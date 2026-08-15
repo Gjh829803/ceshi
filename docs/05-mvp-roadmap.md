@@ -2,6 +2,8 @@
 
 > 路线图只表达范围和顺序，不代表全部模块已经实现。当前事实以[项目总览](00-project-overview.md)和[实验记录](10-current-experiments.md)为准。
 
+面向产品体验的简明版本见[能力分层与体验路线](14-capability-levels-and-experience-roadmap.md)。本文继续保留工程范围和模块拆分。
+
 ## 当前进度摘要（2026-08-15）
 
 | 工作流 | 状态 | 说明 |

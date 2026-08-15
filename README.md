@@ -38,6 +38,7 @@
 - [Agent-facing API](docs/03-agent-facing-api.md)
 - [世界模型渲染契约](docs/04-render-contract.md)
 - [MVP 范围与演进路线](docs/05-mvp-roadmap.md)
+- [能力分层与体验路线](docs/14-capability-levels-and-experience-roadmap.md)
 - [自由世界特征扩展协议](docs/06-world-feature-system.md)
 - [第一期 Alpha 实现与运行指南](docs/07-alpha-implementation.md)
 - [Coding Agent 场景创作指南](docs/08-agent-scene-authoring.md)
