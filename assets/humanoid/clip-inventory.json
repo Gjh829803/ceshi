@@ -1,0 +1,113 @@
+{
+  "version": 1,
+  "inventoryId": "whitebox-humanoid-local-mixamo-v1",
+  "capturedAt": "2026-08-14",
+  "claimBoundary": {
+    "proves": [
+      "local source files exist",
+      "source hashes and FBX container integrity",
+      "shared Mixamo bone naming",
+      "an existing browser-loadable Xbot GLB contains idle, walk, and run clips"
+    ],
+    "doesNotProve": [
+      "license or redistribution rights",
+      "Jump is target-bound to Xbot",
+      "retarget visual quality",
+      "loop/contact quality",
+      "release readiness"
+    ]
+  },
+  "rig": {
+    "id": "mixamo-humanoid-v1",
+    "rootBone": "mixamorig:Hips",
+    "sourceBoneCount": 65,
+    "upAxis": "Y",
+    "sourceCharacter": {
+      "provider": "mixamo",
+      "id": "4f5d21e1-4ccc-41f1-b35b-fb2547bd8493",
+      "name": "Y Bot"
+    }
+  },
+  "targetCandidate": {
+    "name": "Xbot",
+    "status": "workspace_local_ignored_candidate_not_distributed",
+    "path": "apps/playground/public/local-assets/Xbot.glb",
+    "bytes": 2930032,
+    "sha256": "002f8d269de68e5dce3d25195caf390d1aa359bbfaae3fcf4c8dc78ec36c3ba5",
+    "format": "glb",
+    "armatureBoneCount": 67,
+    "rootBone": "mixamorig:Hips",
+    "embeddedClips": [
+      "agree",
+      "headShake",
+      "idle",
+      "run",
+      "sad_pose",
+      "sneak_pose",
+      "walk"
+    ],
+    "notes": [
+      "The two extra bones observed versus the source FBXs are LeftEye and RightEye.",
+      "The GLB is copied into a gitignored workspace-local runtime cache so sandboxed agents never follow an external symlink.",
+      "Redistribution provenance must be confirmed before bundling it in the SDK."
+    ]
+  },
+  "sourceClips": [
+    {
+      "actionId": "idle",
+      "sourceName": "Standard Idle",
+      "status": "source_verified_not_target_bound",
+      "path": "external-source-redacted/Standard Idle.fbx",
+      "bytes": 594848,
+      "sha256": "321ddf07abff07ec7739803f561a81d6cad9c60c45968d2fea8cbd33751b64a4",
+      "sourceTake": "Armature|mixamo.com|Layer0",
+      "frameRange": [1, 91],
+      "fps": 30,
+      "durationSeconds": 3,
+      "loopable": true,
+      "providerSupportsInPlace": false
+    },
+    {
+      "actionId": "walk",
+      "sourceName": "Standard Walk",
+      "status": "source_verified_not_target_bound",
+      "path": "external-source-redacted/Standard Walk.fbx",
+      "bytes": 390912,
+      "sha256": "4ade606d11292370702dbbf37ea099cfa1138c6febdd9872c22775639d59a12a",
+      "sourceTake": "Armature|mixamo.com|Layer0",
+      "frameRange": [1, 36],
+      "fps": 30,
+      "durationSeconds": 1.17,
+      "loopable": true,
+      "providerSupportsInPlace": true
+    },
+    {
+      "actionId": "run",
+      "sourceName": "Standard Run",
+      "status": "source_verified_not_target_bound",
+      "path": "external-source-redacted/Standard Run.fbx",
+      "bytes": 342720,
+      "sha256": "75ab79be64d6ee4bb7dadbfbd8a1c26ffbe2d49c6d50d694f4b5bf3e80d14b5e",
+      "sourceTake": "Armature|mixamo.com|Layer0",
+      "frameRange": [1, 23],
+      "fps": 30,
+      "durationSeconds": 0.7,
+      "loopable": true,
+      "providerSupportsInPlace": true
+    },
+    {
+      "actionId": "jump",
+      "sourceName": "Jump",
+      "status": "source_verified_binding_required",
+      "path": "external-source-redacted/Jump.fbx",
+      "bytes": 341456,
+      "sha256": "e96eac19d42cf1a9a0bd6d85a65e91019a1fa788edadc486c9d2167d19c35ce0",
+      "sourceTake": "Armature|mixamo.com|Layer0",
+      "frameRange": [1, 24],
+      "fps": 30,
+      "durationSeconds": 0.77,
+      "loopable": true,
+      "providerSupportsInPlace": true
+    }
+  ]
+}

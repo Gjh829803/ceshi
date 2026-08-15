@@ -1,0 +1,23 @@
+# Hard local-command boundary for scene-authoring agents.
+# Project-scoped config is loaded by Codex after the project is trusted.
+default_permissions = "whitebox_workspace_only"
+approval_policy = "never"
+
+[permissions]
+
+[permissions.whitebox_workspace_only]
+description = "Write this workspace only; deny all other user files and network access."
+extends = ":workspace"
+
+[permissions.whitebox_workspace_only.filesystem]
+# Deny the whole filesystem first. More-specific inherited workspace-root
+# rules reopen this project's root. :minimal only exposes runtime files that
+# common developer tools need in order to execute.
+":root" = "deny"
+":minimal" = "read"
+"/opt/homebrew" = "read"
+":tmpdir" = "deny"
+":slash_tmp" = "deny"
+
+[permissions.whitebox_workspace_only.network]
+enabled = false

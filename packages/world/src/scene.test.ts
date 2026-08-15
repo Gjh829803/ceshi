@@ -1,0 +1,210 @@
+import { describe, expect, it } from "vitest";
+
+import { defineWorldFeature } from "./features";
+import { compileOutdoorScene, defineOutdoorScene, SceneCompilationError } from "./scene";
+import { Heightfield, HeightfieldGrid } from "./terrain";
+
+describe("outdoor scene authoring", () => {
+  it("uses explicit relief profiles instead of applying strong noise to every world", () => {
+    const makeScene = (relief: "flat" | "plain" | "hills") => defineOutdoorScene({
+      id: `relief-${relief}`,
+      seed: 42,
+      build(world) {
+        const terrain = world.terrain.landscape({
+          id: "terrain",
+          tileSize: [80, 80],
+          tiles: [1, 1],
+          segmentsPerTile: [32, 32],
+          relief,
+        });
+        world.player.spawn({ terrain, at: [0, 0] });
+      },
+    });
+    const heightRange = (relief: "flat" | "plain" | "hills") => {
+      const compiled = compileOutdoorScene(makeScene(relief));
+      const resource = compiled.registry.getResource<HeightfieldGrid>(
+        compiled.terrainHandles[0]?.terrainId ?? "",
+      );
+      const heights = resource?.value.tiles.flatMap((tile) => [...tile.heights]) ?? [];
+      return Math.max(...heights) - Math.min(...heights);
+    };
+
+    expect(heightRange("flat")).toBe(0);
+    expect(heightRange("plain")).toBeGreaterThan(0);
+    expect(heightRange("hills")).toBeGreaterThan(heightRange("plain"));
+  });
+
+  it("lets an agent compose a tracked playable scene without touching runtime internals", () => {
+    const scene = defineOutdoorScene({
+      id: "agent-lake-valley",
+      seed: 42,
+      build(world) {
+        const terrain = world.terrain.landscape({
+          id: "valley",
+          tileSize: [160, 160],
+          tiles: [2, 2],
+          segmentsPerTile: [16, 16],
+          relief: "plain",
+          amplitude: 7,
+          frequency: 0.015,
+          semantic: "open_grass_valley",
+        });
+        world.water.lake({
+          id: "lake",
+          terrain,
+          center: [0, 0],
+          radius: [24, 18],
+          depth: 6,
+          shoreWidth: 7,
+          semantic: "clear_lake",
+        });
+        const towerGround = world.terrain.height(terrain, [-45, -50]) ?? 0;
+        world.landmark.compound({
+          id: "tower",
+          dependsOn: [terrain],
+          transform: { position: [-45, towerGround, -50] },
+          semantic: "watchtower",
+          children: [
+            { kind: "cylinder", radius: 5, height: 20, transform: { position: [0, 10, 0] } },
+            { kind: "cone", radius: 7, height: 7, transform: { position: [0, 23.5, 0] } },
+          ],
+        });
+        world.player.spawn({
+          terrain,
+          at: [0, 45],
+          facingRadians: Math.PI,
+          camera: { pitchRadians: 0.55, distance: 7 },
+        });
+        world.atmosphere.set({ preset: "golden-hour", semantic: "warm_open_world" });
+      },
+    });
+
+    const compiled = compileOutdoorScene(scene);
+
+    expect(compiled.registry.list().map((feature) => feature.type)).toEqual([
+      "official.tiled-rolling-terrain",
+      "official.lake",
+      "official.compound-landmark",
+    ]);
+    expect(compiled.registry.listResources().length).toBeGreaterThan(6);
+    expect(compiled.terrainHandles).toHaveLength(1);
+    expect(compiled.spawn.position[2]).toBe(45);
+    expect(compiled.spawn.facingRadians).toBe(Math.PI);
+    expect(compiled.spawn.camera).toEqual({ pitchRadians: 0.55, distance: 7 });
+    expect(compiled.atmosphere.preset).toBe("golden-hour");
+    expect(compiled.diagnostics.filter((diagnostic) => diagnostic.severity === "error")).toHaveLength(0);
+    const terrainResource = compiled.registry.getResource<HeightfieldGrid>(
+      compiled.terrainHandles[0]?.terrainId ?? "",
+    );
+    expect(terrainResource?.value.tiles).toHaveLength(4);
+  });
+
+  it("supports a custom agent-authored terrain feature through the same compiler", () => {
+    const MesaFeature = defineWorldFeature<
+      { size: number; height: number },
+      { terrainId: string }
+    >({
+      type: "custom.mesa",
+      version: 1,
+      source: "scenes/features/mesa.ts",
+      schema: { size: "positiveNumber", height: "positiveNumber" },
+      build(context, params) {
+        const terrainId = context.terrain.create({
+          width: params.size,
+          depth: params.size,
+          xSegments: 32,
+          zSegments: 32,
+        });
+        context.terrain.raise(terrainId, {
+          area: context.shape.polygon([
+            [-20, -15],
+            [18, -18],
+            [24, 10],
+            [-12, 22],
+          ]),
+          amount: params.height,
+          falloffWidth: 7,
+        });
+        context.semantic.bind(terrainId, { semantic: "mesa_plateau" });
+        return { terrainId };
+      },
+    });
+    const scene = defineOutdoorScene({
+      id: "custom-mesa-scene",
+      seed: "mesa-seed",
+      build(world) {
+        const terrain = world.terrain.custom(
+          MesaFeature,
+          { id: "mesa", params: { size: 120, height: 18 }, seed: world.seed },
+          (output) => output.terrainId,
+        );
+        world.player.spawn({ terrain, at: [0, 0] });
+      },
+    });
+
+    const first = compileOutdoorScene(scene);
+    const second = compileOutdoorScene(scene);
+    const firstTerrain = first.registry.getResource<Heightfield>(
+      first.terrainHandles[0]?.terrainId ?? "",
+    );
+    const secondTerrain = second.registry.getResource<Heightfield>(
+      second.terrainHandles[0]?.terrainId ?? "",
+    );
+    expect(firstTerrain?.value.sampleHeight(0, 0)).toBeGreaterThan(10);
+    expect(firstTerrain?.value.heights).toEqual(secondTerrain?.value.heights);
+  });
+
+  it("returns an actionable error when the agent places a spawn outside terrain", () => {
+    const scene = defineOutdoorScene({
+      id: "invalid-spawn",
+      build(world) {
+        const terrain = world.terrain.rolling({
+          id: "tiny",
+          size: [20, 20],
+          segments: [8, 8],
+          amplitude: 0,
+          frequency: 0.1,
+        });
+        world.player.spawn({ terrain, at: [100, 100] });
+      },
+    });
+    expect(() => compileOutdoorScene(scene)).toThrow(SceneCompilationError);
+    expect(() => compileOutdoorScene(scene)).toThrow(/outside terrain/);
+  });
+
+  it("rejects a spawn on a slope the humanoid controller cannot climb", () => {
+    const SteepSpawnTerrain = defineWorldFeature<{}, { terrainId: string }>({
+      type: "test.steep-spawn",
+      version: 1,
+      schema: {},
+      build(context) {
+        const terrainId = context.terrain.create({
+          width: 40,
+          depth: 40,
+          xSegments: 40,
+          zSegments: 40,
+        });
+        context.terrain.raise(terrainId, {
+          area: context.shape.circle([0, 0], 10),
+          amount: 20,
+          falloffWidth: 10,
+          curve: "linear",
+        });
+        return { terrainId };
+      },
+    });
+    const scene = defineOutdoorScene({
+      id: "steep-spawn",
+      build(world) {
+        const terrain = world.terrain.custom(
+          SteepSpawnTerrain,
+          { id: "steep", params: {} },
+          (output) => output.terrainId,
+        );
+        world.player.spawn({ terrain, at: [7, 0] });
+      },
+    });
+
+    expect(() => compileOutdoorScene(scene)).toThrow(/climb limit/);
+  });
+});

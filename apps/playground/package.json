@@ -1,0 +1,25 @@
+{
+  "name": "@whitebox-world/playground",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "preview": "vite preview"
+  },
+  "dependencies": {
+    "@whitebox-world/contracts": "workspace:*",
+    "@whitebox-world/core": "workspace:*",
+    "@whitebox-world/physics": "workspace:*",
+    "@whitebox-world/subjects": "workspace:*",
+    "@whitebox-world/testkit": "workspace:*",
+    "@whitebox-world/world": "workspace:*",
+    "three": "^0.180.0"
+  },
+  "devDependencies": {
+    "@types/three": "^0.180.0",
+    "typescript": "^5.9.2",
+    "vite": "^7.1.2"
+  }
+}

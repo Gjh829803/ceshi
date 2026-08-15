@@ -1,0 +1,13 @@
+{
+  "name": "@whitebox-world/core",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "dependencies": {
+    "@whitebox-world/contracts": "workspace:*",
+    "three": "^0.180.0"
+  }
+}

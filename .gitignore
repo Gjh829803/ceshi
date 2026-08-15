@@ -1,0 +1,11 @@
+node_modules/
+dist/
+.DS_Store
+coverage/
+*.log
+apps/playground/public/local-assets/
+agent-home/
+agent-tmp/
+.agent-home/
+.agent-tmp/
+.codex-tmp/
