@@ -171,6 +171,32 @@ describe("OutdoorWorldSpec", () => {
     expect(codes.filter((code) => code === "WORLD_SPEC_ARTIFACT_MISSING")).toHaveLength(2);
   });
 
+  it("accepts frozen project references and rejects unsafe or duplicate reference images", () => {
+    const validBase = validSpec();
+    const valid = {
+      ...validBase,
+      source: {
+        ...validBase.source,
+        referenceImages: ["/scene-plans/valid-world/reference-0.png"],
+      },
+    };
+    expect(validateOutdoorWorldSpec(valid)).not.toContainEqual(
+      expect.objectContaining({ code: "WORLD_SPEC_REFERENCE_IMAGE_INVALID" }),
+    );
+
+    const invalidBase = validSpec();
+    const invalid = {
+      ...invalidBase,
+      source: {
+        ...invalidBase.source,
+        referenceImages: ["../../outside.png", "../../outside.png"],
+      },
+    };
+    expect(validateOutdoorWorldSpec(invalid)).toContainEqual(
+      expect.objectContaining({ severity: "error", code: "WORLD_SPEC_REFERENCE_IMAGE_INVALID" }),
+    );
+  });
+
   it("reports a primary route that was planned above the recommended slope margin", () => {
     const spec = validSpec();
     spec.routes[0] = { ...spec.routes[0]!, maxSlopeDegrees: 40 };

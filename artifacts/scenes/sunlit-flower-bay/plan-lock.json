@@ -1,0 +1,28 @@
+{
+  "workflowVersion": 1,
+  "sceneId": "sunlit-flower-bay",
+  "stage": "frozen",
+  "specSha256": "3afbb464ef894a2da5dcf01ad8d05291730bde45a4dbb7da5d9ea448afe1eff9",
+  "files": [
+    {
+      "kind": "opening-shot",
+      "path": "apps/playground/public/scene-plans/sunlit-flower-bay/opening-shot.png",
+      "sha256": "fdfad014b155d9f9051cf2276e6bd01b1b22382a75628841b40092d6822ab822"
+    },
+    {
+      "kind": "reference-image",
+      "path": "apps/playground/public/scene-plans/sunlit-flower-bay/reference-0.png",
+      "sha256": "52b94002f48b027716958fb654074e551a2cf233cc6215b7b9964965b462e6de"
+    },
+    {
+      "kind": "world-plan",
+      "path": "apps/playground/public/scene-plans/sunlit-flower-bay/world-plan.png",
+      "sha256": "7d03e3616fd2d06578618a97b4f7055364dc7ebb3e1bfa11cd7c6439be680f89"
+    },
+    {
+      "kind": "world-spec-source",
+      "path": "apps/playground/src/scenes/plans/sunlit-flower-bay.ts",
+      "sha256": "582065d019abcb6f341a090aca5519ea6ae051c89b9508ebb4a81426d47a0bec"
+    }
+  ]
+}

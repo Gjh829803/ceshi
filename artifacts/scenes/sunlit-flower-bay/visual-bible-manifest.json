@@ -1,0 +1,62 @@
+{
+  "workflowVersion": 1,
+  "sceneId": "sunlit-flower-bay",
+  "stage": "visualized",
+  "frozenPlanSpecSha256": "3afbb464ef894a2da5dcf01ad8d05291730bde45a4dbb7da5d9ea448afe1eff9",
+  "planLockSha256": "b464119e5d05bee4b2e48d71919ce340b8fe70bfa29e4a3d48219283ee77a10c",
+  "verifiedSceneManifestSha256": "66d43a760aee51cef2cc99e313265dd2b2d253c86e53ab449d36c11b4997a61d",
+  "finalFrame": {
+    "uri": "/scene-plans/sunlit-flower-bay/opening-frame-rendered.png",
+    "sha256": "c666b087f12233bded3c39a4776749c9095c4fe1032580633e37972ecc9b02dc"
+  },
+  "prototypes": [
+    {
+      "id": "traveler-player",
+      "instanceColor": "#D94B45",
+      "whitebox": {
+        "uri": "/scene-plans/sunlit-flower-bay/prototypes/traveler-player/whitebox-triview.png",
+        "sha256": "3eb240774abdca7a141afe44e1303588b2c2146a2b43bf794bab79d905218a9b"
+      },
+      "styled": {
+        "uri": "/scene-plans/sunlit-flower-bay/prototypes/traveler-player/styled-triview.png",
+        "sha256": "f4a138131d3386cca35902c14e68af8bc8613639006172b2298b194755927e52"
+      }
+    },
+    {
+      "id": "cape-lighthouse",
+      "instanceColor": "#F0C541",
+      "whitebox": {
+        "uri": "/scene-plans/sunlit-flower-bay/prototypes/cape-lighthouse/whitebox-triview.png",
+        "sha256": "59dc2bb28c177caedb66ad7d50ecacaa93b50dc2cc0fc082ea97ed0e186502d9"
+      },
+      "styled": {
+        "uri": "/scene-plans/sunlit-flower-bay/prototypes/cape-lighthouse/styled-triview.png",
+        "sha256": "00bcd49408bbf7a2b077fc82823f52f549091bc0d513b912c7820cd53c287db8"
+      }
+    },
+    {
+      "id": "red-roof-cottage",
+      "instanceColor": "#4F8BC9",
+      "whitebox": {
+        "uri": "/scene-plans/sunlit-flower-bay/prototypes/red-roof-cottage/whitebox-triview.png",
+        "sha256": "71ae9f2da21909eeb8f5c52c844a59268a98f7bb418879e7d45c6e2532dcdc4d"
+      },
+      "styled": {
+        "uri": "/scene-plans/sunlit-flower-bay/prototypes/red-roof-cottage/styled-triview.png",
+        "sha256": "aa96d2bf7f121aeebb96331ecde6d594ae07ee9dd696a8ab8a6e834b49c49958"
+      }
+    },
+    {
+      "id": "tiny-sailboat",
+      "instanceColor": "#6F58A8",
+      "whitebox": {
+        "uri": "/scene-plans/sunlit-flower-bay/prototypes/tiny-sailboat/whitebox-triview.png",
+        "sha256": "54ba3ca5b4333509c9abb30237207df00c02af844f224661645179fac05a0dff"
+      },
+      "styled": {
+        "uri": "/scene-plans/sunlit-flower-bay/prototypes/tiny-sailboat/styled-triview.png",
+        "sha256": "dea44c3c5ee8b03e982d8c89fa8a698b939e7562451f1edf0f35131d6ff52ad7"
+      }
+    }
+  ]
+}

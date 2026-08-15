@@ -192,6 +192,15 @@ function safePublicPlanUri(uri: string, specId: string): boolean {
   );
 }
 
+function safeReferenceImageUri(uri: string, specId: string): boolean {
+  return (
+    uri.startsWith(`/scene-plans/${specId}/reference-`) &&
+    !uri.includes("..") &&
+    !uri.includes("://") &&
+    /^\/scene-plans\/[^/]+\/reference-\d+\.(png|jpe?g|webp)$/i.test(uri)
+  );
+}
+
 function safePrototypeUri(uri: string, specId: string, prototypeId: string): boolean {
   return (
     uri.startsWith(`/scene-plans/${specId}/prototypes/${prototypeId}/`) &&
@@ -233,6 +242,19 @@ export function validateOutdoorWorldSpec(
         "error",
         "WORLD_SPEC_INTENT_MISSING",
         "WorldSpec must preserve the user request and a concise world intent.",
+      ),
+    );
+  }
+  const referenceImages = spec.source.referenceImages ?? [];
+  if (
+    new Set(referenceImages).size !== referenceImages.length ||
+    referenceImages.some((uri) => !safeReferenceImageUri(uri, spec.id))
+  ) {
+    diagnostics.push(
+      diagnostic(
+        "error",
+        "WORLD_SPEC_REFERENCE_IMAGE_INVALID",
+        `Reference images must be unique project-local /scene-plans/${spec.id}/reference-N image URIs.`,
       ),
     );
   }

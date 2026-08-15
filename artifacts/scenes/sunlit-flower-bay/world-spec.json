@@ -1,0 +1,1197 @@
+{
+  "kind": "outdoor-world-spec",
+  "version": 1,
+  "id": "sunlit-flower-bay",
+  "title": "Sunlit Flower Bay",
+  "source": {
+    "request": "根据参考图规划一个完整可玩的室外海湾世界。进入视角必须是第三人称玩家站在南侧鲜花草坡高处，沿中央土石小路向下俯瞰广阔蓝色海湾；左右两侧为层叠绿色海岸与岩壁，右侧岬角有一座灯塔，坡地散布少量红顶房屋，海面有尺度很小的帆船，远处有岛屿和开阔地平线。请扩展图片背面为连贯可玩的完整世界，同时区分白膜必需结构与交给世界模型的花海、云层、水面细节和绘画风格。",
+    "referenceImages": [
+      "/scene-plans/sunlit-flower-bay/reference-0.png"
+    ]
+  },
+  "intent": "A complete walkable coastal highland wrapped around a broad north-opening bay, preserving the reference entry vista while extending behind the camera into a coherent southern upland loop.",
+  "worldPrompt": {
+    "identity": "A bright, expansive pastoral sea bay seen from a flowered southern headland, with layered green coasts, pale rock cliffs, a lighthouse on the eastern cape, sparse red-roof cottages, tiny sailboats, distant islands, and an open northern horizon.",
+    "spatialComposition": "The player begins on the high south-central overlook and faces north down a central dirt-and-stone path. The bay fills the middle of the world; terraced western and eastern shores embrace it without closing the northern mouth. The eastern route branches to the lighthouse cape, the western route descends through cliff terraces, and both reconnect through the southern upland behind the entry viewpoint.",
+    "environment": "Broad hill-country relief shaped into a flattened spawn overlook, a long gentle descent, stepped coastal shoulders, explicit cliff bands, protected coves, an eastern lighthouse plateau, a navigable southern hinterland, a broad water body, and low distant islands. Whitebox geometry expresses only terrain, paths, shore boundaries, cliff masses, lighthouse, cottages, and sailboat silhouettes.",
+    "lighting": "Clear late-morning sunlight from the south-east, high visibility over the bay, bright readable land-water separation, and gentle atmospheric distance without obscuring routes or silhouettes.",
+    "visualStyle": "Warm hand-painted pastoral adventure concept art with saturated Mediterranean blue and green. Dense wildflowers, individual grasses, cloud towers, sparkling water, foam, foliage texture, roof materials, and painterly brushwork are render-layer treatments and must not become collision geometry.",
+    "openingShot": "Third-person camera behind an adult traveler standing on the southern high meadow, looking north and moderately downward along the centered descending path; flowered slopes frame the foreground, the vast blue bay dominates the middle ground, layered shores flank both sides, and the eastern lighthouse sits right of center against distant islands and an open horizon.",
+    "invariants": [
+      "Keep the spawn on the flattened south-central high ground, outside water and landmark blockers, facing north down the central path.",
+      "Keep the central path continuously walkable from the entry overlook to the inner-bay shore at no more than 30 degrees planned slope.",
+      "Keep the broad bay visually centered and open to the north, framed by asymmetric layered coasts and pale cliff bands.",
+      "Keep one lighthouse on the eastern cape, sparse red-roof cottages on both coastal slopes, tiny sailboats on the water, and low islands beyond the bay mouth.",
+      "Keep the southern hinterland behind the camera playable and connected to both coastal branches as a complete loop.",
+      "Do not encode flowers, clouds, surface ripples, foam, painted texture, or illustration brushwork as whitebox collision geometry."
+    ],
+    "negativePrompt": [
+      "enclosed lake",
+      "dense town or city",
+      "tropical palms",
+      "giant ships",
+      "oversized lighthouse",
+      "impassable main path",
+      "mountains blocking the horizon",
+      "flower-shaped collision meshes",
+      "cloud collision geometry",
+      "text",
+      "labels",
+      "UI",
+      "watermark"
+    ]
+  },
+  "entityCatalog": {
+    "prototypes": [
+      {
+        "id": "traveler-player",
+        "role": "subject",
+        "semantic": "third_person_coastal_traveler",
+        "description": "An adult traveler with a compact shoulder bag and wind-readable silhouette.",
+        "approximateSize": [
+          0.8,
+          1.75,
+          0.55
+        ],
+        "forwardAxis": "-Z",
+        "pivot": "ground-center",
+        "instanceColor": "#D94B45",
+        "appearancePrompt": "adult coastal traveler, dark hair with a red ribbon, cream blouse, long blue skirt, compact brown shoulder bag, clean third-person silhouette",
+        "negativePrompt": "no trailing collision cloth, no weapon, no oversized luggage, no extra limbs",
+        "evidence": "reference-visible",
+        "views": {
+          "canonical": [
+            "front",
+            "right",
+            "back"
+          ],
+          "whiteboxUri": "/scene-plans/sunlit-flower-bay/prototypes/traveler-player/whitebox-triview.png",
+          "styledUri": "/scene-plans/sunlit-flower-bay/prototypes/traveler-player/styled-triview.png"
+        }
+      },
+      {
+        "id": "cape-lighthouse",
+        "role": "landmark",
+        "semantic": "white_eastern_cape_lighthouse",
+        "description": "A slender white lighthouse with a dark lantern room and restrained red cap.",
+        "approximateSize": [
+          8,
+          25,
+          8
+        ],
+        "forwardAxis": "-Z",
+        "pivot": "ground-center",
+        "instanceColor": "#F0C541",
+        "appearancePrompt": "slender white stone coastal lighthouse, dark lantern gallery, small muted red cap, simple readable maritime silhouette",
+        "negativePrompt": "no castle, no attached city, no giant tower, no changed proportions",
+        "evidence": "reference-visible",
+        "views": {
+          "canonical": [
+            "front",
+            "right",
+            "back"
+          ],
+          "whiteboxUri": "/scene-plans/sunlit-flower-bay/prototypes/cape-lighthouse/whitebox-triview.png",
+          "styledUri": "/scene-plans/sunlit-flower-bay/prototypes/cape-lighthouse/styled-triview.png"
+        }
+      },
+      {
+        "id": "red-roof-cottage",
+        "role": "landmark",
+        "semantic": "small_pale_coastal_cottage_with_red_tile_roof",
+        "description": "A compact pale cottage with a low terracotta gable roof and one attached minor volume.",
+        "approximateSize": [
+          12,
+          8,
+          9
+        ],
+        "forwardAxis": "-Z",
+        "pivot": "ground-center",
+        "instanceColor": "#4F8BC9",
+        "appearancePrompt": "small pale plaster coastal cottage, low terracotta gable roof, modest rural proportions, sparse settlement character",
+        "negativePrompt": "no multi-storey villa, no urban block, no garden wall maze, no enlarged footprint",
+        "evidence": "reference-visible",
+        "views": {
+          "canonical": [
+            "front",
+            "right",
+            "back"
+          ],
+          "whiteboxUri": "/scene-plans/sunlit-flower-bay/prototypes/red-roof-cottage/whitebox-triview.png",
+          "styledUri": "/scene-plans/sunlit-flower-bay/prototypes/red-roof-cottage/styled-triview.png"
+        }
+      },
+      {
+        "id": "tiny-sailboat",
+        "role": "object",
+        "semantic": "distant_small_single_mast_sailboat",
+        "description": "A very small single-mast sailboat used as a scale cue on the broad bay.",
+        "approximateSize": [
+          3.2,
+          5.5,
+          7
+        ],
+        "forwardAxis": "-Z",
+        "pivot": "center",
+        "instanceColor": "#6F58A8",
+        "appearancePrompt": "tiny single-mast coastal sailboat with one bright triangular sail and a narrow hull, distant scale cue",
+        "negativePrompt": "no yacht, no tall ship, no engine wake, no oversized hull, no crew detail",
+        "evidence": "reference-visible",
+        "views": {
+          "canonical": [
+            "front",
+            "right",
+            "back"
+          ],
+          "whiteboxUri": "/scene-plans/sunlit-flower-bay/prototypes/tiny-sailboat/whitebox-triview.png",
+          "styledUri": "/scene-plans/sunlit-flower-bay/prototypes/tiny-sailboat/styled-triview.png"
+        }
+      }
+    ],
+    "instances": [
+      {
+        "id": "player",
+        "prototypeId": "traveler-player",
+        "binding": {
+          "kind": "runtime-entity",
+          "id": "player"
+        },
+        "evidence": "user-explicit"
+      },
+      {
+        "id": "east-cape-lighthouse",
+        "prototypeId": "cape-lighthouse",
+        "binding": {
+          "kind": "feature",
+          "id": "east-cape-lighthouse"
+        },
+        "evidence": "user-explicit"
+      },
+      {
+        "id": "west-upper-cottage",
+        "prototypeId": "red-roof-cottage",
+        "binding": {
+          "kind": "feature",
+          "id": "west-upper-cottage"
+        },
+        "evidence": "reference-visible"
+      },
+      {
+        "id": "west-cove-cottage",
+        "prototypeId": "red-roof-cottage",
+        "binding": {
+          "kind": "feature",
+          "id": "west-cove-cottage"
+        },
+        "evidence": "reference-visible"
+      },
+      {
+        "id": "south-path-cottage",
+        "prototypeId": "red-roof-cottage",
+        "binding": {
+          "kind": "feature",
+          "id": "south-path-cottage"
+        },
+        "evidence": "reference-visible"
+      },
+      {
+        "id": "east-slope-cottage",
+        "prototypeId": "red-roof-cottage",
+        "binding": {
+          "kind": "feature",
+          "id": "east-slope-cottage"
+        },
+        "evidence": "reference-visible"
+      },
+      {
+        "id": "lighthouse-keeper-cottage",
+        "prototypeId": "red-roof-cottage",
+        "binding": {
+          "kind": "feature",
+          "id": "lighthouse-keeper-cottage"
+        },
+        "evidence": "planner-inferred"
+      },
+      {
+        "id": "bay-sailboat-west",
+        "prototypeId": "tiny-sailboat",
+        "binding": {
+          "kind": "feature",
+          "id": "bay-sailboat-west"
+        },
+        "evidence": "reference-visible"
+      },
+      {
+        "id": "bay-sailboat-center",
+        "prototypeId": "tiny-sailboat",
+        "binding": {
+          "kind": "feature",
+          "id": "bay-sailboat-center"
+        },
+        "evidence": "reference-visible"
+      },
+      {
+        "id": "bay-sailboat-east",
+        "prototypeId": "tiny-sailboat",
+        "binding": {
+          "kind": "feature",
+          "id": "bay-sailboat-east"
+        },
+        "evidence": "reference-visible"
+      },
+      {
+        "id": "bay-sailboat-mouth",
+        "prototypeId": "tiny-sailboat",
+        "binding": {
+          "kind": "feature",
+          "id": "bay-sailboat-mouth"
+        },
+        "evidence": "reference-visible"
+      },
+      {
+        "id": "east-cove-sailboat",
+        "prototypeId": "tiny-sailboat",
+        "binding": {
+          "kind": "feature",
+          "id": "east-cove-sailboat"
+        },
+        "evidence": "planner-inferred"
+      }
+    ]
+  },
+  "bounds": {
+    "center": [
+      0,
+      0
+    ],
+    "size": [
+      1200,
+      1000
+    ],
+    "heightRange": [
+      -18,
+      118
+    ]
+  },
+  "terrain": {
+    "baseRelief": "hills",
+    "regions": [
+      {
+        "id": "whole-coastal-ground",
+        "semantic": "broad_hill_country_base_with_explicit_bay_cutout",
+        "role": "ground",
+        "area": {
+          "kind": "polygon",
+          "points": [
+            [
+              -600,
+              -500
+            ],
+            [
+              600,
+              -500
+            ],
+            [
+              600,
+              500
+            ],
+            [
+              -600,
+              500
+            ]
+          ]
+        },
+        "elevationIntent": "tiled hill-country base at about two meters per heightfield cell; global noise remains subtle beneath shaped landforms",
+        "featureId": "coastal-terrain",
+        "evidence": "planner-inferred"
+      },
+      {
+        "id": "south-entry-overlook",
+        "semantic": "flattened_high_meadow_overlook",
+        "role": "plateau",
+        "area": {
+          "kind": "ellipse",
+          "center": [
+            0,
+            350
+          ],
+          "radius": [
+            115,
+            82
+          ]
+        },
+        "elevationIntent": "flat 82 meter entry shelf with safe camera space and no blockers",
+        "featureId": "south-overlook",
+        "evidence": "user-explicit"
+      },
+      {
+        "id": "central-descent-corridor",
+        "semantic": "long_broad_walkable_descent_to_inner_bay",
+        "role": "route",
+        "area": {
+          "kind": "polygon",
+          "points": [
+            [
+              -42,
+              365
+            ],
+            [
+              42,
+              365
+            ],
+            [
+              66,
+              165
+            ],
+            [
+              78,
+              35
+            ],
+            [
+              -78,
+              35
+            ],
+            [
+              -66,
+              165
+            ]
+          ]
+        },
+        "elevationIntent": "whole descent shaped from 82 meters to 12 meters, kept continuously below 30 degrees with a flattened foot near shore",
+        "featureId": "central-descent-landform",
+        "evidence": "user-explicit"
+      },
+      {
+        "id": "western-layered-coast",
+        "semantic": "stepped_green_western_headlands_and_coves",
+        "role": "ridge",
+        "area": {
+          "kind": "polygon",
+          "points": [
+            [
+              -600,
+              -500
+            ],
+            [
+              -430,
+              -500
+            ],
+            [
+              -330,
+              -330
+            ],
+            [
+              -365,
+              -120
+            ],
+            [
+              -245,
+              35
+            ],
+            [
+              -155,
+              235
+            ],
+            [
+              -220,
+              500
+            ],
+            [
+              -600,
+              500
+            ]
+          ]
+        },
+        "elevationIntent": "three broad walkable green shoulders from 20 to 86 meters, separated by explicitly carved shallow valleys",
+        "featureId": "western-coast-landform",
+        "evidence": "reference-visible"
+      },
+      {
+        "id": "western-pale-cliff-band",
+        "semantic": "pale_rock_cliff_steps_above_western_waterline",
+        "role": "shore",
+        "area": {
+          "kind": "polygon",
+          "points": [
+            [
+              -350,
+              -310
+            ],
+            [
+              -305,
+              -280
+            ],
+            [
+              -315,
+              -110
+            ],
+            [
+              -205,
+              30
+            ],
+            [
+              -155,
+              190
+            ],
+            [
+              -185,
+              225
+            ],
+            [
+              -245,
+              55
+            ],
+            [
+              -365,
+              -95
+            ]
+          ]
+        },
+        "elevationIntent": "visible 10 to 24 meter cliff band facing the bay, with breaks for coves and the route; not itself a primary route",
+        "featureId": "western-cliffs",
+        "evidence": "reference-visible"
+      },
+      {
+        "id": "eastern-layered-coast",
+        "semantic": "rolling_eastern_coast_and_lighthouse_headland",
+        "role": "ridge",
+        "area": {
+          "kind": "polygon",
+          "points": [
+            [
+              600,
+              -500
+            ],
+            [
+              420,
+              -500
+            ],
+            [
+              315,
+              -320
+            ],
+            [
+              340,
+              -110
+            ],
+            [
+              255,
+              20
+            ],
+            [
+              165,
+              220
+            ],
+            [
+              225,
+              500
+            ],
+            [
+              600,
+              500
+            ]
+          ]
+        },
+        "elevationIntent": "layered green hills from 18 to 78 meters with a broad accessible cape shoulder",
+        "featureId": "eastern-coast-landform",
+        "evidence": "reference-visible"
+      },
+      {
+        "id": "eastern-pale-cliff-band",
+        "semantic": "broken_pale_cliffs_beneath_eastern_headland",
+        "role": "shore",
+        "area": {
+          "kind": "polygon",
+          "points": [
+            [
+              330,
+              -305
+            ],
+            [
+              285,
+              -275
+            ],
+            [
+              295,
+              -115
+            ],
+            [
+              215,
+              20
+            ],
+            [
+              165,
+              188
+            ],
+            [
+              195,
+              220
+            ],
+            [
+              258,
+              48
+            ],
+            [
+              345,
+              -95
+            ]
+          ]
+        },
+        "elevationIntent": "broken 9 to 22 meter sea cliffs with a low cove gap and no obstruction on the lighthouse approach",
+        "featureId": "eastern-cliffs",
+        "evidence": "reference-visible"
+      },
+      {
+        "id": "lighthouse-cape-plateau",
+        "semantic": "small_walkable_eastern_lighthouse_plateau",
+        "role": "plateau",
+        "area": {
+          "kind": "ellipse",
+          "center": [
+            295,
+            -45
+          ],
+          "radius": [
+            74,
+            60
+          ]
+        },
+        "elevationIntent": "flattened 42 meter cape top with safe clearance around lighthouse and keeper cottage",
+        "featureId": "lighthouse-cape-ground",
+        "evidence": "user-explicit"
+      },
+      {
+        "id": "southern-hinterland",
+        "semantic": "playable_rolling_upland_behind_entry_view",
+        "role": "background",
+        "area": {
+          "kind": "polygon",
+          "points": [
+            [
+              -600,
+              300
+            ],
+            [
+              600,
+              300
+            ],
+            [
+              600,
+              500
+            ],
+            [
+              -600,
+              500
+            ]
+          ]
+        },
+        "elevationIntent": "coherent rolling 68 to 100 meter upland containing the rear connector loop and open continuation behind the opening camera",
+        "featureId": "southern-hinterland-landform",
+        "evidence": "planner-inferred"
+      },
+      {
+        "id": "northwest-distant-island",
+        "semantic": "low_distant_island_silhouette",
+        "role": "background",
+        "area": {
+          "kind": "ellipse",
+          "center": [
+            -245,
+            -430
+          ],
+          "radius": [
+            105,
+            42
+          ]
+        },
+        "elevationIntent": "low 20 meter island with soft readable ridge, visually detached from western coast",
+        "featureId": "northwest-island",
+        "evidence": "user-explicit"
+      },
+      {
+        "id": "northeast-distant-island",
+        "semantic": "long_low_distant_island_silhouette",
+        "role": "background",
+        "area": {
+          "kind": "ellipse",
+          "center": [
+            215,
+            -445
+          ],
+          "radius": [
+            135,
+            36
+          ]
+        },
+        "elevationIntent": "low 16 meter island leaving broad open-water gaps and an unobstructed horizon",
+        "featureId": "northeast-island",
+        "evidence": "user-explicit"
+      }
+    ]
+  },
+  "water": [
+    {
+      "id": "sunlit-bay-water",
+      "semantic": "broad_north_opening_blue_sea_bay",
+      "area": {
+        "kind": "polygon",
+        "points": [
+          [
+            -420,
+            -500
+          ],
+          [
+            420,
+            -500
+          ],
+          [
+            335,
+            -320
+          ],
+          [
+            285,
+            -250
+          ],
+          [
+            270,
+            -115
+          ],
+          [
+            205,
+            40
+          ],
+          [
+            145,
+            130
+          ],
+          [
+            80,
+            180
+          ],
+          [
+            -80,
+            180
+          ],
+          [
+            -145,
+            130
+          ],
+          [
+            -215,
+            35
+          ],
+          [
+            -285,
+            -115
+          ],
+          [
+            -300,
+            -280
+          ]
+        ]
+      },
+      "featureId": "sunlit-bay",
+      "evidence": "user-explicit"
+    }
+  ],
+  "landmarks": [
+    {
+      "id": "east-cape-lighthouse-anchor",
+      "semantic": "primary_eastern_lighthouse",
+      "position": [
+        295,
+        42,
+        -45
+      ],
+      "approximateSize": [
+        8,
+        25,
+        8
+      ],
+      "importance": "primary",
+      "featureId": "east-cape-lighthouse",
+      "evidence": "user-explicit"
+    },
+    {
+      "id": "west-upper-cottage-anchor",
+      "semantic": "sparse_western_upper_cottage",
+      "position": [
+        -315,
+        58,
+        95
+      ],
+      "approximateSize": [
+        12,
+        8,
+        9
+      ],
+      "importance": "secondary",
+      "featureId": "west-upper-cottage",
+      "evidence": "reference-visible"
+    },
+    {
+      "id": "west-cove-cottage-anchor",
+      "semantic": "sparse_western_cove_cottage",
+      "position": [
+        -360,
+        29,
+        -85
+      ],
+      "approximateSize": [
+        12,
+        8,
+        9
+      ],
+      "importance": "secondary",
+      "featureId": "west-cove-cottage",
+      "evidence": "reference-visible"
+    },
+    {
+      "id": "south-path-cottage-anchor",
+      "semantic": "single_cottage_beside_lower_descent",
+      "position": [
+        -92,
+        35,
+        145
+      ],
+      "approximateSize": [
+        12,
+        8,
+        9
+      ],
+      "importance": "secondary",
+      "featureId": "south-path-cottage",
+      "evidence": "reference-visible"
+    },
+    {
+      "id": "east-slope-cottage-anchor",
+      "semantic": "sparse_eastern_slope_cottage",
+      "position": [
+        235,
+        33,
+        105
+      ],
+      "approximateSize": [
+        12,
+        8,
+        9
+      ],
+      "importance": "secondary",
+      "featureId": "east-slope-cottage",
+      "evidence": "reference-visible"
+    },
+    {
+      "id": "lighthouse-keeper-cottage-anchor",
+      "semantic": "small_keeper_cottage",
+      "position": [
+        330,
+        42,
+        -15
+      ],
+      "approximateSize": [
+        12,
+        8,
+        9
+      ],
+      "importance": "secondary",
+      "featureId": "lighthouse-keeper-cottage",
+      "evidence": "planner-inferred"
+    },
+    {
+      "id": "bay-sailboat-west-anchor",
+      "semantic": "tiny_west_bay_sailboat",
+      "position": [
+        -145,
+        1,
+        -90
+      ],
+      "approximateSize": [
+        3.2,
+        5.5,
+        7
+      ],
+      "importance": "background",
+      "featureId": "bay-sailboat-west",
+      "evidence": "reference-visible"
+    },
+    {
+      "id": "bay-sailboat-center-anchor",
+      "semantic": "tiny_center_bay_sailboat",
+      "position": [
+        5,
+        1,
+        -155
+      ],
+      "approximateSize": [
+        3.2,
+        5.5,
+        7
+      ],
+      "importance": "background",
+      "featureId": "bay-sailboat-center",
+      "evidence": "reference-visible"
+    },
+    {
+      "id": "bay-sailboat-east-anchor",
+      "semantic": "tiny_east_bay_sailboat",
+      "position": [
+        135,
+        1,
+        -105
+      ],
+      "approximateSize": [
+        3.2,
+        5.5,
+        7
+      ],
+      "importance": "background",
+      "featureId": "bay-sailboat-east",
+      "evidence": "reference-visible"
+    },
+    {
+      "id": "bay-sailboat-mouth-anchor",
+      "semantic": "tiny_bay_mouth_sailboat",
+      "position": [
+        -45,
+        1,
+        -330
+      ],
+      "approximateSize": [
+        3.2,
+        5.5,
+        7
+      ],
+      "importance": "background",
+      "featureId": "bay-sailboat-mouth",
+      "evidence": "reference-visible"
+    },
+    {
+      "id": "east-cove-sailboat-anchor",
+      "semantic": "tiny_east_cove_sailboat",
+      "position": [
+        215,
+        1,
+        -15
+      ],
+      "approximateSize": [
+        3.2,
+        5.5,
+        7
+      ],
+      "importance": "background",
+      "featureId": "east-cove-sailboat",
+      "evidence": "planner-inferred"
+    }
+  ],
+  "routes": [
+    {
+      "id": "central-overlook-descent",
+      "points": [
+        [
+          0,
+          355
+        ],
+        [
+          0,
+          320
+        ],
+        [
+          -5,
+          295
+        ],
+        [
+          0,
+          280
+        ]
+      ],
+      "width": 9,
+      "priority": "primary",
+      "maxSlopeDegrees": 30,
+      "evidence": "user-explicit"
+    },
+    {
+      "id": "east-lighthouse-branch",
+      "points": [
+        [
+          0,
+          280
+        ],
+        [
+          130,
+          270
+        ],
+        [
+          205,
+          210
+        ],
+        [
+          250,
+          115
+        ],
+        [
+          285,
+          10
+        ],
+        [
+          295,
+          -45
+        ]
+      ],
+      "width": 8,
+      "priority": "primary",
+      "maxSlopeDegrees": 32,
+      "evidence": "planner-inferred"
+    },
+    {
+      "id": "west-coast-terrace-route",
+      "points": [
+        [
+          0,
+          280
+        ],
+        [
+          -130,
+          270
+        ],
+        [
+          -205,
+          210
+        ],
+        [
+          -255,
+          115
+        ],
+        [
+          -290,
+          5
+        ],
+        [
+          -345,
+          -95
+        ],
+        [
+          -385,
+          -210
+        ]
+      ],
+      "width": 8,
+      "priority": "primary",
+      "maxSlopeDegrees": 33,
+      "evidence": "planner-inferred"
+    },
+    {
+      "id": "east-coast-north-route",
+      "points": [
+        [
+          295,
+          -45
+        ],
+        [
+          345,
+          -115
+        ],
+        [
+          370,
+          -215
+        ],
+        [
+          405,
+          -325
+        ]
+      ],
+      "width": 7,
+      "priority": "secondary",
+      "maxSlopeDegrees": 34,
+      "evidence": "planner-inferred"
+    },
+    {
+      "id": "southern-rear-loop-west",
+      "points": [
+        [
+          0,
+          355
+        ],
+        [
+          -120,
+          405
+        ],
+        [
+          -275,
+          390
+        ],
+        [
+          -410,
+          310
+        ],
+        [
+          -350,
+          165
+        ],
+        [
+          -235,
+          100
+        ]
+      ],
+      "width": 9,
+      "priority": "primary",
+      "maxSlopeDegrees": 34,
+      "evidence": "planner-inferred"
+    },
+    {
+      "id": "southern-rear-loop-east",
+      "points": [
+        [
+          0,
+          355
+        ],
+        [
+          135,
+          415
+        ],
+        [
+          290,
+          390
+        ],
+        [
+          420,
+          300
+        ],
+        [
+          350,
+          170
+        ],
+        [
+          230,
+          100
+        ]
+      ],
+      "width": 9,
+      "priority": "primary",
+      "maxSlopeDegrees": 34,
+      "evidence": "planner-inferred"
+    }
+  ],
+  "entry": {
+    "spawn": [
+      0,
+      355
+    ],
+    "facingRadians": 0,
+    "camera": {
+      "pitchRadians": 0.42,
+      "distance": 4.2,
+      "fovDegrees": 60
+    },
+    "composition": {
+      "foreground": [
+        "traveler centered from behind on flattened high meadow",
+        "central dirt-and-stone path descending away",
+        "flower-rich grass slopes as render-layer framing"
+      ],
+      "middleground": [
+        "broad blue bay occupying the visual center",
+        "layered green western and eastern coasts with pale cliff bands",
+        "tiny sailboats as distant scale cues",
+        "eastern lighthouse right of center"
+      ],
+      "background": [
+        "two low distant islands separated by open water",
+        "wide unobstructed northern sea horizon",
+        "large sunlit cloud formations as render-only atmosphere"
+      ],
+      "visibleLandmarkIds": [
+        "east-cape-lighthouse-anchor",
+        "west-upper-cottage-anchor",
+        "south-path-cottage-anchor",
+        "east-slope-cottage-anchor",
+        "bay-sailboat-west-anchor",
+        "bay-sailboat-center-anchor",
+        "bay-sailboat-east-anchor",
+        "bay-sailboat-mouth-anchor"
+      ]
+    }
+  },
+  "claims": [
+    {
+      "id": "user-entry-composition",
+      "evidence": "user-explicit",
+      "statement": "The entry is a third-person view from the high southern flower slope, looking north and downward along the centered dirt-and-stone path over the bay."
+    },
+    {
+      "id": "user-coastal-layout",
+      "evidence": "user-explicit",
+      "statement": "Layered green coasts and rock cliffs flank the broad blue bay, with a lighthouse on the right cape, sparse red-roof houses, tiny sailboats, distant islands, and an open horizon."
+    },
+    {
+      "id": "reference-asymmetric-coasts",
+      "evidence": "reference-visible",
+      "statement": "The western shore reads as a longer sequence of cliff terraces while the eastern shore forms a compact lighthouse cape."
+    },
+    {
+      "id": "reference-traveler",
+      "evidence": "reference-visible",
+      "statement": "A single adult traveler seen from behind anchors the entry composition."
+    },
+    {
+      "id": "inferred-southern-continuation",
+      "evidence": "planner-inferred",
+      "statement": "Behind the reference camera, a rolling southern upland connects west and east coastal routes into a playable loop."
+    },
+    {
+      "id": "inferred-route-network",
+      "evidence": "planner-inferred",
+      "statement": "The central descent branches to the lighthouse and western terraces, with walkable corridor slopes capped below 35 degrees."
+    },
+    {
+      "id": "optional-render-layer",
+      "evidence": "planner-optional",
+      "statement": "Dense flower species, individual grasses, cloud shapes, water sparkle and foam, foliage texture, roof materials, and hand-painted styling are delegated to the world model and are not whitebox collision structure."
+    }
+  ],
+  "artifacts": [
+    {
+      "kind": "world-plan",
+      "generator": "codex-imagegen",
+      "uri": "/scene-plans/sunlit-flower-bay/world-plan.png",
+      "prompt": "Use case: infographic-diagram\nAsset type: strict orthographic topology plan for a complete playable outdoor 3D world\nPrimary request: map a 1200 by 1000 meter pastoral sea bay world, north at top, with a broad blue bay opening to the north; high southern entry overlook at bottom center; centered descending path; long stepped western green coast and pale cliff bands; compact eastern lighthouse cape and cliffs; sparse cottages; five tiny sailboats; two low distant islands near the north boundary; and connected southern rear upland routes behind the entry\nExact topology: water fills the center and reaches the north edge through a wide mouth; western and eastern land masses embrace but never close the bay; entry path descends from south to inner shore then branches west and east; east branch reaches one lighthouse; primary rear loop connects both coasts across the south\nComposition/framing: true top-down 90-degree orthographic view, rectangular full-world framing, north at top, no horizon and no visible sides of objects; use simple large flat color regions and crisp route lines\nStyle/medium: elegant professional game level-design plan with readable green elevation terraces, pale cliff bands, blue water, tan paths, tiny simple building and boat symbols\nConstraints: topology rather than decorative aerial art; no perspective, isometric angle, text, labels, legend, compass letters, UI, border annotations, clouds, flower detail, water texture, shadows that imply perspective, dense town, giant ships, extra lighthouse, watermark, or cropped world edges"
+    },
+    {
+      "kind": "opening-shot",
+      "generator": "codex-imagegen",
+      "uri": "/scene-plans/sunlit-flower-bay/opening-shot.png",
+      "prompt": "Use case: stylized-concept\nAsset type: intended entry composition for a third-person playable outdoor world\nPrimary request: from behind an adult traveler on a high southern flower meadow, look north and moderately downward along a centered dirt-and-stone footpath descending toward a vast brilliant blue sea bay; layered green coasts and pale rock cliffs frame both sides; a slender white lighthouse stands on the right cape; a few small red-roof cottages dot both slopes; very tiny sailboats cross the bay; two low distant islands sit beneath a broad open horizon\nComposition/framing: wide 16:9 third-person game view, camera 4.2 meters behind the traveler at a gentle downward pitch and 60-degree FOV; traveler centered in lower foreground; path begins under their feet and leads to the visual center; bay dominates middle ground; western coast longer and more terraced, eastern lighthouse right of center, open sea horizon in upper middle\nLighting: clear bright late morning, sunlight from upper right, high visibility, luminous blue water and readable distant silhouettes\nStyle/medium: warm hand-painted pastoral adventure environment concept art, saturated yet natural blue and green, painterly flower meadow and towering summer clouds; coherent real-world scale\nStructural constraints: preserve the exact player-path-bay-lighthouse relationship; one player, one lighthouse, sparse cottages only, sailboats must remain tiny scale cues, main path visibly walkable, bay open to the horizon\nRender-layer note: flowers, individual grass, cloud volume, water sparkle and foam, foliage texture, roof material and brushwork are visual treatment only and must not suggest extra collision landforms\nNegative constraints: no enclosed lake, city, harbor skyline, giant ship, tropical palms, fantasy castle, mountains blocking the sea, extra lighthouse, front-facing player, first-person camera, text, UI, logo, or watermark"
+    },
+    {
+      "kind": "height-slope-plan",
+      "generator": "sdk-derived",
+      "uri": "runtime://planning/height-slope"
+    }
+  ],
+  "traceability": {
+    "requiredFeatureIds": [
+      "coastal-terrain",
+      "south-overlook",
+      "central-descent-landform",
+      "western-coast-landform",
+      "western-cliffs",
+      "eastern-coast-landform",
+      "eastern-cliffs",
+      "lighthouse-cape-ground",
+      "southern-hinterland-landform",
+      "northwest-island",
+      "northeast-island",
+      "sunlit-bay",
+      "east-cape-lighthouse",
+      "west-upper-cottage",
+      "west-cove-cottage",
+      "south-path-cottage",
+      "east-slope-cottage",
+      "lighthouse-keeper-cottage",
+      "bay-sailboat-west",
+      "bay-sailboat-center",
+      "bay-sailboat-east",
+      "bay-sailboat-mouth",
+      "east-cove-sailboat"
+    ]
+  }
+}

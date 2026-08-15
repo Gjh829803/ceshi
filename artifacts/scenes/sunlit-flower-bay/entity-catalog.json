@@ -1,0 +1,218 @@
+{
+  "prototypes": [
+    {
+      "id": "traveler-player",
+      "role": "subject",
+      "semantic": "third_person_coastal_traveler",
+      "description": "An adult traveler with a compact shoulder bag and wind-readable silhouette.",
+      "approximateSize": [
+        0.8,
+        1.75,
+        0.55
+      ],
+      "forwardAxis": "-Z",
+      "pivot": "ground-center",
+      "instanceColor": "#D94B45",
+      "appearancePrompt": "adult coastal traveler, dark hair with a red ribbon, cream blouse, long blue skirt, compact brown shoulder bag, clean third-person silhouette",
+      "negativePrompt": "no trailing collision cloth, no weapon, no oversized luggage, no extra limbs",
+      "evidence": "reference-visible",
+      "views": {
+        "canonical": [
+          "front",
+          "right",
+          "back"
+        ],
+        "whiteboxUri": "/scene-plans/sunlit-flower-bay/prototypes/traveler-player/whitebox-triview.png",
+        "styledUri": "/scene-plans/sunlit-flower-bay/prototypes/traveler-player/styled-triview.png"
+      }
+    },
+    {
+      "id": "cape-lighthouse",
+      "role": "landmark",
+      "semantic": "white_eastern_cape_lighthouse",
+      "description": "A slender white lighthouse with a dark lantern room and restrained red cap.",
+      "approximateSize": [
+        8,
+        25,
+        8
+      ],
+      "forwardAxis": "-Z",
+      "pivot": "ground-center",
+      "instanceColor": "#F0C541",
+      "appearancePrompt": "slender white stone coastal lighthouse, dark lantern gallery, small muted red cap, simple readable maritime silhouette",
+      "negativePrompt": "no castle, no attached city, no giant tower, no changed proportions",
+      "evidence": "reference-visible",
+      "views": {
+        "canonical": [
+          "front",
+          "right",
+          "back"
+        ],
+        "whiteboxUri": "/scene-plans/sunlit-flower-bay/prototypes/cape-lighthouse/whitebox-triview.png",
+        "styledUri": "/scene-plans/sunlit-flower-bay/prototypes/cape-lighthouse/styled-triview.png"
+      }
+    },
+    {
+      "id": "red-roof-cottage",
+      "role": "landmark",
+      "semantic": "small_pale_coastal_cottage_with_red_tile_roof",
+      "description": "A compact pale cottage with a low terracotta gable roof and one attached minor volume.",
+      "approximateSize": [
+        12,
+        8,
+        9
+      ],
+      "forwardAxis": "-Z",
+      "pivot": "ground-center",
+      "instanceColor": "#4F8BC9",
+      "appearancePrompt": "small pale plaster coastal cottage, low terracotta gable roof, modest rural proportions, sparse settlement character",
+      "negativePrompt": "no multi-storey villa, no urban block, no garden wall maze, no enlarged footprint",
+      "evidence": "reference-visible",
+      "views": {
+        "canonical": [
+          "front",
+          "right",
+          "back"
+        ],
+        "whiteboxUri": "/scene-plans/sunlit-flower-bay/prototypes/red-roof-cottage/whitebox-triview.png",
+        "styledUri": "/scene-plans/sunlit-flower-bay/prototypes/red-roof-cottage/styled-triview.png"
+      }
+    },
+    {
+      "id": "tiny-sailboat",
+      "role": "object",
+      "semantic": "distant_small_single_mast_sailboat",
+      "description": "A very small single-mast sailboat used as a scale cue on the broad bay.",
+      "approximateSize": [
+        3.2,
+        5.5,
+        7
+      ],
+      "forwardAxis": "-Z",
+      "pivot": "center",
+      "instanceColor": "#6F58A8",
+      "appearancePrompt": "tiny single-mast coastal sailboat with one bright triangular sail and a narrow hull, distant scale cue",
+      "negativePrompt": "no yacht, no tall ship, no engine wake, no oversized hull, no crew detail",
+      "evidence": "reference-visible",
+      "views": {
+        "canonical": [
+          "front",
+          "right",
+          "back"
+        ],
+        "whiteboxUri": "/scene-plans/sunlit-flower-bay/prototypes/tiny-sailboat/whitebox-triview.png",
+        "styledUri": "/scene-plans/sunlit-flower-bay/prototypes/tiny-sailboat/styled-triview.png"
+      }
+    }
+  ],
+  "instances": [
+    {
+      "id": "player",
+      "prototypeId": "traveler-player",
+      "binding": {
+        "kind": "runtime-entity",
+        "id": "player"
+      },
+      "evidence": "user-explicit"
+    },
+    {
+      "id": "east-cape-lighthouse",
+      "prototypeId": "cape-lighthouse",
+      "binding": {
+        "kind": "feature",
+        "id": "east-cape-lighthouse"
+      },
+      "evidence": "user-explicit"
+    },
+    {
+      "id": "west-upper-cottage",
+      "prototypeId": "red-roof-cottage",
+      "binding": {
+        "kind": "feature",
+        "id": "west-upper-cottage"
+      },
+      "evidence": "reference-visible"
+    },
+    {
+      "id": "west-cove-cottage",
+      "prototypeId": "red-roof-cottage",
+      "binding": {
+        "kind": "feature",
+        "id": "west-cove-cottage"
+      },
+      "evidence": "reference-visible"
+    },
+    {
+      "id": "south-path-cottage",
+      "prototypeId": "red-roof-cottage",
+      "binding": {
+        "kind": "feature",
+        "id": "south-path-cottage"
+      },
+      "evidence": "reference-visible"
+    },
+    {
+      "id": "east-slope-cottage",
+      "prototypeId": "red-roof-cottage",
+      "binding": {
+        "kind": "feature",
+        "id": "east-slope-cottage"
+      },
+      "evidence": "reference-visible"
+    },
+    {
+      "id": "lighthouse-keeper-cottage",
+      "prototypeId": "red-roof-cottage",
+      "binding": {
+        "kind": "feature",
+        "id": "lighthouse-keeper-cottage"
+      },
+      "evidence": "planner-inferred"
+    },
+    {
+      "id": "bay-sailboat-west",
+      "prototypeId": "tiny-sailboat",
+      "binding": {
+        "kind": "feature",
+        "id": "bay-sailboat-west"
+      },
+      "evidence": "reference-visible"
+    },
+    {
+      "id": "bay-sailboat-center",
+      "prototypeId": "tiny-sailboat",
+      "binding": {
+        "kind": "feature",
+        "id": "bay-sailboat-center"
+      },
+      "evidence": "reference-visible"
+    },
+    {
+      "id": "bay-sailboat-east",
+      "prototypeId": "tiny-sailboat",
+      "binding": {
+        "kind": "feature",
+        "id": "bay-sailboat-east"
+      },
+      "evidence": "reference-visible"
+    },
+    {
+      "id": "bay-sailboat-mouth",
+      "prototypeId": "tiny-sailboat",
+      "binding": {
+        "kind": "feature",
+        "id": "bay-sailboat-mouth"
+      },
+      "evidence": "reference-visible"
+    },
+    {
+      "id": "east-cove-sailboat",
+      "prototypeId": "tiny-sailboat",
+      "binding": {
+        "kind": "feature",
+        "id": "east-cove-sailboat"
+      },
+      "evidence": "planner-inferred"
+    }
+  ]
+}

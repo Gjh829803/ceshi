@@ -115,6 +115,11 @@ pnpm visual:inputs -- --scene coastal-world
 pnpm agent:visual -- --scene-id coastal-world
 ```
 
+显式传入的参考图会由可信启动层复制到
+`apps/playground/public/scene-plans/<scene-id>/reference-N.<ext>`；Planner 只能引用、不能修改。
+这些参考图与 WorldSpec、World Plan、Opening Shot 一起进入 `plan-lock.json`，因此后续 Builder
+和 Visual Bible 使用的是可复现的同一份视觉证据。
+
 `pnpm agent:scene` 是 Planner + Builder 的便捷连续入口，内部仍然启动两次独立的临时 Agent，并在中间冻结计划。它不会自动执行 Visual Bible，因为真实白膜需要先在浏览器中进行可玩性和构图验收、导出三视图。
 
 ## 7. 当前实现边界

@@ -67,7 +67,7 @@
 - `defineOutdoorScene` 场景 DSL、通用运行时编译器、Agent 自定义 Feature、场景目录与可追踪的初始镜头构图
 - `OutdoorWorldSpec / definePlannedOutdoorScene`：全世界拓扑、证据来源、进入视角和规划资产的可验证契约
 - `WorldPromptBundle / Entity Catalog`：世界级渲染描述，以及主体、NPC、标志物、客体的 Prototype/Instance、唯一实例色和三视图契约
-- `plan-lock.json`：冻结 WorldSpec 源码、World Plan 和 Opening Shot；Builder 前后都会检查漂移
+- `plan-lock.json`：冻结项目内参考图、WorldSpec 源码、World Plan 和 Opening Shot；Builder 前后都会检查漂移
 - Codex 内置图片生成的 World Plan / Opening Shot，以及 SDK 从真实场景导出的 Top-down / Height-Slope 规划工件
 - SDK 真实正交白膜三视图导出，以及 Visual Bible 输入/最终包校验
 - `WASD / Shift / Space / ↑ / ↓`、相机相对移动、符合视线语义的上下视角、固定步长插值与防颠簸跟随

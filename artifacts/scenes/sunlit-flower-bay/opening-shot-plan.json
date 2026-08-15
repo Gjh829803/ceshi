@@ -1,0 +1,46 @@
+{
+  "artifactVersion": 1,
+  "sceneId": "sunlit-flower-bay",
+  "specHash": "e8edd203",
+  "entry": {
+    "spawn": [
+      0,
+      355
+    ],
+    "facingRadians": 0,
+    "camera": {
+      "pitchRadians": 0.42,
+      "distance": 4.2,
+      "fovDegrees": 60
+    },
+    "composition": {
+      "foreground": [
+        "traveler centered from behind on flattened high meadow",
+        "central dirt-and-stone path descending away",
+        "flower-rich grass slopes as render-layer framing"
+      ],
+      "middleground": [
+        "broad blue bay occupying the visual center",
+        "layered green western and eastern coasts with pale cliff bands",
+        "tiny sailboats as distant scale cues",
+        "eastern lighthouse right of center"
+      ],
+      "background": [
+        "two low distant islands separated by open water",
+        "wide unobstructed northern sea horizon",
+        "large sunlit cloud formations as render-only atmosphere"
+      ],
+      "visibleLandmarkIds": [
+        "east-cape-lighthouse-anchor",
+        "west-upper-cottage-anchor",
+        "south-path-cottage-anchor",
+        "east-slope-cottage-anchor",
+        "bay-sailboat-west-anchor",
+        "bay-sailboat-center-anchor",
+        "bay-sailboat-east-anchor",
+        "bay-sailboat-mouth-anchor"
+      ]
+    }
+  },
+  "reference": "/scene-plans/sunlit-flower-bay/opening-shot.png"
+}

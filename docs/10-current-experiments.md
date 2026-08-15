@@ -23,6 +23,7 @@
 | `?scene=canyon` | 自定义峡谷、Polygon 河流和石拱 | Coding Agent 可用 BuildContext 定义 SDK 未预置的地貌名词 | 河流没有流体模拟，blocked/swimmable 仍主要是语义契约 |
 | `?scene=azure-bay` | 南侧高地俯瞰海湾、两侧海岸、岛状轮廓、灯塔、村落和帆船 | 单图构图转译、自定义地形、Polygon 水体、初始镜头构图、连续可走下坡 | 岛状轮廓来自同一地形 Feature 的塑形，并非独立 Island Feature；不重建花海、云层和绘画风格 |
 | `?scene=mistbound-rider` | 山谷、道路式区域、废墟、村落、城堡和远景天体 | 更复杂的自由 Feature/标志物组合和语义提示 | 马与骑手是静态几何标志物，不代表骑马主体已实现 |
+| `?scene=sunlit-flower-bay` | 用用户参考图完成 Planner → Builder → 浏览器 QA → Visual Bible 全流程 | 1200m × 1000m 海湾、冻结图片输入、路线坡度、四类 Prototype、白膜/样式三视图、渲染首帧与完整 `visualized` 清单 | 白膜只保证结构和可玩性；最终渲染首帧是世界模型条件包的目标表达，不是当前 Three.js 逐帧输出 |
 
 运行方式：
 
@@ -47,7 +48,7 @@ pnpm dev
 | 不可爬坡面没有定义 | 人形 42° 最大爬坡、48° 自动滑落，主路线建议 ≤35° | 出生点坡度检查；Azure Bay 路线测试覆盖 ≤35° |
 | 分块地形出现缝或高差 | 分块使用世界坐标采样；渲染网格和 Rapier 高度场复用同一高度数据 | 自动测试验证高度/物理对齐；像素级接缝仍需浏览器截图回归 |
 
-## 4. 多 Agent 创作实验
+## 4. Planner / Builder / Visual Bible 创作实验
 
 `grassland` 已迁移为首个完整样例：
 
@@ -60,11 +61,21 @@ pnpm dev
 
 本次浏览器人工 QA 发现并修复了高 DPR 屏幕下三视图被裁切的问题：WebGL viewport/scissor 现在使用 renderer 的逻辑尺寸，而不是包含 DPR 的 drawing-buffer 尺寸。修复后人物与高塔在三格中均完整、等比例、背景一致。
 
+`sunlit-flower-bay` 已用用户提供的花海海湾图片完成一次真实端到端运行：
+
+- 参考图先复制为项目内 `reference-0.png`，并和 World Plan、Opening Shot、WorldSpec 一起进入 `plan-lock.json`；Builder 只消费项目内 URI，未读取其他工作区目录。
+- Planner 扩展出 1200m × 1000m 完整世界、进入视角、六条路线、一个主体 Prototype 与灯塔/房屋/帆船三个物体 Prototype。四类实例分别使用红、黄、蓝、紫唯一白膜色。
+- 第一版 Builder 虽通过数值测试，但浏览器首帧暴露出 300m 水岸过渡把出生高台拉低、远景物体漂浮的问题。QA 随即触发规划修订：把路线移出水体、缩窄岸带、恢复 82m 出生高台，并增加中央海湾视线谷地。修订后重新冻结规划，所有路线继续满足各自 30°–34° 上限。
+- 浏览器最终实测出生高度约 82.9m，中央海湾、两侧岸线和右侧灯塔均进入白膜首帧；四类 Prototype 均从真实运行时导出 Front / Right / Back 白膜三视图。
+- Codex Image 工具以白膜三视图作为结构约束、参考图和 Opening Shot 作为风格约束，生成四张样式三视图和 `opening-frame-rendered.png`。`visual-bible-manifest.json` 已记录最终首帧与全部八张三视图的哈希，`visual:check` 通过。
+- Builder 隔离流程曾两次把并发文档提交或自身临时编译缓存误判为越权；实现本身的测试、类型检查、构建和规划导出均通过。后续应把权限审计的基线限定为 Agent 阶段开始后的授权文件集合，并显式忽略阶段私有临时目录。
+- 页面三视图写入端点在一次带多余 `--` 的 Vite 启动命令下返回 404；使用标准 `pnpm dev`/Vite 启动方式已验证插件端点会加载。本次结果仍由同一页面运行时捕获，宿主只负责把 PNG 写入声明路径。
+
 ## 5. 2026-08-15 自动验证结果
 
 ```text
-pnpm test         17 test files / 89 tests passed
-pnpm test:scenes  2 test files / 14 tests passed
+pnpm test         17 test files / 92 tests passed
+pnpm test:scenes  2 test files / 16 tests passed
 pnpm typecheck    passed
 pnpm build        passed
 pnpm test:isolation passed; workspace 外目录不可读
@@ -72,6 +83,9 @@ pnpm plan:check -- --scene grassland passed
 pnpm plan:scene -- --scene grassland passed
 pnpm plan:scene:check -- --scene grassland passed
 pnpm visual:inputs -- --scene grassland passed
+pnpm plan:check -- --scene sunlit-flower-bay passed
+pnpm plan:scene:check -- --scene sunlit-flower-bay passed
+pnpm visual:check -- --scene sunlit-flower-bay passed
 ```
 
 已知非阻塞告警：
@@ -86,7 +100,7 @@ pnpm visual:inputs -- --scene grassland passed
 - 场景可编译、所有 Feature 构建成功。
 - 资源唯一所有权、依赖、有限 Transform，以及出生点的地形高度/落差/坡度安全；尚未检查出生点与水体、标志物或世界边界相交。
 - 各场景渲染高度采样与 Rapier 高度场一致。
-- Azure Bay 从出生点到观景坡底的主路线坡度不超过 35°。
+- Azure Bay 从出生点到观景坡底的主路线坡度不超过 35°；Sunlit Flower Bay 六条冻结路线均满足各自 30°–34° 上限。
 - Core、Physics、Camera、Subject、Animation、Terrain、Feature、Schema 和 Testkit 的核心单元测试。
 - WorldSpec 的必需字段、项目内图片 URI、Feature/进入镜头一致性，以及结构化规划工件的确定性导出。
 - WorldPrompt 完整性、Prototype/Instance 引用、唯一实例色、固定三视图路径和 Landmark 运行时绑定。
@@ -99,10 +113,10 @@ pnpm visual:inputs -- --scene grassland passed
 - tile 边界的像素级阴影/法线接缝。
 - 每个图片参考场景的首帧构图相似度。
 - 生成 World Plan/Opening Shot 与真实白膜截图的自动视觉差异评分；当前已经能分别截图，但仍由人或 Agent 对比。
-- 白膜三视图与样式三视图的自动轮廓/姿态一致性评分；当前只检查文件、路径和哈希。
+- 白膜三视图与样式三视图的自动轮廓/姿态一致性评分；Sunlit Flower Bay 已有完整配对，但当前仍只自动检查文件、路径和哈希。
 - 水岸在各种视角和地形高度下的观感。
 - Mixamo 动作混合观感、脚滑和 jump 动作绑定。
-- 世界模型条件帧与最终生成画面的一致性；该链路尚未实现。
+- 世界模型条件帧与最终生成画面的一致性；当前已产出条件包和目标首帧，但实时世界模型链路尚未接入。
 
 其他实现层已知问题：
 
@@ -113,4 +127,4 @@ pnpm visual:inputs -- --scene grassland passed
 
 ## 7. 当前结论
 
-当前代码已经证明“受约束的 Planner 与 Builder 可以通过冻结契约创建可追踪的室外高度场白膜世界”，并完成了真实实体白膜三视图的结构化导出；但还不能宣称“任意场景”或“第一期生产完成”。下一步应实际运行 Visual Bible 样例、扩大图片参考实验集，并把构图、三视图轮廓、可玩性、性能和主观手感变成可重复验收，而不是继续堆更多地貌名词。
+当前代码已经证明“受约束的 Planner、Builder 与 Visual Bible 可以通过冻结契约，把单张参考图变成可追踪、可玩的室外高度场白膜世界，并交付目标渲染首帧和实体视觉绑定”。`sunlit-flower-bay` 是第一个完整 `visualized` 样例；但单个成功样例还不能等同于“任意场景”或“第一期生产完成”。下一步应扩大图片参考实验集，并把首帧构图、三视图轮廓、可玩性、性能和主观手感变成自动或半自动验收。

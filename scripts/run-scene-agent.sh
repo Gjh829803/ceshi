@@ -88,6 +88,7 @@ trap cleanup EXIT
 mkdir -p "$task_tmp/home" "$task_tmp/tmp" "$task_tmp/input"
 
 image_args=()
+project_reference_uris=()
 image_index=0
 for image_source in "${image_sources[@]}"; do
   if [[ ! -f "$image_source" || ! -r "$image_source" || -L "$image_source" ]]; then
@@ -96,15 +97,27 @@ for image_source in "${image_sources[@]}"; do
   fi
   extension="${image_source##*.}"
   case "$extension" in
-    png|PNG|jpg|JPG|jpeg|JPEG|webp|WEBP) ;;
+    png|PNG) normalized_extension="png" ;;
+    jpg|JPG|jpeg|JPEG) normalized_extension="jpg" ;;
+    webp|WEBP) normalized_extension="webp" ;;
     *) echo "Unsupported image format .$extension." >&2; exit 2 ;;
   esac
-  staged_image="$task_tmp/input/reference-$image_index.$extension"
+  staged_image="$task_tmp/input/reference-$image_index.$normalized_extension"
   /bin/cp -- "$image_source" "$staged_image"
   /bin/chmod 0444 "$staged_image"
   image_args+=(--image "$staged_image")
+  project_reference_dir="$project_root/apps/playground/public/scene-plans/$scene_id"
+  project_reference_path="$project_reference_dir/reference-$image_index.$normalized_extension"
+  /bin/mkdir -p -- "$project_reference_dir"
+  /bin/cp -- "$image_source" "$project_reference_path"
+  project_reference_uris+=("/scene-plans/$scene_id/reference-$image_index.$normalized_extension")
   image_index=$((image_index + 1))
 done
+
+reference_uri_context="No reference images were supplied."
+if [[ ${#project_reference_uris[@]} -gt 0 ]]; then
+  reference_uri_context="Persist these exact project-local URIs in source.referenceImages: ${project_reference_uris[*]}"
+fi
 
 permission_args=(
   -c 'default_permissions="whitebox_workspace_only"'
@@ -156,6 +169,7 @@ run_gate() {
     "${permission_args[@]}" \
     --permission-profile whitebox_workspace_only \
     --cd "$project_root" \
+    --allow-unix-socket "$task_tmp/tmp" \
     -- \
     "$@"
 }
@@ -195,13 +209,14 @@ planner_prompt="$user_prompt
 
 You are the World Planner Agent for catalog id '$scene_id'. You plan; you do not write scene geometry.
 1. Create apps/playground/src/scenes/plans/$scene_id.ts and export a named worldSpec using defineOutdoorWorldSpec.
+   $reference_uri_context
 2. Define the complete playable world, WorldPromptBundle, Entity Catalog, stable unique instance colors, and front/right/back whitebox/styled tri-view paths for every subject, NPC, landmark, and object visual prototype.
 3. Separate user-explicit, reference-visible, planner-inferred, and planner-optional evidence. Multiple instances may share one prototype, but every meaningful runtime instance needs a catalog entry and binding.
 4. Use Codex's built-in image generation tool to create exactly:
    - apps/playground/public/scene-plans/$scene_id/world-plan.png
    - apps/playground/public/scene-plans/$scene_id/opening-shot.png
    The first is a strict orthographic topology plan; the second is the intended entry composition. Copy real generated assets into those paths and never fabricate placeholders.
-5. Do not create or edit scene implementation files, SDK internals, plan-lock.json, or derived artifacts. Height and slope remain SDK-derived.
+5. Do not create, edit, or replace the persisted reference images. Do not create or edit scene implementation files, SDK internals, plan-lock.json, or derived artifacts. Height and slope remain SDK-derived.
 6. Finish only when pnpm typecheck succeeds."
 
 builder_prompt="You are the World Builder Agent for catalog id '$scene_id'. The reviewed plan is frozen and is your only design authority.

@@ -9,7 +9,7 @@ import {
 } from "../../packages/world/src/index.js";
 
 export interface FrozenPlanFile {
-  kind: "world-spec-source" | "world-plan" | "opening-shot";
+  kind: "world-spec-source" | "reference-image" | "world-plan" | "opening-shot";
   path: string;
   sha256: string;
 }
@@ -91,6 +91,11 @@ export async function buildFrozenPlanLock(
       sha256: sha256(sourceContents),
     },
   ];
+  for (const referenceUri of spec.source.referenceImages ?? []) {
+    const relativePath = `apps/playground/public${referenceUri}`;
+    const contents = await readRegularFile(path.join(projectRoot, relativePath));
+    files.push({ kind: "reference-image", path: relativePath, sha256: sha256(contents) });
+  }
   for (const artifact of spec.artifacts) {
     if (artifact.generator !== "codex-imagegen") continue;
     if (artifact.kind !== "world-plan" && artifact.kind !== "opening-shot") continue;

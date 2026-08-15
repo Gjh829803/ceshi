@@ -1,0 +1,31 @@
+{
+  "identity": "A bright, expansive pastoral sea bay seen from a flowered southern headland, with layered green coasts, pale rock cliffs, a lighthouse on the eastern cape, sparse red-roof cottages, tiny sailboats, distant islands, and an open northern horizon.",
+  "spatialComposition": "The player begins on the high south-central overlook and faces north down a central dirt-and-stone path. The bay fills the middle of the world; terraced western and eastern shores embrace it without closing the northern mouth. The eastern route branches to the lighthouse cape, the western route descends through cliff terraces, and both reconnect through the southern upland behind the entry viewpoint.",
+  "environment": "Broad hill-country relief shaped into a flattened spawn overlook, a long gentle descent, stepped coastal shoulders, explicit cliff bands, protected coves, an eastern lighthouse plateau, a navigable southern hinterland, a broad water body, and low distant islands. Whitebox geometry expresses only terrain, paths, shore boundaries, cliff masses, lighthouse, cottages, and sailboat silhouettes.",
+  "lighting": "Clear late-morning sunlight from the south-east, high visibility over the bay, bright readable land-water separation, and gentle atmospheric distance without obscuring routes or silhouettes.",
+  "visualStyle": "Warm hand-painted pastoral adventure concept art with saturated Mediterranean blue and green. Dense wildflowers, individual grasses, cloud towers, sparkling water, foam, foliage texture, roof materials, and painterly brushwork are render-layer treatments and must not become collision geometry.",
+  "openingShot": "Third-person camera behind an adult traveler standing on the southern high meadow, looking north and moderately downward along the centered descending path; flowered slopes frame the foreground, the vast blue bay dominates the middle ground, layered shores flank both sides, and the eastern lighthouse sits right of center against distant islands and an open horizon.",
+  "invariants": [
+    "Keep the spawn on the flattened south-central high ground, outside water and landmark blockers, facing north down the central path.",
+    "Keep the central path continuously walkable from the entry overlook to the inner-bay shore at no more than 30 degrees planned slope.",
+    "Keep the broad bay visually centered and open to the north, framed by asymmetric layered coasts and pale cliff bands.",
+    "Keep one lighthouse on the eastern cape, sparse red-roof cottages on both coastal slopes, tiny sailboats on the water, and low islands beyond the bay mouth.",
+    "Keep the southern hinterland behind the camera playable and connected to both coastal branches as a complete loop.",
+    "Do not encode flowers, clouds, surface ripples, foam, painted texture, or illustration brushwork as whitebox collision geometry."
+  ],
+  "negativePrompt": [
+    "enclosed lake",
+    "dense town or city",
+    "tropical palms",
+    "giant ships",
+    "oversized lighthouse",
+    "impassable main path",
+    "mountains blocking the horizon",
+    "flower-shaped collision meshes",
+    "cloud collision geometry",
+    "text",
+    "labels",
+    "UI",
+    "watermark"
+  ]
+}

@@ -1,0 +1,29 @@
+{
+  "artifactVersion": 1,
+  "workflowStage": "verified",
+  "sceneId": "sunlit-flower-bay",
+  "specHash": "e8edd203",
+  "frozenPlanSpecSha256": "3afbb464ef894a2da5dcf01ad8d05291730bde45a4dbb7da5d9ea448afe1eff9",
+  "planLockSha256": "b464119e5d05bee4b2e48d71919ce340b8fe70bfa29e4a3d48219283ee77a10c",
+  "compiler": "whitebox-world-planning-v1",
+  "files": [
+    "world-spec.json",
+    "world-prompt.json",
+    "entity-catalog.json",
+    "top-down-plan.json",
+    "height-slope-plan.json",
+    "opening-shot-plan.json"
+  ],
+  "imageAssets": [
+    {
+      "kind": "world-plan",
+      "uri": "/scene-plans/sunlit-flower-bay/world-plan.png",
+      "sha256": "7d03e3616fd2d06578618a97b4f7055364dc7ebb3e1bfa11cd7c6439be680f89"
+    },
+    {
+      "kind": "opening-shot",
+      "uri": "/scene-plans/sunlit-flower-bay/opening-shot.png",
+      "sha256": "fdfad014b155d9f9051cf2276e6bd01b1b22382a75628841b40092d6822ab822"
+    }
+  ]
+}

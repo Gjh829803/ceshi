@@ -4,12 +4,14 @@ import { azureBayScene } from "./azure-bay-scene.js";
 import { canyonScene } from "./canyon-scene.js";
 import { currentScene } from "./current-scene.js";
 import { mistboundRiderScene } from "./mistbound-rider-scene.js";
+import { sunlitFlowerBayScene } from "./sunlit-flower-bay.js";
 
 export const sceneCatalog: Readonly<Record<string, OutdoorSceneDefinition>> = {
   grassland: currentScene,
   "azure-bay": azureBayScene,
   canyon: canyonScene,
   "mistbound-rider": mistboundRiderScene,
+  "sunlit-flower-bay": sunlitFlowerBayScene,
 };
 
 export function resolveScene(search: string): OutdoorSceneDefinition {
