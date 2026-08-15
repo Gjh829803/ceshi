@@ -4,19 +4,20 @@
 
 ## 1. 实验目的
 
-当前实验要回答五个问题：
+当前实验要回答六个问题：
 
 1. 第三人称人形的移动、物理、动作和镜头能否由一个稳定 SubjectKit 统一提供。
 2. Coding Agent 能否只写场景模块，不改 SDK 内部，就创建不同的室外白膜世界。
 3. 大地形分块能否保持视觉高度、物理高度和边界采样一致。
 4. 场景中的地形、水体和标志物能否追踪到 Feature、参数、seed 和资源所有者。
 5. 图片参考能否被转译成可玩的白膜空间构图，而不是把纹理和视觉细节错误建成碰撞几何。
+6. Coding Agent 能否先把输入扩展为可追踪的整个世界和进入视角，再用两张规划图与 SDK 实测工件闭环，而不是直接猜几何。
 
 ## 2. 当前 Playground 场景
 
 | URL 参数 | 实验内容 | 已证明的能力 | 必须避免的误读 |
 |---|---|---|---|
-| `?scene=grassland` | 640m × 640m plain 地形、大湖和高塔 | relief 预设、分块高度场、LakeFeature、复合标志物、第三人称主体 | 本地水面只是白膜预览，不是世界模型效果 |
+| `?scene=grassland` | 640m × 640m base-plain 地形、西北低缓塔岭、大湖和高塔 | relief 预设、显式地貌区域、分块高度场、LakeFeature、复合标志物、第三人称主体；首个完整 WorldSpec/World Plan/Opening Shot/Height-Slope 样例 | 两张生成规划图是空间意图，不是物理真相；本地水面也不是世界模型效果 |
 | `?scene=canyon` | 自定义峡谷、Polygon 河流和石拱 | Coding Agent 可用 BuildContext 定义 SDK 未预置的地貌名词 | 河流没有流体模拟，blocked/swimmable 仍主要是语义契约 |
 | `?scene=azure-bay` | 南侧高地俯瞰海湾、两侧海岸、岛状轮廓、灯塔、村落和帆船 | 单图构图转译、自定义地形、Polygon 水体、初始镜头构图、连续可走下坡 | 岛状轮廓来自同一地形 Feature 的塑形，并非独立 Island Feature；不重建花海、云层和绘画风格 |
 | `?scene=mistbound-rider` | 山谷、道路式区域、废墟、村落、城堡和远景天体 | 更复杂的自由 Feature/标志物组合和语义提示 | 马与骑手是静态几何标志物，不代表骑马主体已实现 |
@@ -47,11 +48,13 @@ pnpm dev
 ## 4. 2026-08-15 自动验证结果
 
 ```text
-pnpm test         14 test files / 77 tests passed
+pnpm test         16 test files / 84 tests passed
 pnpm test:scenes  2 test files / 14 tests passed
 pnpm typecheck    passed
 pnpm build        passed
 pnpm test:isolation passed; workspace 外目录不可读
+pnpm plan:scene -- --scene grassland passed
+pnpm plan:scene:check -- --scene grassland passed
 ```
 
 已知非阻塞告警：
@@ -68,12 +71,15 @@ pnpm test:isolation passed; workspace 外目录不可读
 - 各场景渲染高度采样与 Rapier 高度场一致。
 - Azure Bay 从出生点到观景坡底的主路线坡度不超过 35°。
 - Core、Physics、Camera、Subject、Animation、Terrain、Feature、Schema 和 Testkit 的核心单元测试。
+- WorldSpec 的必需字段、项目内图片 URI、Feature/进入镜头一致性，以及结构化规划工件的确定性导出。
+- `grassland` 主要路线的真实地形坡度采样；高度/坡度图来自编译后的 Heightfield，而不是图片模型。
 
 仍需人工或未来视觉回归覆盖：
 
 - 长时间上下坡时的主观移动手感和剩余镜头微振。
 - tile 边界的像素级阴影/法线接缝。
 - 每个图片参考场景的首帧构图相似度。
+- 生成 World Plan/Opening Shot 与真实白膜截图的自动视觉差异评分；当前已经能分别截图，但仍由人或 Agent 对比。
 - 水岸在各种视角和地形高度下的观感。
 - Mixamo 动作混合观感、脚滑和 jump 动作绑定。
 - 世界模型条件帧与最终生成画面的一致性；该链路尚未实现。
@@ -83,7 +89,7 @@ pnpm test:isolation passed; workspace 外目录不可读
 - `WorldSnapshot.player.grounded` 目前由最近动作推断，不是 Rapier motor 的真实 grounded 状态。
 - `reset()` 重置主体、镜头和输入，但不会把 World tick 或 frame 归零。
 - `humanoid-rig-status` 是 Adapter 为检查器追加的运行时状态项，不属于 FeatureRegistry 资源图。
-- `demo-world-adapter.ts` 是未被当前入口引用的早期遗留适配器；真实入口使用 `SdkWorldAdapter`。
+- 早期未引用的 `demo-world-adapter.ts` 已删除；Playground 只保留真实 `SdkWorldAdapter` 链路。
 
 ## 6. 当前结论
 

@@ -12,7 +12,7 @@
 
 ```text
 创作期
-用户文本/图片 → Coding Agent → 创作 SDK → 白膜运行时
+用户文本/图片 → Coding Agent → WorldSpec + 两张规划图 → 创作 SDK → 白膜运行时
 
 运行期
 用户指令 → Director LLM → Director SDK → 白膜运行时
@@ -25,7 +25,7 @@ Director LLM → Render Directive SDK ────────────┘
 
 | 角色 | 负责什么 | 不负责什么 | 当前状态 |
 |---|---|---|---|
-| Coding Agent | 根据文字/图片编写可版本化的 TypeScript 场景 | 不参与每帧控制，不绕过 SDK 改 Three.js/Rapier | Alpha 可用 |
+| Coding Agent | 先定义整个世界与进入视角，再生成规划图并编写可版本化场景 | 不参与每帧控制，不绕过 SDK 改 Three.js/Rapier | Plan-first Alpha 可用 |
 | 白膜 World SDK | 世界构建、主体、镜头、运动、物理、动作和确定性状态 | 不生成最终高质量视觉 | 第一期 Alpha 可运行 |
 | Director LLM + Director SDK | 运行时理解意图，并通过观察、命令、任务和回执受控改世界 | 不逐帧驱动刚体，不直接拿底层对象 | 仅完成方案设计 |
 | 实时世界模型 | 根据白膜条件生成材质、光影、天气、风格和视觉细节 | 不决定位置、碰撞、导航、数量和玩法结果 | 尚未接入 |
@@ -41,6 +41,7 @@ Director LLM → Render Directive SDK ────────────┘
 - 室外高度场场景：连续分块地形、四种 relief、局部塑形、湖泊/水体、复合几何标志物。
 - 可追踪的 `WorldFeature`：稳定 ID、schema、seed、依赖、资源所有权、预算、诊断、重建和清理。
 - `defineOutdoorScene` 场景 DSL、场景目录、Playground、检查器和固定输入 Smoke API。
+- `OutdoorWorldSpec`、两张 Codex imagegen 规划图、SDK 派生的俯视/高度坡度工件，以及规划和白膜的 Feature/进入镜头一致性检查。
 - Coding Agent 的 workspace 隔离入口，以及受控图片输入入口。
 
 当前的“自由创造”严格指室外高度场白膜世界，不等于任意 3D 游戏类型。洞穴、倒悬结构、完整室内、车辆、骑乘、动物、NPC、寻路、Gameplay、联网、Render Bridge、实时世界模型和 Runtime Director 都尚未实现。
@@ -50,6 +51,7 @@ Director LLM → Render Directive SDK ────────────┘
 - 物理跳跃已经存在，但 `jump` 骨骼动作尚未绑定和视觉验收。
 - WaterBody 是白膜水体与基础本地预览，不是最终生成式水面。
 - 图片可以传给 Coding Agent，但单张透视图只能重建可见构图与合理的可玩延伸，不能恢复唯一真实三维几何。
+- World Plan 和 Opening Shot 是创作意图，不是碰撞或高度真相；高度、坡度、可通行性必须从实际白膜计算。
 - Playground 目前只显示 Three.js 本地白膜预览，没有实时世界模型参与。
 - `mistbound-rider` 中的马和骑手是静态标志物，用于测试构图；它不是可骑乘主体。
 - 现有自动测试覆盖编译、资源归属、物理高度场和固定步长等工程契约；固定输入 Smoke 目前通过 Playground 按钮/API 手动触发，尚未纳入浏览器 E2E。两者都不能代替运动手感和图像构图的人工验收。
@@ -78,6 +80,7 @@ Director LLM → Render Directive SDK ────────────┘
 2. [当前实验与验证记录](10-current-experiments.md)：代码现在实际能做什么。
 3. [第一期 Alpha 实现与运行指南](07-alpha-implementation.md)：如何运行。
 4. [Coding Agent 场景创作指南](08-agent-scene-authoring.md)：如何创建新场景。
-5. [SDK 总体架构](02-sdk-architecture.md)：目标模块和实现状态。
-6. [世界模型团队接入说明](11-world-model-team-handoff.md)：双方边界与近期接口工作。
-7. [运行时世界导演方案](09-runtime-world-director.md)：后续受控世界操作协议。
+5. [Plan-first 世界创作协议](12-plan-first-world-authoring.md)：如何从输入得到可追踪世界和规划工件。
+6. [SDK 总体架构](02-sdk-architecture.md)：目标模块和实现状态。
+7. [世界模型团队接入说明](11-world-model-team-handoff.md)：双方边界与近期接口工作。
+8. [运行时世界导演方案](09-runtime-world-director.md)：后续受控世界操作协议。

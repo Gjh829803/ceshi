@@ -1,0 +1,24 @@
+{
+  "artifactVersion": 1,
+  "sceneId": "grassland",
+  "specHash": "a8023b55",
+  "compiler": "whitebox-world-planning-v1",
+  "files": [
+    "world-spec.json",
+    "top-down-plan.json",
+    "height-slope-plan.json",
+    "opening-shot-plan.json"
+  ],
+  "imageAssets": [
+    {
+      "kind": "world-plan",
+      "uri": "/scene-plans/grassland/world-plan.png",
+      "sha256": "24354ac9cef8579ada49f2c1710cbd3c8628b6667d448b9afca7b4b765e3c44f"
+    },
+    {
+      "kind": "opening-shot",
+      "uri": "/scene-plans/grassland/opening-shot.png",
+      "sha256": "04ba7188f7962c3834bf5d03a9dc259976703b423af97e29a7bb033e9967acd7"
+    }
+  ]
+}

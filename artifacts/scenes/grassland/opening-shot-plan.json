@@ -1,0 +1,35 @@
+{
+  "artifactVersion": 1,
+  "sceneId": "grassland",
+  "specHash": "a8023b55",
+  "entry": {
+    "spawn": [
+      0,
+      68
+    ],
+    "facingRadians": 0,
+    "camera": {
+      "pitchRadians": 0.3,
+      "distance": 4.5,
+      "fovDegrees": 56
+    },
+    "composition": {
+      "foreground": [
+        "player on gently rolling grass",
+        "open approach toward the lake"
+      ],
+      "middleground": [
+        "central lake occupying the visual center"
+      ],
+      "background": [
+        "northern ridge",
+        "watchtower left of center",
+        "wide sunlit horizon"
+      ],
+      "visibleLandmarkIds": [
+        "northern-watchtower-anchor"
+      ]
+    }
+  },
+  "reference": "/scene-plans/grassland/opening-shot.png"
+}

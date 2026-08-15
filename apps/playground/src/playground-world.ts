@@ -1,3 +1,8 @@
+import type {
+  DerivedWorldPlanArtifacts,
+  OutdoorWorldSpec,
+} from "@whitebox-world/world";
+
 export type InputAction =
   | "forward"
   | "backward"
@@ -70,6 +75,9 @@ export interface PlaygroundWorldAdapter {
   render(): void;
   runFixedInput(steps: readonly FixedInputStep[]): Promise<WorldSnapshot>;
   captureScreenshot(): string;
+  getWorldSpec(): OutdoorWorldSpec | null;
+  getPlanArtifacts(): DerivedWorldPlanArtifacts | null;
+  capturePlanningView(kind: PlanningViewKind): string;
   inspectFeatures(): readonly FeatureInspection[];
   snapshot(): WorldSnapshot;
   subscribe(listener: (snapshot: WorldSnapshot) => void): () => void;
@@ -77,11 +85,14 @@ export interface PlaygroundWorldAdapter {
 }
 
 export interface PlaygroundAutomationApi {
-  version: 1;
+  version: 2;
   getSnapshot(): WorldSnapshot;
   inspectFeatures(): readonly FeatureInspection[];
   runFixedInput(steps: readonly FixedInputStep[]): Promise<WorldSnapshot>;
   captureScreenshot(): string;
+  getWorldSpec(): OutdoorWorldSpec | null;
+  getPlanArtifacts(): DerivedWorldPlanArtifacts | null;
+  capturePlanningView(kind: PlanningViewKind): string;
   reset(): WorldSnapshot;
   setPaused(paused: boolean): WorldSnapshot;
 }
@@ -91,3 +102,5 @@ declare global {
     __WHITEBOX_PLAYGROUND__: PlaygroundAutomationApi;
   }
 }
+
+export type PlanningViewKind = "world-plan" | "height-slope-plan" | "opening-shot";

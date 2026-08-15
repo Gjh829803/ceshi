@@ -6,28 +6,30 @@
 
 ```bash
 pnpm test:isolation
-pnpm agent:scene -- "创建一个中央有弯曲河谷、两侧有高台的室外白膜场景"
+pnpm agent:scene -- --scene-id river-canyon "创建一个中央有弯曲河谷、两侧有高台的室外白膜场景"
 ```
 
 图片参考通过同一个隔离入口传入：
 
 ```bash
 pnpm agent:scene -- \
+  --scene-id azure-bay \
   --image /absolute/path/coastal-reference.png \
   "按参考图的可见空间构图创建可玩的海湾白膜场景；保留前景高地、中央海湾、两侧海岸和远处岛屿关系"
 ```
 
-启动脚本只读取命令中明确指定的图片，将它复制到一次性隔离目录，再作为 Codex 初始图片附件传入；场景 Agent 看不到原始目录，任务结束后副本自动删除。支持 PNG、JPEG 和 WebP，可重复使用 `--image` 传多张参考图。
+启动脚本只读取命令中明确指定的图片，将它复制到一次性隔离目录，再作为 Codex 初始图片附件传入；场景 Agent 看不到原始目录，任务结束后副本自动删除。支持 PNG、JPEG 和 WebP，可重复使用 `--image` 传多张参考图。`--scene-id` 是规划、代码、资源和导出工件共用的稳定 ID；只评审规划、不搭几何时追加 `--plan-only`。
 
 单张透视图没有不可见区域和真实尺度，因此验收目标是“指定观察点下的空间构图、地貌拓扑和关键轮廓相符”，不是从一张图恢复唯一且逐点完全一致的三维地形。花草、云层、绘画风格、纹理与密集小船属于生成式渲染层；白膜只负责海湾轮廓、高地、岛屿、道路、灯塔、房屋等会影响空间关系的内容。
 
 `.codex/config.toml` 使用 `whitebox_workspace_only` 权限 Profile：整个文件系统默认不可读，只重新开放当前 workspace，并关闭网络和权限升级。工具运行仍需要读取 Codex 官方定义的 `:minimal` 系统运行路径和只读的 `/opt/homebrew` Node 工具链，但不能读取其他用户目录或相邻项目。
 
-也可以在仓库根目录启动 Agent，然后直接描述场景。推荐提示词：
+完整工作流是：先 `WorldSpec`，再让 Codex 内置图片工具生成 World Plan 与 Opening Shot，然后搭白膜，最后让 SDK 导出真实俯视/高度坡度数据进行对比。详见 [Plan-first 世界创作协议](12-plan-first-world-authoring.md)。也可以在仓库根目录启动 Agent，然后直接描述场景。推荐提示词：
 
 ```text
 请遵守仓库根目录 AGENTS.md，创建一个可玩的室外白膜场景：<写你的场景描述>。
-只修改 apps/playground/src/scenes/ 下的场景代码并注册到 sceneCatalog；
+先写完整 WorldSpec，并用 Codex 内置图片工具生成俯视规划图和进入视角图；
+只修改 apps/playground/src/scenes/ 与 apps/playground/public/scene-plans 下的场景文件并注册到 sceneCatalog；
 内置 API 不够时，在场景模块中用 defineWorldFeature 和受追踪的 BuildContext 自定义，
 不要为了这个场景修改 SDK 内部。完成后运行 test:scenes、typecheck、build，并在浏览器验收。
 ```
@@ -36,12 +38,14 @@ pnpm agent:scene -- \
 
 ## 可验收目标
 
-Coding Agent 创建新室外场景时，只新增或修改 `apps/playground/src/scenes/` 下的场景模块，不修改相机、物理、渲染器或 SDK 内部代码。
+Coding Agent 创建新室外场景时，只新增或修改 `apps/playground/src/scenes/` 下的规划/场景模块，以及 `apps/playground/public/scene-plans/` 下的两张生成图，不修改相机、物理、渲染器或 SDK 内部代码。
 
 场景文件经过下面的固定链路：
 
 ```text
-defineOutdoorScene
+defineOutdoorWorldSpec + Codex imagegen
+       ↓
+definePlannedOutdoorScene
        ↓
 Scene authoring context
        ↓
@@ -54,12 +58,16 @@ Three.js meshes + Rapier colliders + SubjectKit
 
 ## 最小场景
 
-```ts
-import { defineOutdoorScene } from "@whitebox-world/world";
+新场景必须先给出完整 WorldSpec。为避免这里复制一大段不完整字段，请直接从 [`templates/outdoor-scene.ts`](../templates/outdoor-scene.ts) 开始；下面只展示白膜实现部分：
 
-export const scene = defineOutdoorScene({
+```ts
+import { definePlannedOutdoorScene } from "@whitebox-world/world";
+import { worldSpec } from "./plans/green-valley.js";
+
+export const scene = definePlannedOutdoorScene({
   id: "green-valley",
   seed: 42,
+  worldSpec,
   build(world) {
     const terrain = world.terrain.landscape({
       id: "terrain",
@@ -73,7 +81,7 @@ export const scene = defineOutdoorScene({
       terrain,
       at: [0, 40],
       facingRadians: Math.PI,
-      camera: { pitchRadians: 0.45, distance: 6 },
+      camera: { pitchRadians: 0.45, distance: 6, fovDegrees: 56 },
     });
     world.atmosphere.set({ preset: "clear-day" });
   },
@@ -189,6 +197,8 @@ http://127.0.0.1:5173/?scene=myScene
 pnpm test:scenes
 pnpm typecheck
 pnpm build
+pnpm plan:scene -- --scene my-scene
+pnpm plan:scene:check -- --scene my-scene
 ```
 
 `test:scenes` 会检查：
@@ -199,6 +209,9 @@ pnpm build
 - Spawn 是否位于有效地形上。
 - Transform 是否为有限值。
 - 自定义 Feature 是否可确定性重建。
+- WorldSpec 是否完整，必需 Feature ID 与实现是否一致。
+- 出生点、朝向、镜头 pitch/distance/FOV 是否忠实实现进入视角。
+- 主要路线是否超过 WorldSpec 的坡度限制。
 
 最后必须在浏览器中检查构图、岸线、碰撞、镜头和移动手感。
 

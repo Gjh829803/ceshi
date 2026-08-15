@@ -63,6 +63,9 @@ export interface HeightfieldGridSpec {
 }
 
 export interface TerrainSurface {
+  readonly width: number;
+  readonly depth: number;
+  readonly origin: Vec2Tuple;
   readonly vertexCount: number;
   readonly triangleCount: number;
   applyNoise(options: TerrainNoiseOptions): this;

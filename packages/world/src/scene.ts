@@ -37,6 +37,11 @@ import {
   sampleTerrainSlopeDegrees,
   type TerrainSurface,
 } from "./terrain";
+import {
+  validateOutdoorWorldSpec,
+  validateWorldSpecImplementation,
+  type OutdoorWorldSpec,
+} from "./world-spec";
 
 export interface SceneFeatureHandle<O = unknown> {
   id: string;
@@ -81,6 +86,7 @@ export interface SceneThirdPersonCameraRequest {
   /** Orbit pitch. Positive values raise the camera and look farther downward. */
   pitchRadians?: number;
   distance?: number;
+  fovDegrees?: number;
 }
 
 export interface ResolvedSceneSpawn {
@@ -159,6 +165,7 @@ export interface OutdoorSceneDefinition {
   title?: string;
   seed?: Seed;
   budget?: ResourceBudget;
+  worldSpec?: OutdoorWorldSpec;
   build(context: OutdoorSceneAuthoringContext): void;
 }
 
@@ -168,6 +175,7 @@ export interface CompiledOutdoorScene {
   terrainHandles: readonly SceneTerrainHandle[];
   spawn: ResolvedSceneSpawn;
   atmosphere: OutdoorSceneAtmosphere;
+  worldSpec?: OutdoorWorldSpec;
   diagnostics: readonly Diagnostic[];
 }
 
@@ -205,7 +213,35 @@ export function defineOutdoorScene(
   return Object.freeze({ ...definition, kind: "outdoor", version: 1 });
 }
 
+export function definePlannedOutdoorScene(
+  definition: Omit<OutdoorSceneDefinition, "kind" | "version" | "worldSpec"> & {
+    kind?: "outdoor";
+    version?: 1;
+    worldSpec: OutdoorWorldSpec;
+  },
+): OutdoorSceneDefinition {
+  const diagnostics = validateOutdoorWorldSpec(definition.worldSpec, definition.id);
+  const errors = diagnostics.filter((item) => item.severity === "error");
+  if (errors.length > 0) {
+    throw new SceneCompilationError(
+      `Planned scene ${definition.id} has an invalid WorldSpec: ${errors.map((item) => item.message).join(" ")}`,
+      diagnostics,
+    );
+  }
+  return defineOutdoorScene(definition);
+}
+
 export function compileOutdoorScene(definition: OutdoorSceneDefinition): CompiledOutdoorScene {
+  const worldSpecDiagnostics = definition.worldSpec === undefined
+    ? []
+    : validateOutdoorWorldSpec(definition.worldSpec, definition.id);
+  const worldSpecErrors = worldSpecDiagnostics.filter((item) => item.severity === "error");
+  if (worldSpecErrors.length > 0) {
+    throw new SceneCompilationError(
+      `Scene ${definition.id} has an invalid WorldSpec.`,
+      worldSpecDiagnostics,
+    );
+  }
   const sceneSeed =
     typeof definition.seed === "number"
       ? definition.seed >>> 0
@@ -380,7 +416,10 @@ export function compileOutdoorScene(definition: OutdoorSceneDefinition): Compile
       `Player spawn [${request.at.join(", ")}] is outside terrain ${request.terrain.id}.`,
     );
   }
-  const diagnostics = [...registry.list().flatMap((feature) => feature.diagnostics)];
+  const diagnostics = [
+    ...worldSpecDiagnostics,
+    ...registry.list().flatMap((feature) => feature.diagnostics),
+  ];
   const spawnSlope = sampleTerrainSlopeDegrees(
     terrainResource.value,
     request.at[0],
@@ -404,6 +443,7 @@ export function compileOutdoorScene(definition: OutdoorSceneDefinition): Compile
   }
   const cameraPitchRadians = request.camera?.pitchRadians ?? 0.3;
   const cameraDistance = request.camera?.distance ?? 4.5;
+  const cameraFovDegrees = request.camera?.fovDegrees ?? 56;
   if (!Number.isFinite(cameraPitchRadians) || cameraPitchRadians < -0.95 || cameraPitchRadians > 0.65) {
     throw new SceneCompilationError(
       `Player camera pitch ${cameraPitchRadians} is outside the supported -0.95 to 0.65 radian range.`,
@@ -413,6 +453,35 @@ export function compileOutdoorScene(definition: OutdoorSceneDefinition): Compile
     throw new SceneCompilationError(
       `Player camera distance ${cameraDistance} is outside the supported 1.8 to 8 meter range.`,
     );
+  }
+  if (!Number.isFinite(cameraFovDegrees) || cameraFovDegrees < 35 || cameraFovDegrees > 90) {
+    throw new SceneCompilationError(
+      `Player camera FOV ${cameraFovDegrees} is outside the supported 35 to 90 degree range.`,
+    );
+  }
+  if (definition.worldSpec !== undefined) {
+    const implementationDiagnostics = validateWorldSpecImplementation(definition.worldSpec, {
+      featureIds: registry.list().map((feature) => feature.id),
+      bounds: {
+        center: terrainResource.value.origin,
+        size: [terrainResource.value.width, terrainResource.value.depth],
+      },
+      spawn: request.at,
+      facingRadians: request.facingRadians ?? 0,
+      camera: {
+        pitchRadians: cameraPitchRadians,
+        distance: cameraDistance,
+        fovDegrees: cameraFovDegrees,
+      },
+    });
+    diagnostics.push(...implementationDiagnostics);
+    const implementationErrors = implementationDiagnostics.filter((item) => item.severity === "error");
+    if (implementationErrors.length > 0) {
+      throw new SceneCompilationError(
+        `Scene ${definition.id} does not implement its WorldSpec.`,
+        diagnostics,
+      );
+    }
   }
   return {
     definition,
@@ -428,9 +497,11 @@ export function compileOutdoorScene(definition: OutdoorSceneDefinition): Compile
       camera: {
         pitchRadians: cameraPitchRadians,
         distance: cameraDistance,
+        fovDegrees: cameraFovDegrees,
       },
     },
     atmosphere,
+    ...(definition.worldSpec === undefined ? {} : { worldSpec: definition.worldSpec }),
     diagnostics,
   };
 }

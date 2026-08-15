@@ -178,11 +178,14 @@ function updateHud(snapshot: WorldSnapshot): void {
 }
 
 const automationApi: PlaygroundAutomationApi = {
-  version: 1,
+  version: 2,
   getSnapshot: () => adapter.snapshot(),
   inspectFeatures: () => adapter.inspectFeatures(),
   runFixedInput: (steps) => adapter.runFixedInput(steps),
   captureScreenshot: () => adapter.captureScreenshot(),
+  getWorldSpec: () => adapter.getWorldSpec(),
+  getPlanArtifacts: () => adapter.getPlanArtifacts(),
+  capturePlanningView: (kind) => adapter.capturePlanningView(kind),
   reset: () => {
     adapter.reset();
     return adapter.snapshot();

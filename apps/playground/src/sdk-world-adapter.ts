@@ -15,13 +15,16 @@ import {
 } from "@whitebox-world/subjects";
 import {
   compileOutdoorScene,
+  deriveWorldPlanArtifacts,
   FeatureRegistry,
   isTerrainSurface,
   type CompiledOutdoorScene,
+  type DerivedWorldPlanArtifacts,
   type FeatureInspection as RegistryFeatureInspection,
   type LandmarkDescriptor,
   type LandmarkPrimitiveDescriptor,
   type OutdoorSceneDefinition,
+  type OutdoorWorldSpec,
   type TerrainSurface,
   type WaterSurfaceDescriptor,
 } from "@whitebox-world/world";
@@ -31,6 +34,7 @@ import type {
   FeatureInspection,
   FixedInputStep,
   InputAction,
+  PlanningViewKind,
   PlaygroundWorldAdapter,
   WorldSnapshot,
 } from "./playground-world.js";
@@ -240,6 +244,8 @@ export class SdkWorldAdapter implements PlaygroundWorldAdapter {
   private readonly world: World;
   private readonly physics: PhysicsSystem;
   private readonly registry: FeatureRegistry;
+  private readonly worldSpec: OutdoorWorldSpec | null;
+  private readonly planArtifacts: DerivedWorldPlanArtifacts | null;
   private readonly subject: HumanoidThirdPersonSubjectKit<unknown>;
   private readonly renderer: THREE.WebGLRenderer;
   private readonly camera: THREE.PerspectiveCamera;
@@ -280,10 +286,12 @@ export class SdkWorldAdapter implements PlaygroundWorldAdapter {
   ) {
     this.physics = physics;
     this.registry = scene.registry;
+    this.worldSpec = scene.worldSpec ?? null;
+    this.planArtifacts = scene.worldSpec === undefined ? null : deriveWorldPlanArtifacts(scene);
     this.rigStatus = visualResult.status;
     this.name = `sdk-runtime/${scene.definition.id}/${visualResult.status.source}`;
     this.world = new World({ fixedDeltaSeconds: FIXED_DELTA, scheduler: null });
-    this.camera = new THREE.PerspectiveCamera(56, 1, 0.1, 1_200);
+    this.camera = new THREE.PerspectiveCamera(scene.spawn.camera.fovDegrees, 1, 0.1, 1_200);
     this.renderer = new THREE.WebGLRenderer({ antialias: true, preserveDrawingBuffer: true });
     this.canvas = this.renderer.domElement;
     this.canvas.className = "world-canvas";
@@ -436,6 +444,26 @@ export class SdkWorldAdapter implements PlaygroundWorldAdapter {
     return this.canvas.toDataURL("image/png");
   }
 
+  getWorldSpec(): OutdoorWorldSpec | null {
+    return this.worldSpec;
+  }
+
+  getPlanArtifacts(): DerivedWorldPlanArtifacts | null {
+    return this.planArtifacts;
+  }
+
+  capturePlanningView(kind: PlanningViewKind): string {
+    if (this.worldSpec === null || this.planArtifacts === null) {
+      throw new Error("This legacy scene has no WorldSpec planning artifacts.");
+    }
+    if (kind === "opening-shot") {
+      this.reset();
+      return this.canvas.toDataURL("image/png");
+    }
+    if (kind === "height-slope-plan") return this.captureHeightSlopePlan();
+    return this.captureTopDownPlan();
+  }
+
   inspectFeatures(): readonly FeatureInspection[] {
     const features = this.registry.list().map((feature) =>
       toPlaygroundInspection(this.registry, feature),
@@ -533,6 +561,78 @@ export class SdkWorldAdapter implements PlaygroundWorldAdapter {
         this.addLandmark(resource.value, resource.id);
       }
     }
+  }
+
+  private captureTopDownPlan(): string {
+    if (this.worldSpec === null) throw new Error("WorldSpec is unavailable.");
+    const bounds = this.worldSpec.bounds;
+    const pixelWidth = Math.max(1, this.canvas.width);
+    const pixelHeight = Math.max(1, this.canvas.height);
+    const viewportAspect = pixelWidth / pixelHeight;
+    const worldAspect = bounds.size[0] / bounds.size[1];
+    const halfWidth = worldAspect > viewportAspect
+      ? bounds.size[0] / 2
+      : (bounds.size[1] * viewportAspect) / 2;
+    const halfHeight = worldAspect > viewportAspect
+      ? bounds.size[0] / viewportAspect / 2
+      : bounds.size[1] / 2;
+    const camera = new THREE.OrthographicCamera(
+      -halfWidth,
+      halfWidth,
+      halfHeight,
+      -halfHeight,
+      0.1,
+      Math.max(2_000, bounds.size[0] + bounds.size[1]),
+    );
+    camera.position.set(
+      bounds.center[0],
+      bounds.heightRange[1] + Math.max(bounds.size[0], bounds.size[1]),
+      bounds.center[1],
+    );
+    camera.up.set(0, 0, -1);
+    camera.lookAt(bounds.center[0], 0, bounds.center[1]);
+    camera.updateProjectionMatrix();
+    this.renderer.render(this.world.scene, camera);
+    const result = this.canvas.toDataURL("image/png");
+    this.renderer.render(this.world.scene, this.camera);
+    return result;
+  }
+
+  private captureHeightSlopePlan(): string {
+    if (this.planArtifacts === null) throw new Error("Planning artifacts are unavailable.");
+    const artifact = this.planArtifacts.heightSlope;
+    const canvas = document.createElement("canvas");
+    canvas.width = artifact.grid.columns;
+    canvas.height = artifact.grid.rows;
+    const context = canvas.getContext("2d");
+    if (context === null) throw new Error("2D canvas is unavailable.");
+    const image = context.createImageData(canvas.width, canvas.height);
+    const heightRange = Math.max(
+      1e-6,
+      artifact.stats.maximumHeight - artifact.stats.minimumHeight,
+    );
+    for (let index = 0; index < artifact.grid.heights.length; index += 1) {
+      const height = artifact.grid.heights[index];
+      const slope = artifact.grid.slopesDegrees[index];
+      const offset = index * 4;
+      if (height == null || slope == null) {
+        image.data.set([20, 24, 28, 255], offset);
+        continue;
+      }
+      const elevation = (height - artifact.stats.minimumHeight) / heightRange;
+      const brightness = 0.65 + elevation * 0.35;
+      const base = slope <= 35
+        ? [66, 145, 82]
+        : slope <= 42
+          ? [222, 174, 61]
+          : [204, 68, 62];
+      image.data[offset] = Math.round((base[0] ?? 0) * brightness);
+      image.data[offset + 1] = Math.round((base[1] ?? 0) * brightness);
+      image.data[offset + 2] = Math.round((base[2] ?? 0) * brightness);
+      image.data[offset + 3] = 255;
+    }
+    context.putImageData(image, 0, 0);
+    return canvas.toDataURL("image/png");
   }
 
   private addTerrain(terrain: TerrainSurface, resourceId: string): void {

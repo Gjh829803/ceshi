@@ -19,14 +19,61 @@
 
 ## 2. 当前 Alpha 的可运行入口
 
-当前 Coding Agent 应使用 `defineOutdoorScene`，并只在 `apps/playground/src/scenes/` 新增场景模块：
+新场景应先用 `defineOutdoorWorldSpec` 声明整个世界，再用 `definePlannedOutdoorScene` 实现；旧的 `defineOutdoorScene` 只保留兼容：
 
 ```ts
-import { defineOutdoorScene } from "@whitebox-world/world";
+import { defineOutdoorWorldSpec, definePlannedOutdoorScene } from "@whitebox-world/world";
 
-export const scene = defineOutdoorScene({
+export const worldSpec = defineOutdoorWorldSpec({
+  kind: "outdoor-world-spec",
+  version: 1,
+  id: "lake-plain",
+  title: "Lake Plain",
+  source: { request: "一片围绕大湖展开的平原" },
+  intent: "以大湖为中心、从南向北进入的可玩平原",
+  bounds: { center: [0, 0], size: [640, 640], heightRange: [-10, 20] },
+  terrain: { baseRelief: "plain", regions: [] },
+  water: [],
+  landmarks: [],
+  routes: [],
+  entry: {
+    spawn: [0, 70],
+    facingRadians: 0,
+    camera: { pitchRadians: 0.3, distance: 4.5, fovDegrees: 56 },
+    composition: {
+      foreground: [],
+      middleground: ["large lake"],
+      background: [],
+      visibleLandmarkIds: [],
+    },
+  },
+  claims: [],
+  artifacts: [
+    {
+      kind: "world-plan",
+      generator: "codex-imagegen",
+      uri: "/scene-plans/lake-plain/world-plan.png",
+      prompt: "...",
+    },
+    {
+      kind: "opening-shot",
+      generator: "codex-imagegen",
+      uri: "/scene-plans/lake-plain/opening-shot.png",
+      prompt: "...",
+    },
+    {
+      kind: "height-slope-plan",
+      generator: "sdk-derived",
+      uri: "runtime://planning/height-slope",
+    },
+  ],
+  traceability: { requiredFeatureIds: ["terrain"] },
+});
+
+export const scene = definePlannedOutdoorScene({
   id: "lake-plain",
   seed: 42,
+  worldSpec,
   build(world) {
     const terrain = world.terrain.landscape({
       id: "terrain",
@@ -46,6 +93,8 @@ export const scene = defineOutdoorScene({
   },
 });
 ```
+
+完整字段、证据分层、图片生成约束和导出格式见 [Plan-first 世界创作协议](12-plan-first-world-authoring.md)。
 
 完整现有 API 和工作流见 [Coding Agent 场景创作指南](08-agent-scene-authoring.md)。
 
@@ -223,7 +272,7 @@ await world.capture({
 
 ```text
 当前 Agent 默认可见
-├── defineOutdoorScene
+├── defineOutdoorWorldSpec / definePlannedOutdoorScene
 ├── Terrain / Water / Landmark builders
 ├── WorldFeature / BuildContext
 ├── humanoid.third_person player spawn

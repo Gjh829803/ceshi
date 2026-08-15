@@ -1,0 +1,155 @@
+{
+  "artifactVersion": 1,
+  "sceneId": "grassland",
+  "sceneSeed": 42,
+  "specHash": "a8023b55",
+  "compiler": "whitebox-world-planning-v1",
+  "kind": "top-down-plan",
+  "bounds": {
+    "center": [
+      0,
+      0
+    ],
+    "size": [
+      640,
+      640
+    ],
+    "minimum": [
+      -320,
+      -320
+    ],
+    "maximum": [
+      320,
+      320
+    ]
+  },
+  "spawn": [
+    0,
+    68
+  ],
+  "facingRadians": 0,
+  "terrainRegions": [
+    {
+      "id": "open-grassland-region",
+      "semantic": "gently_rolling_open_grassland",
+      "role": "ground",
+      "area": {
+        "kind": "polygon",
+        "points": [
+          [
+            -320,
+            -320
+          ],
+          [
+            320,
+            -320
+          ],
+          [
+            320,
+            320
+          ],
+          [
+            -320,
+            320
+          ]
+        ]
+      },
+      "elevationIntent": "mostly walkable, low-amplitude rolling ground with an open horizon",
+      "featureId": "rolling-grassland",
+      "evidence": "user-explicit"
+    },
+    {
+      "id": "northwest-watchtower-ridge-region",
+      "semantic": "low_broad_watchtower_ridge",
+      "role": "ridge",
+      "area": {
+        "kind": "ellipse",
+        "center": [
+          -105,
+          -65
+        ],
+        "radius": [
+          92,
+          70
+        ]
+      },
+      "elevationIntent": "a broad eight-meter rise that remains walkable from the west route",
+      "featureId": "rolling-grassland",
+      "evidence": "planner-inferred"
+    }
+  ],
+  "water": [
+    {
+      "id": "central-lake-region",
+      "semantic": "broad_clear_central_lake",
+      "area": {
+        "kind": "ellipse",
+        "center": [
+          0,
+          2
+        ],
+        "radius": [
+          62,
+          45
+        ]
+      },
+      "featureId": "central-lake",
+      "evidence": "user-explicit"
+    }
+  ],
+  "landmarks": [
+    {
+      "id": "northern-watchtower-anchor",
+      "semantic": "monumental_watchtower",
+      "position": [
+        -95,
+        0,
+        -65
+      ],
+      "approximateSize": [
+        16,
+        27,
+        16
+      ],
+      "importance": "primary",
+      "featureId": "northern-watchtower",
+      "evidence": "user-explicit"
+    }
+  ],
+  "routes": [
+    {
+      "id": "entry-to-watchtower-west-route",
+      "points": [
+        [
+          0,
+          68
+        ],
+        [
+          -100,
+          70
+        ],
+        [
+          -110,
+          20
+        ],
+        [
+          -105,
+          -40
+        ],
+        [
+          -95,
+          -65
+        ]
+      ],
+      "width": 10,
+      "priority": "primary",
+      "maxSlopeDegrees": 35,
+      "evidence": "planner-inferred"
+    }
+  ],
+  "builtFeatureIds": [
+    "rolling-grassland",
+    "central-lake",
+    "northern-watchtower"
+  ]
+}

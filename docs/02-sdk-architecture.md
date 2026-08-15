@@ -15,7 +15,7 @@ World SDK
 ├── NPC                          [Planned]
 ├── Runtime World Director       [Design]
 ├── Render Bridge                [Design]
-└── Agent Tooling                [Partial]
+└── Agent Tooling                [Alpha: plan-first outdoor]
 ```
 
 | 模块 | 当前仓库 | 下一阶段 |
@@ -23,10 +23,12 @@ World SDK
 | Core Runtime | World、Entity、Transform、fixed timestep、Input、EventBus | 生命周期/快照协议继续收敛 |
 | World Construction | Terrain、Water、Landmark、FeatureRegistry、Outdoor Scene DSL | 路径/曲线、更多 QA、室内另行设计 |
 | Subject/Camera/Motion | 第三人称人形、Rapier motor、idle/walk/run、本地 rig 加载 | jump 动作、更多主体与第一人称 |
-| Agent Tooling | 隔离 launcher、图片入口、场景测试、检查器、固定输入 | 截图视觉回归、可达性和性能报告 |
+| Agent Tooling | WorldSpec、内置图片生成工作流、隔离 launcher、规划工件、场景测试、检查器、固定输入 | 自动视觉差异评分、可达性和性能报告 |
 | Gameplay/NPC | 无 | 后续定义后实现 |
 | Runtime Director | 完整设计文档，无运行时代码 | Director SDK 的 Observation/Command/Task |
 | Render Bridge | 目标契约，无多 pass 导出 | 与 World Model 团队先做离线 RenderFrame |
+
+Agent Tooling 的规划链路是：`用户输入 → WorldSpec → World Plan + Opening Shot → 白膜实现 → SDK 派生 Top-down + Height/Slope → 对比修正`。两张生成图不进入物理判定；它们与 `WorldSpec` 一起约束空间意图，运行时白膜仍是最终真相。
 
 ## 2. Core Runtime
 

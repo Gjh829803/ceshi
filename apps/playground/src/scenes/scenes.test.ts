@@ -6,6 +6,7 @@ import {
 import { createPhysicsSystem } from "@whitebox-world/physics";
 import {
   compileOutdoorScene,
+  deriveWorldPlanArtifacts,
   isTerrainSurface,
   sampleTerrainSlopeDegrees,
   type TerrainSurface,
@@ -61,6 +62,12 @@ describe("agent-authored playground scenes", () => {
       ).toEqual([]);
       expect(scene.registry.list().every((feature) => feature.status === "built")).toBe(true);
       expect(scene.registry.listResources().length).toBeGreaterThan(0);
+      if (scene.worldSpec !== undefined) {
+        const artifacts = deriveWorldPlanArtifacts(scene);
+        expect(artifacts.diagnostics).toEqual([]);
+        expect(artifacts.topDown.sceneId).toBe(definition.id);
+        expect(artifacts.heightSlope.grid.heights.every((value) => value === null || Number.isFinite(value))).toBe(true);
+      }
     });
 
     it(`keeps ${catalogId} terrain rendering samples aligned with physics`, async () => {

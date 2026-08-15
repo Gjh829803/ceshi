@@ -6,6 +6,8 @@ if [[ "${1:-}" == "--" ]]; then shift; fi
 
 image_sources=()
 prompt_parts=()
+scene_id=""
+plan_only=false
 while [[ $# -gt 0 ]]; do
   case "$1" in
     -i|--image)
@@ -15,6 +17,17 @@ while [[ $# -gt 0 ]]; do
         exit 2
       fi
       image_sources+=("$1")
+      ;;
+    --scene-id)
+      shift
+      if [[ $# -eq 0 ]]; then
+        echo "Missing catalog id after --scene-id." >&2
+        exit 2
+      fi
+      scene_id="$1"
+      ;;
+    --plan-only)
+      plan_only=true
       ;;
     --)
       ;;
@@ -30,13 +43,38 @@ while [[ $# -gt 0 ]]; do
 done
 
 if [[ ${#prompt_parts[@]} -eq 0 ]]; then
-  echo 'Usage: pnpm agent:scene -- [--image /absolute/reference.png] "<scene description>"' >&2
+  echo 'Usage: pnpm agent:scene -- --scene-id <catalog-id> [--plan-only] [--image /absolute/reference.png] "<scene description>"' >&2
+  exit 2
+fi
+if [[ ! "$scene_id" =~ ^[a-z0-9][a-z0-9-]*$ ]]; then
+  echo "--scene-id must contain lowercase letters, numbers, and hyphens." >&2
   exit 2
 fi
 prompt="${prompt_parts[*]}"
 
+if [[ "$plan_only" == true ]]; then
+  workflow_instruction="Stop after creating and validating WorldSpec plus the two Codex imagegen planning images. Do not implement or register scene geometry."
+else
+  workflow_instruction="After the planning assets exist, implement and register the scene with definePlannedOutdoorScene, then compare the actual SDK planning captures against the intended plan and correct material spatial differences."
+fi
+
+prompt="$prompt
+
+Mandatory plan-first workflow for catalog id '$scene_id':
+1. Before writing scene geometry, create apps/playground/src/scenes/plans/$scene_id.ts with defineOutdoorWorldSpec. Preserve user-explicit, reference-visible, planner-inferred, and planner-optional claims separately.
+2. Define the whole playable world: bounds, relief, terrain regions, water, landmarks, primary routes, entry spawn, facing, camera pitch/distance/FOV, and foreground/middleground/background composition.
+3. Use Codex's built-in image generation tool, not a custom API script, to generate exactly two project assets from the prompts stored in WorldSpec:
+   - apps/playground/public/scene-plans/$scene_id/world-plan.png: strict orthographic top-down topology plan.
+   - apps/playground/public/scene-plans/$scene_id/opening-shot.png: the intended player entry composition.
+   Copy the final generated images into those workspace paths. Never invent placeholder bytes or claim generation succeeded if the image tool is unavailable.
+4. Height/slope planning is SDK-derived from the built terrain; do not ask image generation to invent walkability.
+5. $workflow_instruction
+6. Keep whitebox geometry limited to logic, navigation, collision, silhouette, and composition. Leave texture, flowers, clouds, painterly style, and other surface detail to the world model.
+7. Do not edit SDK internals merely to satisfy this scene."
+
 real_codex_home="${CODEX_HOME:-$HOME/.codex}"
 codex_bin="$(command -v codex)"
+pnpm_bin="$(command -v pnpm)"
 task_tmp="$(mktemp -d /tmp/whitebox-agent.XXXXXX)"
 
 case "$task_tmp" in
@@ -101,3 +139,21 @@ LANG=C \
   "${image_args[@]}" \
   -- \
   "$prompt"
+
+if [[ "$plan_only" == true ]]; then
+  "$pnpm_bin" typecheck
+  "$pnpm_bin" exec tsx -e "import('./apps/playground/src/scenes/plans/$scene_id.ts')"
+  for planned_image in world-plan.png opening-shot.png; do
+    planned_path="$project_root/apps/playground/public/scene-plans/$scene_id/$planned_image"
+    if [[ ! -s "$planned_path" ]]; then
+      echo "Missing or empty planning image: $planned_path" >&2
+      exit 1
+    fi
+  done
+else
+  "$pnpm_bin" test:scenes
+  "$pnpm_bin" typecheck
+  "$pnpm_bin" build
+  "$pnpm_bin" plan:scene -- --scene "$scene_id"
+  "$pnpm_bin" plan:scene:check -- --scene "$scene_id"
+fi
