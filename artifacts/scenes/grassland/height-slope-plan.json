@@ -2,7 +2,7 @@
   "artifactVersion": 1,
   "sceneId": "grassland",
   "sceneSeed": 42,
-  "specHash": "a8023b55",
+  "specHash": "da2e082f",
   "compiler": "whitebox-world-planning-v1",
   "kind": "height-slope-plan",
   "terrainFeatureId": "rolling-grassland",

@@ -26,6 +26,7 @@ import {
   type OutdoorSceneDefinition,
   type OutdoorWorldSpec,
   type TerrainSurface,
+  type VisualPrototypeSpec,
   type WaterSurfaceDescriptor,
 } from "@whitebox-world/world";
 import * as THREE from "three";
@@ -260,6 +261,7 @@ export class SdkWorldAdapter implements PlaygroundWorldAdapter {
   private readonly spawnCameraPitchRadians: number;
   private readonly spawnCameraDistance: number;
   private readonly waterMaterials = new Set<THREE.ShaderMaterial>();
+  private readonly renderObjectsByBinding = new Map<string, THREE.Object3D[]>();
   private frame = 0;
   private paused = false;
   private disposed = false;
@@ -364,6 +366,7 @@ export class SdkWorldAdapter implements PlaygroundWorldAdapter {
       grounded: false,
     });
     this.subject.cameraRig.update(0);
+    this.renderObjectsByBinding.set("runtime-entity:player", [this.subject.root]);
 
     const hemi = new THREE.HemisphereLight(0xf8fbff, 0x6d736f, 1.55);
     const sun = new THREE.DirectionalLight(0xfff1cf, 2.6);
@@ -464,6 +467,46 @@ export class SdkWorldAdapter implements PlaygroundWorldAdapter {
     return this.captureTopDownPlan();
   }
 
+  getVisualPrototypes(): readonly VisualPrototypeSpec[] {
+    return this.worldSpec?.entityCatalog.prototypes ?? [];
+  }
+
+  captureWhiteboxTriview(prototypeId: string): string {
+    if (this.worldSpec === null) throw new Error("WorldSpec is unavailable.");
+    const prototype = this.worldSpec.entityCatalog.prototypes.find((item) => item.id === prototypeId);
+    if (prototype === undefined) throw new Error(`Unknown visual prototype ${prototypeId}.`);
+    const instance = this.worldSpec.entityCatalog.instances.find(
+      (item) => item.prototypeId === prototypeId,
+    );
+    if (instance === undefined) throw new Error(`Prototype ${prototypeId} has no bound instance.`);
+    const key = `${instance.binding.kind}:${instance.binding.id}`;
+    const targets = this.renderObjectsByBinding.get(key);
+    if (targets === undefined || targets.length === 0) {
+      throw new Error(`Prototype ${prototypeId} binding ${key} has no runtime renderable.`);
+    }
+    return this.captureTriview(targets, prototype.instanceColor);
+  }
+
+  async exportWhiteboxTriviews(): Promise<readonly string[]> {
+    if (this.worldSpec === null) throw new Error("WorldSpec is unavailable.");
+    const outputPaths: string[] = [];
+    for (const prototype of this.worldSpec.entityCatalog.prototypes) {
+      const response = await fetch("/__whitebox/write-triview", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          sceneId: this.worldSpec.id,
+          prototypeId: prototype.id,
+          dataUrl: this.captureWhiteboxTriview(prototype.id),
+        }),
+      });
+      if (!response.ok) throw new Error(`Failed to export ${prototype.id}: ${await response.text()}`);
+      const payload = await response.json() as { path: string };
+      outputPaths.push(payload.path);
+    }
+    return outputPaths;
+  }
+
   inspectFeatures(): readonly FeatureInspection[] {
     const features = this.registry.list().map((feature) =>
       toPlaygroundInspection(this.registry, feature),
@@ -553,12 +596,19 @@ export class SdkWorldAdapter implements PlaygroundWorldAdapter {
 
   private compileTrackedResources(): void {
     for (const resource of this.registry.listResources()) {
+      let renderables: readonly THREE.Object3D[] = [];
       if (resource.kind === "terrain" && isTerrainSurface(resource.value)) {
-        this.addTerrain(resource.value, resource.id);
+        renderables = this.addTerrain(resource.value, resource.id);
       } else if (resource.kind === "surface" && isWaterSurface(resource.value)) {
-        this.addLake(resource.value, resource.id);
+        renderables = [this.addLake(resource.value, resource.id)];
       } else if (resource.kind === "landmark" && isLandmark(resource.value)) {
-        this.addLandmark(resource.value, resource.id);
+        renderables = [this.addLandmark(resource.value, resource.id)];
+      }
+      if (renderables.length > 0) {
+        const key = `feature:${resource.ownerFeatureId}`;
+        const existing = this.renderObjectsByBinding.get(key) ?? [];
+        existing.push(...renderables);
+        this.renderObjectsByBinding.set(key, existing);
       }
     }
   }
@@ -635,7 +685,98 @@ export class SdkWorldAdapter implements PlaygroundWorldAdapter {
     return canvas.toDataURL("image/png");
   }
 
-  private addTerrain(terrain: TerrainSurface, resourceId: string): void {
+  private captureTriview(targets: readonly THREE.Object3D[], instanceColor: string): string {
+    const targetMeshes = new Set<THREE.Mesh>();
+    const bounds = new THREE.Box3();
+    for (const target of targets) {
+      target.updateWorldMatrix(true, true);
+      bounds.expandByObject(target, true);
+      target.traverse((object) => {
+        if (object instanceof THREE.Mesh) targetMeshes.add(object);
+      });
+    }
+    if (bounds.isEmpty() || targetMeshes.size === 0) {
+      throw new Error("Whitebox tri-view target has no visible mesh bounds.");
+    }
+
+    const visibility = new Map<THREE.Mesh, boolean>();
+    const materials = new Map<THREE.Mesh, THREE.Material | THREE.Material[]>();
+    const identityMaterial = new THREE.MeshBasicMaterial({ color: new THREE.Color(instanceColor) });
+    this.world.scene.traverse((object) => {
+      if (!(object instanceof THREE.Mesh)) return;
+      visibility.set(object, object.visible);
+      object.visible = targetMeshes.has(object);
+      if (targetMeshes.has(object)) {
+        materials.set(object, object.material);
+        object.material = identityMaterial;
+      }
+    });
+
+    const previousBackground = this.world.scene.background;
+    const previousFog = this.world.scene.fog;
+    // WebGLRenderer viewport/scissor coordinates use logical renderer size;
+    // canvas.width/height are drawing-buffer pixels and include pixel ratio.
+    const rendererSize = this.renderer.getSize(new THREE.Vector2());
+    const width = Math.max(3, Math.floor(rendererSize.x));
+    const height = Math.max(1, Math.floor(rendererSize.y));
+    const panelWidth = Math.floor(width / 3);
+    const panelAspect = panelWidth / height;
+    const center = bounds.getCenter(new THREE.Vector3());
+    const size = bounds.getSize(new THREE.Vector3());
+    const distance = Math.max(size.x, size.y, size.z, 1) * 3;
+    const views = [
+      { direction: new THREE.Vector3(0, 0, -1), horizontalSize: size.x },
+      { direction: new THREE.Vector3(1, 0, 0), horizontalSize: size.z },
+      { direction: new THREE.Vector3(0, 0, 1), horizontalSize: size.x },
+    ];
+
+    try {
+      this.world.scene.background = new THREE.Color(0xf1f1ed);
+      this.world.scene.fog = null;
+      this.renderer.setScissorTest(true);
+      this.renderer.clear();
+      for (let index = 0; index < views.length; index += 1) {
+        const view = views[index];
+        if (view === undefined) continue;
+        const halfHeight = Math.max(
+          size.y * 0.58,
+          (view.horizontalSize * 0.58) / Math.max(panelAspect, 0.01),
+          0.5,
+        );
+        const halfWidth = halfHeight * panelAspect;
+        const camera = new THREE.OrthographicCamera(
+          -halfWidth,
+          halfWidth,
+          halfHeight,
+          -halfHeight,
+          0.01,
+          distance * 4,
+        );
+        camera.position.copy(center).addScaledVector(view.direction, distance);
+        camera.up.set(0, 1, 0);
+        camera.lookAt(center);
+        camera.updateProjectionMatrix();
+        const x = index * panelWidth;
+        const currentWidth = index === 2 ? width - x : panelWidth;
+        this.renderer.setViewport(x, 0, currentWidth, height);
+        this.renderer.setScissor(x, 0, currentWidth, height);
+        this.renderer.render(this.world.scene, camera);
+      }
+      return this.canvas.toDataURL("image/png");
+    } finally {
+      this.renderer.setScissorTest(false);
+      this.renderer.setViewport(0, 0, width, height);
+      this.world.scene.background = previousBackground;
+      this.world.scene.fog = previousFog;
+      for (const [mesh, material] of materials) mesh.material = material;
+      for (const [mesh, wasVisible] of visibility) mesh.visible = wasVisible;
+      identityMaterial.dispose();
+      this.renderer.render(this.world.scene, this.camera);
+    }
+  }
+
+  private addTerrain(terrain: TerrainSurface, resourceId: string): readonly THREE.Object3D[] {
+    const renderables: THREE.Object3D[] = [];
     let tileIndex = 0;
     terrain.forEachHeightfield((heightfield) => {
       const id = `${resourceId}:tile:${tileIndex}`;
@@ -648,6 +789,7 @@ export class SdkWorldAdapter implements PlaygroundWorldAdapter {
       mesh.receiveShadow = true;
       mesh.castShadow = true;
       addOwnedRenderable(this.world, id, mesh);
+      renderables.push(mesh);
       const body = this.physics.createRigidBody(undefined, {
         type: "fixed",
         sync: "none",
@@ -664,9 +806,10 @@ export class SdkWorldAdapter implements PlaygroundWorldAdapter {
         friction: 0.8,
       });
     });
+    return renderables;
   }
 
-  private addLake(descriptor: WaterSurfaceDescriptor, resourceId: string): void {
+  private addLake(descriptor: WaterSurfaceDescriptor, resourceId: string): THREE.Object3D {
     const geometry = geometryForWater(descriptor);
     const material = new THREE.ShaderMaterial({
       uniforms: {
@@ -720,9 +863,10 @@ export class SdkWorldAdapter implements PlaygroundWorldAdapter {
     water.position.y = descriptor.elevation;
     water.receiveShadow = true;
     addOwnedRenderable(this.world, resourceId, water);
+    return water;
   }
 
-  private addLandmark(descriptor: LandmarkDescriptor, resourceId: string): void {
+  private addLandmark(descriptor: LandmarkDescriptor, resourceId: string): THREE.Object3D {
     const landmark = compileLandmark(descriptor);
     landmark.updateMatrixWorld(true);
     addOwnedRenderable(this.world, resourceId, landmark);
@@ -796,6 +940,7 @@ export class SdkWorldAdapter implements PlaygroundWorldAdapter {
           break;
       }
     });
+    return landmark;
   }
 
   private animate(): void {

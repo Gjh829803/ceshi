@@ -2,6 +2,7 @@ export * from "./features";
 export * from "./landmarks";
 export * from "./official-features";
 export * from "./planning-artifacts";
+export * from "./authoring-workflow";
 export * from "./random";
 export * from "./scene";
 export * from "./schema";

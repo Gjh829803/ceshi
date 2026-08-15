@@ -4,16 +4,19 @@
 
 ## 1. 产品目标
 
-用户输入一句话、图片或其他视觉参考，Coding Agent 使用本 SDK 创建一个可玩的 3D 白膜世界。玩家直接操作这个确定性的白膜世界，实时世界模型把它渲染成风格完整、细节丰富的最终画面。
+用户输入一句话、图片或其他视觉参考，职责隔离的 Planner、Builder 和 Visual Bible Agent 使用本 SDK 创建一个可玩且具有完整视觉定义的 3D 白膜世界。玩家直接操作这个确定性的白膜世界，实时世界模型把它渲染成风格完整、细节丰富的最终画面。
 
 系统链路：
 
 ```text
 用户文本/图片
     ↓
-Coding Agent
+Planner Agent
+    ↓ WorldSpec / WorldPrompt / Entity Catalog / 规划图（冻结）
+Builder Agent
     ↓ 编写 TypeScript 世界代码
 Three.js 白膜游戏运行时
+    ↘ SDK 白膜三视图 → Visual Bible Agent → 样式三视图 / 渲染首帧
     ↓ 白膜 + 深度 + 法线 + ID + 动作 + 语义
 实时世界模型
     ↓
@@ -32,7 +35,7 @@ World Control Gateway
 Three.js 白膜游戏运行时
 ```
 
-Coding Agent 负责创作和修改世界代码；Director LLM 负责在已运行世界允许的能力范围内进行即时编排。两者都不能绕过白膜运行时直接改变最终画面的逻辑真相。当前只有第一条链路的室外 Alpha 已运行；Director 和实时世界模型仍处于方案/接入准备阶段。
+创作 Agent 组负责规划、实现和视觉定义；Director LLM 负责在已运行世界允许的能力范围内进行即时编排。两类 Agent 都不能绕过白膜运行时直接改变最终画面的逻辑真相。当前只有第一条链路的室外 Alpha 已运行；Director 和实时世界模型仍处于方案/接入准备阶段。
 
 ## 2. 世界真相
 
@@ -99,12 +102,12 @@ Coding Agent 负责创作和修改世界代码；Director LLM 负责在已运行
 
 系统成功不以白膜画面精美为标准，而以以下能力衡量：
 
-- Coding Agent 能稳定生成可启动、可操控的世界。
+- Planner 与 Builder 能通过冻结契约稳定生成可启动、可操控的世界。
 - 玩家输入具有稳定、可复用的运动手感。
 - 白膜状态与最终生成画面的空间关系一致。
 - 主体跨帧保持身份、位置和动作连续性。
 - 世界模型出现延迟或失败时，白膜模拟仍然正确运行。
-- SDK 错误能够被 Coding Agent 理解并自动修复。
+- SDK 错误能够被相应阶段 Agent 理解，并通过本阶段修复或结构化变更请求处理。
 - 后续 Runtime Director 的每次世界修改都能被授权、验证、回执和确定性重放。
 
 其中前六项是第一期和 World Model 接入需要逐步验证的目标；最后一项是 Runtime Director 实现后的验收目标，不能用于暗示该模块目前已经存在。

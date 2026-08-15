@@ -5,6 +5,11 @@ import path from "node:path";
 import { compileOutdoorScene, deriveWorldPlanArtifacts } from "../packages/world/src/index.js";
 
 import { sceneCatalog } from "../apps/playground/src/scenes/index.js";
+import {
+  planLockPath,
+  sha256,
+  verifyFrozenWorldPlan,
+} from "./lib/plan-lock.js";
 
 interface Options {
   sceneId: string;
@@ -39,6 +44,9 @@ function json(value: unknown): string {
 
 async function main() {
   const options = parseOptions(process.argv.slice(2));
+  const projectRoot = path.resolve(".");
+  const planLock = await verifyFrozenWorldPlan(projectRoot, options.sceneId);
+  const planLockSha256 = sha256(await readFile(planLockPath(projectRoot, options.sceneId)));
   const definition = sceneCatalog[options.sceneId];
   if (definition === undefined) throw new Error(`Unknown scene catalog id: ${options.sceneId}`);
   const scene = compileOutdoorScene(definition);
@@ -78,6 +86,8 @@ async function main() {
   const outputDirectory = path.resolve("artifacts/scenes", options.sceneId);
   const files = new Map<string, string>([
     ["world-spec.json", json(scene.worldSpec)],
+    ["world-prompt.json", json(scene.worldSpec.worldPrompt)],
+    ["entity-catalog.json", json(scene.worldSpec.entityCatalog)],
     ["top-down-plan.json", json(artifacts.topDown)],
     ["height-slope-plan.json", json(artifacts.heightSlope)],
     [
@@ -94,11 +104,16 @@ async function main() {
       "manifest.json",
       json({
         artifactVersion: 1,
+        workflowStage: "verified",
         sceneId: definition.id,
         specHash: artifacts.topDown.specHash,
+        frozenPlanSpecSha256: planLock.specSha256,
+        planLockSha256,
         compiler: artifacts.topDown.compiler,
         files: [
           "world-spec.json",
+          "world-prompt.json",
+          "entity-catalog.json",
           "top-down-plan.json",
           "height-slope-plan.json",
           "opening-shot-plan.json",

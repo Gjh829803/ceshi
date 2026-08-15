@@ -1,12 +1,12 @@
 # Agent Whitebox World SDK
 
-一个基于 Three.js 的语义白膜游戏 SDK。当前提供可运行的第一期 Alpha，目标是让 Coding Agent 根据一句话或图片创建可玩的室外白膜世界，并为后续实时世界模型提供确定性的空间、动作和语义条件。
+一个基于 Three.js 的语义白膜游戏 SDK。当前提供可运行的第一期 Alpha，目标是让职责隔离的创作 Agent 根据一句话或图片规划、搭建并视觉定义可玩的室外白膜世界，为后续实时世界模型提供确定性的空间、动作和语义条件。
 
 > 第一次阅读请从[项目总览](docs/00-project-overview.md)开始。它区分了当前实现、实验能力和后续规划；其他文档中的目标 API 不代表已经交付。
 
-用户通过一句话或图片提出创作需求，Coding Agent 使用 SDK 生成可玩的白膜世界；玩家操控确定性的 3D 游戏运行时；实时世界模型根据白膜、空间结构和语义条件生成最终视觉画面。
+用户通过一句话或图片提出创作需求，Planner、Builder 和 Visual Bible Agent 通过 SDK 工件接力生成世界；玩家操控确定性的 3D 游戏运行时；实时世界模型根据白膜、空间结构和语义条件生成最终视觉画面。
 
-创作不再从“直接写几何”开始。Coding Agent 会先把输入扩展为可追踪的 `WorldSpec`，再用 Codex 内置图片生成能力制作一张严格俯视的世界规划图和一张进入视角构图图，随后实现白膜。SDK 从真实白膜反算俯视图与高度/坡度图，用于检查规划和实现是否一致。图片表达意图，`WorldSpec` 与白膜运行时共同约束真实空间。
+创作不再从“直接写几何”开始。World Planner Agent 先把输入扩展为可追踪的 `WorldSpec`、世界 Prompt 和 Entity Catalog，并用 Codex 内置图片生成能力制作严格俯视的世界规划图和进入视角构图图。规划被哈希冻结后，独立的 World Builder Agent 才实现白膜；SDK 再从真实白膜导出俯视图、高度/坡度图和每类实体的正/右/后三视图。最后由 Visual Bible Agent 生成匹配的样式三视图和渲染首帧。图片表达意图，`WorldSpec` 与白膜运行时共同约束真实空间。
 
 ## 核心定义
 
@@ -14,7 +14,7 @@
 
 它由三部分组成：
 
-1. **Coding Agent 创作层**：当前根据用户输入编写室外场景；未来再扩展主体、NPC 和游戏规则。
+1. **多 Agent 创作层**：Planner 负责世界定义，Builder 负责白膜实现，Visual Bible 负责视觉条件；未来再扩展主体、NPC 和游戏规则。
 2. **白膜游戏运行时**：当前负责镜头、输入、人形运动、物理和基础动作；未来扩展导航、玩法和更多主体。
 3. **生成式渲染层**：未来把白膜世界实时转换为具有材质、光影和细节的最终画面，当前尚未接入。
 
@@ -45,10 +45,12 @@
 - [当前实验与验证记录](docs/10-current-experiments.md)
 - [世界模型团队接入说明](docs/11-world-model-team-handoff.md)
 - [Plan-first 世界创作协议](docs/12-plan-first-world-authoring.md)
+- [多 Agent 世界创作流水线](docs/13-multi-agent-world-authoring.md)
 - [架构决策：向 Agent 暴露主体套餐](decisions/0001-subject-kits.md)
 - [架构决策：第一、二期范围](decisions/0002-phased-scope.md)
 - [架构决策：Agent、Director 与 World Model 边界](decisions/0003-agent-director-world-model-boundaries.md)
 - [架构决策：新场景采用 Plan-first 创作](decisions/0004-plan-first-world-authoring.md)
+- [架构决策：分离 Planner、Builder 与 Visual Bible](decisions/0005-separated-planner-builder-visual-bible.md)
 
 ## 当前状态
 
@@ -63,7 +65,10 @@
 - `FeatureRegistry`：schema、seed、预算、诊断、资源所有权、更新、重建和删除
 - `defineOutdoorScene` 场景 DSL、通用运行时编译器、Agent 自定义 Feature、场景目录与可追踪的初始镜头构图
 - `OutdoorWorldSpec / definePlannedOutdoorScene`：全世界拓扑、证据来源、进入视角和规划资产的可验证契约
+- `WorldPromptBundle / Entity Catalog`：世界级渲染描述，以及主体、NPC、标志物、客体的 Prototype/Instance、唯一实例色和三视图契约
+- `plan-lock.json`：冻结 WorldSpec 源码、World Plan 和 Opening Shot；Builder 前后都会检查漂移
 - Codex 内置图片生成的 World Plan / Opening Shot，以及 SDK 从真实场景导出的 Top-down / Height-Slope 规划工件
+- SDK 真实正交白膜三视图导出，以及 Visual Bible 输入/最终包校验
 - `WASD / Shift / Space / ↑ / ↓`、相机相对移动、符合视线语义的上下视角、固定步长插值与防颠簸跟随
 - 统一人形通行契约：42° 最大爬坡角、48° 自动滑落角、局部坡度查询和出生点坡度检查
 - 可玩的 Vite Playground、世界检查器、截图与固定输入 Smoke API
@@ -75,9 +80,18 @@ pnpm dev
 
 浏览器打开 `http://127.0.0.1:5173/`。仓库不分发来源尚未确认的 Xbot；本地开发可按[运行指南](docs/07-alpha-implementation.md)链接自己的 Mixamo 兼容 GLB。没有本地资产时会明确显示无骨骼占位体，不会伪装成已绑定角色。
 
-让 Coding Agent 创作新场景时，直接描述目标并要求它遵循仓库根目录的 `AGENTS.md`；它只需新增/修改 `apps/playground/src/scenes/`，无需改 SDK 内部。完整流程和能力边界见 [Coding Agent 场景创作指南](docs/08-agent-scene-authoring.md)。
+让 Agent 创作新场景时，优先分阶段执行并在 Planner 后人工评审：
 
-场景 Agent 默认使用项目级 `whitebox_workspace_only` 权限 Profile：禁止读取其他用户目录、禁止网络、禁止权限升级。启动前可运行 `pnpm test:isolation` 验证，再用 `pnpm agent:scene -- --scene-id <catalog-id> "<场景描述>"` 启动。图片参考可追加 `--image /absolute/reference.png`；启动器只把明确指定的图片复制到一次性隔离目录，不会向 Agent 开放图片所在目录。只想先评审世界定义和两张规划图时可加 `--plan-only`。
+```bash
+pnpm agent:plan -- --scene-id <id> --image /absolute/reference.png "<场景描述>"
+pnpm agent:build -- --scene-id <id>
+pnpm dev  # 浏览器验收并导出白膜三视图
+pnpm agent:visual -- --scene-id <id>
+```
+
+三个阶段遵守仓库根目录的 `AGENTS.md`，且无需改 SDK 内部。完整流程和能力边界见 [Coding Agent 场景创作指南](docs/08-agent-scene-authoring.md)与[多 Agent 世界创作流水线](docs/13-multi-agent-world-authoring.md)。
+
+三个创作 Agent 都使用项目级 `whitebox_workspace_only` 权限 Profile：禁止读取其他用户目录、禁止网络、禁止权限升级。图片只允许传给 Planner；启动器把明确指定的文件复制到一次性隔离目录，不开放原目录。`pnpm agent:scene -- --scene-id <id> "<描述>"` 仍可连续运行 Planner 与 Builder，但内部是两次独立任务并带冻结门禁；Visual Bible 必须在浏览器白膜验收和三视图导出后单独运行。
 
 测试数量以当前 `pnpm test` 输出为准；`typecheck`、生产构建和规划工件一致性均属于交付门禁。详细场景、近期反馈修正、自动验证边界和已知告警见[当前实验与验证记录](docs/10-current-experiments.md)。
 

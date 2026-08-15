@@ -6,7 +6,7 @@
 
 世界模型团队可以直接运行四个样例场景，理解白膜世界中的地形、主体、相机、动作、语义和稳定 ID。当前优先目标不是立刻追求最终画质，而是共同冻结最小 RenderFrame 契约并制作离线数据导出样例。
 
-`grassland` 还提供完整的 plan-first 样例：结构化 `WorldSpec`、Codex imagegen 的全局俯视规划图与进入视角图，以及 SDK 从真实白膜派生的 Top-down/Height-Slope 工件。规划图可以成为构图辅助条件，但不得覆盖白膜中的相机、Entity 位置或可通行性真相。
+`grassland` 还提供完整的多 Agent plan-first 样例：结构化 `WorldSpec / WorldPrompt / Entity Catalog`、Codex imagegen 的全局俯视规划图与进入视角图、冻结锁、SDK 从真实白膜派生的 Top-down/Height-Slope 工件，以及人物/高塔的唯一颜色正/右/后三视图。规划图和后续样式图可以成为构图与身份条件，但不得覆盖白膜中的相机、Entity 位置或可通行性真相。
 
 ## 2. 双方职责
 
@@ -70,11 +70,11 @@ RenderFrame
 - `apps/playground/src/sdk-world-adapter.ts`：当前真实 World/Physics/SubjectKit/Scene 编译链路，也是规划视图和后续 Render Bridge 的实验接入点。
 - `packages/core`：World、Entity、Transform、Input 和固定更新。
 - `packages/world`：Terrain、Water、Landmark、FeatureRegistry 和场景 DSL。
-- `packages/world/src/world-spec.ts` 与 `planning-artifacts.ts`：创作意图、证据来源、进入镜头和真实地形规划工件。
-- `apps/playground/public/scene-plans/grassland/` 与 `artifacts/scenes/grassland/`：当前规划图片和可重复导出的结构化样例。
+- `packages/world/src/world-spec.ts` 与 `planning-artifacts.ts`：创作意图、WorldPrompt、Entity Catalog、证据来源、进入镜头和真实地形规划工件。
+- `apps/playground/public/scene-plans/grassland/` 与 `artifacts/scenes/grassland/`：当前规划图片、白膜三视图、冻结锁和可重复导出的结构化样例。
 - `packages/subjects`、`packages/camera`、`packages/animation`：主体、相机和动作状态。
 - `assets/humanoid/action-manifest.json`：动作语义清单；不包含可再分发的人形资产。
-- `window.__WHITEBOX_PLAYGROUND__` automation API v2：快照、固定输入、普通截图，以及 WorldSpec/规划工件/三种规划视图入口。
+- `window.__WHITEBOX_PLAYGROUND__` automation API v2：快照、固定输入、普通截图、WorldSpec/规划工件/三种规划视图，以及 Prototype 查询和白膜三视图捕获/导出入口。
 
 ## 6. 当前缺口
 
@@ -83,6 +83,7 @@ RenderFrame
 - 多 pass Render Bridge 与 GPU readback。
 - Depth、Normal、Instance ID、Semantic ID 和 Motion Vector 导出。
 - 正式 `EntityManifest / AppearanceManifest` 序列化协议。
+- Visual Bible 当前只落地了输入/输出工件门禁；样式三视图尚未转换成正式运行时 `AppearanceManifest`。
 - 实时传输、模型服务客户端和生成帧回传。
 - 重投影、插帧、异步合成与白膜降级 UI。
 - Render Directive Gateway。

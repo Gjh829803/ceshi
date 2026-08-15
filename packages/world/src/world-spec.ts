@@ -15,6 +15,52 @@ export interface WorldPlanClaim {
   statement: string;
 }
 
+export interface WorldPromptBundle {
+  identity: string;
+  spatialComposition: string;
+  environment: string;
+  lighting: string;
+  visualStyle: string;
+  openingShot: string;
+  invariants: readonly string[];
+  negativePrompt: readonly string[];
+}
+
+export type PlannedEntityRole = "subject" | "npc" | "landmark" | "object";
+
+export interface VisualPrototypeSpec {
+  id: string;
+  role: PlannedEntityRole;
+  semantic: string;
+  description: string;
+  approximateSize: Vec3Tuple;
+  forwardAxis: "-Z";
+  pivot: "ground-center" | "center";
+  instanceColor: `#${string}`;
+  appearancePrompt: string;
+  negativePrompt: string;
+  evidence: WorldPlanEvidence;
+  views: {
+    canonical: readonly ["front", "right", "back"];
+    whiteboxUri: string;
+    styledUri: string;
+  };
+}
+
+export interface PlannedEntityInstance {
+  id: string;
+  prototypeId: string;
+  binding:
+    | { kind: "feature"; id: string }
+    | { kind: "runtime-entity"; id: string };
+  evidence: WorldPlanEvidence;
+}
+
+export interface WorldEntityCatalog {
+  prototypes: readonly VisualPrototypeSpec[];
+  instances: readonly PlannedEntityInstance[];
+}
+
 export interface OutdoorWorldBoundsSpec {
   center: Vec2Tuple;
   size: Vec2Tuple;
@@ -97,6 +143,8 @@ export interface OutdoorWorldSpec {
     referenceImages?: readonly string[];
   };
   intent: string;
+  worldPrompt: WorldPromptBundle;
+  entityCatalog: WorldEntityCatalog;
   bounds: OutdoorWorldBoundsSpec;
   terrain: {
     baseRelief: TerrainRelief;
@@ -144,6 +192,15 @@ function safePublicPlanUri(uri: string, specId: string): boolean {
   );
 }
 
+function safePrototypeUri(uri: string, specId: string, prototypeId: string): boolean {
+  return (
+    uri.startsWith(`/scene-plans/${specId}/prototypes/${prototypeId}/`) &&
+    !uri.includes("..") &&
+    !uri.includes("://") &&
+    /\.png$/i.test(uri)
+  );
+}
+
 function diagnostic(
   severity: Diagnostic["severity"],
   code: string,
@@ -176,6 +233,23 @@ export function validateOutdoorWorldSpec(
         "error",
         "WORLD_SPEC_INTENT_MISSING",
         "WorldSpec must preserve the user request and a concise world intent.",
+      ),
+    );
+  }
+  const promptFields = [
+    spec.worldPrompt.identity,
+    spec.worldPrompt.spatialComposition,
+    spec.worldPrompt.environment,
+    spec.worldPrompt.lighting,
+    spec.worldPrompt.visualStyle,
+    spec.worldPrompt.openingShot,
+  ];
+  if (promptFields.some((value) => !value.trim()) || spec.worldPrompt.invariants.length === 0) {
+    diagnostics.push(
+      diagnostic(
+        "error",
+        "WORLD_SPEC_WORLD_PROMPT_INCOMPLETE",
+        "WorldPrompt must define identity, space, environment, lighting, style, opening shot, and at least one invariant.",
       ),
     );
   }
@@ -304,6 +378,118 @@ export function validateOutdoorWorldSpec(
     }
   }
   for (const claim of spec.claims) addUnique(claim.id, "Claim");
+
+  const prototypeIds = new Set<string>();
+  const prototypeColors = new Set<string>();
+  for (const prototype of spec.entityCatalog.prototypes) {
+    if (!prototype.id.trim() || prototypeIds.has(prototype.id)) {
+      diagnostics.push(
+        diagnostic(
+          "error",
+          "WORLD_SPEC_PROTOTYPE_ID_INVALID",
+          `Visual prototype id ${prototype.id || "<empty>"} must be non-empty and unique.`,
+        ),
+      );
+    }
+    prototypeIds.add(prototype.id);
+    if (
+      prototype.approximateSize.some((value) => !(value > 0) || !Number.isFinite(value)) ||
+      !prototype.semantic.trim() ||
+      !prototype.description.trim() ||
+      !prototype.appearancePrompt.trim()
+    ) {
+      diagnostics.push(
+        diagnostic(
+          "error",
+          "WORLD_SPEC_PROTOTYPE_DEFINITION_INVALID",
+          `Visual prototype ${prototype.id} requires positive size and non-empty semantic, description, and appearance prompt.`,
+        ),
+      );
+    }
+    if (!/^#[0-9a-f]{6}$/i.test(prototype.instanceColor) || prototypeColors.has(prototype.instanceColor.toLowerCase())) {
+      diagnostics.push(
+        diagnostic(
+          "error",
+          "WORLD_SPEC_PROTOTYPE_COLOR_INVALID",
+          `Visual prototype ${prototype.id} requires a unique six-digit instance color.`,
+        ),
+      );
+    }
+    prototypeColors.add(prototype.instanceColor.toLowerCase());
+    if (
+      prototype.views.canonical.join(",") !== "front,right,back" ||
+      !safePrototypeUri(prototype.views.whiteboxUri, spec.id, prototype.id) ||
+      !safePrototypeUri(prototype.views.styledUri, spec.id, prototype.id)
+    ) {
+      diagnostics.push(
+        diagnostic(
+          "error",
+          "WORLD_SPEC_PROTOTYPE_VIEWS_INVALID",
+          `Visual prototype ${prototype.id} must use front/right/back and project-local whitebox/styled PNG paths.`,
+        ),
+      );
+    }
+  }
+
+  const instanceIds = new Set<string>();
+  const boundIds = new Set<string>();
+  let subjectCount = 0;
+  for (const instance of spec.entityCatalog.instances) {
+    if (!instance.id.trim() || instanceIds.has(instance.id)) {
+      diagnostics.push(
+        diagnostic(
+          "error",
+          "WORLD_SPEC_ENTITY_INSTANCE_ID_INVALID",
+          `Entity instance id ${instance.id || "<empty>"} must be non-empty and unique.`,
+        ),
+      );
+    }
+    instanceIds.add(instance.id);
+    const prototype = spec.entityCatalog.prototypes.find((item) => item.id === instance.prototypeId);
+    if (prototype === undefined) {
+      diagnostics.push(
+        diagnostic(
+          "error",
+          "WORLD_SPEC_ENTITY_PROTOTYPE_UNKNOWN",
+          `Entity instance ${instance.id} references unknown prototype ${instance.prototypeId}.`,
+        ),
+      );
+    } else if (prototype.role === "subject") {
+      subjectCount += 1;
+    }
+    const bindingKey = `${instance.binding.kind}:${instance.binding.id}`;
+    if (!instance.binding.id.trim() || boundIds.has(bindingKey)) {
+      diagnostics.push(
+        diagnostic(
+          "error",
+          "WORLD_SPEC_ENTITY_BINDING_INVALID",
+          `Entity instance ${instance.id} requires a non-empty unique runtime binding.`,
+        ),
+      );
+    }
+    boundIds.add(bindingKey);
+  }
+  if (subjectCount === 0) {
+    diagnostics.push(
+      diagnostic("error", "WORLD_SPEC_SUBJECT_MISSING", "Entity Catalog must define the playable subject."),
+    );
+  }
+  const featureBindings = new Set(
+    spec.entityCatalog.instances
+      .filter((instance) => instance.binding.kind === "feature")
+      .map((instance) => instance.binding.id),
+  );
+  for (const landmark of spec.landmarks) {
+    if (!featureBindings.has(landmark.featureId)) {
+      diagnostics.push(
+        diagnostic(
+          "error",
+          "WORLD_SPEC_LANDMARK_ENTITY_MISSING",
+          `Landmark feature ${landmark.featureId} has no Entity Catalog instance.`,
+        ),
+      );
+    }
+  }
 
   if (!insideBounds(spec.entry.spawn, spec.bounds)) {
     diagnostics.push(

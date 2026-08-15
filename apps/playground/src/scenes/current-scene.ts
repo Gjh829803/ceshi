@@ -4,7 +4,7 @@ import {
   terrainNoiseForRelief,
 } from "@whitebox-world/world";
 
-import { grasslandWorldSpec } from "./plans/grassland.js";
+import { worldSpec } from "./plans/grassland.js";
 
 const GrasslandTerrainFeature = defineWorldFeature<{}, { terrainId: string }>({
   type: "scene.grassland-planned-terrain",
@@ -45,7 +45,7 @@ export const currentScene = definePlannedOutdoorScene({
   id: "grassland",
   title: "Great Lake Grassland",
   seed: 42,
-  worldSpec: grasslandWorldSpec,
+  worldSpec,
   budget: {
     maxVertices: 350_000,
     maxTriangles: 700_000,

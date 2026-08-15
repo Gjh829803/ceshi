@@ -4,7 +4,7 @@
 
 ## 1. 实验目的
 
-当前实验要回答六个问题：
+当前实验要回答八个问题：
 
 1. 第三人称人形的移动、物理、动作和镜头能否由一个稳定 SubjectKit 统一提供。
 2. Coding Agent 能否只写场景模块，不改 SDK 内部，就创建不同的室外白膜世界。
@@ -12,6 +12,8 @@
 4. 场景中的地形、水体和标志物能否追踪到 Feature、参数、seed 和资源所有者。
 5. 图片参考能否被转译成可玩的白膜空间构图，而不是把纹理和视觉细节错误建成碰撞几何。
 6. Coding Agent 能否先把输入扩展为可追踪的整个世界和进入视角，再用两张规划图与 SDK 实测工件闭环，而不是直接猜几何。
+7. Planner 与 Builder 能否通过冻结锁真正隔离，避免下游为实现方便而篡改上游规划。
+8. 每类实体能否从真实白膜导出唯一颜色的正/右/后三视图，为 Visual Bible 与世界模型建立稳定视觉绑定。
 
 ## 2. 当前 Playground 场景
 
@@ -45,16 +47,31 @@ pnpm dev
 | 不可爬坡面没有定义 | 人形 42° 最大爬坡、48° 自动滑落，主路线建议 ≤35° | 出生点坡度检查；Azure Bay 路线测试覆盖 ≤35° |
 | 分块地形出现缝或高差 | 分块使用世界坐标采样；渲染网格和 Rapier 高度场复用同一高度数据 | 自动测试验证高度/物理对齐；像素级接缝仍需浏览器截图回归 |
 
-## 4. 2026-08-15 自动验证结果
+## 4. 多 Agent 创作实验
+
+`grassland` 已迁移为首个完整样例：
+
+- Planner 产物包含 WorldPrompt、Entity Catalog、World Plan 和 Opening Shot。
+- `plan-lock.json` 冻结规划源码与两张图片；Builder 前后都可检测漂移。
+- Builder 导出的场景清单标记 `workflowStage: "verified"`，并记录冻结锁与规划图片哈希。
+- Playground 已真实导出 `humanoid-player` 与 `watchtower` 两个 Prototype 的 Front / Right / Back 白膜三视图；分别使用红色与蓝色唯一实例色。
+- `visual:inputs` 已校验冻结锁、verified 场景和两张白膜三视图。样式三视图与渲染首帧尚未生成，因此当前样例不声称已经完成 `visualized` 阶段。
+- 隔离启动器的所有 post-agent 类型检查、测试、构建和工件导出也通过 workspace-only sandbox 执行，不直接在无隔离宿主中运行 Agent 生成代码。
+
+本次浏览器人工 QA 发现并修复了高 DPR 屏幕下三视图被裁切的问题：WebGL viewport/scissor 现在使用 renderer 的逻辑尺寸，而不是包含 DPR 的 drawing-buffer 尺寸。修复后人物与高塔在三格中均完整、等比例、背景一致。
+
+## 5. 2026-08-15 自动验证结果
 
 ```text
-pnpm test         16 test files / 84 tests passed
+pnpm test         17 test files / 89 tests passed
 pnpm test:scenes  2 test files / 14 tests passed
 pnpm typecheck    passed
 pnpm build        passed
 pnpm test:isolation passed; workspace 外目录不可读
+pnpm plan:check -- --scene grassland passed
 pnpm plan:scene -- --scene grassland passed
 pnpm plan:scene:check -- --scene grassland passed
+pnpm visual:inputs -- --scene grassland passed
 ```
 
 已知非阻塞告警：
@@ -62,7 +79,7 @@ pnpm plan:scene:check -- --scene grassland passed
 - Rapier compat 初始化仍会输出 deprecated parameter 警告，需要升级调用方式。
 - Playground 生产 bundle 约 2.94 MB（gzip 约 1.02 MB），Vite 提示需要后续 code splitting。
 
-## 5. 自动验证覆盖与未覆盖
+## 6. 自动验证覆盖与未覆盖
 
 自动验证已经覆盖：
 
@@ -72,6 +89,8 @@ pnpm plan:scene:check -- --scene grassland passed
 - Azure Bay 从出生点到观景坡底的主路线坡度不超过 35°。
 - Core、Physics、Camera、Subject、Animation、Terrain、Feature、Schema 和 Testkit 的核心单元测试。
 - WorldSpec 的必需字段、项目内图片 URI、Feature/进入镜头一致性，以及结构化规划工件的确定性导出。
+- WorldPrompt 完整性、Prototype/Instance 引用、唯一实例色、固定三视图路径和 Landmark 运行时绑定。
+- Planner 冻结输入的哈希漂移、verified 场景清单和 Visual Bible 输入文件完整性。
 - `grassland` 主要路线的真实地形坡度采样；高度/坡度图来自编译后的 Heightfield，而不是图片模型。
 
 仍需人工或未来视觉回归覆盖：
@@ -80,6 +99,7 @@ pnpm plan:scene:check -- --scene grassland passed
 - tile 边界的像素级阴影/法线接缝。
 - 每个图片参考场景的首帧构图相似度。
 - 生成 World Plan/Opening Shot 与真实白膜截图的自动视觉差异评分；当前已经能分别截图，但仍由人或 Agent 对比。
+- 白膜三视图与样式三视图的自动轮廓/姿态一致性评分；当前只检查文件、路径和哈希。
 - 水岸在各种视角和地形高度下的观感。
 - Mixamo 动作混合观感、脚滑和 jump 动作绑定。
 - 世界模型条件帧与最终生成画面的一致性；该链路尚未实现。
@@ -91,6 +111,6 @@ pnpm plan:scene:check -- --scene grassland passed
 - `humanoid-rig-status` 是 Adapter 为检查器追加的运行时状态项，不属于 FeatureRegistry 资源图。
 - 早期未引用的 `demo-world-adapter.ts` 已删除；Playground 只保留真实 `SdkWorldAdapter` 链路。
 
-## 6. 当前结论
+## 7. 当前结论
 
-当前代码已经证明“受约束的 Coding Agent 可以创建可追踪的室外高度场白膜世界”，但还不能宣称“任意场景”或“第一期生产完成”。下一步应该扩大图片参考实验集，并把构图、可玩性、性能和主观手感变成可重复验收，而不是继续堆更多地貌名词。
+当前代码已经证明“受约束的 Planner 与 Builder 可以通过冻结契约创建可追踪的室外高度场白膜世界”，并完成了真实实体白膜三视图的结构化导出；但还不能宣称“任意场景”或“第一期生产完成”。下一步应实际运行 Visual Bible 样例、扩大图片参考实验集，并把构图、三视图轮廓、可玩性、性能和主观手感变成可重复验收，而不是继续堆更多地貌名词。

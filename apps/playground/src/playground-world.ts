@@ -1,6 +1,7 @@
 import type {
   DerivedWorldPlanArtifacts,
   OutdoorWorldSpec,
+  VisualPrototypeSpec,
 } from "@whitebox-world/world";
 
 export type InputAction =
@@ -78,6 +79,9 @@ export interface PlaygroundWorldAdapter {
   getWorldSpec(): OutdoorWorldSpec | null;
   getPlanArtifacts(): DerivedWorldPlanArtifacts | null;
   capturePlanningView(kind: PlanningViewKind): string;
+  getVisualPrototypes(): readonly VisualPrototypeSpec[];
+  captureWhiteboxTriview(prototypeId: string): string;
+  exportWhiteboxTriviews(): Promise<readonly string[]>;
   inspectFeatures(): readonly FeatureInspection[];
   snapshot(): WorldSnapshot;
   subscribe(listener: (snapshot: WorldSnapshot) => void): () => void;
@@ -93,6 +97,9 @@ export interface PlaygroundAutomationApi {
   getWorldSpec(): OutdoorWorldSpec | null;
   getPlanArtifacts(): DerivedWorldPlanArtifacts | null;
   capturePlanningView(kind: PlanningViewKind): string;
+  getVisualPrototypes(): readonly VisualPrototypeSpec[];
+  captureWhiteboxTriview(prototypeId: string): string;
+  exportWhiteboxTriviews(): Promise<readonly string[]>;
   reset(): WorldSnapshot;
   setPaused(paused: boolean): WorldSnapshot;
 }

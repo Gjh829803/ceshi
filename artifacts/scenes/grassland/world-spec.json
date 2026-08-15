@@ -7,6 +7,102 @@
     "request": "山峦起伏的草地，中间有一个大湖，天上有太阳，远处有一座高塔。"
   },
   "intent": "A broad playable grassland organized around a central lake, with a northern watchtower as the main navigation and composition anchor.",
+  "worldPrompt": {
+    "identity": "A vast playable grassland world organized around one clear central lake and one north-west watchtower.",
+    "spatialComposition": "Enter from the south, cross open grass, move around the west shore, and reach the watchtower on a low broad ridge.",
+    "environment": "Open gently rolling grassland, a continuous natural shoreline, a distant low ridge, and an expansive unobstructed horizon.",
+    "lighting": "Bright clear daytime with warm directional sunlight and readable long-distance silhouettes.",
+    "visualStyle": "Cinematic naturalistic landscape with coherent scale; surface detail must never change whitebox topology.",
+    "openingShot": "Third-person view behind the player, lake centered in the middle ground and the 27 meter tower left of center about 160 meters away.",
+    "invariants": [
+      "Keep exactly one large central lake.",
+      "Keep the player, lake and tower in their planned relative positions.",
+      "Keep the west route visually and physically open."
+    ],
+    "negativePrompt": [
+      "extra cities",
+      "giant fantasy tower",
+      "mountains blocking the route",
+      "text",
+      "UI"
+    ]
+  },
+  "entityCatalog": {
+    "prototypes": [
+      {
+        "id": "humanoid-player",
+        "role": "subject",
+        "semantic": "neutral_playable_humanoid",
+        "description": "A rigged neutral humanoid used as the player-controlled subject.",
+        "approximateSize": [
+          0.8,
+          1.8,
+          0.6
+        ],
+        "forwardAxis": "-Z",
+        "pivot": "ground-center",
+        "instanceColor": "#E85D5D",
+        "appearancePrompt": "a clearly recognizable adult adventurer with a simple silhouette suitable for third-person gameplay",
+        "negativePrompt": "no extra limbs, no oversized equipment, no silhouette-changing cloak",
+        "evidence": "planner-inferred",
+        "views": {
+          "canonical": [
+            "front",
+            "right",
+            "back"
+          ],
+          "whiteboxUri": "/scene-plans/grassland/prototypes/humanoid-player/whitebox-triview.png",
+          "styledUri": "/scene-plans/grassland/prototypes/humanoid-player/styled-triview.png"
+        }
+      },
+      {
+        "id": "watchtower",
+        "role": "landmark",
+        "semantic": "northwest_watchtower",
+        "description": "A 27 meter stone watchtower with a cylindrical body, wider crown and pointed roof.",
+        "approximateSize": [
+          16,
+          27,
+          16
+        ],
+        "forwardAxis": "-Z",
+        "pivot": "ground-center",
+        "instanceColor": "#4C78D0",
+        "appearancePrompt": "a 27 meter weathered stone watchtower with a cylindrical shaft, wider lookout crown and restrained conical roof",
+        "negativePrompt": "not a skyscraper, no castle complex, no attached city, no changed proportions",
+        "evidence": "user-explicit",
+        "views": {
+          "canonical": [
+            "front",
+            "right",
+            "back"
+          ],
+          "whiteboxUri": "/scene-plans/grassland/prototypes/watchtower/whitebox-triview.png",
+          "styledUri": "/scene-plans/grassland/prototypes/watchtower/styled-triview.png"
+        }
+      }
+    ],
+    "instances": [
+      {
+        "id": "player",
+        "prototypeId": "humanoid-player",
+        "binding": {
+          "kind": "runtime-entity",
+          "id": "player"
+        },
+        "evidence": "planner-inferred"
+      },
+      {
+        "id": "northern-watchtower",
+        "prototypeId": "watchtower",
+        "binding": {
+          "kind": "feature",
+          "id": "northern-watchtower"
+        },
+        "evidence": "user-explicit"
+      }
+    ]
+  },
   "bounds": {
     "center": [
       0,

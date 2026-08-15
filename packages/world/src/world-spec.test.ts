@@ -13,6 +13,70 @@ function validSpec() {
     id: "valid-world",
     source: { request: "a field with one tower" },
     intent: "A small planning validation fixture.",
+    worldPrompt: {
+      identity: "A field with one tower.",
+      spatialComposition: "The player faces the tower across open ground.",
+      environment: "A small open field.",
+      lighting: "Neutral daylight.",
+      visualStyle: "Simple readable realism.",
+      openingShot: "Third-person view toward the tower.",
+      invariants: ["Keep one tower."],
+      negativePrompt: ["extra structures"],
+    },
+    entityCatalog: {
+      prototypes: [
+        {
+          id: "player-prototype",
+          role: "subject" as const,
+          semantic: "player",
+          description: "A neutral player humanoid.",
+          approximateSize: [1, 2, 1] as const,
+          forwardAxis: "-Z" as const,
+          pivot: "ground-center" as const,
+          instanceColor: "#E85D5D" as const,
+          appearancePrompt: "a neutral player humanoid",
+          negativePrompt: "no oversized silhouette",
+          evidence: "planner-inferred" as const,
+          views: {
+            canonical: ["front", "right", "back"] as const,
+            whiteboxUri: "/scene-plans/valid-world/prototypes/player-prototype/whitebox-triview.png",
+            styledUri: "/scene-plans/valid-world/prototypes/player-prototype/styled-triview.png",
+          },
+        },
+        {
+          id: "tower-prototype",
+          role: "landmark" as const,
+          semantic: "tower",
+          description: "A simple tower.",
+          approximateSize: [6, 20, 6] as const,
+          forwardAxis: "-Z" as const,
+          pivot: "ground-center" as const,
+          instanceColor: "#4C78D0" as const,
+          appearancePrompt: "a simple stone tower",
+          negativePrompt: "no city",
+          evidence: "user-explicit" as const,
+          views: {
+            canonical: ["front", "right", "back"] as const,
+            whiteboxUri: "/scene-plans/valid-world/prototypes/tower-prototype/whitebox-triview.png",
+            styledUri: "/scene-plans/valid-world/prototypes/tower-prototype/styled-triview.png",
+          },
+        },
+      ],
+      instances: [
+        {
+          id: "player",
+          prototypeId: "player-prototype",
+          binding: { kind: "runtime-entity" as const, id: "player" },
+          evidence: "planner-inferred" as const,
+        },
+        {
+          id: "tower",
+          prototypeId: "tower-prototype",
+          binding: { kind: "feature" as const, id: "tower" },
+          evidence: "user-explicit" as const,
+        },
+      ],
+    },
     bounds: { center: [0, 0] as const, size: [100, 100] as const, heightRange: [-2, 20] as const },
     terrain: {
       baseRelief: "plain" as const,
@@ -125,6 +189,46 @@ describe("OutdoorWorldSpec", () => {
     const codes = validateOutdoorWorldSpec(spec).map((item) => item.code);
     expect(codes).toContain("WORLD_SPEC_LANDMARK_OUTSIDE_BOUNDS");
     expect(codes).toContain("WORLD_SPEC_ROUTE_OUTSIDE_BOUNDS");
+  });
+
+  it("rejects duplicate instance colors and prototype views outside their declared directory", () => {
+    const base = validSpec();
+    const spec = {
+      ...base,
+      entityCatalog: {
+        ...base.entityCatalog,
+        prototypes: [
+          base.entityCatalog.prototypes[0]!,
+          {
+            ...base.entityCatalog.prototypes[1]!,
+            instanceColor: base.entityCatalog.prototypes[0]!.instanceColor,
+            views: {
+              ...base.entityCatalog.prototypes[1]!.views,
+              styledUri: "/scene-plans/valid-world/prototypes/player-prototype/styled-triview.png",
+            },
+          },
+        ],
+      },
+    };
+    const codes = validateOutdoorWorldSpec(spec).map((item) => item.code);
+    expect(codes).toContain("WORLD_SPEC_PROTOTYPE_COLOR_INVALID");
+    expect(codes).toContain("WORLD_SPEC_PROTOTYPE_VIEWS_INVALID");
+  });
+
+  it("requires every planned landmark to bind to an Entity Catalog instance", () => {
+    const base = validSpec();
+    const spec = {
+      ...base,
+      entityCatalog: {
+        ...base.entityCatalog,
+        instances: base.entityCatalog.instances.filter(
+          (instance) => instance.binding.kind !== "feature",
+        ),
+      },
+    };
+    expect(validateOutdoorWorldSpec(spec)).toContainEqual(
+      expect.objectContaining({ severity: "error", code: "WORLD_SPEC_LANDMARK_ENTITY_MISSING" }),
+    );
   });
 
   it("detects when the built primary terrain does not match planned bounds", () => {

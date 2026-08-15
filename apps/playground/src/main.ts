@@ -68,6 +68,7 @@ app.innerHTML = `
         <div class="automation-card">
           <div><p>Automation API</p><code>window.__WHITEBOX_PLAYGROUND__</code></div>
           <button id="smoke-button" type="button">运行固定输入 Smoke</button>
+          <button id="triview-button" type="button">导出白膜三视图</button>
           <pre id="smoke-output">ready</pre>
         </div>
       </aside>
@@ -186,6 +187,9 @@ const automationApi: PlaygroundAutomationApi = {
   getWorldSpec: () => adapter.getWorldSpec(),
   getPlanArtifacts: () => adapter.getPlanArtifacts(),
   capturePlanningView: (kind) => adapter.capturePlanningView(kind),
+  getVisualPrototypes: () => adapter.getVisualPrototypes(),
+  captureWhiteboxTriview: (prototypeId) => adapter.captureWhiteboxTriview(prototypeId),
+  exportWhiteboxTriviews: () => adapter.exportWhiteboxTriviews(),
   reset: () => {
     adapter.reset();
     return adapter.snapshot();
@@ -214,6 +218,17 @@ requiredElement<HTMLButtonElement>("#capture-button").addEventListener("click", 
   link.download = `whitebox-world-${Date.now()}.png`;
   link.href = adapter.captureScreenshot();
   link.click();
+});
+
+requiredElement<HTMLButtonElement>("#triview-button").addEventListener("click", async () => {
+  const output = requiredElement<HTMLPreElement>("#smoke-output");
+  output.textContent = "exporting whitebox tri-views…";
+  try {
+    const paths = await adapter.exportWhiteboxTriviews();
+    output.textContent = `exported ${paths.length} tri-views\n${paths.join("\n")}`;
+  } catch (error) {
+    output.textContent = error instanceof Error ? error.message : String(error);
+  }
 });
 
 requiredElement<HTMLButtonElement>("#smoke-button").addEventListener("click", async () => {

@@ -2,58 +2,66 @@
 
 ## 直接交给 Agent 的用法
 
-使用项目提供的隔离入口启动 Coding Agent：
+推荐让三个独立职责的 Agent 分阶段工作，Planner 结束后先人工评审：
 
 ```bash
 pnpm test:isolation
-pnpm agent:scene -- --scene-id river-canyon "创建一个中央有弯曲河谷、两侧有高台的室外白膜场景"
+pnpm agent:plan -- --scene-id river-canyon \
+  "创建一个中央有弯曲河谷、两侧有高台的室外白膜场景"
+
+# 评审 WorldSpec、World Plan 和 Opening Shot 后：
+pnpm agent:build -- --scene-id river-canyon
 ```
 
 图片参考通过同一个隔离入口传入：
 
 ```bash
-pnpm agent:scene -- \
+pnpm agent:plan -- \
   --scene-id azure-bay \
   --image /absolute/path/coastal-reference.png \
   "按参考图的可见空间构图创建可玩的海湾白膜场景；保留前景高地、中央海湾、两侧海岸和远处岛屿关系"
 ```
 
-启动脚本只读取命令中明确指定的图片，将它复制到一次性隔离目录，再作为 Codex 初始图片附件传入；场景 Agent 看不到原始目录，任务结束后副本自动删除。支持 PNG、JPEG 和 WebP，可重复使用 `--image` 传多张参考图。`--scene-id` 是规划、代码、资源和导出工件共用的稳定 ID；只评审规划、不搭几何时追加 `--plan-only`。
+启动脚本只读取命令中明确指定的图片，将它复制到一次性隔离目录，再作为 Codex 初始图片附件传给 Planner；Agent 看不到原始目录，任务结束后副本自动删除。支持 PNG、JPEG 和 WebP，可重复使用 `--image` 传多张参考图。Builder 和 Visual Bible 不接受外部图片路径，只消费已冻结的项目工件。`--scene-id` 是规划、代码、资源和导出工件共用的稳定 ID。
 
 单张透视图没有不可见区域和真实尺度，因此验收目标是“指定观察点下的空间构图、地貌拓扑和关键轮廓相符”，不是从一张图恢复唯一且逐点完全一致的三维地形。花草、云层、绘画风格、纹理与密集小船属于生成式渲染层；白膜只负责海湾轮廓、高地、岛屿、道路、灯塔、房屋等会影响空间关系的内容。
 
 `.codex/config.toml` 使用 `whitebox_workspace_only` 权限 Profile：整个文件系统默认不可读，只重新开放当前 workspace，并关闭网络和权限升级。工具运行仍需要读取 Codex 官方定义的 `:minimal` 系统运行路径和只读的 `/opt/homebrew` Node 工具链，但不能读取其他用户目录或相邻项目。
 
-完整工作流是：先 `WorldSpec`，再让 Codex 内置图片工具生成 World Plan 与 Opening Shot，然后搭白膜，最后让 SDK 导出真实俯视/高度坡度数据进行对比。详见 [Plan-first 世界创作协议](12-plan-first-world-authoring.md)。也可以在仓库根目录启动 Agent，然后直接描述场景。推荐提示词：
+完整工作流是：Planner 先定义 `WorldSpec + WorldPrompt + Entity Catalog` 并生成 World Plan / Opening Shot；宿主冻结规划；Builder 搭白膜并通过 SDK 验收；SDK 导出每个视觉 Prototype 的真实白膜三视图；Visual Bible 最后生成样式三视图和渲染首帧。详见 [多 Agent 世界创作流水线](13-multi-agent-world-authoring.md)。
+
+`pnpm agent:scene -- --scene-id <id> "<描述>"` 是 Planner + Builder 的便捷连续入口，内部仍启动两个独立临时任务并验证冻结锁。它不自动运行 Visual Bible。也可以在仓库根目录手动启动 Planner，推荐提示词：
 
 ```text
-请遵守仓库根目录 AGENTS.md，创建一个可玩的室外白膜场景：<写你的场景描述>。
-先写完整 WorldSpec，并用 Codex 内置图片工具生成俯视规划图和进入视角图；
-只修改 apps/playground/src/scenes/ 与 apps/playground/public/scene-plans 下的场景文件并注册到 sceneCatalog；
-内置 API 不够时，在场景模块中用 defineWorldFeature 和受追踪的 BuildContext 自定义，
-不要为了这个场景修改 SDK 内部。完成后运行 test:scenes、typecheck、build，并在浏览器验收。
+请遵守仓库根目录 AGENTS.md，作为 World Planner Agent 规划：<写你的场景描述>。
+先定义完整 WorldSpec、WorldPrompt 与 Entity Catalog，并用 Codex 内置图片工具生成
+严格俯视的 World Plan 和进入视角 Opening Shot。不要写场景几何或修改 SDK。
 ```
 
 例如可以把 `<写你的场景描述>` 换成“中央是一条弯曲河谷，两侧有高台，远处有三座几何瞭望塔，黄昏光线，玩家从南侧高地出发”。Agent 可以自由写新的 Feature，不需要等待 SDK 预置“河谷”这个名词。
 
 ## 可验收目标
 
-Coding Agent 创建新室外场景时，只新增或修改 `apps/playground/src/scenes/` 下的规划/场景模块，以及 `apps/playground/public/scene-plans/` 下的两张生成图，不修改相机、物理、渲染器或 SDK 内部代码。
+Planner 只修改规划模块和两张生成图；Builder 只修改场景实现/注册；Visual Bible 只写声明好的样式三视图与渲染首帧。任何阶段都不为了单个场景修改相机、物理、渲染器或 SDK 内部代码。
 
 场景文件经过下面的固定链路：
 
 ```text
-defineOutdoorWorldSpec + Codex imagegen
+World Planner: WorldSpec + WorldPrompt + Entity Catalog + imagegen
        ↓
-definePlannedOutdoorScene
+plan-lock.json
        ↓
-Scene authoring context
+World Builder: definePlannedOutdoorScene
        ↓
 FeatureRegistry + resource ownership
        ↓
 Generic runtime compiler
        ↓
 Three.js meshes + Rapier colliders + SubjectKit
+       ↓
+SDK-derived plans + whitebox tri-views
+       ↓
+Visual Bible: styled tri-views + rendered opening frame
 ```
 
 ## 最小场景
@@ -194,11 +202,13 @@ http://127.0.0.1:5173/?scene=myScene
 ## Agent 验收门禁
 
 ```bash
+pnpm plan:check -- --scene my-scene
 pnpm test:scenes
 pnpm typecheck
 pnpm build
 pnpm plan:scene -- --scene my-scene
 pnpm plan:scene:check -- --scene my-scene
+pnpm visual:inputs -- --scene my-scene
 ```
 
 `test:scenes` 会检查：
@@ -214,6 +224,14 @@ pnpm plan:scene:check -- --scene my-scene
 - 主要路线是否超过 WorldSpec 的坡度限制。
 
 最后必须在浏览器中检查构图、岸线、碰撞、镜头和移动手感。
+
+在 Playground 点击“导出白膜三视图”，或调用：
+
+```js
+await window.__WHITEBOX_PLAYGROUND__.exportWhiteboxTriviews();
+```
+
+确认 `visual:inputs` 通过后才可执行 `pnpm agent:visual -- --scene-id my-scene`。最终 `visual:check` 同时校验样式三视图、渲染首帧和视觉清单是否一致。
 
 ## 当前“任意”的边界
 

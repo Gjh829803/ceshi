@@ -1,10 +1,15 @@
 {
   "artifactVersion": 1,
+  "workflowStage": "verified",
   "sceneId": "grassland",
-  "specHash": "a8023b55",
+  "specHash": "da2e082f",
+  "frozenPlanSpecSha256": "9f98960dfb2bd92d0aba9ad9155bc795e22ef3c260b20db78d1b4e8079905c42",
+  "planLockSha256": "0fa0f557dd49f7192ba2cb31f9e87b9a52cda8cd67b79785be90e31cfc287181",
   "compiler": "whitebox-world-planning-v1",
   "files": [
     "world-spec.json",
+    "world-prompt.json",
+    "entity-catalog.json",
     "top-down-plan.json",
     "height-slope-plan.json",
     "opening-shot-plan.json"

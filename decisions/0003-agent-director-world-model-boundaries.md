@@ -5,11 +5,11 @@
 
 ## 背景
 
-系统同时包含创作期 Coding Agent、运行期 Director LLM、确定性 World SDK 和实时世界模型。如果不明确边界，容易出现三种错误：把 Director 当作逐帧游戏控制器、让世界模型改变逻辑状态，或让两个 Agent 绕过 SDK 各自操作 Three.js/Rapier。
+系统同时包含创作期 Agent、运行期 Director LLM、确定性 World SDK 和实时世界模型。如果不明确边界，容易出现三种错误：把 Director 当作逐帧游戏控制器、让世界模型改变逻辑状态，或让不同 Agent 绕过 SDK 各自操作 Three.js/Rapier。创作 Agent 后续由 ADR-0005 细分为 Planner、Builder 与 Visual Bible。
 
 ## 决策
 
-1. Coding Agent 只在创作期编写可版本化的场景代码，并通过创作 SDK/Compiler 构建世界。
+1. 创作 Agent 只在创作期通过受控工件定义世界、编写可版本化场景代码和视觉条件，并通过创作 SDK/Compiler 构建世界；具体职责隔离遵循 ADR-0005。
 2. Runtime World Director 由两部分组成：SDK 外部的 Director LLM，以及 SDK 内部的 Observation/Control/Task/Receipt 模块。
 3. 两类 Agent 都不能直接操作底层 Three.js、Rapier、动画 mixer 或导航内部对象。
 4. 白膜 World Runtime 是位置、数量、碰撞、导航、动作、相机和玩法结果的唯一世界真相。
@@ -18,7 +18,7 @@
 
 ## 结果
 
-- Coding Agent 可以自由创作，同时保持 Feature 可追踪、可重建。
+- 创作 Agent 可以自由规划和实现，同时保持 Feature 可追踪、可重建且规划不可被下游静默篡改。
 - Director LLM 可以在运行时编排世界，但所有修改仍可授权、验证、回执和重放。
 - 世界模型团队拥有明确的输入契约，不需要承担物理和玩法一致性。
 - 当前没有实现的模块必须在文档中标记为目标或计划，不得用目标 API 暗示已交付。

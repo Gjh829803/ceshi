@@ -7,7 +7,7 @@
 系统需要支持两种不同时间尺度的 Agent：
 
 ```text
-创作期：用户 → Coding Agent → TypeScript 场景代码 → 编译后的白膜世界
+创作期：用户 → Planner → 冻结规划 → Builder → TypeScript 场景代码 → 编译后的白膜世界
 运行期：用户 → Director LLM → 受控世界操作协议 → 正在运行的白膜世界
 ```
 
