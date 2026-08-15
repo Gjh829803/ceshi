@@ -553,6 +553,19 @@ kbd,
   line-height: 1.55;
 }
 
+#composition-mask {
+  display: block;
+  width: 100%;
+  margin-top: 10px;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 8px;
+  image-rendering: pixelated;
+}
+
+#composition-mask[hidden] {
+  display: none;
+}
+
 @media (max-width: 900px) {
   .workspace { grid-template-columns: minmax(0, 1fr) 280px; }
   .hud-card.hud-wide { display: none; }

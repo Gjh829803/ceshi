@@ -1,7 +1,7 @@
 {
   "artifactVersion": 1,
   "sceneId": "sunlit-flower-bay",
-  "specHash": "e8edd203",
+  "specHash": "ada9b13b",
   "entry": {
     "spawn": [
       0,
@@ -9,9 +9,10 @@
     ],
     "facingRadians": 0,
     "camera": {
-      "pitchRadians": 0.42,
-      "distance": 4.2,
-      "fovDegrees": 60
+      "pitchRadians": 0.18,
+      "distance": 4,
+      "fovDegrees": 45,
+      "targetHeight": 0.8
     },
     "composition": {
       "foreground": [
@@ -39,7 +40,139 @@
         "bay-sailboat-center-anchor",
         "bay-sailboat-east-anchor",
         "bay-sailboat-mouth-anchor"
-      ]
+      ],
+      "guide": {
+        "aspectRatio": 1.7777777777777777,
+        "resolution": [
+          320,
+          180
+        ],
+        "minimumScore": 0.58,
+        "regions": [
+          {
+            "id": "opening-sky-mass",
+            "semantic": "open_sky_above_low_sea_horizon",
+            "color": "#CFD5D5",
+            "polygon": [
+              [
+                0,
+                0
+              ],
+              [
+                1,
+                0
+              ],
+              [
+                1,
+                0.31
+              ],
+              [
+                0,
+                0.31
+              ]
+            ],
+            "minimumIou": 0.56
+          },
+          {
+            "id": "opening-bay-mass",
+            "semantic": "centered_broad_bay_between_asymmetric_coasts",
+            "color": "#378FBE",
+            "polygon": [
+              [
+                0.18,
+                0.32
+              ],
+              [
+                0.82,
+                0.32
+              ],
+              [
+                0.98,
+                0.39
+              ],
+              [
+                0.96,
+                0.61
+              ],
+              [
+                0.82,
+                0.62
+              ],
+              [
+                0.71,
+                0.67
+              ],
+              [
+                0.61,
+                0.66
+              ],
+              [
+                0.54,
+                0.7
+              ],
+              [
+                0.46,
+                0.7
+              ],
+              [
+                0.39,
+                0.66
+              ],
+              [
+                0.28,
+                0.67
+              ],
+              [
+                0.17,
+                0.62
+              ],
+              [
+                0.04,
+                0.61
+              ],
+              [
+                0.02,
+                0.4
+              ]
+            ],
+            "minimumIou": 0.4
+          }
+        ],
+        "anchors": [
+          {
+            "id": "opening-player-anchor",
+            "binding": {
+              "kind": "runtime-entity",
+              "id": "player"
+            },
+            "center": [
+              0.5,
+              0.72
+            ],
+            "size": [
+              0.1,
+              0.5
+            ],
+            "tolerance": 0.2
+          },
+          {
+            "id": "opening-lighthouse-anchor",
+            "binding": {
+              "kind": "feature",
+              "id": "east-cape-lighthouse"
+            },
+            "center": [
+              0.79,
+              0.55
+            ],
+            "size": [
+              0.025,
+              0.11
+            ],
+            "tolerance": 0.18
+          }
+        ]
+      }
     }
   },
   "reference": "/scene-plans/sunlit-flower-bay/opening-shot.png"

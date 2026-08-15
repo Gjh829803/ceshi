@@ -104,6 +104,36 @@ export interface PlannedRoute {
   evidence: WorldPlanEvidence;
 }
 
+export type NormalizedScreenPoint = readonly [u: number, v: number];
+
+export interface OpeningCompositionRegion {
+  id: string;
+  semantic: string;
+  /** Exact flat color used by the SDK's composition-mask render. */
+  color: `#${string}`;
+  polygon: readonly NormalizedScreenPoint[];
+  minimumIou: number;
+}
+
+export interface OpeningCompositionAnchor {
+  id: string;
+  binding:
+    | { kind: "feature"; id: string }
+    | { kind: "runtime-entity"; id: string };
+  center: NormalizedScreenPoint;
+  size?: NormalizedScreenPoint;
+  tolerance: number;
+}
+
+/** Machine-checkable screen-space contract derived from the reference image. */
+export interface OpeningCompositionGuide {
+  aspectRatio: number;
+  resolution: readonly [width: number, height: number];
+  minimumScore: number;
+  regions: readonly OpeningCompositionRegion[];
+  anchors: readonly OpeningCompositionAnchor[];
+}
+
 export interface OpeningShotSpec {
   spawn: Vec2Tuple;
   facingRadians: number;
@@ -111,12 +141,15 @@ export interface OpeningShotSpec {
     pitchRadians: number;
     distance: number;
     fovDegrees: number;
+    /** Vertical focus point above subject ground; enables elevated landscape framing. */
+    targetHeight?: number;
   };
   composition: {
     foreground: readonly string[];
     middleground: readonly string[];
     background: readonly string[];
     visibleLandmarkIds: readonly string[];
+    guide?: OpeningCompositionGuide;
   };
 }
 
@@ -533,13 +566,15 @@ export function validateOutdoorWorldSpec(
     camera.distance > 8 ||
     !Number.isFinite(camera.fovDegrees) ||
     camera.fovDegrees < 35 ||
-    camera.fovDegrees > 90
+    camera.fovDegrees > 90 ||
+    (camera.targetHeight !== undefined &&
+      (!Number.isFinite(camera.targetHeight) || camera.targetHeight < 0.5 || camera.targetHeight > 4.5))
   ) {
     diagnostics.push(
       diagnostic(
         "error",
         "WORLD_SPEC_ENTRY_CAMERA_INVALID",
-        "Opening-shot camera must use pitch -0.95..0.65, distance 1.8..8m, and FOV 35..90°.",
+        "Opening-shot camera must use pitch -0.95..0.65, distance 1.8..8m, FOV 35..90°, and optional targetHeight 0.5..4.5m.",
       ),
     );
   }
@@ -555,6 +590,63 @@ export function validateOutdoorWorldSpec(
         ),
       );
     }
+  }
+  const guide = spec.entry.composition.guide;
+  if (guide !== undefined) {
+    const normalizedPoint = (point: NormalizedScreenPoint) =>
+      isFiniteTuple(point, 2) && point.every((value) => value >= 0 && value <= 1);
+    if (
+      !Number.isFinite(guide.aspectRatio) || guide.aspectRatio <= 0 ||
+      guide.resolution.length !== 2 ||
+      guide.resolution.some((value) => !Number.isInteger(value) || value < 32 || value > 2_048) ||
+      !Number.isFinite(guide.minimumScore) || guide.minimumScore < 0 || guide.minimumScore > 1 ||
+      guide.regions.length === 0
+    ) {
+      diagnostics.push(diagnostic(
+        "error",
+        "WORLD_SPEC_COMPOSITION_GUIDE_INVALID",
+        "Composition guide requires a positive aspect, 32..2048 integer resolution, score in [0,1], and at least one region.",
+      ));
+    }
+    const guideIds = new Set<string>();
+    for (const region of guide.regions) {
+      if (
+        !region.id.trim() || guideIds.has(region.id) || !region.semantic.trim() ||
+        !/^#[0-9a-f]{6}$/i.test(region.color) || region.polygon.length < 3 ||
+        region.polygon.some((point) => !normalizedPoint(point)) ||
+        !Number.isFinite(region.minimumIou) || region.minimumIou < 0 || region.minimumIou > 1
+      ) {
+        diagnostics.push(diagnostic(
+          "error",
+          "WORLD_SPEC_COMPOSITION_REGION_INVALID",
+          `Composition region ${region.id || "<empty>"} requires a unique id, semantic, hex color, normalized polygon, and minimumIoU in [0,1].`,
+        ));
+      }
+      guideIds.add(region.id);
+    }
+    for (const anchor of guide.anchors) {
+      const bindingKey = `${anchor.binding.kind}:${anchor.binding.id}`;
+      if (
+        !anchor.id.trim() || guideIds.has(anchor.id) || !anchor.binding.id.trim() ||
+        !boundIds.has(bindingKey) ||
+        !normalizedPoint(anchor.center) ||
+        (anchor.size !== undefined && !normalizedPoint(anchor.size)) ||
+        !Number.isFinite(anchor.tolerance) || anchor.tolerance <= 0 || anchor.tolerance > 1
+      ) {
+        diagnostics.push(diagnostic(
+          "error",
+          "WORLD_SPEC_COMPOSITION_ANCHOR_INVALID",
+          `Composition anchor ${anchor.id || "<empty>"} requires a unique id, known runtime binding, normalized center/size, and tolerance in (0,1].`,
+        ));
+      }
+      guideIds.add(anchor.id);
+    }
+  } else if (referenceImages.length > 0) {
+    diagnostics.push(diagnostic(
+      "error",
+      "WORLD_SPEC_REFERENCE_COMPOSITION_GUIDE_MISSING",
+      "WorldSpecs created from reference images must include a machine-checkable opening composition guide.",
+    ));
   }
 
   const artifactKinds = new Set(spec.artifacts.map((artifact) => artifact.kind));
@@ -642,6 +734,10 @@ export function validateWorldSpecImplementation(
     !approximately(spec.entry.camera.pitchRadians, implementation.camera.pitchRadians) ||
     !approximately(spec.entry.camera.distance, implementation.camera.distance) ||
     !approximately(spec.entry.camera.fovDegrees, implementation.camera.fovDegrees)
+    || !approximately(
+      spec.entry.camera.targetHeight ?? 0.85,
+      implementation.camera.targetHeight ?? 0.85,
+    )
   ) {
     diagnostics.push(
       diagnostic(

@@ -5,6 +5,13 @@ import {
 } from "@whitebox-world/world";
 
 import { worldSpec } from "./plans/sunlit-flower-bay.js";
+import {
+  SUNLIT_BAY_RASTER_BOUNDS,
+  sunlitBayCliffMask,
+  sunlitBayGrassMask,
+  sunlitBayHeightField,
+  sunlitBayPathMask,
+} from "./data/sunlit-flower-bay-raster.js";
 
 type PlannedRegionParams = {
   semantic: string;
@@ -44,60 +51,77 @@ const SunlitFlowerBayTerrain = defineWorldFeature<{}, { terrainId: string }>({
       origin: [0, 0],
       baseHeight: 12,
     });
-    // Southern high country supplies the long entry descent without relying on
-    // high-amplitude global noise.
-    context.terrain.raise(terrainId, {
-      area: context.shape.circle([0, 500], 760),
-      amount: 70,
-      falloffWidth: 700,
-      curve: "smoother",
+    // The complete topography is one tracked, world-space raster. Agent-created
+    // bays, ridges, shelves, islands and corridors no longer have to be faked by
+    // stacking broad circles, and all tiles sample identical shared edges.
+    context.terrain.raster(terrainId, {
+      field: sunlitBayHeightField,
+      bounds: SUNLIT_BAY_RASTER_BOUNDS,
+      mode: "set",
     });
-    // Open the central sightline into the bay while keeping the entry shelf and
-    // rear loop high. This broad inner valley is structural, not surface detail.
-    context.terrain.lower(terrainId, {
-      area: context.shape.circle([0, 0], 360),
-      amount: 55,
-      falloffWidth: 250,
-      curve: "smoother",
+    context.semantic.terrainLayer(terrainId, {
+      id: "coastal-grass",
+      semantic: "green_meadow_and_coastal_hills",
+      color: "#b8c9a5",
+      field: sunlitBayGrassMask,
+      bounds: SUNLIT_BAY_RASTER_BOUNDS,
+      priority: 1,
     });
-    // Asymmetric coastal shoulders form the frozen headland and cliff silhouettes.
-    context.terrain.raise(terrainId, {
-      area: context.shape.circle([-520, 10], 465),
-      amount: 22,
-      falloffWidth: 150,
-      curve: "smoother",
+    context.semantic.terrainLayer(terrainId, {
+      id: "pale-cliffs",
+      semantic: "pale_rock_cliff_bands",
+      color: "#d7cfbb",
+      field: sunlitBayCliffMask,
+      bounds: SUNLIT_BAY_RASTER_BOUNDS,
+      priority: 2,
     });
-    context.terrain.raise(terrainId, {
-      area: context.shape.circle([520, 5], 455),
-      amount: 20,
-      falloffWidth: 150,
-      curve: "smoother",
+    context.semantic.terrainLayer(terrainId, {
+      id: "route-network",
+      semantic: "walkable_dirt_and_stone_paths",
+      color: "#cba66f",
+      field: sunlitBayPathMask,
+      bounds: SUNLIT_BAY_RASTER_BOUNDS,
+      priority: 3,
     });
-    // Composition-critical shelves are explicitly level and clear.
-    context.terrain.flatten(terrainId, {
-      area: context.shape.circle([0, 350], 40),
-      height: 82,
-      strength: 1,
-      falloffWidth: 32,
-      curve: "smoother",
-    });
-    context.terrain.flatten(terrainId, {
-      area: context.shape.circle([295, -45], 60),
-      height: 42,
-      strength: 1,
-      falloffWidth: 36,
-      curve: "smoother",
-    });
-
-    // The broad southern mound is the continuous grade shared by the frozen
-    // central and rear-loop routes. The coast operations use wide falloffs so
-    // the branch centerlines remain traversable instead of becoming trenches.
-    context.terrain.smooth(terrainId, { iterations: 2, strength: 0.7 });
     context.semantic.bind(terrainId, {
       semantic: "broad_hill_country_base_with_explicit_bay_cutout",
       prompt: "layered walkable green coasts, pale cliff masses, a high southern overlook, low islands, and a broad north-opening bay",
     });
     return { terrainId };
+  },
+});
+
+const BAY_BOUNDARY = [
+  [-4_000, -4_000], [4_000, -4_000], [420, -500], [350, -320], [275, -120], [205, 40],
+  [88, 145], [120, 270], [-120, 270], [-88, 145], [-205, 40],
+  [-275, -120], [-350, -320],
+] as const;
+
+const SunlitFlowerBayWater = defineWorldFeature<{}, { waterSurfaceId: string }>({
+  type: "scene.sunlit-flower-bay-water",
+  version: 1,
+  source: "apps/playground/src/scenes/sunlit-flower-bay.ts#SunlitFlowerBayWater",
+  schema: {},
+  build(context) {
+    const waterSurfaceId = context.surface.water({
+      area: context.shape.polygon(BAY_BOUNDARY),
+      elevation: 0,
+      minimumDepth: 6,
+      shoreWidth: 28,
+      traversal: "blocked",
+      appearance: {
+        semantic: "broad_north_opening_blue_sea_bay",
+        prompt: "vast brilliant Mediterranean-blue bay with a readable open northern mouth",
+      },
+      style: {
+        deepColor: 0x378fbe,
+        shallowColor: 0x84c9d4,
+        opacity: 0.9,
+        waveAmplitude: 0.025,
+        waveFrequency: 0.1,
+      },
+    });
+    return { waterSurfaceId };
   },
 });
 
@@ -144,6 +168,8 @@ export const sunlitFlowerBayScene = definePlannedOutdoorScene({
       ["eastern-cliffs", "broken_pale_cliffs_beneath_eastern_headland", "shore"],
       ["lighthouse-cape-ground", "small_walkable_eastern_lighthouse_plateau", "plateau"],
       ["southern-hinterland-landform", "playable_rolling_upland_behind_entry_view", "background"],
+      ["northwest-island", "low_distant_island_silhouette", "background"],
+      ["northeast-island", "long_low_distant_island_silhouette", "background"],
     ] as const;
     for (const [id, semantic, role] of plannedRegions) {
       world.feature.add(PlannedRegionFeature, {
@@ -154,46 +180,11 @@ export const sunlitFlowerBayScene = definePlannedOutdoorScene({
       });
     }
 
-    world.water.body({
+    world.feature.add(SunlitFlowerBayWater, {
       id: "sunlit-bay",
-      terrain,
-      boundary: {
-        kind: "polygon",
-        points: [
-          [-420, -500], [420, -500], [335, -320], [285, -250], [270, -115],
-          [205, 40], [145, 130], [80, 180], [-80, 180], [-145, 130],
-          [-215, 35], [-285, -115], [-300, -280],
-        ],
-      },
-      depth: 6,
-      waterLevel: 0,
-      shoreWidth: 50,
-      traversal: "blocked",
-      semantic: "broad_north_opening_blue_sea_bay",
-      appearancePrompt: "vast brilliant Mediterranean-blue bay with a readable open northern mouth",
-    });
-
-    // The frozen water polygon includes the distant-island footprints, so their
-    // low whitebox masses sit above the water surface as separate tracked features.
-    world.landmark.compound({
-      id: "northwest-island",
-      dependsOn: [terrain],
-      transform: { position: [-245, 0, -430], rotation: [0, -0.08, 0] },
-      semantic: "low_distant_island_silhouette",
-      appearancePrompt: "low green distant island with a soft readable ridge",
-      children: [
-        { id: "northwest-island-mass", kind: "box", size: [190, 13, 66], transform: { position: [0, 5, 0], rotation: [0, 0, -0.035] } },
-      ],
-    });
-    world.landmark.compound({
-      id: "northeast-island",
-      dependsOn: [terrain],
-      transform: { position: [215, 0, -445], rotation: [0, 0.04, 0] },
-      semantic: "long_low_distant_island_silhouette",
-      appearancePrompt: "long low green distant island leaving broad open-water gaps",
-      children: [
-        { id: "northeast-island-mass", kind: "box", size: [245, 10, 54], transform: { position: [0, 4, 0], rotation: [0, 0, 0.025] } },
-      ],
+      seed: world.seed,
+      dependsOn: [terrain.id],
+      params: {},
     });
 
     const addLandmark = (
@@ -204,10 +195,11 @@ export const sunlitFlowerBayScene = definePlannedOutdoorScene({
       children: LandmarkPrimitiveSpec[],
       collision = true,
     ) => {
+      const groundHeight = world.terrain.height(terrain, [at[0], at[2]]) ?? at[1];
       world.landmark.compound({
         id,
         dependsOn: [terrain],
-        transform: { position: [at[0], at[1], at[2]], rotation: [0, 0, 0] },
+        transform: { position: [at[0], groundHeight, at[2]], rotation: [0, 0, 0] },
         collision,
         semantic,
         appearancePrompt,
@@ -216,7 +208,7 @@ export const sunlitFlowerBayScene = definePlannedOutdoorScene({
     };
 
     addLandmark(
-      "east-cape-lighthouse", [295, 42, -45], "white_eastern_cape_lighthouse",
+      "east-cape-lighthouse", [110, 42, 100], "white_eastern_cape_lighthouse",
       "slender white stone coastal lighthouse with a dark lantern gallery and restrained red cap",
       [
         { id: "lighthouse-tower", kind: "cylinder", radius: 4, height: 20, transform: { position: [0, 10, 0] } },
@@ -231,7 +223,7 @@ export const sunlitFlowerBayScene = definePlannedOutdoorScene({
       ["west-cove-cottage", -360, 29, -85],
       ["south-path-cottage", -92, 35, 145],
       ["east-slope-cottage", 235, 33, 105],
-      ["lighthouse-keeper-cottage", 330, 42, -15],
+      ["lighthouse-keeper-cottage", 145, 42, 115],
     ] as const;
     for (const [id, x, y, z] of cottages) {
       addLandmark(
@@ -249,11 +241,15 @@ export const sunlitFlowerBayScene = definePlannedOutdoorScene({
       ["east-cove-sailboat", 215, 1, -15],
     ] as const;
     for (const [id, x, y, z] of sailboats) {
-      addLandmark(
-        id, [x, y, z], "distant_small_single_mast_sailboat",
-        "tiny single-mast coastal sailboat with one bright triangular sail and narrow hull",
-        sailboatChildren(id), false,
-      );
+      world.landmark.compound({
+        id,
+        dependsOn: [terrain],
+        transform: { position: [x, y, z], rotation: [0, 0, 0] },
+        collision: false,
+        semantic: "distant_small_single_mast_sailboat",
+        appearancePrompt: "tiny single-mast coastal sailboat with one bright triangular sail and narrow hull",
+        children: sailboatChildren(id),
+      });
     }
 
     world.player.spawn({
@@ -261,12 +257,12 @@ export const sunlitFlowerBayScene = definePlannedOutdoorScene({
       at: [0, 355],
       heightOffset: 0.9,
       facingRadians: 0,
-      camera: { pitchRadians: 0.42, distance: 4.2, fovDegrees: 60 },
+      camera: { pitchRadians: 0.18, distance: 4, fovDegrees: 45, targetHeight: 0.8 },
     });
     world.atmosphere.set({
       preset: "clear-day",
       fogNear: 560,
-      fogFar: 1_450,
+      fogFar: 4_500,
       sunDirection: [0.55, 0.78, 0.3],
       sunIntensity: 1.15,
       semantic: "clear_bright_late_morning_coastal_day",

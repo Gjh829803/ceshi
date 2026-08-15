@@ -25,6 +25,31 @@ export interface TerrainNoiseOptions {
   mode?: "add" | "set";
 }
 
+/** A serializable, row-major scalar field that an agent can generate or import. */
+export interface ScalarRasterField {
+  columns: number;
+  rows: number;
+  values: readonly number[];
+}
+
+export interface RasterWorldBounds {
+  center: Vec2Tuple;
+  size: Vec2Tuple;
+}
+
+/**
+ * Projects one global scalar field onto terrain in world space. `set` treats
+ * field values as absolute heights; `add` treats them as height deltas. A mask
+ * is optional and is sampled in the same world bounds.
+ */
+export interface TerrainRasterOperation {
+  field: ScalarRasterField;
+  bounds: RasterWorldBounds;
+  mask?: ScalarRasterField;
+  mode?: "set" | "add" | "min" | "max";
+  strength?: number;
+}
+
 export interface ShapedTerrainOperation {
   area: Shape2D;
   falloffWidth?: number;
@@ -69,6 +94,7 @@ export interface TerrainSurface {
   readonly vertexCount: number;
   readonly triangleCount: number;
   applyNoise(options: TerrainNoiseOptions): this;
+  applyRaster(options: TerrainRasterOperation): this;
   raise(options: TerrainAmountOperation): this;
   lower(options: TerrainAmountOperation): this;
   flatten(options: TerrainFlattenOperation): this;
@@ -153,6 +179,81 @@ function assertPositiveInteger(value: number, label: string): void {
 
 function clamp01(value: number): number {
   return Math.max(0, Math.min(1, value));
+}
+
+export function validateScalarRasterField(field: ScalarRasterField): void {
+  assertPositiveInteger(field.columns, "raster columns");
+  assertPositiveInteger(field.rows, "raster rows");
+  if (field.columns < 2 || field.rows < 2) {
+    throw new RangeError("Raster fields require at least two columns and two rows.");
+  }
+  if (field.values.length !== field.columns * field.rows) {
+    throw new RangeError(
+      `Raster field expected ${field.columns * field.rows} values, received ${field.values.length}.`,
+    );
+  }
+  if (field.values.some((value) => !Number.isFinite(value))) {
+    throw new TypeError("Raster field values must all be finite numbers.");
+  }
+}
+
+/** Builds a compact, deterministic field from an agent-authored sampler. */
+export function createScalarRasterField(
+  columns: number,
+  rows: number,
+  sample: (u: number, v: number, column: number, row: number) => number,
+): ScalarRasterField {
+  const values: number[] = [];
+  for (let row = 0; row < rows; row += 1) {
+    for (let column = 0; column < columns; column += 1) {
+      values.push(sample(column / Math.max(1, columns - 1), row / Math.max(1, rows - 1), column, row));
+    }
+  }
+  const field = { columns, rows, values };
+  validateScalarRasterField(field);
+  return field;
+}
+
+function sampleScalarRasterFieldUnchecked(field: ScalarRasterField, u: number, v: number): number {
+  const x = clamp01(u) * (field.columns - 1);
+  const z = clamp01(v) * (field.rows - 1);
+  const x0 = Math.floor(x);
+  const z0 = Math.floor(z);
+  const x1 = Math.min(field.columns - 1, x0 + 1);
+  const z1 = Math.min(field.rows - 1, z0 + 1);
+  const tx = x - x0;
+  const tz = z - z0;
+  const at = (column: number, row: number) => field.values[row * field.columns + column] ?? 0;
+  const top = at(x0, z0) * (1 - tx) + at(x1, z0) * tx;
+  const bottom = at(x0, z1) * (1 - tx) + at(x1, z1) * tx;
+  return top * (1 - tz) + bottom * tz;
+}
+
+/** Validates once and returns a fast bilinear sampler for repeated use. */
+export function createScalarRasterSampler(
+  field: ScalarRasterField,
+): (u: number, v: number) => number {
+  validateScalarRasterField(field);
+  return (u, v) => sampleScalarRasterFieldUnchecked(field, u, v);
+}
+
+/** Bilinearly samples a scalar field; u/v are normalized and clamped. */
+export function sampleScalarRasterField(field: ScalarRasterField, u: number, v: number): number {
+  return createScalarRasterSampler(field)(u, v);
+}
+
+function validateRasterOperation(options: TerrainRasterOperation): void {
+  validateScalarRasterField(options.field);
+  if (options.mask !== undefined) validateScalarRasterField(options.mask);
+  if (
+    options.bounds.center.some((value) => !Number.isFinite(value)) ||
+    options.bounds.size.some((value) => !Number.isFinite(value) || value <= 0)
+  ) {
+    throw new RangeError("Raster world bounds require a finite center and positive size.");
+  }
+  if (options.strength !== undefined && !Number.isFinite(options.strength)) {
+    throw new TypeError("Raster strength must be finite.");
+  }
 }
 
 function shapeFalloff(value: number, curve: FalloffCurve): number {
@@ -258,6 +359,40 @@ export class Heightfield implements TerrainSurface {
         const index = this.index(xIndex, zIndex);
         const value = sample * options.amplitude;
         this.heights[index] = options.mode === "set" ? value : (this.heights[index] ?? 0) + value;
+      }
+    }
+    return this;
+  }
+
+  applyRaster(options: TerrainRasterOperation): this {
+    validateRasterOperation(options);
+    const minimumX = options.bounds.center[0] - options.bounds.size[0] / 2;
+    const minimumZ = options.bounds.center[1] - options.bounds.size[1] / 2;
+    const strength = clamp01(options.strength ?? 1);
+    const sampleField = createScalarRasterSampler(options.field);
+    const sampleMask = options.mask === undefined
+      ? undefined
+      : createScalarRasterSampler(options.mask);
+    for (let zIndex = 0; zIndex <= this.zSegments; zIndex += 1) {
+      for (let xIndex = 0; xIndex <= this.xSegments; xIndex += 1) {
+        const [x, z] = this.pointAt(xIndex, zIndex);
+        const u = (x - minimumX) / options.bounds.size[0];
+        const v = (z - minimumZ) / options.bounds.size[1];
+        if (u < 0 || u > 1 || v < 0 || v > 1) continue;
+        const sampled = sampleField(u, v);
+        const mask = sampleMask === undefined ? 1 : clamp01(sampleMask(u, v));
+        const influence = strength * mask;
+        if (influence <= 0) continue;
+        const index = this.index(xIndex, zIndex);
+        const current = this.heights[index] ?? 0;
+        const target = options.mode === "add"
+          ? current + sampled
+          : options.mode === "min"
+            ? Math.min(current, sampled)
+            : options.mode === "max"
+              ? Math.max(current, sampled)
+              : sampled;
+        this.heights[index] = current + (target - current) * influence;
       }
     }
     return this;
@@ -543,6 +678,13 @@ export class HeightfieldGrid implements TerrainSurface {
 
   applyNoise(options: TerrainNoiseOptions): this {
     for (const tile of this.tiles) tile.applyNoise(options);
+    return this;
+  }
+
+  applyRaster(options: TerrainRasterOperation): this {
+    // Every tile samples the same world-space field, so shared vertices receive
+    // bit-identical heights and cannot open visible seams.
+    for (const tile of this.tiles) tile.applyRaster(options);
     return this;
   }
 

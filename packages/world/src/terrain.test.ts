@@ -1,7 +1,12 @@
 import { describe, expect, it } from "vitest";
 
 import { CircleShape } from "./shapes";
-import { Heightfield, HeightfieldGrid, sampleTerrainSlopeDegrees } from "./terrain";
+import {
+  createScalarRasterField,
+  Heightfield,
+  HeightfieldGrid,
+  sampleTerrainSlopeDegrees,
+} from "./terrain";
 
 describe("Heightfield", () => {
   it("creates deterministic rolling terrain", () => {
@@ -98,6 +103,45 @@ describe("Heightfield", () => {
     grid.raise({ area: new CircleShape([0, 0], 5), amount: 3 });
     grid.copyFrom(snapshot);
     expect(grid.sampleHeight(0, 0)).toBeCloseTo(snapshot.sampleHeight(0, 0) ?? Number.NaN);
+  });
+
+  it("projects one global raster across tiles without seams", () => {
+    const grid = new HeightfieldGrid({
+      tileSize: [10, 10],
+      tiles: [2, 1],
+      segmentsPerTile: [4, 4],
+    });
+    const field = createScalarRasterField(5, 3, (u, v) => u * 20 + v * 4);
+    grid.applyRaster({
+      field,
+      bounds: { center: [0, 0], size: [20, 10] },
+      mode: "set",
+    });
+    const left = grid.tiles[0] as Heightfield;
+    const right = grid.tiles[1] as Heightfield;
+    expect(grid.sampleHeight(0, 0)).toBeCloseTo(12);
+    for (let z = 0; z <= left.zSegments; z += 1) {
+      expect(left.getHeight(left.xSegments, z)).toBe(
+        right.getHeight(0, z),
+      );
+    }
+  });
+
+  it("supports masked raster blending and rejects malformed fields", () => {
+    const terrain = new Heightfield({ width: 10, depth: 10, xSegments: 2, zSegments: 2 });
+    const height = createScalarRasterField(2, 2, () => 8);
+    const mask = createScalarRasterField(2, 2, (u) => u);
+    terrain.applyRaster({
+      field: height,
+      mask,
+      bounds: { center: [0, 0], size: [10, 10] },
+    });
+    expect(terrain.sampleHeight(-5, 0)).toBeCloseTo(0);
+    expect(terrain.sampleHeight(5, 0)).toBeCloseTo(8);
+    expect(() => terrain.applyRaster({
+      field: { columns: 2, rows: 2, values: [1] },
+      bounds: { center: [0, 0], size: [10, 10] },
+    })).toThrow(/expected 4 values/i);
   });
 
   it("keeps heights and lighting normals continuous after tiled smoothing", () => {

@@ -15,8 +15,10 @@ import {
 } from "@whitebox-world/subjects";
 import {
   compileOutdoorScene,
+  createScalarRasterSampler,
   deriveWorldPlanArtifacts,
   FeatureRegistry,
+  isTerrainSemanticLayerDescriptor,
   isTerrainSurface,
   type CompiledOutdoorScene,
   type DerivedWorldPlanArtifacts,
@@ -24,8 +26,10 @@ import {
   type LandmarkDescriptor,
   type LandmarkPrimitiveDescriptor,
   type OutdoorSceneDefinition,
+  type OpeningCompositionGuide,
   type OutdoorWorldSpec,
   type TerrainSurface,
+  type TerrainSemanticLayerDescriptor,
   type VisualPrototypeSpec,
   type WaterSurfaceDescriptor,
 } from "@whitebox-world/world";
@@ -35,6 +39,7 @@ import type {
   FeatureInspection,
   FixedInputStep,
   InputAction,
+  OpeningCompositionReport,
   PlanningViewKind,
   PlaygroundWorldAdapter,
   WorldSnapshot,
@@ -50,9 +55,10 @@ interface LocalRigStatus {
   limitations: readonly string[];
 }
 
-function whiteMaterial(color = WHITE): THREE.MeshStandardMaterial {
+function whiteMaterial(color = WHITE, vertexColors = false): THREE.MeshStandardMaterial {
   return new THREE.MeshStandardMaterial({
     color,
+    vertexColors,
     roughness: 0.9,
     metalness: 0,
   });
@@ -136,9 +142,9 @@ function applyTransform(object: THREE.Object3D, descriptor: LandmarkDescriptor):
   object.scale.set(...descriptor.transform.scale);
 }
 
-function compileLandmark(descriptor: LandmarkDescriptor): THREE.Object3D {
+function compileLandmark(descriptor: LandmarkDescriptor, color = 0xd9dad5): THREE.Object3D {
   if (descriptor.kind === "primitive") {
-    const mesh = new THREE.Mesh(geometryForPrimitive(descriptor), whiteMaterial(0xd9dad5));
+    const mesh = new THREE.Mesh(geometryForPrimitive(descriptor), whiteMaterial(color));
     mesh.name = descriptor.id ?? descriptor.primitive;
     mesh.userData.landmarkDescriptor = descriptor;
     mesh.castShadow = true;
@@ -149,8 +155,27 @@ function compileLandmark(descriptor: LandmarkDescriptor): THREE.Object3D {
   const group = new THREE.Group();
   group.name = descriptor.id ?? "compound-landmark";
   applyTransform(group, descriptor);
-  for (const child of descriptor.children) group.add(compileLandmark(child));
+  for (const child of descriptor.children) group.add(compileLandmark(child, color));
   return group;
+}
+
+interface RuntimeTerrainLayer {
+  descriptor: TerrainSemanticLayerDescriptor;
+  sample: (u: number, v: number) => number;
+  color: THREE.Color;
+}
+
+function tintObject(root: THREE.Object3D, color: string): void {
+  root.traverse((object) => {
+    if (!(object instanceof THREE.Mesh)) return;
+    const materials = Array.isArray(object.material) ? object.material : [object.material];
+    const tinted = materials.map((material) => {
+      const clone = material.clone();
+      if ("color" in clone && clone.color instanceof THREE.Color) clone.color.set(color);
+      return clone;
+    });
+    object.material = Array.isArray(object.material) ? tinted : tinted[0] as THREE.Material;
+  });
 }
 
 function normalizeHumanoidVisual(visual: HumanoidVisual): void {
@@ -262,6 +287,7 @@ export class SdkWorldAdapter implements PlaygroundWorldAdapter {
   private readonly spawnCameraDistance: number;
   private readonly waterMaterials = new Set<THREE.ShaderMaterial>();
   private readonly renderObjectsByBinding = new Map<string, THREE.Object3D[]>();
+  private compositionCache: { dataUrl: string; report: OpeningCompositionReport } | null = null;
   private frame = 0;
   private paused = false;
   private disposed = false;
@@ -293,7 +319,7 @@ export class SdkWorldAdapter implements PlaygroundWorldAdapter {
     this.rigStatus = visualResult.status;
     this.name = `sdk-runtime/${scene.definition.id}/${visualResult.status.source}`;
     this.world = new World({ fixedDeltaSeconds: FIXED_DELTA, scheduler: null });
-    this.camera = new THREE.PerspectiveCamera(scene.spawn.camera.fovDegrees, 1, 0.1, 1_200);
+    this.camera = new THREE.PerspectiveCamera(scene.spawn.camera.fovDegrees, 1, 0.1, 5_000);
     this.renderer = new THREE.WebGLRenderer({ antialias: true, preserveDrawingBuffer: true });
     this.canvas = this.renderer.domElement;
     this.canvas.className = "world-canvas";
@@ -336,7 +362,7 @@ export class SdkWorldAdapter implements PlaygroundWorldAdapter {
         distance: this.spawnCameraDistance,
         minDistance: 1.8,
         maxDistance: 8,
-        targetOffset: [0, 0.85, 0],
+        targetOffset: [0, scene.spawn.camera.targetHeight, 0],
         pitch: this.spawnCameraPitchRadians,
         yaw: this.spawnFacingRadians,
         collision: {
@@ -366,6 +392,8 @@ export class SdkWorldAdapter implements PlaygroundWorldAdapter {
       grounded: false,
     });
     this.subject.cameraRig.update(0);
+    const playerColor = this.colorForBinding("runtime-entity", "player");
+    if (playerColor !== undefined) tintObject(this.subject.root, playerColor);
     this.renderObjectsByBinding.set("runtime-entity:player", [this.subject.root]);
 
     const hemi = new THREE.HemisphereLight(0xf8fbff, 0x6d736f, 1.55);
@@ -404,6 +432,7 @@ export class SdkWorldAdapter implements PlaygroundWorldAdapter {
   }
 
   reset(): void {
+    this.compositionCache = null;
     this.pressed.clear();
     this.subject.reset(this.spawnPosition, {
       facingRadians: this.spawnFacingRadians,
@@ -424,6 +453,7 @@ export class SdkWorldAdapter implements PlaygroundWorldAdapter {
   }
 
   async runFixedInput(steps: readonly FixedInputStep[]): Promise<WorldSnapshot> {
+    this.compositionCache = null;
     const wasPaused = this.paused;
     this.paused = true;
     this.pressed.clear();
@@ -445,6 +475,69 @@ export class SdkWorldAdapter implements PlaygroundWorldAdapter {
   captureScreenshot(): string {
     this.render();
     return this.canvas.toDataURL("image/png");
+  }
+
+  captureCompositionMask(): string {
+    return this.renderCompositionAnalysis()?.dataUrl ?? "";
+  }
+
+  analyzeOpeningComposition(): OpeningCompositionReport | null {
+    return this.renderCompositionAnalysis()?.report ?? null;
+  }
+
+  async exportOpeningFrame(report?: OpeningCompositionReport): Promise<string> {
+    if (this.worldSpec === null) throw new Error("WorldSpec is unavailable.");
+    this.reset();
+    const resolvedReport = report ?? this.analyzeOpeningComposition();
+    if (resolvedReport === null) throw new Error("Opening composition guide is unavailable.");
+    const response = await fetch("/__whitebox/write-opening-frame", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({
+        sceneId: this.worldSpec.id,
+        dataUrl: this.captureOpeningFrameDataUrl(),
+        report: resolvedReport,
+      }),
+    });
+    if (!response.ok) throw new Error(`Failed to export opening frame: ${await response.text()}`);
+    return (await response.json() as { path: string }).path;
+  }
+
+  private captureOpeningFrameDataUrl(): string {
+    const guide = this.worldSpec?.entry.composition.guide;
+    const aspect = guide?.aspectRatio ?? 16 / 9;
+    const width = 1_280;
+    const height = Math.round(width / aspect);
+    const target = new THREE.WebGLRenderTarget(width, height, { depthBuffer: true });
+    target.texture.colorSpace = THREE.SRGBColorSpace;
+    const previousTarget = this.renderer.getRenderTarget();
+    const previousAspect = this.camera.aspect;
+    try {
+      this.camera.aspect = aspect;
+      this.camera.updateProjectionMatrix();
+      this.renderer.setRenderTarget(target);
+      this.renderer.render(this.world.scene, this.camera);
+      const pixels = new Uint8Array(width * height * 4);
+      this.renderer.readRenderTargetPixels(target, 0, 0, width, height, pixels);
+      const flipped = new Uint8ClampedArray(pixels.length);
+      for (let y = 0; y < height; y += 1) {
+        const sourceOffset = (height - 1 - y) * width * 4;
+        flipped.set(pixels.subarray(sourceOffset, sourceOffset + width * 4), y * width * 4);
+      }
+      const canvas = document.createElement("canvas");
+      canvas.width = width;
+      canvas.height = height;
+      const context = canvas.getContext("2d");
+      if (context === null) throw new Error("2D canvas is unavailable for opening-frame export.");
+      context.putImageData(new ImageData(flipped, width, height), 0, 0);
+      return canvas.toDataURL("image/png");
+    } finally {
+      this.renderer.setRenderTarget(previousTarget);
+      this.camera.aspect = previousAspect;
+      this.camera.updateProjectionMatrix();
+      target.dispose();
+      this.renderer.render(this.world.scene, this.camera);
+    }
   }
 
   getWorldSpec(): OutdoorWorldSpec | null {
@@ -595,14 +688,35 @@ export class SdkWorldAdapter implements PlaygroundWorldAdapter {
   }
 
   private compileTrackedResources(): void {
-    for (const resource of this.registry.listResources()) {
+    const resources = this.registry.listResources();
+    const layersByTerrain = new Map<string, RuntimeTerrainLayer[]>();
+    for (const resource of resources) {
+      if (resource.kind !== "semantic" || !isTerrainSemanticLayerDescriptor(resource.value)) continue;
+      const descriptor = resource.value;
+      const layers = layersByTerrain.get(descriptor.targetResourceId) ?? [];
+      layers.push({
+        descriptor,
+        sample: createScalarRasterSampler(descriptor.field),
+        color: new THREE.Color(descriptor.color),
+      });
+      layersByTerrain.set(descriptor.targetResourceId, layers);
+    }
+    for (const layers of layersByTerrain.values()) {
+      layers.sort((left, right) => left.descriptor.priority - right.descriptor.priority);
+    }
+
+    for (const resource of resources) {
       let renderables: readonly THREE.Object3D[] = [];
       if (resource.kind === "terrain" && isTerrainSurface(resource.value)) {
-        renderables = this.addTerrain(resource.value, resource.id);
+        renderables = this.addTerrain(resource.value, resource.id, layersByTerrain.get(resource.id) ?? []);
       } else if (resource.kind === "surface" && isWaterSurface(resource.value)) {
         renderables = [this.addLake(resource.value, resource.id)];
       } else if (resource.kind === "landmark" && isLandmark(resource.value)) {
-        renderables = [this.addLandmark(resource.value, resource.id)];
+        renderables = [this.addLandmark(
+          resource.value,
+          resource.id,
+          this.colorForBinding("feature", resource.ownerFeatureId),
+        )];
       }
       if (renderables.length > 0) {
         const key = `feature:${resource.ownerFeatureId}`;
@@ -611,6 +725,199 @@ export class SdkWorldAdapter implements PlaygroundWorldAdapter {
         this.renderObjectsByBinding.set(key, existing);
       }
     }
+  }
+
+  private renderCompositionAnalysis(): {
+    dataUrl: string;
+    report: OpeningCompositionReport;
+  } | null {
+    const guide = this.worldSpec?.entry.composition.guide;
+    if (guide === undefined) return null;
+    // A cached result is deterministic until reset or runtime input changes;
+    // composition tooling explicitly calls reset before final acceptance.
+    if (this.compositionCache !== null) return this.compositionCache;
+    const [width, height] = guide.resolution;
+    const target = new THREE.WebGLRenderTarget(width, height, {
+      depthBuffer: true,
+      stencilBuffer: false,
+    });
+    target.texture.colorSpace = THREE.SRGBColorSpace;
+    const previousTarget = this.renderer.getRenderTarget();
+    const previousBackground = this.world.scene.background;
+    const previousFog = this.world.scene.fog;
+    const previousAspect = this.camera.aspect;
+    const replacements: Array<[THREE.Mesh, THREE.Material | THREE.Material[]]> = [];
+    const temporaryMaterials: THREE.Material[] = [];
+    try {
+      this.world.scene.fog = null;
+      const skyRegion = guide.regions.find((region) => region.semantic.includes("sky"));
+      this.world.scene.background = new THREE.Color(skyRegion?.color ?? "#CFD5D5");
+      this.world.scene.traverse((object) => {
+        if (!(object instanceof THREE.Mesh)) return;
+        replacements.push([object, object.material]);
+        const original = Array.isArray(object.material) ? object.material[0] : object.material;
+        const isWater = original instanceof THREE.ShaderMaterial && this.waterMaterials.has(original);
+        const material = isWater
+          ? new THREE.MeshBasicMaterial({
+              color: object.userData.compositionColor as number | undefined ?? 0x378fbe,
+              side: THREE.DoubleSide,
+            })
+          : object.geometry.hasAttribute("color")
+            ? new THREE.MeshBasicMaterial({ color: 0xffffff, vertexColors: true, side: THREE.DoubleSide })
+            : new THREE.MeshBasicMaterial({
+                color: original !== undefined && "color" in original && original.color instanceof THREE.Color
+                  ? original.color
+                  : new THREE.Color(WHITE),
+                side: THREE.DoubleSide,
+              });
+        temporaryMaterials.push(material);
+        object.material = material;
+      });
+      this.camera.aspect = guide.aspectRatio;
+      this.camera.updateProjectionMatrix();
+      this.renderer.setRenderTarget(target);
+      this.renderer.render(this.world.scene, this.camera);
+      const pixels = new Uint8Array(width * height * 4);
+      this.renderer.readRenderTargetPixels(target, 0, 0, width, height, pixels);
+      const flipped = new Uint8ClampedArray(pixels.length);
+      for (let y = 0; y < height; y += 1) {
+        const sourceOffset = (height - 1 - y) * width * 4;
+        flipped.set(pixels.subarray(sourceOffset, sourceOffset + width * 4), y * width * 4);
+      }
+      const canvas = document.createElement("canvas");
+      canvas.width = width;
+      canvas.height = height;
+      const context = canvas.getContext("2d");
+      if (context === null) throw new Error("2D canvas is unavailable for composition analysis.");
+      context.putImageData(new ImageData(flipped, width, height), 0, 0);
+      const report = this.compareComposition(guide, flipped, width, height);
+      this.compositionCache = { dataUrl: canvas.toDataURL("image/png"), report };
+      return this.compositionCache;
+    } finally {
+      this.renderer.setRenderTarget(previousTarget);
+      this.camera.aspect = previousAspect;
+      this.camera.updateProjectionMatrix();
+      this.world.scene.background = previousBackground;
+      this.world.scene.fog = previousFog;
+      for (const [mesh, material] of replacements) mesh.material = material;
+      for (const material of temporaryMaterials) material.dispose();
+      target.dispose();
+      this.renderer.render(this.world.scene, this.camera);
+    }
+  }
+
+  private compareComposition(
+    guide: OpeningCompositionGuide,
+    pixels: Uint8ClampedArray,
+    width: number,
+    height: number,
+  ): OpeningCompositionReport {
+    const parseColor = (value: string): readonly [number, number, number] => {
+      const hex = Number.parseInt(value.slice(1), 16);
+      return [(hex >> 16) & 255, (hex >> 8) & 255, hex & 255];
+    };
+    const insidePolygon = (
+      point: readonly [number, number],
+      polygon: readonly (readonly [number, number])[],
+    ) => {
+      let inside = false;
+      for (let current = 0, previous = polygon.length - 1; current < polygon.length; previous = current, current += 1) {
+        const a = polygon[current] as readonly [number, number];
+        const b = polygon[previous] as readonly [number, number];
+        if (
+          (a[1] > point[1]) !== (b[1] > point[1]) &&
+          point[0] < ((b[0] - a[0]) * (point[1] - a[1])) / (b[1] - a[1]) + a[0]
+        ) inside = !inside;
+      }
+      return inside;
+    };
+    const regionMetrics = guide.regions.map((region) => {
+      const color = parseColor(region.color);
+      let intersection = 0;
+      let union = 0;
+      for (let y = 0; y < height; y += 1) {
+        for (let x = 0; x < width; x += 1) {
+          const offset = (y * width + x) * 4;
+          const desired = insidePolygon([(x + 0.5) / width, (y + 0.5) / height], region.polygon);
+          const distance = Math.hypot(
+            (pixels[offset] ?? 0) - color[0],
+            (pixels[offset + 1] ?? 0) - color[1],
+            (pixels[offset + 2] ?? 0) - color[2],
+          );
+          const observed = distance <= 38;
+          if (desired && observed) intersection += 1;
+          if (desired || observed) union += 1;
+        }
+      }
+      const iou = union === 0 ? 0 : intersection / union;
+      return { id: region.id, iou, minimumIou: region.minimumIou, pass: iou >= region.minimumIou };
+    });
+    const anchorMetrics = guide.anchors.map((anchor) => {
+      const targets = this.renderObjectsByBinding.get(`${anchor.binding.kind}:${anchor.binding.id}`) ?? [];
+      const bounds = new THREE.Box3();
+      for (const object of targets) {
+        object.updateWorldMatrix(true, true);
+        bounds.expandByObject(object, true);
+      }
+      let observedCenter: readonly [number, number] | null = null;
+      let observedSize: readonly [number, number] | null = null;
+      if (!bounds.isEmpty()) {
+        const points = [
+          [bounds.min.x, bounds.min.y, bounds.min.z], [bounds.max.x, bounds.min.y, bounds.min.z],
+          [bounds.min.x, bounds.max.y, bounds.min.z], [bounds.max.x, bounds.max.y, bounds.min.z],
+          [bounds.min.x, bounds.min.y, bounds.max.z], [bounds.max.x, bounds.min.y, bounds.max.z],
+          [bounds.min.x, bounds.max.y, bounds.max.z], [bounds.max.x, bounds.max.y, bounds.max.z],
+        ].map((point) => new THREE.Vector3(...point as [number, number, number]).project(this.camera));
+        const minimumX = Math.min(...points.map((point) => point.x));
+        const maximumX = Math.max(...points.map((point) => point.x));
+        const minimumY = Math.min(...points.map((point) => point.y));
+        const maximumY = Math.max(...points.map((point) => point.y));
+        observedCenter = [(minimumX + maximumX + 2) / 4, (2 - minimumY - maximumY) / 4];
+        observedSize = [(maximumX - minimumX) / 2, (maximumY - minimumY) / 2];
+      }
+      const centerError = observedCenter === null
+        ? Number.POSITIVE_INFINITY
+        : Math.hypot(observedCenter[0] - anchor.center[0], observedCenter[1] - anchor.center[1]);
+      const sizeError = anchor.size === undefined || observedSize === null
+        ? 0
+        : Math.hypot(observedSize[0] - anchor.size[0], observedSize[1] - anchor.size[1]) * 0.5;
+      const error = centerError + sizeError;
+      return {
+        id: anchor.id,
+        expectedCenter: anchor.center,
+        observedCenter,
+        ...(anchor.size === undefined ? {} : { expectedSize: anchor.size }),
+        observedSize,
+        error,
+        tolerance: anchor.tolerance,
+        pass: error <= anchor.tolerance,
+      };
+    });
+    const scores = [
+      ...regionMetrics.map((metric) => Math.min(1, metric.iou / Math.max(1e-6, metric.minimumIou))),
+      ...anchorMetrics.map((metric) => Math.max(0, 1 - metric.error / metric.tolerance)),
+    ];
+    const score = scores.reduce((sum, value) => sum + value, 0) / Math.max(1, scores.length);
+    return {
+      score,
+      minimumScore: guide.minimumScore,
+      pass: score >= guide.minimumScore &&
+        regionMetrics.every((metric) => metric.pass) &&
+        anchorMetrics.every((metric) => metric.pass),
+      regions: regionMetrics,
+      anchors: anchorMetrics,
+    };
+  }
+
+  private colorForBinding(kind: "feature" | "runtime-entity", id: string): string | undefined {
+    if (this.worldSpec === null) return undefined;
+    const instance = this.worldSpec.entityCatalog.instances.find(
+      (item) => item.binding.kind === kind && item.binding.id === id,
+    );
+    if (instance === undefined) return undefined;
+    return this.worldSpec.entityCatalog.prototypes.find(
+      (item) => item.id === instance.prototypeId,
+    )?.instanceColor;
   }
 
   private captureTopDownPlan(): string {
@@ -775,7 +1082,11 @@ export class SdkWorldAdapter implements PlaygroundWorldAdapter {
     }
   }
 
-  private addTerrain(terrain: TerrainSurface, resourceId: string): readonly THREE.Object3D[] {
+  private addTerrain(
+    terrain: TerrainSurface,
+    resourceId: string,
+    semanticLayers: readonly RuntimeTerrainLayer[],
+  ): readonly THREE.Object3D[] {
     const renderables: THREE.Object3D[] = [];
     let tileIndex = 0;
     terrain.forEachHeightfield((heightfield) => {
@@ -784,7 +1095,27 @@ export class SdkWorldAdapter implements PlaygroundWorldAdapter {
       // Derive edge normals from the complete surface, not from one tile, so
       // adjacent meshes receive identical lighting along their shared border.
       const geometry = heightfield.toBufferGeometry(terrain);
-      const mesh = new THREE.Mesh(geometry, whiteMaterial());
+      if (semanticLayers.length > 0) {
+        const positions = geometry.getAttribute("position");
+        const colors = new Float32Array(positions.count * 3);
+        const base = new THREE.Color(WHITE);
+        for (let vertex = 0; vertex < positions.count; vertex += 1) {
+          const x = positions.getX(vertex);
+          const z = positions.getZ(vertex);
+          const color = base.clone();
+          for (const layer of semanticLayers) {
+            const minimumX = layer.descriptor.bounds.center[0] - layer.descriptor.bounds.size[0] / 2;
+            const minimumZ = layer.descriptor.bounds.center[1] - layer.descriptor.bounds.size[1] / 2;
+            const u = (x - minimumX) / layer.descriptor.bounds.size[0];
+            const v = (z - minimumZ) / layer.descriptor.bounds.size[1];
+            if (u < 0 || u > 1 || v < 0 || v > 1) continue;
+            color.lerp(layer.color, Math.max(0, Math.min(1, layer.sample(u, v))));
+          }
+          colors.set([color.r, color.g, color.b], vertex * 3);
+        }
+        geometry.setAttribute("color", new THREE.BufferAttribute(colors, 3));
+      }
+      const mesh = new THREE.Mesh(geometry, whiteMaterial(WHITE, semanticLayers.length > 0));
       mesh.name = id;
       mesh.receiveShadow = true;
       mesh.castShadow = true;
@@ -860,14 +1191,22 @@ export class SdkWorldAdapter implements PlaygroundWorldAdapter {
     this.waterMaterials.add(material);
     const water = new THREE.Mesh(geometry, material);
     water.name = resourceId;
+    water.userData.compositionColor = descriptor.style.deepColor;
     water.position.y = descriptor.elevation;
     water.receiveShadow = true;
     addOwnedRenderable(this.world, resourceId, water);
     return water;
   }
 
-  private addLandmark(descriptor: LandmarkDescriptor, resourceId: string): THREE.Object3D {
-    const landmark = compileLandmark(descriptor);
+  private addLandmark(
+    descriptor: LandmarkDescriptor,
+    resourceId: string,
+    instanceColor?: string,
+  ): THREE.Object3D {
+    const landmark = compileLandmark(
+      descriptor,
+      instanceColor === undefined ? 0xd9dad5 : new THREE.Color(instanceColor).getHex(),
+    );
     landmark.updateMatrixWorld(true);
     addOwnedRenderable(this.world, resourceId, landmark);
     landmark.traverse((object) => {

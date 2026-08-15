@@ -2,9 +2,9 @@
   "workflowVersion": 1,
   "sceneId": "sunlit-flower-bay",
   "stage": "visualized",
-  "frozenPlanSpecSha256": "3afbb464ef894a2da5dcf01ad8d05291730bde45a4dbb7da5d9ea448afe1eff9",
-  "planLockSha256": "b464119e5d05bee4b2e48d71919ce340b8fe70bfa29e4a3d48219283ee77a10c",
-  "verifiedSceneManifestSha256": "66d43a760aee51cef2cc99e313265dd2b2d253c86e53ab449d36c11b4997a61d",
+  "frozenPlanSpecSha256": "f31fc7c1dc0af09efbeaa762881e1fc64de9273d8a0f16ea2732681a30e0ab72",
+  "planLockSha256": "c4f817776636d4bd108a09bcb65c2e4ae983c46d9e53e89fb6e0da6c9202db65",
+  "verifiedSceneManifestSha256": "f39cbc4fad56e2b10c7280bba1c79a37304430cf81f6758c0eabdea08d240e39",
   "finalFrame": {
     "uri": "/scene-plans/sunlit-flower-bay/opening-frame-rendered.png",
     "sha256": "c666b087f12233bded3c39a4776749c9095c4fe1032580633e37972ecc9b02dc"

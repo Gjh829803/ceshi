@@ -87,6 +87,8 @@ export interface SceneThirdPersonCameraRequest {
   pitchRadians?: number;
   distance?: number;
   fovDegrees?: number;
+  /** Vertical focus above the subject ground; useful for elevated landscape compositions. */
+  targetHeight?: number;
 }
 
 export interface ResolvedSceneSpawn {
@@ -444,6 +446,7 @@ export function compileOutdoorScene(definition: OutdoorSceneDefinition): Compile
   const cameraPitchRadians = request.camera?.pitchRadians ?? 0.3;
   const cameraDistance = request.camera?.distance ?? 4.5;
   const cameraFovDegrees = request.camera?.fovDegrees ?? 56;
+  const cameraTargetHeight = request.camera?.targetHeight ?? 0.85;
   if (!Number.isFinite(cameraPitchRadians) || cameraPitchRadians < -0.95 || cameraPitchRadians > 0.65) {
     throw new SceneCompilationError(
       `Player camera pitch ${cameraPitchRadians} is outside the supported -0.95 to 0.65 radian range.`,
@@ -459,6 +462,11 @@ export function compileOutdoorScene(definition: OutdoorSceneDefinition): Compile
       `Player camera FOV ${cameraFovDegrees} is outside the supported 35 to 90 degree range.`,
     );
   }
+  if (!Number.isFinite(cameraTargetHeight) || cameraTargetHeight < 0.5 || cameraTargetHeight > 4.5) {
+    throw new SceneCompilationError(
+      `Player camera target height ${cameraTargetHeight} is outside the supported 0.5 to 4.5 meter range.`,
+    );
+  }
   if (definition.worldSpec !== undefined) {
     const implementationDiagnostics = validateWorldSpecImplementation(definition.worldSpec, {
       featureIds: registry.list().map((feature) => feature.id),
@@ -472,6 +480,7 @@ export function compileOutdoorScene(definition: OutdoorSceneDefinition): Compile
         pitchRadians: cameraPitchRadians,
         distance: cameraDistance,
         fovDegrees: cameraFovDegrees,
+        targetHeight: cameraTargetHeight,
       },
     });
     diagnostics.push(...implementationDiagnostics);
@@ -498,6 +507,7 @@ export function compileOutdoorScene(definition: OutdoorSceneDefinition): Compile
         pitchRadians: cameraPitchRadians,
         distance: cameraDistance,
         fovDegrees: cameraFovDegrees,
+        targetHeight: cameraTargetHeight,
       },
     },
     atmosphere,

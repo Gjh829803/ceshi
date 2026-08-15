@@ -23,7 +23,7 @@
 | `?scene=canyon` | 自定义峡谷、Polygon 河流和石拱 | Coding Agent 可用 BuildContext 定义 SDK 未预置的地貌名词 | 河流没有流体模拟，blocked/swimmable 仍主要是语义契约 |
 | `?scene=azure-bay` | 南侧高地俯瞰海湾、两侧海岸、岛状轮廓、灯塔、村落和帆船 | 单图构图转译、自定义地形、Polygon 水体、初始镜头构图、连续可走下坡 | 岛状轮廓来自同一地形 Feature 的塑形，并非独立 Island Feature；不重建花海、云层和绘画风格 |
 | `?scene=mistbound-rider` | 山谷、道路式区域、废墟、村落、城堡和远景天体 | 更复杂的自由 Feature/标志物组合和语义提示 | 马与骑手是静态几何标志物，不代表骑马主体已实现 |
-| `?scene=sunlit-flower-bay` | 用用户参考图完成 Planner → Builder → 浏览器 QA → Visual Bible 全流程 | 1200m × 1000m 海湾、冻结图片输入、路线坡度、四类 Prototype、白膜/样式三视图、渲染首帧与完整 `visualized` 清单 | 白膜只保证结构和可玩性；最终渲染首帧是世界模型条件包的目标表达，不是当前 Three.js 逐帧输出 |
+| `?scene=sunlit-flower-bay` | 用用户参考图完成 Planner → Raster/Mask Builder → 浏览器构图 QA → Visual Bible 全流程 | 1200m × 1000m 海湾、全局高度 Raster、草地/岩壁/路径 Mask、无缝 tile、路线坡度、语义构图门禁、四类 Prototype 和完整视觉包 | 构图门禁验证空间区域与实例投影，不验证花朵、云、水花等最终画风 |
 
 运行方式：
 
@@ -47,6 +47,7 @@ pnpm dev
 | 所有地形都过度起伏 | 增加 `flat/plain/hills/mountains`，要求按用户场景选择 | API、场景规则和测试已覆盖 |
 | 不可爬坡面没有定义 | 人形 42° 最大爬坡、48° 自动滑落，主路线建议 ≤35° | 出生点坡度检查；Azure Bay 路线测试覆盖 ≤35° |
 | 分块地形出现缝或高差 | 分块使用世界坐标采样；渲染网格和 Rapier 高度场复用同一高度数据 | 自动测试验证高度/物理对齐；像素级接缝仍需浏览器截图回归 |
+| 参考图白膜只有几个圆和浮动方块 | 增加全局高度 Raster、语义 Mask、地形内生远岛、地形吸附标志物和首帧构图门禁 | `sunlit-flower-bay` 浏览器实测区域 IoU、人物与灯塔锚点均过线 |
 
 ## 4. Planner / Builder / Visual Bible 创作实验
 
@@ -65,8 +66,9 @@ pnpm dev
 
 - 参考图先复制为项目内 `reference-0.png`，并和 World Plan、Opening Shot、WorldSpec 一起进入 `plan-lock.json`；Builder 只消费项目内 URI，未读取其他工作区目录。
 - Planner 扩展出 1200m × 1000m 完整世界、进入视角、六条路线、一个主体 Prototype 与灯塔/房屋/帆船三个物体 Prototype。四类实例分别使用红、黄、蓝、紫唯一白膜色。
-- 第一版 Builder 虽通过数值测试，但浏览器首帧暴露出 300m 水岸过渡把出生高台拉低、远景物体漂浮的问题。QA 随即触发规划修订：把路线移出水体、缩窄岸带、恢复 82m 出生高台，并增加中央海湾视线谷地。修订后重新冻结规划，所有路线继续满足各自 30°–34° 上限。
-- 浏览器最终实测出生高度约 82.9m，中央海湾、两侧岸线和右侧灯塔均进入白膜首帧；四类 Prototype 均从真实运行时导出 Front / Right / Back 白膜三视图。
+- 旧 Builder 虽通过数值测试，但首帧本质上仍是几个圆形抬升、一个水面和两个浮动方块岛；规划 Region 只是元数据，没有真正写入几何。这一结果被保留为失败样例并触发 SDK 改造。
+- 新 Builder 用一张 241 × 201 的 Agent 数据场表达完整海湾、海岸、远岛、出生坡面和路径高程，用独立 Raster Mask 标出草地、岩壁和道路。地形、渲染网格和 Rapier 仍共享同一高度数据，远岛不再是方块，房屋与灯塔在构建时吸附地面。
+- Opening Shot 新增 320 × 180 语义 Mask 门禁：天空/海湾用区域 IoU，人物/灯塔用投影中心与尺寸误差；总分达标也不能覆盖单项失败。浏览器最终验收已通过。
 - Codex Image 工具以白膜三视图作为结构约束、参考图和 Opening Shot 作为风格约束，生成四张样式三视图和 `opening-frame-rendered.png`。`visual-bible-manifest.json` 已记录最终首帧与全部八张三视图的哈希，`visual:check` 通过。
 - Builder 隔离流程曾两次把并发文档提交或自身临时编译缓存误判为越权；实现本身的测试、类型检查、构建和规划导出均通过。后续应把权限审计的基线限定为 Agent 阶段开始后的授权文件集合，并显式忽略阶段私有临时目录。
 - 页面三视图写入端点在一次带多余 `--` 的 Vite 启动命令下返回 404；使用标准 `pnpm dev`/Vite 启动方式已验证插件端点会加载。本次结果仍由同一页面运行时捕获，宿主只负责把 PNG 写入声明路径。
@@ -74,7 +76,7 @@ pnpm dev
 ## 5. 2026-08-15 自动验证结果
 
 ```text
-pnpm test         17 test files / 92 tests passed
+pnpm test         17 test files / 95 tests passed
 pnpm test:scenes  2 test files / 16 tests passed
 pnpm typecheck    passed
 pnpm build        passed
@@ -111,8 +113,8 @@ pnpm visual:check -- --scene sunlit-flower-bay passed
 
 - 长时间上下坡时的主观移动手感和剩余镜头微振。
 - tile 边界的像素级阴影/法线接缝。
-- 每个图片参考场景的首帧构图相似度。
-- 生成 World Plan/Opening Shot 与真实白膜截图的自动视觉差异评分；当前已经能分别截图，但仍由人或 Agent 对比。
+- 构图门禁已覆盖结构化语义区域和实例锚点；仍需人工判断未标注轮廓、审美质量与单图歧义。
+- 生成 World Plan/Opening Shot 与真实白膜的通用视觉嵌入评分；当前门禁依赖 Planner 先给出可解释的区域/锚点 Guide。
 - 白膜三视图与样式三视图的自动轮廓/姿态一致性评分；Sunlit Flower Bay 已有完整配对，但当前仍只自动检查文件、路径和哈希。
 - 水岸在各种视角和地形高度下的观感。
 - Mixamo 动作混合观感、脚滑和 jump 动作绑定。

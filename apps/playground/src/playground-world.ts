@@ -66,6 +66,28 @@ export interface WorldSnapshot {
   };
 }
 
+export interface OpeningCompositionReport {
+  score: number;
+  minimumScore: number;
+  pass: boolean;
+  regions: readonly {
+    id: string;
+    iou: number;
+    minimumIou: number;
+    pass: boolean;
+  }[];
+  anchors: readonly {
+    id: string;
+    expectedCenter: readonly [number, number];
+    observedCenter: readonly [number, number] | null;
+    expectedSize?: readonly [number, number];
+    observedSize: readonly [number, number] | null;
+    error: number;
+    tolerance: number;
+    pass: boolean;
+  }[];
+}
+
 export interface PlaygroundWorldAdapter {
   readonly name: string;
   readonly canvas: HTMLCanvasElement;
@@ -76,6 +98,9 @@ export interface PlaygroundWorldAdapter {
   render(): void;
   runFixedInput(steps: readonly FixedInputStep[]): Promise<WorldSnapshot>;
   captureScreenshot(): string;
+  captureCompositionMask(): string;
+  analyzeOpeningComposition(): OpeningCompositionReport | null;
+  exportOpeningFrame(report?: OpeningCompositionReport): Promise<string>;
   getWorldSpec(): OutdoorWorldSpec | null;
   getPlanArtifacts(): DerivedWorldPlanArtifacts | null;
   capturePlanningView(kind: PlanningViewKind): string;
@@ -89,11 +114,14 @@ export interface PlaygroundWorldAdapter {
 }
 
 export interface PlaygroundAutomationApi {
-  version: 2;
+  version: 3;
   getSnapshot(): WorldSnapshot;
   inspectFeatures(): readonly FeatureInspection[];
   runFixedInput(steps: readonly FixedInputStep[]): Promise<WorldSnapshot>;
   captureScreenshot(): string;
+  captureCompositionMask(): string;
+  analyzeOpeningComposition(): OpeningCompositionReport | null;
+  exportOpeningFrame(report?: OpeningCompositionReport): Promise<string>;
   getWorldSpec(): OutdoorWorldSpec | null;
   getPlanArtifacts(): DerivedWorldPlanArtifacts | null;
   capturePlanningView(kind: PlanningViewKind): string;

@@ -74,7 +74,7 @@ RenderFrame
 - `apps/playground/public/scene-plans/grassland/` 与 `artifacts/scenes/grassland/`：当前规划图片、白膜三视图、冻结锁和可重复导出的结构化样例。
 - `packages/subjects`、`packages/camera`、`packages/animation`：主体、相机和动作状态。
 - `assets/humanoid/action-manifest.json`：动作语义清单；不包含可再分发的人形资产。
-- `window.__WHITEBOX_PLAYGROUND__` automation API v2：快照、固定输入、普通截图、WorldSpec/规划工件/三种规划视图，以及 Prototype 查询和白膜三视图捕获/导出入口。
+- `window.__WHITEBOX_PLAYGROUND__` automation API v3：快照、固定输入、普通截图、WorldSpec/规划工件/三种规划视图、语义构图 Mask/评分，以及 Prototype 查询和白膜三视图捕获/导出入口。
 
 ## 6. 当前缺口
 

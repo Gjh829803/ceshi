@@ -90,7 +90,12 @@ describe("outdoor scene authoring", () => {
     expect(compiled.terrainHandles).toHaveLength(1);
     expect(compiled.spawn.position[2]).toBe(45);
     expect(compiled.spawn.facingRadians).toBe(Math.PI);
-    expect(compiled.spawn.camera).toEqual({ pitchRadians: 0.55, distance: 7, fovDegrees: 56 });
+    expect(compiled.spawn.camera).toEqual({
+      pitchRadians: 0.55,
+      distance: 7,
+      fovDegrees: 56,
+      targetHeight: 0.85,
+    });
     expect(compiled.atmosphere.preset).toBe("golden-hour");
     expect(compiled.diagnostics.filter((diagnostic) => diagnostic.severity === "error")).toHaveLength(0);
     const terrainResource = compiled.registry.getResource<HeightfieldGrid>(

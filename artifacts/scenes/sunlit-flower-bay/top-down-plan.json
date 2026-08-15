@@ -2,7 +2,7 @@
   "artifactVersion": 1,
   "sceneId": "sunlit-flower-bay",
   "sceneSeed": 731942,
-  "specHash": "e8edd203",
+  "specHash": "ada9b13b",
   "compiler": "whitebox-world-planning-v1",
   "kind": "top-down-plan",
   "bounds": {
@@ -69,8 +69,8 @@
           350
         ],
         "radius": [
-          115,
-          82
+          100,
+          48
         ]
       },
       "elevationIntent": "flat 82 meter entry shelf with safe camera space and no blockers",
@@ -301,12 +301,12 @@
       "area": {
         "kind": "ellipse",
         "center": [
-          295,
-          -45
+          110,
+          100
         ],
         "radius": [
-          74,
-          60
+          82,
+          68
         ]
       },
       "elevationIntent": "flattened 42 meter cape top with safe clearance around lighthouse and keeper cottage",
@@ -397,48 +397,44 @@
             -500
           ],
           [
-            335,
+            350,
             -320
           ],
           [
-            285,
-            -250
-          ],
-          [
-            270,
-            -115
+            275,
+            -120
           ],
           [
             205,
             40
           ],
           [
-            145,
-            130
+            88,
+            145
           ],
           [
-            80,
-            180
+            120,
+            270
           ],
           [
-            -80,
-            180
+            -120,
+            270
           ],
           [
-            -145,
-            130
+            -88,
+            145
           ],
           [
-            -215,
-            35
+            -205,
+            40
           ],
           [
-            -285,
-            -115
+            -275,
+            -120
           ],
           [
-            -300,
-            -280
+            -350,
+            -320
           ]
         ]
       },
@@ -451,9 +447,9 @@
       "id": "east-cape-lighthouse-anchor",
       "semantic": "primary_eastern_lighthouse",
       "position": [
-        295,
+        110,
         42,
-        -45
+        100
       ],
       "approximateSize": [
         8,
@@ -536,9 +532,9 @@
       "id": "lighthouse-keeper-cottage-anchor",
       "semantic": "small_keeper_cottage",
       "position": [
-        330,
+        145,
         42,
-        -15
+        115
       ],
       "approximateSize": [
         12,
@@ -669,24 +665,20 @@
           280
         ],
         [
-          130,
-          270
+          45,
+          260
         ],
         [
-          205,
+          75,
           210
         ],
         [
-          250,
-          115
+          100,
+          150
         ],
         [
-          285,
-          10
-        ],
-        [
-          295,
-          -45
+          110,
+          100
         ]
       ],
       "width": 8,
@@ -735,16 +727,16 @@
       "id": "east-coast-north-route",
       "points": [
         [
-          295,
-          -45
+          110,
+          100
         ],
         [
-          345,
-          -115
+          200,
+          -40
         ],
         [
-          370,
-          -215
+          300,
+          -195
         ],
         [
           405,
@@ -833,9 +825,9 @@
     "eastern-cliffs",
     "lighthouse-cape-ground",
     "southern-hinterland-landform",
-    "sunlit-bay",
     "northwest-island",
     "northeast-island",
+    "sunlit-bay",
     "east-cape-lighthouse",
     "west-upper-cottage",
     "west-cove-cottage",

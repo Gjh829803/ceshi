@@ -2,7 +2,7 @@
   "workflowVersion": 1,
   "sceneId": "sunlit-flower-bay",
   "stage": "frozen",
-  "specSha256": "3afbb464ef894a2da5dcf01ad8d05291730bde45a4dbb7da5d9ea448afe1eff9",
+  "specSha256": "f31fc7c1dc0af09efbeaa762881e1fc64de9273d8a0f16ea2732681a30e0ab72",
   "files": [
     {
       "kind": "opening-shot",
@@ -22,7 +22,7 @@
     {
       "kind": "world-spec-source",
       "path": "apps/playground/src/scenes/plans/sunlit-flower-bay.ts",
-      "sha256": "582065d019abcb6f341a090aca5519ea6ae051c89b9508ebb4a81426d47a0bec"
+      "sha256": "4421e00f98b596b45e2783bc55d9552933acf0e89227b5fcc95fb0236a753927"
     }
   ]
 }

@@ -43,7 +43,7 @@ Do not modify `sdk-world-adapter.ts`, physics, camera, or rendering code merely 
 - `world.player.spawn(...)` exactly once.
 - `world.atmosphere.set(...)` for sky/fog/sun semantics.
 
-`world.player.spawn(...)` uses the SDK's Three.js-facing convention: `facingRadians: 0` faces `-Z`, while `Math.PI` faces `+Z`. For a composition-critical opening view, set `camera: { pitchRadians, distance }`; a larger positive pitch looks farther downward. Supported pitch is `-0.95..0.65` radians and distance is `1.8..8` meters. Keep these as initial framing choices only—the SDK still owns runtime camera controls.
+`world.player.spawn(...)` uses the SDK's Three.js-facing convention: `facingRadians: 0` faces `-Z`, while `Math.PI` faces `+Z`. For a composition-critical opening view, set `camera: { pitchRadians, distance, fovDegrees, targetHeight }`; a larger positive pitch looks farther downward. Supported pitch is `-0.95..0.65`, distance is `1.8..8m`, and target height is `0.5..4.5m`. Keep these as initial framing choices only—the SDK still owns runtime camera controls.
 
 When built-ins are insufficient, define a local `defineWorldFeature(...)` and use only its tracked `BuildContext`. Register custom terrain through `world.terrain.custom(...)`. Never add opaque objects directly to `THREE.Scene` from a scene module.
 
@@ -55,7 +55,7 @@ When built-ins are insufficient, define a local `defineWorldFeature(...)` and us
 - Every Prototype must have a unique six-digit instance color, positive approximate size, `-Z` forward, a declared pivot, and canonical `front/right/back` whitebox and styled PNG paths.
 - Explicit separation of user facts, visible reference evidence, inferred continuation, and optional render-layer ideas.
 - A strict orthographic World Plan that communicates topology, not a decorative aerial perspective.
-- An Opening Shot that records spawn, facing, pitch, distance, FOV, and foreground/middleground/background composition.
+- An Opening Shot that records spawn, facing, pitch, distance, FOV, target height, and foreground/middleground/background composition. Reference-image scenes also require normalized semantic regions and runtime anchor targets in `composition.guide`.
 - Primary routes declared in WorldSpec and kept at or below their slope limits.
 - Stable, descriptive, unique IDs for every feature.
 - A deterministic scene seed.
@@ -63,11 +63,11 @@ When built-ins are insufficient, define a local `defineWorldFeature(...)` and us
 - Semantic strings and appearance prompts for important terrain, water, and landmarks.
 - A spawn point inside terrain and outside obvious water/landmark blockers.
 - Large maps should use tiled terrain; preserve approximately 1.25–2.5 meters per heightfield cell unless the scene requires finer collision.
-- Global noise is only the base surface. Build valleys, ridges, basins, plateaus, and roads with explicit shaped operations; do not turn up global amplitude to imply a landform.
+- Global noise is only the base surface. For reference-driven topology, prefer a tracked world-space `context.terrain.raster(...)` field plus `context.semantic.terrainLayer(...)` masks; shaped operations remain appropriate for simple local edits. Do not approximate a whole reference with a few broad circles.
 - Shaped-operation `falloffWidth` fades across the inside of the shape toward its boundary; it does not spread outside the boundary. To author a long descent, include the whole descent inside the shape and place its boundary at the low end.
 - Humanoids climb slopes up to 42°. Keep primary routes below 35° for margin, flatten the spawn area, and provide a continuous walkable corridor through hill or mountain scenes.
 - For image references, reproduce the visible spatial composition and semantic silhouettes in whitebox form. Do not encode clouds, flowers, textures, painterly style, or other render-layer detail as collision geometry. A single view does not define hidden geometry, so create a coherent playable continuation and report important inferred areas.
-- Treat the reference viewpoint as part of image matching: align spawn position, `facingRadians`, camera pitch, and distance before judging whether terrain geometry is wrong. Browser-check the opening frame; feature presence alone is not visual proof.
+- Treat the reference viewpoint as part of image matching: align spawn position, `facingRadians`, pitch, distance, FOV and target height before judging geometry. Browser-run the opening composition gate; feature presence and a passing overall score cannot override a failed required region or anchor.
 - Do not ask image generation to invent the whitebox tri-view. It must be captured from the verified SDK runtime. The styled tri-view may be generated only from that structural reference.
 
 ## Current phase boundary

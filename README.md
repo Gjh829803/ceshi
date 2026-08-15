@@ -61,18 +61,18 @@
 - Rapier 刚体、碰撞体、高度场与射线查询
 - `humanoid.third_person` 主体套餐：WASD、走/跑/跳、动作状态、第三人称镜头与镜头碰撞
 - 可绑定 Mixamo 骨架的白膜 GLB 加载；本地 Xbot 已验证 `idle / walk / run`
-- 640m × 640m 连续分块高度场；`flat / plain / hills / mountains` 可玩性地貌预设；噪声、抬高、压低、平整、平滑、Circle、Ellipse、Polygon
+- 连续分块高度场；`flat / plain / hills / mountains` 预设；以及 Agent 可生成/导入的全局标量 Raster、可选 Mask、双线性采样和无缝跨 tile 投影
 - 专用 WaterBody：连续岸带、湖底/水位语义、浅深水着色、菲涅尔和轻微波纹
 - `FeatureRegistry`：schema、seed、预算、诊断、资源所有权、更新、重建和删除
 - `defineOutdoorScene` 场景 DSL、通用运行时编译器、Agent 自定义 Feature、场景目录与可追踪的初始镜头构图
-- `OutdoorWorldSpec / definePlannedOutdoorScene`：全世界拓扑、证据来源、进入视角和规划资产的可验证契约
+- `OutdoorWorldSpec / definePlannedOutdoorScene`：全世界拓扑、证据来源、进入视角、屏幕空间构图 Guide 和规划资产的可验证契约
 - `WorldPromptBundle / Entity Catalog`：世界级渲染描述，以及主体、NPC、标志物、客体的 Prototype/Instance、唯一实例色和三视图契约
 - `plan-lock.json`：冻结项目内参考图、WorldSpec 源码、World Plan 和 Opening Shot；Builder 前后都会检查漂移
 - Codex 内置图片生成的 World Plan / Opening Shot，以及 SDK 从真实场景导出的 Top-down / Height-Slope 规划工件
 - SDK 真实正交白膜三视图导出，以及 Visual Bible 输入/最终包校验
 - `WASD / Shift / Space / ↑ / ↓`、相机相对移动、符合视线语义的上下视角、固定步长插值与防颠簸跟随
 - 统一人形通行契约：42° 最大爬坡角、48° 自动滑落角、局部坡度查询和出生点坡度检查
-- 可玩的 Vite Playground、世界检查器、截图与固定输入 Smoke API
+- 可玩的 Vite Playground、世界检查器、截图、固定输入 Smoke，以及语义构图 Mask / 区域 IoU / 实体屏幕锚点门禁
 
 ```bash
 pnpm install

@@ -183,6 +183,9 @@ describe("OutdoorWorldSpec", () => {
     expect(validateOutdoorWorldSpec(valid)).not.toContainEqual(
       expect.objectContaining({ code: "WORLD_SPEC_REFERENCE_IMAGE_INVALID" }),
     );
+    expect(validateOutdoorWorldSpec(valid)).toContainEqual(
+      expect.objectContaining({ code: "WORLD_SPEC_REFERENCE_COMPOSITION_GUIDE_MISSING" }),
+    );
 
     const invalidBase = validSpec();
     const invalid = {

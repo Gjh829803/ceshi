@@ -28,8 +28,12 @@ import {
   type TerrainBasinOperation,
   type TerrainFlattenOperation,
   type TerrainNoiseOptions,
+  type RasterWorldBounds,
+  type ScalarRasterField,
+  type TerrainRasterOperation,
   type TerrainSurface,
   type TerrainSmoothOperation,
+  validateScalarRasterField,
   isTerrainSurface,
 } from "./terrain";
 
@@ -55,7 +59,28 @@ export interface TrackedWorldResource<T = unknown> {
 
 export interface TerrainPatchDescriptor {
   targetResourceId: ResourceId;
-  operation: "noise" | "raise" | "lower" | "flatten" | "basin" | "smooth";
+  operation: "noise" | "raster" | "raise" | "lower" | "flatten" | "basin" | "smooth";
+}
+
+export interface TerrainSemanticLayerDescriptor {
+  kind: "terrain-semantic-layer";
+  targetResourceId: ResourceId;
+  id: string;
+  semantic: string;
+  color: `#${string}`;
+  field: ScalarRasterField;
+  bounds: RasterWorldBounds;
+  priority: number;
+}
+
+export function isTerrainSemanticLayerDescriptor(
+  value: unknown,
+): value is TerrainSemanticLayerDescriptor {
+  return (
+    typeof value === "object" &&
+    value !== null &&
+    (value as { kind?: unknown }).kind === "terrain-semantic-layer"
+  );
 }
 
 export interface BuildContext {
@@ -68,6 +93,7 @@ export interface BuildContext {
     create(spec: HeightfieldSpec): ResourceId;
     createGrid(spec: HeightfieldGridSpec): ResourceId;
     noise(target: ResourceId, options: Omit<TerrainNoiseOptions, "seed"> & { seed?: Seed }): ResourceId;
+    raster(target: ResourceId, options: TerrainRasterOperation): ResourceId;
     raise(target: ResourceId, options: TerrainAmountOperation): ResourceId;
     lower(target: ResourceId, options: TerrainAmountOperation): ResourceId;
     flatten(target: ResourceId, options: TerrainFlattenOperation): ResourceId;
@@ -84,6 +110,10 @@ export interface BuildContext {
   };
   readonly semantic: {
     bind(target: ResourceId, appearance: AppearanceBinding): ResourceId;
+    terrainLayer(
+      target: ResourceId,
+      layer: Omit<TerrainSemanticLayerDescriptor, "kind" | "targetResourceId">,
+    ): ResourceId;
   };
   readonly resources: {
     create<T>(kind: WorldResourceKind, value: T, metrics?: Partial<ResourceMetrics>): ResourceId;
@@ -241,6 +271,10 @@ class InternalBuildContext implements BuildContext {
         terrain.applyNoise(resolved);
         return this.trackTerrainPatch(target, "noise");
       },
+      raster: (target, options) => {
+        this.writableTerrain(target).applyRaster(options);
+        return this.trackTerrainPatch(target, "raster");
+      },
       raise: (target, options) => {
         this.writableTerrain(target).raise(options);
         return this.trackTerrainPatch(target, "raise");
@@ -287,6 +321,29 @@ class InternalBuildContext implements BuildContext {
           appearance: { ...appearance },
         };
         return this.createResource("semantic", binding);
+      },
+      terrainLayer: (target, layer) => {
+        this.readTerrain(target);
+        validateScalarRasterField(layer.field);
+        const descriptor: TerrainSemanticLayerDescriptor = {
+          kind: "terrain-semantic-layer",
+          targetResourceId: target,
+          ...layer,
+        };
+        if (!descriptor.id.trim() || !descriptor.semantic.trim()) {
+          throw new Error("Terrain semantic layers require non-empty id and semantic values.");
+        }
+        if (!/^#[0-9a-f]{6}$/i.test(descriptor.color)) {
+          throw new Error("Terrain semantic layer color must be a six-digit hex color.");
+        }
+        if (
+          descriptor.bounds.center.some((value) => !Number.isFinite(value)) ||
+          descriptor.bounds.size.some((value) => !Number.isFinite(value) || value <= 0) ||
+          !Number.isFinite(descriptor.priority)
+        ) {
+          throw new Error("Terrain semantic layer requires finite world bounds, positive size, and priority.");
+        }
+        return this.createResource("semantic", descriptor);
       },
     };
 

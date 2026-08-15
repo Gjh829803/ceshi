@@ -316,8 +316,8 @@
             350
           ],
           "radius": [
-            115,
-            82
+            100,
+            48
           ]
         },
         "elevationIntent": "flat 82 meter entry shelf with safe camera space and no blockers",
@@ -548,12 +548,12 @@
         "area": {
           "kind": "ellipse",
           "center": [
-            295,
-            -45
+            110,
+            100
           ],
           "radius": [
-            74,
-            60
+            82,
+            68
           ]
         },
         "elevationIntent": "flattened 42 meter cape top with safe clearance around lighthouse and keeper cottage",
@@ -645,48 +645,44 @@
             -500
           ],
           [
-            335,
+            350,
             -320
           ],
           [
-            285,
-            -250
-          ],
-          [
-            270,
-            -115
+            275,
+            -120
           ],
           [
             205,
             40
           ],
           [
-            145,
-            130
+            88,
+            145
           ],
           [
-            80,
-            180
+            120,
+            270
           ],
           [
-            -80,
-            180
+            -120,
+            270
           ],
           [
-            -145,
-            130
+            -88,
+            145
           ],
           [
-            -215,
-            35
+            -205,
+            40
           ],
           [
-            -285,
-            -115
+            -275,
+            -120
           ],
           [
-            -300,
-            -280
+            -350,
+            -320
           ]
         ]
       },
@@ -699,9 +695,9 @@
       "id": "east-cape-lighthouse-anchor",
       "semantic": "primary_eastern_lighthouse",
       "position": [
-        295,
+        110,
         42,
-        -45
+        100
       ],
       "approximateSize": [
         8,
@@ -784,9 +780,9 @@
       "id": "lighthouse-keeper-cottage-anchor",
       "semantic": "small_keeper_cottage",
       "position": [
-        330,
+        145,
         42,
-        -15
+        115
       ],
       "approximateSize": [
         12,
@@ -917,24 +913,20 @@
           280
         ],
         [
-          130,
-          270
+          45,
+          260
         ],
         [
-          205,
+          75,
           210
         ],
         [
-          250,
-          115
+          100,
+          150
         ],
         [
-          285,
-          10
-        ],
-        [
-          295,
-          -45
+          110,
+          100
         ]
       ],
       "width": 8,
@@ -983,16 +975,16 @@
       "id": "east-coast-north-route",
       "points": [
         [
-          295,
-          -45
+          110,
+          100
         ],
         [
-          345,
-          -115
+          200,
+          -40
         ],
         [
-          370,
-          -215
+          300,
+          -195
         ],
         [
           405,
@@ -1078,9 +1070,10 @@
     ],
     "facingRadians": 0,
     "camera": {
-      "pitchRadians": 0.42,
-      "distance": 4.2,
-      "fovDegrees": 60
+      "pitchRadians": 0.18,
+      "distance": 4,
+      "fovDegrees": 45,
+      "targetHeight": 0.8
     },
     "composition": {
       "foreground": [
@@ -1108,7 +1101,139 @@
         "bay-sailboat-center-anchor",
         "bay-sailboat-east-anchor",
         "bay-sailboat-mouth-anchor"
-      ]
+      ],
+      "guide": {
+        "aspectRatio": 1.7777777777777777,
+        "resolution": [
+          320,
+          180
+        ],
+        "minimumScore": 0.58,
+        "regions": [
+          {
+            "id": "opening-sky-mass",
+            "semantic": "open_sky_above_low_sea_horizon",
+            "color": "#CFD5D5",
+            "polygon": [
+              [
+                0,
+                0
+              ],
+              [
+                1,
+                0
+              ],
+              [
+                1,
+                0.31
+              ],
+              [
+                0,
+                0.31
+              ]
+            ],
+            "minimumIou": 0.56
+          },
+          {
+            "id": "opening-bay-mass",
+            "semantic": "centered_broad_bay_between_asymmetric_coasts",
+            "color": "#378FBE",
+            "polygon": [
+              [
+                0.18,
+                0.32
+              ],
+              [
+                0.82,
+                0.32
+              ],
+              [
+                0.98,
+                0.39
+              ],
+              [
+                0.96,
+                0.61
+              ],
+              [
+                0.82,
+                0.62
+              ],
+              [
+                0.71,
+                0.67
+              ],
+              [
+                0.61,
+                0.66
+              ],
+              [
+                0.54,
+                0.7
+              ],
+              [
+                0.46,
+                0.7
+              ],
+              [
+                0.39,
+                0.66
+              ],
+              [
+                0.28,
+                0.67
+              ],
+              [
+                0.17,
+                0.62
+              ],
+              [
+                0.04,
+                0.61
+              ],
+              [
+                0.02,
+                0.4
+              ]
+            ],
+            "minimumIou": 0.4
+          }
+        ],
+        "anchors": [
+          {
+            "id": "opening-player-anchor",
+            "binding": {
+              "kind": "runtime-entity",
+              "id": "player"
+            },
+            "center": [
+              0.5,
+              0.72
+            ],
+            "size": [
+              0.1,
+              0.5
+            ],
+            "tolerance": 0.2
+          },
+          {
+            "id": "opening-lighthouse-anchor",
+            "binding": {
+              "kind": "feature",
+              "id": "east-cape-lighthouse"
+            },
+            "center": [
+              0.79,
+              0.55
+            ],
+            "size": [
+              0.025,
+              0.11
+            ],
+            "tolerance": 0.18
+          }
+        ]
+      }
     }
   },
   "claims": [
@@ -1159,7 +1284,7 @@
       "kind": "opening-shot",
       "generator": "codex-imagegen",
       "uri": "/scene-plans/sunlit-flower-bay/opening-shot.png",
-      "prompt": "Use case: stylized-concept\nAsset type: intended entry composition for a third-person playable outdoor world\nPrimary request: from behind an adult traveler on a high southern flower meadow, look north and moderately downward along a centered dirt-and-stone footpath descending toward a vast brilliant blue sea bay; layered green coasts and pale rock cliffs frame both sides; a slender white lighthouse stands on the right cape; a few small red-roof cottages dot both slopes; very tiny sailboats cross the bay; two low distant islands sit beneath a broad open horizon\nComposition/framing: wide 16:9 third-person game view, camera 4.2 meters behind the traveler at a gentle downward pitch and 60-degree FOV; traveler centered in lower foreground; path begins under their feet and leads to the visual center; bay dominates middle ground; western coast longer and more terraced, eastern lighthouse right of center, open sea horizon in upper middle\nLighting: clear bright late morning, sunlight from upper right, high visibility, luminous blue water and readable distant silhouettes\nStyle/medium: warm hand-painted pastoral adventure environment concept art, saturated yet natural blue and green, painterly flower meadow and towering summer clouds; coherent real-world scale\nStructural constraints: preserve the exact player-path-bay-lighthouse relationship; one player, one lighthouse, sparse cottages only, sailboats must remain tiny scale cues, main path visibly walkable, bay open to the horizon\nRender-layer note: flowers, individual grass, cloud volume, water sparkle and foam, foliage texture, roof material and brushwork are visual treatment only and must not suggest extra collision landforms\nNegative constraints: no enclosed lake, city, harbor skyline, giant ship, tropical palms, fantasy castle, mountains blocking the sea, extra lighthouse, front-facing player, first-person camera, text, UI, logo, or watermark"
+      "prompt": "Use case: stylized-concept\nAsset type: intended entry composition for a third-person playable outdoor world\nPrimary request: from behind an adult traveler on a high southern flower meadow, look north and moderately downward along a centered dirt-and-stone footpath descending toward a vast brilliant blue sea bay; layered green coasts and pale rock cliffs frame both sides; a slender white lighthouse stands on the right cape; a few small red-roof cottages dot both slopes; very tiny sailboats cross the bay; two low distant islands sit beneath a broad open horizon\nComposition/framing: wide 16:9 third-person game view, camera 4 meters behind the traveler with a 0.8-meter focus, gentle 0.18-radian downward pitch and 45-degree FOV; traveler centered in lower foreground; path begins under their feet and leads to the visual center; bay dominates middle ground; western coast longer and more terraced, eastern lighthouse right of center, open sea horizon in upper middle\nLighting: clear bright late morning, sunlight from upper right, high visibility, luminous blue water and readable distant silhouettes\nStyle/medium: warm hand-painted pastoral adventure environment concept art, saturated yet natural blue and green, painterly flower meadow and towering summer clouds; coherent real-world scale\nStructural constraints: preserve the exact player-path-bay-lighthouse relationship; one player, one lighthouse, sparse cottages only, sailboats must remain tiny scale cues, main path visibly walkable, bay open to the horizon\nRender-layer note: flowers, individual grass, cloud volume, water sparkle and foam, foliage texture, roof material and brushwork are visual treatment only and must not suggest extra collision landforms\nNegative constraints: no enclosed lake, city, harbor skyline, giant ship, tropical palms, fantasy castle, mountains blocking the sea, extra lighthouse, front-facing player, first-person camera, text, UI, logo, or watermark"
     },
     {
       "kind": "height-slope-plan",

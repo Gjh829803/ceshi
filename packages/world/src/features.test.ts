@@ -254,6 +254,49 @@ describe("FeatureRegistry", () => {
     expect(registry.getResource(volcano.output?.terrainId ?? "")?.ownerFeatureId).toBe("north-volcano");
   });
 
+  it("tracks agent-authored raster terrain and semantic mask layers", () => {
+    const RasterFeature = defineWorldFeature<{}, { terrainId: string }>({
+      type: "test.raster-terrain",
+      version: 1,
+      schema: {},
+      build(context) {
+        const terrainId = context.terrain.create({
+          width: 20,
+          depth: 20,
+          xSegments: 4,
+          zSegments: 4,
+        });
+        const field = {
+          columns: 2,
+          rows: 2,
+          values: [0, 2, 4, 6],
+        } as const;
+        context.terrain.raster(terrainId, {
+          field,
+          bounds: { center: [0, 0], size: [20, 20] },
+        });
+        context.semantic.terrainLayer(terrainId, {
+          id: "grass",
+          semantic: "grassland",
+          color: "#88AA77",
+          field: { columns: 2, rows: 2, values: [1, 1, 1, 1] },
+          bounds: { center: [0, 0], size: [20, 20] },
+          priority: 1,
+        });
+        return { terrainId };
+      },
+    });
+    const registry = new FeatureRegistry();
+    const feature = registry.instantiate(RasterFeature, { id: "raster", params: {} });
+    expect(feature.status).toBe("built");
+    expect(registry.listResources("raster").map((resource) => resource.kind)).toEqual([
+      "terrain",
+      "terrainPatch",
+      "semantic",
+    ]);
+    expect(registry.getResource<Heightfield>(feature.output?.terrainId ?? "")?.value.sampleHeight(0, 0)).toBeCloseTo(3);
+  });
+
   it("builds compound landmark descriptions as a tracked official feature", () => {
     const registry = new FeatureRegistry();
     const tower = registry.instantiate(CompoundLandmarkFeature, {

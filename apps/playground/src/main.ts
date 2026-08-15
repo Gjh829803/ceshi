@@ -68,8 +68,10 @@ app.innerHTML = `
         <div class="automation-card">
           <div><p>Automation API</p><code>window.__WHITEBOX_PLAYGROUND__</code></div>
           <button id="smoke-button" type="button">运行固定输入 Smoke</button>
+          <button id="composition-button" type="button">运行首帧构图验收</button>
           <button id="triview-button" type="button">导出白膜三视图</button>
           <pre id="smoke-output">ready</pre>
+          <img id="composition-mask" alt="Opening composition semantic mask" hidden />
         </div>
       </aside>
     </section>
@@ -179,11 +181,14 @@ function updateHud(snapshot: WorldSnapshot): void {
 }
 
 const automationApi: PlaygroundAutomationApi = {
-  version: 2,
+  version: 3,
   getSnapshot: () => adapter.snapshot(),
   inspectFeatures: () => adapter.inspectFeatures(),
   runFixedInput: (steps) => adapter.runFixedInput(steps),
   captureScreenshot: () => adapter.captureScreenshot(),
+  captureCompositionMask: () => adapter.captureCompositionMask(),
+  analyzeOpeningComposition: () => adapter.analyzeOpeningComposition(),
+  exportOpeningFrame: () => adapter.exportOpeningFrame(),
   getWorldSpec: () => adapter.getWorldSpec(),
   getPlanArtifacts: () => adapter.getPlanArtifacts(),
   capturePlanningView: (kind) => adapter.capturePlanningView(kind),
@@ -266,6 +271,26 @@ requiredElement<HTMLButtonElement>("#smoke-button").addEventListener("click", as
     null,
     2,
   );
+});
+
+requiredElement<HTMLButtonElement>("#composition-button").addEventListener("click", async () => {
+  const output = requiredElement<HTMLPreElement>("#smoke-output");
+  adapter.reset();
+  const report = adapter.analyzeOpeningComposition();
+  const mask = requiredElement<HTMLImageElement>("#composition-mask");
+  mask.src = adapter.captureCompositionMask();
+  mask.hidden = report === null;
+  output.textContent = report === null
+    ? "This scene has no opening composition guide."
+    : JSON.stringify(report, null, 2);
+  if (report?.pass) {
+    try {
+      const path = await adapter.exportOpeningFrame(report);
+      output.textContent += `\nexported: ${path}`;
+    } catch (error) {
+      output.textContent += `\nexport failed: ${error instanceof Error ? error.message : String(error)}`;
+    }
+  }
 });
 
 window.addEventListener("beforeunload", () => adapter.dispose());

@@ -21,9 +21,9 @@ World SDK
 | 模块 | 当前仓库 | 下一阶段 |
 |---|---|---|
 | Core Runtime | World、Entity、Transform、fixed timestep、Input、EventBus | 生命周期/快照协议继续收敛 |
-| World Construction | Terrain、Water、Landmark、FeatureRegistry、Outdoor Scene DSL | 路径/曲线、更多 QA、室内另行设计 |
+| World Construction | Terrain、全局 Raster/Mask、高度场语义层、Water、Landmark、FeatureRegistry、Outdoor Scene DSL | 路径/曲线、更多 QA、室内另行设计 |
 | Subject/Camera/Motion | 第三人称人形、Rapier motor、idle/walk/run、本地 rig 加载 | jump 动作、更多主体与第一人称 |
-| Agent Tooling | Planner/Builder/Visual Bible 隔离流程、WorldSpec/WorldPrompt/Entity Catalog、冻结锁、内置图片生成、白膜三视图、规划工件、场景测试、检查器、固定输入 | 自动视觉差异评分、可达性和性能报告 |
+| Agent Tooling | Planner/Builder/Visual Bible 隔离流程、WorldSpec/WorldPrompt/Entity Catalog、冻结锁、内置图片生成、白膜三视图、规划工件、场景测试、检查器、固定输入、首帧语义构图评分 | 多参考图视觉嵌入评分、可达性和性能报告 |
 | Gameplay/NPC | 无 | 后续定义后实现 |
 | Runtime Director | 完整设计文档，无运行时代码 | Director SDK 的 Observation/Command/Task |
 | Render Bridge | 目标契约，无多 pass 导出 | 与 World Model 团队先做离线 RenderFrame |
@@ -75,6 +75,8 @@ Core Runtime
 - `neutral_flat`
 
 当前室外 Alpha 实际公开的是 `clear-day / golden-hour / overcast / night`。上面的 `noon_hard` 等名称是目标方向，尚未作为现有 API 发布；`indoor_top` 要等室内阶段。
+
+对于图片参考，Builder 不必把所有海岸、山脊和道路预置成 SDK 名词。它可以用 `createScalarRasterField(...)` 生成可追踪的高度场，再用 `context.terrain.raster(...)` 一次写入全局世界坐标；多个 `context.semantic.terrainLayer(...)` Mask 分别标出草地、岩壁、道路等区域。相同 Raster 在每个 tile 上按世界坐标采样，因此共享边不会重复纹理或裂开。
 
 这些 preset 主要用于白膜可读性和向世界模型传达环境意图，不代表最终生成画面的固定光照。
 

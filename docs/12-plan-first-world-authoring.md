@@ -45,6 +45,7 @@ World Plan 必须是严格正交俯视，不带透视，不依赖文字标签。
 - 水体、标志物和稳定 Feature ID。
 - 主要/次要路线、宽度和最大坡度。
 - 进入点、主体朝向、镜头和前中后景。
+- 参考图场景必须附带归一化屏幕空间 `composition.guide`：语义区域多边形、目标实例锚点、容差和验收阈值。
 - 三类规划工件的生成方式和项目内 URI。
 - 必须由白膜实现的 Feature ID。
 - 每一项信息的证据来源。
@@ -110,7 +111,7 @@ pnpm agent:visual -- --scene-id coastal-overlook
 
 ## 5. 运行时校验接口
 
-Playground 的 `window.__WHITEBOX_PLAYGROUND__` 目前为 automation API v2，新增：
+Playground 的 `window.__WHITEBOX_PLAYGROUND__` 目前为 automation API v3：
 
 ```ts
 getWorldSpec();
@@ -118,6 +119,8 @@ getPlanArtifacts();
 capturePlanningView("world-plan");
 capturePlanningView("height-slope-plan");
 capturePlanningView("opening-shot");
+captureCompositionMask();
+analyzeOpeningComposition();
 getVisualPrototypes();
 captureWhiteboxTriview("prototype-id");
 exportWhiteboxTriviews();
@@ -126,10 +129,11 @@ exportWhiteboxTriviews();
 - `world-plan` 是真实白膜的正交俯视截图。
 - `height-slope-plan` 是 SDK 根据真实高度场生成的确定性颜色图。
 - `opening-shot` 会复位到 WorldSpec 指定的进入镜头再截图。
+- `captureCompositionMask` 用无光照的稳定实例/语义色渲染首帧；`analyzeOpeningComposition` 计算规划区域 IoU、主体/标志物屏幕中心与尺寸误差，并给出可阻断的 pass/score。
 - `captureWhiteboxTriview` 会隐藏其他网格，以 Prototype 唯一实例色正交捕获 Front / Right / Back。
 - `exportWhiteboxTriviews` 只在本地 Vite 开发服务器中写入声明好的项目路径。
 
-第一版要求人或 Agent 对比生成参考图与真实截图。后续可增加语义分割、轮廓/区域 IoU、标志物屏幕位置误差和路线覆盖率等自动评分，但不能只用一个视觉相似度分数替代可玩性检查。
+区域 IoU 与锚点门禁负责防止“对象都有但构图完全不一样”；Height/Slope 与物理测试仍独立负责可玩性。总分不能掩盖任一必需区域或锚点失败。
 
 ## 6. 与世界模型、Runtime Director 的关系
 
@@ -142,4 +146,4 @@ exportWhiteboxTriviews();
 
 ## 7. 当前边界
 
-当前完整迁移样例是 `grassland`；其规划已冻结、白膜已验证，玩家和高塔两个 Prototype 的真实白膜三视图已导出。样式三视图与渲染首帧留给 Visual Bible 阶段。其他目录场景仍作为旧 DSL 与实验回归样例存在。当前协议面向室外高度场，不声称支持洞穴、倒悬几何或完整室内；视觉差异自动评分仍是后续工作。
+`grassland` 是基础 Plan-first 样例；`sunlit-flower-bay` 是参考图驱动的 Raster/Mask 与首帧构图门禁样例。当前协议面向室外高度场，不声称支持洞穴、倒悬几何或完整室内；像素风格与最终生成画面的相似度仍属于世界模型侧验收。
