@@ -1,0 +1,121 @@
+{
+  "score": 0.17219122351337768,
+  "minimumScore": 0.62,
+  "pass": false,
+  "regions": [
+    {
+      "id": "sky-region",
+      "iou": 0.7247311827956989,
+      "minimumIou": 0.48,
+      "pass": true
+    },
+    {
+      "id": "sea-horizon-region",
+      "iou": 0.017039298729439576,
+      "minimumIou": 0.32,
+      "pass": false
+    },
+    {
+      "id": "train-region",
+      "iou": 0.13619843142255947,
+      "minimumIou": 0.42,
+      "pass": false
+    },
+    {
+      "id": "ground-region",
+      "iou": 0,
+      "minimumIou": 0.55,
+      "pass": false
+    }
+  ],
+  "anchors": [
+    {
+      "id": "schoolgirl-screen-anchor",
+      "expectedCenter": [
+        0.51,
+        0.61
+      ],
+      "observedCenter": [
+        0.5,
+        0.5225657442688687
+      ],
+      "expectedSize": [
+        0.14,
+        0.61
+      ],
+      "observedSize": [
+        0.01757957804900659,
+        0.10168077327917624
+      ],
+      "error": 0.3494307255752426,
+      "tolerance": 0.12,
+      "pass": false
+    },
+    {
+      "id": "train-screen-anchor",
+      "expectedCenter": [
+        0.84,
+        0.42
+      ],
+      "observedCenter": [
+        1.2164563074107482,
+        0.4297746797641179
+      ],
+      "expectedSize": [
+        0.31,
+        0.79
+      ],
+      "observedSize": [
+        0.37461931943105586,
+        0.11962288824558293
+      ],
+      "error": 0.7133253453765847,
+      "tolerance": 0.14,
+      "pass": false
+    },
+    {
+      "id": "wagon-screen-anchor",
+      "expectedCenter": [
+        0.29,
+        0.57
+      ],
+      "observedCenter": [
+        0.1688052001074417,
+        0.4605360418447851
+      ],
+      "expectedSize": [
+        0.25,
+        0.25
+      ],
+      "observedSize": [
+        0.04148458193850485,
+        0.022330343527726094
+      ],
+      "error": 0.3176744993677416,
+      "tolerance": 0.14,
+      "pass": false
+    },
+    {
+      "id": "near-gate-screen-anchor",
+      "expectedCenter": [
+        0.49,
+        0.63
+      ],
+      "observedCenter": [
+        0.5001369330765154,
+        0.5143007273146184
+      ],
+      "expectedSize": [
+        0.96,
+        0.08
+      ],
+      "observedSize": [
+        0.2054003477096792,
+        0.05645773387595445
+      ],
+      "error": 0.49362589632573806,
+      "tolerance": 0.12,
+      "pass": false
+    }
+  ]
+}

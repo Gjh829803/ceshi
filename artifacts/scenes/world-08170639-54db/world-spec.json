@@ -1,0 +1,1167 @@
+{
+  "kind": "outdoor-world-spec",
+  "version": 1,
+  "id": "world-08170639-54db",
+  "title": "Seaside Railway Crossing Homage",
+  "source": {
+    "request": "灌篮高手的经典场景",
+    "referenceImages": [
+      "/scene-plans/world-08170639-54db/reference-0.jpg"
+    ]
+  },
+  "intent": "A playable outdoor seaside neighborhood centered on an iconic Japanese railway crossing: a schoolgirl waits with her back to the player while a teal local train crosses between her and the brilliant blue sea.",
+  "worldPrompt": {
+    "identity": "A sunlit Japanese seaside railway crossing inspired by a classic youth-basketball anime composition, with a sailor-uniform schoolgirl, teal local train, striped crossing gates, coastal road, parked cars, small station edge, and an uninterrupted blue sea horizon.",
+    "spatialComposition": "The player enters from the inland south pavement, looking north toward the crossing. The waiting schoolgirl is centered just before the near rail; the train runs east-west across the right half; striped gates cut horizontally across the frame; cars and two bystanders sit left of center beyond the gate; the sea and low horizon fill every gap behind them. Behind the entry, a compact station forecourt and residential slope extend the world; east and west pedestrian routes reconnect to the coastal road after safe grade-separated rail crossings.",
+    "environment": "Mostly flat constructed coastal ground with two parallel rails, asphalt streets, concrete pavements, a shallow inland rise, a narrow station platform, seawall, and broad ocean boundary. Collision geometry includes only terrain, route surfaces, rail bed, barriers, train and vehicle masses, people, station shelter, and seawall.",
+    "lighting": "Clear high summer noon with strong sunlight from upper left, crisp short shadows, saturated cyan sky, bright sea, and highly readable silhouettes.",
+    "visualStyle": "Polished cinematic anime-realism honoring a beloved 1990s seaside railway-crossing mood without logos or text. Paint, clothing details, reflections, rail shine, clouds, ocean texture, and foliage remain render-layer appearance rather than topology.",
+    "openingShot": "Third-person composition from directly behind a centered teenage schoolgirl in a white sailor blouse, navy pleated skirt and black knee socks, standing before the lowered gate. A teal-and-cream local train crosses right-to-left on the right, two parked cars and two waiting adults occupy the left, striped barriers form strong horizontal bands, and the brilliant sea horizon spans the background.",
+    "invariants": [
+      "Keep the opening viewpoint inland and south of both rails, facing north toward the sea.",
+      "Keep the schoolgirl centered from behind, fully on the safe pavement before the near rail.",
+      "Keep one teal-and-cream two-car local train as a static east-west landmark; do not imply supported vehicle behavior.",
+      "Keep lowered black-yellow crossing gates as horizontal composition lines without blocking the alternate playable pedestrian loop.",
+      "Keep the ocean horizon visible behind the crossing and avoid buildings or mountains that close it.",
+      "Keep all primary walking routes below 12 degrees and provide a continuous safe loop around the rail corridor.",
+      "Do not encode clouds, water ripples, reflections, clothing folds, painted stripes, or vegetation detail as collision geometry."
+    ],
+    "negativePrompt": [
+      "moving train simulation",
+      "interior train",
+      "dense city skyline",
+      "mountains blocking sea",
+      "fantasy railway",
+      "extra tracks",
+      "basketball court",
+      "logos",
+      "copyrighted title text",
+      "labels",
+      "UI",
+      "watermark"
+    ]
+  },
+  "entityCatalog": {
+    "prototypes": [
+      {
+        "id": "schoolgirl",
+        "role": "subject",
+        "semantic": "waiting_sailor_uniform_schoolgirl",
+        "description": "Teenage schoolgirl with long dark hair, sailor blouse, pleated skirt, and knee socks, read clearly from behind.",
+        "approximateSize": [
+          0.65,
+          1.62,
+          0.45
+        ],
+        "forwardAxis": "-Z",
+        "pivot": "ground-center",
+        "instanceColor": "#D63C50",
+        "appearancePrompt": "Japanese teenage schoolgirl, long black hair, white navy-trim sailor blouse, navy pleated skirt, black knee socks, modest clean silhouette, viewed primarily from behind",
+        "negativePrompt": "no weapon, no bag obscuring silhouette, no extra limbs, no sexualized styling",
+        "evidence": "reference-visible",
+        "views": {
+          "canonical": [
+            "front",
+            "right",
+            "back"
+          ],
+          "whiteboxUri": "/scene-plans/world-08170639-54db/prototypes/schoolgirl/whitebox-triview.png",
+          "styledUri": "/scene-plans/world-08170639-54db/prototypes/schoolgirl/styled-triview.png"
+        }
+      },
+      {
+        "id": "local-train-car",
+        "role": "landmark",
+        "semantic": "teal_cream_local_railcar",
+        "description": "Boxy coastal local railcar with cream upper body, deep teal lower body, large windows and end door.",
+        "approximateSize": [
+          3.1,
+          4.1,
+          20
+        ],
+        "forwardAxis": "-Z",
+        "pivot": "ground-center",
+        "instanceColor": "#168A9D",
+        "appearancePrompt": "Japanese coastal local railway car, cream upper body, deep teal lower body, squared end, large dark windows, restrained realistic proportions, no branding",
+        "negativePrompt": "no high-speed nose, no steam engine, no readable signage, no interior",
+        "evidence": "reference-visible",
+        "views": {
+          "canonical": [
+            "front",
+            "right",
+            "back"
+          ],
+          "whiteboxUri": "/scene-plans/world-08170639-54db/prototypes/local-train-car/whitebox-triview.png",
+          "styledUri": "/scene-plans/world-08170639-54db/prototypes/local-train-car/styled-triview.png"
+        }
+      },
+      {
+        "id": "crossing-gate",
+        "role": "object",
+        "semantic": "black_yellow_lowered_crossing_barrier",
+        "description": "Lowered striped railway barrier with compact yellow-black mechanism housing.",
+        "approximateSize": [
+          7.5,
+          1.15,
+          0.3
+        ],
+        "forwardAxis": "-Z",
+        "pivot": "ground-center",
+        "instanceColor": "#F2B632",
+        "appearancePrompt": "Japanese railway crossing gate, lowered slender black and yellow striped arm, compact warning mechanism, clean readable silhouette",
+        "negativePrompt": "no oversized wall, no text, no floating parts",
+        "evidence": "reference-visible",
+        "views": {
+          "canonical": [
+            "front",
+            "right",
+            "back"
+          ],
+          "whiteboxUri": "/scene-plans/world-08170639-54db/prototypes/crossing-gate/whitebox-triview.png",
+          "styledUri": "/scene-plans/world-08170639-54db/prototypes/crossing-gate/styled-triview.png"
+        }
+      },
+      {
+        "id": "compact-wagon",
+        "role": "object",
+        "semantic": "dark_compact_station_wagon",
+        "description": "Dark blue compact station wagon waiting beyond the crossing.",
+        "approximateSize": [
+          1.75,
+          1.55,
+          4.3
+        ],
+        "forwardAxis": "-Z",
+        "pivot": "ground-center",
+        "instanceColor": "#334E86",
+        "appearancePrompt": "late 1990s dark navy compact Japanese station wagon, simple realistic proportions, parked",
+        "negativePrompt": "no logo, no driver detail, no motion blur",
+        "evidence": "reference-visible",
+        "views": {
+          "canonical": [
+            "front",
+            "right",
+            "back"
+          ],
+          "whiteboxUri": "/scene-plans/world-08170639-54db/prototypes/compact-wagon/whitebox-triview.png",
+          "styledUri": "/scene-plans/world-08170639-54db/prototypes/compact-wagon/styled-triview.png"
+        }
+      },
+      {
+        "id": "silver-minivan",
+        "role": "object",
+        "semantic": "silver_family_minivan",
+        "description": "Silver family minivan queued behind the dark wagon.",
+        "approximateSize": [
+          1.85,
+          1.75,
+          4.65
+        ],
+        "forwardAxis": "-Z",
+        "pivot": "ground-center",
+        "instanceColor": "#A9B5C8",
+        "appearancePrompt": "silver Japanese family minivan, clean late 1990s form, parked side-on",
+        "negativePrompt": "no logo, no open doors, no motion blur",
+        "evidence": "reference-visible",
+        "views": {
+          "canonical": [
+            "front",
+            "right",
+            "back"
+          ],
+          "whiteboxUri": "/scene-plans/world-08170639-54db/prototypes/silver-minivan/whitebox-triview.png",
+          "styledUri": "/scene-plans/world-08170639-54db/prototypes/silver-minivan/styled-triview.png"
+        }
+      },
+      {
+        "id": "waiting-adult",
+        "role": "npc",
+        "semantic": "waiting_crossing_bystander",
+        "description": "Adult pedestrian waiting near the far-side curb and looking toward the crossing.",
+        "approximateSize": [
+          0.65,
+          1.68,
+          0.5
+        ],
+        "forwardAxis": "-Z",
+        "pivot": "ground-center",
+        "instanceColor": "#60A95B",
+        "appearancePrompt": "casual adult seaside pedestrian in pale summer clothing, relaxed waiting pose, simple readable silhouette",
+        "negativePrompt": "no crowd, no luggage, no extra limbs",
+        "evidence": "reference-visible",
+        "views": {
+          "canonical": [
+            "front",
+            "right",
+            "back"
+          ],
+          "whiteboxUri": "/scene-plans/world-08170639-54db/prototypes/waiting-adult/whitebox-triview.png",
+          "styledUri": "/scene-plans/world-08170639-54db/prototypes/waiting-adult/styled-triview.png"
+        }
+      },
+      {
+        "id": "station-shelter",
+        "role": "landmark",
+        "semantic": "small_coastal_station_shelter",
+        "description": "Minimal open-air platform shelter extending the visible railway into a coherent playable station edge.",
+        "approximateSize": [
+          5,
+          4.2,
+          12
+        ],
+        "forwardAxis": "-Z",
+        "pivot": "ground-center",
+        "instanceColor": "#8A5FB5",
+        "appearancePrompt": "small unbranded Japanese coastal station platform shelter, pale concrete columns, simple blue-green roof, open air",
+        "negativePrompt": "no interior rooms, no readable signs, no large terminal",
+        "evidence": "planner-inferred",
+        "views": {
+          "canonical": [
+            "front",
+            "right",
+            "back"
+          ],
+          "whiteboxUri": "/scene-plans/world-08170639-54db/prototypes/station-shelter/whitebox-triview.png",
+          "styledUri": "/scene-plans/world-08170639-54db/prototypes/station-shelter/styled-triview.png"
+        }
+      }
+    ],
+    "instances": [
+      {
+        "id": "player",
+        "prototypeId": "schoolgirl",
+        "binding": {
+          "kind": "runtime-entity",
+          "id": "player"
+        },
+        "evidence": "planner-inferred"
+      },
+      {
+        "id": "waiting-schoolgirl",
+        "prototypeId": "schoolgirl",
+        "binding": {
+          "kind": "feature",
+          "id": "waiting-schoolgirl"
+        },
+        "evidence": "reference-visible"
+      },
+      {
+        "id": "train-car-east",
+        "prototypeId": "local-train-car",
+        "binding": {
+          "kind": "feature",
+          "id": "train-car-east"
+        },
+        "evidence": "reference-visible"
+      },
+      {
+        "id": "train-car-west",
+        "prototypeId": "local-train-car",
+        "binding": {
+          "kind": "feature",
+          "id": "train-car-west"
+        },
+        "evidence": "planner-inferred"
+      },
+      {
+        "id": "near-gate",
+        "prototypeId": "crossing-gate",
+        "binding": {
+          "kind": "feature",
+          "id": "near-gate"
+        },
+        "evidence": "reference-visible"
+      },
+      {
+        "id": "far-gate",
+        "prototypeId": "crossing-gate",
+        "binding": {
+          "kind": "feature",
+          "id": "far-gate"
+        },
+        "evidence": "reference-visible"
+      },
+      {
+        "id": "dark-wagon",
+        "prototypeId": "compact-wagon",
+        "binding": {
+          "kind": "feature",
+          "id": "dark-wagon"
+        },
+        "evidence": "reference-visible"
+      },
+      {
+        "id": "silver-van",
+        "prototypeId": "silver-minivan",
+        "binding": {
+          "kind": "feature",
+          "id": "silver-van"
+        },
+        "evidence": "reference-visible"
+      },
+      {
+        "id": "bystander-west",
+        "prototypeId": "waiting-adult",
+        "binding": {
+          "kind": "feature",
+          "id": "bystander-west"
+        },
+        "evidence": "reference-visible"
+      },
+      {
+        "id": "bystander-center",
+        "prototypeId": "waiting-adult",
+        "binding": {
+          "kind": "feature",
+          "id": "bystander-center"
+        },
+        "evidence": "reference-visible"
+      },
+      {
+        "id": "coastal-station-shelter",
+        "prototypeId": "station-shelter",
+        "binding": {
+          "kind": "feature",
+          "id": "coastal-station-shelter"
+        },
+        "evidence": "planner-inferred"
+      }
+    ]
+  },
+  "bounds": {
+    "center": [
+      0,
+      0
+    ],
+    "size": [
+      360,
+      300
+    ],
+    "heightRange": [
+      -8,
+      26
+    ]
+  },
+  "terrain": {
+    "baseRelief": "flat",
+    "regions": [
+      {
+        "id": "coastal-town-ground",
+        "semantic": "flat_constructed_coastal_neighborhood",
+        "role": "ground",
+        "area": {
+          "kind": "polygon",
+          "points": [
+            [
+              -180,
+              -150
+            ],
+            [
+              180,
+              -150
+            ],
+            [
+              180,
+              150
+            ],
+            [
+              -180,
+              150
+            ]
+          ]
+        },
+        "elevationIntent": "mostly flat paved coastal ground at roughly 1.5 meters per heightfield cell",
+        "featureId": "coastal-town-terrain",
+        "evidence": "planner-inferred"
+      },
+      {
+        "id": "opening-crossing-apron",
+        "semantic": "flat_safe_waiting_pavement",
+        "role": "plateau",
+        "area": {
+          "kind": "polygon",
+          "points": [
+            [
+              -35,
+              26
+            ],
+            [
+              35,
+              26
+            ],
+            [
+              35,
+              76
+            ],
+            [
+              -35,
+              76
+            ]
+          ]
+        },
+        "elevationIntent": "level pavement at 4 meters, clear of rails and blockers",
+        "featureId": "crossing-apron",
+        "evidence": "reference-visible"
+      },
+      {
+        "id": "rail-corridor",
+        "semantic": "east_west_double_rail_embankment",
+        "role": "route",
+        "area": {
+          "kind": "polygon",
+          "points": [
+            [
+              -180,
+              -5
+            ],
+            [
+              180,
+              -5
+            ],
+            [
+              180,
+              25
+            ],
+            [
+              -180,
+              25
+            ]
+          ]
+        },
+        "elevationIntent": "level low rail bed at 4.3 meters, visually strong but crossed only by designated paths",
+        "featureId": "railway-corridor",
+        "evidence": "reference-visible"
+      },
+      {
+        "id": "inland-neighborhood-rise",
+        "semantic": "gentle_station_forecourt_and_residential_slope",
+        "role": "background",
+        "area": {
+          "kind": "polygon",
+          "points": [
+            [
+              -180,
+              70
+            ],
+            [
+              180,
+              70
+            ],
+            [
+              180,
+              150
+            ],
+            [
+              -180,
+              150
+            ]
+          ]
+        },
+        "elevationIntent": "gentle rise from 4 to 15 meters with broad sub-12-degree walkable streets",
+        "featureId": "inland-neighborhood",
+        "evidence": "planner-inferred"
+      },
+      {
+        "id": "coastal-road-strip",
+        "semantic": "flat_road_between_railway_and_seawall",
+        "role": "route",
+        "area": {
+          "kind": "polygon",
+          "points": [
+            [
+              -180,
+              -58
+            ],
+            [
+              180,
+              -58
+            ],
+            [
+              180,
+              -8
+            ],
+            [
+              -180,
+              -8
+            ]
+          ]
+        },
+        "elevationIntent": "flat asphalt road at 3.5 meters with pavements along both sides",
+        "featureId": "coastal-road",
+        "evidence": "reference-visible"
+      },
+      {
+        "id": "seawall-promenade",
+        "semantic": "walkable_coastal_promenade",
+        "role": "shore",
+        "area": {
+          "kind": "polygon",
+          "points": [
+            [
+              -180,
+              -82
+            ],
+            [
+              180,
+              -82
+            ],
+            [
+              180,
+              -58
+            ],
+            [
+              -180,
+              -58
+            ]
+          ]
+        },
+        "elevationIntent": "level promenade and seawall crest at 4 meters, safely above water",
+        "featureId": "seawall-promenade",
+        "evidence": "planner-inferred"
+      }
+    ]
+  },
+  "water": [
+    {
+      "id": "open-sea-region",
+      "semantic": "bright_open_blue_sea",
+      "area": {
+        "kind": "polygon",
+        "points": [
+          [
+            -180,
+            -150
+          ],
+          [
+            180,
+            -150
+          ],
+          [
+            180,
+            -82
+          ],
+          [
+            -180,
+            -82
+          ]
+        ]
+      },
+      "featureId": "open-sea",
+      "evidence": "reference-visible"
+    }
+  ],
+  "landmarks": [
+    {
+      "id": "waiting-schoolgirl-anchor",
+      "semantic": "centered_waiting_schoolgirl",
+      "position": [
+        0,
+        4,
+        32
+      ],
+      "approximateSize": [
+        0.65,
+        1.62,
+        0.45
+      ],
+      "importance": "primary",
+      "featureId": "waiting-schoolgirl",
+      "evidence": "reference-visible"
+    },
+    {
+      "id": "train-car-east-anchor",
+      "semantic": "visible_teal_train_car",
+      "position": [
+        45,
+        4.3,
+        10
+      ],
+      "approximateSize": [
+        3.1,
+        4.1,
+        20
+      ],
+      "importance": "primary",
+      "featureId": "train-car-east",
+      "evidence": "reference-visible"
+    },
+    {
+      "id": "train-car-west-anchor",
+      "semantic": "continuing_teal_train_car",
+      "position": [
+        22,
+        4.3,
+        10
+      ],
+      "approximateSize": [
+        3.1,
+        4.1,
+        20
+      ],
+      "importance": "secondary",
+      "featureId": "train-car-west",
+      "evidence": "planner-inferred"
+    },
+    {
+      "id": "near-gate-anchor",
+      "semantic": "lowered_near_crossing_gate",
+      "position": [
+        0,
+        4,
+        27
+      ],
+      "approximateSize": [
+        7.5,
+        1.15,
+        0.3
+      ],
+      "importance": "primary",
+      "featureId": "near-gate",
+      "evidence": "reference-visible"
+    },
+    {
+      "id": "far-gate-anchor",
+      "semantic": "lowered_far_crossing_gate",
+      "position": [
+        -35,
+        4,
+        -1
+      ],
+      "approximateSize": [
+        7.5,
+        1.15,
+        0.3
+      ],
+      "importance": "secondary",
+      "featureId": "far-gate",
+      "evidence": "reference-visible"
+    },
+    {
+      "id": "dark-wagon-anchor",
+      "semantic": "dark_wagon_left_of_center",
+      "position": [
+        -42,
+        3.5,
+        -30
+      ],
+      "approximateSize": [
+        1.75,
+        1.55,
+        4.3
+      ],
+      "importance": "secondary",
+      "featureId": "dark-wagon",
+      "evidence": "reference-visible"
+    },
+    {
+      "id": "silver-van-anchor",
+      "semantic": "silver_minivan_behind_wagon",
+      "position": [
+        -20,
+        3.5,
+        -34
+      ],
+      "approximateSize": [
+        1.85,
+        1.75,
+        4.65
+      ],
+      "importance": "secondary",
+      "featureId": "silver-van",
+      "evidence": "reference-visible"
+    },
+    {
+      "id": "bystander-west-anchor",
+      "semantic": "waiting_bystander_far_left",
+      "position": [
+        -72,
+        4,
+        -18
+      ],
+      "approximateSize": [
+        0.65,
+        1.68,
+        0.5
+      ],
+      "importance": "secondary",
+      "featureId": "bystander-west",
+      "evidence": "reference-visible"
+    },
+    {
+      "id": "bystander-center-anchor",
+      "semantic": "waiting_bystander_left_of_cars",
+      "position": [
+        -58,
+        4,
+        -21
+      ],
+      "approximateSize": [
+        0.65,
+        1.68,
+        0.5
+      ],
+      "importance": "secondary",
+      "featureId": "bystander-center",
+      "evidence": "reference-visible"
+    },
+    {
+      "id": "station-shelter-anchor",
+      "semantic": "small_station_shelter_east",
+      "position": [
+        105,
+        4.3,
+        18
+      ],
+      "approximateSize": [
+        5,
+        4.2,
+        12
+      ],
+      "importance": "background",
+      "featureId": "coastal-station-shelter",
+      "evidence": "planner-inferred"
+    }
+  ],
+  "routes": [
+    {
+      "id": "inland-to-opening-apron",
+      "points": [
+        [
+          0,
+          118
+        ],
+        [
+          0,
+          78
+        ],
+        [
+          0,
+          45
+        ]
+      ],
+      "width": 8,
+      "priority": "primary",
+      "maxSlopeDegrees": 8,
+      "evidence": "planner-inferred"
+    },
+    {
+      "id": "west-safe-crossing-loop",
+      "points": [
+        [
+          0,
+          45
+        ],
+        [
+          -55,
+          48
+        ],
+        [
+          -110,
+          42
+        ],
+        [
+          -135,
+          28
+        ],
+        [
+          -140,
+          5
+        ],
+        [
+          -140,
+          -40
+        ],
+        [
+          -110,
+          -68
+        ]
+      ],
+      "width": 7,
+      "priority": "primary",
+      "maxSlopeDegrees": 10,
+      "evidence": "planner-inferred"
+    },
+    {
+      "id": "east-station-loop",
+      "points": [
+        [
+          0,
+          45
+        ],
+        [
+          55,
+          52
+        ],
+        [
+          105,
+          45
+        ],
+        [
+          135,
+          25
+        ],
+        [
+          140,
+          -8
+        ],
+        [
+          140,
+          -52
+        ],
+        [
+          105,
+          -68
+        ]
+      ],
+      "width": 7,
+      "priority": "primary",
+      "maxSlopeDegrees": 10,
+      "evidence": "planner-inferred"
+    },
+    {
+      "id": "seawall-promenade-route",
+      "points": [
+        [
+          -110,
+          -68
+        ],
+        [
+          -55,
+          -70
+        ],
+        [
+          0,
+          -70
+        ],
+        [
+          55,
+          -70
+        ],
+        [
+          105,
+          -68
+        ]
+      ],
+      "width": 8,
+      "priority": "primary",
+      "maxSlopeDegrees": 4,
+      "evidence": "planner-inferred"
+    },
+    {
+      "id": "station-forecourt-connector",
+      "points": [
+        [
+          -110,
+          42
+        ],
+        [
+          -90,
+          95
+        ],
+        [
+          -35,
+          120
+        ],
+        [
+          35,
+          120
+        ],
+        [
+          95,
+          90
+        ],
+        [
+          105,
+          45
+        ]
+      ],
+      "width": 8,
+      "priority": "secondary",
+      "maxSlopeDegrees": 12,
+      "evidence": "planner-inferred"
+    }
+  ],
+  "entry": {
+    "spawn": [
+      0,
+      45
+    ],
+    "facingRadians": 0,
+    "camera": {
+      "pitchRadians": 0.06,
+      "distance": 5.2,
+      "fovDegrees": 48,
+      "targetHeight": 1.05
+    },
+    "composition": {
+      "foreground": [
+        "centered schoolgirl from behind on sunlit pavement",
+        "lowered near crossing gate spanning the frame",
+        "rail and yellow road markings"
+      ],
+      "middleground": [
+        "teal-and-cream local train occupying the right half",
+        "dark wagon and silver minivan left of center",
+        "two waiting adult bystanders on the far-left curb"
+      ],
+      "background": [
+        "bright blue sea visible through gaps",
+        "low uninterrupted horizon",
+        "large clear summer sky"
+      ],
+      "visibleLandmarkIds": [
+        "waiting-schoolgirl-anchor",
+        "train-car-east-anchor",
+        "near-gate-anchor",
+        "far-gate-anchor",
+        "dark-wagon-anchor",
+        "silver-van-anchor",
+        "bystander-west-anchor",
+        "bystander-center-anchor"
+      ],
+      "guide": {
+        "aspectRatio": 1.7777777777777777,
+        "resolution": [
+          320,
+          180
+        ],
+        "minimumScore": 0.62,
+        "regions": [
+          {
+            "id": "sky-region",
+            "semantic": "clear_blue_sky",
+            "color": "#76BCE8",
+            "polygon": [
+              [
+                0,
+                0
+              ],
+              [
+                0.73,
+                0
+              ],
+              [
+                0.73,
+                0.43
+              ],
+              [
+                0,
+                0.43
+              ]
+            ],
+            "minimumIou": 0.48
+          },
+          {
+            "id": "sea-horizon-region",
+            "semantic": "blue_sea_background",
+            "color": "#168FC1",
+            "polygon": [
+              [
+                0,
+                0.43
+              ],
+              [
+                0.73,
+                0.43
+              ],
+              [
+                0.73,
+                0.62
+              ],
+              [
+                0,
+                0.62
+              ]
+            ],
+            "minimumIou": 0.32
+          },
+          {
+            "id": "train-region",
+            "semantic": "teal_train_right_half",
+            "color": "#207C83",
+            "polygon": [
+              [
+                0.72,
+                0
+              ],
+              [
+                1,
+                0
+              ],
+              [
+                1,
+                0.84
+              ],
+              [
+                0.66,
+                0.84
+              ],
+              [
+                0.66,
+                0.44
+              ]
+            ],
+            "minimumIou": 0.42
+          },
+          {
+            "id": "ground-region",
+            "semantic": "crossing_and_road_foreground",
+            "color": "#555965",
+            "polygon": [
+              [
+                0,
+                0.62
+              ],
+              [
+                1,
+                0.62
+              ],
+              [
+                1,
+                1
+              ],
+              [
+                0,
+                1
+              ]
+            ],
+            "minimumIou": 0.55
+          }
+        ],
+        "anchors": [
+          {
+            "id": "schoolgirl-screen-anchor",
+            "binding": {
+              "kind": "feature",
+              "id": "waiting-schoolgirl"
+            },
+            "center": [
+              0.51,
+              0.61
+            ],
+            "size": [
+              0.14,
+              0.61
+            ],
+            "tolerance": 0.12
+          },
+          {
+            "id": "train-screen-anchor",
+            "binding": {
+              "kind": "feature",
+              "id": "train-car-east"
+            },
+            "center": [
+              0.84,
+              0.42
+            ],
+            "size": [
+              0.31,
+              0.79
+            ],
+            "tolerance": 0.14
+          },
+          {
+            "id": "wagon-screen-anchor",
+            "binding": {
+              "kind": "feature",
+              "id": "dark-wagon"
+            },
+            "center": [
+              0.29,
+              0.57
+            ],
+            "size": [
+              0.25,
+              0.25
+            ],
+            "tolerance": 0.14
+          },
+          {
+            "id": "near-gate-screen-anchor",
+            "binding": {
+              "kind": "feature",
+              "id": "near-gate"
+            },
+            "center": [
+              0.49,
+              0.63
+            ],
+            "size": [
+              0.96,
+              0.08
+            ],
+            "tolerance": 0.12
+          }
+        ]
+      }
+    }
+  },
+  "claims": [
+    {
+      "id": "claim-classic-crossing",
+      "evidence": "user-explicit",
+      "statement": "The world is an homage to the classic Slam Dunk seaside railway-crossing scene."
+    },
+    {
+      "id": "claim-visible-composition",
+      "evidence": "reference-visible",
+      "statement": "A schoolgirl waits before striped gates while a teal train crosses, with cars, bystanders, sea and sky behind."
+    },
+    {
+      "id": "claim-complete-neighborhood",
+      "evidence": "planner-inferred",
+      "statement": "The unseen sides continue into a small station forecourt, inland neighborhood and connected coastal promenade."
+    },
+    {
+      "id": "claim-static-train",
+      "evidence": "planner-inferred",
+      "statement": "The train is planned as static landmark geometry because vehicle behavior is outside the current outdoor whitebox capability."
+    },
+    {
+      "id": "claim-render-details",
+      "evidence": "planner-optional",
+      "statement": "Anime-realistic color, clothing folds, clouds, reflections, rail shine and ocean sparkle belong to the render layer."
+    }
+  ],
+  "artifacts": [
+    {
+      "kind": "world-plan",
+      "generator": "codex-imagegen",
+      "uri": "/scene-plans/world-08170639-54db/world-plan.png",
+      "prompt": "Use case: infographic-diagram\nStrict orthographic top-down topology plan for a playable 360m x 300m Japanese seaside railway-crossing neighborhood, north at top and no perspective.\nShow large clean color masses only: open sea along north edge, seawall promenade, east-west coastal road, two parallel east-west rails, centered inland crossing apron, small station shelter east, inland neighborhood rise south, west and east safe pedestrian loops reconnecting to promenade.\nMark topology through shapes and color without any text, labels, legend, arrows, UI, watermark, decorative aerial perspective, tiny props, clouds, or painterly clutter.\nPreserve exact spatial ordering and leave sea open across the entire north horizon."
+    },
+    {
+      "kind": "opening-shot",
+      "generator": "codex-imagegen",
+      "uri": "/scene-plans/world-08170639-54db/opening-shot.png",
+      "prompt": "Use case: stylized-concept\nCinematic 16:9 opening composition for a playable Japanese seaside railway crossing, honoring the mood of a classic 1990s basketball anime without logos or text.\nCamera directly behind a centered teenage schoolgirl with long black hair, white navy-trim sailor blouse, navy pleated skirt and black knee socks. She stands safely before a lowered black-yellow striped barrier. A cream-and-deep-teal boxy local train crosses right-to-left and fills the right third. A dark compact wagon, silver minivan and two waiting adults sit left of center. Two rails and yellow road markings fill the foreground. Brilliant blue sea horizon and vast cyan summer sky fill all gaps behind.\nStrong noon sun from upper left, crisp shadows, realistic anime concept-art finish, exact readable silhouettes.\nNo title text, logos, watermark, basketball court, city skyline, mountains, fantasy train, extra tracks, moving blur, train interior, or crowd."
+    },
+    {
+      "kind": "height-slope-plan",
+      "generator": "sdk-derived",
+      "uri": "runtime://planning/height-slope"
+    }
+  ],
+  "traceability": {
+    "requiredFeatureIds": [
+      "coastal-town-terrain",
+      "crossing-apron",
+      "railway-corridor",
+      "inland-neighborhood",
+      "coastal-road",
+      "seawall-promenade",
+      "open-sea",
+      "waiting-schoolgirl",
+      "train-car-east",
+      "train-car-west",
+      "near-gate",
+      "far-gate",
+      "dark-wagon",
+      "silver-van",
+      "bystander-west",
+      "bystander-center",
+      "coastal-station-shelter"
+    ]
+  }
+}

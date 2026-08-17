@@ -47,6 +47,7 @@
 - [世界模型团队接入说明](docs/11-world-model-team-handoff.md)
 - [Plan-first 世界创作协议](docs/12-plan-first-world-authoring.md)
 - [多 Agent 世界创作流水线](docs/13-multi-agent-world-authoring.md)
+- [Creator Studio：上传、生成与历史世界](docs/15-creator-studio.md)
 - [架构决策：向 Agent 暴露主体套餐](decisions/0001-subject-kits.md)
 - [架构决策：第一、二期范围](decisions/0002-phased-scope.md)
 - [架构决策：Agent、Director 与 World Model 边界](decisions/0003-agent-director-world-model-boundaries.md)
@@ -72,7 +73,8 @@
 - SDK 真实正交白膜三视图导出，以及 Visual Bible 输入/最终包校验
 - `WASD / Shift / Space / ↑ / ↓`、相机相对移动、符合视线语义的上下视角、固定步长插值与防颠簸跟随
 - 统一人形通行契约：42° 最大爬坡角、48° 自动滑落角、局部坡度查询和出生点坡度检查
-- 可玩的 Vite Playground、世界检查器、截图、固定输入 Smoke，以及语义构图 Mask / 区域 IoU / 实体屏幕锚点门禁
+- 可玩的 Vite Playground、世界检查器、截图、无 UI 的纯 WebGL 游玩录屏、固定输入 Smoke，以及语义构图 Mask / 区域 IoU / 实体屏幕锚点门禁
+- 本地 Creator Studio：Prompt / 参考图上传、Codex 串行生成队列、持久化历史、日志、失败重试和白膜体验入口
 
 ```bash
 pnpm install
@@ -80,6 +82,14 @@ pnpm dev
 ```
 
 浏览器打开 `http://127.0.0.1:5173/`。仓库不分发来源尚未确认的 Xbot；本地开发可按[运行指南](docs/07-alpha-implementation.md)链接自己的 Mixamo 兼容 GLB。没有本地资产时会明确显示无骨骼占位体，不会伪装成已绑定角色。
+
+如需使用图形化创作入口，运行：
+
+```bash
+pnpm studio
+```
+
+然后打开 `http://127.0.0.1:4174/`。Studio 会同时保证 Playground 在 `http://127.0.0.1:5173/` 可用；现有已验证世界会自动进入历史列表，新任务的输入、状态与日志保存在 `apps/studio/data/worlds/`。
 
 让 Agent 创作新场景时，优先分阶段执行并在 Planner 后人工评审：
 

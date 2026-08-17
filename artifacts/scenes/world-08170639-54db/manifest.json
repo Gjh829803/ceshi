@@ -1,0 +1,29 @@
+{
+  "artifactVersion": 1,
+  "workflowStage": "verified",
+  "sceneId": "world-08170639-54db",
+  "specHash": "968b356e",
+  "frozenPlanSpecSha256": "380a59629d8fbf1a2a488c4f897ac97455d3fdec74ef15d943792429364dd0d8",
+  "planLockSha256": "66b2c51d279648078f1d51b7c29e58acd1a69a89cc4647df5d9907ee9575a225",
+  "compiler": "whitebox-world-planning-v1",
+  "files": [
+    "world-spec.json",
+    "world-prompt.json",
+    "entity-catalog.json",
+    "top-down-plan.json",
+    "height-slope-plan.json",
+    "opening-shot-plan.json"
+  ],
+  "imageAssets": [
+    {
+      "kind": "world-plan",
+      "uri": "/scene-plans/world-08170639-54db/world-plan.png",
+      "sha256": "06dd4905f458bc0ce82692db240916de67b353cde837237a5fab86539afa91a5"
+    },
+    {
+      "kind": "opening-shot",
+      "uri": "/scene-plans/world-08170639-54db/opening-shot.png",
+      "sha256": "99fb6fc0976e374d6486902434857872446398df36a97c54b76868c2bbd8749c"
+    }
+  ]
+}

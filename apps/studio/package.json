@@ -1,0 +1,11 @@
+{
+  "name": "@whitebox-world/studio",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "node server.mjs",
+    "start": "node server.mjs",
+    "test": "node --test server.test.mjs"
+  }
+}

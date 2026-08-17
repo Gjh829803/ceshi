@@ -1,0 +1,31 @@
+{
+  "identity": "A sunlit Japanese seaside railway crossing inspired by a classic youth-basketball anime composition, with a sailor-uniform schoolgirl, teal local train, striped crossing gates, coastal road, parked cars, small station edge, and an uninterrupted blue sea horizon.",
+  "spatialComposition": "The player enters from the inland south pavement, looking north toward the crossing. The waiting schoolgirl is centered just before the near rail; the train runs east-west across the right half; striped gates cut horizontally across the frame; cars and two bystanders sit left of center beyond the gate; the sea and low horizon fill every gap behind them. Behind the entry, a compact station forecourt and residential slope extend the world; east and west pedestrian routes reconnect to the coastal road after safe grade-separated rail crossings.",
+  "environment": "Mostly flat constructed coastal ground with two parallel rails, asphalt streets, concrete pavements, a shallow inland rise, a narrow station platform, seawall, and broad ocean boundary. Collision geometry includes only terrain, route surfaces, rail bed, barriers, train and vehicle masses, people, station shelter, and seawall.",
+  "lighting": "Clear high summer noon with strong sunlight from upper left, crisp short shadows, saturated cyan sky, bright sea, and highly readable silhouettes.",
+  "visualStyle": "Polished cinematic anime-realism honoring a beloved 1990s seaside railway-crossing mood without logos or text. Paint, clothing details, reflections, rail shine, clouds, ocean texture, and foliage remain render-layer appearance rather than topology.",
+  "openingShot": "Third-person composition from directly behind a centered teenage schoolgirl in a white sailor blouse, navy pleated skirt and black knee socks, standing before the lowered gate. A teal-and-cream local train crosses right-to-left on the right, two parked cars and two waiting adults occupy the left, striped barriers form strong horizontal bands, and the brilliant sea horizon spans the background.",
+  "invariants": [
+    "Keep the opening viewpoint inland and south of both rails, facing north toward the sea.",
+    "Keep the schoolgirl centered from behind, fully on the safe pavement before the near rail.",
+    "Keep one teal-and-cream two-car local train as a static east-west landmark; do not imply supported vehicle behavior.",
+    "Keep lowered black-yellow crossing gates as horizontal composition lines without blocking the alternate playable pedestrian loop.",
+    "Keep the ocean horizon visible behind the crossing and avoid buildings or mountains that close it.",
+    "Keep all primary walking routes below 12 degrees and provide a continuous safe loop around the rail corridor.",
+    "Do not encode clouds, water ripples, reflections, clothing folds, painted stripes, or vegetation detail as collision geometry."
+  ],
+  "negativePrompt": [
+    "moving train simulation",
+    "interior train",
+    "dense city skyline",
+    "mountains blocking sea",
+    "fantasy railway",
+    "extra tracks",
+    "basketball court",
+    "logos",
+    "copyrighted title text",
+    "labels",
+    "UI",
+    "watermark"
+  ]
+}

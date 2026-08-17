@@ -153,6 +153,34 @@ h1 span {
 .button-subtle { background: #171c1a; }
 .button-primary { color: #0c1811; border-color: #83eab0; background: #83eab0; font-weight: 700; }
 
+.button-record {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  background: #171c1a;
+}
+
+.record-dot,
+.recording-indicator i {
+  display: block;
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: #e16c64;
+}
+
+.button-record.is-recording {
+  border-color: rgba(225, 108, 100, 0.72);
+  color: #ffd6d2;
+  background: rgba(110, 32, 28, 0.36);
+}
+
+.button-record.is-recording .record-dot,
+.recording-indicator i {
+  animation: record-pulse 1.2s ease-in-out infinite;
+  box-shadow: 0 0 10px rgba(225, 108, 100, 0.72);
+}
+
 .workspace {
   display: grid;
   grid-template-columns: minmax(0, 1fr) 330px;
@@ -318,6 +346,67 @@ kbd,
   border-radius: 8px;
   background: rgba(18, 23, 21, 0.78);
   cursor: pointer;
+}
+
+.recording-indicator {
+  position: absolute;
+  z-index: 3;
+  right: 60px;
+  bottom: 14px;
+  display: flex;
+  align-items: center;
+  height: 34px;
+  gap: 7px;
+  padding: 0 11px;
+  border: 1px solid rgba(225, 108, 100, 0.42);
+  border-radius: 8px;
+  color: #ffd6d2;
+  background: rgba(50, 17, 15, 0.82);
+  backdrop-filter: blur(9px);
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  pointer-events: none;
+}
+
+.recording-indicator[hidden] {
+  display: none;
+}
+
+.recording-indicator time {
+  min-width: 32px;
+  color: #f4b2ac;
+  font-variant-numeric: tabular-nums;
+}
+
+.recording-toast {
+  position: absolute;
+  z-index: 4;
+  left: 50%;
+  bottom: 18px;
+  max-width: min(560px, calc(100% - 410px));
+  overflow: hidden;
+  padding: 9px 13px;
+  border: 1px solid rgba(131, 234, 176, 0.4);
+  border-radius: 8px;
+  color: #d9f9e6;
+  background: rgba(15, 43, 27, 0.88);
+  backdrop-filter: blur(9px);
+  box-shadow: 0 10px 36px rgba(0, 0, 0, 0.24);
+  transform: translateX(-50%);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 9px;
+  pointer-events: none;
+}
+
+.recording-toast[hidden] {
+  display: none;
+}
+
+@keyframes record-pulse {
+  50% { opacity: 0.38; transform: scale(0.8); }
 }
 
 .viewport-footer {
@@ -579,6 +668,8 @@ kbd,
   .inspector { border-top: 1px solid #252b28; border-left: 0; }
   .status { display: none; }
   .button-subtle { display: none; }
+  .button-record { padding: 0 10px; }
+  .recording-toast { max-width: calc(100% - 210px); }
   .topbar { padding: 0 12px; }
   .hud-card:nth-child(2) { display: none; }
 }

@@ -42,6 +42,8 @@ pnpm build
 
 默认 `grassland` 场景为 640m × 640m 的 `plain` 分块地形和大型湖泊；`?scene=canyon` 是一个只使用公开 BuildContext 编写的自定义峡谷/Polygon 河流场景；`?scene=azure-bay` 和 `?scene=mistbound-rider` 用于更复杂的图片构图/语义组合实验。地形基础预设为 `flat / plain / hills / mountains`，人形最大爬坡角为 42°，48°以上自动滑落。`↑ / ↓` 按玩家视线方向控制上下观察；角色显示使用固定物理步长插值和接地高度平滑，固定输入 Smoke 同时验证移动、Transform 有限性和两个方向的镜头输入。
 
+顶部“录制画面”直接采集 Three.js WebGL canvas，默认以 60 FPS、12 Mbps 编码。录制中仍可正常使用键鼠；停止后浏览器自动下载 WebM 或 MP4。HUD、操作提示、检查器、录制状态和其他 DOM UI 都不在视频流中。
+
 Playground 左上角的 `WHITEBOX / LOCAL PREVIEW` 明确表示当前只运行 Three.js 本地白膜预览；没有实时世界模型或多 pass Render Bridge。
 
 Playground 暴露只用于测试和集成的浏览器 API：

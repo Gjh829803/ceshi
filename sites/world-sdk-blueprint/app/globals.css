@@ -1,0 +1,15 @@
+@import "tailwindcss";
+
+:root { --background: #030812; --foreground: #eef8fc; }
+
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --font-sans: var(--font-geist-sans);
+  --font-mono: var(--font-geist-mono);
+}
+
+html, body { width: 100%; height: 100%; margin: 0; overflow: hidden; }
+body { background: var(--background); color: var(--foreground); font-family: Arial, Helvetica, sans-serif; }
+.site-frame-shell { width: 100%; height: 100dvh; }
+.site-frame { display: block; width: 100%; height: 100%; border: 0; background: #030812; }

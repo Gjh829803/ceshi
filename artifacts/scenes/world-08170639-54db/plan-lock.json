@@ -1,0 +1,28 @@
+{
+  "workflowVersion": 1,
+  "sceneId": "world-08170639-54db",
+  "stage": "frozen",
+  "specSha256": "380a59629d8fbf1a2a488c4f897ac97455d3fdec74ef15d943792429364dd0d8",
+  "files": [
+    {
+      "kind": "opening-shot",
+      "path": "apps/playground/public/scene-plans/world-08170639-54db/opening-shot.png",
+      "sha256": "99fb6fc0976e374d6486902434857872446398df36a97c54b76868c2bbd8749c"
+    },
+    {
+      "kind": "reference-image",
+      "path": "apps/playground/public/scene-plans/world-08170639-54db/reference-0.jpg",
+      "sha256": "3029f14530a02152be9e9edd3a41bac63ce8acee2435b996bbd0effc71302c2f"
+    },
+    {
+      "kind": "world-plan",
+      "path": "apps/playground/public/scene-plans/world-08170639-54db/world-plan.png",
+      "sha256": "06dd4905f458bc0ce82692db240916de67b353cde837237a5fab86539afa91a5"
+    },
+    {
+      "kind": "world-spec-source",
+      "path": "apps/playground/src/scenes/plans/world-08170639-54db.ts",
+      "sha256": "af5a7607282a9e99b252a0639bd9d501290f22cab2203d6cd864196ad07c4a93"
+    }
+  ]
+}

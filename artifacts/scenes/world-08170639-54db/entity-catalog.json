@@ -1,0 +1,287 @@
+{
+  "prototypes": [
+    {
+      "id": "schoolgirl",
+      "role": "subject",
+      "semantic": "waiting_sailor_uniform_schoolgirl",
+      "description": "Teenage schoolgirl with long dark hair, sailor blouse, pleated skirt, and knee socks, read clearly from behind.",
+      "approximateSize": [
+        0.65,
+        1.62,
+        0.45
+      ],
+      "forwardAxis": "-Z",
+      "pivot": "ground-center",
+      "instanceColor": "#D63C50",
+      "appearancePrompt": "Japanese teenage schoolgirl, long black hair, white navy-trim sailor blouse, navy pleated skirt, black knee socks, modest clean silhouette, viewed primarily from behind",
+      "negativePrompt": "no weapon, no bag obscuring silhouette, no extra limbs, no sexualized styling",
+      "evidence": "reference-visible",
+      "views": {
+        "canonical": [
+          "front",
+          "right",
+          "back"
+        ],
+        "whiteboxUri": "/scene-plans/world-08170639-54db/prototypes/schoolgirl/whitebox-triview.png",
+        "styledUri": "/scene-plans/world-08170639-54db/prototypes/schoolgirl/styled-triview.png"
+      }
+    },
+    {
+      "id": "local-train-car",
+      "role": "landmark",
+      "semantic": "teal_cream_local_railcar",
+      "description": "Boxy coastal local railcar with cream upper body, deep teal lower body, large windows and end door.",
+      "approximateSize": [
+        3.1,
+        4.1,
+        20
+      ],
+      "forwardAxis": "-Z",
+      "pivot": "ground-center",
+      "instanceColor": "#168A9D",
+      "appearancePrompt": "Japanese coastal local railway car, cream upper body, deep teal lower body, squared end, large dark windows, restrained realistic proportions, no branding",
+      "negativePrompt": "no high-speed nose, no steam engine, no readable signage, no interior",
+      "evidence": "reference-visible",
+      "views": {
+        "canonical": [
+          "front",
+          "right",
+          "back"
+        ],
+        "whiteboxUri": "/scene-plans/world-08170639-54db/prototypes/local-train-car/whitebox-triview.png",
+        "styledUri": "/scene-plans/world-08170639-54db/prototypes/local-train-car/styled-triview.png"
+      }
+    },
+    {
+      "id": "crossing-gate",
+      "role": "object",
+      "semantic": "black_yellow_lowered_crossing_barrier",
+      "description": "Lowered striped railway barrier with compact yellow-black mechanism housing.",
+      "approximateSize": [
+        7.5,
+        1.15,
+        0.3
+      ],
+      "forwardAxis": "-Z",
+      "pivot": "ground-center",
+      "instanceColor": "#F2B632",
+      "appearancePrompt": "Japanese railway crossing gate, lowered slender black and yellow striped arm, compact warning mechanism, clean readable silhouette",
+      "negativePrompt": "no oversized wall, no text, no floating parts",
+      "evidence": "reference-visible",
+      "views": {
+        "canonical": [
+          "front",
+          "right",
+          "back"
+        ],
+        "whiteboxUri": "/scene-plans/world-08170639-54db/prototypes/crossing-gate/whitebox-triview.png",
+        "styledUri": "/scene-plans/world-08170639-54db/prototypes/crossing-gate/styled-triview.png"
+      }
+    },
+    {
+      "id": "compact-wagon",
+      "role": "object",
+      "semantic": "dark_compact_station_wagon",
+      "description": "Dark blue compact station wagon waiting beyond the crossing.",
+      "approximateSize": [
+        1.75,
+        1.55,
+        4.3
+      ],
+      "forwardAxis": "-Z",
+      "pivot": "ground-center",
+      "instanceColor": "#334E86",
+      "appearancePrompt": "late 1990s dark navy compact Japanese station wagon, simple realistic proportions, parked",
+      "negativePrompt": "no logo, no driver detail, no motion blur",
+      "evidence": "reference-visible",
+      "views": {
+        "canonical": [
+          "front",
+          "right",
+          "back"
+        ],
+        "whiteboxUri": "/scene-plans/world-08170639-54db/prototypes/compact-wagon/whitebox-triview.png",
+        "styledUri": "/scene-plans/world-08170639-54db/prototypes/compact-wagon/styled-triview.png"
+      }
+    },
+    {
+      "id": "silver-minivan",
+      "role": "object",
+      "semantic": "silver_family_minivan",
+      "description": "Silver family minivan queued behind the dark wagon.",
+      "approximateSize": [
+        1.85,
+        1.75,
+        4.65
+      ],
+      "forwardAxis": "-Z",
+      "pivot": "ground-center",
+      "instanceColor": "#A9B5C8",
+      "appearancePrompt": "silver Japanese family minivan, clean late 1990s form, parked side-on",
+      "negativePrompt": "no logo, no open doors, no motion blur",
+      "evidence": "reference-visible",
+      "views": {
+        "canonical": [
+          "front",
+          "right",
+          "back"
+        ],
+        "whiteboxUri": "/scene-plans/world-08170639-54db/prototypes/silver-minivan/whitebox-triview.png",
+        "styledUri": "/scene-plans/world-08170639-54db/prototypes/silver-minivan/styled-triview.png"
+      }
+    },
+    {
+      "id": "waiting-adult",
+      "role": "npc",
+      "semantic": "waiting_crossing_bystander",
+      "description": "Adult pedestrian waiting near the far-side curb and looking toward the crossing.",
+      "approximateSize": [
+        0.65,
+        1.68,
+        0.5
+      ],
+      "forwardAxis": "-Z",
+      "pivot": "ground-center",
+      "instanceColor": "#60A95B",
+      "appearancePrompt": "casual adult seaside pedestrian in pale summer clothing, relaxed waiting pose, simple readable silhouette",
+      "negativePrompt": "no crowd, no luggage, no extra limbs",
+      "evidence": "reference-visible",
+      "views": {
+        "canonical": [
+          "front",
+          "right",
+          "back"
+        ],
+        "whiteboxUri": "/scene-plans/world-08170639-54db/prototypes/waiting-adult/whitebox-triview.png",
+        "styledUri": "/scene-plans/world-08170639-54db/prototypes/waiting-adult/styled-triview.png"
+      }
+    },
+    {
+      "id": "station-shelter",
+      "role": "landmark",
+      "semantic": "small_coastal_station_shelter",
+      "description": "Minimal open-air platform shelter extending the visible railway into a coherent playable station edge.",
+      "approximateSize": [
+        5,
+        4.2,
+        12
+      ],
+      "forwardAxis": "-Z",
+      "pivot": "ground-center",
+      "instanceColor": "#8A5FB5",
+      "appearancePrompt": "small unbranded Japanese coastal station platform shelter, pale concrete columns, simple blue-green roof, open air",
+      "negativePrompt": "no interior rooms, no readable signs, no large terminal",
+      "evidence": "planner-inferred",
+      "views": {
+        "canonical": [
+          "front",
+          "right",
+          "back"
+        ],
+        "whiteboxUri": "/scene-plans/world-08170639-54db/prototypes/station-shelter/whitebox-triview.png",
+        "styledUri": "/scene-plans/world-08170639-54db/prototypes/station-shelter/styled-triview.png"
+      }
+    }
+  ],
+  "instances": [
+    {
+      "id": "player",
+      "prototypeId": "schoolgirl",
+      "binding": {
+        "kind": "runtime-entity",
+        "id": "player"
+      },
+      "evidence": "planner-inferred"
+    },
+    {
+      "id": "waiting-schoolgirl",
+      "prototypeId": "schoolgirl",
+      "binding": {
+        "kind": "feature",
+        "id": "waiting-schoolgirl"
+      },
+      "evidence": "reference-visible"
+    },
+    {
+      "id": "train-car-east",
+      "prototypeId": "local-train-car",
+      "binding": {
+        "kind": "feature",
+        "id": "train-car-east"
+      },
+      "evidence": "reference-visible"
+    },
+    {
+      "id": "train-car-west",
+      "prototypeId": "local-train-car",
+      "binding": {
+        "kind": "feature",
+        "id": "train-car-west"
+      },
+      "evidence": "planner-inferred"
+    },
+    {
+      "id": "near-gate",
+      "prototypeId": "crossing-gate",
+      "binding": {
+        "kind": "feature",
+        "id": "near-gate"
+      },
+      "evidence": "reference-visible"
+    },
+    {
+      "id": "far-gate",
+      "prototypeId": "crossing-gate",
+      "binding": {
+        "kind": "feature",
+        "id": "far-gate"
+      },
+      "evidence": "reference-visible"
+    },
+    {
+      "id": "dark-wagon",
+      "prototypeId": "compact-wagon",
+      "binding": {
+        "kind": "feature",
+        "id": "dark-wagon"
+      },
+      "evidence": "reference-visible"
+    },
+    {
+      "id": "silver-van",
+      "prototypeId": "silver-minivan",
+      "binding": {
+        "kind": "feature",
+        "id": "silver-van"
+      },
+      "evidence": "reference-visible"
+    },
+    {
+      "id": "bystander-west",
+      "prototypeId": "waiting-adult",
+      "binding": {
+        "kind": "feature",
+        "id": "bystander-west"
+      },
+      "evidence": "reference-visible"
+    },
+    {
+      "id": "bystander-center",
+      "prototypeId": "waiting-adult",
+      "binding": {
+        "kind": "feature",
+        "id": "bystander-center"
+      },
+      "evidence": "reference-visible"
+    },
+    {
+      "id": "coastal-station-shelter",
+      "prototypeId": "station-shelter",
+      "binding": {
+        "kind": "feature",
+        "id": "coastal-station-shelter"
+      },
+      "evidence": "planner-inferred"
+    }
+  ]
+}

@@ -7,7 +7,12 @@
   "packageManager": "pnpm@10.14.0",
   "scripts": {
     "dev": "pnpm --filter @whitebox-world/playground dev",
+    "studio": "pnpm --filter @whitebox-world/studio dev",
+    "studio:public": "WORLDKIT_PUBLIC_MODE=1 WORLDKIT_STUDIO_PORT=4175 WORLDKIT_PLAYGROUND_ORIGIN=/play WORLDKIT_PLAYGROUND_INTERNAL_ORIGIN=http://127.0.0.1:5173 WORLDKIT_DISABLE_PLAYGROUND_SPAWN=1 pnpm --filter @whitebox-world/studio dev",
+    "test:studio": "pnpm --filter @whitebox-world/studio test",
+    "dev:architecture": "pnpm --filter @whitebox-world/architecture dev",
     "build": "pnpm --filter @whitebox-world/playground build",
+    "build:architecture": "pnpm --filter @whitebox-world/architecture build",
     "agent:scene": "LC_ALL=C LANG=C bash scripts/run-scene-agent.sh",
     "agent:plan": "LC_ALL=C LANG=C bash scripts/run-scene-agent.sh --plan-only",
     "agent:build": "LC_ALL=C LANG=C bash scripts/run-scene-agent.sh --build-only",

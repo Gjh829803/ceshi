@@ -1,0 +1,222 @@
+{
+  "artifactVersion": 1,
+  "sceneId": "world-08170639-54db",
+  "specHash": "968b356e",
+  "entry": {
+    "spawn": [
+      0,
+      45
+    ],
+    "facingRadians": 0,
+    "camera": {
+      "pitchRadians": 0.06,
+      "distance": 5.2,
+      "fovDegrees": 48,
+      "targetHeight": 1.05
+    },
+    "composition": {
+      "foreground": [
+        "centered schoolgirl from behind on sunlit pavement",
+        "lowered near crossing gate spanning the frame",
+        "rail and yellow road markings"
+      ],
+      "middleground": [
+        "teal-and-cream local train occupying the right half",
+        "dark wagon and silver minivan left of center",
+        "two waiting adult bystanders on the far-left curb"
+      ],
+      "background": [
+        "bright blue sea visible through gaps",
+        "low uninterrupted horizon",
+        "large clear summer sky"
+      ],
+      "visibleLandmarkIds": [
+        "waiting-schoolgirl-anchor",
+        "train-car-east-anchor",
+        "near-gate-anchor",
+        "far-gate-anchor",
+        "dark-wagon-anchor",
+        "silver-van-anchor",
+        "bystander-west-anchor",
+        "bystander-center-anchor"
+      ],
+      "guide": {
+        "aspectRatio": 1.7777777777777777,
+        "resolution": [
+          320,
+          180
+        ],
+        "minimumScore": 0.62,
+        "regions": [
+          {
+            "id": "sky-region",
+            "semantic": "clear_blue_sky",
+            "color": "#76BCE8",
+            "polygon": [
+              [
+                0,
+                0
+              ],
+              [
+                0.73,
+                0
+              ],
+              [
+                0.73,
+                0.43
+              ],
+              [
+                0,
+                0.43
+              ]
+            ],
+            "minimumIou": 0.48
+          },
+          {
+            "id": "sea-horizon-region",
+            "semantic": "blue_sea_background",
+            "color": "#168FC1",
+            "polygon": [
+              [
+                0,
+                0.43
+              ],
+              [
+                0.73,
+                0.43
+              ],
+              [
+                0.73,
+                0.62
+              ],
+              [
+                0,
+                0.62
+              ]
+            ],
+            "minimumIou": 0.32
+          },
+          {
+            "id": "train-region",
+            "semantic": "teal_train_right_half",
+            "color": "#207C83",
+            "polygon": [
+              [
+                0.72,
+                0
+              ],
+              [
+                1,
+                0
+              ],
+              [
+                1,
+                0.84
+              ],
+              [
+                0.66,
+                0.84
+              ],
+              [
+                0.66,
+                0.44
+              ]
+            ],
+            "minimumIou": 0.42
+          },
+          {
+            "id": "ground-region",
+            "semantic": "crossing_and_road_foreground",
+            "color": "#555965",
+            "polygon": [
+              [
+                0,
+                0.62
+              ],
+              [
+                1,
+                0.62
+              ],
+              [
+                1,
+                1
+              ],
+              [
+                0,
+                1
+              ]
+            ],
+            "minimumIou": 0.55
+          }
+        ],
+        "anchors": [
+          {
+            "id": "schoolgirl-screen-anchor",
+            "binding": {
+              "kind": "feature",
+              "id": "waiting-schoolgirl"
+            },
+            "center": [
+              0.51,
+              0.61
+            ],
+            "size": [
+              0.14,
+              0.61
+            ],
+            "tolerance": 0.12
+          },
+          {
+            "id": "train-screen-anchor",
+            "binding": {
+              "kind": "feature",
+              "id": "train-car-east"
+            },
+            "center": [
+              0.84,
+              0.42
+            ],
+            "size": [
+              0.31,
+              0.79
+            ],
+            "tolerance": 0.14
+          },
+          {
+            "id": "wagon-screen-anchor",
+            "binding": {
+              "kind": "feature",
+              "id": "dark-wagon"
+            },
+            "center": [
+              0.29,
+              0.57
+            ],
+            "size": [
+              0.25,
+              0.25
+            ],
+            "tolerance": 0.14
+          },
+          {
+            "id": "near-gate-screen-anchor",
+            "binding": {
+              "kind": "feature",
+              "id": "near-gate"
+            },
+            "center": [
+              0.49,
+              0.63
+            ],
+            "size": [
+              0.96,
+              0.08
+            ],
+            "tolerance": 0.12
+          }
+        ]
+      }
+    }
+  },
+  "reference": "/scene-plans/world-08170639-54db/opening-shot.png"
+}

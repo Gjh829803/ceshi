@@ -1,4 +1,5 @@
 import "./style.css";
+import { CanvasRecorder } from "./canvas-recorder.js";
 import { SdkWorldAdapter } from "./sdk-world-adapter.js";
 import type {
   FeatureInspection,
@@ -23,6 +24,9 @@ app.innerHTML = `
       <div class="topbar-actions">
         <span class="status"><i></i><span id="adapter-name">adapter</span></span>
         <button class="button button-subtle" id="reset-button" type="button">重置世界</button>
+        <button class="button button-record" id="record-button" type="button" aria-pressed="false" title="仅录制 3D 渲染画面，不包含界面">
+          <i class="record-dot" aria-hidden="true"></i><span id="record-label">录制画面</span>
+        </button>
         <button class="button button-primary" id="capture-button" type="button">保存截图</button>
       </div>
     </header>
@@ -47,6 +51,10 @@ app.innerHTML = `
             <div><span class="wheel-icon">↕</span><span>滚轮缩放</span></div>
           </div>
           <button class="pause-button" id="pause-button" type="button" aria-label="暂停模拟">Ⅱ</button>
+          <div class="recording-indicator" id="recording-indicator" aria-live="polite" hidden>
+            <i aria-hidden="true"></i><span>REC</span><time id="recording-time">00:00</time>
+          </div>
+          <div class="recording-toast" id="recording-toast" role="status" hidden></div>
         </div>
         <footer class="viewport-footer">
           <span><i class="dot terrain"></i> Terrain mesh</span>
@@ -90,6 +98,8 @@ const inspection = requiredElement<HTMLDivElement>("#inspection");
 const adapter = await SdkWorldAdapter.create(resolveScene(window.location.search));
 adapter.mount(viewport);
 requiredElement("#adapter-name").textContent = adapter.name;
+const canvasRecorder = new CanvasRecorder(adapter.canvas);
+let recordingTimer: number | null = null;
 
 let selectedFeatureId: string | null = null;
 
@@ -225,6 +235,82 @@ requiredElement<HTMLButtonElement>("#capture-button").addEventListener("click", 
   link.click();
 });
 
+function formatRecordingTime(durationMs: number): string {
+  const totalSeconds = Math.floor(durationMs / 1_000);
+  const minutes = Math.floor(totalSeconds / 60).toString().padStart(2, "0");
+  const seconds = (totalSeconds % 60).toString().padStart(2, "0");
+  return `${minutes}:${seconds}`;
+}
+
+function updateRecordingUi(recording: boolean): void {
+  const button = requiredElement<HTMLButtonElement>("#record-button");
+  const indicator = requiredElement<HTMLDivElement>("#recording-indicator");
+  button.classList.toggle("is-recording", recording);
+  button.setAttribute("aria-pressed", String(recording));
+  requiredElement("#record-label").textContent = recording ? "停止录制" : "录制画面";
+  indicator.hidden = !recording;
+  if (!recording) requiredElement("#recording-time").textContent = "00:00";
+}
+
+function downloadRecording(blob: Blob, extension: "mp4" | "webm"): string {
+  const link = document.createElement("a");
+  const url = URL.createObjectURL(blob);
+  const sceneId = adapter.getWorldSpec()?.id ?? "whitebox-world";
+  const filename = `${sceneId}-gameplay-${new Date().toISOString().replaceAll(":", "-")}.${extension}`;
+  link.download = filename;
+  link.href = url;
+  link.hidden = true;
+  document.body.append(link);
+  link.click();
+  link.remove();
+  window.setTimeout(() => URL.revokeObjectURL(url), 10_000);
+  return filename;
+}
+
+function showRecordingSaved(filename: string, blob: Blob, durationMs: number): void {
+  const toast = requiredElement<HTMLDivElement>("#recording-toast");
+  const megabytes = blob.size / 1_000_000;
+  toast.textContent = `已保存 ${formatRecordingTime(durationMs)} · ${megabytes.toFixed(1)} MB · ${filename}`;
+  toast.hidden = false;
+  window.setTimeout(() => {
+    toast.hidden = true;
+  }, 5_000);
+}
+
+requiredElement<HTMLButtonElement>("#record-button").addEventListener("click", async () => {
+  const button = requiredElement<HTMLButtonElement>("#record-button");
+  if (canvasRecorder.state === "idle") {
+    try {
+      canvasRecorder.start();
+      updateRecordingUi(true);
+      recordingTimer = window.setInterval(() => {
+        requiredElement("#recording-time").textContent = formatRecordingTime(canvasRecorder.elapsedMs);
+      }, 250);
+      adapter.canvas.focus();
+    } catch (error) {
+      window.alert(error instanceof Error ? error.message : String(error));
+    }
+    return;
+  }
+
+  if (canvasRecorder.state !== "recording") return;
+  button.disabled = true;
+  requiredElement("#record-label").textContent = "正在保存…";
+  try {
+    const result = await canvasRecorder.stop();
+    const filename = downloadRecording(result.blob, result.extension);
+    showRecordingSaved(filename, result.blob, result.durationMs);
+  } catch (error) {
+    window.alert(error instanceof Error ? error.message : String(error));
+  } finally {
+    if (recordingTimer !== null) window.clearInterval(recordingTimer);
+    recordingTimer = null;
+    button.disabled = false;
+    updateRecordingUi(false);
+    adapter.canvas.focus();
+  }
+});
+
 requiredElement<HTMLButtonElement>("#triview-button").addEventListener("click", async () => {
   const output = requiredElement<HTMLPreElement>("#smoke-output");
   output.textContent = "exporting whitebox tri-views…";
@@ -293,4 +379,41 @@ requiredElement<HTMLButtonElement>("#composition-button").addEventListener("clic
   }
 });
 
-window.addEventListener("beforeunload", () => adapter.dispose());
+async function captureRequestedArtifacts(): Promise<void> {
+  const params = new URLSearchParams(window.location.search);
+  if (params.get("captureArtifacts") !== "1") return;
+  const sceneId = adapter.getWorldSpec()?.id ?? params.get("scene") ?? "unknown-scene";
+  try {
+    await new Promise<void>((resolve) => window.setTimeout(resolve, 900));
+    const triViewPaths = await adapter.exportWhiteboxTriviews();
+    adapter.reset();
+    const report = adapter.analyzeOpeningComposition();
+    const openingFramePath = report === null ? null : await adapter.exportOpeningFrame(report);
+    document.documentElement.dataset.artifactCapture = "complete";
+    window.parent.postMessage({
+      type: "whitebox-artifact-capture",
+      sceneId,
+      status: "complete",
+      triViewCount: triViewPaths.length,
+      openingFramePath,
+      compositionPass: report?.pass ?? null,
+      compositionScore: report?.score ?? null,
+    }, "*");
+  } catch (error) {
+    document.documentElement.dataset.artifactCapture = "failed";
+    window.parent.postMessage({
+      type: "whitebox-artifact-capture",
+      sceneId,
+      status: "failed",
+      error: error instanceof Error ? error.message : String(error),
+    }, "*");
+  }
+}
+
+void captureRequestedArtifacts();
+
+window.addEventListener("beforeunload", () => {
+  if (recordingTimer !== null) window.clearInterval(recordingTimer);
+  canvasRecorder.dispose();
+  adapter.dispose();
+});

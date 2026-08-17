@@ -1,0 +1,120 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="description" content="使用本地 Codex 与 WorldKit SDK 创建可游玩的白膜世界。" />
+    <title>WorldKit Creator Studio</title>
+    <link rel="stylesheet" href="/styles.css" />
+  </head>
+  <body>
+    <header class="topbar">
+      <a class="brand" href="/" aria-label="WorldKit Creator Studio 首页">
+        <span class="brand-mark">W</span>
+        <span><b>WORLDKIT</b><small>CREATOR STUDIO</small></span>
+      </a>
+      <div class="runtime-state" id="runtime-state">
+        <i></i><span>正在连接本地运行时</span>
+      </div>
+    </header>
+
+    <main>
+      <section class="hero">
+        <div>
+          <p class="kicker">PROMPT + IMAGE → PLAYABLE WHITEBOX</p>
+          <h1>描述一个世界，<br />让本地 Codex<br />把它建出来。</h1>
+        </div>
+        <p class="hero-copy">Creator Studio 会先规划完整世界，再冻结空间定义并搭建可游玩的白膜。每次创建都会留下输入、进度、工件、日志和体验入口。</p>
+      </section>
+
+      <section class="workspace">
+        <aside class="composer-panel">
+          <div class="panel-heading">
+            <span>CREATE / 01</span>
+            <b>新建世界</b>
+          </div>
+          <form id="create-form">
+            <label class="field-label" for="world-title">世界名称 <span>可选</span></label>
+            <input id="world-title" name="title" maxlength="80" placeholder="例如：雾中群岛" />
+
+            <label class="field-label" for="world-prompt">世界描述</label>
+            <textarea id="world-prompt" name="prompt" required minlength="4" maxlength="8000" placeholder="一片山峦起伏的草地，中央有一座巨大的蓝色湖泊。玩家从南侧高坡进入，远方能看见北岸灯塔……"></textarea>
+
+            <label class="field-label">参考图片 <span>可选 · PNG / JPEG / WebP</span></label>
+            <button class="dropzone" id="dropzone" type="button">
+              <input id="world-image" type="file" accept="image/png,image/jpeg,image/webp" hidden />
+              <span class="drop-icon">＋</span>
+              <span class="drop-copy"><b>上传一张参考图</b><small>拖放到这里，或点击选择</small></span>
+              <img id="image-preview" alt="参考图预览" hidden />
+              <span class="replace-image" id="replace-image" hidden>更换图片</span>
+            </button>
+
+            <div class="generation-contract">
+              <div><span>01</span><p><b>World Planner</b>扩展完整世界与进入视角</p></div>
+              <div><span>02</span><p><b>Plan Lock</b>冻结地形、路径和实体身份</p></div>
+              <div><span>03</span><p><b>World Builder</b>生成可碰撞、可游玩的白膜</p></div>
+            </div>
+
+            <button class="submit-button" id="submit-button" type="submit">
+              <span><small>RUN LOCAL CODEX</small>生成白膜世界</span>
+              <b>→</b>
+            </button>
+            <p class="form-message" id="form-message" role="status"></p>
+          </form>
+        </aside>
+
+        <section class="history-panel">
+          <div class="history-heading">
+            <div>
+              <p class="kicker">WORLD HISTORY / LOCAL</p>
+              <h2>历史创建</h2>
+            </div>
+            <div class="history-stats" id="history-stats"></div>
+          </div>
+
+          <div class="filters" role="tablist" aria-label="筛选历史世界">
+            <button class="active" data-filter="all" type="button">全部</button>
+            <button data-filter="running" type="button">生成中</button>
+            <button data-filter="ready" type="button">可游玩</button>
+            <button data-filter="failed" type="button">需处理</button>
+          </div>
+
+          <div class="empty-state" id="empty-state" hidden>
+            <span>W–00</span>
+            <h3>还没有创建过世界</h3>
+            <p>在左侧输入一句话或上传参考图，第一条创建记录会出现在这里。</p>
+          </div>
+          <div class="world-grid" id="world-grid" aria-live="polite"></div>
+        </section>
+      </section>
+    </main>
+
+    <dialog id="world-dialog">
+      <button class="dialog-close" id="dialog-close" aria-label="关闭详情">×</button>
+      <div id="dialog-content"></div>
+    </dialog>
+
+    <template id="world-card-template">
+      <article class="world-card">
+        <button class="card-cover" type="button">
+          <img alt="" />
+          <span class="cover-fallback">W</span>
+          <span class="status-pill"></span>
+        </button>
+        <div class="card-body">
+          <div class="card-meta"><span class="scene-id"></span><time></time></div>
+          <h3></h3>
+          <p class="prompt-excerpt"></p>
+          <div class="progress-track"><i></i></div>
+          <p class="stage-copy"></p>
+          <div class="card-actions">
+            <button class="details-button" type="button">查看详情</button>
+            <a class="play-button" target="_blank" rel="noreferrer">进入世界 ↗</a>
+          </div>
+        </div>
+      </article>
+    </template>
+
+    <script type="module" src="/app.js"></script>
+  </body>
+</html>
