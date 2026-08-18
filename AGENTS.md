@@ -1,16 +1,23 @@
 # Agent Whitebox World authoring rules
 
-## Security boundary
-
-- Work only inside this repository. Do not read, list, search, or write any parent, sibling, home, or other external directory.
-- Do not request sandbox escalation, add writable directories, or bypass the configured `whitebox_workspace_only` permission profile.
-- Do not use Browser, Computer Use, connectors, MCP file resources, or other side channels to inspect local files outside this workspace.
-- Reference images must be passed to Planner through `pnpm agent:plan -- --scene-id <catalog-id> --image /absolute/reference.png "<prompt>"` (or the compatible `agent:scene` entry). The trusted launcher copies only that explicitly named file into its disposable sandbox; never inspect the original external path from inside the scene task.
-- Run `pnpm test:isolation` if the local Codex installation or project permission configuration changes.
-
 ## Goal
 
 Create playable outdoor whitebox scenes through a gated multi-agent workflow. Planning, whitebox implementation, and visual styling are separate responsibilities; never collapse their authority by improvising geometry or editing SDK internals.
+
+## Schema naming and AI friendliness
+
+Apply these rules whenever adding or changing public Authoring Schema, Registry manifests, Commands, Events, Snapshots, CLI/Browser protocols, examples, or generated types. The authoritative detailed rules live in `docs/superpowers/specs/2026-08-17-ai-first-lego-game-sdk-design.md`.
+
+- Use one canonical term for each concept. Do not keep synonymous public fields or ask adapters to translate between competing dialects.
+- Use `id` for the current object. Use role-qualified local references such as `...EntityId`, `...ControllerId`, `...SessionId`, `...SlotId`, and `...SocketId`.
+- Use `...Ref` for Registry, WorldPackage, or content-addressed resources, and `...Uri` only for raw locations. A resource-valued field must not use a bare name such as `rig`, `prototype`, `asset`, or `profile`.
+- Use `schemaVersion` for serialized protocol structure, `version` for Registry resource versions, and `resolvedVersion` only for locked implementations.
+- Use `kind` as the discriminator for persistent definitions and nodes, `type` for Commands, Events, Relationships, and Change Operations, and `mode` for mutually exclusive runtime state.
+- Use role-specific Relationship endpoints such as `riderEntityId`, `mountEntityId`, `itemEntityId`, and `wearerEntityId`. Do not expose generic `subject/target/params` triples in AI-facing Schema; generic graph endpoints are internal to Normalized IR.
+- Put units and coordinate domains in numeric field names, including `Meters`, `Seconds`, `Radians`, `Degrees`, `Ticks`, `Ratio`, `Bytes`, `XYZ`, `XZ`, and `Uv`. Do not rely on surrounding prose to disambiguate units.
+- Prefer required discriminators, closed enums, and discriminated unions over combinations of overlapping optional flags. Collections use plural names, ID-indexed maps use `...ById`, and booleans use `is...`, `has...`, `allow...`, or an explicit `...Enabled` suffix.
+- Canonical Schema, AI Schema Profile, CLI, Browser Protocol, examples, and generated types use the same public field names. Babylon, Havok, renderer handles, and provider-specific terminology stay behind adapters.
+- A public rename must update the authoritative Schema, examples, validation, migration, and conformance coverage together. Preserve compatibility through explicit version migration, not permanent alias fields.
 
 ## Agent roles and frozen boundary
 
