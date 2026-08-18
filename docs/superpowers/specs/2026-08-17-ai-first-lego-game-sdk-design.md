@@ -4,6 +4,7 @@
 - 日期：2026-08-17
 - 目标仓库：`agent-whitebox-world-sdk`
 - 目标读者：SDK 团队、上游 Agent 团队、运行时与测试工具维护者
+- 评审支撑材料：[业界对照与可落地性核查报告](./2026-08-18-industry-alignment-and-feasibility-review.md)
 
 ## 1. 结论
 
@@ -29,12 +30,12 @@ Babylon Web Runtime + Physics Backend
 
 核心设计原则：
 
-1. AI 默认使用“大积木”：Node、Kit、Capability、Relationship 和 Semantic Action。
+1. AI 默认使用“大积木”：WorldNodeSpec、Kit、Capability、Relationship 和 Semantic Action。
 2. SDK 内部使用“小积木”：Component、System、Port、Adapter 和确定性执行阶段。
-3. AI 永远不直接生成 Babylon Node、物理句柄、动画 Mixer 或底层 TypeScript 场景代码。
+3. AI 永远不直接生成 Babylon RenderNode、物理句柄、动画 Mixer 或底层 TypeScript 场景代码。
 4. 配置负责组合已有能力；第一次增加新的能力类别时，由 SDK 插件实现。
 5. 逻辑图、渲染/Transform 图和物理图分离，各自拥有明确真相和同步规则。
-6. 同一份 Spec、同一组插件版本和同一个 Seed 必须产生相同的规范化结果与可复现模拟结果。
+6. 同一份 Spec、同一份 Registry Lock 和同一个 Seed 必须产生 bit-for-bit 相同的规范化结果；模拟与视觉结果按照本文定义的 Determinism Profile 验收。
 7. SDK 正式交付物是库 API、无状态 CLI、浏览器控制协议和可持久化 WorldPackage。
 8. Babylon.js 是默认 Web Runtime，但对外 Schema 与引擎无关。
 9. 当前仓库继续作为 SDK 仓库；生产 Agent 编排由另一个团队在独立仓库实现。
@@ -99,7 +100,9 @@ SDK 应保证结构与模拟正确；上游 Agent 对图片理解和隐藏区域
 |---|---|
 | Resource | 可复用但不直接存在于世界中的模型、Rig、动画集、Kit 或配置。 |
 | Prototype | 一类实体的视觉与语义原型，可被多个实例引用。 |
-| Entity / Node | 世界中具有稳定 ID、生命周期和组件集合的实例。 |
+| WorldNodeSpec | AuthoringSpec 中由 AI 声明的世界实例描述；可以使用受控嵌套简写。 |
+| RuntimeEntity | 规范化后具有稳定 ID、生命周期、组件和关系的逻辑实例。 |
+| RenderNode | Babylon Runtime 内部的视觉或 Transform 节点，不进入公共 Schema。 |
 | Component | 实体上的纯数据；不持有底层引擎对象。 |
 | Capability | 可组合、可验证、可版本化的行为模块。 |
 | System | 在确定性阶段处理 Component、Intent 和 Event 的运行逻辑。 |
@@ -113,6 +116,8 @@ SDK 应保证结构与模拟正确；上游 Agent 对图片理解和隐藏区域
 | Runtime Adapter | Babylon、物理、音频等底层实现与引擎无关 Port 的适配层。 |
 
 `Capability` 和 `Kit` 的命名并非所有引擎统一，但分别对应 Trait/Behavior/Module 与 Prefab/Archetype，符合通用工程概念。
+
+本文后续单独出现 `Node` 时默认指 AI-facing 的 `WorldNodeSpec`；运行时逻辑对象统一称为 `RuntimeEntity`，Babylon 节点统一称为 `RenderNode`。三者不能作为同一个公共类型复用。
 
 ## 5. 总体架构
 
@@ -128,7 +133,7 @@ SDK 应保证结构与模拟正确；上游 Agent 对图片理解和隐藏区域
 @worldkit/world-ir
   ├── AuthoringSpec AST
   ├── NormalizedWorldIR
-  ├── Resource / Node / Relationship / Rule
+  ├── Resource / WorldNodeSpec / RuntimeEntity / Relationship / Rule
   └── 规范化与稳定序列化
   ↓
 @worldkit/capability
@@ -303,7 +308,28 @@ Kit 内部展开为碰撞体、输入映射、运动控制、镜头、动作状�
 
 所有 Runtime Adapter 必须遵守这些公共约定，在边界内部进行引擎坐标转换。
 
-### 7.3 NormalizedWorldIR
+### 7.3 ID、命名空间与资源引用
+
+世界内实例 ID、包内资源和宿主注册表资源必须明确区分：
+
+```text
+player                                  # WorldPackage 内 RuntimeEntity ID
+package://prototype/player              # 当前 WorldPackage 内资源
+worldkit://kit/humanoid.third-person@1  # 宿主注册表中的 Kit Major Version
+worldkit://capability/locomotion.ground@1
+asset://sha256/<content-hash>            # 内容寻址资产
+```
+
+规则：
+
+- WorldNodeSpec 的 `id` 在整个世界内唯一，不依赖数组位置或父节点路径。
+- WorldNodeSpec 只引用宿主允许的 Kit、Capability 和资源，不能声明任意插件包。
+- AuthoringSpec 可以接受由 Schema 声明的简短引用；Normalizer 必须将其改写为上述规范 URI 后再进入 NormalizedWorldIR。
+- `normalize` 将 Major Version 解析成确定的实现版本与内容哈希，并写入 `registry-lock.json`。
+- 多个注册表项匹配同一引用时返回歧义错误，禁止按注册顺序或“最新版本”静默选择。
+- 外部 Asset URI 必须经过 AssetResolver；可持久化产物优先改写为内容寻址引用。
+
+### 7.4 NormalizedWorldIR
 
 NormalizedWorldIR 必须：
 
@@ -315,6 +341,78 @@ NormalizedWorldIR 必须：
 - 输出稳定排序和稳定 JSON 序列化结果。
 - 不包含 Babylon、Havok、DOM 或进程内对象。
 - 能独立用于 Diff、缓存、重放、迁移和审计。
+
+### 7.5 Canonical Schema、AI Schema Profile 与 Provider Adapter
+
+“面向 AI”不能只依赖字段命名和 Prompt 约定，必须成为可导出、可验证、可版本化的协议。SDK 维护三层边界：
+
+| 层 | 责任 | 是否属于公共协议 |
+|---|---|---|
+| Canonical Schema | 完整表达 AuthoringSpec 语义，作为校验、文档和迁移的唯一真相 | 是 |
+| AI Schema Profile | 从 Canonical Schema 投影出的受限、提供方无关子集 | 是 |
+| Provider Adapter | 将 AI Schema Profile 转成某个模型 API 当时支持的结构化输出格式 | 否，属于接入层 |
+
+Canonical Schema 使用 [JSON Schema Draft 2020-12](https://json-schema.org/draft/2020-12)，并遵守以下约束：
+
+- 根 Schema 具有绝对 `$id`、明确 `$schema` 和稳定 `$defs` 名称；稳定 ID 不能由构建目录或包版本临时生成。
+- Union 必须有 `kind`、`type` 或 `op` 等显式判别字段，禁止依赖模糊的字段组合猜测分支。
+- 面向 AI 的对象默认关闭未知字段；需要扩展的位置使用注册过的 Extension Point，不能放任无约束 `Record<string, unknown>`。
+- 数值字段在名称或描述中明确米、秒、弧度、Tick、归一化屏幕坐标等单位，并同时声明边界。
+- 默认值由 Normalizer 应用并写入 IR；不能依赖模型记住或补齐隐式默认值。
+- ID、Capability、Relationship、Action、Tag 和 Resource Ref 优先使用注册表枚举或带格式约束的引用，不接受任意自然语言字符串代替协议值。
+- 示例和解释元数据可以进入独立 `schema-catalog.json`，但不能改变校验语义。
+
+第一版定义提供方无关的 `constrained-json@1` Profile：只允许对象、数组、枚举、常量、有限 Union 和有界基础类型，不使用动态引用、递归 Authoring 结构或依赖复杂 Schema 求值顺序的表达。受控嵌套简写按 Profile 声明的深度预算投影，默认只展开一层。Provider Adapter 可以继续缩窄或展开 Schema，但必须保留字段语义，且必须将模型输出重新交给 Canonical Schema 和语义验证器；结构化输出只约束 JSON 形状，不证明坐标、关系或 Gameplay 语义正确。
+
+Canonical Schema 中的 optional 表示字段可以缺失；它与显式 `null` 是两个不同状态。若某个 Provider Profile 要求全部字段存在，Adapter 可以把 optional 投影为 required + nullable，但必须同时记录 Projection Map：模型返回 `null` 时，只在该字段的 Canonical Schema 允许缺失且不允许 `null` 的情况下还原为“缺失”。如果 Canonical Schema 同时允许缺失和显式 `null`，required + nullable 无法无损表达两种状态，Projector 必须改用带 `present` 判别字段的包装对象，或以 `AI_SCHEMA_PROFILE_UNREPRESENTABLE` 拒绝该投影；Adapter 不得猜测或折叠二者。该往返规则必须进入 Adapter Conformance Fixture，避免不同 Provider 生成不同 AuthoringSpec 语义。
+
+Schema Projector 的输入是 Canonical Schema、Registry Lock、已允许的 Kit/Capability 集合和资源预算，输出必须包含：
+
+- `schemaProfile`、`schemaHash`、`registryLockHash` 和 Capability Set Hash。
+- 当前任务真正允许的节点种类、关系、动作和配置分支；未安装能力不应继续出现在模型可选项里。
+- 被裁剪分支及原因，供 Agent 在 Discovery 后重新规划。
+- 与 Canonical Schema 的可追踪映射，保证 Diagnostic 仍能指向原 AuthoringSpec JSON Pointer。
+
+Schema Projector 必须把提供方结构化输出的规模上限当作显式预算处理：属性总数、嵌套层数、枚举值总量和 Schema 总字符数都可能存在硬上限。注册表枚举超出预算时，按 Profile 声明的降级策略投影为带 `pattern`/`format` 约束的引用类型，由 Canonical Schema 与语义验证器兜底校验；降级不得改变字段语义，降级发生的位置与原因必须写入投影输出。
+
+公共 Schema 中不得出现 OpenAI、Anthropic、Gemini 等提供方名称或私有关键字。Provider 兼容性由适配器 Conformance Fixture 验证；参考实现可借鉴 [OpenAI Structured Outputs](https://openai.com/index/introducing-structured-outputs-in-the-api/) 等结构化输出能力，但不能把任一提供方当作协议真相。
+
+### 7.6 Prototype、Instance、Variant 与 Composition Layer
+
+为了让“成人/儿童、空手/持剑、步行/骑龙”可以像 Lego 一样组合，公共模型显式区分：
+
+- `PrototypeSpec`：可复用的语义、视觉和能力基线，不直接存在于世界中。
+- `InstanceSpec`：具有稳定 ID 和 Transform 的世界实例，通过 `prototype` 引用原型。
+- `VariantSetSpec`：在一个封闭选择维度中声明候选，例如 `body=adult|child`、`loadout=unarmed|sword`。
+- `CompositionLayer`：有来源、优先级和基线哈希的一组显式覆盖操作，用于模板、用户输入或 Agent 修订。
+
+```ts
+interface PrototypeSpec {
+  id: ResourceId;
+  base?: ResourceRef;
+  components?: Readonly<Record<ComponentId, JsonValue>>;
+  capabilities?: readonly CapabilityInstance[];
+  variantSets?: readonly VariantSetSpec[];
+}
+
+interface InstanceSpec {
+  id: EntityId;
+  prototype: ResourceRef;
+  variants?: Readonly<Record<VariantSetId, VariantId>>;
+  overrides?: readonly CompositionOperation[];
+}
+```
+
+组合规则是协议的一部分：
+
+- 标量使用显式 `set` 替换；对象只有 Schema 声明后才能 `merge`。
+- 数组默认整体替换；需要组合的集合必须按稳定 ID 使用 `upsert/remove/reorder`，禁止按数组下标深合并。
+- Relationship 使用 `relationship-add`、`relationship-remove` 和显式稳定边 ID；不能通过改父节点隐式覆盖。
+- 删除使用带目标 ID 的 Tombstone，保证高层 Layer 不会因低层重新出现而“复活”对象。
+- 冲突按照显式 Layer 优先级和稳定 Layer ID 处理；同优先级、同目标的非交换写入直接失败，不能 last-write-wins。
+- NormalizedWorldIR 记录每个最终值的来源 Layer、Operation ID 和输入 JSON Pointer，支持解释、Diff 与回滚。
+
+本 SDK 只采用 [OpenUSD Glossary](https://openusd.org/release/glossary.html) 等成熟 DCC/场景描述体系中的 Prototype、Instance、Variant、Layer 和 Relationship 思想，不实现完整 OpenUSD。Composition 的目标是给 AI 一个有限、可验证的游戏世界组合协议，而不是暴露任意场景图编辑能力。
 
 ## 8. 通用节点分类
 
@@ -328,14 +426,61 @@ AI-facing 节点种类保持有限，后续主要通过 Component、Capability �
 | `object` | 通用可见物件 | 塔、墙、门、箱子、桥、船 |
 | `volume` | 不一定可见的空间区域 | Trigger、伤害区、水下区、检查点 |
 | `path` | 路线、巡逻线、导航或构图引导 | 道路、飞行航线、NPC 巡逻线 |
-| `anchor` | 空间锚点与 Socket | 出生点、座位、手持点、交互点 |
+| `anchor` | 世界空间中的稳定锚点 | 出生点、构图点、交互位置、导航目标 |
 | `camera` | 相机实体或相机 Rig 配置 | 第三人称、骑乘、飞行、开场镜头 |
 | `spawner` | 运行时创建实体 | NPC、敌人、道具刷新点 |
 | `environment` | 世界级环境条件 | 天空、雾、光照、重力、音频环境 |
 
 `rule`、`objective`、`timer` 和 `state` 属于 Gameplay 定义，不要求具有空间 Transform，因此放在 `rules` 而不是 `nodes`。
 
-### 8.1 Object 不按语义继续分裂
+### 8.1 受控嵌套与规范化关系图
+
+为降低 AI 生成复杂度，AuthoringSpec 允许在注册过的语义字段中使用嵌套简写，例如初始装备：
+
+```json
+{
+  "id": "player",
+  "kind": "subject",
+  "kit": "humanoid.third-person@1",
+  "loadout": {
+    "right-hand": {
+      "id": "sword-1",
+      "kind": "object",
+      "prototype": "iron-sword@1"
+    }
+  }
+}
+```
+
+嵌套只是一种 Authoring Sugar。Normalizer 必须将它提升为稳定的同级实体与类型化关系：
+
+```text
+RuntimeEntity: player
+RuntimeEntity: sword-1
+
+sword-1 --ownedBy--> player
+sword-1 --equippedAt(slot=right-hand)--> player
+```
+
+限制：
+
+- 只有 Kit 或节点 Schema 明确声明的字段，如 `loadout`、`initialInventory`、`initialMount`，才能包含嵌套实体。
+- 受控嵌套有显式深度预算：AI Schema Profile 默认只投影一层嵌套实体，更深的结构必须用同级节点加 Relationship 表达。
+- 任意 JSON 父子结构不自动产生 Transform、所有权、装备或生命周期语义。
+- 嵌套实体必须具有显式稳定 ID；Normalizer 保留源 JSON Pointer，保证 Diagnostic 能定位原始输入。
+- NormalizedWorldIR 不保留具有业务含义的隐式父子关系，所有跨实体语义都展开为 Relationship。
+- RenderNode 层级由 Runtime 根据关系、Rig Socket 和 VisualBinding 派生，不能反向成为 Gameplay 真相。
+
+是否拆成独立 RuntimeEntity 使用以下判断：对象只要满足任一条件，就应拥有独立 ID：
+
+- 可以被拾取、丢弃、转移、销毁或独立保存。
+- 拥有独立状态、Capability、Collider、事件或权限。
+- 需要被 Agent、规则、自动化或 Inspector 单独查询。
+- 同时参与所有权、装备、目标、跟随等多种关系。
+
+骨骼、头发、不可拆卸装饰、纯 LOD 和纯特效节点通常留在 RenderNode，不进入逻辑实体图。
+
+### 8.2 Object 不按语义继续分裂
 
 塔、墙、箱子和门都使用 `object`，差异来自组件：
 
@@ -364,7 +509,7 @@ AI-facing 节点种类保持有限，后续主要通过 Component、Capability �
 - 自动门：`mobility: kinematic` + `interaction.openable`。
 - 可破坏塔：增加 `gameplay.destructible`。
 
-### 8.2 Water 是 Surface 与 Volume 的组合
+### 8.3 Water 是 Surface 与 Volume 的组合
 
 Water 的公共结构同时保留：
 
@@ -382,7 +527,7 @@ Water 的公共结构同时保留：
 
 | 图 | 唯一责任 | 骑龙示例 |
 |---|---|---|
-| 逻辑图 | Entity、Capability、Relationship、状态与控制权 | `player mountedOn dragon` |
+| 逻辑图 | RuntimeEntity、Capability、Relationship、状态与控制权 | `player mountedOn dragon` |
 | 渲染/Transform 图 | 可见层级、骨骼、Socket 和局部 Transform | 玩家模型挂到龙的 `saddle` |
 | 物理图 | Body、Collider、Joint、碰撞组与接触 | 龙负责移动，玩家 Collider 切换 |
 
@@ -420,7 +565,22 @@ interface CapabilityManifest {
   phases: readonly RuntimePhase[];
   resources?: ResourceBudget;
   normalize(context: NormalizeContext, config: unknown): NormalizedCapability;
-  install(context: CapabilityInstallContext): InstalledCapability;
+  prepareInstall(context: CapabilityInstallContext): PreparedCapabilityInstall;
+}
+
+interface CapabilityInstance {
+  id: string;
+  capability: string;
+  config: JsonValue;
+  enabled: boolean;
+  activationGroup?: string;
+  bindings?: Record<string, string>;
+}
+
+interface CapabilityRequirement {
+  id: string;
+  contract: string;
+  cardinality: "one" | "optional" | "many";
 }
 ```
 
@@ -434,19 +594,40 @@ Manifest 必须声明：
 - 执行阶段和生命周期。
 - 资源预算、诊断和 Conformance Test。
 
+Capability Manifest 描述能力类型，CapabilityInstance 描述某个实体上安装的稳定实例。同一类型是否允许多个实例由 Manifest 的基数约束决定，不能依赖数组位置判断。
+
+Manifest 混合了协议数据与实现代码，两者的哈希边界必须分开：声明字段（`id`、`version`、`configSchema`、`requires`、`provides`、`conflicts`、`phases`、`resources`）是可序列化协议数据，按 Canonical Bytes 计算 Manifest Hash；`normalize` 与 `prepareInstall` 属于插件实现，以插件内容 Hash 锁定。`registry-lock.json` 同时记录两个 Hash，任一变化都视为不同实现版本。
+
+Kit override 只有三种规范操作：
+
+- `merge`：按照 Capability 配置 Schema 声明的合并策略覆盖字段。
+- `replace`：用显式实例替换 Kit 产生的指定实例。
+- `disable`：禁用指定实例，但保留来源和 Diagnostic 可解释性。
+
+未声明合并策略的对象不能自动深合并；数组默认整体替换，除非 Schema 明确声明按稳定 ID 合并。
+
 ### 10.3 依赖解析
 
 解析器按以下顺序工作：
 
 1. 展开 Kit。
 2. 合并显式 Capability override。
-3. 解析 `requires` 与 `provides`。
+3. 解析 `requires` 与 `provides`，应用显式 `bindings`。
 4. 检查 `conflicts`、基数和循环依赖。
 5. 应用默认值并生成 Normalized Capability。
 6. 根据固定 Runtime Phase 拓扑排序。
 7. 生成 ExecutionPlan。
 
 插件注册顺序不能改变执行结果。
+
+Provider 绑定规则：
+
+- `one` 必须且只能绑定一个 Provider；存在多个候选且没有显式 Binding 时返回歧义错误。
+- `optional` 最多绑定一个 Provider；多个候选同样不能自动猜测。
+- `many` 按稳定 Capability Instance ID 排序并全部绑定。
+- 不能使用插件注册顺序、对象插入顺序或“最新版本”作为选择依据。
+- `activationGroup` 允许地面移动、飞行、游泳等能力同时安装但只有一个模式处于权威激活状态；切换由 Action 或状态事务完成。
+- 解析后的 Provider Instance ID、激活组、override 来源和最终配置必须写入 NormalizedWorldIR。
 
 ### 10.4 Kit
 
@@ -473,7 +654,48 @@ Kit 是经过验证的组合清单，不包含不可观察的魔法逻辑：
 
 Kit 必须可以通过 CLI 查询、展开和解释。
 
-## 11. Relationship、Attachment 与 Possession
+### 10.5 Capability 动态生命周期与资源所有权
+
+Capability 的安装、切换和移除是事务，不是一次会立即产生副作用的函数调用。统一状态机为：
+
+```text
+declared
+  → validated
+  → admitted
+  → prepared
+  → committed@phase-barrier
+  → active ↔ suspended
+  → removing@phase-barrier
+  → disposed
+
+prepare/commit/remove 失败 → rollback → previous-stable-state
+```
+
+- `validate` 校验配置、依赖、冲突、基数和目标实体状态，不创建底层资源。
+- `admit` 预留预算并确认当前 Phase Barrier 允许修改 ExecutionPlan。
+- `prepare` 可以创建尚未发布的资源，但不能让其他 System、Entity 或 Browser Session 看见半安装状态。
+- `commit` 在固定 Phase Barrier 原子发布 Component、System、Port、Relationship 派生状态和资源句柄。
+- `remove` 先检查反向依赖；只有命令显式声明并通过验证时才允许级联删除或切换 Provider。
+- 任一步失败都按相反顺序回滚；回滚失败是阻断级 Runtime Diagnostic。
+
+安装成功返回稳定 `CapabilityHandle`，并登记到 Ownership Ledger：
+
+```ts
+interface CapabilityHandle {
+  instanceId: CapabilityInstanceId;
+  ownerEntityId: EntityId;
+  state: CapabilityLifecycleState;
+  ownedResources: readonly OwnedResourceRef[];
+  suspend(commandId: CommandId): CapabilityReceipt;
+  resume(commandId: CommandId): CapabilityReceipt;
+  remove(commandId: CommandId): CapabilityReceipt;
+  dispose(): void;
+}
+```
+
+Ownership Ledger 至少跟踪 System Registration、Component、Port Provider、Listener、Timer、Render/Physics Handle、Asset Lease 和派生 Relationship。所有释放操作必须幂等；同一 `commandId` 重试返回相同 Receipt，不重复注册或释放资源。World Dispose 从所有权根按依赖逆序释放，测试必须证明安装/移除循环后不存在悬挂 System、监听器、Collider、WASM Handle 或 Asset Lease。
+
+## 11. Relationship、Equipment、Attachment 与 Possession
 
 实体间关系使用显式、可版本化的 Relationship，不通过数组下标或永久父子节点隐式表达。
 
@@ -482,21 +704,56 @@ Kit 必须可以通过 CLI 查询、展开和解释。
 - `attachedTo`
 - `mountedOn`
 - `possessedBy`
+- `ownedBy`
+- `storedIn`
+- `equippedAt`
 - `follows`
 - `targets`
-- `owns`
+
+Relationship 是有方向、带版本和 Schema 的逻辑边。每种关系必须声明端点类型、基数、互斥关系、删除策略和权限来源。不能用通用 `parentId` 同时表达所有权、空间挂载、装备和骑乘。
+
+### 11.1 单一真相与关系事务
+
+同一个业务事实只能有一个权威来源：
+
+- `ownedBy` 是物品所有权真相。
+- `storedIn` 是物品当前容器位置真相。
+- `equippedAt` 是装备状态与逻辑槽位真相。
+- `mountedOn` 是骑乘状态真相。
+- `possessedBy` 是控制权真相。
+- `attachedTo` 仅用于明确需要持久化的空间挂载；由装备或骑乘派生的 RenderNode 父子关系不重复写成 Gameplay 真相。
+
+任何跨逻辑图、渲染图和物理图的关系变化都通过事务执行：
+
+```text
+validate
+  → prepare logical/physics/render changes
+  → commit at phase barrier
+  → emit event and receipt
+```
+
+准备或提交失败时必须恢复上一份关系、控制权、Collider、Capability 激活状态和 Render Binding。重复提交相同命令必须幂等，Receipt 只在完整提交后产生。
+
+### 11.2 骑乘
 
 骑乘示例：
 
 ```json
-{
-  "type": "mountedOn",
-  "version": 1,
-  "subject": "player",
-  "target": "dragon-1",
-  "socket": "saddle",
-  "controlTarget": "dragon-1"
-}
+[
+  {
+    "type": "mountedOn",
+    "version": 1,
+    "subject": "player",
+    "target": "dragon-1",
+    "seat": "saddle"
+  },
+  {
+    "type": "possessedBy",
+    "version": 1,
+    "subject": "dragon-1",
+    "controller": "player-controller"
+  }
+]
 ```
 
 运行时 Mount 状态机：
@@ -509,7 +766,7 @@ unmounted
   → unmounted
 ```
 
-进入 `mounted` 时：
+进入 `mounted` 时，以下修改属于同一个 Mount Transaction：
 
 1. 验证 Rider 与 Mountable Capability。
 2. 验证距离、座位可用性与动作前置条件。
@@ -518,9 +775,40 @@ unmounted
 5. 切换骑手碰撞组或关闭独立 Collider。
 6. 将 Control/Possession 交给坐骑。
 7. 激活骑乘 Camera Rig 和 `ride` Action。
-8. 记录 Relationship、Event 和 Receipt。
+8. 原子提交 `mountedOn` 与 `possessedBy`，再产生 Event 和 Receipt。
 
 下坐骑时必须寻找安全落点，恢复骑手物理和控制权，并解除渲染挂载。
+
+### 11.3 装备、槽位与 Socket
+
+武器、盾牌和可转移道具是独立 RuntimeEntity。人物与装备保持同级，通过关系组合：
+
+```json
+{
+  "type": "equippedAt",
+  "version": 1,
+  "subject": "sword-1",
+  "target": "player",
+  "slot": "right-hand"
+}
+```
+
+三个概念必须分开：
+
+- `EquipmentSlot`：Gameplay 逻辑槽位，声明容量、允许的物品标签、单手/双手占用和互斥规则。
+- `RigSocket`：RigProfile 中的局部 Transform，如 `hand-r`、`back`、`saddle`，只负责视觉挂载位置。
+- `anchor`：世界空间中的出生点、构图点或交互位置，不属于 Rig。
+
+`EquipmentSlot` 可以引用一个 `RigSocket` 作为默认视觉位置，但二者不是同一对象。装备时由 Equipment System 根据 `equippedAt` 派生 RenderNode 挂载和物理模式：
+
+```text
+sword-1 equippedAt player.right-hand
+  → SwordVisual attach to player RigSocket hand-r
+  → disable world rigid body
+  → keep weapon hitbox disabled until an authoritative attack window
+```
+
+卸下、放入背包和丢弃分别更新 `equippedAt`、`storedIn`、`ownedBy`，不能通过移动 RenderNode 推断逻辑状态。双手武器通过一次事务原子占用多个 EquipmentSlot。
 
 ## 12. Subject、模型、身体、Rig 与动画分离
 
@@ -581,19 +869,25 @@ AnimationSet 只负责将稳定 Action ID 映射到具体动画资源，不拥�
   "version": 1,
   "category": "interaction",
   "parametersSchema": {
-    "target": "entity-id",
-    "seat": "string"
+    "type": "object",
+    "additionalProperties": false,
+    "required": ["target"],
+    "properties": {
+      "target": { "$ref": "worldkit://schema/entity-id@1" },
+      "seat": { "type": "string", "maxLength": 64 }
+    }
   },
   "requires": [
     "capability:rider",
     "target-capability:mountable"
   ],
-  "interruptPolicy": "locked",
+  "interruptPolicy": "uninterruptible",
   "authority": "simulation",
   "completion": {
-    "type": "animation-event",
-    "event": "seated"
-  }
+    "type": "relationship-committed",
+    "relationship": "mountedOn"
+  },
+  "presentationMarkers": ["seated"]
 }
 ```
 
@@ -607,6 +901,8 @@ ActionDefinition 声明：
 - Root Motion 策略。
 - 完成、失败和取消条件。
 - Gameplay Effect 与 Event。
+
+Action 的完成、失败和伤害等权威结果必须来自模拟状态、关系事务或确定的 Tick 条件，不能依赖动画 Clip 是否存在。Animation Marker 只用于脚步声、姿态对齐、特效等表现同步；缺失 Marker 可以降级并产生 Diagnostic，但不能让 Gameplay Action 永久卡住。
 
 ### 13.2 AnimationBinding
 
@@ -632,7 +928,97 @@ ActionDefinition 声明：
 }
 ```
 
-### 13.3 扩展规则
+### 13.3 ActionContext 与动作变体
+
+Semantic Action 表达“要做什么”，不把装备和表现组合编码进 Action ID：
+
+```text
+locomotion.run + equipment.unarmed          → 空手跑步表现
+locomotion.run + weapon.sword.one-handed   → 持剑跑步表现
+combat.attack.light + weapon.sword         → 轻型挥剑攻击
+```
+
+禁止为每个组合创造 `run-with-sword`、`run-with-shield` 等新的 Gameplay Action。Action Runtime 在执行时构造只读上下文：
+
+```ts
+interface ActionContext {
+  actorId: string;
+  actionId: string;
+  targetIds: readonly string[];
+  tags: readonly string[];
+  relationships: readonly RelationshipRef[];
+  activeCapabilities: readonly CapabilityInstanceRef[];
+  equipment: Readonly<Record<EquipmentSlotId, EntityId | null>>;
+  locomotionMode: string;
+  grounded: boolean;
+}
+```
+
+上下文标签来自注册表，不允许 Agent 发明未声明字符串。首批稳定标签包括：
+
+- `equipment.unarmed`
+- `weapon.sword.one-handed`
+- `weapon.sword.two-handed`
+- `stance.exploration`
+- `stance.combat`
+- `locomotion.ground`
+- `locomotion.mounted`
+- `locomotion.flight`
+
+AnimationSet 和武器 AttackProfile 可以为同一个 Action 提供 Variant：
+
+```json
+{
+  "action": "locomotion.run",
+  "variants": [
+    {
+      "id": "run-one-handed-sword",
+      "when": ["weapon.sword.one-handed"],
+      "clip": "Run_OneHandSword",
+      "priority": 100
+    },
+    {
+      "id": "run-unarmed",
+      "when": ["equipment.unarmed"],
+      "clip": "Run_Unarmed",
+      "priority": 50
+    }
+  ],
+  "fallback": "Run_Default"
+}
+```
+
+匹配顺序固定为：显式 Binding、较高 priority、较高条件特异度。三者完全相同而存在多个候选时返回歧义 Diagnostic；Diagnostic 中的候选按稳定 Variant ID 排序，但不能用 ID、资源加载或注册顺序替 Agent 猜测语义。缺少专用动画时可以使用声明的 fallback；缺少权威 Gameplay Capability 时不能只靠动画假装支持动作。
+
+### 13.4 武器攻击组合
+
+人物发起稳定的 `combat.attack.light`，当前 `equippedAt` 武器提供 AttackProfile：
+
+```json
+{
+  "capability": "weapon.melee@1",
+  "attackProfiles": {
+    "combat.attack.light": {
+      "animationTag": "attack.sword.light",
+      "damage": 20,
+      "range": 1.6,
+      "hitbox": "blade",
+      "activeTicks": [12, 18],
+      "cooldownTicks": 30
+    }
+  }
+}
+```
+
+职责边界：
+
+- 人物 Action Performer 接收攻击 Intent 并检查前置条件。
+- `equippedAt` 决定当前使用哪件武器。
+- 武器 Capability 提供攻击参数和 Hitbox 描述。
+- 人物 Rig/AnimationSet 提供挥剑表现。
+- 模拟层按固定 Tick 激活 Hitbox、计算命中和伤害；动画 Marker 不拥有伤害权威。
+
+### 13.5 扩展规则
 
 - 更换模型对已有动作的动画：只增加或替换 AnimationSet。
 - 成人和儿童使用不同动作表现：不同 BodyProfile、RigProfile 与 AnimationSet。
@@ -640,7 +1026,7 @@ ActionDefinition 声明：
 - 第一次增加新的语义动作：注册 ActionDefinition，并为相关 Rig 提供 Binding。
 - 第一次增加新的物理行为，如飞行或抓钩：注册新的 Capability/System，而不是只增加动画。
 
-### 13.4 动画层
+### 13.6 动画层
 
 Action Runtime 支持：
 
@@ -655,13 +1041,53 @@ Action Runtime 支持：
 
 默认由物理系统拥有世界 Transform，动画使用 `inPlace`。Root Motion 只有在 ActionDefinition 与 Physics Capability 明确支持时才能启用。
 
+持械移动优先使用分层组合以避免动画数量乘法增长：
+
+```text
+Base Locomotion Layer: Run
+Upper Body Layer: One-Hand Sword Pose
+Action Override Layer: Sword Slash
+```
+
+强烈改变全身重心的攻击、跳跃和骑乘过渡可以声明为 Full Body Override。所有 Layer、Bone Mask、互斥和优先级进入 AnimationSet/RigProfile 的版本化配置，而不是硬编码在人物 Runtime Core。
+
+### 13.7 Action Execution Timeline
+
+每次动作执行都是有稳定 `executionId` 的状态机，不能只记录“正在播放哪个 Clip”：
+
+```text
+queued → preparing → windup → active → recovery → completed
+                    ↘ failed / cancelled / interrupted ↗
+```
+
+- `queued`：等待优先级、并发锁和所需资源。
+- `preparing`：冻结本次 ActionContext，校验目标、装备、关系、体力和权限。
+- `windup`：动作已经承诺但权威 Effect 尚未激活。
+- `active`：按固定 Simulation Tick 启用移动、命中框、关系提交或其他 Effect。
+- `recovery`：Effect 已结束，但尚未释放所有并发锁。
+- 终止状态记录原因、最终 Tick、Effect Receipt 和派生事件。
+
+ActionDefinition 必须通过时间线 Profile 声明：各阶段进入/退出条件、最长 Tick、Cancel Window、允许打断者、Channel Lock、目标丢失策略以及 Root Motion 所有权。常用 Channel 至少包括 `locomotion`、`full-body`、`upper-body`、`interaction` 和 `equipment`；多个动作只有在声明的 Channel 与写入集合兼容时才能并发。Channel 及其互斥、包含关系由版本化 Channel Registry 声明，例如 `full-body` 必须声明为独占 `locomotion` 与 `upper-body`。ActionDefinition 只能引用注册过的 Channel；兼容性判定只使用注册的互斥矩阵，不能由 Runtime 按名称推断。
+
+Gameplay 时间一律以固定 Tick 表达。Animation Marker 可以对齐声音、特效和视觉 Blend，但不能推进权威阶段。若视觉 Clip 时长与权威 Timeline 不同，Presentation 层按 Binding 的 stretch/clamp/fallback 策略适配，不能反向改变伤害窗口或关系提交 Tick。
+
+动作开始后装备、坐骑或能力发生变化时，必须采用 ActionDefinition 声明的策略之一：
+
+- `snapshot`：本次执行继续使用 `preparing` 阶段冻结的上下文。
+- `revalidate`：在指定 Phase Barrier 重新校验，不满足条件则进入确定的 `cancelled/failed`。
+- `locked`：相关 Relationship/Capability 修改进入队列，待动作释放锁后执行。
+
+默认攻击使用 `snapshot` 保存攻击参数，并锁定对应 EquipmentSlot 到 `active` 结束；骑乘和双手装备事务默认使用 `locked`。Root Motion 启用时，每个 Tick 只能有一个 Transform Authority，且 Physics System 必须对位移做碰撞约束并回写实际结果。所有阶段转换、Cancel、Interrupt 和锁释放都产生可重放 Receipt。
+
 ## 14. 地形、参考图与空间一致性
 
 SDK 不负责从图片生成地形，但必须提供足够强的结构表达和验证能力，让 Agent 可以把图片理解结果落地。
 
+本章只冻结总架构边界。Terrain Source 方案比较、生成式等高色带图、确定性重建、Gameplay 约束、NormalizedTerrainIR、离线 Terrain Refiner、包边界和实施 Gate 由子规格 [`2026-08-17-terrain-authoring-pipeline-design.md`](./2026-08-17-terrain-authoring-pipeline-design.md) 定义。子规格可以演进具体 Compiler Profile，但不能让具体图片模型、专业地形工具、Babylon 或 Havok 类型进入 AuthoringSpec 和引擎无关 IR。
+
 ### 14.1 地形输入
 
-生产地形优先使用世界空间 Height Raster 与 Semantic Mask，而不是依赖少量圆形操作近似整张参考图。
+生产地形优先使用世界空间 Height Raster 与独立 Semantic/Constraint Mask，而不是依赖少量圆形操作近似整张参考图。生成式图片只属于不可信 Authoring Input；Runtime 权威数据是显式 Scale/Offset 的 `R16` 或米制 `F32` Heightfield，Semantic、Evidence 和 Protected Layer 使用独立 `R8` Mask。
 
 AuthoringSpec 支持：
 
@@ -672,6 +1098,8 @@ AuthoringSpec 支持：
 - 局部 Raise/Lower/Flatten/Smooth。
 - 路线走廊和坡度限制。
 - 岸线、水位和湖底/海底语义。
+
+SDK 可以通过 Host Registry 接入受信的离线 Terrain Refiner，用冻结 Recipe/HDA/Graph 完成侵蚀或自然化；Refiner 只能处理统一 Macro Heightfield 和受保护 Mask，其输出必须重新应用 Gameplay 硬约束并通过全部 Gate。通过 bit-for-bit Conformance 的实现可以成为确定性 Compiler Stage；其余实现属于 Authoring Aid，必须先把 Height/Mask 固化为内容寻址 Source 与 Output Lock，再进入确定性 Compiler。Recipe 与 Seed 不能代替输出 Hash。具体 Provider 不进入 AI-facing Schema，Refiner 未安装时也不能阻断 Core Pipeline 和 WorldPackage Runtime。
 
 ### 14.2 参考图证据
 
@@ -737,6 +1165,31 @@ receive commands
 
 模拟使用固定时间步；渲染可以插值。截图和自动测试必须能暂停实时循环并按 Tick 精确推进。
 
+固定阶段本身不足以保证确定性。每个 System 必须声明：
+
+```ts
+interface SystemManifest {
+  id: string;
+  phase: RuntimePhase;
+  reads: readonly ComponentType[];
+  writes: readonly ComponentType[];
+  emits: readonly EventType[];
+  consumes: readonly EventType[];
+  before?: readonly SystemId[];
+  after?: readonly SystemId[];
+}
+```
+
+调度与提交规则：
+
+- 编译期检测同阶段的非交换多 Writer；没有显式归并器时直接报错。
+- System 不在遍历过程中直接改变其他 System 可见的结构，修改写入 Command Buffer。
+- Command Buffer 在固定 Phase Barrier 原子提交，并以稳定 Command ID 排序。
+- Event 声明明确的投递阶段；默认在当前提交完成后的下一合法阶段消费，不能依赖监听器注册顺序。
+- `before/after` 形成局部拓扑约束；没有依赖关系的 System 按稳定 System ID 排序。
+- Runtime 禁止以插件注册顺序、Map 插入顺序或资源加载完成顺序作为语义 tie-breaker。
+- 对允许多个贡献者的数值或集合，必须注册确定的 Reducer，并定义排序、精度和冲突规则。
+
 ### 15.4 生命周期
 
 统一生命周期：
@@ -745,7 +1198,23 @@ receive commands
 create → load → start → suspend/resume → stop → dispose
 ```
 
-Entity、Capability、System、Asset、Collider 和 Browser Session 都必须有明确所有者和幂等 Dispose。
+RuntimeEntity、Capability、System、Asset、Collider 和 Browser Session 都必须有明确所有者和幂等 Dispose。
+
+这一通用生命周期描述 World/Runtime 的外层状态；Capability 的热安装、切换和移除必须进一步遵守 10.5 节的 `validate → admit → prepare → commit/rollback` 事务，并且只能在固定 Phase Barrier 改变 ExecutionPlan。禁止在 `normalize`、Schema 校验、资源异步回调或 System 遍历中发布运行时副作用。
+
+### 15.5 确定性等级
+
+确定性承诺分成三层，不能笼统承诺跨所有设备 bit-exact：
+
+1. **编译确定性**：相同 AuthoringSpec、Registry Lock 和 Seed 生成 bit-for-bit 一致的 NormalizedWorldIR、ExecutionPlan 和 Package Hash。
+2. **模拟可重放性**：在固定 SDK、Runtime、Physics/WASM 构建和平台类别中，输入日志产生满足声明数值容差与状态不变量的结果。
+3. **视觉可复现性**：通过 Semantic Mask、Instance ID、Depth、Region、Anchor 和容差验证；跨 GPU/浏览器不要求 Color Pass 像素完全相同。
+
+编译确定性必须处理 JavaScript 数学实现差异：ECMAScript 的 `Math.sin`、`Math.cos`、`Math.exp`、`Math.pow` 等超越函数是实现近似，不同 JS 引擎结果不同。参与协议哈希的计算必须使用 Compiler Profile 声明的确定性数学实现——自带软件数学库，或只使用 IEEE-754 完全确定的加减乘除与 `sqrt`。bit-for-bit 承诺的范围是锁定 SDK 构建加声明的 JS 引擎类别；Node CLI 与浏览器内校验重算得到相同哈希属于 Conformance 测试范围。
+
+WorldPackage Manifest 和 Replay Report 必须记录 SDK、Babylon、Physics/WASM、浏览器、平台类别、Feature Flag、固定时间步和浮点容差。生产验收分别报告三层结果，不能用“固定时间步”替代完整的确定性证明。
+
+第一版生产验收的平台类别是桌面浏览器（PC Web）。移动端属于后续决策；Havok WASM 的 WebAssembly SIMD 依赖等平台约束记录在平台类别 Profile 中，扩展平台时重新评估。
 
 ## 16. CLI 与外部程序协议
 
@@ -754,7 +1223,7 @@ SDK 同时提供 TypeScript API 和无状态 CLI。JS/TS 程序可以直接调�
 ### 16.1 命令
 
 ```bash
-worldkit schema --output worldkit.schema.json
+worldkit schema --profile constrained-json@1 --registry-lock registry-lock.json --output worldkit.schema.json
 worldkit capabilities list --json
 worldkit capabilities describe locomotion.flight@1 --json
 worldkit kits describe dragon.mountable-flight@1 --json
@@ -762,6 +1231,8 @@ worldkit examples --capability mountedOn --json
 
 worldkit validate world.json --json
 worldkit normalize world.json --output normalized.json --json
+worldkit change validate changeset.json --base world.json --json
+worldkit change apply changeset.json --base world.json --output next-world.json --json
 worldkit build world.json --output ./dist/world --json
 worldkit verify ./dist/world --json
 worldkit preview ./dist/world --port 5173
@@ -780,11 +1251,14 @@ worldkit inspect ./dist/world --json
 - JSON 输出包含 `protocolVersion`、`sdkVersion`、`specVersion` 和 `command`。
 - 不把堆栈信息作为稳定 API；Debug 模式可在单独字段返回。
 
+一次性命令成功时只输出一个 JSON Document。`preview` 和长期 Session 属于流式命令，使用版本化 NDJSON Event；第一个 Event 必须是 `ready` 并包含 URL、Session ID 和协议版本，后续 stdout 不能混入人类日志。流式命令必须定义 SIGINT/SIGTERM、超时、Session 关闭和最终 `completed/failed` Event。
+
 退出码：
 
 | 退出码 | 含义 |
 |---:|---|
 | 0 | 成功 |
+| 1 | 未预期的内部错误或崩溃 |
 | 2 | 输入或 Schema 不合法 |
 | 3 | 规范化或依赖解析失败 |
 | 4 | 编译失败 |
@@ -792,6 +1266,57 @@ worldkit inspect ./dist/world --json
 | 6 | 不支持的版本、Kit 或 Capability |
 | 7 | 资产解析失败 |
 | 8 | 浏览器自动化失败 |
+
+### 16.3 WorldChangeSet 与增量修改协议
+
+AI 修复和迭代不应每次重写整个大型 JSON，也不应直接使用数组下标驱动的通用 Patch。SDK 定义面向领域的 `WorldChangeSet`：
+
+```ts
+interface WorldChangeSet {
+  kind: "worldkit-change-set";
+  version: 1;
+  patchId: string;
+  baseAuthoringSpecHash: Sha256;
+  preconditions: readonly WorldPrecondition[];
+  operations: readonly WorldChangeOperation[];
+  source?: ChangeSource;
+}
+```
+
+`baseAuthoringSpecHash` 只表示当前待修改 AuthoringSpec 的规范字节 Hash：输入已经通过无重复键解析和其声明版本的 Canonical Schema 校验，但尚未执行版本迁移、默认值注入、Normalizer、Compiler 或安全修复。第一版计算方式固定为 `SHA-256(canonical-json-jcs@1(authoringSpec))`；AuthoringSpec 自身的 Schema Version 因此也进入 Hash。NormalizedWorldIR Hash、WorldPackage Root Hash 和运行时 Snapshot 使用各自明确命名的字段，禁止统称或替代 `baseAuthoringSpecHash`。
+
+首批 Operation 只包含可验证的稳定 ID 操作：
+
+- `resource-upsert` / `resource-remove`
+- `node-upsert` / `node-remove`
+- `component-set` / `component-remove`
+- `relationship-add` / `relationship-remove`
+- `variant-select`
+- `terrain-source-replace`
+- `constraint-set` / `constraint-remove`
+
+Operation 必须携带稳定 `operationId`、目标 ID 和必要的期望版本/值。[RFC 6902 JSON Patch](https://www.rfc-editor.org/rfc/rfc6902.html) 可以作为标量字段和 JSON Pointer 的互操作输入，但进入 Compiler 前必须转换为上述领域操作；生产协议禁止用 `/nodes/17` 一类数组位置表达实体身份。
+
+应用流程固定为：
+
+```text
+check baseAuthoringSpecHash and patchId
+  → validate schema and preconditions
+  → apply to isolated authoring candidate
+  → normalize and compile affected graph
+  → run budgets and required gates
+  → atomically publish candidate
+  → emit ChangeReceipt(resultAuthoringSpecHash, normalizedWorldIrHash, affectedIds, diagnostics)
+```
+
+- 默认是 `dry-run`，只有显式 `apply` 才写出新 AuthoringSpec；CLI 不就地覆盖输入文件。
+- 任一 Operation 或 Gate 失败都不产生部分提交。
+- 相同 `patchId + baseAuthoringSpecHash + ChangeSet Hash` 重试返回同一 Receipt；相同 `patchId` 携带不同内容必须失败。
+- `baseAuthoringSpecHash` 不匹配返回 `WORLD_CHANGESET_BASE_AUTHORING_SPEC_MISMATCH`，并给出当前 AuthoringSpec Hash 与机器可读 rebase 所需的冲突 ID，不能静默套用到新世界。
+- ChangeReceipt 明确记录 `baseAuthoringSpecHash`、`resultAuthoringSpecHash`、`normalizedWorldIrHash`、受影响实体/资源、Diagnostic、实际应用的迁移和安全修复；不得使用未定义对象的通用 `worldHash` 字段。
+- 增量编译结果必须通过 Differential Test，证明它与对最终 AuthoringSpec 做一次完整 normalize/build 的 Canonical Output 完全相同。
+
+WorldChangeSet 只修改 Authoring 数据。运行中的移动、攻击和骑乘仍使用有权限、按 Tick 提交的 Runtime Command；二者不能共用一个模糊的 Patch API。
 
 ## 17. Diagnostic 与 AI 自修复
 
@@ -822,10 +1347,11 @@ Diagnostic 必须是正式协议：
 
 - 错误码稳定且可文档化。
 - 使用 JSON Pointer 定位输入。
-- 包含相关 Entity、Resource、Capability 或 Relationship ID。
+- 包含相关 RuntimeEntity、Resource、Capability 或 Relationship ID。
 - 解释实际值、期望值和冲突来源。
 - 提供机器可读修复建议。
 - SDK 可以输出建议 Patch，但只自动应用被标记为 `safe` 的机械修复。
+- 所有可应用建议都必须编码成带 `baseAuthoringSpecHash` 和 Preconditions 的 WorldChangeSet；`safe` 只表示可以在显式授权后自动应用，不允许绕过事务和 Gate。
 - 物理和构图错误包含空间位置、相关 Collider/Region 和可执行建议。
 
 ## 18. Browser Protocol 与 Playwright Driver
@@ -889,7 +1415,21 @@ Playwright 不使用任意 `waitForTimeout` 驱动模拟。测试动作按固定
 - `collision-debug`
 - `height-slope`
 
-CLI `run` 提供批处理；Node Driver API 提供长生命周期 Session。跨语言长期控制可以通过 CLI NDJSON Session 包装，但正式状态协议仍来自 Browser Protocol。
+CLI `run` 提供批处理；TypeScript/Node.js Driver API 提供长生命周期 Session。跨语言长期控制可以通过 CLI NDJSON Session 包装，但正式状态协议仍来自 Browser Protocol。
+
+### 18.1 Driver 访问控制
+
+Browser Driver 是测试与受信宿主控制面，不是所有发布页面默认开放的 Gameplay API：
+
+- 正式 Runtime 构建默认不暴露 `window.__WORLDKIT_DRIVER__`；只有显式 test/dev 或受信 embed 模式启用。
+- Host 通过 bootstrap handshake 创建短生命周期 Session，并使用不可预测 nonce 绑定页面实例。
+- Session Scope 至少拆成 `observe`、`control`、`capture` 和 `load`；Driver 方法逐项校验权限。
+- `loadWorldPackage` 只能加载宿主允许来源且通过完整性、兼容性和预算校验的 Package。
+- Session 绑定允许的 Origin、World ID 和有效期；页面导航、World Dispose 或 Host 断开时自动失效。
+- 每个自动化 Run 使用独立 Browser Context、Storage Namespace 和 Session；禁止跨 Case 复用可变世界状态、Local Storage、权限或 Driver Handle。
+- `reset/loadWorldPackage` 必须等待 Runtime Dispose、Ownership Ledger 清空和下一份 World Ready Gate 后才返回；Snapshot/Receipt 均携带 `worldPackageRootHash`、`normalizedWorldIrHash`、Registry Lock Hash、Session ID、Request ID 和 Tick。
+- Snapshot、Diagnostic 和日志遵守数据脱敏策略，不向无权限 Session 暴露本地路径、Prompt 或资产凭证。
+- Playwright Driver 通过握手获得句柄，不假设任意页面脚本都能永久调用全局写接口。
 
 ## 19. WorldPackage
 
@@ -908,12 +1448,14 @@ world-package/
     babylon-web/
   diagnostics.json
   integrity.json
+  signatures/             # 可选，不参与自身签名
 ```
 
 `manifest.json` 至少包含：
 
 - World ID 与标题。
 - SDK、Schema 和 Package 版本。
+- Canonical Schema Hash、使用过的 AI Schema Profile Hash 与 Registry Lock Hash。
 - Seed。
 - Runtime Target。
 - Capability、Kit、Action 与插件版本。
@@ -921,9 +1463,55 @@ world-package/
 - 资源 URI、哈希、大小和类型。
 - 世界边界和资源预算。
 - NormalizedWorldIR 哈希。
-- 完整性文件哈希。
+- Hash 算法与 Canonicalization Profile。
 
 WorldPackage 不保存进程内对象或引擎 Handle。Runtime Target 可以包含经过缓存的 Babylon/Web 资源，但 `world.normalized.json` 保持引擎无关。
+
+`authoring-source.json` 是可选审计产物，不是 Runtime 必需文件。构建命令必须支持省略或脱敏 Prompt、参考图 URI、用户标识和内部证据；资源同时记录来源、许可证与允许用途。Runtime Target 缓存的第三方运行时二进制（如物理引擎 WASM）同样记录来源与许可证。
+
+`integrity.json` 只证明文件内容与清单一致，不能证明发布者身份。如果部署场景要求真实性，WorldPackage 还必须包含签名、签名者 ID 和宿主信任根；文档和 Diagnostic 必须明确区分 corruption integrity 与 publisher authenticity。
+
+### 19.1 Canonical Bytes、Hash 与签名输入
+
+“稳定 JSON 序列化”必须固定为版本化字节协议。第一版使用 `canonical-json-jcs@1`，语义兼容 [RFC 8785 JSON Canonicalization Scheme](https://www.rfc-editor.org/rfc/rfc8785.html)，并增加本项目的输入限制：
+
+- JSON 解析阶段拒绝重复属性名、无效 Unicode、`NaN`、`Infinity`、`-Infinity` 和 `-0`。
+- 整数必须落在 JSON/IEEE-754 可无损互操作范围；需要高精度的量使用带单位的十进制字符串或量化整数 Schema。
+- 字符串不做隐式 Unicode Normalization；不同码点序列就是不同输入，Normalizer 只能通过显式迁移修改。
+- Object Property 顺序、数字输出和字符串转义完全由 Profile 决定；业务代码不能使用普通 `JSON.stringify`、Map 插入顺序或本地 Locale 自行计算协议 Hash。
+- NormalizedWorldIR 中所有集合在 Canonicalization 前按照其 Schema 声明的稳定键排序；有语义顺序的数组保留原顺序，并将该顺序视为 Hash 输入。
+
+二进制资源直接对原始字节计算 SHA-256，不经过图片解码、换行转换或平台格式转换。`integrity.json` 使用稳定路径排序，记录除自身和 `signatures/` 外每个文件的 `path`、`mediaType`、`sizeBytes` 与 `sha256`。Package Root 的计算输入固定为：
+
+```text
+SHA-256(canonical-json-jcs@1({
+  packageFormatVersion,
+  canonicalizationProfile,
+  hashAlgorithm,
+  files: sortedIntegrityEntries
+}))
+```
+
+这样避免文件自哈希循环。签名 Envelope 不进入 Package Root。签名输入禁止使用字段字符串直接拼接，第一版固定为以下对象的 `canonical-json-jcs@1` 字节，以 `kind + version` 提供协议域隔离：
+
+```json
+{
+  "kind": "worldkit-package-signature-envelope",
+  "version": 1,
+  "packageRootHash": "sha256:...",
+  "packageId": "coastal-world",
+  "packageFormatVersion": 1,
+  "runtimeTarget": "babylon-web",
+  "signatureAlgorithm": "ed25519",
+  "keyId": "publisher-key-2026-01",
+  "trustDomain": "worldkit.production",
+  "signedAt": "2026-08-18T00:00:00Z"
+}
+```
+
+`signatures/<key-id>.json` 保存完整 Envelope 与对其规范字节计算的签名；验证方先重新生成规范字节，再验证签名，不能信任文件中另存的拼接串或摘要。验证顺序是路径安全检查、逐文件 Hash、Package Root、Envelope 字段与宿主策略、签名信任、版本/预算兼容性，任何一步失败都不能加载 Runtime Target。
+
+`registry-lock.json` 同时固定 Schema/Profile Hash、Kit/Capability/Action 精确版本、插件内容 Hash、Asset Hash、Compiler Profile 和 Determinism Profile。Compiler Cache、WorldChangeSet `baseAuthoringSpecHash`、Replay 和远程制品索引必须复用同一 Canonical Bytes 协议，并为各自的哈希对象使用明确字段名和域标签，禁止各自定义“近似相同”的哈希算法。
 
 ## 20. 版本、迁移与兼容性
 
@@ -934,6 +1522,8 @@ WorldPackage 不保存进程内对象或引擎 Handle。Runtime Target 可以包
 - NormalizedWorldIR Version。
 - WorldPackage Version。
 - Capability/Kit/Action/Rig 独立 Major Version。
+- AI Schema Profile、Canonicalization Profile 和 Determinism Profile 独立版本。
+- WorldChangeSet 与 ChangeReceipt Protocol Version。
 - Browser Protocol Version。
 
 规则：
@@ -965,6 +1555,12 @@ Agent 输出视为不可信数据：
 - Valid/Invalid Fixture。
 - 边界值、未知字段、重复 ID 和悬空引用。
 - Kit 展开、默认值和稳定序列化。
+- 受控嵌套 `loadout/initialInventory/initialMount` 展开为稳定 RuntimeEntity 与 Relationship。
+- WorldNodeSpec ID、包内 URI、注册表 URI 与 Registry Lock 解析。
+- Canonical Schema、`constrained-json@1` 投影和每个 Provider Adapter 的 Valid/Invalid Fixture；Adapter 输出必须重新通过 Canonical Schema。
+- Prototype/Instance/Variant/Composition Layer 的稳定解析、Tombstone、按 ID 集合操作和冲突诊断。
+- Canonical Bytes Golden Fixture：属性重排 Hash 不变，语义数组重排 Hash 改变，重复键、`-0` 和非法数值被拒绝。
+- WorldChangeSet 的 `baseAuthoringSpecHash`、Precondition、幂等 Receipt、原子失败和增量/全量 Differential Build。
 - Version Migration。
 - Diagnostic Snapshot。
 
@@ -974,22 +1570,29 @@ Agent 输出视为不可信数据：
 
 - Manifest Schema。
 - requires/provides/conflicts。
-- 安装与 Dispose。
+- Capability Instance 基数、Kit merge/replace/disable 和 Provider 歧义。
+- 改变插件注册顺序不改变解析结果与 ExecutionPlan Hash。
+- 安装、Suspend/Resume、依赖感知移除、Rollback 与幂等 Dispose。
+- Ownership Ledger 泄漏测试；反复安装/移除后 System、Listener、Collider、WASM Handle 和 Asset Lease 回到基线。
 - 固定阶段执行。
-- 确定性重放。
+- 按 Determinism Profile 验收编译确定性、模拟重放和视觉容差。
 - 资源预算。
 - 缺失依赖的可执行诊断。
 
 ### 22.3 Runtime Conformance
 
 - Transform 与坐标约定。
-- Entity 生命周期和资源清理。
+- RuntimeEntity 生命周期和资源清理。
 - Fixed Timestep。
 - Body/Collider 同步。
 - Raycast 与碰撞组。
 - Terrain 与水体边界。
 - Camera、输入 Intent 和 Possession。
 - Action、动画事件与状态转换。
+- Relationship Transaction 的原子提交、回滚和幂等 Receipt。
+- EquipmentSlot、RigSocket、装备物理模式和双手占用。
+- ActionContext、Variant fallback、动画分层与武器 Hitbox Tick。
+- Action Timeline、Cancel Window、Channel Lock、装备/坐骑中途变化策略和 Root Motion Transform Authority。
 - Capture Pass 与 Browser Protocol。
 
 ### 22.4 Vertical Slice
@@ -1007,10 +1610,11 @@ Agent 输出视为不可信数据：
 
 第二条能力验证场景：
 
-- Humanoid 与 Dragon 独立 Entity。
+- Humanoid 与 Dragon 是独立 RuntimeEntity。
 - 接近、上坐骑、控制权切换、起飞、飞行、降落和下坐骑。
 - Body/Visual/Rig/AnimationSet 可替换。
 - Replay 结果确定。
+- 空手跑动、持剑跑动、持剑攻击和缺少专用动画时的声明式降级。
 
 ### 22.5 Production Gates
 
@@ -1023,10 +1627,15 @@ schema
   → browser smoke
   → physics/playability
   → capture/composition
+  → performance/resource budget
   → package integrity
 ```
 
 任一必需 Gate 失败都阻止发布，不能用总体分数掩盖关键失败。
+
+性能与资源预算 Gate 的预算来自两处：AuthoringSpec `constraints` 中的世界级资源预算（节点数、三角形、Collider、Raster、包体与内存上限），以及 Host Profile 按平台类别声明的运行基线（固定输入脚本下的帧时间分位数、加载时间和内存峰值）。测量在声明的平台类别中按固定 Tick 脚本执行，结果与所用 Profile 一起写入验收报告；超出预算或基线属于阻断失败，不能用平均值或总体分数覆盖。
+
+生产 Gate 还必须覆盖：Schema Projector/Adapter Conformance、WorldChangeSet 全量等价性、Capability 事务回滚、Canonical Package Root 和签名验证。Browser/Replay Gate 的 Snapshot 与 Capture Artifact 记录 `worldPackageRootHash`、`normalizedWorldIrHash`、Registry Lock Hash、Session ID、Request ID 和当前 Tick，避免把不同构建或不同运行实例的结果误作同一证据。
 
 ## 23. 当前实现评估与复用
 
@@ -1050,12 +1659,37 @@ schema
 - Playground Automation API 升级为稳定 Browser Protocol。
 - 零散脚本升级为统一 CLI。
 - Three Runtime 在 Babylon Vertical Slice 通过后移除。
+- 提供一次性的 `OutdoorWorldSpec/CompiledOutdoorScene → AuthoringSpec Fixture` 迁移工具，用于生成回归基准；它不是永久 Public API，也不阻止旧格式最终下线。
 
 ## 24. 仓库策略与迁移顺序
 
 继续在当前仓库开发，不新建第二个 SDK 仓库。使用隔离分支或 Worktree 建设新架构，旧 Runtime 作为回归基准暂时保留。
 
-本文是覆盖整个 SDK 的总架构规格，不应被压缩成一个超大实现任务。阶段 A 至 F 分别形成独立实施计划；Schema/IR、Capability Compiler、Babylon Runtime、Subject/Action、CLI/Browser Driver 五个子系统在编码前各自补充接口级实施说明和验收清单，但不得偏离本文冻结的公共边界。
+本文是覆盖整个 SDK 的总架构规格，不应被压缩成一个超大实现任务。阶段 0 至 F 分别形成独立实施计划；Schema/IR、Capability Compiler、Babylon Runtime、Subject/Action、CLI/Browser Driver 五个子系统在编码前各自补充接口级实施说明和验收清单，但不得偏离本文冻结的公共边界。
+
+### 与现有 ADR 和创作工作流的关系
+
+架构级决策记录在 [ADR-0006：AuthoringSpec 编译架构与 Babylon Runtime](../../../decisions/0006-authoring-spec-compiler-architecture.md)（Proposed，随本文评审一同定稿）：
+
+- ADR-0001 的 Subject Kit 方向被继承为 AI-facing Kit 层，不被推翻。
+- ADR-0004 与 ADR-0005 的原则（Plan-first、四类证据、角色分离、冻结门禁）由 AuthoringSpec、Evidence 分类、WorldChangeSet 和 Production Gates 继承；其具体载体（`plans/<catalog-id>.ts`、`plan-lock.json`、`agent:plan/build/visual` 脚本链）在阶段 F 由新协议取代，届时两份 ADR 标记为 Superseded by ADR-0006。
+- 阶段 B–E 期间旧创作链路保持可用且只接收缺陷修复，不再接收新能力；新场景在阶段 F 切换点之前默认仍走旧链路。
+- 阶段 F 必须同步完成创作侧迁移：更新根 `AGENTS.md` 与工作流文档，迁移或下线 `plan:freeze`、`plan:scene` 等脚本，将旧规划工件格式冻结为回归 Fixture。
+
+地形子规格 T0–T6 与本文阶段的依赖关系：T0 与阶段 A 并行；T1、T2 依赖阶段 B 的 contracts、Canonical Bytes 与 Registry Lock 协议；T4 与阶段 C 是同一次 Babylon/Havok Vertical Slice 里程碑；T5 依赖阶段 E 的 CLI 与 Browser Protocol。
+
+### 阶段 0：Runtime 风险探针
+
+在冻结 PhysicsPort、CapturePort 和完整 ExecutionPlan 前，先做不进入公共 API 的 Babylon/Havok 技术探针（实施计划与判据见[阶段 0 技术探针计划与外部资料核查](./2026-08-18-phase0-probe-plan-and-external-research.md)）：
+
+- 分块 Heightfield 或等价地形 Collider 的创建、更新、Raycast 和释放。
+- Character Controller 的坡度、跨阶、贴地、边缘和连续碰撞行为。
+- GLB Rig、动画、Socket/Bone Attachment 和分层动画。
+- Headless Playwright 下的 Fixed Tick、暂停和 Browser Session。
+- Color、Semantic Mask、Instance ID、Depth 与 Collision Debug Capture Pass。
+- 大场景资源加载、Dispose、WASM 生命周期、内存和帧率基线。
+
+探针只用于验证 Port 契约和选型，不允许场景代码直接依赖探针实现。若 Havok 的地形或角色控制不满足验收，先调整 PhysicsPort/后端决策，再冻结阶段 B 协议。
 
 ### 阶段 A：冻结基准
 
@@ -1066,8 +1700,9 @@ schema
 ### 阶段 B：协议底座
 
 - 新增 contracts、schema、world-ir、capability 和 compiler 包。
-- 定义 AuthoringSpec、NormalizedWorldIR、Diagnostic 和 Capability Manifest。
-- 实现 validate、normalize、registry lock 和稳定序列化。
+- 定义 AuthoringSpec、NormalizedWorldIR、Prototype/Instance/Variant/Layer、WorldChangeSet、Diagnostic 和 Capability Manifest。
+- 实现 Canonical Schema、`constrained-json@1` Projector、validate、normalize、registry lock 和 `canonical-json-jcs@1`。
+- 用 Golden Fixture 冻结 Canonical Bytes、Composition、增量/全量等价和 Provider Adapter Conformance，再允许 Runtime 依赖这些协议。
 
 ### 阶段 C：Babylon Vertical Slice
 
@@ -1079,6 +1714,7 @@ schema
 
 - 实现 Profile、Kit、Possession、Relationship 和 Semantic Action。
 - 验证成人/儿童模型替换和不同 AnimationSet。
+- 实现 Action Timeline、Channel Lock、Cancel/Interrupt、Equipment 事务和 Capability 动态生命周期。
 - 实现地面坐骑，再实现飞龙飞行与下坐骑。
 
 ### 阶段 E：工具化
@@ -1095,6 +1731,7 @@ schema
 - Playground 默认切换 Babylon。
 - 移除或归档 Three Runtime。
 - 将生产 Agent 编排迁出 SDK 仓库，只保留 Fixtures 和接入文档。
+- 更新 `AGENTS.md`、创作工作流文档与被取代 ADR 的状态；旧规划工件格式冻结为回归 Fixture。
 
 ## 25. 方案对比与选择
 
@@ -1122,7 +1759,7 @@ schema
 
 1. 外部程序仅通过 JSON 和公开 SDK/CLI 即可生成、验证和运行世界。
 2. Agent 不生成 TypeScript 场景代码，不接触 Babylon/Havok 对象。
-3. `worldkit capabilities list` 能发现所有可用 Node、Kit、Capability、Action 和 Relationship。
+3. `worldkit capabilities list` 能发现所有可用 WorldNodeSpec kind、Kit、Capability、Action 和 Relationship。
 4. `validate` 与 `normalize` 输出稳定、可定位、可修复的 Diagnostic。
 5. 同一输入和 Seed 的 NormalizedWorldIR 哈希稳定。
 6. 新增 Capability 不修改 Compiler Core。
@@ -1134,6 +1771,15 @@ schema
 12. WorldPackage 可以独立校验、保存、加载和重放。
 13. 必需构图 Region、Anchor、路线坡度和物理 Gate 可阻断不合格产物。
 14. Runtime、CLI 和插件具有明确版本、生命周期和兼容性规则。
+15. AI 可以使用受控嵌套声明初始装备和坐骑，NormalizedWorldIR 必须展开为稳定实体与类型化关系。
+16. 空手、持械、骑乘等状态复用稳定 Semantic Action，并通过确定的 ActionContext/Variant 规则选择表现。
+17. Browser Driver 默认不出现在普通生产构建中，受信 Session 按 Scope 授权。
+18. SDK 可以按已安装能力导出提供方无关的 AI Schema Profile，任一 Provider Adapter 的输出都必须重新通过 Canonical Schema 与语义 Gate。
+19. Prototype、Instance、Variant 与 Composition Layer 具有确定的覆盖、删除、冲突和 Provenance 规则，不依赖数组位置或通用 deep merge。
+20. WorldChangeSet 以 `baseAuthoringSpecHash` 和稳定 ID 原子应用；重试幂等，失败不产生部分世界，增量编译与全量编译结果一致。
+21. Capability 动态安装与移除可以回滚且无资源泄漏；Action Timeline 的阶段、锁、Effect Tick 和终止原因可重放。
+22. NormalizedWorldIR、Registry Lock、资源和 WorldPackage 使用同一版本化 Canonical Bytes/Package Root 协议，签名与完整性验证无自引用歧义。
+23. 每个发布世界在声明的平台类别下通过帧时间、内存、加载时间和包体预算 Gate，预算来源与测量结果记录在验收报告中。
 
 ## 27. 最终架构决策摘要
 
@@ -1141,14 +1787,22 @@ schema
 - 外部团队实现图片/Prompt Agent。
 - Agent 正式输出为纯 JSON AuthoringSpec。
 - AI 默认使用 Kit，高级模式允许 Capability 组合。
+- Canonical JSON Schema 是协议真相；AI Schema Profile 是基于能力集的受限投影，模型提供方差异留在 Adapter。
+- AI-facing 类型是 WorldNodeSpec，规范化后的逻辑实例是 RuntimeEntity，Babylon 内部对象是 RenderNode。
 - 通用节点为 subject、terrain、water、object、volume、path、anchor、camera、spawner、environment。
+- AuthoringSpec 允许注册字段中的受控嵌套简写，但 NormalizedWorldIR 统一展开为同级 RuntimeEntity 与类型化 Relationship。
 - Resources、Nodes、Relationships 和 Rules 分离。
+- Prototype、Instance、Variant 和 Composition Layer 负责复用与确定性覆盖；WorldChangeSet 负责带基线哈希的增量修改。
 - 逻辑图、渲染图和物理图分离。
 - 人物的 Body、Visual、Rig、AnimationSet 和 Subject 能力分离。
 - Action 是语义操作，不只是 Clip；AnimationBinding 只负责表现。
+- 装备槽、Rig Socket 和世界 Anchor 分离；武器和坐骑等独立对象通过 Relationship 组合。
+- 同一 Semantic Action 根据装备、姿态和移动模式解析确定的 Action Variant，避免为组合状态复制动作类型。
+- Action Runtime 使用权威 Tick Timeline 和 Channel Lock；动画 Marker 只负责表现同步。
 - Babylon 是第一版默认 Web Runtime；公共协议不包含 Babylon 类型。
 - 物理通过 Port 隔离，第一版默认 Havok。
 - SDK 提供 TypeScript API、CLI、WorldPackage、Browser Protocol 和 Playwright Driver。
+- Capability 通过两阶段事务安装/移除并由 Ownership Ledger 管理；Package Hash 与签名使用版本化 Canonical Bytes。
 - 先在同一 Monorepo 并行建设新 Runtime，再移除旧 Three Runtime。
 
 这套设计兼容业界常见游戏引擎概念，同时针对 AI 做了明确的 Schema、发现、规范化、诊断、编译和自动验收增强。它避免纯节点树和纯底层 ECS 两个极端，让 AI 使用可理解的大积木，让 SDK 内部保持可组合的小积木。

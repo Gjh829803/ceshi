@@ -54,6 +54,17 @@
 - [架构决策：新场景采用 Plan-first 创作](decisions/0004-plan-first-world-authoring.md)
 - [架构决策：分离 Planner、Builder 与 Visual Bible](decisions/0005-separated-planner-builder-visual-bible.md)
 
+### 下一代架构规格（评审中，未交付）
+
+以下文档描述计划中的 AuthoringSpec 编译架构与 Babylon Runtime，处于评审阶段，不代表当前实现；与上方文档冲突时，当前实现以上方文档为准：
+
+- [AI-first 白模游戏 SDK 设计评审简版](docs/reviews/2026-08-18-ai-first-sdk-design-review-brief.md)：面向团队评审的 10～15 分钟阅读稿，只保留关键设计、风险和待确认决策。
+- [AI-first LEGO 游戏 SDK 总体设计](docs/superpowers/specs/2026-08-17-ai-first-lego-game-sdk-design.md)：下一代总架构规格，含双层 AI API、引擎无关 IR、确定性编译与迁移阶段计划。
+- [AI-first Terrain Authoring Pipeline 设计](docs/superpowers/specs/2026-08-17-terrain-authoring-pipeline-design.md)：地形子规格，定义从生成式规划图到权威 Heightfield 的确定性编译链路。
+- [业界对照与可落地性核查报告](docs/superpowers/specs/2026-08-18-industry-alignment-and-feasibility-review.md)：评审支撑材料，含运行时选型核实、业界实践对照与 AI 友好性评估。
+- [阶段 0 技术探针计划与外部资料核查](docs/superpowers/specs/2026-08-18-phase0-probe-plan-and-external-research.md)：协议冻结前的风险探针清单、判据与已定决策记录。
+- [架构决策：AuthoringSpec 编译架构与 Babylon Runtime（Proposed）](decisions/0006-authoring-spec-compiler-architecture.md)：随总体设计评审一同定稿。
+
 ## 当前状态
 
 第一期 Alpha 已有可运行实现，但不等于第一期生产完成：
