@@ -61,7 +61,7 @@ export interface TerrainNodeSpecV1 {
     terrain: {
       source: ProceduralTerrainSourceSpecV1;
       grid: {
-        originXZ: Vec2;
+        centerXZ: Vec2;
         sizeXZ: Vec2;
         resolutionXZ: readonly [columns: number, rows: number];
       };

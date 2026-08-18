@@ -115,6 +115,15 @@ importers:
         specifier: ^0.180.0
         version: 0.180.0
 
+  packages/compiler:
+    dependencies:
+      '@whitebox-world/authoring':
+        specifier: workspace:*
+        version: link:../authoring
+      '@whitebox-world/runtime-contracts':
+        specifier: workspace:*
+        version: link:../runtime-contracts
+
   packages/contracts: {}
 
   packages/core:
@@ -140,6 +149,8 @@ importers:
       three:
         specifier: ^0.180.0
         version: 0.180.0
+
+  packages/runtime-contracts: {}
 
   packages/subjects:
     dependencies:

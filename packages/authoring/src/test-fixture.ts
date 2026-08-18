@@ -42,7 +42,7 @@ export function createValidAuthoringSpec(): AuthoringSpecV1 {
           terrain: {
             source: { kind: "procedural", relief: "plain" },
             grid: {
-              originXZ: [0, 0],
+              centerXZ: [0, 0],
               sizeXZ: [160, 160],
               resolutionXZ: [65, 65],
             },

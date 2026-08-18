@@ -204,9 +204,9 @@
                 "grid": {
                   "type": "object",
                   "additionalProperties": false,
-                  "required": ["originXZ", "sizeXZ", "resolutionXZ"],
+                  "required": ["centerXZ", "sizeXZ", "resolutionXZ"],
                   "properties": {
-                    "originXZ": { "$ref": "#/$defs/vec2" },
+                    "centerXZ": { "$ref": "#/$defs/vec2" },
                     "sizeXZ": { "$ref": "#/$defs/positiveVec2" },
                     "resolutionXZ": {
                       "type": "array",

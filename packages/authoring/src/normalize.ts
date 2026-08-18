@@ -21,34 +21,34 @@ const RELIEF_DEFAULTS: Readonly<
   flat: {
     baseHeightMeters: 0,
     amplitudeMeters: 0,
-    frequencyPerMeter: 0.01,
+    frequencyPerMeter: 0.002,
     octaves: 1,
     lacunarityRatio: 2,
-    persistenceRatio: 0.5,
+    persistenceRatio: 0.3,
   },
   plain: {
     baseHeightMeters: 0,
-    amplitudeMeters: 3,
-    frequencyPerMeter: 0.0125,
+    amplitudeMeters: 2.5,
+    frequencyPerMeter: 0.006,
     octaves: 3,
     lacunarityRatio: 2,
-    persistenceRatio: 0.5,
+    persistenceRatio: 0.35,
   },
   hills: {
     baseHeightMeters: 0,
-    amplitudeMeters: 12,
-    frequencyPerMeter: 0.01,
+    amplitudeMeters: 8,
+    frequencyPerMeter: 0.0065,
     octaves: 4,
     lacunarityRatio: 2,
-    persistenceRatio: 0.5,
+    persistenceRatio: 0.42,
   },
   mountains: {
     baseHeightMeters: 0,
-    amplitudeMeters: 28,
-    frequencyPerMeter: 0.0075,
-    octaves: 5,
+    amplitudeMeters: 24,
+    frequencyPerMeter: 0.0035,
+    octaves: 4,
     lacunarityRatio: 2,
-    persistenceRatio: 0.52,
+    persistenceRatio: 0.45,
   },
 };
 
@@ -280,7 +280,7 @@ function validateSemantics(spec: AuthoringSpecV1): AuthoringDiagnostic[] {
   const terrain = terrains[0];
   if (spawn?.kind === "anchor" && terrain?.kind === "terrain") {
     const [x, , z] = spawn.transform.positionMeters;
-    const [centerX, centerZ] = terrain.components.terrain.grid.originXZ;
+    const [centerX, centerZ] = terrain.components.terrain.grid.centerXZ;
     const [sizeX, sizeZ] = terrain.components.terrain.grid.sizeXZ;
     if (x < centerX - sizeX / 2 || x > centerX + sizeX / 2 || z < centerZ - sizeZ / 2 || z > centerZ + sizeZ / 2) {
       const index = spec.nodes.indexOf(spawn);
