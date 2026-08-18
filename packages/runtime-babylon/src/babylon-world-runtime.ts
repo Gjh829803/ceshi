@@ -1,6 +1,6 @@
 import { FreeCamera } from "@babylonjs/core/Cameras/freeCamera.js";
 import type { AbstractEngine } from "@babylonjs/core/Engines/abstractEngine.js";
-import { Engine } from "@babylonjs/core/Engines/engine.pure.js";
+import { Engine } from "@babylonjs/core/Engines/engine.js";
 import { Color3, Color4 } from "@babylonjs/core/Maths/math.color.js";
 import { Quaternion, Vector3 } from "@babylonjs/core/Maths/math.vector.js";
 import { DirectionalLight } from "@babylonjs/core/Lights/directionalLight.js";

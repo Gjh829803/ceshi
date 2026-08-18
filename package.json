@@ -3,7 +3,7 @@
   "version": "0.0.0",
   "private": true,
   "type": "module",
-  "description": "A Three.js-based semantic whitebox game SDK authored by coding agents and rendered by a real-time world model.",
+  "description": "An AI-first semantic whitebox game SDK with a Canonical JSON compiler and Babylon.js plus Havok runtime.",
   "packageManager": "pnpm@10.14.0",
   "scripts": {
     "dev": "pnpm --filter @whitebox-world/playground dev",
@@ -31,7 +31,8 @@
     "test": "vitest run",
     "test:scenes": "vitest run packages/world/src/scene.test.ts apps/playground/src/scenes/scenes.test.ts",
     "test:watch": "vitest",
-    "worldkit": "tsx scripts/worldkit.ts"
+    "worldkit": "tsx scripts/worldkit.ts",
+    "verify:v1": "tsx scripts/verify-canonical-world.ts"
   },
   "dependencies": {
     "@dimforge/rapier3d-compat": "^0.19.3",

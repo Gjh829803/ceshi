@@ -1,0 +1,91 @@
+{
+  "kind": "worldkit-authoring-spec",
+  "schemaVersion": 1,
+  "id": "invalid-world",
+  "seed": 1024,
+  "world": {
+    "coordinateSystem": "right-handed-y-up-minus-z-forward",
+    "bounds": {
+      "centerXZ": [0, 0],
+      "sizeXZ": [40, 40],
+      "heightRangeMeters": [-2, 4]
+    },
+    "gravityMetersPerSecondSquaredXYZ": [0, -9.81, 0],
+    "environment": {
+      "preset": "clear-day"
+    },
+    "resourceBudget": {
+      "maxVertices": 1000,
+      "maxTriangles": 2000,
+      "maxColliders": 4
+    }
+  },
+  "resources": {
+    "prototypes": []
+  },
+  "nodes": [
+    {
+      "id": "terrain-main",
+      "kind": "terrain",
+      "components": {
+        "terrain": {
+          "source": {
+            "kind": "procedural",
+            "relief": "flat"
+          },
+          "grid": {
+            "centerXZ": [0, 0],
+            "sizeXZ": [40, 40],
+            "resolutionXZ": [17, 17]
+          }
+        }
+      }
+    },
+    {
+      "id": "spawn-main",
+      "kind": "anchor",
+      "transform": {
+        "positionMeters": [0, 0, 8]
+      },
+      "semantic": {
+        "classId": "spawn.player"
+      }
+    },
+    {
+      "id": "player",
+      "kind": "subject",
+      "kitRef": "worldkit://kit/humanoid.third-person@1"
+    },
+    {
+      "id": "camera-main",
+      "kind": "camera",
+      "components": {
+        "cameraRig": {
+          "defaultRigRef": "worldkit://camera/third-person.standard@1",
+          "allowedRigRefs": [
+            "worldkit://camera/third-person.standard@1"
+          ],
+          "target": {
+            "entityId": "player"
+          },
+          "thirdPerson": {
+            "pitchRadians": 0.2,
+            "distanceMeters": 5,
+            "targetHeightMeters": 1,
+            "fovDegrees": 56
+          },
+          "manualSwitchAllowed": false
+        }
+      }
+    }
+  ],
+  "relationships": [],
+  "rules": [],
+  "startup": {
+    "spawnAnchorId": "spawn-main",
+    "controlledEntityId": "player",
+    "cameraEntityId": "camera-main"
+  },
+  "constraints": {},
+  "unknownFieldThatMustFail": true
+}

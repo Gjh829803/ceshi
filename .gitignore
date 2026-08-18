@@ -9,4 +9,5 @@ agent-tmp/
 .agent-home/
 .agent-tmp/
 .codex-tmp/
+.playwright-cli/
 .worktrees/

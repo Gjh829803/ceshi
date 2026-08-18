@@ -1,8 +1,16 @@
 # Agent Whitebox World SDK
 
-一个基于 Three.js 的语义白膜游戏 SDK。当前提供可运行的第一期 Alpha，目标是让职责隔离的创作 Agent 根据一句话或图片规划、搭建并视觉定义可玩的室外白膜世界，为后续实时世界模型提供确定性的空间、动作和语义条件。
+一个面向 AI 的语义白膜游戏 SDK。当前同时保留 Three.js/Rapier Alpha 场景作为兼容回归样例，并交付了第一版 Canonical JSON 编译链路与 Babylon.js/Havok 运行时：其他程序只需生成严格 JSON，就能校验、编译、运行和截图一个带物理的室外白膜世界。
 
 > 第一次阅读请从[项目总览](docs/00-project-overview.md)开始。它区分了当前实现、实验能力和后续规划；其他文档中的目标 API 不代表已经交付。
+
+新程序接入请直接阅读 [Canonical JSON V1 快速接入](docs/17-canonical-json-quickstart.md)，并运行：
+
+```bash
+pnpm install
+pnpm worldkit validate examples/authoring/basic-world.json
+pnpm worldkit run examples/authoring/basic-world.json
+```
 
 用户通过一句话或图片提出创作需求，Planner、Builder 和 Visual Bible Agent 通过 SDK 工件接力生成世界；玩家操控确定性的 3D 游戏运行时；实时世界模型根据白膜、空间结构和语义条件生成最终视觉画面。
 
@@ -48,15 +56,16 @@
 - [Plan-first 世界创作协议](docs/12-plan-first-world-authoring.md)
 - [多 Agent 世界创作流水线](docs/13-multi-agent-world-authoring.md)
 - [Creator Studio：上传、生成与历史世界](docs/15-creator-studio.md)
+- [Canonical JSON V1：AI/CLI 接入与运行指南](docs/17-canonical-json-quickstart.md)
 - [架构决策：向 Agent 暴露主体套餐](decisions/0001-subject-kits.md)
 - [架构决策：第一、二期范围](decisions/0002-phased-scope.md)
 - [架构决策：Agent、Director 与 World Model 边界](decisions/0003-agent-director-world-model-boundaries.md)
 - [架构决策：新场景采用 Plan-first 创作](decisions/0004-plan-first-world-authoring.md)
 - [架构决策：分离 Planner、Builder 与 Visual Bible](decisions/0005-separated-planner-builder-visual-bible.md)
 
-### 下一代架构规格（评审中，未交付）
+### 下一代架构规格与 V1 实现依据
 
-以下文档描述计划中的 AuthoringSpec 编译架构与 Babylon Runtime，处于评审阶段，不代表当前实现；与上方文档冲突时，当前实现以上方文档为准：
+以下文档描述 AuthoringSpec 编译架构与 Babylon Runtime 的长期目标。Canonical JSON V1 已交付其中的最小纵向切片；关系、规则、更多 Kit、资产系统与高级地形等仍是后续设计，不应误认为已经实现：
 
 - [AI-first 白模游戏 SDK 设计评审简版](docs/reviews/2026-08-18-ai-first-sdk-design-review-brief.md)：面向团队评审的 10～15 分钟阅读稿，只保留关键设计、风险和待确认决策。
 - [AI-first LEGO 游戏 SDK 总体设计](docs/superpowers/specs/2026-08-17-ai-first-lego-game-sdk-design.md)：下一代总架构规格，含双层 AI API、引擎无关 IR、确定性编译与迁移阶段计划。
@@ -66,6 +75,8 @@
 - [架构决策：AuthoringSpec 编译架构与 Babylon Runtime（Proposed）](decisions/0006-authoring-spec-compiler-architecture.md)：随总体设计评审一同定稿。
 
 ## 当前状态
+
+Canonical JSON V1 当前已经具备：严格 JSON Schema、语义校验、确定性归一化与哈希、引擎无关 ExecutionPlan、Babylon.js 渲染、Havok Heightfield/静态障碍物/角色碰撞、水域检测、第三人称镜头、Browser Protocol，以及 `validate / build / run / capture` CLI。运行 `pnpm verify:v1` 可执行真实 Chromium 端到端验收。
 
 第一期 Alpha 已有可运行实现，但不等于第一期生产完成：
 
@@ -117,4 +128,4 @@ pnpm agent:visual -- --scene-id <id>
 
 测试数量以当前 `pnpm test` 输出为准；`typecheck`、生产构建和规划工件一致性均属于交付门禁。详细场景、近期反馈修正、自动验证边界和已知告警见[当前实验与验证记录](docs/10-current-experiments.md)。
 
-第二期的其他主体、更多动作和室内搭建尚未开始；NPC、完整玩法、Render Bridge、实时世界模型和 Runtime World Director 均属于后续范围。Playground 当前显示的是本地 Three.js 白膜预览，不是实时世界模型输出。
+第二期的其他主体、更多动作和室内搭建尚未开始；NPC、完整玩法、Render Bridge、实时世界模型和 Runtime World Director 均属于后续范围。默认旧场景页面仍是本地 Three.js 白膜预览；`worldkit run` 启动的是新的 Babylon.js/Havok Canonical JSON 页面，两者都不是实时世界模型输出。

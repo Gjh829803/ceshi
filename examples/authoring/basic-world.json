@@ -1,0 +1,167 @@
+{
+  "kind": "worldkit-authoring-spec",
+  "schemaVersion": 1,
+  "id": "basic-world",
+  "seed": 1024,
+  "provenance": {
+    "userPrompt": "Create a playable outdoor whitebox with rolling ground, a lake, a tower, and two corridor walls."
+  },
+  "world": {
+    "coordinateSystem": "right-handed-y-up-minus-z-forward",
+    "bounds": {
+      "centerXZ": [0, 0],
+      "sizeXZ": [120, 120],
+      "heightRangeMeters": [-8, 16]
+    },
+    "gravityMetersPerSecondSquaredXYZ": [0, -9.81, 0],
+    "environment": {
+      "preset": "clear-day"
+    },
+    "resourceBudget": {
+      "maxVertices": 20000,
+      "maxTriangles": 30000,
+      "maxColliders": 16
+    }
+  },
+  "resources": {
+    "prototypes": [
+      {
+        "id": "corridor-wall",
+        "version": 1,
+        "kind": "primitive",
+        "primitive": "box",
+        "sizeMetersXYZ": [2, 3, 24],
+        "collisionEnabled": true,
+        "semantic": {
+          "classId": "obstacle.wall"
+        }
+      },
+      {
+        "id": "landmark-tower",
+        "version": 1,
+        "kind": "primitive",
+        "primitive": "cylinder",
+        "radiusMeters": 2.5,
+        "heightMeters": 10,
+        "collisionEnabled": true,
+        "semantic": {
+          "classId": "landmark.tower"
+        }
+      }
+    ]
+  },
+  "nodes": [
+    {
+      "id": "terrain-main",
+      "kind": "terrain",
+      "components": {
+        "terrain": {
+          "source": {
+            "kind": "procedural",
+            "relief": "plain",
+            "amplitudeMeters": 1.5
+          },
+          "grid": {
+            "centerXZ": [0, 0],
+            "sizeXZ": [120, 120],
+            "resolutionXZ": [65, 65]
+          },
+          "semantic": {
+            "classId": "terrain.grassland"
+          }
+        }
+      }
+    },
+    {
+      "id": "lake-main",
+      "kind": "water",
+      "components": {
+        "water": {
+          "terrainEntityId": "terrain-main",
+          "boundary": {
+            "kind": "ellipse",
+            "centerXZ": [0, -12],
+            "radiusMetersXZ": [13, 17]
+          },
+          "depthMeters": 4,
+          "shoreWidthMeters": 3,
+          "waterLevelMeters": 1.5,
+          "traversalMode": "swimmable",
+          "semantic": {
+            "classId": "water.lake"
+          }
+        }
+      }
+    },
+    {
+      "id": "tower",
+      "kind": "object",
+      "prototypeRef": "package://prototype/landmark-tower",
+      "transform": {
+        "positionMeters": [17, 5, -19]
+      }
+    },
+    {
+      "id": "wall-east",
+      "kind": "object",
+      "prototypeRef": "package://prototype/corridor-wall",
+      "transform": {
+        "positionMeters": [7, 1.5, 22]
+      }
+    },
+    {
+      "id": "wall-west",
+      "kind": "object",
+      "prototypeRef": "package://prototype/corridor-wall",
+      "transform": {
+        "positionMeters": [-7, 1.5, 22]
+      }
+    },
+    {
+      "id": "spawn-main",
+      "kind": "anchor",
+      "transform": {
+        "positionMeters": [0, 0, 30]
+      },
+      "semantic": {
+        "classId": "spawn.player"
+      }
+    },
+    {
+      "id": "player",
+      "kind": "subject",
+      "kitRef": "worldkit://kit/humanoid.third-person@1"
+    },
+    {
+      "id": "camera-main",
+      "kind": "camera",
+      "components": {
+        "cameraRig": {
+          "defaultRigRef": "worldkit://camera/third-person.standard@1",
+          "allowedRigRefs": [
+            "worldkit://camera/third-person.standard@1"
+          ],
+          "target": {
+            "entityId": "player",
+            "targetHeightMeters": 1.2
+          },
+          "thirdPerson": {
+            "pitchRadians": 0.22,
+            "distanceMeters": 6,
+            "targetHeightMeters": 1.2,
+            "fovDegrees": 58
+          },
+          "manualSwitchAllowed": false
+        }
+      }
+    }
+  ],
+  "relationships": [],
+  "rules": [],
+  "startup": {
+    "spawnAnchorId": "spawn-main",
+    "controlledEntityId": "player",
+    "cameraEntityId": "camera-main"
+  },
+  "constraints": {}
+}

@@ -1,4 +1,5 @@
 import HavokPhysics from "@babylonjs/havok";
+import havokWasmUrl from "@babylonjs/havok/lib/esm/HavokPhysics.wasm?url";
 import { Vector3 } from "@babylonjs/core/Maths/math.vector.js";
 import { HavokPlugin } from "@babylonjs/core/Physics/v2/Plugins/havokPlugin.js";
 import type { Scene } from "@babylonjs/core/scene.pure.js";
@@ -17,7 +18,7 @@ export async function enableHavokPhysics(
   wasmBinary?: ArrayBuffer,
 ): Promise<HavokPlugin> {
   const havokPromise = wasmBinary === undefined
-    ? (browserHavokPromise ??= HavokPhysics())
+    ? (browserHavokPromise ??= HavokPhysics({ locateFile: () => havokWasmUrl }))
     : (injectedHavokPromise ??= HavokPhysics({ wasmBinary }));
   const havok = await havokPromise;
   const plugin = new HavokPlugin(true, havok);

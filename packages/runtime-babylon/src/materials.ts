@@ -13,6 +13,10 @@ export function createWhiteboxMaterials(scene: Scene): WhiteboxMaterials {
   const terrain = new StandardMaterial("worldkit.material.terrain", scene);
   terrain.diffuseColor = new Color3(0.58, 0.64, 0.48);
   terrain.specularColor = Color3.Black();
+  // Heightfield triangles are compiled in engine-neutral row-major order.
+  // Render both sides so the right-handed adapter never drops the ground.
+  terrain.backFaceCulling = false;
+  terrain.twoSidedLighting = true;
 
   const water = new StandardMaterial("worldkit.material.water", scene);
   water.diffuseColor = new Color3(0.16, 0.58, 0.78);
