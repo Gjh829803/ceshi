@@ -265,6 +265,94 @@
 
 [TerraFusion](https://arxiv.org/abs/2505.04050) 和 [MESA](https://openaccess.thecvf.com/content/CVPR2025W/MORSE/papers/Borne--Pons_MESA_Text-Driven_Terrain_Generation_Using_Latent_Diffusion_and_Global_Copernicus_CVPRW_2025_paper.pdf) 说明扩散模型已经能生成或辅助生成 Heightmap/2.5D Terrain。这类方案可注册为实验性 Terrain Source 或离线 Refiner，但在通过本项目的确定性、硬约束、物理和构图 Gate 前，不进入 Core，也不替代统一 NormalizedTerrainIR。
 
+### 5.12 Hunyuan3D-WorldClaw 外部案例与设计启示
+
+#### 5.12.1 参考资料与公开状态
+
+本节基于以下官方公开材料，调研时间为 2026-08-18：
+
+- [Tencent-Hunyuan/Hunyuan3D-WorldClaw 官方 GitHub 仓库](https://github.com/Tencent-Hunyuan/Hunyuan3D-WorldClaw)
+- [WorldClaw 官方项目页](https://tencent-hunyuan.github.io/Hunyuan3D-WorldClaw/)
+- [官方 Pipeline 图](https://raw.githubusercontent.com/Tencent-Hunyuan/Hunyuan3D-WorldClaw/main/assets/pipeline.jpg)
+- [论文摘要：Hunyuan3D-WorldClaw: An Agentic Framework for Open-World 3D Scene Generation](https://arxiv.org/abs/2608.05248)
+- [论文全文 HTML](https://arxiv.org/html/2608.05248v1)
+
+截至本次调研，官方 GitHub 仓库公开了 README、演示资产和论文入口，但没有公开 Pipeline 脚本、Agent Skill、Prompt 模板或 YAML Schema 实现。因此 WorldClaw 在本设计中属于**有论文和流程证据的外部研究案例**，不是可直接安装、审计和集成的开源依赖；下文只吸收公开方法，不假设未公开实现细节。
+
+#### 5.12.2 已公开的技术链路
+
+WorldClaw 的核心不是“一个模型直接生成完整世界”，而是 Agent 编排多个模型和 Blender 工具完成三阶段流水线：
+
+```text
+自然语言需求
+  → 意图分析与全局/区域规划
+  → 全局地形生成、材质与散布
+  → 区域构图、实例分割、3D 重建与落位
+  → Blender 渲染检查与迭代修正
+  → 可编辑 Mesh、材质、独立物体实例和渲染通道
+```
+
+论文和官方 Pipeline 图公开的信息包括：
+
+- Agent 使用结构化场景计划拆分全局地形条件与区域物体条件，而不是让下游从自然语言临时猜测所有参数。
+- 示例流程使用 GPT-Image-2 生成语义布局图和物体参考图，SAM3 做实例分割，SAM3D 做粗 3D 重建，Hunyuan3D 做高质量 Mesh/PBR 细化。
+- Blender 负责场景组装、材质、渲染和检查；Agent 通过 BlenderMCP 执行多轮 Render-Inspect-Refine。
+- 官方图中展示了 `scene_plan.yaml`、`terrain_param.yaml`、`scatter_plan.yaml`，以及 `img_gen.py`、`terrain.py`、`scatter.py`、`img_edit.py`、`img_to_3d.py`、`3d_placement.py`、`tex.py` 等阶段名。这证明其流水线存在显式中间产物，但公开材料不足以确认这些文件的完整字段、兼容性和版本协议。
+- 论文实验环境列出了 Claude Opus 4.8、Blender 5.1.1 和 4 张 NVIDIA H20；这些是论文实现选择，不应进入本 SDK 的公共 Schema。
+
+#### 5.12.3 值得吸收的地形与物体方法
+
+WorldClaw 的地形路线与本方案的 `Height + Masks + Layers` 有较强一致性：
+
+1. 先生成使用预定义颜色区分山地、沙地、水域等类别的俯视语义布局图。
+2. 从布局图提取每个区域的 Mask，并对边界做平滑，得到可混合的区域权重。
+3. 为每个区域绑定基准高度、分形噪声和山峰、沙丘、台地、侵蚀等地貌算子，再按区域权重合成统一高度场。
+4. 同一组区域权重同时驱动高度合成、材质混合和资产散布，避免三套系统各自维护不一致的区域定义。
+5. 散布阶段继续使用高度、坡度和法线筛选或调整物体落点。
+
+它的区域物体链路则是：先渲染局部地形并保存相机参数，再通过图像编辑得到区域构图；随后做实例分割和单体 3D 重建，通过相机射线与地形求交恢复落位，并继续修正比例、接地、悬浮和穿插。这个流程对未来的地标、建筑、植被和道具放置有参考意义，但视觉接地检查不能替代 Havok Collider、Nav/Route 和实际 Gameplay Gate。
+
+#### 5.12.4 与本 SDK 的边界映射
+
+| WorldClaw 公开概念 | 本 SDK 对应边界 | 设计结论 |
+| --- | --- | --- |
+| 场景计划、地形计划、散布计划 | `WorldSpec`、`WorldPromptBundle`、`TerrainAuthoringSpec` 和后续 Asset Placement Spec | Agent 输出声明式结构，不把临时代码当世界真相 |
+| 语义颜色布局图 | `CompositeTerrainSourceSpec` 中的 Semantic Raster 候选输入 | 先作为 T2 Probe，不立即新增公共 Source ID |
+| 每区域地貌参数 | 结构化 Elevation Constraint、Procedural Modifier 和 Compiler Profile | 数值参数与图像区域分离，允许单独验证和替换 |
+| 区域 Mask 同时驱动地形、材质和散布 | `NormalizedTerrainIR` 的 Height 与独立 R8 Semantic Layers | 同一个 Canonical Region ID 跨系统引用，不复制区域真相 |
+| 区域物体生成与三维落位 | 未来独立 Asset Generation / Placement Pipeline | 不塞进 Terrain Runtime，也不允许物体生成器修改权威 Heightfield |
+| Render-Inspect-Refine | Authoring Aid Refiner、Browser Gate、Physics Gate 和 ChangeSet | 非确定性修正先冻结产物，再重新进入确定性 Compiler |
+| 独立可编辑对象实例 | Prototype/Instance、Asset Slot 和 Relationship | 保留 LEGO 化替换、组合和后续交互能力 |
+
+WorldClaw 支持了本项目“全局到区域、结构先于生成”的总体判断，但不改变 Runtime 归属：本 SDK 仍采用 `Agent → Versioned Schema → Compiler → NormalizedTerrainIR / WorldPackage → Babylon + Havok Runtime`。WorldClaw 主要可参考的是上游 Planning、Terrain Authoring、Asset Generation 和自动质检，不是角色控制、物理、3C、动作系统或多主体控制的替代方案。
+
+#### 5.12.5 明确吸收与不吸收
+
+吸收以下思想：
+
+- 全局地形与区域物体分阶段生成，先解决大尺度拓扑，再解决局部资产。
+- 用语义布局图降低 Agent 表达区域边界的难度，同时用结构化参数保留米制高度和 Gameplay 控制。
+- 用同一组 Canonical Region Mask 驱动高度、地表语义和资产放置。
+- 每个生成物体保持独立 Prototype/Instance 身份，支持替换、验证和局部修复。
+- 生成后必须经过渲染、构图、接地、物理和可玩性检查，并输出机器可读 Diagnostic/ChangeSet。
+
+不吸收以下实现耦合：
+
+- 不把 GPT-Image-2、SAM3、SAM3D、Hunyuan3D、Claude 或 Blender 写入公共 Schema。
+- 不允许运行时执行 Agent 临时生成的 Python/Blender 脚本；外部生成只在受控 Authoring Host 内运行。
+- 不让 Blender 文件或渲染结果成为运行时世界的单一真相；最终仍冻结为版本化、可 Hash、可验证的 SDK 资源。
+- 不把图片中的物体接触关系当作物理正确性证据；Collider、可行走区域、路线、浮空和穿插必须由 Runtime Gate 验证。
+- 不因论文 Demo 质量而跳过 Provider 可替换性、失败回退、确定性、资源预算和长期版本迁移设计。
+
+#### 5.12.6 对当前地形决策的影响
+
+WorldClaw 为“图像模型生成语义区域图，再由工程 Compiler 生成高度场”的路线提供了外部案例，但没有证明语义图能够单独恢复精确高度，也没有公开足够实现用于直接复现。因此：
+
+- 第一版推荐路线仍是 Elevation Band Image + Critical Structured Controls。
+- T2 Bake-off 增加第四条候选：**语义区域布局图 + 每区域结构化地貌参数**。第一轮使用既有 `CompositeTerrainSourceSpec` 表达，避免过早冻结新 Source Schema。
+- 第四条路线必须与离散色带、连续灰度、概念图转 Canonical Map 使用同一 Dataset、Constraint 和 Runtime Gate。
+- 只有当第四条路线显著改善宏观拓扑、区域一致性或 Agent 收敛，并能给出稳定 Canonicalization 规则时，才提出新的公共 Source ID；否则它保持为 Composite Source 的上游生成 Profile。
+
 ## 6. 总体架构
 
 ```mermaid
@@ -1064,7 +1152,7 @@ Benchmark 规则：
 
 1. Development Split 用于调整 Prompt、Palette、Compiler 和修复策略；Holdout Split 在阈值冻结后运行，其期望标注不暴露给调参/Planner 流程。
 2. 对随机生成器执行 Manifest 声明的重复次数，报告单次成功率、全 Case 通过率、分位数和跨运行漂移，禁止挑选最佳一次作为正式结果。
-3. 比较离散色带、连续灰度和概念图转 Canonical Map 时使用同一 Case、结构约束和 Runtime Gate；Provider 名称只进入 Benchmark/Provenance，不进入 Public Terrain Schema。
+3. 比较离散色带、连续灰度、概念图转 Canonical Map，以及语义区域布局图 + 结构化区域参数时使用同一 Case、结构约束和 Runtime Gate；Provider 名称只进入 Benchmark/Provenance，不进入 Public Terrain Schema。
 4. 阻断指标至少包括 Source 可解析、关键拓扑、必需 Region/Anchor、Spawn、Route、Water/Platform、Tile Seam 和 Physics。任何阻断 Gate 失败都不能由加权总分抵消。
 5. 诊断指标至少包括 unknown pixel ratio、非法 Band 邻接、Constraint Repair Delta、地形修改面积/高度、Agent 收敛轮数、生成漂移、编译耗时和资源峰值。模型价格不是本项目的选择指标。
 6. Metric 定义、聚合方式、缺失值策略和阈值都写入 Manifest；阈值变化必须增加 Manifest 版本，不能在看到 Holdout 结果后原地修改。
@@ -1138,7 +1226,7 @@ T 阶段与上位规格阶段 0–F 的依赖关系：T0 与阶段 A 并行执�
 - 实现 Band Topology 和 `monotonic-bands@1`。
 - 实现 unknown、repair 和 adjacency Diagnostics。
 - 使用生成式规划图和人工 Golden 图双轨测试。
-- 在冻结默认 Image Profile 前，对 20～30 张真实参考图执行三路线 Bake-off：离散色带控制图、连续灰度高度候选图、概念图再经 Vision/Segmentation 转 Canonical Map。
+- 在冻结默认 Image Profile 前，对 20～30 张真实参考图执行四路线 Bake-off：离散色带控制图、连续灰度高度候选图、概念图再经 Vision/Segmentation 转 Canonical Map、语义区域布局图 + 每区域结构化地貌参数。第四条路线第一轮必须通过既有 `CompositeTerrainSourceSpec` 表达，不提前增加公共 Source ID。
 - Bake-off 严格通过冻结的 TerrainBenchmarkManifest 运行，记录宏观拓扑正确率、Opening Shot Region/Anchor、unknown pixel ratio、非法 Band 邻接、Constraint Repair Delta、路线/出生点通过率、重复生成一致性和 Agent 收敛轮数；模型成本不是选择指标。
 - Profile 和阈值在 Development Split 冻结后只运行一次正式 Holdout；失败后不得原地修改同版本阈值或删除失败 Case。
 
@@ -1223,7 +1311,7 @@ T 阶段与上位规格阶段 0–F 的依赖关系：T0 与阶段 A 并行执�
 - 路线约束对宏观地形改造量的可接受阈值。
 - 1.25、2.0、2.5 米/格的碰撞、画面和资源差异。
 - 生成图整体重做与局部 Patch 哪种更容易让 Agent 稳定收敛。
-- 三条图像路线在 20～30 张真实参考图上的 Gate 通过率和 Agent 收敛轮数：离散色带、连续灰度、概念图转 Canonical Map。
+- 四条图像路线在 20～30 张真实参考图上的 Gate 通过率和 Agent 收敛轮数：离散色带、连续灰度、概念图转 Canonical Map、语义区域布局图 + 结构化区域参数。
 - GPT Image 2 等具体 Provider 在推荐 Profile 下的重复生成漂移；结果只用于选择上游 Profile，不写入 Public Schema。
 - Native、Gaea Recipe、Houdini HDA、World Machine Graph 中哪一种 Refiner 在自然度、确定性、Protected Mask 和自动化 Report 上真正增加价值。
 
