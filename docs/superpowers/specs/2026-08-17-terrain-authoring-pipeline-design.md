@@ -392,6 +392,8 @@ flowchart TD
 
 ## 7. Terrain Source 插件协议
 
+本子规格继承总规格的 Schema 命名规则：Source 判别使用 `kind`，Registry/Package 资源字段使用 `...Ref`，结构版本使用 `schemaVersion`，二维世界坐标显式使用 `XZ`，图像归一化坐标显式使用 `Uv`。
+
 ### 7.1 AI-facing Union
 
 ```ts
@@ -468,7 +470,7 @@ interface TerrainRefiner {
 }
 
 interface TerrainRefinementContext {
-  readonly semanticMasks: readonly SemanticRasterLayer[];
+  readonly semanticLayers: readonly SemanticRasterLayer[];
   readonly protectedMasks: readonly ProtectedTerrainMask[];
   readonly profile: LockedTerrainRefinementProfile;
   readonly seed: number;
@@ -476,8 +478,8 @@ interface TerrainRefinementContext {
 }
 
 interface TerrainRefinementResult {
-  readonly candidateHeight: MetricHeightRaster;
-  readonly derivedMasks: readonly SemanticRasterLayer[];
+  readonly candidateHeightRaster: MetricHeightRaster;
+  readonly derivedSemanticLayers: readonly SemanticRasterLayer[];
   readonly report: TerrainRefinementReport;
   readonly diagnostics: readonly Diagnostic[];
 }
@@ -524,21 +526,21 @@ type TerrainRefinementClass =
   "id": "main-terrain",
   "kind": "terrain",
   "bounds": {
-    "center": [0, 0],
-    "size": [1200, 1000],
-    "heightRange": [-12, 92]
+    "centerXZ": [0, 0],
+    "sizeXZ": [1200, 1000],
+    "heightRangeMeters": [-12, 92]
   },
   "grid": {
     "metersPerCell": 2,
-    "tileSizeMeters": [200, 200]
+    "tileSizeMetersXZ": [200, 200]
   },
   "source": {
-    "type": "terrain-source.elevation-band-image@1",
-    "asset": "package://terrain/elevation-bands.png",
+    "kind": "terrain-source.elevation-band-image@1",
+    "assetRef": "package://terrain/elevation-bands.png",
     "registration": {
       "imageRightMapsTo": "+X",
       "imageUpMapsTo": "-Z",
-      "crop": [0, 0, 1, 1]
+      "cropUv": [0, 0, 1, 1]
     },
     "palette": [
       {
@@ -577,8 +579,8 @@ type TerrainRefinementClass =
         "heightRangeMeters": [72, 92]
       }
     ],
-    "quantizationProfile": "terrain-quantization.lab-nearest@1",
-    "reconstructionProfile": "terrain-reconstruction.monotonic-bands@1",
+    "quantizationProfileRef": "terrain-quantization.lab-nearest@1",
+    "reconstructionProfileRef": "terrain-reconstruction.monotonic-bands@1",
     "unknownPixelPolicy": {
       "maximumRatio": 0.01,
       "action": "error"
@@ -589,8 +591,8 @@ type TerrainRefinementClass =
     "spawnAreas": [
       {
         "id": "player-spawn",
-        "center": [0, 360],
-        "radius": 8,
+        "centerXZ": [0, 360],
+        "radiusMeters": 8,
         "targetHeightMeters": 82,
         "maximumSlopeDegrees": 4
       }
@@ -598,7 +600,7 @@ type TerrainRefinementClass =
     "routes": [
       {
         "id": "spawn-to-bay",
-        "points": [[0, 360], [0, 280], [0, 180], [0, 80]],
+        "pointsXZ": [[0, 360], [0, 280], [0, 180], [0, 80]],
         "widthMeters": 8,
         "maximumSlopeDegrees": 35
       }
@@ -606,8 +608,8 @@ type TerrainRefinementClass =
     "platforms": [
       {
         "id": "lighthouse-platform",
-        "center": [110, 100],
-        "size": [28, 28],
+        "centerXZ": [110, 100],
+        "sizeXZ": [28, 28],
         "targetHeightMeters": 42,
         "maximumSlopeDegrees": 3
       }
@@ -625,9 +627,9 @@ type TerrainRefinementClass =
 
 `generator.name` 只是审计信息，不能参与插件选择或 Runtime 分支。
 
-普通模式优先选择注册的 `paletteProfile`，例如 `terrain-palette.coastal-7@1`；Normalizer 将它展开成完整 Palette 和高度映射。上例展开 Palette 是为了展示规范化后的含义。只有高级模式允许显式 Palette，并且仍需通过颜色距离、Band 顺序和高度范围校验。
+普通模式优先选择注册的 `paletteProfileRef`，例如 `terrain-palette.coastal-7@1`；Normalizer 将它展开成完整 Palette 和高度映射。上例展开 Palette 是为了展示规范化后的含义。只有高级模式允许显式 Palette，并且仍需通过颜色距离、Band 顺序和高度范围校验。
 
-像素到世界坐标的映射必须无歧义。上述方向表示：图片右侧是世界 `+X`，图片顶部是世界 `-Z`。在完整 Crop 下，左上角映射到 `center - size / 2`，右下角映射到 `center + size / 2`。Compiler 必须把 Registration 写入 Debug Artifact，避免图像翻转后仍能生成“看似合理但方向错误”的世界。
+像素到世界坐标的映射必须无歧义。上述方向表示：图片右侧是世界 `+X`，图片顶部是世界 `-Z`。在完整 Crop 下，左上角映射到 `centerXZ - sizeXZ / 2`，右下角映射到 `centerXZ + sizeXZ / 2`。Compiler 必须把 Registration 写入 Debug Artifact，避免图像翻转后仍能生成“看似合理但方向错误”的世界。
 
 ### 8.2 规划图生成约束
 
@@ -814,11 +816,11 @@ world bounds and finite heights
 ```ts
 interface NormalizedTerrainIR {
   id: string;
-  version: 1;
+  schemaVersion: 1;
   bounds: {
-    center: readonly [number, number];
-    size: readonly [number, number];
-    heightRange: readonly [number, number];
+    centerXZ: readonly [number, number];
+    sizeXZ: readonly [number, number];
+    heightRangeMeters: readonly [number, number];
   };
   grid: {
     columns: number;
@@ -827,14 +829,14 @@ interface NormalizedTerrainIR {
     tileColumns: number;
     tileRows: number;
   };
-  height: ContentAddressedHeightRasterRef;
+  heightRaster: ContentAddressedHeightRasterRef;
   semanticLayers: readonly NormalizedSemanticLayer[];
   evidenceLayers: readonly NormalizedEvidenceLayer[];
   waterBindings: readonly NormalizedWaterBinding[];
   constraints: readonly NormalizedTerrainConstraintResult[];
   topology: TerrainTopologySummary;
   compiler: {
-    sourceType: string;
+    sourcePluginId: string;
     sourceHash: string;
     compilerId: string;
     compilerVersion: string;
@@ -846,7 +848,7 @@ interface NormalizedTerrainIR {
       refinementClass: "deterministic-compiler-refiner";
       recipeHash: string;
       inputHash: string;
-      outputHeightHash: string;
+      outputHeightRasterHash: string;
       outputMaskHashes: readonly string[];
       reportHash: string;
     };
@@ -877,7 +879,7 @@ interface ContentAddressedHeightRasterRef {
   readonly rows: number;
   readonly offsetMeters: number;
   readonly scaleMetersPerUnit: number;
-  readonly noData?: number;
+  readonly noDataValue?: number;
 }
 ```
 
@@ -926,14 +928,14 @@ Diagnostic 示例：
   "severity": "error",
   "code": "TERRAIN_BAND_ADJACENCY_INVALID",
   "instancePath": "/nodes/0/source",
-  "terrainId": "main-terrain",
+  "terrainEntityId": "main-terrain",
   "imageRegion": {
-    "minimum": [0.62, 0.18],
-    "maximum": [0.71, 0.29]
+    "minimumUv": [0.62, 0.18],
+    "maximumUv": [0.71, 0.29]
   },
   "worldRegion": {
-    "minimum": [144, -320],
-    "maximum": [252, -210]
+    "minimumXZ": [144, -320],
+    "maximumXZ": [252, -210]
   },
   "message": "Lowland touches summit across 8.2% of the summit boundary.",
   "details": {
@@ -945,7 +947,7 @@ Diagnostic 示例：
   "suggestions": [
     {
       "kind": "regenerate-source-region",
-      "region": [0.62, 0.18, 0.71, 0.29],
+      "regionUv": [0.62, 0.18, 0.71, 0.29],
       "requireIntermediateBands": ["hills", "highland"]
     },
     {

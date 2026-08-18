@@ -72,18 +72,20 @@ CLI、Browser、键盘、AI 和 NPC 只是不同 ControlSource。它们通过同
 
 ### 5.1 稳定资源引用
 
-所有可复用定义都通过 Registry 中的稳定 ID 和版本引用：
+所有可复用定义都通过受约束的 Registry/Package URI 引用；Authoring 输入与解析后的锁定引用使用不同类型：
 
 ```ts
-interface ResourceRef {
-  id: string;
-  version: number;
-  contentHash?: string;
+type ResourceRef = string;
+
+interface ResolvedResourceRef {
+  uri: string;
+  resolvedVersion: string;
+  contentHash: string;
 }
 ```
 
-- `id + version` 表示语义兼容边界。
-- `contentHash` 锁定当前构建使用的实际内容。
+- `ResourceRef` 受 `worldkit-resource-ref` Format 约束，可使用 Canonical Schema 明确允许的简写。
+- Normalizer 将其解析为 `ResolvedResourceRef`；`resolvedVersion + contentHash` 锁定当前构建实际使用的实现。
 - Registry Lock 记录 Schema Hash、Manifest Hash、实现 Hash 和资产 Hash。
 - 生产构建禁止使用“latest”或按注册顺序选择资源。
 
@@ -96,35 +98,35 @@ interface SubjectPresetDefinition {
   id: string;
   version: number;
   category: "human" | "animal" | "vehicle" | "furniture" | "composite";
-  topology: string;
+  bodyTopology: string;
   sizeClass: "small" | "medium" | "large";
-  mediums: readonly ("ground" | "water" | "air")[];
-  capabilities: readonly CapabilityRef[];
+  supportedMediums: readonly ("ground" | "water" | "air")[];
+  capabilityRefs: readonly ResourceRef[];
   profiles: {
-    bodyArt: ResourceRef;
-    body: ResourceRef;
-    rig?: ResourceRef;
-    sockets: ResourceRef;
-    characterState: ResourceRef;
-    controlMethod: ResourceRef;
-    controlFeel: ResourceRef;
-    cameraMethod: ResourceRef;
-    physicsMedium: ResourceRef;
-    renderBinding: ResourceRef;
-    actionPacks?: readonly ResourceRef[];
-    poseSet?: ResourceRef;
-    mountBinding?: ResourceRef;
+    visualProfileRef: ResourceRef;
+    bodyProfileRef: ResourceRef;
+    rigProfileRef?: ResourceRef;
+    socketSetRef: ResourceRef;
+    stateModelRef: ResourceRef;
+    controlMethodProfileRef: ResourceRef;
+    controlFeelProfileRef: ResourceRef;
+    cameraRigRef: ResourceRef;
+    mediumPhysicsProfileRef: ResourceRef;
+    renderBindingProfileRef: ResourceRef;
+    animationSetRef?: ResourceRef;
+    poseSetRef?: ResourceRef;
+    mountBindingProfileRef?: ResourceRef;
   };
-  agentFacing: {
-    name: string;
+  aiMetadata: {
+    displayName: string;
     description: string;
-    allowedOverrides: readonly string[];
-    examples: readonly string[];
+    allowedOverridePaths: readonly string[];
+    usageExamples: readonly string[];
   };
 }
 ```
 
-`topology` 描述标准人形、四足、蛇形、四轮等运动/身体拓扑；翼、鳍、可骑乘、可驾驶是 Capability，不创建深层继承 Class。尺寸默认通过 Body、Collider、质量、速度和 Camera Profile 组合，身体比例显著变化时才新增美术资源。
+`bodyTopology` 描述标准人形、四足、蛇形、四轮等运动/身体拓扑；翼、鳍、可骑乘、可驾驶是 Capability，不创建深层继承 Class。尺寸默认通过 Body、Collider、质量、速度和 Camera Profile 组合，身体比例显著变化时才新增美术资源。
 
 ### 5.3 Agent-facing 主体实例
 
@@ -134,19 +136,19 @@ interface SubjectPresetDefinition {
 {
   "id": "hero",
   "kind": "subject",
-  "preset": "subject.humanoid.basic@1",
+  "presetRef": "subject.humanoid.basic@1",
   "transform": {
-    "position": [0, 1, 0],
+    "positionMeters": [0, 1, 0],
     "facingRadians": 0
   },
   "appearance": {
-    "variant": "adult-neutral"
+    "variantId": "adult-neutral"
   },
   "role": "primary-playable"
 }
 ```
 
-Agent 不填写：动画 Clip 名、骨骼名、Collider 尺寸、入水阈值、加速度、Camera Raycast 参数和底层控制器类型。高级覆盖只有在 Preset 的 `allowedOverrides` 中显式开放后才有效。
+Agent 不填写：动画 Clip 名、骨骼名、Collider 尺寸、入水阈值、加速度、Camera Raycast 参数和底层控制器类型。高级覆盖只有在 Preset 的 `allowedOverridePaths` 中显式开放后才有效。
 
 `role: "primary-playable"` 只声明默认可玩候选。Runtime Host 在 Session Bootstrap 时创建 Controller 并建立 `possessedBy`；Controller ID、权限和绑定不写入普通场景 Schema。因此 AI 只指定主要人物也能获得默认控制，同时高级调用方仍能显式创建多个 Controller。
 
@@ -158,8 +160,8 @@ Agent 不填写：动画 Clip 名、骨骼名、Collider 尺寸、入水阈值�
 interface SubjectAssetBundle {
   id: string;
   version: number;
-  subjectCategory: string;
-  topology: string;
+  category: string;
+  bodyTopology: string;
   coordinateConvention: {
     metersPerUnit: 1;
     forwardAxis: "-Z";
@@ -170,9 +172,9 @@ interface SubjectAssetBundle {
     id: string;
     kind: "model" | "animation" | "pose" | "metadata";
     uri: string;
-    sha256: string;
+    contentHash: string;
   }[];
-  rig?: ResourceRef;
+  rigRef?: ResourceRef;
   sockets: readonly SocketDeclaration[];
   colliderHints: readonly ColliderHint[];
   semanticTags: readonly string[];
@@ -188,10 +190,11 @@ Bundle 只提供资产事实和参考；最终 Collider、控制、物理和 Cam
 Runtime 按固定层级解析主体状态：
 
 ```text
-1. Control Ownership：free / driver / rider / passenger / uncontrolled
-2. Medium：ground / water / air
-3. Locomotion Method：walk / swim / wingsuit / vehicle / mount / none
-4. Action/Pose：idle / move / turn / jump / fall / attack / ...
+1. Possession：由 possessedBy / controlBindings 表达，不复制到主体状态字段
+2. Mount Role：driver / rider / passenger / none
+3. Movement Medium：ground / water / air
+4. Locomotion Mode：walk / swim / flight / vehicle / mounted / none
+5. Active Action / Pose：idle / move / turn / jump / fall / attack / ...
 ```
 
 上层状态约束下层选择。动作只表现已提交状态，不能反向写入权威位移或伪造接地/入水事实。
@@ -199,11 +202,11 @@ Runtime 按固定层级解析主体状态：
 ```ts
 interface SubjectStateSnapshot {
   entityId: EntityId;
-  controlOwnership: "free" | "driver" | "rider" | "passenger" | "uncontrolled";
-  medium: "ground" | "water" | "air";
-  locomotionMethod: string;
-  action: string;
-  tags: readonly string[];
+  mountRole?: "driver" | "rider" | "passenger";
+  movementMedium: "ground" | "water" | "air";
+  locomotionMode: string;
+  activeActionRef: ResourceRef;
+  stateTags: readonly string[];
   effectiveTick: number;
 }
 ```
@@ -214,12 +217,12 @@ Scene Agent 只负责创建人物和水体；SDK 自动执行：
 
 ```text
 Physics/Water Query
-  → MediumSensor 产生 waterDepth、immersionRatio、groundContact
+  → MediumSensor 产生 waterDepthMeters、immersionRatio、hasGroundContact
   → StateResolver 使用进入/退出阈值和优先级
   → Capability Transaction 暂停 ground locomotion、激活 swim locomotion
   → 选择 Water Action Pack、Water Control Feel 和 Camera Context
   → Physics 执行浮力、阻力和权威位移
-  → Render Binding 发布 medium=water、action=swim 等稳定状态
+  → Render Binding 发布 movementMedium=water、locomotionMode=swim 等稳定状态
 ```
 
 ```ts
@@ -236,14 +239,14 @@ interface PhysicsMediumProfile {
     exitDepthMeters: number;
     enterImmersionRatio: number;
     exitImmersionRatio: number;
-    buoyancy: number;
-    linearDrag: number;
-    angularDrag: number;
-    surfaceHold: number;
+    buoyancyScale: number;
+    linearDragCoefficient: number;
+    angularDragCoefficient: number;
+    surfaceHoldStrength: number;
   };
   air?: {
     gravityScale: number;
-    drag: number;
+    dragCoefficient: number;
   };
 }
 ```
@@ -269,7 +272,7 @@ interface ControllerEntitySpec {
   id: ControllerId;
   kind: "controller";
   ownerSessionId: SessionId;
-  source: {
+  controlSource: {
     kind: "keyboard" | "gamepad" | "browser" | "cli" | "ai" | "script" | "npc";
     sourceId: string;
   };
@@ -279,9 +282,9 @@ interface ControllerEntitySpec {
 
 interface PossessedByRelationship {
   type: "possessedBy";
-  version: 1;
-  subject: EntityId;
-  controller: ControllerId;
+  schemaVersion: 1;
+  controlledEntityId: EntityId;
+  controllerId: ControllerId;
   channels: readonly ("locomotion" | "action")[];
 }
 ```
@@ -319,9 +322,9 @@ interface ControlMethodProfile {
     | "watercraft-steer"
     | "flight-steer"
     | "none";
-  facingRule: "align-to-move" | "steering-derived" | "flight-derived" | "fixed";
-  lateralMovement: "allowed" | "forbidden" | "profile";
-  feelProfile: ResourceRef;
+  facingPolicy: "align-to-move" | "steering-derived" | "flight-derived" | "fixed";
+  lateralMovementPolicy: "allowed" | "forbidden" | "profile";
+  feelProfileRef: ResourceRef;
 }
 ```
 
@@ -332,9 +335,9 @@ interface ControlMethodProfile {
 外部程序保持一个 `worldkit run --interactive --protocol ndjson` Session，先创建多个 Controller，再分别绑定人物：
 
 ```jsonl
-{"type":"controller.create","requestId":"r1","controllers":[{"id":"controller-red","source":{"kind":"cli","sourceId":"director"}},{"id":"controller-blue","source":{"kind":"cli","sourceId":"director"}}]}
-{"type":"control.bind","requestId":"r2","controllerId":"controller-red","subjectEntityId":"person-a","channels":["locomotion","action"]}
-{"type":"control.bind","requestId":"r3","controllerId":"controller-blue","subjectEntityId":"person-b","channels":["locomotion","action"]}
+{"type":"controller.create","requestId":"r1","controllers":[{"id":"controller-red","controlSource":{"kind":"cli","sourceId":"director"}},{"id":"controller-blue","controlSource":{"kind":"cli","sourceId":"director"}}]}
+{"type":"control.bind","requestId":"r2","controllerId":"controller-red","controlledEntityId":"person-a","channels":["locomotion","action"]}
+{"type":"control.bind","requestId":"r3","controllerId":"controller-blue","controlledEntityId":"person-b","channels":["locomotion","action"]}
 ```
 
 同一 Tick 的多人输入使用 Batch：
@@ -343,25 +346,25 @@ interface ControlMethodProfile {
 {
   "type": "control.intent-batch",
   "requestId": "r4",
-  "tick": 120,
+  "targetTick": 120,
   "commands": [
     {
       "controllerId": "controller-red",
-      "sequence": 1,
-      "expectedTargetEntityId": "person-a",
+      "sequenceNumber": 1,
+      "expectedControlledEntityId": "person-a",
       "intent": { "type": "move", "forward": 1 }
     },
     {
       "controllerId": "controller-blue",
-      "sequence": 1,
-      "expectedTargetEntityId": "person-b",
+      "sequenceNumber": 1,
+      "expectedControlledEntityId": "person-b",
       "intent": { "type": "move", "right": 1 }
     }
   ]
 }
 ```
 
-命令的权威目标来自 `possessedBy`。`expectedTargetEntityId` 只用于发现控制权已经切换，不能绕过 Binding。Batch 在进入 Tick 队列前整体校验；任一 Controller、权限、Sequence、Binding 或 Intent 非法时整批拒绝。
+命令的权威目标来自 `possessedBy`。`expectedControlledEntityId` 只用于发现控制权已经切换，不能绕过 Binding。Batch 在进入 Tick 队列前整体校验；任一 Controller、权限、Sequence、Binding 或 Intent 非法时整批拒绝。
 
 `controller.create` 不能由调用方自行指定或扩大 Scope 和目标白名单；这些权限来自 Host Session Policy。Session 关闭、超时或宿主断开时，Runtime 释放相关 Binding，并按场景策略让主体安全停止、进入默认 AI 或保持无控制状态。
 
@@ -392,12 +395,16 @@ Camera Entity、ControllerEntity 和 Subject Entity 是三个独立对象：
 interface CameraContextBinding {
   id: string;
   when: {
-    controlOwnership?: readonly string[];
-    locomotionMethods?: readonly string[];
-    mediums?: readonly string[];
+    mountRoles?: readonly ("driver" | "rider" | "passenger")[];
+    locomotionModes?: readonly string[];
+    movementMediums?: readonly ("ground" | "water" | "air")[];
+    allTags?: readonly string[];
+    anyTags?: readonly string[];
+    excludedTags?: readonly string[];
   };
-  rig: ResourceRef;
+  rigRef: ResourceRef;
   targetPolicy: "controlled-entity" | "rider" | "explicit-entity";
+  explicitTargetEntityId?: EntityId;
   priority: number;
 }
 ```
@@ -413,13 +420,13 @@ interface MountBindingProfile {
   id: string;
   version: number;
   seatPose: "sit" | "straddle" | "stand" | "cabin";
-  humanAlignmentSocket: "SeatAlignment";
-  targetSeatSocket: string;
-  controlOwnership: "transfer-to-target" | "keep-rider" | "none";
-  humanCollider: "disabled-dynamic-query-only" | "enabled";
+  riderAlignmentSocketId: "SeatAlignment";
+  mountSeatSocketId: string;
+  controlTransferPolicy: "transfer-to-mount" | "keep-rider" | "none";
+  riderColliderPolicy: "disabled-dynamic-query-only" | "enabled";
   cameraTargetPolicy: "controlled-entity" | "rider";
-  actionPack: ResourceRef;
-  safeExitSockets: readonly string[];
+  riderActionPackRef: ResourceRef;
+  safeExitSocketIds: readonly string[];
 }
 ```
 
@@ -459,15 +466,15 @@ AnimationSet 根据上下文选择 Variant：
 
 ```ts
 interface ActionVariantRule {
-  action: string;
+  actionRef: ResourceRef;
   when: {
-    locomotionMethod?: string;
+    locomotionMode?: string;
     equippedTags?: readonly string[];
-    controlOwnership?: string;
-    medium?: string;
+    mountRole?: "driver" | "rider" | "passenger";
+    movementMedium?: "ground" | "water" | "air";
   };
-  animation: ResourceRef;
-  fallback?: ResourceRef;
+  animationRef: ResourceRef;
+  fallbackAnimationRef?: ResourceRef;
 }
 ```
 
@@ -481,15 +488,15 @@ Render Binding 向白膜渲染器和后续世界模型发布稳定、可查询�
 interface SubjectRenderBindingSnapshot {
   entityId: EntityId;
   semanticClass: string;
-  topology: string;
+  bodyTopology: string;
   sizeClass: string;
   forward: readonly [number, number, number];
   speedMetersPerSecond: number;
-  medium: "ground" | "water" | "air";
-  locomotionMethod: string;
-  action: string;
-  pose: string;
-  mountedOn?: EntityId;
+  movementMedium: "ground" | "water" | "air";
+  locomotionMode: string;
+  activeActionRef: ResourceRef;
+  poseId: string;
+  mountEntityId?: EntityId;
   equippedEntityIds: readonly EntityId[];
   effectiveTick: number;
 }
@@ -504,11 +511,11 @@ Runtime Snapshot 使用复数集合和稳定 ID，不能只返回一个 `player`
 ```ts
 interface RuntimeSnapshot {
   sessionId: SessionId;
-  tick: number;
-  controllers: Record<ControllerId, ControllerSnapshot>;
+  currentTick: number;
+  controllersById: Record<ControllerId, ControllerSnapshot>;
   controlBindings: readonly ControlBindingSnapshot[];
-  entities: Record<EntityId, SubjectStateSnapshot>;
-  cameras: Record<EntityId, CameraSnapshot>;
+  subjectStatesByEntityId: Record<EntityId, SubjectStateSnapshot>;
+  camerasById: Record<EntityId, CameraSnapshot>;
 }
 ```
 
@@ -520,7 +527,7 @@ interface RuntimeSnapshot {
 | `CONTROL_TARGET_NOT_ALLOWED` | 目标不在 Controller 白名单 |
 | `CONTROL_TARGET_NOT_POSSESSABLE` | 主体没有可控制能力 |
 | `CONTROL_CHANNEL_OCCUPIED` | Channel 已被另一个权威 Controller 占用 |
-| `CONTROL_BINDING_STALE` | `expectedTargetEntityId` 与当前绑定不一致 |
+| `CONTROL_BINDING_STALE` | `expectedControlledEntityId` 与当前绑定不一致 |
 | `CONTROL_SEQUENCE_STALE` | Sequence 重复或倒退 |
 | `CONTROL_INTENT_CONFLICT` | 同一 Controller/Channel/Tick 存在互斥命令 |
 | `MEDIUM_TRANSITION_FAILED` | 介质能力切换无法完整提交 |
@@ -601,7 +608,7 @@ Schema 和边界一次设计完整，运行能力分阶段交付。
 3. **骑乘飞龙**：人物与飞龙身份不变；骑乘、控制权、Collider、动作、Camera 和 SafeExit 原子切换。
 4. **多人 CLI**：一个 Session 用两个 Controller 在同一 Tick 控制两个人物；Replay 得到相同状态结果。
 5. **权限失败**：无 `control.bind` Scope 的 Session 不能抢占主体；失败不改变原绑定。
-6. **控制权过期**：骑乘切换后，携带旧 `expectedTargetEntityId` 的 Intent 稳定失败。
+6. **控制权过期**：骑乘切换后，携带旧 `expectedControlledEntityId` 的 Intent 稳定失败。
 7. **持剑动作**：空手跑、持剑跑、持剑攻击使用正确 Variant；缺失专用资源时按声明 fallback。
 8. **世界模型关闭**：白膜 Runtime 仍可独立完成全部控制、物理、Camera 和状态验收。
 

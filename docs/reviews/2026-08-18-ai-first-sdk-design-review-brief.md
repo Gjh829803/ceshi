@@ -87,33 +87,53 @@ Schema 分成两层：
 ```ts
 interface AuthoringSpecV1 {
   kind: "worldkit-authoring-spec";
-  version: 1;
+  schemaVersion: 1;
   id: string;
   seed: number;
 
-  source: SourceSpec;
+  provenance: ProvenanceSpec;
   world: WorldSpec;
   resources: ResourceCatalogSpec;
   nodes: readonly WorldNodeSpec[];
   relationships: readonly RelationshipSpec[];
   rules: readonly RuleSpec[];
-  entry: EntrySpec;
+  startup: StartupSpec;
   constraints: ConstraintSpec;
 }
 ```
 
 | 顶层字段 | 负责表达什么 | 不应该放什么 |
 |---|---|---|
-| `source` | 用户 Prompt、参考图、可见证据、推断和来源 | Runtime 对象、模型私有上下文 |
+| `provenance` | 用户 Prompt、参考图、可见证据、推断和生成来源 | Runtime 对象、模型私有上下文 |
 | `world` | 单位、坐标、世界边界、重力、环境和资源预算 | 具体 Babylon Scene 配置 |
 | `resources` | Prototype、模型、Rig、AnimationSet 和内容寻址资产 | 世界实例状态 |
 | `nodes` | 世界中有稳定 ID 的实体实例 | Rule、计时器和无空间状态 |
 | `relationships` | 所有权、装备、骑乘、控制等类型化逻辑边 | 通用 `parentId` 或渲染父子关系 |
 | `rules` | Trigger、Action Invocation、Objective、Timer 和状态规则 | 动画 Clip 内部实现 |
-| `entry` | Spawn、初始控制主体和开场相机 | 运行过程中的临时状态 |
+| `startup` | Spawn、初始控制主体和开场相机 | 运行过程中的临时状态 |
 | `constraints` | 路线、坡度、构图、语义锚点、性能和资源 Gate | 仅供参考、不参与验收的描述 |
 
 这些桶的边界很重要。它们决定 Agent 能否准确定位修改，也决定 Compiler 能否只重新编译受影响部分。
+
+#### 3.3.1 Schema 命名约定
+
+公共字段以“AI 不需要结合上下文猜类型”为标准：
+
+| 后缀/字段 | 固定含义 | 示例 |
+|---|---|---|
+| `id` | 当前对象自身 ID | `id: "player"` |
+| `...EntityId` / `...ControllerId` / `...SlotId` | World 内本地对象 ID | `riderEntityId`、`controllerId`、`slotId` |
+| `...Ref` | Registry、Package 或内容寻址资源引用 | `kitRef`、`prototypeRef`、`rigRef` |
+| `schemaVersion` | 当前 JSON 协议结构版本 | Relationship、AuthoringSpec、ChangeSet |
+| `version` | Registry 定义资源的版本 | Kit、Capability、ActionDefinition |
+| `...Mode` | 当前互斥状态 | `locomotionMode`、`cameraMode` |
+| `...Model` | 实现算法族 | `locomotionModel` |
+| `...Policy` | 选择、权限、回退或转移规则 | `controlTransferPolicy` |
+| 单位后缀 | 数值的物理单位或坐标域 | `rangeMeters`、`targetTick`、`centerXZ`、`cropUv` |
+
+`kind` 用于节点和持久化定义的判别 Union；`type` 用于 Command、Event、Relationship 和 Change Operation。Canonical Schema 与 AI Schema Profile 保持同名，Provider Adapter 不得再次发明别名。
+
+命名参考 [JSON Schema 的 `$id`/`$ref`](https://json-schema.org/understanding-json-schema/structuring)、[OpenAPI 的显式 discriminator](https://spec.openapis.org/oas/v3.0.4.html#discriminator-object)、[Kubernetes 的 `apiVersion`/`kind`](https://kubernetes.io/docs/reference/kubernetes-api/definitions/api-resource-v1-meta/) 和 [Unreal Engine 的 Controller/Possession](https://dev.epicgames.com/documentation/en-us/unreal-engine/controllers-in-unreal-engine)，但不照搬任何单一协议。项目自己的适配原则是：保留行业熟悉词汇，增加一致后缀表达类型与单位，并禁止同义字段并存。
 
 ### 3.4 节点、能力和关系的结构
 
@@ -135,16 +155,16 @@ type WorldNodeKind =
 interface WorldNodeSpec {
   id: string;
   kind: WorldNodeKind;
-  prototype?: string;
+  prototypeRef?: ResourceRef;
   transform?: {
-    position: [number, number, number];
-    rotationRadians?: [number, number, number];
+    positionMeters: [number, number, number];
+    rotationEulerRadiansXYZ?: [number, number, number];
     scale?: [number, number, number];
   };
 
-  kit?: string;
+  kitRef?: ResourceRef;
   components?: Record<string, JsonValue>;
-  capabilities?: readonly CapabilityInstance[];
+  capabilities?: readonly CapabilityInstanceSpec[];
   tags?: readonly string[];
 
   // 只在节点 Schema 明确允许时出现的 AI 简写
@@ -153,34 +173,44 @@ interface WorldNodeSpec {
   initialMount?: NestedEntitySpec;
 }
 
-interface CapabilityInstance {
-  id: string;
-  capability: string;
+interface CapabilityInstanceSpec {
+  id: CapabilityInstanceId;
+  capabilityRef: ResourceRef;
   enabled: boolean;
   config: JsonValue;
-  activationGroup?: string;
-  bindings?: Record<string, string>;
+  activationGroupId?: string;
+  providerBindings?: Record<CapabilityRequirementId, CapabilityInstanceId>;
 }
 
-interface RelationshipSpec {
-  id: string;
-  type: string;
-  version: number;
-  subject: string;
-  target: string;
-  params?: JsonValue;
+interface RelationshipSpecBase {
+  id: RelationshipId;
+  type: RelationshipType;
+  schemaVersion: number;
+}
+
+interface MountedOnRelationshipSpec extends RelationshipSpecBase {
+  type: "mountedOn";
+  riderEntityId: EntityId;
+  mountEntityId: EntityId;
+  seatId: SeatId;
+}
+
+interface EquippedAtRelationshipSpec extends RelationshipSpecBase {
+  type: "equippedAt";
+  itemEntityId: EntityId;
+  wearerEntityId: EntityId;
+  slotId: EquipmentSlotId;
 }
 
 interface RelationshipManifest {
   type: string;
   version: number;
-  subjectKinds: readonly WorldNodeKind[];
-  targetKinds: readonly WorldNodeKind[];
-  cardinality: {
-    perSubject: "one" | "optional" | "many";
-    perTarget: "one" | "optional" | "many";
-  };
-  paramsSchema: JsonSchema;
+  endpoints: readonly {
+    role: string;
+    allowedNodeKinds: readonly WorldNodeKind[];
+    cardinality: "one" | "optional" | "many";
+  }[];
+  fieldsSchema: JsonSchema;
   conflicts?: readonly string[];
   deletePolicy: "reject" | "cascade" | "detach";
 }
@@ -199,7 +229,7 @@ interface ActionDefinition {
 
 ```
 
-`RelationshipSpec` 是世界里的关系实例；`RelationshipManifest` 和 `ActionDefinition` 属于版本化 Registry。前者规定某条关系允许连接什么实体、基数、配置和删除策略，后者规定动作参数、前置条件、权威来源和完成条件。AuthoringSpec 只能引用 Registry Lock 中允许的版本，不能内嵌任意执行代码。
+`RelationshipSpec` 是按 `type` 判别的 Union，每种关系使用业务角色端点，例如 `riderEntityId/mountEntityId` 或 `itemEntityId/wearerEntityId`；`RelationshipManifest` 和 `ActionDefinition` 属于版本化 Registry。前者规定端点角色、允许连接的实体、基数、字段和删除策略，后者规定动作参数、前置条件、权威来源和完成条件。AuthoringSpec 只能引用 Registry Lock 中允许的版本，不能内嵌任意执行代码。
 
 
 首批节点分类的含义如下：
@@ -226,15 +256,15 @@ interface ActionDefinition {
 ```json
 {
   "kind": "worldkit-authoring-spec",
-  "version": 1,
+  "schemaVersion": 1,
   "id": "sunlit-dragon-bay",
   "seed": 1024,
-  "source": {
-    "prompt": "A playable coastal bay with a lighthouse, a humanoid and a rideable dragon.",
+  "provenance": {
+    "userPrompt": "A playable coastal bay with a lighthouse, a humanoid and a rideable dragon.",
     "referenceImages": [
       {
-        "uri": "asset://sha256/reference-image",
-        "evidence": "reference-visible"
+        "assetRef": "asset://sha256/reference-image",
+        "evidenceClass": "reference-visible"
       }
     ]
   },
@@ -242,10 +272,10 @@ interface ActionDefinition {
     "units": "meters",
     "coordinateSystem": "right-handed-y-up-minus-z-forward",
     "bounds": {
-      "min": [-300, -20, -250],
-      "max": [300, 180, 250]
+      "minimumXYZ": [-300, -20, -250],
+      "maximumXYZ": [300, 180, 250]
     },
-    "gravity": [0, -9.81, 0],
+    "gravityMetersPerSecondSquaredXYZ": [0, -9.81, 0],
     "resourceBudget": {
       "maxNodes": 5000,
       "maxColliders": 2000,
@@ -255,20 +285,23 @@ interface ActionDefinition {
   "resources": {
     "prototypes": [
       {
-        "id": "adventurer-adult@1",
-        "bodyProfile": "humanoid.adult@1",
-        "rigProfile": "humanoid.biped@1",
-        "animationSet": "adventurer.base@1"
+        "id": "adventurer-adult",
+        "version": 1,
+        "bodyProfileRef": "humanoid.adult@1",
+        "rigProfileRef": "humanoid.biped@1",
+        "animationSetRef": "adventurer.base@1"
       },
       {
-        "id": "rideable-dragon@1",
-        "bodyProfile": "dragon.medium@1",
-        "rigProfile": "dragon.standard@1",
-        "animationSet": "dragon.flight@1"
+        "id": "rideable-dragon",
+        "version": 1,
+        "bodyProfileRef": "dragon.medium@1",
+        "rigProfileRef": "dragon.standard@1",
+        "animationSetRef": "dragon.flight@1"
       },
       {
-        "id": "iron-sword@1",
-        "visual": "asset://sha256/iron-sword-model"
+        "id": "iron-sword",
+        "version": 1,
+        "visualRef": "asset://sha256/iron-sword-model"
       }
     ]
   },
@@ -276,33 +309,33 @@ interface ActionDefinition {
     {
       "id": "player",
       "kind": "subject",
-      "prototype": "adventurer-adult@1",
-      "kit": "humanoid.switchable-view@1",
+      "prototypeRef": "package://prototype/adventurer-adult",
+      "kitRef": "humanoid.switchable-view@1",
       "transform": {
-        "position": [0, 2, 42],
-        "rotationRadians": [0, 3.141592653589793, 0]
+        "positionMeters": [0, 2, 42],
+        "rotationEulerRadiansXYZ": [0, 3.141592653589793, 0]
       }
     },
     {
       "id": "dragon-1",
       "kind": "subject",
-      "prototype": "rideable-dragon@1",
-      "kit": "dragon.mountable-flight@1",
+      "prototypeRef": "package://prototype/rideable-dragon",
+      "kitRef": "dragon.mountable-flight@1",
       "transform": {
-        "position": [12, 3, 35],
-        "rotationRadians": [0, 3.141592653589793, 0]
+        "positionMeters": [12, 3, 35],
+        "rotationEulerRadiansXYZ": [0, 3.141592653589793, 0]
       }
     },
     {
       "id": "sword-1",
       "kind": "object",
-      "prototype": "iron-sword@1",
+      "prototypeRef": "package://prototype/iron-sword",
       "components": {
         "physics": {
           "mobility": "dynamic"
         },
         "semantic": {
-          "type": "weapon.sword"
+          "classId": "weapon.sword"
         }
       }
     },
@@ -311,22 +344,22 @@ interface ActionDefinition {
       "kind": "camera",
       "components": {
         "cameraRig": {
-          "defaultRig": "camera.third-person.standard@1",
-          "allowedRigs": [
+          "defaultRigRef": "camera.third-person.standard@1",
+          "allowedRigRefs": [
             "camera.first-person.standard@1",
             "camera.third-person.standard@1",
             "camera.third-person.flight@1"
           ],
           "target": {
-            "entity": "player",
-            "socket": "camera-root"
+            "entityId": "player",
+            "socketId": "camera-root"
           },
-          "allowUserSwitch": true,
+          "manualSwitchAllowed": true,
           "contextBindings": [
             {
               "id": "mounted-flight",
-              "whenTags": ["locomotion.mounted", "locomotion.flight"],
-              "rig": "camera.third-person.flight@1",
+              "when": { "allTags": ["locomotion.mounted", "locomotion.flight"] },
+              "rigRef": "camera.third-person.flight@1",
               "targetPolicy": "controlled-entity",
               "priority": 100
             }
@@ -339,8 +372,8 @@ interface ActionDefinition {
       "kind": "terrain",
       "components": {
         "terrain": {
-          "source": "asset://sha256/elevation-band-source",
-          "compilerProfile": "coastal-hills@1"
+          "sourceRef": "asset://sha256/elevation-band-source",
+          "compilerProfileRef": "coastal-hills@1"
         }
       }
     },
@@ -350,16 +383,16 @@ interface ActionDefinition {
       "components": {
         "water": {
           "levelMeters": 0,
-          "boundary": "asset://sha256/bay-boundary"
+          "boundaryRef": "asset://sha256/bay-boundary"
         }
       }
     },
     {
       "id": "lighthouse",
       "kind": "object",
-      "prototype": "coastal-lighthouse@1",
+      "prototypeRef": "coastal-lighthouse@1",
       "transform": {
-        "position": [118, 22, -74]
+        "positionMeters": [118, 22, -74]
       },
       "components": {
         "physics": {
@@ -367,7 +400,7 @@ interface ActionDefinition {
           "collider": "compound"
         },
         "semantic": {
-          "type": "landmark.lighthouse",
+          "classId": "landmark.lighthouse",
           "importance": "primary"
         }
       }
@@ -376,12 +409,12 @@ interface ActionDefinition {
       "id": "spawn-main",
       "kind": "anchor",
       "transform": {
-        "position": [0, 2, 42],
-        "rotationRadians": [0, 3.141592653589793, 0]
+        "positionMeters": [0, 2, 42],
+        "rotationEulerRadiansXYZ": [0, 3.141592653589793, 0]
       },
       "components": {
         "semantic": {
-          "type": "spawn"
+          "classId": "spawn"
         }
       }
     }
@@ -390,49 +423,47 @@ interface ActionDefinition {
     {
       "id": "sword-owned-by-player",
       "type": "ownedBy",
-      "version": 1,
-      "subject": "sword-1",
-      "target": "player"
+      "schemaVersion": 1,
+      "itemEntityId": "sword-1",
+      "ownerEntityId": "player"
     },
     {
       "id": "sword-equipped-right-hand",
       "type": "equippedAt",
-      "version": 1,
-      "subject": "sword-1",
-      "target": "player",
-      "params": {
-        "slot": "right-hand"
-      }
+      "schemaVersion": 1,
+      "itemEntityId": "sword-1",
+      "wearerEntityId": "player",
+      "slotId": "right-hand"
     }
   ],
   "rules": [
     {
       "id": "mount-dragon-interaction",
       "kind": "interaction",
-      "action": "mount@1",
-      "subject": "player",
-      "target": "dragon-1",
+      "actionRef": "mount@1",
+      "actorEntityId": "player",
+      "targetEntityId": "dragon-1",
       "conditions": {
         "maxDistanceMeters": 3
       }
     }
   ],
-  "entry": {
-    "spawn": "spawn-main",
-    "control": "player",
-    "camera": "player-view"
+  "startup": {
+    "spawnAnchorId": "spawn-main",
+    "controlledEntityId": "player",
+    "cameraEntityId": "player-view"
   },
   "constraints": {
     "primaryRoutes": [
       {
         "id": "spawn-to-lighthouse",
-        "from": "spawn-main",
-        "to": "lighthouse",
+        "fromEntityId": "spawn-main",
+        "toEntityId": "lighthouse",
         "maxSlopeDegrees": 35
       }
     ],
     "composition": {
-      "requiredAnchors": ["player", "bay-water", "lighthouse"]
+      "requiredEntityIds": ["player", "bay-water", "lighthouse"]
     }
   }
 }
@@ -456,12 +487,12 @@ interface ActionDefinition {
 {
   "id": "player",
   "kind": "subject",
-  "kit": "humanoid.third-person@1",
+  "kitRef": "humanoid.third-person@1",
   "loadout": {
     "right-hand": {
       "id": "sword-1",
       "kind": "object",
-      "prototype": "iron-sword@1"
+      "prototypeRef": "iron-sword@1"
     }
   }
 }
@@ -496,7 +527,7 @@ ActionDefinition 由版本化 Registry 提供，AuthoringSpec 中的 Rule 或外
 
 ### 3.8 Schema 评审需要回答的问题
 
-1. `source / world / resources / nodes / relationships / rules / entry / constraints` 的顶层分区是否足够清楚，是否存在职责重叠？
+1. `provenance / world / resources / nodes / relationships / rules / startup / constraints` 的顶层分区是否足够清楚，是否存在职责重叠？
 2. 十种基础 `WorldNodeKind` 是否过多或过少？新增塔、门、车辆时能否主要依靠 Component/Capability，而不是继续增加 kind？
 3. “常用 Kit + 高级 Capability”两级接口是否适合上游 Agent？
 4. 人物、坐骑、武器使用同级 Entity + Relationship，是否能覆盖预期的装备、转移、骑乘和控制权变化？
@@ -558,14 +589,14 @@ SDK 解析语义区域、色带、路线和约束
 
 ```ts
 interface CameraNodeConfig {
-  defaultRig: ResourceRef;
-  allowedRigs: readonly ResourceRef[];
+  defaultRigRef: ResourceRef;
+  allowedRigRefs: readonly ResourceRef[];
   target: {
-    entity: EntityId;
-    socket?: RigSocketId;
+    entityId: EntityId;
+    socketId?: RigSocketId;
   };
   contextBindings?: readonly CameraContextBinding[];
-  allowUserSwitch: boolean;
+  manualSwitchAllowed: boolean;
 }
 
 type CameraRigProfile = CameraRigProfileBase &
@@ -596,7 +627,7 @@ Head Bob、镜头平滑、遮挡物淡化和第一人称 View Model 都只属于
 
 ### 6.3 切换、骑乘和自动化
 
-手动切换通过幂等 `view.set-mode` Command 完成，Runtime 校验目标 Rig 是否在 `allowedRigs` 中，准备资源后在 Camera/Render 同步点原子切换，并返回 `ViewReceipt + CameraSnapshot`。失败时继续使用原镜头。
+手动切换通过幂等 `view.set-mode` Command 完成，普通调用方传入 `mode`，Camera Director 在当前 Context 中解析对应的 `allowedRigRefs`；高级创作/测试调用才使用 `view.set-rig + rigRef` 指定精确 Rig。Runtime 准备资源后在 Camera/Render 同步点原子切换，并返回 `ViewReceipt + CameraSnapshot`。失败时继续使用原镜头。
 
 Context Binding 负责自动切换：步行时可以保留第一/第三人称偏好；骑乘或飞行时切到更远的 `camera.third-person.flight@1`；下坐骑后恢复偏好。Camera 只读取已提交的骑乘与控制权状态，不参与 Mount Transaction，避免两边互相看到半完成状态。
 

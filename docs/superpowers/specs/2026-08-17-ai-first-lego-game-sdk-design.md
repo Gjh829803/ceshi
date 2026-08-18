@@ -201,15 +201,15 @@ apps/
 {
   "id": "player",
   "kind": "subject",
-  "kit": "humanoid.third-person@1",
+  "kitRef": "humanoid.third-person@1",
   "profiles": {
-    "body": "humanoid.adult@1",
-    "visual": "traveler-red-coat@3",
-    "rig": "humanoid.biped@1",
-    "animations": "humanoid-standard-actions@2"
+    "bodyProfileRef": "humanoid.adult@1",
+    "visualProfileRef": "traveler-red-coat@3",
+    "rigProfileRef": "humanoid.biped@1",
+    "animationSetRef": "humanoid-standard-actions@2"
   },
   "transform": {
-    "position": [0, 22, 40],
+    "positionMeters": [0, 22, 40],
     "facingRadians": 0
   }
 }
@@ -225,28 +225,33 @@ Kit 内部展开为碰撞体、输入映射、运动控制、镜头、动作状�
 {
   "id": "dragon-1",
   "kind": "subject",
-  "prototype": "dragon",
+  "prototypeRef": "dragon@1",
   "capabilities": [
     {
-      "type": "locomotion.ground",
-      "version": 1
+      "id": "ground-locomotion",
+      "capabilityRef": "locomotion.ground@1",
+      "enabled": true,
+      "config": {}
     },
     {
-      "type": "locomotion.flight",
-      "version": 1,
-      "parameters": {
-        "cruiseSpeed": 18,
-        "turnRate": 1.4
+      "id": "flight-locomotion",
+      "capabilityRef": "locomotion.flight@1",
+      "enabled": true,
+      "activationGroupId": "locomotion",
+      "config": {
+        "cruiseSpeedMetersPerSecond": 18,
+        "turnRateRadiansPerSecond": 1.4
       }
     },
     {
-      "type": "interaction.mountable",
-      "version": 1,
-      "parameters": {
+      "id": "mountable",
+      "capabilityRef": "interaction.mountable@1",
+      "enabled": true,
+      "config": {
         "seats": [
           {
             "id": "saddle",
-            "socket": "spine-saddle"
+            "socketId": "spine-saddle"
           }
         ]
       }
@@ -271,36 +276,36 @@ Kit 内部展开为碰撞体、输入映射、运动控制、镜头、动作状�
 ```json
 {
   "kind": "worldkit-authoring-spec",
-  "version": 1,
+  "schemaVersion": 1,
   "id": "sunlit-bay",
   "seed": 1024,
-  "source": {},
+  "provenance": {},
   "world": {},
   "resources": {},
   "nodes": [],
   "relationships": [],
   "rules": [],
-  "entry": {},
+  "startup": {},
   "constraints": {}
 }
 ```
 
 字段职责：
 
-- `source`：保留用户 Prompt、参考图 URI、证据与推断来源。
+- `provenance`：保留用户 Prompt、参考图 URI、证据、推断与生成来源。
 - `world`：边界、单位、坐标约定、重力、环境和预算。
 - `resources`：模型、Rig、AnimationSet、Kit 和 Prototype 引用。
 - `nodes`：世界实例。
 - `relationships`：实体之间的动态或初始关系。
 - `rules`：Trigger、Action、Objective、Timer 和状态规则。
-- `entry`：出生点、控制目标和开场相机。
+- `startup`：出生点、初始控制目标和开场相机。
 - `constraints`：路线坡度、构图区域、语义锚点和其他验收要求。
 
 ### 7.2 固定坐标与单位
 
 - 长度单位：米。
 - 时间单位：秒。
-- 角度：对外 Schema 使用弧度并在字段名中保留 `Radians`。
+- 朝向、旋转和角速度默认使用弧度并在字段名中保留 `Radians`；面向人类配置的 FOV 与坡度允许使用度，但字段名必须保留 `Degrees`。
 - 世界坐标：右手坐标系，`+Y` 向上。
 - 主体和 Prototype 正前方：`-Z`。
 - 默认 Pivot：`ground-center`；特殊资源必须显式声明。
@@ -308,7 +313,42 @@ Kit 内部展开为碰撞体、输入映射、运动控制、镜头、动作状�
 
 所有 Runtime Adapter 必须遵守这些公共约定，在边界内部进行引擎坐标转换。
 
-### 7.3 ID、命名空间与资源引用
+### 7.3 字段命名、ID、命名空间与资源引用
+
+Canonical Schema 与 AI Schema Profile 使用同一组字段名；Provider Adapter 只能缩窄结构，不能把字段翻译成另一套供应商私有方言。公共字段遵守以下规则：
+
+- 当前对象自身使用 `id`；引用世界实体、Controller、Session、Slot 等本地对象时使用 `...EntityId`、`...ControllerId`、`...SessionId`、`...SlotId`。
+- 引用 Registry、WorldPackage 或内容寻址资源时使用 `...Ref`；原始地址才使用 `...Uri`。禁止用裸 `target`、`rig`、`prototype` 同时表示 ID、内联对象和资源引用。
+- 可序列化协议对象的结构版本使用 `schemaVersion`；Registry 定义的资源版本使用 `version`；锁定后的精确实现版本使用 `resolvedVersion`。
+- `kind` 用于持久化定义或节点的判别 Union，`type` 用于 Command、Event、Relationship 和 Change Operation，`mode` 表示当前互斥运行状态。
+- `...Mode` 表示当前状态，`...Model` 表示算法族，`...ProfileRef` 表示可复用调参资源，`...Policy` 表示选择、权限、回退或转移规则。
+- 标量物理量在字段名中写明 `Meters`、`Seconds`、`Radians`、`Degrees`、`Ticks`、`Ratio` 或 `Bytes`。二维数组必须在字段名中写明 `XY`、`XZ` 或 `Uv`；三维 Transform 数组使用固定 `XYZ` 顺序并由字段名或 Schema 描述明确单位。
+- 集合字段使用复数；按 ID 索引的对象使用 `...ById`。布尔字段使用 `is/has/allow` 或明确的 `...Enabled`，不能使用语义不明的状态词。
+- AI-facing Relationship 使用角色化端点名，例如 `riderEntityId`、`mountEntityId`、`itemEntityId`、`wearerEntityId`；只有 NormalizedWorldIR 内部通用边表示才允许 `sourceEntityId/targetEntityId`。
+
+以下两类引用必须分开：
+
+```ts
+type ResourceRef = string; // 受 worldkit-resource-ref format 约束，可使用 Schema 允许的简写
+
+interface ResolvedResourceRef {
+  uri: string;
+  resolvedVersion: string;
+  contentHash: string;
+}
+```
+
+`ResourceRef` 是 Authoring 输入；`ResolvedResourceRef` 是 Registry Lock 和 NormalizedWorldIR 中的确定引用。二者不能复用同一个结构，否则 AI 无法判断是否需要填写内容哈希或精确版本。
+
+这些规则不是照搬某个单一协议，而是对成熟约定的领域适配：
+
+- [JSON Schema](https://json-schema.org/understanding-json-schema/structuring) 使用 `$id` 标识 Schema、使用 `$ref` 组合可复用定义；本 SDK 因此将对象身份与资源引用明确拆成 `id` 和 `...Ref`。
+- [Kubernetes API conventions](https://kubernetes.io/docs/reference/kubernetes-api/definitions/api-resource-v1-meta/) 使用 `apiVersion` 和 `kind` 显式说明资源表示与种类；本 SDK 面向非 Kubernetes 的游戏协议，采用语义更直接的 `schemaVersion + kind`。
+- [OpenAPI discriminator](https://spec.openapis.org/oas/v3.0.4.html#discriminator-object) 要求通过明确属性选择多态 Schema；本 SDK 固定用 `kind` 或 `type` 作为判别字段，不允许依赖字段猜测 Union 分支。
+- [CloudEvents](https://github.com/cloudevents/spec/blob/main/cloudevents/spec.md#context-attributes) 使用 `id`、`source`、`specversion` 和 `type` 等明确上下文属性；本 SDK 仅借鉴其“消息自描述”原则，不复用 `subject` 表示图关系端点，避免它与游戏主体概念冲突。
+- [Unreal Engine Controller/Possession](https://dev.epicgames.com/documentation/en-us/unreal-engine/controllers-in-unreal-engine) 证明 `Controller` 与 `Possession` 是成熟的游戏领域术语；本 SDK 使用 `controllerId`、`controlledEntityId` 和 `possessedBy` 表达控制权，不发明 `driver`、`owner` 等近义别名。
+
+因此，“业界标准命名”在本项目中的含义是：优先采用跨工具可识别的基础词汇，再通过一致后缀和领域角色名消除歧义；不是把某个外部协议的全部字段原样搬进游戏 Schema。
 
 世界内实例 ID、包内资源和宿主注册表资源必须明确区分：
 
@@ -382,22 +422,22 @@ Schema Projector 必须把提供方结构化输出的规模上限当作显式预
 为了让“成人/儿童、空手/持剑、步行/骑龙”可以像 Lego 一样组合，公共模型显式区分：
 
 - `PrototypeSpec`：可复用的语义、视觉和能力基线，不直接存在于世界中。
-- `InstanceSpec`：具有稳定 ID 和 Transform 的世界实例，通过 `prototype` 引用原型。
+- `InstanceSpec`：具有稳定 ID 和 Transform 的世界实例，通过 `prototypeRef` 引用原型。
 - `VariantSetSpec`：在一个封闭选择维度中声明候选，例如 `body=adult|child`、`loadout=unarmed|sword`。
 - `CompositionLayer`：有来源、优先级和基线哈希的一组显式覆盖操作，用于模板、用户输入或 Agent 修订。
 
 ```ts
 interface PrototypeSpec {
   id: ResourceId;
-  base?: ResourceRef;
+  basePrototypeRef?: ResourceRef;
   components?: Readonly<Record<ComponentId, JsonValue>>;
-  capabilities?: readonly CapabilityInstance[];
+  capabilities?: readonly CapabilityInstanceSpec[];
   variantSets?: readonly VariantSetSpec[];
 }
 
 interface InstanceSpec {
   id: EntityId;
-  prototype: ResourceRef;
+  prototypeRef: ResourceRef;
   variants?: Readonly<Record<VariantSetId, VariantId>>;
   overrides?: readonly CompositionOperation[];
 }
@@ -441,12 +481,12 @@ AI-facing 节点种类保持有限，后续主要通过 Component、Capability �
 {
   "id": "player",
   "kind": "subject",
-  "kit": "humanoid.third-person@1",
+  "kitRef": "humanoid.third-person@1",
   "loadout": {
     "right-hand": {
       "id": "sword-1",
       "kind": "object",
-      "prototype": "iron-sword@1"
+      "prototypeRef": "iron-sword@1"
     }
   }
 }
@@ -488,7 +528,7 @@ sword-1 --equippedAt(slot=right-hand)--> player
 {
   "id": "watchtower",
   "kind": "object",
-  "prototype": "watchtower-stone@1",
+  "prototypeRef": "watchtower-stone@1",
   "components": {
     "physics": {
       "mobility": "static",
@@ -563,23 +603,23 @@ interface CapabilityManifest {
   provides: readonly CapabilityProvision[];
   conflicts: readonly CapabilityConflict[];
   phases: readonly RuntimePhase[];
-  resources?: ResourceBudget;
+  resourceBudget?: ResourceBudget;
   normalize(context: NormalizeContext, config: unknown): NormalizedCapability;
   prepareInstall(context: CapabilityInstallContext): PreparedCapabilityInstall;
 }
 
-interface CapabilityInstance {
-  id: string;
-  capability: string;
+interface CapabilityInstanceSpec {
+  id: CapabilityInstanceId;
+  capabilityRef: ResourceRef;
   config: JsonValue;
   enabled: boolean;
-  activationGroup?: string;
-  bindings?: Record<string, string>;
+  activationGroupId?: string;
+  providerBindings?: Record<CapabilityRequirementId, CapabilityInstanceId>;
 }
 
 interface CapabilityRequirement {
-  id: string;
-  contract: string;
+  id: CapabilityRequirementId;
+  contractId: string;
   cardinality: "one" | "optional" | "many";
 }
 ```
@@ -594,9 +634,9 @@ Manifest 必须声明：
 - 执行阶段和生命周期。
 - 资源预算、诊断和 Conformance Test。
 
-Capability Manifest 描述能力类型，CapabilityInstance 描述某个实体上安装的稳定实例。同一类型是否允许多个实例由 Manifest 的基数约束决定，不能依赖数组位置判断。
+Capability Manifest 描述能力类型，`CapabilityInstanceSpec` 描述 AuthoringSpec 中声明的稳定安装实例；Normalizer 将其解析为带精确 Provider 和资源锁的 `NormalizedCapabilityInstance`。同一类型是否允许多个实例由 Manifest 的基数约束决定，不能依赖数组位置判断。
 
-Manifest 混合了协议数据与实现代码，两者的哈希边界必须分开：声明字段（`id`、`version`、`configSchema`、`requires`、`provides`、`conflicts`、`phases`、`resources`）是可序列化协议数据，按 Canonical Bytes 计算 Manifest Hash；`normalize` 与 `prepareInstall` 属于插件实现，以插件内容 Hash 锁定。`registry-lock.json` 同时记录两个 Hash，任一变化都视为不同实现版本。
+Manifest 混合了协议数据与实现代码，两者的哈希边界必须分开：声明字段（`id`、`version`、`configSchema`、`requires`、`provides`、`conflicts`、`phases`、`resourceBudget`）是可序列化协议数据，按 Canonical Bytes 计算 Manifest Hash；`normalize` 与 `prepareInstall` 属于插件实现，以插件内容 Hash 锁定。`registry-lock.json` 同时记录两个 Hash，任一变化都视为不同实现版本。
 
 Kit override 只有三种规范操作：
 
@@ -626,7 +666,7 @@ Provider 绑定规则：
 - `optional` 最多绑定一个 Provider；多个候选同样不能自动猜测。
 - `many` 按稳定 Capability Instance ID 排序并全部绑定。
 - 不能使用插件注册顺序、对象插入顺序或“最新版本”作为选择依据。
-- `activationGroup` 允许地面移动、飞行、游泳等能力同时安装但只有一个模式处于权威激活状态；切换由 Action 或状态事务完成。
+- `activationGroupId` 允许地面移动、飞行、游泳等能力同时安装但只有一个模式处于权威激活状态；切换由 Action 或状态事务完成。
 - 解析后的 Provider Instance ID、激活组、override 来源和最终配置必须写入 NormalizedWorldIR。
 
 ### 10.4 Kit
@@ -637,7 +677,7 @@ Kit 是经过验证的组合清单，不包含不可观察的魔法逻辑：
 {
   "id": "humanoid.third-person",
   "version": 1,
-  "capabilities": [
+  "capabilityRefs": [
     "render.humanoid@1",
     "physics.character@1",
     "locomotion.ground@1",
@@ -646,8 +686,8 @@ Kit 是经过验证的组合清单，不包含不可观察的魔法逻辑：
     "action.humanoid-locomotion@1"
   ],
   "profiles": {
-    "body": "humanoid.adult@1",
-    "rig": "humanoid.biped@1"
+    "bodyProfileRef": "humanoid.adult@1",
+    "rigProfileRef": "humanoid.biped@1"
   }
 }
 ```
@@ -712,6 +752,32 @@ Ownership Ledger 至少跟踪 System Registration、Component、Port Provider、
 
 Relationship 是有方向、带版本和 Schema 的逻辑边。每种关系必须声明端点类型、基数、互斥关系、删除策略和权限来源。不能用通用 `parentId` 同时表达所有权、空间挂载、装备和骑乘。
 
+AI-facing Relationship 不暴露通用 `subject/target/params` 三元组，而是使用每种关系的业务角色名：
+
+```ts
+interface RelationshipSpecBase {
+  id: RelationshipId;
+  type: RelationshipType;
+  schemaVersion: number;
+}
+
+interface MountedOnRelationshipSpec extends RelationshipSpecBase {
+  type: "mountedOn";
+  riderEntityId: EntityId;
+  mountEntityId: EntityId;
+  seatId: SeatId;
+}
+
+interface EquippedAtRelationshipSpec extends RelationshipSpecBase {
+  type: "equippedAt";
+  itemEntityId: EntityId;
+  wearerEntityId: EntityId;
+  slotId: EquipmentSlotId;
+}
+```
+
+不同 Relationship 可以拥有不同端点角色，但 Registry Manifest 必须把角色映射到 NormalizedWorldIR 的 `sourceEntityId/targetEntityId`，并声明端点类型、基数和删除策略。这样既保留通用图执行能力，也避免 AI 猜测 `subject` 在某条边中到底指人物、物品还是语法主语。
+
 ### 11.1 单一真相与关系事务
 
 同一个业务事实只能有一个权威来源：
@@ -760,7 +826,7 @@ interface ControllerEntitySpec {
   id: ControllerId;
   kind: "controller";
   ownerSessionId: SessionId;
-  source: {
+  controlSource: {
     kind: ControlSourceKind;
     sourceId: string;
   };
@@ -770,9 +836,9 @@ interface ControllerEntitySpec {
 
 interface PossessedByRelationship {
   type: "possessedBy";
-  version: 1;
-  subject: EntityId;
-  controller: ControllerId;
+  schemaVersion: 1;
+  controlledEntityId: EntityId;
+  controllerId: ControllerId;
   channels: readonly ControlChannel[];
 }
 ```
@@ -787,28 +853,28 @@ interface PossessedByRelationship {
 - AuthoringSpec 中的 `primary-playable` 等 Role 只是 Host 初始绑定的候选目标；Controller 身份、Session 权限和实际 `possessedBy` 仍在 Runtime Bootstrap 时创建和提交。默认玩家控制因此不要求场景 Agent 生成 Controller Schema。
 - 标准玩家 Controller 默认同时占有 `locomotion` 与 `action`；分开 Channel 只作为显式高级策略启用，不能由 Runtime 自动猜测。
 
-控制命令只指定 Controller；Runtime 根据提交 Tick 时已生效的 `possessedBy` 解析目标。调用方不能用 `targetEntityId` 绕过控制权：
+控制命令只指定 Controller；Runtime 根据提交 Tick 时已生效的 `possessedBy` 解析受控实体。调用方不能用任意实体 ID 绕过控制权：
 
 ```ts
 interface ControlIntentCommand {
   type: "control.intent";
   requestId: string;
   controllerId: ControllerId;
-  tick: number;
-  sequence: number;
-  expectedTargetEntityId?: EntityId;
+  targetTick: number;
+  sequenceNumber: number;
+  expectedControlledEntityId?: EntityId;
   intent: SemanticIntent;
 }
 
 interface ControlIntentBatch {
   type: "control.intent-batch";
   requestId: string;
-  tick: number;
-  commands: readonly Omit<ControlIntentCommand, "type" | "requestId" | "tick">[];
+  targetTick: number;
+  commands: readonly Omit<ControlIntentCommand, "type" | "requestId" | "targetTick">[];
 }
 ```
 
-`expectedTargetEntityId` 只是防止控制权已经切换时误操作的前置条件，不是路由来源。Batch 在进入 Tick 队列前整体校验 Controller、权限、绑定、Sequence 和 Intent Schema；任一命令无效时整批拒绝。相同 Controller、Channel 和 Tick 出现两个互斥 Intent 时返回 `CONTROL_INTENT_CONFLICT`，不能依赖 NDJSON 行顺序、网络到达顺序或插件注册顺序决定胜负。
+`expectedControlledEntityId` 只是防止控制权已经切换时误操作的前置条件，不是路由来源。Batch 在进入 Tick 队列前整体校验 Controller、权限、绑定、Sequence 和 Intent Schema；任一命令无效时整批拒绝。相同 Controller、Channel 和 Tick 出现两个互斥 Intent 时返回 `CONTROL_INTENT_CONFLICT`，不能依赖 NDJSON 行顺序、网络到达顺序或插件注册顺序决定胜负。
 
 控制绑定和切换使用事务：
 
@@ -817,10 +883,10 @@ validate controller scope, target and possessable capability
   → reserve channels and check cardinality
   → prepare locomotion/action/camera context changes
   → commit possessedBy at fixed phase barrier
-  → emit ControlReceipt(effectiveTick, previousTarget, currentTarget)
+  → emit ControlReceipt(effectiveTick, previousControlledEntityId, currentControlledEntityId)
 ```
 
-Runtime Snapshot 必须按稳定 ID 返回 `controllers`、`controlBindings` 和 `entities`，不能只暴露单数 `player`。Replay Input Log 记录 Session ID、Controller ID、Sequence、解析后的目标、Intent、接收 Tick、生效 Tick 和 Receipt；重放时仍通过相同 Control Router 验证绑定和顺序。
+Runtime Snapshot 必须按稳定 ID 返回 `controllersById`、`controlBindings` 和 `subjectStatesByEntityId`，不能只暴露单数 `player`。Replay Input Log 记录 Session ID、Controller ID、Sequence Number、解析后的目标、Intent、接收 Tick、生效 Tick 和 Receipt；重放时仍通过相同 Control Router 验证绑定和顺序。
 
 ### 11.3 骑乘
 
@@ -829,17 +895,20 @@ Runtime Snapshot 必须按稳定 ID 返回 `controllers`、`controlBindings` 和
 ```json
 [
   {
+    "id": "player-mounted-on-dragon",
     "type": "mountedOn",
-    "version": 1,
-    "subject": "player",
-    "target": "dragon-1",
-    "seat": "saddle"
+    "schemaVersion": 1,
+    "riderEntityId": "player",
+    "mountEntityId": "dragon-1",
+    "seatId": "saddle"
   },
   {
+    "id": "dragon-possessed-by-player-controller",
     "type": "possessedBy",
-    "version": 1,
-    "subject": "dragon-1",
-    "controller": "player-controller"
+    "schemaVersion": 1,
+    "controlledEntityId": "dragon-1",
+    "controllerId": "player-controller",
+    "channels": ["locomotion", "action"]
   }
 ]
 ```
@@ -873,11 +942,12 @@ unmounted
 
 ```json
 {
+  "id": "sword-equipped-right-hand",
   "type": "equippedAt",
-  "version": 1,
-  "subject": "sword-1",
-  "target": "player",
-  "slot": "right-hand"
+  "schemaVersion": 1,
+  "itemEntityId": "sword-1",
+  "wearerEntityId": "player",
+  "slotId": "right-hand"
 }
 ```
 
@@ -959,10 +1029,10 @@ AnimationSet 只负责将稳定 Action ID 映射到具体动画资源，不拥�
   "parametersSchema": {
     "type": "object",
     "additionalProperties": false,
-    "required": ["target"],
+    "required": ["targetEntityId"],
     "properties": {
-      "target": { "$ref": "worldkit://schema/entity-id@1" },
-      "seat": { "type": "string", "maxLength": 64 }
+      "targetEntityId": { "$ref": "worldkit://schema/entity-id@1" },
+      "seatId": { "type": "string", "maxLength": 64 }
     }
   },
   "requires": [
@@ -973,7 +1043,7 @@ AnimationSet 只负责将稳定 Action ID 映射到具体动画资源，不拥�
   "authority": "simulation",
   "completion": {
     "type": "relationship-committed",
-    "relationship": "mountedOn"
+    "relationshipType": "mountedOn"
   },
   "presentationMarkers": ["seated"]
 }
@@ -996,20 +1066,20 @@ Action 的完成、失败和伤害等权威结果必须来自模拟状态、关�
 
 ```json
 {
-  "rig": "humanoid.biped@1",
+  "rigRef": "humanoid.biped@1",
   "bindings": {
     "idle": {
-      "clip": "Adult_Idle",
+      "clipId": "Adult_Idle",
       "loop": true,
-      "blendIn": 0.2
+      "blendInSeconds": 0.2
     },
     "wave": {
-      "clip": "Adult_Wave",
-      "layer": "upper-body",
-      "blendIn": 0.1
+      "clipId": "Adult_Wave",
+      "layerId": "upper-body",
+      "blendInSeconds": 0.1
     },
     "ride": {
-      "clip": "Adult_Ride_Pose",
+      "clipId": "Adult_Ride_Pose",
       "loop": true
     }
   }
@@ -1030,9 +1100,9 @@ combat.attack.light + weapon.sword         → 轻型挥剑攻击
 
 ```ts
 interface ActionContext {
-  actorId: string;
-  actionId: string;
-  targetIds: readonly string[];
+  actorEntityId: EntityId;
+  actionRef: ResourceRef;
+  targetEntityIds: readonly EntityId[];
   tags: readonly string[];
   relationships: readonly RelationshipRef[];
   activeCapabilities: readonly CapabilityInstanceRef[];
@@ -1057,22 +1127,22 @@ AnimationSet 和武器 AttackProfile 可以为同一个 Action 提供 Variant：
 
 ```json
 {
-  "action": "locomotion.run",
+  "actionRef": "locomotion.run@1",
   "variants": [
     {
       "id": "run-one-handed-sword",
-      "when": ["weapon.sword.one-handed"],
-      "clip": "Run_OneHandSword",
+      "when": { "allTags": ["weapon.sword.one-handed"] },
+      "clipId": "Run_OneHandSword",
       "priority": 100
     },
     {
       "id": "run-unarmed",
-      "when": ["equipment.unarmed"],
-      "clip": "Run_Unarmed",
+      "when": { "allTags": ["equipment.unarmed"] },
+      "clipId": "Run_Unarmed",
       "priority": 50
     }
   ],
-  "fallback": "Run_Default"
+  "fallbackClipId": "Run_Default"
 }
 ```
 
@@ -1084,14 +1154,17 @@ AnimationSet 和武器 AttackProfile 可以为同一个 Action 提供 Variant：
 
 ```json
 {
-  "capability": "weapon.melee@1",
+  "capabilityRef": "weapon.melee@1",
   "attackProfiles": {
     "combat.attack.light": {
-      "animationTag": "attack.sword.light",
-      "damage": 20,
-      "range": 1.6,
-      "hitbox": "blade",
-      "activeTicks": [12, 18],
+      "animationTagId": "attack.sword.light",
+      "baseDamage": 20,
+      "rangeMeters": 1.6,
+      "hitboxId": "blade",
+      "activeWindow": {
+        "startTickOffset": 12,
+        "endTickOffsetExclusive": 19
+      },
       "cooldownTicks": 30
     }
   }
@@ -1249,18 +1322,18 @@ Camera 是独立的 View Runtime 子系统，不是 Subject RenderNode 的永久
 
 ```ts
 interface CameraNodeConfig {
-  defaultRig: ResourceRef;
-  allowedRigs: readonly ResourceRef[];
+  defaultRigRef: ResourceRef;
+  allowedRigRefs: readonly ResourceRef[];
   target: CameraTargetSpec;
   contextBindings?: readonly CameraContextBinding[];
-  allowUserSwitch: boolean;
+  manualSwitchAllowed: boolean;
 }
 
 interface CameraTargetSpec {
-  entity: EntityId;
-  socket?: RigSocketId;
+  entityId: EntityId;
+  socketId?: RigSocketId;
   targetHeightMeters?: number;
-  localOffset?: [number, number, number];
+  localOffsetMeters?: [number, number, number];
 }
 
 interface CameraRigProfileBase {
@@ -1312,17 +1385,24 @@ interface CameraControlSpec {
 }
 
 interface CameraTransitionSpec {
-  type: "cut" | "blend";
+  kind: "cut" | "blend";
   durationSeconds: number;
   easing: "linear" | "ease-in-out";
 }
 
 interface CameraContextBinding {
   id: string;
-  whenTags: readonly string[];
-  rig: ResourceRef;
-  targetPolicy: "controlled-entity" | "rider" | "explicit";
-  explicitTarget?: EntityId;
+  when: {
+    allTags?: readonly string[];
+    anyTags?: readonly string[];
+    excludedTags?: readonly string[];
+    mountRoles?: readonly ("driver" | "rider" | "passenger")[];
+    locomotionModes?: readonly string[];
+    movementMediums?: readonly ("ground" | "water" | "air")[];
+  };
+  rigRef: ResourceRef;
+  targetPolicy: "controlled-entity" | "rider" | "explicit-entity";
+  explicitTargetEntityId?: EntityId;
   priority: number;
 }
 ```
@@ -1333,13 +1413,13 @@ interface CameraContextBinding {
 
 ```ts
 interface FirstPersonCameraSpec {
-  eyeSocket?: RigSocketId;
+  eyeSocketId?: RigSocketId;
   fallbackEyeHeightMeters: number;
-  localOffset: [number, number, number];
+  localOffsetMeters: [number, number, number];
   bodyVisibility: "hide-head" | "hide-upper-body" | "show-full-body";
   weaponPresentation: "world-model" | "first-person-view-model";
   preventWallPeek: boolean;
-  motionProfile?: ResourceRef;
+  motionProfileRef?: ResourceRef;
 }
 ```
 
@@ -1399,28 +1479,28 @@ camera.third-person.flight@1
   "kind": "camera",
   "components": {
     "cameraRig": {
-      "defaultRig": "camera.third-person.standard@1",
-      "allowedRigs": [
+      "defaultRigRef": "camera.third-person.standard@1",
+      "allowedRigRefs": [
         "camera.first-person.standard@1",
         "camera.third-person.standard@1"
       ],
       "target": {
-        "entity": "player",
-        "socket": "camera-root"
+        "entityId": "player",
+        "socketId": "camera-root"
       },
-      "allowUserSwitch": true,
+      "manualSwitchAllowed": true,
       "contextBindings": [
         {
           "id": "on-foot-third-person",
-          "whenTags": ["locomotion.ground"],
-          "rig": "camera.third-person.standard@1",
+          "when": { "allTags": ["locomotion.ground"] },
+          "rigRef": "camera.third-person.standard@1",
           "targetPolicy": "controlled-entity",
           "priority": 50
         },
         {
           "id": "mounted-flight",
-          "whenTags": ["locomotion.mounted", "locomotion.flight"],
-          "rig": "camera.third-person.flight@1",
+          "when": { "allTags": ["locomotion.mounted", "locomotion.flight"] },
+          "rigRef": "camera.third-person.flight@1",
           "targetPolicy": "controlled-entity",
           "priority": 100
         }
@@ -1445,18 +1525,28 @@ humanoid.switchable-view@1
 手动视角切换使用 `ViewCommand`，不是装备/攻击类 Gameplay Action：
 
 ```ts
+type CameraMode = "first-person" | "third-person" | "top-down" | "orbit" | "cinematic";
+
 interface SetCameraModeCommand {
   type: "view.set-mode";
   requestId: string;
-  cameraId: EntityId;
-  rig: ResourceRef;
-  transition?: "cut" | "blend";
+  cameraEntityId: EntityId;
+  mode: CameraMode;
+  transitionKind?: "cut" | "blend";
+}
+
+interface SetCameraRigCommand {
+  type: "view.set-rig";
+  requestId: string;
+  cameraEntityId: EntityId;
+  rigRef: ResourceRef;
+  transitionKind?: "cut" | "blend";
 }
 
 interface CameraSnapshot {
-  cameraId: EntityId;
-  activeRig: ResourceRef;
-  mode: "first-person" | "third-person" | "top-down" | "orbit" | "cinematic";
+  cameraEntityId: EntityId;
+  activeRigRef: ResolvedResourceRef;
+  mode: CameraMode;
   targetEntityId: EntityId;
   yawRadians: number;
   pitchRadians: number;
@@ -1468,7 +1558,7 @@ interface CameraSnapshot {
 切换流程固定为：
 
 ```text
-validate allowed rig and target
+resolve mode or explicit rig, then validate allowed rig and target
   → prepare camera resources and visibility bindings
   → commit active rig at camera/render-sync barrier
   → start deterministic cut/blend
@@ -1489,9 +1579,9 @@ Camera Orientation 如果被移动、瞄准或交互系统用于计算方向，I
 interface CameraPort {
   createRig(profile: CameraRigProfile): CameraRigHandle;
   bindTarget(handle: CameraRigHandle, target: CameraTargetSpec): void;
-  setActiveRig(cameraId: EntityId, handle: CameraRigHandle): void;
+  setActiveRig(cameraEntityId: EntityId, handle: CameraRigHandle): void;
   applyViewCommand(command: JsonValue): ViewReceipt;
-  getSnapshot(cameraId: EntityId): CameraSnapshot;
+  getSnapshot(cameraEntityId: EntityId): CameraSnapshot;
   disposeRig(handle: CameraRigHandle): void;
 }
 ```
@@ -1638,15 +1728,15 @@ Session 首批命令：
 示例：同一个外部程序在 Tick 120 同时控制两个人物：
 
 ```jsonl
-{"type":"controller.create","requestId":"r1","controllers":[{"id":"controller-red","source":{"kind":"cli","sourceId":"agent-a"}},{"id":"controller-blue","source":{"kind":"cli","sourceId":"agent-a"}}]}
-{"type":"control.bind","requestId":"r2","controllerId":"controller-red","subjectEntityId":"person-a","channels":["locomotion","action"]}
-{"type":"control.bind","requestId":"r3","controllerId":"controller-blue","subjectEntityId":"person-b","channels":["locomotion","action"]}
-{"type":"control.intent-batch","requestId":"r4","tick":120,"commands":[{"controllerId":"controller-red","sequence":1,"expectedTargetEntityId":"person-a","intent":{"type":"move","forward":1}},{"controllerId":"controller-blue","sequence":1,"expectedTargetEntityId":"person-b","intent":{"type":"move","right":1}}]}
+{"type":"controller.create","requestId":"r1","controllers":[{"id":"controller-red","controlSource":{"kind":"cli","sourceId":"agent-a"}},{"id":"controller-blue","controlSource":{"kind":"cli","sourceId":"agent-a"}}]}
+{"type":"control.bind","requestId":"r2","controllerId":"controller-red","controlledEntityId":"person-a","channels":["locomotion","action"]}
+{"type":"control.bind","requestId":"r3","controllerId":"controller-blue","controlledEntityId":"person-b","channels":["locomotion","action"]}
+{"type":"control.intent-batch","requestId":"r4","targetTick":120,"commands":[{"controllerId":"controller-red","sequenceNumber":1,"expectedControlledEntityId":"person-a","intent":{"type":"move","forward":1}},{"controllerId":"controller-blue","sequenceNumber":1,"expectedControlledEntityId":"person-b","intent":{"type":"move","right":1}}]}
 ```
 
 `controller.create` 的权限和目标白名单由 Host Session Policy 授予，调用方不能在命令中自我提权。`control.bind` 必须校验 Session 的 `control.bind` Scope、Controller 所有权、目标白名单、目标 `control.possessable` 能力与 Channel 基数。`control.intent` 需要 `control.intent` Scope。一个 Session 可以创建多个 Controller；同一个 Controller 不能通过重复 Bind 同时占有多个 Locomotion 目标。
 
-Intent Receipt 至少包含 `requestId`、`sessionId`、`controllerId`、解析后的 `targetEntityId`、`acceptedTick`、`effectiveTick` 和结果状态。Session 结束、超时或宿主断开时，Runtime 在 Phase Barrier 释放控制绑定，并按 Authoring Policy 将主体切回 `uncontrolled`、默认 AI 或安全停止状态。
+Intent Receipt 至少包含 `requestId`、`sessionId`、`controllerId`、解析后的 `controlledEntityId`、`acceptedTick`、`effectiveTick` 和结果状态。Session 结束、超时或宿主断开时，Runtime 在 Phase Barrier 释放控制绑定，并按 Authoring Policy 将主体切回 `uncontrolled`、默认 AI 或安全停止状态。
 
 ### 16.4 WorldChangeSet 与增量修改协议
 
@@ -1655,12 +1745,12 @@ AI 修复和迭代不应每次重写整个大型 JSON，也不应直接使用数
 ```ts
 interface WorldChangeSet {
   kind: "worldkit-change-set";
-  version: 1;
-  patchId: string;
+  schemaVersion: 1;
+  changeSetId: string;
   baseAuthoringSpecHash: Sha256;
   preconditions: readonly WorldPrecondition[];
   operations: readonly WorldChangeOperation[];
-  source?: ChangeSource;
+  provenance?: ChangeProvenance;
 }
 ```
 
@@ -1681,7 +1771,7 @@ Operation 必须携带稳定 `operationId`、目标 ID 和必要的期望版本/
 应用流程固定为：
 
 ```text
-check baseAuthoringSpecHash and patchId
+check baseAuthoringSpecHash and changeSetId
   → validate schema and preconditions
   → apply to isolated authoring candidate
   → normalize and compile affected graph
@@ -1692,7 +1782,7 @@ check baseAuthoringSpecHash and patchId
 
 - 默认是 `dry-run`，只有显式 `apply` 才写出新 AuthoringSpec；CLI 不就地覆盖输入文件。
 - 任一 Operation 或 Gate 失败都不产生部分提交。
-- 相同 `patchId + baseAuthoringSpecHash + ChangeSet Hash` 重试返回同一 Receipt；相同 `patchId` 携带不同内容必须失败。
+- 相同 `changeSetId + baseAuthoringSpecHash + ChangeSet Hash` 重试返回同一 Receipt；相同 `changeSetId` 携带不同内容必须失败。
 - `baseAuthoringSpecHash` 不匹配返回 `WORLD_CHANGESET_BASE_AUTHORING_SPEC_MISMATCH`，并给出当前 AuthoringSpec Hash 与机器可读 rebase 所需的冲突 ID，不能静默套用到新世界。
 - ChangeReceipt 明确记录 `baseAuthoringSpecHash`、`resultAuthoringSpecHash`、`normalizedWorldIrHash`、受影响实体/资源、Diagnostic、实际应用的迁移和安全修复；不得使用未定义对象的通用 `worldHash` 字段。
 - 增量编译结果必须通过 Differential Test，证明它与对最终 AuthoringSpec 做一次完整 normalize/build 的 Canonical Output 完全相同。
@@ -1709,7 +1799,7 @@ Diagnostic 必须是正式协议：
   "code": "CAPABILITY_REQUIREMENT_UNSATISFIED",
   "instancePath": "/nodes/2/capabilities/1",
   "entityId": "dragon-1",
-  "capabilityId": "locomotion.flight@1",
+  "capabilityRef": "locomotion.flight@1",
   "message": "Flight requires a 3D directional control provider.",
   "details": {
     "required": "control.direction3d",
@@ -1718,7 +1808,7 @@ Diagnostic 必须是正式协议：
   "suggestions": [
     {
       "kind": "add-capability",
-      "capability": "control.direction3d@1"
+      "capabilityRef": "control.direction3d@1"
     }
   ]
 }
@@ -1781,23 +1871,23 @@ Playwright 不使用任意 `waitForTimeout` 驱动模拟。测试动作按固定
       "type": "move",
       "forward": 1,
       "run": true,
-      "ticks": 120
+      "durationTicks": 120
     },
     {
       "type": "perform",
-      "action": "jump"
+      "actionRef": "jump@1"
     },
     {
       "type": "set-camera-mode",
-      "camera": "player-view",
-      "rig": "camera.first-person.standard@1",
-      "transition": "cut"
+      "cameraEntityId": "player-view",
+      "mode": "first-person",
+      "transitionKind": "cut"
     },
     {
       "type": "look",
       "yawRadians": 0.4,
       "pitchRadians": -0.1,
-      "ticks": 1
+      "durationTicks": 1
     },
     {
       "type": "capture",
@@ -1820,7 +1910,7 @@ Playwright 不使用任意 `waitForTimeout` 驱动模拟。测试动作按固定
 
 CLI `run` 提供文件批处理和长生命周期 NDJSON Session；TypeScript/Node.js Driver API 与 Browser Driver 提供同一协议的类型安全包装。Controller、Possession、Intent、Receipt 和 Snapshot Schema 只有一份权威定义，任何传输 Adapter 都必须通过 Conformance Test 证明等价。
 
-`listCameraRigs/getCameraSnapshot` 需要 `observe` Scope；`setCameraMode`、View Intent 和 `setCameraPose` 需要 `camera.control` Scope；`createControllers/setIntent/setIntents/performAction` 需要 `control.intent` Scope；`bindControl/releaseControl` 需要更高权限的 `control.bind` Scope。拥有 `capture` 不能隐式获得镜头或主体控制权，拥有 `control.intent` 也不能改变 Possession。`setCameraPose` 只允许操作 AuthoringSpec 声明为可外部控制的 Camera，且正式 Gameplay 构建默认关闭；每次修改返回 Request ID、Camera Snapshot 与生效 Tick/Render Frame。Capture Gate 必须等待 ViewReceipt 和下一次 Render Ready，不能用任意延时猜测镜头已经稳定。
+`listCameraRigs/getCameraSnapshot` 需要 `observe` Scope；`setCameraMode`、View Intent 和 `setCameraPose` 需要 `camera.control` Scope；精确指定 Profile 的 `setCameraRig` 还要求创作/测试 Session Scope，并且目标必须在 `allowedRigRefs` 中。`createControllers/setIntent/setIntents/performAction` 需要 `control.intent` Scope；`bindControl/releaseControl` 需要更高权限的 `control.bind` Scope。拥有 `capture` 不能隐式获得镜头或主体控制权，拥有 `control.intent` 也不能改变 Possession。`setCameraPose` 只允许操作 AuthoringSpec 声明为可外部控制的 Camera，且正式 Gameplay 构建默认关闭；每次修改返回 Request ID、Camera Snapshot 与生效 Tick/Render Frame。Capture Gate 必须等待 ViewReceipt 和下一次 Render Ready，不能用任意延时猜测镜头已经稳定。
 
 ### 18.1 Driver 访问控制
 
@@ -1843,7 +1933,7 @@ Browser Driver 是测试与受信宿主控制面，不是所有发布页面默�
 ```text
 world-package/
   manifest.json
-  authoring-source.json
+  authoring-spec.json
   world.normalized.json
   registry-lock.json
   resources/
@@ -1872,7 +1962,7 @@ world-package/
 
 WorldPackage 不保存进程内对象或引擎 Handle。Runtime Target 可以包含经过缓存的 Babylon/Web 资源，但 `world.normalized.json` 保持引擎无关。
 
-`authoring-source.json` 是可选审计产物，不是 Runtime 必需文件。构建命令必须支持省略或脱敏 Prompt、参考图 URI、用户标识和内部证据；资源同时记录来源、许可证与允许用途。Runtime Target 缓存的第三方运行时二进制（如物理引擎 WASM）同样记录来源与许可证。
+`authoring-spec.json` 是可选审计产物，不是 Runtime 必需文件。构建命令必须支持省略或脱敏 `provenance` 中的 Prompt、参考图 URI、用户标识和内部证据；资源同时记录来源、许可证与允许用途。Runtime Target 缓存的第三方运行时二进制（如物理引擎 WASM）同样记录来源与许可证。
 
 `integrity.json` 只证明文件内容与清单一致，不能证明发布者身份。如果部署场景要求真实性，WorldPackage 还必须包含签名、签名者 ID 和宿主信任根；文档和 Diagnostic 必须明确区分 corruption integrity 与 publisher authenticity。
 
@@ -1897,12 +1987,12 @@ SHA-256(canonical-json-jcs@1({
 }))
 ```
 
-这样避免文件自哈希循环。签名 Envelope 不进入 Package Root。签名输入禁止使用字段字符串直接拼接，第一版固定为以下对象的 `canonical-json-jcs@1` 字节，以 `kind + version` 提供协议域隔离：
+这样避免文件自哈希循环。签名 Envelope 不进入 Package Root。签名输入禁止使用字段字符串直接拼接，第一版固定为以下对象的 `canonical-json-jcs@1` 字节，以 `kind + schemaVersion` 提供协议域隔离：
 
 ```json
 {
   "kind": "worldkit-package-signature-envelope",
-  "version": 1,
+  "schemaVersion": 1,
   "packageRootHash": "sha256:...",
   "packageId": "coastal-world",
   "packageFormatVersion": 1,
@@ -2024,7 +2114,7 @@ Agent 输出视为不可信数据：
 
 - Humanoid 与 Dragon 是独立 RuntimeEntity。
 - 接近、上坐骑、控制权切换、起飞、飞行、降落和下坐骑。
-- 一个 Runtime Session 创建两个 Controller，分别控制 Humanoid 与 Dragon，并在同一 Tick 提交可重放的 Intent Batch；未授权 Controller、过期 Sequence 和过期 `expectedTargetEntityId` 必须稳定失败。
+- 一个 Runtime Session 创建两个 Controller，分别控制 Humanoid 与 Dragon，并在同一 Tick 提交可重放的 Intent Batch；未授权 Controller、过期 Sequence 和过期 `expectedControlledEntityId` 必须稳定失败。
 - Body/Visual/Rig/AnimationSet 可替换。
 - Replay 结果确定。
 - 空手跑动、持剑跑动、持剑攻击和缺少专用动画时的声明式降级。
