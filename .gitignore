@@ -9,3 +9,4 @@ agent-tmp/
 .agent-home/
 .agent-tmp/
 .codex-tmp/
+.worktrees/
