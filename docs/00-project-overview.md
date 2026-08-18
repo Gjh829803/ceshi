@@ -86,6 +86,8 @@ Director LLM → Render Directive SDK ────────────┘
 5. [Plan-first 世界创作协议](12-plan-first-world-authoring.md)：如何从输入得到可追踪世界和规划工件。
 6. [多 Agent 世界创作流水线](13-multi-agent-world-authoring.md)：三个 Agent 的权限、工件和门禁。
 7. [能力分层与体验路线](14-capability-levels-and-experience-roadmap.md)：SDK、World Model 和玩家体验如何逐级增长。
-8. [SDK 总体架构](02-sdk-architecture.md)：目标模块和实现状态。
-9. [世界模型团队接入说明](11-world-model-team-handoff.md)：双方边界与近期接口工作。
-10. [运行时世界导演方案](09-runtime-world-director.md)：后续受控世界操作协议。
+8. [AI-first LEGO Game SDK 生产设计](superpowers/specs/2026-08-17-ai-first-lego-game-sdk-design.md)：面向重构的长期 Schema、Compiler、Runtime、CLI 和门禁设计。
+9. [主体资产与 3C 配置接入契约](16-subject-assets-3c-integration.md)：产品主体资产、Character、Control、Camera、骑乘和多人控制如何接入 SDK。
+10. [SDK 总体架构](02-sdk-architecture.md)：当前模块、目标模块和实现状态。
+11. [世界模型团队接入说明](11-world-model-team-handoff.md)：双方边界与近期接口工作。
+12. [运行时世界导演方案](09-runtime-world-director.md)：后续受控世界操作协议。

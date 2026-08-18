@@ -36,7 +36,7 @@ Babylon Web Runtime + Physics Backend
 4. 配置负责组合已有能力；第一次增加新的能力类别时，由 SDK 插件实现。
 5. 逻辑图、渲染/Transform 图和物理图分离，各自拥有明确真相和同步规则。
 6. 同一份 Spec、同一份 Registry Lock 和同一个 Seed 必须产生 bit-for-bit 相同的规范化结果；模拟与视觉结果按照本文定义的 Determinism Profile 验收。
-7. SDK 正式交付物是库 API、无状态 CLI、浏览器控制协议和可持久化 WorldPackage。
+7. SDK 正式交付物是库 API、无状态的一次性 CLI、有生命周期的 Runtime Session 协议、浏览器控制协议和可持久化 WorldPackage。
 8. Babylon.js 是默认 Web Runtime，但对外 Schema 与引擎无关。
 9. 当前仓库继续作为 SDK 仓库；生产 Agent 编排由另一个团队在独立仓库实现。
 
@@ -734,7 +734,95 @@ validate
 
 准备或提交失败时必须恢复上一份关系、控制权、Collider、Capability 激活状态和 Render Binding。重复提交相同命令必须幂等，Receipt 只在完整提交后产生。
 
-### 11.2 骑乘
+### 11.2 ControllerEntity、ControlSource 与控制绑定
+
+`possessedBy` 不能只停留在关系名称。Runtime 必须把“谁发出输入”“当前控制谁”“目标怎样解释输入”拆成三个独立概念：
+
+```text
+Keyboard / CLI / Browser / AI / Script / NPC
+  → ControlSource Adapter
+  → ControllerEntity
+  → possessedBy
+  → Subject Capability
+  → Control Method / Locomotion / Action / Physics
+```
+
+- `ControlSource` 是输入来源适配器，只把设备或外部协议转换为稳定语义 Intent，不决定目标主体的移动算法。
+- `ControllerEntity` 是没有 Render、Transform 和 Collider 的 Runtime 逻辑实体，提供稳定控制身份、Session 归属、权限和重放序列。
+- `possessedBy` 是 Controller 与当前受控 RuntimeEntity 之间的权威绑定。
+- `Control Method` 属于受控主体：同一个 `move` Intent 由人解释为相机相对移动，由汽车解释为油门/转向，由飞龙解释为飞行趋势。
+
+```ts
+type ControlSourceKind = "keyboard" | "gamepad" | "browser" | "cli" | "ai" | "script" | "npc";
+type ControlChannel = "locomotion" | "action";
+
+interface ControllerEntitySpec {
+  id: ControllerId;
+  kind: "controller";
+  ownerSessionId: SessionId;
+  source: {
+    kind: ControlSourceKind;
+    sourceId: string;
+  };
+  scopes: readonly ControlScope[];
+  allowedTargetEntityIds?: readonly EntityId[];
+}
+
+interface PossessedByRelationship {
+  type: "possessedBy";
+  version: 1;
+  subject: EntityId;
+  controller: ControllerId;
+  channels: readonly ControlChannel[];
+}
+```
+
+默认基数和冲突规则：
+
+- 一个 Controller 在同一 World、同一 Tick、同一 Channel 最多控制一个主体。
+- 一个主体的同一 Channel 最多存在一个权威 Controller；协作控制必须以后续版本显式定义 Channel 合并规则，第一版不能按到达顺序抢占。
+- 一个 Session 可以拥有多个 Controller，因此一个 CLI/Agent 进程可以同时控制多个人物。
+- “一条命令控制整队”属于上层编排：Group Command 必须展开成多个 Controller Intent，并在日志中保留每个主体的独立结果，不能把一个 `possessedBy` 绑定到多个目标。
+- ControllerEntity 默认由 Runtime Session 创建，不要求普通场景 Agent 写进 AuthoringSpec。预设 Script/NPC Controller 也必须通过同一 Registry 和权限模型创建。
+- AuthoringSpec 中的 `primary-playable` 等 Role 只是 Host 初始绑定的候选目标；Controller 身份、Session 权限和实际 `possessedBy` 仍在 Runtime Bootstrap 时创建和提交。默认玩家控制因此不要求场景 Agent 生成 Controller Schema。
+- 标准玩家 Controller 默认同时占有 `locomotion` 与 `action`；分开 Channel 只作为显式高级策略启用，不能由 Runtime 自动猜测。
+
+控制命令只指定 Controller；Runtime 根据提交 Tick 时已生效的 `possessedBy` 解析目标。调用方不能用 `targetEntityId` 绕过控制权：
+
+```ts
+interface ControlIntentCommand {
+  type: "control.intent";
+  requestId: string;
+  controllerId: ControllerId;
+  tick: number;
+  sequence: number;
+  expectedTargetEntityId?: EntityId;
+  intent: SemanticIntent;
+}
+
+interface ControlIntentBatch {
+  type: "control.intent-batch";
+  requestId: string;
+  tick: number;
+  commands: readonly Omit<ControlIntentCommand, "type" | "requestId" | "tick">[];
+}
+```
+
+`expectedTargetEntityId` 只是防止控制权已经切换时误操作的前置条件，不是路由来源。Batch 在进入 Tick 队列前整体校验 Controller、权限、绑定、Sequence 和 Intent Schema；任一命令无效时整批拒绝。相同 Controller、Channel 和 Tick 出现两个互斥 Intent 时返回 `CONTROL_INTENT_CONFLICT`，不能依赖 NDJSON 行顺序、网络到达顺序或插件注册顺序决定胜负。
+
+控制绑定和切换使用事务：
+
+```text
+validate controller scope, target and possessable capability
+  → reserve channels and check cardinality
+  → prepare locomotion/action/camera context changes
+  → commit possessedBy at fixed phase barrier
+  → emit ControlReceipt(effectiveTick, previousTarget, currentTarget)
+```
+
+Runtime Snapshot 必须按稳定 ID 返回 `controllers`、`controlBindings` 和 `entities`，不能只暴露单数 `player`。Replay Input Log 记录 Session ID、Controller ID、Sequence、解析后的目标、Intent、接收 Tick、生效 Tick 和 Receipt；重放时仍通过相同 Control Router 验证绑定和顺序。
+
+### 11.3 骑乘
 
 骑乘示例：
 
@@ -779,7 +867,7 @@ unmounted
 
 下坐骑时必须寻找安全落点，恢复骑手物理和控制权，并解除渲染挂载。
 
-### 11.3 装备、槽位与 Socket
+### 11.4 装备、槽位与 Socket
 
 武器、盾牌和可转移道具是独立 RuntimeEntity。人物与装备保持同级，通过关系组合：
 
@@ -1391,6 +1479,8 @@ validate allowed rig and target
 
 骑乘事务提交新的 Possession/Locomotion Tag 后，Camera Director 才根据 Context Binding 选择坐骑或飞行 Rig。下坐骑时恢复当前 Session 对 on-foot Context 的首选 Rig；若首选第一人称但目标缺少兼容 Eye Socket/Profile，则使用声明的 fallback 并产生 Diagnostic。Camera Context 只消费已提交状态，不能与 Mount Transaction 互相读取半完成结果。
 
+Camera 与 Controller 具有独立身份和权限：控制某个主体不等于拥有任意 Camera，观察某个 Camera 也不等于获得主体控制权。`targetPolicy: "controlled-entity"` 只是默认联动策略——Camera Director 在 `possessedBy` 提交后，把当前 View Session 的 Camera 切到受控对象声明的 Camera Profile。一个 Session 同时拥有多个 Controller 时，可以只使用一个观察 Camera，也可以显式创建多个 View；两者都不能从 Controller 数量隐式推断。
+
 Camera Orientation 如果被移动、瞄准或交互系统用于计算方向，Input Resolver 必须在固定 Tick 冻结 `view.direction`/`view.target` Intent，并将 ViewCommand 与结果写入 Replay Input Log。纯视觉插值、遮挡淡化和 Head Bob 不进入 Gameplay Hash。
 
 #### 15.3.6 CameraPort 与资源所有权
@@ -1481,7 +1571,7 @@ WorldPackage Manifest 和 Replay Report 必须记录 SDK、Babylon、Physics/WAS
 
 ## 16. CLI 与外部程序协议
 
-SDK 同时提供 TypeScript API 和无状态 CLI。JS/TS 程序可以直接调用包；Python、Go、Java 或 Agent 服务通过子进程和 JSON 调用 CLI。
+SDK 同时提供 TypeScript API 和 CLI。Schema、Validate、Build、Inspect 等一次性命令无状态；`run --interactive` 和 `preview` 是有明确生命周期的 Session 命令。JS/TS 程序可以直接调用包；Python、Go、Java 或 Agent 服务通过子进程和版本化 JSON/NDJSON 调用 CLI。
 
 ### 16.1 命令
 
@@ -1501,6 +1591,7 @@ worldkit verify ./dist/world --json
 worldkit preview ./dist/world --port 5173
 
 worldkit run ./dist/world --script actions.json --artifacts ./artifacts --headless --json
+worldkit run ./dist/world --interactive --protocol ndjson --headless
 worldkit capture ./dist/world --view opening --output opening.png --json
 worldkit inspect ./dist/world --json
 ```
@@ -1530,7 +1621,34 @@ worldkit inspect ./dist/world --json
 | 7 | 资产解析失败 |
 | 8 | 浏览器自动化失败 |
 
-### 16.3 WorldChangeSet 与增量修改协议
+### 16.3 NDJSON Runtime Session 与多人控制
+
+跨语言程序需要持续控制人物时，保持一个 `worldkit run --interactive` 子进程，并通过 stdin/stdout 交换 NDJSON。这个 Session 是传输层；控制语义复用 11.2 的 Controller、Possession 和 Intent Schema，Browser Driver 也复用同一组类型。
+
+Session 首批命令：
+
+- `controller.create`：在当前 Session 创建一个或多个 ControllerEntity。
+- `control.bind`：事务性建立或切换 `possessedBy`，返回生效 Tick。
+- `control.release`：释放指定 Channel；没有绑定的后续 Intent 必须失败。
+- `control.intent`：提交单个 Controller 的语义 Intent。
+- `control.intent-batch`：同一 Tick 原子接收多个 Controller Intent。
+- `snapshot.get`：返回按稳定 ID 索引的 Controller、Binding、Entity、Camera 和世界状态。
+- `session.close`：释放 Session 拥有的 Controller、View 和临时资源。
+
+示例：同一个外部程序在 Tick 120 同时控制两个人物：
+
+```jsonl
+{"type":"controller.create","requestId":"r1","controllers":[{"id":"controller-red","source":{"kind":"cli","sourceId":"agent-a"}},{"id":"controller-blue","source":{"kind":"cli","sourceId":"agent-a"}}]}
+{"type":"control.bind","requestId":"r2","controllerId":"controller-red","subjectEntityId":"person-a","channels":["locomotion","action"]}
+{"type":"control.bind","requestId":"r3","controllerId":"controller-blue","subjectEntityId":"person-b","channels":["locomotion","action"]}
+{"type":"control.intent-batch","requestId":"r4","tick":120,"commands":[{"controllerId":"controller-red","sequence":1,"expectedTargetEntityId":"person-a","intent":{"type":"move","forward":1}},{"controllerId":"controller-blue","sequence":1,"expectedTargetEntityId":"person-b","intent":{"type":"move","right":1}}]}
+```
+
+`controller.create` 的权限和目标白名单由 Host Session Policy 授予，调用方不能在命令中自我提权。`control.bind` 必须校验 Session 的 `control.bind` Scope、Controller 所有权、目标白名单、目标 `control.possessable` 能力与 Channel 基数。`control.intent` 需要 `control.intent` Scope。一个 Session 可以创建多个 Controller；同一个 Controller 不能通过重复 Bind 同时占有多个 Locomotion 目标。
+
+Intent Receipt 至少包含 `requestId`、`sessionId`、`controllerId`、解析后的 `targetEntityId`、`acceptedTick`、`effectiveTick` 和结果状态。Session 结束、超时或宿主断开时，Runtime 在 Phase Barrier 释放控制绑定，并按 Authoring Policy 将主体切回 `uncontrolled`、默认 AI 或安全停止状态。
+
+### 16.4 WorldChangeSet 与增量修改协议
 
 AI 修复和迭代不应每次重写整个大型 JSON，也不应直接使用数组下标驱动的通用 Patch。SDK 定义面向领域的 `WorldChangeSet`：
 
@@ -1635,10 +1753,15 @@ window.__WORLDKIT_DRIVER__
 - `inspectEntity()`
 - `setPaused()`
 - `reset()`
-- `setIntent()`
+- `createControllers()`
+- `getControlBindings()`
+- `bindControl()`
+- `releaseControl()`
+- `setIntent(command: ControlIntentCommand)`
+- `setIntents(batch: ControlIntentBatch)`
 - `stepTicks()`
 - `runActions()`
-- `performAction()`
+- `performAction(controllerId, action)`
 - `listCameraRigs()`
 - `getCameraSnapshot()`
 - `setCameraMode()`
@@ -1652,6 +1775,7 @@ Playwright 不使用任意 `waitForTimeout` 驱动模拟。测试动作按固定
 
 ```json
 {
+  "controllerId": "controller-red",
   "actions": [
     {
       "type": "move",
@@ -1694,9 +1818,9 @@ Playwright 不使用任意 `waitForTimeout` 驱动模拟。测试动作按固定
 - `collision-debug`
 - `height-slope`
 
-CLI `run` 提供批处理；TypeScript/Node.js Driver API 提供长生命周期 Session。跨语言长期控制可以通过 CLI NDJSON Session 包装，但正式状态协议仍来自 Browser Protocol。
+CLI `run` 提供文件批处理和长生命周期 NDJSON Session；TypeScript/Node.js Driver API 与 Browser Driver 提供同一协议的类型安全包装。Controller、Possession、Intent、Receipt 和 Snapshot Schema 只有一份权威定义，任何传输 Adapter 都必须通过 Conformance Test 证明等价。
 
-`listCameraRigs/getCameraSnapshot` 需要 `observe` Scope；`setCameraMode`、View Intent 和 `setCameraPose` 需要 `control` Scope，拥有 `capture` 不能隐式获得镜头控制权。`setCameraPose` 只允许操作 AuthoringSpec 声明为可外部控制的 Camera，且正式 Gameplay 构建默认关闭；每次修改返回 Request ID、Camera Snapshot 与生效 Tick/Render Frame。Capture Gate 必须等待 ViewReceipt 和下一次 Render Ready，不能用任意延时猜测镜头已经稳定。
+`listCameraRigs/getCameraSnapshot` 需要 `observe` Scope；`setCameraMode`、View Intent 和 `setCameraPose` 需要 `camera.control` Scope；`createControllers/setIntent/setIntents/performAction` 需要 `control.intent` Scope；`bindControl/releaseControl` 需要更高权限的 `control.bind` Scope。拥有 `capture` 不能隐式获得镜头或主体控制权，拥有 `control.intent` 也不能改变 Possession。`setCameraPose` 只允许操作 AuthoringSpec 声明为可外部控制的 Camera，且正式 Gameplay 构建默认关闭；每次修改返回 Request ID、Camera Snapshot 与生效 Tick/Render Frame。Capture Gate 必须等待 ViewReceipt 和下一次 Render Ready，不能用任意延时猜测镜头已经稳定。
 
 ### 18.1 Driver 访问控制
 
@@ -1704,7 +1828,7 @@ Browser Driver 是测试与受信宿主控制面，不是所有发布页面默�
 
 - 正式 Runtime 构建默认不暴露 `window.__WORLDKIT_DRIVER__`；只有显式 test/dev 或受信 embed 模式启用。
 - Host 通过 bootstrap handshake 创建短生命周期 Session，并使用不可预测 nonce 绑定页面实例。
-- Session Scope 至少拆成 `observe`、`control`、`capture` 和 `load`；Driver 方法逐项校验权限。
+- Session Scope 至少拆成 `observe`、`control.intent`、`control.bind`、`camera.control`、`capture` 和 `load`；Driver 方法逐项校验权限。
 - `loadWorldPackage` 只能加载宿主允许来源且通过完整性、兼容性和预算校验的 Package。
 - Session 绑定允许的 Origin、World ID 和有效期；页面导航、World Dispose 或 Host 断开时自动失效。
 - 每个自动化 Run 使用独立 Browser Context、Storage Namespace 和 Session；禁止跨 Case 复用可变世界状态、Local Storage、权限或 Driver Handle。
@@ -1871,6 +1995,7 @@ Agent 输出视为不可信数据：
 - Raycast 与碰撞组。
 - Terrain 与水体边界。
 - Camera Node、CameraRigProfile、Target/Socket fallback、第一/第三人称切换、输入 Intent 和 Possession。
+- ControllerEntity、ControlSource Adapter、Channel 基数、Binding 权限、多人同 Tick Batch、Sequence 冲突、Session 断开释放和 Replay 一致性。
 - 第一人称 Body Visibility、权威武器 Entity 与可选 View Model 的身份映射；防穿墙不能修改 Gameplay Physics。
 - 第三人称 Boom Shape Cast、主体过滤、遮挡策略、最小距离和距离恢复；Camera Query 不能推动物体。
 - 骑乘/飞行 Context Binding 在 Possession 提交后切换 Rig，下坐骑恢复 Session 首选视角，失败路径保持上一可用 Rig。
@@ -1899,6 +2024,7 @@ Agent 输出视为不可信数据：
 
 - Humanoid 与 Dragon 是独立 RuntimeEntity。
 - 接近、上坐骑、控制权切换、起飞、飞行、降落和下坐骑。
+- 一个 Runtime Session 创建两个 Controller，分别控制 Humanoid 与 Dragon，并在同一 Tick 提交可重放的 Intent Batch；未授权 Controller、过期 Sequence 和过期 `expectedTargetEntityId` 必须稳定失败。
 - Body/Visual/Rig/AnimationSet 可替换。
 - Replay 结果确定。
 - 空手跑动、持剑跑动、持剑攻击和缺少专用动画时的声明式降级。
