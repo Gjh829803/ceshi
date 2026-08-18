@@ -21,6 +21,10 @@ export interface AuthoringResult<T> {
   diagnostics: readonly AuthoringDiagnostic[];
 }
 
+export interface NormalizeAuthoringResult extends AuthoringResult<NormalizedWorldIRV1> {
+  normalizedWorldIrHash?: string;
+}
+
 export interface TransformSpecV1 {
   positionMeters: Vec3;
   rotationEulerRadiansXYZ?: Vec3;
@@ -184,4 +188,62 @@ export interface AuthoringSpecV1 {
     cameraEntityId: string;
   };
   constraints: Record<string, never>;
+}
+
+export interface NormalizedTransformV1 {
+  positionMeters: Vec3;
+  rotationEulerRadiansXYZ: Vec3;
+  scaleXYZ: Vec3;
+}
+
+export interface NormalizedProceduralTerrainSourceV1 {
+  kind: "procedural";
+  relief: ProceduralTerrainSourceSpecV1["relief"];
+  baseHeightMeters: number;
+  amplitudeMeters: number;
+  frequencyPerMeter: number;
+  octaves: number;
+  lacunarityRatio: number;
+  persistenceRatio: number;
+}
+
+export type NormalizedWorldNodeV1 =
+  | (Omit<TerrainNodeSpecV1, "components"> & {
+      components: {
+        terrain: Omit<TerrainNodeSpecV1["components"]["terrain"], "source"> & {
+          source: NormalizedProceduralTerrainSourceV1;
+        };
+      };
+    })
+  | (Omit<WaterNodeSpecV1, "components"> & {
+      components: {
+        water: Omit<
+          WaterNodeSpecV1["components"]["water"],
+          "shoreWidthMeters" | "traversalMode"
+        > & {
+          shoreWidthMeters: number;
+          traversalMode: "blocked" | "swimmable" | "walkable";
+        };
+      };
+    })
+  | (Omit<ObjectNodeSpecV1, "transform"> & { transform: NormalizedTransformV1 })
+  | SubjectNodeSpecV1
+  | CameraNodeSpecV1
+  | (Omit<AnchorNodeSpecV1, "transform"> & { transform: NormalizedTransformV1 });
+
+/**
+ * Engine-neutral, deterministic form of an AuthoringSpec. Optional authoring
+ * conveniences have been expanded and all order-insensitive collections are
+ * sorted. Engine adapters must never consume AuthoringSpec directly.
+ */
+export interface NormalizedWorldIRV1 {
+  kind: "worldkit-normalized-world";
+  schemaVersion: 1;
+  id: string;
+  seed: number;
+  provenance?: AuthoringSpecV1["provenance"];
+  world: AuthoringSpecV1["world"];
+  resources: { prototypes: readonly PrimitivePrototypeSpecV1[] };
+  nodes: readonly NormalizedWorldNodeV1[];
+  startup: AuthoringSpecV1["startup"];
 }
