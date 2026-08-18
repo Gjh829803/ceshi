@@ -79,6 +79,404 @@ Schema 分成两层：
 
 扩展性来自“稳定实体 + 能力 + 关系 + 明确生命周期”，而不是把所有东西永久嵌套在人物节点下面。
 
+
+### 3.3 可评审的 Schema 顶层结构
+
+下面是第一版 AuthoringSpec 的协议骨架。它不是伪代码式的概念图，而是计划冻结为 JSON Schema 的真实层级：
+
+```ts
+interface AuthoringSpecV1 {
+  kind: "worldkit-authoring-spec";
+  version: 1;
+  id: string;
+  seed: number;
+
+  source: SourceSpec;
+  world: WorldSpec;
+  resources: ResourceCatalogSpec;
+  nodes: readonly WorldNodeSpec[];
+  relationships: readonly RelationshipSpec[];
+  rules: readonly RuleSpec[];
+  entry: EntrySpec;
+  constraints: ConstraintSpec;
+}
+```
+
+| 顶层字段 | 负责表达什么 | 不应该放什么 |
+|---|---|---|
+| `source` | 用户 Prompt、参考图、可见证据、推断和来源 | Runtime 对象、模型私有上下文 |
+| `world` | 单位、坐标、世界边界、重力、环境和资源预算 | 具体 Babylon Scene 配置 |
+| `resources` | Prototype、模型、Rig、AnimationSet 和内容寻址资产 | 世界实例状态 |
+| `nodes` | 世界中有稳定 ID 的实体实例 | Rule、计时器和无空间状态 |
+| `relationships` | 所有权、装备、骑乘、控制等类型化逻辑边 | 通用 `parentId` 或渲染父子关系 |
+| `rules` | Trigger、Action Invocation、Objective、Timer 和状态规则 | 动画 Clip 内部实现 |
+| `entry` | Spawn、初始控制主体和开场相机 | 运行过程中的临时状态 |
+| `constraints` | 路线、坡度、构图、语义锚点、性能和资源 Gate | 仅供参考、不参与验收的描述 |
+
+这些桶的边界很重要。它们决定 Agent 能否准确定位修改，也决定 Compiler 能否只重新编译受影响部分。
+
+### 3.4 节点、能力和关系的结构
+
+`WorldNodeSpec` 只保留少量稳定节点种类，具体差异交给 Prototype、Component 和 Capability：
+
+```ts
+type WorldNodeKind =
+  | "subject"
+  | "terrain"
+  | "water"
+  | "object"
+  | "volume"
+  | "path"
+  | "anchor"
+  | "camera"
+  | "spawner"
+  | "environment";
+
+interface WorldNodeSpec {
+  id: string;
+  kind: WorldNodeKind;
+  prototype?: string;
+  transform?: {
+    position: [number, number, number];
+    rotationRadians?: [number, number, number];
+    scale?: [number, number, number];
+  };
+
+  kit?: string;
+  components?: Record<string, JsonValue>;
+  capabilities?: readonly CapabilityInstance[];
+  tags?: readonly string[];
+
+  // 只在节点 Schema 明确允许时出现的 AI 简写
+  loadout?: Record<string, NestedEntitySpec>;
+  initialInventory?: readonly NestedEntitySpec[];
+  initialMount?: NestedEntitySpec;
+}
+
+interface CapabilityInstance {
+  id: string;
+  capability: string;
+  enabled: boolean;
+  config: JsonValue;
+  activationGroup?: string;
+  bindings?: Record<string, string>;
+}
+
+interface RelationshipSpec {
+  id: string;
+  type: string;
+  version: number;
+  subject: string;
+  target: string;
+  params?: JsonValue;
+}
+
+interface RelationshipManifest {
+  type: string;
+  version: number;
+  subjectKinds: readonly WorldNodeKind[];
+  targetKinds: readonly WorldNodeKind[];
+  cardinality: {
+    perSubject: "one" | "optional" | "many";
+    perTarget: "one" | "optional" | "many";
+  };
+  paramsSchema: JsonSchema;
+  conflicts?: readonly string[];
+  deletePolicy: "reject" | "cascade" | "detach";
+}
+
+interface ActionDefinition {
+  id: string;
+  version: number;
+  category: "locomotion" | "interaction" | "gameplay";
+  parametersSchema: JsonSchema;
+  requires: readonly string[];
+  authority: "simulation";
+  interruptPolicy: string;
+  completion: JsonValue;
+  effects?: readonly JsonValue[];
+}
+
+```
+
+`RelationshipSpec` 是世界里的关系实例；`RelationshipManifest` 和 `ActionDefinition` 属于版本化 Registry。前者规定某条关系允许连接什么实体、基数、配置和删除策略，后者规定动作参数、前置条件、权威来源和完成条件。AuthoringSpec 只能引用 Registry Lock 中允许的版本，不能内嵌任意执行代码。
+
+
+首批节点分类的含义如下：
+
+| kind | 例子 | 主要扩展方式 |
+|---|---|---|
+| `subject` | 人、动物、飞龙、NPC | Body/Rig/Visual Profile、控制权和 Capability |
+| `terrain` | 平原、丘陵、岛屿 | Terrain Source、约束和 Compiler Profile |
+| `water` | 海、湖、河 | Surface、Boundary、Volume 和水体能力 |
+| `object` | 塔、墙、门、箱子、剑 | Prototype、物理模式、交互/破坏能力 |
+| `volume` | Trigger、伤害区、检查点 | 形状、过滤条件和进入/离开规则 |
+| `path` | 道路、巡逻线、飞行路线 | 路线点、宽度、坡度和用途 |
+| `anchor` | Spawn、交互点、构图点 | 稳定空间位置和语义 |
+| `camera` | 第三人称、开场镜头 | Camera Rig 和控制 Profile |
+| `spawner` | NPC、道具生成点 | Prototype、数量和生成规则 |
+| `environment` | 天空、雾、重力、光照 | 世界级环境 Component |
+
+我们有意不为“塔、墙、门、剑”分别增加基础节点类型。它们都是 `object`，差异由 Prototype、Component、Capability 和 Semantic Tag 表达。否则基础类型会随着业务不断膨胀，AI 也更难选择。
+
+### 3.5 一个可运行世界的代表性 JSON
+
+下面的例子展示 Canonical AuthoringSpec 期望表达的关系。为便于评审，资源细节和地形控制数据做了缩写，但节点、能力和关系的边界与正式方案一致：
+
+```json
+{
+  "kind": "worldkit-authoring-spec",
+  "version": 1,
+  "id": "sunlit-dragon-bay",
+  "seed": 1024,
+  "source": {
+    "prompt": "A playable coastal bay with a lighthouse, a humanoid and a rideable dragon.",
+    "referenceImages": [
+      {
+        "uri": "asset://sha256/reference-image",
+        "evidence": "reference-visible"
+      }
+    ]
+  },
+  "world": {
+    "units": "meters",
+    "coordinateSystem": "right-handed-y-up-minus-z-forward",
+    "bounds": {
+      "min": [-300, -20, -250],
+      "max": [300, 180, 250]
+    },
+    "gravity": [0, -9.81, 0],
+    "resourceBudget": {
+      "maxNodes": 5000,
+      "maxColliders": 2000,
+      "maxPackageBytes": 268435456
+    }
+  },
+  "resources": {
+    "prototypes": [
+      {
+        "id": "adventurer-adult@1",
+        "bodyProfile": "humanoid.adult@1",
+        "rigProfile": "humanoid.biped@1",
+        "animationSet": "adventurer.base@1"
+      },
+      {
+        "id": "rideable-dragon@1",
+        "bodyProfile": "dragon.medium@1",
+        "rigProfile": "dragon.standard@1",
+        "animationSet": "dragon.flight@1"
+      },
+      {
+        "id": "iron-sword@1",
+        "visual": "asset://sha256/iron-sword-model"
+      }
+    ]
+  },
+  "nodes": [
+    {
+      "id": "player",
+      "kind": "subject",
+      "prototype": "adventurer-adult@1",
+      "kit": "humanoid.third-person@1",
+      "transform": {
+        "position": [0, 2, 42],
+        "rotationRadians": [0, 3.141592653589793, 0]
+      }
+    },
+    {
+      "id": "dragon-1",
+      "kind": "subject",
+      "prototype": "rideable-dragon@1",
+      "kit": "dragon.mountable-flight@1",
+      "transform": {
+        "position": [12, 3, 35],
+        "rotationRadians": [0, 3.141592653589793, 0]
+      }
+    },
+    {
+      "id": "sword-1",
+      "kind": "object",
+      "prototype": "iron-sword@1",
+      "components": {
+        "physics": {
+          "mobility": "dynamic"
+        },
+        "semantic": {
+          "type": "weapon.sword"
+        }
+      }
+    },
+    {
+      "id": "terrain-main",
+      "kind": "terrain",
+      "components": {
+        "terrain": {
+          "source": "asset://sha256/elevation-band-source",
+          "compilerProfile": "coastal-hills@1"
+        }
+      }
+    },
+    {
+      "id": "bay-water",
+      "kind": "water",
+      "components": {
+        "water": {
+          "levelMeters": 0,
+          "boundary": "asset://sha256/bay-boundary"
+        }
+      }
+    },
+    {
+      "id": "lighthouse",
+      "kind": "object",
+      "prototype": "coastal-lighthouse@1",
+      "transform": {
+        "position": [118, 22, -74]
+      },
+      "components": {
+        "physics": {
+          "mobility": "static",
+          "collider": "compound"
+        },
+        "semantic": {
+          "type": "landmark.lighthouse",
+          "importance": "primary"
+        }
+      }
+    },
+    {
+      "id": "spawn-main",
+      "kind": "anchor",
+      "transform": {
+        "position": [0, 2, 42],
+        "rotationRadians": [0, 3.141592653589793, 0]
+      },
+      "components": {
+        "semantic": {
+          "type": "spawn"
+        }
+      }
+    }
+  ],
+  "relationships": [
+    {
+      "id": "sword-owned-by-player",
+      "type": "ownedBy",
+      "version": 1,
+      "subject": "sword-1",
+      "target": "player"
+    },
+    {
+      "id": "sword-equipped-right-hand",
+      "type": "equippedAt",
+      "version": 1,
+      "subject": "sword-1",
+      "target": "player",
+      "params": {
+        "slot": "right-hand"
+      }
+    }
+  ],
+  "rules": [
+    {
+      "id": "mount-dragon-interaction",
+      "kind": "interaction",
+      "action": "mount@1",
+      "subject": "player",
+      "target": "dragon-1",
+      "conditions": {
+        "maxDistanceMeters": 3
+      }
+    }
+  ],
+  "entry": {
+    "spawn": "spawn-main",
+    "control": "player",
+    "camera": "camera.third-person@1"
+  },
+  "constraints": {
+    "primaryRoutes": [
+      {
+        "id": "spawn-to-lighthouse",
+        "from": "spawn-main",
+        "to": "lighthouse",
+        "maxSlopeDegrees": 35
+      }
+    ],
+    "composition": {
+      "requiredAnchors": ["player", "bay-water", "lighthouse"]
+    }
+  }
+}
+```
+
+这个例子有几个需要评审的关键点：
+
+- 人物、飞龙和剑都是同级 Entity，不依赖永久父子嵌套。
+- `equippedAt` 是装备逻辑真相，Runtime 根据它派生剑在 `hand-r` Socket 上的渲染挂载。
+- 飞龙的可骑乘和飞行能力来自 Kit/Capability；真正上坐骑时通过 `mountedOn + possessedBy` 事务改变状态。
+- 地形 Source 是 Authoring Input；Compiler 生成的权威 Heightfield 才供 Mesh 和 Collider 使用。
+- Rule 引用稳定 Semantic Action，而不是直接指定动画 Clip。
+- 路线和构图属于阻断式 Constraint，不只是 Prompt 描述。
+
+### 3.6 AI 简写与 Canonical 结构的关系
+
+为了降低 Agent 输出长度，AI Schema Profile 可以允许一层受控嵌套：
+
+```json
+{
+  "id": "player",
+  "kind": "subject",
+  "kit": "humanoid.third-person@1",
+  "loadout": {
+    "right-hand": {
+      "id": "sword-1",
+      "kind": "object",
+      "prototype": "iron-sword@1"
+    }
+  }
+}
+```
+
+Normalizer 必须把它展开为稳定的同级结构：
+
+```text
+Node: player
+Node: sword-1
+Relationship: sword-1 --ownedBy--> player
+Relationship: sword-1 --equippedAt(slot=right-hand)--> player
+```
+
+只有 Schema 注册过的 `loadout`、`initialInventory`、`initialMount` 等字段可以使用这种简写；默认最多嵌套一层。更复杂的结构直接使用 `nodes + relationships`。任意 JSON 父子关系不会自动产生所有权、Transform 或生命周期语义。
+
+Canonical Schema 保留完整语义；AI Schema Profile 只暴露当前任务需要的节点、Kit、Capability、Action 和 Relationship。例如“海湾步行场景”不需要向模型暴露飞行、车辆、联网和室内相关分支。Provider Adapter 可以继续适配各模型的结构化输出限制，但输出最终必须回到同一 Canonical Schema。
+
+### 3.7 Kit、Capability、Action 分别解决什么问题
+
+| 概念 | 解决的问题 | 示例 |
+|---|---|---|
+| Kit | 给 AI 的大积木，快速获得一组经过验证的能力 | `humanoid.third-person@1` |
+| Capability | 可独立配置、安装和测试的能力 | `locomotion.ground@1`、`locomotion.flight@1` |
+| ActionDefinition | 稳定的语义动作及其参数、前置和完成条件 | `mount@1`、`attack.light@1` |
+| AnimationBinding | Action 在某个 Rig/状态下使用什么动画表现 | 持剑 `run` → `Run_With_Sword` |
+| Relationship | 多个实体当前如何组合 | `mountedOn`、`equippedAt` |
+
+Kit 和 Capability 是两级 API：常见场景优先使用 Kit，特殊场景再追加或覆盖 Capability。只使用 Kit 会导致组合爆炸；只暴露细粒度 Capability 又会让 AI 输出过长、依赖容易配错。
+
+ActionDefinition 由版本化 Registry 提供，AuthoringSpec 中的 Rule 或外部命令只引用 Action ID 和参数。动画资源不能决定攻击是否命中、骑乘是否完成等权威结果。
+
+### 3.8 Schema 评审需要回答的问题
+
+1. `source / world / resources / nodes / relationships / rules / entry / constraints` 的顶层分区是否足够清楚，是否存在职责重叠？
+2. 十种基础 `WorldNodeKind` 是否过多或过少？新增塔、门、车辆时能否主要依靠 Component/Capability，而不是继续增加 kind？
+3. “常用 Kit + 高级 Capability”两级接口是否适合上游 Agent？
+4. 人物、坐骑、武器使用同级 Entity + Relationship，是否能覆盖预期的装备、转移、骑乘和控制权变化？
+5. 一层受控嵌套作为 AI Authoring Sugar、进入 Compiler 前完全展开，是否是可接受的复杂度折中？
+6. ActionDefinition 放在 Registry，世界只引用稳定 Action ID，是否满足动作持续扩展和资源替换？
+7. 地形图像只作为 Source、权威 Heightfield 由 Compiler 生成，是否满足参考图还原和物理可靠性？
+8. Constraint 是否覆盖首批必须阻断的问题：Spawn、路线坡度、水域、地标平台、构图和资源预算？
+
+
 ## 4. 动作如何组合
 
 `run`、`attack`、`mount` 这类动作首先是 Gameplay 语义，不是某个动画文件名。
