@@ -42,6 +42,7 @@ export interface WorldRuntimeSession {
   readonly ready: Promise<void>;
   runFixedInput(input: FixedInputV1): Promise<WorldRuntimeSnapshotV1>;
   snapshot(): WorldRuntimeSnapshotV1;
+  reset(): WorldRuntimeSnapshotV1;
   renderFrame(): void;
   dispose(): Promise<void>;
 }

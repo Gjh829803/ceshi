@@ -1,5 +1,82 @@
-import { mkdir, writeFile } from "node:fs/promises";
+import { mkdir, readFile, stat, writeFile } from "node:fs/promises";
 import path from "node:path";
+
+const MAX_AUTHORING_BYTES = 8 * 1024 * 1024;
+
+function writeJsonResponse(response, statusCode, body) {
+  response.statusCode = statusCode;
+  response.setHeader("content-type", "application/json; charset=utf-8");
+  response.setHeader("cache-control", "no-store");
+  response.end(JSON.stringify(body));
+}
+
+/** @returns {import("vite").Plugin} */
+export function worldkitAuthoringSource() {
+  return {
+    name: "worldkit-authoring-source",
+    apply: "serve",
+    configureServer(server) {
+      server.middlewares.use("/__worldkit/authoring-spec", (request, response) => {
+        if (request.method !== "GET" && request.method !== "HEAD") {
+          writeJsonResponse(response, 405, {
+            diagnostics: [{
+              severity: "error",
+              code: "AUTHORING_SOURCE_METHOD_NOT_ALLOWED",
+              instancePath: "",
+              message: "The AuthoringSpec endpoint accepts only GET and HEAD.",
+            }],
+          });
+          return;
+        }
+        void (async () => {
+          const configuredPath = process.env.WORLDKIT_AUTHORING_SPEC_PATH;
+          if (configuredPath === undefined || configuredPath.length === 0) {
+            writeJsonResponse(response, 404, {
+              diagnostics: [{
+                severity: "error",
+                code: "AUTHORING_SOURCE_NOT_CONFIGURED",
+                instancePath: "",
+                message: "WORLDKIT_AUTHORING_SPEC_PATH is not configured for this server.",
+              }],
+            });
+            return;
+          }
+          const exactPath = path.resolve(configuredPath);
+          const sourceStat = await stat(exactPath);
+          if (!sourceStat.isFile()) throw new Error("Configured AuthoringSpec path is not a regular file.");
+          if (sourceStat.size > MAX_AUTHORING_BYTES) {
+            writeJsonResponse(response, 413, {
+              diagnostics: [{
+                severity: "error",
+                code: "AUTHORING_JSON_TOO_LARGE",
+                instancePath: "",
+                message: `AuthoringSpec exceeds the ${MAX_AUTHORING_BYTES} byte server limit.`,
+              }],
+            });
+            return;
+          }
+          response.statusCode = 200;
+          response.setHeader("content-type", "application/json; charset=utf-8");
+          response.setHeader("cache-control", "no-store");
+          if (request.method === "HEAD") {
+            response.end();
+            return;
+          }
+          response.end(await readFile(exactPath, "utf8"));
+        })().catch((error) => {
+          writeJsonResponse(response, 404, {
+            diagnostics: [{
+              severity: "error",
+              code: "AUTHORING_SOURCE_UNAVAILABLE",
+              instancePath: "",
+              message: error instanceof Error ? error.message : String(error),
+            }],
+          });
+        });
+      });
+    },
+  };
+}
 
 /** @returns {import("vite").Plugin} */
 function whiteboxArtifactWriter() {
@@ -102,5 +179,5 @@ function whiteboxArtifactWriter() {
 }
 
 export default {
-  plugins: [whiteboxArtifactWriter()],
+  plugins: [worldkitAuthoringSource(), whiteboxArtifactWriter()],
 };

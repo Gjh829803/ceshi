@@ -48,6 +48,12 @@ importers:
 
   apps/playground:
     dependencies:
+      '@whitebox-world/authoring':
+        specifier: workspace:*
+        version: link:../../packages/authoring
+      '@whitebox-world/compiler':
+        specifier: workspace:*
+        version: link:../../packages/compiler
       '@whitebox-world/contracts':
         specifier: workspace:*
         version: link:../../packages/contracts
@@ -57,6 +63,12 @@ importers:
       '@whitebox-world/physics':
         specifier: workspace:*
         version: link:../../packages/physics
+      '@whitebox-world/runtime-babylon':
+        specifier: workspace:*
+        version: link:../../packages/runtime-babylon
+      '@whitebox-world/runtime-contracts':
+        specifier: workspace:*
+        version: link:../../packages/runtime-contracts
       '@whitebox-world/subjects':
         specifier: workspace:*
         version: link:../../packages/subjects

@@ -9,9 +9,13 @@
     "preview": "vite preview"
   },
   "dependencies": {
+    "@whitebox-world/authoring": "workspace:*",
+    "@whitebox-world/compiler": "workspace:*",
     "@whitebox-world/contracts": "workspace:*",
     "@whitebox-world/core": "workspace:*",
     "@whitebox-world/physics": "workspace:*",
+    "@whitebox-world/runtime-babylon": "workspace:*",
+    "@whitebox-world/runtime-contracts": "workspace:*",
     "@whitebox-world/subjects": "workspace:*",
     "@whitebox-world/testkit": "workspace:*",
     "@whitebox-world/world": "workspace:*",

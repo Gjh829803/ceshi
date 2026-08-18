@@ -118,4 +118,27 @@ describe("BabylonWorldRuntime", () => {
     expect(snapshot.subject.movementMedium).toBe("water");
     await runtime.dispose();
   });
+
+  it("resets deterministic runtime state to the compiled spawn", async () => {
+    const executionPlan = createExecutionPlan();
+    const runtime = await BabylonWorldRuntime.create({
+      executionPlan,
+      havokWasmBinary,
+      engineFactory: () => new NullEngine({
+        renderWidth: 640,
+        renderHeight: 360,
+        textureSize: 512,
+        deterministicLockstep: true,
+        lockstepMaxSteps: 4,
+      }),
+    });
+    await runtime.runFixedInput({ actions: ["move-left"], ticks: 30 });
+
+    const reset = runtime.reset();
+
+    expect(reset.tick).toBe(0);
+    expect(reset.subject.positionMeters).toEqual(executionPlan.subject.spawnPositionMeters);
+    expect(reset.subject.velocityMetersPerSecond).toEqual([0, 0, 0]);
+    await runtime.dispose();
+  });
 });

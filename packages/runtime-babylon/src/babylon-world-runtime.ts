@@ -323,10 +323,23 @@ export class BabylonWorldRuntime implements WorldRuntimeSession {
     };
   }
 
+  reset(): WorldRuntimeSnapshotV1 {
+    this.assertUsable();
+    this.subjectController.reset();
+    this.tick = 0;
+    this.updateCamera();
+    return this.snapshot();
+  }
+
   renderFrame(): void {
     this.assertUsable();
     this.updateCamera();
     this.scene.render();
+  }
+
+  resize(): void {
+    this.assertUsable();
+    this.engine.resize();
   }
 
   async dispose(): Promise<void> {

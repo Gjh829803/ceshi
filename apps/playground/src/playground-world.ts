@@ -3,6 +3,7 @@ import type {
   OutdoorWorldSpec,
   VisualPrototypeSpec,
 } from "@whitebox-world/world";
+import type { FixedInputV1, WorldRuntimeSnapshotV1 } from "@whitebox-world/runtime-contracts";
 
 export type InputAction =
   | "forward"
@@ -132,9 +133,21 @@ export interface PlaygroundAutomationApi {
   setPaused(paused: boolean): WorldSnapshot;
 }
 
+export interface WorldkitBrowserApiV1 {
+  version: 1;
+  ready(): Promise<WorldRuntimeSnapshotV1>;
+  getSnapshot(): WorldRuntimeSnapshotV1;
+  getDiagnostics(): readonly Readonly<Record<string, unknown>>[];
+  runFixedInput(steps: readonly FixedInputV1[]): Promise<WorldRuntimeSnapshotV1>;
+  captureScreenshot(): string;
+  reset(): WorldRuntimeSnapshotV1;
+  setPaused(paused: boolean): WorldRuntimeSnapshotV1;
+}
+
 declare global {
   interface Window {
     __WHITEBOX_PLAYGROUND__: PlaygroundAutomationApi;
+    __WORLDKIT__?: WorldkitBrowserApiV1;
   }
 }
 

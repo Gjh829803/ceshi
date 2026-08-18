@@ -97,6 +97,12 @@ export class SubjectController {
     return this.physicsController.getVelocity();
   }
 
+  reset(): void {
+    this.physicsController.setPosition(new Vector3(...this.plan.subject.spawnPositionMeters));
+    this.physicsController.setVelocity(Vector3.Zero());
+    this.syncVisual();
+  }
+
   dispose(): void {
     this.physicsController.dispose();
   }
