@@ -26,7 +26,7 @@
 
 ECMAScript 只规定 `Math.sin/cos/exp/pow` 等超越函数为实现近似，不能把跨 JS 引擎 bit-for-bit 一致当作协议前提。地形重建的距离场与平滑求解可能使用这类函数，而 normalize/校验会同时运行在 Node CLI 与浏览器中。若不处理，编译层 bit-for-bit 承诺会在跨环境下静默破产。
 
-已补进规格的约束：参与协议哈希的计算必须使用 Compiler Profile 声明的确定性数学实现（自带软件数学库，或限制在 IEEE-754 完全确定的加减乘除与 `sqrt`）；bit-for-bit 范围限定为锁定 SDK 构建加声明的 JS 引擎类别；Node 与浏览器重算哈希一致属于 Conformance 测试范围（总规格 §15.5、地形子规格 §13.2）。
+已补进规格的约束：参与协议哈希的计算必须使用 Compiler Profile 声明的确定性数学实现（自带软件数学库，或限制在 IEEE-754 完全确定的加减乘除与 `sqrt`）；bit-for-bit 范围限定为锁定 SDK 构建加声明的 JS 引擎类别；Node 与浏览器重算哈希一致属于 Conformance 测试范围（总规格 §15.6、地形子规格 §13.2）。
 
 ### 2.3 其余子系统评估
 
@@ -86,7 +86,7 @@ Diagnostic（稳定错误码 + JSON Pointer + 机器可读建议）→ WorldChan
 
 | 修订 | 位置 |
 |---|---|
-| 确定性数学实现与 bit-for-bit 范围限定 | 总规格 §15.5；地形子规格 §13.2 |
+| 确定性数学实现与 bit-for-bit 范围限定 | 总规格 §15.6；地形子规格 §13.2 |
 | Schema Projector 规模预算与枚举降级策略 | 总规格 §7.5 |
 | 受控嵌套深度预算（默认一层） | 总规格 §7.5、§8.1 |
 | Runtime Target 第三方二进制记录来源与许可证 | 总规格 §19 |

@@ -427,7 +427,7 @@ AI-facing 节点种类保持有限，后续主要通过 Component、Capability �
 | `volume` | 不一定可见的空间区域 | Trigger、伤害区、水下区、检查点 |
 | `path` | 路线、巡逻线、导航或构图引导 | 道路、飞行航线、NPC 巡逻线 |
 | `anchor` | 世界空间中的稳定锚点 | 出生点、构图点、交互位置、导航目标 |
-| `camera` | 相机实体或相机 Rig 配置 | 第三人称、骑乘、飞行、开场镜头 |
+| `camera` | 相机实体、可用 Rig 与视角切换策略 | 第一人称、第三人称、俯视、骑乘、飞行、开场镜头 |
 | `spawner` | 运行时创建实体 | NPC、敌人、道具刷新点 |
 | `environment` | 世界级环境条件 | 天空、雾、光照、重力、音频环境 |
 
@@ -1145,7 +1145,270 @@ Opening Shot 必须定义：
 
 如果具体地形或 Character Controller 能力在实现验证中不满足契约，可以替换 PhysicsPort 后端，但不能修改 AuthoringSpec 或 Agent API。
 
-### 15.3 Runtime 执行阶段
+### 15.3 Camera Rig、多视角与切换
+
+Camera 是独立的 View Runtime 子系统，不是 Subject RenderNode 的永久子节点。AuthoringSpec 中的 `camera` 节点声明可用 Rig、默认视角、目标解析和上下文切换策略；Normalizer 可以把 Subject Kit 中的相机简写展开成独立 Camera RuntimeEntity、Camera Capability 与目标绑定。Babylon Camera、碰撞查询句柄和输入设备对象只存在于 Runtime Adapter。
+
+第一版公开支持以下 Camera Mode：
+
+- `first-person`：视点位于主体眼睛或头部 Socket，适合沉浸、精确观察和第一人称交互。
+- `third-person`：视点通过带碰撞的跟随臂位于主体后方，适合角色移动、战斗和骑乘。
+- `top-down`：俯视或斜俯视跟随，适合策略、建造和大范围导航。
+- `orbit`：围绕目标观察，主要用于 Inspector、角色预览或受控玩法。
+- `cinematic`：由固定 Pose、路径或镜头脚本驱动，用于 Opening Shot 和过场，不默认接管 Gameplay 输入。
+
+视角模式使用显式判别 Union，避免第一人称和第三人称的大量互斥字段同时出现：
+
+```ts
+interface CameraNodeConfig {
+  defaultRig: ResourceRef;
+  allowedRigs: readonly ResourceRef[];
+  target: CameraTargetSpec;
+  contextBindings?: readonly CameraContextBinding[];
+  allowUserSwitch: boolean;
+}
+
+interface CameraTargetSpec {
+  entity: EntityId;
+  socket?: RigSocketId;
+  targetHeightMeters?: number;
+  localOffset?: [number, number, number];
+}
+
+interface CameraRigProfileBase {
+  id: ResourceId;
+  projection: CameraProjectionSpec;
+  control: CameraControlSpec;
+  transition: CameraTransitionSpec;
+}
+
+type CameraProjectionSpec =
+  | {
+      kind: "perspective";
+      fovDegrees: number;
+      nearMeters: number;
+      farMeters: number;
+    }
+  | {
+      kind: "orthographic";
+      verticalSizeMeters: number;
+      nearMeters: number;
+      farMeters: number;
+    };
+
+type CameraRigProfile = CameraRigProfileBase &
+  (
+    | { mode: "first-person"; firstPerson: FirstPersonCameraSpec }
+    | { mode: "third-person"; thirdPerson: ThirdPersonCameraSpec }
+    | { mode: "top-down"; topDown: TopDownCameraSpec }
+    | { mode: "orbit"; orbit: OrbitCameraSpec }
+    | { mode: "cinematic"; cinematic: CinematicCameraSpec }
+  );
+```
+
+公共控制与切换配置：
+
+```ts
+interface CameraControlSpec {
+  scheme: "free-look" | "target-locked" | "scripted";
+  lookIntent?: "view.look";
+  zoomIntent?: "view.zoom";
+  minPitchRadians?: number;
+  maxPitchRadians?: number;
+  yawPolicy: "unbounded" | "relative-to-target" | "locked";
+  recenter?: {
+    enabled: boolean;
+    delaySeconds: number;
+    halfLifeSeconds: number;
+  };
+}
+
+interface CameraTransitionSpec {
+  type: "cut" | "blend";
+  durationSeconds: number;
+  easing: "linear" | "ease-in-out";
+}
+
+interface CameraContextBinding {
+  id: string;
+  whenTags: readonly string[];
+  rig: ResourceRef;
+  targetPolicy: "controlled-entity" | "rider" | "explicit";
+  explicitTarget?: EntityId;
+  priority: number;
+}
+```
+
+`CameraControlSpec` 只声明世界允许的控制语义、范围和默认行为；鼠标灵敏度、手柄曲线、反转 Y 轴等用户偏好属于 Host/User Settings，不写入 AuthoringSpec。Context Binding 按 priority、条件特异度和稳定 Binding ID 解析；仍然歧义时编译失败，不能按注册顺序选择。
+
+#### 15.3.1 第一人称
+
+```ts
+interface FirstPersonCameraSpec {
+  eyeSocket?: RigSocketId;
+  fallbackEyeHeightMeters: number;
+  localOffset: [number, number, number];
+  bodyVisibility: "hide-head" | "hide-upper-body" | "show-full-body";
+  weaponPresentation: "world-model" | "first-person-view-model";
+  preventWallPeek: boolean;
+  motionProfile?: ResourceRef;
+}
+```
+
+第一人称规则：
+
+- 优先使用 RigProfile 声明的 `eye`/`camera` Socket；没有 Socket 时使用 BodyProfile 的眼睛高度，不能从模型包围盒临时猜测。
+- `hide-head` 只影响当前 Camera 的 Color Presentation；主体 RuntimeEntity、Collider、阴影、其他相机和语义身份仍然存在。
+- 默认使用同一权威武器 Entity 的 World Model。可选 First-person View Model 只是额外 Render Binding，必须映射回同一 Entity/Instance ID，不能复制库存、伤害或装备状态。
+- `preventWallPeek` 使用头部位置、近裁剪面和 Physics Query 限制视点穿墙；相机查询不能推动刚体或修改 Character Body。
+- Head Bob、呼吸晃动和 Camera Roll 是可关闭的 Presentation Motion Profile，不进入 Gameplay Transform，也不能改变 Raycast/命中权威。
+
+#### 15.3.2 第三人称
+
+```ts
+interface ThirdPersonCameraSpec {
+  distanceMeters: number;
+  minDistanceMeters: number;
+  maxDistanceMeters: number;
+  targetHeightMeters: number;
+  shoulderOffsetMeters: number;
+  defaultPitchRadians: number;
+  boomCollision: {
+    enabled: boolean;
+    radiusMeters: number;
+    paddingMeters: number;
+    recoveryHalfLifeSeconds: number;
+    occlusionPolicy: "pull-in" | "fade-occluder" | "pull-in-and-fade";
+  };
+}
+```
+
+第三人称 Camera 先根据目标和输入计算期望 Pose，再从 Target 到期望位置执行 Raycast/Shape Cast，过滤被跟随主体及声明为 Camera-transparent 的 Collider；结果只缩短 Camera Boom，不修改主体或障碍物物理。障碍消失后按声明的 Half-life 恢复距离，避免镜头瞬移。`fade-occluder` 只属于当前 View 的渲染策略，不能让 Collider、语义 Mask 或其他 Session 看见不同的 Gameplay 世界。
+
+骑乘和飞行使用独立 Profile，例如：
+
+```text
+camera.third-person.standard@1
+camera.third-person.mounted@1
+camera.third-person.flight@1
+```
+
+它们共享第三人称协议，但可以使用不同距离、目标高度、Pitch、FOV 和碰撞参数。
+
+#### 15.3.3 其他视角
+
+- Top-down Rig 明确高度、俯角、正交/透视投影、世界边界 Clamp 和是否允许旋转/缩放。
+- Orbit Rig 明确目标、半径范围、Pitch 范围和输入权限；默认不产生移动 Intent。
+- Cinematic Rig 使用内容寻址的 Camera Path 或确定的关键帧，声明是否允许跳过；它不能隐式改变 Possession、Gameplay Target 或主体 Transform。
+
+#### 15.3.4 Camera 节点与 AI-facing Kit
+
+多人称可切换主体的 AuthoringSpec 示例：
+
+```json
+{
+  "id": "player-view",
+  "kind": "camera",
+  "components": {
+    "cameraRig": {
+      "defaultRig": "camera.third-person.standard@1",
+      "allowedRigs": [
+        "camera.first-person.standard@1",
+        "camera.third-person.standard@1"
+      ],
+      "target": {
+        "entity": "player",
+        "socket": "camera-root"
+      },
+      "allowUserSwitch": true,
+      "contextBindings": [
+        {
+          "id": "on-foot-third-person",
+          "whenTags": ["locomotion.ground"],
+          "rig": "camera.third-person.standard@1",
+          "targetPolicy": "controlled-entity",
+          "priority": 50
+        },
+        {
+          "id": "mounted-flight",
+          "whenTags": ["locomotion.mounted", "locomotion.flight"],
+          "rig": "camera.third-person.flight@1",
+          "targetPolicy": "controlled-entity",
+          "priority": 100
+        }
+      ]
+    }
+  }
+}
+```
+
+AI 普通模式仍可以使用：
+
+```text
+humanoid.first-person@1
+humanoid.third-person@1
+humanoid.switchable-view@1
+```
+
+这些 Kit 是 Authoring Sugar：Normalizer 必须物化 Camera Entity、Camera Capability、Registry Profile 与目标绑定。`humanoid.switchable-view@1` 安装第一/第三人称 Rig，并把它们放入同一 `camera-mode` Activation Group；每个 View Session 同一时刻只能有一个 Active Rig。Kit 名称不能让 Camera 成为 Subject 的逻辑子节点。
+
+#### 15.3.5 切换、骑乘与控制权
+
+手动视角切换使用 `ViewCommand`，不是装备/攻击类 Gameplay Action：
+
+```ts
+interface SetCameraModeCommand {
+  type: "view.set-mode";
+  requestId: string;
+  cameraId: EntityId;
+  rig: ResourceRef;
+  transition?: "cut" | "blend";
+}
+
+interface CameraSnapshot {
+  cameraId: EntityId;
+  activeRig: ResourceRef;
+  mode: "first-person" | "third-person" | "top-down" | "orbit" | "cinematic";
+  targetEntityId: EntityId;
+  yawRadians: number;
+  pitchRadians: number;
+  distanceMeters?: number;
+  fovDegrees?: number;
+}
+```
+
+切换流程固定为：
+
+```text
+validate allowed rig and target
+  → prepare camera resources and visibility bindings
+  → commit active rig at camera/render-sync barrier
+  → start deterministic cut/blend
+  → emit ViewReceipt and CameraSnapshot
+```
+
+失败时保留上一 Active Rig。相同 `requestId + command hash` 重试必须返回同一 Receipt。切换 Camera 不得自行改变 `possessedBy`、`mountedOn`、Collider、Locomotion 或主体 Transform。
+
+骑乘事务提交新的 Possession/Locomotion Tag 后，Camera Director 才根据 Context Binding 选择坐骑或飞行 Rig。下坐骑时恢复当前 Session 对 on-foot Context 的首选 Rig；若首选第一人称但目标缺少兼容 Eye Socket/Profile，则使用声明的 fallback 并产生 Diagnostic。Camera Context 只消费已提交状态，不能与 Mount Transaction 互相读取半完成结果。
+
+Camera Orientation 如果被移动、瞄准或交互系统用于计算方向，Input Resolver 必须在固定 Tick 冻结 `view.direction`/`view.target` Intent，并将 ViewCommand 与结果写入 Replay Input Log。纯视觉插值、遮挡淡化和 Head Bob 不进入 Gameplay Hash。
+
+#### 15.3.6 CameraPort 与资源所有权
+
+```ts
+interface CameraPort {
+  createRig(profile: CameraRigProfile): CameraRigHandle;
+  bindTarget(handle: CameraRigHandle, target: CameraTargetSpec): void;
+  setActiveRig(cameraId: EntityId, handle: CameraRigHandle): void;
+  applyViewCommand(command: JsonValue): ViewReceipt;
+  getSnapshot(cameraId: EntityId): CameraSnapshot;
+  disposeRig(handle: CameraRigHandle): void;
+}
+```
+
+Camera Capability 声明对 Transform Query、Physics Query、Render Visibility 和 Input Intent 的 requires/provides。Camera Entity 拥有 Rig Handle、监听器、临时 Render Binding 和遮挡状态；切换、World Dispose 或 Session 结束时必须幂等释放。Babylon Camera、Post-process、LayerMask 和 Pointer 事件不能泄漏到 World IR 或其他 Session。
+
+### 15.4 Runtime 执行阶段
 
 固定执行顺序：
 
@@ -1190,7 +1453,7 @@ interface SystemManifest {
 - Runtime 禁止以插件注册顺序、Map 插入顺序或资源加载完成顺序作为语义 tie-breaker。
 - 对允许多个贡献者的数值或集合，必须注册确定的 Reducer，并定义排序、精度和冲突规则。
 
-### 15.4 生命周期
+### 15.5 生命周期
 
 统一生命周期：
 
@@ -1202,7 +1465,7 @@ RuntimeEntity、Capability、System、Asset、Collider 和 Browser Session 都�
 
 这一通用生命周期描述 World/Runtime 的外层状态；Capability 的热安装、切换和移除必须进一步遵守 10.5 节的 `validate → admit → prepare → commit/rollback` 事务，并且只能在固定 Phase Barrier 改变 ExecutionPlan。禁止在 `normalize`、Schema 校验、资源异步回调或 System 遍历中发布运行时副作用。
 
-### 15.5 确定性等级
+### 15.6 确定性等级
 
 确定性承诺分成三层，不能笼统承诺跨所有设备 bit-exact：
 
@@ -1376,6 +1639,10 @@ window.__WORLDKIT_DRIVER__
 - `stepTicks()`
 - `runActions()`
 - `performAction()`
+- `listCameraRigs()`
+- `getCameraSnapshot()`
+- `setCameraMode()`
+- `setCameraPose()`（仅 test/dev 或受信控制面）
 - `raycast()`
 - `captureFrame()`
 - `getDiagnostics()`
@@ -1397,6 +1664,18 @@ Playwright 不使用任意 `waitForTimeout` 驱动模拟。测试动作按固定
       "action": "jump"
     },
     {
+      "type": "set-camera-mode",
+      "camera": "player-view",
+      "rig": "camera.first-person.standard@1",
+      "transition": "cut"
+    },
+    {
+      "type": "look",
+      "yawRadians": 0.4,
+      "pitchRadians": -0.1,
+      "ticks": 1
+    },
+    {
       "type": "capture",
       "name": "after-jump",
       "passes": ["color", "semantic-mask", "depth"]
@@ -1416,6 +1695,8 @@ Playwright 不使用任意 `waitForTimeout` 驱动模拟。测试动作按固定
 - `height-slope`
 
 CLI `run` 提供批处理；TypeScript/Node.js Driver API 提供长生命周期 Session。跨语言长期控制可以通过 CLI NDJSON Session 包装，但正式状态协议仍来自 Browser Protocol。
+
+`listCameraRigs/getCameraSnapshot` 需要 `observe` Scope；`setCameraMode`、View Intent 和 `setCameraPose` 需要 `control` Scope，拥有 `capture` 不能隐式获得镜头控制权。`setCameraPose` 只允许操作 AuthoringSpec 声明为可外部控制的 Camera，且正式 Gameplay 构建默认关闭；每次修改返回 Request ID、Camera Snapshot 与生效 Tick/Render Frame。Capture Gate 必须等待 ViewReceipt 和下一次 Render Ready，不能用任意延时猜测镜头已经稳定。
 
 ### 18.1 Driver 访问控制
 
@@ -1556,6 +1837,7 @@ Agent 输出视为不可信数据：
 - 边界值、未知字段、重复 ID 和悬空引用。
 - Kit 展开、默认值和稳定序列化。
 - 受控嵌套 `loadout/initialInventory/initialMount` 展开为稳定 RuntimeEntity 与 Relationship。
+- CameraRigProfile 的 `mode` 判别 Union、投影类型与 Mode 专属字段互斥；Camera 节点的 Default/Allowed Rig、Target、Context Binding 与 Registry Lock 解析。
 - WorldNodeSpec ID、包内 URI、注册表 URI 与 Registry Lock 解析。
 - Canonical Schema、`constrained-json@1` 投影和每个 Provider Adapter 的 Valid/Invalid Fixture；Adapter 输出必须重新通过 Canonical Schema。
 - Prototype/Instance/Variant/Composition Layer 的稳定解析、Tombstone、按 ID 集合操作和冲突诊断。
@@ -1578,6 +1860,7 @@ Agent 输出视为不可信数据：
 - 按 Determinism Profile 验收编译确定性、模拟重放和视觉容差。
 - 资源预算。
 - 缺失依赖的可执行诊断。
+- Camera Rig Activation Group 在每个 View Session 只能激活一个模式；切换失败回滚旧 Rig，反复切换/销毁后 Camera、监听器、Render Binding 与 Physics Query Lease 无泄漏。
 
 ### 22.3 Runtime Conformance
 
@@ -1587,7 +1870,11 @@ Agent 输出视为不可信数据：
 - Body/Collider 同步。
 - Raycast 与碰撞组。
 - Terrain 与水体边界。
-- Camera、输入 Intent 和 Possession。
+- Camera Node、CameraRigProfile、Target/Socket fallback、第一/第三人称切换、输入 Intent 和 Possession。
+- 第一人称 Body Visibility、权威武器 Entity 与可选 View Model 的身份映射；防穿墙不能修改 Gameplay Physics。
+- 第三人称 Boom Shape Cast、主体过滤、遮挡策略、最小距离和距离恢复；Camera Query 不能推动物体。
+- 骑乘/飞行 Context Binding 在 Possession 提交后切换 Rig，下坐骑恢复 Session 首选视角，失败路径保持上一可用 Rig。
+- Camera Orientation 参与瞄准/移动时，View Intent、切换 Receipt 与 Replay Input Log 一致；纯视觉插值不污染 Gameplay Hash。
 - Action、动画事件与状态转换。
 - Relationship Transaction 的原子提交、回滚和幂等 Receipt。
 - EquipmentSlot、RigSocket、装备物理模式和双手占用。
@@ -1601,7 +1888,7 @@ Agent 输出视为不可信数据：
 
 - 分块 Heightfield。
 - 大面积海湾和岸线。
-- 第三人称人物。
+- 可在第一人称和第三人称之间切换的人物；两种视角共享同一主体、武器、物理和 Semantic ID。
 - 灯塔、房屋、帆船和岛屿。
 - 静态碰撞和连续可走路线。
 - Opening Shot Region/Anchor 校验。
@@ -1615,6 +1902,7 @@ Agent 输出视为不可信数据：
 - Body/Visual/Rig/AnimationSet 可替换。
 - Replay 结果确定。
 - 空手跑动、持剑跑动、持剑攻击和缺少专用动画时的声明式降级。
+- 骑乘和飞行 Camera Context 切换；下坐骑后恢复 on-foot 首选视角。
 
 ### 22.5 Production Gates
 
@@ -1708,14 +1996,16 @@ schema
 
 - 实现 runtime-contracts、runtime-babylon 和 physics-havok。
 - 编译并运行海湾场景。
-- 达成与旧 Runtime 相同的地形、主体、物理和捕获 Gate。
+- 实现 CameraPort、第三人称 Rig、Boom Collision 与可重放 View Snapshot。
+- 达成与旧 Runtime 相同的地形、主体、物理、相机和捕获 Gate。
 
 ### 阶段 D：Subject 与 Action
 
 - 实现 Profile、Kit、Possession、Relationship 和 Semantic Action。
 - 验证成人/儿童模型替换和不同 AnimationSet。
+- 实现第一人称 Rig、Body Visibility、Wall-peek 防护和第一/第三人称切换；同一武器 Entity 在两种视角保持同一 Gameplay/Semantic 身份。
 - 实现 Action Timeline、Channel Lock、Cancel/Interrupt、Equipment 事务和 Capability 动态生命周期。
-- 实现地面坐骑，再实现飞龙飞行与下坐骑。
+- 实现地面坐骑，再实现飞龙飞行与下坐骑；Camera Director 根据已提交的 Possession/Locomotion Context 切换并恢复 Rig。
 
 ### 阶段 E：工具化
 
@@ -1723,6 +2013,7 @@ schema
 - WorldPackage。
 - Browser Protocol。
 - Playwright Driver。
+- Camera Mode/Snapshot/View Intent/受控 Pose 的 Browser Protocol 与 CLI 脚本动作。
 - Inspector 与 Capability Discovery。
 
 ### 阶段 F：切换默认实现
@@ -1767,7 +2058,7 @@ schema
 8. 成人与儿童能共享 Humanoid Kit，同时使用不同 Body/Visual/Rig/Animation Profile。
 9. 主体能够通过 Relationship 与坐骑组合，并正确切换控制、物理、相机和动作。
 10. 地形、水面、主体和核心物件可由 Spec 确定性编译并具有正确物理。
-11. Browser Protocol 能按 Tick 移动、执行动作、查询状态和截图。
+11. Browser Protocol 能按 Tick 移动、执行动作、切换/查询 Camera、控制 View Intent 和截图。
 12. WorldPackage 可以独立校验、保存、加载和重放。
 13. 必需构图 Region、Anchor、路线坡度和物理 Gate 可阻断不合格产物。
 14. Runtime、CLI 和插件具有明确版本、生命周期和兼容性规则。
@@ -1779,7 +2070,8 @@ schema
 20. WorldChangeSet 以 `baseAuthoringSpecHash` 和稳定 ID 原子应用；重试幂等，失败不产生部分世界，增量编译与全量编译结果一致。
 21. Capability 动态安装与移除可以回滚且无资源泄漏；Action Timeline 的阶段、锁、Effect Tick 和终止原因可重放。
 22. NormalizedWorldIR、Registry Lock、资源和 WorldPackage 使用同一版本化 Canonical Bytes/Package Root 协议，签名与完整性验证无自引用歧义。
-23. 每个发布世界在声明的平台类别下通过帧时间、内存、加载时间和包体预算 Gate，预算来源与测量结果记录在验收报告中。
+23. CameraRigProfile 能表达第一人称、第三人称及其他注册视角；切换不复制 Gameplay Entity、不改变 Possession/Physics，并在骑乘/飞行 Context 中确定回退与恢复。
+24. 每个发布世界在声明的平台类别下通过帧时间、内存、加载时间和包体预算 Gate，预算来源与测量结果记录在验收报告中。
 
 ## 27. 最终架构决策摘要
 
@@ -1799,6 +2091,8 @@ schema
 - 装备槽、Rig Socket 和世界 Anchor 分离；武器和坐骑等独立对象通过 Relationship 组合。
 - 同一 Semantic Action 根据装备、姿态和移动模式解析确定的 Action Variant，避免为组合状态复制动作类型。
 - Action Runtime 使用权威 Tick Timeline 和 Channel Lock；动画 Marker 只负责表现同步。
+- Camera 是独立 View RuntimeEntity；CameraRigProfile 使用判别 Union 表达第一人称、第三人称、俯视、环绕和过场视角，Camera Director 根据 Session 首选与已提交 Gameplay Context 切换。
+- 第一人称与第三人称共享同一主体、装备和语义身份；View Model、遮挡淡化、Head Bob 和镜头插值只属于 Presentation。
 - Babylon 是第一版默认 Web Runtime；公共协议不包含 Babylon 类型。
 - 物理通过 Port 隔离，第一版默认 Havok。
 - SDK 提供 TypeScript API、CLI、WorldPackage、Browser Protocol 和 Playwright Driver。

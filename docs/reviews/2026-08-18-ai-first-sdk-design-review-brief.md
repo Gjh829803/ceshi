@@ -213,7 +213,7 @@ interface ActionDefinition {
 | `volume` | Trigger、伤害区、检查点 | 形状、过滤条件和进入/离开规则 |
 | `path` | 道路、巡逻线、飞行路线 | 路线点、宽度、坡度和用途 |
 | `anchor` | Spawn、交互点、构图点 | 稳定空间位置和语义 |
-| `camera` | 第三人称、开场镜头 | Camera Rig 和控制 Profile |
+| `camera` | 第一人称、第三人称、俯视、开场镜头 | Camera Rig、目标、控制与上下文切换 Profile |
 | `spawner` | NPC、道具生成点 | Prototype、数量和生成规则 |
 | `environment` | 天空、雾、重力、光照 | 世界级环境 Component |
 
@@ -277,7 +277,7 @@ interface ActionDefinition {
       "id": "player",
       "kind": "subject",
       "prototype": "adventurer-adult@1",
-      "kit": "humanoid.third-person@1",
+      "kit": "humanoid.switchable-view@1",
       "transform": {
         "position": [0, 2, 42],
         "rotationRadians": [0, 3.141592653589793, 0]
@@ -303,6 +303,34 @@ interface ActionDefinition {
         },
         "semantic": {
           "type": "weapon.sword"
+        }
+      }
+    },
+    {
+      "id": "player-view",
+      "kind": "camera",
+      "components": {
+        "cameraRig": {
+          "defaultRig": "camera.third-person.standard@1",
+          "allowedRigs": [
+            "camera.first-person.standard@1",
+            "camera.third-person.standard@1",
+            "camera.third-person.flight@1"
+          ],
+          "target": {
+            "entity": "player",
+            "socket": "camera-root"
+          },
+          "allowUserSwitch": true,
+          "contextBindings": [
+            {
+              "id": "mounted-flight",
+              "whenTags": ["locomotion.mounted", "locomotion.flight"],
+              "rig": "camera.third-person.flight@1",
+              "targetPolicy": "controlled-entity",
+              "priority": 100
+            }
+          ]
         }
       }
     },
@@ -392,7 +420,7 @@ interface ActionDefinition {
   "entry": {
     "spawn": "spawn-main",
     "control": "player",
-    "camera": "camera.third-person@1"
+    "camera": "player-view"
   },
   "constraints": {
     "primaryRoutes": [
@@ -415,6 +443,7 @@ interface ActionDefinition {
 - 人物、飞龙和剑都是同级 Entity，不依赖永久父子嵌套。
 - `equippedAt` 是装备逻辑真相，Runtime 根据它派生剑在 `hand-r` Socket 上的渲染挂载。
 - 飞龙的可骑乘和飞行能力来自 Kit/Capability；真正上坐骑时通过 `mountedOn + possessedBy` 事务改变状态。
+- Camera 是独立 View Entity；第一/第三人称共享同一个人物、武器、动作和物理状态，骑乘后只按已提交的 Gameplay Context 更换 Rig 与目标。
 - 地形 Source 是 Authoring Input；Compiler 生成的权威 Heightfield 才供 Mesh 和 Collider 使用。
 - Rule 引用稳定 Semantic Action，而不是直接指定动画 Clip。
 - 路线和构图属于阻断式 Constraint，不只是 Prompt 描述。
@@ -475,6 +504,7 @@ ActionDefinition 由版本化 Registry 提供，AuthoringSpec 中的 Rule 或外
 6. ActionDefinition 放在 Registry，世界只引用稳定 Action ID，是否满足动作持续扩展和资源替换？
 7. 地形图像只作为 Source、权威 Heightfield 由 Compiler 生成，是否满足参考图还原和物理可靠性？
 8. Constraint 是否覆盖首批必须阻断的问题：Spawn、路线坡度、水域、地标平台、构图和资源预算？
+9. Camera 使用独立节点、判别式 Rig Profile 与 Context Binding，是否能覆盖第一/第三人称、骑乘/飞行和自动截图？
 
 
 ## 4. 动作如何组合
@@ -518,7 +548,69 @@ SDK 解析语义区域、色带、路线和约束
 - Mesh 和物理 Collider 必须来自同一份权威 Heightfield。
 - 图片模型、专业地形工具和具体 Runtime 都是可替换实现，不进入公共 Schema。
 
-## 6. 为什么选择 Babylon + Havok
+## 6. 不同人称相机如何设计
+
+核心结论：**Camera 是独立 View Entity，人物只是 Camera 的跟随目标。** 第一人称、第三人称、俯视、环绕和过场镜头由不同 `CameraRigProfile` 表达；它们可以观察同一个人物，但不会成为人物 Gameplay 状态的一部分。
+
+这样设计后，切换人称只是切换当前 View Session 的 Active Rig：不复制人物，不重新装备武器，不改变 Collider、Position、Possession 或动作状态。人物骑上飞龙后，Camera Director 再根据已经提交的 `locomotion.mounted + locomotion.flight` Context 切到飞行镜头；下坐骑时恢复玩家在步行 Context 中偏好的视角。
+
+### 6.1 Schema 结构
+
+```ts
+interface CameraNodeConfig {
+  defaultRig: ResourceRef;
+  allowedRigs: readonly ResourceRef[];
+  target: {
+    entity: EntityId;
+    socket?: RigSocketId;
+  };
+  contextBindings?: readonly CameraContextBinding[];
+  allowUserSwitch: boolean;
+}
+
+type CameraRigProfile = CameraRigProfileBase &
+  (
+    | { mode: "first-person"; firstPerson: FirstPersonCameraSpec }
+    | { mode: "third-person"; thirdPerson: ThirdPersonCameraSpec }
+    | { mode: "top-down"; topDown: TopDownCameraSpec }
+    | { mode: "orbit"; orbit: OrbitCameraSpec }
+    | { mode: "cinematic"; cinematic: CinematicCameraSpec }
+  );
+```
+
+这里使用判别式 Union：`mode = first-person` 时只能出现第一人称配置，`mode = third-person` 时只能出现第三人称配置。这样 AI 不需要理解一大组互相冲突的开关，也不会同时生成“眼睛位置”和“第三人称跟随臂距离”。
+
+普通 Agent 可以直接使用 `humanoid.first-person@1`、`humanoid.third-person@1` 或 `humanoid.switchable-view@1` Kit；Normalizer 会把简写展开为上文完整 JSON 中的 `player-view` Camera 节点、Registry Profile 和目标绑定。高级 Agent 才需要直接配置 Rig。
+
+### 6.2 第一人称与第三人称的边界
+
+| 关注点 | 第一人称 | 第三人称 |
+|---|---|---|
+| 视点 | Rig 的 `eye/camera` Socket；缺失时使用 BodyProfile 声明的眼高 | Subject 后方的 Target + Camera Boom |
+| 人物显示 | 可仅对当前 View 隐藏头部或上身；人物实体仍存在 | 完整显示人物 |
+| 武器 | 默认复用同一权威武器；可添加只负责显示的 View Model | 显示同一武器的 World Model |
+| 防穿模 | 约束头部到近裁剪面的空间，防止穿墙观察 | 对 Camera Boom 做 Ray/Shape Cast，遇障碍缩短距离 |
+| Gameplay | Camera Direction 可在固定 Tick 转成移动/瞄准 Intent | 同样产生显式 Intent；视觉插值不进入 Gameplay Hash |
+
+Head Bob、镜头平滑、遮挡物淡化和第一人称 View Model 都只属于 Presentation。它们不能复制伤害状态、库存或碰撞体，也不能让不同 Camera 看见不同的 Gameplay 世界。
+
+### 6.3 切换、骑乘和自动化
+
+手动切换通过幂等 `view.set-mode` Command 完成，Runtime 校验目标 Rig 是否在 `allowedRigs` 中，准备资源后在 Camera/Render 同步点原子切换，并返回 `ViewReceipt + CameraSnapshot`。失败时继续使用原镜头。
+
+Context Binding 负责自动切换：步行时可以保留第一/第三人称偏好；骑乘或飞行时切到更远的 `camera.third-person.flight@1`；下坐骑后恢复偏好。Camera 只读取已提交的骑乘与控制权状态，不参与 Mount Transaction，避免两边互相看到半完成状态。
+
+Browser Protocol 对 Playwright 或其他程序公开：
+
+- `listCameraRigs()`：查询可用 Rig。
+- `getCameraSnapshot()`：读取当前模式、目标、Yaw、Pitch、距离和 FOV。
+- `setCameraMode()`：在允许范围内切换人称。
+- `setCameraPose()`：仅在声明为可外部控制的测试/创作构建中设置镜头。
+- `captureFrame()`：等待 View Receipt 和下一帧 Render Ready 后再截图，不依赖固定延时。
+
+评审时需要确认三点：Camera 是否应保持独立 Entity；第一版是否正式交付第一/第三人称切换；骑乘/飞行是否允许由 Context Binding 自动覆盖玩家步行视角。
+
+## 7. 为什么选择 Babylon + Havok
 
 第一版 Runtime 推荐 Babylon，物理默认 Havok，但两者都放在 Adapter/Port 后面，不进入 AuthoringSpec。
 
@@ -530,7 +622,7 @@ SDK 解析语义区域、色带、路线和约束
 
 这不是承诺未来永远只支持 Babylon。真正需要冻结的是引擎无关的 AuthoringSpec、NormalizedWorldIR、PhysicsPort 和 Browser Protocol。
 
-## 7. SDK 如何被其他程序调用
+## 8. SDK 如何被其他程序调用
 
 SDK 提供三种正式交付面：
 
@@ -540,7 +632,7 @@ SDK 提供三种正式交付面：
 
 浏览器控制协议默认不在普通生产页面中开放。测试或受信宿主需要通过 Session、Scope 和短期凭证获得 `observe`、`control`、`capture` 或 `load` 权限。
 
-## 8. 生产级设计中最重要的保障
+## 9. 生产级设计中最重要的保障
 
 ### 确定性
 
@@ -562,7 +654,7 @@ WorldPackage 保存规范化世界、资源、Runtime Target、版本锁和完�
 
 Capability、System、Collider、Asset 和 Browser Session 都有明确 Owner 和幂等 Dispose。动态安装坐骑、武器或能力时采用 prepare/commit/rollback 事务，避免出现只挂了一半的状态。
 
-## 9. 第一阶段明确不做什么
+## 10. 第一阶段明确不做什么
 
 第一阶段目标是可玩的室外 Heightfield 世界，不把以下能力假装成已经支持：
 
@@ -573,7 +665,7 @@ Capability、System、Collider、Asset 和 Browser Session 都有明确 Owner �
 
 这些能力未来可以沿 Entity、Capability、Relationship 和 Port 扩展，但不应阻塞第一条生产链路。
 
-## 10. 本次评审需要确认的六个决定
+## 11. 本次评审需要确认的七个决定
 
 | 决策 | 推荐结论 | 评审重点 |
 |---|---|---|
@@ -582,9 +674,10 @@ Capability、System、Collider、Asset 和 Browser Session 都有明确 Owner �
 | 编译边界 | 接受 AuthoringSpec → NormalizedWorldIR → Runtime | 引擎细节是否被正确隔离 |
 | 第一版 Runtime | 接受 Babylon + Havok，并保留 Port | 是否满足 Web、物理和自动化需求 |
 | 地形路线 | 接受“生成式规划输入 + 确定性编译” | 是否兼顾图片理解能力和物理可靠性 |
+| 多视角 Camera | 接受独立 Camera Entity + 判别式 Rig + Context Binding | 第一/第三人称和骑乘/飞行切换是否保持同一 Gameplay 世界 |
 | 实施顺序 | 先做 Phase 0 技术探针，再冻结协议 | 高风险能力是否都有明确通过标准 |
 
-## 11. 主要风险与处理方式
+## 12. 主要风险与处理方式
 
 | 风险 | 影响 | 当前处理方式 |
 |---|---|---|
@@ -593,9 +686,10 @@ Capability、System、Collider、Asset 和 Browser Session 都有明确 Owner �
 | 单张图片无法恢复唯一 3D 世界 | 隐藏区域和尺度存在歧义 | 区分可见证据、用户事实和推断延伸 |
 | 地形生成漂亮但不可玩 | 路线、出生点和坡度失败 | 权威 Heightfield、Gameplay Constraint 和阻断 Gate |
 | Web 物理和截图存在平台差异 | 重放或视觉测试不稳定 | 锁定 Profile、分层确定性承诺、Phase 0 探针 |
+| 不同人称各自复制人物或武器状态 | 库存、命中和截图语义不一致 | 单一 Gameplay Entity；Camera 仅切换 View Rig 和 Render Binding |
 | 第一版范围持续膨胀 | 无法形成生产闭环 | 先完成室外地形 + 主体 + 关键物件的 Vertical Slice |
 
-## 12. 建议的评审结论模板
+## 13. 建议的评审结论模板
 
 评审结束时，请明确记录：
 
@@ -604,7 +698,8 @@ Capability、System、Collider、Asset 和 Browser Session 都有明确 Owner �
 3. Entity、Capability、Relationship 组合模型：是否接受。
 4. Babylon + Havok 第一版选型：是否接受。
 5. 地形编译路线：是否接受。
-6. Phase 0 探针清单和通过标准：是否足以支持协议冻结。
-7. 阻塞开发的问题、负责人和截止时间。
+6. 独立 Camera Entity、第一/第三人称切换与骑乘 Context 策略：是否接受。
+7. Phase 0 探针清单和通过标准：是否足以支持协议冻结。
+8. 阻塞开发的问题、负责人和截止时间。
 
 完整接口、Schema、确定性协议、地形算法和实施阶段以仓库中的总体设计、地形子规格、ADR-0006 与 Phase 0 探针计划为准。
