@@ -13,6 +13,102 @@ interface SubjectRegistryResourceBaseInputV1 {
   aiMetadata: SubjectResourceAiMetadataV1;
 }
 
+export interface SubjectAssetManifestInputV1 extends SubjectRegistryResourceBaseInputV1 {
+  kind: "subject-asset";
+  format: "glb";
+  artifact: {
+    mediaType: "model/gltf-binary";
+    byteLength: number;
+    contentHash: string;
+  };
+  coordinateConvention: {
+    forwardAxis: "-Z";
+    upAxis: "+Y";
+    metersPerUnit: 1;
+    pivot: "support-center";
+  };
+  bounds: {
+    minimumMetersXYZ: Vec3;
+    maximumMetersXYZ: Vec3;
+  };
+  inventory: {
+    meshCount: number;
+    vertexCount: number;
+    triangleCount: number;
+    skeletonCount: number;
+    boneCount: number;
+    animationClipNames: readonly string[];
+  };
+  provenance: {
+    licenseSpdxId: string;
+    redistributionPolicy: "allowed" | "internal-only" | "prohibited";
+    sourceUri?: string;
+    licenseUri?: string;
+    author?: string;
+  };
+}
+
+export type BipedBoneIdV1 =
+  | "root"
+  | "hips"
+  | "spine"
+  | "chest"
+  | "neck"
+  | "head"
+  | "upper-arm.left"
+  | "lower-arm.left"
+  | "hand.left"
+  | "upper-arm.right"
+  | "lower-arm.right"
+  | "hand.right"
+  | "upper-leg.left"
+  | "lower-leg.left"
+  | "foot.left"
+  | "upper-leg.right"
+  | "lower-leg.right"
+  | "foot.right";
+
+export interface RigProfileManifestInputV1 extends SubjectRegistryResourceBaseInputV1 {
+  kind: "rig-profile";
+  bodyTopology: "biped";
+  compatibleSubjectAssetRefs: readonly string[];
+  skeletonRootNodeName: string;
+  requiredBoneIds: readonly BipedBoneIdV1[];
+  sourceNodeNameByBoneId: Readonly<Record<BipedBoneIdV1, string>>;
+}
+
+export type GroundHumanoidActionIdV1 = "idle" | "walk" | "run" | "jump";
+
+export interface AnimationBindingV1 {
+  actionId: GroundHumanoidActionIdV1;
+  sourceClipName: string;
+  loopMode: "repeat" | "once";
+  playbackSpeedRatio: number;
+  blendDurationSeconds: number;
+  rootMotionMode: "in-place";
+}
+
+export interface AnimationSetManifestInputV1 extends SubjectRegistryResourceBaseInputV1 {
+  kind: "animation-set";
+  subjectAssetRef: string;
+  rigProfileRef: string;
+  defaultActionId: "idle";
+  requiredActionIds: readonly GroundHumanoidActionIdV1[];
+  animationBindings: readonly AnimationBindingV1[];
+}
+
+export interface ColliderProfileManifestInputV1
+  extends SubjectRegistryResourceBaseInputV1 {
+  kind: "collider-profile";
+  supportedBodyTopologies: readonly ("biped" | "quadruped" | "custom")[];
+  collider: {
+    kind: "capsule";
+    radiusMeters: number;
+    heightMeters: number;
+    centerOffsetFromSubjectOriginMetersXYZ: Vec3;
+  };
+}
+
 export interface SubjectVisualPartDefinitionV1 {
   id: string;
   kind: "primitive";
@@ -103,6 +199,10 @@ export interface ColliderDerivationProfileManifestInputV1
 
 type WithContentHash<T> = Readonly<T & { contentHash: string }>;
 
+export type SubjectAssetManifestV1 = WithContentHash<SubjectAssetManifestInputV1>;
+export type RigProfileManifestV1 = WithContentHash<RigProfileManifestInputV1>;
+export type AnimationSetManifestV1 = WithContentHash<AnimationSetManifestInputV1>;
+export type ColliderProfileManifestV1 = WithContentHash<ColliderProfileManifestInputV1>;
 export type RegistrySubjectDefinitionV2 = WithContentHash<RegistrySubjectDefinitionInputV2>;
 export type CapabilityManifestV1 = WithContentHash<CapabilityManifestInputV1>;
 export type PhysicsBodyProfileManifestV1 =
@@ -112,6 +212,10 @@ export type ColliderDerivationProfileManifestV1 =
   WithContentHash<ColliderDerivationProfileManifestInputV1>;
 
 export type SubjectRegistryResourceInputV1 =
+  | SubjectAssetManifestInputV1
+  | RigProfileManifestInputV1
+  | AnimationSetManifestInputV1
+  | ColliderProfileManifestInputV1
   | RegistrySubjectDefinitionInputV2
   | CapabilityManifestInputV1
   | PhysicsBodyProfileManifestInputV1
@@ -119,6 +223,10 @@ export type SubjectRegistryResourceInputV1 =
   | ColliderDerivationProfileManifestInputV1;
 
 export type SubjectRegistryResourceV1 =
+  | SubjectAssetManifestV1
+  | RigProfileManifestV1
+  | AnimationSetManifestV1
+  | ColliderProfileManifestV1
   | RegistrySubjectDefinitionV2
   | CapabilityManifestV1
   | PhysicsBodyProfileManifestV1
@@ -126,6 +234,10 @@ export type SubjectRegistryResourceV1 =
   | ColliderDerivationProfileManifestV1;
 
 export interface SubjectResourceRegistryV2 {
+  resolveSubjectAsset(resourceRef: string): SubjectAssetManifestV1 | undefined;
+  resolveRigProfile(resourceRef: string): RigProfileManifestV1 | undefined;
+  resolveAnimationSet(resourceRef: string): AnimationSetManifestV1 | undefined;
+  resolveColliderProfile(resourceRef: string): ColliderProfileManifestV1 | undefined;
   resolveSubjectDefinition(resourceRef: string): RegistrySubjectDefinitionV2 | undefined;
   resolveCapability(resourceRef: string): CapabilityManifestV1 | undefined;
   resolvePhysicsBodyProfile(resourceRef: string): PhysicsBodyProfileManifestV1 | undefined;

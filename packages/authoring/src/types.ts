@@ -352,6 +352,10 @@ export interface NormalizedSubjectDefinitionV2 {
 
 export type ResolvedResourceKindV1 =
   | "subject-definition"
+  | "subject-asset"
+  | "rig-profile"
+  | "animation-set"
+  | "collider-profile"
   | "capability"
   | "physics-body-profile"
   | "locomotion-profile"

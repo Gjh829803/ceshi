@@ -30,6 +30,10 @@ export function canonicalJsonBytes(value: unknown): Uint8Array {
   return new TextEncoder().encode(stringifyCanonicalJson(value));
 }
 
+export function sha256Bytes(bytes: Uint8Array): string {
+  return `sha256:${bytesToHex(sha256(bytes))}`;
+}
+
 export function sha256CanonicalJson(value: unknown): string {
-  return `sha256:${bytesToHex(sha256(canonicalJsonBytes(value)))}`;
+  return sha256Bytes(canonicalJsonBytes(value));
 }
