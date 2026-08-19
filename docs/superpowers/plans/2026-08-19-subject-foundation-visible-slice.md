@@ -17,7 +17,7 @@
 | Task | Deliverable | Status |
 |---:|---|---|
 | 0 | Extensible Subject Authoring dedicated design | Complete |
-| 1 | Engine-neutral Subject Kit Registry | Not started |
+| 1 | Engine-neutral Subject Kit Registry | Complete |
 | 2 | Multi-subject Authoring validation and normalization | Not started |
 | 3 | Versioned plural Execution and Runtime contracts | Not started |
 | 4 | Registered Subject compiler | Not started |
@@ -26,7 +26,7 @@
 | 7 | Multi-subject fixture, CLI, Playwright, documentation | Not started |
 | 8 | Completion audit and Relationship-slice handoff | Not started |
 
-**Current milestone:** Dedicated design and implementation plan are complete; Task 1 waits for design review approval.
+**Current milestone:** Task 1 is complete; Task 2 multi-subject Authoring validation and normalization is in progress.
 
 **Latest verified baseline before implementation:** `pnpm typecheck`, 125 tests, production build, and `pnpm verify:v1` all pass on commit `8ccd219`.
 
@@ -63,7 +63,7 @@
 - Consumers: authoring resolution only. Compiler must not query this Registry.
 - Dependencies: protocol data only; this package must not import Babylon, Havok, Three, Rapier, DOM, or filesystem modules.
 
-- [ ] **Step 1: Write failing registry tests**
+- [x] **Step 1: Write failing registry tests**
 
 ```ts
 import { describe, expect, it } from "vitest";
@@ -91,13 +91,13 @@ describe("built-in subject registry", () => {
 });
 ```
 
-- [ ] **Step 2: Run the focused test and confirm it fails because the package does not exist**
+- [x] **Step 2: Run the focused test and confirm it fails because the package does not exist**
 
 Run: `pnpm vitest run packages/subject-registry/src/subject-registry.test.ts`
 
 Expected: FAIL because `packages/subject-registry` and its exports do not exist.
 
-- [ ] **Step 3: Define the closed registry types**
+- [x] **Step 3: Define the closed registry types**
 
 ```ts
 export type SubjectDefinitionRef = string;
@@ -150,11 +150,11 @@ export function createSubjectDefinitionRegistry(
 ): SubjectDefinitionRegistryV1;
 ```
 
-- [ ] **Step 4: Implement two frozen built-in definitions and stable lookup**
+- [x] **Step 4: Implement two frozen built-in definitions and stable lookup**
 
 Use a capsule for the humanoid visual. Build the quadruped proxy from a torso box, head box, four leg cylinders, and a tail cylinder. `createSubjectDefinitionRegistry` deep-freezes supplied definitions, indexes by `kitRef`, and returns definitions in `id`, then `version` order. Reject duplicate `kitRef` values with `SUBJECT_REGISTRY_DUPLICATE_REF`. Construct `builtInSubjectDefinitionRegistry` by passing the two first-party definitions through the same public constructor; do not special-case their IDs inside registry methods.
 
-- [ ] **Step 5: Run registry tests and typecheck**
+- [x] **Step 5: Run registry tests and typecheck**
 
 Run: `pnpm vitest run packages/subject-registry/src/subject-registry.test.ts`
 
@@ -164,7 +164,7 @@ Run: `pnpm typecheck`
 
 Expected: PASS.
 
-- [ ] **Step 6: Commit the registry**
+- [x] **Step 6: Commit the registry**
 
 ```bash
 git add packages/subject-registry
