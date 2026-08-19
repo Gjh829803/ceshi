@@ -1,12 +1,9 @@
 import assert from "node:assert/strict";
-import { createHash, randomUUID } from "node:crypto";
+import { createHash } from "node:crypto";
 import {
   access,
-  mkdir,
   mkdtemp,
   readFile,
-  readdir,
-  rename,
   rm,
   writeFile,
 } from "node:fs/promises";
@@ -36,6 +33,7 @@ import {
   explainSubjectFile,
   type SubjectExplanationSuccessV1,
 } from "./lib/subject-explain";
+import { promoteArtifactDirectory } from "./lib/artifact-directory-promotion";
 import {
   startWorldkitServer,
   type WorldkitServerHandle,
@@ -207,44 +205,6 @@ function assertPositionUnchanged(actual: Vec3, expected: Vec3, message: string):
   assert.ok(maximumDriftMeters <= 1e-9, `${message} Drift=${maximumDriftMeters}m.`);
 }
 
-async function assertExactArtifactFiles(directory: string): Promise<void> {
-  assert.deepEqual(
-    (await readdir(directory)).sort(),
-    [...ARTIFACT_FILES],
-    "Rigged evidence directory must contain exactly the declared files.",
-  );
-}
-
-async function promoteArtifactDirectory(
-  temporaryDirectory: string,
-  targetDirectory: string,
-): Promise<void> {
-  await assertExactArtifactFiles(temporaryDirectory);
-  await mkdir(path.dirname(targetDirectory), { recursive: true });
-  const backupDirectory = `${targetDirectory}.backup-${randomUUID()}`;
-  let hadTarget = true;
-  try {
-    await rename(targetDirectory, backupDirectory);
-  } catch (error) {
-    if ((error as NodeJS.ErrnoException).code !== "ENOENT") throw error;
-    hadTarget = false;
-  }
-  try {
-    await rename(temporaryDirectory, targetDirectory);
-  } catch (error) {
-    if (hadTarget) await rename(backupDirectory, targetDirectory);
-    throw error;
-  }
-  if (!hadTarget) return;
-  try {
-    await rm(backupDirectory, { recursive: true });
-  } catch (error) {
-    await rename(targetDirectory, temporaryDirectory);
-    await rename(backupDirectory, targetDirectory);
-    throw error;
-  }
-}
-
 async function runCliGates(paths: ArtifactPaths): Promise<WorldBuildArtifactV3> {
   assert.equal(await worldkitMain(["validate", INPUT_PATH, "--json"]), 0);
   assert.equal(
@@ -408,7 +368,25 @@ async function verifyBrowser(paths: ArtifactPaths): Promise<BrowserEvidence> {
       PRIMARY_ENTITY_ID,
       SECONDARY_ENTITY_ID,
     ]);
+    await page.evaluate(async () =>
+      new Promise<void>((resolve) => requestAnimationFrame(() => resolve())),
+    );
     await page.evaluate(() => window.__WORLDKIT__!.setPaused(true));
+    const fixedReset = await page.evaluate(() => window.__WORLDKIT__!.reset());
+    assert.equal(fixedReset.tick, 0);
+    await page.evaluate(async () => {
+      await new Promise<void>((resolve) => requestAnimationFrame(() => resolve()));
+      await new Promise<void>((resolve) => requestAnimationFrame(() => resolve()));
+    });
+    await page.evaluate(() => window.__WORLDKIT__!.captureScreenshot());
+    const fixedResetBytes = pngBytesFromDataUrl(
+      await page.evaluate(() => window.__WORLDKIT__!.captureScreenshot()),
+    );
+    assert.equal(
+      sha256(fixedResetBytes),
+      sha256(await readFile(paths.world)),
+      "CLI world.png must render the same paused reset Tick as snapshot.json.",
+    );
 
     const actions = {
       idle: await captureAction(page, paths, "idle", [], 12),
@@ -665,9 +643,17 @@ async function run(): Promise<void> {
     const artifact = await runCliGates(paths);
     const browser = await verifyBrowser(paths);
     await writeVerification(paths, artifact, browser);
-    await assertExactArtifactFiles(temporaryDirectory);
-    await promoteArtifactDirectory(temporaryDirectory, TARGET_ARTIFACT_DIRECTORY);
+    const promotion = await promoteArtifactDirectory({
+      temporaryDirectory,
+      targetDirectory: TARGET_ARTIFACT_DIRECTORY,
+      expectedFilenames: ARTIFACT_FILES,
+    });
     promoted = true;
+    if (promotion.backupGarbageCollection === "deferred") {
+      process.stderr.write(
+        `Rigged artifact backup GC deferred at '${promotion.deferredBackupDirectory}'.\n`,
+      );
+    }
     process.stdout.write(`${JSON.stringify({
       ok: true,
       artifacts: TARGET_ARTIFACT_DIRECTORY,

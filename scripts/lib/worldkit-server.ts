@@ -45,7 +45,43 @@ class WorldkitServerStartError extends Error {
 }
 
 function delay(milliseconds: number): Promise<void> {
-  return new Promise((resolve) => setTimeout(resolve, milliseconds));
+  return new Promise((resolve) => {
+    const timer = setTimeout(resolve, milliseconds);
+    timer.unref();
+  });
+}
+
+interface OwnedChildLifecycle {
+  readonly exitPromise: Promise<number | null>;
+  readonly processErrorPromise: Promise<never>;
+}
+
+function observeOwnedChild(
+  child: ChildProcessWithoutNullStreams,
+): OwnedChildLifecycle {
+  let settleExit!: (code: number | null) => void;
+  let rejectProcessError!: (error: WorldkitServerStartError) => void;
+  let settled = false;
+  const exitPromise = new Promise<number | null>((resolve) => {
+    settleExit = (code) => {
+      if (settled) return;
+      settled = true;
+      resolve(code);
+    };
+  });
+  const processErrorPromise = new Promise<never>((_, reject) => {
+    rejectProcessError = reject;
+  });
+  child.once("error", () => {
+    rejectProcessError(new WorldkitServerStartError(
+      "WORLDKIT_SERVER_PROCESS_ERROR",
+      "Worldkit playground process failed to start.",
+    ));
+    settleExit(null);
+  });
+  child.once("exit", (code) => settleExit(code));
+  child.once("close", (code) => settleExit(code));
+  return { exitPromise, processErrorPromise };
 }
 
 async function allocateAvailablePort(): Promise<number> {
@@ -97,17 +133,12 @@ function signalOwnedProcess(
 
 function createHandle(options: {
   child: ChildProcessWithoutNullStreams;
+  lifecycle: OwnedChildLifecycle;
   port: number;
   stopTimeoutMilliseconds: number;
 }): WorldkitServerHandle {
-  const { child, port, stopTimeoutMilliseconds } = options;
-  const exitPromise = new Promise<number | null>((resolve) => {
-    if (child.exitCode !== null || child.signalCode !== null) {
-      resolve(child.exitCode);
-      return;
-    }
-    child.once("exit", (code) => resolve(code));
-  });
+  const { child, lifecycle, port, stopTimeoutMilliseconds } = options;
+  const { exitPromise } = lifecycle;
   let stopPromise: Promise<void> | undefined;
   const stop = (): Promise<void> => {
     stopPromise ??= (async () => {
@@ -137,31 +168,26 @@ function createHandle(options: {
 }
 
 async function waitUntilReady(options: {
-  child: ChildProcessWithoutNullStreams;
-  exitPromise: Promise<number | null>;
+  lifecycle: OwnedChildLifecycle;
   endpoint: string;
   nonce: string;
   timeoutMilliseconds: number;
 }): Promise<void> {
-  const { child, exitPromise, endpoint, nonce, timeoutMilliseconds } = options;
+  const { lifecycle, endpoint, nonce, timeoutMilliseconds } = options;
   let polling = true;
-  const processError = new Promise<never>((_, reject) => {
-    child.once("error", () => reject(new WorldkitServerStartError(
-      "WORLDKIT_SERVER_PROCESS_ERROR",
-      "Worldkit playground process failed to start.",
-    )));
-  });
-  const processExit = exitPromise.then((code): never => {
+  const processExit = lifecycle.exitPromise.then((code): never => {
     throw new WorldkitServerStartError(
       "WORLDKIT_SERVER_PROCESS_EXITED",
       `Worldkit playground exited before readiness (exit ${String(code)}).`,
     );
   });
-  const timeout = delay(timeoutMilliseconds).then((): never => {
-    throw new WorldkitServerStartError(
+  let timeoutHandle: NodeJS.Timeout | undefined;
+  const timeout = new Promise<never>((_, reject) => {
+    timeoutHandle = setTimeout(() => reject(new WorldkitServerStartError(
       "WORLDKIT_SERVER_START_TIMEOUT",
       `Worldkit playground did not become ready within ${timeoutMilliseconds}ms.`,
-    );
+    )), timeoutMilliseconds);
+    timeoutHandle.unref();
   });
   const readiness = (async () => {
     while (polling) {
@@ -179,9 +205,15 @@ async function waitUntilReady(options: {
     }
   })();
   try {
-    await Promise.race([readiness, processError, processExit, timeout]);
+    await Promise.race([
+      readiness,
+      lifecycle.processErrorPromise,
+      processExit,
+      timeout,
+    ]);
   } finally {
     polling = false;
+    if (timeoutHandle !== undefined) clearTimeout(timeoutHandle);
   }
 }
 
@@ -210,6 +242,7 @@ async function startOne(options: StartWorldkitServerOptions, port: number): Prom
       stdio: ["pipe", "pipe", "pipe"],
     },
   );
+  const lifecycle = observeOwnedChild(child);
   child.stdin.end();
   if (options.forwardOutput === true) {
     child.stdout.pipe(process.stdout);
@@ -220,14 +253,14 @@ async function startOne(options: StartWorldkitServerOptions, port: number): Prom
   }
   const handle = createHandle({
     child,
+    lifecycle,
     port,
     stopTimeoutMilliseconds:
       options.stopTimeoutMilliseconds ?? DEFAULT_STOP_TIMEOUT_MILLISECONDS,
   });
   try {
     await waitUntilReady({
-      child,
-      exitPromise: handle.waitForExit(),
+      lifecycle,
       endpoint: `http://127.0.0.1:${port}${AUTHORING_ENDPOINT}`,
       nonce,
       timeoutMilliseconds:

@@ -519,24 +519,87 @@ export async function captureFile(
       undefined,
       { timeout: 30_000 },
     );
-    const snapshot = await page.evaluate(
-      async (): Promise<WorldRuntimeSnapshotV3> => {
+    await page.evaluate(async () => {
+      const api = window.__WORLDKIT__;
+      if (api === undefined) {
+        throw new Error("WORLDKIT_BROWSER_PROTOCOL_MISSING");
+      }
+      await api.ready();
+      await new Promise<void>((resolve) => requestAnimationFrame(() => resolve()));
+    });
+    const capture = await page.evaluate(
+      async (): Promise<{
+        snapshot: WorldRuntimeSnapshotV3;
+        screenshotDataUrl: string;
+      }> => {
         const api = window.__WORLDKIT__;
         if (api === undefined) {
           throw new Error("WORLDKIT_BROWSER_PROTOCOL_MISSING");
         }
-        return api.ready();
+        api.setPaused(true);
+        const snapshot = api.reset();
+        await new Promise<void>((resolve) => requestAnimationFrame(() => resolve()));
+        await new Promise<void>((resolve) => requestAnimationFrame(() => resolve()));
+        const beforeCapture = api.getSnapshot();
+        if (beforeCapture.tick !== snapshot.tick) {
+          throw new Error("WORLDKIT_CAPTURE_TICK_MISMATCH");
+        }
+        api.captureScreenshot();
+        const screenshotDataUrl = api.captureScreenshot();
+        const screenshotImage = new Image();
+        screenshotImage.src = screenshotDataUrl;
+        await screenshotImage.decode();
+        const inspectionCanvas = document.createElement("canvas");
+        inspectionCanvas.width = screenshotImage.naturalWidth;
+        inspectionCanvas.height = screenshotImage.naturalHeight;
+        const inspectionContext = inspectionCanvas.getContext("2d", {
+          willReadFrequently: true,
+        });
+        if (inspectionContext === null) {
+          throw new Error("WORLDKIT_CAPTURE_INSPECTION_UNAVAILABLE");
+        }
+        inspectionContext.drawImage(screenshotImage, 0, 0);
+        const pixels = inspectionContext.getImageData(
+          0,
+          0,
+          inspectionCanvas.width,
+          inspectionCanvas.height,
+        ).data;
+        const sampledRgbColors = new Set<number>();
+        const stridePixels = 16;
+        for (let pixel = 0; pixel < pixels.length / 4; pixel += stridePixels) {
+          const offset = pixel * 4;
+          sampledRgbColors.add(
+            (pixels[offset]! << 16) |
+              (pixels[offset + 1]! << 8) |
+              pixels[offset + 2]!,
+          );
+          if (sampledRgbColors.size >= 4) break;
+        }
+        if (sampledRgbColors.size < 4) {
+          throw new Error("WORLDKIT_CAPTURE_VISIBLE_WORLD_MISSING");
+        }
+        const afterCapture = api.getSnapshot();
+        if (afterCapture.tick !== snapshot.tick) {
+          throw new Error("WORLDKIT_CAPTURE_TICK_ADVANCED");
+        }
+        return { snapshot, screenshotDataUrl };
       },
     );
+    const pngDataUrlPrefix = "data:image/png;base64,";
+    if (!capture.screenshotDataUrl.startsWith(pngDataUrlPrefix)) {
+      throw new Error("WORLDKIT_CAPTURE_PNG_DATA_URL_INVALID");
+    }
     await mkdir(path.dirname(absoluteOutputPath), { recursive: true });
-    await page
-      .locator("canvas.world-canvas")
-      .screenshot({ path: temporaryScreenshotPath, type: "png" });
+    await writeFile(
+      temporaryScreenshotPath,
+      Buffer.from(capture.screenshotDataUrl.slice(pngDataUrlPrefix.length), "base64"),
+    );
     await rename(temporaryScreenshotPath, absoluteOutputPath);
     if (absoluteSnapshotPath !== undefined) {
       await writeAtomic(
         absoluteSnapshotPath,
-        `${stringifyCanonicalJson(snapshot)}\n`,
+        `${stringifyCanonicalJson(capture.snapshot)}\n`,
       );
     }
     return {

@@ -1,5 +1,7 @@
+import { spawn } from "node:child_process";
 import { createServer } from "node:net";
 import { fileURLToPath } from "node:url";
+import path from "node:path";
 
 import { afterEach, describe, expect, it } from "vitest";
 
@@ -56,4 +58,68 @@ describe("startWorldkitServer", () => {
       }));
     }
   });
+
+  it("lets a successful start and stop subprocess exit promptly", async () => {
+    const source = `
+      import { startWorldkitServer } from ${JSON.stringify(
+        new URL("./worldkit-server.ts", import.meta.url).href,
+      )};
+      const handle = await startWorldkitServer({
+        inputPath: ${JSON.stringify(INPUT_PATH)},
+        startupTimeoutMilliseconds: 30000,
+      });
+      await handle.stop();
+    `;
+    const child = spawn(
+      process.execPath,
+      ["--import", "tsx", "--eval", source],
+      { cwd: fileURLToPath(new URL("../../", import.meta.url)), stdio: "ignore" },
+    );
+    const outcome = await new Promise<
+      | { kind: "exit"; code: number | null }
+      | { kind: "timeout" }
+    >((resolve) => {
+      const timer = setTimeout(() => resolve({ kind: "timeout" }), 3_000);
+      child.once("exit", (code) => {
+        clearTimeout(timer);
+        resolve({ kind: "exit", code });
+      });
+    });
+    if (outcome.kind === "timeout") {
+      child.kill("SIGKILL");
+      await new Promise<void>((resolve) => child.once("exit", () => resolve()));
+    }
+    expect(outcome).toEqual({ kind: "exit", code: 0 });
+  }, 10_000);
+
+  it("settles cleanup when spawning the owned process emits error without exit", async () => {
+    const realExecutablePath = process.execPath;
+    try {
+      process.execPath = path.join(
+        fileURLToPath(new URL("../../", import.meta.url)),
+        ".missing-node-executable",
+      );
+      const outcome = await Promise.race([
+        startWorldkitServer({
+          inputPath: INPUT_PATH,
+          startupTimeoutMilliseconds: 1_000,
+        }).then(
+          () => ({ kind: "resolved" as const }),
+          (error: unknown) => ({
+            kind: "rejected" as const,
+            code: (error as { code?: string }).code,
+          }),
+        ),
+        new Promise<{ kind: "timeout" }>((resolve) =>
+          setTimeout(() => resolve({ kind: "timeout" }), 1_500),
+        ),
+      ]);
+      expect(outcome).toEqual({
+        kind: "rejected",
+        code: "WORLDKIT_SERVER_PROCESS_ERROR",
+      });
+    } finally {
+      process.execPath = realExecutablePath;
+    }
+  }, 5_000);
 });

@@ -1,11 +1,7 @@
 import assert from "node:assert/strict";
-import { randomUUID } from "node:crypto";
 import {
-  mkdir,
   mkdtemp,
   readFile,
-  readdir,
-  rename,
   rm,
   writeFile,
 } from "node:fs/promises";
@@ -33,6 +29,7 @@ import {
   explainSubjectFile,
   type SubjectExplanationSuccessV1,
 } from "./lib/subject-explain";
+import { promoteArtifactDirectory } from "./lib/artifact-directory-promotion";
 import { startWorldkitServer } from "./lib/worldkit-server";
 import { main as worldkitMain } from "./worldkit";
 
@@ -86,44 +83,6 @@ function artifactPaths(directory: string): CanonicalArtifactPaths {
     snapshot: path.join(directory, "snapshot.json"),
     explain: path.join(directory, "explain.json"),
   };
-}
-
-async function assertExactArtifactFiles(directory: string): Promise<void> {
-  assert.deepEqual(
-    (await readdir(directory)).sort(),
-    [...CANONICAL_ARTIFACT_FILES],
-    "Canonical artifact directory must contain exactly the declared files.",
-  );
-}
-
-async function promoteArtifactDirectory(
-  temporaryDirectory: string,
-  targetDirectory: string,
-): Promise<void> {
-  await assertExactArtifactFiles(temporaryDirectory);
-  await mkdir(path.dirname(targetDirectory), { recursive: true });
-  const backupDirectory = `${targetDirectory}.backup-${randomUUID()}`;
-  let hadTarget = true;
-  try {
-    await rename(targetDirectory, backupDirectory);
-  } catch (error) {
-    if ((error as NodeJS.ErrnoException).code !== "ENOENT") throw error;
-    hadTarget = false;
-  }
-  try {
-    await rename(temporaryDirectory, targetDirectory);
-  } catch (error) {
-    if (hadTarget) await rename(backupDirectory, targetDirectory);
-    throw error;
-  }
-  if (!hadTarget) return;
-  try {
-    await rm(backupDirectory, { recursive: true });
-  } catch (error) {
-    await rename(targetDirectory, temporaryDirectory);
-    await rename(backupDirectory, targetDirectory);
-    throw error;
-  }
 }
 
 function parseJson<T>(sourceText: string, label: string): T {
@@ -651,9 +610,17 @@ async function run(): Promise<void> {
     await runCliGates(paths);
     artifacts = await verifyArtifacts(paths);
     physics = await verifyBrowserProtocolAndPhysics();
-    await assertExactArtifactFiles(temporaryDirectory);
-    await promoteArtifactDirectory(temporaryDirectory, TARGET_ARTIFACT_DIRECTORY);
+    const promotion = await promoteArtifactDirectory({
+      temporaryDirectory,
+      targetDirectory: TARGET_ARTIFACT_DIRECTORY,
+      expectedFilenames: CANONICAL_ARTIFACT_FILES,
+    });
     promoted = true;
+    if (promotion.backupGarbageCollection === "deferred") {
+      process.stderr.write(
+        `Canonical artifact backup GC deferred at '${promotion.deferredBackupDirectory}'.\n`,
+      );
+    }
   } finally {
     if (!promoted) await rm(temporaryDirectory, { recursive: true, force: true });
   }
