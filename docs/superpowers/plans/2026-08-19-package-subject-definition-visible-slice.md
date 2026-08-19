@@ -31,7 +31,7 @@
 | 2. Subject Composition | Complete | `567f159` | 7 focused tests + dependency audit + typecheck |
 | 3. Subject Resource Registry | Complete | `182cca2` | 6 focused tests + typecheck |
 | 4. Clean AuthoringSpecV2 | Complete | `d5e976c` | 10 focused / 20 Authoring tests + schema exports + typecheck |
-| 5. Definition Normalize/Hash/Lock | Not started | — | — |
+| 5. Definition Normalize/Hash/Lock | Complete | `6fabbfa` | 28 Authoring tests + typecheck |
 | 6. Runtime Contracts V3 | Not started | — | — |
 | 7. Compiler V3 | Not started | — | — |
 | 8. Babylon + Browser V3 | Not started | — | — |
@@ -505,7 +505,7 @@ export function normalizeAuthoringSpecV2(
 ```
 - Staging rule: existing S0 `normalizeAuthoringSpec` remains available until Task 9; all new S1a code calls `normalizeAuthoringSpecV2` explicitly.
 
-- [ ] **Step 1: Write failing Package resolution and determinism tests**
+- [x] **Step 1: Write failing Package resolution and determinism tests**
 
 ```ts
 it("normalizes one Package Definition once for two Subject instances", () => {
@@ -552,29 +552,29 @@ it("changes Definition Hash for semantic geometry changes", () => {
 
 Add exact Diagnostic tests for duplicate Definition, missing Ref, bad Profile, bad support origin, failed derivation, and Resource Lock conflicts.
 
-- [ ] **Step 2: Run focused tests and verify failure**
+- [x] **Step 2: Run focused tests and verify failure**
 
 Run: `pnpm vitest run packages/authoring/src/subject-definition-normalizer.test.ts packages/authoring/src/normalize.test.ts`
 
 Expected: FAIL because NormalizedWorldIRV2 and Package resolution do not exist.
 
-- [ ] **Step 3: Implement local Definition indexing and canonical refs**
+- [x] **Step 3: Implement local Definition indexing and canonical refs**
 
 Build `package://subject-definition/${id}@${version}` from every local definition, reject duplicates, and resolve Subject instances by exact Authority. Package refs never fall through to Registry; Registry refs never search Package resources.
 
-- [ ] **Step 4: Normalize composition and resolve manifests**
+- [x] **Step 4: Normalize composition and resolve manifests**
 
 Sort Part/Socket IDs and semantic tags, inject zero rotations, resolve Capability/Profile/Derivation refs, derive the capsule from included Parts, compute resource cost, and map composition issues to exact Authoring JSON Pointers.
 
-- [ ] **Step 5: Compute Definition Hash and Resource Lock**
+- [x] **Step 5: Compute Definition Hash and Resource Lock**
 
 Hash the normalized Definition without computed Hash/Lock fields. Emit one sorted Lock Entry per referenced immutable resource plus each Package Definition. Compute `resourceLockHash` over the complete ordered array. Detect the same exact Registry Ref resolving to different content within one normalization request.
 
-- [ ] **Step 6: Upgrade semantic validation and normalized nodes**
+- [x] **Step 6: Upgrade semantic validation and normalized nodes**
 
 Replace `kitRef` lookup with `subjectDefinitionRef`, keep role-qualified `spawnAnchorEntityId`, verify controlled/camera targets, and emit only NormalizedWorldIRV2. Compiler-facing data must contain no unresolved Package Definition or Registry object.
 
-- [ ] **Step 7: Run Authoring tests and typecheck**
+- [x] **Step 7: Run Authoring tests and typecheck**
 
 Run: `pnpm vitest run packages/authoring/src`
 
@@ -582,7 +582,7 @@ Run: `pnpm typecheck`
 
 Expected: Authoring tests and repository typecheck PASS because V2 normalization is additive at this checkpoint.
 
-- [ ] **Step 8: Commit**
+- [x] **Step 8: Commit**
 
 ```bash
 git add packages/authoring
