@@ -4,7 +4,10 @@ import {
   type ColliderSourcePartV1,
 } from "@whitebox-world/subject-composition";
 import type {
+  AnimationSetManifestV1,
   RegistrySubjectDefinitionV2,
+  RigProfileManifestV1,
+  SubjectAssetManifestV1,
   SubjectResourceRegistryV2,
 } from "@whitebox-world/subject-registry";
 
@@ -13,9 +16,6 @@ import { ResourceLockBuilderV1 } from "./resource-lock";
 import type {
   AuthoringDiagnostic,
   AuthoringSpecV2,
-  NormalizedAnimationSetV1,
-  NormalizedRigProfileV1,
-  NormalizedSubjectAssetV1,
   NormalizedSubjectColliderV2,
   NormalizedSubjectDefinitionV2,
   NormalizedSubjectSocketV2,
@@ -39,9 +39,9 @@ export interface NormalizeSubjectDefinitionRequestV2 {
 }
 
 interface NormalizedRiggedVisualResourcesV1 {
-  subjectAssetResource: NormalizedSubjectAssetV1;
-  rigProfileResource: NormalizedRigProfileV1;
-  animationSetResource: NormalizedAnimationSetV1;
+  subjectAssetResource: SubjectAssetManifestV1;
+  rigProfileResource: RigProfileManifestV1;
+  animationSetResource: AnimationSetManifestV1;
 }
 
 const REQUIRED_GROUND_ACTION_IDS = ["idle", "jump", "run", "walk"] as const;

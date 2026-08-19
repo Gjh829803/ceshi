@@ -64,7 +64,90 @@ export type SubjectVisualPrimitiveV3 =
   | { kind: "cylinder"; radiusMeters: number; heightMeters: number }
   | { kind: "capsule"; radiusMeters: number; heightMeters: number };
 
-export interface SubjectVisualPartV3 {
+export interface SubjectAssetInventoryV1 {
+  meshCount: number;
+  vertexCount: number;
+  triangleCount: number;
+  skeletonCount: number;
+  boneCount: number;
+  animationClipNames: readonly string[];
+}
+
+export interface ExecutionSubjectAssetV1 {
+  subjectAssetRef: string;
+  artifactContentHash: string;
+  byteLength: number;
+  mediaType: "model/gltf-binary";
+  format: "glb";
+  inventory: SubjectAssetInventoryV1;
+}
+
+export type ExecutionBipedBoneIdV1 =
+  | "root"
+  | "hips"
+  | "spine"
+  | "chest"
+  | "neck"
+  | "head"
+  | "upper-arm.left"
+  | "lower-arm.left"
+  | "hand.left"
+  | "upper-arm.right"
+  | "lower-arm.right"
+  | "hand.right"
+  | "upper-leg.left"
+  | "lower-leg.left"
+  | "foot.left"
+  | "upper-leg.right"
+  | "lower-leg.right"
+  | "foot.right";
+
+export type ExecutionGroundHumanoidActionIdV1 =
+  | "idle"
+  | "walk"
+  | "run"
+  | "jump";
+
+export interface ExecutionRigProfileV1 {
+  rigProfileRef: string;
+  bodyTopology: "biped";
+  skeletonRootNodeName: string;
+  requiredBoneIds: readonly ExecutionBipedBoneIdV1[];
+  sourceNodeNameByBoneId: Readonly<Record<ExecutionBipedBoneIdV1, string>>;
+}
+
+export interface ExecutionAnimationBindingV1 {
+  actionId: ExecutionGroundHumanoidActionIdV1;
+  sourceClipName: string;
+  loopMode: "repeat" | "once";
+  playbackSpeedRatio: number;
+  blendDurationSeconds: number;
+  rootMotionMode: "in-place";
+}
+
+export interface ExecutionAnimationSetV1 {
+  animationSetRef: string;
+  subjectAssetRef: string;
+  rigProfileRef: string;
+  defaultActionId: ExecutionGroundHumanoidActionIdV1;
+  requiredActionIds: readonly ExecutionGroundHumanoidActionIdV1[];
+  animationBindings: readonly ExecutionAnimationBindingV1[];
+}
+
+export interface ExecutionSubjectCapsuleV1 {
+  kind: "capsule";
+  radiusMeters: number;
+  heightMeters: number;
+  centerOffsetFromSubjectOriginMetersXYZ: Vec3;
+}
+
+export interface ExecutionColliderProfileV1 {
+  colliderProfileRef: string;
+  supportedBodyTopologies: readonly ("biped" | "quadruped" | "custom")[];
+  collider: ExecutionSubjectCapsuleV1;
+}
+
+export interface SubjectVisualPrimitivePartV3 {
   id: string;
   kind: "primitive";
   shape: SubjectVisualPrimitiveV3;
@@ -75,14 +158,53 @@ export interface SubjectVisualPartV3 {
   semanticTags: readonly string[];
 }
 
-export interface SubjectSocketV3 {
+export interface SubjectVisualAssetPartV3 {
   id: string;
+  kind: "asset";
+  subjectAssetRef: string;
+  localTransform: {
+    positionMetersXYZ: Vec3;
+    rotationEulerRadiansXYZ: Vec3;
+    scaleXYZ: Vec3;
+  };
+  appearance: { mode: "whitebox-neutral" };
+  semanticTags: readonly string[];
+}
+
+export type SubjectVisualPartV3 =
+  | SubjectVisualPrimitivePartV3
+  | SubjectVisualAssetPartV3;
+
+export interface SubjectLocalSocketV3 {
+  id: string;
+  kind: "local";
   localTransform: {
     positionMetersXYZ: Vec3;
     rotationEulerRadiansXYZ: Vec3;
   };
   semanticTags: readonly string[];
 }
+
+export interface SubjectBoneSocketV3 {
+  id: string;
+  kind: "bone";
+  boneId: ExecutionBipedBoneIdV1;
+  offsetTransform: {
+    positionMetersXYZ: Vec3;
+    rotationEulerRadiansXYZ: Vec3;
+  };
+  semanticTags: readonly string[];
+}
+
+export type SubjectSocketV3 = SubjectLocalSocketV3 | SubjectBoneSocketV3;
+
+export type ExecutionSubjectVisualBindingV1 =
+  | { mode: "static" }
+  | {
+      mode: "rigged";
+      rigProfileRef: string;
+      animationSetRef: string;
+    };
 
 export interface ExecutionSubjectV3 {
   entityId: string;
@@ -94,6 +216,7 @@ export interface ExecutionSubjectV3 {
   spawnSubjectOriginPositionMetersXYZ: Vec3;
   forwardDirection: "-z";
   visualParts: readonly SubjectVisualPartV3[];
+  visualBinding: ExecutionSubjectVisualBindingV1;
   sockets: readonly SubjectSocketV3[];
   collider: {
     kind: "capsule";
@@ -106,7 +229,8 @@ export interface ExecutionSubjectV3 {
   };
   locomotion: {
     mode: "ground";
-    groundSpeedMetersPerSecond: number;
+    walkSpeedMetersPerSecond: number;
+    runSpeedMetersPerSecond: number;
     waterSpeedMetersPerSecond: number;
     jumpSpeedMetersPerSecond: number;
   };
@@ -137,6 +261,10 @@ export interface ExecutionPlanV3 {
   terrain: ExecutionTerrainV3;
   waters: readonly ExecutionWaterV3[];
   objects: readonly ExecutionObjectV3[];
+  subjectAssets: readonly ExecutionSubjectAssetV1[];
+  rigProfiles: readonly ExecutionRigProfileV1[];
+  animationSets: readonly ExecutionAnimationSetV1[];
+  colliderProfiles: readonly ExecutionColliderProfileV1[];
   controlledEntityId: string;
   subjects: readonly ExecutionSubjectV3[];
   camera: ExecutionCameraV3;

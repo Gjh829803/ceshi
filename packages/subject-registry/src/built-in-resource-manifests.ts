@@ -220,7 +220,8 @@ const STANDARD_GROUND_LOCOMOTION_PROFILE: LocomotionProfileManifestInputV1 = {
   requiredCapabilityRefs: ["worldkit://capability/locomotion.ground@1"],
   locomotion: {
     mode: "ground",
-    groundSpeedMetersPerSecond: 4,
+    walkSpeedMetersPerSecond: 2.4,
+    runSpeedMetersPerSecond: 4,
     waterSpeedMetersPerSecond: 2.2,
     jumpSpeedMetersPerSecond: 5.5,
   },

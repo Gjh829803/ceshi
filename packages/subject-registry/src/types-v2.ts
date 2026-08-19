@@ -212,7 +212,8 @@ export interface LocomotionProfileManifestInputV1
   requiredCapabilityRefs: readonly string[];
   locomotion: {
     mode: "ground";
-    groundSpeedMetersPerSecond: number;
+    walkSpeedMetersPerSecond: number;
+    runSpeedMetersPerSecond: number;
     waterSpeedMetersPerSecond: number;
     jumpSpeedMetersPerSecond: number;
   };

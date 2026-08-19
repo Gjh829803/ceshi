@@ -62,7 +62,9 @@ export class SubjectController {
     if (horizontal.lengthSquared() > 1) horizontal.normalize();
     const speed = movementMedium === "water"
       ? this.subject.locomotion.waterSpeedMetersPerSecond
-      : this.subject.locomotion.groundSpeedMetersPerSecond;
+      : horizontal.lengthSquared() > 0 && hasAction(actions, "run")
+        ? this.subject.locomotion.runSpeedMetersPerSecond
+        : this.subject.locomotion.walkSpeedMetersPerSecond;
     const desired = horizontal.scale(speed);
     const current = this.physicsController.getVelocity();
     const movementSurfaceNormal = support.supportedState === CharacterSupportedState.UNSUPPORTED

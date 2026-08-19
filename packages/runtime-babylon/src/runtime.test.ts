@@ -9,7 +9,10 @@ import {
   type AuthoringSpecV2,
 } from "@whitebox-world/authoring";
 import { compileWorld } from "@whitebox-world/compiler";
-import { createValidPackageSubjectWorldV2 } from "../../authoring/src/test-fixture";
+import {
+  createValidPackageSubjectWorldV2,
+  createValidRiggedPackageSubjectWorldV2,
+} from "../../authoring/src/test-fixture";
 import type {
   ExecutionPlanV3,
   FixedInputV1,
@@ -83,11 +86,7 @@ function moveRightForTicks(tickCount: number): FixedInputV1 {
   return { actions: ["move-right"], ticks: tickCount };
 }
 
-function createExecutionPlan(
-  mutator?: (spec: AuthoringSpecV2) => void,
-): ExecutionPlanV3 {
-  const spec = createValidPackageSubjectWorldV2();
-  mutator?.(spec);
+function compileExecutionPlan(spec: AuthoringSpecV2): ExecutionPlanV3 {
   const normalized = normalizeAuthoringSpec(spec);
   if (
     !normalized.ok ||
@@ -106,6 +105,14 @@ function createExecutionPlan(
   return compiled.executionPlan;
 }
 
+function createExecutionPlan(
+  mutator?: (spec: AuthoringSpecV2) => void,
+): ExecutionPlanV3 {
+  const spec = createValidPackageSubjectWorldV2();
+  mutator?.(spec);
+  return compileExecutionPlan(spec);
+}
+
 async function createRuntime(
   executionPlan = createExecutionPlan(),
 ): Promise<BabylonWorldRuntime> {
@@ -121,6 +128,24 @@ async function createRuntime(
         lockstepMaxSteps: 4,
       }),
   });
+}
+
+async function movementResult(
+  executionPlan: ExecutionPlanV3,
+  actions: FixedInputV1["actions"],
+): Promise<{ deltaXMeters: number; movementMedium: "ground" | "air" | "water" }> {
+  const runtime = await createRuntime(executionPlan);
+  try {
+    const before = runtime.snapshot().subjectStatesByEntityId.player!.positionMetersXYZ[0];
+    const after = await runtime.runFixedInput({ actions, ticks: 60 });
+    const player = after.subjectStatesByEntityId.player!;
+    return {
+      deltaXMeters: player.positionMetersXYZ[0] - before,
+      movementMedium: player.movementMedium,
+    };
+  } finally {
+    await runtime.dispose();
+  }
 }
 
 async function createRuntimeWithPackageSubject(): Promise<{
@@ -209,6 +234,40 @@ describe("BabylonWorldRuntime", () => {
       "tow.rear",
     ]);
     await runtime.dispose();
+  });
+
+  it("requires an explicit Subject Asset resolver before constructing Asset visuals", async () => {
+    const executionPlan = compileExecutionPlan(
+      createValidRiggedPackageSubjectWorldV2(),
+    );
+
+    await expect(createRuntime(executionPlan)).rejects.toThrowError(
+      /SUBJECT_ASSET_RESOLVER_REQUIRED:.*body\.asset.*player/,
+    );
+  });
+
+  it("uses run speed only for horizontal non-water movement", async () => {
+    const groundPlan = createExecutionPlan();
+    const walk = await movementResult(groundPlan, ["move-right"]);
+    const run = await movementResult(groundPlan, ["move-right", "run"]);
+    expect(walk.movementMedium).toBe("ground");
+    expect(run.movementMedium).toBe("ground");
+    expect(run.deltaXMeters).toBeGreaterThan(walk.deltaXMeters * 1.25);
+
+    const waterPlan = createExecutionPlan((spec) => {
+      const water = spec.nodes.find((node) => node.kind === "water");
+      if (water?.kind !== "water") throw new Error("Fixture water node missing.");
+      water.components.water.boundary = {
+        kind: "ellipse",
+        centerMetersXZ: [0, 30],
+        radiusMetersXZ: [50, 50],
+      };
+    });
+    const waterWalk = await movementResult(waterPlan, ["move-right"]);
+    const waterRun = await movementResult(waterPlan, ["move-right", "run"]);
+    expect(waterWalk.movementMedium).toBe("water");
+    expect(waterRun.movementMedium).toBe("water");
+    expect(waterRun.deltaXMeters).toBeCloseTo(waterWalk.deltaXMeters, 8);
   });
 
   it("switches the default Controller atomically and moves only the committed Subject", async () => {
@@ -303,7 +362,7 @@ describe("BabylonWorldRuntime", () => {
       if (water?.kind !== "water") throw new Error("Fixture water node missing.");
       water.components.water.boundary = {
         kind: "ellipse",
-        centerMetersXZ: [7, 30],
+        centerMetersXZ: [4, 30],
         radiusMetersXZ: [3, 5],
       };
     });
@@ -311,7 +370,7 @@ describe("BabylonWorldRuntime", () => {
 
     const snapshot = await runtime.runFixedInput(moveRightForTicks(90));
 
-    expect(snapshot.subjectStatesByEntityId.player!.positionMetersXYZ[0]).toBeGreaterThan(4);
+    expect(snapshot.subjectStatesByEntityId.player!.positionMetersXYZ[0]).toBeGreaterThan(3);
     expect(snapshot.subjectStatesByEntityId.player!.movementMedium).toBe("water");
     await runtime.dispose();
   });

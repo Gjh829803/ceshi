@@ -5,14 +5,21 @@ import { MeshBuilder } from "@babylonjs/core/Meshes/meshBuilder.js";
 import { TransformNode } from "@babylonjs/core/Meshes/transformNode.js";
 import type { Scene } from "@babylonjs/core/scene.pure.js";
 
-import type { ExecutionSubjectV3, SubjectVisualPartV3 } from "@whitebox-world/runtime-contracts";
+import type {
+  ExecutionSubjectV3,
+  SubjectVisualPrimitivePartV3,
+} from "@whitebox-world/runtime-contracts";
 
 export interface SubjectVisual {
   root: TransformNode;
   meshes: readonly Mesh[];
 }
 
-function createPartMesh(subjectEntityId: string, part: SubjectVisualPartV3, scene: Scene): Mesh {
+function createPartMesh(
+  subjectEntityId: string,
+  part: SubjectVisualPrimitivePartV3,
+  scene: Scene,
+): Mesh {
   const name = `${subjectEntityId}.${part.id}`;
   switch (part.shape.kind) {
     case "capsule":
@@ -59,12 +66,20 @@ export function createSubjectVisual(
   material: Material,
   scene: Scene,
 ): SubjectVisual {
+  const primitiveParts = subject.visualParts.map((part) => {
+    if (part.kind === "asset") {
+      throw new Error(
+        `SUBJECT_ASSET_RESOLVER_REQUIRED: Asset Part '${part.id}' on Subject '${subject.entityId}' requires a Host Subject Asset resolver.`,
+      );
+    }
+    return part;
+  });
   const root = new TransformNode(`${subject.entityId}.visual-root`, scene);
   root.metadata = {
     worldkitEntityId: subject.entityId,
     semanticClassId: subject.semanticClassId,
   };
-  const meshes = subject.visualParts.map((part) => {
+  const meshes = primitiveParts.map((part) => {
     const mesh = createPartMesh(subject.entityId, part, scene);
     mesh.parent = root;
     mesh.position = new Vector3(...part.localTransform.positionMetersXYZ);

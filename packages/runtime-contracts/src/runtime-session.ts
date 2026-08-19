@@ -5,7 +5,8 @@ export type SemanticInputActionV1 =
   | "move-backward"
   | "move-left"
   | "move-right"
-  | "jump";
+  | "jump"
+  | "run";
 
 export interface FixedInputV1 {
   actions: readonly SemanticInputActionV1[];

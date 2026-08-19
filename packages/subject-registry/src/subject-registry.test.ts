@@ -304,11 +304,17 @@ describe("subject resource registry", () => {
       kind: "locomotion-profile",
       locomotion: {
         mode: "ground",
-        groundSpeedMetersPerSecond: 4,
+        walkSpeedMetersPerSecond: 2.4,
+        runSpeedMetersPerSecond: 4,
         waterSpeedMetersPerSecond: 2.2,
         jumpSpeedMetersPerSecond: 5.5,
       },
     });
+    expect(
+      builtInSubjectResourceRegistry.resolveLocomotionProfile(
+        "worldkit://locomotion-profile/ground.standard@1",
+      )?.locomotion,
+    ).not.toHaveProperty("groundSpeedMetersPerSecond");
     expect(
       builtInSubjectResourceRegistry.resolveColliderDerivationProfile(
         "worldkit://collider-derivation-profile/vertical-character-capsule@1",

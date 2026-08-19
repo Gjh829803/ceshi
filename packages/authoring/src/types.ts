@@ -1,9 +1,5 @@
 import type {
-  AnimationSetManifestV1,
   BipedBoneIdV1,
-  ColliderProfileManifestV1,
-  RigProfileManifestV1,
-  SubjectAssetManifestV1,
   SubjectResourceRegistryV2,
 } from "@whitebox-world/subject-registry";
 
@@ -377,10 +373,61 @@ export interface NormalizedSubjectColliderV2 {
   centerOffsetFromSubjectOriginMetersXYZ: Vec3;
 }
 
-export type NormalizedSubjectAssetV1 = SubjectAssetManifestV1;
-export type NormalizedRigProfileV1 = RigProfileManifestV1;
-export type NormalizedAnimationSetV1 = AnimationSetManifestV1;
-export type NormalizedColliderProfileV1 = ColliderProfileManifestV1;
+export interface NormalizedSubjectAssetInventoryV1 {
+  meshCount: number;
+  vertexCount: number;
+  triangleCount: number;
+  skeletonCount: number;
+  boneCount: number;
+  animationClipNames: readonly string[];
+}
+
+export interface NormalizedSubjectAssetV1 {
+  subjectAssetRef: string;
+  artifactContentHash: string;
+  byteLength: number;
+  mediaType: "model/gltf-binary";
+  format: "glb";
+  inventory: NormalizedSubjectAssetInventoryV1;
+}
+
+export interface NormalizedRigProfileV1 {
+  rigProfileRef: string;
+  bodyTopology: "biped";
+  skeletonRootNodeName: string;
+  requiredBoneIds: readonly BipedBoneIdV1[];
+  sourceNodeNameByBoneId: Readonly<Record<BipedBoneIdV1, string>>;
+}
+
+export type NormalizedGroundHumanoidActionIdV1 =
+  | "idle"
+  | "walk"
+  | "run"
+  | "jump";
+
+export interface NormalizedAnimationBindingV1 {
+  actionId: NormalizedGroundHumanoidActionIdV1;
+  sourceClipName: string;
+  loopMode: "repeat" | "once";
+  playbackSpeedRatio: number;
+  blendDurationSeconds: number;
+  rootMotionMode: "in-place";
+}
+
+export interface NormalizedAnimationSetV1 {
+  animationSetRef: string;
+  subjectAssetRef: string;
+  rigProfileRef: string;
+  defaultActionId: NormalizedGroundHumanoidActionIdV1;
+  requiredActionIds: readonly NormalizedGroundHumanoidActionIdV1[];
+  animationBindings: readonly NormalizedAnimationBindingV1[];
+}
+
+export interface NormalizedColliderProfileV1 {
+  colliderProfileRef: string;
+  supportedBodyTopologies: readonly ("biped" | "quadruped" | "custom")[];
+  collider: NormalizedSubjectColliderV2;
+}
 
 export interface NormalizedSubjectDefinitionV2 {
   subjectDefinitionRef: string;
@@ -409,7 +456,8 @@ export interface NormalizedSubjectDefinitionV2 {
   };
   locomotion: {
     mode: "ground";
-    groundSpeedMetersPerSecond: number;
+    walkSpeedMetersPerSecond: number;
+    runSpeedMetersPerSecond: number;
     waterSpeedMetersPerSecond: number;
     jumpSpeedMetersPerSecond: number;
   };

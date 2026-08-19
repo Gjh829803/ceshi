@@ -135,19 +135,17 @@ describe("Package Subject Definition normalization", () => {
     expect(result.value?.resources).toMatchObject({
       subjectAssets: [
         {
-          resourceRef: SUBJECT_ASSET_REF,
+          subjectAssetRef: SUBJECT_ASSET_REF,
+          artifactContentHash:
+            "sha256:1095fd65c754d53e6db3757ab5e1c9e5e9dcea2581f85d40f37ea4890ee8c2c2",
+          byteLength: 43_656,
+          mediaType: "model/gltf-binary",
           format: "glb",
-          artifact: {
-            mediaType: "model/gltf-binary",
-            byteLength: 43_656,
-            contentHash:
-              "sha256:1095fd65c754d53e6db3757ab5e1c9e5e9dcea2581f85d40f37ea4890ee8c2c2",
-          },
         },
       ],
-      rigProfiles: [{ resourceRef: RIG_PROFILE_REF }],
-      animationSets: [{ resourceRef: ANIMATION_SET_REF }],
-      colliderProfiles: [{ resourceRef: COLLIDER_PROFILE_REF }],
+      rigProfiles: [{ rigProfileRef: RIG_PROFILE_REF }],
+      animationSets: [{ animationSetRef: ANIMATION_SET_REF }],
+      colliderProfiles: [{ colliderProfileRef: COLLIDER_PROFILE_REF }],
     });
     expect(result.value?.resources.subjectDefinitions[0]).toMatchObject({
       visualParts: [
@@ -257,20 +255,92 @@ describe("Package Subject Definition normalization", () => {
     );
   });
 
-  it("emits self-consistent content hashes for every normalized transitive row", () => {
-    const result = normalizeAuthoringSpec(createValidRiggedPackageSubjectWorldV2());
-    expect(result.ok).toBe(true);
-    const rows = [
-      ...result.value!.resources.subjectAssets,
-      ...result.value!.resources.rigProfiles,
-      ...result.value!.resources.animationSets,
-      ...result.value!.resources.colliderProfiles,
-    ];
+  it("emits exact minimal descriptors without Registry provenance or discovery metadata", () => {
+    const sourceUri = "https://registry.invalid/private/golden-humanoid.glb";
+    const licenseUri = "https://registry.invalid/private/license";
+    const privateAiTag = "registry-private-discovery-tag";
+    const world = createValidRiggedPackageSubjectWorldV2();
+    world.provenance = { userPrompt: "top-level provenance remains allowed" };
+    const subjectResourceRegistry = registryFrom((resource) =>
+      resource.kind === "subject-asset"
+        ? {
+            ...resource,
+            provenance: {
+              ...resource.provenance,
+              sourceUri,
+              licenseUri,
+            },
+            aiMetadata: {
+              ...resource.aiMetadata,
+              semanticTags: [...resource.aiMetadata.semanticTags, privateAiTag],
+            },
+          }
+        : resource,
+    );
 
-    for (const row of rows) {
-      const { contentHash, ...hashInput } = row;
-      expect(contentHash).toBe(sha256CanonicalJson(hashInput));
+    const result = normalizeAuthoringSpec(world, { subjectResourceRegistry });
+    expect(result.ok).toBe(true);
+    const tables = {
+      subjectAssets: result.value!.resources.subjectAssets,
+      rigProfiles: result.value!.resources.rigProfiles,
+      animationSets: result.value!.resources.animationSets,
+      colliderProfiles: result.value!.resources.colliderProfiles,
+    };
+    expect(Object.keys(tables.subjectAssets[0]!).sort()).toEqual([
+      "artifactContentHash",
+      "byteLength",
+      "format",
+      "inventory",
+      "mediaType",
+      "subjectAssetRef",
+    ]);
+    expect(Object.keys(tables.rigProfiles[0]!).sort()).toEqual([
+      "bodyTopology",
+      "requiredBoneIds",
+      "rigProfileRef",
+      "skeletonRootNodeName",
+      "sourceNodeNameByBoneId",
+    ]);
+    expect(Object.keys(tables.animationSets[0]!).sort()).toEqual([
+      "animationBindings",
+      "animationSetRef",
+      "defaultActionId",
+      "requiredActionIds",
+      "rigProfileRef",
+      "subjectAssetRef",
+    ]);
+    expect(Object.keys(tables.colliderProfiles[0]!).sort()).toEqual([
+      "collider",
+      "colliderProfileRef",
+      "supportedBodyTopologies",
+    ]);
+    expect(tables.subjectAssets[0]).toEqual({
+      subjectAssetRef: SUBJECT_ASSET_REF,
+      artifactContentHash:
+        "sha256:1095fd65c754d53e6db3757ab5e1c9e5e9dcea2581f85d40f37ea4890ee8c2c2",
+      byteLength: 43_656,
+      mediaType: "model/gltf-binary",
+      format: "glb",
+      inventory: {
+        meshCount: 1,
+        vertexCount: 360,
+        triangleCount: 180,
+        skeletonCount: 1,
+        boneCount: 18,
+        animationClipNames: ["idle", "jump", "run", "walk"],
+      },
+    });
+
+    const serializedTables = JSON.stringify(tables);
+    for (const forbiddenValue of [sourceUri, licenseUri, privateAiTag]) {
+      expect(serializedTables).not.toContain(forbiddenValue);
+      expect(JSON.stringify(result.value)).not.toContain(forbiddenValue);
     }
+    expect(serializedTables).not.toMatch(
+      /"(?:id|version|contentHash|aiMetadata|provenance|bounds|coordinateConvention)"/,
+    );
+    expect(JSON.stringify(result.value)).toContain("top-level provenance remains allowed");
+    expect(JSON.stringify(result.value)).toContain('"contentHash"');
   });
 
   it.each([

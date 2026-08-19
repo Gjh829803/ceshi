@@ -31,6 +31,54 @@ function pushConflict(
   });
 }
 
+function normalizeSubjectAsset(
+  resource: SubjectAssetManifestV1,
+): NormalizedSubjectAssetV1 {
+  return {
+    subjectAssetRef: resource.resourceRef,
+    artifactContentHash: resource.artifact.contentHash,
+    byteLength: resource.artifact.byteLength,
+    mediaType: resource.artifact.mediaType,
+    format: resource.format,
+    inventory: structuredClone(resource.inventory),
+  };
+}
+
+function normalizeRigProfile(
+  resource: RigProfileManifestV1,
+): NormalizedRigProfileV1 {
+  return {
+    rigProfileRef: resource.resourceRef,
+    bodyTopology: resource.bodyTopology,
+    skeletonRootNodeName: resource.skeletonRootNodeName,
+    requiredBoneIds: [...resource.requiredBoneIds],
+    sourceNodeNameByBoneId: structuredClone(resource.sourceNodeNameByBoneId),
+  };
+}
+
+function normalizeAnimationSet(
+  resource: AnimationSetManifestV1,
+): NormalizedAnimationSetV1 {
+  return {
+    animationSetRef: resource.resourceRef,
+    subjectAssetRef: resource.subjectAssetRef,
+    rigProfileRef: resource.rigProfileRef,
+    defaultActionId: resource.defaultActionId,
+    requiredActionIds: [...resource.requiredActionIds],
+    animationBindings: structuredClone(resource.animationBindings),
+  };
+}
+
+function normalizeColliderProfile(
+  resource: ColliderProfileManifestV1,
+): NormalizedColliderProfileV1 {
+  return {
+    colliderProfileRef: resource.resourceRef,
+    supportedBodyTopologies: [...resource.supportedBodyTopologies],
+    collider: structuredClone(resource.collider),
+  };
+}
+
 export class ResourceLockBuilderV1 {
   readonly #entriesByRef = new Map<string, ResolvedResourceLockEntryV1>();
   readonly #subjectAssetsByRef = new Map<string, SubjectAssetManifestV1>();
@@ -124,21 +172,34 @@ export class ResourceLockBuilderV1 {
       left.resourceRef.localeCompare(right.resourceRef),
     );
     return {
-      subjectAssets: this.#sortedResources(this.#subjectAssetsByRef),
-      rigProfiles: this.#sortedResources(this.#rigProfilesByRef),
-      animationSets: this.#sortedResources(this.#animationSetsByRef),
-      colliderProfiles: this.#sortedResources(this.#colliderProfilesByRef),
+      subjectAssets: this.#sortedResources(
+        this.#subjectAssetsByRef,
+        normalizeSubjectAsset,
+      ),
+      rigProfiles: this.#sortedResources(
+        this.#rigProfilesByRef,
+        normalizeRigProfile,
+      ),
+      animationSets: this.#sortedResources(
+        this.#animationSetsByRef,
+        normalizeAnimationSet,
+      ),
+      colliderProfiles: this.#sortedResources(
+        this.#colliderProfilesByRef,
+        normalizeColliderProfile,
+      ),
       resourceLock,
       resourceLockHash: sha256CanonicalJson(resourceLock),
     };
   }
 
-  #sortedResources<T extends { resourceRef: string }>(
+  #sortedResources<T extends { resourceRef: string }, U>(
     resourcesByRef: ReadonlyMap<string, T>,
-  ): readonly T[] {
+    normalize: (resource: T) => U,
+  ): readonly U[] {
     return [...resourcesByRef.values()]
       .sort((left, right) => left.resourceRef.localeCompare(right.resourceRef))
-      .map((resource) => structuredClone(resource));
+      .map(normalize);
   }
 
   #addEntry(

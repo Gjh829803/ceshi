@@ -1,4 +1,8 @@
 import type {
+  NormalizedAnimationSetV1,
+  NormalizedColliderProfileV1,
+  NormalizedRigProfileV1,
+  NormalizedSubjectAssetV1,
   NormalizedWorldIRV2,
   NormalizedWorldNodeV2,
   NormalizedSubjectSocketV2,
@@ -10,9 +14,13 @@ import { sha256CanonicalJson } from "@whitebox-world/protocol";
 import type {
   CompileDiagnostic,
   CompileWorldResultV3,
+  ExecutionAnimationSetV1,
+  ExecutionColliderProfileV1,
   ExecutionObjectPrimitiveV3,
   ExecutionObjectV3,
   ExecutionPlanV3,
+  ExecutionRigProfileV1,
+  ExecutionSubjectAssetV1,
   ExecutionSubjectV3,
   ExecutionTerrainV3,
   ExecutionWaterBoundaryV3,
@@ -219,16 +227,120 @@ function compileObjectsV3(world: NormalizedWorldIRV2): ExecutionObjectV3[] {
 
 interface CompiledSubjectsV3 {
   subjects: ExecutionSubjectV3[];
+  subjectAssets: ExecutionSubjectAssetV1[];
+  rigProfiles: ExecutionRigProfileV1[];
+  animationSets: ExecutionAnimationSetV1[];
+  colliderProfiles: ExecutionColliderProfileV1[];
   resourceCost: { vertices: number; triangles: number; colliders: number };
+}
+
+function indexNormalizedResourceRowsV3<T>(
+  rows: readonly T[],
+  resourceRef: (row: T) => string,
+  label: string,
+): ReadonlyMap<string, T> {
+  const rowsByRef = new Map<string, T>();
+  for (const row of [...rows].sort((left, right) =>
+    resourceRef(left).localeCompare(resourceRef(right)))) {
+    const ref = resourceRef(row);
+    if (rowsByRef.has(ref)) {
+      throw new Error(
+        `NormalizedWorldIRV2 invariant violated: duplicate ${label} '${ref}'.`,
+      );
+    }
+    rowsByRef.set(ref, row);
+  }
+  return rowsByRef;
+}
+
+function requireNormalizedResourceRowV3<T>(
+  rowsByRef: ReadonlyMap<string, T>,
+  resourceRef: string,
+  label: string,
+): T {
+  const row = rowsByRef.get(resourceRef);
+  if (row === undefined) {
+    throw new Error(
+      `NormalizedWorldIRV2 invariant violated: missing ${label} '${resourceRef}'.`,
+    );
+  }
+  return row;
+}
+
+function compileSubjectAssetV1(
+  resource: NormalizedSubjectAssetV1,
+): ExecutionSubjectAssetV1 {
+  return {
+    subjectAssetRef: resource.subjectAssetRef,
+    artifactContentHash: resource.artifactContentHash,
+    byteLength: resource.byteLength,
+    mediaType: resource.mediaType,
+    format: resource.format,
+    inventory: {
+      meshCount: resource.inventory.meshCount,
+      vertexCount: resource.inventory.vertexCount,
+      triangleCount: resource.inventory.triangleCount,
+      skeletonCount: resource.inventory.skeletonCount,
+      boneCount: resource.inventory.boneCount,
+      animationClipNames: [...resource.inventory.animationClipNames],
+    },
+  };
+}
+
+function compileRigProfileV1(
+  resource: NormalizedRigProfileV1,
+): ExecutionRigProfileV1 {
+  return {
+    rigProfileRef: resource.rigProfileRef,
+    bodyTopology: resource.bodyTopology,
+    skeletonRootNodeName: resource.skeletonRootNodeName,
+    requiredBoneIds: [...resource.requiredBoneIds],
+    sourceNodeNameByBoneId: structuredClone(resource.sourceNodeNameByBoneId),
+  };
+}
+
+function compileAnimationSetV1(
+  resource: NormalizedAnimationSetV1,
+): ExecutionAnimationSetV1 {
+  return {
+    animationSetRef: resource.animationSetRef,
+    subjectAssetRef: resource.subjectAssetRef,
+    rigProfileRef: resource.rigProfileRef,
+    defaultActionId: resource.defaultActionId,
+    requiredActionIds: [...resource.requiredActionIds],
+    animationBindings: resource.animationBindings.map((binding) => ({
+      actionId: binding.actionId,
+      sourceClipName: binding.sourceClipName,
+      loopMode: binding.loopMode,
+      playbackSpeedRatio: binding.playbackSpeedRatio,
+      blendDurationSeconds: binding.blendDurationSeconds,
+      rootMotionMode: binding.rootMotionMode,
+    })),
+  };
+}
+
+function compileColliderProfileV1(
+  resource: NormalizedColliderProfileV1,
+): ExecutionColliderProfileV1 {
+  return {
+    colliderProfileRef: resource.colliderProfileRef,
+    supportedBodyTopologies: [...resource.supportedBodyTopologies],
+    collider: structuredClone(resource.collider),
+  };
 }
 
 function compileSubjectVisualPartV3(
   part: NormalizedSubjectVisualPartV2,
 ): SubjectVisualPartV3 {
   if (part.kind === "asset") {
-    throw new Error(
-      `COMPILER_SUBJECT_ASSET_NOT_SUPPORTED: Asset Part '${part.id}' references '${part.subjectAssetRef}', but ExecutionPlan Asset support belongs to Task 4.`,
-    );
+    return {
+      id: part.id,
+      kind: "asset",
+      subjectAssetRef: part.subjectAssetRef,
+      localTransform: structuredClone(part.localTransform),
+      appearance: { mode: "whitebox-neutral" },
+      semanticTags: [...part.semanticTags],
+    };
   }
   return {
     id: part.id,
@@ -241,15 +353,34 @@ function compileSubjectVisualPartV3(
 
 function compileSubjectSocketV3(socket: NormalizedSubjectSocketV2): SubjectSocketV3 {
   if (socket.kind === "bone") {
-    throw new Error(
-      `COMPILER_SUBJECT_BONE_SOCKET_NOT_SUPPORTED: Bone Socket '${socket.id}' targets '${socket.boneId}', but ExecutionPlan Bone Socket support belongs to Task 4.`,
-    );
+    return {
+      id: socket.id,
+      kind: "bone",
+      boneId: socket.boneId,
+      offsetTransform: structuredClone(socket.offsetTransform),
+      semanticTags: [...socket.semanticTags],
+    };
   }
   return {
     id: socket.id,
+    kind: "local",
     localTransform: structuredClone(socket.localTransform),
     semanticTags: [...socket.semanticTags],
   };
+}
+
+function colliderProfileMatchesDefinitionV3(
+  profile: NormalizedColliderProfileV1,
+  definitionCollider: ExecutionSubjectV3["collider"],
+): boolean {
+  const profileCollider = profile.collider;
+  return profileCollider.kind === definitionCollider.kind &&
+    profileCollider.radiusMeters === definitionCollider.radiusMeters &&
+    profileCollider.heightMeters === definitionCollider.heightMeters &&
+    profileCollider.centerOffsetFromSubjectOriginMetersXYZ.every(
+      (component, index) =>
+        component === definitionCollider.centerOffsetFromSubjectOriginMetersXYZ[index],
+    );
 }
 
 function compileSubjectsV3(
@@ -262,6 +393,26 @@ function compileSubjectsV3(
       definition,
     ]),
   );
+  const subjectAssetsByRef = indexNormalizedResourceRowsV3(
+    world.resources.subjectAssets,
+    (resource) => resource.subjectAssetRef,
+    "Subject Asset",
+  );
+  const rigProfilesByRef = indexNormalizedResourceRowsV3(
+    world.resources.rigProfiles,
+    (resource) => resource.rigProfileRef,
+    "Rig Profile",
+  );
+  const animationSetsByRef = indexNormalizedResourceRowsV3(
+    world.resources.animationSets,
+    (resource) => resource.animationSetRef,
+    "Animation Set",
+  );
+  const colliderProfilesByRef = indexNormalizedResourceRowsV3(
+    world.resources.colliderProfiles,
+    (resource) => resource.colliderProfileRef,
+    "Collider Profile",
+  );
   const anchorsByEntityId = new Map(
     world.nodes
       .filter(
@@ -270,6 +421,10 @@ function compileSubjectsV3(
       )
       .map((anchor) => [anchor.id, anchor]),
   );
+  const reachableSubjectAssetsByRef = new Map<string, NormalizedSubjectAssetV1>();
+  const reachableRigProfilesByRef = new Map<string, NormalizedRigProfileV1>();
+  const reachableAnimationSetsByRef = new Map<string, NormalizedAnimationSetV1>();
+  const reachableColliderProfilesByRef = new Map<string, NormalizedColliderProfileV1>();
   const resourceCost = { vertices: 0, triangles: 0, colliders: 0 };
 
   const subjects = world.nodes
@@ -277,6 +432,7 @@ function compileSubjectsV3(
       (node): node is Extract<NormalizedWorldNodeV2, { kind: "subject" }> =>
         node.kind === "subject",
     )
+    .sort((left, right) => left.id.localeCompare(right.id))
     .map((node): ExecutionSubjectV3 => {
       const definition = definitionsByRef.get(node.subjectDefinitionRef);
       if (definition === undefined) {
@@ -295,6 +451,92 @@ function compileSubjectsV3(
       resourceCost.triangles += definition.resourceCost.triangles;
       resourceCost.colliders += definition.resourceCost.colliders;
 
+      const assetParts = definition.visualParts.filter(
+        (part) => part.kind === "asset",
+      );
+      for (const assetPart of assetParts) {
+        const subjectAsset = requireNormalizedResourceRowV3(
+          subjectAssetsByRef,
+          assetPart.subjectAssetRef,
+          "Subject Asset",
+        );
+        reachableSubjectAssetsByRef.set(subjectAsset.subjectAssetRef, subjectAsset);
+      }
+
+      if (definition.visualBinding.mode === "rigged") {
+        if (assetParts.length !== 1) {
+          throw new Error(
+            `NormalizedWorldIRV2 invariant violated: rigged Subject '${node.id}' must select exactly one Subject Asset.`,
+          );
+        }
+        const subjectAssetRef = assetParts[0]!.subjectAssetRef;
+        const rigProfile = requireNormalizedResourceRowV3(
+          rigProfilesByRef,
+          definition.visualBinding.rigProfileRef,
+          "Rig Profile",
+        );
+        const animationSet = requireNormalizedResourceRowV3(
+          animationSetsByRef,
+          definition.visualBinding.animationSetRef,
+          "Animation Set",
+        );
+        if (rigProfile.bodyTopology !== definition.bodyTopology) {
+          throw new Error(
+            `NormalizedWorldIRV2 invariant violated: Rig Profile '${rigProfile.rigProfileRef}' has topology '${rigProfile.bodyTopology}', but Subject '${node.id}' has '${definition.bodyTopology}'.`,
+          );
+        }
+        if (animationSet.subjectAssetRef !== subjectAssetRef) {
+          throw new Error(
+            `NormalizedWorldIRV2 invariant violated: Animation Set '${animationSet.animationSetRef}' targets Subject Asset '${animationSet.subjectAssetRef}', but Subject '${node.id}' selects '${subjectAssetRef}'.`,
+          );
+        }
+        if (animationSet.rigProfileRef !== rigProfile.rigProfileRef) {
+          throw new Error(
+            `NormalizedWorldIRV2 invariant violated: Animation Set '${animationSet.animationSetRef}' targets Rig Profile '${animationSet.rigProfileRef}', but Subject '${node.id}' selects '${rigProfile.rigProfileRef}'.`,
+          );
+        }
+        const requiredBoneIds = new Set(rigProfile.requiredBoneIds);
+        const missingSocketBone = definition.sockets.find(
+          (socket) => socket.kind === "bone" && !requiredBoneIds.has(socket.boneId),
+        );
+        if (missingSocketBone?.kind === "bone") {
+          throw new Error(
+            `NormalizedWorldIRV2 invariant violated: Bone Socket '${missingSocketBone.id}' targets undeclared Bone '${missingSocketBone.boneId}'.`,
+          );
+        }
+        reachableRigProfilesByRef.set(rigProfile.rigProfileRef, rigProfile);
+        reachableAnimationSetsByRef.set(animationSet.animationSetRef, animationSet);
+      } else if (
+        assetParts.length > 0 ||
+        definition.sockets.some((socket) => socket.kind === "bone")
+      ) {
+        throw new Error(
+          `NormalizedWorldIRV2 invariant violated: static Subject '${node.id}' contains rigged visual data.`,
+        );
+      }
+
+      if (definition.colliderPolicy.kind === "profile") {
+        const colliderProfile = requireNormalizedResourceRowV3(
+          colliderProfilesByRef,
+          definition.colliderPolicy.colliderProfileRef,
+          "Collider Profile",
+        );
+        if (!colliderProfile.supportedBodyTopologies.includes(definition.bodyTopology)) {
+          throw new Error(
+            `NormalizedWorldIRV2 invariant violated: Collider Profile '${colliderProfile.colliderProfileRef}' does not support Subject '${node.id}' topology '${definition.bodyTopology}'.`,
+          );
+        }
+        if (!colliderProfileMatchesDefinitionV3(colliderProfile, definition.collider)) {
+          throw new Error(
+            `NormalizedWorldIRV2 invariant violated: Collider Profile '${colliderProfile.colliderProfileRef}' does not match Subject '${node.id}' collider.`,
+          );
+        }
+        reachableColliderProfilesByRef.set(
+          colliderProfile.colliderProfileRef,
+          colliderProfile,
+        );
+      }
+
       const [spawnX, spawnYOffset, spawnZ] =
         spawnAnchor.transform.positionMetersXYZ;
       const groundHeightMeters = sampleTerrainHeight(terrain, [spawnX, spawnZ]);
@@ -312,6 +554,7 @@ function compileSubjectsV3(
         ],
         forwardDirection: "-z",
         visualParts: definition.visualParts.map(compileSubjectVisualPartV3),
+        visualBinding: structuredClone(definition.visualBinding),
         sockets: definition.sockets.map(compileSubjectSocketV3),
         collider: structuredClone(definition.collider),
         locomotion: structuredClone(definition.locomotion),
@@ -324,7 +567,23 @@ function compileSubjectsV3(
       "NormalizedWorldIRV2 invariant violated: no Subject nodes were materialized.",
     );
   }
-  return { subjects, resourceCost };
+  return {
+    subjects,
+    subjectAssets: [...reachableSubjectAssetsByRef.values()]
+      .sort((left, right) => left.subjectAssetRef.localeCompare(right.subjectAssetRef))
+      .map(compileSubjectAssetV1),
+    rigProfiles: [...reachableRigProfilesByRef.values()]
+      .sort((left, right) => left.rigProfileRef.localeCompare(right.rigProfileRef))
+      .map(compileRigProfileV1),
+    animationSets: [...reachableAnimationSetsByRef.values()]
+      .sort((left, right) => left.animationSetRef.localeCompare(right.animationSetRef))
+      .map(compileAnimationSetV1),
+    colliderProfiles: [...reachableColliderProfilesByRef.values()]
+      .sort((left, right) =>
+        left.colliderProfileRef.localeCompare(right.colliderProfileRef))
+      .map(compileColliderProfileV1),
+    resourceCost,
+  };
 }
 
 function primitiveResourceCostV3(
@@ -392,10 +651,14 @@ export function compileWorld(input: CompileWorldInput): CompileWorldResultV3 {
     const terrain = compileTerrainV3(world);
     const waters = compileWatersV3(world, terrain);
     const objects = compileObjectsV3(world);
-    const { subjects, resourceCost: subjectResourceCost } = compileSubjectsV3(
-      world,
-      terrain,
-    );
+    const {
+      subjects,
+      subjectAssets,
+      rigProfiles,
+      animationSets,
+      colliderProfiles,
+      resourceCost: subjectResourceCost,
+    } = compileSubjectsV3(world, terrain);
     const cameraNode = findOnlyNodeV3(world.nodes, "camera");
     const terrainVertices =
       terrain.resolutionCellsXZ[0] * terrain.resolutionCellsXZ[1];
@@ -466,6 +729,10 @@ export function compileWorld(input: CompileWorldInput): CompileWorldResultV3 {
       terrain,
       waters,
       objects,
+      subjectAssets,
+      rigProfiles,
+      animationSets,
+      colliderProfiles,
       controlledEntityId: world.startup.controlledEntityId,
       subjects,
       camera: {
