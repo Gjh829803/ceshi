@@ -37,7 +37,7 @@
 | 8. Babylon + Browser V3 | Complete | `59ad40a` | 15 focused tests + typecheck + Playground build |
 | 9. CLI Discovery/Explain | Complete | `8cc6a80` | 9 CLI tests + canonical source audit + typecheck |
 | 10. V2 Browser E2E | Complete | `7668d06` | 179 tests + Playground build + Browser V3/Havok verifier + 936×596 screenshot |
-| 11. Docs and Audit | In progress | — | 179 tests + build + canonical browser gate passed |
+| 11. Docs and Audit | Complete | `7ed0f34` | 179 tests + build + canonical browser gate + naming audit |
 
 Task 10 visual inspection: the 936×596 runtime capture shows the red Humanoid
 capsule in the foreground and two distinct red quadruped proxies ahead, one on
@@ -1233,7 +1233,7 @@ git add README.md docs
 git commit -m "docs: complete package subject definition audit"
 ```
 
-- [ ] **Step 6: Verify branch integration state**
+- [x] **Step 6: Verify branch integration state**
 
 Run:
 
