@@ -1,3 +1,6 @@
+import { createServer } from "node:http";
+import type { AddressInfo } from "node:net";
+
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import {
@@ -42,7 +45,7 @@ describe("createFetchSubjectAssetResolver", () => {
     const fetchImplementation = (async (input: URL | RequestInfo, init?: RequestInit) => {
       fetchCalls.push({ input: String(input), init });
       return responseFixture({
-        url: "https://playground.test/worldkit-assets/golden-humanoid.glb?token=secret#fragment",
+        url: "https://playground.test/asset.glb?token=secret",
         arrayBuffer: async () => {
           bodyReads += 1;
           return sourceBytes.buffer;
@@ -50,7 +53,7 @@ describe("createFetchSubjectAssetResolver", () => {
       });
     }) as typeof fetch;
     const mapping: Record<string, string> = {
-      [ASSET_REF]: "/worldkit-assets/golden-humanoid.glb?token=secret#fragment",
+      [ASSET_REF]: "/asset.glb?token=secret#fragment",
     };
     const resolver = createFetchSubjectAssetResolver(mapping, fetchImplementation);
     mapping[ASSET_REF] = "https://attacker.test/replaced.glb";
@@ -60,12 +63,12 @@ describe("createFetchSubjectAssetResolver", () => {
 
     expect(result).toEqual({
       bytes: new Uint8Array([1, 2, 3, 4]),
-      sourceLabel: "/worldkit-assets/golden-humanoid.glb",
+      sourceLabel: "/asset.glb",
     });
     expect(bodyReads).toBe(1);
     expect(fetchCalls).toEqual([
       {
-        input: "https://playground.test/worldkit-assets/golden-humanoid.glb?token=secret#fragment",
+        input: "https://playground.test/asset.glb?token=secret",
         init: {
           mode: "same-origin",
           credentials: "same-origin",
@@ -73,6 +76,43 @@ describe("createFetchSubjectAssetResolver", () => {
         },
       },
     ]);
+  });
+
+  it("matches native Fetch fragment stripping while retaining the query", async () => {
+    const observedRequestPaths: string[] = [];
+    const server = createServer((request, response) => {
+      observedRequestPaths.push(request.url ?? "");
+      response.statusCode = 200;
+      response.setHeader("content-type", "model/gltf-binary");
+      response.end(Buffer.from([1, 2, 3, 4]));
+    });
+    await new Promise<void>((resolve, reject) => {
+      server.once("error", reject);
+      server.listen(0, "127.0.0.1", resolve);
+    });
+    const address = server.address() as AddressInfo;
+    const origin = `http://127.0.0.1:${address.port}`;
+    vi.stubGlobal("location", { origin });
+
+    let result;
+    try {
+      const resolver = createFetchSubjectAssetResolver({
+        [ASSET_REF]: "/asset.glb?token=secret#fragment",
+      });
+      result = await resolver.resolveSubjectAsset(REQUEST);
+    } finally {
+      await new Promise<void>((resolve, reject) => {
+        server.close((error) =>
+          error === undefined ? resolve() : reject(error),
+        );
+      });
+    }
+
+    expect(observedRequestPaths).toEqual(["/asset.glb?token=secret"]);
+    expect(result).toEqual({
+      bytes: new Uint8Array([1, 2, 3, 4]),
+      sourceLabel: "/asset.glb",
+    });
   });
 
   it("contains the exact same-origin Golden Humanoid Host mapping", () => {

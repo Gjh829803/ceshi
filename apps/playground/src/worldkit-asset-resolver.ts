@@ -71,19 +71,21 @@ export function createFetchSubjectAssetResolver(
         }
         const uri = capturedUriByRef[request.subjectAssetRef];
         if (uri === undefined) throw hostResolveFailure();
-        const resolvedUrl = safeSameOriginUrl(uri, pageOrigin);
-        const response = await fetchImplementation(resolvedUrl.href, {
+        const policyUrl = safeSameOriginUrl(uri, pageOrigin);
+        const networkUrl = new URL(policyUrl.href);
+        networkUrl.hash = "";
+        const response = await fetchImplementation(networkUrl.href, {
           mode: "same-origin",
           credentials: "same-origin",
           redirect: "error",
         });
         if (!response.ok || response.redirected) throw hostResolveFailure();
         const responseUrl = safeSameOriginUrl(response.url, pageOrigin);
-        if (responseUrl.href !== resolvedUrl.href) throw hostResolveFailure();
+        if (responseUrl.href !== networkUrl.href) throw hostResolveFailure();
         const body = await response.arrayBuffer();
         return {
           bytes: Uint8Array.from(new Uint8Array(body)),
-          sourceLabel: resolvedUrl.pathname,
+          sourceLabel: policyUrl.pathname,
         };
       } catch (error) {
         if (error instanceof WorldkitHostSubjectAssetResolveErrorV1) throw error;
