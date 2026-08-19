@@ -1472,53 +1472,172 @@ explicitly as the Legacy Three/Rapier/local-Mixamo path rather than Canonical Ba
 
 - [ ] **Step 3: Run naming and boundary audits**
 
-Run obsolete-field audit over non-historical production source, examples, and artifacts:
+Review RED proof: controlled probes placed an obsolete public field and Registry URI in
+`packages/runtime-babylon/src`, a provider name in `packages/protocol/src`, a second provider field
+beside an allowed `runtimeBackend` in generated JSON, and a Playwright auto-install lifecycle in a
+workspace `package.json`. The previous four commands all returned success because those paths were
+outside their search roots or shared a minified artifact line with an allowed value. The probes are
+not committed; the commands below must fail for each equivalent probe before they are accepted.
+
+Define the complete non-historical production/public search roots once, then run the obsolete-
+field audit. Tests/specs are excluded because their negative fixtures intentionally spell removed
+fields; no production package, app, CLI/lifecycle helper, Authoring example, generated public
+artifact, or deployed blueprint source is excluded:
 
 ```bash
-if rg -n --glob '!*.test.ts' \
+audit_roots=(
+  package.json
+  packages
+  apps
+  scripts
+  examples/authoring
+  artifacts/examples
+  sites/world-sdk-blueprint
+)
+
+obsolete_matches=$(rg -n --glob '!*.test.*' --glob '!*.spec.*' \
   '\b(assetUrl|kitRef|groundSpeedMetersPerSecond|sourceTarget)\b|(^|[,{;])[[:space:]]*assetPath[[:space:]]*[?:]|"assetPath"[[:space:]]*:' \
-  packages/authoring packages/compiler packages/runtime-contracts packages/subject-registry \
-  examples/authoring scripts artifacts/examples; then
+  "${audit_roots[@]}")
+obsolete_status=$?
+if test "$obsolete_status" -gt 1; then
+  exit "$obsolete_status"
+fi
+if test -n "$obsolete_matches"; then
+  printf '%s\n' "$obsolete_matches"
   exit 1
-else
-  test $? -eq 1
 fi
 ```
 
-Expected: zero matches. Negative tests may name a removed field, and a local variable such as
-`assetPath` is not a public field; the command excludes tests and matches only the serialized or
-property-shaped `assetPath` forms.
+Expected: zero matches. A local variable such as `assetPath` is not a public field, so that name
+is matched only in serialized or property-shaped forms. An `rg` I/O/configuration error is not
+converted into a pass.
 
-Run provider-boundary and URI audits separately so results are machine-decidable:
+Run the Registry-URI audit over the same complete roots. The only production allowance is the
+exact optional Provenance field declaration in the Registry manifest type; an occurrence in any
+other file or line shape fails:
 
 ```bash
-if rg -n --glob '!*.test.ts' "@babylonjs|AnimationGroup|AssetContainer|\bBabylon\b|\bHavok\b" \
-  packages/authoring/src packages/compiler/src packages/runtime-contracts/src \
-  packages/subject-registry/src examples/authoring; then
-  exit 1
-else
-  test $? -eq 1
+uri_matches=$(rg -n --glob '!*.test.*' --glob '!*.spec.*' \
+  '\b(sourceUri|licenseUri)\b' "${audit_roots[@]}")
+uri_status=$?
+if test "$uri_status" -gt 1; then
+  exit "$uri_status"
 fi
-if rg -n --glob '!*.test.ts' "sourceUri|licenseUri" \
-  packages/authoring/src packages/compiler/src packages/runtime-contracts/src \
-  examples/authoring scripts artifacts/examples; then
-  exit 1
-else
-  test $? -eq 1
+uri_allowlist='^packages/subject-registry/src/types-v2\.ts:[0-9]+:[[:space:]]+(sourceUri|licenseUri)\?: string;$'
+uri_unexpected=$(printf '%s\n' "$uri_matches" | rg -v "$uri_allowlist")
+uri_filter_status=$?
+if test "$uri_filter_status" -gt 1; then
+  exit "$uri_filter_status"
 fi
-matches=$(rg -n "playwright[^\n]*(install|download)|(install|download)[^\n]*playwright" scripts || true)
-unexpected=$(printf '%s\n' "$matches" | \
-  rg -v "Playwright Chromium is unavailable\\. Run 'pnpm exec playwright install chromium'\\." || true)
-test -z "$unexpected"
+if test -n "$uri_unexpected"; then
+  printf '%s\n' "$uri_unexpected"
+  exit 1
+fi
 ```
 
-Expected: zero matches. The existing lowercase Runtime/Physics backend discriminator values are
-an explicit allowlist; Runtime Babylon implementation types are allowed only inside that adapter.
-Registry Manifest Provenance URI fields are allowed in Registry production source, while
-structure tests must continue proving they do not serialize into Canonical World, Normalized IR,
-or ExecutionPlan. Test fixtures that inject forbidden URI values remain intentional. The exact
-CLI diagnostic telling a human how to install Chromium is also allowed; any other Playwright
-install/download match fails the audit, so verifier code cannot invoke installation itself.
+Run the case-insensitive provider-boundary audit over every production/public text entry. The
+allowlist is path-and-line-shape specific: the Babylon adapter implementation, its exact Host
+wiring/dependencies, the frozen `runtimeBackend`/physics discriminator, and two human-facing
+descriptions or conformance assertions. A provider term in any other public package or protocol
+file fails. Generated JSON is checked structurally afterward, so a second provider-valued field
+cannot hide on the same minified line as an allowed discriminator:
+
+```bash
+provider_roots=(
+  package.json
+  packages
+  apps
+  scripts
+  examples/authoring
+  sites/world-sdk-blueprint
+)
+provider_matches=$(rg -ni --glob '!*.test.*' --glob '!*.spec.*' \
+  '@babylonjs|animationgroup|assetcontainer|\bbabylon(?:\.js)?\b|\bhavok\b' \
+  "${provider_roots[@]}")
+provider_status=$?
+if test "$provider_status" -gt 1; then
+  exit "$provider_status"
+fi
+provider_allowlist='^packages/runtime-babylon/src/[^:]+:[0-9]+:|^packages/runtime-babylon/package\.json:[0-9]+:[[:space:]]+("name": "@whitebox-world/runtime-babylon"|"@babylonjs/(core|havok|loaders)": "[^"]+"),?$|^apps/playground/src/babylon-world-adapter\.ts:[0-9]+:|^apps/playground/package\.json:[0-9]+:[[:space:]]+"@whitebox-world/runtime-babylon": "workspace:\*",$|^apps/playground/src/(main|worldkit-asset-resolver|worldkit-browser-api)\.ts:[0-9]+:.*(babylon-world-adapter\.js|@whitebox-world/runtime-babylon|Protocol · Subject Definition · Babylon · Havok)|^package\.json:[0-9]+:[[:space:]]+"description": "An AI-first semantic whitebox game SDK with a Canonical JSON compiler and Babylon\.js plus Havok runtime\.",$|^packages/compiler/src/compile\.ts:[0-9]+:[[:space:]]+runtimeBackend: "babylon-havok",$|^packages/runtime-contracts/src/(execution-plan|runtime-session)\.ts:[0-9]+:.*(runtimeBackend: "babylon-havok"|backend: "havok")|^scripts/verify-(canonical|rigged-subject)-world\.ts:[0-9]+:[[:space:]]+(assert\.equal\([^;]*(runtimeBackend|physics\.backend), "(babylon-havok|havok)"\);|backend: "havok",|"Terrain, three static objects, and three Subjects must own Havok bodies\.",|"babylon-havok-runtime",)$'
+provider_unexpected=$(printf '%s\n' "$provider_matches" | rg -v "$provider_allowlist")
+provider_filter_status=$?
+if test "$provider_filter_status" -gt 1; then
+  exit "$provider_filter_status"
+fi
+if test -n "$provider_unexpected"; then
+  printf '%s\n' "$provider_unexpected"
+  exit 1
+fi
+
+node --input-type=module <<'NODE'
+import { readdirSync, readFileSync } from "node:fs";
+import { join } from "node:path";
+
+const jsonFiles = [];
+const collect = (directory) => {
+  for (const entry of readdirSync(directory, { withFileTypes: true })) {
+    const path = join(directory, entry.name);
+    if (entry.isDirectory()) collect(path);
+    else if (entry.isFile() && path.endsWith(".json")) jsonFiles.push(path);
+  }
+};
+collect("artifacts/examples");
+
+const violations = [];
+const visit = (value, path, file) => {
+  if (typeof value === "string" && /babylon|havok/i.test(value)) {
+    const key = path.at(-1);
+    const parent = path.at(-2);
+    const isRuntimeBackend = key === "runtimeBackend" && value === "babylon-havok";
+    const isPhysicsBackend = parent === "physics" && key === "backend" && value === "havok";
+    if (!isRuntimeBackend && !isPhysicsBackend) {
+      violations.push(`${file}:${path.join(".")}=${JSON.stringify(value)}`);
+    }
+  }
+  if (Array.isArray(value)) value.forEach((entry, index) => visit(entry, [...path, index], file));
+  else if (value && typeof value === "object") {
+    for (const [key, entry] of Object.entries(value)) visit(entry, [...path, key], file);
+  }
+};
+for (const file of jsonFiles) visit(JSON.parse(readFileSync(file, "utf8")), [], file);
+if (violations.length > 0) {
+  console.error(violations.join("\n"));
+  process.exit(1);
+}
+NODE
+```
+
+Run the Playwright lifecycle audit separately. It covers the root lifecycle, every workspace
+package script, deployed-site package script, CLI/lifecycle helpers, and Vite lifecycle helpers.
+Only the exact human diagnostic is allowed; an executable install, install-deps, or download
+command anywhere in those roots fails:
+
+```bash
+playwright_matches=$(rg -ni \
+  'playwright[^\n]*(install(-deps)?|download)|(install(-deps)?|download)[^\n]*playwright' \
+  package.json apps/*/package.json packages/*/package.json sites/*/package.json \
+  scripts apps/*/vite.config.* sites/*/vite.config.*)
+playwright_status=$?
+if test "$playwright_status" -gt 1; then
+  exit "$playwright_status"
+fi
+playwright_allowlist='^scripts/worldkit\.ts:[0-9]+:[[:space:]]+"Playwright Chromium is unavailable\. Run '\''pnpm exec playwright install chromium'\''\.",$'
+playwright_unexpected=$(printf '%s\n' "$playwright_matches" | rg -v "$playwright_allowlist")
+playwright_filter_status=$?
+if test "$playwright_filter_status" -gt 1; then
+  exit "$playwright_filter_status"
+fi
+if test -n "$playwright_unexpected"; then
+  printf '%s\n' "$playwright_unexpected"
+  exit 1
+fi
+```
+
+Expected: all four audits pass with zero non-allowlisted matches. Registry Manifest Provenance URI
+fields remain legal only in the exact Registry type declaration; structure tests still prove they
+do not serialize into Canonical World, Normalized IR, or ExecutionPlan. Provider types stay behind
+the exact adapter/Host boundary, while serialized artifacts may contain only the frozen backend
+discriminators. The verifier never invokes Playwright installation itself.
 
 Run:
 
