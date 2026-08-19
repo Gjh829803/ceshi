@@ -7,6 +7,7 @@
   "packageManager": "pnpm@10.14.0",
   "scripts": {
     "dev": "pnpm --filter @whitebox-world/playground dev",
+    "generate:golden-humanoid": "tsx scripts/fixtures/generate-golden-humanoid-glb.ts --write",
     "studio": "pnpm --filter @whitebox-world/studio dev",
     "studio:public": "WORLDKIT_PUBLIC_MODE=1 WORLDKIT_STUDIO_PORT=4175 WORLDKIT_PLAYGROUND_ORIGIN=/play WORLDKIT_PLAYGROUND_INTERNAL_ORIGIN=http://127.0.0.1:5173 WORLDKIT_DISABLE_PLAYGROUND_SPAWN=1 pnpm --filter @whitebox-world/studio dev",
     "test:studio": "pnpm --filter @whitebox-world/studio test",
