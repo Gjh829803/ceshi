@@ -58,19 +58,51 @@ describe("ActionRegistry", () => {
 });
 
 describe("HumanoidActionStateMachine", () => {
-  it("selects idle, walk and run through stable action ids", () => {
+  it("adapts legacy grounded and run-threshold inputs to canonical actions", () => {
     const played: string[] = [];
     const machine = new HumanoidActionStateMachine({
       currentActionId: null,
-      has: (id) => ["idle", "walk", "run"].includes(id),
+      has: (id) => ["idle", "walk", "run", "jump"].includes(id),
       play: (id) => {
         played.push(id);
         return true;
       },
     });
     machine.update({ grounded: true, horizontalSpeed: 0, runRequested: false });
-    machine.update({ grounded: true, horizontalSpeed: 1.5, runRequested: false });
-    machine.update({ grounded: true, horizontalSpeed: 4, runRequested: true });
-    expect(played).toEqual(["idle", "walk", "run"]);
+    machine.update({ grounded: true, horizontalSpeed: 0.081, runRequested: true });
+    machine.update({ grounded: true, horizontalSpeed: 3.2, runRequested: true });
+    machine.update({ grounded: false, horizontalSpeed: 4, runRequested: true });
+    expect(played).toEqual(["idle", "walk", "run", "jump"]);
+  });
+
+  it("validates speed through the canonical resolver before airborne priority", () => {
+    const machine = new HumanoidActionStateMachine({
+      currentActionId: null,
+      has: () => true,
+      play: () => true,
+    });
+
+    expect(() => machine.update({
+      grounded: false,
+      horizontalSpeed: Number.NaN,
+      runRequested: true,
+    })).toThrow(RangeError);
+  });
+
+  it("preserves missing jump and run clip fallbacks in the legacy adapter", () => {
+    const played: string[] = [];
+    const available = new Set(["idle", "walk"]);
+    const machine = new HumanoidActionStateMachine({
+      currentActionId: null,
+      has: (id) => available.has(id),
+      play: (id) => {
+        if (!available.has(id)) return false;
+        played.push(id);
+        return true;
+      },
+    });
+
+    machine.update({ grounded: false, horizontalSpeed: 4, runRequested: true });
+    expect(played).toEqual(["walk"]);
   });
 });

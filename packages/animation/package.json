@@ -8,6 +8,7 @@
   },
   "dependencies": {
     "@whitebox-world/contracts": "workspace:*",
+    "@whitebox-world/subject-actions": "workspace:*",
     "three": "^0.180.0"
   }
 }

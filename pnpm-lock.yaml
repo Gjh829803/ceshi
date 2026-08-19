@@ -120,6 +120,9 @@ importers:
       '@whitebox-world/contracts':
         specifier: workspace:*
         version: link:../contracts
+      '@whitebox-world/subject-actions':
+        specifier: workspace:*
+        version: link:../subject-actions
       three:
         specifier: ^0.180.0
         version: 0.180.0
@@ -218,6 +221,8 @@ importers:
         version: link:../compiler
 
   packages/runtime-contracts: {}
+
+  packages/subject-actions: {}
 
   packages/subject-composition: {}
 
