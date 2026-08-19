@@ -30,7 +30,7 @@
 | 1. Shared Canonical Protocol | Complete | `d3bf828` | 3 focused test files / 19 tests + typecheck |
 | 2. Subject Composition | Complete | `567f159` | 7 focused tests + dependency audit + typecheck |
 | 3. Subject Resource Registry | Complete | `182cca2` | 6 focused tests + typecheck |
-| 4. Clean AuthoringSpecV2 | Not started | — | — |
+| 4. Clean AuthoringSpecV2 | Complete | `d5e976c` | 10 focused / 20 Authoring tests + schema exports + typecheck |
 | 5. Definition Normalize/Hash/Lock | Not started | — | — |
 | 6. Runtime Contracts V3 | Not started | — | — |
 | 7. Compiler V3 | Not started | — | — |
@@ -383,7 +383,7 @@ export function createValidPackageSubjectWorldV2(options?: {
 ```
 - Worktree staging rule: existing S0 consumers may stay unchanged through Task 8 only to keep intermediate commits buildable. No V1 parser, migration API, compatibility test, or old-field fallback is added; Task 9 deletes all obsolete S0 surfaces before integration.
 
-- [ ] **Step 1: Write failing clean-break V2 tests**
+- [x] **Step 1: Write failing clean-break V2 tests**
 
 ```ts
 it("rejects unknown Subject fields in AuthoringSpecV2", () => {
@@ -414,21 +414,21 @@ it("rejects the unpublished schemaVersion 1 instead of migrating it", () => {
 
 Also test duplicate JSON keys before Schema validation, unsupported non-integer versions, unknown V2 fields, invalid resource refs, and attempts to author computed fields.
 
-- [ ] **Step 2: Run Authoring tests and verify failure**
+- [x] **Step 2: Run Authoring tests and verify failure**
 
 Run: `pnpm vitest run packages/authoring/src/authoring.test.ts`
 
 Expected: FAIL because the V2 schema and types do not exist.
 
-- [ ] **Step 3: Add V2 TypeScript discriminated types**
+- [x] **Step 3: Add V2 TypeScript discriminated types**
 
 Define the exact interfaces from the S1a spec. `AuthoringSpecV2.resources` requires both `prototypes` and `subjectDefinitions`; `SubjectNodeSpecV2` requires `subjectDefinitionRef`. Keep old types only as untouched worktree staging needed by S0 consumers; do not export them from any V2 API or add compatibility behavior. Task 9 deletes them before integration.
 
-- [ ] **Step 4: Add strict V2 and standalone Definition JSON Schemas**
+- [x] **Step 4: Add strict V2 and standalone Definition JSON Schemas**
 
 Use `additionalProperties: false` at every object boundary, closed enum values, finite/positive numeric constraints, unique list values where JSON equality is sufficient, and conditional Shape requirements. V2 Subject nodes must not mention `kitRef`. Definition schema must not define computed Hash, Lock, derived Collider, or resource-cost fields.
 
-- [ ] **Step 5: Implement the V2-only parser**
+- [x] **Step 5: Implement the V2-only parser**
 
 After syntax/duplicate-key checks, require exact `kind` and integer `schemaVersion: 2`, then validate the V2 Canonical Schema. Any other version returns:
 
@@ -442,7 +442,7 @@ After syntax/duplicate-key checks, require exact `kind` and integer `schemaVersi
 }
 ```
 
-- [ ] **Step 6: Run focused tests and schema export checks**
+- [x] **Step 6: Run focused tests and schema export checks**
 
 Run: `pnpm vitest run packages/authoring/src/authoring.test.ts`
 
@@ -450,7 +450,7 @@ Run: `pnpm typecheck`
 
 Expected: focused tests and repository typecheck PASS because the V2 parser is additive at this checkpoint.
 
-- [ ] **Step 7: Commit**
+- [x] **Step 7: Commit**
 
 ```bash
 git add packages/authoring
