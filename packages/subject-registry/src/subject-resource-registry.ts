@@ -6,10 +6,12 @@ import type {
   AnimationSetManifestInputV1,
   AnimationSetManifestV1,
   CapabilityManifestV1,
+  ColliderProfileManifestInputV1,
   ColliderProfileManifestV1,
   ColliderDerivationProfileManifestV1,
   LocomotionProfileManifestV1,
   PhysicsBodyProfileManifestV1,
+  RigProfileManifestInputV1,
   RegistrySubjectDefinitionV2,
   RigProfileManifestV1,
   SubjectAssetManifestV1,
@@ -60,10 +62,97 @@ function validateAnimationSet(source: AnimationSetManifestInputV1): void {
   }
 }
 
+function validateRigProfile(source: RigProfileManifestInputV1): void {
+  const duplicateBoneId = duplicateValue(source.requiredBoneIds);
+  if (duplicateBoneId !== undefined) {
+    throw new Error(
+      `SUBJECT_REGISTRY_DUPLICATE_BONE_ID: '${duplicateBoneId}' in '${source.resourceRef}'.`,
+    );
+  }
+
+  const duplicateCompatibleRef = duplicateValue(source.compatibleSubjectAssetRefs);
+  if (duplicateCompatibleRef !== undefined) {
+    throw new Error(
+      `SUBJECT_REGISTRY_DUPLICATE_COMPATIBLE_REF: '${duplicateCompatibleRef}' in '${source.resourceRef}'.`,
+    );
+  }
+}
+
+function validateColliderProfile(source: ColliderProfileManifestInputV1): void {
+  const duplicateBodyTopology = duplicateValue(source.supportedBodyTopologies);
+  if (duplicateBodyTopology !== undefined) {
+    throw new Error(
+      `SUBJECT_REGISTRY_DUPLICATE_BODY_TOPOLOGY: '${duplicateBodyTopology}' in '${source.resourceRef}'.`,
+    );
+  }
+}
+
+function sortedStrings<T extends string>(values: readonly T[]): readonly T[] {
+  return [...values].sort((left, right) => left.localeCompare(right));
+}
+
+function canonicalizeNewResourceCollections(
+  source: SubjectRegistryResourceInputV1,
+): SubjectRegistryResourceInputV1 {
+  const input = structuredClone(source);
+  switch (input.kind) {
+    case "subject-asset":
+      return {
+        ...input,
+        inventory: {
+          ...input.inventory,
+          animationClipNames: sortedStrings(input.inventory.animationClipNames),
+        },
+        aiMetadata: {
+          ...input.aiMetadata,
+          semanticTags: sortedStrings(input.aiMetadata.semanticTags),
+        },
+      };
+    case "rig-profile":
+      return {
+        ...input,
+        compatibleSubjectAssetRefs: sortedStrings(input.compatibleSubjectAssetRefs),
+        requiredBoneIds: sortedStrings(input.requiredBoneIds),
+        sourceNodeNameByBoneId: Object.fromEntries(
+          Object.entries(input.sourceNodeNameByBoneId).sort(([left], [right]) =>
+            left.localeCompare(right)),
+        ) as RigProfileManifestInputV1["sourceNodeNameByBoneId"],
+        aiMetadata: {
+          ...input.aiMetadata,
+          semanticTags: sortedStrings(input.aiMetadata.semanticTags),
+        },
+      };
+    case "animation-set":
+      return {
+        ...input,
+        requiredActionIds: sortedStrings(input.requiredActionIds),
+        animationBindings: [...input.animationBindings].sort((left, right) =>
+          left.actionId.localeCompare(right.actionId)),
+        aiMetadata: {
+          ...input.aiMetadata,
+          semanticTags: sortedStrings(input.aiMetadata.semanticTags),
+        },
+      };
+    case "collider-profile":
+      return {
+        ...input,
+        supportedBodyTopologies: sortedStrings(input.supportedBodyTopologies),
+        aiMetadata: {
+          ...input.aiMetadata,
+          semanticTags: sortedStrings(input.aiMetadata.semanticTags),
+        },
+      };
+    default:
+      return input;
+  }
+}
+
 function lockResource(source: SubjectRegistryResourceInputV1): SubjectRegistryResourceV1 {
   const { contentHash: _ignoredContentHash, ...sourceWithoutContentHash } = source as
     SubjectRegistryResourceInputV1 & { contentHash?: string };
-  const hashInput = structuredClone(sourceWithoutContentHash) as SubjectRegistryResourceInputV1;
+  const hashInput = canonicalizeNewResourceCollections(
+    sourceWithoutContentHash as SubjectRegistryResourceInputV1,
+  );
   return deepFreeze({
     ...hashInput,
     contentHash: sha256CanonicalJson(hashInput),
@@ -79,6 +168,8 @@ export function createSubjectResourceRegistry(
       throw new Error(`SUBJECT_REGISTRY_DUPLICATE_REF: '${source.resourceRef}'.`);
     }
     if (source.kind === "animation-set") validateAnimationSet(source);
+    if (source.kind === "rig-profile") validateRigProfile(source);
+    if (source.kind === "collider-profile") validateColliderProfile(source);
     resourcesByRef.set(source.resourceRef, lockResource(source));
   }
 

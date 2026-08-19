@@ -6,7 +6,9 @@ import {
   builtInSubjectResourceRegistry,
   createSubjectResourceRegistry,
 } from "./index";
-import type { AnimationSetManifestInputV1 } from "./index";
+import type {
+  AnimationSetManifestInputV1,
+} from "./index";
 
 const SUBJECT_ASSET_REF = "worldkit://subject-asset/humanoid.golden@1";
 const RIG_PROFILE_REF = "worldkit://rig-profile/biped.golden@1";
@@ -17,24 +19,24 @@ const RIGGED_SUBJECT_DEFINITION_REF =
   "worldkit://subject-definition/humanoid.rigged-golden@1";
 
 const BIPED_BONE_IDS = [
-  "root",
-  "hips",
-  "spine",
   "chest",
-  "neck",
-  "head",
-  "upper-arm.left",
-  "lower-arm.left",
-  "hand.left",
-  "upper-arm.right",
-  "lower-arm.right",
-  "hand.right",
-  "upper-leg.left",
-  "lower-leg.left",
   "foot.left",
-  "upper-leg.right",
-  "lower-leg.right",
   "foot.right",
+  "hand.left",
+  "hand.right",
+  "head",
+  "hips",
+  "lower-arm.left",
+  "lower-arm.right",
+  "lower-leg.left",
+  "lower-leg.right",
+  "neck",
+  "root",
+  "spine",
+  "upper-arm.left",
+  "upper-arm.right",
+  "upper-leg.left",
+  "upper-leg.right",
 ] as const;
 
 function goldenAnimationSetInput(): AnimationSetManifestInputV1 {
@@ -87,6 +89,75 @@ function goldenAnimationSetInput(): AnimationSetManifestInputV1 {
       semanticTags: ["animation", "test"],
     },
   };
+}
+
+function registryWithPermutedNewResourceCollections(
+  isReversed: boolean,
+) {
+  const maybeReverse = <T>(values: readonly T[]): readonly T[] =>
+    isReversed ? [...values].reverse() : [...values];
+
+  return createSubjectResourceRegistry(
+    builtInSubjectResourceRegistry.listResources().map((resource) => {
+      const input = structuredClone(resource);
+      switch (input.kind) {
+        case "subject-asset":
+          return {
+            ...input,
+            inventory: {
+              ...input.inventory,
+              animationClipNames: maybeReverse(input.inventory.animationClipNames),
+            },
+            aiMetadata: {
+              ...input.aiMetadata,
+              semanticTags: maybeReverse(input.aiMetadata.semanticTags),
+            },
+          };
+        case "rig-profile": {
+          const compatibleSubjectAssetRefs = [
+            SUBJECT_ASSET_REF,
+            "worldkit://subject-asset/humanoid.other@1",
+          ];
+          const boneEntries = Object.entries(input.sourceNodeNameByBoneId);
+          return {
+            ...input,
+            compatibleSubjectAssetRefs: maybeReverse(compatibleSubjectAssetRefs),
+            requiredBoneIds: maybeReverse(input.requiredBoneIds),
+            sourceNodeNameByBoneId: Object.fromEntries(
+              maybeReverse(boneEntries),
+            ) as typeof input.sourceNodeNameByBoneId,
+            aiMetadata: {
+              ...input.aiMetadata,
+              semanticTags: maybeReverse(input.aiMetadata.semanticTags),
+            },
+          };
+        }
+        case "animation-set":
+          return {
+            ...input,
+            requiredActionIds: maybeReverse(input.requiredActionIds),
+            animationBindings: maybeReverse(input.animationBindings),
+            aiMetadata: {
+              ...input.aiMetadata,
+              semanticTags: maybeReverse(input.aiMetadata.semanticTags),
+            },
+          };
+        case "collider-profile": {
+          const supportedBodyTopologies = ["biped", "custom"] as const;
+          return {
+            ...input,
+            supportedBodyTopologies: maybeReverse(supportedBodyTopologies),
+            aiMetadata: {
+              ...input.aiMetadata,
+              semanticTags: maybeReverse(input.aiMetadata.semanticTags),
+            },
+          };
+        }
+        default:
+          return input;
+      }
+    }),
+  );
 }
 
 describe("subject resource registry", () => {
@@ -179,6 +250,27 @@ describe("subject resource registry", () => {
       .listResources()
       .map((resource) => resource.resourceRef);
     expect(refs).toEqual([...refs].sort((left, right) => left.localeCompare(right)));
+  });
+
+  it("canonicalizes every order-insensitive new-resource collection before hashing", () => {
+    const forward = registryWithPermutedNewResourceCollections(false);
+    const reversed = registryWithPermutedNewResourceCollections(true);
+    const newResourceKinds = new Set([
+      "subject-asset",
+      "rig-profile",
+      "animation-set",
+      "collider-profile",
+    ]);
+    const forwardRows = forward.listResources().filter((resource) =>
+      newResourceKinds.has(resource.kind));
+    const reversedRows = reversed.listResources().filter((resource) =>
+      newResourceKinds.has(resource.kind));
+
+    expect(reversedRows).toEqual(forwardRows);
+    for (const row of forwardRows) {
+      const { contentHash, ...hashInput } = row;
+      expect(contentHash).toBe(sha256CanonicalJson(hashInput));
+    }
   });
 
   it("resolves exact capability and profile manifests", () => {
@@ -290,7 +382,7 @@ describe("subject resource registry", () => {
       subjectAssetRef: SUBJECT_ASSET_REF,
       rigProfileRef: RIG_PROFILE_REF,
       defaultActionId: "idle",
-      requiredActionIds: ["idle", "walk", "run", "jump"],
+      requiredActionIds: ["idle", "jump", "run", "walk"],
       animationBindings: [
         {
           actionId: "idle",
@@ -301,11 +393,11 @@ describe("subject resource registry", () => {
           rootMotionMode: "in-place",
         },
         {
-          actionId: "walk",
-          sourceClipName: "walk",
-          loopMode: "repeat",
+          actionId: "jump",
+          sourceClipName: "jump",
+          loopMode: "once",
           playbackSpeedRatio: 1,
-          blendDurationSeconds: 0.2,
+          blendDurationSeconds: 0.1,
           rootMotionMode: "in-place",
         },
         {
@@ -317,11 +409,11 @@ describe("subject resource registry", () => {
           rootMotionMode: "in-place",
         },
         {
-          actionId: "jump",
-          sourceClipName: "jump",
-          loopMode: "once",
+          actionId: "walk",
+          sourceClipName: "walk",
+          loopMode: "repeat",
           playbackSpeedRatio: 1,
-          blendDurationSeconds: 0.1,
+          blendDurationSeconds: 0.2,
           rootMotionMode: "in-place",
         },
       ],
@@ -446,5 +538,46 @@ describe("subject resource registry", () => {
         },
       ]),
     ).toThrowError(/SUBJECT_REGISTRY_DUPLICATE_CLIP_MAPPING/);
+  });
+
+  it("rejects duplicate Rig Bone IDs before canonical ordering", () => {
+    const rig = builtInSubjectResourceRegistry.resolveRigProfile(RIG_PROFILE_REF)!;
+
+    expect(() => createSubjectResourceRegistry([
+      {
+        ...rig,
+        requiredBoneIds: [...rig.requiredBoneIds, rig.requiredBoneIds[0]!],
+      },
+    ])).toThrowError(/SUBJECT_REGISTRY_DUPLICATE_BONE_ID/);
+  });
+
+  it("rejects duplicate Rig compatible refs before canonical ordering", () => {
+    const rig = builtInSubjectResourceRegistry.resolveRigProfile(RIG_PROFILE_REF)!;
+
+    expect(() => createSubjectResourceRegistry([
+      {
+        ...rig,
+        compatibleSubjectAssetRefs: [
+          ...rig.compatibleSubjectAssetRefs,
+          rig.compatibleSubjectAssetRefs[0]!,
+        ],
+      },
+    ])).toThrowError(/SUBJECT_REGISTRY_DUPLICATE_COMPATIBLE_REF/);
+  });
+
+  it("rejects duplicate Collider body topologies before canonical ordering", () => {
+    const collider = builtInSubjectResourceRegistry.resolveColliderProfile(
+      COLLIDER_PROFILE_REF,
+    )!;
+
+    expect(() => createSubjectResourceRegistry([
+      {
+        ...collider,
+        supportedBodyTopologies: [
+          ...collider.supportedBodyTopologies,
+          collider.supportedBodyTopologies[0]!,
+        ],
+      },
+    ])).toThrowError(/SUBJECT_REGISTRY_DUPLICATE_BODY_TOPOLOGY/);
   });
 });

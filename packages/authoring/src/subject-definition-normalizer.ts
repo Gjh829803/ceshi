@@ -4,10 +4,7 @@ import {
   type ColliderSourcePartV1,
 } from "@whitebox-world/subject-composition";
 import type {
-  AnimationSetManifestV1,
   RegistrySubjectDefinitionV2,
-  RigProfileManifestV1,
-  SubjectAssetManifestV1,
   SubjectResourceRegistryV2,
 } from "@whitebox-world/subject-registry";
 
@@ -179,56 +176,6 @@ function resourcesOfKind(
     .filter((resource) => resource.kind === kind)
     .map((resource) => resource.resourceRef)
     .sort((left, right) => left.localeCompare(right));
-}
-
-function normalizeSubjectAssetResource(
-  resource: SubjectAssetManifestV1,
-): NormalizedSubjectAssetV1 {
-  return {
-    ...structuredClone(resource),
-    inventory: {
-      ...structuredClone(resource.inventory),
-      animationClipNames: sortedStrings(resource.inventory.animationClipNames),
-    },
-    aiMetadata: {
-      ...structuredClone(resource.aiMetadata),
-      semanticTags: sortedStrings(resource.aiMetadata.semanticTags),
-    },
-  };
-}
-
-function normalizeRigProfileResource(resource: RigProfileManifestV1): NormalizedRigProfileV1 {
-  return {
-    ...structuredClone(resource),
-    compatibleSubjectAssetRefs: sortedStrings(resource.compatibleSubjectAssetRefs),
-    requiredBoneIds: [...resource.requiredBoneIds].sort((left, right) =>
-      left.localeCompare(right)),
-    sourceNodeNameByBoneId: Object.fromEntries(
-      Object.entries(resource.sourceNodeNameByBoneId).sort(([left], [right]) =>
-        left.localeCompare(right)),
-    ) as RigProfileManifestV1["sourceNodeNameByBoneId"],
-    aiMetadata: {
-      ...structuredClone(resource.aiMetadata),
-      semanticTags: sortedStrings(resource.aiMetadata.semanticTags),
-    },
-  };
-}
-
-function normalizeAnimationSetResource(
-  resource: AnimationSetManifestV1,
-): NormalizedAnimationSetV1 {
-  return {
-    ...structuredClone(resource),
-    requiredActionIds: [...resource.requiredActionIds].sort((left, right) =>
-      left.localeCompare(right)),
-    animationBindings: [...resource.animationBindings]
-      .sort((left, right) => left.actionId.localeCompare(right.actionId))
-      .map((binding) => structuredClone(binding)),
-    aiMetadata: {
-      ...structuredClone(resource.aiMetadata),
-      semanticTags: sortedStrings(resource.aiMetadata.semanticTags),
-    },
-  };
 }
 
 function resolveRiggedVisualResources(
@@ -404,9 +351,9 @@ function resolveRiggedVisualResources(
   });
 
   return {
-    subjectAssetResource: normalizeSubjectAssetResource(subjectAsset),
-    rigProfileResource: normalizeRigProfileResource(rigProfile),
-    animationSetResource: normalizeAnimationSetResource(animationSet),
+    subjectAssetResource: structuredClone(subjectAsset),
+    rigProfileResource: structuredClone(rigProfile),
+    animationSetResource: structuredClone(animationSet),
   };
 }
 

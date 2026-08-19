@@ -72,80 +72,22 @@ export class ResourceLockBuilderV1 {
     switch (resource.kind) {
       case "subject-asset":
         if (!this.#subjectAssetsByRef.has(resource.resourceRef)) {
-          this.#subjectAssetsByRef.set(resource.resourceRef, {
-            ...structuredClone(resource),
-            inventory: {
-              ...structuredClone(resource.inventory),
-              animationClipNames: [...resource.inventory.animationClipNames].sort(
-                (left, right) => left.localeCompare(right),
-              ),
-            },
-            aiMetadata: {
-              ...structuredClone(resource.aiMetadata),
-              semanticTags: [...resource.aiMetadata.semanticTags].sort((left, right) =>
-                left.localeCompare(right),
-              ),
-            },
-          });
+          this.#subjectAssetsByRef.set(resource.resourceRef, structuredClone(resource));
         }
         break;
       case "rig-profile":
         if (!this.#rigProfilesByRef.has(resource.resourceRef)) {
-          this.#rigProfilesByRef.set(resource.resourceRef, {
-            ...structuredClone(resource),
-            compatibleSubjectAssetRefs: [...resource.compatibleSubjectAssetRefs].sort(
-              (left, right) => left.localeCompare(right),
-            ),
-            requiredBoneIds: [...resource.requiredBoneIds].sort((left, right) =>
-              left.localeCompare(right),
-            ),
-            sourceNodeNameByBoneId: Object.fromEntries(
-              Object.entries(resource.sourceNodeNameByBoneId).sort(([left], [right]) =>
-                left.localeCompare(right),
-              ),
-            ) as RigProfileManifestV1["sourceNodeNameByBoneId"],
-            aiMetadata: {
-              ...structuredClone(resource.aiMetadata),
-              semanticTags: [...resource.aiMetadata.semanticTags].sort((left, right) =>
-                left.localeCompare(right),
-              ),
-            },
-          });
+          this.#rigProfilesByRef.set(resource.resourceRef, structuredClone(resource));
         }
         break;
       case "animation-set":
         if (!this.#animationSetsByRef.has(resource.resourceRef)) {
-          this.#animationSetsByRef.set(resource.resourceRef, {
-            ...structuredClone(resource),
-            requiredActionIds: [...resource.requiredActionIds].sort((left, right) =>
-              left.localeCompare(right),
-            ),
-            animationBindings: [...resource.animationBindings]
-              .sort((left, right) => left.actionId.localeCompare(right.actionId))
-              .map((binding) => structuredClone(binding)),
-            aiMetadata: {
-              ...structuredClone(resource.aiMetadata),
-              semanticTags: [...resource.aiMetadata.semanticTags].sort((left, right) =>
-                left.localeCompare(right),
-              ),
-            },
-          });
+          this.#animationSetsByRef.set(resource.resourceRef, structuredClone(resource));
         }
         break;
       case "collider-profile":
         if (!this.#colliderProfilesByRef.has(resource.resourceRef)) {
-          this.#colliderProfilesByRef.set(resource.resourceRef, {
-            ...structuredClone(resource),
-            supportedBodyTopologies: [...resource.supportedBodyTopologies].sort(
-              (left, right) => left.localeCompare(right),
-            ),
-            aiMetadata: {
-              ...structuredClone(resource.aiMetadata),
-              semanticTags: [...resource.aiMetadata.semanticTags].sort((left, right) =>
-                left.localeCompare(right),
-              ),
-            },
-          });
+          this.#colliderProfilesByRef.set(resource.resourceRef, structuredClone(resource));
         }
         break;
     }

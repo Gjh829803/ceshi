@@ -11,6 +11,7 @@ import {
   normalizeAuthoringSpec,
   normalizeSubjectDefinitionV2,
   ResourceLockBuilderV1,
+  sha256CanonicalJson,
   type NormalizeAuthoringResult,
 } from "./index";
 import {
@@ -37,6 +38,75 @@ function registryFrom(
         const transformed = transform(structuredClone(resource));
         return transformed === undefined ? [] : [transformed];
       }),
+  );
+}
+
+function registryWithPermutedNewResourceCollections(
+  isReversed: boolean,
+): SubjectResourceRegistryV2 {
+  const maybeReverse = <T>(values: readonly T[]): readonly T[] =>
+    isReversed ? [...values].reverse() : [...values];
+
+  return createSubjectResourceRegistry(
+    builtInSubjectResourceRegistry.listResources().map((resource) => {
+      const input = structuredClone(resource);
+      switch (input.kind) {
+        case "subject-asset":
+          return {
+            ...input,
+            inventory: {
+              ...input.inventory,
+              animationClipNames: maybeReverse(input.inventory.animationClipNames),
+            },
+            aiMetadata: {
+              ...input.aiMetadata,
+              semanticTags: maybeReverse(input.aiMetadata.semanticTags),
+            },
+          };
+        case "rig-profile": {
+          const compatibleSubjectAssetRefs = [
+            SUBJECT_ASSET_REF,
+            "worldkit://subject-asset/humanoid.other@1",
+          ];
+          const boneEntries = Object.entries(input.sourceNodeNameByBoneId);
+          return {
+            ...input,
+            compatibleSubjectAssetRefs: maybeReverse(compatibleSubjectAssetRefs),
+            requiredBoneIds: maybeReverse(input.requiredBoneIds),
+            sourceNodeNameByBoneId: Object.fromEntries(
+              maybeReverse(boneEntries),
+            ) as typeof input.sourceNodeNameByBoneId,
+            aiMetadata: {
+              ...input.aiMetadata,
+              semanticTags: maybeReverse(input.aiMetadata.semanticTags),
+            },
+          };
+        }
+        case "animation-set":
+          return {
+            ...input,
+            requiredActionIds: maybeReverse(input.requiredActionIds),
+            animationBindings: maybeReverse(input.animationBindings),
+            aiMetadata: {
+              ...input.aiMetadata,
+              semanticTags: maybeReverse(input.aiMetadata.semanticTags),
+            },
+          };
+        case "collider-profile": {
+          const supportedBodyTopologies = ["biped", "custom"] as const;
+          return {
+            ...input,
+            supportedBodyTopologies: maybeReverse(supportedBodyTopologies),
+            aiMetadata: {
+              ...input.aiMetadata,
+              semanticTags: maybeReverse(input.aiMetadata.semanticTags),
+            },
+          };
+        }
+        default:
+          return input;
+      }
+    }),
   );
 }
 
@@ -160,20 +230,47 @@ describe("Package Subject Definition normalization", () => {
   });
 
   it("keeps rigged hashes stable when Registry manifest collections are reordered", () => {
-    const forward = normalizeAuthoringSpec(createValidRiggedPackageSubjectWorldV2());
-    const reversedRegistry = createSubjectResourceRegistry(
-      [...builtInSubjectResourceRegistry.listResources()].reverse(),
-    );
+    const forward = normalizeAuthoringSpec(createValidRiggedPackageSubjectWorldV2(), {
+      subjectResourceRegistry: registryWithPermutedNewResourceCollections(false),
+    });
     const reversed = normalizeAuthoringSpec(createValidRiggedPackageSubjectWorldV2(), {
-      subjectResourceRegistry: reversedRegistry,
+      subjectResourceRegistry: registryWithPermutedNewResourceCollections(true),
     });
 
     expect(forward.ok).toBe(true);
     expect(reversed.ok).toBe(true);
+    expect(reversed.value?.resources.subjectAssets).toEqual(
+      forward.value?.resources.subjectAssets,
+    );
+    expect(reversed.value?.resources.rigProfiles).toEqual(
+      forward.value?.resources.rigProfiles,
+    );
+    expect(reversed.value?.resources.animationSets).toEqual(
+      forward.value?.resources.animationSets,
+    );
+    expect(reversed.value?.resources.colliderProfiles).toEqual(
+      forward.value?.resources.colliderProfiles,
+    );
     expect(reversed.normalizedWorldIrHash).toBe(forward.normalizedWorldIrHash);
     expect(reversed.value?.resources.resourceLockHash).toBe(
       forward.value?.resources.resourceLockHash,
     );
+  });
+
+  it("emits self-consistent content hashes for every normalized transitive row", () => {
+    const result = normalizeAuthoringSpec(createValidRiggedPackageSubjectWorldV2());
+    expect(result.ok).toBe(true);
+    const rows = [
+      ...result.value!.resources.subjectAssets,
+      ...result.value!.resources.rigProfiles,
+      ...result.value!.resources.animationSets,
+      ...result.value!.resources.colliderProfiles,
+    ];
+
+    for (const row of rows) {
+      const { contentHash, ...hashInput } = row;
+      expect(contentHash).toBe(sha256CanonicalJson(hashInput));
+    }
   });
 
   it.each([
