@@ -1,7 +1,10 @@
 import { describe, expect, it } from "vitest";
 
-import { normalizeAuthoringSpec } from "@whitebox-world/authoring";
-import { createValidPackageSubjectWorldV2 } from "../../authoring/src/test-fixture";
+import { normalizeAuthoringSpec, sha256CanonicalJson } from "@whitebox-world/authoring";
+import {
+  createValidPackageSubjectWorldV2,
+  createValidRiggedPackageSubjectWorldV2,
+} from "../../authoring/src/test-fixture";
 
 import { compileWorld, sampleTerrainHeight } from "./index";
 
@@ -21,6 +24,64 @@ function compilePackageWorld() {
 }
 
 describe("compileWorld", () => {
+  it("explicitly rejects normalized Asset Parts until execution support lands", () => {
+    const normalized = normalizeAuthoringSpec(createValidRiggedPackageSubjectWorldV2());
+    expect(normalized.ok).toBe(true);
+
+    const result = compileWorld({
+      normalizedWorldIr: normalized.value!,
+      normalizedWorldIrHash: normalized.normalizedWorldIrHash!,
+    });
+
+    expect(result).toMatchObject({
+      ok: false,
+      diagnostics: [
+        {
+          code: "COMPILER_NORMALIZED_IR_INVALID",
+          instancePath: "/normalizedWorldIr",
+          message: expect.stringContaining("COMPILER_SUBJECT_ASSET_NOT_SUPPORTED"),
+        },
+      ],
+    });
+  });
+
+  it("explicitly rejects normalized Bone Sockets until execution support lands", () => {
+    const normalized = normalizeAuthoringSpec(createValidPackageSubjectWorldV2());
+    expect(normalized.ok).toBe(true);
+    const world = structuredClone(normalized.value!);
+    const definition = world.resources.subjectDefinitions.find(
+      (candidate) => candidate.source === "package",
+    )!;
+    definition.sockets = [
+      {
+        id: "hand.right",
+        kind: "bone",
+        boneId: "hand.right",
+        offsetTransform: {
+          positionMetersXYZ: [0, 0, 0],
+          rotationEulerRadiansXYZ: [0, 0, 0],
+        },
+        semanticTags: ["hand"],
+      },
+    ];
+
+    const result = compileWorld({
+      normalizedWorldIr: world,
+      normalizedWorldIrHash: sha256CanonicalJson(world),
+    });
+
+    expect(result).toMatchObject({
+      ok: false,
+      diagnostics: [
+        {
+          code: "COMPILER_NORMALIZED_IR_INVALID",
+          instancePath: "/normalizedWorldIr",
+          message: expect.stringContaining("COMPILER_SUBJECT_BONE_SOCKET_NOT_SUPPORTED"),
+        },
+      ],
+    });
+  });
+
   it("compiles two instances from one resolved Package Definition", () => {
     const result = compilePackageWorld();
 

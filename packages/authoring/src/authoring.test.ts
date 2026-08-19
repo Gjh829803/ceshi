@@ -8,6 +8,7 @@ import {
 import {
   createValidAuthoringSpec,
   createValidPackageSubjectWorldV2,
+  createValidRiggedPackageDefinition,
 } from "./test-fixture";
 
 const validSpec = createValidAuthoringSpec();
@@ -165,5 +166,54 @@ describe("AuthoringSpecV2", () => {
     });
 
     expect(result.ok).toBe(false);
+  });
+
+  it("accepts one rigged Asset Part with exact Profiles", () => {
+    const result = validatePackageSubjectDefinition(
+      createValidRiggedPackageDefinition(),
+    );
+
+    expect(result).toEqual({
+      ok: true,
+      value: createValidRiggedPackageDefinition(),
+      diagnostics: [],
+    });
+  });
+
+  it.each([
+    ["asset part with colliderContribution", "/visualParts/0/colliderContribution"],
+    ["rigged binding without animationSetRef", "/visualBinding/animationSetRef"],
+    ["static binding containing an asset part", "/visualBinding/mode"],
+    ["bone socket without boneId", "/sockets/0/boneId"],
+  ])("rejects %s at the exact property path", (_label, instancePath) => {
+    const definition = structuredClone(
+      createValidRiggedPackageDefinition(),
+    ) as unknown as Record<string, unknown>;
+    const visualParts = definition.visualParts as Array<Record<string, unknown>>;
+    const visualBinding = definition.visualBinding as Record<string, unknown>;
+    const sockets = definition.sockets as Array<Record<string, unknown>>;
+
+    switch (instancePath) {
+      case "/visualParts/0/colliderContribution":
+        visualParts[0]!.colliderContribution = "include";
+        break;
+      case "/visualBinding/animationSetRef":
+        delete visualBinding.animationSetRef;
+        break;
+      case "/visualBinding/mode":
+        definition.visualBinding = { mode: "static" };
+        break;
+      case "/sockets/0/boneId":
+        delete sockets[0]!.boneId;
+        break;
+    }
+
+    const result = validatePackageSubjectDefinition(definition);
+    expect(result.ok).toBe(false);
+    expect(result.diagnostics).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ severity: "error", instancePath }),
+      ]),
+    );
   });
 });

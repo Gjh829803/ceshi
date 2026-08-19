@@ -23,9 +23,11 @@ export interface SubjectExplanationV1 {
   profiles: NormalizedSubjectDefinitionV2["profiles"];
   visualParts: NormalizedSubjectDefinitionV2["visualParts"];
   sockets: NormalizedSubjectDefinitionV2["sockets"];
-  collider: ExecutionSubjectV3["collider"] & {
-    derivationProfileRef: string;
-  };
+  collider: ExecutionSubjectV3["collider"] &
+    (
+      | { colliderDerivationProfileRef: string }
+      | { colliderProfileRef: string }
+    );
   locomotion: ExecutionSubjectV3["locomotion"];
   resourceCost: NormalizedSubjectDefinitionV2["resourceCost"];
   resourceLockHash: string;
@@ -51,12 +53,15 @@ function lockEntriesForDefinition(
   definition: NormalizedSubjectDefinitionV2,
   resourceLock: readonly ResolvedResourceLockEntryV1[],
 ): readonly ResolvedResourceLockEntryV1[] {
+  const colliderPolicyRef = definition.colliderPolicy.kind === "derive"
+    ? definition.colliderPolicy.colliderDerivationProfileRef
+    : definition.colliderPolicy.colliderProfileRef;
   const relevantRefs = new Set([
     definition.subjectDefinitionRef,
     ...definition.capabilityRefs,
     definition.profiles.physicsBodyProfileRef,
     definition.profiles.locomotionProfileRef,
-    definition.colliderPolicy.colliderDerivationProfileRef,
+    colliderPolicyRef,
   ]);
   return resourceLock.filter((entry) => relevantRefs.has(entry.resourceRef));
 }
@@ -119,8 +124,12 @@ export async function explainSubjectFile(
       visualParts: definition.visualParts,
       sockets: definition.sockets,
       collider: {
-        derivationProfileRef:
-          definition.colliderPolicy.colliderDerivationProfileRef,
+        ...(definition.colliderPolicy.kind === "derive"
+          ? {
+              colliderDerivationProfileRef:
+                definition.colliderPolicy.colliderDerivationProfileRef,
+            }
+          : { colliderProfileRef: definition.colliderPolicy.colliderProfileRef }),
         ...executionSubject.collider,
       },
       locomotion: executionSubject.locomotion,

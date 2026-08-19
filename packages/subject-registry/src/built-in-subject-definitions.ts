@@ -42,9 +42,11 @@ const HUMANOID_THIRD_PERSON_DEFINITION: RegistrySubjectDefinitionInputV2 = {
       semanticTags: ["body"],
     },
   ],
+  visualBinding: { mode: "static" },
   sockets: [
     {
       id: "hand.right",
+      kind: "local",
       localTransform: {
         positionMetersXYZ: [0.42, 1.1, 0],
         rotationEulerRadiansXYZ: [0, 0, 0],
@@ -150,9 +152,11 @@ const QUADRUPED_GROUND_PROXY_DEFINITION: RegistrySubjectDefinitionInputV2 = {
       semanticTags: ["tail"],
     },
   ],
+  visualBinding: { mode: "static" },
   sockets: [
     {
       id: "seat.mount",
+      kind: "local",
       localTransform: {
         positionMetersXYZ: [0, 1.3, 0],
         rotationEulerRadiansXYZ: [0, 0, 0],
@@ -170,7 +174,62 @@ const QUADRUPED_GROUND_PROXY_DEFINITION: RegistrySubjectDefinitionInputV2 = {
   },
 };
 
+const RIGGED_GOLDEN_HUMANOID_DEFINITION: RegistrySubjectDefinitionInputV2 = {
+  kind: "subject-definition",
+  id: "humanoid.rigged-golden",
+  version: 1,
+  resourceRef: "worldkit://subject-definition/humanoid.rigged-golden@1",
+  category: "human",
+  bodyTopology: "biped",
+  semanticClassId: "subject.humanoid.rigged",
+  coordinateConvention: SHARED_COORDINATE_CONVENTION,
+  visualParts: [
+    {
+      id: "body.asset",
+      kind: "asset",
+      subjectAssetRef: "worldkit://subject-asset/humanoid.golden@1",
+      localTransform: {
+        positionMetersXYZ: [0, 0, 0],
+        rotationEulerRadiansXYZ: [0, 0, 0],
+        scaleXYZ: [1, 1, 1],
+      },
+      appearance: { mode: "whitebox-neutral" },
+      semanticTags: ["body", "golden", "rigged"],
+    },
+  ],
+  visualBinding: {
+    mode: "rigged",
+    rigProfileRef: "worldkit://rig-profile/biped.golden@1",
+    animationSetRef: "worldkit://animation-set/humanoid.ground.golden@1",
+  },
+  sockets: [
+    {
+      id: "hand.right",
+      kind: "bone",
+      boneId: "hand.right",
+      offsetTransform: {
+        positionMetersXYZ: [0, 0, 0],
+        rotationEulerRadiansXYZ: [0, 0, 0],
+      },
+      semanticTags: ["equipment-grip", "hand"],
+    },
+  ],
+  colliderPolicy: {
+    kind: "profile",
+    colliderProfileRef:
+      "worldkit://collider-profile/humanoid.medium-capsule@1",
+  },
+  capabilityRefs: SHARED_CAPABILITY_REFS,
+  profiles: SHARED_PROFILES,
+  aiMetadata: {
+    displayName: "Rigged Golden humanoid",
+    description: "Project-owned rigged humanoid for the complete asset Subject pipeline.",
+    semanticTags: ["biped", "golden", "human", "rigged"],
+  },
+};
+
 export const BUILT_IN_SUBJECT_DEFINITIONS = [
+  RIGGED_GOLDEN_HUMANOID_DEFINITION,
   HUMANOID_THIRD_PERSON_DEFINITION,
   QUADRUPED_GROUND_PROXY_DEFINITION,
 ] as const satisfies readonly RegistrySubjectDefinitionInputV2[];

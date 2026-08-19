@@ -79,10 +79,22 @@ function diagnosticFor(error: ErrorObject): AuthoringDiagnostic {
     schemaPath: error.schemaPath,
     params: error.params,
   };
+  const missingOrAdditionalProperty =
+    error.keyword === "required"
+      ? (error.params.missingProperty as string | undefined)
+      : error.keyword === "additionalProperties"
+        ? (error.params.additionalProperty as string | undefined)
+        : undefined;
+  const escapedProperty = missingOrAdditionalProperty
+    ?.replace(/~/g, "~0")
+    .replace(/\//g, "~1");
   return {
     severity: "error",
     code: "AUTHORING_SCHEMA_INVALID",
-    instancePath: error.instancePath,
+    instancePath:
+      escapedProperty === undefined
+        ? error.instancePath
+        : `${error.instancePath}/${escapedProperty}`,
     message: error.message ?? "AuthoringSpec does not match the canonical schema.",
     details,
   };

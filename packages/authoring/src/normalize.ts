@@ -490,10 +490,18 @@ export function normalizeAuthoringSpec(
         subjectResourceRegistry,
         resourceLockBuilder,
         diagnostics,
+        resourceBudget: spec.world.resourceBudget,
       });
       return normalized === undefined ? [] : [normalized];
     });
-  const { resourceLock, resourceLockHash } = resourceLockBuilder.finish();
+  const {
+    subjectAssets,
+    rigProfiles,
+    animationSets,
+    colliderProfiles,
+    resourceLock,
+    resourceLockHash,
+  } = resourceLockBuilder.finish();
 
   if (diagnostics.some((diagnostic) => diagnostic.severity === "error")) {
     return { ok: false, diagnostics };
@@ -513,6 +521,10 @@ export function normalizeAuthoringSpec(
         .sort((left, right) => left.id.localeCompare(right.id))
         .map((prototype) => structuredClone(prototype)),
       subjectDefinitions,
+      subjectAssets,
+      rigProfiles,
+      animationSets,
+      colliderProfiles,
       resourceLock,
       resourceLockHash,
     },

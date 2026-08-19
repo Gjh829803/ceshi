@@ -4,7 +4,10 @@ import {
   type ColliderSourcePartV1,
 } from "@whitebox-world/subject-composition";
 import type {
+  AnimationSetManifestV1,
   RegistrySubjectDefinitionV2,
+  RigProfileManifestV1,
+  SubjectAssetManifestV1,
   SubjectResourceRegistryV2,
 } from "@whitebox-world/subject-registry";
 
@@ -12,6 +15,11 @@ import { sha256CanonicalJson } from "./canonical-json";
 import { ResourceLockBuilderV1 } from "./resource-lock";
 import type {
   AuthoringDiagnostic,
+  AuthoringSpecV2,
+  NormalizedAnimationSetV1,
+  NormalizedRigProfileV1,
+  NormalizedSubjectAssetV1,
+  NormalizedSubjectColliderV2,
   NormalizedSubjectDefinitionV2,
   NormalizedSubjectSocketV2,
   NormalizedSubjectVisualPartV2,
@@ -30,7 +38,16 @@ export interface NormalizeSubjectDefinitionRequestV2 {
   subjectResourceRegistry: SubjectResourceRegistryV2;
   resourceLockBuilder: ResourceLockBuilderV1;
   diagnostics: AuthoringDiagnostic[];
+  resourceBudget?: AuthoringSpecV2["world"]["resourceBudget"];
 }
+
+interface NormalizedRiggedVisualResourcesV1 {
+  subjectAssetResource: NormalizedSubjectAssetV1;
+  rigProfileResource: NormalizedRigProfileV1;
+  animationSetResource: NormalizedAnimationSetV1;
+}
+
+const REQUIRED_GROUND_ACTION_IDS = ["idle", "jump", "run", "walk"] as const;
 
 function addError(
   diagnostics: AuthoringDiagnostic[],
@@ -65,13 +82,8 @@ function reportDuplicateIds(
   const seen = new Set<string>();
   values.forEach((value, index) => {
     if (seen.has(value.id)) {
-      addError(
-        diagnostics,
-        code,
-        `${instancePath}/${index}/id`,
-        `Duplicate Subject component ID '${value.id}'.`,
-        { id: value.id },
-      );
+      addError(diagnostics, code, `${instancePath}/${index}/id`,
+        `Duplicate Subject component ID '${value.id}'.`, { id: value.id });
     }
     seen.add(value.id);
   });
@@ -82,26 +94,47 @@ function normalizeVisualParts(
   instancePath: string,
   diagnostics: AuthoringDiagnostic[],
 ): readonly NormalizedSubjectVisualPartV2[] {
-  reportDuplicateIds(
-    definition.visualParts,
-    "SUBJECT_VISUAL_PART_DUPLICATE",
-    `${instancePath}/visualParts`,
-    diagnostics,
-  );
+  reportDuplicateIds(definition.visualParts, "SUBJECT_VISUAL_PART_DUPLICATE",
+    `${instancePath}/visualParts`, diagnostics);
   return definition.visualParts
-    .map((part) => ({
-      id: part.id,
-      kind: "primitive" as const,
-      shape: structuredClone(part.shape) as SubjectPrimitiveShapeSpecV1,
-      localTransform: {
-        positionMetersXYZ: cloneVec3(part.localTransform.positionMetersXYZ),
-        rotationEulerRadiansXYZ: cloneVec3(
-          part.localTransform.rotationEulerRadiansXYZ ?? [0, 0, 0],
-        ),
-      },
-      colliderContribution: part.colliderContribution,
-      semanticTags: sortedStrings(part.semanticTags),
-    }))
+    .map((part, index): NormalizedSubjectVisualPartV2 => {
+      if (part.kind === "primitive") {
+        return {
+          id: part.id,
+          kind: "primitive",
+          shape: structuredClone(part.shape) as SubjectPrimitiveShapeSpecV1,
+          localTransform: {
+            positionMetersXYZ: cloneVec3(part.localTransform.positionMetersXYZ),
+            rotationEulerRadiansXYZ: cloneVec3(
+              part.localTransform.rotationEulerRadiansXYZ ?? [0, 0, 0]),
+          },
+          colliderContribution: part.colliderContribution,
+          semanticTags: sortedStrings(part.semanticTags),
+        };
+      }
+      const scaleXYZ = cloneVec3(part.localTransform.scaleXYZ);
+      scaleXYZ.forEach((scale, componentIndex) => {
+        if (!Number.isFinite(scale) || scale <= 0) {
+          addError(diagnostics, "SUBJECT_ASSET_PROFILE_INCOMPATIBLE",
+            `${instancePath}/visualParts/${index}/localTransform/scaleXYZ/${componentIndex}`,
+            "Asset Part scale components must be positive finite numbers.",
+            { subjectAssetRef: part.subjectAssetRef, scaleXYZ });
+        }
+      });
+      return {
+        id: part.id,
+        kind: "asset",
+        subjectAssetRef: part.subjectAssetRef,
+        localTransform: {
+          positionMetersXYZ: cloneVec3(part.localTransform.positionMetersXYZ),
+          rotationEulerRadiansXYZ: cloneVec3(
+            part.localTransform.rotationEulerRadiansXYZ ?? [0, 0, 0]),
+          scaleXYZ,
+        },
+        appearance: { mode: "whitebox-neutral" },
+        semanticTags: sortedStrings(part.semanticTags),
+      };
+    })
     .sort((left, right) => left.id.localeCompare(right.id));
 }
 
@@ -110,62 +143,399 @@ function normalizeSockets(
   instancePath: string,
   diagnostics: AuthoringDiagnostic[],
 ): readonly NormalizedSubjectSocketV2[] {
-  reportDuplicateIds(
-    definition.sockets,
-    "SUBJECT_SOCKET_DUPLICATE",
-    `${instancePath}/sockets`,
-    diagnostics,
-  );
+  reportDuplicateIds(definition.sockets, "SUBJECT_SOCKET_DUPLICATE",
+    `${instancePath}/sockets`, diagnostics);
   return definition.sockets
-    .map((socket) => ({
-      id: socket.id,
-      localTransform: {
-        positionMetersXYZ: cloneVec3(socket.localTransform.positionMetersXYZ),
-        rotationEulerRadiansXYZ: cloneVec3(
-          socket.localTransform.rotationEulerRadiansXYZ ?? [0, 0, 0],
-        ),
-      },
-      semanticTags: sortedStrings(socket.semanticTags),
-    }))
+    .map((socket): NormalizedSubjectSocketV2 => socket.kind === "local"
+      ? {
+          id: socket.id,
+          kind: "local",
+          localTransform: {
+            positionMetersXYZ: cloneVec3(socket.localTransform.positionMetersXYZ),
+            rotationEulerRadiansXYZ: cloneVec3(
+              socket.localTransform.rotationEulerRadiansXYZ ?? [0, 0, 0]),
+          },
+          semanticTags: sortedStrings(socket.semanticTags),
+        }
+      : {
+          id: socket.id,
+          kind: "bone",
+          boneId: socket.boneId,
+          offsetTransform: {
+            positionMetersXYZ: cloneVec3(socket.offsetTransform.positionMetersXYZ),
+            rotationEulerRadiansXYZ: cloneVec3(
+              socket.offsetTransform.rotationEulerRadiansXYZ ?? [0, 0, 0]),
+          },
+          semanticTags: sortedStrings(socket.semanticTags),
+        })
     .sort((left, right) => left.id.localeCompare(right.id));
+}
+
+function resourcesOfKind(
+  registry: SubjectResourceRegistryV2,
+  kind: "subject-asset" | "rig-profile" | "animation-set" | "collider-profile",
+): readonly string[] {
+  return registry.listResources()
+    .filter((resource) => resource.kind === kind)
+    .map((resource) => resource.resourceRef)
+    .sort((left, right) => left.localeCompare(right));
+}
+
+function normalizeSubjectAssetResource(
+  resource: SubjectAssetManifestV1,
+): NormalizedSubjectAssetV1 {
+  return {
+    ...structuredClone(resource),
+    inventory: {
+      ...structuredClone(resource.inventory),
+      animationClipNames: sortedStrings(resource.inventory.animationClipNames),
+    },
+    aiMetadata: {
+      ...structuredClone(resource.aiMetadata),
+      semanticTags: sortedStrings(resource.aiMetadata.semanticTags),
+    },
+  };
+}
+
+function normalizeRigProfileResource(resource: RigProfileManifestV1): NormalizedRigProfileV1 {
+  return {
+    ...structuredClone(resource),
+    compatibleSubjectAssetRefs: sortedStrings(resource.compatibleSubjectAssetRefs),
+    requiredBoneIds: [...resource.requiredBoneIds].sort((left, right) =>
+      left.localeCompare(right)),
+    sourceNodeNameByBoneId: Object.fromEntries(
+      Object.entries(resource.sourceNodeNameByBoneId).sort(([left], [right]) =>
+        left.localeCompare(right)),
+    ) as RigProfileManifestV1["sourceNodeNameByBoneId"],
+    aiMetadata: {
+      ...structuredClone(resource.aiMetadata),
+      semanticTags: sortedStrings(resource.aiMetadata.semanticTags),
+    },
+  };
+}
+
+function normalizeAnimationSetResource(
+  resource: AnimationSetManifestV1,
+): NormalizedAnimationSetV1 {
+  return {
+    ...structuredClone(resource),
+    requiredActionIds: [...resource.requiredActionIds].sort((left, right) =>
+      left.localeCompare(right)),
+    animationBindings: [...resource.animationBindings]
+      .sort((left, right) => left.actionId.localeCompare(right.actionId))
+      .map((binding) => structuredClone(binding)),
+    aiMetadata: {
+      ...structuredClone(resource.aiMetadata),
+      semanticTags: sortedStrings(resource.aiMetadata.semanticTags),
+    },
+  };
+}
+
+function resolveRiggedVisualResources(
+  definition: SubjectDefinitionSourceV2,
+  request: NormalizeSubjectDefinitionRequestV2,
+): NormalizedRiggedVisualResourcesV1 | undefined {
+  const { diagnostics, instancePath, resourceLockBuilder, subjectResourceRegistry } = request;
+  if (definition.visualBinding.mode !== "rigged") return undefined;
+
+  const assetParts = definition.visualParts.filter((part) => part.kind === "asset");
+  if (assetParts.length !== 1) {
+    addError(diagnostics, "SUBJECT_ASSET_PROFILE_INCOMPATIBLE",
+      `${instancePath}/visualParts`,
+      "A rigged Subject Definition requires exactly one Asset Part.",
+      { requiredAssetPartCount: 1, assetPartCount: assetParts.length });
+  }
+  const assetPart = assetParts[0];
+  if (assetPart === undefined) return undefined;
+  const assetPartIndex = definition.visualParts.indexOf(assetPart);
+
+  const subjectAsset = subjectResourceRegistry.resolveSubjectAsset(assetPart.subjectAssetRef);
+  if (subjectAsset === undefined) {
+    addError(diagnostics, "SUBJECT_ASSET_NOT_FOUND",
+      `${instancePath}/visualParts/${assetPartIndex}/subjectAssetRef`,
+      `Subject Asset '${assetPart.subjectAssetRef}' is not registered at the exact requested version.`,
+      {
+        resourceRef: assetPart.subjectAssetRef,
+        subjectAssetRef: assetPart.subjectAssetRef,
+        availableSubjectAssetRefs: resourcesOfKind(subjectResourceRegistry, "subject-asset"),
+      });
+  } else {
+    resourceLockBuilder.addRegistryResource(subjectAsset,
+      `${instancePath}/visualParts/${assetPartIndex}/subjectAssetRef`, diagnostics);
+  }
+
+  const { rigProfileRef, animationSetRef } = definition.visualBinding;
+  const rigProfile = subjectResourceRegistry.resolveRigProfile(rigProfileRef);
+  if (rigProfile === undefined) {
+    const compatibleRigProfileRefs = subjectResourceRegistry.listResources()
+      .filter((resource) => resource.kind === "rig-profile" &&
+        resource.compatibleSubjectAssetRefs.includes(assetPart.subjectAssetRef))
+      .map((resource) => resource.resourceRef).sort((left, right) => left.localeCompare(right));
+    addError(diagnostics, "SUBJECT_RIG_PROFILE_NOT_FOUND",
+      `${instancePath}/visualBinding/rigProfileRef`,
+      `Rig Profile '${rigProfileRef}' is not registered at the exact requested version.`,
+      { resourceRef: rigProfileRef, rigProfileRef, compatibleRigProfileRefs });
+  } else {
+    resourceLockBuilder.addRegistryResource(rigProfile,
+      `${instancePath}/visualBinding/rigProfileRef`, diagnostics);
+  }
+
+  const animationSet = subjectResourceRegistry.resolveAnimationSet(animationSetRef);
+  if (animationSet === undefined) {
+    const compatibleAnimationSetRefs = subjectResourceRegistry.listResources()
+      .filter((resource) => resource.kind === "animation-set" &&
+        resource.subjectAssetRef === assetPart.subjectAssetRef &&
+        resource.rigProfileRef === rigProfileRef)
+      .map((resource) => resource.resourceRef).sort((left, right) => left.localeCompare(right));
+    addError(diagnostics, "SUBJECT_ANIMATION_SET_NOT_FOUND",
+      `${instancePath}/visualBinding/animationSetRef`,
+      `Animation Set '${animationSetRef}' is not registered at the exact requested version.`,
+      { resourceRef: animationSetRef, animationSetRef, compatibleAnimationSetRefs });
+  } else {
+    resourceLockBuilder.addRegistryResource(animationSet,
+      `${instancePath}/visualBinding/animationSetRef`, diagnostics);
+  }
+
+  if (subjectAsset === undefined || rigProfile === undefined || animationSet === undefined) {
+    return undefined;
+  }
+  if (!rigProfile.compatibleSubjectAssetRefs.includes(subjectAsset.resourceRef)) {
+    addError(diagnostics, "SUBJECT_ASSET_PROFILE_INCOMPATIBLE",
+      `${instancePath}/visualParts/${assetPartIndex}/subjectAssetRef`,
+      `Rig Profile '${rigProfile.resourceRef}' is not compatible with Subject Asset '${subjectAsset.resourceRef}'.`,
+      {
+        subjectAssetRef: subjectAsset.resourceRef,
+        rigProfileRef: rigProfile.resourceRef,
+        compatibleSubjectAssetRefs: sortedStrings(rigProfile.compatibleSubjectAssetRefs),
+      });
+  }
+  if (animationSet.subjectAssetRef !== subjectAsset.resourceRef) {
+    addError(diagnostics, "SUBJECT_ASSET_PROFILE_INCOMPATIBLE",
+      `${instancePath}/visualBinding/animationSetRef`,
+      `Animation Set '${animationSet.resourceRef}' targets a different Subject Asset.`,
+      {
+        animationSetRef: animationSet.resourceRef,
+        subjectAssetRef: subjectAsset.resourceRef,
+        compatibleSubjectAssetRefs: [animationSet.subjectAssetRef],
+      });
+  }
+  if (animationSet.rigProfileRef !== rigProfile.resourceRef) {
+    addError(diagnostics, "SUBJECT_ASSET_PROFILE_INCOMPATIBLE",
+      `${instancePath}/visualBinding/animationSetRef`,
+      `Animation Set '${animationSet.resourceRef}' targets a different Rig Profile.`,
+      {
+        animationSetRef: animationSet.resourceRef,
+        rigProfileRef: rigProfile.resourceRef,
+        compatibleRigProfileRefs: [animationSet.rigProfileRef],
+      });
+  }
+  if (rigProfile.bodyTopology !== definition.bodyTopology) {
+    addError(diagnostics, "SUBJECT_ASSET_PROFILE_INCOMPATIBLE",
+      `${instancePath}/visualBinding/rigProfileRef`,
+      `Rig Profile '${rigProfile.resourceRef}' does not support Definition topology '${definition.bodyTopology}'.`,
+      {
+        rigProfileRef: rigProfile.resourceRef,
+        bodyTopology: definition.bodyTopology,
+        rigBodyTopology: rigProfile.bodyTopology,
+      });
+  }
+
+  const boundActionIds = new Set(animationSet.animationBindings.map((binding) => binding.actionId));
+  const declaredActionIds = new Set(animationSet.requiredActionIds);
+  const missingActionIds = REQUIRED_GROUND_ACTION_IDS.filter((actionId) =>
+    !declaredActionIds.has(actionId) || !boundActionIds.has(actionId));
+  if (missingActionIds.length > 0) {
+    addError(diagnostics, "SUBJECT_ASSET_PROFILE_INCOMPATIBLE",
+      `${instancePath}/visualBinding/animationSetRef`,
+      `Animation Set '${animationSet.resourceRef}' does not provide every required ground Action.`,
+      { animationSetRef: animationSet.resourceRef, missingActionIds });
+  }
+
+  const availableClipNames = new Set(subjectAsset.inventory.animationClipNames);
+  const missingSourceClipNames = sortedStrings(animationSet.animationBindings
+    .filter((binding) => !availableClipNames.has(binding.sourceClipName))
+    .map((binding) => binding.sourceClipName));
+  if (missingSourceClipNames.length > 0) {
+    addError(diagnostics, "SUBJECT_ASSET_PROFILE_INCOMPATIBLE",
+      `${instancePath}/visualBinding/animationSetRef`,
+      `Animation Set '${animationSet.resourceRef}' maps Clips absent from Subject Asset '${subjectAsset.resourceRef}'.`,
+      {
+        animationSetRef: animationSet.resourceRef,
+        subjectAssetRef: subjectAsset.resourceRef,
+        missingSourceClipNames,
+        availableSourceClipNames: sortedStrings(subjectAsset.inventory.animationClipNames),
+      });
+  }
+
+  const missingBoneIds = rigProfile.requiredBoneIds.filter((boneId) =>
+    !Object.prototype.hasOwnProperty.call(rigProfile.sourceNodeNameByBoneId, boneId) ||
+    rigProfile.sourceNodeNameByBoneId[boneId].length === 0);
+  if (missingBoneIds.length > 0) {
+    addError(diagnostics, "SUBJECT_ASSET_PROFILE_INCOMPATIBLE",
+      `${instancePath}/visualBinding/rigProfileRef`,
+      `Rig Profile '${rigProfile.resourceRef}' omits required Bone mappings.`,
+      { rigProfileRef: rigProfile.resourceRef, missingBoneIds: sortedStrings(missingBoneIds) });
+  }
+  if (subjectAsset.inventory.skeletonCount !== 1 ||
+    subjectAsset.inventory.boneCount < rigProfile.requiredBoneIds.length) {
+    addError(diagnostics, "SUBJECT_ASSET_PROFILE_INCOMPATIBLE",
+      `${instancePath}/visualParts/${assetPartIndex}/subjectAssetRef`,
+      `Subject Asset '${subjectAsset.resourceRef}' inventory cannot satisfy Rig Profile '${rigProfile.resourceRef}'.`,
+      {
+        subjectAssetRef: subjectAsset.resourceRef,
+        rigProfileRef: rigProfile.resourceRef,
+        skeletonCount: subjectAsset.inventory.skeletonCount,
+        boneCount: subjectAsset.inventory.boneCount,
+        requiredBoneCount: rigProfile.requiredBoneIds.length,
+      });
+  }
+  const availableBoneIds = new Set(rigProfile.requiredBoneIds);
+  definition.sockets.forEach((socket, index) => {
+    if (socket.kind === "bone" && !availableBoneIds.has(socket.boneId)) {
+      addError(diagnostics, "SUBJECT_ASSET_PROFILE_INCOMPATIBLE",
+        `${instancePath}/sockets/${index}/boneId`,
+        `Bone Socket '${socket.id}' targets Bone '${socket.boneId}' not declared by Rig Profile '${rigProfile.resourceRef}'.`,
+        {
+          boneId: socket.boneId,
+          rigProfileRef: rigProfile.resourceRef,
+          availableBoneIds: sortedStrings(rigProfile.requiredBoneIds),
+        });
+    }
+  });
+
+  return {
+    subjectAssetResource: normalizeSubjectAssetResource(subjectAsset),
+    rigProfileResource: normalizeRigProfileResource(rigProfile),
+    animationSetResource: normalizeAnimationSetResource(animationSet),
+  };
+}
+
+function resolveColliderPolicy(
+  definition: SubjectDefinitionSourceV2,
+  request: NormalizeSubjectDefinitionRequestV2,
+): NormalizedSubjectColliderV2 | undefined {
+  const { diagnostics, instancePath, resourceLockBuilder, subjectResourceRegistry } = request;
+  if (definition.colliderPolicy.kind === "profile") {
+    const { colliderProfileRef } = definition.colliderPolicy;
+    const colliderProfile = subjectResourceRegistry.resolveColliderProfile(colliderProfileRef);
+    if (colliderProfile === undefined) {
+      const compatibleColliderProfileRefs = subjectResourceRegistry.listResources()
+        .filter((resource) => resource.kind === "collider-profile" &&
+          resource.supportedBodyTopologies.includes(definition.bodyTopology))
+        .map((resource) => resource.resourceRef).sort((left, right) => left.localeCompare(right));
+      addError(diagnostics, "SUBJECT_COLLIDER_PROFILE_NOT_FOUND",
+        `${instancePath}/colliderPolicy/colliderProfileRef`,
+        `Collider Profile '${colliderProfileRef}' is not registered at the exact requested version.`,
+        { resourceRef: colliderProfileRef, colliderProfileRef, compatibleColliderProfileRefs });
+      return undefined;
+    }
+    resourceLockBuilder.addRegistryResource(colliderProfile,
+      `${instancePath}/colliderPolicy/colliderProfileRef`, diagnostics);
+    const [centerX, centerY, centerZ] =
+      colliderProfile.collider.centerOffsetFromSubjectOriginMetersXYZ;
+    const isSupportCentered = Number.isFinite(colliderProfile.collider.radiusMeters) &&
+      colliderProfile.collider.radiusMeters > 0 &&
+      Number.isFinite(colliderProfile.collider.heightMeters) &&
+      colliderProfile.collider.heightMeters > 0 && centerX === 0 && centerZ === 0 &&
+      centerY === colliderProfile.collider.heightMeters / 2;
+    if (!colliderProfile.supportedBodyTopologies.includes(definition.bodyTopology) ||
+      !isSupportCentered) {
+      addError(diagnostics, "SUBJECT_ASSET_PROFILE_INCOMPATIBLE",
+        `${instancePath}/colliderPolicy/colliderProfileRef`,
+        `Collider Profile '${colliderProfileRef}' is not a support-centered capsule compatible with '${definition.bodyTopology}'.`,
+        {
+          colliderProfileRef,
+          bodyTopology: definition.bodyTopology,
+          supportedBodyTopologies: sortedStrings(colliderProfile.supportedBodyTopologies),
+          collider: structuredClone(colliderProfile.collider),
+        });
+    }
+    return structuredClone(colliderProfile.collider);
+  }
+
+  if (definition.visualParts.some((part) => part.kind === "asset")) {
+    addError(diagnostics, "SUBJECT_ASSET_PROFILE_INCOMPATIBLE",
+      `${instancePath}/colliderPolicy/kind`,
+      "A Subject Definition containing an Asset Part requires an explicit Collider Profile.",
+      { colliderPolicyKind: definition.colliderPolicy.kind });
+  }
+  const colliderDerivationProfile = subjectResourceRegistry.resolveColliderDerivationProfile(
+    definition.colliderPolicy.colliderDerivationProfileRef);
+  if (colliderDerivationProfile === undefined) {
+    addError(diagnostics, "SUBJECT_CAPABILITY_UNSATISFIED",
+      `${instancePath}/colliderPolicy/colliderDerivationProfileRef`,
+      `Collider Derivation Profile '${definition.colliderPolicy.colliderDerivationProfileRef}' is not registered at the exact requested version.`,
+      { resourceRef: definition.colliderPolicy.colliderDerivationProfileRef });
+    return undefined;
+  }
+  resourceLockBuilder.addRegistryResource(colliderDerivationProfile,
+    `${instancePath}/colliderPolicy/colliderDerivationProfileRef`, diagnostics);
+  if (!colliderDerivationProfile.supportedBodyTopologies.includes(definition.bodyTopology)) {
+    addError(diagnostics, "SUBJECT_CAPABILITY_UNSATISFIED",
+      `${instancePath}/colliderPolicy/colliderDerivationProfileRef`,
+      `Collider Derivation Profile '${colliderDerivationProfile.resourceRef}' does not support '${definition.bodyTopology}'.`,
+      { bodyTopology: definition.bodyTopology });
+  }
+  const colliderSourceParts: ColliderSourcePartV1[] = definition.visualParts.flatMap(
+    (part) => part.kind === "primitive" && part.colliderContribution === "include"
+      ? [{
+          id: part.id,
+          shape: part.shape,
+          localPositionMetersXYZ: part.localTransform.positionMetersXYZ,
+          localRotationEulerRadiansXYZ:
+            part.localTransform.rotationEulerRadiansXYZ ?? [0, 0, 0],
+        }]
+      : [],
+  );
+  const colliderResult = deriveVerticalCharacterCapsule(colliderSourceParts);
+  if (!colliderResult.ok) {
+    for (const issue of colliderResult.issues) {
+      const isSupportOriginIssue = issue.code === "SUBJECT_SUPPORT_ORIGIN_INVALID";
+      addError(diagnostics,
+        isSupportOriginIssue ? "SUBJECT_SUPPORT_ORIGIN_INVALID" : "SUBJECT_COLLIDER_DERIVATION_FAILED",
+        isSupportOriginIssue ? `${instancePath}/visualParts` : `${instancePath}/colliderPolicy`,
+        issue.message, { partIds: issue.partIds, ...(issue.details ?? {}) });
+    }
+    return undefined;
+  }
+  if (colliderResult.collider.radiusMeters >
+      colliderDerivationProfile.colliderDerivation.maximumRadiusMeters ||
+    colliderResult.collider.heightMeters >
+      colliderDerivationProfile.colliderDerivation.maximumHeightMeters) {
+    addError(diagnostics, "SUBJECT_COLLIDER_DERIVATION_FAILED",
+      `${instancePath}/colliderPolicy`,
+      "Derived Collider exceeds the selected derivation Profile limits.",
+      {
+        derivedCollider: colliderResult.collider,
+        maximumRadiusMeters: colliderDerivationProfile.colliderDerivation.maximumRadiusMeters,
+        maximumHeightMeters: colliderDerivationProfile.colliderDerivation.maximumHeightMeters,
+      });
+  }
+  return colliderResult.collider;
 }
 
 export function normalizeSubjectDefinitionV2(
   request: NormalizeSubjectDefinitionRequestV2,
 ): NormalizedSubjectDefinitionV2 | undefined {
-  const {
-    definition,
-    diagnostics,
-    instancePath,
-    resourceLockBuilder,
-    source,
-    subjectDefinitionRef,
-    subjectResourceRegistry,
-  } = request;
+  const { definition, diagnostics, instancePath, resourceBudget, resourceLockBuilder, source,
+    subjectDefinitionRef, subjectResourceRegistry } = request;
+  const initialErrorCount = diagnostics.filter((item) => item.severity === "error").length;
 
   if (source === "registry") {
-    resourceLockBuilder.addRegistryResource(
-      definition as RegistrySubjectDefinitionV2,
-      instancePath,
-      diagnostics,
-    );
+    resourceLockBuilder.addRegistryResource(definition as RegistrySubjectDefinitionV2,
+      instancePath, diagnostics);
   }
-
   const visualParts = normalizeVisualParts(definition, instancePath, diagnostics);
   const sockets = normalizeSockets(definition, instancePath, diagnostics);
   const capabilityRefs = sortedStrings(definition.capabilityRefs);
   const selectedCapabilityRefs = new Set(capabilityRefs);
-
   const capabilities = capabilityRefs.flatMap((resourceRef) => {
     const resource = subjectResourceRegistry.resolveCapability(resourceRef);
     if (resource === undefined) {
-      addError(
-        diagnostics,
-        "SUBJECT_CAPABILITY_UNSATISFIED",
+      addError(diagnostics, "SUBJECT_CAPABILITY_UNSATISFIED",
         `${instancePath}/capabilityRefs/${definition.capabilityRefs.indexOf(resourceRef)}`,
         `Capability '${resourceRef}' is not registered at the exact requested version.`,
-        { resourceRef },
-      );
+        { resourceRef });
       return [];
     }
     resourceLockBuilder.addRegistryResource(resource, `${instancePath}/capabilityRefs`, diagnostics);
@@ -173,197 +543,122 @@ export function normalizeSubjectDefinitionV2(
   });
 
   const physicsBodyProfile = subjectResourceRegistry.resolvePhysicsBodyProfile(
-    definition.profiles.physicsBodyProfileRef,
-  );
+    definition.profiles.physicsBodyProfileRef);
   if (physicsBodyProfile === undefined) {
-    addError(
-      diagnostics,
-      "SUBJECT_CAPABILITY_UNSATISFIED",
+    addError(diagnostics, "SUBJECT_CAPABILITY_UNSATISFIED",
       `${instancePath}/profiles/physicsBodyProfileRef`,
       `Physics Body Profile '${definition.profiles.physicsBodyProfileRef}' is not registered at the exact requested version.`,
-      { resourceRef: definition.profiles.physicsBodyProfileRef },
-    );
+      { resourceRef: definition.profiles.physicsBodyProfileRef });
   } else {
-    resourceLockBuilder.addRegistryResource(
-      physicsBodyProfile,
-      `${instancePath}/profiles/physicsBodyProfileRef`,
-      diagnostics,
-    );
+    resourceLockBuilder.addRegistryResource(physicsBodyProfile,
+      `${instancePath}/profiles/physicsBodyProfileRef`, diagnostics);
   }
-
   const locomotionProfile = subjectResourceRegistry.resolveLocomotionProfile(
-    definition.profiles.locomotionProfileRef,
-  );
+    definition.profiles.locomotionProfileRef);
   if (locomotionProfile === undefined) {
-    addError(
-      diagnostics,
-      "SUBJECT_CAPABILITY_UNSATISFIED",
+    addError(diagnostics, "SUBJECT_CAPABILITY_UNSATISFIED",
       `${instancePath}/profiles/locomotionProfileRef`,
       `Locomotion Profile '${definition.profiles.locomotionProfileRef}' is not registered at the exact requested version.`,
-      { resourceRef: definition.profiles.locomotionProfileRef },
-    );
+      { resourceRef: definition.profiles.locomotionProfileRef });
   } else {
-    resourceLockBuilder.addRegistryResource(
-      locomotionProfile,
-      `${instancePath}/profiles/locomotionProfileRef`,
-      diagnostics,
-    );
-  }
-
-  const colliderDerivationProfile =
-    subjectResourceRegistry.resolveColliderDerivationProfile(
-      definition.colliderPolicy.colliderDerivationProfileRef,
-    );
-  if (colliderDerivationProfile === undefined) {
-    addError(
-      diagnostics,
-      "SUBJECT_CAPABILITY_UNSATISFIED",
-      `${instancePath}/colliderPolicy/colliderDerivationProfileRef`,
-      `Collider Derivation Profile '${definition.colliderPolicy.colliderDerivationProfileRef}' is not registered at the exact requested version.`,
-      { resourceRef: definition.colliderPolicy.colliderDerivationProfileRef },
-    );
-  } else {
-    resourceLockBuilder.addRegistryResource(
-      colliderDerivationProfile,
-      `${instancePath}/colliderPolicy/colliderDerivationProfileRef`,
-      diagnostics,
-    );
+    resourceLockBuilder.addRegistryResource(locomotionProfile,
+      `${instancePath}/profiles/locomotionProfileRef`, diagnostics);
   }
 
   for (const capability of capabilities) {
     for (const requiredRef of capability.requiredCapabilityRefs) {
       if (!selectedCapabilityRefs.has(requiredRef)) {
-        addError(
-          diagnostics,
-          "SUBJECT_CAPABILITY_UNSATISFIED",
-          `${instancePath}/capabilityRefs`,
+        addError(diagnostics, "SUBJECT_CAPABILITY_UNSATISFIED", `${instancePath}/capabilityRefs`,
           `Capability '${capability.resourceRef}' requires '${requiredRef}'.`,
-          { capabilityRef: capability.resourceRef, requiredCapabilityRef: requiredRef },
-        );
+          { capabilityRef: capability.resourceRef, requiredCapabilityRef: requiredRef });
       }
     }
     for (const conflictingRef of capability.conflictingCapabilityRefs) {
       if (selectedCapabilityRefs.has(conflictingRef)) {
-        addError(
-          diagnostics,
-          "SUBJECT_CAPABILITY_UNSATISFIED",
-          `${instancePath}/capabilityRefs`,
+        addError(diagnostics, "SUBJECT_CAPABILITY_UNSATISFIED", `${instancePath}/capabilityRefs`,
           `Capability '${capability.resourceRef}' conflicts with '${conflictingRef}'.`,
-          { capabilityRef: capability.resourceRef, conflictingCapabilityRef: conflictingRef },
-        );
+          { capabilityRef: capability.resourceRef, conflictingCapabilityRef: conflictingRef });
       }
     }
   }
-
-  if (
-    capabilityRefs.length !== 1 ||
+  if (capabilityRefs.length !== 1 ||
     capabilityRefs[0] !== "worldkit://capability/locomotion.ground@1" ||
-    capabilities[0]?.providedFeatures.includes("ground-locomotion") !== true
-  ) {
-    addError(
-      diagnostics,
-      "SUBJECT_CAPABILITY_UNSATISFIED",
-      `${instancePath}/capabilityRefs`,
-      "S1a Subject Definitions require exactly the ground locomotion capability.",
-      { requiredCapabilityRefs: ["worldkit://capability/locomotion.ground@1"] },
-    );
+    capabilities[0]?.providedFeatures.includes("ground-locomotion") !== true) {
+    addError(diagnostics, "SUBJECT_CAPABILITY_UNSATISFIED", `${instancePath}/capabilityRefs`,
+      "S1b Subject Definitions require exactly the ground locomotion capability.",
+      { requiredCapabilityRefs: ["worldkit://capability/locomotion.ground@1"] });
   }
-
-  if (
-    locomotionProfile !== undefined &&
-    locomotionProfile.requiredCapabilityRefs.some(
-      (resourceRef) => !selectedCapabilityRefs.has(resourceRef),
-    )
-  ) {
-    addError(
-      diagnostics,
-      "SUBJECT_CAPABILITY_UNSATISFIED",
+  if (locomotionProfile !== undefined && locomotionProfile.requiredCapabilityRefs.some(
+    (resourceRef) => !selectedCapabilityRefs.has(resourceRef))) {
+    addError(diagnostics, "SUBJECT_CAPABILITY_UNSATISFIED",
       `${instancePath}/profiles/locomotionProfileRef`,
       `Locomotion Profile '${locomotionProfile.resourceRef}' requires a missing Capability.`,
-      { requiredCapabilityRefs: locomotionProfile.requiredCapabilityRefs },
-    );
+      { requiredCapabilityRefs: locomotionProfile.requiredCapabilityRefs });
   }
-
-  if (
-    physicsBodyProfile !== undefined &&
-    !physicsBodyProfile.supportedBodyTopologies.includes(definition.bodyTopology)
-  ) {
-    addError(
-      diagnostics,
-      "SUBJECT_CAPABILITY_UNSATISFIED",
+  if (physicsBodyProfile !== undefined &&
+    !physicsBodyProfile.supportedBodyTopologies.includes(definition.bodyTopology)) {
+    addError(diagnostics, "SUBJECT_CAPABILITY_UNSATISFIED",
       `${instancePath}/profiles/physicsBodyProfileRef`,
       `Physics Body Profile '${physicsBodyProfile.resourceRef}' does not support '${definition.bodyTopology}'.`,
-      { bodyTopology: definition.bodyTopology },
-    );
-  }
-  if (
-    colliderDerivationProfile !== undefined &&
-    !colliderDerivationProfile.supportedBodyTopologies.includes(definition.bodyTopology)
-  ) {
-    addError(
-      diagnostics,
-      "SUBJECT_CAPABILITY_UNSATISFIED",
-      `${instancePath}/colliderPolicy/colliderDerivationProfileRef`,
-      `Collider Derivation Profile '${colliderDerivationProfile.resourceRef}' does not support '${definition.bodyTopology}'.`,
-      { bodyTopology: definition.bodyTopology },
-    );
+      { bodyTopology: definition.bodyTopology });
   }
 
-  const colliderSourceParts: ColliderSourcePartV1[] = visualParts
-    .filter((part) => part.colliderContribution === "include")
-    .map((part) => ({
-      id: part.id,
-      shape: part.shape,
-      localPositionMetersXYZ: part.localTransform.positionMetersXYZ,
-      localRotationEulerRadiansXYZ: part.localTransform.rotationEulerRadiansXYZ,
-    }));
-  const colliderResult = deriveVerticalCharacterCapsule(colliderSourceParts);
-  if (!colliderResult.ok) {
-    for (const issue of colliderResult.issues) {
-      const isSupportOriginIssue = issue.code === "SUBJECT_SUPPORT_ORIGIN_INVALID";
-      addError(
-        diagnostics,
-        isSupportOriginIssue
-          ? "SUBJECT_SUPPORT_ORIGIN_INVALID"
-          : "SUBJECT_COLLIDER_DERIVATION_FAILED",
-        isSupportOriginIssue
-          ? `${instancePath}/visualParts`
-          : `${instancePath}/colliderPolicy`,
-        issue.message,
-        { partIds: issue.partIds, ...(issue.details ?? {}) },
-      );
+  let riggedResources: NormalizedRiggedVisualResourcesV1 | undefined;
+  if (definition.visualBinding.mode === "rigged") {
+    riggedResources = resolveRiggedVisualResources(definition, request);
+  } else {
+    const assetPartIds = definition.visualParts.filter((part) => part.kind === "asset")
+      .map((part) => part.id).sort((left, right) => left.localeCompare(right));
+    if (assetPartIds.length > 0) {
+      addError(diagnostics, "SUBJECT_ASSET_PROFILE_INCOMPATIBLE",
+        `${instancePath}/visualBinding/mode`,
+        "A static Subject Definition cannot contain Asset Parts.", { assetPartIds });
+    }
+    definition.sockets.forEach((socket, index) => {
+      if (socket.kind === "bone") {
+        addError(diagnostics, "SUBJECT_ASSET_PROFILE_INCOMPATIBLE",
+          `${instancePath}/sockets/${index}/kind`,
+          "A Bone Socket requires a rigged Visual Binding.", { socketId: socket.id });
+      }
+    });
+  }
+
+  const normalizedCollider = resolveColliderPolicy(definition, request);
+  const primitiveCost = calculatePrimitiveResourceCost(
+    visualParts.filter((part) => part.kind === "primitive"));
+  const subjectAsset = riggedResources?.subjectAssetResource;
+  const resourceCost = {
+    vertices: primitiveCost.vertices + (subjectAsset?.inventory.vertexCount ?? 0),
+    triangles: primitiveCost.triangles + (subjectAsset?.inventory.triangleCount ?? 0),
+    colliders: 1 as const,
+  };
+  if (resourceBudget !== undefined && subjectAsset !== undefined) {
+    if (resourceCost.vertices > resourceBudget.maxVertices) {
+      addError(diagnostics, "SUBJECT_ASSET_BUDGET_EXCEEDED",
+        "/world/resourceBudget/maxVertices",
+        `Subject Asset '${subjectAsset.resourceRef}' exceeds the world vertex budget.`,
+        {
+          subjectAssetRef: subjectAsset.resourceRef,
+          requiredVertices: resourceCost.vertices,
+          maxVertices: resourceBudget.maxVertices,
+        });
+    }
+    if (resourceCost.triangles > resourceBudget.maxTriangles) {
+      addError(diagnostics, "SUBJECT_ASSET_BUDGET_EXCEEDED",
+        "/world/resourceBudget/maxTriangles",
+        `Subject Asset '${subjectAsset.resourceRef}' exceeds the world triangle budget.`,
+        {
+          subjectAssetRef: subjectAsset.resourceRef,
+          requiredTriangles: resourceCost.triangles,
+          maxTriangles: resourceBudget.maxTriangles,
+        });
     }
   }
 
-  if (
-    colliderResult.ok &&
-    colliderDerivationProfile !== undefined &&
-    (colliderResult.collider.radiusMeters >
-      colliderDerivationProfile.colliderDerivation.maximumRadiusMeters ||
-      colliderResult.collider.heightMeters >
-        colliderDerivationProfile.colliderDerivation.maximumHeightMeters)
-  ) {
-    addError(
-      diagnostics,
-      "SUBJECT_COLLIDER_DERIVATION_FAILED",
-      `${instancePath}/colliderPolicy`,
-      "Derived Collider exceeds the selected derivation Profile limits.",
-      {
-        derivedCollider: colliderResult.collider,
-        maximumRadiusMeters:
-          colliderDerivationProfile.colliderDerivation.maximumRadiusMeters,
-        maximumHeightMeters:
-          colliderDerivationProfile.colliderDerivation.maximumHeightMeters,
-      },
-    );
-  }
-
-  if (
-    !colliderResult.ok ||
-    physicsBodyProfile === undefined ||
-    locomotionProfile === undefined ||
-    colliderDerivationProfile === undefined
-  ) {
+  const finalErrorCount = diagnostics.filter((item) => item.severity === "error").length;
+  if (finalErrorCount > initialErrorCount || physicsBodyProfile === undefined ||
+    locomotionProfile === undefined || normalizedCollider === undefined ||
+    (definition.visualBinding.mode === "rigged" && riggedResources === undefined)) {
     return undefined;
   }
 
@@ -377,6 +672,7 @@ export function normalizeSubjectDefinitionV2(
     semanticClassId: definition.semanticClassId,
     coordinateConvention: structuredClone(definition.coordinateConvention),
     visualParts,
+    visualBinding: structuredClone(definition.visualBinding),
     sockets,
     colliderPolicy: structuredClone(definition.colliderPolicy),
     capabilityRefs,
@@ -387,28 +683,21 @@ export function normalizeSubjectDefinitionV2(
     },
   };
   const subjectDefinitionHash = sha256CanonicalJson(normalizedDefinitionHashInput);
-
   if (source === "package") {
-    resourceLockBuilder.addPackageSubjectDefinition(
-      subjectDefinitionRef,
-      definition.version,
-      subjectDefinitionHash,
-      instancePath,
-      diagnostics,
-    );
+    resourceLockBuilder.addPackageSubjectDefinition(subjectDefinitionRef, definition.version,
+      subjectDefinitionHash, instancePath, diagnostics);
   }
-
   return {
     ...normalizedDefinitionHashInput,
     subjectDefinitionHash,
     source,
     collider: {
-      ...colliderResult.collider,
+      ...normalizedCollider,
       massKilograms: physicsBodyProfile.physicsBody.massKilograms,
       maxSlopeDegrees: physicsBodyProfile.physicsBody.maxSlopeDegrees,
       maxStepHeightMeters: physicsBodyProfile.physicsBody.maxStepHeightMeters,
     },
     locomotion: structuredClone(locomotionProfile.locomotion),
-    resourceCost: calculatePrimitiveResourceCost(visualParts),
+    resourceCost,
   };
 }

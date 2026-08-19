@@ -1,6 +1,8 @@
 import type {
   NormalizedWorldIRV2,
   NormalizedWorldNodeV2,
+  NormalizedSubjectSocketV2,
+  NormalizedSubjectVisualPartV2,
   PrimitivePrototypeSpecV2,
   Vec2,
 } from "@whitebox-world/authoring";
@@ -15,6 +17,8 @@ import type {
   ExecutionTerrainV3,
   ExecutionWaterBoundaryV3,
   ExecutionWaterV3,
+  SubjectSocketV3,
+  SubjectVisualPartV3,
 } from "@whitebox-world/runtime-contracts";
 
 import { sampleFractalNoise } from "./noise";
@@ -218,6 +222,36 @@ interface CompiledSubjectsV3 {
   resourceCost: { vertices: number; triangles: number; colliders: number };
 }
 
+function compileSubjectVisualPartV3(
+  part: NormalizedSubjectVisualPartV2,
+): SubjectVisualPartV3 {
+  if (part.kind === "asset") {
+    throw new Error(
+      `COMPILER_SUBJECT_ASSET_NOT_SUPPORTED: Asset Part '${part.id}' references '${part.subjectAssetRef}', but ExecutionPlan Asset support belongs to Task 4.`,
+    );
+  }
+  return {
+    id: part.id,
+    kind: "primitive",
+    shape: structuredClone(part.shape),
+    localTransform: structuredClone(part.localTransform),
+    semanticTags: [...part.semanticTags],
+  };
+}
+
+function compileSubjectSocketV3(socket: NormalizedSubjectSocketV2): SubjectSocketV3 {
+  if (socket.kind === "bone") {
+    throw new Error(
+      `COMPILER_SUBJECT_BONE_SOCKET_NOT_SUPPORTED: Bone Socket '${socket.id}' targets '${socket.boneId}', but ExecutionPlan Bone Socket support belongs to Task 4.`,
+    );
+  }
+  return {
+    id: socket.id,
+    localTransform: structuredClone(socket.localTransform),
+    semanticTags: [...socket.semanticTags],
+  };
+}
+
 function compileSubjectsV3(
   world: NormalizedWorldIRV2,
   terrain: ExecutionTerrainV3,
@@ -277,14 +311,8 @@ function compileSubjectsV3(
           spawnZ,
         ],
         forwardDirection: "-z",
-        visualParts: definition.visualParts.map((part) => ({
-          id: part.id,
-          kind: part.kind,
-          shape: structuredClone(part.shape),
-          localTransform: structuredClone(part.localTransform),
-          semanticTags: [...part.semanticTags],
-        })),
-        sockets: definition.sockets.map((socket) => structuredClone(socket)),
+        visualParts: definition.visualParts.map(compileSubjectVisualPartV3),
+        sockets: definition.sockets.map(compileSubjectSocketV3),
         collider: structuredClone(definition.collider),
         locomotion: structuredClone(definition.locomotion),
       };

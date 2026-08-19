@@ -13,6 +13,8 @@ const RIG_PROFILE_REF = "worldkit://rig-profile/biped.golden@1";
 const ANIMATION_SET_REF = "worldkit://animation-set/humanoid.ground.golden@1";
 const COLLIDER_PROFILE_REF =
   "worldkit://collider-profile/humanoid.medium-capsule@1";
+const RIGGED_SUBJECT_DEFINITION_REF =
+  "worldkit://subject-definition/humanoid.rigged-golden@1";
 
 const BIPED_BONE_IDS = [
   "root",
@@ -94,9 +96,56 @@ describe("subject resource registry", () => {
         .listSubjectDefinitions()
         .map((definition) => definition.resourceRef),
     ).toEqual([
+      RIGGED_SUBJECT_DEFINITION_REF,
       "worldkit://subject-definition/humanoid.third-person@1",
       "worldkit://subject-definition/quadruped.ground-proxy@1",
     ]);
+  });
+
+  it("shares the exact closed Subject unions across built-in definitions", () => {
+    const [rigged, staticHumanoid, staticQuadruped] =
+      builtInSubjectResourceRegistry.listSubjectDefinitions();
+
+    expect(rigged).toMatchObject({
+      resourceRef: RIGGED_SUBJECT_DEFINITION_REF,
+      visualParts: [
+        {
+          id: "body.asset",
+          kind: "asset",
+          subjectAssetRef: SUBJECT_ASSET_REF,
+          localTransform: {
+            positionMetersXYZ: [0, 0, 0],
+            rotationEulerRadiansXYZ: [0, 0, 0],
+            scaleXYZ: [1, 1, 1],
+          },
+          appearance: { mode: "whitebox-neutral" },
+        },
+      ],
+      visualBinding: {
+        mode: "rigged",
+        rigProfileRef: RIG_PROFILE_REF,
+        animationSetRef: ANIMATION_SET_REF,
+      },
+      sockets: [
+        expect.objectContaining({
+          id: "hand.right",
+          kind: "bone",
+          boneId: "hand.right",
+        }),
+      ],
+      colliderPolicy: {
+        kind: "profile",
+        colliderProfileRef: COLLIDER_PROFILE_REF,
+      },
+    });
+    expect(staticHumanoid).toMatchObject({
+      visualBinding: { mode: "static" },
+      sockets: [expect.objectContaining({ kind: "local" })],
+    });
+    expect(staticQuadruped).toMatchObject({
+      visualBinding: { mode: "static" },
+      sockets: [expect.objectContaining({ kind: "local" })],
+    });
   });
 
   it("locks every immutable manifest with a canonical content hash", () => {

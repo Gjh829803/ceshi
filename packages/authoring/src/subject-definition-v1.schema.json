@@ -12,6 +12,7 @@
     "semanticClassId",
     "coordinateConvention",
     "visualParts",
+    "visualBinding",
     "sockets",
     "colliderPolicy",
     "capabilityRefs",
@@ -42,23 +43,13 @@
       "maxItems": 128,
       "items": { "$ref": "#/$defs/visualPart" }
     },
+    "visualBinding": { "$ref": "#/$defs/visualBinding" },
     "sockets": {
       "type": "array",
       "maxItems": 64,
       "items": { "$ref": "#/$defs/socket" }
     },
-    "colliderPolicy": {
-      "type": "object",
-      "additionalProperties": false,
-      "required": ["kind", "colliderDerivationProfileRef"],
-      "properties": {
-        "kind": { "const": "derive" },
-        "colliderDerivationProfileRef": {
-          "type": "string",
-          "format": "collider-derivation-profile-ref"
-        }
-      }
-    },
+    "colliderPolicy": { "$ref": "#/$defs/colliderPolicy" },
     "capabilityRefs": {
       "type": "array",
       "minItems": 1,
@@ -92,6 +83,54 @@
       }
     }
   },
+  "allOf": [
+    {
+      "if": {
+        "properties": {
+          "visualParts": {
+            "type": "array",
+            "contains": {
+              "type": "object",
+              "required": ["kind"],
+              "properties": { "kind": { "const": "asset" } }
+            }
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "visualBinding": {
+            "type": "object",
+            "properties": { "mode": { "const": "rigged" } }
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "visualBinding": {
+            "type": "object",
+            "required": ["mode"],
+            "properties": { "mode": { "const": "rigged" } }
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "visualParts": {
+            "type": "array",
+            "contains": {
+              "type": "object",
+              "required": ["kind"],
+              "properties": { "kind": { "const": "asset" } }
+            },
+            "minContains": 1
+          }
+        }
+      }
+    }
+  ],
   "$defs": {
     "id": {
       "type": "string",
@@ -146,6 +185,16 @@
         "rotationEulerRadiansXYZ": { "$ref": "#/$defs/vec3" }
       }
     },
+    "assetLocalTransform": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["positionMetersXYZ", "scaleXYZ"],
+      "properties": {
+        "positionMetersXYZ": { "$ref": "#/$defs/vec3" },
+        "rotationEulerRadiansXYZ": { "$ref": "#/$defs/vec3" },
+        "scaleXYZ": { "$ref": "#/$defs/positiveVec3" }
+      }
+    },
     "shape": {
       "oneOf": [
         {
@@ -189,27 +238,158 @@
       ]
     },
     "visualPart": {
-      "type": "object",
-      "additionalProperties": false,
-      "required": ["id", "kind", "shape", "localTransform", "colliderContribution"],
-      "properties": {
-        "id": { "$ref": "#/$defs/id" },
-        "kind": { "const": "primitive" },
-        "shape": { "$ref": "#/$defs/shape" },
-        "localTransform": { "$ref": "#/$defs/localTransform" },
-        "colliderContribution": { "enum": ["include", "exclude"] },
-        "semanticTags": { "$ref": "#/$defs/semanticTags" }
-      }
+      "oneOf": [
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "id",
+            "kind",
+            "shape",
+            "localTransform",
+            "colliderContribution",
+            "semanticTags"
+          ],
+          "properties": {
+            "id": { "$ref": "#/$defs/id" },
+            "kind": { "const": "primitive" },
+            "shape": { "$ref": "#/$defs/shape" },
+            "localTransform": { "$ref": "#/$defs/localTransform" },
+            "colliderContribution": { "enum": ["include", "exclude"] },
+            "semanticTags": { "$ref": "#/$defs/semanticTags" }
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "id",
+            "kind",
+            "subjectAssetRef",
+            "localTransform",
+            "appearance",
+            "semanticTags"
+          ],
+          "properties": {
+            "id": { "$ref": "#/$defs/id" },
+            "kind": { "const": "asset" },
+            "subjectAssetRef": {
+              "type": "string",
+              "pattern": "^worldkit://subject-asset/[a-z0-9][a-z0-9.-]{0,63}@[1-9][0-9]*$"
+            },
+            "localTransform": { "$ref": "#/$defs/assetLocalTransform" },
+            "appearance": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["mode"],
+              "properties": { "mode": { "const": "whitebox-neutral" } }
+            },
+            "semanticTags": { "$ref": "#/$defs/semanticTags" }
+          }
+        }
+      ]
+    },
+    "visualBinding": {
+      "oneOf": [
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["mode"],
+          "properties": { "mode": { "const": "static" } }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["mode", "rigProfileRef", "animationSetRef"],
+          "properties": {
+            "mode": { "const": "rigged" },
+            "rigProfileRef": {
+              "type": "string",
+              "pattern": "^worldkit://rig-profile/[a-z0-9][a-z0-9.-]{0,63}@[1-9][0-9]*$"
+            },
+            "animationSetRef": {
+              "type": "string",
+              "pattern": "^worldkit://animation-set/[a-z0-9][a-z0-9.-]{0,63}@[1-9][0-9]*$"
+            }
+          }
+        }
+      ]
+    },
+    "colliderPolicy": {
+      "oneOf": [
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["kind", "colliderDerivationProfileRef"],
+          "properties": {
+            "kind": { "const": "derive" },
+            "colliderDerivationProfileRef": {
+              "type": "string",
+              "format": "collider-derivation-profile-ref"
+            }
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["kind", "colliderProfileRef"],
+          "properties": {
+            "kind": { "const": "profile" },
+            "colliderProfileRef": {
+              "type": "string",
+              "pattern": "^worldkit://collider-profile/[a-z0-9][a-z0-9.-]{0,63}@[1-9][0-9]*$"
+            }
+          }
+        }
+      ]
     },
     "socket": {
-      "type": "object",
-      "additionalProperties": false,
-      "required": ["id", "localTransform", "semanticTags"],
-      "properties": {
-        "id": { "$ref": "#/$defs/id" },
-        "localTransform": { "$ref": "#/$defs/localTransform" },
-        "semanticTags": { "$ref": "#/$defs/semanticTags" }
-      }
+      "oneOf": [
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["id", "kind", "localTransform", "semanticTags"],
+          "properties": {
+            "id": { "$ref": "#/$defs/id" },
+            "kind": { "const": "local" },
+            "localTransform": { "$ref": "#/$defs/localTransform" },
+            "semanticTags": { "$ref": "#/$defs/semanticTags" }
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["id", "kind", "boneId", "offsetTransform", "semanticTags"],
+          "properties": {
+            "id": { "$ref": "#/$defs/id" },
+            "kind": { "const": "bone" },
+            "boneId": {
+              "enum": [
+                "root",
+                "hips",
+                "spine",
+                "chest",
+                "neck",
+                "head",
+                "upper-arm.left",
+                "lower-arm.left",
+                "hand.left",
+                "upper-arm.right",
+                "lower-arm.right",
+                "hand.right",
+                "upper-leg.left",
+                "lower-leg.left",
+                "foot.left",
+                "upper-leg.right",
+                "lower-leg.right",
+                "foot.right"
+              ]
+            },
+            "offsetTransform": { "$ref": "#/$defs/localTransform" },
+            "semanticTags": { "$ref": "#/$defs/semanticTags" }
+          }
+        }
+      ]
     }
   }
 }

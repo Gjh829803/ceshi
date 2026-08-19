@@ -1,4 +1,11 @@
-import type { SubjectResourceRegistryV2 } from "@whitebox-world/subject-registry";
+import type {
+  AnimationSetManifestV1,
+  BipedBoneIdV1,
+  ColliderProfileManifestV1,
+  RigProfileManifestV1,
+  SubjectAssetManifestV1,
+  SubjectResourceRegistryV2,
+} from "@whitebox-world/subject-registry";
 
 export type Vec2 = readonly [x: number, z: number];
 export type Vec3 = readonly [x: number, y: number, z: number];
@@ -143,26 +150,61 @@ export type SubjectPrimitiveShapeSpecV1 =
   | { kind: "cylinder"; radiusMeters: number; heightMeters: number }
   | { kind: "capsule"; radiusMeters: number; heightMeters: number };
 
-export interface SubjectVisualPartSpecV1 {
-  id: string;
-  kind: "primitive";
-  shape: SubjectPrimitiveShapeSpecV1;
-  localTransform: {
-    positionMetersXYZ: Vec3;
-    rotationEulerRadiansXYZ?: Vec3;
-  };
-  colliderContribution: "include" | "exclude";
-  semanticTags?: readonly string[];
+export interface SubjectLocalTransformSpecV1 {
+  positionMetersXYZ: Vec3;
+  rotationEulerRadiansXYZ?: Vec3;
 }
 
-export interface SubjectSocketSpecV1 {
-  id: string;
-  localTransform: {
-    positionMetersXYZ: Vec3;
-    rotationEulerRadiansXYZ?: Vec3;
-  };
-  semanticTags: readonly string[];
-}
+export type SubjectVisualPartSpecV2 =
+  | {
+      id: string;
+      kind: "primitive";
+      shape: SubjectPrimitiveShapeSpecV1;
+      localTransform: SubjectLocalTransformSpecV1;
+      colliderContribution: "include" | "exclude";
+      semanticTags: readonly string[];
+    }
+  | {
+      id: string;
+      kind: "asset";
+      subjectAssetRef: string;
+      localTransform: SubjectLocalTransformSpecV1 & { scaleXYZ: Vec3 };
+      appearance: { mode: "whitebox-neutral" };
+      semanticTags: readonly string[];
+    };
+
+export type SubjectVisualBindingV1 =
+  | { mode: "static" }
+  | {
+      mode: "rigged";
+      rigProfileRef: string;
+      animationSetRef: string;
+    };
+
+export type SubjectColliderPolicyV2 =
+  | {
+      kind: "derive";
+      colliderDerivationProfileRef: string;
+    }
+  | {
+      kind: "profile";
+      colliderProfileRef: string;
+    };
+
+export type SubjectSocketSpecV2 =
+  | {
+      id: string;
+      kind: "local";
+      localTransform: SubjectLocalTransformSpecV1;
+      semanticTags: readonly string[];
+    }
+  | {
+      id: string;
+      kind: "bone";
+      boneId: BipedBoneIdV1;
+      offsetTransform: SubjectLocalTransformSpecV1;
+      semanticTags: readonly string[];
+    };
 
 export interface PackageSubjectDefinitionV1 {
   id: string;
@@ -177,12 +219,10 @@ export interface PackageSubjectDefinitionV1 {
     metersPerUnit: 1;
     pivot: "support-center";
   };
-  visualParts: readonly SubjectVisualPartSpecV1[];
-  sockets: readonly SubjectSocketSpecV1[];
-  colliderPolicy: {
-    kind: "derive";
-    colliderDerivationProfileRef: string;
-  };
+  visualParts: readonly SubjectVisualPartSpecV2[];
+  visualBinding: SubjectVisualBindingV1;
+  sockets: readonly SubjectSocketSpecV2[];
+  colliderPolicy: SubjectColliderPolicyV2;
   capabilityRefs: readonly string[];
   profiles: {
     physicsBodyProfileRef: string;
@@ -284,26 +324,63 @@ export interface NormalizedProceduralTerrainSourceV2 {
   persistenceRatio: number;
 }
 
-export interface NormalizedSubjectVisualPartV2 {
-  id: string;
-  kind: "primitive";
-  shape: SubjectPrimitiveShapeSpecV1;
-  localTransform: {
-    positionMetersXYZ: Vec3;
-    rotationEulerRadiansXYZ: Vec3;
-  };
-  colliderContribution: "include" | "exclude";
-  semanticTags: readonly string[];
+export type NormalizedSubjectVisualPartV2 =
+  | {
+      id: string;
+      kind: "primitive";
+      shape: SubjectPrimitiveShapeSpecV1;
+      localTransform: {
+        positionMetersXYZ: Vec3;
+        rotationEulerRadiansXYZ: Vec3;
+      };
+      colliderContribution: "include" | "exclude";
+      semanticTags: readonly string[];
+    }
+  | {
+      id: string;
+      kind: "asset";
+      subjectAssetRef: string;
+      localTransform: {
+        positionMetersXYZ: Vec3;
+        rotationEulerRadiansXYZ: Vec3;
+        scaleXYZ: Vec3;
+      };
+      appearance: { mode: "whitebox-neutral" };
+      semanticTags: readonly string[];
+    };
+
+export type NormalizedSubjectSocketV2 =
+  | {
+      id: string;
+      kind: "local";
+      localTransform: {
+        positionMetersXYZ: Vec3;
+        rotationEulerRadiansXYZ: Vec3;
+      };
+      semanticTags: readonly string[];
+    }
+  | {
+      id: string;
+      kind: "bone";
+      boneId: BipedBoneIdV1;
+      offsetTransform: {
+        positionMetersXYZ: Vec3;
+        rotationEulerRadiansXYZ: Vec3;
+      };
+      semanticTags: readonly string[];
+    };
+
+export interface NormalizedSubjectColliderV2 {
+  kind: "capsule";
+  radiusMeters: number;
+  heightMeters: number;
+  centerOffsetFromSubjectOriginMetersXYZ: Vec3;
 }
 
-export interface NormalizedSubjectSocketV2 {
-  id: string;
-  localTransform: {
-    positionMetersXYZ: Vec3;
-    rotationEulerRadiansXYZ: Vec3;
-  };
-  semanticTags: readonly string[];
-}
+export type NormalizedSubjectAssetV1 = SubjectAssetManifestV1;
+export type NormalizedRigProfileV1 = RigProfileManifestV1;
+export type NormalizedAnimationSetV1 = AnimationSetManifestV1;
+export type NormalizedColliderProfileV1 = ColliderProfileManifestV1;
 
 export interface NormalizedSubjectDefinitionV2 {
   subjectDefinitionRef: string;
@@ -317,21 +394,15 @@ export interface NormalizedSubjectDefinitionV2 {
   semanticClassId: string;
   coordinateConvention: PackageSubjectDefinitionV1["coordinateConvention"];
   visualParts: readonly NormalizedSubjectVisualPartV2[];
+  visualBinding: SubjectVisualBindingV1;
   sockets: readonly NormalizedSubjectSocketV2[];
-  colliderPolicy: {
-    kind: "derive";
-    colliderDerivationProfileRef: string;
-  };
+  colliderPolicy: SubjectColliderPolicyV2;
   capabilityRefs: readonly string[];
   profiles: {
     physicsBodyProfileRef: string;
     locomotionProfileRef: string;
   };
-  collider: {
-    kind: "capsule";
-    radiusMeters: number;
-    heightMeters: number;
-    centerOffsetFromSubjectOriginMetersXYZ: Vec3;
+  collider: NormalizedSubjectColliderV2 & {
     massKilograms: number;
     maxSlopeDegrees: number;
     maxStepHeightMeters: number;
@@ -366,6 +437,17 @@ export interface ResolvedResourceLockEntryV1 {
   resourceKind: ResolvedResourceKindV1;
   resolvedVersion: string;
   contentHash: string;
+}
+
+export interface NormalizedWorldResourcesV2 {
+  prototypes: readonly PrimitivePrototypeSpecV2[];
+  subjectDefinitions: readonly NormalizedSubjectDefinitionV2[];
+  subjectAssets: readonly NormalizedSubjectAssetV1[];
+  rigProfiles: readonly NormalizedRigProfileV1[];
+  animationSets: readonly NormalizedAnimationSetV1[];
+  colliderProfiles: readonly NormalizedColliderProfileV1[];
+  resourceLock: readonly ResolvedResourceLockEntryV1[];
+  resourceLockHash: string;
 }
 
 export type NormalizedWorldNodeV2 =
@@ -403,12 +485,7 @@ export interface NormalizedWorldIRV2 {
   seed: number;
   provenance?: AuthoringSpecV2["provenance"];
   world: AuthoringSpecV2["world"];
-  resources: {
-    prototypes: readonly PrimitivePrototypeSpecV2[];
-    subjectDefinitions: readonly NormalizedSubjectDefinitionV2[];
-    resourceLock: readonly ResolvedResourceLockEntryV1[];
-    resourceLockHash: string;
-  };
+  resources: NormalizedWorldResourcesV2;
   nodes: readonly NormalizedWorldNodeV2[];
   startup: AuthoringSpecV2["startup"];
 }

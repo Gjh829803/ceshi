@@ -161,14 +161,17 @@ function createPackageSubjectDefinition(
         }),
       ),
     ],
+    visualBinding: { mode: "static" },
     sockets: [
       {
         id: "seat.mount",
+        kind: "local",
         localTransform: { positionMetersXYZ: [0, 1.3, 0] },
         semanticTags: ["mount-seat"],
       },
       {
         id: "tow.rear",
+        kind: "local",
         localTransform: { positionMetersXYZ: [0, 0.8, 0.8] },
         semanticTags: ["tow-point"],
       },
@@ -252,5 +255,88 @@ export function createValidPackageSubjectWorldV2(options: {
         spawnAnchorEntityId: "spawn-pack-animal-b",
       },
     ],
+  };
+}
+
+export function createValidRiggedPackageDefinition(): PackageSubjectDefinitionV1 {
+  return {
+    id: "rigged-golden-package",
+    version: 1,
+    kind: "subject-definition",
+    category: "human",
+    bodyTopology: "biped",
+    semanticClassId: "subject.humanoid.rigged",
+    coordinateConvention: {
+      forwardAxis: "-Z",
+      upAxis: "+Y",
+      metersPerUnit: 1,
+      pivot: "support-center",
+    },
+    visualParts: [
+      {
+        id: "body.asset",
+        kind: "asset",
+        subjectAssetRef: "worldkit://subject-asset/humanoid.golden@1",
+        localTransform: {
+          positionMetersXYZ: [0, 0, 0],
+          rotationEulerRadiansXYZ: [0, 0, 0],
+          scaleXYZ: [1, 1, 1],
+        },
+        appearance: { mode: "whitebox-neutral" },
+        semanticTags: ["body", "golden", "rigged"],
+      },
+    ],
+    visualBinding: {
+      mode: "rigged",
+      rigProfileRef: "worldkit://rig-profile/biped.golden@1",
+      animationSetRef: "worldkit://animation-set/humanoid.ground.golden@1",
+    },
+    sockets: [
+      {
+        id: "hand.right",
+        kind: "bone",
+        boneId: "hand.right",
+        offsetTransform: {
+          positionMetersXYZ: [0, 0, 0],
+          rotationEulerRadiansXYZ: [0, 0, 0],
+        },
+        semanticTags: ["equipment-grip", "hand"],
+      },
+    ],
+    colliderPolicy: {
+      kind: "profile",
+      colliderProfileRef:
+        "worldkit://collider-profile/humanoid.medium-capsule@1",
+    },
+    capabilityRefs: ["worldkit://capability/locomotion.ground@1"],
+    profiles: {
+      physicsBodyProfileRef: "worldkit://physics-body-profile/character.medium@1",
+      locomotionProfileRef: "worldkit://locomotion-profile/ground.standard@1",
+    },
+    aiMetadata: {
+      displayName: "Package rigged Golden humanoid",
+      description: "A package definition that exercises the complete rigged asset graph.",
+      semanticTags: ["golden", "human", "rigged"],
+    },
+  };
+}
+
+export function createValidRiggedPackageSubjectWorldV2(): AuthoringSpecV2 {
+  const base = createValidAuthoringSpec();
+  return {
+    ...base,
+    resources: {
+      ...base.resources,
+      subjectDefinitions: [createValidRiggedPackageDefinition()],
+    },
+    nodes: base.nodes.map((node) =>
+      node.kind === "subject" && node.id === "player"
+        ? {
+            ...node,
+            subjectDefinitionRef:
+              "package://subject-definition/rigged-golden-package@1",
+          }
+        : node,
+    ),
   };
 }

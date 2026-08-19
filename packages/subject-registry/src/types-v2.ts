@@ -109,26 +109,61 @@ export interface ColliderProfileManifestInputV1
   };
 }
 
-export interface SubjectVisualPartDefinitionV1 {
-  id: string;
-  kind: "primitive";
-  shape: CompositionPrimitiveV1;
-  localTransform: {
-    positionMetersXYZ: Vec3;
-    rotationEulerRadiansXYZ: Vec3;
-  };
-  colliderContribution: "include" | "exclude";
-  semanticTags: readonly string[];
+export interface SubjectLocalTransformV1 {
+  positionMetersXYZ: Vec3;
+  rotationEulerRadiansXYZ?: Vec3;
 }
 
-export interface SubjectSocketDefinitionV1 {
-  id: string;
-  localTransform: {
-    positionMetersXYZ: Vec3;
-    rotationEulerRadiansXYZ: Vec3;
-  };
-  semanticTags: readonly string[];
-}
+export type SubjectVisualPartDefinitionV2 =
+  | {
+      id: string;
+      kind: "primitive";
+      shape: CompositionPrimitiveV1;
+      localTransform: SubjectLocalTransformV1;
+      colliderContribution: "include" | "exclude";
+      semanticTags: readonly string[];
+    }
+  | {
+      id: string;
+      kind: "asset";
+      subjectAssetRef: string;
+      localTransform: SubjectLocalTransformV1 & { scaleXYZ: Vec3 };
+      appearance: { mode: "whitebox-neutral" };
+      semanticTags: readonly string[];
+    };
+
+export type SubjectVisualBindingV1 =
+  | { mode: "static" }
+  | {
+      mode: "rigged";
+      rigProfileRef: string;
+      animationSetRef: string;
+    };
+
+export type SubjectColliderPolicyV2 =
+  | {
+      kind: "derive";
+      colliderDerivationProfileRef: string;
+    }
+  | {
+      kind: "profile";
+      colliderProfileRef: string;
+    };
+
+export type SubjectSocketDefinitionV2 =
+  | {
+      id: string;
+      kind: "local";
+      localTransform: SubjectLocalTransformV1;
+      semanticTags: readonly string[];
+    }
+  | {
+      id: string;
+      kind: "bone";
+      boneId: BipedBoneIdV1;
+      offsetTransform: SubjectLocalTransformV1;
+      semanticTags: readonly string[];
+    };
 
 export interface RegistrySubjectDefinitionInputV2 extends SubjectRegistryResourceBaseInputV1 {
   kind: "subject-definition";
@@ -141,12 +176,10 @@ export interface RegistrySubjectDefinitionInputV2 extends SubjectRegistryResourc
     metersPerUnit: 1;
     pivot: "support-center";
   };
-  visualParts: readonly SubjectVisualPartDefinitionV1[];
-  sockets: readonly SubjectSocketDefinitionV1[];
-  colliderPolicy: {
-    kind: "derive";
-    colliderDerivationProfileRef: string;
-  };
+  visualParts: readonly SubjectVisualPartDefinitionV2[];
+  visualBinding: SubjectVisualBindingV1;
+  sockets: readonly SubjectSocketDefinitionV2[];
+  colliderPolicy: SubjectColliderPolicyV2;
   capabilityRefs: readonly string[];
   profiles: {
     physicsBodyProfileRef: string;

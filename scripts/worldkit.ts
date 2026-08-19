@@ -361,8 +361,12 @@ export async function validateSubjectDefinitionFile(inputPath: string) {
       subjectDefinitionRef,
       subjectDefinitionHash: normalized.subjectDefinitionHash,
       collider: {
-        derivationProfileRef:
-          normalized.colliderPolicy.colliderDerivationProfileRef,
+        ...(normalized.colliderPolicy.kind === "derive"
+          ? {
+              colliderDerivationProfileRef:
+                normalized.colliderPolicy.colliderDerivationProfileRef,
+            }
+          : { colliderProfileRef: normalized.colliderPolicy.colliderProfileRef }),
         ...normalized.collider,
       },
       resourceCost: normalized.resourceCost,

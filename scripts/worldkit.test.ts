@@ -4,7 +4,10 @@ import path from "node:path";
 
 import { afterEach, describe, expect, it } from "vitest";
 
-import { createValidPackageSubjectWorldV2 } from "../packages/authoring/src/test-fixture";
+import {
+  createValidPackageSubjectWorldV2,
+  createValidRiggedPackageDefinition,
+} from "../packages/authoring/src/test-fixture";
 
 import { explainSubjectFile } from "./lib/subject-explain";
 import {
@@ -131,6 +134,7 @@ describe("worldkit CLI", () => {
       resourceKind: "subject-definition",
     });
     expect(first.resources.map((resource) => resource.resourceRef)).toEqual([
+      "worldkit://subject-definition/humanoid.rigged-golden@1",
       "worldkit://subject-definition/humanoid.third-person@1",
       "worldkit://subject-definition/quadruped.ground-proxy@1",
     ]);
@@ -201,7 +205,7 @@ describe("worldkit CLI", () => {
           "package://subject-definition/coastal-pack-animal@1",
         subjectDefinitionHash: expect.stringMatching(/^sha256:/),
         collider: {
-          derivationProfileRef:
+          colliderDerivationProfileRef:
             "worldkit://collider-derivation-profile/vertical-character-capsule@1",
           radiusMeters: 0.7,
           heightMeters: 1.4,
@@ -212,6 +216,31 @@ describe("worldkit CLI", () => {
         resourceLockEntries: expect.any(Array),
       },
     });
+  });
+
+  it("validates a profile Collider without inventing a derivation alias", async () => {
+    const directory = await createTemporaryDirectory();
+    const definitionPath = path.join(directory, "rigged-definition.json");
+    await writeFile(
+      definitionPath,
+      JSON.stringify(createValidRiggedPackageDefinition()),
+      "utf8",
+    );
+
+    const result = await validateSubjectDefinitionFile(definitionPath);
+
+    expect(result).toMatchObject({
+      ok: true,
+      subjectDefinition: {
+        collider: {
+          colliderProfileRef:
+            "worldkit://collider-profile/humanoid.medium-capsule@1",
+          radiusMeters: 0.32,
+          heightMeters: 1.92,
+        },
+      },
+    });
+    expect(JSON.stringify(result)).not.toContain("derivationProfileRef");
   });
 
   it("rejects duplicate keys and invalid standalone Definition fields", async () => {
@@ -261,7 +290,7 @@ describe("worldkit CLI", () => {
         subjectDefinitionHash: expect.stringMatching(/^sha256:/),
         source: "package",
         collider: {
-          derivationProfileRef:
+          colliderDerivationProfileRef:
             "worldkit://collider-derivation-profile/vertical-character-capsule@1",
           centerOffsetFromSubjectOriginMetersXYZ: [0, 0.7, 0],
         },
