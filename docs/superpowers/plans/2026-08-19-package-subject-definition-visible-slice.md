@@ -27,7 +27,7 @@
 
 | Task | Status | Commit | Evidence |
 |---:|---|---|---|
-| 1. Shared Canonical Protocol | Not started | — | — |
+| 1. Shared Canonical Protocol | Implementation complete | — | 3 focused test files / 19 tests + typecheck |
 | 2. Subject Composition | Not started | — | — |
 | 3. Subject Resource Registry | Not started | — | — |
 | 4. Clean AuthoringSpecV2 | Not started | — | — |
@@ -75,7 +75,7 @@
 - Produces: `stringifyCanonicalJson(value: unknown): string`, `canonicalJsonBytes(value: unknown): Uint8Array`, and `sha256CanonicalJson(value: unknown): string` from `@whitebox-world/protocol`.
 - Invariant: existing normalized and execution hashes remain byte-for-byte unchanged before any intentional protocol data change.
 
-- [ ] **Step 1: Write failing protocol tests**
+- [x] **Step 1: Write failing protocol tests**
 
 ```ts
 import { describe, expect, it } from "vitest";
@@ -98,13 +98,13 @@ describe("canonical JSON protocol", () => {
 });
 ```
 
-- [ ] **Step 2: Run the focused test and verify the missing package failure**
+- [x] **Step 2: Run the focused test and verify the missing package failure**
 
 Run: `pnpm vitest run packages/protocol/src/canonical-json.test.ts`
 
 Expected: FAIL because `packages/protocol/src/index.ts` does not exist.
 
-- [ ] **Step 3: Move the canonical implementation without changing behavior**
+- [x] **Step 3: Move the canonical implementation without changing behavior**
 
 Create `@whitebox-world/protocol` with `@noble/hashes` as its only dependency. Move the implementation from Authoring, export all three functions, and replace `packages/authoring/src/canonical-json.ts` with explicit re-exports:
 
@@ -116,7 +116,7 @@ export {
 } from "@whitebox-world/protocol";
 ```
 
-- [ ] **Step 4: Run focused and regression tests**
+- [x] **Step 4: Run focused and regression tests**
 
 Run: `pnpm vitest run packages/protocol/src/canonical-json.test.ts packages/authoring/src/normalize.test.ts packages/compiler/src/compile.test.ts`
 

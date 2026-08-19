@@ -1,32 +1,5 @@
-import { sha256 } from "@noble/hashes/sha256";
-import { bytesToHex } from "@noble/hashes/utils";
-
-function canonicalize(value: unknown, path: string): unknown {
-  if (value === null || typeof value === "boolean" || typeof value === "string") return value;
-  if (typeof value === "number") {
-    if (!Number.isFinite(value)) throw new TypeError(`Non-finite number at ${path || "/"}.`);
-    return Object.is(value, -0) ? 0 : value;
-  }
-  if (Array.isArray(value)) {
-    return value.map((item, index) => canonicalize(item, `${path}/${index}`));
-  }
-  if (typeof value === "object") {
-    const source = value as Record<string, unknown>;
-    const result: Record<string, unknown> = {};
-    for (const key of Object.keys(source).sort()) {
-      if (source[key] === undefined) continue;
-      result[key] = canonicalize(source[key], `${path}/${key}`);
-    }
-    return result;
-  }
-  throw new TypeError(`Unsupported canonical JSON value at ${path || "/"}.`);
-}
-
-export function stringifyCanonicalJson(value: unknown): string {
-  return JSON.stringify(canonicalize(value, ""));
-}
-
-export function sha256CanonicalJson(value: unknown): string {
-  const bytes = new TextEncoder().encode(stringifyCanonicalJson(value));
-  return `sha256:${bytesToHex(sha256(bytes))}`;
-}
+export {
+  canonicalJsonBytes,
+  sha256CanonicalJson,
+  stringifyCanonicalJson,
+} from "@whitebox-world/protocol";

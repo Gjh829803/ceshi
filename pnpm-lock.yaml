@@ -117,9 +117,9 @@ importers:
 
   packages/authoring:
     dependencies:
-      '@noble/hashes':
-        specifier: ^1.8.0
-        version: 1.8.0
+      '@whitebox-world/protocol':
+        specifier: workspace:*
+        version: link:../protocol
       '@whitebox-world/subject-registry':
         specifier: workspace:*
         version: link:../subject-registry
@@ -176,6 +176,12 @@ importers:
       three:
         specifier: ^0.180.0
         version: 0.180.0
+
+  packages/protocol:
+    dependencies:
+      '@noble/hashes':
+        specifier: ^1.8.0
+        version: 1.8.0
 
   packages/runtime-babylon:
     dependencies:

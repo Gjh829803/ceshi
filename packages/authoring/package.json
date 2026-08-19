@@ -8,7 +8,7 @@
     "./schema": "./src/authoring-spec-v1.schema.json"
   },
   "dependencies": {
-    "@noble/hashes": "^1.8.0",
+    "@whitebox-world/protocol": "workspace:*",
     "@whitebox-world/subject-registry": "workspace:*",
     "ajv": "^8.17.1",
     "ajv-formats": "^3.0.1",
