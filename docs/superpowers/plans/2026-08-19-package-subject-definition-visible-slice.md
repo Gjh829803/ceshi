@@ -35,9 +35,15 @@
 | 6. Runtime Contracts V3 | Complete | `3583f6e` | 4 focused tests + typecheck |
 | 7. Compiler V3 | Complete | `9453bfb` | 7 focused tests + dependency audit + typecheck |
 | 8. Babylon + Browser V3 | Complete | `59ad40a` | 15 focused tests + typecheck + Playground build |
-| 9. CLI Discovery/Explain | Not started | — | — |
-| 10. V2 Browser E2E | Not started | — | — |
+| 9. CLI Discovery/Explain | Complete | `8cc6a80` | 9 CLI tests + canonical source audit + typecheck |
+| 10. V2 Browser E2E | Complete | `7668d06` | 179 tests + Playground build + Browser V3/Havok verifier + 936×596 screenshot |
 | 11. Docs and Audit | Not started | — | — |
+
+Task 10 visual inspection: the 936×596 runtime capture shows the red Humanoid
+capsule in the foreground and two distinct red quadruped proxies ahead, one on
+each side of the corridor. All three Subjects are visibly grounded and
+separated; neither quadruped intersects the corridor walls, terrain, or the
+other Subject. The lake and tower remain visible beyond the corridor.
 
 ---
 
@@ -1072,7 +1078,7 @@ git commit -m "feat: explain subject definitions from cli"
 - Consumes: completed V2 pipeline and Browser Protocol V3.
 - Produces: one reviewable fixture with one built-in Humanoid and two instances of one Package-local quadruped Definition.
 
-- [ ] **Step 1: Add the V2 fixture and failing verification assertions**
+- [x] **Step 1: Add the V2 fixture and failing verification assertions**
 
 The fixture must contain:
 
@@ -1100,21 +1106,21 @@ Fill every required field exactly from the approved spec. Include body, head, fo
 
 Add verifier assertions for one shared Definition Hash, three independent Snapshot states, control transfer, movement of only the selected target, reset, screenshot dimensions, and explain artifact identity.
 
-- [ ] **Step 2: Run the verifier and confirm the new gate fails**
+- [x] **Step 2: Run the verifier and confirm the new gate fails**
 
 Run: `pnpm verify:canonical`
 
 Expected: FAIL at the missing or invalid Package Definition fixture gate.
 
-- [ ] **Step 3: Rewrite existing examples as canonical V2**
+- [x] **Step 3: Rewrite existing examples as canonical V2**
 
 Replace every `schemaVersion: 1` with `2`, add empty `resources.subjectDefinitions` where appropriate, rename every Subject `kitRef` to `subjectDefinitionRef`, and use canonical `worldkit://subject-definition/...@1` refs. Delete V1 fixtures and compatibility assertions; the repository keeps no accepted V1 input.
 
-- [ ] **Step 4: Complete the Package Definition fixture**
+- [x] **Step 4: Complete the Package Definition fixture**
 
 Use support-center local geometry, deterministic Part IDs, closed Profile/Capability refs, stable semantic tags, and two Subject nodes that reference the same `package://subject-definition/coastal-pack-animal@1`.
 
-- [ ] **Step 5: Run unit, build, and real-browser gates**
+- [x] **Step 5: Run unit, build, and real-browser gates**
 
 Run: `pnpm typecheck`
 
@@ -1126,11 +1132,11 @@ Run: `pnpm verify:canonical`
 
 Expected: all commands PASS. The verifier prints normalized IR V2, ExecutionPlan V3, Snapshot V3, Browser Protocol V3, Definition Hash, Resource Lock Hash, Havok body count, movement evidence for both Definition instances, and artifact paths.
 
-- [ ] **Step 6: Inspect the generated screenshot**
+- [x] **Step 6: Inspect the generated screenshot**
 
 Open `artifacts/examples/package-subject-world/world.png` and verify the Humanoid plus two distinct quadruped whitebox proxies are visible, grounded, separated, and not intersecting obvious terrain/obstacles. Record the exact visual result in the plan progress section.
 
-- [ ] **Step 7: Commit**
+- [x] **Step 7: Commit**
 
 ```bash
 git add examples scripts/verify-canonical-world.ts artifacts/examples/package-subject-world
