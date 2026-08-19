@@ -27,8 +27,8 @@
 
 | Task | Status | Commit | Evidence |
 |---:|---|---|---|
-| 1. Shared Canonical Protocol | Implementation complete | — | 3 focused test files / 19 tests + typecheck |
-| 2. Subject Composition | Not started | — | — |
+| 1. Shared Canonical Protocol | Complete | `d3bf828` | 3 focused test files / 19 tests + typecheck |
+| 2. Subject Composition | Complete | `567f159` | 7 focused tests + dependency audit + typecheck |
 | 3. Subject Resource Registry | Not started | — | — |
 | 4. Clean AuthoringSpecV2 | Not started | — | — |
 | 5. Definition Normalize/Hash/Lock | Not started | — | — |
@@ -122,7 +122,7 @@ Run: `pnpm vitest run packages/protocol/src/canonical-json.test.ts packages/auth
 
 Expected: PASS; existing fixture hashes remain unchanged.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add packages/protocol packages/authoring/package.json packages/authoring/src/canonical-json.ts
@@ -173,7 +173,7 @@ export function calculatePrimitiveResourceCost(
 ): { vertices: number; triangles: number; colliders: 1 };
 ```
 
-- [ ] **Step 1: Write failing bounds, origin, collider, and cost tests**
+- [x] **Step 1: Write failing bounds, origin, collider, and cost tests**
 
 ```ts
 it("derives a grounded capsule without Babylon bounds", () => {
@@ -225,21 +225,21 @@ it("uses a deterministic resource-cost table", () => {
 
 Also add a rotated-cylinder case and assert its conservative bounds exactly to six decimal places.
 
-- [ ] **Step 2: Run the focused test and verify failure**
+- [x] **Step 2: Run the focused test and verify failure**
 
 Run: `pnpm vitest run packages/subject-composition/src/subject-composition.test.ts`
 
 Expected: FAIL because the package and exports do not exist.
 
-- [ ] **Step 3: Implement primitive validation and right-handed XYZ bounds**
+- [x] **Step 3: Implement primitive validation and right-handed XYZ bounds**
 
 Implement finite-number checks, positive dimensions, Capsule `heightMeters >= 2 * radiusMeters`, and an explicit X-then-Y-then-Z rotation matrix. Transform the eight corners of each primitive's conservative local AABB; do not import Babylon or Three.js.
 
-- [ ] **Step 4: Implement capsule derivation and cost calculation**
+- [x] **Step 4: Implement capsule derivation and cost calculation**
 
 Use the spec's `0.01m` support-origin tolerance. Compute radius from the largest X/Z diameter, height from `max(boundsMaximumYMeters, 2 * radiusMeters)`, and Y center from `heightMeters / 2`. Return issues rather than throwing for expected invalid composition.
 
-- [ ] **Step 5: Run focused tests and dependency audit**
+- [x] **Step 5: Run focused tests and dependency audit**
 
 Run: `pnpm vitest run packages/subject-composition/src/subject-composition.test.ts`
 
@@ -247,7 +247,7 @@ Run: `rg -n "babylon|havok|three|window|document" packages/subject-composition`
 
 Expected: tests PASS; dependency audit returns no matches outside explanatory test descriptions.
 
-- [ ] **Step 6: Commit**
+- [x] **Step 6: Commit**
 
 ```bash
 git add packages/subject-composition
