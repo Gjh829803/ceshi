@@ -1,10 +1,12 @@
 # SDK 重构总进度与 Backlog
 
 - 状态：Active，重构执行进度与剩余工作的唯一跟踪入口。
-- 基准日期：2026-08-19。
-- 长期目标总进度：约 **40%**，合理误差范围为 ±5%。
-- 第一条 Canonical 纵向切片：约 **80%**。
+- 基准日期：2026-08-20。
+- 长期目标总进度：约 **45%**，合理误差范围为 ±5%。
+- 第一条 Canonical 纵向切片：约 **85%**。
 - 当前代码入口：Canonical Authoring V2 → NormalizedWorldIR V2 → ExecutionPlan V3 → Babylon.js/Havok Runtime。
+
+> Golden Humanoid S1b 首个可视纵向切片已完成并进入回归；S1b 整体与 Semantic Actions 整体仍未完成.
 
 ## 1. 文档职责
 
@@ -40,19 +42,20 @@ Normalizer/Compiler、Runtime、CLI/Browser 和对应 Conformance Gate 的纵向
 | 工作流 | 权重 | 当前完成度 | 加权贡献 | 判断依据 |
 |---|---:|---:|---:|---|
 | 架构、边界与命名 | 8% | 90% | 7.2% | 总规格、ADR、主体/地形/3C 和 Placement/Take/Validation 专项已成稿；三份新协议仍待评审冻结 |
-| Canonical Schema、IR、Registry 与 Compiler | 15% | 70% | 10.5% | V2/V2/V3、Hash、Lock、严格校验、Package Primitive Definition 已交付；WorldChangeSet、完整 Capability 和 WorldPackage 尚未交付 |
-| Babylon/Havok Runtime、物理与相机 | 15% | 60% | 9.0% | Heightfield、障碍、水域、多主体、第三人称、碰撞、重置和控制切换已交付；多视角、完整生命周期与生产预算尚未完成 |
-| Subject LEGO 组装体系 | 15% | 30% | 4.5% | S0、S1a 已完成；S1b、S2、S3、S4 尚未完成 |
+| Canonical Schema、IR、Registry 与 Compiler | 15% | 75% | 11.25% | V2/V2/V3、Hash、Lock、严格校验、Primitive 与首个 Asset Subject 资源表已交付；WorldChangeSet、完整 Capability 和 WorldPackage 尚未交付 |
+| Babylon/Havok Runtime、物理与相机 | 15% | 65% | 9.75% | Heightfield、障碍、水域、多主体、第三人称、碰撞、重置、控制切换与首个 Rigged Asset Runtime 已交付；多视角与完整生产预算尚未完成 |
+| Subject LEGO 组装体系 | 15% | 40% | 6.0% | S0、S1a 与 S1b 首个 Golden 可视切片已完成；S1b 后续、S2、S3、S4 尚未完成 |
 | Terrain、Region 与 Placement | 12% | 30% | 3.6% | Alpha 地形能力可运行，Placement/Solver 专项已成稿；长期 Terrain IR/Mask/Region 与 Solver 尚未形成 Canonical 纵向切片 |
-| CLI、Browser Protocol 与自动化 | 10% | 50% | 5.0% | validate/build/run/capture/discovery/explain 与 Browser V3 已有；持久 Session、完整 Driver、Take 和 Package 工具未完成 |
-| Semantic Action、动画与 Gameplay | 8% | 20% | 1.6% | Alpha 有基础移动和本地动画经验；Canonical Action、Animation Binding、装备与规则未交付 |
+| CLI、Browser Protocol 与自动化 | 10% | 55% | 5.5% | validate/build/run/capture/discovery/explain、Browser V3 与 Rigged Subject Gate 已有；持久 Session、完整 Driver、Take 和 Package 工具未完成 |
+| Semantic Action、动画与 Gameplay | 8% | 30% | 2.4% | Golden `idle/walk/run/jump` 固定 Tick Animation Binding 已交付；通用 Action Request/Receipt、姿态、装备与规则未交付 |
 | Simulation Take、控制通道与视频接入 | 10% | 15% | 1.5% | Take/Capture 专项已成稿，单截图能力已有；多 Pass、时间轨、Bundle 和模型 Adapter 未交付 |
 | 生产 Gate、默认切换与旧实现退出 | 7% | 20% | 1.4% | Validation Profile/Report 专项已成稿且 Canonical Browser Gate 可运行；统一报告、默认切换和旧路径退出未交付 |
-| **合计** | **100%** |  | **约 44%** | 三份专项设计只小幅提升架构进度；对外按实现不确定性仍报告 **约 40%** |
+| **合计** | **100%** |  | **约 49%** | 首个 S1b Asset Subject 切片提高了实现证据；对外按剩余生产 Gate 与范围不确定性报告 **约 45%** |
 
-“第一条 Canonical 纵向切片约 80%”只指以下较窄范围：AI 提交 JSON，SDK
-完成严格校验、确定性编译、Babylon/Havok 运行、多主体控制、截图和查询。
-它不代表资产主体、关系、动作、复杂地形、视频控制输出或生产切换已经完成。
+“第一条 Canonical 纵向切片约 85%”只指以下较窄范围：AI 提交 JSON，SDK
+完成严格校验、确定性编译、Babylon/Havok 运行、多主体控制、首个 Golden Asset
+Subject、截图和查询。它不代表任意产品资产、完整 S1b、关系、完整动作、复杂地形、
+视频控制输出或生产切换已经完成。
 
 ## 3. 当前已完成并进入回归的能力
 
@@ -80,7 +83,19 @@ Normalizer/Compiler、Runtime、CLI/Browser 和对应 Conformance Gate 的纵向
 - [`Subject Foundation Visible Slice`](superpowers/plans/2026-08-19-subject-foundation-visible-slice.md)：49 项完成、0 项打开；
 - [`Package Subject Definition Visible Slice`](superpowers/plans/2026-08-19-package-subject-definition-visible-slice.md)：73 项完成、0 项打开。
 
-### 3.3 当前 Runtime 与工具纵向切片
+### 3.3 Subject S1b 首个 Golden Asset 可视切片
+
+- [x] 项目自有、自包含 Golden GLB、原始字节 SHA-256 与精确 Inventory。
+- [x] Subject Asset、Rig Profile、Animation Set、Collider Profile 与 Definition Registry。
+- [x] Host Asset Resolver、长度/Hash/GLB/Inventory Gate 与 Babylon AssetContainer 缓存。
+- [x] 独立 Skeleton/Animation/Transform/Dispose、Bone Socket 与白模材质。
+- [x] 固定 Tick `idle/walk/run/jump`、Snapshot `activeActionId` 与 Havok 权威位移。
+- [x] CLI/Browser 两实例、墙体停止、五张动作/世界截图与 Hash 篡改失败 E2E。
+
+未完成：产品资产验收、Compound Collider、LOD、更多拓扑、独立动画资产、通用姿态、
+游泳、装备、坐骑和飞行。
+
+### 3.4 当前 Runtime 与工具纵向切片
 
 - [x] Babylon.js 右手坐标 Runtime 与 Havok WASM。
 - [x] Heightfield、静态障碍物、角色碰撞和水域状态切换。
@@ -89,14 +104,17 @@ Normalizer/Compiler、Runtime、CLI/Browser 和对应 Conformance Gate 的纵向
 - [x] Browser Protocol V3 的加载、固定输入、绑定、Snapshot、Reset 和截图。
 - [x] 真实 Chromium 下验证 Package Definition 的两个实例可以分别控制。
 
-2026-08-19 的新鲜验证证据：
+2026-08-20 的新鲜验证证据：
 
 - `pnpm typecheck`：通过；
-- `pnpm test`：29 个测试文件、179 项测试通过；
+- `pnpm test`：35 个测试文件、335 项测试通过；
 - `pnpm verify:canonical`：Authoring 2、Normalized IR 2、ExecutionPlan 3、
   Runtime Snapshot 3、Browser Protocol 3 全部通过；
 - Canonical Browser Gate 覆盖 Babylon/Havok、墙体阻挡、水域切换、两个
   Package Subject 独立控制和确定性重置。
+- `pnpm verify:rigged-subject`：项目自有 Golden GLB、Rig、Collider Profile、
+  `idle/walk/run/jump`、双实例隔离、墙体停止、936×596 截图与
+  `SUBJECT_ASSET_HASH_MISMATCH` 篡改 Gate 全部通过。
 
 ## 4. Master Backlog
 
@@ -192,18 +210,18 @@ Schema、Physics、Route 和 Composition 阻断 Gate。
 
 #### P1.2 Subject S1b：资产型 Definition 与扩展 Collider
 
-- [x] 接受首个 GLB/版本化 Asset Part、Rig Binding、Animation Set、Collider Profile、Host Resolver 和资产 Provenance 字段级设计；实现仍按专项计划追踪。
-- [ ] 按 [`Asset Subject S1b 可视切片实施计划`](superpowers/plans/2026-08-19-asset-subject-s1b-visible-slice.md) 打通 Golden Humanoid 的 Canonical → Babylon/Havok → CLI/Browser 纵向链路。
+- [x] 接受首个 GLB/版本化 Asset Part、Rig Binding、Animation Set、Collider Profile、Host Resolver 和资产 Provenance 字段级设计。
+- [x] 按 [`Asset Subject S1b 可视切片实施计划`](superpowers/plans/2026-08-19-asset-subject-s1b-visible-slice.md) 打通 Golden Humanoid 的 Canonical → Babylon/Havok → CLI/Browser 纵向链路。
 - [ ] 支持 Compound Collider 和更多确定性 Collider Derivation Profile。
-- [ ] 定义 Pivot、Forward Axis、Scale、Socket/Bone Binding 与单位检查。
+- [x] 为 Golden 切片定义并验证 Pivot、Forward Axis、Scale、Socket/Bone Binding 与单位检查。
 - [ ] 建立资产导入、License/Hash、预算、LOD、Skeleton 和动画 Clip 验收。
 - [ ] 证明 Primitive 白模可以替换为人形、四足或非人形资产而不改变 Entity ID 和 Gameplay 身份。
-- [ ] 缺少 Rig、Clip、Collider 或 Socket 时返回稳定 Diagnostic，不静默猜测。
+- [x] Golden 切片中缺少 Rig、Clip、Collider 或 Socket 时返回稳定 Diagnostic，不静默猜测。
 
 #### P1.3 Semantic Action 与 Animation Binding
 
 - [ ] 冻结 ActionDefinition、Action Request/Receipt、Context 和 Channel Lock。
-- [ ] 实现 idle/walk/run/jump 的 Canonical Action 与动画映射。
+- [x] 实现首个 Golden `idle/walk/run/jump` 固定 Tick Action 与动画映射。
 - [ ] 冻结 `HumanoidPostureModeV1 = "standing" | "crouched" | "prone"`；Runtime Snapshot 必须同时暴露实际 `postureMode` 与 `activeActionId`，不能根据动画名称反推姿态。
 - [ ] 增加通用 Humanoid Action Pack：`fall`、`land`、`crouch-enter`、`crouch-idle`、`crouch-walk`、`crouch-exit`、`prone-enter`、`prone-idle`、`crawl`、`prone-exit`；源 Clip 名只允许在版本化 Animation Set 中映射。
 - [ ] 为站立、蹲伏、趴伏定义版本化 Capsule；切换时保持 Support Center/脚底位置，起身前使用 Havok Shape Proximity 做净空检测，空间不足返回稳定 `SUBJECT_POSTURE_BLOCKED`，不允许穿入低矮障碍。
@@ -323,14 +341,15 @@ Placement、Capture 与 Validation 三条 P0 已形成可评审专项设计，�
 
 ## 6. 下一里程碑
 
-当前没有代码阻塞项。三份 P0 专项设计已经成稿，下一步依次进行：
+当前没有代码阻塞项。S1b 首个 Golden 可视切片已经完成并进入回归；三份 P0 专项
+设计已经成稿，下一步依次进行：
 
 1. **M1：评审并冻结 Placement、Take/Capture、Validation 三份协议的公共边界**；
 2. **M2：决定三份文档列出的字段级开放项，并为未发布 Schema 选择干净替换或 Major 升级**；
 3. **M3：编写首条窄纵向切片实施计划，定位真实包、Schema、迁移、Fixture 与 Conformance**；
 4. **M4：实现 Constraint + Take + 五 Pass Capture + Validation 的最小闭环**；
 5. **M5：在同一闭环上接入一个实验 Video Model Adapter**；
-6. **M6：再进入 Asset Subject / Semantic Action 或 Typed Relationship 的下一条可视切片**。
+6. **M6：在 Golden 回归稳定后，选择产品资产验收、Semantic Action 后续或 Typed Relationship 的下一条窄可视切片**。
 
 M1/M2 完成前不得实现公共字段；技术探针可以验证 Capture Encoding 或 Runtime Query
 可行性，但其实现不得泄漏到 Canonical Schema。
@@ -355,5 +374,5 @@ M1/M2 完成前不得实现公共字段；技术探针可以验证 Capture Encod
 | 图片生成结果被误当作权威地形 | P1.1 固化为 Height/Mask，重新执行确定性 Compiler 和 Gate |
 | 任意 Blender/Python 代码进入生产世界 | 只允许隔离制作 Provider；Runtime 只消费锁定制品 |
 | 机器人研究仓库的格式污染 Web SDK | 只借鉴 Solver、Gate、Registry 和 Capture 思想，通过 Adapter 映射 |
-| S0/S1a 完成被误读为整个 Subject 系统完成 | 本文分别追踪 S1b、S2、S3 和 S4 |
+| S0/S1a/Golden S1b 切片完成被误读为整个 Subject 系统完成 | 本文分别追踪 S1b 未完成项、S2、S3 和 S4 |
 | 旧 Three/Rapier 与新 Babylon/Havok 长期双轨 | P3.2 设定明确默认切换和退出 Gate |

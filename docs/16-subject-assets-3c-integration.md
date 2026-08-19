@@ -1,16 +1,19 @@
 # 主体资产与 3C 配置接入 World SDK 技术契约
 
-- 状态：设计评审稿；S1a 已实现
+- 状态：设计评审稿；S1a 与 Golden Humanoid S1b 首个可视切片已实现
 - 版本：v0.2
 - 日期：2026-08-19
 - 产品输入：《世界模型底层引擎主体资产与 3C 配置体系》v0.1
 - 技术基线：[AI-first LEGO Game SDK 设计](./superpowers/specs/2026-08-17-ai-first-lego-game-sdk-design.md)
 
-> 实现状态（2026-08-19）：S1a 已交付 Canonical Authoring V2、Registry/Package
+> 实现状态（2026-08-20）：S1a 已交付 Canonical Authoring V2、Registry/Package
 > Primitive Subject Definition、Socket、自动 Capsule、Definition Hash、Resource
-> Lock、复数实例、单 Controller 原子切换和 Subject Explain。本文中的 GLB、
-> Animation、Medium State Resolver、Relationship、坐骑、装备、多 Controller 与
-> 飞行仍是后续契约，不是当前运行能力。
+> Lock、复数实例、单 Controller 原子切换和 Subject Explain。项目自有 Golden GLB
+> 还打通了 Asset/Rig/Animation/Collider、`idle/walk/run/jump`、Bone Socket 与
+> CLI/Browser/Havok Gate。产品资产验收、Medium State Resolver、Relationship、
+> 坐骑、装备、多 Controller 与飞行仍是后续契约，不是当前运行能力。
+
+> Golden Humanoid S1b 首个可视纵向切片已完成并进入回归；S1b 整体与 Semantic Actions 整体仍未完成.
 
 ## 1. 结论
 
@@ -188,6 +191,44 @@ interface SubjectAssetBundle {
 ```
 
 Bundle 只提供资产事实和参考；最终 Collider、控制、物理和 Camera Profile 由 SDK Registry 中经过验收的配置决定。
+
+### 5.5 S1b 产品人物资产交付清单
+
+产品/资产团队接入 Canonical Babylon 运行时，不需要交付场景脚本；需要交付一组
+可生成下列 Registry 资源的确定性事实。字段缺失时 SDK 应阻断接入，不能在 Scene
+或 Loader 中猜测。
+
+| 必需输入 | 当前 S1b 契约 | Golden 参考值 |
+|---|---|---|
+| GLB bytes | 单文件、自包含 GLB 2.0；不允许外部 Buffer/Image URI | `golden-humanoid.glb`，43,656 bytes |
+| Coordinate convention | `-Z` Forward、`+Y` Up、1 meter/unit | 同契约 |
+| Pivot | `support-center`，主体 Origin 与 Collider/Camera/Snapshot 共用 | 同契约 |
+| Asset Hash | 对原始 GLB bytes 计算 `sha256:`，并记录精确 `byteLength` | `sha256:1095fd65c754d53e6db3757ab5e1c9e5e9dcea2581f85d40f37ea4890ee8c2c2` |
+| License/Provenance | SPDX 或内部 License ID、再分发策略、作者；可选来源/许可证 URI 只留在 Registry Manifest | `LicenseRef-Project-Owned`、`allowed`、`Agent Whitebox World SDK` |
+| Bone mapping | 版本化 Rig Profile：唯一 Skeleton Root、必需语义 Bone ID → 源节点名 | `worldkit://rig-profile/biped.golden@1`，18 个 Biped Bone |
+| Clip mappings (4) | 版本化 Animation Set：每个语义 Action 显式映射源 Clip、Loop、速度、Blend、Root Motion | `idle→idle`、`walk→walk`、`run→run`、`jump→jump`，全部 in-place |
+| Collider ref | 引用经过验收的 Collider Profile；不在运行时从 Mesh Bounds 猜测 | `worldkit://collider-profile/humanoid.medium-capsule@1`，0.32m radius / 1.92m height |
+| Bone Sockets (optional) | 可选；使用稳定 Socket ID、语义 `boneId` 与局部 Offset，不暴露 Babylon Node Path | Golden 提供 `hand.right` → `boneId: "hand.right"` |
+
+产品接入时通常新增或更新 Subject Asset、Rig Profile、Animation Set、Collider Profile
+和 Subject Definition Registry 内容。普通 World Agent 仍只写
+`subjectDefinitionRef`；GLB URI、鉴权、骨骼名、源 Clip 名与 Capsule 参数不进入世界 JSON。
+
+当前最小接入/验证流程是：
+
+```bash
+pnpm worldkit validate examples/authoring/rigged-subject-world.json --json
+pnpm worldkit capture examples/authoring/rigged-subject-world.json \
+  --output artifacts/examples/rigged-subject-world/world.png \
+  --snapshot artifacts/examples/rigged-subject-world/snapshot.json \
+  --json
+pnpm verify:rigged-subject
+```
+
+三条命令共同构成最小上手流程；只有最后的 `pnpm verify:rigged-subject` 是单命令
+Gate。产品资产通过前还需要把同一 Gate 扩展为该资产的 Hash/Inventory、Rig、Clip、
+Collider、动作截图、实例隔离、碰撞和许可证证据，不能把 Golden 的通过结果直接继承
+给产品资产。
 
 ## 6. Character：分层状态而不是复制主体
 
@@ -589,6 +630,9 @@ Schema 和边界一次设计完整，运行能力分阶段交付。
 - ControllerEntity、possessedBy、单/多 Controller Tick Intent 和复数 Snapshot。
 - Asset Fixture、Schema/Compiler/Runtime Conformance。
 
+当前只完成了 Phase 0 中项目自有 Golden Humanoid 的首个可视纵向切片；产品资产
+验收、更多人形比例/拓扑、独立动画资产、完整姿态与 Action Request/Receipt 尚未完成。
+
 ### Phase 1：水中、骑乘、代表性动物与载具
 
 - MediumSensor、迟滞阈值、游泳 Capability 和 Water Action Pack。
@@ -606,7 +650,8 @@ Schema 和边界一次设计完整，运行能力分阶段交付。
 当前 Canonical Runtime 已使用复数 `subjectStatesByEntityId`、
 `controllersById` 和 `controlledEntityId`；旧 Demo 的单人物
 `setMovementIntent()` 与单数 `player` Snapshot 只作为历史实现，不是新协议的
-兼容约束。S1a 仍只有一个受信默认 Controller；多 Controller 同 Tick 输入尚未实现。
+兼容约束。S1b Golden Runtime 仍只有一个受信默认 Controller；多 Controller 同 Tick
+输入尚未实现。
 
 ## 16. 验收场景
 

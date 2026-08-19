@@ -1,10 +1,12 @@
 # Asset Subject S1b 可视切片设计
 
-- 状态：Accepted，待实现
+- 状态：Accepted；Golden Humanoid 首个可视切片已实现并进入回归
 - 日期：2026-08-19
 - 上位规格：[`2026-08-19-extensible-subject-authoring-design.md`](./2026-08-19-extensible-subject-authoring-design.md)
 - 产品/资产契约：[`16-subject-assets-3c-integration.md`](../../16-subject-assets-3c-integration.md)
 - 实施计划：[`2026-08-19-asset-subject-s1b-visible-slice.md`](../plans/2026-08-19-asset-subject-s1b-visible-slice.md)
+
+> Golden Humanoid S1b 首个可视纵向切片已完成并进入回归；S1b 整体与 Semantic Actions 整体仍未完成.
 
 ## 1. 决策摘要
 
@@ -382,15 +384,33 @@ Resolver 是 Host Adapter，不是 Canonical JSON。它可以实现：
 - 带鉴权的 CDN/对象存储；
 - 测试内存字节。
 
+这些接口由 Runtime Babylon 包公开导出。Resolve Request 只有 Ref、预期内容 Hash、
+字节长度和媒体类型，ExecutionPlan 不携带 URI、鉴权信息或字节。`sourceLabel` 仅供 Host
+内部定位来源，S1b 的异常和日志不输出它；Resolver 返回空值、非对象或非
+`Uint8Array` 字节统一映射为 `SUBJECT_ASSET_RESOLVE_FAILED`。
+
 Runtime 在 Babylon Loader 前验证：
 
 1. Resolver 返回值存在且非空；
 2. 字节长度等于 Manifest；
 3. SHA-256 等于 `artifactContentHash`；
-4. 格式为 GLB；
-5. GLB 实际 Inventory 不超过 Manifest 和 Runtime Gate。
+4. GLB Header、Chunk Table 与 JSON Chunk 合法；
+5. JSON 不包含 `buffers[*].uri` 或 `images[*].uri`，Loader 不允许发起网络/文件读取；
+6. GLB 实际 Inventory 等于 Manifest 且不超过 Runtime Gate。
 
 Hash 或长度不一致时不得缓存或实例化。
+
+失败优先级固定为：Cache 已关闭、Descriptor 媒体/格式不支持、Descriptor 超限、
+缺少 Resolver、Resolver 失败、长度不符、Hash 不符、GLB/禁用内容不支持、实际
+Inventory 超限、实际 Inventory 不符。这样同一份多重错误输入不会因实现重排产生
+不同诊断。Host 只能把 Runtime Limit 收紧为有限正整数，不能放宽 SDK 默认上限。
+
+Runtime Babylon 包公开封闭的 `SubjectAssetRuntimeErrorCodeV1`、
+`SubjectAssetRuntimeErrorV1` 与 `isSubjectAssetRuntimeErrorV1`。Task 6/7 的 Asset、Rig、
+Animation、Socket 错误都使用该类型；Message 不包含 Provider/Babylon 文本与 Cause，
+可选安全上下文只有 Asset Ref 和预期 Hash。Browser 不解析 Error Message，只通过类型
+判别器转发白名单 Code；其他异常统一转换为
+`WORLDKIT_RUNTIME_INITIALIZATION_FAILED` 且不暴露 Cause。
 
 ## 8. Babylon Runtime 设计
 
@@ -405,7 +425,9 @@ SubjectAssetResolver bytes
   → per-instance root/skeleton/animation groups
 ```
 
-Cache Key 是 `subjectAssetRef + artifactContentHash`。同一资产只解析一次，但使用
+Cache Key 是 `subjectAssetRef + artifactContentHash`。同一资产只解析一次，但每次
+Acquire（包括命中 Cache 或加入 Pending Promise）仍需校验媒体类型、格式、字节长度
+和完整 Inventory 与冻结条目一致，冲突不能增加 Ref Count。实例化使用
 `doNotInstantiate: true` 克隆实例，避免两个 Subject 共享 Skeleton Pose 或
 AnimationGroup 状态。
 
@@ -419,8 +441,22 @@ AnimationGroup 状态。
 - `SubjectAnimationPlayer`；
 - 幂等 Dispose。
 
-Runtime Dispose 顺序：停止 Action → Dispose 实例 AnimationGroup/Skeleton/Nodes →
-释放 Asset Cache 引用 → 最后 Dispose AssetContainer、Scene、Engine。
+Lease 跟踪它创建的全部 Instance。Lease Release 先 Dispose 遗漏 Instance，再幂等
+递减 Ref Count；Cache Dispose 原子关闭 Cache，使现有 Lease/Instance 失效，等待
+Pending Load all-settled，然后按完整 Cache Key 的逆字典序 Dispose Container。
+Dispose 中完成的 Load 必须立即且只 Dispose 一次。重复 Cache Dispose 返回同一个
+Promise；关闭后的 Acquire 使用 `SUBJECT_ASSET_CACHE_DISPOSED`，失效 Lease 的
+Instantiate 使用 `SUBJECT_ASSET_LEASE_RELEASED`。
+
+`SubjectVisual.dispose()` 独占其嵌套资源：停止 Animation Player、解绑并销毁 Socket、
+销毁 Primitive Node 或 Asset Instance，最后释放 Lease。Runtime 只按逆序销毁
+Controller、SubjectVisual、Asset Cache、Physics、Scene 与 Engine，避免重复释放。
+
+`BabylonWorldRuntimeOptions` 公开可选的 `subjectAssetResolver` 与
+`subjectAssetCacheOptions`。Runtime 创建并独占一个 Cache，所有 Asset Visual 共享它；
+Primitive-only 世界可不提供 Resolver，含 Asset 的世界缺少 Resolver 时使用
+`SUBJECT_ASSET_RESOLVER_REQUIRED`。Host/Playground 只注入 Resolver 和更严格的 Cache
+Limits，不直接管理 Runtime Cache。
 
 ### 8.2 白模材质
 
@@ -431,10 +467,19 @@ Runtime Dispose 顺序：停止 Action → Dispose 实例 AnimationGroup/Skeleto
 - 禁止导入资产 Light、Camera、Audio 和任意脚本行为；
 - Metadata 只写 SDK 的 Entity/Part/Semantic ID。
 
+Source Container 若包含 Camera、Light、Sound、Container/Mesh ActionManager 或任意
+Node Behavior，统一作为 `SUBJECT_ASSET_FORMAT_UNSUPPORTED` 拒绝。Mesh Inventory
+按所有可渲染且带 Geometry 的 Mesh 计数；顶点和索引按共享 Geometry 去重。S1b 只接受
+带 Index 且 Index 数为 3 的倍数的 Triangle List。Instance Mesh 从每个 Root（包括
+Root 本身为 AbstractMesh）及 `getChildMeshes(false)` 稳定收集并按 `uniqueId` 去重；
+不能重命名源 Bone。
+
 ### 8.3 Rig 与 Socket
 
 Runtime 用 Rig Profile 的 `sourceNodeNameByBoneId` 验证实例节点。缺失必需节点或
-重复节点直接失败。Bone Socket 创建受 Visual Root 管理的跟随节点，并应用
+重复节点直接失败。S1b 要求 Instance 恰有一个 Skeleton、所有 Bone Name 唯一、
+`skeletonRootNodeName` 命中唯一的 Parentless Bone，且必需语义 Bone 一对一解析。
+Bone Socket 创建受 Visual Root 管理的跟随节点，并应用
 `offsetTransform`；Socket 不成为独立 Entity。
 
 ## 9. 固定 Tick 动作状态
@@ -469,14 +514,44 @@ otherwise                          → walk
 
 未受控主体默认 `idle`。Reset 恢复 `idle`、动画起始帧、零速度和起始 Transform。
 
-AnimationGroup 由固定 Tick 推进：启动后 Pause，按 `tick / 60` 计算目标 Frame，并用
-`blendDurationSeconds` 对前后 AnimationGroup 权重做确定性过渡。Scene Render 不作为
-动作时间真相。
+Controller 在 Havok `_step()` 前写入运动意图；物理步完成后 Runtime 同步 Visual Root，
+再从同一个实际位置/速度采样 `movementMedium` 与水平速度。只有受控主体的输入提供
+`runRequested`，未受控主体直接设为 `idle`，不经过动作推断。
+
+AnimationGroup 启动后 Pause，由固定 Tick 推进：
+`elapsedFrames = (tick - actionStartTick) / 60 * playbackSpeedRatio * fps`。Repeat 使用
+`from + elapsedFrames % (to - from)`，Once 使用 `min(to, from + elapsedFrames)`；Reset
+回到 Idle 的 `from`。过渡权重为
+`durationTicks === 0 ? 1 : clamp((tick - transitionStartTick) / durationTicks, 0, 1)`。
+Scene Render 不作为动作时间真相。每个绑定 Clip 必须唯一、含 Targeted Animation、
+具有单一有限正 FPS 和有限 `from < to`，Playback Ratio 必须为有限正数，Blend
+Duration 必须有限且非负，否则使用 `SUBJECT_ASSET_ANIMATION_INCOMPATIBLE`。
 
 ### 9.3 Root Motion
 
 第一版只接受 `rootMotionMode: "in-place"`。接入检查必须证明 Root/Hips 平移不会
-产生可见世界位移；不满足时资产先离线清理，不能让动画覆盖 Havok Transform。
+产生可见世界位移：禁止目标为映射 Root/Hips Bone 本体或其非空
+`getTransformNode()` 的任何 `position...` 动画通道，不按显示 Name 猜测，也不因关键帧
+恰好常量而放行。不满足时资产先离线清理，不能让动画覆盖 Havok Transform。
+
+### 9.4 Host 与 Browser 状态边界
+
+Playground Fetch Resolver 在创建时复制 Ref→URI 映射，并用创建时页面 Origin 解析相对
+URI；只接受无 UserInfo 的同源 HTTP(S)，Fetch 固定为 same-origin mode/credentials 与
+redirect error。非 OK Response 不读 Body，成功 Body 只读一次并复制字节，Source Label
+只有 Pathname。Resolver 内部的 Unmapped Ref 不冒充 Normalize 的
+`SUBJECT_ASSET_NOT_FOUND`；通过 Runtime 后统一成为 `SUBJECT_ASSET_RESOLVE_FAILED`。
+
+`authoring=1` 被识别后，Playground 在任何动态 Import 或加载前安装 Browser API，状态
+只允许 `loading → ready | error`。`ready()` 始终返回同一个启动 Promise；Loading 时
+Diagnostics 为空，同步方法抛 `WORLDKIT_RUNTIME_NOT_READY`，异步方法等待启动。只有
+Adapter 创建、Mount 和首帧成功后才进入 Ready。后续失败先 Dispose 已创建资源，再
+发布 Error，不能形成未处理的顶层 Reject。
+
+Browser Protocol 使用结构化 `WorldkitBrowserDiagnosticV1`，不再返回任意 Record。
+仅通过 `isSubjectAssetRuntimeErrorV1` 转发受控 Code；未知错误转换为不带 Cause 的
+`WORLDKIT_RUNTIME_INITIALIZATION_FAILED`。DOM `data-worldkit-status` 同步使用
+`loading/ready/error`。
 
 ## 10. Diagnostic
 
@@ -493,11 +568,23 @@ AnimationGroup 由固定 Tick 推进：启动后 Pause，按 `tick / 60` 计算�
 | `SUBJECT_ASSET_HASH_MISMATCH` | Runtime | GLB 字节 Hash 不一致 |
 | `SUBJECT_ASSET_LENGTH_MISMATCH` | Runtime | GLB 字节长度不一致 |
 | `SUBJECT_ASSET_FORMAT_UNSUPPORTED` | Runtime | 不是受支持的 GLB 2.0 |
+| `SUBJECT_ASSET_INVENTORY_MISMATCH` | Runtime | 实际资产 Inventory 与内容寻址 Manifest 不一致 |
+| `SUBJECT_ASSET_INVENTORY_EXCEEDED` | Runtime | 实际资产 Inventory 超过 Manifest 或 Runtime 限制 |
+| `SUBJECT_ASSET_CACHE_DISPOSED` | Runtime | Asset Cache 已关闭，不能 Acquire |
+| `SUBJECT_ASSET_LEASE_RELEASED` | Runtime | Lease 已释放或因 Cache Dispose 失效，不能 Instantiate |
+| `SUBJECT_ASSET_DISPOSE_FAILED` | Runtime | Subject Asset/Animation/Socket 清理失败；异常已脱敏且其他资源继续清理 |
 | `SUBJECT_ASSET_RIG_INCOMPATIBLE` | Runtime | Skeleton 或必需 Bone 缺失/重复 |
 | `SUBJECT_ASSET_ANIMATION_MISSING` | Runtime | 映射的源 Clip 不存在 |
+| `SUBJECT_ASSET_ANIMATION_INCOMPATIBLE` | Runtime | Clip 数量、Target、FPS、Frame Range 或播放/过渡参数无效 |
 | `SUBJECT_ASSET_SOCKET_BONE_MISSING` | Runtime | Bone Socket 无法绑定 |
+| `SUBJECT_ASSET_ROOT_MOTION_UNSUPPORTED` | Runtime | Root/Hips 平移违反 in-place 动作约束 |
+| `WORLDKIT_RUNTIME_NOT_READY` | Browser Host | Browser API 仍在 Loading，不能调用同步方法 |
+| `WORLDKIT_RUNTIME_INITIALIZATION_FAILED` | Browser Host | 未知 Runtime 启动错误的脱敏统一诊断 |
+| `WORLDKIT_RUNTIME_DISPOSE_FAILED` | Runtime | Physics/Scene/Engine 清理失败；异常已脱敏且其他资源继续清理 |
 
-Runtime 初始化失败时 `ready` 必须 Reject，不能显示 Primitive 占位体伪装成功。
+`BabylonWorldRuntime.create()` 在初始化失败时直接 Reject，不能返回 Primitive 占位体
+伪装成功；成功返回的 Runtime `ready` 已经 Resolved。Browser 侧在 Task 8 先安装延迟
+API，再把 Factory Reject 原样转为稳定 Diagnostic，避免自动化等待不到协议对象。
 
 ## 11. Golden Humanoid Fixture
 
@@ -544,6 +631,13 @@ Golden Fixture 只验证 SDK 管线，不作为产品人物视觉标准。
 9. CLI Capture 产出有效 PNG 与包含 `activeActionId` 的 Snapshot。
 10. Runtime Dispose 两次安全，Scene 中不残留实例、AnimationGroup、Skeleton 或
     AssetContainer 资源。
+11. Canonical 与 Rigged Verifier 只在全部 Gate 和清理成功后，以可回滚目录交换发布
+    完整 Artifact 集；失败不会留下半新半旧证据。
+12. `verification.json` 机器可读地绑定输入/Asset/IR/Plan Hash、每张截图的
+    Tick/Action/Entity/尺寸/Hash、实例隔离、墙体停止和 Tamper Diagnostic；四个 Action
+    PNG Hash 两两不同，同时保留人工姿态检查。
+13. Server Readiness 用本次启动 Nonce 证明端口归属，清理只作用于本次直接拥有的
+    Vite PID/Process Group；缺 Chromium 不自动安装。
 
 ## 14. 后续扩展点
 
@@ -560,3 +654,23 @@ Golden Fixture 只验证 SDK 管线，不作为产品人物视觉标准。
 
 这些扩展复用本切片的 Asset Ref、Rig Bone ID、Animation Set、Collider Profile 和
 实例隔离，不改变普通 Agent 的 Subject Node 形状。
+
+## 15. 当前实现证据与剩余边界
+
+当前项目自有 Golden Fixture 已通过 Canonical Authoring V2 → NormalizedWorldIR V2 →
+ExecutionPlan V3 → Babylon/Havok → CLI/Browser 的首个纵向切片：
+
+- GLB 为 43,656 bytes；原始字节 Hash 为
+  `sha256:1095fd65c754d53e6db3757ab5e1c9e5e9dcea2581f85d40f37ea4890ee8c2c2`；
+- Normalized IR Hash 为
+  `sha256:e746bd738e13ec8603779afba4d62d2d4610d0b03d428a6a1f8cc4f468ce1984`；
+- ExecutionPlan Hash 为
+  `sha256:22e38f9dc474b33a2adbe8442dba411e70f62731ac1e9a54fe1ac90f9f73249f`；
+- CLI 世界图与四张固定 Tick Action 图均为 936×596，四张 Action PNG Hash 两两不同；
+- 两个 Subject 的位置与 `activeActionId` 独立，Havok 墙体停止有效；篡改 GLB 后
+  Browser 稳定返回 `SUBJECT_ASSET_HASH_MISMATCH` 且磁盘资产 Hash 不变。
+
+实现证据位于 `artifacts/examples/rigged-subject-world/verification.json`，一键 Gate 为
+`pnpm verify:rigged-subject`。该结果只覆盖项目自有 Golden GLB，不把产品资产验收、
+Compound Collider、LOD、更多身体拓扑、独立动画资产、通用姿态、游泳、装备、坐骑
+或飞行标记为完成。

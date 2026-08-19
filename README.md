@@ -7,9 +7,11 @@
 后续视频模型只消费 SDK 输出的白模与控制通道，不负责决定碰撞、位置、导航或
 Gameplay 真相。
 
-> 当前长期重构总进度约 **40%**；“JSON → IR → Babylon/Havok → 多主体控制与截图”
-> 的第一条 Canonical 纵向切片约 **80%**。详细口径和全部待办见
+> 当前长期重构总进度约 **45%**；“JSON → IR → Babylon/Havok → 多主体控制与截图”
+> 的第一条 Canonical 纵向切片约 **85%**。详细口径和全部待办见
 > [SDK 重构总进度与 Backlog](docs/18-refactor-progress-and-backlog.md)。
+
+> Golden Humanoid S1b 首个可视纵向切片已完成并进入回归；S1b 整体与 Semantic Actions 整体仍未完成.
 
 第一次阅读建议依次查看：
 
@@ -101,11 +103,11 @@ Placement Solver、Simulation Take/Control Capture Bundle、Validation Report �
 |---|---|---|
 | Subject Definition | 可复用主体定义，组合 Geometry/Asset、Socket、Collider Policy、Profile 和 Capability | Primitive Package/Registry Definition 已交付 |
 | Subject Instance | 世界中的具体主体，具有独立 Entity ID、Transform、状态和控制权 | 已交付 |
-| Visual Part | Definition 内部的可渲染组成部分，不自动成为独立 Entity | Primitive Part 已交付，GLB/Asset Part 未交付 |
+| Visual Part | Definition 内部的可渲染组成部分，不自动成为独立 Entity | Primitive Part 与首个 Golden GLB Asset Part 已交付；产品资产验收和更多拓扑仍未完成 |
 | Subject Socket | 主体局部空间中的稳定连接点，例如手、座位或拖车钩 | 声明与编译已交付，关系绑定未交付 |
 | Capability/Profile | 运动、控制、物理、动作等可组合能力及其锁定配置 | 首个 Ground Locomotion/Collider Profile 已交付 |
 | Relationship | `mountedOn`、装备、拖拽等实例之间的类型化 Gameplay 关系 | S2 规划中，当前 Authoring V2 不支持 |
-| Semantic Action | 与具体动画 Clip 解耦的移动、攻击、交互等动作 | 规划中 |
+| Semantic Action | 与具体动画 Clip 解耦的移动、攻击、交互等动作 | Golden `idle/walk/run/jump` 固定 Tick 地面切片已交付；通用 Action 协议仍未完成 |
 
 主体类别不决定能力。人、马、滑板、汽车、拖车或飞龙都使用同一套
 Definition/Instance/Capability/Relationship 原则；差异由已注册能力、Profile、
@@ -117,13 +119,13 @@ Socket 和类型化关系表达。
 |---|---|---|
 | 世界输入 | Canonical Authoring V2、严格 Schema、Registry/Package Primitive Definition | Placement Constraint Solver、完整 WorldPackage（专项设计已成稿） |
 | 地形 | 室外 Heightfield、基础 Relief、静态障碍、水域和物理查询 | Canonical Raster/Mask/Region Pipeline、洞穴、Overhang、完整室内 |
-| 主体 | Primitive 人形/四足代理、多实例、自动 Capsule、独立控制 | GLB 资产主体、Compound Collider、Rig/Animation Binding |
+| 主体 | Primitive 人形/四足代理；Golden GLB、Rig/Animation/Collider Profile、多实例与独立控制 | 产品资产验收、Compound Collider、LOD、更多拓扑和独立动画资产 |
 | 关系 | Socket 数据可以声明和查询 | 动态 Bind、骑乘、装备、拖拽、Joint、事务与回滚 |
 | 运动与相机 | 地面移动、跳跃、水域状态、第三人称跟随 | 第一人称、飞行、车辆、Camera Director 和多 Rig 切换 |
 | 自动化 | validate/build/run/capture、Registry Discovery、Definition Validate、Subject Explain、Browser V3 | 持久 Runtime Session、完整 Playwright Driver、多人同时控制 |
 | Capture | 单帧截图、Runtime Snapshot | Simulation Take、Neutral/Depth/Semantic/Instance/Normal 多 Pass 与视频序列（专项设计已成稿） |
 | Validation | Canonical Browser Gate、现有物理/构图检查 | 统一 Validation Profile/Report、量化 Metric/Evidence 与生产 Policy（专项设计已成稿） |
-| Gameplay | 基础固定输入和控制绑定 | Semantic Action、NPC、导航、任务、战斗、联网 |
+| Gameplay | 基础固定输入、控制绑定与 Golden `idle/walk/run/jump` 动作状态 | 完整 Semantic Action、姿态、游泳、装备、NPC、导航、任务、战斗、联网 |
 | 最终视觉 | 本地白模渲染 | Render Bridge、实时世界模型和生产 Video Model Adapter |
 
 当前阶段只承诺室外 Heightfield 白模世界。不要把 NPC、车辆、坐骑、飞行、室内、
@@ -164,6 +166,20 @@ pnpm worldkit capture examples/authoring/package-subject-world.json \
 
 Canonical Authoring V2 是唯一输入；V1 从未发布，已经删除，也不存在兼容字段。
 
+验证首个 Rigged Subject 可视切片的最小接入流程：
+
+```bash
+pnpm worldkit validate examples/authoring/rigged-subject-world.json --json
+pnpm worldkit capture examples/authoring/rigged-subject-world.json \
+  --output artifacts/examples/rigged-subject-world/world.png \
+  --snapshot artifacts/examples/rigged-subject-world/snapshot.json \
+  --json
+pnpm verify:rigged-subject
+```
+
+前两条分别演示校验与捕获；只有 `pnpm verify:rigged-subject` 是覆盖 CLI、Browser、
+Havok、四动作、实例隔离、墙体碰撞、截图与 Hash 篡改失败的单命令 Gate。
+
 ## 验证
 
 ```bash
@@ -172,11 +188,16 @@ pnpm test
 pnpm test:scenes
 pnpm build
 pnpm verify:canonical
+pnpm verify:rigged-subject
 ```
 
 `verify:canonical` 会在真实 Chromium 中验证 Canonical Build Artifact、
 Babylon/Havok、墙体碰撞、水域切换、两个 Package Subject 独立控制、截图、
 Snapshot 和确定性 Reset。
+
+`verify:rigged-subject` 会验证项目自有 Golden GLB 的内容 Hash、Rig、
+`idle/walk/run/jump` 固定 Tick 动画、两个实例状态隔离、Havok 墙体停止和篡改失败；
+它不代表任意产品资产、Compound Collider、LOD 或全部 Semantic Actions 已可用。
 
 ## 代码边界
 
@@ -212,6 +233,7 @@ Compiler 和 Runtime 不能反向读取 Agent Prompt；Runtime Adapter 不能把
 - [AI-first LEGO 游戏 SDK 总体设计](docs/superpowers/specs/2026-08-17-ai-first-lego-game-sdk-design.md)
 - [AI-first Terrain Authoring Pipeline 设计](docs/superpowers/specs/2026-08-17-terrain-authoring-pipeline-design.md)
 - [可扩展主体组装 Authoring 专项设计](docs/superpowers/specs/2026-08-19-extensible-subject-authoring-design.md)
+- [Asset Subject S1b 可视切片字段级设计](docs/superpowers/specs/2026-08-19-asset-subject-s1b-visible-slice-design.md)
 - [Placement Constraint 与确定性 Layout Solver 设计](docs/superpowers/specs/2026-08-19-placement-constraint-layout-solver-design.md)
 - [Simulation Take 与 Control Capture Bundle 设计](docs/superpowers/specs/2026-08-19-simulation-take-control-capture-design.md)
 - [World Validation Report 与质量门禁设计](docs/superpowers/specs/2026-08-19-world-validation-report-and-quality-gates-design.md)
@@ -231,6 +253,10 @@ Compiler 和 Runtime 不能反向读取 Agent Prompt；Runtime Adapter 不能把
 - [Subject Foundation 可视切片](docs/superpowers/plans/2026-08-19-subject-foundation-visible-slice.md)
 - [Package Subject Definition 可视切片](docs/superpowers/plans/2026-08-19-package-subject-definition-visible-slice.md)
 - [Canonical JSON Babylon 历史实施计划](docs/superpowers/plans/2026-08-18-canonical-json-babylon-v1.md)：已被 Authoring V2 取代，仅保留历史上下文。
+
+### 已完成首个切片、继续回归
+
+- [Asset Subject S1b 可视切片实施计划](docs/superpowers/plans/2026-08-19-asset-subject-s1b-visible-slice.md)：项目自有 Golden GLB、Rig、Collider Profile、`idle/walk/run/jump` 和 Babylon/Havok 端到端接入已完成；S1b 后续能力仍按 Backlog 推进。
 
 ### 架构决策
 
@@ -255,6 +281,7 @@ pnpm studio
 使用 `worldkit`、Authoring V2 和 Browser Protocol V3。最终切换计划见
 [重构总进度与 Backlog](docs/18-refactor-progress-and-backlog.md#p32-默认实现切换)。
 
-仓库不分发来源尚未确认的 Xbot。需要本地验证 Mixamo 兼容 GLB 时，请按照
+仓库不分发来源尚未确认的 Xbot。以下 Mixamo 入口只属于 Legacy Three/Rapier
+实验路径，不是 Canonical Babylon S1b。需要本地验证 Mixamo 兼容 GLB 时，请按照
 [Alpha 运行指南](docs/07-alpha-implementation.md)链接自己的合规资产；没有资产时
 Runtime 会明确显示白模占位体，不会伪装成已绑定角色。

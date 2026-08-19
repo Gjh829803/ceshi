@@ -42,6 +42,8 @@ Director LLM → Render Directive SDK ────────────┘
 
 ## 3. 当前真正可运行的范围
 
+> Golden Humanoid S1b 首个可视纵向切片已完成并进入回归；S1b 整体与 Semantic Actions 整体仍未完成.
+
 第一期 Alpha 已证明以下链路可以运行：
 
 - Canonical Authoring V2 唯一输入：严格 JSON、精确版本 Registry、Package
@@ -52,8 +54,15 @@ Director LLM → Render Directive SDK ────────────┘
   固定输入、复位、查询 Snapshot 和截图。
 - `worldkit` 支持校验、构建、运行、截图、Registry Discovery、独立 Definition
   校验与 Subject Explain；真实 Chromium 门禁覆盖碰撞、入水和两个自定义实例。
+- 项目自有、可再分发的 Golden Humanoid GLB 已通过内容 Hash、Rig Profile、
+  Animation Set、Collider Profile 与 Host Asset Resolver 的完整 Canonical 链路；
+  两个实例拥有独立 Skeleton、动作、Transform 和生命周期。
+- Golden 人形的 `idle / walk / run / jump` 由固定 Tick 语义动作驱动，Snapshot
+  直接暴露 `activeActionId`；真实 Chromium 门禁覆盖动作截图、墙体停止、实例隔离
+  和 GLB 内存篡改后的 `SUBJECT_ASSET_HASH_MISMATCH`。
 - 一个第三人称人形主体：WASD 镜头相对移动、跑步、物理跳跃、第三人称镜头和碰撞。
-- 本地 Mixamo 兼容骨骼 GLB 的 `idle / walk / run` 动作绑定；没有本地资产时显示明确占位体。
+- Legacy Three/Rapier 路径仍可用调用方自己的 Mixamo 兼容 GLB 做本地实验；它不是
+  Canonical Babylon S1b 的资产来源或发布门禁。
 - 室外高度场场景：连续分块地形、四种 relief、局部塑形、湖泊/水体、复合几何标志物。
 - 可追踪的 `WorldFeature`：稳定 ID、schema、seed、依赖、资源所有权、预算、诊断、重建和清理。
 - `defineOutdoorScene` 场景 DSL、场景目录、Playground、检查器和固定输入 Smoke API。
@@ -68,7 +77,8 @@ Render Bridge、实时世界模型和 Runtime Director 也都尚未实现。
 
 ## 4. 当前交付不能被误解为完成的部分
 
-- 物理跳跃已经存在，但 `jump` 骨骼动作尚未绑定和视觉验收。
+- Golden Fixture 的 `jump` 已完成固定 Tick 绑定和白模验收；产品人物资产的
+  接入验收、动作观感、脚滑、更多姿态/动作和独立动画资产仍未完成。
 - WaterBody 是白膜水体与基础本地预览，不是最终生成式水面。
 - 图片可以传给 Coding Agent，但单张透视图只能重建可见构图与合理的可玩延伸，不能恢复唯一真实三维几何。
 - World Plan 和 Opening Shot 是创作意图，不是碰撞或高度真相；高度、坡度、可通行性必须从实际白膜计算。
@@ -89,8 +99,18 @@ Render Bridge、实时世界模型和 Runtime Director 也都尚未实现。
 Capability 和 Profile 定义主体，再通过多个 `subject` 节点生成独立实例。SDK
 确定性推导 Collider、Hash、Lock 和资源成本，并提供 Registry/Explain 工具。
 
-未完成：GLB/资产主体、Compound Collider、动画、Relationship、坐骑、装备、
-车辆与飞行。它们分别属于 S1b、S2 及之后阶段。
+未完成：产品 GLB 资产验收、Compound Collider、完整 Semantic Actions、Relationship、
+坐骑、装备、车辆与飞行。它们分别属于 S1b 后续、S2 及之后阶段。
+
+### Subject Authoring S1b：首个 Golden Asset 可视切片
+
+已完成：项目自有 Golden GLB 的 Asset/Rig/Animation/Collider Registry 资源、
+内容 Hash Gate、Babylon AssetContainer 缓存、逐实例 Rig/动画状态、
+`idle/walk/run/jump`、Bone Socket、CLI/Browser Explain 与端到端验证。
+
+未完成：产品资产接入验收、Compound Collider、LOD、更多身体拓扑、独立动画资产、
+通用姿态、游泳、装备、坐骑与飞行。首个 Fixture 证明了管线，不等于 S1b 或
+Semantic Actions 整体生产完成。
 
 ### Phase II：更多主体、动作与室内
 

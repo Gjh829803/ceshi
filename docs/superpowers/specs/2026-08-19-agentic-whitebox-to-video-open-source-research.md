@@ -6,6 +6,8 @@
 - 对照规格：[`AI-first LEGO 游戏 SDK 总体设计`](./2026-08-17-ai-first-lego-game-sdk-design.md)、[`Terrain Authoring Pipeline`](./2026-08-17-terrain-authoring-pipeline-design.md)、[`可扩展主体组装 Authoring`](./2026-08-19-extensible-subject-authoring-design.md)、[`Placement Constraint / Layout Solver`](./2026-08-19-placement-constraint-layout-solver-design.md)、[`Simulation Take / Control Capture Bundle`](./2026-08-19-simulation-take-control-capture-design.md)、[`Validation Report / Quality Gates`](./2026-08-19-world-validation-report-and-quality-gates-design.md)。
 - 当前实现边界：[`Canonical Authoring V2 / Runtime Protocol V3 快速接入`](../../17-canonical-json-quickstart.md)。
 
+> 当前仓库状态更新（2026-08-20）：Golden Humanoid S1b 首个可视纵向切片已完成并进入回归；S1b 整体与 Semantic Actions 整体仍未完成.
+
 ## 1. 结论摘要
 
 1. **产品路线成立，并已有直接先例。** 2025–2026 年出现的 VideoCoCo、WorldClaw、PAT3D、SAGE、NVIDIA 3D Guided GenAI Blueprint 与 Cosmos Transfer 已分别验证“可执行白模承载物理/构图”“语义布局生成室外地形”“分阶段生成可模拟场景”“3D Depth 控制生成画面”“多控制通道生成视频”等关键环节。
@@ -385,10 +387,12 @@ Required Region/Anchor 单独阻断；Capture 验证 Pass、ID、Depth 单位、
 | Region/Semantic/Constraint Mask 地形 | Terrain 子规格已详细设计 | Canonical V2 仍是单一程序化 Heightfield | 实现内容寻址 Raster/Mask、Region Graph 与 Gate |
 | 多 Pass Capture | 总规格已列 Color/Semantic/Instance/Depth/Collision Debug | Runtime Contract 当前主要暴露单一 `captureScreenshot()` | 冻结 Control Capture Bundle、Profile 与多帧输出 |
 | Replay 与多 Controller | 总规格与 3C 文档已设计 | 当前 Host 只有一个默认 Controller 和固定输入 | 实现稳定 Take/Replay Log 与同 Tick Batch |
-| Asset Subject / Animation / Relationship | Subject 专项设计已分期 | S1a 只实现 Primitive Subject Definition | 按 S1b/S2+ 门禁推进，不伪装已支持 |
+| Asset Subject / Animation / Relationship | Subject 专项设计已分期 | S1a 与首个 Golden GLB/Rig/Animation/Collider 切片已实现；产品资产与 Relationship 未实现 | 保持 Golden 回归，按 S1b 后续/S2+ 门禁推进，不把窄切片伪装成完整能力 |
 | 受信 Plugin 与 Capability Registry | 总规格已定义原则 | 当前 Registry 内容仍是闭合集 | 冻结 Package、签名、Conformance 与发布流程 |
 
-当前交付真相仍以 [`Canonical JSON 快速接入 §8`](../../17-canonical-json-quickstart.md#8-当前能力边界) 为准：室外 Heightfield、Primitive 静态物体、Primitive Subject、第三人称相机、基础移动/跳跃/碰撞/水域检测；GLB、动画、Relationship、动态 Spawn、NPC、车辆、飞行与第一人称均尚未交付。
+当前交付真相仍以 [`Canonical JSON 快速接入 §8`](../../17-canonical-json-quickstart.md#8-当前能力边界) 为准：室外 Heightfield、Primitive 静态物体/Subject、第三人称相机、基础移动/跳跃/碰撞/水域检测，以及项目自有 Golden GLB 的 Rig/Collider/
+`idle/walk/run/jump` 窄切片。任意产品 GLB、完整 Semantic Actions、Relationship、
+动态 Spawn、NPC、车辆、飞行与第一人称仍未交付。
 
 ### 5.6 自定义扩展应采用双通道
 

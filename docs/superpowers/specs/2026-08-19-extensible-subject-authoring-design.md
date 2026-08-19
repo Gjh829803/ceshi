@@ -1,6 +1,6 @@
 # 可扩展主体组装 Authoring 专项设计
 
-- 状态：核心语义已接受；S0/S1a 已实现，S1b/S2+ 仍为 Proposed
+- 状态：核心语义已接受；S0/S1a 与 S1b 首个 Golden 可视切片已实现，S1b 后续/S2+ 仍为 Proposed
 - 日期：2026-08-19
 - 上位规格：[`2026-08-17-ai-first-lego-game-sdk-design.md`](./2026-08-17-ai-first-lego-game-sdk-design.md)
 - 产品/资产契约：[`16-subject-assets-3c-integration.md`](../../16-subject-assets-3c-integration.md)
@@ -22,6 +22,8 @@ S1a 的公开资源术语已统一为 Subject Definition / `subjectDefinitionRef
 TypeScript、CLI、Browser Protocol、示例和生成类型完全一致。
 
 本文冻结的是语义、数据归属、扩展机制和编译边界，而不是这三个临时方法名。
+
+> Golden Humanoid S1b 首个可视纵向切片已完成并进入回归；S1b 整体与 Semantic Actions 整体仍未完成.
 
 ## 2. 目标与非目标
 
@@ -634,11 +636,20 @@ S1a 已由 [`Package Subject Definition Visible Slice`](../plans/2026-08-19-pack
 Definition Hash、但 Transform、物理状态和控制权独立的实例。概念上的
 `define + spawn` 已对 Primitive 地面主体成立，但不是冻结的 TypeScript 方法名。
 
-### S1b：资产型 Definition 与扩展 Collider（未开始）
+### S1b：资产型 Definition 与扩展 Collider（首个 Golden 可视切片已完成）
+
+首个可视切片的字段、Resolver、Rig、Animation 和验收边界已在
+[`Asset Subject S1b 可视切片设计`](./2026-08-19-asset-subject-s1b-visible-slice-design.md)
+中冻结，并由
+[`实施计划`](../plans/2026-08-19-asset-subject-s1b-visible-slice.md)追踪。
+
+已完成的窄切片包括：项目自有 GLB Asset Part、Rig/Animation/Collider Profile、
+Host Resolver 与 Hash Gate、逐实例 Skeleton/Action/Transform、Bone Socket、固定 Tick
+`idle/walk/run/jump`、Havok 碰撞及 CLI/Browser Conformance。
 
 - GLB/版本化 Asset Part 与 Rig Binding。
-- Compound Collider 与更多确定性 Derivation Profile。
-- 动画/姿势资源、资产接入 Fixture 与视觉验收。
+- Compound Collider 与更多确定性 Derivation Profile（未完成）。
+- 产品动画/姿势资源、产品资产接入 Fixture 与视觉验收（未完成）。
 - 更丰富但仍闭合的 Capability/Profile 组合。
 
 ### S2：类型化 Relationship Framework
@@ -698,8 +709,9 @@ Definition Hash、但 Transform、物理状态和控制权独立的实例。概�
 9. RenderNode 层级只是关系的运行时派生结果，不能成为 Gameplay 真相。
 10. Registry、Normalizer、Compiler 和 Runtime Adapter 分层；公共 Schema 不包含 Babylon/Havok 类型。
 11. 当前概念方法名不冻结；正式命名通过独立版本化评审确定。
-12. S0 与 S1a 已交付；实现边界继续允许 S1b/S2 增加资产 Part、Collider
-   策略与 Relationship Manifest，不能把闭合集写死进 Compiler Core。
+12. S0、S1a 与 S1b 首个 Golden Asset 切片已交付；实现边界继续允许 S1b 后续/S2
+   增加资产 Part、Collider 策略与 Relationship Manifest，不能把闭合集写死进
+   Compiler Core。
 
 ## 19. 后续命名评审项
 

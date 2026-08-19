@@ -1,8 +1,13 @@
-# 第一期 Alpha 实现与运行指南
+# Legacy 第一期 Alpha 实现与运行指南（Three/Rapier/local-Mixamo）
 
-> 本文是当前可运行实现的操作指南。2026-08-15 的测试数字、四个实验场景和已知边界见[当前实验与验证记录](10-current-experiments.md)。
+> 本文只记录 Legacy Three.js/Rapier/local-Mixamo 创作 Playground，保留用于场景
+> 创作实验和迁移回归；它不是 Canonical Babylon S1b 的接入指南或当前协议真相。
+> 新程序请使用 [Canonical Authoring V2 快速接入](17-canonical-json-quickstart.md)。
+> 2026-08-15 的历史实验与边界见[当前实验与验证记录](10-current-experiments.md)。
 
-## 已交付的运行链路
+> Golden Humanoid S1b 首个可视纵向切片已完成并进入回归；S1b 整体与 Semantic Actions 整体仍未完成.
+
+## Legacy 已交付运行链路
 
 当前 Playground 不是静态界面，而是用 SDK 的真实模块构建并运行下面这条链路：
 
@@ -112,6 +117,8 @@ Registry 会追踪定义版本、来源哈希、参数、seed、依赖、输出�
 
 ## 当前明确边界
 
+- 本节只描述 Legacy Three/Rapier/local-Mixamo 路径；Canonical Babylon 的 Golden
+  GLB/Rig/Animation/Collider Profile 事实以快速接入和 S1b 设计文档为准。
 - 这是第一期 Alpha，不是生产级完整游戏引擎。
 - 已实现 Circle、Ellipse、Polygon；Curve/Path 和通用 SDF 仍是后续扩展点。
 - 湖泊的地形凹陷、水面和语义已实现；`blocked/swimmable` 目前是语义契约，尚未变成完整游泳/禁行玩法。

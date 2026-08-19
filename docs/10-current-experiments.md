@@ -1,10 +1,12 @@
 # 当前实验与验证记录
 
-> 状态日期：2026-08-19。本文只记录当前仓库中可以运行或已经验证的事实，不描述远期目标 API。
+> 状态日期：2026-08-20。本文只记录当前仓库中可以运行或已经验证的事实，不描述远期目标 API。
+
+> Golden Humanoid S1b 首个可视纵向切片已完成并进入回归；S1b 整体与 Semantic Actions 整体仍未完成.
 
 ## 1. 实验目的
 
-当前实验要回答九个问题：
+当前实验要回答十个问题：
 
 1. 第三人称人形的移动、物理、动作和镜头能否由一个稳定 SubjectKit 统一提供。
 2. Coding Agent 能否只写场景模块，不改 SDK 内部，就创建不同的室外白膜世界。
@@ -16,6 +18,8 @@
 8. 每类实体能否从真实白膜导出唯一颜色的正/右/后三视图，为 Visual Bible 与世界模型建立稳定视觉绑定。
 9. AI 能否只用 Canonical Schema 定义 Package 局部 Primitive 主体，并让
    SDK 自动完成 Collider、Hash/Lock、多实例、物理、控制与 Explain。
+10. AI 能否只引用一个 Rigged Subject Definition，SDK 自动完成 GLB Hash Gate、
+    Rig/Clip/Collider 绑定、固定 Tick 动作、双实例隔离、Havok 碰撞和截图证据。
 
 ## 2. 当前 Playground 场景
 
@@ -47,9 +51,9 @@ Package 四足 Definition 的实例。Definition 由 body、head、四条 leg、
 
 - Authoring 2 → Normalized IR 2 → ExecutionPlan 3 → Snapshot/Browser 3；
 - 两个四足实例共享 Definition Hash
-  `sha256:d336986b1108c7769c42afb6c4ff69d983bd784f5b1e744b2d10f2dbdafcf5b5`；
+  `sha256:7220f0793b43e3d6f7cbbdd6bb2c184461850ed4975b36917e2c5716778561b1`；
 - Resource Lock Hash 为
-  `sha256:06eca2c38e678be84eb920bec8d6757eb71f66b5c69c3bb3122ebeaa9e7d16af`；
+  `sha256:52c08a6e9c54cdb88308eced9d18abae27065792edc79fe0614f21e719eb789b`；
 - 三个 Subject 对应 3 份独立状态，场景共 7 个 Havok Body；
 - 控制权可分别切换给 `pack-animal-a` 和 `pack-animal-b`，固定输入只移动目标，
   Reset 恢复默认人形、相机和全部 Subject Origin；
@@ -64,11 +68,43 @@ pnpm worldkit run examples/authoring/package-subject-world.json
 pnpm verify:canonical
 ```
 
+### Canonical Asset Subject S1b / Golden Humanoid 实验
+
+[`rigged-subject-world.json`](../examples/authoring/rigged-subject-world.json) 只在普通
+Subject Node 中引用 `worldkit://subject-definition/humanoid.rigged-golden@1`。GLB 路径、
+骨骼名、源 Clip 名和 Capsule 尺寸均留在 Registry/Host 边界，不进入世界 JSON。
+
+`pnpm verify:rigged-subject` 已验证：
+
+- 自包含 GLB 为 43,656 bytes，原始字节 Hash 为
+  `sha256:1095fd65c754d53e6db3757ab5e1c9e5e9dcea2581f85d40f37ea4890ee8c2c2`；
+- Normalized IR Hash 为
+  `sha256:e746bd738e13ec8603779afba4d62d2d4610d0b03d428a6a1f8cc4f468ce1984`，
+  ExecutionPlan Hash 为
+  `sha256:22e38f9dc474b33a2adbe8442dba411e70f62731ac1e9a54fe1ac90f9f73249f`；
+- `world.png` 与 `idle/walk/run/jump.png` 均为 936×596；CLI `world.png` 在暂停并
+  Reset 后以 Tick 0 同步记录 Snapshot 和截图，Hash 为
+  `sha256:b9ff828333641e548ea7ef3d2f8dbc6c8ae96c120659db3a6f6c17df19a09d9b`；
+- Browser 固定 Tick 动作截图 Hash 分别为 Idle
+  `sha256:af60b01ae2bf9db87c5ea5a5e01a08539e1ca35186e7b88b60125cc049a641aa`、
+  Walk `sha256:326c170bf8add1e8bd48e35fa7499a656776dfab2d8a3ed6f11d125b2ef2a92d`、
+  Run `sha256:d8957ad8b2bc115a9a493dd5404ef38e10cd2373a40b2743b2af83851400e3c7`、
+  Jump `sha256:992383d2cc70d49b827af24815dff7a41bbed8e5da7e0f8bf527294b00f61552`；
+  四者两两不同，Jump 在 Tick 12 报告 `movementMedium: air`；
+- 未受控的 `rigged-primary` 保持位置与 `idle`，受控的 `rigged-secondary` 从 x=3
+  移到 x=5.361666666666668 并报告 `walk`；
+- `rigged-secondary` 在墙前停于 x=5.561666666666668，低于 6.2m 门禁；
+- 内存篡改 GLB 只命中一次请求并得到 `SUBJECT_ASSET_HASH_MISMATCH`，磁盘资产
+  前后 Hash 不变。
+
+这些事实证明项目自有 Golden Fixture 的完整管线，不证明任意产品资产、动作观感、
+Compound Collider、LOD、更多拓扑或完整 Semantic Actions 已经通过验收。
+
 ## 3. 针对近期反馈做过的实验
 
 | 反馈 | 当前处理 | 验证状态 |
 |---|---|---|
-| W 前进方向与人物朝向相反 | 统一运行时前进轴为 `-Z`，Mixamo `+Z` 资产正面在加载层校正 | SubjectKit 单测覆盖运动方向；仍需每个新资产做视觉 QA |
+| W 前进方向与人物朝向相反 | Canonical Golden 资产与运行时统一为 `-Z`；Legacy Mixamo `+Z` 资产仍在旧加载层校正 | Golden E2E 覆盖 `-Z` 朝向；每个产品资产仍需独立视觉 QA |
 | 镜头离人物过远 | 第三人称默认距离下调，并允许场景在 `1.8..8m` 内设置初始距离 | 参数校验和镜头单测已覆盖 |
 | 地图太小 | 默认草地扩展为 4 × 4 个 160m tile，即 640m × 640m | 场景编译测试已覆盖 |
 | 水体奇怪 | 增加专用 WaterBody/Lake：湖盆、岸带、水位、浅深色、菲涅尔和轻微波纹 | 功能已运行；最终水质仍由世界模型负责 |
@@ -104,14 +140,15 @@ pnpm verify:canonical
 - Builder 隔离流程曾两次把并发文档提交或自身临时编译缓存误判为越权；实现本身的测试、类型检查、构建和规划导出均通过。后续应把权限审计的基线限定为 Agent 阶段开始后的授权文件集合，并显式忽略阶段私有临时目录。
 - 页面三视图写入端点在一次带多余 `--` 的 Vite 启动命令下返回 404；使用标准 `pnpm dev`/Vite 启动方式已验证插件端点会加载。本次结果仍由同一页面运行时捕获，宿主只负责把 PNG 写入声明路径。
 
-## 5. 2026-08-19 自动验证结果
+## 5. 2026-08-20 自动验证结果
 
 ```text
-pnpm test         29 test files / 179 tests passed
+pnpm test         35 test files / 335 tests passed
 pnpm test:scenes  2 test files / 18 tests passed
 pnpm typecheck    passed
 pnpm build        passed
 pnpm verify:canonical passed; Authoring 2 / IR 2 / Plan 3 / Snapshot 3 / Browser 3
+pnpm verify:rigged-subject passed; Golden GLB/Rig/Animation/Collider/Hash/Tamper E2E
 pnpm test:isolation passed; workspace 外目录不可读
 pnpm plan:check -- --scene grassland passed
 pnpm plan:scene -- --scene grassland passed
@@ -150,7 +187,8 @@ pnpm visual:check -- --scene sunlit-flower-bay passed
 - 生成 World Plan/Opening Shot 与真实白膜的通用视觉嵌入评分；当前门禁依赖 Planner 先给出可解释的区域/锚点 Guide。
 - 白膜三视图与样式三视图的自动轮廓/姿态一致性评分；Sunlit Flower Bay 已有完整配对，但当前仍只自动检查文件、路径和哈希。
 - 水岸在各种视角和地形高度下的观感。
-- Mixamo 动作混合观感、脚滑和 jump 动作绑定。
+- 产品资产的动作混合观感、脚滑、独立动画资产、姿态和更多 Semantic Action；
+  Golden `idle/walk/run/jump` 只作为确定性管线 Fixture。
 - 世界模型条件帧与最终生成画面的一致性；当前已产出条件包和目标首帧，但实时世界模型链路尚未接入。
 
 其他实现层已知问题：
