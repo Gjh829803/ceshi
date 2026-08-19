@@ -1,26 +1,49 @@
 import assert from "node:assert/strict";
-import { readFile } from "node:fs/promises";
+import { readFile, writeFile } from "node:fs/promises";
 import { fileURLToPath } from "node:url";
 import path from "node:path";
 
 import { chromium } from "playwright";
 
+import {
+  stringifyCanonicalJson,
+  type NormalizedWorldIRV2,
+} from "@whitebox-world/authoring";
 import type {
   ExecutionPlanV3,
+  Vec3,
   WorldRuntimeSnapshotV3,
 } from "@whitebox-world/runtime-contracts";
-import type { NormalizedWorldIRV2 } from "@whitebox-world/authoring";
 
+import {
+  explainSubjectFile,
+  type SubjectExplanationSuccessV1,
+} from "./lib/subject-explain";
 import { startWorldkitServer } from "./lib/worldkit-server";
 import { main as worldkitMain } from "./worldkit";
 
 const REPOSITORY_ROOT = fileURLToPath(new URL("../", import.meta.url));
-const INPUT_PATH = path.join(REPOSITORY_ROOT, "examples/authoring/multi-subject-world.json");
-const INVALID_INPUT_PATH = path.join(REPOSITORY_ROOT, "examples/authoring/invalid-world.json");
-const ARTIFACT_DIRECTORY = path.join(REPOSITORY_ROOT, "artifacts/examples/multi-subject-world");
-const BUILD_PATH = path.join(ARTIFACT_DIRECTORY, "world.normalized.json");
+const INPUT_PATH = path.join(
+  REPOSITORY_ROOT,
+  "examples/authoring/package-subject-world.json",
+);
+const INVALID_INPUT_PATH = path.join(
+  REPOSITORY_ROOT,
+  "examples/authoring/invalid-world.json",
+);
+const ARTIFACT_DIRECTORY = path.join(
+  REPOSITORY_ROOT,
+  "artifacts/examples/package-subject-world",
+);
+const BUILD_PATH = path.join(ARTIFACT_DIRECTORY, "world.build.json");
 const SCREENSHOT_PATH = path.join(ARTIFACT_DIRECTORY, "world.png");
 const SNAPSHOT_PATH = path.join(ARTIFACT_DIRECTORY, "snapshot.json");
+const EXPLAIN_PATH = path.join(ARTIFACT_DIRECTORY, "explain.json");
+const PLAYER_ENTITY_ID = "player";
+const FIRST_PACKAGE_SUBJECT_ENTITY_ID = "pack-animal-a";
+const SECOND_PACKAGE_SUBJECT_ENTITY_ID = "pack-animal-b";
+const PACKAGE_SUBJECT_DEFINITION_REF =
+  "package://subject-definition/coastal-pack-animal@1";
 
 interface WorldBuildArtifactV3 {
   kind: "worldkit-build-artifact";
@@ -41,17 +64,30 @@ function parseJson<T>(sourceText: string, label: string): T {
 
 function inspectPng(bytes: Buffer): { width: number; height: number } {
   const signature = Buffer.from([137, 80, 78, 71, 13, 10, 26, 10]);
-  assert.ok(bytes.length >= 24, "Captured PNG is too small to contain an IHDR chunk.");
-  assert.ok(bytes.subarray(0, 8).equals(signature), "Captured file does not have a PNG signature.");
-  assert.equal(bytes.subarray(12, 16).toString("ascii"), "IHDR", "Captured PNG has no leading IHDR chunk.");
-  return { width: bytes.readUInt32BE(16), height: bytes.readUInt32BE(20) };
+  assert.ok(
+    bytes.length >= 24,
+    "Captured PNG is too small to contain an IHDR chunk.",
+  );
+  assert.ok(
+    bytes.subarray(0, 8).equals(signature),
+    "Captured file does not have a PNG signature.",
+  );
+  assert.equal(
+    bytes.subarray(12, 16).toString("ascii"),
+    "IHDR",
+    "Captured PNG has no leading IHDR chunk.",
+  );
+  return {
+    width: bytes.readUInt32BE(16),
+    height: bytes.readUInt32BE(20),
+  };
 }
 
 async function runCliGates(): Promise<void> {
   assert.equal(
     await worldkitMain(["validate", INPUT_PATH, "--json"]),
     0,
-    "worldkit validate must accept the representative multi-subject world.",
+    "worldkit validate must accept the Package Subject Definition world.",
   );
   assert.equal(
     await worldkitMain(["validate", INVALID_INPUT_PATH, "--json"]),
@@ -61,18 +97,43 @@ async function runCliGates(): Promise<void> {
   assert.equal(
     await worldkitMain(["build", INPUT_PATH, "--output", BUILD_PATH, "--json"]),
     0,
-    "worldkit build must emit the canonical build artifact.",
+    "worldkit build must emit the canonical V3 build artifact.",
   );
   const firstBuildBytes = await readFile(BUILD_PATH, "utf8");
   assert.equal(
     await worldkitMain(["build", INPUT_PATH, "--output", BUILD_PATH, "--json"]),
     0,
-    "repeated worldkit build must succeed.",
+    "Repeated worldkit build must succeed.",
   );
   assert.equal(
     await readFile(BUILD_PATH, "utf8"),
     firstBuildBytes,
     "Repeated builds of the same input must be byte-identical.",
+  );
+  assert.equal(
+    await worldkitMain([
+      "subject",
+      "explain",
+      INPUT_PATH,
+      "--entity-id",
+      FIRST_PACKAGE_SUBJECT_ENTITY_ID,
+      "--json",
+    ]),
+    0,
+    "worldkit subject explain must accept a Package Definition instance.",
+  );
+  const explanation = await explainSubjectFile(
+    INPUT_PATH,
+    FIRST_PACKAGE_SUBJECT_ENTITY_ID,
+  );
+  assert.equal(
+    explanation.ok,
+    true,
+    "Subject Explain must return a success artifact.",
+  );
+  await writeFile(
+    EXPLAIN_PATH,
+    `${stringifyCanonicalJson(explanation)}\n`,
   );
   assert.equal(
     await worldkitMain([
@@ -85,12 +146,22 @@ async function runCliGates(): Promise<void> {
       "--json",
     ]),
     0,
-    "worldkit capture must emit a PNG and plural runtime snapshot.",
+    "worldkit capture must emit a PNG and plural V3 runtime snapshot.",
   );
 }
 
-async function verifyArtifacts(): Promise<{ dimensions: { width: number; height: number }; bodyCount: number }> {
-  const artifact = parseJson<WorldBuildArtifactV3>(await readFile(BUILD_PATH, "utf8"), "Build artifact");
+async function verifyArtifacts(): Promise<{
+  dimensions: { width: number; height: number };
+  bodyCount: number;
+  normalizedWorldIrHash: string;
+  executionPlanHash: string;
+  subjectDefinitionHash: string;
+  resourceLockHash: string;
+}> {
+  const artifact = parseJson<WorldBuildArtifactV3>(
+    await readFile(BUILD_PATH, "utf8"),
+    "Build artifact",
+  );
   assert.equal(artifact.kind, "worldkit-build-artifact");
   assert.equal(artifact.schemaVersion, 3);
   assert.match(artifact.normalizedWorldIrHash, /^sha256:[a-f0-9]{64}$/);
@@ -99,13 +170,79 @@ async function verifyArtifacts(): Promise<{ dimensions: { width: number; height:
   assert.equal(artifact.executionPlan.schemaVersion, 3);
   assert.equal(artifact.executionPlan.runtimeBackend, "babylon-havok");
   assert.equal(artifact.executionPlan.terrain.entityId, "terrain-main");
-  assert.deepEqual(artifact.executionPlan.waters.map((water) => water.entityId), ["lake-main"]);
-  assert.deepEqual(artifact.executionPlan.objects.map((object) => object.entityId), ["tower", "wall-east", "wall-west"]);
-  assert.equal(artifact.executionPlan.controlledEntityId, "player");
-  assert.deepEqual(artifact.executionPlan.subjects.map((subject) => subject.entityId), ["animal", "player"]);
+  assert.deepEqual(
+    artifact.executionPlan.waters.map((water) => water.entityId),
+    ["lake-main"],
+  );
+  assert.deepEqual(
+    artifact.executionPlan.objects.map((object) => object.entityId),
+    ["tower", "wall-east", "wall-west"],
+  );
+  assert.equal(artifact.executionPlan.controlledEntityId, PLAYER_ENTITY_ID);
+  assert.deepEqual(
+    artifact.executionPlan.subjects.map((subject) => subject.entityId),
+    [
+      FIRST_PACKAGE_SUBJECT_ENTITY_ID,
+      SECOND_PACKAGE_SUBJECT_ENTITY_ID,
+      PLAYER_ENTITY_ID,
+    ],
+  );
   assert.equal(artifact.executionPlan.camera.cameraEntityId, "camera-main");
 
-  const snapshot = parseJson<WorldRuntimeSnapshotV3>(await readFile(SNAPSHOT_PATH, "utf8"), "Runtime snapshot");
+  const packageSubjects = artifact.executionPlan.subjects.filter(
+    (subject) => subject.subjectDefinitionRef === PACKAGE_SUBJECT_DEFINITION_REF,
+  );
+  assert.equal(packageSubjects.length, 2);
+  assert.equal(
+    new Set(packageSubjects.map((subject) => subject.subjectDefinitionHash)).size,
+    1,
+    "Both instances must share one resolved Package Definition Hash.",
+  );
+  assert.notDeepEqual(
+    packageSubjects[0]?.spawnSubjectOriginPositionMetersXYZ,
+    packageSubjects[1]?.spawnSubjectOriginPositionMetersXYZ,
+    "Package Definition instances must compile to independent spawn origins.",
+  );
+  const subjectDefinitionHash = packageSubjects[0]?.subjectDefinitionHash;
+  assert.ok(subjectDefinitionHash !== undefined);
+
+  const packageDefinition =
+    artifact.normalizedWorldIr.resources.subjectDefinitions.find(
+      (definition) =>
+        definition.subjectDefinitionRef === PACKAGE_SUBJECT_DEFINITION_REF,
+    );
+  assert.ok(packageDefinition !== undefined);
+  assert.equal(packageDefinition.source, "package");
+  assert.equal(packageDefinition.subjectDefinitionHash, subjectDefinitionHash);
+  assert.ok(
+    packageDefinition.sockets.some((socket) => socket.id === "seat.mount"),
+    "Package Definition must preserve its declared mount seat Socket.",
+  );
+
+  const explanation = parseJson<SubjectExplanationSuccessV1>(
+    await readFile(EXPLAIN_PATH, "utf8"),
+    "Subject Explain artifact",
+  );
+  assert.equal(explanation.ok, true);
+  assert.equal(explanation.subject.entityId, FIRST_PACKAGE_SUBJECT_ENTITY_ID);
+  assert.equal(
+    explanation.subject.subjectDefinitionRef,
+    PACKAGE_SUBJECT_DEFINITION_REF,
+  );
+  assert.equal(
+    explanation.subject.subjectDefinitionHash,
+    subjectDefinitionHash,
+  );
+  assert.equal(
+    explanation.subject.resourceLockHash,
+    artifact.normalizedWorldIr.resources.resourceLockHash,
+  );
+  assert.ok(explanation.subject.resourceLockEntries.length >= 5);
+
+  const snapshot = parseJson<WorldRuntimeSnapshotV3>(
+    await readFile(SNAPSHOT_PATH, "utf8"),
+    "Runtime snapshot",
+  );
   assert.equal(snapshot.schemaVersion, 3);
   assert.equal(snapshot.runtimeBackend, "babylon-havok");
   assert.deepEqual(snapshot.physics, {
@@ -113,37 +250,94 @@ async function verifyArtifacts(): Promise<{ dimensions: { width: number; height:
     ready: true,
     fixedTimeStepSeconds: 1 / 60,
   });
-  assert.equal(snapshot.controlledEntityId, "player");
-  assert.deepEqual(Object.keys(snapshot.subjectStatesByEntityId).sort(), ["animal", "player"]);
-  assert.equal(snapshot.controllersById["controller-primary"]?.controlledEntityId, "player");
+  assert.equal(snapshot.controlledEntityId, PLAYER_ENTITY_ID);
+  assert.deepEqual(Object.keys(snapshot.subjectStatesByEntityId).sort(), [
+    FIRST_PACKAGE_SUBJECT_ENTITY_ID,
+    SECOND_PACKAGE_SUBJECT_ENTITY_ID,
+    PLAYER_ENTITY_ID,
+  ]);
+  assert.notStrictEqual(
+    snapshot.subjectStatesByEntityId[FIRST_PACKAGE_SUBJECT_ENTITY_ID],
+    snapshot.subjectStatesByEntityId[SECOND_PACKAGE_SUBJECT_ENTITY_ID],
+  );
+  assert.equal(
+    snapshot.controllersById["controller-primary"]?.controlledEntityId,
+    PLAYER_ENTITY_ID,
+  );
   assert.equal(snapshot.camera.entityId, "camera-main");
-  assert.ok(snapshot.resources.bodies >= 6, "Terrain, three static objects, and two Subjects must own Havok bodies.");
+  assert.ok(
+    snapshot.resources.bodies >= 7,
+    "Terrain, three static objects, and three Subjects must own Havok bodies.",
+  );
   assert.equal(snapshot.resources.terrainSamples, 65 * 65);
 
   const dimensions = inspectPng(await readFile(SCREENSHOT_PATH));
-  assert.ok(dimensions.width >= 800 && dimensions.height >= 450, "Captured PNG dimensions are unexpectedly small.");
-  return { dimensions, bodyCount: snapshot.resources.bodies };
+  assert.ok(
+    dimensions.width >= 800 && dimensions.height >= 450,
+    "Captured PNG dimensions are unexpectedly small.",
+  );
+  return {
+    dimensions,
+    bodyCount: snapshot.resources.bodies,
+    normalizedWorldIrHash: artifact.normalizedWorldIrHash,
+    executionPlanHash: artifact.executionPlanHash,
+    subjectDefinitionHash,
+    resourceLockHash: artifact.normalizedWorldIr.resources.resourceLockHash,
+  };
+}
+
+interface MovementEvidence {
+  beforePositionMetersXYZ: Vec3;
+  afterPositionMetersXYZ: Vec3;
+}
+
+function assertPositionUnchanged(
+  actual: Vec3,
+  expected: Vec3,
+  message: string,
+): void {
+  const maximumDriftMeters = Math.max(
+    ...actual.map((coordinate, index) =>
+      Math.abs(coordinate - expected[index]!),
+    ),
+  );
+  assert.ok(
+    maximumDriftMeters <= 1e-9,
+    `${message} Maximum drift was ${maximumDriftMeters}m.`,
+  );
 }
 
 async function verifyBrowserProtocolAndPhysics(): Promise<{
-  wallStopPositionMeters: readonly [number, number, number];
-  waterEntryPositionMeters: readonly [number, number, number];
-  animalMovePositionMeters: readonly [number, number, number];
+  wallStopPositionMetersXYZ: Vec3;
+  waterEntryPositionMetersXYZ: Vec3;
+  firstPackageSubjectMovement: MovementEvidence;
+  secondPackageSubjectMovement: MovementEvidence;
 }> {
   const server = await startWorldkitServer({ inputPath: INPUT_PATH });
   const browser = await chromium.launch({ headless: true });
   try {
     const page = await browser.newPage({ viewport: { width: 1280, height: 720 } });
-    await page.goto(server.url, { waitUntil: "domcontentloaded", timeout: 30_000 });
-    await page.waitForFunction(() => window.__WORLDKIT__ !== undefined, undefined, { timeout: 30_000 });
+    await page.goto(server.url, {
+      waitUntil: "domcontentloaded",
+      timeout: 30_000,
+    });
+    await page.waitForFunction(
+      () => window.__WORLDKIT__ !== undefined,
+      undefined,
+      { timeout: 30_000 },
+    );
     assert.equal(await page.evaluate(() => window.__WORLDKIT__!.version), 3);
     const ready = await page.evaluate(async () => window.__WORLDKIT__!.ready());
     assert.equal(ready.schemaVersion, 3);
     assert.equal(ready.runtimeBackend, "babylon-havok");
     assert.equal(ready.physics.backend, "havok");
     assert.equal(ready.physics.ready, true);
-    assert.equal(ready.controlledEntityId, "player");
-    assert.deepEqual(Object.keys(ready.subjectStatesByEntityId).sort(), ["animal", "player"]);
+    assert.equal(ready.controlledEntityId, PLAYER_ENTITY_ID);
+    assert.deepEqual(Object.keys(ready.subjectStatesByEntityId).sort(), [
+      FIRST_PACKAGE_SUBJECT_ENTITY_ID,
+      SECOND_PACKAGE_SUBJECT_ENTITY_ID,
+      PLAYER_ENTITY_ID,
+    ]);
 
     const wallStop = await page.evaluate(async () => {
       const api = window.__WORLDKIT__!;
@@ -151,8 +345,11 @@ async function verifyBrowserProtocolAndPhysics(): Promise<{
       api.reset();
       return api.runFixedInput([{ actions: ["move-right"], ticks: 360 }]);
     });
-    const wallStopPlayer = wallStop.subjectStatesByEntityId.player!;
-    assert.ok(wallStopPlayer.positionMetersXYZ[0] > 2, "Fixed input did not move player toward the east wall.");
+    const wallStopPlayer = wallStop.subjectStatesByEntityId[PLAYER_ENTITY_ID]!;
+    assert.ok(
+      wallStopPlayer.positionMetersXYZ[0] > 2,
+      "Fixed input did not move player toward the east wall.",
+    );
     assert.ok(
       wallStopPlayer.positionMetersXYZ[0] < 6.2,
       `Player crossed the east wall at x=${wallStopPlayer.positionMetersXYZ[0]}.`,
@@ -163,43 +360,143 @@ async function verifyBrowserProtocolAndPhysics(): Promise<{
       api.reset();
       return api.runFixedInput([{ actions: ["move-forward"], ticks: 600 }]);
     });
-    const waterEntryPlayer = waterEntry.subjectStatesByEntityId.player!;
-    assert.ok(waterEntryPlayer.positionMetersXYZ[2] < 5, "Fixed input did not move player toward the lake.");
-    assert.equal(waterEntryPlayer.movementMedium, "water", "The lake must deterministically activate water movement.");
-
-    const beforeControlSwitch = await page.evaluate(() => window.__WORLDKIT__!.reset());
-    const receipt = await page.evaluate(() => window.__WORLDKIT__!.bindControl({
-      controllerId: "controller-primary",
-      expectedControlledEntityId: "player",
-      controlledEntityId: "animal",
-    }));
-    assert.equal(receipt.status, "committed");
-    assert.equal(receipt.controlledEntityId, "animal");
-    const animalMove = await page.evaluate(() => window.__WORLDKIT__!.runFixedInput([
-      { actions: ["move-right"], ticks: 120 },
-    ]));
-    assert.equal(animalMove.controlledEntityId, "animal");
-    assert.equal(animalMove.camera.targetEntityId, "animal");
+    const waterEntryPlayer = waterEntry.subjectStatesByEntityId[PLAYER_ENTITY_ID]!;
     assert.ok(
-      animalMove.subjectStatesByEntityId.animal!.positionMetersXYZ[0] >
-        beforeControlSwitch.subjectStatesByEntityId.animal!.positionMetersXYZ[0],
-      "The committed animal did not move.",
+      waterEntryPlayer.positionMetersXYZ[2] < 5,
+      "Fixed input did not move player toward the lake.",
     );
-    assert.deepEqual(
-      animalMove.subjectStatesByEntityId.player!.positionMetersXYZ,
-      beforeControlSwitch.subjectStatesByEntityId.player!.positionMetersXYZ,
-      "The uncontrolled player moved during animal input.",
+    assert.equal(
+      waterEntryPlayer.movementMedium,
+      "water",
+      "The lake must deterministically activate water movement.",
+    );
+
+    const firstStart = await page.evaluate(() => window.__WORLDKIT__!.reset());
+    const firstReceipt = await page.evaluate(
+      ({ controlledEntityId }) =>
+        window.__WORLDKIT__!.bindControl({
+          controllerId: "controller-primary",
+          expectedControlledEntityId: "player",
+          controlledEntityId,
+        }),
+      { controlledEntityId: FIRST_PACKAGE_SUBJECT_ENTITY_ID },
+    );
+    assert.equal(firstReceipt.status, "committed");
+    assert.equal(firstReceipt.controlledEntityId, FIRST_PACKAGE_SUBJECT_ENTITY_ID);
+    const firstMove = await page.evaluate(() =>
+      window.__WORLDKIT__!.runFixedInput([
+        { actions: ["move-right"], ticks: 120 },
+      ]),
+    );
+    assert.equal(firstMove.controlledEntityId, FIRST_PACKAGE_SUBJECT_ENTITY_ID);
+    assert.equal(firstMove.camera.targetEntityId, FIRST_PACKAGE_SUBJECT_ENTITY_ID);
+    assert.ok(
+      firstMove.subjectStatesByEntityId[FIRST_PACKAGE_SUBJECT_ENTITY_ID]!
+        .positionMetersXYZ[0] >
+        firstStart.subjectStatesByEntityId[FIRST_PACKAGE_SUBJECT_ENTITY_ID]!
+          .positionMetersXYZ[0],
+      "The first Package Definition instance did not move.",
+    );
+    assertPositionUnchanged(
+      firstMove.subjectStatesByEntityId[SECOND_PACKAGE_SUBJECT_ENTITY_ID]!
+        .positionMetersXYZ,
+      firstStart.subjectStatesByEntityId[SECOND_PACKAGE_SUBJECT_ENTITY_ID]!
+        .positionMetersXYZ,
+      "The second Package Definition instance moved during first-instance input.",
+    );
+    assertPositionUnchanged(
+      firstMove.subjectStatesByEntityId[PLAYER_ENTITY_ID]!.positionMetersXYZ,
+      firstStart.subjectStatesByEntityId[PLAYER_ENTITY_ID]!.positionMetersXYZ,
+      "The uncontrolled player moved during first-instance input.",
+    );
+
+    const secondStart = await page.evaluate(() => window.__WORLDKIT__!.reset());
+    const secondReceipt = await page.evaluate(
+      ({ controlledEntityId }) =>
+        window.__WORLDKIT__!.bindControl({
+          controllerId: "controller-primary",
+          expectedControlledEntityId: "player",
+          controlledEntityId,
+        }),
+      { controlledEntityId: SECOND_PACKAGE_SUBJECT_ENTITY_ID },
+    );
+    assert.equal(secondReceipt.status, "committed");
+    assert.equal(secondReceipt.controlledEntityId, SECOND_PACKAGE_SUBJECT_ENTITY_ID);
+    const secondMove = await page.evaluate(() =>
+      window.__WORLDKIT__!.runFixedInput([
+        { actions: ["move-left"], ticks: 120 },
+      ]),
+    );
+    assert.equal(secondMove.controlledEntityId, SECOND_PACKAGE_SUBJECT_ENTITY_ID);
+    assert.equal(secondMove.camera.targetEntityId, SECOND_PACKAGE_SUBJECT_ENTITY_ID);
+    assert.ok(
+      secondMove.subjectStatesByEntityId[SECOND_PACKAGE_SUBJECT_ENTITY_ID]!
+        .positionMetersXYZ[0] <
+        secondStart.subjectStatesByEntityId[SECOND_PACKAGE_SUBJECT_ENTITY_ID]!
+          .positionMetersXYZ[0],
+      "The second Package Definition instance did not move.",
+    );
+    assertPositionUnchanged(
+      secondMove.subjectStatesByEntityId[FIRST_PACKAGE_SUBJECT_ENTITY_ID]!
+        .positionMetersXYZ,
+      secondStart.subjectStatesByEntityId[FIRST_PACKAGE_SUBJECT_ENTITY_ID]!
+        .positionMetersXYZ,
+      "The first Package Definition instance moved during second-instance input.",
+    );
+    assertPositionUnchanged(
+      secondMove.subjectStatesByEntityId[PLAYER_ENTITY_ID]!.positionMetersXYZ,
+      secondStart.subjectStatesByEntityId[PLAYER_ENTITY_ID]!.positionMetersXYZ,
+      "The uncontrolled player moved during second-instance input.",
     );
 
     const reset = await page.evaluate(() => window.__WORLDKIT__!.reset());
-    assert.equal(reset.controlledEntityId, "player");
-    assert.equal(reset.camera.targetEntityId, "player");
-    assert.deepEqual(reset.subjectStatesByEntityId, ready.subjectStatesByEntityId);
+    assert.equal(reset.controlledEntityId, PLAYER_ENTITY_ID);
+    assert.equal(reset.camera.targetEntityId, PLAYER_ENTITY_ID);
+    for (const entityId of [
+      FIRST_PACKAGE_SUBJECT_ENTITY_ID,
+      SECOND_PACKAGE_SUBJECT_ENTITY_ID,
+      PLAYER_ENTITY_ID,
+    ]) {
+      const resetState = reset.subjectStatesByEntityId[entityId]!;
+      const readyState = ready.subjectStatesByEntityId[entityId]!;
+      assert.equal(resetState.subjectDefinitionRef, readyState.subjectDefinitionRef);
+      assert.equal(
+        resetState.subjectDefinitionHash,
+        readyState.subjectDefinitionHash,
+      );
+      assert.equal(resetState.movementMedium, readyState.movementMedium);
+      assertPositionUnchanged(
+        resetState.positionMetersXYZ,
+        readyState.positionMetersXYZ,
+        `Reset did not restore Subject Origin for '${entityId}'.`,
+      );
+      assert.ok(
+        resetState.velocityMetersPerSecondXYZ.every(
+          (velocity) => Math.abs(velocity) <= 1e-9,
+        ),
+        `Reset did not clear velocity for '${entityId}'.`,
+      );
+    }
 
     return {
-      wallStopPositionMeters: wallStopPlayer.positionMetersXYZ,
-      waterEntryPositionMeters: waterEntryPlayer.positionMetersXYZ,
-      animalMovePositionMeters: animalMove.subjectStatesByEntityId.animal!.positionMetersXYZ,
+      wallStopPositionMetersXYZ: wallStopPlayer.positionMetersXYZ,
+      waterEntryPositionMetersXYZ: waterEntryPlayer.positionMetersXYZ,
+      firstPackageSubjectMovement: {
+        beforePositionMetersXYZ:
+          firstStart.subjectStatesByEntityId[FIRST_PACKAGE_SUBJECT_ENTITY_ID]!
+            .positionMetersXYZ,
+        afterPositionMetersXYZ:
+          firstMove.subjectStatesByEntityId[FIRST_PACKAGE_SUBJECT_ENTITY_ID]!
+            .positionMetersXYZ,
+      },
+      secondPackageSubjectMovement: {
+        beforePositionMetersXYZ:
+          secondStart.subjectStatesByEntityId[SECOND_PACKAGE_SUBJECT_ENTITY_ID]!
+            .positionMetersXYZ,
+        afterPositionMetersXYZ:
+          secondMove.subjectStatesByEntityId[SECOND_PACKAGE_SUBJECT_ENTITY_ID]!
+            .positionMetersXYZ,
+      },
     };
   } finally {
     await browser.close();
@@ -211,30 +508,58 @@ async function run(): Promise<void> {
   await runCliGates();
   const artifacts = await verifyArtifacts();
   const physics = await verifyBrowserProtocolAndPhysics();
-  process.stdout.write(`${JSON.stringify({
-    ok: true,
-    gates: [
-      "strict-valid-input",
-      "strict-invalid-input-rejection",
-      "deterministic-v3-build-artifact",
-      "playwright-capture",
-      "browser-protocol-v3",
-      "babylon-havok-runtime",
-      "multi-subject-visuals",
-      "blocking-wall-collision",
-      "water-medium-transition",
-      "atomic-control-switch",
-      "deterministic-reset",
-    ],
-    screenshot: { path: SCREENSHOT_PATH, ...artifacts.dimensions },
-    havokBodies: artifacts.bodyCount,
-    ...physics,
-  }, null, 2)}\n`);
+  process.stdout.write(
+    `${JSON.stringify(
+      {
+        ok: true,
+        protocolVersions: {
+          authoring: 2,
+          normalizedWorldIr: 2,
+          executionPlan: 3,
+          runtimeSnapshot: 3,
+          browserProtocol: 3,
+        },
+        gates: [
+          "strict-valid-input",
+          "strict-invalid-input-rejection",
+          "deterministic-v3-build-artifact",
+          "subject-explain-artifact",
+          "playwright-capture",
+          "browser-protocol-v3",
+          "babylon-havok-runtime",
+          "shared-package-definition",
+          "independent-subject-runtime-state",
+          "blocking-wall-collision",
+          "water-medium-transition",
+          "atomic-control-switch-both-package-instances",
+          "deterministic-reset",
+        ],
+        hashes: {
+          normalizedWorldIr: artifacts.normalizedWorldIrHash,
+          executionPlan: artifacts.executionPlanHash,
+          subjectDefinition: artifacts.subjectDefinitionHash,
+          resourceLock: artifacts.resourceLockHash,
+        },
+        artifacts: {
+          build: BUILD_PATH,
+          screenshot: { path: SCREENSHOT_PATH, ...artifacts.dimensions },
+          snapshot: SNAPSHOT_PATH,
+          explain: EXPLAIN_PATH,
+        },
+        havokBodies: artifacts.bodyCount,
+        ...physics,
+      },
+      null,
+      2,
+    )}\n`,
+  );
 }
 
 try {
   await run();
 } catch (error) {
-  process.stderr.write(`${error instanceof Error ? error.stack ?? error.message : String(error)}\n`);
+  process.stderr.write(
+    `${error instanceof Error ? error.stack ?? error.message : String(error)}\n`,
+  );
   process.exitCode = 1;
 }
