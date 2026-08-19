@@ -32,6 +32,7 @@ import { createWhiteboxMaterials, type WhiteboxMaterials } from "./materials";
 import { enableHavokPhysics, FIXED_TIME_STEP_SECONDS } from "./physics";
 import { SubjectController } from "./subject-controller";
 import {
+  isSubjectAssetRuntimeErrorV1,
   SubjectAssetCacheV1,
   type SubjectAssetCacheOptionsV1,
   type SubjectAssetResolverV1,
@@ -55,6 +56,15 @@ export interface BabylonWorldRuntimeOptions {
 }
 
 type OwnedDisposer = () => void | Promise<void>;
+
+class WorldRuntimeDisposeErrorV1 extends Error {
+  readonly name = "WorldRuntimeDisposeErrorV1";
+  readonly code = "WORLDKIT_RUNTIME_DISPOSE_FAILED" as const;
+
+  constructor() {
+    super("WORLDKIT_RUNTIME_DISPOSE_FAILED: Runtime cleanup failed.");
+  }
+}
 
 function applyTransform(mesh: Mesh, object: ExecutionObjectV3): void {
   mesh.position = new Vector3(...object.transform.positionMetersXYZ);
@@ -224,7 +234,10 @@ async function disposeOwnedStack(
       firstFailure ??= error;
     }
   }
-  if (firstFailure !== undefined) throw firstFailure;
+  if (firstFailure !== undefined) {
+    if (isSubjectAssetRuntimeErrorV1(firstFailure)) throw firstFailure;
+    throw new WorldRuntimeDisposeErrorV1();
+  }
 }
 
 export class BabylonWorldRuntime implements WorldRuntimeSessionV3 {
@@ -321,13 +334,15 @@ export class BabylonWorldRuntime implements WorldRuntimeSessionV3 {
         scene,
       );
       const aggregates: PhysicsAggregate[] = [];
-      ownedDisposers.push(() => {
-        for (const aggregate of [...aggregates].reverse()) aggregate.dispose();
-        heightfieldShape.dispose();
-      });
-      aggregates.push(
-        new PhysicsAggregate(terrainMesh, heightfieldShape, { mass: 0, friction: 0.9, restitution: 0 }, scene),
+      ownedDisposers.push(() => heightfieldShape.dispose());
+      const terrainAggregate = new PhysicsAggregate(
+        terrainMesh,
+        heightfieldShape,
+        { mass: 0, friction: 0.9, restitution: 0 },
+        scene,
       );
+      aggregates.push(terrainAggregate);
+      ownedDisposers.push(() => terrainAggregate.dispose());
 
       for (const water of options.executionPlan.waters) createWaterMesh(water, materials, scene);
       for (const object of options.executionPlan.objects) {
@@ -338,7 +353,14 @@ export class BabylonWorldRuntime implements WorldRuntimeSessionV3 {
             : object.primitive.kind === "sphere"
               ? PhysicsShapeType.SPHERE
               : PhysicsShapeType.CYLINDER;
-          aggregates.push(new PhysicsAggregate(mesh, shapeType, { mass: 0, friction: 0.75, restitution: 0 }, scene));
+          const aggregate = new PhysicsAggregate(
+            mesh,
+            shapeType,
+            { mass: 0, friction: 0.75, restitution: 0 },
+            scene,
+          );
+          aggregates.push(aggregate);
+          ownedDisposers.push(() => aggregate.dispose());
         }
       }
 
@@ -460,6 +482,7 @@ export class BabylonWorldRuntime implements WorldRuntimeSessionV3 {
     }
 
     this.controllerFor(this.controlledEntityId).stop();
+    this.visualFor(this.controlledEntityId).stepAnimation(this.tick, "idle");
     this.controlledEntityId = request.controlledEntityId;
     this.updateCamera();
     return {
@@ -582,8 +605,19 @@ export class BabylonWorldRuntime implements WorldRuntimeSessionV3 {
   async dispose(): Promise<void> {
     if (this.disposed) return;
     this.disposed = true;
-    this.engine.stopRenderLoop(this.renderLoop);
-    await disposeOwnedStack(this.ownedDisposers);
+    let renderLoopStopFailed = false;
+    try {
+      this.engine.stopRenderLoop(this.renderLoop);
+    } catch {
+      renderLoopStopFailed = true;
+    }
+    try {
+      await disposeOwnedStack(this.ownedDisposers);
+    } catch (error) {
+      if (renderLoopStopFailed) throw new WorldRuntimeDisposeErrorV1();
+      throw error;
+    }
+    if (renderLoopStopFailed) throw new WorldRuntimeDisposeErrorV1();
   }
 
   private detectMovementMedium(

@@ -85,15 +85,20 @@ export class SubjectAnimationPlayer {
     if (this.disposed) return;
     this.disposed = true;
     this.transition = undefined;
-    let firstFailure: unknown;
+    let disposalFailed = false;
     for (const animation of this.animationsByActionId.values()) {
       try {
         animation.group.stop();
-      } catch (error) {
-        firstFailure ??= error;
+      } catch {
+        disposalFailed = true;
       }
     }
-    if (firstFailure !== undefined) throw firstFailure;
+    if (disposalFailed) {
+      throw new SubjectAssetRuntimeErrorV1("SUBJECT_ASSET_DISPOSE_FAILED", {
+        subjectAssetRef: this.options.subjectAssetRef,
+        artifactContentHash: this.options.artifactContentHash,
+      });
+    }
   }
 
   private validateAnimations(): ReadonlyMap<

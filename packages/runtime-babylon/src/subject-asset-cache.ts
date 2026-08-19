@@ -78,6 +78,7 @@ export type SubjectAssetRuntimeErrorCodeV1 =
   | "SUBJECT_ASSET_CACHE_DISPOSED"
   | "SUBJECT_ASSET_ANIMATION_INCOMPATIBLE"
   | "SUBJECT_ASSET_ANIMATION_MISSING"
+  | "SUBJECT_ASSET_DISPOSE_FAILED"
   | "SUBJECT_ASSET_FORMAT_UNSUPPORTED"
   | "SUBJECT_ASSET_HASH_MISMATCH"
   | "SUBJECT_ASSET_INVENTORY_EXCEEDED"
@@ -94,6 +95,7 @@ const SUBJECT_ASSET_RUNTIME_ERROR_CODES = new Set<SubjectAssetRuntimeErrorCodeV1
   "SUBJECT_ASSET_ANIMATION_INCOMPATIBLE",
   "SUBJECT_ASSET_ANIMATION_MISSING",
   "SUBJECT_ASSET_CACHE_DISPOSED",
+  "SUBJECT_ASSET_DISPOSE_FAILED",
   "SUBJECT_ASSET_FORMAT_UNSUPPORTED",
   "SUBJECT_ASSET_HASH_MISMATCH",
   "SUBJECT_ASSET_INVENTORY_EXCEEDED",
@@ -167,8 +169,8 @@ function sanitizedDisposalFailure(
 ): SubjectAssetRuntimeErrorV1 {
   if (isSubjectAssetRuntimeErrorV1(error)) return error;
   return asset === undefined
-    ? new SubjectAssetRuntimeErrorV1("SUBJECT_ASSET_FORMAT_UNSUPPORTED")
-    : assetDiagnostic("SUBJECT_ASSET_FORMAT_UNSUPPORTED", asset);
+    ? new SubjectAssetRuntimeErrorV1("SUBJECT_ASSET_DISPOSE_FAILED")
+    : assetDiagnostic("SUBJECT_ASSET_DISPOSE_FAILED", asset);
 }
 
 function copyDescriptor(asset: ExecutionSubjectAssetV1): ExecutionSubjectAssetV1 {

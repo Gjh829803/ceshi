@@ -46,6 +46,7 @@ import {
   isSubjectAssetRuntimeErrorV1,
   type SubjectAssetResolverV1,
   type SubjectAssetInstanceV1,
+  type SubjectAssetLeaseV1,
   type SubjectAssetRuntimeLimitsV1,
   type SubjectVisual,
   type BabylonWorldRuntimeOptions,
@@ -307,6 +308,9 @@ interface RuntimeDebugProbe {
 
 interface RiggedVisualInternals extends SubjectVisual {
   assetInstance?: SubjectAssetInstanceV1;
+  assetLease?: SubjectAssetLeaseV1;
+  primitiveMeshes?: readonly TransformNode[];
+  assetPartRoots?: readonly TransformNode[];
 }
 
 interface RiggedRuntimeProbe {
@@ -615,11 +619,11 @@ describe("BabylonWorldRuntime", () => {
     const basePlan = createTwoRiggedSubjectExecutionPlan();
     const executionPlan: ExecutionPlanV3 = {
       ...basePlan,
-      subjects: basePlan.subjects.map((subject) =>
-        subject.entityId === "player"
-          ? {
-              ...subject,
-              visualParts: [
+      subjects: basePlan.subjects.map((subject) => ({
+        ...subject,
+        visualParts:
+          subject.entityId === "player"
+            ? [
                 ...subject.visualParts,
                 {
                   id: "marker",
@@ -631,32 +635,31 @@ describe("BabylonWorldRuntime", () => {
                   },
                   semanticTags: ["marker"],
                 },
-              ],
-              sockets: [
-                ...subject.sockets.map((socket) =>
-                  socket.kind === "bone"
-                    ? {
-                        ...socket,
-                        offsetTransform: {
-                          ...socket.offsetTransform,
-                          positionMetersXYZ: [0.2, 0, 0] as const,
-                        },
-                      }
-                    : socket,
-                ),
-                {
-                  id: "focus.local",
-                  kind: "local" as const,
-                  localTransform: {
-                    positionMetersXYZ: [0, 1.5, 0] as const,
-                    rotationEulerRadiansXYZ: [0, 0, 0] as const,
+              ]
+            : subject.visualParts,
+        sockets: [
+          ...subject.sockets.map((socket) =>
+            subject.entityId === "player" && socket.kind === "bone"
+              ? {
+                  ...socket,
+                  offsetTransform: {
+                    ...socket.offsetTransform,
+                    positionMetersXYZ: [0.2, 0, 0] as const,
                   },
-                  semanticTags: ["focus"],
-                },
-              ],
-            }
-          : subject,
-      ),
+                }
+              : socket,
+          ),
+          {
+            id: "focus.local",
+            kind: "local" as const,
+            localTransform: {
+              positionMetersXYZ: [0, 1.5, 0] as const,
+              rotationEulerRadiansXYZ: [0, 0, 0] as const,
+            },
+            semanticTags: ["focus"],
+          },
+        ],
+      })),
     };
     const runtime = await createRiggedRuntime(executionPlan);
     const probe = createRiggedRuntimeProbe(runtime);
@@ -691,19 +694,41 @@ describe("BabylonWorldRuntime", () => {
     ]);
 
     const handSocket = playerVisual.socketNodesById.get("hand.right")!;
-    handSocket.computeWorldMatrix(true);
-    const beforeSocket = handSocket.getAbsolutePosition().clone();
-    const snapshot = await runtime.runFixedInput({
-      actions: ["move-right", "run"],
-      ticks: 20,
-    });
+    const localSocket = playerVisual.socketNodesById.get("focus.local")!;
+    const heroBHandSocket = heroBVisual.socketNodesById.get("hand.right")!;
+    const heroBLocalSocket = heroBVisual.socketNodesById.get("focus.local")!;
+    expect(handSocket).not.toBe(heroBHandSocket);
+    expect(localSocket).not.toBe(heroBLocalSocket);
+    const relativeSocketPosition = (
+      socket: TransformNode,
+      visualRoot: TransformNode,
+    ): Vector3 => {
+      visualRoot.computeWorldMatrix(true);
+      socket.computeWorldMatrix(true);
+      return Vector3.TransformCoordinates(
+        socket.getAbsolutePosition(),
+        visualRoot.getWorldMatrix().clone().invert(),
+      );
+    };
+    const rootPositionBefore = playerVisual.root.getAbsolutePosition().clone();
+    const relativeSocketBefore = relativeSocketPosition(
+      handSocket,
+      playerVisual.root,
+    );
+    playerVisual.stepAnimation(0, "run");
+    playerVisual.stepAnimation(30, "run");
     runtime.renderFrame();
-    handSocket.computeWorldMatrix(true);
+    const relativeSocketAfter = relativeSocketPosition(
+      handSocket,
+      playerVisual.root,
+    );
+    const snapshot = runtime.snapshot();
 
     expect(snapshot.subjectStatesByEntityId.player?.activeActionId).toBe("run");
     expect(snapshot.subjectStatesByEntityId["hero-b"]?.activeActionId).toBe("idle");
-    expect(handSocket.getAbsolutePosition().subtract(beforeSocket).length()).toBeGreaterThan(
-      0.01,
+    expect(playerVisual.root.getAbsolutePosition()).toEqual(rootPositionBefore);
+    expect(relativeSocketAfter.subtract(relativeSocketBefore).length()).toBeGreaterThan(
+      0.001,
     );
     expect(
       playerInstance.animationGroups.find((group) => group.name === "run")?.isStarted,
@@ -711,6 +736,14 @@ describe("BabylonWorldRuntime", () => {
     expect(
       heroBInstance.animationGroups.find((group) => group.name === "run")?.isStarted,
     ).toBeFalsy();
+
+    playerVisual.dispose();
+    expect(handSocket.isDisposed()).toBe(true);
+    expect(localSocket.isDisposed()).toBe(true);
+    expect(playerInstance.rootNodes[0]!.isDisposed()).toBe(true);
+    expect(heroBHandSocket.isDisposed()).toBe(false);
+    expect(heroBLocalSocket.isDisposed()).toBe(false);
+    expect(heroBInstance.rootNodes[0]!.isDisposed()).toBe(false);
 
     await runtime.dispose();
   });
@@ -957,12 +990,16 @@ describe("BabylonWorldRuntime", () => {
 
   it("unwinds the partial runtime and disposes a cloned Asset instance exactly once", async () => {
     let instanceDispose: ReturnType<typeof vi.fn> | undefined;
+    const secret = "BABYLON_PROVIDER_PRIVATE_INITIALIZATION_CLEANUP_FAILURE";
     mutateNextLoadedContainer((container) => {
       const nativeInstantiate = container.instantiateModelsToScene.bind(container);
       vi.spyOn(container, "instantiateModelsToScene").mockImplementation((...args) => {
         const instance = nativeInstantiate(...args);
         const nativeDispose = instance.dispose.bind(instance);
-        instanceDispose = vi.fn(() => nativeDispose());
+        instanceDispose = vi.fn(() => {
+          nativeDispose();
+          throw new Error(secret);
+        });
         instance.dispose = instanceDispose;
         return instance;
       });
@@ -980,6 +1017,9 @@ describe("BabylonWorldRuntime", () => {
     }).catch((reason) => reason as unknown);
 
     expect(error).toMatchObject({ code: "SUBJECT_ASSET_RIG_INCOMPATIBLE" });
+    expect(error).not.toHaveProperty("cause");
+    expect(String(error)).not.toContain(secret);
+    expect(String(error)).not.toMatch(/babylon|provider/i);
     expect(instanceDispose).toHaveBeenCalledTimes(1);
     expect(engine.isDisposed).toBe(true);
   });
@@ -1002,6 +1042,180 @@ describe("BabylonWorldRuntime", () => {
     await runtime.dispose();
 
     expect(instanceDispose).toHaveBeenCalledTimes(1);
+  });
+
+  it("sanitizes rigged Visual cleanup failures after attempting every sibling", async () => {
+    const basePlan = createRiggedExecutionPlan();
+    const baseSubject = basePlan.subjects[0]!;
+    const executionPlan: ExecutionPlanV3 = {
+      ...basePlan,
+      subjects: [
+        {
+          ...baseSubject,
+          visualParts: [
+            ...baseSubject.visualParts,
+            {
+              id: "cleanup-marker",
+              kind: "primitive" as const,
+              shape: { kind: "sphere" as const, radiusMeters: 0.08 },
+              localTransform: {
+                positionMetersXYZ: [0, 2, 0] as const,
+                rotationEulerRadiansXYZ: [0, 0, 0] as const,
+              },
+              semanticTags: ["cleanup-marker"],
+            },
+          ],
+          sockets: [
+            ...baseSubject.sockets,
+            {
+              id: "focus.local",
+              kind: "local" as const,
+              localTransform: {
+                positionMetersXYZ: [0, 1.5, 0] as const,
+                rotationEulerRadiansXYZ: [0, 0, 0] as const,
+              },
+              semanticTags: ["focus"],
+            },
+          ],
+        },
+      ],
+    };
+    const runtime = await createRiggedRuntime(executionPlan);
+    const visual = createRiggedRuntimeProbe(runtime).visual("player");
+    const boneSocket = visual.socketNodesById.get("hand.right")!;
+    const localSocket = visual.socketNodesById.get("focus.local")!;
+    const instance = visual.assetInstance!;
+    const lease = visual.assetLease!;
+    const primitiveMesh = visual.primitiveMeshes![0]!;
+    const assetPartRoot = visual.assetPartRoots![0]!;
+    const secret = "BABYLON_PROVIDER_PRIVATE_VISUAL_DISPOSE_FAILURE";
+
+    const nativeBoneDetach = boneSocket.detachFromBone.bind(boneSocket);
+    const boneDetach = vi.spyOn(boneSocket, "detachFromBone").mockImplementation(() => {
+      nativeBoneDetach();
+      throw new Error(secret);
+    });
+    const nativeBoneDispose = boneSocket.dispose.bind(boneSocket);
+    const boneDispose = vi
+      .spyOn(boneSocket, "dispose")
+      .mockImplementation((...args) => nativeBoneDispose(...args));
+    const localDetach = vi.spyOn(localSocket, "detachFromBone");
+    const nativeLocalDispose = localSocket.dispose.bind(localSocket);
+    const localDispose = vi
+      .spyOn(localSocket, "dispose")
+      .mockImplementation((...args) => {
+        nativeLocalDispose(...args);
+        throw new Error(secret);
+      });
+    const nativePrimitiveDispose = primitiveMesh.dispose.bind(primitiveMesh);
+    const primitiveDispose = vi
+      .spyOn(primitiveMesh, "dispose")
+      .mockImplementation((...args) => nativePrimitiveDispose(...args));
+    const nativeInstanceDispose = instance.dispose.bind(instance);
+    const instanceDispose = vi.spyOn(instance, "dispose").mockImplementation(() => {
+      nativeInstanceDispose();
+      throw new Error(secret);
+    });
+    const nativePartRootDispose = assetPartRoot.dispose.bind(assetPartRoot);
+    const partRootDispose = vi
+      .spyOn(assetPartRoot, "dispose")
+      .mockImplementation((...args) => nativePartRootDispose(...args));
+    const nativeRootDispose = visual.root.dispose.bind(visual.root);
+    const rootDispose = vi
+      .spyOn(visual.root, "dispose")
+      .mockImplementation((...args) => nativeRootDispose(...args));
+    const nativeLeaseRelease = lease.release.bind(lease);
+    const leaseRelease = vi
+      .spyOn(lease, "release")
+      .mockImplementation(() => nativeLeaseRelease());
+
+    const error = (() => {
+      try {
+        visual.dispose();
+      } catch (reason) {
+        return reason as unknown;
+      }
+    })();
+    visual.dispose();
+
+    expect(isSubjectAssetRuntimeErrorV1(error)).toBe(true);
+    expect(error).toMatchObject({
+      code: "SUBJECT_ASSET_DISPOSE_FAILED",
+      subjectAssetRef: goldenSubjectAssetDescriptor.subjectAssetRef,
+      artifactContentHash: goldenSubjectAssetDescriptor.artifactContentHash,
+    });
+    expect(error).not.toHaveProperty("cause");
+    expect(String(error)).not.toContain(secret);
+    expect(String(error)).not.toMatch(/babylon|provider/i);
+    expect(boneDetach).toHaveBeenCalledTimes(1);
+    expect(boneDispose).toHaveBeenCalledTimes(1);
+    expect(localDetach).toHaveBeenCalledTimes(1);
+    expect(localDispose).toHaveBeenCalledTimes(1);
+    expect(primitiveDispose).toHaveBeenCalledTimes(1);
+    expect(instanceDispose).toHaveBeenCalledTimes(1);
+    expect(partRootDispose).toHaveBeenCalledTimes(1);
+    expect(rootDispose).toHaveBeenCalledTimes(1);
+    expect(leaseRelease).toHaveBeenCalledTimes(1);
+
+    boneDetach.mockRestore();
+    boneDispose.mockRestore();
+    localDetach.mockRestore();
+    localDispose.mockRestore();
+    primitiveDispose.mockRestore();
+    instanceDispose.mockRestore();
+    partRootDispose.mockRestore();
+    rootDispose.mockRestore();
+    leaseRelease.mockRestore();
+    await runtime.dispose();
+  });
+
+  it("continues every Runtime cleanup after an aggregate disposal failure", async () => {
+    const runtime = await createRuntime();
+    const internals = runtime as unknown as {
+      aggregates: Array<{ dispose(): void }>;
+      ownedHeightfieldShape: { dispose(): void };
+      scene: Scene;
+      engine: NullEngine;
+    };
+    expect(internals.aggregates.length).toBeGreaterThan(1);
+    const secret = "HAVOK_PROVIDER_PRIVATE_DISPOSE_FAILURE";
+    const aggregateDisposals = internals.aggregates.map((aggregate, index) => {
+      const nativeDispose = aggregate.dispose.bind(aggregate);
+      return vi.spyOn(aggregate, "dispose").mockImplementation(() => {
+        nativeDispose();
+        if (index === internals.aggregates.length - 1) throw new Error(secret);
+      });
+    });
+    const nativeHeightfieldDispose =
+      internals.ownedHeightfieldShape.dispose.bind(internals.ownedHeightfieldShape);
+    const heightfieldDisposal = vi
+      .spyOn(internals.ownedHeightfieldShape, "dispose")
+      .mockImplementation(() => nativeHeightfieldDispose());
+    const nativeSceneDispose = internals.scene.dispose.bind(internals.scene);
+    const sceneDisposal = vi
+      .spyOn(internals.scene, "dispose")
+      .mockImplementation(() => nativeSceneDispose());
+    const nativeEngineDispose = internals.engine.dispose.bind(internals.engine);
+    const engineDisposal = vi
+      .spyOn(internals.engine, "dispose")
+      .mockImplementation(() => nativeEngineDispose());
+    const error = await runtime.dispose().catch((reason) => reason as unknown);
+    await runtime.dispose();
+
+    expect(error).toMatchObject({ code: "WORLDKIT_RUNTIME_DISPOSE_FAILED" });
+    expect(error).not.toHaveProperty("cause");
+    expect(String(error)).not.toContain(secret);
+    expect(String(error)).not.toMatch(/havok|provider/i);
+    for (const disposal of aggregateDisposals) {
+      expect(disposal).toHaveBeenCalledTimes(1);
+      disposal.mockRestore();
+    }
+    expect(heightfieldDisposal).toHaveBeenCalledTimes(1);
+    expect(sceneDisposal).toHaveBeenCalledTimes(1);
+    expect(engineDisposal).toHaveBeenCalledTimes(1);
+    heightfieldDisposal.mockRestore();
+    sceneDisposal.mockRestore();
+    engineDisposal.mockRestore();
   });
 
   it("uses run speed only for horizontal non-water movement", async () => {
@@ -1050,6 +1264,33 @@ describe("BabylonWorldRuntime", () => {
     expect(inactiveAfter[1]).toBeCloseTo(inactiveBefore[1]);
     expect(inactiveAfter[2]).toBe(inactiveBefore[2]);
     expect(after.camera.targetEntityId).toBe("pack-animal-a");
+    await runtime.dispose();
+  });
+
+  it("idles the previous rigged Subject in the committed rebind snapshot", async () => {
+    const runtime = await createRiggedRuntime(
+      createTwoRiggedSubjectExecutionPlan(),
+    );
+    const running = await runtime.runFixedInput({
+      actions: ["move-right", "run"],
+      ticks: 2,
+    });
+    expect(running.subjectStatesByEntityId.player?.activeActionId).toBe("run");
+
+    expect(
+      runtime.bindControl({
+        controllerId: "controller-primary",
+        expectedControlledEntityId: "player",
+        controlledEntityId: "hero-b",
+      }),
+    ).toMatchObject({ status: "committed", controlledEntityId: "hero-b" });
+    const immediate = runtime.snapshot();
+    const zeroTick = await runtime.runFixedInput({ actions: [], ticks: 0 });
+
+    expect(immediate.subjectStatesByEntityId.player?.activeActionId).toBe("idle");
+    expect(zeroTick.subjectStatesByEntityId.player?.activeActionId).toBe("idle");
+    expect(immediate.tick).toBe(running.tick);
+    expect(zeroTick.tick).toBe(running.tick);
     await runtime.dispose();
   });
 
@@ -1262,6 +1503,53 @@ describe("SubjectAnimationPlayer", () => {
     expect(groups.filter((group) => group.isStarted)).toHaveLength(1);
     expect(player.activeActionId).toBe("jump");
     player.dispose();
+    scene.dispose();
+    engine.dispose();
+  });
+
+  it("sanitizes AnimationGroup stop failure after stopping every mapped Clip", () => {
+    const { engine, scene } = createAssetScene();
+    const groups = ["idle", "walk", "run", "jump"].map((name) =>
+      createClipGroup(scene, name),
+    );
+    const player = new SubjectAnimationPlayer({
+      animationGroups: groups,
+      animationSet: createAnimationSet(),
+      subjectAssetRef: goldenSubjectAssetDescriptor.subjectAssetRef,
+      artifactContentHash: goldenSubjectAssetDescriptor.artifactContentHash,
+    });
+    const secret = "BABYLON_PROVIDER_PRIVATE_ANIMATION_STOP_FAILURE";
+    const stopSpies = groups.map((group, index) => {
+      const nativeStop = group.stop.bind(group);
+      return vi.spyOn(group, "stop").mockImplementation(() => {
+        const stoppedGroup = nativeStop();
+        if (index === 0) throw new Error(secret);
+        return stoppedGroup;
+      });
+    });
+
+    const error = (() => {
+      try {
+        player.dispose();
+      } catch (reason) {
+        return reason as unknown;
+      }
+    })();
+    player.dispose();
+
+    expect(isSubjectAssetRuntimeErrorV1(error)).toBe(true);
+    expect(error).toMatchObject({
+      code: "SUBJECT_ASSET_DISPOSE_FAILED",
+      subjectAssetRef: goldenSubjectAssetDescriptor.subjectAssetRef,
+      artifactContentHash: goldenSubjectAssetDescriptor.artifactContentHash,
+    });
+    expect(error).not.toHaveProperty("cause");
+    expect(String(error)).not.toContain(secret);
+    expect(String(error)).not.toMatch(/babylon|provider/i);
+    for (const stop of stopSpies) {
+      expect(stop).toHaveBeenCalledTimes(1);
+      stop.mockRestore();
+    }
     scene.dispose();
     engine.dispose();
   });
@@ -2238,7 +2526,8 @@ describe("SubjectAssetCacheV1", () => {
     const disposalError = await firstDisposal!.catch((error) => error);
 
     expect(isSubjectAssetRuntimeErrorV1(disposalError)).toBe(true);
-    expect(disposalError).toMatchObject({ code: "SUBJECT_ASSET_FORMAT_UNSUPPORTED" });
+    expect(disposalError).toMatchObject({ code: "SUBJECT_ASSET_DISPOSE_FAILED" });
+    expect(disposalError).not.toHaveProperty("cause");
     expect(String(disposalError)).not.toContain(secret);
     expect(String(disposalError)).not.toMatch(/babylon|provider/i);
     expect(firstInstanceDisposeCalls).toBe(1);

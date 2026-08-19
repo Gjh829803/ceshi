@@ -215,6 +215,7 @@ class OwnedSubjectVisual implements SubjectVisual {
     private readonly primitiveMeshes: readonly Mesh[],
     private readonly assetPartRoots: readonly TransformNode[],
     private readonly animationPlayer: SubjectAnimationPlayer | undefined,
+    private readonly assetDescriptor: ExecutionSubjectAssetV1 | undefined,
     private readonly assetInstance: SubjectAssetInstanceV1 | undefined,
     private readonly assetLease: SubjectAssetLeaseV1 | undefined,
   ) {}
@@ -260,7 +261,9 @@ class OwnedSubjectVisual implements SubjectVisual {
     }
     attempt(() => this.root.dispose(false, false));
     if (this.assetLease !== undefined) attempt(() => this.assetLease!.release());
-    if (firstFailure !== undefined) throw firstFailure;
+    if (firstFailure !== undefined) {
+      throw assetError("SUBJECT_ASSET_DISPOSE_FAILED", this.assetDescriptor);
+    }
   }
 }
 
@@ -280,6 +283,7 @@ export async function createSubjectVisual(
   let assetLease: SubjectAssetLeaseV1 | undefined;
   let assetInstance: SubjectAssetInstanceV1 | undefined;
   let animationPlayer: SubjectAnimationPlayer | undefined;
+  let assetDescriptor: ExecutionSubjectAssetV1 | undefined;
 
   try {
     const assetParts = subject.visualParts.filter((part) => part.kind === "asset");
@@ -309,6 +313,7 @@ export async function createSubjectVisual(
         (resource) => resource.subjectAssetRef,
         "SUBJECT_ASSET_RIG_INCOMPATIBLE",
       );
+      assetDescriptor = asset;
       assetLease = await subjectAssetCache.acquire(asset);
       assetInstance = assetLease.instantiate(subject.entityId);
       const partRoot = new TransformNode(`${subject.entityId}.${part.id}`, scene);
@@ -430,6 +435,7 @@ export async function createSubjectVisual(
       primitiveMeshes,
       assetPartRoots,
       animationPlayer,
+      assetDescriptor,
       assetInstance,
       assetLease,
     );
