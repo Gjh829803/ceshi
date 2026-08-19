@@ -41,4 +41,9 @@ export const builtInSubjectDefinitionRegistry = createSubjectDefinitionRegistry(
   BUILT_IN_SUBJECT_KIT_DEFINITIONS,
 );
 
+export {
+  builtInSubjectResourceRegistry,
+  createSubjectResourceRegistry,
+} from "./subject-resource-registry";
 export * from "./types";
+export * from "./types-v2";

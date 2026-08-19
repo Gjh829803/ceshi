@@ -204,7 +204,16 @@ importers:
 
   packages/runtime-contracts: {}
 
-  packages/subject-registry: {}
+  packages/subject-composition: {}
+
+  packages/subject-registry:
+    dependencies:
+      '@whitebox-world/protocol':
+        specifier: workspace:*
+        version: link:../protocol
+      '@whitebox-world/subject-composition':
+        specifier: workspace:*
+        version: link:../subject-composition
 
   packages/subjects:
     dependencies:
