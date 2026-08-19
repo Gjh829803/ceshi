@@ -29,7 +29,7 @@
 |---:|---|---|---|
 | 1. Shared Canonical Protocol | Complete | `d3bf828` | 3 focused test files / 19 tests + typecheck |
 | 2. Subject Composition | Complete | `567f159` | 7 focused tests + dependency audit + typecheck |
-| 3. Subject Resource Registry | Not started | — | — |
+| 3. Subject Resource Registry | Complete | `182cca2` | 6 focused tests + typecheck |
 | 4. Clean AuthoringSpecV2 | Not started | — | — |
 | 5. Definition Normalize/Hash/Lock | Not started | — | — |
 | 6. Runtime Contracts V3 | Not started | — | — |
@@ -287,12 +287,12 @@ export function createSubjectResourceRegistry(
 ```
 - Worktree-only staging rule: S0 Registry exports may remain during Tasks 3–8 only so intermediate commits typecheck. No compatibility tests or fallback resolution are added, the branch must not integrate in that state, and Task 9 deletes the old exports before the full gate.
 
-- [ ] **Step 1: Replace S0 registry tests with canonical resource tests**
+- [x] **Step 1: Replace S0 registry tests with canonical resource tests**
 
 ```ts
-it("exposes canonical subject-definition refs", () => {
+it("exposes canonical subject-definition resource refs", () => {
   expect(builtInSubjectResourceRegistry.listSubjectDefinitions().map(
-    (definition) => definition.subjectDefinitionRef,
+    (definition) => definition.resourceRef,
   )).toEqual([
     "worldkit://subject-definition/humanoid.third-person@1",
     "worldkit://subject-definition/quadruped.ground-proxy@1",
@@ -309,13 +309,13 @@ it("locks every immutable manifest with canonical content hash", () => {
 
 Add duplicate-ref rejection tests across resource kinds, stable `resourceRef` ordering, and Profile resolution tests.
 
-- [ ] **Step 2: Run registry tests and verify type/ref failures**
+- [x] **Step 2: Run registry tests and verify type/ref failures**
 
 Run: `pnpm vitest run packages/subject-registry/src/subject-registry.test.ts`
 
 Expected: FAIL because S0 exposes `kitRef` and has no Profile manifests.
 
-- [ ] **Step 3: Define registry resource discriminated unions**
+- [x] **Step 3: Define registry resource discriminated unions**
 
 Create manifests for:
 
@@ -330,11 +330,11 @@ worldkit://subject-definition/quadruped.ground-proxy@1
 
 Each manifest has `kind`, `id`, `version`, `resourceRef`, `contentHash`, closed configuration, and AI metadata where relevant. Compute `contentHash` from the manifest without its own hash field.
 
-- [ ] **Step 4: Implement immutable exact resolution**
+- [x] **Step 4: Implement immutable exact resolution**
 
 Deep-clone and deep-freeze inputs, reject duplicate `resourceRef` with `SUBJECT_REGISTRY_DUPLICATE_REF`, index by exact Ref, and sort list output by `resourceRef`. Do not resolve `latest`, unversioned aliases, or old Kit refs.
 
-- [ ] **Step 5: Run registry and type checks**
+- [x] **Step 5: Run registry and type checks**
 
 Run: `pnpm vitest run packages/subject-registry/src/subject-registry.test.ts`
 
@@ -342,7 +342,7 @@ Run: `pnpm typecheck`
 
 Expected: registry tests and repository typecheck PASS because the V2 Registry is additive at this checkpoint.
 
-- [ ] **Step 6: Commit**
+- [x] **Step 6: Commit**
 
 ```bash
 git add packages/subject-registry
