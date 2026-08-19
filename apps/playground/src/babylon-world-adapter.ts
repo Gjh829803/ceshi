@@ -1,8 +1,10 @@
 import type {
-  ExecutionPlanV1,
+  BindControlRequestV2,
+  ControlBindingReceiptV2,
+  ExecutionPlanV2,
   FixedInputV1,
   SemanticInputActionV1,
-  WorldRuntimeSnapshotV1,
+  WorldRuntimeSnapshotV2,
 } from "@whitebox-world/runtime-contracts";
 import { BabylonWorldRuntime } from "@whitebox-world/runtime-babylon";
 
@@ -30,7 +32,7 @@ const KEY_ACTION_MAP: Readonly<Record<string, SemanticInputActionV1>> = {
   Space: "jump",
 };
 
-function featureInspections(plan: ExecutionPlanV1): readonly FeatureInspection[] {
+export function featureInspections(plan: ExecutionPlanV2): readonly FeatureInspection[] {
   return [
     {
       id: plan.terrain.entityId,
@@ -79,18 +81,27 @@ function featureInspections(plan: ExecutionPlanV1): readonly FeatureInspection[]
       ],
       diagnostics: [],
     })),
-    {
-      id: plan.subject.entityId,
-      type: "runtime.subject-humanoid-third-person",
+    ...plan.subjects.map<FeatureInspection>((subject) => ({
+      id: subject.entityId,
+      type: `runtime.subject-${subject.bodyTopology}`,
       version: 1,
       status: "ready",
-      parameters: { kitRef: plan.subject.kitRef, capsule: plan.subject.capsule },
+      parameters: {
+        kitRef: subject.kitRef,
+        bodyTopology: subject.bodyTopology,
+        semanticClassId: subject.semanticClassId,
+        collider: subject.collider,
+        locomotion: subject.locomotion,
+      },
       resources: [
-        { id: `${plan.subject.entityId}.mesh`, kind: "mesh" },
-        { id: `${plan.subject.entityId}.character-controller`, kind: "collider" },
+        ...subject.visualParts.map((part) => ({
+          id: `${subject.entityId}.${part.id}`,
+          kind: "mesh" as const,
+        })),
+        { id: `${subject.entityId}.character-controller`, kind: "collider" },
       ],
       diagnostics: [],
-    },
+    })),
     {
       id: plan.camera.cameraEntityId,
       type: "runtime.camera-third-person",
@@ -118,7 +129,7 @@ export class BabylonWorldAdapter implements PlaygroundWorldAdapter {
   private animationPending = false;
 
   private constructor(
-    private readonly executionPlan: ExecutionPlanV1,
+    private readonly executionPlan: ExecutionPlanV2,
     private readonly runtime: BabylonWorldRuntime,
     canvas: HTMLCanvasElement,
   ) {
@@ -133,7 +144,7 @@ export class BabylonWorldAdapter implements PlaygroundWorldAdapter {
     window.addEventListener("blur", this.handleBlur);
   }
 
-  static async create(executionPlan: ExecutionPlanV1): Promise<BabylonWorldAdapter> {
+  static async create(executionPlan: ExecutionPlanV2): Promise<BabylonWorldAdapter> {
     const canvas = document.createElement("canvas");
     const runtime = await BabylonWorldRuntime.create({
       executionPlan,
@@ -191,7 +202,16 @@ export class BabylonWorldAdapter implements PlaygroundWorldAdapter {
     return this.snapshot();
   }
 
-  async runWorldkitFixedInput(steps: readonly FixedInputV1[]): Promise<WorldRuntimeSnapshotV1> {
+  bindControl(request: BindControlRequestV2): ControlBindingReceiptV2 {
+    const receipt = this.runtime.bindControl(request);
+    if (receipt.status === "committed") {
+      this.render();
+      this.emit();
+    }
+    return receipt;
+  }
+
+  async runWorldkitFixedInput(steps: readonly FixedInputV1[]): Promise<WorldRuntimeSnapshotV2> {
     const wasPaused = this.paused;
     this.paused = true;
     let snapshot = this.runtime.snapshot();
@@ -202,11 +222,11 @@ export class BabylonWorldAdapter implements PlaygroundWorldAdapter {
     return snapshot;
   }
 
-  runtimeSnapshot(): WorldRuntimeSnapshotV1 {
+  runtimeSnapshot(): WorldRuntimeSnapshotV2 {
     return this.runtime.snapshot();
   }
 
-  resetRuntime(): WorldRuntimeSnapshotV1 {
+  resetRuntime(): WorldRuntimeSnapshotV2 {
     const snapshot = this.runtime.reset();
     this.render();
     this.emit();
@@ -260,9 +280,15 @@ export class BabylonWorldAdapter implements PlaygroundWorldAdapter {
 
   snapshot(): WorldSnapshot {
     const snapshot = this.runtime.snapshot();
+    const controlledSubject = snapshot.subjectStatesByEntityId[snapshot.controlledEntityId];
+    if (controlledSubject === undefined) {
+      throw new Error(
+        `WORLDKIT_RUNTIME_SNAPSHOT_CONTROL_TARGET_NOT_FOUND: ${snapshot.controlledEntityId}`,
+      );
+    }
     const moving = Math.hypot(
-      snapshot.subject.velocityMetersPerSecond[0],
-      snapshot.subject.velocityMetersPerSecond[2],
+      controlledSubject.velocityMetersPerSecond[0],
+      controlledSubject.velocityMetersPerSecond[2],
     ) > 0.05;
     return {
       adapter: this.name,
@@ -270,10 +296,10 @@ export class BabylonWorldAdapter implements PlaygroundWorldAdapter {
       tick: snapshot.tick,
       paused: this.paused,
       player: {
-        entityId: snapshot.subject.entityId,
+        entityId: controlledSubject.entityId,
         action: moving ? "walk" : "idle",
-        grounded: snapshot.subject.movementMedium === "ground",
-        position: snapshot.subject.positionMeters,
+        grounded: controlledSubject.movementMedium === "ground",
+        position: controlledSubject.positionMeters,
         rotationY: 0,
       },
       camera: {

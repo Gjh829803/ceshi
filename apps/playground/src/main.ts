@@ -5,7 +5,7 @@ import type {
   PlaygroundAutomationApi,
   PlaygroundWorldAdapter,
   WorldSnapshot,
-  WorldkitBrowserApiV1,
+  WorldkitBrowserApiV2,
 } from "./playground-world.js";
 import type { BabylonWorldAdapter } from "./babylon-world-adapter.js";
 
@@ -113,10 +113,11 @@ if (authoringMode) {
       throw error;
     };
     window.__WORLDKIT__ = {
-      version: 1,
+      version: 2,
       ready: () => Promise.reject(error),
       getSnapshot: fail,
       getDiagnostics: () => diagnostics,
+      bindControl: fail,
       runFixedInput: async () => fail(),
       captureScreenshot: fail,
       reset: fail,
@@ -257,11 +258,12 @@ window.__WHITEBOX_PLAYGROUND__ = automationApi;
 
 if (babylonAdapter !== null) {
   const runtimeAdapter = babylonAdapter;
-  const worldkitApi: WorldkitBrowserApiV1 = {
-    version: 1,
+  const worldkitApi: WorldkitBrowserApiV2 = {
+    version: 2,
     ready: async () => runtimeAdapter.runtimeSnapshot(),
     getSnapshot: () => runtimeAdapter.runtimeSnapshot(),
     getDiagnostics: () => [],
+    bindControl: (request) => runtimeAdapter.bindControl(request),
     runFixedInput: (steps) => runtimeAdapter.runWorldkitFixedInput(steps),
     captureScreenshot: () => runtimeAdapter.captureScreenshot(),
     reset: () => runtimeAdapter.resetRuntime(),

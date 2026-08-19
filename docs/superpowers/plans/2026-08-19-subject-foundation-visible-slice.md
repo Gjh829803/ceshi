@@ -22,11 +22,11 @@
 | 3 | Versioned plural Execution and Runtime contracts | Complete |
 | 4 | Registered Subject compiler | Complete |
 | 5 | Babylon multi-subject runtime and control binding | Complete |
-| 6 | Browser Protocol V2 and Playground switching | Not started |
+| 6 | Browser Protocol V2 and Playground switching | Complete |
 | 7 | Multi-subject fixture, CLI, Playwright, documentation | Not started |
 | 8 | Completion audit and Relationship-slice handoff | Not started |
 
-**Current milestone:** Tasks 1-5 are complete; Task 6 Browser Protocol V2 and Playground switching is in progress.
+**Current milestone:** Tasks 1-6 are complete; Task 7 multi-subject fixture, CLI, and end-to-end gate is in progress.
 
 **Latest verified baseline before implementation:** `pnpm typecheck`, 125 tests, production build, and `pnpm verify:v1` all pass on commit `8ccd219`.
 
@@ -583,7 +583,7 @@ git commit -m "feat: run multiple registered subjects"
 - Produces: active `WorldkitBrowserApiV2` with `version: 2`, plural Snapshot methods, and `bindControl(request)`.
 - Migration: do not expose V1 and V2 fields together on the same object.
 
-- [ ] **Step 1: Add failing adapter and Browser API tests**
+- [x] **Step 1: Add failing adapter and Browser API tests**
 
 ```ts
 expect(loaded.executionPlan).toMatchObject({
@@ -608,24 +608,24 @@ interface WorldkitBrowserApiV2 {
 }
 ```
 
-- [ ] **Step 2: Run focused Playground tests and confirm V1 type failures**
+- [x] **Step 2: Run focused Playground tests and confirm V1 type failures**
 
 Run: `pnpm vitest run apps/playground/src/authoring-loader.test.ts`
 
 Expected: FAIL until loader and adapter consume V2.
 
-- [ ] **Step 3: Migrate loader, inspections, automation, and HUD**
+- [x] **Step 3: Migrate loader, inspections, automation, and HUD**
 
 - Return `ExecutionPlanV2` from `loadAuthoringScene`.
 - Produce one Feature inspection per execution subject.
 - Derive legacy Playground HUD `player` from `snapshot.subjectStatesByEntityId[snapshot.controlledEntityId]` only inside the adapter; do not re-export it as Canonical state.
 - Make the HUD and camera follow control switches.
 
-- [ ] **Step 4: Publish `window.__WORLDKIT__` V2**
+- [x] **Step 4: Publish `window.__WORLDKIT__` V2**
 
 Set `version: 2`, forward `bindControl`, and update the error-mode fallback so every method returns or rejects with the same stable diagnostic behavior. Update the global Window declaration to V2 only.
 
-- [ ] **Step 5: Run Playground tests, typecheck, and production build**
+- [x] **Step 5: Run Playground tests, typecheck, and production build**
 
 Run: `pnpm vitest run apps/playground/src/authoring-loader.test.ts apps/playground/src/canvas-recorder.test.ts`
 
@@ -639,7 +639,7 @@ Run: `pnpm build`
 
 Expected: PASS; existing large-chunk warning remains non-blocking.
 
-- [ ] **Step 6: Commit Browser Protocol V2**
+- [x] **Step 6: Commit Browser Protocol V2**
 
 ```bash
 git add apps/playground

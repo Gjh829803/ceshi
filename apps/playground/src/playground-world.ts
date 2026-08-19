@@ -3,7 +3,12 @@ import type {
   OutdoorWorldSpec,
   VisualPrototypeSpec,
 } from "@whitebox-world/world";
-import type { FixedInputV1, WorldRuntimeSnapshotV1 } from "@whitebox-world/runtime-contracts";
+import type {
+  BindControlRequestV2,
+  ControlBindingReceiptV2,
+  FixedInputV1,
+  WorldRuntimeSnapshotV2,
+} from "@whitebox-world/runtime-contracts";
 
 export type InputAction =
   | "forward"
@@ -133,21 +138,22 @@ export interface PlaygroundAutomationApi {
   setPaused(paused: boolean): WorldSnapshot;
 }
 
-export interface WorldkitBrowserApiV1 {
-  version: 1;
-  ready(): Promise<WorldRuntimeSnapshotV1>;
-  getSnapshot(): WorldRuntimeSnapshotV1;
+export interface WorldkitBrowserApiV2 {
+  version: 2;
+  ready(): Promise<WorldRuntimeSnapshotV2>;
+  getSnapshot(): WorldRuntimeSnapshotV2;
   getDiagnostics(): readonly Readonly<Record<string, unknown>>[];
-  runFixedInput(steps: readonly FixedInputV1[]): Promise<WorldRuntimeSnapshotV1>;
+  bindControl(request: BindControlRequestV2): ControlBindingReceiptV2;
+  runFixedInput(steps: readonly FixedInputV1[]): Promise<WorldRuntimeSnapshotV2>;
   captureScreenshot(): string;
-  reset(): WorldRuntimeSnapshotV1;
-  setPaused(paused: boolean): WorldRuntimeSnapshotV1;
+  reset(): WorldRuntimeSnapshotV2;
+  setPaused(paused: boolean): WorldRuntimeSnapshotV2;
 }
 
 declare global {
   interface Window {
     __WHITEBOX_PLAYGROUND__: PlaygroundAutomationApi;
-    __WORLDKIT__?: WorldkitBrowserApiV1;
+    __WORLDKIT__?: WorldkitBrowserApiV2;
   }
 }
 
