@@ -98,7 +98,10 @@ export interface ControlBindingReceiptV2 {
   previousControlledEntityId: string;
   controlledEntityId: string;
   diagnostic?: {
-    code: "CONTROL_BINDING_STALE" | "CONTROL_TARGET_NOT_FOUND";
+    code:
+      | "CONTROL_BINDING_STALE"
+      | "CONTROL_CONTROLLER_NOT_FOUND"
+      | "CONTROL_TARGET_NOT_FOUND";
     message: string;
   };
 }

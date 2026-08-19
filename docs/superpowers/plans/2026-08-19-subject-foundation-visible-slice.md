@@ -21,12 +21,12 @@
 | 2 | Multi-subject Authoring validation and normalization | Complete |
 | 3 | Versioned plural Execution and Runtime contracts | Complete |
 | 4 | Registered Subject compiler | Complete |
-| 5 | Babylon multi-subject runtime and control binding | Not started |
+| 5 | Babylon multi-subject runtime and control binding | Complete |
 | 6 | Browser Protocol V2 and Playground switching | Not started |
 | 7 | Multi-subject fixture, CLI, Playwright, documentation | Not started |
 | 8 | Completion audit and Relationship-slice handoff | Not started |
 
-**Current milestone:** Tasks 1-4 are complete; Task 5 Babylon multi-subject runtime and control binding is in progress.
+**Current milestone:** Tasks 1-5 are complete; Task 6 Browser Protocol V2 and Playground switching is in progress.
 
 **Latest verified baseline before implementation:** `pnpm typecheck`, 125 tests, production build, and `pnpm verify:v1` all pass on commit `8ccd219`.
 
@@ -472,7 +472,7 @@ git commit -m "feat: compile registered subject kits"
 - Produces: one `SubjectController` per subject, one visual root per subject, plural snapshots, and atomic `bindControl` receipts.
 - Runtime invariant: `controller-primary` controls exactly one registered subject; only that subject receives fixed input; all subjects remain queryable and resettable.
 
-- [ ] **Step 1: Write failing runtime tests**
+- [x] **Step 1: Write failing runtime tests**
 
 ```ts
 it("creates and snapshots every compiled subject", async () => {
@@ -507,13 +507,13 @@ it("rejects a stale binding without changing control", async () => {
 });
 ```
 
-- [ ] **Step 2: Run runtime tests and confirm they fail on singular state**
+- [x] **Step 2: Run runtime tests and confirm they fail on singular state**
 
 Run: `pnpm vitest run packages/runtime-babylon/src/runtime.test.ts`
 
 Expected: FAIL because the runtime constructs only `executionPlan.subject`.
 
-- [ ] **Step 3: Build visuals from execution primitives**
+- [x] **Step 3: Build visuals from execution primitives**
 
 `createSubjectVisual(subject, material, scene)` must:
 
@@ -522,7 +522,7 @@ Expected: FAIL because the runtime constructs only `executionPlan.subject`.
 - Return `{ root, meshes }` so ownership and disposal are explicit.
 - Never derive collider or movement behavior from mesh bounds.
 
-- [ ] **Step 4: Refactor `SubjectController` to one subject**
+- [x] **Step 4: Refactor `SubjectController` to one subject**
 
 Change the constructor to:
 
@@ -537,7 +537,7 @@ constructor(
 
 Read capsule dimensions, mass, max slope, max step, and locomotion speeds from `subject`. Remove access to singular `plan.subject`.
 
-- [ ] **Step 5: Manage controllers in an ID-indexed map**
+- [x] **Step 5: Manage controllers in an ID-indexed map**
 
 Create all subjects in `ExecutionPlanV2.subjects`, then store `Map<EntityId, SubjectController>`. Track `controlledEntityId` separately. Each fixed tick:
 
@@ -546,11 +546,11 @@ Create all subjects in `ExecutionPlanV2.subjects`, then store `Map<EntityId, Sub
 - Detect movement medium independently from each subject's position and collider foot height.
 - Update the camera against the committed `controlledEntityId`.
 
-- [ ] **Step 6: Implement `bindControl` and plural lifecycle operations**
+- [x] **Step 6: Implement `bindControl` and plural lifecycle operations**
 
 Validate `controllerId === "controller-primary"`, stale expected binding, and target existence before mutation. On success, zero the previous controller velocity, commit the new ID, update camera targeting, and return a receipt. `reset` resets every subject and restores the initial controlled Entity. `dispose` disposes every controller and visual exactly once.
 
-- [ ] **Step 7: Run runtime tests and leak-safe disposal tests**
+- [x] **Step 7: Run runtime tests and leak-safe disposal tests**
 
 Run: `pnpm vitest run packages/runtime-babylon/src/runtime.test.ts`
 
@@ -560,7 +560,7 @@ Run: `pnpm typecheck`
 
 Expected: remaining failures only in Playground/CLI V1 consumers.
 
-- [ ] **Step 8: Commit runtime support**
+- [x] **Step 8: Commit runtime support**
 
 ```bash
 git add packages/runtime-babylon

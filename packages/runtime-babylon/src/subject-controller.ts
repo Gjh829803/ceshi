@@ -3,13 +3,13 @@ import {
   CharacterSupportedState,
   PhysicsCharacterController,
 } from "@babylonjs/core/Physics/v2/characterController.js";
-import type { Mesh } from "@babylonjs/core/Meshes/mesh.js";
+import type { TransformNode } from "@babylonjs/core/Meshes/transformNode.js";
 import type { Scene } from "@babylonjs/core/scene.pure.js";
 
 import type {
-  ExecutionPlanV1,
-  FixedInputV1,
+  ExecutionSubjectV2,
   SemanticInputActionV1,
+  Vec3,
 } from "@whitebox-world/runtime-contracts";
 
 import { FIXED_TIME_STEP_SECONDS } from "./physics";
@@ -24,22 +24,23 @@ export class SubjectController {
   private readonly up = Vector3.Up();
 
   constructor(
-    private readonly plan: ExecutionPlanV1,
-    private readonly visual: Mesh,
+    private readonly subject: ExecutionSubjectV2,
+    gravityMetersPerSecondSquaredXYZ: Vec3,
+    private readonly visualRoot: TransformNode,
     scene: Scene,
   ) {
-    this.gravity = new Vector3(...plan.gravityMetersPerSecondSquaredXYZ);
+    this.gravity = new Vector3(...gravityMetersPerSecondSquaredXYZ);
     this.physicsController = new PhysicsCharacterController(
-      new Vector3(...plan.subject.spawnPositionMeters),
+      new Vector3(...subject.spawnPositionMeters),
       {
-        capsuleHeight: plan.subject.capsule.heightMeters,
-        capsuleRadius: plan.subject.capsule.radiusMeters,
+        capsuleHeight: subject.collider.heightMeters,
+        capsuleRadius: subject.collider.radiusMeters,
       },
       scene,
     );
-    this.physicsController.maxSlopeCosine = Math.cos((42 * Math.PI) / 180);
-    this.physicsController.maxStepHeight = 0.3;
-    this.physicsController.characterMass = 80;
+    this.physicsController.maxSlopeCosine = Math.cos((subject.collider.maxSlopeDegrees * Math.PI) / 180);
+    this.physicsController.maxStepHeight = subject.collider.maxStepHeightMeters;
+    this.physicsController.characterMass = subject.collider.massKilograms;
     this.physicsController.acceleration = 1;
     this.syncVisual();
   }
@@ -53,8 +54,8 @@ export class SubjectController {
     );
     if (horizontal.lengthSquared() > 1) horizontal.normalize();
     const speed = movementMedium === "water"
-      ? this.plan.subject.movement.waterSpeedMetersPerSecond
-      : this.plan.subject.movement.groundSpeedMetersPerSecond;
+      ? this.subject.locomotion.waterSpeedMetersPerSecond
+      : this.subject.locomotion.groundSpeedMetersPerSecond;
     const desired = horizontal.scale(speed);
     const current = this.physicsController.getVelocity();
     const movementSurfaceNormal = support.supportedState === CharacterSupportedState.UNSUPPORTED
@@ -74,7 +75,7 @@ export class SubjectController {
       movementMedium === "ground" &&
       support.supportedState === CharacterSupportedState.SUPPORTED
     ) {
-      calculated.y = this.plan.subject.movement.jumpSpeedMetersPerSecond;
+      calculated.y = this.subject.locomotion.jumpSpeedMetersPerSecond;
     }
     this.physicsController.setVelocity(calculated);
     this.physicsController.integrate(
@@ -83,10 +84,6 @@ export class SubjectController {
       movementMedium === "water" ? this.gravity.scale(0.15) : this.gravity,
     );
     this.syncVisual();
-  }
-
-  runFixedInput(input: FixedInputV1, medium: () => "ground" | "air" | "water"): void {
-    for (let tick = 0; tick < input.ticks; tick += 1) this.step(input.actions, medium());
   }
 
   get position(): Vector3 {
@@ -98,9 +95,13 @@ export class SubjectController {
   }
 
   reset(): void {
-    this.physicsController.setPosition(new Vector3(...this.plan.subject.spawnPositionMeters));
+    this.physicsController.setPosition(new Vector3(...this.subject.spawnPositionMeters));
     this.physicsController.setVelocity(Vector3.Zero());
     this.syncVisual();
+  }
+
+  stop(): void {
+    this.physicsController.setVelocity(Vector3.Zero());
   }
 
   dispose(): void {
@@ -108,6 +109,6 @@ export class SubjectController {
   }
 
   private syncVisual(): void {
-    this.visual.position.copyFrom(this.physicsController.getPosition());
+    this.visualRoot.position.copyFrom(this.physicsController.getPosition());
   }
 }

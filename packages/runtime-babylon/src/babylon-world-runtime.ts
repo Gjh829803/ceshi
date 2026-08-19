@@ -15,18 +15,23 @@ import type { PhysicsEngine } from "@babylonjs/core/Physics/v2/physicsEngine.js"
 import { Scene } from "@babylonjs/core/scene.pure.js";
 
 import type {
+  BindControlRequestV2,
+  ControlBindingReceiptV2,
   ExecutionObjectV1,
-  ExecutionPlanV1,
+  ExecutionPlanV2,
+  ExecutionSubjectV2,
   ExecutionWaterBoundaryV1,
   ExecutionWaterV1,
   FixedInputV1,
-  WorldRuntimeSession,
-  WorldRuntimeSnapshotV1,
+  WorldRuntimeSessionV2,
+  WorldRuntimeSnapshotV2,
 } from "@whitebox-world/runtime-contracts";
+import { TRUSTED_DEFAULT_CONTROLLER_ID } from "@whitebox-world/runtime-contracts";
 
 import { createWhiteboxMaterials, type WhiteboxMaterials } from "./materials";
 import { enableHavokPhysics, FIXED_TIME_STEP_SECONDS } from "./physics";
 import { SubjectController } from "./subject-controller";
+import { createSubjectVisual, type SubjectVisual } from "./subject-visual";
 import {
   createTerrainMesh,
   sampleExecutionTerrainHeight,
@@ -34,7 +39,7 @@ import {
 } from "./terrain";
 
 export interface BabylonWorldRuntimeOptions {
-  executionPlan: ExecutionPlanV1;
+  executionPlan: ExecutionPlanV2;
   canvas?: HTMLCanvasElement;
   engineFactory?: () => AbstractEngine;
   autoStartRenderLoop?: boolean;
@@ -158,7 +163,7 @@ function containsPoint(boundary: ExecutionWaterBoundaryV1, x: number, z: number)
   return inside;
 }
 
-function configureAtmosphere(scene: Scene, preset: ExecutionPlanV1["atmospherePreset"]): void {
+function configureAtmosphere(scene: Scene, preset: ExecutionPlanV2["atmospherePreset"]): void {
   const colors = {
     "clear-day": new Color4(0.55, 0.78, 0.92, 1),
     "golden-hour": new Color4(0.91, 0.65, 0.42, 1),
@@ -173,29 +178,34 @@ function configureAtmosphere(scene: Scene, preset: ExecutionPlanV1["atmospherePr
   sun.intensity = preset === "night" ? 0.22 : 1.1;
 }
 
-export class BabylonWorldRuntime implements WorldRuntimeSession {
+export class BabylonWorldRuntime implements WorldRuntimeSessionV2 {
   readonly runtimeBackend = "babylon-havok" as const;
   readonly ready: Promise<void> = Promise.resolve();
 
   private tick = 0;
   private disposed = false;
+  private controlledEntityId: string;
   private readonly aggregates: PhysicsAggregate[] = [];
   private readonly ownedHeightfieldShape: PhysicsShapeHeightField;
-  private readonly subjectController: SubjectController;
+  private readonly subjectControllersByEntityId: ReadonlyMap<string, SubjectController>;
+  private readonly subjectVisuals: readonly SubjectVisual[];
   private readonly camera: FreeCamera;
   private readonly renderLoop: () => void;
 
   private constructor(
-    private readonly executionPlan: ExecutionPlanV1,
+    private readonly executionPlan: ExecutionPlanV2,
     private readonly engine: AbstractEngine,
     private readonly scene: Scene,
-    subjectController: SubjectController,
+    subjectControllersByEntityId: ReadonlyMap<string, SubjectController>,
+    subjectVisuals: readonly SubjectVisual[],
     camera: FreeCamera,
     ownedHeightfieldShape: PhysicsShapeHeightField,
     aggregates: PhysicsAggregate[],
     autoStartRenderLoop: boolean,
   ) {
-    this.subjectController = subjectController;
+    this.controlledEntityId = executionPlan.controlledEntityId;
+    this.subjectControllersByEntityId = subjectControllersByEntityId;
+    this.subjectVisuals = subjectVisuals;
     this.camera = camera;
     this.ownedHeightfieldShape = ownedHeightfieldShape;
     this.aggregates.push(...aggregates);
@@ -210,6 +220,21 @@ export class BabylonWorldRuntime implements WorldRuntimeSession {
     }
     if (options.engineFactory === undefined && options.canvas === undefined) {
       throw new TypeError("BabylonWorldRuntime requires canvas or engineFactory.");
+    }
+    if (options.executionPlan.subjects.length === 0) {
+      throw new Error("WORLDKIT_RUNTIME_SUBJECTS_EMPTY");
+    }
+    const subjectEntityIds = new Set<string>();
+    for (const subject of options.executionPlan.subjects) {
+      if (subjectEntityIds.has(subject.entityId)) {
+        throw new Error(`WORLDKIT_RUNTIME_SUBJECT_DUPLICATE: ${subject.entityId}`);
+      }
+      subjectEntityIds.add(subject.entityId);
+    }
+    if (!subjectEntityIds.has(options.executionPlan.controlledEntityId)) {
+      throw new Error(
+        `WORLDKIT_RUNTIME_CONTROL_TARGET_NOT_FOUND: ${options.executionPlan.controlledEntityId}`,
+      );
     }
     const engine = options.engineFactory?.() ?? new Engine(options.canvas!, true, { preserveDrawingBuffer: true, stencil: true });
     const scene = new Scene(engine);
@@ -249,15 +274,20 @@ export class BabylonWorldRuntime implements WorldRuntimeSession {
       }
     }
 
-    const subject = options.executionPlan.subject;
-    const subjectMesh = MeshBuilder.CreateCapsule(
-      subject.entityId,
-      { height: subject.capsule.heightMeters, radius: subject.capsule.radiusMeters, tessellation: 16 },
-      scene,
-    );
-    subjectMesh.material = materials.subject;
-    subjectMesh.metadata = { worldkitEntityId: subject.entityId, semanticClassId: "subject.player" };
-    const subjectController = new SubjectController(options.executionPlan, subjectMesh, scene);
+    const subjectControllersByEntityId = new Map<string, SubjectController>();
+    const subjectVisuals = options.executionPlan.subjects.map((subject) => {
+      const visual = createSubjectVisual(subject, materials.subject, scene);
+      subjectControllersByEntityId.set(
+        subject.entityId,
+        new SubjectController(
+          subject,
+          options.executionPlan.gravityMetersPerSecondSquaredXYZ,
+          visual.root,
+          scene,
+        ),
+      );
+      return visual;
+    });
 
     const cameraPlan = options.executionPlan.camera;
     const camera = new FreeCamera(cameraPlan.cameraEntityId, Vector3.Zero(), scene);
@@ -269,7 +299,8 @@ export class BabylonWorldRuntime implements WorldRuntimeSession {
       options.executionPlan,
       engine,
       scene,
-      subjectController,
+      subjectControllersByEntityId,
+      subjectVisuals,
       camera,
       heightfieldShape,
       aggregates,
@@ -277,7 +308,76 @@ export class BabylonWorldRuntime implements WorldRuntimeSession {
     );
   }
 
-  async runFixedInput(input: FixedInputV1): Promise<WorldRuntimeSnapshotV1> {
+  bindControl(request: BindControlRequestV2): ControlBindingReceiptV2 {
+    this.assertUsable();
+    const previousControlledEntityId = this.controlledEntityId;
+    if (request.controllerId !== TRUSTED_DEFAULT_CONTROLLER_ID) {
+      return {
+        kind: "worldkit-control-binding-receipt",
+        schemaVersion: 2,
+        status: "rejected",
+        controllerId: request.controllerId,
+        previousControlledEntityId,
+        controlledEntityId: this.controlledEntityId,
+        diagnostic: {
+          code: "CONTROL_CONTROLLER_NOT_FOUND",
+          message: `Controller '${request.controllerId}' does not exist.`,
+        },
+      };
+    }
+    if (!this.subjectControllersByEntityId.has(request.controlledEntityId)) {
+      return {
+        kind: "worldkit-control-binding-receipt",
+        schemaVersion: 2,
+        status: "rejected",
+        controllerId: request.controllerId,
+        previousControlledEntityId,
+        controlledEntityId: this.controlledEntityId,
+        diagnostic: {
+          code: "CONTROL_TARGET_NOT_FOUND",
+          message: `Subject '${request.controlledEntityId}' does not exist.`,
+        },
+      };
+    }
+    if (request.expectedControlledEntityId !== this.controlledEntityId) {
+      return {
+        kind: "worldkit-control-binding-receipt",
+        schemaVersion: 2,
+        status: "rejected",
+        controllerId: request.controllerId,
+        previousControlledEntityId,
+        controlledEntityId: this.controlledEntityId,
+        diagnostic: {
+          code: "CONTROL_BINDING_STALE",
+          message: `Controller '${request.controllerId}' controls '${this.controlledEntityId}', not '${request.expectedControlledEntityId}'.`,
+        },
+      };
+    }
+    if (request.controlledEntityId === this.controlledEntityId) {
+      return {
+        kind: "worldkit-control-binding-receipt",
+        schemaVersion: 2,
+        status: "committed",
+        controllerId: request.controllerId,
+        previousControlledEntityId,
+        controlledEntityId: this.controlledEntityId,
+      };
+    }
+
+    this.controllerFor(this.controlledEntityId).stop();
+    this.controlledEntityId = request.controlledEntityId;
+    this.updateCamera();
+    return {
+      kind: "worldkit-control-binding-receipt",
+      schemaVersion: 2,
+      status: "committed",
+      controllerId: request.controllerId,
+      previousControlledEntityId,
+      controlledEntityId: this.controlledEntityId,
+    };
+  }
+
+  async runFixedInput(input: FixedInputV1): Promise<WorldRuntimeSnapshotV2> {
     this.assertUsable();
     if (!Number.isSafeInteger(input.ticks) || input.ticks < 0 || input.ticks > 36_000) {
       throw new RangeError("Fixed input ticks must be an integer from 0 through 36000.");
@@ -285,7 +385,13 @@ export class BabylonWorldRuntime implements WorldRuntimeSession {
     const physicsEngine = this.scene.getPhysicsEngine();
     if (physicsEngine === null) throw new Error("WORLDKIT_HAVOK_ENGINE_MISSING");
     for (let index = 0; index < input.ticks; index += 1) {
-      this.subjectController.step(input.actions, this.detectMovementMedium());
+      for (const subject of this.executionPlan.subjects) {
+        const controller = this.controllerFor(subject.entityId);
+        controller.step(
+          subject.entityId === this.controlledEntityId ? input.actions : [],
+          this.detectMovementMedium(subject, controller),
+        );
+      }
       physicsEngine._step(FIXED_TIME_STEP_SECONDS);
       this.tick += 1;
       this.updateCamera();
@@ -293,26 +399,41 @@ export class BabylonWorldRuntime implements WorldRuntimeSession {
     return this.snapshot();
   }
 
-  snapshot(): WorldRuntimeSnapshotV1 {
+  snapshot(): WorldRuntimeSnapshotV2 {
     this.assertUsable();
-    const position = this.subjectController.position;
-    const velocity = this.subjectController.velocity;
+    const subjectStatesByEntityId: Record<
+      string,
+      WorldRuntimeSnapshotV2["subjectStatesByEntityId"][string]
+    > = {};
+    for (const subject of this.executionPlan.subjects) {
+      const controller = this.controllerFor(subject.entityId);
+      const position = controller.position;
+      const velocity = controller.velocity;
+      subjectStatesByEntityId[subject.entityId] = {
+        entityId: subject.entityId,
+        positionMeters: [position.x, position.y, position.z],
+        velocityMetersPerSecond: [velocity.x, velocity.y, velocity.z],
+        movementMedium: this.detectMovementMedium(subject, controller),
+      };
+    }
     return {
       kind: "worldkit-runtime-snapshot",
-      schemaVersion: 1,
+      schemaVersion: 2,
       runtimeBackend: "babylon-havok",
       tick: this.tick,
       ready: true,
-      physics: { backend: "havok", ready: true, fixedTimeStepSeconds: FIXED_TIME_STEP_SECONDS },
-      subject: {
-        entityId: this.executionPlan.subject.entityId,
-        positionMeters: [position.x, position.y, position.z],
-        velocityMetersPerSecond: [velocity.x, velocity.y, velocity.z],
-        movementMedium: this.detectMovementMedium(),
+      controlledEntityId: this.controlledEntityId,
+      controllersById: {
+        [TRUSTED_DEFAULT_CONTROLLER_ID]: {
+          id: TRUSTED_DEFAULT_CONTROLLER_ID,
+          controlledEntityId: this.controlledEntityId,
+        },
       },
+      subjectStatesByEntityId,
+      physics: { backend: "havok", ready: true, fixedTimeStepSeconds: FIXED_TIME_STEP_SECONDS },
       camera: {
         entityId: this.executionPlan.camera.cameraEntityId,
-        targetEntityId: this.executionPlan.camera.targetEntityId,
+        targetEntityId: this.controlledEntityId,
         positionMeters: [this.camera.position.x, this.camera.position.y, this.camera.position.z],
       },
       resources: {
@@ -323,9 +444,10 @@ export class BabylonWorldRuntime implements WorldRuntimeSession {
     };
   }
 
-  reset(): WorldRuntimeSnapshotV1 {
+  reset(): WorldRuntimeSnapshotV2 {
     this.assertUsable();
-    this.subjectController.reset();
+    for (const controller of this.subjectControllersByEntityId.values()) controller.reset();
+    this.controlledEntityId = this.executionPlan.controlledEntityId;
     this.tick = 0;
     this.updateCamera();
     return this.snapshot();
@@ -346,16 +468,23 @@ export class BabylonWorldRuntime implements WorldRuntimeSession {
     if (this.disposed) return;
     this.disposed = true;
     this.engine.stopRenderLoop(this.renderLoop);
-    this.subjectController.dispose();
+    for (const controller of this.subjectControllersByEntityId.values()) controller.dispose();
+    for (const visual of [...this.subjectVisuals].reverse()) {
+      for (const mesh of [...visual.meshes].reverse()) mesh.dispose(false, false);
+      visual.root.dispose(false, false);
+    }
     for (const aggregate of this.aggregates.reverse()) aggregate.dispose();
     this.ownedHeightfieldShape.dispose();
     this.scene.dispose();
     this.engine.dispose();
   }
 
-  private detectMovementMedium(): "ground" | "air" | "water" {
-    const position = this.subjectController.position;
-    const footHeight = position.y - this.executionPlan.subject.capsule.heightMeters / 2;
+  private detectMovementMedium(
+    subject: ExecutionSubjectV2,
+    controller: SubjectController,
+  ): "ground" | "air" | "water" {
+    const position = controller.position;
+    const footHeight = position.y - subject.collider.heightMeters / 2;
     for (const water of this.executionPlan.waters) {
       if (
         water.traversalMode === "swimmable" &&
@@ -371,11 +500,19 @@ export class BabylonWorldRuntime implements WorldRuntimeSession {
   }
 
   private updateCamera(): void {
-    const subjectPosition = this.subjectController.position;
+    const subject = this.executionPlan.subjects.find(
+      (candidate) => candidate.entityId === this.controlledEntityId,
+    );
+    if (subject === undefined) {
+      throw new Error(
+        `WORLDKIT_RUNTIME_CONTROL_TARGET_NOT_FOUND: ${this.controlledEntityId}`,
+      );
+    }
+    const subjectPosition = this.controllerFor(subject.entityId).position;
     const cameraPlan = this.executionPlan.camera;
     const target = new Vector3(
       subjectPosition.x,
-      subjectPosition.y - this.executionPlan.subject.capsule.heightMeters / 2 + cameraPlan.targetHeightMeters,
+      subjectPosition.y - subject.collider.heightMeters / 2 + cameraPlan.targetHeightMeters,
       subjectPosition.z,
     );
     const horizontalDistance = Math.cos(cameraPlan.pitchRadians) * cameraPlan.distanceMeters;
@@ -385,6 +522,14 @@ export class BabylonWorldRuntime implements WorldRuntimeSession {
       target.z + horizontalDistance,
     );
     this.camera.setTarget(target);
+  }
+
+  private controllerFor(subjectEntityId: string): SubjectController {
+    const controller = this.subjectControllersByEntityId.get(subjectEntityId);
+    if (controller === undefined) {
+      throw new Error(`WORLDKIT_RUNTIME_SUBJECT_NOT_FOUND: ${subjectEntityId}`);
+    }
+    return controller;
   }
 
   private assertUsable(): void {
