@@ -120,6 +120,9 @@ importers:
       '@whitebox-world/protocol':
         specifier: workspace:*
         version: link:../protocol
+      '@whitebox-world/subject-composition':
+        specifier: workspace:*
+        version: link:../subject-composition
       '@whitebox-world/subject-registry':
         specifier: workspace:*
         version: link:../subject-registry

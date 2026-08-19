@@ -10,6 +10,7 @@
   },
   "dependencies": {
     "@whitebox-world/protocol": "workspace:*",
+    "@whitebox-world/subject-composition": "workspace:*",
     "@whitebox-world/subject-registry": "workspace:*",
     "ajv": "^8.17.1",
     "ajv-formats": "^3.0.1",

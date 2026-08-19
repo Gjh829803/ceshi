@@ -1,6 +1,7 @@
 import type {
   SubjectDefinitionRegistryV1,
   SubjectKitDefinitionV1,
+  SubjectResourceRegistryV2,
 } from "@whitebox-world/subject-registry";
 
 export type Vec2 = readonly [x: number, y: number];
@@ -483,4 +484,152 @@ export interface AuthoringSpecV2 {
     cameraEntityId: string;
   };
   constraints: Record<string, never>;
+}
+
+export interface NormalizeAuthoringOptionsV2 {
+  subjectResourceRegistry?: SubjectResourceRegistryV2;
+}
+
+export interface NormalizeAuthoringResultV2 extends AuthoringResult<NormalizedWorldIRV2> {
+  normalizedWorldIrHash?: string;
+}
+
+export interface NormalizedTransformV2 {
+  positionMetersXYZ: Vec3;
+  rotationEulerRadiansXYZ: Vec3;
+  scaleXYZ: Vec3;
+}
+
+export interface NormalizedProceduralTerrainSourceV2 {
+  kind: "procedural";
+  relief: ProceduralTerrainSourceSpecV2["relief"];
+  baseHeightMeters: number;
+  amplitudeMeters: number;
+  frequencyPerMeter: number;
+  octaves: number;
+  lacunarityRatio: number;
+  persistenceRatio: number;
+}
+
+export interface NormalizedSubjectVisualPartV2 {
+  id: string;
+  kind: "primitive";
+  shape: SubjectPrimitiveShapeSpecV1;
+  localTransform: {
+    positionMetersXYZ: Vec3;
+    rotationEulerRadiansXYZ: Vec3;
+  };
+  colliderContribution: "include" | "exclude";
+  semanticTags: readonly string[];
+}
+
+export interface NormalizedSubjectSocketV2 {
+  id: string;
+  localTransform: {
+    positionMetersXYZ: Vec3;
+    rotationEulerRadiansXYZ: Vec3;
+  };
+  semanticTags: readonly string[];
+}
+
+export interface NormalizedSubjectDefinitionV2 {
+  subjectDefinitionRef: string;
+  subjectDefinitionHash: string;
+  source: "package" | "registry";
+  id: string;
+  version: number;
+  kind: "subject-definition";
+  category: "human" | "animal" | "custom";
+  bodyTopology: "biped" | "quadruped" | "custom";
+  semanticClassId: string;
+  coordinateConvention: PackageSubjectDefinitionV1["coordinateConvention"];
+  visualParts: readonly NormalizedSubjectVisualPartV2[];
+  sockets: readonly NormalizedSubjectSocketV2[];
+  colliderPolicy: {
+    kind: "derive";
+    colliderDerivationProfileRef: string;
+  };
+  capabilityRefs: readonly string[];
+  profiles: {
+    physicsBodyProfileRef: string;
+    locomotionProfileRef: string;
+  };
+  collider: {
+    kind: "capsule";
+    radiusMeters: number;
+    heightMeters: number;
+    centerOffsetFromSubjectOriginMetersXYZ: Vec3;
+    massKilograms: number;
+    maxSlopeDegrees: number;
+    maxStepHeightMeters: number;
+  };
+  locomotion: {
+    mode: "ground";
+    groundSpeedMetersPerSecond: number;
+    waterSpeedMetersPerSecond: number;
+    jumpSpeedMetersPerSecond: number;
+  };
+  resourceCost: {
+    vertices: number;
+    triangles: number;
+    colliders: 1;
+  };
+  aiMetadata: PackageSubjectDefinitionV1["aiMetadata"];
+}
+
+export type ResolvedResourceKindV1 =
+  | "subject-definition"
+  | "capability"
+  | "physics-body-profile"
+  | "locomotion-profile"
+  | "collider-derivation-profile";
+
+export interface ResolvedResourceLockEntryV1 {
+  resourceRef: string;
+  resourceKind: ResolvedResourceKindV1;
+  resolvedVersion: string;
+  contentHash: string;
+}
+
+export type NormalizedWorldNodeV2 =
+  | (Omit<TerrainNodeSpecV2, "components"> & {
+      components: {
+        terrain: Omit<TerrainNodeSpecV2["components"]["terrain"], "source"> & {
+          source: NormalizedProceduralTerrainSourceV2;
+        };
+      };
+    })
+  | (Omit<WaterNodeSpecV2, "components"> & {
+      components: {
+        water: Omit<
+          WaterNodeSpecV2["components"]["water"],
+          "shoreWidthMeters" | "traversalMode"
+        > & {
+          shoreWidthMeters: number;
+          traversalMode: "blocked" | "swimmable" | "walkable";
+        };
+      };
+    })
+  | (Omit<ObjectNodeSpecV2, "transform"> & { transform: NormalizedTransformV2 })
+  | (Omit<SubjectNodeSpecV2, "spawnAnchorEntityId"> & {
+      spawnAnchorEntityId: string;
+    })
+  | CameraNodeSpecV2
+  | (Omit<AnchorNodeSpecV2, "transform"> & { transform: NormalizedTransformV2 });
+
+export interface NormalizedWorldIRV2 {
+  kind: "worldkit-normalized-world";
+  schemaVersion: 2;
+  id: string;
+  seed: number;
+  provenance?: AuthoringSpecV2["provenance"];
+  world: AuthoringSpecV2["world"];
+  resources: {
+    prototypes: readonly PrimitivePrototypeSpecV2[];
+    subjectDefinitions: readonly NormalizedSubjectDefinitionV2[];
+    resourceLock: readonly ResolvedResourceLockEntryV1[];
+    resourceLockHash: string;
+  };
+  nodes: readonly NormalizedWorldNodeV2[];
+  startup: AuthoringSpecV2["startup"];
 }
