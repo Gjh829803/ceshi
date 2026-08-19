@@ -1,9 +1,23 @@
 import assert from "node:assert/strict";
-import { readFile, writeFile } from "node:fs/promises";
+import { randomUUID } from "node:crypto";
+import {
+  mkdir,
+  mkdtemp,
+  readFile,
+  readdir,
+  rename,
+  rm,
+  writeFile,
+} from "node:fs/promises";
 import { fileURLToPath } from "node:url";
 import path from "node:path";
 
-import { chromium } from "playwright";
+import {
+  chromium,
+  type Browser,
+  type BrowserContext,
+  type Page,
+} from "playwright";
 
 import {
   stringifyCanonicalJson,
@@ -31,14 +45,16 @@ const INVALID_INPUT_PATH = path.join(
   REPOSITORY_ROOT,
   "examples/authoring/invalid-world.json",
 );
-const ARTIFACT_DIRECTORY = path.join(
+const TARGET_ARTIFACT_DIRECTORY = path.join(
   REPOSITORY_ROOT,
   "artifacts/examples/package-subject-world",
 );
-const BUILD_PATH = path.join(ARTIFACT_DIRECTORY, "world.build.json");
-const SCREENSHOT_PATH = path.join(ARTIFACT_DIRECTORY, "world.png");
-const SNAPSHOT_PATH = path.join(ARTIFACT_DIRECTORY, "snapshot.json");
-const EXPLAIN_PATH = path.join(ARTIFACT_DIRECTORY, "explain.json");
+const CANONICAL_ARTIFACT_FILES = [
+  "explain.json",
+  "snapshot.json",
+  "world.build.json",
+  "world.png",
+] as const;
 const PLAYER_ENTITY_ID = "player";
 const FIRST_PACKAGE_SUBJECT_ENTITY_ID = "pack-animal-a";
 const SECOND_PACKAGE_SUBJECT_ENTITY_ID = "pack-animal-b";
@@ -52,6 +68,62 @@ interface WorldBuildArtifactV3 {
   executionPlanHash: string;
   normalizedWorldIr: NormalizedWorldIRV2;
   executionPlan: ExecutionPlanV3;
+}
+
+interface CanonicalArtifactPaths {
+  directory: string;
+  build: string;
+  screenshot: string;
+  snapshot: string;
+  explain: string;
+}
+
+function artifactPaths(directory: string): CanonicalArtifactPaths {
+  return {
+    directory,
+    build: path.join(directory, "world.build.json"),
+    screenshot: path.join(directory, "world.png"),
+    snapshot: path.join(directory, "snapshot.json"),
+    explain: path.join(directory, "explain.json"),
+  };
+}
+
+async function assertExactArtifactFiles(directory: string): Promise<void> {
+  assert.deepEqual(
+    (await readdir(directory)).sort(),
+    [...CANONICAL_ARTIFACT_FILES],
+    "Canonical artifact directory must contain exactly the declared files.",
+  );
+}
+
+async function promoteArtifactDirectory(
+  temporaryDirectory: string,
+  targetDirectory: string,
+): Promise<void> {
+  await assertExactArtifactFiles(temporaryDirectory);
+  await mkdir(path.dirname(targetDirectory), { recursive: true });
+  const backupDirectory = `${targetDirectory}.backup-${randomUUID()}`;
+  let hadTarget = true;
+  try {
+    await rename(targetDirectory, backupDirectory);
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code !== "ENOENT") throw error;
+    hadTarget = false;
+  }
+  try {
+    await rename(temporaryDirectory, targetDirectory);
+  } catch (error) {
+    if (hadTarget) await rename(backupDirectory, targetDirectory);
+    throw error;
+  }
+  if (!hadTarget) return;
+  try {
+    await rm(backupDirectory, { recursive: true });
+  } catch (error) {
+    await rename(targetDirectory, temporaryDirectory);
+    await rename(backupDirectory, targetDirectory);
+    throw error;
+  }
 }
 
 function parseJson<T>(sourceText: string, label: string): T {
@@ -83,7 +155,7 @@ function inspectPng(bytes: Buffer): { width: number; height: number } {
   };
 }
 
-async function runCliGates(): Promise<void> {
+async function runCliGates(paths: CanonicalArtifactPaths): Promise<void> {
   assert.equal(
     await worldkitMain(["validate", INPUT_PATH, "--json"]),
     0,
@@ -95,18 +167,18 @@ async function runCliGates(): Promise<void> {
     "worldkit validate must reject unknown fields.",
   );
   assert.equal(
-    await worldkitMain(["build", INPUT_PATH, "--output", BUILD_PATH, "--json"]),
+    await worldkitMain(["build", INPUT_PATH, "--output", paths.build, "--json"]),
     0,
     "worldkit build must emit the canonical V3 build artifact.",
   );
-  const firstBuildBytes = await readFile(BUILD_PATH, "utf8");
+  const firstBuildBytes = await readFile(paths.build, "utf8");
   assert.equal(
-    await worldkitMain(["build", INPUT_PATH, "--output", BUILD_PATH, "--json"]),
+    await worldkitMain(["build", INPUT_PATH, "--output", paths.build, "--json"]),
     0,
     "Repeated worldkit build must succeed.",
   );
   assert.equal(
-    await readFile(BUILD_PATH, "utf8"),
+    await readFile(paths.build, "utf8"),
     firstBuildBytes,
     "Repeated builds of the same input must be byte-identical.",
   );
@@ -132,7 +204,7 @@ async function runCliGates(): Promise<void> {
     "Subject Explain must return a success artifact.",
   );
   await writeFile(
-    EXPLAIN_PATH,
+    paths.explain,
     `${stringifyCanonicalJson(explanation)}\n`,
   );
   assert.equal(
@@ -140,9 +212,9 @@ async function runCliGates(): Promise<void> {
       "capture",
       INPUT_PATH,
       "--output",
-      SCREENSHOT_PATH,
+      paths.screenshot,
       "--snapshot",
-      SNAPSHOT_PATH,
+      paths.snapshot,
       "--json",
     ]),
     0,
@@ -150,7 +222,7 @@ async function runCliGates(): Promise<void> {
   );
 }
 
-async function verifyArtifacts(): Promise<{
+async function verifyArtifacts(paths: CanonicalArtifactPaths): Promise<{
   dimensions: { width: number; height: number };
   bodyCount: number;
   normalizedWorldIrHash: string;
@@ -159,7 +231,7 @@ async function verifyArtifacts(): Promise<{
   resourceLockHash: string;
 }> {
   const artifact = parseJson<WorldBuildArtifactV3>(
-    await readFile(BUILD_PATH, "utf8"),
+    await readFile(paths.build, "utf8"),
     "Build artifact",
   );
   assert.equal(artifact.kind, "worldkit-build-artifact");
@@ -220,7 +292,7 @@ async function verifyArtifacts(): Promise<{
   );
 
   const explanation = parseJson<SubjectExplanationSuccessV1>(
-    await readFile(EXPLAIN_PATH, "utf8"),
+    await readFile(paths.explain, "utf8"),
     "Subject Explain artifact",
   );
   assert.equal(explanation.ok, true);
@@ -240,7 +312,7 @@ async function verifyArtifacts(): Promise<{
   assert.ok(explanation.subject.resourceLockEntries.length >= 5);
 
   const snapshot = parseJson<WorldRuntimeSnapshotV3>(
-    await readFile(SNAPSHOT_PATH, "utf8"),
+    await readFile(paths.snapshot, "utf8"),
     "Runtime snapshot",
   );
   assert.equal(snapshot.schemaVersion, 3);
@@ -256,6 +328,9 @@ async function verifyArtifacts(): Promise<{
     SECOND_PACKAGE_SUBJECT_ENTITY_ID,
     PLAYER_ENTITY_ID,
   ]);
+  for (const state of Object.values(snapshot.subjectStatesByEntityId)) {
+    assert.equal(state.activeActionId, "idle");
+  }
   assert.notStrictEqual(
     snapshot.subjectStatesByEntityId[FIRST_PACKAGE_SUBJECT_ENTITY_ID],
     snapshot.subjectStatesByEntityId[SECOND_PACKAGE_SUBJECT_ENTITY_ID],
@@ -271,7 +346,7 @@ async function verifyArtifacts(): Promise<{
   );
   assert.equal(snapshot.resources.terrainSamples, 65 * 65);
 
-  const dimensions = inspectPng(await readFile(SCREENSHOT_PATH));
+  const dimensions = inspectPng(await readFile(paths.screenshot));
   assert.ok(
     dimensions.width >= 800 && dimensions.height >= 450,
     "Captured PNG dimensions are unexpectedly small.",
@@ -313,10 +388,30 @@ async function verifyBrowserProtocolAndPhysics(): Promise<{
   firstPackageSubjectMovement: MovementEvidence;
   secondPackageSubjectMovement: MovementEvidence;
 }> {
-  const server = await startWorldkitServer({ inputPath: INPUT_PATH });
-  const browser = await chromium.launch({ headless: true });
+  let server: Awaited<ReturnType<typeof startWorldkitServer>> | undefined;
+  let browser: Browser | undefined;
+  let context: BrowserContext | undefined;
+  let page: Page | undefined;
+  let result:
+    | {
+        wallStopPositionMetersXYZ: Vec3;
+        waterEntryPositionMetersXYZ: Vec3;
+        firstPackageSubjectMovement: MovementEvidence;
+        secondPackageSubjectMovement: MovementEvidence;
+      }
+    | undefined;
+  let primaryError: unknown;
   try {
-    const page = await browser.newPage({ viewport: { width: 1280, height: 720 } });
+    server = await startWorldkitServer({ inputPath: INPUT_PATH });
+    try {
+      browser = await chromium.launch({ headless: true });
+    } catch {
+      throw Object.assign(new Error("Playwright Chromium is unavailable."), {
+        code: "CLI_PLAYWRIGHT_BROWSER_UNAVAILABLE",
+      });
+    }
+    context = await browser.newContext({ viewport: { width: 1280, height: 720 } });
+    page = await context.newPage();
     await page.goto(server.url, {
       waitUntil: "domcontentloaded",
       timeout: 30_000,
@@ -358,7 +453,7 @@ async function verifyBrowserProtocolAndPhysics(): Promise<{
     const waterEntry = await page.evaluate(async () => {
       const api = window.__WORLDKIT__!;
       api.reset();
-      return api.runFixedInput([{ actions: ["move-forward"], ticks: 600 }]);
+      return api.runFixedInput([{ actions: ["move-forward"], ticks: 720 }]);
     });
     const waterEntryPlayer = waterEntry.subjectStatesByEntityId[PLAYER_ENTITY_ID]!;
     assert.ok(
@@ -370,6 +465,7 @@ async function verifyBrowserProtocolAndPhysics(): Promise<{
       "water",
       "The lake must deterministically activate water movement.",
     );
+    assert.equal(waterEntryPlayer.activeActionId, "walk");
 
     const firstStart = await page.evaluate(() => window.__WORLDKIT__!.reset());
     const firstReceipt = await page.evaluate(
@@ -389,6 +485,11 @@ async function verifyBrowserProtocolAndPhysics(): Promise<{
       ]),
     );
     assert.equal(firstMove.controlledEntityId, FIRST_PACKAGE_SUBJECT_ENTITY_ID);
+    assert.equal(
+      firstMove.subjectStatesByEntityId[FIRST_PACKAGE_SUBJECT_ENTITY_ID]!
+        .activeActionId,
+      "walk",
+    );
     assert.equal(firstMove.camera.targetEntityId, FIRST_PACKAGE_SUBJECT_ENTITY_ID);
     assert.ok(
       firstMove.subjectStatesByEntityId[FIRST_PACKAGE_SUBJECT_ENTITY_ID]!
@@ -428,6 +529,11 @@ async function verifyBrowserProtocolAndPhysics(): Promise<{
       ]),
     );
     assert.equal(secondMove.controlledEntityId, SECOND_PACKAGE_SUBJECT_ENTITY_ID);
+    assert.equal(
+      secondMove.subjectStatesByEntityId[SECOND_PACKAGE_SUBJECT_ENTITY_ID]!
+        .activeActionId,
+      "walk",
+    );
     assert.equal(secondMove.camera.targetEntityId, SECOND_PACKAGE_SUBJECT_ENTITY_ID);
     assert.ok(
       secondMove.subjectStatesByEntityId[SECOND_PACKAGE_SUBJECT_ENTITY_ID]!
@@ -465,6 +571,7 @@ async function verifyBrowserProtocolAndPhysics(): Promise<{
         readyState.subjectDefinitionHash,
       );
       assert.equal(resetState.movementMedium, readyState.movementMedium);
+      assert.equal(resetState.activeActionId, "idle");
       assertPositionUnchanged(
         resetState.positionMetersXYZ,
         readyState.positionMetersXYZ,
@@ -478,7 +585,7 @@ async function verifyBrowserProtocolAndPhysics(): Promise<{
       );
     }
 
-    return {
+    result = {
       wallStopPositionMetersXYZ: wallStopPlayer.positionMetersXYZ,
       waterEntryPositionMetersXYZ: waterEntryPlayer.positionMetersXYZ,
       firstPackageSubjectMovement: {
@@ -498,16 +605,58 @@ async function verifyBrowserProtocolAndPhysics(): Promise<{
             .positionMetersXYZ,
       },
     };
+  } catch (error) {
+    primaryError = error;
   } finally {
-    await browser.close();
-    await server.stop();
+    const cleanupErrors: unknown[] = [];
+    for (const close of [
+      () => page?.close(),
+      () => context?.close(),
+      () => browser?.close(),
+      () => server?.stop(),
+    ]) {
+      try {
+        await close();
+      } catch (error) {
+        cleanupErrors.push(error);
+      }
+    }
+    if (cleanupErrors.length > 0) {
+      const cleanupError = new AggregateError(
+        cleanupErrors,
+        "Canonical verifier cleanup failed.",
+      );
+      primaryError = primaryError === undefined
+        ? cleanupError
+        : new AggregateError(
+            [primaryError, cleanupError],
+            "Canonical verification and cleanup both failed.",
+          );
+    }
   }
+  if (primaryError !== undefined) throw primaryError;
+  assert.ok(result !== undefined);
+  return result;
 }
 
 async function run(): Promise<void> {
-  await runCliGates();
-  const artifacts = await verifyArtifacts();
-  const physics = await verifyBrowserProtocolAndPhysics();
+  const temporaryDirectory = await mkdtemp(
+    path.join(path.dirname(TARGET_ARTIFACT_DIRECTORY), ".package-subject-world.tmp-"),
+  );
+  const paths = artifactPaths(temporaryDirectory);
+  let promoted = false;
+  let artifacts: Awaited<ReturnType<typeof verifyArtifacts>>;
+  let physics: Awaited<ReturnType<typeof verifyBrowserProtocolAndPhysics>>;
+  try {
+    await runCliGates(paths);
+    artifacts = await verifyArtifacts(paths);
+    physics = await verifyBrowserProtocolAndPhysics();
+    await assertExactArtifactFiles(temporaryDirectory);
+    await promoteArtifactDirectory(temporaryDirectory, TARGET_ARTIFACT_DIRECTORY);
+    promoted = true;
+  } finally {
+    if (!promoted) await rm(temporaryDirectory, { recursive: true, force: true });
+  }
   process.stdout.write(
     `${JSON.stringify(
       {
@@ -541,10 +690,13 @@ async function run(): Promise<void> {
           resourceLock: artifacts.resourceLockHash,
         },
         artifacts: {
-          build: BUILD_PATH,
-          screenshot: { path: SCREENSHOT_PATH, ...artifacts.dimensions },
-          snapshot: SNAPSHOT_PATH,
-          explain: EXPLAIN_PATH,
+          build: path.join(TARGET_ARTIFACT_DIRECTORY, "world.build.json"),
+          screenshot: {
+            path: path.join(TARGET_ARTIFACT_DIRECTORY, "world.png"),
+            ...artifacts.dimensions,
+          },
+          snapshot: path.join(TARGET_ARTIFACT_DIRECTORY, "snapshot.json"),
+          explain: path.join(TARGET_ARTIFACT_DIRECTORY, "explain.json"),
         },
         havokBodies: artifacts.bodyCount,
         ...physics,

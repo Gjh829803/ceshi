@@ -162,9 +162,13 @@
             "semanticTags": ["tail"]
           }
         ],
+        "visualBinding": {
+          "mode": "static"
+        },
         "sockets": [
           {
             "id": "seat.mount",
+            "kind": "local",
             "localTransform": {
               "positionMetersXYZ": [0, 1.35, 0]
             },

@@ -2,9 +2,18 @@ import { mkdir, readFile, stat, writeFile } from "node:fs/promises";
 import path from "node:path";
 
 const MAX_AUTHORING_BYTES = 8 * 1024 * 1024;
+const SERVER_NONCE_HEADER = "x-worldkit-server-nonce";
+
+function setServerNonceHeader(response) {
+  const nonce = process.env.WORLDKIT_AUTHORING_SERVER_NONCE;
+  if (nonce !== undefined && nonce.length > 0) {
+    response.setHeader(SERVER_NONCE_HEADER, nonce);
+  }
+}
 
 function writeJsonResponse(response, statusCode, body) {
   response.statusCode = statusCode;
+  setServerNonceHeader(response);
   response.setHeader("content-type", "application/json; charset=utf-8");
   response.setHeader("cache-control", "no-store");
   response.end(JSON.stringify(body));
@@ -56,6 +65,7 @@ export function worldkitAuthoringSource() {
             return;
           }
           response.statusCode = 200;
+          setServerNonceHeader(response);
           response.setHeader("content-type", "application/json; charset=utf-8");
           response.setHeader("cache-control", "no-store");
           if (request.method === "HEAD") {
