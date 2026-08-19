@@ -1,8 +1,22 @@
 import { readFile } from "node:fs/promises";
 import { createRequire } from "node:module";
 
+import type { AssetContainer } from "@babylonjs/core/assetContainer.js";
 import { NullEngine } from "@babylonjs/core/Engines/nullEngine.pure.js";
-import { describe, expect, it } from "vitest";
+import { LoadAssetContainerAsync } from "@babylonjs/core/Loading/sceneLoader.js";
+import { Scene } from "@babylonjs/core/scene.pure.js";
+import { sha256Bytes } from "@whitebox-world/protocol";
+import { describe, expect, it, vi } from "vitest";
+
+vi.mock("@babylonjs/core/Loading/sceneLoader.js", async (importOriginal) => {
+  const actual = await importOriginal<
+    typeof import("@babylonjs/core/Loading/sceneLoader.js")
+  >();
+  return {
+    ...actual,
+    LoadAssetContainerAsync: vi.fn(actual.LoadAssetContainerAsync),
+  };
+});
 
 import {
   normalizeAuthoringSpec,
@@ -15,11 +29,19 @@ import {
 } from "../../authoring/src/test-fixture";
 import type {
   ExecutionPlanV3,
+  ExecutionSubjectAssetV1,
   FixedInputV1,
   Vec3,
 } from "@whitebox-world/runtime-contracts";
 
-import { BabylonWorldRuntime } from "./index";
+import {
+  BabylonWorldRuntime,
+  SubjectAssetCacheV1,
+  SubjectAssetRuntimeErrorV1,
+  isSubjectAssetRuntimeErrorV1,
+  type SubjectAssetResolverV1,
+  type SubjectAssetRuntimeLimitsV1,
+} from "./index";
 
 const havokWasmBytes = await readFile(
   createRequire(import.meta.url).resolve("@babylonjs/havok/lib/esm/HavokPhysics.wasm"),
@@ -28,6 +50,137 @@ const havokWasmBinary = havokWasmBytes.buffer.slice(
   havokWasmBytes.byteOffset,
   havokWasmBytes.byteOffset + havokWasmBytes.byteLength,
 ) as ArrayBuffer;
+
+const goldenSubjectAssetBytes = new Uint8Array(
+  await readFile(
+    new URL(
+      "../../../apps/playground/public/worldkit-assets/golden-humanoid.glb",
+      import.meta.url,
+    ),
+  ),
+);
+
+const goldenSubjectAssetDescriptor = {
+  subjectAssetRef: "worldkit://subject-asset/humanoid.golden@1",
+  artifactContentHash:
+    "sha256:1095fd65c754d53e6db3757ab5e1c9e5e9dcea2581f85d40f37ea4890ee8c2c2",
+  byteLength: 43_656,
+  mediaType: "model/gltf-binary",
+  format: "glb",
+  inventory: {
+    meshCount: 1,
+    vertexCount: 360,
+    triangleCount: 180,
+    skeletonCount: 1,
+    boneCount: 18,
+    animationClipNames: ["idle", "jump", "run", "walk"],
+  },
+} as const satisfies ExecutionSubjectAssetV1;
+
+interface MutableGlbJson {
+  buffers?: Array<Record<string, unknown>>;
+  images?: Array<Record<string, unknown>>;
+  scenes?: Array<{ nodes?: number[] }>;
+  nodes?: Array<Record<string, unknown>>;
+  meshes?: Array<Record<string, unknown>>;
+  animations?: Array<Record<string, unknown>>;
+  cameras?: Array<Record<string, unknown>>;
+}
+
+function mutateGlbJson(
+  bytes: Uint8Array,
+  mutate: (json: MutableGlbJson) => void,
+): Uint8Array {
+  const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
+  const chunks: Array<{ type: number; bytes: Uint8Array }> = [];
+  let cursor = 12;
+  while (cursor < bytes.byteLength) {
+    const length = view.getUint32(cursor, true);
+    const type = view.getUint32(cursor + 4, true);
+    const chunk = bytes.slice(cursor + 8, cursor + 8 + length);
+    chunks.push({ type, bytes: chunk });
+    cursor += 8 + length;
+  }
+  const jsonChunk = chunks.find((chunk) => chunk.type === 0x4e4f534a);
+  if (jsonChunk === undefined) throw new Error("Golden GLB JSON chunk missing.");
+  const json = JSON.parse(
+    new TextDecoder().decode(jsonChunk.bytes).replace(/[\u0000\u0020]+$/u, ""),
+  ) as MutableGlbJson;
+  mutate(json);
+  const encoded = new TextEncoder().encode(JSON.stringify(json));
+  const paddedJsonLength = Math.ceil(encoded.byteLength / 4) * 4;
+  const replacement = new Uint8Array(paddedJsonLength);
+  replacement.fill(0x20);
+  replacement.set(encoded);
+  const rewritten = chunks.map((chunk) =>
+    chunk.type === 0x4e4f534a ? { ...chunk, bytes: replacement } : chunk,
+  );
+  const totalLength =
+    12 + rewritten.reduce((sum, chunk) => sum + 8 + chunk.bytes.byteLength, 0);
+  const result = new Uint8Array(totalLength);
+  const resultView = new DataView(result.buffer);
+  resultView.setUint32(0, 0x46546c67, true);
+  resultView.setUint32(4, 2, true);
+  resultView.setUint32(8, totalLength, true);
+  cursor = 12;
+  for (const chunk of rewritten) {
+    resultView.setUint32(cursor, chunk.bytes.byteLength, true);
+    resultView.setUint32(cursor + 4, chunk.type, true);
+    result.set(chunk.bytes, cursor + 8);
+    cursor += 8 + chunk.bytes.byteLength;
+  }
+  return result;
+}
+
+function descriptorForBytes(
+  bytes: Uint8Array,
+  overrides: Partial<ExecutionSubjectAssetV1> = {},
+): ExecutionSubjectAssetV1 {
+  return {
+    ...goldenSubjectAssetDescriptor,
+    artifactContentHash: sha256Bytes(bytes),
+    byteLength: bytes.byteLength,
+    inventory: {
+      ...goldenSubjectAssetDescriptor.inventory,
+      ...overrides.inventory,
+    },
+    ...overrides,
+  } as ExecutionSubjectAssetV1;
+}
+
+function createAssetScene(): { engine: NullEngine; scene: Scene } {
+  const engine = new NullEngine({
+    renderWidth: 64,
+    renderHeight: 64,
+    textureSize: 64,
+    deterministicLockstep: true,
+    lockstepMaxSteps: 4,
+  });
+  return { engine, scene: new Scene(engine) };
+}
+
+function createMemoryResolver(
+  bytes: Uint8Array,
+  onResolve?: (request: Parameters<SubjectAssetResolverV1["resolveSubjectAsset"]>[0]) => void,
+): SubjectAssetResolverV1 {
+  return {
+    async resolveSubjectAsset(request) {
+      onResolve?.(request);
+      return { bytes, sourceLabel: "secret://must-never-leak" };
+    },
+  };
+}
+
+function deferred<T>(): {
+  promise: Promise<T>;
+  resolve: (value: T) => void;
+} {
+  let resolve!: (value: T) => void;
+  const promise = new Promise<T>((accept) => {
+    resolve = accept;
+  });
+  return { promise, resolve };
+}
 
 interface RuntimeDebugProbe {
   subjectVisualOrigin(subjectEntityId: string): Vec3;
@@ -425,5 +578,653 @@ describe("BabylonWorldRuntime", () => {
       );
     }
     await runtime.dispose();
+  });
+});
+
+const defaultSubjectAssetRuntimeLimits = {
+  maxByteLengthBytes: 128 * 1024 * 1024,
+  maxMeshCount: 256,
+  maxVertexCount: 2_000_000,
+  maxTriangleCount: 2_000_000,
+  maxSkeletonCount: 8,
+  maxBoneCount: 512,
+  maxAnimationClipCount: 256,
+} as const satisfies SubjectAssetRuntimeLimitsV1;
+
+describe("SubjectAssetCacheV1", () => {
+  it("does not expose Cache ownership internals as public operations", async () => {
+    const { engine, scene } = createAssetScene();
+    const cache = new SubjectAssetCacheV1(scene);
+
+    expect("isClosed" in cache).toBe(false);
+    expect("releaseLease" in cache).toBe(false);
+
+    await cache.dispose();
+    scene.dispose();
+    engine.dispose();
+  });
+
+  it("exposes a typed closed-code Runtime error without provider context or Cause", async () => {
+    const { engine, scene } = createAssetScene();
+    const cache = new SubjectAssetCacheV1(scene);
+    const error = await cache.acquire(goldenSubjectAssetDescriptor).catch((reason) => reason);
+
+    expect(error).toBeInstanceOf(SubjectAssetRuntimeErrorV1);
+    expect(isSubjectAssetRuntimeErrorV1(error)).toBe(true);
+    expect(error).toMatchObject({
+      code: "SUBJECT_ASSET_RESOLVER_REQUIRED",
+      subjectAssetRef: goldenSubjectAssetDescriptor.subjectAssetRef,
+      artifactContentHash: goldenSubjectAssetDescriptor.artifactContentHash,
+    });
+    expect(error).not.toHaveProperty("cause");
+    expect(isSubjectAssetRuntimeErrorV1(new Error("ordinary"))).toBe(false);
+    expect(
+      isSubjectAssetRuntimeErrorV1({
+        code: "BABYLON_PROVIDER_FAILURE",
+      }),
+    ).toBe(false);
+
+    await cache.dispose();
+    scene.dispose();
+    engine.dispose();
+  });
+
+  it("sends the exact engine-neutral resolve request and parses identical bytes once", async () => {
+    const { engine, scene } = createAssetScene();
+    const requests: unknown[] = [];
+    const cache = new SubjectAssetCacheV1(
+      scene,
+      createMemoryResolver(goldenSubjectAssetBytes, (request) => requests.push(request)),
+    );
+    try {
+      const first = await cache.acquire(goldenSubjectAssetDescriptor);
+      const second = await cache.acquire(goldenSubjectAssetDescriptor);
+
+      expect(requests).toEqual([
+        {
+          subjectAssetRef: goldenSubjectAssetDescriptor.subjectAssetRef,
+          artifactContentHash: goldenSubjectAssetDescriptor.artifactContentHash,
+          byteLength: goldenSubjectAssetDescriptor.byteLength,
+          mediaType: "model/gltf-binary",
+        },
+      ]);
+      first.release();
+      second.release();
+    } finally {
+      await cache.dispose();
+      scene.dispose();
+      engine.dispose();
+    }
+  });
+
+  it("shares one pending Resolve and Parse across concurrent acquires", async () => {
+    const { engine, scene } = createAssetScene();
+    const resolution = deferred<{ bytes: Uint8Array; sourceLabel: string }>();
+    let calls = 0;
+    const cache = new SubjectAssetCacheV1(scene, {
+      resolveSubjectAsset: async () => {
+        calls += 1;
+        return resolution.promise;
+      },
+    });
+    try {
+      const firstPending = cache.acquire(goldenSubjectAssetDescriptor);
+      const secondPending = cache.acquire(goldenSubjectAssetDescriptor);
+      resolution.resolve({ bytes: goldenSubjectAssetBytes, sourceLabel: "memory" });
+      const [first, second] = await Promise.all([firstPending, secondPending]);
+      expect(calls).toBe(1);
+      first.release();
+      second.release();
+    } finally {
+      await cache.dispose();
+      scene.dispose();
+      engine.dispose();
+    }
+  });
+
+  it("loads the real GLB and creates isolated root, Mesh, Skeleton, and Clip instances", async () => {
+    const { engine, scene } = createAssetScene();
+    const cache = new SubjectAssetCacheV1(
+      scene,
+      createMemoryResolver(goldenSubjectAssetBytes),
+    );
+    try {
+      const lease = await cache.acquire(goldenSubjectAssetDescriptor);
+      const first = lease.instantiate("hero-a");
+      const second = lease.instantiate("hero-b");
+
+      expect(first.meshes).toHaveLength(2);
+      expect(first.skeletons).toHaveLength(1);
+      expect(first.animationGroups.map((group) => group.name).sort()).toEqual([
+        "idle",
+        "jump",
+        "run",
+        "walk",
+      ]);
+      expect(first.rootNodes[0]).not.toBe(second.rootNodes[0]);
+      expect(first.meshes[0]).not.toBe(second.meshes[0]);
+      expect(first.skeletons[0]).not.toBe(second.skeletons[0]);
+      expect(first.animationGroups[0]).not.toBe(second.animationGroups[0]);
+      expect(first.skeletons[0]!.bones.map((bone) => bone.name)).toEqual(
+        second.skeletons[0]!.bones.map((bone) => bone.name),
+      );
+      expect(first.rootNodes.every((root) => root.name.startsWith("hero-a."))).toBe(true);
+      expect(second.rootNodes.every((root) => root.name.startsWith("hero-b."))).toBe(true);
+
+      const forgottenRoot = second.rootNodes[0]!;
+      first.dispose();
+      first.dispose();
+      lease.release();
+      expect(forgottenRoot.isDisposed()).toBe(true);
+      lease.release();
+      expect(() => lease.instantiate("too-late")).toThrow(/SUBJECT_ASSET_LEASE_RELEASED/);
+    } finally {
+      await cache.dispose();
+      scene.dispose();
+      engine.dispose();
+    }
+  });
+
+  it("maps Babylon instantiation failures to the closed Runtime error", async () => {
+    const { engine, scene } = createAssetScene();
+    const loader = vi.mocked(LoadAssetContainerAsync);
+    const loaderResultOffset = loader.mock.results.length;
+    const cache = new SubjectAssetCacheV1(
+      scene,
+      createMemoryResolver(goldenSubjectAssetBytes),
+    );
+    const lease = await cache.acquire(goldenSubjectAssetDescriptor);
+    const container = await (loader.mock.results[loaderResultOffset]!
+      .value as Promise<AssetContainer>);
+    const secret = "BABYLON_PROVIDER_PRIVATE_FAILURE";
+    const instantiateSpy = vi
+      .spyOn(container, "instantiateModelsToScene")
+      .mockImplementation(() => {
+        throw new Error(secret);
+      });
+
+    const error = (() => {
+      try {
+        lease.instantiate("hero");
+      } catch (reason) {
+        return reason;
+      }
+      throw new Error("Expected instantiation to fail.");
+    })();
+
+    expect(isSubjectAssetRuntimeErrorV1(error)).toBe(true);
+    expect(error).toMatchObject({ code: "SUBJECT_ASSET_FORMAT_UNSUPPORTED" });
+    expect(String(error)).not.toContain(secret);
+    instantiateSpy.mockRestore();
+    lease.release();
+    await cache.dispose();
+    scene.dispose();
+    engine.dispose();
+  });
+
+  it("parses a byte-offset Uint8Array without hashing prefix or suffix bytes", async () => {
+    const { engine, scene } = createAssetScene();
+    const storage = new Uint8Array(goldenSubjectAssetBytes.byteLength + 9);
+    storage.fill(0x7f);
+    storage.set(goldenSubjectAssetBytes, 5);
+    const offsetBytes = storage.subarray(5, 5 + goldenSubjectAssetBytes.byteLength);
+    const cache = new SubjectAssetCacheV1(scene, createMemoryResolver(offsetBytes));
+    try {
+      const lease = await cache.acquire(goldenSubjectAssetDescriptor);
+      lease.release();
+    } finally {
+      await cache.dispose();
+      scene.dispose();
+      engine.dispose();
+    }
+  });
+
+  it("rejects missing, throwing, empty, and non-byte Resolver results without leaking Host data", async () => {
+    const { engine, scene } = createAssetScene();
+    const missing = new SubjectAssetCacheV1(scene);
+    await expect(missing.acquire(goldenSubjectAssetDescriptor)).rejects.toThrow(
+      /SUBJECT_ASSET_RESOLVER_REQUIRED/,
+    );
+    await missing.dispose();
+
+    const secret = "https://user:password@example.invalid/private.glb";
+    const throwing = new SubjectAssetCacheV1(scene, {
+      resolveSubjectAsset: async () => {
+        throw new Error(secret);
+      },
+    });
+    const throwingError = await throwing.acquire(goldenSubjectAssetDescriptor).catch((error) =>
+      String(error),
+    );
+    expect(throwingError).toContain("SUBJECT_ASSET_RESOLVE_FAILED");
+    expect(throwingError).not.toContain(secret);
+    await throwing.dispose();
+
+    for (const result of [undefined, {}, { bytes: new ArrayBuffer(8), sourceLabel: secret }]) {
+      const invalid = new SubjectAssetCacheV1(scene, {
+        resolveSubjectAsset: async () => result as never,
+      });
+      const invalidError = await invalid.acquire(goldenSubjectAssetDescriptor).catch((error) =>
+        String(error),
+      );
+      expect(invalidError).toContain("SUBJECT_ASSET_RESOLVE_FAILED");
+      expect(invalidError).not.toContain(secret);
+      await invalid.dispose();
+    }
+    scene.dispose();
+    engine.dispose();
+  });
+
+  it("enforces descriptor, Resolver, length, Hash, and format precedence", async () => {
+    const { engine, scene } = createAssetScene();
+    const unsupported = {
+      ...goldenSubjectAssetDescriptor,
+      mediaType: "model/gltf+json",
+      format: "gltf",
+      byteLength: defaultSubjectAssetRuntimeLimits.maxByteLengthBytes + 1,
+    } as unknown as ExecutionSubjectAssetV1;
+    await expect(new SubjectAssetCacheV1(scene).acquire(unsupported)).rejects.toThrow(
+      /SUBJECT_ASSET_FORMAT_UNSUPPORTED/,
+    );
+
+    const oversized = {
+      ...goldenSubjectAssetDescriptor,
+      byteLength: defaultSubjectAssetRuntimeLimits.maxByteLengthBytes + 1,
+    };
+    await expect(new SubjectAssetCacheV1(scene).acquire(oversized)).rejects.toThrow(
+      /SUBJECT_ASSET_INVENTORY_EXCEEDED/,
+    );
+
+    const throwing = new SubjectAssetCacheV1(scene, {
+      resolveSubjectAsset: async () => {
+        throw new Error("resolver private failure");
+      },
+    });
+    await expect(
+      throwing.acquire({ ...goldenSubjectAssetDescriptor, byteLength: 1 }),
+    ).rejects.toThrow(/SUBJECT_ASSET_RESOLVE_FAILED/);
+    await throwing.dispose();
+
+    const malformed = new Uint8Array(goldenSubjectAssetBytes.byteLength);
+    const lengthFirst = new SubjectAssetCacheV1(scene, createMemoryResolver(malformed));
+    await expect(
+      lengthFirst.acquire({
+        ...goldenSubjectAssetDescriptor,
+        byteLength: malformed.byteLength - 1,
+        artifactContentHash: `sha256:${"0".repeat(64)}`,
+      }),
+    ).rejects.toThrow(/SUBJECT_ASSET_LENGTH_MISMATCH/);
+    await lengthFirst.dispose();
+
+    const hashFirst = new SubjectAssetCacheV1(scene, createMemoryResolver(malformed));
+    await expect(
+      hashFirst.acquire({
+        ...goldenSubjectAssetDescriptor,
+        byteLength: malformed.byteLength,
+        artifactContentHash: `sha256:${"0".repeat(64)}`,
+      }),
+    ).rejects.toThrow(/SUBJECT_ASSET_HASH_MISMATCH/);
+    await hashFirst.dispose();
+
+    const formatLast = new SubjectAssetCacheV1(scene, createMemoryResolver(malformed));
+    await expect(formatLast.acquire(descriptorForBytes(malformed))).rejects.toThrow(
+      /SUBJECT_ASSET_FORMAT_UNSUPPORTED/,
+    );
+    await formatLast.dispose();
+    scene.dispose();
+    engine.dispose();
+  });
+
+  it("validates Host limits as strict finite positive integer reductions", () => {
+    const { engine, scene } = createAssetScene();
+    const invalidValues = [
+      0,
+      -1,
+      1.5,
+      Number.NaN,
+      Number.POSITIVE_INFINITY,
+      defaultSubjectAssetRuntimeLimits.maxMeshCount + 1,
+    ];
+    for (const maxMeshCount of invalidValues) {
+      expect(
+        () =>
+          new SubjectAssetCacheV1(scene, undefined, {
+            runtimeLimits: {
+              ...defaultSubjectAssetRuntimeLimits,
+              maxMeshCount,
+            },
+          }),
+      ).toThrow(RangeError);
+    }
+    scene.dispose();
+    engine.dispose();
+  });
+
+  it("rejects malformed Host limit objects with RangeError", () => {
+    const { engine, scene } = createAssetScene();
+    for (const runtimeLimits of [null, {}, { ...defaultSubjectAssetRuntimeLimits }]) {
+      if (runtimeLimits !== null && "maxMeshCount" in runtimeLimits) {
+        delete (runtimeLimits as Partial<SubjectAssetRuntimeLimitsV1>).maxMeshCount;
+      }
+      expect(
+        () =>
+          new SubjectAssetCacheV1(scene, undefined, {
+            runtimeLimits: runtimeLimits as SubjectAssetRuntimeLimitsV1,
+          }),
+      ).toThrow(RangeError);
+    }
+    scene.dispose();
+    engine.dispose();
+  });
+
+  it("rejects external GLB buffer and image URIs before Babylon parsing", async () => {
+    const { engine, scene } = createAssetScene();
+    for (const mutate of [
+      (json: MutableGlbJson) => {
+        json.buffers![0]!.uri = "https://example.invalid/external.bin";
+      },
+      (json: MutableGlbJson) => {
+        json.images = [{ uri: "data:image/png;base64,AAAA" }];
+      },
+    ]) {
+      const bytes = mutateGlbJson(goldenSubjectAssetBytes, mutate);
+      const cache = new SubjectAssetCacheV1(scene, createMemoryResolver(bytes));
+      await expect(cache.acquire(descriptorForBytes(bytes))).rejects.toThrow(
+        /SUBJECT_ASSET_FORMAT_UNSUPPORTED/,
+      );
+      await cache.dispose();
+    }
+    scene.dispose();
+    engine.dispose();
+  });
+
+  it("rejects a GLB JSON chunk padded with non-JSON NUL bytes", async () => {
+    const { engine, scene } = createAssetScene();
+    const bytes = goldenSubjectAssetBytes.slice();
+    const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
+    const jsonChunkLength = view.getUint32(12, true);
+    const finalJsonByteIndex = 20 + jsonChunkLength - 1;
+    expect(bytes[finalJsonByteIndex]).toBe(0x20);
+    bytes[finalJsonByteIndex] = 0;
+    const cache = new SubjectAssetCacheV1(scene, createMemoryResolver(bytes));
+    const loaderCallCount = vi.mocked(LoadAssetContainerAsync).mock.calls.length;
+
+    await expect(cache.acquire(descriptorForBytes(bytes))).rejects.toThrow(
+      /SUBJECT_ASSET_FORMAT_UNSUPPORTED/,
+    );
+    expect(LoadAssetContainerAsync).toHaveBeenCalledTimes(loaderCallCount);
+
+    await cache.dispose();
+    scene.dispose();
+    engine.dispose();
+  });
+
+  it("rejects non-indexed geometry and Cameras as unsupported source content", async () => {
+    const { engine, scene } = createAssetScene();
+    const nonIndexed = mutateGlbJson(goldenSubjectAssetBytes, (json) => {
+      const primitive = (json.meshes![0]!.primitives as Array<Record<string, unknown>>)[0]!;
+      delete primitive.indices;
+    });
+    const nonIndexedCache = new SubjectAssetCacheV1(
+      scene,
+      createMemoryResolver(nonIndexed),
+    );
+    await expect(nonIndexedCache.acquire(descriptorForBytes(nonIndexed))).rejects.toThrow(
+      /SUBJECT_ASSET_FORMAT_UNSUPPORTED/,
+    );
+    await nonIndexedCache.dispose();
+
+    const withCamera = mutateGlbJson(goldenSubjectAssetBytes, (json) => {
+      json.cameras = [{ type: "perspective", perspective: { yfov: 1, znear: 0.1 } }];
+      const nodeIndex = json.nodes!.push({ name: "ForbiddenCamera", camera: 0 }) - 1;
+      json.scenes![0]!.nodes!.push(nodeIndex);
+    });
+    const cameraCache = new SubjectAssetCacheV1(scene, createMemoryResolver(withCamera));
+    await expect(cameraCache.acquire(descriptorForBytes(withCamera))).rejects.toThrow(
+      /SUBJECT_ASSET_FORMAT_UNSUPPORTED/,
+    );
+    await cameraCache.dispose();
+    scene.dispose();
+    engine.dispose();
+  });
+
+  it("applies parsed runtime limits before exact Inventory mismatch", async () => {
+    const { engine, scene } = createAssetScene();
+    const twoMeshes = mutateGlbJson(goldenSubjectAssetBytes, (json) => {
+      const duplicateMesh = structuredClone(json.meshes![0]!);
+      duplicateMesh.name = "DuplicateGoldenHumanoid";
+      const meshIndex = json.meshes!.push(duplicateMesh) - 1;
+      const nodeIndex =
+        json.nodes!.push({
+          name: "DuplicateGoldenHumanoidMesh",
+          mesh: meshIndex,
+          skin: 0,
+          translation: [2, 0, 0],
+        }) - 1;
+      json.scenes![0]!.nodes!.push(nodeIndex);
+    });
+    const cache = new SubjectAssetCacheV1(scene, createMemoryResolver(twoMeshes), {
+      runtimeLimits: {
+        ...defaultSubjectAssetRuntimeLimits,
+        maxMeshCount: 1,
+      },
+    });
+    await expect(cache.acquire(descriptorForBytes(twoMeshes))).rejects.toThrow(
+      /SUBJECT_ASSET_INVENTORY_EXCEEDED/,
+    );
+    await cache.dispose();
+    scene.dispose();
+    engine.dispose();
+  });
+
+  it("rejects exact Inventory mismatch and duplicate actual Clip names", async () => {
+    const { engine, scene } = createAssetScene();
+    const mismatched = new SubjectAssetCacheV1(
+      scene,
+      createMemoryResolver(goldenSubjectAssetBytes),
+    );
+    await expect(
+      mismatched.acquire({
+        ...goldenSubjectAssetDescriptor,
+        inventory: { ...goldenSubjectAssetDescriptor.inventory, vertexCount: 359 },
+      }),
+    ).rejects.toThrow(/SUBJECT_ASSET_INVENTORY_MISMATCH/);
+    await mismatched.dispose();
+
+    const duplicateClip = mutateGlbJson(goldenSubjectAssetBytes, (json) => {
+      json.animations!.push(structuredClone(json.animations![0]!));
+    });
+    const duplicateCache = new SubjectAssetCacheV1(
+      scene,
+      createMemoryResolver(duplicateClip),
+    );
+    await expect(duplicateCache.acquire(descriptorForBytes(duplicateClip))).rejects.toThrow(
+      /SUBJECT_ASSET_INVENTORY_MISMATCH/,
+    );
+    await duplicateCache.dispose();
+    scene.dispose();
+    engine.dispose();
+  });
+
+  it("revalidates cache-hit and pending-join descriptors without changing ownership", async () => {
+    const { engine, scene } = createAssetScene();
+    const cache = new SubjectAssetCacheV1(
+      scene,
+      createMemoryResolver(goldenSubjectAssetBytes),
+    );
+    const first = await cache.acquire(goldenSubjectAssetDescriptor);
+    await expect(
+      cache.acquire({
+        ...goldenSubjectAssetDescriptor,
+        inventory: { ...goldenSubjectAssetDescriptor.inventory, boneCount: 17 },
+      }),
+    ).rejects.toThrow(/SUBJECT_ASSET_INVENTORY_MISMATCH/);
+    first.release();
+    await cache.dispose();
+
+    const resolution = deferred<{ bytes: Uint8Array; sourceLabel: string }>();
+    const pendingCache = new SubjectAssetCacheV1(scene, {
+      resolveSubjectAsset: async () => resolution.promise,
+    });
+    const validPending = pendingCache.acquire(goldenSubjectAssetDescriptor);
+    const conflictingPending = pendingCache.acquire({
+      ...goldenSubjectAssetDescriptor,
+      inventory: { ...goldenSubjectAssetDescriptor.inventory, skeletonCount: 2 },
+    });
+    resolution.resolve({ bytes: goldenSubjectAssetBytes, sourceLabel: "memory" });
+    const valid = await validPending;
+    await expect(conflictingPending).rejects.toThrow(/SUBJECT_ASSET_INVENTORY_MISMATCH/);
+    valid.release();
+    await pendingCache.dispose();
+    scene.dispose();
+    engine.dispose();
+  });
+
+  it("evicts a failed pending entry so the same key can retry successfully", async () => {
+    const { engine, scene } = createAssetScene();
+    let calls = 0;
+    const cache = new SubjectAssetCacheV1(scene, {
+      async resolveSubjectAsset() {
+        calls += 1;
+        const bytes = calls === 1 ? goldenSubjectAssetBytes.slice() : goldenSubjectAssetBytes;
+        if (calls === 1) {
+          const finalIndex = bytes.byteLength - 1;
+          bytes[finalIndex] = bytes[finalIndex]! ^ 0xff;
+        }
+        return { bytes, sourceLabel: "memory" };
+      },
+    });
+    await expect(cache.acquire(goldenSubjectAssetDescriptor)).rejects.toThrow(
+      /SUBJECT_ASSET_HASH_MISMATCH/,
+    );
+    const lease = await cache.acquire(goldenSubjectAssetDescriptor);
+    expect(calls).toBe(2);
+    lease.release();
+    await cache.dispose();
+    scene.dispose();
+    engine.dispose();
+  });
+
+  it("closes atomically, rejects a pending acquire, and shares one Dispose Promise", async () => {
+    const { engine, scene } = createAssetScene();
+    const resolution = deferred<{ bytes: Uint8Array; sourceLabel: string }>();
+    const cache = new SubjectAssetCacheV1(scene, {
+      resolveSubjectAsset: async () => resolution.promise,
+    });
+    const pendingAcquire = cache.acquire(goldenSubjectAssetDescriptor);
+    const firstDispose = cache.dispose();
+    const secondDispose = cache.dispose();
+    expect(secondDispose).toBe(firstDispose);
+    await expect(cache.acquire(goldenSubjectAssetDescriptor)).rejects.toThrow(
+      /SUBJECT_ASSET_CACHE_DISPOSED/,
+    );
+    resolution.resolve({ bytes: goldenSubjectAssetBytes, sourceLabel: "memory" });
+    await expect(pendingAcquire).rejects.toThrow(/SUBJECT_ASSET_CACHE_DISPOSED/);
+    await firstDispose;
+    scene.dispose();
+    engine.dispose();
+  });
+
+  it("disposes a container exactly once when shutdown races a pending Parse", async () => {
+    const { engine, scene } = createAssetScene();
+    const loader = vi.mocked(LoadAssetContainerAsync);
+    const loadImplementation = loader.getMockImplementation();
+    if (loadImplementation === undefined) throw new Error("Loader test wrapper missing.");
+    const parsedContainer = deferred<AssetContainer>();
+    const allowLoaderReturn = deferred<void>();
+    let containerDisposeCalls = 0;
+    let containerDisposeSpy: ReturnType<typeof vi.spyOn> | undefined;
+    loader.mockImplementationOnce(async (...args) => {
+      const container = await loadImplementation(...args);
+      const nativeDispose = container.dispose.bind(container);
+      containerDisposeSpy = vi.spyOn(container, "dispose").mockImplementation(() => {
+        containerDisposeCalls += 1;
+        nativeDispose();
+      });
+      parsedContainer.resolve(container);
+      await allowLoaderReturn.promise;
+      return container;
+    });
+    const cache = new SubjectAssetCacheV1(
+      scene,
+      createMemoryResolver(goldenSubjectAssetBytes),
+    );
+    const pendingAcquire = cache.acquire(goldenSubjectAssetDescriptor);
+    await parsedContainer.promise;
+
+    const disposal = cache.dispose();
+    allowLoaderReturn.resolve();
+
+    await expect(pendingAcquire).rejects.toThrow(/SUBJECT_ASSET_CACHE_DISPOSED/);
+    await disposal;
+    expect(containerDisposeCalls).toBe(1);
+    containerDisposeSpy?.mockRestore();
+    scene.dispose();
+    engine.dispose();
+  });
+
+  it("disposes retained containers by descending full Cache Key", async () => {
+    const { engine, scene } = createAssetScene();
+    const loader = vi.mocked(LoadAssetContainerAsync);
+    const loaderResultOffset = loader.mock.results.length;
+    const cache = new SubjectAssetCacheV1(
+      scene,
+      createMemoryResolver(goldenSubjectAssetBytes),
+    );
+    const refsInAcquireOrder = [
+      "worldkit://subject-asset/b@1",
+      "worldkit://subject-asset/a@1",
+      "worldkit://subject-asset/c@1",
+    ];
+    for (const subjectAssetRef of refsInAcquireOrder) {
+      const lease = await cache.acquire({
+        ...goldenSubjectAssetDescriptor,
+        subjectAssetRef,
+      });
+      lease.release();
+    }
+    const loadResults = loader.mock.results.slice(loaderResultOffset);
+    expect(loadResults).toHaveLength(refsInAcquireOrder.length);
+    const containers = await Promise.all(
+      loadResults.map((result) => result.value as Promise<AssetContainer>),
+    );
+    const disposedRefs: string[] = [];
+    const disposalSpies = containers.map((container, index) => {
+      const nativeDispose = container.dispose.bind(container);
+      return vi.spyOn(container, "dispose").mockImplementation(() => {
+        disposedRefs.push(refsInAcquireOrder[index]!);
+        nativeDispose();
+      });
+    });
+
+    await cache.dispose();
+
+    expect(disposedRefs).toEqual([
+      "worldkit://subject-asset/c@1",
+      "worldkit://subject-asset/b@1",
+      "worldkit://subject-asset/a@1",
+    ]);
+    for (const spy of disposalSpies) spy.mockRestore();
+    scene.dispose();
+    engine.dispose();
+  });
+
+  it("invalidates leases and live instances when Cache Dispose begins", async () => {
+    const { engine, scene } = createAssetScene();
+    const cache = new SubjectAssetCacheV1(
+      scene,
+      createMemoryResolver(goldenSubjectAssetBytes),
+    );
+    const lease = await cache.acquire(goldenSubjectAssetDescriptor);
+    const instance = lease.instantiate("hero");
+    const root = instance.rootNodes[0]!;
+    const disposal = cache.dispose();
+    expect(root.isDisposed()).toBe(true);
+    expect(() => lease.instantiate("late")).toThrow(/SUBJECT_ASSET_LEASE_RELEASED/);
+    lease.release();
+    instance.dispose();
+    await disposal;
+    scene.dispose();
+    engine.dispose();
   });
 });
