@@ -967,7 +967,7 @@ worldkit subject explain <world-file> --entity-id <id> --json
 - Produces `WorldBuildArtifactV3` with NormalizedWorldIRV2 and ExecutionPlanV3.
 - Finalizes versionless APIs: `parseAuthoringSpecJson`, `normalizeAuthoringSpec`, and `compileWorld` become the only canonical V2/V2/V3 pipeline. All obsolete S0 Authoring, normalized, registry, compiler, and runtime types containing `kitRef` are removed.
 
-- [ ] **Step 1: Write failing argument and JSON output tests**
+- [x] **Step 1: Write failing argument and JSON output tests**
 
 ```ts
 const packageWorldPath = path.resolve("examples/authoring/package-subject-world.json");
@@ -1009,37 +1009,37 @@ it("explains Definition, collider derivation, profiles, lock, and cost", async (
 
 Add stable ordering, missing Ref/Entity diagnostics, invalid standalone Definition, and Build Artifact V3 tests.
 
-- [ ] **Step 2: Run CLI tests and verify failure**
+- [x] **Step 2: Run CLI tests and verify failure**
 
 Run: `pnpm vitest run scripts/worldkit.test.ts`
 
 Expected: FAIL because nested discovery commands and V3 artifacts are absent.
 
-- [ ] **Step 3: Extract the shared world pipeline**
+- [x] **Step 3: Extract the shared world pipeline**
 
 Move file read → Parse V2 → Normalize → Compile into `scripts/lib/worldkit-pipeline.ts`. `validate`, `build`, `run`, `capture`, and `subject explain` all call the same function. Preserve atomic writes and current exit-code policy.
 
-- [ ] **Step 4: Implement Registry list/describe**
+- [x] **Step 4: Implement Registry list/describe**
 
 Return versioned JSON objects with stable resource order, `resourceRef`, `kind`, `version`, `contentHash`, AI metadata, and closed configuration. A missing exact Ref returns `SUBJECT_DEFINITION_NOT_FOUND` or the kind-appropriate resource diagnostic with available Discovery guidance.
 
-- [ ] **Step 5: Implement standalone Definition validation**
+- [x] **Step 5: Implement standalone Definition validation**
 
 Parse a single JSON object with the same size, syntax, and duplicate-key rules. Validate it with `validatePackageSubjectDefinitionV1`, normalize it through the same exported Definition normalizer using the built-in Registry, and return its derived Ref, Definition Hash, Collider, Resource Lock Hash, and Diagnostics.
 
-- [ ] **Step 6: Implement Subject Explain and Artifact V3**
+- [x] **Step 6: Implement Subject Explain and Artifact V3**
 
 Join the normalized Definition with the Execution Subject by `subjectDefinitionRef`, then return the fields required by the spec. Build output becomes `kind: "worldkit-build-artifact", schemaVersion: 3` and contains only IR V2 and Plan V3.
 
-- [ ] **Step 7: Rename and update the canonical verifier**
+- [x] **Step 7: Rename and update the canonical verifier**
 
 Replace the unpublished `verify:v1` package script with `verify:canonical`. Print and assert Authoring `2`, Normalized IR `2`, ExecutionPlan `3`, Runtime Snapshot `3`, and Browser Protocol `3`; do not retain a command alias.
 
-- [ ] **Step 8: Switch versionless APIs and remove S0 aliases**
+- [x] **Step 8: Switch versionless APIs and remove S0 aliases**
 
 Make the versionless parser accept only AuthoringSpecV2, make the versionless Normalizer accept only canonical AuthoringSpecV2, and make the versionless Compiler emit V3. Remove `AuthoringSpecV1`, `SubjectNodeSpecV1`, `SubjectKitDefinitionV1`, `SubjectDefinitionRegistryV1`, `NormalizedWorldIRV1`, `ExecutionSubjectV2`, `ExecutionPlanV2`, `WorldRuntimeSnapshotV2`, the V1 JSON Schema, and built-in Kit data. Delete `kitRef` from all current source, fixtures, examples, and generated artifacts.
 
-- [ ] **Step 9: Run CLI and full type tests**
+- [x] **Step 9: Run CLI and full type tests**
 
 Run: `pnpm vitest run scripts/worldkit.test.ts`
 
@@ -1047,7 +1047,7 @@ Run: `pnpm typecheck`
 
 Expected: PASS.
 
-- [ ] **Step 10: Commit**
+- [x] **Step 10: Commit**
 
 ```bash
 git add package.json scripts packages/authoring packages/subject-registry packages/runtime-contracts packages/compiler
