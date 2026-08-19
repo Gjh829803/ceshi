@@ -1,6 +1,6 @@
 # 可扩展主体组装 Authoring 专项设计
 
-- 状态：Proposed，供 Subject Phase 0/1 实施评审
+- 状态：核心语义已接受；S0/S1a 已实现，S1b/S2+ 仍为 Proposed
 - 日期：2026-08-19
 - 上位规格：[`2026-08-17-ai-first-lego-game-sdk-design.md`](./2026-08-17-ai-first-lego-game-sdk-design.md)
 - 产品/资产契约：[`16-subject-assets-3c-integration.md`](../../16-subject-assets-3c-integration.md)
@@ -12,10 +12,14 @@
 本文专门定义以下三类能力的长期语义：
 
 1. 定义一个可复用或世界局部的主体，包括非人形白膜几何、Socket、Collider、运动方式和其他 Capability。
-2. 从目录 Preset、Package Definition 或允许的自定义 Definition 创建具有稳定 Entity ID 的主体实例。
+2. 从 Registry Definition、Package Definition 或允许的自定义 Definition 创建具有稳定 Entity ID 的主体实例。
 3. 使用类型化 Relationship 组合任意两个兼容主体，例如马与马车、人与滑板、汽车与拖车、人与飞龙、人与武器。
 
-讨论中使用过的 `world.subject.define(...)`、`world.subject.spawn(...)`、`world.subject.bind(...)` 只是概念性操作名，不是已冻结的 TypeScript API。最终公开名称必须经过单独的 AI Friendly 与业界术语评审，并保持 Canonical Schema、TypeScript、CLI、Browser Protocol、示例和生成类型完全一致。
+讨论中使用过的 `world.subject.define(...)`、`world.subject.spawn(...)`、
+`world.subject.bind(...)` 只是概念性操作名，不是已冻结的 TypeScript API。
+S1a 的公开资源术语已统一为 Subject Definition / `subjectDefinitionRef`；
+未来 Relationship 与运行时创建方法仍须单独评审，并保持 Canonical Schema、
+TypeScript、CLI、Browser Protocol、示例和生成类型完全一致。
 
 本文冻结的是语义、数据归属、扩展机制和编译边界，而不是这三个临时方法名。
 
@@ -23,7 +27,7 @@
 
 ### 2.1 目标
 
-- 普通 Agent 优先选择经过验证的 Subject Preset/Kit，不需要理解 Babylon 或 Havok。
+- 普通 Agent 优先选择经过验证的 Registry Subject Definition，不需要理解 Babylon 或 Havok。
 - 高级 Agent 可以用注册过的几何、Profile 和 Capability 组合非人形主体。
 - 自定义主体与目录主体经过同一套 Schema、Normalizer、Compiler、Runtime 和验收门禁。
 - Collider 可以由受控策略自动生成，也可以引用经过验证的 Collider Profile。
@@ -38,7 +42,7 @@
 - 不把所有主体都压成一个万能继承类。
 - 不把 RenderNode 父子关系当作骑乘、装备、拖拽或控制权真相。
 - 不承诺自动 Collider 能从任意高模资产得到生产质量结果；无法稳定推导时必须要求 Profile 或人工接入。
-- 不在本专项文档冻结最终 API 方法名、包名或所有 JSON 字段名。
+- 不在本专项文档冻结 S1b/S2+ 的最终 API 方法名、包名或未实现字段。
 - 不在 Subject Foundation 第一个可视切片中假装已经支持骑乘、拖车、武器或飞行。
 
 ## 3. 核心模型：Definition、Instance、Relationship
@@ -74,19 +78,20 @@ Relationship Instance
 
 SDK 支持三种来源，但最终都归一化为同一种 Definition：
 
-### 4.1 宿主 Registry Preset
+### 4.1 宿主 Registry Definition
 
-用于普通 Agent 的默认入口。Preset 已通过资产、Collider、控制、Camera、动作和性能验收。
+用于普通 Agent 的默认入口。Registry Definition 已通过其当前声明能力对应的
+Collider、控制和性能验收。
 
 示例语义：
 
 ```text
-worldkit://subject-preset/humanoid.basic@1
-worldkit://subject-preset/quadruped.basic@1
-worldkit://subject-preset/four-wheel-vehicle.basic@1
+worldkit://subject-definition/humanoid.third-person@1
+worldkit://subject-definition/quadruped.ground-proxy@1
 ```
 
-上述资源引用只是说明命名空间层级；正式 Resource Ref 名称在公开命名评审中冻结。
+Registry Ref 必须使用 `worldkit://subject-definition/<id>@<version>`；不接受
+无版本引用或另一套同义命名空间。
 
 ### 4.2 WorldPackage 局部 Definition
 
@@ -95,7 +100,7 @@ worldkit://subject-preset/four-wheel-vehicle.basic@1
 节点实例只引用它，不能复制整份定义：
 
 ```text
-package://subject-definition/coastal-pack-animal
+package://subject-definition/coastal-pack-animal@1
 ```
 
 ### 4.3 已发布的扩展包 Definition
@@ -235,7 +240,7 @@ type ColliderPolicyConcept =
   | { kind: "none"; reason: string };
 ```
 
-- `profile`：优先用于已发布 Preset，直接引用经过验收的 Collider Profile。
+- `profile`：优先用于已发布 Registry Definition，直接引用经过验收的 Collider Profile。
 - `derive`：从允许参与推导的白膜 Part 生成 Capsule、Box、Sphere、Convex Hull 或受控 Compound。
 - `compound`：显式组合多个已注册 Collider Part，但仍不暴露 Havok Handle。
 - `none`：只允许纯视觉或明确无碰撞主体，必须给出原因和 Capability 限制。
@@ -314,7 +319,7 @@ interface SubjectInstanceConcept {
 实例必须具备：
 
 - 世界内唯一、稳定、可读的 Entity ID；
-- Definition/Preset Ref；
+- Subject Definition Ref；
 - 世界 Transform 或 Spawn Anchor 引用；
 - 明确 Variant；
 - 只落在 Definition `allowedOverridePaths` 内的覆盖；
@@ -479,7 +484,7 @@ validate Schema and entity existence
 
 ```text
 AuthoringSpec
-  ├── Registry Preset Ref
+  ├── Registry Subject Definition Ref
   ├── Package Subject Definition
   ├── Subject Instances
   └── Typed Relationships
@@ -548,7 +553,7 @@ examples by capability/relationship
 
 | Diagnostic | 含义 |
 |---|---|
-| `SUBJECT_DEFINITION_NOT_FOUND` | Definition/Preset Ref 无法解析 |
+| `SUBJECT_DEFINITION_NOT_FOUND` | Subject Definition Ref 无法解析 |
 | `SUBJECT_DEFINITION_INVALID` | Definition 不符合 Canonical Schema |
 | `SUBJECT_CAPABILITY_UNSATISFIED` | Capability 依赖缺失或歧义 |
 | `SUBJECT_COLLIDER_DERIVATION_FAILED` | 自动 Collider 无法确定生成 |
@@ -562,11 +567,11 @@ Diagnostic 必须指出 JSON Pointer、相关 Entity/Resource/Relationship ID、
 
 ## 15. 扩展一种能力时改什么
 
-### 15.1 新增主体 Preset
+### 15.1 新增 Registry Subject Definition
 
 需要：
 
-- Subject Definition/Preset Manifest；
+- Subject Definition Manifest；
 - Geometry/Asset 与 Body/Socket/Collider/Profile 引用；
 - Capability 组合；
 - Registry Lock；
@@ -603,26 +608,38 @@ Diagnostic 必须指出 JSON Pointer、相关 Entity/Resource/Relationship ID、
 
 ## 16. 分阶段落地
 
-### S0：Registry-ready 多主体基础
+### S0：Registry-ready 多主体基础（已完成）
 
-- Registry 接口和首批内置 Kit。
+- Registry 接口和首批内置 Subject Definition。
 - 多 Subject Instance、独立 Spawn Anchor。
-- 每个 Kit 编译白膜几何、Collider 和 Locomotion Profile。
+- 每个 Definition 编译白膜几何、Collider 和 Locomotion Profile。
 - 复数 ExecutionPlan/Snapshot。
 - 默认 Controller 在主体间切换。
 
-S0 是当前 [`Subject Foundation Visible Slice`](../plans/2026-08-19-subject-foundation-visible-slice.md) 的范围。首批 Registry 内容是闭合集，但 Registry API、数据结构和 Compiler 输入不得写死为“只能有两种主体”。
+S0 已由 [`Subject Foundation Visible Slice`](../plans/2026-08-19-subject-foundation-visible-slice.md)
+完成并进入回归门禁。首批 Registry 内容是闭合集，但 Registry API、数据结构
+和 Compiler 输入没有写死为“只能有两种主体”。
 
-### S1：Package 局部自定义 Definition
+### S1a：Package 局部 Primitive Definition（已完成）
 
 - `resources` 中的 Subject Definition Schema。
-- Primitive/Asset Geometry Composition。
+- Primitive Geometry Composition。
 - Socket Set。
-- Collider derive/profile/compound 策略。
+- Collider derive/profile 策略。
 - 注册 Capability 与 Profile 组合。
 - Definition Hash、Package Lock、Discovery 与 Explain。
 
-完成 S1 后，概念上的 `define + spawn` 才算生产可用。
+S1a 已由 [`Package Subject Definition Visible Slice`](../plans/2026-08-19-package-subject-definition-visible-slice.md)
+完成：Authoring V2 是唯一输入；一个 Package Definition 可以生成多个共享
+Definition Hash、但 Transform、物理状态和控制权独立的实例。概念上的
+`define + spawn` 已对 Primitive 地面主体成立，但不是冻结的 TypeScript 方法名。
+
+### S1b：资产型 Definition 与扩展 Collider（未开始）
+
+- GLB/版本化 Asset Part 与 Rig Binding。
+- Compound Collider 与更多确定性 Derivation Profile。
+- 动画/姿势资源、资产接入 Fixture 与视觉验收。
+- 更丰富但仍闭合的 Capability/Profile 组合。
 
 ### S2：类型化 Relationship Framework
 
@@ -669,7 +686,9 @@ S0 是当前 [`Subject Foundation Visible Slice`](../plans/2026-08-19-subject-fo
 ## 18. 已冻结决策
 
 1. Definition、Instance、Relationship 是三个独立概念。
-2. 普通 AI 使用 Preset/Kit；高级 AI 只能组合注册 Geometry、Profile 和 Capability。
+2. 公开 Schema 统一使用 Subject Definition；产品目录可把常用 Definition
+   展示为 Preset，但不产生第二套公开字段。高级 AI 只能组合注册 Geometry、
+   Profile 和 Capability。
 3. 自定义 Definition 放在 Package Resources 或 Registry，不复制到每个 Subject Node。
 4. 自动 Collider 是版本化确定性策略，不是运行时按 Mesh Bounds 猜测。
 5. World Anchor、Subject Socket 和 Gameplay Slot 分离。
@@ -679,13 +698,15 @@ S0 是当前 [`Subject Foundation Visible Slice`](../plans/2026-08-19-subject-fo
 9. RenderNode 层级只是关系的运行时派生结果，不能成为 Gameplay 真相。
 10. Registry、Normalizer、Compiler 和 Runtime Adapter 分层；公共 Schema 不包含 Babylon/Havok 类型。
 11. 当前概念方法名不冻结；正式命名通过独立版本化评审确定。
-12. S0 先交付可见基础，但实现边界必须允许 S1/S2 增加 Package Definition 与 Relationship Manifest，不能把闭合集写死进 Compiler Core。
+12. S0 与 S1a 已交付；实现边界继续允许 S1b/S2 增加资产 Part、Collider
+   策略与 Relationship Manifest，不能把闭合集写死进 Compiler Core。
 
 ## 19. 后续命名评审项
 
 以下名称故意不在本文冻结：
 
-- `SubjectPreset`、`SubjectKit`、`SubjectDefinition` 的最终公开分工与 Resource URI 命名空间。
+- 产品目录是否显示 “Preset” 标签；公开 Schema 与 Resource URI 已统一冻结为
+  `Subject Definition` / `subjectDefinitionRef`。
 - 创建 Definition 的 TypeScript 方法名和 CLI 命令名。
 - 创建 Instance 使用 `spawn`、`instantiate`、`create` 中的哪一个术语。
 - 通用关系提交入口使用 `bind`、`relate` 还是基于 Relationship Type 的显式命令。

@@ -4,11 +4,12 @@
 
 面向产品体验的简明版本见[能力分层与体验路线](14-capability-levels-and-experience-roadmap.md)。本文继续保留工程范围和模块拆分。
 
-## 当前进度摘要（2026-08-15）
+## 当前进度摘要（2026-08-19）
 
 | 工作流 | 状态 | 说明 |
 |---|---|---|
 | Phase I：第三人称人形 + 室外搭建 | Alpha 收敛中 | 主链路可运行；资产/动作 QA、视觉回归、手感和更多图像场景仍需收敛 |
+| Subject Authoring S1a | 已完成 | Authoring V2、Registry/Package Primitive Definition、自动 Capsule、Hash/Lock、复数实例、CLI Explain 与 Browser V3 已通过 E2E |
 | Phase II：更多主体/动作 + 室内 | 未开始 | 优先级尚未冻结 |
 | World Model Integration | 契约设计 | 尚无 Render Bridge 实现，可立即与模型团队开始 WM-0/WM-1 |
 | Runtime World Director | 方案完成 | 尚无运行时代码；依赖稳定 Entity/Action/Nav 等能力 |
@@ -96,6 +97,11 @@ Coding Agent 在不修改 SDK 内部代码的前提下完成：
 
 ## 第二期：扩展主体、动作与室内搭建
 
+进入第二期前，主体 Authoring 已先完成 S1a 基础：AI 可以定义 Package 局部
+Primitive 白膜主体并生成多个独立实例，SDK 负责 Collider、Profile、Hash、
+Lock、物理与控制。该能力证明了“Definition 与 Instance 分离”的 LEGO 边界，
+但不代表以下二期能力已经交付。
+
 ### 1. 主体扩展
 
 候选方向：
@@ -107,6 +113,13 @@ Coding Agent 在不修改 SDK 内部代码的前提下完成：
 - 飞行主体
 
 具体优先级在第一期完成后确定。
+
+主体演进按独立 S 阶段推进：
+
+1. **S1b**：GLB/资产 Part、Compound Collider、更多 Profile 与资产验收。
+2. **S2**：类型化 Relationship、Socket 对齐、事务、Receipt 与回滚。
+3. **S3**：坐骑、拖拽、控制上下文与安全解绑。
+4. **S4**：飞行、装备和 Action Variant/Animation Binding。
 
 ### 2. 动作扩展
 

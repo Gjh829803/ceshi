@@ -4,7 +4,10 @@
 
 ## 1. 一句话定义
 
-这是一个面向创作 Agent 的 Three.js 白膜世界 SDK：用户用一句话或图片描述世界，Planner 定义完整世界，Builder 编写受追踪的场景代码，Visual Bible 定义最终视觉条件；玩家在确定性白膜运行时中操作，未来实时世界模型再把白膜条件渲染成最终画面。
+这是一个面向创作 Agent 的语义白膜游戏 SDK：上游可以走 Plan-first
+场景创作链路，也可以直接交付 Canonical Authoring V2 JSON；SDK 把世界与
+主体定义确定性编译成可运行、可观察、带物理的白膜世界，未来实时世界模型
+再把白膜条件渲染成最终画面。
 
 系统同时规划另一条运行时链路：Director LLM 可以理解用户在游玩过程中的指令，但只能通过 SDK 的受控命令和任务接口修改世界。
 
@@ -38,6 +41,14 @@ Director LLM → Render Directive SDK ────────────┘
 
 第一期 Alpha 已证明以下链路可以运行：
 
+- Canonical Authoring V2 唯一输入：严格 JSON、精确版本 Registry、Package
+  局部 Primitive Subject Definition、Socket、自动 Capsule、Definition Hash、
+  Resource Lock、NormalizedWorldIR V2 和 ExecutionPlan V3。
+- 一个内置人形与两个共享 Package Definition 的四足代理可以同时生成；三个
+  Subject 拥有独立 Havok Controller/状态，Browser Protocol V3 可原子切换控制、
+  固定输入、复位、查询 Snapshot 和截图。
+- `worldkit` 支持校验、构建、运行、截图、Registry Discovery、独立 Definition
+  校验与 Subject Explain；真实 Chromium 门禁覆盖碰撞、入水和两个自定义实例。
 - 一个第三人称人形主体：WASD 镜头相对移动、跑步、物理跳跃、第三人称镜头和碰撞。
 - 本地 Mixamo 兼容骨骼 GLB 的 `idle / walk / run` 动作绑定；没有本地资产时显示明确占位体。
 - 室外高度场场景：连续分块地形、四种 relief、局部塑形、湖泊/水体、复合几何标志物。
@@ -47,7 +58,10 @@ Director LLM → Render Directive SDK ────────────┘
 - SDK 从真实实体导出的唯一颜色白膜三视图，以及 Visual Bible 输入/最终包门禁。
 - 三个创作 Agent 的 workspace 隔离入口，以及仅向 Planner 开放的受控图片输入入口。
 
-当前的“自由创造”严格指室外高度场白膜世界，不等于任意 3D 游戏类型。洞穴、倒悬结构、完整室内、车辆、骑乘、动物、NPC、寻路、Gameplay、联网、Render Bridge、实时世界模型和 Runtime Director 都尚未实现。
+当前的“自由创造”严格指室外高度场白膜世界，不等于任意 3D 游戏类型。
+Primitive 四足代理已经可以自定义和控制，但动物资产、骨骼、动画与行为尚未
+实现；洞穴、倒悬结构、完整室内、车辆、骑乘、NPC、寻路、Gameplay、联网、
+Render Bridge、实时世界模型和 Runtime Director 也都尚未实现。
 
 ## 4. 当前交付不能被误解为完成的部分
 
@@ -55,7 +69,8 @@ Director LLM → Render Directive SDK ────────────┘
 - WaterBody 是白膜水体与基础本地预览，不是最终生成式水面。
 - 图片可以传给 Coding Agent，但单张透视图只能重建可见构图与合理的可玩延伸，不能恢复唯一真实三维几何。
 - World Plan 和 Opening Shot 是创作意图，不是碰撞或高度真相；高度、坡度、可通行性必须从实际白膜计算。
-- Playground 目前只显示 Three.js 本地白膜预览，没有实时世界模型参与。
+- 仓库同时有 Three.js/Rapier 创作 Playground 与 Babylon.js/Havok Canonical
+  页面；二者都只显示本地白膜，没有实时世界模型参与。
 - `mistbound-rider` 中的马和骑手是静态标志物，用于测试构图；它不是可骑乘主体。
 - 现有自动测试覆盖编译、资源归属、物理高度场和固定步长等工程契约；固定输入 Smoke 目前通过 Playground 按钮/API 手动触发，尚未纳入浏览器 E2E。两者都不能代替运动手感和图像构图的人工验收。
 
@@ -64,6 +79,15 @@ Director LLM → Render Directive SDK ────────────┘
 ### Phase I：第三人称人形与室外自由搭建
 
 当前处于 Alpha 收敛阶段。剩余重点是人形资产合规与动作 QA、移动/镜头手感回归、更多图片参考场景、地形与水体视觉/物理边界验证、性能预算和稳定的 Agent 验收闭环。
+
+### Subject Authoring S1a：Package Primitive 主体
+
+已完成：AI 可以在 `resources.subjectDefinitions` 中用 Primitive Part、Socket、
+Capability 和 Profile 定义主体，再通过多个 `subject` 节点生成独立实例。SDK
+确定性推导 Collider、Hash、Lock 和资源成本，并提供 Registry/Explain 工具。
+
+未完成：GLB/资产主体、Compound Collider、动画、Relationship、坐骑、装备、
+车辆与飞行。它们分别属于 S1b、S2 及之后阶段。
 
 ### Phase II：更多主体、动作与室内
 
@@ -86,8 +110,10 @@ Director LLM → Render Directive SDK ────────────┘
 5. [Plan-first 世界创作协议](12-plan-first-world-authoring.md)：如何从输入得到可追踪世界和规划工件。
 6. [多 Agent 世界创作流水线](13-multi-agent-world-authoring.md)：三个 Agent 的权限、工件和门禁。
 7. [能力分层与体验路线](14-capability-levels-and-experience-roadmap.md)：SDK、World Model 和玩家体验如何逐级增长。
-8. [AI-first LEGO Game SDK 生产设计](superpowers/specs/2026-08-17-ai-first-lego-game-sdk-design.md)：面向重构的长期 Schema、Compiler、Runtime、CLI 和门禁设计。
-9. [主体资产与 3C 配置接入契约](16-subject-assets-3c-integration.md)：产品主体资产、Character、Control、Camera、骑乘和多人控制如何接入 SDK。
-10. [SDK 总体架构](02-sdk-architecture.md)：当前模块、目标模块和实现状态。
-11. [世界模型团队接入说明](11-world-model-team-handoff.md)：双方边界与近期接口工作。
-12. [运行时世界导演方案](09-runtime-world-director.md)：后续受控世界操作协议。
+8. [Canonical Authoring V2 快速接入](17-canonical-json-quickstart.md)：AI/CLI
+   的当前唯一 JSON 协议、Package Definition 和 Browser V3。
+9. [AI-first LEGO Game SDK 生产设计](superpowers/specs/2026-08-17-ai-first-lego-game-sdk-design.md)：面向重构的长期 Schema、Compiler、Runtime、CLI 和门禁设计。
+10. [主体资产与 3C 配置接入契约](16-subject-assets-3c-integration.md)：产品主体资产、Character、Control、Camera、骑乘和多人控制如何接入 SDK。
+11. [SDK 总体架构](02-sdk-architecture.md)：当前模块、目标模块和实现状态。
+12. [世界模型团队接入说明](11-world-model-team-handoff.md)：双方边界与近期接口工作。
+13. [运行时世界导演方案](09-runtime-world-director.md)：后续受控世界操作协议。

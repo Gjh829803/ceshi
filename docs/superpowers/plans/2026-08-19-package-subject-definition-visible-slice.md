@@ -37,13 +37,35 @@
 | 8. Babylon + Browser V3 | Complete | `59ad40a` | 15 focused tests + typecheck + Playground build |
 | 9. CLI Discovery/Explain | Complete | `8cc6a80` | 9 CLI tests + canonical source audit + typecheck |
 | 10. V2 Browser E2E | Complete | `7668d06` | 179 tests + Playground build + Browser V3/Havok verifier + 936×596 screenshot |
-| 11. Docs and Audit | Not started | — | — |
+| 11. Docs and Audit | In progress | — | 179 tests + build + canonical browser gate passed |
 
 Task 10 visual inspection: the 936×596 runtime capture shows the red Humanoid
 capsule in the foreground and two distinct red quadruped proxies ahead, one on
 each side of the corridor. All three Subjects are visibly grounded and
 separated; neither quadruped intersects the corridor walls, terrain, or the
 other Subject. The lake and tower remain visible beyond the corridor.
+
+Final conformance evidence (2026-08-19):
+
+- `pnpm typecheck`: passed.
+- `pnpm test`: 29 files / 179 tests passed.
+- `pnpm test:scenes`: 2 files / 18 tests passed.
+- `pnpm build`: passed; only the documented Vite large-chunk warning remains.
+- `pnpm verify:canonical`: Authoring 2 / Normalized IR 2 / ExecutionPlan 3 /
+  Runtime Snapshot 3 / Browser Protocol 3 passed in real Chromium.
+- Normalized IR Hash:
+  `sha256:39d732aeced950962024e4c736f12753e2f17eaeef5ff846d2402f68498aae61`.
+- ExecutionPlan Hash:
+  `sha256:a2a41acf4d1558a700b6312d9a89fd9a94533f59baa7c3057d70959a3315e226`.
+- Subject Definition Hash:
+  `sha256:d336986b1108c7769c42afb6c4ff69d983bd784f5b1e744b2d10f2dbdafcf5b5`.
+- Resource Lock Hash:
+  `sha256:06eca2c38e678be84eb920bec8d6757eb71f66b5c69c3bb3122ebeaa9e7d16af`.
+- Screenshot: 936×596; Havok Body count: 7.
+- `pack-animal-a` moved from X=-4 to X=1.9388902147974487 while the other
+  Subjects remained stationary within 1e-9m; `pack-animal-b` moved from X=4
+  to X=-1.938888896836179 under its own binding. Reset restored the player
+  binding, camera target, Subject Origins, and zero velocity.
 
 ---
 
@@ -1161,7 +1183,7 @@ git commit -m "test: verify package subject world end to end"
 - Consumes: verified code, generated artifacts, hashes, screenshot, and exact version output.
 - Produces: truthful current-state docs, checked task boxes, validation evidence, remaining S1b/S2 boundary, and a clean main branch synchronized with `origin/main`.
 
-- [ ] **Step 1: Update current-state and quickstart docs**
+- [x] **Step 1: Update current-state and quickstart docs**
 
 Document:
 
@@ -1175,7 +1197,7 @@ pnpm worldkit capture examples/authoring/package-subject-world.json --output art
 
 State that Authoring V2 is the only accepted input, V1 was never released and has been removed, and S1a does not support assets, relationships, mounts, equipment, vehicles, animations, NPC behavior, or flight.
 
-- [ ] **Step 2: Run naming and engine-leak audits**
+- [x] **Step 2: Run naming and engine-leak audits**
 
 Run:
 
@@ -1186,7 +1208,7 @@ rg -n 'Babylon|Havok|PhysicsCharacterController' packages/authoring packages/sub
 
 Expected: `kitRef`, bare `definitionRef`, and `presetRef` return no matches in current source, examples, CLI, quickstart, or README; Babylon/Havok terms do not appear in engine-neutral protocol data or implementation imports.
 
-- [ ] **Step 3: Run the complete final gate from a clean build state**
+- [x] **Step 3: Run the complete final gate from a clean build state**
 
 Run:
 
@@ -1200,7 +1222,7 @@ git diff --check
 
 Expected: all commands PASS; only documented non-failing bundler warnings may remain.
 
-- [ ] **Step 4: Record exact evidence and close plan checkboxes**
+- [x] **Step 4: Record exact evidence and close plan checkboxes**
 
 Fill the existing progress table with commit IDs and add final evidence below it: test totals, Definition Hash, Resource Lock Hash, Normalized IR Hash, ExecutionPlan Hash, screenshot dimensions, Havok body count, and movement/reset evidence. Mark a checkbox only after its command or artifact is verified.
 

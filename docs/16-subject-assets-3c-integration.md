@@ -1,10 +1,16 @@
 # 主体资产与 3C 配置接入 World SDK 技术契约
 
-- 状态：设计评审稿
-- 版本：v0.1
-- 日期：2026-08-18
+- 状态：设计评审稿；S1a 已实现
+- 版本：v0.2
+- 日期：2026-08-19
 - 产品输入：《世界模型底层引擎主体资产与 3C 配置体系》v0.1
 - 技术基线：[AI-first LEGO Game SDK 设计](./superpowers/specs/2026-08-17-ai-first-lego-game-sdk-design.md)
+
+> 实现状态（2026-08-19）：S1a 已交付 Canonical Authoring V2、Registry/Package
+> Primitive Subject Definition、Socket、自动 Capsule、Definition Hash、Resource
+> Lock、复数实例、单 Controller 原子切换和 Subject Explain。本文中的 GLB、
+> Animation、Medium State Resolver、Relationship、坐骑、装备、多 Controller 与
+> 飞行仍是后续契约，不是当前运行能力。
 
 ## 1. 结论
 
@@ -15,21 +21,24 @@
 ```text
 产品与资产团队交付版本化资产和 Profile
   → SDK Registry 注册并验证
-  → SubjectPreset 组合成可用主体
-  → Scene Agent 只选择 Preset、位置和高层关系
+  → Registry Subject Definition 组合成可用主体
+  → Scene Agent 只选择 Definition、位置和高层关系
   → Runtime 根据物理、介质、控制权和动作状态自动运行
 ```
 
 人物进入水中自动游泳、骑上飞龙后控制权转给飞龙、拿剑后切换动作 Variant，均应由通用 Runtime System 和配置驱动，不应由 Scene Agent 为每个场景编写条件脚本。
 
-CLI、Browser、键盘、AI 和 NPC 只是不同 ControlSource。它们通过同一 Controller/Possession/Intent 协议控制主体；一个 CLI Session 可以创建多个 Controller，并在同一 Tick 控制多个人物。
+CLI、Browser、键盘、AI 和 NPC 在目标架构中只是不同 ControlSource。它们通过
+同一 Controller/Possession/Intent 协议控制主体；后续多 Controller 协议将允许
+一个 CLI Session 在同一 Tick 控制多个主体。当前 S1a 只实现一个受信默认
+Controller 在多个主体之间原子切换。
 
 ## 2. 文档边界
 
 本文负责定义：
 
 - 产品主体资产表如何映射为 SDK Schema。
-- SubjectPreset、Profile、Capability 和资产包的职责边界。
+- Subject Definition、Profile、Capability 和资产包的职责边界。
 - Character、Control、Camera、Physics/Medium、Mount 与 Render Binding 的组合方式。
 - 人物陆地、水中、空中、骑乘状态的通用判定链路。
 - Controller、控制权绑定和多人 CLI 控制协议。
@@ -44,7 +53,7 @@ CLI、Browser、键盘、AI 和 NPC 只是不同 ControlSource。它们通过同
 | 产品/策划 | 主体分类、体验规则、状态优先级、手感参数范围、Camera/Control/Profile 选择 | Babylon 节点、物理句柄、逐场景代码 |
 | 美术/资产 | GLB、骨架、动作、可驱动节点、Anchor/Socket、朝向尺度、Collider 参考 | 决定权威位移、入水状态和控制权 |
 | World SDK | Schema、Registry、Compiler、Control Router、State Resolver、Physics、Camera、Action、Render Binding 和验收工具 | 为每个场景手写玩法逻辑、让 Agent 操作底层引擎对象 |
-| Scene Agent | 选择 SubjectPreset、创建实例、放置、声明关系和高层目标/动作 | 动画 Clip 名、介质阈值、Collider 细节、控制器算法、Camera 避障算法 |
+| Scene Agent | 选择 Subject Definition、创建实例、放置、声明关系和高层目标/动作 | 动画 Clip 名、介质阈值、Collider 细节、控制器算法、Camera 避障算法 |
 
 世界模型或渲染模型可以根据稳定状态补足外观和连续动作细节，但不能改变接地、入水、权威位移、控制归属或碰撞结果。
 
@@ -52,7 +61,7 @@ CLI、Browser、键盘、AI 和 NPC 只是不同 ControlSource。它们通过同
 
 | 产品概念 | SDK 权威对象 | 说明 |
 |---|---|---|
-| Subject Preset | `SubjectPresetDefinition` / Kit | AI-facing 大积木 |
+| Subject Preset | `RegistrySubjectDefinition` | 产品目录中的大积木；公开 Schema 统一称 Subject Definition |
 | Body Art | `VisualProfile` + Asset Resource | 模型、朝向、尺度和 Pivot |
 | Human Action Pack | `AnimationSet` + `ActionVariantSet` | 语义 Action 到动画资源的映射 |
 | Non-human Pose Set | `PoseSetProfile` | 少量稳定状态姿势 |
@@ -77,24 +86,25 @@ CLI、Browser、键盘、AI 和 NPC 只是不同 ControlSource。它们通过同
 ```ts
 type ResourceRef = string;
 
-interface ResolvedResourceRef {
-  uri: string;
+interface ResourceLockEntry {
+  resourceRef: string;
   resolvedVersion: string;
   contentHash: string;
 }
 ```
 
-- `ResourceRef` 受 `worldkit-resource-ref` Format 约束，可使用 Canonical Schema 明确允许的简写。
-- Normalizer 将其解析为 `ResolvedResourceRef`；`resolvedVersion + contentHash` 锁定当前构建实际使用的实现。
+- `ResourceRef` 受 `worldkit-resource-ref` Format 约束，必须携带精确版本。
+- Normalizer 将每个实际使用的资源固化为 `ResourceLockEntry`；`resolvedVersion + contentHash` 锁定当前构建实际使用的实现。
 - Registry Lock 记录 Schema Hash、Manifest Hash、实现 Hash 和资产 Hash。
 - 生产构建禁止使用“latest”或按注册顺序选择资源。
 
-### 5.2 SubjectPresetDefinition
+### 5.2 RegistrySubjectDefinition
 
-SubjectPreset 是产品侧可评审、Agent 可选择的主体套餐，不包含 Babylon Mesh、Havok Handle 或场景脚本：
+产品侧的 Subject Preset 在 SDK 公开协议中统一落为 Subject Definition，不包含
+Babylon Mesh、Havok Handle 或场景脚本：
 
 ```ts
-interface SubjectPresetDefinition {
+interface RegistrySubjectDefinition {
   id: string;
   version: number;
   category: "human" | "animal" | "vehicle" | "furniture" | "composite";
@@ -130,27 +140,23 @@ interface SubjectPresetDefinition {
 
 ### 5.3 Agent-facing 主体实例
 
-普通 Scene Agent 只写小而稳定的实例 Schema：
+普通 Scene Agent 只写小而稳定的实例 Schema。当前 Canonical Authoring V2 的
+主体实例不复制 Definition 配置：
 
 ```json
 {
   "id": "hero",
   "kind": "subject",
-  "presetRef": "subject.humanoid.basic@1",
-  "transform": {
-    "positionMeters": [0, 1, 0],
-    "facingRadians": 0
-  },
-  "appearance": {
-    "variantId": "adult-neutral"
-  },
-  "role": "primary-playable"
+  "subjectDefinitionRef": "worldkit://subject-definition/humanoid.third-person@1",
+  "spawnAnchorEntityId": "spawn-hero"
 }
 ```
 
-Agent 不填写：动画 Clip 名、骨骼名、Collider 尺寸、入水阈值、加速度、Camera Raycast 参数和底层控制器类型。高级覆盖只有在 Preset 的 `allowedOverridePaths` 中显式开放后才有效。
+Agent 不填写：动画 Clip 名、骨骼名、Collider 尺寸、入水阈值、加速度、Camera Raycast 参数和底层控制器类型。高级覆盖只有在 Definition 的 `allowedOverridePaths` 中显式开放后才有效。
 
-`role: "primary-playable"` 只声明默认可玩候选。Runtime Host 在 Session Bootstrap 时创建 Controller 并建立 `possessedBy`；Controller ID、权限和绑定不写入普通场景 Schema。因此 AI 只指定主要人物也能获得默认控制，同时高级调用方仍能显式创建多个 Controller。
+当前默认控制目标由 `startup.controlledEntityId` 声明。Runtime Host 在 Session
+Bootstrap 时创建受信默认 Controller；Controller ID、权限和绑定不写入普通场景
+Schema。多 Controller Session 属于后续控制协议。
 
 ### 5.4 主体资产包
 
@@ -532,7 +538,7 @@ interface RuntimeSnapshot {
 | `CONTROL_INTENT_CONFLICT` | 同一 Controller/Channel/Tick 存在互斥命令 |
 | `MEDIUM_TRANSITION_FAILED` | 介质能力切换无法完整提交 |
 | `MOUNT_SAFE_EXIT_UNAVAILABLE` | 无安全解除位置，继续保持绑定 |
-| `ASSET_PROFILE_INCOMPATIBLE` | 资产的 Rig/Socket/Action 与 Preset 不兼容 |
+| `ASSET_PROFILE_INCOMPATIBLE` | 资产的 Rig/Socket/Action 与 Definition 不兼容 |
 
 ## 13. 资产接入流水线
 
@@ -546,7 +552,7 @@ interface RuntimeSnapshot {
 5. Fixture Build：生成独立主体测试场景
 6. Runtime Conformance：移动、碰撞、Camera、动作、介质和控制权测试
 7. Visual Inspection：正/右/背视图、Socket Debug、Collider Debug 和动作采样
-8. Publish：发布版本化 SubjectPreset；旧版本继续可重建
+8. Publish：发布版本化 Registry Subject Definition；旧版本继续可重建
 ```
 
 资产不满足契约时返回结构化接入报告，不在 Scene Script 中做临时修复。常见阻断项包括：前向错误、单位不一致、缺失必需 Socket、骨架不兼容、Action 映射缺失、Collider 与视觉严重不符。
@@ -555,8 +561,8 @@ interface RuntimeSnapshot {
 
 普通 Agent 需要知道：
 
-- 有哪些 SubjectPreset。
-- 每个 Preset 支持哪些介质、能力、动作和关系。
+- 有哪些 Subject Definition。
+- 每个 Definition 支持哪些介质、能力、动作和关系。
 - 如何创建实例、放置、装备、骑乘和发出语义动作。
 - Diagnostic 说明了什么问题以及允许怎样修复。
 
@@ -577,7 +583,7 @@ Schema 和边界一次设计完整，运行能力分阶段交付。
 
 ### Phase 0：公共底座与基础人形
 
-- SubjectPreset/Resource/Profile Registry 与 Registry Lock。
+- Subject Definition/Resource/Profile Registry 与 Registry Lock。
 - 标准人形 Body、Rig、Socket、Collider、陆地 Action Pack。
 - Direct Move Facing、Human Feel、第一/第三人称 Camera。
 - ControllerEntity、possessedBy、单/多 Controller Tick Intent 和复数 Snapshot。
@@ -587,7 +593,7 @@ Schema 和边界一次设计完整，运行能力分阶段交付。
 
 - MediumSensor、迟滞阈值、游泳 Capability 和 Water Action Pack。
 - Mount/Seat/SafeExit、控制权和 Camera Context 切换。
-- 四足动物、四轮载具、可乘坐家具的首批 Preset。
+- 四足动物、四轮载具、可乘坐家具的首批 Registry Subject Definition。
 - 多 Controller CLI/Browser 端到端测试和 Replay。
 
 ### Phase 2：飞行、装备动作与复杂遍历
@@ -597,7 +603,10 @@ Schema 和边界一次设计完整，运行能力分阶段交付。
 - 攀爬、翻越等 Traversal Capability。
 - 更复杂的 NPC/Script ControlSource，但继续复用 Controller/Intent 协议。
 
-当前旧 Demo 的单人物 `setMovementIntent()`、单数 `player` Snapshot 和全局键盘输入只作为迁移参考，不是新协议的兼容约束。
+当前 Canonical Runtime 已使用复数 `subjectStatesByEntityId`、
+`controllersById` 和 `controlledEntityId`；旧 Demo 的单人物
+`setMovementIntent()` 与单数 `player` Snapshot 只作为历史实现，不是新协议的
+兼容约束。S1a 仍只有一个受信默认 Controller；多 Controller 同 Tick 输入尚未实现。
 
 ## 16. 验收场景
 
@@ -617,7 +626,7 @@ Schema 和边界一次设计完整，运行能力分阶段交付。
 本对接契约固定以下决策：
 
 1. 产品侧交付资产和 Profile，SDK 维护通用 System；不建立逐场景脚本体系。
-2. SubjectPreset 是 AI-facing 大积木，内部由可替换 Profile 和 Capability 组合。
+2. Subject Definition 是 AI-facing 大积木，内部由可替换 Profile 和 Capability 组合。
 3. 控制来源、Controller 身份、控制权绑定和主体运动方法相互分离。
 4. `possessedBy` 是控制权唯一真相，CLI 不能通过直接目标参数绕过它。
 5. 一个 Session 可以拥有多个 Controller；多人同步控制使用按 Tick 的 Intent Batch。

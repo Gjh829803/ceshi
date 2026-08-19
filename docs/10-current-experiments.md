@@ -1,10 +1,10 @@
 # 当前实验与验证记录
 
-> 状态日期：2026-08-15。本文只记录当前仓库中可以运行或已经验证的事实，不描述远期目标 API。
+> 状态日期：2026-08-19。本文只记录当前仓库中可以运行或已经验证的事实，不描述远期目标 API。
 
 ## 1. 实验目的
 
-当前实验要回答八个问题：
+当前实验要回答九个问题：
 
 1. 第三人称人形的移动、物理、动作和镜头能否由一个稳定 SubjectKit 统一提供。
 2. Coding Agent 能否只写场景模块，不改 SDK 内部，就创建不同的室外白膜世界。
@@ -14,6 +14,8 @@
 6. Coding Agent 能否先把输入扩展为可追踪的整个世界和进入视角，再用两张规划图与 SDK 实测工件闭环，而不是直接猜几何。
 7. Planner 与 Builder 能否通过冻结锁真正隔离，避免下游为实现方便而篡改上游规划。
 8. 每类实体能否从真实白膜导出唯一颜色的正/右/后三视图，为 Visual Bible 与世界模型建立稳定视觉绑定。
+9. AI 能否只用 Canonical Schema 定义 Package 局部 Primitive 主体，并让
+   SDK 自动完成 Collider、Hash/Lock、多实例、物理、控制与 Explain。
 
 ## 2. 当前 Playground 场景
 
@@ -33,6 +35,34 @@ pnpm dev
 ```
 
 然后打开 `http://127.0.0.1:5173/?scene=<上表参数>`。
+
+### Canonical Authoring V2 / Package Subject 实验
+
+[`package-subject-world.json`](../examples/authoring/package-subject-world.json)
+是当前新程序接入的代表性 Fixture。它包含一个 Registry 人形和两个引用同一
+Package 四足 Definition 的实例。Definition 由 body、head、四条 leg、tail 与
+`seat.mount` Socket 组成；Socket 目前只作为结构数据验证，不执行骑乘。
+
+真实 Chromium/Havok 门禁已经验证：
+
+- Authoring 2 → Normalized IR 2 → ExecutionPlan 3 → Snapshot/Browser 3；
+- 两个四足实例共享 Definition Hash
+  `sha256:d336986b1108c7769c42afb6c4ff69d983bd784f5b1e744b2d10f2dbdafcf5b5`；
+- Resource Lock Hash 为
+  `sha256:06eca2c38e678be84eb920bec8d6757eb71f66b5c69c3bb3122ebeaa9e7d16af`；
+- 三个 Subject 对应 3 份独立状态，场景共 7 个 Havok Body；
+- 控制权可分别切换给 `pack-animal-a` 和 `pack-animal-b`，固定输入只移动目标，
+  Reset 恢复默认人形、相机和全部 Subject Origin；
+- 人形被墙体阻挡并可进入 swimmable 水域；
+- 生成的 `world.png` 为 936×596，画面中人形与两只四足代理均可见、落地、
+  分离，且未与走廊墙体或彼此明显穿插。
+
+运行入口：
+
+```bash
+pnpm worldkit run examples/authoring/package-subject-world.json
+pnpm verify:canonical
+```
 
 ## 3. 针对近期反馈做过的实验
 
@@ -74,13 +104,14 @@ pnpm dev
 - Builder 隔离流程曾两次把并发文档提交或自身临时编译缓存误判为越权；实现本身的测试、类型检查、构建和规划导出均通过。后续应把权限审计的基线限定为 Agent 阶段开始后的授权文件集合，并显式忽略阶段私有临时目录。
 - 页面三视图写入端点在一次带多余 `--` 的 Vite 启动命令下返回 404；使用标准 `pnpm dev`/Vite 启动方式已验证插件端点会加载。本次结果仍由同一页面运行时捕获，宿主只负责把 PNG 写入声明路径。
 
-## 5. 2026-08-15 自动验证结果
+## 5. 2026-08-19 自动验证结果
 
 ```text
-pnpm test         17 test files / 95 tests passed
-pnpm test:scenes  2 test files / 16 tests passed
+pnpm test         29 test files / 179 tests passed
+pnpm test:scenes  2 test files / 18 tests passed
 pnpm typecheck    passed
 pnpm build        passed
+pnpm verify:canonical passed; Authoring 2 / IR 2 / Plan 3 / Snapshot 3 / Browser 3
 pnpm test:isolation passed; workspace 外目录不可读
 pnpm plan:check -- --scene grassland passed
 pnpm plan:scene -- --scene grassland passed
@@ -94,7 +125,8 @@ pnpm visual:check -- --scene sunlit-flower-bay passed
 已知非阻塞告警：
 
 - Rapier compat 初始化仍会输出 deprecated parameter 警告，需要升级调用方式。
-- Playground 生产 bundle 约 2.94 MB（gzip 约 1.02 MB），Vite 提示需要后续 code splitting。
+- Playground 生产构建通过；Vite 仍提示多个大于 500 kB 的 chunk，需要后续
+  code splitting，但不阻塞当前协议与 E2E 门禁。
 
 ## 6. 自动验证覆盖与未覆盖
 
