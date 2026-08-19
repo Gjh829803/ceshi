@@ -83,7 +83,7 @@ const QUADRUPED_GROUND_PROXY_DEFINITION: SubjectKitDefinitionV1 = {
     waterSpeedMetersPerSecond: 1.8,
     jumpSpeedMetersPerSecond: 4.2,
   },
-  resourceCost: { vertices: 404, triangles: 716, colliders: 1 },
+  resourceCost: { vertices: 398, triangles: 664, colliders: 1 },
 };
 
 export const BUILT_IN_SUBJECT_KIT_DEFINITIONS: readonly SubjectKitDefinitionV1[] = [

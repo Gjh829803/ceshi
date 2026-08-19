@@ -22,6 +22,7 @@ describe("subject definition registry", () => {
       bodyTopology: "quadruped",
       collider: { kind: "capsule" },
       locomotion: { mode: "ground" },
+      resourceCost: { vertices: 398, triangles: 664, colliders: 1 },
     });
     expect(Object.isFrozen(definition)).toBe(true);
     expect(Object.isFrozen(definition?.visualParts)).toBe(true);

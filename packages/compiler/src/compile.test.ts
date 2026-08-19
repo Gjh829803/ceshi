@@ -86,8 +86,8 @@ describe("compileWorld", () => {
       "tail",
     ]);
     expect(result.executionPlan?.resourceUsage).toEqual({
-      vertices: 4_752,
-      triangles: 9_048,
+      vertices: 4_746,
+      triangles: 8_996,
       colliders: 4,
     });
   });

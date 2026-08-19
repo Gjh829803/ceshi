@@ -24,9 +24,9 @@
 | 5 | Babylon multi-subject runtime and control binding | Complete |
 | 6 | Browser Protocol V2 and Playground switching | Complete |
 | 7 | Multi-subject fixture, CLI, Playwright, documentation | Complete |
-| 8 | Completion audit and Relationship-slice handoff | Not started |
+| 8 | Completion audit and Relationship-slice handoff | Complete |
 
-**Current milestone:** Tasks 1-7 are complete; Task 8 completion audit and Relationship-slice handoff is in progress.
+**Current milestone:** S0 Subject Foundation visible slice is complete; S1 Package Definitions and S2 typed Relationships remain separate future slices.
 
 **Latest verified baseline before implementation:** `pnpm typecheck`, 125 tests, production build, and `pnpm verify:v1` all pass on commit `8ccd219`.
 
@@ -754,7 +754,7 @@ git commit -m "feat: ship multi-subject visible slice"
 - Produces: an auditable completion statement and a clean boundary for the next `attachedTo` / `mountedOn` Relationship plan.
 - Does not implement: Socket alignment, `mountedOn`, `towedBy`, control-transfer profiles, safe exit, joints, weapons, or animation variants.
 
-- [ ] **Step 1: Audit every global constraint against code and tests**
+- [x] **Step 1: Audit every global constraint against code and tests**
 
 Confirm:
 
@@ -765,18 +765,46 @@ Confirm:
 - existing single-subject JSON remains valid;
 - Three/Rapier catalog scenes still pass their tests.
 
-- [ ] **Step 2: Run fresh verification from a clean process**
+- [x] **Step 2: Run fresh verification from a clean process**
 
 Run: `pnpm typecheck && pnpm test && pnpm build && pnpm verify:v1`
 
 Expected: all commands exit 0. Record only actual counts and hashes from this run in the final handoff.
 
-- [ ] **Step 3: Verify Git hygiene**
+- [x] **Step 3: Verify Git hygiene**
 
 Run: `git status --short --branch`
 
 Expected: only the intended Subject slice files are changed before final commit; generated PNG, Snapshot, build artifacts, server logs, and temporary files remain ignored.
 
-- [ ] **Step 4: Prepare the next visible Relationship plan**
+- [x] **Step 4: Prepare the next visible Relationship plan**
 
 The next plan starts from the completed plural Subject/Controller base and implements one typed `attachedTo`/standing binding fixture for `person` and `skateboard`, including Socket alignment, transactional attach/detach, collider policy, camera context, and an E2E receipt. It must not encode a generic `sourceEntityId/targetEntityId/params` public relationship.
+
+## Completion Evidence
+
+Fresh release verification on 2026-08-19 passed:
+
+- `pnpm typecheck`;
+- `pnpm test`: 26 test files and 146 tests passed;
+- `pnpm build`: production build passed with only the pre-existing large-chunk warning;
+- `pnpm verify:v1`: Authoring V1 to Runtime Protocol V2 passed all 11 browser and artifact gates;
+- normalized IR hash: `sha256:3f0a90a0a7f5c8117e589db4a71122a2f3a05e6a77c33e2f92d4795a6fc4fa1c`;
+- execution plan hash: `sha256:fdf8ab9d1b9b7d44b44490e9a06358c7d9f4bc765ac97e17c361a3ad60cd06b6`;
+- screenshot: 936 × 596; Havok bodies: 6;
+- wall stop: x = 5.5389; player water entry: z = -3.2006; controlled animal movement: x = 5.4000.
+
+The generated screenshot was visually inspected: the humanoid capsule and quadruped proxy are both visible, grounded, separated, and framed from the initial player camera. Generated build, snapshot, and PNG outputs remain ignored; only artifact-directory sentinels are tracked.
+
+## Next Relationship Slice Handoff
+
+The next implementation plan should begin at S2 with one narrow `person`–`skateboard` visible slice:
+
+1. add typed AI-facing `attachedTo` or standing Relationship endpoints with role-specific field names;
+2. add Definition-level Socket and Gameplay Slot data, without making RenderNode parentage authoritative;
+3. compile a normalized internal edge plus collider/alignment policy;
+4. implement atomic attach/detach with expected-state validation, Receipt, Event, rollback, and idempotency;
+5. switch locomotion and camera context only at the fixed-tick commit barrier;
+6. verify attach, movement, detach, reset, stale request rejection, and resource disposal in Browser E2E.
+
+That slice must not claim mounting, towing, equipment, flight, animation variants, arbitrary Package Definitions, or generic public `sourceEntityId/targetEntityId/params` relationships.
