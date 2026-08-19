@@ -19,6 +19,16 @@ Apply these rules whenever adding or changing public Authoring Schema, Registry 
 - Canonical Schema, AI Schema Profile, CLI, Browser Protocol, examples, and generated types use the same public field names. Babylon, Havok, renderer handles, and provider-specific terminology stay behind adapters.
 - A released or externally adopted public rename must update the authoritative Schema, examples, validation, migration, and conformance coverage together. Preserve that compatibility through explicit version migration, not permanent alias fields. For an unreleased private Schema, an explicitly approved clean break may delete the old version and rewrite all local fixtures/artifacts instead of creating migration code solely for development history.
 
+## Dependency reuse and utility code
+
+- Before writing a general-purpose helper, search the repository and check the language runtime, platform APIs, engine APIs, and existing dependencies. Prefer a mature, maintained implementation when it reduces custom code and edge-case risk.
+- Use `lodash-es` for established collection and object operations such as grouping, ordering, deduplication, deep comparison, and debounce or throttle behavior. Do not reimplement these utilities without a domain-specific reason.
+- Import only the functions that are used, for example `import { groupBy } from "lodash-es"`. Do not import the full `lodash-es` namespace.
+- Prefer Babylon.js math and geometry APIs for vectors, matrices, quaternions, transforms, bounds, and other 3D calculations. `lodash-es` is not a replacement for engine math.
+- Prefer a clear native JavaScript or TypeScript expression when it is simpler than a library call. Avoid dependencies or abstractions that do not materially improve correctness, readability, or maintenance.
+- Every workspace package must declare the libraries it imports as direct dependencies. Do not rely on undeclared dependencies being available from the workspace root.
+- Keep domain-specific algorithms local, deterministic, and covered by focused tests. Reuse libraries for generic mechanics; keep SDK semantics in SDK-owned code.
+
 ## Agent roles and frozen boundary
 
 - **World Planner Agent** may create only `apps/playground/src/scenes/plans/<catalog-id>.ts` and its `world-plan.png` / `opening-shot.png`. It must define the complete WorldPrompt and Entity Catalog before geometry.
