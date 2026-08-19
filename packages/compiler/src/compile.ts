@@ -13,6 +13,7 @@ import type {
   ExecutionPrimitiveV1,
   ExecutionSubjectV2,
   ExecutionTerrainV1,
+  ExecutionTerrainV3,
   ExecutionWaterBoundaryV1,
   ExecutionWaterV1,
 } from "@whitebox-world/runtime-contracts";
@@ -79,12 +80,26 @@ function compileTerrain(world: NormalizedWorldIRV1): ExecutionTerrainV1 {
   };
 }
 
-export function sampleTerrainHeight(terrain: ExecutionTerrainV1, pointXZ: Vec2): number {
-  const [columns, rows] = terrain.resolutionXZ;
-  const minimumX = terrain.centerXZ[0] - terrain.sizeXZ[0] / 2;
-  const minimumZ = terrain.centerXZ[1] - terrain.sizeXZ[1] / 2;
-  const x = Math.max(0, Math.min(columns - 1, ((pointXZ[0] - minimumX) / terrain.sizeXZ[0]) * (columns - 1)));
-  const z = Math.max(0, Math.min(rows - 1, ((pointXZ[1] - minimumZ) / terrain.sizeXZ[1]) * (rows - 1)));
+export function sampleTerrainHeight(
+  terrain: ExecutionTerrainV1 | ExecutionTerrainV3,
+  pointXZ: Vec2,
+): number {
+  const resolution = "resolutionCellsXZ" in terrain
+    ? terrain.resolutionCellsXZ
+    : terrain.resolutionXZ;
+  const center = "centerMetersXZ" in terrain ? terrain.centerMetersXZ : terrain.centerXZ;
+  const size = "sizeMetersXZ" in terrain ? terrain.sizeMetersXZ : terrain.sizeXZ;
+  const [columns, rows] = resolution;
+  const minimumX = center[0] - size[0] / 2;
+  const minimumZ = center[1] - size[1] / 2;
+  const x = Math.max(
+    0,
+    Math.min(columns - 1, ((pointXZ[0] - minimumX) / size[0]) * (columns - 1)),
+  );
+  const z = Math.max(
+    0,
+    Math.min(rows - 1, ((pointXZ[1] - minimumZ) / size[1]) * (rows - 1)),
+  );
   const x0 = Math.floor(x);
   const z0 = Math.floor(z);
   const x1 = Math.min(columns - 1, x0 + 1);

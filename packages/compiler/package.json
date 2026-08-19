@@ -8,6 +8,7 @@
   },
   "dependencies": {
     "@whitebox-world/authoring": "workspace:*",
+    "@whitebox-world/protocol": "workspace:*",
     "@whitebox-world/runtime-contracts": "workspace:*"
   }
 }

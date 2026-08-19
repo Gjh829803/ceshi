@@ -1,122 +1,130 @@
 import { describe, expect, it } from "vitest";
 
-import { normalizeAuthoringSpec } from "@whitebox-world/authoring";
-import { createValidAuthoringSpec } from "../../authoring/src/test-fixture";
-import { compileWorld } from "./index";
+import { normalizeAuthoringSpecV2 } from "@whitebox-world/authoring";
+import { createValidPackageSubjectWorldV2 } from "../../authoring/src/test-fixture";
 
-function compileSpec(spec = createValidAuthoringSpec()) {
-  const normalized = normalizeAuthoringSpec(spec);
-  if (!normalized.ok || normalized.value === undefined || normalized.normalizedWorldIrHash === undefined) {
-    throw new Error("Fixture did not normalize.");
+import { compileWorldV3, sampleTerrainHeight } from "./index";
+
+function compilePackageWorld() {
+  const normalized = normalizeAuthoringSpecV2(createValidPackageSubjectWorldV2());
+  if (
+    !normalized.ok ||
+    normalized.value === undefined ||
+    normalized.normalizedWorldIrHash === undefined
+  ) {
+    throw new Error("Package Subject fixture did not normalize.");
   }
-  return compileWorld({
+  return compileWorldV3({
     normalizedWorldIr: normalized.value,
     normalizedWorldIrHash: normalized.normalizedWorldIrHash,
   });
 }
 
-function createMultiSubjectSpec(subjectOrder: readonly ["player", "animal"] | readonly ["animal", "player"] = ["player", "animal"]) {
-  const spec = createValidAuthoringSpec();
-  const player = spec.nodes.find((node) => node.kind === "subject");
-  if (player === undefined || player.kind !== "subject") throw new Error("Fixture subject missing.");
-  const animal = {
-    id: "animal",
-    kind: "subject" as const,
-    kitRef: "worldkit://kit/quadruped.ground-proxy@1",
-    spawnAnchorEntityId: "spawn-animal",
-  };
-  const subjectsById = { player, animal };
-  spec.nodes = [
-    ...spec.nodes.filter((node) => node.kind !== "subject"),
-    {
-      id: "spawn-animal",
-      kind: "anchor",
-      transform: { positionMeters: [6, 0, 28] },
-      semantic: { classId: "spawn.subject" },
-    },
-    ...subjectOrder.map((entityId) => subjectsById[entityId]),
-  ];
-  return spec;
-}
+describe("compileWorldV3", () => {
+  it("compiles two instances from one resolved Package Definition", () => {
+    const result = compilePackageWorld();
 
-function compileFixture() {
-  return compileSpec();
-}
-
-describe("compileWorld", () => {
-  it("compiles a fully resolved, engine-neutral Babylon/Havok execution plan", () => {
-    const result = compileFixture();
-
-    expect(result.diagnostics).toEqual([]);
-    expect(result.executionPlan).toMatchObject({
-      kind: "worldkit-execution-plan",
-      schemaVersion: 2,
-      runtimeBackend: "babylon-havok",
-      controlledEntityId: "player",
-      subjects: [{ entityId: "player", spawnAnchorEntityId: "spawn-main" }],
-      camera: { cameraEntityId: "camera-main", targetEntityId: "player" },
-    });
-    expect("subject" in result.executionPlan!).toBe(false);
-    expect(result.executionPlan?.objects.map((item) => item.entityId)).toEqual(["wall-east"]);
-    expect(result.executionPlan?.terrain.heightSamplesMeters).toHaveLength(65 * 65);
-    expect(result.executionPlan?.terrain.heightSamplesHash).toMatch(/^sha256:[a-f0-9]{64}$/);
-    expect(result.executionPlan?.terrain.heightSamplesMeters.every(Number.isFinite)).toBe(true);
-  });
-
-  it("compiles every subject from its registered Kit in stable entity order", () => {
-    const result = compileSpec(createMultiSubjectSpec());
-
-    expect(result.executionPlan?.schemaVersion).toBe(2);
-    expect(result.executionPlan?.controlledEntityId).toBe("player");
-    expect(result.executionPlan?.subjects.map((subject) => subject.entityId)).toEqual(["animal", "player"]);
-    expect(result.executionPlan?.subjects[0]).toMatchObject({
-      kitRef: "worldkit://kit/quadruped.ground-proxy@1",
-      bodyTopology: "quadruped",
-      semanticClassId: "subject.animal.quadruped",
-      collider: { kind: "capsule" },
-      locomotion: { mode: "ground" },
-    });
-    expect(result.executionPlan?.subjects[0]?.visualParts.map((part) => part.id)).toEqual([
-      "torso",
-      "head",
-      "front-left-leg",
-      "front-right-leg",
-      "back-left-leg",
-      "back-right-leg",
-      "tail",
+    expect(result.ok).toBe(true);
+    expect(result.executionPlan?.schemaVersion).toBe(3);
+    expect(
+      result.executionPlan?.subjects.map((subject) => ({
+        entityId: subject.entityId,
+        ref: subject.subjectDefinitionRef,
+        hash: subject.subjectDefinitionHash,
+      })),
+    ).toEqual([
+      {
+        entityId: "pack-animal-a",
+        ref: "package://subject-definition/coastal-pack-animal@1",
+        hash: expect.stringMatching(/^sha256:/),
+      },
+      {
+        entityId: "pack-animal-b",
+        ref: "package://subject-definition/coastal-pack-animal@1",
+        hash: expect.stringMatching(/^sha256:/),
+      },
+      expect.objectContaining({ entityId: "player" }),
     ]);
-    expect(result.executionPlan?.resourceUsage).toEqual({
-      vertices: 4_746,
-      triangles: 8_996,
-      colliders: 4,
-    });
+    expect(result.executionPlan?.subjects[0]?.subjectDefinitionHash).toBe(
+      result.executionPlan?.subjects[1]?.subjectDefinitionHash,
+    );
   });
 
-  it("changes neither plan bytes nor hash when subject nodes are reordered", () => {
-    const playerFirst = compileSpec(createMultiSubjectSpec(["player", "animal"]));
-    const animalFirst = compileSpec(createMultiSubjectSpec(["animal", "player"]));
+  it("places Subject Origin on sampled Terrain without adding Collider height", () => {
+    const result = compilePackageWorld();
+    const executionPlan = result.executionPlan!;
+    const subject = executionPlan.subjects.find(
+      (candidate) => candidate.entityId === "pack-animal-a",
+    )!;
 
-    expect(playerFirst.executionPlan).toEqual(animalFirst.executionPlan);
-    expect(playerFirst.executionPlanHash).toBe(animalFirst.executionPlanHash);
+    expect(subject.spawnSubjectOriginPositionMetersXYZ[1]).toBeCloseTo(
+      sampleTerrainHeight(executionPlan.terrain, [-4, 5]),
+    );
+    expect(subject.collider).toMatchObject({
+      radiusMeters: 0.7,
+      heightMeters: 1.4,
+      centerOffsetFromSubjectOriginMetersXYZ: [0, 0.7, 0],
+    });
+    expect(subject.spawnSubjectOriginPositionMetersXYZ[1]).not.toBeCloseTo(
+      sampleTerrainHeight(executionPlan.terrain, [-4, 5]) +
+        subject.collider.heightMeters / 2,
+    );
+  });
+
+  it("propagates stable Sockets and normalized visual composition", () => {
+    const subject = compilePackageWorld().executionPlan!.subjects.find(
+      (candidate) => candidate.entityId === "pack-animal-a",
+    )!;
+
+    expect(subject.sockets.map((socket) => socket.id)).toEqual([
+      "seat.mount",
+      "tow.rear",
+    ]);
+    expect(subject.visualParts.map((part) => part.id)).toEqual([
+      "body",
+      "leg.back-left",
+      "leg.back-right",
+      "leg.front-left",
+      "leg.front-right",
+    ]);
+    expect(subject.visualParts[0]).toHaveProperty(
+      "localTransform.positionMetersXYZ",
+    );
+  });
+
+  it("aggregates resource cost once per Subject instance", () => {
+    expect(compilePackageWorld().executionPlan?.resourceUsage).toEqual({
+      vertices: 4_956,
+      triangles: 9_380,
+      colliders: 5,
+    });
   });
 
   it("is deterministic for the same normalized input and seed", () => {
-    const first = compileFixture();
-    const second = compileFixture();
+    const first = compilePackageWorld();
+    const second = compilePackageWorld();
 
     expect(first.executionPlan).toEqual(second.executionPlan);
+    expect(first.executionPlanHash).toMatch(/^sha256:[a-f0-9]{64}$/);
     expect(first.executionPlanHash).toBe(second.executionPlanHash);
   });
 
-  it("fails before runtime construction when the resolved plan exceeds a resource budget", () => {
-    const spec = createValidAuthoringSpec();
-    spec.world.resourceBudget.maxVertices = 100;
-    const normalized = normalizeAuthoringSpec(spec);
-    if (!normalized.ok || normalized.value === undefined || normalized.normalizedWorldIrHash === undefined) {
+  it("fails before runtime construction when the plan exceeds a resource budget", () => {
+    const spec = createValidPackageSubjectWorldV2();
+    spec.world = {
+      ...spec.world,
+      resourceBudget: { ...spec.world.resourceBudget, maxVertices: 100 },
+    };
+    const normalized = normalizeAuthoringSpecV2(spec);
+    if (
+      !normalized.ok ||
+      normalized.value === undefined ||
+      normalized.normalizedWorldIrHash === undefined
+    ) {
       throw new Error("Fixture did not normalize.");
     }
 
-    const result = compileWorld({
+    const result = compileWorldV3({
       normalizedWorldIr: normalized.value,
       normalizedWorldIrHash: normalized.normalizedWorldIrHash,
     });
@@ -131,18 +139,25 @@ describe("compileWorld", () => {
     );
   });
 
-  it("rejects a normalized hash that does not match the supplied IR", () => {
-    const normalized = normalizeAuthoringSpec(createValidAuthoringSpec());
-    if (!normalized.ok || normalized.value === undefined) throw new Error("Fixture did not normalize.");
+  it("rejects a normalized hash that does not match the supplied V2 IR", () => {
+    const normalized = normalizeAuthoringSpecV2(createValidPackageSubjectWorldV2());
+    if (!normalized.ok || normalized.value === undefined) {
+      throw new Error("Fixture did not normalize.");
+    }
 
-    const result = compileWorld({
+    const result = compileWorldV3({
       normalizedWorldIr: normalized.value,
       normalizedWorldIrHash: `sha256:${"0".repeat(64)}`,
     });
 
     expect(result).toMatchObject({
       ok: false,
-      diagnostics: [{ code: "COMPILER_NORMALIZED_HASH_MISMATCH", instancePath: "/normalizedWorldIrHash" }],
+      diagnostics: [
+        {
+          code: "COMPILER_NORMALIZED_HASH_MISMATCH",
+          instancePath: "/normalizedWorldIrHash",
+        },
+      ],
     });
   });
 });

@@ -150,6 +150,9 @@ importers:
       '@whitebox-world/authoring':
         specifier: workspace:*
         version: link:../authoring
+      '@whitebox-world/protocol':
+        specifier: workspace:*
+        version: link:../protocol
       '@whitebox-world/runtime-contracts':
         specifier: workspace:*
         version: link:../runtime-contracts
