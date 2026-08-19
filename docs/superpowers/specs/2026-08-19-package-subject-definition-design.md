@@ -5,6 +5,7 @@
 - 上位规格：[`2026-08-19-extensible-subject-authoring-design.md`](./2026-08-19-extensible-subject-authoring-design.md)
 - 产品/资产契约：[`16-subject-assets-3c-integration.md`](../../16-subject-assets-3c-integration.md)
 - 前置里程碑：[`2026-08-19-subject-foundation-visible-slice.md`](../plans/2026-08-19-subject-foundation-visible-slice.md)
+- 实施计划：[`2026-08-19-package-subject-definition-visible-slice.md`](../plans/2026-08-19-package-subject-definition-visible-slice.md)
 
 ## 1. 决策摘要
 
@@ -178,7 +179,7 @@ S1a 要求每个 Subject Definition 恰好提供 `locomotion.ground` Capability�
             "kind": "primitive",
             "shape": { "kind": "box", "sizeMetersXYZ": [0.8, 0.7, 1.4] },
             "localTransform": {
-              "positionMeters": [0, 0.9, 0]
+              "positionMetersXYZ": [0, 0.9, 0]
             },
             "colliderContribution": "include",
             "semanticTags": ["body"]
@@ -188,7 +189,7 @@ S1a 要求每个 Subject Definition 恰好提供 `locomotion.ground` Capability�
             "kind": "primitive",
             "shape": { "kind": "cylinder", "radiusMeters": 0.1, "heightMeters": 0.7 },
             "localTransform": {
-              "positionMeters": [-0.28, 0.35, -0.45]
+              "positionMetersXYZ": [-0.28, 0.35, -0.45]
             },
             "colliderContribution": "include",
             "semanticTags": ["leg"]
@@ -198,7 +199,7 @@ S1a 要求每个 Subject Definition 恰好提供 `locomotion.ground` Capability�
           {
             "id": "seat.mount",
             "localTransform": {
-              "positionMeters": [0, 1.3, 0]
+              "positionMetersXYZ": [0, 1.3, 0]
             },
             "semanticTags": ["mount-seat"]
           }
@@ -255,7 +256,7 @@ interface SubjectVisualPartSpecV1 {
     | { kind: "cylinder"; radiusMeters: number; heightMeters: number }
     | { kind: "capsule"; radiusMeters: number; heightMeters: number };
   localTransform: {
-    positionMeters: readonly [number, number, number];
+    positionMetersXYZ: readonly [number, number, number];
     rotationEulerRadiansXYZ?: readonly [number, number, number];
   };
   colliderContribution: "include" | "exclude";
@@ -295,7 +296,7 @@ Visual Root、Socket 和 Snapshot 都以 Subject Origin 为权威空间。
 interface SubjectSocketSpecV1 {
   id: string;
   localTransform: {
-    positionMeters: readonly [number, number, number];
+    positionMetersXYZ: readonly [number, number, number];
     rotationEulerRadiansXYZ?: readonly [number, number, number];
   };
   semanticTags: readonly string[];
@@ -449,7 +450,7 @@ interface ExecutionSubjectV3 {
   bodyTopology: string;
   semanticClassId: string;
   spawnAnchorEntityId: string;
-  spawnSubjectOriginPositionMeters: readonly [number, number, number];
+  spawnSubjectOriginPositionMetersXYZ: readonly [number, number, number];
   forwardDirection: "-z";
   visualParts: readonly SubjectVisualPartV3[];
   sockets: readonly SubjectSocketV3[];
@@ -477,7 +478,7 @@ ExecutionPlan 不包含 Babylon/Havok 类名、Handle 或 Profile Registry 对�
 
 - Spawn Anchor 表示 Subject Origin 的初始世界位置；Y 值仍是相对采样地形的高度偏移。
 - Character Controller Position 是内部 Collider Center。
-- Visual Root Position 和 Snapshot `positionMeters` 是 Subject Origin。
+- Visual Root Position 和 Snapshot `positionMetersXYZ` 是 Subject Origin。
 - Camera Target 以 Subject Origin 加 `targetHeightMeters` 计算。
 - Reset 必须同时恢复 Collider Center、Subject Origin、Visual Root、速度和 Camera。
 
@@ -594,7 +595,7 @@ AuthoringSpec V1 or V2
 
 1. 固定 Primitive Composition 推导出精确预期 Capsule 和中心 Offset。
 2. support-center 不合法时失败，不静默移动主体。
-3. Runtime Snapshot 位置等于 Subject Origin，而不是 Havok Collider Center。
+3. Runtime Snapshot `positionMetersXYZ` 等于 Subject Origin，而不是 Havok Collider Center。
 4. Reset、移动、切换控制和 Camera 跟随均保持 Origin/Collider Offset 一致。
 
 ### 15.4 Discovery 与解释

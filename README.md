@@ -81,6 +81,7 @@ pnpm worldkit run examples/authoring/multi-subject-world.json
 
 - [Canonical JSON Babylon V1 实施计划](docs/superpowers/plans/2026-08-18-canonical-json-babylon-v1.md)：已交付的第一条生产形态纵向切片，覆盖严格 JSON、NormalizedWorldIR、ExecutionPlan、Babylon/Havok、CLI、Browser Protocol 与 Playwright Gate。
 - [Subject Foundation 可视切片 TODO](docs/superpowers/plans/2026-08-19-subject-foundation-visible-slice.md)：多主体、可注入 Definition Registry、自动 Collider、复数 Snapshot 与控制切换的实施与验收记录；顶部进度表和任务复选框是实施状态真相。
+- [Package Subject Definition 可视切片计划](docs/superpowers/plans/2026-08-19-package-subject-definition-visible-slice.md)：Authoring V2、Package 白模主体、Collider 推导、Hash/Lock、CLI Explain 与 Browser V3 的逐任务实施清单。
 
 ## 当前状态
 
