@@ -5,6 +5,7 @@
 - 上位规格：[`2026-08-17-ai-first-lego-game-sdk-design.md`](./2026-08-17-ai-first-lego-game-sdk-design.md)
 - 产品/资产契约：[`16-subject-assets-3c-integration.md`](../../16-subject-assets-3c-integration.md)
 - 实施计划：[`2026-08-19-subject-foundation-visible-slice.md`](../plans/2026-08-19-subject-foundation-visible-slice.md)
+- S1a 子规格：[`2026-08-19-package-subject-definition-design.md`](./2026-08-19-package-subject-definition-design.md)
 
 ## 1. 文档目的
 

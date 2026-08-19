@@ -72,6 +72,7 @@ pnpm worldkit run examples/authoring/multi-subject-world.json
 - [AI-first LEGO 游戏 SDK 总体设计](docs/superpowers/specs/2026-08-17-ai-first-lego-game-sdk-design.md)：下一代总架构规格，含双层 AI API、引擎无关 IR、确定性编译与迁移阶段计划。
 - [AI-first Terrain Authoring Pipeline 设计](docs/superpowers/specs/2026-08-17-terrain-authoring-pipeline-design.md)：地形子规格，定义从生成式规划图到权威 Heightfield 的确定性编译链路。
 - [可扩展主体组装 Authoring 专项设计](docs/superpowers/specs/2026-08-19-extensible-subject-authoring-design.md)：定义自定义主体 Definition、实例化、自动 Collider、Capability 与类型化 Relationship 的长期扩展边界；讨论中的 `define / spawn / bind` 仅为概念操作名。
+- [Package 局部 Subject Definition（S1a）设计](docs/superpowers/specs/2026-08-19-package-subject-definition-design.md)：冻结 Authoring V2、自定义 Primitive 白模、Socket、Collider 推导、Definition Hash、Resource Lock 与 Discovery/Explain 契约。
 - [业界对照与可落地性核查报告](docs/superpowers/specs/2026-08-18-industry-alignment-and-feasibility-review.md)：评审支撑材料，含运行时选型核实、业界实践对照与 AI 友好性评估。
 - [阶段 0 技术探针计划与外部资料核查](docs/superpowers/specs/2026-08-18-phase0-probe-plan-and-external-research.md)：协议冻结前的风险探针清单、判据与已定决策记录。
 - [架构决策：AuthoringSpec 编译架构与 Babylon Runtime（Proposed）](decisions/0006-authoring-spec-compiler-architecture.md)：随总体设计评审一同定稿。
