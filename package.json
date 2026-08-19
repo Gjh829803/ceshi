@@ -39,9 +39,11 @@
     "@whitebox-world/authoring": "workspace:*",
     "@whitebox-world/compiler": "workspace:*",
     "@whitebox-world/runtime-contracts": "workspace:*",
+    "lodash-es": "^4.18.1",
     "three": "^0.180.0"
   },
   "devDependencies": {
+    "@types/lodash-es": "^4.17.12",
     "@types/node": "^24.3.0",
     "@types/three": "^0.180.0",
     "@vitest/coverage-v8": "^3.2.4",
