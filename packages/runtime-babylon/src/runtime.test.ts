@@ -4,10 +4,17 @@ import { createRequire } from "node:module";
 import { NullEngine } from "@babylonjs/core/Engines/nullEngine.pure.js";
 import { describe, expect, it } from "vitest";
 
-import { normalizeAuthoringSpec } from "@whitebox-world/authoring";
-import { compileWorld } from "@whitebox-world/compiler";
-import { createValidAuthoringSpec } from "../../authoring/src/test-fixture";
-import type { ExecutionPlanV2 } from "@whitebox-world/runtime-contracts";
+import {
+  normalizeAuthoringSpecV2,
+  type AuthoringSpecV2,
+} from "@whitebox-world/authoring";
+import { compileWorldV3 } from "@whitebox-world/compiler";
+import { createValidPackageSubjectWorldV2 } from "../../authoring/src/test-fixture";
+import type {
+  ExecutionPlanV3,
+  FixedInputV1,
+  Vec3,
+} from "@whitebox-world/runtime-contracts";
 
 import { BabylonWorldRuntime } from "./index";
 
@@ -19,14 +26,77 @@ const havokWasmBinary = havokWasmBytes.buffer.slice(
   havokWasmBytes.byteOffset + havokWasmBytes.byteLength,
 ) as ArrayBuffer;
 
-function createExecutionPlan(mutator?: (spec: ReturnType<typeof createValidAuthoringSpec>) => void): ExecutionPlanV2 {
-  const spec = createValidAuthoringSpec();
+interface RuntimeDebugProbe {
+  subjectVisualOrigin(subjectEntityId: string): Vec3;
+  controllerCenter(subjectEntityId: string): Vec3;
+  visualPartLocalPosition(subjectEntityId: string, partId: string): Vec3;
+}
+
+interface CartesianVector {
+  x: number;
+  y: number;
+  z: number;
+}
+
+interface ControllerProbe {
+  physicsController: { getPosition(): CartesianVector };
+  visualRoot: {
+    position: CartesianVector;
+    getChildMeshes(): readonly { name: string; position: CartesianVector }[];
+  };
+}
+
+function toVec3(value: CartesianVector): Vec3 {
+  return [value.x, value.y, value.z];
+}
+
+function createRuntimeDebugProbe(runtime: BabylonWorldRuntime): RuntimeDebugProbe {
+  const internals = runtime as unknown as {
+    subjectControllersByEntityId: ReadonlyMap<string, ControllerProbe>;
+  };
+  const controllerFor = (subjectEntityId: string): ControllerProbe => {
+    const controller = internals.subjectControllersByEntityId.get(subjectEntityId);
+    if (controller === undefined) throw new Error(`Missing Subject '${subjectEntityId}'.`);
+    return controller;
+  };
+  return {
+    subjectVisualOrigin: (subjectEntityId) =>
+      toVec3(controllerFor(subjectEntityId).visualRoot.position),
+    controllerCenter: (subjectEntityId) =>
+      toVec3(controllerFor(subjectEntityId).physicsController.getPosition()),
+    visualPartLocalPosition: (subjectEntityId, partId) => {
+      const expectedName = `${subjectEntityId}.${partId}`;
+      const mesh = controllerFor(subjectEntityId)
+        .visualRoot.getChildMeshes()
+        .find((candidate) => candidate.name === expectedName);
+      if (mesh === undefined) throw new Error(`Missing visual Part '${expectedName}'.`);
+      return toVec3(mesh.position);
+    },
+  };
+}
+
+function addVec3(left: Vec3, right: Vec3): Vec3 {
+  return [left[0] + right[0], left[1] + right[1], left[2] + right[2]];
+}
+
+function moveRightForTicks(tickCount: number): FixedInputV1 {
+  return { actions: ["move-right"], ticks: tickCount };
+}
+
+function createExecutionPlan(
+  mutator?: (spec: AuthoringSpecV2) => void,
+): ExecutionPlanV3 {
+  const spec = createValidPackageSubjectWorldV2();
   mutator?.(spec);
-  const normalized = normalizeAuthoringSpec(spec);
-  if (!normalized.ok || normalized.value === undefined || normalized.normalizedWorldIrHash === undefined) {
+  const normalized = normalizeAuthoringSpecV2(spec);
+  if (
+    !normalized.ok ||
+    normalized.value === undefined ||
+    normalized.normalizedWorldIrHash === undefined
+  ) {
     throw new Error(`Fixture normalize failed: ${JSON.stringify(normalized.diagnostics)}`);
   }
-  const compiled = compileWorld({
+  const compiled = compileWorldV3({
     normalizedWorldIr: normalized.value,
     normalizedWorldIrHash: normalized.normalizedWorldIrHash,
   });
@@ -36,120 +106,169 @@ function createExecutionPlan(mutator?: (spec: ReturnType<typeof createValidAutho
   return compiled.executionPlan;
 }
 
-function createMultiSubjectExecutionPlan(): ExecutionPlanV2 {
-  return createExecutionPlan((spec) => {
-    spec.nodes = [
-      ...spec.nodes,
-      {
-        id: "spawn-animal",
-        kind: "anchor",
-        transform: { positionMeters: [6, 0, 28] },
-        semantic: { classId: "spawn.subject" },
-      },
-      {
-        id: "animal",
-        kind: "subject",
-        kitRef: "worldkit://kit/quadruped.ground-proxy@1",
-        spawnAnchorEntityId: "spawn-animal",
-      },
-    ];
-  });
-}
-
-async function createRuntime(executionPlan = createExecutionPlan()): Promise<BabylonWorldRuntime> {
+async function createRuntime(
+  executionPlan = createExecutionPlan(),
+): Promise<BabylonWorldRuntime> {
   return BabylonWorldRuntime.create({
     executionPlan,
     havokWasmBinary,
-    engineFactory: () => new NullEngine({
-      renderWidth: 640,
-      renderHeight: 360,
-      textureSize: 512,
-      deterministicLockstep: true,
-      lockstepMaxSteps: 4,
-    }),
+    engineFactory: () =>
+      new NullEngine({
+        renderWidth: 640,
+        renderHeight: 360,
+        textureSize: 512,
+        deterministicLockstep: true,
+        lockstepMaxSteps: 4,
+      }),
   });
 }
 
+async function createRuntimeWithPackageSubject(): Promise<{
+  runtime: BabylonWorldRuntime;
+  executionPlan: ExecutionPlanV3;
+  debug: RuntimeDebugProbe;
+}> {
+  const executionPlan = createExecutionPlan();
+  const runtime = await createRuntime(executionPlan);
+  return { runtime, executionPlan, debug: createRuntimeDebugProbe(runtime) };
+}
+
 describe("BabylonWorldRuntime", () => {
-  it("initializes a right-handed Babylon scene with Havok physics from an ExecutionPlan", async () => {
-    const executionPlan = createExecutionPlan();
-    const runtime = await createRuntime(executionPlan);
+  it("initializes a right-handed Babylon scene with Havok from ExecutionPlanV3", async () => {
+    const runtime = await createRuntime();
 
     expect(runtime.snapshot()).toMatchObject({
       runtimeBackend: "babylon-havok",
       ready: true,
       physics: { backend: "havok", ready: true, fixedTimeStepSeconds: 1 / 60 },
-      schemaVersion: 2,
+      schemaVersion: 3,
       controlledEntityId: "player",
-      subjectStatesByEntityId: { player: { entityId: "player", movementMedium: "ground" } },
-      resources: { bodies: 3, terrainSamples: 65 * 65 },
+      subjectStatesByEntityId: {
+        player: {
+          entityId: "player",
+          subjectDefinitionRef:
+            "worldkit://subject-definition/humanoid.third-person@1",
+          subjectDefinitionHash: expect.stringMatching(/^sha256:/),
+          movementMedium: "ground",
+        },
+      },
+      resources: { terrainSamples: 65 * 65 },
     });
-    expect(runtime.snapshot().resources.meshes).toBeGreaterThanOrEqual(4);
+    expect(runtime.snapshot().resources.meshes).toBeGreaterThanOrEqual(10);
 
     await runtime.dispose();
     await runtime.dispose();
   });
 
-  it("creates and snapshots every compiled subject", async () => {
-    const runtime = await createRuntime(createMultiSubjectExecutionPlan());
+  it("keeps Snapshot and Visual Root at Subject Origin", async () => {
+    const { runtime, executionPlan, debug } = await createRuntimeWithPackageSubject();
+    const snapshot = runtime.snapshot();
+    const subject = executionPlan.subjects.find(
+      (value) => value.entityId === "pack-animal-a",
+    )!;
+    const state = snapshot.subjectStatesByEntityId[subject.entityId]!;
 
-    expect(Object.keys(runtime.snapshot().subjectStatesByEntityId).sort()).toEqual(["animal", "player"]);
+    expect(state.positionMetersXYZ).toEqual(
+      subject.spawnSubjectOriginPositionMetersXYZ,
+    );
+    expect(debug.subjectVisualOrigin(subject.entityId)).toEqual(state.positionMetersXYZ);
+    expect(debug.controllerCenter(subject.entityId)).toEqual(
+      addVec3(
+        state.positionMetersXYZ,
+        subject.collider.centerOffsetFromSubjectOriginMetersXYZ,
+      ),
+    );
+    await runtime.dispose();
+  });
+
+  it("creates and snapshots every compiled Subject independently", async () => {
+    const runtime = await createRuntime();
+
+    expect(Object.keys(runtime.snapshot().subjectStatesByEntityId).sort()).toEqual([
+      "pack-animal-a",
+      "pack-animal-b",
+      "player",
+    ]);
     expect(runtime.snapshot().controlledEntityId).toBe("player");
-    expect(runtime.snapshot().resources.meshes).toBeGreaterThan(8);
     await runtime.dispose();
   });
 
-  it("switches the default Controller atomically and moves only the committed subject", async () => {
-    const runtime = await createRuntime(createMultiSubjectExecutionPlan());
+  it("renders resolved Primitive Parts at Definition-local transforms", async () => {
+    const { runtime, executionPlan, debug } = await createRuntimeWithPackageSubject();
+    const subject = executionPlan.subjects.find(
+      (candidate) => candidate.entityId === "pack-animal-a",
+    )!;
+
+    for (const part of subject.visualParts) {
+      expect(debug.visualPartLocalPosition(subject.entityId, part.id)).toEqual(
+        part.localTransform.positionMetersXYZ,
+      );
+    }
+    expect(subject.sockets.map((socket) => socket.id)).toEqual([
+      "seat.mount",
+      "tow.rear",
+    ]);
+    await runtime.dispose();
+  });
+
+  it("switches the default Controller atomically and moves only the committed Subject", async () => {
+    const runtime = await createRuntime();
     const before = runtime.snapshot();
 
-    expect(runtime.bindControl({
-      controllerId: "controller-primary",
-      expectedControlledEntityId: "player",
-      controlledEntityId: "animal",
-    })).toMatchObject({ status: "committed", controlledEntityId: "animal" });
-    const after = await runtime.runFixedInput({ actions: ["move-right"], ticks: 60 });
+    expect(
+      runtime.bindControl({
+        controllerId: "controller-primary",
+        expectedControlledEntityId: "player",
+        controlledEntityId: "pack-animal-a",
+      }),
+    ).toMatchObject({ status: "committed", controlledEntityId: "pack-animal-a" });
+    const after = await runtime.runFixedInput(moveRightForTicks(60));
 
-    expect(after.subjectStatesByEntityId.animal!.positionMeters[0]).toBeGreaterThan(
-      before.subjectStatesByEntityId.animal!.positionMeters[0],
+    expect(after.subjectStatesByEntityId["pack-animal-a"]!.positionMetersXYZ[0]).toBeGreaterThan(
+      before.subjectStatesByEntityId["pack-animal-a"]!.positionMetersXYZ[0],
     );
-    expect(after.subjectStatesByEntityId.player!.positionMeters).toEqual(
-      before.subjectStatesByEntityId.player!.positionMeters,
-    );
-    expect(after.camera.targetEntityId).toBe("animal");
+    const inactiveBefore = before.subjectStatesByEntityId.player!.positionMetersXYZ;
+    const inactiveAfter = after.subjectStatesByEntityId.player!.positionMetersXYZ;
+    expect(inactiveAfter[0]).toBe(inactiveBefore[0]);
+    expect(inactiveAfter[1]).toBeCloseTo(inactiveBefore[1]);
+    expect(inactiveAfter[2]).toBe(inactiveBefore[2]);
+    expect(after.camera.targetEntityId).toBe("pack-animal-a");
     await runtime.dispose();
   });
 
-  it("rejects a stale binding without changing control", async () => {
-    const runtime = await createRuntime(createMultiSubjectExecutionPlan());
+  it("rejects stale, unknown Controller, and unknown Subject bindings", async () => {
+    const runtime = await createRuntime();
 
-    expect(runtime.bindControl({
-      controllerId: "controller-primary",
-      expectedControlledEntityId: "animal",
-      controlledEntityId: "player",
-    })).toMatchObject({ status: "rejected", diagnostic: { code: "CONTROL_BINDING_STALE" } });
-    expect(runtime.snapshot().controlledEntityId).toBe("player");
-    await runtime.dispose();
-  });
-
-  it("validates Controller and Subject IDs and commits an idempotent no-op", async () => {
-    const runtime = await createRuntime(createMultiSubjectExecutionPlan());
-
-    expect(runtime.bindControl({
-      controllerId: "controller-missing",
-      expectedControlledEntityId: "player",
-      controlledEntityId: "animal",
-    })).toMatchObject({ status: "rejected", diagnostic: { code: "CONTROL_CONTROLLER_NOT_FOUND" } });
-    expect(runtime.bindControl({
-      controllerId: "controller-primary",
-      expectedControlledEntityId: "player",
-      controlledEntityId: "missing",
-    })).toMatchObject({ status: "rejected", diagnostic: { code: "CONTROL_TARGET_NOT_FOUND" } });
-    expect(runtime.bindControl({
-      controllerId: "controller-primary",
-      expectedControlledEntityId: "player",
-      controlledEntityId: "player",
-    })).toMatchObject({ status: "committed", controlledEntityId: "player" });
+    expect(
+      runtime.bindControl({
+        controllerId: "controller-primary",
+        expectedControlledEntityId: "pack-animal-a",
+        controlledEntityId: "player",
+      }),
+    ).toMatchObject({
+      status: "rejected",
+      diagnostic: { code: "CONTROL_BINDING_STALE" },
+    });
+    expect(
+      runtime.bindControl({
+        controllerId: "controller-missing",
+        expectedControlledEntityId: "player",
+        controlledEntityId: "pack-animal-a",
+      }),
+    ).toMatchObject({
+      status: "rejected",
+      diagnostic: { code: "CONTROL_CONTROLLER_NOT_FOUND" },
+    });
+    expect(
+      runtime.bindControl({
+        controllerId: "controller-primary",
+        expectedControlledEntityId: "player",
+        controlledEntityId: "missing",
+      }),
+    ).toMatchObject({
+      status: "rejected",
+      diagnostic: { code: "CONTROL_TARGET_NOT_FOUND" },
+    });
     expect(runtime.snapshot().controlledEntityId).toBe("player");
     await runtime.dispose();
   });
@@ -157,11 +276,13 @@ describe("BabylonWorldRuntime", () => {
   it("moves by semantic fixed input but cannot pass through a fixed wall", async () => {
     const executionPlan = createExecutionPlan((spec) => {
       const wall = spec.resources.prototypes[0];
-      if (wall === undefined) throw new Error("Fixture wall prototype missing.");
+      if (wall?.primitive !== "box") {
+        throw new Error("Fixture box wall Prototype missing.");
+      }
       wall.sizeMetersXYZ = [14, 4, 2];
       const wallNode = spec.nodes.find((node) => node.kind === "object");
       if (wallNode?.kind !== "object") throw new Error("Fixture wall node missing.");
-      wallNode.transform.positionMeters = [0, 2, 25];
+      wallNode.transform.positionMetersXYZ = [0, 2, 25];
     });
     const runtime = await createRuntime(executionPlan);
 
@@ -169,61 +290,80 @@ describe("BabylonWorldRuntime", () => {
     const moved = await runtime.runFixedInput({ actions: ["move-forward"], ticks: 180 });
 
     expect(moved.tick).toBe(180);
-    expect(moved.subjectStatesByEntityId.player!.positionMeters[2]).toBeLessThan(
-      initial.subjectStatesByEntityId.player!.positionMeters[2],
+    expect(moved.subjectStatesByEntityId.player!.positionMetersXYZ[2]).toBeLessThan(
+      initial.subjectStatesByEntityId.player!.positionMetersXYZ[2],
     );
-    expect(moved.subjectStatesByEntityId.player!.positionMeters[2]).toBeGreaterThan(26.1);
+    expect(moved.subjectStatesByEntityId.player!.positionMetersXYZ[2]).toBeGreaterThan(26.1);
     await runtime.dispose();
   });
 
-  it("changes movement medium when the subject enters a declared swimmable water boundary", async () => {
+  it("changes movement medium in declared swimmable water", async () => {
     const executionPlan = createExecutionPlan((spec) => {
       const water = spec.nodes.find((node) => node.kind === "water");
       if (water?.kind !== "water") throw new Error("Fixture water node missing.");
-      water.components.water.boundary = { kind: "ellipse", centerXZ: [7, 30], radiusMetersXZ: [3, 5] };
+      water.components.water.boundary = {
+        kind: "ellipse",
+        centerMetersXZ: [7, 30],
+        radiusMetersXZ: [3, 5],
+      };
     });
     const runtime = await createRuntime(executionPlan);
 
-    const snapshot = await runtime.runFixedInput({ actions: ["move-right"], ticks: 90 });
+    const snapshot = await runtime.runFixedInput(moveRightForTicks(90));
 
-    expect(snapshot.subjectStatesByEntityId.player!.positionMeters[0]).toBeGreaterThan(4);
+    expect(snapshot.subjectStatesByEntityId.player!.positionMetersXYZ[0]).toBeGreaterThan(4);
     expect(snapshot.subjectStatesByEntityId.player!.movementMedium).toBe("water");
     await runtime.dispose();
   });
 
-  it("resets deterministic runtime state to the compiled spawn", async () => {
-    const executionPlan = createExecutionPlan();
-    const runtime = await createRuntime(executionPlan);
-    await runtime.runFixedInput({ actions: ["move-left"], ticks: 30 });
+  it("camera follows Subject Origin plus target height", async () => {
+    const { runtime, executionPlan } = await createRuntimeWithPackageSubject();
+    runtime.bindControl({
+      controllerId: "controller-primary",
+      expectedControlledEntityId: "player",
+      controlledEntityId: "pack-animal-a",
+    });
+    const snapshot = runtime.snapshot();
+    const state = snapshot.subjectStatesByEntityId["pack-animal-a"]!;
+    const camera = executionPlan.camera;
+    const horizontalDistance = Math.cos(camera.pitchRadians) * camera.distanceMeters;
+
+    expect(snapshot.camera.positionMetersXYZ).toEqual([
+      state.positionMetersXYZ[0],
+      state.positionMetersXYZ[1] +
+        camera.targetHeightMeters +
+        Math.sin(camera.pitchRadians) * camera.distanceMeters,
+      state.positionMetersXYZ[2] + horizontalDistance,
+    ]);
+    await runtime.dispose();
+  });
+
+  it("reset restores origins, controller centers, velocity, binding, and camera", async () => {
+    const { runtime, executionPlan, debug } = await createRuntimeWithPackageSubject();
+    const initialCamera = runtime.snapshot().camera.positionMetersXYZ;
+    runtime.bindControl({
+      controllerId: "controller-primary",
+      expectedControlledEntityId: "player",
+      controlledEntityId: "pack-animal-a",
+    });
+    await runtime.runFixedInput(moveRightForTicks(30));
 
     const reset = runtime.reset();
 
     expect(reset.tick).toBe(0);
-    expect(reset.subjectStatesByEntityId.player!.positionMeters).toEqual(
-      executionPlan.subjects.find((subject) => subject.entityId === "player")!.spawnPositionMeters,
-    );
-    expect(reset.subjectStatesByEntityId.player!.velocityMetersPerSecond).toEqual([0, 0, 0]);
-    await runtime.dispose();
-  });
-
-  it("resets every subject and restores the initial Controller binding", async () => {
-    const executionPlan = createMultiSubjectExecutionPlan();
-    const runtime = await createRuntime(executionPlan);
-    runtime.bindControl({
-      controllerId: "controller-primary",
-      expectedControlledEntityId: "player",
-      controlledEntityId: "animal",
-    });
-    await runtime.runFixedInput({ actions: ["move-left"], ticks: 30 });
-
-    const reset = runtime.reset();
-
     expect(reset.controlledEntityId).toBe("player");
+    expect(reset.camera.positionMetersXYZ).toEqual(initialCamera);
     for (const subject of executionPlan.subjects) {
-      expect(reset.subjectStatesByEntityId[subject.entityId]?.positionMeters).toEqual(
-        subject.spawnPositionMeters,
+      const state = reset.subjectStatesByEntityId[subject.entityId]!;
+      expect(state.positionMetersXYZ).toEqual(subject.spawnSubjectOriginPositionMetersXYZ);
+      expect(state.velocityMetersPerSecondXYZ).toEqual([0, 0, 0]);
+      expect(debug.subjectVisualOrigin(subject.entityId)).toEqual(state.positionMetersXYZ);
+      expect(debug.controllerCenter(subject.entityId)).toEqual(
+        addVec3(
+          state.positionMetersXYZ,
+          subject.collider.centerOffsetFromSubjectOriginMetersXYZ,
+        ),
       );
-      expect(reset.subjectStatesByEntityId[subject.entityId]?.velocityMetersPerSecond).toEqual([0, 0, 0]);
     }
     await runtime.dispose();
   });

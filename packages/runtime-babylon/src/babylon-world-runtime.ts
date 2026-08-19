@@ -17,14 +17,13 @@ import { Scene } from "@babylonjs/core/scene.pure.js";
 import type {
   BindControlRequestV2,
   ControlBindingReceiptV2,
-  ExecutionObjectV1,
-  ExecutionPlanV2,
-  ExecutionSubjectV2,
-  ExecutionWaterBoundaryV1,
-  ExecutionWaterV1,
+  ExecutionObjectV3,
+  ExecutionPlanV3,
+  ExecutionWaterBoundaryV3,
+  ExecutionWaterV3,
   FixedInputV1,
-  WorldRuntimeSessionV2,
-  WorldRuntimeSnapshotV2,
+  WorldRuntimeSessionV3,
+  WorldRuntimeSnapshotV3,
 } from "@whitebox-world/runtime-contracts";
 import { TRUSTED_DEFAULT_CONTROLLER_ID } from "@whitebox-world/runtime-contracts";
 
@@ -39,7 +38,7 @@ import {
 } from "./terrain";
 
 export interface BabylonWorldRuntimeOptions {
-  executionPlan: ExecutionPlanV2;
+  executionPlan: ExecutionPlanV3;
   canvas?: HTMLCanvasElement;
   engineFactory?: () => AbstractEngine;
   autoStartRenderLoop?: boolean;
@@ -47,15 +46,15 @@ export interface BabylonWorldRuntimeOptions {
   havokWasmBinary?: ArrayBuffer;
 }
 
-function applyTransform(mesh: Mesh, object: ExecutionObjectV1): void {
-  mesh.position = new Vector3(...object.transform.positionMeters);
+function applyTransform(mesh: Mesh, object: ExecutionObjectV3): void {
+  mesh.position = new Vector3(...object.transform.positionMetersXYZ);
   const [rotationX, rotationY, rotationZ] = object.transform.rotationEulerRadiansXYZ;
   mesh.rotationQuaternion = Quaternion.FromEulerAngles(rotationX, rotationY, rotationZ);
   mesh.scaling = new Vector3(...object.transform.scaleXYZ);
   mesh.metadata = { worldkitEntityId: object.entityId, semanticClassId: object.semanticClassId };
 }
 
-function createObjectMesh(object: ExecutionObjectV1, materials: WhiteboxMaterials, scene: Scene): Mesh {
+function createObjectMesh(object: ExecutionObjectV3, materials: WhiteboxMaterials, scene: Scene): Mesh {
   let mesh: Mesh;
   switch (object.primitive.kind) {
     case "box":
@@ -105,7 +104,7 @@ function createObjectMesh(object: ExecutionObjectV1, materials: WhiteboxMaterial
   return mesh;
 }
 
-function createWaterMesh(water: ExecutionWaterV1, materials: WhiteboxMaterials, scene: Scene): Mesh {
+function createWaterMesh(water: ExecutionWaterV3, materials: WhiteboxMaterials, scene: Scene): Mesh {
   const boundary = water.boundary;
   let mesh: Mesh;
   if (boundary.kind === "circle" || boundary.kind === "ellipse") {
@@ -116,16 +115,20 @@ function createWaterMesh(water: ExecutionWaterV1, materials: WhiteboxMaterials, 
       : boundary.radiusMetersXZ;
     mesh.scaling.x = radii[0];
     mesh.scaling.y = radii[1];
-    mesh.position = new Vector3(boundary.centerXZ[0], water.waterLevelMeters, boundary.centerXZ[1]);
+    mesh.position = new Vector3(
+      boundary.centerMetersXZ[0],
+      water.waterLevelMeters,
+      boundary.centerMetersXZ[1],
+    );
   } else {
     mesh = new Mesh(water.entityId, scene);
-    const centerX = boundary.pointsXZ.reduce((sum, point) => sum + point[0], 0) / boundary.pointsXZ.length;
-    const centerZ = boundary.pointsXZ.reduce((sum, point) => sum + point[1], 0) / boundary.pointsXZ.length;
+    const centerX = boundary.pointsMetersXZ.reduce((sum, point) => sum + point[0], 0) / boundary.pointsMetersXZ.length;
+    const centerZ = boundary.pointsMetersXZ.reduce((sum, point) => sum + point[1], 0) / boundary.pointsMetersXZ.length;
     const positions = [centerX, water.waterLevelMeters, centerZ];
     const indices: number[] = [];
-    for (const point of boundary.pointsXZ) positions.push(point[0], water.waterLevelMeters, point[1]);
-    for (let index = 0; index < boundary.pointsXZ.length; index += 1) {
-      indices.push(0, index + 1, ((index + 1) % boundary.pointsXZ.length) + 1);
+    for (const point of boundary.pointsMetersXZ) positions.push(point[0], water.waterLevelMeters, point[1]);
+    for (let index = 0; index < boundary.pointsMetersXZ.length; index += 1) {
+      indices.push(0, index + 1, ((index + 1) % boundary.pointsMetersXZ.length) + 1);
     }
     const normals: number[] = [];
     VertexData.ComputeNormals(positions, indices, normals);
@@ -140,21 +143,21 @@ function createWaterMesh(water: ExecutionWaterV1, materials: WhiteboxMaterials, 
   return mesh;
 }
 
-function containsPoint(boundary: ExecutionWaterBoundaryV1, x: number, z: number): boolean {
+function containsPoint(boundary: ExecutionWaterBoundaryV3, x: number, z: number): boolean {
   if (boundary.kind === "circle") {
-    const dx = x - boundary.centerXZ[0];
-    const dz = z - boundary.centerXZ[1];
+    const dx = x - boundary.centerMetersXZ[0];
+    const dz = z - boundary.centerMetersXZ[1];
     return dx * dx + dz * dz <= boundary.radiusMeters * boundary.radiusMeters;
   }
   if (boundary.kind === "ellipse") {
-    const dx = (x - boundary.centerXZ[0]) / boundary.radiusMetersXZ[0];
-    const dz = (z - boundary.centerXZ[1]) / boundary.radiusMetersXZ[1];
+    const dx = (x - boundary.centerMetersXZ[0]) / boundary.radiusMetersXZ[0];
+    const dz = (z - boundary.centerMetersXZ[1]) / boundary.radiusMetersXZ[1];
     return dx * dx + dz * dz <= 1;
   }
   let inside = false;
-  for (let current = 0, previous = boundary.pointsXZ.length - 1; current < boundary.pointsXZ.length; previous = current, current += 1) {
-    const currentPoint = boundary.pointsXZ[current]!;
-    const previousPoint = boundary.pointsXZ[previous]!;
+  for (let current = 0, previous = boundary.pointsMetersXZ.length - 1; current < boundary.pointsMetersXZ.length; previous = current, current += 1) {
+    const currentPoint = boundary.pointsMetersXZ[current]!;
+    const previousPoint = boundary.pointsMetersXZ[previous]!;
     const crosses = currentPoint[1] > z !== previousPoint[1] > z &&
       x < ((previousPoint[0] - currentPoint[0]) * (z - currentPoint[1])) /
         (previousPoint[1] - currentPoint[1]) + currentPoint[0];
@@ -163,7 +166,7 @@ function containsPoint(boundary: ExecutionWaterBoundaryV1, x: number, z: number)
   return inside;
 }
 
-function configureAtmosphere(scene: Scene, preset: ExecutionPlanV2["atmospherePreset"]): void {
+function configureAtmosphere(scene: Scene, preset: ExecutionPlanV3["atmospherePreset"]): void {
   const colors = {
     "clear-day": new Color4(0.55, 0.78, 0.92, 1),
     "golden-hour": new Color4(0.91, 0.65, 0.42, 1),
@@ -178,7 +181,7 @@ function configureAtmosphere(scene: Scene, preset: ExecutionPlanV2["atmospherePr
   sun.intensity = preset === "night" ? 0.22 : 1.1;
 }
 
-export class BabylonWorldRuntime implements WorldRuntimeSessionV2 {
+export class BabylonWorldRuntime implements WorldRuntimeSessionV3 {
   readonly runtimeBackend = "babylon-havok" as const;
   readonly ready: Promise<void> = Promise.resolve();
 
@@ -193,7 +196,7 @@ export class BabylonWorldRuntime implements WorldRuntimeSessionV2 {
   private readonly renderLoop: () => void;
 
   private constructor(
-    private readonly executionPlan: ExecutionPlanV2,
+    private readonly executionPlan: ExecutionPlanV3,
     private readonly engine: AbstractEngine,
     private readonly scene: Scene,
     subjectControllersByEntityId: ReadonlyMap<string, SubjectController>,
@@ -250,10 +253,10 @@ export class BabylonWorldRuntime implements WorldRuntimeSessionV2 {
     const terrainMesh = createTerrainMesh(options.executionPlan.terrain, materials.terrain, scene);
     const terrain = options.executionPlan.terrain;
     const heightfieldShape = new PhysicsShapeHeightField(
-      terrain.sizeXZ[0],
-      terrain.sizeXZ[1],
-      terrain.resolutionXZ[0],
-      terrain.resolutionXZ[1],
+      terrain.sizeMetersXZ[0],
+      terrain.sizeMetersXZ[1],
+      terrain.resolutionCellsXZ[0],
+      terrain.resolutionCellsXZ[1],
       toBabylonHeightfieldData(terrain),
       scene,
     );
@@ -377,7 +380,7 @@ export class BabylonWorldRuntime implements WorldRuntimeSessionV2 {
     };
   }
 
-  async runFixedInput(input: FixedInputV1): Promise<WorldRuntimeSnapshotV2> {
+  async runFixedInput(input: FixedInputV1): Promise<WorldRuntimeSnapshotV3> {
     this.assertUsable();
     if (!Number.isSafeInteger(input.ticks) || input.ticks < 0 || input.ticks > 36_000) {
       throw new RangeError("Fixed input ticks must be an integer from 0 through 36000.");
@@ -389,7 +392,7 @@ export class BabylonWorldRuntime implements WorldRuntimeSessionV2 {
         const controller = this.controllerFor(subject.entityId);
         controller.step(
           subject.entityId === this.controlledEntityId ? input.actions : [],
-          this.detectMovementMedium(subject, controller),
+          this.detectMovementMedium(controller),
         );
       }
       physicsEngine._step(FIXED_TIME_STEP_SECONDS);
@@ -399,26 +402,28 @@ export class BabylonWorldRuntime implements WorldRuntimeSessionV2 {
     return this.snapshot();
   }
 
-  snapshot(): WorldRuntimeSnapshotV2 {
+  snapshot(): WorldRuntimeSnapshotV3 {
     this.assertUsable();
     const subjectStatesByEntityId: Record<
       string,
-      WorldRuntimeSnapshotV2["subjectStatesByEntityId"][string]
+      WorldRuntimeSnapshotV3["subjectStatesByEntityId"][string]
     > = {};
     for (const subject of this.executionPlan.subjects) {
       const controller = this.controllerFor(subject.entityId);
-      const position = controller.position;
+      const subjectOrigin = controller.subjectOrigin;
       const velocity = controller.velocity;
       subjectStatesByEntityId[subject.entityId] = {
         entityId: subject.entityId,
-        positionMeters: [position.x, position.y, position.z],
-        velocityMetersPerSecond: [velocity.x, velocity.y, velocity.z],
-        movementMedium: this.detectMovementMedium(subject, controller),
+        subjectDefinitionRef: subject.subjectDefinitionRef,
+        subjectDefinitionHash: subject.subjectDefinitionHash,
+        positionMetersXYZ: [subjectOrigin.x, subjectOrigin.y, subjectOrigin.z],
+        velocityMetersPerSecondXYZ: [velocity.x, velocity.y, velocity.z],
+        movementMedium: this.detectMovementMedium(controller),
       };
     }
     return {
       kind: "worldkit-runtime-snapshot",
-      schemaVersion: 2,
+      schemaVersion: 3,
       runtimeBackend: "babylon-havok",
       tick: this.tick,
       ready: true,
@@ -434,7 +439,11 @@ export class BabylonWorldRuntime implements WorldRuntimeSessionV2 {
       camera: {
         entityId: this.executionPlan.camera.cameraEntityId,
         targetEntityId: this.controlledEntityId,
-        positionMeters: [this.camera.position.x, this.camera.position.y, this.camera.position.z],
+        positionMetersXYZ: [
+          this.camera.position.x,
+          this.camera.position.y,
+          this.camera.position.z,
+        ],
       },
       resources: {
         meshes: this.scene.meshes.length,
@@ -444,7 +453,7 @@ export class BabylonWorldRuntime implements WorldRuntimeSessionV2 {
     };
   }
 
-  reset(): WorldRuntimeSnapshotV2 {
+  reset(): WorldRuntimeSnapshotV3 {
     this.assertUsable();
     for (const controller of this.subjectControllersByEntityId.values()) controller.reset();
     this.controlledEntityId = this.executionPlan.controlledEntityId;
@@ -480,23 +489,25 @@ export class BabylonWorldRuntime implements WorldRuntimeSessionV2 {
   }
 
   private detectMovementMedium(
-    subject: ExecutionSubjectV2,
     controller: SubjectController,
   ): "ground" | "air" | "water" {
-    const position = controller.position;
-    const footHeight = position.y - subject.collider.heightMeters / 2;
+    const subjectOrigin = controller.subjectOrigin;
     for (const water of this.executionPlan.waters) {
       if (
         water.traversalMode === "swimmable" &&
-        containsPoint(water.boundary, position.x, position.z) &&
-        footHeight <= water.waterLevelMeters + 0.6 &&
-        footHeight >= water.waterLevelMeters - water.depthMeters - 0.6
+        containsPoint(water.boundary, subjectOrigin.x, subjectOrigin.z) &&
+        subjectOrigin.y <= water.waterLevelMeters + 0.6 &&
+        subjectOrigin.y >= water.waterLevelMeters - water.depthMeters - 0.6
       ) {
         return "water";
       }
     }
-    const groundHeight = sampleExecutionTerrainHeight(this.executionPlan.terrain, position.x, position.z);
-    return footHeight <= groundHeight + 0.16 ? "ground" : "air";
+    const groundHeight = sampleExecutionTerrainHeight(
+      this.executionPlan.terrain,
+      subjectOrigin.x,
+      subjectOrigin.z,
+    );
+    return subjectOrigin.y <= groundHeight + 0.16 ? "ground" : "air";
   }
 
   private updateCamera(): void {
@@ -508,12 +519,12 @@ export class BabylonWorldRuntime implements WorldRuntimeSessionV2 {
         `WORLDKIT_RUNTIME_CONTROL_TARGET_NOT_FOUND: ${this.controlledEntityId}`,
       );
     }
-    const subjectPosition = this.controllerFor(subject.entityId).position;
+    const subjectOrigin = this.controllerFor(subject.entityId).subjectOrigin;
     const cameraPlan = this.executionPlan.camera;
     const target = new Vector3(
-      subjectPosition.x,
-      subjectPosition.y - subject.collider.heightMeters / 2 + cameraPlan.targetHeightMeters,
-      subjectPosition.z,
+      subjectOrigin.x,
+      subjectOrigin.y + cameraPlan.targetHeightMeters,
+      subjectOrigin.z,
     );
     const horizontalDistance = Math.cos(cameraPlan.pitchRadians) * cameraPlan.distanceMeters;
     this.camera.position.set(

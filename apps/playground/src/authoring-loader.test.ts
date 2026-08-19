@@ -1,14 +1,16 @@
 import { describe, expect, it } from "vitest";
 
-import { createValidAuthoringSpec } from "../../../packages/authoring/src/test-fixture";
-import type { WorldkitBrowserApiV2 } from "./playground-world";
+import { createValidPackageSubjectWorldV2 } from "../../../packages/authoring/src/test-fixture";
+import type { WorldkitBrowserApiV3 } from "@whitebox-world/runtime-contracts";
+import { WORLDKIT_BROWSER_PROTOCOL_VERSION } from "@whitebox-world/runtime-contracts";
+
 import { featureInspections } from "./babylon-world-adapter";
 import { loadAuthoringScene } from "./authoring-loader";
 
 describe("loadAuthoringScene", () => {
-  it("runs strict JSON through normalize and compile before exposing an execution plan", async () => {
+  it("runs strict Authoring V2 JSON through normalize and Compiler V3", async () => {
     const loaded = await loadAuthoringScene(async () =>
-      new Response(JSON.stringify(createValidAuthoringSpec()), {
+      new Response(JSON.stringify(createValidPackageSubjectWorldV2()), {
         status: 200,
         headers: { "content-type": "application/json" },
       }),
@@ -18,49 +20,54 @@ describe("loadAuthoringScene", () => {
       ok: true,
       diagnostics: [],
       executionPlan: {
-        schemaVersion: 2,
+        schemaVersion: 3,
         runtimeBackend: "babylon-havok",
         id: "basic-world",
-        subjects: [expect.objectContaining({ entityId: "player" })],
+        subjects: [
+          expect.objectContaining({
+            entityId: "pack-animal-a",
+            subjectDefinitionRef:
+              "package://subject-definition/coastal-pack-animal@1",
+          }),
+          expect.objectContaining({ entityId: "pack-animal-b" }),
+          expect.objectContaining({ entityId: "player" }),
+        ],
       },
     });
     expect(loaded.normalizedWorldIrHash).toMatch(/^sha256:[a-f0-9]{64}$/);
     expect(loaded.executionPlanHash).toMatch(/^sha256:[a-f0-9]{64}$/);
   });
 
-  it("produces one runtime Feature inspection per compiled subject", async () => {
-    const spec = createValidAuthoringSpec();
-    spec.nodes = [
-      ...spec.nodes,
-      {
-        id: "spawn-animal",
-        kind: "anchor",
-        transform: { positionMeters: [6, 0, 28] },
-        semantic: { classId: "spawn.subject" },
-      },
-      {
-        id: "animal",
-        kind: "subject",
-        kitRef: "worldkit://kit/quadruped.ground-proxy@1",
-        spawnAnchorEntityId: "spawn-animal",
-      },
-    ];
-    const loaded = await loadAuthoringScene(async () => new Response(JSON.stringify(spec)));
-    if (!loaded.ok || loaded.executionPlan === undefined) throw new Error("Fixture did not load.");
+  it("produces one runtime Feature inspection per compiled Subject", async () => {
+    const loaded = await loadAuthoringScene(async () =>
+      new Response(JSON.stringify(createValidPackageSubjectWorldV2())),
+    );
+    if (!loaded.ok || loaded.executionPlan === undefined) {
+      throw new Error("Fixture did not load.");
+    }
 
     expect(
       featureInspections(loaded.executionPlan)
         .filter((feature) => feature.type.startsWith("runtime.subject-"))
         .map((feature) => feature.id),
-    ).toEqual(["animal", "player"]);
+    ).toEqual(["pack-animal-a", "pack-animal-b", "player"]);
+    expect(
+      featureInspections(loaded.executionPlan).find(
+        (feature) => feature.id === "pack-animal-a",
+      )?.parameters,
+    ).toMatchObject({
+      subjectDefinitionRef:
+        "package://subject-definition/coastal-pack-animal@1",
+      subjectDefinitionHash: expect.stringMatching(/^sha256:/),
+    });
   });
 
-  it("defines Browser Protocol V2 with explicit control binding", () => {
+  it("defines Browser Protocol V3 with explicit control binding", () => {
     const fail = (): never => {
       throw new Error("not invoked");
     };
-    const api: WorldkitBrowserApiV2 = {
-      version: 2,
+    const api: WorldkitBrowserApiV3 = {
+      version: WORLDKIT_BROWSER_PROTOCOL_VERSION,
       ready: async () => fail(),
       getSnapshot: fail,
       getDiagnostics: () => [],
@@ -71,7 +78,7 @@ describe("loadAuthoringScene", () => {
       setPaused: fail,
     };
 
-    expect(api.version).toBe(2);
+    expect(api.version).toBe(3);
     expect(api.bindControl).toBeTypeOf("function");
   });
 
@@ -84,7 +91,9 @@ describe("loadAuthoringScene", () => {
   });
 
   it("does not parse an unsuccessful source response", async () => {
-    const loaded = await loadAuthoringScene(async () => new Response("not configured", { status: 404 }));
+    const loaded = await loadAuthoringScene(async () =>
+      new Response("not configured", { status: 404 }),
+    );
 
     expect(loaded).toMatchObject({
       ok: false,

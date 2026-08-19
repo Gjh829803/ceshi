@@ -4,11 +4,9 @@ import type {
   VisualPrototypeSpec,
 } from "@whitebox-world/world";
 import type {
-  BindControlRequestV2,
-  ControlBindingReceiptV2,
-  FixedInputV1,
-  WorldRuntimeSnapshotV2,
+  WorldkitBrowserApiV3,
 } from "@whitebox-world/runtime-contracts";
+export type { WorldkitBrowserApiV3 } from "@whitebox-world/runtime-contracts";
 
 export type InputAction =
   | "forward"
@@ -138,22 +136,10 @@ export interface PlaygroundAutomationApi {
   setPaused(paused: boolean): WorldSnapshot;
 }
 
-export interface WorldkitBrowserApiV2 {
-  version: 2;
-  ready(): Promise<WorldRuntimeSnapshotV2>;
-  getSnapshot(): WorldRuntimeSnapshotV2;
-  getDiagnostics(): readonly Readonly<Record<string, unknown>>[];
-  bindControl(request: BindControlRequestV2): ControlBindingReceiptV2;
-  runFixedInput(steps: readonly FixedInputV1[]): Promise<WorldRuntimeSnapshotV2>;
-  captureScreenshot(): string;
-  reset(): WorldRuntimeSnapshotV2;
-  setPaused(paused: boolean): WorldRuntimeSnapshotV2;
-}
-
 declare global {
   interface Window {
     __WHITEBOX_PLAYGROUND__: PlaygroundAutomationApi;
-    __WORLDKIT__?: WorldkitBrowserApiV2;
+    __WORLDKIT__?: WorldkitBrowserApiV3;
   }
 }
 

@@ -4,16 +4,16 @@ import { Vector3 } from "@babylonjs/core/Maths/math.vector.js";
 import type { StandardMaterial } from "@babylonjs/core/Materials/standardMaterial.js";
 import type { Scene } from "@babylonjs/core/scene.pure.js";
 
-import type { ExecutionTerrainV1 } from "@whitebox-world/runtime-contracts";
+import type { ExecutionTerrainV3 } from "@whitebox-world/runtime-contracts";
 
 export function createTerrainMesh(
-  terrain: ExecutionTerrainV1,
+  terrain: ExecutionTerrainV3,
   material: StandardMaterial,
   scene: Scene,
 ): Mesh {
   const mesh = new Mesh(terrain.entityId, scene);
-  const [columns, rows] = terrain.resolutionXZ;
-  const [sizeX, sizeZ] = terrain.sizeXZ;
+  const [columns, rows] = terrain.resolutionCellsXZ;
+  const [sizeX, sizeZ] = terrain.sizeMetersXZ;
   const positions: number[] = [];
   const indices: number[] = [];
   const uvs: number[] = [];
@@ -43,9 +43,9 @@ export function createTerrainMesh(
   vertexData.uvs = uvs;
   vertexData.applyToMesh(mesh, false);
   mesh.position = new Vector3(
-    terrain.centerXZ[0] - sizeX / 2,
+    terrain.centerMetersXZ[0] - sizeX / 2,
     0,
-    terrain.centerXZ[1] - sizeZ / 2,
+    terrain.centerMetersXZ[1] - sizeZ / 2,
   );
   mesh.material = material;
   mesh.receiveShadows = true;
@@ -58,8 +58,8 @@ export function createTerrainMesh(
  * and converts it to Havok's row-major layout. The ExecutionPlan remains
  * engine-neutral row-major, so the adapter performs the explicit conversion.
  */
-export function toBabylonHeightfieldData(terrain: ExecutionTerrainV1): Float32Array {
-  const [columns, rows] = terrain.resolutionXZ;
+export function toBabylonHeightfieldData(terrain: ExecutionTerrainV3): Float32Array {
+  const [columns, rows] = terrain.resolutionCellsXZ;
   const result = new Float32Array(columns * rows);
   for (let x = 0; x < columns; x += 1) {
     for (let z = 0; z < rows; z += 1) {
@@ -69,12 +69,12 @@ export function toBabylonHeightfieldData(terrain: ExecutionTerrainV1): Float32Ar
   return result;
 }
 
-export function sampleExecutionTerrainHeight(terrain: ExecutionTerrainV1, x: number, z: number): number {
-  const [columns, rows] = terrain.resolutionXZ;
-  const minimumX = terrain.centerXZ[0] - terrain.sizeXZ[0] / 2;
-  const minimumZ = terrain.centerXZ[1] - terrain.sizeXZ[1] / 2;
-  const column = Math.max(0, Math.min(columns - 1, ((x - minimumX) / terrain.sizeXZ[0]) * (columns - 1)));
-  const row = Math.max(0, Math.min(rows - 1, ((z - minimumZ) / terrain.sizeXZ[1]) * (rows - 1)));
+export function sampleExecutionTerrainHeight(terrain: ExecutionTerrainV3, x: number, z: number): number {
+  const [columns, rows] = terrain.resolutionCellsXZ;
+  const minimumX = terrain.centerMetersXZ[0] - terrain.sizeMetersXZ[0] / 2;
+  const minimumZ = terrain.centerMetersXZ[1] - terrain.sizeMetersXZ[1] / 2;
+  const column = Math.max(0, Math.min(columns - 1, ((x - minimumX) / terrain.sizeMetersXZ[0]) * (columns - 1)));
+  const row = Math.max(0, Math.min(rows - 1, ((z - minimumZ) / terrain.sizeMetersXZ[1]) * (rows - 1)));
   const x0 = Math.floor(column);
   const z0 = Math.floor(row);
   const x1 = Math.min(columns - 1, x0 + 1);

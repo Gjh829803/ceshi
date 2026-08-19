@@ -14,7 +14,7 @@ import { compileWorld } from "@whitebox-world/compiler";
 import type {
   CompileDiagnostic,
   ExecutionPlanV2,
-  WorldRuntimeSnapshotV2,
+  WorldRuntimeSnapshotV3,
 } from "@whitebox-world/runtime-contracts";
 
 import {
@@ -301,7 +301,7 @@ export async function captureFile(
     const page = await browser.newPage({ viewport: { width: 1280, height: 720 }, deviceScaleFactor: 1 });
     await page.goto(server.url, { waitUntil: "domcontentloaded", timeout: 30_000 });
     await page.waitForFunction(() => window.__WORLDKIT__ !== undefined, undefined, { timeout: 30_000 });
-    const snapshot = await page.evaluate(async (): Promise<WorldRuntimeSnapshotV2> => {
+    const snapshot = await page.evaluate(async (): Promise<WorldRuntimeSnapshotV3> => {
       const api = window.__WORLDKIT__;
       if (api === undefined) throw new Error("WORLDKIT_BROWSER_PROTOCOL_MISSING");
       return api.ready();

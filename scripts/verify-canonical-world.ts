@@ -133,9 +133,9 @@ async function verifyBrowserProtocolAndPhysics(): Promise<{
     const page = await browser.newPage({ viewport: { width: 1280, height: 720 } });
     await page.goto(server.url, { waitUntil: "domcontentloaded", timeout: 30_000 });
     await page.waitForFunction(() => window.__WORLDKIT__ !== undefined, undefined, { timeout: 30_000 });
-    assert.equal(await page.evaluate(() => window.__WORLDKIT__!.version), 2);
+    assert.equal(await page.evaluate(() => window.__WORLDKIT__!.version), 3);
     const ready = await page.evaluate(async () => window.__WORLDKIT__!.ready());
-    assert.equal(ready.schemaVersion, 2);
+    assert.equal(ready.schemaVersion, 3);
     assert.equal(ready.runtimeBackend, "babylon-havok");
     assert.equal(ready.physics.backend, "havok");
     assert.equal(ready.physics.ready, true);
@@ -149,10 +149,10 @@ async function verifyBrowserProtocolAndPhysics(): Promise<{
       return api.runFixedInput([{ actions: ["move-right"], ticks: 360 }]);
     });
     const wallStopPlayer = wallStop.subjectStatesByEntityId.player!;
-    assert.ok(wallStopPlayer.positionMeters[0] > 2, "Fixed input did not move player toward the east wall.");
+    assert.ok(wallStopPlayer.positionMetersXYZ[0] > 2, "Fixed input did not move player toward the east wall.");
     assert.ok(
-      wallStopPlayer.positionMeters[0] < 6.2,
-      `Player crossed the east wall at x=${wallStopPlayer.positionMeters[0]}.`,
+      wallStopPlayer.positionMetersXYZ[0] < 6.2,
+      `Player crossed the east wall at x=${wallStopPlayer.positionMetersXYZ[0]}.`,
     );
 
     const waterEntry = await page.evaluate(async () => {
@@ -161,7 +161,7 @@ async function verifyBrowserProtocolAndPhysics(): Promise<{
       return api.runFixedInput([{ actions: ["move-forward"], ticks: 600 }]);
     });
     const waterEntryPlayer = waterEntry.subjectStatesByEntityId.player!;
-    assert.ok(waterEntryPlayer.positionMeters[2] < 5, "Fixed input did not move player toward the lake.");
+    assert.ok(waterEntryPlayer.positionMetersXYZ[2] < 5, "Fixed input did not move player toward the lake.");
     assert.equal(waterEntryPlayer.movementMedium, "water", "The lake must deterministically activate water movement.");
 
     const beforeControlSwitch = await page.evaluate(() => window.__WORLDKIT__!.reset());
@@ -178,13 +178,13 @@ async function verifyBrowserProtocolAndPhysics(): Promise<{
     assert.equal(animalMove.controlledEntityId, "animal");
     assert.equal(animalMove.camera.targetEntityId, "animal");
     assert.ok(
-      animalMove.subjectStatesByEntityId.animal!.positionMeters[0] >
-        beforeControlSwitch.subjectStatesByEntityId.animal!.positionMeters[0],
+      animalMove.subjectStatesByEntityId.animal!.positionMetersXYZ[0] >
+        beforeControlSwitch.subjectStatesByEntityId.animal!.positionMetersXYZ[0],
       "The committed animal did not move.",
     );
     assert.deepEqual(
-      animalMove.subjectStatesByEntityId.player!.positionMeters,
-      beforeControlSwitch.subjectStatesByEntityId.player!.positionMeters,
+      animalMove.subjectStatesByEntityId.player!.positionMetersXYZ,
+      beforeControlSwitch.subjectStatesByEntityId.player!.positionMetersXYZ,
       "The uncontrolled player moved during animal input.",
     );
 
@@ -194,9 +194,9 @@ async function verifyBrowserProtocolAndPhysics(): Promise<{
     assert.deepEqual(reset.subjectStatesByEntityId, ready.subjectStatesByEntityId);
 
     return {
-      wallStopPositionMeters: wallStopPlayer.positionMeters,
-      waterEntryPositionMeters: waterEntryPlayer.positionMeters,
-      animalMovePositionMeters: animalMove.subjectStatesByEntityId.animal!.positionMeters,
+      wallStopPositionMeters: wallStopPlayer.positionMetersXYZ,
+      waterEntryPositionMeters: waterEntryPlayer.positionMetersXYZ,
+      animalMovePositionMeters: animalMove.subjectStatesByEntityId.animal!.positionMetersXYZ,
     };
   } finally {
     await browser.close();

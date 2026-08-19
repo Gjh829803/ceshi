@@ -5,22 +5,22 @@ import { MeshBuilder } from "@babylonjs/core/Meshes/meshBuilder.js";
 import { TransformNode } from "@babylonjs/core/Meshes/transformNode.js";
 import type { Scene } from "@babylonjs/core/scene.pure.js";
 
-import type { ExecutionSubjectV2, SubjectVisualPartV2 } from "@whitebox-world/runtime-contracts";
+import type { ExecutionSubjectV3, SubjectVisualPartV3 } from "@whitebox-world/runtime-contracts";
 
 export interface SubjectVisual {
   root: TransformNode;
   meshes: readonly Mesh[];
 }
 
-function createPartMesh(subjectEntityId: string, part: SubjectVisualPartV2, scene: Scene): Mesh {
+function createPartMesh(subjectEntityId: string, part: SubjectVisualPartV3, scene: Scene): Mesh {
   const name = `${subjectEntityId}.${part.id}`;
-  switch (part.primitive.kind) {
+  switch (part.shape.kind) {
     case "capsule":
       return MeshBuilder.CreateCapsule(
         name,
         {
-          height: part.primitive.heightMeters,
-          radius: part.primitive.radiusMeters,
+          height: part.shape.heightMeters,
+          radius: part.shape.radiusMeters,
           tessellation: 16,
         },
         scene,
@@ -29,24 +29,24 @@ function createPartMesh(subjectEntityId: string, part: SubjectVisualPartV2, scen
       return MeshBuilder.CreateBox(
         name,
         {
-          width: part.primitive.sizeMetersXYZ[0],
-          height: part.primitive.sizeMetersXYZ[1],
-          depth: part.primitive.sizeMetersXYZ[2],
+          width: part.shape.sizeMetersXYZ[0],
+          height: part.shape.sizeMetersXYZ[1],
+          depth: part.shape.sizeMetersXYZ[2],
         },
         scene,
       );
     case "sphere":
       return MeshBuilder.CreateSphere(
         name,
-        { diameter: part.primitive.radiusMeters * 2, segments: 16 },
+        { diameter: part.shape.radiusMeters * 2, segments: 16 },
         scene,
       );
     case "cylinder":
       return MeshBuilder.CreateCylinder(
         name,
         {
-          height: part.primitive.heightMeters,
-          diameter: part.primitive.radiusMeters * 2,
+          height: part.shape.heightMeters,
+          diameter: part.shape.radiusMeters * 2,
           tessellation: 16,
         },
         scene,
@@ -55,7 +55,7 @@ function createPartMesh(subjectEntityId: string, part: SubjectVisualPartV2, scen
 }
 
 export function createSubjectVisual(
-  subject: ExecutionSubjectV2,
+  subject: ExecutionSubjectV3,
   material: Material,
   scene: Scene,
 ): SubjectVisual {
@@ -67,13 +67,16 @@ export function createSubjectVisual(
   const meshes = subject.visualParts.map((part) => {
     const mesh = createPartMesh(subject.entityId, part, scene);
     mesh.parent = root;
-    mesh.position = new Vector3(...part.localPositionMeters);
-    mesh.rotationQuaternion = Quaternion.FromEulerAngles(...part.localRotationEulerRadiansXYZ);
+    mesh.position = new Vector3(...part.localTransform.positionMetersXYZ);
+    mesh.rotationQuaternion = Quaternion.FromEulerAngles(
+      ...part.localTransform.rotationEulerRadiansXYZ,
+    );
     mesh.material = material;
     mesh.metadata = {
       worldkitEntityId: subject.entityId,
       subjectVisualPartId: part.id,
       semanticClassId: subject.semanticClassId,
+      semanticTags: [...part.semanticTags],
     };
     return mesh;
   });

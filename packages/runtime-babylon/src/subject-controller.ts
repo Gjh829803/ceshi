@@ -7,7 +7,7 @@ import type { TransformNode } from "@babylonjs/core/Meshes/transformNode.js";
 import type { Scene } from "@babylonjs/core/scene.pure.js";
 
 import type {
-  ExecutionSubjectV2,
+  ExecutionSubjectV3,
   SemanticInputActionV1,
   Vec3,
 } from "@whitebox-world/runtime-contracts";
@@ -22,16 +22,23 @@ export class SubjectController {
   readonly physicsController: PhysicsCharacterController;
   private readonly gravity: Vector3;
   private readonly up = Vector3.Up();
+  private readonly colliderCenterOffsetFromSubjectOrigin: Vector3;
 
   constructor(
-    private readonly subject: ExecutionSubjectV2,
+    private readonly subject: ExecutionSubjectV3,
     gravityMetersPerSecondSquaredXYZ: Vec3,
     private readonly visualRoot: TransformNode,
     scene: Scene,
   ) {
     this.gravity = new Vector3(...gravityMetersPerSecondSquaredXYZ);
+    this.colliderCenterOffsetFromSubjectOrigin = new Vector3(
+      ...subject.collider.centerOffsetFromSubjectOriginMetersXYZ,
+    );
+    const spawnSubjectOrigin = new Vector3(
+      ...subject.spawnSubjectOriginPositionMetersXYZ,
+    );
     this.physicsController = new PhysicsCharacterController(
-      new Vector3(...subject.spawnPositionMeters),
+      spawnSubjectOrigin.add(this.colliderCenterOffsetFromSubjectOrigin),
       {
         capsuleHeight: subject.collider.heightMeters,
         capsuleRadius: subject.collider.radiusMeters,
@@ -42,7 +49,7 @@ export class SubjectController {
     this.physicsController.maxStepHeight = subject.collider.maxStepHeightMeters;
     this.physicsController.characterMass = subject.collider.massKilograms;
     this.physicsController.acceleration = 1;
-    this.syncVisual();
+    this.syncVisual(spawnSubjectOrigin);
   }
 
   step(actions: readonly SemanticInputActionV1[], movementMedium: "ground" | "air" | "water"): void {
@@ -86,8 +93,12 @@ export class SubjectController {
     this.syncVisual();
   }
 
-  get position(): Vector3 {
+  get controllerCenter(): Vector3 {
     return this.physicsController.getPosition();
+  }
+
+  get subjectOrigin(): Vector3 {
+    return this.visualRoot.position.clone();
   }
 
   get velocity(): Vector3 {
@@ -95,9 +106,14 @@ export class SubjectController {
   }
 
   reset(): void {
-    this.physicsController.setPosition(new Vector3(...this.subject.spawnPositionMeters));
+    const spawnSubjectOrigin = new Vector3(
+      ...this.subject.spawnSubjectOriginPositionMetersXYZ,
+    );
+    this.physicsController.setPosition(
+      spawnSubjectOrigin.add(this.colliderCenterOffsetFromSubjectOrigin),
+    );
     this.physicsController.setVelocity(Vector3.Zero());
-    this.syncVisual();
+    this.syncVisual(spawnSubjectOrigin);
   }
 
   stop(): void {
@@ -108,7 +124,16 @@ export class SubjectController {
     this.physicsController.dispose();
   }
 
-  private syncVisual(): void {
-    this.visualRoot.position.copyFrom(this.physicsController.getPosition());
+  private syncVisual(subjectOriginOverride?: Vector3): void {
+    if (subjectOriginOverride !== undefined) {
+      this.visualRoot.position.copyFrom(subjectOriginOverride);
+      return;
+    }
+    const center = this.physicsController.getPosition();
+    this.visualRoot.position.set(
+      center.x - this.colliderCenterOffsetFromSubjectOrigin.x,
+      center.y - this.colliderCenterOffsetFromSubjectOrigin.y,
+      center.z - this.colliderCenterOffsetFromSubjectOrigin.z,
+    );
   }
 }

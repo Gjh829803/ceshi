@@ -1,11 +1,13 @@
 import "./style.css";
+import { WORLDKIT_BROWSER_PROTOCOL_VERSION } from "@whitebox-world/runtime-contracts";
+
 import { CanvasRecorder } from "./canvas-recorder.js";
 import type {
   FeatureInspection,
   PlaygroundAutomationApi,
   PlaygroundWorldAdapter,
   WorldSnapshot,
-  WorldkitBrowserApiV2,
+  WorldkitBrowserApiV3,
 } from "./playground-world.js";
 import type { BabylonWorldAdapter } from "./babylon-world-adapter.js";
 
@@ -40,7 +42,7 @@ app.innerHTML = `
           <div class="hud" aria-live="polite">
             <div class="hud-card"><span>FPS</span><strong id="fps">—</strong></div>
             <div class="hud-card"><span>TICK</span><strong id="tick">0</strong></div>
-            <div class="hud-card hud-wide"><span>PLAYER</span><strong id="player-position">0.0 / 0.0 / 0.0</strong></div>
+            <div class="hud-card hud-wide"><span id="controlled-entity-label">PLAYER</span><strong id="player-position">0.0 / 0.0 / 0.0</strong></div>
             <div class="hud-card"><span>ACTION</span><strong id="player-action">IDLE</strong></div>
           </div>
           <div class="controls-card">
@@ -61,7 +63,7 @@ app.innerHTML = `
           <span><i class="dot terrain"></i> Terrain mesh</span>
           <span><i class="dot surface"></i> Water surface</span>
           <span><i class="dot collider"></i> Collider contract</span>
-          <span class="footer-note">Core · Rapier · SubjectKit · FeatureRegistry</span>
+          <span class="footer-note">Protocol · Subject Definition · Babylon · Havok</span>
         </footer>
       </div>
 
@@ -113,7 +115,7 @@ if (authoringMode) {
       throw error;
     };
     window.__WORLDKIT__ = {
-      version: 2,
+      version: WORLDKIT_BROWSER_PROTOCOL_VERSION,
       ready: () => Promise.reject(error),
       getSnapshot: fail,
       getDiagnostics: () => diagnostics,
@@ -221,6 +223,7 @@ function escapeHtml(value: string): string {
 function updateHud(snapshot: WorldSnapshot): void {
   requiredElement("#fps").textContent = String(snapshot.performance.fps || "—");
   requiredElement("#tick").textContent = String(snapshot.tick);
+  requiredElement("#controlled-entity-label").textContent = snapshot.player.entityId;
   requiredElement("#player-action").textContent = snapshot.player.action.toUpperCase();
   requiredElement("#player-position").textContent = snapshot.player.position
     .map(formatNumber)
@@ -258,8 +261,8 @@ window.__WHITEBOX_PLAYGROUND__ = automationApi;
 
 if (babylonAdapter !== null) {
   const runtimeAdapter = babylonAdapter;
-  const worldkitApi: WorldkitBrowserApiV2 = {
-    version: 2,
+  const worldkitApi: WorldkitBrowserApiV3 = {
+    version: WORLDKIT_BROWSER_PROTOCOL_VERSION,
     ready: async () => runtimeAdapter.runtimeSnapshot(),
     getSnapshot: () => runtimeAdapter.runtimeSnapshot(),
     getDiagnostics: () => [],

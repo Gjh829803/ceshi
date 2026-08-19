@@ -1,10 +1,10 @@
 import type {
   BindControlRequestV2,
   ControlBindingReceiptV2,
-  ExecutionPlanV2,
+  ExecutionPlanV3,
   FixedInputV1,
   SemanticInputActionV1,
-  WorldRuntimeSnapshotV2,
+  WorldRuntimeSnapshotV3,
 } from "@whitebox-world/runtime-contracts";
 import { BabylonWorldRuntime } from "@whitebox-world/runtime-babylon";
 
@@ -32,7 +32,7 @@ const KEY_ACTION_MAP: Readonly<Record<string, SemanticInputActionV1>> = {
   Space: "jump",
 };
 
-export function featureInspections(plan: ExecutionPlanV2): readonly FeatureInspection[] {
+export function featureInspections(plan: ExecutionPlanV3): readonly FeatureInspection[] {
   return [
     {
       id: plan.terrain.entityId,
@@ -41,9 +41,9 @@ export function featureInspections(plan: ExecutionPlanV2): readonly FeatureInspe
       seed: plan.seed,
       status: "ready",
       parameters: {
-        centerXZ: plan.terrain.centerXZ,
-        sizeXZ: plan.terrain.sizeXZ,
-        resolutionXZ: plan.terrain.resolutionXZ,
+        centerMetersXZ: plan.terrain.centerMetersXZ,
+        sizeMetersXZ: plan.terrain.sizeMetersXZ,
+        resolutionCellsXZ: plan.terrain.resolutionCellsXZ,
         heightSamplesHash: plan.terrain.heightSamplesHash,
       },
       resources: [
@@ -87,7 +87,8 @@ export function featureInspections(plan: ExecutionPlanV2): readonly FeatureInspe
       version: 1,
       status: "ready",
       parameters: {
-        kitRef: subject.kitRef,
+        subjectDefinitionRef: subject.subjectDefinitionRef,
+        subjectDefinitionHash: subject.subjectDefinitionHash,
         bodyTopology: subject.bodyTopology,
         semanticClassId: subject.semanticClassId,
         collider: subject.collider,
@@ -129,7 +130,7 @@ export class BabylonWorldAdapter implements PlaygroundWorldAdapter {
   private animationPending = false;
 
   private constructor(
-    private readonly executionPlan: ExecutionPlanV2,
+    private readonly executionPlan: ExecutionPlanV3,
     private readonly runtime: BabylonWorldRuntime,
     canvas: HTMLCanvasElement,
   ) {
@@ -144,7 +145,7 @@ export class BabylonWorldAdapter implements PlaygroundWorldAdapter {
     window.addEventListener("blur", this.handleBlur);
   }
 
-  static async create(executionPlan: ExecutionPlanV2): Promise<BabylonWorldAdapter> {
+  static async create(executionPlan: ExecutionPlanV3): Promise<BabylonWorldAdapter> {
     const canvas = document.createElement("canvas");
     const runtime = await BabylonWorldRuntime.create({
       executionPlan,
@@ -211,7 +212,7 @@ export class BabylonWorldAdapter implements PlaygroundWorldAdapter {
     return receipt;
   }
 
-  async runWorldkitFixedInput(steps: readonly FixedInputV1[]): Promise<WorldRuntimeSnapshotV2> {
+  async runWorldkitFixedInput(steps: readonly FixedInputV1[]): Promise<WorldRuntimeSnapshotV3> {
     const wasPaused = this.paused;
     this.paused = true;
     let snapshot = this.runtime.snapshot();
@@ -222,11 +223,11 @@ export class BabylonWorldAdapter implements PlaygroundWorldAdapter {
     return snapshot;
   }
 
-  runtimeSnapshot(): WorldRuntimeSnapshotV2 {
+  runtimeSnapshot(): WorldRuntimeSnapshotV3 {
     return this.runtime.snapshot();
   }
 
-  resetRuntime(): WorldRuntimeSnapshotV2 {
+  resetRuntime(): WorldRuntimeSnapshotV3 {
     const snapshot = this.runtime.reset();
     this.render();
     this.emit();
@@ -247,7 +248,7 @@ export class BabylonWorldAdapter implements PlaygroundWorldAdapter {
   }
 
   async exportOpeningFrame(): Promise<string> {
-    throw new Error("Opening-frame artifact export is not available for Canonical JSON V1.");
+    throw new Error("Opening-frame artifact export is not available for Canonical JSON V2.");
   }
 
   getWorldSpec(): null {
@@ -259,7 +260,7 @@ export class BabylonWorldAdapter implements PlaygroundWorldAdapter {
   }
 
   capturePlanningView(): string {
-    throw new Error("Planning views are not available for Canonical JSON V1.");
+    throw new Error("Planning views are not available for Canonical JSON V2.");
   }
 
   getVisualPrototypes(): readonly [] {
@@ -267,7 +268,7 @@ export class BabylonWorldAdapter implements PlaygroundWorldAdapter {
   }
 
   captureWhiteboxTriview(): string {
-    throw new Error("Prototype tri-view export is not available for Canonical JSON V1.");
+    throw new Error("Prototype tri-view export is not available for Canonical JSON V2.");
   }
 
   async exportWhiteboxTriviews(): Promise<readonly string[]> {
@@ -287,8 +288,8 @@ export class BabylonWorldAdapter implements PlaygroundWorldAdapter {
       );
     }
     const moving = Math.hypot(
-      controlledSubject.velocityMetersPerSecond[0],
-      controlledSubject.velocityMetersPerSecond[2],
+      controlledSubject.velocityMetersPerSecondXYZ[0],
+      controlledSubject.velocityMetersPerSecondXYZ[2],
     ) > 0.05;
     return {
       adapter: this.name,
@@ -299,11 +300,11 @@ export class BabylonWorldAdapter implements PlaygroundWorldAdapter {
         entityId: controlledSubject.entityId,
         action: moving ? "walk" : "idle",
         grounded: controlledSubject.movementMedium === "ground",
-        position: controlledSubject.positionMeters,
+        position: controlledSubject.positionMetersXYZ,
         rotationY: 0,
       },
       camera: {
-        position: snapshot.camera.positionMeters,
+        position: snapshot.camera.positionMetersXYZ,
         yaw: 0,
         pitch: this.executionPlan.camera.pitchRadians,
         distance: this.executionPlan.camera.distanceMeters,
