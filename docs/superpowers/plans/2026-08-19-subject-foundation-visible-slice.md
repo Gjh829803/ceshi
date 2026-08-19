@@ -23,10 +23,10 @@
 | 4 | Registered Subject compiler | Complete |
 | 5 | Babylon multi-subject runtime and control binding | Complete |
 | 6 | Browser Protocol V2 and Playground switching | Complete |
-| 7 | Multi-subject fixture, CLI, Playwright, documentation | Not started |
+| 7 | Multi-subject fixture, CLI, Playwright, documentation | Complete |
 | 8 | Completion audit and Relationship-slice handoff | Not started |
 
-**Current milestone:** Tasks 1-6 are complete; Task 7 multi-subject fixture, CLI, and end-to-end gate is in progress.
+**Current milestone:** Tasks 1-7 are complete; Task 8 completion audit and Relationship-slice handoff is in progress.
 
 **Latest verified baseline before implementation:** `pnpm typecheck`, 125 tests, production build, and `pnpm verify:v1` all pass on commit `8ccd219`.
 
@@ -663,7 +663,7 @@ git commit -m "feat: expose multi-subject browser protocol"
 - Produces: build artifact `schemaVersion: 2`, plural snapshot capture, and an E2E fixture that proves visual presence, physics, control switching, deterministic reset, and stable screenshot output.
 - Compatibility: CLI command names and exit codes remain unchanged.
 
-- [ ] **Step 1: Add the representative Canonical JSON fixture**
+- [x] **Step 1: Add the representative Canonical JSON fixture**
 
 Create a world containing:
 
@@ -671,11 +671,11 @@ Create a world containing:
 - `animal` using `worldkit://kit/quadruped.ground-proxy@1` with `spawnAnchorEntityId: "spawn-animal"`.
 - At least one wall between or near the subjects, one swimmable water boundary, one third-person camera initially targeting `player`, and sufficient collider/vertex/triangle budgets.
 
-- [ ] **Step 2: Migrate CLI serialization to V2**
+- [x] **Step 2: Migrate CLI serialization to V2**
 
 Update CLI TypeScript imports, capture return type, and build artifact `schemaVersion` to 2. The CLI must not add a `--subject` shortcut; control still flows through Browser `bindControl` and the Controller binding.
 
-- [ ] **Step 3: Extend the release verifier before implementation is considered complete**
+- [x] **Step 3: Extend the release verifier before implementation is considered complete**
 
 The Playwright gate must assert:
 
@@ -699,7 +699,7 @@ expect(moved.camera.targetEntityId).toBe("animal");
 
 Also retain strict invalid-input rejection, deterministic build hash, screenshot dimensions, Havok readiness, blocking wall collision, water transition, and reset coverage.
 
-- [ ] **Step 4: Document the explicit V1 to V2 migration**
+- [x] **Step 4: Document the explicit V1 to V2 migration**
 
 Add a migration table:
 
@@ -712,7 +712,7 @@ Add a migration table:
 
 State that `kitRef` is intentionally unchanged in this slice and is subject to a future versioned naming review.
 
-- [ ] **Step 5: Run all release gates**
+- [x] **Step 5: Run all release gates**
 
 Run: `pnpm typecheck`
 
@@ -730,11 +730,11 @@ Run: `pnpm verify:v1`
 
 Expected: PASS with strict parsing, deterministic V2 artifact, two subject IDs, Browser Protocol V2, Havok readiness, collision, water, control switching, reset, and screenshot gates. Keep the script name for command compatibility; document that it verifies Canonical Authoring V1 compiled to Runtime Protocol V2.
 
-- [ ] **Step 6: Inspect the generated screenshot**
+- [x] **Step 6: Inspect the generated screenshot**
 
 Open `artifacts/examples/basic-world/world.png` or the multi-subject output with the local image viewer. Confirm the humanoid and quadruped proxy are both visible, placed on terrain, not overlapping blockers, and framed by the controlled subject's camera. If composition fails, change only fixture placement or camera authoring values; do not add scene-specific runtime logic.
 
-- [ ] **Step 7: Commit the vertical slice**
+- [x] **Step 7: Commit the vertical slice**
 
 ```bash
 git add examples/authoring/multi-subject-world.json scripts docs/17-canonical-json-quickstart.md README.md

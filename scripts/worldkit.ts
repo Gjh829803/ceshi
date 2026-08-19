@@ -13,8 +13,8 @@ import {
 import { compileWorld } from "@whitebox-world/compiler";
 import type {
   CompileDiagnostic,
-  ExecutionPlanV1,
-  WorldRuntimeSnapshotV1,
+  ExecutionPlanV2,
+  WorldRuntimeSnapshotV2,
 } from "@whitebox-world/runtime-contracts";
 
 import {
@@ -69,7 +69,7 @@ export interface WorldkitCommandResult {
 interface PipelineSuccess {
   normalizedWorldIr: NormalizedWorldIRV1;
   normalizedWorldIrHash: string;
-  executionPlan: ExecutionPlanV1;
+  executionPlan: ExecutionPlanV2;
   executionPlanHash: string;
 }
 
@@ -235,7 +235,7 @@ export async function buildFile(inputPath: string, outputPath: string): Promise<
   if (isFailure(pipeline)) return pipeline;
   const artifact = {
     kind: "worldkit-build-artifact",
-    schemaVersion: 1,
+    schemaVersion: 2,
     normalizedWorldIrHash: pipeline.normalizedWorldIrHash,
     executionPlanHash: pipeline.executionPlanHash,
     normalizedWorldIr: pipeline.normalizedWorldIr,
@@ -301,7 +301,7 @@ export async function captureFile(
     const page = await browser.newPage({ viewport: { width: 1280, height: 720 }, deviceScaleFactor: 1 });
     await page.goto(server.url, { waitUntil: "domcontentloaded", timeout: 30_000 });
     await page.waitForFunction(() => window.__WORLDKIT__ !== undefined, undefined, { timeout: 30_000 });
-    const snapshot = await page.evaluate(async (): Promise<WorldRuntimeSnapshotV1> => {
+    const snapshot = await page.evaluate(async (): Promise<WorldRuntimeSnapshotV2> => {
       const api = window.__WORLDKIT__;
       if (api === undefined) throw new Error("WORLDKIT_BROWSER_PROTOCOL_MISSING");
       return api.ready();

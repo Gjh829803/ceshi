@@ -84,8 +84,13 @@ describe("worldkit CLI", () => {
     expect(firstBytes).toBe(secondBytes);
     expect(JSON.parse(firstBytes)).toMatchObject({
       kind: "worldkit-build-artifact",
-      schemaVersion: 1,
-      executionPlan: { runtimeBackend: "babylon-havok" },
+      schemaVersion: 2,
+      executionPlan: {
+        schemaVersion: 2,
+        runtimeBackend: "babylon-havok",
+        controlledEntityId: "player",
+        subjects: [expect.objectContaining({ entityId: "player" })],
+      },
     });
     expect(samePath).toMatchObject({
       ok: false,

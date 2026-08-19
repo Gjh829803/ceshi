@@ -1,6 +1,6 @@
 # Agent Whitebox World SDK
 
-一个面向 AI 的语义白膜游戏 SDK。当前同时保留 Three.js/Rapier Alpha 场景作为兼容回归样例，并交付了第一版 Canonical JSON 编译链路与 Babylon.js/Havok 运行时：其他程序只需生成严格 JSON，就能校验、编译、运行和截图一个带物理的室外白膜世界。
+一个面向 AI 的语义白膜游戏 SDK。当前同时保留 Three.js/Rapier Alpha 场景作为兼容回归样例，并已把 Canonical Authoring V1 扩展为 Registry-ready 的多主体链路：其他程序只需生成严格 JSON，就能校验、编译、运行、切换受控主体并截图一个带物理的室外白膜世界。
 
 > 第一次阅读请从[项目总览](docs/00-project-overview.md)开始。它区分了当前实现、实验能力和后续规划；其他文档中的目标 API 不代表已经交付。
 
@@ -8,8 +8,8 @@
 
 ```bash
 pnpm install
-pnpm worldkit validate examples/authoring/basic-world.json
-pnpm worldkit run examples/authoring/basic-world.json
+pnpm worldkit validate examples/authoring/multi-subject-world.json
+pnpm worldkit run examples/authoring/multi-subject-world.json
 ```
 
 用户通过一句话或图片提出创作需求，Planner、Builder 和 Visual Bible Agent 通过 SDK 工件接力生成世界；玩家操控确定性的 3D 游戏运行时；实时世界模型根据白膜、空间结构和语义条件生成最终视觉画面。
@@ -79,11 +79,11 @@ pnpm worldkit run examples/authoring/basic-world.json
 ### 重构实施计划与进度
 
 - [Canonical JSON Babylon V1 实施计划](docs/superpowers/plans/2026-08-18-canonical-json-babylon-v1.md)：已交付的第一条生产形态纵向切片，覆盖严格 JSON、NormalizedWorldIR、ExecutionPlan、Babylon/Havok、CLI、Browser Protocol 与 Playwright Gate。
-- [Subject Foundation 可视切片 TODO](docs/superpowers/plans/2026-08-19-subject-foundation-visible-slice.md)：当前进行中的多主体、可注入 Definition Registry、自动 Collider、复数 Snapshot 与控制切换任务；顶部进度表和任务复选框是实施状态真相。
+- [Subject Foundation 可视切片 TODO](docs/superpowers/plans/2026-08-19-subject-foundation-visible-slice.md)：多主体、可注入 Definition Registry、自动 Collider、复数 Snapshot 与控制切换的实施与验收记录；顶部进度表和任务复选框是实施状态真相。
 
 ## 当前状态
 
-Canonical JSON V1 当前已经具备：严格 JSON Schema、语义校验、确定性归一化与哈希、引擎无关 ExecutionPlan、Babylon.js 渲染、Havok Heightfield/静态障碍物/角色碰撞、水域检测、第三人称镜头、Browser Protocol，以及 `validate / build / run / capture` CLI。运行 `pnpm verify:v1` 可执行真实 Chromium 端到端验收。
+Canonical Authoring V1 当前已经具备：严格 JSON Schema、语义校验、可注入主体 Definition Registry、确定性归一化与哈希、引擎无关的复数 `ExecutionPlanV2`、Babylon.js 白模渲染、每主体独立 Havok Controller、Heightfield/静态障碍物/角色碰撞、水域检测、第三人称镜头、原子控制切换、Browser Protocol V2，以及 `validate / build / run / capture` CLI。运行 `pnpm verify:v1` 可执行真实 Chromium 端到端验收；命令名中的 V1 指 Authoring 输入版本。
 
 第一期 Alpha 已有可运行实现，但不等于第一期生产完成：
 
@@ -135,4 +135,4 @@ pnpm agent:visual -- --scene-id <id>
 
 测试数量以当前 `pnpm test` 输出为准；`typecheck`、生产构建和规划工件一致性均属于交付门禁。详细场景、近期反馈修正、自动验证边界和已知告警见[当前实验与验证记录](docs/10-current-experiments.md)。
 
-第二期的其他主体、更多动作和室内搭建尚未开始；NPC、完整玩法、Render Bridge、实时世界模型和 Runtime World Director 均属于后续范围。默认旧场景页面仍是本地 Three.js 白膜预览；`worldkit run` 启动的是新的 Babylon.js/Havok Canonical JSON 页面，两者都不是实时世界模型输出。
+Package 局部自定义主体 Definition、类型化 Relationship、坐骑/拖拽、装备、更多动作和室内搭建尚未开始；NPC、完整玩法、Render Bridge、实时世界模型和 Runtime World Director 均属于后续范围。当前 Quadruped 只是 Registry、白模组合和多 Controller 的代理验证。默认旧场景页面仍是本地 Three.js 白膜预览；`worldkit run` 启动的是 Babylon.js/Havok Canonical JSON 页面，两者都不是实时世界模型输出。
