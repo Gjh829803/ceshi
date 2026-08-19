@@ -34,7 +34,7 @@
 | 5. Definition Normalize/Hash/Lock | Complete | `6fabbfa` | 28 Authoring tests + typecheck |
 | 6. Runtime Contracts V3 | Complete | `3583f6e` | 4 focused tests + typecheck |
 | 7. Compiler V3 | Complete | `9453bfb` | 7 focused tests + dependency audit + typecheck |
-| 8. Babylon + Browser V3 | Not started | — | — |
+| 8. Babylon + Browser V3 | Complete | `59ad40a` | 15 focused tests + typecheck + Playground build |
 | 9. CLI Discovery/Explain | Not started | — | — |
 | 10. V2 Browser E2E | Not started | — | — |
 | 11. Docs and Audit | Not started | — | — |
@@ -861,7 +861,7 @@ function addVec3(left: Vec3, right: Vec3): Vec3;
 function moveRightForTicks(tickCount: number): FixedInputV1;
 ```
 
-- [ ] **Step 1: Write failing origin/controller tests**
+- [x] **Step 1: Write failing origin/controller tests**
 
 ```ts
 it("keeps Snapshot and Visual Root at Subject Origin", async () => {
@@ -897,25 +897,25 @@ it("reset restores origin, controller center, velocity, and camera", async () =>
 
 Use existing test-only engine/controller observability patterns; do not add debug methods to the Browser Protocol.
 
-- [ ] **Step 2: Run runtime tests and verify failure**
+- [x] **Step 2: Run runtime tests and verify failure**
 
 Run: `pnpm vitest run packages/runtime-babylon/src/runtime.test.ts apps/playground/src/authoring-loader.test.ts`
 
 Expected: FAIL because Runtime accepts V2 and exposes collider-center positions.
 
-- [ ] **Step 3: Map Origin to Controller Center**
+- [x] **Step 3: Map Origin to Controller Center**
 
 Initialize Havok at `origin + centerOffset`. On every sync, calculate `origin = controllerCenter - centerOffset` and place Visual Root there. Snapshot uses Origin; physics support and velocity still use the controller. Reset applies the same conversion.
 
-- [ ] **Step 4: Upgrade camera and subject visuals**
+- [x] **Step 4: Upgrade camera and subject visuals**
 
 Camera target is `subjectOrigin + [0, targetHeightMeters, 0]`. Render each resolved Primitive Part and preserve local transforms relative to Visual Root. Carry Socket data as runtime contract data without creating Babylon attachment nodes in S1a.
 
-- [ ] **Step 5: Upgrade Browser Protocol and Playground HUD**
+- [x] **Step 5: Upgrade Browser Protocol and Playground HUD**
 
 Expose version `3`, return SnapshotV3, and display `controlledEntityId` by looking up the plural subject state. Remove any V2-only type assertion; do not add a singular active-subject alias.
 
-- [ ] **Step 6: Run focused runtime and Playground tests**
+- [x] **Step 6: Run focused runtime and Playground tests**
 
 Run: `pnpm vitest run packages/runtime-babylon/src/runtime.test.ts apps/playground/src/authoring-loader.test.ts`
 
@@ -923,7 +923,7 @@ Run: `pnpm typecheck`
 
 Expected: focused tests and typecheck PASS except CLI tests updated in Task 9.
 
-- [ ] **Step 7: Commit**
+- [x] **Step 7: Commit**
 
 ```bash
 git add packages/runtime-babylon apps/playground/src
