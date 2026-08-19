@@ -14,6 +14,15 @@ describe("AuthoringSpecV1", () => {
     expect(result.diagnostics).toEqual([]);
   });
 
+  it("accepts the optional role-qualified subject spawn anchor field", () => {
+    const spec = createValidAuthoringSpec();
+    const subject = spec.nodes.find((node) => node.kind === "subject");
+    if (subject === undefined || subject.kind !== "subject") throw new Error("fixture subject missing");
+    subject.spawnAnchorEntityId = "spawn-main";
+
+    expect(validateAuthoringSpec(spec)).toEqual({ ok: true, value: spec, diagnostics: [] });
+  });
+
   it("rejects duplicate JSON object keys before schema validation", () => {
     const result = parseAuthoringSpecJson(
       '{"kind":"worldkit-authoring-spec","kind":"other"}',

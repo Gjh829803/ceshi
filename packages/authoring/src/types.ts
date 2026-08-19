@@ -1,3 +1,8 @@
+import type {
+  SubjectDefinitionRegistryV1,
+  SubjectKitDefinitionV1,
+} from "@whitebox-world/subject-registry";
+
 export type Vec2 = readonly [x: number, y: number];
 export type Vec3 = readonly [x: number, y: number, z: number];
 
@@ -23,6 +28,10 @@ export interface AuthoringResult<T> {
 
 export interface NormalizeAuthoringResult extends AuthoringResult<NormalizedWorldIRV1> {
   normalizedWorldIrHash?: string;
+}
+
+export interface NormalizeAuthoringOptionsV1 {
+  subjectDefinitionRegistry?: SubjectDefinitionRegistryV1;
 }
 
 export interface TransformSpecV1 {
@@ -102,6 +111,7 @@ export interface SubjectNodeSpecV1 {
   id: string;
   kind: "subject";
   kitRef: string;
+  spawnAnchorEntityId?: string;
 }
 
 export interface CameraNodeSpecV1 {
@@ -227,7 +237,7 @@ export type NormalizedWorldNodeV1 =
       };
     })
   | (Omit<ObjectNodeSpecV1, "transform"> & { transform: NormalizedTransformV1 })
-  | SubjectNodeSpecV1
+  | (Omit<SubjectNodeSpecV1, "spawnAnchorEntityId"> & { spawnAnchorEntityId: string })
   | CameraNodeSpecV1
   | (Omit<AnchorNodeSpecV1, "transform"> & { transform: NormalizedTransformV1 });
 
@@ -243,7 +253,10 @@ export interface NormalizedWorldIRV1 {
   seed: number;
   provenance?: AuthoringSpecV1["provenance"];
   world: AuthoringSpecV1["world"];
-  resources: { prototypes: readonly PrimitivePrototypeSpecV1[] };
+  resources: {
+    prototypes: readonly PrimitivePrototypeSpecV1[];
+    subjectDefinitions: readonly SubjectKitDefinitionV1[];
+  };
   nodes: readonly NormalizedWorldNodeV1[];
   startup: AuthoringSpecV1["startup"];
 }

@@ -18,7 +18,7 @@
 |---:|---|---|
 | 0 | Extensible Subject Authoring dedicated design | Complete |
 | 1 | Engine-neutral Subject Kit Registry | Complete |
-| 2 | Multi-subject Authoring validation and normalization | Not started |
+| 2 | Multi-subject Authoring validation and normalization | Complete |
 | 3 | Versioned plural Execution and Runtime contracts | Not started |
 | 4 | Registered Subject compiler | Not started |
 | 5 | Babylon multi-subject runtime and control binding | Not started |
@@ -26,7 +26,7 @@
 | 7 | Multi-subject fixture, CLI, Playwright, documentation | Not started |
 | 8 | Completion audit and Relationship-slice handoff | Not started |
 
-**Current milestone:** Task 1 is complete; Task 2 multi-subject Authoring validation and normalization is in progress.
+**Current milestone:** Tasks 1-2 are complete; Task 3 plural execution and runtime contracts is next.
 
 **Latest verified baseline before implementation:** `pnpm typecheck`, 125 tests, production build, and `pnpm verify:v1` all pass on commit `8ccd219`.
 
@@ -189,7 +189,7 @@ git commit -m "feat: add built-in subject kit registry"
 - Produces: source-compatible `SubjectNodeSpecV1.spawnAnchorEntityId?: string`, `NormalizeAuthoringOptionsV1.subjectDefinitionRegistry?`, normalized subject nodes where `spawnAnchorEntityId` is always present, and `NormalizedWorldIRV1.resources.subjectDefinitions` containing each resolved definition once.
 - Invariant: `NormalizedWorldIRV1` contains one or more subjects, each with a resolved Anchor Entity ID and a `kitRef` present in the normalized resource table.
 
-- [ ] **Step 1: Add failing authoring tests**
+- [x] **Step 1: Add failing authoring tests**
 
 ```ts
 it("normalizes multiple registered subjects with explicit spawn anchors", () => {
@@ -215,17 +215,17 @@ it("rejects an additional subject without a spawn anchor", () => {
 });
 ```
 
-- [ ] **Step 2: Run focused tests and confirm the new cases fail**
+- [x] **Step 2: Run focused tests and confirm the new cases fail**
 
 Run: `pnpm vitest run packages/authoring/src/authoring.test.ts packages/authoring/src/normalize.test.ts`
 
 Expected: FAIL because `spawnAnchorEntityId` is not in the closed Schema and the quadruped Kit is not accepted.
 
-- [ ] **Step 3: Extend the closed Schema without changing existing input**
+- [x] **Step 3: Extend the closed Schema without changing existing input**
 
 Add optional `spawnAnchorEntityId` to `$defs.subjectNode`. Do not add `presetRef`, inline collider fields, movement fields, visual parts, or provider-specific handles.
 
-- [ ] **Step 4: Resolve Kit and Anchor semantics**
+- [x] **Step 4: Resolve Kit and Anchor semantics**
 
 For each subject:
 
@@ -236,7 +236,7 @@ For each subject:
 5. Copy every referenced Definition into `normalized.resources.subjectDefinitions`, deduplicate by `kitRef`, and sort by `kitRef` before hashing.
 6. Preserve deterministic node sorting by `id`.
 
-- [ ] **Step 5: Run authoring, normalization, and full type checks**
+- [x] **Step 5: Run authoring, normalization, and full type checks**
 
 Run: `pnpm vitest run packages/authoring/src/authoring.test.ts packages/authoring/src/normalize.test.ts`
 
@@ -246,7 +246,7 @@ Run: `pnpm typecheck`
 
 Expected: PASS.
 
-- [ ] **Step 6: Commit the Authoring extension**
+- [x] **Step 6: Commit the Authoring extension**
 
 ```bash
 git add packages/authoring

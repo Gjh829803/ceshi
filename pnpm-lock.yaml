@@ -120,6 +120,9 @@ importers:
       '@noble/hashes':
         specifier: ^1.8.0
         version: 1.8.0
+      '@whitebox-world/subject-registry':
+        specifier: workspace:*
+        version: link:../subject-registry
       ajv:
         specifier: ^8.17.1
         version: 8.20.0
@@ -194,6 +197,8 @@ importers:
         version: link:../compiler
 
   packages/runtime-contracts: {}
+
+  packages/subject-registry: {}
 
   packages/subjects:
     dependencies:

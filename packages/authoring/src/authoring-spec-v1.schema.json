@@ -297,7 +297,8 @@
       "properties": {
         "id": { "$ref": "#/$defs/id" },
         "kind": { "const": "subject" },
-        "kitRef": { "$ref": "#/$defs/resourceRef" }
+        "kitRef": { "$ref": "#/$defs/resourceRef" },
+        "spawnAnchorEntityId": { "$ref": "#/$defs/id" }
       }
     },
     "cameraNode": {

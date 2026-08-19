@@ -1,7 +1,14 @@
+import {
+  builtInSubjectDefinitionRegistry,
+  type SubjectDefinitionRegistryV1,
+  type SubjectKitDefinitionV1,
+} from "@whitebox-world/subject-registry";
+
 import { sha256CanonicalJson } from "./canonical-json";
 import type {
   AuthoringDiagnostic,
   AuthoringSpecV1,
+  NormalizeAuthoringOptionsV1,
   NormalizeAuthoringResult,
   NormalizedProceduralTerrainSourceV1,
   NormalizedTransformV1,
@@ -12,7 +19,6 @@ import type {
 } from "./types";
 import { validateAuthoringSpec } from "./validate";
 
-const SUPPORTED_KIT = "worldkit://kit/humanoid.third-person@1";
 const SUPPORTED_CAMERA_RIG = "worldkit://camera/third-person.standard@1";
 
 const RELIEF_DEFAULTS: Readonly<
@@ -127,7 +133,10 @@ function normalizeSource(source: ProceduralTerrainSourceSpecV1): NormalizedProce
   };
 }
 
-function normalizeNode(node: WorldNodeSpecV1): NormalizedWorldNodeV1 {
+function normalizeNode(
+  node: WorldNodeSpecV1,
+  startup: AuthoringSpecV1["startup"],
+): NormalizedWorldNodeV1 {
   switch (node.kind) {
     case "terrain":
       return {
@@ -154,14 +163,36 @@ function normalizeNode(node: WorldNodeSpecV1): NormalizedWorldNodeV1 {
       return { ...structuredClone(node), transform: normalizeTransform(node.transform) };
     case "anchor":
       return { ...structuredClone(node), transform: normalizeTransform(node.transform) };
-    case "subject":
+    case "subject": {
+      const spawnAnchorEntityId =
+        node.spawnAnchorEntityId ??
+        (node.id === startup.controlledEntityId ? startup.spawnAnchorId : undefined);
+      if (spawnAnchorEntityId === undefined) {
+        throw new Error(
+          `NormalizedWorldIR invariant violated: subject '${node.id}' has no spawn anchor.`,
+        );
+      }
+      return {
+        ...structuredClone(node),
+        spawnAnchorEntityId,
+      };
+    }
     case "camera":
       return structuredClone(node);
   }
 }
 
-function validateSemantics(spec: AuthoringSpecV1): AuthoringDiagnostic[] {
+interface SemanticValidationResult {
+  diagnostics: AuthoringDiagnostic[];
+  subjectDefinitions: SubjectKitDefinitionV1[];
+}
+
+function validateSemantics(
+  spec: AuthoringSpecV1,
+  subjectDefinitionRegistry: SubjectDefinitionRegistryV1,
+): SemanticValidationResult {
   const diagnostics: AuthoringDiagnostic[] = [];
+  const subjectDefinitionsByRef = new Map<string, SubjectKitDefinitionV1>();
   const prototypes = buildUniqueIndex(spec.resources.prototypes, "/resources/prototypes", diagnostics);
   const nodes = buildUniqueIndex(spec.nodes, "/nodes", diagnostics);
 
@@ -219,14 +250,42 @@ function validateSemantics(spec: AuthoringSpecV1): AuthoringDiagnostic[] {
         `/nodes/${index}/components/water/terrainEntityId`,
         diagnostics,
       );
-    } else if (node.kind === "subject" && node.kitRef !== SUPPORTED_KIT) {
-      error(
-        diagnostics,
-        "AUTHORING_RESOURCE_NOT_SUPPORTED",
-        `/nodes/${index}/kitRef`,
-        `Kit '${node.kitRef}' is not supported by the V1 runtime.`,
-        { supported: [SUPPORTED_KIT] },
-      );
+    } else if (node.kind === "subject") {
+      const definition = subjectDefinitionRegistry.resolve(node.kitRef);
+      if (definition === undefined) {
+        error(
+          diagnostics,
+          "AUTHORING_RESOURCE_NOT_SUPPORTED",
+          `/nodes/${index}/kitRef`,
+          `Kit '${node.kitRef}' is not registered.`,
+          {
+            supportedKitRefs: subjectDefinitionRegistry
+              .list()
+              .map((candidate) => candidate.kitRef)
+              .sort((left, right) => left.localeCompare(right)),
+          },
+        );
+      } else {
+        subjectDefinitionsByRef.set(definition.kitRef, definition);
+      }
+
+      if (node.spawnAnchorEntityId !== undefined) {
+        requireNodeKind(
+          nodes,
+          node.spawnAnchorEntityId,
+          "anchor",
+          `/nodes/${index}/spawnAnchorEntityId`,
+          diagnostics,
+        );
+      } else if (node.id !== spec.startup.controlledEntityId) {
+        error(
+          diagnostics,
+          "AUTHORING_SUBJECT_SPAWN_REQUIRED",
+          `/nodes/${index}/spawnAnchorEntityId`,
+          "Every subject except the startup controlled subject must declare spawnAnchorEntityId.",
+          { subjectEntityId: node.id },
+        );
+      }
     } else if (node.kind === "camera") {
       const rig = node.components.cameraRig;
       if (rig.defaultRigRef !== SUPPORTED_CAMERA_RIG || rig.allowedRigRefs.some((ref) => ref !== SUPPORTED_CAMERA_RIG)) {
@@ -302,16 +361,27 @@ function validateSemantics(spec: AuthoringSpecV1): AuthoringDiagnostic[] {
       "heightRangeMeters minimum must be less than maximum.",
     );
   }
-  return diagnostics;
+  return {
+    diagnostics,
+    subjectDefinitions: [...subjectDefinitionsByRef.values()].sort((left, right) =>
+      left.kitRef.localeCompare(right.kitRef),
+    ),
+  };
 }
 
-export function normalizeAuthoringSpec(value: unknown): NormalizeAuthoringResult {
+export function normalizeAuthoringSpec(
+  value: unknown,
+  options: NormalizeAuthoringOptionsV1 = {},
+): NormalizeAuthoringResult {
   const schemaResult = validateAuthoringSpec(value);
   if (!schemaResult.ok || schemaResult.value === undefined) {
     return { ok: false, diagnostics: schemaResult.diagnostics };
   }
 
-  const diagnostics = validateSemantics(schemaResult.value);
+  const { diagnostics, subjectDefinitions } = validateSemantics(
+    schemaResult.value,
+    options.subjectDefinitionRegistry ?? builtInSubjectDefinitionRegistry,
+  );
   if (diagnostics.some((diagnostic) => diagnostic.severity === "error")) {
     return { ok: false, diagnostics };
   }
@@ -328,10 +398,11 @@ export function normalizeAuthoringSpec(value: unknown): NormalizeAuthoringResult
       prototypes: [...spec.resources.prototypes]
         .sort((left, right) => left.id.localeCompare(right.id))
         .map((prototype) => structuredClone(prototype)),
+      subjectDefinitions: subjectDefinitions.map((definition) => structuredClone(definition)),
     },
     nodes: [...spec.nodes]
       .sort((left, right) => left.id.localeCompare(right.id))
-      .map(normalizeNode),
+      .map((node) => normalizeNode(node, spec.startup)),
     startup: structuredClone(spec.startup),
   };
   return {
