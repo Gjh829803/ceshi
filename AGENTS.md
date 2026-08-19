@@ -17,7 +17,7 @@ Apply these rules whenever adding or changing public Authoring Schema, Registry 
 - Put units and coordinate domains in numeric field names, including `Meters`, `Seconds`, `Radians`, `Degrees`, `Ticks`, `Ratio`, `Bytes`, `XYZ`, `XZ`, and `Uv`. Do not rely on surrounding prose to disambiguate units.
 - Prefer required discriminators, closed enums, and discriminated unions over combinations of overlapping optional flags. Collections use plural names, ID-indexed maps use `...ById`, and booleans use `is...`, `has...`, `allow...`, or an explicit `...Enabled` suffix.
 - Canonical Schema, AI Schema Profile, CLI, Browser Protocol, examples, and generated types use the same public field names. Babylon, Havok, renderer handles, and provider-specific terminology stay behind adapters.
-- A public rename must update the authoritative Schema, examples, validation, migration, and conformance coverage together. Preserve compatibility through explicit version migration, not permanent alias fields.
+- A released or externally adopted public rename must update the authoritative Schema, examples, validation, migration, and conformance coverage together. Preserve that compatibility through explicit version migration, not permanent alias fields. For an unreleased private Schema, an explicitly approved clean break may delete the old version and rewrite all local fixtures/artifacts instead of creating migration code solely for development history.
 
 ## Agent roles and frozen boundary
 

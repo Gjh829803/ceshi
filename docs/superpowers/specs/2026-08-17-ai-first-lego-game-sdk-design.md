@@ -201,17 +201,8 @@ apps/
 {
   "id": "player",
   "kind": "subject",
-  "kitRef": "humanoid.third-person@1",
-  "profiles": {
-    "bodyProfileRef": "humanoid.adult@1",
-    "visualProfileRef": "traveler-red-coat@3",
-    "rigProfileRef": "humanoid.biped@1",
-    "animationSetRef": "humanoid-standard-actions@2"
-  },
-  "transform": {
-    "positionMeters": [0, 22, 40],
-    "facingRadians": 0
-  }
+  "subjectDefinitionRef": "worldkit://subject-definition/humanoid.third-person@1",
+  "spawnAnchorEntityId": "spawn-player"
 }
 ```
 
@@ -481,7 +472,7 @@ AI-facing 节点种类保持有限，后续主要通过 Component、Capability �
 {
   "id": "player",
   "kind": "subject",
-  "kitRef": "humanoid.third-person@1",
+  "subjectDefinitionRef": "worldkit://subject-definition/humanoid.third-person@1",
   "loadout": {
     "right-hand": {
       "id": "sword-1",
@@ -2023,6 +2014,7 @@ SHA-256(canonical-json-jcs@1({
 
 规则：
 
+- 以下兼容规则适用于已经发布或被外部调用方采用的协议；未发布私有 Schema 经明确评审后可以干净替换，并同步重写全部本地 Fixture/Artifact，而不为开发历史增加迁移代码。
 - Patch/Minor 不能改变相同 NormalizedWorldIR 的既有语义。
 - 破坏性 Schema 变化增加 Major Version，并提供显式迁移器。
 - `normalize` 固定所有插件版本，禁止运行时静默选择最新版本。

@@ -4,7 +4,7 @@
 
 **Goal:** Ship AuthoringSpecV2 so one Canonical JSON world can define a reusable Package-local primitive Subject Definition, spawn multiple independently controlled instances, and inspect the deterministic Definition/Collider/Resource Lock through CLI and Babylon/Havok runtime artifacts.
 
-**Architecture:** Extract Canonical JSON hashing into a dependency-neutral protocol package, add an engine-neutral subject-composition package, and expand the immutable subject registry into exact-version resource resolution. Authoring migrates V1 to canonical V2 and materializes fully resolved NormalizedWorldIRV2; Compiler and Babylon consume only versioned resolved contracts, with Subject Origin separated from the internal Havok collider center.
+**Architecture:** Extract Canonical JSON hashing into a dependency-neutral protocol package, add an engine-neutral subject-composition package, and expand the immutable subject registry into exact-version resource resolution. Authoring V2 fully replaces the unpublished V1 and materializes resolved NormalizedWorldIRV2; Compiler and Babylon consume only versioned resolved contracts, with Subject Origin separated from the internal Havok collider center.
 
 **Tech Stack:** TypeScript 5.9, JSON Schema 2020-12, Ajv, noble hashes, Vitest, Babylon.js 9, Havok WASM, Vite, Playwright, pnpm workspaces.
 
@@ -12,7 +12,7 @@
 
 ## Global Constraints
 
-- Public V2 uses only `subjectDefinitionRef`; `kitRef` exists only in the V1 schema and V1-to-V2 migration.
+- Public V2 uses only `subjectDefinitionRef`; `kitRef` and V1 migration do not exist in the completed repository.
 - Package Definition references are exactly `package://subject-definition/<id>@<version>`; Registry references are exactly `worldkit://subject-definition/<id>@<version>`.
 - Authoring cannot provide computed Definition hashes, resolved Profile values, collider results, or resource costs.
 - Subject Origin is `support-center`; Visual Root, Socket transforms, Camera target, and Snapshot positions use that origin.
@@ -20,7 +20,7 @@
 - Normalizer may resolve Registry resources; Compiler and Runtime may not query Registry or inspect Authoring input.
 - Runtime-facing contracts contain no Babylon, Havok, DOM, or in-process object handles.
 - S1a supports primitive whitebox ground-character proxies only; no GLB, Compound Collider, Relationship, mount, equipment, vehicle, animation, NPC behavior, or flight claims.
-- Every public rename updates Schema, TypeScript, examples, validation, migration, CLI, Browser Protocol, and conformance coverage in the same slice.
+- Every public rename updates Schema, TypeScript, examples, validation, CLI, Browser Protocol, and conformance coverage in the same slice.
 - Use strict discriminated unions, closed enums, unit-bearing numeric names, stable ordering, exact-version refs, and structured Diagnostics.
 
 ## Progress
@@ -30,7 +30,7 @@
 | 1. Shared Canonical Protocol | Not started | — | — |
 | 2. Subject Composition | Not started | — | — |
 | 3. Subject Resource Registry | Not started | — | — |
-| 4. AuthoringSpecV2 + Migration | Not started | — | — |
+| 4. Clean AuthoringSpecV2 | Not started | — | — |
 | 5. Definition Normalize/Hash/Lock | Not started | — | — |
 | 6. Runtime Contracts V3 | Not started | — | — |
 | 7. Compiler V3 | Not started | — | — |
@@ -51,7 +51,7 @@
 ### Existing package responsibility changes
 
 - `packages/subject-registry/`: canonical built-in Subject Definitions plus Capability/Profile/Derivation manifests and exact immutable resolution.
-- `packages/authoring/`: V1/V2 schemas, source-version parser, explicit migration, Package Definition validation, Definition resolution, Definition Hash, Resource Lock, and NormalizedWorldIRV2.
+- `packages/authoring/`: the only Authoring V2 schema, strict parser, Package Definition validation, Definition resolution, Definition Hash, Resource Lock, and NormalizedWorldIRV2.
 - `packages/runtime-contracts/`: ExecutionPlanV3, RuntimeSnapshotV3, Browser Protocol V3 data types.
 - `packages/compiler/`: stable materialization from NormalizedWorldIRV2 into ExecutionPlanV3.
 - `packages/runtime-babylon/`: map Subject Origin to Havok Character Controller center and back.
@@ -285,21 +285,18 @@ export function createSubjectResourceRegistry(
   resources: readonly SubjectRegistryResourceInputV1[],
 ): SubjectResourceRegistryV2;
 ```
-- Staging rule: keep the S0 Registry exports intact during Tasks 3–8 so every intermediate commit typechecks; Task 9 removes them after all consumers use V2 resources. These are temporary implementation staging, not V2 aliases.
+- Worktree-only staging rule: S0 Registry exports may remain during Tasks 3–8 only so intermediate commits typecheck. No compatibility tests or fallback resolution are added, the branch must not integrate in that state, and Task 9 deletes the old exports before the full gate.
 
 - [ ] **Step 1: Replace S0 registry tests with canonical resource tests**
 
 ```ts
-it("exposes canonical subject-definition refs without kit aliases", () => {
+it("exposes canonical subject-definition refs", () => {
   expect(builtInSubjectResourceRegistry.listSubjectDefinitions().map(
     (definition) => definition.subjectDefinitionRef,
   )).toEqual([
     "worldkit://subject-definition/humanoid.third-person@1",
     "worldkit://subject-definition/quadruped.ground-proxy@1",
   ]);
-  expect(builtInSubjectResourceRegistry.resolveSubjectDefinition(
-    "worldkit://kit/humanoid.third-person@1",
-  )).toBeUndefined();
 });
 
 it("locks every immutable manifest with canonical content hash", () => {
@@ -354,92 +351,86 @@ git commit -m "feat: register versioned subject resources"
 
 ---
 
-### Task 4: AuthoringSpecV2 Schema and V1 Migration
+### Task 4: Clean AuthoringSpecV2 Schema
 
 **Files:**
 - Create: `packages/authoring/src/authoring-spec-v2.schema.json`
 - Create: `packages/authoring/src/subject-definition-v1.schema.json`
-- Create: `packages/authoring/src/migrate.ts`
 - Modify: `packages/authoring/src/types.ts`
 - Modify: `packages/authoring/src/validate.ts`
 - Modify: `packages/authoring/src/parse.ts`
 - Modify: `packages/authoring/src/index.ts`
 - Modify: `packages/authoring/package.json`
 - Modify: `packages/authoring/src/authoring.test.ts`
-- Create: `packages/authoring/src/migrate.test.ts`
 - Modify: `packages/authoring/src/test-fixture.ts`
 
 **Interfaces:**
-- Consumes: strict V1 documents and new V2 Package Definition Schema.
+- Consumes: strict JSON whose only accepted root protocol version is AuthoringSpecV2.
 - Produces:
 
 ```ts
-export function validateAuthoringSpecV1(value: unknown): AuthoringResult<AuthoringSpecV1>;
 export function validateAuthoringSpecV2(value: unknown): AuthoringResult<AuthoringSpecV2>;
 export function validatePackageSubjectDefinitionV1(
   value: unknown,
 ): AuthoringResult<PackageSubjectDefinitionV1>;
-export function migrateAuthoringSpecV1ToV2(value: AuthoringSpecV1): AuthoringSpecV2;
 export function parseAuthoringSpecJsonV2(sourceText: string): AuthoringResult<AuthoringSpecV2>;
 
-export function createValidAuthoringSpecV1(): AuthoringSpecV1;
 export function createValidAuthoringSpecV2(): AuthoringSpecV2;
 export function createValidPackageSubjectWorldV2(options?: {
   reverseDefinitionCollections?: boolean;
   bodyWidthMeters?: number;
 }): AuthoringSpecV2;
 ```
-- Staging rule: existing S0 `parseAuthoringSpecJson` stays unchanged through Task 8 so downstream commits remain green. Task 9 switches the versionless public parser to the V2 dispatch function and removes obsolete normalized/runtime S0 contracts.
+- Worktree staging rule: existing S0 consumers may stay unchanged through Task 8 only to keep intermediate commits buildable. No V1 parser, migration API, compatibility test, or old-field fallback is added; Task 9 deletes all obsolete S0 surfaces before integration.
 
-- [ ] **Step 1: Write failing V2 and migration tests**
+- [ ] **Step 1: Write failing clean-break V2 tests**
 
 ```ts
-it("migrates V1 kit refs into the only canonical V2 field", () => {
-  const migrated = migrateAuthoringSpecV1ToV2(createValidAuthoringSpecV1());
-  const subject = migrated.nodes.find((node) => node.kind === "subject");
-  expect(migrated.schemaVersion).toBe(2);
-  expect(migrated.resources.subjectDefinitions).toEqual([]);
-  expect(subject).toMatchObject({
-    subjectDefinitionRef: "worldkit://subject-definition/humanoid.third-person@1",
-  });
-  expect(subject).not.toHaveProperty("kitRef");
-});
-
-it("rejects kitRef in AuthoringSpecV2", () => {
+it("rejects unknown Subject fields in AuthoringSpecV2", () => {
   const spec = createValidAuthoringSpecV2();
   const subject = spec.nodes.find((node) => node.kind === "subject")!;
   const result = validateAuthoringSpecV2({
     ...spec,
-    nodes: [{ ...subject, kitRef: "worldkit://kit/humanoid.third-person@1" }],
+    nodes: [{ ...subject, unexpectedSubjectField: true }],
   });
   expect(result).toMatchObject({ ok: false });
 });
 
-it("dispatches by source schema version and returns canonical V2", () => {
-  const parsed = parseAuthoringSpecJsonV2(JSON.stringify(createValidAuthoringSpecV1()));
-  expect(parsed).toMatchObject({ ok: true, value: { schemaVersion: 2 } });
+it("rejects the unpublished schemaVersion 1 instead of migrating it", () => {
+  const parsed = parseAuthoringSpecJsonV2(JSON.stringify({
+    ...createValidAuthoringSpecV2(),
+    schemaVersion: 1,
+  }));
+  expect(parsed).toMatchObject({
+    ok: false,
+    diagnostics: [{
+      code: "AUTHORING_SCHEMA_VERSION_NOT_SUPPORTED",
+      instancePath: "/schemaVersion",
+      details: { supportedSchemaVersions: [2] },
+    }],
+  });
 });
 ```
 
-Also test unsupported Schema Version, migration idempotence at the parse boundary, duplicate JSON keys before version dispatch, and attempts to author computed fields.
+Also test duplicate JSON keys before Schema validation, unsupported non-integer versions, unknown V2 fields, invalid resource refs, and attempts to author computed fields.
 
 - [ ] **Step 2: Run Authoring tests and verify failure**
 
-Run: `pnpm vitest run packages/authoring/src/authoring.test.ts packages/authoring/src/migrate.test.ts`
+Run: `pnpm vitest run packages/authoring/src/authoring.test.ts`
 
-Expected: FAIL because V2 schema/types and migration do not exist.
+Expected: FAIL because the V2 schema and types do not exist.
 
 - [ ] **Step 3: Add V2 TypeScript discriminated types**
 
-Define the exact interfaces from the S1a spec. `AuthoringSpecV2.resources` requires both `prototypes` and `subjectDefinitions`; `SubjectNodeSpecV2` requires `subjectDefinitionRef`. Keep `AuthoringSpecV1` only as the migration source type.
+Define the exact interfaces from the S1a spec. `AuthoringSpecV2.resources` requires both `prototypes` and `subjectDefinitions`; `SubjectNodeSpecV2` requires `subjectDefinitionRef`. Keep old types only as untouched worktree staging needed by S0 consumers; do not export them from any V2 API or add compatibility behavior. Task 9 deletes them before integration.
 
 - [ ] **Step 4: Add strict V2 and standalone Definition JSON Schemas**
 
 Use `additionalProperties: false` at every object boundary, closed enum values, finite/positive numeric constraints, unique list values where JSON equality is sufficient, and conditional Shape requirements. V2 Subject nodes must not mention `kitRef`. Definition schema must not define computed Hash, Lock, derived Collider, or resource-cost fields.
 
-- [ ] **Step 5: Implement source-version parse and migration**
+- [ ] **Step 5: Implement the V2-only parser**
 
-After syntax/duplicate-key checks, inspect only `kind` and integer `schemaVersion`. Validate with the matching source schema, migrate V1 with a total switch for the two old Kit refs, validate the resulting V2 document again, and return:
+After syntax/duplicate-key checks, require exact `kind` and integer `schemaVersion: 2`, then validate the V2 Canonical Schema. Any other version returns:
 
 ```ts
 {
@@ -447,13 +438,13 @@ After syntax/duplicate-key checks, inspect only `kind` and integer `schemaVersio
   code: "AUTHORING_SCHEMA_VERSION_NOT_SUPPORTED",
   instancePath: "/schemaVersion",
   message: `Authoring schema version '${String(version)}' is not supported.`,
-  details: { supportedSchemaVersions: [1, 2] },
+  details: { supportedSchemaVersions: [2] },
 }
 ```
 
 - [ ] **Step 6: Run focused tests and schema export checks**
 
-Run: `pnpm vitest run packages/authoring/src/authoring.test.ts packages/authoring/src/migrate.test.ts`
+Run: `pnpm vitest run packages/authoring/src/authoring.test.ts`
 
 Run: `pnpm typecheck`
 
@@ -463,7 +454,7 @@ Expected: focused tests and repository typecheck PASS because the V2 parser is a
 
 ```bash
 git add packages/authoring
-git commit -m "feat: add authoring v2 migration boundary"
+git commit -m "feat: define canonical authoring v2"
 ```
 
 ---
@@ -612,7 +603,7 @@ git commit -m "feat: normalize package subject definitions"
 - Consumes: Normalized Definition identity and origin/collider offset semantics.
 - Produces `ExecutionSubjectV3`, `ExecutionPlanV3`, `SubjectRuntimeStateV3`, `WorldRuntimeSnapshotV3`, and `WorldkitBrowserApiV3` data contracts.
 - Preserves: `BindControlRequestV2` and its receipt because their structure and semantics do not change.
-- Staging rule: V2 execution/snapshot types remain exported through Task 8 for green intermediate commits; Task 9 removes V2 types containing `kitRef` after every consumer is on V3.
+- Worktree-only staging rule: old execution/snapshot types may remain through Task 8 only for green intermediate commits. They receive no compatibility tests or new behavior, the branch must not integrate in that state, and Task 9 deletes every old type containing `kitRef`.
 
 ```ts
 export interface SubjectRuntimeStateV3 {
@@ -682,7 +673,6 @@ it("separates Subject Origin from collider center in ExecutionSubjectV3", () => 
       centerOffsetFromSubjectOriginMetersXYZ: [0, 0.7, 0],
     },
   });
-  expect(subject).not.toHaveProperty("kitRef");
   expect(subject).not.toHaveProperty("spawnPositionMeters");
 });
 
@@ -947,6 +937,7 @@ git commit -m "feat: run subjects from support origin"
 **Files:**
 - Create: `scripts/lib/worldkit-pipeline.ts`
 - Create: `scripts/lib/subject-explain.ts`
+- Modify: `package.json`
 - Modify: `scripts/worldkit.ts`
 - Modify: `scripts/worldkit.test.ts`
 - Modify: `scripts/verify-canonical-world.ts`
@@ -954,6 +945,7 @@ git commit -m "feat: run subjects from support origin"
 - Modify: `packages/authoring/src/parse.ts`
 - Modify: `packages/authoring/src/normalize.ts`
 - Modify: `packages/authoring/src/types.ts`
+- Delete: `packages/authoring/src/authoring-spec-v1.schema.json`
 - Modify: `packages/subject-registry/src/index.ts`
 - Delete: `packages/subject-registry/src/built-in-subject-kits.ts`
 - Modify: `packages/runtime-contracts/src/execution-plan.ts`
@@ -973,11 +965,13 @@ worldkit subject explain <world-file> --entity-id <id> --json
 ```
 
 - Produces `WorldBuildArtifactV3` with NormalizedWorldIRV2 and ExecutionPlanV3.
-- Finalizes versionless APIs: `parseAuthoringSpecJson`, `normalizeAuthoringSpec`, and `compileWorld` become the canonical V2/V2/V3 pipeline. Explicit `AuthoringSpecV1` validation and migration remain; obsolete S0 normalized, registry, compiler, and runtime types containing `kitRef` are removed.
+- Finalizes versionless APIs: `parseAuthoringSpecJson`, `normalizeAuthoringSpec`, and `compileWorld` become the only canonical V2/V2/V3 pipeline. All obsolete S0 Authoring, normalized, registry, compiler, and runtime types containing `kitRef` are removed.
 
 - [ ] **Step 1: Write failing argument and JSON output tests**
 
 ```ts
+const packageWorldPath = path.resolve("examples/authoring/package-subject-world.json");
+
 it("parses discovery and explain commands without positional guessing", () => {
   expect(parseWorldkitArgs([
     "registry", "describe", "--resource-ref",
@@ -1023,7 +1017,7 @@ Expected: FAIL because nested discovery commands and V3 artifacts are absent.
 
 - [ ] **Step 3: Extract the shared world pipeline**
 
-Move file read → Parse/Migrate → Normalize → Compile into `scripts/lib/worldkit-pipeline.ts`. `validate`, `build`, `run`, `capture`, and `subject explain` all call the same function. Preserve atomic writes and current exit-code policy.
+Move file read → Parse V2 → Normalize → Compile into `scripts/lib/worldkit-pipeline.ts`. `validate`, `build`, `run`, `capture`, and `subject explain` all call the same function. Preserve atomic writes and current exit-code policy.
 
 - [ ] **Step 4: Implement Registry list/describe**
 
@@ -1037,13 +1031,13 @@ Parse a single JSON object with the same size, syntax, and duplicate-key rules. 
 
 Join the normalized Definition with the Execution Subject by `subjectDefinitionRef`, then return the fields required by the spec. Build output becomes `kind: "worldkit-build-artifact", schemaVersion: 3` and contains only IR V2 and Plan V3.
 
-- [ ] **Step 7: Update verifier version reporting**
+- [ ] **Step 7: Rename and update the canonical verifier**
 
-Keep the command name `verify:v1`, but print and assert Authoring input `[1,2]`, canonical Authoring `2`, Normalized IR `2`, ExecutionPlan `3`, Runtime Snapshot `3`, and Browser Protocol `3`.
+Replace the unpublished `verify:v1` package script with `verify:canonical`. Print and assert Authoring `2`, Normalized IR `2`, ExecutionPlan `3`, Runtime Snapshot `3`, and Browser Protocol `3`; do not retain a command alias.
 
 - [ ] **Step 8: Switch versionless APIs and remove S0 aliases**
 
-Make the versionless parser call the source-version dispatcher, make the versionless Normalizer accept only canonical AuthoringSpecV2, and make the versionless Compiler emit V3. Remove `SubjectKitDefinitionV1`, `SubjectDefinitionRegistryV1`, `NormalizedWorldIRV1`, `ExecutionSubjectV2`, `ExecutionPlanV2`, `WorldRuntimeSnapshotV2`, and built-in Kit data. Keep `AuthoringSpecV1` and its `kitRef` only in source-version validation/migration files and fixtures.
+Make the versionless parser accept only AuthoringSpecV2, make the versionless Normalizer accept only canonical AuthoringSpecV2, and make the versionless Compiler emit V3. Remove `AuthoringSpecV1`, `SubjectNodeSpecV1`, `SubjectKitDefinitionV1`, `SubjectDefinitionRegistryV1`, `NormalizedWorldIRV1`, `ExecutionSubjectV2`, `ExecutionPlanV2`, `WorldRuntimeSnapshotV2`, the V1 JSON Schema, and built-in Kit data. Delete `kitRef` from all current source, fixtures, examples, and generated artifacts.
 
 - [ ] **Step 9: Run CLI and full type tests**
 
@@ -1056,7 +1050,7 @@ Expected: PASS.
 - [ ] **Step 10: Commit**
 
 ```bash
-git add scripts packages/authoring packages/subject-registry packages/runtime-contracts packages/compiler
+git add package.json scripts packages/authoring packages/subject-registry packages/runtime-contracts packages/compiler
 git commit -m "feat: explain subject definitions from cli"
 ```
 
@@ -1108,13 +1102,13 @@ Add verifier assertions for one shared Definition Hash, three independent Snapsh
 
 - [ ] **Step 2: Run the verifier and confirm the new gate fails**
 
-Run: `pnpm verify:v1`
+Run: `pnpm verify:canonical`
 
 Expected: FAIL at the missing or invalid Package Definition fixture gate.
 
-- [ ] **Step 3: Migrate existing examples to canonical V2**
+- [ ] **Step 3: Rewrite existing examples as canonical V2**
 
-Replace every `schemaVersion: 1` with `2`, add empty `resources.subjectDefinitions` where appropriate, rename every Subject `kitRef` to `subjectDefinitionRef`, and use canonical `worldkit://subject-definition/...@1` refs. Keep V1 compatibility coverage in test fixtures rather than public examples.
+Replace every `schemaVersion: 1` with `2`, add empty `resources.subjectDefinitions` where appropriate, rename every Subject `kitRef` to `subjectDefinitionRef`, and use canonical `worldkit://subject-definition/...@1` refs. Delete V1 fixtures and compatibility assertions; the repository keeps no accepted V1 input.
 
 - [ ] **Step 4: Complete the Package Definition fixture**
 
@@ -1128,7 +1122,7 @@ Run: `pnpm test`
 
 Run: `pnpm build`
 
-Run: `pnpm verify:v1`
+Run: `pnpm verify:canonical`
 
 Expected: all commands PASS. The verifier prints normalized IR V2, ExecutionPlan V3, Snapshot V3, Browser Protocol V3, Definition Hash, Resource Lock Hash, Havok body count, movement evidence for both Definition instances, and artifact paths.
 
@@ -1173,7 +1167,7 @@ pnpm worldkit run examples/authoring/package-subject-world.json
 pnpm worldkit capture examples/authoring/package-subject-world.json --output artifacts/examples/package-subject-world/world.png --snapshot artifacts/examples/package-subject-world/snapshot.json --json
 ```
 
-State that Authoring V1 is accepted only through migration, public examples are V2, and S1a does not support assets, relationships, mounts, equipment, vehicles, animations, NPC behavior, or flight.
+State that Authoring V2 is the only accepted input, V1 was never released and has been removed, and S1a does not support assets, relationships, mounts, equipment, vehicles, animations, NPC behavior, or flight.
 
 - [ ] **Step 2: Run naming and engine-leak audits**
 
@@ -1184,7 +1178,7 @@ rg -n 'kitRef|presetRef|definitionRef' packages apps scripts examples docs/17-ca
 rg -n 'Babylon|Havok|PhysicsCharacterController' packages/authoring packages/subject-registry packages/subject-composition packages/runtime-contracts
 ```
 
-Expected: `kitRef` appears only in V1 schema/types/migration and explicit migration documentation/tests; bare `definitionRef` and `presetRef` do not appear as public fields; Babylon/Havok terms do not appear in engine-neutral protocol data or implementation imports.
+Expected: `kitRef`, bare `definitionRef`, and `presetRef` return no matches in current source, examples, CLI, quickstart, or README; Babylon/Havok terms do not appear in engine-neutral protocol data or implementation imports.
 
 - [ ] **Step 3: Run the complete final gate from a clean build state**
 
@@ -1194,7 +1188,7 @@ Run:
 pnpm typecheck
 pnpm test
 pnpm build
-pnpm verify:v1
+pnpm verify:canonical
 git diff --check
 ```
 

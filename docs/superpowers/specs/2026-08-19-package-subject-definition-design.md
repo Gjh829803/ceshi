@@ -1,6 +1,6 @@
 # Package 局部 Subject Definition（S1a）设计
 
-- 状态：Proposed，等待书面规格确认
+- 状态：Approved for implementation
 - 日期：2026-08-19
 - 上位规格：[`2026-08-19-extensible-subject-authoring-design.md`](./2026-08-19-extensible-subject-authoring-design.md)
 - 产品/资产契约：[`16-subject-assets-3c-integration.md`](../../16-subject-assets-3c-integration.md)
@@ -12,7 +12,7 @@
 S1a 把 S0 的“选择内置 Subject Kit”升级为“在 WorldPackage 内定义可复用白模主体，并创建多个独立实例”。本阶段采用以下正式边界：
 
 1. 新增 `AuthoringSpecV2`；主体实例只使用 `subjectDefinitionRef`，不再使用 `kitRef`。
-2. V1 输入通过显式迁移转换成 V2；V2 不接受 `kitRef`，也不提供永久别名。
+2. 现有 V1 从未发布，直接由 V2 取代；不实现 V1 解析、迁移或字段别名。
 3. Package 局部 Definition 位于 `resources.subjectDefinitions`，实例节点只保存资源引用。
 4. Definition 只能组合受 Schema 限制的 Primitive、Socket、Capability Ref 和 Profile Ref，不能包含代码或引擎对象。
 5. Collider 由注册、版本化、确定性的 Derivation Profile 生成；AI 不直接选择 Babylon/Havok 类型。
@@ -44,8 +44,9 @@ S1a 是完整 S1 的第一个可见垂直切片。它让概念上的“定义白
 - 不把 Socket 解释为装备槽、座位或关系；S1a 只冻结并传递稳定空间接口。
 - 不实现 Registry 发布、远程下载、签名或完整 WorldPackage 文件布局。
 - 不保留 `kitRef`、`presetRef`、`definitionRef` 多种同义公开字段。
+- 不为未发布的 V1 保留 Schema、类型、迁移器、示例或运行路径。
 
-## 3. 协议版本与兼容性
+## 3. 协议版本与未发布版本清理
 
 ### 3.1 版本升级
 
@@ -62,29 +63,19 @@ S1a 引入以下版本：
 
 没有结构变化的 Command 可以继续使用自己的现有版本；不能只因为外层协议升级就无意义地修改所有 Command。
 
-### 3.2 V1 到 V2 的显式迁移
+### 3.2 未发布 V1 的清理策略
 
-输入管线按以下顺序运行：
+仓库目前为 `0.0.0` 私有开发状态，没有发布 Tag、外部调用方或需要重放的生产 WorldPackage，因此 V1 不构成兼容契约。S1a 直接执行一次干净替换：
 
 ```text
-duplicate-key / JSON syntax validation
-  → read kind + schemaVersion
-  → validate source-version Canonical Schema
-  → migrate source version to AuthoringSpecV2
-  → validate AuthoringSpecV2 Canonical Schema
-  → semantic validation
-  → normalization
+delete V1 Schema / normalized types / runtime types / examples
+  → install AuthoringSpecV2 as the only accepted Authoring protocol
+  → reject every schemaVersion other than 2
+  → use subjectDefinitionRef in every public surface
+  → regenerate all local fixtures and artifacts
 ```
 
-迁移规则：
-
-- `worldkit://kit/humanoid.third-person@1` → `worldkit://subject-definition/humanoid.third-person@1`
-- `worldkit://kit/quadruped.ground-proxy@1` → `worldkit://subject-definition/quadruped.ground-proxy@1`
-- `nodes[*].kitRef` → `nodes[*].subjectDefinitionRef`
-- `resources.subjectDefinitions` 初始化为空数组。
-- 其他 V1 字段按值复制，不通过宽松解析丢弃未知字段。
-
-V2 Schema 明确拒绝 `kitRef`。兼容性只存在于版本迁移器中，不存在于 Canonical V2 类型、示例、Normalized IR、ExecutionPlan、CLI 输出或 Browser Protocol 中。
+不实现 `migrateAuthoringSpecV1ToV2`，不保留旧 Kit Ref 映射，也不让 Parser 同时识别两个版本。旧本地 JSON 必须按新 Schema 重写；这是开发期 Schema 变更，不是用户数据迁移。
 
 ## 4. AuthoringSpecV2
 
@@ -514,8 +505,7 @@ JSON 输出使用版本化判别对象，不输出格式化日志。`explain` �
 
 | Code | 含义 |
 |---|---|
-| `AUTHORING_SCHEMA_VERSION_NOT_SUPPORTED` | 输入 Schema Version 没有验证器或迁移器 |
-| `AUTHORING_MIGRATION_FAILED` | 已验证旧输入无法确定性迁移 |
+| `AUTHORING_SCHEMA_VERSION_NOT_SUPPORTED` | 输入 Schema Version 不是当前唯一支持的版本 2 |
 | `SUBJECT_DEFINITION_DUPLICATE` | Package Definition ID/Version 重复 |
 | `SUBJECT_DEFINITION_NOT_FOUND` | Subject Definition Ref 无法解析 |
 | `SUBJECT_DEFINITION_REF_INVALID` | Package Ref 与 Definition ID/Version 不匹配 |
@@ -533,7 +523,7 @@ Diagnostic 必须包含准确 JSON Pointer；Ref 相关错误附带允许值或 
 
 ```text
 packages/authoring
-  owns: V1/V2 schema, migration, semantic validation, normalized package definitions
+  owns: V2 schema, strict validation, semantic validation, normalized package definitions
 
 packages/subject-registry
   owns: immutable built-in definitions, capability/profile manifests, exact ref resolution
@@ -559,10 +549,8 @@ scripts/worldkit.ts
 ## 14. 数据流
 
 ```text
-AuthoringSpec V1 or V2
-  → strict source-version validation
-  → V1 migration when needed
-  → canonical AuthoringSpecV2
+AuthoringSpecV2
+  → strict JSON and V2 Schema validation
   → resolve Package/Registry Subject Definitions
   → resolve Capability/Profile manifests
   → normalize Primitive + Socket composition
@@ -578,11 +566,11 @@ AuthoringSpec V1 or V2
 
 ## 15. 验收与测试
 
-### 15.1 Schema 与迁移
+### 15.1 Schema 与干净替换
 
-1. V2 接受 Package Definition，并拒绝未知字段和 `kitRef`。
-2. 合法 V1 输入迁移后与等价 V2 输入生成相同 Normalized IR Hash 和 ExecutionPlan Hash。
-3. 不支持的版本返回单一、机器可修复的版本 Diagnostic。
+1. V2 接受 Package Definition，并拒绝未知字段、`kitRef` 和 `schemaVersion: 1`。
+2. `kitRef` 不存在于 Authoring、Normalized IR、ExecutionPlan、Snapshot、CLI、Browser Protocol、示例或当前接入文档。
+3. 不支持的版本返回单一、机器可修复的版本 Diagnostic，允许值只有 `2`。
 
 ### 15.2 Definition 与确定性
 
@@ -623,10 +611,10 @@ AuthoringSpec V1 or V2
 pnpm typecheck
 pnpm test
 pnpm build
-pnpm verify:v1
+pnpm verify:canonical
 ```
 
-`verify:v1` 的脚本名仍表示原始命令兼容 Gate；输出必须明确报告本次实际验证的 Authoring、IR、ExecutionPlan、Snapshot 和 Browser Protocol 版本。
+`verify:canonical` 输出必须明确报告本次实际验证的 Authoring、IR、ExecutionPlan、Snapshot 和 Browser Protocol 版本；不保留带未发布 V1 名称的兼容脚本。
 
 ## 16. 后续阶段
 
@@ -655,8 +643,8 @@ pnpm verify:v1
 
 ## 17. 已冻结决策
 
-1. S1a 使用 Authoring V2，不向 V1 追加长期字段。
-2. 正式公开名是 `subjectDefinitionRef`；`kitRef` 只存在于 V1 Schema 和迁移器。
+1. S1a 使用 Authoring V2，并删除未发布 V1 的 Schema、类型和运行路径。
+2. 正式公开名是 `subjectDefinitionRef`；当前代码与公共工件不保留 `kitRef`。
 3. Package Definition 不在 Subject Node 内联。
 4. Package Ref 由 Definition `id + version` 确定。
 5. Definition 只组合声明式数据与 Registry Ref，不承载实现代码。
