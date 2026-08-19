@@ -21,6 +21,9 @@
 - [`2026-08-17-ai-first-lego-game-sdk-design.md`](superpowers/specs/2026-08-17-ai-first-lego-game-sdk-design.md)：长期架构规格；
 - [`2026-08-17-terrain-authoring-pipeline-design.md`](superpowers/specs/2026-08-17-terrain-authoring-pipeline-design.md)：地形专项规格；
 - [`2026-08-19-extensible-subject-authoring-design.md`](superpowers/specs/2026-08-19-extensible-subject-authoring-design.md)：主体组装、Relationship、坐骑、装备和飞行的专项规格；
+- [`2026-08-19-placement-constraint-layout-solver-design.md`](superpowers/specs/2026-08-19-placement-constraint-layout-solver-design.md)：AI 空间意图、最终 Transform 求解与冲突报告专项规格；
+- [`2026-08-19-simulation-take-control-capture-design.md`](superpowers/specs/2026-08-19-simulation-take-control-capture-design.md)：WorldPackage、Take、Session、多 Pass Capture 与视频 Adapter 边界；
+- [`2026-08-19-world-validation-report-and-quality-gates-design.md`](superpowers/specs/2026-08-19-world-validation-report-and-quality-gates-design.md)：量化 Gate、Metric、Evidence 和生产阻断协议；
 - `docs/superpowers/plans/`：已经进入实施阶段的单个纵向切片计划与证据。
 
 如果本文与已接受的 ADR、Canonical Schema 或真实代码不一致，以已接受 ADR、
@@ -35,16 +38,16 @@ Normalizer/Compiler、Runtime、CLI/Browser 和对应 Conformance Gate 的纵向
 
 | 工作流 | 权重 | 当前完成度 | 加权贡献 | 判断依据 |
 |---|---:|---:|---:|---|
-| 架构、边界与命名 | 8% | 85% | 6.8% | 总规格、ADR、主体/地形/3C 子规格和命名规则基本完成；Placement 与 Capture 仍缺专项冻结 |
+| 架构、边界与命名 | 8% | 90% | 7.2% | 总规格、ADR、主体/地形/3C 和 Placement/Take/Validation 专项已成稿；三份新协议仍待评审冻结 |
 | Canonical Schema、IR、Registry 与 Compiler | 15% | 70% | 10.5% | V2/V2/V3、Hash、Lock、严格校验、Package Primitive Definition 已交付；WorldChangeSet、完整 Capability 和 WorldPackage 尚未交付 |
 | Babylon/Havok Runtime、物理与相机 | 15% | 60% | 9.0% | Heightfield、障碍、水域、多主体、第三人称、碰撞、重置和控制切换已交付；多视角、完整生命周期与生产预算尚未完成 |
 | Subject LEGO 组装体系 | 15% | 30% | 4.5% | S0、S1a 已完成；S1b、S2、S3、S4 尚未完成 |
-| Terrain、Region 与 Placement | 12% | 25% | 3.0% | Alpha 地形能力可运行，长期 Terrain IR/Mask/Region/Constraint Solver 尚未形成 Canonical 纵向切片 |
+| Terrain、Region 与 Placement | 12% | 30% | 3.6% | Alpha 地形能力可运行，Placement/Solver 专项已成稿；长期 Terrain IR/Mask/Region 与 Solver 尚未形成 Canonical 纵向切片 |
 | CLI、Browser Protocol 与自动化 | 10% | 50% | 5.0% | validate/build/run/capture/discovery/explain 与 Browser V3 已有；持久 Session、完整 Driver、Take 和 Package 工具未完成 |
 | Semantic Action、动画与 Gameplay | 8% | 20% | 1.6% | Alpha 有基础移动和本地动画经验；Canonical Action、Animation Binding、装备与规则未交付 |
-| Simulation Take、控制通道与视频接入 | 10% | 10% | 1.0% | 单截图和设计依据已有；多 Pass、时间轨、Capture Bundle 和模型 Adapter 未交付 |
-| 生产 Gate、默认切换与旧实现退出 | 7% | 15% | 1.1% | Canonical Browser Gate 可运行；默认 Playground、Agent 工作流和 Three/Rapier 旧路径尚未迁移或归档 |
-| **合计** | **100%** |  | **约 42%** | 对外按不确定性向下取整为 **约 40%** |
+| Simulation Take、控制通道与视频接入 | 10% | 15% | 1.5% | Take/Capture 专项已成稿，单截图能力已有；多 Pass、时间轨、Bundle 和模型 Adapter 未交付 |
+| 生产 Gate、默认切换与旧实现退出 | 7% | 20% | 1.4% | Validation Profile/Report 专项已成稿且 Canonical Browser Gate 可运行；统一报告、默认切换和旧路径退出未交付 |
+| **合计** | **100%** |  | **约 44%** | 三份专项设计只小幅提升架构进度；对外按实现不确定性仍报告 **约 40%** |
 
 “第一条 Canonical 纵向切片约 80%”只指以下较窄范围：AI 提交 JSON，SDK
 完成严格校验、确定性编译、Babylon/Havok 运行、多主体控制、截图和查询。
@@ -107,9 +110,10 @@ Normalizer/Compiler、Runtime、CLI/Browser 和对应 Conformance Gate 的纵向
 目标：让 AI 表达空间意图和硬约束，由 SDK 生成可解释的最终 Transform，而不是
 要求模型为所有实例猜绝对坐标。
 
-- [ ] 编写并评审 Placement Constraint / Layout Solver 专项设计。
+- [x] 编写 [Placement Constraint / Layout Solver 专项设计](superpowers/specs/2026-08-19-placement-constraint-layout-solver-design.md)。
+- [ ] 评审并冻结专项设计中的字段、版本、首批 Constraint 与 Fixture。
 - [ ] 冻结 Placement Constraint 与 Gameplay Relationship 的协议边界。
-- [ ] 定义关闭枚举的 Hard/Soft Constraint 判别 Union。
+- [ ] 定义关闭枚举的 Required/Preferred Constraint 判别 Union。
 - [ ] 第一批覆盖 Region 内外、相对距离、方向、支撑、净空、坡度、路线和镜头可见性。
 - [ ] 定义 Normalized Constraint、Solver 输入、稳定排序、Seed 和预算。
 - [ ] Solver 输出 Transform、Provenance、违反项、评分和冲突核心。
@@ -126,12 +130,13 @@ Schema、Physics、Route 和 Composition 阻断 Gate。
 目标：把“世界是什么”“本次怎样操作/拍摄”“输出给视频模型的控制信号”分成
 三个独立、可哈希和可重放的制品。
 
-- [ ] 编写并评审 Simulation Take / Control Capture Bundle 专项设计。
-- [ ] 冻结 WorldPackage、Simulation Take、Runtime Session 与 Capture Bundle 的引用关系。
+- [x] 编写 [Simulation Take / Control Capture Bundle 专项设计](superpowers/specs/2026-08-19-simulation-take-control-capture-design.md)。
+- [ ] 评审并冻结专项设计中的字段、编码 Profile、时间映射与 Fixture。
+- [ ] 冻结 WorldPackage、Simulation Take、Runtime Session 与 Control Capture Bundle 的引用关系。
 - [ ] 定义 Controller/Action/Input Track、Camera Track、Tick Range 和 Capture Schedule。
-- [ ] 定义 Tick、Simulation Frame、Render Frame 与输出帧的显式映射。
+- [ ] 定义 Simulation Tick、Render Frame 与 Capture Frame 的显式映射。
 - [ ] 定义版本化 Capture Profile 和必需/可选 Pass。
-- [ ] 第一批必需 Pass：Neutral Clay RGB、Linear Metric Depth、Semantic Mask、Stable Instance ID、Normal。
+- [ ] 第一批必需 Pass：Neutral Color、Linear Depth Meters、Semantic Class ID、Stable Instance ID、World Normal。
 - [ ] 评估并决定 Motion Vector、Albedo、Roughness、Metallic 和 Lighting Profile 的阶段。
 - [ ] 每帧记录 Camera Intrinsics/Extrinsics、Snapshot/Event/Action/Relationship Receipt。
 - [ ] Bundle 固定 WorldPackage、IR、ExecutionPlan、Registry Lock、Session 和 Take Hash。
@@ -141,12 +146,29 @@ Schema、Physics、Route 和 Composition 阻断 Gate。
 完成标准：同一个 WorldPackage 可以运行至少两个不同 Take，并生成互不混淆、可
 重放的多通道 Bundle。
 
-#### P0.3 白模到生成式视频的第一条纵向切片
+#### P0.3 Validation Report 与量化质量门禁
+
+目标：用统一、可解释、可哈希的 Profile/Report 决定世界和控制制品能否进入下一
+阶段，避免不同脚本各用一套阈值或以总体分数掩盖关键失败。
+
+- [x] 编写 [World Validation Report 与质量门禁专项设计](superpowers/specs/2026-08-19-world-validation-report-and-quality-gates-design.md)。
+- [ ] 评审并冻结 ValidationProfile、ValidationReport、Gate、Metric 与 Evidence Schema。
+- [ ] 冻结 Blocking/Advisory、Required Missing、Incomplete 和 Policy Decision 语义。
+- [ ] 定义 Schema/Layout/Physics/Route/Composition/Capture/Replay/Performance/Integrity 首批 Gate。
+- [ ] 把单位、阈值、容差、Evaluator、Platform Profile 与 Evidence 归属写入版本化 Profile。
+- [ ] CLI 支持 verify/explain/compare，CI 持久化 Report 和 Evidence Manifest。
+- [ ] Golden Fixture 覆盖浮空、穿插、不可达、Anchor 缺失、Depth 单位错误、帧归属错误和 Hash 损坏。
+- [ ] 证明 Blocking Failure 或 Required Metric 缺失不能被 Advisory/总体分数抵消。
+
+完成标准：Placement 和 Capture 首条纵向切片都通过同一版本化 Validation 协议，
+每个失败能落到唯一 Gate/Metric/Diagnostic，并产生可审阅修复建议。
+
+#### P0.4 白模到生成式视频的第一条纵向切片
 
 - [ ] 冻结一个不进入 Canonical Schema 的 Video Model Adapter 接口。
 - [ ] 选择一个首批模型/工作流作为实验 Adapter，并单独记录许可证与运行环境。
 - [ ] 固定一个包含地形、水体、主体移动、障碍和相机运动的 WorldPackage/Take。
-- [ ] 导出 Clay、Depth、Semantic、Instance 和 Camera 控制序列。
+- [ ] 导出 Neutral Color、Linear Depth、Semantic、Instance、World Normal 和 Camera 控制序列。
 - [ ] 生成最终视频，并保留 Adapter 配置、输入 Bundle Hash 和输出 Provenance。
 - [ ] 验收 Region、Anchor、主体身份、接触、遮挡、运动方向和长视频漂移。
 - [ ] 失败可以定位到 Authoring、Solver、Runtime、Capture 或 Model Adapter，而不是只返回总体分数。
@@ -232,6 +254,7 @@ Schema、Physics、Route 和 Composition 阻断 Gate。
 
 #### P3.1 Production Gates
 
+- [ ] 基于 P0.3 已冻结的 Validation Profile/Report 协议扩展生产 Profile，不新建第二套报告格式。
 - [ ] Schema/Projector/Provider Adapter Conformance。
 - [ ] Physics Gate：穿插比例、浮空、接触、稳定性、异常位移和可达性。
 - [ ] Capture Gate：通道完整性、ID 集合、相机矩阵、帧归属和 Render Ready。
@@ -266,10 +289,14 @@ Schema、Physics、Route 和 Composition 阻断 Gate。
 ```text
 P0.1 Placement Constraint / Layout Solver
   ├── P1.1 Canonical Terrain / Region / Mask
-  └── 通用物体与构图稳定落位
+  ├── 通用物体与构图稳定落位
+  └── P0.3 Validation 的 Layout / Physics / Composition Gate
 
 P0.2 Simulation Take / Control Capture Bundle
-  └── P0.3 白模到生成式视频纵向切片
+  └── P0.3 Validation 的 Capture / Replay / Integrity Gate
+
+P0.1 + P0.2 + P0.3
+  └── P0.4 白模到生成式视频纵向切片
 
 P1.2 Asset Subject + P1.3 Semantic Action
   └── P2.1 Typed Relationship
@@ -277,24 +304,27 @@ P1.2 Asset Subject + P1.3 Semantic Action
               └── P2.3 Equipment / Flight
 
 P1.4 WorldPackage + P2.4 Controller/Camera/Driver
-  └── P3.1 Production Gates
+  └── P3.1 Production Gates（复用 P0.3 协议并扩展生产 Profile）
         └── P3.2 默认切换
 ```
 
-Placement 与 Capture 两条 P0 可以并行设计，但首个实现里程碑应保持窄纵向切片；
+Placement、Capture 与 Validation 三条 P0 已形成可评审专项设计，可以并行评审，
+但首个实现里程碑应保持窄纵向切片；
 不要同时启动坐骑、装备、飞行、NPC 和室内，避免再次形成无法验收的大重构。
 
 ## 6. 下一里程碑
 
-当前没有代码阻塞项。推荐依次启动：
+当前没有代码阻塞项。三份 P0 专项设计已经成稿，下一步依次进行：
 
-1. **M1：Placement Constraint / Layout Solver 专项设计**；
-2. **M2：Simulation Take / Control Capture Bundle 专项设计**；
-3. **M3：选择一个参考室外世界，完成 Constraint + Take + 多 Pass Capture 的最小闭环**；
-4. **M4：在同一闭环上接入一个实验 Video Model Adapter**；
-5. **M5：再进入 Asset Subject / Semantic Action 或 Typed Relationship 的下一条可视切片**。
+1. **M1：评审并冻结 Placement、Take/Capture、Validation 三份协议的公共边界**；
+2. **M2：决定三份文档列出的字段级开放项，并为未发布 Schema 选择干净替换或 Major 升级**；
+3. **M3：编写首条窄纵向切片实施计划，定位真实包、Schema、迁移、Fixture 与 Conformance**；
+4. **M4：实现 Constraint + Take + 五 Pass Capture + Validation 的最小闭环**；
+5. **M5：在同一闭环上接入一个实验 Video Model Adapter**；
+6. **M6：再进入 Asset Subject / Semantic Action 或 Typed Relationship 的下一条可视切片**。
 
-M1 和 M2 在字段、版本、Fixture 与 Conformance 未通过评审前不得直接实现公共 API。
+M1/M2 完成前不得实现公共字段；技术探针可以验证 Capture Encoding 或 Runtime Query
+可行性，但其实现不得泄漏到 Canonical Schema。
 
 ## 7. 更新规则
 
@@ -311,7 +341,8 @@ M1 和 M2 在字段、版本、Fixture 与 Conformance 未通过评审前不得�
 | 风险 | 当前处理方式 |
 |---|---|
 | Agent 为大量实例猜坐标导致漂浮、穿插和构图漂移 | P0.1 引入 AI-facing Constraint 与确定性 Solver |
-| 世界定义、动作脚本和视频捕获混成一个 JSON | P0.2 分离 WorldPackage、Simulation Take 和 Capture Bundle |
+| 世界定义、动作脚本和视频捕获混成一个 JSON | P0.2 分离 WorldPackage、Simulation Take 和 Control Capture Bundle |
+| 测试阈值分散或总体分数掩盖关键失败 | P0.3 统一 Validation Profile/Report，Blocking Gate 一票否决 |
 | 图片生成结果被误当作权威地形 | P1.1 固化为 Height/Mask，重新执行确定性 Compiler 和 Gate |
 | 任意 Blender/Python 代码进入生产世界 | 只允许隔离制作 Provider；Runtime 只消费锁定制品 |
 | 机器人研究仓库的格式污染 Web SDK | 只借鉴 Solver、Gate、Registry 和 Capture 思想，通过 Adapter 映射 |

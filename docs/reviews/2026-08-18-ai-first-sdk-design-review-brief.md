@@ -6,6 +6,40 @@
 >
 > 本文不是完整技术规格，不展开所有 Schema 字段、接口和测试细节。
 
+## 0. 2026-08-19 本轮架构优化
+
+外部开源方案复核后，总体四层架构、Babylon/Havok 选型和 LEGO 组合模型不需要
+推翻，但三项能力需要在继续实现前提升为一等协议：
+
+1. **Placement Constraint + Deterministic Layout Solver**：Agent 描述 Region、
+   距离、朝向、支撑、净空、路线、坡度和镜头可见性；SDK 求最终 Transform。
+   这只负责编译时布局，不替代骑乘、装备、拖拽等运行时 Relationship。
+2. **Simulation Take + Control Capture Bundle**：WorldPackage 描述世界，Take 描述
+   本次固定 Tick 的控制/动作/相机，Runtime Session 执行，Bundle 保存实际多 Pass
+   帧和证据。换镜头或动作不重建世界，模型 Provider 不污染 Canonical Schema。
+3. **Validation Profile + Validation Report**：物理、可达性、构图、Capture、Replay、
+   性能和完整性使用版本化 Metric/阈值/Evidence 验收。Blocking Gate 或 Required
+   Metric 缺失一票否决，不能由总体分数覆盖。
+
+```text
+AuthoringSpec
+  → Terrain Compiler + Layout Solver
+  → NormalizedWorldIR / WorldPackage
+  → Simulation Take / Runtime Session
+  → Control Capture Bundle
+  → Validation Report
+  → Video Model Adapter
+```
+
+本轮专项规格：
+
+- [Placement Constraint 与确定性 Layout Solver](../superpowers/specs/2026-08-19-placement-constraint-layout-solver-design.md)
+- [Simulation Take 与 Control Capture Bundle](../superpowers/specs/2026-08-19-simulation-take-control-capture-design.md)
+- [World Validation Report 与质量门禁](../superpowers/specs/2026-08-19-world-validation-report-and-quality-gates-design.md)
+
+三份设计已经成稿，代码尚未交付。本次评审应先确认公共边界和字段级开放项，再
+编写实施计划，不能把“设计完成”当成 Runtime 能力完成。
+
 ## 1. 我们要做什么
 
 我们要提供一个面向 AI Agent 的游戏场景 SDK。
@@ -23,9 +57,13 @@ AuthoringSpec（结构化世界描述）
     ↓
 SDK 校验、规范化和编译
     ↓
+Terrain Compiler + Layout Solver
+    ↓
+WorldPackage + Simulation Take
+    ↓
 Babylon Runtime + Havok Physics
     ↓
-可操作白模世界 + 截图/状态/诊断
+Control Capture Bundle + Validation Report
 ```
 
 一句话定义：**这是一个让 AI 用结构化配置“组装游戏世界”的 SDK，而不是让 AI 直接编写游戏引擎代码。**
@@ -82,12 +120,14 @@ Schema 分成两层：
 
 ### 3.3 可评审的 Schema 顶层结构
 
-下面是第一版 AuthoringSpec 的协议骨架。它不是伪代码式的概念图，而是计划冻结为 JSON Schema 的真实层级：
+下面保留的是顶层协议的评审骨架。当前运行代码以 Canonical Authoring V2 Schema
+为准；Placement Union 会在专项设计评审后通过干净替换或下一 Major 落地，因此本节
+用于评审桶边界，不应被复制成当前可运行 JSON：
 
 ```ts
-interface AuthoringSpecV1 {
+interface AuthoringSpecReviewShape {
   kind: "worldkit-authoring-spec";
-  schemaVersion: 1;
+  schemaVersion: number;
   id: string;
   seed: number;
 
@@ -156,11 +196,7 @@ interface WorldNodeSpec {
   id: string;
   kind: WorldNodeKind;
   prototypeRef?: ResourceRef;
-  transform?: {
-    positionMeters: [number, number, number];
-    rotationEulerRadiansXYZ?: [number, number, number];
-    scale?: [number, number, number];
-  };
+  placement: FixedPlacementSpec | SolvedPlacementSpec;
 
   kitRef?: ResourceRef;
   components?: Record<string, JsonValue>;
@@ -171,6 +207,21 @@ interface WorldNodeSpec {
   loadout?: Record<string, NestedEntitySpec>;
   initialInventory?: readonly NestedEntitySpec[];
   initialMount?: NestedEntitySpec;
+}
+
+interface FixedPlacementSpec {
+  kind: "fixed";
+  transform: {
+    positionMetersXYZ: [number, number, number];
+    rotationRadiansXYZ: [number, number, number];
+    scaleXYZ: [number, number, number];
+  };
+}
+
+interface SolvedPlacementSpec {
+  kind: "solved";
+  initialTransform?: FixedPlacementSpec["transform"];
+  placementConstraintIds: readonly string[];
 }
 
 interface CapabilityInstanceSpec {
@@ -251,7 +302,9 @@ interface ActionDefinition {
 
 ### 3.5 一个可运行世界的代表性 JSON
 
-下面的例子展示 Canonical AuthoringSpec 期望表达的关系。为便于评审，资源细节和地形控制数据做了缩写，但节点、能力和关系的边界与正式方案一致：
+下面是 2026-08-18 保留的历史结构评审样例，用于展示 Entity/Capability/Relationship
+边界，不是当前可运行 Fixture，也不包含 2026-08-19 新增的 Placement/Take/Validation
+协议。实现时必须使用真实 Canonical Schema 和三份专项规格，不能复制本段字段：
 
 ```json
 {
@@ -696,7 +749,7 @@ Capability、System、Collider、Asset 和 Browser Session 都有明确 Owner �
 
 这些能力未来可以沿 Entity、Capability、Relationship 和 Port 扩展，但不应阻塞第一条生产链路。
 
-## 11. 本次评审需要确认的七个决定
+## 11. 本次评审需要确认的十个决定
 
 | 决策 | 推荐结论 | 评审重点 |
 |---|---|---|
@@ -706,7 +759,10 @@ Capability、System、Collider、Asset 和 Browser Session 都有明确 Owner �
 | 第一版 Runtime | 接受 Babylon + Havok，并保留 Port | 是否满足 Web、物理和自动化需求 |
 | 地形路线 | 接受“生成式规划输入 + 确定性编译” | 是否兼顾图片理解能力和物理可靠性 |
 | 多视角 Camera | 接受独立 Camera Entity + 判别式 Rig + Context Binding | 第一/第三人称和骑乘/飞行切换是否保持同一 Gameplay 世界 |
-| 实施顺序 | 先做 Phase 0 技术探针，再冻结协议 | 高风险能力是否都有明确通过标准 |
+| 空间放置 | 接受 Placement Constraint + Deterministic Layout Solver | Required/Preferred 边界、首批 Constraint 和 Runtime Relationship 是否彻底分离 |
+| 操作与捕获 | 接受 WorldPackage / Simulation Take / Runtime Session / Control Capture Bundle 分层 | 时间、Frame、Pass、Hash 和模型 Adapter 边界是否明确 |
+| 生产门禁 | 接受 Validation Profile / Report / Metric / Evidence | Blocking/Advisory、Required Missing 与首批量化阈值是否可执行 |
+| 实施顺序 | 先评审三份专项设计，再写窄纵向切片计划和针对性技术探针 | Capture Encoding、Runtime Query 等高风险项是否有明确判据 |
 
 ## 12. 主要风险与处理方式
 
@@ -718,6 +774,9 @@ Capability、System、Collider、Asset 和 Browser Session 都有明确 Owner �
 | 地形生成漂亮但不可玩 | 路线、出生点和坡度失败 | 权威 Heightfield、Gameplay Constraint 和阻断 Gate |
 | Web 物理和截图存在平台差异 | 重放或视觉测试不稳定 | 锁定 Profile、分层确定性承诺、Phase 0 探针 |
 | 不同人称各自复制人物或武器状态 | 库存、命中和截图语义不一致 | 单一 Gameplay Entity；Camera 仅切换 View Rig 和 Render Binding |
+| Agent 为大量实例猜绝对坐标 | 浮空、穿插、构图漂移且难以修复 | AI-facing Placement Constraint + 确定性 Solver + Solve Report |
+| 世界、动作脚本和视频帧混成一个制品 | 无法复用、重放或证明帧归属 | WorldPackage、Take、Session 和 Control Capture Bundle 分层 Hash |
+| 总体分数掩盖关键失败 | 不合格世界或控制包进入下游 | Validation Blocking Gate/Required Metric 一票否决 |
 | 第一版范围持续膨胀 | 无法形成生产闭环 | 先完成室外地形 + 主体 + 关键物件的 Vertical Slice |
 
 ## 13. 建议的评审结论模板
@@ -730,7 +789,11 @@ Capability、System、Collider、Asset 和 Browser Session 都有明确 Owner �
 4. Babylon + Havok 第一版选型：是否接受。
 5. 地形编译路线：是否接受。
 6. 独立 Camera Entity、第一/第三人称切换与骑乘 Context 策略：是否接受。
-7. Phase 0 探针清单和通过标准：是否足以支持协议冻结。
-8. 阻塞开发的问题、负责人和截止时间。
+7. Placement Constraint、Layout Solver 与 Gameplay Relationship 边界：是否接受。
+8. WorldPackage、Simulation Take、Runtime Session 与 Control Capture Bundle 分层：是否接受。
+9. Validation Profile/Report、量化 Metric 和 Blocking Policy：是否接受。
+10. 下一条窄纵向切片的技术探针和通过标准：是否足以支持协议冻结。
+11. 阻塞开发的问题、负责人和截止时间。
 
-完整接口、Schema、确定性协议、地形算法和实施阶段以仓库中的总体设计、地形子规格、ADR-0006 与 Phase 0 探针计划为准。
+完整接口、Schema、确定性协议、地形算法和实施阶段以仓库中的总体设计、三份
+2026-08-19 专项设计、地形子规格、ADR-0006 与 Phase 0 探针计划为准。

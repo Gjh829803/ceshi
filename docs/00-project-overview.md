@@ -116,7 +116,10 @@ Capability 和 Profile 定义主体，再通过多个 `subject` 节点生成独�
 8. [Canonical Authoring V2 快速接入](17-canonical-json-quickstart.md)：AI/CLI
    的当前唯一 JSON 协议、Package Definition 和 Browser V3。
 9. [AI-first LEGO Game SDK 生产设计](superpowers/specs/2026-08-17-ai-first-lego-game-sdk-design.md)：面向重构的长期 Schema、Compiler、Runtime、CLI 和门禁设计。
-10. [主体资产与 3C 配置接入契约](16-subject-assets-3c-integration.md)：产品主体资产、Character、Control、Camera、骑乘和多人控制如何接入 SDK。
-11. [SDK 总体架构](02-sdk-architecture.md)：当前模块、目标模块和实现状态。
-12. [世界模型团队接入说明](11-world-model-team-handoff.md)：双方边界与近期接口工作。
-13. [运行时世界导演方案](09-runtime-world-director.md)：后续受控世界操作协议。
+10. [Placement Constraint 与确定性 Layout Solver](superpowers/specs/2026-08-19-placement-constraint-layout-solver-design.md)：AI 如何表达空间意图，SDK 如何生成最终 Transform。
+11. [Simulation Take 与 Control Capture Bundle](superpowers/specs/2026-08-19-simulation-take-control-capture-design.md)：世界、操作/镜头和多 Pass 控制制品如何分离。
+12. [World Validation Report 与质量门禁](superpowers/specs/2026-08-19-world-validation-report-and-quality-gates-design.md)：量化 Metric、Evidence、阻断策略和生产报告。
+13. [主体资产与 3C 配置接入契约](16-subject-assets-3c-integration.md)：产品主体资产、Character、Control、Camera、骑乘和多人控制如何接入 SDK。
+14. [SDK 总体架构](02-sdk-architecture.md)：当前模块、目标模块和实现状态。
+15. [世界模型团队接入说明](11-world-model-team-handoff.md)：双方边界与近期接口工作。
+16. [运行时世界导演方案](09-runtime-world-director.md)：后续受控世界操作协议。

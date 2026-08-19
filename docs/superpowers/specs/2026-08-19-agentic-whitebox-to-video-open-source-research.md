@@ -3,7 +3,7 @@
 - 性质：外部研究与架构评审支撑材料，不是权威协议规格。
 - 日期：2026-08-19（外部项目状态以该日核实结果为准）。
 - 研究对象：Agent 生成可执行 3D 白模世界，物理运行时产生结构控制信号，生成式视频模型完成最终视觉呈现。
-- 对照规格：[`AI-first LEGO 游戏 SDK 总体设计`](./2026-08-17-ai-first-lego-game-sdk-design.md)、[`Terrain Authoring Pipeline`](./2026-08-17-terrain-authoring-pipeline-design.md)、[`可扩展主体组装 Authoring`](./2026-08-19-extensible-subject-authoring-design.md)。
+- 对照规格：[`AI-first LEGO 游戏 SDK 总体设计`](./2026-08-17-ai-first-lego-game-sdk-design.md)、[`Terrain Authoring Pipeline`](./2026-08-17-terrain-authoring-pipeline-design.md)、[`可扩展主体组装 Authoring`](./2026-08-19-extensible-subject-authoring-design.md)、[`Placement Constraint / Layout Solver`](./2026-08-19-placement-constraint-layout-solver-design.md)、[`Simulation Take / Control Capture Bundle`](./2026-08-19-simulation-take-control-capture-design.md)、[`Validation Report / Quality Gates`](./2026-08-19-world-validation-report-and-quality-gates-design.md)。
 - 当前实现边界：[`Canonical Authoring V2 / Runtime Protocol V3 快速接入`](../../17-canonical-json-quickstart.md)。
 
 ## 1. 结论摘要
@@ -11,7 +11,7 @@
 1. **产品路线成立，并已有直接先例。** 2025–2026 年出现的 VideoCoCo、WorldClaw、PAT3D、SAGE、NVIDIA 3D Guided GenAI Blueprint 与 Cosmos Transfer 已分别验证“可执行白模承载物理/构图”“语义布局生成室外地形”“分阶段生成可模拟场景”“3D Depth 控制生成画面”“多控制通道生成视频”等关键环节。
 2. **没有一个成熟开源项目覆盖完整链路。** 现有项目分别解决场景生成、场景表示、Agent 执行、实时模拟或生成式渲染；不能选择其中一个直接替代本 SDK。
 3. **当前核心架构不需要推翻。** `AuthoringSpec → NormalizedWorldIR → ExecutionPlan → Runtime Adapter`、Registry/Lock、Definition/Instance/Relationship 分离、确定性编译和结构化 Diagnostic 均与外部最强实践一致。
-4. **当前长期设计还缺两个一等协议。** 一是 AI-facing 的空间放置约束与确定性 Layout Solver；二是独立于 WorldPackage 的 Simulation Take 与 Control Capture Bundle。地形 Region/Mask、多 Pass Capture、Replay 与插件门禁已有原则设计，但尚未形成完整交付。
+4. **调研识别出三个应提前的一等协议，现已形成专项设计。** 一是 AI-facing 的空间放置约束与确定性 Layout Solver；二是独立于 WorldPackage 的 Simulation Take 与 Control Capture Bundle；三是统一量化 Metric、Evidence 和阻断策略的 Validation Profile/Report。三份文档已成稿待评审，实现仍未交付。
 5. **不建议更换 Babylon + Havok。** Blender、Godot、O3DE、Habitat 和 OpenUSD 各有值得吸收的子系统思想，但没有证据表明它们更适合作为本项目的 Web 实时白模运行时。Blender 可作为未来离线 Provider，OpenUSD 可作为语义和交换格式参考。
 
 本项目更准确的长期定位是：
@@ -116,7 +116,7 @@ Habitat 证明高吞吐模拟可以把 RGB、Depth、Semantic 作为同步 Senso
 
 因此长期 CapturePort 必须输出一个可验证的多通道 Bundle，而不只是 PNG：
 
-- Neutral Clay RGB；
+- Neutral Color RGB；
 - Linear Metric Depth；
 - Semantic Class Mask；
 - Stable Instance ID；
@@ -292,19 +292,19 @@ Graph` 输出。应借鉴的是“先发现真实 Registry 资源、再组合、
 未来应增加独立的 Placement Constraint 判别 Union，至少覆盖：
 
 - `inside-region` / `outside-region`；
-- `near` / `far`；
-- `in-front-of` / `behind` / `beside`；
-- `facing` / `aligned-with`；
-- `on-surface` / `supported-by`；
-- `minimum-clearance` / `avoid-overlap`；
+- `distance-range`；
+- `relative-direction`；
+- `faces-entity`；
+- `supported-by`；
+- `minimum-clearance`；
 - `connected-by-route`；
 - `within-slope-limit`；
-- `visible-from-camera-region`。
+- `visible-in-camera-region`。
 
 约束分为：
 
-- **Hard Constraint**：碰撞、边界、支撑、出生可达、路线坡度等，不允许静默违反；
-- **Soft Constraint**：靠近、朝向、构图偏好等，Solver 在无法全部满足时返回稳定评分与违反项。
+- **Required Constraint**：碰撞、边界、支撑、出生可达、路线坡度等，不允许静默违反；
+- **Preferred Constraint**：靠近、朝向、构图偏好等，Solver 在无法全部满足时返回稳定评分与违反项。
 
 权威边界必须是：
 
@@ -321,7 +321,10 @@ Gameplay Relationship
 
 两者不能复用同一个万能 `relationships` 数组，也不能根据字段名称隐式推断属于哪一类。
 
-### 5.3 必须新增的设计二：WorldPackage、Simulation Take 与 Capture Bundle 分离
+字段、求解 Pipeline、确定性、Report、Diagnostic 和首条 Fixture 已细化到
+[Placement Constraint 与确定性 Layout Solver 专项设计](./2026-08-19-placement-constraint-layout-solver-design.md)，本文不再作为字段级协议真相。
+
+### 5.3 必须新增的设计二：WorldPackage、Simulation Take 与 Control Capture Bundle 分离
 
 当前总设计已经包含固定输入、Replay、Camera Path、Action Timeline 和 Capture Pass，但它们尚未组合成面向视频生产的独立制品。建议冻结三个对象边界：
 
@@ -342,23 +345,52 @@ ControlCaptureBundle
 
 - 同一个 WorldPackage 可以生成多个 Take，不因换镜头或换动作重新定义世界；
 - Take 的时间使用固定 Tick，帧号必须显式映射到 Tick/Render Frame；
-- Capture Bundle 不允许混入不同 WorldPackage、IR、Registry Lock 或 Session 的帧；
+- Control Capture Bundle 不允许混入不同 WorldPackage、IR、Registry Lock 或 Session 的帧；
 - 模型专属配置放在 `VideoModelAdapter`，不进入 WorldPackage；
 - 生成式视频结果是派生 Artifact，不得反向成为 Gameplay 真相。
 
-### 5.4 已有设计但尚未交付的关键部分
+五层制品边界、固定 Tick、三种 Frame 计数、五个必需 Pass、Encoding Profile、
+Bundle 目录与 CLI/Browser 协议已细化到
+[Simulation Take 与 Control Capture Bundle 专项设计](./2026-08-19-simulation-take-control-capture-design.md)。
+
+### 5.4 必须新增的设计三：Validation Profile、Report 与量化 Gate
+
+仅写出“物理/构图/Capture 必须通过”不足以形成生产协议。阈值如果散落在测试、
+Prompt 和 CI 中，或者只输出一个总体分数，Agent 无法稳定修复，关键失败也可能被
+平均值掩盖。需要将以下对象提升为一等协议：
+
+```text
+ValidationProfile
+  固定 Gate / Metric / 单位 / 阈值 / Evaluator / Platform Profile
+
+ValidationReport
+  针对单一 WorldPackage / Take / Bundle 输出不可变结果
+
+GateResult + MetricResult + EvidenceArtifact
+  保存逐项状态、实测值、阈值、证据、Diagnostic 和 Hash
+```
+
+`blocking` Gate 或 Required Metric 缺失必须阻断，不能由美学分数、VLM 判断或总体
+评分覆盖。Physics 至少量化穿插、支撑、Settling 和可达性；Composition 对每个
+Required Region/Anchor 单独阻断；Capture 验证 Pass、ID、Depth 单位、Camera、帧映射
+和 Hash 归属。VLM/LLM 第一阶段只输出 Advisory Evidence。
+
+完整 Profile/Report/Policy/CLI/Conformance 见
+[World Validation Report 与质量门禁专项设计](./2026-08-19-world-validation-report-and-quality-gates-design.md)。
+
+### 5.5 已有设计但尚未交付的关键部分
 
 | 能力 | 长期设计状态 | 当前实现状态 | 后续要求 |
 |---|---|---|---|
 | Region/Semantic/Constraint Mask 地形 | Terrain 子规格已详细设计 | Canonical V2 仍是单一程序化 Heightfield | 实现内容寻址 Raster/Mask、Region Graph 与 Gate |
-| 多 Pass Capture | 总规格已列 Color/Semantic/Instance/Depth/Collision Debug | Runtime Contract 当前主要暴露单一 `captureScreenshot()` | 冻结 Capture Bundle、Profile 与多帧输出 |
+| 多 Pass Capture | 总规格已列 Color/Semantic/Instance/Depth/Collision Debug | Runtime Contract 当前主要暴露单一 `captureScreenshot()` | 冻结 Control Capture Bundle、Profile 与多帧输出 |
 | Replay 与多 Controller | 总规格与 3C 文档已设计 | 当前 Host 只有一个默认 Controller 和固定输入 | 实现稳定 Take/Replay Log 与同 Tick Batch |
 | Asset Subject / Animation / Relationship | Subject 专项设计已分期 | S1a 只实现 Primitive Subject Definition | 按 S1b/S2+ 门禁推进，不伪装已支持 |
 | 受信 Plugin 与 Capability Registry | 总规格已定义原则 | 当前 Registry 内容仍是闭合集 | 冻结 Package、签名、Conformance 与发布流程 |
 
 当前交付真相仍以 [`Canonical JSON 快速接入 §8`](../../17-canonical-json-quickstart.md#8-当前能力边界) 为准：室外 Heightfield、Primitive 静态物体、Primitive Subject、第三人称相机、基础移动/跳跃/碰撞/水域检测；GLB、动画、Relationship、动态 Spawn、NPC、车辆、飞行与第一人称均尚未交付。
 
-### 5.5 自定义扩展应采用双通道
+### 5.6 自定义扩展应采用双通道
 
 为了同时满足开放性、确定性和生产安全，扩展必须分成两条通道：
 
@@ -398,16 +430,19 @@ NormalizedWorldIR + Provenance + Resource Lock
             ↓
 ExecutionPlan / WorldPackage
             ↓
-Babylon Runtime + Havok Physics
-            ↓
 SimulationTake
   - fixed-tick control/action track
   - camera track
+            ↓
+Babylon Runtime + Havok Physics / RuntimeSession
   - event/relationship receipts
             ↓
 ControlCaptureBundle
-  - clay RGB / depth / semantic / instance / normal
+  - neutral color / linear depth / semantic / instance / world normal
   - camera matrices / tick mapping / snapshots / hashes
+            ↓
+ValidationReport
+  - blocking gates / metrics / evidence
             ↓
 Model Adapter
   - Cosmos Transfer
@@ -465,19 +500,22 @@ Blender Provider 不能让 Blender 对象路径、`bpy` 代码或任意脚本进
 外部 Agent JSON
   → Region/Heightfield/Subject
   → 固定 Tick 移动与相机
-  → Clay + Depth + Semantic + Instance 视频
+  → Neutral Color + Linear Depth + Semantic + Instance + World Normal 视频
+  → 量化 Validation Report
   → 一个下游 Video Model Adapter
   → 最终视频与结构一致性报告
 ```
 
 该切片应优先于同时实现全部坐骑、装备、飞行和 NPC 行为，因为它直接验证产品核心假设。
 
-### P1：冻结两个新协议
+### P1：冻结三个新协议
 
 1. Placement Constraint / Layout Solver 专项设计；
-2. Simulation Take / Control Capture Bundle 专项设计。
+2. Simulation Take / Control Capture Bundle 专项设计；
+3. Validation Profile / Report / Quality Gates 专项设计。
 
-两份设计都必须包含 Schema、Normalized IR、Hash、Diagnostic、CLI/Browser API、Fixture 和 Conformance。
+三份设计都已成稿待评审，评审必须冻结 Schema、Hash、Diagnostic、CLI/Browser API、
+Fixture 和 Conformance；设计完成不等于 Runtime 或生产能力已经交付。
 
 ### P2：落实已经设计的基础能力
 
@@ -490,7 +528,7 @@ Blender Provider 不能让 Blender 对象路径、`bpy` 代码或任意脚本进
 
 ### P3：建立外部方案 Bake-off
 
-固定一组相同的 WorldPackage/Take/Capture Bundle，对 Cosmos Transfer、DiffusionRenderer 和其他候选视频模型比较：
+固定一组相同的 WorldPackage/Take/Control Capture Bundle，对 Cosmos Transfer、DiffusionRenderer 和其他候选视频模型比较：
 
 - 构图与 Anchor 保持；
 - Instance/Region 一致性；
@@ -510,7 +548,7 @@ Blender Provider 不能让 Blender 对象路径、`bpy` 代码或任意脚本进
 2. Babylon + Havok 继续作为默认 Web Runtime；
 3. Canonical Schema、IR、Compiler、Registry 和 Adapter 分层继续保持；
 4. Image 2 语义/色带图可以作为 Terrain Authoring 输入，但必须工程化固化；
-5. Placement Constraint、Simulation Take 和 Control Capture Bundle 应成为后续专项设计；
+5. Placement Constraint/Layout Solver、Simulation Take/Control Capture Bundle 和 Validation Profile/Report 应成为一等协议；
 6. 下游视频模型通过 Adapter 接入；
 7. 任意引擎代码只能存在于隔离扩展制作流程，不进入世界 JSON。
 

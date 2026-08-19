@@ -28,18 +28,20 @@ AI Schema Profile / Canonical AuthoringSpec   SDK 公共入口
             ↓
 Schema Validation + Registry Resolution
             ↓
-Normalizer + Terrain / Placement Compiler
+Normalizer + Terrain Compiler + Deterministic Layout Solver
             ↓
 NormalizedWorldIR + Resource Lock
             ↓
 ExecutionPlan / WorldPackage
             ↓
+Simulation Take                               专项设计已成稿，实现规划中
+            ↓
 Babylon.js Runtime + Havok Physics            唯一白模世界真相
             ↓
-Simulation Take                               规划中
+Control Capture Bundle                        专项设计已成稿，实现规划中
+  Neutral Color / Linear Depth / Semantic / Instance / World Normal
             ↓
-Control Capture Bundle                        规划中
-  Clay RGB / Depth / Semantic / Instance / Normal
+Validation Report                             必需 Gate 一票否决
             ↓
 Video Model Adapter                           外部视觉实现
             ↓
@@ -47,8 +49,9 @@ Final Generated Video
 ```
 
 当前已经交付到 Babylon/Havok Runtime、单截图、Snapshot 和 Browser Protocol；
-Placement Solver、WorldPackage、Simulation Take、多通道 Capture Bundle 和视频模型
-Adapter 仍在后续 Backlog 中。
+Placement Solver、Simulation Take/Control Capture Bundle、Validation Report 三份专项
+设计已成稿并等待评审冻结，相关 Runtime/CLI/Schema 实现、完整 WorldPackage 和视频
+模型 Adapter 仍在后续 Backlog 中。
 
 ## 职责边界
 
@@ -80,6 +83,12 @@ Adapter 仍在后续 Backlog 中。
   扩展经过 Plugin Conformance、签名和版本锁后才能进入生产世界。
 - **生成结果不可信**：图片、模型和外部工具输出必须被固化、校验、哈希并重新
   通过物理、构图、资源和安全 Gate。
+- **空间意图与运行时关系分离**：Placement Constraint 只负责编译时最终落位；
+  骑乘、装备、拖拽和控制权继续使用类型化 Gameplay Relationship。
+- **世界、操作和捕获分离**：WorldPackage、Simulation Take、Runtime Session、
+  Control Capture Bundle 与生成视频分别版本化和哈希。
+- **量化门禁优先**：Validation Profile 固定 Metric、阈值、单位和证据；Blocking
+  Gate 或 Required Metric 缺失不能被综合分数抵消。
 
 详细命名规则见仓库根目录的 [`AGENTS.md`](AGENTS.md) 与
 [AI-first LEGO 游戏 SDK 总体设计](docs/superpowers/specs/2026-08-17-ai-first-lego-game-sdk-design.md)。
@@ -104,13 +113,14 @@ Socket 和类型化关系表达。
 
 | 领域 | 当前已交付 | 尚未交付 |
 |---|---|---|
-| 世界输入 | Canonical Authoring V2、严格 Schema、Registry/Package Primitive Definition | Placement Constraint Solver、完整 WorldPackage |
+| 世界输入 | Canonical Authoring V2、严格 Schema、Registry/Package Primitive Definition | Placement Constraint Solver、完整 WorldPackage（专项设计已成稿） |
 | 地形 | 室外 Heightfield、基础 Relief、静态障碍、水域和物理查询 | Canonical Raster/Mask/Region Pipeline、洞穴、Overhang、完整室内 |
 | 主体 | Primitive 人形/四足代理、多实例、自动 Capsule、独立控制 | GLB 资产主体、Compound Collider、Rig/Animation Binding |
 | 关系 | Socket 数据可以声明和查询 | 动态 Bind、骑乘、装备、拖拽、Joint、事务与回滚 |
 | 运动与相机 | 地面移动、跳跃、水域状态、第三人称跟随 | 第一人称、飞行、车辆、Camera Director 和多 Rig 切换 |
 | 自动化 | validate/build/run/capture、Registry Discovery、Definition Validate、Subject Explain、Browser V3 | 持久 Runtime Session、完整 Playwright Driver、多人同时控制 |
-| Capture | 单帧截图、Runtime Snapshot | Simulation Take、Depth/Semantic/Instance/Normal 多 Pass 与视频序列 |
+| Capture | 单帧截图、Runtime Snapshot | Simulation Take、Neutral/Depth/Semantic/Instance/Normal 多 Pass 与视频序列（专项设计已成稿） |
+| Validation | Canonical Browser Gate、现有物理/构图检查 | 统一 Validation Profile/Report、量化 Metric/Evidence 与生产 Policy（专项设计已成稿） |
 | Gameplay | 基础固定输入和控制绑定 | Semantic Action、NPC、导航、任务、战斗、联网 |
 | 最终视觉 | 本地白模渲染 | Render Bridge、实时世界模型和生产 Video Model Adapter |
 
@@ -200,6 +210,9 @@ Compiler 和 Runtime 不能反向读取 Agent Prompt；Runtime Adapter 不能把
 - [AI-first LEGO 游戏 SDK 总体设计](docs/superpowers/specs/2026-08-17-ai-first-lego-game-sdk-design.md)
 - [AI-first Terrain Authoring Pipeline 设计](docs/superpowers/specs/2026-08-17-terrain-authoring-pipeline-design.md)
 - [可扩展主体组装 Authoring 专项设计](docs/superpowers/specs/2026-08-19-extensible-subject-authoring-design.md)
+- [Placement Constraint 与确定性 Layout Solver 设计](docs/superpowers/specs/2026-08-19-placement-constraint-layout-solver-design.md)
+- [Simulation Take 与 Control Capture Bundle 设计](docs/superpowers/specs/2026-08-19-simulation-take-control-capture-design.md)
+- [World Validation Report 与质量门禁设计](docs/superpowers/specs/2026-08-19-world-validation-report-and-quality-gates-design.md)
 - [Package 局部 Subject Definition（S1a）设计](docs/superpowers/specs/2026-08-19-package-subject-definition-design.md)
 - [主体资产与 3C 配置接入契约](docs/16-subject-assets-3c-integration.md)
 - [世界模型团队接入说明](docs/11-world-model-team-handoff.md)

@@ -6,6 +6,9 @@
 - 目标读者：SDK 团队、上游 Agent 团队、运行时与测试工具维护者
 - 评审支撑材料：[业界对照与可落地性核查报告](./2026-08-18-industry-alignment-and-feasibility-review.md)
 - 外部方案专题：[Agentic 白模世界到可控视频：开源方案调研与架构启示](./2026-08-19-agentic-whitebox-to-video-open-source-research.md)
+- 空间求解专项：[Placement Constraint 与确定性 Layout Solver](./2026-08-19-placement-constraint-layout-solver-design.md)
+- 拍摄制品专项：[Simulation Take 与 Control Capture Bundle](./2026-08-19-simulation-take-control-capture-design.md)
+- 质量协议专项：[World Validation Report 与质量门禁](./2026-08-19-world-validation-report-and-quality-gates-design.md)
 
 ## 1. 结论
 
@@ -21,12 +24,18 @@
 SDK Schema Validator
     ↓
 Normalizer + Kit Expander + Capability Resolver
+    ↓
+Terrain Compiler + Deterministic Layout Solver
     ↓ NormalizedWorldIR
 World Compiler
     ↓ ExecutionPlan / WorldPackage
-Babylon Web Runtime + Physics Backend
+Simulation Take
     ↓
-可移动、可碰撞、可截图、可自动验收的游戏世界
+Babylon Web Runtime + Physics Backend / Runtime Session
+    ↓
+Control Capture Bundle + Validation Report
+    ↓
+可移动、可碰撞、可重放、可自动验收的游戏世界与控制制品
 ```
 
 核心设计原则：
@@ -40,6 +49,9 @@ Babylon Web Runtime + Physics Backend
 7. SDK 正式交付物是库 API、无状态的一次性 CLI、有生命周期的 Runtime Session 协议、浏览器控制协议和可持久化 WorldPackage。
 8. Babylon.js 是默认 Web Runtime，但对外 Schema 与引擎无关。
 9. 当前仓库继续作为 SDK 仓库；生产 Agent 编排由另一个团队在独立仓库实现。
+10. AI 表达 Region、相对空间关系和 Placement Constraint；确定性 Layout Solver 负责最终 Transform，运行时 Gameplay Relationship 不参与编译时布局。
+11. WorldPackage、Simulation Take、Runtime Session、Control Capture Bundle 和最终生成视频是不同制品，使用明确引用和 Hash 连接。
+12. 生产验收由版本化 Validation Profile 与量化 Validation Report 决定；任一必需 Gate 失败都不能被综合分数覆盖。
 
 本项目不以短期开发成本最小为目标，优先保证 AI 可用性、长期扩展性和架构边界；但生产运行时的帧率、内存、包体、资源预算和安全性仍属于强制验收指标。
 
@@ -72,7 +84,9 @@ SDK 应保证结构与模拟正确；上游 Agent 对图片理解和隐藏区域
 - 地形、水面、静态/动态物体、主体、镜头、动作和基础 Gameplay 运行时。
 - 固定步长模拟、输入 Intent、状态快照、事件和回执。
 - CLI、WorldPackage、浏览器控制协议和 Playwright Driver。
-- 物理、可玩性、构图、资源预算和性能验收。
+- Placement Constraint 求解、最终 Transform Provenance 与可解释冲突报告。
+- Simulation Take、固定 Tick Track、多 Pass Control Capture Bundle 与完整性协议。
+- 物理、可玩性、构图、Capture、Replay、资源预算和性能的量化 Validation Report。
 - 能力发现、示例查询、结构化 Diagnostic 和安全修复建议。
 
 ### 3.2 上游 Agent 负责
@@ -114,6 +128,12 @@ SDK 应保证结构与模拟正确；上游 Agent 对图片理解和隐藏区域
 | NormalizedWorldIR | SDK 展开默认值、Kit、依赖和关系后的完整执行图。 |
 | ExecutionPlan | 编译器为 Runtime 生成的有序资源、系统和实例化计划。 |
 | WorldPackage | 可保存、校验、加载和运行的编译产物。 |
+| PlacementConstraint | Authoring 期描述 Entity/Region/Route/Camera 空间要求的类型化约束；不表示运行时关系。 |
+| LayoutSolveReport | Layout Solver 输出的最终 Transform、逐约束结果、Provenance、冲突和 Hash。 |
+| SimulationTake | 引用 WorldPackage 的固定 Tick 控制、动作、相机与 Capture 计划。 |
+| ControlCaptureBundle | 一次 Take 实际运行生成的多 Pass 帧、轨迹、相机、状态和完整性证据包。 |
+| ValidationProfile | 版本化 Gate、Metric、阈值、Evaluator 与平台要求。 |
+| ValidationReport | 对单一制品执行 Profile 后得到的量化 Gate/Metric/Evidence 结果。 |
 | Runtime Adapter | Babylon、物理、音频等底层实现与引擎无关 Port 的适配层。 |
 
 `Capability` 和 `Kit` 的命名并非所有引擎统一，但分别对应 Trait/Behavior/Module 与 Prefab/Archetype，符合通用工程概念。
@@ -147,6 +167,7 @@ SDK 应保证结构与模拟正确；上游 Agent 对图片理解和隐藏区域
   ├── validate
   ├── normalize
   ├── resolve
+  ├── solve layout
   ├── compile
   └── package
   ↓
@@ -160,6 +181,8 @@ SDK 应保证结构与模拟正确；上游 Agent 对图片理解和隐藏区域
   ↓
 @worldkit/runtime-babylon + @worldkit/physics-havok
   ↓
+@worldkit/take + @worldkit/capture-contracts + @worldkit/validation
+  ↓
 @worldkit/browser-protocol + @worldkit/playwright-driver + @worldkit/cli
 ```
 
@@ -172,6 +195,7 @@ packages/
   world-ir/
   capability/
   compiler/
+  layout/
   runtime-contracts/
   capabilities-core/
   capabilities-subject/
@@ -180,6 +204,9 @@ packages/
   actions/
   runtime-babylon/
   physics-havok/
+  take/
+  capture-contracts/
+  validation/
   testkit/
   browser-protocol/
   playwright-driver/
@@ -1277,6 +1304,24 @@ Opening Shot 必须定义：
 
 普通截图用于视觉比较；Semantic Mask、Instance ID、Depth、Height/Slope 和 Collider Debug 用于结构验证。必需 Region 或 Anchor 失败时，总分不能覆盖失败。
 
+### 14.4 Placement Constraint 与 Layout Solver
+
+Agent 不应为所有实例手写最终米制坐标。Authoring Schema 同时提供关闭的
+`fixed` / `solved` Placement 判别 Union：精确事实使用固定 Transform，语义放置
+使用类型化 Constraint 引用。第一批 Constraint 覆盖 Region 内外、距离范围、相对
+方向、朝向、支撑、净空、坡度、路线连接和 Camera Region 可见性。
+
+Layout Solver 位于 Registry/Terrain/Region 解析之后、NormalizedWorldIR 最终落位
+之前。它不调用 LLM/VLM，不创建 Runtime 对象；相同 Authoring、资源、Registry
+Lock、Solver Profile、Seed 与预算必须产生相同 Transform 和
+`LayoutSolveReport` Hash。Required Constraint 无法满足时阻止 WorldPackage 构建；
+Preferred Constraint 可以违反，但必须逐项返回测量、代价和证据。
+
+Placement 只解决“编译时摆在哪里”。骑乘、装备、拖拽、控制权等仍由运行时
+Gameplay Relationship 表达，不能用静态 Constraint 代替。完整 Schema、求解顺序、
+确定性、Diagnostic、CLI 与首条 Fixture 见
+[Placement Constraint 与确定性 Layout Solver 专项设计](./2026-08-19-placement-constraint-layout-solver-design.md)。
+
 ## 15. Runtime 与 Babylon/Havok
 
 ### 15.1 选择 Babylon 的原因
@@ -1651,6 +1696,26 @@ WorldPackage Manifest 和 Replay Report 必须记录 SDK、Babylon、Physics/WAS
 
 第一版生产验收的平台类别是桌面浏览器（PC Web）。移动端属于后续决策；Havok WASM 的 WebAssembly SIMD 依赖等平台约束记录在平台类别 Profile 中，扩展平台时重新评估。
 
+### 15.7 Simulation Take 与 Control Capture Bundle
+
+WorldPackage 只定义世界内容和能力，不保存某次视频的动作/镜头脚本。一次确定性
+操作与拍摄由独立 `SimulationTake` 引用 WorldPackage，使用固定 Tick 描述
+Controller/Input、Semantic Action、Camera Track 和 Capture Schedule；实际执行状态
+属于有生命周期的 `RuntimeSession`。
+
+一次运行的输出固化为不可变 `ControlCaptureBundle`。Bundle 逐帧记录
+`simulationTick`、`renderFrameIndex`、`captureFrameIndex`、Camera、Snapshot、
+Event/Action/Relationship Receipt、Pass Artifact 与全链路 Hash。第一版必需 Pass
+是 `neutral-color`、`linear-depth-meters`、`semantic-class-id`、`instance-id` 和
+`world-normal`。Capture 必须等待命令 Receipt 与 Render Ready，不能用任意延时猜测
+状态已稳定。
+
+下游视频 Provider 只通过 `VideoModelAdapter` 消费已验证 Bundle；模型专属 Prompt、
+Tensor 转换和参数不进入 WorldPackage/Take 的 Canonical Schema，生成视频也不能反向
+成为 Gameplay 真相。完整制品边界、时间映射、编码 Profile、目录、CLI/Browser 和
+重放门禁见
+[Simulation Take 与 Control Capture Bundle 专项设计](./2026-08-19-simulation-take-control-capture-design.md)。
+
 ## 16. CLI 与外部程序协议
 
 SDK 同时提供 TypeScript API 和 CLI。Schema、Validate、Build、Inspect 等一次性命令无状态；`run --interactive` 和 `preview` 是有明确生命周期的 Session 命令。JS/TS 程序可以直接调用包；Python、Go、Java 或 Agent 服务通过子进程和版本化 JSON/NDJSON 调用 CLI。
@@ -1676,6 +1741,13 @@ worldkit run ./dist/world --script actions.json --artifacts ./artifacts --headle
 worldkit run ./dist/world --interactive --protocol ndjson --headless
 worldkit capture ./dist/world --view opening --output opening.png --json
 worldkit inspect ./dist/world --json
+
+worldkit layout solve world.json --output ./artifacts/layout --json
+worldkit layout explain ./artifacts/layout/layout-report.json --constraint-id <id> --json
+worldkit take validate take.json --json
+worldkit capture run take.json --output ./artifacts/control-capture --json
+worldkit verify package ./dist/world --profile worldkit://validation/outdoor-production@1 --json
+worldkit verify capture ./artifacts/control-capture --profile worldkit://validation/control-video@1 --json
 ```
 
 所有接受文件的命令同时接受 `-`，从 stdin 读取 JSON。
@@ -1954,6 +2026,13 @@ world-package/
 
 WorldPackage 不保存进程内对象或引擎 Handle。Runtime Target 可以包含经过缓存的 Babylon/Web 资源，但 `world.normalized.json` 保持引擎无关。
 
+WorldPackage 也不保存某一次拍摄的 Controller/Input/Action/Camera Track、输出帧或模型
+参数。它只提供 Simulation Take 可引用的世界、初始状态、Capability 和锁定资源。
+`SimulationTake`、`RuntimeSession` 与 `ControlCaptureBundle` 使用各自独立 Schema 和
+Hash；同一个 WorldPackage 可以运行多个 Take，任何 Bundle 必须逐帧绑定唯一
+Package Root、Take Hash 和实际 Session。这样换镜头或动作不会重建世界，也不会把
+视频生产状态污染可复用 Package。
+
 `authoring-spec.json` 是可选审计产物，不是 Runtime 必需文件。构建命令必须支持省略或脱敏 `provenance` 中的 Prompt、参考图 URI、用户标识和内部证据；资源同时记录来源、许可证与允许用途。Runtime Target 缓存的第三方运行时二进制（如物理引擎 WASM）同样记录来源与许可证。
 
 `integrity.json` 只证明文件内容与清单一致，不能证明发布者身份。如果部署场景要求真实性，WorldPackage 还必须包含签名、签名者 ID 和宿主信任根；文档和 Diagnostic 必须明确区分 corruption integrity 与 publisher authenticity。
@@ -2119,20 +2198,35 @@ Agent 输出视为不可信数据：
 schema
   → normalize
   → capability resolve
+  → layout solve
   → compile
   → unit/integration
   → browser smoke
   → physics/playability
   → capture/composition
+  → replay/determinism
   → performance/resource budget
-  → package integrity
+  → package/bundle integrity
+  → validation report
 ```
 
-任一必需 Gate 失败都阻止发布，不能用总体分数掩盖关键失败。
+任一必需 Gate 失败都阻止发布，不能用总体分数掩盖关键失败。所有生产验收使用
+锁定的 `ValidationProfile`，输出不可变 `ValidationReport`、`GateResult`、
+`MetricResult` 和 `EvidenceArtifact`。Blocking Gate 失败、Required Metric 缺失、
+Evaluator 未完成或证据归属不明都阻断下一阶段；Advisory 结果保留但不改变结构真相。
+阈值、单位、容差、平台类别和 Evaluator 版本必须进入 Profile/Report，不能散落在
+测试代码或 Prompt 中。
 
 性能与资源预算 Gate 的预算来自两处：AuthoringSpec `constraints` 中的世界级资源预算（节点数、三角形、Collider、Raster、包体与内存上限），以及 Host Profile 按平台类别声明的运行基线（固定输入脚本下的帧时间分位数、加载时间和内存峰值）。测量在声明的平台类别中按固定 Tick 脚本执行，结果与所用 Profile 一起写入验收报告；超出预算或基线属于阻断失败，不能用平均值或总体分数覆盖。
 
 生产 Gate 还必须覆盖：Schema Projector/Adapter Conformance、WorldChangeSet 全量等价性、Capability 事务回滚、Canonical Package Root 和签名验证。Browser/Replay Gate 的 Snapshot 与 Capture Artifact 记录 `worldPackageRootHash`、`normalizedWorldIrHash`、Registry Lock Hash、Session ID、Request ID 和当前 Tick，避免把不同构建或不同运行实例的结果误作同一证据。
+
+物理 Gate 至少量化穿插深度、支撑间隙、接触比例、Settling 位移/转角、非法物理值
+和可达性；构图 Gate 对每个 Required Region/Anchor 单独阻断；Capture Gate 验证帧数、
+Pass、ID Table、Depth 单位、Camera Matrix、Tick/Frame 映射和 Hash 归属。VLM/LLM
+评估第一阶段只能作为 Advisory Evidence，不能覆盖碰撞、位置、身份或完整性失败。
+完整协议见
+[World Validation Report 与质量门禁专项设计](./2026-08-19-world-validation-report-and-quality-gates-design.md)。
 
 ## 23. 当前实现评估与复用
 
@@ -2197,16 +2291,17 @@ schema
 ### 阶段 B：协议底座
 
 - 新增 contracts、schema、world-ir、capability 和 compiler 包。
-- 定义 AuthoringSpec、NormalizedWorldIR、Prototype/Instance/Variant/Layer、WorldChangeSet、Diagnostic 和 Capability Manifest。
+- 定义 AuthoringSpec、NormalizedWorldIR、Prototype/Instance/Variant/Layer、Placement Constraint、WorldChangeSet、Diagnostic 和 Capability Manifest。
 - 实现 Canonical Schema、`constrained-json@1` Projector、validate、normalize、registry lock 和 `canonical-json-jcs@1`。
-- 用 Golden Fixture 冻结 Canonical Bytes、Composition、增量/全量等价和 Provider Adapter Conformance，再允许 Runtime 依赖这些协议。
+- 冻结 LayoutSolveReport 与 Validation Profile/Report 的基础协议，先实现 Schema/引用/Layout 的确定性 Gate。
+- 用 Golden Fixture 冻结 Canonical Bytes、Composition、Layout Solve、增量/全量等价和 Provider Adapter Conformance，再允许 Runtime 依赖这些协议。
 
 ### 阶段 C：Babylon Vertical Slice
 
 - 实现 runtime-contracts、runtime-babylon 和 physics-havok。
 - 编译并运行海湾场景。
 - 实现 CameraPort、第三人称 Rig、Boom Collision 与可重放 View Snapshot。
-- 达成与旧 Runtime 相同的地形、主体、物理、相机和捕获 Gate。
+- 达成与旧 Runtime 相同的地形、主体、物理、相机和捕获 Gate，并通过统一 Validation Report 输出量化证据。
 
 ### 阶段 D：Subject 与 Action
 
@@ -2220,6 +2315,8 @@ schema
 
 - 正式 CLI。
 - WorldPackage。
+- Simulation Take 与固定 Tick Track。
+- Control Capture Bundle、五个必需 Pass 和 Capture Encoding Profile。
 - Browser Protocol。
 - Playwright Driver。
 - Camera Mode/Snapshot/View Intent/受控 Pose 的 Browser Protocol 与 CLI 脚本动作。
@@ -2281,6 +2378,11 @@ schema
 22. NormalizedWorldIR、Registry Lock、资源和 WorldPackage 使用同一版本化 Canonical Bytes/Package Root 协议，签名与完整性验证无自引用歧义。
 23. CameraRigProfile 能表达第一人称、第三人称及其他注册视角；切换不复制 Gameplay Entity、不改变 Possession/Physics，并在骑乘/飞行 Context 中确定回退与恢复。
 24. 每个发布世界在声明的平台类别下通过帧时间、内存、加载时间和包体预算 Gate，预算来源与测量结果记录在验收报告中。
+25. Agent 可以使用类型化 Placement Constraint 表达 Region、距离、朝向、支撑、净空、路线、坡度和构图，不必为全部实例猜最终坐标。
+26. 相同 Authoring、Registry Lock、资源、Solver Profile、Seed 和预算得到相同最终 Transform 与 LayoutSolveReport Hash；Required Constraint 失败时不生成 WorldPackage。
+27. 同一个 WorldPackage 可以运行多个独立 Simulation Take；Take、Runtime Session 与 Control Capture Bundle 的引用和 Hash 不混淆。
+28. 每个生产 Control Capture Bundle 包含 `neutral-color`、`linear-depth-meters`、`semantic-class-id`、`instance-id`、`world-normal`，以及逐帧 Tick/Render Frame/Camera/Receipt 归属。
+29. 所有发布制品通过锁定 ValidationProfile 生成量化 ValidationReport；Blocking Gate、Required Metric 缺失或验证未完成都阻断，任何综合分数不能覆盖。
 
 ## 27. 最终架构决策摘要
 
@@ -2304,7 +2406,10 @@ schema
 - 第一人称与第三人称共享同一主体、装备和语义身份；View Model、遮挡淡化、Head Bob 和镜头插值只属于 Presentation。
 - Babylon 是第一版默认 Web Runtime；公共协议不包含 Babylon 类型。
 - 物理通过 Port 隔离，第一版默认 Havok。
-- SDK 提供 TypeScript API、CLI、WorldPackage、Browser Protocol 和 Playwright Driver。
+- Agent 使用 Placement Constraint 描述空间意图；确定性 Layout Solver 输出最终 Transform、Provenance 和 LayoutSolveReport，Gameplay Relationship 保持独立。
+- WorldPackage、Simulation Take、Runtime Session、Control Capture Bundle 和生成视频分层，模型专属逻辑只在 Adapter。
+- SDK 提供 TypeScript API、CLI、WorldPackage、Simulation Take、Control Capture Bundle、Browser Protocol 和 Playwright Driver。
+- 生产验收使用版本化 ValidationProfile 和量化 ValidationReport；必需 Gate 一票否决。
 - Capability 通过两阶段事务安装/移除并由 Ownership Ledger 管理；Package Hash 与签名使用版本化 Canonical Bytes。
 - 先在同一 Monorepo 并行建设新 Runtime，再移除旧 Three Runtime。
 
