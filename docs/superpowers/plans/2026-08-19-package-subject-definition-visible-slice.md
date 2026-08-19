@@ -33,7 +33,7 @@
 | 4. Clean AuthoringSpecV2 | Complete | `d5e976c` | 10 focused / 20 Authoring tests + schema exports + typecheck |
 | 5. Definition Normalize/Hash/Lock | Complete | `6fabbfa` | 28 Authoring tests + typecheck |
 | 6. Runtime Contracts V3 | Complete | `3583f6e` | 4 focused tests + typecheck |
-| 7. Compiler V3 | Not started | — | — |
+| 7. Compiler V3 | Complete | `9453bfb` | 7 focused tests + dependency audit + typecheck |
 | 8. Babylon + Browser V3 | Not started | — | — |
 | 9. CLI Discovery/Explain | Not started | — | — |
 | 10. V2 Browser E2E | Not started | — | — |
@@ -755,7 +755,7 @@ git commit -m "feat: define subject origin runtime contracts"
 - Invariant: Compiler resolves instances only from `normalizedWorldIr.resources.subjectDefinitions`; no Registry dependency is added.
 - Staging rule: S0 `compileWorld` remains until Task 9; S1a consumers call `compileWorldV3` explicitly.
 
-- [ ] **Step 1: Write failing compiler tests**
+- [x] **Step 1: Write failing compiler tests**
 
 ```ts
 it("compiles two instances from one resolved Package Definition", () => {
@@ -801,21 +801,21 @@ it("places Subject Origin on sampled terrain without adding half collider height
 
 Also assert Sockets, collider center offset, exact aggregated resource cost, stable Entity order, Definition Hash propagation, and normalized-hash mismatch failure.
 
-- [ ] **Step 2: Run compiler tests and verify failure**
+- [x] **Step 2: Run compiler tests and verify failure**
 
 Run: `pnpm vitest run packages/compiler/src/compile.test.ts`
 
 Expected: FAIL because Compiler consumes NormalizedWorldIRV1 and emits ExecutionPlanV2.
 
-- [ ] **Step 3: Upgrade compiler input and subject materialization**
+- [x] **Step 3: Upgrade compiler input and subject materialization**
 
 Index normalized definitions by `subjectDefinitionRef`; propagate resolved fields without recomputing Profile/Collider data. Compute Subject Origin from anchor X/Z, sampled terrain height, and anchor Y offset. Do not add collider height to the Origin.
 
-- [ ] **Step 4: Upgrade resource usage and execution hashing**
+- [x] **Step 4: Upgrade resource usage and execution hashing**
 
 Aggregate SDK-computed per-definition costs once per instance, preserve existing terrain/object/water costs, emit ExecutionPlanV3, and hash through `@whitebox-world/protocol` rather than Authoring re-exports.
 
-- [ ] **Step 5: Run compiler regression tests**
+- [x] **Step 5: Run compiler regression tests**
 
 Run: `pnpm vitest run packages/compiler/src/compile.test.ts`
 
@@ -823,7 +823,7 @@ Run: `pnpm typecheck`
 
 Expected: compiler tests and repository typecheck PASS because `compileWorldV3` is additive at this checkpoint.
 
-- [ ] **Step 6: Commit**
+- [x] **Step 6: Commit**
 
 ```bash
 git add packages/compiler
