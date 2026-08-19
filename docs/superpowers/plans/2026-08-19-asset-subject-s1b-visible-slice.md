@@ -1763,8 +1763,8 @@ current contracts do not treat `idle/walk/run/jump` as the permanent limit.
 | 6. Babylon Asset Resolver, Hash Gate, and Cache | Complete | `081902ea124e7f341c20f6eae232e34590cbb474`, `99abd05beb8ff99bb322de80d159c4352bf21586`, `2623a37bc3a32fa987942b66d6ace501349fcf1a` | 38 focused + 289 full tests, typecheck/build; hash/inventory/lifecycle/retry gates; final review clean |
 | 7. Rigged Visuals, Fixed-tick Animation, and Havok Integration | Complete | `130757286fa7807e6ec965c8253a3e7fccbe3edb`, `cf4bebbad2ec0851e190094046a629148d1125ff`, `bd5fea4467748288ca738fc19f0246d5a180bf04` | 72 focused + 312 full tests, typecheck/build; clone/action/socket/disposal isolation; final review clean |
 | 8. Playground Resolver, Canonical Example, CLI Explain, and HUD | Complete | `e940bb383b5c35fedfa49b330f3bf8b6e4342d61`, `ddddd32908c8bfbd390fe7feb69af3329e858ce9` | 325 full tests, typecheck/build, native Fetch + real Browser GLB readiness; final review clean |
-| 9. Rigged Subject End-to-End Conformance | Complete | `8cfc238fee0f7f1c4fcd6117e80b6c33c6419215`, review fix `339feac92715ce9f776675afdbb18245994f9f3d` | 35 files / 335 tests, typecheck/build, both verifiers, deterministic paused Tick 0 world capture, lifecycle and directory-promotion fault gates pass; Fix Round 1 independent review clean; no temp/backup/Vite residue |
-| 10. Documentation, Product Handoff, and Final Audit | Complete | `this docs commit` | 35/335 tests, 2/18 scene tests, typecheck, build, both verifiers, five boundary audits and documentation contract audit pass; only documented Vite large-chunk warning |
+| 9. Rigged Subject End-to-End Conformance | Complete | `8cfc238fee0f7f1c4fcd6117e80b6c33c6419215`, lifecycle/evidence fix `339feac92715ce9f776675afdbb18245994f9f3d`, visible-pose fix `c16c2c727efb135ad0c938dea6667b710c2ad3a1` | 36 files / 340 tests, typecheck/build, both verifiers, deterministic paused Tick 0 world capture, lifecycle/directory-promotion/tamper/visible-pose gates pass; final full-branch independent review clean; no temp/backup/Vite residue |
+| 10. Documentation, Product Handoff, and Final Audit | Complete | initial docs `dbdc729ca77c7f43bf9a66f2788c1dc1fe153bad`; audit fixes `fe675401068fca2dfeb03032869afafe7ec10fd9`, `0f3321a1364571313b0cc9d2af8155b8e3c01b7a`; `this evidence sync commit` | 36/340 tests, 2/18 scene tests, typecheck, build, both verifiers, hardened boundary audits and documentation contract audit pass; only documented Vite large-chunk warning |
 
 Task 9 的精确机器证据来自提交后的
 `artifacts/examples/rigged-subject-world/verification.json`：Authoring Spec
@@ -1775,20 +1775,27 @@ Normalized IR
 `sha256:e746bd738e13ec8603779afba4d62d2d4610d0b03d428a6a1f8cc4f468ce1984`，
 ExecutionPlan
 `sha256:22e38f9dc474b33a2adbe8442dba411e70f62731ac1e9a54fe1ac90f9f73249f`。
-五张 PNG 均为 936×596：CLI `world.png` 为暂停 Reset 后的 Tick 0，Hash
+`verification.json` 使用 `schemaVersion: 2`。五张 PNG 均为 936×596：CLI
+`world.png` 为暂停 Reset 后的 Tick 0，Hash
 `sha256:b9ff828333641e548ea7ef3d2f8dbc6c8ae96c120659db3a6f6c17df19a09d9b`；
 Browser `idle/walk/run/jump` 分别为
 `sha256:af60b01ae2bf9db87c5ea5a5e01a08539e1ca35186e7b88b60125cc049a641aa`、
-`sha256:326c170bf8add1e8bd48e35fa7499a656776dfab2d8a3ed6f11d125b2ef2a92d`、
+`sha256:63e1f332c7dcbb446f093d0d32db0e151288ab94a92aeb2d666b52bd8fd1f513`、
 `sha256:d8957ad8b2bc115a9a493dd5404ef38e10cd2373a40b2743b2af83851400e3c7`、
 `sha256:992383d2cc70d49b827af24815dff7a41bbed8e5da7e0f8bf527294b00f61552`。
+Walk 使用 1s/30 FPS Clip、1× Playback、0.2s Blend 与 60Hz Runtime，在 Action Start
+Tick 1 后的首个 Post-blend Quarter-cycle Tick 16 捕获，位置 z 为
+29.398333333333344。四张动作图在 `[374,166,188,287]` Crop 内做 Foreground-origin
+Subject Silhouette 比较；Idle/Walk、Idle/Run、Idle/Jump、Walk/Run、Walk/Jump、Run/Jump
+差异率依次为 0.500432、0.531802、0.398077、0.657316、0.298178、0.602627，全部高于
+0.15 门禁。
 隔离 Gate 记录未受控 `rigged-primary` 位置与 `idle` 不变，受控
 `rigged-secondary` 从 x=3 移至 x=5.361666666666668 并进入 `walk`；墙体 Gate
 停在 x=5.561666666666668（上限 6.2m），Tamper Gate 只命中一次资源请求并返回
 `SUBJECT_ASSET_HASH_MISMATCH`，磁盘资产 Hash 前后相同。
 
-Task 10 在 Task 9 Fix Round 1 独立复审 CLEAN 后重新执行了最终门禁：`pnpm test`
-为 35/35 files、335/335 tests，`pnpm test:scenes` 为 2/2 files、18/18 tests，
+Task 10 在 Task 9 最终全分支独立复审 CLEAN 与 Visible-pose P2 收口后记录最新门禁：
+`pnpm test` 为 36/36 files、340/340 tests，`pnpm test:scenes` 为 2/2 files、18/18 tests，
 `pnpm typecheck`、`pnpm build`、`pnpm verify:canonical` 和
 `pnpm verify:rigged-subject` 均通过。Obsolete public field、provider boundary、Registry URI
 leak、Playwright auto-install 与 Xbot/local-humanoid 五项机器审计均为零违规；构建仅保留

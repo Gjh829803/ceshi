@@ -107,14 +107,16 @@ Subject、截图和查询。它不代表任意产品资产、完整 S1b、关系
 2026-08-20 的新鲜验证证据：
 
 - `pnpm typecheck`：通过；
-- `pnpm test`：35 个测试文件、335 项测试通过；
+- `pnpm test`：36 个测试文件、340 项测试通过；
 - `pnpm verify:canonical`：Authoring 2、Normalized IR 2、ExecutionPlan 3、
   Runtime Snapshot 3、Browser Protocol 3 全部通过；
 - Canonical Browser Gate 覆盖 Babylon/Havok、墙体阻挡、水域切换、两个
   Package Subject 独立控制和确定性重置。
 - `pnpm verify:rigged-subject`：项目自有 Golden GLB、Rig、Collider Profile、
   `idle/walk/run/jump`、双实例隔离、墙体停止、936×596 截图与
-  `SUBJECT_ASSET_HASH_MISMATCH` 篡改 Gate 全部通过。
+  `SUBJECT_ASSET_HASH_MISMATCH` 篡改 Gate 全部通过；`verification.json` V2 还用
+  Foreground-origin Subject Silhouette 证明六组动作姿态差异率均高于 0.15，
+  最低为 0.298178。
 
 ## 4. Master Backlog
 

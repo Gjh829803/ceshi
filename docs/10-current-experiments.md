@@ -76,6 +76,7 @@ Subject Node 中引用 `worldkit://subject-definition/humanoid.rigged-golden@1`�
 
 `pnpm verify:rigged-subject` 已验证：
 
+- `verification.json` 使用 `schemaVersion: 2`，同时绑定动作截图与可见姿态门禁证据；
 - 自包含 GLB 为 43,656 bytes，原始字节 Hash 为
   `sha256:1095fd65c754d53e6db3757ab5e1c9e5e9dcea2581f85d40f37ea4890ee8c2c2`；
 - Normalized IR Hash 为
@@ -87,10 +88,15 @@ Subject Node 中引用 `worldkit://subject-definition/humanoid.rigged-golden@1`�
   `sha256:b9ff828333641e548ea7ef3d2f8dbc6c8ae96c120659db3a6f6c17df19a09d9b`；
 - Browser 固定 Tick 动作截图 Hash 分别为 Idle
   `sha256:af60b01ae2bf9db87c5ea5a5e01a08539e1ca35186e7b88b60125cc049a641aa`、
-  Walk `sha256:326c170bf8add1e8bd48e35fa7499a656776dfab2d8a3ed6f11d125b2ef2a92d`、
+  Walk `sha256:63e1f332c7dcbb446f093d0d32db0e151288ab94a92aeb2d666b52bd8fd1f513`、
   Run `sha256:d8957ad8b2bc115a9a493dd5404ef38e10cd2373a40b2743b2af83851400e3c7`、
   Jump `sha256:992383d2cc70d49b827af24815dff7a41bbed8e5da7e0f8bf527294b00f61552`；
-  四者两两不同，Jump 在 Tick 12 报告 `movementMedium: air`；
+  Walk 按 1s/30 FPS Clip、1× Playback、0.2s Blend 与 60Hz Runtime 推导，在
+  Action Start Tick 1 后的首个 Post-blend Quarter-cycle Tick 16 捕获，z 为
+  29.398333333333344；Jump 在 Tick 12 报告 `movementMedium: air`；
+- 四张动作图在 `[374,166,188,287]` Crop 内使用 Foreground-origin 归一化 Subject
+  Silhouette 比较；六组差异率为 0.500432、0.531802、0.398077、0.657316、
+  0.298178、0.602627，均高于 0.15 门禁，不再只以 PNG Hash 不同代替姿态证据；
 - 未受控的 `rigged-primary` 保持位置与 `idle`，受控的 `rigged-secondary` 从 x=3
   移到 x=5.361666666666668 并报告 `walk`；
 - `rigged-secondary` 在墙前停于 x=5.561666666666668，低于 6.2m 门禁；
@@ -143,7 +149,7 @@ Compound Collider、LOD、更多拓扑或完整 Semantic Actions 已经通过验
 ## 5. 2026-08-20 自动验证结果
 
 ```text
-pnpm test         35 test files / 335 tests passed
+pnpm test         36 test files / 340 tests passed
 pnpm test:scenes  2 test files / 18 tests passed
 pnpm typecheck    passed
 pnpm build        passed
