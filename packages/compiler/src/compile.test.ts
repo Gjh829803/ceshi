@@ -23,6 +23,26 @@ const RIG_PROFILE_REF = "worldkit://rig-profile/biped.golden@1";
 const ANIMATION_SET_REF = "worldkit://animation-set/humanoid.ground.golden@1";
 const COLLIDER_PROFILE_REF =
   "worldkit://collider-profile/humanoid.medium-capsule@1";
+const BIPED_BONE_IDS = [
+  "chest",
+  "foot.left",
+  "foot.right",
+  "hand.left",
+  "hand.right",
+  "head",
+  "hips",
+  "lower-arm.left",
+  "lower-arm.right",
+  "lower-leg.left",
+  "lower-leg.right",
+  "neck",
+  "root",
+  "spine",
+  "upper-arm.left",
+  "upper-arm.right",
+  "upper-leg.left",
+  "upper-leg.right",
+] as const;
 const INJECTED_SOURCE_URI = "https://registry.invalid/private/golden-humanoid.glb";
 const INJECTED_LICENSE_URI = "https://registry.invalid/private/license";
 const INJECTED_AI_TAG = "registry-private-discovery-tag";
@@ -179,6 +199,25 @@ describe("compileWorld", () => {
       format: "glb",
       inventory: { vertexCount: 360, triangleCount: 180 },
     });
+    const serializedRigProfile = JSON.parse(
+      JSON.stringify(plan.rigProfiles[0]),
+    ) as {
+      requiredBoneIds: readonly string[];
+      sourceNodeNameByBoneId: Readonly<Record<string, unknown>>;
+    };
+    expect(serializedRigProfile.requiredBoneIds).toEqual(BIPED_BONE_IDS);
+    expectExactKeys(serializedRigProfile.sourceNodeNameByBoneId, BIPED_BONE_IDS);
+    for (const boneId of BIPED_BONE_IDS) {
+      expect(
+        Object.prototype.hasOwnProperty.call(
+          serializedRigProfile.sourceNodeNameByBoneId,
+          boneId,
+        ),
+      ).toBe(true);
+      const sourceNodeName = serializedRigProfile.sourceNodeNameByBoneId[boneId];
+      expect(sourceNodeName).toEqual(expect.any(String));
+      expect((sourceNodeName as string).trim()).not.toBe("");
+    }
 
     const serializedNormalized = JSON.stringify(normalized.value);
     const serializedPlan = JSON.stringify(plan);
@@ -208,6 +247,45 @@ describe("compileWorld", () => {
     ).toBe(
       "sha256:fbbd12c164323149b817e99bbe0b1146747a1ab0c02b3f636b9f67bb716e0465",
     );
+  });
+
+  it.each([
+    {
+      label: "missing canonical Bone mapping",
+      mutate: (world: NormalizedWorldIRV2) => {
+        const sourceNodeNameByBoneId = world.resources.rigProfiles[0]!
+          .sourceNodeNameByBoneId as unknown as Record<string, string>;
+        delete sourceNodeNameByBoneId.head;
+      },
+      message:
+        "NormalizedWorldIRV2 invariant violated: Rig Profile 'worldkit://rig-profile/biped.golden@1' is missing source-node mapping for Bone 'head'.",
+    },
+    {
+      label: "whitespace-only canonical Bone mapping",
+      mutate: (world: NormalizedWorldIRV2) => {
+        const sourceNodeNameByBoneId = world.resources.rigProfiles[0]!
+          .sourceNodeNameByBoneId as unknown as Record<string, string>;
+        sourceNodeNameByBoneId.head = " \t ";
+      },
+      message:
+        "NormalizedWorldIRV2 invariant violated: Rig Profile 'worldkit://rig-profile/biped.golden@1' has an empty source-node mapping for Bone 'head'.",
+    },
+  ])("rejects a $label", ({ mutate, message }) => {
+    const normalized = normalizeRiggedWorld();
+    const world = structuredClone(normalized.value!);
+    mutate(world);
+
+    expect(compileNormalizedWorld(world)).toEqual({
+      ok: false,
+      diagnostics: [
+        {
+          severity: "error",
+          code: "COMPILER_NORMALIZED_IR_INVALID",
+          instancePath: "/normalizedWorldIr",
+          message,
+        },
+      ],
+    });
   });
 
   it("recursively projects forged Normalized descriptors and Subject data", () => {
@@ -300,26 +378,7 @@ describe("compileWorld", () => {
       "triangleCount",
       "vertexCount",
     ]);
-    expectExactKeys(executionRig.sourceNodeNameByBoneId, [
-      "chest",
-      "foot.left",
-      "foot.right",
-      "hand.left",
-      "hand.right",
-      "head",
-      "hips",
-      "lower-arm.left",
-      "lower-arm.right",
-      "lower-leg.left",
-      "lower-leg.right",
-      "neck",
-      "root",
-      "spine",
-      "upper-arm.left",
-      "upper-arm.right",
-      "upper-leg.left",
-      "upper-leg.right",
-    ]);
+    expectExactKeys(executionRig.sourceNodeNameByBoneId, BIPED_BONE_IDS);
     for (const binding of executionAnimationSet.animationBindings) {
       expectExactKeys(binding, [
         "actionId",

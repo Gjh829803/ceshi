@@ -15,6 +15,7 @@ import type {
   CompileDiagnostic,
   CompileWorldResultV3,
   ExecutionAnimationSetV1,
+  ExecutionBipedBoneIdV1,
   ExecutionColliderProfileV1,
   ExecutionObjectPrimitiveV3,
   ExecutionObjectV3,
@@ -30,6 +31,27 @@ import type {
 } from "@whitebox-world/runtime-contracts";
 
 import { sampleFractalNoise } from "./noise";
+
+const EXECUTION_BIPED_BONE_IDS = [
+  "chest",
+  "foot.left",
+  "foot.right",
+  "hand.left",
+  "hand.right",
+  "head",
+  "hips",
+  "lower-arm.left",
+  "lower-arm.right",
+  "lower-leg.left",
+  "lower-leg.right",
+  "neck",
+  "root",
+  "spine",
+  "upper-arm.left",
+  "upper-arm.right",
+  "upper-leg.left",
+  "upper-leg.right",
+] as const satisfies readonly ExecutionBipedBoneIdV1[];
 
 export interface CompileWorldInput {
   normalizedWorldIr: NormalizedWorldIRV2;
@@ -290,6 +312,23 @@ function compileSubjectAssetV1(
 function compileRigProfileV1(
   resource: NormalizedRigProfileV1,
 ): ExecutionRigProfileV1 {
+  for (const boneId of EXECUTION_BIPED_BONE_IDS) {
+    const hasMapping = Object.prototype.hasOwnProperty.call(
+      resource.sourceNodeNameByBoneId,
+      boneId,
+    );
+    const sourceNodeName = resource.sourceNodeNameByBoneId[boneId];
+    if (!hasMapping || typeof sourceNodeName !== "string") {
+      throw new Error(
+        `NormalizedWorldIRV2 invariant violated: Rig Profile '${resource.rigProfileRef}' is missing source-node mapping for Bone '${boneId}'.`,
+      );
+    }
+    if (sourceNodeName.trim().length === 0) {
+      throw new Error(
+        `NormalizedWorldIRV2 invariant violated: Rig Profile '${resource.rigProfileRef}' has an empty source-node mapping for Bone '${boneId}'.`,
+      );
+    }
+  }
   return {
     rigProfileRef: resource.rigProfileRef,
     bodyTopology: resource.bodyTopology,
