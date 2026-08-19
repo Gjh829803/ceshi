@@ -19,14 +19,14 @@
 | 0 | Extensible Subject Authoring dedicated design | Complete |
 | 1 | Engine-neutral Subject Kit Registry | Complete |
 | 2 | Multi-subject Authoring validation and normalization | Complete |
-| 3 | Versioned plural Execution and Runtime contracts | Not started |
+| 3 | Versioned plural Execution and Runtime contracts | Complete |
 | 4 | Registered Subject compiler | Not started |
 | 5 | Babylon multi-subject runtime and control binding | Not started |
 | 6 | Browser Protocol V2 and Playground switching | Not started |
 | 7 | Multi-subject fixture, CLI, Playwright, documentation | Not started |
 | 8 | Completion audit and Relationship-slice handoff | Not started |
 
-**Current milestone:** Tasks 1-2 are complete; Task 3 plural execution and runtime contracts is next.
+**Current milestone:** Tasks 1-3 are complete; Task 4 registered Subject compilation is in progress.
 
 **Latest verified baseline before implementation:** `pnpm typecheck`, 125 tests, production build, and `pnpm verify:v1` all pass on commit `8ccd219`.
 
@@ -268,7 +268,7 @@ git commit -m "feat: validate multi-subject authoring"
 - Historical: retain exported V1 interfaces so old serialized artifacts remain identifiable, but the active compiler/runtime must produce only V2.
 - Consumers: compiler, Babylon runtime, Playground adapter, Browser Protocol, CLI, tests.
 
-- [ ] **Step 1: Write failing serialization-shape tests**
+- [x] **Step 1: Write failing serialization-shape tests**
 
 ```ts
 it("uses plural subject and ID-indexed runtime state in V2", () => {
@@ -280,13 +280,13 @@ it("uses plural subject and ID-indexed runtime state in V2", () => {
 });
 ```
 
-- [ ] **Step 2: Run the focused test and confirm V2 types/fixtures are missing**
+- [x] **Step 2: Run the focused test and confirm V2 types/fixtures are missing**
 
 Run: `pnpm vitest run packages/runtime-contracts/src/runtime-contracts.test.ts`
 
 Expected: FAIL because V2 contracts are not defined.
 
-- [ ] **Step 3: Define `ExecutionPlanV2`**
+- [x] **Step 3: Define `ExecutionPlanV2`**
 
 ```ts
 export interface ExecutionSubjectV2 {
@@ -323,7 +323,7 @@ export interface ExecutionPlanV2 {
 }
 ```
 
-- [ ] **Step 4: Define Browser/Runtime V2 state and control binding**
+- [x] **Step 4: Define Browser/Runtime V2 state and control binding**
 
 ```ts
 export interface SubjectStateSnapshotV2 {
@@ -366,7 +366,7 @@ export interface ControlBindingReceiptV2 {
 
 The trusted default Controller ID is `controller-primary`. `bindControl` must be atomic and idempotent when the requested binding is already committed.
 
-- [ ] **Step 5: Run contract tests and typecheck**
+- [x] **Step 5: Run contract tests and typecheck**
 
 Run: `pnpm vitest run packages/runtime-contracts/src/runtime-contracts.test.ts`
 
@@ -374,9 +374,9 @@ Expected: PASS.
 
 Run: `pnpm typecheck`
 
-Expected: FAIL only in downstream consumers that still require V1; use this failure list as the migration checklist for Tasks 4-7.
+Expected: PASS while V1 and V2 contracts coexist during the staged migration; Tasks 4-7 move active producers and consumers to V2.
 
-- [ ] **Step 6: Commit the V2 contracts**
+- [x] **Step 6: Commit the V2 contracts**
 
 ```bash
 git add packages/runtime-contracts

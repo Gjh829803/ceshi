@@ -111,3 +111,71 @@ export interface CompileWorldResult {
   executionPlanHash?: string;
   diagnostics: readonly CompileDiagnostic[];
 }
+
+export type SubjectVisualPrimitiveV2 =
+  | { kind: "capsule"; radiusMeters: number; heightMeters: number }
+  | { kind: "box"; sizeMetersXYZ: Vec3 }
+  | { kind: "sphere"; radiusMeters: number }
+  | { kind: "cylinder"; radiusMeters: number; heightMeters: number };
+
+export interface SubjectVisualPartV2 {
+  id: string;
+  primitive: SubjectVisualPrimitiveV2;
+  localPositionMeters: Vec3;
+  localRotationEulerRadiansXYZ: Vec3;
+}
+
+export interface ExecutionSubjectV2 {
+  entityId: string;
+  kitRef: string;
+  bodyTopology: string;
+  semanticClassId: string;
+  spawnAnchorEntityId: string;
+  spawnPositionMeters: Vec3;
+  forwardDirection: "-z";
+  visualParts: readonly SubjectVisualPartV2[];
+  collider: {
+    kind: "capsule";
+    radiusMeters: number;
+    heightMeters: number;
+    massKilograms: number;
+    maxSlopeDegrees: number;
+    maxStepHeightMeters: number;
+  };
+  locomotion: {
+    mode: "ground";
+    groundSpeedMetersPerSecond: number;
+    waterSpeedMetersPerSecond: number;
+    jumpSpeedMetersPerSecond: number;
+  };
+}
+
+export interface ExecutionPlanV2 {
+  kind: "worldkit-execution-plan";
+  schemaVersion: 2;
+  id: string;
+  seed: number;
+  runtimeBackend: "babylon-havok";
+  normalizedWorldIrHash: string;
+  coordinateSystem: "right-handed-y-up-minus-z-forward";
+  gravityMetersPerSecondSquaredXYZ: Vec3;
+  atmospherePreset: "clear-day" | "golden-hour" | "overcast" | "night";
+  terrain: ExecutionTerrainV1;
+  waters: readonly ExecutionWaterV1[];
+  objects: readonly ExecutionObjectV1[];
+  controlledEntityId: string;
+  subjects: readonly ExecutionSubjectV2[];
+  camera: ExecutionCameraV1;
+  resourceUsage: {
+    vertices: number;
+    triangles: number;
+    colliders: number;
+  };
+}
+
+export interface CompileWorldResultV2 {
+  ok: boolean;
+  executionPlan?: ExecutionPlanV2;
+  executionPlanHash?: string;
+  diagnostics: readonly CompileDiagnostic[];
+}
