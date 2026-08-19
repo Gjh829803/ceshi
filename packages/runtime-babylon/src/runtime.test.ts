@@ -988,6 +988,56 @@ describe("SubjectAssetCacheV1", () => {
     engine.dispose();
   });
 
+  it("rejects parsed Lights, Sounds, ActionManagers, and Node Behaviors", async () => {
+    const { engine, scene } = createAssetScene();
+    const loader = vi.mocked(LoadAssetContainerAsync);
+    const loadImplementation = loader.getMockImplementation();
+    if (loadImplementation === undefined) throw new Error("Loader test wrapper missing.");
+    const forbiddenMutations: Array<(container: AssetContainer) => void> = [
+      (container) => {
+        container.lights.push({ behaviors: [], dispose() {} } as never);
+      },
+      (container) => {
+        container.sounds = [{ dispose() {} } as never];
+      },
+      (container) => {
+        container.actionManagers.push({ dispose() {} } as never);
+      },
+      (container) => {
+        container.getNodes()[0]!.addBehavior({
+          name: "ForbiddenBehavior",
+          attachedNode: null,
+          init() {},
+          attach(target) {
+            this.attachedNode = target;
+          },
+          detach() {
+            this.attachedNode = null;
+          },
+        });
+      },
+    ];
+
+    for (const mutateContainer of forbiddenMutations) {
+      loader.mockImplementationOnce(async (...args) => {
+        const container = await loadImplementation(...args);
+        mutateContainer(container);
+        return container;
+      });
+      const cache = new SubjectAssetCacheV1(
+        scene,
+        createMemoryResolver(goldenSubjectAssetBytes),
+      );
+      await expect(cache.acquire(goldenSubjectAssetDescriptor)).rejects.toThrow(
+        /SUBJECT_ASSET_FORMAT_UNSUPPORTED/,
+      );
+      await cache.dispose();
+    }
+
+    scene.dispose();
+    engine.dispose();
+  });
+
   it("applies parsed runtime limits before exact Inventory mismatch", async () => {
     const { engine, scene } = createAssetScene();
     const twoMeshes = mutateGlbJson(goldenSubjectAssetBytes, (json) => {
@@ -1012,6 +1062,27 @@ describe("SubjectAssetCacheV1", () => {
     await expect(cache.acquire(descriptorForBytes(twoMeshes))).rejects.toThrow(
       /SUBJECT_ASSET_INVENTORY_EXCEEDED/,
     );
+    await cache.dispose();
+    scene.dispose();
+    engine.dispose();
+  });
+
+  it("applies the actual Clip count limit before duplicate-name mismatch", async () => {
+    const { engine, scene } = createAssetScene();
+    const duplicateClip = mutateGlbJson(goldenSubjectAssetBytes, (json) => {
+      json.animations!.push(structuredClone(json.animations![0]!));
+    });
+    const cache = new SubjectAssetCacheV1(scene, createMemoryResolver(duplicateClip), {
+      runtimeLimits: {
+        ...defaultSubjectAssetRuntimeLimits,
+        maxAnimationClipCount: 4,
+      },
+    });
+
+    await expect(cache.acquire(descriptorForBytes(duplicateClip))).rejects.toThrow(
+      /SUBJECT_ASSET_INVENTORY_EXCEEDED/,
+    );
+
     await cache.dispose();
     scene.dispose();
     engine.dispose();
@@ -1224,6 +1295,108 @@ describe("SubjectAssetCacheV1", () => {
     lease.release();
     instance.dispose();
     await disposal;
+    scene.dispose();
+    engine.dispose();
+  });
+
+  it("continues Cache cleanup and sanitizes a native Instance disposal failure", async () => {
+    const { engine, scene } = createAssetScene();
+    const loader = vi.mocked(LoadAssetContainerAsync);
+    const loaderResultOffset = loader.mock.results.length;
+    const cache = new SubjectAssetCacheV1(
+      scene,
+      createMemoryResolver(goldenSubjectAssetBytes),
+    );
+    const firstLease = await cache.acquire({
+      ...goldenSubjectAssetDescriptor,
+      subjectAssetRef: "worldkit://subject-asset/disposal-a@1",
+    });
+    const secondLease = await cache.acquire({
+      ...goldenSubjectAssetDescriptor,
+      subjectAssetRef: "worldkit://subject-asset/disposal-b@1",
+    });
+    const firstInstance = firstLease.instantiate("hero-a");
+    const siblingInstance = firstLease.instantiate("hero-a-sibling");
+    const secondInstance = secondLease.instantiate("hero-b");
+    const containers = await Promise.all(
+      loader.mock.results
+        .slice(loaderResultOffset)
+        .map((result) => result.value as Promise<AssetContainer>),
+    );
+    expect(containers).toHaveLength(2);
+
+    const containerDisposeCalls = [0, 0];
+    const containerDisposeSpies = containers.map((container, index) => {
+      const nativeDispose = container.dispose.bind(container);
+      return vi.spyOn(container, "dispose").mockImplementation(() => {
+        containerDisposeCalls[index] = containerDisposeCalls[index]! + 1;
+        nativeDispose();
+      });
+    });
+    const secret = "BABYLON_PROVIDER_PRIVATE_DISPOSE_FAILURE";
+    let firstInstanceDisposeCalls = 0;
+    const firstRoot = firstInstance.rootNodes[0]!;
+    const firstRootDisposeSpy = vi.spyOn(firstRoot, "dispose").mockImplementation(() => {
+      firstInstanceDisposeCalls += 1;
+      throw new Error(secret);
+    });
+    let siblingInstanceDisposeCalls = 0;
+    const siblingRoot = siblingInstance.rootNodes[0]!;
+    const nativeSiblingRootDispose = siblingRoot.dispose.bind(siblingRoot);
+    const siblingRootDisposeSpy = vi
+      .spyOn(siblingRoot, "dispose")
+      .mockImplementation((...args) => {
+        siblingInstanceDisposeCalls += 1;
+        nativeSiblingRootDispose(...args);
+      });
+    let secondInstanceDisposeCalls = 0;
+    const secondRoot = secondInstance.rootNodes[0]!;
+    const nativeSecondRootDispose = secondRoot.dispose.bind(secondRoot);
+    const secondRootDisposeSpy = vi
+      .spyOn(secondRoot, "dispose")
+      .mockImplementation((...args) => {
+        secondInstanceDisposeCalls += 1;
+        nativeSecondRootDispose(...args);
+      });
+
+    let firstDisposal: Promise<void> | undefined;
+    expect(() => {
+      firstDisposal = cache.dispose();
+    }).not.toThrow();
+    expect(firstDisposal).toBeInstanceOf(Promise);
+    const repeatedDisposal = cache.dispose();
+    expect(repeatedDisposal).toBe(firstDisposal);
+    const disposalError = await firstDisposal!.catch((error) => error);
+
+    expect(isSubjectAssetRuntimeErrorV1(disposalError)).toBe(true);
+    expect(disposalError).toMatchObject({ code: "SUBJECT_ASSET_FORMAT_UNSUPPORTED" });
+    expect(String(disposalError)).not.toContain(secret);
+    expect(String(disposalError)).not.toMatch(/babylon|provider/i);
+    expect(firstInstanceDisposeCalls).toBe(1);
+    expect(siblingInstanceDisposeCalls).toBe(1);
+    expect(secondInstanceDisposeCalls).toBe(1);
+    expect(containerDisposeCalls).toEqual([1, 1]);
+    expect(secondRoot.isDisposed()).toBe(true);
+    expect(() => firstLease.instantiate("late-a")).toThrow(
+      /SUBJECT_ASSET_LEASE_RELEASED/,
+    );
+    expect(() => secondLease.instantiate("late-b")).toThrow(
+      /SUBJECT_ASSET_LEASE_RELEASED/,
+    );
+    firstLease.release();
+    secondLease.release();
+    firstInstance.dispose();
+    siblingInstance.dispose();
+    secondInstance.dispose();
+    expect(firstInstanceDisposeCalls).toBe(1);
+    expect(siblingInstanceDisposeCalls).toBe(1);
+    expect(secondInstanceDisposeCalls).toBe(1);
+    expect(containerDisposeCalls).toEqual([1, 1]);
+
+    firstRootDisposeSpy.mockRestore();
+    siblingRootDisposeSpy.mockRestore();
+    secondRootDisposeSpy.mockRestore();
+    for (const spy of containerDisposeSpies) spy.mockRestore();
     scene.dispose();
     engine.dispose();
   });

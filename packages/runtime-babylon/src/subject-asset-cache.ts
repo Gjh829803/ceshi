@@ -161,6 +161,16 @@ function assetDiagnostic(
   });
 }
 
+function sanitizedDisposalFailure(
+  error: unknown,
+  asset?: ExecutionSubjectAssetV1,
+): SubjectAssetRuntimeErrorV1 {
+  if (isSubjectAssetRuntimeErrorV1(error)) return error;
+  return asset === undefined
+    ? new SubjectAssetRuntimeErrorV1("SUBJECT_ASSET_FORMAT_UNSUPPORTED")
+    : assetDiagnostic("SUBJECT_ASSET_FORMAT_UNSUPPORTED", asset);
+}
+
 function copyDescriptor(asset: ExecutionSubjectAssetV1): ExecutionSubjectAssetV1 {
   return {
     ...asset,
@@ -269,6 +279,9 @@ function validateExactInventory(
   asset: ExecutionSubjectAssetV1,
   actual: SubjectAssetInventoryV1,
 ): void {
+  if (uniq(actual.animationClipNames).length !== actual.animationClipNames.length) {
+    throw assetDiagnostic("SUBJECT_ASSET_INVENTORY_MISMATCH", asset);
+  }
   if (!isEqual(normalizedInventory(asset.inventory), normalizedInventory(actual))) {
     throw assetDiagnostic("SUBJECT_ASSET_INVENTORY_MISMATCH", asset);
   }
@@ -412,16 +425,13 @@ function inspectContainerInventory(
     triangleCount += indices.length / 3;
   }
   const clipNames = container.animationGroups.map((group) => group.name);
-  if (uniq(clipNames).length !== clipNames.length) {
-    throw assetDiagnostic("SUBJECT_ASSET_INVENTORY_MISMATCH", asset);
-  }
   return {
     meshCount: renderableMeshes.length,
     vertexCount,
     triangleCount,
     skeletonCount: container.skeletons.length,
     boneCount: container.skeletons.reduce((sum, skeleton) => sum + skeleton.bones.length, 0),
-    animationClipNames: sortBy(clipNames),
+    animationClipNames: clipNames,
   };
 }
 
@@ -430,6 +440,7 @@ class SubjectAssetInstance implements SubjectAssetInstanceV1 {
 
   constructor(
     private readonly nativeEntries: InstantiatedEntries,
+    private readonly descriptor: ExecutionSubjectAssetV1,
     readonly rootNodes: readonly TransformNode[],
     readonly meshes: readonly AbstractMesh[],
     readonly skeletons: readonly Skeleton[],
@@ -440,8 +451,13 @@ class SubjectAssetInstance implements SubjectAssetInstanceV1 {
   dispose(): void {
     if (this.disposed) return;
     this.disposed = true;
-    this.nativeEntries.dispose();
-    this.onDispose(this);
+    try {
+      this.nativeEntries.dispose();
+    } catch (error) {
+      throw sanitizedDisposalFailure(error, this.descriptor);
+    } finally {
+      this.onDispose(this);
+    }
   }
 }
 
@@ -489,6 +505,7 @@ class SubjectAssetLease implements SubjectAssetLeaseV1 {
       }
       const instance = new SubjectAssetInstance(
         nativeEntries,
+        this.entry.descriptor,
         rootNodes,
         meshes,
         skeletons,
@@ -511,8 +528,29 @@ class SubjectAssetLease implements SubjectAssetLeaseV1 {
   release(): void {
     if (!this.active) return;
     this.active = false;
-    for (const instance of [...this.liveInstances]) instance.dispose();
-    this.onRelease(this, this.entry);
+    let firstDisposalFailure: SubjectAssetRuntimeErrorV1 | undefined;
+    try {
+      for (const instance of [...this.liveInstances]) {
+        try {
+          instance.dispose();
+        } catch (error) {
+          firstDisposalFailure ??= sanitizedDisposalFailure(
+            error,
+            this.entry.descriptor,
+          );
+        }
+      }
+    } finally {
+      try {
+        this.onRelease(this, this.entry);
+      } catch (error) {
+        firstDisposalFailure ??= sanitizedDisposalFailure(
+          error,
+          this.entry.descriptor,
+        );
+      }
+    }
+    if (firstDisposalFailure !== undefined) throw firstDisposalFailure;
   }
 
   invalidateFromCache(): void {
@@ -593,24 +631,41 @@ export class SubjectAssetCacheV1 {
   dispose(): Promise<void> {
     if (this.disposePromise !== undefined) return this.disposePromise;
     this.closed = true;
-    for (const lease of [...this.leases]) lease.invalidateFromCache();
     const pendingPromises = [...this.pendingByKey.values()].map((entry) => entry.promise);
-    this.disposePromise = (async () => {
+    let resolveDisposal!: () => void;
+    let rejectDisposal!: (error: SubjectAssetRuntimeErrorV1) => void;
+    const storedPromise = new Promise<void>((resolve, reject) => {
+      resolveDisposal = resolve;
+      rejectDisposal = reject;
+    });
+    void storedPromise.catch(() => undefined);
+    this.disposePromise = storedPromise;
+    let firstDisposalFailure: SubjectAssetRuntimeErrorV1 | undefined;
+    for (const lease of [...this.leases]) {
+      try {
+        lease.invalidateFromCache();
+      } catch (error) {
+        firstDisposalFailure ??= sanitizedDisposalFailure(error);
+      }
+    }
+    const finishDisposal = async (): Promise<void> => {
       await Promise.allSettled(pendingPromises);
       const entries = sortBy([...this.entriesByKey.values()], (entry) => entry.key).reverse();
-      let firstDisposalError: unknown;
       for (const entry of entries) {
         try {
           this.disposeContainerOnce(entry.container);
         } catch (error) {
-          firstDisposalError ??= error;
+          firstDisposalFailure ??= sanitizedDisposalFailure(error, entry.descriptor);
         }
       }
       this.entriesByKey.clear();
       this.pendingByKey.clear();
-      if (firstDisposalError !== undefined) throw firstDisposalError;
-    })();
-    return this.disposePromise;
+      if (firstDisposalFailure !== undefined) throw firstDisposalFailure;
+    };
+    void finishDisposal().then(resolveDisposal, (error) => {
+      rejectDisposal(sanitizedDisposalFailure(error));
+    });
+    return storedPromise;
   }
 
   private async loadEntry(
