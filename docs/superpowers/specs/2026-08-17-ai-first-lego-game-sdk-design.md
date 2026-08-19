@@ -5,6 +5,7 @@
 - 目标仓库：`agent-whitebox-world-sdk`
 - 目标读者：SDK 团队、上游 Agent 团队、运行时与测试工具维护者
 - 评审支撑材料：[业界对照与可落地性核查报告](./2026-08-18-industry-alignment-and-feasibility-review.md)
+- 外部方案专题：[Agentic 白模世界到可控视频：开源方案调研与架构启示](./2026-08-19-agentic-whitebox-to-video-open-source-research.md)
 
 ## 1. 结论
 

@@ -1,5 +1,11 @@
 # Canonical JSON Babylon Vertical Slice Implementation Plan
 
+> **状态：Superseded / Historical。** 本计划对应从未发布的 Authoring V1，已被
+> Canonical Authoring V2、NormalizedWorldIR V2、ExecutionPlan V3 以及
+> [`2026-08-19-package-subject-definition-visible-slice.md`](./2026-08-19-package-subject-definition-visible-slice.md)
+> 取代。下方未勾选项只保留历史上下文，不属于当前 Backlog，也不得用于计算重构
+> 进度；当前任务统一查看 [`../../18-refactor-progress-and-backlog.md`](../../18-refactor-progress-and-backlog.md)。
+
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
 **Goal:** Build the first production-shaped vertical slice in which a strict `AuthoringSpecV1` JSON file validates, normalizes, compiles, and runs as an interactive whitebox 3D world in a new Babylon.js + Havok runtime, with CLI validation/build/run/capture commands.
@@ -520,4 +526,3 @@ Expected: clean worktree and only intentional V1 commits.
 - [ ] **Step 4: Integrate and synchronize**
 
 Fetch `origin`, rebase the feature branch if necessary, fast-forward `main`, push `main`, fetch again, and verify `git rev-list --left-right --count main...origin/main` returns `0 0` with matching local/remote hashes.
-

@@ -4,6 +4,7 @@
 - 日期：2026-08-18（外部事实核实日期，链接内容以当日为准）。
 - 核查对象：[`2026-08-17-ai-first-lego-game-sdk-design.md`](./2026-08-17-ai-first-lego-game-sdk-design.md) 与 [`2026-08-17-terrain-authoring-pipeline-design.md`](./2026-08-17-terrain-authoring-pipeline-design.md)。
 - 核查方法：对照本仓库现状验证复用主张；联网核实运行时选型的关键能力；对照模型提供方已发布的结构化输出硬上限评估 AI-facing 协议。
+- 后续专题：[`Agentic 白模世界到可控视频：开源方案调研与架构启示`](./2026-08-19-agentic-whitebox-to-video-open-source-research.md) 进一步对照场景生成、约束求解、模拟控制信号和生成式视频渲染项目。
 
 ## 1. 结论摘要
 

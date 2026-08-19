@@ -1,158 +1,245 @@
 # Agent Whitebox World SDK
 
-一个面向 AI 的语义白膜游戏 SDK。新程序通过 Canonical Authoring V2
-描述室外世界和可组合主体；SDK 将其确定性编译为 IR V2、ExecutionPlan V3，
-并用 Babylon.js/Havok 运行、切换受控主体和截图。仓库仍保留
-Three.js/Rapier Alpha 场景作为创作实验与回归样例，但它不是新程序的协议入口。
+一个面向 AI 的确定性白模世界编译与交互模拟 SDK。
 
-> 第一次阅读请从[项目总览](docs/00-project-overview.md)开始。它区分了当前实现、实验能力和后续规划；其他文档中的目标 API 不代表已经交付。
+外部 Agent 使用稳定的 Canonical Schema 描述世界、主体和约束；SDK 负责校验、
+资源解析、确定性编译、Babylon.js/Havok 运行、物理控制、状态查询和结构捕获。
+后续视频模型只消费 SDK 输出的白模与控制通道，不负责决定碰撞、位置、导航或
+Gameplay 真相。
 
-新程序接入请直接阅读 [Canonical JSON V2 快速接入](docs/17-canonical-json-quickstart.md)，并运行：
+> 当前长期重构总进度约 **40%**；“JSON → IR → Babylon/Havok → 多主体控制与截图”
+> 的第一条 Canonical 纵向切片约 **80%**。详细口径和全部待办见
+> [SDK 重构总进度与 Backlog](docs/18-refactor-progress-and-backlog.md)。
+
+第一次阅读建议依次查看：
+
+1. [项目总览](docs/00-project-overview.md)：产品范围、当前能力和明确不支持的部分；
+2. [Canonical JSON V2 快速接入](docs/17-canonical-json-quickstart.md)：当前唯一 JSON 协议和命令；
+3. [重构总进度与 Backlog](docs/18-refactor-progress-and-backlog.md)：完成度、优先级、依赖和验收标准。
+
+## 核心链路
+
+```text
+Prompt + Reference Image
+            ↓
+External Planning / Coding Agent              上游团队负责
+            ↓
+AI Schema Profile / Canonical AuthoringSpec   SDK 公共入口
+            ↓
+Schema Validation + Registry Resolution
+            ↓
+Normalizer + Terrain / Placement Compiler
+            ↓
+NormalizedWorldIR + Resource Lock
+            ↓
+ExecutionPlan / WorldPackage
+            ↓
+Babylon.js Runtime + Havok Physics            唯一白模世界真相
+            ↓
+Simulation Take                               规划中
+            ↓
+Control Capture Bundle                        规划中
+  Clay RGB / Depth / Semantic / Instance / Normal
+            ↓
+Video Model Adapter                           外部视觉实现
+            ↓
+Final Generated Video
+```
+
+当前已经交付到 Babylon/Havok Runtime、单截图、Snapshot 和 Browser Protocol；
+Placement Solver、WorldPackage、Simulation Take、多通道 Capture Bundle 和视频模型
+Adapter 仍在后续 Backlog 中。
+
+## 职责边界
+
+| 角色 | 负责 | 不负责 |
+|---|---|---|
+| 上游 Agent 团队 | 理解 Prompt/参考图，选择 Registry 内容，生成和修复 Canonical JSON | 不直接操作 Babylon、Havok、DOM、Mesh 或物理 Handle |
+| 本 SDK | Schema、IR、Compiler、Registry、Runtime、物理、控制、相机、状态、Capture 和 CLI/Browser 协议 | 不实现通用 LLM Agent，不生成最终高质量视觉 |
+| 3D 资产团队 | 提供带版本、单位、Pivot、Forward Axis、Rig、Animation、Socket 和许可证信息的资产 | 不定义世界 Gameplay 或运行时控制权 |
+| 视频模型与 Adapter | 根据白模控制通道实现材质、光影、风格和视觉细节 | 不修改世界位置、碰撞、主体数量、动作结果或语义身份 |
+
+白模 Runtime 是唯一世界真相。凡是影响位置、数量、碰撞、遮挡、导航、动作、
+关键轮廓或玩法结果的变化，都必须先进入 Canonical 世界并通过 Runtime Gate。
+
+## 核心设计原则
+
+- **AI-friendly Schema**：一个概念只有一个公共名称；使用稳定 ID、精确 Ref、
+  闭合枚举、判别 Union 和带单位的数值字段。
+- **高层语义优先**：Agent 选择 Definition、Capability、Relationship 和约束，
+  不拼装引擎对象或猜测底层生命周期。
+- **确定性编译**：相同输入、Registry Lock、Compiler Version 和 Seed 产生相同
+  Canonical Hash、IR 和执行结果。
+- **协议与引擎分离**：Canonical Schema、IR 和 Runtime Contracts 不包含
+  Babylon/Havok 类型；引擎细节只存在于 Adapter 内。
+- **逻辑、渲染、物理三图分离**：RenderNode 父子层级不是 Gameplay 真相；
+  Relationship、Collider 和 Visual Attachment 分别编译并保持一致。
+- **Definition、Instance、Relationship 分离**：定义“是什么”、实例“世界里是谁”、
+  关系“两个实例当前怎样连接”，三者不能互相替代。
+- **开放但受控的扩展**：内容级扩展通过 Package/Registry Definition；算法级
+  扩展经过 Plugin Conformance、签名和版本锁后才能进入生产世界。
+- **生成结果不可信**：图片、模型和外部工具输出必须被固化、校验、哈希并重新
+  通过物理、构图、资源和安全 Gate。
+
+详细命名规则见仓库根目录的 [`AGENTS.md`](AGENTS.md) 与
+[AI-first LEGO 游戏 SDK 总体设计](docs/superpowers/specs/2026-08-17-ai-first-lego-game-sdk-design.md)。
+
+## LEGO 世界模型
+
+| 概念 | 含义 | 当前状态 |
+|---|---|---|
+| Subject Definition | 可复用主体定义，组合 Geometry/Asset、Socket、Collider Policy、Profile 和 Capability | Primitive Package/Registry Definition 已交付 |
+| Subject Instance | 世界中的具体主体，具有独立 Entity ID、Transform、状态和控制权 | 已交付 |
+| Visual Part | Definition 内部的可渲染组成部分，不自动成为独立 Entity | Primitive Part 已交付，GLB/Asset Part 未交付 |
+| Subject Socket | 主体局部空间中的稳定连接点，例如手、座位或拖车钩 | 声明与编译已交付，关系绑定未交付 |
+| Capability/Profile | 运动、控制、物理、动作等可组合能力及其锁定配置 | 首个 Ground Locomotion/Collider Profile 已交付 |
+| Relationship | `mountedOn`、装备、拖拽等实例之间的类型化 Gameplay 关系 | S2 规划中，当前 Authoring V2 不支持 |
+| Semantic Action | 与具体动画 Clip 解耦的移动、攻击、交互等动作 | 规划中 |
+
+主体类别不决定能力。人、马、滑板、汽车、拖车或飞龙都使用同一套
+Definition/Instance/Capability/Relationship 原则；差异由已注册能力、Profile、
+Socket 和类型化关系表达。
+
+## 当前能力与后续边界
+
+| 领域 | 当前已交付 | 尚未交付 |
+|---|---|---|
+| 世界输入 | Canonical Authoring V2、严格 Schema、Registry/Package Primitive Definition | Placement Constraint Solver、完整 WorldPackage |
+| 地形 | 室外 Heightfield、基础 Relief、静态障碍、水域和物理查询 | Canonical Raster/Mask/Region Pipeline、洞穴、Overhang、完整室内 |
+| 主体 | Primitive 人形/四足代理、多实例、自动 Capsule、独立控制 | GLB 资产主体、Compound Collider、Rig/Animation Binding |
+| 关系 | Socket 数据可以声明和查询 | 动态 Bind、骑乘、装备、拖拽、Joint、事务与回滚 |
+| 运动与相机 | 地面移动、跳跃、水域状态、第三人称跟随 | 第一人称、飞行、车辆、Camera Director 和多 Rig 切换 |
+| 自动化 | validate/build/run/capture、Registry Discovery、Definition Validate、Subject Explain、Browser V3 | 持久 Runtime Session、完整 Playwright Driver、多人同时控制 |
+| Capture | 单帧截图、Runtime Snapshot | Simulation Take、Depth/Semantic/Instance/Normal 多 Pass 与视频序列 |
+| Gameplay | 基础固定输入和控制绑定 | Semantic Action、NPC、导航、任务、战斗、联网 |
+| 最终视觉 | 本地白模渲染 | Render Bridge、实时世界模型和生产 Video Model Adapter |
+
+当前阶段只承诺室外 Heightfield 白模世界。不要把 NPC、车辆、坐骑、飞行、室内、
+洞穴、联网或视频模型接入当作已经存在的生产能力。
+
+## 快速开始
+
+安装依赖并验证 Canonical 示例：
 
 ```bash
 pnpm install
 pnpm worldkit validate examples/authoring/package-subject-world.json --json
+pnpm worldkit build examples/authoring/package-subject-world.json \
+  --output artifacts/examples/package-subject-world/world.build.json --json
+```
+
+查看 Package Subject Definition 的确定性解析结果：
+
+```bash
+pnpm worldkit subject explain \
+  examples/authoring/package-subject-world.json \
+  --entity-id pack-animal-a --json
+```
+
+启动 Canonical Babylon/Havok Runtime：
+
+```bash
 pnpm worldkit run examples/authoring/package-subject-world.json
 ```
 
-用户通过一句话或图片提出创作需求，Planner、Builder 和 Visual Bible Agent 通过 SDK 工件接力生成世界；玩家操控确定性的 3D 游戏运行时；实时世界模型根据白膜、空间结构和语义条件生成最终视觉画面。
-
-创作不再从“直接写几何”开始。World Planner Agent 先把输入扩展为可追踪的 `WorldSpec`、世界 Prompt 和 Entity Catalog，并用 Codex 内置图片生成能力制作严格俯视的世界规划图和进入视角构图图。规划被哈希冻结后，独立的 World Builder Agent 才实现白膜；SDK 再从真实白膜导出俯视图、高度/坡度图和每类实体的正/右/后三视图。最后由 Visual Bible Agent 生成匹配的样式三视图和渲染首帧。图片表达意图，`WorldSpec` 与白膜运行时共同约束真实空间。
-
-## 核心定义
-
-本项目不是完整传统游戏引擎，也不是让 Agent 在运行时控制角色。
-
-它由三部分组成：
-
-1. **多 Agent 创作层**：Planner 负责世界定义，Builder 负责白膜实现，Visual Bible 负责视觉条件；未来再扩展主体、NPC 和游戏规则。
-2. **白膜游戏运行时**：当前负责镜头、输入、人形运动、物理和基础动作；未来扩展导航、玩法和更多主体。
-3. **生成式渲染层**：未来把白膜世界实时转换为具有材质、光影和细节的最终画面，当前尚未接入。
-
-白膜世界是游戏逻辑和空间关系的真实来源，生成式渲染层不负责决定碰撞、导航和玩法结果。
-
-## 设计原则
-
-- 面向 Coding Agent 提供少量、高层、稳定的 API。
-- Agent 优先选择完整的主体套餐，而不是逐项配置相机、物理和动画。
-- SDK 内部保持镜头、运动、物理、动作等模块解耦。
-- 主体与客体使用相同 Entity 模型，区别来自控制权和能力配置。
-- 影响移动、碰撞、遮挡、导航和关键轮廓的内容必须存在于白膜中。
-- 材质、纹理、表面装饰、氛围和非关键细节交给生成式渲染层。
-- 每个白膜实体具有稳定 ID、语义和外观绑定，供世界模型持续识别。
-
-## 文档
-
-- [项目总览：范围、状态与阅读顺序](docs/00-project-overview.md)
-- [产品与系统边界](docs/01-product-definition.md)
-- [SDK 总体架构](docs/02-sdk-architecture.md)
-- [Agent-facing API](docs/03-agent-facing-api.md)
-- [世界模型渲染契约](docs/04-render-contract.md)
-- [MVP 范围与演进路线](docs/05-mvp-roadmap.md)
-- [能力分层与体验路线](docs/14-capability-levels-and-experience-roadmap.md)
-- [自由世界特征扩展协议](docs/06-world-feature-system.md)
-- [第一期 Alpha 实现与运行指南](docs/07-alpha-implementation.md)
-- [Coding Agent 场景创作指南](docs/08-agent-scene-authoring.md)
-- [运行时世界导演与受控世界操作协议](docs/09-runtime-world-director.md)
-- [当前实验与验证记录](docs/10-current-experiments.md)
-- [世界模型团队接入说明](docs/11-world-model-team-handoff.md)
-- [Plan-first 世界创作协议](docs/12-plan-first-world-authoring.md)
-- [多 Agent 世界创作流水线](docs/13-multi-agent-world-authoring.md)
-- [Creator Studio：上传、生成与历史世界](docs/15-creator-studio.md)
-- [主体资产与 3C 配置接入契约](docs/16-subject-assets-3c-integration.md)
-- [Canonical JSON V2：AI/CLI 接入与运行指南](docs/17-canonical-json-quickstart.md)
-- [架构决策：向 Agent 暴露主体套餐](decisions/0001-subject-kits.md)
-- [架构决策：第一、二期范围](decisions/0002-phased-scope.md)
-- [架构决策：Agent、Director 与 World Model 边界](decisions/0003-agent-director-world-model-boundaries.md)
-- [架构决策：新场景采用 Plan-first 创作](decisions/0004-plan-first-world-authoring.md)
-- [架构决策：分离 Planner、Builder 与 Visual Bible](decisions/0005-separated-planner-builder-visual-bible.md)
-
-### 下一代架构规格与当前实现依据
-
-以下文档描述 AuthoringSpec 编译架构与 Runtime 的长期目标。Canonical
-Authoring V2 已交付 S1a：Registry/Package Primitive Subject Definition、自动
-Collider、Hash/Lock、复数主体、CLI Explain 和 Browser Protocol V3。关系、
-资产型主体、动画、坐骑、装备与高级地形仍是后续设计，不应误认为已经实现：
-
-- [AI-first 白模游戏 SDK 设计评审简版](docs/reviews/2026-08-18-ai-first-sdk-design-review-brief.md)：面向团队评审的 10～15 分钟阅读稿，只保留关键设计、风险和待确认决策。
-- [AI-first LEGO 游戏 SDK 总体设计](docs/superpowers/specs/2026-08-17-ai-first-lego-game-sdk-design.md)：下一代总架构规格，含双层 AI API、引擎无关 IR、确定性编译与迁移阶段计划。
-- [AI-first Terrain Authoring Pipeline 设计](docs/superpowers/specs/2026-08-17-terrain-authoring-pipeline-design.md)：地形子规格，定义从生成式规划图到权威 Heightfield 的确定性编译链路。
-- [可扩展主体组装 Authoring 专项设计](docs/superpowers/specs/2026-08-19-extensible-subject-authoring-design.md)：定义自定义主体 Definition、实例化、自动 Collider、Capability 与类型化 Relationship 的长期扩展边界；讨论中的 `define / spawn / bind` 仅为概念操作名。
-- [Package 局部 Subject Definition（S1a）设计](docs/superpowers/specs/2026-08-19-package-subject-definition-design.md)：冻结 Authoring V2、自定义 Primitive 白模、Socket、Collider 推导、Definition Hash、Resource Lock 与 Discovery/Explain 契约。
-- [业界对照与可落地性核查报告](docs/superpowers/specs/2026-08-18-industry-alignment-and-feasibility-review.md)：评审支撑材料，含运行时选型核实、业界实践对照与 AI 友好性评估。
-- [阶段 0 技术探针计划与外部资料核查](docs/superpowers/specs/2026-08-18-phase0-probe-plan-and-external-research.md)：协议冻结前的风险探针清单、判据与已定决策记录。
-- [架构决策：AuthoringSpec 编译架构与 Babylon Runtime（Proposed）](decisions/0006-authoring-spec-compiler-architecture.md)：随总体设计评审一同定稿。
-
-### 重构实施计划与进度
-
-- [Canonical JSON Babylon 历史实施计划](docs/superpowers/plans/2026-08-18-canonical-json-babylon-v1.md)：第一条纵向切片的历史实施记录；其中的未发布输入协议已被 Authoring V2 取代。
-- [Subject Foundation 可视切片 TODO](docs/superpowers/plans/2026-08-19-subject-foundation-visible-slice.md)：多主体、可注入 Definition Registry、自动 Collider、复数 Snapshot 与控制切换的实施与验收记录；顶部进度表和任务复选框是实施状态真相。
-- [Package Subject Definition 可视切片计划](docs/superpowers/plans/2026-08-19-package-subject-definition-visible-slice.md)：Authoring V2、Package 白模主体、Collider 推导、Hash/Lock、CLI Explain 与 Browser V3 的逐任务实施清单。
-
-## 当前状态
-
-Canonical Authoring V2 是唯一接受的输入。当前已具备严格 JSON Schema、
-语义校验、精确版本 Registry、Package 局部 Primitive Subject Definition、
-确定性 Collider 推导、Definition/IR/Plan Hash、Resource Lock、复数
-`ExecutionPlanV3`、Babylon.js 白膜渲染、每主体独立 Havok Controller、
-Heightfield/静态障碍物/角色碰撞、水域检测、第三人称镜头、原子控制切换、
-Browser Protocol V3，以及 Registry Discovery、Definition Validate、Subject
-Explain、`validate / build / run / capture` CLI。运行 `pnpm verify:canonical`
-可执行真实 Chromium 端到端验收。Authoring V1 从未发布，现已删除且不兼容。
-
-第一期 Alpha 已有可运行实现，但不等于第一期生产完成：
-
-- `World / Entity / fixed timestep / Input / EventBus`
-- Rapier 刚体、碰撞体、高度场与射线查询
-- `humanoid.third_person` 主体套餐：WASD、走/跑/跳、动作状态、第三人称镜头与镜头碰撞
-- 可绑定 Mixamo 骨架的白膜 GLB 加载；本地 Xbot 已验证 `idle / walk / run`
-- 连续分块高度场；`flat / plain / hills / mountains` 预设；以及 Agent 可生成/导入的全局标量 Raster、可选 Mask、双线性采样和无缝跨 tile 投影
-- 专用 WaterBody：连续岸带、湖底/水位语义、浅深水着色、菲涅尔和轻微波纹
-- `FeatureRegistry`：schema、seed、预算、诊断、资源所有权、更新、重建和删除
-- `defineOutdoorScene` 场景 DSL、通用运行时编译器、Agent 自定义 Feature、场景目录与可追踪的初始镜头构图
-- `OutdoorWorldSpec / definePlannedOutdoorScene`：全世界拓扑、证据来源、进入视角、屏幕空间构图 Guide 和规划资产的可验证契约
-- `WorldPromptBundle / Entity Catalog`：世界级渲染描述，以及主体、NPC、标志物、客体的 Prototype/Instance、唯一实例色和三视图契约
-- `plan-lock.json`：冻结项目内参考图、WorldSpec 源码、World Plan 和 Opening Shot；Builder 前后都会检查漂移
-- Codex 内置图片生成的 World Plan / Opening Shot，以及 SDK 从真实场景导出的 Top-down / Height-Slope 规划工件
-- SDK 真实正交白膜三视图导出，以及 Visual Bible 输入/最终包校验
-- `WASD / Shift / Space / ↑ / ↓`、相机相对移动、符合视线语义的上下视角、固定步长插值与防颠簸跟随
-- 统一人形通行契约：42° 最大爬坡角、48° 自动滑落角、局部坡度查询和出生点坡度检查
-- 可玩的 Vite Playground、世界检查器、截图、无 UI 的纯 WebGL 游玩录屏、固定输入 Smoke，以及语义构图 Mask / 区域 IoU / 实体屏幕锚点门禁
-- 本地 Creator Studio：Prompt / 参考图上传、Codex 串行生成队列、持久化历史、日志、失败重试和白膜体验入口
+截图并保存 Runtime Snapshot：
 
 ```bash
-pnpm install
-pnpm dev
+pnpm worldkit capture examples/authoring/package-subject-world.json \
+  --output artifacts/examples/package-subject-world/world.png \
+  --snapshot artifacts/examples/package-subject-world/snapshot.json --json
 ```
 
-浏览器打开 `http://127.0.0.1:5173/`。仓库不分发来源尚未确认的 Xbot；本地开发可按[运行指南](docs/07-alpha-implementation.md)链接自己的 Mixamo 兼容 GLB。没有本地资产时会明确显示无骨骼占位体，不会伪装成已绑定角色。
+Canonical Authoring V2 是唯一输入；V1 从未发布，已经删除，也不存在兼容字段。
 
-如需使用图形化创作入口，运行：
+## 验证
 
 ```bash
+pnpm typecheck
+pnpm test
+pnpm test:scenes
+pnpm build
+pnpm verify:canonical
+```
+
+`verify:canonical` 会在真实 Chromium 中验证 Canonical Build Artifact、
+Babylon/Havok、墙体碰撞、水域切换、两个 Package Subject 独立控制、截图、
+Snapshot 和确定性 Reset。
+
+## 代码边界
+
+| 路径 | 职责 |
+|---|---|
+| `packages/protocol/` | Canonical JSON Bytes 与 Hash |
+| `packages/subject-composition/` | 引擎无关的 Primitive Bounds、Collider 推导和资源成本 |
+| `packages/subject-registry/` | 精确版本的 Definition、Capability 和 Profile Registry |
+| `packages/authoring/` | Authoring V2 Schema、解析、语义校验、资源解析和 Normalized IR |
+| `packages/compiler/` | NormalizedWorldIR → ExecutionPlan 的确定性编译 |
+| `packages/runtime-contracts/` | ExecutionPlan、Snapshot 与 Browser Protocol 数据协议 |
+| `packages/runtime-babylon/` | Babylon/Havok Runtime Adapter |
+| `apps/playground/` | Canonical Runtime 页面、旧 Alpha 场景和浏览器验证入口 |
+| `scripts/worldkit.ts` | SDK CLI |
+
+Compiler 和 Runtime 不能反向读取 Agent Prompt；Runtime Adapter 不能把 Babylon
+对象泄漏到公共协议；场景模块不能为了创建内容而修改 Runtime、Physics 或 Camera
+内部实现。
+
+## 文档导航
+
+### 使用与当前状态
+
+- [项目总览：范围、状态与阅读顺序](docs/00-project-overview.md)
+- [Canonical JSON V2：AI/CLI 接入与运行指南](docs/17-canonical-json-quickstart.md)
+- [SDK 重构总进度与 Backlog](docs/18-refactor-progress-and-backlog.md)
+- [当前实验与验证记录](docs/10-current-experiments.md)
+- [第一期 Alpha 实现与运行指南](docs/07-alpha-implementation.md)
+
+### 架构评审
+
+- [AI-first 白模游戏 SDK 设计评审简版](docs/reviews/2026-08-18-ai-first-sdk-design-review-brief.md)
+- [AI-first LEGO 游戏 SDK 总体设计](docs/superpowers/specs/2026-08-17-ai-first-lego-game-sdk-design.md)
+- [AI-first Terrain Authoring Pipeline 设计](docs/superpowers/specs/2026-08-17-terrain-authoring-pipeline-design.md)
+- [可扩展主体组装 Authoring 专项设计](docs/superpowers/specs/2026-08-19-extensible-subject-authoring-design.md)
+- [Package 局部 Subject Definition（S1a）设计](docs/superpowers/specs/2026-08-19-package-subject-definition-design.md)
+- [主体资产与 3C 配置接入契约](docs/16-subject-assets-3c-integration.md)
+- [世界模型团队接入说明](docs/11-world-model-team-handoff.md)
+- [运行时世界导演与受控世界操作协议](docs/09-runtime-world-director.md)
+
+### 外部依据与可行性
+
+- [业界对照与可落地性核查报告](docs/superpowers/specs/2026-08-18-industry-alignment-and-feasibility-review.md)
+- [Agentic 白模世界到可控视频：开源方案调研与架构启示](docs/superpowers/specs/2026-08-19-agentic-whitebox-to-video-open-source-research.md)
+- [阶段 0 技术探针计划与外部资料核查](docs/superpowers/specs/2026-08-18-phase0-probe-plan-and-external-research.md)
+
+### 已完成实施切片
+
+- [Subject Foundation 可视切片](docs/superpowers/plans/2026-08-19-subject-foundation-visible-slice.md)
+- [Package Subject Definition 可视切片](docs/superpowers/plans/2026-08-19-package-subject-definition-visible-slice.md)
+- [Canonical JSON Babylon 历史实施计划](docs/superpowers/plans/2026-08-18-canonical-json-babylon-v1.md)：已被 Authoring V2 取代，仅保留历史上下文。
+
+### 架构决策
+
+- [ADR-0001：向 Agent 暴露主体套餐](decisions/0001-subject-kits.md)
+- [ADR-0002：第一、二期范围](decisions/0002-phased-scope.md)
+- [ADR-0003：Agent、Director 与 World Model 边界](decisions/0003-agent-director-world-model-boundaries.md)
+- [ADR-0004：新场景采用 Plan-first 创作](decisions/0004-plan-first-world-authoring.md)
+- [ADR-0005：分离 Planner、Builder 与 Visual Bible](decisions/0005-separated-planner-builder-visual-bible.md)
+- [ADR-0006：AuthoringSpec 编译架构与 Babylon Runtime](decisions/0006-authoring-spec-compiler-architecture.md)
+
+## Legacy 与实验路径
+
+仓库仍保留 Three.js/Rapier Alpha Playground、Plan-first 多 Agent 场景流程、
+Creator Studio 和若干已验证场景，作为创作实验、视觉回归和迁移 Fixture。
+
+```bash
+pnpm dev
 pnpm studio
 ```
 
-然后打开 `http://127.0.0.1:4174/`。Studio 会同时保证 Playground 在 `http://127.0.0.1:5173/` 可用；现有已验证世界会自动进入历史列表，新任务的输入、状态与日志保存在 `apps/studio/data/worlds/`。
+这些入口不是新程序的 Canonical 协议真相，不再承接新的底层能力。新外部程序应
+使用 `worldkit`、Authoring V2 和 Browser Protocol V3。最终切换计划见
+[重构总进度与 Backlog](docs/18-refactor-progress-and-backlog.md#p32-默认实现切换)。
 
-让 Agent 创作新场景时，优先分阶段执行并在 Planner 后人工评审：
-
-```bash
-pnpm agent:plan -- --scene-id <id> --image /absolute/reference.png "<场景描述>"
-pnpm agent:build -- --scene-id <id>
-pnpm dev  # 浏览器验收并导出白膜三视图
-pnpm agent:visual -- --scene-id <id>
-```
-
-三个阶段遵守仓库根目录的 `AGENTS.md`，且无需改 SDK 内部。完整流程和能力边界见 [Coding Agent 场景创作指南](docs/08-agent-scene-authoring.md)与[多 Agent 世界创作流水线](docs/13-multi-agent-world-authoring.md)。
-
-三个创作 Agent 都使用项目级 `whitebox_workspace_only` 权限 Profile：禁止读取其他用户目录、禁止网络、禁止权限升级。图片只允许传给 Planner；启动器把明确指定的文件复制到一次性隔离目录，不开放原目录。`pnpm agent:scene -- --scene-id <id> "<描述>"` 仍可连续运行 Planner 与 Builder，但内部是两次独立任务并带冻结门禁；Visual Bible 必须在浏览器白膜验收和三视图导出后单独运行。
-
-测试数量以当前 `pnpm test` 输出为准；`typecheck`、生产构建和规划工件一致性均属于交付门禁。详细场景、近期反馈修正、自动验证边界和已知告警见[当前实验与验证记录](docs/10-current-experiments.md)。
-
-Package 局部 Primitive Subject Definition 已完成 S1a 可视切片；类型化
-Relationship、资产型主体、坐骑/拖拽、装备、动画和室内搭建尚未实现。NPC、
-完整玩法、Render Bridge、实时世界模型和 Runtime World Director 也属于后续
-范围。当前 Quadruped 是白膜组合、自动 Collider、Socket 和独立控制的代理，
-不是动物资产或行为系统。默认旧场景页面仍是本地 Three.js 白膜预览；
-`worldkit run` 启动 Babylon.js/Havok Canonical 页面，两者都不是实时世界模型输出。
+仓库不分发来源尚未确认的 Xbot。需要本地验证 Mixamo 兼容 GLB 时，请按照
+[Alpha 运行指南](docs/07-alpha-implementation.md)链接自己的合规资产；没有资产时
+Runtime 会明确显示白模占位体，不会伪装成已绑定角色。

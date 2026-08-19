@@ -1,6 +1,7 @@
 # 分期范围与演进路线
 
 > 路线图只表达范围和顺序，不代表全部模块已经实现。当前事实以[项目总览](00-project-overview.md)和[实验记录](10-current-experiments.md)为准。
+> 可执行任务、加权进度、依赖和完成证据统一查看[重构总进度与 Backlog](18-refactor-progress-and-backlog.md)。
 
 面向产品体验的简明版本见[能力分层与体验路线](14-capability-levels-and-experience-roadmap.md)。本文继续保留工程范围和模块拆分。
 
