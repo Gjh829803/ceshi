@@ -5,7 +5,8 @@
   "type": "module",
   "exports": {
     ".": "./src/index.ts",
-    "./schema": "./src/authoring-spec-v1.schema.json"
+    "./schema": "./src/authoring-spec-v2.schema.json",
+    "./subject-definition-schema": "./src/subject-definition-v1.schema.json"
   },
   "dependencies": {
     "@whitebox-world/protocol": "workspace:*",

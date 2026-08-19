@@ -1,8 +1,16 @@
 import Ajv2020, { type ErrorObject } from "ajv/dist/2020.js";
 import addFormats from "ajv-formats";
 
-import schema from "./authoring-spec-v1.schema.json";
-import type { AuthoringDiagnostic, AuthoringResult, AuthoringSpecV1 } from "./types";
+import authoringSpecV1Schema from "./authoring-spec-v1.schema.json";
+import authoringSpecV2Schema from "./authoring-spec-v2.schema.json";
+import subjectDefinitionV1Schema from "./subject-definition-v1.schema.json";
+import type {
+  AuthoringDiagnostic,
+  AuthoringResult,
+  AuthoringSpecV1,
+  AuthoringSpecV2,
+  PackageSubjectDefinitionV1,
+} from "./types";
 
 const ajv = new Ajv2020({
   allErrors: true,
@@ -15,8 +23,56 @@ ajv.addFormat("worldkit-resource-ref", {
   validate: (value: string) =>
     /^(?:worldkit|package|asset):\/\/[a-z0-9][a-z0-9./_-]*(?:@[1-9][0-9]*)?$/.test(value),
 });
+ajv.addFormat("subject-definition-ref", {
+  type: "string",
+  validate: (value: string) =>
+    /^(?:worldkit|package):\/\/subject-definition\/[a-z0-9][a-z0-9.-]{0,63}@[1-9][0-9]*$/.test(
+      value,
+    ),
+});
+ajv.addFormat("capability-ref", {
+  type: "string",
+  validate: (value: string) =>
+    /^worldkit:\/\/capability\/[a-z0-9][a-z0-9.-]{0,63}@[1-9][0-9]*$/.test(value),
+});
+ajv.addFormat("physics-body-profile-ref", {
+  type: "string",
+  validate: (value: string) =>
+    /^worldkit:\/\/physics-body-profile\/[a-z0-9][a-z0-9.-]{0,63}@[1-9][0-9]*$/.test(
+      value,
+    ),
+});
+ajv.addFormat("locomotion-profile-ref", {
+  type: "string",
+  validate: (value: string) =>
+    /^worldkit:\/\/locomotion-profile\/[a-z0-9][a-z0-9.-]{0,63}@[1-9][0-9]*$/.test(value),
+});
+ajv.addFormat("collider-derivation-profile-ref", {
+  type: "string",
+  validate: (value: string) =>
+    /^worldkit:\/\/collider-derivation-profile\/[a-z0-9][a-z0-9.-]{0,63}@[1-9][0-9]*$/.test(
+      value,
+    ),
+});
+ajv.addFormat("package-prototype-ref", {
+  type: "string",
+  validate: (value: string) =>
+    /^package:\/\/prototype\/[a-z0-9][a-z0-9.-]{0,63}@[1-9][0-9]*$/.test(value),
+});
 
-const validate = ajv.compile<AuthoringSpecV1>(schema);
+ajv.addSchema(subjectDefinitionV1Schema);
+
+const validateV1 = ajv.compile<AuthoringSpecV1>(authoringSpecV1Schema);
+const validateV2 = ajv.compile<AuthoringSpecV2>(authoringSpecV2Schema);
+const validateSubjectDefinitionV1 = (() => {
+  const registeredValidator = ajv.getSchema<PackageSubjectDefinitionV1>(
+    "worldkit://schema/subject-definition@1",
+  );
+  if (registeredValidator === undefined) {
+    throw new Error("SUBJECT_DEFINITION_SCHEMA_NOT_REGISTERED");
+  }
+  return registeredValidator;
+})();
 
 function diagnosticFor(error: ErrorObject): AuthoringDiagnostic {
   const details: Record<string, unknown> = {
@@ -34,9 +90,29 @@ function diagnosticFor(error: ErrorObject): AuthoringDiagnostic {
 }
 
 export function validateAuthoringSpec(value: unknown): AuthoringResult<AuthoringSpecV1> {
-  if (validate(value)) return { ok: true, value, diagnostics: [] };
+  if (validateV1(value)) return { ok: true, value, diagnostics: [] };
   return {
     ok: false,
-    diagnostics: (validate.errors ?? []).map(diagnosticFor),
+    diagnostics: (validateV1.errors ?? []).map(diagnosticFor),
+  };
+}
+
+export function validateAuthoringSpecV2(value: unknown): AuthoringResult<AuthoringSpecV2> {
+  if (validateV2(value)) return { ok: true, value, diagnostics: [] };
+  return {
+    ok: false,
+    diagnostics: (validateV2.errors ?? []).map(diagnosticFor),
+  };
+}
+
+export function validatePackageSubjectDefinitionV1(
+  value: unknown,
+): AuthoringResult<PackageSubjectDefinitionV1> {
+  if (validateSubjectDefinitionV1(value)) {
+    return { ok: true, value: value as PackageSubjectDefinitionV1, diagnostics: [] };
+  }
+  return {
+    ok: false,
+    diagnostics: (validateSubjectDefinitionV1.errors ?? []).map(diagnosticFor),
   };
 }

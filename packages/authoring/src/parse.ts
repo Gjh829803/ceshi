@@ -6,8 +6,13 @@ import {
   type ParseError,
 } from "jsonc-parser";
 
-import type { AuthoringDiagnostic, AuthoringResult, AuthoringSpecV1 } from "./types";
-import { validateAuthoringSpec } from "./validate";
+import type {
+  AuthoringDiagnostic,
+  AuthoringResult,
+  AuthoringSpecV1,
+  AuthoringSpecV2,
+} from "./types";
+import { validateAuthoringSpec, validateAuthoringSpecV2 } from "./validate";
 
 const MAX_AUTHORING_JSON_BYTES = 8 * 1024 * 1024;
 
@@ -49,7 +54,7 @@ function findDuplicateKeys(
   }
 }
 
-export function parseAuthoringSpecJson(sourceText: string): AuthoringResult<AuthoringSpecV1> {
+function parseCanonicalAuthoringJson(sourceText: string): AuthoringResult<unknown> {
   if (new TextEncoder().encode(sourceText).byteLength > MAX_AUTHORING_JSON_BYTES) {
     return {
       ok: false,
@@ -93,5 +98,41 @@ export function parseAuthoringSpecJson(sourceText: string): AuthoringResult<Auth
   if (duplicateDiagnostics.length > 0) {
     return { ok: false, diagnostics: duplicateDiagnostics };
   }
-  return validateAuthoringSpec(getNodeValue(root));
+  return { ok: true, value: getNodeValue(root), diagnostics: [] };
+}
+
+export function parseAuthoringSpecJson(sourceText: string): AuthoringResult<AuthoringSpecV1> {
+  const parsed = parseCanonicalAuthoringJson(sourceText);
+  if (!parsed.ok) return { ok: false, diagnostics: parsed.diagnostics };
+  return validateAuthoringSpec(parsed.value);
+}
+
+export function parseAuthoringSpecJsonV2(sourceText: string): AuthoringResult<AuthoringSpecV2> {
+  const parsed = parseCanonicalAuthoringJson(sourceText);
+  if (!parsed.ok) return { ok: false, diagnostics: parsed.diagnostics };
+
+  const value = parsed.value;
+  if (
+    value !== null &&
+    typeof value === "object" &&
+    (value as { kind?: unknown }).kind === "worldkit-authoring-spec" &&
+    Object.hasOwn(value, "schemaVersion") &&
+    (value as { schemaVersion?: unknown }).schemaVersion !== 2
+  ) {
+    const version = (value as { schemaVersion?: unknown }).schemaVersion;
+    return {
+      ok: false,
+      diagnostics: [
+        {
+          severity: "error",
+          code: "AUTHORING_SCHEMA_VERSION_NOT_SUPPORTED",
+          instancePath: "/schemaVersion",
+          message: `Authoring schema version '${String(version)}' is not supported.`,
+          details: { supportedSchemaVersions: [2] },
+        },
+      ],
+    };
+  }
+
+  return validateAuthoringSpecV2(value);
 }

@@ -1,0 +1,519 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "worldkit://schema/authoring-spec@2",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "kind",
+    "schemaVersion",
+    "id",
+    "seed",
+    "world",
+    "resources",
+    "nodes",
+    "relationships",
+    "rules",
+    "startup",
+    "constraints"
+  ],
+  "properties": {
+    "kind": { "const": "worldkit-authoring-spec" },
+    "schemaVersion": { "const": 2 },
+    "id": { "$ref": "#/$defs/id" },
+    "seed": { "type": "integer", "minimum": 0, "maximum": 4294967295 },
+    "provenance": { "$ref": "#/$defs/provenance" },
+    "world": { "$ref": "#/$defs/world" },
+    "resources": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["prototypes", "subjectDefinitions"],
+      "properties": {
+        "prototypes": {
+          "type": "array",
+          "maxItems": 4096,
+          "items": { "$ref": "#/$defs/prototype" }
+        },
+        "subjectDefinitions": {
+          "type": "array",
+          "maxItems": 256,
+          "items": { "$ref": "worldkit://schema/subject-definition@1" }
+        }
+      }
+    },
+    "nodes": {
+      "type": "array",
+      "minItems": 4,
+      "maxItems": 10000,
+      "items": {
+        "oneOf": [
+          { "$ref": "#/$defs/terrainNode" },
+          { "$ref": "#/$defs/waterNode" },
+          { "$ref": "#/$defs/objectNode" },
+          { "$ref": "#/$defs/subjectNode" },
+          { "$ref": "#/$defs/cameraNode" },
+          { "$ref": "#/$defs/anchorNode" }
+        ]
+      }
+    },
+    "relationships": {
+      "type": "array",
+      "maxItems": 10000,
+      "items": { "$ref": "#/$defs/relationship" }
+    },
+    "rules": {
+      "type": "array",
+      "maxItems": 10000,
+      "items": { "$ref": "#/$defs/rule" }
+    },
+    "startup": { "$ref": "#/$defs/startup" },
+    "constraints": { "type": "object", "additionalProperties": false }
+  },
+  "$defs": {
+    "id": {
+      "type": "string",
+      "pattern": "^[a-z0-9][a-z0-9.-]{0,63}$"
+    },
+    "resourceRef": {
+      "type": "string",
+      "format": "worldkit-resource-ref"
+    },
+    "positiveNumber": {
+      "type": "number",
+      "exclusiveMinimum": 0
+    },
+    "vec2": {
+      "type": "array",
+      "prefixItems": [{ "type": "number" }, { "type": "number" }],
+      "items": false,
+      "minItems": 2,
+      "maxItems": 2
+    },
+    "positiveVec2": {
+      "type": "array",
+      "prefixItems": [
+        { "$ref": "#/$defs/positiveNumber" },
+        { "$ref": "#/$defs/positiveNumber" }
+      ],
+      "items": false,
+      "minItems": 2,
+      "maxItems": 2
+    },
+    "vec3": {
+      "type": "array",
+      "prefixItems": [
+        { "type": "number" },
+        { "type": "number" },
+        { "type": "number" }
+      ],
+      "items": false,
+      "minItems": 3,
+      "maxItems": 3
+    },
+    "positiveVec3": {
+      "type": "array",
+      "prefixItems": [
+        { "$ref": "#/$defs/positiveNumber" },
+        { "$ref": "#/$defs/positiveNumber" },
+        { "$ref": "#/$defs/positiveNumber" }
+      ],
+      "items": false,
+      "minItems": 3,
+      "maxItems": 3
+    },
+    "semantic": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["classId"],
+      "properties": {
+        "classId": { "type": "string", "minLength": 1, "maxLength": 128 }
+      }
+    },
+    "transform": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["positionMetersXYZ"],
+      "properties": {
+        "positionMetersXYZ": { "$ref": "#/$defs/vec3" },
+        "rotationEulerRadiansXYZ": { "$ref": "#/$defs/vec3" },
+        "scaleXYZ": { "$ref": "#/$defs/positiveVec3" }
+      }
+    },
+    "provenance": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "userPrompt": { "type": "string", "maxLength": 20000 },
+        "referenceImages": {
+          "type": "array",
+          "maxItems": 64,
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["assetRef", "evidenceClass"],
+            "properties": {
+              "assetRef": { "$ref": "#/$defs/resourceRef" },
+              "evidenceClass": {
+                "enum": ["user-explicit", "reference-visible", "planner-inferred"]
+              }
+            }
+          }
+        }
+      }
+    },
+    "world": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "coordinateSystem",
+        "bounds",
+        "gravityMetersPerSecondSquaredXYZ",
+        "environment",
+        "resourceBudget"
+      ],
+      "properties": {
+        "coordinateSystem": { "const": "right-handed-y-up-minus-z-forward" },
+        "bounds": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["centerMetersXZ", "sizeMetersXZ", "heightRangeMeters"],
+          "properties": {
+            "centerMetersXZ": { "$ref": "#/$defs/vec2" },
+            "sizeMetersXZ": { "$ref": "#/$defs/positiveVec2" },
+            "heightRangeMeters": {
+              "type": "array",
+              "prefixItems": [{ "type": "number" }, { "type": "number" }],
+              "items": false,
+              "minItems": 2,
+              "maxItems": 2
+            }
+          }
+        },
+        "gravityMetersPerSecondSquaredXYZ": { "$ref": "#/$defs/vec3" },
+        "environment": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["preset"],
+          "properties": {
+            "preset": { "enum": ["clear-day", "golden-hour", "overcast", "night"] }
+          }
+        },
+        "resourceBudget": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["maxVertices", "maxTriangles", "maxColliders"],
+          "properties": {
+            "maxVertices": { "type": "integer", "minimum": 1 },
+            "maxTriangles": { "type": "integer", "minimum": 1 },
+            "maxColliders": { "type": "integer", "minimum": 1 }
+          }
+        }
+      }
+    },
+    "prototype": {
+      "oneOf": [
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["id", "version", "kind", "primitive", "sizeMetersXYZ", "collisionEnabled"],
+          "properties": {
+            "id": { "$ref": "#/$defs/id" },
+            "version": { "const": 1 },
+            "kind": { "const": "primitive" },
+            "primitive": { "const": "box" },
+            "sizeMetersXYZ": { "$ref": "#/$defs/positiveVec3" },
+            "collisionEnabled": { "type": "boolean" },
+            "semantic": { "$ref": "#/$defs/semantic" }
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["id", "version", "kind", "primitive", "radiusMeters", "collisionEnabled"],
+          "properties": {
+            "id": { "$ref": "#/$defs/id" },
+            "version": { "const": 1 },
+            "kind": { "const": "primitive" },
+            "primitive": { "const": "sphere" },
+            "radiusMeters": { "$ref": "#/$defs/positiveNumber" },
+            "collisionEnabled": { "type": "boolean" },
+            "semantic": { "$ref": "#/$defs/semantic" }
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["id", "version", "kind", "primitive", "radiusMeters", "heightMeters", "collisionEnabled"],
+          "properties": {
+            "id": { "$ref": "#/$defs/id" },
+            "version": { "const": 1 },
+            "kind": { "const": "primitive" },
+            "primitive": { "const": "cylinder" },
+            "radiusMeters": { "$ref": "#/$defs/positiveNumber" },
+            "heightMeters": { "$ref": "#/$defs/positiveNumber" },
+            "collisionEnabled": { "type": "boolean" },
+            "semantic": { "$ref": "#/$defs/semantic" }
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["id", "version", "kind", "primitive", "radiusMeters", "heightMeters", "collisionEnabled"],
+          "properties": {
+            "id": { "$ref": "#/$defs/id" },
+            "version": { "const": 1 },
+            "kind": { "const": "primitive" },
+            "primitive": { "const": "cone" },
+            "radiusMeters": { "$ref": "#/$defs/positiveNumber" },
+            "heightMeters": { "$ref": "#/$defs/positiveNumber" },
+            "collisionEnabled": { "type": "boolean" },
+            "semantic": { "$ref": "#/$defs/semantic" }
+          }
+        }
+      ]
+    },
+    "proceduralSource": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["kind", "relief"],
+      "properties": {
+        "kind": { "const": "procedural" },
+        "relief": { "enum": ["flat", "plain", "hills", "mountains"] },
+        "baseHeightMeters": { "type": "number" },
+        "amplitudeMeters": { "type": "number", "minimum": 0 },
+        "frequencyPerMeter": { "$ref": "#/$defs/positiveNumber" },
+        "octaves": { "type": "integer", "minimum": 1, "maximum": 8 },
+        "lacunarityRatio": { "$ref": "#/$defs/positiveNumber" },
+        "persistenceRatio": { "type": "number", "exclusiveMinimum": 0, "maximum": 1 }
+      }
+    },
+    "terrainNode": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "kind", "components"],
+      "properties": {
+        "id": { "$ref": "#/$defs/id" },
+        "kind": { "const": "terrain" },
+        "components": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["terrain"],
+          "properties": {
+            "terrain": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["source", "grid"],
+              "properties": {
+                "source": { "$ref": "#/$defs/proceduralSource" },
+                "grid": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "required": ["centerMetersXZ", "sizeMetersXZ", "resolutionCellsXZ"],
+                  "properties": {
+                    "centerMetersXZ": { "$ref": "#/$defs/vec2" },
+                    "sizeMetersXZ": { "$ref": "#/$defs/positiveVec2" },
+                    "resolutionCellsXZ": {
+                      "type": "array",
+                      "prefixItems": [
+                        { "type": "integer", "minimum": 2, "maximum": 1025 },
+                        { "type": "integer", "minimum": 2, "maximum": 1025 }
+                      ],
+                      "items": false,
+                      "minItems": 2,
+                      "maxItems": 2
+                    }
+                  }
+                },
+                "semantic": { "$ref": "#/$defs/semantic" }
+              }
+            }
+          }
+        }
+      }
+    },
+    "waterBoundary": {
+      "oneOf": [
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["kind", "centerMetersXZ", "radiusMeters"],
+          "properties": {
+            "kind": { "const": "circle" },
+            "centerMetersXZ": { "$ref": "#/$defs/vec2" },
+            "radiusMeters": { "$ref": "#/$defs/positiveNumber" }
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["kind", "centerMetersXZ", "radiusMetersXZ"],
+          "properties": {
+            "kind": { "const": "ellipse" },
+            "centerMetersXZ": { "$ref": "#/$defs/vec2" },
+            "radiusMetersXZ": { "$ref": "#/$defs/positiveVec2" }
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["kind", "pointsMetersXZ"],
+          "properties": {
+            "kind": { "const": "polygon" },
+            "pointsMetersXZ": {
+              "type": "array",
+              "minItems": 3,
+              "maxItems": 4096,
+              "items": { "$ref": "#/$defs/vec2" }
+            }
+          }
+        }
+      ]
+    },
+    "waterNode": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "kind", "components"],
+      "properties": {
+        "id": { "$ref": "#/$defs/id" },
+        "kind": { "const": "water" },
+        "components": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["water"],
+          "properties": {
+            "water": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["terrainEntityId", "boundary", "depthMeters"],
+              "properties": {
+                "terrainEntityId": { "$ref": "#/$defs/id" },
+                "boundary": { "$ref": "#/$defs/waterBoundary" },
+                "depthMeters": { "$ref": "#/$defs/positiveNumber" },
+                "shoreWidthMeters": { "type": "number", "minimum": 0 },
+                "waterLevelMeters": { "type": "number" },
+                "traversalMode": { "enum": ["blocked", "swimmable", "walkable"] },
+                "semantic": { "$ref": "#/$defs/semantic" }
+              }
+            }
+          }
+        }
+      }
+    },
+    "objectNode": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "kind", "prototypeRef", "transform"],
+      "properties": {
+        "id": { "$ref": "#/$defs/id" },
+        "kind": { "const": "object" },
+        "prototypeRef": { "type": "string", "format": "package-prototype-ref" },
+        "transform": { "$ref": "#/$defs/transform" }
+      }
+    },
+    "subjectNode": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "kind", "subjectDefinitionRef"],
+      "properties": {
+        "id": { "$ref": "#/$defs/id" },
+        "kind": { "const": "subject" },
+        "subjectDefinitionRef": {
+          "type": "string",
+          "format": "subject-definition-ref"
+        },
+        "spawnAnchorEntityId": { "$ref": "#/$defs/id" }
+      }
+    },
+    "cameraNode": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "kind", "components"],
+      "properties": {
+        "id": { "$ref": "#/$defs/id" },
+        "kind": { "const": "camera" },
+        "components": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["cameraRig"],
+          "properties": {
+            "cameraRig": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["defaultRigRef", "allowedRigRefs", "target", "thirdPerson", "manualSwitchAllowed"],
+              "properties": {
+                "defaultRigRef": { "$ref": "#/$defs/resourceRef" },
+                "allowedRigRefs": {
+                  "type": "array",
+                  "minItems": 1,
+                  "maxItems": 16,
+                  "uniqueItems": true,
+                  "items": { "$ref": "#/$defs/resourceRef" }
+                },
+                "target": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "required": ["targetEntityId"],
+                  "properties": {
+                    "targetEntityId": { "$ref": "#/$defs/id" },
+                    "targetHeightMeters": { "type": "number" }
+                  }
+                },
+                "thirdPerson": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "required": ["pitchRadians", "distanceMeters", "targetHeightMeters", "fovDegrees"],
+                  "properties": {
+                    "pitchRadians": { "type": "number", "minimum": -0.95, "maximum": 0.65 },
+                    "distanceMeters": { "type": "number", "minimum": 1.8, "maximum": 8 },
+                    "targetHeightMeters": { "type": "number", "minimum": 0.5, "maximum": 4.5 },
+                    "fovDegrees": { "type": "number", "minimum": 35, "maximum": 90 }
+                  }
+                },
+                "manualSwitchAllowed": { "type": "boolean" }
+              }
+            }
+          }
+        }
+      }
+    },
+    "anchorNode": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "kind", "transform", "semantic"],
+      "properties": {
+        "id": { "$ref": "#/$defs/id" },
+        "kind": { "const": "anchor" },
+        "transform": { "$ref": "#/$defs/transform" },
+        "semantic": { "$ref": "#/$defs/semantic" }
+      }
+    },
+    "relationship": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "type", "schemaVersion"],
+      "properties": {
+        "id": { "$ref": "#/$defs/id" },
+        "type": { "type": "string", "minLength": 1 },
+        "schemaVersion": { "const": 1 }
+      }
+    },
+    "rule": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "kind"],
+      "properties": {
+        "id": { "$ref": "#/$defs/id" },
+        "kind": { "type": "string", "minLength": 1 }
+      }
+    },
+    "startup": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["spawnAnchorEntityId", "controlledEntityId", "cameraEntityId"],
+      "properties": {
+        "spawnAnchorEntityId": { "$ref": "#/$defs/id" },
+        "controlledEntityId": { "$ref": "#/$defs/id" },
+        "cameraEntityId": { "$ref": "#/$defs/id" }
+      }
+    }
+  }
+}
