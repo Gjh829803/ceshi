@@ -35,6 +35,14 @@ import {
 } from "./lib/subject-explain";
 import { promoteArtifactDirectory } from "./lib/artifact-directory-promotion";
 import {
+  analyzeSubjectPoseCrop,
+  compareSubjectPoseSilhouettes,
+  deriveLoopQuarterCycleCaptureTick,
+  readGlbAnimationClipTiming,
+  type SubjectPoseAnalysisV1,
+  type SubjectPoseEvidenceV1,
+} from "./lib/subject-pose-evidence";
+import {
   startWorldkitServer,
   type WorldkitServerHandle,
 } from "./lib/worldkit-server";
@@ -58,6 +66,7 @@ const SECONDARY_ENTITY_ID = "rigged-secondary";
 const CONTROLLER_ID = "controller-primary";
 const SUBJECT_ASSET_REF = "worldkit://subject-asset/humanoid.golden@1";
 const ASSET_ROUTE_PATH = "/worldkit-assets/golden-humanoid.glb";
+const MINIMUM_SUBJECT_POSE_DIFFERENCE_RATIO = 0.15;
 const ARTIFACT_FILES = [
   "explain.json",
   "idle.png",
@@ -105,10 +114,37 @@ interface ActionCaptureEvidence extends PngInspection {
   subjectEntityId: typeof PRIMARY_ENTITY_ID;
   positionMetersXYZ: Vec3;
   movementMedium: SubjectRuntimeStateV3["movementMedium"];
+  subjectSilhouette: SubjectPoseEvidenceV1;
+}
+
+interface ActionCaptureResult {
+  evidence: ActionCaptureEvidence;
+  poseAnalysis: SubjectPoseAnalysisV1;
+}
+
+interface PoseComparisonEvidence {
+  firstActionId: ActionId;
+  secondActionId: ActionId;
+  differingPixelCount: number;
+  unionForegroundPixelCount: number;
+  differenceRatio: number;
 }
 
 interface BrowserEvidence {
   actions: Record<ActionId, ActionCaptureEvidence>;
+  poseGate: {
+    minimumDifferenceRatio: number;
+    walkCaptureTiming: {
+      actionStartTick: number;
+      blendDurationSeconds: number;
+      captureTick: number;
+      clipDurationSeconds: number;
+      framesPerSecond: number;
+      fixedTicksPerSecond: number;
+      playbackSpeedRatio: number;
+    };
+    comparisons: readonly PoseComparisonEvidence[];
+  };
   isolation: {
     observedEntityId: typeof PRIMARY_ENTITY_ID;
     controlledEntityId: typeof SECONDARY_ENTITY_ID;
@@ -307,7 +343,7 @@ async function captureAction(
   actionId: ActionId,
   actions: readonly ("move-forward" | "run" | "jump")[],
   ticks: number,
-): Promise<ActionCaptureEvidence> {
+): Promise<ActionCaptureResult> {
   const reset = await page.evaluate(() => window.__WORLDKIT__!.reset());
   assert.equal(reset.tick, 0);
   assert.equal(reset.controlledEntityId, PRIMARY_ENTITY_ID);
@@ -323,24 +359,87 @@ async function captureAction(
   if (actionId === "jump") {
     assert.equal(state.movementMedium, "air", "Jump capture must remain airborne.");
   }
-  await page.evaluate(() => window.__WORLDKIT__!.captureScreenshot());
-  const dataUrl = await page.evaluate(() => window.__WORLDKIT__!.captureScreenshot());
-  const bytes = pngBytesFromDataUrl(dataUrl);
+  const capture = await page.evaluate(async () => {
+    window.__WORLDKIT__!.captureScreenshot();
+    const dataUrl = window.__WORLDKIT__!.captureScreenshot();
+    const image = new Image();
+    image.src = dataUrl;
+    await image.decode();
+    const boundsPixelsXYWH = [
+      Math.floor(image.naturalWidth * 0.4),
+      Math.floor(image.naturalHeight * 0.28),
+      Math.ceil(image.naturalWidth * 0.2),
+      Math.ceil(image.naturalHeight * 0.48),
+    ] as const;
+    const cropCanvas = document.createElement("canvas");
+    cropCanvas.width = boundsPixelsXYWH[2];
+    cropCanvas.height = boundsPixelsXYWH[3];
+    const cropContext = cropCanvas.getContext("2d", { willReadFrequently: true });
+    if (cropContext === null) throw new Error("SUBJECT_POSE_CROP_UNAVAILABLE");
+    cropContext.drawImage(
+      image,
+      boundsPixelsXYWH[0],
+      boundsPixelsXYWH[1],
+      boundsPixelsXYWH[2],
+      boundsPixelsXYWH[3],
+      0,
+      0,
+      boundsPixelsXYWH[2],
+      boundsPixelsXYWH[3],
+    );
+    const rgbaBytes = cropContext.getImageData(
+      0,
+      0,
+      boundsPixelsXYWH[2],
+      boundsPixelsXYWH[3],
+    ).data;
+    return {
+      boundsPixelsXYWH,
+      dataUrl,
+      rgbaBytes: Array.from(rgbaBytes),
+    };
+  });
+  const bytes = pngBytesFromDataUrl(capture.dataUrl);
   await writeFile(paths.action[actionId], bytes);
   const filename = `${actionId}.png` as ActionCaptureEvidence["filename"];
+  const poseAnalysis = analyzeSubjectPoseCrop({
+    boundsPixelsXYWH: capture.boundsPixelsXYWH,
+    rgbaBytes: Uint8Array.from(capture.rgbaBytes),
+  });
   return {
-    filename,
-    source: "browser-fixed-tick",
-    tick: snapshot.tick,
-    actionId,
-    subjectEntityId: PRIMARY_ENTITY_ID,
-    positionMetersXYZ: state.positionMetersXYZ,
-    movementMedium: state.movementMedium,
-    ...inspectPng(bytes),
+    evidence: {
+      filename,
+      source: "browser-fixed-tick",
+      tick: snapshot.tick,
+      actionId,
+      subjectEntityId: PRIMARY_ENTITY_ID,
+      positionMetersXYZ: state.positionMetersXYZ,
+      movementMedium: state.movementMedium,
+      subjectSilhouette: poseAnalysis.evidence,
+      ...inspectPng(bytes),
+    },
+    poseAnalysis,
   };
 }
 
-async function verifyBrowser(paths: ArtifactPaths): Promise<BrowserEvidence> {
+async function verifyBrowser(
+  paths: ArtifactPaths,
+  artifact: WorldBuildArtifactV3,
+): Promise<BrowserEvidence> {
+  const walkClipTiming = readGlbAnimationClipTiming(
+    await readFile(ASSET_PATH),
+    "walk",
+  );
+  const animationSets = artifact.executionPlan.animationSets.filter(
+    (animationSet) => animationSet.subjectAssetRef === SUBJECT_ASSET_REF,
+  );
+  assert.equal(animationSets.length, 1);
+  const walkBindings = animationSets[0]!.animationBindings.filter(
+    (binding) => binding.actionId === "walk",
+  );
+  assert.equal(walkBindings.length, 1);
+  const walkBinding = walkBindings[0]!;
+  assert.equal(walkBinding.loopMode, "repeat");
   let server: WorldkitServerHandle | undefined;
   let browser: Browser | undefined;
   let context: BrowserContext | undefined;
@@ -368,6 +467,23 @@ async function verifyBrowser(paths: ArtifactPaths): Promise<BrowserEvidence> {
       PRIMARY_ENTITY_ID,
       SECONDARY_ENTITY_ID,
     ]);
+    const fixedTicksPerSecond = 1 / ready.physics.fixedTimeStepSeconds;
+    assert.ok(Number.isSafeInteger(fixedTicksPerSecond));
+    const walkCaptureTiming = {
+      actionStartTick: 1,
+      blendDurationSeconds: walkBinding.blendDurationSeconds,
+      captureTick: deriveLoopQuarterCycleCaptureTick({
+        actionStartTick: 1,
+        blendDurationSeconds: walkBinding.blendDurationSeconds,
+        clipDurationSeconds: walkClipTiming.durationSeconds,
+        fixedTicksPerSecond,
+        playbackSpeedRatio: walkBinding.playbackSpeedRatio,
+      }),
+      clipDurationSeconds: walkClipTiming.durationSeconds,
+      framesPerSecond: walkClipTiming.framesPerSecond,
+      fixedTicksPerSecond,
+      playbackSpeedRatio: walkBinding.playbackSpeedRatio,
+    } as const;
     await page.evaluate(async () =>
       new Promise<void>((resolve) => requestAnimationFrame(() => resolve())),
     );
@@ -388,14 +504,45 @@ async function verifyBrowser(paths: ArtifactPaths): Promise<BrowserEvidence> {
       "CLI world.png must render the same paused reset Tick as snapshot.json.",
     );
 
-    const actions = {
+    const captures = {
       idle: await captureAction(page, paths, "idle", [], 12),
-      walk: await captureAction(page, paths, "walk", ["move-forward"], 30),
+      walk: await captureAction(
+        page,
+        paths,
+        "walk",
+        ["move-forward"],
+        walkCaptureTiming.captureTick,
+      ),
       run: await captureAction(page, paths, "run", ["move-forward", "run"], 24),
       jump: await captureAction(page, paths, "jump", ["jump"], 12),
+    } satisfies Record<ActionId, ActionCaptureResult>;
+    const actions = {
+      idle: captures.idle.evidence,
+      walk: captures.walk.evidence,
+      run: captures.run.evidence,
+      jump: captures.jump.evidence,
     } satisfies Record<ActionId, ActionCaptureEvidence>;
     assert.equal(new Set(Object.values(actions).map((item) => item.sha256)).size, 4,
       "Action screenshots must have pairwise-distinct hashes.");
+    const actionIds = ["idle", "walk", "run", "jump"] as const;
+    const poseComparisons: PoseComparisonEvidence[] = [];
+    for (let firstIndex = 0; firstIndex < actionIds.length; firstIndex += 1) {
+      for (let secondIndex = firstIndex + 1; secondIndex < actionIds.length; secondIndex += 1) {
+        const firstActionId = actionIds[firstIndex]!;
+        const secondActionId = actionIds[secondIndex]!;
+        const comparison = compareSubjectPoseSilhouettes(
+          captures[firstActionId].poseAnalysis,
+          captures[secondActionId].poseAnalysis,
+        );
+        assert.ok(
+          comparison.differenceRatio >= MINIMUM_SUBJECT_POSE_DIFFERENCE_RATIO,
+          `${firstActionId}/${secondActionId} Subject silhouette difference ` +
+            `${comparison.differenceRatio.toFixed(6)} is below ` +
+            `${MINIMUM_SUBJECT_POSE_DIFFERENCE_RATIO}.`,
+        );
+        poseComparisons.push({ firstActionId, secondActionId, ...comparison });
+      }
+    }
 
     const isolationBefore = await page.evaluate(() => window.__WORLDKIT__!.reset());
     const receipt = await page.evaluate(
@@ -526,6 +673,11 @@ async function verifyBrowser(paths: ArtifactPaths): Promise<BrowserEvidence> {
 
     result = {
       actions,
+      poseGate: {
+        minimumDifferenceRatio: MINIMUM_SUBJECT_POSE_DIFFERENCE_RATIO,
+        walkCaptureTiming,
+        comparisons: poseComparisons,
+      },
       isolation: {
         observedEntityId: PRIMARY_ENTITY_ID,
         controlledEntityId: SECONDARY_ENTITY_ID,
@@ -595,7 +747,7 @@ async function writeVerification(
   );
   const verification = {
     kind: "worldkit-rigged-subject-verification",
-    schemaVersion: 1,
+    schemaVersion: 2,
     inputs: {
       authoringSpecSha256: sha256(await readFile(INPUT_PATH)),
       subjectAssetRef: asset.subjectAssetRef,
@@ -617,6 +769,7 @@ async function writeVerification(
       browser.actions.run,
       browser.actions.jump,
     ],
+    poseGate: browser.poseGate,
     isolation: browser.isolation,
     wallStop: browser.wallStop,
     tamper: browser.tamper,
@@ -641,7 +794,7 @@ async function run(): Promise<void> {
   let promoted = false;
   try {
     const artifact = await runCliGates(paths);
-    const browser = await verifyBrowser(paths);
+    const browser = await verifyBrowser(paths, artifact);
     await writeVerification(paths, artifact, browser);
     const promotion = await promoteArtifactDirectory({
       temporaryDirectory,
@@ -663,6 +816,7 @@ async function run(): Promise<void> {
         subjectAsset: artifact.executionPlan.subjectAssets[0]?.artifactContentHash,
       },
       actionScreenshots: browser.actions,
+      poseGate: browser.poseGate,
       isolation: browser.isolation,
       wallStop: browser.wallStop,
       tamper: browser.tamper,
