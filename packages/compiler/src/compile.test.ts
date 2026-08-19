@@ -270,12 +270,43 @@ describe("compileWorld", () => {
       message:
         "NormalizedWorldIRV2 invariant violated: Rig Profile 'worldkit://rig-profile/biped.golden@1' has an empty source-node mapping for Bone 'head'.",
     },
+    {
+      label: "own-property undefined canonical Bone mapping",
+      mutate: (world: NormalizedWorldIRV2) => {
+        const sourceNodeNameByBoneId = world.resources.rigProfiles[0]!
+          .sourceNodeNameByBoneId as unknown as Record<string, unknown>;
+        sourceNodeNameByBoneId.head = undefined;
+      },
+      message:
+        "NormalizedWorldIRV2 invariant violated: Rig Profile 'worldkit://rig-profile/biped.golden@1' is missing source-node mapping for Bone 'head'.",
+    },
+    {
+      label: "numeric canonical Bone mapping",
+      mutate: (world: NormalizedWorldIRV2) => {
+        const sourceNodeNameByBoneId = world.resources.rigProfiles[0]!
+          .sourceNodeNameByBoneId as unknown as Record<string, unknown>;
+        sourceNodeNameByBoneId.head = 123;
+      },
+      message:
+        "NormalizedWorldIRV2 invariant violated: Rig Profile 'worldkit://rig-profile/biped.golden@1' is missing source-node mapping for Bone 'head'.",
+    },
+    {
+      label: "explicit empty canonical Bone mapping",
+      mutate: (world: NormalizedWorldIRV2) => {
+        const sourceNodeNameByBoneId = world.resources.rigProfiles[0]!
+          .sourceNodeNameByBoneId as unknown as Record<string, string>;
+        sourceNodeNameByBoneId.head = "";
+      },
+      message:
+        "NormalizedWorldIRV2 invariant violated: Rig Profile 'worldkit://rig-profile/biped.golden@1' has an empty source-node mapping for Bone 'head'.",
+    },
   ])("rejects a $label", ({ mutate, message }) => {
     const normalized = normalizeRiggedWorld();
     const world = structuredClone(normalized.value!);
     mutate(world);
+    const result = compileNormalizedWorld(world);
 
-    expect(compileNormalizedWorld(world)).toEqual({
+    expect(result).toEqual({
       ok: false,
       diagnostics: [
         {
@@ -286,6 +317,7 @@ describe("compileWorld", () => {
         },
       ],
     });
+    expect(result.executionPlan).toBeUndefined();
   });
 
   it("recursively projects forged Normalized descriptors and Subject data", () => {
