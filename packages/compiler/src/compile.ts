@@ -4,14 +4,14 @@ import {
   type NormalizedWorldNodeV1,
   type PrimitivePrototypeSpecV1,
   type Vec2,
-  type Vec3,
 } from "@whitebox-world/authoring";
 import type {
   CompileDiagnostic,
-  CompileWorldResult,
+  CompileWorldResultV2,
   ExecutionObjectV1,
-  ExecutionPlanV1,
+  ExecutionPlanV2,
   ExecutionPrimitiveV1,
+  ExecutionSubjectV2,
   ExecutionTerrainV1,
   ExecutionWaterBoundaryV1,
   ExecutionWaterV1,
@@ -161,6 +161,69 @@ function compileObjects(world: NormalizedWorldIRV1): ExecutionObjectV1[] {
     });
 }
 
+interface CompiledSubjects {
+  subjects: ExecutionSubjectV2[];
+  resourceCost: { vertices: number; triangles: number; colliders: number };
+}
+
+function compileSubjects(world: NormalizedWorldIRV1, terrain: ExecutionTerrainV1): CompiledSubjects {
+  const definitionsByRef = new Map(
+    world.resources.subjectDefinitions.map((definition) => [definition.kitRef, definition]),
+  );
+  const anchorsByEntityId = new Map(
+    world.nodes
+      .filter((node): node is Extract<NormalizedWorldNodeV1, { kind: "anchor" }> => node.kind === "anchor")
+      .map((anchor) => [anchor.id, anchor]),
+  );
+  const resourceCost = { vertices: 0, triangles: 0, colliders: 0 };
+
+  const subjects = world.nodes
+    .filter((node): node is Extract<NormalizedWorldNodeV1, { kind: "subject" }> => node.kind === "subject")
+    .map((node): ExecutionSubjectV2 => {
+      const definition = definitionsByRef.get(node.kitRef);
+      if (definition === undefined) {
+        throw new Error(
+          `NormalizedWorldIR invariant violated: subject '${node.id}' references missing Definition '${node.kitRef}'.`,
+        );
+      }
+      const spawnAnchor = anchorsByEntityId.get(node.spawnAnchorEntityId);
+      if (spawnAnchor === undefined) {
+        throw new Error(
+          `NormalizedWorldIR invariant violated: subject '${node.id}' references missing spawn Anchor '${node.spawnAnchorEntityId}'.`,
+        );
+      }
+
+      resourceCost.vertices += definition.resourceCost.vertices;
+      resourceCost.triangles += definition.resourceCost.triangles;
+      resourceCost.colliders += definition.resourceCost.colliders;
+
+      const [spawnX, spawnYOffset, spawnZ] = spawnAnchor.transform.positionMeters;
+      const groundHeightMeters = sampleTerrainHeight(terrain, [spawnX, spawnZ]);
+      return {
+        entityId: node.id,
+        kitRef: definition.kitRef,
+        bodyTopology: definition.bodyTopology,
+        semanticClassId: definition.semanticClassId,
+        spawnAnchorEntityId: spawnAnchor.id,
+        spawnPositionMeters: [
+          spawnX,
+          groundHeightMeters + spawnYOffset + definition.collider.heightMeters / 2,
+          spawnZ,
+        ],
+        forwardDirection: "-z",
+        visualParts: structuredClone(definition.visualParts),
+        collider: structuredClone(definition.collider),
+        locomotion: structuredClone(definition.locomotion),
+      };
+    })
+    .sort((left, right) => left.entityId.localeCompare(right.entityId));
+
+  if (subjects.length === 0) {
+    throw new Error("NormalizedWorldIR invariant violated: no Subject nodes were materialized.");
+  }
+  return { subjects, resourceCost };
+}
+
 function primitiveResourceCost(primitive: ExecutionPrimitiveV1): { vertices: number; triangles: number } {
   switch (primitive.kind) {
     case "box":
@@ -195,7 +258,7 @@ function pushBudgetDiagnostic(
   });
 }
 
-export function compileWorld(input: CompileWorldInput): CompileWorldResult {
+export function compileWorld(input: CompileWorldInput): CompileWorldResultV2 {
   const world = input.normalizedWorldIr;
   const actualNormalizedWorldIrHash = sha256CanonicalJson(world);
   if (input.normalizedWorldIrHash !== actualNormalizedWorldIrHash) {
@@ -215,29 +278,16 @@ export function compileWorld(input: CompileWorldInput): CompileWorldResult {
   const terrain = compileTerrain(world);
   const waters = compileWaters(world, terrain);
   const objects = compileObjects(world);
-  const subjectNode = findOnlyNode(world.nodes, "subject");
-  const spawnNode = world.nodes.find(
-    (node): node is Extract<NormalizedWorldNodeV1, { kind: "anchor" }> =>
-      node.kind === "anchor" && node.id === world.startup.spawnAnchorId,
-  );
+  const { subjects, resourceCost: subjectResourceCost } = compileSubjects(world, terrain);
   const cameraNode = findOnlyNode(world.nodes, "camera");
-  if (spawnNode === undefined) throw new Error("NormalizedWorldIR invariant violated: startup spawn anchor missing.");
-
-  const capsuleHeightMeters = 1.8;
-  const groundHeight = sampleTerrainHeight(terrain, [spawnNode.transform.positionMeters[0], spawnNode.transform.positionMeters[2]]);
-  const spawnPositionMeters: Vec3 = [
-    spawnNode.transform.positionMeters[0],
-    groundHeight + spawnNode.transform.positionMeters[1] + capsuleHeightMeters / 2,
-    spawnNode.transform.positionMeters[2],
-  ];
   const terrainVertices = terrain.resolutionXZ[0] * terrain.resolutionXZ[1];
   const terrainTriangles = (terrain.resolutionXZ[0] - 1) * (terrain.resolutionXZ[1] - 1) * 2;
   const objectCosts = objects.map((object) => primitiveResourceCost(object.primitive));
   const waterCosts = waters.map((water) => waterResourceCost(water.boundary));
   const usage = {
-    vertices: terrainVertices + 34 + [...objectCosts, ...waterCosts].reduce((sum, cost) => sum + cost.vertices, 0),
-    triangles: terrainTriangles + 64 + [...objectCosts, ...waterCosts].reduce((sum, cost) => sum + cost.triangles, 0),
-    colliders: 2 + objects.filter((object) => object.collisionEnabled).length,
+    vertices: terrainVertices + subjectResourceCost.vertices + [...objectCosts, ...waterCosts].reduce((sum, cost) => sum + cost.vertices, 0),
+    triangles: terrainTriangles + subjectResourceCost.triangles + [...objectCosts, ...waterCosts].reduce((sum, cost) => sum + cost.triangles, 0),
+    colliders: 1 + subjectResourceCost.colliders + objects.filter((object) => object.collisionEnabled).length,
   };
   const budget = world.world.resourceBudget;
   const diagnostics: CompileDiagnostic[] = [];
@@ -247,9 +297,9 @@ export function compileWorld(input: CompileWorldInput): CompileWorldResult {
   if (diagnostics.length > 0) return { ok: false, diagnostics };
 
   const rig = cameraNode.components.cameraRig;
-  const executionPlan: ExecutionPlanV1 = {
+  const executionPlan: ExecutionPlanV2 = {
     kind: "worldkit-execution-plan",
-    schemaVersion: 1,
+    schemaVersion: 2,
     id: world.id,
     seed: world.seed,
     runtimeBackend: "babylon-havok",
@@ -260,19 +310,8 @@ export function compileWorld(input: CompileWorldInput): CompileWorldResult {
     terrain,
     waters,
     objects,
-    subject: {
-      entityId: subjectNode.id,
-      kitRef: "worldkit://kit/humanoid.third-person@1",
-      spawnAnchorEntityId: spawnNode.id,
-      spawnPositionMeters,
-      forwardDirection: "-z",
-      capsule: { radiusMeters: 0.35, heightMeters: capsuleHeightMeters },
-      movement: {
-        groundSpeedMetersPerSecond: 4,
-        waterSpeedMetersPerSecond: 2.2,
-        jumpSpeedMetersPerSecond: 5.5,
-      },
-    },
+    controlledEntityId: world.startup.controlledEntityId,
+    subjects,
     camera: {
       cameraEntityId: cameraNode.id,
       rigRef: "worldkit://camera/third-person.standard@1",

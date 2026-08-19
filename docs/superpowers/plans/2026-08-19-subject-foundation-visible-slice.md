@@ -20,13 +20,13 @@
 | 1 | Engine-neutral Subject Kit Registry | Complete |
 | 2 | Multi-subject Authoring validation and normalization | Complete |
 | 3 | Versioned plural Execution and Runtime contracts | Complete |
-| 4 | Registered Subject compiler | Not started |
+| 4 | Registered Subject compiler | Complete |
 | 5 | Babylon multi-subject runtime and control binding | Not started |
 | 6 | Browser Protocol V2 and Playground switching | Not started |
 | 7 | Multi-subject fixture, CLI, Playwright, documentation | Not started |
 | 8 | Completion audit and Relationship-slice handoff | Not started |
 
-**Current milestone:** Tasks 1-3 are complete; Task 4 registered Subject compilation is in progress.
+**Current milestone:** Tasks 1-4 are complete; Task 5 Babylon multi-subject runtime and control binding is in progress.
 
 **Latest verified baseline before implementation:** `pnpm typecheck`, 125 tests, production build, and `pnpm verify:v1` all pass on commit `8ccd219`.
 
@@ -397,7 +397,7 @@ git commit -m "feat: define plural subject runtime contracts"
 - Produces: stable `subjects` ordered by `entityId`, exact resource usage, and `controlledEntityId` copied from startup semantics.
 - Failure boundary: authoring owns Registry and Anchor diagnostics; compiler performs no Registry lookup and treats absent normalized Definition references as invariant violations.
 
-- [ ] **Step 1: Write failing compiler tests**
+- [x] **Step 1: Write failing compiler tests**
 
 ```ts
 it("compiles every subject from its registered Kit in stable entity order", () => {
@@ -418,13 +418,13 @@ it("changes neither plan bytes nor hash when subject nodes are reordered", () =>
 });
 ```
 
-- [ ] **Step 2: Run compiler tests and confirm they fail on the singular plan**
+- [x] **Step 2: Run compiler tests and confirm they fail on the singular plan**
 
 Run: `pnpm vitest run packages/compiler/src/compile.test.ts`
 
 Expected: FAIL because `ExecutionPlanV1.subject` is still singular and Kit data is hard-coded.
 
-- [ ] **Step 3: Implement `compileSubjects`**
+- [x] **Step 3: Implement `compileSubjects`**
 
 For each normalized subject:
 
@@ -435,11 +435,11 @@ For each normalized subject:
 5. Clone Kit visual, collider, locomotion, topology, and semantic data into engine-neutral execution data.
 6. Sort by `entityId` before hashing.
 
-- [ ] **Step 4: Account for every subject resource**
+- [x] **Step 4: Account for every subject resource**
 
 Replace the fixed `34 vertices / 64 triangles / 1 subject collider` constants with the sum of every resolved Kit's `resourceCost`. Keep terrain and static object body costs unchanged.
 
-- [ ] **Step 5: Run compiler tests, authoring tests, and typecheck**
+- [x] **Step 5: Run compiler tests, authoring tests, and typecheck**
 
 Run: `pnpm vitest run packages/compiler/src/compile.test.ts packages/authoring/src/normalize.test.ts`
 
@@ -449,7 +449,7 @@ Run: `pnpm typecheck`
 
 Expected: remaining failures only in runtime/playground/CLI V1 consumers.
 
-- [ ] **Step 6: Commit compiler migration**
+- [x] **Step 6: Commit compiler migration**
 
 ```bash
 git add packages/compiler

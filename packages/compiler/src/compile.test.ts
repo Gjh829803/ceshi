@@ -4,8 +4,8 @@ import { normalizeAuthoringSpec } from "@whitebox-world/authoring";
 import { createValidAuthoringSpec } from "../../authoring/src/test-fixture";
 import { compileWorld } from "./index";
 
-function compileFixture() {
-  const normalized = normalizeAuthoringSpec(createValidAuthoringSpec());
+function compileSpec(spec = createValidAuthoringSpec()) {
+  const normalized = normalizeAuthoringSpec(spec);
   if (!normalized.ok || normalized.value === undefined || normalized.normalizedWorldIrHash === undefined) {
     throw new Error("Fixture did not normalize.");
   }
@@ -15,6 +15,34 @@ function compileFixture() {
   });
 }
 
+function createMultiSubjectSpec(subjectOrder: readonly ["player", "animal"] | readonly ["animal", "player"] = ["player", "animal"]) {
+  const spec = createValidAuthoringSpec();
+  const player = spec.nodes.find((node) => node.kind === "subject");
+  if (player === undefined || player.kind !== "subject") throw new Error("Fixture subject missing.");
+  const animal = {
+    id: "animal",
+    kind: "subject" as const,
+    kitRef: "worldkit://kit/quadruped.ground-proxy@1",
+    spawnAnchorEntityId: "spawn-animal",
+  };
+  const subjectsById = { player, animal };
+  spec.nodes = [
+    ...spec.nodes.filter((node) => node.kind !== "subject"),
+    {
+      id: "spawn-animal",
+      kind: "anchor",
+      transform: { positionMeters: [6, 0, 28] },
+      semantic: { classId: "spawn.subject" },
+    },
+    ...subjectOrder.map((entityId) => subjectsById[entityId]),
+  ];
+  return spec;
+}
+
+function compileFixture() {
+  return compileSpec();
+}
+
 describe("compileWorld", () => {
   it("compiles a fully resolved, engine-neutral Babylon/Havok execution plan", () => {
     const result = compileFixture();
@@ -22,15 +50,54 @@ describe("compileWorld", () => {
     expect(result.diagnostics).toEqual([]);
     expect(result.executionPlan).toMatchObject({
       kind: "worldkit-execution-plan",
-      schemaVersion: 1,
+      schemaVersion: 2,
       runtimeBackend: "babylon-havok",
-      subject: { entityId: "player", spawnAnchorEntityId: "spawn-main" },
+      controlledEntityId: "player",
+      subjects: [{ entityId: "player", spawnAnchorEntityId: "spawn-main" }],
       camera: { cameraEntityId: "camera-main", targetEntityId: "player" },
     });
+    expect("subject" in result.executionPlan!).toBe(false);
     expect(result.executionPlan?.objects.map((item) => item.entityId)).toEqual(["wall-east"]);
     expect(result.executionPlan?.terrain.heightSamplesMeters).toHaveLength(65 * 65);
     expect(result.executionPlan?.terrain.heightSamplesHash).toMatch(/^sha256:[a-f0-9]{64}$/);
     expect(result.executionPlan?.terrain.heightSamplesMeters.every(Number.isFinite)).toBe(true);
+  });
+
+  it("compiles every subject from its registered Kit in stable entity order", () => {
+    const result = compileSpec(createMultiSubjectSpec());
+
+    expect(result.executionPlan?.schemaVersion).toBe(2);
+    expect(result.executionPlan?.controlledEntityId).toBe("player");
+    expect(result.executionPlan?.subjects.map((subject) => subject.entityId)).toEqual(["animal", "player"]);
+    expect(result.executionPlan?.subjects[0]).toMatchObject({
+      kitRef: "worldkit://kit/quadruped.ground-proxy@1",
+      bodyTopology: "quadruped",
+      semanticClassId: "subject.animal.quadruped",
+      collider: { kind: "capsule" },
+      locomotion: { mode: "ground" },
+    });
+    expect(result.executionPlan?.subjects[0]?.visualParts.map((part) => part.id)).toEqual([
+      "torso",
+      "head",
+      "front-left-leg",
+      "front-right-leg",
+      "back-left-leg",
+      "back-right-leg",
+      "tail",
+    ]);
+    expect(result.executionPlan?.resourceUsage).toEqual({
+      vertices: 4_752,
+      triangles: 9_048,
+      colliders: 4,
+    });
+  });
+
+  it("changes neither plan bytes nor hash when subject nodes are reordered", () => {
+    const playerFirst = compileSpec(createMultiSubjectSpec(["player", "animal"]));
+    const animalFirst = compileSpec(createMultiSubjectSpec(["animal", "player"]));
+
+    expect(playerFirst.executionPlan).toEqual(animalFirst.executionPlan);
+    expect(playerFirst.executionPlanHash).toBe(animalFirst.executionPlanHash);
   });
 
   it("is deterministic for the same normalized input and seed", () => {
