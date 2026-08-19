@@ -19,33 +19,35 @@ Gameplay 真相。
 
 ## 核心链路
 
-```text
-Prompt + Reference Image
-            ↓
-External Planning / Coding Agent              上游团队负责
-            ↓
-AI Schema Profile / Canonical AuthoringSpec   SDK 公共入口
-            ↓
-Schema Validation + Registry Resolution
-            ↓
-Normalizer + Terrain Compiler + Deterministic Layout Solver
-            ↓
-NormalizedWorldIR + Resource Lock
-            ↓
-ExecutionPlan / WorldPackage
-            ↓
-Simulation Take                               专项设计已成稿，实现规划中
-            ↓
-Babylon.js Runtime + Havok Physics            唯一白模世界真相
-            ↓
-Control Capture Bundle                        专项设计已成稿，实现规划中
-  Neutral Color / Linear Depth / Semantic / Instance / World Normal
-            ↓
-Validation Report                             必需 Gate 一票否决
-            ↓
-Video Model Adapter                           外部视觉实现
-            ↓
-Final Generated Video
+```mermaid
+flowchart TB
+    INPUT["Prompt + Reference Image"] --> AGENT["External Planning / Coding Agent<br/>上游团队负责"]
+
+    subgraph SDK["Agent Whitebox World SDK"]
+        AUTHOR["AI Schema Profile<br/>Canonical AuthoringSpec"]
+        VALIDATE["Schema Validation<br/>Registry Resolution"]
+        COMPILE["Normalizer + Terrain Compiler<br/>Deterministic Layout Solver"]
+        IR["NormalizedWorldIR<br/>Resource Lock"]
+        PACKAGE["ExecutionPlan<br/>WorldPackage"]
+        TAKE["Simulation Take<br/>专项设计已成稿"]
+        RUNTIME["Babylon.js Runtime + Havok Physics<br/>唯一白模世界真相"]
+        CAPTURE["Control Capture Bundle<br/>Neutral Color · Linear Depth · Semantic · Instance · Normal"]
+        REPORT["Validation Report<br/>Blocking Gate 一票否决"]
+
+        AUTHOR --> VALIDATE --> COMPILE --> IR --> PACKAGE --> TAKE --> RUNTIME --> CAPTURE --> REPORT
+    end
+
+    AGENT --> AUTHOR
+
+    LEGO["Registry / Package Definitions<br/>Capability · Profile · Kit · Action · Relationship"] -.-> VALIDATE
+    TOOLING["TypeScript API · CLI · Browser Protocol · Playwright Driver"] -.-> AUTHOR
+    TOOLING -.-> RUNTIME
+    TOOLING -.-> CAPTURE
+    FOUNDATION["Canonical Hash · Diagnostic · Security · Resource Budget"] -.-> COMPILE
+    FOUNDATION -.-> RUNTIME
+    FOUNDATION -.-> REPORT
+
+    REPORT --> ADAPTER["Video Model Adapter<br/>外部视觉实现"] --> VIDEO["Final Generated Video"]
 ```
 
 当前已经交付到 Babylon/Havok Runtime、单截图、Snapshot 和 Browser Protocol；
