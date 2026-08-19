@@ -1473,11 +1473,13 @@ explicitly as the Legacy Three/Rapier/local-Mixamo path rather than Canonical Ba
 - [ ] **Step 3: Run naming and boundary audits**
 
 Review RED proof: controlled probes placed an obsolete public field and Registry URI in
-`packages/runtime-babylon/src`, a provider name in `packages/protocol/src`, a second provider field
-beside an allowed `runtimeBackend` in generated JSON, and a Playwright auto-install lifecycle in a
-workspace `package.json`. The previous four commands all returned success because those paths were
-outside their search roots or shared a minified artifact line with an allowed value. The probes are
-not committed; the commands below must fail for each equivalent probe before they are accepted.
+`packages/runtime-babylon/src`, a provider name in `packages/protocol/src`, a second provider value
+beside an allowed `runtimeBackend`, provider-specific root/nested/array-object keys in generated
+JSON, and a Playwright auto-install lifecycle in a workspace `package.json`. The previous commands
+returned success because those paths were outside their search roots, shared a minified artifact
+line with an allowed value, or placed the provider term in an object key instead of a string value.
+The probes are not committed; the commands below must fail for each equivalent probe before they
+are accepted.
 
 Define the complete non-historical production/public search roots once, then run the obsolete-
 field audit. Tests/specs are excluded because their negative fixtures intentionally spell removed
@@ -1584,19 +1586,31 @@ const collect = (directory) => {
 collect("artifacts/examples");
 
 const violations = [];
+const providerPattern = /babylon|havok/i;
+const isAllowedProviderValue = (path, value) => {
+  const serializedPath = path.join(".");
+  return (
+    ((serializedPath === "runtimeBackend" ||
+      serializedPath === "executionPlan.runtimeBackend") &&
+      value === "babylon-havok") ||
+    (serializedPath === "physics.backend" && value === "havok")
+  );
+};
 const visit = (value, path, file) => {
-  if (typeof value === "string" && /babylon|havok/i.test(value)) {
-    const key = path.at(-1);
-    const parent = path.at(-2);
-    const isRuntimeBackend = key === "runtimeBackend" && value === "babylon-havok";
-    const isPhysicsBackend = parent === "physics" && key === "backend" && value === "havok";
-    if (!isRuntimeBackend && !isPhysicsBackend) {
+  if (typeof value === "string" && providerPattern.test(value)) {
+    if (!isAllowedProviderValue(path, value)) {
       violations.push(`${file}:${path.join(".")}=${JSON.stringify(value)}`);
     }
   }
   if (Array.isArray(value)) value.forEach((entry, index) => visit(entry, [...path, index], file));
   else if (value && typeof value === "object") {
-    for (const [key, entry] of Object.entries(value)) visit(entry, [...path, key], file);
+    for (const [key, entry] of Object.entries(value)) {
+      const entryPath = [...path, key];
+      if (providerPattern.test(key)) {
+        violations.push(`${file}:${entryPath.join(".")}=<provider-specific-key>`);
+      }
+      visit(entry, entryPath, file);
+    }
   }
 };
 for (const file of jsonFiles) visit(JSON.parse(readFileSync(file, "utf8")), [], file);
