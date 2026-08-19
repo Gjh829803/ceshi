@@ -2,14 +2,16 @@ import { describe, expect, it } from "vitest";
 
 import {
   TRUSTED_DEFAULT_CONTROLLER_ID,
-  type ExecutionPlanV2,
-  type WorldRuntimeSnapshotV2,
+  WORLDKIT_BROWSER_PROTOCOL_VERSION,
+  type ExecutionSubjectV3,
+  type WorldRuntimeSnapshotV3,
+  type WorldkitBrowserApiV3,
 } from "./index";
 
-function createSnapshotFixtureV2(): WorldRuntimeSnapshotV2 {
+function createSnapshotFixtureV3(): WorldRuntimeSnapshotV3 {
   return {
     kind: "worldkit-runtime-snapshot",
-    schemaVersion: 2,
+    schemaVersion: 3,
     runtimeBackend: "babylon-havok",
     tick: 30,
     ready: true,
@@ -18,48 +20,120 @@ function createSnapshotFixtureV2(): WorldRuntimeSnapshotV2 {
       "controller-primary": { id: "controller-primary", controlledEntityId: "player" },
     },
     subjectStatesByEntityId: {
-      animal: {
-        entityId: "animal",
-        positionMeters: [6, 1, 28],
-        velocityMetersPerSecond: [0, 0, 0],
+      "pack-animal-a": {
+        entityId: "pack-animal-a",
+        subjectDefinitionRef:
+          "package://subject-definition/coastal-pack-animal@1",
+        subjectDefinitionHash: `sha256:${"a".repeat(64)}`,
+        positionMetersXYZ: [6, 0, 28],
+        velocityMetersPerSecondXYZ: [0, 0, 0],
         movementMedium: "ground",
       },
       player: {
         entityId: "player",
-        positionMeters: [0, 1, 30],
-        velocityMetersPerSecond: [0, 0, -4],
+        subjectDefinitionRef:
+          "worldkit://subject-definition/humanoid.third-person@1",
+        subjectDefinitionHash: `sha256:${"b".repeat(64)}`,
+        positionMetersXYZ: [0, 0, 30],
+        velocityMetersPerSecondXYZ: [0, 0, -4],
         movementMedium: "ground",
       },
     },
-    camera: { entityId: "camera-main", targetEntityId: "player", positionMeters: [0, 4, 35] },
+    camera: {
+      entityId: "camera-main",
+      targetEntityId: "player",
+      positionMetersXYZ: [0, 4, 35],
+    },
     physics: { backend: "havok", ready: true, fixedTimeStepSeconds: 1 / 60 },
     resources: { meshes: 12, bodies: 4, terrainSamples: 65 * 65 },
   };
 }
 
-describe("runtime contracts V2", () => {
-  it("uses plural subject and ID-indexed runtime state", () => {
-    const snapshot = createSnapshotFixtureV2();
+describe("runtime contracts V3", () => {
+  it("separates Subject Origin from Collider center in ExecutionSubjectV3", () => {
+    const subject = {
+      entityId: "pack-animal-a",
+      subjectDefinitionRef:
+        "package://subject-definition/coastal-pack-animal@1",
+      subjectDefinitionHash: `sha256:${"a".repeat(64)}`,
+      bodyTopology: "quadruped",
+      semanticClassId: "subject.animal.pack",
+      spawnAnchorEntityId: "spawn-pack-animal-a",
+      spawnSubjectOriginPositionMetersXYZ: [4, 0, 2],
+      forwardDirection: "-z",
+      visualParts: [],
+      sockets: [],
+      collider: {
+        kind: "capsule",
+        radiusMeters: 0.7,
+        heightMeters: 1.4,
+        centerOffsetFromSubjectOriginMetersXYZ: [0, 0.7, 0],
+        massKilograms: 75,
+        maxSlopeDegrees: 42,
+        maxStepHeightMeters: 0.3,
+      },
+      locomotion: {
+        mode: "ground",
+        groundSpeedMetersPerSecond: 4,
+        waterSpeedMetersPerSecond: 2.2,
+        jumpSpeedMetersPerSecond: 5.5,
+      },
+    } satisfies ExecutionSubjectV3;
 
-    expect(snapshot.schemaVersion).toBe(2);
-    expect(snapshot.controlledEntityId).toBe("player");
-    expect(Object.keys(snapshot.subjectStatesByEntityId).sort()).toEqual(["animal", "player"]);
-    expect("subject" in snapshot).toBe(false);
+    expect(subject).toMatchObject({
+      subjectDefinitionRef:
+        "package://subject-definition/coastal-pack-animal@1",
+      subjectDefinitionHash: expect.stringMatching(/^sha256:/),
+      spawnSubjectOriginPositionMetersXYZ: [4, 0, 2],
+      collider: {
+        centerOffsetFromSubjectOriginMetersXYZ: [0, 0.7, 0],
+      },
+    });
+    expect(subject).not.toHaveProperty("kitRef");
+    expect(subject).not.toHaveProperty("spawnPositionMeters");
   });
 
-  it("uses the stable trusted default Controller ID", () => {
+  it("defines every SnapshotV3 Subject position as Subject Origin", () => {
+    const snapshot = createSnapshotFixtureV3();
+
+    expect(snapshot.schemaVersion).toBe(3);
+    expect(snapshot.subjectStatesByEntityId.player).toMatchObject({
+      subjectDefinitionRef: expect.any(String),
+      subjectDefinitionHash: expect.stringMatching(/^sha256:/),
+      positionMetersXYZ: expect.any(Array),
+      velocityMetersPerSecondXYZ: expect.any(Array),
+    });
+    expect(snapshot.subjectStatesByEntityId.player).not.toHaveProperty(
+      "positionMeters",
+    );
+  });
+
+  it("keeps the stable trusted default Controller ID", () => {
     expect(TRUSTED_DEFAULT_CONTROLLER_ID).toBe("controller-primary");
   });
 
-  it("keeps the V2 execution shape plural without a singular alias", () => {
-    const plan = {
-      kind: "worldkit-execution-plan",
-      schemaVersion: 2,
-      controlledEntityId: "player",
-      subjects: [],
-    } as unknown as ExecutionPlanV2;
+  it("defines Browser Protocol V3 directly over SnapshotV3", async () => {
+    const snapshot = createSnapshotFixtureV3();
+    const api = {
+      version: WORLDKIT_BROWSER_PROTOCOL_VERSION,
+      ready: async () => snapshot,
+      getSnapshot: () => snapshot,
+      getDiagnostics: () => [],
+      bindControl: () => ({
+        kind: "worldkit-control-binding-receipt" as const,
+        schemaVersion: 2 as const,
+        status: "committed" as const,
+        controllerId: "controller-primary",
+        previousControlledEntityId: "player",
+        controlledEntityId: "pack-animal-a",
+      }),
+      runFixedInput: async () => snapshot,
+      captureScreenshot: () => "data:image/png;base64,",
+      reset: () => snapshot,
+      setPaused: () => snapshot,
+    } satisfies WorldkitBrowserApiV3;
 
-    expect(plan.subjects).toEqual([]);
-    expect("subject" in plan).toBe(false);
+    expect(api.version).toBe(3);
+    await expect(api.ready()).resolves.toBe(snapshot);
   });
 });
