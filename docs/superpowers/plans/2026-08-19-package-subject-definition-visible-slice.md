@@ -32,7 +32,7 @@
 | 3. Subject Resource Registry | Complete | `182cca2` | 6 focused tests + typecheck |
 | 4. Clean AuthoringSpecV2 | Complete | `d5e976c` | 10 focused / 20 Authoring tests + schema exports + typecheck |
 | 5. Definition Normalize/Hash/Lock | Complete | `6fabbfa` | 28 Authoring tests + typecheck |
-| 6. Runtime Contracts V3 | Not started | — | — |
+| 6. Runtime Contracts V3 | Complete | `3583f6e` | 4 focused tests + typecheck |
 | 7. Compiler V3 | Not started | — | — |
 | 8. Babylon + Browser V3 | Not started | — | — |
 | 9. CLI Discovery/Explain | Not started | — | — |
@@ -634,7 +634,7 @@ export interface WorldRuntimeSnapshotV3 {
 }
 ```
 
-- [ ] **Step 1: Write failing V3 contract tests**
+- [x] **Step 1: Write failing V3 contract tests**
 
 ```ts
 it("separates Subject Origin from collider center in ExecutionSubjectV3", () => {
@@ -714,17 +714,17 @@ it("defines SnapshotV3 position as Subject Origin", () => {
 });
 ```
 
-- [ ] **Step 2: Run contract tests and verify failure**
+- [x] **Step 2: Run contract tests and verify failure**
 
 Run: `pnpm vitest run packages/runtime-contracts/src/runtime-contracts.test.ts`
 
 Expected: FAIL because V3 types are absent.
 
-- [ ] **Step 3: Define V3 contracts and remove canonical V2 subject aliases**
+- [x] **Step 3: Define V3 contracts and remove canonical V2 subject aliases**
 
 Add V3 interfaces exactly as the spec defines. `ExecutionPlanV3.subjects` is stable Entity-ID order and includes Definition Hash plus Sockets. SnapshotV3 states carry Definition identity and Subject-Origin position. Do not add `kitRef` compatibility fields.
 
-- [ ] **Step 4: Run contract tests and typecheck**
+- [x] **Step 4: Run contract tests and typecheck**
 
 Run: `pnpm vitest run packages/runtime-contracts/src/runtime-contracts.test.ts`
 
@@ -732,7 +732,7 @@ Run: `pnpm typecheck`
 
 Expected: contract tests PASS; Compiler/Runtime/Playground type errors remain until Tasks 7–9.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add packages/runtime-contracts
