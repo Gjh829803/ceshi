@@ -1,12 +1,12 @@
 import { describe, expect, it } from "vitest";
 
-import { normalizeAuthoringSpecV2 } from "@whitebox-world/authoring";
+import { normalizeAuthoringSpec } from "@whitebox-world/authoring";
 import { createValidPackageSubjectWorldV2 } from "../../authoring/src/test-fixture";
 
-import { compileWorldV3, sampleTerrainHeight } from "./index";
+import { compileWorld, sampleTerrainHeight } from "./index";
 
 function compilePackageWorld() {
-  const normalized = normalizeAuthoringSpecV2(createValidPackageSubjectWorldV2());
+  const normalized = normalizeAuthoringSpec(createValidPackageSubjectWorldV2());
   if (
     !normalized.ok ||
     normalized.value === undefined ||
@@ -14,13 +14,13 @@ function compilePackageWorld() {
   ) {
     throw new Error("Package Subject fixture did not normalize.");
   }
-  return compileWorldV3({
+  return compileWorld({
     normalizedWorldIr: normalized.value,
     normalizedWorldIrHash: normalized.normalizedWorldIrHash,
   });
 }
 
-describe("compileWorldV3", () => {
+describe("compileWorld", () => {
   it("compiles two instances from one resolved Package Definition", () => {
     const result = compilePackageWorld();
 
@@ -115,7 +115,7 @@ describe("compileWorldV3", () => {
       ...spec.world,
       resourceBudget: { ...spec.world.resourceBudget, maxVertices: 100 },
     };
-    const normalized = normalizeAuthoringSpecV2(spec);
+    const normalized = normalizeAuthoringSpec(spec);
     if (
       !normalized.ok ||
       normalized.value === undefined ||
@@ -124,7 +124,7 @@ describe("compileWorldV3", () => {
       throw new Error("Fixture did not normalize.");
     }
 
-    const result = compileWorldV3({
+    const result = compileWorld({
       normalizedWorldIr: normalized.value,
       normalizedWorldIrHash: normalized.normalizedWorldIrHash,
     });
@@ -140,12 +140,12 @@ describe("compileWorldV3", () => {
   });
 
   it("rejects a normalized hash that does not match the supplied V2 IR", () => {
-    const normalized = normalizeAuthoringSpecV2(createValidPackageSubjectWorldV2());
+    const normalized = normalizeAuthoringSpec(createValidPackageSubjectWorldV2());
     if (!normalized.ok || normalized.value === undefined) {
       throw new Error("Fixture did not normalize.");
     }
 
-    const result = compileWorldV3({
+    const result = compileWorld({
       normalizedWorldIr: normalized.value,
       normalizedWorldIrHash: `sha256:${"0".repeat(64)}`,
     });

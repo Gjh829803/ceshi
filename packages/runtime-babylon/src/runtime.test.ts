@@ -5,10 +5,10 @@ import { NullEngine } from "@babylonjs/core/Engines/nullEngine.pure.js";
 import { describe, expect, it } from "vitest";
 
 import {
-  normalizeAuthoringSpecV2,
+  normalizeAuthoringSpec,
   type AuthoringSpecV2,
 } from "@whitebox-world/authoring";
-import { compileWorldV3 } from "@whitebox-world/compiler";
+import { compileWorld } from "@whitebox-world/compiler";
 import { createValidPackageSubjectWorldV2 } from "../../authoring/src/test-fixture";
 import type {
   ExecutionPlanV3,
@@ -88,7 +88,7 @@ function createExecutionPlan(
 ): ExecutionPlanV3 {
   const spec = createValidPackageSubjectWorldV2();
   mutator?.(spec);
-  const normalized = normalizeAuthoringSpecV2(spec);
+  const normalized = normalizeAuthoringSpec(spec);
   if (
     !normalized.ok ||
     normalized.value === undefined ||
@@ -96,7 +96,7 @@ function createExecutionPlan(
   ) {
     throw new Error(`Fixture normalize failed: ${JSON.stringify(normalized.diagnostics)}`);
   }
-  const compiled = compileWorldV3({
+  const compiled = compileWorld({
     normalizedWorldIr: normalized.value,
     normalizedWorldIrHash: normalized.normalizedWorldIrHash,
   });

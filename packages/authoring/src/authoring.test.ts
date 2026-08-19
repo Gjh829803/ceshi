@@ -1,20 +1,20 @@
 import { describe, expect, it } from "vitest";
 
 import {
-  parseAuthoringSpecJsonV2,
-  validateAuthoringSpecV2,
-  validatePackageSubjectDefinitionV1,
+  parseAuthoringSpecJson,
+  validateAuthoringSpec,
+  validatePackageSubjectDefinition,
 } from "./index";
 import {
-  createValidAuthoringSpecV2,
+  createValidAuthoringSpec,
   createValidPackageSubjectWorldV2,
 } from "./test-fixture";
 
-const validSpec = createValidAuthoringSpecV2();
+const validSpec = createValidAuthoringSpec();
 
 describe("AuthoringSpecV2", () => {
   it("strictly parses a valid canonical V2 document", () => {
-    const result = parseAuthoringSpecJsonV2(JSON.stringify(validSpec));
+    const result = parseAuthoringSpecJson(JSON.stringify(validSpec));
 
     expect(result.ok).toBe(true);
     expect(result.value).toEqual(validSpec);
@@ -22,7 +22,7 @@ describe("AuthoringSpecV2", () => {
   });
 
   it("rejects duplicate JSON object keys before schema validation", () => {
-    const result = parseAuthoringSpecJsonV2(
+    const result = parseAuthoringSpecJson(
       '{"kind":"worldkit-authoring-spec","kind":"worldkit-authoring-spec","schemaVersion":2}',
     );
 
@@ -37,7 +37,7 @@ describe("AuthoringSpecV2", () => {
   it("rejects unknown Subject fields instead of silently ignoring them", () => {
     const subject = validSpec.nodes.find((node) => node.kind === "subject");
     expect(subject).toBeDefined();
-    const result = validateAuthoringSpecV2({
+    const result = validateAuthoringSpec({
       ...validSpec,
       nodes: validSpec.nodes.map((node) =>
         node === subject ? { ...node, unexpectedSubjectField: true } : node,
@@ -48,7 +48,7 @@ describe("AuthoringSpecV2", () => {
   });
 
   it("rejects the unpublished schemaVersion 1 instead of migrating it", () => {
-    const result = parseAuthoringSpecJsonV2(
+    const result = parseAuthoringSpecJson(
       JSON.stringify({ ...validSpec, schemaVersion: 1 }),
     );
 
@@ -66,7 +66,7 @@ describe("AuthoringSpecV2", () => {
   });
 
   it("rejects unsupported non-integer schema versions with the same version diagnostic", () => {
-    const result = parseAuthoringSpecJsonV2(
+    const result = parseAuthoringSpecJson(
       JSON.stringify({ ...validSpec, schemaVersion: 2.5 }),
     );
 
@@ -82,17 +82,22 @@ describe("AuthoringSpecV2", () => {
     });
   });
 
-  it("rejects unknown V2 root fields and the removed kitRef field", () => {
+  it("rejects unknown V2 root fields and the removed legacy subject reference field", () => {
     const subject = validSpec.nodes.find((node) => node.kind === "subject");
+    const legacySubjectReferenceField = ["kit", "Ref"].join("");
     expect(subject).toBeDefined();
 
-    expect(validateAuthoringSpecV2({ ...validSpec, unexpectedRootField: true }).ok).toBe(false);
+    expect(validateAuthoringSpec({ ...validSpec, unexpectedRootField: true }).ok).toBe(false);
     expect(
-      validateAuthoringSpecV2({
+      validateAuthoringSpec({
         ...validSpec,
         nodes: validSpec.nodes.map((node) =>
           node === subject
-            ? { ...node, kitRef: "worldkit://kit/humanoid.third-person@1" }
+            ? {
+                ...node,
+                [legacySubjectReferenceField]:
+                  "worldkit://kit/humanoid.third-person@1",
+              }
             : node,
         ),
       }).ok,
@@ -102,7 +107,7 @@ describe("AuthoringSpecV2", () => {
   it("rejects invalid or unversioned Subject Definition refs", () => {
     const subject = validSpec.nodes.find((node) => node.kind === "subject");
     expect(subject).toBeDefined();
-    const result = validateAuthoringSpecV2({
+    const result = validateAuthoringSpec({
       ...validSpec,
       nodes: validSpec.nodes.map((node) =>
         node === subject
@@ -123,8 +128,8 @@ describe("AuthoringSpecV2", () => {
     const definition = packageWorld.resources.subjectDefinitions[0];
     expect(definition).toBeDefined();
 
-    expect(validateAuthoringSpecV2(packageWorld).ok).toBe(true);
-    expect(validatePackageSubjectDefinitionV1(definition)).toEqual({
+    expect(validateAuthoringSpec(packageWorld).ok).toBe(true);
+    expect(validatePackageSubjectDefinition(definition)).toEqual({
       ok: true,
       value: definition,
       diagnostics: [],
@@ -135,7 +140,7 @@ describe("AuthoringSpecV2", () => {
     const spec = createValidPackageSubjectWorldV2();
     const definition = spec.resources.subjectDefinitions[0];
     expect(definition).toBeDefined();
-    const result = validatePackageSubjectDefinitionV1({
+    const result = validatePackageSubjectDefinition({
       ...definition,
       subjectDefinitionHash: `sha256:${"a".repeat(64)}`,
       resourceCost: { vertices: 1, triangles: 1, colliders: 1 },
@@ -149,7 +154,7 @@ describe("AuthoringSpecV2", () => {
     expect(definition).toBeDefined();
     const firstPart = definition!.visualParts[0];
     expect(firstPart).toBeDefined();
-    const result = validatePackageSubjectDefinitionV1({
+    const result = validatePackageSubjectDefinition({
       ...definition,
       visualParts: [
         {

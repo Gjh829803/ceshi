@@ -1,13 +1,13 @@
 {
   "kind": "worldkit-authoring-spec",
-  "schemaVersion": 1,
+  "schemaVersion": 2,
   "id": "invalid-world",
   "seed": 1024,
   "world": {
     "coordinateSystem": "right-handed-y-up-minus-z-forward",
     "bounds": {
-      "centerXZ": [0, 0],
-      "sizeXZ": [40, 40],
+      "centerMetersXZ": [0, 0],
+      "sizeMetersXZ": [40, 40],
       "heightRangeMeters": [-2, 4]
     },
     "gravityMetersPerSecondSquaredXYZ": [0, -9.81, 0],
@@ -21,7 +21,8 @@
     }
   },
   "resources": {
-    "prototypes": []
+    "prototypes": [],
+    "subjectDefinitions": []
   },
   "nodes": [
     {
@@ -34,9 +35,9 @@
             "relief": "flat"
           },
           "grid": {
-            "centerXZ": [0, 0],
-            "sizeXZ": [40, 40],
-            "resolutionXZ": [17, 17]
+            "centerMetersXZ": [0, 0],
+            "sizeMetersXZ": [40, 40],
+            "resolutionCellsXZ": [17, 17]
           }
         }
       }
@@ -45,7 +46,7 @@
       "id": "spawn-main",
       "kind": "anchor",
       "transform": {
-        "positionMeters": [0, 0, 8]
+        "positionMetersXYZ": [0, 0, 8]
       },
       "semantic": {
         "classId": "spawn.player"
@@ -54,7 +55,8 @@
     {
       "id": "player",
       "kind": "subject",
-      "kitRef": "worldkit://kit/humanoid.third-person@1"
+      "subjectDefinitionRef": "worldkit://subject-definition/humanoid.third-person@1",
+      "spawnAnchorEntityId": "spawn-main"
     },
     {
       "id": "camera-main",
@@ -66,7 +68,7 @@
             "worldkit://camera/third-person.standard@1"
           ],
           "target": {
-            "entityId": "player"
+            "targetEntityId": "player"
           },
           "thirdPerson": {
             "pitchRadians": 0.2,
@@ -82,7 +84,7 @@
   "relationships": [],
   "rules": [],
   "startup": {
-    "spawnAnchorId": "spawn-main",
+    "spawnAnchorEntityId": "spawn-main",
     "controlledEntityId": "player",
     "cameraEntityId": "camera-main"
   },

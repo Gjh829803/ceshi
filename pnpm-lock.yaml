@@ -20,6 +20,9 @@ importers:
       '@whitebox-world/runtime-contracts':
         specifier: workspace:*
         version: link:packages/runtime-contracts
+      '@whitebox-world/subject-registry':
+        specifier: workspace:*
+        version: link:packages/subject-registry
       three:
         specifier: ^0.180.0
         version: 0.180.0

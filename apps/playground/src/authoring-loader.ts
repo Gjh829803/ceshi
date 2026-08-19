@@ -1,9 +1,9 @@
 import {
-  normalizeAuthoringSpecV2,
-  parseAuthoringSpecJsonV2,
+  normalizeAuthoringSpec,
+  parseAuthoringSpecJson,
   type AuthoringDiagnostic,
 } from "@whitebox-world/authoring";
-import { compileWorldV3 } from "@whitebox-world/compiler";
+import { compileWorld } from "@whitebox-world/compiler";
 import type {
   CompileDiagnostic,
   ExecutionPlanV3,
@@ -59,13 +59,13 @@ export async function loadAuthoringScene(
       cause: error instanceof Error ? error.message : String(error),
     });
   }
-  const parsed = parseAuthoringSpecJsonV2(sourceText);
+  const parsed = parseAuthoringSpecJson(sourceText);
   if (!parsed.ok || parsed.value === undefined) return { ok: false, diagnostics: parsed.diagnostics };
-  const normalized = normalizeAuthoringSpecV2(parsed.value);
+  const normalized = normalizeAuthoringSpec(parsed.value);
   if (!normalized.ok || normalized.value === undefined || normalized.normalizedWorldIrHash === undefined) {
     return { ok: false, diagnostics: normalized.diagnostics };
   }
-  const compiled = compileWorldV3({
+  const compiled = compileWorld({
     normalizedWorldIr: normalized.value,
     normalizedWorldIrHash: normalized.normalizedWorldIrHash,
   });

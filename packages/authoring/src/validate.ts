@@ -1,13 +1,11 @@
 import Ajv2020, { type ErrorObject } from "ajv/dist/2020.js";
 import addFormats from "ajv-formats";
 
-import authoringSpecV1Schema from "./authoring-spec-v1.schema.json";
 import authoringSpecV2Schema from "./authoring-spec-v2.schema.json";
 import subjectDefinitionV1Schema from "./subject-definition-v1.schema.json";
 import type {
   AuthoringDiagnostic,
   AuthoringResult,
-  AuthoringSpecV1,
   AuthoringSpecV2,
   PackageSubjectDefinitionV1,
 } from "./types";
@@ -62,8 +60,9 @@ ajv.addFormat("package-prototype-ref", {
 
 ajv.addSchema(subjectDefinitionV1Schema);
 
-const validateV1 = ajv.compile<AuthoringSpecV1>(authoringSpecV1Schema);
-const validateV2 = ajv.compile<AuthoringSpecV2>(authoringSpecV2Schema);
+const validateCanonicalAuthoringSpec = ajv.compile<AuthoringSpecV2>(
+  authoringSpecV2Schema,
+);
 const validateSubjectDefinitionV1 = (() => {
   const registeredValidator = ajv.getSchema<PackageSubjectDefinitionV1>(
     "worldkit://schema/subject-definition@1",
@@ -89,23 +88,17 @@ function diagnosticFor(error: ErrorObject): AuthoringDiagnostic {
   };
 }
 
-export function validateAuthoringSpec(value: unknown): AuthoringResult<AuthoringSpecV1> {
-  if (validateV1(value)) return { ok: true, value, diagnostics: [] };
+export function validateAuthoringSpec(value: unknown): AuthoringResult<AuthoringSpecV2> {
+  if (validateCanonicalAuthoringSpec(value)) {
+    return { ok: true, value, diagnostics: [] };
+  }
   return {
     ok: false,
-    diagnostics: (validateV1.errors ?? []).map(diagnosticFor),
+    diagnostics: (validateCanonicalAuthoringSpec.errors ?? []).map(diagnosticFor),
   };
 }
 
-export function validateAuthoringSpecV2(value: unknown): AuthoringResult<AuthoringSpecV2> {
-  if (validateV2(value)) return { ok: true, value, diagnostics: [] };
-  return {
-    ok: false,
-    diagnostics: (validateV2.errors ?? []).map(diagnosticFor),
-  };
-}
-
-export function validatePackageSubjectDefinitionV1(
+export function validatePackageSubjectDefinition(
   value: unknown,
 ): AuthoringResult<PackageSubjectDefinitionV1> {
   if (validateSubjectDefinitionV1(value)) {

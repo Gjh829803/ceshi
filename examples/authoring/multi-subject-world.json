@@ -1,6 +1,6 @@
 {
   "kind": "worldkit-authoring-spec",
-  "schemaVersion": 1,
+  "schemaVersion": 2,
   "id": "multi-subject-world",
   "seed": 2048,
   "provenance": {
@@ -9,8 +9,8 @@
   "world": {
     "coordinateSystem": "right-handed-y-up-minus-z-forward",
     "bounds": {
-      "centerXZ": [0, 0],
-      "sizeXZ": [120, 120],
+      "centerMetersXZ": [0, 0],
+      "sizeMetersXZ": [120, 120],
       "heightRangeMeters": [-8, 16]
     },
     "gravityMetersPerSecondSquaredXYZ": [0, -9.81, 0],
@@ -48,7 +48,8 @@
           "classId": "landmark.tower"
         }
       }
-    ]
+    ],
+    "subjectDefinitions": []
   },
   "nodes": [
     {
@@ -62,9 +63,9 @@
             "amplitudeMeters": 1.5
           },
           "grid": {
-            "centerXZ": [0, 0],
-            "sizeXZ": [120, 120],
-            "resolutionXZ": [65, 65]
+            "centerMetersXZ": [0, 0],
+            "sizeMetersXZ": [120, 120],
+            "resolutionCellsXZ": [65, 65]
           },
           "semantic": {
             "classId": "terrain.grassland"
@@ -80,7 +81,7 @@
           "terrainEntityId": "terrain-main",
           "boundary": {
             "kind": "ellipse",
-            "centerXZ": [0, -12],
+            "centerMetersXZ": [0, -12],
             "radiusMetersXZ": [13, 17]
           },
           "depthMeters": 4,
@@ -96,32 +97,32 @@
     {
       "id": "tower",
       "kind": "object",
-      "prototypeRef": "package://prototype/landmark-tower",
+      "prototypeRef": "package://prototype/landmark-tower@1",
       "transform": {
-        "positionMeters": [17, 5, -19]
+        "positionMetersXYZ": [17, 5, -19]
       }
     },
     {
       "id": "wall-east",
       "kind": "object",
-      "prototypeRef": "package://prototype/corridor-wall",
+      "prototypeRef": "package://prototype/corridor-wall@1",
       "transform": {
-        "positionMeters": [7, 1.5, 22]
+        "positionMetersXYZ": [7, 1.5, 22]
       }
     },
     {
       "id": "wall-west",
       "kind": "object",
-      "prototypeRef": "package://prototype/corridor-wall",
+      "prototypeRef": "package://prototype/corridor-wall@1",
       "transform": {
-        "positionMeters": [-7, 1.5, 22]
+        "positionMetersXYZ": [-7, 1.5, 22]
       }
     },
     {
       "id": "spawn-main",
       "kind": "anchor",
       "transform": {
-        "positionMeters": [0, 0, 30]
+        "positionMetersXYZ": [0, 0, 30]
       },
       "semantic": {
         "classId": "spawn.player"
@@ -131,7 +132,7 @@
       "id": "spawn-animal",
       "kind": "anchor",
       "transform": {
-        "positionMeters": [3, 0, 26]
+        "positionMetersXYZ": [3, 0, 26]
       },
       "semantic": {
         "classId": "spawn.animal"
@@ -140,12 +141,13 @@
     {
       "id": "player",
       "kind": "subject",
-      "kitRef": "worldkit://kit/humanoid.third-person@1"
+      "subjectDefinitionRef": "worldkit://subject-definition/humanoid.third-person@1",
+      "spawnAnchorEntityId": "spawn-main"
     },
     {
       "id": "animal",
       "kind": "subject",
-      "kitRef": "worldkit://kit/quadruped.ground-proxy@1",
+      "subjectDefinitionRef": "worldkit://subject-definition/quadruped.ground-proxy@1",
       "spawnAnchorEntityId": "spawn-animal"
     },
     {
@@ -158,7 +160,7 @@
             "worldkit://camera/third-person.standard@1"
           ],
           "target": {
-            "entityId": "player",
+            "targetEntityId": "player",
             "targetHeightMeters": 1.2
           },
           "thirdPerson": {
@@ -175,7 +177,7 @@
   "relationships": [],
   "rules": [],
   "startup": {
-    "spawnAnchorId": "spawn-main",
+    "spawnAnchorEntityId": "spawn-main",
     "controlledEntityId": "player",
     "cameraEntityId": "camera-main"
   },

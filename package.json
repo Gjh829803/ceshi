@@ -32,13 +32,14 @@
     "test:scenes": "vitest run packages/world/src/scene.test.ts apps/playground/src/scenes/scenes.test.ts",
     "test:watch": "vitest",
     "worldkit": "tsx scripts/worldkit.ts",
-    "verify:v1": "tsx scripts/verify-canonical-world.ts"
+    "verify:canonical": "tsx scripts/verify-canonical-world.ts"
   },
   "dependencies": {
     "@dimforge/rapier3d-compat": "^0.19.3",
     "@whitebox-world/authoring": "workspace:*",
     "@whitebox-world/compiler": "workspace:*",
     "@whitebox-world/runtime-contracts": "workspace:*",
+    "@whitebox-world/subject-registry": "workspace:*",
     "three": "^0.180.0"
   },
   "devDependencies": {

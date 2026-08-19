@@ -6,9 +6,10 @@ import path from "node:path";
 import { chromium } from "playwright";
 
 import type {
-  ExecutionPlanV2,
-  WorldRuntimeSnapshotV2,
+  ExecutionPlanV3,
+  WorldRuntimeSnapshotV3,
 } from "@whitebox-world/runtime-contracts";
+import type { NormalizedWorldIRV2 } from "@whitebox-world/authoring";
 
 import { startWorldkitServer } from "./lib/worldkit-server";
 import { main as worldkitMain } from "./worldkit";
@@ -21,12 +22,13 @@ const BUILD_PATH = path.join(ARTIFACT_DIRECTORY, "world.normalized.json");
 const SCREENSHOT_PATH = path.join(ARTIFACT_DIRECTORY, "world.png");
 const SNAPSHOT_PATH = path.join(ARTIFACT_DIRECTORY, "snapshot.json");
 
-interface BuildArtifactV2 {
+interface WorldBuildArtifactV3 {
   kind: "worldkit-build-artifact";
-  schemaVersion: 2;
+  schemaVersion: 3;
   normalizedWorldIrHash: string;
   executionPlanHash: string;
-  executionPlan: ExecutionPlanV2;
+  normalizedWorldIr: NormalizedWorldIRV2;
+  executionPlan: ExecutionPlanV3;
 }
 
 function parseJson<T>(sourceText: string, label: string): T {
@@ -88,12 +90,13 @@ async function runCliGates(): Promise<void> {
 }
 
 async function verifyArtifacts(): Promise<{ dimensions: { width: number; height: number }; bodyCount: number }> {
-  const artifact = parseJson<BuildArtifactV2>(await readFile(BUILD_PATH, "utf8"), "Build artifact");
+  const artifact = parseJson<WorldBuildArtifactV3>(await readFile(BUILD_PATH, "utf8"), "Build artifact");
   assert.equal(artifact.kind, "worldkit-build-artifact");
-  assert.equal(artifact.schemaVersion, 2);
+  assert.equal(artifact.schemaVersion, 3);
   assert.match(artifact.normalizedWorldIrHash, /^sha256:[a-f0-9]{64}$/);
   assert.match(artifact.executionPlanHash, /^sha256:[a-f0-9]{64}$/);
-  assert.equal(artifact.executionPlan.schemaVersion, 2);
+  assert.equal(artifact.normalizedWorldIr.schemaVersion, 2);
+  assert.equal(artifact.executionPlan.schemaVersion, 3);
   assert.equal(artifact.executionPlan.runtimeBackend, "babylon-havok");
   assert.equal(artifact.executionPlan.terrain.entityId, "terrain-main");
   assert.deepEqual(artifact.executionPlan.waters.map((water) => water.entityId), ["lake-main"]);
@@ -102,8 +105,8 @@ async function verifyArtifacts(): Promise<{ dimensions: { width: number; height:
   assert.deepEqual(artifact.executionPlan.subjects.map((subject) => subject.entityId), ["animal", "player"]);
   assert.equal(artifact.executionPlan.camera.cameraEntityId, "camera-main");
 
-  const snapshot = parseJson<WorldRuntimeSnapshotV2>(await readFile(SNAPSHOT_PATH, "utf8"), "Runtime snapshot");
-  assert.equal(snapshot.schemaVersion, 2);
+  const snapshot = parseJson<WorldRuntimeSnapshotV3>(await readFile(SNAPSHOT_PATH, "utf8"), "Runtime snapshot");
+  assert.equal(snapshot.schemaVersion, 3);
   assert.equal(snapshot.runtimeBackend, "babylon-havok");
   assert.deepEqual(snapshot.physics, {
     backend: "havok",
@@ -213,9 +216,9 @@ async function run(): Promise<void> {
     gates: [
       "strict-valid-input",
       "strict-invalid-input-rejection",
-      "deterministic-v2-build-artifact",
+      "deterministic-v3-build-artifact",
       "playwright-capture",
-      "browser-protocol-v2",
+      "browser-protocol-v3",
       "babylon-havok-runtime",
       "multi-subject-visuals",
       "blocking-wall-collision",

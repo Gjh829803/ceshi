@@ -9,10 +9,9 @@ import {
 import type {
   AuthoringDiagnostic,
   AuthoringResult,
-  AuthoringSpecV1,
   AuthoringSpecV2,
 } from "./types";
-import { validateAuthoringSpec, validateAuthoringSpecV2 } from "./validate";
+import { validateAuthoringSpec } from "./validate";
 
 const MAX_AUTHORING_JSON_BYTES = 8 * 1024 * 1024;
 
@@ -54,7 +53,7 @@ function findDuplicateKeys(
   }
 }
 
-function parseCanonicalAuthoringJson(sourceText: string): AuthoringResult<unknown> {
+export function parseCanonicalJson(sourceText: string): AuthoringResult<unknown> {
   if (new TextEncoder().encode(sourceText).byteLength > MAX_AUTHORING_JSON_BYTES) {
     return {
       ok: false,
@@ -101,14 +100,8 @@ function parseCanonicalAuthoringJson(sourceText: string): AuthoringResult<unknow
   return { ok: true, value: getNodeValue(root), diagnostics: [] };
 }
 
-export function parseAuthoringSpecJson(sourceText: string): AuthoringResult<AuthoringSpecV1> {
-  const parsed = parseCanonicalAuthoringJson(sourceText);
-  if (!parsed.ok) return { ok: false, diagnostics: parsed.diagnostics };
-  return validateAuthoringSpec(parsed.value);
-}
-
-export function parseAuthoringSpecJsonV2(sourceText: string): AuthoringResult<AuthoringSpecV2> {
-  const parsed = parseCanonicalAuthoringJson(sourceText);
+export function parseAuthoringSpecJson(sourceText: string): AuthoringResult<AuthoringSpecV2> {
+  const parsed = parseCanonicalJson(sourceText);
   if (!parsed.ok) return { ok: false, diagnostics: parsed.diagnostics };
 
   const value = parsed.value;
@@ -134,5 +127,5 @@ export function parseAuthoringSpecJsonV2(sourceText: string): AuthoringResult<Au
     };
   }
 
-  return validateAuthoringSpecV2(value);
+  return validateAuthoringSpec(value);
 }

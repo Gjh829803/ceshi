@@ -6,12 +6,12 @@ import {
 } from "@whitebox-world/subject-registry";
 
 import {
-  normalizeAuthoringSpecV2,
-  type NormalizeAuthoringResultV2,
+  normalizeAuthoringSpec,
+  type NormalizeAuthoringResult,
 } from "./index";
 import { createValidPackageSubjectWorldV2 } from "./test-fixture";
 
-function packageDefinitionHash(result: NormalizeAuthoringResultV2): string {
+function packageDefinitionHash(result: NormalizeAuthoringResult): string {
   return result.value!.resources.subjectDefinitions.find(
     (definition) => definition.source === "package",
   )!.subjectDefinitionHash;
@@ -19,7 +19,7 @@ function packageDefinitionHash(result: NormalizeAuthoringResultV2): string {
 
 describe("Package Subject Definition normalization", () => {
   it("normalizes one Package Definition once for two Subject instances", () => {
-    const result = normalizeAuthoringSpecV2(createValidPackageSubjectWorldV2());
+    const result = normalizeAuthoringSpec(createValidPackageSubjectWorldV2());
 
     expect(result.ok).toBe(true);
     expect(result.value?.resources.subjectDefinitions).toHaveLength(2);
@@ -50,8 +50,8 @@ describe("Package Subject Definition normalization", () => {
   });
 
   it("makes Definition and world hashes insensitive to order-only changes", () => {
-    const first = normalizeAuthoringSpecV2(createValidPackageSubjectWorldV2());
-    const reordered = normalizeAuthoringSpecV2(
+    const first = normalizeAuthoringSpec(createValidPackageSubjectWorldV2());
+    const reordered = normalizeAuthoringSpec(
       createValidPackageSubjectWorldV2({ reverseDefinitionCollections: true }),
     );
 
@@ -62,8 +62,8 @@ describe("Package Subject Definition normalization", () => {
   });
 
   it("changes Definition Hash for semantic geometry changes", () => {
-    const first = normalizeAuthoringSpecV2(createValidPackageSubjectWorldV2());
-    const changed = normalizeAuthoringSpecV2(
+    const first = normalizeAuthoringSpec(createValidPackageSubjectWorldV2());
+    const changed = normalizeAuthoringSpec(
       createValidPackageSubjectWorldV2({ bodyWidthMeters: 1.1 }),
     );
 
@@ -73,7 +73,7 @@ describe("Package Subject Definition normalization", () => {
   });
 
   it("emits a stable, de-duplicated Resource Lock", () => {
-    const result = normalizeAuthoringSpecV2(createValidPackageSubjectWorldV2());
+    const result = normalizeAuthoringSpec(createValidPackageSubjectWorldV2());
 
     expect(result.ok).toBe(true);
     const lock = result.value!.resources.resourceLock;
@@ -101,7 +101,7 @@ describe("Package Subject Definition normalization", () => {
       ],
     };
 
-    expect(normalizeAuthoringSpecV2(spec).diagnostics).toContainEqual(
+    expect(normalizeAuthoringSpec(spec).diagnostics).toContainEqual(
       expect.objectContaining({
         code: "SUBJECT_DEFINITION_DUPLICATE",
         instancePath: "/resources/subjectDefinitions/1",
@@ -121,7 +121,7 @@ describe("Package Subject Definition normalization", () => {
         : node,
     );
 
-    expect(normalizeAuthoringSpecV2(spec).diagnostics).toContainEqual(
+    expect(normalizeAuthoringSpec(spec).diagnostics).toContainEqual(
       expect.objectContaining({
         code: "SUBJECT_DEFINITION_NOT_FOUND",
         instancePath: "/nodes/8/subjectDefinitionRef",
@@ -146,7 +146,7 @@ describe("Package Subject Definition normalization", () => {
       ],
     };
 
-    expect(normalizeAuthoringSpecV2(spec).diagnostics).toContainEqual(
+    expect(normalizeAuthoringSpec(spec).diagnostics).toContainEqual(
       expect.objectContaining({
         code: "SUBJECT_CAPABILITY_UNSATISFIED",
         instancePath:
@@ -178,7 +178,7 @@ describe("Package Subject Definition normalization", () => {
       ],
     };
 
-    expect(normalizeAuthoringSpecV2(spec).diagnostics).toContainEqual(
+    expect(normalizeAuthoringSpec(spec).diagnostics).toContainEqual(
       expect.objectContaining({
         code: "SUBJECT_SUPPORT_ORIGIN_INVALID",
         instancePath: "/resources/subjectDefinitions/0/visualParts",
@@ -202,7 +202,7 @@ describe("Package Subject Definition normalization", () => {
       ],
     };
 
-    expect(normalizeAuthoringSpecV2(spec).diagnostics).toContainEqual(
+    expect(normalizeAuthoringSpec(spec).diagnostics).toContainEqual(
       expect.objectContaining({
         code: "SUBJECT_COLLIDER_DERIVATION_FAILED",
         instancePath: "/resources/subjectDefinitions/0/colliderPolicy",
@@ -222,7 +222,7 @@ describe("Package Subject Definition normalization", () => {
     };
 
     expect(
-      normalizeAuthoringSpecV2(createValidPackageSubjectWorldV2(), {
+      normalizeAuthoringSpec(createValidPackageSubjectWorldV2(), {
         subjectResourceRegistry: conflictingRegistry,
       }).diagnostics,
     ).toContainEqual(

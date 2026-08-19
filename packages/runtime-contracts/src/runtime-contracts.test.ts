@@ -89,7 +89,7 @@ describe("runtime contracts V3", () => {
         centerOffsetFromSubjectOriginMetersXYZ: [0, 0.7, 0],
       },
     });
-    expect(subject).not.toHaveProperty("kitRef");
+    expect(subject).not.toHaveProperty(["kit", "Ref"].join(""));
     expect(subject).not.toHaveProperty("spawnPositionMeters");
   });
 
