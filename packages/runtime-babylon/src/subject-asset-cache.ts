@@ -173,6 +173,14 @@ function sanitizedDisposalFailure(
     : assetDiagnostic("SUBJECT_ASSET_DISPOSE_FAILED", asset);
 }
 
+function sanitizedPostParseFailure(
+  error: unknown,
+  asset: ExecutionSubjectAssetV1,
+): SubjectAssetRuntimeErrorV1 {
+  if (isSubjectAssetRuntimeErrorV1(error)) return error;
+  return assetDiagnostic("SUBJECT_ASSET_FORMAT_UNSUPPORTED", asset);
+}
+
 function copyDescriptor(asset: ExecutionSubjectAssetV1): ExecutionSubjectAssetV1 {
   return {
     ...asset,
@@ -736,7 +744,7 @@ export class SubjectAssetCacheV1 {
       } catch {
         // Preserve the primary post-Parse rejection after the exactly-once cleanup attempt.
       }
-      throw sanitizedDisposalFailure(error, asset);
+      throw sanitizedPostParseFailure(error, asset);
     }
   }
 
