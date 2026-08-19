@@ -1226,7 +1226,7 @@ Expected: all commands PASS; only documented non-failing bundler warnings may re
 
 Fill the existing progress table with commit IDs and add final evidence below it: test totals, Definition Hash, Resource Lock Hash, Normalized IR Hash, ExecutionPlan Hash, screenshot dimensions, Havok body count, and movement/reset evidence. Mark a checkbox only after its command or artifact is verified.
 
-- [ ] **Step 5: Commit documentation and audit**
+- [x] **Step 5: Commit documentation and audit**
 
 ```bash
 git add README.md docs
