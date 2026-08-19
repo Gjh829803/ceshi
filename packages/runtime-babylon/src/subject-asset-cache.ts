@@ -729,8 +729,12 @@ export class SubjectAssetCacheV1 {
       this.entriesByKey.set(key, entry);
       return entry;
     } catch (error) {
-      this.disposeContainerOnce(container);
-      throw error;
+      try {
+        this.disposeContainerOnce(container);
+      } catch {
+        // Preserve the primary post-Parse rejection after the exactly-once cleanup attempt.
+      }
+      throw sanitizedDisposalFailure(error, asset);
     }
   }
 

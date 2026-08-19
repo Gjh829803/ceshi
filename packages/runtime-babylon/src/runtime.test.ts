@@ -1176,6 +1176,60 @@ describe("SubjectAssetCacheV1", () => {
     engine.dispose();
   });
 
+  it("preserves a post-Parse rejection when Container cleanup also fails", async () => {
+    const { engine, scene } = createAssetScene();
+    const loader = vi.mocked(LoadAssetContainerAsync);
+    const loadImplementation = loader.getMockImplementation();
+    if (loadImplementation === undefined) throw new Error("Loader test wrapper missing.");
+    const secret = "BABYLON_PRIVATE_POSTPARSE_DISPOSE_FAILURE";
+    let rejectedContainerDisposeCalls = 0;
+    let rejectedContainerDisposeSpy: ReturnType<typeof vi.spyOn> | undefined;
+    loader.mockImplementationOnce(async (...args) => {
+      const container = await loadImplementation(...args);
+      const nativeDispose = container.dispose.bind(container);
+      rejectedContainerDisposeSpy = vi
+        .spyOn(container, "dispose")
+        .mockImplementation(() => {
+          rejectedContainerDisposeCalls += 1;
+          nativeDispose();
+          throw new Error(secret);
+        });
+      return container;
+    });
+    let resolverCalls = 0;
+    const cache = new SubjectAssetCacheV1(scene, {
+      async resolveSubjectAsset() {
+        resolverCalls += 1;
+        return { bytes: goldenSubjectAssetBytes, sourceLabel: "memory" };
+      },
+    });
+    const mismatchedDescriptor: ExecutionSubjectAssetV1 = {
+      ...goldenSubjectAssetDescriptor,
+      inventory: {
+        ...goldenSubjectAssetDescriptor.inventory,
+        vertexCount: goldenSubjectAssetDescriptor.inventory.vertexCount - 1,
+      },
+    };
+
+    const primaryError = await cache.acquire(mismatchedDescriptor).catch((error) => error);
+
+    expect(isSubjectAssetRuntimeErrorV1(primaryError)).toBe(true);
+    expect(primaryError).toMatchObject({ code: "SUBJECT_ASSET_INVENTORY_MISMATCH" });
+    expect(String(primaryError)).not.toContain(secret);
+    expect(String(primaryError)).not.toMatch(/babylon|provider/i);
+    expect(rejectedContainerDisposeCalls).toBe(1);
+
+    const retryLease = await cache.acquire(goldenSubjectAssetDescriptor);
+    expect(resolverCalls).toBe(2);
+    retryLease.release();
+    await cache.dispose();
+    expect(rejectedContainerDisposeCalls).toBe(1);
+
+    rejectedContainerDisposeSpy?.mockRestore();
+    scene.dispose();
+    engine.dispose();
+  });
+
   it("closes atomically, rejects a pending acquire, and shares one Dispose Promise", async () => {
     const { engine, scene } = createAssetScene();
     const resolution = deferred<{ bytes: Uint8Array; sourceLabel: string }>();
