@@ -87,11 +87,19 @@ export interface WorldRuntimeSessionV3 {
 
 export const WORLDKIT_BROWSER_PROTOCOL_VERSION = 3 as const;
 
+export interface WorldkitBrowserDiagnosticV1 {
+  severity: "info" | "warning" | "error";
+  code: string;
+  instancePath: string;
+  message: string;
+  details?: Readonly<Record<string, unknown>>;
+}
+
 export interface WorldkitBrowserApiV3 {
   version: typeof WORLDKIT_BROWSER_PROTOCOL_VERSION;
   ready(): Promise<WorldRuntimeSnapshotV3>;
   getSnapshot(): WorldRuntimeSnapshotV3;
-  getDiagnostics(): readonly Readonly<Record<string, unknown>>[];
+  getDiagnostics(): readonly WorldkitBrowserDiagnosticV1[];
   bindControl(request: BindControlRequestV2): ControlBindingReceiptV2;
   runFixedInput(steps: readonly FixedInputV1[]): Promise<WorldRuntimeSnapshotV3>;
   captureScreenshot(): string;

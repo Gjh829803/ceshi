@@ -22,6 +22,7 @@ export interface SubjectExplanationV1 {
   capabilityRefs: readonly string[];
   profiles: NormalizedSubjectDefinitionV2["profiles"];
   visualParts: NormalizedSubjectDefinitionV2["visualParts"];
+  visualBinding: NormalizedSubjectDefinitionV2["visualBinding"];
   sockets: NormalizedSubjectDefinitionV2["sockets"];
   collider: ExecutionSubjectV3["collider"] &
     (
@@ -62,6 +63,15 @@ function lockEntriesForDefinition(
     definition.profiles.physicsBodyProfileRef,
     definition.profiles.locomotionProfileRef,
     colliderPolicyRef,
+    ...definition.visualParts.flatMap((part) =>
+      part.kind === "asset" ? [part.subjectAssetRef] : [],
+    ),
+    ...(definition.visualBinding.mode === "rigged"
+      ? [
+          definition.visualBinding.rigProfileRef,
+          definition.visualBinding.animationSetRef,
+        ]
+      : []),
   ]);
   return resourceLock.filter((entry) => relevantRefs.has(entry.resourceRef));
 }
@@ -122,6 +132,7 @@ export async function explainSubjectFile(
       capabilityRefs: definition.capabilityRefs,
       profiles: definition.profiles,
       visualParts: definition.visualParts,
+      visualBinding: definition.visualBinding,
       sockets: definition.sockets,
       collider: {
         ...(definition.colliderPolicy.kind === "derive"

@@ -1,5 +1,4 @@
 import "./style.css";
-import { WORLDKIT_BROWSER_PROTOCOL_VERSION } from "@whitebox-world/runtime-contracts";
 
 import { CanvasRecorder } from "./canvas-recorder.js";
 import type {
@@ -7,9 +6,10 @@ import type {
   PlaygroundAutomationApi,
   PlaygroundWorldAdapter,
   WorldSnapshot,
-  WorldkitBrowserApiV3,
 } from "./playground-world.js";
 import type { BabylonWorldAdapter } from "./babylon-world-adapter.js";
+import { createFetchSubjectAssetResolver, PLAYGROUND_SUBJECT_ASSET_URI_BY_REF_V1 } from "./worldkit-asset-resolver.js";
+import { installDeferredWorldkitBrowserApi } from "./worldkit-browser-api.js";
 
 const app = document.querySelector<HTMLDivElement>("#app");
 if (app === null) throw new Error("Missing #app container");
@@ -95,50 +95,68 @@ function requiredElement<T extends Element>(selector: string): T {
   return element;
 }
 
+function escapeHtml(value: string): string {
+  return value
+    .replaceAll("&", "&amp;")
+    .replaceAll("<", "&lt;")
+    .replaceAll(">", "&gt;")
+    .replaceAll('"', "&quot;")
+    .replaceAll("'", "&#039;");
+}
+
 const viewport = requiredElement<HTMLDivElement>("#viewport");
 const featureList = requiredElement<HTMLDivElement>("#feature-list");
 const inspection = requiredElement<HTMLDivElement>("#inspection");
 const urlParameters = new URLSearchParams(window.location.search);
 const authoringMode = urlParameters.get("authoring") === "1";
-let adapter: PlaygroundWorldAdapter;
-let babylonAdapter: BabylonWorldAdapter | null = null;
 if (authoringMode) {
-  const [{ loadAuthoringScene }, { BabylonWorldAdapter }] = await Promise.all([
-    import("./authoring-loader.js"),
-    import("./babylon-world-adapter.js"),
-  ]);
-  const loaded = await loadAuthoringScene();
-  if (!loaded.ok || loaded.executionPlan === undefined) {
-    const diagnostics = loaded.diagnostics.map((diagnostic) => ({ ...diagnostic }));
-    const error = new Error(`WORLDKIT_AUTHORING_LOAD_FAILED: ${JSON.stringify(diagnostics)}`);
-    const fail = (): never => {
-      throw error;
-    };
-    window.__WORLDKIT__ = {
-      version: WORLDKIT_BROWSER_PROTOCOL_VERSION,
-      ready: () => Promise.reject(error),
-      getSnapshot: fail,
-      getDiagnostics: () => diagnostics,
-      bindControl: fail,
-      runFixedInput: async () => fail(),
-      captureScreenshot: fail,
-      reset: fail,
-      setPaused: fail,
-    };
-    document.documentElement.dataset.worldkitStatus = "error";
-    inspection.innerHTML = `<pre>${escapeHtml(JSON.stringify(diagnostics, null, 2))}</pre>`;
-    throw error;
+  let createdAdapter: BabylonWorldAdapter | null = null;
+  const browserInstallation = installDeferredWorldkitBrowserApi({
+    target: window,
+    statusElement: document.documentElement,
+    initialize: async ({ trackAdapter }) => {
+      const subjectAssetResolver = createFetchSubjectAssetResolver(
+        PLAYGROUND_SUBJECT_ASSET_URI_BY_REF_V1,
+      );
+      const [{ loadAuthoringScene }, { BabylonWorldAdapter }] = await Promise.all([
+        import("./authoring-loader.js"),
+        import("./babylon-world-adapter.js"),
+      ]);
+      const loaded = await loadAuthoringScene();
+      if (!loaded.ok || loaded.executionPlan === undefined) {
+        inspection.innerHTML = `<pre>${escapeHtml(JSON.stringify(loaded.diagnostics, null, 2))}</pre>`;
+        throw new Error("WORLDKIT_AUTHORING_LOAD_FAILED");
+      }
+      const adapter = await BabylonWorldAdapter.create(loaded.executionPlan, {
+        subjectAssetResolver,
+      });
+      createdAdapter = adapter;
+      trackAdapter(adapter);
+      adapter.mount(viewport);
+      adapter.render();
+      return adapter;
+    },
+  });
+  const initialized = await browserInstallation.initialization;
+  if (initialized !== undefined && createdAdapter !== null) {
+    startPlayground(createdAdapter, () => browserInstallation.dispose());
+  } else {
+    inspection.innerHTML = `<pre>${escapeHtml(JSON.stringify(browserInstallation.api.getDiagnostics(), null, 2))}</pre>`;
   }
-  babylonAdapter = await BabylonWorldAdapter.create(loaded.executionPlan);
-  adapter = babylonAdapter;
 } else {
   const [{ SdkWorldAdapter }, { resolveScene }] = await Promise.all([
     import("./sdk-world-adapter.js"),
     import("./scenes/index.js"),
   ]);
-  adapter = await SdkWorldAdapter.create(resolveScene(window.location.search));
+  const adapter = await SdkWorldAdapter.create(resolveScene(window.location.search));
+  adapter.mount(viewport);
+  startPlayground(adapter);
 }
-adapter.mount(viewport);
+
+function startPlayground(
+  adapter: PlaygroundWorldAdapter,
+  disposeBrowserRuntime?: () => Promise<void>,
+): void {
 requiredElement("#adapter-name").textContent = adapter.name;
 const canvasRecorder = new CanvasRecorder(adapter.canvas);
 let recordingTimer: number | null = null;
@@ -211,15 +229,6 @@ function selectFeature(featureId: string): void {
   `;
 }
 
-function escapeHtml(value: string): string {
-  return value
-    .replaceAll("&", "&amp;")
-    .replaceAll("<", "&lt;")
-    .replaceAll(">", "&gt;")
-    .replaceAll('"', "&quot;")
-    .replaceAll("'", "&#039;");
-}
-
 function updateHud(snapshot: WorldSnapshot): void {
   requiredElement("#fps").textContent = String(snapshot.performance.fps || "—");
   requiredElement("#tick").textContent = String(snapshot.tick);
@@ -258,26 +267,6 @@ const automationApi: PlaygroundAutomationApi = {
   },
 };
 window.__WHITEBOX_PLAYGROUND__ = automationApi;
-
-if (babylonAdapter !== null) {
-  const runtimeAdapter = babylonAdapter;
-  const worldkitApi: WorldkitBrowserApiV3 = {
-    version: WORLDKIT_BROWSER_PROTOCOL_VERSION,
-    ready: async () => runtimeAdapter.runtimeSnapshot(),
-    getSnapshot: () => runtimeAdapter.runtimeSnapshot(),
-    getDiagnostics: () => [],
-    bindControl: (request) => runtimeAdapter.bindControl(request),
-    runFixedInput: (steps) => runtimeAdapter.runWorldkitFixedInput(steps),
-    captureScreenshot: () => runtimeAdapter.captureScreenshot(),
-    reset: () => runtimeAdapter.resetRuntime(),
-    setPaused: (paused) => {
-      runtimeAdapter.setPaused(paused);
-      return runtimeAdapter.runtimeSnapshot();
-    },
-  };
-  window.__WORLDKIT__ = worldkitApi;
-  document.documentElement.dataset.worldkitStatus = "ready";
-}
 
 adapter.subscribe(updateHud);
 renderFeatureList(adapter.inspectFeatures());
@@ -478,5 +467,7 @@ void captureRequestedArtifacts();
 window.addEventListener("beforeunload", () => {
   if (recordingTimer !== null) window.clearInterval(recordingTimer);
   canvasRecorder.dispose();
-  adapter.dispose();
+  if (disposeBrowserRuntime === undefined) adapter.dispose();
+  else void disposeBrowserRuntime();
 });
+}

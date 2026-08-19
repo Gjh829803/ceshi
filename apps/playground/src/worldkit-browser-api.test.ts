@@ -1,0 +1,205 @@
+import { describe, expect, it } from "vitest";
+
+import { SubjectAssetRuntimeErrorV1 } from "@whitebox-world/runtime-babylon";
+import type {
+  BindControlRequestV2,
+  ControlBindingReceiptV2,
+  FixedInputV1,
+  WorldRuntimeSnapshotV3,
+  WorldkitBrowserApiV3,
+} from "@whitebox-world/runtime-contracts";
+
+import {
+  installDeferredWorldkitBrowserApi,
+  type DeferredWorldkitBrowserRuntimeAdapterV1,
+} from "./worldkit-browser-api";
+
+function snapshotFixture(action: "idle" | "walk" | "run" | "jump" = "idle"): WorldRuntimeSnapshotV3 {
+  return {
+    kind: "worldkit-runtime-snapshot",
+    schemaVersion: 3,
+    runtimeBackend: "babylon-havok",
+    tick: 0,
+    ready: true,
+    controlledEntityId: "rigged-primary",
+    controllersById: {
+      "controller-primary": {
+        id: "controller-primary",
+        controlledEntityId: "rigged-primary",
+      },
+    },
+    subjectStatesByEntityId: {
+      "rigged-primary": {
+        entityId: "rigged-primary",
+        subjectDefinitionRef: "worldkit://subject-definition/humanoid.rigged-golden@1",
+        subjectDefinitionHash: `sha256:${"1".repeat(64)}`,
+        positionMetersXYZ: [0, 0, 0],
+        velocityMetersPerSecondXYZ: [0, 0, 0],
+        movementMedium: "ground",
+        activeActionId: action,
+      },
+    },
+    camera: {
+      entityId: "camera-main",
+      targetEntityId: "rigged-primary",
+      positionMetersXYZ: [0, 4, 6],
+    },
+    physics: { backend: "havok", ready: true, fixedTimeStepSeconds: 1 / 60 },
+    resources: { meshes: 1, bodies: 1, terrainSamples: 9 },
+  };
+}
+
+function adapterFixture(): DeferredWorldkitBrowserRuntimeAdapterV1 & {
+  disposeCount: number;
+} {
+  const snapshot = snapshotFixture();
+  return {
+    disposeCount: 0,
+    runtimeSnapshot: () => snapshot,
+    bindControl: (request: BindControlRequestV2): ControlBindingReceiptV2 => ({
+      kind: "worldkit-control-binding-receipt",
+      schemaVersion: 2,
+      status: "committed",
+      controllerId: request.controllerId,
+      previousControlledEntityId: request.expectedControlledEntityId,
+      controlledEntityId: request.controlledEntityId,
+    }),
+    runWorldkitFixedInput: async (_steps: readonly FixedInputV1[]) => snapshotFixture("run"),
+    captureScreenshot: () => "data:image/png;base64,",
+    resetRuntime: () => snapshot,
+    setPaused: () => undefined,
+    disposeRuntime: async function () {
+      this.disposeCount += 1;
+    },
+  };
+}
+
+function deferred<T>(): {
+  promise: Promise<T>;
+  resolve(value: T): void;
+  reject(error: unknown): void;
+} {
+  let resolve!: (value: T) => void;
+  let reject!: (error: unknown) => void;
+  const promise = new Promise<T>((resolvePromise, rejectPromise) => {
+    resolve = resolvePromise;
+    reject = rejectPromise;
+  });
+  return { promise, resolve, reject };
+}
+
+describe("installDeferredWorldkitBrowserApi", () => {
+  it("installs before startup, keeps one ready Promise, and gates sync/async methods", async () => {
+    const gate = deferred<void>();
+    const adapter = adapterFixture();
+    const target: { __WORLDKIT__?: WorldkitBrowserApiV3 } = {};
+    const statusElement = { dataset: {} as Record<string, string | undefined> };
+    const installation = installDeferredWorldkitBrowserApi({
+      target,
+      statusElement,
+      initialize: async ({ trackAdapter }) => {
+        await gate.promise;
+        trackAdapter(adapter);
+        return adapter;
+      },
+    });
+    const api = target.__WORLDKIT__ as typeof installation.api;
+
+    expect(api).toBe(installation.api);
+    expect(statusElement.dataset.worldkitStatus).toBe("loading");
+    expect(api.getDiagnostics()).toEqual([]);
+    expect(api.ready()).toBe(api.ready());
+    expect(() => api.getSnapshot()).toThrowError(
+      expect.objectContaining({ code: "WORLDKIT_RUNTIME_NOT_READY" }),
+    );
+    const pendingRun = api.runFixedInput([{ actions: ["run"], ticks: 1 }]);
+
+    gate.resolve();
+    await expect(installation.initialization).resolves.toBe(adapter);
+    await expect(api.ready()).resolves.toEqual(snapshotFixture());
+    await expect(pendingRun).resolves.toEqual(snapshotFixture("run"));
+    expect(statusElement.dataset.worldkitStatus).toBe("ready");
+  });
+
+  it("forwards only guarded Subject Asset codes and publishes one stable diagnostic", async () => {
+    const target: { __WORLDKIT__?: WorldkitBrowserApiV3 } = {};
+    const statusElement = { dataset: {} as Record<string, string | undefined> };
+    const installation = installDeferredWorldkitBrowserApi({
+      target,
+      statusElement,
+      initialize: async () => {
+        throw new SubjectAssetRuntimeErrorV1("SUBJECT_ASSET_HASH_MISMATCH", {
+          subjectAssetRef: "worldkit://subject-asset/humanoid.golden@1",
+          artifactContentHash: `sha256:${"1".repeat(64)}`,
+        });
+      },
+    });
+
+    await expect(installation.initialization).resolves.toBeUndefined();
+    const readyError = await installation.api.ready().catch((error: unknown) => error) as {
+      code: string;
+      diagnostic: unknown;
+    };
+    expect(readyError).toMatchObject({
+      code: "SUBJECT_ASSET_HASH_MISMATCH",
+    });
+    expect(statusElement.dataset.worldkitStatus).toBe("error");
+    const diagnostics = installation.api.getDiagnostics();
+    expect(diagnostics).toEqual([
+      {
+        severity: "error",
+        code: "SUBJECT_ASSET_HASH_MISMATCH",
+        instancePath: "",
+        message: "Subject Asset runtime initialization failed.",
+      },
+    ]);
+    expect(installation.api.getDiagnostics()).toBe(diagnostics);
+    expect(readyError.diagnostic).toBe(diagnostics[0]);
+  });
+
+  it("redacts unknown failures even when they imitate a Runtime code", async () => {
+    const installation = installDeferredWorldkitBrowserApi({
+      target: {},
+      statusElement: { dataset: {} },
+      initialize: async () => {
+        throw Object.assign(new Error("provider secret"), {
+          code: "SUBJECT_ASSET_HASH_MISMATCH",
+          cause: new Error("private cause"),
+        });
+      },
+    });
+
+    await installation.initialization;
+    await expect(installation.api.ready()).rejects.toMatchObject({
+      code: "WORLDKIT_RUNTIME_INITIALIZATION_FAILED",
+    });
+    const diagnosticsJson = JSON.stringify(installation.api.getDiagnostics());
+    expect(installation.api.getDiagnostics()).toEqual([
+      {
+        severity: "error",
+        code: "WORLDKIT_RUNTIME_INITIALIZATION_FAILED",
+        instancePath: "",
+        message: "Worldkit runtime initialization failed.",
+      },
+    ]);
+    expect(diagnosticsJson).not.toContain("provider secret");
+    expect(diagnosticsJson).not.toContain("private cause");
+  });
+
+  it("cleans a tracked Adapter when startup fails after Runtime creation", async () => {
+    const adapter = adapterFixture();
+    const installation = installDeferredWorldkitBrowserApi({
+      target: {},
+      statusElement: { dataset: {} },
+      initialize: async ({ trackAdapter }) => {
+        trackAdapter(adapter);
+        throw new Error("mount failed");
+      },
+    });
+
+    await expect(installation.initialization).resolves.toBeUndefined();
+    expect(adapter.disposeCount).toBe(1);
+    await expect(installation.dispose()).resolves.toBeUndefined();
+    expect(adapter.disposeCount).toBe(1);
+  });
+});

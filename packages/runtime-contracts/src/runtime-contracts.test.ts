@@ -11,6 +11,7 @@ import {
   type FixedInputV1,
   type WorldRuntimeSnapshotV3,
   type WorldkitBrowserApiV3,
+  type WorldkitBrowserDiagnosticV1,
 } from "./index";
 
 function createSnapshotFixtureV3(): WorldRuntimeSnapshotV3 {
@@ -233,11 +234,17 @@ describe("runtime contracts V3", () => {
 
   it("defines Browser Protocol V3 directly over SnapshotV3", async () => {
     const snapshot = createSnapshotFixtureV3();
+    const diagnostic = {
+      severity: "error",
+      code: "SUBJECT_ASSET_HASH_MISMATCH",
+      instancePath: "",
+      message: "Subject Asset bytes do not match the locked content hash.",
+    } satisfies WorldkitBrowserDiagnosticV1;
     const api = {
       version: WORLDKIT_BROWSER_PROTOCOL_VERSION,
       ready: async () => snapshot,
       getSnapshot: () => snapshot,
-      getDiagnostics: () => [],
+      getDiagnostics: () => [diagnostic],
       bindControl: () => ({
         kind: "worldkit-control-binding-receipt" as const,
         schemaVersion: 2 as const,
@@ -254,5 +261,6 @@ describe("runtime contracts V3", () => {
 
     expect(api.version).toBe(3);
     await expect(api.ready()).resolves.toBe(snapshot);
+    expect(api.getDiagnostics()).toEqual([diagnostic]);
   });
 });

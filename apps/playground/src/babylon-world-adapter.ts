@@ -6,7 +6,10 @@ import type {
   SemanticInputActionV1,
   WorldRuntimeSnapshotV3,
 } from "@whitebox-world/runtime-contracts";
-import { BabylonWorldRuntime } from "@whitebox-world/runtime-babylon";
+import {
+  BabylonWorldRuntime,
+  type BabylonWorldRuntimeOptions,
+} from "@whitebox-world/runtime-babylon";
 
 import type {
   FeatureInspection,
@@ -21,6 +24,7 @@ const INPUT_ACTION_MAP: Readonly<Partial<Record<InputAction, SemanticInputAction
   backward: "move-backward",
   left: "move-left",
   right: "move-right",
+  run: "run",
   jump: "jump",
 };
 
@@ -29,8 +33,72 @@ const KEY_ACTION_MAP: Readonly<Record<string, SemanticInputActionV1>> = {
   KeyS: "move-backward",
   KeyA: "move-left",
   KeyD: "move-right",
+  ShiftLeft: "run",
+  ShiftRight: "run",
   Space: "jump",
 };
+
+const SEMANTIC_INPUT_ACTION_ORDER: readonly SemanticInputActionV1[] = [
+  "move-forward",
+  "move-backward",
+  "move-left",
+  "move-right",
+  "jump",
+  "run",
+];
+
+export function mapPlaygroundInputActions(
+  actions: readonly InputAction[],
+): readonly SemanticInputActionV1[] {
+  const mapped = new Set<SemanticInputActionV1>();
+  for (const action of actions) {
+    const semanticAction = INPUT_ACTION_MAP[action];
+    if (semanticAction !== undefined) mapped.add(semanticAction);
+  }
+  return SEMANTIC_INPUT_ACTION_ORDER.filter((action) => mapped.has(action));
+}
+
+export class PhysicalKeyboardActionTracker {
+  readonly #pressedCodes = new Set<string>();
+
+  press(code: string): boolean {
+    if (KEY_ACTION_MAP[code] === undefined) return false;
+    this.#pressedCodes.add(code);
+    return true;
+  }
+
+  release(code: string): boolean {
+    if (KEY_ACTION_MAP[code] === undefined) return false;
+    this.#pressedCodes.delete(code);
+    return true;
+  }
+
+  clear(): void {
+    this.#pressedCodes.clear();
+  }
+
+  actions(): readonly SemanticInputActionV1[] {
+    const active = new Set<SemanticInputActionV1>();
+    for (const code of this.#pressedCodes) {
+      const action = KEY_ACTION_MAP[code];
+      if (action !== undefined) active.add(action);
+    }
+    return SEMANTIC_INPUT_ACTION_ORDER.filter((action) => active.has(action));
+  }
+}
+
+export function activeActionForControlledSubject(
+  snapshot: WorldRuntimeSnapshotV3,
+): WorldSnapshot["player"]["action"] {
+  const controlledSubject =
+    snapshot.subjectStatesByEntityId[snapshot.controlledEntityId];
+  if (controlledSubject === undefined) {
+    throw new Error(
+      `WORLDKIT_RUNTIME_SNAPSHOT_CONTROL_TARGET_NOT_FOUND: ${snapshot.controlledEntityId}`,
+    );
+  }
+  return controlledSubject.activeActionId;
+}
 
 export function featureInspections(plan: ExecutionPlanV3): readonly FeatureInspection[] {
   return [
@@ -120,13 +188,14 @@ export class BabylonWorldAdapter implements PlaygroundWorldAdapter {
   readonly canvas: HTMLCanvasElement;
 
   private readonly listeners = new Set<(snapshot: WorldSnapshot) => void>();
-  private readonly pressed = new Set<SemanticInputActionV1>();
+  private readonly keyboardInput = new PhysicalKeyboardActionTracker();
   private readonly inspections: readonly FeatureInspection[];
   private readonly resizeObserver: ResizeObserver;
   private animationFrameId: number | null = null;
   private frame = 0;
   private paused = false;
   private disposed = false;
+  private disposePromise: Promise<void> | null = null;
   private animationPending = false;
 
   private constructor(
@@ -145,15 +214,30 @@ export class BabylonWorldAdapter implements PlaygroundWorldAdapter {
     window.addEventListener("blur", this.handleBlur);
   }
 
-  static async create(executionPlan: ExecutionPlanV3): Promise<BabylonWorldAdapter> {
+  static async create(
+    executionPlan: ExecutionPlanV3,
+    options: Pick<
+      BabylonWorldRuntimeOptions,
+      "subjectAssetResolver" | "subjectAssetCacheOptions"
+    > = {},
+  ): Promise<BabylonWorldAdapter> {
     const canvas = document.createElement("canvas");
     const runtime = await BabylonWorldRuntime.create({
       executionPlan,
       canvas,
       autoStartRenderLoop: false,
+      ...options,
     });
-    runtime.renderFrame();
-    return new BabylonWorldAdapter(executionPlan, runtime, canvas);
+    try {
+      return new BabylonWorldAdapter(executionPlan, runtime, canvas);
+    } catch (error) {
+      try {
+        await runtime.dispose();
+      } catch {
+        // Preserve the primary Adapter construction failure.
+      }
+      throw error;
+    }
   }
 
   mount(container: HTMLElement): void {
@@ -174,7 +258,7 @@ export class BabylonWorldAdapter implements PlaygroundWorldAdapter {
   }
 
   reset(): void {
-    this.pressed.clear();
+    this.keyboardInput.clear();
     this.runtime.reset();
     this.render();
     this.emit();
@@ -190,10 +274,7 @@ export class BabylonWorldAdapter implements PlaygroundWorldAdapter {
     this.paused = true;
     for (const step of steps) {
       await this.runtime.runFixedInput({
-        actions: step.actions.flatMap((action) => {
-          const mapped = INPUT_ACTION_MAP[action];
-          return mapped === undefined ? [] : [mapped];
-        }),
+        actions: mapPlaygroundInputActions(step.actions),
         ticks: Math.max(0, Math.floor(step.ticks)),
       });
     }
@@ -287,10 +368,6 @@ export class BabylonWorldAdapter implements PlaygroundWorldAdapter {
         `WORLDKIT_RUNTIME_SNAPSHOT_CONTROL_TARGET_NOT_FOUND: ${snapshot.controlledEntityId}`,
       );
     }
-    const moving = Math.hypot(
-      controlledSubject.velocityMetersPerSecondXYZ[0],
-      controlledSubject.velocityMetersPerSecondXYZ[2],
-    ) > 0.05;
     return {
       adapter: this.name,
       frame: this.frame,
@@ -298,7 +375,7 @@ export class BabylonWorldAdapter implements PlaygroundWorldAdapter {
       paused: this.paused,
       player: {
         entityId: controlledSubject.entityId,
-        action: moving ? "walk" : "idle",
+        action: activeActionForControlledSubject(snapshot),
         grounded: controlledSubject.movementMedium === "ground",
         position: controlledSubject.positionMetersXYZ,
         rotationY: 0,
@@ -325,32 +402,34 @@ export class BabylonWorldAdapter implements PlaygroundWorldAdapter {
   }
 
   dispose(): void {
-    if (this.disposed) return;
+    void this.disposeRuntime();
+  }
+
+  disposeRuntime(): Promise<void> {
+    if (this.disposePromise !== null) return this.disposePromise;
     this.disposed = true;
     if (this.animationFrameId !== null) cancelAnimationFrame(this.animationFrameId);
     this.resizeObserver.disconnect();
     window.removeEventListener("keydown", this.handleKeyDown);
     window.removeEventListener("keyup", this.handleKeyUp);
     window.removeEventListener("blur", this.handleBlur);
-    void this.runtime.dispose();
+    this.canvas.remove();
+    this.disposePromise = this.runtime.dispose();
+    return this.disposePromise;
   }
 
   private readonly handleKeyDown = (event: KeyboardEvent): void => {
-    const action = KEY_ACTION_MAP[event.code];
-    if (action === undefined) return;
+    if (!this.keyboardInput.press(event.code)) return;
     event.preventDefault();
-    this.pressed.add(action);
   };
 
   private readonly handleKeyUp = (event: KeyboardEvent): void => {
-    const action = KEY_ACTION_MAP[event.code];
-    if (action === undefined) return;
+    if (!this.keyboardInput.release(event.code)) return;
     event.preventDefault();
-    this.pressed.delete(action);
   };
 
   private readonly handleBlur = (): void => {
-    this.pressed.clear();
+    this.keyboardInput.clear();
   };
 
   private scheduleAnimationFrame(): void {
@@ -365,7 +444,10 @@ export class BabylonWorldAdapter implements PlaygroundWorldAdapter {
     if (!this.paused && !this.animationPending) {
       this.animationPending = true;
       try {
-        await this.runtime.runFixedInput({ actions: [...this.pressed], ticks: 1 });
+        await this.runtime.runFixedInput({
+          actions: this.keyboardInput.actions(),
+          ticks: 1,
+        });
       } finally {
         this.animationPending = false;
       }

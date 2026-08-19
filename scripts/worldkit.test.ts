@@ -1,6 +1,7 @@
 import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
+import { fileURLToPath } from "node:url";
 
 import { afterEach, describe, expect, it } from "vitest";
 
@@ -37,6 +38,10 @@ async function writePackageWorld(directory: string): Promise<string> {
   );
   return inputPath;
 }
+
+const RIGGED_SUBJECT_WORLD_PATH = path.resolve(
+  fileURLToPath(new URL("../examples/authoring/rigged-subject-world.json", import.meta.url)),
+);
 
 afterEach(async () => {
   await Promise.all(
@@ -163,6 +168,26 @@ describe("worldkit CLI", () => {
         contentHash: expect.stringMatching(/^sha256:/),
       },
     });
+  });
+
+  it("describes every Registry resource kind selected by the rigged Subject", () => {
+    const resourceRefByKind = {
+      "subject-asset": "worldkit://subject-asset/humanoid.golden@1",
+      "rig-profile": "worldkit://rig-profile/biped.golden@1",
+      "animation-set": "worldkit://animation-set/humanoid.ground.golden@1",
+      "collider-profile": "worldkit://collider-profile/humanoid.medium-capsule@1",
+      "physics-body-profile": "worldkit://physics-body-profile/character.medium@1",
+      "locomotion-profile": "worldkit://locomotion-profile/ground.standard@1",
+      capability: "worldkit://capability/locomotion.ground@1",
+      "subject-definition": "worldkit://subject-definition/humanoid.rigged-golden@1",
+    } as const;
+
+    for (const [kind, resourceRef] of Object.entries(resourceRefByKind)) {
+      expect(describeRegistryResource(resourceRef)).toMatchObject({
+        ok: true,
+        resource: { kind, resourceRef },
+      });
+    }
   });
 
   it("returns discovery guidance for a missing exact Registry Ref", () => {
@@ -306,6 +331,62 @@ describe("worldkit CLI", () => {
         resourceCost: { colliders: 1 },
       },
     });
+  });
+
+  it("explains the rigged Subject with canonical refs and exactly eight selected lock kinds", async () => {
+    const result = await explainSubjectFile(
+      RIGGED_SUBJECT_WORLD_PATH,
+      "rigged-primary",
+    );
+
+    expect(result).toMatchObject({
+      ok: true,
+      subject: {
+        entityId: "rigged-primary",
+        subjectDefinitionRef:
+          "worldkit://subject-definition/humanoid.rigged-golden@1",
+        visualParts: [
+          {
+            id: "body.asset",
+            kind: "asset",
+            subjectAssetRef: "worldkit://subject-asset/humanoid.golden@1",
+          },
+        ],
+        visualBinding: {
+          mode: "rigged",
+          rigProfileRef: "worldkit://rig-profile/biped.golden@1",
+          animationSetRef:
+            "worldkit://animation-set/humanoid.ground.golden@1",
+        },
+        collider: {
+          colliderProfileRef:
+            "worldkit://collider-profile/humanoid.medium-capsule@1",
+        },
+      },
+    });
+    if (!result.ok) throw new Error("Rigged Subject explanation failed.");
+    expect(
+      result.subject.resourceLockEntries.map((entry) => entry.resourceKind),
+    ).toEqual([
+      "animation-set",
+      "capability",
+      "collider-profile",
+      "locomotion-profile",
+      "physics-body-profile",
+      "rig-profile",
+      "subject-asset",
+      "subject-definition",
+    ]);
+    const explanationJson = JSON.stringify(result.subject);
+    for (const forbiddenField of [
+      "artifact",
+      "bytes",
+      "provenance",
+      "sourceUri",
+      "engineHandle",
+    ]) {
+      expect(explanationJson).not.toContain(forbiddenField);
+    }
   });
 
   it("returns a stable diagnostic for a missing Subject Entity", async () => {
