@@ -296,11 +296,10 @@ describe("subject resource registry", () => {
         maxStepHeightMeters: 0.3,
       },
     });
-    expect(
-      builtInSubjectResourceRegistry.resolveLocomotionProfile(
-        "worldkit://locomotion-profile/ground.standard@1",
-      ),
-    ).toMatchObject({
+    const locomotionProfile = builtInSubjectResourceRegistry.resolveLocomotionProfile(
+      "worldkit://locomotion-profile/ground.standard@1",
+    );
+    expect(locomotionProfile).toMatchObject({
       kind: "locomotion-profile",
       locomotion: {
         mode: "ground",
@@ -310,11 +309,12 @@ describe("subject resource registry", () => {
         jumpSpeedMetersPerSecond: 5.5,
       },
     });
-    expect(
-      builtInSubjectResourceRegistry.resolveLocomotionProfile(
-        "worldkit://locomotion-profile/ground.standard@1",
-      )?.locomotion,
-    ).not.toHaveProperty("groundSpeedMetersPerSecond");
+    expect(locomotionProfile?.contentHash).toBe(
+      "sha256:a8d223d132e45027e5156f6857f9833b5ba89bdcd7408bea1cec7cf6ba47ac11",
+    );
+    expect(locomotionProfile?.locomotion).not.toHaveProperty(
+      "groundSpeedMetersPerSecond",
+    );
     expect(
       builtInSubjectResourceRegistry.resolveColliderDerivationProfile(
         "worldkit://collider-derivation-profile/vertical-character-capsule@1",

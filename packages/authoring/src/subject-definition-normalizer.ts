@@ -397,7 +397,12 @@ function resolveColliderPolicy(
           collider: structuredClone(colliderProfile.collider),
         });
     }
-    return structuredClone(colliderProfile.collider);
+    return {
+      kind: colliderProfile.collider.kind,
+      radiusMeters: colliderProfile.collider.radiusMeters,
+      heightMeters: colliderProfile.collider.heightMeters,
+      centerOffsetFromSubjectOriginMetersXYZ: [centerX, centerY, centerZ],
+    };
   }
 
   if (definition.visualParts.some((part) => part.kind === "asset")) {
@@ -619,7 +624,13 @@ export function normalizeSubjectDefinitionV2(
     semanticClassId: definition.semanticClassId,
     coordinateConvention: structuredClone(definition.coordinateConvention),
     visualParts,
-    visualBinding: structuredClone(definition.visualBinding),
+    visualBinding: definition.visualBinding.mode === "static"
+      ? { mode: "static" as const }
+      : {
+          mode: "rigged" as const,
+          rigProfileRef: definition.visualBinding.rigProfileRef,
+          animationSetRef: definition.visualBinding.animationSetRef,
+        },
     sockets,
     colliderPolicy: structuredClone(definition.colliderPolicy),
     capabilityRefs,
@@ -644,7 +655,17 @@ export function normalizeSubjectDefinitionV2(
       maxSlopeDegrees: physicsBodyProfile.physicsBody.maxSlopeDegrees,
       maxStepHeightMeters: physicsBodyProfile.physicsBody.maxStepHeightMeters,
     },
-    locomotion: structuredClone(locomotionProfile.locomotion),
+    locomotion: {
+      mode: locomotionProfile.locomotion.mode,
+      walkSpeedMetersPerSecond:
+        locomotionProfile.locomotion.walkSpeedMetersPerSecond,
+      runSpeedMetersPerSecond:
+        locomotionProfile.locomotion.runSpeedMetersPerSecond,
+      waterSpeedMetersPerSecond:
+        locomotionProfile.locomotion.waterSpeedMetersPerSecond,
+      jumpSpeedMetersPerSecond:
+        locomotionProfile.locomotion.jumpSpeedMetersPerSecond,
+    },
     resourceCost,
   };
 }

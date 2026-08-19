@@ -40,7 +40,14 @@ function normalizeSubjectAsset(
     byteLength: resource.artifact.byteLength,
     mediaType: resource.artifact.mediaType,
     format: resource.format,
-    inventory: structuredClone(resource.inventory),
+    inventory: {
+      meshCount: resource.inventory.meshCount,
+      vertexCount: resource.inventory.vertexCount,
+      triangleCount: resource.inventory.triangleCount,
+      skeletonCount: resource.inventory.skeletonCount,
+      boneCount: resource.inventory.boneCount,
+      animationClipNames: [...resource.inventory.animationClipNames],
+    },
   };
 }
 
@@ -52,7 +59,26 @@ function normalizeRigProfile(
     bodyTopology: resource.bodyTopology,
     skeletonRootNodeName: resource.skeletonRootNodeName,
     requiredBoneIds: [...resource.requiredBoneIds],
-    sourceNodeNameByBoneId: structuredClone(resource.sourceNodeNameByBoneId),
+    sourceNodeNameByBoneId: {
+      chest: resource.sourceNodeNameByBoneId.chest,
+      "foot.left": resource.sourceNodeNameByBoneId["foot.left"],
+      "foot.right": resource.sourceNodeNameByBoneId["foot.right"],
+      "hand.left": resource.sourceNodeNameByBoneId["hand.left"],
+      "hand.right": resource.sourceNodeNameByBoneId["hand.right"],
+      head: resource.sourceNodeNameByBoneId.head,
+      hips: resource.sourceNodeNameByBoneId.hips,
+      "lower-arm.left": resource.sourceNodeNameByBoneId["lower-arm.left"],
+      "lower-arm.right": resource.sourceNodeNameByBoneId["lower-arm.right"],
+      "lower-leg.left": resource.sourceNodeNameByBoneId["lower-leg.left"],
+      "lower-leg.right": resource.sourceNodeNameByBoneId["lower-leg.right"],
+      neck: resource.sourceNodeNameByBoneId.neck,
+      root: resource.sourceNodeNameByBoneId.root,
+      spine: resource.sourceNodeNameByBoneId.spine,
+      "upper-arm.left": resource.sourceNodeNameByBoneId["upper-arm.left"],
+      "upper-arm.right": resource.sourceNodeNameByBoneId["upper-arm.right"],
+      "upper-leg.left": resource.sourceNodeNameByBoneId["upper-leg.left"],
+      "upper-leg.right": resource.sourceNodeNameByBoneId["upper-leg.right"],
+    },
   };
 }
 
@@ -65,7 +91,14 @@ function normalizeAnimationSet(
     rigProfileRef: resource.rigProfileRef,
     defaultActionId: resource.defaultActionId,
     requiredActionIds: [...resource.requiredActionIds],
-    animationBindings: structuredClone(resource.animationBindings),
+    animationBindings: resource.animationBindings.map((binding) => ({
+      actionId: binding.actionId,
+      sourceClipName: binding.sourceClipName,
+      loopMode: binding.loopMode,
+      playbackSpeedRatio: binding.playbackSpeedRatio,
+      blendDurationSeconds: binding.blendDurationSeconds,
+      rootMotionMode: binding.rootMotionMode,
+    })),
   };
 }
 
@@ -75,7 +108,16 @@ function normalizeColliderProfile(
   return {
     colliderProfileRef: resource.resourceRef,
     supportedBodyTopologies: [...resource.supportedBodyTopologies],
-    collider: structuredClone(resource.collider),
+    collider: {
+      kind: resource.collider.kind,
+      radiusMeters: resource.collider.radiusMeters,
+      heightMeters: resource.collider.heightMeters,
+      centerOffsetFromSubjectOriginMetersXYZ: [
+        resource.collider.centerOffsetFromSubjectOriginMetersXYZ[0],
+        resource.collider.centerOffsetFromSubjectOriginMetersXYZ[1],
+        resource.collider.centerOffsetFromSubjectOriginMetersXYZ[2],
+      ],
+    },
   };
 }
 

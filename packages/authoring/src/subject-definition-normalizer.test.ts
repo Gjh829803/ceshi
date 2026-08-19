@@ -25,6 +25,30 @@ const RIG_PROFILE_REF = "worldkit://rig-profile/biped.golden@1";
 const ANIMATION_SET_REF = "worldkit://animation-set/humanoid.ground.golden@1";
 const COLLIDER_PROFILE_REF =
   "worldkit://collider-profile/humanoid.medium-capsule@1";
+const BIPED_BONE_IDS = [
+  "chest",
+  "foot.left",
+  "foot.right",
+  "hand.left",
+  "hand.right",
+  "head",
+  "hips",
+  "lower-arm.left",
+  "lower-arm.right",
+  "lower-leg.left",
+  "lower-leg.right",
+  "neck",
+  "root",
+  "spine",
+  "upper-arm.left",
+  "upper-arm.right",
+  "upper-leg.left",
+  "upper-leg.right",
+] as const;
+
+function expectExactKeys(value: object, expectedKeys: readonly string[]): void {
+  expect(Object.keys(value).sort()).toEqual([...expectedKeys].sort());
+}
 
 function registryFrom(
   transform: (
@@ -204,6 +228,21 @@ describe("Package Subject Definition normalization", () => {
     );
   });
 
+  it("locks the current rigged Subject Definition, Resource Lock, and Normalized IR hashes", () => {
+    const result = normalizeAuthoringSpec(createValidRiggedPackageSubjectWorldV2());
+
+    expect(result.ok).toBe(true);
+    expect(packageDefinitionHash(result)).toBe(
+      "sha256:2949c4c8f7ebbb321a3a40ea10890f4dd608178c26424c530e771c1b529d0a1b",
+    );
+    expect(result.value?.resources.resourceLockHash).toBe(
+      "sha256:73caff41be6267df95087c08f870a3943ab6f38107a1feff4fa4ac43ff2d4aec",
+    );
+    expect(result.normalizedWorldIrHash).toBe(
+      "sha256:0118602a6b48033a3aa7756f86ecdd8a195a10a579c7f511ca2d3d110c5eb365",
+    );
+  });
+
   it("deduplicates transitive tables and locks across definitions", () => {
     const world = createValidRiggedPackageSubjectWorldV2();
     world.resources = {
@@ -341,6 +380,201 @@ describe("Package Subject Definition normalization", () => {
     );
     expect(JSON.stringify(result.value)).toContain("top-level provenance remains allowed");
     expect(JSON.stringify(result.value)).toContain('"contentHash"');
+  });
+
+  it("recursively projects only allowed nested execution data into Normalized IR", () => {
+    const forbiddenValues = [
+      "registry-inventory-provider-handle",
+      "registry-rig-provider-handle",
+      "registry-animation-source-uri",
+      "registry-collider-provider-handle",
+      "registry-collider-center-source-uri",
+      "registry-locomotion-provider-handle",
+    ] as const;
+    const subjectResourceRegistry = registryFrom((resource) => {
+      switch (resource.kind) {
+        case "subject-asset":
+          return {
+            ...resource,
+            inventory: {
+              ...resource.inventory,
+              providerHandle: forbiddenValues[0],
+            },
+          } as unknown as SubjectRegistryResourceInputV1;
+        case "rig-profile":
+          return {
+            ...resource,
+            sourceNodeNameByBoneId: {
+              ...resource.sourceNodeNameByBoneId,
+              providerHandle: forbiddenValues[1],
+            },
+          } as SubjectRegistryResourceInputV1;
+        case "animation-set":
+          return {
+            ...resource,
+            animationBindings: resource.animationBindings.map((binding) => ({
+              ...binding,
+              sourceUri: forbiddenValues[2],
+            })),
+          } as SubjectRegistryResourceInputV1;
+        case "collider-profile": {
+          const centerOffset = Object.assign(
+            [...resource.collider.centerOffsetFromSubjectOriginMetersXYZ],
+            { sourceUri: forbiddenValues[4] },
+          );
+          return {
+            ...resource,
+            collider: {
+              ...resource.collider,
+              centerOffsetFromSubjectOriginMetersXYZ: centerOffset,
+              providerHandle: forbiddenValues[3],
+            },
+          } as unknown as SubjectRegistryResourceInputV1;
+        }
+        case "locomotion-profile":
+          return {
+            ...resource,
+            locomotion: {
+              ...resource.locomotion,
+              providerHandle: forbiddenValues[5],
+            },
+          } as SubjectRegistryResourceInputV1;
+        default:
+          return resource;
+      }
+    });
+    const registryBefore = structuredClone(subjectResourceRegistry.listResources());
+    const world = createValidRiggedPackageSubjectWorldV2();
+    const definition = world.resources.subjectDefinitions[0]!;
+    definition.sockets = [
+      ...definition.sockets,
+      {
+        id: "test.local",
+        kind: "local",
+        localTransform: {
+          positionMetersXYZ: [0, 0, 0],
+          rotationEulerRadiansXYZ: [0, 0, 0],
+        },
+        semanticTags: ["test"],
+      },
+    ];
+    const worldBefore = structuredClone(world);
+
+    const result = normalizeAuthoringSpec(world, { subjectResourceRegistry });
+
+    expect(result.diagnostics).toEqual([]);
+    expect(result.ok).toBe(true);
+    expect(world).toEqual(worldBefore);
+    expect(subjectResourceRegistry.listResources()).toEqual(registryBefore);
+    const asset = result.value!.resources.subjectAssets[0]!;
+    const rig = result.value!.resources.rigProfiles[0]!;
+    const animationSet = result.value!.resources.animationSets[0]!;
+    const colliderProfile = result.value!.resources.colliderProfiles[0]!;
+    expectExactKeys(asset.inventory, [
+      "animationClipNames",
+      "boneCount",
+      "meshCount",
+      "skeletonCount",
+      "triangleCount",
+      "vertexCount",
+    ]);
+    expectExactKeys(rig.sourceNodeNameByBoneId, BIPED_BONE_IDS);
+    for (const binding of animationSet.animationBindings) {
+      expectExactKeys(binding, [
+        "actionId",
+        "blendDurationSeconds",
+        "loopMode",
+        "playbackSpeedRatio",
+        "rootMotionMode",
+        "sourceClipName",
+      ]);
+    }
+    expectExactKeys(colliderProfile.collider, [
+      "centerOffsetFromSubjectOriginMetersXYZ",
+      "heightMeters",
+      "kind",
+      "radiusMeters",
+    ]);
+    expectExactKeys(
+      colliderProfile.collider.centerOffsetFromSubjectOriginMetersXYZ,
+      ["0", "1", "2"],
+    );
+    const normalizedDefinition = result.value!.resources.subjectDefinitions[0]!;
+    expectExactKeys(normalizedDefinition.visualBinding, [
+      "animationSetRef",
+      "mode",
+      "rigProfileRef",
+    ]);
+    expectExactKeys(normalizedDefinition.collider, [
+      "centerOffsetFromSubjectOriginMetersXYZ",
+      "heightMeters",
+      "kind",
+      "massKilograms",
+      "maxSlopeDegrees",
+      "maxStepHeightMeters",
+      "radiusMeters",
+    ]);
+    expectExactKeys(
+      normalizedDefinition.collider.centerOffsetFromSubjectOriginMetersXYZ,
+      ["0", "1", "2"],
+    );
+    expectExactKeys(normalizedDefinition.locomotion, [
+      "jumpSpeedMetersPerSecond",
+      "mode",
+      "runSpeedMetersPerSecond",
+      "walkSpeedMetersPerSecond",
+      "waterSpeedMetersPerSecond",
+    ]);
+    const normalizedAssetPart = normalizedDefinition.visualParts.find(
+      (part) => part.kind === "asset",
+    )!;
+    expectExactKeys(normalizedAssetPart.localTransform, [
+      "positionMetersXYZ",
+      "rotationEulerRadiansXYZ",
+      "scaleXYZ",
+    ]);
+    expectExactKeys(normalizedAssetPart.localTransform.positionMetersXYZ, ["0", "1", "2"]);
+    expectExactKeys(normalizedAssetPart.localTransform.rotationEulerRadiansXYZ, ["0", "1", "2"]);
+    expectExactKeys(normalizedAssetPart.localTransform.scaleXYZ, ["0", "1", "2"]);
+    expectExactKeys(normalizedAssetPart.appearance, ["mode"]);
+    const normalizedBoneSocket = normalizedDefinition.sockets.find(
+      (socket) => socket.kind === "bone",
+    )!;
+    expectExactKeys(normalizedBoneSocket.offsetTransform, [
+      "positionMetersXYZ",
+      "rotationEulerRadiansXYZ",
+    ]);
+    expectExactKeys(normalizedBoneSocket.offsetTransform.positionMetersXYZ, ["0", "1", "2"]);
+    expectExactKeys(normalizedBoneSocket.offsetTransform.rotationEulerRadiansXYZ, ["0", "1", "2"]);
+    const normalizedLocalSocket = normalizedDefinition.sockets.find(
+      (socket) => socket.kind === "local",
+    )!;
+    expectExactKeys(normalizedLocalSocket.localTransform, [
+      "positionMetersXYZ",
+      "rotationEulerRadiansXYZ",
+    ]);
+    expectExactKeys(normalizedLocalSocket.localTransform.positionMetersXYZ, ["0", "1", "2"]);
+    expectExactKeys(normalizedLocalSocket.localTransform.rotationEulerRadiansXYZ, ["0", "1", "2"]);
+    const serializedIr = JSON.stringify(result.value);
+    for (const forbiddenValue of forbiddenValues) {
+      expect(serializedIr).not.toContain(forbiddenValue);
+    }
+
+    for (const resourceRef of [
+      SUBJECT_ASSET_REF,
+      RIG_PROFILE_REF,
+      ANIMATION_SET_REF,
+      COLLIDER_PROFILE_REF,
+    ]) {
+      const lockedManifest = subjectResourceRegistry
+        .listResources()
+        .find((resource) => resource.resourceRef === resourceRef)!;
+      expect(
+        result.value!.resources.resourceLock.find(
+          (entry) => entry.resourceRef === resourceRef,
+        )?.contentHash,
+      ).toBe(lockedManifest.contentHash);
+    }
   });
 
   it.each([

@@ -295,7 +295,26 @@ function compileRigProfileV1(
     bodyTopology: resource.bodyTopology,
     skeletonRootNodeName: resource.skeletonRootNodeName,
     requiredBoneIds: [...resource.requiredBoneIds],
-    sourceNodeNameByBoneId: structuredClone(resource.sourceNodeNameByBoneId),
+    sourceNodeNameByBoneId: {
+      chest: resource.sourceNodeNameByBoneId.chest,
+      "foot.left": resource.sourceNodeNameByBoneId["foot.left"],
+      "foot.right": resource.sourceNodeNameByBoneId["foot.right"],
+      "hand.left": resource.sourceNodeNameByBoneId["hand.left"],
+      "hand.right": resource.sourceNodeNameByBoneId["hand.right"],
+      head: resource.sourceNodeNameByBoneId.head,
+      hips: resource.sourceNodeNameByBoneId.hips,
+      "lower-arm.left": resource.sourceNodeNameByBoneId["lower-arm.left"],
+      "lower-arm.right": resource.sourceNodeNameByBoneId["lower-arm.right"],
+      "lower-leg.left": resource.sourceNodeNameByBoneId["lower-leg.left"],
+      "lower-leg.right": resource.sourceNodeNameByBoneId["lower-leg.right"],
+      neck: resource.sourceNodeNameByBoneId.neck,
+      root: resource.sourceNodeNameByBoneId.root,
+      spine: resource.sourceNodeNameByBoneId.spine,
+      "upper-arm.left": resource.sourceNodeNameByBoneId["upper-arm.left"],
+      "upper-arm.right": resource.sourceNodeNameByBoneId["upper-arm.right"],
+      "upper-leg.left": resource.sourceNodeNameByBoneId["upper-leg.left"],
+      "upper-leg.right": resource.sourceNodeNameByBoneId["upper-leg.right"],
+    },
   };
 }
 
@@ -325,7 +344,16 @@ function compileColliderProfileV1(
   return {
     colliderProfileRef: resource.colliderProfileRef,
     supportedBodyTopologies: [...resource.supportedBodyTopologies],
-    collider: structuredClone(resource.collider),
+    collider: {
+      kind: resource.collider.kind,
+      radiusMeters: resource.collider.radiusMeters,
+      heightMeters: resource.collider.heightMeters,
+      centerOffsetFromSubjectOriginMetersXYZ: [
+        resource.collider.centerOffsetFromSubjectOriginMetersXYZ[0],
+        resource.collider.centerOffsetFromSubjectOriginMetersXYZ[1],
+        resource.collider.centerOffsetFromSubjectOriginMetersXYZ[2],
+      ],
+    },
   };
 }
 
@@ -337,7 +365,23 @@ function compileSubjectVisualPartV3(
       id: part.id,
       kind: "asset",
       subjectAssetRef: part.subjectAssetRef,
-      localTransform: structuredClone(part.localTransform),
+      localTransform: {
+        positionMetersXYZ: [
+          part.localTransform.positionMetersXYZ[0],
+          part.localTransform.positionMetersXYZ[1],
+          part.localTransform.positionMetersXYZ[2],
+        ],
+        rotationEulerRadiansXYZ: [
+          part.localTransform.rotationEulerRadiansXYZ[0],
+          part.localTransform.rotationEulerRadiansXYZ[1],
+          part.localTransform.rotationEulerRadiansXYZ[2],
+        ],
+        scaleXYZ: [
+          part.localTransform.scaleXYZ[0],
+          part.localTransform.scaleXYZ[1],
+          part.localTransform.scaleXYZ[2],
+        ],
+      },
       appearance: { mode: "whitebox-neutral" },
       semanticTags: [...part.semanticTags],
     };
@@ -357,14 +401,36 @@ function compileSubjectSocketV3(socket: NormalizedSubjectSocketV2): SubjectSocke
       id: socket.id,
       kind: "bone",
       boneId: socket.boneId,
-      offsetTransform: structuredClone(socket.offsetTransform),
+      offsetTransform: {
+        positionMetersXYZ: [
+          socket.offsetTransform.positionMetersXYZ[0],
+          socket.offsetTransform.positionMetersXYZ[1],
+          socket.offsetTransform.positionMetersXYZ[2],
+        ],
+        rotationEulerRadiansXYZ: [
+          socket.offsetTransform.rotationEulerRadiansXYZ[0],
+          socket.offsetTransform.rotationEulerRadiansXYZ[1],
+          socket.offsetTransform.rotationEulerRadiansXYZ[2],
+        ],
+      },
       semanticTags: [...socket.semanticTags],
     };
   }
   return {
     id: socket.id,
     kind: "local",
-    localTransform: structuredClone(socket.localTransform),
+    localTransform: {
+      positionMetersXYZ: [
+        socket.localTransform.positionMetersXYZ[0],
+        socket.localTransform.positionMetersXYZ[1],
+        socket.localTransform.positionMetersXYZ[2],
+      ],
+      rotationEulerRadiansXYZ: [
+        socket.localTransform.rotationEulerRadiansXYZ[0],
+        socket.localTransform.rotationEulerRadiansXYZ[1],
+        socket.localTransform.rotationEulerRadiansXYZ[2],
+      ],
+    },
     semanticTags: [...socket.semanticTags],
   };
 }
@@ -554,10 +620,38 @@ function compileSubjectsV3(
         ],
         forwardDirection: "-z",
         visualParts: definition.visualParts.map(compileSubjectVisualPartV3),
-        visualBinding: structuredClone(definition.visualBinding),
+        visualBinding: definition.visualBinding.mode === "static"
+          ? { mode: "static" }
+          : {
+              mode: "rigged",
+              rigProfileRef: definition.visualBinding.rigProfileRef,
+              animationSetRef: definition.visualBinding.animationSetRef,
+            },
         sockets: definition.sockets.map(compileSubjectSocketV3),
-        collider: structuredClone(definition.collider),
-        locomotion: structuredClone(definition.locomotion),
+        collider: {
+          kind: definition.collider.kind,
+          radiusMeters: definition.collider.radiusMeters,
+          heightMeters: definition.collider.heightMeters,
+          centerOffsetFromSubjectOriginMetersXYZ: [
+            definition.collider.centerOffsetFromSubjectOriginMetersXYZ[0],
+            definition.collider.centerOffsetFromSubjectOriginMetersXYZ[1],
+            definition.collider.centerOffsetFromSubjectOriginMetersXYZ[2],
+          ],
+          massKilograms: definition.collider.massKilograms,
+          maxSlopeDegrees: definition.collider.maxSlopeDegrees,
+          maxStepHeightMeters: definition.collider.maxStepHeightMeters,
+        },
+        locomotion: {
+          mode: definition.locomotion.mode,
+          walkSpeedMetersPerSecond:
+            definition.locomotion.walkSpeedMetersPerSecond,
+          runSpeedMetersPerSecond:
+            definition.locomotion.runSpeedMetersPerSecond,
+          waterSpeedMetersPerSecond:
+            definition.locomotion.waterSpeedMetersPerSecond,
+          jumpSpeedMetersPerSecond:
+            definition.locomotion.jumpSpeedMetersPerSecond,
+        },
       };
     })
     .sort((left, right) => left.entityId.localeCompare(right.entityId));

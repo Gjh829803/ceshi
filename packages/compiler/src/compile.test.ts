@@ -27,6 +27,10 @@ const INJECTED_SOURCE_URI = "https://registry.invalid/private/golden-humanoid.gl
 const INJECTED_LICENSE_URI = "https://registry.invalid/private/license";
 const INJECTED_AI_TAG = "registry-private-discovery-tag";
 
+function expectExactKeys(value: object, expectedKeys: readonly string[]): void {
+  expect(Object.keys(value).sort()).toEqual([...expectedKeys].sort());
+}
+
 function registryWithPrivateAssetMetadata() {
   return createSubjectResourceRegistry(
     builtInSubjectResourceRegistry.listResources().map((resource) =>
@@ -191,6 +195,202 @@ describe("compileWorld", () => {
       /Babylon|Havok|AssetContainer|Uint8Array|ArrayBuffer/,
     );
     expect(serializedPlan).not.toContain('"contentHash"');
+  });
+
+  it("locks the current valid rigged ExecutionPlan hash", () => {
+    const rigged = normalizeRiggedWorld();
+
+    expect(
+      compileWorld({
+        normalizedWorldIr: rigged.value!,
+        normalizedWorldIrHash: rigged.normalizedWorldIrHash!,
+      }).executionPlanHash,
+    ).toBe(
+      "sha256:fbbd12c164323149b817e99bbe0b1146747a1ab0c02b3f636b9f67bb716e0465",
+    );
+  });
+
+  it("recursively projects forged Normalized descriptors and Subject data", () => {
+    const forbiddenValues = [
+      "normalized-inventory-provider-handle",
+      "normalized-rig-provider-handle",
+      "normalized-animation-source-uri",
+      "normalized-collider-provider-handle",
+      "normalized-collider-center-source-uri",
+      "normalized-binding-provider-handle",
+      "normalized-asset-transform-provider-handle",
+      "normalized-asset-position-source-uri",
+      "normalized-asset-scale-provider-handle",
+      "normalized-appearance-source-uri",
+      "normalized-bone-transform-provider-handle",
+      "normalized-bone-position-source-uri",
+      "normalized-local-transform-provider-handle",
+      "normalized-local-position-source-uri",
+      "normalized-subject-collider-provider-handle",
+      "normalized-subject-collider-center-source-uri",
+      "normalized-locomotion-provider-handle",
+    ] as const;
+    const normalized = normalizeRiggedWorld();
+    const world = structuredClone(normalized.value!);
+    const asset = world.resources.subjectAssets[0]!;
+    const rig = world.resources.rigProfiles[0]!;
+    const animationSet = world.resources.animationSets[0]!;
+    const colliderProfile = world.resources.colliderProfiles[0]!;
+    Object.assign(asset.inventory, { providerHandle: forbiddenValues[0] });
+    Object.assign(rig.sourceNodeNameByBoneId, { providerHandle: forbiddenValues[1] });
+    for (const binding of animationSet.animationBindings) {
+      Object.assign(binding, { sourceUri: forbiddenValues[2] });
+    }
+    Object.assign(colliderProfile.collider, { providerHandle: forbiddenValues[3] });
+    Object.assign(colliderProfile.collider.centerOffsetFromSubjectOriginMetersXYZ, {
+      sourceUri: forbiddenValues[4],
+    });
+    const definition = world.resources.subjectDefinitions[0]!;
+    Object.assign(definition.visualBinding, { providerHandle: forbiddenValues[5] });
+    const assetPart = definition.visualParts.find((part) => part.kind === "asset")!;
+    Object.assign(assetPart.localTransform, { providerHandle: forbiddenValues[6] });
+    Object.assign(assetPart.localTransform.positionMetersXYZ, {
+      sourceUri: forbiddenValues[7],
+    });
+    Object.assign(assetPart.localTransform.scaleXYZ, {
+      providerHandle: forbiddenValues[8],
+    });
+    Object.assign(assetPart.appearance, { sourceUri: forbiddenValues[9] });
+    const boneSocket = definition.sockets.find((socket) => socket.kind === "bone")!;
+    Object.assign(boneSocket.offsetTransform, { providerHandle: forbiddenValues[10] });
+    Object.assign(boneSocket.offsetTransform.positionMetersXYZ, {
+      sourceUri: forbiddenValues[11],
+    });
+    definition.sockets = [
+      ...definition.sockets,
+      {
+        id: "test.local",
+        kind: "local",
+        localTransform: {
+          positionMetersXYZ: Object.assign([0, 0, 0] as [number, number, number], {
+            sourceUri: forbiddenValues[13],
+          }),
+          rotationEulerRadiansXYZ: [0, 0, 0],
+          providerHandle: forbiddenValues[12],
+        },
+        semanticTags: ["test"],
+      } as unknown as (typeof definition.sockets)[number],
+    ];
+    Object.assign(definition.collider, { providerHandle: forbiddenValues[14] });
+    Object.assign(definition.collider.centerOffsetFromSubjectOriginMetersXYZ, {
+      sourceUri: forbiddenValues[15],
+    });
+    Object.assign(definition.locomotion, { providerHandle: forbiddenValues[16] });
+    const beforeCompile = structuredClone(world);
+
+    const result = compileNormalizedWorld(world);
+
+    expect(result.ok).toBe(true);
+    expect(world).toEqual(beforeCompile);
+    const plan = result.executionPlan!;
+    const executionAsset = plan.subjectAssets[0]!;
+    const executionRig = plan.rigProfiles[0]!;
+    const executionAnimationSet = plan.animationSets[0]!;
+    const executionColliderProfile = plan.colliderProfiles[0]!;
+    expectExactKeys(executionAsset.inventory, [
+      "animationClipNames",
+      "boneCount",
+      "meshCount",
+      "skeletonCount",
+      "triangleCount",
+      "vertexCount",
+    ]);
+    expectExactKeys(executionRig.sourceNodeNameByBoneId, [
+      "chest",
+      "foot.left",
+      "foot.right",
+      "hand.left",
+      "hand.right",
+      "head",
+      "hips",
+      "lower-arm.left",
+      "lower-arm.right",
+      "lower-leg.left",
+      "lower-leg.right",
+      "neck",
+      "root",
+      "spine",
+      "upper-arm.left",
+      "upper-arm.right",
+      "upper-leg.left",
+      "upper-leg.right",
+    ]);
+    for (const binding of executionAnimationSet.animationBindings) {
+      expectExactKeys(binding, [
+        "actionId",
+        "blendDurationSeconds",
+        "loopMode",
+        "playbackSpeedRatio",
+        "rootMotionMode",
+        "sourceClipName",
+      ]);
+    }
+    expectExactKeys(executionColliderProfile.collider, [
+      "centerOffsetFromSubjectOriginMetersXYZ",
+      "heightMeters",
+      "kind",
+      "radiusMeters",
+    ]);
+    expectExactKeys(
+      executionColliderProfile.collider.centerOffsetFromSubjectOriginMetersXYZ,
+      ["0", "1", "2"],
+    );
+    const subject = plan.subjects.find((candidate) => candidate.entityId === "player")!;
+    expectExactKeys(subject.visualBinding, [
+      "animationSetRef",
+      "mode",
+      "rigProfileRef",
+    ]);
+    const executionAssetPart = subject.visualParts.find((part) => part.kind === "asset")!;
+    expectExactKeys(executionAssetPart.localTransform, [
+      "positionMetersXYZ",
+      "rotationEulerRadiansXYZ",
+      "scaleXYZ",
+    ]);
+    expectExactKeys(executionAssetPart.localTransform.positionMetersXYZ, ["0", "1", "2"]);
+    expectExactKeys(executionAssetPart.localTransform.rotationEulerRadiansXYZ, ["0", "1", "2"]);
+    expectExactKeys(executionAssetPart.localTransform.scaleXYZ, ["0", "1", "2"]);
+    expectExactKeys(executionAssetPart.appearance, ["mode"]);
+    const executionBoneSocket = subject.sockets.find((socket) => socket.kind === "bone")!;
+    expectExactKeys(executionBoneSocket.offsetTransform, [
+      "positionMetersXYZ",
+      "rotationEulerRadiansXYZ",
+    ]);
+    expectExactKeys(executionBoneSocket.offsetTransform.positionMetersXYZ, ["0", "1", "2"]);
+    expectExactKeys(executionBoneSocket.offsetTransform.rotationEulerRadiansXYZ, ["0", "1", "2"]);
+    const executionLocalSocket = subject.sockets.find((socket) => socket.kind === "local")!;
+    expectExactKeys(executionLocalSocket.localTransform, [
+      "positionMetersXYZ",
+      "rotationEulerRadiansXYZ",
+    ]);
+    expectExactKeys(executionLocalSocket.localTransform.positionMetersXYZ, ["0", "1", "2"]);
+    expectExactKeys(executionLocalSocket.localTransform.rotationEulerRadiansXYZ, ["0", "1", "2"]);
+    expectExactKeys(subject.collider, [
+      "centerOffsetFromSubjectOriginMetersXYZ",
+      "heightMeters",
+      "kind",
+      "massKilograms",
+      "maxSlopeDegrees",
+      "maxStepHeightMeters",
+      "radiusMeters",
+    ]);
+    expectExactKeys(subject.collider.centerOffsetFromSubjectOriginMetersXYZ, ["0", "1", "2"]);
+    expectExactKeys(subject.locomotion, [
+      "jumpSpeedMetersPerSecond",
+      "mode",
+      "runSpeedMetersPerSecond",
+      "walkSpeedMetersPerSecond",
+      "waterSpeedMetersPerSecond",
+    ]);
+    const serializedPlan = JSON.stringify(plan);
+    for (const forbiddenValue of forbiddenValues) {
+      expect(serializedPlan).not.toContain(forbiddenValue);
+    }
   });
 
   it("deduplicates reachable resources while charging each rigged Subject instance once", () => {
