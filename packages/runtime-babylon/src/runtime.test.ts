@@ -2,8 +2,12 @@ import { readFile } from "node:fs/promises";
 import { createRequire } from "node:module";
 
 import type { AssetContainer } from "@babylonjs/core/assetContainer.js";
+import { Animation } from "@babylonjs/core/Animations/animation.js";
+import { AnimationGroup } from "@babylonjs/core/Animations/animationGroup.js";
 import { NullEngine } from "@babylonjs/core/Engines/nullEngine.pure.js";
 import { LoadAssetContainerAsync } from "@babylonjs/core/Loading/sceneLoader.js";
+import { Vector3 } from "@babylonjs/core/Maths/math.vector.js";
+import { TransformNode } from "@babylonjs/core/Meshes/transformNode.js";
 import { Scene } from "@babylonjs/core/scene.pure.js";
 import { sha256Bytes } from "@whitebox-world/protocol";
 import { describe, expect, it, vi } from "vitest";
@@ -28,6 +32,7 @@ import {
   createValidRiggedPackageSubjectWorldV2,
 } from "../../authoring/src/test-fixture";
 import type {
+  ExecutionAnimationSetV1,
   ExecutionPlanV3,
   ExecutionSubjectAssetV1,
   FixedInputV1,
@@ -40,8 +45,26 @@ import {
   SubjectAssetRuntimeErrorV1,
   isSubjectAssetRuntimeErrorV1,
   type SubjectAssetResolverV1,
+  type SubjectAssetInstanceV1,
   type SubjectAssetRuntimeLimitsV1,
+  type SubjectVisual,
+  type BabylonWorldRuntimeOptions,
 } from "./index";
+import { SubjectAnimationPlayer } from "./subject-animation-player";
+
+const loadAssetContainerImplementation = vi
+  .mocked(LoadAssetContainerAsync)
+  .getMockImplementation()!;
+
+function mutateNextLoadedContainer(
+  mutate: (container: AssetContainer) => void,
+): void {
+  vi.mocked(LoadAssetContainerAsync).mockImplementationOnce(async (...args) => {
+    const container = await loadAssetContainerImplementation(...args);
+    mutate(container);
+    return container;
+  });
+}
 
 const havokWasmBytes = await readFile(
   createRequire(import.meta.url).resolve("@babylonjs/havok/lib/esm/HavokPhysics.wasm"),
@@ -159,6 +182,100 @@ function createAssetScene(): { engine: NullEngine; scene: Scene } {
   return { engine, scene: new Scene(engine) };
 }
 
+function createClipGroup(
+  scene: Scene,
+  name: string,
+  options: {
+    from?: number;
+    to?: number;
+    framesPerSecond?: number;
+    secondFramesPerSecond?: number;
+  } = {},
+): AnimationGroup {
+  const from = options.from ?? 0;
+  const to = options.to ?? 60;
+  const target = new TransformNode(`${name}.target`, scene);
+  const group = new AnimationGroup(name, scene);
+  const addAnimation = (framesPerSecond: number, suffix: string): void => {
+    const animation = new Animation(
+      `${name}.${suffix}`,
+      "rotation.x",
+      framesPerSecond,
+      Animation.ANIMATIONTYPE_FLOAT,
+      Animation.ANIMATIONLOOPMODE_CYCLE,
+    );
+    animation.setKeys([
+      { frame: from, value: 0 },
+      { frame: to, value: 1 },
+    ]);
+    group.addTargetedAnimation(animation, target);
+  };
+  addAnimation(options.framesPerSecond ?? 60, "primary");
+  if (options.secondFramesPerSecond !== undefined) {
+    addAnimation(options.secondFramesPerSecond, "secondary");
+  }
+  return group;
+}
+
+function createAnimationSet(
+  overrides: Partial<ExecutionAnimationSetV1> = {},
+): ExecutionAnimationSetV1 {
+  return {
+    animationSetRef: "worldkit://animation-set/test@1",
+    subjectAssetRef: goldenSubjectAssetDescriptor.subjectAssetRef,
+    rigProfileRef: "worldkit://rig-profile/test@1",
+    defaultActionId: "idle",
+    requiredActionIds: ["idle", "walk", "run", "jump"],
+    animationBindings: [
+      {
+        actionId: "idle",
+        sourceClipName: "idle",
+        loopMode: "repeat",
+        playbackSpeedRatio: 1,
+        blendDurationSeconds: 0,
+        rootMotionMode: "in-place",
+      },
+      {
+        actionId: "walk",
+        sourceClipName: "walk",
+        loopMode: "repeat",
+        playbackSpeedRatio: 1.5,
+        blendDurationSeconds: 0.5,
+        rootMotionMode: "in-place",
+      },
+      {
+        actionId: "run",
+        sourceClipName: "run",
+        loopMode: "repeat",
+        playbackSpeedRatio: 1,
+        blendDurationSeconds: 0.25,
+        rootMotionMode: "in-place",
+      },
+      {
+        actionId: "jump",
+        sourceClipName: "jump",
+        loopMode: "once",
+        playbackSpeedRatio: 2,
+        blendDurationSeconds: 0,
+        rootMotionMode: "in-place",
+      },
+    ],
+    ...overrides,
+  };
+}
+
+function animationFrame(group: AnimationGroup): number {
+  const animatable = group.animatables[0];
+  if (animatable === undefined) throw new Error(`Animation '${group.name}' is not started.`);
+  return animatable.masterFrame;
+}
+
+function animationWeight(group: AnimationGroup): number {
+  const animatable = group.animatables[0];
+  if (animatable === undefined) throw new Error(`Animation '${group.name}' is not started.`);
+  return animatable.weight;
+}
+
 function createMemoryResolver(
   bytes: Uint8Array,
   onResolve?: (request: Parameters<SubjectAssetResolverV1["resolveSubjectAsset"]>[0]) => void,
@@ -186,6 +303,14 @@ interface RuntimeDebugProbe {
   subjectVisualOrigin(subjectEntityId: string): Vec3;
   controllerCenter(subjectEntityId: string): Vec3;
   visualPartLocalPosition(subjectEntityId: string, partId: string): Vec3;
+}
+
+interface RiggedVisualInternals extends SubjectVisual {
+  assetInstance?: SubjectAssetInstanceV1;
+}
+
+interface RiggedRuntimeProbe {
+  visual(subjectEntityId: string): RiggedVisualInternals;
 }
 
 interface CartesianVector {
@@ -231,6 +356,22 @@ function createRuntimeDebugProbe(runtime: BabylonWorldRuntime): RuntimeDebugProb
   };
 }
 
+function createRiggedRuntimeProbe(runtime: BabylonWorldRuntime): RiggedRuntimeProbe {
+  const internals = runtime as unknown as {
+    subjectVisuals: readonly RiggedVisualInternals[];
+  };
+  return {
+    visual(subjectEntityId) {
+      const visual = internals.subjectVisuals.find(
+        (candidate) =>
+          candidate.root.metadata?.worldkitEntityId === subjectEntityId,
+      );
+      if (visual === undefined) throw new Error(`Missing Subject '${subjectEntityId}'.`);
+      return visual;
+    },
+  };
+}
+
 function addVec3(left: Vec3, right: Vec3): Vec3 {
   return [left[0] + right[0], left[1] + right[1], left[2] + right[2]];
 }
@@ -268,9 +409,14 @@ function createExecutionPlan(
 
 async function createRuntime(
   executionPlan = createExecutionPlan(),
+  options: Pick<
+    BabylonWorldRuntimeOptions,
+    "subjectAssetResolver" | "subjectAssetCacheOptions"
+  > = {},
 ): Promise<BabylonWorldRuntime> {
   return BabylonWorldRuntime.create({
     executionPlan,
+    ...options,
     havokWasmBinary,
     engineFactory: () =>
       new NullEngine({
@@ -280,6 +426,47 @@ async function createRuntime(
         deterministicLockstep: true,
         lockstepMaxSteps: 4,
       }),
+  });
+}
+
+function createRiggedExecutionPlan(): ExecutionPlanV3 {
+  return compileExecutionPlan(createValidRiggedPackageSubjectWorldV2());
+}
+
+function createTwoRiggedSubjectExecutionPlan(): ExecutionPlanV3 {
+  const executionPlan = createRiggedExecutionPlan();
+  const player = executionPlan.subjects[0]!;
+  return {
+    ...executionPlan,
+    subjects: [
+      player,
+      {
+        ...player,
+        entityId: "hero-b",
+        spawnAnchorEntityId: "spawn-hero-b",
+        spawnSubjectOriginPositionMetersXYZ: [4, 0, 30],
+      },
+    ],
+  };
+}
+
+async function expectRiggedRuntimeFailure(
+  executionPlan: ExecutionPlanV3,
+  code: SubjectAssetRuntimeErrorV1["code"],
+): Promise<void> {
+  const error = await createRiggedRuntime(executionPlan).catch(
+    (reason) => reason as unknown,
+  );
+  expect(isSubjectAssetRuntimeErrorV1(error)).toBe(true);
+  expect(error).toMatchObject({ code });
+  expect(error).not.toHaveProperty("cause");
+}
+
+async function createRiggedRuntime(
+  executionPlan = createRiggedExecutionPlan(),
+): Promise<BabylonWorldRuntime> {
+  return createRuntime(executionPlan, {
+    subjectAssetResolver: createMemoryResolver(goldenSubjectAssetBytes),
   });
 }
 
@@ -328,6 +515,7 @@ describe("BabylonWorldRuntime", () => {
             "worldkit://subject-definition/humanoid.third-person@1",
           subjectDefinitionHash: expect.stringMatching(/^sha256:/),
           movementMedium: "ground",
+          activeActionId: "idle",
         },
       },
       resources: { terrainSamples: 65 * 65 },
@@ -394,9 +582,426 @@ describe("BabylonWorldRuntime", () => {
       createValidRiggedPackageSubjectWorldV2(),
     );
 
-    await expect(createRuntime(executionPlan)).rejects.toThrowError(
-      /SUBJECT_ASSET_RESOLVER_REQUIRED:.*body\.asset.*player/,
+    const error = await createRuntime(executionPlan).catch((reason) => reason as unknown);
+
+    expect(isSubjectAssetRuntimeErrorV1(error)).toBe(true);
+    expect(error).toMatchObject({ code: "SUBJECT_ASSET_RESOLVER_REQUIRED" });
+  });
+
+  it("loads a rigged Subject through the injected resolver and exposes deterministic Action state", async () => {
+    const runtime = await createRiggedRuntime();
+
+    await expect(runtime.ready).resolves.toBeUndefined();
+    expect(runtime.snapshot().subjectStatesByEntityId.player?.activeActionId).toBe("idle");
+
+    const walking = await runtime.runFixedInput({ actions: ["move-right"], ticks: 2 });
+    expect(walking.subjectStatesByEntityId.player?.activeActionId).toBe("walk");
+
+    const running = await runtime.runFixedInput({
+      actions: ["move-right", "run"],
+      ticks: 2,
+    });
+    expect(running.subjectStatesByEntityId.player?.activeActionId).toBe("run");
+
+    const jumping = await runtime.runFixedInput({ actions: ["jump"], ticks: 4 });
+    expect(jumping.subjectStatesByEntityId.player?.activeActionId).toBe("jump");
+    const idleAgain = await runtime.runFixedInput({ actions: [], ticks: 180 });
+    expect(idleAgain.subjectStatesByEntityId.player?.activeActionId).toBe("idle");
+
+    await runtime.dispose();
+  });
+
+  it("keeps two rigged Subjects on isolated Skeleton, Clip, Socket, and Action state", async () => {
+    const basePlan = createTwoRiggedSubjectExecutionPlan();
+    const executionPlan: ExecutionPlanV3 = {
+      ...basePlan,
+      subjects: basePlan.subjects.map((subject) =>
+        subject.entityId === "player"
+          ? {
+              ...subject,
+              visualParts: [
+                ...subject.visualParts,
+                {
+                  id: "marker",
+                  kind: "primitive" as const,
+                  shape: { kind: "sphere" as const, radiusMeters: 0.08 },
+                  localTransform: {
+                    positionMetersXYZ: [0, 2.05, 0] as const,
+                    rotationEulerRadiansXYZ: [0, 0, 0] as const,
+                  },
+                  semanticTags: ["marker"],
+                },
+              ],
+              sockets: [
+                ...subject.sockets.map((socket) =>
+                  socket.kind === "bone"
+                    ? {
+                        ...socket,
+                        offsetTransform: {
+                          ...socket.offsetTransform,
+                          positionMetersXYZ: [0.2, 0, 0] as const,
+                        },
+                      }
+                    : socket,
+                ),
+                {
+                  id: "focus.local",
+                  kind: "local" as const,
+                  localTransform: {
+                    positionMetersXYZ: [0, 1.5, 0] as const,
+                    rotationEulerRadiansXYZ: [0, 0, 0] as const,
+                  },
+                  semanticTags: ["focus"],
+                },
+              ],
+            }
+          : subject,
+      ),
+    };
+    const runtime = await createRiggedRuntime(executionPlan);
+    const probe = createRiggedRuntimeProbe(runtime);
+    const playerVisual = probe.visual("player");
+    const heroBVisual = probe.visual("hero-b");
+    const playerInstance = playerVisual.assetInstance!;
+    const heroBInstance = heroBVisual.assetInstance!;
+
+    expect(playerVisual.root).not.toBe(heroBVisual.root);
+    expect(playerInstance.rootNodes[0]).not.toBe(heroBInstance.rootNodes[0]);
+    expect(playerInstance.meshes[0]).not.toBe(heroBInstance.meshes[0]);
+    expect(playerInstance.skeletons[0]).not.toBe(heroBInstance.skeletons[0]);
+    expect(playerInstance.animationGroups[0]).not.toBe(
+      heroBInstance.animationGroups[0],
     );
+    expect(
+      playerVisual.meshes.some((mesh) => mesh.name === "player.marker"),
+    ).toBe(true);
+    expect(
+      playerVisual.meshes.some((mesh) => mesh.name.includes("GoldenHumanoidMesh")),
+    ).toBe(true);
+    const markerMaterial = playerVisual.meshes.find(
+      (mesh) => mesh.name === "player.marker",
+    )!.material;
+    expect(
+      playerVisual.meshes.find((mesh) => mesh.name.includes("GoldenHumanoidMesh"))!
+        .material,
+    ).toBe(markerMaterial);
+    expect([...playerVisual.socketNodesById.keys()].sort()).toEqual([
+      "focus.local",
+      "hand.right",
+    ]);
+
+    const handSocket = playerVisual.socketNodesById.get("hand.right")!;
+    handSocket.computeWorldMatrix(true);
+    const beforeSocket = handSocket.getAbsolutePosition().clone();
+    const snapshot = await runtime.runFixedInput({
+      actions: ["move-right", "run"],
+      ticks: 20,
+    });
+    runtime.renderFrame();
+    handSocket.computeWorldMatrix(true);
+
+    expect(snapshot.subjectStatesByEntityId.player?.activeActionId).toBe("run");
+    expect(snapshot.subjectStatesByEntityId["hero-b"]?.activeActionId).toBe("idle");
+    expect(handSocket.getAbsolutePosition().subtract(beforeSocket).length()).toBeGreaterThan(
+      0.01,
+    );
+    expect(
+      playerInstance.animationGroups.find((group) => group.name === "run")?.isStarted,
+    ).toBe(true);
+    expect(
+      heroBInstance.animationGroups.find((group) => group.name === "run")?.isStarted,
+    ).toBeFalsy();
+
+    await runtime.dispose();
+  });
+
+  it("transitions jump back to idle and reset restores Tick zero and idle frame", async () => {
+    const runtime = await createRiggedRuntime();
+    const probe = createRiggedRuntimeProbe(runtime);
+    const visual = probe.visual("player");
+
+    await runtime.runFixedInput({ actions: [], ticks: 5 });
+    const jumping = await runtime.runFixedInput({ actions: ["jump"], ticks: 4 });
+    expect(jumping.subjectStatesByEntityId.player).toMatchObject({
+      activeActionId: "jump",
+      movementMedium: "air",
+      velocityMetersPerSecondXYZ: [0, expect.any(Number), 0],
+    });
+    const landed = await runtime.runFixedInput({ actions: [], ticks: 180 });
+    expect(landed.subjectStatesByEntityId.player).toMatchObject({
+      activeActionId: "idle",
+      movementMedium: "ground",
+      positionMetersXYZ: [0, expect.any(Number), 30],
+      velocityMetersPerSecondXYZ: [0, expect.any(Number), 0],
+    });
+
+    const reset = runtime.reset();
+    const idleGroup = visual.assetInstance!.animationGroups.find(
+      (group) => group.name === "idle",
+    )!;
+    expect(reset.tick).toBe(0);
+    expect(reset.subjectStatesByEntityId.player?.activeActionId).toBe("idle");
+    expect(animationFrame(idleGroup)).toBe(idleGroup.from);
+    await runtime.dispose();
+  });
+
+  it("produces the same rigged Snapshot for identical fixed input", async () => {
+    const first = await createRiggedRuntime();
+    const second = await createRiggedRuntime();
+    const input = { actions: ["move-right", "run"] as const, ticks: 45 };
+
+    const firstSnapshot = await first.runFixedInput(input);
+    const secondSnapshot = await second.runFixedInput(input);
+
+    expect(secondSnapshot).toEqual(firstSnapshot);
+    await first.dispose();
+    await second.dispose();
+  });
+
+  it("rejects missing, aliased, and incorrectly rooted Rig Bone mappings", async () => {
+    for (const mutateRig of [
+      (plan: ExecutionPlanV3) => {
+        const rig = plan.rigProfiles[0]!;
+        (rig.sourceNodeNameByBoneId as Record<string, string>).head = "missing-head";
+      },
+      (plan: ExecutionPlanV3) => {
+        const rig = plan.rigProfiles[0]!;
+        (rig.sourceNodeNameByBoneId as Record<string, string>)["hand.right"] =
+          rig.sourceNodeNameByBoneId["hand.left"];
+      },
+      (plan: ExecutionPlanV3) => {
+        (plan.rigProfiles[0] as { skeletonRootNodeName: string }).skeletonRootNodeName =
+          "hips";
+      },
+    ]) {
+      const executionPlan = createRiggedExecutionPlan();
+      mutateRig(executionPlan);
+      await expectRiggedRuntimeFailure(
+        executionPlan,
+        "SUBJECT_ASSET_RIG_INCOMPATIBLE",
+      );
+    }
+  });
+
+  it("rejects missing Clips and invalid runtime Animation bindings with one typed code", async () => {
+    for (const mutateBinding of [
+      (binding: Record<string, unknown>) => {
+        binding.sourceClipName = "missing";
+      },
+      (binding: Record<string, unknown>) => {
+        binding.playbackSpeedRatio = 0;
+      },
+      (binding: Record<string, unknown>) => {
+        binding.blendDurationSeconds = -1;
+      },
+    ]) {
+      const executionPlan = createRiggedExecutionPlan();
+      mutateBinding(
+        executionPlan.animationSets[0]!.animationBindings[0] as unknown as Record<
+          string,
+          unknown
+        >,
+      );
+      await expectRiggedRuntimeFailure(
+        executionPlan,
+        "SUBJECT_ASSET_ANIMATION_INCOMPATIBLE",
+      );
+    }
+  });
+
+  it("rejects Root and Hips position channels by Bone and linked-node identity", async () => {
+    for (const targetKind of ["bone", "linked-transform"] as const) {
+      mutateNextLoadedContainer((container) => {
+        const nativeInstantiate = container.instantiateModelsToScene.bind(container);
+        vi.spyOn(container, "instantiateModelsToScene").mockImplementation((...args) => {
+          const instance = nativeInstantiate(...args);
+          const skeleton = instance.skeletons[0]!;
+          const bone = skeleton.bones.find((candidate) =>
+            candidate.name === (targetKind === "bone" ? "root" : "hips"),
+          )!;
+          const target = targetKind === "bone" ? bone : bone.getTransformNode()!;
+          const property = targetKind === "bone" ? "position.x" : "position";
+          const animation = new Animation(
+            `forbidden.${targetKind}`,
+            property,
+            60,
+            targetKind === "bone"
+              ? Animation.ANIMATIONTYPE_FLOAT
+              : Animation.ANIMATIONTYPE_VECTOR3,
+            Animation.ANIMATIONLOOPMODE_CONSTANT,
+          );
+          const value = targetKind === "bone" ? 0 : Vector3.Zero();
+          animation.setKeys([
+            { frame: 0, value },
+            { frame: 1, value },
+          ]);
+          instance.animationGroups
+            .find((group) => group.name.endsWith("idle"))!
+            .addTargetedAnimation(animation, target);
+          return instance;
+        });
+      });
+
+      await expectRiggedRuntimeFailure(
+        createRiggedExecutionPlan(),
+        "SUBJECT_ASSET_ROOT_MOTION_UNSUPPORTED",
+      );
+    }
+  });
+
+  it("does not infer forbidden Root Motion from a target display name", async () => {
+    mutateNextLoadedContainer((container) => {
+      const nativeInstantiate = container.instantiateModelsToScene.bind(container);
+      vi.spyOn(container, "instantiateModelsToScene").mockImplementation((...args) => {
+        const instance = nativeInstantiate(...args);
+        const decoyTarget = instance.rootNodes[0]!;
+        decoyTarget.name = "root";
+        const animation = new Animation(
+          "allowed.display-name-decoy",
+          "position.x",
+          60,
+          Animation.ANIMATIONTYPE_FLOAT,
+          Animation.ANIMATIONLOOPMODE_CONSTANT,
+        );
+        animation.setKeys([
+          { frame: 0, value: 0 },
+          { frame: 1, value: 0 },
+        ]);
+        instance.animationGroups
+          .find((group) => group.name.endsWith("idle"))!
+          .addTargetedAnimation(animation, decoyTarget);
+        return instance;
+      });
+    });
+
+    const runtime = await createRiggedRuntime();
+    expect(runtime.snapshot().subjectStatesByEntityId.player?.activeActionId).toBe(
+      "idle",
+    );
+    await runtime.dispose();
+  });
+
+  it("rejects missing, multiple, duplicate-name, and multiple-root Skeleton structures", async () => {
+    const cases: Array<{
+      mutatePlan?: (plan: ExecutionPlanV3) => void;
+      mutateContainer: (container: AssetContainer) => void;
+    }> = [
+      {
+        mutatePlan(plan) {
+          plan.subjectAssets[0]!.inventory.skeletonCount = 0;
+          plan.subjectAssets[0]!.inventory.boneCount = 0;
+        },
+        mutateContainer(container) {
+          container.skeletons.splice(0);
+        },
+      },
+      {
+        mutatePlan(plan) {
+          plan.subjectAssets[0]!.inventory.skeletonCount = 2;
+          plan.subjectAssets[0]!.inventory.boneCount = 36;
+        },
+        mutateContainer(container) {
+          container.skeletons.push(
+            container.skeletons[0]!.clone("extra-skeleton"),
+          );
+        },
+      },
+      {
+        mutateContainer(container) {
+          container.skeletons[0]!.bones.find((bone) => bone.name === "head")!.name =
+            "root";
+        },
+      },
+      {
+        mutateContainer(container) {
+          container.skeletons[0]!.bones
+            .find((bone) => bone.name === "head")!
+            .setParent(null);
+        },
+      },
+    ];
+
+    for (const testCase of cases) {
+      const executionPlan = createRiggedExecutionPlan();
+      testCase.mutatePlan?.(executionPlan);
+      mutateNextLoadedContainer(testCase.mutateContainer);
+      await expectRiggedRuntimeFailure(
+        executionPlan,
+        "SUBJECT_ASSET_RIG_INCOMPATIBLE",
+      );
+    }
+  });
+
+  it("rejects a Bone Socket when no cloned Mesh is driven by the Rig Skeleton", async () => {
+    mutateNextLoadedContainer((container) => {
+      for (const mesh of container.meshes) mesh.skeleton = null;
+    });
+
+    await expectRiggedRuntimeFailure(
+      createRiggedExecutionPlan(),
+      "SUBJECT_ASSET_RIG_INCOMPATIBLE",
+    );
+  });
+
+  it("uses the closed Socket diagnostic when a Bone Socket cannot resolve its semantic Bone", async () => {
+    const executionPlan = createRiggedExecutionPlan();
+    const subject = executionPlan.subjects[0]!;
+    const boneSocket = subject.sockets.find((socket) => socket.kind === "bone")!;
+    (boneSocket as { boneId: string }).boneId = "unmapped.bone";
+
+    await expectRiggedRuntimeFailure(
+      executionPlan,
+      "SUBJECT_ASSET_SOCKET_BONE_MISSING",
+    );
+  });
+
+  it("unwinds the partial runtime and disposes a cloned Asset instance exactly once", async () => {
+    let instanceDispose: ReturnType<typeof vi.fn> | undefined;
+    mutateNextLoadedContainer((container) => {
+      const nativeInstantiate = container.instantiateModelsToScene.bind(container);
+      vi.spyOn(container, "instantiateModelsToScene").mockImplementation((...args) => {
+        const instance = nativeInstantiate(...args);
+        const nativeDispose = instance.dispose.bind(instance);
+        instanceDispose = vi.fn(() => nativeDispose());
+        instance.dispose = instanceDispose;
+        return instance;
+      });
+    });
+    const executionPlan = createRiggedExecutionPlan();
+    (executionPlan.rigProfiles[0] as { skeletonRootNodeName: string }).skeletonRootNodeName =
+      "hips";
+    const engine = new NullEngine();
+
+    const error = await BabylonWorldRuntime.create({
+      executionPlan,
+      havokWasmBinary,
+      engineFactory: () => engine,
+      subjectAssetResolver: createMemoryResolver(goldenSubjectAssetBytes),
+    }).catch((reason) => reason as unknown);
+
+    expect(error).toMatchObject({ code: "SUBJECT_ASSET_RIG_INCOMPATIBLE" });
+    expect(instanceDispose).toHaveBeenCalledTimes(1);
+    expect(engine.isDisposed).toBe(true);
+  });
+
+  it("disposes a successful rigged Visual instance once across repeated Runtime disposal", async () => {
+    let instanceDispose: ReturnType<typeof vi.fn> | undefined;
+    mutateNextLoadedContainer((container) => {
+      const nativeInstantiate = container.instantiateModelsToScene.bind(container);
+      vi.spyOn(container, "instantiateModelsToScene").mockImplementation((...args) => {
+        const instance = nativeInstantiate(...args);
+        const nativeDispose = instance.dispose.bind(instance);
+        instanceDispose = vi.fn(() => nativeDispose());
+        instance.dispose = instanceDispose;
+        return instance;
+      });
+    });
+    const runtime = await createRiggedRuntime();
+
+    await runtime.dispose();
+    await runtime.dispose();
+
+    expect(instanceDispose).toHaveBeenCalledTimes(1);
   });
 
   it("uses run speed only for horizontal non-water movement", async () => {
@@ -578,6 +1183,216 @@ describe("BabylonWorldRuntime", () => {
       );
     }
     await runtime.dispose();
+  });
+});
+
+describe("SubjectAnimationPlayer", () => {
+  it("samples non-zero Clip ranges and blends from fixed Ticks", () => {
+    const { engine, scene } = createAssetScene();
+    const idle = createClipGroup(scene, "idle", {
+      from: 10,
+      to: 70,
+      framesPerSecond: 30,
+    });
+    const walk = createClipGroup(scene, "walk", {
+      from: 5,
+      to: 45,
+      framesPerSecond: 20,
+    });
+    const run = createClipGroup(scene, "run");
+    const jump = createClipGroup(scene, "jump", {
+      from: 7,
+      to: 27,
+      framesPerSecond: 10,
+    });
+    const player = new SubjectAnimationPlayer({
+      animationGroups: [idle, walk, run, jump],
+      animationSet: createAnimationSet(),
+      subjectAssetRef: goldenSubjectAssetDescriptor.subjectAssetRef,
+      artifactContentHash: goldenSubjectAssetDescriptor.artifactContentHash,
+    });
+
+    expect(animationFrame(idle)).toBe(10);
+    player.step(60, "idle");
+    expect(animationFrame(idle)).toBe(40);
+
+    player.step(60, "walk");
+    expect(animationFrame(walk)).toBe(5);
+    expect(animationWeight(idle)).toBe(1);
+    expect(animationWeight(walk)).toBe(0);
+    player.step(75, "walk");
+    expect(animationFrame(walk)).toBeCloseTo(12.5, 8);
+    expect(animationWeight(idle)).toBeCloseTo(0.5, 8);
+    expect(animationWeight(walk)).toBeCloseTo(0.5, 8);
+    player.step(90, "walk");
+    expect(animationFrame(walk)).toBe(20);
+    expect(animationWeight(walk)).toBe(1);
+    expect(idle.isStarted).toBe(false);
+
+    player.step(90, "jump");
+    expect(animationFrame(jump)).toBe(7);
+    player.step(150, "jump");
+    expect(animationFrame(jump)).toBe(27);
+
+    player.reset();
+    expect(player.activeActionId).toBe("idle");
+    expect(animationFrame(idle)).toBe(10);
+    expect(animationWeight(idle)).toBe(1);
+    player.dispose();
+    scene.dispose();
+    engine.dispose();
+  });
+
+  it("keeps at most two groups started when an Action interrupts a blend", () => {
+    const { engine, scene } = createAssetScene();
+    const groups = ["idle", "walk", "run", "jump"].map((name) =>
+      createClipGroup(scene, name),
+    );
+    const player = new SubjectAnimationPlayer({
+      animationGroups: groups,
+      animationSet: createAnimationSet(),
+      subjectAssetRef: goldenSubjectAssetDescriptor.subjectAssetRef,
+      artifactContentHash: goldenSubjectAssetDescriptor.artifactContentHash,
+    });
+
+    player.step(1, "walk");
+    player.step(2, "run");
+    player.step(3, "jump");
+
+    expect(groups.filter((group) => group.isStarted)).toHaveLength(1);
+    expect(player.activeActionId).toBe("jump");
+    player.dispose();
+    scene.dispose();
+    engine.dispose();
+  });
+
+  it("rejects missing, duplicate, empty, and mixed-FPS mapped Clips", () => {
+    for (const invalidGroups of [
+      (scene: Scene) => [
+        createClipGroup(scene, "idle"),
+        createClipGroup(scene, "walk"),
+        createClipGroup(scene, "run"),
+      ],
+      (scene: Scene) => [
+        createClipGroup(scene, "idle"),
+        createClipGroup(scene, "walk"),
+        createClipGroup(scene, "run"),
+        createClipGroup(scene, "jump"),
+        createClipGroup(scene, "jump"),
+      ],
+      (scene: Scene) => [
+        new AnimationGroup("idle", scene),
+        createClipGroup(scene, "walk"),
+        createClipGroup(scene, "run"),
+        createClipGroup(scene, "jump"),
+      ],
+      (scene: Scene) => [
+        createClipGroup(scene, "idle", {
+          framesPerSecond: 30,
+          secondFramesPerSecond: 60,
+        }),
+        createClipGroup(scene, "walk"),
+        createClipGroup(scene, "run"),
+        createClipGroup(scene, "jump"),
+      ],
+    ]) {
+      const { engine, scene } = createAssetScene();
+      const error = (() => {
+        try {
+          return new SubjectAnimationPlayer({
+            animationGroups: invalidGroups(scene),
+            animationSet: createAnimationSet(),
+            subjectAssetRef: goldenSubjectAssetDescriptor.subjectAssetRef,
+            artifactContentHash: goldenSubjectAssetDescriptor.artifactContentHash,
+          });
+        } catch (reason) {
+          return reason;
+        }
+      })();
+
+      expect(isSubjectAssetRuntimeErrorV1(error)).toBe(true);
+      expect(error).toMatchObject({
+        code: "SUBJECT_ASSET_ANIMATION_INCOMPATIBLE",
+      });
+      scene.dispose();
+      engine.dispose();
+    }
+  });
+
+  it("rejects non-finite or empty frame ranges and non-positive Clip FPS", () => {
+    const invalidIdleGroups = [
+      (scene: Scene) => {
+        const group = createClipGroup(scene, "idle");
+        Object.defineProperty(group, "from", { value: Number.NaN });
+        return group;
+      },
+      (scene: Scene) => createClipGroup(scene, "idle", { from: 10, to: 10 }),
+      (scene: Scene) => createClipGroup(scene, "idle", { framesPerSecond: 0 }),
+    ];
+    for (const invalidIdleGroup of invalidIdleGroups) {
+      const { engine, scene } = createAssetScene();
+      const error = (() => {
+        try {
+          return new SubjectAnimationPlayer({
+            animationGroups: [
+              invalidIdleGroup(scene),
+              createClipGroup(scene, "walk"),
+              createClipGroup(scene, "run"),
+              createClipGroup(scene, "jump"),
+            ],
+            animationSet: createAnimationSet(),
+            subjectAssetRef: goldenSubjectAssetDescriptor.subjectAssetRef,
+            artifactContentHash: goldenSubjectAssetDescriptor.artifactContentHash,
+          });
+        } catch (reason) {
+          return reason;
+        }
+      })();
+
+      expect(isSubjectAssetRuntimeErrorV1(error)).toBe(true);
+      expect(error).toMatchObject({
+        code: "SUBJECT_ASSET_ANIMATION_INCOMPATIBLE",
+      });
+      scene.dispose();
+      engine.dispose();
+    }
+  });
+
+  it("rejects non-positive playback and negative or non-finite blend values", () => {
+    for (const invalidBinding of [
+      { playbackSpeedRatio: 0 },
+      { playbackSpeedRatio: Number.NaN },
+      { blendDurationSeconds: -0.01 },
+      { blendDurationSeconds: Number.POSITIVE_INFINITY },
+    ]) {
+      const { engine, scene } = createAssetScene();
+      const groups = ["idle", "walk", "run", "jump"].map((name) =>
+        createClipGroup(scene, name),
+      );
+      const animationSet = createAnimationSet();
+      animationSet.animationBindings = animationSet.animationBindings.map((binding) =>
+        binding.actionId === "walk" ? { ...binding, ...invalidBinding } : binding,
+      );
+      const error = (() => {
+        try {
+          return new SubjectAnimationPlayer({
+            animationGroups: groups,
+            animationSet,
+            subjectAssetRef: goldenSubjectAssetDescriptor.subjectAssetRef,
+            artifactContentHash: goldenSubjectAssetDescriptor.artifactContentHash,
+          });
+        } catch (reason) {
+          return reason;
+        }
+      })();
+
+      expect(isSubjectAssetRuntimeErrorV1(error)).toBe(true);
+      expect(error).toMatchObject({
+        code: "SUBJECT_ASSET_ANIMATION_INCOMPATIBLE",
+      });
+      scene.dispose();
+      engine.dispose();
+    }
   });
 });
 

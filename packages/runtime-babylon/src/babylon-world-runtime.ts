@@ -26,10 +26,16 @@ import type {
   WorldRuntimeSnapshotV3,
 } from "@whitebox-world/runtime-contracts";
 import { TRUSTED_DEFAULT_CONTROLLER_ID } from "@whitebox-world/runtime-contracts";
+import { resolveGroundHumanoidAction } from "@whitebox-world/subject-actions";
 
 import { createWhiteboxMaterials, type WhiteboxMaterials } from "./materials";
 import { enableHavokPhysics, FIXED_TIME_STEP_SECONDS } from "./physics";
 import { SubjectController } from "./subject-controller";
+import {
+  SubjectAssetCacheV1,
+  type SubjectAssetCacheOptionsV1,
+  type SubjectAssetResolverV1,
+} from "./subject-asset-cache";
 import { createSubjectVisual, type SubjectVisual } from "./subject-visual";
 import {
   createTerrainMesh,
@@ -44,7 +50,11 @@ export interface BabylonWorldRuntimeOptions {
   autoStartRenderLoop?: boolean;
   /** Required by headless Node hosts because Node cannot fetch file:// WASM URLs. */
   havokWasmBinary?: ArrayBuffer;
+  subjectAssetResolver?: SubjectAssetResolverV1;
+  subjectAssetCacheOptions?: SubjectAssetCacheOptionsV1;
 }
+
+type OwnedDisposer = () => void | Promise<void>;
 
 function applyTransform(mesh: Mesh, object: ExecutionObjectV3): void {
   mesh.position = new Vector3(...object.transform.positionMetersXYZ);
@@ -166,6 +176,28 @@ function containsPoint(boundary: ExecutionWaterBoundaryV3, x: number, z: number)
   return inside;
 }
 
+function movementMediumAtSubjectOrigin(
+  executionPlan: ExecutionPlanV3,
+  subjectOrigin: Vector3,
+): "ground" | "air" | "water" {
+  for (const water of executionPlan.waters) {
+    if (
+      water.traversalMode === "swimmable" &&
+      containsPoint(water.boundary, subjectOrigin.x, subjectOrigin.z) &&
+      subjectOrigin.y <= water.waterLevelMeters + 0.6 &&
+      subjectOrigin.y >= water.waterLevelMeters - water.depthMeters - 0.6
+    ) {
+      return "water";
+    }
+  }
+  const groundHeight = sampleExecutionTerrainHeight(
+    executionPlan.terrain,
+    subjectOrigin.x,
+    subjectOrigin.z,
+  );
+  return subjectOrigin.y <= groundHeight + 0.16 ? "ground" : "air";
+}
+
 function configureAtmosphere(scene: Scene, preset: ExecutionPlanV3["atmospherePreset"]): void {
   const colors = {
     "clear-day": new Color4(0.55, 0.78, 0.92, 1),
@@ -181,6 +213,20 @@ function configureAtmosphere(scene: Scene, preset: ExecutionPlanV3["atmospherePr
   sun.intensity = preset === "night" ? 0.22 : 1.1;
 }
 
+async function disposeOwnedStack(
+  ownedDisposers: readonly OwnedDisposer[],
+): Promise<void> {
+  let firstFailure: unknown;
+  for (const dispose of [...ownedDisposers].reverse()) {
+    try {
+      await dispose();
+    } catch (error) {
+      firstFailure ??= error;
+    }
+  }
+  if (firstFailure !== undefined) throw firstFailure;
+}
+
 export class BabylonWorldRuntime implements WorldRuntimeSessionV3 {
   readonly runtimeBackend = "babylon-havok" as const;
   readonly ready: Promise<void> = Promise.resolve();
@@ -192,8 +238,10 @@ export class BabylonWorldRuntime implements WorldRuntimeSessionV3 {
   private readonly ownedHeightfieldShape: PhysicsShapeHeightField;
   private readonly subjectControllersByEntityId: ReadonlyMap<string, SubjectController>;
   private readonly subjectVisuals: readonly SubjectVisual[];
+  private readonly subjectVisualsByEntityId: ReadonlyMap<string, SubjectVisual>;
   private readonly camera: FreeCamera;
   private readonly renderLoop: () => void;
+  private readonly ownedDisposers: readonly OwnedDisposer[];
 
   private constructor(
     private readonly executionPlan: ExecutionPlanV3,
@@ -204,14 +252,22 @@ export class BabylonWorldRuntime implements WorldRuntimeSessionV3 {
     camera: FreeCamera,
     ownedHeightfieldShape: PhysicsShapeHeightField,
     aggregates: PhysicsAggregate[],
+    ownedDisposers: readonly OwnedDisposer[],
     autoStartRenderLoop: boolean,
   ) {
     this.controlledEntityId = executionPlan.controlledEntityId;
     this.subjectControllersByEntityId = subjectControllersByEntityId;
     this.subjectVisuals = subjectVisuals;
+    this.subjectVisualsByEntityId = new Map(
+      subjectVisuals.map((visual) => [
+        String(visual.root.metadata?.worldkitEntityId),
+        visual,
+      ]),
+    );
     this.camera = camera;
     this.ownedHeightfieldShape = ownedHeightfieldShape;
     this.aggregates.push(...aggregates);
+    this.ownedDisposers = ownedDisposers;
     this.renderLoop = () => this.renderFrame();
     this.updateCamera();
     if (autoStartRenderLoop) this.engine.runRenderLoop(this.renderLoop);
@@ -239,76 +295,112 @@ export class BabylonWorldRuntime implements WorldRuntimeSessionV3 {
         `WORLDKIT_RUNTIME_CONTROL_TARGET_NOT_FOUND: ${options.executionPlan.controlledEntityId}`,
       );
     }
+    const ownedDisposers: OwnedDisposer[] = [];
     const engine = options.engineFactory?.() ?? new Engine(options.canvas!, true, { preserveDrawingBuffer: true, stencil: true });
-    const scene = new Scene(engine);
-    scene.useRightHandedSystem = true;
-    await enableHavokPhysics(
-      scene,
-      options.executionPlan.gravityMetersPerSecondSquaredXYZ,
-      options.havokWasmBinary,
-    );
-    configureAtmosphere(scene, options.executionPlan.atmospherePreset);
-    const materials = createWhiteboxMaterials(scene);
+    ownedDisposers.push(() => engine.dispose());
+    try {
+      const scene = new Scene(engine);
+      ownedDisposers.push(() => scene.dispose());
+      scene.useRightHandedSystem = true;
+      await enableHavokPhysics(
+        scene,
+        options.executionPlan.gravityMetersPerSecondSquaredXYZ,
+        options.havokWasmBinary,
+      );
+      configureAtmosphere(scene, options.executionPlan.atmospherePreset);
+      const materials = createWhiteboxMaterials(scene);
 
-    const terrainMesh = createTerrainMesh(options.executionPlan.terrain, materials.terrain, scene);
-    const terrain = options.executionPlan.terrain;
-    const heightfieldShape = new PhysicsShapeHeightField(
-      terrain.sizeMetersXZ[0],
-      terrain.sizeMetersXZ[1],
-      terrain.resolutionCellsXZ[0],
-      terrain.resolutionCellsXZ[1],
-      toBabylonHeightfieldData(terrain),
-      scene,
-    );
-    const aggregates: PhysicsAggregate[] = [
-      new PhysicsAggregate(terrainMesh, heightfieldShape, { mass: 0, friction: 0.9, restitution: 0 }, scene),
-    ];
+      const terrainMesh = createTerrainMesh(options.executionPlan.terrain, materials.terrain, scene);
+      const terrain = options.executionPlan.terrain;
+      const heightfieldShape = new PhysicsShapeHeightField(
+        terrain.sizeMetersXZ[0],
+        terrain.sizeMetersXZ[1],
+        terrain.resolutionCellsXZ[0],
+        terrain.resolutionCellsXZ[1],
+        toBabylonHeightfieldData(terrain),
+        scene,
+      );
+      const aggregates: PhysicsAggregate[] = [];
+      ownedDisposers.push(() => {
+        for (const aggregate of [...aggregates].reverse()) aggregate.dispose();
+        heightfieldShape.dispose();
+      });
+      aggregates.push(
+        new PhysicsAggregate(terrainMesh, heightfieldShape, { mass: 0, friction: 0.9, restitution: 0 }, scene),
+      );
 
-    for (const water of options.executionPlan.waters) createWaterMesh(water, materials, scene);
-    for (const object of options.executionPlan.objects) {
-      const mesh = createObjectMesh(object, materials, scene);
-      if (object.collisionEnabled) {
-        const shapeType = object.primitive.kind === "box"
-          ? PhysicsShapeType.BOX
-          : object.primitive.kind === "sphere"
-            ? PhysicsShapeType.SPHERE
-            : PhysicsShapeType.CYLINDER;
-        aggregates.push(new PhysicsAggregate(mesh, shapeType, { mass: 0, friction: 0.75, restitution: 0 }, scene));
+      for (const water of options.executionPlan.waters) createWaterMesh(water, materials, scene);
+      for (const object of options.executionPlan.objects) {
+        const mesh = createObjectMesh(object, materials, scene);
+        if (object.collisionEnabled) {
+          const shapeType = object.primitive.kind === "box"
+            ? PhysicsShapeType.BOX
+            : object.primitive.kind === "sphere"
+              ? PhysicsShapeType.SPHERE
+              : PhysicsShapeType.CYLINDER;
+          aggregates.push(new PhysicsAggregate(mesh, shapeType, { mass: 0, friction: 0.75, restitution: 0 }, scene));
+        }
       }
-    }
 
-    const subjectControllersByEntityId = new Map<string, SubjectController>();
-    const subjectVisuals = options.executionPlan.subjects.map((subject) => {
-      const visual = createSubjectVisual(subject, materials.subject, scene);
-      subjectControllersByEntityId.set(
-        subject.entityId,
-        new SubjectController(
+      const subjectAssetCache = new SubjectAssetCacheV1(
+        scene,
+        options.subjectAssetResolver,
+        options.subjectAssetCacheOptions,
+      );
+      ownedDisposers.push(() => subjectAssetCache.dispose());
+      const subjectControllersByEntityId = new Map<string, SubjectController>();
+      const subjectVisuals: SubjectVisual[] = [];
+      const sortedSubjects = [...options.executionPlan.subjects].sort((left, right) =>
+        left.entityId.localeCompare(right.entityId),
+      );
+      for (const subject of sortedSubjects) {
+        const visual = await createSubjectVisual({
+          subject,
+          executionPlan: options.executionPlan,
+          material: materials.subject,
+          scene,
+          subjectAssetCache,
+        });
+        subjectVisuals.push(visual);
+        ownedDisposers.push(() => visual.dispose());
+        const controller = new SubjectController(
           subject,
           options.executionPlan.gravityMetersPerSecondSquaredXYZ,
           visual.root,
           scene,
-        ),
+          (subjectOrigin) =>
+            movementMediumAtSubjectOrigin(options.executionPlan, subjectOrigin),
+        );
+        subjectControllersByEntityId.set(subject.entityId, controller);
+        ownedDisposers.push(() => controller.dispose());
+      }
+
+      const cameraPlan = options.executionPlan.camera;
+      const camera = new FreeCamera(cameraPlan.cameraEntityId, Vector3.Zero(), scene);
+      camera.fov = (cameraPlan.fovDegrees * Math.PI) / 180;
+      camera.minZ = 0.05;
+      scene.activeCamera = camera;
+
+      return new BabylonWorldRuntime(
+        options.executionPlan,
+        engine,
+        scene,
+        subjectControllersByEntityId,
+        subjectVisuals,
+        camera,
+        heightfieldShape,
+        aggregates,
+        ownedDisposers,
+        options.engineFactory === undefined && options.autoStartRenderLoop !== false,
       );
-      return visual;
-    });
-
-    const cameraPlan = options.executionPlan.camera;
-    const camera = new FreeCamera(cameraPlan.cameraEntityId, Vector3.Zero(), scene);
-    camera.fov = (cameraPlan.fovDegrees * Math.PI) / 180;
-    camera.minZ = 0.05;
-    scene.activeCamera = camera;
-
-    return new BabylonWorldRuntime(
-      options.executionPlan,
-      engine,
-      scene,
-      subjectControllersByEntityId,
-      subjectVisuals,
-      camera,
-      heightfieldShape,
-      aggregates,
-      options.engineFactory === undefined && options.autoStartRenderLoop !== false,
-    );
+    } catch (error) {
+      try {
+        await disposeOwnedStack(ownedDisposers);
+      } catch {
+        // Preserve the primary initialization failure.
+      }
+      throw error;
+    }
   }
 
   bindControl(request: BindControlRequestV2): ControlBindingReceiptV2 {
@@ -390,13 +482,25 @@ export class BabylonWorldRuntime implements WorldRuntimeSessionV3 {
     for (let index = 0; index < input.ticks; index += 1) {
       for (const subject of this.executionPlan.subjects) {
         const controller = this.controllerFor(subject.entityId);
+        const controlled = subject.entityId === this.controlledEntityId;
         controller.step(
-          subject.entityId === this.controlledEntityId ? input.actions : [],
+          controlled ? input.actions : [],
           this.detectMovementMedium(controller),
         );
       }
       physicsEngine._step(FIXED_TIME_STEP_SECONDS);
       this.tick += 1;
+      for (const subject of this.executionPlan.subjects) {
+        const controller = this.controllerFor(subject.entityId);
+        const visual = this.visualFor(subject.entityId);
+        controller.synchronizeVisual();
+        if (subject.entityId !== this.controlledEntityId) {
+          visual.stepAnimation(this.tick, "idle");
+          continue;
+        }
+        const motion = controller.sampleMotion(input.actions.includes("run"));
+        visual.stepAnimation(this.tick, resolveGroundHumanoidAction(motion));
+      }
       this.updateCamera();
     }
     return this.snapshot();
@@ -419,6 +523,7 @@ export class BabylonWorldRuntime implements WorldRuntimeSessionV3 {
         positionMetersXYZ: [subjectOrigin.x, subjectOrigin.y, subjectOrigin.z],
         velocityMetersPerSecondXYZ: [velocity.x, velocity.y, velocity.z],
         movementMedium: this.detectMovementMedium(controller),
+        activeActionId: this.visualFor(subject.entityId).activeActionId,
       };
     }
     return {
@@ -456,6 +561,7 @@ export class BabylonWorldRuntime implements WorldRuntimeSessionV3 {
   reset(): WorldRuntimeSnapshotV3 {
     this.assertUsable();
     for (const controller of this.subjectControllersByEntityId.values()) controller.reset();
+    for (const visual of this.subjectVisuals) visual.resetAnimation();
     this.controlledEntityId = this.executionPlan.controlledEntityId;
     this.tick = 0;
     this.updateCamera();
@@ -477,37 +583,13 @@ export class BabylonWorldRuntime implements WorldRuntimeSessionV3 {
     if (this.disposed) return;
     this.disposed = true;
     this.engine.stopRenderLoop(this.renderLoop);
-    for (const controller of this.subjectControllersByEntityId.values()) controller.dispose();
-    for (const visual of [...this.subjectVisuals].reverse()) {
-      for (const mesh of [...visual.meshes].reverse()) mesh.dispose(false, false);
-      visual.root.dispose(false, false);
-    }
-    for (const aggregate of this.aggregates.reverse()) aggregate.dispose();
-    this.ownedHeightfieldShape.dispose();
-    this.scene.dispose();
-    this.engine.dispose();
+    await disposeOwnedStack(this.ownedDisposers);
   }
 
   private detectMovementMedium(
     controller: SubjectController,
   ): "ground" | "air" | "water" {
-    const subjectOrigin = controller.subjectOrigin;
-    for (const water of this.executionPlan.waters) {
-      if (
-        water.traversalMode === "swimmable" &&
-        containsPoint(water.boundary, subjectOrigin.x, subjectOrigin.z) &&
-        subjectOrigin.y <= water.waterLevelMeters + 0.6 &&
-        subjectOrigin.y >= water.waterLevelMeters - water.depthMeters - 0.6
-      ) {
-        return "water";
-      }
-    }
-    const groundHeight = sampleExecutionTerrainHeight(
-      this.executionPlan.terrain,
-      subjectOrigin.x,
-      subjectOrigin.z,
-    );
-    return subjectOrigin.y <= groundHeight + 0.16 ? "ground" : "air";
+    return movementMediumAtSubjectOrigin(this.executionPlan, controller.subjectOrigin);
   }
 
   private updateCamera(): void {
@@ -541,6 +623,14 @@ export class BabylonWorldRuntime implements WorldRuntimeSessionV3 {
       throw new Error(`WORLDKIT_RUNTIME_SUBJECT_NOT_FOUND: ${subjectEntityId}`);
     }
     return controller;
+  }
+
+  private visualFor(subjectEntityId: string): SubjectVisual {
+    const visual = this.subjectVisualsByEntityId.get(subjectEntityId);
+    if (visual === undefined) {
+      throw new Error(`WORLDKIT_RUNTIME_SUBJECT_NOT_FOUND: ${subjectEntityId}`);
+    }
+    return visual;
   }
 
   private assertUsable(): void {

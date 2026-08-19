@@ -49,6 +49,7 @@ export interface SubjectRuntimeStateV3 {
   positionMetersXYZ: Vec3;
   velocityMetersPerSecondXYZ: Vec3;
   movementMedium: "ground" | "air" | "water";
+  activeActionId: "idle" | "walk" | "run" | "jump";
 }
 
 export interface WorldRuntimeSnapshotV3 {

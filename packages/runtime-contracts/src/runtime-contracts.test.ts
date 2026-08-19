@@ -33,6 +33,7 @@ function createSnapshotFixtureV3(): WorldRuntimeSnapshotV3 {
         positionMetersXYZ: [6, 0, 28],
         velocityMetersPerSecondXYZ: [0, 0, 0],
         movementMedium: "ground",
+        activeActionId: "idle",
       },
       player: {
         entityId: "player",
@@ -42,6 +43,7 @@ function createSnapshotFixtureV3(): WorldRuntimeSnapshotV3 {
         positionMetersXYZ: [0, 0, 30],
         velocityMetersPerSecondXYZ: [0, 0, -4],
         movementMedium: "ground",
+        activeActionId: "run",
       },
     },
     camera: {
@@ -218,6 +220,7 @@ describe("runtime contracts V3", () => {
       subjectDefinitionHash: expect.stringMatching(/^sha256:/),
       positionMetersXYZ: expect.any(Array),
       velocityMetersPerSecondXYZ: expect.any(Array),
+      activeActionId: "run",
     });
     expect(snapshot.subjectStatesByEntityId.player).not.toHaveProperty(
       "positionMeters",

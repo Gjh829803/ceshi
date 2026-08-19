@@ -14,6 +14,12 @@ import type {
 
 import { FIXED_TIME_STEP_SECONDS } from "./physics";
 
+export interface SubjectMotionSampleV1 {
+  horizontalSpeedMetersPerSecond: number;
+  runRequested: boolean;
+  movementMedium: "ground" | "air" | "water";
+}
+
 function hasAction(actions: readonly SemanticInputActionV1[], action: SemanticInputActionV1): boolean {
   return actions.includes(action);
 }
@@ -23,12 +29,16 @@ export class SubjectController {
   private readonly gravity: Vector3;
   private readonly up = Vector3.Up();
   private readonly colliderCenterOffsetFromSubjectOrigin: Vector3;
+  private jumpInProgress = false;
 
   constructor(
     private readonly subject: ExecutionSubjectV3,
     gravityMetersPerSecondSquaredXYZ: Vec3,
     private readonly visualRoot: TransformNode,
     scene: Scene,
+    private readonly movementMediumAtSubjectOrigin: (
+      subjectOrigin: Vector3,
+    ) => "ground" | "air" | "water",
   ) {
     this.gravity = new Vector3(...gravityMetersPerSecondSquaredXYZ);
     this.colliderCenterOffsetFromSubjectOrigin = new Vector3(
@@ -79,12 +89,24 @@ export class SubjectController {
       desired,
       this.up,
     );
-    if (
-      hasAction(actions, "jump") &&
-      movementMedium === "ground" &&
-      support.supportedState === CharacterSupportedState.SUPPORTED
-    ) {
+    const isUnsupported =
+      support.supportedState === CharacterSupportedState.UNSUPPORTED;
+    if (isUnsupported) {
+      calculated.y = current.y;
+    }
+    const jumpRequested =
+      hasAction(actions, "jump") && movementMedium === "ground";
+    if (jumpRequested) {
+      this.jumpInProgress = true;
       calculated.y = this.subject.locomotion.jumpSpeedMetersPerSecond;
+    } else if (isUnsupported && this.jumpInProgress) {
+      calculated.addInPlace(
+        (movementMedium === "water" ? this.gravity.scale(0.15) : this.gravity).scale(
+          FIXED_TIME_STEP_SECONDS,
+        ),
+      );
+    } else if (movementMedium === "ground") {
+      this.jumpInProgress = false;
     }
     this.physicsController.setVelocity(calculated);
     this.physicsController.integrate(
@@ -92,7 +114,19 @@ export class SubjectController {
       support,
       movementMedium === "water" ? this.gravity.scale(0.15) : this.gravity,
     );
+  }
+
+  synchronizeVisual(): void {
     this.syncVisual();
+  }
+
+  sampleMotion(runRequested: boolean): SubjectMotionSampleV1 {
+    const velocity = this.physicsController.getVelocity();
+    return {
+      horizontalSpeedMetersPerSecond: Math.hypot(velocity.x, velocity.z),
+      runRequested,
+      movementMedium: this.movementMediumAtSubjectOrigin(this.subjectOrigin),
+    };
   }
 
   get controllerCenter(): Vector3 {
@@ -115,6 +149,7 @@ export class SubjectController {
       spawnSubjectOrigin.add(this.colliderCenterOffsetFromSubjectOrigin),
     );
     this.physicsController.setVelocity(Vector3.Zero());
+    this.jumpInProgress = false;
     this.syncVisual(spawnSubjectOrigin);
   }
 
