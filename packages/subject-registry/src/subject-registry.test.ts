@@ -540,6 +540,50 @@ describe("subject resource registry", () => {
     ).toThrowError(/SUBJECT_REGISTRY_DUPLICATE_CLIP_MAPPING/);
   });
 
+  it("rejects duplicate Subject Asset inventory Clip names before canonical ordering", () => {
+    const asset = builtInSubjectResourceRegistry.resolveSubjectAsset(SUBJECT_ASSET_REF)!;
+
+    expect(() => createSubjectResourceRegistry([
+      {
+        ...asset,
+        inventory: {
+          ...asset.inventory,
+          animationClipNames: [
+            ...asset.inventory.animationClipNames,
+            asset.inventory.animationClipNames[0]!,
+          ],
+        },
+      },
+    ])).toThrowError(/SUBJECT_REGISTRY_DUPLICATE_CLIP_NAME/);
+  });
+
+  it.each([
+    "subject-asset",
+    "rig-profile",
+    "animation-set",
+    "collider-profile",
+  ] as const)(
+    "rejects duplicate %s semantic tags before canonical ordering",
+    (resourceKind) => {
+      const resource = builtInSubjectResourceRegistry.listResources().find(
+        (candidate) => candidate.kind === resourceKind,
+      )!;
+
+      expect(() => createSubjectResourceRegistry([
+        {
+          ...resource,
+          aiMetadata: {
+            ...resource.aiMetadata,
+            semanticTags: [
+              ...resource.aiMetadata.semanticTags,
+              resource.aiMetadata.semanticTags[0]!,
+            ],
+          },
+        },
+      ])).toThrowError(/SUBJECT_REGISTRY_DUPLICATE_SEMANTIC_TAG/);
+    },
+  );
+
   it("rejects duplicate Rig Bone IDs before canonical ordering", () => {
     const rig = builtInSubjectResourceRegistry.resolveRigProfile(RIG_PROFILE_REF)!;
 

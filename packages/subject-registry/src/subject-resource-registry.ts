@@ -15,6 +15,7 @@ import type {
   RegistrySubjectDefinitionV2,
   RigProfileManifestV1,
   SubjectAssetManifestV1,
+  SubjectAssetManifestInputV1,
   SubjectRegistryResourceInputV1,
   SubjectRegistryResourceV1,
   SubjectResourceRegistryV2,
@@ -58,6 +59,24 @@ function validateAnimationSet(source: AnimationSetManifestInputV1): void {
   if (duplicateClipName !== undefined) {
     throw new Error(
       `SUBJECT_REGISTRY_DUPLICATE_CLIP_MAPPING: '${duplicateClipName}' in '${source.resourceRef}'.`,
+    );
+  }
+}
+
+function validateSubjectAsset(source: SubjectAssetManifestInputV1): void {
+  const duplicateClipName = duplicateValue(source.inventory.animationClipNames);
+  if (duplicateClipName !== undefined) {
+    throw new Error(
+      `SUBJECT_REGISTRY_DUPLICATE_CLIP_NAME: '${duplicateClipName}' in '${source.resourceRef}'.`,
+    );
+  }
+}
+
+function validateCanonicalizedSemanticTags(source: SubjectRegistryResourceInputV1): void {
+  const duplicateSemanticTag = duplicateValue(source.aiMetadata.semanticTags);
+  if (duplicateSemanticTag !== undefined) {
+    throw new Error(
+      `SUBJECT_REGISTRY_DUPLICATE_SEMANTIC_TAG: '${duplicateSemanticTag}' in '${source.resourceRef}'.`,
     );
   }
 }
@@ -167,9 +186,18 @@ export function createSubjectResourceRegistry(
     if (resourcesByRef.has(source.resourceRef)) {
       throw new Error(`SUBJECT_REGISTRY_DUPLICATE_REF: '${source.resourceRef}'.`);
     }
+    if (source.kind === "subject-asset") validateSubjectAsset(source);
     if (source.kind === "animation-set") validateAnimationSet(source);
     if (source.kind === "rig-profile") validateRigProfile(source);
     if (source.kind === "collider-profile") validateColliderProfile(source);
+    if (
+      source.kind === "subject-asset" ||
+      source.kind === "rig-profile" ||
+      source.kind === "animation-set" ||
+      source.kind === "collider-profile"
+    ) {
+      validateCanonicalizedSemanticTags(source);
+    }
     resourcesByRef.set(source.resourceRef, lockResource(source));
   }
 
