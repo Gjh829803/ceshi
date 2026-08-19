@@ -56,6 +56,7 @@ pnpm worldkit run examples/authoring/basic-world.json
 - [Plan-first 世界创作协议](docs/12-plan-first-world-authoring.md)
 - [多 Agent 世界创作流水线](docs/13-multi-agent-world-authoring.md)
 - [Creator Studio：上传、生成与历史世界](docs/15-creator-studio.md)
+- [主体资产与 3C 配置接入契约](docs/16-subject-assets-3c-integration.md)
 - [Canonical JSON V1：AI/CLI 接入与运行指南](docs/17-canonical-json-quickstart.md)
 - [架构决策：向 Agent 暴露主体套餐](decisions/0001-subject-kits.md)
 - [架构决策：第一、二期范围](decisions/0002-phased-scope.md)
@@ -70,9 +71,15 @@ pnpm worldkit run examples/authoring/basic-world.json
 - [AI-first 白模游戏 SDK 设计评审简版](docs/reviews/2026-08-18-ai-first-sdk-design-review-brief.md)：面向团队评审的 10～15 分钟阅读稿，只保留关键设计、风险和待确认决策。
 - [AI-first LEGO 游戏 SDK 总体设计](docs/superpowers/specs/2026-08-17-ai-first-lego-game-sdk-design.md)：下一代总架构规格，含双层 AI API、引擎无关 IR、确定性编译与迁移阶段计划。
 - [AI-first Terrain Authoring Pipeline 设计](docs/superpowers/specs/2026-08-17-terrain-authoring-pipeline-design.md)：地形子规格，定义从生成式规划图到权威 Heightfield 的确定性编译链路。
+- [可扩展主体组装 Authoring 专项设计](docs/superpowers/specs/2026-08-19-extensible-subject-authoring-design.md)：定义自定义主体 Definition、实例化、自动 Collider、Capability 与类型化 Relationship 的长期扩展边界；讨论中的 `define / spawn / bind` 仅为概念操作名。
 - [业界对照与可落地性核查报告](docs/superpowers/specs/2026-08-18-industry-alignment-and-feasibility-review.md)：评审支撑材料，含运行时选型核实、业界实践对照与 AI 友好性评估。
 - [阶段 0 技术探针计划与外部资料核查](docs/superpowers/specs/2026-08-18-phase0-probe-plan-and-external-research.md)：协议冻结前的风险探针清单、判据与已定决策记录。
 - [架构决策：AuthoringSpec 编译架构与 Babylon Runtime（Proposed）](decisions/0006-authoring-spec-compiler-architecture.md)：随总体设计评审一同定稿。
+
+### 重构实施计划与进度
+
+- [Canonical JSON Babylon V1 实施计划](docs/superpowers/plans/2026-08-18-canonical-json-babylon-v1.md)：已交付的第一条生产形态纵向切片，覆盖严格 JSON、NormalizedWorldIR、ExecutionPlan、Babylon/Havok、CLI、Browser Protocol 与 Playwright Gate。
+- [Subject Foundation 可视切片 TODO](docs/superpowers/plans/2026-08-19-subject-foundation-visible-slice.md)：当前进行中的多主体、可注入 Definition Registry、自动 Collider、复数 Snapshot 与控制切换任务；顶部进度表和任务复选框是实施状态真相。
 
 ## 当前状态
 
