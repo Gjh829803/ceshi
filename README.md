@@ -52,6 +52,75 @@ flowchart TB
     REPORT --> ADAPTER["Video Model Adapter<br/>外部视觉实现"] --> VIDEO["Final Generated Video"]
 ```
 
+### 核心链路节点说明
+
+这条链路可以先用一句话理解：**AI 不直接操作 3D 引擎，而是先写一份结构化的
+世界说明书；SDK 再把说明书逐步编译成可运行、可验证的白模世界，最后交给视频
+模型增加材质、光影和艺术风格。**
+
+主链路中每个节点的职责如下：
+
+| 节点 | 通俗解释 | 主要输入与输出 |
+|---|---|---|
+| **Prompt + Reference Image** | 用户的原始需求，例如“生成一个海湾，山坡上站着人物，右侧有灯塔” | 文字和参考图 |
+| **External Planning / Coding Agent** | 上游 AI，负责理解图片和 Prompt，并把自然语言翻译成 SDK 能理解的结构化 JSON | 图片、Prompt → `AuthoringSpec` |
+| **AI Schema Profile / Canonical AuthoringSpec** | 世界的“设计图纸”，描述需要什么地形、水面、主体、物件、动作和空间约束；它不是 Babylon 代码，也不是 3D 模型文件 | AI 意图 → 标准世界 JSON |
+| **Schema Validation / Registry Resolution** | 检查图纸结构、字段、单位和引用是否合法，并从 Registry/Package 中找到指定版本的主体、动作、碰撞体等内容 | AuthoringSpec + Registry → 已校验、已解析的输入 |
+| **Normalizer + Terrain Compiler / Deterministic Layout Solver** | 补齐默认值、生成确定的地形高度数据，并把“灯塔在右侧、人物不要出生在水里”等约束计算成最终坐标和朝向 | 高层语义和约束 → 确定布局 |
+| **NormalizedWorldIR / Resource Lock** | SDK 内部统一的“施工图”。所有简写已经展开，最终位置已经确定，资源版本和内容 Hash 已锁定 | 已校验世界 → 规范化中间数据 |
+| **ExecutionPlan / WorldPackage** | 交给 Runtime 的“施工任务单和材料包”，列明要创建的地形、物体、主体、碰撞体、动作、相机及控制关系 | IR → 可执行世界计划 |
+| **Simulation Take** | 一段可复现的表演时间线，例如“人物走 3 秒、跳跃、相机持续跟随” | 世界计划 + 控制序列 → 固定时间线 |
+| **Babylon.js Runtime + Havok Physics** | 真正运行白模世界的地方。Babylon.js 负责模型、场景、相机、骨骼动画和画面；Havok 负责重力、地面支撑、墙体碰撞和物理运动 | ExecutionPlan → 可交互白模世界 |
+| **Control Capture Bundle** | 从同一个 Runtime、同一时刻导出白模画面和结构通道，让下游模型同时知道“看到了什么、在哪里、属于谁、表面朝向哪里” | 运行中的世界 → 多通道结构捕获 |
+| **Validation Report / Blocking Gate** | 最终质检。位置、碰撞、遮挡、构图、资源或确定性只要有必需项不合格，就拒绝继续，不允许视频模型掩盖结构错误 | 世界和捕获证据 → 通过或拒绝 |
+| **Video Model Adapter** | 把 SDK 的白模和结构通道转换成外部视频模型需要的输入格式，但不能修改世界中的主体数量、位置、碰撞和动作结果 | 白模证据 → 视频模型输入 |
+| **Final Generated Video** | 视频模型在结构正确的白模基础上增加材质、光影、人物细节和视觉风格后的最终结果 | 经过验证的结构 → 最终视频 |
+
+其中最容易混淆的是 `AuthoringSpec`、`NormalizedWorldIR` 和 `ExecutionPlan`：
+
+- **AuthoringSpec 是设计意图**：主要由 AI 编写，例如“人物位于观景区”“灯塔在
+  海湾右侧”“人物与悬崖保持至少 2 米距离”。AI 不需要猜测大量 3D 坐标。
+- **NormalizedWorldIR 是确定的施工图**：默认值、资源引用、地形数据和最终坐标
+  都已经解析完成，相同输入应得到相同 IR 和 Hash。
+- **ExecutionPlan 是引擎任务单**：告诉 Runtime 具体创建哪些对象、在哪里创建、
+  使用什么碰撞体和动作、相机跟随谁，以及当前控制哪个主体。
+
+`Babylon.js Runtime + Havok Physics` 也可以拆开理解：
+
+- **Babylon.js 是 3D 舞台系统**，负责场景、模型、相机、灯光、骨骼动画和渲染；
+- **Havok 是物理规则系统**，负责重力、碰撞、支撑、跳跃和实际可移动的位置。
+
+例如人物向前走时，控制器先产生移动意图，Havok 判断前方是否有墙、脚下是否有
+地面并计算实际位置，Babylon.js 再把人物渲染到该位置并播放走路动作。因此
+“动画中的脚在走”不等于“人物可以穿墙”，Gameplay 结果始终由 Runtime 世界决定。
+
+Control Capture Bundle 中的通道分别表示：
+
+- **Neutral Color**：没有复杂材质和最终风格的白模彩色图；
+- **Linear Depth**：每个像素距离相机有多远；
+- **Semantic**：每个像素属于人物、地形、水面、建筑等哪一类；
+- **Instance**：每个像素具体属于哪个人物或哪个物件；
+- **Normal**：表面朝向，用于理解坡面、墙面和光照方向。
+
+图中的虚线节点是贯穿主链路的支撑能力，而不是单独的前后步骤：
+
+- **Registry / Package Definitions** 是“乐高零件目录”，保存主体、资产、骨骼、
+  动作、Collider、Capability、Socket 和 Relationship 等可复用定义；
+- **TypeScript API / CLI / Browser Protocol / Playwright Driver** 是人和其他程序
+  调用 SDK、控制主体、查询状态和自动截图的入口；
+- **Canonical Hash / Diagnostic / Security / Resource Budget** 提供确定性 Hash、
+  AI 可修复的稳定错误、安全边界和资源上限。
+
+以“人物从海湾山坡走向灯塔”为例：Agent 先用 AuthoringSpec 描述山坡、海面、
+人物、灯塔、道路和空间约束；Validator 检查资源；Terrain Compiler 和 Layout
+Solver 生成高度并计算位置；IR 固化结果；ExecutionPlan 创建可运行任务；Babylon
+加载场景和动画；Havok 处理坡面、重力和墙体；Simulation Take 控制人物移动；
+Capture 导出白模及结构通道；Validation Report 检查人物是否掉入水中、穿墙或偏离
+要求。全部通过后，视频模型才负责把白模变成最终画面。
+
+因此，这个 SDK 不只是对 Babylon.js 做一层简单封装，而是在 AI 与 3D 游戏引擎
+之间提供一套**稳定、确定、可验证、可复现的世界编译系统**。
+
 当前已经交付到 Babylon/Havok Runtime、单截图、Snapshot 和 Browser Protocol；
 Placement Solver、Simulation Take/Control Capture Bundle、Validation Report 三份专项
 设计已成稿并等待评审冻结，相关 Runtime/CLI/Schema 实现、完整 WorldPackage 和视频
