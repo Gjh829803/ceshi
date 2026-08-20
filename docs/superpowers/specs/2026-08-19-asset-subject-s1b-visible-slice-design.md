@@ -670,9 +670,9 @@ ExecutionPlan V4 → Babylon/Havok → CLI/Browser 的首个纵向切片：
 - GLB 为 43,656 bytes；原始字节 Hash 为
   `sha256:1095fd65c754d53e6db3757ab5e1c9e5e9dcea2581f85d40f37ea4890ee8c2c2`；
 - Normalized IR Hash 为
-  `sha256:3b148412c45ac66e75bc4c57482c92b29ead3cc07e72b8ad006f9987b9655296`；
+  `sha256:ffe2240f2fa90931d7d7cb3863c0d1068b0984dd2b4897f2ffbc9473ca76a1f9`；
 - ExecutionPlan Hash 为
-  `sha256:a71c2aec80c2b8c81e43a82009a02be9be6df1729c286c967aede6e9ea516b59`；
+  `sha256:df3a35b3ff935c0ddc1f9c68a8dfca6395193b02c92b1db6e63b20429f55f994`；
 - CLI 世界图与四张固定 Tick Action 图均为 936×596，四张 Action PNG Hash 两两不同；
 - 两个 Subject 的位置与 `activeActionId` 独立，Havok 墙体停止有效；篡改 GLB 后
   Browser 稳定返回 `SUBJECT_ASSET_HASH_MISMATCH` 且磁盘资产 Hash 不变。

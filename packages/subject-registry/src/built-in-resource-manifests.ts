@@ -179,7 +179,8 @@ const GOLDEN_BIPED_RIG_PROFILE: RigProfileManifestInputV1 = {
   },
   aiMetadata: {
     displayName: "Golden biped rig",
-    description: "Canonical 18-bone mapping for the project-owned Golden humanoid fixture.",
+    description:
+      "Canonical 17-bone anatomical mapping with an independent Skeleton root for the project-owned Golden humanoid fixture.",
     semanticTags: ["biped", "golden", "humanoid", "rig"],
   },
 };

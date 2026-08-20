@@ -80,9 +80,9 @@ Subject Node 中引用 `worldkit://subject-definition/humanoid.rigged-golden@1`�
 - 自包含 GLB 为 43,656 bytes，原始字节 Hash 为
   `sha256:1095fd65c754d53e6db3757ab5e1c9e5e9dcea2581f85d40f37ea4890ee8c2c2`；
 - Normalized IR Hash 为
-  `sha256:e746bd738e13ec8603779afba4d62d2d4610d0b03d428a6a1f8cc4f468ce1984`，
+  `sha256:ffe2240f2fa90931d7d7cb3863c0d1068b0984dd2b4897f2ffbc9473ca76a1f9`，
   ExecutionPlan Hash 为
-  `sha256:22e38f9dc474b33a2adbe8442dba411e70f62731ac1e9a54fe1ac90f9f73249f`；
+  `sha256:df3a35b3ff935c0ddc1f9c68a8dfca6395193b02c92b1db6e63b20429f55f994`；
 - `world.png` 与 `idle/walk/run/jump.png` 均为 936×596；CLI `world.png` 在暂停并
   Reset 后以 Tick 0 同步记录 Snapshot 和截图，Hash 为
   `sha256:b9ff828333641e548ea7ef3d2f8dbc6c8ae96c120659db3a6f6c17df19a09d9b`；

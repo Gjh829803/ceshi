@@ -398,6 +398,11 @@ describe("subject resource registry", () => {
       skeletonRootBoneName: "root",
       requiredBoneIds: BIPED_BONE_IDS,
       sourceNodeNameByBoneId: Object.fromEntries(BIPED_BONE_IDS.map((id) => [id, id])),
+      aiMetadata: {
+        displayName: "Golden biped rig",
+        description:
+          "Canonical 17-bone anatomical mapping with an independent Skeleton root for the project-owned Golden humanoid fixture.",
+      },
     });
 
     expect(

@@ -111,7 +111,7 @@ The slice is accepted only when all of the following hold:
 
 ## Non-goals
 
-- Do not expose the eight additional G Bot clips as supported Semantic Actions in this slice.
+- Do not expose the 21 additional G Bot Clips as supported Semantic Actions in this slice.
 - Do not implement swimming State Resolver, sitting interactions, mounts, equipment, root-motion locomotion, or animation retargeting.
 - Do not modify or replace the committed G Bot GLB.
 - Do not weaken inventory, hash, provenance, same-origin resolver, cleanup, or provider-boundary checks.

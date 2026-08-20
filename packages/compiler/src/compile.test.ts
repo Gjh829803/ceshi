@@ -305,7 +305,7 @@ describe("compileWorld", () => {
         normalizedWorldIrHash: rigged.normalizedWorldIrHash!,
       }).executionPlanHash,
     ).toBe(
-      "sha256:fd7ae8699237a81d3db852c9b0fec6b8ff22febe9c3ed716b5f573893b12248c",
+      "sha256:0b64e4abc8edc25ce9d8d1bc4715ef48f408a9f19626883c7082685ad3661caa",
     );
   });
 

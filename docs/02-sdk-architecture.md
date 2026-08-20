@@ -377,7 +377,7 @@ Authoring、IR、ExecutionPlan 或 Browser Protocol。
 - Canonical Authoring V3 → IR V3 → ExecutionPlan V4；
 - Placement Solver S1 的八种 Constraint 和海湾 Golden 场景；
 - Babylon/Havok Heightfield、障碍、水域、第三人称和多主体控制；
-- Golden Humanoid GLB、18 根语义骨骼、Bone Socket 与 `idle/walk/run/jump`；
+- Golden Humanoid GLB、17 根解剖语义骨骼、独立 Skeleton Root、Bone Socket 与 `idle/walk/run/jump`；
 - CLI/Browser V3 的校验、编译、运行、控制、Snapshot 和单截图；
 - Canonical、Rigged Subject 和 Placement Layout 三条真实 Chromium Gate。
 

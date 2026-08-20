@@ -235,10 +235,10 @@ describe("Package Subject Definition normalization", () => {
       "sha256:2949c4c8f7ebbb321a3a40ea10890f4dd608178c26424c530e771c1b529d0a1b",
     );
     expect(result.value?.resources.resourceLockHash).toBe(
-      "sha256:1a567f789c50f0fe234253417eca8313c34931eb02f66513ed8819b95710091c",
+      "sha256:2e685dbfad9f563ae9b5ec3ca966bc8a6e3c85b6daa3b12280b4ca3dd989c3b0",
     );
     expect(result.normalizedWorldIrHash).toBe(
-      "sha256:e5425e5ba54d367c9c52256b25eb3954df20fdf8834c42089501215e5e17b970",
+      "sha256:4f754cbe820da4519478dff3f3ed5b4c96240fb36397ca97b2bbe2f3ec58aae9",
     );
   });
 
