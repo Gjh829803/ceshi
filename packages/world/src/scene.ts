@@ -349,6 +349,8 @@ function waterSpawnSurface(
     entityId,
     featureId,
     boundary,
+    waterLevelMeters: descriptor.elevation,
+    depthMeters: descriptor.minimumDepth,
     traversalMode: descriptor.traversal,
   };
 }

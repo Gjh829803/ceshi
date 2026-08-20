@@ -2,8 +2,16 @@ import { readFile } from "node:fs/promises";
 import { createRequire } from "node:module";
 
 import { NullEngine } from "@babylonjs/core/Engines/nullEngine.pure.js";
+import { normalizeAuthoringSpec, sha256CanonicalJson } from "@whitebox-world/authoring";
+import { compileWorld } from "@whitebox-world/compiler";
 import { isNil } from "lodash-es";
 import { describe, expect, it } from "vitest";
+
+import {
+  builtInSubjectResourceRegistry,
+  type RegistrySubjectDefinitionV3,
+  type SubjectResourceRegistryV3,
+} from "@whitebox-world/subject-registry";
 
 import { loadAuthoringScene } from "../../../apps/playground/src/authoring-loader";
 import { createValidAuthoringSpec } from "../../authoring/src/test-fixture";
@@ -31,22 +39,27 @@ const UNAVAILABLE_RELATIONSHIP_PACKAGES = [
   [
     "worldkit://subject-definition/animal.quadruped.forward-steer@1",
     "worldkit://capability/relationship.mount@1",
+    "worldkit://motion-kernel/forward-steer@1",
   ],
   [
     "worldkit://subject-definition/vehicle.four-wheel.arcade@1",
     "worldkit://capability/relationship.seat@1",
+    "worldkit://motion-kernel/wheeled-arcade@1",
   ],
   [
     "worldkit://subject-definition/surface-craft.ice-skimmer@1",
     "worldkit://capability/relationship.seat@1",
+    "worldkit://motion-kernel/surface-slide@1",
   ],
   [
     "worldkit://subject-definition/watercraft.kayak.surface@1",
     "worldkit://capability/relationship.seat@1",
+    "worldkit://motion-kernel/water-surface@1",
   ],
   [
     "worldkit://subject-definition/glider.paraglider.unpowered@1",
     "worldkit://capability/relationship.tether@1",
+    "worldkit://motion-kernel/unpowered-glide@1",
   ],
 ] as const;
 
@@ -94,6 +107,101 @@ function createFlatTerrainCapabilitySpec() {
     amplitudeMeters: 0,
   };
   return spec;
+}
+
+function relationshipFreeTestDefinition(
+  sourceDefinitionRef: string,
+): {
+  definition: RegistrySubjectDefinitionV3;
+  registry: SubjectResourceRegistryV3;
+} {
+  const source = builtInSubjectResourceRegistry.resolveSubjectDefinition(
+    sourceDefinitionRef,
+  );
+  if (source === undefined || !("schemaVersion" in source) || source.schemaVersion !== 3) {
+    throw new Error(`Capability Definition is unavailable: ${sourceDefinitionRef}`);
+  }
+  const { contentHash: _contentHash, ...sourceInput } = structuredClone(source);
+  const input = {
+    ...sourceInput,
+    id: `runtime-test.${source.id}`,
+    resourceRef: `worldkit://subject-definition/runtime-test.${source.id}@1`,
+    capabilityRefs: source.capabilityRefs.filter(
+      (capabilityRef) => !capabilityRef.includes("/relationship."),
+    ),
+    relationshipCapabilityRefs: [],
+  };
+  const definition = Object.freeze({
+    ...input,
+    contentHash: sha256CanonicalJson(input),
+  }) as RegistrySubjectDefinitionV3;
+  const registry: SubjectResourceRegistryV3 = Object.freeze({
+    ...builtInSubjectResourceRegistry,
+    resolveSubjectDefinition(resourceRef: string) {
+      return resourceRef === definition.resourceRef
+        ? definition
+        : builtInSubjectResourceRegistry.resolveSubjectDefinition(resourceRef);
+    },
+    listSubjectDefinitions() {
+      return [...builtInSubjectResourceRegistry.listSubjectDefinitions(), definition];
+    },
+    listCapabilitySubjectDefinitions() {
+      return [
+        ...builtInSubjectResourceRegistry.listCapabilitySubjectDefinitions(),
+        definition,
+      ];
+    },
+  });
+  return { definition, registry };
+}
+
+function compileRelationshipFreeKernelPlan(sourceDefinitionRef: string) {
+  const { definition, registry } = relationshipFreeTestDefinition(sourceDefinitionRef);
+  const spec = createFlatTerrainCapabilitySpec();
+  const controlledSubject = spec.nodes.find(
+    (node) => node.kind === "subject" && node.id === spec.startup.controlledEntityId,
+  );
+  const spawn = spec.nodes.find(
+    (node) => node.kind === "anchor" && node.id === spec.startup.spawnAnchorEntityId,
+  );
+  if (
+    controlledSubject?.kind !== "subject" ||
+    spawn?.kind !== "anchor" ||
+    spawn.placement.kind !== "fixed"
+  ) {
+    throw new Error("Capability runtime fixture is missing its controlled Subject or spawn.");
+  }
+  controlledSubject.subjectDefinitionRef = definition.resourceRef;
+  const kernelRef = builtInSubjectResourceRegistry.resolveMotionProfile(
+    definition.profiles.motion.defaultMotionProfileRef,
+  )?.motionKernelRef;
+  if (kernelRef === "worldkit://motion-kernel/water-surface@1") {
+    spawn.placement.transform.positionMetersXYZ = [25, 0, 0];
+  } else if (kernelRef === "worldkit://motion-kernel/unpowered-glide@1") {
+    spawn.placement.transform.positionMetersXYZ = [0, 12, 30];
+  }
+  const normalized = normalizeAuthoringSpec(spec, {
+    subjectResourceRegistry: registry,
+  });
+  if (
+    !normalized.ok ||
+    normalized.value === undefined ||
+    normalized.normalizedWorldIrHash === undefined
+  ) {
+    throw new Error(
+      `Relationship-free Definition failed to normalize: ${JSON.stringify(normalized.diagnostics)}`,
+    );
+  }
+  const compiled = compileWorld({
+    normalizedWorldIr: normalized.value,
+    normalizedWorldIrHash: normalized.normalizedWorldIrHash,
+  });
+  if (!compiled.ok || compiled.executionPlan === undefined) {
+    throw new Error(
+      `Relationship-free Definition failed to compile: ${JSON.stringify(compiled.diagnostics)}`,
+    );
+  }
+  return compiled.executionPlan;
 }
 
 describe("capability package runtime smoke tests", () => {
@@ -230,6 +338,82 @@ describe("capability package runtime smoke tests", () => {
         code: "SUBJECT_CAPABILITY_UNSATISFIED",
         details: expect.objectContaining({ capabilityRef }),
       }));
+    },
+  );
+
+  it.each(UNAVAILABLE_RELATIONSHIP_PACKAGES)(
+    "executes implemented Kernel for %s through a relationship-free test Definition",
+    async (subjectDefinitionRef, _capabilityRef, motionKernelRef) => {
+      const executionPlan = compileRelationshipFreeKernelPlan(subjectDefinitionRef);
+      const assembly = executionPlan.subjects[0]?.capabilityAssembly;
+      expect(assembly?.relationshipProfiles).toEqual([]);
+      expect(assembly?.motionKernels).toContainEqual(expect.objectContaining({
+        resourceRef: motionKernelRef,
+      }));
+      expect(
+        builtInSubjectResourceRegistry.resolveMotionKernel(motionKernelRef)?.runtimeStatus,
+      ).toBe("implemented");
+      const runtime = await BabylonWorldRuntime.create({
+        executionPlan,
+        havokWasmBinary,
+        engineFactory: () =>
+          new NullEngine({
+            renderWidth: 640,
+            renderHeight: 360,
+            textureSize: 512,
+            deterministicLockstep: true,
+            lockstepMaxSteps: 4,
+          }),
+      });
+      try {
+        const snapshot = await runtime.runFixedInput({
+          actions: ["move-forward"],
+          ticks: 30,
+        });
+        const state = snapshot.subjectStatesByEntityId.player!;
+        const harness = await runtime.runHarness("player");
+        expect(state.activeMotionKernelRef).toBe(motionKernelRef);
+        expect([
+          ...state.positionMetersXYZ,
+          ...state.velocityMetersPerSecondXYZ,
+        ].every(Number.isFinite)).toBe(true);
+        expect(snapshot.camera.positionMetersXYZ.every(Number.isFinite)).toBe(true);
+        expect(harness.passed).toBe(true);
+        expect(harness.checks).toHaveLength(9);
+
+        if (motionKernelRef === "worldkit://motion-kernel/wheeled-arcade@1") {
+          runtime.reset();
+          expect(runtime.setMotionTuning("player", {
+            lowSpeedTurnRateRadiansPerSecond: 0.2,
+            highSpeedTurnRateRadiansPerSecond: 0.1,
+          }).subjectStatesByEntityId.player?.motionParameterTuning).toEqual({
+            lowSpeedTurnRateRadiansPerSecond: 0.2,
+            highSpeedTurnRateRadiansPerSecond: 0.1,
+          });
+          const gentleTurn = await runtime.runFixedInput({
+            actions: ["move-forward", "move-left"],
+            ticks: 15,
+          });
+          runtime.reset();
+          runtime.setMotionTuning("player", {
+            lowSpeedTurnRateRadiansPerSecond: 5,
+            highSpeedTurnRateRadiansPerSecond: 2,
+          });
+          const sharpTurn = await runtime.runFixedInput({
+            actions: ["move-forward", "move-left"],
+            ticks: 15,
+          });
+          expect(Math.abs(sharpTurn.subjectStatesByEntityId.player!.forwardXYZ![0]))
+            .toBeGreaterThan(
+              Math.abs(gentleTurn.subjectStatesByEntityId.player!.forwardXYZ![0]),
+            );
+          expect(() => runtime.setMotionTuning("player", {
+            lowSpeedTurnRateRadiansPerSecond: 99,
+          })).toThrow(RangeError);
+        }
+      } finally {
+        await runtime.dispose();
+      }
     },
   );
 

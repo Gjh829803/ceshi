@@ -1,7 +1,9 @@
 import { describe, expect, it } from "vitest";
 
 import {
+  planningWorkflowStage,
   promotePlanningManifest,
+  requiresCompositionPromotion,
   validatePersistedCompositionReport,
   validateSubmittedCompositionReport,
 } from "./composition-gate.js";
@@ -74,6 +76,16 @@ const currentInput = {
 };
 
 describe("composition gate", () => {
+  it("finalizes planning-only scenes while keeping reference-guided scenes pre-composition", () => {
+    expect(requiresCompositionPromotion(worldSpec)).toBe(true);
+    expect(planningWorkflowStage(worldSpec)).toBe("whitebox-built");
+    expect(planningWorkflowStage({
+      id: "planning-only",
+      source: { referenceImages: [] },
+      entry: { composition: {} },
+    })).toBe("verified");
+  });
+
   it("rejects a missing persisted report", () => {
     expect(validatePersistedCompositionReport({
       ...currentInput,

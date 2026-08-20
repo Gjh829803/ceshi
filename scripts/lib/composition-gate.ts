@@ -66,6 +66,19 @@ interface CompositionWorldSpec {
   entry: { composition: { guide?: CompositionGuide } };
 }
 
+export function requiresCompositionPromotion(
+  worldSpec: CompositionWorldSpec,
+): boolean {
+  return (worldSpec.source?.referenceImages?.length ?? 0) > 0 ||
+    worldSpec.entry.composition.guide !== undefined;
+}
+
+export function planningWorkflowStage(
+  worldSpec: CompositionWorldSpec,
+): "whitebox-built" | "verified" {
+  return requiresCompositionPromotion(worldSpec) ? "whitebox-built" : "verified";
+}
+
 interface FrozenPlan {
   workflowVersion: number;
   sceneId: string;

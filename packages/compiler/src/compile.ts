@@ -345,6 +345,8 @@ function validateCompiledSpawnFootprintsV3(
         waterSurfaces: [{
           entityId: water.entityId,
           boundary: water.boundary,
+          waterLevelMeters: water.waterLevelMeters,
+          depthMeters: water.depthMeters,
           traversalMode: water.traversalMode,
         }],
       });

@@ -83,6 +83,8 @@ describe("validateSpawnSafety", () => {
         entityId: "lake-blocked",
         featureId: "lake-feature",
         boundary,
+        waterLevelMeters: 1,
+        depthMeters: 2,
         traversalMode: "blocked",
       }],
     })).toEqual([{
@@ -98,9 +100,34 @@ describe("validateSpawnSafety", () => {
       expect(validateSpawnSafety({
         entityId: "player",
         position: [2, 0, -3],
-        waterSurfaces: [{ entityId: `lake-${traversalMode}`, boundary, traversalMode }],
+        waterSurfaces: [{
+          entityId: `lake-${traversalMode}`,
+          boundary,
+          waterLevelMeters: 1,
+          depthMeters: 2,
+          traversalMode,
+        }],
       })).toEqual([]);
     }
+  });
+
+  it("allows a spawn below an elevated blocked-water volume", () => {
+    expect(validateSpawnSafety({
+      entityId: "player",
+      position: [0, 0, 0],
+      capsule: { radius: 0.35, height: 1.8 },
+      waterSurfaces: [{
+        entityId: "elevated-reservoir",
+        boundary: {
+          kind: "circle",
+          centerMetersXZ: [0, 0],
+          radiusMeters: 4,
+        },
+        waterLevelMeters: 5,
+        depthMeters: 2,
+        traversalMode: "blocked",
+      }],
+    })).toEqual([]);
   });
 
   it("rejects a spawn inside the footprint and vertical range of a static blocker", () => {
@@ -135,6 +162,22 @@ describe("validateSpawnSafety", () => {
       entityId: "player",
       position: [0, 4, 0],
       staticBlockingObjects: [blocker],
+    })).toEqual([]);
+  });
+
+  it("allows exact capsule-foot contact with the top of a static blocker", () => {
+    expect(validateSpawnSafety({
+      entityId: "player",
+      position: [0, 3, 0],
+      capsule: { radius: 0.35, height: 1.8 },
+      staticBlockingObjects: [{
+        entityId: "support-box",
+        footprint: {
+          kind: "polygon",
+          pointsMetersXZ: [[-1, -1], [1, -1], [1, 1], [-1, 1]],
+        },
+        heightRangeMeters: [0, 3],
+      }],
     })).toEqual([]);
   });
 });

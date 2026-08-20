@@ -291,6 +291,42 @@ describe("outdoor scene authoring", () => {
     );
   });
 
+  it("allows a spawn below an elevated blocked-water volume", () => {
+    const ElevatedWater = defineWorldFeature<{}, {}>({
+      type: "test.elevated-water",
+      version: 1,
+      source: "scene.test.ts#ElevatedWater",
+      schema: {},
+      build(context) {
+        context.surface.water({
+          area: context.shape.circle([0, 0], 4),
+          elevation: 5,
+          minimumDepth: 2,
+          traversal: "blocked",
+        });
+        return {};
+      },
+    });
+    const scene = defineOutdoorScene({
+      id: "elevated-water-spawn",
+      build(world) {
+        const terrain = world.terrain.rolling({
+          id: "ground",
+          size: [40, 40],
+          segments: [8, 8],
+          amplitude: 0,
+          frequency: 0.1,
+        });
+        world.feature.add(ElevatedWater, { id: "reservoir", params: {} });
+        world.player.spawn({ terrain, at: [0, 0] });
+      },
+    });
+
+    expect(compileOutdoorScene(scene).diagnostics).not.toContainEqual(
+      expect.objectContaining({ code: "SPAWN_IN_BLOCKED_WATER" }),
+    );
+  });
+
   it("rejects a spawn inside a static blocking landmark footprint", () => {
     const scene = defineOutdoorScene({
       id: "static-blocker-spawn",
@@ -329,5 +365,35 @@ describe("outdoor scene authoring", () => {
         }),
       );
     }
+  });
+
+  it("allows a spawn standing exactly on top of a static blocking landmark", () => {
+    const scene = defineOutdoorScene({
+      id: "static-blocker-top-contact",
+      build(world) {
+        const terrain = world.terrain.rolling({
+          id: "ground",
+          size: [40, 40],
+          segments: [8, 8],
+          amplitude: 0,
+          frequency: 0.1,
+        });
+        world.landmark.compound({
+          id: "support-box",
+          transform: { position: [0, 0, 0] },
+          children: [{
+            id: "box",
+            kind: "box",
+            size: [2, 2, 2],
+            transform: { position: [0, 1, 0] },
+          }],
+        });
+        world.player.spawn({ terrain, at: [0, 0], heightOffset: 2.9 });
+      },
+    });
+
+    expect(compileOutdoorScene(scene).diagnostics).not.toContainEqual(
+      expect.objectContaining({ code: "SPAWN_INSIDE_STATIC_BLOCKER" }),
+    );
   });
 });

@@ -48,6 +48,8 @@ export interface SpawnWaterSurface {
   entityId: EntityId;
   featureId?: FeatureId;
   boundary: SpawnFootprintBoundary;
+  waterLevelMeters: number;
+  depthMeters: number;
   traversalMode: "blocked" | "walkable" | "swimmable";
 }
 

@@ -1,6 +1,6 @@
 import { createHash } from "node:crypto";
 import { EventEmitter } from "node:events";
-import { access, mkdtemp, mkdir, readFile, rm, writeFile } from "node:fs/promises";
+import { access, mkdtemp, mkdir, readFile, rm, stat, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 
@@ -190,5 +190,33 @@ describe("whitebox opening-frame host gate", () => {
     });
     expect(JSON.parse(await readFile(path.join(project.artifactDirectory, "manifest.json"), "utf8")))
       .toEqual({ ...project.manifest, workflowStage: "verified" });
+  });
+
+  it("rolls back the opening frame when the report target cannot be written", async () => {
+    const project = await createProject(root);
+    const publicDirectory = path.join(
+      project.playgroundDirectory,
+      "public",
+      "scene-plans",
+      sceneId,
+    );
+    const framePath = path.join(publicDirectory, "whitebox-opening-frame.png");
+    const reportPath = path.join(publicDirectory, "opening-composition-report.json");
+    await mkdir(publicDirectory, { recursive: true });
+    await writeFile(framePath, "authoritative-old-frame");
+    await mkdir(reportPath);
+    cwdSpy = vi.spyOn(process, "cwd").mockReturnValue(project.playgroundDirectory);
+
+    const response = await invoke(openingFrameHandler(), {
+      sceneId,
+      dataUrl: pngDataUrl,
+      report: passingReport,
+    });
+
+    expect(response.statusCode).toBe(400);
+    expect(await readFile(framePath, "utf8")).toBe("authoritative-old-frame");
+    expect(JSON.parse(await readFile(path.join(project.artifactDirectory, "manifest.json"), "utf8")))
+      .toEqual(project.manifest);
+    expect((await stat(reportPath)).isDirectory()).toBe(true);
   });
 });

@@ -32,6 +32,16 @@ function overlaps(a: Aabb, b: Aabb): boolean {
   );
 }
 
+function intervalsStrictlyOverlap(
+  leftMinimum: number,
+  leftMaximum: number,
+  rightMinimum: number,
+  rightMaximum: number,
+): boolean {
+  return leftMinimum < rightMaximum - EPSILON &&
+    leftMaximum > rightMinimum + EPSILON;
+}
+
 function playerBounds(
   position: Vec3Tuple,
   radius: number,
@@ -153,9 +163,18 @@ export function validateSpawnSafety(input: SpawnSafetyInput): Diagnostic[] {
 
   const positionXZ = [input.position[0], input.position[2]] as const;
   for (const water of input.waterSurfaces ?? []) {
+    const subjectMinimum = input.position[1];
+    const subjectMaximum = input.position[1] + height;
+    const waterMinimum = water.waterLevelMeters - water.depthMeters;
     if (
       water.traversalMode !== "blocked" ||
-      !footprintContains(water.boundary, positionXZ)
+      !footprintContains(water.boundary, positionXZ) ||
+      !intervalsStrictlyOverlap(
+        subjectMinimum,
+        subjectMaximum,
+        waterMinimum,
+        water.waterLevelMeters,
+      )
     ) continue;
     diagnostics.push({
       severity: "error",
@@ -175,10 +194,12 @@ export function validateSpawnSafety(input: SpawnSafetyInput): Diagnostic[] {
       const [minimum, maximum] = blocker.heightRangeMeters;
       const subjectMinimum = input.position[1];
       const subjectMaximum = input.position[1] + height;
-      if (
-        subjectMaximum < minimum - EPSILON ||
-        subjectMinimum > maximum + EPSILON
-      ) continue;
+      if (!intervalsStrictlyOverlap(
+        subjectMinimum,
+        subjectMaximum,
+        minimum,
+        maximum,
+      )) continue;
     }
     diagnostics.push({
       severity: "error",

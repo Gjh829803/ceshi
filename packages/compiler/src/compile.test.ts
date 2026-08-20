@@ -978,6 +978,31 @@ describe("compileWorld", () => {
     }).ok).toBe(true);
   });
 
+  it("allows a Subject spawn below an elevated blocked-water volume", () => {
+    const spec = createValidAuthoringSpec();
+    const water = spec.nodes.find((node) => node.kind === "water");
+    const spawn = spec.nodes.find((node) => node.kind === "anchor" && node.id === "spawn-main");
+    if (water?.kind !== "water" || spawn?.kind !== "anchor" || spawn.placement.kind !== "fixed") {
+      throw new Error("Canonical elevated-water fixture is incomplete.");
+    }
+    water.components.water.traversalMode = "blocked";
+    water.components.water.waterLevelMeters = 5;
+    water.components.water.depthMeters = 2;
+    spawn.placement.transform.positionMetersXYZ = [25, 0, 0];
+
+    const normalized = normalizeAuthoringSpec(spec);
+    if (!normalized.ok || normalized.value === undefined || normalized.normalizedWorldIrHash === undefined) {
+      throw new Error(`Elevated-water fixture did not normalize: ${JSON.stringify(normalized.diagnostics)}`);
+    }
+
+    expect(compileWorld({
+      normalizedWorldIr: normalized.value,
+      normalizedWorldIrHash: normalized.normalizedWorldIrHash,
+    }).diagnostics).not.toContainEqual(
+      expect.objectContaining({ code: "COMPILER_SPAWN_IN_BLOCKED_WATER" }),
+    );
+  });
+
   it("rejects a Subject spawn inside a static collision object's footprint", () => {
     const spec = createValidAuthoringSpec();
     const object = spec.nodes.find((node) => node.kind === "object");
@@ -1004,6 +1029,30 @@ describe("compileWorld", () => {
       instancePath: "/nodes/player/spawnAnchorEntityId",
       details: { subjectEntityId: "player", objectEntityId: "wall-east" },
     }));
+  });
+
+  it("allows exact capsule-foot contact with a static collision object's top", () => {
+    const spec = createValidAuthoringSpec();
+    const object = spec.nodes.find((node) => node.kind === "object");
+    const spawn = spec.nodes.find((node) => node.kind === "anchor" && node.id === "spawn-main");
+    if (object?.kind !== "object" || object.placement.kind !== "fixed" ||
+        spawn?.kind !== "anchor" || spawn.placement.kind !== "fixed") {
+      throw new Error("Canonical static-blocker contact fixture is incomplete.");
+    }
+    object.placement.transform.positionMetersXYZ = [0, -2, 30];
+    spawn.placement.transform.positionMetersXYZ = [0, 0, 30];
+
+    const normalized = normalizeAuthoringSpec(spec);
+    if (!normalized.ok || normalized.value === undefined || normalized.normalizedWorldIrHash === undefined) {
+      throw new Error(`Static-blocker contact fixture did not normalize: ${JSON.stringify(normalized.diagnostics)}`);
+    }
+
+    expect(compileWorld({
+      normalizedWorldIr: normalized.value,
+      normalizedWorldIrHash: normalized.normalizedWorldIrHash,
+    }).diagnostics).not.toContainEqual(
+      expect.objectContaining({ code: "COMPILER_SPAWN_INSIDE_STATIC_BLOCKER" }),
+    );
   });
 
   it.each(PRODUCT_FIXED_SPAWN_CASES)(

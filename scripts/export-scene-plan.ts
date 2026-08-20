@@ -11,6 +11,7 @@ import {
   verifyFrozenWorldPlan,
 } from "./lib/plan-lock.js";
 import {
+  planningWorkflowStage,
   validatePersistedCompositionReport,
   type PlanningManifest,
 } from "./lib/composition-gate.js";
@@ -66,6 +67,7 @@ async function main() {
   const imageArtifacts = scene.worldSpec.artifacts.filter(
     (artifact) => artifact.generator === "codex-imagegen",
   );
+  const initialWorkflowStage = planningWorkflowStage(scene.worldSpec);
   const imageAssets: Array<{
     kind: "world-plan" | "opening-shot";
     uri: string;
@@ -108,7 +110,7 @@ async function main() {
       "manifest.json",
       json({
         artifactVersion: 1,
-        workflowStage: "whitebox-built",
+        workflowStage: initialWorkflowStage,
         sceneId: definition.id,
         specHash: artifacts.topDown.specHash,
         frozenPlanSpecSha256: planLock.specSha256,
@@ -136,6 +138,7 @@ async function main() {
       const actualManifest = JSON.parse(actual) as PlanningManifest;
       const expectedManifest = JSON.parse(expected) as PlanningManifest;
       if (
+        expectedManifest.workflowStage !== "whitebox-built" ||
         actualManifest.workflowStage !== "verified" ||
         JSON.stringify({ ...actualManifest, workflowStage: "whitebox-built" }) !==
           JSON.stringify(expectedManifest)
