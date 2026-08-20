@@ -329,6 +329,40 @@ sequenceDiagram
 版本化制品，`Control Capture Bundle` 会把同一 Tick 的 Neutral Color、Linear Depth、
 Semantic、Instance、Normal 等通道绑定到一起；它们目前仍是设计能力。
 
+### 6.1 运行中修改不是直接操作页面
+
+运行中的世界有两类完全不同的修改：
+
+| 修改类型 | 示例 | 协议 | 当前状态 |
+|---|---|---|---|
+| Runtime 状态操作 | 移动、跳跃、攻击、切换控制目标 | 固定 Tick Command/Intent | Browser V3 部分实现 |
+| Authoring 结构修改 | 增加人物、房屋、障碍，删除实体，替换地形 | `WorldChangeSet` | 设计，尚未实现 |
+
+LLM 不直接执行 `scene.add(mesh)`、修改 DOM 或创建 Havok Body。结构修改必须通过受信
+Host/Browser Edit API 进入以下链路：
+
+```mermaid
+flowchart LR
+    LLM["LLM / External Agent"] --> EDIT["Trusted Edit API<br/>设计"]
+    EDIT --> WCS["WorldChangeSet<br/>Base Hash + Preconditions"]
+    WCS --> DRY["Validate + Dry Run"]
+    DRY --> BUILD["Normalize + Solve + Compile + Gates"]
+    BUILD --> POLICY{"Publication Policy"}
+    POLICY -->|"第一阶段"| RELOAD["Prepare Replacement Runtime<br/>Atomic Full Reload"]
+    POLICY -->|"后续受支持操作"| HOT["Fixed Tick Transaction<br/>Incremental Hot Apply"]
+    RELOAD --> RECEIPT["ChangeReceipt + Snapshot"]
+    HOT --> RECEIPT
+```
+
+第一阶段采用隔离构建和原子 Full Reload：Replacement Runtime Ready 后才切换句柄，失败
+时旧世界继续运行；新 Runtime 默认从 Tick 0 启动，不隐式继承旧位置、速度、Action、
+Controller Binding 或 Camera 状态。后续增量热更新只允许有 Transaction Handler 的
+Operation/Node Kind，并在固定 Tick Phase Barrier 同时提交逻辑、渲染和物理变化；地形、
+全局物理、Major Schema/Profile、插件等变化仍强制 Full Reload。
+
+因此“画面运行时让 LLM 加一个人或一栋房屋”是明确的长期能力，但不属于当前 Browser
+Protocol V3。详细事务、状态保留和权限边界见总体设计 §16.4–16.5，实施任务见 P1.6。
+
 ## 7. 核心代码包与依赖边界
 
 ### 7.1 Canonical 生产方向
