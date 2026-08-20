@@ -9,6 +9,7 @@ import {
 } from "./worldkit-asset-resolver";
 
 const ASSET_REF = "worldkit://subject-asset/humanoid.golden@1";
+const G_BOT_ASSET_REF = "worldkit://subject-asset/actor.humanoid.g-bot@1";
 const REQUEST = {
   subjectAssetRef: ASSET_REF,
   artifactContentHash: `sha256:${"1".repeat(64)}`,
@@ -115,9 +116,10 @@ describe("createFetchSubjectAssetResolver", () => {
     });
   });
 
-  it("contains the exact same-origin Golden Humanoid Host mapping", () => {
+  it("contains the exact same-origin Golden and G Bot Host mappings", () => {
     expect(PLAYGROUND_SUBJECT_ASSET_URI_BY_REF_V1).toEqual({
       [ASSET_REF]: "/worldkit-assets/golden-humanoid.glb",
+      [G_BOT_ASSET_REF]: "/subject-assets/humanoid/g-bot/v1/g-bot.glb",
     });
   });
 

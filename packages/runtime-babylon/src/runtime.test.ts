@@ -28,6 +28,7 @@ import {
 } from "@whitebox-world/authoring";
 import { compileWorld } from "@whitebox-world/compiler";
 import {
+  createValidAuthoringSpec,
   createValidPackageSubjectWorld,
   createValidRiggedPackageSubjectWorld,
 } from "../../authoring/src/test-fixture";
@@ -80,6 +81,15 @@ const goldenSubjectAssetBytes = new Uint8Array(
   await readFile(
     new URL(
       "../../../apps/playground/public/worldkit-assets/golden-humanoid.glb",
+      import.meta.url,
+    ),
+  ),
+);
+
+const gBotSubjectAssetBytes = new Uint8Array(
+  await readFile(
+    new URL(
+      "../../../apps/playground/public/subject-assets/humanoid/g-bot/v1/g-bot.glb",
       import.meta.url,
     ),
   ),
@@ -709,6 +719,57 @@ describe("BabylonWorldRuntime", () => {
     const idleAgain = await runtime.runFixedInput({ actions: [], ticks: 180 });
     expect(idleAgain.subjectStatesByEntityId.player?.activeActionId).toBe("idle");
 
+    await runtime.dispose();
+  });
+
+  it("loads the Registry G Bot with a Hips-root Mixamo rig and four semantic Actions", async () => {
+    const spec = createValidAuthoringSpec();
+    spec.nodes = spec.nodes.map((node) =>
+      node.kind === "subject" && node.id === "player"
+        ? {
+            ...node,
+            subjectDefinitionRef:
+              "worldkit://subject-definition/humanoid.g-bot@1",
+          }
+        : node,
+    );
+    const executionPlan = compileExecutionPlan(spec);
+    expect(executionPlan.rigProfiles).toEqual([
+      expect.objectContaining({
+        skeletonRootBoneName: "mixamorig:Hips",
+        sourceNodeNameByBoneId: expect.objectContaining({
+          hips: "mixamorig:Hips",
+          "hand.right": "mixamorig:RightHand",
+        }),
+      }),
+    ]);
+
+    const runtime = await createRuntime(executionPlan, {
+      subjectAssetResolver: createMemoryResolver(gBotSubjectAssetBytes),
+    });
+    const visual = createRiggedRuntimeProbe(runtime).visual("player");
+    expect(visual.assetInstance?.skeletons[0]?.bones).toHaveLength(65);
+    expect(
+      visual.assetInstance?.skeletons[0]?.bones
+        .filter((bone) => bone.getParent() === null)
+        .map((bone) => bone.name),
+    ).toEqual(["mixamorig:Hips"]);
+    expect([...visual.socketNodesById.keys()]).toContain("hand.right");
+    expect(runtime.snapshot().subjectStatesByEntityId.player?.activeActionId).toBe(
+      "idle",
+    );
+    expect(
+      (await runtime.runFixedInput({ actions: ["move-right"], ticks: 2 }))
+        .subjectStatesByEntityId.player?.activeActionId,
+    ).toBe("walk");
+    expect(
+      (await runtime.runFixedInput({ actions: ["move-right", "run"], ticks: 2 }))
+        .subjectStatesByEntityId.player?.activeActionId,
+    ).toBe("run");
+    expect(
+      (await runtime.runFixedInput({ actions: ["jump"], ticks: 4 }))
+        .subjectStatesByEntityId.player?.activeActionId,
+    ).toBe("jump");
     await runtime.dispose();
   });
 

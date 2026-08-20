@@ -17,6 +17,16 @@ const COLLIDER_PROFILE_REF =
   "worldkit://collider-profile/humanoid.medium-capsule@1";
 const RIGGED_SUBJECT_DEFINITION_REF =
   "worldkit://subject-definition/humanoid.rigged-golden@1";
+const G_BOT_SUBJECT_ASSET_REF =
+  "worldkit://subject-asset/actor.humanoid.g-bot@1";
+const G_BOT_RIG_PROFILE_REF =
+  "worldkit://rig-profile/biped.mixamo-g-bot@1";
+const G_BOT_ANIMATION_SET_REF =
+  "worldkit://animation-set/humanoid.ground.g-bot@1";
+const G_BOT_COLLIDER_PROFILE_REF =
+  "worldkit://collider-profile/humanoid.g-bot-capsule@1";
+const G_BOT_SUBJECT_DEFINITION_REF =
+  "worldkit://subject-definition/humanoid.g-bot@1";
 
 const BIPED_BONE_IDS = [
   "chest",
@@ -166,6 +176,7 @@ describe("subject resource registry", () => {
         .listSubjectDefinitions()
         .map((definition) => definition.resourceRef),
     ).toEqual([
+      G_BOT_SUBJECT_DEFINITION_REF,
       RIGGED_SUBJECT_DEFINITION_REF,
       "worldkit://subject-definition/humanoid.third-person@1",
       "worldkit://subject-definition/quadruped.ground-proxy@1",
@@ -173,8 +184,20 @@ describe("subject resource registry", () => {
   });
 
   it("shares the exact closed Subject unions across built-in definitions", () => {
-    const [rigged, staticHumanoid, staticQuadruped] =
-      builtInSubjectResourceRegistry.listSubjectDefinitions();
+    const definitions = builtInSubjectResourceRegistry.listSubjectDefinitions();
+    const rigged = definitions.find(
+      (definition) => definition.resourceRef === RIGGED_SUBJECT_DEFINITION_REF,
+    )!;
+    const staticHumanoid = definitions.find(
+      (definition) =>
+        definition.resourceRef ===
+        "worldkit://subject-definition/humanoid.third-person@1",
+    )!;
+    const staticQuadruped = definitions.find(
+      (definition) =>
+        definition.resourceRef ===
+        "worldkit://subject-definition/quadruped.ground-proxy@1",
+    )!;
 
     expect(rigged).toMatchObject({
       resourceRef: RIGGED_SUBJECT_DEFINITION_REF,
@@ -437,6 +460,132 @@ describe("subject resource registry", () => {
         radiusMeters: 0.32,
         heightMeters: 1.92,
         centerOffsetFromSubjectOriginMetersXYZ: [0, 0.96, 0],
+      },
+    });
+  });
+
+  it("resolves the exact G Bot product asset binding graph", () => {
+    expect(
+      builtInSubjectResourceRegistry.resolveSubjectAsset(G_BOT_SUBJECT_ASSET_REF),
+    ).toMatchObject({
+      kind: "subject-asset",
+      id: "actor.humanoid.g-bot",
+      version: 1,
+      resourceRef: G_BOT_SUBJECT_ASSET_REF,
+      artifact: {
+        mediaType: "model/gltf-binary",
+        byteLength: 3_362_888,
+        contentHash:
+          "sha256:74bbf9426577caa1b7e808bf388bd9a6b8b48d50cc80ab7b0abef10c2693c286",
+      },
+      bounds: {
+        minimumMetersXYZ: [-0.9025661945343018, -0.0003511549439281225, -0.14895710349082947],
+        maximumMetersXYZ: [0.9025658369064331, 1.8088831901550293, 0.17174167931079865],
+      },
+      inventory: {
+        meshCount: 2,
+        vertexCount: 28_374,
+        triangleCount: 49_112,
+        skeletonCount: 1,
+        boneCount: 65,
+        animationClipNames: [
+          "fall",
+          "float",
+          "idle",
+          "jump",
+          "run",
+          "sit",
+          "sit.idle",
+          "stand",
+          "swim.exit",
+          "swim.surface",
+          "swim.tread",
+          "walk",
+        ],
+      },
+      provenance: {
+        licenseSpdxId: "LicenseRef-Company-Private",
+        redistributionPolicy: "internal-only",
+        author: "G Golden asset owner",
+      },
+    });
+
+    expect(
+      builtInSubjectResourceRegistry.resolveRigProfile(G_BOT_RIG_PROFILE_REF),
+    ).toMatchObject({
+      kind: "rig-profile",
+      id: "biped.mixamo-g-bot",
+      compatibleSubjectAssetRefs: [G_BOT_SUBJECT_ASSET_REF],
+      skeletonRootBoneName: "mixamorig:Hips",
+      requiredBoneIds: BIPED_BONE_IDS,
+      sourceNodeNameByBoneId: {
+        hips: "mixamorig:Hips",
+        spine: "mixamorig:Spine",
+        chest: "mixamorig:Spine2",
+        neck: "mixamorig:Neck",
+        head: "mixamorig:Head",
+        "upper-arm.left": "mixamorig:LeftArm",
+        "lower-arm.left": "mixamorig:LeftForeArm",
+        "hand.left": "mixamorig:LeftHand",
+        "upper-arm.right": "mixamorig:RightArm",
+        "lower-arm.right": "mixamorig:RightForeArm",
+        "hand.right": "mixamorig:RightHand",
+        "upper-leg.left": "mixamorig:LeftUpLeg",
+        "lower-leg.left": "mixamorig:LeftLeg",
+        "foot.left": "mixamorig:LeftFoot",
+        "upper-leg.right": "mixamorig:RightUpLeg",
+        "lower-leg.right": "mixamorig:RightLeg",
+        "foot.right": "mixamorig:RightFoot",
+      },
+    });
+
+    expect(
+      builtInSubjectResourceRegistry.resolveAnimationSet(G_BOT_ANIMATION_SET_REF),
+    ).toMatchObject({
+      subjectAssetRef: G_BOT_SUBJECT_ASSET_REF,
+      rigProfileRef: G_BOT_RIG_PROFILE_REF,
+      defaultActionId: "idle",
+      requiredActionIds: ["idle", "jump", "run", "walk"],
+      animationBindings: [
+        expect.objectContaining({ actionId: "idle", sourceClipName: "idle" }),
+        expect.objectContaining({ actionId: "jump", sourceClipName: "jump" }),
+        expect.objectContaining({ actionId: "run", sourceClipName: "run" }),
+        expect.objectContaining({ actionId: "walk", sourceClipName: "walk" }),
+      ],
+    });
+
+    expect(
+      builtInSubjectResourceRegistry.resolveColliderProfile(
+        G_BOT_COLLIDER_PROFILE_REF,
+      ),
+    ).toMatchObject({
+      collider: {
+        kind: "capsule",
+        radiusMeters: 0.35,
+        heightMeters: 1.8,
+        centerOffsetFromSubjectOriginMetersXYZ: [0, 0.9, 0],
+      },
+    });
+
+    expect(
+      builtInSubjectResourceRegistry.resolveSubjectDefinition(
+        G_BOT_SUBJECT_DEFINITION_REF,
+      ),
+    ).toMatchObject({
+      visualParts: [
+        expect.objectContaining({
+          kind: "asset",
+          subjectAssetRef: G_BOT_SUBJECT_ASSET_REF,
+        }),
+      ],
+      visualBinding: {
+        mode: "rigged",
+        rigProfileRef: G_BOT_RIG_PROFILE_REF,
+        animationSetRef: G_BOT_ANIMATION_SET_REF,
+      },
+      colliderPolicy: {
+        kind: "profile",
+        colliderProfileRef: G_BOT_COLLIDER_PROFILE_REF,
       },
     });
   });

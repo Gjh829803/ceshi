@@ -228,7 +228,63 @@ const RIGGED_GOLDEN_HUMANOID_DEFINITION: RegistrySubjectDefinitionInputV2 = {
   },
 };
 
+const G_BOT_HUMANOID_DEFINITION: RegistrySubjectDefinitionInputV2 = {
+  kind: "subject-definition",
+  id: "humanoid.g-bot",
+  version: 1,
+  resourceRef: "worldkit://subject-definition/humanoid.g-bot@1",
+  category: "human",
+  bodyTopology: "biped",
+  semanticClassId: "subject.humanoid.robot",
+  coordinateConvention: SHARED_COORDINATE_CONVENTION,
+  visualParts: [
+    {
+      id: "body.asset",
+      kind: "asset",
+      subjectAssetRef: "worldkit://subject-asset/actor.humanoid.g-bot@1",
+      localTransform: {
+        positionMetersXYZ: [0, 0, 0],
+        rotationEulerRadiansXYZ: [0, 0, 0],
+        scaleXYZ: [1, 1, 1],
+      },
+      appearance: { mode: "whitebox-neutral" },
+      semanticTags: ["body", "g-bot", "rigged", "robot"],
+    },
+  ],
+  visualBinding: {
+    mode: "rigged",
+    rigProfileRef: "worldkit://rig-profile/biped.mixamo-g-bot@1",
+    animationSetRef: "worldkit://animation-set/humanoid.ground.g-bot@1",
+  },
+  sockets: [
+    {
+      id: "hand.right",
+      kind: "bone",
+      boneId: "hand.right",
+      offsetTransform: {
+        positionMetersXYZ: [0, 0, 0],
+        rotationEulerRadiansXYZ: [0, 0, 0],
+      },
+      semanticTags: ["equipment-grip", "hand"],
+    },
+  ],
+  colliderPolicy: {
+    kind: "profile",
+    colliderProfileRef:
+      "worldkit://collider-profile/humanoid.g-bot-capsule@1",
+  },
+  capabilityRefs: SHARED_CAPABILITY_REFS,
+  profiles: SHARED_PROFILES,
+  aiMetadata: {
+    displayName: "G Bot humanoid",
+    description:
+      "Product-authored rigged G Bot assembled with canonical ground control and physics profiles.",
+    semanticTags: ["biped", "g-bot", "human", "product", "rigged", "robot"],
+  },
+};
+
 export const BUILT_IN_SUBJECT_DEFINITIONS = [
+  G_BOT_HUMANOID_DEFINITION,
   RIGGED_GOLDEN_HUMANOID_DEFINITION,
   HUMANOID_THIRD_PERSON_DEFINITION,
   QUADRUPED_GROUND_PROXY_DEFINITION,

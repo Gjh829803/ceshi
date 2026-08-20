@@ -52,6 +52,70 @@ const GOLDEN_HUMANOID_SUBJECT_ASSET: SubjectAssetManifestInputV1 = {
   },
 };
 
+const G_BOT_SUBJECT_ASSET: SubjectAssetManifestInputV1 = {
+  kind: "subject-asset",
+  id: "actor.humanoid.g-bot",
+  version: 1,
+  resourceRef: "worldkit://subject-asset/actor.humanoid.g-bot@1",
+  format: "glb",
+  artifact: {
+    mediaType: "model/gltf-binary",
+    byteLength: 3_362_888,
+    contentHash:
+      "sha256:74bbf9426577caa1b7e808bf388bd9a6b8b48d50cc80ab7b0abef10c2693c286",
+  },
+  coordinateConvention: {
+    forwardAxis: "-Z",
+    upAxis: "+Y",
+    metersPerUnit: 1,
+    pivot: "support-center",
+  },
+  bounds: {
+    minimumMetersXYZ: [
+      -0.9025661945343018,
+      -0.0003511549439281225,
+      -0.14895710349082947,
+    ],
+    maximumMetersXYZ: [
+      0.9025658369064331,
+      1.8088831901550293,
+      0.17174167931079865,
+    ],
+  },
+  inventory: {
+    meshCount: 2,
+    vertexCount: 28_374,
+    triangleCount: 49_112,
+    skeletonCount: 1,
+    boneCount: 65,
+    animationClipNames: [
+      "idle",
+      "walk",
+      "run",
+      "jump",
+      "fall",
+      "float",
+      "swim.surface",
+      "swim.tread",
+      "sit",
+      "sit.idle",
+      "stand",
+      "swim.exit",
+    ],
+  },
+  provenance: {
+    licenseSpdxId: "LicenseRef-Company-Private",
+    redistributionPolicy: "internal-only",
+    author: "G Golden asset owner",
+  },
+  aiMetadata: {
+    displayName: "G Bot humanoid",
+    description:
+      "Company-authorized Mixamo-rigged humanoid product asset with ground and contextual animation clips.",
+    semanticTags: ["biped", "g-bot", "humanoid", "product", "rigged", "robot"],
+  },
+};
+
 const GOLDEN_BIPED_BONE_IDS = [
   "hips",
   "spine",
@@ -107,6 +171,42 @@ const GOLDEN_BIPED_RIG_PROFILE: RigProfileManifestInputV1 = {
   },
 };
 
+const G_BOT_MIXAMO_RIG_PROFILE: RigProfileManifestInputV1 = {
+  kind: "rig-profile",
+  id: "biped.mixamo-g-bot",
+  version: 1,
+  resourceRef: "worldkit://rig-profile/biped.mixamo-g-bot@1",
+  bodyTopology: "biped",
+  compatibleSubjectAssetRefs: [G_BOT_SUBJECT_ASSET.resourceRef],
+  skeletonRootBoneName: "mixamorig:Hips",
+  requiredBoneIds: GOLDEN_BIPED_BONE_IDS,
+  sourceNodeNameByBoneId: {
+    hips: "mixamorig:Hips",
+    spine: "mixamorig:Spine",
+    chest: "mixamorig:Spine2",
+    neck: "mixamorig:Neck",
+    head: "mixamorig:Head",
+    "upper-arm.left": "mixamorig:LeftArm",
+    "lower-arm.left": "mixamorig:LeftForeArm",
+    "hand.left": "mixamorig:LeftHand",
+    "upper-arm.right": "mixamorig:RightArm",
+    "lower-arm.right": "mixamorig:RightForeArm",
+    "hand.right": "mixamorig:RightHand",
+    "upper-leg.left": "mixamorig:LeftUpLeg",
+    "lower-leg.left": "mixamorig:LeftLeg",
+    "foot.left": "mixamorig:LeftFoot",
+    "upper-leg.right": "mixamorig:RightUpLeg",
+    "lower-leg.right": "mixamorig:RightLeg",
+    "foot.right": "mixamorig:RightFoot",
+  },
+  aiMetadata: {
+    displayName: "G Bot Mixamo biped rig",
+    description:
+      "Canonical anatomical Bone mapping for the G Bot Mixamo source Skeleton.",
+    semanticTags: ["biped", "g-bot", "humanoid", "mixamo", "rig"],
+  },
+};
+
 const GOLDEN_GROUND_ANIMATION_SET: AnimationSetManifestInputV1 = {
   kind: "animation-set",
   id: "humanoid.ground.golden",
@@ -157,6 +257,57 @@ const GOLDEN_GROUND_ANIMATION_SET: AnimationSetManifestInputV1 = {
   },
 };
 
+const G_BOT_GROUND_ANIMATION_SET: AnimationSetManifestInputV1 = {
+  kind: "animation-set",
+  id: "humanoid.ground.g-bot",
+  version: 1,
+  resourceRef: "worldkit://animation-set/humanoid.ground.g-bot@1",
+  subjectAssetRef: G_BOT_SUBJECT_ASSET.resourceRef,
+  rigProfileRef: G_BOT_MIXAMO_RIG_PROFILE.resourceRef,
+  defaultActionId: "idle",
+  requiredActionIds: ["idle", "walk", "run", "jump"],
+  animationBindings: [
+    {
+      actionId: "idle",
+      sourceClipName: "idle",
+      loopMode: "repeat",
+      playbackSpeedRatio: 1,
+      blendDurationSeconds: 0.2,
+      rootMotionMode: "in-place",
+    },
+    {
+      actionId: "walk",
+      sourceClipName: "walk",
+      loopMode: "repeat",
+      playbackSpeedRatio: 1,
+      blendDurationSeconds: 0.15,
+      rootMotionMode: "in-place",
+    },
+    {
+      actionId: "run",
+      sourceClipName: "run",
+      loopMode: "repeat",
+      playbackSpeedRatio: 1,
+      blendDurationSeconds: 0.12,
+      rootMotionMode: "in-place",
+    },
+    {
+      actionId: "jump",
+      sourceClipName: "jump",
+      loopMode: "once",
+      playbackSpeedRatio: 1,
+      blendDurationSeconds: 0.1,
+      rootMotionMode: "in-place",
+    },
+  ],
+  aiMetadata: {
+    displayName: "G Bot ground animations",
+    description:
+      "Explicit in-place idle, walk, run, and jump mappings for the G Bot asset.",
+    semanticTags: ["animation", "g-bot", "ground", "humanoid"],
+  },
+};
+
 const MEDIUM_HUMANOID_CAPSULE_PROFILE: ColliderProfileManifestInputV1 = {
   kind: "collider-profile",
   id: "humanoid.medium-capsule",
@@ -173,6 +324,25 @@ const MEDIUM_HUMANOID_CAPSULE_PROFILE: ColliderProfileManifestInputV1 = {
     displayName: "Medium humanoid capsule",
     description: "Explicit support-centered capsule for a medium biped character.",
     semanticTags: ["biped", "capsule", "character", "collider", "medium"],
+  },
+};
+
+const G_BOT_CAPSULE_PROFILE: ColliderProfileManifestInputV1 = {
+  kind: "collider-profile",
+  id: "humanoid.g-bot-capsule",
+  version: 1,
+  resourceRef: "worldkit://collider-profile/humanoid.g-bot-capsule@1",
+  supportedBodyTopologies: ["biped"],
+  collider: {
+    kind: "capsule",
+    radiusMeters: 0.35,
+    heightMeters: 1.8,
+    centerOffsetFromSubjectOriginMetersXYZ: [0, 0.9, 0],
+  },
+  aiMetadata: {
+    displayName: "G Bot capsule",
+    description: "Product-approved support-centered Capsule for the G Bot humanoid.",
+    semanticTags: ["biped", "capsule", "character", "g-bot"],
   },
 };
 
@@ -252,9 +422,13 @@ const VERTICAL_CHARACTER_CAPSULE_PROFILE: ColliderDerivationProfileManifestInput
 
 export const BUILT_IN_SUBJECT_RESOURCE_MANIFESTS = [
   GOLDEN_HUMANOID_SUBJECT_ASSET,
+  G_BOT_SUBJECT_ASSET,
   GOLDEN_BIPED_RIG_PROFILE,
+  G_BOT_MIXAMO_RIG_PROFILE,
   GOLDEN_GROUND_ANIMATION_SET,
+  G_BOT_GROUND_ANIMATION_SET,
   MEDIUM_HUMANOID_CAPSULE_PROFILE,
+  G_BOT_CAPSULE_PROFILE,
   GROUND_LOCOMOTION_CAPABILITY,
   MEDIUM_CHARACTER_PHYSICS_BODY_PROFILE,
   STANDARD_GROUND_LOCOMOTION_PROFILE,
