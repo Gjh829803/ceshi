@@ -44,6 +44,9 @@ async function writePackageWorld(directory: string): Promise<string> {
 const RIGGED_SUBJECT_WORLD_PATH = path.resolve(
   fileURLToPath(new URL("../examples/authoring/rigged-subject-world.json", import.meta.url)),
 );
+const G_BOT_SUBJECT_WORLD_PATH = path.resolve(
+  fileURLToPath(new URL("../examples/authoring/g-bot-subject-world.json", import.meta.url)),
+);
 
 afterEach(async () => {
   await Promise.all(
@@ -265,6 +268,7 @@ describe("worldkit CLI", () => {
       resourceKind: "subject-definition",
     });
     expect(first.resources.map((resource) => resource.resourceRef)).toEqual([
+      "worldkit://subject-definition/humanoid.g-bot@1",
       "worldkit://subject-definition/humanoid.rigged-golden@1",
       "worldkit://subject-definition/humanoid.third-person@1",
       "worldkit://subject-definition/quadruped.ground-proxy@1",
@@ -513,6 +517,71 @@ describe("worldkit CLI", () => {
     ]) {
       expect(explanationJson).not.toContain(forbiddenField);
     }
+  });
+
+  it("validates, builds, and explains the G Bot world without leaking asset locations", async () => {
+    const directory = await createTemporaryDirectory();
+    const outputPath = path.join(directory, "g-bot.build.json");
+
+    const validation = await validateFile(G_BOT_SUBJECT_WORLD_PATH);
+    const build = await buildFile(G_BOT_SUBJECT_WORLD_PATH, outputPath);
+    const explanation = await explainSubjectFile(
+      G_BOT_SUBJECT_WORLD_PATH,
+      "g-bot-primary",
+    );
+    expect(validation).toMatchObject({ ok: true, diagnostics: [] });
+    expect(build).toMatchObject({ ok: true, outputPath });
+    expect(explanation).toMatchObject({
+      ok: true,
+      subject: {
+        entityId: "g-bot-primary",
+        subjectDefinitionRef:
+          "worldkit://subject-definition/humanoid.g-bot@1",
+        visualBinding: {
+          rigProfileRef: "worldkit://rig-profile/biped.mixamo-g-bot@1",
+          animationSetRef:
+            "worldkit://animation-set/humanoid.ground.g-bot@1",
+        },
+      },
+    });
+    const artifactText = await readFile(outputPath, "utf8");
+    const artifact = JSON.parse(artifactText) as {
+      executionPlan: {
+        subjectAssets: Array<{ subjectAssetRef: string }>;
+        rigProfiles: Array<{ skeletonRootBoneName: string }>;
+        animationSets: Array<{ animationBindings: Array<{ actionId: string }> }>;
+        colliderProfiles: Array<{ colliderProfileRef: string }>;
+      };
+    };
+
+    expect(artifact.executionPlan.subjectAssets).toEqual([
+      {
+        subjectAssetRef: "worldkit://subject-asset/actor.humanoid.g-bot@1",
+        artifactContentHash:
+          "sha256:74bbf9426577caa1b7e808bf388bd9a6b8b48d50cc80ab7b0abef10c2693c286",
+        byteLength: 3_362_888,
+        format: "glb",
+        inventory: expect.any(Object),
+        mediaType: "model/gltf-binary",
+      },
+    ]);
+    expect(artifact.executionPlan.rigProfiles).toEqual([
+      expect.objectContaining({ skeletonRootBoneName: "mixamorig:Hips" }),
+    ]);
+    expect(
+      artifact.executionPlan.animationSets[0]?.animationBindings.map(
+        (binding) => binding.actionId,
+      ),
+    ).toEqual(["idle", "jump", "run", "walk"]);
+    expect(artifact.executionPlan.colliderProfiles).toEqual([
+      expect.objectContaining({
+        colliderProfileRef:
+          "worldkit://collider-profile/humanoid.g-bot-capsule@1",
+      }),
+    ]);
+    expect(artifactText).not.toMatch(
+      /subject-assets\/humanoid|sourceUri|licenseUri|providerHandle/i,
+    );
   });
 
   it("returns a stable diagnostic for a missing Subject Entity", async () => {
