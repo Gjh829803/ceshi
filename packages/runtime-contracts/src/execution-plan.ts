@@ -248,6 +248,9 @@ export interface ExecutionMotionProfileV1 {
   motionKernelRef: string;
   parameters: Readonly<Record<string, number | boolean>>;
   safetyLimits: Readonly<Record<string, { minimum: number; maximum: number }>>;
+  authoringRanges?: Readonly<
+    Record<string, { minimum: number; maximum: number; step: number }>
+  >;
   motionTags: readonly string[];
 }
 
@@ -262,6 +265,7 @@ export interface ExecutionMotionKernelDefinitionV1 {
     | "unpowered-glide";
   commandKind: ExecutionMotionCommandKindV1;
   supportedMediums: readonly ExecutionMovementMediumV1[];
+  runtimeParameterNames: readonly string[];
   fallbackMotionProfileRef: string;
   deterministic: true;
 }
@@ -277,6 +281,7 @@ export interface ExecutionControlProfileV1 {
 export interface ExecutionCameraRigProfileV1 {
   resourceRef: string;
   algorithmRef: string;
+  headingSource: "view" | "target-forward" | "target-velocity";
   preferredSocketIds: readonly string[];
   parameters: {
     distanceMeters: number;
@@ -295,7 +300,11 @@ export interface ExecutionCameraRigProfileV1 {
     maximumSpeedFovDegrees: number;
     lookAheadSeconds: number;
     transitionSeconds: number;
+    minimumHeadingSpeedMetersPerSecond: number;
   };
+  authoringRanges?: Readonly<
+    Record<string, { minimum: number; maximum: number; step: number }>
+  >;
 }
 
 export interface ExecutionCameraContextRuleV1 {

@@ -46,6 +46,7 @@ export interface MotionKernelDefinitionInputV1
   supportedBodyKinds: readonly PhysicsBodyKindV1[];
   requiredCapabilityRefs: readonly string[];
   parameterSchemaRef: string;
+  runtimeParameterNames: readonly string[];
   fallbackMotionProfileRef: string;
   deterministic: true;
   runtimeStatus: "implemented" | "reserved";
@@ -58,11 +59,16 @@ export interface MotionParameterLimitV1 {
   maximum: number;
 }
 
+export interface ParameterAuthoringRangeV1 extends MotionParameterLimitV1 {
+  step: number;
+}
+
 export interface MotionProfileInputV1 extends CapabilityResourceBaseInputV1 {
   kind: "motion-profile";
   motionKernelRef: string;
   parameters: Readonly<Record<string, MotionParameterValueV1>>;
   safetyLimits: Readonly<Record<string, MotionParameterLimitV1>>;
+  authoringRanges?: Readonly<Record<string, ParameterAuthoringRangeV1>>;
   motionTags: readonly string[];
 }
 
@@ -99,6 +105,7 @@ export interface CameraRigProfileInputV1
   extends CapabilityResourceBaseInputV1 {
   kind: "camera-rig-profile";
   algorithmRef: CameraRigAlgorithmRefV1;
+  headingSource: "view" | "target-forward" | "target-velocity";
   preferredSocketIds: readonly string[];
   parameters: {
     distanceMeters: number;
@@ -117,7 +124,9 @@ export interface CameraRigProfileInputV1
     maximumSpeedFovDegrees: number;
     lookAheadSeconds: number;
     transitionSeconds: number;
+    minimumHeadingSpeedMetersPerSecond: number;
   };
+  authoringRanges?: Readonly<Record<string, ParameterAuthoringRangeV1>>;
 }
 
 export type RelationshipRoleV1 =

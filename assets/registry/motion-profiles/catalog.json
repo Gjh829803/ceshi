@@ -42,10 +42,10 @@
       "walkSpeedMetersPerSecond": 2.4,
       "runSpeedMetersPerSecond": 4,
       "jumpSpeedMetersPerSecond": 5.5,
-      "accelerationMetersPerSecondSquared": 18,
-      "decelerationMetersPerSecondSquared": 22,
-      "turnRateRadiansPerSecond": 8,
-      "airControlRatio": 0.35
+      "accelerationMetersPerSecondSquared": 12,
+      "decelerationMetersPerSecondSquared": 16,
+      "turnRateRadiansPerSecond": 7,
+      "airControlRatio": 0.3
     },
     "safetyLimits": {
       "walkSpeedMetersPerSecond": { "minimum": 0.5, "maximum": 5 },
@@ -55,6 +55,15 @@
       "decelerationMetersPerSecondSquared": { "minimum": 1, "maximum": 50 },
       "turnRateRadiansPerSecond": { "minimum": 0.5, "maximum": 16 },
       "airControlRatio": { "minimum": 0, "maximum": 1 }
+    },
+    "authoringRanges": {
+      "walkSpeedMetersPerSecond": { "minimum": 1, "maximum": 4, "step": 0.1 },
+      "runSpeedMetersPerSecond": { "minimum": 2, "maximum": 7, "step": 0.1 },
+      "jumpSpeedMetersPerSecond": { "minimum": 3, "maximum": 8, "step": 0.1 },
+      "accelerationMetersPerSecondSquared": { "minimum": 4, "maximum": 24, "step": 0.25 },
+      "decelerationMetersPerSecondSquared": { "minimum": 4, "maximum": 30, "step": 0.25 },
+      "turnRateRadiansPerSecond": { "minimum": 2, "maximum": 12, "step": 0.1 },
+      "airControlRatio": { "minimum": 0, "maximum": 0.8, "step": 0.01 }
     },
     "motionTags": ["free-ground", "ground", "jump"],
     "aiMetadata": {
@@ -88,6 +97,15 @@
       "jumpSpeedMetersPerSecond": { "minimum": 0, "maximum": 8 },
       "boostMultiplier": { "minimum": 1, "maximum": 1.6 }
     },
+    "authoringRanges": {
+      "forwardSpeedMetersPerSecond": { "minimum": 1, "maximum": 7, "step": 0.1 },
+      "reverseSpeedMetersPerSecond": { "minimum": 0, "maximum": 3, "step": 0.1 },
+      "accelerationMetersPerSecondSquared": { "minimum": 2, "maximum": 16, "step": 0.25 },
+      "decelerationMetersPerSecondSquared": { "minimum": 2, "maximum": 20, "step": 0.25 },
+      "turnRateRadiansPerSecond": { "minimum": 0.5, "maximum": 4, "step": 0.05 },
+      "jumpSpeedMetersPerSecond": { "minimum": 2, "maximum": 7, "step": 0.1 },
+      "boostMultiplier": { "minimum": 1, "maximum": 1.5, "step": 0.01 }
+    },
     "motionTags": ["forward", "ground", "steer"],
     "aiMetadata": {
       "displayName": "Medium Forward Steer",
@@ -107,9 +125,13 @@
       "reverseSpeedMetersPerSecond": 4,
       "accelerationMetersPerSecondSquared": 6,
       "brakeMetersPerSecondSquared": 10,
-      "dragPerSecond": 1.5,
-      "lowSpeedTurnRateRadiansPerSecond": 2.2,
-      "highSpeedTurnRateRadiansPerSecond": 0.7,
+      "dragPerSecond": 0.7,
+      "lowSpeedTurnRateRadiansPerSecond": 1.15,
+      "highSpeedTurnRateRadiansPerSecond": 0.42,
+      "steeringResponsePerSecond": 4.5,
+      "steeringReturnPerSecond": 7,
+      "fullSteeringAuthoritySpeedMetersPerSecond": 2.5,
+      "turnRateSpeedCurveExponent": 1.35,
       "boostMultiplier": 1.2
     },
     "safetyLimits": {
@@ -120,7 +142,25 @@
       "dragPerSecond": { "minimum": 0, "maximum": 5 },
       "lowSpeedTurnRateRadiansPerSecond": { "minimum": 0.2, "maximum": 5 },
       "highSpeedTurnRateRadiansPerSecond": { "minimum": 0.1, "maximum": 2 },
+      "steeringResponsePerSecond": { "minimum": 0.5, "maximum": 20 },
+      "steeringReturnPerSecond": { "minimum": 0.5, "maximum": 24 },
+      "fullSteeringAuthoritySpeedMetersPerSecond": { "minimum": 0.25, "maximum": 8 },
+      "turnRateSpeedCurveExponent": { "minimum": 0.25, "maximum": 4 },
       "boostMultiplier": { "minimum": 1, "maximum": 1.5 }
+    },
+    "authoringRanges": {
+      "forwardSpeedMetersPerSecond": { "minimum": 4, "maximum": 20, "step": 0.25 },
+      "reverseSpeedMetersPerSecond": { "minimum": 0, "maximum": 6, "step": 0.1 },
+      "accelerationMetersPerSecondSquared": { "minimum": 1, "maximum": 12, "step": 0.25 },
+      "brakeMetersPerSecondSquared": { "minimum": 2, "maximum": 20, "step": 0.25 },
+      "dragPerSecond": { "minimum": 0, "maximum": 2, "step": 0.05 },
+      "lowSpeedTurnRateRadiansPerSecond": { "minimum": 0.3, "maximum": 2, "step": 0.01 },
+      "highSpeedTurnRateRadiansPerSecond": { "minimum": 0.1, "maximum": 0.9, "step": 0.01 },
+      "steeringResponsePerSecond": { "minimum": 1, "maximum": 10, "step": 0.1 },
+      "steeringReturnPerSecond": { "minimum": 1, "maximum": 14, "step": 0.1 },
+      "fullSteeringAuthoritySpeedMetersPerSecond": { "minimum": 0.5, "maximum": 5, "step": 0.1 },
+      "turnRateSpeedCurveExponent": { "minimum": 0.5, "maximum": 2.5, "step": 0.05 },
+      "boostMultiplier": { "minimum": 1, "maximum": 1.4, "step": 0.01 }
     },
     "motionTags": ["arcade", "ground", "surface-fast", "wheeled"],
     "aiMetadata": {
@@ -151,6 +191,14 @@
       "slopeGravityRatio": { "minimum": 0, "maximum": 2 },
       "turnRateRadiansPerSecond": { "minimum": 0.1, "maximum": 4 },
       "boostMultiplier": { "minimum": 1, "maximum": 1.4 }
+    },
+    "authoringRanges": {
+      "maximumSpeedMetersPerSecond": { "minimum": 5, "maximum": 20, "step": 0.25 },
+      "driveAccelerationMetersPerSecondSquared": { "minimum": 0, "maximum": 10, "step": 0.25 },
+      "surfaceFrictionPerSecond": { "minimum": 0.05, "maximum": 1.5, "step": 0.05 },
+      "slopeGravityRatio": { "minimum": 0, "maximum": 2, "step": 0.05 },
+      "turnRateRadiansPerSecond": { "minimum": 0.3, "maximum": 3, "step": 0.05 },
+      "boostMultiplier": { "minimum": 1, "maximum": 1.3, "step": 0.01 }
     },
     "motionTags": ["ground", "slide", "surface-fast"],
     "aiMetadata": {
@@ -213,6 +261,15 @@
       "turnRateRadiansPerSecond": { "minimum": 0.1, "maximum": 3 },
       "surfaceHoldStrengthPerSecond": { "minimum": 1, "maximum": 20 },
       "boostMultiplier": { "minimum": 1, "maximum": 1.35 }
+    },
+    "authoringRanges": {
+      "forwardSpeedMetersPerSecond": { "minimum": 1, "maximum": 8, "step": 0.1 },
+      "reverseSpeedMetersPerSecond": { "minimum": 0, "maximum": 2.5, "step": 0.1 },
+      "accelerationMetersPerSecondSquared": { "minimum": 0.5, "maximum": 5, "step": 0.1 },
+      "dragPerSecond": { "minimum": 0.2, "maximum": 2, "step": 0.05 },
+      "turnRateRadiansPerSecond": { "minimum": 0.3, "maximum": 2.5, "step": 0.05 },
+      "surfaceHoldStrengthPerSecond": { "minimum": 3, "maximum": 15, "step": 0.25 },
+      "boostMultiplier": { "minimum": 1, "maximum": 1.3, "step": 0.01 }
     },
     "motionTags": ["surface", "water", "watercraft"]
     ,"aiMetadata": {
@@ -285,6 +342,17 @@
       "yawRateRadiansPerSecond": { "minimum": 0.1, "maximum": 3 },
       "rollRateRadiansPerSecond": { "minimum": 0.1, "maximum": 4 },
       "stallSpeedMetersPerSecond": { "minimum": 1, "maximum": 10 }
+    },
+    "authoringRanges": {
+      "minimumForwardSpeedMetersPerSecond": { "minimum": 2, "maximum": 7, "step": 0.1 },
+      "maximumForwardSpeedMetersPerSecond": { "minimum": 8, "maximum": 24, "step": 0.25 },
+      "glideAccelerationMetersPerSecondSquared": { "minimum": 0, "maximum": 4, "step": 0.1 },
+      "gravityScale": { "minimum": 0.2, "maximum": 1, "step": 0.01 },
+      "liftRatio": { "minimum": 0.2, "maximum": 1.8, "step": 0.01 },
+      "pitchRateRadiansPerSecond": { "minimum": 0.2, "maximum": 2, "step": 0.05 },
+      "yawRateRadiansPerSecond": { "minimum": 0.2, "maximum": 2, "step": 0.05 },
+      "rollRateRadiansPerSecond": { "minimum": 0.2, "maximum": 2.5, "step": 0.05 },
+      "stallSpeedMetersPerSecond": { "minimum": 2, "maximum": 8, "step": 0.1 }
     },
     "motionTags": ["air", "flight", "glide"],
     "aiMetadata": {

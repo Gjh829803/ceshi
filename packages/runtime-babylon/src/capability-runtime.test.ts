@@ -25,6 +25,10 @@ const gBotAssetBytes = new Uint8Array(
     ),
   ),
 );
+const cameraDirectorSource = await readFile(
+  new URL("./camera-director.ts", import.meta.url),
+  "utf8",
+);
 
 const WHITEBOX_PACKAGES = [
   [
@@ -81,6 +85,12 @@ const CAMERA_PROFILES = [
 ] as const;
 
 describe("capability package runtime smoke tests", () => {
+  it("keeps Camera Director independent from controls and real-world subject categories", () => {
+    expect(cameraDirectorSource).not.toMatch(
+      /controlProfile|SubjectController|ExecutionSubjectV3|humanoid|vehicle|category\s*===/,
+    );
+  });
+
   it("loads the locked 25-clip G Bot package into a live Runtime", async () => {
     const subjectDefinitionRef =
       "worldkit://subject-definition/humanoid.g-bot.ground@1";
@@ -184,6 +194,67 @@ describe("capability package runtime smoke tests", () => {
         .toBeGreaterThan(0.995);
       expect(Math.abs(afterStrafe.subjectStatesByEntityId.player!.forwardXYZ![0]))
         .toBeGreaterThan(0.9);
+
+      runtime.reset();
+      runtime.setCameraPreference("worldkit://camera-profile/orbit.medium@1");
+      runtime.setCameraTuning({ distanceMeters: 6 });
+      expect(
+        runtime.setCameraPreference("worldkit://camera-profile/follow.medium@1")
+          .camera.tuning,
+      ).toEqual({});
+      expect(
+        runtime.setCameraPreference("worldkit://camera-profile/orbit.medium@1")
+          .camera.tuning,
+      ).toEqual({ distanceMeters: 6 });
+
+      const beforeTransition = runtime.snapshot().camera.positionMetersXYZ;
+      const firstTransitionFrame = runtime.setCameraPreference(
+        "worldkit://camera-profile/follow.medium@1",
+      ).camera.positionMetersXYZ;
+      expect(firstTransitionFrame).toEqual(beforeTransition);
+      await runRenderedFixedInput(["move-left"], 30);
+      const followed = await runRenderedFixedInput([], 120);
+      const followedState = followed.subjectStatesByEntityId.player!;
+      const followedOffset = horizontalCameraOffset(followed);
+      expect(
+        followedOffset[0] * followedState.forwardXYZ![0] +
+          followedOffset[1] * followedState.forwardXYZ![2],
+      ).toBeLessThan(-0.9);
+
+      runtime.reset();
+      runtime.setMotionTuning("player", {
+        accelerationMetersPerSecondSquared: 4,
+      });
+      const slowAcceleration = await runtime.runFixedInput({
+        actions: ["move-forward"],
+        ticks: 6,
+      });
+      runtime.reset();
+      runtime.setMotionTuning("player", {
+        accelerationMetersPerSecondSquared: 24,
+      });
+      const fastAcceleration = await runtime.runFixedInput({
+        actions: ["move-forward"],
+        ticks: 6,
+      });
+      expect(fastAcceleration.subjectStatesByEntityId.player!.speedMetersPerSecond)
+        .toBeGreaterThan(
+          slowAcceleration.subjectStatesByEntityId.player!.speedMetersPerSecond!,
+        );
+
+      runtime.reset();
+      runtime.setMotionTuning("player", { turnRateRadiansPerSecond: 2 });
+      const slowTurn = await runtime.runFixedInput({ actions: ["move-left"], ticks: 10 });
+      runtime.reset();
+      runtime.setMotionTuning("player", { turnRateRadiansPerSecond: 12 });
+      const fastTurn = await runtime.runFixedInput({ actions: ["move-left"], ticks: 10 });
+      expect(Math.abs(fastTurn.subjectStatesByEntityId.player!.forwardXYZ![0]))
+        .toBeGreaterThan(
+          Math.abs(slowTurn.subjectStatesByEntityId.player!.forwardXYZ![0]),
+        );
+      expect(() => runtime.setMotionTuning("player", {
+        slopeGravityRatio: 1,
+      })).toThrow(RangeError);
       expect((await runtime.runHarness("player")).passed).toBe(true);
     } finally {
       await runtime.dispose();
@@ -233,6 +304,38 @@ describe("capability package runtime smoke tests", () => {
         expect(harness.checks).toHaveLength(9);
         if (subjectDefinitionRef.includes("vehicle.four-wheel")) {
           runtime.reset();
+          const stationaryTurn = await runtime.runFixedInput({
+            actions: ["move-left"],
+            ticks: 120,
+          });
+          expect(Math.abs(stationaryTurn.subjectStatesByEntityId.player!.forwardXYZ![0]))
+            .toBeLessThan(Math.sin((0.5 * Math.PI) / 180));
+
+          runtime.reset();
+          const defaultQuarterSecondTurn = await runtime.runFixedInput({
+            actions: ["move-forward", "move-left"],
+            ticks: 15,
+          });
+          const defaultForward = defaultQuarterSecondTurn
+            .subjectStatesByEntityId.player!.forwardXYZ!;
+          expect(Math.acos(Math.max(-1, Math.min(1, -defaultForward[2]))))
+            .toBeLessThan((8 * Math.PI) / 180);
+
+          const afterSteeringRelease = await runtime.runFixedInput({
+            actions: ["move-forward"],
+            ticks: 15,
+          });
+          const afterSecondReleaseWindow = await runtime.runFixedInput({
+            actions: ["move-forward"],
+            ticks: 15,
+          });
+          const releasedForward = afterSteeringRelease.subjectStatesByEntityId.player!.forwardXYZ!;
+          const settledForward = afterSecondReleaseWindow.subjectStatesByEntityId.player!.forwardXYZ!;
+          expect(Math.acos(Math.max(-1, Math.min(1,
+            releasedForward[0] * settledForward[0] + releasedForward[2] * settledForward[2],
+          )))).toBeLessThan(0.005);
+
+          runtime.reset();
           expect(runtime.setMotionTuning("player", {
             lowSpeedTurnRateRadiansPerSecond: 0.2,
             highSpeedTurnRateRadiansPerSecond: 0.1,
@@ -259,6 +362,10 @@ describe("capability package runtime smoke tests", () => {
             );
           expect(() => runtime.setMotionTuning("player", {
             lowSpeedTurnRateRadiansPerSecond: 99,
+          })).toThrow(RangeError);
+          expect(() => runtime.setMotionTuning("player", {
+            lowSpeedTurnRateRadiansPerSecond: 0.3,
+            highSpeedTurnRateRadiansPerSecond: 0.4,
           })).toThrow(RangeError);
         }
       } finally {

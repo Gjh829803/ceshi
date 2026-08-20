@@ -1,7 +1,7 @@
 import type {
   ExecutionControlProfileV1,
   SemanticInputActionV1,
-  Vec3,
+  ViewControlFrameV1,
 } from "@whitebox-world/runtime-contracts";
 
 export type MotionCommandV1 =
@@ -42,7 +42,7 @@ function clampUnit(value: number): number {
 export function compileMotionCommandV1(
   profile: ExecutionControlProfileV1,
   actions: readonly SemanticInputActionV1[],
-  cameraForwardXYZ: Vec3,
+  viewControlFrame: ViewControlFrameV1,
 ): MotionCommandV1 {
   if (profile.commandKind === "none" || profile.inputSpace === "none") {
     return { kind: "none" };
@@ -55,11 +55,18 @@ export function compileMotionCommandV1(
     (hasAction(actions, "move-left") ? 1 : 0);
 
   if (profile.commandKind === "planar-vector") {
+    const cameraForwardXYZ = viewControlFrame.forwardXYZ;
+    const cameraRightXYZ = viewControlFrame.rightXYZ;
     const forwardLength = Math.hypot(cameraForwardXYZ[0], cameraForwardXYZ[2]);
     const forwardX = forwardLength <= 0.000001 ? 0 : cameraForwardXYZ[0] / forwardLength;
     const forwardZ = forwardLength <= 0.000001 ? -1 : cameraForwardXYZ[2] / forwardLength;
-    const rightX = -forwardZ;
-    const rightZ = forwardX;
+    const rightLength = Math.hypot(cameraRightXYZ[0], cameraRightXYZ[2]);
+    const rightX = rightLength <= 0.000001
+      ? -forwardZ
+      : cameraRightXYZ[0] / rightLength;
+    const rightZ = rightLength <= 0.000001
+      ? forwardX
+      : cameraRightXYZ[2] / rightLength;
     const rawX = forwardX * longitudinal + rightX * lateral;
     const rawZ = forwardZ * longitudinal + rightZ * lateral;
     const length = Math.hypot(rawX, rawZ);

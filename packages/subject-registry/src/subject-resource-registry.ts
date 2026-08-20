@@ -26,6 +26,7 @@ import type {
 import type {
   CameraContextProfileV1,
   CameraRigAlgorithmDefinitionV1,
+  CameraRigProfileInputV1,
   CameraRigProfileV1,
   ControlProfileV1,
   HarnessProfileV1,
@@ -226,6 +227,45 @@ function validateMotionProfile(source: MotionProfileInputV1): void {
       );
     }
   }
+  for (const [parameterName, range] of Object.entries(source.authoringRanges ?? {})) {
+    const safetyLimit = source.safetyLimits[parameterName];
+    const parameterValue = source.parameters[parameterName];
+    if (
+      safetyLimit === undefined ||
+      typeof parameterValue !== "number" ||
+      ![range.minimum, range.maximum, range.step].every(Number.isFinite) ||
+      range.minimum > range.maximum ||
+      range.step <= 0 ||
+      range.minimum < safetyLimit.minimum ||
+      range.maximum > safetyLimit.maximum ||
+      parameterValue < range.minimum ||
+      parameterValue > range.maximum
+    ) {
+      throw new Error(
+        `SUBJECT_REGISTRY_INVALID_AUTHORING_RANGE: '${parameterName}' in '${source.resourceRef}'.`,
+      );
+    }
+  }
+}
+
+function validateCameraProfile(source: CameraRigProfileInputV1): void {
+  for (const [parameterName, range] of Object.entries(source.authoringRanges ?? {})) {
+    const parameterValue = source.parameters[
+      parameterName as keyof CameraRigProfileInputV1["parameters"]
+    ];
+    if (
+      typeof parameterValue !== "number" ||
+      ![range.minimum, range.maximum, range.step].every(Number.isFinite) ||
+      range.minimum > range.maximum ||
+      range.step <= 0 ||
+      parameterValue < range.minimum ||
+      parameterValue > range.maximum
+    ) {
+      throw new Error(
+        `SUBJECT_REGISTRY_INVALID_AUTHORING_RANGE: '${parameterName}' in '${source.resourceRef}'.`,
+      );
+    }
+  }
 }
 
 function validateReferences(resourcesByRef: ReadonlyMap<string, SubjectRegistryResourceV3>): void {
@@ -334,6 +374,15 @@ export function createSubjectResourceRegistry(
     if (source.kind === "rig-profile") validateRigProfile(source);
     if (source.kind === "collider-profile") validateColliderProfile(source);
     if (source.kind === "motion-profile") validateMotionProfile(source);
+    if (source.kind === "camera-rig-profile") validateCameraProfile(source);
+    if (source.kind === "motion-kernel") {
+      const duplicateParameterName = duplicateValue(source.runtimeParameterNames);
+      if (duplicateParameterName !== undefined) {
+        throw new Error(
+          `SUBJECT_REGISTRY_DUPLICATE_RUNTIME_PARAMETER: '${duplicateParameterName}' in '${source.resourceRef}'.`,
+        );
+      }
+    }
     validateCanonicalizedSemanticTags(source);
     resourcesByRef.set(source.resourceRef, lockResource(source));
   }

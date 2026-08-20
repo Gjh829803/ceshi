@@ -244,10 +244,14 @@ export function installDeferredWorldkitBrowserApi(options: {
       return [
         ...[...motionRefs].flatMap((resourceRef) => {
           const resource = builtInSubjectResourceRegistry.resolveMotionProfile(resourceRef);
+          const kernel = resource === undefined
+            ? undefined
+            : builtInSubjectResourceRegistry.resolveMotionKernel(resource.motionKernelRef);
           return resource === undefined
             ? []
             : [{
                 resourceRef,
+                contentHash: resource.contentHash,
                 kind: "motion-profile" as const,
                 displayName: resource.aiMetadata.displayName,
                 role: resourceRef === definition.profiles.motion.defaultMotionProfileRef
@@ -257,6 +261,13 @@ export function installDeferredWorldkitBrowserApi(options: {
                     : "optional" as const,
                 parameters: resource.parameters,
                 safetyLimits: resource.safetyLimits,
+                ...(resource.authoringRanges === undefined
+                  ? {}
+                  : { authoringRanges: resource.authoringRanges }),
+                runtimeParameterNames: kernel?.runtimeParameterNames ?? [],
+                draftOnlyParameterNames: Object.keys(resource.parameters).filter(
+                  (name) => !(kernel?.runtimeParameterNames ?? []).includes(name),
+                ),
               }];
         }),
         ...[...cameraRefs].flatMap((resourceRef) => {
@@ -265,10 +276,14 @@ export function installDeferredWorldkitBrowserApi(options: {
             ? []
             : [{
                 resourceRef,
+                contentHash: resource.contentHash,
                 kind: "camera-rig-profile" as const,
                 displayName: resource.aiMetadata.displayName,
                 role: "camera" as const,
                 parameters: resource.parameters,
+                ...(resource.authoringRanges === undefined
+                  ? {}
+                  : { authoringRanges: resource.authoringRanges }),
               }];
         }),
       ].sort((left, right) => left.resourceRef.localeCompare(right.resourceRef));

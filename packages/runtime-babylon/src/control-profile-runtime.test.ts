@@ -4,6 +4,12 @@ import type { ExecutionControlProfileV1 } from "@whitebox-world/runtime-contract
 
 import { compileMotionCommandV1 } from "./control-profile-runtime";
 
+const DEFAULT_VIEW_FRAME = {
+  forwardXYZ: [0, 0, -1],
+  rightXYZ: [1, 0, 0],
+  committedTick: 0,
+} as const;
+
 function profile(
   commandKind: ExecutionControlProfileV1["commandKind"],
   inputSpace: ExecutionControlProfileV1["inputSpace"],
@@ -29,7 +35,7 @@ describe("compileMotionCommandV1", () => {
     const command = compileMotionCommandV1(
         profile("planar-vector", "camera-relative"),
         ["move-forward", "move-right", "run", "jump"],
-        [1, 0, 0],
+        { forwardXYZ: [1, 0, 0], rightXYZ: [0, 0, 1], committedTick: 12 },
       );
     expect(command).toMatchObject({
       kind: "planar-vector",
@@ -48,7 +54,7 @@ describe("compileMotionCommandV1", () => {
       compileMotionCommandV1(
         profile("throttle-steer", "subject-local"),
         ["move-forward", "move-left"],
-        [0, 0, -1],
+        DEFAULT_VIEW_FRAME,
       ),
     ).toEqual({
       kind: "throttle-steer",
@@ -65,7 +71,7 @@ describe("compileMotionCommandV1", () => {
       compileMotionCommandV1(
         profile("throttle-steer", "subject-local"),
         ["move-forward", "run", "jump"],
-        [0, 0, -1],
+        DEFAULT_VIEW_FRAME,
       ),
     ).toMatchObject({
       kind: "throttle-steer",
@@ -81,7 +87,7 @@ describe("compileMotionCommandV1", () => {
       compileMotionCommandV1(
         profile("flight-attitude", "flight-frame"),
         ["move-forward", "move-right", "jump"],
-        [0, 0, -1],
+        DEFAULT_VIEW_FRAME,
       ),
     ).toEqual({
       kind: "flight-attitude",
@@ -97,7 +103,7 @@ describe("compileMotionCommandV1", () => {
       compileMotionCommandV1(
         profile("none", "none"),
         ["move-forward", "run", "jump"],
-        [0, 0, -1],
+        DEFAULT_VIEW_FRAME,
       ),
     ).toEqual({ kind: "none" });
   });

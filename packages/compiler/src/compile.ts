@@ -506,6 +506,7 @@ function compileCapabilityAssemblyV1(
     motionKernelRef: profile.motionKernelRef,
     parameters: structuredClone(profile.parameters),
     safetyLimits: structuredClone(profile.safetyLimits),
+    authoringRanges: structuredClone(profile.authoringRanges ?? {}),
     motionTags: [...profile.motionTags],
   });
   const implementationId = assembly.motionKernel.implementationId;
@@ -549,6 +550,7 @@ function compileCapabilityAssemblyV1(
       implementationId,
       commandKind: assembly.motionKernel.commandKind,
       supportedMediums: [...assembly.motionKernel.supportedMediums],
+      runtimeParameterNames: [...assembly.motionKernel.runtimeParameterNames],
       fallbackMotionProfileRef: assembly.motionKernel.fallbackMotionProfileRef,
       deterministic: true,
     },
@@ -573,8 +575,10 @@ function compileCapabilityAssemblyV1(
       cameraRigProfiles: assembly.cameraRigProfiles.map((profile) => ({
         resourceRef: profile.resourceRef,
         algorithmRef: profile.algorithmRef,
+        headingSource: profile.headingSource,
         preferredSocketIds: [...profile.preferredSocketIds],
         parameters: structuredClone(profile.parameters),
+        authoringRanges: structuredClone(profile.authoringRanges ?? {}),
       })),
     },
     mediumProfile: {

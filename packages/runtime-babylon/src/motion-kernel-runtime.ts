@@ -69,12 +69,103 @@ function profileIsValid(profile: ExecutionMotionProfileV1): boolean {
       return false;
     }
   }
-  return true;
+  return kernelParameterRelationshipsAreValid(profile);
 }
 
 function moveTowards(current: number, target: number, maximumDelta: number): number {
   if (Math.abs(target - current) <= maximumDelta) return target;
   return current + Math.sign(target - current) * maximumDelta;
+}
+
+function moveVectorTowards(
+  current: Vector3,
+  target: Vector3,
+  maximumDelta: number,
+): Vector3 {
+  const delta = target.subtract(current);
+  const distance = delta.length();
+  if (distance <= maximumDelta || distance <= 0.000001) return target.clone();
+  return current.add(delta.scale(maximumDelta / distance));
+}
+
+function moveAngleTowards(current: number, target: number, maximumDelta: number): number {
+  const delta = Math.atan2(Math.sin(target - current), Math.cos(target - current));
+  return current + Math.max(-maximumDelta, Math.min(maximumDelta, delta));
+}
+
+function smoothstep01(value: number): number {
+  const clamped = Math.max(0, Math.min(1, value));
+  return clamped * clamped * (3 - 2 * clamped);
+}
+
+function runtimeParameterNamesForKernel(resourceRef: string): ReadonlySet<string> {
+  const implementationId = kernelImplementationId(resourceRef);
+  const names: Readonly<Record<ReturnType<typeof kernelImplementationId>, readonly string[]>> = {
+    "free-ground": [
+      "walkSpeedMetersPerSecond",
+      "runSpeedMetersPerSecond",
+      "jumpSpeedMetersPerSecond",
+      "accelerationMetersPerSecondSquared",
+      "decelerationMetersPerSecondSquared",
+      "turnRateRadiansPerSecond",
+      "airControlRatio",
+    ],
+    "forward-steer": [
+      "forwardSpeedMetersPerSecond",
+      "reverseSpeedMetersPerSecond",
+      "accelerationMetersPerSecondSquared",
+      "decelerationMetersPerSecondSquared",
+      "turnRateRadiansPerSecond",
+      "jumpSpeedMetersPerSecond",
+      "boostMultiplier",
+    ],
+    "wheeled-arcade": [
+      "forwardSpeedMetersPerSecond",
+      "reverseSpeedMetersPerSecond",
+      "accelerationMetersPerSecondSquared",
+      "brakeMetersPerSecondSquared",
+      "dragPerSecond",
+      "lowSpeedTurnRateRadiansPerSecond",
+      "highSpeedTurnRateRadiansPerSecond",
+      "steeringResponsePerSecond",
+      "steeringReturnPerSecond",
+      "fullSteeringAuthoritySpeedMetersPerSecond",
+      "turnRateSpeedCurveExponent",
+      "boostMultiplier",
+    ],
+    "surface-slide": [
+      "maximumSpeedMetersPerSecond",
+      "driveAccelerationMetersPerSecondSquared",
+      "surfaceFrictionPerSecond",
+      "turnRateRadiansPerSecond",
+      "boostMultiplier",
+    ],
+    "water-surface": [
+      "forwardSpeedMetersPerSecond",
+      "reverseSpeedMetersPerSecond",
+      "accelerationMetersPerSecondSquared",
+      "dragPerSecond",
+      "turnRateRadiansPerSecond",
+      "surfaceHoldStrengthPerSecond",
+      "boostMultiplier",
+    ],
+    "unpowered-glide": [
+      "minimumForwardSpeedMetersPerSecond",
+      "maximumForwardSpeedMetersPerSecond",
+      "glideAccelerationMetersPerSecondSquared",
+      "gravityScale",
+      "liftRatio",
+      "yawRateRadiansPerSecond",
+      "stallSpeedMetersPerSecond",
+    ],
+  };
+  return new Set(names[implementationId]);
+}
+
+function kernelParameterRelationshipsAreValid(profile: ExecutionMotionProfileV1): boolean {
+  if (kernelImplementationId(profile.motionKernelRef) !== "wheeled-arcade") return true;
+  return numberParameter(profile, "highSpeedTurnRateRadiansPerSecond", 0.42) <=
+    numberParameter(profile, "lowSpeedTurnRateRadiansPerSecond", 1.15);
 }
 
 export class MotionKernelRuntimeV1 {
@@ -85,6 +176,8 @@ export class MotionKernelRuntimeV1 {
   private readonly motionModeResolver: MotionModeResolverV1;
   private yawRadians = 0;
   private forwardSpeedMetersPerSecond = 0;
+  private planarVelocity = Vector3.Zero();
+  private steeringInput = 0;
   private slideVelocity = Vector3.Zero();
   private jumpInProgress = false;
   private parameterTuning: MotionParameterTuningV1 = {};
@@ -170,9 +263,14 @@ export class MotionKernelRuntimeV1 {
 
   setParameterTuning(tuning: MotionParameterTuningV1): boolean {
     const profile = this.motionModeResolver.currentProfile;
+    const declaredKernel = this.subject.capabilityAssembly?.motionKernel;
+    const supportedParameters = declaredKernel?.resourceRef === profile.motionKernelRef
+      ? new Set(declaredKernel.runtimeParameterNames)
+      : runtimeParameterNamesForKernel(profile.motionKernelRef);
     for (const [name, value] of Object.entries(tuning)) {
       const limit = profile.safetyLimits[name];
       if (
+        !supportedParameters.has(name) ||
         limit === undefined ||
         !Number.isFinite(value) ||
         value < limit.minimum ||
@@ -181,6 +279,11 @@ export class MotionKernelRuntimeV1 {
         return false;
       }
     }
+    const candidate: ExecutionMotionProfileV1 = {
+      ...profile,
+      parameters: { ...profile.parameters, ...tuning },
+    };
+    if (!kernelParameterRelationshipsAreValid(candidate)) return false;
     this.parameterTuning = { ...tuning };
     this.parameterTuningRevision += 1;
     this.effectiveProfileCache = undefined;
@@ -244,6 +347,8 @@ export class MotionKernelRuntimeV1 {
     this.clearParameterTuning();
     this.yawRadians = 0;
     this.forwardSpeedMetersPerSecond = 0;
+    this.planarVelocity.setAll(0);
+    this.steeringInput = 0;
     this.slideVelocity.setAll(0);
     this.jumpInProgress = false;
     this.syncVisual(spawn);
@@ -251,6 +356,8 @@ export class MotionKernelRuntimeV1 {
 
   stop(): void {
     this.forwardSpeedMetersPerSecond = 0;
+    this.planarVelocity.setAll(0);
+    this.steeringInput = 0;
     this.slideVelocity.setAll(0);
     this.physicsController.setVelocity(Vector3.Zero());
   }
@@ -289,9 +396,49 @@ export class MotionKernelRuntimeV1 {
         : planar?.runRequested
           ? numberParameter(this.activeProfile, "runSpeedMetersPerSecond", 4)
           : numberParameter(this.activeProfile, "walkSpeedMetersPerSecond", 2.4);
-      desired.set(direction[0] * requestedSpeed, 0, direction[1] * requestedSpeed);
-      if (desired.lengthSquared() > 0.000001) {
-        this.yawRadians = Math.atan2(-desired.x, -desired.z);
+      const targetPlanarVelocity = new Vector3(
+        direction[0] * requestedSpeed,
+        0,
+        direction[1] * requestedSpeed,
+      );
+      const currentVelocity = this.physicsController.getVelocity();
+      const currentPlanarVelocity = new Vector3(
+        currentVelocity.x,
+        0,
+        currentVelocity.z,
+      );
+      const changingSpeed = targetPlanarVelocity.lengthSquared() > 0.000001;
+      const response = numberParameter(
+        this.activeProfile,
+        changingSpeed
+          ? "accelerationMetersPerSecondSquared"
+          : "decelerationMetersPerSecondSquared",
+        changingSpeed ? 12 : 16,
+      );
+      const airControl = movementMedium === "air"
+        ? numberParameter(this.activeProfile, "airControlRatio", 0.3)
+        : 1;
+      this.planarVelocity = moveVectorTowards(
+        currentPlanarVelocity,
+        targetPlanarVelocity,
+        response * airControl * FIXED_TIME_STEP_SECONDS,
+      );
+      desired.copyFrom(this.planarVelocity);
+      if (targetPlanarVelocity.lengthSquared() > 0.000001) {
+        const targetYaw = Math.atan2(
+          -targetPlanarVelocity.x,
+          -targetPlanarVelocity.z,
+        );
+        const turnRate = numberParameter(
+          this.activeProfile,
+          "turnRateRadiansPerSecond",
+          7,
+        );
+        this.yawRadians = moveAngleTowards(
+          this.yawRadians,
+          targetYaw,
+          turnRate * airControl * FIXED_TIME_STEP_SECONDS,
+        );
       }
       if (planar?.jumpRequested === true && movementMedium === "ground") {
         this.jumpInProgress = true;
@@ -335,30 +482,106 @@ export class MotionKernelRuntimeV1 {
         "decelerationMetersPerSecondSquared",
         numberParameter(this.activeProfile, "brakeMetersPerSecondSquared", 9),
       );
-      this.forwardSpeedMetersPerSecond = moveTowards(
-        this.forwardSpeedMetersPerSecond,
-        targetSpeed,
-        (Math.abs(targetSpeed) > Math.abs(this.forwardSpeedMetersPerSecond)
-          ? acceleration
-          : deceleration) * FIXED_TIME_STEP_SECONDS,
-      );
+      if (implementationId === "wheeled-arcade") {
+        if (braking) {
+          this.forwardSpeedMetersPerSecond = moveTowards(
+            this.forwardSpeedMetersPerSecond,
+            0,
+            numberParameter(
+              this.activeProfile,
+              "brakeMetersPerSecondSquared",
+              10,
+            ) * FIXED_TIME_STEP_SECONDS,
+          );
+        } else if (Math.abs(throttle) > 0.000001) {
+          const changingDirection =
+            Math.sign(targetSpeed) !== Math.sign(this.forwardSpeedMetersPerSecond) &&
+            Math.abs(this.forwardSpeedMetersPerSecond) > 0.000001;
+          const response = changingDirection ||
+              Math.abs(targetSpeed) < Math.abs(this.forwardSpeedMetersPerSecond)
+            ? numberParameter(
+                this.activeProfile,
+                "brakeMetersPerSecondSquared",
+                10,
+              )
+            : acceleration;
+          this.forwardSpeedMetersPerSecond = moveTowards(
+            this.forwardSpeedMetersPerSecond,
+            targetSpeed,
+            response * FIXED_TIME_STEP_SECONDS,
+          );
+        } else {
+          this.forwardSpeedMetersPerSecond *= Math.exp(
+            -numberParameter(this.activeProfile, "dragPerSecond", 0.7) *
+              FIXED_TIME_STEP_SECONDS,
+          );
+          if (Math.abs(this.forwardSpeedMetersPerSecond) < 0.001) {
+            this.forwardSpeedMetersPerSecond = 0;
+          }
+        }
+      } else {
+        this.forwardSpeedMetersPerSecond = moveTowards(
+          this.forwardSpeedMetersPerSecond,
+          targetSpeed,
+          (Math.abs(targetSpeed) > Math.abs(this.forwardSpeedMetersPerSecond)
+            ? acceleration
+            : deceleration) * FIXED_TIME_STEP_SECONDS,
+        );
+      }
       const speedRatio = maximumForwardSpeed <= 0
         ? 0
         : Math.min(1, Math.abs(this.forwardSpeedMetersPerSecond) / maximumForwardSpeed);
+      let appliedSteering = steering;
+      let steeringAuthority = 1;
+      let drivingDirection = 1;
+      if (implementationId === "wheeled-arcade") {
+        const steeringResponse = numberParameter(
+          this.activeProfile,
+          Math.abs(steering) > 0.000001
+            ? "steeringResponsePerSecond"
+            : "steeringReturnPerSecond",
+          Math.abs(steering) > 0.000001 ? 4.5 : 7,
+        );
+        this.steeringInput = moveTowards(
+          this.steeringInput,
+          steering,
+          steeringResponse * FIXED_TIME_STEP_SECONDS,
+        );
+        appliedSteering = this.steeringInput;
+        steeringAuthority = smoothstep01(
+          Math.abs(this.forwardSpeedMetersPerSecond) /
+            numberParameter(
+              this.activeProfile,
+              "fullSteeringAuthoritySpeedMetersPerSecond",
+              2.5,
+            ),
+        );
+        drivingDirection = Math.sign(this.forwardSpeedMetersPerSecond);
+      }
       const turnRate = implementationId === "wheeled-arcade"
-        ? numberParameter(
-            this.activeProfile,
-            "lowSpeedTurnRateRadiansPerSecond",
-            2.2,
-          ) * (1 - speedRatio) +
-          numberParameter(
-            this.activeProfile,
-            "highSpeedTurnRateRadiansPerSecond",
-            0.7,
-          ) * speedRatio
+        ? (() => {
+            const curve = Math.pow(
+              speedRatio,
+              numberParameter(
+                this.activeProfile,
+                "turnRateSpeedCurveExponent",
+                1.35,
+              ),
+            );
+            return numberParameter(
+              this.activeProfile,
+              "lowSpeedTurnRateRadiansPerSecond",
+              1.15,
+            ) * (1 - curve) +
+              numberParameter(
+                this.activeProfile,
+                "highSpeedTurnRateRadiansPerSecond",
+                0.42,
+              ) * curve;
+          })()
         : numberParameter(this.activeProfile, "turnRateRadiansPerSecond", 1.8);
-      this.yawRadians -=
-        steering * turnRate * FIXED_TIME_STEP_SECONDS;
+      this.yawRadians -= appliedSteering * turnRate * steeringAuthority *
+        drivingDirection * FIXED_TIME_STEP_SECONDS;
       desired = this.forward.scale(this.forwardSpeedMetersPerSecond);
 
       if (
@@ -535,6 +758,8 @@ export class MotionKernelRuntimeV1 {
     if (this.motionModeResolver.commitTickBoundary()) {
       this.clearParameterTuning();
       this.forwardSpeedMetersPerSecond = 0;
+      this.planarVelocity.setAll(0);
+      this.steeringInput = 0;
       this.slideVelocity.setAll(0);
     }
   }

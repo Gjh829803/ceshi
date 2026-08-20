@@ -7,13 +7,11 @@ import type {
   CameraTuningV1,
   CameraViewInputV1,
   ExecutionCameraRigProfileV1,
-  ExecutionMovementMediumV1,
   ExecutionPlanV4,
-  ExecutionSubjectV3,
+  ExecutionSubjectCapabilityAssemblyV1,
+  ViewControlFrameV1,
+  ViewTargetSampleV1,
 } from "@whitebox-world/runtime-contracts";
-
-import type { SubjectController } from "./subject-controller";
-import type { SubjectVisual } from "./subject-visual";
 
 export type CameraPreferenceV1 = "auto" | "first-person" | string;
 
@@ -27,6 +25,9 @@ export interface CameraDirectorSnapshotV1 {
   viewDistanceOffsetMeters: number;
   tuning: Readonly<CameraTuningV1>;
 }
+
+type CameraContextV1 = ExecutionSubjectCapabilityAssemblyV1["cameraContext"];
+type CameraParametersV1 = ExecutionCameraRigProfileV1["parameters"];
 
 function exponentialAlpha(ratePerSecond: number, deltaSeconds: number): number {
   return 1 - Math.exp(-Math.max(0, ratePerSecond) * Math.max(0, deltaSeconds));
@@ -50,44 +51,64 @@ function rotateAroundY(direction: Vector3, radians: number): Vector3 {
   );
 }
 
+function horizontalDirection(value: Vector3): Vector3 | undefined {
+  const horizontal = new Vector3(value.x, 0, value.z);
+  return horizontal.lengthSquared() <= 0.000001
+    ? undefined
+    : horizontal.normalize();
+}
+
+function directionYaw(direction: Vector3): number {
+  return Math.atan2(direction.x, direction.z);
+}
+
+function yawDirection(yawRadians: number): Vector3 {
+  return new Vector3(Math.sin(yawRadians), 0, Math.cos(yawRadians));
+}
+
+function smoothstep01(value: number): number {
+  const clamped = clamp(value, 0, 1);
+  return clamped * clamped * (3 - 2 * clamped);
+}
+
 function ruleMatches(
-  rule: NonNullable<ExecutionSubjectV3["capabilityAssembly"]>["cameraContext"]["rules"][number],
-  facts: {
-    activeMotionKernelRef: string;
-    motionTags: readonly string[];
-    movementMedium: ExecutionMovementMediumV1;
-    speedMetersPerSecond: number;
-    socketIds: ReadonlySet<string>;
-  },
+  rule: CameraContextV1["rules"][number],
+  sample: ViewTargetSampleV1,
 ): boolean {
   const when = rule.when;
+  const speedMetersPerSecond = Math.hypot(
+    sample.velocityMetersPerSecondXYZ[0],
+    sample.velocityMetersPerSecondXYZ[1],
+    sample.velocityMetersPerSecondXYZ[2],
+  );
+  const socketIds = new Set(Object.keys(sample.socketPositionsMetersXYZById));
   if (
     when.relationshipRoles !== undefined &&
-    !when.relationshipRoles.includes("none")
+    !when.relationshipRoles.includes(sample.relationshipRole)
   ) return false;
   if (
     when.motionKernelRefs !== undefined &&
-    !when.motionKernelRefs.includes(facts.activeMotionKernelRef)
+    !when.motionKernelRefs.includes(sample.activeMotionKernelRef)
   ) return false;
   if (
     when.requiredMotionTags !== undefined &&
-    !when.requiredMotionTags.every((tag) => facts.motionTags.includes(tag))
+    !when.requiredMotionTags.every((tag) => sample.motionTags.includes(tag))
   ) return false;
   if (
     when.movementMediums !== undefined &&
-    !when.movementMediums.includes(facts.movementMedium)
+    !when.movementMediums.includes(sample.movementMedium)
   ) return false;
   if (
     when.minimumSpeedMetersPerSecond !== undefined &&
-    facts.speedMetersPerSecond < when.minimumSpeedMetersPerSecond
+    speedMetersPerSecond < when.minimumSpeedMetersPerSecond
   ) return false;
   if (
     when.maximumSpeedMetersPerSecond !== undefined &&
-    facts.speedMetersPerSecond > when.maximumSpeedMetersPerSecond
+    speedMetersPerSecond > when.maximumSpeedMetersPerSecond
   ) return false;
   if (
     when.requiredSocketIds !== undefined &&
-    !when.requiredSocketIds.every((id) => facts.socketIds.has(id))
+    !when.requiredSocketIds.every((id) => socketIds.has(id))
   ) return false;
   return true;
 }
@@ -105,9 +126,15 @@ export class CameraDirectorV1 {
   private viewYawOffsetRadians = 0;
   private viewPitchOffsetRadians = 0;
   private viewDistanceOffsetMeters = 0;
-  private tuning: CameraTuningV1 = {};
-  private orbitReferenceForward = new Vector3(0, 0, -1);
-  private orbitReferenceEntityId: string | undefined;
+  private readonly tuningByProfileRef = new Map<string, CameraTuningV1>();
+  private baseHeadingYawRadians = Math.PI;
+  private baseHeadingIdentity: string | undefined;
+  private lastStableVelocityForward: Vector3 | undefined;
+  private transitionElapsedSeconds = 0;
+  private transitionDurationSeconds = 0;
+  private transitionStartPosition = Vector3.Zero();
+  private transitionStartTarget = Vector3.Zero();
+  private transitionStartFovRadians = Math.PI / 3;
 
   constructor(
     private readonly executionPlan: ExecutionPlanV4,
@@ -150,7 +177,7 @@ export class CameraDirectorV1 {
     this.targetYawOffsetRadians = 0;
     this.targetPitchOffsetRadians = 0;
     this.targetDistanceOffsetMeters = 0;
-    this.orbitReferenceEntityId = undefined;
+    this.baseHeadingIdentity = undefined;
   }
 
   setTuning(tuning: CameraTuningV1): boolean {
@@ -158,22 +185,34 @@ export class CameraDirectorV1 {
     if (!entries.every((entry) => typeof entry[1] === "number" && Number.isFinite(entry[1]))) {
       return false;
     }
-    this.tuning = {
+    this.tuningByProfileRef.set(this.activeProfileRef, {
       ...(tuning.distanceMeters === undefined
         ? {}
         : { distanceMeters: clamp(tuning.distanceMeters, 0, 30) }),
       ...(tuning.targetHeightMeters === undefined
         ? {}
         : { targetHeightMeters: clamp(tuning.targetHeightMeters, 0, 10) }),
+      ...(tuning.shoulderOffsetMeters === undefined
+        ? {}
+        : { shoulderOffsetMeters: clamp(tuning.shoulderOffsetMeters, -3, 3) }),
+      ...(tuning.pitchRadians === undefined
+        ? {}
+        : { pitchRadians: clamp(tuning.pitchRadians, -1.4, 1.4) }),
       ...(tuning.positionDampingPerSecond === undefined
         ? {}
-        : { positionDampingPerSecond: clamp(tuning.positionDampingPerSecond, 1, 40) }),
+        : { positionDampingPerSecond: clamp(tuning.positionDampingPerSecond, 0, 40) }),
       ...(tuning.rotationDampingPerSecond === undefined
         ? {}
-        : { rotationDampingPerSecond: clamp(tuning.rotationDampingPerSecond, 1, 40) }),
+        : { rotationDampingPerSecond: clamp(tuning.rotationDampingPerSecond, 0, 40) }),
+      ...(tuning.collisionRadiusMeters === undefined
+        ? {}
+        : { collisionRadiusMeters: clamp(tuning.collisionRadiusMeters, 0.01, 2) }),
       ...(tuning.lookAheadSeconds === undefined
         ? {}
         : { lookAheadSeconds: clamp(tuning.lookAheadSeconds, 0, 2) }),
+      ...(tuning.transitionSeconds === undefined
+        ? {}
+        : { transitionSeconds: clamp(tuning.transitionSeconds, 0, 3) }),
       ...(tuning.baseFovDegrees === undefined
         ? {}
         : { baseFovDegrees: clamp(tuning.baseFovDegrees, 35, 100) }),
@@ -189,54 +228,57 @@ export class CameraDirectorV1 {
       ...(tuning.maximumSpeedFovDegrees === undefined
         ? {}
         : { maximumSpeedFovDegrees: clamp(tuning.maximumSpeedFovDegrees, 0, 30) }),
-    };
+    });
     return true;
   }
 
+  controlFrame(committedTick: number): ViewControlFrameV1 {
+    const forward = horizontalDirection(this.camera.getForwardRay().direction) ??
+      new Vector3(0, 0, -1);
+    const right = Vector3.Cross(forward, Vector3.Up()).normalize();
+    return {
+      forwardXYZ: [forward.x, forward.y, forward.z],
+      rightXYZ: [right.x, right.y, right.z],
+      committedTick,
+    };
+  }
+
   update(
-    subject: ExecutionSubjectV3,
-    controller: SubjectController,
-    visual: SubjectVisual,
-    movementMedium: ExecutionMovementMediumV1,
+    cameraContext: CameraContextV1 | undefined,
+    sample: ViewTargetSampleV1,
     deltaSeconds: number,
   ): void {
-    const profile = this.selectProfile(subject, controller, visual, movementMedium);
+    const profile = this.selectProfile(cameraContext, sample);
     if (profile === undefined) {
-      this.updateLegacy(subject, controller);
+      this.updateLegacy(sample);
       return;
     }
-    if (this.activeProfileRef !== profile.resourceRef) {
-      this.orbitReferenceEntityId = undefined;
+
+    const previousProfileRef = this.activeProfileRef;
+    const profileChanged = this.initialized && previousProfileRef !== profile.resourceRef;
+    if (profileChanged) {
+      this.transitionElapsedSeconds = 0;
+      this.transitionStartPosition.copyFrom(this.camera.position);
+      this.transitionStartTarget.copyFrom(this.smoothedTarget);
+      this.transitionStartFovRadians = this.camera.fov;
+      this.baseHeadingIdentity = undefined;
     }
     this.activeProfileRef = profile.resourceRef;
     this.activeRigRef = profile.algorithmRef;
-    const parameters = { ...profile.parameters, ...this.tuning };
-    const motion = controller.motionSnapshot();
-    const socket = profile.preferredSocketIds
-      .map((id) => visual.socketNodesById.get(id))
-      .find((node) => node !== undefined);
-    const origin = controller.subjectOrigin;
-    const socketPosition = socket?.getAbsolutePosition();
-    const baseTarget = socketPosition?.clone() ?? new Vector3(
-      origin.x,
-      origin.y + parameters.targetHeightMeters,
-      origin.z,
-    );
-    const velocity = controller.velocity;
-    const subjectForward = controller.forward.normalizeToNew();
-    const speed = motion.speedMetersPerSecond;
-    const algorithm = profile.algorithmRef;
-    const firstPerson = algorithm.endsWith("/socket-first-person@1");
-    const cameraRelativeOrbit =
-      !firstPerson &&
-      subject.capabilityAssembly?.controlProfile.inputSpace === "camera-relative";
-    if (
-      cameraRelativeOrbit &&
-      this.orbitReferenceEntityId !== subject.entityId
-    ) {
-      this.orbitReferenceForward.copyFrom(subjectForward);
-      this.orbitReferenceEntityId = subject.entityId;
-    }
+    const tuning = this.tuningByProfileRef.get(profile.resourceRef) ?? {};
+    const parameters = { ...profile.parameters, ...tuning };
+    if (profileChanged) this.transitionDurationSeconds = parameters.transitionSeconds;
+
+    const targetPosition = new Vector3(...sample.targetPositionMetersXYZ);
+    const socketPosition = profile.preferredSocketIds
+      .map((id) => sample.socketPositionsMetersXYZById[id])
+      .find((position) => position !== undefined);
+    const baseTarget = socketPosition === undefined
+      ? targetPosition.add(new Vector3(0, parameters.targetHeightMeters, 0))
+      : new Vector3(...socketPosition);
+    const velocity = new Vector3(...sample.velocityMetersPerSecondXYZ);
+    const speed = velocity.length();
+    const baseForward = this.resolveBaseForward(profile, sample, velocity, deltaSeconds);
     const positionAlpha = this.initialized
       ? exponentialAlpha(parameters.positionDampingPerSecond, deltaSeconds)
       : 1;
@@ -252,19 +294,19 @@ export class CameraDirectorV1 {
     this.viewDistanceOffsetMeters += (
       this.targetDistanceOffsetMeters - this.viewDistanceOffsetMeters
     ) * positionAlpha;
-    const baseCameraForward = cameraRelativeOrbit
-      ? this.orbitReferenceForward
-      : subjectForward;
-    const forward = rotateAroundY(baseCameraForward, this.viewYawOffsetRadians).normalize();
-    const lookAheadVelocity = cameraRelativeOrbit
-      ? forward.scale(Math.max(0, Vector3.Dot(velocity, forward)))
-      : velocity;
-    const target = baseTarget.add(
-      lookAheadVelocity.scale(parameters.lookAheadSeconds),
-    );
+
+    const forward = rotateAroundY(baseForward, this.viewYawOffsetRadians).normalize();
+    const chaseAlgorithm =
+      profile.algorithmRef.endsWith("/velocity-chase@1") ||
+      profile.algorithmRef.endsWith("/flight-horizon@1");
+    const lookAheadVelocity = chaseAlgorithm
+      ? velocity
+      : forward.scale(Math.max(0, Vector3.Dot(velocity, forward)));
+    const target = baseTarget.add(lookAheadVelocity.scale(parameters.lookAheadSeconds));
+    const firstPerson = profile.algorithmRef.endsWith("/socket-first-person@1");
     let desiredPosition: Vector3;
     if (firstPerson) {
-      desiredPosition = socketPosition?.clone() ?? baseTarget;
+      desiredPosition = baseTarget.clone();
       const pitch = clamp(
         parameters.pitchRadians + this.viewPitchOffsetRadians,
         parameters.minimumPitchRadians,
@@ -293,30 +335,50 @@ export class CameraDirectorV1 {
         .subtract(forward.scale(horizontalDistance))
         .add(right.scale(parameters.shoulderOffsetMeters));
       desiredPosition.y += Math.sin(pitch) * distance;
-      if (algorithm.endsWith("/flight-horizon@1")) {
+      if (profile.algorithmRef.endsWith("/flight-horizon@1")) {
         target.y = baseTarget.y + velocity.y * Math.min(0.5, parameters.lookAheadSeconds);
       }
       desiredPosition = this.collisionShortenedPosition(
-        subject.entityId,
+        sample.entityId,
         target,
         desiredPosition,
-        profile,
+        parameters,
       );
     }
 
-    this.camera.position = Vector3.Lerp(
-      this.camera.position,
-      desiredPosition,
-      positionAlpha,
-    );
-    this.smoothedTarget = Vector3.Lerp(this.smoothedTarget, target, rotationAlpha);
-    this.camera.setTarget(this.smoothedTarget);
+    const nextPosition = Vector3.Lerp(this.camera.position, desiredPosition, positionAlpha);
+    const nextTarget = Vector3.Lerp(this.smoothedTarget, target, rotationAlpha);
     const extraFov = Math.min(
       parameters.maximumSpeedFovDegrees,
       speed * parameters.speedFovDegreesPerMeterPerSecond,
     );
-    this.camera.fov =
-      ((parameters.baseFovDegrees + extraFov) * Math.PI) / 180;
+    const nextFov = ((parameters.baseFovDegrees + extraFov) * Math.PI) / 180;
+    if (
+      this.transitionDurationSeconds > 0 &&
+      this.transitionElapsedSeconds < this.transitionDurationSeconds
+    ) {
+      const transitionAlpha = smoothstep01(
+        this.transitionElapsedSeconds / this.transitionDurationSeconds,
+      );
+      this.camera.position.copyFrom(Vector3.Lerp(
+        this.transitionStartPosition,
+        nextPosition,
+        transitionAlpha,
+      ));
+      this.smoothedTarget.copyFrom(Vector3.Lerp(
+        this.transitionStartTarget,
+        nextTarget,
+        transitionAlpha,
+      ));
+      this.camera.fov = this.transitionStartFovRadians +
+        (nextFov - this.transitionStartFovRadians) * transitionAlpha;
+    } else {
+      this.camera.position.copyFrom(nextPosition);
+      this.smoothedTarget.copyFrom(nextTarget);
+      this.camera.fov = nextFov;
+    }
+    this.transitionElapsedSeconds += Math.max(0, deltaSeconds);
+    this.camera.setTarget(this.smoothedTarget);
     this.initialized = true;
   }
 
@@ -331,9 +393,12 @@ export class CameraDirectorV1 {
     this.viewYawOffsetRadians = 0;
     this.viewPitchOffsetRadians = 0;
     this.viewDistanceOffsetMeters = 0;
-    this.tuning = {};
-    this.orbitReferenceForward.set(0, 0, -1);
-    this.orbitReferenceEntityId = undefined;
+    this.tuningByProfileRef.clear();
+    this.baseHeadingYawRadians = Math.PI;
+    this.baseHeadingIdentity = undefined;
+    this.lastStableVelocityForward = undefined;
+    this.transitionElapsedSeconds = 0;
+    this.transitionDurationSeconds = 0;
   }
 
   snapshot(): CameraDirectorSnapshotV1 {
@@ -345,17 +410,53 @@ export class CameraDirectorV1 {
       viewYawOffsetRadians: this.viewYawOffsetRadians,
       viewPitchOffsetRadians: this.viewPitchOffsetRadians,
       viewDistanceOffsetMeters: this.viewDistanceOffsetMeters,
-      tuning: { ...this.tuning },
+      tuning: { ...(this.tuningByProfileRef.get(this.activeProfileRef) ?? {}) },
     };
   }
 
+  private resolveBaseForward(
+    profile: ExecutionCameraRigProfileV1,
+    sample: ViewTargetSampleV1,
+    velocity: Vector3,
+    deltaSeconds: number,
+  ): Vector3 {
+    const identity = `${sample.entityId}:${profile.resourceRef}`;
+    const targetForward = horizontalDirection(new Vector3(...sample.forwardXYZ)) ??
+      new Vector3(0, 0, -1);
+    if (this.baseHeadingIdentity !== identity) {
+      this.baseHeadingIdentity = identity;
+      this.baseHeadingYawRadians = directionYaw(targetForward);
+      this.lastStableVelocityForward = targetForward.clone();
+    }
+    let desired = targetForward;
+    if (profile.headingSource === "view") {
+      desired = yawDirection(this.baseHeadingYawRadians);
+    } else if (profile.headingSource === "target-velocity") {
+      const horizontalVelocity = horizontalDirection(velocity);
+      const horizontalSpeed = Math.hypot(velocity.x, velocity.z);
+      if (
+        horizontalVelocity !== undefined &&
+        horizontalSpeed >= profile.parameters.minimumHeadingSpeedMetersPerSecond
+      ) {
+        this.lastStableVelocityForward = horizontalVelocity.clone();
+      }
+      desired = this.lastStableVelocityForward ?? targetForward;
+    }
+    if (profile.headingSource !== "view") {
+      const alpha = this.initialized
+        ? exponentialAlpha(profile.parameters.rotationDampingPerSecond, deltaSeconds)
+        : 1;
+      this.baseHeadingYawRadians += wrapRadians(
+        directionYaw(desired) - this.baseHeadingYawRadians,
+      ) * alpha;
+    }
+    return yawDirection(this.baseHeadingYawRadians);
+  }
+
   private selectProfile(
-    subject: ExecutionSubjectV3,
-    controller: SubjectController,
-    visual: SubjectVisual,
-    movementMedium: ExecutionMovementMediumV1,
+    context: CameraContextV1 | undefined,
+    sample: ViewTargetSampleV1,
   ): ExecutionCameraRigProfileV1 | undefined {
-    const context = subject.capabilityAssembly?.cameraContext;
     if (context === undefined) return undefined;
     const byRef = new Map(
       context.cameraRigProfiles.map((profile) => [profile.resourceRef, profile]),
@@ -367,17 +468,9 @@ export class CameraDirectorV1 {
     } else if (this.preference !== "auto" && byRef.has(this.preference)) {
       selectedRef = this.preference;
     } else {
-      const motion = controller.motionSnapshot();
-      const facts = {
-        activeMotionKernelRef: motion.activeMotionKernelRef,
-        motionTags: motion.motionTags,
-        movementMedium,
-        speedMetersPerSecond: motion.speedMetersPerSecond,
-        socketIds: new Set(visual.socketNodesById.keys()),
-      };
       selectedRef = [...context.rules]
         .sort((left, right) => right.priority - left.priority || left.id.localeCompare(right.id))
-        .find((rule) => ruleMatches(rule, facts))?.cameraRigProfileRef ??
+        .find((rule) => ruleMatches(rule, sample))?.cameraRigProfileRef ??
         context.defaultCameraRigProfileRef;
     }
     const profile = byRef.get(selectedRef) ?? byRef.get(context.defaultCameraRigProfileRef);
@@ -389,7 +482,7 @@ export class CameraDirectorV1 {
     subjectEntityId: string,
     target: Vector3,
     desiredPosition: Vector3,
-    profile: ExecutionCameraRigProfileV1,
+    parameters: CameraParametersV1,
   ): Vector3 {
     const displacement = desiredPosition.subtract(target);
     const distance = displacement.length();
@@ -400,14 +493,14 @@ export class CameraDirectorV1 {
     );
     if (hit?.hit !== true || hit.distance <= 0) return desiredPosition;
     const safeDistance = Math.max(
-      profile.parameters.minimumDistanceMeters,
-      hit.distance - profile.parameters.collisionRadiusMeters,
+      parameters.minimumDistanceMeters,
+      hit.distance - parameters.collisionRadiusMeters,
     );
     return target.add(ray.direction.scale(Math.min(distance, safeDistance)));
   }
 
-  private updateLegacy(subject: ExecutionSubjectV3, controller: SubjectController): void {
-    const origin = controller.subjectOrigin;
+  private updateLegacy(sample: ViewTargetSampleV1): void {
+    const origin = new Vector3(...sample.targetPositionMetersXYZ);
     const plan = this.executionPlan.camera;
     const target = new Vector3(origin.x, origin.y + plan.targetHeightMeters, origin.z);
     const horizontalDistance = Math.cos(plan.pitchRadians) * plan.distanceMeters;
@@ -417,10 +510,10 @@ export class CameraDirectorV1 {
       target.z + horizontalDistance,
     );
     this.camera.setTarget(target);
+    this.smoothedTarget.copyFrom(target);
     this.activeProfileRef = plan.rigRef;
     this.activeRigRef = "worldkit://camera-rig/orbit-follow@1";
     this.fallbackActive = false;
     this.initialized = true;
-    void subject;
   }
 }

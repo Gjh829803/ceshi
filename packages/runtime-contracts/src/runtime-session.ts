@@ -22,15 +22,39 @@ export interface CameraViewInputV1 {
 export interface CameraTuningV1 {
   distanceMeters?: number;
   targetHeightMeters?: number;
+  shoulderOffsetMeters?: number;
+  pitchRadians?: number;
   positionDampingPerSecond?: number;
   rotationDampingPerSecond?: number;
+  collisionRadiusMeters?: number;
   lookAheadSeconds?: number;
+  transitionSeconds?: number;
   baseFovDegrees?: number;
   speedFovDegreesPerMeterPerSecond?: number;
   maximumSpeedFovDegrees?: number;
 }
 
 export type MotionParameterTuningV1 = Readonly<Record<string, number>>;
+
+export interface ViewControlFrameV1 {
+  forwardXYZ: Vec3;
+  rightXYZ: Vec3;
+  committedTick: number;
+}
+
+export interface ViewTargetSampleV1 {
+  entityId: string;
+  targetPositionMetersXYZ: Vec3;
+  forwardXYZ: Vec3;
+  upXYZ: Vec3;
+  velocityMetersPerSecondXYZ: Vec3;
+  approximateRadiusMeters: number;
+  socketPositionsMetersXYZById: Readonly<Record<string, Vec3>>;
+  activeMotionKernelRef: string;
+  motionTags: readonly string[];
+  movementMedium: "ground" | "water" | "air";
+  relationshipRole: "none" | "rider" | "driver" | "passenger" | "tethered";
+}
 
 export const TRUSTED_DEFAULT_CONTROLLER_ID = "controller-primary" as const;
 
@@ -143,11 +167,17 @@ export interface MotionKernelSummaryV1 {
 
 export interface CompatibleProfileSummaryV1 {
   resourceRef: string;
+  contentHash: string;
   kind: "motion-profile" | "camera-rig-profile";
   displayName: string;
   role?: "default" | "optional" | "fallback" | "camera";
   parameters?: Readonly<Record<string, number | boolean>>;
   safetyLimits?: Readonly<Record<string, { minimum: number; maximum: number }>>;
+  authoringRanges?: Readonly<
+    Record<string, { minimum: number; maximum: number; step: number }>
+  >;
+  runtimeParameterNames?: readonly string[];
+  draftOnlyParameterNames?: readonly string[];
 }
 
 export interface SubjectPackageValidationResultV1 {

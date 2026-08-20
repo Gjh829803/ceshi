@@ -173,4 +173,61 @@ describe("capability-driven subject registry", () => {
       [...G_BOT_CLIPS].sort(),
     );
   });
+
+  it("separates hard safety limits, authoring ranges and runtime parameter support", () => {
+    const vehicle = builtInSubjectResourceRegistry.resolveMotionProfile(
+      "worldkit://motion-profile/wheeled-arcade.medium@1",
+    );
+    const vehicleKernel = builtInSubjectResourceRegistry.resolveMotionKernel(
+      "worldkit://motion-kernel/wheeled-arcade@1",
+    );
+    expect(vehicle?.parameters).toMatchObject({
+      lowSpeedTurnRateRadiansPerSecond: 1.15,
+      highSpeedTurnRateRadiansPerSecond: 0.42,
+      steeringResponsePerSecond: 4.5,
+      steeringReturnPerSecond: 7,
+      fullSteeringAuthoritySpeedMetersPerSecond: 2.5,
+      turnRateSpeedCurveExponent: 1.35,
+      dragPerSecond: 0.7,
+    });
+    expect(vehicle?.authoringRanges?.lowSpeedTurnRateRadiansPerSecond).toEqual({
+      minimum: 0.3,
+      maximum: 2,
+      step: 0.01,
+    });
+    expect(vehicleKernel?.runtimeParameterNames).toEqual(
+      expect.arrayContaining(Object.keys(vehicle?.authoringRanges ?? {})),
+    );
+
+    const slide = builtInSubjectResourceRegistry.resolveMotionProfile(
+      "worldkit://motion-profile/surface-slide.skimmer@1",
+    );
+    const slideKernel = builtInSubjectResourceRegistry.resolveMotionKernel(
+      "worldkit://motion-kernel/surface-slide@1",
+    );
+    expect(slide?.parameters.slopeGravityRatio).toBeDefined();
+    expect(slideKernel?.runtimeParameterNames).not.toContain("slopeGravityRatio");
+  });
+
+  it("maps the seven reusable camera presets to explicit heading behavior", () => {
+    const expectedHeadingSources = {
+      "worldkit://camera-profile/first-person.standard@1": "target-forward",
+      "worldkit://camera-profile/orbit.medium@1": "view",
+      "worldkit://camera-profile/follow.medium@1": "target-forward",
+      "worldkit://camera-profile/chase.surface-fast@1": "target-velocity",
+      "worldkit://camera-profile/follow.water-surface@1": "target-velocity",
+      "worldkit://camera-profile/flight.glide@1": "target-velocity",
+      "worldkit://camera-profile/follow.mounted@1": "target-forward",
+    } as const;
+    for (const [resourceRef, headingSource] of Object.entries(expectedHeadingSources)) {
+      const profile = builtInSubjectResourceRegistry.resolveCameraRigProfile(resourceRef);
+      expect(profile?.headingSource).toBe(headingSource);
+      expect(profile?.authoringRanges?.transitionSeconds).toBeDefined();
+    }
+    expect(
+      builtInSubjectResourceRegistry.resolveCameraRigProfile(
+        "worldkit://camera-profile/orbit.medium@1",
+      )?.parameters.lookAheadSeconds,
+    ).toBe(0);
+  });
 });

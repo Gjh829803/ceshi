@@ -30,6 +30,7 @@ import type {
   SubjectHarnessReportV1,
   Vec2,
   Vec3,
+  ViewTargetSampleV1,
   WorldRuntimeSessionV3,
   WorldRuntimeSnapshotV3,
 } from "@whitebox-world/runtime-contracts";
@@ -708,14 +709,14 @@ export class BabylonWorldRuntime implements WorldRuntimeSessionV3 {
     const physicsEngine = this.scene.getPhysicsEngine();
     if (physicsEngine === null) throw new Error("WORLDKIT_HAVOK_ENGINE_MISSING");
     for (let index = 0; index < input.ticks; index += 1) {
+      const viewControlFrame = this.cameraDirector.controlFrame(this.tick);
       for (const subject of this.executionPlan.subjects) {
         const controller = this.controllerFor(subject.entityId);
         const controlled = subject.entityId === this.controlledEntityId;
-        const cameraDirection = this.camera.getForwardRay().direction;
         controller.step(
           controlled ? input.actions : [],
           this.detectMovementMedium(controller),
-          [cameraDirection.x, cameraDirection.y, cameraDirection.z],
+          viewControlFrame,
         );
       }
       physicsEngine._step(FIXED_TIME_STEP_SECONDS);
@@ -865,11 +866,31 @@ export class BabylonWorldRuntime implements WorldRuntimeSessionV3 {
       );
     }
     const controller = this.controllerFor(subject.entityId);
+    const visual = this.visualFor(subject.entityId);
+    const origin = controller.subjectOrigin;
+    const velocity = controller.velocity;
+    const motion = controller.motionSnapshot();
+    const socketPositionsMetersXYZById: Record<string, Vec3> = {};
+    for (const [socketId, socketNode] of visual.socketNodesById) {
+      const position = socketNode.getAbsolutePosition();
+      socketPositionsMetersXYZById[socketId] = [position.x, position.y, position.z];
+    }
+    const sample: ViewTargetSampleV1 = {
+      entityId: subject.entityId,
+      targetPositionMetersXYZ: [origin.x, origin.y, origin.z],
+      forwardXYZ: motion.forwardXYZ,
+      upXYZ: [0, 1, 0],
+      velocityMetersPerSecondXYZ: [velocity.x, velocity.y, velocity.z],
+      approximateRadiusMeters: subject.collider.radiusMeters,
+      socketPositionsMetersXYZById,
+      activeMotionKernelRef: motion.activeMotionKernelRef,
+      motionTags: motion.motionTags,
+      movementMedium: this.detectMovementMedium(controller),
+      relationshipRole: "none",
+    };
     this.cameraDirector.update(
-      subject,
-      controller,
-      this.visualFor(subject.entityId),
-      this.detectMovementMedium(controller),
+      subject.capabilityAssembly?.cameraContext,
+      sample,
       FIXED_TIME_STEP_SECONDS,
     );
   }

@@ -153,7 +153,7 @@ app.innerHTML = `
             <div class="tuning-inline-status" id="tuning-input-status">等待试跑</div>
           </section>
           <section class="tuning-section" id="tuning-motion">
-            <div class="tuning-section-heading"><span>03</span><div><h3>调整运动手感</h3><p>所有滑杆都被限制在安全范围内；拖动后会立即作用于当前主体，同时保存为可导出的策划草稿。</p></div></div>
+            <div class="tuning-section-heading"><span>03</span><div><h3>调整运动手感</h3><p>滑杆使用策划推荐范围，并明确标出“即时生效”或“仅草稿、待接入”。</p></div></div>
             <div class="friendly-slider-grid" id="tuning-motion-sliders"></div>
           </section>
           <section class="tuning-section" id="tuning-camera">
@@ -267,6 +267,10 @@ const FRIENDLY_MOTION_PARAMETERS: Readonly<Record<string, readonly [string, stri
   turnRateRadiansPerSecond: ["转向速度", "数值越高，转弯越灵敏"],
   lowSpeedTurnRateRadiansPerSecond: ["低速转向", "慢速时方向盘的灵敏度"],
   highSpeedTurnRateRadiansPerSecond: ["高速转向", "高速时方向盘的灵敏度"],
+  steeringResponsePerSecond: ["方向输入渐变", "数值越低，按下 A/D 后方向越慢打满"],
+  steeringReturnPerSecond: ["松手回正速度", "松开 A/D 后方向盘回到中间的速度"],
+  fullSteeringAuthoritySpeedMetersPerSecond: ["完整转向所需车速", "车速达到这里后才获得完整转向权限"],
+  turnRateSpeedCurveExponent: ["高低速转向曲线", "控制低速转向过渡到高速转向的节奏"],
   pitchRateRadiansPerSecond: ["俯仰速度", "抬头和俯冲的反应速度"],
   yawRateRadiansPerSecond: ["偏航速度", "左右改变飞行方向的反应速度"],
   rollRateRadiansPerSecond: ["倾斜速度", "机体左右倾斜的反应速度"],
@@ -418,10 +422,12 @@ function installTuningWorkbench(
 
   const motionSliderGrid = requiredElement<HTMLDivElement>("#tuning-motion-sliders");
   const defaultMotion = workbenchContext.motionProfiles.find((row) => row.role === "default");
+  const liveMotionParameterNames = new Set(defaultMotion?.runtimeParameterNames ?? []);
   const applyMotionTuning = (): void => {
     const numericTuning = Object.fromEntries(
       Object.entries(workbenchContext.parameterDraft).filter(
-        (entry): entry is [string, number] => typeof entry[1] === "number",
+        (entry): entry is [string, number] =>
+          typeof entry[1] === "number" && liveMotionParameterNames.has(entry[0]),
       ),
     );
     try {
@@ -434,19 +440,24 @@ function installTuningWorkbench(
   if (defaultMotion?.safetyLimits === undefined) {
     motionSliderGrid.innerHTML = '<p class="friendly-empty">当前主体没有开放可调的运动参数。</p>';
   } else {
-    motionSliderGrid.replaceChildren(...Object.entries(defaultMotion.safetyLimits).flatMap(([name, limit]) => {
+    motionSliderGrid.replaceChildren(...Object.entries(defaultMotion.safetyLimits).flatMap(([name, safetyLimit]) => {
       const value = workbenchContext.parameterDraft[name];
-      if (typeof value !== "number" || limit.minimum === limit.maximum) return [];
+      const range = defaultMotion.authoringRanges?.[name] ?? {
+        ...safetyLimit,
+        step: Math.max(0.01, (safetyLimit.maximum - safetyLimit.minimum) / 100),
+      };
+      if (typeof value !== "number" || range.minimum === range.maximum) return [];
+      const runtimeSupported = liveMotionParameterNames.has(name);
       const [labelText, helpText] = FRIENDLY_MOTION_PARAMETERS[name] ?? [name, "安全范围内的运动参数"];
       const label = document.createElement("label");
       label.className = "friendly-slider";
-      label.innerHTML = `<span><strong>${escapeHtml(labelText)}</strong><small>${escapeHtml(helpText)}</small></span>`;
+      label.innerHTML = `<span><strong>${escapeHtml(labelText)} · ${runtimeSupported ? "即时生效" : "仅草稿"}</strong><small>${escapeHtml(helpText)}${runtimeSupported ? "" : "；当前 Runtime 尚未接入"}</small></span>`;
       const control = document.createElement("div");
       const input = document.createElement("input");
       input.type = "range";
-      input.min = String(limit.minimum);
-      input.max = String(limit.maximum);
-      input.step = String(Math.max(0.01, (limit.maximum - limit.minimum) / 100));
+      input.min = String(range.minimum);
+      input.max = String(range.maximum);
+      input.step = String(range.step);
       input.value = String(value);
       const output = document.createElement("output");
       output.textContent = value.toFixed(2);
@@ -458,8 +469,12 @@ function installTuningWorkbench(
           workbenchContext.motionDraftStorageKey,
           JSON.stringify(workbenchContext.parameterDraft),
         );
-        applyMotionTuning();
-        saveStatus.textContent = `“${labelText}”已应用到当前主体，并保存到本机草稿`;
+        if (runtimeSupported) {
+          applyMotionTuning();
+          saveStatus.textContent = `“${labelText}”已应用到当前主体，并保存到本机草稿`;
+        } else {
+          saveStatus.textContent = `“${labelText}”只保存为草稿，当前 Runtime 尚未接入`;
+        }
       });
       control.append(input, output);
       label.append(control);
@@ -491,7 +506,7 @@ function installTuningWorkbench(
       : cameraPreference;
     const profile = cameraRows.find((row) => row.resourceRef === activeProfileRef) ?? cameraRows[0];
     const base = profile?.parameters ?? {};
-    const storageKey = `worldkit.camera-tuning.${workbenchContext.definition.resourceRef}.${profile?.resourceRef ?? "auto"}`;
+    const storageKey = `worldkit.camera-tuning.v2.${workbenchContext.definition.resourceRef}.${profile?.resourceRef ?? "auto"}.${profile?.contentHash ?? "unlocked"}`;
     try {
       const stored = readLocalDraft(storageKey);
       cameraTuning = stored === null ? {} : JSON.parse(stored) as CameraTuningV1;
@@ -504,19 +519,25 @@ function installTuningWorkbench(
       help: string;
       minimum: number;
       maximum: number;
+      step: number;
       fallback: number;
     }> = [
-      { key: "distanceMeters", label: "跟随距离", help: "镜头离主体有多远", minimum: Number(base.minimumDistanceMeters ?? 0), maximum: Number(base.maximumDistanceMeters ?? 16), fallback: Number(base.distanceMeters ?? 5) },
-      { key: "targetHeightMeters", label: "观察高度", help: "镜头对准主体的高度", minimum: 0, maximum: 4, fallback: Number(base.targetHeightMeters ?? 1.2) },
-      { key: "positionDampingPerSecond", label: "位置跟随速度", help: "越高越贴紧，越低越有惯性", minimum: 1, maximum: 40, fallback: Number(base.positionDampingPerSecond ?? 12) },
-      { key: "rotationDampingPerSecond", label: "旋转稳定度", help: "越高转向越快，越低镜头越柔和", minimum: 1, maximum: 40, fallback: Number(base.rotationDampingPerSecond ?? 14) },
-      { key: "lookAheadSeconds", label: "启动时镜头向前带", help: "车一动，镜头焦点向前移动的程度；设为 0 完全关闭", minimum: 0, maximum: 2, fallback: Number(base.lookAheadSeconds ?? 0.2) },
-      { key: "baseFovDegrees", label: "视野宽度", help: "越大看到的范围越广", minimum: 35, maximum: 100, fallback: Number(base.baseFovDegrees ?? 60) },
-      { key: "speedFovDegreesPerMeterPerSecond", label: "加速时视野变宽", help: "速度越快画面越有冲刺感；设为 0 完全关闭", minimum: 0, maximum: 5, fallback: Number(base.speedFovDegreesPerMeterPerSecond ?? 0) },
-      { key: "maximumSpeedFovDegrees", label: "冲刺视野上限", help: "限制高速时最多额外增加多少视野", minimum: 0, maximum: 30, fallback: Number(base.maximumSpeedFovDegrees ?? 0) },
+      { key: "distanceMeters", label: "跟随距离", help: "镜头离主体有多远", minimum: 0, maximum: 16, step: 0.1, fallback: Number(base.distanceMeters ?? 5) },
+      { key: "targetHeightMeters", label: "观察高度", help: "镜头对准主体的高度", minimum: 0, maximum: 4, step: 0.05, fallback: Number(base.targetHeightMeters ?? 1.2) },
+      { key: "shoulderOffsetMeters", label: "肩部偏移", help: "让镜头从主体左侧或右侧观察", minimum: -2, maximum: 2, step: 0.05, fallback: Number(base.shoulderOffsetMeters ?? 0) },
+      { key: "pitchRadians", label: "镜头俯仰角", help: "调整镜头从上方或下方观察的角度", minimum: -1.2, maximum: 1.2, step: 0.01, fallback: Number(base.pitchRadians ?? 0.25) },
+      { key: "positionDampingPerSecond", label: "位置跟随速度", help: "越高越贴紧，越低越有惯性", minimum: 1, maximum: 40, step: 0.1, fallback: Number(base.positionDampingPerSecond ?? 12) },
+      { key: "rotationDampingPerSecond", label: "旋转稳定度", help: "越高转向越快，越低镜头越柔和", minimum: 1, maximum: 40, step: 0.1, fallback: Number(base.rotationDampingPerSecond ?? 14) },
+      { key: "collisionRadiusMeters", label: "碰撞保护距离", help: "镜头接近墙面时保留的安全距离", minimum: 0.05, maximum: 1, step: 0.01, fallback: Number(base.collisionRadiusMeters ?? 0.25) },
+      { key: "lookAheadSeconds", label: "启动时镜头向前带", help: "主体移动时焦点沿前进方向预看；设为 0 完全关闭", minimum: 0, maximum: 2, step: 0.01, fallback: Number(base.lookAheadSeconds ?? 0.2) },
+      { key: "transitionSeconds", label: "镜头切换时间", help: "切换预制时连续过渡所用的时间", minimum: 0, maximum: 3, step: 0.05, fallback: Number(base.transitionSeconds ?? 0.35) },
+      { key: "baseFovDegrees", label: "视野宽度", help: "越大看到的范围越广", minimum: 35, maximum: 100, step: 0.5, fallback: Number(base.baseFovDegrees ?? 60) },
+      { key: "speedFovDegreesPerMeterPerSecond", label: "加速时视野变宽", help: "速度越快画面越有冲刺感；设为 0 完全关闭", minimum: 0, maximum: 5, step: 0.05, fallback: Number(base.speedFovDegreesPerMeterPerSecond ?? 0) },
+      { key: "maximumSpeedFovDegrees", label: "冲刺视野上限", help: "限制高速时最多额外增加多少视野", minimum: 0, maximum: 30, step: 0.5, fallback: Number(base.maximumSpeedFovDegrees ?? 0) },
     ];
     cameraSliders.replaceChildren(...settings.flatMap((setting) => {
-      if (setting.key === "distanceMeters" && Number(base.maximumDistanceMeters ?? 1) === 0) return [];
+      const range = profile?.authoringRanges?.[setting.key];
+      if (range === undefined) return [];
       const value = cameraTuning[setting.key] ?? setting.fallback;
       cameraTuning[setting.key] = value;
       const label = document.createElement("label");
@@ -525,9 +546,9 @@ function installTuningWorkbench(
       const control = document.createElement("div");
       const input = document.createElement("input");
       input.type = "range";
-      input.min = String(setting.minimum);
-      input.max = String(setting.maximum);
-      input.step = String(Math.max(0.01, (setting.maximum - setting.minimum) / 100));
+      input.min = String(range.minimum ?? setting.minimum);
+      input.max = String(range.maximum ?? setting.maximum);
+      input.step = String(range.step ?? setting.step);
       input.value = String(value);
       const output = document.createElement("output");
       output.textContent = Number(value).toFixed(2);
@@ -603,15 +624,20 @@ function installTuningWorkbench(
 
   const exportCurrent = (): void => {
     const payload = {
-      schemaVersion: 2,
+      schemaVersion: 3,
       subjectDefinition: workbenchContext.definition,
       selectedCameraPreference: cameraPreference,
       cameraTuning,
       motionParameterDraft: workbenchContext.parameterDraft,
+      motionParameterSupport: {
+        runtimeParameterNames: defaultMotion?.runtimeParameterNames ?? [],
+        draftOnlyParameterNames: defaultMotion?.draftOnlyParameterNames ?? [],
+        authoringRanges: defaultMotion?.authoringRanges ?? {},
+      },
       inputGuide: inputItems.map((item) => ({ key: item.keyLabel, action: item.title, meaning: item.explanation })),
       compatibleProfiles: [...workbenchContext.motionProfiles, ...workbenchContext.cameraProfiles],
       resourceLockRequired: true,
-      note: "运动与相机参数均已在当前会话即时预览；导出的草稿仍需写回 Registry 并重新编译，才能成为正式预制。",
+      note: "标记为即时生效的参数已在当前会话预览；仅草稿参数需接入 Runtime 后才能成为正式预制。",
     };
     downloadJson(
       `${workbenchContext.definition.semanticClassId.replaceAll(".", "-")}.worldkit-authoring.json`,
@@ -762,7 +788,7 @@ function installCapabilityAuthoringPanel(api: WorldkitBrowserApiV3): void {
 
   const parameterDraft: Record<string, number | boolean> = {};
   const defaultMotion = motionProfiles.find((row) => row.role === "default");
-  const motionDraftStorageKey = `worldkit.motion-draft.${definition.resourceRef}`;
+  const motionDraftStorageKey = `worldkit.motion-draft.v2.${definition.resourceRef}.${defaultMotion?.resourceRef ?? "none"}.${defaultMotion?.contentHash ?? "unlocked"}`;
   if (defaultMotion?.safetyLimits !== undefined) {
     let storedDraft: Readonly<Record<string, unknown>> = {};
     try {
@@ -777,14 +803,18 @@ function installCapabilityAuthoringPanel(api: WorldkitBrowserApiV3): void {
     const title = document.createElement("p");
     title.textContent = "安全参数草稿（导出后重新编译生效）";
     drafts.append(title);
-    for (const [name, limit] of Object.entries(defaultMotion.safetyLimits)) {
+    for (const [name, safetyLimit] of Object.entries(defaultMotion.safetyLimits)) {
+      const range = defaultMotion.authoringRanges?.[name] ?? {
+        ...safetyLimit,
+        step: Math.max(0.01, (safetyLimit.maximum - safetyLimit.minimum) / 100),
+      };
       const value = defaultMotion.parameters?.[name];
-      if (typeof value !== "number" || limit.minimum === limit.maximum) continue;
+      if (typeof value !== "number" || range.minimum === range.maximum) continue;
       const storedValue = storedDraft[name];
       const draftValue = typeof storedValue === "number" &&
           Number.isFinite(storedValue) &&
-          storedValue >= limit.minimum &&
-          storedValue <= limit.maximum
+          storedValue >= range.minimum &&
+          storedValue <= range.maximum
         ? storedValue
         : value;
       parameterDraft[name] = draftValue;
@@ -793,9 +823,9 @@ function installCapabilityAuthoringPanel(api: WorldkitBrowserApiV3): void {
       valueOutput.textContent = String(draftValue);
       const input = document.createElement("input");
       input.type = "range";
-      input.min = String(limit.minimum);
-      input.max = String(limit.maximum);
-      input.step = String(Math.max(0.01, (limit.maximum - limit.minimum) / 100));
+      input.min = String(range.minimum);
+      input.max = String(range.maximum);
+      input.step = String(range.step);
       input.value = String(draftValue);
       input.addEventListener("input", () => {
         parameterDraft[name] = Number(input.value);
@@ -862,7 +892,7 @@ function installCapabilityAuthoringPanel(api: WorldkitBrowserApiV3): void {
   });
   requiredElement<HTMLButtonElement>("#export-package-button").addEventListener("click", () => {
     const payload = {
-      schemaVersion: 1,
+      schemaVersion: 3,
       subjectDefinition: definition,
       compatibleProfiles: profiles,
       motionParameterDraft: parameterDraft,

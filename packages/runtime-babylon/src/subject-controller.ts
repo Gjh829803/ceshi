@@ -8,6 +8,7 @@ import type {
   MotionParameterTuningV1,
   SemanticInputActionV1,
   Vec3,
+  ViewControlFrameV1,
 } from "@whitebox-world/runtime-contracts";
 
 import { compileMotionCommandV1 } from "./control-profile-runtime";
@@ -63,12 +64,16 @@ export class SubjectController {
   step(
     actions: readonly SemanticInputActionV1[],
     movementMedium: ExecutionMovementMediumV1,
-    cameraForwardXYZ: Vec3 = [0, 0, -1],
+    viewControlFrame: ViewControlFrameV1 = {
+      forwardXYZ: [0, 0, -1],
+      rightXYZ: [1, 0, 0],
+      committedTick: 0,
+    },
   ): void {
     const command = compileMotionCommandV1(
       this.subject.capabilityAssembly?.controlProfile ?? LEGACY_CONTROL_PROFILE,
       actions,
-      cameraForwardXYZ,
+      viewControlFrame,
     );
     this.motionKernel.step(command, movementMedium);
   }
