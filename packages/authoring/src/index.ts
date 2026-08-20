@@ -1,7 +1,12 @@
 export * from "./canonical-json";
+export { BUILT_IN_LAYOUT_SOLVER_PROFILE_REF } from "@whitebox-world/layout-solver";
+export * from "./migrate-v2-to-v3";
 export * from "./normalize";
 export * from "./parse";
+export * from "./parse-v3";
 export * from "./resource-lock";
 export * from "./subject-definition-normalizer";
 export * from "./types";
+export * from "./types-v3";
 export * from "./validate";
+export * from "./validate-v3";

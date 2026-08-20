@@ -129,6 +129,9 @@ importers:
 
   packages/authoring:
     dependencies:
+      '@whitebox-world/layout-solver':
+        specifier: workspace:*
+        version: link:../layout-solver
       '@whitebox-world/protocol':
         specifier: workspace:*
         version: link:../protocol

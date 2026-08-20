@@ -6,9 +6,11 @@
   "exports": {
     ".": "./src/index.ts",
     "./schema": "./src/authoring-spec-v2.schema.json",
+    "./schema-v3": "./src/authoring-spec-v3.schema.json",
     "./subject-definition-schema": "./src/subject-definition-v1.schema.json"
   },
   "dependencies": {
+    "@whitebox-world/layout-solver": "workspace:*",
     "@whitebox-world/protocol": "workspace:*",
     "@whitebox-world/subject-composition": "workspace:*",
     "@whitebox-world/subject-registry": "workspace:*",

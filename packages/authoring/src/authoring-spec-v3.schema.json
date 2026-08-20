@@ -1,0 +1,252 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "worldkit://schema/authoring-spec@3",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["kind", "schemaVersion", "id", "seed", "layout", "spatial", "world", "resources", "nodes", "relationships", "rules", "startup", "constraints"],
+  "properties": {
+    "kind": { "const": "worldkit-authoring-spec" },
+    "schemaVersion": { "const": 3 },
+    "id": { "$ref": "worldkit://schema/authoring-spec@2#/$defs/id" },
+    "seed": { "type": "integer", "minimum": 0, "maximum": 4294967295 },
+    "provenance": { "$ref": "worldkit://schema/authoring-spec@2#/$defs/provenance" },
+    "layout": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["solverProfileRef"],
+      "properties": {
+        "solverProfileRef": { "type": "string", "format": "layout-solver-profile-ref" }
+      }
+    },
+    "spatial": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["regions", "routes", "screenRegions"],
+      "properties": {
+        "regions": { "type": "array", "maxItems": 256, "items": { "$ref": "#/$defs/spatialRegion" } },
+        "routes": { "type": "array", "maxItems": 256, "items": { "$ref": "#/$defs/route" } },
+        "screenRegions": { "type": "array", "maxItems": 64, "items": { "$ref": "#/$defs/screenRegion" } }
+      }
+    },
+    "world": { "$ref": "worldkit://schema/authoring-spec@2#/$defs/world" },
+    "resources": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["prototypes", "subjectDefinitions"],
+      "properties": {
+        "prototypes": { "type": "array", "maxItems": 4096, "items": { "$ref": "worldkit://schema/authoring-spec@2#/$defs/prototype" } },
+        "subjectDefinitions": { "type": "array", "maxItems": 256, "items": { "$ref": "worldkit://schema/subject-definition@1" } }
+      }
+    },
+    "nodes": {
+      "type": "array",
+      "minItems": 4,
+      "maxItems": 10000,
+      "items": {
+        "oneOf": [
+          { "$ref": "worldkit://schema/authoring-spec@2#/$defs/terrainNode" },
+          { "$ref": "worldkit://schema/authoring-spec@2#/$defs/waterNode" },
+          { "$ref": "#/$defs/objectNode" },
+          { "$ref": "worldkit://schema/authoring-spec@2#/$defs/subjectNode" },
+          { "$ref": "worldkit://schema/authoring-spec@2#/$defs/cameraNode" },
+          { "$ref": "#/$defs/anchorNode" }
+        ]
+      }
+    },
+    "relationships": { "type": "array", "maxItems": 10000, "items": { "$ref": "worldkit://schema/authoring-spec@2#/$defs/relationship" } },
+    "rules": { "type": "array", "maxItems": 10000, "items": { "$ref": "worldkit://schema/authoring-spec@2#/$defs/rule" } },
+    "startup": { "$ref": "worldkit://schema/authoring-spec@2#/$defs/startup" },
+    "constraints": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["placements"],
+      "properties": {
+        "placements": { "type": "array", "maxItems": 128, "items": { "$ref": "#/$defs/placementConstraint" } }
+      }
+    }
+  },
+  "$defs": {
+    "uv": {
+      "type": "array",
+      "prefixItems": [{ "type": "number", "minimum": 0, "maximum": 1 }, { "type": "number", "minimum": 0, "maximum": 1 }],
+      "items": false,
+      "minItems": 2,
+      "maxItems": 2
+    },
+    "spatialRegion": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "kind", "pointsMetersXZ", "semanticClassId"],
+      "properties": {
+        "id": { "$ref": "worldkit://schema/authoring-spec@2#/$defs/id" },
+        "kind": { "const": "polygon-xz" },
+        "pointsMetersXZ": { "type": "array", "minItems": 3, "maxItems": 4096, "items": { "$ref": "worldkit://schema/authoring-spec@2#/$defs/vec2" } },
+        "minimumHeightMeters": { "type": "number" },
+        "maximumHeightMeters": { "type": "number" },
+        "semanticClassId": { "type": "string", "minLength": 1, "maxLength": 128 }
+      }
+    },
+    "route": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "kind", "pointsMetersXZ", "widthMeters", "locomotionProfileRef"],
+      "properties": {
+        "id": { "$ref": "worldkit://schema/authoring-spec@2#/$defs/id" },
+        "kind": { "const": "polyline-xz" },
+        "pointsMetersXZ": { "type": "array", "minItems": 2, "maxItems": 4096, "items": { "$ref": "worldkit://schema/authoring-spec@2#/$defs/vec2" } },
+        "widthMeters": { "type": "number", "exclusiveMinimum": 0 },
+        "locomotionProfileRef": { "type": "string", "format": "locomotion-profile-ref" }
+      }
+    },
+    "screenRegion": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "kind", "minimumUv", "maximumUv"],
+      "properties": {
+        "id": { "$ref": "worldkit://schema/authoring-spec@2#/$defs/id" },
+        "kind": { "const": "rectangle-uv" },
+        "minimumUv": { "$ref": "#/$defs/uv" },
+        "maximumUv": { "$ref": "#/$defs/uv" }
+      }
+    },
+    "placement": {
+      "oneOf": [
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["kind", "transform"],
+          "properties": {
+            "kind": { "const": "fixed" },
+            "transform": { "$ref": "worldkit://schema/authoring-spec@2#/$defs/transform" }
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["kind", "placementConstraintIds"],
+          "properties": {
+            "kind": { "const": "solved" },
+            "initialTransform": { "$ref": "worldkit://schema/authoring-spec@2#/$defs/transform" },
+            "placementConstraintIds": { "type": "array", "minItems": 1, "maxItems": 128, "uniqueItems": true, "items": { "$ref": "worldkit://schema/authoring-spec@2#/$defs/id" } }
+          }
+        }
+      ]
+    },
+    "objectNode": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "kind", "prototypeRef", "placement"],
+      "properties": {
+        "id": { "$ref": "worldkit://schema/authoring-spec@2#/$defs/id" },
+        "kind": { "const": "object" },
+        "prototypeRef": { "type": "string", "format": "package-prototype-ref" },
+        "placement": { "$ref": "#/$defs/placement" }
+      }
+    },
+    "anchorNode": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "kind", "placement", "semantic"],
+      "properties": {
+        "id": { "$ref": "worldkit://schema/authoring-spec@2#/$defs/id" },
+        "kind": { "const": "anchor" },
+        "placement": { "$ref": "#/$defs/placement" },
+        "semantic": { "$ref": "worldkit://schema/authoring-spec@2#/$defs/semantic" }
+      }
+    },
+    "insideRegionConstraint": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "kind", "requirement", "entityId", "regionId", "boundaryClearanceMeters"],
+      "properties": {
+        "id": { "$ref": "worldkit://schema/authoring-spec@2#/$defs/id" }, "kind": { "const": "inside-region" }, "requirement": { "enum": ["required", "preferred"] }, "preferenceWeightRatio": { "type": "number", "exclusiveMinimum": 0, "maximum": 1 },
+        "entityId": { "$ref": "worldkit://schema/authoring-spec@2#/$defs/id" }, "regionId": { "$ref": "worldkit://schema/authoring-spec@2#/$defs/id" }, "boundaryClearanceMeters": { "type": "number", "minimum": 0 }
+      },
+      "allOf": [{ "$ref": "#/$defs/requirementWeight" }]
+    },
+    "outsideRegionConstraint": {
+      "type": "object", "additionalProperties": false,
+      "required": ["id", "kind", "requirement", "entityId", "regionId", "boundaryClearanceMeters"],
+      "properties": {
+        "id": { "$ref": "worldkit://schema/authoring-spec@2#/$defs/id" }, "kind": { "const": "outside-region" }, "requirement": { "enum": ["required", "preferred"] }, "preferenceWeightRatio": { "type": "number", "exclusiveMinimum": 0, "maximum": 1 },
+        "entityId": { "$ref": "worldkit://schema/authoring-spec@2#/$defs/id" }, "regionId": { "$ref": "worldkit://schema/authoring-spec@2#/$defs/id" }, "boundaryClearanceMeters": { "type": "number", "minimum": 0 }
+      }, "allOf": [{ "$ref": "#/$defs/requirementWeight" }]
+    },
+    "distanceRangeConstraint": {
+      "type": "object", "additionalProperties": false,
+      "required": ["id", "kind", "requirement", "entityId", "referenceEntityId", "minimumDistanceMeters", "maximumDistanceMeters"],
+      "properties": {
+        "id": { "$ref": "worldkit://schema/authoring-spec@2#/$defs/id" }, "kind": { "const": "distance-range" }, "requirement": { "enum": ["required", "preferred"] }, "preferenceWeightRatio": { "type": "number", "exclusiveMinimum": 0, "maximum": 1 },
+        "entityId": { "$ref": "worldkit://schema/authoring-spec@2#/$defs/id" }, "referenceEntityId": { "$ref": "worldkit://schema/authoring-spec@2#/$defs/id" }, "minimumDistanceMeters": { "type": "number", "minimum": 0 }, "maximumDistanceMeters": { "type": "number", "minimum": 0 }
+      }, "allOf": [{ "$ref": "#/$defs/requirementWeight" }]
+    },
+    "facesEntityConstraint": {
+      "type": "object", "additionalProperties": false,
+      "required": ["id", "kind", "requirement", "facingEntityId", "targetEntityId", "maximumAngularDeviationDegrees"],
+      "properties": {
+        "id": { "$ref": "worldkit://schema/authoring-spec@2#/$defs/id" }, "kind": { "const": "faces-entity" }, "requirement": { "enum": ["required", "preferred"] }, "preferenceWeightRatio": { "type": "number", "exclusiveMinimum": 0, "maximum": 1 },
+        "facingEntityId": { "$ref": "worldkit://schema/authoring-spec@2#/$defs/id" }, "targetEntityId": { "$ref": "worldkit://schema/authoring-spec@2#/$defs/id" }, "maximumAngularDeviationDegrees": { "type": "number", "minimum": 0, "maximum": 180 }
+      }, "allOf": [{ "$ref": "#/$defs/requirementWeight" }]
+    },
+    "supportedByConstraint": {
+      "type": "object", "additionalProperties": false,
+      "required": ["id", "kind", "requirement", "supportedEntityId", "supportingEntityId", "maximumSupportGapMeters", "minimumSupportRatio"],
+      "properties": {
+        "id": { "$ref": "worldkit://schema/authoring-spec@2#/$defs/id" }, "kind": { "const": "supported-by" }, "requirement": { "enum": ["required", "preferred"] }, "preferenceWeightRatio": { "type": "number", "exclusiveMinimum": 0, "maximum": 1 },
+        "supportedEntityId": { "$ref": "worldkit://schema/authoring-spec@2#/$defs/id" }, "supportingEntityId": { "$ref": "worldkit://schema/authoring-spec@2#/$defs/id" }, "maximumSupportGapMeters": { "type": "number", "minimum": 0 }, "minimumSupportRatio": { "type": "number", "minimum": 0, "maximum": 1 }
+      }, "allOf": [{ "$ref": "#/$defs/requirementWeight" }]
+    },
+    "minimumClearanceConstraint": {
+      "type": "object", "additionalProperties": false,
+      "required": ["id", "kind", "requirement", "entityId", "clearanceMeters"],
+      "properties": {
+        "id": { "$ref": "worldkit://schema/authoring-spec@2#/$defs/id" }, "kind": { "const": "minimum-clearance" }, "requirement": { "enum": ["required", "preferred"] }, "preferenceWeightRatio": { "type": "number", "exclusiveMinimum": 0, "maximum": 1 },
+        "entityId": { "$ref": "worldkit://schema/authoring-spec@2#/$defs/id" }, "clearanceMeters": { "type": "number", "minimum": 0 },
+        "otherEntityIds": { "type": "array", "minItems": 1, "maxItems": 256, "uniqueItems": true, "items": { "$ref": "worldkit://schema/authoring-spec@2#/$defs/id" } },
+        "semanticClassIds": { "type": "array", "minItems": 1, "maxItems": 256, "uniqueItems": true, "items": { "type": "string", "minLength": 1, "maxLength": 128 } }
+      },
+      "oneOf": [{ "type": "object", "properties": { "otherEntityIds": true }, "required": ["otherEntityIds"], "not": { "type": "object", "properties": { "semanticClassIds": true }, "required": ["semanticClassIds"] } }, { "type": "object", "properties": { "semanticClassIds": true }, "required": ["semanticClassIds"], "not": { "type": "object", "properties": { "otherEntityIds": true }, "required": ["otherEntityIds"] } }],
+      "allOf": [{ "$ref": "#/$defs/requirementWeight" }]
+    },
+    "withinSlopeLimitConstraint": {
+      "type": "object", "additionalProperties": false,
+      "required": ["id", "kind", "requirement", "terrainEntityId", "maximumSlopeDegrees"],
+      "properties": {
+        "id": { "$ref": "worldkit://schema/authoring-spec@2#/$defs/id" }, "kind": { "const": "within-slope-limit" }, "requirement": { "enum": ["required", "preferred"] }, "preferenceWeightRatio": { "type": "number", "exclusiveMinimum": 0, "maximum": 1 },
+        "entityId": { "$ref": "worldkit://schema/authoring-spec@2#/$defs/id" }, "routeId": { "$ref": "worldkit://schema/authoring-spec@2#/$defs/id" }, "terrainEntityId": { "$ref": "worldkit://schema/authoring-spec@2#/$defs/id" }, "maximumSlopeDegrees": { "type": "number", "minimum": 0, "maximum": 90 }
+      },
+      "oneOf": [{ "type": "object", "properties": { "entityId": true }, "required": ["entityId"], "not": { "type": "object", "properties": { "routeId": true }, "required": ["routeId"] } }, { "type": "object", "properties": { "routeId": true }, "required": ["routeId"], "not": { "type": "object", "properties": { "entityId": true }, "required": ["entityId"] } }],
+      "allOf": [{ "$ref": "#/$defs/requirementWeight" }]
+    },
+    "visibleInCameraRegionConstraint": {
+      "type": "object", "additionalProperties": false,
+      "required": ["id", "kind", "requirement", "visibleEntityId", "cameraEntityId", "screenRegionId", "minimumVisibleRatio", "minimumProjectedAreaRatio"],
+      "properties": {
+        "id": { "$ref": "worldkit://schema/authoring-spec@2#/$defs/id" }, "kind": { "const": "visible-in-camera-region" }, "requirement": { "enum": ["required", "preferred"] }, "preferenceWeightRatio": { "type": "number", "exclusiveMinimum": 0, "maximum": 1 },
+        "visibleEntityId": { "$ref": "worldkit://schema/authoring-spec@2#/$defs/id" }, "cameraEntityId": { "$ref": "worldkit://schema/authoring-spec@2#/$defs/id" }, "screenRegionId": { "$ref": "worldkit://schema/authoring-spec@2#/$defs/id" }, "minimumVisibleRatio": { "type": "number", "minimum": 0, "maximum": 1 }, "minimumProjectedAreaRatio": { "type": "number", "minimum": 0, "maximum": 1 }
+      }, "allOf": [{ "$ref": "#/$defs/requirementWeight" }]
+    },
+    "requirementWeight": {
+      "type": "object",
+      "properties": {
+        "requirement": { "enum": ["required", "preferred"] },
+        "preferenceWeightRatio": { "type": "number", "exclusiveMinimum": 0, "maximum": 1 }
+      },
+      "if": { "type": "object", "properties": { "requirement": { "const": "preferred" } }, "required": ["requirement"] },
+      "then": { "type": "object", "properties": { "preferenceWeightRatio": true }, "required": ["preferenceWeightRatio"] },
+      "else": { "type": "object", "not": { "type": "object", "properties": { "preferenceWeightRatio": true }, "required": ["preferenceWeightRatio"] } }
+    },
+    "placementConstraint": {
+      "oneOf": [
+        { "$ref": "#/$defs/insideRegionConstraint" },
+        { "$ref": "#/$defs/outsideRegionConstraint" },
+        { "$ref": "#/$defs/distanceRangeConstraint" },
+        { "$ref": "#/$defs/facesEntityConstraint" },
+        { "$ref": "#/$defs/supportedByConstraint" },
+        { "$ref": "#/$defs/minimumClearanceConstraint" },
+        { "$ref": "#/$defs/withinSlopeLimitConstraint" },
+        { "$ref": "#/$defs/visibleInCameraRegionConstraint" }
+      ]
+    }
+  }
+}
