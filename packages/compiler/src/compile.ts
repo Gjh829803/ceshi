@@ -4,6 +4,8 @@ import type {
   NormalizedRigProfileV1,
   NormalizedSubjectAssetV1,
   NormalizedWorldIRV2,
+  NormalizedWorldIRV3,
+  NormalizedLayoutAssertionV1,
   NormalizedWorldNodeV2,
   NormalizedSubjectSocketV2,
   NormalizedSubjectVisualPartV2,
@@ -14,12 +16,16 @@ import { sha256CanonicalJson } from "@whitebox-world/protocol";
 import type {
   CompileDiagnostic,
   CompileWorldResultV3,
+  CompileWorldResultV4,
   ExecutionAnimationSetV1,
   ExecutionBipedBoneIdV1,
   ExecutionColliderProfileV1,
   ExecutionObjectPrimitiveV3,
   ExecutionObjectV3,
   ExecutionPlanV3,
+  ExecutionPlanV4,
+  ExecutionLayoutAssertionV1,
+  ExecutionLayoutPlacementV1,
   ExecutionRigProfileV1,
   ExecutionSubjectAssetV1,
   ExecutionSubjectV3,
@@ -56,6 +62,11 @@ const EXECUTION_BIPED_BONE_IDS = [
 export interface CompileWorldInput {
   normalizedWorldIr: NormalizedWorldIRV2;
   normalizedWorldIrHash: string;
+}
+
+export interface CompileWorldInputV4 {
+  readonly normalizedWorldIr: NormalizedWorldIRV3;
+  readonly normalizedWorldIrHash: string;
 }
 
 export function sampleTerrainHeight(
@@ -901,6 +912,303 @@ export function compileWorld(input: CompileWorldInput): CompileWorldResultV3 {
               : "NormalizedWorldIRV2 could not be compiled.",
         },
       ],
+    };
+  }
+}
+
+function projectNormalizedWorldV3ToV2(
+  world: NormalizedWorldIRV3,
+): NormalizedWorldIRV2 {
+  const { layout: _layout, schemaVersion: _schemaVersion, nodes: _nodes, ...common } = world;
+  return {
+    ...structuredClone(common),
+    schemaVersion: 2,
+    nodes: world.nodes.map((node): NormalizedWorldNodeV2 => {
+      if (node.kind === "camera") {
+        const { aspectRatio: _aspectRatio, ...thirdPerson } = node.components.cameraRig.thirdPerson;
+        return {
+          ...structuredClone(node),
+          components: {
+            cameraRig: {
+              ...structuredClone(node.components.cameraRig),
+              thirdPerson,
+            },
+          },
+        };
+      }
+      if (node.kind === "object" || node.kind === "anchor") {
+        const { placementProvenance: _placementProvenance, ...projected } = node;
+        return structuredClone(projected);
+      }
+      return structuredClone(node);
+    }),
+  };
+}
+
+function projectPrimitiveRecord(
+  value: Readonly<Record<string, number | boolean | string>>,
+  allowedKeys: readonly string[],
+): Readonly<Record<string, number | boolean | string>> {
+  return Object.fromEntries(
+    allowedKeys.flatMap((key) => {
+      const candidate = value[key];
+      return typeof candidate === "number" || typeof candidate === "boolean" || typeof candidate === "string"
+        ? [[key, candidate] as const]
+        : [];
+    }),
+  );
+}
+
+function projectNumericRecord(
+  value: Readonly<Record<string, number>>,
+  allowedKeys: readonly string[],
+): Readonly<Record<string, number>> {
+  return Object.fromEntries(
+    allowedKeys.flatMap((key) => {
+      const candidate = value[key];
+      return typeof candidate === "number" && Number.isFinite(candidate)
+        ? [[key, candidate] as const]
+        : [];
+    }),
+  );
+}
+
+function assertionMeasurementKeys(
+  kind: NormalizedLayoutAssertionV1["kind"],
+): readonly string[] {
+  switch (kind) {
+    case "inside-region":
+      return ["isInside", "minimumBoundaryClearanceMeters"];
+    case "outside-region":
+      return ["intersectsRegion", "minimumBoundaryClearanceMeters"];
+    case "distance-range":
+      return ["distanceMeters"];
+    case "faces-entity":
+      return ["angularDeviationDegrees"];
+    case "supported-by":
+      return ["maximumSupportGapMeters", "supportRatio"];
+    case "minimum-clearance":
+      return ["hasOverlap", "minimumClearanceMeters"];
+    case "within-slope-limit":
+      return ["maximumSlopeDegrees", "sampledPointCount", "sampledLateralOffsetCount"];
+    case "visible-in-camera-region":
+      return ["projectedAreaRatio", "visibleRatio", "isOccluded", "cameraTargetAnchorEntityId"];
+  }
+}
+
+function assertionToleranceKeys(
+  kind: NormalizedLayoutAssertionV1["kind"],
+): readonly string[] {
+  switch (kind) {
+    case "inside-region":
+    case "outside-region":
+    case "distance-range":
+      return ["distanceMeters"];
+    case "faces-entity":
+    case "within-slope-limit":
+      return ["angleDegrees"];
+    case "supported-by":
+      return ["supportGapMeters"];
+    case "minimum-clearance":
+      return ["overlapMeters"];
+    case "visible-in-camera-region":
+      return ["ratio"];
+  }
+}
+
+function assertionBase(
+  assertion: NormalizedLayoutAssertionV1,
+): Pick<ExecutionLayoutAssertionV1, "constraintId" | "evidenceEntityIds" | "measurements" | "tolerances"> {
+  return {
+    constraintId: assertion.constraintId,
+    evidenceEntityIds: [...assertion.evidenceEntityIds],
+    measurements: projectPrimitiveRecord(
+      assertion.measurements,
+      assertionMeasurementKeys(assertion.kind),
+    ),
+    tolerances: projectNumericRecord(
+      assertion.tolerances,
+      assertionToleranceKeys(assertion.kind),
+    ),
+  };
+}
+
+function projectLayoutAssertionV1(
+  assertion: NormalizedLayoutAssertionV1,
+): ExecutionLayoutAssertionV1 {
+  const base = assertionBase(assertion);
+  switch (assertion.kind) {
+    case "inside-region":
+    case "outside-region":
+      return { ...base, kind: assertion.kind, entityId: assertion.entityId, regionId: assertion.regionId, boundaryClearanceMeters: assertion.boundaryClearanceMeters };
+    case "distance-range":
+      return { ...base, kind: assertion.kind, entityId: assertion.entityId, referenceEntityId: assertion.referenceEntityId, minimumDistanceMeters: assertion.minimumDistanceMeters, maximumDistanceMeters: assertion.maximumDistanceMeters };
+    case "faces-entity":
+      return { ...base, kind: assertion.kind, facingEntityId: assertion.facingEntityId, targetEntityId: assertion.targetEntityId, maximumAngularDeviationDegrees: assertion.maximumAngularDeviationDegrees };
+    case "supported-by":
+      return { ...base, kind: assertion.kind, supportedEntityId: assertion.supportedEntityId, supportingEntityId: assertion.supportingEntityId, maximumSupportGapMeters: assertion.maximumSupportGapMeters, minimumSupportRatio: assertion.minimumSupportRatio };
+    case "minimum-clearance":
+      return assertion.otherEntityIds === undefined
+        ? { ...base, kind: assertion.kind, entityId: assertion.entityId, semanticClassIds: [...assertion.semanticClassIds], clearanceMeters: assertion.clearanceMeters }
+        : { ...base, kind: assertion.kind, entityId: assertion.entityId, otherEntityIds: [...assertion.otherEntityIds], clearanceMeters: assertion.clearanceMeters };
+    case "within-slope-limit":
+      return assertion.entityId === undefined
+        ? { ...base, kind: assertion.kind, terrainEntityId: assertion.terrainEntityId, routeId: assertion.routeId, maximumSlopeDegrees: assertion.maximumSlopeDegrees }
+        : { ...base, kind: assertion.kind, terrainEntityId: assertion.terrainEntityId, entityId: assertion.entityId, maximumSlopeDegrees: assertion.maximumSlopeDegrees };
+    case "visible-in-camera-region":
+      return { ...base, kind: assertion.kind, visibleEntityId: assertion.visibleEntityId, cameraEntityId: assertion.cameraEntityId, screenRegionId: assertion.screenRegionId, minimumVisibleRatio: assertion.minimumVisibleRatio, minimumProjectedAreaRatio: assertion.minimumProjectedAreaRatio };
+  }
+}
+
+function projectPlacementV1(
+  node: Extract<NormalizedWorldIRV3["nodes"][number], { kind: "object" | "anchor" }>,
+): ExecutionLayoutPlacementV1 {
+  return {
+    entityId: node.id,
+    transform: {
+      positionMetersXYZ: [...node.transform.positionMetersXYZ],
+      rotationEulerRadiansXYZ: [...node.transform.rotationEulerRadiansXYZ],
+      scaleXYZ: [...node.transform.scaleXYZ],
+    },
+    placementProvenance: {
+      kind: node.placementProvenance.kind,
+      candidateId: node.placementProvenance.candidateId,
+      placementConstraintIds: [...node.placementProvenance.placementConstraintIds],
+      solverProfileRef: node.placementProvenance.solverProfileRef,
+      layoutSolveReportHash: node.placementProvenance.layoutSolveReportHash,
+    },
+  };
+}
+
+function compileLockedTerrainV4(
+  world: NormalizedWorldIRV3,
+  baseline: ExecutionTerrainV3,
+): ExecutionTerrainV3 {
+  const heightfield = world.layout.heightfields.find((row) => row.terrainEntityId === baseline.entityId);
+  if (heightfield === undefined) throw new Error("COMPILER_LAYOUT_HEIGHTFIELD_MISSING");
+  const expectedLength = heightfield.resolutionVerticesXZ[0] * heightfield.resolutionVerticesXZ[1];
+  if (
+    heightfield.heightSamplesMeters.length !== expectedLength ||
+    heightfield.heightSamplesMeters.some((value) => !Number.isFinite(value))
+  ) throw new Error("COMPILER_LAYOUT_HEIGHTFIELD_INVALID");
+  const heightSamplesMeters = [...heightfield.heightSamplesMeters];
+  const heightSamplesHash = sha256CanonicalJson(heightSamplesMeters);
+  if (heightSamplesHash !== baseline.heightSamplesHash) {
+    throw new Error("COMPILER_LAYOUT_HEIGHTFIELD_MISMATCH");
+  }
+  return {
+    entityId: baseline.entityId,
+    centerMetersXZ: [...heightfield.centerMetersXZ],
+    sizeMetersXZ: [...heightfield.sizeMetersXZ],
+    resolutionCellsXZ: [...heightfield.resolutionVerticesXZ],
+    heightSamplesMeters,
+    heightSamplesHash,
+    minimumHeightMeters: Math.min(...heightSamplesMeters),
+    maximumHeightMeters: Math.max(...heightSamplesMeters),
+    semanticClassId: baseline.semanticClassId,
+  };
+}
+
+export function compileWorldV4(input: CompileWorldInputV4): CompileWorldResultV4 {
+  const actualNormalizedWorldIrHash = sha256CanonicalJson(input.normalizedWorldIr);
+  if (input.normalizedWorldIrHash !== actualNormalizedWorldIrHash) {
+    return {
+      ok: false,
+      diagnostics: [{
+        severity: "error",
+        code: "COMPILER_NORMALIZED_HASH_MISMATCH",
+        instancePath: "/normalizedWorldIrHash",
+        message: "The supplied normalizedWorldIrHash does not match NormalizedWorldIRV3.",
+        details: { expected: actualNormalizedWorldIrHash, actual: input.normalizedWorldIrHash },
+      }],
+    };
+  }
+  try {
+    const world = input.normalizedWorldIr;
+    const projectedV2 = projectNormalizedWorldV3ToV2(world);
+    const baseline = compileWorld({
+      normalizedWorldIr: projectedV2,
+      normalizedWorldIrHash: sha256CanonicalJson(projectedV2),
+    });
+    if (!baseline.ok || baseline.executionPlan === undefined) {
+      return { ok: false, diagnostics: baseline.diagnostics };
+    }
+    const cameraNode = world.nodes.find((node) => node.kind === "camera");
+    if (cameraNode?.kind !== "camera") throw new Error("COMPILER_LAYOUT_CAMERA_MISSING");
+    const placements = world.nodes
+      .filter((node): node is Extract<typeof node, { kind: "object" | "anchor" }> => node.kind === "object" || node.kind === "anchor")
+      .sort((left, right) => left.id.localeCompare(right.id));
+    for (const node of placements) {
+      if (
+        node.placementProvenance.layoutSolveReportHash !== world.layout.layoutSolveReportHash ||
+        node.placementProvenance.solverProfileRef !== world.layout.solverProfileRef
+      ) throw new Error("COMPILER_LAYOUT_PROVENANCE_MISMATCH");
+    }
+    const plan: ExecutionPlanV4 = {
+      ...baseline.executionPlan,
+      schemaVersion: 4,
+      normalizedWorldIrHash: input.normalizedWorldIrHash,
+      terrain: compileLockedTerrainV4(world, baseline.executionPlan.terrain),
+      camera: {
+        ...baseline.executionPlan.camera,
+        aspectRatio: cameraNode.components.cameraRig.thirdPerson.aspectRatio,
+      },
+      layout: {
+        solverProfileRef: world.layout.solverProfileRef,
+        resolvedVersion: world.layout.resolvedVersion,
+        solverProfileHash: world.layout.solverProfileHash,
+        layoutSolveReportHash: world.layout.layoutSolveReportHash,
+        regions: [...world.layout.regions]
+          .sort((left, right) => left.id.localeCompare(right.id))
+          .map((region) => ({
+            id: region.id,
+            kind: region.kind,
+            pointsMetersXZ: region.pointsMetersXZ.map((point) => [...point]),
+            ...(region.minimumHeightMeters === undefined ? {} : { minimumHeightMeters: region.minimumHeightMeters }),
+            ...(region.maximumHeightMeters === undefined ? {} : { maximumHeightMeters: region.maximumHeightMeters }),
+            semanticClassId: region.semanticClassId,
+          })),
+        routes: [...world.layout.routes]
+          .sort((left, right) => left.id.localeCompare(right.id))
+          .map((route) => ({
+            id: route.id,
+            kind: route.kind,
+            pointsMetersXZ: route.pointsMetersXZ.map((point) => [...point]),
+            widthMeters: route.widthMeters,
+            locomotionProfileRef: route.locomotionProfileRef,
+          })),
+        screenRegions: [...world.layout.screenRegions]
+          .sort((left, right) => left.id.localeCompare(right.id))
+          .map((region) => ({
+            id: region.id,
+            kind: region.kind,
+            minimumUv: [...region.minimumUv],
+            maximumUv: [...region.maximumUv],
+          })),
+        placementsByEntityId: Object.fromEntries(placements.map((node) => [
+          node.id,
+          projectPlacementV1(node),
+        ])),
+        layoutAssertions: [...world.layout.assertions]
+          .sort((left, right) => left.constraintId.localeCompare(right.constraintId))
+          .map(projectLayoutAssertionV1),
+      },
+    };
+    return {
+      ok: true,
+      executionPlan: plan,
+      executionPlanHash: sha256CanonicalJson(plan),
+      diagnostics: [],
+    };
+  } catch (cause) {
+    return {
+      ok: false,
+      diagnostics: [{
+        severity: "error",
+        code: "COMPILER_NORMALIZED_IR_INVALID",
+        instancePath: "/normalizedWorldIr",
+        message: cause instanceof Error ? cause.message : "NormalizedWorldIRV3 could not be compiled.",
+      }],
     };
   }
 }

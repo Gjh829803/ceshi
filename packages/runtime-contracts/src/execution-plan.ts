@@ -281,3 +281,91 @@ export interface CompileWorldResultV3 {
   executionPlanHash?: string;
   diagnostics: readonly CompileDiagnostic[];
 }
+
+interface ExecutionLayoutAssertionBaseV1 {
+  readonly constraintId: string;
+  readonly evidenceEntityIds: readonly string[];
+  readonly measurements: Readonly<Record<string, number | boolean | string>>;
+  readonly tolerances: Readonly<Record<string, number>>;
+}
+
+export type ExecutionLayoutAssertionV1 = ExecutionLayoutAssertionBaseV1 &
+  (
+    | Readonly<{ kind: "inside-region" | "outside-region"; entityId: string; regionId: string; boundaryClearanceMeters: number }>
+    | Readonly<{ kind: "distance-range"; entityId: string; referenceEntityId: string; minimumDistanceMeters: number; maximumDistanceMeters: number }>
+    | Readonly<{ kind: "faces-entity"; facingEntityId: string; targetEntityId: string; maximumAngularDeviationDegrees: number }>
+    | Readonly<{ kind: "supported-by"; supportedEntityId: string; supportingEntityId: string; maximumSupportGapMeters: number; minimumSupportRatio: number }>
+    | (Readonly<{ kind: "minimum-clearance"; entityId: string; clearanceMeters: number }> &
+        (Readonly<{ otherEntityIds: readonly string[]; semanticClassIds?: never }> |
+          Readonly<{ semanticClassIds: readonly string[]; otherEntityIds?: never }>))
+    | (Readonly<{ kind: "within-slope-limit"; terrainEntityId: string; maximumSlopeDegrees: number }> &
+        (Readonly<{ entityId: string; routeId?: never }> |
+          Readonly<{ routeId: string; entityId?: never }>))
+    | Readonly<{ kind: "visible-in-camera-region"; visibleEntityId: string; cameraEntityId: string; screenRegionId: string; minimumVisibleRatio: number; minimumProjectedAreaRatio: number }>
+  );
+
+export interface ExecutionLayoutPlacementProvenanceV1 {
+  readonly kind: "fixed" | "solved";
+  readonly candidateId: string;
+  readonly placementConstraintIds: readonly string[];
+  readonly solverProfileRef: string;
+  readonly layoutSolveReportHash: string;
+}
+
+export interface ExecutionLayoutPlacementV1 {
+  readonly entityId: string;
+  readonly transform: ExecutionTransformV3;
+  readonly placementProvenance: ExecutionLayoutPlacementProvenanceV1;
+}
+
+export interface ExecutionLayoutRegionV1 {
+  readonly id: string;
+  readonly kind: "polygon-xz";
+  readonly pointsMetersXZ: readonly Vec2[];
+  readonly minimumHeightMeters?: number;
+  readonly maximumHeightMeters?: number;
+  readonly semanticClassId: string;
+}
+
+export interface ExecutionLayoutRouteV1 {
+  readonly id: string;
+  readonly kind: "polyline-xz";
+  readonly pointsMetersXZ: readonly Vec2[];
+  readonly widthMeters: number;
+  readonly locomotionProfileRef: string;
+}
+
+export interface ExecutionLayoutScreenRegionV1 {
+  readonly id: string;
+  readonly kind: "rectangle-uv";
+  readonly minimumUv: readonly [u: number, v: number];
+  readonly maximumUv: readonly [u: number, v: number];
+}
+
+export interface ExecutionCameraV4 extends ExecutionCameraV3 {
+  readonly aspectRatio: number;
+}
+
+export interface ExecutionPlanV4
+  extends Omit<ExecutionPlanV3, "schemaVersion" | "camera"> {
+  readonly schemaVersion: 4;
+  readonly camera: ExecutionCameraV4;
+  readonly layout: Readonly<{
+    solverProfileRef: string;
+    resolvedVersion: string;
+    solverProfileHash: string;
+    layoutSolveReportHash: string;
+    regions: readonly ExecutionLayoutRegionV1[];
+    routes: readonly ExecutionLayoutRouteV1[];
+    screenRegions: readonly ExecutionLayoutScreenRegionV1[];
+    placementsByEntityId: Readonly<Record<string, ExecutionLayoutPlacementV1>>;
+    layoutAssertions: readonly ExecutionLayoutAssertionV1[];
+  }>;
+}
+
+export interface CompileWorldResultV4 {
+  readonly ok: boolean;
+  readonly executionPlan?: ExecutionPlanV4;
+  readonly executionPlanHash?: string;
+  readonly diagnostics: readonly CompileDiagnostic[];
+}

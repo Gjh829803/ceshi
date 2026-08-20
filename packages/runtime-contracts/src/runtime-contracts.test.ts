@@ -8,6 +8,7 @@ import {
   type ExecutionRigProfileV1,
   type ExecutionSubjectAssetV1,
   type ExecutionSubjectV3,
+  type ExecutionLayoutAssertionV1,
   type FixedInputV1,
   type WorldRuntimeSnapshotV3,
   type WorldkitBrowserApiV3,
@@ -262,5 +263,26 @@ describe("runtime contracts V3", () => {
     expect(api.version).toBe(3);
     await expect(api.ready()).resolves.toBe(snapshot);
     expect(api.getDiagnostics()).toEqual([diagnostic]);
+  });
+
+  it("defines closed V4 layout assertions with role-qualified endpoints and units", () => {
+    const assertion = {
+      constraintId: "spawn-supported",
+      kind: "supported-by",
+      supportedEntityId: "spawn-main",
+      supportingEntityId: "terrain-main",
+      maximumSupportGapMeters: 0.02,
+      minimumSupportRatio: 1,
+      evidenceEntityIds: ["spawn-main", "terrain-main"],
+      measurements: { maximumSupportGapMeters: 0, supportRatio: 1 },
+      tolerances: { supportGapMeters: 0.02 },
+    } satisfies ExecutionLayoutAssertionV1;
+
+    expect(assertion).toMatchObject({
+      kind: "supported-by",
+      supportedEntityId: "spawn-main",
+      supportingEntityId: "terrain-main",
+    });
+    expect(assertion).not.toHaveProperty("params");
   });
 });

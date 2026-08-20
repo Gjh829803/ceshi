@@ -1,9 +1,12 @@
 import { describe, expect, it } from "vitest";
 
 import {
+  migrateAuthoringSpecV2ToV3,
   normalizeAuthoringSpec,
+  normalizeAuthoringSpecV3,
   sha256CanonicalJson,
   type AuthoringSpecV2,
+  type AuthoringSpecV3,
   type NormalizedWorldIRV2,
 } from "@whitebox-world/authoring";
 import {
@@ -12,11 +15,12 @@ import {
 } from "@whitebox-world/subject-registry";
 import {
   createValidPackageSubjectWorldV2,
+  createValidAuthoringSpec,
   createValidRiggedPackageDefinition,
   createValidRiggedPackageSubjectWorldV2,
 } from "../../authoring/src/test-fixture";
 
-import { compileWorld, sampleTerrainHeight } from "./index";
+import { compileWorld, compileWorldV4, sampleTerrainHeight } from "./index";
 
 const SUBJECT_ASSET_REF = "worldkit://subject-asset/humanoid.golden@1";
 const RIG_PROFILE_REF = "worldkit://rig-profile/biped.golden@1";
@@ -114,6 +118,63 @@ function compilePackageWorld() {
     normalizedWorldIr: normalized.value,
     normalizedWorldIrHash: normalized.normalizedWorldIrHash,
   });
+}
+
+function createSolvedLayoutWorldV3(): AuthoringSpecV3 {
+  const base = migrateAuthoringSpecV2ToV3(createValidAuthoringSpec());
+  return {
+    ...base,
+    spatial: {
+      regions: [{
+        id: "spawn-zone",
+        kind: "polygon-xz",
+        pointsMetersXZ: [[-4, -4], [4, -4], [4, 4], [-4, 4]],
+        semanticClassId: "terrain.spawn-zone",
+      }],
+      routes: [],
+      screenRegions: [],
+    },
+    nodes: base.nodes.map((node) =>
+      node.id === "spawn-main" && node.kind === "anchor"
+        ? {
+            ...node,
+            placement: {
+              kind: "solved" as const,
+              placementConstraintIds: ["spawn-inside", "spawn-supported"],
+            },
+          }
+        : node
+    ),
+    constraints: {
+      placements: [
+        {
+          id: "spawn-inside",
+          kind: "inside-region",
+          requirement: "required",
+          entityId: "spawn-main",
+          regionId: "spawn-zone",
+          boundaryClearanceMeters: 0,
+        },
+        {
+          id: "spawn-supported",
+          kind: "supported-by",
+          requirement: "required",
+          supportedEntityId: "spawn-main",
+          supportingEntityId: "terrain-main",
+          maximumSupportGapMeters: 0,
+          minimumSupportRatio: 1,
+        },
+      ],
+    },
+  };
+}
+
+function normalizeSolvedLayoutWorldV3() {
+  const result = normalizeAuthoringSpecV3(createSolvedLayoutWorldV3());
+  if (!result.ok || result.value === undefined || result.normalizedWorldIrHash === undefined) {
+    throw new Error(`V3 fixture did not normalize: ${JSON.stringify(result.diagnostics)}`);
+  }
+  return result;
 }
 
 describe("compileWorld", () => {
@@ -743,6 +804,77 @@ describe("compileWorld", () => {
           instancePath: "/normalizedWorldIrHash",
         },
       ],
+    });
+  });
+
+  it("compiles V3 solved layout IR into an exact V4 execution layout projection", () => {
+    const normalized = normalizeSolvedLayoutWorldV3();
+    const result = compileWorldV4({
+      normalizedWorldIr: normalized.value!,
+      normalizedWorldIrHash: normalized.normalizedWorldIrHash!,
+    });
+
+    expect(result.ok).toBe(true);
+    expect(result.executionPlan).toMatchObject({
+      kind: "worldkit-execution-plan",
+      schemaVersion: 4,
+      normalizedWorldIrHash: normalized.normalizedWorldIrHash,
+      camera: { aspectRatio: 16 / 9 },
+      layout: {
+        layoutSolveReportHash: normalized.layoutSolveReportHash,
+        placementsByEntityId: {
+          "spawn-main": expect.objectContaining({
+            entityId: "spawn-main",
+            placementProvenance: expect.objectContaining({ kind: "solved" }),
+          }),
+          "wall-east": expect.objectContaining({
+            entityId: "wall-east",
+            placementProvenance: expect.objectContaining({ kind: "fixed" }),
+          }),
+        },
+        layoutAssertions: expect.arrayContaining([
+          expect.objectContaining({ constraintId: "spawn-inside", kind: "inside-region" }),
+          expect.objectContaining({ constraintId: "spawn-supported", kind: "supported-by" }),
+        ]),
+      },
+    });
+    expect(result.executionPlan?.terrain.heightSamplesHash).toBe(
+      sha256CanonicalJson(normalized.value!.layout.heightfields[0]!.heightSamplesMeters),
+    );
+    const serialized = JSON.stringify(result.executionPlan);
+    expect(serialized).not.toContain('"constraints"');
+    expect(serialized).not.toMatch(/candidateRegionIds|sourceUri|licenseUri|providerHandle/);
+    expect(result.executionPlanHash).toBe(
+      "sha256:cf741656c141f0cbe8a425b01051a0726f5754168e3c00be8bd024043469290c",
+    );
+  });
+
+  it("projects forged nested IR objects explicitly and rejects a V3 IR hash mismatch", () => {
+    const normalized = normalizeSolvedLayoutWorldV3();
+    const forged = structuredClone(normalized.value!) as unknown as {
+      layout: {
+        regions: Array<Record<string, unknown>>;
+        assertions: Array<Record<string, unknown>>;
+      };
+    };
+    forged.layout.regions[0]!.providerHandle = "private-region-handle";
+    forged.layout.assertions[0]!.providerHandle = "private-assertion-handle";
+    const projected = compileWorldV4({
+      normalizedWorldIr: forged as unknown as NonNullable<typeof normalized.value>,
+      normalizedWorldIrHash: sha256CanonicalJson(forged),
+    });
+    expect(projected.ok).toBe(true);
+    expect(JSON.stringify(projected.executionPlan)).not.toContain("private-");
+
+    expect(compileWorldV4({
+      normalizedWorldIr: normalized.value!,
+      normalizedWorldIrHash: `sha256:${"0".repeat(64)}`,
+    })).toMatchObject({
+      ok: false,
+      diagnostics: [{
+        code: "COMPILER_NORMALIZED_HASH_MISMATCH",
+        instancePath: "/normalizedWorldIrHash",
+      }],
     });
   });
 });
