@@ -1,6 +1,9 @@
 # Placement Constraint 与确定性 Layout Solver 设计
 
-- 状态：**Proposed / Design Review Ready**。
+- 状态：**Accepted / S1 Scope Frozen（2026-08-20）**。
+- 方案决策：采用“完整但受控的纵向切片”，交付 Schema → Solver → CLI →
+  海湾 Fixture → Report/Browser Gate；不交付只有字段没有效果的空 Schema，也不在
+  S1 一次实现通用优化器。
 - 适用范围：Canonical Authoring、Normalizer、Compiler、CLI/Browser、Conformance。
 - 设计目标：让 AI 描述空间意图和验收要求，由 SDK 生成可解释、可复现、可验证的最终 Transform。
 - 非目标：运行时骑乘、装备、拖拽、控制权等 Gameplay Relationship。
@@ -11,11 +14,20 @@
 
 1. AI-facing Authoring Schema 同时支持精确放置和约束求解放置，但两者使用关闭的判别 Union，不依赖可选字段猜模式。
 2. Placement Constraint 只回答“编译时应摆在哪里”；Gameplay Relationship 只回答“运行时实体之间是什么关系”。二者拥有不同 Schema、生命周期、诊断和回放语义。
-3. Layout Solver 是 Normalizer 与后续 Compiler 之间的一等确定性阶段。Solver 不调用 LLM/VLM，不直接创建 Babylon/Havok 对象。
+3. Layout Solver 是 Authoring 引用解析与 NormalizedWorldIR 投影之间的一等确定性阶段。
+   Solver 不调用 LLM/VLM，不直接创建 Babylon/Havok 对象。
 4. 必需约束不能被综合评分抵消；无法满足时不产生可运行 WorldPackage。偏好约束可以违反，但必须在报告中逐项解释。
 5. Solver 输出不只是 Transform，还包括 `LayoutSolveReport`、约束证据、Provenance、精确 Solver Profile 和结果 Hash。
 6. 同一 Canonical Authoring、Registry Lock、内容资源、Solver Profile、Seed 和预算必须得到相同规范输出与 Report Hash。
 7. 第一阶段只覆盖室外 Heightfield、Region、Route、静态 Object、Subject Spawn、Anchor 和 Camera Composition；室内装箱、动态导航、车辆交通、布料和任意 Mesh 装配不在首期范围。
+8. S1 对 Canonical Authoring 做一次干净的 Major 升级：Authoring Spec V3、
+   NormalizedWorldIR V3、ExecutionPlan V4。仓库内 Fixture 一次性迁移，不保留 V2/V3
+   双重字段或永久兼容别名。
+9. S1 使用仓库内窄域、离散、确定性的 CSP/Search 实现，不引入第三方通用优化器；
+   以后替换算法必须保持相同输入、输出、排序、诊断和 Report Hash 契约。
+10. S1 Camera Probe 使用引擎无关的 Bounds Projection、Heightfield Line-of-Sight 和
+    已锁定静态 Bounds 遮挡近似；Browser Gate 再用真实 Babylon/Havok Runtime 复验。
+11. S1 只公开已经端到端实现的八种 Constraint Kind，不预埋未实现的枚举值。
 
 ## 2. 为什么必须单独存在这一层
 
@@ -67,7 +79,9 @@ Reference Image + Prompt
 
 ## 4. Authoring Schema 形状
 
-以下字段形状是下一版 Canonical Schema 的冻结候选。若当前 V2 尚未被外部采用，可以干净替换本地 Fixture；若已发布，则升级 Schema Major 并提供显式迁移，不保留永久别名。
+以下字段形状冻结为 Canonical Authoring Spec V3。当前 V2 尚未成为外部生产契约，
+因此仓库内 Fixture 通过一次性重写迁移到 V3；Validator、CLI、示例和生成类型不再继续
+接受 V2，也不保留 `transform`/`placement` 两套公共真相。
 
 ### 4.1 Node Placement 判别 Union
 
@@ -113,6 +127,9 @@ SolvedPlacement
 - `solved` 表示 Solver 拥有最终 Transform 权威；`initialTransform` 只是确定性候选 Seed，不是兜底答案。
 - 没有 `placement` 的可放置 Node 无效；不根据是否出现 `transform` 隐式推断模式。
 - Terrain/Water 等拥有专用空间定义的 Node 可以使用其专用协议，但参与约束时必须投影为明确 Region/Surface。
+- S1 只有 Object 与 Anchor 直接携带 `placement`。Subject 继续通过
+  `spawnAnchorEntityId` 引用 Fixed/Solved Anchor；Camera Transform 由锁定 Camera Rig、
+  Target 和开场参数派生。Subject/Camera 不复制第三套位置字段。
 
 ### 4.2 Placement Constraint 集合
 
@@ -152,32 +169,52 @@ SolvedPlacement
 
 `preferenceWeightRatio` 只允许出现在 `preferred` 上，范围为 `(0, 1]`。它只用于同一 Solver Profile 内的稳定排序，不是跨场景质量分数。
 
-### 4.3 第一批关闭的 Constraint Kind
+### 4.3 S1 关闭的 Constraint Kind
 
 | `kind` | 角色化字段 | 关键数值 | 语义 |
 |---|---|---|---|
 | `inside-region` | `entityId`, `regionId` | `boundaryClearanceMeters` | Entity Bounds 完整位于 Region 内 |
 | `outside-region` | `entityId`, `regionId` | `boundaryClearanceMeters` | Entity Bounds 与禁止 Region 保持净空 |
 | `distance-range` | `entityId`, `referenceEntityId` | `minimumDistanceMeters`, `maximumDistanceMeters` | 约束 Pivot 或声明 Anchor 间距离 |
-| `relative-direction` | `entityId`, `referenceEntityId` | `direction`, `minimumOffsetMeters`, `maximumAngularDeviationDegrees` | 以明确坐标域表达前后左右 |
 | `faces-entity` | `facingEntityId`, `targetEntityId` | `maximumAngularDeviationDegrees` | `-Z` Forward 朝向目标 |
 | `supported-by` | `supportedEntityId`, `supportingEntityId` | `maximumSupportGapMeters`, `minimumSupportRatio` | 有足够接触面且不悬空 |
 | `minimum-clearance` | `entityId`, `otherEntityIds` 或 `semanticClassIds` | `clearanceMeters` | Collider/Bounds 间净空 |
-| `connected-by-route` | `startEntityId`, `endEntityId`, `routeId` | `maximumRouteLengthMeters` | 两端连接且可按指定 Profile 通行 |
 | `within-slope-limit` | `entityId` 或 `routeId`, `terrainEntityId` | `maximumSlopeDegrees` | 支撑区或路线不超坡度上限 |
 | `visible-in-camera-region` | `visibleEntityId`, `cameraEntityId`, `screenRegionId` | `minimumVisibleRatio`, `minimumProjectedAreaRatio` | 投影、遮挡和画面区域满足要求 |
 
 补充规则：
 
-- `relative-direction.direction` 第一版关闭为 `front | back | left | right | above | below`，并显式声明 `coordinateFrame: world | reference-entity`。
 - `screenRegionId` 引用 Authoring 中定义的规范化屏幕区域，不接受自由文本如“偏右一点”。
 - `otherEntityIds` 与 `semanticClassIds` 是互斥 Union，不通过两个可选数组猜模式。
 - `supported-by` 第一阶段只支持静态 Terrain/Object Surface；动态平台属于 Runtime Gameplay。
 - `avoid-overlap` 不单独公开；它是 `minimum-clearance` 的 `clearanceMeters: 0` 特例，避免同义字段。
 
+`relative-direction` 与 `connected-by-route` 延后到下一切片：前者需要先冻结参考坐标帧，
+后者需要完整的 Route Graph/Locomotion Cost 协议。S1 仍会验证已声明 Route 的坡度、
+净空与 Browser 可达性，但不允许 AI 用一个尚未实现的 Constraint Kind 表达连通性。
+
+### 4.4 S1 Region、Route 与 Camera Region 输入
+
+当前 Authoring V2 没有 Canonical Region/Route 集合，而 S1 Solver 不能依赖旧的
+Three.js Scene DSL。Authoring V3 因此新增三个关闭集合：
+
+- `spatialRegions`：S1 只支持 `polygon-xz`，字段为稳定 `id`、
+  `pointsMetersXZ`、可选 `minimumHeightMeters`/`maximumHeightMeters` 和
+  `semanticClassId`。Water Boundary 可被投影为只读 Region，但不复制 Water 真相。
+- `routes`：S1 只支持 `polyline-xz`，字段为稳定 `id`、`pointsMetersXZ`、
+  `widthMeters` 和 `locomotionProfileRef`。Route 是约束/验证输入，不是 Runtime
+  Relationship。
+- `screenRegions`：S1 使用归一化 `minimumUv`/`maximumUv` 矩形；`[0, 0]` 是图像
+  左上角，`+U` 向右，`+V` 向下，边界范围均为 `[0, 1]`。不接受“左上”“偏右”等
+  自然语言别名。
+
+这些是 S1 的解析几何输入。后续 Canonical Terrain Pipeline 可以让同一 Region ID
+引用内容寻址 R8 Mask，让 Route 引用锁定 Graph，但不能新增第二套 Region/Route 语义。
+
 ## 5. Normalized IR 与求解输出
 
-Authoring Constraint 不直接进入 Runtime。Solver 成功后，Normalizer 输出：
+Authoring Constraint 不直接进入 Runtime。Solver 成功后，Normalizer 输出
+NormalizedWorldIR V3：
 
 - 每个 Entity 的最终 `transform`；
 - `placementProvenance`：`fixed | solved`、来源 Constraint ID、Solver Profile Ref 和 Report Hash；
@@ -185,7 +222,10 @@ Authoring Constraint 不直接进入 Runtime。Solver 成功后，Normalizer 输
 - 对后续 Gate 有用的 Required Constraint Assertion；
 - 不包含搜索队列、随机生成器内部状态或 Provider Handle。
 
-ExecutionPlan 只消费最终 Transform、Runtime 所需 Assertion 和资源引用。Runtime 加载时可重新验证接地/穿插等物理断言，但不能静默重新布局。
+ExecutionPlan V4 只消费最终 Transform、Runtime 所需 Assertion 和资源引用。Runtime
+加载时可重新验证接地/穿插等物理断言，但不能静默重新布局。Authoring V3、IR V3、
+ExecutionPlan V4 必须原子迁移示例、CLI、Browser Protocol Fixture 与 Conformance，
+不得通过可选字段兼容旧版本。
 
 ## 6. Layout Solver Pipeline
 
@@ -221,7 +261,28 @@ ExecutionPlan 只消费最终 Transform、Runtime 所需 Assertion 和资源引�
 
 Solver 可以调用引擎无关的 Geometry/Physics Query Port：Bounds、Raycast、Overlap、Support、Slope、Route Cost 和 Camera Projection。Babylon/Havok 只是某个实现；公共 Schema 与 Report 不出现其 Handle 或专有类型。
 
-首期允许在 Compiler 阶段使用快速几何近似，再由 Browser Gate 使用真实 Runtime 复验。若近似与 Runtime 结果冲突，以 Runtime 阻断报告为准，不能运行时悄悄移动 Entity。
+S1 Solver Query Port 固定使用量化 AABB/Collider Bounds、Heightfield Support/Slope、
+Route Polyline 采样、Camera Frustum Projection、Heightfield Line-of-Sight 和已锁定静态
+Bounds 遮挡。它不加载渲染 Mesh，也不调用 Babylon Scene Occlusion Query。Browser Gate
+随后使用真实 Runtime 复验；若近似与 Runtime 结果冲突，以 Runtime 阻断报告为准，
+不能运行时悄悄移动 Entity。
+
+### 6.4 S1 包边界与调用顺序
+
+- `packages/authoring`：拥有 Authoring V3 Schema、字段级诊断、引用解析和
+  `ResolvedLayoutInputV1` 投影，不拥有搜索算法。
+- `packages/layout-solver`：新建引擎无关包，拥有候选生成、Constraint Evaluator、
+  Required Search、Preferred 排序、Conflict Core 和 Report Canonicalization。
+- `packages/compiler`：消费求解后的 NormalizedWorldIR V3，生成 ExecutionPlan V4；
+  不重新运行 Solver。
+- `packages/runtime-babylon`：只复验 Execution Assertion，不读取 Authoring Constraint，
+  不修正求解结果。
+- CLI/Browser Host：编排 validate → resolve → solve → normalize → compile → runtime gate，
+  并保存 Report/Hash；Provider/LLM 不进入该链路。
+
+`packages/layout-solver` 的公开入口接收闭合 `ResolvedLayoutInputV1` 和锁定
+`LayoutSolverProfileV1`，返回 `LayoutSolveResultV1`。它不能读取文件、网络、时间、环境
+变量或 Babylon/Havok Handle。
 
 ## 7. 确定性协议
 
@@ -336,7 +397,7 @@ Layout 成功至少通过：
 - 不可信 Package Solver Plugin 不能在主进程执行；算法级扩展必须通过 Conformance、资源预算和签名门禁。
 - 超出预算返回稳定状态，不回退成随机摆放或跳过碰撞。
 
-## 13. 第一条实施切片
+## 13. 已接受的 S1 实施切片
 
 选择一个参考图驱动的室外海湾 Fixture，限制范围如下：
 
@@ -344,9 +405,14 @@ Layout 成功至少通过：
 - 一个 Player Spawn、一个 Camera、三个 Landmark、一个 Route；
 - `inside-region`、`outside-region`、`distance-range`、`faces-entity`、`supported-by`、`minimum-clearance`、`within-slope-limit`、`visible-in-camera-region`；
 - 固定 Seed 与 Solver Profile；
-- 输出 Authoring、LayoutSolveReport、NormalizedWorldIR 和 Browser Validation Report。
+- 输出 Authoring、LayoutSolveReport、NormalizedWorldIR 和 Browser Conformance Evidence。
+  该 Evidence 只证明 S1 Runtime 复验结果并由 LayoutSolveReport 引用，不提前冻结 P0.3
+  的通用 ValidationReport Schema。
 
-验收标准：Agent 不为三个 Landmark 手写最终坐标；同一输入连续运行结果 Hash 一致；必需接地、无穿插、路线和开场构图 Gate 全部通过；故意制造冲突时返回可定位的 Constraint IDs，不生成 WorldPackage。
+验收标准：Agent 不为三个 Landmark 手写最终坐标；同一输入连续运行和并发扰动结果
+Hash 一致；必需接地、无穿插、路线和开场构图 Gate 全部通过；故意制造冲突时返回
+可定位的 Constraint IDs，不生成 WorldPackage。Fixture 还必须证明：删除 Solver Report、
+修改 Seed/Profile/Bounds 或把 Required 改为不可满足时，旧结果不能被缓存或静默复用。
 
 ## 14. 实施分解
 
@@ -361,22 +427,21 @@ Layout 成功至少通过：
 
 编码前必须新增独立实施计划，列出实际包路径、Schema 文件、迁移范围、测试矩阵和可视 Fixture；本文不授权一次性实现完整通用约束求解器。
 
-## 15. 已冻结与待评审
-
-已冻结的架构方向：
+## 15. 已冻结的实施决策
 
 - Placement 与 Gameplay Relationship 分离；
 - AI 表达约束，SDK 求最终 Transform；
 - Required 失败阻断，Preferred 可解释降级；
 - Solver/Profile/Report 是确定性、版本化协议；
 - Runtime 不重新布局。
-
-待评审的字段级细节：
-
-- 下一版 Authoring Schema 的具体 Major Version；
-- 首期是否包含 `relative-direction` 和 `connected-by-route` 的完整实现；
-- Camera Visibility 在 Compiler 近似阶段使用 Bounds 还是低模 Occlusion Probe；
-- 首版 Solver 使用 CSP/优化库还是仓库内窄域求解器。实现选择不得改变本协议语义。
+- 协议版本为 Authoring V3、NormalizedWorldIR V3、ExecutionPlan V4；仓库内一次性迁移，
+  不保留旧字段别名。
+- S1 Constraint Kind 精确为第 4.3 节八种；`relative-direction`、
+  `connected-by-route` 延后且不进入 S1 枚举。
+- Camera Visibility 使用量化 Bounds/Heightfield/静态遮挡近似，Browser Runtime 负责
+  阻断式复验。
+- Solver 使用仓库内窄域离散 CSP/Search，稳定顺序和量化规则属于协议。
+- Region/Route/Screen Region 使用第 4.4 节解析输入；未来 Mask/Graph 资源必须复用同一 ID。
 
 ## 16. 参考依据
 

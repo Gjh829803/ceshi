@@ -41,7 +41,7 @@ Normalizer/Compiler、Runtime、CLI/Browser 和对应 Conformance Gate 的纵向
 
 | 工作流 | 权重 | 当前完成度 | 加权贡献 | 判断依据 |
 |---|---:|---:|---:|---|
-| 架构、边界与命名 | 8% | 90% | 7.2% | 总规格、ADR、主体/地形/3C 和 Placement/Take/Validation 专项已成稿；三份新协议仍待评审冻结 |
+| 架构、边界与命名 | 8% | 92% | 7.4% | 总规格、ADR、主体/地形/3C 和 Placement/Take/Validation 专项已成稿；Placement S1 已冻结，Take/Validation 仍待评审 |
 | Canonical Schema、IR、Registry 与 Compiler | 15% | 75% | 11.25% | V2/V2/V3、Hash、Lock、严格校验、Primitive 与首个 Asset Subject 资源表已交付；WorldChangeSet、完整 Capability 和 WorldPackage 尚未交付 |
 | Babylon/Havok Runtime、物理与相机 | 15% | 65% | 9.75% | Heightfield、障碍、水域、多主体、第三人称、碰撞、重置、控制切换与首个 Rigged Asset Runtime 已交付；多视角与完整生产预算尚未完成 |
 | Subject LEGO 组装体系 | 15% | 40% | 6.0% | S0、S1a 与 S1b 首个 Golden 可视切片已完成；S1b 后续、S2、S3、S4 尚未完成 |
@@ -132,7 +132,8 @@ Subject、截图和查询。它不代表任意产品资产、完整 S1b、关系
 要求模型为所有实例猜绝对坐标。
 
 - [x] 编写 [Placement Constraint / Layout Solver 专项设计](superpowers/specs/2026-08-19-placement-constraint-layout-solver-design.md)。
-- [ ] 评审并冻结专项设计中的字段、版本、首批 Constraint 与 Fixture。
+- [x] 评审并冻结专项设计中的字段、版本、首批 Constraint 与 Fixture（方案 2，
+  Authoring V3 / NormalizedWorldIR V3 / ExecutionPlan V4，2026-08-20）。
 - [ ] 冻结 Placement Constraint 与 Gameplay Relationship 的协议边界。
 - [ ] 定义关闭枚举的 Required/Preferred Constraint 判别 Union。
 - [ ] 第一批覆盖 Region 内外、相对距离、方向、支撑、净空、坡度、路线和镜头可见性。
