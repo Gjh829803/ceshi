@@ -1853,6 +1853,76 @@ check baseAuthoringSpecHash and changeSetId
 
 WorldChangeSet 只修改 Authoring 数据。运行中的移动、攻击和骑乘仍使用有权限、按 Tick 提交的 Runtime Command；二者不能共用一个模糊的 Patch API。
 
+### 16.5 运行中结构修改与 Runtime 发布
+
+“页面正在运行时增加一个人物或一栋房屋”仍然是 Authoring 结构修改，不是 DOM 操作、
+Babylon `Scene` 操作或 Gameplay Command。系统必须始终区分两条写入平面：
+
+| 写入平面 | 典型操作 | 权威协议 | 是否改变 AuthoringSpec |
+|---|---|---|---|
+| Runtime State | 移动、跳跃、攻击、骑乘、相机控制 | 固定 Tick Command/Intent/Relationship Transaction | 否 |
+| World Structure | 增删人物、房屋、障碍、资源、Constraint 或地形 | `WorldChangeSet` | 是 |
+
+LLM、Playwright 或页面脚本不得因为运行在浏览器中就绕过该边界直接调用
+`scene.add(...)`、改 DOM、创建 Havok Body 或写 Runtime 内部 Map。受信 Host 接受
+WorldChangeSet 后，仍必须走 16.4 的 Schema、Registry、Solver、Compiler、Budget 和
+Required Gate。
+
+#### 16.5.1 第一条生产切片：Full Reload
+
+第一条实现优先保证安全和可解释性，不承诺保留可变运行状态：
+
+```text
+trusted edit request
+  → validate/dry-run WorldChangeSet against baseAuthoringSpecHash
+  → apply to isolated Authoring candidate
+  → full normalize / solve / compile / package / required gates
+  → prepare Replacement Runtime in isolation
+  → wait for Replacement World Ready
+  → commit at a Phase Barrier and atomically swap Host/Browser handle
+  → dispose old Runtime from its Ownership root
+  → return ChangeReceipt + new Snapshot
+```
+
+- Replacement Runtime 在进入 Commit 前必须已经通过 World Ready；准备、预算或 Gate 失败
+  时旧 Runtime 继续运行，不能先 Dispose 旧世界再尝试构建新世界。
+- Host 必须在准备前检查新旧 Runtime 暂时双驻留所需的峰值内存、WASM、Asset 和 GPU
+  Budget；无法满足时稳定拒绝或使用明确声明的维护窗口，不能静默突破资源上限。
+- Full Reload 默认产生新的 Runtime Instance，并从 Tick 0 启动。旧人物的位置、速度、
+  Action、Controller Binding、Relationship、Camera Pose 和临时资源不自动复制。
+- Host 级 View Preference 或 Bootstrap Policy 只有作为显式、可验证输入时才可重新应用；
+  不能把旧 Runtime Handle 或未版本化闭包带进新世界。
+- ChangeReceipt 必须记录应用模式、旧/新 AuthoringSpec Hash、IR/Package Hash、受影响 ID、
+  新 Runtime Instance 身份，以及明确的 `preserved/reset/replaced` 状态集合。这里的英文词
+  仅描述语义；最终公共字段名在 P1.6 专项设计中冻结。
+- Browser/Host 的发布请求 Envelope 还必须绑定 Request ID、Session ID、期望的 Runtime
+  Instance、期望的 WorldPackage Root Hash 和目标 Phase Barrier。`baseAuthoringSpecHash`
+  只防止 Authoring 基线错配，不能代替运行实例并发控制；任何期望值过期都必须在创建
+  Runtime 副作用前稳定失败。
+
+#### 16.5.2 后续切片：受限 Incremental Hot Apply
+
+增量热更新是独立的高风险能力，不能因为增量 Compiler 已存在就推断 Runtime 可以安全
+热替换。每个允许热更新的 Operation/Node Kind 都必须注册确定性的 Transaction Handler，
+声明 Prepare、Validate、Commit、Rollback、State Migration 和 Ownership 规则。
+
+- Commit 只发生在固定 Tick Phase Barrier；逻辑、Visual、Physics、Control、Camera、
+  Relationship、Snapshot 索引和 Ownership Ledger 必须原子可见。
+- 未受影响实体必须保持 Entity ID、Transform、Velocity、Action、Controller Binding 和
+  Camera/Relationship 状态；被修改或删除实体使用显式迁移/删除策略，禁止按对象引用猜测。
+- Terrain、全局物理、坐标系、Schema/Profile Major、插件实现、Runtime Backend，以及未
+  注册 Transaction Handler 的变化必须返回“需要 Full Reload”的结构化结果，不能半热更新。
+- 任一步失败恢复到同一 Tick 的旧逻辑图、渲染图和物理图，并释放全部候选资源；重复
+  Request 返回同一 Receipt，不重复创建 Mesh、Body、Listener、Controller 或 Asset Lease。
+- Apply 请求在排队和 Commit 时都要复验 Runtime Instance、Package Hash 与目标 Tick/Phase；
+  若期间发生 Full Reload、Reset 或另一笔结构提交，返回结构化并发冲突，不自动改投新世界。
+- Incremental 结果必须与对最终 AuthoringSpec 执行 Full Normalize/Compile 的 Canonical
+  IR/ExecutionPlan 等价；Runtime Conformance 还要验证未受影响状态保持和重放一致性。
+
+Full Reload 与 Incremental Hot Apply 必须共享一个 WorldChangeSet/ChangeReceipt 协议；
+应用方式是 Host 根据变更分类、能力、预算和 Policy 作出的受控决定，不允许 LLM 自报
+“可热更新”来绕过 Gate。
+
 ## 17. Diagnostic 与 AI 自修复
 
 Diagnostic 必须是正式协议：
@@ -1924,6 +1994,14 @@ window.__WORLDKIT_DRIVER__
 - `captureFrame()`
 - `getDiagnostics()`
 - `dispose()`
+
+上表是 Runtime 控制/观察协议的长期目标集合；当前 Browser Protocol V3 只实现其中的
+Ready、Snapshot、Diagnostic、Control Binding、Fixed Input、Pause/Reset 和 Screenshot
+子集，**不支持结构写入**。P1.6 必须另行冻结 WorldChangeSet 的 Validate、Dry Run、Apply、
+Receipt 查询与 Full Reload/Incremental 发布能力；这些写操作使用独立的受信 Authoring/Edit
+Session Scope，不能复用 `control.intent`、`control.bind` 或 `capture` 权限。`load` Scope
+只允许加载 Host 已批准且通过完整性验证的不可变 WorldPackage；它不能从 WorldChangeSet
+派生、批准或发布一个新 Package。
 
 Playwright 不使用任意 `waitForTimeout` 驱动模拟。测试动作按固定 Tick 执行：
 

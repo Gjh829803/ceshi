@@ -326,16 +326,41 @@ Babylon/Havok Adapter 的硬编码分支中。字段职责以
 - [ ] 冻结 `WorldChangeSet`/`ChangeReceipt`：稳定 ID、`baseAuthoringSpecHash`、Precondition、
   Dry Run、原子提交、幂等重试和增量/全量编译等价性，不使用数组位置驱动的通用 Patch
   作为生产协议。
+- [ ] 明确两条写入平面：移动、攻击、骑乘等已有实体状态只走有权限的固定 Tick Runtime
+  Command；增加/删除人物、房屋、障碍、资源或地形属于 Authoring 结构修改，只走
+  `WorldChangeSet`，两者不能共用通用 `patch`/`execute` 接口。
+- [ ] 第一条生产切片采用 Full Reload：在隔离候选中完成 ChangeSet Apply、完整
+  Normalize/Compile/Package、预算与必需 Gate，再准备 Replacement Runtime；只有新 Runtime
+  Ready 后才在 Phase Barrier 原子切换 Host/Browser 句柄并释放旧 Runtime，任一步失败都
+  保留旧世界。
+- [ ] Full Reload 默认创建新的 Runtime Instance、从 Tick 0 启动，不隐式搬运人物位置、
+  速度、Action、Controller Binding 或 Camera 状态；允许保留的 Bootstrap/View Preference
+  必须有显式输入，Receipt 必须列出替换、保留、重置和受影响的 ID/Hash。
+- [ ] 第二条切片才支持受限 Incremental Hot Apply：每种 Operation/Node Kind 必须声明
+  Transaction Handler、状态迁移策略和回滚；未受影响实体保持身份及运行状态，地形、
+  全局物理、Schema/Profile Major、插件或不支持的资源变化必须稳定降级为 Full Reload。
+- [ ] Incremental Commit 只能发生在固定 Tick Phase Barrier；Visual、Physics、Control、
+  Camera、Relationship 和 Ownership Ledger 必须同时发布或同时回滚，并用 Differential
+  Test 证明最终 Authoring/IR/ExecutionPlan 与 Full Build 完全等价。
+- [ ] Runtime 发布请求除 `baseAuthoringSpecHash` 外，还必须绑定 Request/Session、期望的
+  Runtime Instance/WorldPackage 和目标 Phase Barrier；过期或并发冲突稳定失败，不能把
+  已验证的 ChangeSet 静默应用到另一个正在运行的世界实例。
 - [ ] 已发布协议的破坏性升级使用显式 Version Migration，并输出迁移前后 Hash 和报告；
   未发布私有 Schema 仍按评审批准的 Clean Break 规则处理，不保留永久别名字段。
 - [ ] CLI/Browser 提供 Schema Profile、Registry Search、Dry Run、Explain、Diff、Apply 和
-  Receipt；Provider Adapter 输出必须重新通过 Canonical Schema 与语义验证。
+  Receipt；结构写入只对受信 Authoring/Edit Session Scope 开放，不能因拥有页面脚本、
+  `control.intent`、`capture` 或普通 `load` 权限而派生新世界；`load` 只允许加载 Host
+  已批准的不可变 Package，任何调用方都不能直接修改 DOM、Babylon Scene 或 Havok World；
+  Provider Adapter 输出必须重新通过 Canonical Schema 与语义验证。
 - [ ] Conformance 覆盖 Schema 规模预算、Provider 降级、非法 Override、过期 Base Hash、
-  重复 Request、部分失败回滚、增量/全量结果等价和 Migration Golden Fixture。
+  重复 Request、Replacement Runtime 准备失败时旧世界仍可运行、Full Reload 状态重置、
+  Incremental 未影响实体状态保留、部分失败回滚、增量/全量结果等价和 Migration Golden
+  Fixture。
 
 完成标准：至少两个结构化输出 Provider 使用同一 Canonical 字段生成有效世界；一次 AI
 修复通过 WorldChangeSet 原子应用并可重放，Adapter、CLI 和 Browser 不产生同义字段或
-绕过 Canonical Validation 的旁路。
+绕过 Canonical Validation 的旁路；Receipt 能无歧义说明本次修改采用 Full Reload 还是
+Incremental Hot Apply，以及哪些 Runtime 状态被保留、重置或替换。
 
 ### P2：完成 LEGO 关系与复杂主体
 
