@@ -103,14 +103,17 @@ Subject Node 中引用 `worldkit://subject-definition/humanoid.rigged-golden@1`�
 - 内存篡改 GLB 只命中一次请求并得到 `SUBJECT_ASSET_HASH_MISMATCH`，磁盘资产
   前后 Hash 不变。
 
-这些事实证明项目自有 Golden Fixture 的完整管线，不证明任意产品资产、动作观感、
-Compound Collider、LOD、更多拓扑或完整 Semantic Actions 已经通过验收。
+这些事实证明项目自有 Golden Fixture 的完整管线。首个产品 G Bot 另由
+`pnpm verify:g-bot-subject` 独立验收：3,362,888-byte GLB、65 Bone、12 源 Clip、
+`idle/walk/run/jump` 显式映射、双实例隔离、墙体停止和五张 936×596 截图均通过。
+这仍不证明任意后续产品资产、Compound Collider、LOD、更多拓扑或完整 Semantic
+Actions 已经通过验收。
 
 ## 3. 针对近期反馈做过的实验
 
 | 反馈 | 当前处理 | 验证状态 |
 |---|---|---|
-| W 前进方向与人物朝向相反 | Canonical Golden 资产与运行时统一为 `-Z`；Legacy Mixamo `+Z` 资产仍在旧加载层校正 | Golden E2E 覆盖 `-Z` 朝向；每个产品资产仍需独立视觉 QA |
+| W 前进方向与人物朝向相反 | Canonical Golden/G Bot 资产与运行时统一为 `-Z`；Legacy Mixamo `+Z` 资产仍在旧加载层校正 | Golden 与 G Bot E2E 覆盖 `-Z` 朝向；每个后续产品资产仍需独立视觉 QA |
 | 镜头离人物过远 | 第三人称默认距离下调，并允许场景在 `1.8..8m` 内设置初始距离 | 参数校验和镜头单测已覆盖 |
 | 地图太小 | 默认草地扩展为 4 × 4 个 160m tile，即 640m × 640m | 场景编译测试已覆盖 |
 | 水体奇怪 | 增加专用 WaterBody/Lake：湖盆、岸带、水位、浅深色、菲涅尔和轻微波纹 | 功能已运行；最终水质仍由世界模型负责 |
@@ -193,8 +196,8 @@ pnpm visual:check -- --scene sunlit-flower-bay passed
 - 生成 World Plan/Opening Shot 与真实白膜的通用视觉嵌入评分；当前门禁依赖 Planner 先给出可解释的区域/锚点 Guide。
 - 白膜三视图与样式三视图的自动轮廓/姿态一致性评分；Sunlit Flower Bay 已有完整配对，但当前仍只自动检查文件、路径和哈希。
 - 水岸在各种视角和地形高度下的观感。
-- 产品资产的动作混合观感、脚滑、独立动画资产、姿态和更多 Semantic Action；
-  Golden `idle/walk/run/jump` 只作为确定性管线 Fixture。
+- 后续产品资产的动作混合观感、脚滑、独立动画资产、姿态和更多 Semantic Action；
+  Golden 是确定性管线 Fixture，G Bot 当前只验收 `idle/walk/run/jump`。
 - 世界模型条件帧与最终生成画面的一致性；当前已产出条件包和目标首帧，但实时世界模型链路尚未接入。
 
 其他实现层已知问题：

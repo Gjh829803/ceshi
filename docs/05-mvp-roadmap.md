@@ -7,13 +7,13 @@
 
 ## 当前进度摘要（2026-08-20）
 
-> Golden Humanoid S1b 首个可视纵向切片已完成并进入回归；S1b 整体与 Semantic Actions 整体仍未完成.
+> Golden Humanoid 与首个产品 G Bot 的 S1b 可视纵向切片已完成并进入回归；S1b 整体与 Semantic Actions 整体仍未完成.
 
 | 工作流 | 状态 | 说明 |
 |---|---|---|
 | Phase I：第三人称人形 + 室外搭建 | Alpha 收敛中 | 主链路可运行；资产/动作 QA、视觉回归、手感和更多图像场景仍需收敛 |
 | Subject Authoring S1a | 已完成 | Authoring V2、Registry/Package Primitive Definition、自动 Capsule、Hash/Lock、复数实例、CLI Explain 与 Browser V3 已通过 E2E |
-| Subject Authoring S1b | 首个 Golden 切片已完成 | 项目自有 GLB、Rig、Collider Profile 与 `idle/walk/run/jump` 已通过 Canonical Babylon/Havok E2E；产品资产验收、Compound Collider、LOD 和更多动作/拓扑仍开放 |
+| Subject Authoring S1b | Golden + 首个产品切片已完成 | 项目自有 Golden 与产品 G Bot 的 GLB、Rig、Collider Profile 与 `idle/walk/run/jump` 已通过 Canonical Babylon/Havok E2E；更多产品资产、Compound Collider、LOD 和更多动作/拓扑仍开放 |
 | Phase II：更多主体/动作 + 室内 | 未开始 | 优先级尚未冻结 |
 | World Model Integration | 契约设计 | 尚无 Render Bridge 实现，可立即与模型团队开始 WM-0/WM-1 |
 | Runtime World Director | 方案完成 | 尚无运行时代码；依赖稳定 Entity/Action/Nav 等能力 |
@@ -40,9 +40,9 @@
 
 第一期不实现第一人称、车辆、骑马、动物或飞行主体。
 
-当前实现说明：Canonical Babylon 路径的项目自有 Golden GLB 已验证
+当前实现说明：Canonical Babylon 路径的项目自有 Golden GLB 与首个产品 G Bot 已验证
 `idle / walk / run / jump`、固定 Tick 动作状态、Havok 位移、墙体碰撞与双实例隔离。
-Legacy Three/Rapier 路径仍可用本地 Mixamo 资产做实验，但不代表产品资产已验收。
+Legacy Three/Rapier 路径仍可用本地 Mixamo 资产做实验，但不代表后续产品资产已验收。
 
 ### 2. 室外自由地形搭建
 
@@ -122,9 +122,9 @@ Lock、物理与控制。该能力证明了“Definition 与 Instance 分离”�
 
 主体演进按独立 S 阶段推进：
 
-1. **S1b**：首个 Golden GLB/Asset Part、Rig、Animation 与 Capsule Profile
-   纵向切片已完成；Compound Collider、LOD、更多 Profile/拓扑、独立动画资产与
-   产品资产验收继续开放。
+1. **S1b**：Golden 与首个产品 G Bot 的 GLB/Asset Part、Rig、Animation 与 Capsule
+   Profile 纵向切片已完成；Compound Collider、LOD、更多 Profile/拓扑、独立动画
+   资产与后续产品资产验收继续开放。
 2. **S2**：类型化 Relationship、Socket 对齐、事务、Receipt 与回滚。
 3. **S3**：坐骑、拖拽、控制上下文与安全解绑。
 4. **S4**：飞行、装备和 Action Variant/Animation Binding。

@@ -2,11 +2,14 @@
 
 - 状态：Active，重构执行进度与剩余工作的唯一跟踪入口。
 - 基准日期：2026-08-20。
-- 长期目标总进度：约 **50%**，合理误差范围为 ±5%。
+- 长期目标总进度：约 **55%**，合理误差范围为 ±5%。
 - 第一条 Canonical 纵向切片：约 **90%**。
 - 当前代码入口：Canonical Authoring V3 → Placement Solver S1 → NormalizedWorldIR V3 → ExecutionPlan V4 → Babylon.js/Havok Runtime。
 
 > Golden Humanoid S1b 首个可视纵向切片已完成并进入回归；S1b 整体与 Semantic Actions 整体仍未完成.
+
+> 首个产品资产 G Bot 已通过独立 Registry/CLI/Babylon/Havok/Browser Gate；这只代表
+> 当前版本 G Bot 的 `idle/walk/run/jump`，不代表任意产品包或其余八个 Clip 已开放。
 
 > Placement Solver S1 首个海湾纵向切片已完成并进入回归；通用 Terrain Mask/Route Graph、更多 Constraint 与 P0.1 整体仍未完成。
 
@@ -26,6 +29,7 @@
 - [`2026-08-17-terrain-authoring-pipeline-design.md`](superpowers/specs/2026-08-17-terrain-authoring-pipeline-design.md)：地形专项规格；
 - [`2026-08-19-extensible-subject-authoring-design.md`](superpowers/specs/2026-08-19-extensible-subject-authoring-design.md)：主体组装、Relationship、坐骑、装备和飞行的专项规格；
 - [`2026-08-19-asset-subject-s1b-visible-slice-design.md`](superpowers/specs/2026-08-19-asset-subject-s1b-visible-slice-design.md)：首个 GLB/Rig/Animation/Collider Profile 资产主体纵向切片；
+- [`2026-08-20-g-bot-product-asset-s1-design.md`](superpowers/specs/2026-08-20-g-bot-product-asset-s1-design.md)：首个真实产品人物 G Bot 的版本化映射与可视验收；
 - [`2026-08-19-placement-constraint-layout-solver-design.md`](superpowers/specs/2026-08-19-placement-constraint-layout-solver-design.md)：AI 空间意图、最终 Transform 求解与冲突报告专项规格；
 - [`2026-08-19-simulation-take-control-capture-design.md`](superpowers/specs/2026-08-19-simulation-take-control-capture-design.md)：WorldPackage、Take、Session、多 Pass Capture 与视频 Adapter 边界；
 - [`2026-08-19-world-validation-report-and-quality-gates-design.md`](superpowers/specs/2026-08-19-world-validation-report-and-quality-gates-design.md)：量化 Gate、Metric、Evidence 和生产阻断协议；
@@ -45,18 +49,18 @@ Normalizer/Compiler、Runtime、CLI/Browser 和对应 Conformance Gate 的纵向
 |---|---:|---:|---:|---|
 | 架构、边界与命名 | 8% | 92% | 7.4% | 总规格、ADR、主体/地形/3C 和 Placement/Take/Validation 专项已成稿；Placement S1 已冻结，Take/Validation 仍待评审 |
 | Canonical Schema、IR、Registry 与 Compiler | 15% | 82% | 12.3% | V3/V3/V4、Hash、Lock、严格校验、Placement、Primitive 与首个 Asset Subject 资源表已交付；WorldChangeSet、完整 Capability 和 WorldPackage 尚未交付 |
-| Babylon/Havok Runtime、物理与相机 | 15% | 70% | 10.5% | Heightfield、障碍、水域、多主体、第三人称、碰撞、重置、控制切换、Rigged Asset 与 Placement Assertion 复验已交付；多视角与完整生产预算尚未完成 |
-| Subject LEGO 组装体系 | 15% | 40% | 6.0% | S0、S1a 与 S1b 首个 Golden 可视切片已完成；S1b 后续、S2、S3、S4 尚未完成 |
+| Babylon/Havok Runtime、物理与相机 | 15% | 72% | 10.8% | Heightfield、障碍、水域、多主体、第三人称、碰撞、重置、控制切换、Golden/G Bot Rigged Asset 与 Placement Assertion 复验已交付；多视角与完整生产预算尚未完成 |
+| Subject LEGO 组装体系 | 15% | 45% | 6.75% | S0、S1a、Golden 与首个产品 G Bot 可视切片已完成；S1b 后续、S2、S3、S4 尚未完成 |
 | Terrain、Region 与 Placement | 12% | 60% | 7.2% | Alpha 地形和 Placement Solver S1 海湾纵向切片已运行；通用 Terrain Mask/Route Graph、更多 Constraint 与完整 P0.1 未完成 |
-| CLI、Browser Protocol 与自动化 | 10% | 68% | 6.8% | validate/build/run/capture/discovery/explain、layout validate/solve/explain、Browser V3 与三条可视 Gate 已有；持久 Session、完整 Driver、Take 和 Package 工具未完成 |
-| Semantic Action、动画与 Gameplay | 8% | 30% | 2.4% | Golden `idle/walk/run/jump` 固定 Tick Animation Binding 已交付；通用 Action Request/Receipt、姿态、装备与规则未交付 |
+| CLI、Browser Protocol 与自动化 | 10% | 70% | 7.0% | validate/build/run/capture/discovery/explain、layout validate/solve/explain、Browser V3 与 Golden/G Bot 等可视 Gate 已有；持久 Session、完整 Driver、Take 和 Package 工具未完成 |
+| Semantic Action、动画与 Gameplay | 8% | 33% | 2.64% | Golden 与 G Bot `idle/walk/run/jump` 固定 Tick Animation Binding 已交付；通用 Action Request/Receipt、姿态、装备与规则未交付 |
 | Simulation Take、控制通道与视频接入 | 10% | 15% | 1.5% | Take/Capture 专项已成稿，单截图能力已有；多 Pass、时间轨、Bundle 和模型 Adapter 未交付 |
-| 生产 Gate、默认切换与旧实现退出 | 7% | 25% | 1.75% | Validation Profile/Report 专项已成稿，Canonical/Rigged/Placement Browser Gate 可运行；统一报告、默认切换和旧路径退出未交付 |
-| **合计** | **100%** |  | **约 56%** | Placement S1 新增可运行证据；对外按通用 Terrain/Route、生产 Gate 与剩余范围不确定性保守报告 **约 50%** |
+| 生产 Gate、默认切换与旧实现退出 | 7% | 30% | 2.1% | Validation Profile/Report 专项已成稿，Canonical/Golden Rigged/G Bot/Placement Browser Gate 可运行；统一报告、默认切换和旧路径退出未交付 |
+| **合计** | **100%** |  | **约 58%** | 首个产品资产加入可运行证据；对外按通用 Terrain/Route、生产 Gate 与剩余范围不确定性保守报告 **约 55%** |
 
 “第一条 Canonical 纵向切片约 90%”只指以下较窄范围：AI 提交 JSON，SDK
 完成严格校验、确定性编译、Babylon/Havok 运行、多主体控制、首个 Golden Asset
-Subject、Placement S1、截图和查询。它不代表任意产品资产、完整 S1b/P0.1、关系、
+Subject、首个产品 G Bot、Placement S1、截图和查询。它不代表任意产品资产、完整 S1b/P0.1、关系、
 完整动作、复杂地形、视频控制输出或生产切换已经完成。
 
 ## 3. 当前已完成并进入回归的能力
@@ -85,7 +89,7 @@ Subject、Placement S1、截图和查询。它不代表任意产品资产、完�
 - [`Subject Foundation Visible Slice`](superpowers/plans/2026-08-19-subject-foundation-visible-slice.md)：49 项完成、0 项打开；
 - [`Package Subject Definition Visible Slice`](superpowers/plans/2026-08-19-package-subject-definition-visible-slice.md)：73 项完成、0 项打开。
 
-### 3.3 Subject S1b 首个 Golden Asset 可视切片
+### 3.3 Subject S1b Golden 与首个产品 G Bot 可视切片
 
 - [x] 项目自有、自包含 Golden GLB、原始字节 SHA-256 与精确 Inventory。
 - [x] Subject Asset、Rig Profile、Animation Set、Collider Profile 与 Definition Registry。
@@ -93,8 +97,12 @@ Subject、Placement S1、截图和查询。它不代表任意产品资产、完�
 - [x] 独立 Skeleton/Animation/Transform/Dispose、Bone Socket 与白模材质。
 - [x] 固定 Tick `idle/walk/run/jump`、Snapshot `activeActionId` 与 Havok 权威位移。
 - [x] CLI/Browser 两实例、墙体停止、五张动作/世界截图与 Hash 篡改失败 E2E。
+- [x] G Bot 通过产品 Manifest → Registry Rig/Animation/Collider/Definition 映射；
+  World JSON 只引用稳定 `subjectDefinitionRef`。
+- [x] G Bot 真实 3.36MB GLB、65 Bone、12 源 Clip 与当前四动作通过独立
+  `pnpm verify:g-bot-subject` Gate、双实例隔离、墙体停止与五张截图。
 
-未完成：产品资产验收、Compound Collider、LOD、更多拓扑、独立动画资产、通用姿态、
+未完成：更多产品资产、Compound Collider、LOD、更多拓扑、独立动画资产、通用姿态、
 游泳、装备、坐骑和飞行。
 
 ### 3.4 当前 Runtime 与工具纵向切片
@@ -109,7 +117,7 @@ Subject、Placement S1、截图和查询。它不代表任意产品资产、完�
 2026-08-20 的新鲜验证证据：
 
 - `pnpm typecheck`：通过；
-- `pnpm test`：48 个测试文件、435 项测试通过；
+- `pnpm test`：49 个测试文件、441 项测试通过；
 - `pnpm verify:canonical`：Authoring 3、Normalized IR 3、ExecutionPlan 4、
   Runtime Snapshot 3、Browser Protocol 3 全部通过；
 - Canonical Browser Gate 覆盖 Babylon/Havok、墙体阻挡、水域切换、两个
@@ -119,6 +127,10 @@ Subject、Placement S1、截图和查询。它不代表任意产品资产、完�
   `SUBJECT_ASSET_HASH_MISMATCH` 篡改 Gate 全部通过；`verification.json` V2 还用
   Foreground-origin Subject Silhouette 证明六组动作姿态差异率均高于 0.15，
   最低为 0.298178。
+- `pnpm verify:g-bot-subject`：首个产品 G Bot 的 GLB/Manifest/Registry 映射、
+  `idle/walk/run/jump`、双实例隔离和墙体停止通过；资产 Hash 为
+  `sha256:74bbf9426577caa1b7e808bf388bd9a6b8b48d50cc80ab7b0abef10c2693c286`，
+  Walk 在 Tick 16、Jump 在 Tick 30 捕获，六组姿态差异率最低高于 0.79。
 - `pnpm verify:placement-layout`：八种 Constraint、19 条海湾约束、Report → IR →
   Plan → Snapshot、Runtime Assertion、连续/并发确定性、冲突、篡改和预算门禁全部通过；
   936×596 Screenshot Hash 为
@@ -354,9 +366,9 @@ Placement S1 已形成首个回归纵向切片；Capture 与 Validation 两条 P
 
 ## 6. 下一里程碑
 
-当前没有代码阻塞项。S1b Golden Asset 与 Placement Solver S1 都已进入回归，下一步：
+当前没有代码阻塞项。S1b Golden、首个产品 G Bot 与 Placement Solver S1 都已进入回归，下一步：
 
-1. **M1：让产品资产团队按 Rig/Animation/Collider/Socket 合同交付第一个真实人物包，并走现有 S1b 验收**；
+1. **M1：把 G Bot 的交付 Manifest/Registry 映射/Gate 固化为后续产品资产接入模板**；
 2. **M2：评审冻结 Take/Capture 与 Validation 两份协议的首条实施范围**；
 3. **M3：为 P0.2 编写五 Pass Capture 的窄纵向切片计划，并复用 Placement WorldPackage/Hash**；
 4. **M4：扩展 P0.1 的 Terrain Mask/Route Graph，而不是新增第二套 Region/Route 语义**；
@@ -386,5 +398,5 @@ Encoding 或 Runtime Query 可行性，但其实现不得泄漏到 Canonical Sch
 | 图片生成结果被误当作权威地形 | P1.1 固化为 Height/Mask，重新执行确定性 Compiler 和 Gate |
 | 任意 Blender/Python 代码进入生产世界 | 只允许隔离制作 Provider；Runtime 只消费锁定制品 |
 | 机器人研究仓库的格式污染 Web SDK | 只借鉴 Solver、Gate、Registry 和 Capture 思想，通过 Adapter 映射 |
-| S0/S1a/Golden S1b 切片完成被误读为整个 Subject 系统完成 | 本文分别追踪 S1b 未完成项、S2、S3 和 S4 |
+| S0/S1a/Golden/G Bot S1b 切片完成被误读为整个 Subject 系统完成 | 本文分别追踪 S1b 未完成项、S2、S3 和 S4 |
 | 旧 Three/Rapier 与新 Babylon/Havok 长期双轨 | P3.2 设定明确默认切换和退出 Gate |

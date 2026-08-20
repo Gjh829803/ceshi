@@ -25,7 +25,7 @@ Registry Subject Definition
   └── Collider Policy ──── colliderProfileRef ► Deterministic Capsule
                  │
                  ▼
-Canonical Authoring V2 → Normalized IR V2 → ExecutionPlan V3
+Canonical Authoring V3 → Normalized IR V3 → ExecutionPlan V4
                  │
                  ▼
 Host Asset Resolver → Hash Gate → Babylon AssetContainer Cache
@@ -152,7 +152,6 @@ Runtime 不使用 `sourceUri` 取文件；它仅用于 Provenance。Host Resolve
 
 ```ts
 type BipedBoneIdV1 =
-  | "root"
   | "hips"
   | "spine"
   | "chest"
@@ -178,7 +177,7 @@ interface RigProfileManifestInputV1 {
   resourceRef: string;
   bodyTopology: "biped";
   compatibleSubjectAssetRefs: readonly string[];
-  skeletonRootNodeName: string;
+  skeletonRootBoneName: string;
   requiredBoneIds: readonly BipedBoneIdV1[];
   sourceNodeNameByBoneId: Readonly<Record<BipedBoneIdV1, string>>;
   aiMetadata: SubjectResourceAiMetadataV1;
@@ -478,7 +477,9 @@ Root 本身为 AbstractMesh）及 `getChildMeshes(false)` 稳定收集并按 `un
 
 Runtime 用 Rig Profile 的 `sourceNodeNameByBoneId` 验证实例节点。缺失必需节点或
 重复节点直接失败。S1b 要求 Instance 恰有一个 Skeleton、所有 Bone Name 唯一、
-`skeletonRootNodeName` 命中唯一的 Parentless Bone，且必需语义 Bone 一对一解析。
+`skeletonRootBoneName` 命中唯一的 Parentless Bone，且 17 个解剖语义 Bone 一对一
+解析。Skeleton Root 是独立骨架事实，不占用语义 Bone ID；它可以与 `hips` 映射
+指向同一个物理 Bone，例如 G Bot 的 `mixamorig:Hips`。
 Bone Socket 创建受 Visual Root 管理的跟随节点，并应用
 `offsetTransform`；Socket 不成为独立 Entity。
 
@@ -616,6 +617,12 @@ Golden Fixture 只验证 SDK 管线，不作为产品人物视觉标准。
 若以上步骤要求修改 Compiler 分支、Babylon Loader 或 Scene JSON 字段，说明资产契约
 或底座存在缺口，必须回到 Profile/Adapter 设计评审，不能在场景脚本中修补。
 
+首个产品 G Bot 已按此流程接入：产品 `asset.manifest.json` / `action-manifest.json`
+保留源资产事实，Registry `RigProfile` / `AnimationSet` 显式映射 65 根源 Bone 和
+12 个源 Clip 中当前开放的 `idle/walk/run/jump`；普通 World JSON 只引用
+`worldkit://subject-definition/humanoid.g-bot@1`。独立验收命令为
+`pnpm verify:g-bot-subject`。
+
 ## 13. 验收标准
 
 1. Primitive 世界的 Canonical Hash、行为和现有回归继续通过。
@@ -657,20 +664,21 @@ Golden Fixture 只验证 SDK 管线，不作为产品人物视觉标准。
 
 ## 15. 当前实现证据与剩余边界
 
-当前项目自有 Golden Fixture 已通过 Canonical Authoring V2 → NormalizedWorldIR V2 →
-ExecutionPlan V3 → Babylon/Havok → CLI/Browser 的首个纵向切片：
+当前项目自有 Golden Fixture 已通过 Canonical Authoring V3 → NormalizedWorldIR V3 →
+ExecutionPlan V4 → Babylon/Havok → CLI/Browser 的首个纵向切片：
 
 - GLB 为 43,656 bytes；原始字节 Hash 为
   `sha256:1095fd65c754d53e6db3757ab5e1c9e5e9dcea2581f85d40f37ea4890ee8c2c2`；
 - Normalized IR Hash 为
-  `sha256:e746bd738e13ec8603779afba4d62d2d4610d0b03d428a6a1f8cc4f468ce1984`；
+  `sha256:3b148412c45ac66e75bc4c57482c92b29ead3cc07e72b8ad006f9987b9655296`；
 - ExecutionPlan Hash 为
-  `sha256:22e38f9dc474b33a2adbe8442dba411e70f62731ac1e9a54fe1ac90f9f73249f`；
+  `sha256:a71c2aec80c2b8c81e43a82009a02be9be6df1729c286c967aede6e9ea516b59`；
 - CLI 世界图与四张固定 Tick Action 图均为 936×596，四张 Action PNG Hash 两两不同；
 - 两个 Subject 的位置与 `activeActionId` 独立，Havok 墙体停止有效；篡改 GLB 后
   Browser 稳定返回 `SUBJECT_ASSET_HASH_MISMATCH` 且磁盘资产 Hash 不变。
 
 实现证据位于 `artifacts/examples/rigged-subject-world/verification.json`，一键 Gate 为
-`pnpm verify:rigged-subject`。该结果只覆盖项目自有 Golden GLB，不把产品资产验收、
-Compound Collider、LOD、更多身体拓扑、独立动画资产、通用姿态、游泳、装备、坐骑
-或飞行标记为完成。
+`pnpm verify:rigged-subject`。G Bot 的独立证据位于
+`artifacts/examples/g-bot-subject-world/verification.json`，一键 Gate 为
+`pnpm verify:g-bot-subject`。这两个结果不把任意后续产品资产、Compound Collider、
+LOD、更多身体拓扑、独立动画资产、通用姿态、游泳、装备、坐骑或飞行标记为完成。

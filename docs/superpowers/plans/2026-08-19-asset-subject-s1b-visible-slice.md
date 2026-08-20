@@ -107,7 +107,9 @@ export function buildGoldenHumanoidGlb(): {
 };
 ```
 
-- Asset contract: GLB 2.0, one embedded buffer, one skinned low-poly biped, 18 semantic bones, four named clips, no image/texture/light/camera/audio, `-Z` forward, `+Y` up, support-center origin.
+- Asset contract: GLB 2.0, one embedded buffer, one skinned low-poly biped, 18 source Bones
+  consisting of one independent Skeleton Root plus 17 anatomical semantic mappings, four named
+  clips, no image/texture/light/camera/audio, `-Z` forward, `+Y` up, support-center origin.
 
 - [ ] **Step 1: Add a failing deterministic fixture test**
 
@@ -263,7 +265,7 @@ Authoring definitions together.
 
 - [ ] **Step 4: Register the Golden resource graph**
 
-Use Task 1's exact byte length, Hash, Inventory, project-owned provenance, 18 Bone mappings,
+Use Task 1's exact byte length, Hash, Inventory, project-owned provenance, 17 anatomical Bone mappings,
 four required Animation bindings, and an explicit medium capsule. Task 3 adds the rigged
 Subject Definition after the public Subject unions exist.
 
@@ -448,7 +450,7 @@ export interface ExecutionSubjectAssetV1 {
 }
 
 export type ExecutionBipedBoneIdV1 =
-  | "root" | "hips" | "spine" | "chest" | "neck" | "head"
+  | "hips" | "spine" | "chest" | "neck" | "head"
   | "upper-arm.left" | "lower-arm.left" | "hand.left"
   | "upper-arm.right" | "lower-arm.right" | "hand.right"
   | "upper-leg.left" | "lower-leg.left" | "foot.left"
@@ -459,7 +461,7 @@ export type ExecutionGroundHumanoidActionIdV1 = "idle" | "walk" | "run" | "jump"
 export interface ExecutionRigProfileV1 {
   rigProfileRef: string;
   bodyTopology: "biped";
-  skeletonRootNodeName: string;
+  skeletonRootBoneName: string;
   requiredBoneIds: readonly ExecutionBipedBoneIdV1[];
   sourceNodeNameByBoneId: Readonly<Record<ExecutionBipedBoneIdV1, string>>;
 }
@@ -1104,8 +1106,9 @@ infer targets from display names. Animation cannot move the controller. On any f
 the partial instance and release the lease before rethrowing the stable code.
 
 Require `instance.skeletons.length === 1` for the current S1b Asset. Build a unique map of every
-`bone.name`; verify `skeletonRootNodeName` names the one unique parentless Bone and every required
-semantic mapping resolves to a distinct Bone. For a Bone Socket, collect meshes
+`bone.name`; verify `skeletonRootBoneName` names the one unique parentless Bone and every required
+anatomical semantic mapping resolves to a distinct Bone. Skeleton Root is validated separately
+and may be the same physical Bone as the `hips` mapping. For a Bone Socket, collect meshes
 using that Skeleton, require at least one descendant of the instance root, and select the
 lexicographically smallest stable mesh name as `affectedSkinnedMesh`. Add missing/multiple
 Skeleton, missing/multiple root, and no affected-mesh tests.
@@ -1560,7 +1563,7 @@ provider_status=$?
 if test "$provider_status" -gt 1; then
   exit "$provider_status"
 fi
-provider_allowlist='^packages/runtime-babylon/src/[^:]+:[0-9]+:|^packages/runtime-babylon/package\.json:[0-9]+:[[:space:]]+("name": "@whitebox-world/runtime-babylon"|"@babylonjs/(core|havok|loaders)": "[^"]+"),?$|^apps/playground/src/babylon-world-adapter\.ts:[0-9]+:|^apps/playground/package\.json:[0-9]+:[[:space:]]+"@whitebox-world/runtime-babylon": "workspace:\*",$|^apps/playground/src/(main|worldkit-asset-resolver|worldkit-browser-api)\.ts:[0-9]+:.*(babylon-world-adapter\.js|@whitebox-world/runtime-babylon|Protocol · Subject Definition · Babylon · Havok)|^package\.json:[0-9]+:[[:space:]]+"description": "An AI-first semantic whitebox game SDK with a Canonical JSON compiler and Babylon\.js plus Havok runtime\.",$|^packages/compiler/src/compile\.ts:[0-9]+:[[:space:]]+runtimeBackend: "babylon-havok",$|^packages/runtime-contracts/src/(execution-plan|runtime-session)\.ts:[0-9]+:.*(runtimeBackend: "babylon-havok"|backend: "havok")|^scripts/verify-(canonical|rigged-subject)-world\.ts:[0-9]+:[[:space:]]+(assert\.equal\([^;]*(runtimeBackend|physics\.backend), "(babylon-havok|havok)"\);|backend: "havok",|"Terrain, three static objects, and three Subjects must own Havok bodies\.",|"babylon-havok-runtime",)$'
+provider_allowlist='^packages/runtime-babylon/src/[^:]+:[0-9]+:|^packages/runtime-babylon/package\.json:[0-9]+:[[:space:]]+("name": "@whitebox-world/runtime-babylon"|"@babylonjs/(core|havok|loaders)": "[^"]+"),?$|^apps/playground/src/babylon-world-adapter\.ts:[0-9]+:|^apps/playground/package\.json:[0-9]+:[[:space:]]+"@whitebox-world/runtime-babylon": "workspace:\*",$|^apps/playground/src/(main|worldkit-asset-resolver|worldkit-browser-api)\.ts:[0-9]+:.*(babylon-world-adapter\.js|@whitebox-world/runtime-babylon|Protocol · Subject Definition · Babylon · Havok)|^package\.json:[0-9]+:[[:space:]]+"description": "An AI-first semantic whitebox game SDK with a Canonical JSON compiler and Babylon\.js plus Havok runtime\.",$|^packages/compiler/src/compile\.ts:[0-9]+:[[:space:]]+runtimeBackend: "babylon-havok",$|^packages/runtime-contracts/src/(execution-plan|runtime-session)\.ts:[0-9]+:.*(runtimeBackend: "babylon-havok"|backend: "havok")|^scripts/verify-(canonical|rigged-subject|g-bot-subject)-world\.ts:[0-9]+:[[:space:]]+(assert\.equal\([^;]*(runtimeBackend|physics\.backend), "(babylon-havok|havok)"\);|backend: "havok",|"Terrain, three static objects, and three Subjects must own Havok bodies\.",|"babylon-havok-runtime",)$'
 provider_unexpected=$(printf '%s\n' "$provider_matches" | rg -v "$provider_allowlist")
 provider_filter_status=$?
 if test "$provider_filter_status" -gt 1; then
@@ -1591,9 +1594,11 @@ const isAllowedProviderValue = (path, value) => {
   const serializedPath = path.join(".");
   return (
     ((serializedPath === "runtimeBackend" ||
-      serializedPath === "executionPlan.runtimeBackend") &&
+      serializedPath === "executionPlan.runtimeBackend" ||
+      serializedPath === "browser.snapshot.runtimeBackend") &&
       value === "babylon-havok") ||
-    (serializedPath === "physics.backend" && value === "havok")
+    ((serializedPath === "physics.backend" ||
+      serializedPath === "browser.snapshot.physics.backend") && value === "havok")
   );
 };
 const visit = (value, path, file) => {

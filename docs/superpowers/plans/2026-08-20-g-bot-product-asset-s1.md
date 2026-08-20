@@ -45,11 +45,11 @@
 - Produces: `RigProfileManifestInputV1.skeletonRootBoneName: string` and `ExecutionRigProfileV1.skeletonRootBoneName: string`.
 - Preserves: exact one-to-one anatomical Bone mapping and root-motion rejection for both distinct-root and Hips-root Skeletons.
 
-- [ ] **Step 1: Read the test quality rules before editing tests**
+- [x] **Step 1: Read the test quality rules before editing tests**
 
 Run: `sed -n '1,320p' /Users/xiateng/.codex/plugins/cache/openai-curated-remote/superpowers/6.3.0/skills/test-driven-development/writing-good-tests.md`
 
-- [ ] **Step 2: Write focused RED contract tests**
+- [x] **Step 2: Write focused RED contract tests**
 
 Add assertions that `root` is absent from the canonical Bone ID/key sets, `skeletonRootBoneName` is the only serialized root field, and a Runtime Rig may use the same physical Hips Bone as both Skeleton root metadata and the canonical `hips` mapping without creating two semantic mappings.
 
@@ -60,13 +60,13 @@ expect(executionRig.skeletonRootBoneName).toBe("root");
 expect(executionRig).not.toHaveProperty("skeletonRootNodeName");
 ```
 
-- [ ] **Step 3: Run focused tests and verify RED**
+- [x] **Step 3: Run focused tests and verify RED**
 
 Run: `pnpm vitest run packages/subject-registry/src/subject-registry.test.ts packages/authoring/src/subject-definition-normalizer.test.ts packages/runtime-contracts/src/runtime-contracts.test.ts packages/compiler/src/compile.test.ts packages/runtime-babylon/src/runtime.test.ts`
 
 Expected: failures name the obsolete `root` semantic key and missing `skeletonRootBoneName` projection.
 
-- [ ] **Step 4: Implement the minimal cross-layer contract correction**
+- [x] **Step 4: Implement the minimal cross-layer contract correction**
 
 Remove `root` from both canonical Bone unions and exact projections. Rename the root field through Registry, lock, Normalized IR, Compiler, ExecutionPlan, and Runtime. In `validateRig`, resolve the unique parentless Bone by `skeletonRootBoneName`, resolve all 17 anatomical mappings one-to-one, and pass the root Bone separately to root-motion validation.
 
@@ -76,13 +76,13 @@ if (skeletonRootBone.name !== rigProfile.skeletonRootBoneName) fail();
 validateRootMotion(animationGroups, skeletonRootBone, mappedBones.get("hips"), asset);
 ```
 
-- [ ] **Step 5: Run focused tests and typecheck**
+- [x] **Step 5: Run focused tests and typecheck**
 
 Run: `pnpm vitest run packages/subject-registry/src/subject-registry.test.ts packages/authoring/src/subject-definition-normalizer.test.ts packages/runtime-contracts/src/runtime-contracts.test.ts packages/compiler/src/compile.test.ts packages/runtime-babylon/src/runtime.test.ts && pnpm typecheck`
 
 Expected: all selected tests and typecheck pass.
 
-- [ ] **Step 6: Commit Task 1**
+- [x] **Step 6: Commit Task 1**
 
 ```bash
 git add packages/subject-registry packages/authoring packages/runtime-contracts packages/compiler packages/runtime-babylon
@@ -104,7 +104,7 @@ git commit -m "refactor: separate skeleton root from biped bones"
 - Produces: Host-only mapping from the G Bot Subject Asset ref to its same-origin public route.
 - Consumes: the committed immutable GLB bytes and the corrected Rig Profile contract from Task 1.
 
-- [ ] **Step 1: Write RED Registry and Resolver tests**
+- [x] **Step 1: Write RED Registry and Resolver tests**
 
 Assert exact inventory/hash/bounds/provenance, exact Mixamo Bone mapping, four ground bindings, accepted Collider values, Subject Definition composition, stable resource order, and the resolver route.
 
@@ -119,23 +119,23 @@ expect(gBotRig).toMatchObject({
 });
 ```
 
-- [ ] **Step 2: Run focused tests and verify RED**
+- [x] **Step 2: Run focused tests and verify RED**
 
 Run: `pnpm vitest run packages/subject-registry/src/subject-registry.test.ts apps/playground/src/worldkit-asset-resolver.test.ts packages/runtime-babylon/src/runtime.test.ts -t "G Bot|g-bot|Hips-root"`
 
 Expected: missing Registry resources/route and the absent Hips-root product plan cause failures.
 
-- [ ] **Step 3: Add G Bot resources and real-byte Runtime coverage**
+- [x] **Step 3: Add G Bot resources and real-byte Runtime coverage**
 
 Register the Asset, Rig, Animation Set, Collider, and Definition with explicit canonical fields. Add the Host route. In Runtime tests, load the committed GLB through an in-memory resolver and assert its exact inventory, unique Hips root, four mapped Action states, isolated clone ownership, and Bone Socket resolution.
 
-- [ ] **Step 4: Run focused tests and verify GREEN**
+- [x] **Step 4: Run focused tests and verify GREEN**
 
 Run: `pnpm vitest run packages/subject-registry/src/subject-registry.test.ts apps/playground/src/worldkit-asset-resolver.test.ts packages/runtime-babylon/src/runtime.test.ts`
 
 Expected: all Registry, resolver, and Runtime tests pass against the actual 3.36MB asset.
 
-- [ ] **Step 5: Commit Task 2**
+- [x] **Step 5: Commit Task 2**
 
 ```bash
 git add packages/subject-registry apps/playground/src/worldkit-asset-resolver.ts apps/playground/src/worldkit-asset-resolver.test.ts packages/runtime-babylon/src/runtime.test.ts
@@ -153,34 +153,34 @@ git commit -m "feat: register G Bot product subject"
 - Produces: a Canonical Authoring V3 example that references only `worldkit://subject-definition/humanoid.g-bot@1`.
 - Produces: build, capture, snapshot, and explain artifacts through existing CLI operations.
 
-- [ ] **Step 1: Write RED CLI integration coverage**
+- [x] **Step 1: Write RED CLI integration coverage**
 
 Add a test that loads the G Bot example, compiles exactly one G Bot asset/rig/animation/collider resource chain, and verifies the serialized build contains no `url`, `uri`, `babylon`, or `havok` field outside the allowed backend discriminator.
 
-- [ ] **Step 2: Run the focused CLI test and verify RED**
+- [x] **Step 2: Run the focused CLI test and verify RED**
 
 Run: `pnpm vitest run scripts/worldkit.test.ts -t "G Bot"`
 
 Expected: the example file is missing.
 
-- [ ] **Step 3: Create the example world**
+- [x] **Step 3: Create the example world**
 
 Create a small deterministic outdoor plain with one controllable G Bot, one second G Bot for isolation, a blocking wall, a third-person Camera, and a resource budget above the compiled product asset cost. Keep the Subject nodes limited to stable Definition refs and spawn anchors.
 
-- [ ] **Step 4: Run validate/build/explain and focused tests**
+- [x] **Step 4: Run validate/build/explain and focused tests**
 
 Run:
 
 ```bash
 pnpm worldkit validate examples/authoring/g-bot-subject-world.json --json
 pnpm worldkit build examples/authoring/g-bot-subject-world.json --output /tmp/g-bot-world.build.json --json
-pnpm worldkit explain subject examples/authoring/g-bot-subject-world.json --entity g-bot-primary --json
+pnpm worldkit subject explain examples/authoring/g-bot-subject-world.json --entity-id g-bot-primary --json
 pnpm vitest run scripts/worldkit.test.ts
 ```
 
 Expected: all commands exit zero and the compiled chain names only canonical refs.
 
-- [ ] **Step 5: Commit Task 3**
+- [x] **Step 5: Commit Task 3**
 
 ```bash
 git add examples/authoring/g-bot-subject-world.json scripts/worldkit.test.ts package.json
@@ -209,21 +209,21 @@ git commit -m "feat: add G Bot authoring example"
 - Produces: transactional artifacts with exact input/build/asset hashes, action ticks, movement/collision/isolation evidence, PNG dimensions/hashes, and failure-safe cleanup.
 - Consumes: existing `startWorldkitServer`, `promoteArtifactDirectory`, Browser API, and fixed-tick Runtime methods.
 
-- [ ] **Step 1: Write RED evidence-helper tests**
+- [x] **Step 1: Write RED evidence-helper tests**
 
 Parse the committed GLB JSON chunk and product manifests, then assert exact hash/inventory, the twelve declared source clips, the four supported ground bindings, unique Bone names, Hips-root hierarchy, no forbidden content, and non-empty per-action timing.
 
-- [ ] **Step 2: Run the focused helper test and verify RED**
+- [x] **Step 2: Run the focused helper test and verify RED**
 
 Run: `pnpm vitest run scripts/lib/g-bot-evidence.test.ts`
 
 Expected: the evidence helper module is missing.
 
-- [ ] **Step 3: Implement the pure evidence helper**
+- [x] **Step 3: Implement the pure evidence helper**
 
 Return a closed JSON-ready result without Babylon objects or raw source bytes. Reject manifest/GLB disagreement with stable verifier assertions.
 
-- [ ] **Step 4: Write and run the initial E2E RED Gate**
+- [x] **Step 4: Write and run the initial E2E RED Gate**
 
 Add `verify:g-bot-subject` to `package.json`, invoke it before creating the verifier, and record the missing-script/module failure.
 
@@ -231,17 +231,17 @@ Run: `pnpm verify:g-bot-subject`
 
 Expected: the verifier entrypoint is missing.
 
-- [ ] **Step 5: Implement the transactional CLI/browser verifier**
+- [x] **Step 5: Implement the transactional CLI/browser verifier**
 
 Use existing CLI functions for validate/build/capture/explain. Start the nonce-owned Vite server, use the deferred Browser API, pause/reset between fixed-action captures, bind control atomically for isolation, move into the wall, and assert stable snapshots. Record all evidence under a temporary sibling and promote only after every assertion passes.
 
-- [ ] **Step 6: Generate and visually inspect all captures**
+- [x] **Step 6: Generate and visually inspect all captures**
 
 Run: `pnpm verify:g-bot-subject`
 
 Open `world.png`, `idle.png`, `walk.png`, `run.png`, and `jump.png` with the local image viewer. Confirm the G Bot is approximately human-scale, grounded, visible, untextured/neutral, differently posed for the four actions, and not intersecting the wall.
 
-- [ ] **Step 7: Run focused regressions**
+- [x] **Step 7: Run focused regressions**
 
 Run:
 
@@ -253,7 +253,7 @@ pnpm verify:g-bot-subject
 
 Expected: Golden and G Bot verifiers both pass with no server/temp/backup residue.
 
-- [ ] **Step 8: Commit Task 4**
+- [x] **Step 8: Commit Task 4**
 
 ```bash
 git add scripts/verify-g-bot-subject-world.ts scripts/lib/g-bot-evidence.ts scripts/lib/g-bot-evidence.test.ts package.json artifacts/examples/g-bot-subject-world
@@ -276,21 +276,21 @@ git commit -m "test: verify G Bot subject end to end"
 - Produces: regenerated Golden evidence using `skeletonRootBoneName`, current G Bot onboarding/status, and a completed checkbox ledger.
 - Preserves: the original Golden GLB hash and all provider/URI boundary audits.
 
-- [ ] **Step 1: Regenerate Golden artifacts through the verifier**
+- [x] **Step 1: Regenerate Golden artifacts through the verifier**
 
 Run: `pnpm verify:rigged-subject`
 
 Expected: build/evidence hashes update only because the canonical Rig descriptor changed; action images and the GLB hash remain deterministic.
 
-- [ ] **Step 2: Update design/status documentation**
+- [x] **Step 2: Update design/status documentation**
 
 Replace the obsolete root field and 18-semantic-Bone statement with the exact 17 anatomical Bone plus independent Skeleton root contract. Add G Bot refs, supported actions, one-command Gate, product gaps, and the distinction between source handoff manifests and Canonical Registry resources.
 
-- [ ] **Step 3: Run obsolete-field and boundary audits**
+- [x] **Step 3: Run obsolete-field and boundary audits**
 
 Run targeted `rg` checks proving no production/example/generated JSON contains `skeletonRootNodeName`, raw asset URI fields, or provider-specific public keys beyond the documented allowlist.
 
-- [ ] **Step 4: Run the complete verification matrix**
+- [x] **Step 4: Run the complete verification matrix**
 
 Run:
 
@@ -308,7 +308,7 @@ git diff --check
 
 Expected: every Gate passes; only existing deprecation/chunk-size advisories may remain.
 
-- [ ] **Step 5: Self-review exact scope and commit docs/artifacts**
+- [x] **Step 5: Self-review exact scope and commit docs/artifacts**
 
 Inspect `git diff --stat`, `git diff`, resource hashes, PNGs, process/temp residue, and commit history. Mark completed plan checkboxes only after their evidence exists.
 

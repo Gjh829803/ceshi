@@ -105,16 +105,17 @@ Runtime Director 也都尚未实现。
 Capability 和 Profile 定义主体，再通过多个 `subject` 节点生成独立实例。SDK
 确定性推导 Collider、Hash、Lock 和资源成本，并提供 Registry/Explain 工具。
 
-未完成：产品 GLB 资产验收、Compound Collider、完整 Semantic Actions、Relationship、
+未完成：更多产品 GLB 资产、Compound Collider、完整 Semantic Actions、Relationship、
 坐骑、装备、车辆与飞行。它们分别属于 S1b 后续、S2 及之后阶段。
 
-### Subject Authoring S1b：首个 Golden Asset 可视切片
+### Subject Authoring S1b：Golden 与首个产品 G Bot 可视切片
 
-已完成：项目自有 Golden GLB 的 Asset/Rig/Animation/Collider Registry 资源、
-内容 Hash Gate、Babylon AssetContainer 缓存、逐实例 Rig/动画状态、
-`idle/walk/run/jump`、Bone Socket、CLI/Browser Explain 与端到端验证。
+已完成：项目自有 Golden 与首个产品 G Bot GLB 的 Asset/Rig/Animation/Collider
+Registry 资源、内容 Hash Gate、Babylon AssetContainer 缓存、逐实例 Rig/动画状态、
+`idle/walk/run/jump`、Bone Socket、CLI/Browser Explain 与端到端验证。G Bot World
+JSON 只引用稳定 Subject Definition，源 Bone/Clip 映射由 Registry Profile 承担。
 
-未完成：产品资产接入验收、Compound Collider、LOD、更多身体拓扑、独立动画资产、
+未完成：更多产品资产接入、Compound Collider、LOD、更多身体拓扑、独立动画资产、
 通用姿态、游泳、装备、坐骑与飞行。首个 Fixture 证明了管线，不等于 S1b 或
 Semantic Actions 整体生产完成。
 

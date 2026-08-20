@@ -3,7 +3,7 @@
 ## Status
 
 - Date: 2026-08-20
-- Decision: approved for implementation
+- Decision: implemented and verified; independent review findings resolved
 - Scope: first product-authored humanoid asset through the existing Canonical Registry → Authoring → Compiler → Babylon/Havok pipeline
 - Input commit: `4ccfaa1b4fbdccb8111af8c97dda39e48b257c98`
 
