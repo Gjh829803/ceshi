@@ -1,6 +1,6 @@
 # Placement Constraint 与确定性 Layout Solver 设计
 
-- 状态：**Accepted / S1 Scope Frozen（2026-08-20）**。
+- 状态：**Accepted / S1 Implemented and in Regression（2026-08-20）**。
 - 方案决策：采用“完整但受控的纵向切片”，交付 Schema → Solver → CLI →
   海湾 Fixture → Report/Browser Gate；不交付只有字段没有效果的空 Schema，也不在
   S1 一次实现通用优化器。
@@ -31,7 +31,8 @@
 
 ## 2. 为什么必须单独存在这一层
 
-当前 [`AuthoringSpec V2`](../../../packages/authoring/src/authoring-spec-v2.schema.json) 的 `constraints` 是关闭未知字段的保留对象，Object/Anchor 主要依赖最终 Transform。该模式适合验证编译链，但会把三个不应由 Agent 独自承担的问题混在一起：
+旧 Authoring 输入让 Object/Anchor 直接携带最终 Transform。该模式适合验证编译链，
+但会把三个不应由 Agent 独自承担的问题混在一起：
 
 - 从图片和 Prompt 推断语义区域及相对关系；
 - 将相对关系转换成精确坐标；
@@ -79,9 +80,9 @@ Reference Image + Prompt
 
 ## 4. Authoring Schema 形状
 
-以下字段形状冻结为 Canonical Authoring Spec V3。当前 V2 尚未成为外部生产契约，
-因此仓库内 Fixture 通过一次性重写迁移到 V3；Validator、CLI、示例和生成类型不再继续
-接受 V2，也不保留 `transform`/`placement` 两套公共真相。
+以下字段形状已作为 Canonical Authoring Spec V3 交付。旧版本未成为外部生产契约，
+仓库内 Fixture 已一次性迁移；Validator、CLI、示例和生成类型不再接受旧版本，也不
+保留 `transform`/`placement` 两套公共真相。
 
 ### 4.1 Node Placement 判别 Union
 
@@ -91,12 +92,12 @@ Reference Image + Prompt
 {
   "id": "lighthouse",
   "kind": "object",
-  "prototypeRef": "package://prototype/lighthouse",
+  "prototypeRef": "package://prototype/coastal-lighthouse@1",
   "placement": {
     "kind": "solved",
     "initialTransform": {
       "positionMetersXYZ": [28, 8, -36],
-      "rotationRadiansXYZ": [0, 0, 0],
+      "rotationEulerRadiansXYZ": [0, 0, 0],
       "scaleXYZ": [1, 1, 1]
     },
     "placementConstraintIds": [
@@ -155,7 +156,8 @@ SolvedPlacement
         "visibleEntityId": "lighthouse",
         "cameraEntityId": "opening-camera",
         "screenRegionId": "upper-right",
-        "minimumVisibleRatio": 0.65
+        "minimumVisibleRatio": 0.65,
+        "minimumProjectedAreaRatio": 0.001
       }
     ]
   }
@@ -195,16 +197,16 @@ SolvedPlacement
 
 ### 4.4 S1 Region、Route 与 Camera Region 输入
 
-当前 Authoring V2 没有 Canonical Region/Route 集合，而 S1 Solver 不能依赖旧的
-Three.js Scene DSL。Authoring V3 因此新增三个关闭集合：
+S1 Solver 不能依赖旧的 Three.js Scene DSL。Authoring V3 因此交付一个 `spatial`
+对象中的三个关闭集合：
 
-- `spatialRegions`：S1 只支持 `polygon-xz`，字段为稳定 `id`、
+- `spatial.regions`：S1 只支持 `polygon-xz`，字段为稳定 `id`、
   `pointsMetersXZ`、可选 `minimumHeightMeters`/`maximumHeightMeters` 和
   `semanticClassId`。Water Boundary 可被投影为只读 Region，但不复制 Water 真相。
-- `routes`：S1 只支持 `polyline-xz`，字段为稳定 `id`、`pointsMetersXZ`、
+- `spatial.routes`：S1 只支持 `polyline-xz`，字段为稳定 `id`、`pointsMetersXZ`、
   `widthMeters` 和 `locomotionProfileRef`。Route 是约束/验证输入，不是 Runtime
   Relationship。
-- `screenRegions`：S1 使用归一化 `minimumUv`/`maximumUv` 矩形；`[0, 0]` 是图像
+- `spatial.screenRegions`：S1 使用归一化 `minimumUv`/`maximumUv` 矩形；`[0, 0]` 是图像
   左上角，`+U` 向右，`+V` 向下，边界范围均为 `[0, 1]`。不接受“左上”“偏右”等
   自然语言别名。
 
@@ -318,14 +320,18 @@ quantizationProfile
   "id": "coastal-world-layout",
   "authoringSpecHash": "sha256:...",
   "registryLockHash": "sha256:...",
-  "solverProfileRef": "worldkit://solver/layout-default@1",
-  "resolvedVersion": "1.0.0",
-  "seed": 184219,
+  "solverProfileRef": "worldkit://layout-solver-profile/outdoor.s1@1",
+  "resolvedVersion": "1",
+  "solverProfileHash": "sha256:...",
+  "seed": 20310417,
   "status": "solved",
   "placementsByEntityId": {},
   "constraintResultsById": {},
   "diagnostics": [],
-  "iterationCount": 418
+  "searchNodeCount": 72041,
+  "conflictCheckCount": 0,
+  "conflictConstraintIds": [],
+  "totalPreferenceCostRatio": 0
 }
 ```
 
@@ -344,22 +350,24 @@ Hash，由 CLI 返回并被 NormalizedWorldIR/ValidationReport 引用；若落�
 
 ## 9. Diagnostic 与 AI 修复
 
-Diagnostic 使用稳定 Code、JSON Pointer、Entity/Constraint ID、测量值和建议操作，例如：
+顶层求解结果使用精确、关闭的稳定 Code、JSON Pointer、Entity/Constraint ID、测量值
+和建议操作：
 
+- `PLACEMENT_INPUT_INVALID`；
 - `PLACEMENT_REQUIRED_CONSTRAINT_UNSATISFIED`；
 - `PLACEMENT_REGION_HAS_NO_CANDIDATE`；
-- `PLACEMENT_SUPPORT_SURFACE_MISSING`；
-- `PLACEMENT_CLEARANCE_CONFLICT`；
-- `PLACEMENT_ROUTE_UNREACHABLE`；
-- `PLACEMENT_CAMERA_REGION_OCCLUDED`；
-- `PLACEMENT_SOLVER_BUDGET_EXCEEDED`；
-- `PLACEMENT_NONDETERMINISTIC_RESULT`。
+- `PLACEMENT_SOLVER_BUDGET_EXCEEDED`。
+
+单条 Constraint 结果另用关闭的 Evaluator Violation Code，例如
+`PLACEMENT_SUPPORT_CONSTRAINT_UNSATISFIED`、`PLACEMENT_CLEARANCE_CONFLICT`、
+`PLACEMENT_SLOPE_LIMIT_EXCEEDED` 和 `PLACEMENT_CAMERA_REGION_OCCLUDED`。确定性由重跑
+Hash Gate 证明，不虚构一个尚未实现的 `PLACEMENT_NONDETERMINISTIC_RESULT` 公共 Code。
 
 建议可以说明“扩大 Region”“降低 preferred 权重”“增加显式 Anchor”或“拆分互斥 Required Constraint”，但只能通过 `WorldChangeSet` 形成候选修复；SDK 不自动修改 Authoring 真相。
 
 ## 10. CLI、Browser 与 ChangeSet
 
-候选命令面：
+已交付命令面：
 
 ```text
 worldkit layout validate <authoring.json>
@@ -370,9 +378,13 @@ worldkit layout explain <report.json> --constraint-id <id>
 
 所有命令支持 JSON 输出并区分 process error、invalid input、unsatisfied 和 budget exceeded。`solve` 默认不启动 Runtime。
 
-Browser/Inspector 只暴露只读调试能力：候选点、Region、Constraint Line、Support、Clearance、Route 和 Camera Projection。Production 页面不向无权限 Session 暴露 Solver 写接口。
+Browser V3 通过 `getDiagnostics()` 只读暴露递归冻结的 Required Runtime Assertion
+证据；不暴露 Candidate、搜索、修复或重新布局 Handle。更丰富的 Inspector 可视化仍
+属后续，Production 页面不向无权限 Session 暴露 Solver 写接口。
 
-WorldChangeSet 对 Placement 的修改使用 ID 定位：添加/删除/替换 Constraint、切换 Placement Union 或修改显式数值。增量求解必须证明与完整重新求解的规范结果相同；在证明前，增量实现只可作为缓存优化，不形成第二套语义。
+后续 WorldChangeSet 对 Placement 的修改必须使用 ID 定位：添加/删除/替换 Constraint、
+切换 Placement Union 或修改显式数值。增量求解必须证明与完整重新求解的规范结果相同；
+在证明前，增量实现只可作为缓存优化，不形成第二套语义。
 
 ## 11. Validation Gate
 
@@ -397,7 +409,7 @@ Layout 成功至少通过：
 - 不可信 Package Solver Plugin 不能在主进程执行；算法级扩展必须通过 Conformance、资源预算和签名门禁。
 - 超出预算返回稳定状态，不回退成随机摆放或跳过碰撞。
 
-## 13. 已接受的 S1 实施切片
+## 13. 已交付的 S1 实施切片
 
 选择一个参考图驱动的室外海湾 Fixture，限制范围如下：
 
@@ -409,23 +421,31 @@ Layout 成功至少通过：
   该 Evidence 只证明 S1 Runtime 复验结果并由 LayoutSolveReport 引用，不提前冻结 P0.3
   的通用 ValidationReport Schema。
 
-验收标准：Agent 不为三个 Landmark 手写最终坐标；同一输入连续运行和并发扰动结果
-Hash 一致；必需接地、无穿插、路线和开场构图 Gate 全部通过；故意制造冲突时返回
-可定位的 Constraint IDs，不生成 WorldPackage。Fixture 还必须证明：删除 Solver Report、
-修改 Seed/Profile/Bounds 或把 Required 改为不可满足时，旧结果不能被缓存或静默复用。
+验收已通过：Agent 不为三个 Landmark 和 Spawn 手写最终坐标；同一输入连续运行和并发
+扰动的 Report/IR/Plan Hash 一致；必需接地、净空、路线坡度和开场构图 Gate 全部通过；
+故意制造冲突时返回可定位的 Constraint IDs，不生成 WorldPackage。Fixture 还证明删除
+Solver Report、修改 Seed/Profile/Bounds、篡改 Report Hash、耗尽预算或令 Required
+不可满足时，旧结果不会被缓存、复用或覆盖到目标目录。
 
-## 14. 实施分解
+## 14. 实施状态
 
-1. 冻结 Placement Union、Constraint Union、Report Schema 与 Profile Manifest。
-2. 为现有 Authoring Fixture 编写显式迁移/重写工具，移除旧字段后不保留双重真相。
-3. 实现 Schema/语义校验和 Normalized Constraint。
-4. 实现确定性候选生成与首批 Constraint Evaluator。
-5. 实现 Required Solver、Preferred Optimizer 与 Conflict Core。
-6. 接入 Terrain/Bounds/Route/Camera Query Port。
-7. 输出 Report、Diagnostic、Explain 和 ChangeSet。
-8. 接入统一 Validation Gate、Browser Debug Pass 与 Golden Fixture。
+1. [x] 冻结并实现 Placement Union、八种 Constraint Union、Report Schema 与 Profile Manifest。
+2. [x] 一次性迁移所有受跟踪 Authoring Fixture，删除旧 Schema 与双重字段真相。
+3. [x] 实现字段级 Schema/语义校验、Normalized Constraint 和结构化 Diagnostic。
+4. [x] 实现确定性候选生成、八种 Constraint Evaluator、Required Search 与 Preferred 排序。
+5. [x] 实现稳定 Conflict Core、Report Canonicalization 与内容 Hash。
+6. [x] 接入 Heightfield/Bounds/Route/Camera Query Port 和 Runtime Assertion 复验。
+7. [x] 输出 Report、Diagnostic 与 CLI Explain；WorldChangeSet 延后，不宣称已实现。
+8. [x] 接入 Browser/Havok 海湾 Golden Fixture；通用 P0.3 ValidationReport 延后。
 
-编码前必须新增独立实施计划，列出实际包路径、Schema 文件、迁移范围、测试矩阵和可视 Fixture；本文不授权一次性实现完整通用约束求解器。
+实施与证据详见
+[Placement Solver S1 Implementation Plan](../plans/2026-08-20-placement-layout-solver-s1.md)。
+当前 Report Hash 为
+`sha256:b89559755fea6cf71beba7cf4a308cef35bcd99c19749b85d818a378124c1ebd`，
+IR Hash 为 `sha256:869fbf4e48fc6200d8512a643914d091358e3f8e254e705dffd315233e7c7190`，
+Plan Hash 为 `sha256:e55aa781caa92af917b5224a3846e0ddd5e672b1ab9f3613fcb62645b3b98b6d`。
+
+Placement Solver S1 首个海湾纵向切片已完成并进入回归；通用 Terrain Mask/Route Graph、更多 Constraint 与 P0.1 整体仍未完成。
 
 ## 15. 已冻结的实施决策
 

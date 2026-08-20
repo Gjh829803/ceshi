@@ -1,19 +1,22 @@
-# Canonical Authoring V2 / Runtime Protocol V3 快速接入
+# Canonical Authoring V3 / Runtime Protocol V3 快速接入
 
-Canonical Authoring V2 是本仓库面向 AI Agent 和其他程序的唯一 JSON
+Canonical Authoring V3 是本仓库面向 AI Agent 和其他程序的唯一 JSON
 输入协议。调用方只描述世界、资源、节点和启动绑定；SDK 负责严格校验、
-Registry 解析、确定性归一化、Collider 推导、编译、物理执行和截图。
+Registry 解析、确定性 Placement 求解、归一化、Collider 推导、编译、物理执行和截图。
 
-Authoring V1 从未发布，现已删除，也没有兼容解析或字段别名。当前版本链路为：
+旧 Authoring 版本从未发布，现已删除，也没有兼容解析或字段别名。当前版本链路为：
 
 ```text
-AuthoringSpec V2
-  -> NormalizedWorldIR V2
-  -> ExecutionPlan V3
+AuthoringSpec V3
+  -> LayoutSolveReport V1
+  -> NormalizedWorldIR V3
+  -> ExecutionPlan V4
   -> Runtime Snapshot V3 / Browser Protocol V3
 ```
 
 > Golden Humanoid S1b 首个可视纵向切片已完成并进入回归；S1b 整体与 Semantic Actions 整体仍未完成.
+
+> Placement Solver S1 首个海湾纵向切片已完成并进入回归；通用 Terrain Mask/Route Graph、更多 Constraint 与 P0.1 整体仍未完成。
 
 ## 1. 最短运行路径
 
@@ -49,7 +52,7 @@ SDK 从上游交付的 Canonical JSON 开始工作。
 ## 2. Agent 应输出什么
 
 权威 Schema 是
-[`authoring-spec-v2.schema.json`](../packages/authoring/src/authoring-spec-v2.schema.json)，
+[`authoring-spec-v3.schema.json`](../packages/authoring/src/authoring-spec-v3.schema.json)，
 Package 主体 Schema 是
 [`subject-definition-v1.schema.json`](../packages/authoring/src/subject-definition-v1.schema.json)，
 完整示例是
@@ -63,13 +66,21 @@ Package 主体 Schema 是
 ```json
 {
   "kind": "worldkit-authoring-spec",
-  "schemaVersion": 2,
+  "schemaVersion": 3,
   "id": "package-subject-world",
   "seed": 4096,
   "world": {},
   "resources": {
     "prototypes": [],
     "subjectDefinitions": []
+  },
+  "layout": {
+    "solverProfileRef": "worldkit://layout-solver-profile/outdoor.s1@1"
+  },
+  "spatial": {
+    "regions": [],
+    "routes": [],
+    "screenRegions": []
   },
   "nodes": [],
   "relationships": [],
@@ -92,12 +103,70 @@ Package 主体 Schema 是
 | 障碍物/地标 | `kind: "object"` | 引用版本化原型的静态实例和碰撞体 |
 | 主体实例 | `kind: "subject"` | 引用一个精确版本 Subject Definition |
 | 相机 | `kind: "camera"` | 第三人称相机，目标随控制绑定切换 |
-| 锚点 | `kind: "anchor"` | 出生位置等稳定空间实体 |
+| 锚点 | `kind: "anchor"` | 出生位置、构图焦点等稳定空间实体 |
+| 空间输入 | `spatial` | Polygon Region、Polyline Route 和规范化 Screen Region |
+| 落位 | Object/Anchor 的 `placement` | `fixed` 直接给 Transform；`solved` 引用 Constraint |
+| 落位约束 | `constraints.placements` | Required/Preferred 与八种 S1 Constraint |
 | 启动绑定 | `startup` | 默认出生锚点、受控主体和相机 |
 
 所有对象都是闭合 Schema。未知字段、重复 JSON Key、注释、尾逗号、
 非有限数字、错误引用、版本缺失、超预算和当前不支持的能力都会返回结构化
 Diagnostic，不会被静默忽略。
+
+### 2.1 Fixed、Solved 与 Required/Preferred
+
+固定构图焦点直接声明最终 Transform：
+
+```json
+{
+  "id": "composition-focus",
+  "kind": "anchor",
+  "semantic": { "classId": "anchor.composition-focus" },
+  "placement": {
+    "kind": "fixed",
+    "transform": { "positionMetersXYZ": [0, 0, -18] }
+  }
+}
+```
+
+需要 SDK 求解的地标只引用约束，不同时填写 `transform`：
+
+```json
+{
+  "id": "lighthouse",
+  "kind": "object",
+  "prototypeRef": "package://prototype/coastal-lighthouse@1",
+  "placement": {
+    "kind": "solved",
+    "placementConstraintIds": [
+      "lighthouse-inside",
+      "lighthouse-supported",
+      "lighthouse-visible"
+    ]
+  }
+}
+```
+
+`required` 不满足会阻断 Report/IR/Plan；`preferred` 只在 Required 可行解中参与
+稳定排序，并在 Report 中保留满足情况和代价。例如：
+
+```json
+{
+  "id": "lighthouse-visible",
+  "kind": "visible-in-camera-region",
+  "requirement": "preferred",
+  "preferenceWeightRatio": 0.4,
+  "visibleEntityId": "lighthouse",
+  "cameraEntityId": "camera-main",
+  "screenRegionId": "opening-right",
+  "minimumVisibleRatio": 0.4,
+  "minimumProjectedAreaRatio": 0.001
+}
+```
+
+S1 精确支持 `inside-region`、`outside-region`、`distance-range`、`faces-entity`、
+`supported-by`、`minimum-clearance`、`within-slope-limit` 和
+`visible-in-camera-region`。其他 Kind 会被严格 Schema 拒绝。
 
 ## 3. Subject Definition 与实例
 
@@ -227,10 +296,11 @@ pnpm worldkit subject explain ./world.json --entity-id pack-animal-a --json
 Canonical JSON bytes
   -> strict parse + Schema validation
   -> semantic validation + exact Registry resolution
+  -> ResolvedLayoutInput + deterministic LayoutSolveReport
   -> normalized Part/Socket ordering + Collider derivation
   -> Definition Hash + Resource Lock
-  -> NormalizedWorldIR V2 + SHA-256
-  -> ExecutionPlan V3 + SHA-256
+  -> NormalizedWorldIR V3 + SHA-256
+  -> ExecutionPlan V4 + SHA-256
   -> Babylon Runtime Adapter + Havok
 ```
 
@@ -250,9 +320,25 @@ Compiler 版本会得到字节稳定的 Definition、IR 与 Plan 哈希。
 | `registry describe --resource-ref <ref> [--json]` | 0 | 2 | 描述精确版本资源 |
 | `subject-definition validate <file> [--json]` | 0 | 2 | 独立校验 Package Definition |
 | `subject explain <world> --entity-id <id> [--json]` | 0 | 2 | 解释已编译主体 |
+| `layout validate <world> [--json]` | 0 | 2 | 校验 V3 Placement/Spatial/Constraint 并解析 Solver 输入 |
+| `layout solve <world> --output <dir> [--json]` | 0 | 2/3/4/5 | 事务性写 Report、IR 与 Integrity Manifest |
+| `layout explain <report> --entity-id <id> [--json]` | 0 | 2 | 解释一个最终 Placement |
+| `layout explain <report> --constraint-id <id> [--json]` | 0 | 2 | 解释一条 Constraint 结果 |
 
 `--json` 输出稳定字段名、`code`、JSON Pointer 风格的 `instancePath`、
 `message` 和可选 `details`。命令不会回显源文件正文或环境变量。
+
+Layout `solve` 的 3/4/5 分别表示 Required 不可满足、搜索预算耗尽和制品发布
+失败。`--entity-id` 与 `--constraint-id` 必须二选一；`solve` 失败不生成或覆盖
+WorldPackage。最小流程是：
+
+```bash
+pnpm worldkit layout validate examples/authoring/placement-coastal-world.json --json
+pnpm worldkit layout solve examples/authoring/placement-coastal-world.json \
+  --output /tmp/placement-coastal-layout --json
+pnpm worldkit layout explain /tmp/placement-coastal-layout/layout-report.json \
+  --constraint-id lighthouse-visible --json
+```
 
 ## 7. Browser Protocol V3
 
@@ -286,6 +372,11 @@ Snapshot 通过 `subjectStatesByEntityId` 报告每个主体的 Definition 身�
 Origin 位置、速度、`ground / air / water` 介质与
 `idle / walk / run / jump` 的 `activeActionId`。
 
+对于 Placement 世界，`getDiagnostics()` 还会发布只读、递归冻结的
+`WORLDKIT_LAYOUT_ASSERTION_SATISFIED` 证据。Browser 不暴露 Candidate、搜索、
+修改 Constraint 或重新布局接口；Runtime 只按 ExecutionPlan V4 复验 Required
+Assertion，失败即拒绝发布世界。
+
 当前 Host 只有一个受信默认 Controller；同时创建多个 Controller、NDJSON
 长连接和按 Tick 批量输入属于后续控制协议，不应由调用方自行模拟。
 
@@ -295,6 +386,9 @@ Origin 位置、速度、`ground / air / water` 介质与
 Registry/Package Primitive 主体，以及首个 Registry Golden GLB Rigged Subject。
 Golden 切片包括内容 Hash Gate、Rig/Animation/Collider Profile、Bone Socket、
 `idle/walk/run/jump`、地面移动、跳跃、碰撞、可游泳水域检测和控制目标切换。
+Placement Solver S1 还支持 Object/Anchor Fixed/Solved Placement、解析 Region/Route/
+Screen Region、八种关闭 Constraint、Required/Preferred 与锁定 Profile/Seed 的
+确定性求解。
 
 以下能力尚未交付，必须报告为能力缺口：
 
@@ -303,6 +397,7 @@ Golden 切片包括内容 Hash Gate、Rig/Animation/Collider Profile、Bone Sock
 - Relationship、挂载、坐骑、拖拽、装备、武器和车辆；
 - NPC 行为、战斗、导航、玩法规则、网络与动态刚体；
 - 飞行、第一人称/自由镜头、室内、洞穴、悬挑和 Overhang 地形；
+- 通用 Terrain Mask/Route Graph、S1 之外的 Constraint、增量 Solver 和完整 P0.1；
 - 非空 `relationships`、非空 `rules` 和运行时动态 Spawn。
 
 `seat.mount` 目前只是可验证、可解释的 Socket 数据，不代表骑乘逻辑已经实现。
@@ -334,6 +429,7 @@ pnpm test
 pnpm build
 pnpm verify:canonical
 pnpm verify:rigged-subject
+pnpm verify:placement-layout
 ```
 
 `verify:canonical` 在真实 Chromium 中验证严格输入、确定性 Build Artifact、
@@ -343,3 +439,8 @@ Package Definition Hash/Lock、三个独立 Subject、Havok 初始化、墙体�
 `verify:rigged-subject` 在真实 Chromium 中额外验证 Golden GLB 原始字节 Hash、
 Rig/Clip/Collider 绑定、四种固定 Tick 动作、双实例隔离、Havok 墙体停止、
 五张 936×596 截图和篡改后的稳定失败；它不是产品资产验收的替代品。
+
+`verify:placement-layout` 在真实 Chromium/Havok 中验证海湾 Fixture 的 19 条约束、
+八种 S1 Kind、Report → IR → Plan → Snapshot 一致性、Required Assertion、连续和并发
+确定性，以及冲突、Seed/Profile/Bounds/Report/Hash/预算负向门禁。它不代表通用
+Terrain Mask、Route Graph、更多 Constraint 或 P0.1 整体完成。

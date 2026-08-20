@@ -2,11 +2,13 @@
 
 - 状态：Active，重构执行进度与剩余工作的唯一跟踪入口。
 - 基准日期：2026-08-20。
-- 长期目标总进度：约 **45%**，合理误差范围为 ±5%。
-- 第一条 Canonical 纵向切片：约 **85%**。
-- 当前代码入口：Canonical Authoring V2 → NormalizedWorldIR V2 → ExecutionPlan V3 → Babylon.js/Havok Runtime。
+- 长期目标总进度：约 **50%**，合理误差范围为 ±5%。
+- 第一条 Canonical 纵向切片：约 **90%**。
+- 当前代码入口：Canonical Authoring V3 → Placement Solver S1 → NormalizedWorldIR V3 → ExecutionPlan V4 → Babylon.js/Havok Runtime。
 
 > Golden Humanoid S1b 首个可视纵向切片已完成并进入回归；S1b 整体与 Semantic Actions 整体仍未完成.
+
+> Placement Solver S1 首个海湾纵向切片已完成并进入回归；通用 Terrain Mask/Route Graph、更多 Constraint 与 P0.1 整体仍未完成。
 
 ## 1. 文档职责
 
@@ -42,28 +44,28 @@ Normalizer/Compiler、Runtime、CLI/Browser 和对应 Conformance Gate 的纵向
 | 工作流 | 权重 | 当前完成度 | 加权贡献 | 判断依据 |
 |---|---:|---:|---:|---|
 | 架构、边界与命名 | 8% | 92% | 7.4% | 总规格、ADR、主体/地形/3C 和 Placement/Take/Validation 专项已成稿；Placement S1 已冻结，Take/Validation 仍待评审 |
-| Canonical Schema、IR、Registry 与 Compiler | 15% | 75% | 11.25% | V2/V2/V3、Hash、Lock、严格校验、Primitive 与首个 Asset Subject 资源表已交付；WorldChangeSet、完整 Capability 和 WorldPackage 尚未交付 |
-| Babylon/Havok Runtime、物理与相机 | 15% | 65% | 9.75% | Heightfield、障碍、水域、多主体、第三人称、碰撞、重置、控制切换与首个 Rigged Asset Runtime 已交付；多视角与完整生产预算尚未完成 |
+| Canonical Schema、IR、Registry 与 Compiler | 15% | 82% | 12.3% | V3/V3/V4、Hash、Lock、严格校验、Placement、Primitive 与首个 Asset Subject 资源表已交付；WorldChangeSet、完整 Capability 和 WorldPackage 尚未交付 |
+| Babylon/Havok Runtime、物理与相机 | 15% | 70% | 10.5% | Heightfield、障碍、水域、多主体、第三人称、碰撞、重置、控制切换、Rigged Asset 与 Placement Assertion 复验已交付；多视角与完整生产预算尚未完成 |
 | Subject LEGO 组装体系 | 15% | 40% | 6.0% | S0、S1a 与 S1b 首个 Golden 可视切片已完成；S1b 后续、S2、S3、S4 尚未完成 |
-| Terrain、Region 与 Placement | 12% | 30% | 3.6% | Alpha 地形能力可运行，Placement/Solver 专项已成稿；长期 Terrain IR/Mask/Region 与 Solver 尚未形成 Canonical 纵向切片 |
-| CLI、Browser Protocol 与自动化 | 10% | 55% | 5.5% | validate/build/run/capture/discovery/explain、Browser V3 与 Rigged Subject Gate 已有；持久 Session、完整 Driver、Take 和 Package 工具未完成 |
+| Terrain、Region 与 Placement | 12% | 60% | 7.2% | Alpha 地形和 Placement Solver S1 海湾纵向切片已运行；通用 Terrain Mask/Route Graph、更多 Constraint 与完整 P0.1 未完成 |
+| CLI、Browser Protocol 与自动化 | 10% | 68% | 6.8% | validate/build/run/capture/discovery/explain、layout validate/solve/explain、Browser V3 与三条可视 Gate 已有；持久 Session、完整 Driver、Take 和 Package 工具未完成 |
 | Semantic Action、动画与 Gameplay | 8% | 30% | 2.4% | Golden `idle/walk/run/jump` 固定 Tick Animation Binding 已交付；通用 Action Request/Receipt、姿态、装备与规则未交付 |
 | Simulation Take、控制通道与视频接入 | 10% | 15% | 1.5% | Take/Capture 专项已成稿，单截图能力已有；多 Pass、时间轨、Bundle 和模型 Adapter 未交付 |
-| 生产 Gate、默认切换与旧实现退出 | 7% | 20% | 1.4% | Validation Profile/Report 专项已成稿且 Canonical Browser Gate 可运行；统一报告、默认切换和旧路径退出未交付 |
-| **合计** | **100%** |  | **约 49%** | 首个 S1b Asset Subject 切片提高了实现证据；对外按剩余生产 Gate 与范围不确定性报告 **约 45%** |
+| 生产 Gate、默认切换与旧实现退出 | 7% | 25% | 1.75% | Validation Profile/Report 专项已成稿，Canonical/Rigged/Placement Browser Gate 可运行；统一报告、默认切换和旧路径退出未交付 |
+| **合计** | **100%** |  | **约 56%** | Placement S1 新增可运行证据；对外按通用 Terrain/Route、生产 Gate 与剩余范围不确定性保守报告 **约 50%** |
 
-“第一条 Canonical 纵向切片约 85%”只指以下较窄范围：AI 提交 JSON，SDK
+“第一条 Canonical 纵向切片约 90%”只指以下较窄范围：AI 提交 JSON，SDK
 完成严格校验、确定性编译、Babylon/Havok 运行、多主体控制、首个 Golden Asset
-Subject、截图和查询。它不代表任意产品资产、完整 S1b、关系、完整动作、复杂地形、
-视频控制输出或生产切换已经完成。
+Subject、Placement S1、截图和查询。它不代表任意产品资产、完整 S1b/P0.1、关系、
+完整动作、复杂地形、视频控制输出或生产切换已经完成。
 
 ## 3. 当前已完成并进入回归的能力
 
 ### 3.1 Canonical 编译底座
 
-- [x] Canonical Authoring V2 是唯一接受的 JSON 输入；未发布的 V1 已删除。
+- [x] Canonical Authoring V3 是唯一接受的 JSON 输入；未发布的旧版本已删除。
 - [x] 严格 JSON Schema、关闭未知字段、语义校验和结构化 Diagnostic。
-- [x] NormalizedWorldIR V2 与 ExecutionPlan V3。
+- [x] NormalizedWorldIR V3 与 ExecutionPlan V4。
 - [x] Canonical JSON Bytes、稳定 SHA-256、Definition Hash 和 Resource Lock。
 - [x] 精确版本的 Registry Capability/Profile/Subject Definition 解析。
 - [x] Compiler 和 Runtime 不读取 Authoring 原始输入，也不在协议中暴露 Babylon/Havok Handle。
@@ -107,8 +109,8 @@ Subject、截图和查询。它不代表任意产品资产、完整 S1b、关系
 2026-08-20 的新鲜验证证据：
 
 - `pnpm typecheck`：通过；
-- `pnpm test`：36 个测试文件、340 项测试通过；
-- `pnpm verify:canonical`：Authoring 2、Normalized IR 2、ExecutionPlan 3、
+- `pnpm test`：48 个测试文件、435 项测试通过；
+- `pnpm verify:canonical`：Authoring 3、Normalized IR 3、ExecutionPlan 4、
   Runtime Snapshot 3、Browser Protocol 3 全部通过；
 - Canonical Browser Gate 覆盖 Babylon/Havok、墙体阻挡、水域切换、两个
   Package Subject 独立控制和确定性重置。
@@ -117,6 +119,10 @@ Subject、截图和查询。它不代表任意产品资产、完整 S1b、关系
   `SUBJECT_ASSET_HASH_MISMATCH` 篡改 Gate 全部通过；`verification.json` V2 还用
   Foreground-origin Subject Silhouette 证明六组动作姿态差异率均高于 0.15，
   最低为 0.298178。
+- `pnpm verify:placement-layout`：八种 Constraint、19 条海湾约束、Report → IR →
+  Plan → Snapshot、Runtime Assertion、连续/并发确定性、冲突、篡改和预算门禁全部通过；
+  936×596 Screenshot Hash 为
+  `sha256:d5c8c2bd8bbba62c86903679792094d0e00d1f1d1d6ba5d55e743d409a414f04`。
 
 ## 4. Master Backlog
 
@@ -134,18 +140,22 @@ Subject、截图和查询。它不代表任意产品资产、完整 S1b、关系
 - [x] 编写 [Placement Constraint / Layout Solver 专项设计](superpowers/specs/2026-08-19-placement-constraint-layout-solver-design.md)。
 - [x] 评审并冻结专项设计中的字段、版本、首批 Constraint 与 Fixture（方案 2，
   Authoring V3 / NormalizedWorldIR V3 / ExecutionPlan V4，2026-08-20）。
-- [ ] 冻结 Placement Constraint 与 Gameplay Relationship 的协议边界。
-- [ ] 定义关闭枚举的 Required/Preferred Constraint 判别 Union。
-- [ ] 第一批覆盖 Region 内外、相对距离、方向、支撑、净空、坡度、路线和镜头可见性。
-- [ ] 定义 Normalized Constraint、Solver 输入、稳定排序、Seed 和预算。
-- [ ] Solver 输出 Transform、Provenance、违反项、评分和冲突核心。
-- [ ] 失败返回结构化 Diagnostic 与可执行但不自动提交的修复建议。
-- [ ] CLI 支持 validate/solve/explain，并输出可审计 Solve Report。
-- [ ] Browser Fixture 覆盖接地、无穿插、Spawn 可达、Route 坡度和 Opening Shot Anchor。
-- [ ] Golden Fixture 证明相同输入和 Lock 得到相同 Transform 与 Report Hash。
+- [x] 冻结 Placement Constraint 与 Gameplay Relationship 的协议边界。
+- [x] 定义关闭枚举的 Required/Preferred Constraint 判别 Union。
+- [x] S1 覆盖 Region 内外、距离、方向、支撑、净空、坡度和镜头可见性；Route 以坡度约束/证据进入，未伪装成延后的 `connected-by-route` Kind。
+- [x] 定义 Normalized Constraint、Solver 输入、稳定排序、Seed 和预算。
+- [x] Solver 输出 Transform、Provenance、违反项、评分和冲突核心。
+- [x] 失败返回结构化 Diagnostic 与不自动提交的修复建议。
+- [x] CLI 支持 validate/solve/explain，并输出可审计 Solve Report。
+- [x] Browser Fixture 覆盖接地、无穿插、Spawn/Route 坡度和 Opening Shot Anchor。
+- [x] Golden Fixture 证明相同输入和 Lock 在连续/并发执行中得到相同 Transform 与 Report Hash。
+- [ ] 引入通用 Terrain Mask 与内容寻址 Region 数据，不复制 Heightfield/Water 真相。
+- [ ] 引入完整 Route Graph、Locomotion Cost 与 `connected-by-route`。
+- [ ] 增加 S1 之外的 Constraint、增量求解等价证明和通用 ValidationReport。
 
-完成标准：至少一个室外参考场景不依赖 Agent 手写全部绝对坐标，Solver 输出通过
-Schema、Physics、Route 和 Composition 阻断 Gate。
+S1 纵向切片完成标准已满足：一个室外海湾场景不依赖 Agent 手写三个地标和 Spawn
+最终坐标，Solver 输出通过 Schema、Physics、Route 和 Composition 阻断 Gate。
+P0.1 整体仍以上述三项开放能力及生产范围扩展为完成标准。
 
 #### P0.2 Simulation Take 与 Control Capture Bundle
 
@@ -338,24 +348,23 @@ P1.4 WorldPackage + P2.4 Controller/Camera/Driver
         └── P3.2 默认切换
 ```
 
-Placement、Capture 与 Validation 三条 P0 已形成可评审专项设计，可以并行评审，
-但首个实现里程碑应保持窄纵向切片；
+Placement S1 已形成首个回归纵向切片；Capture 与 Validation 两条 P0 已形成可评审
+专项设计，可以并行评审，但后续实现仍应保持窄纵向切片；
 不要同时启动坐骑、装备、飞行、NPC 和室内，避免再次形成无法验收的大重构。
 
 ## 6. 下一里程碑
 
-当前没有代码阻塞项。S1b 首个 Golden 可视切片已经完成并进入回归；三份 P0 专项
-设计已经成稿，下一步依次进行：
+当前没有代码阻塞项。S1b Golden Asset 与 Placement Solver S1 都已进入回归，下一步：
 
-1. **M1：评审并冻结 Placement、Take/Capture、Validation 三份协议的公共边界**；
-2. **M2：决定三份文档列出的字段级开放项，并为未发布 Schema 选择干净替换或 Major 升级**；
-3. **M3：编写首条窄纵向切片实施计划，定位真实包、Schema、迁移、Fixture 与 Conformance**；
-4. **M4：实现 Constraint + Take + 五 Pass Capture + Validation 的最小闭环**；
-5. **M5：在同一闭环上接入一个实验 Video Model Adapter**；
-6. **M6：在 Golden 回归稳定后，选择产品资产验收、Semantic Action 后续或 Typed Relationship 的下一条窄可视切片**。
+1. **M1：让产品资产团队按 Rig/Animation/Collider/Socket 合同交付第一个真实人物包，并走现有 S1b 验收**；
+2. **M2：评审冻结 Take/Capture 与 Validation 两份协议的首条实施范围**；
+3. **M3：为 P0.2 编写五 Pass Capture 的窄纵向切片计划，并复用 Placement WorldPackage/Hash**；
+4. **M4：扩展 P0.1 的 Terrain Mask/Route Graph，而不是新增第二套 Region/Route 语义**；
+5. **M5：在 Placement + Take + Validation 闭环上接入实验 Video Model Adapter**；
+6. **M6：按产品优先级选择 Semantic Action 后续或 Typed Relationship 窄可视切片**。
 
-M1/M2 完成前不得实现公共字段；技术探针可以验证 Capture Encoding 或 Runtime Query
-可行性，但其实现不得泄漏到 Canonical Schema。
+Take/Capture 与 Validation 字段冻结前不得实现公共协议字段；技术探针可以验证 Capture
+Encoding 或 Runtime Query 可行性，但其实现不得泄漏到 Canonical Schema。
 
 ## 7. 更新规则
 

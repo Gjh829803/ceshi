@@ -8,7 +8,7 @@
 ## 1. 一句话定义
 
 这是一个面向创作 Agent 的语义白膜游戏 SDK：上游可以走 Plan-first
-场景创作链路，也可以直接交付 Canonical Authoring V2 JSON；SDK 把世界与
+场景创作链路，也可以直接交付 Canonical Authoring V3 JSON；SDK 把世界与
 主体定义确定性编译成可运行、可观察、带物理的白膜世界，未来实时世界模型
 再把白膜条件渲染成最终画面。
 
@@ -44,11 +44,16 @@ Director LLM → Render Directive SDK ────────────┘
 
 > Golden Humanoid S1b 首个可视纵向切片已完成并进入回归；S1b 整体与 Semantic Actions 整体仍未完成.
 
+> Placement Solver S1 首个海湾纵向切片已完成并进入回归；通用 Terrain Mask/Route Graph、更多 Constraint 与 P0.1 整体仍未完成。
+
 第一期 Alpha 已证明以下链路可以运行：
 
-- Canonical Authoring V2 唯一输入：严格 JSON、精确版本 Registry、Package
+- Canonical Authoring V3 唯一输入：严格 JSON、精确版本 Registry、Package
   局部 Primitive Subject Definition、Socket、自动 Capsule、Definition Hash、
-  Resource Lock、NormalizedWorldIR V2 和 ExecutionPlan V3。
+  Resource Lock、NormalizedWorldIR V3 和 ExecutionPlan V4。
+- Placement Solver S1 已交付 Fixed/Solved Placement、Polygon Region、Polyline Route、
+  Screen Region、八种关闭 Constraint、Required/Preferred、确定性 Report、CLI 和
+  Browser/Havok 复验；海湾 Fixture 的 19 条约束已进入回归。
 - 一个内置人形与两个共享 Package Definition 的四足代理可以同时生成；三个
   Subject 拥有独立 Havok Controller/状态，Browser Protocol V3 可原子切换控制、
   固定输入、复位、查询 Snapshot 和截图。
@@ -72,8 +77,9 @@ Director LLM → Render Directive SDK ────────────┘
 
 当前的“自由创造”严格指室外高度场白膜世界，不等于任意 3D 游戏类型。
 Primitive 四足代理已经可以自定义和控制，但动物资产、骨骼、动画与行为尚未
-实现；洞穴、倒悬结构、完整室内、车辆、骑乘、NPC、寻路、Gameplay、联网、
-Render Bridge、实时世界模型和 Runtime Director 也都尚未实现。
+实现；通用 Terrain Mask/Route Graph、更多 Constraint、洞穴、倒悬结构、完整
+室内、车辆、骑乘、NPC、寻路、Gameplay、联网、Render Bridge、实时世界模型和
+Runtime Director 也都尚未实现。
 
 ## 4. 当前交付不能被误解为完成的部分
 
@@ -112,6 +118,18 @@ Capability 和 Profile 定义主体，再通过多个 `subject` 节点生成独�
 通用姿态、游泳、装备、坐骑与飞行。首个 Fixture 证明了管线，不等于 S1b 或
 Semantic Actions 整体生产完成。
 
+### Placement Solver S1：首个海湾可视切片
+
+已完成：Agent 可以为 Object/Anchor 选择 `fixed` 或 `solved` Placement；Solved
+Entity 通过八种关闭 Constraint、Required/Preferred 优先级和锁定 Solver Profile
+确定最终 Transform。CLI 可独立 validate/solve/explain；Browser/Havok 只复验
+Required Runtime Assertion，不重新布局。海湾 Fixture 覆盖接地、净空、路线坡度、
+镜头可见性、冲突、篡改、预算和连续/并发确定性。
+
+未完成：通用 Terrain Mask、Route Graph、更多 Constraint、增量求解、通用
+Validation Report 以及完整 P0.1。S1 证明的是一个受控纵向切片，不是任意开放世界
+布局已经生产完成。
+
 ### Phase II：更多主体、动作与室内
 
 候选包括第一人称、人形动作扩展、车辆、骑乘、动物，以及独立的室内空间与紧凑镜头方案。具体顺序尚未确定。
@@ -133,8 +151,8 @@ Semantic Actions 整体生产完成。
 5. [Plan-first 世界创作协议](12-plan-first-world-authoring.md)：如何从输入得到可追踪世界和规划工件。
 6. [多 Agent 世界创作流水线](13-multi-agent-world-authoring.md)：三个 Agent 的权限、工件和门禁。
 7. [能力分层与体验路线](14-capability-levels-and-experience-roadmap.md)：SDK、World Model 和玩家体验如何逐级增长。
-8. [Canonical Authoring V2 快速接入](17-canonical-json-quickstart.md)：AI/CLI
-   的当前唯一 JSON 协议、Package Definition 和 Browser V3。
+8. [Canonical Authoring V3 快速接入](17-canonical-json-quickstart.md)：AI/CLI
+   的当前唯一 JSON 协议、Placement Solver、Package Definition 和 Browser V3。
 9. [AI-first LEGO Game SDK 生产设计](superpowers/specs/2026-08-17-ai-first-lego-game-sdk-design.md)：面向重构的长期 Schema、Compiler、Runtime、CLI 和门禁设计。
 10. [Placement Constraint 与确定性 Layout Solver](superpowers/specs/2026-08-19-placement-constraint-layout-solver-design.md)：AI 如何表达空间意图，SDK 如何生成最终 Transform。
 11. [Simulation Take 与 Control Capture Bundle](superpowers/specs/2026-08-19-simulation-take-control-capture-design.md)：世界、操作/镜头和多 Pass 控制制品如何分离。

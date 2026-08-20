@@ -40,7 +40,7 @@
 - The built-in Ref is exactly `worldkit://layout-solver-profile/outdoor.s1@1`.
 - The resolved row exposes exact `resolvedVersion`, `contentHash`, quantization, tolerance, and budget fields; it does not expose mutable Maps or provider handles.
 
-- [ ] **Step 1: Write Registry/profile RED tests**
+- [x] **Step 1: Write Registry/profile RED tests**
 
 ```ts
 expect(resolveLayoutSolverProfileV1(BUILT_IN_LAYOUT_SOLVER_PROFILE_REF)).toEqual({
@@ -53,12 +53,12 @@ expect(() => resolveLayoutSolverProfileV1("worldkit://layout-solver-profile/outd
   .toThrow("LAYOUT_SOLVER_PROFILE_NOT_FOUND");
 ```
 
-- [ ] **Step 2: Run RED gate**
+- [x] **Step 2: Run RED gate**
 
 Run: `pnpm vitest run packages/layout-solver/src/profile-registry.test.ts`
 Expected: FAIL because package/module does not exist.
 
-- [ ] **Step 3: Implement the closed profile types and immutable resolver**
+- [x] **Step 3: Implement the closed profile types and immutable resolver**
 
 ```ts
 export interface LayoutSolverProfileV1 {
@@ -94,12 +94,12 @@ export interface LayoutSolverProfileV1 {
 
 Use canonical JSON and `sha256Bytes` for the content hash; deep-project a fresh frozen value on every resolve.
 
-- [ ] **Step 4: Run focused tests and typecheck**
+- [x] **Step 4: Run focused tests and typecheck**
 
 Run: `pnpm vitest run packages/layout-solver/src/profile-registry.test.ts && pnpm typecheck`
 Expected: PASS.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add packages/layout-solver/package.json packages/layout-solver/src/types.ts packages/layout-solver/src/profile-registry.ts packages/layout-solver/src/profile-registry.test.ts packages/layout-solver/src/index.ts pnpm-lock.yaml
@@ -124,7 +124,7 @@ git commit -m "feat: define deterministic layout solver profile"
 - This task builds an explicit V3 path beside the still-green V2 path. The temporary coexistence is branch-internal scaffolding only; Task 8 atomically migrates tracked inputs, switches public defaults, and deletes V2.
 - `migrateAuthoringSpecV2ToV3` is a one-time developer tool and is not called by parsing, validation, normalization, Compiler, Runtime, or Browser code.
 
-- [ ] **Step 1: Add RED schema cases for exact unions and field paths**
+- [x] **Step 1: Add RED schema cases for exact unions and field paths**
 
 ```ts
 expect(validateAuthoringSpecV3({ ...validV3, schemaVersion: 2 }).ok).toBe(false);
@@ -140,12 +140,12 @@ expect(validateAuthoringSpecV3(withConstraint(validV3, { kind: "relative-directi
 
 Cover: fixed/solved exclusivity, required/preferred weight rules, all eight kinds, role-qualified endpoints, duplicate IDs, UV ranges/order, polygon/polyline cardinality, units/ranges, and unknown fields.
 
-- [ ] **Step 2: Run RED gate**
+- [x] **Step 2: Run RED gate**
 
 Run: `pnpm vitest run packages/authoring/src/authoring-v3.test.ts`
 Expected: FAIL because V3 schema/types do not exist.
 
-- [ ] **Step 3: Implement V3 public types and JSON Schema**
+- [x] **Step 3: Implement V3 public types and JSON Schema**
 
 ```ts
 export type PlacementSpecV1 =
@@ -172,19 +172,19 @@ export interface AuthoringSpecV3 {
 }
 ```
 
-- [ ] **Step 4: Implement and test the one-time migration without rewriting tracked inputs yet**
+- [x] **Step 4: Implement and test the one-time migration without rewriting tracked inputs yet**
 
 Migration rules: Object `transform` → `placement:{kind:"fixed",transform}`; Anchor same; add the built-in Solver Profile Ref, empty spatial collections, and `constraints:{placements:[]}`. Do not leave both fields. Test exact output, immutability and idempotency of `V2 → V3 → canonical bytes`; do not add fallback calls to production parsers.
 
 Run: `pnpm vitest run packages/authoring/src/migrate-v2-to-v3.test.ts`
 Expected: PASS; no tracked example changes in this task.
 
-- [ ] **Step 5: Run Authoring and repository gates**
+- [x] **Step 5: Run Authoring and repository gates**
 
 Run: `pnpm vitest run packages/authoring/src/authoring.test.ts packages/authoring/src/authoring-v3.test.ts packages/authoring/src/migrate-v2-to-v3.test.ts packages/authoring/src/normalize.test.ts && pnpm typecheck`
 Expected: PASS; current V2 regressions and the new V3 contract are both green before the atomic cutover.
 
-- [ ] **Step 6: Commit**
+- [x] **Step 6: Commit**
 
 ```bash
 git add packages/authoring/package.json packages/authoring/src/authoring-spec-v3.schema.json packages/authoring/src/authoring-v3.test.ts packages/authoring/src/types-v3.ts packages/authoring/src/validate-v3.ts packages/authoring/src/parse-v3.ts packages/authoring/src/migrate-v2-to-v3.ts packages/authoring/src/migrate-v2-to-v3.test.ts packages/authoring/src/index.ts
@@ -205,7 +205,7 @@ git commit -m "feat: define placement authoring v3"
 - Produces: `LayoutGeometryQueryV1`, `ResolvedLayoutEntityV1`, `LayoutCandidateV1`, `generateLayoutCandidatesV1(input, profile)`.
 - Geometry uses quantized numbers and plain records/arrays only.
 
-- [ ] **Step 1: Write RED geometry tests**
+- [x] **Step 1: Write RED geometry tests**
 
 Cover polygon containment/clearance, point-to-polygon distance, AABB separation, terrain height/normal/slope sampling, route samples, camera projection, screen UV convention, and deterministic quantization.
 
@@ -214,25 +214,25 @@ expect(projectToScreenUv(camera, [0, 0, -5])).toEqual([0.5, 0.5]);
 expect(quantizeMeters(1.23456, 0.001)).toBe(1.235);
 ```
 
-- [ ] **Step 2: Run RED gate**
+- [x] **Step 2: Run RED gate**
 
 Run: `pnpm vitest run packages/layout-solver/src/geometry.test.ts packages/layout-solver/src/candidates.test.ts`
 Expected: FAIL because modules do not exist.
 
-- [ ] **Step 3: Implement pure geometry helpers and the Query Port**
+- [x] **Step 3: Implement pure geometry helpers and the Query Port**
 
 No Babylon/Three imports. Reject NaN/Infinity and degenerate polygons before search.
 
-- [ ] **Step 4: Implement stable candidate generation**
+- [x] **Step 4: Implement stable candidate generation**
 
 Candidate order is: valid `initialTransform`, stable region grid, polygon boundary samples, route samples, explicit anchors; then quantized `(x,y,z,rotation)` and stable candidate ID. Enforce `maximumCandidatesPerEntity` before allocation growth.
 
-- [ ] **Step 5: Run focused tests and mutation checks**
+- [x] **Step 5: Run focused tests and mutation checks**
 
 Run: `pnpm vitest run packages/layout-solver/src/geometry.test.ts packages/layout-solver/src/candidates.test.ts`
 Expected: PASS. Temporarily reverse candidate sort and prove determinism tests fail, then restore.
 
-- [ ] **Step 6: Commit**
+- [x] **Step 6: Commit**
 
 ```bash
 git add packages/layout-solver/src/geometry.ts packages/layout-solver/src/geometry.test.ts packages/layout-solver/src/candidates.ts packages/layout-solver/src/candidates.test.ts packages/layout-solver/src/types.ts packages/layout-solver/src/index.ts
@@ -250,16 +250,16 @@ git commit -m "feat: generate deterministic placement candidates"
 **Interfaces:**
 - Produces: `evaluatePlacementConstraintV1(context, constraint, assignments)` returning a closed `ConstraintEvaluationV1` with `satisfied`, quantized measurements, tolerance, evidence IDs, and `preferenceCostRatio`.
 
-- [ ] **Step 1: Write table-driven RED tests for all eight kinds**
+- [x] **Step 1: Write table-driven RED tests for all eight kinds**
 
 Each kind gets satisfied, boundary-equal, violated, missing-reference, and non-finite cases. Explicitly prove `minimum-clearance:0` is overlap prevention, `faces-entity` uses `-Z`, route slope samples its full width/profile spacing, and Camera Region checks projected area plus visibility.
 
-- [ ] **Step 2: Run RED gate**
+- [x] **Step 2: Run RED gate**
 
 Run: `pnpm vitest run packages/layout-solver/src/evaluators.test.ts`
 Expected: FAIL because evaluator is missing.
 
-- [ ] **Step 3: Implement one exhaustive discriminated-union evaluator**
+- [x] **Step 3: Implement one exhaustive discriminated-union evaluator**
 
 ```ts
 switch (constraint.kind) {
@@ -276,12 +276,12 @@ switch (constraint.kind) {
 
 Use `never` exhaustiveness; no default/fallback and no evaluator registry strings.
 
-- [ ] **Step 4: Run focused tests and typecheck**
+- [x] **Step 4: Run focused tests and typecheck**
 
 Run: `pnpm vitest run packages/layout-solver/src/evaluators.test.ts && pnpm typecheck`
 Expected: PASS.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add packages/layout-solver/src/evaluators.ts packages/layout-solver/src/evaluators.test.ts packages/layout-solver/src/types.ts packages/layout-solver/src/index.ts
@@ -302,7 +302,7 @@ git commit -m "feat: evaluate placement constraints"
 - Produces: `solveLayoutV1(input, profile): LayoutSolveResultV1` and `hashLayoutSolveReportV1(report)`.
 - Status is exactly `solved | unsatisfied | budget-exceeded | invalid-input`.
 
-- [ ] **Step 1: Write RED solver/report tests**
+- [x] **Step 1: Write RED solver/report tests**
 
 Cover coupled distance/clearance backtracking, stable variable/candidate order, Required blocking, Preferred weighted tie-break, equal-score canonical tie-break, search budget, diagnostic budget, invalid input, and repeated/concurrent hash identity.
 
@@ -311,29 +311,29 @@ expect(await Promise.all(Array.from({ length: 8 }, () => solveAndHash(input))))
   .toEqual(Array(8).fill(expectedHash));
 ```
 
-- [ ] **Step 2: Run RED gate**
+- [x] **Step 2: Run RED gate**
 
 Run: `pnpm vitest run packages/layout-solver/src/solve.test.ts packages/layout-solver/src/report.test.ts`
 Expected: FAIL because Solver/Report are missing.
 
-- [ ] **Step 3: Implement bounded stable CSP search**
+- [x] **Step 3: Implement bounded stable CSP search**
 
 Order variables by constrained-domain size then Entity ID; order candidates by initial flag, quantized local cost, position, rotation and stable ID. Increment `searchNodeCount` before expansion. Required constraints prune immediately; Preferred costs are evaluated only on complete feasible assignments.
 
-- [ ] **Step 4: Implement deterministic approximate irreducible Conflict Core**
+- [x] **Step 4: Implement deterministic approximate irreducible Conflict Core**
 
 For constraints touching the failed Entity component, remove one Required constraint at a time in stable ID order and rerun within `maximumConflictChecks`; keep a constraint only when its removal changes satisfiability. Budget exhaustion returns `budget-exceeded`, never a partial Production transform.
 
-- [ ] **Step 5: Implement exact-shape canonical Report and diagnostics**
+- [x] **Step 5: Implement exact-shape canonical Report and diagnostics**
 
 Report excludes its own hash. Hash canonical report bytes externally. Diagnostics are closed codes with JSON Pointer, Entity/Constraint IDs, quantized measurements and closed repair operation kinds; no free-form provider errors.
 
-- [ ] **Step 6: Run focused/full package tests**
+- [x] **Step 6: Run focused/full package tests**
 
 Run: `pnpm vitest run packages/layout-solver/src && pnpm typecheck`
 Expected: PASS; repeated and concurrent result hashes match.
 
-- [ ] **Step 7: Commit**
+- [x] **Step 7: Commit**
 
 ```bash
 git add packages/layout-solver/src/solve.ts packages/layout-solver/src/solve.test.ts packages/layout-solver/src/report.ts packages/layout-solver/src/report.test.ts packages/layout-solver/src/types.ts packages/layout-solver/src/index.ts
@@ -357,29 +357,29 @@ git commit -m "feat: solve and explain deterministic layouts"
 - Normalized nodes contain final `transform` plus `placementProvenance`; constraints/search internals do not leak into Runtime tables.
 - Existing `normalizeAuthoringSpec` V2 remains untouched until Task 8's atomic switch.
 
-- [ ] **Step 1: Write RED Authoring→Solver→IR tests**
+- [x] **Step 1: Write RED Authoring→Solver→IR tests**
 
 Prove fixed nodes are validated but unchanged, solved nodes receive final transforms, Subject uses solved spawn Anchor, missing Profile/Bounds/Region/Constraint Ref fails with exact path/code, Required failure returns no IR, and Registry URIs/provider fields remain absent from serialized IR.
 
-- [ ] **Step 2: Run RED gate**
+- [x] **Step 2: Run RED gate**
 
 Run: `pnpm vitest run packages/authoring/src/layout-input.test.ts packages/authoring/src/normalize-v3.test.ts`
 Expected: FAIL on missing V3 orchestration/IR.
 
-- [ ] **Step 3: Implement exact ResolvedLayoutInput projection**
+- [x] **Step 3: Implement exact ResolvedLayoutInput projection**
 
 Project only locked primitive/asset bounds, terrain query data, camera parameters, spatial definitions, constraints, Seed and Profile identity. Never `structuredClone` a Registry manifest into IR.
 
-- [ ] **Step 4: Integrate Solver before Normalized IR projection**
+- [x] **Step 4: Integrate Solver before Normalized IR projection**
 
 Return `{ value, normalizedWorldIrHash, layoutSolveReport, layoutSolveReportHash, diagnostics }`. The Report hash referenced in every solved provenance must match the returned report bytes.
 
-- [ ] **Step 5: Run gates and golden hash locks**
+- [x] **Step 5: Run gates and golden hash locks**
 
 Run: `pnpm vitest run packages/authoring/src/layout-input.test.ts packages/authoring/src/normalize-v3.test.ts packages/authoring/src/normalize.test.ts && pnpm typecheck`
 Expected: PASS; add exact golden hash assertions for one solved and one fixed fixture.
 
-- [ ] **Step 6: Commit**
+- [x] **Step 6: Commit**
 
 ```bash
 git add packages/authoring/package.json packages/authoring/src/layout-input.ts packages/authoring/src/layout-input.test.ts packages/authoring/src/normalize-v3.ts packages/authoring/src/normalize-v3.test.ts packages/authoring/src/types-v3.ts packages/authoring/src/index.ts packages/authoring/src/resource-lock.ts pnpm-lock.yaml
@@ -398,20 +398,20 @@ git commit -m "feat: normalize solved placement layouts"
 - Produces: `ExecutionPlanV4` and `compileWorldV4(normalizedWorldIrV3)` with final transforms and closed `layoutAssertions`.
 - Existing V2→V3 public Compiler entry remains green until Task 8; there is no V3→V4 fallback or coercion.
 
-- [ ] **Step 1: Write RED contract/compiler tests**
+- [x] **Step 1: Write RED contract/compiler tests**
 
 Assert V3 IR → V4 Plan, exact projection, Report Hash/provenance, reachable assertions only, no Authoring constraints/provider/URI/search state, and stable Plan hash.
 
-- [ ] **Step 2: Implement V4 Plan and Compiler projection**
+- [x] **Step 2: Implement V4 Plan and Compiler projection**
 
 Runtime assertions carry only IDs, closed kind, quantized expected/tolerance values, and final transform references. They do not carry repair suggestions or Solver candidates.
 
-- [ ] **Step 3: Run focused regression gates**
+- [x] **Step 3: Run focused regression gates**
 
 Run: `pnpm vitest run packages/runtime-contracts/src/runtime-contracts.test.ts packages/compiler/src/compile.test.ts && pnpm typecheck`
 Expected: PASS for both the existing V3 Compiler path and the new V4 path.
 
-- [ ] **Step 4: Commit**
+- [x] **Step 4: Commit**
 
 ```bash
 git add packages/runtime-contracts/src/execution-plan.ts packages/runtime-contracts/src/runtime-contracts.test.ts packages/compiler/src/compile.ts packages/compiler/src/compile.test.ts
@@ -460,25 +460,25 @@ git commit -m "feat: compile solved layout execution plans"
 - Public defaults become V3/V3/V4; V2 Authoring schema/types and V3 ExecutionPlan exports are removed.
 - Runtime rejects a failed assertion with stable `WORLDKIT_LAYOUT_ASSERTION_FAILED` and never mutates placement.
 
-- [ ] **Step 1: Write RED cutover and Runtime tests**
+- [x] **Step 1: Write RED cutover and Runtime tests**
 
 Assert old Authoring V2 input fails at `/schemaVersion`, V3 examples use `placement` without Object/Anchor `transform`, build emits IR V3/Plan V4, Browser loads V4, and support/clearance assertion failures reject before ownership publication while cleaning every resource once.
 
-- [ ] **Step 2: Apply the one-time migration and switch public exports**
+- [x] **Step 2: Apply the one-time migration and switch public exports**
 
 Run: `pnpm tsx packages/authoring/src/migrate-v2-to-v3.ts --write`
 Then remove V2 schema/public aliases and point `validateAuthoringSpec`, `parseAuthoringSpec`, `normalizeAuthoringSpec`, `compileWorld`, CLI build/capture and Playground loader at V3/V3/V4 only. A second migration run must create no diff.
 
-- [ ] **Step 3: Implement Runtime assertion revalidation without repair**
+- [x] **Step 3: Implement Runtime assertion revalidation without repair**
 
 Run assertions after static physics construction and before `ready`; on failure preserve final transforms, sanitize provider details, unwind ownership and reject. Runtime never imports `@whitebox-world/layout-solver` or Authoring Constraint types.
 
-- [ ] **Step 4: Regenerate canonical/rigged artifacts and run cutover gates**
+- [x] **Step 4: Regenerate canonical/rigged artifacts and run cutover gates**
 
 Run: `pnpm verify:canonical && pnpm verify:rigged-subject && pnpm test && pnpm typecheck && pnpm build`
 Expected: PASS, artifact protocol versions are V3/V3/V4, old V2 Authoring fixtures fail, and no production import references V2 types/schema.
 
-- [ ] **Step 5: Commit exact migrated paths**
+- [x] **Step 5: Commit exact migrated paths**
 
 Before staging, use `git diff --name-only` to enumerate verifier outputs and stage only the listed cutover files plus those exact regenerated artifact paths.
 
@@ -500,25 +500,25 @@ git commit -m "feat: switch canonical runtime to solved layout contracts"
 - Adds: `worldkit layout validate`, `worldkit layout solve`, `worldkit layout explain --entity-id|--constraint-id`.
 - `solve` writes a transactionally promoted directory containing `layout-report.json`, `normalized-world-ir.json`, and an integrity manifest.
 
-- [ ] **Step 1: Write RED CLI tests**
+- [x] **Step 1: Write RED CLI tests**
 
 Cover JSON stdout/stderr, exact exit codes for invalid/unsatisfied/budget/process failures, mutually exclusive explain selectors, output-directory transaction rollback, and deterministic rerun bytes.
 
-- [ ] **Step 2: Run RED gate**
+- [x] **Step 2: Run RED gate**
 
 Run: `pnpm vitest run scripts/worldkit.test.ts scripts/lib/layout-artifacts.test.ts`
 Expected: FAIL because layout commands do not exist.
 
-- [ ] **Step 3: Implement CLI orchestration and artifacts**
+- [x] **Step 3: Implement CLI orchestration and artifacts**
 
 Reuse `artifact-directory-promotion.ts`; never partially replace a good output. `validate` performs schema/reference/profile checks without search; `solve` never starts Browser; `explain` reads only the report and emits exact selected rows.
 
-- [ ] **Step 4: Run CLI/type gates**
+- [x] **Step 4: Run CLI/type gates**
 
 Run: `pnpm vitest run scripts/worldkit.test.ts scripts/lib/layout-artifacts.test.ts && pnpm typecheck`
 Expected: PASS.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add scripts/lib/layout-artifacts.ts scripts/lib/layout-artifacts.test.ts scripts/worldkit.ts scripts/worldkit.test.ts package.json pnpm-lock.yaml
@@ -544,34 +544,34 @@ git commit -m "feat: expose deterministic layout cli"
 - Adds one command: `pnpm verify:placement-layout`.
 - Browser protocol remains read-only for Solver data and returns layout assertion evidence; it exposes no mutation/search handle.
 
-- [ ] **Step 1: Write the coastal fixture and RED verifier**
+- [x] **Step 1: Write the coastal fixture and RED verifier**
 
 Fixture contains one Heightfield, Water Region, solved Player Spawn Anchor, derived Camera, three solved primitive Landmarks and one Route. No Landmark has a final coordinate in Authoring. Include the eight S1 kinds across Required and Preferred constraints.
 
-- [ ] **Step 2: Run RED verifier**
+- [x] **Step 2: Run RED verifier**
 
 Run: `pnpm verify:placement-layout`
 Expected: FAIL before Browser/report/artifact support exists.
 
-- [ ] **Step 3: Implement positive Browser gates**
+- [x] **Step 3: Implement positive Browser gates**
 
 Prove final transforms match report/IR/Plan/Snapshot; support gap, overlap, route slope, camera screen region and visibility pass; fixed Seed/Profile repeated and concurrent runs produce identical report/IR/Plan hashes.
 
-- [ ] **Step 4: Implement negative integrity gates**
+- [x] **Step 4: Implement negative integrity gates**
 
 Mutations for Required conflict, Seed, Profile, bounds, missing Report, stale Report Hash and budget exhaustion must return exact codes and must not create/promote WorldPackage output. Browser must never auto-repair placement.
 
-- [ ] **Step 5: Generate evidence transactionally and inspect the PNG**
+- [x] **Step 5: Generate evidence transactionally and inspect the PNG**
 
 Run: `pnpm verify:placement-layout`
 Expected: PASS and exact declared artifact set. View `world.png`; confirm three Landmarks, grounded spawn, no visible overlap, route continuity and required opening composition.
 
-- [ ] **Step 6: Run all conformance gates**
+- [x] **Step 6: Run all conformance gates**
 
 Run: `pnpm verify:canonical && pnpm verify:rigged-subject && pnpm verify:placement-layout && pnpm test && pnpm typecheck && pnpm build`
 Expected: PASS; only the documented Vite chunk warning may remain.
 
-- [ ] **Step 7: Commit**
+- [x] **Step 7: Commit**
 
 ```bash
 git add examples/authoring/placement-coastal-world.json scripts/verify-placement-layout.ts scripts/verify-placement-layout.test.ts artifacts/examples/placement-coastal-world apps/playground/src/worldkit-browser-api.ts apps/playground/src/worldkit-browser-api.test.ts package.json
@@ -591,11 +591,11 @@ git commit -m "test: verify solved coastal layout end to end"
 **Interfaces:**
 - Documents the exact V3/V3/V4 flow, AI examples, CLI, Report, limitations and product status without claiming P0.1 beyond S1.
 
-- [ ] **Step 1: Update current-status entrypoints and examples**
+- [x] **Step 1: Update current-status entrypoints and examples**
 
 State exactly: “Placement Solver S1 首个海湾纵向切片已完成并进入回归；通用 Terrain Mask/Route Graph、更多 Constraint 与 P0.1 整体仍未完成。” Show one Fixed and one Solved placement, Required/Preferred behavior, and the three layout CLI commands.
 
-- [ ] **Step 2: Run machine boundary audits**
+- [x] **Step 2: Run machine boundary audits**
 
 Audit public Schema/IR/Plan/artifacts for obsolete V2 Authoring fields, provider terms, URI leakage, non-finite numbers, unimplemented Constraint kinds, duplicated `transform`+`placement`, and Solver access to filesystem/network/time/env/Babylon/Havok.
 
@@ -634,16 +634,58 @@ git commit -m "docs: complete placement solver s1 slice"
 
 ## Progress
 
+Placement Solver S1 首个海湾纵向切片已完成并进入回归；通用 Terrain Mask/Route Graph、更多 Constraint 与 P0.1 整体仍未完成。
+
+### Final S1 evidence
+
+- Coastal Fixture：3 个 Solved Landmark、1 个 Solved Spawn、1 个 Fixed Composition
+  Anchor、1 条 Route、1 个 Screen Region；19 条 Required/Preferred Constraint 覆盖
+  S1 八种关闭 Kind。
+- `layoutSolveReportHash`：
+  `sha256:b89559755fea6cf71beba7cf4a308cef35bcd99c19749b85d818a378124c1ebd`；
+  `normalizedWorldIrHash`：
+  `sha256:869fbf4e48fc6200d8512a643914d091358e3f8e254e705dffd315233e7c7190`；
+  `executionPlanHash`：
+  `sha256:e55aa781caa92af917b5224a3846e0ddd5e672b1ab9f3613fcb62645b3b98b6d`。
+- Solver Profile Hash：
+  `sha256:52129288492651e7ff052be16615597f09b7ceb290f136b5691829a0dff1b1cb`；
+  Authoring Spec Hash：
+  `sha256:3f5600ea5697d219463be49d5b741c5fabffd7999ac4b4e7250152e72cdb0c17`。
+- Screenshot：936×596、23,709 bytes、
+  `sha256:d5c8c2bd8bbba62c86903679792094d0e00d1f1d1d6ba5d55e743d409a414f04`、
+  8 种采样 RGB；人工检查确认 Spawn、三个 Landmark 与水面可见且无可见重叠。
+- Solver 搜索 72,041 nodes；接地最大间隙 0、支撑比例 1；Landmark 最小净空
+  35.695m；Route 最大坡度 0°、117 个采样点；Lighthouse 可见比例 0.679312、
+  投影面积比例 0.076655。
+- 连续 2 次与并发 2 次 Report/IR Bytes、Plan Hash 相同。Required 冲突返回
+  `PLACEMENT_REQUIRED_CONSTRAINT_UNSATISFIED`；Seed/Profile/Bounds/Missing Report/
+  Stale Hash/Budget 分别返回稳定 Code，且失败前后目标目录指纹完全一致。
+- `pnpm test`：48 files / 435 tests；`pnpm typecheck`、`pnpm build`、
+  `pnpm verify:canonical`、`pnpm verify:rigged-subject`、
+  `pnpm verify:placement-layout` 全部通过；Build 仅保留既有 Vite large-chunk warning。
+
+### Machine boundary audit evidence
+
+| Boundary | Machine check and result |
+|---|---|
+| Obsolete V2 public surface | Production `rg` for `AuthoringSpecV2 / NormalizedWorldIRV2 / ExecutionPlanV3 / authoring-spec-v2` found only the private, non-exported one-time `migrate-v2-to-v3.ts`; public exports, apps, scripts, examples and artifacts are V3/V3/V4-only. |
+| Provider isolation | Case-insensitive source audit found no Babylon/Havok term in Authoring, Layout Solver or examples. Compiler/Runtime Contract has exactly five approved backend discriminator literals; recursive generated-JSON audit allows only exact `runtimeBackend: babylon-havok` and `physics.backend: havok` value paths and rejects provider keys. |
+| URI privacy | `sourceUri / licenseUri / artifactUri / .glb` audit is empty across Authoring V3 Schema/types, Compiler, ExecutionPlan and all coastal artifacts; the JSON Schema meta `$schema` URL is not world/resource provenance. |
+| Finite canonical numbers | Recursive parse of all four coastal JSON artifacts verifies every numeric leaf with `Number.isFinite`; zero violations. |
+| Closed implemented kinds | Schema and Fixture independently resolve exactly eight kinds: `distance-range`, `faces-entity`, `inside-region`, `minimum-clearance`, `outside-region`, `supported-by`, `visible-in-camera-region`, `within-slope-limit`; deferred kinds are absent. |
+| One placement truth | `jq` over all six tracked Authoring examples found zero Object/Anchor nodes that contain both `transform` and `placement`. |
+| Solver purity | Production Layout Solver audit for `node:fs/net/http/https`, `process.env/cwd`, time/performance, randomness, fetch, Babylon and Havok returned zero matches. |
+
 | Task | Status | Commit | Evidence |
 |---|---|---|---|
-| 1. Layout Contracts/Profile | Pending | — | — |
-| 2. Authoring V3 | Pending | — | — |
-| 3. Geometry/Candidates | Pending | — | — |
-| 4. Constraint Evaluators | Pending | — | — |
-| 5. Search/Report | Pending | — | — |
-| 6. Authoring/IR V3 | Pending | — | — |
-| 7. Plan V4/Compiler | Pending | — | — |
-| 8. Atomic Cutover/Runtime Assertions | Pending | — | — |
-| 9. CLI | Pending | — | — |
-| 10. Browser/E2E | Pending | — | — |
-| 11. Docs/Audit | Pending | — | — |
+| 1. Layout Contracts/Profile | Complete | `c582fb8` | Profile manifest/hash, immutable resolver and protocol contract tests |
+| 2. Authoring V3 | Complete | `de1361c` | Closed Placement/Spatial/Constraint Schema and V2→V3 one-time migration tests |
+| 3. Geometry/Candidates | Complete | `cb8c21c` | Pure query port, quantized geometry and stable candidate tests |
+| 4. Constraint Evaluators | Complete | `2ff1d79` | Exhaustive eight-kind evaluator table and non-finite/reference diagnostics |
+| 5. Search/Report | Complete | `41c87eb` | Bounded deterministic search, Preferred ordering, Conflict Core and Report Hash |
+| 6. Authoring/IR V3 | Complete | `9742862`, `4ec1a02`, `334f61b` | Camera aspect/fixed derivation plus Authoring→Solver→IR V3 projection |
+| 7. Plan V4/Compiler | Complete | `2a59b2d` | Exact ExecutionPlan V4 projection and assertion/resource privacy tests |
+| 8. Atomic Cutover/Runtime Assertions | Complete | `5e3ed01` | V3/V3/V4-only cutover; Runtime revalidation without repair and cleanup tests |
+| 9. CLI | Complete | `797bfab` | layout validate/solve/explain, exit codes and transactional artifact tests |
+| 10. Browser/E2E | Complete | `068b1d7` | Coastal Browser/Havok evidence, deterministic/negative gates and visible PNG |
+| 11. Docs/Audit | In progress | — | Exact status/docs prepared; final audits and clean-worktree verification pending |

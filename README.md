@@ -7,16 +7,18 @@
 后续视频模型只消费 SDK 输出的白模与控制通道，不负责决定碰撞、位置、导航或
 Gameplay 真相。
 
-> 当前长期重构总进度约 **45%**；“JSON → IR → Babylon/Havok → 多主体控制与截图”
-> 的第一条 Canonical 纵向切片约 **85%**。详细口径和全部待办见
+> 当前长期重构总进度约 **50%**；“JSON → IR → Babylon/Havok → 多主体控制、
+> 确定性落位与截图”的第一条 Canonical 纵向切片约 **90%**。详细口径和全部待办见
 > [SDK 重构总进度与 Backlog](docs/18-refactor-progress-and-backlog.md)。
 
 > Golden Humanoid S1b 首个可视纵向切片已完成并进入回归；S1b 整体与 Semantic Actions 整体仍未完成.
 
+> Placement Solver S1 首个海湾纵向切片已完成并进入回归；通用 Terrain Mask/Route Graph、更多 Constraint 与 P0.1 整体仍未完成。
+
 第一次阅读建议依次查看：
 
 1. [项目总览](docs/00-project-overview.md)：产品范围、当前能力和明确不支持的部分；
-2. [Canonical JSON V2 快速接入](docs/17-canonical-json-quickstart.md)：当前唯一 JSON 协议和命令；
+2. [Canonical JSON V3 快速接入](docs/17-canonical-json-quickstart.md)：当前唯一 JSON 协议和命令；
 3. [重构总进度与 Backlog](docs/18-refactor-progress-and-backlog.md)：完成度、优先级、依赖和验收标准。
 
 ## 核心链路
@@ -52,10 +54,10 @@ flowchart TB
     REPORT --> ADAPTER["Video Model Adapter<br/>外部视觉实现"] --> VIDEO["Final Generated Video"]
 ```
 
-当前已经交付到 Babylon/Havok Runtime、单截图、Snapshot 和 Browser Protocol；
-Placement Solver、Simulation Take/Control Capture Bundle、Validation Report 三份专项
-设计已成稿并等待评审冻结，相关 Runtime/CLI/Schema 实现、完整 WorldPackage 和视频
-模型 Adapter 仍在后续 Backlog 中。
+当前已经交付到 AuthoringSpec V3、NormalizedWorldIR V3、ExecutionPlan V4、
+Placement Solver S1、Babylon/Havok Runtime、单截图、Snapshot 和 Browser Protocol。
+Simulation Take/Control Capture Bundle 与统一 Validation Report 仍只有专项设计，完整
+WorldPackage、通用 Terrain/Route 和视频模型 Adapter 仍在后续 Backlog 中。
 
 ## 职责边界
 
@@ -106,7 +108,7 @@ Placement Solver、Simulation Take/Control Capture Bundle、Validation Report �
 | Visual Part | Definition 内部的可渲染组成部分，不自动成为独立 Entity | Primitive Part 与首个 Golden GLB Asset Part 已交付；产品资产验收和更多拓扑仍未完成 |
 | Subject Socket | 主体局部空间中的稳定连接点，例如手、座位或拖车钩 | 声明与编译已交付，关系绑定未交付 |
 | Capability/Profile | 运动、控制、物理、动作等可组合能力及其锁定配置 | 首个 Ground Locomotion/Collider Profile 已交付 |
-| Relationship | `mountedOn`、装备、拖拽等实例之间的类型化 Gameplay 关系 | S2 规划中，当前 Authoring V2 不支持 |
+| Relationship | `mountedOn`、装备、拖拽等实例之间的类型化 Gameplay 关系 | S2 规划中，当前 Authoring V3 不支持 |
 | Semantic Action | 与具体动画 Clip 解耦的移动、攻击、交互等动作 | Golden `idle/walk/run/jump` 固定 Tick 地面切片已交付；通用 Action 协议仍未完成 |
 
 主体类别不决定能力。人、马、滑板、汽车、拖车或飞龙都使用同一套
@@ -117,7 +119,7 @@ Socket 和类型化关系表达。
 
 | 领域 | 当前已交付 | 尚未交付 |
 |---|---|---|
-| 世界输入 | Canonical Authoring V2、严格 Schema、Registry/Package Primitive Definition | Placement Constraint Solver、完整 WorldPackage（专项设计已成稿） |
+| 世界输入 | Canonical Authoring V3、严格 Schema、Registry/Package Definition、八种 Placement Constraint 与确定性 Solver S1 | 通用 Terrain Mask/Route Graph、更多 Constraint、完整 WorldPackage |
 | 地形 | 室外 Heightfield、基础 Relief、静态障碍、水域和物理查询 | Canonical Raster/Mask/Region Pipeline、洞穴、Overhang、完整室内 |
 | 主体 | Primitive 人形/四足代理；Golden GLB、Rig/Animation/Collider Profile、多实例与独立控制 | 产品资产验收、Compound Collider、LOD、更多拓扑和独立动画资产 |
 | 关系 | Socket 数据可以声明和查询 | 动态 Bind、骑乘、装备、拖拽、Joint、事务与回滚 |
@@ -164,7 +166,22 @@ pnpm worldkit capture examples/authoring/package-subject-world.json \
   --snapshot artifacts/examples/package-subject-world/snapshot.json --json
 ```
 
-Canonical Authoring V2 是唯一输入；V1 从未发布，已经删除，也不存在兼容字段。
+Canonical Authoring V3 是唯一输入；未发布的旧版本已经删除，也不存在兼容字段。
+
+让 SDK 根据空间意图求解海湾场景，而不是由 Agent 为地标填写最终坐标：
+
+```bash
+pnpm worldkit layout validate examples/authoring/placement-coastal-world.json --json
+pnpm worldkit layout solve examples/authoring/placement-coastal-world.json \
+  --output /tmp/placement-coastal-layout --json
+pnpm worldkit layout explain /tmp/placement-coastal-layout/layout-report.json \
+  --entity-id lighthouse --json
+pnpm verify:placement-layout
+```
+
+`validate` 只校验并解析输入；`solve` 事务性写入 Report、Normalized IR 和完整性
+清单；`explain` 只读取 Report。`verify:placement-layout` 额外验证 Browser/Havok、
+正负向完整性门禁、并发确定性和 936×596 可见截图。
 
 验证首个 Rigged Subject 可视切片的最小接入流程：
 
@@ -189,6 +206,7 @@ pnpm test:scenes
 pnpm build
 pnpm verify:canonical
 pnpm verify:rigged-subject
+pnpm verify:placement-layout
 ```
 
 `verify:canonical` 会在真实 Chromium 中验证 Canonical Build Artifact、
@@ -199,6 +217,11 @@ Snapshot 和确定性 Reset。
 `idle/walk/run/jump` 固定 Tick 动画、两个实例状态隔离、Havok 墙体停止和篡改失败；
 它不代表任意产品资产、Compound Collider、LOD 或全部 Semantic Actions 已可用。
 
+`verify:placement-layout` 会验证海湾 Fixture 的 19 条约束、八种 S1 Constraint、
+Report → IR → Plan → Snapshot 一致性、Required Runtime Assertion、接地/净空/路线
+坡度/镜头可见性、固定 Seed/Profile 的连续与并发确定性，以及冲突、篡改和预算耗尽
+不会生成或覆盖 WorldPackage。
+
 ## 代码边界
 
 | 路径 | 职责 |
@@ -206,7 +229,8 @@ Snapshot 和确定性 Reset。
 | `packages/protocol/` | Canonical JSON Bytes 与 Hash |
 | `packages/subject-composition/` | 引擎无关的 Primitive Bounds、Collider 推导和资源成本 |
 | `packages/subject-registry/` | 精确版本的 Definition、Capability 和 Profile Registry |
-| `packages/authoring/` | Authoring V2 Schema、解析、语义校验、资源解析和 Normalized IR |
+| `packages/authoring/` | Authoring V3 Schema、解析、语义校验、资源解析、Solver 编排和 Normalized IR V3 |
+| `packages/layout-solver/` | 引擎无关的候选、八种 Constraint Evaluator、确定性搜索、冲突与 Report |
 | `packages/compiler/` | NormalizedWorldIR → ExecutionPlan 的确定性编译 |
 | `packages/runtime-contracts/` | ExecutionPlan、Snapshot 与 Browser Protocol 数据协议 |
 | `packages/runtime-babylon/` | Babylon/Havok Runtime Adapter |
@@ -222,7 +246,7 @@ Compiler 和 Runtime 不能反向读取 Agent Prompt；Runtime Adapter 不能把
 ### 使用与当前状态
 
 - [项目总览：范围、状态与阅读顺序](docs/00-project-overview.md)
-- [Canonical JSON V2：AI/CLI 接入与运行指南](docs/17-canonical-json-quickstart.md)
+- [Canonical JSON V3：AI/CLI 接入与运行指南](docs/17-canonical-json-quickstart.md)
 - [SDK 重构总进度与 Backlog](docs/18-refactor-progress-and-backlog.md)
 - [当前实验与验证记录](docs/10-current-experiments.md)
 - [第一期 Alpha 实现与运行指南](docs/07-alpha-implementation.md)
@@ -252,7 +276,8 @@ Compiler 和 Runtime 不能反向读取 Agent Prompt；Runtime Adapter 不能把
 
 - [Subject Foundation 可视切片](docs/superpowers/plans/2026-08-19-subject-foundation-visible-slice.md)
 - [Package Subject Definition 可视切片](docs/superpowers/plans/2026-08-19-package-subject-definition-visible-slice.md)
-- [Canonical JSON Babylon 历史实施计划](docs/superpowers/plans/2026-08-18-canonical-json-babylon-v1.md)：已被 Authoring V2 取代，仅保留历史上下文。
+- [Canonical JSON Babylon 历史实施计划](docs/superpowers/plans/2026-08-18-canonical-json-babylon-v1.md)：已被 Authoring V3 取代，仅保留历史上下文。
+- [Placement Solver S1 海湾纵向切片](docs/superpowers/plans/2026-08-20-placement-layout-solver-s1.md)：Authoring/IR/Plan V3/V3/V4、八种 Constraint、CLI、Browser/Havok 与事务证据已完成。
 
 ### 已完成首个切片、继续回归
 
@@ -278,7 +303,7 @@ pnpm studio
 ```
 
 这些入口不是新程序的 Canonical 协议真相，不再承接新的底层能力。新外部程序应
-使用 `worldkit`、Authoring V2 和 Browser Protocol V3。最终切换计划见
+使用 `worldkit`、Authoring V3 和 Browser Protocol V3。最终切换计划见
 [重构总进度与 Backlog](docs/18-refactor-progress-and-backlog.md#p32-默认实现切换)。
 
 仓库不分发来源尚未确认的 Xbot。以下 Mixamo 入口只属于 Legacy Three/Rapier
