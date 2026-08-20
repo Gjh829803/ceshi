@@ -1,0 +1,111 @@
+{
+  "schemaVersion": 1,
+  "id": "actor.humanoid.g-bot",
+  "version": "1.0.0",
+  "resourceRef": "worldkit://subject-asset/actor.humanoid.g-bot@1",
+  "label": "G Bot Golden",
+  "kind": "actor",
+  "topology": "humanoid",
+  "runtime": {
+    "type": "glb",
+    "url": "/subject-assets/humanoid/g-bot/v1/g-bot.glb",
+    "formatVersion": "2.0",
+    "byteLength": 3362888,
+    "contentHash": "sha256:74bbf9426577caa1b7e808bf388bd9a6b8b48d50cc80ab7b0abef10c2693c286"
+  },
+  "coordinates": {
+    "unit": "meter",
+    "upAxis": "+Y",
+    "forwardAxis": "-Z",
+    "supportSurfaceY": 0
+  },
+  "geometry": {
+    "meshCount": 2,
+    "vertexCount": 28374,
+    "triangleCount": 49112,
+    "skinnedMesh": true,
+    "requiredVertexAttributes": [
+      "POSITION",
+      "NORMAL",
+      "TEXCOORD_0",
+      "JOINTS_0",
+      "WEIGHTS_0"
+    ]
+  },
+  "collider": {
+    "type": "capsule",
+    "radius": 0.35,
+    "height": 1.8,
+    "center": [0, 0.9, 0],
+    "derivation": "profile"
+  },
+  "anchors": [
+    {
+      "id": "FirstPersonView",
+      "position": [0, 1.64, 0]
+    },
+    {
+      "id": "ThirdPersonTarget",
+      "position": [0, 1.25, 0]
+    },
+    {
+      "id": "SeatAlignment",
+      "position": [0, 0.92, 0]
+    }
+  ],
+  "rig": {
+    "id": "mixamo-humanoid-v1",
+    "rootBone": "mixamorig:Hips",
+    "jointCount": 65,
+    "requiredActions": ["idle", "walk", "run", "jump"]
+  },
+  "provenance": {
+    "sourceAsset": "G Golden",
+    "sourceFiles": [
+      "G-idle.glb",
+      "G-walk.glb",
+      "G-slow run.glb",
+      "G-jumping.glb",
+      "G-falling.glb",
+      "G-Floating.glb",
+      "G-swimming.glb",
+      "G-Treading Water.glb",
+      "G-sitting.glb",
+      "G-sitting idle.glb",
+      "G-stand up.glb",
+      "G-Swimming To Edge.glb"
+    ],
+    "license": {
+      "status": "accepted",
+      "scope": "Company private repositories and product release",
+      "note": "Release authorization confirmed by the asset owner for the G Golden package."
+    }
+  },
+  "qa": {
+    "status": "warning",
+    "productionReady": false,
+    "runtimeVerifiedActions": [],
+    "artReadyActions": [
+      "idle",
+      "walk",
+      "run",
+      "jump",
+      "fall",
+      "float",
+      "swim.surface",
+      "swim.tread",
+      "sit",
+      "sit.idle",
+      "stand",
+      "swim.exit"
+    ],
+    "limitations": [
+      "Backward locomotion is not authored.",
+      "Strafe locomotion is not authored.",
+      "Turn-in-place is not authored.",
+      "A formal landing transition is not authored.",
+      "A G-specific neutral glide is not authored.",
+      "A straddle or riding pose is not authored."
+    ]
+  }
+}

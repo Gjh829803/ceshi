@@ -1,0 +1,136 @@
+{
+  "version": 1,
+  "character": "G Bot",
+  "rigId": "mixamo-humanoid-v1",
+  "source": "G Golden authored animation set",
+  "actions": [
+    {
+      "id": "idle",
+      "clip": "idle",
+      "loop": true,
+      "blendIn": 0.2,
+      "speed": 1,
+      "rootMotion": "inPlace",
+      "motionKind": "idle",
+      "readiness": "artReady"
+    },
+    {
+      "id": "walk",
+      "clip": "walk",
+      "loop": true,
+      "blendIn": 0.15,
+      "speed": 1,
+      "rootMotion": "inPlace",
+      "motionKind": "dynamic",
+      "readiness": "artReady"
+    },
+    {
+      "id": "run",
+      "clip": "run",
+      "loop": true,
+      "blendIn": 0.12,
+      "speed": 1,
+      "rootMotion": "inPlace",
+      "motionKind": "dynamic",
+      "readiness": "artReady"
+    },
+    {
+      "id": "jump",
+      "clip": "jump",
+      "loop": false,
+      "blendIn": 0.1,
+      "speed": 1,
+      "rootMotion": "inPlace",
+      "motionKind": "dynamic",
+      "readiness": "artReady"
+    },
+    {
+      "id": "fall",
+      "clip": "fall",
+      "loop": true,
+      "blendIn": 0.12,
+      "speed": 1,
+      "rootMotion": "inPlace",
+      "motionKind": "dynamic",
+      "readiness": "artReady"
+    },
+    {
+      "id": "float",
+      "clip": "float",
+      "loop": true,
+      "blendIn": 0.2,
+      "speed": 1,
+      "rootMotion": "inPlace",
+      "motionKind": "subtle",
+      "readiness": "artReady"
+    },
+    {
+      "id": "swim.surface",
+      "clip": "swim.surface",
+      "loop": true,
+      "blendIn": 0.18,
+      "speed": 1,
+      "rootMotion": "inPlace",
+      "motionKind": "dynamic",
+      "readiness": "artReady"
+    },
+    {
+      "id": "swim.tread",
+      "clip": "swim.tread",
+      "loop": true,
+      "blendIn": 0.2,
+      "speed": 1,
+      "rootMotion": "inPlace",
+      "motionKind": "dynamic",
+      "readiness": "artReady"
+    },
+    {
+      "id": "sit",
+      "clip": "sit",
+      "loop": false,
+      "blendIn": 0.2,
+      "speed": 1,
+      "rootMotion": "inPlace",
+      "motionKind": "pose",
+      "readiness": "artReady"
+    },
+    {
+      "id": "sit.idle",
+      "clip": "sit.idle",
+      "loop": true,
+      "blendIn": 0.2,
+      "speed": 1,
+      "rootMotion": "inPlace",
+      "motionKind": "idle",
+      "readiness": "artReady"
+    },
+    {
+      "id": "stand",
+      "clip": "stand",
+      "loop": false,
+      "blendIn": 0.18,
+      "speed": 1,
+      "rootMotion": "inPlace",
+      "motionKind": "dynamic",
+      "readiness": "artReady"
+    },
+    {
+      "id": "swim.exit",
+      "clip": "swim.exit",
+      "loop": false,
+      "blendIn": 0.15,
+      "speed": 1,
+      "rootMotion": "inPlace",
+      "motionKind": "dynamic",
+      "readiness": "artReady"
+    }
+  ],
+  "knownGaps": [
+    "backward locomotion",
+    "strafe locomotion",
+    "turn in place",
+    "formal landing transition",
+    "G-specific neutral glide",
+    "straddle or riding pose"
+  ]
+}
