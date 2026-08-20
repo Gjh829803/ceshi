@@ -18,8 +18,9 @@ Gameplay 真相。
 第一次阅读建议依次查看：
 
 1. [项目总览](docs/00-project-overview.md)：产品范围、当前能力和明确不支持的部分；
-2. [Canonical JSON V3 快速接入](docs/17-canonical-json-quickstart.md)：当前唯一 JSON 协议和命令；
-3. [重构总进度与 Backlog](docs/18-refactor-progress-and-backlog.md)：完成度、优先级、依赖和验收标准。
+2. [SDK 分层架构](docs/02-sdk-architecture.md)：系统边界、八层架构、代码包归属和运行时序列；
+3. [Canonical JSON V3 快速接入](docs/17-canonical-json-quickstart.md)：当前唯一 JSON 协议和命令；
+4. [重构总进度与 Backlog](docs/18-refactor-progress-and-backlog.md)：完成度、优先级、依赖和验收标准。
 
 ## 核心链路
 
@@ -53,6 +54,9 @@ flowchart TB
 
     REPORT --> ADAPTER["Video Model Adapter<br/>外部视觉实现"] --> VIDEO["Final Generated Video"]
 ```
+
+> 这张图用于说明数据处理顺序，不是完整的软件架构图。系统上下文、八层架构、
+> 代码包依赖边界和运行时序列见 [SDK 分层架构](docs/02-sdk-architecture.md)。
 
 ### 核心链路节点说明
 

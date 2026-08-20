@@ -142,6 +142,9 @@ Subject、首个产品 G Bot、Placement S1、截图和查询。它不代表任�
 每个新纵向切片在实施前必须有独立设计或实施计划；本文不替代具体 Schema 和
 测试规格。
 
+P1.5、P1.6 与 P2.5 是把既有总体设计和产品对接契约显式落入可验收 Backlog，未扩大
+既定产品范围，也不因“写入待办”提高当前完成度。
+
 ### P0：完成产品核心闭环
 
 #### P0.1 Placement Constraint 与确定性 Layout Solver
@@ -247,6 +250,8 @@ P0.1 整体仍以上述三项开放能力及生产范围扩展为完成标准。
 
 - [ ] 冻结 ActionDefinition、Action Request/Receipt、Context 和 Channel Lock。
 - [x] 实现首个 Golden `idle/walk/run/jump` 固定 Tick Action 与动画映射。
+- [ ] 冻结版本化 `ActionVariantSet` 与 `PoseSetProfile`；人形动作变体和非人形稳定姿势
+  都必须由语义 Action/Context 解析，不能从 Clip 名、骨骼名或资产文件名反推。
 - [ ] 冻结 `HumanoidPostureModeV1 = "standing" | "crouched" | "prone"`；Runtime Snapshot 必须同时暴露实际 `postureMode` 与 `activeActionId`，不能根据动画名称反推姿态。
 - [ ] 增加通用 Humanoid Action Pack：`fall`、`land`、`crouch-enter`、`crouch-idle`、`crouch-walk`、`crouch-exit`、`prone-enter`、`prone-idle`、`crawl`、`prone-exit`；源 Clip 名只允许在版本化 Animation Set 中映射。
 - [ ] 为站立、蹲伏、趴伏定义版本化 Capsule；切换时保持 Support Center/脚底位置，起身前使用 Havok Shape Proximity 做净空检测，空间不足返回稳定 `SUBJECT_POSTURE_BLOCKED`，不允许穿入低矮障碍。
@@ -266,6 +271,71 @@ P0.1 整体仍以上述三项开放能力及生产范围扩展为完成标准。
 - [ ] CLI 支持 package、inspect、load 和 run-session。
 - [ ] Runtime Session 支持 NDJSON 或等价的有生命周期协议、Request ID、Receipt 和恢复语义。
 - [ ] 加载新 Package 前完成旧世界 Dispose、Ownership Ledger 清空和 World Ready Gate。
+
+#### P1.5 Subject Control Feel、Physics Medium 与 State Resolver
+
+目标：把“主体怎样响应输入”“主体在地面、水中和空中受到什么物理影响”“当前应该
+激活哪种运动和动作状态”变成版本化、可组合、可锁定的 Profile，而不是继续留在
+Babylon/Havok Adapter 的硬编码分支中。字段职责以
+[`主体资产与 3C 对接设计`](16-subject-assets-3c-integration.md)为基础，实施前必须完成
+专项评审；本 Backlog 不提前冻结最终公共字段名。
+
+- [ ] 评审并冻结 `LocomotionProfile` 与 `ControlFeelProfile` 的唯一字段归属：前者负责
+  运动模式及能力边界，后者负责加速度、减速度、转向速率、响应曲线和空中控制比例；
+  奔跑等速度不得在两种 Profile 中形成同义字段或双重真相。
+- [ ] 冻结 `ControlMethodProfile` 与语义 Intent Pipeline：Direct Move、Steering、Swim、
+  Flight 等方法复用同一控制协议，由 Capability/Context 选择，World Agent 不直接调用
+  人物 Motor、车辆控制器或飞行实现。
+- [ ] 定义版本化 `PhysicsMediumProfile`：世界保留唯一全局重力向量，主体/介质只声明
+  相对重力倍率、线性/角阻力、浮力、表面保持和单位明确的安全边界；最终数值字段必须
+  按命名规则携带 `Ratio`/单位后缀，不能直接沿用未冻结概念稿中的含糊名称。
+- [ ] 定义 `MediumSensor`、`SubjectStateProfile` 与纯固定 Tick `StateResolver`；Ground、
+  Water、Air 的进入/退出使用迟滞阈值和明确优先级，不依赖动画状态或渲染帧率判断。
+- [ ] 普通 Agent 只选择已注册 Profile；高级覆盖必须经过 Definition 的
+  `allowedOverridePaths`、Schema 范围、Host Policy 和 Resource Budget，禁止直接填写
+  Babylon/Havok Handle 或控制器实现参数。
+- [ ] 为所有数值字段声明单位、有限值、最小/最大值和跨字段约束；非法 Profile 在
+  Registry Admission 阶段失败，不能等到 Runtime 再钳制或猜测。
+- [ ] Profile 的精确版本、Canonical Hash 和依赖进入 Registry Lock；Normalizer 和
+  Compiler 将最小、引擎无关描述投影进 IR/ExecutionPlan，Runtime 不反向读取 Registry。
+- [ ] Babylon/Havok 去除主体加速度、水中重力倍率和相关介质响应硬编码；Adapter 只
+  执行已编译参数，并保持固定 Tick、失败回滚、幂等 Dispose 与资源所有权边界。
+- [ ] Snapshot/Render Binding 暴露实际 `movementMedium`、`locomotionMode`、状态与生效
+  Profile 引用，使 Agent、Capture 和视频 Adapter 不需要从动画 Clip 猜 Gameplay 状态。
+- [ ] CLI/Browser/E2E 至少覆盖两种 Control Feel、不同主体重力倍率、Ground→Water→Air
+  稳定切换、边界抖动、Reset、双实例隔离和同输入 Replay；缺少 Profile 或切换失败时
+  保留上一稳定状态并返回稳定 Diagnostic。
+
+完成标准：仅替换版本化 Profile 就能改变主体的加减速、转向、介质重力/阻力和浮力，
+同一输入与 Registry Lock 在固定 Tick 下得到相同 Snapshot/Hash；普通场景 JSON 不需要
+复制底层参数，Canonical Runtime 中不存在对应 Provider 硬编码。
+
+#### P1.6 AI Schema Profile、受控覆盖与 WorldChangeSet
+
+目标：让上游 Agent 获得“小而稳定、能力感知”的 Schema，并能用领域操作增量修复
+世界；不能要求 Agent 每次重写大型 Authoring JSON，也不能让 Provider Adapter 形成
+第二套公共方言。
+
+- [ ] 为 Canonical Schema + Registry Lock + 允许 Capability 集冻结版本化 AI Schema
+  Profile/Projector；记录 Profile Hash、Registry Lock Hash、Capability Set Hash、规模
+  预算和降级原因。
+- [ ] Registry 枚举超过 Provider 结构化输出预算时，只能按 Profile 降级为带
+  `format`/`pattern` 的 Canonical Ref；字段名称、语义和验证规则不得改变。
+- [ ] 实现跨 Definition 通用的 `allowedOverridePaths` 校验、Explain 和拒绝诊断；
+  Override 不能修改版本/Hash、权限、Provider 类型或未开放 Collider/Socket 内部结构。
+- [ ] 冻结 `WorldChangeSet`/`ChangeReceipt`：稳定 ID、`baseAuthoringSpecHash`、Precondition、
+  Dry Run、原子提交、幂等重试和增量/全量编译等价性，不使用数组位置驱动的通用 Patch
+  作为生产协议。
+- [ ] 已发布协议的破坏性升级使用显式 Version Migration，并输出迁移前后 Hash 和报告；
+  未发布私有 Schema 仍按评审批准的 Clean Break 规则处理，不保留永久别名字段。
+- [ ] CLI/Browser 提供 Schema Profile、Registry Search、Dry Run、Explain、Diff、Apply 和
+  Receipt；Provider Adapter 输出必须重新通过 Canonical Schema 与语义验证。
+- [ ] Conformance 覆盖 Schema 规模预算、Provider 降级、非法 Override、过期 Base Hash、
+  重复 Request、部分失败回滚、增量/全量结果等价和 Migration Golden Fixture。
+
+完成标准：至少两个结构化输出 Provider 使用同一 Canonical 字段生成有效世界；一次 AI
+修复通过 WorldChangeSet 原子应用并可重放，Adapter、CLI 和 Browser 不产生同义字段或
+绕过 Canonical Validation 的旁路。
 
 ### P2：完成 LEGO 关系与复杂主体
 
@@ -301,6 +371,28 @@ P0.1 整体仍以上述三项开放能力及生产范围扩展为完成标准。
 - [ ] 第一人称、第三人称和声明式 Camera Rig 切换。
 - [ ] Browser/CLI 支持观察、控制、截图权限分离。
 - [ ] 为上游 Agent 提供 Registry Search、Dry Run、Explain、Diff 和结构化修复工具，不提供底层引擎对象。
+
+#### P2.5 Surface Semantics 与 Traversal Capability
+
+目标：让“到水边游泳、到可攀爬墙面攀爬、到矮障碍翻越”由稳定 Surface/Volume 语义、
+Sensor 和 Capability 组合触发，而不是按 Mesh 名称、颜色、材质或场景脚本猜测。该能力
+已有产品方向，但尚未冻结专项 Schema；实施前必须先写独立设计和首个窄纵向计划。
+
+- [ ] 冻结 Surface/Volume 语义与 Terrain/Obstacle 权威数据的引用边界；可行走、可游泳、
+  可攀爬、可翻越等能力不得复制 Heightfield、Collider 或 Region 真相。
+- [ ] 定义 Surface/Volume Query、Contact/Sensor Event、进入/退出迟滞、稳定 ID 与固定
+  Tick 顺序；视觉材质和动画不能成为 Gameplay 判定来源。
+- [ ] 定义 Traversal Capability/Profile 的适用主体、坡度/高度/净空/朝向约束、冲突、
+  优先级和失败回退；普通 Agent 只选择已注册能力和 Profile。
+- [ ] State Resolver 原子切换 Locomotion、Action、Collider、Control Feel、Physics Medium、
+  Camera Context 和 Render Binding；任一准备步骤失败时全部保持上一稳定状态。
+- [ ] 攀爬/翻越至少覆盖进入、循环、顶部退出、中止、无安全落点和控制权切换；不能用
+  RenderNode 父子关系、瞬移或禁用碰撞掩盖逻辑缺口。
+- [ ] CLI/Browser/E2E 使用同一人物完成地面→水中→地面以及地面→攀爬→顶部落地，验证
+  无边界抖动、穿插、悬空、状态残留和 Replay 偏差。
+
+完成标准：场景只声明权威 Surface/Volume 语义和主体 Profile，Runtime 就能在固定 Tick
+下自动选择正确运动/动作模式；删除或修改视觉材质不会改变 Gameplay 结果。
 
 ### P3：生产收敛与默认切换
 
@@ -350,12 +442,15 @@ P0.2 Simulation Take / Control Capture Bundle
 P0.1 + P0.2 + P0.3
   └── P0.4 白模到生成式视频纵向切片
 
-P1.2 Asset Subject + P1.3 Semantic Action
+P1.2 Asset Subject + P1.3 Semantic Action + P1.5 Control Feel / Physics Medium
   └── P2.1 Typed Relationship
         └── P2.2 Mount / Tow
               └── P2.3 Equipment / Flight
 
-P1.4 WorldPackage + P2.4 Controller/Camera/Driver
+P1.1 Terrain / Region / Mask + P1.5 State Resolver
+  └── P2.5 Surface Semantics / Traversal
+
+P1.4 WorldPackage + P1.6 AI Schema / WorldChangeSet + P2.4 Controller/Camera/Driver
   └── P3.1 Production Gates（复用 P0.3 协议并扩展生产 Profile）
         └── P3.2 默认切换
 ```
@@ -373,7 +468,11 @@ Placement S1 已形成首个回归纵向切片；Capture 与 Validation 两条 P
 3. **M3：为 P0.2 编写五 Pass Capture 的窄纵向切片计划，并复用 Placement WorldPackage/Hash**；
 4. **M4：扩展 P0.1 的 Terrain Mask/Route Graph，而不是新增第二套 Region/Route 语义**；
 5. **M5：在 Placement + Take + Validation 闭环上接入实验 Video Model Adapter**；
-6. **M6：按产品优先级选择 Semantic Action 后续或 Typed Relationship 窄可视切片**。
+6. **M6：评审冻结 P1.5 的 Control Feel/Physics Medium/State Resolver 首条纵向范围，清除
+   Canonical Babylon 路径中的对应硬编码**；
+7. **M7：按产品优先级选择 Semantic Action 后续或 Typed Relationship 窄可视切片**；
+8. **M8：在实现游泳、攀爬或增量 Agent 修复前，分别冻结 P2.5 Surface/Traversal 与
+   P1.6 AI Schema/WorldChangeSet 的专项设计，禁止临时增加公共字段或场景脚本旁路**。
 
 Take/Capture 与 Validation 字段冻结前不得实现公共协议字段；技术探针可以验证 Capture
 Encoding 或 Runtime Query 可行性，但其实现不得泄漏到 Canonical Schema。
