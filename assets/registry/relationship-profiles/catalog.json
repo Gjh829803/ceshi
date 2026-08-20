@@ -1,0 +1,58 @@
+[
+  {
+    "kind": "relationship-profile",
+    "id": "R01.seat.driver",
+    "version": 1,
+    "resourceRef": "worldkit://relationship-profile/seat.driver@1",
+    "agentAccessLevel": "T2",
+    "relationshipType": "seat",
+    "runtimeStatus": "implemented",
+    "requiredSourceSocketIds": ["SeatAlignment"],
+    "requiredTargetSocketIds": ["DriverSeat"],
+    "controlTransferPolicy": "transfer-to-target",
+    "cameraTargetPolicy": "controlled-entity",
+    "maximumDistanceMeters": 3,
+    "aiMetadata": {
+      "displayName": "R01 Driver Seat",
+      "description": "Direct seat alignment and control transfer for whitebox PoCs.",
+      "semanticTags": ["driver", "seat"]
+    }
+  },
+  {
+    "kind": "relationship-profile",
+    "id": "R03.tether.standard",
+    "version": 1,
+    "resourceRef": "worldkit://relationship-profile/tether.standard@1",
+    "agentAccessLevel": "T2",
+    "relationshipType": "tether",
+    "runtimeStatus": "implemented",
+    "requiredSourceSocketIds": ["TetherSource"],
+    "requiredTargetSocketIds": ["TetherTarget"],
+    "controlTransferPolicy": "keep-source",
+    "cameraTargetPolicy": "source-entity",
+    "maximumDistanceMeters": 4,
+    "aiMetadata": {
+      "displayName": "R03 Standard Tether",
+      "description": "Bounded anchor-to-anchor relationship for the paraglider PoC.",
+      "semanticTags": ["constraint", "tether"]
+    }
+  },
+  {
+    "kind": "relationship-profile",
+    "id": "R02.mount.reserved",
+    "version": 1,
+    "resourceRef": "worldkit://relationship-profile/mount.reserved@1",
+    "agentAccessLevel": "internal",
+    "relationshipType": "mount",
+    "runtimeStatus": "reserved",
+    "requiredSourceSocketIds": ["SeatAlignment"],
+    "requiredTargetSocketIds": ["MountSeat"],
+    "controlTransferPolicy": "transfer-to-target",
+    "cameraTargetPolicy": "controlled-entity",
+    "aiMetadata": {
+      "displayName": "R02 Mount Reserved",
+      "description": "Frozen mount relationship vocabulary; runtime is not implemented in this phase.",
+      "semanticTags": ["mount", "reserved"]
+    }
+  }
+]

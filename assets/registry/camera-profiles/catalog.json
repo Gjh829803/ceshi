@@ -1,0 +1,334 @@
+{
+  "algorithms": [
+    {
+      "kind": "camera-rig-algorithm",
+      "id": "socket-first-person",
+      "version": 1,
+      "resourceRef": "worldkit://camera-rig/socket-first-person@1",
+      "agentAccessLevel": "T0",
+      "implementationId": "socket-first-person",
+      "runtimeStatus": "implemented",
+      "aiMetadata": {
+        "displayName": "Socket First Person",
+        "description": "Positions the view at a declared first-person socket.",
+        "semanticTags": ["first-person", "socket"]
+      }
+    },
+    {
+      "kind": "camera-rig-algorithm",
+      "id": "orbit-follow",
+      "version": 1,
+      "resourceRef": "worldkit://camera-rig/orbit-follow@1",
+      "agentAccessLevel": "T0",
+      "implementationId": "orbit-follow",
+      "runtimeStatus": "implemented",
+      "aiMetadata": {
+        "displayName": "Orbit Follow",
+        "description": "Orbits and follows a stable target frame with collision shortening.",
+        "semanticTags": ["follow", "orbit"]
+      }
+    },
+    {
+      "kind": "camera-rig-algorithm",
+      "id": "velocity-chase",
+      "version": 1,
+      "resourceRef": "worldkit://camera-rig/velocity-chase@1",
+      "agentAccessLevel": "T1",
+      "implementationId": "velocity-chase",
+      "runtimeStatus": "implemented",
+      "aiMetadata": {
+        "displayName": "Velocity Chase",
+        "description": "Chases a moving target with velocity look-ahead and speed FOV.",
+        "semanticTags": ["chase", "speed", "velocity"]
+      }
+    },
+    {
+      "kind": "camera-rig-algorithm",
+      "id": "flight-horizon",
+      "version": 1,
+      "resourceRef": "worldkit://camera-rig/flight-horizon@1",
+      "agentAccessLevel": "T2",
+      "implementationId": "flight-horizon",
+      "runtimeStatus": "implemented",
+      "aiMetadata": {
+        "displayName": "Flight Horizon",
+        "description": "Follows flight direction while retaining horizon and landing context.",
+        "semanticTags": ["flight", "horizon"]
+      }
+    }
+  ],
+  "profiles": [
+    {
+      "kind": "camera-rig-profile",
+      "id": "first-person.standard",
+      "version": 1,
+      "resourceRef": "worldkit://camera-profile/first-person.standard@1",
+      "agentAccessLevel": "T0",
+      "algorithmRef": "worldkit://camera-rig/socket-first-person@1",
+      "preferredSocketIds": ["FirstPersonView"],
+      "parameters": {
+        "distanceMeters": 0,
+        "minimumDistanceMeters": 0,
+        "maximumDistanceMeters": 0,
+        "targetHeightMeters": 1.64,
+        "shoulderOffsetMeters": 0,
+        "pitchRadians": 0,
+        "minimumPitchRadians": -1.2,
+        "maximumPitchRadians": 1.2,
+        "positionDampingPerSecond": 30,
+        "rotationDampingPerSecond": 24,
+        "collisionRadiusMeters": 0.05,
+        "baseFovDegrees": 70,
+        "speedFovDegreesPerMeterPerSecond": 0,
+        "maximumSpeedFovDegrees": 0,
+        "lookAheadSeconds": 0,
+        "transitionSeconds": 0.25
+      },
+      "aiMetadata": {
+        "displayName": "Standard First Person",
+        "description": "Stable socket first-person view for subjects that expose FirstPersonView.",
+        "semanticTags": ["first-person", "standard"]
+      }
+    },
+    {
+      "kind": "camera-rig-profile",
+      "id": "orbit.medium",
+      "version": 1,
+      "resourceRef": "worldkit://camera-profile/orbit.medium@1",
+      "agentAccessLevel": "T0",
+      "algorithmRef": "worldkit://camera-rig/orbit-follow@1",
+      "preferredSocketIds": ["ThirdPersonTarget", "CameraTarget3D"],
+      "parameters": {
+        "distanceMeters": 5,
+        "minimumDistanceMeters": 1.2,
+        "maximumDistanceMeters": 8,
+        "targetHeightMeters": 1.25,
+        "shoulderOffsetMeters": 0,
+        "pitchRadians": 0.22,
+        "minimumPitchRadians": -0.95,
+        "maximumPitchRadians": 0.65,
+        "positionDampingPerSecond": 18,
+        "rotationDampingPerSecond": 20,
+        "collisionRadiusMeters": 0.2,
+        "baseFovDegrees": 58,
+        "speedFovDegreesPerMeterPerSecond": 0.4,
+        "maximumSpeedFovDegrees": 4,
+        "lookAheadSeconds": 0.1,
+        "transitionSeconds": 0.35
+      },
+      "aiMetadata": {
+        "displayName": "Medium Orbit",
+        "description": "General orbit view for medium controllable subjects.",
+        "semanticTags": ["medium", "orbit"]
+      }
+    },
+    {
+      "kind": "camera-rig-profile",
+      "id": "follow.medium",
+      "version": 1,
+      "resourceRef": "worldkit://camera-profile/follow.medium@1",
+      "agentAccessLevel": "T1",
+      "algorithmRef": "worldkit://camera-rig/orbit-follow@1",
+      "preferredSocketIds": ["CameraTarget3D", "ThirdPersonTarget"],
+      "parameters": {
+        "distanceMeters": 6,
+        "minimumDistanceMeters": 1.5,
+        "maximumDistanceMeters": 10,
+        "targetHeightMeters": 1.1,
+        "shoulderOffsetMeters": 0,
+        "pitchRadians": 0.26,
+        "minimumPitchRadians": -0.8,
+        "maximumPitchRadians": 0.7,
+        "positionDampingPerSecond": 14,
+        "rotationDampingPerSecond": 16,
+        "collisionRadiusMeters": 0.25,
+        "baseFovDegrees": 60,
+        "speedFovDegreesPerMeterPerSecond": 0.6,
+        "maximumSpeedFovDegrees": 5,
+        "lookAheadSeconds": 0.2,
+        "transitionSeconds": 0.4
+      },
+      "aiMetadata": {
+        "displayName": "Medium Follow",
+        "description": "Stable follow view for forward-steering subjects.",
+        "semanticTags": ["follow", "medium"]
+      }
+    },
+    {
+      "kind": "camera-rig-profile",
+      "id": "chase.surface-fast",
+      "version": 1,
+      "resourceRef": "worldkit://camera-profile/chase.surface-fast@1",
+      "agentAccessLevel": "T1",
+      "algorithmRef": "worldkit://camera-rig/velocity-chase@1",
+      "preferredSocketIds": ["CameraTarget3D", "LookAhead"],
+      "parameters": {
+        "distanceMeters": 8,
+        "minimumDistanceMeters": 2,
+        "maximumDistanceMeters": 14,
+        "targetHeightMeters": 1.2,
+        "shoulderOffsetMeters": 0,
+        "pitchRadians": 0.18,
+        "minimumPitchRadians": -0.6,
+        "maximumPitchRadians": 0.6,
+        "positionDampingPerSecond": 9,
+        "rotationDampingPerSecond": 12,
+        "collisionRadiusMeters": 0.3,
+        "baseFovDegrees": 62,
+        "speedFovDegreesPerMeterPerSecond": 0.9,
+        "maximumSpeedFovDegrees": 12,
+        "lookAheadSeconds": 0.7,
+        "transitionSeconds": 0.45
+      },
+      "aiMetadata": {
+        "displayName": "Fast Surface Chase",
+        "description": "Velocity chase view for fast movement along a support surface.",
+        "semanticTags": ["chase", "fast", "surface"]
+      }
+    },
+    {
+      "kind": "camera-rig-profile",
+      "id": "follow.water-surface",
+      "version": 1,
+      "resourceRef": "worldkit://camera-profile/follow.water-surface@1",
+      "agentAccessLevel": "T2",
+      "algorithmRef": "worldkit://camera-rig/orbit-follow@1",
+      "preferredSocketIds": ["CameraTarget3D", "LookAhead"],
+      "parameters": {
+        "distanceMeters": 7,
+        "minimumDistanceMeters": 2,
+        "maximumDistanceMeters": 12,
+        "targetHeightMeters": 1.3,
+        "shoulderOffsetMeters": 0,
+        "pitchRadians": 0.3,
+        "minimumPitchRadians": -0.5,
+        "maximumPitchRadians": 0.75,
+        "positionDampingPerSecond": 8,
+        "rotationDampingPerSecond": 10,
+        "collisionRadiusMeters": 0.3,
+        "baseFovDegrees": 60,
+        "speedFovDegreesPerMeterPerSecond": 0.5,
+        "maximumSpeedFovDegrees": 5,
+        "lookAheadSeconds": 0.45,
+        "transitionSeconds": 0.45
+      },
+      "aiMetadata": {
+        "displayName": "Water Surface Follow",
+        "description": "Low-response follow view that preserves water horizon context.",
+        "semanticTags": ["follow", "surface", "water"]
+      }
+    },
+    {
+      "kind": "camera-rig-profile",
+      "id": "flight.glide",
+      "version": 1,
+      "resourceRef": "worldkit://camera-profile/flight.glide@1",
+      "agentAccessLevel": "T2",
+      "algorithmRef": "worldkit://camera-rig/flight-horizon@1",
+      "preferredSocketIds": ["CameraTarget3D", "LookAhead"],
+      "parameters": {
+        "distanceMeters": 9,
+        "minimumDistanceMeters": 3,
+        "maximumDistanceMeters": 16,
+        "targetHeightMeters": 1.4,
+        "shoulderOffsetMeters": 0,
+        "pitchRadians": 0.12,
+        "minimumPitchRadians": -0.5,
+        "maximumPitchRadians": 0.6,
+        "positionDampingPerSecond": 7,
+        "rotationDampingPerSecond": 9,
+        "collisionRadiusMeters": 0.25,
+        "baseFovDegrees": 64,
+        "speedFovDegreesPerMeterPerSecond": 0.8,
+        "maximumSpeedFovDegrees": 10,
+        "lookAheadSeconds": 0.9,
+        "transitionSeconds": 0.55
+      },
+      "aiMetadata": {
+        "displayName": "Glide Flight",
+        "description": "Flight direction view with horizon and landing context.",
+        "semanticTags": ["flight", "glide", "horizon"]
+      }
+    },
+    {
+      "kind": "camera-rig-profile",
+      "id": "follow.mounted",
+      "version": 1,
+      "resourceRef": "worldkit://camera-profile/follow.mounted@1",
+      "agentAccessLevel": "T2",
+      "algorithmRef": "worldkit://camera-rig/orbit-follow@1",
+      "preferredSocketIds": ["CameraTarget3D", "ThirdPersonTarget"],
+      "parameters": {
+        "distanceMeters": 7,
+        "minimumDistanceMeters": 2,
+        "maximumDistanceMeters": 12,
+        "targetHeightMeters": 1.5,
+        "shoulderOffsetMeters": 0,
+        "pitchRadians": 0.24,
+        "minimumPitchRadians": -0.7,
+        "maximumPitchRadians": 0.7,
+        "positionDampingPerSecond": 10,
+        "rotationDampingPerSecond": 12,
+        "collisionRadiusMeters": 0.28,
+        "baseFovDegrees": 61,
+        "speedFovDegreesPerMeterPerSecond": 0.6,
+        "maximumSpeedFovDegrees": 7,
+        "lookAheadSeconds": 0.35,
+        "transitionSeconds": 0.5
+      },
+      "aiMetadata": {
+        "displayName": "Mounted Follow",
+        "description": "Follow view for committed seat or mount relationships.",
+        "semanticTags": ["follow", "mounted"]
+      }
+    }
+  ],
+  "contexts": [
+    {
+      "kind": "camera-context-profile",
+      "id": "capability-driven.default",
+      "version": 1,
+      "resourceRef": "worldkit://camera-context/capability-driven.default@1",
+      "agentAccessLevel": "T0",
+      "defaultCameraRigProfileRef": "worldkit://camera-profile/follow.medium@1",
+      "firstPersonCameraRigProfileRef": "worldkit://camera-profile/first-person.standard@1",
+      "rules": [
+        {
+          "id": "mounted",
+          "priority": 100,
+          "when": { "relationshipRoles": ["driver", "passenger", "rider"] },
+          "cameraRigProfileRef": "worldkit://camera-profile/follow.mounted@1"
+        },
+        {
+          "id": "glide",
+          "priority": 90,
+          "when": { "requiredMotionTags": ["glide"], "movementMediums": ["air"] },
+          "cameraRigProfileRef": "worldkit://camera-profile/flight.glide@1"
+        },
+        {
+          "id": "water-surface",
+          "priority": 80,
+          "when": { "requiredMotionTags": ["water"], "movementMediums": ["water"] },
+          "cameraRigProfileRef": "worldkit://camera-profile/follow.water-surface@1"
+        },
+        {
+          "id": "surface-fast",
+          "priority": 70,
+          "when": { "requiredMotionTags": ["surface-fast"] },
+          "cameraRigProfileRef": "worldkit://camera-profile/chase.surface-fast@1"
+        },
+        {
+          "id": "free-ground",
+          "priority": 60,
+          "when": { "requiredMotionTags": ["free-ground"] },
+          "cameraRigProfileRef": "worldkit://camera-profile/orbit.medium@1"
+        }
+      ],
+      "aiMetadata": {
+        "displayName": "Capability-driven Camera Context",
+        "description": "Selects camera behavior from committed relationship, motion and medium state.",
+        "semanticTags": ["capability-driven", "context", "default"]
+      }
+    }
+  ]
+}

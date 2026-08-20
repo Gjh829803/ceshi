@@ -1,0 +1,18 @@
+[
+  {
+    "kind": "medium-profile",
+    "id": "ground-water-air.standard",
+    "version": 1,
+    "resourceRef": "worldkit://medium-profile/ground-water-air.standard@1",
+    "agentAccessLevel": "T0",
+    "supportedMediums": ["ground", "water", "air"],
+    "ground": { "groundingToleranceMeters": 0.08 },
+    "water": { "surfaceHoldStrength": 8, "linearDragPerSecond": 0.8 },
+    "air": { "gravityScale": 1, "linearDragPerSecond": 0.05 },
+    "aiMetadata": {
+      "displayName": "Standard Ground Water Air",
+      "description": "Shared medium facts for the first capability-driven subject packages.",
+      "semanticTags": ["air", "ground", "standard", "water"]
+    }
+  }
+]
