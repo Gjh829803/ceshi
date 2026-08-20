@@ -25,6 +25,12 @@ export interface AuthoringSceneLoadOptionsV1 {
   subjectDefinitionRef?: string;
 }
 
+const CAPABILITY_PLAYGROUND_MINIMUM_RESOURCE_BUDGET = Object.freeze({
+  maxVertices: 200_000,
+  maxTriangles: 300_000,
+  maxColliders: 128,
+});
+
 function sourceDiagnostic(message: string, details?: Readonly<Record<string, unknown>>): AuthoringSceneLoadResult {
   return {
     ok: false,
@@ -65,6 +71,27 @@ function applyCapabilityDemoContext(
 
   return {
     ...source,
+    // Subject Package selection is an explicit Playground demo overlay. Its
+    // host world must be large enough for every registered Phase-1 package;
+    // otherwise a valid art asset (notably the 49,112-triangle G Bot) is
+    // rejected by an unrelated small-world example budget before Runtime.
+    world: {
+      ...source.world,
+      resourceBudget: {
+        maxVertices: Math.max(
+          source.world.resourceBudget.maxVertices,
+          CAPABILITY_PLAYGROUND_MINIMUM_RESOURCE_BUDGET.maxVertices,
+        ),
+        maxTriangles: Math.max(
+          source.world.resourceBudget.maxTriangles,
+          CAPABILITY_PLAYGROUND_MINIMUM_RESOURCE_BUDGET.maxTriangles,
+        ),
+        maxColliders: Math.max(
+          source.world.resourceBudget.maxColliders,
+          CAPABILITY_PLAYGROUND_MINIMUM_RESOURCE_BUDGET.maxColliders,
+        ),
+      },
+    },
     nodes: source.nodes.map((node) => {
       if (node.kind === "subject" && node.id === controlledEntityId) {
         return { ...node, subjectDefinitionRef };

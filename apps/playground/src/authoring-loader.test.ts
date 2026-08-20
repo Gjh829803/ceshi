@@ -193,6 +193,36 @@ describe("loadAuthoringScene", () => {
     ).toBeGreaterThanOrEqual(12);
   });
 
+  it("gives the capability Playground enough explicit budget for the locked G Bot asset", async () => {
+    const source = createValidAuthoringSpec();
+    source.world.resourceBudget = {
+      maxVertices: 20_000,
+      maxTriangles: 30_000,
+      maxColliders: 16,
+    };
+    const loaded = await loadAuthoringScene(
+      async () => new Response(JSON.stringify(source)),
+      {
+        subjectDefinitionRef:
+          "worldkit://subject-definition/humanoid.g-bot.ground@1",
+      },
+    );
+
+    expect(loaded).toMatchObject({
+      ok: true,
+      diagnostics: [],
+      executionPlan: {
+        subjects: [
+          expect.objectContaining({
+            subjectDefinitionRef:
+              "worldkit://subject-definition/humanoid.g-bot.ground@1",
+          }),
+        ],
+      },
+    });
+    expect(loaded.executionPlan?.resourceUsage.triangles).toBeGreaterThan(30_000);
+  });
+
   it("produces one runtime Feature inspection per compiled Subject", async () => {
     const loaded = await loadAuthoringScene(async () =>
       new Response(JSON.stringify(createValidPackageSubjectWorld())),
