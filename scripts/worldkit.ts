@@ -19,6 +19,11 @@ import {
 
 import { explainSubjectFile } from "./lib/subject-explain";
 import {
+  layoutExplainFile,
+  layoutSolveFile,
+  layoutValidateFile,
+} from "./lib/layout-artifacts";
+import {
   cliFailure,
   loadWorldkitPipeline,
   readWorldkitInput,
@@ -41,6 +46,10 @@ Usage:
   worldkit registry describe --resource-ref <ref> [--json]
   worldkit subject-definition validate <file> [--json]
   worldkit subject explain <world-file> --entity-id <id> [--json]
+  worldkit layout validate <world-file> [--json]
+  worldkit layout solve <world-file> --output <directory> [--json]
+  worldkit layout explain <layout-report.json> --entity-id <id> [--json]
+  worldkit layout explain <layout-report.json> --constraint-id <id> [--json]
 `;
 
 export type { CliDiagnostic } from "./lib/worldkit-pipeline";
@@ -74,7 +83,19 @@ export type WorldkitArgs =
       inputPath: string;
       entityId: string;
       json: boolean;
-    };
+    }
+  | { command: "layout-validate"; inputPath: string; json: boolean }
+  | {
+      command: "layout-solve";
+      inputPath: string;
+      outputPath: string;
+      json: boolean;
+    }
+  | ({ command: "layout-explain"; inputPath: string; json: boolean } &
+      (
+        | { entityId: string; constraintId?: never }
+        | { constraintId: string; entityId?: never }
+      ));
 
 export interface WorldkitCommandResult {
   ok: boolean;
@@ -211,6 +232,39 @@ export function parseWorldkitArgs(arguments_: readonly string[]): WorldkitArgs {
     }
     rejectRemaining(tokens, "subject explain");
     return { command: "subject-explain", inputPath, entityId, json };
+  }
+
+  if (command === "layout") {
+    const operation = takeRequiredPositional(tokens, "layout operation");
+    const inputPath = takeRequiredPositional(tokens, "Layout input file");
+    if (operation === "validate") {
+      rejectRemaining(tokens, "layout validate");
+      return { command: "layout-validate", inputPath, json };
+    }
+    if (operation === "solve") {
+      const outputPath = takeOption(tokens, "--output");
+      if (outputPath === undefined) {
+        throw new WorldkitUsageError(
+          "layout solve requires --output <directory>.",
+        );
+      }
+      rejectRemaining(tokens, "layout solve");
+      return { command: "layout-solve", inputPath, outputPath, json };
+    }
+    if (operation === "explain") {
+      const entityId = takeOption(tokens, "--entity-id");
+      const constraintId = takeOption(tokens, "--constraint-id");
+      if ((entityId === undefined) === (constraintId === undefined)) {
+        throw new WorldkitUsageError(
+          "layout explain requires exactly one of --entity-id or --constraint-id.",
+        );
+      }
+      rejectRemaining(tokens, "layout explain");
+      return entityId === undefined
+        ? { command: "layout-explain", inputPath, constraintId: constraintId!, json }
+        : { command: "layout-explain", inputPath, entityId, json };
+    }
+    throw new WorldkitUsageError(`Unknown layout operation '${operation}'.`);
   }
 
   const inputPath = takeRequiredPositional(tokens, `${command ?? "command"} input file`);
@@ -453,6 +507,22 @@ export async function buildFile(
   };
 }
 
+export async function captureVisibleWorldWithRetries<
+  T extends Readonly<{ sampledRgbColorCount: number }>,
+>(
+  capture: () => Promise<T>,
+  maximumAttempts = 8,
+): Promise<T> {
+  if (!Number.isSafeInteger(maximumAttempts) || maximumAttempts < 1) {
+    throw new RangeError("maximumAttempts must be a positive safe integer.");
+  }
+  for (let attempt = 0; attempt < maximumAttempts; attempt += 1) {
+    const result = await capture();
+    if (result.sampledRgbColorCount >= 4) return result;
+  }
+  throw new Error("WORLDKIT_CAPTURE_VISIBLE_WORLD_MISSING");
+}
+
 export async function captureFile(
   inputPath: string,
   outputPath: string,
@@ -527,10 +597,11 @@ export async function captureFile(
       await api.ready();
       await new Promise<void>((resolve) => requestAnimationFrame(() => resolve()));
     });
-    const capture = await page.evaluate(
+    const capture = await captureVisibleWorldWithRetries(() => page.evaluate(
       async (): Promise<{
         snapshot: WorldRuntimeSnapshotV3;
         screenshotDataUrl: string;
+        sampledRgbColorCount: number;
       }> => {
         const api = window.__WORLDKIT__;
         if (api === undefined) {
@@ -576,16 +647,17 @@ export async function captureFile(
           );
           if (sampledRgbColors.size >= 4) break;
         }
-        if (sampledRgbColors.size < 4) {
-          throw new Error("WORLDKIT_CAPTURE_VISIBLE_WORLD_MISSING");
-        }
         const afterCapture = api.getSnapshot();
         if (afterCapture.tick !== snapshot.tick) {
           throw new Error("WORLDKIT_CAPTURE_TICK_ADVANCED");
         }
-        return { snapshot, screenshotDataUrl };
+        return {
+          snapshot,
+          screenshotDataUrl,
+          sampledRgbColorCount: sampledRgbColors.size,
+        };
       },
-    );
+    ));
     const pngDataUrlPrefix = "data:image/png;base64,";
     if (!capture.screenshotDataUrl.startsWith(pngDataUrlPrefix)) {
       throw new Error("WORLDKIT_CAPTURE_PNG_DATA_URL_INVALID");
@@ -735,6 +807,17 @@ export async function main(
   const result =
     parsed.command === "validate"
       ? await validateFile(parsed.inputPath)
+      : parsed.command === "layout-validate"
+        ? await layoutValidateFile(parsed.inputPath)
+        : parsed.command === "layout-solve"
+          ? await layoutSolveFile(parsed.inputPath, parsed.outputPath)
+          : parsed.command === "layout-explain"
+            ? await layoutExplainFile(
+                parsed.inputPath,
+                parsed.entityId === undefined
+                  ? { constraintId: parsed.constraintId }
+                  : { entityId: parsed.entityId },
+              )
       : parsed.command === "build"
         ? await buildFile(parsed.inputPath, parsed.outputPath)
         : parsed.command === "capture"

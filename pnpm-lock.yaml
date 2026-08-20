@@ -129,6 +129,9 @@ importers:
 
   packages/authoring:
     dependencies:
+      '@whitebox-world/layout-solver':
+        specifier: workspace:*
+        version: link:../layout-solver
       '@whitebox-world/protocol':
         specifier: workspace:*
         version: link:../protocol
@@ -179,6 +182,12 @@ importers:
       three:
         specifier: ^0.180.0
         version: 0.180.0
+
+  packages/layout-solver:
+    dependencies:
+      '@whitebox-world/protocol':
+        specifier: workspace:*
+        version: link:../protocol
 
   packages/physics:
     dependencies:

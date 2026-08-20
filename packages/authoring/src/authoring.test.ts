@@ -7,14 +7,14 @@ import {
 } from "./index";
 import {
   createValidAuthoringSpec,
-  createValidPackageSubjectWorldV2,
+  createValidPackageSubjectWorld,
   createValidRiggedPackageDefinition,
 } from "./test-fixture";
 
 const validSpec = createValidAuthoringSpec();
 
-describe("AuthoringSpecV2", () => {
-  it("strictly parses a valid canonical V2 document", () => {
+describe("AuthoringSpecV3", () => {
+  it("strictly parses a valid canonical V3 document", () => {
     const result = parseAuthoringSpecJson(JSON.stringify(validSpec));
 
     expect(result.ok).toBe(true);
@@ -24,7 +24,7 @@ describe("AuthoringSpecV2", () => {
 
   it("rejects duplicate JSON object keys before schema validation", () => {
     const result = parseAuthoringSpecJson(
-      '{"kind":"worldkit-authoring-spec","kind":"worldkit-authoring-spec","schemaVersion":2}',
+      '{"kind":"worldkit-authoring-spec","kind":"worldkit-authoring-spec","schemaVersion":3}',
     );
 
     expect(result.diagnostics).toContainEqual(
@@ -60,7 +60,7 @@ describe("AuthoringSpecV2", () => {
           severity: "error",
           code: "AUTHORING_SCHEMA_VERSION_NOT_SUPPORTED",
           instancePath: "/schemaVersion",
-          details: { supportedSchemaVersions: [2] },
+          details: { supportedSchemaVersions: [3] },
         },
       ],
     });
@@ -68,7 +68,7 @@ describe("AuthoringSpecV2", () => {
 
   it("rejects unsupported non-integer schema versions with the same version diagnostic", () => {
     const result = parseAuthoringSpecJson(
-      JSON.stringify({ ...validSpec, schemaVersion: 2.5 }),
+      JSON.stringify({ ...validSpec, schemaVersion: 3.5 }),
     );
 
     expect(result).toMatchObject({
@@ -77,13 +77,13 @@ describe("AuthoringSpecV2", () => {
         {
           code: "AUTHORING_SCHEMA_VERSION_NOT_SUPPORTED",
           instancePath: "/schemaVersion",
-          details: { supportedSchemaVersions: [2] },
+          details: { supportedSchemaVersions: [3] },
         },
       ],
     });
   });
 
-  it("rejects unknown V2 root fields and the removed legacy subject reference field", () => {
+  it("rejects unknown V3 root fields and the removed legacy subject reference field", () => {
     const subject = validSpec.nodes.find((node) => node.kind === "subject");
     const legacySubjectReferenceField = ["kit", "Ref"].join("");
     expect(subject).toBeDefined();
@@ -125,7 +125,7 @@ describe("AuthoringSpecV2", () => {
   });
 
   it("validates Package Subject Definitions independently", () => {
-    const packageWorld = createValidPackageSubjectWorldV2();
+    const packageWorld = createValidPackageSubjectWorld();
     const definition = packageWorld.resources.subjectDefinitions[0];
     expect(definition).toBeDefined();
 
@@ -138,7 +138,7 @@ describe("AuthoringSpecV2", () => {
   });
 
   it("rejects attempts to author computed Definition fields", () => {
-    const spec = createValidPackageSubjectWorldV2();
+    const spec = createValidPackageSubjectWorld();
     const definition = spec.resources.subjectDefinitions[0];
     expect(definition).toBeDefined();
     const result = validatePackageSubjectDefinition({
@@ -151,7 +151,7 @@ describe("AuthoringSpecV2", () => {
   });
 
   it("rejects non-finite primitive dimensions before semantic normalization", () => {
-    const definition = createValidPackageSubjectWorldV2().resources.subjectDefinitions[0];
+    const definition = createValidPackageSubjectWorld().resources.subjectDefinitions[0];
     expect(definition).toBeDefined();
     const firstPart = definition!.visualParts[0];
     expect(firstPart).toBeDefined();

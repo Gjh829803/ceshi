@@ -6,12 +6,12 @@ import {
 import { compileWorld } from "@whitebox-world/compiler";
 import type {
   CompileDiagnostic,
-  ExecutionPlanV3,
+  ExecutionPlanV4,
 } from "@whitebox-world/runtime-contracts";
 
 export interface AuthoringSceneLoadResult {
   ok: boolean;
-  executionPlan?: ExecutionPlanV3;
+  executionPlan?: ExecutionPlanV4;
   normalizedWorldIrHash?: string;
   executionPlanHash?: string;
   diagnostics: readonly (AuthoringDiagnostic | CompileDiagnostic)[];

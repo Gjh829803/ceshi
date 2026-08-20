@@ -34,6 +34,7 @@
     "test:watch": "vitest",
     "worldkit": "tsx scripts/worldkit.ts",
     "verify:canonical": "tsx scripts/verify-canonical-world.ts",
+    "verify:placement-layout": "tsx scripts/verify-placement-layout.ts",
     "verify:rigged-subject": "tsx scripts/verify-rigged-subject-world.ts"
   },
   "dependencies": {

@@ -15,7 +15,7 @@ import { sha256CanonicalJson } from "./canonical-json";
 import { ResourceLockBuilderV1 } from "./resource-lock";
 import type {
   AuthoringDiagnostic,
-  AuthoringSpecV2,
+  AuthoringDocumentBase,
   NormalizedSubjectColliderV2,
   NormalizedSubjectDefinitionV2,
   NormalizedSubjectSocketV2,
@@ -35,7 +35,7 @@ export interface NormalizeSubjectDefinitionRequestV2 {
   subjectResourceRegistry: SubjectResourceRegistryV2;
   resourceLockBuilder: ResourceLockBuilderV1;
   diagnostics: AuthoringDiagnostic[];
-  resourceBudget?: AuthoringSpecV2["world"]["resourceBudget"];
+  resourceBudget?: AuthoringDocumentBase["world"]["resourceBudget"];
 }
 
 interface NormalizedRiggedVisualResourcesV1 {

@@ -1,16 +1,28 @@
 {
   "kind": "worldkit-authoring-spec",
-  "schemaVersion": 2,
   "id": "invalid-world",
   "seed": 1024,
   "world": {
     "coordinateSystem": "right-handed-y-up-minus-z-forward",
     "bounds": {
-      "centerMetersXZ": [0, 0],
-      "sizeMetersXZ": [40, 40],
-      "heightRangeMeters": [-2, 4]
+      "centerMetersXZ": [
+        0,
+        0
+      ],
+      "sizeMetersXZ": [
+        40,
+        40
+      ],
+      "heightRangeMeters": [
+        -2,
+        4
+      ]
     },
-    "gravityMetersPerSecondSquaredXYZ": [0, -9.81, 0],
+    "gravityMetersPerSecondSquaredXYZ": [
+      0,
+      -9.81,
+      0
+    ],
     "environment": {
       "preset": "clear-day"
     },
@@ -35,9 +47,18 @@
             "relief": "flat"
           },
           "grid": {
-            "centerMetersXZ": [0, 0],
-            "sizeMetersXZ": [40, 40],
-            "resolutionCellsXZ": [17, 17]
+            "centerMetersXZ": [
+              0,
+              0
+            ],
+            "sizeMetersXZ": [
+              40,
+              40
+            ],
+            "resolutionCellsXZ": [
+              17,
+              17
+            ]
           }
         }
       }
@@ -45,11 +66,18 @@
     {
       "id": "spawn-main",
       "kind": "anchor",
-      "transform": {
-        "positionMetersXYZ": [0, 0, 8]
-      },
       "semantic": {
         "classId": "spawn.player"
+      },
+      "placement": {
+        "kind": "fixed",
+        "transform": {
+          "positionMetersXYZ": [
+            0,
+            0,
+            8
+          ]
+        }
       }
     },
     {
@@ -74,7 +102,8 @@
             "pitchRadians": 0.2,
             "distanceMeters": 5,
             "targetHeightMeters": 1,
-            "fovDegrees": 56
+            "fovDegrees": 56,
+            "aspectRatio": 1.7777777777777777
           },
           "manualSwitchAllowed": false
         }
@@ -88,6 +117,17 @@
     "controlledEntityId": "player",
     "cameraEntityId": "camera-main"
   },
-  "constraints": {},
-  "unknownFieldThatMustFail": true
+  "unknownFieldThatMustFail": true,
+  "schemaVersion": 3,
+  "layout": {
+    "solverProfileRef": "worldkit://layout-solver-profile/outdoor.s1@1"
+  },
+  "spatial": {
+    "regions": [],
+    "routes": [],
+    "screenRegions": []
+  },
+  "constraints": {
+    "placements": []
+  }
 }

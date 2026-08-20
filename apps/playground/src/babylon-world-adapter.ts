@@ -1,10 +1,11 @@
 import type {
   BindControlRequestV2,
   ControlBindingReceiptV2,
-  ExecutionPlanV3,
+  ExecutionPlanV4,
   FixedInputV1,
   SemanticInputActionV1,
   WorldRuntimeSnapshotV3,
+  WorldkitBrowserDiagnosticV1,
 } from "@whitebox-world/runtime-contracts";
 import {
   BabylonWorldRuntime,
@@ -100,7 +101,7 @@ export function activeActionForControlledSubject(
   return controlledSubject.activeActionId;
 }
 
-export function featureInspections(plan: ExecutionPlanV3): readonly FeatureInspection[] {
+export function featureInspections(plan: ExecutionPlanV4): readonly FeatureInspection[] {
   return [
     {
       id: plan.terrain.entityId,
@@ -199,7 +200,7 @@ export class BabylonWorldAdapter implements PlaygroundWorldAdapter {
   private animationPending = false;
 
   private constructor(
-    private readonly executionPlan: ExecutionPlanV3,
+    private readonly executionPlan: ExecutionPlanV4,
     private readonly runtime: BabylonWorldRuntime,
     canvas: HTMLCanvasElement,
   ) {
@@ -215,7 +216,7 @@ export class BabylonWorldAdapter implements PlaygroundWorldAdapter {
   }
 
   static async create(
-    executionPlan: ExecutionPlanV3,
+    executionPlan: ExecutionPlanV4,
     options: Pick<
       BabylonWorldRuntimeOptions,
       "subjectAssetResolver" | "subjectAssetCacheOptions"
@@ -302,6 +303,23 @@ export class BabylonWorldAdapter implements PlaygroundWorldAdapter {
     this.render();
     this.emit();
     return snapshot;
+  }
+
+  runtimeDiagnostics(): readonly WorldkitBrowserDiagnosticV1[] {
+    return this.executionPlan.layout.layoutAssertions.map((assertion, index) => ({
+      severity: "info",
+      code: "WORLDKIT_LAYOUT_ASSERTION_SATISFIED",
+      instancePath: `/layout/layoutAssertions/${index}`,
+      message: "Frozen layout assertion passed runtime validation.",
+      details: {
+        layoutSolveReportHash: this.executionPlan.layout.layoutSolveReportHash,
+        constraintId: assertion.constraintId,
+        kind: assertion.kind,
+        evidenceEntityIds: [...assertion.evidenceEntityIds],
+        measurements: structuredClone(assertion.measurements),
+        tolerances: structuredClone(assertion.tolerances),
+      },
+    }));
   }
 
   runtimeSnapshot(): WorldRuntimeSnapshotV3 {

@@ -250,9 +250,8 @@ export type WorldNodeSpecV2 =
   | CameraNodeSpecV2
   | AnchorNodeSpecV2;
 
-export interface AuthoringSpecV2 {
+export interface AuthoringDocumentBase {
   kind: "worldkit-authoring-spec";
-  schemaVersion: 2;
   id: string;
   seed: number;
   provenance?: {
@@ -283,7 +282,6 @@ export interface AuthoringSpecV2 {
     prototypes: readonly PrimitivePrototypeSpecV2[];
     subjectDefinitions: readonly PackageSubjectDefinitionV1[];
   };
-  nodes: readonly WorldNodeSpecV2[];
   relationships: readonly RelationshipSpecV1[];
   rules: readonly RuleSpecV1[];
   startup: {
@@ -291,15 +289,14 @@ export interface AuthoringSpecV2 {
     controlledEntityId: string;
     cameraEntityId: string;
   };
-  constraints: Record<string, never>;
 }
 
 export interface NormalizeAuthoringOptions {
   subjectResourceRegistry?: SubjectResourceRegistryV2;
 }
 
-export interface NormalizeAuthoringResult
-  extends AuthoringResult<NormalizedWorldIRV2> {
+export interface NormalizeAuthoringBaseResult
+  extends AuthoringResult<NormalizedWorldBase> {
   normalizedWorldIrHash?: string;
 }
 
@@ -526,14 +523,12 @@ export type NormalizedWorldNodeV2 =
       transform: NormalizedTransformV2;
     });
 
-export interface NormalizedWorldIRV2 {
-  kind: "worldkit-normalized-world";
-  schemaVersion: 2;
+export interface NormalizedWorldBase {
   id: string;
   seed: number;
-  provenance?: AuthoringSpecV2["provenance"];
-  world: AuthoringSpecV2["world"];
+  provenance?: AuthoringDocumentBase["provenance"];
+  world: AuthoringDocumentBase["world"];
   resources: NormalizedWorldResourcesV2;
   nodes: readonly NormalizedWorldNodeV2[];
-  startup: AuthoringSpecV2["startup"];
+  startup: AuthoringDocumentBase["startup"];
 }

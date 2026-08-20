@@ -3,18 +3,20 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 
 import {
-  createValidPackageSubjectWorldV2,
+  createValidPackageSubjectWorld,
   createValidRiggedPackageDefinition,
 } from "../packages/authoring/src/test-fixture";
 
 import { explainSubjectFile } from "./lib/subject-explain";
 import {
   buildFile,
+  captureVisibleWorldWithRetries,
   describeRegistryResource,
   listRegistryResources,
+  main,
   parseWorldkitArgs,
   validateFile,
   validateSubjectDefinitionFile,
@@ -33,7 +35,7 @@ async function writePackageWorld(directory: string): Promise<string> {
   const inputPath = path.join(directory, "package-world.json");
   await writeFile(
     inputPath,
-    JSON.stringify(createValidPackageSubjectWorldV2()),
+    JSON.stringify(createValidPackageSubjectWorld()),
     "utf8",
   );
   return inputPath;
@@ -52,6 +54,33 @@ afterEach(async () => {
 });
 
 describe("worldkit CLI", () => {
+  it("retries background-only browser captures and stops at the first visible world", async () => {
+    const sampledRgbColorCounts = [1, 2, 4];
+    let attempts = 0;
+
+    await expect(
+      captureVisibleWorldWithRetries(async () => ({
+        sampledRgbColorCount: sampledRgbColorCounts[attempts++]!,
+        screenshotDataUrl: `capture-${attempts}`,
+      }), 4),
+    ).resolves.toEqual({
+      sampledRgbColorCount: 4,
+      screenshotDataUrl: "capture-3",
+    });
+    expect(attempts).toBe(3);
+  });
+
+  it("fails after the bounded visible-world capture attempts", async () => {
+    let attempts = 0;
+    await expect(
+      captureVisibleWorldWithRetries(async () => {
+        attempts += 1;
+        return { sampledRgbColorCount: 1 };
+      }, 3),
+    ).rejects.toThrow("WORLDKIT_CAPTURE_VISIBLE_WORLD_MISSING");
+    expect(attempts).toBe(3);
+  });
+
   it("parses discovery and explain commands without positional guessing", () => {
     expect(
       parseWorldkitArgs([
@@ -64,6 +93,43 @@ describe("worldkit CLI", () => {
     ).toEqual({
       command: "registry-list",
       resourceKind: "subject-definition",
+      json: true,
+    });
+    expect(
+      parseWorldkitArgs(["layout", "validate", "world.json", "--json"]),
+    ).toEqual({
+      command: "layout-validate",
+      inputPath: "world.json",
+      json: true,
+    });
+    expect(
+      parseWorldkitArgs([
+        "layout",
+        "solve",
+        "world.json",
+        "--output",
+        "layout-output",
+        "--json",
+      ]),
+    ).toEqual({
+      command: "layout-solve",
+      inputPath: "world.json",
+      outputPath: "layout-output",
+      json: true,
+    });
+    expect(
+      parseWorldkitArgs([
+        "layout",
+        "explain",
+        "layout-report.json",
+        "--constraint-id",
+        "tower-clearance",
+        "--json",
+      ]),
+    ).toEqual({
+      command: "layout-explain",
+      inputPath: "layout-report.json",
+      constraintId: "tower-clearance",
       json: true,
     });
     expect(
@@ -125,6 +191,66 @@ describe("worldkit CLI", () => {
     expect(() =>
       parseWorldkitArgs(["subject", "explain", "world.json"]),
     ).toThrow(WorldkitUsageError);
+    expect(() =>
+      parseWorldkitArgs([
+        "layout",
+        "explain",
+        "report.json",
+        "--entity-id",
+        "tower",
+        "--constraint-id",
+        "tower-clearance",
+      ]),
+    ).toThrow("exactly one of --entity-id or --constraint-id");
+    expect(() =>
+      parseWorldkitArgs(["layout", "solve", "world.json"]),
+    ).toThrow("layout solve requires --output <directory>");
+  });
+
+  it("prints one canonical JSON result and keeps stderr empty for layout commands", async () => {
+    const directory = await createTemporaryDirectory();
+    const inputPath = await writePackageWorld(directory);
+    const outputPath = path.join(directory, "layout");
+    let stdout = "";
+    let stderr = "";
+    const stdoutWrite = vi
+      .spyOn(process.stdout, "write")
+      .mockImplementation((chunk) => {
+        stdout += String(chunk);
+        return true;
+      });
+    const stderrWrite = vi
+      .spyOn(process.stderr, "write")
+      .mockImplementation((chunk) => {
+        stderr += String(chunk);
+        return true;
+      });
+    try {
+      await expect(
+        main([
+          "layout",
+          "solve",
+          inputPath,
+          "--output",
+          outputPath,
+          "--json",
+        ]),
+      ).resolves.toBe(0);
+    } finally {
+      stdoutWrite.mockRestore();
+      stderrWrite.mockRestore();
+    }
+
+    expect(stderr).toBe("");
+    expect(stdout.endsWith("\n")).toBe(true);
+    expect(stdout.trim().split("\n")).toHaveLength(1);
+    expect(JSON.parse(stdout)).toMatchObject({
+      ok: true,
+      exitCode: 0,
+      kind: "worldkit-layout-solve",
+      status: "solved",
+      outputPath,
+    });
   });
 
   it("lists and describes immutable Registry resources in stable order", () => {
@@ -215,7 +341,7 @@ describe("worldkit CLI", () => {
   it("validates a standalone Definition through canonical derivation", async () => {
     const directory = await createTemporaryDirectory();
     const definitionPath = path.join(directory, "definition.json");
-    const definition = createValidPackageSubjectWorldV2().resources
+    const definition = createValidPackageSubjectWorld().resources
       .subjectDefinitions[0]!;
     await writeFile(definitionPath, JSON.stringify(definition), "utf8");
 
@@ -280,7 +406,7 @@ describe("worldkit CLI", () => {
     await writeFile(
       invalidPath,
       JSON.stringify({
-        ...createValidPackageSubjectWorldV2().resources.subjectDefinitions[0],
+        ...createValidPackageSubjectWorld().resources.subjectDefinitions[0],
         unexpectedField: true,
       }),
       "utf8",
@@ -407,7 +533,7 @@ describe("worldkit CLI", () => {
     });
   });
 
-  it("validates V2 files and builds deterministic V3 artifacts", async () => {
+  it("validates V3 files and builds deterministic V3/V4 artifacts", async () => {
     const directory = await createTemporaryDirectory();
     const inputPath = await writePackageWorld(directory);
     const outputPath = path.join(directory, "dist", "world.build.json");
@@ -426,9 +552,9 @@ describe("worldkit CLI", () => {
     expect(artifact).toMatchObject({
       kind: "worldkit-build-artifact",
       schemaVersion: 3,
-      normalizedWorldIr: { schemaVersion: 2 },
+      normalizedWorldIr: { schemaVersion: 3 },
       executionPlan: {
-        schemaVersion: 3,
+        schemaVersion: 4,
         runtimeBackend: "babylon-havok",
         controlledEntityId: "player",
       },

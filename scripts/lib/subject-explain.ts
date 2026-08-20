@@ -106,7 +106,7 @@ export async function explainSubjectFile(
   if (definition === undefined) {
     return cliFailure(
       "SUBJECT_DEFINITION_NOT_FOUND",
-      `Resolved Subject Definition '${executionSubject.subjectDefinitionRef}' is missing from NormalizedWorldIRV2.`,
+      `Resolved Subject Definition '${executionSubject.subjectDefinitionRef}' is missing from NormalizedWorldIRV3.`,
       {
         entityId,
         subjectDefinitionRef: executionSubject.subjectDefinitionRef,

@@ -10,6 +10,7 @@ import {
 } from "@whitebox-world/runtime-contracts";
 
 export interface DeferredWorldkitBrowserRuntimeAdapterV1 {
+  runtimeDiagnostics(): readonly WorldkitBrowserDiagnosticV1[];
   runtimeSnapshot(): WorldRuntimeSnapshotV3;
   bindControl(request: BindControlRequestV2): ControlBindingReceiptV2;
   runWorldkitFixedInput(
@@ -43,6 +44,7 @@ export interface DeferredWorldkitBrowserApiInstallationV1 {
 
 type BrowserStartupErrorCodeV1 =
   | SubjectAssetRuntimeErrorCodeV1
+  | "WORLDKIT_LAYOUT_ASSERTION_FAILED"
   | "WORLDKIT_RUNTIME_INITIALIZATION_FAILED"
   | "WORLDKIT_RUNTIME_NOT_READY";
 
@@ -86,12 +88,21 @@ function genericStartupError(): WorldkitBrowserStartupErrorV1 {
 async function sanitizeStartupError(
   error: unknown,
 ): Promise<WorldkitBrowserStartupErrorV1> {
-  let guardedCode: SubjectAssetRuntimeErrorCodeV1 | undefined;
+  let guardedCode:
+    | SubjectAssetRuntimeErrorCodeV1
+    | "WORLDKIT_LAYOUT_ASSERTION_FAILED"
+    | undefined;
   try {
-    const { isSubjectAssetRuntimeErrorV1 } = await import(
+    const {
+      isSubjectAssetRuntimeErrorV1,
+      isWorldRuntimeLayoutAssertionErrorV1,
+    } = await import(
       "@whitebox-world/runtime-babylon"
     );
     if (isSubjectAssetRuntimeErrorV1(error)) guardedCode = error.code;
+    else if (isWorldRuntimeLayoutAssertionErrorV1(error)) {
+      guardedCode = error.code;
+    }
   } catch {
     return genericStartupError();
   }
@@ -100,9 +111,19 @@ async function sanitizeStartupError(
     severity: "error",
     code: guardedCode,
     instancePath: "",
-    message: "Subject Asset runtime initialization failed.",
+    message: guardedCode === "WORLDKIT_LAYOUT_ASSERTION_FAILED"
+      ? "Worldkit layout assertion validation failed."
+      : "Subject Asset runtime initialization failed.",
   });
   return new WorldkitBrowserStartupErrorV1(guardedCode, diagnostic);
+}
+
+function deepFreeze<T>(value: T): T {
+  if (value === null || typeof value !== "object" || Object.isFrozen(value)) {
+    return value;
+  }
+  for (const child of Object.values(value)) deepFreeze(child);
+  return Object.freeze(value);
 }
 
 export function installDeferredWorldkitBrowserApi(options: {
@@ -176,6 +197,11 @@ export function installDeferredWorldkitBrowserApi(options: {
         throw new Error("Browser Runtime Adapter ownership changed during startup.");
       }
       trackedAdapter = adapter;
+      diagnostics = Object.freeze(
+        adapter.runtimeDiagnostics().map((diagnostic) =>
+          deepFreeze(structuredClone(diagnostic)),
+        ),
+      );
       const snapshot = adapter.runtimeSnapshot();
       state = "ready";
       options.statusElement.dataset.worldkitStatus = "ready";

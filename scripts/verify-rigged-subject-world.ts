@@ -19,10 +19,10 @@ import {
 
 import {
   stringifyCanonicalJson,
-  type NormalizedWorldIRV2,
+  type NormalizedWorldIRV3,
 } from "@whitebox-world/authoring";
 import type {
-  ExecutionPlanV3,
+  ExecutionPlanV4,
   SubjectRuntimeStateV3,
   Vec3,
   WorldRuntimeSnapshotV3,
@@ -86,8 +86,8 @@ interface WorldBuildArtifactV3 {
   schemaVersion: 3;
   normalizedWorldIrHash: string;
   executionPlanHash: string;
-  normalizedWorldIr: NormalizedWorldIRV2;
-  executionPlan: ExecutionPlanV3;
+  normalizedWorldIr: NormalizedWorldIRV3;
+  executionPlan: ExecutionPlanV4;
 }
 
 interface ArtifactPaths {
@@ -286,6 +286,8 @@ async function runCliGates(paths: ArtifactPaths): Promise<WorldBuildArtifactV3> 
   );
   assert.equal(artifact.kind, "worldkit-build-artifact");
   assert.equal(artifact.schemaVersion, 3);
+  assert.equal(artifact.normalizedWorldIr.schemaVersion, 3);
+  assert.equal(artifact.executionPlan.schemaVersion, 4);
   assert.equal(artifact.executionPlan.runtimeBackend, "babylon-havok");
   assert.equal(artifact.executionPlan.controlledEntityId, PRIMARY_ENTITY_ID);
   assert.deepEqual(

@@ -18,10 +18,14 @@ import type {
   BindControlRequestV2,
   ControlBindingReceiptV2,
   ExecutionObjectV3,
-  ExecutionPlanV3,
+  ExecutionLayoutAssertionV1,
+  ExecutionLayoutPlacementV1,
+  ExecutionPlanV4,
   ExecutionWaterBoundaryV3,
   ExecutionWaterV3,
   FixedInputV1,
+  Vec2,
+  Vec3,
   WorldRuntimeSessionV3,
   WorldRuntimeSnapshotV3,
 } from "@whitebox-world/runtime-contracts";
@@ -45,7 +49,7 @@ import {
 } from "./terrain";
 
 export interface BabylonWorldRuntimeOptions {
-  executionPlan: ExecutionPlanV3;
+  executionPlan: ExecutionPlanV4;
   canvas?: HTMLCanvasElement;
   engineFactory?: () => AbstractEngine;
   autoStartRenderLoop?: boolean;
@@ -63,6 +67,168 @@ class WorldRuntimeDisposeErrorV1 extends Error {
 
   constructor() {
     super("WORLDKIT_RUNTIME_DISPOSE_FAILED: Runtime cleanup failed.");
+  }
+}
+
+export class WorldRuntimeLayoutAssertionErrorV1 extends Error {
+  readonly name = "WorldRuntimeLayoutAssertionErrorV1";
+  readonly code = "WORLDKIT_LAYOUT_ASSERTION_FAILED" as const;
+
+  constructor() {
+    super("WORLDKIT_LAYOUT_ASSERTION_FAILED: A frozen layout assertion failed.");
+  }
+}
+
+export function isWorldRuntimeLayoutAssertionErrorV1(
+  value: unknown,
+): value is WorldRuntimeLayoutAssertionErrorV1 {
+  return value instanceof WorldRuntimeLayoutAssertionErrorV1 &&
+    value.code === "WORLDKIT_LAYOUT_ASSERTION_FAILED";
+}
+
+interface RuntimeLayoutBoundsV1 {
+  readonly minimumMetersXYZ: Vec3;
+  readonly maximumMetersXYZ: Vec3;
+}
+
+function runtimeLayoutBounds(
+  executionPlan: ExecutionPlanV4,
+  placement: ExecutionLayoutPlacementV1,
+): RuntimeLayoutBoundsV1 {
+  const object = executionPlan.objects.find((row) => row.entityId === placement.entityId);
+  const halfExtents = object === undefined
+    ? [0, 0, 0] as const
+    : object.primitive.kind === "box"
+      ? object.primitive.sizeMetersXYZ.map((value) => value / 2) as [number, number, number]
+      : object.primitive.kind === "sphere"
+        ? [object.primitive.radiusMeters, object.primitive.radiusMeters, object.primitive.radiusMeters] as const
+        : [object.primitive.radiusMeters, object.primitive.heightMeters / 2, object.primitive.radiusMeters] as const;
+  const scaled = halfExtents.map((value, axis) =>
+    value * placement.transform.scaleXYZ[axis]!
+  ) as [number, number, number];
+  const [x, y, z] = placement.transform.rotationEulerRadiansXYZ;
+  const cx = Math.cos(x);
+  const sx = Math.sin(x);
+  const cy = Math.cos(y);
+  const sy = Math.sin(y);
+  const cz = Math.cos(z);
+  const sz = Math.sin(z);
+  const rotation = [
+    [cz * cy, cz * sy * sx - sz * cx, cz * sy * cx + sz * sx],
+    [sz * cy, sz * sy * sx + cz * cx, sz * sy * cx - cz * sx],
+    [-sy, cy * sx, cy * cx],
+  ] as const;
+  const rotated = rotation.map((row) => row.reduce(
+    (sum, coefficient, axis) => sum + Math.abs(coefficient) * scaled[axis]!,
+    0,
+  )) as [number, number, number];
+  return {
+    minimumMetersXYZ: placement.transform.positionMetersXYZ.map((value, axis) =>
+      value - rotated[axis]!
+    ) as unknown as Vec3,
+    maximumMetersXYZ: placement.transform.positionMetersXYZ.map((value, axis) =>
+      value + rotated[axis]!
+    ) as unknown as Vec3,
+  };
+}
+
+function runtimeSupportSamples(bounds: RuntimeLayoutBoundsV1): readonly Vec2[] {
+  const minimum = bounds.minimumMetersXYZ;
+  const maximum = bounds.maximumMetersXYZ;
+  return [
+    [(minimum[0] + maximum[0]) / 2, (minimum[2] + maximum[2]) / 2],
+    [minimum[0], minimum[2]],
+    [maximum[0], minimum[2]],
+    [maximum[0], maximum[2]],
+    [minimum[0], maximum[2]],
+  ];
+}
+
+function runtimeAabbSeparation(
+  left: RuntimeLayoutBoundsV1,
+  right: RuntimeLayoutBoundsV1,
+): number {
+  const distances = [0, 1, 2].map((axis) => Math.max(
+    0,
+    right.minimumMetersXYZ[axis]! - left.maximumMetersXYZ[axis]!,
+    left.minimumMetersXYZ[axis]! - right.maximumMetersXYZ[axis]!,
+  ));
+  return Math.hypot(...distances);
+}
+
+function runtimeAabbsOverlap(
+  left: RuntimeLayoutBoundsV1,
+  right: RuntimeLayoutBoundsV1,
+): boolean {
+  return [0, 1, 2].every((axis) =>
+    Math.min(left.maximumMetersXYZ[axis]!, right.maximumMetersXYZ[axis]!) -
+      Math.max(left.minimumMetersXYZ[axis]!, right.minimumMetersXYZ[axis]!) > 0
+  );
+}
+
+function revalidateSupportAssertion(
+  executionPlan: ExecutionPlanV4,
+  assertion: Extract<ExecutionLayoutAssertionV1, { kind: "supported-by" }>,
+  boundsByEntityId: Readonly<Record<string, RuntimeLayoutBoundsV1>>,
+): boolean {
+  const supported = boundsByEntityId[assertion.supportedEntityId];
+  if (supported === undefined) return false;
+  const supportGapTolerance = assertion.tolerances.supportGapMeters ?? 0;
+  const bottom = supported.minimumMetersXYZ[1];
+  if (assertion.supportingEntityId === executionPlan.terrain.entityId) {
+    const gaps = runtimeSupportSamples(supported).map((point) => Math.abs(
+      bottom - sampleExecutionTerrainHeight(executionPlan.terrain, point[0], point[1])
+    ));
+    const passing = gaps.filter((gap) =>
+      gap <= assertion.maximumSupportGapMeters + supportGapTolerance
+    ).length;
+    return Math.max(...gaps) <= assertion.maximumSupportGapMeters + supportGapTolerance &&
+      passing / gaps.length + 0.000001 >= assertion.minimumSupportRatio;
+  }
+  const supporting = boundsByEntityId[assertion.supportingEntityId];
+  if (supporting === undefined) return false;
+  const overlapX = Math.max(0, Math.min(supported.maximumMetersXYZ[0], supporting.maximumMetersXYZ[0]) - Math.max(supported.minimumMetersXYZ[0], supporting.minimumMetersXYZ[0]));
+  const overlapZ = Math.max(0, Math.min(supported.maximumMetersXYZ[2], supporting.maximumMetersXYZ[2]) - Math.max(supported.minimumMetersXYZ[2], supporting.minimumMetersXYZ[2]));
+  const area = (supported.maximumMetersXYZ[0] - supported.minimumMetersXYZ[0]) *
+    (supported.maximumMetersXYZ[2] - supported.minimumMetersXYZ[2]);
+  const ratio = area === 0 ? 0 : overlapX * overlapZ / area;
+  const gap = Math.abs(bottom - supporting.maximumMetersXYZ[1]);
+  return gap <= assertion.maximumSupportGapMeters + supportGapTolerance &&
+    ratio + 0.000001 >= assertion.minimumSupportRatio;
+}
+
+function revalidateClearanceAssertion(
+  assertion: Extract<ExecutionLayoutAssertionV1, { kind: "minimum-clearance" }>,
+  executionPlan: ExecutionPlanV4,
+  boundsByEntityId: Readonly<Record<string, RuntimeLayoutBoundsV1>>,
+): boolean {
+  const entity = boundsByEntityId[assertion.entityId];
+  if (entity === undefined) return false;
+  const targetIds = assertion.otherEntityIds ?? assertion.evidenceEntityIds
+    .filter((entityId) => entityId !== assertion.entityId);
+  if (targetIds.length === 0) return false;
+  let minimumClearance = Number.POSITIVE_INFINITY;
+  for (const targetId of targetIds) {
+    const target = boundsByEntityId[targetId];
+    if (target === undefined || runtimeAabbsOverlap(entity, target)) return false;
+    minimumClearance = Math.min(minimumClearance, runtimeAabbSeparation(entity, target));
+  }
+  return minimumClearance + (assertion.tolerances.overlapMeters ?? 0) >= assertion.clearanceMeters;
+}
+
+function revalidateRuntimeLayoutAssertions(executionPlan: ExecutionPlanV4): void {
+  const placements = Object.values(executionPlan.layout.placementsByEntityId);
+  const boundsByEntityId = Object.fromEntries(placements.map((placement) => [
+    placement.entityId,
+    runtimeLayoutBounds(executionPlan, placement),
+  ]));
+  for (const assertion of executionPlan.layout.layoutAssertions) {
+    const satisfied = assertion.kind === "supported-by"
+      ? revalidateSupportAssertion(executionPlan, assertion, boundsByEntityId)
+      : assertion.kind === "minimum-clearance"
+        ? revalidateClearanceAssertion(assertion, executionPlan, boundsByEntityId)
+        : true;
+    if (!satisfied) throw new WorldRuntimeLayoutAssertionErrorV1();
   }
 }
 
@@ -187,7 +353,7 @@ function containsPoint(boundary: ExecutionWaterBoundaryV3, x: number, z: number)
 }
 
 function movementMediumAtSubjectOrigin(
-  executionPlan: ExecutionPlanV3,
+  executionPlan: ExecutionPlanV4,
   subjectOrigin: Vector3,
 ): "ground" | "air" | "water" {
   for (const water of executionPlan.waters) {
@@ -208,7 +374,7 @@ function movementMediumAtSubjectOrigin(
   return subjectOrigin.y <= groundHeight + 0.16 ? "ground" : "air";
 }
 
-function configureAtmosphere(scene: Scene, preset: ExecutionPlanV3["atmospherePreset"]): void {
+function configureAtmosphere(scene: Scene, preset: ExecutionPlanV4["atmospherePreset"]): void {
   const colors = {
     "clear-day": new Color4(0.55, 0.78, 0.92, 1),
     "golden-hour": new Color4(0.91, 0.65, 0.42, 1),
@@ -257,7 +423,7 @@ export class BabylonWorldRuntime implements WorldRuntimeSessionV3 {
   private readonly ownedDisposers: readonly OwnedDisposer[];
 
   private constructor(
-    private readonly executionPlan: ExecutionPlanV3,
+    private readonly executionPlan: ExecutionPlanV4,
     private readonly engine: AbstractEngine,
     private readonly scene: Scene,
     subjectControllersByEntityId: ReadonlyMap<string, SubjectController>,
@@ -363,6 +529,8 @@ export class BabylonWorldRuntime implements WorldRuntimeSessionV3 {
           ownedDisposers.push(() => aggregate.dispose());
         }
       }
+
+      revalidateRuntimeLayoutAssertions(options.executionPlan);
 
       const subjectAssetCache = new SubjectAssetCacheV1(
         scene,
