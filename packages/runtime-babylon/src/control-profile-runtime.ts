@@ -17,6 +17,7 @@ export type MotionCommandV1 =
       steering: number;
       brakeRequested: boolean;
       jumpRequested: boolean;
+      boostRequested: boolean;
     }
   | {
       kind: "flight-attitude";
@@ -75,9 +76,9 @@ export function compileMotionCommandV1(
       kind: "throttle-steer",
       throttle: clampUnit(longitudinal),
       steering: clampUnit(lateral),
-      brakeRequested:
-        longitudinal === 0 && hasAction(actions, "move-backward"),
+      brakeRequested: hasAction(actions, "jump"),
       jumpRequested: hasAction(actions, "jump"),
+      boostRequested: hasAction(actions, "run"),
     };
   }
   return {

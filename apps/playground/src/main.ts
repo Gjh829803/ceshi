@@ -8,7 +8,14 @@ import type {
   WorldSnapshot,
 } from "./playground-world.js";
 import type { BabylonWorldAdapter } from "./babylon-world-adapter.js";
-import type { WorldkitBrowserApiV3 } from "@whitebox-world/runtime-contracts";
+import type {
+  CameraTuningV1,
+  CompatibleProfileSummaryV1,
+  MotionKernelSummaryV1,
+  SemanticInputActionV1,
+  SubjectDefinitionSummaryV1,
+  WorldkitBrowserApiV3,
+} from "@whitebox-world/runtime-contracts";
 import { createFetchSubjectAssetResolver, PLAYGROUND_CAPABILITY_SUBJECT_ASSET_URI_BY_REF_V1 } from "./worldkit-asset-resolver.js";
 import { installDeferredWorldkitBrowserApi } from "./worldkit-browser-api.js";
 
@@ -37,6 +44,7 @@ app.innerHTML = `
       </div>
       <div class="topbar-actions">
         <span class="status"><i></i><span id="adapter-name">adapter</span></span>
+        ${authoringMode ? '<button class="button button-tuning" id="open-tuning-button" type="button" hidden>打开调控台</button>' : ''}
         <button class="button button-subtle" id="reset-button" type="button">重置世界</button>
         <button class="button button-record" id="record-button" type="button" aria-pressed="false" title="仅录制 3D 渲染画面，不包含界面">
           <i class="record-dot" aria-hidden="true"></i><span id="record-label">录制画面</span>
@@ -105,6 +113,7 @@ app.innerHTML = `
           <label>Camera Preference<select id="camera-preference-select"></select></label>
           <div class="parameter-drafts" id="parameter-drafts"></div>
           <div class="capability-actions">
+            <button class="capability-open-button" id="open-tuning-panel-button" type="button">打开大尺寸调控台</button>
             <button id="fallback-button" type="button">注入 Safe Fallback</button>
             <button id="harness-button" type="button">运行 H01–H09</button>
             <button id="export-package-button" type="button">导出配置 JSON</button>
@@ -114,6 +123,58 @@ app.innerHTML = `
       </aside>
     </section>
   </main>
+  ${authoringMode ? `
+    <div class="tuning-layer" id="tuning-layer" hidden>
+      <aside class="tuning-workbench" aria-labelledby="tuning-title">
+        <header class="tuning-header">
+          <div>
+            <p class="eyebrow">SUBJECT & CAMERA WORKBENCH</p>
+            <h2 id="tuning-title">主体与相机调控台</h2>
+            <p>选择、试跑、调整、导出都集中在这里。左侧世界画面仍然可以直接操作。</p>
+          </div>
+          <button class="tuning-close" id="close-tuning-button" type="button" aria-label="关闭调控台">×</button>
+        </header>
+        <nav class="tuning-nav" aria-label="调控台章节">
+          <a href="#tuning-subject">选择主体</a>
+          <a href="#tuning-input">操作测试</a>
+          <a href="#tuning-motion">运动手感</a>
+          <a href="#tuning-camera">相机</a>
+          <a href="#tuning-delivery">检查与导出</a>
+        </nav>
+        <div class="tuning-content">
+          <section class="tuning-section" id="tuning-subject">
+            <div class="tuning-section-heading"><span>01</span><div><h3>先选择要调的主体</h3><p>切换主体会重新载入对应的白膜、运动规律和默认镜头。</p></div></div>
+            <label class="friendly-field">主体预制<select id="tuning-subject-select"></select></label>
+            <div class="friendly-summary" id="tuning-subject-summary"></div>
+          </section>
+          <section class="tuning-section" id="tuning-input">
+            <div class="tuning-section-heading"><span>02</span><div><h3>直接试一下操作</h3><p>键盘和下面的按钮会走同一套输入链路，按钮适合快速确认配置是否正确。</p></div></div>
+            <div class="input-capability-grid" id="tuning-input-capabilities"></div>
+            <div class="tuning-inline-status" id="tuning-input-status">等待试跑</div>
+          </section>
+          <section class="tuning-section" id="tuning-motion">
+            <div class="tuning-section-heading"><span>03</span><div><h3>调整运动手感</h3><p>所有滑杆都被限制在安全范围内。当前版本先保存为策划草稿，导出后由 Registry 编译生效。</p></div></div>
+            <div class="friendly-slider-grid" id="tuning-motion-sliders"></div>
+          </section>
+          <section class="tuning-section" id="tuning-camera">
+            <div class="tuning-section-heading"><span>04</span><div><h3>选择并微调相机</h3><p>7 套预制共享同一套拖动、旋转、平滑和碰撞保护；第一人称不使用滚轮距离。</p></div></div>
+            <div class="camera-instructions"><span>鼠标左键拖动</span>旋转镜头 <span>滚轮</span>拉近或拉远 <button id="reset-camera-view-button" type="button">镜头回正</button></div>
+            <div class="camera-card-grid" id="tuning-camera-cards"></div>
+            <div class="friendly-slider-grid camera-tuning-grid" id="tuning-camera-sliders"></div>
+          </section>
+          <section class="tuning-section" id="tuning-delivery">
+            <div class="tuning-section-heading"><span>05</span><div><h3>检查并导出</h3><p>先跑一次自动检查，再把主体、运动草稿、输入说明和相机配置一起导出。</p></div></div>
+            <div class="delivery-actions">
+              <button id="tuning-harness-button" type="button">运行自动检查</button>
+              <button class="primary" id="tuning-export-button" type="button">导出配置 JSON</button>
+            </div>
+            <pre class="friendly-result" id="tuning-result">尚未运行检查</pre>
+          </section>
+        </div>
+        <footer class="tuning-footer"><span id="tuning-save-status">更改会自动保存在本机草稿中</span><button id="tuning-export-footer-button" type="button">导出当前配置</button></footer>
+      </aside>
+    </div>
+  ` : ''}
 `;
 
 function requiredElement<T extends Element>(selector: string): T {
@@ -187,6 +248,363 @@ function navigateToSubjectPackage(subjectDefinitionRef: string): void {
   next.searchParams.set("subjectDefinitionRef", subjectDefinitionRef);
   next.searchParams.set("uiRecovery", String(Date.now()));
   window.location.assign(next);
+}
+
+const FRIENDLY_MOTION_PARAMETERS: Readonly<Record<string, readonly [string, string]>> = {
+  walkSpeedMetersPerSecond: ["普通移动速度", "不按 Shift 时的移动速度"],
+  runSpeedMetersPerSecond: ["加速移动速度", "按住 Shift 时的移动速度"],
+  forwardSpeedMetersPerSecond: ["最高前进速度", "持续向前时可以达到的速度"],
+  reverseSpeedMetersPerSecond: ["最高倒退速度", "持续倒退时可以达到的速度"],
+  maximumSpeedMetersPerSecond: ["最高速度", "限制主体不会无限加速"],
+  minimumForwardSpeedMetersPerSecond: ["最低滑翔速度", "低于它时会更容易下坠"],
+  maximumForwardSpeedMetersPerSecond: ["最高滑翔速度", "滑翔过程的速度上限"],
+  jumpSpeedMetersPerSecond: ["跳跃力度", "数值越高，起跳高度越高"],
+  accelerationMetersPerSecondSquared: ["起步灵敏度", "数值越高，达到目标速度越快"],
+  driveAccelerationMetersPerSecondSquared: ["推进力度", "数值越高，滑行起步越快"],
+  glideAccelerationMetersPerSecondSquared: ["滑翔加速", "向前滑翔时累积速度的快慢"],
+  decelerationMetersPerSecondSquared: ["松手减速", "松开方向键后停下来的快慢"],
+  brakeMetersPerSecondSquared: ["制动力度", "按空格制动时停下来的快慢"],
+  turnRateRadiansPerSecond: ["转向速度", "数值越高，转弯越灵敏"],
+  lowSpeedTurnRateRadiansPerSecond: ["低速转向", "慢速时方向盘的灵敏度"],
+  highSpeedTurnRateRadiansPerSecond: ["高速转向", "高速时方向盘的灵敏度"],
+  pitchRateRadiansPerSecond: ["俯仰速度", "抬头和俯冲的反应速度"],
+  yawRateRadiansPerSecond: ["偏航速度", "左右改变飞行方向的反应速度"],
+  rollRateRadiansPerSecond: ["倾斜速度", "机体左右倾斜的反应速度"],
+  dragPerSecond: ["移动阻力", "数值越高，松手后越快慢下来"],
+  surfaceFrictionPerSecond: ["地面摩擦", "数值越低，冰面滑行距离越长"],
+  airControlRatio: ["空中控制力", "跳起后还能改变方向的程度"],
+  gravityScale: ["重力影响", "数值越高，下坠越明显"],
+  liftRatio: ["升力效率", "速度转换为升力的效率"],
+  slopeGravityRatio: ["坡度影响", "斜坡对滑行加速的影响程度"],
+  surfaceHoldStrengthPerSecond: ["贴水稳定度", "主体保持在水面附近的力度"],
+  stallSpeedMetersPerSecond: ["失速速度", "低于它时升力明显不足"],
+  boostMultiplier: ["Shift 加速倍率", "按住 Shift 后速度放大的倍数"],
+};
+
+const FRIENDLY_CAMERA_PROFILES: Readonly<Record<string, readonly [string, string]>> = {
+  "worldkit://camera-profile/first-person.standard@1": ["标准第一人称", "从角色视点观察，适合沉浸和近距离检查"],
+  "worldkit://camera-profile/orbit.medium@1": ["自由环绕", "通用第三人称，可拖动查看主体四周"],
+  "worldkit://camera-profile/follow.medium@1": ["稳定跟随", "跟在主体后方，转向变化更柔和"],
+  "worldkit://camera-profile/chase.surface-fast@1": ["高速追逐", "速度越高看得越远，适合载具和滑行"],
+  "worldkit://camera-profile/follow.water-surface@1": ["水面跟随", "变化较慢，尽量保留水面与地平线"],
+  "worldkit://camera-profile/flight.glide@1": ["滑翔视角", "保持地平线稳定，同时预看飞行方向"],
+  "worldkit://camera-profile/follow.mounted@1": ["乘坐跟随", "面向骑乘、驾驶和座位组合的中距离镜头"],
+};
+
+function subjectFriendlyName(definition: SubjectDefinitionSummaryV1): string {
+  if (definition.semanticClassId.includes("humanoid")) return "G Bot 人形角色";
+  if (definition.semanticClassId.includes("quadruped")) return "四足角色白膜";
+  if (definition.semanticClassId.includes("four-wheel")) return "四轮载具白膜";
+  if (definition.semanticClassId.includes("ice-skimmer")) return "冰面滑行器白膜";
+  if (definition.semanticClassId.includes("kayak")) return "皮划艇白膜";
+  if (definition.semanticClassId.includes("paraglider")) return "滑翔伞白膜";
+  return definition.displayName;
+}
+
+function kernelFriendlyName(kernel: MotionKernelSummaryV1 | undefined): string {
+  if (kernel === undefined) return "等待运行时确认";
+  const names: Readonly<Record<string, string>> = {
+    "worldkit://motion-kernel/free-ground@1": "自由地面移动",
+    "worldkit://motion-kernel/forward-steer@1": "面向前方的行走与转向",
+    "worldkit://motion-kernel/wheeled-arcade@1": "街机式四轮驾驶",
+    "worldkit://motion-kernel/surface-slide@1": "低摩擦表面滑行",
+    "worldkit://motion-kernel/water-surface@1": "水面推进与转向",
+    "worldkit://motion-kernel/unpowered-glide@1": "无动力滑翔",
+  };
+  return names[kernel.resourceRef] ?? kernel.displayName;
+}
+
+function downloadJson(filename: string, payload: unknown): void {
+  const blob = new Blob([`${JSON.stringify(payload, null, 2)}\n`], {
+    type: "application/json",
+  });
+  const link = document.createElement("a");
+  link.href = URL.createObjectURL(blob);
+  link.download = filename;
+  link.click();
+  window.setTimeout(() => URL.revokeObjectURL(link.href), 0);
+}
+
+interface TuningWorkbenchContextV1 {
+  definitions: readonly SubjectDefinitionSummaryV1[];
+  definition: SubjectDefinitionSummaryV1;
+  activeKernel: MotionKernelSummaryV1 | undefined;
+  motionProfiles: readonly CompatibleProfileSummaryV1[];
+  cameraProfiles: readonly CompatibleProfileSummaryV1[];
+  parameterDraft: Record<string, number | boolean>;
+  motionDraftStorageKey: string;
+  controlledEntityId: string;
+  initialCameraPreference: string;
+}
+
+function installTuningWorkbench(
+  api: WorldkitBrowserApiV3,
+  workbenchContext: TuningWorkbenchContextV1,
+): void {
+  const layer = requiredElement<HTMLDivElement>("#tuning-layer");
+  const openButtons = [
+    requiredElement<HTMLButtonElement>("#open-tuning-button"),
+    requiredElement<HTMLButtonElement>("#open-tuning-panel-button"),
+  ];
+  const closeButton = requiredElement<HTMLButtonElement>("#close-tuning-button");
+  const saveStatus = requiredElement<HTMLSpanElement>("#tuning-save-status");
+  const showWorkbench = (): void => {
+    layer.hidden = false;
+    document.body.classList.add("tuning-open");
+  };
+  const hideWorkbench = (): void => {
+    layer.hidden = true;
+    document.body.classList.remove("tuning-open");
+  };
+  openButtons.forEach((button) => {
+    button.hidden = false;
+    button.addEventListener("click", showWorkbench);
+  });
+  closeButton.addEventListener("click", hideWorkbench);
+  window.addEventListener("keydown", (event) => {
+    if (event.code === "Escape" && !layer.hidden) hideWorkbench();
+  });
+
+  const subjectSelect = requiredElement<HTMLSelectElement>("#tuning-subject-select");
+  subjectSelect.replaceChildren(...workbenchContext.definitions.map((definition) =>
+    new Option(
+      `${subjectFriendlyName(definition)} · ${definition.agentAccessLevel}`,
+      definition.resourceRef,
+      false,
+      definition.resourceRef === workbenchContext.definition.resourceRef,
+    )
+  ));
+  subjectSelect.addEventListener("change", () => navigateToSubjectPackage(subjectSelect.value));
+  const summary = requiredElement<HTMLDivElement>("#tuning-subject-summary");
+  const currentSubject = api.getSubjectSnapshot?.(workbenchContext.controlledEntityId);
+  summary.innerHTML = `
+    <div><span>现在调的是</span><strong>${escapeHtml(subjectFriendlyName(workbenchContext.definition))}</strong></div>
+    <div><span>移动方式</span><strong>${escapeHtml(kernelFriendlyName(workbenchContext.activeKernel))}</strong></div>
+    <div><span>所在环境</span><strong>${currentSubject?.movementMedium === "water" ? "水面" : currentSubject?.movementMedium === "air" ? "空中" : "地面"}</strong></div>
+    <div><span>配置权限</span><strong>${workbenchContext.definition.agentAccessLevel}</strong></div>
+  `;
+
+  const inputGrid = requiredElement<HTMLDivElement>("#tuning-input-capabilities");
+  const inputStatus = requiredElement<HTMLDivElement>("#tuning-input-status");
+  const commandKind = workbenchContext.activeKernel?.commandKind ?? "planar-vector";
+  const forwardSteer = workbenchContext.activeKernel?.resourceRef.includes("forward-steer") === true;
+  const inputItems: Array<{
+    keyLabel: string;
+    title: string;
+    explanation: string;
+    steps: readonly { actions: readonly SemanticInputActionV1[]; ticks: number }[];
+  }> = [
+    { keyLabel: "W", title: commandKind === "flight-attitude" ? "向下俯冲" : "向前", explanation: commandKind === "planar-vector" ? "按照镜头朝向前进" : "按照主体自身朝向前进", steps: [{ actions: ["move-forward"], ticks: 24 }] },
+    { keyLabel: "S", title: commandKind === "flight-attitude" ? "抬头减速" : "向后", explanation: commandKind === "planar-vector" ? "按照镜头朝向后退" : "倒退或降低油门", steps: [{ actions: ["move-backward"], ticks: 18 }] },
+    { keyLabel: "A / D", title: commandKind === "planar-vector" ? "横向移动" : "左右转向", explanation: commandKind === "flight-attitude" ? "偏航并带动机体倾斜" : "改变主体的移动方向", steps: [{ actions: ["move-left"], ticks: 18 }] },
+    { keyLabel: "Shift", title: commandKind === "flight-attitude" ? "飞行动作请求" : forwardSteer ? "冲刺" : commandKind === "throttle-steer" ? "增强推进" : "奔跑", explanation: commandKind === "flight-attitude" ? "输入已识别，具体技能由后续动作配置绑定" : "按住时使用配置表中的加速倍率", steps: [{ actions: ["move-forward", "run"], ticks: 30 }] },
+    { keyLabel: "空格", title: commandKind === "planar-vector" || forwardSteer ? "跳跃" : commandKind === "throttle-steer" ? "制动" : "飞行动作请求", explanation: commandKind === "flight-attitude" ? "输入已识别，当前简化滑翔内核不额外消耗它" : commandKind === "throttle-steer" && !forwardSteer ? "让载具、滑行器或水面主体减速" : "只有脚下有支撑时才会起跳", steps: commandKind === "throttle-steer" && !forwardSteer ? [{ actions: ["move-forward"], ticks: 18 }, { actions: ["jump"], ticks: 12 }] : [{ actions: ["jump"], ticks: 2 }] },
+  ];
+  inputGrid.replaceChildren(...inputItems.map((item) => {
+    const card = document.createElement("article");
+    card.innerHTML = `<kbd>${escapeHtml(item.keyLabel)}</kbd><div><strong>${escapeHtml(item.title)}</strong><p>${escapeHtml(item.explanation)}</p></div><button type="button">试一下</button>`;
+    card.querySelector("button")!.addEventListener("click", async () => {
+      inputStatus.textContent = `正在执行“${item.title}”…`;
+      try {
+        const after = await api.runFixedInput(item.steps);
+        const state = after.subjectStatesByEntityId[after.controlledEntityId];
+        inputStatus.textContent = `“${item.title}”已执行 · 当前动作：${state?.activeActionId ?? "已提交"}`;
+      } catch {
+        inputStatus.textContent = `“${item.title}”没有成功执行，世界状态已保留。`;
+      }
+    });
+    return card;
+  }));
+
+  const motionSliderGrid = requiredElement<HTMLDivElement>("#tuning-motion-sliders");
+  const defaultMotion = workbenchContext.motionProfiles.find((row) => row.role === "default");
+  if (defaultMotion?.safetyLimits === undefined) {
+    motionSliderGrid.innerHTML = '<p class="friendly-empty">当前主体没有开放可调的运动参数。</p>';
+  } else {
+    motionSliderGrid.replaceChildren(...Object.entries(defaultMotion.safetyLimits).flatMap(([name, limit]) => {
+      const value = workbenchContext.parameterDraft[name];
+      if (typeof value !== "number" || limit.minimum === limit.maximum) return [];
+      const [labelText, helpText] = FRIENDLY_MOTION_PARAMETERS[name] ?? [name, "安全范围内的运动参数"];
+      const label = document.createElement("label");
+      label.className = "friendly-slider";
+      label.innerHTML = `<span><strong>${escapeHtml(labelText)}</strong><small>${escapeHtml(helpText)}</small></span>`;
+      const control = document.createElement("div");
+      const input = document.createElement("input");
+      input.type = "range";
+      input.min = String(limit.minimum);
+      input.max = String(limit.maximum);
+      input.step = String(Math.max(0.01, (limit.maximum - limit.minimum) / 100));
+      input.value = String(value);
+      const output = document.createElement("output");
+      output.textContent = value.toFixed(2);
+      input.addEventListener("input", () => {
+        const nextValue = Number(input.value);
+        workbenchContext.parameterDraft[name] = nextValue;
+        output.textContent = nextValue.toFixed(2);
+        writeLocalDraft(
+          workbenchContext.motionDraftStorageKey,
+          JSON.stringify(workbenchContext.parameterDraft),
+        );
+        saveStatus.textContent = `“${labelText}”已保存到本机草稿；导出后编译生效`;
+      });
+      control.append(input, output);
+      label.append(control);
+      return [label];
+    }));
+  }
+
+  const cameraCards = requiredElement<HTMLDivElement>("#tuning-camera-cards");
+  const cameraSliders = requiredElement<HTMLDivElement>("#tuning-camera-sliders");
+  const cameraRows = workbenchContext.cameraProfiles;
+  let cameraPreference = workbenchContext.initialCameraPreference === "first-person"
+    ? cameraRows.find((row) => row.resourceRef.includes("first-person"))?.resourceRef ?? "auto"
+    : workbenchContext.initialCameraPreference;
+  let cameraTuning: CameraTuningV1 = {};
+
+  const applyCameraTuning = (): void => {
+    try {
+      api.setCameraTuning?.(cameraTuning);
+      saveStatus.textContent = "相机微调已应用到当前预览，并自动保存";
+    } catch {
+      saveStatus.textContent = "相机微调未能应用，原镜头设置已保留";
+    }
+  };
+
+  const renderCameraSliders = (): void => {
+    const activeProfileRef = cameraPreference === "auto"
+      ? api.getCameraSnapshot?.().activeCameraProfileRef
+      : cameraPreference;
+    const profile = cameraRows.find((row) => row.resourceRef === activeProfileRef) ?? cameraRows[0];
+    const base = profile?.parameters ?? {};
+    const storageKey = `worldkit.camera-tuning.${workbenchContext.definition.resourceRef}.${profile?.resourceRef ?? "auto"}`;
+    try {
+      const stored = readLocalDraft(storageKey);
+      cameraTuning = stored === null ? {} : JSON.parse(stored) as CameraTuningV1;
+    } catch {
+      cameraTuning = {};
+    }
+    const settings: Array<{
+      key: keyof CameraTuningV1;
+      label: string;
+      help: string;
+      minimum: number;
+      maximum: number;
+      fallback: number;
+    }> = [
+      { key: "distanceMeters", label: "跟随距离", help: "镜头离主体有多远", minimum: Number(base.minimumDistanceMeters ?? 0), maximum: Number(base.maximumDistanceMeters ?? 16), fallback: Number(base.distanceMeters ?? 5) },
+      { key: "targetHeightMeters", label: "观察高度", help: "镜头对准主体的高度", minimum: 0, maximum: 4, fallback: Number(base.targetHeightMeters ?? 1.2) },
+      { key: "positionDampingPerSecond", label: "位置跟随速度", help: "越高越贴紧，越低越有惯性", minimum: 1, maximum: 40, fallback: Number(base.positionDampingPerSecond ?? 12) },
+      { key: "rotationDampingPerSecond", label: "旋转稳定度", help: "越高转向越快，越低镜头越柔和", minimum: 1, maximum: 40, fallback: Number(base.rotationDampingPerSecond ?? 14) },
+      { key: "lookAheadSeconds", label: "向前预看", help: "移动时提前看向前方的程度", minimum: 0, maximum: 2, fallback: Number(base.lookAheadSeconds ?? 0.2) },
+      { key: "baseFovDegrees", label: "视野宽度", help: "越大看到的范围越广", minimum: 35, maximum: 100, fallback: Number(base.baseFovDegrees ?? 60) },
+    ];
+    cameraSliders.replaceChildren(...settings.flatMap((setting) => {
+      if (setting.key === "distanceMeters" && Number(base.maximumDistanceMeters ?? 1) === 0) return [];
+      const value = cameraTuning[setting.key] ?? setting.fallback;
+      cameraTuning[setting.key] = value;
+      const label = document.createElement("label");
+      label.className = "friendly-slider";
+      label.innerHTML = `<span><strong>${setting.label}</strong><small>${setting.help}</small></span>`;
+      const control = document.createElement("div");
+      const input = document.createElement("input");
+      input.type = "range";
+      input.min = String(setting.minimum);
+      input.max = String(setting.maximum);
+      input.step = String(Math.max(0.01, (setting.maximum - setting.minimum) / 100));
+      input.value = String(value);
+      const output = document.createElement("output");
+      output.textContent = Number(value).toFixed(2);
+      input.addEventListener("input", () => {
+        const nextValue = Number(input.value);
+        cameraTuning[setting.key] = nextValue;
+        output.textContent = nextValue.toFixed(2);
+        writeLocalDraft(storageKey, JSON.stringify(cameraTuning));
+        applyCameraTuning();
+      });
+      control.append(input, output);
+      label.append(control);
+      return [label];
+    }));
+    applyCameraTuning();
+  };
+
+  const refreshCameraCards = (): void => {
+    cameraCards.replaceChildren(...[
+      { resourceRef: "auto", displayName: "自动选择", description: "根据地面、水面、飞行、速度和关系自动选择合适镜头" },
+      ...cameraRows.map((row) => {
+        const friendly = FRIENDLY_CAMERA_PROFILES[row.resourceRef];
+        return { resourceRef: row.resourceRef, displayName: friendly?.[0] ?? row.displayName, description: friendly?.[1] ?? "通用相机预制" };
+      }),
+    ].map((row) => {
+      const card = document.createElement("article");
+      if (row.resourceRef === cameraPreference) card.classList.add("selected");
+      card.innerHTML = `<div><strong>${escapeHtml(row.displayName)}</strong><p>${escapeHtml(row.description)}</p></div><button type="button">${row.resourceRef === cameraPreference ? "当前正在使用" : "应用并预览"}</button>`;
+      const button = card.querySelector("button")!;
+      button.disabled = row.resourceRef === cameraPreference;
+      button.addEventListener("click", () => {
+        try {
+          api.setCameraPreference?.(row.resourceRef);
+          cameraPreference = row.resourceRef;
+          writeLocalDraft("worldkit.camera-preference", row.resourceRef);
+          refreshCameraCards();
+          renderCameraSliders();
+          saveStatus.textContent = `已应用“${row.displayName}”，现在可以在左侧拖动体验`;
+        } catch {
+          saveStatus.textContent = `“${row.displayName}”未能应用，原镜头已保留`;
+        }
+      });
+      return card;
+    }));
+  };
+  refreshCameraCards();
+  renderCameraSliders();
+  requiredElement<HTMLButtonElement>("#reset-camera-view-button").addEventListener("click", () => {
+    try {
+      api.resetCameraView?.();
+      saveStatus.textContent = "镜头已回到主体后方";
+    } catch {
+      saveStatus.textContent = "镜头暂时无法回正，当前状态已保留";
+    }
+  });
+
+  const result = requiredElement<HTMLPreElement>("#tuning-result");
+  const runHarness = async (): Promise<void> => {
+    if (api.runHarness === undefined) return;
+    result.textContent = "正在检查操作、物理、相机、清理和安全回退…";
+    try {
+      const report = await api.runHarness(workbenchContext.controlledEntityId);
+      const passed = report.checks.filter((check) => check.status === "passed").length;
+      const failed = report.checks.filter((check) => check.status === "failed");
+      result.textContent = failed.length === 0
+        ? `检查完成：${passed}/9 项通过，可以导出。`
+        : `检查完成：${passed}/9 项通过。需要关注：${failed.map((check) => check.checkId).join("、")}`;
+    } catch {
+      result.textContent = "自动检查没有完成，世界状态未被修改。";
+    }
+  };
+  requiredElement<HTMLButtonElement>("#tuning-harness-button").addEventListener("click", () => void runHarness());
+
+  const exportCurrent = (): void => {
+    const payload = {
+      schemaVersion: 2,
+      subjectDefinition: workbenchContext.definition,
+      selectedCameraPreference: cameraPreference,
+      cameraTuning,
+      motionParameterDraft: workbenchContext.parameterDraft,
+      inputGuide: inputItems.map((item) => ({ key: item.keyLabel, action: item.title, meaning: item.explanation })),
+      compatibleProfiles: [...workbenchContext.motionProfiles, ...workbenchContext.cameraProfiles],
+      resourceLockRequired: true,
+      note: "运动参数为策划草稿，需要写回 Registry 并重新编译；相机参数已在当前会话即时预览。",
+    };
+    downloadJson(
+      `${workbenchContext.definition.semanticClassId.replaceAll(".", "-")}.worldkit-authoring.json`,
+      payload,
+    );
+    saveStatus.textContent = "配置 JSON 已导出";
+  };
+  for (const selector of ["#tuning-export-button", "#tuning-export-footer-button"]) {
+    requiredElement<HTMLButtonElement>(selector).addEventListener("click", exportCurrent);
+  }
 }
 
 function installAuthoringRecoveryPanel(api: WorldkitBrowserApiV3): void {
@@ -274,29 +692,31 @@ function installCapabilityAuthoringPanel(api: WorldkitBrowserApiV3): void {
         <p>油门 / 转向</p>
         <div><kbd>W</kbd><kbd>S</kbd><span>前进 / 倒退</span></div>
         <div><kbd>A</kbd><kbd>D</kbd><span>左转 / 右转</span></div>
-        <div><span>右侧 Camera Preference</span><span>切换镜头</span></div>
+        <div><kbd>⇧</kbd><span>增强推进</span><kbd>空格</kbd><span>${activeKernel.resourceRef.includes("forward-steer") ? "跳跃" : "制动"}</span></div>
+        <div><span>鼠标拖动 / 滚轮</span><span>旋转 / 缩放镜头</span></div>
       `
     : activeKernel?.commandKind === "flight-attitude"
       ? `
           <p>飞行姿态</p>
           <div><kbd>W</kbd><kbd>S</kbd><span>俯仰</span></div>
           <div><kbd>A</kbd><kbd>D</kbd><span>偏航 / 倾斜</span></div>
-          <div><span>右侧 Camera Preference</span><span>切换镜头</span></div>
+          <div><kbd>⇧</kbd><kbd>空格</kbd><span>飞行动作请求</span></div>
+          <div><span>鼠标拖动 / 滚轮</span><span>旋转 / 缩放镜头</span></div>
         `
       : `
           <p>平面移动</p>
           <div><kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd><span>移动</span></div>
           <div><kbd>⇧</kbd><span>奔跑</span><kbd>空格</kbd><span>跳跃</span></div>
-          <div><span>右侧 Camera Preference</span><span>切换镜头</span></div>
+          <div><span>鼠标拖动 / 滚轮</span><span>旋转 / 缩放镜头</span></div>
         `;
   const profiles = api.listCompatibleProfiles?.(definition.resourceRef) ?? [];
   const motionProfiles = profiles.filter((row) => row.kind === "motion-profile");
   const cameraProfiles = profiles.filter((row) => row.kind === "camera-rig-profile");
   cameraSelect.replaceChildren(
     ...[
-      ["auto", "Auto · Context Policy"],
-      ["first-person", "First Person"],
-      ...cameraProfiles.map((row) => [row.resourceRef, row.displayName]),
+      ["auto", "自动选择合适镜头"],
+      ["first-person", "第一人称"],
+      ...cameraProfiles.map((row) => [row.resourceRef, FRIENDLY_CAMERA_PROFILES[row.resourceRef]?.[0] ?? row.displayName]),
     ].map(([value, label]) => {
       const option = document.createElement("option");
       option.value = value!;
@@ -317,19 +737,19 @@ function installCapabilityAuthoringPanel(api: WorldkitBrowserApiV3): void {
     }
   }
   context.innerHTML = `
-    <div><span>Kernel</span><code>${escapeHtml(activeSubject?.activeMotionKernelRef ?? definition.defaultMotionProfileRef)}</code></div>
-    <div><span>Control</span><code>${escapeHtml(definition.controlProfileRef)}</code></div>
-    <div><span>Camera</span><code>${escapeHtml(snapshot.camera.activeCameraProfileRef ?? definition.cameraContextProfileRef)}</code></div>
-    <div><span>Medium</span><code>${escapeHtml(activeSubject?.movementMedium ?? "ground")}</code></div>
+    <div><span>当前主体</span><code>${escapeHtml(subjectFriendlyName(definition))}</code></div>
+    <div><span>移动方式</span><code>${escapeHtml(kernelFriendlyName(activeKernel))}</code></div>
+    <div><span>当前镜头</span><code>${escapeHtml(FRIENDLY_CAMERA_PROFILES[snapshot.camera.activeCameraProfileRef ?? ""]?.[0] ?? "自动")}</code></div>
+    <div><span>使用提示</span><code>打开大尺寸调控台</code></div>
   `;
 
   const parameterDraft: Record<string, number | boolean> = {};
   const defaultMotion = motionProfiles.find((row) => row.role === "default");
+  const motionDraftStorageKey = `worldkit.motion-draft.${definition.resourceRef}`;
   if (defaultMotion?.safetyLimits !== undefined) {
-    const draftStorageKey = `worldkit.motion-draft.${definition.resourceRef}`;
     let storedDraft: Readonly<Record<string, unknown>> = {};
     try {
-      const rawDraft = readLocalDraft(draftStorageKey);
+      const rawDraft = readLocalDraft(motionDraftStorageKey);
       const parsedDraft = rawDraft === null ? {} : JSON.parse(rawDraft);
       if (parsedDraft !== null && typeof parsedDraft === "object" && !Array.isArray(parsedDraft)) {
         storedDraft = parsedDraft as Readonly<Record<string, unknown>>;
@@ -363,7 +783,7 @@ function installCapabilityAuthoringPanel(api: WorldkitBrowserApiV3): void {
       input.addEventListener("input", () => {
         parameterDraft[name] = Number(input.value);
         valueOutput.textContent = Number(input.value).toFixed(2);
-        writeLocalDraft(draftStorageKey, JSON.stringify(parameterDraft));
+        writeLocalDraft(motionDraftStorageKey, JSON.stringify(parameterDraft));
       });
       const header = document.createElement("span");
       header.textContent = name;
@@ -371,6 +791,19 @@ function installCapabilityAuthoringPanel(api: WorldkitBrowserApiV3): void {
       drafts.append(label);
     }
   }
+  drafts.innerHTML = "<p>完整的运动手感滑杆、操作说明和 7 套相机都已移到大尺寸调控台。</p>";
+
+  installTuningWorkbench(api, {
+    definitions,
+    definition,
+    activeKernel,
+    motionProfiles,
+    cameraProfiles,
+    parameterDraft,
+    motionDraftStorageKey,
+    controlledEntityId: snapshot.controlledEntityId,
+    initialCameraPreference: cameraSelect.value,
+  });
 
   packageSelect.addEventListener("change", () => {
     navigateToSubjectPackage(packageSelect.value);

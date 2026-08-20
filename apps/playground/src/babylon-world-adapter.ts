@@ -1,5 +1,7 @@
 import type {
   BindControlRequestV2,
+  CameraTuningV1,
+  CameraViewInputV1,
   ControlBindingReceiptV2,
   ExecutionPlanV4,
   FixedInputV1,
@@ -198,6 +200,8 @@ export class BabylonWorldAdapter implements PlaygroundWorldAdapter {
   private disposed = false;
   private disposePromise: Promise<void> | null = null;
   private animationPending = false;
+  private activeCameraPointerId: number | null = null;
+  private lastCameraPointerPosition: readonly [number, number] = [0, 0];
 
   private constructor(
     private readonly executionPlan: ExecutionPlanV4,
@@ -208,11 +212,17 @@ export class BabylonWorldAdapter implements PlaygroundWorldAdapter {
     this.canvas = canvas;
     this.canvas.className = "world-canvas";
     this.canvas.tabIndex = 0;
+    this.canvas.style.touchAction = "none";
     this.inspections = featureInspections(executionPlan);
     this.resizeObserver = new ResizeObserver(() => this.runtime.resize());
     window.addEventListener("keydown", this.handleKeyDown);
     window.addEventListener("keyup", this.handleKeyUp);
     window.addEventListener("blur", this.handleBlur);
+    this.canvas.addEventListener("pointerdown", this.handleCameraPointerDown);
+    this.canvas.addEventListener("pointermove", this.handleCameraPointerMove);
+    this.canvas.addEventListener("pointerup", this.handleCameraPointerUp);
+    this.canvas.addEventListener("pointercancel", this.handleCameraPointerUp);
+    this.canvas.addEventListener("wheel", this.handleCameraWheel, { passive: false });
   }
 
   static async create(
@@ -309,6 +319,27 @@ export class BabylonWorldAdapter implements PlaygroundWorldAdapter {
 
   setCameraPreferenceRuntime(preference: string): WorldRuntimeSnapshotV3 {
     const snapshot = this.runtime.setCameraPreference(preference);
+    this.render();
+    this.emit();
+    return snapshot;
+  }
+
+  adjustCameraViewRuntime(input: CameraViewInputV1): WorldRuntimeSnapshotV3 {
+    const snapshot = this.runtime.adjustCameraView(input);
+    this.render();
+    this.emit();
+    return snapshot;
+  }
+
+  resetCameraViewRuntime(): WorldRuntimeSnapshotV3 {
+    const snapshot = this.runtime.resetCameraView();
+    this.render();
+    this.emit();
+    return snapshot;
+  }
+
+  setCameraTuningRuntime(tuning: CameraTuningV1): WorldRuntimeSnapshotV3 {
+    const snapshot = this.runtime.setCameraTuning(tuning);
     this.render();
     this.emit();
     return snapshot;
@@ -457,6 +488,11 @@ export class BabylonWorldAdapter implements PlaygroundWorldAdapter {
     window.removeEventListener("keydown", this.handleKeyDown);
     window.removeEventListener("keyup", this.handleKeyUp);
     window.removeEventListener("blur", this.handleBlur);
+    this.canvas.removeEventListener("pointerdown", this.handleCameraPointerDown);
+    this.canvas.removeEventListener("pointermove", this.handleCameraPointerMove);
+    this.canvas.removeEventListener("pointerup", this.handleCameraPointerUp);
+    this.canvas.removeEventListener("pointercancel", this.handleCameraPointerUp);
+    this.canvas.removeEventListener("wheel", this.handleCameraWheel);
     this.canvas.remove();
     this.disposePromise = this.runtime.dispose();
     return this.disposePromise;
@@ -474,6 +510,42 @@ export class BabylonWorldAdapter implements PlaygroundWorldAdapter {
 
   private readonly handleBlur = (): void => {
     this.keyboardInput.clear();
+    this.activeCameraPointerId = null;
+  };
+
+  private readonly handleCameraPointerDown = (event: PointerEvent): void => {
+    if (event.button !== 0) return;
+    this.activeCameraPointerId = event.pointerId;
+    this.lastCameraPointerPosition = [event.clientX, event.clientY];
+    this.canvas.setPointerCapture(event.pointerId);
+    this.canvas.focus();
+    event.preventDefault();
+  };
+
+  private readonly handleCameraPointerMove = (event: PointerEvent): void => {
+    if (event.pointerId !== this.activeCameraPointerId) return;
+    const deltaX = event.clientX - this.lastCameraPointerPosition[0];
+    const deltaY = event.clientY - this.lastCameraPointerPosition[1];
+    this.lastCameraPointerPosition = [event.clientX, event.clientY];
+    this.adjustCameraViewRuntime({
+      yawDeltaRadians: -deltaX * 0.006,
+      pitchDeltaRadians: deltaY * 0.005,
+    });
+    event.preventDefault();
+  };
+
+  private readonly handleCameraPointerUp = (event: PointerEvent): void => {
+    if (event.pointerId !== this.activeCameraPointerId) return;
+    this.activeCameraPointerId = null;
+    if (this.canvas.hasPointerCapture(event.pointerId)) {
+      this.canvas.releasePointerCapture(event.pointerId);
+    }
+    event.preventDefault();
+  };
+
+  private readonly handleCameraWheel = (event: WheelEvent): void => {
+    this.adjustCameraViewRuntime({ zoomDeltaMeters: event.deltaY * 0.008 });
+    event.preventDefault();
   };
 
   private scheduleAnimationFrame(): void {

@@ -76,7 +76,8 @@
       "accelerationMetersPerSecondSquared": 8,
       "decelerationMetersPerSecondSquared": 10,
       "turnRateRadiansPerSecond": 2.2,
-      "jumpSpeedMetersPerSecond": 4.5
+      "jumpSpeedMetersPerSecond": 4.5,
+      "boostMultiplier": 1.25
     },
     "safetyLimits": {
       "forwardSpeedMetersPerSecond": { "minimum": 0.5, "maximum": 8 },
@@ -84,7 +85,8 @@
       "accelerationMetersPerSecondSquared": { "minimum": 0.5, "maximum": 24 },
       "decelerationMetersPerSecondSquared": { "minimum": 0.5, "maximum": 30 },
       "turnRateRadiansPerSecond": { "minimum": 0.2, "maximum": 6 },
-      "jumpSpeedMetersPerSecond": { "minimum": 0, "maximum": 8 }
+      "jumpSpeedMetersPerSecond": { "minimum": 0, "maximum": 8 },
+      "boostMultiplier": { "minimum": 1, "maximum": 1.6 }
     },
     "motionTags": ["forward", "ground", "steer"],
     "aiMetadata": {
@@ -107,7 +109,8 @@
       "brakeMetersPerSecondSquared": 10,
       "dragPerSecond": 1.5,
       "lowSpeedTurnRateRadiansPerSecond": 2.2,
-      "highSpeedTurnRateRadiansPerSecond": 0.7
+      "highSpeedTurnRateRadiansPerSecond": 0.7,
+      "boostMultiplier": 1.2
     },
     "safetyLimits": {
       "forwardSpeedMetersPerSecond": { "minimum": 2, "maximum": 25 },
@@ -116,7 +119,8 @@
       "brakeMetersPerSecondSquared": { "minimum": 1, "maximum": 30 },
       "dragPerSecond": { "minimum": 0, "maximum": 5 },
       "lowSpeedTurnRateRadiansPerSecond": { "minimum": 0.2, "maximum": 5 },
-      "highSpeedTurnRateRadiansPerSecond": { "minimum": 0.1, "maximum": 2 }
+      "highSpeedTurnRateRadiansPerSecond": { "minimum": 0.1, "maximum": 2 },
+      "boostMultiplier": { "minimum": 1, "maximum": 1.5 }
     },
     "motionTags": ["arcade", "ground", "surface-fast", "wheeled"],
     "aiMetadata": {
@@ -137,14 +141,16 @@
       "driveAccelerationMetersPerSecondSquared": 5,
       "surfaceFrictionPerSecond": 0.35,
       "slopeGravityRatio": 1,
-      "turnRateRadiansPerSecond": 1.2
+      "turnRateRadiansPerSecond": 1.2,
+      "boostMultiplier": 1.15
     },
     "safetyLimits": {
       "maximumSpeedMetersPerSecond": { "minimum": 2, "maximum": 24 },
       "driveAccelerationMetersPerSecondSquared": { "minimum": 0, "maximum": 12 },
       "surfaceFrictionPerSecond": { "minimum": 0.05, "maximum": 4 },
       "slopeGravityRatio": { "minimum": 0, "maximum": 2 },
-      "turnRateRadiansPerSecond": { "minimum": 0.1, "maximum": 4 }
+      "turnRateRadiansPerSecond": { "minimum": 0.1, "maximum": 4 },
+      "boostMultiplier": { "minimum": 1, "maximum": 1.4 }
     },
     "motionTags": ["ground", "slide", "surface-fast"],
     "aiMetadata": {
@@ -196,7 +202,8 @@
       "accelerationMetersPerSecondSquared": 2.5,
       "dragPerSecond": 0.8,
       "turnRateRadiansPerSecond": 1.2,
-      "surfaceHoldStrengthPerSecond": 8
+      "surfaceHoldStrengthPerSecond": 8,
+      "boostMultiplier": 1.12
     },
     "safetyLimits": {
       "forwardSpeedMetersPerSecond": { "minimum": 0.5, "maximum": 9 },
@@ -204,7 +211,8 @@
       "accelerationMetersPerSecondSquared": { "minimum": 0.2, "maximum": 7 },
       "dragPerSecond": { "minimum": 0.1, "maximum": 4 },
       "turnRateRadiansPerSecond": { "minimum": 0.1, "maximum": 3 },
-      "surfaceHoldStrengthPerSecond": { "minimum": 1, "maximum": 20 }
+      "surfaceHoldStrengthPerSecond": { "minimum": 1, "maximum": 20 },
+      "boostMultiplier": { "minimum": 1, "maximum": 1.35 }
     },
     "motionTags": ["surface", "water", "watercraft"]
     ,"aiMetadata": {

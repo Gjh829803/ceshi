@@ -56,6 +56,23 @@ describe("compileMotionCommandV1", () => {
       steering: -1,
       brakeRequested: false,
       jumpRequested: false,
+      boostRequested: false,
+    });
+  });
+
+  it("keeps Shift and Space as capability requests for throttle-steer subjects", () => {
+    expect(
+      compileMotionCommandV1(
+        profile("throttle-steer", "subject-local"),
+        ["move-forward", "run", "jump"],
+        [0, 0, -1],
+      ),
+    ).toMatchObject({
+      kind: "throttle-steer",
+      throttle: 1,
+      brakeRequested: true,
+      jumpRequested: true,
+      boostRequested: true,
     });
   });
 

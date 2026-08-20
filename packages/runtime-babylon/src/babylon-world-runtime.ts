@@ -16,6 +16,8 @@ import { Scene } from "@babylonjs/core/scene.pure.js";
 
 import type {
   BindControlRequestV2,
+  CameraTuningV1,
+  CameraViewInputV1,
   ControlBindingReceiptV2,
   ExecutionObjectV3,
   ExecutionLayoutAssertionV1,
@@ -764,6 +766,7 @@ export class BabylonWorldRuntime implements WorldRuntimeSessionV3 {
           : { motionFailureCode: motion.lastFailureCode }),
       };
     }
+    const cameraDirectorSnapshot = this.cameraDirector.snapshot();
     return {
       kind: "worldkit-runtime-snapshot",
       schemaVersion: 3,
@@ -787,10 +790,14 @@ export class BabylonWorldRuntime implements WorldRuntimeSessionV3 {
           this.camera.position.y,
           this.camera.position.z,
         ],
-        activeCameraProfileRef: this.cameraDirector.snapshot().activeCameraProfileRef,
-        activeCameraRigRef: this.cameraDirector.snapshot().activeCameraRigRef,
-        preference: this.cameraDirector.snapshot().preference,
-        safeFallbackActive: this.cameraDirector.snapshot().fallbackActive,
+        activeCameraProfileRef: cameraDirectorSnapshot.activeCameraProfileRef,
+        activeCameraRigRef: cameraDirectorSnapshot.activeCameraRigRef,
+        preference: cameraDirectorSnapshot.preference,
+        safeFallbackActive: cameraDirectorSnapshot.fallbackActive,
+        viewYawOffsetRadians: cameraDirectorSnapshot.viewYawOffsetRadians,
+        viewPitchOffsetRadians: cameraDirectorSnapshot.viewPitchOffsetRadians,
+        viewDistanceOffsetMeters: cameraDirectorSnapshot.viewDistanceOffsetMeters,
+        tuning: cameraDirectorSnapshot.tuning,
       },
       resources: {
         meshes: this.scene.meshes.length,
@@ -869,6 +876,31 @@ export class BabylonWorldRuntime implements WorldRuntimeSessionV3 {
     this.assertUsable();
     if (!this.cameraDirector.setPreference(preference)) {
       throw new RangeError("Camera preference must be a non-empty string.");
+    }
+    this.updateCamera();
+    return this.snapshot();
+  }
+
+  adjustCameraView(input: CameraViewInputV1): WorldRuntimeSnapshotV3 {
+    this.assertUsable();
+    if (!this.cameraDirector.adjustView(input)) {
+      throw new RangeError("Camera view deltas must be finite numbers.");
+    }
+    this.updateCamera();
+    return this.snapshot();
+  }
+
+  resetCameraView(): WorldRuntimeSnapshotV3 {
+    this.assertUsable();
+    this.cameraDirector.resetView();
+    this.updateCamera();
+    return this.snapshot();
+  }
+
+  setCameraTuning(tuning: CameraTuningV1): WorldRuntimeSnapshotV3 {
+    this.assertUsable();
+    if (!this.cameraDirector.setTuning(tuning)) {
+      throw new RangeError("Camera tuning values must be finite numbers.");
     }
     this.updateCamera();
     return this.snapshot();

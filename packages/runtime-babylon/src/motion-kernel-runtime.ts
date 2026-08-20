@@ -268,8 +268,9 @@ export class MotionKernelRuntimeV1 {
         jumpRequestedThisTick = true;
       }
     } else {
-      const throttle = command.kind === "throttle-steer" ? command.throttle : 0;
-      const steering = command.kind === "throttle-steer" ? command.steering : 0;
+      const throttleCommand = command.kind === "throttle-steer" ? command : undefined;
+      const throttle = throttleCommand?.throttle ?? 0;
+      const steering = throttleCommand?.steering ?? 0;
       const turnRate = numberParameter(
         this.activeProfile,
         implementationId === "wheeled-arcade"
@@ -279,7 +280,9 @@ export class MotionKernelRuntimeV1 {
       );
       const maximumForwardSpeed = numberParameter(
         this.activeProfile,
-        "forwardSpeedMetersPerSecond",
+        implementationId === "surface-slide"
+          ? "maximumSpeedMetersPerSecond"
+          : "forwardSpeedMetersPerSecond",
         4,
       );
       const maximumReverseSpeed = numberParameter(
@@ -287,12 +290,21 @@ export class MotionKernelRuntimeV1 {
         "reverseSpeedMetersPerSecond",
         maximumForwardSpeed * 0.4,
       );
-      const targetSpeed = throttle >= 0
-        ? throttle * maximumForwardSpeed
+      const boostMultiplier = throttleCommand?.boostRequested === true
+        ? numberParameter(this.activeProfile, "boostMultiplier", 1.2)
+        : 1;
+      const braking = throttleCommand?.brakeRequested === true &&
+        implementationId !== "forward-steer";
+      const targetSpeed = braking
+        ? 0
+        : throttle >= 0
+        ? throttle * maximumForwardSpeed * boostMultiplier
         : throttle * maximumReverseSpeed;
       const acceleration = numberParameter(
         this.activeProfile,
-        "accelerationMetersPerSecondSquared",
+        implementationId === "surface-slide"
+          ? "driveAccelerationMetersPerSecondSquared"
+          : "accelerationMetersPerSecondSquared",
         6,
       );
       const deceleration = numberParameter(
@@ -317,13 +329,26 @@ export class MotionKernelRuntimeV1 {
         steering * turnRate * steeringScale * FIXED_TIME_STEP_SECONDS;
       desired = this.forward.scale(this.forwardSpeedMetersPerSecond);
 
+      if (
+        implementationId === "forward-steer" &&
+        throttleCommand?.jumpRequested === true &&
+        movementMedium === "ground"
+      ) {
+        this.jumpInProgress = true;
+        jumpRequestedThisTick = true;
+      }
+
       if (implementationId === "surface-slide") {
         const drive = desired.scale(
           numberParameter(this.activeProfile, "driveResponsePerSecond", 1.8) *
             FIXED_TIME_STEP_SECONDS,
         );
         this.slideVelocity.addInPlace(drive);
-        const friction = numberParameter(this.activeProfile, "frictionPerSecond", 0.18);
+        const friction = numberParameter(
+          this.activeProfile,
+          "surfaceFrictionPerSecond",
+          0.18,
+        );
         this.slideVelocity.scaleInPlace(
           Math.max(0, 1 - friction * FIXED_TIME_STEP_SECONDS),
         );

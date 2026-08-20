@@ -3,6 +3,8 @@ import { builtInSubjectResourceRegistry } from "@whitebox-world/subject-registry
 import {
   WORLDKIT_BROWSER_PROTOCOL_VERSION,
   type BindControlRequestV2,
+  type CameraTuningV1,
+  type CameraViewInputV1,
   type ControlBindingReceiptV2,
   type FixedInputV1,
   type WorldRuntimeSnapshotV3,
@@ -23,6 +25,9 @@ export interface DeferredWorldkitBrowserRuntimeAdapterV1 {
   setPaused(paused: boolean): void;
   disposeRuntime(): Promise<void>;
   setCameraPreferenceRuntime?(preference: string): WorldRuntimeSnapshotV3;
+  adjustCameraViewRuntime?(input: CameraViewInputV1): WorldRuntimeSnapshotV3;
+  resetCameraViewRuntime?(): WorldRuntimeSnapshotV3;
+  setCameraTuningRuntime?(tuning: CameraTuningV1): WorldRuntimeSnapshotV3;
   runSubjectHarness?(subjectEntityId: string): Promise<SubjectHarnessReportV1>;
   setMotionProfileRuntime?(
     subjectEntityId: string,
@@ -258,6 +263,7 @@ export function installDeferredWorldkitBrowserApi(options: {
                 kind: "camera-rig-profile" as const,
                 displayName: resource.aiMetadata.displayName,
                 role: "camera" as const,
+                parameters: resource.parameters,
               }];
         }),
       ].sort((left, right) => left.resourceRef.localeCompare(right.resourceRef));
@@ -308,6 +314,27 @@ export function installDeferredWorldkitBrowserApi(options: {
       }
       return adapter.setCameraPreferenceRuntime(preference);
     },
+    adjustCameraView: (input) => {
+      const adapter = requireReadyAdapter();
+      if (adapter.adjustCameraViewRuntime === undefined) {
+        throw new Error("WORLDKIT_CAMERA_VIEW_INPUT_UNAVAILABLE");
+      }
+      return adapter.adjustCameraViewRuntime(input);
+    },
+    resetCameraView: () => {
+      const adapter = requireReadyAdapter();
+      if (adapter.resetCameraViewRuntime === undefined) {
+        throw new Error("WORLDKIT_CAMERA_VIEW_RESET_UNAVAILABLE");
+      }
+      return adapter.resetCameraViewRuntime();
+    },
+    setCameraTuning: (tuning) => {
+      const adapter = requireReadyAdapter();
+      if (adapter.setCameraTuningRuntime === undefined) {
+        throw new Error("WORLDKIT_CAMERA_TUNING_UNAVAILABLE");
+      }
+      return adapter.setCameraTuningRuntime(tuning);
+    },
     setMotionProfile: async (subjectEntityId, motionProfileRef) => {
       await startupPromise;
       const adapter = requireReadyAdapter();
@@ -332,13 +359,16 @@ export function installDeferredWorldkitBrowserApi(options: {
   // Protocol V3 keys remain enumerable for exact backward compatibility. The
   // capability-authoring extension is callable but does not mutate that key set.
   for (const extensionName of [
+    "adjustCameraView",
     "getCameraSnapshot",
     "getSubjectSnapshot",
     "listCompatibleProfiles",
     "listMotionKernels",
     "listSubjectDefinitions",
     "runHarness",
+    "resetCameraView",
     "setCameraPreference",
+    "setCameraTuning",
     "setIntent",
     "setMotionProfile",
     "validateSubjectPackage",

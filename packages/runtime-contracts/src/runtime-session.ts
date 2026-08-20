@@ -13,6 +13,21 @@ export interface FixedInputV1 {
   ticks: number;
 }
 
+export interface CameraViewInputV1 {
+  yawDeltaRadians?: number;
+  pitchDeltaRadians?: number;
+  zoomDeltaMeters?: number;
+}
+
+export interface CameraTuningV1 {
+  distanceMeters?: number;
+  targetHeightMeters?: number;
+  positionDampingPerSecond?: number;
+  rotationDampingPerSecond?: number;
+  lookAheadSeconds?: number;
+  baseFovDegrees?: number;
+}
+
 export const TRUSTED_DEFAULT_CONTROLLER_ID = "controller-primary" as const;
 
 export interface BindControlRequestV2 {
@@ -77,6 +92,10 @@ export interface WorldRuntimeSnapshotV3 {
     activeCameraRigRef?: string;
     preference?: string;
     safeFallbackActive?: boolean;
+    viewYawOffsetRadians?: number;
+    viewPitchOffsetRadians?: number;
+    viewDistanceOffsetMeters?: number;
+    tuning?: Readonly<CameraTuningV1>;
   };
   physics: { backend: "havok"; ready: boolean; fixedTimeStepSeconds: number };
   resources: {
@@ -175,6 +194,9 @@ export interface WorldkitBrowserApiV3 {
   ): SubjectPackageValidationResultV1;
   setIntent?(input: FixedInputV1): Promise<WorldRuntimeSnapshotV3>;
   setCameraPreference?(preference: string): WorldRuntimeSnapshotV3;
+  adjustCameraView?(input: CameraViewInputV1): WorldRuntimeSnapshotV3;
+  resetCameraView?(): WorldRuntimeSnapshotV3;
+  setCameraTuning?(tuning: CameraTuningV1): WorldRuntimeSnapshotV3;
   setMotionProfile?(
     subjectEntityId: string,
     motionProfileRef: string,

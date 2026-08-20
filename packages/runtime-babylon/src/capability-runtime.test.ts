@@ -129,6 +129,25 @@ describe("capability package runtime smoke tests", () => {
         });
         expect(camera.positionMetersXYZ.every(Number.isFinite)).toBe(true);
       }
+      runtime.setCameraPreference("worldkit://camera-profile/orbit.medium@1");
+      const adjustedCamera = runtime.adjustCameraView({
+        yawDeltaRadians: 0.5,
+        pitchDeltaRadians: 0.2,
+        zoomDeltaMeters: 1,
+      }).camera;
+      expect(adjustedCamera.viewYawOffsetRadians).toBeGreaterThan(0);
+      expect(adjustedCamera.viewPitchOffsetRadians).toBeGreaterThan(0);
+      expect(adjustedCamera.viewDistanceOffsetMeters).toBeGreaterThan(0);
+      expect(runtime.setCameraTuning({
+        distanceMeters: 6,
+        rotationDampingPerSecond: 18,
+        lookAheadSeconds: 0.4,
+      }).camera.tuning).toEqual({
+        distanceMeters: 6,
+        rotationDampingPerSecond: 18,
+        lookAheadSeconds: 0.4,
+      });
+      runtime.resetCameraView();
       expect(runtime.setCameraPreference("auto").camera.preference).toBe("auto");
       expect((await runtime.runHarness("player")).passed).toBe(true);
     } finally {
