@@ -47,6 +47,7 @@ export class SubjectAnimationPlayer {
   >;
   private current: ActiveAnimationV1;
   private transition: AnimationTransitionV1 | undefined;
+  private latestTick = 0;
   private disposed = false;
 
   constructor(private readonly options: SubjectAnimationPlayerOptionsV1) {
@@ -65,7 +66,12 @@ export class SubjectAnimationPlayer {
     if (actionId !== this.current.animation.actionId) {
       this.beginTransition(tick, this.animationFor(actionId));
     }
-    this.sample(tick);
+    this.latestTick = tick;
+  }
+
+  applyPose(): void {
+    if (this.disposed) return;
+    this.sample(this.latestTick);
   }
 
   reset(): void {
@@ -77,6 +83,7 @@ export class SubjectAnimationPlayer {
     const idle = this.animationFor("idle");
     this.current = { animation: idle, actionStartTick: 0 };
     this.transition = undefined;
+    this.latestTick = 0;
     this.startPaused(idle);
     idle.group.goToFrame(idle.from, true);
     idle.group.setWeightForAllAnimatables(1);
@@ -191,7 +198,6 @@ export class SubjectAnimationPlayer {
     const source = this.current;
     const target = { animation: targetAnimation, actionStartTick: tick };
     this.startPaused(targetAnimation);
-    targetAnimation.group.goToFrame(targetAnimation.from, true);
     targetAnimation.group.setWeightForAllAnimatables(0);
     this.current = target;
     this.transition = {
@@ -203,13 +209,12 @@ export class SubjectAnimationPlayer {
   }
 
   private sample(tick: number): void {
-    this.sampleActive(this.current, tick);
     const transition = this.transition;
     if (transition === undefined) {
       this.current.animation.group.setWeightForAllAnimatables(1);
+      this.sampleActive(this.current, tick);
       return;
     }
-    this.sampleActive(transition.source, tick);
     const alpha = transition.durationTicks === 0
       ? 1
       : clamp(
@@ -219,6 +224,8 @@ export class SubjectAnimationPlayer {
         );
     transition.source.animation.group.setWeightForAllAnimatables(1 - alpha);
     transition.target.animation.group.setWeightForAllAnimatables(alpha);
+    this.sampleActive(transition.source, tick);
+    this.sampleActive(transition.target, tick);
     if (alpha >= 1) {
       transition.source.animation.group.stop();
       this.transition = undefined;

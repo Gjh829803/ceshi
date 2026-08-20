@@ -814,6 +814,7 @@ export class BabylonWorldRuntime implements WorldRuntimeSessionV3 {
 
   renderFrame(): void {
     this.assertUsable();
+    for (const visual of this.subjectVisuals) visual.applyAnimationPose();
     this.updateCamera();
     this.scene.render();
   }

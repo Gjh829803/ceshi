@@ -32,6 +32,7 @@ export interface SubjectVisual {
   socketNodesById: ReadonlyMap<string, TransformNode>;
   readonly activeActionId: GroundHumanoidActionIdV1;
   stepAnimation(tick: number, actionId: GroundHumanoidActionIdV1): void;
+  applyAnimationPose(): void;
   resetAnimation(): void;
   dispose(): void;
 }
@@ -232,6 +233,10 @@ class OwnedSubjectVisual implements SubjectVisual {
   stepAnimation(tick: number, actionId: GroundHumanoidActionIdV1): void {
     this.fallbackActionId = actionId;
     this.animationPlayer?.step(tick, actionId);
+  }
+
+  applyAnimationPose(): void {
+    this.animationPlayer?.applyPose();
   }
 
   resetAnimation(): void {

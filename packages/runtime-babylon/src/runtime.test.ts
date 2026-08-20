@@ -919,6 +919,38 @@ describe("BabylonWorldRuntime", () => {
     await runtime.dispose();
   });
 
+  it("samples the G Bot pose once when many fixed Ticks share one rendered frame", async () => {
+    const runtime = await createRuntime(
+      compileExecutionPlan(structuredClone(gBotAuthoringSpec)),
+      { subjectAssetResolver: createMemoryResolver(gBotSubjectAssetBytes) },
+    );
+    const animationGroups = createRiggedRuntimeProbe(runtime)
+      .visual("g-bot-primary")
+      .assetInstance!.animationGroups;
+    const poseSampleSpies = animationGroups.map((group) =>
+      vi.spyOn(group, "goToFrame"),
+    );
+    const schedule = [
+      { actions: [] as const, ticks: 20 },
+      { actions: ["move-forward"] as const, ticks: 20 },
+      { actions: [] as const, ticks: 5 },
+    ];
+
+    for (const input of schedule) await runtime.runFixedInput(input);
+    expect(
+      poseSampleSpies.reduce((count, spy) => count + spy.mock.calls.length, 0),
+    ).toBe(0);
+
+    runtime.renderFrame();
+
+    const renderedPoseSampleCount =
+      poseSampleSpies.reduce((count, spy) => count + spy.mock.calls.length, 0);
+    expect(renderedPoseSampleCount).toBeGreaterThan(0);
+    expect(renderedPoseSampleCount).toBeLessThanOrEqual(2);
+    for (const spy of poseSampleSpies) spy.mockRestore();
+    await runtime.dispose();
+  }, 20_000);
+
   it("lands the product G Bot on its authored heightfield after one jump input", async () => {
     const runtime = await createRuntime(
       compileExecutionPlan(structuredClone(gBotAuthoringSpec)),
@@ -2086,24 +2118,30 @@ describe("SubjectAnimationPlayer", () => {
 
     expect(animationFrame(idle)).toBe(10);
     player.step(60, "idle");
+    player.applyPose();
     expect(animationFrame(idle)).toBe(40);
 
     player.step(60, "walk");
+    player.applyPose();
     expect(animationFrame(walk)).toBe(5);
     expect(animationWeight(idle)).toBe(1);
     expect(animationWeight(walk)).toBe(0);
     player.step(75, "walk");
+    player.applyPose();
     expect(animationFrame(walk)).toBeCloseTo(12.5, 8);
     expect(animationWeight(idle)).toBeCloseTo(0.5, 8);
     expect(animationWeight(walk)).toBeCloseTo(0.5, 8);
     player.step(90, "walk");
+    player.applyPose();
     expect(animationFrame(walk)).toBe(20);
     expect(animationWeight(walk)).toBe(1);
     expect(idle.isStarted).toBe(false);
 
     player.step(90, "jump");
+    player.applyPose();
     expect(animationFrame(jump)).toBe(7);
     player.step(150, "jump");
+    player.applyPose();
     expect(animationFrame(jump)).toBe(27);
 
     player.reset();
@@ -2130,6 +2168,7 @@ describe("SubjectAnimationPlayer", () => {
     player.step(1, "walk");
     player.step(2, "run");
     player.step(3, "jump");
+    player.applyPose();
 
     expect(groups.filter((group) => group.isStarted)).toHaveLength(1);
     expect(player.activeActionId).toBe("jump");
