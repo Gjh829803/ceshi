@@ -3,7 +3,7 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 
 import {
   createValidPackageSubjectWorld,
@@ -15,6 +15,7 @@ import {
   buildFile,
   describeRegistryResource,
   listRegistryResources,
+  main,
   parseWorldkitArgs,
   validateFile,
   validateSubjectDefinitionFile,
@@ -64,6 +65,43 @@ describe("worldkit CLI", () => {
     ).toEqual({
       command: "registry-list",
       resourceKind: "subject-definition",
+      json: true,
+    });
+    expect(
+      parseWorldkitArgs(["layout", "validate", "world.json", "--json"]),
+    ).toEqual({
+      command: "layout-validate",
+      inputPath: "world.json",
+      json: true,
+    });
+    expect(
+      parseWorldkitArgs([
+        "layout",
+        "solve",
+        "world.json",
+        "--output",
+        "layout-output",
+        "--json",
+      ]),
+    ).toEqual({
+      command: "layout-solve",
+      inputPath: "world.json",
+      outputPath: "layout-output",
+      json: true,
+    });
+    expect(
+      parseWorldkitArgs([
+        "layout",
+        "explain",
+        "layout-report.json",
+        "--constraint-id",
+        "tower-clearance",
+        "--json",
+      ]),
+    ).toEqual({
+      command: "layout-explain",
+      inputPath: "layout-report.json",
+      constraintId: "tower-clearance",
       json: true,
     });
     expect(
@@ -125,6 +163,66 @@ describe("worldkit CLI", () => {
     expect(() =>
       parseWorldkitArgs(["subject", "explain", "world.json"]),
     ).toThrow(WorldkitUsageError);
+    expect(() =>
+      parseWorldkitArgs([
+        "layout",
+        "explain",
+        "report.json",
+        "--entity-id",
+        "tower",
+        "--constraint-id",
+        "tower-clearance",
+      ]),
+    ).toThrow("exactly one of --entity-id or --constraint-id");
+    expect(() =>
+      parseWorldkitArgs(["layout", "solve", "world.json"]),
+    ).toThrow("layout solve requires --output <directory>");
+  });
+
+  it("prints one canonical JSON result and keeps stderr empty for layout commands", async () => {
+    const directory = await createTemporaryDirectory();
+    const inputPath = await writePackageWorld(directory);
+    const outputPath = path.join(directory, "layout");
+    let stdout = "";
+    let stderr = "";
+    const stdoutWrite = vi
+      .spyOn(process.stdout, "write")
+      .mockImplementation((chunk) => {
+        stdout += String(chunk);
+        return true;
+      });
+    const stderrWrite = vi
+      .spyOn(process.stderr, "write")
+      .mockImplementation((chunk) => {
+        stderr += String(chunk);
+        return true;
+      });
+    try {
+      await expect(
+        main([
+          "layout",
+          "solve",
+          inputPath,
+          "--output",
+          outputPath,
+          "--json",
+        ]),
+      ).resolves.toBe(0);
+    } finally {
+      stdoutWrite.mockRestore();
+      stderrWrite.mockRestore();
+    }
+
+    expect(stderr).toBe("");
+    expect(stdout.endsWith("\n")).toBe(true);
+    expect(stdout.trim().split("\n")).toHaveLength(1);
+    expect(JSON.parse(stdout)).toMatchObject({
+      ok: true,
+      exitCode: 0,
+      kind: "worldkit-layout-solve",
+      status: "solved",
+      outputPath,
+    });
   });
 
   it("lists and describes immutable Registry resources in stable order", () => {
