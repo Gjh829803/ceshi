@@ -1,12 +1,16 @@
 import type {
-  AuthoringSpecV2,
   PackageSubjectDefinitionV1,
 } from "./types";
+import type { AuthoringSpecV3 } from "./types-v3.js";
 
-export function createValidAuthoringSpec(): AuthoringSpecV2 {
+export function createValidAuthoringSpec(): AuthoringSpecV3 {
   return {
     kind: "worldkit-authoring-spec",
-    schemaVersion: 2,
+    schemaVersion: 3,
+    layout: {
+      solverProfileRef: "worldkit://layout-solver-profile/outdoor.s1@1",
+    },
+    spatial: { regions: [], routes: [], screenRegions: [] },
     id: "basic-world",
     seed: 1024,
     world: {
@@ -74,12 +78,12 @@ export function createValidAuthoringSpec(): AuthoringSpecV2 {
         id: "wall-east",
         kind: "object",
         prototypeRef: "package://prototype/wall@1",
-        transform: { positionMetersXYZ: [12, 2, 10] },
+        placement: { kind: "fixed", transform: { positionMetersXYZ: [12, 2, 10] } },
       },
       {
         id: "spawn-main",
         kind: "anchor",
-        transform: { positionMetersXYZ: [0, 0, 30] },
+        placement: { kind: "fixed", transform: { positionMetersXYZ: [0, 0, 30] } },
         semantic: { classId: "spawn" },
       },
       {
@@ -102,6 +106,7 @@ export function createValidAuthoringSpec(): AuthoringSpecV2 {
               distanceMeters: 5,
               targetHeightMeters: 1,
               fovDegrees: 56,
+              aspectRatio: 16 / 9,
             },
             manualSwitchAllowed: false,
           },
@@ -115,7 +120,7 @@ export function createValidAuthoringSpec(): AuthoringSpecV2 {
       controlledEntityId: "player",
       cameraEntityId: "camera-main",
     },
-    constraints: {},
+    constraints: { placements: [] },
   };
 }
 
@@ -194,10 +199,10 @@ function createPackageSubjectDefinition(
   };
 }
 
-export function createValidPackageSubjectWorldV2(options: {
+export function createValidPackageSubjectWorld(options: {
   reverseDefinitionCollections?: boolean;
   bodyWidthMeters?: number;
-} = {}): AuthoringSpecV2 {
+} = {}): AuthoringSpecV3 {
   const base = createValidAuthoringSpec();
   const sourceDefinition = createPackageSubjectDefinition(options.bodyWidthMeters ?? 0.8);
   const definition = options.reverseDefinitionCollections
@@ -231,13 +236,13 @@ export function createValidPackageSubjectWorldV2(options: {
       {
         id: "spawn-pack-animal-a",
         kind: "anchor",
-        transform: { positionMetersXYZ: [-4, 0, 5] },
+        placement: { kind: "fixed", transform: { positionMetersXYZ: [-4, 0, 5] } },
         semantic: { classId: "spawn" },
       },
       {
         id: "spawn-pack-animal-b",
         kind: "anchor",
-        transform: { positionMetersXYZ: [4, 0, 5] },
+        placement: { kind: "fixed", transform: { positionMetersXYZ: [4, 0, 5] } },
         semantic: { classId: "spawn" },
       },
       {
@@ -321,7 +326,7 @@ export function createValidRiggedPackageDefinition(): PackageSubjectDefinitionV1
   };
 }
 
-export function createValidRiggedPackageSubjectWorldV2(): AuthoringSpecV2 {
+export function createValidRiggedPackageSubjectWorld(): AuthoringSpecV3 {
   const base = createValidAuthoringSpec();
   return {
     ...base,

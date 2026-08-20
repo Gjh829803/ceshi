@@ -1,14 +1,14 @@
 import Ajv2020, { type ErrorObject } from "ajv/dist/2020.js";
 import addFormats from "ajv-formats";
 
-import authoringSpecV2Schema from "./authoring-spec-v2.schema.json";
 import subjectDefinitionV1Schema from "./subject-definition-v1.schema.json";
 import type {
   AuthoringDiagnostic,
   AuthoringResult,
-  AuthoringSpecV2,
   PackageSubjectDefinitionV1,
 } from "./types";
+import type { AuthoringSpecV3 } from "./types-v3.js";
+import { validateAuthoringSpecV3 } from "./validate-v3.js";
 
 const ajv = new Ajv2020({
   allErrors: true,
@@ -60,9 +60,6 @@ ajv.addFormat("package-prototype-ref", {
 
 ajv.addSchema(subjectDefinitionV1Schema);
 
-const validateCanonicalAuthoringSpec = ajv.compile<AuthoringSpecV2>(
-  authoringSpecV2Schema,
-);
 const validateSubjectDefinitionV1 = (() => {
   const registeredValidator = ajv.getSchema<PackageSubjectDefinitionV1>(
     "worldkit://schema/subject-definition@1",
@@ -100,14 +97,8 @@ function diagnosticFor(error: ErrorObject): AuthoringDiagnostic {
   };
 }
 
-export function validateAuthoringSpec(value: unknown): AuthoringResult<AuthoringSpecV2> {
-  if (validateCanonicalAuthoringSpec(value)) {
-    return { ok: true, value, diagnostics: [] };
-  }
-  return {
-    ok: false,
-    diagnostics: (validateCanonicalAuthoringSpec.errors ?? []).map(diagnosticFor),
-  };
+export function validateAuthoringSpec(value: unknown): AuthoringResult<AuthoringSpecV3> {
+  return validateAuthoringSpecV3(value);
 }
 
 export function validatePackageSubjectDefinition(

@@ -3,13 +3,13 @@ import { describe, expect, it } from "vitest";
 import { normalizeAuthoringSpec } from "./index";
 import {
   createValidAuthoringSpec,
-  createValidPackageSubjectWorldV2,
+  createValidPackageSubjectWorld,
 } from "./test-fixture";
 
 describe("normalizeAuthoringSpec", () => {
   it("produces byte-stable normalized ordering and transform defaults", () => {
-    const ordered = createValidPackageSubjectWorldV2();
-    const shuffled = createValidPackageSubjectWorldV2();
+    const ordered = createValidPackageSubjectWorld();
+    const shuffled = createValidPackageSubjectWorld();
     shuffled.nodes = [...shuffled.nodes].reverse();
     shuffled.resources = {
       prototypes: [...shuffled.resources.prototypes].reverse(),
@@ -62,7 +62,7 @@ describe("normalizeAuthoringSpec", () => {
   });
 
   it("rejects a non-controlled Subject without a spawn anchor", () => {
-    const spec = createValidPackageSubjectWorldV2();
+    const spec = createValidPackageSubjectWorld();
     spec.nodes = spec.nodes.map((node) => {
       if (node.id !== "pack-animal-a" || node.kind !== "subject") return node;
       const { spawnAnchorEntityId: _removed, ...withoutSpawn } = node;
@@ -83,7 +83,7 @@ describe("normalizeAuthoringSpec", () => {
 
     expect(normalizeAuthoringSpec(spec).diagnostics).toContainEqual(
       expect.objectContaining({
-        code: "AUTHORING_ID_DUPLICATE",
+        code: "AUTHORING_DUPLICATE_ID",
         instancePath: "/nodes/6/id",
       }),
     );
@@ -142,7 +142,10 @@ describe("normalizeAuthoringSpec", () => {
       node.id === "spawn-main" && node.kind === "anchor"
         ? {
             ...node,
-            transform: { ...node.transform, positionMetersXYZ: [1_000, 0, 1_000] },
+            placement: {
+              kind: "fixed" as const,
+              transform: { positionMetersXYZ: [1_000, 0, 1_000] as const },
+            },
           }
         : node,
     );
@@ -150,7 +153,7 @@ describe("normalizeAuthoringSpec", () => {
     expect(normalizeAuthoringSpec(spec).diagnostics).toContainEqual(
       expect.objectContaining({
         code: "AUTHORING_SPAWN_OUT_OF_BOUNDS",
-        instancePath: "/nodes/3/transform/positionMetersXYZ",
+        instancePath: "/nodes/3/placement/transform/positionMetersXYZ",
       }),
     );
   });

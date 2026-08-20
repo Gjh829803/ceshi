@@ -8,18 +8,17 @@ import { ResourceLockBuilderV1 } from "./resource-lock";
 import { normalizeSubjectDefinitionV2 } from "./subject-definition-normalizer";
 import type {
   AuthoringDiagnostic,
-  AuthoringSpecV2,
   NormalizeAuthoringOptions,
-  NormalizeAuthoringResult,
+  NormalizeAuthoringBaseResult,
   NormalizedProceduralTerrainSourceV2,
   NormalizedTransformV2,
-  NormalizedWorldIRV2,
+  NormalizedWorldBase,
   NormalizedWorldNodeV2,
   PackageSubjectDefinitionV1,
   ProceduralTerrainSourceSpecV2,
-  WorldNodeSpecV2,
 } from "./types";
-import { validateAuthoringSpec } from "./validate";
+import type { AuthoringSpecV3, WorldNodeSpecV3 } from "./types-v3.js";
+import { validateAuthoringSpecV3 } from "./validate-v3.js";
 
 const SUPPORTED_CAMERA_RIG = "worldkit://camera/third-person.standard@1";
 
@@ -102,9 +101,9 @@ function buildUniqueIndex<T extends { id: string }>(
 }
 
 function requireNodeKind(
-  nodes: ReadonlyMap<string, WorldNodeSpecV2>,
+  nodes: ReadonlyMap<string, WorldNodeSpecV3>,
   id: string,
-  kind: WorldNodeSpecV2["kind"],
+  kind: WorldNodeSpecV3["kind"],
   instancePath: string,
   diagnostics: AuthoringDiagnostic[],
 ): void {
@@ -157,8 +156,10 @@ function normalizeTerrainSourceV2(
 }
 
 function normalizeNodeV2(
-  node: WorldNodeSpecV2,
-  startup: AuthoringSpecV2["startup"],
+  node: WorldNodeSpecV3,
+  startup: AuthoringSpecV3["startup"],
+  finalTransformsByEntityId: Readonly<Record<string, NormalizedTransformV2>>,
+  fallbackPositionMetersXYZ: readonly [number, number, number],
 ): NormalizedWorldNodeV2 {
   switch (node.kind) {
     case "terrain":
@@ -183,9 +184,18 @@ function normalizeNodeV2(
         },
       };
     case "object":
-      return { ...structuredClone(node), transform: normalizeTransformV2(node.transform) };
-    case "anchor":
-      return { ...structuredClone(node), transform: normalizeTransformV2(node.transform) };
+    case "anchor": {
+      const finalTransform = finalTransformsByEntityId[node.id];
+      const transform = finalTransform ?? (
+        node.placement.kind === "fixed"
+          ? normalizeTransformV2(node.placement.transform)
+          : node.placement.initialTransform === undefined
+            ? normalizeTransformV2({ positionMetersXYZ: fallbackPositionMetersXYZ })
+            : normalizeTransformV2(node.placement.initialTransform)
+      );
+      const { placement: _placement, ...nodeWithoutPlacement } = node;
+      return { ...structuredClone(nodeWithoutPlacement), transform };
+    }
     case "subject": {
       const spawnAnchorEntityId =
         node.spawnAnchorEntityId ??
@@ -194,13 +204,26 @@ function normalizeNodeV2(
           : undefined);
       if (spawnAnchorEntityId === undefined) {
         throw new Error(
-          `NormalizedWorldIRV2 invariant violated: Subject '${node.id}' has no spawn anchor.`,
+          `NormalizedWorldIRV3 invariant violated: Subject '${node.id}' has no spawn anchor.`,
         );
       }
       return { ...structuredClone(node), spawnAnchorEntityId };
     }
     case "camera":
-      return structuredClone(node);
+      return {
+        ...structuredClone(node),
+        components: {
+          cameraRig: {
+            ...structuredClone(node.components.cameraRig),
+            thirdPerson: {
+              pitchRadians: node.components.cameraRig.thirdPerson.pitchRadians,
+              distanceMeters: node.components.cameraRig.thirdPerson.distanceMeters,
+              targetHeightMeters: node.components.cameraRig.thirdPerson.targetHeightMeters,
+              fovDegrees: node.components.cameraRig.thirdPerson.fovDegrees,
+            },
+          },
+        },
+      };
   }
 }
 
@@ -215,11 +238,15 @@ function packageDefinitionRef(definition: PackageSubjectDefinitionV1): string {
   return `package://subject-definition/${definition.id}@${definition.version}`;
 }
 
-export function normalizeAuthoringSpec(
+export interface NormalizeAuthoringBaseV3Options extends NormalizeAuthoringOptions {
+  readonly finalTransformsByEntityId?: Readonly<Record<string, NormalizedTransformV2>>;
+}
+
+export function normalizeAuthoringBaseV3(
   value: unknown,
-  options: NormalizeAuthoringOptions = {},
-): NormalizeAuthoringResult {
-  const schemaResult = validateAuthoringSpec(value);
+  options: NormalizeAuthoringBaseV3Options = {},
+): NormalizeAuthoringBaseResult {
+  const schemaResult = validateAuthoringSpecV3(value);
   if (!schemaResult.ok || schemaResult.value === undefined) {
     return { ok: false, diagnostics: schemaResult.diagnostics };
   }
@@ -264,7 +291,7 @@ export function normalizeAuthoringSpec(
       diagnostics,
       "AUTHORING_FEATURE_NOT_SUPPORTED",
       `/relationships/${index}`,
-      `Relationship '${relationship.type}' is not supported by AuthoringSpec V2.`,
+      `Relationship '${relationship.type}' is not supported by AuthoringSpec V3.`,
       { feature: "relationships", type: relationship.type },
     );
   });
@@ -273,7 +300,7 @@ export function normalizeAuthoringSpec(
       diagnostics,
       "AUTHORING_FEATURE_NOT_SUPPORTED",
       `/rules/${index}`,
-      `Rule '${rule.kind}' is not supported by AuthoringSpec V2.`,
+      `Rule '${rule.kind}' is not supported by AuthoringSpec V3.`,
       { feature: "rules", kind: rule.kind },
     );
   });
@@ -284,7 +311,7 @@ export function normalizeAuthoringSpec(
       diagnostics,
       "AUTHORING_CARDINALITY_INVALID",
       "/nodes",
-      `AuthoringSpec V2 requires exactly one Terrain node; received ${terrains.length}.`,
+      `AuthoringSpec V3 requires exactly one Terrain node; received ${terrains.length}.`,
       { kind: "terrain", expected: 1, actual: terrains.length },
     );
   }
@@ -386,7 +413,7 @@ export function normalizeAuthoringSpec(
           diagnostics,
           "AUTHORING_RESOURCE_NOT_SUPPORTED",
           `/nodes/${index}/components/cameraRig`,
-          "AuthoringSpec V2 supports only the standard third-person Camera Rig.",
+          "AuthoringSpec V3 supports only the standard third-person Camera Rig.",
           { supportedResourceRefs: [SUPPORTED_CAMERA_RIG] },
         );
       }
@@ -449,7 +476,19 @@ export function normalizeAuthoringSpec(
   const spawn = nodes.get(spec.startup.spawnAnchorEntityId);
   const terrain = terrains[0];
   if (spawn?.kind === "anchor" && terrain?.kind === "terrain") {
-    const [x, , z] = spawn.transform.positionMetersXYZ;
+    const fallbackPositionMetersXYZ = [
+      spec.world.bounds.centerMetersXZ[0],
+      0,
+      spec.world.bounds.centerMetersXZ[1],
+    ] as const;
+    const spawnTransform = options.finalTransformsByEntityId?.[spawn.id] ?? (
+      spawn.placement.kind === "fixed"
+        ? normalizeTransformV2(spawn.placement.transform)
+        : spawn.placement.initialTransform === undefined
+          ? normalizeTransformV2({ positionMetersXYZ: fallbackPositionMetersXYZ })
+          : normalizeTransformV2(spawn.placement.initialTransform)
+    );
+    const [x, , z] = spawnTransform.positionMetersXYZ;
     const [centerX, centerZ] = terrain.components.terrain.grid.centerMetersXZ;
     const [sizeX, sizeZ] = terrain.components.terrain.grid.sizeMetersXZ;
     if (
@@ -462,7 +501,7 @@ export function normalizeAuthoringSpec(
       addError(
         diagnostics,
         "AUTHORING_SPAWN_OUT_OF_BOUNDS",
-        `/nodes/${index}/transform/positionMetersXYZ`,
+        `/nodes/${index}/placement/transform/positionMetersXYZ`,
         "The startup Spawn Anchor must lie inside the Terrain grid.",
       );
     }
@@ -507,9 +546,7 @@ export function normalizeAuthoringSpec(
     return { ok: false, diagnostics };
   }
 
-  const normalized: NormalizedWorldIRV2 = {
-    kind: "worldkit-normalized-world",
-    schemaVersion: 2,
+  const normalized: NormalizedWorldBase = {
     id: spec.id,
     seed: spec.seed,
     ...(spec.provenance === undefined
@@ -530,7 +567,12 @@ export function normalizeAuthoringSpec(
     },
     nodes: [...spec.nodes]
       .sort((left, right) => left.id.localeCompare(right.id))
-      .map((node) => normalizeNodeV2(node, spec.startup)),
+      .map((node) => normalizeNodeV2(
+        node,
+        spec.startup,
+        options.finalTransformsByEntityId ?? {},
+        [spec.world.bounds.centerMetersXZ[0], 0, spec.world.bounds.centerMetersXZ[1]],
+      )),
     startup: structuredClone(spec.startup),
   };
 

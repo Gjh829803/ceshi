@@ -12,12 +12,12 @@ import {
   normalizeSubjectDefinitionV2,
   ResourceLockBuilderV1,
   sha256CanonicalJson,
-  type NormalizeAuthoringResult,
+  type NormalizeAuthoringResultV3,
 } from "./index";
 import {
-  createValidPackageSubjectWorldV2,
+  createValidPackageSubjectWorld,
   createValidRiggedPackageDefinition,
-  createValidRiggedPackageSubjectWorldV2,
+  createValidRiggedPackageSubjectWorld,
 } from "./test-fixture";
 
 const SUBJECT_ASSET_REF = "worldkit://subject-asset/humanoid.golden@1";
@@ -136,16 +136,16 @@ function registryWithPermutedNewResourceCollections(
 
 function diagnosticForRiggedWorld(
   subjectResourceRegistry: SubjectResourceRegistryV2,
-  mutateWorld?: (world: ReturnType<typeof createValidRiggedPackageSubjectWorldV2>) => void,
+  mutateWorld?: (world: ReturnType<typeof createValidRiggedPackageSubjectWorld>) => void,
 ) {
-  const world = createValidRiggedPackageSubjectWorldV2();
+  const world = createValidRiggedPackageSubjectWorld();
   mutateWorld?.(world);
   const result = normalizeAuthoringSpec(world, { subjectResourceRegistry });
   expect(result.ok).toBe(false);
   return result.diagnostics;
 }
 
-function packageDefinitionHash(result: NormalizeAuthoringResult): string {
+function packageDefinitionHash(result: NormalizeAuthoringResultV3): string {
   return result.value!.resources.subjectDefinitions.find(
     (definition) => definition.source === "package",
   )!.subjectDefinitionHash;
@@ -153,7 +153,7 @@ function packageDefinitionHash(result: NormalizeAuthoringResult): string {
 
 describe("Package Subject Definition normalization", () => {
   it("normalizes and locks the complete Golden rigged graph without asset bytes", () => {
-    const result = normalizeAuthoringSpec(createValidRiggedPackageSubjectWorldV2());
+    const result = normalizeAuthoringSpec(createValidRiggedPackageSubjectWorld());
 
     expect(result.ok).toBe(true);
     expect(result.value?.resources).toMatchObject({
@@ -229,7 +229,7 @@ describe("Package Subject Definition normalization", () => {
   });
 
   it("locks the current rigged Subject Definition, Resource Lock, and Normalized IR hashes", () => {
-    const result = normalizeAuthoringSpec(createValidRiggedPackageSubjectWorldV2());
+    const result = normalizeAuthoringSpec(createValidRiggedPackageSubjectWorld());
 
     expect(result.ok).toBe(true);
     expect(packageDefinitionHash(result)).toBe(
@@ -239,12 +239,12 @@ describe("Package Subject Definition normalization", () => {
       "sha256:73caff41be6267df95087c08f870a3943ab6f38107a1feff4fa4ac43ff2d4aec",
     );
     expect(result.normalizedWorldIrHash).toBe(
-      "sha256:0118602a6b48033a3aa7756f86ecdd8a195a10a579c7f511ca2d3d110c5eb365",
+      "sha256:272dd718b5f76d6902bd057c34efdc2e60675e2f7daa88ad92446232ee8eeb74",
     );
   });
 
   it("deduplicates transitive tables and locks across definitions", () => {
-    const world = createValidRiggedPackageSubjectWorldV2();
+    const world = createValidRiggedPackageSubjectWorld();
     world.resources = {
       ...world.resources,
       subjectDefinitions: [
@@ -267,10 +267,10 @@ describe("Package Subject Definition normalization", () => {
   });
 
   it("keeps rigged hashes stable when Registry manifest collections are reordered", () => {
-    const forward = normalizeAuthoringSpec(createValidRiggedPackageSubjectWorldV2(), {
+    const forward = normalizeAuthoringSpec(createValidRiggedPackageSubjectWorld(), {
       subjectResourceRegistry: registryWithPermutedNewResourceCollections(false),
     });
-    const reversed = normalizeAuthoringSpec(createValidRiggedPackageSubjectWorldV2(), {
+    const reversed = normalizeAuthoringSpec(createValidRiggedPackageSubjectWorld(), {
       subjectResourceRegistry: registryWithPermutedNewResourceCollections(true),
     });
 
@@ -298,7 +298,7 @@ describe("Package Subject Definition normalization", () => {
     const sourceUri = "https://registry.invalid/private/golden-humanoid.glb";
     const licenseUri = "https://registry.invalid/private/license";
     const privateAiTag = "registry-private-discovery-tag";
-    const world = createValidRiggedPackageSubjectWorldV2();
+    const world = createValidRiggedPackageSubjectWorld();
     world.provenance = { userPrompt: "top-level provenance remains allowed" };
     const subjectResourceRegistry = registryFrom((resource) =>
       resource.kind === "subject-asset"
@@ -444,7 +444,7 @@ describe("Package Subject Definition normalization", () => {
       }
     });
     const registryBefore = structuredClone(subjectResourceRegistry.listResources());
-    const world = createValidRiggedPackageSubjectWorldV2();
+    const world = createValidRiggedPackageSubjectWorld();
     const definition = world.resources.subjectDefinitions[0]!;
     definition.sockets = [
       ...definition.sockets,
@@ -894,7 +894,7 @@ describe("Package Subject Definition normalization", () => {
   });
 
   it("normalizes one Package Definition once for two Subject instances", () => {
-    const result = normalizeAuthoringSpec(createValidPackageSubjectWorldV2());
+    const result = normalizeAuthoringSpec(createValidPackageSubjectWorld());
 
     expect(result.ok).toBe(true);
     expect(result.value?.resources.subjectDefinitions).toHaveLength(2);
@@ -925,9 +925,9 @@ describe("Package Subject Definition normalization", () => {
   });
 
   it("makes Definition and world hashes insensitive to order-only changes", () => {
-    const first = normalizeAuthoringSpec(createValidPackageSubjectWorldV2());
+    const first = normalizeAuthoringSpec(createValidPackageSubjectWorld());
     const reordered = normalizeAuthoringSpec(
-      createValidPackageSubjectWorldV2({ reverseDefinitionCollections: true }),
+      createValidPackageSubjectWorld({ reverseDefinitionCollections: true }),
     );
 
     expect(first.ok).toBe(true);
@@ -937,9 +937,9 @@ describe("Package Subject Definition normalization", () => {
   });
 
   it("changes Definition Hash for semantic geometry changes", () => {
-    const first = normalizeAuthoringSpec(createValidPackageSubjectWorldV2());
+    const first = normalizeAuthoringSpec(createValidPackageSubjectWorld());
     const changed = normalizeAuthoringSpec(
-      createValidPackageSubjectWorldV2({ bodyWidthMeters: 1.1 }),
+      createValidPackageSubjectWorld({ bodyWidthMeters: 1.1 }),
     );
 
     expect(first.ok).toBe(true);
@@ -948,7 +948,7 @@ describe("Package Subject Definition normalization", () => {
   });
 
   it("emits a stable, de-duplicated Resource Lock", () => {
-    const result = normalizeAuthoringSpec(createValidPackageSubjectWorldV2());
+    const result = normalizeAuthoringSpec(createValidPackageSubjectWorld());
 
     expect(result.ok).toBe(true);
     const lock = result.value!.resources.resourceLock;
@@ -967,7 +967,7 @@ describe("Package Subject Definition normalization", () => {
   });
 
   it("rejects duplicate Package Definition identity", () => {
-    const spec = createValidPackageSubjectWorldV2();
+    const spec = createValidPackageSubjectWorld();
     spec.resources = {
       ...spec.resources,
       subjectDefinitions: [
@@ -985,7 +985,7 @@ describe("Package Subject Definition normalization", () => {
   });
 
   it("does not fall back when an exact Package Definition ref is missing", () => {
-    const spec = createValidPackageSubjectWorldV2();
+    const spec = createValidPackageSubjectWorld();
     spec.nodes = spec.nodes.map((node) =>
       node.id === "pack-animal-a" && node.kind === "subject"
         ? {
@@ -1005,7 +1005,7 @@ describe("Package Subject Definition normalization", () => {
   });
 
   it("rejects a missing exact Profile ref", () => {
-    const spec = createValidPackageSubjectWorldV2();
+    const spec = createValidPackageSubjectWorld();
     const definition = spec.resources.subjectDefinitions[0]!;
     spec.resources = {
       ...spec.resources,
@@ -1031,7 +1031,7 @@ describe("Package Subject Definition normalization", () => {
   });
 
   it("maps support-center failures to the Package Definition path", () => {
-    const spec = createValidPackageSubjectWorldV2();
+    const spec = createValidPackageSubjectWorld();
     const definition = spec.resources.subjectDefinitions[0]!;
     spec.resources = {
       ...spec.resources,
@@ -1076,7 +1076,7 @@ describe("Package Subject Definition normalization", () => {
   });
 
   it("rejects a composition that cannot derive the selected Collider", () => {
-    const spec = createValidPackageSubjectWorldV2();
+    const spec = createValidPackageSubjectWorld();
     const definition = spec.resources.subjectDefinitions[0]!;
     spec.resources = {
       ...spec.resources,
@@ -1111,7 +1111,7 @@ describe("Package Subject Definition normalization", () => {
     };
 
     expect(
-      normalizeAuthoringSpec(createValidPackageSubjectWorldV2(), {
+      normalizeAuthoringSpec(createValidPackageSubjectWorld(), {
         subjectResourceRegistry: conflictingRegistry,
       }).diagnostics,
     ).toContainEqual(

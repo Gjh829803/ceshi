@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import { readFile } from "node:fs/promises";
 import { fileURLToPath } from "node:url";
 
-import { createValidPackageSubjectWorldV2 } from "../../../packages/authoring/src/test-fixture";
+import { createValidPackageSubjectWorld } from "../../../packages/authoring/src/test-fixture";
 import type { WorldkitBrowserApiV3 } from "@whitebox-world/runtime-contracts";
 import { WORLDKIT_BROWSER_PROTOCOL_VERSION } from "@whitebox-world/runtime-contracts";
 
@@ -54,8 +54,10 @@ describe("loadAuthoringScene", () => {
     ]);
     expect(
       anchors.map((anchor) =>
-        (anchor.transform as { positionMetersXYZ: readonly number[] })
-          .positionMetersXYZ,
+        (anchor.placement as {
+          kind: "fixed";
+          transform: { positionMetersXYZ: readonly number[] };
+        }).transform.positionMetersXYZ,
       ),
     ).toEqual([
       [-3, 0, 30],
@@ -127,9 +129,9 @@ describe("loadAuthoringScene", () => {
     expect(activeActionForControlledSubject(snapshot)).toBe("run");
   });
 
-  it("runs strict Authoring V2 JSON through normalize and Compiler V3", async () => {
+  it("runs strict Authoring V3 JSON through NormalizedWorldIR V3 and ExecutionPlan V4", async () => {
     const loaded = await loadAuthoringScene(async () =>
-      new Response(JSON.stringify(createValidPackageSubjectWorldV2()), {
+      new Response(JSON.stringify(createValidPackageSubjectWorld()), {
         status: 200,
         headers: { "content-type": "application/json" },
       }),
@@ -139,7 +141,7 @@ describe("loadAuthoringScene", () => {
       ok: true,
       diagnostics: [],
       executionPlan: {
-        schemaVersion: 3,
+        schemaVersion: 4,
         runtimeBackend: "babylon-havok",
         id: "basic-world",
         subjects: [
@@ -159,7 +161,7 @@ describe("loadAuthoringScene", () => {
 
   it("produces one runtime Feature inspection per compiled Subject", async () => {
     const loaded = await loadAuthoringScene(async () =>
-      new Response(JSON.stringify(createValidPackageSubjectWorldV2())),
+      new Response(JSON.stringify(createValidPackageSubjectWorld())),
     );
     if (!loaded.ok || loaded.executionPlan === undefined) {
       throw new Error("Fixture did not load.");

@@ -5,14 +5,14 @@ import type {
 } from "@whitebox-world/layout-solver";
 import type {
   AnchorNodeSpecV2,
-  AuthoringSpecV2,
+  AuthoringDocumentBase,
   CameraNodeSpecV2,
   ObjectNodeSpecV2,
   TransformSpecV2,
   Vec2,
   WorldNodeSpecV2,
   NormalizeAuthoringOptions,
-  NormalizedWorldIRV2,
+  NormalizedWorldBase,
   NormalizedWorldNodeV2,
   AuthoringResult,
 } from "./types.js";
@@ -161,18 +161,18 @@ export type PlacementConstraintSpecV1 = ConstraintBaseV1 &
   );
 
 export interface AuthoringSpecV3
-  extends Omit<AuthoringSpecV2, "schemaVersion" | "nodes" | "constraints"> {
-  readonly schemaVersion: 3;
-  readonly layout: Readonly<{ solverProfileRef: string }>;
-  readonly spatial: Readonly<{
-    regions: readonly SpatialRegionSpecV1[];
-    routes: readonly RouteSpecV1[];
-    screenRegions: readonly ScreenRegionSpecV1[];
-  }>;
-  readonly nodes: readonly WorldNodeSpecV3[];
-  readonly constraints: Readonly<{
-    placements: readonly PlacementConstraintSpecV1[];
-  }>;
+  extends AuthoringDocumentBase {
+  schemaVersion: 3;
+  layout: { solverProfileRef: string };
+  spatial: {
+    regions: SpatialRegionSpecV1[];
+    routes: RouteSpecV1[];
+    screenRegions: ScreenRegionSpecV1[];
+  };
+  nodes: WorldNodeSpecV3[];
+  constraints: {
+    placements: PlacementConstraintSpecV1[];
+  };
 }
 
 export interface NormalizedPlacementProvenanceV1 {
@@ -211,7 +211,8 @@ export type NormalizedWorldNodeV3 =
   | CameraNodeSpecV3;
 
 export interface NormalizedWorldIRV3
-  extends Omit<NormalizedWorldIRV2, "schemaVersion" | "nodes"> {
+  extends Omit<NormalizedWorldBase, "nodes"> {
+  readonly kind: "worldkit-normalized-world";
   readonly schemaVersion: 3;
   readonly nodes: readonly NormalizedWorldNodeV3[];
   readonly layout: Readonly<{

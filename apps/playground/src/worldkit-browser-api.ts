@@ -43,6 +43,7 @@ export interface DeferredWorldkitBrowserApiInstallationV1 {
 
 type BrowserStartupErrorCodeV1 =
   | SubjectAssetRuntimeErrorCodeV1
+  | "WORLDKIT_LAYOUT_ASSERTION_FAILED"
   | "WORLDKIT_RUNTIME_INITIALIZATION_FAILED"
   | "WORLDKIT_RUNTIME_NOT_READY";
 
@@ -86,12 +87,21 @@ function genericStartupError(): WorldkitBrowserStartupErrorV1 {
 async function sanitizeStartupError(
   error: unknown,
 ): Promise<WorldkitBrowserStartupErrorV1> {
-  let guardedCode: SubjectAssetRuntimeErrorCodeV1 | undefined;
+  let guardedCode:
+    | SubjectAssetRuntimeErrorCodeV1
+    | "WORLDKIT_LAYOUT_ASSERTION_FAILED"
+    | undefined;
   try {
-    const { isSubjectAssetRuntimeErrorV1 } = await import(
+    const {
+      isSubjectAssetRuntimeErrorV1,
+      isWorldRuntimeLayoutAssertionErrorV1,
+    } = await import(
       "@whitebox-world/runtime-babylon"
     );
     if (isSubjectAssetRuntimeErrorV1(error)) guardedCode = error.code;
+    else if (isWorldRuntimeLayoutAssertionErrorV1(error)) {
+      guardedCode = error.code;
+    }
   } catch {
     return genericStartupError();
   }
@@ -100,7 +110,9 @@ async function sanitizeStartupError(
     severity: "error",
     code: guardedCode,
     instancePath: "",
-    message: "Subject Asset runtime initialization failed.",
+    message: guardedCode === "WORLDKIT_LAYOUT_ASSERTION_FAILED"
+      ? "Worldkit layout assertion validation failed."
+      : "Subject Asset runtime initialization failed.",
   });
   return new WorldkitBrowserStartupErrorV1(guardedCode, diagnostic);
 }

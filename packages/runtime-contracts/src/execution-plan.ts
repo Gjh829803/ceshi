@@ -236,7 +236,7 @@ export interface ExecutionSubjectV3 {
   };
 }
 
-export interface ExecutionCameraV3 {
+interface ExecutionCameraCore {
   cameraEntityId: string;
   rigRef: "worldkit://camera/third-person.standard@1";
   targetEntityId: string;
@@ -245,41 +245,6 @@ export interface ExecutionCameraV3 {
   targetHeightMeters: number;
   fovDegrees: number;
   manualSwitchAllowed: boolean;
-}
-
-export interface ExecutionPlanV3 {
-  kind: "worldkit-execution-plan";
-  schemaVersion: 3;
-  id: string;
-  seed: number;
-  runtimeBackend: "babylon-havok";
-  normalizedWorldIrHash: string;
-  resourceLockHash: string;
-  coordinateSystem: "right-handed-y-up-minus-z-forward";
-  gravityMetersPerSecondSquaredXYZ: Vec3;
-  atmospherePreset: "clear-day" | "golden-hour" | "overcast" | "night";
-  terrain: ExecutionTerrainV3;
-  waters: readonly ExecutionWaterV3[];
-  objects: readonly ExecutionObjectV3[];
-  subjectAssets: readonly ExecutionSubjectAssetV1[];
-  rigProfiles: readonly ExecutionRigProfileV1[];
-  animationSets: readonly ExecutionAnimationSetV1[];
-  colliderProfiles: readonly ExecutionColliderProfileV1[];
-  controlledEntityId: string;
-  subjects: readonly ExecutionSubjectV3[];
-  camera: ExecutionCameraV3;
-  resourceUsage: {
-    vertices: number;
-    triangles: number;
-    colliders: number;
-  };
-}
-
-export interface CompileWorldResultV3 {
-  ok: boolean;
-  executionPlan?: ExecutionPlanV3;
-  executionPlanHash?: string;
-  diagnostics: readonly CompileDiagnostic[];
 }
 
 interface ExecutionLayoutAssertionBaseV1 {
@@ -342,14 +307,36 @@ export interface ExecutionLayoutScreenRegionV1 {
   readonly maximumUv: readonly [u: number, v: number];
 }
 
-export interface ExecutionCameraV4 extends ExecutionCameraV3 {
+export interface ExecutionCameraV4 extends ExecutionCameraCore {
   readonly aspectRatio: number;
 }
 
-export interface ExecutionPlanV4
-  extends Omit<ExecutionPlanV3, "schemaVersion" | "camera"> {
+export interface ExecutionPlanV4 {
+  readonly kind: "worldkit-execution-plan";
   readonly schemaVersion: 4;
+  readonly id: string;
+  readonly seed: number;
+  readonly runtimeBackend: "babylon-havok";
+  readonly normalizedWorldIrHash: string;
+  readonly resourceLockHash: string;
+  readonly coordinateSystem: "right-handed-y-up-minus-z-forward";
+  readonly gravityMetersPerSecondSquaredXYZ: Vec3;
+  readonly atmospherePreset: "clear-day" | "golden-hour" | "overcast" | "night";
+  readonly terrain: ExecutionTerrainV3;
+  readonly waters: readonly ExecutionWaterV3[];
+  readonly objects: readonly ExecutionObjectV3[];
+  readonly subjectAssets: readonly ExecutionSubjectAssetV1[];
+  readonly rigProfiles: readonly ExecutionRigProfileV1[];
+  readonly animationSets: readonly ExecutionAnimationSetV1[];
+  readonly colliderProfiles: readonly ExecutionColliderProfileV1[];
+  readonly controlledEntityId: string;
+  readonly subjects: readonly ExecutionSubjectV3[];
   readonly camera: ExecutionCameraV4;
+  readonly resourceUsage: Readonly<{
+    vertices: number;
+    triangles: number;
+    colliders: number;
+  }>;
   readonly layout: Readonly<{
     solverProfileRef: string;
     resolvedVersion: string;

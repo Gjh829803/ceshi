@@ -1,9 +1,24 @@
 import { BUILT_IN_LAYOUT_SOLVER_PROFILE_REF } from "@whitebox-world/layout-solver";
 
-import type { AuthoringSpecV2 } from "./types.js";
+import type { AuthoringDocumentBase, WorldNodeSpecV2 } from "./types.js";
 import type { AuthoringSpecV3, WorldNodeSpecV3 } from "./types-v3.js";
 
-export function migrateAuthoringSpecV2ToV3(input: AuthoringSpecV2): AuthoringSpecV3 {
+interface LegacyAuthoringSpec {
+  readonly kind: AuthoringDocumentBase["kind"];
+  readonly schemaVersion: 2;
+  readonly id: AuthoringDocumentBase["id"];
+  readonly seed: AuthoringDocumentBase["seed"];
+  readonly provenance?: AuthoringDocumentBase["provenance"];
+  readonly world: AuthoringDocumentBase["world"];
+  readonly resources: AuthoringDocumentBase["resources"];
+  readonly nodes: readonly WorldNodeSpecV2[];
+  readonly relationships: AuthoringDocumentBase["relationships"];
+  readonly rules: AuthoringDocumentBase["rules"];
+  readonly startup: AuthoringDocumentBase["startup"];
+  readonly constraints: Record<string, never>;
+}
+
+export function migrateAuthoringSpecV2ToV3(input: LegacyAuthoringSpec): AuthoringSpecV3 {
   if (
     input === null ||
     typeof input !== "object" ||
@@ -39,10 +54,16 @@ export function migrateAuthoringSpecV2ToV3(input: AuthoringSpecV2): AuthoringSpe
       },
     };
   });
-  const { schemaVersion: _schemaVersion, constraints: _constraints, ...sourceRest } = source;
+  const {
+    schemaVersion: _schemaVersion,
+    constraints: _constraints,
+    provenance,
+    ...sourceRest
+  } = source;
 
   return {
     ...sourceRest,
+    ...(provenance === undefined ? {} : { provenance }),
     schemaVersion: 3,
     layout: { solverProfileRef: BUILT_IN_LAYOUT_SOLVER_PROFILE_REF },
     spatial: { regions: [], routes: [], screenRegions: [] },

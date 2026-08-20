@@ -1,40 +1,26 @@
 import { describe, expect, it } from "vitest";
 
-import basicWorldV2 from "../../../examples/authoring/basic-world.json";
+import basicWorldV3 from "../../../examples/authoring/basic-world.json";
 
 import {
   parseAuthoringSpecV3Json,
   validateAuthoringSpecV3,
   type AuthoringSpecV3,
-  type CameraNodeSpecV2,
   type PlacementConstraintSpecV1,
 } from "./index.js";
 
 function validV3(): AuthoringSpecV3 {
-  const nodes = structuredClone(basicWorldV2.nodes).map((node) => {
-    if (node.kind === "camera") {
-      const cameraNode = node as CameraNodeSpecV2;
-      return {
-        ...cameraNode,
-        components: {
-          cameraRig: {
-            ...cameraNode.components.cameraRig,
-            thirdPerson: {
-              ...cameraNode.components.cameraRig.thirdPerson,
-              aspectRatio: 16 / 9,
-            },
-          },
-        },
-      };
-    }
-    if (node.kind !== "object" && node.kind !== "anchor") return node;
-    const { transform, ...rest } = node;
+  const source = structuredClone(basicWorldV3) as unknown as AuthoringSpecV3;
+  const nodes = source.nodes.map((node) => {
     if (node.id === "tower") {
+      if (node.kind !== "object") throw new Error("Tower fixture must be an Object.");
       return {
-        ...rest,
+        ...node,
         placement: {
           kind: "solved" as const,
-          initialTransform: transform,
+          initialTransform: node.placement.kind === "fixed"
+            ? node.placement.transform
+            : node.placement.initialTransform,
           placementConstraintIds: [
             "tower-inside-east-bluff",
             "tower-outside-water",
@@ -48,11 +34,11 @@ function validV3(): AuthoringSpecV3 {
         },
       };
     }
-    return { ...rest, placement: { kind: "fixed" as const, transform } };
+    return node;
   });
 
   return {
-    ...structuredClone(basicWorldV2),
+    ...source,
     schemaVersion: 3,
     layout: {
       solverProfileRef: "worldkit://layout-solver-profile/outdoor.s1@1",

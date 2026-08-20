@@ -6,7 +6,7 @@ import { fileURLToPath } from "node:url";
 import { afterEach, describe, expect, it } from "vitest";
 
 import {
-  createValidPackageSubjectWorldV2,
+  createValidPackageSubjectWorld,
   createValidRiggedPackageDefinition,
 } from "../packages/authoring/src/test-fixture";
 
@@ -33,7 +33,7 @@ async function writePackageWorld(directory: string): Promise<string> {
   const inputPath = path.join(directory, "package-world.json");
   await writeFile(
     inputPath,
-    JSON.stringify(createValidPackageSubjectWorldV2()),
+    JSON.stringify(createValidPackageSubjectWorld()),
     "utf8",
   );
   return inputPath;
@@ -215,7 +215,7 @@ describe("worldkit CLI", () => {
   it("validates a standalone Definition through canonical derivation", async () => {
     const directory = await createTemporaryDirectory();
     const definitionPath = path.join(directory, "definition.json");
-    const definition = createValidPackageSubjectWorldV2().resources
+    const definition = createValidPackageSubjectWorld().resources
       .subjectDefinitions[0]!;
     await writeFile(definitionPath, JSON.stringify(definition), "utf8");
 
@@ -280,7 +280,7 @@ describe("worldkit CLI", () => {
     await writeFile(
       invalidPath,
       JSON.stringify({
-        ...createValidPackageSubjectWorldV2().resources.subjectDefinitions[0],
+        ...createValidPackageSubjectWorld().resources.subjectDefinitions[0],
         unexpectedField: true,
       }),
       "utf8",
@@ -407,7 +407,7 @@ describe("worldkit CLI", () => {
     });
   });
 
-  it("validates V2 files and builds deterministic V3 artifacts", async () => {
+  it("validates V3 files and builds deterministic V3/V4 artifacts", async () => {
     const directory = await createTemporaryDirectory();
     const inputPath = await writePackageWorld(directory);
     const outputPath = path.join(directory, "dist", "world.build.json");
@@ -426,9 +426,9 @@ describe("worldkit CLI", () => {
     expect(artifact).toMatchObject({
       kind: "worldkit-build-artifact",
       schemaVersion: 3,
-      normalizedWorldIr: { schemaVersion: 2 },
+      normalizedWorldIr: { schemaVersion: 3 },
       executionPlan: {
-        schemaVersion: 3,
+        schemaVersion: 4,
         runtimeBackend: "babylon-havok",
         controlledEntityId: "player",
       },

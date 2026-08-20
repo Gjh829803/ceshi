@@ -1,6 +1,5 @@
 {
   "kind": "worldkit-authoring-spec",
-  "schemaVersion": 2,
   "id": "package-subject-world",
   "seed": 4096,
   "provenance": {
@@ -9,11 +8,24 @@
   "world": {
     "coordinateSystem": "right-handed-y-up-minus-z-forward",
     "bounds": {
-      "centerMetersXZ": [0, 0],
-      "sizeMetersXZ": [120, 120],
-      "heightRangeMeters": [-8, 16]
+      "centerMetersXZ": [
+        0,
+        0
+      ],
+      "sizeMetersXZ": [
+        120,
+        120
+      ],
+      "heightRangeMeters": [
+        -8,
+        16
+      ]
     },
-    "gravityMetersPerSecondSquaredXYZ": [0, -9.81, 0],
+    "gravityMetersPerSecondSquaredXYZ": [
+      0,
+      -9.81,
+      0
+    ],
     "environment": {
       "preset": "clear-day"
     },
@@ -30,7 +42,11 @@
         "version": 1,
         "kind": "primitive",
         "primitive": "box",
-        "sizeMetersXYZ": [2, 3, 24],
+        "sizeMetersXYZ": [
+          2,
+          3,
+          24
+        ],
         "collisionEnabled": true,
         "semantic": {
           "classId": "obstacle.wall"
@@ -69,13 +85,24 @@
             "kind": "primitive",
             "shape": {
               "kind": "box",
-              "sizeMetersXYZ": [0.9, 0.7, 1.4]
+              "sizeMetersXYZ": [
+                0.9,
+                0.7,
+                1.4
+              ]
             },
             "localTransform": {
-              "positionMetersXYZ": [0, 0.85, 0]
+              "positionMetersXYZ": [
+                0,
+                0.85,
+                0
+              ]
             },
             "colliderContribution": "include",
-            "semanticTags": ["body", "torso"]
+            "semanticTags": [
+              "body",
+              "torso"
+            ]
           },
           {
             "id": "head",
@@ -85,10 +112,16 @@
               "radiusMeters": 0.32
             },
             "localTransform": {
-              "positionMetersXYZ": [0, 1.15, -0.9]
+              "positionMetersXYZ": [
+                0,
+                1.15,
+                -0.9
+              ]
             },
             "colliderContribution": "include",
-            "semanticTags": ["head"]
+            "semanticTags": [
+              "head"
+            ]
           },
           {
             "id": "leg.back-left",
@@ -99,10 +132,17 @@
               "heightMeters": 0.7
             },
             "localTransform": {
-              "positionMetersXYZ": [-0.3, 0.35, 0.45]
+              "positionMetersXYZ": [
+                -0.3,
+                0.35,
+                0.45
+              ]
             },
             "colliderContribution": "include",
-            "semanticTags": ["back-left", "leg"]
+            "semanticTags": [
+              "back-left",
+              "leg"
+            ]
           },
           {
             "id": "leg.back-right",
@@ -113,10 +153,17 @@
               "heightMeters": 0.7
             },
             "localTransform": {
-              "positionMetersXYZ": [0.3, 0.35, 0.45]
+              "positionMetersXYZ": [
+                0.3,
+                0.35,
+                0.45
+              ]
             },
             "colliderContribution": "include",
-            "semanticTags": ["back-right", "leg"]
+            "semanticTags": [
+              "back-right",
+              "leg"
+            ]
           },
           {
             "id": "leg.front-left",
@@ -127,10 +174,17 @@
               "heightMeters": 0.7
             },
             "localTransform": {
-              "positionMetersXYZ": [-0.3, 0.35, -0.45]
+              "positionMetersXYZ": [
+                -0.3,
+                0.35,
+                -0.45
+              ]
             },
             "colliderContribution": "include",
-            "semanticTags": ["front-left", "leg"]
+            "semanticTags": [
+              "front-left",
+              "leg"
+            ]
           },
           {
             "id": "leg.front-right",
@@ -141,10 +195,17 @@
               "heightMeters": 0.7
             },
             "localTransform": {
-              "positionMetersXYZ": [0.3, 0.35, -0.45]
+              "positionMetersXYZ": [
+                0.3,
+                0.35,
+                -0.45
+              ]
             },
             "colliderContribution": "include",
-            "semanticTags": ["front-right", "leg"]
+            "semanticTags": [
+              "front-right",
+              "leg"
+            ]
           },
           {
             "id": "tail",
@@ -155,11 +216,21 @@
               "heightMeters": 0.7
             },
             "localTransform": {
-              "positionMetersXYZ": [0, 1.05, 0.95],
-              "rotationEulerRadiansXYZ": [1.5707963267948966, 0, 0]
+              "positionMetersXYZ": [
+                0,
+                1.05,
+                0.95
+              ],
+              "rotationEulerRadiansXYZ": [
+                1.5707963267948966,
+                0,
+                0
+              ]
             },
             "colliderContribution": "exclude",
-            "semanticTags": ["tail"]
+            "semanticTags": [
+              "tail"
+            ]
           }
         ],
         "visualBinding": {
@@ -170,9 +241,15 @@
             "id": "seat.mount",
             "kind": "local",
             "localTransform": {
-              "positionMetersXYZ": [0, 1.35, 0]
+              "positionMetersXYZ": [
+                0,
+                1.35,
+                0
+              ]
             },
-            "semanticTags": ["mount-seat"]
+            "semanticTags": [
+              "mount-seat"
+            ]
           }
         ],
         "colliderPolicy": {
@@ -189,7 +266,11 @@
         "aiMetadata": {
           "displayName": "Coastal pack animal",
           "description": "A package-local controllable quadruped whitebox proxy used to verify deterministic composition and independent runtime instances.",
-          "semanticTags": ["animal", "ground", "quadruped"]
+          "semanticTags": [
+            "animal",
+            "ground",
+            "quadruped"
+          ]
         }
       }
     ]
@@ -206,9 +287,18 @@
             "amplitudeMeters": 1.5
           },
           "grid": {
-            "centerMetersXZ": [0, 0],
-            "sizeMetersXZ": [120, 120],
-            "resolutionCellsXZ": [65, 65]
+            "centerMetersXZ": [
+              0,
+              0
+            ],
+            "sizeMetersXZ": [
+              120,
+              120
+            ],
+            "resolutionCellsXZ": [
+              65,
+              65
+            ]
           },
           "semantic": {
             "classId": "terrain.grassland"
@@ -224,8 +314,14 @@
           "terrainEntityId": "terrain-main",
           "boundary": {
             "kind": "ellipse",
-            "centerMetersXZ": [0, -12],
-            "radiusMetersXZ": [13, 17]
+            "centerMetersXZ": [
+              0,
+              -12
+            ],
+            "radiusMetersXZ": [
+              13,
+              17
+            ]
           },
           "depthMeters": 4,
           "shoreWidthMeters": 3,
@@ -241,54 +337,96 @@
       "id": "tower",
       "kind": "object",
       "prototypeRef": "package://prototype/landmark-tower@1",
-      "transform": {
-        "positionMetersXYZ": [17, 5, -19]
+      "placement": {
+        "kind": "fixed",
+        "transform": {
+          "positionMetersXYZ": [
+            17,
+            5,
+            -19
+          ]
+        }
       }
     },
     {
       "id": "wall-east",
       "kind": "object",
       "prototypeRef": "package://prototype/corridor-wall@1",
-      "transform": {
-        "positionMetersXYZ": [7, 1.5, 22]
+      "placement": {
+        "kind": "fixed",
+        "transform": {
+          "positionMetersXYZ": [
+            7,
+            1.5,
+            22
+          ]
+        }
       }
     },
     {
       "id": "wall-west",
       "kind": "object",
       "prototypeRef": "package://prototype/corridor-wall@1",
-      "transform": {
-        "positionMetersXYZ": [-7, 1.5, 22]
+      "placement": {
+        "kind": "fixed",
+        "transform": {
+          "positionMetersXYZ": [
+            -7,
+            1.5,
+            22
+          ]
+        }
       }
     },
     {
       "id": "spawn-main",
       "kind": "anchor",
-      "transform": {
-        "positionMetersXYZ": [0, 0, 30]
-      },
       "semantic": {
         "classId": "spawn.player"
+      },
+      "placement": {
+        "kind": "fixed",
+        "transform": {
+          "positionMetersXYZ": [
+            0,
+            0,
+            30
+          ]
+        }
       }
     },
     {
       "id": "spawn-pack-animal-a",
       "kind": "anchor",
-      "transform": {
-        "positionMetersXYZ": [-4, 0, 24]
-      },
       "semantic": {
         "classId": "spawn.animal"
+      },
+      "placement": {
+        "kind": "fixed",
+        "transform": {
+          "positionMetersXYZ": [
+            -4,
+            0,
+            24
+          ]
+        }
       }
     },
     {
       "id": "spawn-pack-animal-b",
       "kind": "anchor",
-      "transform": {
-        "positionMetersXYZ": [4, 0, 24]
-      },
       "semantic": {
         "classId": "spawn.animal"
+      },
+      "placement": {
+        "kind": "fixed",
+        "transform": {
+          "positionMetersXYZ": [
+            4,
+            0,
+            24
+          ]
+        }
       }
     },
     {
@@ -326,7 +464,8 @@
             "pitchRadians": 0.22,
             "distanceMeters": 7,
             "targetHeightMeters": 1.2,
-            "fovDegrees": 62
+            "fovDegrees": 62,
+            "aspectRatio": 1.7777777777777777
           },
           "manualSwitchAllowed": false
         }
@@ -340,5 +479,16 @@
     "controlledEntityId": "player",
     "cameraEntityId": "camera-main"
   },
-  "constraints": {}
+  "schemaVersion": 3,
+  "layout": {
+    "solverProfileRef": "worldkit://layout-solver-profile/outdoor.s1@1"
+  },
+  "spatial": {
+    "regions": [],
+    "routes": [],
+    "screenRegions": []
+  },
+  "constraints": {
+    "placements": []
+  }
 }

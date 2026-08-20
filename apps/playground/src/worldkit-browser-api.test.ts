@@ -1,6 +1,9 @@
 import { describe, expect, it } from "vitest";
 
-import { SubjectAssetRuntimeErrorV1 } from "@whitebox-world/runtime-babylon";
+import {
+  SubjectAssetRuntimeErrorV1,
+  WorldRuntimeLayoutAssertionErrorV1,
+} from "@whitebox-world/runtime-babylon";
 import type {
   BindControlRequestV2,
   ControlBindingReceiptV2,
@@ -155,6 +158,32 @@ describe("installDeferredWorldkitBrowserApi", () => {
     ]);
     expect(installation.api.getDiagnostics()).toBe(diagnostics);
     expect(readyError.diagnostic).toBe(diagnostics[0]);
+  });
+
+  it("forwards only the guarded layout assertion failure without internal details", async () => {
+    const installation = installDeferredWorldkitBrowserApi({
+      target: {},
+      statusElement: { dataset: {} },
+      initialize: async () => {
+        throw new WorldRuntimeLayoutAssertionErrorV1();
+      },
+    });
+
+    await expect(installation.initialization).resolves.toBeUndefined();
+    await expect(installation.api.ready()).rejects.toMatchObject({
+      code: "WORLDKIT_LAYOUT_ASSERTION_FAILED",
+    });
+    expect(installation.api.getDiagnostics()).toEqual([
+      {
+        severity: "error",
+        code: "WORLDKIT_LAYOUT_ASSERTION_FAILED",
+        instancePath: "",
+        message: "Worldkit layout assertion validation failed.",
+      },
+    ]);
+    expect(JSON.stringify(installation.api.getDiagnostics())).not.toContain(
+      "frozen layout assertion",
+    );
   });
 
   it("redacts unknown failures even when they imitate a Runtime code", async () => {

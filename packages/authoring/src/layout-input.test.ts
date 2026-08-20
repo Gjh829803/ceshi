@@ -1,14 +1,13 @@
 import { describe, expect, it } from "vitest";
 
 import {
-  migrateAuthoringSpecV2ToV3,
   resolveAuthoringLayoutV3,
   type AuthoringSpecV3,
 } from "./index.js";
 import { createValidAuthoringSpec } from "./test-fixture.js";
 
 function solvedSpawnWorld(): AuthoringSpecV3 {
-  const base = migrateAuthoringSpecV2ToV3(createValidAuthoringSpec());
+  const base = createValidAuthoringSpec();
   return {
     ...base,
     spatial: {

@@ -9,14 +9,13 @@ import {
 } from "@whitebox-world/layout-solver";
 
 import { sha256CanonicalJson } from "./canonical-json.js";
-import { normalizeAuthoringSpec } from "./normalize.js";
+import { normalizeAuthoringBaseV3 } from "./normalize.js";
 import type {
   AuthoringDiagnostic,
   AuthoringResult,
-  AuthoringSpecV2,
   NormalizeAuthoringOptions,
   NormalizedProceduralTerrainSourceV2,
-  NormalizedWorldIRV2,
+  NormalizedWorldBase,
   PrimitivePrototypeSpecV2,
   TransformSpecV2,
 } from "./types.js";
@@ -53,61 +52,6 @@ function normalizeTransform(
     positionMetersXYZ: [...transform.positionMetersXYZ],
     rotationEulerRadiansXYZ: [...(transform.rotationEulerRadiansXYZ ?? [0, 0, 0])],
     scaleXYZ: [...(transform.scaleXYZ ?? [1, 1, 1])],
-  };
-}
-
-export function projectAuthoringV3ToV2ForNormalization(
-  spec: AuthoringSpecV3,
-  finalTransformsByEntityId: Readonly<Record<string, LayoutTransformV1>> = {},
-): AuthoringSpecV2 {
-  const {
-    schemaVersion: _schemaVersion,
-    layout: _layout,
-    spatial: _spatial,
-    constraints: _placementConstraints,
-    nodes: _nodes,
-    ...common
-  } = structuredClone(spec);
-  const fallbackPosition = [
-    spec.world.bounds.centerMetersXZ[0],
-    0,
-    spec.world.bounds.centerMetersXZ[1],
-  ] as const;
-  const nodes: AuthoringSpecV2["nodes"] = spec.nodes.map((node) => {
-    if (node.kind === "camera") {
-      const { aspectRatio: _aspectRatio, ...thirdPerson } = node.components.cameraRig.thirdPerson;
-      return {
-        ...structuredClone(node),
-        components: {
-          cameraRig: {
-            ...structuredClone(node.components.cameraRig),
-            thirdPerson,
-          },
-        },
-      };
-    }
-    if (node.kind !== "object" && node.kind !== "anchor") {
-      return structuredClone(node);
-    }
-    const finalTransform = finalTransformsByEntityId[node.id];
-    const sourceTransform = finalTransform ?? (
-      node.placement.kind === "fixed"
-        ? normalizeTransform(node.placement.transform)
-        : node.placement.initialTransform === undefined
-          ? normalizeTransform({ positionMetersXYZ: fallbackPosition })
-          : normalizeTransform(node.placement.initialTransform)
-    );
-    const { placement: _placement, ...nodeWithoutPlacement } = node;
-    return {
-      ...structuredClone(nodeWithoutPlacement),
-      transform: structuredClone(sourceTransform),
-    };
-  });
-  return {
-    ...common,
-    schemaVersion: 2,
-    nodes,
-    constraints: {},
   };
 }
 
@@ -158,7 +102,7 @@ function fractalNoise(
   return normalization === 0 ? 0 : total / normalization;
 }
 
-function terrainHeightfield(normalized: NormalizedWorldIRV2): LayoutHeightfieldV1 {
+function terrainHeightfield(normalized: NormalizedWorldBase): LayoutHeightfieldV1 {
   const terrain = normalized.nodes.find((node) => node.kind === "terrain");
   if (terrain === undefined) throw new Error("AUTHORING_TERRAIN_REQUIRED");
   const { grid, source } = terrain.components.terrain;
@@ -292,6 +236,63 @@ function semanticReferenceDiagnostics(spec: AuthoringSpecV3): readonly Authoring
   return diagnostics;
 }
 
+function canonicalAuthoringIdentityV3(
+  spec: AuthoringSpecV3,
+  normalizedBase: NormalizedWorldBase,
+): unknown {
+  return {
+    kind: spec.kind,
+    schemaVersion: spec.schemaVersion,
+    id: spec.id,
+    seed: spec.seed,
+    ...(spec.provenance === undefined ? {} : { provenance: structuredClone(spec.provenance) }),
+    world: structuredClone(spec.world),
+    resources: structuredClone(normalizedBase.resources),
+    layout: structuredClone(spec.layout),
+    spatial: {
+      regions: [...spec.spatial.regions].sort((left, right) => left.id.localeCompare(right.id)).map((row) => structuredClone(row)),
+      routes: [...spec.spatial.routes].sort((left, right) => left.id.localeCompare(right.id)).map((row) => structuredClone(row)),
+      screenRegions: [...spec.spatial.screenRegions].sort((left, right) => left.id.localeCompare(right.id)).map((row) => structuredClone(row)),
+    },
+    nodes: [...spec.nodes].sort((left, right) => left.id.localeCompare(right.id)).map((node) => {
+      if ((node.kind === "object" || node.kind === "anchor") && node.placement.kind === "solved") {
+        return {
+          ...structuredClone(node),
+          placement: {
+            ...structuredClone(node.placement),
+            placementConstraintIds: [...node.placement.placementConstraintIds].sort(),
+          },
+        };
+      }
+      if (node.kind === "camera") {
+        return {
+          ...structuredClone(node),
+          components: {
+            cameraRig: {
+              ...structuredClone(node.components.cameraRig),
+              allowedRigRefs: [...node.components.cameraRig.allowedRigRefs].sort(),
+            },
+          },
+        };
+      }
+      return structuredClone(node);
+    }),
+    relationships: [...spec.relationships].sort((left, right) => left.id.localeCompare(right.id)).map((row) => structuredClone(row)),
+    rules: [...spec.rules].sort((left, right) => left.id.localeCompare(right.id)).map((row) => structuredClone(row)),
+    startup: structuredClone(spec.startup),
+    constraints: {
+      placements: [...spec.constraints.placements]
+        .sort((left, right) => left.id.localeCompare(right.id))
+        .map((constraint) => {
+          if (constraint.kind !== "minimum-clearance") return structuredClone(constraint);
+          return constraint.otherEntityIds === undefined
+            ? { ...structuredClone(constraint), semanticClassIds: [...constraint.semanticClassIds].sort() }
+            : { ...structuredClone(constraint), otherEntityIds: [...constraint.otherEntityIds].sort() };
+        }),
+    },
+  };
+}
+
 export function resolveAuthoringLayoutV3(
   value: unknown,
   options: NormalizeAuthoringOptions = {},
@@ -312,10 +313,7 @@ export function resolveAuthoringLayoutV3(
   if (referenceDiagnostics.length > 0) {
     return { ok: false, diagnostics: referenceDiagnostics, resolvedSolverProfile };
   }
-  const normalizedBase = normalizeAuthoringSpec(
-    projectAuthoringV3ToV2ForNormalization(spec),
-    options,
-  );
+  const normalizedBase = normalizeAuthoringBaseV3(spec, options);
   if (!normalizedBase.ok || normalizedBase.value === undefined) {
     return { ok: false, diagnostics: normalizedBase.diagnostics, resolvedSolverProfile };
   }
@@ -393,7 +391,9 @@ export function resolveAuthoringLayoutV3(
     kind: "worldkit-resolved-layout-input",
     schemaVersion: 1,
     id: spec.id,
-    authoringSpecHash: sha256CanonicalJson(spec) as `sha256:${string}`,
+    authoringSpecHash: sha256CanonicalJson(
+      canonicalAuthoringIdentityV3(spec, normalized),
+    ) as `sha256:${string}`,
     registryLockHash: normalized.resources.resourceLockHash as `sha256:${string}`,
     solverProfile: {
       solverProfileRef: resolvedSolverProfile.resourceRef,

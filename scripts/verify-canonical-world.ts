@@ -17,10 +17,10 @@ import {
 
 import {
   stringifyCanonicalJson,
-  type NormalizedWorldIRV2,
+  type NormalizedWorldIRV3,
 } from "@whitebox-world/authoring";
 import type {
-  ExecutionPlanV3,
+  ExecutionPlanV4,
   Vec3,
   WorldRuntimeSnapshotV3,
 } from "@whitebox-world/runtime-contracts";
@@ -63,8 +63,8 @@ interface WorldBuildArtifactV3 {
   schemaVersion: 3;
   normalizedWorldIrHash: string;
   executionPlanHash: string;
-  normalizedWorldIr: NormalizedWorldIRV2;
-  executionPlan: ExecutionPlanV3;
+  normalizedWorldIr: NormalizedWorldIRV3;
+  executionPlan: ExecutionPlanV4;
 }
 
 interface CanonicalArtifactPaths {
@@ -197,8 +197,8 @@ async function verifyArtifacts(paths: CanonicalArtifactPaths): Promise<{
   assert.equal(artifact.schemaVersion, 3);
   assert.match(artifact.normalizedWorldIrHash, /^sha256:[a-f0-9]{64}$/);
   assert.match(artifact.executionPlanHash, /^sha256:[a-f0-9]{64}$/);
-  assert.equal(artifact.normalizedWorldIr.schemaVersion, 2);
-  assert.equal(artifact.executionPlan.schemaVersion, 3);
+  assert.equal(artifact.normalizedWorldIr.schemaVersion, 3);
+  assert.equal(artifact.executionPlan.schemaVersion, 4);
   assert.equal(artifact.executionPlan.runtimeBackend, "babylon-havok");
   assert.equal(artifact.executionPlan.terrain.entityId, "terrain-main");
   assert.deepEqual(
@@ -629,16 +629,16 @@ async function run(): Promise<void> {
       {
         ok: true,
         protocolVersions: {
-          authoring: 2,
-          normalizedWorldIr: 2,
-          executionPlan: 3,
+          authoring: 3,
+          normalizedWorldIr: 3,
+          executionPlan: 4,
           runtimeSnapshot: 3,
           browserProtocol: 3,
         },
         gates: [
           "strict-valid-input",
           "strict-invalid-input-rejection",
-          "deterministic-v3-build-artifact",
+          "deterministic-v3-v4-build-artifact",
           "subject-explain-artifact",
           "playwright-capture",
           "browser-protocol-v3",

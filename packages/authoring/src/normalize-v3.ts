@@ -6,10 +6,9 @@ import {
 
 import { sha256CanonicalJson } from "./canonical-json.js";
 import {
-  projectAuthoringV3ToV2ForNormalization,
   resolveAuthoringLayoutV3,
 } from "./layout-input.js";
-import { normalizeAuthoringSpec } from "./normalize.js";
+import { normalizeAuthoringBaseV3 } from "./normalize.js";
 import type { AuthoringDiagnostic, NormalizedWorldNodeV2 } from "./types.js";
 import type {
   AuthoringSpecV3,
@@ -119,10 +118,10 @@ export function normalizeAuthoringSpecV3(
       placement.transform,
     ]),
   );
-  const normalizedBase = normalizeAuthoringSpec(
-    projectAuthoringV3ToV2ForNormalization(spec, finalTransformsByEntityId),
-    options,
-  );
+  const normalizedBase = normalizeAuthoringBaseV3(spec, {
+    ...options,
+    finalTransformsByEntityId,
+  });
   if (!normalizedBase.ok || normalizedBase.value === undefined) {
     return {
       ok: false,
@@ -140,6 +139,7 @@ export function normalizeAuthoringSpecV3(
     ));
   const normalized: NormalizedWorldIRV3 = {
     ...structuredClone(normalizedBase.value),
+    kind: "worldkit-normalized-world",
     schemaVersion: 3,
     nodes: normalizedNodesV3(
       spec,

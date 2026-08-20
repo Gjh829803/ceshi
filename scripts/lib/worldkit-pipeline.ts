@@ -5,12 +5,12 @@ import {
   normalizeAuthoringSpec,
   parseAuthoringSpecJson,
   type AuthoringDiagnostic,
-  type NormalizedWorldIRV2,
+  type NormalizedWorldIRV3,
 } from "@whitebox-world/authoring";
 import { compileWorld } from "@whitebox-world/compiler";
 import type {
   CompileDiagnostic,
-  ExecutionPlanV3,
+  ExecutionPlanV4,
 } from "@whitebox-world/runtime-contracts";
 
 export interface CliDiagnostic {
@@ -37,9 +37,9 @@ export interface WorldkitPipelineSuccess {
   exitCode: 0;
   diagnostics: readonly [];
   absoluteInputPath: string;
-  normalizedWorldIr: NormalizedWorldIRV2;
+  normalizedWorldIr: NormalizedWorldIRV3;
   normalizedWorldIrHash: string;
-  executionPlan: ExecutionPlanV3;
+  executionPlan: ExecutionPlanV4;
   executionPlanHash: string;
 }
 

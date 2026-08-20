@@ -1,7 +1,6 @@
 import Ajv2020, { type ErrorObject } from "ajv/dist/2020.js";
 import addFormats from "ajv-formats";
 
-import authoringSpecV2Schema from "./authoring-spec-v2.schema.json";
 import authoringSpecV3Schema from "./authoring-spec-v3.schema.json";
 import subjectDefinitionV1Schema from "./subject-definition-v1.schema.json";
 import type { AuthoringDiagnostic, AuthoringResult } from "./types.js";
@@ -65,7 +64,6 @@ ajv.addFormat("layout-solver-profile-ref", {
 });
 
 ajv.addSchema(subjectDefinitionV1Schema);
-ajv.addSchema(authoringSpecV2Schema);
 const validateCanonicalAuthoringSpecV3 = ajv.compile<AuthoringSpecV3>(
   authoringSpecV3Schema,
 );

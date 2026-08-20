@@ -1,14 +1,13 @@
 import { describe, expect, it } from "vitest";
 
 import {
-  migrateAuthoringSpecV2ToV3,
   normalizeAuthoringSpecV3,
   type AuthoringSpecV3,
 } from "./index.js";
 import { createValidAuthoringSpec } from "./test-fixture.js";
 
 function world(solved: boolean): AuthoringSpecV3 {
-  const base = migrateAuthoringSpecV2ToV3(createValidAuthoringSpec());
+  const base = createValidAuthoringSpec();
   if (!solved) return base;
   return {
     ...base,
@@ -130,10 +129,10 @@ describe("normalizeAuthoringSpecV3", () => {
 
   it("locks exact solved and all-fixed Normalized IR hashes", () => {
     expect(normalizeAuthoringSpecV3(world(true)).normalizedWorldIrHash).toBe(
-      "sha256:3c102bc3d7e1e47ee84d4c2640fc732da8d5f9f4863b086895faf84a058fa717",
+      "sha256:dbf42d2610edc241643e43ac8be114b96dad1bf15d2f4be93b6eac1d141d5420",
     );
     expect(normalizeAuthoringSpecV3(world(false)).normalizedWorldIrHash).toBe(
-      "sha256:79bd24d438dbb81a483d28fbbfb8c957e393bf58a87e02e92ef4eac554ff394a",
+      "sha256:23f3ff64a7c2c8beab7fbd17adc0a8498db11c26535afca7e5f7cbacb191a6c6",
     );
   });
 });
