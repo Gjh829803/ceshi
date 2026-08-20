@@ -22,6 +22,11 @@ function canonicalize(value: unknown, path: string): unknown {
     return Object.is(value, -0) ? 0 : value;
   }
   if (Array.isArray(value)) {
+    if (Object.getPrototypeOf(value) !== Array.prototype) {
+      throw new TypeError(
+        `Non-plain array at ${canonicalJsonPath(path)} is unsupported canonical JSON.`,
+      );
+    }
     rejectOwnSymbolKeys(value, path);
     return value.map((item, index) => canonicalize(item, `${path}/${index}`));
   }
@@ -33,12 +38,12 @@ function canonicalize(value: unknown, path: string): unknown {
     }
     rejectOwnSymbolKeys(value, path);
     const source = value as Record<string, unknown>;
-    const result: Record<string, unknown> = {};
+    const entries: [string, unknown][] = [];
     for (const key of Object.keys(source).sort()) {
       if (source[key] === undefined) continue;
-      result[key] = canonicalize(source[key], `${path}/${key}`);
+      entries.push([key, canonicalize(source[key], `${path}/${key}`)]);
     }
-    return result;
+    return Object.fromEntries(entries);
   }
   throw new TypeError(`Unsupported canonical JSON value at ${canonicalJsonPath(path)}.`);
 }

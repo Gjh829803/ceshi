@@ -65,4 +65,36 @@ describe("canonical JSON protocol", () => {
       values: [-0, { z: 2, a: 1 }],
     })).toBe('{"values":[0,{"a":1,"z":2}]}');
   });
+
+  it("preserves a legal own __proto__ key without a stringify collision", () => {
+    const value = JSON.parse('{"__proto__":{"semantic":"kept"}}') as unknown;
+
+    expect(stringifyCanonicalJson(value)).toBe(
+      '{"__proto__":{"semantic":"kept"}}',
+    );
+    expect(stringifyCanonicalJson(value)).not.toBe(stringifyCanonicalJson({}));
+  });
+
+  it("preserves a legal own __proto__ key without a hash collision", () => {
+    const value = JSON.parse('{"__proto__":{"semantic":"kept"}}') as unknown;
+
+    expect(sha256CanonicalJson(value)).not.toBe(sha256CanonicalJson({}));
+  });
+
+  it.each(["stringify", "hash"] as const)(
+    "rejects a nested Array subclass with semantic own data through %s",
+    (operation) => {
+      class FancyArray extends Array<number> {
+        readonly semantic = "meaningful";
+      }
+      const value = { nested: new FancyArray(1, 2) };
+      const canonicalOperation = operation === "stringify"
+        ? () => stringifyCanonicalJson(value)
+        : () => sha256CanonicalJson(value);
+
+      expect(canonicalOperation).toThrow(
+        "Non-plain array at /nested is unsupported canonical JSON.",
+      );
+    },
+  );
 });

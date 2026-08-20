@@ -342,6 +342,70 @@ describe("loadAuthoringScene", () => {
     ).toBe(true);
   });
 
+  it("retains an immutable overlay only on an overlaid compile failure", async () => {
+    const source = createValidAuthoringSpec();
+    const staticBlocker = source.nodes.find((node) => node.kind === "object");
+    const spawn = source.nodes.find(
+      (node) => node.kind === "anchor" && node.id === "spawn-main",
+    );
+    if (
+      staticBlocker?.kind !== "object" ||
+      staticBlocker.placement.kind !== "fixed" ||
+      spawn?.kind !== "anchor" ||
+      spawn.placement.kind !== "fixed"
+    ) {
+      throw new Error("Compile-failure overlay fixture is incomplete.");
+    }
+    staticBlocker.placement.transform.positionMetersXYZ = [0, 2, 30];
+    spawn.placement.transform.positionMetersXYZ = [0, 0, 30];
+    const sourceText = JSON.stringify(source);
+
+    const overlaid = await loadAuthoringScene(
+      async () => new Response(sourceText),
+      {
+        subjectDefinitionRef:
+          "worldkit://subject-definition/humanoid.g-bot@1",
+      },
+    );
+    const unmodified = await loadAuthoringScene(
+      async () => new Response(sourceText),
+    );
+
+    for (const loaded of [overlaid, unmodified]) {
+      expect(loaded).toMatchObject({
+        ok: false,
+        diagnostics: [expect.objectContaining({
+          code: "COMPILER_SPAWN_INSIDE_STATIC_BLOCKER",
+          instancePath: "/nodes/player/spawnAnchorEntityId",
+          details: {
+            subjectEntityId: "player",
+            objectEntityId: "wall-east",
+          },
+        })],
+      });
+      expect(loaded.executionPlan).toBeUndefined();
+    }
+    expect(overlaid.hostOverlay).toEqual({
+      schemaVersion: 1,
+      kind: "capability-demo",
+      id: "capability-demo",
+      subjectDefinitionRef:
+        "worldkit://subject-definition/humanoid.g-bot@1",
+      changes: [{
+        type: "subject-definition-replaced",
+        subjectEntityId: "player",
+        beforeSubjectDefinitionRef:
+          "worldkit://subject-definition/humanoid.third-person@1",
+        afterSubjectDefinitionRef:
+          "worldkit://subject-definition/humanoid.g-bot@1",
+      }],
+    });
+    expect(Object.isFrozen(overlaid.hostOverlay)).toBe(true);
+    expect(Object.isFrozen(overlaid.hostOverlay?.changes)).toBe(true);
+    expect(Object.isFrozen(overlaid.hostOverlay?.changes[0])).toBe(true);
+    expect(unmodified).not.toHaveProperty("hostOverlay");
+  });
+
   it("produces one runtime Feature inspection per compiled Subject", async () => {
     const loaded = await loadAuthoringScene(async () =>
       new Response(JSON.stringify(createValidPackageSubjectWorld())),
