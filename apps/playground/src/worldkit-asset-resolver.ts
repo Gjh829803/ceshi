@@ -80,10 +80,19 @@ export function createFetchSubjectAssetResolver(
         const policyUrl = safeSameOriginUrl(uri, pageOrigin);
         const networkUrl = new URL(policyUrl.href);
         networkUrl.hash = "";
+        // The same logical asset URL may be reused while artists publish a new
+        // locked artifact. Address the browser request by the Registry lock so
+        // an already-open authoring session cannot replay stale GLB bytes from
+        // its HTTP cache and then fail the length/hash contract.
+        networkUrl.searchParams.set(
+          "worldkit-content-hash",
+          request.artifactContentHash,
+        );
         const response = await fetchImplementation(networkUrl.href, {
           mode: "same-origin",
           credentials: "same-origin",
           redirect: "error",
+          cache: "no-store",
         });
         if (!response.ok || response.redirected) throw hostResolveFailure();
         const responseUrl = safeSameOriginUrl(response.url, pageOrigin);

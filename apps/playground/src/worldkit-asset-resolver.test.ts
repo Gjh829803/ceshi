@@ -27,7 +27,8 @@ function responseFixture(options: {
     ok: options.ok ?? true,
     status: options.status ?? 200,
     redirected: options.redirected ?? false,
-    url: options.url ?? "https://playground.test/worldkit-assets/golden-humanoid.glb",
+    url: options.url ??
+      `https://playground.test/worldkit-assets/golden-humanoid.glb?worldkit-content-hash=${encodeURIComponent(REQUEST.artifactContentHash)}`,
     arrayBuffer: options.arrayBuffer ?? (async () => new Uint8Array([1, 2, 3, 4]).buffer),
   } as Response;
 }
@@ -45,7 +46,7 @@ describe("createFetchSubjectAssetResolver", () => {
     const fetchImplementation = (async (input: URL | RequestInfo, init?: RequestInit) => {
       fetchCalls.push({ input: String(input), init });
       return responseFixture({
-        url: "https://playground.test/asset.glb?token=secret",
+        url: `https://playground.test/asset.glb?token=secret&worldkit-content-hash=${encodeURIComponent(REQUEST.artifactContentHash)}`,
         arrayBuffer: async () => {
           bodyReads += 1;
           return sourceBytes.buffer;
@@ -68,11 +69,12 @@ describe("createFetchSubjectAssetResolver", () => {
     expect(bodyReads).toBe(1);
     expect(fetchCalls).toEqual([
       {
-        input: "https://playground.test/asset.glb?token=secret",
+        input: `https://playground.test/asset.glb?token=secret&worldkit-content-hash=${encodeURIComponent(REQUEST.artifactContentHash)}`,
         init: {
           mode: "same-origin",
           credentials: "same-origin",
           redirect: "error",
+          cache: "no-store",
         },
       },
     ]);
@@ -108,7 +110,9 @@ describe("createFetchSubjectAssetResolver", () => {
       });
     }
 
-    expect(observedRequestPaths).toEqual(["/asset.glb?token=secret"]);
+    expect(observedRequestPaths).toEqual([
+      `/asset.glb?token=secret&worldkit-content-hash=${encodeURIComponent(REQUEST.artifactContentHash)}`,
+    ]);
     expect(result).toEqual({
       bytes: new Uint8Array([1, 2, 3, 4]),
       sourceLabel: "/asset.glb",

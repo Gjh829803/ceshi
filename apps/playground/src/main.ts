@@ -123,6 +123,34 @@ function escapeHtml(value: string): string {
     .replaceAll("'", "&#039;");
 }
 
+function readLocalDraft(key: string): string | null {
+  try {
+    return localStorage.getItem(key);
+  } catch {
+    return null;
+  }
+}
+
+function writeLocalDraft(key: string, value: string): void {
+  try {
+    localStorage.setItem(key, value);
+  } catch {
+    // Authoring must remain usable when storage is blocked or full.
+  }
+}
+
+function authoringActionFailure(): string {
+  return JSON.stringify(
+    {
+      severity: "error",
+      code: "WORLDKIT_AUTHORING_ACTION_FAILED",
+      message: "The authoring action could not be completed. Runtime state was preserved.",
+    },
+    null,
+    2,
+  );
+}
+
 const viewport = requiredElement<HTMLDivElement>("#viewport");
 const featureList = requiredElement<HTMLDivElement>("#feature-list");
 const inspection = requiredElement<HTMLDivElement>("#inspection");
@@ -190,6 +218,18 @@ function installCapabilityAuthoringPanel(api: WorldkitBrowserApiV3): void {
       return option;
     }),
   );
+  const storedCameraPreference = readLocalDraft("worldkit.camera-preference");
+  if (
+    storedCameraPreference !== null &&
+    [...cameraSelect.options].some((option) => option.value === storedCameraPreference)
+  ) {
+    cameraSelect.value = storedCameraPreference;
+    try {
+      api.setCameraPreference?.(storedCameraPreference);
+    } catch {
+      cameraSelect.value = "auto";
+    }
+  }
   context.innerHTML = `
     <div><span>Kernel</span><code>${escapeHtml(activeSubject?.activeMotionKernelRef ?? definition.defaultMotionProfileRef)}</code></div>
     <div><span>Control</span><code>${escapeHtml(definition.controlProfileRef)}</code></div>
@@ -200,29 +240,44 @@ function installCapabilityAuthoringPanel(api: WorldkitBrowserApiV3): void {
   const parameterDraft: Record<string, number | boolean> = {};
   const defaultMotion = motionProfiles.find((row) => row.role === "default");
   if (defaultMotion?.safetyLimits !== undefined) {
+    const draftStorageKey = `worldkit.motion-draft.${definition.resourceRef}`;
+    let storedDraft: Readonly<Record<string, unknown>> = {};
+    try {
+      const rawDraft = readLocalDraft(draftStorageKey);
+      const parsedDraft = rawDraft === null ? {} : JSON.parse(rawDraft);
+      if (parsedDraft !== null && typeof parsedDraft === "object" && !Array.isArray(parsedDraft)) {
+        storedDraft = parsedDraft as Readonly<Record<string, unknown>>;
+      }
+    } catch {
+      storedDraft = {};
+    }
     const title = document.createElement("p");
     title.textContent = "安全参数草稿（导出后重新编译生效）";
     drafts.append(title);
     for (const [name, limit] of Object.entries(defaultMotion.safetyLimits)) {
       const value = defaultMotion.parameters?.[name];
       if (typeof value !== "number" || limit.minimum === limit.maximum) continue;
-      parameterDraft[name] = value;
+      const storedValue = storedDraft[name];
+      const draftValue = typeof storedValue === "number" &&
+          Number.isFinite(storedValue) &&
+          storedValue >= limit.minimum &&
+          storedValue <= limit.maximum
+        ? storedValue
+        : value;
+      parameterDraft[name] = draftValue;
       const label = document.createElement("label");
       const valueOutput = document.createElement("output");
-      valueOutput.textContent = String(value);
+      valueOutput.textContent = String(draftValue);
       const input = document.createElement("input");
       input.type = "range";
       input.min = String(limit.minimum);
       input.max = String(limit.maximum);
       input.step = String(Math.max(0.01, (limit.maximum - limit.minimum) / 100));
-      input.value = String(value);
+      input.value = String(draftValue);
       input.addEventListener("input", () => {
         parameterDraft[name] = Number(input.value);
         valueOutput.textContent = Number(input.value).toFixed(2);
-        localStorage.setItem(
-          `worldkit.motion-draft.${definition.resourceRef}`,
-          JSON.stringify(parameterDraft),
-        );
+        writeLocalDraft(draftStorageKey, JSON.stringify(parameterDraft));
       });
       const header = document.createElement("span");
       header.textContent = name;
@@ -232,34 +287,46 @@ function installCapabilityAuthoringPanel(api: WorldkitBrowserApiV3): void {
   }
 
   packageSelect.addEventListener("change", () => {
-    localStorage.setItem("worldkit.subject-package", packageSelect.value);
+    writeLocalDraft("worldkit.subject-package", packageSelect.value);
     const next = new URL(window.location.href);
     next.searchParams.set("authoring", "1");
     next.searchParams.set("subjectDefinitionRef", packageSelect.value);
     window.location.assign(next);
   });
   cameraSelect.addEventListener("change", () => {
-    api.setCameraPreference?.(cameraSelect.value);
-    localStorage.setItem("worldkit.camera-preference", cameraSelect.value);
+    try {
+      api.setCameraPreference?.(cameraSelect.value);
+      writeLocalDraft("worldkit.camera-preference", cameraSelect.value);
+    } catch {
+      harnessOutput.textContent = authoringActionFailure();
+    }
   });
   requiredElement<HTMLButtonElement>("#fallback-button").addEventListener("click", async () => {
     const fallback = motionProfiles.find((row) => row.role === "fallback");
     if (fallback === undefined || api.setMotionProfile === undefined) return;
-    const after = await api.setMotionProfile(snapshot.controlledEntityId, fallback.resourceRef);
-    harnessOutput.textContent = JSON.stringify(
-      after.subjectStatesByEntityId[snapshot.controlledEntityId],
-      null,
-      2,
-    );
+    try {
+      const after = await api.setMotionProfile(snapshot.controlledEntityId, fallback.resourceRef);
+      harnessOutput.textContent = JSON.stringify(
+        after.subjectStatesByEntityId[snapshot.controlledEntityId],
+        null,
+        2,
+      );
+    } catch {
+      harnessOutput.textContent = authoringActionFailure();
+    }
   });
   requiredElement<HTMLButtonElement>("#harness-button").addEventListener("click", async () => {
     if (api.runHarness === undefined) return;
     harnessOutput.textContent = "running…";
-    harnessOutput.textContent = JSON.stringify(
-      await api.runHarness(snapshot.controlledEntityId),
-      null,
-      2,
-    );
+    try {
+      harnessOutput.textContent = JSON.stringify(
+        await api.runHarness(snapshot.controlledEntityId),
+        null,
+        2,
+      );
+    } catch {
+      harnessOutput.textContent = authoringActionFailure();
+    }
   });
   requiredElement<HTMLButtonElement>("#export-package-button").addEventListener("click", () => {
     const payload = {
@@ -276,7 +343,7 @@ function installCapabilityAuthoringPanel(api: WorldkitBrowserApiV3): void {
     link.href = URL.createObjectURL(blob);
     link.download = `${definition.semanticClassId.replaceAll(".", "-")}.worldkit-package.json`;
     link.click();
-    URL.revokeObjectURL(link.href);
+    window.setTimeout(() => URL.revokeObjectURL(link.href), 0);
   });
 }
 
