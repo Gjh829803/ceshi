@@ -1,7 +1,7 @@
 {
   "schemaVersion": 1,
   "id": "actor.humanoid.g-bot",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "resourceRef": "worldkit://subject-asset/actor.humanoid.g-bot@1",
   "label": "G Bot Golden",
   "kind": "actor",
@@ -10,8 +10,8 @@
     "type": "glb",
     "url": "/subject-assets/humanoid/g-bot/v1/g-bot.glb",
     "formatVersion": "2.0",
-    "byteLength": 3362888,
-    "contentHash": "sha256:74bbf9426577caa1b7e808bf388bd9a6b8b48d50cc80ab7b0abef10c2693c286"
+    "byteLength": 5302160,
+    "contentHash": "sha256:41833210e735788da0777fc37badcec03f90ccf17ab5a7d89103f0727abeeb1b"
   },
   "coordinates": {
     "unit": "meter",
@@ -57,23 +57,50 @@
     "id": "mixamo-humanoid-v1",
     "rootBone": "mixamorig:Hips",
     "jointCount": 65,
-    "requiredActions": ["idle", "walk", "run", "jump"]
+    "requiredActions": ["idle", "walk", "run", "jump"],
+    "strippedTranslationNodes": ["mixamorig:Hips", "mixamorig:Spine"]
   },
   "provenance": {
-    "sourceAsset": "G Golden",
+    "sourceAsset": "G Golden updated authored set",
     "sourceFiles": [
       "G-idle.glb",
+      "G-gaming standing idle.glb",
       "G-walk.glb",
+      "G-walk step.glb",
       "G-slow run.glb",
       "G-jumping.glb",
       "G-falling.glb",
+      "G-Falling Flat Impact.glb",
+      "G-flying.glb",
       "G-Floating.glb",
       "G-swimming.glb",
       "G-Treading Water.glb",
+      "G-Swimming To Edge.glb",
       "G-sitting.glb",
       "G-sitting idle.glb",
+      "G-sitting on the ground idle.glb",
+      "G-Sit To Stand.glb",
       "G-stand up.glb",
-      "G-Swimming To Edge.glb"
+      "G-laying idle.glb",
+      "G-Quick Roll To Run.glb",
+      "G-Standing Idle To Fight Idle.glb",
+      "G-salute.glb",
+      "G-angry.glb",
+      "G-Rumba Dancing.glb"
+    ],
+    "excludedDuplicateFiles": [
+      {
+        "file": "G-Dancing.glb",
+        "identicalTo": "G-Rumba Dancing.glb"
+      },
+      {
+        "file": "G-sitting down.glb",
+        "identicalTo": "G-sitting on the ground idle.glb"
+      }
+    ],
+    "sourceSelectionNotes": [
+      "Both distinct animation tracks from G-Falling Flat Impact.glb are included as land.hard and land.hard.alt.",
+      "G-Standing Idle To Fight Idle.glb contains two identical internal animation tracks; only the first is included."
     ],
     "license": {
       "status": "accepted",
@@ -84,28 +111,48 @@
   "qa": {
     "status": "warning",
     "productionReady": false,
+    "packageValidation": {
+      "babylonJsVersion": "9.21.2",
+      "subjectAssetCacheLoad": "passed",
+      "animationClipCount": 25,
+      "runtimeStateBinding": "not-implemented"
+    },
     "runtimeVerifiedActions": [],
     "artReadyActions": [
       "idle",
+      "idle.gaming",
       "walk",
+      "walk.step",
       "run",
       "jump",
       "fall",
+      "land.hard",
+      "land.hard.alt",
+      "fly",
       "float",
       "swim.surface",
       "swim.tread",
+      "swim.exit",
       "sit",
       "sit.idle",
+      "sit.ground.idle",
+      "sit.toStand",
       "stand",
-      "swim.exit"
+      "lay.idle",
+      "roll.toRun",
+      "fight.enter",
+      "emote.salute",
+      "emote.angry",
+      "dance.rumba"
     ],
     "limitations": [
       "Backward locomotion is not authored.",
       "Strafe locomotion is not authored.",
       "Turn-in-place is not authored.",
-      "A formal landing transition is not authored.",
-      "A G-specific neutral glide is not authored.",
-      "A straddle or riding pose is not authored."
+      "A straddle or riding pose is not authored.",
+      "The fly clip is art-ready, but the current SDK does not provide a flight movement kernel or state binding.",
+      "The land.hard.alt semantic distinction requires art review before runtime binding.",
+      "The source files G-sitting down.glb and G-sitting on the ground idle.glb are byte-identical; the package uses the ground-idle interpretation."
     ]
   }
 }

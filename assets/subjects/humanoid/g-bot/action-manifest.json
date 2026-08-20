@@ -1,12 +1,25 @@
 {
   "version": 1,
   "character": "G Bot",
+  "assetVersion": "1.1.0",
   "rigId": "mixamo-humanoid-v1",
-  "source": "G Golden authored animation set",
+  "source": "G Golden updated authored animation set",
   "actions": [
     {
       "id": "idle",
       "clip": "idle",
+      "sourceFile": "G-idle.glb",
+      "loop": true,
+      "blendIn": 0.2,
+      "speed": 1,
+      "rootMotion": "inPlace",
+      "motionKind": "idle",
+      "readiness": "artReady"
+    },
+    {
+      "id": "idle.gaming",
+      "clip": "idle.gaming",
+      "sourceFile": "G-gaming standing idle.glb",
       "loop": true,
       "blendIn": 0.2,
       "speed": 1,
@@ -17,6 +30,7 @@
     {
       "id": "walk",
       "clip": "walk",
+      "sourceFile": "G-walk.glb",
       "loop": true,
       "blendIn": 0.15,
       "speed": 1,
@@ -25,8 +39,20 @@
       "readiness": "artReady"
     },
     {
+      "id": "walk.step",
+      "clip": "walk.step",
+      "sourceFile": "G-walk step.glb",
+      "loop": false,
+      "blendIn": 0.12,
+      "speed": 1,
+      "rootMotion": "inPlace",
+      "motionKind": "dynamic",
+      "readiness": "artReady"
+    },
+    {
       "id": "run",
       "clip": "run",
+      "sourceFile": "G-slow run.glb",
       "loop": true,
       "blendIn": 0.12,
       "speed": 1,
@@ -37,6 +63,7 @@
     {
       "id": "jump",
       "clip": "jump",
+      "sourceFile": "G-jumping.glb",
       "loop": false,
       "blendIn": 0.1,
       "speed": 1,
@@ -47,6 +74,7 @@
     {
       "id": "fall",
       "clip": "fall",
+      "sourceFile": "G-falling.glb",
       "loop": true,
       "blendIn": 0.12,
       "speed": 1,
@@ -55,8 +83,44 @@
       "readiness": "artReady"
     },
     {
+      "id": "land.hard",
+      "clip": "land.hard",
+      "sourceFile": "G-Falling Flat Impact.glb",
+      "sourceAnimationIndex": 0,
+      "loop": false,
+      "blendIn": 0.08,
+      "speed": 1,
+      "rootMotion": "inPlace",
+      "motionKind": "dynamic",
+      "readiness": "artReady"
+    },
+    {
+      "id": "land.hard.alt",
+      "clip": "land.hard.alt",
+      "sourceFile": "G-Falling Flat Impact.glb",
+      "sourceAnimationIndex": 1,
+      "loop": false,
+      "blendIn": 0.08,
+      "speed": 1,
+      "rootMotion": "inPlace",
+      "motionKind": "dynamic",
+      "readiness": "artReady"
+    },
+    {
+      "id": "fly",
+      "clip": "fly",
+      "sourceFile": "G-flying.glb",
+      "loop": true,
+      "blendIn": 0.18,
+      "speed": 1,
+      "rootMotion": "inPlace",
+      "motionKind": "dynamic",
+      "readiness": "artReady"
+    },
+    {
       "id": "float",
       "clip": "float",
+      "sourceFile": "G-Floating.glb",
       "loop": true,
       "blendIn": 0.2,
       "speed": 1,
@@ -67,6 +131,7 @@
     {
       "id": "swim.surface",
       "clip": "swim.surface",
+      "sourceFile": "G-swimming.glb",
       "loop": true,
       "blendIn": 0.18,
       "speed": 1,
@@ -77,6 +142,7 @@
     {
       "id": "swim.tread",
       "clip": "swim.tread",
+      "sourceFile": "G-Treading Water.glb",
       "loop": true,
       "blendIn": 0.2,
       "speed": 1,
@@ -85,8 +151,20 @@
       "readiness": "artReady"
     },
     {
+      "id": "swim.exit",
+      "clip": "swim.exit",
+      "sourceFile": "G-Swimming To Edge.glb",
+      "loop": false,
+      "blendIn": 0.15,
+      "speed": 1,
+      "rootMotion": "inPlace",
+      "motionKind": "dynamic",
+      "readiness": "artReady"
+    },
+    {
       "id": "sit",
       "clip": "sit",
+      "sourceFile": "G-sitting.glb",
       "loop": false,
       "blendIn": 0.2,
       "speed": 1,
@@ -97,6 +175,7 @@
     {
       "id": "sit.idle",
       "clip": "sit.idle",
+      "sourceFile": "G-sitting idle.glb",
       "loop": true,
       "blendIn": 0.2,
       "speed": 1,
@@ -105,8 +184,31 @@
       "readiness": "artReady"
     },
     {
+      "id": "sit.ground.idle",
+      "clip": "sit.ground.idle",
+      "sourceFile": "G-sitting on the ground idle.glb",
+      "loop": true,
+      "blendIn": 0.2,
+      "speed": 1,
+      "rootMotion": "inPlace",
+      "motionKind": "idle",
+      "readiness": "artReady"
+    },
+    {
+      "id": "sit.toStand",
+      "clip": "sit.toStand",
+      "sourceFile": "G-Sit To Stand.glb",
+      "loop": false,
+      "blendIn": 0.15,
+      "speed": 1,
+      "rootMotion": "inPlace",
+      "motionKind": "dynamic",
+      "readiness": "artReady"
+    },
+    {
       "id": "stand",
       "clip": "stand",
+      "sourceFile": "G-stand up.glb",
       "loop": false,
       "blendIn": 0.18,
       "speed": 1,
@@ -115,10 +217,67 @@
       "readiness": "artReady"
     },
     {
-      "id": "swim.exit",
-      "clip": "swim.exit",
+      "id": "lay.idle",
+      "clip": "lay.idle",
+      "sourceFile": "G-laying idle.glb",
+      "loop": true,
+      "blendIn": 0.2,
+      "speed": 1,
+      "rootMotion": "inPlace",
+      "motionKind": "idle",
+      "readiness": "artReady"
+    },
+    {
+      "id": "roll.toRun",
+      "clip": "roll.toRun",
+      "sourceFile": "G-Quick Roll To Run.glb",
+      "loop": false,
+      "blendIn": 0.08,
+      "speed": 1,
+      "rootMotion": "inPlace",
+      "motionKind": "dynamic",
+      "readiness": "artReady"
+    },
+    {
+      "id": "fight.enter",
+      "clip": "fight.enter",
+      "sourceFile": "G-Standing Idle To Fight Idle.glb",
+      "sourceAnimationIndex": 0,
+      "loop": false,
+      "blendIn": 0.12,
+      "speed": 1,
+      "rootMotion": "inPlace",
+      "motionKind": "dynamic",
+      "readiness": "artReady"
+    },
+    {
+      "id": "emote.salute",
+      "clip": "emote.salute",
+      "sourceFile": "G-salute.glb",
       "loop": false,
       "blendIn": 0.15,
+      "speed": 1,
+      "rootMotion": "inPlace",
+      "motionKind": "pose",
+      "readiness": "artReady"
+    },
+    {
+      "id": "emote.angry",
+      "clip": "emote.angry",
+      "sourceFile": "G-angry.glb",
+      "loop": false,
+      "blendIn": 0.15,
+      "speed": 1,
+      "rootMotion": "inPlace",
+      "motionKind": "pose",
+      "readiness": "artReady"
+    },
+    {
+      "id": "dance.rumba",
+      "clip": "dance.rumba",
+      "sourceFile": "G-Rumba Dancing.glb",
+      "loop": true,
+      "blendIn": 0.2,
       "speed": 1,
       "rootMotion": "inPlace",
       "motionKind": "dynamic",
@@ -129,8 +288,8 @@
     "backward locomotion",
     "strafe locomotion",
     "turn in place",
-    "formal landing transition",
-    "G-specific neutral glide",
-    "straddle or riding pose"
+    "straddle or riding pose",
+    "runtime state bindings beyond idle, walk, run, and jump",
+    "flight movement kernel for the fly pose"
   ]
 }
