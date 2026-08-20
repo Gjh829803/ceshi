@@ -23,6 +23,10 @@ describe("Authoring V2 to V3 one-time migration", () => {
     });
     expect(migrated.spatial).toEqual({ regions: [], routes: [], screenRegions: [] });
     expect(migrated.constraints).toEqual({ placements: [] });
+    expect(
+      migrated.nodes.find((node) => node.kind === "camera")?.components.cameraRig.thirdPerson
+        .aspectRatio,
+    ).toBe(16 / 9);
     for (const node of migrated.nodes) {
       if (node.kind !== "object" && node.kind !== "anchor") continue;
       expect(node).not.toHaveProperty("transform");

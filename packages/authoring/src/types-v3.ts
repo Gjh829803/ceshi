@@ -1,6 +1,7 @@
 import type {
   AnchorNodeSpecV2,
   AuthoringSpecV2,
+  CameraNodeSpecV2,
   ObjectNodeSpecV2,
   TransformSpecV2,
   Vec2,
@@ -28,10 +29,21 @@ export type AnchorNodeSpecV3 = Omit<AnchorNodeSpecV2, "transform"> & {
   placement: PlacementSpecV1;
 };
 
+export interface CameraNodeSpecV3 extends Omit<CameraNodeSpecV2, "components"> {
+  components: {
+    cameraRig: Omit<CameraNodeSpecV2["components"]["cameraRig"], "thirdPerson"> & {
+      thirdPerson: CameraNodeSpecV2["components"]["cameraRig"]["thirdPerson"] & {
+        aspectRatio: number;
+      };
+    };
+  };
+}
+
 export type WorldNodeSpecV3 =
-  | Exclude<WorldNodeSpecV2, ObjectNodeSpecV2 | AnchorNodeSpecV2>
+  | Exclude<WorldNodeSpecV2, ObjectNodeSpecV2 | AnchorNodeSpecV2 | CameraNodeSpecV2>
   | ObjectNodeSpecV3
-  | AnchorNodeSpecV3;
+  | AnchorNodeSpecV3
+  | CameraNodeSpecV3;
 
 export interface SpatialRegionSpecV1 {
   readonly id: string;

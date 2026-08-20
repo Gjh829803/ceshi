@@ -6,11 +6,27 @@ import {
   parseAuthoringSpecV3Json,
   validateAuthoringSpecV3,
   type AuthoringSpecV3,
+  type CameraNodeSpecV2,
   type PlacementConstraintSpecV1,
 } from "./index.js";
 
 function validV3(): AuthoringSpecV3 {
   const nodes = structuredClone(basicWorldV2.nodes).map((node) => {
+    if (node.kind === "camera") {
+      const cameraNode = node as CameraNodeSpecV2;
+      return {
+        ...cameraNode,
+        components: {
+          cameraRig: {
+            ...cameraNode.components.cameraRig,
+            thirdPerson: {
+              ...cameraNode.components.cameraRig.thirdPerson,
+              aspectRatio: 16 / 9,
+            },
+          },
+        },
+      };
+    }
     if (node.kind !== "object" && node.kind !== "anchor") return node;
     const { transform, ...rest } = node;
     if (node.id === "tower") {
@@ -357,6 +373,23 @@ describe("Authoring Spec V3 placement schema", () => {
           details: { supportedSchemaVersions: [3] },
         },
       ],
+    });
+  });
+
+  it("requires a locked camera aspect ratio for deterministic screen projection", () => {
+    const spec = validV3();
+    const cameraIndex = spec.nodes.findIndex((node) => node.kind === "camera");
+    const invalid = structuredClone(spec) as unknown as {
+      nodes: Array<{ components?: { cameraRig?: { thirdPerson?: Record<string, unknown> } } }>;
+    };
+    delete invalid.nodes[cameraIndex]?.components?.cameraRig?.thirdPerson?.aspectRatio;
+    expect(validateAuthoringSpecV3(invalid)).toMatchObject({
+      ok: false,
+      diagnostics: expect.arrayContaining([
+        expect.objectContaining({
+          instancePath: `/nodes/${cameraIndex}/components/cameraRig/thirdPerson/aspectRatio`,
+        }),
+      ]),
     });
   });
 });

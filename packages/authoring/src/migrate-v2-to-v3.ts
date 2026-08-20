@@ -15,6 +15,20 @@ export function migrateAuthoringSpecV2ToV3(input: AuthoringSpecV2): AuthoringSpe
 
   const source = structuredClone(input);
   const nodes = source.nodes.map((node): WorldNodeSpecV3 => {
+    if (node.kind === "camera") {
+      return {
+        ...node,
+        components: {
+          cameraRig: {
+            ...node.components.cameraRig,
+            thirdPerson: {
+              ...node.components.cameraRig.thirdPerson,
+              aspectRatio: 16 / 9,
+            },
+          },
+        },
+      };
+    }
     if (node.kind !== "object" && node.kind !== "anchor") return node;
     const { transform, ...nodeWithoutTransform } = node;
     return {

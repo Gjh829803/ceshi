@@ -48,7 +48,7 @@
           { "$ref": "worldkit://schema/authoring-spec@2#/$defs/waterNode" },
           { "$ref": "#/$defs/objectNode" },
           { "$ref": "worldkit://schema/authoring-spec@2#/$defs/subjectNode" },
-          { "$ref": "worldkit://schema/authoring-spec@2#/$defs/cameraNode" },
+          { "$ref": "#/$defs/cameraNode" },
           { "$ref": "#/$defs/anchorNode" }
         ]
       }
@@ -152,6 +152,59 @@
         "kind": { "const": "anchor" },
         "placement": { "$ref": "#/$defs/placement" },
         "semantic": { "$ref": "worldkit://schema/authoring-spec@2#/$defs/semantic" }
+      }
+    },
+    "cameraNode": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "kind", "components"],
+      "properties": {
+        "id": { "$ref": "worldkit://schema/authoring-spec@2#/$defs/id" },
+        "kind": { "const": "camera" },
+        "components": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["cameraRig"],
+          "properties": {
+            "cameraRig": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["defaultRigRef", "allowedRigRefs", "target", "thirdPerson", "manualSwitchAllowed"],
+              "properties": {
+                "defaultRigRef": { "$ref": "worldkit://schema/authoring-spec@2#/$defs/resourceRef" },
+                "allowedRigRefs": {
+                  "type": "array",
+                  "minItems": 1,
+                  "maxItems": 16,
+                  "uniqueItems": true,
+                  "items": { "$ref": "worldkit://schema/authoring-spec@2#/$defs/resourceRef" }
+                },
+                "target": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "required": ["targetEntityId"],
+                  "properties": {
+                    "targetEntityId": { "$ref": "worldkit://schema/authoring-spec@2#/$defs/id" },
+                    "targetHeightMeters": { "type": "number" }
+                  }
+                },
+                "thirdPerson": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "required": ["pitchRadians", "distanceMeters", "targetHeightMeters", "fovDegrees", "aspectRatio"],
+                  "properties": {
+                    "pitchRadians": { "type": "number", "minimum": -0.95, "maximum": 0.65 },
+                    "distanceMeters": { "type": "number", "minimum": 1.8, "maximum": 8 },
+                    "targetHeightMeters": { "type": "number", "minimum": 0.5, "maximum": 4.5 },
+                    "fovDegrees": { "type": "number", "minimum": 35, "maximum": 90 },
+                    "aspectRatio": { "type": "number", "minimum": 0.25, "maximum": 4 }
+                  }
+                },
+                "manualSwitchAllowed": { "type": "boolean" }
+              }
+            }
+          }
+        }
       }
     },
     "insideRegionConstraint": {
