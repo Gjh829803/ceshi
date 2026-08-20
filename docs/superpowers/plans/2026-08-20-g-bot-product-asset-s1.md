@@ -321,4 +321,4 @@ git commit -m "docs: complete G Bot product asset slice"
 
 Review the full feature range against the approved design, exact generated artifacts, and complete verification output. Any P0-P2 finding must be reproduced with a failing test before correction.
 
-Initial integration independent review: CLEAN for `84d60e1..1ba48e7`, with no remaining P0-P2 findings. Registry canonical-hash coverage and real-byte G Bot clone/Clip/Socket/disposal isolation were added before closure. The later `main` synchronization adopts product asset update `7f8a48b` (25 source Clips) and requires its own final review before merge.
+Initial integration independent review: CLEAN for `84d60e1..1ba48e7`, with no remaining P0-P2 findings. Registry canonical-hash coverage and real-byte G Bot clone/Clip/Socket/disposal isolation were added before closure. The later `main` synchronization adopts product asset update `7f8a48b` (25 source Clips); its three P2 metadata/documentation drifts were corrected in `32aa354`, and final independent review is CLEAN for `f2d6ca7..ece76eb`, with no remaining P0-P2 findings.
