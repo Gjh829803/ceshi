@@ -50,6 +50,15 @@ import {
   toBabylonHeightfieldData,
 } from "./terrain";
 
+export type BabylonWorldRuntimeInitializationStageV1 =
+  | "engine"
+  | "scene"
+  | "havok"
+  | "terrain"
+  | "subjects"
+  | "camera"
+  | "ready";
+
 export interface BabylonWorldRuntimeOptions {
   executionPlan: ExecutionPlanV4;
   canvas?: HTMLCanvasElement;
@@ -59,6 +68,7 @@ export interface BabylonWorldRuntimeOptions {
   havokWasmBinary?: ArrayBuffer;
   subjectAssetResolver?: SubjectAssetResolverV1;
   subjectAssetCacheOptions?: SubjectAssetCacheOptionsV1;
+  onInitializationStage?(stage: BabylonWorldRuntimeInitializationStageV1): void;
 }
 
 type OwnedDisposer = () => void | Promise<void>;
@@ -490,17 +500,21 @@ export class BabylonWorldRuntime implements WorldRuntimeSessionV3 {
       );
     }
     const ownedDisposers: OwnedDisposer[] = [];
+    options.onInitializationStage?.("engine");
     const engine = options.engineFactory?.() ?? new Engine(options.canvas!, true, { preserveDrawingBuffer: true, stencil: true });
     ownedDisposers.push(() => engine.dispose());
     try {
+      options.onInitializationStage?.("scene");
       const scene = new Scene(engine);
       ownedDisposers.push(() => scene.dispose());
       scene.useRightHandedSystem = true;
+      options.onInitializationStage?.("havok");
       await enableHavokPhysics(
         scene,
         options.executionPlan.gravityMetersPerSecondSquaredXYZ,
         options.havokWasmBinary,
       );
+      options.onInitializationStage?.("terrain");
       configureAtmosphere(scene, options.executionPlan.atmospherePreset);
       const materials = createWhiteboxMaterials(scene);
 
@@ -547,6 +561,7 @@ export class BabylonWorldRuntime implements WorldRuntimeSessionV3 {
 
       revalidateRuntimeLayoutAssertions(options.executionPlan);
 
+      options.onInitializationStage?.("subjects");
       const subjectAssetCache = new SubjectAssetCacheV1(
         scene,
         options.subjectAssetResolver,
@@ -582,12 +597,14 @@ export class BabylonWorldRuntime implements WorldRuntimeSessionV3 {
         ownedDisposers.push(() => controller.dispose());
       }
 
+      options.onInitializationStage?.("camera");
       const cameraPlan = options.executionPlan.camera;
       const camera = new FreeCamera(cameraPlan.cameraEntityId, Vector3.Zero(), scene);
       camera.fov = (cameraPlan.fovDegrees * Math.PI) / 180;
       camera.minZ = 0.05;
       scene.activeCamera = camera;
 
+      options.onInitializationStage?.("ready");
       return new BabylonWorldRuntime(
         options.executionPlan,
         engine,

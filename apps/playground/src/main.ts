@@ -17,6 +17,14 @@ if (app === null) throw new Error("Missing #app container");
 const urlParameters = new URLSearchParams(window.location.search);
 const authoringMode = urlParameters.get("authoring") === "1";
 
+interface AuthoringStartupDebugV1 {
+  stage: string;
+  errorName: string;
+  errorMessage: string;
+}
+
+let authoringStartupDebug: AuthoringStartupDebugV1 | undefined;
+
 app.innerHTML = `
   <main class="shell">
     <header class="topbar">
@@ -151,6 +159,23 @@ function authoringActionFailure(): string {
   );
 }
 
+function captureAuthoringStartupFailure(stage: string, error: unknown): void {
+  authoringStartupDebug = {
+    stage,
+    errorName: error instanceof Error ? error.name : typeof error,
+    errorMessage: error instanceof Error ? error.message : String(error),
+  };
+}
+
+function authoringStartupEvidence(
+  api: WorldkitBrowserApiV3,
+): { diagnostics: ReturnType<WorldkitBrowserApiV3["getDiagnostics"]>; developer: AuthoringStartupDebugV1 | null } {
+  return {
+    diagnostics: api.getDiagnostics(),
+    developer: authoringStartupDebug ?? null,
+  };
+}
+
 const viewport = requiredElement<HTMLDivElement>("#viewport");
 const featureList = requiredElement<HTMLDivElement>("#feature-list");
 const inspection = requiredElement<HTMLDivElement>("#inspection");
@@ -194,7 +219,7 @@ function installAuthoringRecoveryPanel(api: WorldkitBrowserApiV3): void {
   drafts.innerHTML = `
     <p>当前主体未能启动。你仍然可以在上方切换 Subject Package，或先进入安全白膜恢复编辑器。</p>
   `;
-  harnessOutput.textContent = JSON.stringify(api.getDiagnostics(), null, 2);
+  harnessOutput.textContent = JSON.stringify(authoringStartupEvidence(api), null, 2);
   const controls = requiredElement<HTMLDivElement>("#controls-card");
   controls.innerHTML = `
     <p>恢复模式</p>
@@ -410,30 +435,44 @@ if (authoringMode) {
     target: window,
     statusElement: document.documentElement,
     initialize: async ({ trackAdapter }) => {
-      const subjectAssetResolver = createFetchSubjectAssetResolver(
-        PLAYGROUND_CAPABILITY_SUBJECT_ASSET_URI_BY_REF_V1,
-      );
-      const [{ loadAuthoringScene }, { BabylonWorldAdapter }] = await Promise.all([
-        import("./authoring-loader.js"),
-        import("./babylon-world-adapter.js"),
-      ]);
-      const loaded = await loadAuthoringScene(undefined, {
-        ...(urlParameters.get("subjectDefinitionRef") === null
-          ? {}
-          : { subjectDefinitionRef: urlParameters.get("subjectDefinitionRef")! }),
-      });
-      if (!loaded.ok || loaded.executionPlan === undefined) {
-        inspection.innerHTML = `<pre>${escapeHtml(JSON.stringify(loaded.diagnostics, null, 2))}</pre>`;
-        throw new Error("WORLDKIT_AUTHORING_LOAD_FAILED");
+      let startupStage = "host-resolver";
+      try {
+        const subjectAssetResolver = createFetchSubjectAssetResolver(
+          PLAYGROUND_CAPABILITY_SUBJECT_ASSET_URI_BY_REF_V1,
+        );
+        startupStage = "module-import";
+        const [{ loadAuthoringScene }, { BabylonWorldAdapter }] = await Promise.all([
+          import("./authoring-loader.js"),
+          import("./babylon-world-adapter.js"),
+        ]);
+        startupStage = "authoring-load";
+        const loaded = await loadAuthoringScene(undefined, {
+          ...(urlParameters.get("subjectDefinitionRef") === null
+            ? {}
+            : { subjectDefinitionRef: urlParameters.get("subjectDefinitionRef")! }),
+        });
+        if (!loaded.ok || loaded.executionPlan === undefined) {
+          inspection.innerHTML = `<pre>${escapeHtml(JSON.stringify(loaded.diagnostics, null, 2))}</pre>`;
+          throw new Error("WORLDKIT_AUTHORING_LOAD_FAILED");
+        }
+        startupStage = "runtime-create";
+        const adapter = await BabylonWorldAdapter.create(loaded.executionPlan, {
+          subjectAssetResolver,
+          onInitializationStage(stage) {
+            startupStage = `runtime:${stage}`;
+          },
+        });
+        createdAdapter = adapter;
+        trackAdapter(adapter);
+        startupStage = "adapter-mount";
+        adapter.mount(viewport);
+        startupStage = "first-render";
+        adapter.render();
+        return adapter;
+      } catch (error) {
+        captureAuthoringStartupFailure(startupStage, error);
+        throw error;
       }
-      const adapter = await BabylonWorldAdapter.create(loaded.executionPlan, {
-        subjectAssetResolver,
-      });
-      createdAdapter = adapter;
-      trackAdapter(adapter);
-      adapter.mount(viewport);
-      adapter.render();
-      return adapter;
     },
   });
   const initialized = await browserInstallation.initialization;
@@ -441,7 +480,7 @@ if (authoringMode) {
     installCapabilityAuthoringPanel(browserInstallation.api);
     startPlayground(createdAdapter, () => browserInstallation.dispose());
   } else {
-    inspection.innerHTML = `<pre>${escapeHtml(JSON.stringify(browserInstallation.api.getDiagnostics(), null, 2))}</pre>`;
+    inspection.innerHTML = `<pre>${escapeHtml(JSON.stringify(authoringStartupEvidence(browserInstallation.api), null, 2))}</pre>`;
     installAuthoringRecoveryPanel(browserInstallation.api);
   }
 } else {

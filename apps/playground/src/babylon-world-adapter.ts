@@ -219,7 +219,9 @@ export class BabylonWorldAdapter implements PlaygroundWorldAdapter {
     executionPlan: ExecutionPlanV4,
     options: Pick<
       BabylonWorldRuntimeOptions,
-      "subjectAssetResolver" | "subjectAssetCacheOptions"
+      | "subjectAssetResolver"
+      | "subjectAssetCacheOptions"
+      | "onInitializationStage"
     > = {},
   ): Promise<BabylonWorldAdapter> {
     const canvas = document.createElement("canvas");
