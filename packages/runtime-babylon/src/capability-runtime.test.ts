@@ -93,6 +93,13 @@ describe("capability package runtime smoke tests", () => {
         `G Bot package failed to load: ${JSON.stringify(loaded.diagnostics)}`,
       );
     }
+    const gBotAssetPart = loaded.executionPlan.subjects[0]?.visualParts.find(
+      (part) => part.id === "body.asset",
+    );
+    expect(gBotAssetPart?.localTransform.rotationEulerRadiansXYZ[1]).toBeCloseTo(
+      Math.PI,
+      12,
+    );
     const runtime = await BabylonWorldRuntime.create({
       executionPlan: loaded.executionPlan,
       havokWasmBinary,
@@ -149,6 +156,34 @@ describe("capability package runtime smoke tests", () => {
       });
       runtime.resetCameraView();
       expect(runtime.setCameraPreference("auto").camera.preference).toBe("auto");
+      runtime.reset();
+      runtime.setCameraPreference("worldkit://camera-profile/orbit.medium@1");
+      const runRenderedFixedInput = async (
+        actions: readonly ("move-left")[],
+        ticks: number,
+      ) => {
+        for (let tick = 0; tick < ticks; tick += 1) {
+          await runtime.runFixedInput({ actions, ticks: 1 });
+          runtime.renderFrame();
+        }
+        return runtime.snapshot();
+      };
+      const beforeStrafe = await runRenderedFixedInput([], 1);
+      await runRenderedFixedInput(["move-left"], 30);
+      const afterStrafe = await runRenderedFixedInput([], 120);
+      const horizontalCameraOffset = (snapshot: typeof beforeStrafe) => {
+        const state = snapshot.subjectStatesByEntityId.player!;
+        const x = snapshot.camera.positionMetersXYZ[0] - state.positionMetersXYZ[0];
+        const z = snapshot.camera.positionMetersXYZ[2] - state.positionMetersXYZ[2];
+        const length = Math.hypot(x, z);
+        return [x / length, z / length] as const;
+      };
+      const beforeOffset = horizontalCameraOffset(beforeStrafe);
+      const afterOffset = horizontalCameraOffset(afterStrafe);
+      expect(beforeOffset[0] * afterOffset[0] + beforeOffset[1] * afterOffset[1])
+        .toBeGreaterThan(0.995);
+      expect(Math.abs(afterStrafe.subjectStatesByEntityId.player!.forwardXYZ![0]))
+        .toBeGreaterThan(0.9);
       expect((await runtime.runHarness("player")).passed).toBe(true);
     } finally {
       await runtime.dispose();

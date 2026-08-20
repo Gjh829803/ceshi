@@ -15,7 +15,7 @@
         "id": "body.asset",
         "kind": "asset",
         "subjectAssetRef": "worldkit://subject-asset/actor.humanoid.g-bot@1",
-        "localTransform": { "positionMetersXYZ": [0, 0, 0], "rotationEulerRadiansXYZ": [0, 0, 0], "scaleXYZ": [1, 1, 1] },
+        "localTransform": { "positionMetersXYZ": [0, 0, 0], "rotationEulerRadiansXYZ": [0, 3.141592653589793, 0], "scaleXYZ": [1, 1, 1] },
         "appearance": { "mode": "whitebox-neutral" },
         "semanticTags": ["body", "g-bot", "rigged"]
       }

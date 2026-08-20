@@ -106,6 +106,8 @@ export class CameraDirectorV1 {
   private viewPitchOffsetRadians = 0;
   private viewDistanceOffsetMeters = 0;
   private tuning: CameraTuningV1 = {};
+  private orbitReferenceForward = new Vector3(0, 0, -1);
+  private orbitReferenceEntityId: string | undefined;
 
   constructor(
     private readonly executionPlan: ExecutionPlanV4,
@@ -148,6 +150,7 @@ export class CameraDirectorV1 {
     this.targetYawOffsetRadians = 0;
     this.targetPitchOffsetRadians = 0;
     this.targetDistanceOffsetMeters = 0;
+    this.orbitReferenceEntityId = undefined;
   }
 
   setTuning(tuning: CameraTuningV1): boolean {
@@ -202,6 +205,9 @@ export class CameraDirectorV1 {
       this.updateLegacy(subject, controller);
       return;
     }
+    if (this.activeProfileRef !== profile.resourceRef) {
+      this.orbitReferenceEntityId = undefined;
+    }
     this.activeProfileRef = profile.resourceRef;
     this.activeRigRef = profile.algorithmRef;
     const parameters = { ...profile.parameters, ...this.tuning };
@@ -217,11 +223,20 @@ export class CameraDirectorV1 {
       origin.z,
     );
     const velocity = controller.velocity;
-    const lookAhead = velocity.scale(parameters.lookAheadSeconds);
-    const target = baseTarget.add(lookAhead);
     const subjectForward = controller.forward.normalizeToNew();
     const speed = motion.speedMetersPerSecond;
     const algorithm = profile.algorithmRef;
+    const firstPerson = algorithm.endsWith("/socket-first-person@1");
+    const cameraRelativeOrbit =
+      !firstPerson &&
+      subject.capabilityAssembly?.controlProfile.inputSpace === "camera-relative";
+    if (
+      cameraRelativeOrbit &&
+      this.orbitReferenceEntityId !== subject.entityId
+    ) {
+      this.orbitReferenceForward.copyFrom(subjectForward);
+      this.orbitReferenceEntityId = subject.entityId;
+    }
     const positionAlpha = this.initialized
       ? exponentialAlpha(parameters.positionDampingPerSecond, deltaSeconds)
       : 1;
@@ -237,9 +252,18 @@ export class CameraDirectorV1 {
     this.viewDistanceOffsetMeters += (
       this.targetDistanceOffsetMeters - this.viewDistanceOffsetMeters
     ) * positionAlpha;
-    const forward = rotateAroundY(subjectForward, this.viewYawOffsetRadians).normalize();
+    const baseCameraForward = cameraRelativeOrbit
+      ? this.orbitReferenceForward
+      : subjectForward;
+    const forward = rotateAroundY(baseCameraForward, this.viewYawOffsetRadians).normalize();
+    const lookAheadVelocity = cameraRelativeOrbit
+      ? forward.scale(Math.max(0, Vector3.Dot(velocity, forward)))
+      : velocity;
+    const target = baseTarget.add(
+      lookAheadVelocity.scale(parameters.lookAheadSeconds),
+    );
     let desiredPosition: Vector3;
-    if (algorithm.endsWith("/socket-first-person@1")) {
+    if (firstPerson) {
       desiredPosition = socketPosition?.clone() ?? baseTarget;
       const pitch = clamp(
         parameters.pitchRadians + this.viewPitchOffsetRadians,
@@ -308,6 +332,8 @@ export class CameraDirectorV1 {
     this.viewPitchOffsetRadians = 0;
     this.viewDistanceOffsetMeters = 0;
     this.tuning = {};
+    this.orbitReferenceForward.set(0, 0, -1);
+    this.orbitReferenceEntityId = undefined;
   }
 
   snapshot(): CameraDirectorSnapshotV1 {
