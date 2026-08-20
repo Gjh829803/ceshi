@@ -153,7 +153,7 @@ app.innerHTML = `
             <div class="tuning-inline-status" id="tuning-input-status">等待试跑</div>
           </section>
           <section class="tuning-section" id="tuning-motion">
-            <div class="tuning-section-heading"><span>03</span><div><h3>调整运动手感</h3><p>所有滑杆都被限制在安全范围内。当前版本先保存为策划草稿，导出后由 Registry 编译生效。</p></div></div>
+            <div class="tuning-section-heading"><span>03</span><div><h3>调整运动手感</h3><p>所有滑杆都被限制在安全范围内；拖动后会立即作用于当前主体，同时保存为可导出的策划草稿。</p></div></div>
             <div class="friendly-slider-grid" id="tuning-motion-sliders"></div>
           </section>
           <section class="tuning-section" id="tuning-camera">
@@ -418,6 +418,19 @@ function installTuningWorkbench(
 
   const motionSliderGrid = requiredElement<HTMLDivElement>("#tuning-motion-sliders");
   const defaultMotion = workbenchContext.motionProfiles.find((row) => row.role === "default");
+  const applyMotionTuning = (): void => {
+    const numericTuning = Object.fromEntries(
+      Object.entries(workbenchContext.parameterDraft).filter(
+        (entry): entry is [string, number] => typeof entry[1] === "number",
+      ),
+    );
+    try {
+      api.setMotionTuning?.(workbenchContext.controlledEntityId, numericTuning);
+      saveStatus.textContent = "运动手感已应用到当前主体，并保存到本机草稿";
+    } catch {
+      saveStatus.textContent = "运动参数未能应用，当前主体仍使用上一组稳定配置";
+    }
+  };
   if (defaultMotion?.safetyLimits === undefined) {
     motionSliderGrid.innerHTML = '<p class="friendly-empty">当前主体没有开放可调的运动参数。</p>';
   } else {
@@ -445,12 +458,14 @@ function installTuningWorkbench(
           workbenchContext.motionDraftStorageKey,
           JSON.stringify(workbenchContext.parameterDraft),
         );
-        saveStatus.textContent = `“${labelText}”已保存到本机草稿；导出后编译生效`;
+        applyMotionTuning();
+        saveStatus.textContent = `“${labelText}”已应用到当前主体，并保存到本机草稿`;
       });
       control.append(input, output);
       label.append(control);
       return [label];
     }));
+    applyMotionTuning();
   }
 
   const cameraCards = requiredElement<HTMLDivElement>("#tuning-camera-cards");
@@ -495,8 +510,10 @@ function installTuningWorkbench(
       { key: "targetHeightMeters", label: "观察高度", help: "镜头对准主体的高度", minimum: 0, maximum: 4, fallback: Number(base.targetHeightMeters ?? 1.2) },
       { key: "positionDampingPerSecond", label: "位置跟随速度", help: "越高越贴紧，越低越有惯性", minimum: 1, maximum: 40, fallback: Number(base.positionDampingPerSecond ?? 12) },
       { key: "rotationDampingPerSecond", label: "旋转稳定度", help: "越高转向越快，越低镜头越柔和", minimum: 1, maximum: 40, fallback: Number(base.rotationDampingPerSecond ?? 14) },
-      { key: "lookAheadSeconds", label: "向前预看", help: "移动时提前看向前方的程度", minimum: 0, maximum: 2, fallback: Number(base.lookAheadSeconds ?? 0.2) },
+      { key: "lookAheadSeconds", label: "启动时镜头向前带", help: "车一动，镜头焦点向前移动的程度；设为 0 完全关闭", minimum: 0, maximum: 2, fallback: Number(base.lookAheadSeconds ?? 0.2) },
       { key: "baseFovDegrees", label: "视野宽度", help: "越大看到的范围越广", minimum: 35, maximum: 100, fallback: Number(base.baseFovDegrees ?? 60) },
+      { key: "speedFovDegreesPerMeterPerSecond", label: "加速时视野变宽", help: "速度越快画面越有冲刺感；设为 0 完全关闭", minimum: 0, maximum: 5, fallback: Number(base.speedFovDegreesPerMeterPerSecond ?? 0) },
+      { key: "maximumSpeedFovDegrees", label: "冲刺视野上限", help: "限制高速时最多额外增加多少视野", minimum: 0, maximum: 30, fallback: Number(base.maximumSpeedFovDegrees ?? 0) },
     ];
     cameraSliders.replaceChildren(...settings.flatMap((setting) => {
       if (setting.key === "distanceMeters" && Number(base.maximumDistanceMeters ?? 1) === 0) return [];
@@ -594,7 +611,7 @@ function installTuningWorkbench(
       inputGuide: inputItems.map((item) => ({ key: item.keyLabel, action: item.title, meaning: item.explanation })),
       compatibleProfiles: [...workbenchContext.motionProfiles, ...workbenchContext.cameraProfiles],
       resourceLockRequired: true,
-      note: "运动参数为策划草稿，需要写回 Registry 并重新编译；相机参数已在当前会话即时预览。",
+      note: "运动与相机参数均已在当前会话即时预览；导出的草稿仍需写回 Registry 并重新编译，才能成为正式预制。",
     };
     downloadJson(
       `${workbenchContext.definition.semanticClassId.replaceAll(".", "-")}.worldkit-authoring.json`,

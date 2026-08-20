@@ -26,6 +26,7 @@ import type {
   ExecutionWaterBoundaryV3,
   ExecutionWaterV3,
   FixedInputV1,
+  MotionParameterTuningV1,
   SubjectHarnessReportV1,
   Vec2,
   Vec3,
@@ -761,6 +762,7 @@ export class BabylonWorldRuntime implements WorldRuntimeSessionV3 {
         motionTags: motion.motionTags,
         relationshipRole: "none",
         safeFallbackActive: motion.fallbackActive,
+        motionParameterTuning: motion.parameterTuning,
         ...(motion.lastFailureCode === undefined
           ? {}
           : { motionFailureCode: motion.lastFailureCode }),
@@ -909,6 +911,17 @@ export class BabylonWorldRuntime implements WorldRuntimeSessionV3 {
   requestMotionProfile(subjectEntityId: string, motionProfileRef: string): boolean {
     this.assertUsable();
     return this.controllerFor(subjectEntityId).requestMotionProfile(motionProfileRef);
+  }
+
+  setMotionTuning(
+    subjectEntityId: string,
+    tuning: MotionParameterTuningV1,
+  ): WorldRuntimeSnapshotV3 {
+    this.assertUsable();
+    if (!this.controllerFor(subjectEntityId).setMotionTuning(tuning)) {
+      throw new RangeError("Motion tuning must use registered parameters inside safety limits.");
+    }
+    return this.snapshot();
   }
 
   async runHarness(subjectEntityId: string): Promise<SubjectHarnessReportV1> {

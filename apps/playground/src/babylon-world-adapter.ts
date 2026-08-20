@@ -5,6 +5,7 @@ import type {
   ControlBindingReceiptV2,
   ExecutionPlanV4,
   FixedInputV1,
+  MotionParameterTuningV1,
   SemanticInputActionV1,
   WorldRuntimeSnapshotV3,
   WorldkitBrowserDiagnosticV1,
@@ -340,6 +341,16 @@ export class BabylonWorldAdapter implements PlaygroundWorldAdapter {
 
   setCameraTuningRuntime(tuning: CameraTuningV1): WorldRuntimeSnapshotV3 {
     const snapshot = this.runtime.setCameraTuning(tuning);
+    this.render();
+    this.emit();
+    return snapshot;
+  }
+
+  setMotionTuningRuntime(
+    subjectEntityId: string,
+    tuning: MotionParameterTuningV1,
+  ): WorldRuntimeSnapshotV3 {
+    const snapshot = this.runtime.setMotionTuning(subjectEntityId, tuning);
     this.render();
     this.emit();
     return snapshot;

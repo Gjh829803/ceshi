@@ -174,6 +174,18 @@ export class CameraDirectorV1 {
       ...(tuning.baseFovDegrees === undefined
         ? {}
         : { baseFovDegrees: clamp(tuning.baseFovDegrees, 35, 100) }),
+      ...(tuning.speedFovDegreesPerMeterPerSecond === undefined
+        ? {}
+        : {
+            speedFovDegreesPerMeterPerSecond: clamp(
+              tuning.speedFovDegreesPerMeterPerSecond,
+              0,
+              5,
+            ),
+          }),
+      ...(tuning.maximumSpeedFovDegrees === undefined
+        ? {}
+        : { maximumSpeedFovDegrees: clamp(tuning.maximumSpeedFovDegrees, 0, 30) }),
     };
     return true;
   }

@@ -7,6 +7,7 @@ import {
   type CameraViewInputV1,
   type ControlBindingReceiptV2,
   type FixedInputV1,
+  type MotionParameterTuningV1,
   type WorldRuntimeSnapshotV3,
   type SubjectHarnessReportV1,
   type WorldkitBrowserApiV3,
@@ -28,6 +29,10 @@ export interface DeferredWorldkitBrowserRuntimeAdapterV1 {
   adjustCameraViewRuntime?(input: CameraViewInputV1): WorldRuntimeSnapshotV3;
   resetCameraViewRuntime?(): WorldRuntimeSnapshotV3;
   setCameraTuningRuntime?(tuning: CameraTuningV1): WorldRuntimeSnapshotV3;
+  setMotionTuningRuntime?(
+    subjectEntityId: string,
+    tuning: MotionParameterTuningV1,
+  ): WorldRuntimeSnapshotV3;
   runSubjectHarness?(subjectEntityId: string): Promise<SubjectHarnessReportV1>;
   setMotionProfileRuntime?(
     subjectEntityId: string,
@@ -335,6 +340,13 @@ export function installDeferredWorldkitBrowserApi(options: {
       }
       return adapter.setCameraTuningRuntime(tuning);
     },
+    setMotionTuning: (subjectEntityId, tuning) => {
+      const adapter = requireReadyAdapter();
+      if (adapter.setMotionTuningRuntime === undefined) {
+        throw new Error("WORLDKIT_MOTION_TUNING_UNAVAILABLE");
+      }
+      return adapter.setMotionTuningRuntime(subjectEntityId, tuning);
+    },
     setMotionProfile: async (subjectEntityId, motionProfileRef) => {
       await startupPromise;
       const adapter = requireReadyAdapter();
@@ -371,6 +383,7 @@ export function installDeferredWorldkitBrowserApi(options: {
     "setCameraTuning",
     "setIntent",
     "setMotionProfile",
+    "setMotionTuning",
     "validateSubjectPackage",
   ] as const) {
     const descriptor = Object.getOwnPropertyDescriptor(api, extensionName);

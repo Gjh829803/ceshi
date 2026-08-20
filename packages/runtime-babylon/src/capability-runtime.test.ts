@@ -196,6 +196,36 @@ describe("capability package runtime smoke tests", () => {
         expect(snapshot.camera.positionMetersXYZ.every(Number.isFinite)).toBe(true);
         expect(harness.passed).toBe(true);
         expect(harness.checks).toHaveLength(9);
+        if (subjectDefinitionRef.includes("vehicle.four-wheel")) {
+          runtime.reset();
+          expect(runtime.setMotionTuning("player", {
+            lowSpeedTurnRateRadiansPerSecond: 0.2,
+            highSpeedTurnRateRadiansPerSecond: 0.1,
+          }).subjectStatesByEntityId.player?.motionParameterTuning).toEqual({
+            lowSpeedTurnRateRadiansPerSecond: 0.2,
+            highSpeedTurnRateRadiansPerSecond: 0.1,
+          });
+          const gentleTurn = await runtime.runFixedInput({
+            actions: ["move-forward", "move-left"],
+            ticks: 15,
+          });
+          runtime.reset();
+          runtime.setMotionTuning("player", {
+            lowSpeedTurnRateRadiansPerSecond: 5,
+            highSpeedTurnRateRadiansPerSecond: 2,
+          });
+          const sharpTurn = await runtime.runFixedInput({
+            actions: ["move-forward", "move-left"],
+            ticks: 15,
+          });
+          expect(Math.abs(sharpTurn.subjectStatesByEntityId.player!.forwardXYZ![0]))
+            .toBeGreaterThan(
+              Math.abs(gentleTurn.subjectStatesByEntityId.player!.forwardXYZ![0]),
+            );
+          expect(() => runtime.setMotionTuning("player", {
+            lowSpeedTurnRateRadiansPerSecond: 99,
+          })).toThrow(RangeError);
+        }
       } finally {
         await runtime.dispose();
       }

@@ -26,7 +26,11 @@ export interface CameraTuningV1 {
   rotationDampingPerSecond?: number;
   lookAheadSeconds?: number;
   baseFovDegrees?: number;
+  speedFovDegreesPerMeterPerSecond?: number;
+  maximumSpeedFovDegrees?: number;
 }
+
+export type MotionParameterTuningV1 = Readonly<Record<string, number>>;
 
 export const TRUSTED_DEFAULT_CONTROLLER_ID = "controller-primary" as const;
 
@@ -73,6 +77,7 @@ export interface SubjectRuntimeStateV3 {
   relationshipRole?: "none" | "rider" | "driver" | "passenger" | "tethered";
   safeFallbackActive?: boolean;
   motionFailureCode?: string;
+  motionParameterTuning?: MotionParameterTuningV1;
 }
 
 export interface WorldRuntimeSnapshotV3 {
@@ -197,6 +202,10 @@ export interface WorldkitBrowserApiV3 {
   adjustCameraView?(input: CameraViewInputV1): WorldRuntimeSnapshotV3;
   resetCameraView?(): WorldRuntimeSnapshotV3;
   setCameraTuning?(tuning: CameraTuningV1): WorldRuntimeSnapshotV3;
+  setMotionTuning?(
+    subjectEntityId: string,
+    tuning: MotionParameterTuningV1,
+  ): WorldRuntimeSnapshotV3;
   setMotionProfile?(
     subjectEntityId: string,
     motionProfileRef: string,

@@ -10,6 +10,7 @@ import type {
   ExecutionMotionProfileV1,
   ExecutionMovementMediumV1,
   ExecutionSubjectV3,
+  MotionParameterTuningV1,
   Vec3,
 } from "@whitebox-world/runtime-contracts";
 
@@ -27,6 +28,7 @@ export interface MotionKernelSnapshotV1 {
   forwardXYZ: Vec3;
   speedMetersPerSecond: number;
   fallbackActive: boolean;
+  parameterTuning: MotionParameterTuningV1;
   lastFailureCode?: "MOTION_PARAMETER_INVALID" | "MOTION_NON_FINITE_STATE";
 }
 
@@ -85,6 +87,13 @@ export class MotionKernelRuntimeV1 {
   private forwardSpeedMetersPerSecond = 0;
   private slideVelocity = Vector3.Zero();
   private jumpInProgress = false;
+  private parameterTuning: MotionParameterTuningV1 = {};
+  private parameterTuningRevision = 0;
+  private effectiveProfileCache: {
+    baseProfile: ExecutionMotionProfileV1;
+    tuningRevision: number;
+    profile: ExecutionMotionProfileV1;
+  } | undefined;
 
   constructor(
     private readonly subject: ExecutionSubjectV3,
@@ -159,6 +168,25 @@ export class MotionKernelRuntimeV1 {
     return this.motionModeResolver.request(resourceRef);
   }
 
+  setParameterTuning(tuning: MotionParameterTuningV1): boolean {
+    const profile = this.motionModeResolver.currentProfile;
+    for (const [name, value] of Object.entries(tuning)) {
+      const limit = profile.safetyLimits[name];
+      if (
+        limit === undefined ||
+        !Number.isFinite(value) ||
+        value < limit.minimum ||
+        value > limit.maximum
+      ) {
+        return false;
+      }
+    }
+    this.parameterTuning = { ...tuning };
+    this.parameterTuningRevision += 1;
+    this.effectiveProfileCache = undefined;
+    return true;
+  }
+
   step(command: MotionCommandV1, movementMedium: ExecutionMovementMediumV1): void {
     this.commitPendingProfile();
     try {
@@ -189,6 +217,7 @@ export class MotionKernelRuntimeV1 {
       forwardXYZ: [forward.x, forward.y, forward.z],
       speedMetersPerSecond: velocity.length(),
       fallbackActive: mode.fallbackActive,
+      parameterTuning: { ...this.parameterTuning },
       ...(mode.lastFailureCode === undefined
         ? {}
         : { lastFailureCode: mode.lastFailureCode }),
@@ -212,6 +241,7 @@ export class MotionKernelRuntimeV1 {
     this.physicsController.setPosition(spawn.add(this.colliderCenterOffset));
     this.physicsController.setVelocity(Vector3.Zero());
     this.motionModeResolver.reset();
+    this.clearParameterTuning();
     this.yawRadians = 0;
     this.forwardSpeedMetersPerSecond = 0;
     this.slideVelocity.setAll(0);
@@ -271,13 +301,6 @@ export class MotionKernelRuntimeV1 {
       const throttleCommand = command.kind === "throttle-steer" ? command : undefined;
       const throttle = throttleCommand?.throttle ?? 0;
       const steering = throttleCommand?.steering ?? 0;
-      const turnRate = numberParameter(
-        this.activeProfile,
-        implementationId === "wheeled-arcade"
-          ? "lowSpeedTurnRateRadiansPerSecond"
-          : "turnRateRadiansPerSecond",
-        1.8,
-      );
       const maximumForwardSpeed = numberParameter(
         this.activeProfile,
         implementationId === "surface-slide"
@@ -322,11 +345,20 @@ export class MotionKernelRuntimeV1 {
       const speedRatio = maximumForwardSpeed <= 0
         ? 0
         : Math.min(1, Math.abs(this.forwardSpeedMetersPerSecond) / maximumForwardSpeed);
-      const steeringScale = implementationId === "wheeled-arcade"
-        ? Math.max(0.25, 1 - speedRatio * 0.65)
-        : 1;
+      const turnRate = implementationId === "wheeled-arcade"
+        ? numberParameter(
+            this.activeProfile,
+            "lowSpeedTurnRateRadiansPerSecond",
+            2.2,
+          ) * (1 - speedRatio) +
+          numberParameter(
+            this.activeProfile,
+            "highSpeedTurnRateRadiansPerSecond",
+            0.7,
+          ) * speedRatio
+        : numberParameter(this.activeProfile, "turnRateRadiansPerSecond", 1.8);
       this.yawRadians -=
-        steering * turnRate * steeringScale * FIXED_TIME_STEP_SECONDS;
+        steering * turnRate * FIXED_TIME_STEP_SECONDS;
       desired = this.forward.scale(this.forwardSpeedMetersPerSecond);
 
       if (
@@ -421,7 +453,24 @@ export class MotionKernelRuntimeV1 {
   }
 
   private get activeProfile(): ExecutionMotionProfileV1 {
-    return this.motionModeResolver.currentProfile;
+    const baseProfile = this.motionModeResolver.currentProfile;
+    if (Object.keys(this.parameterTuning).length === 0) return baseProfile;
+    if (
+      this.effectiveProfileCache?.baseProfile === baseProfile &&
+      this.effectiveProfileCache.tuningRevision === this.parameterTuningRevision
+    ) {
+      return this.effectiveProfileCache.profile;
+    }
+    const profile: ExecutionMotionProfileV1 = {
+      ...baseProfile,
+      parameters: { ...baseProfile.parameters, ...this.parameterTuning },
+    };
+    this.effectiveProfileCache = {
+      baseProfile,
+      tuningRevision: this.parameterTuningRevision,
+      profile,
+    };
+    return profile;
   }
 
   private stepGlide(
@@ -484,6 +533,7 @@ export class MotionKernelRuntimeV1 {
 
   private commitPendingProfile(): void {
     if (this.motionModeResolver.commitTickBoundary()) {
+      this.clearParameterTuning();
       this.forwardSpeedMetersPerSecond = 0;
       this.slideVelocity.setAll(0);
     }
@@ -491,6 +541,13 @@ export class MotionKernelRuntimeV1 {
 
   private activateFallback(code: MotionModeFailureCodeV1): void {
     this.motionModeResolver.activateFallback(code);
+    this.clearParameterTuning();
+  }
+
+  private clearParameterTuning(): void {
+    this.parameterTuning = {};
+    this.parameterTuningRevision += 1;
+    this.effectiveProfileCache = undefined;
   }
 
   private syncVisual(subjectOriginOverride?: Vector3): void {

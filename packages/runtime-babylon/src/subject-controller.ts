@@ -5,6 +5,7 @@ import type { Scene } from "@babylonjs/core/scene.pure.js";
 import type {
   ExecutionMovementMediumV1,
   ExecutionSubjectV3,
+  MotionParameterTuningV1,
   SemanticInputActionV1,
   Vec3,
 } from "@whitebox-world/runtime-contracts";
@@ -74,6 +75,10 @@ export class SubjectController {
 
   requestMotionProfile(resourceRef: string): boolean {
     return this.motionKernel.requestMotionProfile(resourceRef);
+  }
+
+  setMotionTuning(tuning: MotionParameterTuningV1): boolean {
+    return this.motionKernel.setParameterTuning(tuning);
   }
 
   synchronizeVisual(): void {
