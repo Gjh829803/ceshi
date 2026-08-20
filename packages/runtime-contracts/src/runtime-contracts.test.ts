@@ -123,10 +123,9 @@ describe("runtime contracts V3", () => {
     const rigProfile = {
       rigProfileRef: "worldkit://rig-profile/biped.golden@1",
       bodyTopology: "biped",
-      skeletonRootNodeName: "root",
-      requiredBoneIds: ["root", "hand.right"],
+      skeletonRootBoneName: "root",
+      requiredBoneIds: ["hips", "hand.right"],
       sourceNodeNameByBoneId: {
-        root: "root",
         hips: "hips",
         spine: "spine",
         chest: "chest",
@@ -186,7 +185,7 @@ describe("runtime contracts V3", () => {
       "bodyTopology",
       "requiredBoneIds",
       "rigProfileRef",
-      "skeletonRootNodeName",
+      "skeletonRootBoneName",
       "sourceNodeNameByBoneId",
     ]);
     expect(Object.keys(animationSet).sort()).toEqual([

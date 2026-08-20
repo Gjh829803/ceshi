@@ -31,7 +31,6 @@ const BIPED_BONE_IDS = [
   "lower-leg.left",
   "lower-leg.right",
   "neck",
-  "root",
   "spine",
   "upper-arm.left",
   "upper-arm.right",
@@ -373,7 +372,7 @@ describe("subject resource registry", () => {
       resourceRef: RIG_PROFILE_REF,
       bodyTopology: "biped",
       compatibleSubjectAssetRefs: [SUBJECT_ASSET_REF],
-      skeletonRootNodeName: "root",
+      skeletonRootBoneName: "root",
       requiredBoneIds: BIPED_BONE_IDS,
       sourceNodeNameByBoneId: Object.fromEntries(BIPED_BONE_IDS.map((id) => [id, id])),
     });

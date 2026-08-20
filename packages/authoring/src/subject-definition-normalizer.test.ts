@@ -38,7 +38,6 @@ const BIPED_BONE_IDS = [
   "lower-leg.left",
   "lower-leg.right",
   "neck",
-  "root",
   "spine",
   "upper-arm.left",
   "upper-arm.right",
@@ -236,10 +235,10 @@ describe("Package Subject Definition normalization", () => {
       "sha256:2949c4c8f7ebbb321a3a40ea10890f4dd608178c26424c530e771c1b529d0a1b",
     );
     expect(result.value?.resources.resourceLockHash).toBe(
-      "sha256:73caff41be6267df95087c08f870a3943ab6f38107a1feff4fa4ac43ff2d4aec",
+      "sha256:1a567f789c50f0fe234253417eca8313c34931eb02f66513ed8819b95710091c",
     );
     expect(result.normalizedWorldIrHash).toBe(
-      "sha256:272dd718b5f76d6902bd057c34efdc2e60675e2f7daa88ad92446232ee8eeb74",
+      "sha256:e5425e5ba54d367c9c52256b25eb3954df20fdf8834c42089501215e5e17b970",
     );
   });
 
@@ -337,7 +336,7 @@ describe("Package Subject Definition normalization", () => {
       "bodyTopology",
       "requiredBoneIds",
       "rigProfileRef",
-      "skeletonRootNodeName",
+      "skeletonRootBoneName",
       "sourceNodeNameByBoneId",
     ]);
     expect(Object.keys(tables.animationSets[0]!).sort()).toEqual([

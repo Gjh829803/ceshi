@@ -391,7 +391,7 @@ export interface NormalizedSubjectAssetV1 {
 export interface NormalizedRigProfileV1 {
   rigProfileRef: string;
   bodyTopology: "biped";
-  skeletonRootNodeName: string;
+  skeletonRootBoneName: string;
   requiredBoneIds: readonly BipedBoneIdV1[];
   sourceNodeNameByBoneId: Readonly<Record<BipedBoneIdV1, string>>;
 }

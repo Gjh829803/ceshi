@@ -49,7 +49,6 @@ export interface SubjectAssetManifestInputV1 extends SubjectRegistryResourceBase
 }
 
 export type BipedBoneIdV1 =
-  | "root"
   | "hips"
   | "spine"
   | "chest"
@@ -72,7 +71,7 @@ export interface RigProfileManifestInputV1 extends SubjectRegistryResourceBaseIn
   kind: "rig-profile";
   bodyTopology: "biped";
   compatibleSubjectAssetRefs: readonly string[];
-  skeletonRootNodeName: string;
+  skeletonRootBoneName: string;
   requiredBoneIds: readonly BipedBoneIdV1[];
   sourceNodeNameByBoneId: Readonly<Record<BipedBoneIdV1, string>>;
 }

@@ -53,7 +53,6 @@ const GOLDEN_HUMANOID_SUBJECT_ASSET: SubjectAssetManifestInputV1 = {
 };
 
 const GOLDEN_BIPED_BONE_IDS = [
-  "root",
   "hips",
   "spine",
   "chest",
@@ -80,10 +79,9 @@ const GOLDEN_BIPED_RIG_PROFILE: RigProfileManifestInputV1 = {
   resourceRef: "worldkit://rig-profile/biped.golden@1",
   bodyTopology: "biped",
   compatibleSubjectAssetRefs: [GOLDEN_HUMANOID_SUBJECT_ASSET.resourceRef],
-  skeletonRootNodeName: "root",
+  skeletonRootBoneName: "root",
   requiredBoneIds: GOLDEN_BIPED_BONE_IDS,
   sourceNodeNameByBoneId: {
-    root: "root",
     hips: "hips",
     spine: "spine",
     chest: "chest",

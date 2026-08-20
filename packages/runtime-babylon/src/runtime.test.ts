@@ -900,7 +900,7 @@ describe("BabylonWorldRuntime", () => {
           rig.sourceNodeNameByBoneId["hand.left"];
       },
       (plan: ExecutionPlanV4) => {
-        (plan.rigProfiles[0] as { skeletonRootNodeName: string }).skeletonRootNodeName =
+        (plan.rigProfiles[0] as { skeletonRootBoneName: string }).skeletonRootBoneName =
           "hips";
       },
     ]) {
@@ -1102,7 +1102,7 @@ describe("BabylonWorldRuntime", () => {
       });
     });
     const executionPlan = createRiggedExecutionPlan();
-    (executionPlan.rigProfiles[0] as { skeletonRootNodeName: string }).skeletonRootNodeName =
+    (executionPlan.rigProfiles[0] as { skeletonRootBoneName: string }).skeletonRootBoneName =
       "hips";
     const engine = new NullEngine();
 

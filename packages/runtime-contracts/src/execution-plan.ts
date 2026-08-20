@@ -83,7 +83,6 @@ export interface ExecutionSubjectAssetV1 {
 }
 
 export type ExecutionBipedBoneIdV1 =
-  | "root"
   | "hips"
   | "spine"
   | "chest"
@@ -111,7 +110,7 @@ export type ExecutionGroundHumanoidActionIdV1 =
 export interface ExecutionRigProfileV1 {
   rigProfileRef: string;
   bodyTopology: "biped";
-  skeletonRootNodeName: string;
+  skeletonRootBoneName: string;
   requiredBoneIds: readonly ExecutionBipedBoneIdV1[];
   sourceNodeNameByBoneId: Readonly<Record<ExecutionBipedBoneIdV1, string>>;
 }

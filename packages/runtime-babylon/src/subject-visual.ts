@@ -130,11 +130,16 @@ function exactResource<T>(
   return matches[0]!;
 }
 
+interface ValidatedRigV1 {
+  mappedBones: ReadonlyMap<string, Bone>;
+  skeletonRootBone: Bone;
+}
+
 function validateRig(
   instance: SubjectAssetInstanceV1,
   rigProfile: ExecutionRigProfileV1,
   asset: ExecutionSubjectAssetV1,
-): ReadonlyMap<string, Bone> {
+): ValidatedRigV1 {
   if (instance.skeletons.length !== 1) {
     throw assetError("SUBJECT_ASSET_RIG_INCOMPATIBLE", asset);
   }
@@ -149,7 +154,7 @@ function validateRig(
   const rootBones = skeleton.bones.filter((bone) => bone.getParent() === null);
   if (
     rootBones.length !== 1 ||
-    rootBones[0]!.name !== rigProfile.skeletonRootNodeName
+    rootBones[0]!.name !== rigProfile.skeletonRootBoneName
   ) {
     throw assetError("SUBJECT_ASSET_RIG_INCOMPATIBLE", asset);
   }
@@ -164,17 +169,17 @@ function validateRig(
     uniqueBones.add(bone);
     mappedBones.set(boneId, bone);
   }
-  return mappedBones;
+  return { mappedBones, skeletonRootBone: rootBones[0]! };
 }
 
 function validateRootMotion(
   animationGroups: readonly AnimationGroup[],
+  skeletonRootBone: Bone,
   mappedBones: ReadonlyMap<string, Bone>,
   asset: ExecutionSubjectAssetV1,
 ): void {
   const forbiddenTargets = new Set<unknown>();
-  for (const boneId of ["root", "hips"] as const) {
-    const bone = mappedBones.get(boneId);
+  for (const bone of [skeletonRootBone, mappedBones.get("hips")]) {
     if (bone === undefined) continue;
     forbiddenTargets.add(bone);
     const transformNode = bone.getTransformNode();
@@ -356,8 +361,17 @@ export async function createSubjectVisual(
       ) {
         throw assetError("SUBJECT_ASSET_RIG_INCOMPATIBLE", asset);
       }
-      const mappedBones = validateRig(assetInstance, rigProfile, asset);
-      validateRootMotion(assetInstance.animationGroups, mappedBones, asset);
+      const { mappedBones, skeletonRootBone } = validateRig(
+        assetInstance,
+        rigProfile,
+        asset,
+      );
+      validateRootMotion(
+        assetInstance.animationGroups,
+        skeletonRootBone,
+        mappedBones,
+        asset,
+      );
       const affectedMeshes = assetInstance.meshes
         .filter(
           (mesh) =>

@@ -38,7 +38,6 @@ const BIPED_BONE_IDS = [
   "lower-leg.left",
   "lower-leg.right",
   "neck",
-  "root",
   "spine",
   "upper-arm.left",
   "upper-arm.right",
@@ -233,7 +232,7 @@ describe("compileWorld", () => {
       "bodyTopology",
       "requiredBoneIds",
       "rigProfileRef",
-      "skeletonRootNodeName",
+      "skeletonRootBoneName",
       "sourceNodeNameByBoneId",
     ]);
     expect(Object.keys(plan.animationSets[0]!).sort()).toEqual([
@@ -262,8 +261,10 @@ describe("compileWorld", () => {
       JSON.stringify(plan.rigProfiles[0]),
     ) as {
       requiredBoneIds: readonly string[];
+      skeletonRootBoneName: string;
       sourceNodeNameByBoneId: Readonly<Record<string, unknown>>;
     };
+    expect(serializedRigProfile.skeletonRootBoneName).toBe("root");
     expect(serializedRigProfile.requiredBoneIds).toEqual(BIPED_BONE_IDS);
     expectExactKeys(serializedRigProfile.sourceNodeNameByBoneId, BIPED_BONE_IDS);
     for (const boneId of BIPED_BONE_IDS) {
@@ -304,7 +305,7 @@ describe("compileWorld", () => {
         normalizedWorldIrHash: rigged.normalizedWorldIrHash!,
       }).executionPlanHash,
     ).toBe(
-      "sha256:1f8a285f2ada5394ce27abbe4274394adf0d8c6ccc0dcdaf6c9b49184e590515",
+      "sha256:fd7ae8699237a81d3db852c9b0fec6b8ff22febe9c3ed716b5f573893b12248c",
     );
   });
 

@@ -48,7 +48,6 @@ const EXECUTION_BIPED_BONE_IDS = [
   "lower-leg.left",
   "lower-leg.right",
   "neck",
-  "root",
   "spine",
   "upper-arm.left",
   "upper-arm.right",
@@ -353,7 +352,7 @@ function compileRigProfileV1(
   return {
     rigProfileRef: resource.rigProfileRef,
     bodyTopology: resource.bodyTopology,
-    skeletonRootNodeName: resource.skeletonRootNodeName,
+    skeletonRootBoneName: resource.skeletonRootBoneName,
     requiredBoneIds: [...resource.requiredBoneIds],
     sourceNodeNameByBoneId: {
       chest: resource.sourceNodeNameByBoneId.chest,
@@ -368,7 +367,6 @@ function compileRigProfileV1(
       "lower-leg.left": resource.sourceNodeNameByBoneId["lower-leg.left"],
       "lower-leg.right": resource.sourceNodeNameByBoneId["lower-leg.right"],
       neck: resource.sourceNodeNameByBoneId.neck,
-      root: resource.sourceNodeNameByBoneId.root,
       spine: resource.sourceNodeNameByBoneId.spine,
       "upper-arm.left": resource.sourceNodeNameByBoneId["upper-arm.left"],
       "upper-arm.right": resource.sourceNodeNameByBoneId["upper-arm.right"],
