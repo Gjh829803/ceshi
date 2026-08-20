@@ -599,16 +599,16 @@ State exactly: “Placement Solver S1 首个海湾纵向切片已完成并进入
 
 Audit public Schema/IR/Plan/artifacts for obsolete V2 Authoring fields, provider terms, URI leakage, non-finite numbers, unimplemented Constraint kinds, duplicated `transform`+`placement`, and Solver access to filesystem/network/time/env/Babylon/Havok.
 
-- [ ] **Step 3: Run final verification from a clean worktree**
+- [x] **Step 3: Run final verification from a clean worktree**
 
 Run: `pnpm test && pnpm typecheck && pnpm build && pnpm verify:canonical && pnpm verify:rigged-subject && pnpm verify:placement-layout && git diff --check`
 Expected: PASS, tracked verifier artifacts unchanged, no temp/backup/Vite residue.
 
-- [ ] **Step 4: Review every requirement against evidence**
+- [x] **Step 4: Review every requirement against evidence**
 
 Record commit hashes, exact test totals, IR/Plan/Report hashes, screenshot dimensions/hash, constraints/evidence, conflict and cache-integrity outcomes in this plan's Progress table. Do not mark deferred kinds or P0.1 overall complete.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add README.md docs/00-project-overview.md docs/17-canonical-json-quickstart.md docs/18-refactor-progress-and-backlog.md docs/superpowers/specs/2026-08-19-placement-constraint-layout-solver-design.md docs/superpowers/plans/2026-08-20-placement-layout-solver-s1.md
@@ -688,4 +688,4 @@ Placement Solver S1 首个海湾纵向切片已完成并进入回归；通用 Te
 | 8. Atomic Cutover/Runtime Assertions | Complete | `5e3ed01` | V3/V3/V4-only cutover; Runtime revalidation without repair and cleanup tests |
 | 9. CLI | Complete | `797bfab` | layout validate/solve/explain, exit codes and transactional artifact tests |
 | 10. Browser/E2E | Complete | `068b1d7` | Coastal Browser/Havok evidence, deterministic/negative gates and visible PNG |
-| 11. Docs/Audit | In progress | — | Exact status/docs prepared; final audits and clean-worktree verification pending |
+| 11. Docs/Audit | Complete | `f7039fa` | Six entrypoint/design docs, seven machine boundaries, clean-worktree 48/435 + type/build + three Browser gates; completion evidence synchronized in the immediate follow-up commit |
