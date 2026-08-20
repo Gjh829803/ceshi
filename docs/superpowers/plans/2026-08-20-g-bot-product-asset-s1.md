@@ -317,6 +317,8 @@ git add README.md docs artifacts/examples/rigged-subject-world
 git commit -m "docs: complete G Bot product asset slice"
 ```
 
-- [ ] **Step 6: Request independent review and fix findings test-first**
+- [x] **Step 6: Request independent review and fix findings test-first**
 
 Review the full feature range against the approved design, exact generated artifacts, and complete verification output. Any P0-P2 finding must be reproduced with a failing test before correction.
+
+Final independent review: CLEAN for `84d60e1..1ba48e7`, with no remaining P0-P2 findings. Registry canonical-hash coverage and real-byte G Bot clone/Clip/Socket/disposal isolation were added before closure.
