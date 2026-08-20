@@ -650,7 +650,7 @@ describe("subject resource registry", () => {
       {
         resourceRef: G_BOT_SUBJECT_DEFINITION_REF,
         contentHash:
-          "sha256:2c8f17a171ab4a17ac1bd1477aabebcf7775eb8898ccf274b84e0c20216ebbfe",
+          "sha256:614b8f6638d55045c0b71697bee6e6e315b42f02564285f1d0e3b8ba6e0b5f2a",
       },
     ]);
   });

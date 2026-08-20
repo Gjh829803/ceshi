@@ -244,7 +244,7 @@ const G_BOT_HUMANOID_DEFINITION: RegistrySubjectDefinitionInputV2 = {
       subjectAssetRef: "worldkit://subject-asset/actor.humanoid.g-bot@1",
       localTransform: {
         positionMetersXYZ: [0, 0, 0],
-        rotationEulerRadiansXYZ: [0, 0, 0],
+        rotationEulerRadiansXYZ: [0, Math.PI, 0],
         scaleXYZ: [1, 1, 1],
       },
       appearance: { mode: "whitebox-neutral" },

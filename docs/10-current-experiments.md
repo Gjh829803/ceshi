@@ -87,19 +87,19 @@ Subject Node 中引用 `worldkit://subject-definition/humanoid.rigged-golden@1`�
   Reset 后以 Tick 0 同步记录 Snapshot 和截图，Hash 为
   `sha256:b9ff828333641e548ea7ef3d2f8dbc6c8ae96c120659db3a6f6c17df19a09d9b`；
 - Browser 固定 Tick 动作截图 Hash 分别为 Idle
-  `sha256:af60b01ae2bf9db87c5ea5a5e01a08539e1ca35186e7b88b60125cc049a641aa`、
-  Walk `sha256:63e1f332c7dcbb446f093d0d32db0e151288ab94a92aeb2d666b52bd8fd1f513`、
-  Run `sha256:d8957ad8b2bc115a9a493dd5404ef38e10cd2373a40b2743b2af83851400e3c7`、
-  Jump `sha256:992383d2cc70d49b827af24815dff7a41bbed8e5da7e0f8bf527294b00f61552`；
+  `sha256:4301d77f6d7eaab46c589abf6376b2e90aee94e2b43c7424bdde713ecd190cf2`、
+  Walk `sha256:5e85136862609606ffe1986a96fb684c180beb2bc8bc3c6735ff6385a447e86e`、
+  Run `sha256:86cbb3f4b375b3c7e50d1d7368077a1389d4db0d397c59aaf744be178984e199`、
+  Jump `sha256:d70e74ced33ce3e3868f77085a6895585c1b885f92d511b60623b0bc4f567ffb`；
   Walk 按 1s/30 FPS Clip、1× Playback、0.2s Blend 与 60Hz Runtime 推导，在
   Action Start Tick 1 后的首个 Post-blend Quarter-cycle Tick 16 捕获，z 为
-  29.398333333333344；Jump 在 Tick 12 报告 `movementMedium: air`；
+  29.398516476888297；Jump 在 Tick 12 报告 `movementMedium: air`；
 - 四张动作图在 `[374,166,188,287]` Crop 内使用 Foreground-origin 归一化 Subject
-  Silhouette 比较；六组差异率为 0.500432、0.531802、0.398077、0.657316、
-  0.298178、0.602627，均高于 0.15 门禁，不再只以 PNG Hash 不同代替姿态证据；
+  Silhouette 比较；六组差异率为 0.500432、0.531802、0.442699、0.657316、
+  0.281609、0.626496，均高于 0.15 门禁，不再只以 PNG Hash 不同代替姿态证据；
 - 未受控的 `rigged-primary` 保持位置与 `idle`，受控的 `rigged-secondary` 从 x=3
-  移到 x=5.361666666666668 并报告 `walk`；
-- `rigged-secondary` 在墙前停于 x=5.561666666666668，低于 6.2m 门禁；
+  移到 x=5.361550803956806 并报告 `walk`；
+- `rigged-secondary` 在墙前停于 x=5.641541341197738，低于 6.2m 门禁；
 - 内存篡改 GLB 只命中一次请求并得到 `SUBJECT_ASSET_HASH_MISMATCH`，磁盘资产
   前后 Hash 不变。
 

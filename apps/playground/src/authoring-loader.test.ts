@@ -11,6 +11,7 @@ import {
   activeActionForControlledSubject,
   featureInspections,
   mapPlaygroundInputActions,
+  nextThirdPersonCameraOrbit,
 } from "./babylon-world-adapter";
 import { loadAuthoringScene } from "./authoring-loader";
 
@@ -127,6 +128,42 @@ describe("loadAuthoringScene", () => {
       resources: { meshes: 1, bodies: 1, terrainSamples: 9 },
     } as const;
     expect(activeActionForControlledSubject(snapshot)).toBe("run");
+  });
+
+  it("derives deterministic third-person orbit changes from arrows, drag, and wheel input", () => {
+    const initial = {
+      yawRadians: 0,
+      pitchRadians: 0.1,
+      distanceMeters: 4,
+    };
+    expect(
+      nextThirdPersonCameraOrbit(initial, {
+        kind: "actions",
+        actions: ["cameraRight", "cameraUp"],
+        ticks: 10,
+      }),
+    ).toEqual({
+      yawRadians: 0.25,
+      pitchRadians: -0.04999999999999999,
+      distanceMeters: 4,
+    });
+    expect(
+      nextThirdPersonCameraOrbit(initial, {
+        kind: "pointer-drag",
+        deltaPixelsXY: [100, -50],
+      }),
+    ).toEqual({
+      yawRadians: -0.6,
+      pitchRadians: 0.4,
+      distanceMeters: 4,
+    });
+    expect(
+      nextThirdPersonCameraOrbit(initial, { kind: "wheel", deltaY: 250 }),
+    ).toEqual({
+      yawRadians: 0,
+      pitchRadians: 0.1,
+      distanceMeters: 6,
+    });
   });
 
   it("runs strict Authoring V3 JSON through NormalizedWorldIR V3 and ExecutionPlan V4", async () => {

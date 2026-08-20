@@ -9,7 +9,11 @@ import { Mesh } from "@babylonjs/core/Meshes/mesh.js";
 import { MeshBuilder } from "@babylonjs/core/Meshes/meshBuilder.js";
 import { VertexData } from "@babylonjs/core/Meshes/mesh.vertexData.js";
 import { PhysicsAggregate } from "@babylonjs/core/Physics/v2/physicsAggregate.js";
-import { PhysicsShapeHeightField } from "@babylonjs/core/Physics/v2/physicsShape.js";
+import {
+  PhysicsShapeHeightField,
+  PhysicsShapeMesh,
+  type PhysicsShape,
+} from "@babylonjs/core/Physics/v2/physicsShape.js";
 import { PhysicsShapeType } from "@babylonjs/core/Physics/v2/IPhysicsEnginePlugin.js";
 import type { PhysicsEngine } from "@babylonjs/core/Physics/v2/physicsEngine.js";
 import { Scene } from "@babylonjs/core/scene.pure.js";
@@ -58,6 +62,17 @@ export interface BabylonWorldRuntimeOptions {
   subjectAssetResolver?: SubjectAssetResolverV1;
   subjectAssetCacheOptions?: SubjectAssetCacheOptionsV1;
 }
+
+export interface ThirdPersonCameraOrbitV1 {
+  readonly yawRadians: number;
+  readonly pitchRadians: number;
+  readonly distanceMeters: number;
+}
+
+const MINIMUM_CAMERA_PITCH_RADIANS = -0.95;
+const MAXIMUM_CAMERA_PITCH_RADIANS = 0.65;
+const MINIMUM_CAMERA_DISTANCE_METERS = 1.8;
+const MAXIMUM_CAMERA_DISTANCE_METERS = 8;
 
 type OwnedDisposer = () => void | Promise<void>;
 
@@ -113,10 +128,11 @@ function runtimeLayoutBounds(
   const sy = Math.sin(y);
   const cz = Math.cos(z);
   const sz = Math.sin(z);
+  // Matches Babylon Quaternion.FromEulerAngles(x, y, z): yaw(Y) * pitch(X) * roll(Z).
   const rotation = [
-    [cz * cy, cz * sy * sx - sz * cx, cz * sy * cx + sz * sx],
-    [sz * cy, sz * sy * sx + cz * cx, sz * sy * cx - cz * sx],
-    [-sy, cy * sx, cy * cx],
+    [cy * cz + sy * sx * sz, -cy * sz + sy * sx * cz, sy * cx],
+    [cx * sz, cx * cz, -sx],
+    [-sy * cz + cy * sx * sz, sy * sz + cy * sx * cz, cy * cx],
   ] as const;
   const rotated = rotation.map((row) => row.reduce(
     (sum, coefficient, axis) => sum + Math.abs(coefficient) * scaled[axis]!,
@@ -352,10 +368,10 @@ function containsPoint(boundary: ExecutionWaterBoundaryV3, x: number, z: number)
   return inside;
 }
 
-function movementMediumAtSubjectOrigin(
+function isSubjectOriginInSwimmableWater(
   executionPlan: ExecutionPlanV4,
   subjectOrigin: Vector3,
-): "ground" | "air" | "water" {
+): boolean {
   for (const water of executionPlan.waters) {
     if (
       water.traversalMode === "swimmable" &&
@@ -363,15 +379,10 @@ function movementMediumAtSubjectOrigin(
       subjectOrigin.y <= water.waterLevelMeters + 0.6 &&
       subjectOrigin.y >= water.waterLevelMeters - water.depthMeters - 0.6
     ) {
-      return "water";
+      return true;
     }
   }
-  const groundHeight = sampleExecutionTerrainHeight(
-    executionPlan.terrain,
-    subjectOrigin.x,
-    subjectOrigin.z,
-  );
-  return subjectOrigin.y <= groundHeight + 0.16 ? "ground" : "air";
+  return false;
 }
 
 function configureAtmosphere(scene: Scene, preset: ExecutionPlanV4["atmospherePreset"]): void {
@@ -414,11 +425,14 @@ export class BabylonWorldRuntime implements WorldRuntimeSessionV3 {
   private disposed = false;
   private controlledEntityId: string;
   private readonly aggregates: PhysicsAggregate[] = [];
-  private readonly ownedHeightfieldShape: PhysicsShapeHeightField;
+  private readonly ownedTerrainShape: PhysicsShape;
   private readonly subjectControllersByEntityId: ReadonlyMap<string, SubjectController>;
   private readonly subjectVisuals: readonly SubjectVisual[];
   private readonly subjectVisualsByEntityId: ReadonlyMap<string, SubjectVisual>;
   private readonly camera: FreeCamera;
+  private cameraYawRadians = 0;
+  private cameraPitchRadians: number;
+  private cameraDistanceMeters: number;
   private readonly renderLoop: () => void;
   private readonly ownedDisposers: readonly OwnedDisposer[];
 
@@ -429,7 +443,7 @@ export class BabylonWorldRuntime implements WorldRuntimeSessionV3 {
     subjectControllersByEntityId: ReadonlyMap<string, SubjectController>,
     subjectVisuals: readonly SubjectVisual[],
     camera: FreeCamera,
-    ownedHeightfieldShape: PhysicsShapeHeightField,
+    ownedTerrainShape: PhysicsShape,
     aggregates: PhysicsAggregate[],
     ownedDisposers: readonly OwnedDisposer[],
     autoStartRenderLoop: boolean,
@@ -444,7 +458,9 @@ export class BabylonWorldRuntime implements WorldRuntimeSessionV3 {
       ]),
     );
     this.camera = camera;
-    this.ownedHeightfieldShape = ownedHeightfieldShape;
+    this.cameraPitchRadians = executionPlan.camera.pitchRadians;
+    this.cameraDistanceMeters = executionPlan.camera.distanceMeters;
+    this.ownedTerrainShape = ownedTerrainShape;
     this.aggregates.push(...aggregates);
     this.ownedDisposers = ownedDisposers;
     this.renderLoop = () => this.renderFrame();
@@ -491,19 +507,22 @@ export class BabylonWorldRuntime implements WorldRuntimeSessionV3 {
 
       const terrainMesh = createTerrainMesh(options.executionPlan.terrain, materials.terrain, scene);
       const terrain = options.executionPlan.terrain;
-      const heightfieldShape = new PhysicsShapeHeightField(
-        terrain.sizeMetersXZ[0],
-        terrain.sizeMetersXZ[1],
-        terrain.resolutionCellsXZ[0],
-        terrain.resolutionCellsXZ[1],
-        toBabylonHeightfieldData(terrain),
-        scene,
-      );
+      const [terrainColumns, terrainRows] = terrain.resolutionCellsXZ;
+      const terrainShape: PhysicsShape = terrainColumns === terrainRows
+        ? new PhysicsShapeHeightField(
+            terrain.sizeMetersXZ[0],
+            terrain.sizeMetersXZ[1],
+            terrainColumns,
+            terrainRows,
+            toBabylonHeightfieldData(terrain),
+            scene,
+          )
+        : new PhysicsShapeMesh(terrainMesh, scene);
       const aggregates: PhysicsAggregate[] = [];
-      ownedDisposers.push(() => heightfieldShape.dispose());
+      ownedDisposers.push(() => terrainShape.dispose());
       const terrainAggregate = new PhysicsAggregate(
         terrainMesh,
-        heightfieldShape,
+        terrainShape,
         { mass: 0, friction: 0.9, restitution: 0 },
         scene,
       );
@@ -559,7 +578,7 @@ export class BabylonWorldRuntime implements WorldRuntimeSessionV3 {
           visual.root,
           scene,
           (subjectOrigin) =>
-            movementMediumAtSubjectOrigin(options.executionPlan, subjectOrigin),
+            isSubjectOriginInSwimmableWater(options.executionPlan, subjectOrigin),
         );
         subjectControllersByEntityId.set(subject.entityId, controller);
         ownedDisposers.push(() => controller.dispose());
@@ -578,7 +597,7 @@ export class BabylonWorldRuntime implements WorldRuntimeSessionV3 {
         subjectControllersByEntityId,
         subjectVisuals,
         camera,
-        heightfieldShape,
+        terrainShape,
         aggregates,
         ownedDisposers,
         options.engineFactory === undefined && options.autoStartRenderLoop !== false,
@@ -673,11 +692,10 @@ export class BabylonWorldRuntime implements WorldRuntimeSessionV3 {
     for (let index = 0; index < input.ticks; index += 1) {
       for (const subject of this.executionPlan.subjects) {
         const controller = this.controllerFor(subject.entityId);
-        const controlled = subject.entityId === this.controlledEntityId;
-        controller.step(
-          controlled ? input.actions : [],
-          this.detectMovementMedium(controller),
-        );
+        const isControlled = subject.entityId === this.controlledEntityId;
+        if (isControlled || controller.movementMedium !== "ground") {
+          controller.step(isControlled ? input.actions : []);
+        }
       }
       physicsEngine._step(FIXED_TIME_STEP_SECONDS);
       this.tick += 1;
@@ -685,6 +703,7 @@ export class BabylonWorldRuntime implements WorldRuntimeSessionV3 {
         const controller = this.controllerFor(subject.entityId);
         const visual = this.visualFor(subject.entityId);
         controller.synchronizeVisual();
+        controller.refreshMovementMedium();
         if (subject.entityId !== this.controlledEntityId) {
           visual.stepAnimation(this.tick, "idle");
           continue;
@@ -713,7 +732,7 @@ export class BabylonWorldRuntime implements WorldRuntimeSessionV3 {
         subjectDefinitionHash: subject.subjectDefinitionHash,
         positionMetersXYZ: [subjectOrigin.x, subjectOrigin.y, subjectOrigin.z],
         velocityMetersPerSecondXYZ: [velocity.x, velocity.y, velocity.z],
-        movementMedium: this.detectMovementMedium(controller),
+        movementMedium: controller.movementMedium,
         activeActionId: this.visualFor(subject.entityId).activeActionId,
       };
     }
@@ -749,12 +768,53 @@ export class BabylonWorldRuntime implements WorldRuntimeSessionV3 {
     };
   }
 
+  getThirdPersonCameraOrbit(): ThirdPersonCameraOrbitV1 {
+    this.assertUsable();
+    return {
+      yawRadians: this.cameraYawRadians,
+      pitchRadians: this.cameraPitchRadians,
+      distanceMeters: this.cameraDistanceMeters,
+    };
+  }
+
+  setThirdPersonCameraOrbit(orbit: ThirdPersonCameraOrbitV1): void {
+    this.assertUsable();
+    if (
+      !Number.isFinite(orbit.yawRadians) ||
+      !Number.isFinite(orbit.pitchRadians) ||
+      !Number.isFinite(orbit.distanceMeters)
+    ) {
+      throw new RangeError("Third-person camera orbit values must be finite.");
+    }
+    this.cameraYawRadians = Math.atan2(
+      Math.sin(orbit.yawRadians),
+      Math.cos(orbit.yawRadians),
+    );
+    this.cameraPitchRadians = Math.max(
+      MINIMUM_CAMERA_PITCH_RADIANS,
+      Math.min(MAXIMUM_CAMERA_PITCH_RADIANS, orbit.pitchRadians),
+    );
+    this.cameraDistanceMeters = Math.max(
+      MINIMUM_CAMERA_DISTANCE_METERS,
+      Math.min(MAXIMUM_CAMERA_DISTANCE_METERS, orbit.distanceMeters),
+    );
+    this.updateCamera();
+  }
+
+  getSubjectFacingYawRadians(subjectEntityId: string): number {
+    this.assertUsable();
+    return this.controllerFor(subjectEntityId).facingYawRadians;
+  }
+
   reset(): WorldRuntimeSnapshotV3 {
     this.assertUsable();
     for (const controller of this.subjectControllersByEntityId.values()) controller.reset();
     for (const visual of this.subjectVisuals) visual.resetAnimation();
     this.controlledEntityId = this.executionPlan.controlledEntityId;
     this.tick = 0;
+    this.cameraYawRadians = 0;
+    this.cameraPitchRadians = this.executionPlan.camera.pitchRadians;
+    this.cameraDistanceMeters = this.executionPlan.camera.distanceMeters;
     this.updateCamera();
     return this.snapshot();
   }
@@ -788,12 +848,6 @@ export class BabylonWorldRuntime implements WorldRuntimeSessionV3 {
     if (renderLoopStopFailed) throw new WorldRuntimeDisposeErrorV1();
   }
 
-  private detectMovementMedium(
-    controller: SubjectController,
-  ): "ground" | "air" | "water" {
-    return movementMediumAtSubjectOrigin(this.executionPlan, controller.subjectOrigin);
-  }
-
   private updateCamera(): void {
     const subject = this.executionPlan.subjects.find(
       (candidate) => candidate.entityId === this.controlledEntityId,
@@ -810,11 +864,11 @@ export class BabylonWorldRuntime implements WorldRuntimeSessionV3 {
       subjectOrigin.y + cameraPlan.targetHeightMeters,
       subjectOrigin.z,
     );
-    const horizontalDistance = Math.cos(cameraPlan.pitchRadians) * cameraPlan.distanceMeters;
+    const horizontalDistance = Math.cos(this.cameraPitchRadians) * this.cameraDistanceMeters;
     this.camera.position.set(
-      target.x,
-      target.y + Math.sin(cameraPlan.pitchRadians) * cameraPlan.distanceMeters,
-      target.z + horizontalDistance,
+      target.x + Math.sin(this.cameraYawRadians) * horizontalDistance,
+      target.y + Math.sin(this.cameraPitchRadians) * this.cameraDistanceMeters,
+      target.z + Math.cos(this.cameraYawRadians) * horizontalDistance,
     );
     this.camera.setTarget(target);
   }

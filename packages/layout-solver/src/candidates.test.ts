@@ -205,6 +205,34 @@ describe("deterministic layout candidate generation", () => {
     ]);
   });
 
+  it("projects multi-axis Euler rotations in Babylon y-x-z composition order", () => {
+    const source = input();
+    const fixed: LayoutCandidateGenerationInputV1 = {
+      ...source,
+      entity: {
+        ...source.entity,
+        halfExtentsMetersXYZ: [1, 2, 3],
+        placement: {
+          kind: "fixed",
+          transform: {
+            positionMetersXYZ: [0, 0, 0],
+            rotationEulerRadiansXYZ: [0.4, 0.7, -0.3],
+            scaleXYZ: [1, 1, 1],
+          },
+        },
+      },
+    };
+
+    expect(generateLayoutCandidatesV1(fixed, profile())).toEqual([
+      expect.objectContaining({
+        bounds: {
+          minimumMetersXYZ: [-3.368, -3.2, -3.005],
+          maximumMetersXYZ: [3.368, 3.2, 3.005],
+        },
+      }),
+    ]);
+  });
+
   it("rejects non-finite and degenerate geometry before search", () => {
     const source = input();
     const invalid: LayoutCandidateGenerationInputV1 = {

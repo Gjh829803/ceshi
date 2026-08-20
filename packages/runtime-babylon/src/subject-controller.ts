@@ -30,15 +30,18 @@ export class SubjectController {
   private readonly up = Vector3.Up();
   private readonly colliderCenterOffsetFromSubjectOrigin: Vector3;
   private jumpInProgress = false;
+  private jumpActionWasActive = false;
+  private currentMovementMedium: "ground" | "air" | "water" = "air";
+  private initialGroundSupportPending: boolean;
 
   constructor(
     private readonly subject: ExecutionSubjectV3,
     gravityMetersPerSecondSquaredXYZ: Vec3,
     private readonly visualRoot: TransformNode,
-    scene: Scene,
-    private readonly movementMediumAtSubjectOrigin: (
+    private readonly scene: Scene,
+    private readonly isSubjectOriginInSwimmableWater: (
       subjectOrigin: Vector3,
-    ) => "ground" | "air" | "water",
+    ) => boolean,
   ) {
     this.gravity = new Vector3(...gravityMetersPerSecondSquaredXYZ);
     this.colliderCenterOffsetFromSubjectOrigin = new Vector3(
@@ -60,16 +63,31 @@ export class SubjectController {
     this.physicsController.characterMass = subject.collider.massKilograms;
     this.physicsController.acceleration = 1;
     this.syncVisual(spawnSubjectOrigin);
+    this.initialGroundSupportPending = this.hasWalkablePhysicalGroundAt(
+      spawnSubjectOrigin,
+    );
+    this.currentMovementMedium = this.movementMediumForSupport(
+      CharacterSupportedState.UNSUPPORTED,
+    );
   }
 
-  step(actions: readonly SemanticInputActionV1[], movementMedium: "ground" | "air" | "water"): void {
-    const support = this.physicsController.checkSupport(FIXED_TIME_STEP_SECONDS, this.gravity);
+  step(actions: readonly SemanticInputActionV1[]): void {
+    const support = this.physicsController.checkSupport(
+      FIXED_TIME_STEP_SECONDS,
+      this.gravity,
+    );
+    const movementMedium = this.movementMediumForSupport(support.supportedState);
+    this.currentMovementMedium = movementMedium;
     const horizontal = new Vector3(
       (hasAction(actions, "move-right") ? 1 : 0) - (hasAction(actions, "move-left") ? 1 : 0),
       0,
       (hasAction(actions, "move-backward") ? 1 : 0) - (hasAction(actions, "move-forward") ? 1 : 0),
     );
     if (horizontal.lengthSquared() > 1) horizontal.normalize();
+    if (horizontal.lengthSquared() > 0) {
+      const yawRadians = Math.atan2(-horizontal.x, -horizontal.z);
+      this.visualRoot.rotation.y = yawRadians === -Math.PI ? Math.PI : yawRadians;
+    }
     const speed = movementMedium === "water"
       ? this.subject.locomotion.waterSpeedMetersPerSecond
       : horizontal.lengthSquared() > 0 && hasAction(actions, "run")
@@ -89,23 +107,28 @@ export class SubjectController {
       desired,
       this.up,
     );
-    const isUnsupported =
-      support.supportedState === CharacterSupportedState.UNSUPPORTED;
-    if (isUnsupported) {
-      calculated.y = current.y;
-    }
+    const isPhysicallySupported =
+      support.supportedState !== CharacterSupportedState.UNSUPPORTED ||
+      this.initialGroundSupportPending;
+    const jumpActionActive = hasAction(actions, "jump");
     const jumpRequested =
-      hasAction(actions, "jump") && movementMedium === "ground";
+      jumpActionActive &&
+      !this.jumpActionWasActive &&
+      movementMedium === "ground" &&
+      !this.jumpInProgress;
+    this.jumpActionWasActive = jumpActionActive;
     if (jumpRequested) {
       this.jumpInProgress = true;
       calculated.y = this.subject.locomotion.jumpSpeedMetersPerSecond;
-    } else if (isUnsupported && this.jumpInProgress) {
+    } else if (!isPhysicallySupported || (this.jumpInProgress && current.y > 0)) {
+      calculated.y = current.y;
       calculated.addInPlace(
         (movementMedium === "water" ? this.gravity.scale(0.15) : this.gravity).scale(
           FIXED_TIME_STEP_SECONDS,
         ),
       );
-    } else if (movementMedium === "ground") {
+    } else {
+      calculated.y = support.averageSurfaceVelocity.y;
       this.jumpInProgress = false;
     }
     this.physicsController.setVelocity(calculated);
@@ -114,10 +137,21 @@ export class SubjectController {
       support,
       movementMedium === "water" ? this.gravity.scale(0.15) : this.gravity,
     );
+    this.initialGroundSupportPending = false;
   }
 
   synchronizeVisual(): void {
     this.syncVisual();
+  }
+
+  refreshMovementMedium(): void {
+    const support = this.physicsController.checkSupport(
+      FIXED_TIME_STEP_SECONDS,
+      this.gravity,
+    );
+    this.currentMovementMedium = this.movementMediumForSupport(
+      support.supportedState,
+    );
   }
 
   sampleMotion(runRequested: boolean): SubjectMotionSampleV1 {
@@ -125,8 +159,12 @@ export class SubjectController {
     return {
       horizontalSpeedMetersPerSecond: Math.hypot(velocity.x, velocity.z),
       runRequested,
-      movementMedium: this.movementMediumAtSubjectOrigin(this.subjectOrigin),
+      movementMedium: this.currentMovementMedium,
     };
+  }
+
+  get movementMedium(): "ground" | "air" | "water" {
+    return this.currentMovementMedium;
   }
 
   get controllerCenter(): Vector3 {
@@ -141,6 +179,10 @@ export class SubjectController {
     return this.physicsController.getVelocity();
   }
 
+  get facingYawRadians(): number {
+    return this.visualRoot.rotation.y;
+  }
+
   reset(): void {
     const spawnSubjectOrigin = new Vector3(
       ...this.subject.spawnSubjectOriginPositionMetersXYZ,
@@ -150,7 +192,15 @@ export class SubjectController {
     );
     this.physicsController.setVelocity(Vector3.Zero());
     this.jumpInProgress = false;
+    this.jumpActionWasActive = false;
+    this.visualRoot.rotation.y = 0;
     this.syncVisual(spawnSubjectOrigin);
+    this.initialGroundSupportPending = this.hasWalkablePhysicalGroundAt(
+      spawnSubjectOrigin,
+    );
+    this.currentMovementMedium = this.movementMediumForSupport(
+      CharacterSupportedState.UNSUPPORTED,
+    );
   }
 
   stop(): void {
@@ -172,5 +222,30 @@ export class SubjectController {
       center.y - this.colliderCenterOffsetFromSubjectOrigin.y,
       center.z - this.colliderCenterOffsetFromSubjectOrigin.z,
     );
+  }
+
+  private movementMediumForSupport(
+    supportedState: CharacterSupportedState,
+  ): "ground" | "air" | "water" {
+    if (this.isSubjectOriginInSwimmableWater(this.subjectOrigin)) return "water";
+    if (this.jumpInProgress && this.physicsController.getVelocity().y > 0) return "air";
+    if (this.initialGroundSupportPending) return "ground";
+    return supportedState === CharacterSupportedState.UNSUPPORTED ? "air" : "ground";
+  }
+
+  private hasWalkablePhysicalGroundAt(subjectOrigin: Vector3): boolean {
+    const physicsEngine = this.scene.getPhysicsEngine();
+    if (physicsEngine === null) return false;
+    const castHeightMeters = 0.25;
+    const castDepthMeters = Math.max(
+      0.5,
+      this.subject.collider.maxStepHeightMeters + castHeightMeters,
+    );
+    const result = physicsEngine.raycast(
+      subjectOrigin.add(this.up.scale(castHeightMeters)),
+      subjectOrigin.subtract(this.up.scale(castDepthMeters)),
+    );
+    return result.hasHit &&
+      result.hitNormalWorld.dot(this.up) >= this.physicsController.maxSlopeCosine;
   }
 }

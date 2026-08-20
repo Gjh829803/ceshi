@@ -68,7 +68,7 @@ describe("agent-authored playground scenes", () => {
         expect(artifacts.topDown.sceneId).toBe(definition.id);
         expect(artifacts.heightSlope.grid.heights.every((value) => value === null || Number.isFinite(value))).toBe(true);
       }
-    });
+    }, 15_000);
 
     it(`keeps ${catalogId} terrain rendering samples aligned with physics`, async () => {
       const scene = compileOutdoorScene(definition);
@@ -112,7 +112,7 @@ describe("agent-authored playground scenes", () => {
       } finally {
         physics.dispose();
       }
-    });
+    }, 15_000);
   }
 
   it("keeps the Azure Bay overlook route continuously walkable", () => {

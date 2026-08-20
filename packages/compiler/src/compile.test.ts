@@ -716,6 +716,19 @@ describe("compileWorld", () => {
     );
   });
 
+  it("samples the exact rendered Terrain triangles rather than a bilinear surface", () => {
+    const terrain = {
+      ...compilePackageWorld().executionPlan!.terrain,
+      centerMetersXZ: [0, 0] as const,
+      sizeMetersXZ: [2, 2] as const,
+      resolutionCellsXZ: [2, 2] as const,
+      heightSamplesMeters: [0, 2, 4, 0],
+    };
+
+    expect(sampleTerrainHeight(terrain, [-0.5, -0.5])).toBe(1.5);
+    expect(sampleTerrainHeight(terrain, [0.5, 0.5])).toBe(1.5);
+  });
+
   it("propagates stable Sockets and normalized visual composition", () => {
     const subject = compilePackageWorld().executionPlan!.subjects.find(
       (candidate) => candidate.entityId === "pack-animal-a",
@@ -844,7 +857,7 @@ describe("compileWorld", () => {
     expect(serialized).not.toContain('"constraints"');
     expect(serialized).not.toMatch(/candidateRegionIds|sourceUri|licenseUri|providerHandle/);
     expect(result.executionPlanHash).toBe(
-      "sha256:dbc3590c465f4e7b3410190dba503170b0a198f1bae22efdfcc5a28c80a42f89",
+      "sha256:2885a9fd1d3446c629ada75fcc0480d48fd220441e1d3387b84bed0acec04d67",
     );
   });
 

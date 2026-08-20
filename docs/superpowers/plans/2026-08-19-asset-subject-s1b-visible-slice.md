@@ -1784,19 +1784,19 @@ ExecutionPlan
 `world.png` 为暂停 Reset 后的 Tick 0，Hash
 `sha256:b9ff828333641e548ea7ef3d2f8dbc6c8ae96c120659db3a6f6c17df19a09d9b`；
 Browser `idle/walk/run/jump` 分别为
-`sha256:af60b01ae2bf9db87c5ea5a5e01a08539e1ca35186e7b88b60125cc049a641aa`、
-`sha256:63e1f332c7dcbb446f093d0d32db0e151288ab94a92aeb2d666b52bd8fd1f513`、
-`sha256:d8957ad8b2bc115a9a493dd5404ef38e10cd2373a40b2743b2af83851400e3c7`、
-`sha256:992383d2cc70d49b827af24815dff7a41bbed8e5da7e0f8bf527294b00f61552`。
+`sha256:4301d77f6d7eaab46c589abf6376b2e90aee94e2b43c7424bdde713ecd190cf2`、
+`sha256:5e85136862609606ffe1986a96fb684c180beb2bc8bc3c6735ff6385a447e86e`、
+`sha256:86cbb3f4b375b3c7e50d1d7368077a1389d4db0d397c59aaf744be178984e199`、
+`sha256:d70e74ced33ce3e3868f77085a6895585c1b885f92d511b60623b0bc4f567ffb`。
 Walk 使用 1s/30 FPS Clip、1× Playback、0.2s Blend 与 60Hz Runtime，在 Action Start
 Tick 1 后的首个 Post-blend Quarter-cycle Tick 16 捕获，位置 z 为
-29.398333333333344。四张动作图在 `[374,166,188,287]` Crop 内做 Foreground-origin
+29.398516476888297。四张动作图在 `[374,166,188,287]` Crop 内做 Foreground-origin
 Subject Silhouette 比较；Idle/Walk、Idle/Run、Idle/Jump、Walk/Run、Walk/Jump、Run/Jump
-差异率依次为 0.500432、0.531802、0.398077、0.657316、0.298178、0.602627，全部高于
+差异率依次为 0.500432、0.531802、0.442699、0.657316、0.281609、0.626496，全部高于
 0.15 门禁。
 隔离 Gate 记录未受控 `rigged-primary` 位置与 `idle` 不变，受控
-`rigged-secondary` 从 x=3 移至 x=5.361666666666668 并进入 `walk`；墙体 Gate
-停在 x=5.561666666666668（上限 6.2m），Tamper Gate 只命中一次资源请求并返回
+`rigged-secondary` 从 x=3 移至 x=5.361550803956806 并进入 `walk`；墙体 Gate
+停在 x=5.641541341197738（上限 6.2m），Tamper Gate 只命中一次资源请求并返回
 `SUBJECT_ASSET_HASH_MISMATCH`，磁盘资产 Hash 前后相同。
 
 Task 10 在 Task 9 最终全分支独立复审 CLEAN 与 Visible-pose P2 收口后记录最新门禁：

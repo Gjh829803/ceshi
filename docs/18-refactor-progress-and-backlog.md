@@ -126,7 +126,7 @@ Subject、首个产品 G Bot、Placement S1、截图和查询。它不代表任�
   `idle/walk/run/jump`、双实例隔离、墙体停止、936×596 截图与
   `SUBJECT_ASSET_HASH_MISMATCH` 篡改 Gate 全部通过；`verification.json` V2 还用
   Foreground-origin Subject Silhouette 证明六组动作姿态差异率均高于 0.15，
-  最低为 0.298178。
+  最低为 0.281609。
 - `pnpm verify:g-bot-subject`：首个产品 G Bot 的 GLB/Manifest/Registry 映射、
   `idle/walk/run/jump`、双实例隔离和墙体停止通过；资产 Hash 为
   `sha256:41833210e735788da0777fc37badcec03f90ccf17ab5a7d89103f0727abeeb1b`，

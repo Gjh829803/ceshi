@@ -107,9 +107,15 @@ export function sampleTerrainHeight(
   const tz = z - z0;
   const at = (column: number, row: number): number =>
     terrain.heightSamplesMeters[row * columns + column] ?? 0;
-  const top = at(x0, z0) + (at(x1, z0) - at(x0, z0)) * tx;
-  const bottom = at(x0, z1) + (at(x1, z1) - at(x0, z1)) * tx;
-  return top + (bottom - top) * tz;
+  const topLeft = at(x0, z0);
+  const topRight = at(x1, z0);
+  const bottomLeft = at(x0, z1);
+  const bottomRight = at(x1, z1);
+  return tx + tz <= 1
+    ? topLeft + (topRight - topLeft) * tx + (bottomLeft - topLeft) * tz
+    : bottomRight +
+        (bottomLeft - bottomRight) * (1 - tx) +
+        (topRight - bottomRight) * (1 - tz);
 }
 
 function findOnlyNodeV3<K extends NormalizedWorldNodeV3["kind"]>(

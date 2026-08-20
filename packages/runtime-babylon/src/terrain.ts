@@ -21,7 +21,11 @@ export function createTerrainMesh(
   for (let zIndex = 0; zIndex < rows; zIndex += 1) {
     for (let xIndex = 0; xIndex < columns; xIndex += 1) {
       const height = terrain.heightSamplesMeters[zIndex * columns + xIndex] ?? 0;
-      positions.push((xIndex / (columns - 1)) * sizeX, height, (zIndex / (rows - 1)) * sizeZ);
+      positions.push(
+        (xIndex / (columns - 1)) * sizeX - sizeX / 2,
+        height,
+        (zIndex / (rows - 1)) * sizeZ - sizeZ / 2,
+      );
       uvs.push(xIndex / (columns - 1), zIndex / (rows - 1));
     }
   }
@@ -43,9 +47,9 @@ export function createTerrainMesh(
   vertexData.uvs = uvs;
   vertexData.applyToMesh(mesh, false);
   mesh.position = new Vector3(
-    terrain.centerMetersXZ[0] - sizeX / 2,
+    terrain.centerMetersXZ[0],
     0,
-    terrain.centerMetersXZ[1] - sizeZ / 2,
+    terrain.centerMetersXZ[1],
   );
   mesh.material = material;
   mesh.receiveShadows = true;
@@ -54,16 +58,24 @@ export function createTerrainMesh(
 }
 
 /**
- * Babylon's Havok adapter accepts heightfield data in a legacy x-major layout
- * and converts it to Havok's row-major layout. The ExecutionPlan remains
- * engine-neutral row-major, so the adapter performs the explicit conversion.
+ * Babylon's Havok adapter rewrites its legacy heightfield input once, while
+ * Havok indexes the resulting buffer X-major. Encode the engine-neutral
+ * row-major XZ samples so the physical height at (x, z) matches the rendered
+ * terrain vertex at that same coordinate. Rectangular grids use the exact
+ * rendered triangle mesh as their collider because Babylon 9.21 swaps the
+ * heightfield sample axes when the dimensions differ.
  */
 export function toBabylonHeightfieldData(terrain: ExecutionTerrainV3): Float32Array {
   const [columns, rows] = terrain.resolutionCellsXZ;
   const result = new Float32Array(columns * rows);
-  for (let x = 0; x < columns; x += 1) {
-    for (let z = 0; z < rows; z += 1) {
-      result[x * rows + z] = terrain.heightSamplesMeters[z * columns + (columns - 1 - x)] ?? 0;
+  for (let worldX = 0; worldX < columns; worldX += 1) {
+    for (let worldZ = 0; worldZ < rows; worldZ += 1) {
+      const havokReadIndex = worldX * rows + worldZ;
+      const pluginZ = Math.floor(havokReadIndex / columns);
+      const pluginX = havokReadIndex % columns;
+      const babylonInputIndex = (columns - 1 - pluginX) * rows + pluginZ;
+      result[babylonInputIndex] =
+        terrain.heightSamplesMeters[worldZ * columns + worldX] ?? 0;
     }
   }
   return result;
@@ -83,7 +95,13 @@ export function sampleExecutionTerrainHeight(terrain: ExecutionTerrainV3, x: num
   const tz = row - z0;
   const at = (columnIndex: number, rowIndex: number): number =>
     terrain.heightSamplesMeters[rowIndex * columns + columnIndex] ?? 0;
-  const top = at(x0, z0) + (at(x1, z0) - at(x0, z0)) * tx;
-  const bottom = at(x0, z1) + (at(x1, z1) - at(x0, z1)) * tx;
-  return top + (bottom - top) * tz;
+  const topLeft = at(x0, z0);
+  const topRight = at(x1, z0);
+  const bottomLeft = at(x0, z1);
+  const bottomRight = at(x1, z1);
+  return tx + tz <= 1
+    ? topLeft + (topRight - topLeft) * tx + (bottomLeft - topLeft) * tz
+    : bottomRight +
+        (bottomLeft - bottomRight) * (1 - tx) +
+        (topRight - bottomRight) * (1 - tz);
 }

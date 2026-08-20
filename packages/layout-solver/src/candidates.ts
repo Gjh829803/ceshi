@@ -53,10 +53,11 @@ function boundsFor(
   const sy = Math.sin(y);
   const cz = Math.cos(z);
   const sz = Math.sin(z);
+  // Matches Babylon Quaternion.FromEulerAngles(x, y, z): yaw(Y) * pitch(X) * roll(Z).
   const rotation = [
-    [cz * cy, cz * sy * sx - sz * cx, cz * sy * cx + sz * sx],
-    [sz * cy, sz * sy * sx + cz * cx, sz * sy * cx - cz * sx],
-    [-sy, cy * sx, cy * cx],
+    [cy * cz + sy * sx * sz, -cy * sz + sy * sx * cz, sy * cx],
+    [cx * sz, cx * cz, -sx],
+    [-sy * cz + cy * sx * sz, sy * sz + cy * sx * cz, cy * cx],
   ] as const;
   const rotatedHalfExtents = rotation.map((row) =>
     row.reduce(

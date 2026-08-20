@@ -95,6 +95,16 @@ const gBotSubjectAssetBytes = new Uint8Array(
   ),
 );
 
+const gBotAuthoringSpec = JSON.parse(
+  await readFile(
+    new URL(
+      "../../../examples/authoring/g-bot-subject-world.json",
+      import.meta.url,
+    ),
+    "utf8",
+  ),
+) as AuthoringSpecV3;
+
 const goldenSubjectAssetDescriptor = {
   subjectAssetRef: "worldkit://subject-asset/humanoid.golden@1",
   artifactContentHash:
@@ -315,6 +325,7 @@ interface RuntimeDebugProbe {
   subjectVisualOrigin(subjectEntityId: string): Vec3;
   controllerCenter(subjectEntityId: string): Vec3;
   visualPartLocalPosition(subjectEntityId: string, partId: string): Vec3;
+  visualRootYawRadians(subjectEntityId: string): number;
 }
 
 interface RiggedVisualInternals extends SubjectVisual {
@@ -338,6 +349,7 @@ interface ControllerProbe {
   physicsController: { getPosition(): CartesianVector };
   visualRoot: {
     position: CartesianVector;
+    rotation: CartesianVector;
     getChildMeshes(): readonly { name: string; position: CartesianVector }[];
   };
 }
@@ -368,6 +380,8 @@ function createRuntimeDebugProbe(runtime: BabylonWorldRuntime): RuntimeDebugProb
       if (mesh === undefined) throw new Error(`Missing visual Part '${expectedName}'.`);
       return toVec3(mesh.position);
     },
+    visualRootYawRadians: (subjectEntityId) =>
+      controllerFor(subjectEntityId).visualRoot.rotation.y,
   };
 }
 
@@ -637,6 +651,47 @@ describe("BabylonWorldRuntime", () => {
     expect(error).not.toHaveProperty("cause");
   });
 
+  it("revalidates multi-axis layout bounds in the rendered Euler composition order", async () => {
+    const base = createExecutionPlan();
+    const wall = base.objects.find((object) => object.entityId === "wall-east")!;
+    const placement = base.layout.placementsByEntityId[wall.entityId]!;
+    const transform = {
+      positionMetersXYZ: [0, 4.757966786623001, 0] as const,
+      rotationEulerRadiansXYZ: [0.4, 0.7, -0.3] as const,
+      scaleXYZ: [1, 1, 1] as const,
+    };
+    const executionPlan: ExecutionPlanV4 = {
+      ...base,
+      terrain: {
+        ...base.terrain,
+        heightSamplesMeters: base.terrain.heightSamplesMeters.map(() => 0),
+      },
+      objects: [{ ...wall, transform }],
+      layout: {
+        ...base.layout,
+        placementsByEntityId: {
+          [wall.entityId]: { ...placement, transform },
+        },
+        layoutAssertions: [
+          {
+            kind: "supported-by",
+            constraintId: "multi-axis-wall-support",
+            evidenceEntityIds: [wall.entityId, base.terrain.entityId],
+            measurements: {},
+            tolerances: { supportGapMeters: 0.001 },
+            supportedEntityId: wall.entityId,
+            supportingEntityId: base.terrain.entityId,
+            maximumSupportGapMeters: 0.001,
+            minimumSupportRatio: 1,
+          },
+        ],
+      },
+    };
+
+    const runtime = await createRuntime(executionPlan);
+    await runtime.dispose();
+  });
+
   it("keeps Snapshot and Visual Root at Subject Origin", async () => {
     const { runtime, executionPlan, debug } = await createRuntimeWithPackageSubject();
     const snapshot = runtime.snapshot();
@@ -765,6 +820,7 @@ describe("BabylonWorldRuntime", () => {
     const secondaryVisual = probe.visual("g-bot-secondary");
     const primaryInstance = visual.assetInstance!;
     const secondaryInstance = secondaryVisual.assetInstance!;
+    const primaryAssetPartRoot = visual.assetPartRoots![0]!;
     const primaryHandSocket = visual.socketNodesById.get("hand.right")!;
     const secondaryHandSocket = secondaryVisual.socketNodesById.get("hand.right")!;
     expect(primaryInstance.skeletons[0]?.bones).toHaveLength(65);
@@ -780,6 +836,9 @@ describe("BabylonWorldRuntime", () => {
       secondaryInstance.animationGroups[0],
     );
     expect(primaryHandSocket).not.toBe(secondaryHandSocket);
+    expect(primaryAssetPartRoot.rotationQuaternion?.toEulerAngles().y).toBeCloseTo(
+      Math.PI,
+    );
     const relativeSocketPosition = (
       socket: TransformNode,
       visualRoot: TransformNode,
@@ -824,6 +883,12 @@ describe("BabylonWorldRuntime", () => {
       (await runtime.runFixedInput({ actions: ["jump"], ticks: 4 }))
         .subjectStatesByEntityId.player?.activeActionId,
     ).toBe("jump");
+    const gBotLanded = await runtime.runFixedInput({ actions: [], ticks: 240 });
+    expect(gBotLanded.subjectStatesByEntityId.player).toMatchObject({
+      activeActionId: "idle",
+      movementMedium: "ground",
+      velocityMetersPerSecondXYZ: [expect.any(Number), 0, expect.any(Number)],
+    });
     expect(
       runtime.snapshot().subjectStatesByEntityId["g-bot-secondary"]
         ?.activeActionId,
@@ -833,6 +898,23 @@ describe("BabylonWorldRuntime", () => {
     expect(primaryInstance.rootNodes[0]?.isDisposed()).toBe(true);
     expect(secondaryHandSocket.isDisposed()).toBe(false);
     expect(secondaryInstance.rootNodes[0]?.isDisposed()).toBe(false);
+    await runtime.dispose();
+  });
+
+  it("lands the product G Bot on its authored heightfield after one jump input", async () => {
+    const runtime = await createRuntime(
+      compileExecutionPlan(structuredClone(gBotAuthoringSpec)),
+      { subjectAssetResolver: createMemoryResolver(gBotSubjectAssetBytes) },
+    );
+
+    await runtime.runFixedInput({ actions: ["jump"], ticks: 1 });
+    const landed = await runtime.runFixedInput({ actions: [], ticks: 240 });
+
+    expect(landed.subjectStatesByEntityId["g-bot-primary"]).toMatchObject({
+      activeActionId: "idle",
+      movementMedium: "ground",
+      velocityMetersPerSecondXYZ: [expect.any(Number), 0, expect.any(Number)],
+    });
     await runtime.dispose();
   });
 
@@ -975,19 +1057,38 @@ describe("BabylonWorldRuntime", () => {
     const visual = probe.visual("player");
 
     await runtime.runFixedInput({ actions: [], ticks: 5 });
+    const initial = runtime.snapshot().subjectStatesByEntityId.player!;
     const jumping = await runtime.runFixedInput({ actions: ["jump"], ticks: 4 });
     expect(jumping.subjectStatesByEntityId.player).toMatchObject({
       activeActionId: "jump",
       movementMedium: "air",
-      velocityMetersPerSecondXYZ: [0, expect.any(Number), 0],
+      velocityMetersPerSecondXYZ: [
+        expect.any(Number),
+        expect.any(Number),
+        expect.any(Number),
+      ],
     });
+    expect(
+      Math.abs(jumping.subjectStatesByEntityId.player!.velocityMetersPerSecondXYZ[0]),
+    ).toBeLessThan(0.000_001);
+    expect(
+      Math.abs(jumping.subjectStatesByEntityId.player!.velocityMetersPerSecondXYZ[2]),
+    ).toBeLessThan(0.000_001);
     const landed = await runtime.runFixedInput({ actions: [], ticks: 180 });
     expect(landed.subjectStatesByEntityId.player).toMatchObject({
       activeActionId: "idle",
       movementMedium: "ground",
-      positionMetersXYZ: [0, expect.any(Number), 30],
-      velocityMetersPerSecondXYZ: [0, expect.any(Number), 0],
+      positionMetersXYZ: [expect.any(Number), expect.any(Number), expect.any(Number)],
+      velocityMetersPerSecondXYZ: [0, 0, 0],
     });
+    expect(landed.subjectStatesByEntityId.player!.positionMetersXYZ[0]).toBeCloseTo(0, 3);
+    expect(landed.subjectStatesByEntityId.player!.positionMetersXYZ[2]).toBeCloseTo(30, 2);
+    expect(
+      Math.abs(
+        landed.subjectStatesByEntityId.player!.positionMetersXYZ[1] -
+          initial.positionMetersXYZ[1],
+      ),
+    ).toBeLessThan(0.15);
 
     const reset = runtime.reset();
     const idleGroup = visual.assetInstance!.animationGroups.find(
@@ -1394,7 +1495,7 @@ describe("BabylonWorldRuntime", () => {
     const runtime = await createRuntime();
     const internals = runtime as unknown as {
       aggregates: Array<{ dispose(): void }>;
-      ownedHeightfieldShape: { dispose(): void };
+      ownedTerrainShape: { dispose(): void };
       scene: Scene;
       engine: NullEngine;
     };
@@ -1407,11 +1508,11 @@ describe("BabylonWorldRuntime", () => {
         if (index === internals.aggregates.length - 1) throw new Error(secret);
       });
     });
-    const nativeHeightfieldDispose =
-      internals.ownedHeightfieldShape.dispose.bind(internals.ownedHeightfieldShape);
-    const heightfieldDisposal = vi
-      .spyOn(internals.ownedHeightfieldShape, "dispose")
-      .mockImplementation(() => nativeHeightfieldDispose());
+    const nativeTerrainShapeDispose =
+      internals.ownedTerrainShape.dispose.bind(internals.ownedTerrainShape);
+    const terrainShapeDisposal = vi
+      .spyOn(internals.ownedTerrainShape, "dispose")
+      .mockImplementation(() => nativeTerrainShapeDispose());
     const nativeSceneDispose = internals.scene.dispose.bind(internals.scene);
     const sceneDisposal = vi
       .spyOn(internals.scene, "dispose")
@@ -1431,10 +1532,10 @@ describe("BabylonWorldRuntime", () => {
       expect(disposal).toHaveBeenCalledTimes(1);
       disposal.mockRestore();
     }
-    expect(heightfieldDisposal).toHaveBeenCalledTimes(1);
+    expect(terrainShapeDisposal).toHaveBeenCalledTimes(1);
     expect(sceneDisposal).toHaveBeenCalledTimes(1);
     expect(engineDisposal).toHaveBeenCalledTimes(1);
-    heightfieldDisposal.mockRestore();
+    terrainShapeDisposal.mockRestore();
     sceneDisposal.mockRestore();
     engineDisposal.mockRestore();
   });
@@ -1463,6 +1564,251 @@ describe("BabylonWorldRuntime", () => {
     expect(waterRun.deltaXMeters).toBeCloseTo(waterWalk.deltaXMeters, 8);
   });
 
+  it("falls from an unsupported airborne spawn and lands on the terrain", async () => {
+    const base = createExecutionPlan();
+    const player = base.subjects.find((subject) => subject.entityId === "player")!;
+    const executionPlan: ExecutionPlanV4 = {
+      ...base,
+      terrain: {
+        ...base.terrain,
+        heightSamplesMeters: base.terrain.heightSamplesMeters.map(() => 0),
+      },
+      waters: [],
+      objects: [],
+      subjects: [
+        {
+          ...player,
+          spawnSubjectOriginPositionMetersXYZ: [0, 8, 0],
+        },
+      ],
+      layout: { ...base.layout, layoutAssertions: [] },
+    };
+    const runtime = await createRuntime(executionPlan);
+    try {
+      const landed = await runtime.runFixedInput({ actions: [], ticks: 240 });
+      expect(landed.subjectStatesByEntityId.player).toMatchObject({
+        movementMedium: "ground",
+        activeActionId: "idle",
+        velocityMetersPerSecondXYZ: [0, 0, 0],
+      });
+      expect(
+        landed.subjectStatesByEntityId.player!.positionMetersXYZ[1],
+      ).toBeLessThan(0.7);
+    } finally {
+      await runtime.dispose();
+    }
+  });
+
+  it("falls to lower terrain after walking off a raised collider", async () => {
+    const base = createExecutionPlan();
+    const player = base.subjects.find((subject) => subject.entityId === "player")!;
+    const wall = base.objects.find((object) => object.entityId === "wall-east")!;
+    const executionPlan: ExecutionPlanV4 = {
+      ...base,
+      terrain: {
+        ...base.terrain,
+        heightSamplesMeters: base.terrain.heightSamplesMeters.map(() => 0),
+      },
+      waters: [],
+      objects: [
+        {
+          ...wall,
+          transform: {
+            positionMetersXYZ: [0, 2, 0],
+            rotationEulerRadiansXYZ: [0, 0, 0],
+            scaleXYZ: [1, 1, 1],
+          },
+        },
+      ],
+      subjects: [
+        {
+          ...player,
+          spawnSubjectOriginPositionMetersXYZ: [0, 4.05, 0],
+        },
+      ],
+      layout: { ...base.layout, layoutAssertions: [] },
+    };
+    const runtime = await createRuntime(executionPlan);
+    try {
+      await runtime.runFixedInput({ actions: [], ticks: 5 });
+      const landed = await runtime.runFixedInput({
+        actions: ["move-right"],
+        ticks: 240,
+      });
+      const state = landed.subjectStatesByEntityId.player!;
+      expect(state.positionMetersXYZ[0]).toBeGreaterThan(2);
+      expect(state.positionMetersXYZ[1]).toBeLessThan(0.7);
+      expect(state.movementMedium).toBe("ground");
+    } finally {
+      await runtime.dispose();
+    }
+  });
+
+  it("uses Havok support rather than bilinear terrain height for ground and jump state", async () => {
+    const base = createExecutionPlan();
+    const player = base.subjects.find((subject) => subject.entityId === "player")!;
+    const executionPlan: ExecutionPlanV4 = {
+      ...base,
+      terrain: {
+        ...base.terrain,
+        centerMetersXZ: [0, 0],
+        sizeMetersXZ: [10, 10],
+        resolutionCellsXZ: [2, 2],
+        // At (-2.5, -2.5), the Havok triangle is y=0.75 while bilinear sampling
+        // is y=0.5625. The physical slope is about 23 degrees and supported.
+        heightSamplesMeters: [0, 1.5, 1.5, 0],
+      },
+      waters: [],
+      objects: [],
+      subjects: [
+        {
+          ...player,
+          spawnSubjectOriginPositionMetersXYZ: [-2.5, 0.75, -2.5],
+        },
+      ],
+      layout: { ...base.layout, layoutAssertions: [] },
+    };
+    const runtime = await createRuntime(executionPlan);
+    try {
+      await runtime.runFixedInput({ actions: [], ticks: 5 });
+      expect(runtime.snapshot().subjectStatesByEntityId.player!.movementMedium).toBe(
+        "ground",
+      );
+      const jumped = await runtime.runFixedInput({ actions: ["jump"], ticks: 1 });
+      expect(
+        jumped.subjectStatesByEntityId.player!.velocityMetersPerSecondXYZ[1],
+      ).toBeGreaterThan(1);
+      expect(jumped.subjectStatesByEntityId.player!.activeActionId).toBe("jump");
+    } finally {
+      await runtime.dispose();
+    }
+  });
+
+  it("keeps asymmetric square heightfield physics aligned with rendered XZ samples", async () => {
+    const base = createExecutionPlan();
+    const executionPlan: ExecutionPlanV4 = {
+      ...base,
+      terrain: {
+        ...base.terrain,
+        centerMetersXZ: [0, 0],
+        sizeMetersXZ: [10, 10],
+        resolutionCellsXZ: [2, 2],
+        heightSamplesMeters: [0, 0.2, 0.4, 0.6],
+        minimumHeightMeters: 0,
+        maximumHeightMeters: 0.6,
+      },
+      subjects: base.subjects.map((subject) => ({
+        ...subject,
+        spawnSubjectOriginPositionMetersXYZ: [4, 0.54, 4],
+      })),
+    };
+    const runtime = await createRuntime(executionPlan);
+    const scene = (runtime as unknown as { scene: Scene }).scene;
+    const hit = scene.getPhysicsEngine()!.raycast(
+      new Vector3(-2.5, 5, 2.5),
+      new Vector3(-2.5, -5, 2.5),
+    );
+
+    expect(hit.hasHit).toBe(true);
+    expect(hit.hitPointWorld.y).toBeCloseTo(0.35, 4);
+
+    await runtime.dispose();
+  });
+
+  it("keeps rectangular terrain mesh physics aligned with rendered XZ samples", async () => {
+    const base = createExecutionPlan();
+    const executionPlan: ExecutionPlanV4 = {
+      ...base,
+      terrain: {
+        ...base.terrain,
+        centerMetersXZ: [0, 0],
+        sizeMetersXZ: [10, 20],
+        resolutionCellsXZ: [2, 3],
+        heightSamplesMeters: [0, 0.2, 0.4, 0.6, 0.8, 1],
+        minimumHeightMeters: 0,
+        maximumHeightMeters: 1,
+      },
+      subjects: base.subjects.map((subject) => ({
+        ...subject,
+        spawnSubjectOriginPositionMetersXYZ: [4, 0.54, 4],
+      })),
+    };
+    const runtime = await createRuntime(executionPlan);
+    const scene = (runtime as unknown as { scene: Scene }).scene;
+    const hit = scene.getPhysicsEngine()!.raycast(
+      new Vector3(-2.5, 5, 5),
+      new Vector3(-2.5, -5, 5),
+    );
+
+    expect(hit.hasHit).toBe(true);
+    expect(hit.hitPointWorld.y).toBeCloseTo(0.65, 3);
+
+    await runtime.dispose();
+  });
+
+  it("applies gravity to an uncontrolled airborne Subject while keeping it idle", async () => {
+    const base = createExecutionPlan();
+    const player = base.subjects.find((subject) => subject.entityId === "player")!;
+    const executionPlan: ExecutionPlanV4 = {
+      ...base,
+      terrain: {
+        ...base.terrain,
+        heightSamplesMeters: base.terrain.heightSamplesMeters.map(() => 0),
+        minimumHeightMeters: 0,
+        maximumHeightMeters: 0,
+      },
+      subjects: [
+        player,
+        {
+          ...player,
+          entityId: "observer",
+          spawnAnchorEntityId: "spawn-observer",
+          spawnSubjectOriginPositionMetersXYZ: [4, 8, 0],
+        },
+      ],
+    };
+    const runtime = await createRuntime(executionPlan);
+
+    const snapshot = await runtime.runFixedInput({ actions: [], ticks: 240 });
+
+    expect(snapshot.subjectStatesByEntityId.observer).toMatchObject({
+      activeActionId: "idle",
+      movementMedium: "ground",
+    });
+    expect(
+      snapshot.subjectStatesByEntityId.observer!.positionMetersXYZ[1],
+    ).toBeLessThan(0.7);
+
+    await runtime.dispose();
+  });
+
+  it("fires one jump per press while the jump action remains held", async () => {
+    const runtime = await createRuntime();
+    try {
+      let grounded = false;
+      for (let tick = 0; tick < 240; tick += 1) {
+        const snapshot = await runtime.runFixedInput({ actions: [], ticks: 1 });
+        if (snapshot.subjectStatesByEntityId.player!.movementMedium === "ground") {
+          grounded = true;
+          break;
+        }
+      }
+      expect(grounded).toBe(true);
+      let previousVerticalVelocity = 0;
+      let takeoffCount = 0;
+      for (let tick = 0; tick < 360; tick += 1) {
+        const snapshot = await runtime.runFixedInput({ actions: ["jump"], ticks: 1 });
+        const verticalVelocity =
+          snapshot.subjectStatesByEntityId.player!.velocityMetersPerSecondXYZ[1];
+        if (previousVerticalVelocity <= 0.1 && verticalVelocity > 1) takeoffCount += 1;
+        previousVerticalVelocity = verticalVelocity;
+      }
+      expect(takeoffCount).toBe(1);
+    } finally {
+      await runtime.dispose();
+    }
+  });
+
   it("switches the default Controller atomically and moves only the committed Subject", async () => {
     const runtime = await createRuntime();
     const before = runtime.snapshot();
@@ -1481,9 +1827,9 @@ describe("BabylonWorldRuntime", () => {
     );
     const inactiveBefore = before.subjectStatesByEntityId.player!.positionMetersXYZ;
     const inactiveAfter = after.subjectStatesByEntityId.player!.positionMetersXYZ;
-    expect(inactiveAfter[0]).toBe(inactiveBefore[0]);
+    expect(Math.abs(inactiveAfter[0] - inactiveBefore[0])).toBeLessThan(0.000_01);
     expect(inactiveAfter[1]).toBeCloseTo(inactiveBefore[1]);
-    expect(inactiveAfter[2]).toBe(inactiveBefore[2]);
+    expect(Math.abs(inactiveAfter[2] - inactiveBefore[2])).toBeLessThan(0.000_01);
     expect(after.camera.targetEntityId).toBe("pack-animal-a");
     await runtime.dispose();
   });
@@ -1579,6 +1925,26 @@ describe("BabylonWorldRuntime", () => {
     await runtime.dispose();
   });
 
+  it("aligns the canonical minus-Z Subject front with each movement direction", async () => {
+    const { runtime, debug } = await createRuntimeWithPackageSubject();
+    const expectedYawByAction = [
+      ["move-forward", 0],
+      ["move-backward", Math.PI],
+      ["move-left", Math.PI / 2],
+      ["move-right", -Math.PI / 2],
+    ] as const;
+
+    for (const [action, expectedYawRadians] of expectedYawByAction) {
+      runtime.reset();
+      await runtime.runFixedInput({ actions: [action], ticks: 1 });
+      expect(debug.visualRootYawRadians("player")).toBeCloseTo(
+        expectedYawRadians,
+      );
+    }
+
+    await runtime.dispose();
+  });
+
   it("changes movement medium in declared swimmable water", async () => {
     const executionPlan = createExecutionPlan((spec) => {
       const water = spec.nodes.find((node) => node.kind === "water");
@@ -1617,6 +1983,33 @@ describe("BabylonWorldRuntime", () => {
         Math.sin(camera.pitchRadians) * camera.distanceMeters,
       state.positionMetersXYZ[2] + horizontalDistance,
     ]);
+    await runtime.dispose();
+  });
+
+  it("orbits and zooms the third-person camera around its controlled Subject", async () => {
+    const { runtime, executionPlan } = await createRuntimeWithPackageSubject();
+    const target = runtime.snapshot().subjectStatesByEntityId.player!;
+    const orbitRuntime = runtime as BabylonWorldRuntime & {
+      setThirdPersonCameraOrbit(input: {
+        yawRadians: number;
+        pitchRadians: number;
+        distanceMeters: number;
+      }): void;
+    };
+
+    orbitRuntime.setThirdPersonCameraOrbit({
+      yawRadians: Math.PI / 2,
+      pitchRadians: 0,
+      distanceMeters: 3,
+    });
+    const camera = runtime.snapshot().camera.positionMetersXYZ;
+
+    expect(camera[0]).toBeCloseTo(target.positionMetersXYZ[0] + 3, 6);
+    expect(camera[1]).toBeCloseTo(
+      target.positionMetersXYZ[1] + executionPlan.camera.targetHeightMeters,
+      6,
+    );
+    expect(camera[2]).toBeCloseTo(target.positionMetersXYZ[2], 2);
     await runtime.dispose();
   });
 

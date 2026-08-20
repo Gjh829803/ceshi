@@ -9,7 +9,9 @@ import type {
 } from "@whitebox-world/runtime-contracts";
 import {
   BabylonWorldRuntime,
+  FIXED_TIME_STEP_SECONDS,
   type BabylonWorldRuntimeOptions,
+  type ThirdPersonCameraOrbitV1,
 } from "@whitebox-world/runtime-babylon";
 
 import type {
@@ -38,6 +40,75 @@ const KEY_ACTION_MAP: Readonly<Record<string, SemanticInputActionV1>> = {
   ShiftRight: "run",
   Space: "jump",
 };
+
+type CameraInputAction = Extract<
+  InputAction,
+  "cameraLeft" | "cameraRight" | "cameraUp" | "cameraDown"
+>;
+
+const CAMERA_KEY_ACTION_MAP: Readonly<Partial<Record<string, CameraInputAction>>> = {
+  ArrowLeft: "cameraLeft",
+  ArrowRight: "cameraRight",
+  ArrowUp: "cameraUp",
+  ArrowDown: "cameraDown",
+};
+
+const CAMERA_YAW_RADIANS_PER_TICK = 0.025;
+const CAMERA_PITCH_RADIANS_PER_TICK = 0.015;
+const CAMERA_POINTER_RADIANS_PER_PIXEL = 0.006;
+const CAMERA_WHEEL_METERS_PER_PIXEL = 0.008;
+const MAXIMUM_FIXED_TICKS_PER_DISPLAY_FRAME = 5;
+
+export type ThirdPersonCameraControlInputV1 =
+  | {
+      readonly kind: "actions";
+      readonly actions: readonly InputAction[];
+      readonly ticks: number;
+    }
+  | {
+      readonly kind: "pointer-drag";
+      readonly deltaPixelsXY: readonly [number, number];
+    }
+  | {
+      readonly kind: "wheel";
+      readonly deltaY: number;
+    };
+
+export function nextThirdPersonCameraOrbit(
+  current: ThirdPersonCameraOrbitV1,
+  input: ThirdPersonCameraControlInputV1,
+): ThirdPersonCameraOrbitV1 {
+  if (input.kind === "pointer-drag") {
+    return {
+      ...current,
+      yawRadians:
+        current.yawRadians - input.deltaPixelsXY[0] * CAMERA_POINTER_RADIANS_PER_PIXEL,
+      pitchRadians:
+        current.pitchRadians - input.deltaPixelsXY[1] * CAMERA_POINTER_RADIANS_PER_PIXEL,
+    };
+  }
+  if (input.kind === "wheel") {
+    return {
+      ...current,
+      distanceMeters:
+        current.distanceMeters + input.deltaY * CAMERA_WHEEL_METERS_PER_PIXEL,
+    };
+  }
+  const actionSet = new Set(input.actions);
+  return {
+    ...current,
+    yawRadians:
+      current.yawRadians +
+      (Number(actionSet.has("cameraRight")) - Number(actionSet.has("cameraLeft"))) *
+        CAMERA_YAW_RADIANS_PER_TICK *
+        input.ticks,
+    pitchRadians:
+      current.pitchRadians +
+      (Number(actionSet.has("cameraDown")) - Number(actionSet.has("cameraUp"))) *
+        CAMERA_PITCH_RADIANS_PER_TICK *
+        input.ticks,
+  };
+}
 
 const SEMANTIC_INPUT_ACTION_ORDER: readonly SemanticInputActionV1[] = [
   "move-forward",
@@ -190,14 +261,21 @@ export class BabylonWorldAdapter implements PlaygroundWorldAdapter {
 
   private readonly listeners = new Set<(snapshot: WorldSnapshot) => void>();
   private readonly keyboardInput = new PhysicalKeyboardActionTracker();
+  private readonly cameraInput = new Set<CameraInputAction>();
   private readonly inspections: readonly FeatureInspection[];
   private readonly resizeObserver: ResizeObserver;
+  private dragPointerId: number | null = null;
+  private dragLastClientXY: readonly [number, number] = [0, 0];
   private animationFrameId: number | null = null;
   private frame = 0;
   private paused = false;
   private disposed = false;
   private disposePromise: Promise<void> | null = null;
   private animationPending = false;
+  private previousAnimationTimestampMilliseconds: number | null = null;
+  private fixedStepAccumulatorSeconds = 0;
+  private displayFramesPerSecond = 0;
+  private frameLoopDiagnostic: WorldkitBrowserDiagnosticV1 | undefined;
 
   private constructor(
     private readonly executionPlan: ExecutionPlanV4,
@@ -213,6 +291,11 @@ export class BabylonWorldAdapter implements PlaygroundWorldAdapter {
     window.addEventListener("keydown", this.handleKeyDown);
     window.addEventListener("keyup", this.handleKeyUp);
     window.addEventListener("blur", this.handleBlur);
+    this.canvas.addEventListener("pointerdown", this.handlePointerDown);
+    this.canvas.addEventListener("pointermove", this.handlePointerMove);
+    this.canvas.addEventListener("pointerup", this.handlePointerUp);
+    this.canvas.addEventListener("pointercancel", this.handlePointerUp);
+    this.canvas.addEventListener("wheel", this.handleWheel, { passive: false });
   }
 
   static async create(
@@ -251,6 +334,7 @@ export class BabylonWorldAdapter implements PlaygroundWorldAdapter {
 
   setPaused(paused: boolean): void {
     this.paused = paused;
+    this.resetAnimationClock();
     this.emit();
   }
 
@@ -260,6 +344,10 @@ export class BabylonWorldAdapter implements PlaygroundWorldAdapter {
 
   reset(): void {
     this.keyboardInput.clear();
+    this.cameraInput.clear();
+    this.dragPointerId = null;
+    this.frameLoopDiagnostic = undefined;
+    this.resetAnimationClock();
     this.runtime.reset();
     this.render();
     this.emit();
@@ -274,12 +362,18 @@ export class BabylonWorldAdapter implements PlaygroundWorldAdapter {
     const wasPaused = this.paused;
     this.paused = true;
     for (const step of steps) {
+      this.applyCameraControl({
+        kind: "actions",
+        actions: step.actions,
+        ticks: Math.max(0, Math.floor(step.ticks)),
+      });
       await this.runtime.runFixedInput({
         actions: mapPlaygroundInputActions(step.actions),
         ticks: Math.max(0, Math.floor(step.ticks)),
       });
     }
     this.paused = wasPaused;
+    this.resetAnimationClock();
     this.render();
     this.emit();
     return this.snapshot();
@@ -300,26 +394,31 @@ export class BabylonWorldAdapter implements PlaygroundWorldAdapter {
     let snapshot = this.runtime.snapshot();
     for (const step of steps) snapshot = await this.runtime.runFixedInput(step);
     this.paused = wasPaused;
+    this.resetAnimationClock();
     this.render();
     this.emit();
     return snapshot;
   }
 
   runtimeDiagnostics(): readonly WorldkitBrowserDiagnosticV1[] {
-    return this.executionPlan.layout.layoutAssertions.map((assertion, index) => ({
-      severity: "info",
-      code: "WORLDKIT_LAYOUT_ASSERTION_SATISFIED",
-      instancePath: `/layout/layoutAssertions/${index}`,
-      message: "Frozen layout assertion passed runtime validation.",
-      details: {
-        layoutSolveReportHash: this.executionPlan.layout.layoutSolveReportHash,
-        constraintId: assertion.constraintId,
-        kind: assertion.kind,
-        evidenceEntityIds: [...assertion.evidenceEntityIds],
-        measurements: structuredClone(assertion.measurements),
-        tolerances: structuredClone(assertion.tolerances),
-      },
-    }));
+    const diagnostics: WorldkitBrowserDiagnosticV1[] =
+      this.executionPlan.layout.layoutAssertions.map((assertion, index) => ({
+        severity: "info",
+        code: "WORLDKIT_LAYOUT_ASSERTION_SATISFIED",
+        instancePath: `/layout/layoutAssertions/${index}`,
+        message: "Frozen layout assertion passed runtime validation.",
+        details: {
+          layoutSolveReportHash: this.executionPlan.layout.layoutSolveReportHash,
+          constraintId: assertion.constraintId,
+          kind: assertion.kind,
+          evidenceEntityIds: [...assertion.evidenceEntityIds],
+          measurements: structuredClone(assertion.measurements),
+          tolerances: structuredClone(assertion.tolerances),
+        },
+      }));
+    return this.frameLoopDiagnostic === undefined
+      ? diagnostics
+      : [...diagnostics, this.frameLoopDiagnostic];
   }
 
   runtimeSnapshot(): WorldRuntimeSnapshotV3 {
@@ -327,6 +426,11 @@ export class BabylonWorldAdapter implements PlaygroundWorldAdapter {
   }
 
   resetRuntime(): WorldRuntimeSnapshotV3 {
+    this.keyboardInput.clear();
+    this.cameraInput.clear();
+    this.dragPointerId = null;
+    this.frameLoopDiagnostic = undefined;
+    this.resetAnimationClock();
     const snapshot = this.runtime.reset();
     this.render();
     this.emit();
@@ -380,6 +484,7 @@ export class BabylonWorldAdapter implements PlaygroundWorldAdapter {
 
   snapshot(): WorldSnapshot {
     const snapshot = this.runtime.snapshot();
+    const cameraOrbit = this.runtime.getThirdPersonCameraOrbit();
     const controlledSubject = snapshot.subjectStatesByEntityId[snapshot.controlledEntityId];
     if (controlledSubject === undefined) {
       throw new Error(
@@ -396,17 +501,17 @@ export class BabylonWorldAdapter implements PlaygroundWorldAdapter {
         action: activeActionForControlledSubject(snapshot),
         grounded: controlledSubject.movementMedium === "ground",
         position: controlledSubject.positionMetersXYZ,
-        rotationY: 0,
+        rotationY: this.runtime.getSubjectFacingYawRadians(controlledSubject.entityId),
       },
       camera: {
         position: snapshot.camera.positionMetersXYZ,
-        yaw: 0,
-        pitch: this.executionPlan.camera.pitchRadians,
-        distance: this.executionPlan.camera.distanceMeters,
+        yaw: cameraOrbit.yawRadians,
+        pitch: cameraOrbit.pitchRadians,
+        distance: cameraOrbit.distanceMeters,
       },
       features: this.inspections,
       performance: {
-        fps: 60,
+        fps: this.displayFramesPerSecond,
         triangles: this.executionPlan.resourceUsage.triangles,
         drawCalls: this.runtimeSnapshot().resources.meshes,
       },
@@ -431,41 +536,102 @@ export class BabylonWorldAdapter implements PlaygroundWorldAdapter {
     window.removeEventListener("keydown", this.handleKeyDown);
     window.removeEventListener("keyup", this.handleKeyUp);
     window.removeEventListener("blur", this.handleBlur);
+    this.canvas.removeEventListener("pointerdown", this.handlePointerDown);
+    this.canvas.removeEventListener("pointermove", this.handlePointerMove);
+    this.canvas.removeEventListener("pointerup", this.handlePointerUp);
+    this.canvas.removeEventListener("pointercancel", this.handlePointerUp);
+    this.canvas.removeEventListener("wheel", this.handleWheel);
     this.canvas.remove();
     this.disposePromise = this.runtime.dispose();
     return this.disposePromise;
   }
 
   private readonly handleKeyDown = (event: KeyboardEvent): void => {
-    if (!this.keyboardInput.press(event.code)) return;
+    if (this.keyboardInput.press(event.code)) {
+      event.preventDefault();
+      return;
+    }
+    const cameraAction = CAMERA_KEY_ACTION_MAP[event.code];
+    if (cameraAction === undefined) return;
+    this.cameraInput.add(cameraAction);
     event.preventDefault();
   };
 
   private readonly handleKeyUp = (event: KeyboardEvent): void => {
-    if (!this.keyboardInput.release(event.code)) return;
+    if (this.keyboardInput.release(event.code)) {
+      event.preventDefault();
+      return;
+    }
+    const cameraAction = CAMERA_KEY_ACTION_MAP[event.code];
+    if (cameraAction === undefined) return;
+    this.cameraInput.delete(cameraAction);
     event.preventDefault();
   };
 
   private readonly handleBlur = (): void => {
     this.keyboardInput.clear();
+    this.cameraInput.clear();
+  };
+
+  private readonly handlePointerDown = (event: PointerEvent): void => {
+    if (event.button !== 0) return;
+    this.dragPointerId = event.pointerId;
+    this.dragLastClientXY = [event.clientX, event.clientY];
+    this.canvas.setPointerCapture(event.pointerId);
+  };
+
+  private readonly handlePointerMove = (event: PointerEvent): void => {
+    if (event.pointerId !== this.dragPointerId) return;
+    this.applyCameraControl({
+      kind: "pointer-drag",
+      deltaPixelsXY: [
+        event.clientX - this.dragLastClientXY[0],
+        event.clientY - this.dragLastClientXY[1],
+      ],
+    });
+    this.dragLastClientXY = [event.clientX, event.clientY];
+  };
+
+  private readonly handlePointerUp = (event: PointerEvent): void => {
+    if (event.pointerId === this.dragPointerId) this.dragPointerId = null;
+  };
+
+  private readonly handleWheel = (event: WheelEvent): void => {
+    event.preventDefault();
+    this.applyCameraControl({ kind: "wheel", deltaY: event.deltaY });
   };
 
   private scheduleAnimationFrame(): void {
-    this.animationFrameId = requestAnimationFrame(() => {
+    this.animationFrameId = requestAnimationFrame((timestampMilliseconds) => {
       this.animationFrameId = null;
-      void this.animate();
+      void this.animate(timestampMilliseconds);
     });
   }
 
-  private async animate(): Promise<void> {
+  private async animate(timestampMilliseconds: number): Promise<void> {
     if (this.disposed) return;
-    if (!this.paused && !this.animationPending) {
+    const ticks = this.consumeFixedTicks(timestampMilliseconds);
+    if (!this.paused && !this.animationPending && ticks > 0) {
       this.animationPending = true;
       try {
+        this.applyCameraControl({
+          kind: "actions",
+          actions: [...this.cameraInput],
+          ticks,
+        });
         await this.runtime.runFixedInput({
           actions: this.keyboardInput.actions(),
-          ticks: 1,
+          ticks,
         });
+      } catch {
+        this.paused = true;
+        this.frameLoopDiagnostic = {
+          severity: "error",
+          code: "WORLDKIT_RUNTIME_FRAME_FAILED",
+          instancePath: "",
+          message: "The runtime was paused after a simulation frame failed.",
+        };
+        console.error("WORLDKIT_RUNTIME_FRAME_FAILED");
       } finally {
         this.animationPending = false;
       }
@@ -473,6 +639,55 @@ export class BabylonWorldAdapter implements PlaygroundWorldAdapter {
     this.render();
     this.emit();
     this.scheduleAnimationFrame();
+  }
+
+  private consumeFixedTicks(timestampMilliseconds: number): number {
+    if (!Number.isFinite(timestampMilliseconds)) return 0;
+    const previousTimestampMilliseconds = this.previousAnimationTimestampMilliseconds;
+    this.previousAnimationTimestampMilliseconds = timestampMilliseconds;
+    if (
+      previousTimestampMilliseconds === null ||
+      timestampMilliseconds <= previousTimestampMilliseconds
+    ) {
+      return 0;
+    }
+    const elapsedMilliseconds = timestampMilliseconds - previousTimestampMilliseconds;
+    this.displayFramesPerSecond = Math.round(1_000 / elapsedMilliseconds);
+    if (this.paused) {
+      this.fixedStepAccumulatorSeconds = 0;
+      return 0;
+    }
+    const maximumAccumulatedSeconds =
+      FIXED_TIME_STEP_SECONDS * MAXIMUM_FIXED_TICKS_PER_DISPLAY_FRAME;
+    this.fixedStepAccumulatorSeconds = Math.min(
+      maximumAccumulatedSeconds,
+      this.fixedStepAccumulatorSeconds +
+        Math.min(elapsedMilliseconds / 1_000, maximumAccumulatedSeconds),
+    );
+    const ticks = Math.min(
+      MAXIMUM_FIXED_TICKS_PER_DISPLAY_FRAME,
+      Math.floor(
+        (this.fixedStepAccumulatorSeconds + 1e-12) /
+          FIXED_TIME_STEP_SECONDS,
+      ),
+    );
+    this.fixedStepAccumulatorSeconds = Math.max(
+      0,
+      this.fixedStepAccumulatorSeconds - ticks * FIXED_TIME_STEP_SECONDS,
+    );
+    return ticks;
+  }
+
+  private resetAnimationClock(): void {
+    this.previousAnimationTimestampMilliseconds = null;
+    this.fixedStepAccumulatorSeconds = 0;
+    this.displayFramesPerSecond = 0;
+  }
+
+  private applyCameraControl(input: ThirdPersonCameraControlInputV1): void {
+    this.runtime.setThirdPersonCameraOrbit(
+      nextThirdPersonCameraOrbit(this.runtime.getThirdPersonCameraOrbit(), input),
+    );
   }
 
   private emit(): void {
