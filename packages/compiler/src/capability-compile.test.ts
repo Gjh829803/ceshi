@@ -9,7 +9,7 @@ import { compileWorld } from "./index";
 const PACKAGES = [
   {
     subjectDefinitionRef:
-      "worldkit://subject-definition/humanoid.g-bot.ground@1",
+      "worldkit://subject-definition/humanoid.g-bot@1",
     defaultMotionKernelRef: "worldkit://motion-kernel/free-ground@1",
     motionKernelRefs: ["worldkit://motion-kernel/free-ground@1"],
     controlProfileRef: "worldkit://control-profile/planar.camera-relative@1",

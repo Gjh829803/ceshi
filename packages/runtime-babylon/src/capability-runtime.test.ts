@@ -103,7 +103,7 @@ function createFlatTerrainCapabilitySpec() {
 describe("capability package runtime smoke tests", () => {
   it("loads the locked 25-clip G Bot package into a live Runtime", async () => {
     const subjectDefinitionRef =
-      "worldkit://subject-definition/humanoid.g-bot.ground@1";
+      "worldkit://subject-definition/humanoid.g-bot@1";
     const loaded = await loadAuthoringScene(
       async () => new Response(JSON.stringify(createFlatTerrainCapabilitySpec())),
       { subjectDefinitionRef },
@@ -120,6 +120,16 @@ describe("capability package runtime smoke tests", () => {
       Math.PI,
       12,
     );
+    expect(loaded.executionPlan.subjects[0]?.sockets.map((socket) => socket.id).sort())
+      .toEqual([
+        "CameraTarget3D",
+        "FirstPersonView",
+        "LookAhead",
+        "SeatAlignment",
+        "ThirdPersonTarget",
+        "hand.right",
+      ]);
+    expect(loaded.executionPlan.subjects[0]?.capabilityAssembly).toBeDefined();
     const runtime = await BabylonWorldRuntime.create({
       executionPlan: loaded.executionPlan,
       havokWasmBinary,

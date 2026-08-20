@@ -6,7 +6,7 @@ import type { RegistrySubjectDefinitionV3 } from "./types-v3";
 const SUBJECT_DEFINITION_REFS = [
   "worldkit://subject-definition/animal.quadruped.forward-steer@1",
   "worldkit://subject-definition/glider.paraglider.unpowered@1",
-  "worldkit://subject-definition/humanoid.g-bot.ground@1",
+  "worldkit://subject-definition/humanoid.g-bot@1",
   "worldkit://subject-definition/surface-craft.ice-skimmer@1",
   "worldkit://subject-definition/vehicle.four-wheel.arcade@1",
   "worldkit://subject-definition/watercraft.kayak.surface@1",
@@ -50,7 +50,7 @@ function capabilityDefinitions(): readonly RegistrySubjectDefinitionV3[] {
 }
 
 describe("capability-driven subject registry", () => {
-  it("registers the six phase-one subject packages without changing the legacy view", () => {
+  it("registers the six phase-one subject packages while keeping four CLI definitions", () => {
     expect(capabilityDefinitions().map((definition) => definition.resourceRef)).toEqual(
       SUBJECT_DEFINITION_REFS,
     );

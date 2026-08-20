@@ -198,6 +198,7 @@ export function installDeferredWorldkitBrowserApi(options: {
         .map((capabilityDriven) => {
           return {
             resourceRef: capabilityDriven.resourceRef,
+            contentHash: capabilityDriven.contentHash,
             displayName: capabilityDriven.aiMetadata.displayName,
             semanticClassId: capabilityDriven.semanticClassId,
             bodyTopology: capabilityDriven.bodyTopology,

@@ -319,8 +319,11 @@ export interface SubjectResourceRegistryV3 extends SubjectResourceRegistryV2 {
   resolveHarnessProfile(resourceRef: string): HarnessProfileV1 | undefined;
   resolvePoseSetProfile(resourceRef: string): PoseSetProfileV1 | undefined;
   resolveRenderBindingProfile(resourceRef: string): RenderBindingProfileV1 | undefined;
-  /** Canonical Authoring V2 definition view. */
-  listSubjectDefinitions(): readonly RegistrySubjectDefinitionV2[];
+  /** CLI discovery view, including canonical V3 products that extend the V2 fields. */
+  listSubjectDefinitions(): readonly (
+    | RegistrySubjectDefinitionV2
+    | RegistrySubjectDefinitionV3
+  )[];
   /** Capability-driven Authoring V3 definitions only. */
   listCapabilitySubjectDefinitions(): readonly RegistrySubjectDefinitionV3[];
   /** Canonical V1 resource view. */

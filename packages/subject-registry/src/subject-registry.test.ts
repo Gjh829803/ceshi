@@ -634,6 +634,47 @@ describe("subject resource registry", () => {
     });
   });
 
+  it("discovers one canonical V3 G Bot definition with the complete socket contract", () => {
+    const cliDefinitions = builtInSubjectResourceRegistry
+      .listSubjectDefinitions()
+      .filter((definition) => definition.resourceRef.includes("humanoid.g-bot"));
+    const browserDefinitions = builtInSubjectResourceRegistry
+      .listCapabilitySubjectDefinitions()
+      .filter((definition) => definition.resourceRef.includes("humanoid.g-bot"));
+    const resolvedDefinition = builtInSubjectResourceRegistry.resolveSubjectDefinition(
+      G_BOT_SUBJECT_DEFINITION_REF,
+    );
+
+    expect(cliDefinitions.map((definition) => definition.resourceRef)).toEqual([
+      G_BOT_SUBJECT_DEFINITION_REF,
+    ]);
+    expect(browserDefinitions.map((definition) => definition.resourceRef)).toEqual([
+      G_BOT_SUBJECT_DEFINITION_REF,
+    ]);
+    expect(
+      builtInSubjectResourceRegistry
+        .listResources()
+        .filter((resource) => resource.resourceRef === G_BOT_SUBJECT_DEFINITION_REF),
+    ).toEqual([]);
+    expect(cliDefinitions[0]?.contentHash).toBe(resolvedDefinition?.contentHash);
+    expect(browserDefinitions[0]?.contentHash).toBe(resolvedDefinition?.contentHash);
+    expect(resolvedDefinition).toMatchObject({
+      schemaVersion: 3,
+      resourceRef: G_BOT_SUBJECT_DEFINITION_REF,
+    });
+
+    const socketIds = resolvedDefinition?.sockets.map((socket) => socket.id).sort();
+    expect(socketIds).toEqual([
+      "CameraTarget3D",
+      "FirstPersonView",
+      "LookAhead",
+      "SeatAlignment",
+      "ThirdPersonTarget",
+      "hand.right",
+    ]);
+    expect(new Set(socketIds).size).toBe(6);
+  });
+
   it("locks the exact canonical hashes for every G Bot binding resource", () => {
     const resources = [
       builtInSubjectResourceRegistry.resolveSubjectAsset(G_BOT_SUBJECT_ASSET_REF),
@@ -676,7 +717,7 @@ describe("subject resource registry", () => {
       {
         resourceRef: G_BOT_SUBJECT_DEFINITION_REF,
         contentHash:
-          "sha256:614b8f6638d55045c0b71697bee6e6e315b42f02564285f1d0e3b8ba6e0b5f2a",
+          "sha256:0a8f32a97d3e0b764ee30fbc90d5edd1059fcc61e645699b21b2e9dae71ea3ee",
       },
     ]);
   });

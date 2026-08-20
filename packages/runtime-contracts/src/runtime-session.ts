@@ -123,6 +123,7 @@ export interface WorldRuntimeSessionV3 {
 
 export interface SubjectDefinitionSummaryV1 {
   resourceRef: string;
+  contentHash: string;
   displayName: string;
   semanticClassId: string;
   bodyTopology: string;

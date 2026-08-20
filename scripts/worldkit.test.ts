@@ -282,6 +282,7 @@ describe("worldkit CLI", () => {
     ]);
     expect(first.resources[0]).toMatchObject({
       kind: "subject-definition",
+      schemaVersion: 3,
       version: 1,
       contentHash: expect.stringMatching(/^sha256:/),
       aiMetadata: {
@@ -289,6 +290,20 @@ describe("worldkit CLI", () => {
         description: expect.any(String),
       },
       coordinateConvention: { pivot: "support-center" },
+    });
+    expect(
+      describeRegistryResource(
+        "worldkit://subject-definition/humanoid.g-bot@1",
+      ),
+    ).toMatchObject({
+      ok: true,
+      kind: "worldkit-registry-description",
+      schemaVersion: 1,
+      resource: {
+        resourceRef: "worldkit://subject-definition/humanoid.g-bot@1",
+        schemaVersion: 3,
+        contentHash: first.resources[0]?.contentHash,
+      },
     });
 
     expect(

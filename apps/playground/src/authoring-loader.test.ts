@@ -204,7 +204,7 @@ describe("loadAuthoringScene", () => {
       async () => new Response(JSON.stringify(source)),
       {
         subjectDefinitionRef:
-          "worldkit://subject-definition/humanoid.g-bot.ground@1",
+          "worldkit://subject-definition/humanoid.g-bot@1",
       },
     );
 
@@ -215,7 +215,7 @@ describe("loadAuthoringScene", () => {
         subjects: [
           expect.objectContaining({
             subjectDefinitionRef:
-              "worldkit://subject-definition/humanoid.g-bot.ground@1",
+              "worldkit://subject-definition/humanoid.g-bot@1",
           }),
         ],
       },

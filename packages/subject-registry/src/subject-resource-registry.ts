@@ -351,10 +351,14 @@ export function createSubjectResourceRegistry(
         resource.kind === "subject-definition",
     ),
   );
-  const stableLegacySubjectDefinitions = deepFreeze(
+  const stableCliSubjectDefinitions = deepFreeze(
     stableSubjectDefinitions.filter(
-      (resource): resource is RegistrySubjectDefinitionV2 =>
-        !("schemaVersion" in resource),
+      (
+        resource,
+      ): resource is RegistrySubjectDefinitionV2 | RegistrySubjectDefinitionV3 =>
+        !("schemaVersion" in resource) ||
+        resource.resourceRef ===
+          "worldkit://subject-definition/humanoid.g-bot@1",
     ),
   );
   const stableCapabilitySubjectDefinitions = deepFreeze(
@@ -383,7 +387,6 @@ export function createSubjectResourceRegistry(
     "worldkit://collider-profile/humanoid.medium-capsule@1",
     "worldkit://collider-profile/humanoid.g-bot-capsule@1",
     "worldkit://subject-definition/humanoid.rigged-golden@1",
-    "worldkit://subject-definition/humanoid.g-bot@1",
     "worldkit://subject-definition/humanoid.third-person@1",
     "worldkit://subject-definition/quadruped.ground-proxy@1",
     "worldkit://capability/locomotion.ground@1",
@@ -499,8 +502,11 @@ export function createSubjectResourceRegistry(
       const resource = resourcesByRef.get(resourceRef);
       return resource?.kind === "render-binding-profile" ? resource : undefined;
     },
-    listSubjectDefinitions(): readonly RegistrySubjectDefinitionV2[] {
-      return stableLegacySubjectDefinitions;
+    listSubjectDefinitions(): readonly (
+      | RegistrySubjectDefinitionV2
+      | RegistrySubjectDefinitionV3
+    )[] {
+      return stableCliSubjectDefinitions;
     },
     listCapabilitySubjectDefinitions(): readonly RegistrySubjectDefinitionV3[] {
       return stableCapabilitySubjectDefinitions;

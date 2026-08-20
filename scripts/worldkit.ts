@@ -14,7 +14,7 @@ import {
 import type { WorldRuntimeSnapshotV3 } from "@whitebox-world/runtime-contracts";
 import {
   builtInSubjectResourceRegistry,
-  type SubjectRegistryResourceV1,
+  type SubjectRegistryResourceV3,
 } from "@whitebox-world/subject-registry";
 
 import { explainSubjectFile } from "./lib/subject-explain";
@@ -341,10 +341,7 @@ function missingRegistryResourceDiagnostic(resourceRef: string): CliDiagnostic {
     details: {
       resourceRef,
       availableResourceRefs: builtInSubjectResourceRegistry
-        .listResources()
-        .filter((resource) =>
-          isSubjectDefinition ? resource.kind === "subject-definition" : true,
-        )
+        [isSubjectDefinition ? "listSubjectDefinitions" : "listResources"]()
         .map((resource) => resource.resourceRef),
       discoveryCommand: isSubjectDefinition
         ? "worldkit registry list --kind subject-definition --json"
@@ -354,9 +351,11 @@ function missingRegistryResourceDiagnostic(resourceRef: string): CliDiagnostic {
 }
 
 export function describeRegistryResource(resourceRef: string) {
-  const resource = builtInSubjectResourceRegistry
-    .listResources()
-    .find((candidate) => candidate.resourceRef === resourceRef);
+  const resource = resourceRef.startsWith("worldkit://subject-definition/")
+    ? builtInSubjectResourceRegistry.resolveSubjectDefinition(resourceRef)
+    : builtInSubjectResourceRegistry
+        .listResources()
+        .find((candidate) => candidate.resourceRef === resourceRef);
   if (resource === undefined) {
     return {
       ok: false as const,
@@ -370,7 +369,7 @@ export function describeRegistryResource(resourceRef: string) {
     kind: "worldkit-registry-description" as const,
     schemaVersion: 1 as const,
     diagnostics: [] as const,
-    resource: structuredClone(resource) as SubjectRegistryResourceV1,
+    resource: structuredClone(resource) as SubjectRegistryResourceV3,
   };
 }
 

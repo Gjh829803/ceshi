@@ -12,6 +12,7 @@ import type {
   WorldkitBrowserApiV3,
   WorldkitBrowserDiagnosticV1,
 } from "@whitebox-world/runtime-contracts";
+import { builtInSubjectResourceRegistry } from "@whitebox-world/subject-registry";
 
 import {
   installDeferredWorldkitBrowserApi,
@@ -146,8 +147,19 @@ describe("installDeferredWorldkitBrowserApi", () => {
     }) ?? [];
     expect(productionDefinitions.map((definition) => definition.resourceRef)).toEqual([
       "worldkit://subject-definition/animal.quadruped.forward-steer@1",
-      "worldkit://subject-definition/humanoid.g-bot.ground@1",
+      "worldkit://subject-definition/humanoid.g-bot@1",
     ]);
+    const gBotSummary = productionDefinitions.find(
+      (definition) =>
+        definition.resourceRef ===
+        "worldkit://subject-definition/humanoid.g-bot@1",
+    );
+    expect(gBotSummary?.contentHash).toBe(
+      builtInSubjectResourceRegistry.resolveSubjectDefinition(
+        "worldkit://subject-definition/humanoid.g-bot@1",
+      )?.contentHash,
+    );
+    expect(gBotSummary?.contentHash).toMatch(/^sha256:[a-f0-9]{64}$/);
     expect(allDefinitions).toHaveLength(6);
     expect(
       allDefinitions.filter(
