@@ -154,6 +154,7 @@ export interface LayoutCandidateV1 {
   readonly source: LayoutCandidateSourceV1;
   readonly transform: LayoutTransformV1;
   readonly bounds: LayoutAabbV1;
+  readonly localCostRatio: number;
 }
 
 type ResolvedRequiredConstraintV1 = Readonly<{
@@ -222,4 +223,87 @@ export interface ConstraintEvaluationV1 {
   readonly tolerances: Readonly<Record<string, number>>;
   readonly evidenceIds: readonly string[];
   readonly violationCode?: PlacementConstraintViolationCodeV1;
+}
+
+export interface ResolvedLayoutInputV1 {
+  readonly kind: "worldkit-resolved-layout-input";
+  readonly schemaVersion: 1;
+  readonly id: string;
+  readonly authoringSpecHash: `sha256:${string}`;
+  readonly registryLockHash: `sha256:${string}`;
+  readonly solverProfile: Readonly<{
+    solverProfileRef: string;
+    resolvedVersion: string;
+    contentHash: `sha256:${string}`;
+  }>;
+  readonly seed: number;
+  readonly worldBounds: LayoutAabbV1;
+  readonly entities: readonly ResolvedLayoutEntityV1[];
+  readonly regions: readonly LayoutSpatialRegionV1[];
+  readonly routes: readonly LayoutRouteV1[];
+  readonly screenRegions: readonly LayoutScreenRegionV1[];
+  readonly constraints: readonly ResolvedPlacementConstraintV1[];
+  readonly anchorsByEntityId: Readonly<Record<string, LayoutTransformV1>>;
+  readonly geometry: LayoutGeometryQueryV1;
+}
+
+export type LayoutSolveStatusV1 =
+  | "solved"
+  | "unsatisfied"
+  | "budget-exceeded"
+  | "invalid-input";
+
+export type LayoutDiagnosticCodeV1 =
+  | "PLACEMENT_INPUT_INVALID"
+  | "PLACEMENT_REGION_HAS_NO_CANDIDATE"
+  | "PLACEMENT_REQUIRED_CONSTRAINT_UNSATISFIED"
+  | "PLACEMENT_SOLVER_BUDGET_EXCEEDED";
+
+export interface LayoutDiagnosticV1 {
+  readonly severity: "error";
+  readonly code: LayoutDiagnosticCodeV1;
+  readonly instancePath: string;
+  readonly entityId?: string;
+  readonly constraintIds?: readonly string[];
+  readonly repairOperations?: readonly (
+    | "increase-region-area"
+    | "reduce-preference-weight"
+    | "add-explicit-anchor"
+    | "split-required-constraints"
+  )[];
+}
+
+export interface LayoutPlacementResultV1 {
+  readonly entityId: string;
+  readonly candidateId: string;
+  readonly candidateSource: LayoutCandidateSourceV1;
+  readonly transform: LayoutTransformV1;
+  readonly satisfiedConstraintIds: readonly string[];
+  readonly preferenceCostRatio: number;
+}
+
+export interface LayoutSolveReportV1 {
+  readonly kind: "worldkit-layout-solve-report";
+  readonly schemaVersion: 1;
+  readonly id: string;
+  readonly authoringSpecHash: `sha256:${string}`;
+  readonly registryLockHash: `sha256:${string}`;
+  readonly solverProfileRef: string;
+  readonly resolvedVersion: string;
+  readonly solverProfileHash: `sha256:${string}`;
+  readonly seed: number;
+  readonly status: LayoutSolveStatusV1;
+  readonly placementsByEntityId: Readonly<Record<string, LayoutPlacementResultV1>>;
+  readonly constraintResultsById: Readonly<Record<string, ConstraintEvaluationV1>>;
+  readonly totalPreferenceCostRatio: number;
+  readonly diagnostics: readonly LayoutDiagnosticV1[];
+  readonly searchNodeCount: number;
+  readonly conflictCheckCount: number;
+  readonly conflictConstraintIds: readonly string[];
+}
+
+export interface LayoutSolveResultV1 {
+  readonly status: LayoutSolveStatusV1;
+  readonly report: LayoutSolveReportV1;
+  readonly layoutSolveReportHash: `sha256:${string}`;
 }

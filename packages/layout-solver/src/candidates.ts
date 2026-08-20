@@ -156,6 +156,16 @@ export function generateLayoutCandidatesV1(
       source,
       transform,
       bounds: boundsFor(transform, entity.halfExtentsMetersXYZ, profile),
+      localCostRatio:
+        source.kind === "fixed" || source.kind === "initial"
+          ? 0
+          : source.kind === "region-grid"
+            ? 0.1
+            : source.kind === "region-boundary"
+              ? 0.2
+              : source.kind === "route"
+                ? 0.3
+                : 0.4,
     });
   };
 

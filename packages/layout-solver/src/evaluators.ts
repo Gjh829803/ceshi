@@ -326,7 +326,10 @@ function evaluateClearance(
   const entity = assignments[constraint.entityId];
   if (entity === undefined) return missing(constraint, [constraint.entityId]);
   const targetIds = constraint.otherEntityIds ?? Object.values(context.entitiesById)
-    .filter((row) => constraint.semanticClassIds?.includes(row.semanticClassId ?? "") === true)
+    .filter((row) =>
+      row.id !== constraint.entityId &&
+      constraint.semanticClassIds?.includes(row.semanticClassId ?? "") === true
+    )
     .map((row) => row.id);
   const targets = [...targetIds].sort((left, right) => left.localeCompare(right));
   if (targets.length === 0 || targets.some((id) => assignments[id] === undefined && context.geometry.staticBoundsByEntityId[id] === undefined)) {

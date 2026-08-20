@@ -37,6 +37,7 @@ function candidate(
         positionMetersXYZ[2] + halfExtentsMetersXYZ[2],
       ],
     },
+    localCostRatio: 0,
   };
 }
 
@@ -228,6 +229,21 @@ describe("placement constraint evaluator", () => {
     expect(evaluatePlacementConstraintV1(context(), constraint, assignments())).toMatchObject({
       satisfied: false,
       violationCode: "PLACEMENT_CLEARANCE_CONFLICT",
+    });
+  });
+
+  it("excludes the constrained entity from semantic-class clearance targets", () => {
+    const constraint: ResolvedPlacementConstraintV1 = {
+      id: "same-class",
+      kind: "minimum-clearance",
+      requirement: "required",
+      entityId: "tower",
+      semanticClassIds: ["landmark.tower"],
+      clearanceMeters: 0,
+    };
+    expect(evaluatePlacementConstraintV1(context(), constraint, assignments())).toMatchObject({
+      satisfied: false,
+      violationCode: "PLACEMENT_REFERENCE_NOT_FOUND",
     });
   });
 

@@ -15,6 +15,8 @@ export {
 } from "./geometry.js";
 export { generateLayoutCandidatesV1 } from "./candidates.js";
 export { evaluatePlacementConstraintV1 } from "./evaluators.js";
+export { hashLayoutSolveReportV1 } from "./report.js";
+export { solveLayoutV1 } from "./solve.js";
 export type {
   LayoutSolverProfileV1,
   ResolvedLayoutSolverProfileV1,
@@ -38,4 +40,11 @@ export type {
   LayoutEvaluationEntityV1,
   PlacementConstraintViolationCodeV1,
   ResolvedPlacementConstraintV1,
+  LayoutDiagnosticCodeV1,
+  LayoutDiagnosticV1,
+  LayoutPlacementResultV1,
+  LayoutSolveReportV1,
+  LayoutSolveResultV1,
+  LayoutSolveStatusV1,
+  ResolvedLayoutInputV1,
 } from "./types.js";
