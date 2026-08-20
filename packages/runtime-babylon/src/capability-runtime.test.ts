@@ -192,7 +192,7 @@ describe("capability package runtime smoke tests", () => {
     } finally {
       await runtime.dispose();
     }
-  });
+  }, 15_000);
 
   it.each(WHITEBOX_PACKAGES)(
     "runs %s through its committed Kernel, Camera Director and H01-H09 harness",

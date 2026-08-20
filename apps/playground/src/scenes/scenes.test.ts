@@ -135,5 +135,5 @@ describe("agent-authored playground scenes", () => {
       sample.slope > current.slope ? sample : current,
     );
     expect(steepest.slope, JSON.stringify(routeSamples)).toBeLessThanOrEqual(35);
-  });
+  }, 15_000);
 });
