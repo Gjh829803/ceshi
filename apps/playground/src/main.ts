@@ -154,6 +154,67 @@ function authoringActionFailure(): string {
 const viewport = requiredElement<HTMLDivElement>("#viewport");
 const featureList = requiredElement<HTMLDivElement>("#feature-list");
 const inspection = requiredElement<HTMLDivElement>("#inspection");
+
+function navigateToSubjectPackage(subjectDefinitionRef: string): void {
+  writeLocalDraft("worldkit.subject-package", subjectDefinitionRef);
+  const next = new URL(window.location.href);
+  next.searchParams.set("authoring", "1");
+  next.searchParams.set("subjectDefinitionRef", subjectDefinitionRef);
+  next.searchParams.set("uiRecovery", String(Date.now()));
+  window.location.assign(next);
+}
+
+function installAuthoringRecoveryPanel(api: WorldkitBrowserApiV3): void {
+  const definitions = api.listSubjectDefinitions?.() ?? [];
+  if (definitions.length === 0) return;
+  const panel = requiredElement<HTMLDivElement>("#capability-card");
+  const packageSelect = requiredElement<HTMLSelectElement>("#subject-package-select");
+  const cameraSelect = requiredElement<HTMLSelectElement>("#camera-preference-select");
+  const context = requiredElement<HTMLDivElement>("#capability-context");
+  const drafts = requiredElement<HTMLDivElement>("#parameter-drafts");
+  const harnessOutput = requiredElement<HTMLPreElement>("#harness-output");
+  const requestedDefinitionRef = urlParameters.get("subjectDefinitionRef");
+  panel.hidden = false;
+  packageSelect.replaceChildren(...definitions.map((definition) => {
+    const option = document.createElement("option");
+    option.value = definition.resourceRef;
+    option.textContent = `${definition.displayName} · ${definition.agentAccessLevel}`;
+    option.selected = definition.resourceRef === requestedDefinitionRef;
+    return option;
+  }));
+  packageSelect.addEventListener("change", () => {
+    navigateToSubjectPackage(packageSelect.value);
+  });
+  cameraSelect.replaceChildren(new Option("Runtime 启动后可用", "unavailable"));
+  cameraSelect.disabled = true;
+  context.innerHTML = `
+    <div><span>Status</span><code>RECOVERY MODE</code></div>
+    <div><span>Package</span><code>${escapeHtml(requestedDefinitionRef ?? "unknown")}</code></div>
+  `;
+  drafts.innerHTML = `
+    <p>当前主体未能启动。你仍然可以在上方切换 Subject Package，或先进入安全白膜恢复编辑器。</p>
+  `;
+  harnessOutput.textContent = JSON.stringify(api.getDiagnostics(), null, 2);
+  const controls = requiredElement<HTMLDivElement>("#controls-card");
+  controls.innerHTML = `
+    <p>恢复模式</p>
+    <div><span>Subject Package</span><span>切换到其他主体</span></div>
+    <div><span>安全白膜</span><span>恢复完整编辑界面</span></div>
+  `;
+  const safePackageButton = requiredElement<HTMLButtonElement>("#fallback-button");
+  safePackageButton.textContent = "恢复为四足白膜";
+  safePackageButton.addEventListener("click", () => {
+    navigateToSubjectPackage(
+      "worldkit://subject-definition/animal.quadruped.forward-steer@1",
+    );
+  });
+  const retryButton = requiredElement<HTMLButtonElement>("#harness-button");
+  retryButton.textContent = "重试当前主体";
+  retryButton.addEventListener("click", () => window.location.reload());
+  const exportButton = requiredElement<HTMLButtonElement>("#export-package-button");
+  exportButton.disabled = true;
+}
+
 function installCapabilityAuthoringPanel(api: WorldkitBrowserApiV3): void {
   const definitions = api.listSubjectDefinitions?.() ?? [];
   if (definitions.length === 0) return;
@@ -287,11 +348,7 @@ function installCapabilityAuthoringPanel(api: WorldkitBrowserApiV3): void {
   }
 
   packageSelect.addEventListener("change", () => {
-    writeLocalDraft("worldkit.subject-package", packageSelect.value);
-    const next = new URL(window.location.href);
-    next.searchParams.set("authoring", "1");
-    next.searchParams.set("subjectDefinitionRef", packageSelect.value);
-    window.location.assign(next);
+    navigateToSubjectPackage(packageSelect.value);
   });
   cameraSelect.addEventListener("change", () => {
     try {
@@ -385,6 +442,7 @@ if (authoringMode) {
     startPlayground(createdAdapter, () => browserInstallation.dispose());
   } else {
     inspection.innerHTML = `<pre>${escapeHtml(JSON.stringify(browserInstallation.api.getDiagnostics(), null, 2))}</pre>`;
+    installAuthoringRecoveryPanel(browserInstallation.api);
   }
 } else {
   const [{ SdkWorldAdapter }, { resolveScene }] = await Promise.all([
