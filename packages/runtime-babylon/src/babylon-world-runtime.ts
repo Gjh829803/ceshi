@@ -40,6 +40,7 @@ import type {
 import { TRUSTED_DEFAULT_CONTROLLER_ID } from "@whitebox-world/runtime-contracts";
 import { resolveGroundHumanoidAction } from "@whitebox-world/subject-actions";
 
+import "./babylon-shader-bootstrap";
 import { createWhiteboxMaterials, type WhiteboxMaterials } from "./materials";
 import { enableHavokPhysics, FIXED_TIME_STEP_SECONDS } from "./physics";
 import { SubjectController } from "./subject-controller";
