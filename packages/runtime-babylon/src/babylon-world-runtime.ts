@@ -81,6 +81,8 @@ export interface BabylonWorldRuntimeOptions {
 
 type OwnedDisposer = () => void | Promise<void>;
 
+const WATER_SURFACE_CLASSIFICATION_EPSILON_METERS = 0.1;
+
 class WorldRuntimeDisposeErrorV1 extends Error {
   readonly name = "WorldRuntimeDisposeErrorV1";
   readonly code = "WORLDKIT_RUNTIME_DISPOSE_FAILED" as const;
@@ -381,7 +383,8 @@ function waterSurfaceHeightAtSubjectOrigin(
     water.traversalMode === "swimmable" &&
     containsPoint(water.boundary, subjectOrigin.x, subjectOrigin.z) &&
     subjectOrigin.y >= water.waterLevelMeters - water.depthMeters - 1 &&
-    subjectOrigin.y <= water.waterLevelMeters + 2
+    subjectOrigin.y <=
+      water.waterLevelMeters + WATER_SURFACE_CLASSIFICATION_EPSILON_METERS
   )?.waterLevelMeters;
 }
 
@@ -697,7 +700,11 @@ export class BabylonWorldRuntime implements WorldRuntimeSessionV3 {
       for (const subject of this.executionPlan.subjects) {
         const controller = this.controllerFor(subject.entityId);
         const controlled = subject.entityId === this.controlledEntityId;
-        if (controlled || controller.movementMedium !== "ground") {
+        if (
+          controlled ||
+          controller.movementMedium !== "ground" ||
+          controller.hasPendingInitialGroundSupport
+        ) {
           const cameraDirection = this.camera.getForwardRay().direction;
           controller.step(
             controlled ? input.actions : [],
@@ -816,7 +823,6 @@ export class BabylonWorldRuntime implements WorldRuntimeSessionV3 {
   renderFrame(): void {
     this.assertUsable();
     for (const visual of this.subjectVisuals) visual.applyAnimationPose();
-    this.updateCamera();
     this.scene.render();
   }
 

@@ -1832,6 +1832,43 @@ describe("BabylonWorldRuntime", () => {
     await runtime.dispose();
   });
 
+  it("settles an uncontrolled Subject spawned just above terrain", async () => {
+    const base = createExecutionPlan();
+    const player = base.subjects.find((subject) => subject.entityId === "player")!;
+    const executionPlan: ExecutionPlanV4 = {
+      ...base,
+      terrain: {
+        ...base.terrain,
+        heightSamplesMeters: base.terrain.heightSamplesMeters.map(() => 0),
+        minimumHeightMeters: 0,
+        maximumHeightMeters: 0,
+      },
+      waters: [],
+      objects: [],
+      subjects: [
+        player,
+        {
+          ...player,
+          entityId: "observer",
+          spawnAnchorEntityId: "spawn-observer",
+          spawnSubjectOriginPositionMetersXYZ: [4, 0.2, 0],
+        },
+      ],
+      layout: { ...base.layout, layoutAssertions: [] },
+    };
+    const runtime = await createRuntime(executionPlan);
+
+    const settled = await runtime.runFixedInput({ actions: [], ticks: 120 });
+    const observer = settled.subjectStatesByEntityId.observer!;
+
+    expect(observer.activeActionId).toBe("idle");
+    expect(observer.movementMedium).toBe("ground");
+    expect(Math.abs(observer.positionMetersXYZ[1])).toBeLessThan(0.16);
+    expect(Math.abs(observer.velocityMetersPerSecondXYZ[1])).toBeLessThan(0.1);
+
+    await runtime.dispose();
+  });
+
   it("fires one jump per press while the jump action remains held", async () => {
     const runtime = await createRuntime();
     try {
@@ -2013,6 +2050,69 @@ describe("BabylonWorldRuntime", () => {
 
     expect(snapshot.subjectStatesByEntityId.player!.positionMetersXYZ[0]).toBeGreaterThan(3);
     expect(snapshot.subjectStatesByEntityId.player!.movementMedium).toBe("water");
+    await runtime.dispose();
+  });
+
+  it("keeps a Subject on a pier above swimmable water grounded and jumpable", async () => {
+    const base = createExecutionPlan();
+    const player = base.subjects.find((subject) => subject.entityId === "player")!;
+    const wall = base.objects.find((object) => object.entityId === "wall-east")!;
+    const water = base.waters[0]!;
+    const executionPlan: ExecutionPlanV4 = {
+      ...base,
+      terrain: {
+        ...base.terrain,
+        heightSamplesMeters: base.terrain.heightSamplesMeters.map(() => 0),
+        minimumHeightMeters: 0,
+        maximumHeightMeters: 0,
+      },
+      waters: [
+        {
+          ...water,
+          boundary: {
+            kind: "ellipse",
+            centerMetersXZ: [0, 0],
+            radiusMetersXZ: [5, 5],
+          },
+          waterLevelMeters: 0,
+          depthMeters: 3,
+          traversalMode: "swimmable",
+        },
+      ],
+      objects: [
+        {
+          ...wall,
+          entityId: "pier",
+          primitive: { kind: "box", sizeMetersXYZ: [6, 1, 6] },
+          transform: {
+            positionMetersXYZ: [0, 0.5, 0],
+            rotationEulerRadiansXYZ: [0, 0, 0],
+            scaleXYZ: [1, 1, 1],
+          },
+        },
+      ],
+      subjects: [
+        {
+          ...player,
+          spawnSubjectOriginPositionMetersXYZ: [0, 1.05, 0],
+        },
+      ],
+      layout: { ...base.layout, layoutAssertions: [] },
+    };
+    const runtime = await createRuntime(executionPlan);
+
+    await runtime.runFixedInput({ actions: [], ticks: 10 });
+    expect(runtime.snapshot().subjectStatesByEntityId.player!.movementMedium).toBe(
+      "ground",
+    );
+
+    const jumped = await runtime.runFixedInput({ actions: ["jump"], ticks: 1 });
+    expect(jumped.subjectStatesByEntityId.player!.movementMedium).toBe("air");
+    expect(
+      jumped.subjectStatesByEntityId.player!.velocityMetersPerSecondXYZ[1],
+    ).toBeGreaterThan(1);
+    expect(jumped.subjectStatesByEntityId.player!.activeActionId).toBe("jump");
+
     await runtime.dispose();
   });
 

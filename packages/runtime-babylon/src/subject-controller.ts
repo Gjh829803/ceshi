@@ -116,6 +116,10 @@ export class SubjectController {
     return this.motionKernel.movementMedium;
   }
 
+  get hasPendingInitialGroundSupport(): boolean {
+    return this.motionKernel.hasPendingInitialGroundSupport;
+  }
+
   get facingYawRadians(): number {
     return this.motionKernel.facingYawRadians;
   }

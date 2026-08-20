@@ -2,6 +2,7 @@ import { readFile } from "node:fs/promises";
 import { createRequire } from "node:module";
 
 import { NullEngine } from "@babylonjs/core/Engines/nullEngine.pure.js";
+import { isNil } from "lodash-es";
 import { describe, expect, it } from "vitest";
 
 import { loadAuthoringScene } from "../../../apps/playground/src/authoring-loader";
@@ -270,6 +271,48 @@ describe("capability package runtime smoke tests", () => {
       }
     },
   );
+
+  it("keeps the capability camera frozen across render-only paused frames", async () => {
+    const loaded = await loadAuthoringScene(
+      async () => new Response(JSON.stringify(createValidAuthoringSpec())),
+      {
+        subjectDefinitionRef:
+          "worldkit://subject-definition/animal.quadruped.forward-steer@1",
+      },
+    );
+    if (!loaded.ok || isNil(loaded.executionPlan)) {
+      throw new Error(
+        `Capability package failed to load: ${JSON.stringify(loaded.diagnostics)}`,
+      );
+    }
+    const runtime = await BabylonWorldRuntime.create({
+      executionPlan: loaded.executionPlan,
+      havokWasmBinary,
+      engineFactory: () =>
+        new NullEngine({
+          renderWidth: 640,
+          renderHeight: 360,
+          textureSize: 512,
+          deterministicLockstep: true,
+          lockstepMaxSteps: 4,
+        }),
+    });
+    try {
+      runtime.setCameraPreference("worldkit://camera-profile/orbit.medium@1");
+      runtime.adjustCameraView({
+        yawDeltaRadians: 0.8,
+        pitchDeltaRadians: 0.25,
+        zoomDeltaMeters: 1.5,
+      });
+      const beforeRender = runtime.snapshot().camera;
+
+      for (let frame = 0; frame < 12; frame += 1) runtime.renderFrame();
+
+      expect(runtime.snapshot().camera).toEqual(beforeRender);
+    } finally {
+      await runtime.dispose();
+    }
+  });
 
   it.each(NON_FLIGHT_WHITEBOX_PACKAGES)(
     "applies unsupported gravity to %s instead of hovering",

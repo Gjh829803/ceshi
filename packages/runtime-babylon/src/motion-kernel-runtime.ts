@@ -244,6 +244,10 @@ export class MotionKernelRuntimeV1 {
     return this.currentMovementMedium;
   }
 
+  get hasPendingInitialGroundSupport(): boolean {
+    return this.initialGroundSupportPending;
+  }
+
   get facingYawRadians(): number {
     return this.yawRadians;
   }

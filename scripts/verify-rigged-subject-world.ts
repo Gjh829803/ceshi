@@ -548,7 +548,11 @@ async function verifyBrowser(
       }
     }
 
-    const isolationBefore = await page.evaluate(() => window.__WORLDKIT__!.reset());
+    const isolationBefore = await page.evaluate(async () => {
+      const api = window.__WORLDKIT__!;
+      api.reset();
+      return api.runFixedInput([{ actions: [], ticks: 1 }]);
+    });
     const receipt = await page.evaluate(
       ({ controllerId, expectedControlledEntityId, controlledEntityId }) =>
         window.__WORLDKIT__!.bindControl({
