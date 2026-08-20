@@ -63,8 +63,8 @@ describe("loadAuthoringScene", () => {
         }).transform.positionMetersXYZ,
       ),
     ).toEqual([
-      [-3, 0, 30],
-      [3, 0, 30],
+      [-3, -0.976004939803828, 30],
+      [3, -0.9764188420353316, 30],
     ]);
     expect(source.startup).toEqual({
       controlledEntityId: "rigged-primary",

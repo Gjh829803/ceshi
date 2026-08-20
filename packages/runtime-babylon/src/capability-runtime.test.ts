@@ -85,12 +85,27 @@ const CAMERA_PROFILES = [
   ],
 ] as const;
 
+function createFlatTerrainCapabilitySpec() {
+  const spec = createValidAuthoringSpec();
+  const terrain = spec.nodes.find((node) => node.kind === "terrain");
+  if (terrain?.kind !== "terrain") {
+    throw new Error("Capability fixture terrain is missing.");
+  }
+  terrain.components.terrain.source = {
+    kind: "procedural",
+    relief: "flat",
+    baseHeightMeters: 0,
+    amplitudeMeters: 0,
+  };
+  return spec;
+}
+
 describe("capability package runtime smoke tests", () => {
   it("loads the locked 25-clip G Bot package into a live Runtime", async () => {
     const subjectDefinitionRef =
       "worldkit://subject-definition/humanoid.g-bot.ground@1";
     const loaded = await loadAuthoringScene(
-      async () => new Response(JSON.stringify(createValidAuthoringSpec())),
+      async () => new Response(JSON.stringify(createFlatTerrainCapabilitySpec())),
       { subjectDefinitionRef },
     );
     if (!loaded.ok || loaded.executionPlan === undefined) {
@@ -199,7 +214,7 @@ describe("capability package runtime smoke tests", () => {
     "runs %s through its committed Kernel, Camera Director and H01-H09 harness",
     async (subjectDefinitionRef, motionKernelRef) => {
       const loaded = await loadAuthoringScene(
-        async () => new Response(JSON.stringify(createValidAuthoringSpec())),
+        async () => new Response(JSON.stringify(createFlatTerrainCapabilitySpec())),
         { subjectDefinitionRef },
       );
       if (!loaded.ok || loaded.executionPlan === undefined) {
@@ -274,7 +289,7 @@ describe("capability package runtime smoke tests", () => {
 
   it("keeps the capability camera frozen across render-only paused frames", async () => {
     const loaded = await loadAuthoringScene(
-      async () => new Response(JSON.stringify(createValidAuthoringSpec())),
+      async () => new Response(JSON.stringify(createFlatTerrainCapabilitySpec())),
       {
         subjectDefinitionRef:
           "worldkit://subject-definition/animal.quadruped.forward-steer@1",
@@ -318,7 +333,7 @@ describe("capability package runtime smoke tests", () => {
     "applies unsupported gravity to %s instead of hovering",
     async (subjectDefinitionRef) => {
       const loaded = await loadAuthoringScene(
-        async () => new Response(JSON.stringify(createValidAuthoringSpec())),
+        async () => new Response(JSON.stringify(createFlatTerrainCapabilitySpec())),
         { subjectDefinitionRef },
       );
       if (!loaded.ok || loaded.executionPlan === undefined) {
@@ -368,7 +383,7 @@ describe("capability package runtime smoke tests", () => {
 
   it("executes a switched Profile from its locked Kernel descriptor instead of parsing its Ref", async () => {
     const loaded = await loadAuthoringScene(
-      async () => new Response(JSON.stringify(createValidAuthoringSpec())),
+      async () => new Response(JSON.stringify(createFlatTerrainCapabilitySpec())),
       {
         subjectDefinitionRef:
           "worldkit://subject-definition/vehicle.four-wheel.arcade@1",
@@ -431,7 +446,7 @@ describe("capability package runtime smoke tests", () => {
 
   it("fires one forward-steer jump until the held action is released", async () => {
     const loaded = await loadAuthoringScene(
-      async () => new Response(JSON.stringify(createValidAuthoringSpec())),
+      async () => new Response(JSON.stringify(createFlatTerrainCapabilitySpec())),
       {
         subjectDefinitionRef:
           "worldkit://subject-definition/animal.quadruped.forward-steer@1",

@@ -99,7 +99,7 @@ const gBotSubjectAssetBytes = new Uint8Array(
 describe("Babylon terrain surface", () => {
   it("samples the canonical rendered triangle across an asymmetric saddle cell", () => {
     const terrain = {
-      ...createRiggedExecutionPlan().terrain,
+      ...createFlatRiggedExecutionPlan().terrain,
       centerMetersXZ: [0, 0] as const,
       sizeMetersXZ: [2, 2] as const,
       resolutionCellsXZ: [2, 2] as const,
@@ -119,6 +119,19 @@ const gBotAuthoringSpec = JSON.parse(
     "utf8",
   ),
 ) as AuthoringSpecV3;
+
+describe("Babylon runtime fixture compilation", () => {
+  it("keeps the real G Bot authored heightfield non-flat", () => {
+    const executionPlan = compileExecutionPlan(structuredClone(gBotAuthoringSpec));
+    const uniqueHeights = new Set(executionPlan.terrain.heightSamplesMeters);
+
+    expect(uniqueHeights.size).toBeGreaterThan(1);
+    expect(sampleExecutionTerrainHeight(executionPlan.terrain, -2, 18)).toBeCloseTo(
+      0.4327890520288841,
+      12,
+    );
+  });
+});
 
 const goldenSubjectAssetDescriptor = {
   subjectAssetRef: "worldkit://subject-asset/humanoid.golden@1",
@@ -428,8 +441,27 @@ function moveRightForTicks(tickCount: number): FixedInputV1 {
 }
 
 function compileExecutionPlan(spec: AuthoringSpecV3): ExecutionPlanV4 {
-  const runtimeFixture = structuredClone(spec);
-  runtimeFixture.nodes = runtimeFixture.nodes.map((node) =>
+  const normalized = normalizeAuthoringSpec(spec);
+  if (
+    !normalized.ok ||
+    normalized.value === undefined ||
+    normalized.normalizedWorldIrHash === undefined
+  ) {
+    throw new Error(`Fixture normalize failed: ${JSON.stringify(normalized.diagnostics)}`);
+  }
+  const compiled = compileWorld({
+    normalizedWorldIr: normalized.value,
+    normalizedWorldIrHash: normalized.normalizedWorldIrHash,
+  });
+  if (!compiled.ok || compiled.executionPlan === undefined) {
+    throw new Error(`Fixture compile failed: ${JSON.stringify(compiled.diagnostics)}`);
+  }
+  return compiled.executionPlan;
+}
+
+function compileFlatTerrainExecutionPlan(spec: AuthoringSpecV3): ExecutionPlanV4 {
+  const flatTerrainSpec = structuredClone(spec);
+  flatTerrainSpec.nodes = flatTerrainSpec.nodes.map((node) =>
     node.kind === "terrain" &&
       node.components.terrain.source.kind === "procedural"
       ? {
@@ -448,34 +480,19 @@ function compileExecutionPlan(spec: AuthoringSpecV3): ExecutionPlanV4 {
         }
       : node,
   );
-  const normalized = normalizeAuthoringSpec(runtimeFixture);
-  if (
-    !normalized.ok ||
-    normalized.value === undefined ||
-    normalized.normalizedWorldIrHash === undefined
-  ) {
-    throw new Error(`Fixture normalize failed: ${JSON.stringify(normalized.diagnostics)}`);
-  }
-  const compiled = compileWorld({
-    normalizedWorldIr: normalized.value,
-    normalizedWorldIrHash: normalized.normalizedWorldIrHash,
-  });
-  if (!compiled.ok || compiled.executionPlan === undefined) {
-    throw new Error(`Fixture compile failed: ${JSON.stringify(compiled.diagnostics)}`);
-  }
-  return compiled.executionPlan;
+  return compileExecutionPlan(flatTerrainSpec);
 }
 
-function createExecutionPlan(
+function createFlatPackageExecutionPlan(
   mutator?: (spec: AuthoringSpecV3) => void,
 ): ExecutionPlanV4 {
   const spec = createValidPackageSubjectWorld();
   mutator?.(spec);
-  return compileExecutionPlan(spec);
+  return compileFlatTerrainExecutionPlan(spec);
 }
 
 async function createRuntime(
-  executionPlan = createExecutionPlan(),
+  executionPlan: ExecutionPlanV4,
   options: Pick<
     BabylonWorldRuntimeOptions,
     "engineFactory" | "subjectAssetResolver" | "subjectAssetCacheOptions"
@@ -496,12 +513,16 @@ async function createRuntime(
   });
 }
 
-function createRiggedExecutionPlan(): ExecutionPlanV4 {
-  return compileExecutionPlan(createValidRiggedPackageSubjectWorld());
+async function createFlatPackageRuntime(): Promise<BabylonWorldRuntime> {
+  return createRuntime(createFlatPackageExecutionPlan());
+}
+
+function createFlatRiggedExecutionPlan(): ExecutionPlanV4 {
+  return compileFlatTerrainExecutionPlan(createValidRiggedPackageSubjectWorld());
 }
 
 function createTwoRiggedSubjectExecutionPlan(): ExecutionPlanV4 {
-  const executionPlan = createRiggedExecutionPlan();
+  const executionPlan = createFlatRiggedExecutionPlan();
   const player = executionPlan.subjects[0]!;
   return {
     ...executionPlan,
@@ -530,7 +551,7 @@ async function expectRiggedRuntimeFailure(
 }
 
 async function createRiggedRuntime(
-  executionPlan = createRiggedExecutionPlan(),
+  executionPlan = createFlatRiggedExecutionPlan(),
 ): Promise<BabylonWorldRuntime> {
   return createRuntime(executionPlan, {
     subjectAssetResolver: createMemoryResolver(goldenSubjectAssetBytes),
@@ -560,14 +581,14 @@ async function createRuntimeWithPackageSubject(): Promise<{
   executionPlan: ExecutionPlanV4;
   debug: RuntimeDebugProbe;
 }> {
-  const executionPlan = createExecutionPlan();
+  const executionPlan = createFlatPackageExecutionPlan();
   const runtime = await createRuntime(executionPlan);
   return { runtime, executionPlan, debug: createRuntimeDebugProbe(runtime) };
 }
 
 describe("BabylonWorldRuntime", () => {
   it("initializes a right-handed Babylon scene with Havok from ExecutionPlanV4", async () => {
-    const runtime = await createRuntime();
+    const runtime = await createFlatPackageRuntime();
 
     expect(runtime.snapshot()).toMatchObject({
       runtimeBackend: "babylon-havok",
@@ -609,7 +630,7 @@ describe("BabylonWorldRuntime", () => {
   });
 
   it("rejects a tampered frozen support assertion and cleans initialized resources", async () => {
-    const executionPlan = createExecutionPlan();
+    const executionPlan = createFlatPackageExecutionPlan();
     const wallPlacement = executionPlan.layout.placementsByEntityId["wall-east"]!;
     const tamperedPlan: ExecutionPlanV4 = {
       ...executionPlan,
@@ -662,7 +683,7 @@ describe("BabylonWorldRuntime", () => {
   });
 
   it("rejects a tampered frozen minimum-clearance assertion", async () => {
-    const executionPlan = createExecutionPlan();
+    const executionPlan = createFlatPackageExecutionPlan();
     const wallPlacement = executionPlan.layout.placementsByEntityId["wall-east"]!;
     const spawnPlacement = executionPlan.layout.placementsByEntityId["spawn-main"]!;
     const tamperedPlan: ExecutionPlanV4 = {
@@ -705,7 +726,7 @@ describe("BabylonWorldRuntime", () => {
   });
 
   it("revalidates multi-axis layout bounds in the rendered Euler composition order", async () => {
-    const base = createExecutionPlan();
+    const base = createFlatPackageExecutionPlan();
     const wall = base.objects.find((object) => object.entityId === "wall-east")!;
     const placement = base.layout.placementsByEntityId[wall.entityId]!;
     const transform = {
@@ -767,7 +788,7 @@ describe("BabylonWorldRuntime", () => {
   });
 
   it("initializes and resets Subject yaw from the solved spawn facing", async () => {
-    const base = createExecutionPlan();
+    const base = createFlatPackageExecutionPlan();
     const executionPlan: ExecutionPlanV4 = {
       ...base,
       subjects: base.subjects.map((subject) =>
@@ -799,7 +820,7 @@ describe("BabylonWorldRuntime", () => {
   });
 
   it("creates and snapshots every compiled Subject independently", async () => {
-    const runtime = await createRuntime();
+    const runtime = await createFlatPackageRuntime();
 
     expect(Object.keys(runtime.snapshot().subjectStatesByEntityId).sort()).toEqual([
       "pack-animal-a",
@@ -873,7 +894,7 @@ describe("BabylonWorldRuntime", () => {
           }
         : node,
     );
-    const baseExecutionPlan = compileExecutionPlan(spec);
+    const baseExecutionPlan = compileFlatTerrainExecutionPlan(spec);
     const primarySubject = baseExecutionPlan.subjects[0]!;
     const executionPlan: ExecutionPlanV4 = {
       ...baseExecutionPlan,
@@ -1246,7 +1267,7 @@ describe("BabylonWorldRuntime", () => {
           "hips";
       },
     ]) {
-      const executionPlan = createRiggedExecutionPlan();
+      const executionPlan = createFlatRiggedExecutionPlan();
       mutateRig(executionPlan);
       await expectRiggedRuntimeFailure(
         executionPlan,
@@ -1267,7 +1288,7 @@ describe("BabylonWorldRuntime", () => {
         binding.blendDurationSeconds = -1;
       },
     ]) {
-      const executionPlan = createRiggedExecutionPlan();
+      const executionPlan = createFlatRiggedExecutionPlan();
       mutateBinding(
         executionPlan.animationSets[0]!.animationBindings[0] as unknown as Record<
           string,
@@ -1315,7 +1336,7 @@ describe("BabylonWorldRuntime", () => {
       });
 
       await expectRiggedRuntimeFailure(
-        createRiggedExecutionPlan(),
+        createFlatRiggedExecutionPlan(),
         "SUBJECT_ASSET_ROOT_MOTION_UNSUPPORTED",
       );
     }
@@ -1394,7 +1415,7 @@ describe("BabylonWorldRuntime", () => {
     ];
 
     for (const testCase of cases) {
-      const executionPlan = createRiggedExecutionPlan();
+      const executionPlan = createFlatRiggedExecutionPlan();
       testCase.mutatePlan?.(executionPlan);
       mutateNextLoadedContainer(testCase.mutateContainer);
       await expectRiggedRuntimeFailure(
@@ -1410,13 +1431,13 @@ describe("BabylonWorldRuntime", () => {
     });
 
     await expectRiggedRuntimeFailure(
-      createRiggedExecutionPlan(),
+      createFlatRiggedExecutionPlan(),
       "SUBJECT_ASSET_RIG_INCOMPATIBLE",
     );
   });
 
   it("uses the closed Socket diagnostic when a Bone Socket cannot resolve its semantic Bone", async () => {
-    const executionPlan = createRiggedExecutionPlan();
+    const executionPlan = createFlatRiggedExecutionPlan();
     const subject = executionPlan.subjects[0]!;
     const boneSocket = subject.sockets.find((socket) => socket.kind === "bone")!;
     (boneSocket as { boneId: string }).boneId = "unmapped.bone";
@@ -1443,7 +1464,7 @@ describe("BabylonWorldRuntime", () => {
         return instance;
       });
     });
-    const executionPlan = createRiggedExecutionPlan();
+    const executionPlan = createFlatRiggedExecutionPlan();
     (executionPlan.rigProfiles[0] as { skeletonRootBoneName: string }).skeletonRootBoneName =
       "hips";
     const engine = new NullEngine();
@@ -1484,7 +1505,7 @@ describe("BabylonWorldRuntime", () => {
   });
 
   it("sanitizes rigged Visual cleanup failures after attempting every sibling", async () => {
-    const basePlan = createRiggedExecutionPlan();
+    const basePlan = createFlatRiggedExecutionPlan();
     const baseSubject = basePlan.subjects[0]!;
     const executionPlan: ExecutionPlanV4 = {
       ...basePlan,
@@ -1609,7 +1630,7 @@ describe("BabylonWorldRuntime", () => {
   });
 
   it("continues every Runtime cleanup after an aggregate disposal failure", async () => {
-    const runtime = await createRuntime();
+    const runtime = await createFlatPackageRuntime();
     const internals = runtime as unknown as {
       aggregates: Array<{ dispose(): void }>;
       ownedTerrainShape: { dispose(): void };
@@ -1658,14 +1679,14 @@ describe("BabylonWorldRuntime", () => {
   });
 
   it("uses run speed only for horizontal non-water movement", async () => {
-    const groundPlan = createExecutionPlan();
+    const groundPlan = createFlatPackageExecutionPlan();
     const walk = await movementResult(groundPlan, ["move-right"]);
     const run = await movementResult(groundPlan, ["move-right", "run"]);
     expect(walk.movementMedium).toBe("ground");
     expect(run.movementMedium).toBe("ground");
     expect(run.deltaXMeters).toBeGreaterThan(walk.deltaXMeters * 1.25);
 
-    const waterPlan = createExecutionPlan((spec) => {
+    const waterPlan = createFlatPackageExecutionPlan((spec) => {
       const water = spec.nodes.find((node) => node.kind === "water");
       if (water?.kind !== "water") throw new Error("Fixture water node missing.");
       water.components.water.boundary = {
@@ -1682,7 +1703,7 @@ describe("BabylonWorldRuntime", () => {
   });
 
   it("falls from an unsupported airborne spawn and lands on the terrain", async () => {
-    const base = createExecutionPlan();
+    const base = createFlatPackageExecutionPlan();
     const player = base.subjects.find((subject) => subject.entityId === "player")!;
     const executionPlan: ExecutionPlanV4 = {
       ...base,
@@ -1717,7 +1738,7 @@ describe("BabylonWorldRuntime", () => {
   });
 
   it("falls to lower terrain after walking off a raised collider", async () => {
-    const base = createExecutionPlan();
+    const base = createFlatPackageExecutionPlan();
     const player = base.subjects.find((subject) => subject.entityId === "player")!;
     const wall = base.objects.find((object) => object.entityId === "wall-east")!;
     const executionPlan: ExecutionPlanV4 = {
@@ -1762,7 +1783,7 @@ describe("BabylonWorldRuntime", () => {
   });
 
   it("uses Havok support rather than bilinear terrain height for ground and jump state", async () => {
-    const base = createExecutionPlan();
+    const base = createFlatPackageExecutionPlan();
     const player = base.subjects.find((subject) => subject.entityId === "player")!;
     const executionPlan: ExecutionPlanV4 = {
       ...base,
@@ -1802,7 +1823,7 @@ describe("BabylonWorldRuntime", () => {
   });
 
   it("keeps asymmetric square heightfield physics aligned with rendered XZ samples", async () => {
-    const base = createExecutionPlan();
+    const base = createFlatPackageExecutionPlan();
     const executionPlan: ExecutionPlanV4 = {
       ...base,
       terrain: {
@@ -1833,7 +1854,7 @@ describe("BabylonWorldRuntime", () => {
   });
 
   it("keeps rectangular terrain mesh physics aligned with rendered XZ samples", async () => {
-    const base = createExecutionPlan();
+    const base = createFlatPackageExecutionPlan();
     const executionPlan: ExecutionPlanV4 = {
       ...base,
       terrain: {
@@ -1864,7 +1885,7 @@ describe("BabylonWorldRuntime", () => {
   });
 
   it("applies gravity to an uncontrolled airborne Subject while keeping it idle", async () => {
-    const base = createExecutionPlan();
+    const base = createFlatPackageExecutionPlan();
     const player = base.subjects.find((subject) => subject.entityId === "player")!;
     const executionPlan: ExecutionPlanV4 = {
       ...base,
@@ -1900,7 +1921,7 @@ describe("BabylonWorldRuntime", () => {
   });
 
   it("settles an uncontrolled Subject spawned just above terrain", async () => {
-    const base = createExecutionPlan();
+    const base = createFlatPackageExecutionPlan();
     const player = base.subjects.find((subject) => subject.entityId === "player")!;
     const executionPlan: ExecutionPlanV4 = {
       ...base,
@@ -1937,7 +1958,7 @@ describe("BabylonWorldRuntime", () => {
   });
 
   it("fires one jump per press while the jump action remains held", async () => {
-    const runtime = await createRuntime();
+    const runtime = await createFlatPackageRuntime();
     try {
       let grounded = false;
       for (let tick = 0; tick < 240; tick += 1) {
@@ -1964,7 +1985,7 @@ describe("BabylonWorldRuntime", () => {
   });
 
   it("switches the default Controller atomically and moves only the committed Subject", async () => {
-    const runtime = await createRuntime();
+    const runtime = await createFlatPackageRuntime();
     const before = runtime.snapshot();
 
     expect(
@@ -2016,7 +2037,7 @@ describe("BabylonWorldRuntime", () => {
   });
 
   it("rejects stale, unknown Controller, and unknown Subject bindings", async () => {
-    const runtime = await createRuntime();
+    const runtime = await createFlatPackageRuntime();
 
     expect(
       runtime.bindControl({
@@ -2053,7 +2074,7 @@ describe("BabylonWorldRuntime", () => {
   });
 
   it("moves by semantic fixed input but cannot pass through a fixed wall", async () => {
-    const executionPlan = createExecutionPlan((spec) => {
+    const executionPlan = createFlatPackageExecutionPlan((spec) => {
       const wall = spec.resources.prototypes[0];
       if (wall?.primitive !== "box") {
         throw new Error("Fixture box wall Prototype missing.");
@@ -2102,7 +2123,7 @@ describe("BabylonWorldRuntime", () => {
   });
 
   it("changes movement medium in declared swimmable water", async () => {
-    const executionPlan = createExecutionPlan((spec) => {
+    const executionPlan = createFlatPackageExecutionPlan((spec) => {
       const water = spec.nodes.find((node) => node.kind === "water");
       if (water?.kind !== "water") throw new Error("Fixture water node missing.");
       water.components.water.boundary = {
@@ -2121,7 +2142,7 @@ describe("BabylonWorldRuntime", () => {
   });
 
   it("keeps a Subject on a pier above swimmable water grounded and jumpable", async () => {
-    const base = createExecutionPlan();
+    const base = createFlatPackageExecutionPlan();
     const player = base.subjects.find((subject) => subject.entityId === "player")!;
     const wall = base.objects.find((object) => object.entityId === "wall-east")!;
     const water = base.waters[0]!;

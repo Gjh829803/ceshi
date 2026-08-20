@@ -1,3 +1,5 @@
+import { readFile } from "node:fs/promises";
+
 import { describe, expect, it } from "vitest";
 
 import {
@@ -173,6 +175,45 @@ function normalizeSolvedLayoutWorldV3() {
   }
   return result;
 }
+
+const PRODUCT_FIXED_SPAWN_CASES = [
+  {
+    label: "G Bot",
+    path: "../../../examples/authoring/g-bot-subject-world.json",
+    spawns: [
+      {
+        anchorEntityId: "spawn-g-bot-primary",
+        subjectEntityId: "g-bot-primary",
+        authoredPositionMetersXYZ: [-2, 0.4327890520288841, 18],
+        normalizedPositionMetersXYZ: [-2, 0.433, 18],
+      },
+      {
+        anchorEntityId: "spawn-g-bot-secondary",
+        subjectEntityId: "g-bot-secondary",
+        authoredPositionMetersXYZ: [2, 0.4328405709186983, 18],
+        normalizedPositionMetersXYZ: [2, 0.433, 18],
+      },
+    ],
+  },
+  {
+    label: "rigged Subject",
+    path: "../../../examples/authoring/rigged-subject-world.json",
+    spawns: [
+      {
+        anchorEntityId: "spawn-rigged-primary",
+        subjectEntityId: "rigged-primary",
+        authoredPositionMetersXYZ: [-3, -0.976004939803828, 30],
+        normalizedPositionMetersXYZ: [-3, -0.976, 30],
+      },
+      {
+        anchorEntityId: "spawn-rigged-secondary",
+        subjectEntityId: "rigged-secondary",
+        authoredPositionMetersXYZ: [3, -0.9764188420353316, 30],
+        normalizedPositionMetersXYZ: [3, -0.976, 30],
+      },
+    ],
+  },
+] as const;
 
 describe("compileWorld", () => {
   it("compiles one rigged Subject into ref-only parts and minimal resource tables", () => {
@@ -885,6 +926,67 @@ describe("compileWorld", () => {
     expect(subject?.spawnSubjectOriginPositionMetersXYZ).toEqual([0, 7.25, 0]);
     expect(subject?.spawnSubjectFacingRadians).toBe(Math.PI / 2);
   });
+
+  it.each(PRODUCT_FIXED_SPAWN_CASES)(
+    "keeps $label fixed spawn Anchors at their absolute terrain-surface positions",
+    async ({ path, spawns }) => {
+      const spec = JSON.parse(
+        await readFile(new URL(path, import.meta.url), "utf8"),
+      ) as AuthoringSpecV3;
+      const normalized = normalizeAuthoringSpec(spec);
+      if (
+        !normalized.ok ||
+        normalized.value === undefined ||
+        normalized.normalizedWorldIrHash === undefined
+      ) {
+        throw new Error(
+          `Product fixture did not normalize: ${JSON.stringify(normalized.diagnostics)}`,
+        );
+      }
+      const compiled = compileWorld({
+        normalizedWorldIr: normalized.value,
+        normalizedWorldIrHash: normalized.normalizedWorldIrHash,
+      });
+      const executionPlan = compiled.executionPlan!;
+
+      for (const expected of spawns) {
+        const authoredAnchor = spec.nodes.find(
+          (node) => node.kind === "anchor" && node.id === expected.anchorEntityId,
+        );
+        const anchor = normalized.value.nodes.find(
+          (node) => node.kind === "anchor" && node.id === expected.anchorEntityId,
+        );
+        const subject = executionPlan.subjects.find(
+          (candidate) => candidate.entityId === expected.subjectEntityId,
+        );
+        expect(authoredAnchor?.kind).toBe("anchor");
+        if (
+          authoredAnchor?.kind !== "anchor" ||
+          authoredAnchor.placement.kind !== "fixed"
+        ) {
+          continue;
+        }
+        expect(authoredAnchor.placement.transform.positionMetersXYZ).toEqual(
+          expected.authoredPositionMetersXYZ,
+        );
+        expect(anchor?.kind).toBe("anchor");
+        if (anchor?.kind !== "anchor") continue;
+        expect(anchor.transform.positionMetersXYZ).toEqual(
+          expected.normalizedPositionMetersXYZ,
+        );
+        expect(
+          sampleTerrainHeight(executionPlan.terrain, [
+            expected.authoredPositionMetersXYZ[0],
+            expected.authoredPositionMetersXYZ[2],
+          ]),
+        ).toBeCloseTo(expected.authoredPositionMetersXYZ[1], 12);
+        expect(subject?.spawnSubjectOriginPositionMetersXYZ).toEqual(
+          expected.normalizedPositionMetersXYZ,
+        );
+        expect(subject?.spawnSubjectFacingRadians).toBe(0);
+      }
+    },
+  );
 
   it("projects forged nested IR objects explicitly and rejects a V3 IR hash mismatch", () => {
     const normalized = normalizeSolvedLayoutWorldV3();

@@ -89,7 +89,7 @@
       "placement": {
         "kind": "fixed",
         "transform": {
-          "positionMetersXYZ": [-2, 0, 18]
+          "positionMetersXYZ": [-2, 0.4327890520288841, 18]
         }
       }
     },
@@ -102,7 +102,7 @@
       "placement": {
         "kind": "fixed",
         "transform": {
-          "positionMetersXYZ": [2, 0, 18]
+          "positionMetersXYZ": [2, 0.4328405709186983, 18]
         }
       }
     },
