@@ -140,6 +140,16 @@ describe("capability-driven subject registry", () => {
     }
   });
 
+  it("publishes relationship profiles as reserved until their runtime behavior exists", () => {
+    expect([
+      "worldkit://relationship-profile/mount.reserved@1",
+      "worldkit://relationship-profile/seat.driver@1",
+      "worldkit://relationship-profile/tether.standard@1",
+    ].map((resourceRef) =>
+      builtInSubjectResourceRegistry.resolveRelationshipProfile(resourceRef)?.runtimeStatus
+    )).toEqual(["reserved", "reserved", "reserved"]);
+  });
+
   it("locks the current 25-clip G Bot artifact and keeps runtime state binding explicitly unready", () => {
     const asset = builtInSubjectResourceRegistry.resolveSubjectAsset(
       "worldkit://subject-asset/actor.humanoid.g-bot@1",

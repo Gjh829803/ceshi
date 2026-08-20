@@ -10,6 +10,10 @@ import {
   sha256,
   verifyFrozenWorldPlan,
 } from "./lib/plan-lock.js";
+import {
+  validatePersistedCompositionReport,
+  type PlanningManifest,
+} from "./lib/composition-gate.js";
 
 interface Options {
   sceneId: string;
@@ -104,7 +108,7 @@ async function main() {
       "manifest.json",
       json({
         artifactVersion: 1,
-        workflowStage: "verified",
+        workflowStage: "whitebox-built",
         sceneId: definition.id,
         specHash: artifacts.topDown.specHash,
         frozenPlanSpecSha256: planLock.specSha256,
@@ -126,7 +130,40 @@ async function main() {
   if (options.check) {
     for (const [name, expected] of files) {
       const actual = await readFile(path.join(outputDirectory, name), "utf8");
-      if (actual !== expected) throw new Error(`Stale planning artifact: ${name}`);
+      if (actual === expected) continue;
+      if (name !== "manifest.json") throw new Error(`Stale planning artifact: ${name}`);
+
+      const actualManifest = JSON.parse(actual) as PlanningManifest;
+      const expectedManifest = JSON.parse(expected) as PlanningManifest;
+      if (
+        actualManifest.workflowStage !== "verified" ||
+        JSON.stringify({ ...actualManifest, workflowStage: "whitebox-built" }) !==
+          JSON.stringify(expectedManifest)
+      ) {
+        throw new Error(`Stale planning artifact: ${name}`);
+      }
+      let report: unknown;
+      try {
+        report = JSON.parse(await readFile(path.join(
+          projectRoot,
+          "apps/playground/public/scene-plans",
+          options.sceneId,
+          "opening-composition-report.json",
+        ), "utf8"));
+      } catch {
+        report = undefined;
+      }
+      const composition = validatePersistedCompositionReport({
+        sceneId: options.sceneId,
+        worldSpec: scene.worldSpec,
+        frozenPlan: planLock,
+        planLockSha256,
+        planningManifest: actualManifest,
+        report,
+      });
+      if (!composition.ok) {
+        throw new Error(`${composition.code}: ${composition.message}`);
+      }
     }
     process.stdout.write(`PASS: ${options.sceneId} planning artifacts are current.\n`);
     return;

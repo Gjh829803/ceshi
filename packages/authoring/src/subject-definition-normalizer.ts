@@ -115,6 +115,23 @@ function normalizeCapabilityAssemblyV1(
       request.diagnostics,
     );
 
+  const unavailableRelationshipCapabilityRef = subject.relationshipCapabilityRefs.find(
+    (resourceRef) =>
+      resourceRef === "worldkit://capability/relationship.mount@1" ||
+      resourceRef === "worldkit://capability/relationship.seat@1" ||
+      resourceRef === "worldkit://capability/relationship.tether@1",
+  );
+  if (unavailableRelationshipCapabilityRef !== undefined) {
+    addError(
+      request.diagnostics,
+      "SUBJECT_CAPABILITY_UNSATISFIED",
+      request.instancePath,
+      `Relationship capability '${unavailableRelationshipCapabilityRef}' is unavailable in the canonical runtime.`,
+      { capabilityRef: unavailableRelationshipCapabilityRef, runtimeStatus: "reserved" },
+    );
+    return undefined;
+  }
+
   const defaultMotionProfile = registry.resolveMotionProfile(
     subject.profiles.motion.defaultMotionProfileRef,
   );
@@ -193,6 +210,9 @@ function normalizeCapabilityAssemblyV1(
     });
 
   const relationshipProfileRefs = subject.relationshipCapabilityRefs.flatMap((resourceRef) => {
+    if (resourceRef === "worldkit://capability/relationship.mount@1") {
+      return ["worldkit://relationship-profile/mount.reserved@1"];
+    }
     if (resourceRef === "worldkit://capability/relationship.seat@1") {
       return ["worldkit://relationship-profile/seat.driver@1"];
     }

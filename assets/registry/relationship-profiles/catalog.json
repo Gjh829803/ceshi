@@ -6,7 +6,7 @@
     "resourceRef": "worldkit://relationship-profile/seat.driver@1",
     "authoringAvailability": "experimental",
     "relationshipType": "seat",
-    "runtimeStatus": "implemented",
+    "runtimeStatus": "reserved",
     "requiredSourceSocketIds": ["SeatAlignment"],
     "requiredTargetSocketIds": ["DriverSeat"],
     "controlTransferPolicy": "transfer-to-target",
@@ -14,7 +14,7 @@
     "maximumDistanceMeters": 3,
     "aiMetadata": {
       "displayName": "R01 Driver Seat",
-      "description": "Direct seat alignment and control transfer for whitebox PoCs.",
+      "description": "Frozen seat alignment and control-transfer vocabulary; runtime behavior is reserved in this phase.",
       "semanticTags": ["driver", "seat"]
     }
   },
@@ -25,7 +25,7 @@
     "resourceRef": "worldkit://relationship-profile/tether.standard@1",
     "authoringAvailability": "experimental",
     "relationshipType": "tether",
-    "runtimeStatus": "implemented",
+    "runtimeStatus": "reserved",
     "requiredSourceSocketIds": ["TetherSource"],
     "requiredTargetSocketIds": ["TetherTarget"],
     "controlTransferPolicy": "keep-source",
@@ -33,7 +33,7 @@
     "maximumDistanceMeters": 4,
     "aiMetadata": {
       "displayName": "R03 Standard Tether",
-      "description": "Bounded anchor-to-anchor relationship for the paraglider PoC.",
+      "description": "Frozen bounded tether vocabulary for composite subjects; runtime behavior is reserved in this phase.",
       "semanticTags": ["constraint", "tether"]
     }
   },

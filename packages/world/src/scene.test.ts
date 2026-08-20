@@ -224,4 +224,110 @@ describe("outdoor scene authoring", () => {
 
     expect(() => compileOutdoorScene(scene)).toThrow(/climb limit/);
   });
+
+  it("rejects a spawn inside blocked water with a stable diagnostic", () => {
+    const scene = defineOutdoorScene({
+      id: "blocked-water-spawn",
+      build(world) {
+        const terrain = world.terrain.rolling({
+          id: "ground",
+          size: [40, 40],
+          segments: [8, 8],
+          amplitude: 0,
+          frequency: 0.1,
+        });
+        world.water.lake({
+          id: "blocked-lake",
+          terrain,
+          center: [0, 0],
+          radius: [5, 4],
+          depth: 2,
+          traversal: "blocked",
+        });
+        world.player.spawn({ terrain, at: [0, 0] });
+      },
+    });
+
+    try {
+      compileOutdoorScene(scene);
+      throw new Error("Expected blocked water spawn to fail.");
+    } catch (error) {
+      expect(error).toBeInstanceOf(SceneCompilationError);
+      expect((error as SceneCompilationError).diagnostics).toContainEqual(
+        expect.objectContaining({
+          code: "SPAWN_IN_BLOCKED_WATER",
+          entityId: "player",
+          featureId: "blocked-lake",
+        }),
+      );
+    }
+  });
+
+  it("allows a spawn inside an explicitly walkable water surface", () => {
+    const scene = defineOutdoorScene({
+      id: "walkable-water-spawn",
+      build(world) {
+        const terrain = world.terrain.rolling({
+          id: "ground",
+          size: [40, 40],
+          segments: [8, 8],
+          amplitude: 0,
+          frequency: 0.1,
+        });
+        world.water.lake({
+          id: "walkable-lake",
+          terrain,
+          center: [0, 0],
+          radius: [5, 4],
+          depth: 2,
+          traversal: "walkable",
+        });
+        world.player.spawn({ terrain, at: [0, 0] });
+      },
+    });
+
+    expect(compileOutdoorScene(scene).diagnostics).not.toContainEqual(
+      expect.objectContaining({ code: "SPAWN_IN_BLOCKED_WATER" }),
+    );
+  });
+
+  it("rejects a spawn inside a static blocking landmark footprint", () => {
+    const scene = defineOutdoorScene({
+      id: "static-blocker-spawn",
+      build(world) {
+        const terrain = world.terrain.rolling({
+          id: "ground",
+          size: [40, 40],
+          segments: [8, 8],
+          amplitude: 0,
+          frequency: 0.1,
+        });
+        world.landmark.compound({
+          id: "blocking-post",
+          transform: { position: [0, 0, 0] },
+          children: [{
+            id: "post",
+            kind: "box",
+            size: [2, 3, 2],
+            transform: { position: [0, 1.5, 0] },
+          }],
+        });
+        world.player.spawn({ terrain, at: [0, 0] });
+      },
+    });
+
+    try {
+      compileOutdoorScene(scene);
+      throw new Error("Expected static blocker spawn to fail.");
+    } catch (error) {
+      expect(error).toBeInstanceOf(SceneCompilationError);
+      expect((error as SceneCompilationError).diagnostics).toContainEqual(
+        expect.objectContaining({
+          code: "SPAWN_INSIDE_STATIC_BLOCKER",
+          entityId: "player",
+          featureId: "blocking-post",
+        }),
+      );
+    }
+  });
 });

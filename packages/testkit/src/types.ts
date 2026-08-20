@@ -28,6 +28,36 @@ export interface SpawnCollider {
   isTrigger?: boolean;
 }
 
+export type SpawnFootprintBoundary =
+  | {
+      kind: "circle";
+      centerMetersXZ: readonly [x: number, z: number];
+      radiusMeters: number;
+    }
+  | {
+      kind: "ellipse";
+      centerMetersXZ: readonly [x: number, z: number];
+      radiusMetersXZ: readonly [x: number, z: number];
+    }
+  | {
+      kind: "polygon";
+      pointsMetersXZ: readonly (readonly [x: number, z: number])[];
+    };
+
+export interface SpawnWaterSurface {
+  entityId: EntityId;
+  featureId?: FeatureId;
+  boundary: SpawnFootprintBoundary;
+  traversalMode: "blocked" | "walkable" | "swimmable";
+}
+
+export interface SpawnStaticBlockingObject {
+  entityId: EntityId;
+  featureId?: FeatureId;
+  footprint: SpawnFootprintBoundary;
+  heightRangeMeters?: readonly [minimum: number, maximum: number];
+}
+
 export interface SpawnSafetyInput {
   entityId: EntityId;
   /** Player feet position in world space. */
@@ -38,6 +68,8 @@ export interface SpawnSafetyInput {
   };
   worldBounds?: Aabb;
   colliders?: readonly SpawnCollider[];
+  waterSurfaces?: readonly SpawnWaterSurface[];
+  staticBlockingObjects?: readonly SpawnStaticBlockingObject[];
   ground?: {
     heightAt(x: number, z: number): number | undefined;
     slopeDegreesAt?(x: number, z: number): number | undefined;

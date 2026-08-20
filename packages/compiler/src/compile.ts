@@ -13,6 +13,11 @@ import type {
   Vec2,
 } from "@whitebox-world/authoring";
 import { sha256CanonicalJson } from "@whitebox-world/protocol";
+import {
+  validateSpawnSafety,
+  type SpawnFootprintBoundary,
+  type SpawnStaticBlockingObject,
+} from "@whitebox-world/testkit";
 import { sampleTriangleHeightfieldSurface } from "@whitebox-world/terrain-surface";
 import type {
   CompileDiagnostic,
@@ -256,6 +261,131 @@ function compileObjectsV3(world: NormalizedWorldIRV3): ExecutionObjectV3[] {
       };
     })
     .sort((left, right) => left.entityId.localeCompare(right.entityId));
+}
+
+function staticObjectFootprintV3(
+  object: ExecutionObjectV3,
+): SpawnStaticBlockingObject | undefined {
+  const [rotationX, rotationY, rotationZ] = object.transform.rotationEulerRadiansXYZ;
+  if (Math.abs(rotationX) > 1e-8 || Math.abs(rotationZ) > 1e-8) return undefined;
+  const [scaleX, scaleY, scaleZ] = object.transform.scaleXYZ.map(Math.abs) as [
+    number,
+    number,
+    number,
+  ];
+  const [centerX, centerY, centerZ] = object.transform.positionMetersXYZ;
+  let footprint: SpawnFootprintBoundary;
+  let halfHeightMeters: number;
+  if (object.primitive.kind === "box") {
+    const halfX = object.primitive.sizeMetersXYZ[0] * scaleX / 2;
+    const halfZ = object.primitive.sizeMetersXYZ[2] * scaleZ / 2;
+    const cosine = Math.cos(rotationY);
+    const sine = Math.sin(rotationY);
+    footprint = {
+      kind: "polygon",
+      pointsMetersXZ: [
+        [-halfX, -halfZ],
+        [halfX, -halfZ],
+        [halfX, halfZ],
+        [-halfX, halfZ],
+      ].map(([x, z]) => [
+        centerX + x! * cosine - z! * sine,
+        centerZ + x! * sine + z! * cosine,
+      ] as const),
+    };
+    halfHeightMeters = object.primitive.sizeMetersXYZ[1] * scaleY / 2;
+  } else {
+    const radiusMeters = object.primitive.radiusMeters * Math.min(scaleX, scaleZ);
+    footprint = {
+      kind: "circle",
+      centerMetersXZ: [centerX, centerZ],
+      radiusMeters,
+    };
+    halfHeightMeters = object.primitive.kind === "sphere"
+      ? object.primitive.radiusMeters * scaleY
+      : object.primitive.heightMeters * scaleY / 2;
+  }
+  return {
+    entityId: object.entityId,
+    footprint,
+    heightRangeMeters: [centerY - halfHeightMeters, centerY + halfHeightMeters],
+  };
+}
+
+function validateCompiledSpawnFootprintsV3(
+  subjects: readonly ExecutionSubjectV3[],
+  waters: readonly ExecutionWaterV3[],
+  objects: readonly ExecutionObjectV3[],
+): CompileDiagnostic[] {
+  const diagnostics: CompileDiagnostic[] = [];
+  const blockers = objects
+    .filter((object) => object.collisionEnabled)
+    .flatMap((object) => {
+      const blocker = staticObjectFootprintV3(object);
+      return blocker === undefined ? [] : [blocker];
+    });
+  for (const subject of subjects) {
+    const spawnCapsuleFeetPositionMetersXYZ = [
+      subject.spawnSubjectOriginPositionMetersXYZ[0] +
+        subject.collider.centerOffsetFromSubjectOriginMetersXYZ[0],
+      subject.spawnSubjectOriginPositionMetersXYZ[1] +
+        subject.collider.centerOffsetFromSubjectOriginMetersXYZ[1] -
+        subject.collider.heightMeters / 2,
+      subject.spawnSubjectOriginPositionMetersXYZ[2] +
+        subject.collider.centerOffsetFromSubjectOriginMetersXYZ[2],
+    ] as const;
+    for (const water of waters) {
+      const result = validateSpawnSafety({
+        entityId: subject.entityId,
+        position: spawnCapsuleFeetPositionMetersXYZ,
+        capsule: {
+          radius: subject.collider.radiusMeters,
+          height: subject.collider.heightMeters,
+        },
+        waterSurfaces: [{
+          entityId: water.entityId,
+          boundary: water.boundary,
+          traversalMode: water.traversalMode,
+        }],
+      });
+      if (result.some((diagnostic) => diagnostic.code === "SPAWN_IN_BLOCKED_WATER")) {
+        diagnostics.push({
+          severity: "error",
+          code: "COMPILER_SPAWN_IN_BLOCKED_WATER",
+          instancePath: `/nodes/${subject.entityId}/spawnAnchorEntityId`,
+          message: `Subject '${subject.entityId}' spawn is inside blocked water '${water.entityId}'.`,
+          details: {
+            subjectEntityId: subject.entityId,
+            waterEntityId: water.entityId,
+          },
+        });
+      }
+    }
+    for (const blocker of blockers) {
+      const result = validateSpawnSafety({
+        entityId: subject.entityId,
+        position: spawnCapsuleFeetPositionMetersXYZ,
+        capsule: {
+          radius: subject.collider.radiusMeters,
+          height: subject.collider.heightMeters,
+        },
+        staticBlockingObjects: [blocker],
+      });
+      if (result.some((diagnostic) => diagnostic.code === "SPAWN_INSIDE_STATIC_BLOCKER")) {
+        diagnostics.push({
+          severity: "error",
+          code: "COMPILER_SPAWN_INSIDE_STATIC_BLOCKER",
+          instancePath: `/nodes/${subject.entityId}/spawnAnchorEntityId`,
+          message: `Subject '${subject.entityId}' spawn is inside static blocking object '${blocker.entityId}'.`,
+          details: {
+            subjectEntityId: subject.entityId,
+            objectEntityId: blocker.entityId,
+          },
+        });
+      }
+    }
+  }
+  return diagnostics;
 }
 
 interface CompiledSubjectsV3 {
@@ -522,9 +652,9 @@ function compileCapabilityAssemblyV1(
     };
   };
   const relationshipProfiles = assembly.relationshipProfiles.map((profile) => {
-    if (profile.relationshipType === "mount") {
+    if (profile.runtimeStatus !== "implemented" || profile.relationshipType === "mount") {
       throw new Error(
-        `NormalizedWorldIRV3 invariant violated: reserved Mount Profile '${profile.resourceRef}' cannot enter an Execution Plan.`,
+        `NormalizedWorldIRV3 invariant violated: reserved Relationship Profile '${profile.resourceRef}' cannot enter an Execution Plan.`,
       );
     }
     return {
@@ -910,6 +1040,14 @@ function compileWorldCore(input: CompileWorldCoreInput): CompileWorldCoreResult 
       colliderProfiles,
       resourceCost: subjectResourceCost,
     } = compileSubjectsV3(world);
+    const spawnDiagnostics = validateCompiledSpawnFootprintsV3(
+      subjects,
+      waters,
+      objects,
+    );
+    if (spawnDiagnostics.length > 0) {
+      return { ok: false, diagnostics: spawnDiagnostics };
+    }
     const cameraNode = findOnlyNodeV3(world.nodes, "camera");
     const terrainVertices =
       terrain.resolutionCellsXZ[0] * terrain.resolutionCellsXZ[1];

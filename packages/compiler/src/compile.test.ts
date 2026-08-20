@@ -927,6 +927,85 @@ describe("compileWorld", () => {
     expect(subject?.spawnSubjectFacingRadians).toBe(Math.PI / 2);
   });
 
+  it("rejects a Subject spawn inside blocked water", () => {
+    const spec = createValidAuthoringSpec();
+    const water = spec.nodes.find((node) => node.kind === "water");
+    const spawn = spec.nodes.find((node) => node.kind === "anchor" && node.id === "spawn-main");
+    if (water?.kind !== "water" || spawn?.kind !== "anchor" || spawn.placement.kind !== "fixed") {
+      throw new Error("Canonical blocked-water fixture is incomplete.");
+    }
+    water.components.water.traversalMode = "blocked";
+    spawn.placement.transform.positionMetersXYZ = [25, 0, 0];
+
+    const normalized = normalizeAuthoringSpec(spec);
+    if (!normalized.ok || normalized.value === undefined || normalized.normalizedWorldIrHash === undefined) {
+      throw new Error(`Blocked-water fixture did not normalize: ${JSON.stringify(normalized.diagnostics)}`);
+    }
+    const result = compileWorld({
+      normalizedWorldIr: normalized.value,
+      normalizedWorldIrHash: normalized.normalizedWorldIrHash,
+    });
+
+    expect(result.ok).toBe(false);
+    expect(result.executionPlan).toBeUndefined();
+    expect(result.diagnostics).toContainEqual(expect.objectContaining({
+      code: "COMPILER_SPAWN_IN_BLOCKED_WATER",
+      instancePath: "/nodes/player/spawnAnchorEntityId",
+      details: { subjectEntityId: "player", waterEntityId: "lake-main" },
+    }));
+  });
+
+  it.each([
+    { label: "outside blocked water", traversalMode: "blocked" as const, spawn: [0, 0, 30] as const },
+    { label: "inside explicitly walkable water", traversalMode: "walkable" as const, spawn: [25, 0, 0] as const },
+  ])("allows a Subject spawn $label", ({ traversalMode, spawn: spawnPosition }) => {
+    const spec = createValidAuthoringSpec();
+    const water = spec.nodes.find((node) => node.kind === "water");
+    const spawn = spec.nodes.find((node) => node.kind === "anchor" && node.id === "spawn-main");
+    if (water?.kind !== "water" || spawn?.kind !== "anchor" || spawn.placement.kind !== "fixed") {
+      throw new Error("Canonical allowed-water fixture is incomplete.");
+    }
+    water.components.water.traversalMode = traversalMode;
+    spawn.placement.transform.positionMetersXYZ = spawnPosition;
+
+    const normalized = normalizeAuthoringSpec(spec);
+    if (!normalized.ok || normalized.value === undefined || normalized.normalizedWorldIrHash === undefined) {
+      throw new Error(`Allowed-water fixture did not normalize: ${JSON.stringify(normalized.diagnostics)}`);
+    }
+    expect(compileWorld({
+      normalizedWorldIr: normalized.value,
+      normalizedWorldIrHash: normalized.normalizedWorldIrHash,
+    }).ok).toBe(true);
+  });
+
+  it("rejects a Subject spawn inside a static collision object's footprint", () => {
+    const spec = createValidAuthoringSpec();
+    const object = spec.nodes.find((node) => node.kind === "object");
+    const spawn = spec.nodes.find((node) => node.kind === "anchor" && node.id === "spawn-main");
+    if (object?.kind !== "object" || object.placement.kind !== "fixed" ||
+        spawn?.kind !== "anchor" || spawn.placement.kind !== "fixed") {
+      throw new Error("Canonical static-blocker fixture is incomplete.");
+    }
+    object.placement.transform.positionMetersXYZ = [0, 2, 30];
+    spawn.placement.transform.positionMetersXYZ = [0, 0, 30];
+
+    const normalized = normalizeAuthoringSpec(spec);
+    if (!normalized.ok || normalized.value === undefined || normalized.normalizedWorldIrHash === undefined) {
+      throw new Error(`Static-blocker fixture did not normalize: ${JSON.stringify(normalized.diagnostics)}`);
+    }
+    const result = compileWorld({
+      normalizedWorldIr: normalized.value,
+      normalizedWorldIrHash: normalized.normalizedWorldIrHash,
+    });
+
+    expect(result.ok).toBe(false);
+    expect(result.diagnostics).toContainEqual(expect.objectContaining({
+      code: "COMPILER_SPAWN_INSIDE_STATIC_BLOCKER",
+      instancePath: "/nodes/player/spawnAnchorEntityId",
+      details: { subjectEntityId: "player", objectEntityId: "wall-east" },
+    }));
+  });
+
   it.each(PRODUCT_FIXED_SPAWN_CASES)(
     "keeps $label fixed spawn Anchors at their absolute terrain-surface positions",
     async ({ path, spawns }) => {

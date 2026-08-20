@@ -6,6 +6,12 @@ import type {
   Vec3Tuple,
 } from "@whitebox-world/contracts";
 import { DEFAULT_HUMANOID_TRAVERSAL } from "@whitebox-world/contracts";
+import {
+  validateSpawnSafety,
+  type SpawnFootprintBoundary,
+  type SpawnStaticBlockingObject,
+  type SpawnWaterSurface,
+} from "@whitebox-world/testkit";
 
 import {
   FeatureRegistry,
@@ -13,7 +19,11 @@ import {
   type FeatureInstanceOptions,
   type WorldFeatureDefinition,
 } from "./features";
-import type { CompoundLandmarkSpec } from "./landmarks";
+import type {
+  CompoundLandmarkSpec,
+  LandmarkDescriptor,
+  LandmarkPrimitiveDescriptor,
+} from "./landmarks";
 import {
   CompoundLandmarkFeature,
   LakeFeature,
@@ -32,6 +42,7 @@ import {
 } from "./official-features";
 import { hashString, type Seed } from "./random";
 import type { SerializedShape2D } from "./shapes";
+import type { WaterSurfaceDescriptor } from "./surfaces";
 import {
   isTerrainSurface,
   sampleTerrainSlopeDegrees,
@@ -203,6 +214,143 @@ function requireBuilt<O>(inspection: FeatureInspection<O>): O {
 
 function resolvedSeed(sceneSeed: number, id: string, seed?: Seed): Seed {
   return seed ?? hashString(`${sceneSeed}:${id}`);
+}
+
+interface UprightLandmarkTransform {
+  position: Vec3Tuple;
+  scale: Vec3Tuple;
+  yawRadians: number;
+}
+
+function combineUprightLandmarkTransform(
+  parent: UprightLandmarkTransform,
+  descriptor: LandmarkDescriptor,
+): UprightLandmarkTransform | undefined {
+  const [rotationX, rotationY, rotationZ] = descriptor.transform.rotation;
+  if (Math.abs(rotationX) > 1e-8 || Math.abs(rotationZ) > 1e-8) return undefined;
+  if (
+    parent.scale.some((component) => component <= 0) ||
+    descriptor.transform.scale.some((component) => component <= 0) ||
+    (Math.abs(parent.scale[0] - parent.scale[2]) > 1e-8 && Math.abs(rotationY) > 1e-8)
+  ) return undefined;
+  const [localX, localY, localZ] = descriptor.transform.position;
+  const scaledX = localX * parent.scale[0];
+  const scaledZ = localZ * parent.scale[2];
+  const cosine = Math.cos(parent.yawRadians);
+  const sine = Math.sin(parent.yawRadians);
+  return {
+    position: [
+      parent.position[0] + scaledX * cosine - scaledZ * sine,
+      parent.position[1] + localY * parent.scale[1],
+      parent.position[2] + scaledX * sine + scaledZ * cosine,
+    ],
+    scale: [
+      parent.scale[0] * descriptor.transform.scale[0],
+      parent.scale[1] * descriptor.transform.scale[1],
+      parent.scale[2] * descriptor.transform.scale[2],
+    ],
+    yawRadians: parent.yawRadians + rotationY,
+  };
+}
+
+function primitiveSpawnBlocker(
+  primitive: LandmarkPrimitiveDescriptor,
+  transform: UprightLandmarkTransform,
+  featureId: string,
+  ordinal: number,
+): SpawnStaticBlockingObject | undefined {
+  if (!primitive.collision) return undefined;
+  const [centerX, centerY, centerZ] = transform.position;
+  const [scaleX, scaleY, scaleZ] = transform.scale.map(Math.abs) as [number, number, number];
+  let footprint: SpawnFootprintBoundary;
+  let halfHeightMeters: number;
+  if (primitive.primitive === "box" || primitive.primitive === "plane") {
+    const size = primitive.size ?? [1, 1, 1];
+    const halfX = size[0] * scaleX / 2;
+    const halfZ = size[2] * scaleZ / 2;
+    const cosine = Math.cos(transform.yawRadians);
+    const sine = Math.sin(transform.yawRadians);
+    footprint = {
+      kind: "polygon",
+      pointsMetersXZ: [
+        [-halfX, -halfZ],
+        [halfX, -halfZ],
+        [halfX, halfZ],
+        [-halfX, halfZ],
+      ].map(([x, z]) => [
+        centerX + x! * cosine - z! * sine,
+        centerZ + x! * sine + z! * cosine,
+      ] as const),
+    };
+    halfHeightMeters = primitive.primitive === "plane"
+      ? 0.05
+      : size[1] * scaleY / 2;
+  } else {
+    footprint = {
+      kind: "circle",
+      centerMetersXZ: [centerX, centerZ],
+      radiusMeters: (primitive.radius ?? 1) * Math.min(scaleX, scaleZ),
+    };
+    halfHeightMeters = primitive.primitive === "sphere"
+      ? (primitive.radius ?? 1) * scaleY
+      : (primitive.height ?? 1) * scaleY / 2;
+  }
+  return {
+    entityId: `${featureId}:${primitive.id ?? `primitive-${ordinal}`}`,
+    featureId,
+    footprint,
+    heightRangeMeters: [centerY - halfHeightMeters, centerY + halfHeightMeters],
+  };
+}
+
+function landmarkSpawnBlockers(
+  descriptor: LandmarkDescriptor,
+  featureId: string,
+): SpawnStaticBlockingObject[] {
+  const blockers: SpawnStaticBlockingObject[] = [];
+  let ordinal = 0;
+  const visit = (
+    current: LandmarkDescriptor,
+    parent: UprightLandmarkTransform,
+  ): void => {
+    const transform = combineUprightLandmarkTransform(parent, current);
+    if (transform === undefined) return;
+    if (current.kind === "primitive") {
+      ordinal += 1;
+      const blocker = primitiveSpawnBlocker(current, transform, featureId, ordinal);
+      if (blocker !== undefined) blockers.push(blocker);
+      return;
+    }
+    for (const child of current.children) visit(child, transform);
+  };
+  visit(descriptor, { position: [0, 0, 0], scale: [1, 1, 1], yawRadians: 0 });
+  return blockers;
+}
+
+function waterSpawnSurface(
+  descriptor: WaterSurfaceDescriptor,
+  entityId: string,
+  featureId: string,
+): SpawnWaterSurface {
+  const boundary: SpawnFootprintBoundary = descriptor.area.kind === "circle"
+    ? {
+        kind: "circle",
+        centerMetersXZ: descriptor.area.center,
+        radiusMeters: descriptor.area.radius,
+      }
+    : descriptor.area.kind === "ellipse"
+      ? {
+          kind: "ellipse",
+          centerMetersXZ: descriptor.area.center,
+          radiusMetersXZ: descriptor.area.radius,
+        }
+      : { kind: "polygon", pointsMetersXZ: descriptor.area.points };
+  return {
+    entityId,
+    featureId,
+    boundary,
+    traversalMode: descriptor.traversal,
+  };
 }
 
 export function defineOutdoorScene(
@@ -422,6 +570,47 @@ export function compileOutdoorScene(definition: OutdoorSceneDefinition): Compile
     ...worldSpecDiagnostics,
     ...registry.list().flatMap((feature) => feature.diagnostics),
   ];
+  const resolvedSpawnPosition: Vec3Tuple = [
+    request.at[0],
+    groundHeight + (request.heightOffset ?? 0.9),
+    request.at[1],
+  ];
+  const waterSurfaces = registry.listResources().flatMap((resource) => {
+    const descriptor = resource.value as Partial<WaterSurfaceDescriptor>;
+    return resource.kind === "surface" && descriptor.kind === "water"
+      ? [waterSpawnSurface(
+          resource.value as WaterSurfaceDescriptor,
+          resource.id,
+          resource.ownerFeatureId,
+        )]
+      : [];
+  });
+  const staticBlockingObjects = registry.listResources().flatMap((resource) =>
+    resource.kind === "landmark"
+      ? landmarkSpawnBlockers(
+          resource.value as LandmarkDescriptor,
+          resource.ownerFeatureId,
+        )
+      : [],
+  );
+  const spawnDiagnostics = validateSpawnSafety({
+    entityId: "player",
+    position: [
+      resolvedSpawnPosition[0],
+      resolvedSpawnPosition[1] - 0.9,
+      resolvedSpawnPosition[2],
+    ],
+    capsule: { radius: 0.35, height: 1.8 },
+    waterSurfaces,
+    staticBlockingObjects,
+  });
+  if (spawnDiagnostics.some((item) => item.severity === "error")) {
+    throw new SceneCompilationError(
+      spawnDiagnostics.map((item) => item.message).join(" "),
+      [...diagnostics, ...spawnDiagnostics],
+    );
+  }
+  diagnostics.push(...spawnDiagnostics);
   const spawnSlope = sampleTerrainSlopeDegrees(
     terrainResource.value,
     request.at[0],
@@ -498,9 +687,7 @@ export function compileOutdoorScene(definition: OutdoorSceneDefinition): Compile
     terrainHandles,
     spawn: {
       position: [
-        request.at[0],
-        groundHeight + (request.heightOffset ?? 0.9),
-        request.at[1],
+        ...resolvedSpawnPosition,
       ],
       facingRadians: request.facingRadians ?? 0,
       camera: {

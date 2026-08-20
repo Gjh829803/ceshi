@@ -10,6 +10,7 @@
     "@whitebox-world/authoring": "workspace:*",
     "@whitebox-world/protocol": "workspace:*",
     "@whitebox-world/runtime-contracts": "workspace:*",
+    "@whitebox-world/testkit": "workspace:*",
     "@whitebox-world/terrain-surface": "workspace:*"
   }
 }

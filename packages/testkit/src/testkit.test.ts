@@ -68,6 +68,75 @@ describe("validateSpawnSafety", () => {
 
     expect(diagnostics.map((item) => item.code)).toContain("SPAWN_SLOPE_NOT_WALKABLE");
   });
+
+  it("rejects only blocked water footprints and reports the blocking surface", () => {
+    const boundary = {
+      kind: "ellipse" as const,
+      centerMetersXZ: [2, -3] as const,
+      radiusMetersXZ: [5, 4] as const,
+    };
+
+    expect(validateSpawnSafety({
+      entityId: "player",
+      position: [2, 0, -3],
+      waterSurfaces: [{
+        entityId: "lake-blocked",
+        featureId: "lake-feature",
+        boundary,
+        traversalMode: "blocked",
+      }],
+    })).toEqual([{
+      severity: "error",
+      code: "SPAWN_IN_BLOCKED_WATER",
+      message: "Spawn player is inside blocked water lake-blocked.",
+      entityId: "player",
+      featureId: "lake-feature",
+      suggestions: ["Move the spawn outside blocked water or mark an intentionally walkable surface as walkable."],
+    }]);
+
+    for (const traversalMode of ["walkable", "swimmable"] as const) {
+      expect(validateSpawnSafety({
+        entityId: "player",
+        position: [2, 0, -3],
+        waterSurfaces: [{ entityId: `lake-${traversalMode}`, boundary, traversalMode }],
+      })).toEqual([]);
+    }
+  });
+
+  it("rejects a spawn inside the footprint and vertical range of a static blocker", () => {
+    const blocker = {
+      entityId: "gate-post",
+      featureId: "crossing-gate",
+      footprint: {
+        kind: "polygon" as const,
+        pointsMetersXZ: [[-1, -1], [1, -1], [1, 1], [-1, 1]] as const,
+      },
+      heightRangeMeters: [0, 3] as const,
+    };
+
+    expect(validateSpawnSafety({
+      entityId: "player",
+      position: [0, 0, 0],
+      staticBlockingObjects: [blocker],
+    })).toEqual([{
+      severity: "error",
+      code: "SPAWN_INSIDE_STATIC_BLOCKER",
+      message: "Spawn player is inside static blocking object gate-post.",
+      entityId: "player",
+      featureId: "crossing-gate",
+      suggestions: ["Move the spawn outside the blocking object's footprint."],
+    }]);
+    expect(validateSpawnSafety({
+      entityId: "player",
+      position: [4, 0, 0],
+      staticBlockingObjects: [blocker],
+    })).toEqual([]);
+    expect(validateSpawnSafety({
+      entityId: "player",
+      position: [0, 4, 0],
+      staticBlockingObjects: [blocker],
+    })).toEqual([]);
+  });
 });
 
 describe("validateFeatureOwnership", () => {

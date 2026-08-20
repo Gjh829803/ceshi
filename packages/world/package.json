@@ -8,6 +8,7 @@
   },
   "dependencies": {
     "@whitebox-world/contracts": "workspace:*",
+    "@whitebox-world/testkit": "workspace:*",
     "@whitebox-world/terrain-surface": "workspace:*",
     "three": "^0.180.0"
   }

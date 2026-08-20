@@ -27,32 +27,28 @@ const gBotAssetBytes = new Uint8Array(
   ),
 );
 
-const WHITEBOX_PACKAGES = [
+const UNAVAILABLE_RELATIONSHIP_PACKAGES = [
   [
     "worldkit://subject-definition/animal.quadruped.forward-steer@1",
-    "worldkit://motion-kernel/forward-steer@1",
+    "worldkit://capability/relationship.mount@1",
   ],
   [
     "worldkit://subject-definition/vehicle.four-wheel.arcade@1",
-    "worldkit://motion-kernel/wheeled-arcade@1",
+    "worldkit://capability/relationship.seat@1",
   ],
   [
     "worldkit://subject-definition/surface-craft.ice-skimmer@1",
-    "worldkit://motion-kernel/surface-slide@1",
+    "worldkit://capability/relationship.seat@1",
   ],
   [
     "worldkit://subject-definition/watercraft.kayak.surface@1",
-    "worldkit://motion-kernel/water-surface@1",
+    "worldkit://capability/relationship.seat@1",
   ],
   [
     "worldkit://subject-definition/glider.paraglider.unpowered@1",
-    "worldkit://motion-kernel/unpowered-glide@1",
+    "worldkit://capability/relationship.tether@1",
   ],
 ] as const;
-
-const NON_FLIGHT_WHITEBOX_PACKAGES = WHITEBOX_PACKAGES.filter(
-  ([, motionKernelRef]) => !motionKernelRef.includes("unpowered-glide"),
-);
 
 const CAMERA_PROFILES = [
   [
@@ -220,80 +216,20 @@ describe("capability package runtime smoke tests", () => {
     }
   }, 15_000);
 
-  it.each(WHITEBOX_PACKAGES)(
-    "runs %s through its committed Kernel, Camera Director and H01-H09 harness",
-    async (subjectDefinitionRef, motionKernelRef) => {
+  it.each(UNAVAILABLE_RELATIONSHIP_PACKAGES)(
+    "refuses to load %s while required relationship behavior is unavailable",
+    async (subjectDefinitionRef, capabilityRef) => {
       const loaded = await loadAuthoringScene(
         async () => new Response(JSON.stringify(createFlatTerrainCapabilitySpec())),
         { subjectDefinitionRef },
       );
-      if (!loaded.ok || loaded.executionPlan === undefined) {
-        throw new Error(
-          `Capability package failed to load: ${JSON.stringify(loaded.diagnostics)}`,
-        );
-      }
-      const runtime = await BabylonWorldRuntime.create({
-        executionPlan: loaded.executionPlan,
-        havokWasmBinary,
-        engineFactory: () =>
-          new NullEngine({
-            renderWidth: 640,
-            renderHeight: 360,
-            textureSize: 512,
-            deterministicLockstep: true,
-            lockstepMaxSteps: 4,
-          }),
-      });
-      try {
-        const snapshot = await runtime.runFixedInput({
-          actions: ["move-forward"],
-          ticks: 30,
-        });
-        const state = snapshot.subjectStatesByEntityId.player!;
-        const harness = await runtime.runHarness("player");
 
-        expect(state.activeMotionKernelRef).toBe(motionKernelRef);
-        expect(
-          [...state.positionMetersXYZ, ...state.velocityMetersPerSecondXYZ].every(
-            Number.isFinite,
-          ),
-        ).toBe(true);
-        expect(snapshot.camera.positionMetersXYZ.every(Number.isFinite)).toBe(true);
-        expect(harness.passed).toBe(true);
-        expect(harness.checks).toHaveLength(9);
-        if (subjectDefinitionRef.includes("vehicle.four-wheel")) {
-          runtime.reset();
-          expect(runtime.setMotionTuning("player", {
-            lowSpeedTurnRateRadiansPerSecond: 0.2,
-            highSpeedTurnRateRadiansPerSecond: 0.1,
-          }).subjectStatesByEntityId.player?.motionParameterTuning).toEqual({
-            lowSpeedTurnRateRadiansPerSecond: 0.2,
-            highSpeedTurnRateRadiansPerSecond: 0.1,
-          });
-          const gentleTurn = await runtime.runFixedInput({
-            actions: ["move-forward", "move-left"],
-            ticks: 15,
-          });
-          runtime.reset();
-          runtime.setMotionTuning("player", {
-            lowSpeedTurnRateRadiansPerSecond: 5,
-            highSpeedTurnRateRadiansPerSecond: 2,
-          });
-          const sharpTurn = await runtime.runFixedInput({
-            actions: ["move-forward", "move-left"],
-            ticks: 15,
-          });
-          expect(Math.abs(sharpTurn.subjectStatesByEntityId.player!.forwardXYZ![0]))
-            .toBeGreaterThan(
-              Math.abs(gentleTurn.subjectStatesByEntityId.player!.forwardXYZ![0]),
-            );
-          expect(() => runtime.setMotionTuning("player", {
-            lowSpeedTurnRateRadiansPerSecond: 99,
-          })).toThrow(RangeError);
-        }
-      } finally {
-        await runtime.dispose();
-      }
+      expect(loaded.ok).toBe(false);
+      expect(loaded.executionPlan).toBeUndefined();
+      expect(loaded.diagnostics).toContainEqual(expect.objectContaining({
+        code: "SUBJECT_CAPABILITY_UNSATISFIED",
+        details: expect.objectContaining({ capabilityRef }),
+      }));
     },
   );
 
@@ -302,7 +238,7 @@ describe("capability package runtime smoke tests", () => {
       async () => new Response(JSON.stringify(createFlatTerrainCapabilitySpec())),
       {
         subjectDefinitionRef:
-          "worldkit://subject-definition/animal.quadruped.forward-steer@1",
+          "worldkit://subject-definition/humanoid.g-bot@1",
       },
     );
     if (!loaded.ok || isNil(loaded.executionPlan)) {
@@ -313,6 +249,11 @@ describe("capability package runtime smoke tests", () => {
     const runtime = await BabylonWorldRuntime.create({
       executionPlan: loaded.executionPlan,
       havokWasmBinary,
+      subjectAssetResolver: {
+        async resolveSubjectAsset() {
+          return { bytes: gBotAssetBytes, sourceLabel: "g-bot-test" };
+        },
+      },
       engineFactory: () =>
         new NullEngine({
           renderWidth: 640,
@@ -339,64 +280,66 @@ describe("capability package runtime smoke tests", () => {
     }
   });
 
-  it.each(NON_FLIGHT_WHITEBOX_PACKAGES)(
-    "applies unsupported gravity to %s instead of hovering",
-    async (subjectDefinitionRef) => {
-      const loaded = await loadAuthoringScene(
-        async () => new Response(JSON.stringify(createFlatTerrainCapabilitySpec())),
-        { subjectDefinitionRef },
+  it("applies unsupported gravity to the canonical G Bot instead of hovering", async () => {
+    const loaded = await loadAuthoringScene(
+      async () => new Response(JSON.stringify(createFlatTerrainCapabilitySpec())),
+      { subjectDefinitionRef: "worldkit://subject-definition/humanoid.g-bot@1" },
+    );
+    if (!loaded.ok || loaded.executionPlan === undefined) {
+      throw new Error(
+        `Capability package failed to load: ${JSON.stringify(loaded.diagnostics)}`,
       );
-      if (!loaded.ok || loaded.executionPlan === undefined) {
-        throw new Error(
-          `Capability package failed to load: ${JSON.stringify(loaded.diagnostics)}`,
-        );
-      }
-      const executionPlan = {
-        ...structuredClone(loaded.executionPlan),
-        waters: [],
-      };
-      const controlledSubject = executionPlan.subjects.find(
-        (subject) => subject.entityId === executionPlan.controlledEntityId,
-      );
-      if (controlledSubject === undefined) throw new Error("Controlled Subject missing.");
-      controlledSubject.spawnSubjectOriginPositionMetersXYZ = [0, 8, 30];
-      const runtime = await BabylonWorldRuntime.create({
-        executionPlan,
-        havokWasmBinary,
-        engineFactory: () =>
-          new NullEngine({
-            renderWidth: 640,
-            renderHeight: 360,
-            textureSize: 512,
-            deterministicLockstep: true,
-            lockstepMaxSteps: 4,
-          }),
+    }
+    const executionPlan = {
+      ...structuredClone(loaded.executionPlan),
+      waters: [],
+    };
+    const controlledSubject = executionPlan.subjects.find(
+      (subject) => subject.entityId === executionPlan.controlledEntityId,
+    );
+    if (controlledSubject === undefined) throw new Error("Controlled Subject missing.");
+    controlledSubject.spawnSubjectOriginPositionMetersXYZ = [0, 8, 30];
+    const runtime = await BabylonWorldRuntime.create({
+      executionPlan,
+      havokWasmBinary,
+      subjectAssetResolver: {
+        async resolveSubjectAsset() {
+          return { bytes: gBotAssetBytes, sourceLabel: "g-bot-test" };
+        },
+      },
+      engineFactory: () =>
+        new NullEngine({
+          renderWidth: 640,
+          renderHeight: 360,
+          textureSize: 512,
+          deterministicLockstep: true,
+          lockstepMaxSteps: 4,
+        }),
+    });
+    try {
+      const landed = await runtime.runFixedInput({ actions: [], ticks: 300 });
+      expect(landed.subjectStatesByEntityId.player).toMatchObject({
+        movementMedium: "ground",
       });
-      try {
-        const landed = await runtime.runFixedInput({ actions: [], ticks: 300 });
-        expect(landed.subjectStatesByEntityId.player).toMatchObject({
-          movementMedium: "ground",
-        });
-        expect(
-          landed.subjectStatesByEntityId.player!.positionMetersXYZ[1],
-        ).toBeLessThan(2);
-        expect(
-          Math.abs(
-            landed.subjectStatesByEntityId.player!.velocityMetersPerSecondXYZ[1],
-          ),
-        ).toBeLessThan(0.1);
-      } finally {
-        await runtime.dispose();
-      }
-    },
-  );
+      expect(
+        landed.subjectStatesByEntityId.player!.positionMetersXYZ[1],
+      ).toBeLessThan(2);
+      expect(
+        Math.abs(
+          landed.subjectStatesByEntityId.player!.velocityMetersPerSecondXYZ[1],
+        ),
+      ).toBeLessThan(0.1);
+    } finally {
+      await runtime.dispose();
+    }
+  });
 
   it("executes a switched Profile from its locked Kernel descriptor instead of parsing its Ref", async () => {
     const loaded = await loadAuthoringScene(
       async () => new Response(JSON.stringify(createFlatTerrainCapabilitySpec())),
       {
         subjectDefinitionRef:
-          "worldkit://subject-definition/vehicle.four-wheel.arcade@1",
+          "worldkit://subject-definition/humanoid.g-bot@1",
       },
     );
     if (!loaded.ok || loaded.executionPlan === undefined) {
@@ -405,7 +348,7 @@ describe("capability package runtime smoke tests", () => {
     const executionPlan = structuredClone(loaded.executionPlan);
     const subject = executionPlan.subjects[0]!;
     const assembly = subject.capabilityAssembly!;
-    const originalKernelRef = "worldkit://motion-kernel/forward-steer@1";
+    const originalKernelRef = "worldkit://motion-kernel/free-ground@1";
     const aliasedKernelRef = "worldkit://motion-kernel/custom-steering-implementation@1";
     const optionalProfile = assembly.optionalMotionProfiles.find(
       (profile) => profile.motionKernelRef === originalKernelRef,
@@ -427,6 +370,11 @@ describe("capability package runtime smoke tests", () => {
     const runtime = await BabylonWorldRuntime.create({
       executionPlan,
       havokWasmBinary,
+      subjectAssetResolver: {
+        async resolveSubjectAsset() {
+          return { bytes: gBotAssetBytes, sourceLabel: "g-bot-test" };
+        },
+      },
       engineFactory: () =>
         new NullEngine({
           renderWidth: 640,
@@ -448,18 +396,18 @@ describe("capability package runtime smoke tests", () => {
       );
       expect(
         Math.abs(moved.subjectStatesByEntityId.player!.positionMetersXYZ[2] - initialZ),
-      ).toBeGreaterThan(0.5);
+      ).toBeLessThan(0.1);
     } finally {
       await runtime.dispose();
     }
   });
 
-  it("fires one forward-steer jump until the held action is released", async () => {
+  it("fires one free-ground jump until the held action is released", async () => {
     const loaded = await loadAuthoringScene(
       async () => new Response(JSON.stringify(createFlatTerrainCapabilitySpec())),
       {
         subjectDefinitionRef:
-          "worldkit://subject-definition/animal.quadruped.forward-steer@1",
+          "worldkit://subject-definition/humanoid.g-bot@1",
       },
     );
     if (!loaded.ok || loaded.executionPlan === undefined) {
@@ -468,6 +416,11 @@ describe("capability package runtime smoke tests", () => {
     const runtime = await BabylonWorldRuntime.create({
       executionPlan: loaded.executionPlan,
       havokWasmBinary,
+      subjectAssetResolver: {
+        async resolveSubjectAsset() {
+          return { bytes: gBotAssetBytes, sourceLabel: "g-bot-test" };
+        },
+      },
       engineFactory: () =>
         new NullEngine({
           renderWidth: 640,
