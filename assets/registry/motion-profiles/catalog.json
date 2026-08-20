@@ -1,0 +1,296 @@
+[
+  {
+    "kind": "motion-profile",
+    "id": "safe-ground",
+    "version": 1,
+    "resourceRef": "worldkit://motion-profile/safe-ground@1",
+    "authoringAvailability": "internal",
+    "motionKernelRef": "worldkit://motion-kernel/free-ground@1",
+    "parameters": {
+      "walkSpeedMetersPerSecond": 0,
+      "runSpeedMetersPerSecond": 0,
+      "jumpSpeedMetersPerSecond": 0,
+      "accelerationMetersPerSecondSquared": 20,
+      "decelerationMetersPerSecondSquared": 24,
+      "turnRateRadiansPerSecond": 0,
+      "airControlRatio": 0
+    },
+    "safetyLimits": {
+      "walkSpeedMetersPerSecond": { "minimum": 0, "maximum": 0 },
+      "runSpeedMetersPerSecond": { "minimum": 0, "maximum": 0 },
+      "jumpSpeedMetersPerSecond": { "minimum": 0, "maximum": 0 },
+      "accelerationMetersPerSecondSquared": { "minimum": 0, "maximum": 40 },
+      "decelerationMetersPerSecondSquared": { "minimum": 0, "maximum": 50 },
+      "turnRateRadiansPerSecond": { "minimum": 0, "maximum": 0 },
+      "airControlRatio": { "minimum": 0, "maximum": 0 }
+    },
+    "motionTags": ["ground", "safe", "stopped"],
+    "aiMetadata": {
+      "displayName": "Safe Ground Stop",
+      "description": "Internal zero-input grounded fallback that preserves collision and gravity.",
+      "semanticTags": ["fallback", "ground", "internal", "safe"]
+    }
+  },
+  {
+    "kind": "motion-profile",
+    "id": "free-ground.humanoid-medium",
+    "version": 1,
+    "resourceRef": "worldkit://motion-profile/free-ground.humanoid-medium@1",
+    "authoringAvailability": "recommended",
+    "motionKernelRef": "worldkit://motion-kernel/free-ground@1",
+    "parameters": {
+      "walkSpeedMetersPerSecond": 2.4,
+      "runSpeedMetersPerSecond": 4,
+      "jumpSpeedMetersPerSecond": 5.5,
+      "accelerationMetersPerSecondSquared": 18,
+      "decelerationMetersPerSecondSquared": 22,
+      "turnRateRadiansPerSecond": 8,
+      "airControlRatio": 0.35
+    },
+    "safetyLimits": {
+      "walkSpeedMetersPerSecond": { "minimum": 0.5, "maximum": 5 },
+      "runSpeedMetersPerSecond": { "minimum": 1, "maximum": 9 },
+      "jumpSpeedMetersPerSecond": { "minimum": 0, "maximum": 9 },
+      "accelerationMetersPerSecondSquared": { "minimum": 1, "maximum": 40 },
+      "decelerationMetersPerSecondSquared": { "minimum": 1, "maximum": 50 },
+      "turnRateRadiansPerSecond": { "minimum": 0.5, "maximum": 16 },
+      "airControlRatio": { "minimum": 0, "maximum": 1 }
+    },
+    "motionTags": ["free-ground", "ground", "jump"],
+    "aiMetadata": {
+      "displayName": "Medium Free Ground",
+      "description": "Golden medium character feel for camera-relative traversal.",
+      "semanticTags": ["ground", "humanoid", "medium"]
+    }
+  },
+  {
+    "kind": "motion-profile",
+    "id": "forward-steer.medium",
+    "version": 1,
+    "resourceRef": "worldkit://motion-profile/forward-steer.medium@1",
+    "authoringAvailability": "advanced",
+    "motionKernelRef": "worldkit://motion-kernel/forward-steer@1",
+    "parameters": {
+      "forwardSpeedMetersPerSecond": 4.2,
+      "reverseSpeedMetersPerSecond": 1.8,
+      "accelerationMetersPerSecondSquared": 8,
+      "decelerationMetersPerSecondSquared": 10,
+      "turnRateRadiansPerSecond": 2.2,
+      "jumpSpeedMetersPerSecond": 4.5,
+      "boostMultiplier": 1.25
+    },
+    "safetyLimits": {
+      "forwardSpeedMetersPerSecond": { "minimum": 0.5, "maximum": 8 },
+      "reverseSpeedMetersPerSecond": { "minimum": 0, "maximum": 4 },
+      "accelerationMetersPerSecondSquared": { "minimum": 0.5, "maximum": 24 },
+      "decelerationMetersPerSecondSquared": { "minimum": 0.5, "maximum": 30 },
+      "turnRateRadiansPerSecond": { "minimum": 0.2, "maximum": 6 },
+      "jumpSpeedMetersPerSecond": { "minimum": 0, "maximum": 8 },
+      "boostMultiplier": { "minimum": 1, "maximum": 1.6 }
+    },
+    "motionTags": ["forward", "ground", "steer"],
+    "aiMetadata": {
+      "displayName": "Medium Forward Steer",
+      "description": "Medium subject-local forward and steering feel.",
+      "semanticTags": ["forward", "medium", "steer"]
+    }
+  },
+  {
+    "kind": "motion-profile",
+    "id": "wheeled-arcade.medium",
+    "version": 1,
+    "resourceRef": "worldkit://motion-profile/wheeled-arcade.medium@1",
+    "authoringAvailability": "advanced",
+    "motionKernelRef": "worldkit://motion-kernel/wheeled-arcade@1",
+    "parameters": {
+      "forwardSpeedMetersPerSecond": 12,
+      "reverseSpeedMetersPerSecond": 4,
+      "accelerationMetersPerSecondSquared": 6,
+      "brakeMetersPerSecondSquared": 10,
+      "dragPerSecond": 1.5,
+      "lowSpeedTurnRateRadiansPerSecond": 2.2,
+      "highSpeedTurnRateRadiansPerSecond": 0.7,
+      "boostMultiplier": 1.2
+    },
+    "safetyLimits": {
+      "forwardSpeedMetersPerSecond": { "minimum": 2, "maximum": 25 },
+      "reverseSpeedMetersPerSecond": { "minimum": 0, "maximum": 8 },
+      "accelerationMetersPerSecondSquared": { "minimum": 0.5, "maximum": 15 },
+      "brakeMetersPerSecondSquared": { "minimum": 1, "maximum": 30 },
+      "dragPerSecond": { "minimum": 0, "maximum": 5 },
+      "lowSpeedTurnRateRadiansPerSecond": { "minimum": 0.2, "maximum": 5 },
+      "highSpeedTurnRateRadiansPerSecond": { "minimum": 0.1, "maximum": 2 },
+      "boostMultiplier": { "minimum": 1, "maximum": 1.5 }
+    },
+    "motionTags": ["arcade", "ground", "surface-fast", "wheeled"],
+    "aiMetadata": {
+      "displayName": "Medium Wheeled Arcade",
+      "description": "Deterministic arcade vehicle feel for whitebox validation.",
+      "semanticTags": ["arcade", "experimental", "wheeled"]
+    }
+  },
+  {
+    "kind": "motion-profile",
+    "id": "surface-slide.skimmer",
+    "version": 1,
+    "resourceRef": "worldkit://motion-profile/surface-slide.skimmer@1",
+    "authoringAvailability": "experimental",
+    "motionKernelRef": "worldkit://motion-kernel/surface-slide@1",
+    "parameters": {
+      "maximumSpeedMetersPerSecond": 14,
+      "driveAccelerationMetersPerSecondSquared": 5,
+      "surfaceFrictionPerSecond": 0.35,
+      "slopeGravityRatio": 1,
+      "turnRateRadiansPerSecond": 1.2,
+      "boostMultiplier": 1.15
+    },
+    "safetyLimits": {
+      "maximumSpeedMetersPerSecond": { "minimum": 2, "maximum": 24 },
+      "driveAccelerationMetersPerSecondSquared": { "minimum": 0, "maximum": 12 },
+      "surfaceFrictionPerSecond": { "minimum": 0.05, "maximum": 4 },
+      "slopeGravityRatio": { "minimum": 0, "maximum": 2 },
+      "turnRateRadiansPerSecond": { "minimum": 0.1, "maximum": 4 },
+      "boostMultiplier": { "minimum": 1, "maximum": 1.4 }
+    },
+    "motionTags": ["ground", "slide", "surface-fast"],
+    "aiMetadata": {
+      "displayName": "Surface Slide Skimmer",
+      "description": "Low-friction surface slide profile for the Skimmer PoC.",
+      "semanticTags": ["experimental", "skimmer", "slide"]
+    }
+  },
+  {
+    "kind": "motion-profile",
+    "id": "water-surface.safe",
+    "version": 1,
+    "resourceRef": "worldkit://motion-profile/water-surface.safe@1",
+    "authoringAvailability": "internal",
+    "motionKernelRef": "worldkit://motion-kernel/water-surface@1",
+    "parameters": {
+      "forwardSpeedMetersPerSecond": 0,
+      "reverseSpeedMetersPerSecond": 0,
+      "accelerationMetersPerSecondSquared": 0,
+      "dragPerSecond": 2,
+      "turnRateRadiansPerSecond": 0,
+      "surfaceHoldStrengthPerSecond": 8
+    },
+    "safetyLimits": {
+      "forwardSpeedMetersPerSecond": { "minimum": 0, "maximum": 0 },
+      "reverseSpeedMetersPerSecond": { "minimum": 0, "maximum": 0 },
+      "accelerationMetersPerSecondSquared": { "minimum": 0, "maximum": 0 },
+      "dragPerSecond": { "minimum": 0, "maximum": 8 },
+      "turnRateRadiansPerSecond": { "minimum": 0, "maximum": 0 },
+      "surfaceHoldStrengthPerSecond": { "minimum": 1, "maximum": 20 }
+    },
+    "motionTags": ["safe", "surface", "water"],
+    "aiMetadata": {
+      "displayName": "Safe Water Surface",
+      "description": "Internal passive water-surface fallback.",
+      "semanticTags": ["fallback", "internal", "safe", "water"]
+    }
+  },
+  {
+    "kind": "motion-profile",
+    "id": "water-surface.kayak",
+    "version": 1,
+    "resourceRef": "worldkit://motion-profile/water-surface.kayak@1",
+    "authoringAvailability": "experimental",
+    "motionKernelRef": "worldkit://motion-kernel/water-surface@1",
+    "parameters": {
+      "forwardSpeedMetersPerSecond": 5,
+      "reverseSpeedMetersPerSecond": 1.5,
+      "accelerationMetersPerSecondSquared": 2.5,
+      "dragPerSecond": 0.8,
+      "turnRateRadiansPerSecond": 1.2,
+      "surfaceHoldStrengthPerSecond": 8,
+      "boostMultiplier": 1.12
+    },
+    "safetyLimits": {
+      "forwardSpeedMetersPerSecond": { "minimum": 0.5, "maximum": 9 },
+      "reverseSpeedMetersPerSecond": { "minimum": 0, "maximum": 3 },
+      "accelerationMetersPerSecondSquared": { "minimum": 0.2, "maximum": 7 },
+      "dragPerSecond": { "minimum": 0.1, "maximum": 4 },
+      "turnRateRadiansPerSecond": { "minimum": 0.1, "maximum": 3 },
+      "surfaceHoldStrengthPerSecond": { "minimum": 1, "maximum": 20 },
+      "boostMultiplier": { "minimum": 1, "maximum": 1.35 }
+    },
+    "motionTags": ["surface", "water", "watercraft"]
+    ,"aiMetadata": {
+      "displayName": "Water Surface Kayak",
+      "description": "Low-speed water surface propulsion and steering for the Kayak PoC.",
+      "semanticTags": ["experimental", "kayak", "water"]
+    }
+  },
+  {
+    "kind": "motion-profile",
+    "id": "airborne.fall",
+    "version": 1,
+    "resourceRef": "worldkit://motion-profile/airborne.fall@1",
+    "authoringAvailability": "internal",
+    "motionKernelRef": "worldkit://motion-kernel/unpowered-glide@1",
+    "parameters": {
+      "minimumForwardSpeedMetersPerSecond": 0,
+      "maximumForwardSpeedMetersPerSecond": 0,
+      "glideAccelerationMetersPerSecondSquared": 0,
+      "gravityScale": 1,
+      "liftRatio": 0,
+      "pitchRateRadiansPerSecond": 0,
+      "yawRateRadiansPerSecond": 0,
+      "rollRateRadiansPerSecond": 0,
+      "stallSpeedMetersPerSecond": 0
+    },
+    "safetyLimits": {
+      "minimumForwardSpeedMetersPerSecond": { "minimum": 0, "maximum": 0 },
+      "maximumForwardSpeedMetersPerSecond": { "minimum": 0, "maximum": 0 },
+      "glideAccelerationMetersPerSecondSquared": { "minimum": 0, "maximum": 0 },
+      "gravityScale": { "minimum": 0.1, "maximum": 2 },
+      "liftRatio": { "minimum": 0, "maximum": 0 },
+      "pitchRateRadiansPerSecond": { "minimum": 0, "maximum": 0 },
+      "yawRateRadiansPerSecond": { "minimum": 0, "maximum": 0 },
+      "rollRateRadiansPerSecond": { "minimum": 0, "maximum": 0 },
+      "stallSpeedMetersPerSecond": { "minimum": 0, "maximum": 0 }
+    },
+    "motionTags": ["air", "fall", "safe"],
+    "aiMetadata": {
+      "displayName": "Ballistic Fall",
+      "description": "Internal gravity-only air fallback.",
+      "semanticTags": ["air", "fallback", "fall", "internal"]
+    }
+  },
+  {
+    "kind": "motion-profile",
+    "id": "unpowered-glide.paraglider",
+    "version": 1,
+    "resourceRef": "worldkit://motion-profile/unpowered-glide.paraglider@1",
+    "authoringAvailability": "experimental",
+    "motionKernelRef": "worldkit://motion-kernel/unpowered-glide@1",
+    "parameters": {
+      "minimumForwardSpeedMetersPerSecond": 4,
+      "maximumForwardSpeedMetersPerSecond": 16,
+      "glideAccelerationMetersPerSecondSquared": 2,
+      "gravityScale": 0.45,
+      "liftRatio": 1.2,
+      "pitchRateRadiansPerSecond": 1,
+      "yawRateRadiansPerSecond": 0.8,
+      "rollRateRadiansPerSecond": 1.1,
+      "stallSpeedMetersPerSecond": 4
+    },
+    "safetyLimits": {
+      "minimumForwardSpeedMetersPerSecond": { "minimum": 1, "maximum": 8 },
+      "maximumForwardSpeedMetersPerSecond": { "minimum": 6, "maximum": 30 },
+      "glideAccelerationMetersPerSecondSquared": { "minimum": 0, "maximum": 6 },
+      "gravityScale": { "minimum": 0.1, "maximum": 1.5 },
+      "liftRatio": { "minimum": 0, "maximum": 2 },
+      "pitchRateRadiansPerSecond": { "minimum": 0.1, "maximum": 3 },
+      "yawRateRadiansPerSecond": { "minimum": 0.1, "maximum": 3 },
+      "rollRateRadiansPerSecond": { "minimum": 0.1, "maximum": 4 },
+      "stallSpeedMetersPerSecond": { "minimum": 1, "maximum": 10 }
+    },
+    "motionTags": ["air", "flight", "glide"],
+    "aiMetadata": {
+      "displayName": "Unpowered Glide Paraglider",
+      "description": "Simplified deterministic paraglider profile.",
+      "semanticTags": ["experimental", "glide", "paraglider"]
+    }
+  }
+]

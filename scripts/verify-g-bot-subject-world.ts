@@ -76,6 +76,7 @@ const ARTIFACT_FILES = [
 ] as const;
 
 type ActionId = SubjectRuntimeStateV3["activeActionId"];
+type CaptureActionId = "idle" | "walk" | "run" | "jump";
 
 interface WorldBuildArtifactV3 {
   readonly kind: "worldkit-build-artifact";
@@ -93,7 +94,7 @@ interface ArtifactPaths {
   readonly snapshot: string;
   readonly explain: string;
   readonly verification: string;
-  readonly action: Readonly<Record<ActionId, string>>;
+  readonly action: Readonly<Record<CaptureActionId, string>>;
 }
 
 interface PngInspection {
@@ -106,7 +107,7 @@ interface ActionCaptureEvidence extends PngInspection {
   readonly filename: "idle.png" | "walk.png" | "run.png" | "jump.png";
   readonly source: "browser-fixed-tick";
   readonly tick: number;
-  readonly actionId: ActionId;
+  readonly actionId: CaptureActionId;
   readonly subjectEntityId: typeof PRIMARY_ENTITY_ID;
   readonly positionMetersXYZ: Vec3;
   readonly movementMedium: SubjectRuntimeStateV3["movementMedium"];
@@ -319,7 +320,7 @@ async function closeBrowserHandles(handles: {
 async function captureAction(
   page: Page,
   paths: ArtifactPaths,
-  actionId: ActionId,
+  actionId: CaptureActionId,
   actions: readonly ("move-forward" | "move-right" | "run" | "jump")[],
   ticks: number,
 ): Promise<ActionCaptureResult> {
@@ -485,13 +486,13 @@ async function verifyBrowser(
       ),
       run: await captureAction(page, paths, "run", ["move-right", "run"], 24),
       jump: await captureAction(page, paths, "jump", ["jump"], 30),
-    } satisfies Record<ActionId, ActionCaptureResult>;
+    } satisfies Record<CaptureActionId, ActionCaptureResult>;
     const actions = {
       idle: captures.idle.evidence,
       walk: captures.walk.evidence,
       run: captures.run.evidence,
       jump: captures.jump.evidence,
-    } satisfies Record<ActionId, ActionCaptureEvidence>;
+    } satisfies Record<CaptureActionId, ActionCaptureEvidence>;
     assert.equal(new Set(Object.values(actions).map((capture) => capture.sha256)).size, 4);
     const actionIds = ["idle", "walk", "run", "jump"] as const;
     const comparisons: BrowserEvidence["poseGate"]["comparisons"][number][] = [];

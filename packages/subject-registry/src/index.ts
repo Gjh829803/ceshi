@@ -3,3 +3,4 @@ export {
   createSubjectResourceRegistry,
 } from "./subject-resource-registry";
 export * from "./types-v2";
+export * from "./types-v3";

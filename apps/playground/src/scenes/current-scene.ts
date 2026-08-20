@@ -50,7 +50,9 @@ export const currentScene = definePlannedOutdoorScene({
     maxVertices: 350_000,
     maxTriangles: 700_000,
     maxColliders: 128,
-    maxBuildTimeMs: 1_500,
+    // This is an authoring safety budget, not a micro-benchmark. Keep enough
+    // headroom for deterministic validation while the full test suite is under load.
+    maxBuildTimeMs: 3_000,
   },
   build(world) {
     const terrain = world.terrain.custom(

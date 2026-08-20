@@ -1,0 +1,42 @@
+{
+  "poseSets": [
+    {
+      "kind": "pose-set-profile",
+      "id": "static.whitebox",
+      "version": 1,
+      "resourceRef": "worldkit://pose-set/static.whitebox@1",
+      "authoringAvailability": "recommended",
+      "poseIds": ["idle", "move", "fall"],
+      "defaultPoseId": "idle",
+      "aiMetadata": {
+        "displayName": "Static Whitebox Pose Set",
+        "description": "Semantic fallback poses for primitive whitebox subjects.",
+        "semanticTags": ["pose", "static", "whitebox"]
+      }
+    }
+  ],
+  "renderBindings": [
+    {
+      "kind": "render-binding-profile",
+      "id": "subject.standard",
+      "version": 1,
+      "resourceRef": "worldkit://render-binding/subject.standard@1",
+      "authoringAvailability": "recommended",
+      "publishedStateFields": [
+        "semanticClassId",
+        "bodyTopology",
+        "forwardXYZ",
+        "speedMetersPerSecond",
+        "movementMedium",
+        "activeMotionKernelRef",
+        "activeActionId",
+        "relationshipRole"
+      ],
+      "aiMetadata": {
+        "displayName": "Standard Subject Render Binding",
+        "description": "Publishes stable movement and relationship facts to whitebox and world-model renderers.",
+        "semanticTags": ["render-binding", "subject"]
+      }
+    }
+  ]
+}

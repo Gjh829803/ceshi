@@ -2,7 +2,10 @@ import { describe, expect, it } from "vitest";
 import { readFile } from "node:fs/promises";
 import { fileURLToPath } from "node:url";
 
-import { createValidPackageSubjectWorld } from "../../../packages/authoring/src/test-fixture";
+import {
+  createValidAuthoringSpec,
+  createValidPackageSubjectWorld,
+} from "../../../packages/authoring/src/test-fixture";
 import type { WorldkitBrowserApiV3 } from "@whitebox-world/runtime-contracts";
 import { WORLDKIT_BROWSER_PROTOCOL_VERSION } from "@whitebox-world/runtime-contracts";
 
@@ -11,7 +14,6 @@ import {
   activeActionForControlledSubject,
   featureInspections,
   mapPlaygroundInputActions,
-  nextThirdPersonCameraOrbit,
 } from "./babylon-world-adapter";
 import { loadAuthoringScene } from "./authoring-loader";
 
@@ -130,42 +132,6 @@ describe("loadAuthoringScene", () => {
     expect(activeActionForControlledSubject(snapshot)).toBe("run");
   });
 
-  it("derives deterministic third-person orbit changes from arrows, drag, and wheel input", () => {
-    const initial = {
-      yawRadians: 0,
-      pitchRadians: 0.1,
-      distanceMeters: 4,
-    };
-    expect(
-      nextThirdPersonCameraOrbit(initial, {
-        kind: "actions",
-        actions: ["cameraRight", "cameraUp"],
-        ticks: 10,
-      }),
-    ).toEqual({
-      yawRadians: 0.25,
-      pitchRadians: -0.04999999999999999,
-      distanceMeters: 4,
-    });
-    expect(
-      nextThirdPersonCameraOrbit(initial, {
-        kind: "pointer-drag",
-        deltaPixelsXY: [100, -50],
-      }),
-    ).toEqual({
-      yawRadians: -0.6,
-      pitchRadians: 0.4,
-      distanceMeters: 4,
-    });
-    expect(
-      nextThirdPersonCameraOrbit(initial, { kind: "wheel", deltaY: 250 }),
-    ).toEqual({
-      yawRadians: 0,
-      pitchRadians: 0.1,
-      distanceMeters: 6,
-    });
-  });
-
   it("runs strict Authoring V3 JSON through NormalizedWorldIR V3 and ExecutionPlan V4", async () => {
     const loaded = await loadAuthoringScene(async () =>
       new Response(JSON.stringify(createValidPackageSubjectWorld()), {
@@ -194,6 +160,67 @@ describe("loadAuthoringScene", () => {
     });
     expect(loaded.normalizedWorldIrHash).toMatch(/^sha256:[a-f0-9]{64}$/);
     expect(loaded.executionPlanHash).toMatch(/^sha256:[a-f0-9]{64}$/);
+  });
+
+  it("replaces only the controlled Subject and adapts water/air package spawn context", async () => {
+    const waterLoaded = await loadAuthoringScene(
+      async () => new Response(JSON.stringify(createValidAuthoringSpec())),
+      {
+        subjectDefinitionRef:
+          "worldkit://subject-definition/watercraft.kayak.surface@1",
+      },
+    );
+    const airLoaded = await loadAuthoringScene(
+      async () => new Response(JSON.stringify(createValidAuthoringSpec())),
+      {
+        subjectDefinitionRef:
+          "worldkit://subject-definition/glider.paraglider.unpowered@1",
+      },
+    );
+
+    expect(waterLoaded.executionPlan?.subjects[0]).toMatchObject({
+      subjectDefinitionRef:
+        "worldkit://subject-definition/watercraft.kayak.surface@1",
+      spawnSubjectOriginPositionMetersXYZ: [25, expect.any(Number), 0],
+    });
+    expect(airLoaded.executionPlan?.subjects[0]).toMatchObject({
+      subjectDefinitionRef:
+        "worldkit://subject-definition/glider.paraglider.unpowered@1",
+      spawnSubjectOriginPositionMetersXYZ: [0, expect.any(Number), 30],
+    });
+    expect(
+      airLoaded.executionPlan?.subjects[0]?.spawnSubjectOriginPositionMetersXYZ[1],
+    ).toBeGreaterThanOrEqual(12);
+  });
+
+  it("gives the capability Playground enough explicit budget for the locked G Bot asset", async () => {
+    const source = createValidAuthoringSpec();
+    source.world.resourceBudget = {
+      maxVertices: 20_000,
+      maxTriangles: 30_000,
+      maxColliders: 16,
+    };
+    const loaded = await loadAuthoringScene(
+      async () => new Response(JSON.stringify(source)),
+      {
+        subjectDefinitionRef:
+          "worldkit://subject-definition/humanoid.g-bot.ground@1",
+      },
+    );
+
+    expect(loaded).toMatchObject({
+      ok: true,
+      diagnostics: [],
+      executionPlan: {
+        subjects: [
+          expect.objectContaining({
+            subjectDefinitionRef:
+              "worldkit://subject-definition/humanoid.g-bot.ground@1",
+          }),
+        ],
+      },
+    });
+    expect(loaded.executionPlan?.resourceUsage.triangles).toBeGreaterThan(30_000);
   });
 
   it("produces one runtime Feature inspection per compiled Subject", async () => {

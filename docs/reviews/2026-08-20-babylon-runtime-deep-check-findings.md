@@ -18,7 +18,7 @@ Revalidated against the post-baseline working tree before applying fixes. The or
 - **Terrain height semantics were unified:** Compiler and Runtime terrain sampling now use the same two-triangle interpolation as the rendered mesh, while physical Havok support remains the sole ground/air authority for subjects.
 - **Previously in-flight interaction fixes were preserved and integrated:** movement-relative facing, orbit camera controls, and terrain centering remain part of the same working-tree change set; the fixes above were coordinated around those changes rather than replacing them.
 
-The implementation and regenerated conformance evidence are intentionally left uncommitted for owner review.
+The corrected baseline was committed on `main` before the character/camera capability integration. The semantic integration preserves these fixes and adds its own final verification record in the accepted integration design.
 
 ### Verification record
 
@@ -31,9 +31,9 @@ The implementation and regenerated conformance evidence are intentionally left u
 - `pnpm verify:g-bot-subject`: passed; Normalized IR `sha256:6960d9c3a373d32f7db5bbebcf8559ebc3639ddb5f03fe39600a757fdbdd6ea9`, ExecutionPlan `sha256:b5be7cb6b675217d606ff36957978287f2fc86ecad40f49178d09330c60442c5`.
 - Automated behavioral acceptance covers falling and landing after an unsupported spawn, leaving a raised collider, one jump per held Space press, and equivalent fixed-tick progression across 120 Hz-like and 30 Hz-like render intervals. The last item is deterministic timestamp-driven adapter coverage, not a claim that two physical monitors were manually tested.
 
-## Out of scope — already being fixed separately
+## Historical out of scope at the review baseline
 
-The following three user-reported defects are being fixed in a separate effort. Do not duplicate that work, but expect the fixes to interact with findings H1, H2, and H4 below; coordinate on `SubjectController.step` if both land in the same area:
+At the original review baseline, the following three user-reported defects were being fixed separately. They are now covered by the corrected baseline and preserved by the capability integration; the list remains here only to explain the original review scope:
 
 1. All movement keys move the character forward (input/direction mapping).
 2. The character faces the camera instead of `-Z` forward, and the camera cannot be rotated.

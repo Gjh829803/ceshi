@@ -1,5 +1,17 @@
 import type {
   BipedBoneIdV1,
+  GroundHumanoidActionIdV1,
+  CameraContextProfileV1,
+  CameraRigAlgorithmDefinitionV1,
+  CameraRigProfileV1,
+  ControlProfileV1,
+  HarnessProfileV1,
+  MediumProfileV1,
+  MotionKernelDefinitionV1,
+  MotionProfileV1,
+  RelationshipProfileV1,
+  RenderBindingProfileV1,
+  SubjectBodyTopologyV2,
   SubjectResourceRegistryV2,
 } from "@whitebox-world/subject-registry";
 
@@ -396,11 +408,7 @@ export interface NormalizedRigProfileV1 {
   sourceNodeNameByBoneId: Readonly<Record<BipedBoneIdV1, string>>;
 }
 
-export type NormalizedGroundHumanoidActionIdV1 =
-  | "idle"
-  | "walk"
-  | "run"
-  | "jump";
+export type NormalizedGroundHumanoidActionIdV1 = GroundHumanoidActionIdV1;
 
 export interface NormalizedAnimationBindingV1 {
   actionId: NormalizedGroundHumanoidActionIdV1;
@@ -422,7 +430,7 @@ export interface NormalizedAnimationSetV1 {
 
 export interface NormalizedColliderProfileV1 {
   colliderProfileRef: string;
-  supportedBodyTopologies: readonly ("biped" | "quadruped" | "custom")[];
+  supportedBodyTopologies: readonly SubjectBodyTopologyV2[];
   collider: NormalizedSubjectColliderV2;
 }
 
@@ -433,8 +441,8 @@ export interface NormalizedSubjectDefinitionV2 {
   id: string;
   version: number;
   kind: "subject-definition";
-  category: "human" | "animal" | "custom";
-  bodyTopology: "biped" | "quadruped" | "custom";
+  category: "human" | "animal" | "vehicle" | "composite" | "custom";
+  bodyTopology: SubjectBodyTopologyV2;
   semanticClassId: string;
   coordinateConvention: PackageSubjectDefinitionV1["coordinateConvention"];
   visualParts: readonly NormalizedSubjectVisualPartV2[];
@@ -445,6 +453,22 @@ export interface NormalizedSubjectDefinitionV2 {
   profiles: {
     physicsBodyProfileRef: string;
     locomotionProfileRef: string;
+  };
+  capabilityAssembly?: {
+    authoringAvailability: "recommended" | "advanced" | "experimental";
+    defaultMotionProfile: MotionProfileV1;
+    optionalMotionProfiles: readonly MotionProfileV1[];
+    fallbackMotionProfile: MotionProfileV1;
+    motionKernels: readonly MotionKernelDefinitionV1[];
+    controlProfile: ControlProfileV1;
+    cameraContextProfile: CameraContextProfileV1;
+    cameraRigProfiles: readonly CameraRigProfileV1[];
+    cameraRigAlgorithms: readonly CameraRigAlgorithmDefinitionV1[];
+    mediumProfile: MediumProfileV1;
+    relationshipProfiles: readonly RelationshipProfileV1[];
+    harnessProfile: HarnessProfileV1;
+    renderBindingProfile: RenderBindingProfileV1;
+    actionOrPoseSetRef: string;
   };
   collider: NormalizedSubjectColliderV2 & {
     massKilograms: number;
@@ -475,7 +499,18 @@ export type ResolvedResourceKindV1 =
   | "capability"
   | "physics-body-profile"
   | "locomotion-profile"
-  | "collider-derivation-profile";
+  | "collider-derivation-profile"
+  | "motion-kernel"
+  | "motion-profile"
+  | "control-profile"
+  | "camera-rig-algorithm"
+  | "camera-rig-profile"
+  | "camera-context-profile"
+  | "medium-profile"
+  | "relationship-profile"
+  | "harness-profile"
+  | "pose-set-profile"
+  | "render-binding-profile";
 
 export interface ResolvedResourceLockEntryV1 {
   resourceRef: string;

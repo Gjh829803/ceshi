@@ -27,6 +27,33 @@ const G_BOT_COLLIDER_PROFILE_REF =
   "worldkit://collider-profile/humanoid.g-bot-capsule@1";
 const G_BOT_SUBJECT_DEFINITION_REF =
   "worldkit://subject-definition/humanoid.g-bot@1";
+const G_BOT_ACTION_IDS = [
+  "dance.rumba",
+  "emote.angry",
+  "emote.salute",
+  "fall",
+  "fight.enter",
+  "float",
+  "fly",
+  "idle",
+  "idle.gaming",
+  "jump",
+  "land.hard",
+  "land.hard.alt",
+  "lay.idle",
+  "roll.toRun",
+  "run",
+  "sit",
+  "sit.ground.idle",
+  "sit.idle",
+  "sit.toStand",
+  "stand",
+  "swim.exit",
+  "swim.surface",
+  "swim.tread",
+  "walk",
+  "walk.step",
+] as const;
 
 const BIPED_BONE_IDS = [
   "chest",
@@ -522,9 +549,9 @@ describe("subject resource registry", () => {
         ],
       },
       provenance: {
-        licenseSpdxId: "LicenseRef-Company-Private",
+        licenseSpdxId: "LicenseRef-Loopit-Company-Private",
         redistributionPolicy: "internal-only",
-        author: "G Golden asset owner",
+        author: "Loopit asset team",
       },
     });
 
@@ -563,14 +590,13 @@ describe("subject resource registry", () => {
       subjectAssetRef: G_BOT_SUBJECT_ASSET_REF,
       rigProfileRef: G_BOT_RIG_PROFILE_REF,
       defaultActionId: "idle",
-      requiredActionIds: ["idle", "jump", "run", "walk"],
-      animationBindings: [
-        expect.objectContaining({ actionId: "idle", sourceClipName: "idle" }),
-        expect.objectContaining({ actionId: "jump", sourceClipName: "jump" }),
-        expect.objectContaining({ actionId: "run", sourceClipName: "run" }),
-        expect.objectContaining({ actionId: "walk", sourceClipName: "walk" }),
-      ],
+      requiredActionIds: G_BOT_ACTION_IDS,
     });
+    expect(
+      builtInSubjectResourceRegistry
+        .resolveAnimationSet(G_BOT_ANIMATION_SET_REF)
+        ?.animationBindings.map((binding) => binding.actionId),
+    ).toEqual(G_BOT_ACTION_IDS);
 
     expect(
       builtInSubjectResourceRegistry.resolveColliderProfile(
@@ -630,17 +656,17 @@ describe("subject resource registry", () => {
       {
         resourceRef: G_BOT_SUBJECT_ASSET_REF,
         contentHash:
-          "sha256:ab59e67e2ff74448cad2a0b520524d019d7a78b02c8335f82428842b0f0fd7e4",
+          "sha256:fec417067c0ff5fb6f45adcc3ad6185bd6f692a58e6e5617d064de4e11448831",
       },
       {
         resourceRef: G_BOT_RIG_PROFILE_REF,
         contentHash:
-          "sha256:c73a33e59d5394f6b3190272177c2f30483cdfe7a5705ed8bbc6dadecd869545",
+          "sha256:463eda61823207629b87b50938f42f4b55bb246944d16b51214ebeb3eaa343bc",
       },
       {
         resourceRef: G_BOT_ANIMATION_SET_REF,
         contentHash:
-          "sha256:7853d41739601d4e3a2b35cabc558d074a9070cb91afcb3ef9ba25bff75690f5",
+          "sha256:e624c0f621e1a74ec034a7746a7b0a4536c9af7113b481f25a737ec5992629c4",
       },
       {
         resourceRef: G_BOT_COLLIDER_PROFILE_REF,

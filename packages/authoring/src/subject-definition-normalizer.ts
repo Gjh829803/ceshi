@@ -5,10 +5,12 @@ import {
 } from "@whitebox-world/subject-composition";
 import type {
   AnimationSetManifestV1,
+  RegistrySubjectDefinitionV3,
   RegistrySubjectDefinitionV2,
   RigProfileManifestV1,
   SubjectAssetManifestV1,
   SubjectResourceRegistryV2,
+  SubjectResourceRegistryV3,
 } from "@whitebox-world/subject-registry";
 
 import { sha256CanonicalJson } from "./canonical-json";
@@ -46,6 +48,10 @@ interface NormalizedRiggedVisualResourcesV1 {
 
 const REQUIRED_GROUND_ACTION_IDS = ["idle", "jump", "run", "walk"] as const;
 
+type NormalizedCapabilityAssemblyV1 = NonNullable<
+  NormalizedSubjectDefinitionV2["capabilityAssembly"]
+>;
+
 function addError(
   diagnostics: AuthoringDiagnostic[],
   code: string,
@@ -60,6 +66,229 @@ function addError(
     message,
     ...(details === undefined ? {} : { details }),
   });
+}
+
+function normalizeCapabilityAssemblyV1(
+  definition: SubjectDefinitionSourceV2,
+  request: NormalizeSubjectDefinitionRequestV2,
+): NormalizedCapabilityAssemblyV1 | undefined {
+  if (!("schemaVersion" in definition) || definition.schemaVersion !== 3) {
+    return undefined;
+  }
+  const subject = definition as RegistrySubjectDefinitionV3;
+  const registry = request.subjectResourceRegistry as Partial<SubjectResourceRegistryV3>;
+  if (
+    typeof registry.resolveMotionProfile !== "function" ||
+    typeof registry.resolveMotionKernel !== "function" ||
+    typeof registry.resolveControlProfile !== "function" ||
+    typeof registry.resolveCameraContextProfile !== "function" ||
+    typeof registry.resolveCameraRigProfile !== "function" ||
+    typeof registry.resolveCameraRigAlgorithm !== "function" ||
+    typeof registry.resolveMediumProfile !== "function" ||
+    typeof registry.resolveRelationshipProfile !== "function" ||
+    typeof registry.resolveHarnessProfile !== "function" ||
+    typeof registry.resolveRenderBindingProfile !== "function"
+  ) {
+    addError(
+      request.diagnostics,
+      "SUBJECT_CAPABILITY_UNSATISFIED",
+      request.instancePath,
+      "A schemaVersion 3 Subject Definition requires a capability-driven Subject Registry.",
+      { subjectDefinitionRef: subject.resourceRef },
+    );
+    return undefined;
+  }
+
+  const missing = (resourceRef: string, expectedKind: string): void => {
+    addError(
+      request.diagnostics,
+      "SUBJECT_CAPABILITY_UNSATISFIED",
+      request.instancePath,
+      `${expectedKind} '${resourceRef}' is not registered at the exact requested version.`,
+      { expectedKind, resourceRef },
+    );
+  };
+  const addLock = (resource: Parameters<ResourceLockBuilderV1["addRegistryResource"]>[0]) =>
+    request.resourceLockBuilder.addRegistryResource(
+      resource,
+      request.instancePath,
+      request.diagnostics,
+    );
+
+  const defaultMotionProfile = registry.resolveMotionProfile(
+    subject.profiles.motion.defaultMotionProfileRef,
+  );
+  const fallbackMotionProfile = registry.resolveMotionProfile(
+    subject.profiles.motion.fallbackMotionProfileRef,
+  );
+  const optionalMotionProfiles = subject.profiles.motion.optionalMotionProfileRefs.flatMap(
+    (resourceRef) => {
+      const resource = registry.resolveMotionProfile!(resourceRef);
+      if (resource === undefined) missing(resourceRef, "Motion Profile");
+      return resource === undefined ? [] : [resource];
+    },
+  );
+  if (defaultMotionProfile === undefined) {
+    missing(subject.profiles.motion.defaultMotionProfileRef, "Motion Profile");
+  }
+  if (fallbackMotionProfile === undefined) {
+    missing(subject.profiles.motion.fallbackMotionProfileRef, "Fallback Motion Profile");
+  }
+  const resolvedMotionProfiles = [
+    ...(defaultMotionProfile === undefined ? [] : [defaultMotionProfile]),
+    ...optionalMotionProfiles,
+    ...(fallbackMotionProfile === undefined ? [] : [fallbackMotionProfile]),
+  ];
+  const motionKernels = [...new Set(
+    resolvedMotionProfiles.map((profile) => profile.motionKernelRef),
+  )]
+    .sort((left, right) => left.localeCompare(right))
+    .flatMap((resourceRef) => {
+      const resource = registry.resolveMotionKernel!(resourceRef);
+      if (resource === undefined) missing(resourceRef, "Motion Kernel");
+      return resource === undefined ? [] : [resource];
+    });
+  const controlProfile = registry.resolveControlProfile(subject.profiles.controlProfileRef);
+  if (controlProfile === undefined) missing(subject.profiles.controlProfileRef, "Control Profile");
+  const cameraContextProfile = registry.resolveCameraContextProfile(
+    subject.profiles.cameraContextProfileRef,
+  );
+  if (cameraContextProfile === undefined) {
+    missing(subject.profiles.cameraContextProfileRef, "Camera Context Profile");
+  }
+  const mediumProfile = registry.resolveMediumProfile(subject.profiles.mediumProfileRef);
+  if (mediumProfile === undefined) missing(subject.profiles.mediumProfileRef, "Medium Profile");
+  const harnessProfile = registry.resolveHarnessProfile(subject.profiles.harnessProfileRef);
+  if (harnessProfile === undefined) missing(subject.profiles.harnessProfileRef, "Harness Profile");
+  const renderBindingProfile = registry.resolveRenderBindingProfile(
+    subject.renderBindingProfileRef,
+  );
+  if (renderBindingProfile === undefined) {
+    missing(subject.renderBindingProfileRef, "Render Binding Profile");
+  }
+
+  const cameraRigProfileRefs = new Set<string>();
+  if (cameraContextProfile !== undefined) {
+    cameraRigProfileRefs.add(cameraContextProfile.defaultCameraRigProfileRef);
+    if (cameraContextProfile.firstPersonCameraRigProfileRef !== undefined) {
+      cameraRigProfileRefs.add(cameraContextProfile.firstPersonCameraRigProfileRef);
+    }
+    for (const rule of cameraContextProfile.rules) {
+      cameraRigProfileRefs.add(rule.cameraRigProfileRef);
+    }
+  }
+  const cameraRigProfiles = [...cameraRigProfileRefs]
+    .sort((left, right) => left.localeCompare(right))
+    .flatMap((resourceRef) => {
+      const resource = registry.resolveCameraRigProfile!(resourceRef);
+      if (resource === undefined) missing(resourceRef, "Camera Rig Profile");
+      return resource === undefined ? [] : [resource];
+    });
+  const cameraRigAlgorithms = [...new Set(cameraRigProfiles.map((row) => row.algorithmRef))]
+    .sort((left, right) => left.localeCompare(right))
+    .flatMap((resourceRef) => {
+      const resource = registry.resolveCameraRigAlgorithm!(resourceRef);
+      if (resource === undefined) missing(resourceRef, "Camera Rig Algorithm");
+      return resource === undefined ? [] : [resource];
+    });
+
+  const relationshipProfileRefs = subject.relationshipCapabilityRefs.flatMap((resourceRef) => {
+    if (resourceRef === "worldkit://capability/relationship.seat@1") {
+      return ["worldkit://relationship-profile/seat.driver@1"];
+    }
+    if (resourceRef === "worldkit://capability/relationship.tether@1") {
+      return ["worldkit://relationship-profile/tether.standard@1"];
+    }
+    return [];
+  });
+  const relationshipProfiles = relationshipProfileRefs.flatMap((resourceRef) => {
+    const resource = registry.resolveRelationshipProfile!(resourceRef);
+    if (resource === undefined) missing(resourceRef, "Relationship Profile");
+    return resource === undefined ? [] : [resource];
+  });
+
+  if (
+    defaultMotionProfile === undefined ||
+    fallbackMotionProfile === undefined ||
+    motionKernels.length !== new Set(
+      resolvedMotionProfiles.map((profile) => profile.motionKernelRef),
+    ).size ||
+    controlProfile === undefined ||
+    cameraContextProfile === undefined ||
+    mediumProfile === undefined ||
+    harnessProfile === undefined ||
+    renderBindingProfile === undefined
+  ) {
+    return undefined;
+  }
+  const incompatibleMotionKernel = motionKernels.find(
+    (motionKernel) => motionKernel.runtimeStatus !== "implemented",
+  );
+  if (incompatibleMotionKernel !== undefined) {
+    addError(
+      request.diagnostics,
+      "SUBJECT_CAPABILITY_UNSATISFIED",
+      request.instancePath,
+      `Motion Kernel '${incompatibleMotionKernel.resourceRef}' is not implemented by the canonical runtime.`,
+      {
+        kernelCommandKind: incompatibleMotionKernel.commandKind,
+        controlCommandKind: controlProfile.commandKind,
+        runtimeStatus: incompatibleMotionKernel.runtimeStatus,
+      },
+    );
+    return undefined;
+  }
+  const defaultMotionKernel = motionKernels.find(
+    (motionKernel) => motionKernel.resourceRef === defaultMotionProfile.motionKernelRef,
+  );
+  if (
+    defaultMotionKernel === undefined ||
+    defaultMotionKernel.commandKind !== controlProfile.commandKind
+  ) {
+    addError(
+      request.diagnostics,
+      "SUBJECT_CAPABILITY_UNSATISFIED",
+      request.instancePath,
+      `Default Motion Kernel '${defaultMotionProfile.motionKernelRef}' and Control Profile '${controlProfile.resourceRef}' use different command kinds.`,
+      {
+        kernelCommandKind: defaultMotionKernel?.commandKind,
+        controlCommandKind: controlProfile.commandKind,
+      },
+    );
+    return undefined;
+  }
+
+  [
+    defaultMotionProfile,
+    ...optionalMotionProfiles,
+    fallbackMotionProfile,
+    ...motionKernels,
+    controlProfile,
+    cameraContextProfile,
+    ...cameraRigProfiles,
+    ...cameraRigAlgorithms,
+    mediumProfile,
+    ...relationshipProfiles,
+    harnessProfile,
+    renderBindingProfile,
+  ].forEach(addLock);
+
+  return {
+    authoringAvailability: subject.authoringAvailability,
+    defaultMotionProfile,
+    optionalMotionProfiles,
+    fallbackMotionProfile,
+    motionKernels,
+    controlProfile,
+    cameraContextProfile,
+    cameraRigProfiles,
+    cameraRigAlgorithms,
+    mediumProfile,
+    relationshipProfiles,
+    harnessProfile,
+    renderBindingProfile,
+    actionOrPoseSetRef: subject.actionOrPoseSetRef,
+  };
 }
 
 function sortedStrings(values: readonly string[] | undefined): readonly string[] {
@@ -533,14 +762,16 @@ export function normalizeSubjectDefinitionV2(
       }
     }
   }
-  if (capabilityRefs.length !== 1 ||
+  const isCapabilityDrivenV3 =
+    "schemaVersion" in definition && definition.schemaVersion === 3;
+  if (!isCapabilityDrivenV3 && (capabilityRefs.length !== 1 ||
     capabilityRefs[0] !== "worldkit://capability/locomotion.ground@1" ||
-    capabilities[0]?.providedFeatures.includes("ground-locomotion") !== true) {
+    capabilities[0]?.providedFeatures.includes("ground-locomotion") !== true)) {
     addError(diagnostics, "SUBJECT_CAPABILITY_UNSATISFIED", `${instancePath}/capabilityRefs`,
       "S1b Subject Definitions require exactly the ground locomotion capability.",
       { requiredCapabilityRefs: ["worldkit://capability/locomotion.ground@1"] });
   }
-  if (locomotionProfile !== undefined && locomotionProfile.requiredCapabilityRefs.some(
+  if (!isCapabilityDrivenV3 && locomotionProfile !== undefined && locomotionProfile.requiredCapabilityRefs.some(
     (resourceRef) => !selectedCapabilityRefs.has(resourceRef))) {
     addError(diagnostics, "SUBJECT_CAPABILITY_UNSATISFIED",
       `${instancePath}/profiles/locomotionProfileRef`,
@@ -576,6 +807,7 @@ export function normalizeSubjectDefinitionV2(
   }
 
   const normalizedCollider = resolveColliderPolicy(definition, request);
+  const capabilityAssembly = normalizeCapabilityAssemblyV1(definition, request);
   const primitiveCost = calculatePrimitiveResourceCost(
     visualParts.filter((part) => part.kind === "primitive"));
   const subjectAsset = riggedResources?.subjectAssetResource;
@@ -635,6 +867,7 @@ export function normalizeSubjectDefinitionV2(
     colliderPolicy: structuredClone(definition.colliderPolicy),
     capabilityRefs,
     profiles: structuredClone(definition.profiles),
+    ...(capabilityAssembly === undefined ? {} : { capabilityAssembly }),
     aiMetadata: {
       ...structuredClone(definition.aiMetadata),
       semanticTags: sortedStrings(definition.aiMetadata.semanticTags),

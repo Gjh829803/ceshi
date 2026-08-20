@@ -350,6 +350,7 @@ interface ControllerProbe {
   visualRoot: {
     position: CartesianVector;
     rotation: CartesianVector;
+    rotationQuaternion?: { toEulerAngles(): CartesianVector } | null;
     getChildMeshes(): readonly { name: string; position: CartesianVector }[];
   };
 }
@@ -380,8 +381,10 @@ function createRuntimeDebugProbe(runtime: BabylonWorldRuntime): RuntimeDebugProb
       if (mesh === undefined) throw new Error(`Missing visual Part '${expectedName}'.`);
       return toVec3(mesh.position);
     },
-    visualRootYawRadians: (subjectEntityId) =>
-      controllerFor(subjectEntityId).visualRoot.rotation.y,
+    visualRootYawRadians: (subjectEntityId) => {
+      const visualRoot = controllerFor(subjectEntityId).visualRoot;
+      return visualRoot.rotationQuaternion?.toEulerAngles().y ?? visualRoot.rotation.y;
+    },
   };
 }
 
@@ -549,6 +552,21 @@ describe("BabylonWorldRuntime", () => {
       },
       resources: { terrainSamples: 65 * 65 },
     });
+    expect(runtime.snapshot().subjectStatesByEntityId.player).not.toHaveProperty(
+      "activeMotionProfileRef",
+    );
+    expect(runtime.snapshot().subjectStatesByEntityId.player).not.toHaveProperty(
+      "activeMotionKernelRef",
+    );
+    expect(
+      runtime.requestMotionProfile(
+        "player",
+        "worldkit://motion-profile/free-ground.humanoid-medium@1",
+      ),
+    ).toBe(false);
+    expect(() =>
+      runtime.setMotionTuning("player", { walkSpeedMetersPerSecond: 1.5 }),
+    ).toThrow(RangeError);
     expect(runtime.snapshot().resources.meshes).toBeGreaterThanOrEqual(10);
 
     await runtime.dispose();
@@ -1937,9 +1955,11 @@ describe("BabylonWorldRuntime", () => {
     for (const [action, expectedYawRadians] of expectedYawByAction) {
       runtime.reset();
       await runtime.runFixedInput({ actions: [action], ticks: 1 });
-      expect(debug.visualRootYawRadians("player")).toBeCloseTo(
-        expectedYawRadians,
+      const angularDelta = Math.atan2(
+        Math.sin(debug.visualRootYawRadians("player") - expectedYawRadians),
+        Math.cos(debug.visualRootYawRadians("player") - expectedYawRadians),
       );
+      expect(angularDelta).toBeCloseTo(0);
     }
 
     await runtime.dispose();
@@ -1989,20 +2009,13 @@ describe("BabylonWorldRuntime", () => {
   it("orbits and zooms the third-person camera around its controlled Subject", async () => {
     const { runtime, executionPlan } = await createRuntimeWithPackageSubject();
     const target = runtime.snapshot().subjectStatesByEntityId.player!;
-    const orbitRuntime = runtime as BabylonWorldRuntime & {
-      setThirdPersonCameraOrbit(input: {
-        yawRadians: number;
-        pitchRadians: number;
-        distanceMeters: number;
-      }): void;
-    };
-
-    orbitRuntime.setThirdPersonCameraOrbit({
-      yawRadians: Math.PI / 2,
-      pitchRadians: 0,
-      distanceMeters: 3,
+    runtime.adjustCameraView({
+      yawDeltaRadians: Math.PI / 2,
+      pitchDeltaRadians: -executionPlan.camera.pitchRadians,
+      zoomDeltaMeters: 3 - executionPlan.camera.distanceMeters,
     });
-    const camera = runtime.snapshot().camera.positionMetersXYZ;
+    const snapshot = runtime.snapshot();
+    const camera = snapshot.camera.positionMetersXYZ;
 
     expect(camera[0]).toBeCloseTo(target.positionMetersXYZ[0] + 3, 6);
     expect(camera[1]).toBeCloseTo(
@@ -2010,6 +2023,7 @@ describe("BabylonWorldRuntime", () => {
       6,
     );
     expect(camera[2]).toBeCloseTo(target.positionMetersXYZ[2], 2);
+    expect(snapshot.camera.viewYawOffsetRadians).toBeCloseTo(Math.PI / 2);
     await runtime.dispose();
   });
 

@@ -1,10 +1,15 @@
 import type { SubjectAssetRuntimeErrorCodeV1 } from "@whitebox-world/runtime-babylon";
+import { builtInSubjectResourceRegistry } from "@whitebox-world/subject-registry";
 import {
   WORLDKIT_BROWSER_PROTOCOL_VERSION,
   type BindControlRequestV2,
+  type CameraTuningV1,
+  type CameraViewInputV1,
   type ControlBindingReceiptV2,
   type FixedInputV1,
+  type MotionParameterTuningV1,
   type WorldRuntimeSnapshotV3,
+  type SubjectHarnessReportV1,
   type WorldkitBrowserApiV3,
   type WorldkitBrowserDiagnosticV1,
 } from "@whitebox-world/runtime-contracts";
@@ -20,6 +25,19 @@ export interface DeferredWorldkitBrowserRuntimeAdapterV1 {
   resetRuntime(): WorldRuntimeSnapshotV3;
   setPaused(paused: boolean): void;
   disposeRuntime(): Promise<void>;
+  setCameraPreferenceRuntime?(preference: string): WorldRuntimeSnapshotV3;
+  adjustCameraViewRuntime?(input: CameraViewInputV1): WorldRuntimeSnapshotV3;
+  resetCameraViewRuntime?(): WorldRuntimeSnapshotV3;
+  setCameraTuningRuntime?(tuning: CameraTuningV1): WorldRuntimeSnapshotV3;
+  setMotionTuningRuntime?(
+    subjectEntityId: string,
+    tuning: MotionParameterTuningV1,
+  ): WorldRuntimeSnapshotV3;
+  runSubjectHarness?(subjectEntityId: string): Promise<SubjectHarnessReportV1>;
+  setMotionProfileRuntime?(
+    subjectEntityId: string,
+    motionProfileRef: string,
+  ): Promise<WorldRuntimeSnapshotV3>;
 }
 
 interface WorldkitBrowserApiTargetV1 {
@@ -170,7 +188,216 @@ export function installDeferredWorldkitBrowserApi(options: {
       adapter.setPaused(paused);
       return adapter.runtimeSnapshot();
     },
+    listSubjectDefinitions: (options = {}) =>
+      builtInSubjectResourceRegistry.listCapabilitySubjectDefinitions()
+        .filter(
+          (definition) =>
+            options.includeExperimental === true ||
+            definition.authoringAvailability !== "experimental",
+        )
+        .map((capabilityDriven) => {
+          return {
+            resourceRef: capabilityDriven.resourceRef,
+            displayName: capabilityDriven.aiMetadata.displayName,
+            semanticClassId: capabilityDriven.semanticClassId,
+            bodyTopology: capabilityDriven.bodyTopology,
+            authoringAvailability: capabilityDriven.authoringAvailability,
+            defaultMotionProfileRef:
+              capabilityDriven.profiles.motion.defaultMotionProfileRef,
+            controlProfileRef: capabilityDriven.profiles.controlProfileRef,
+            cameraContextProfileRef:
+              capabilityDriven.profiles.cameraContextProfileRef,
+          };
+        }),
+    listMotionKernels: (options = {}) =>
+      builtInSubjectResourceRegistry.listCapabilityResources()
+        .filter((resource) => resource.kind === "motion-kernel")
+        .filter(
+          (resource) =>
+            (options.includeExperimental === true ||
+              resource.authoringAvailability !== "experimental") &&
+            (options.includeInternal === true ||
+              resource.authoringAvailability !== "internal"),
+        )
+        .map((resource) => ({
+          resourceRef: resource.resourceRef,
+          displayName: resource.aiMetadata.displayName,
+          implementationId: resource.implementationId,
+          commandKind: resource.commandKind,
+          runtimeStatus: resource.runtimeStatus,
+          authoringAvailability: resource.authoringAvailability,
+        })),
+    listCompatibleProfiles: (subjectDefinitionRef) => {
+      const definition = builtInSubjectResourceRegistry.resolveSubjectDefinition(
+        subjectDefinitionRef,
+      );
+      if (definition === undefined || !("schemaVersion" in definition)) return [];
+      const motionRefs = new Set([
+        definition.profiles.motion.defaultMotionProfileRef,
+        ...definition.profiles.motion.optionalMotionProfileRefs,
+        definition.profiles.motion.fallbackMotionProfileRef,
+      ]);
+      const cameraContext = builtInSubjectResourceRegistry.resolveCameraContextProfile(
+        definition.profiles.cameraContextProfileRef,
+      );
+      const cameraRefs = new Set<string>();
+      if (cameraContext !== undefined) {
+        cameraRefs.add(cameraContext.defaultCameraRigProfileRef);
+        if (cameraContext.firstPersonCameraRigProfileRef !== undefined) {
+          cameraRefs.add(cameraContext.firstPersonCameraRigProfileRef);
+        }
+        cameraContext.rules.forEach((rule) => cameraRefs.add(rule.cameraRigProfileRef));
+      }
+      return [
+        ...[...motionRefs].flatMap((resourceRef) => {
+          const resource = builtInSubjectResourceRegistry.resolveMotionProfile(resourceRef);
+          return resource === undefined
+            ? []
+            : [{
+                resourceRef,
+                kind: "motion-profile" as const,
+                displayName: resource.aiMetadata.displayName,
+                role: resourceRef === definition.profiles.motion.defaultMotionProfileRef
+                  ? "default" as const
+                  : resourceRef === definition.profiles.motion.fallbackMotionProfileRef
+                    ? "fallback" as const
+                    : "optional" as const,
+                parameters: resource.parameters,
+                safetyLimits: resource.safetyLimits,
+              }];
+        }),
+        ...[...cameraRefs].flatMap((resourceRef) => {
+          const resource = builtInSubjectResourceRegistry.resolveCameraRigProfile(resourceRef);
+          return resource === undefined
+            ? []
+            : [{
+                resourceRef,
+                kind: "camera-rig-profile" as const,
+                displayName: resource.aiMetadata.displayName,
+                role: "camera" as const,
+                parameters: resource.parameters,
+              }];
+        }),
+      ].sort((left, right) => left.resourceRef.localeCompare(right.resourceRef));
+    },
+    validateSubjectPackage: (subjectDefinitionRef) => {
+      const definition = builtInSubjectResourceRegistry.resolveSubjectDefinition(
+        subjectDefinitionRef,
+      );
+      const diagnostics: { code: string; message: string }[] = [];
+      if (definition === undefined || !("schemaVersion" in definition)) {
+        diagnostics.push({
+          code: "SUBJECT_PACKAGE_NOT_FOUND",
+          message: "The exact capability-driven Subject Definition is not registered.",
+        });
+      } else {
+        const motion = builtInSubjectResourceRegistry.resolveMotionProfile(
+          definition.profiles.motion.defaultMotionProfileRef,
+        );
+        const kernel = motion === undefined
+          ? undefined
+          : builtInSubjectResourceRegistry.resolveMotionKernel(motion.motionKernelRef);
+        const control = builtInSubjectResourceRegistry.resolveControlProfile(
+          definition.profiles.controlProfileRef,
+        );
+        if (kernel?.runtimeStatus !== "implemented") {
+          diagnostics.push({
+            code: "SUBJECT_KERNEL_NOT_IMPLEMENTED",
+            message: "The selected Motion Kernel is not installed in the canonical runtime.",
+          });
+        }
+        if (kernel !== undefined && control !== undefined && kernel.commandKind !== control.commandKind) {
+          diagnostics.push({
+            code: "SUBJECT_COMMAND_KIND_MISMATCH",
+            message: "Control Profile and Motion Kernel command kinds do not match.",
+          });
+        }
+      }
+      return { valid: diagnostics.length === 0, subjectDefinitionRef, diagnostics };
+    },
+    setIntent: async (input) => {
+      await startupPromise;
+      return requireReadyAdapter().runWorldkitFixedInput([input]);
+    },
+    setCameraPreference: (preference) => {
+      const adapter = requireReadyAdapter();
+      if (adapter.setCameraPreferenceRuntime === undefined) {
+        throw new Error("WORLDKIT_CAMERA_PREFERENCE_UNAVAILABLE");
+      }
+      return adapter.setCameraPreferenceRuntime(preference);
+    },
+    adjustCameraView: (input) => {
+      const adapter = requireReadyAdapter();
+      if (adapter.adjustCameraViewRuntime === undefined) {
+        throw new Error("WORLDKIT_CAMERA_VIEW_INPUT_UNAVAILABLE");
+      }
+      return adapter.adjustCameraViewRuntime(input);
+    },
+    resetCameraView: () => {
+      const adapter = requireReadyAdapter();
+      if (adapter.resetCameraViewRuntime === undefined) {
+        throw new Error("WORLDKIT_CAMERA_VIEW_RESET_UNAVAILABLE");
+      }
+      return adapter.resetCameraViewRuntime();
+    },
+    setCameraTuning: (tuning) => {
+      const adapter = requireReadyAdapter();
+      if (adapter.setCameraTuningRuntime === undefined) {
+        throw new Error("WORLDKIT_CAMERA_TUNING_UNAVAILABLE");
+      }
+      return adapter.setCameraTuningRuntime(tuning);
+    },
+    setMotionTuning: (subjectEntityId, tuning) => {
+      const adapter = requireReadyAdapter();
+      if (adapter.setMotionTuningRuntime === undefined) {
+        throw new Error("WORLDKIT_MOTION_TUNING_UNAVAILABLE");
+      }
+      return adapter.setMotionTuningRuntime(subjectEntityId, tuning);
+    },
+    setMotionProfile: async (subjectEntityId, motionProfileRef) => {
+      await startupPromise;
+      const adapter = requireReadyAdapter();
+      if (adapter.setMotionProfileRuntime === undefined) {
+        throw new Error("WORLDKIT_MOTION_PROFILE_SWITCH_UNAVAILABLE");
+      }
+      return adapter.setMotionProfileRuntime(subjectEntityId, motionProfileRef);
+    },
+    runHarness: async (subjectEntityId) => {
+      await startupPromise;
+      const adapter = requireReadyAdapter();
+      if (adapter.runSubjectHarness === undefined) {
+        throw new Error("WORLDKIT_SUBJECT_HARNESS_UNAVAILABLE");
+      }
+      return adapter.runSubjectHarness(subjectEntityId);
+    },
+    getSubjectSnapshot: (subjectEntityId) =>
+      requireReadyAdapter().runtimeSnapshot().subjectStatesByEntityId[subjectEntityId],
+    getCameraSnapshot: () => requireReadyAdapter().runtimeSnapshot().camera,
   };
+
+  // Protocol V3 keys remain enumerable for exact backward compatibility. The
+  // capability-authoring extension is callable but does not mutate that key set.
+  for (const extensionName of [
+    "adjustCameraView",
+    "getCameraSnapshot",
+    "getSubjectSnapshot",
+    "listCompatibleProfiles",
+    "listMotionKernels",
+    "listSubjectDefinitions",
+    "runHarness",
+    "resetCameraView",
+    "setCameraPreference",
+    "setCameraTuning",
+    "setIntent",
+    "setMotionProfile",
+    "setMotionTuning",
+    "validateSubjectPackage",
+  ] as const) {
+    const descriptor = Object.getOwnPropertyDescriptor(api, extensionName);
+    if (descriptor !== undefined) {
+      Object.defineProperty(api, extensionName, { ...descriptor, enumerable: false });
+    }
+  }
 
   options.target.__WORLDKIT__ = api;
   options.statusElement.dataset.worldkitStatus = "loading";

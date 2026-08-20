@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import type {
+  CameraViewInputV1,
   ExecutionPlanV4,
   FixedInputV1,
   WorldRuntimeSnapshotV3,
@@ -15,18 +16,8 @@ interface RuntimeProbe {
   runFixedInput: ReturnType<typeof vi.fn<(input: FixedInputV1) => Promise<WorldRuntimeSnapshotV3>>>;
   renderFrame: ReturnType<typeof vi.fn>;
   reset: ReturnType<typeof vi.fn<() => WorldRuntimeSnapshotV3>>;
+  adjustCameraView(input: CameraViewInputV1): WorldRuntimeSnapshotV3;
   snapshot(): WorldRuntimeSnapshotV3;
-  getThirdPersonCameraOrbit(): {
-    yawRadians: number;
-    pitchRadians: number;
-    distanceMeters: number;
-  };
-  setThirdPersonCameraOrbit(orbit: {
-    yawRadians: number;
-    pitchRadians: number;
-    distanceMeters: number;
-  }): void;
-  getSubjectFacingYawRadians(): number;
 }
 
 interface AdapterProbe {
@@ -42,7 +33,14 @@ interface AdapterProbe {
   resetRuntime(): WorldRuntimeSnapshotV3;
 }
 
-function runtimeSnapshot(tick = 0): WorldRuntimeSnapshotV3 {
+function runtimeSnapshot(
+  tick = 0,
+  cameraView: {
+    yawRadians: number;
+    pitchRadians: number;
+    distanceMeters: number;
+  } = { yawRadians: 0, pitchRadians: 0, distanceMeters: 0 },
+): WorldRuntimeSnapshotV3 {
   return {
     kind: "worldkit-runtime-snapshot",
     schemaVersion: 3,
@@ -60,6 +58,7 @@ function runtimeSnapshot(tick = 0): WorldRuntimeSnapshotV3 {
         velocityMetersPerSecondXYZ: [0, 0, 0],
         movementMedium: "ground",
         activeActionId: "idle",
+        forwardXYZ: [0, 0, -1],
       },
     },
     physics: { backend: "havok", ready: true, fixedTimeStepSeconds: 1 / 60 },
@@ -67,6 +66,9 @@ function runtimeSnapshot(tick = 0): WorldRuntimeSnapshotV3 {
       entityId: "camera-main",
       targetEntityId: "player",
       positionMetersXYZ: [0, 2, 4],
+      viewYawOffsetRadians: cameraView.yawRadians,
+      viewPitchOffsetRadians: cameraView.pitchRadians,
+      viewDistanceOffsetMeters: cameraView.distanceMeters,
     },
     resources: { meshes: 1, bodies: 1, terrainSamples: 4 },
   };
@@ -78,27 +80,34 @@ function createAdapterProbe(): {
   requestFrame: ReturnType<typeof vi.fn>;
 } {
   let tick = 0;
-  let orbit = { yawRadians: 0, pitchRadians: 0.2, distanceMeters: 4 };
+  let cameraView = { yawRadians: 0, pitchRadians: 0, distanceMeters: 0 };
   const runtime: RuntimeProbe = {
     runFixedInput: vi.fn(async (input) => {
       tick += input.ticks;
-      return runtimeSnapshot(tick);
+      return runtimeSnapshot(tick, cameraView);
     }),
     renderFrame: vi.fn(),
     reset: vi.fn(() => {
       tick = 0;
-      orbit = { yawRadians: 0, pitchRadians: 0.2, distanceMeters: 4 };
-      return runtimeSnapshot();
+      cameraView = { yawRadians: 0, pitchRadians: 0, distanceMeters: 0 };
+      return runtimeSnapshot(0, cameraView);
     }),
-    snapshot: () => runtimeSnapshot(tick),
-    getThirdPersonCameraOrbit: () => ({ ...orbit }),
-    setThirdPersonCameraOrbit: (next) => {
-      orbit = { ...next };
+    adjustCameraView: (input) => {
+      cameraView = {
+        yawRadians: cameraView.yawRadians + (input.yawDeltaRadians ?? 0),
+        pitchRadians: cameraView.pitchRadians + (input.pitchDeltaRadians ?? 0),
+        distanceMeters: cameraView.distanceMeters + (input.zoomDeltaMeters ?? 0),
+      };
+      return runtimeSnapshot(tick, cameraView);
     },
-    getSubjectFacingYawRadians: () => 0,
+    snapshot: () => runtimeSnapshot(tick, cameraView),
   };
   const executionPlan = {
     id: "adapter-test",
+    camera: {
+      pitchRadians: 0.2,
+      distanceMeters: 4,
+    },
     layout: { layoutAssertions: [], layoutSolveReportHash: `sha256:${"2".repeat(64)}` },
     resourceUsage: { triangles: 2 },
   } as unknown as ExecutionPlanV4;

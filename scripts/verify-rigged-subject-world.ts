@@ -402,7 +402,9 @@ async function captureAction(
     };
   });
   const bytes = pngBytesFromDataUrl(capture.dataUrl);
-  await writeFile(paths.action[actionId], bytes);
+  const actionOutputPath = paths.action[actionId];
+  assert.ok(actionOutputPath !== undefined);
+  await writeFile(actionOutputPath, bytes);
   const filename = `${actionId}.png` as ActionCaptureEvidence["filename"];
   const poseAnalysis = analyzeSubjectPoseCrop({
     boundsPixelsXYWH: capture.boundsPixelsXYWH,
@@ -619,8 +621,16 @@ async function verifyBrowser(
     let routeHits = 0;
     let responseStatus = 0;
     let responseContentType = "";
-    const exactAssetUrl = new URL(ASSET_ROUTE_PATH, server.url).href;
-    await tamperPage.route(exactAssetUrl, async (route) => {
+    const compiledAsset = artifact.executionPlan.subjectAssets.find(
+      (asset) => asset.subjectAssetRef === SUBJECT_ASSET_REF,
+    );
+    assert.ok(compiledAsset !== undefined);
+    const exactAssetUrl = new URL(ASSET_ROUTE_PATH, server.url);
+    exactAssetUrl.searchParams.set(
+      "worldkit-content-hash",
+      compiledAsset.artifactContentHash,
+    );
+    await tamperPage.route(exactAssetUrl.href, async (route) => {
       routeHits += 1;
       assert.equal(routeHits, 1, "Tamper fixture requested the GLB more than once.");
       const response = await route.fetch();
@@ -777,8 +787,14 @@ async function writeVerification(
     tamper: browser.tamper,
   } as const;
   const actionHashes = verification.captures
-    .filter((capture) => capture.source === "browser-fixed-tick")
-    .map((capture) => capture.sha256);
+    .flatMap((capture) =>
+      capture !== undefined &&
+      capture.source === "browser-fixed-tick" &&
+      "sha256" in capture &&
+      typeof capture.sha256 === "string"
+        ? [capture.sha256]
+        : []
+    );
   assert.equal(new Set(actionHashes).size, 4);
   await writeFile(paths.verification, `${stringifyCanonicalJson(verification)}\n`);
 }

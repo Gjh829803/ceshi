@@ -47,6 +47,13 @@ const RIGGED_SUBJECT_WORLD_PATH = path.resolve(
 const G_BOT_SUBJECT_WORLD_PATH = path.resolve(
   fileURLToPath(new URL("../examples/authoring/g-bot-subject-world.json", import.meta.url)),
 );
+const G_BOT_ACTION_IDS = [
+  "dance.rumba", "emote.angry", "emote.salute", "fall", "fight.enter",
+  "float", "fly", "idle", "idle.gaming", "jump", "land.hard",
+  "land.hard.alt", "lay.idle", "roll.toRun", "run", "sit",
+  "sit.ground.idle", "sit.idle", "sit.toStand", "stand", "swim.exit",
+  "swim.surface", "swim.tread", "walk", "walk.step",
+] as const;
 
 afterEach(async () => {
   await Promise.all(
@@ -572,7 +579,7 @@ describe("worldkit CLI", () => {
       artifact.executionPlan.animationSets[0]?.animationBindings.map(
         (binding) => binding.actionId,
       ),
-    ).toEqual(["idle", "jump", "run", "walk"]);
+    ).toEqual(G_BOT_ACTION_IDS);
     expect(artifact.executionPlan.colliderProfiles).toEqual([
       expect.objectContaining({
         colliderProfileRef:

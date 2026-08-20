@@ -1,6 +1,6 @@
 # Character, Camera, and Capability Runtime Integration Design
 
-- Status: Accepted integration design
+- Status: Implemented and verified
 - Date: 2026-08-20
 - Target branch: `main`
 - Integration branch: `codex/integrate-character-camera-decoupling`
@@ -91,9 +91,10 @@ Camera collision queries exclude the controlled Subject and shorten distance wit
 - Registry resources use `...Ref`; raw locations use `...Uri`; Babylon/Havok identifiers remain adapter-internal.
 - Persistent definitions use `kind`; Commands and Events use `type`; runtime exclusivity uses `mode`.
 - Capability resource unions are closed and Registry Hashes cover every canonical field.
-- `listAllResources`/`listResources` or V2/V3 pairs must not become two public AI dialects. If both are temporarily required for repository migration, the older projection is marked internal/deprecated and Canonical examples use only the new name.
-- A fallback profile is an explicit locked resource, not a fabricated `legacy` public profile. Primitive/older fixtures may receive a deterministic internal projection at the Compiler boundary while migration remains, but snapshots and explain output identify the resolved canonical profile.
-- Tier labels such as `T0`/`T1`/`T2` require one Registry definition and one meaning. They must not be inferred from asset names or provider-specific metadata.
+- Every Kernel reachable from the default, optional, or fallback Motion Profiles is resolved, locked, and projected with an explicit `implementationId`. Runtime selection never infers an implementation from a resource-ref substring.
+- `listCapabilityResources` and `listCapabilitySubjectDefinitions` are the capability-oriented AI discovery surface. The older `listResources` and `listSubjectDefinitions` methods remain the Canonical V2 authoring view during repository migration; neither method returns a mixed V2/V3 union or aliases the other dialect.
+- A capability fallback profile is an explicit locked resource, not a fabricated `legacy` public profile. Primitive/older fixtures may use a deterministic internal compatibility projection while migration remains, but their snapshots omit capability-profile refs rather than publishing an unregistered resource identity. Capability-enabled snapshots identify the resolved canonical profile.
+- Public discovery uses the descriptive `authoringAvailability` field with `recommended`, `advanced`, and `experimental`; Registry-only resources may additionally use `internal`. Numeric tier aliases are not exposed to AI callers.
 
 ## 7. Failure and ownership behavior
 
@@ -169,3 +170,14 @@ The policy requires reviewers to:
 9. Remove the integration worktree only after proving its commit is an ancestor of `main` and the worktree is clean.
 
 Acceptance requires no unresolved conflict markers, no uncommitted files, no verifier residue, and no known P0-P2 finding in the integrated scope.
+
+## 11. Final verification record
+
+- `pnpm typecheck`: passed.
+- `pnpm test`: 55 files and 490 tests passed.
+- `pnpm build`: passed with 2,103 transformed modules; the existing large-chunk advisory remains a separate bundle-splitting concern.
+- `pnpm verify:canonical`: passed; Normalized IR `sha256:e5b53f5d853c33e07e4d09c960d01210ad951b3666dcd41faf2c442d9d698d83`, ExecutionPlan `sha256:39925981aac70d61b5056259c384346fb0db4fde628499dbf6799e098c15ba0d`.
+- `pnpm verify:placement-layout`: passed; Normalized IR `sha256:869fbf4e48fc6200d8512a643914d091358e3f8e254e705dffd315233e7c7190`, ExecutionPlan `sha256:e55aa781caa92af917b5224a3846e0ddd5e672b1ab9f3613fcb62645b3b98b6d`.
+- `pnpm verify:rigged-subject`: passed; Normalized IR `sha256:ffe2240f2fa90931d7d7cb3863c0d1068b0984dd2b4897f2ffbc9473ca76a1f9`, ExecutionPlan `sha256:df3a35b3ff935c0ddc1f9c68a8dfca6395193b02c92b1db6e63b20429f55f994`.
+- `pnpm verify:g-bot-subject`: passed; Normalized IR `sha256:bcf0c81f14450cb2f7c875b87f645f9fcd5d930ddbc96d5524bebd1e4b1e4123`, ExecutionPlan `sha256:058035c1f897e78ac6af4b9905ce934beb492812795f3186291053c10232848e`.
+- Generated screenshots were inspected after the final verifier run. G Bot walk/run poses are visibly distinct, the Golden rigged walk remains visible, and no verifier temporary or backup directory remains.

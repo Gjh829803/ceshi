@@ -37,6 +37,7 @@ export interface SubjectAssetManifestInputV1 extends SubjectRegistryResourceBase
     triangleCount: number;
     skeletonCount: number;
     boneCount: number;
+    animationClipCount?: number;
     animationClipNames: readonly string[];
   };
   provenance: {
@@ -45,6 +46,10 @@ export interface SubjectAssetManifestInputV1 extends SubjectRegistryResourceBase
     sourceUri?: string;
     licenseUri?: string;
     author?: string;
+  };
+  runtimeReadiness?: {
+    productionReady: boolean;
+    runtimeStateBinding: "implemented" | "not-implemented" | "partial";
   };
 }
 
@@ -76,7 +81,42 @@ export interface RigProfileManifestInputV1 extends SubjectRegistryResourceBaseIn
   sourceNodeNameByBoneId: Readonly<Record<BipedBoneIdV1, string>>;
 }
 
-export type GroundHumanoidActionIdV1 = "idle" | "walk" | "run" | "jump";
+export type GroundHumanoidActionIdV1 =
+  | "idle"
+  | "idle.gaming"
+  | "walk"
+  | "walk.step"
+  | "run"
+  | "jump"
+  | "fall"
+  | "land.hard"
+  | "land.hard.alt"
+  | "fly"
+  | "float"
+  | "swim.surface"
+  | "swim.tread"
+  | "swim.exit"
+  | "sit"
+  | "sit.idle"
+  | "sit.ground.idle"
+  | "sit.toStand"
+  | "stand"
+  | "lay.idle"
+  | "roll.toRun"
+  | "fight.enter"
+  | "emote.salute"
+  | "emote.angry"
+  | "dance.rumba";
+
+export type SubjectBodyTopologyV2 =
+  | "biped"
+  | "quadruped"
+  | "four-wheel"
+  | "surface-craft"
+  | "watercraft"
+  | "glider"
+  | "composite"
+  | "custom";
 
 export interface AnimationBindingV1 {
   actionId: GroundHumanoidActionIdV1;
@@ -99,7 +139,7 @@ export interface AnimationSetManifestInputV1 extends SubjectRegistryResourceBase
 export interface ColliderProfileManifestInputV1
   extends SubjectRegistryResourceBaseInputV1 {
   kind: "collider-profile";
-  supportedBodyTopologies: readonly ("biped" | "quadruped" | "custom")[];
+  supportedBodyTopologies: readonly SubjectBodyTopologyV2[];
   collider: {
     kind: "capsule";
     radiusMeters: number;
@@ -166,8 +206,8 @@ export type SubjectSocketDefinitionV2 =
 
 export interface RegistrySubjectDefinitionInputV2 extends SubjectRegistryResourceBaseInputV1 {
   kind: "subject-definition";
-  category: "human" | "animal" | "custom";
-  bodyTopology: "biped" | "quadruped" | "custom";
+  category: "human" | "animal" | "vehicle" | "composite" | "custom";
+  bodyTopology: SubjectBodyTopologyV2;
   semanticClassId: string;
   coordinateConvention: {
     forwardAxis: "-Z";
@@ -189,14 +229,26 @@ export interface RegistrySubjectDefinitionInputV2 extends SubjectRegistryResourc
 export interface CapabilityManifestInputV1 extends SubjectRegistryResourceBaseInputV1 {
   kind: "capability";
   requiredCapabilityRefs: readonly string[];
-  providedFeatures: readonly "ground-locomotion"[];
+  providedFeatures: readonly (
+    | "ground-locomotion"
+    | "forward-steer"
+    | "wheeled-locomotion"
+    | "surface-slide"
+    | "water-surface-locomotion"
+    | "unpowered-glide"
+    | "controllable"
+    | "seat"
+    | "tether"
+    | "mount"
+    | "motion-switch"
+  )[];
   conflictingCapabilityRefs: readonly string[];
 }
 
 export interface PhysicsBodyProfileManifestInputV1
   extends SubjectRegistryResourceBaseInputV1 {
   kind: "physics-body-profile";
-  supportedBodyTopologies: readonly ("biped" | "quadruped" | "custom")[];
+  supportedBodyTopologies: readonly SubjectBodyTopologyV2[];
   physicsBody: {
     mode: "character";
     massKilograms: number;
@@ -221,7 +273,7 @@ export interface LocomotionProfileManifestInputV1
 export interface ColliderDerivationProfileManifestInputV1
   extends SubjectRegistryResourceBaseInputV1 {
   kind: "collider-derivation-profile";
-  supportedBodyTopologies: readonly ("biped" | "quadruped" | "custom")[];
+  supportedBodyTopologies: readonly SubjectBodyTopologyV2[];
   colliderDerivation: {
     algorithm: "vertical-character-capsule";
     supportOriginToleranceMeters: number;

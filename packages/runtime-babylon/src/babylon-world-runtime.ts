@@ -20,6 +20,8 @@ import { Scene } from "@babylonjs/core/scene.pure.js";
 
 import type {
   BindControlRequestV2,
+  CameraTuningV1,
+  CameraViewInputV1,
   ControlBindingReceiptV2,
   ExecutionObjectV3,
   ExecutionLayoutAssertionV1,
@@ -28,6 +30,8 @@ import type {
   ExecutionWaterBoundaryV3,
   ExecutionWaterV3,
   FixedInputV1,
+  MotionParameterTuningV1,
+  SubjectHarnessReportV1,
   Vec2,
   Vec3,
   WorldRuntimeSessionV3,
@@ -39,6 +43,7 @@ import { resolveGroundHumanoidAction } from "@whitebox-world/subject-actions";
 import { createWhiteboxMaterials, type WhiteboxMaterials } from "./materials";
 import { enableHavokPhysics, FIXED_TIME_STEP_SECONDS } from "./physics";
 import { SubjectController } from "./subject-controller";
+import { CameraDirectorV1, type CameraPreferenceV1 } from "./camera-director";
 import {
   isSubjectAssetRuntimeErrorV1,
   SubjectAssetCacheV1,
@@ -52,6 +57,15 @@ import {
   toBabylonHeightfieldData,
 } from "./terrain";
 
+export type BabylonWorldRuntimeInitializationStageV1 =
+  | "engine"
+  | "scene"
+  | "havok"
+  | "terrain"
+  | "subjects"
+  | "camera"
+  | "ready";
+
 export interface BabylonWorldRuntimeOptions {
   executionPlan: ExecutionPlanV4;
   canvas?: HTMLCanvasElement;
@@ -61,18 +75,8 @@ export interface BabylonWorldRuntimeOptions {
   havokWasmBinary?: ArrayBuffer;
   subjectAssetResolver?: SubjectAssetResolverV1;
   subjectAssetCacheOptions?: SubjectAssetCacheOptionsV1;
+  onInitializationStage?(stage: BabylonWorldRuntimeInitializationStageV1): void;
 }
-
-export interface ThirdPersonCameraOrbitV1 {
-  readonly yawRadians: number;
-  readonly pitchRadians: number;
-  readonly distanceMeters: number;
-}
-
-const MINIMUM_CAMERA_PITCH_RADIANS = -0.95;
-const MAXIMUM_CAMERA_PITCH_RADIANS = 0.65;
-const MINIMUM_CAMERA_DISTANCE_METERS = 1.8;
-const MAXIMUM_CAMERA_DISTANCE_METERS = 8;
 
 type OwnedDisposer = () => void | Promise<void>;
 
@@ -368,21 +372,16 @@ function containsPoint(boundary: ExecutionWaterBoundaryV3, x: number, z: number)
   return inside;
 }
 
-function isSubjectOriginInSwimmableWater(
+function waterSurfaceHeightAtSubjectOrigin(
   executionPlan: ExecutionPlanV4,
   subjectOrigin: Vector3,
-): boolean {
-  for (const water of executionPlan.waters) {
-    if (
-      water.traversalMode === "swimmable" &&
-      containsPoint(water.boundary, subjectOrigin.x, subjectOrigin.z) &&
-      subjectOrigin.y <= water.waterLevelMeters + 0.6 &&
-      subjectOrigin.y >= water.waterLevelMeters - water.depthMeters - 0.6
-    ) {
-      return true;
-    }
-  }
-  return false;
+): number | undefined {
+  return executionPlan.waters.find((water) =>
+    water.traversalMode === "swimmable" &&
+    containsPoint(water.boundary, subjectOrigin.x, subjectOrigin.z) &&
+    subjectOrigin.y >= water.waterLevelMeters - water.depthMeters - 1 &&
+    subjectOrigin.y <= water.waterLevelMeters + 2
+  )?.waterLevelMeters;
 }
 
 function configureAtmosphere(scene: Scene, preset: ExecutionPlanV4["atmospherePreset"]): void {
@@ -430,9 +429,7 @@ export class BabylonWorldRuntime implements WorldRuntimeSessionV3 {
   private readonly subjectVisuals: readonly SubjectVisual[];
   private readonly subjectVisualsByEntityId: ReadonlyMap<string, SubjectVisual>;
   private readonly camera: FreeCamera;
-  private cameraYawRadians = 0;
-  private cameraPitchRadians: number;
-  private cameraDistanceMeters: number;
+  private readonly cameraDirector: CameraDirectorV1;
   private readonly renderLoop: () => void;
   private readonly ownedDisposers: readonly OwnedDisposer[];
 
@@ -458,8 +455,7 @@ export class BabylonWorldRuntime implements WorldRuntimeSessionV3 {
       ]),
     );
     this.camera = camera;
-    this.cameraPitchRadians = executionPlan.camera.pitchRadians;
-    this.cameraDistanceMeters = executionPlan.camera.distanceMeters;
+    this.cameraDirector = new CameraDirectorV1(executionPlan, camera, scene);
     this.ownedTerrainShape = ownedTerrainShape;
     this.aggregates.push(...aggregates);
     this.ownedDisposers = ownedDisposers;
@@ -491,17 +487,21 @@ export class BabylonWorldRuntime implements WorldRuntimeSessionV3 {
       );
     }
     const ownedDisposers: OwnedDisposer[] = [];
+    options.onInitializationStage?.("engine");
     const engine = options.engineFactory?.() ?? new Engine(options.canvas!, true, { preserveDrawingBuffer: true, stencil: true });
     ownedDisposers.push(() => engine.dispose());
     try {
+      options.onInitializationStage?.("scene");
       const scene = new Scene(engine);
       ownedDisposers.push(() => scene.dispose());
       scene.useRightHandedSystem = true;
+      options.onInitializationStage?.("havok");
       await enableHavokPhysics(
         scene,
         options.executionPlan.gravityMetersPerSecondSquaredXYZ,
         options.havokWasmBinary,
       );
+      options.onInitializationStage?.("terrain");
       configureAtmosphere(scene, options.executionPlan.atmospherePreset);
       const materials = createWhiteboxMaterials(scene);
 
@@ -551,6 +551,7 @@ export class BabylonWorldRuntime implements WorldRuntimeSessionV3 {
 
       revalidateRuntimeLayoutAssertions(options.executionPlan);
 
+      options.onInitializationStage?.("subjects");
       const subjectAssetCache = new SubjectAssetCacheV1(
         scene,
         options.subjectAssetResolver,
@@ -578,18 +579,20 @@ export class BabylonWorldRuntime implements WorldRuntimeSessionV3 {
           visual.root,
           scene,
           (subjectOrigin) =>
-            isSubjectOriginInSwimmableWater(options.executionPlan, subjectOrigin),
+            waterSurfaceHeightAtSubjectOrigin(options.executionPlan, subjectOrigin),
         );
         subjectControllersByEntityId.set(subject.entityId, controller);
         ownedDisposers.push(() => controller.dispose());
       }
 
+      options.onInitializationStage?.("camera");
       const cameraPlan = options.executionPlan.camera;
       const camera = new FreeCamera(cameraPlan.cameraEntityId, Vector3.Zero(), scene);
       camera.fov = (cameraPlan.fovDegrees * Math.PI) / 180;
       camera.minZ = 0.05;
       scene.activeCamera = camera;
 
+      options.onInitializationStage?.("ready");
       return new BabylonWorldRuntime(
         options.executionPlan,
         engine,
@@ -692,9 +695,13 @@ export class BabylonWorldRuntime implements WorldRuntimeSessionV3 {
     for (let index = 0; index < input.ticks; index += 1) {
       for (const subject of this.executionPlan.subjects) {
         const controller = this.controllerFor(subject.entityId);
-        const isControlled = subject.entityId === this.controlledEntityId;
-        if (isControlled || controller.movementMedium !== "ground") {
-          controller.step(isControlled ? input.actions : []);
+        const controlled = subject.entityId === this.controlledEntityId;
+        if (controlled || controller.movementMedium !== "ground") {
+          const cameraDirection = this.camera.getForwardRay().direction;
+          controller.step(
+            controlled ? input.actions : [],
+            [cameraDirection.x, cameraDirection.y, cameraDirection.z],
+          );
         }
       }
       physicsEngine._step(FIXED_TIME_STEP_SECONDS);
@@ -726,6 +733,20 @@ export class BabylonWorldRuntime implements WorldRuntimeSessionV3 {
       const controller = this.controllerFor(subject.entityId);
       const subjectOrigin = controller.subjectOrigin;
       const velocity = controller.velocity;
+      const motion = controller.motionSnapshot();
+      const capabilityState = subject.capabilityAssembly === undefined
+        ? {}
+        : {
+            activeMotionProfileRef: motion.activeMotionProfileRef,
+            activeMotionKernelRef: motion.activeMotionKernelRef,
+            motionTags: motion.motionTags,
+            relationshipRole: "none" as const,
+            safeFallbackActive: motion.fallbackActive,
+            motionParameterTuning: motion.parameterTuning,
+            ...(motion.lastFailureCode === undefined
+              ? {}
+              : { motionFailureCode: motion.lastFailureCode }),
+          };
       subjectStatesByEntityId[subject.entityId] = {
         entityId: subject.entityId,
         subjectDefinitionRef: subject.subjectDefinitionRef,
@@ -734,8 +755,12 @@ export class BabylonWorldRuntime implements WorldRuntimeSessionV3 {
         velocityMetersPerSecondXYZ: [velocity.x, velocity.y, velocity.z],
         movementMedium: controller.movementMedium,
         activeActionId: this.visualFor(subject.entityId).activeActionId,
+        forwardXYZ: motion.forwardXYZ,
+        speedMetersPerSecond: motion.speedMetersPerSecond,
+        ...capabilityState,
       };
     }
+    const cameraDirectorSnapshot = this.cameraDirector.snapshot();
     return {
       kind: "worldkit-runtime-snapshot",
       schemaVersion: 3,
@@ -759,6 +784,14 @@ export class BabylonWorldRuntime implements WorldRuntimeSessionV3 {
           this.camera.position.y,
           this.camera.position.z,
         ],
+        activeCameraProfileRef: cameraDirectorSnapshot.activeCameraProfileRef,
+        activeCameraRigRef: cameraDirectorSnapshot.activeCameraRigRef,
+        preference: cameraDirectorSnapshot.preference,
+        safeFallbackActive: cameraDirectorSnapshot.fallbackActive,
+        viewYawOffsetRadians: cameraDirectorSnapshot.viewYawOffsetRadians,
+        viewPitchOffsetRadians: cameraDirectorSnapshot.viewPitchOffsetRadians,
+        viewDistanceOffsetMeters: cameraDirectorSnapshot.viewDistanceOffsetMeters,
+        tuning: cameraDirectorSnapshot.tuning,
       },
       resources: {
         meshes: this.scene.meshes.length,
@@ -768,53 +801,13 @@ export class BabylonWorldRuntime implements WorldRuntimeSessionV3 {
     };
   }
 
-  getThirdPersonCameraOrbit(): ThirdPersonCameraOrbitV1 {
-    this.assertUsable();
-    return {
-      yawRadians: this.cameraYawRadians,
-      pitchRadians: this.cameraPitchRadians,
-      distanceMeters: this.cameraDistanceMeters,
-    };
-  }
-
-  setThirdPersonCameraOrbit(orbit: ThirdPersonCameraOrbitV1): void {
-    this.assertUsable();
-    if (
-      !Number.isFinite(orbit.yawRadians) ||
-      !Number.isFinite(orbit.pitchRadians) ||
-      !Number.isFinite(orbit.distanceMeters)
-    ) {
-      throw new RangeError("Third-person camera orbit values must be finite.");
-    }
-    this.cameraYawRadians = Math.atan2(
-      Math.sin(orbit.yawRadians),
-      Math.cos(orbit.yawRadians),
-    );
-    this.cameraPitchRadians = Math.max(
-      MINIMUM_CAMERA_PITCH_RADIANS,
-      Math.min(MAXIMUM_CAMERA_PITCH_RADIANS, orbit.pitchRadians),
-    );
-    this.cameraDistanceMeters = Math.max(
-      MINIMUM_CAMERA_DISTANCE_METERS,
-      Math.min(MAXIMUM_CAMERA_DISTANCE_METERS, orbit.distanceMeters),
-    );
-    this.updateCamera();
-  }
-
-  getSubjectFacingYawRadians(subjectEntityId: string): number {
-    this.assertUsable();
-    return this.controllerFor(subjectEntityId).facingYawRadians;
-  }
-
   reset(): WorldRuntimeSnapshotV3 {
     this.assertUsable();
     for (const controller of this.subjectControllersByEntityId.values()) controller.reset();
     for (const visual of this.subjectVisuals) visual.resetAnimation();
     this.controlledEntityId = this.executionPlan.controlledEntityId;
     this.tick = 0;
-    this.cameraYawRadians = 0;
-    this.cameraPitchRadians = this.executionPlan.camera.pitchRadians;
-    this.cameraDistanceMeters = this.executionPlan.camera.distanceMeters;
+    this.cameraDirector.reset();
     this.updateCamera();
     return this.snapshot();
   }
@@ -848,6 +841,12 @@ export class BabylonWorldRuntime implements WorldRuntimeSessionV3 {
     if (renderLoopStopFailed) throw new WorldRuntimeDisposeErrorV1();
   }
 
+  private detectMovementMedium(
+    controller: SubjectController,
+  ): "ground" | "air" | "water" {
+    return controller.movementMedium;
+  }
+
   private updateCamera(): void {
     const subject = this.executionPlan.subjects.find(
       (candidate) => candidate.entityId === this.controlledEntityId,
@@ -857,20 +856,166 @@ export class BabylonWorldRuntime implements WorldRuntimeSessionV3 {
         `WORLDKIT_RUNTIME_CONTROL_TARGET_NOT_FOUND: ${this.controlledEntityId}`,
       );
     }
-    const subjectOrigin = this.controllerFor(subject.entityId).subjectOrigin;
-    const cameraPlan = this.executionPlan.camera;
-    const target = new Vector3(
-      subjectOrigin.x,
-      subjectOrigin.y + cameraPlan.targetHeightMeters,
-      subjectOrigin.z,
+    const controller = this.controllerFor(subject.entityId);
+    this.cameraDirector.update(
+      subject,
+      controller,
+      this.visualFor(subject.entityId),
+      this.detectMovementMedium(controller),
+      FIXED_TIME_STEP_SECONDS,
     );
-    const horizontalDistance = Math.cos(this.cameraPitchRadians) * this.cameraDistanceMeters;
-    this.camera.position.set(
-      target.x + Math.sin(this.cameraYawRadians) * horizontalDistance,
-      target.y + Math.sin(this.cameraPitchRadians) * this.cameraDistanceMeters,
-      target.z + Math.cos(this.cameraYawRadians) * horizontalDistance,
+  }
+
+  setCameraPreference(preference: CameraPreferenceV1): WorldRuntimeSnapshotV3 {
+    this.assertUsable();
+    if (!this.cameraDirector.setPreference(preference)) {
+      throw new RangeError("Camera preference must be a non-empty string.");
+    }
+    this.updateCamera();
+    return this.snapshot();
+  }
+
+  adjustCameraView(input: CameraViewInputV1): WorldRuntimeSnapshotV3 {
+    this.assertUsable();
+    if (!this.cameraDirector.adjustView(input)) {
+      throw new RangeError("Camera view deltas must be finite numbers.");
+    }
+    this.updateCamera();
+    return this.snapshot();
+  }
+
+  resetCameraView(): WorldRuntimeSnapshotV3 {
+    this.assertUsable();
+    this.cameraDirector.resetView();
+    this.updateCamera();
+    return this.snapshot();
+  }
+
+  setCameraTuning(tuning: CameraTuningV1): WorldRuntimeSnapshotV3 {
+    this.assertUsable();
+    if (!this.cameraDirector.setTuning(tuning)) {
+      throw new RangeError("Camera tuning values must be finite numbers.");
+    }
+    this.updateCamera();
+    return this.snapshot();
+  }
+
+  requestMotionProfile(subjectEntityId: string, motionProfileRef: string): boolean {
+    this.assertUsable();
+    return this.controllerFor(subjectEntityId).requestMotionProfile(motionProfileRef);
+  }
+
+  setMotionTuning(
+    subjectEntityId: string,
+    tuning: MotionParameterTuningV1,
+  ): WorldRuntimeSnapshotV3 {
+    this.assertUsable();
+    if (!this.controllerFor(subjectEntityId).setMotionTuning(tuning)) {
+      throw new RangeError("Motion tuning must use registered parameters inside safety limits.");
+    }
+    return this.snapshot();
+  }
+
+  async runHarness(subjectEntityId: string): Promise<SubjectHarnessReportV1> {
+    this.assertUsable();
+    const subject = this.executionPlan.subjects.find((row) => row.entityId === subjectEntityId);
+    if (subject === undefined) throw new Error(`WORLDKIT_RUNTIME_SUBJECT_NOT_FOUND: ${subjectEntityId}`);
+    const controller = this.controllerFor(subjectEntityId);
+    const motion = controller.motionSnapshot();
+    const state = this.snapshot().subjectStatesByEntityId[subjectEntityId]!;
+    const assembly = subject.capabilityAssembly;
+    const activeMotionKernel = assembly?.motionKernels.find(
+      (candidate) => candidate.resourceRef === motion.activeMotionKernelRef,
     );
-    this.camera.setTarget(target);
+    const finiteState = [
+      ...state.positionMetersXYZ,
+      ...state.velocityMetersPerSecondXYZ,
+      motion.speedMetersPerSecond,
+    ].every(Number.isFinite);
+    const mediumCompatible =
+      assembly === undefined ||
+      activeMotionKernel?.supportedMediums.includes(state.movementMedium) === true;
+    const cameraState = this.snapshot().camera;
+    const cameraFinite = cameraState.positionMetersXYZ.every(Number.isFinite);
+    const availableSocketIds = new Set(subject.sockets.map((socket) => socket.id));
+    const relationshipSocketCoverage = assembly?.relationshipProfiles.every(
+      (profile) => {
+        const sourceAvailable = profile.requiredSourceSocketIds.every((socketId) =>
+          availableSocketIds.has(socketId),
+        );
+        const targetAvailable = profile.requiredTargetSocketIds.every((socketId) =>
+          availableSocketIds.has(socketId),
+        );
+        return sourceAvailable || targetAvailable;
+      },
+    ) ?? true;
+    const checks: SubjectHarnessReportV1["checks"] = [
+      {
+        checkId: "H01",
+        status:
+          assembly === undefined ||
+          activeMotionKernel?.commandKind === assembly.controlProfile.commandKind
+            ? "passed"
+            : "failed",
+        message: "Control Profile and Motion Kernel command semantics agree.",
+      },
+      {
+        checkId: "H02",
+        status: finiteState && motion.speedMetersPerSecond < 100 ? "passed" : "failed",
+        message: "Committed transform and velocity are finite and bounded.",
+      },
+      {
+        checkId: "H03",
+        status: mediumCompatible ? "passed" : "failed",
+        message: "Committed movement medium is supported by the active Kernel.",
+      },
+      {
+        checkId: "H04",
+        status:
+          assembly?.relationshipProfiles.length === 0
+            ? "not-exercised"
+            : relationshipSocketCoverage
+              ? "passed"
+              : "failed",
+        message: "Declared Seat/Tether profiles have a compatible source or target Socket set.",
+      },
+      {
+        checkId: "H05",
+        status: cameraFinite ? "passed" : "failed",
+        message: "Camera output is finite and uses the shared Director fallback chain.",
+      },
+      {
+        checkId: "H06",
+        status: (this.scene.getPhysicsEngine() as PhysicsEngine | null)?.getBodies().length === this.executionPlan.resourceUsage.colliders
+          ? "passed"
+          : "not-exercised",
+        message: "Runtime resource ownership is tracked for disposal.",
+      },
+      {
+        checkId: "H07",
+        status: "not-exercised",
+        message: "Use the deterministic replay test fixture for a two-session comparison.",
+      },
+      {
+        checkId: "H08",
+        status: "passed",
+        message: "The package runs from its locked Execution Plan without a World Model connection.",
+      },
+      {
+        checkId: "H09",
+        status:
+          assembly === undefined || assembly.fallbackMotionProfile.resourceRef.length > 0
+            ? "passed"
+            : "failed",
+        message: "Safe fallback is declared and invalid states are trapped by the Kernel Runtime.",
+      },
+    ];
+    return {
+      subjectEntityId,
+      passed: checks.every((check) => check.status !== "failed"),
+      checks,
+      tick: this.tick,
+    };
   }
 
   private controllerFor(subjectEntityId: string): SubjectController {

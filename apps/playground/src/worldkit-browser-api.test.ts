@@ -128,6 +128,49 @@ describe("installDeferredWorldkitBrowserApi", () => {
     expect(statusElement.dataset.worldkitStatus).toBe("ready");
   });
 
+  it("keeps experimental packages out of default AI discovery and uses descriptive availability", async () => {
+    const adapter = adapterFixture();
+    const installation = installDeferredWorldkitBrowserApi({
+      target: {},
+      statusElement: { dataset: {} },
+      initialize: async ({ trackAdapter }) => {
+        trackAdapter(adapter);
+        return adapter;
+      },
+    });
+    await installation.initialization;
+
+    const productionDefinitions = installation.api.listSubjectDefinitions?.() ?? [];
+    const allDefinitions = installation.api.listSubjectDefinitions?.({
+      includeExperimental: true,
+    }) ?? [];
+    expect(productionDefinitions.map((definition) => definition.resourceRef)).toEqual([
+      "worldkit://subject-definition/animal.quadruped.forward-steer@1",
+      "worldkit://subject-definition/humanoid.g-bot.ground@1",
+    ]);
+    expect(allDefinitions).toHaveLength(6);
+    expect(
+      allDefinitions.filter(
+        (definition) => definition.authoringAvailability === "experimental",
+      ),
+    ).toHaveLength(4);
+    expect(JSON.stringify(allDefinitions)).not.toMatch(/agentAccessLevel|"T[0-2]"/);
+
+    const productionKernels = installation.api.listMotionKernels?.() ?? [];
+    const allKernels = installation.api.listMotionKernels?.({
+      includeExperimental: true,
+      includeInternal: true,
+    }) ?? [];
+    expect(
+      productionKernels.every(
+        (kernel) =>
+          kernel.authoringAvailability !== "experimental" &&
+          kernel.authoringAvailability !== "internal",
+      ),
+    ).toBe(true);
+    expect(allKernels).toHaveLength(10);
+  });
+
   it("publishes stable read-only runtime layout evidence without exposing solver handles", async () => {
     const runtimeDiagnostics: readonly WorldkitBrowserDiagnosticV1[] = [
       {

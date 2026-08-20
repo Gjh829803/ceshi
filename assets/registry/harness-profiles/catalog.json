@@ -1,0 +1,15 @@
+[
+  {
+    "kind": "harness-profile",
+    "id": "subject.standard",
+    "version": 1,
+    "resourceRef": "worldkit://harness-profile/subject.standard@1",
+    "authoringAvailability": "recommended",
+    "requiredCheckIds": ["H01", "H02", "H03", "H04", "H05", "H06", "H07", "H08", "H09"],
+    "aiMetadata": {
+      "displayName": "Standard Subject Harness",
+      "description": "Runs the complete H01-H09 capability-driven subject acceptance suite.",
+      "semanticTags": ["acceptance", "harness", "subject"]
+    }
+  }
+]
