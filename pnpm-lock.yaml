@@ -180,6 +180,12 @@ importers:
         specifier: ^0.180.0
         version: 0.180.0
 
+  packages/layout-solver:
+    dependencies:
+      '@whitebox-world/protocol':
+        specifier: workspace:*
+        version: link:../protocol
+
   packages/physics:
     dependencies:
       '@dimforge/rapier3d-compat':
