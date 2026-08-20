@@ -100,7 +100,8 @@ export interface LayoutHeightfieldV1 {
   readonly heightSamplesMeters: readonly number[];
 }
 
-export interface LayoutCameraV1 {
+export interface LayoutFixedCameraV1 {
+  readonly kind: "fixed";
   readonly cameraEntityId: string;
   readonly positionMetersXYZ: LayoutVec3V1;
   readonly targetMetersXYZ: LayoutVec3V1;
@@ -109,6 +110,21 @@ export interface LayoutCameraV1 {
   readonly nearClipMeters: number;
   readonly farClipMeters: number;
 }
+
+export interface LayoutThirdPersonCameraV1 {
+  readonly kind: "third-person";
+  readonly cameraEntityId: string;
+  readonly targetAnchorEntityId: string;
+  readonly targetHeightMeters: number;
+  readonly pitchRadians: number;
+  readonly distanceMeters: number;
+  readonly verticalFovDegrees: number;
+  readonly aspectRatio: number;
+  readonly nearClipMeters: number;
+  readonly farClipMeters: number;
+}
+
+export type LayoutCameraV1 = LayoutFixedCameraV1 | LayoutThirdPersonCameraV1;
 
 export interface LayoutGeometryQueryV1 {
   readonly heightfieldsByTerrainEntityId: Readonly<Record<string, LayoutHeightfieldV1>>;

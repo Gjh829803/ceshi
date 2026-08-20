@@ -88,6 +88,7 @@ describe("engine-neutral layout geometry", () => {
 
   it("projects right-handed -Z camera points to top-left-origin screen UV", () => {
     const camera = {
+      kind: "fixed",
       cameraEntityId: "camera",
       positionMetersXYZ: [0, 0, 0],
       targetMetersXYZ: [0, 0, -1],

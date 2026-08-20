@@ -1,6 +1,6 @@
 import type {
   LayoutAabbV1,
-  LayoutCameraV1,
+  LayoutFixedCameraV1,
   LayoutHeightfieldV1,
   LayoutVec2V1,
   LayoutVec3V1,
@@ -265,7 +265,7 @@ function normalize(vector: LayoutVec3V1): LayoutVec3V1 {
 }
 
 export function projectToScreenUv(
-  camera: LayoutCameraV1,
+  camera: LayoutFixedCameraV1,
   pointMetersXYZ: LayoutVec3V1,
 ): readonly [u: number, v: number] | undefined {
   assertFiniteVector(camera.positionMetersXYZ);

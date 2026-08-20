@@ -13,6 +13,7 @@ import type {
   LayoutAabbV1,
   LayoutCandidateV1,
   LayoutConstraintEvaluationContextV1,
+  LayoutFixedCameraV1,
   LayoutVec2V1,
   LayoutVec3V1,
   PlacementConstraintViolationCodeV1,
@@ -20,6 +21,41 @@ import type {
 } from "./types.js";
 
 type Assignments = Readonly<Record<string, LayoutCandidateV1>>;
+
+function resolveCamera(
+  camera: LayoutConstraintEvaluationContextV1["geometry"]["camerasByEntityId"][string],
+  assignments: Assignments,
+): Readonly<{
+  camera: LayoutFixedCameraV1;
+  targetAnchorEntityId?: string;
+}> | undefined {
+  if (camera.kind === "fixed") return { camera };
+  const targetAnchor = assignments[camera.targetAnchorEntityId];
+  if (targetAnchor === undefined) return undefined;
+  const target: LayoutVec3V1 = [
+    targetAnchor.transform.positionMetersXYZ[0],
+    targetAnchor.transform.positionMetersXYZ[1] + camera.targetHeightMeters,
+    targetAnchor.transform.positionMetersXYZ[2],
+  ];
+  const horizontalDistance = Math.cos(camera.pitchRadians) * camera.distanceMeters;
+  return {
+    camera: {
+      kind: "fixed",
+      cameraEntityId: camera.cameraEntityId,
+      positionMetersXYZ: [
+        target[0],
+        target[1] + Math.sin(camera.pitchRadians) * camera.distanceMeters,
+        target[2] + horizontalDistance,
+      ],
+      targetMetersXYZ: target,
+      verticalFovDegrees: camera.verticalFovDegrees,
+      aspectRatio: camera.aspectRatio,
+      nearClipMeters: camera.nearClipMeters,
+      farClipMeters: camera.farClipMeters,
+    },
+    targetAnchorEntityId: camera.targetAnchorEntityId,
+  };
+}
 
 function hasNonFinite(value: unknown): boolean {
   if (typeof value === "number") return !Number.isFinite(value);
@@ -469,11 +505,21 @@ function evaluateVisibility(
   assignments: Assignments,
 ): ConstraintEvaluationV1 {
   const visible = assignments[constraint.visibleEntityId];
-  const camera = context.geometry.camerasByEntityId[constraint.cameraEntityId];
+  const cameraQuery = context.geometry.camerasByEntityId[constraint.cameraEntityId];
   const screenRegion = context.screenRegionsById[constraint.screenRegionId];
-  if (visible === undefined || camera === undefined || screenRegion === undefined) {
+  if (visible === undefined || cameraQuery === undefined || screenRegion === undefined) {
     return missing(constraint, [constraint.visibleEntityId, constraint.cameraEntityId, constraint.screenRegionId]);
   }
+  const resolvedCamera = resolveCamera(cameraQuery, assignments);
+  if (resolvedCamera === undefined) {
+    return missing(constraint, [
+      constraint.visibleEntityId,
+      constraint.cameraEntityId,
+      constraint.screenRegionId,
+      ...(cameraQuery.kind === "third-person" ? [cameraQuery.targetAnchorEntityId] : []),
+    ]);
+  }
+  const camera = resolvedCamera.camera;
   const corners: LayoutVec3V1[] = [];
   for (const x of [visible.bounds.minimumMetersXYZ[0], visible.bounds.maximumMetersXYZ[0]]) {
     for (const y of [visible.bounds.minimumMetersXYZ[1], visible.bounds.maximumMetersXYZ[1]]) {
@@ -500,13 +546,22 @@ function evaluateVisibility(
     assignments,
     camera.positionMetersXYZ,
     visible.transform.positionMetersXYZ,
-    [constraint.visibleEntityId, constraint.cameraEntityId],
+    [
+      constraint.visibleEntityId,
+      constraint.cameraEntityId,
+      ...(resolvedCamera.targetAnchorEntityId === undefined
+        ? []
+        : [resolvedCamera.targetAnchorEntityId]),
+    ],
   );
   const visibleRatio = occluded || projectedArea === 0 ? 0 : intersectionArea / projectedArea;
   const measurements = {
     projectedAreaRatio: quantizeFinite(projectedArea, context.profile.quantization.ratioStep),
     visibleRatio: quantizeFinite(visibleRatio, context.profile.quantization.ratioStep),
     isOccluded: occluded,
+    ...(resolvedCamera.targetAnchorEntityId === undefined
+      ? {}
+      : { cameraTargetAnchorEntityId: resolvedCamera.targetAnchorEntityId }),
   };
   const tolerance = context.profile.quantization.ratioStep;
   if (projectedArea + tolerance < constraint.minimumProjectedAreaRatio) {

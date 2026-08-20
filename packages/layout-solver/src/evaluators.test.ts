@@ -59,6 +59,7 @@ function context(): LayoutConstraintEvaluationContextV1 {
       overlapping: { id: "overlapping", semanticClassId: "obstacle.wall" },
       floating: { id: "floating", semanticClassId: "landmark.floating" },
       billboard: { id: "billboard", semanticClassId: "landmark.billboard" },
+      spawn: { id: "spawn", semanticClassId: "spawn.player" },
       terrain: { id: "terrain", semanticClassId: "terrain.ground" },
     },
     regionsById: {
@@ -102,6 +103,7 @@ function context(): LayoutConstraintEvaluationContextV1 {
       staticBoundsByEntityId: {},
       camerasByEntityId: {
         camera: {
+          kind: "fixed",
           cameraEntityId: "camera",
           positionMetersXYZ: [0, 0, 10],
           targetMetersXYZ: [0, 0, 0],
@@ -318,6 +320,46 @@ describe("placement constraint evaluator", () => {
       satisfied: false,
       violationCode: "PLACEMENT_CAMERA_REGION_OCCLUDED",
       measurements: { isOccluded: true },
+    });
+  });
+
+  it("derives third-person camera projection from the current solved target anchor", () => {
+    const derivedContext = context();
+    (derivedContext.geometry.camerasByEntityId as Record<string, unknown>).camera = {
+      kind: "third-person",
+      cameraEntityId: "camera",
+      targetAnchorEntityId: "spawn",
+      targetHeightMeters: 0,
+      pitchRadians: 0,
+      distanceMeters: 10,
+      verticalFovDegrees: 90,
+      aspectRatio: 1,
+      nearClipMeters: 0.1,
+      farClipMeters: 100,
+    };
+    const centered = {
+      ...assignments(),
+      spawn: candidate("spawn", [5, 0, 0], [0, 0, 0]),
+    };
+    expect(evaluatePlacementConstraintV1(derivedContext, SATISFIED[7]!, centered)).toMatchObject({
+      satisfied: true,
+      measurements: { cameraTargetAnchorEntityId: "spawn" },
+    });
+
+    const moved = {
+      ...centered,
+      spawn: candidate("spawn", [20, 0, 0], [0, 0, 0]),
+    };
+    expect(evaluatePlacementConstraintV1(derivedContext, SATISFIED[7]!, moved)).toMatchObject({
+      satisfied: false,
+      violationCode: "PLACEMENT_CAMERA_REGION_UNSATISFIED",
+      measurements: { cameraTargetAnchorEntityId: "spawn" },
+    });
+
+    const { spawn: _spawn, ...withoutSpawn } = centered;
+    expect(evaluatePlacementConstraintV1(derivedContext, SATISFIED[7]!, withoutSpawn)).toMatchObject({
+      satisfied: false,
+      violationCode: "PLACEMENT_REFERENCE_NOT_FOUND",
     });
   });
 });
