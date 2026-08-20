@@ -1,4 +1,9 @@
 import type {
+  LayoutHeightfieldV1,
+  LayoutSolveReportV1,
+  ResolvedPlacementConstraintV1,
+} from "@whitebox-world/layout-solver";
+import type {
   AnchorNodeSpecV2,
   AuthoringSpecV2,
   CameraNodeSpecV2,
@@ -6,6 +11,10 @@ import type {
   TransformSpecV2,
   Vec2,
   WorldNodeSpecV2,
+  NormalizeAuthoringOptions,
+  NormalizedWorldIRV2,
+  NormalizedWorldNodeV2,
+  AuthoringResult,
 } from "./types.js";
 
 export type TransformSpecV3 = TransformSpecV2;
@@ -165,3 +174,64 @@ export interface AuthoringSpecV3
     placements: readonly PlacementConstraintSpecV1[];
   }>;
 }
+
+export interface NormalizedPlacementProvenanceV1 {
+  readonly kind: "fixed" | "solved";
+  readonly candidateId: string;
+  readonly placementConstraintIds: readonly string[];
+  readonly solverProfileRef: string;
+  readonly layoutSolveReportHash: `sha256:${string}`;
+}
+
+type NormalizeAssertionV1<Constraint> = Constraint extends {
+  readonly id: string;
+  readonly kind: string;
+}
+  ? Omit<Constraint, "id" | "requirement" | "preferenceWeightRatio"> &
+      Readonly<{
+        constraintId: string;
+        evidenceEntityIds: readonly string[];
+        measurements: Readonly<Record<string, number | boolean | string>>;
+        tolerances: Readonly<Record<string, number>>;
+      }>
+  : never;
+
+export type NormalizedLayoutAssertionV1 = NormalizeAssertionV1<
+  ResolvedPlacementConstraintV1
+>;
+
+export type NormalizedWorldNodeV3 =
+  | Exclude<
+      NormalizedWorldNodeV2,
+      Extract<NormalizedWorldNodeV2, { kind: "object" | "anchor" | "camera" }>
+    >
+  | (Extract<NormalizedWorldNodeV2, { kind: "object" | "anchor" }> & {
+      placementProvenance: NormalizedPlacementProvenanceV1;
+    })
+  | CameraNodeSpecV3;
+
+export interface NormalizedWorldIRV3
+  extends Omit<NormalizedWorldIRV2, "schemaVersion" | "nodes"> {
+  readonly schemaVersion: 3;
+  readonly nodes: readonly NormalizedWorldNodeV3[];
+  readonly layout: Readonly<{
+    solverProfileRef: string;
+    resolvedVersion: string;
+    solverProfileHash: `sha256:${string}`;
+    layoutSolveReportHash: `sha256:${string}`;
+    regions: readonly SpatialRegionSpecV1[];
+    routes: readonly RouteSpecV1[];
+    screenRegions: readonly ScreenRegionSpecV1[];
+    heightfields: readonly LayoutHeightfieldV1[];
+    assertions: readonly NormalizedLayoutAssertionV1[];
+  }>;
+}
+
+export interface NormalizeAuthoringResultV3
+  extends AuthoringResult<NormalizedWorldIRV3> {
+  readonly normalizedWorldIrHash?: `sha256:${string}`;
+  readonly layoutSolveReport?: LayoutSolveReportV1;
+  readonly layoutSolveReportHash?: `sha256:${string}`;
+}
+
+export type NormalizeAuthoringOptionsV3 = NormalizeAuthoringOptions;
