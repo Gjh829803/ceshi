@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 
 import {
   parseAuthoringSpecJson,
+  parseCanonicalJson,
   validateAuthoringSpec,
   validatePackageSubjectDefinition,
 } from "./index";
@@ -33,6 +34,16 @@ describe("AuthoringSpecV3", () => {
         instancePath: "/kind",
       }),
     );
+  });
+
+  it("materializes validated JSON as nested plain objects", () => {
+    const result = parseCanonicalJson('{"nested":{"value":1}}');
+
+    expect(result.ok).toBe(true);
+    expect(Object.getPrototypeOf(result.value)).toBe(Object.prototype);
+    expect(
+      Object.getPrototypeOf((result.value as { nested: object }).nested),
+    ).toBe(Object.prototype);
   });
 
   it("rejects unknown Subject fields instead of silently ignoring them", () => {

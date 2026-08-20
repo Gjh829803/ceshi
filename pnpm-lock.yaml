@@ -90,6 +90,9 @@ importers:
       '@whitebox-world/runtime-contracts':
         specifier: workspace:*
         version: link:../../packages/runtime-contracts
+      '@whitebox-world/subject-registry':
+        specifier: workspace:*
+        version: link:../../packages/subject-registry
       '@whitebox-world/subjects':
         specifier: workspace:*
         version: link:../../packages/subjects

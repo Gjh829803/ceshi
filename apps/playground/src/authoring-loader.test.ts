@@ -17,6 +17,14 @@ import {
 } from "./babylon-world-adapter";
 import { loadAuthoringScene } from "./authoring-loader";
 
+function deepFreeze<T>(value: T): Readonly<T> {
+  if (value !== null && typeof value === "object") {
+    for (const nestedValue of Object.values(value)) deepFreeze(nestedValue);
+    Object.freeze(value);
+  }
+  return value;
+}
+
 describe("loadAuthoringScene", () => {
   it("keeps the rigged canonical world ref-only with two stable non-overlapping instances", async () => {
     const inputPath = fileURLToPath(
@@ -160,18 +168,22 @@ describe("loadAuthoringScene", () => {
     });
     expect(loaded.normalizedWorldIrHash).toMatch(/^sha256:[a-f0-9]{64}$/);
     expect(loaded.executionPlanHash).toMatch(/^sha256:[a-f0-9]{64}$/);
+    expect(loaded).not.toHaveProperty("hostOverlay");
   });
 
-  it("rejects water and air packages before adapting spawn for unavailable relationships", async () => {
+  it("reports immutable water and air host overlays even when package validation fails", async () => {
+    const mutableSource = createValidAuthoringSpec();
+    const sourceSnapshot = structuredClone(mutableSource);
+    const source = deepFreeze(mutableSource);
     const waterLoaded = await loadAuthoringScene(
-      async () => new Response(JSON.stringify(createValidAuthoringSpec())),
+      async () => new Response(JSON.stringify(source)),
       {
         subjectDefinitionRef:
           "worldkit://subject-definition/watercraft.kayak.surface@1",
       },
     );
     const airLoaded = await loadAuthoringScene(
-      async () => new Response(JSON.stringify(createValidAuthoringSpec())),
+      async () => new Response(JSON.stringify(source)),
       {
         subjectDefinitionRef:
           "worldkit://subject-definition/glider.paraglider.unpowered@1",
@@ -186,6 +198,29 @@ describe("loadAuthoringScene", () => {
           capabilityRef: "worldkit://capability/relationship.seat@1",
         }),
       })],
+      hostOverlay: {
+        schemaVersion: 1,
+        kind: "capability-demo",
+        id: "capability-demo",
+        subjectDefinitionRef:
+          "worldkit://subject-definition/watercraft.kayak.surface@1",
+        changes: [
+          {
+            type: "subject-definition-replaced",
+            subjectEntityId: "player",
+            beforeSubjectDefinitionRef:
+              "worldkit://subject-definition/humanoid.third-person@1",
+            afterSubjectDefinitionRef:
+              "worldkit://subject-definition/watercraft.kayak.surface@1",
+          },
+          {
+            type: "spawn-position-changed",
+            spawnAnchorEntityId: "spawn-main",
+            beforePositionMetersXYZ: [0, 0, 30],
+            afterPositionMetersXYZ: [25, 0, 0],
+          },
+        ],
+      },
     });
     expect(waterLoaded.executionPlan).toBeUndefined();
     expect(airLoaded).toMatchObject({
@@ -196,8 +231,46 @@ describe("loadAuthoringScene", () => {
           capabilityRef: "worldkit://capability/relationship.tether@1",
         }),
       })],
+      hostOverlay: {
+        schemaVersion: 1,
+        kind: "capability-demo",
+        id: "capability-demo",
+        subjectDefinitionRef:
+          "worldkit://subject-definition/glider.paraglider.unpowered@1",
+        changes: [
+          {
+            type: "subject-definition-replaced",
+            subjectEntityId: "player",
+            beforeSubjectDefinitionRef:
+              "worldkit://subject-definition/humanoid.third-person@1",
+            afterSubjectDefinitionRef:
+              "worldkit://subject-definition/glider.paraglider.unpowered@1",
+          },
+          {
+            type: "spawn-position-changed",
+            spawnAnchorEntityId: "spawn-main",
+            beforePositionMetersXYZ: [0, 0, 30],
+            afterPositionMetersXYZ: [0, 12, 30],
+          },
+        ],
+      },
     });
     expect(airLoaded.executionPlan).toBeUndefined();
+    expect(source).toEqual(sourceSnapshot);
+    expect(Object.isFrozen(source)).toBe(true);
+    expect(Object.isFrozen(source.nodes)).toBe(true);
+    expect(Object.isFrozen(source.nodes[3])).toBe(true);
+    expect(Object.isFrozen(waterLoaded.hostOverlay)).toBe(true);
+    expect(Object.isFrozen(waterLoaded.hostOverlay?.changes)).toBe(true);
+    expect(Object.isFrozen(waterLoaded.hostOverlay?.changes[0])).toBe(true);
+    expect(Object.isFrozen(waterLoaded.hostOverlay?.changes[1])).toBe(true);
+    expect(
+      Object.isFrozen(
+        waterLoaded.hostOverlay?.changes[1]?.type === "spawn-position-changed"
+          ? waterLoaded.hostOverlay.changes[1].afterPositionMetersXYZ
+          : undefined,
+      ),
+    ).toBe(true);
   });
 
   it("gives the capability Playground enough explicit budget for the locked G Bot asset", async () => {
@@ -226,8 +299,47 @@ describe("loadAuthoringScene", () => {
           }),
         ],
       },
+      hostOverlay: {
+        schemaVersion: 1,
+        kind: "capability-demo",
+        id: "capability-demo",
+        subjectDefinitionRef:
+          "worldkit://subject-definition/humanoid.g-bot@1",
+        changes: [
+          {
+            type: "subject-definition-replaced",
+            subjectEntityId: "player",
+            beforeSubjectDefinitionRef:
+              "worldkit://subject-definition/humanoid.third-person@1",
+            afterSubjectDefinitionRef:
+              "worldkit://subject-definition/humanoid.g-bot@1",
+          },
+          {
+            type: "resource-budget-changed",
+            beforeResourceBudget: {
+              maxVertices: 20_000,
+              maxTriangles: 30_000,
+              maxColliders: 16,
+            },
+            afterResourceBudget: {
+              maxVertices: 200_000,
+              maxTriangles: 300_000,
+              maxColliders: 128,
+            },
+          },
+        ],
+      },
     });
     expect(loaded.executionPlan?.resourceUsage.triangles).toBeGreaterThan(30_000);
+    expect(Object.isFrozen(loaded.hostOverlay)).toBe(true);
+    expect(Object.isFrozen(loaded.hostOverlay?.changes)).toBe(true);
+    expect(
+      Object.isFrozen(
+        loaded.hostOverlay?.changes[1]?.type === "resource-budget-changed"
+          ? loaded.hostOverlay.changes[1].beforeResourceBudget
+          : undefined,
+      ),
+    ).toBe(true);
   });
 
   it("produces one runtime Feature inspection per compiled Subject", async () => {

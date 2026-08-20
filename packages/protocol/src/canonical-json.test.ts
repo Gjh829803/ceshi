@@ -30,4 +30,39 @@ describe("canonical JSON protocol", () => {
   it("rejects non-finite numbers", () => {
     expect(() => stringifyCanonicalJson({ bad: Number.NaN })).toThrow(/finite/i);
   });
+
+  it.each([
+    ["Map", new Map([["key", "value"]])],
+    ["Set", new Set(["value"])],
+    ["Date", new Date("2026-08-21T00:00:00.000Z")],
+    ["typed array", new Uint16Array([1, 2])],
+    ["class instance", new (class CanonicalJsonFixture {
+      readonly value = 1;
+    })()],
+    ["null-prototype object", Object.assign(Object.create(null), { value: 1 })],
+  ])("rejects a %s at its canonical path", (_label, unsupportedValue) => {
+    const input = { nested: { unsupportedValue } };
+    const expectedMessage =
+      "Non-plain object at /nested/unsupportedValue is unsupported canonical JSON.";
+
+    expect(() => stringifyCanonicalJson(input)).toThrow(expectedMessage);
+    expect(() => sha256CanonicalJson(input)).toThrow(expectedMessage);
+  });
+
+  it("rejects own symbol keys at the containing canonical path", () => {
+    const nested = { value: 1, [Symbol("hidden")]: 2 };
+    const input = { nested };
+    const expectedMessage =
+      "Symbol-keyed property at /nested is unsupported canonical JSON.";
+
+    expect(() => stringifyCanonicalJson(input)).toThrow(expectedMessage);
+    expect(() => sha256CanonicalJson(input)).toThrow(expectedMessage);
+  });
+
+  it("continues to accept arrays and plain objects with canonical omissions", () => {
+    expect(stringifyCanonicalJson({
+      omitted: undefined,
+      values: [-0, { z: 2, a: 1 }],
+    })).toBe('{"values":[0,{"a":1,"z":2}]}');
+  });
 });
