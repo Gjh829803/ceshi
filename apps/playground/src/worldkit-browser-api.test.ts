@@ -10,6 +10,7 @@ import type {
   FixedInputV1,
   WorldRuntimeSnapshotV3,
   WorldkitBrowserApiV3,
+  WorldkitBrowserDiagnosticV1,
 } from "@whitebox-world/runtime-contracts";
 
 import {
@@ -52,12 +53,15 @@ function snapshotFixture(action: "idle" | "walk" | "run" | "jump" = "idle"): Wor
   };
 }
 
-function adapterFixture(): DeferredWorldkitBrowserRuntimeAdapterV1 & {
+function adapterFixture(
+  runtimeDiagnostics: readonly WorldkitBrowserDiagnosticV1[] = [],
+): DeferredWorldkitBrowserRuntimeAdapterV1 & {
   disposeCount: number;
 } {
   const snapshot = snapshotFixture();
   return {
     disposeCount: 0,
+    runtimeDiagnostics: () => runtimeDiagnostics,
     runtimeSnapshot: () => snapshot,
     bindControl: (request: BindControlRequestV2): ControlBindingReceiptV2 => ({
       kind: "worldkit-control-binding-receipt",
@@ -122,6 +126,55 @@ describe("installDeferredWorldkitBrowserApi", () => {
     await expect(api.ready()).resolves.toEqual(snapshotFixture());
     await expect(pendingRun).resolves.toEqual(snapshotFixture("run"));
     expect(statusElement.dataset.worldkitStatus).toBe("ready");
+  });
+
+  it("publishes stable read-only runtime layout evidence without exposing solver handles", async () => {
+    const runtimeDiagnostics: readonly WorldkitBrowserDiagnosticV1[] = [
+      {
+        severity: "info",
+        code: "WORLDKIT_LAYOUT_ASSERTION_SATISFIED",
+        instancePath: "/layout/layoutAssertions/0",
+        message: "Frozen layout assertion passed runtime validation.",
+        details: {
+          layoutSolveReportHash: `sha256:${"a".repeat(64)}`,
+          constraintId: "spawn-supported",
+          kind: "supported-by",
+          evidenceEntityIds: ["spawn-main", "terrain-main"],
+          measurements: { supportGapMeters: 0, supportRatio: 1 },
+          tolerances: { maximumSupportGapMeters: 0.05, minimumSupportRatio: 1 },
+        },
+      },
+    ];
+    const adapter = adapterFixture(runtimeDiagnostics);
+    const installation = installDeferredWorldkitBrowserApi({
+      target: {},
+      statusElement: { dataset: {} },
+      initialize: async ({ trackAdapter }) => {
+        trackAdapter(adapter);
+        return adapter;
+      },
+    });
+
+    await expect(installation.initialization).resolves.toBe(adapter);
+    const diagnostics = installation.api.getDiagnostics();
+    expect(diagnostics).toEqual(runtimeDiagnostics);
+    expect(installation.api.getDiagnostics()).toBe(diagnostics);
+    expect(Object.isFrozen(diagnostics)).toBe(true);
+    expect(Object.isFrozen(diagnostics[0])).toBe(true);
+    expect(Object.isFrozen(diagnostics[0]?.details)).toBe(true);
+    expect(Object.isFrozen(diagnostics[0]?.details?.measurements)).toBe(true);
+    expect(Object.keys(installation.api).sort()).toEqual([
+      "bindControl",
+      "captureScreenshot",
+      "getDiagnostics",
+      "getSnapshot",
+      "ready",
+      "reset",
+      "runFixedInput",
+      "setPaused",
+      "version",
+    ]);
+    expect(JSON.stringify(installation.api)).not.toMatch(/solve|search|repair|mutate/i);
   });
 
   it("forwards only guarded Subject Asset codes and publishes one stable diagnostic", async () => {

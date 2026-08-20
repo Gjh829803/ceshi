@@ -5,6 +5,7 @@ import type {
   FixedInputV1,
   SemanticInputActionV1,
   WorldRuntimeSnapshotV3,
+  WorldkitBrowserDiagnosticV1,
 } from "@whitebox-world/runtime-contracts";
 import {
   BabylonWorldRuntime,
@@ -302,6 +303,23 @@ export class BabylonWorldAdapter implements PlaygroundWorldAdapter {
     this.render();
     this.emit();
     return snapshot;
+  }
+
+  runtimeDiagnostics(): readonly WorldkitBrowserDiagnosticV1[] {
+    return this.executionPlan.layout.layoutAssertions.map((assertion, index) => ({
+      severity: "info",
+      code: "WORLDKIT_LAYOUT_ASSERTION_SATISFIED",
+      instancePath: `/layout/layoutAssertions/${index}`,
+      message: "Frozen layout assertion passed runtime validation.",
+      details: {
+        layoutSolveReportHash: this.executionPlan.layout.layoutSolveReportHash,
+        constraintId: assertion.constraintId,
+        kind: assertion.kind,
+        evidenceEntityIds: [...assertion.evidenceEntityIds],
+        measurements: structuredClone(assertion.measurements),
+        tolerances: structuredClone(assertion.tolerances),
+      },
+    }));
   }
 
   runtimeSnapshot(): WorldRuntimeSnapshotV3 {

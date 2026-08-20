@@ -10,6 +10,7 @@ import {
 } from "@whitebox-world/runtime-contracts";
 
 export interface DeferredWorldkitBrowserRuntimeAdapterV1 {
+  runtimeDiagnostics(): readonly WorldkitBrowserDiagnosticV1[];
   runtimeSnapshot(): WorldRuntimeSnapshotV3;
   bindControl(request: BindControlRequestV2): ControlBindingReceiptV2;
   runWorldkitFixedInput(
@@ -117,6 +118,14 @@ async function sanitizeStartupError(
   return new WorldkitBrowserStartupErrorV1(guardedCode, diagnostic);
 }
 
+function deepFreeze<T>(value: T): T {
+  if (value === null || typeof value !== "object" || Object.isFrozen(value)) {
+    return value;
+  }
+  for (const child of Object.values(value)) deepFreeze(child);
+  return Object.freeze(value);
+}
+
 export function installDeferredWorldkitBrowserApi(options: {
   target: WorldkitBrowserApiTargetV1;
   statusElement: WorldkitBrowserStatusTargetV1;
@@ -188,6 +197,11 @@ export function installDeferredWorldkitBrowserApi(options: {
         throw new Error("Browser Runtime Adapter ownership changed during startup.");
       }
       trackedAdapter = adapter;
+      diagnostics = Object.freeze(
+        adapter.runtimeDiagnostics().map((diagnostic) =>
+          deepFreeze(structuredClone(diagnostic)),
+        ),
+      );
       const snapshot = adapter.runtimeSnapshot();
       state = "ready";
       options.statusElement.dataset.worldkitStatus = "ready";

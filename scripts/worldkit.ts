@@ -507,6 +507,22 @@ export async function buildFile(
   };
 }
 
+export async function captureVisibleWorldWithRetries<
+  T extends Readonly<{ sampledRgbColorCount: number }>,
+>(
+  capture: () => Promise<T>,
+  maximumAttempts = 8,
+): Promise<T> {
+  if (!Number.isSafeInteger(maximumAttempts) || maximumAttempts < 1) {
+    throw new RangeError("maximumAttempts must be a positive safe integer.");
+  }
+  for (let attempt = 0; attempt < maximumAttempts; attempt += 1) {
+    const result = await capture();
+    if (result.sampledRgbColorCount >= 4) return result;
+  }
+  throw new Error("WORLDKIT_CAPTURE_VISIBLE_WORLD_MISSING");
+}
+
 export async function captureFile(
   inputPath: string,
   outputPath: string,
@@ -581,10 +597,11 @@ export async function captureFile(
       await api.ready();
       await new Promise<void>((resolve) => requestAnimationFrame(() => resolve()));
     });
-    const capture = await page.evaluate(
+    const capture = await captureVisibleWorldWithRetries(() => page.evaluate(
       async (): Promise<{
         snapshot: WorldRuntimeSnapshotV3;
         screenshotDataUrl: string;
+        sampledRgbColorCount: number;
       }> => {
         const api = window.__WORLDKIT__;
         if (api === undefined) {
@@ -630,16 +647,17 @@ export async function captureFile(
           );
           if (sampledRgbColors.size >= 4) break;
         }
-        if (sampledRgbColors.size < 4) {
-          throw new Error("WORLDKIT_CAPTURE_VISIBLE_WORLD_MISSING");
-        }
         const afterCapture = api.getSnapshot();
         if (afterCapture.tick !== snapshot.tick) {
           throw new Error("WORLDKIT_CAPTURE_TICK_ADVANCED");
         }
-        return { snapshot, screenshotDataUrl };
+        return {
+          snapshot,
+          screenshotDataUrl,
+          sampledRgbColorCount: sampledRgbColors.size,
+        };
       },
-    );
+    ));
     const pngDataUrlPrefix = "data:image/png;base64,";
     if (!capture.screenshotDataUrl.startsWith(pngDataUrlPrefix)) {
       throw new Error("WORLDKIT_CAPTURE_PNG_DATA_URL_INVALID");

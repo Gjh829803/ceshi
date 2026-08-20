@@ -13,6 +13,7 @@ import {
 import { explainSubjectFile } from "./lib/subject-explain";
 import {
   buildFile,
+  captureVisibleWorldWithRetries,
   describeRegistryResource,
   listRegistryResources,
   main,
@@ -53,6 +54,33 @@ afterEach(async () => {
 });
 
 describe("worldkit CLI", () => {
+  it("retries background-only browser captures and stops at the first visible world", async () => {
+    const sampledRgbColorCounts = [1, 2, 4];
+    let attempts = 0;
+
+    await expect(
+      captureVisibleWorldWithRetries(async () => ({
+        sampledRgbColorCount: sampledRgbColorCounts[attempts++]!,
+        screenshotDataUrl: `capture-${attempts}`,
+      }), 4),
+    ).resolves.toEqual({
+      sampledRgbColorCount: 4,
+      screenshotDataUrl: "capture-3",
+    });
+    expect(attempts).toBe(3);
+  });
+
+  it("fails after the bounded visible-world capture attempts", async () => {
+    let attempts = 0;
+    await expect(
+      captureVisibleWorldWithRetries(async () => {
+        attempts += 1;
+        return { sampledRgbColorCount: 1 };
+      }, 3),
+    ).rejects.toThrow("WORLDKIT_CAPTURE_VISIBLE_WORLD_MISSING");
+    expect(attempts).toBe(3);
+  });
+
   it("parses discovery and explain commands without positional guessing", () => {
     expect(
       parseWorldkitArgs([
