@@ -5,6 +5,12 @@ export const PLAYGROUND_SUBJECT_ASSET_URI_BY_REF_V1 = Object.freeze({
     "/worldkit-assets/golden-humanoid.glb",
 });
 
+export const PLAYGROUND_CAPABILITY_SUBJECT_ASSET_URI_BY_REF_V1 = Object.freeze({
+  ...PLAYGROUND_SUBJECT_ASSET_URI_BY_REF_V1,
+  "worldkit://subject-asset/actor.humanoid.g-bot@1":
+    "/subject-assets/humanoid/g-bot/v1/g-bot.glb",
+});
+
 class WorldkitHostSubjectAssetResolveErrorV1 extends Error {
   readonly name = "WorldkitHostSubjectAssetResolveErrorV1";
 

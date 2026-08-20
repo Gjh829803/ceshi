@@ -49,7 +49,15 @@ export interface SubjectRuntimeStateV3 {
   positionMetersXYZ: Vec3;
   velocityMetersPerSecondXYZ: Vec3;
   movementMedium: "ground" | "air" | "water";
-  activeActionId: "idle" | "walk" | "run" | "jump";
+  activeActionId: string;
+  forwardXYZ?: Vec3;
+  speedMetersPerSecond?: number;
+  activeMotionProfileRef?: string;
+  activeMotionKernelRef?: string;
+  motionTags?: readonly string[];
+  relationshipRole?: "none" | "rider" | "driver" | "passenger" | "tethered";
+  safeFallbackActive?: boolean;
+  motionFailureCode?: string;
 }
 
 export interface WorldRuntimeSnapshotV3 {
@@ -65,6 +73,10 @@ export interface WorldRuntimeSnapshotV3 {
     entityId: string;
     targetEntityId: string;
     positionMetersXYZ: Vec3;
+    activeCameraProfileRef?: string;
+    activeCameraRigRef?: string;
+    preference?: string;
+    safeFallbackActive?: boolean;
   };
   physics: { backend: "havok"; ready: boolean; fixedTimeStepSeconds: number };
   resources: {
@@ -83,6 +95,54 @@ export interface WorldRuntimeSessionV3 {
   reset(): WorldRuntimeSnapshotV3;
   renderFrame(): void;
   dispose(): Promise<void>;
+}
+
+export interface SubjectDefinitionSummaryV1 {
+  resourceRef: string;
+  displayName: string;
+  semanticClassId: string;
+  bodyTopology: string;
+  agentAccessLevel: "T0" | "T1" | "T2";
+  defaultMotionProfileRef: string;
+  controlProfileRef: string;
+  cameraContextProfileRef: string;
+}
+
+export interface MotionKernelSummaryV1 {
+  resourceRef: string;
+  displayName: string;
+  implementationId: string;
+  commandKind: string;
+  runtimeStatus: "implemented" | "reserved";
+  agentAccessLevel: "internal" | "T0" | "T1" | "T2";
+}
+
+export interface CompatibleProfileSummaryV1 {
+  resourceRef: string;
+  kind: "motion-profile" | "camera-rig-profile";
+  displayName: string;
+  role?: "default" | "optional" | "fallback" | "camera";
+  parameters?: Readonly<Record<string, number | boolean>>;
+  safetyLimits?: Readonly<Record<string, { minimum: number; maximum: number }>>;
+}
+
+export interface SubjectPackageValidationResultV1 {
+  valid: boolean;
+  subjectDefinitionRef: string;
+  diagnostics: readonly { code: string; message: string }[];
+}
+
+export interface SubjectHarnessCheckResultV1 {
+  checkId: "H01" | "H02" | "H03" | "H04" | "H05" | "H06" | "H07" | "H08" | "H09";
+  status: "passed" | "failed" | "not-exercised";
+  message: string;
+}
+
+export interface SubjectHarnessReportV1 {
+  subjectEntityId: string;
+  passed: boolean;
+  checks: readonly SubjectHarnessCheckResultV1[];
+  tick: number;
 }
 
 export const WORLDKIT_BROWSER_PROTOCOL_VERSION = 3 as const;
@@ -105,4 +165,21 @@ export interface WorldkitBrowserApiV3 {
   captureScreenshot(): string;
   reset(): WorldRuntimeSnapshotV3;
   setPaused(paused: boolean): WorldRuntimeSnapshotV3;
+  listSubjectDefinitions?(): readonly SubjectDefinitionSummaryV1[];
+  listMotionKernels?(): readonly MotionKernelSummaryV1[];
+  listCompatibleProfiles?(
+    subjectDefinitionRef: string,
+  ): readonly CompatibleProfileSummaryV1[];
+  validateSubjectPackage?(
+    subjectDefinitionRef: string,
+  ): SubjectPackageValidationResultV1;
+  setIntent?(input: FixedInputV1): Promise<WorldRuntimeSnapshotV3>;
+  setCameraPreference?(preference: string): WorldRuntimeSnapshotV3;
+  setMotionProfile?(
+    subjectEntityId: string,
+    motionProfileRef: string,
+  ): Promise<WorldRuntimeSnapshotV3>;
+  runHarness?(subjectEntityId: string): Promise<SubjectHarnessReportV1>;
+  getSubjectSnapshot?(subjectEntityId: string): SubjectRuntimeStateV3 | undefined;
+  getCameraSnapshot?(): WorldRuntimeSnapshotV3["camera"];
 }

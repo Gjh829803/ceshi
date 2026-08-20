@@ -51,7 +51,7 @@ export interface WorldSnapshot {
   paused: boolean;
   player: {
     entityId: string;
-    action: "idle" | "walk" | "run" | "jump";
+    action: string;
     grounded: boolean;
     position: readonly [number, number, number];
     rotationY: number;

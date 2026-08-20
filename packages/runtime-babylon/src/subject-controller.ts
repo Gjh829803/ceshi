@@ -1,18 +1,19 @@
 import { Vector3 } from "@babylonjs/core/Maths/math.vector.js";
-import {
-  CharacterSupportedState,
-  PhysicsCharacterController,
-} from "@babylonjs/core/Physics/v2/characterController.js";
 import type { TransformNode } from "@babylonjs/core/Meshes/transformNode.js";
 import type { Scene } from "@babylonjs/core/scene.pure.js";
 
 import type {
+  ExecutionMovementMediumV1,
   ExecutionSubjectV3,
   SemanticInputActionV1,
   Vec3,
 } from "@whitebox-world/runtime-contracts";
 
-import { FIXED_TIME_STEP_SECONDS } from "./physics";
+import { compileMotionCommandV1 } from "./control-profile-runtime";
+import {
+  MotionKernelRuntimeV1,
+  type MotionKernelSnapshotV1,
+} from "./motion-kernel-runtime";
 
 export interface SubjectMotionSampleV1 {
   horizontalSpeedMetersPerSecond: number;
@@ -20,108 +21,67 @@ export interface SubjectMotionSampleV1 {
   movementMedium: "ground" | "air" | "water";
 }
 
-function hasAction(actions: readonly SemanticInputActionV1[], action: SemanticInputActionV1): boolean {
-  return actions.includes(action);
-}
+const LEGACY_CONTROL_PROFILE = {
+  resourceRef: "worldkit://control-profile/legacy-planar.camera-relative@1",
+  commandKind: "planar-vector",
+  inputSpace: "camera-relative",
+  facingPolicy: "align-to-move",
+  lateralMovementPolicy: "allowed",
+} as const;
 
+/**
+ * Compatibility facade. Input interpretation and movement execution are owned by
+ * separate runtimes; this class only commits them on the same fixed-tick boundary.
+ */
 export class SubjectController {
-  readonly physicsController: PhysicsCharacterController;
-  private readonly gravity: Vector3;
-  private readonly up = Vector3.Up();
-  private readonly colliderCenterOffsetFromSubjectOrigin: Vector3;
-  private jumpInProgress = false;
+  private readonly motionKernel: MotionKernelRuntimeV1;
+  readonly physicsController: MotionKernelRuntimeV1["physicsController"];
 
   constructor(
     private readonly subject: ExecutionSubjectV3,
     gravityMetersPerSecondSquaredXYZ: Vec3,
-    private readonly visualRoot: TransformNode,
+    readonly visualRoot: TransformNode,
     scene: Scene,
     private readonly movementMediumAtSubjectOrigin: (
       subjectOrigin: Vector3,
-    ) => "ground" | "air" | "water",
+    ) => ExecutionMovementMediumV1,
+    waterSurfaceHeightAtSubjectOrigin: (
+      subjectOrigin: Vector3,
+    ) => number | undefined,
   ) {
-    this.gravity = new Vector3(...gravityMetersPerSecondSquaredXYZ);
-    this.colliderCenterOffsetFromSubjectOrigin = new Vector3(
-      ...subject.collider.centerOffsetFromSubjectOriginMetersXYZ,
-    );
-    const spawnSubjectOrigin = new Vector3(
-      ...subject.spawnSubjectOriginPositionMetersXYZ,
-    );
-    this.physicsController = new PhysicsCharacterController(
-      spawnSubjectOrigin.add(this.colliderCenterOffsetFromSubjectOrigin),
-      {
-        capsuleHeight: subject.collider.heightMeters,
-        capsuleRadius: subject.collider.radiusMeters,
-      },
+    this.motionKernel = new MotionKernelRuntimeV1(
+      subject,
+      gravityMetersPerSecondSquaredXYZ,
+      visualRoot,
       scene,
+      waterSurfaceHeightAtSubjectOrigin,
     );
-    this.physicsController.maxSlopeCosine = Math.cos((subject.collider.maxSlopeDegrees * Math.PI) / 180);
-    this.physicsController.maxStepHeight = subject.collider.maxStepHeightMeters;
-    this.physicsController.characterMass = subject.collider.massKilograms;
-    this.physicsController.acceleration = 1;
-    this.syncVisual(spawnSubjectOrigin);
+    this.physicsController = this.motionKernel.physicsController;
   }
 
-  step(actions: readonly SemanticInputActionV1[], movementMedium: "ground" | "air" | "water"): void {
-    const support = this.physicsController.checkSupport(FIXED_TIME_STEP_SECONDS, this.gravity);
-    const horizontal = new Vector3(
-      (hasAction(actions, "move-right") ? 1 : 0) - (hasAction(actions, "move-left") ? 1 : 0),
-      0,
-      (hasAction(actions, "move-backward") ? 1 : 0) - (hasAction(actions, "move-forward") ? 1 : 0),
+  step(
+    actions: readonly SemanticInputActionV1[],
+    movementMedium: ExecutionMovementMediumV1,
+    cameraForwardXYZ: Vec3 = [0, 0, -1],
+  ): void {
+    const command = compileMotionCommandV1(
+      this.subject.capabilityAssembly?.controlProfile ?? LEGACY_CONTROL_PROFILE,
+      actions,
+      cameraForwardXYZ,
     );
-    if (horizontal.lengthSquared() > 1) horizontal.normalize();
-    const speed = movementMedium === "water"
-      ? this.subject.locomotion.waterSpeedMetersPerSecond
-      : horizontal.lengthSquared() > 0 && hasAction(actions, "run")
-        ? this.subject.locomotion.runSpeedMetersPerSecond
-        : this.subject.locomotion.walkSpeedMetersPerSecond;
-    const desired = horizontal.scale(speed);
-    const current = this.physicsController.getVelocity();
-    const movementSurfaceNormal = support.supportedState === CharacterSupportedState.UNSUPPORTED
-      ? this.up
-      : support.averageSurfaceNormal;
-    const calculated = this.physicsController.calculateMovement(
-      FIXED_TIME_STEP_SECONDS,
-      new Vector3(0, 0, -1),
-      movementSurfaceNormal,
-      current,
-      support.averageSurfaceVelocity,
-      desired,
-      this.up,
-    );
-    const isUnsupported =
-      support.supportedState === CharacterSupportedState.UNSUPPORTED;
-    if (isUnsupported) {
-      calculated.y = current.y;
-    }
-    const jumpRequested =
-      hasAction(actions, "jump") && movementMedium === "ground";
-    if (jumpRequested) {
-      this.jumpInProgress = true;
-      calculated.y = this.subject.locomotion.jumpSpeedMetersPerSecond;
-    } else if (isUnsupported && this.jumpInProgress) {
-      calculated.addInPlace(
-        (movementMedium === "water" ? this.gravity.scale(0.15) : this.gravity).scale(
-          FIXED_TIME_STEP_SECONDS,
-        ),
-      );
-    } else if (movementMedium === "ground") {
-      this.jumpInProgress = false;
-    }
-    this.physicsController.setVelocity(calculated);
-    this.physicsController.integrate(
-      FIXED_TIME_STEP_SECONDS,
-      support,
-      movementMedium === "water" ? this.gravity.scale(0.15) : this.gravity,
-    );
+    this.motionKernel.step(command, movementMedium);
+  }
+
+  requestMotionProfile(resourceRef: string): boolean {
+    return this.motionKernel.requestMotionProfile(resourceRef);
   }
 
   synchronizeVisual(): void {
-    this.syncVisual();
+    this.motionKernel.synchronizeVisual();
   }
 
   sampleMotion(runRequested: boolean): SubjectMotionSampleV1 {
-    const velocity = this.physicsController.getVelocity();
+    const velocity = this.motionKernel.velocity;
     return {
       horizontalSpeedMetersPerSecond: Math.hypot(velocity.x, velocity.z),
       runRequested,
@@ -129,48 +89,31 @@ export class SubjectController {
     };
   }
 
-  get controllerCenter(): Vector3 {
-    return this.physicsController.getPosition();
+  motionSnapshot(): MotionKernelSnapshotV1 {
+    return this.motionKernel.snapshot();
   }
 
   get subjectOrigin(): Vector3 {
-    return this.visualRoot.position.clone();
+    return this.motionKernel.subjectOrigin;
   }
 
   get velocity(): Vector3 {
-    return this.physicsController.getVelocity();
+    return this.motionKernel.velocity;
+  }
+
+  get forward(): Vector3 {
+    return this.motionKernel.forward;
   }
 
   reset(): void {
-    const spawnSubjectOrigin = new Vector3(
-      ...this.subject.spawnSubjectOriginPositionMetersXYZ,
-    );
-    this.physicsController.setPosition(
-      spawnSubjectOrigin.add(this.colliderCenterOffsetFromSubjectOrigin),
-    );
-    this.physicsController.setVelocity(Vector3.Zero());
-    this.jumpInProgress = false;
-    this.syncVisual(spawnSubjectOrigin);
+    this.motionKernel.reset();
   }
 
   stop(): void {
-    this.physicsController.setVelocity(Vector3.Zero());
+    this.motionKernel.stop();
   }
 
   dispose(): void {
-    this.physicsController.dispose();
-  }
-
-  private syncVisual(subjectOriginOverride?: Vector3): void {
-    if (subjectOriginOverride !== undefined) {
-      this.visualRoot.position.copyFrom(subjectOriginOverride);
-      return;
-    }
-    const center = this.physicsController.getPosition();
-    this.visualRoot.position.set(
-      center.x - this.colliderCenterOffsetFromSubjectOrigin.x,
-      center.y - this.colliderCenterOffsetFromSubjectOrigin.y,
-      center.z - this.colliderCenterOffsetFromSubjectOrigin.z,
-    );
+    this.motionKernel.dispose();
   }
 }

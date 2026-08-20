@@ -402,7 +402,9 @@ async function captureAction(
     };
   });
   const bytes = pngBytesFromDataUrl(capture.dataUrl);
-  await writeFile(paths.action[actionId], bytes);
+  const actionOutputPath = paths.action[actionId];
+  assert.ok(actionOutputPath !== undefined);
+  await writeFile(actionOutputPath, bytes);
   const filename = `${actionId}.png` as ActionCaptureEvidence["filename"];
   const poseAnalysis = analyzeSubjectPoseCrop({
     boundsPixelsXYWH: capture.boundsPixelsXYWH,
@@ -777,8 +779,14 @@ async function writeVerification(
     tamper: browser.tamper,
   } as const;
   const actionHashes = verification.captures
-    .filter((capture) => capture.source === "browser-fixed-tick")
-    .map((capture) => capture.sha256);
+    .flatMap((capture) =>
+      capture !== undefined &&
+      capture.source === "browser-fixed-tick" &&
+      "sha256" in capture &&
+      typeof capture.sha256 === "string"
+        ? [capture.sha256]
+        : []
+    );
   assert.equal(new Set(actionHashes).size, 4);
   await writeFile(paths.verification, `${stringifyCanonicalJson(verification)}\n`);
 }

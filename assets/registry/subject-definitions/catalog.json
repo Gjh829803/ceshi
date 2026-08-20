@@ -35,7 +35,8 @@
     "colliderPolicy": { "kind": "profile", "colliderProfileRef": "worldkit://collider-profile/humanoid.medium-capsule@1" },
     "capabilityRefs": ["worldkit://capability/locomotion.ground@1"],
     "profiles": {
-      "physicsBodyProfileRef": "worldkit://physics-body-profile/character.medium@1",
+      "physicsBodyProfileRef": "worldkit://physics-body-profile/character.capability-medium@1",
+      "locomotionProfileRef": "worldkit://locomotion-profile/ground.standard@1",
       "motion": {
         "defaultMotionProfileRef": "worldkit://motion-profile/free-ground.humanoid-medium@1",
         "optionalMotionProfileRefs": ["worldkit://motion-profile/safe-ground@1"],
@@ -77,10 +78,11 @@
       { "id": "LookAhead", "kind": "local", "localTransform": { "positionMetersXYZ": [0, 0.9, -1.2], "rotationEulerRadiansXYZ": [0, 0, 0] }, "semanticTags": ["camera", "look-ahead"] },
       { "id": "MountSeat", "kind": "local", "localTransform": { "positionMetersXYZ": [0, 1.25, 0], "rotationEulerRadiansXYZ": [0, 0, 0] }, "semanticTags": ["mount", "relationship"] }
     ],
-    "colliderPolicy": { "kind": "derive", "colliderDerivationProfileRef": "worldkit://collider-derivation-profile/vertical-character-capsule@1" },
+    "colliderPolicy": { "kind": "derive", "colliderDerivationProfileRef": "worldkit://collider-derivation-profile/vertical-capability-capsule@1" },
     "capabilityRefs": ["worldkit://capability/locomotion.forward-steer@1"],
     "profiles": {
-      "physicsBodyProfileRef": "worldkit://physics-body-profile/character.medium@1",
+      "physicsBodyProfileRef": "worldkit://physics-body-profile/character.capability-medium@1",
+      "locomotionProfileRef": "worldkit://locomotion-profile/ground.standard@1",
       "motion": { "defaultMotionProfileRef": "worldkit://motion-profile/forward-steer.medium@1", "optionalMotionProfileRefs": ["worldkit://motion-profile/safe-ground@1"], "fallbackMotionProfileRef": "worldkit://motion-profile/safe-ground@1" },
       "controlProfileRef": "worldkit://control-profile/throttle-steer.subject-local@1",
       "cameraContextProfileRef": "worldkit://camera-context/capability-driven.default@1",
@@ -104,7 +106,7 @@
     "semanticClassId": "subject.vehicle.four-wheel",
     "coordinateConvention": { "forwardAxis": "-Z", "upAxis": "+Y", "metersPerUnit": 1, "pivot": "support-center" },
     "visualParts": [
-      { "id": "body", "kind": "primitive", "shape": { "kind": "box", "sizeMetersXYZ": [1.8, 0.8, 3.6] }, "localTransform": { "positionMetersXYZ": [0, 0.65, 0], "rotationEulerRadiansXYZ": [0, 0, 0] }, "colliderContribution": "include", "semanticTags": ["body", "vehicle"] },
+      { "id": "body", "kind": "primitive", "shape": { "kind": "box", "sizeMetersXYZ": [1.8, 0.8, 3.6] }, "localTransform": { "positionMetersXYZ": [0, 0.4, 0], "rotationEulerRadiansXYZ": [0, 0, 0] }, "colliderContribution": "include", "semanticTags": ["body", "vehicle"] },
       { "id": "cabin", "kind": "primitive", "shape": { "kind": "box", "sizeMetersXYZ": [1.45, 0.75, 1.7] }, "localTransform": { "positionMetersXYZ": [0, 1.3, 0.15], "rotationEulerRadiansXYZ": [0, 0, 0] }, "colliderContribution": "include", "semanticTags": ["cabin"] }
     ],
     "visualBinding": { "mode": "static" },
@@ -113,10 +115,11 @@
       { "id": "CameraTarget3D", "kind": "local", "localTransform": { "positionMetersXYZ": [0, 1.1, 0], "rotationEulerRadiansXYZ": [0, 0, 0] }, "semanticTags": ["camera", "target"] },
       { "id": "LookAhead", "kind": "local", "localTransform": { "positionMetersXYZ": [0, 0.8, -3], "rotationEulerRadiansXYZ": [0, 0, 0] }, "semanticTags": ["camera", "look-ahead"] }
     ],
-    "colliderPolicy": { "kind": "derive", "colliderDerivationProfileRef": "worldkit://collider-derivation-profile/vertical-character-capsule@1" },
+    "colliderPolicy": { "kind": "derive", "colliderDerivationProfileRef": "worldkit://collider-derivation-profile/vertical-capability-capsule@1" },
     "capabilityRefs": ["worldkit://capability/locomotion.forward-steer@1", "worldkit://capability/locomotion.wheeled@1", "worldkit://capability/relationship.seat@1"],
     "profiles": {
-      "physicsBodyProfileRef": "worldkit://physics-body-profile/character.medium@1",
+      "physicsBodyProfileRef": "worldkit://physics-body-profile/character.capability-medium@1",
+      "locomotionProfileRef": "worldkit://locomotion-profile/ground.standard@1",
       "motion": { "defaultMotionProfileRef": "worldkit://motion-profile/wheeled-arcade.medium@1", "optionalMotionProfileRefs": ["worldkit://motion-profile/forward-steer.medium@1"], "fallbackMotionProfileRef": "worldkit://motion-profile/forward-steer.medium@1" },
       "controlProfileRef": "worldkit://control-profile/throttle-steer.subject-local@1",
       "cameraContextProfileRef": "worldkit://camera-context/capability-driven.default@1",
@@ -140,7 +143,7 @@
     "semanticClassId": "subject.surface-craft.skimmer",
     "coordinateConvention": { "forwardAxis": "-Z", "upAxis": "+Y", "metersPerUnit": 1, "pivot": "support-center" },
     "visualParts": [
-      { "id": "deck", "kind": "primitive", "shape": { "kind": "box", "sizeMetersXYZ": [1.4, 0.25, 2.8] }, "localTransform": { "positionMetersXYZ": [0, 0.25, 0], "rotationEulerRadiansXYZ": [0, 0, 0] }, "colliderContribution": "include", "semanticTags": ["deck", "skimmer"] },
+      { "id": "deck", "kind": "primitive", "shape": { "kind": "box", "sizeMetersXYZ": [1.4, 0.25, 2.8] }, "localTransform": { "positionMetersXYZ": [0, 0.125, 0], "rotationEulerRadiansXYZ": [0, 0, 0] }, "colliderContribution": "include", "semanticTags": ["deck", "skimmer"] },
       { "id": "seat", "kind": "primitive", "shape": { "kind": "box", "sizeMetersXYZ": [0.7, 0.7, 0.8] }, "localTransform": { "positionMetersXYZ": [0, 0.7, 0.3], "rotationEulerRadiansXYZ": [0, 0, 0] }, "colliderContribution": "include", "semanticTags": ["seat"] }
     ],
     "visualBinding": { "mode": "static" },
@@ -149,10 +152,11 @@
       { "id": "CameraTarget3D", "kind": "local", "localTransform": { "positionMetersXYZ": [0, 0.9, 0], "rotationEulerRadiansXYZ": [0, 0, 0] }, "semanticTags": ["camera", "target"] },
       { "id": "LookAhead", "kind": "local", "localTransform": { "positionMetersXYZ": [0, 0.5, -2.5], "rotationEulerRadiansXYZ": [0, 0, 0] }, "semanticTags": ["camera", "look-ahead"] }
     ],
-    "colliderPolicy": { "kind": "derive", "colliderDerivationProfileRef": "worldkit://collider-derivation-profile/vertical-character-capsule@1" },
+    "colliderPolicy": { "kind": "derive", "colliderDerivationProfileRef": "worldkit://collider-derivation-profile/vertical-capability-capsule@1" },
     "capabilityRefs": ["worldkit://capability/locomotion.forward-steer@1", "worldkit://capability/locomotion.surface-slide@1", "worldkit://capability/relationship.seat@1"],
     "profiles": {
-      "physicsBodyProfileRef": "worldkit://physics-body-profile/character.medium@1",
+      "physicsBodyProfileRef": "worldkit://physics-body-profile/character.capability-medium@1",
+      "locomotionProfileRef": "worldkit://locomotion-profile/ground.standard@1",
       "motion": { "defaultMotionProfileRef": "worldkit://motion-profile/surface-slide.skimmer@1", "optionalMotionProfileRefs": ["worldkit://motion-profile/forward-steer.medium@1"], "fallbackMotionProfileRef": "worldkit://motion-profile/forward-steer.medium@1" },
       "controlProfileRef": "worldkit://control-profile/throttle-steer.subject-local@1",
       "cameraContextProfileRef": "worldkit://camera-context/capability-driven.default@1",
@@ -176,7 +180,7 @@
     "semanticClassId": "subject.watercraft.kayak",
     "coordinateConvention": { "forwardAxis": "-Z", "upAxis": "+Y", "metersPerUnit": 1, "pivot": "support-center" },
     "visualParts": [
-      { "id": "hull", "kind": "primitive", "shape": { "kind": "capsule", "radiusMeters": 0.42, "heightMeters": 3.2 }, "localTransform": { "positionMetersXYZ": [0, 0.3, 0], "rotationEulerRadiansXYZ": [1.5707963267948966, 0, 0] }, "colliderContribution": "include", "semanticTags": ["hull", "kayak"] },
+      { "id": "hull", "kind": "primitive", "shape": { "kind": "capsule", "radiusMeters": 0.42, "heightMeters": 3.2 }, "localTransform": { "positionMetersXYZ": [0, 0.42, 0], "rotationEulerRadiansXYZ": [1.5707963267948966, 0, 0] }, "colliderContribution": "include", "semanticTags": ["hull", "kayak"] },
       { "id": "paddler", "kind": "primitive", "shape": { "kind": "capsule", "radiusMeters": 0.25, "heightMeters": 1.15 }, "localTransform": { "positionMetersXYZ": [0, 0.85, 0], "rotationEulerRadiansXYZ": [0, 0, 0] }, "colliderContribution": "exclude", "semanticTags": ["paddler"] }
     ],
     "visualBinding": { "mode": "static" },
@@ -185,10 +189,11 @@
       { "id": "CameraTarget3D", "kind": "local", "localTransform": { "positionMetersXYZ": [0, 1, 0], "rotationEulerRadiansXYZ": [0, 0, 0] }, "semanticTags": ["camera", "target"] },
       { "id": "LookAhead", "kind": "local", "localTransform": { "positionMetersXYZ": [0, 0.4, -2.3], "rotationEulerRadiansXYZ": [0, 0, 0] }, "semanticTags": ["camera", "look-ahead"] }
     ],
-    "colliderPolicy": { "kind": "derive", "colliderDerivationProfileRef": "worldkit://collider-derivation-profile/vertical-character-capsule@1" },
+    "colliderPolicy": { "kind": "derive", "colliderDerivationProfileRef": "worldkit://collider-derivation-profile/vertical-capability-capsule@1" },
     "capabilityRefs": ["worldkit://capability/locomotion.water-surface@1", "worldkit://capability/relationship.seat@1"],
     "profiles": {
-      "physicsBodyProfileRef": "worldkit://physics-body-profile/character.medium@1",
+      "physicsBodyProfileRef": "worldkit://physics-body-profile/character.capability-medium@1",
+      "locomotionProfileRef": "worldkit://locomotion-profile/ground.standard@1",
       "motion": { "defaultMotionProfileRef": "worldkit://motion-profile/water-surface.kayak@1", "optionalMotionProfileRefs": ["worldkit://motion-profile/water-surface.safe@1"], "fallbackMotionProfileRef": "worldkit://motion-profile/water-surface.safe@1" },
       "controlProfileRef": "worldkit://control-profile/throttle-steer.subject-local@1",
       "cameraContextProfileRef": "worldkit://camera-context/capability-driven.default@1",
@@ -212,7 +217,7 @@
     "semanticClassId": "subject.glider.paraglider",
     "coordinateConvention": { "forwardAxis": "-Z", "upAxis": "+Y", "metersPerUnit": 1, "pivot": "support-center" },
     "visualParts": [
-      { "id": "pilot", "kind": "primitive", "shape": { "kind": "capsule", "radiusMeters": 0.28, "heightMeters": 1.45 }, "localTransform": { "positionMetersXYZ": [0, 1, 0], "rotationEulerRadiansXYZ": [0, 0, 0] }, "colliderContribution": "include", "semanticTags": ["pilot"] },
+      { "id": "pilot", "kind": "primitive", "shape": { "kind": "capsule", "radiusMeters": 0.28, "heightMeters": 1.45 }, "localTransform": { "positionMetersXYZ": [0, 0.725, 0], "rotationEulerRadiansXYZ": [0, 0, 0] }, "colliderContribution": "include", "semanticTags": ["pilot"] },
       { "id": "canopy", "kind": "primitive", "shape": { "kind": "box", "sizeMetersXYZ": [5.5, 0.18, 1.7] }, "localTransform": { "positionMetersXYZ": [0, 4.2, 0.3], "rotationEulerRadiansXYZ": [0.08, 0, 0] }, "colliderContribution": "exclude", "semanticTags": ["canopy", "wing"] }
     ],
     "visualBinding": { "mode": "static" },
@@ -222,10 +227,11 @@
       { "id": "CameraTarget3D", "kind": "local", "localTransform": { "positionMetersXYZ": [0, 1.4, 0], "rotationEulerRadiansXYZ": [0, 0, 0] }, "semanticTags": ["camera", "target"] },
       { "id": "LookAhead", "kind": "local", "localTransform": { "positionMetersXYZ": [0, 1.5, -3], "rotationEulerRadiansXYZ": [0, 0, 0] }, "semanticTags": ["camera", "look-ahead"] }
     ],
-    "colliderPolicy": { "kind": "derive", "colliderDerivationProfileRef": "worldkit://collider-derivation-profile/vertical-character-capsule@1" },
+    "colliderPolicy": { "kind": "derive", "colliderDerivationProfileRef": "worldkit://collider-derivation-profile/vertical-capability-capsule@1" },
     "capabilityRefs": ["worldkit://capability/locomotion.unpowered-glide@1", "worldkit://capability/relationship.tether@1"],
     "profiles": {
-      "physicsBodyProfileRef": "worldkit://physics-body-profile/character.medium@1",
+      "physicsBodyProfileRef": "worldkit://physics-body-profile/character.capability-medium@1",
+      "locomotionProfileRef": "worldkit://locomotion-profile/ground.standard@1",
       "motion": { "defaultMotionProfileRef": "worldkit://motion-profile/unpowered-glide.paraglider@1", "optionalMotionProfileRefs": ["worldkit://motion-profile/airborne.fall@1"], "fallbackMotionProfileRef": "worldkit://motion-profile/airborne.fall@1" },
       "controlProfileRef": "worldkit://control-profile/flight-attitude@1",
       "cameraContextProfileRef": "worldkit://camera-context/capability-driven.default@1",

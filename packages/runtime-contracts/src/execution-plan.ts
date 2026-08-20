@@ -104,9 +104,30 @@ export type ExecutionBipedBoneIdV1 =
 
 export type ExecutionGroundHumanoidActionIdV1 =
   | "idle"
+  | "idle.gaming"
   | "walk"
+  | "walk.step"
   | "run"
-  | "jump";
+  | "jump"
+  | "fall"
+  | "land.hard"
+  | "land.hard.alt"
+  | "fly"
+  | "float"
+  | "swim.surface"
+  | "swim.tread"
+  | "swim.exit"
+  | "sit"
+  | "sit.idle"
+  | "sit.ground.idle"
+  | "sit.toStand"
+  | "stand"
+  | "lay.idle"
+  | "roll.toRun"
+  | "fight.enter"
+  | "emote.salute"
+  | "emote.angry"
+  | "dance.rumba";
 
 export interface ExecutionRigProfileV1 {
   rigProfileRef: string;
@@ -143,7 +164,16 @@ export interface ExecutionSubjectCapsuleV1 {
 
 export interface ExecutionColliderProfileV1 {
   colliderProfileRef: string;
-  supportedBodyTopologies: readonly ("biped" | "quadruped" | "custom")[];
+  supportedBodyTopologies: readonly (
+    | "biped"
+    | "quadruped"
+    | "four-wheel"
+    | "surface-craft"
+    | "watercraft"
+    | "glider"
+    | "composite"
+    | "custom"
+  )[];
   collider: ExecutionSubjectCapsuleV1;
 }
 
@@ -206,6 +236,119 @@ export type ExecutionSubjectVisualBindingV1 =
       animationSetRef: string;
     };
 
+export type ExecutionMovementMediumV1 = "ground" | "water" | "air";
+export type ExecutionMotionCommandKindV1 =
+  | "planar-vector"
+  | "throttle-steer"
+  | "flight-attitude"
+  | "none";
+
+export interface ExecutionMotionProfileV1 {
+  resourceRef: string;
+  motionKernelRef: string;
+  parameters: Readonly<Record<string, number | boolean>>;
+  safetyLimits: Readonly<Record<string, { minimum: number; maximum: number }>>;
+  motionTags: readonly string[];
+}
+
+export interface ExecutionMotionKernelDefinitionV1 {
+  resourceRef: string;
+  implementationId:
+    | "free-ground"
+    | "forward-steer"
+    | "wheeled-arcade"
+    | "surface-slide"
+    | "water-surface"
+    | "unpowered-glide";
+  commandKind: ExecutionMotionCommandKindV1;
+  supportedMediums: readonly ExecutionMovementMediumV1[];
+  fallbackMotionProfileRef: string;
+  deterministic: true;
+}
+
+export interface ExecutionControlProfileV1 {
+  resourceRef: string;
+  commandKind: ExecutionMotionCommandKindV1;
+  inputSpace: "camera-relative" | "subject-local" | "flight-frame" | "none";
+  facingPolicy: "align-to-move" | "steering-derived" | "flight-derived" | "fixed";
+  lateralMovementPolicy: "allowed" | "forbidden";
+}
+
+export interface ExecutionCameraRigProfileV1 {
+  resourceRef: string;
+  algorithmRef: string;
+  preferredSocketIds: readonly string[];
+  parameters: {
+    distanceMeters: number;
+    minimumDistanceMeters: number;
+    maximumDistanceMeters: number;
+    targetHeightMeters: number;
+    shoulderOffsetMeters: number;
+    pitchRadians: number;
+    minimumPitchRadians: number;
+    maximumPitchRadians: number;
+    positionDampingPerSecond: number;
+    rotationDampingPerSecond: number;
+    collisionRadiusMeters: number;
+    baseFovDegrees: number;
+    speedFovDegreesPerMeterPerSecond: number;
+    maximumSpeedFovDegrees: number;
+    lookAheadSeconds: number;
+    transitionSeconds: number;
+  };
+}
+
+export interface ExecutionCameraContextRuleV1 {
+  id: string;
+  priority: number;
+  when: {
+    relationshipRoles?: readonly ("none" | "rider" | "driver" | "passenger" | "tethered")[];
+    motionKernelRefs?: readonly string[];
+    requiredMotionTags?: readonly string[];
+    movementMediums?: readonly ExecutionMovementMediumV1[];
+    minimumSpeedMetersPerSecond?: number;
+    maximumSpeedMetersPerSecond?: number;
+    requiredSocketIds?: readonly string[];
+  };
+  cameraRigProfileRef: string;
+}
+
+export interface ExecutionSubjectCapabilityAssemblyV1 {
+  agentAccessLevel: "T0" | "T1" | "T2";
+  defaultMotionProfile: ExecutionMotionProfileV1;
+  optionalMotionProfiles: readonly ExecutionMotionProfileV1[];
+  fallbackMotionProfile: ExecutionMotionProfileV1;
+  motionKernel: ExecutionMotionKernelDefinitionV1;
+  controlProfile: ExecutionControlProfileV1;
+  cameraContext: {
+    resourceRef: string;
+    defaultCameraRigProfileRef: string;
+    firstPersonCameraRigProfileRef?: string;
+    rules: readonly ExecutionCameraContextRuleV1[];
+    cameraRigProfiles: readonly ExecutionCameraRigProfileV1[];
+  };
+  mediumProfile: {
+    resourceRef: string;
+    supportedMediums: readonly ExecutionMovementMediumV1[];
+    ground: { groundingToleranceMeters: number };
+    water?: { surfaceHoldStrength: number; linearDragPerSecond: number };
+    air?: { gravityScale: number; linearDragPerSecond: number };
+  };
+  relationshipProfiles: readonly {
+    resourceRef: string;
+    relationshipType: "seat" | "tether";
+    requiredSourceSocketIds: readonly string[];
+    requiredTargetSocketIds: readonly string[];
+    controlTransferPolicy: "keep-source" | "transfer-to-target" | "none";
+    cameraTargetPolicy: "controlled-entity" | "source-entity" | "target-entity";
+    maximumDistanceMeters?: number;
+  }[];
+  harnessProfileRef: string;
+  requiredHarnessCheckIds: readonly string[];
+  actionOrPoseSetRef: string;
+  renderBindingProfileRef: string;
+}
+
 export interface ExecutionSubjectV3 {
   entityId: string;
   subjectDefinitionRef: string;
@@ -234,6 +377,7 @@ export interface ExecutionSubjectV3 {
     waterSpeedMetersPerSecond: number;
     jumpSpeedMetersPerSecond: number;
   };
+  capabilityAssembly?: ExecutionSubjectCapabilityAssemblyV1;
 }
 
 interface ExecutionCameraCore {

@@ -2,8 +2,10 @@ import {
   normalizeAuthoringSpec,
   parseAuthoringSpecJson,
   type AuthoringDiagnostic,
+  type AuthoringSpecV3,
 } from "@whitebox-world/authoring";
 import { compileWorld } from "@whitebox-world/compiler";
+import { builtInSubjectResourceRegistry } from "@whitebox-world/subject-registry";
 import type {
   CompileDiagnostic,
   ExecutionPlanV4,
@@ -18,6 +20,10 @@ export interface AuthoringSceneLoadResult {
 }
 
 export type AuthoringSourceFetcher = () => Promise<Response>;
+
+export interface AuthoringSceneLoadOptionsV1 {
+  subjectDefinitionRef?: string;
+}
 
 function sourceDiagnostic(message: string, details?: Readonly<Record<string, unknown>>): AuthoringSceneLoadResult {
   return {
@@ -34,8 +40,84 @@ function sourceDiagnostic(message: string, details?: Readonly<Record<string, unk
   };
 }
 
+function applyCapabilityDemoContext(
+  source: AuthoringSpecV3,
+  subjectDefinitionRef: string,
+): AuthoringSpecV3 {
+  const controlledEntityId = source.startup.controlledEntityId;
+  const controlledSubject = source.nodes.find(
+    (node) => node.kind === "subject" && node.id === controlledEntityId,
+  );
+  if (controlledSubject === undefined || controlledSubject.kind !== "subject") {
+    return source;
+  }
+  const definition = builtInSubjectResourceRegistry.resolveSubjectDefinition(
+    subjectDefinitionRef,
+  );
+  const motionProfile =
+    definition !== undefined && "schemaVersion" in definition
+      ? builtInSubjectResourceRegistry.resolveMotionProfile(
+          definition.profiles.motion.defaultMotionProfileRef,
+        )
+      : undefined;
+  const spawnAnchorId = controlledSubject.spawnAnchorEntityId;
+  const water = source.nodes.find((node) => node.kind === "water");
+
+  return {
+    ...source,
+    nodes: source.nodes.map((node) => {
+      if (node.kind === "subject" && node.id === controlledEntityId) {
+        return { ...node, subjectDefinitionRef };
+      }
+      if (
+        node.kind !== "anchor" ||
+        node.id !== spawnAnchorId ||
+        node.placement.kind !== "fixed"
+      ) {
+        return node;
+      }
+      const current = node.placement.transform.positionMetersXYZ;
+      if (
+        motionProfile?.motionKernelRef ===
+          "worldkit://motion-kernel/water-surface@1" &&
+        water?.kind === "water" &&
+        water.components.water.boundary.kind === "ellipse"
+      ) {
+        const [x, z] = water.components.water.boundary.centerMetersXZ;
+        return {
+          ...node,
+          placement: {
+            ...node.placement,
+            transform: {
+              ...node.placement.transform,
+              positionMetersXYZ: [x, current[1], z],
+            },
+          },
+        };
+      }
+      if (
+        motionProfile?.motionKernelRef ===
+        "worldkit://motion-kernel/unpowered-glide@1"
+      ) {
+        return {
+          ...node,
+          placement: {
+            ...node.placement,
+            transform: {
+              ...node.placement.transform,
+              positionMetersXYZ: [current[0], Math.max(12, current[1]), current[2]],
+            },
+          },
+        };
+      }
+      return node;
+    }),
+  };
+}
+
 export async function loadAuthoringScene(
   fetchSource: AuthoringSourceFetcher = () => fetch("/__worldkit/authoring-spec", { cache: "no-store" }),
+  options: AuthoringSceneLoadOptionsV1 = {},
 ): Promise<AuthoringSceneLoadResult> {
   let response: Response;
   try {
@@ -61,7 +143,13 @@ export async function loadAuthoringScene(
   }
   const parsed = parseAuthoringSpecJson(sourceText);
   if (!parsed.ok || parsed.value === undefined) return { ok: false, diagnostics: parsed.diagnostics };
-  const normalized = normalizeAuthoringSpec(parsed.value);
+  const source = options.subjectDefinitionRef === undefined
+    ? parsed.value
+    : applyCapabilityDemoContext(
+        parsed.value as AuthoringSpecV3,
+        options.subjectDefinitionRef,
+      );
+  const normalized = normalizeAuthoringSpec(source);
   if (!normalized.ok || normalized.value === undefined || normalized.normalizedWorldIrHash === undefined) {
     return { ok: false, diagnostics: normalized.diagnostics };
   }

@@ -18,7 +18,11 @@
     "safetyLimits": {
       "walkSpeedMetersPerSecond": { "minimum": 0, "maximum": 0 },
       "runSpeedMetersPerSecond": { "minimum": 0, "maximum": 0 },
-      "jumpSpeedMetersPerSecond": { "minimum": 0, "maximum": 0 }
+      "jumpSpeedMetersPerSecond": { "minimum": 0, "maximum": 0 },
+      "accelerationMetersPerSecondSquared": { "minimum": 0, "maximum": 40 },
+      "decelerationMetersPerSecondSquared": { "minimum": 0, "maximum": 50 },
+      "turnRateRadiansPerSecond": { "minimum": 0, "maximum": 0 },
+      "airControlRatio": { "minimum": 0, "maximum": 0 }
     },
     "motionTags": ["ground", "safe", "stopped"],
     "aiMetadata": {
@@ -167,6 +171,9 @@
     "safetyLimits": {
       "forwardSpeedMetersPerSecond": { "minimum": 0, "maximum": 0 },
       "reverseSpeedMetersPerSecond": { "minimum": 0, "maximum": 0 },
+      "accelerationMetersPerSecondSquared": { "minimum": 0, "maximum": 0 },
+      "dragPerSecond": { "minimum": 0, "maximum": 8 },
+      "turnRateRadiansPerSecond": { "minimum": 0, "maximum": 0 },
       "surfaceHoldStrengthPerSecond": { "minimum": 1, "maximum": 20 }
     },
     "motionTags": ["safe", "surface", "water"],
@@ -225,7 +232,15 @@
       "stallSpeedMetersPerSecond": 0
     },
     "safetyLimits": {
-      "gravityScale": { "minimum": 0.1, "maximum": 2 }
+      "minimumForwardSpeedMetersPerSecond": { "minimum": 0, "maximum": 0 },
+      "maximumForwardSpeedMetersPerSecond": { "minimum": 0, "maximum": 0 },
+      "glideAccelerationMetersPerSecondSquared": { "minimum": 0, "maximum": 0 },
+      "gravityScale": { "minimum": 0.1, "maximum": 2 },
+      "liftRatio": { "minimum": 0, "maximum": 0 },
+      "pitchRateRadiansPerSecond": { "minimum": 0, "maximum": 0 },
+      "yawRateRadiansPerSecond": { "minimum": 0, "maximum": 0 },
+      "rollRateRadiansPerSecond": { "minimum": 0, "maximum": 0 },
+      "stallSpeedMetersPerSecond": { "minimum": 0, "maximum": 0 }
     },
     "motionTags": ["air", "fall", "safe"],
     "aiMetadata": {

@@ -233,6 +233,8 @@ export interface RegistrySubjectDefinitionInputV3
     | "custom";
   profiles: {
     physicsBodyProfileRef: string;
+    /** Compatibility projection for Authoring V2; V3 runtime uses motion.defaultMotionProfileRef. */
+    locomotionProfileRef: string;
     motion: {
       defaultMotionProfileRef: string;
       optionalMotionProfileRefs: readonly string[];
@@ -300,11 +302,7 @@ export type SubjectRegistryResourceV3 =
   | SubjectCapabilityResourceV1
   | RegistrySubjectDefinitionV3;
 
-export interface SubjectResourceRegistryV3
-  extends Omit<
-    SubjectResourceRegistryV2,
-    "resolveSubjectDefinition" | "listSubjectDefinitions" | "listResources"
-  > {
+export interface SubjectResourceRegistryV3 extends SubjectResourceRegistryV2 {
   resolveSubjectDefinition(
     resourceRef: string,
   ): RegistrySubjectDefinitionV2 | RegistrySubjectDefinitionV3 | undefined;
@@ -321,9 +319,15 @@ export interface SubjectResourceRegistryV3
   resolveHarnessProfile(resourceRef: string): HarnessProfileV1 | undefined;
   resolvePoseSetProfile(resourceRef: string): PoseSetProfileV1 | undefined;
   resolveRenderBindingProfile(resourceRef: string): RenderBindingProfileV1 | undefined;
-  listSubjectDefinitions(): readonly (
+  /** Backward-compatible Authoring V2 definition view. */
+  listSubjectDefinitions(): readonly RegistrySubjectDefinitionV2[];
+  /** Full capability-driven definition view. */
+  listAllSubjectDefinitions(): readonly (
     | RegistrySubjectDefinitionV2
     | RegistrySubjectDefinitionV3
   )[];
-  listResources(): readonly SubjectRegistryResourceV3[];
+  /** Backward-compatible V1 resource view. */
+  listResources(): readonly SubjectRegistryResourceV1[];
+  /** Full capability-driven registry view. */
+  listAllResources(): readonly SubjectRegistryResourceV3[];
 }

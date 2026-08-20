@@ -37,6 +37,7 @@ export interface SubjectAssetManifestInputV1 extends SubjectRegistryResourceBase
     triangleCount: number;
     skeletonCount: number;
     boneCount: number;
+    animationClipCount?: number;
     animationClipNames: readonly string[];
   };
   provenance: {
@@ -45,6 +46,10 @@ export interface SubjectAssetManifestInputV1 extends SubjectRegistryResourceBase
     sourceUri?: string;
     licenseUri?: string;
     author?: string;
+  };
+  runtimeReadiness?: {
+    productionReady: boolean;
+    runtimeStateBinding: "implemented" | "not-implemented" | "partial";
   };
 }
 
@@ -79,17 +84,30 @@ export interface RigProfileManifestInputV1 extends SubjectRegistryResourceBaseIn
 
 export type GroundHumanoidActionIdV1 =
   | "idle"
+  | "idle.gaming"
   | "walk"
+  | "walk.step"
   | "run"
   | "jump"
   | "fall"
+  | "land.hard"
+  | "land.hard.alt"
+  | "fly"
   | "float"
   | "swim.surface"
   | "swim.tread"
+  | "swim.exit"
   | "sit"
   | "sit.idle"
+  | "sit.ground.idle"
+  | "sit.toStand"
   | "stand"
-  | "swim.exit";
+  | "lay.idle"
+  | "roll.toRun"
+  | "fight.enter"
+  | "emote.salute"
+  | "emote.angry"
+  | "dance.rumba";
 
 export type SubjectBodyTopologyV2 =
   | "biped"
@@ -189,8 +207,8 @@ export type SubjectSocketDefinitionV2 =
 
 export interface RegistrySubjectDefinitionInputV2 extends SubjectRegistryResourceBaseInputV1 {
   kind: "subject-definition";
-  category: "human" | "animal" | "custom";
-  bodyTopology: "biped" | "quadruped" | "custom";
+  category: "human" | "animal" | "vehicle" | "composite" | "custom";
+  bodyTopology: SubjectBodyTopologyV2;
   semanticClassId: string;
   coordinateConvention: {
     forwardAxis: "-Z";

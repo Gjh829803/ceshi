@@ -305,6 +305,30 @@ export class BabylonWorldAdapter implements PlaygroundWorldAdapter {
     return snapshot;
   }
 
+  setCameraPreferenceRuntime(preference: string): WorldRuntimeSnapshotV3 {
+    const snapshot = this.runtime.setCameraPreference(preference);
+    this.render();
+    this.emit();
+    return snapshot;
+  }
+
+  runSubjectHarness(subjectEntityId: string) {
+    return this.runtime.runHarness(subjectEntityId);
+  }
+
+  async setMotionProfileRuntime(
+    subjectEntityId: string,
+    motionProfileRef: string,
+  ): Promise<WorldRuntimeSnapshotV3> {
+    if (!this.runtime.requestMotionProfile(subjectEntityId, motionProfileRef)) {
+      throw new Error("WORLDKIT_MOTION_PROFILE_INCOMPATIBLE");
+    }
+    const snapshot = await this.runtime.runFixedInput({ actions: [], ticks: 1 });
+    this.render();
+    this.emit();
+    return snapshot;
+  }
+
   runtimeDiagnostics(): readonly WorldkitBrowserDiagnosticV1[] {
     return this.executionPlan.layout.layoutAssertions.map((assertion, index) => ({
       severity: "info",

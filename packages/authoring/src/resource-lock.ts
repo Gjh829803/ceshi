@@ -3,7 +3,7 @@ import type {
   ColliderProfileManifestV1,
   RigProfileManifestV1,
   SubjectAssetManifestV1,
-  SubjectRegistryResourceV1,
+  SubjectRegistryResourceV3,
 } from "@whitebox-world/subject-registry";
 
 import { sha256CanonicalJson } from "./canonical-json";
@@ -129,7 +129,7 @@ export class ResourceLockBuilderV1 {
   readonly #colliderProfilesByRef = new Map<string, ColliderProfileManifestV1>();
 
   public addRegistryResource(
-    resource: SubjectRegistryResourceV1,
+    resource: SubjectRegistryResourceV3,
     instancePath: string,
     diagnostics: AuthoringDiagnostic[],
   ): void {

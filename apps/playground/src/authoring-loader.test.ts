@@ -2,7 +2,10 @@ import { describe, expect, it } from "vitest";
 import { readFile } from "node:fs/promises";
 import { fileURLToPath } from "node:url";
 
-import { createValidPackageSubjectWorld } from "../../../packages/authoring/src/test-fixture";
+import {
+  createValidAuthoringSpec,
+  createValidPackageSubjectWorld,
+} from "../../../packages/authoring/src/test-fixture";
 import type { WorldkitBrowserApiV3 } from "@whitebox-world/runtime-contracts";
 import { WORLDKIT_BROWSER_PROTOCOL_VERSION } from "@whitebox-world/runtime-contracts";
 
@@ -157,6 +160,37 @@ describe("loadAuthoringScene", () => {
     });
     expect(loaded.normalizedWorldIrHash).toMatch(/^sha256:[a-f0-9]{64}$/);
     expect(loaded.executionPlanHash).toMatch(/^sha256:[a-f0-9]{64}$/);
+  });
+
+  it("replaces only the controlled Subject and adapts water/air package spawn context", async () => {
+    const waterLoaded = await loadAuthoringScene(
+      async () => new Response(JSON.stringify(createValidAuthoringSpec())),
+      {
+        subjectDefinitionRef:
+          "worldkit://subject-definition/watercraft.kayak.surface@1",
+      },
+    );
+    const airLoaded = await loadAuthoringScene(
+      async () => new Response(JSON.stringify(createValidAuthoringSpec())),
+      {
+        subjectDefinitionRef:
+          "worldkit://subject-definition/glider.paraglider.unpowered@1",
+      },
+    );
+
+    expect(waterLoaded.executionPlan?.subjects[0]).toMatchObject({
+      subjectDefinitionRef:
+        "worldkit://subject-definition/watercraft.kayak.surface@1",
+      spawnSubjectOriginPositionMetersXYZ: [25, expect.any(Number), 0],
+    });
+    expect(airLoaded.executionPlan?.subjects[0]).toMatchObject({
+      subjectDefinitionRef:
+        "worldkit://subject-definition/glider.paraglider.unpowered@1",
+      spawnSubjectOriginPositionMetersXYZ: [0, expect.any(Number), 30],
+    });
+    expect(
+      airLoaded.executionPlan?.subjects[0]?.spawnSubjectOriginPositionMetersXYZ[1],
+    ).toBeGreaterThanOrEqual(12);
   });
 
   it("produces one runtime Feature inspection per compiled Subject", async () => {

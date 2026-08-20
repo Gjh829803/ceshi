@@ -2,6 +2,11 @@ import { sha256CanonicalJson } from "@whitebox-world/protocol";
 
 import { BUILT_IN_SUBJECT_RESOURCE_MANIFESTS } from "./built-in-resource-manifests";
 import { BUILT_IN_SUBJECT_DEFINITIONS } from "./built-in-subject-definitions";
+import {
+  BUILT_IN_CAPABILITY_MANIFESTS,
+  BUILT_IN_CAPABILITY_RESOURCES,
+} from "./built-in-capability-resources";
+import subjectDefinitionsV3 from "../../../assets/registry/subject-definitions/catalog.json";
 import type {
   AnimationSetManifestInputV1,
   AnimationSetManifestV1,
@@ -16,10 +21,27 @@ import type {
   RigProfileManifestV1,
   SubjectAssetManifestV1,
   SubjectAssetManifestInputV1,
-  SubjectRegistryResourceInputV1,
   SubjectRegistryResourceV1,
-  SubjectResourceRegistryV2,
 } from "./types-v2";
+import type {
+  CameraContextProfileV1,
+  CameraRigAlgorithmDefinitionV1,
+  CameraRigProfileV1,
+  ControlProfileV1,
+  HarnessProfileV1,
+  MediumProfileV1,
+  MotionKernelDefinitionV1,
+  MotionProfileInputV1,
+  MotionProfileV1,
+  PoseSetProfileV1,
+  RegistrySubjectDefinitionInputV3,
+  RegistrySubjectDefinitionV3,
+  RelationshipProfileV1,
+  RenderBindingProfileV1,
+  SubjectRegistryResourceInputV3,
+  SubjectRegistryResourceV3,
+  SubjectResourceRegistryV3,
+} from "./types-v3";
 
 function deepFreeze<T>(value: T): T {
   if (value === null || typeof value !== "object" || Object.isFrozen(value)) return value;
@@ -72,7 +94,7 @@ function validateSubjectAsset(source: SubjectAssetManifestInputV1): void {
   }
 }
 
-function validateCanonicalizedSemanticTags(source: SubjectRegistryResourceInputV1): void {
+function validateCanonicalizedSemanticTags(source: SubjectRegistryResourceInputV3): void {
   const duplicateSemanticTag = duplicateValue(source.aiMetadata.semanticTags);
   if (duplicateSemanticTag !== undefined) {
     throw new Error(
@@ -111,8 +133,8 @@ function sortedStrings<T extends string>(values: readonly T[]): readonly T[] {
 }
 
 function canonicalizeNewResourceCollections(
-  source: SubjectRegistryResourceInputV1,
-): SubjectRegistryResourceInputV1 {
+  source: SubjectRegistryResourceInputV3,
+): SubjectRegistryResourceInputV3 {
   const input = structuredClone(source);
   switch (input.kind) {
     case "subject-asset":
@@ -162,26 +184,147 @@ function canonicalizeNewResourceCollections(
         },
       };
     default:
-      return input;
+      return {
+        ...input,
+        aiMetadata: {
+          ...input.aiMetadata,
+          semanticTags: sortedStrings(input.aiMetadata.semanticTags),
+        },
+      };
   }
 }
 
-function lockResource(source: SubjectRegistryResourceInputV1): SubjectRegistryResourceV1 {
+function lockResource(source: SubjectRegistryResourceInputV3): SubjectRegistryResourceV3 {
   const { contentHash: _ignoredContentHash, ...sourceWithoutContentHash } = source as
-    SubjectRegistryResourceInputV1 & { contentHash?: string };
+    SubjectRegistryResourceInputV3 & { contentHash?: string };
   const hashInput = canonicalizeNewResourceCollections(
-    sourceWithoutContentHash as SubjectRegistryResourceInputV1,
+    sourceWithoutContentHash as SubjectRegistryResourceInputV3,
   );
   return deepFreeze({
     ...hashInput,
     contentHash: sha256CanonicalJson(hashInput),
-  } as SubjectRegistryResourceV1);
+  } as SubjectRegistryResourceV3);
+}
+
+function validateMotionProfile(source: MotionProfileInputV1): void {
+  for (const [parameterName, parameterValue] of Object.entries(source.parameters)) {
+    if (typeof parameterValue !== "number") continue;
+    if (!Number.isFinite(parameterValue)) {
+      throw new Error(
+        `SUBJECT_REGISTRY_NON_FINITE_PARAMETER: '${parameterName}' in '${source.resourceRef}'.`,
+      );
+    }
+    const limit = source.safetyLimits[parameterName];
+    if (limit === undefined) {
+      throw new Error(
+        `SUBJECT_REGISTRY_MISSING_SAFETY_LIMIT: '${parameterName}' in '${source.resourceRef}'.`,
+      );
+    }
+    if (parameterValue < limit.minimum || parameterValue > limit.maximum) {
+      throw new Error(
+        `SUBJECT_REGISTRY_PARAMETER_OUT_OF_RANGE: '${parameterName}' in '${source.resourceRef}'.`,
+      );
+    }
+  }
+}
+
+function validateReferences(resourcesByRef: ReadonlyMap<string, SubjectRegistryResourceV3>): void {
+  const requireRef = (ownerRef: string, resourceRef: string, expectedKind: string): void => {
+    const resolved = resourcesByRef.get(resourceRef);
+    if (resolved?.kind !== expectedKind) {
+      throw new Error(
+        `SUBJECT_REGISTRY_MISSING_REFERENCE: '${ownerRef}' requires ${expectedKind} '${resourceRef}'.`,
+      );
+    }
+  };
+
+  for (const resource of resourcesByRef.values()) {
+    if (resource.kind === "motion-profile") {
+      requireRef(resource.resourceRef, resource.motionKernelRef, "motion-kernel");
+      const kernel = resourcesByRef.get(resource.motionKernelRef);
+      if (kernel?.kind === "motion-kernel" && kernel.runtimeStatus === "reserved") {
+        throw new Error(
+          `SUBJECT_REGISTRY_RESERVED_KERNEL_PROFILE: '${resource.resourceRef}' targets '${kernel.resourceRef}'.`,
+        );
+      }
+    }
+    if (resource.kind === "camera-rig-profile") {
+      requireRef(resource.resourceRef, resource.algorithmRef, "camera-rig-algorithm");
+    }
+    if (resource.kind === "camera-context-profile") {
+      requireRef(
+        resource.resourceRef,
+        resource.defaultCameraRigProfileRef,
+        "camera-rig-profile",
+      );
+      if (resource.firstPersonCameraRigProfileRef !== undefined) {
+        requireRef(
+          resource.resourceRef,
+          resource.firstPersonCameraRigProfileRef,
+          "camera-rig-profile",
+        );
+      }
+      for (const rule of resource.rules) {
+        requireRef(resource.resourceRef, rule.cameraRigProfileRef, "camera-rig-profile");
+      }
+    }
+    if (resource.kind === "subject-definition" && "schemaVersion" in resource) {
+      const subject = resource as RegistrySubjectDefinitionV3;
+      requireRef(
+        subject.resourceRef,
+        subject.profiles.physicsBodyProfileRef,
+        "physics-body-profile",
+      );
+      const allMotionProfileRefs = [
+        subject.profiles.motion.defaultMotionProfileRef,
+        ...subject.profiles.motion.optionalMotionProfileRefs,
+        subject.profiles.motion.fallbackMotionProfileRef,
+      ];
+      for (const ref of allMotionProfileRefs) {
+        requireRef(subject.resourceRef, ref, "motion-profile");
+      }
+      requireRef(subject.resourceRef, subject.profiles.controlProfileRef, "control-profile");
+      requireRef(
+        subject.resourceRef,
+        subject.profiles.cameraContextProfileRef,
+        "camera-context-profile",
+      );
+      requireRef(subject.resourceRef, subject.profiles.mediumProfileRef, "medium-profile");
+      requireRef(subject.resourceRef, subject.profiles.harnessProfileRef, "harness-profile");
+      requireRef(
+        subject.resourceRef,
+        subject.renderBindingProfileRef,
+        "render-binding-profile",
+      );
+      const actionOrPose = resourcesByRef.get(subject.actionOrPoseSetRef);
+      if (actionOrPose?.kind !== "animation-set" && actionOrPose?.kind !== "pose-set-profile") {
+        throw new Error(
+          `SUBJECT_REGISTRY_MISSING_REFERENCE: '${subject.resourceRef}' requires action or pose set '${subject.actionOrPoseSetRef}'.`,
+        );
+      }
+      const motion = resourcesByRef.get(subject.profiles.motion.defaultMotionProfileRef);
+      const control = resourcesByRef.get(subject.profiles.controlProfileRef);
+      const kernel =
+        motion?.kind === "motion-profile"
+          ? resourcesByRef.get(motion.motionKernelRef)
+          : undefined;
+      if (
+        kernel?.kind === "motion-kernel" &&
+        control?.kind === "control-profile" &&
+        kernel.commandKind !== control.commandKind
+      ) {
+        throw new Error(
+          `SUBJECT_REGISTRY_COMMAND_KIND_MISMATCH: '${subject.resourceRef}' uses '${kernel.commandKind}' with '${control.commandKind}'.`,
+        );
+      }
+    }
+  }
 }
 
 export function createSubjectResourceRegistry(
-  resources: readonly SubjectRegistryResourceInputV1[],
-): SubjectResourceRegistryV2 {
-  const resourcesByRef = new Map<string, SubjectRegistryResourceV1>();
+  resources: readonly SubjectRegistryResourceInputV3[],
+): SubjectResourceRegistryV3 {
+  const resourcesByRef = new Map<string, SubjectRegistryResourceV3>();
   for (const source of resources) {
     if (resourcesByRef.has(source.resourceRef)) {
       throw new Error(`SUBJECT_REGISTRY_DUPLICATE_REF: '${source.resourceRef}'.`);
@@ -190,16 +333,11 @@ export function createSubjectResourceRegistry(
     if (source.kind === "animation-set") validateAnimationSet(source);
     if (source.kind === "rig-profile") validateRigProfile(source);
     if (source.kind === "collider-profile") validateColliderProfile(source);
-    if (
-      source.kind === "subject-asset" ||
-      source.kind === "rig-profile" ||
-      source.kind === "animation-set" ||
-      source.kind === "collider-profile"
-    ) {
-      validateCanonicalizedSemanticTags(source);
-    }
+    if (source.kind === "motion-profile") validateMotionProfile(source);
+    validateCanonicalizedSemanticTags(source);
     resourcesByRef.set(source.resourceRef, lockResource(source));
   }
+  validateReferences(resourcesByRef);
 
   const stableResources = deepFreeze(
     [...resourcesByRef.values()].sort((left, right) =>
@@ -208,8 +346,48 @@ export function createSubjectResourceRegistry(
   );
   const stableSubjectDefinitions = deepFreeze(
     stableResources.filter(
-      (resource): resource is RegistrySubjectDefinitionV2 =>
+      (resource): resource is RegistrySubjectDefinitionV2 | RegistrySubjectDefinitionV3 =>
         resource.kind === "subject-definition",
+    ),
+  );
+  const stableLegacySubjectDefinitions = deepFreeze(
+    stableSubjectDefinitions.filter(
+      (resource): resource is RegistrySubjectDefinitionV2 =>
+        !("schemaVersion" in resource),
+    ),
+  );
+  const capabilityDrivenRegistry = stableResources.some(
+    (resource) => resource.kind === "motion-kernel",
+  );
+  const builtInLegacyResourceRefs = new Set([
+    "worldkit://subject-asset/humanoid.golden@1",
+    "worldkit://rig-profile/biped.golden@1",
+    "worldkit://animation-set/humanoid.ground.golden@1",
+    "worldkit://collider-profile/humanoid.medium-capsule@1",
+    "worldkit://subject-definition/humanoid.rigged-golden@1",
+    "worldkit://subject-definition/humanoid.third-person@1",
+    "worldkit://subject-definition/quadruped.ground-proxy@1",
+    "worldkit://capability/locomotion.ground@1",
+    "worldkit://physics-body-profile/character.medium@1",
+    "worldkit://locomotion-profile/ground.standard@1",
+    "worldkit://collider-derivation-profile/vertical-character-capsule@1",
+  ]);
+  const stableLegacyResources = deepFreeze(
+    stableResources.filter(
+      (resource): resource is SubjectRegistryResourceV1 => {
+        if (capabilityDrivenRegistry) {
+          return builtInLegacyResourceRefs.has(resource.resourceRef);
+        }
+        return resource.kind === "subject-asset" ||
+          resource.kind === "rig-profile" ||
+          resource.kind === "animation-set" ||
+          resource.kind === "collider-profile" ||
+          (resource.kind === "subject-definition" && !("schemaVersion" in resource)) ||
+          resource.kind === "capability" ||
+          resource.kind === "physics-body-profile" ||
+          resource.kind === "locomotion-profile" ||
+          resource.kind === "collider-derivation-profile";
+      },
     ),
   );
 
@@ -230,7 +408,9 @@ export function createSubjectResourceRegistry(
       const resource = resourcesByRef.get(resourceRef);
       return resource?.kind === "collider-profile" ? resource : undefined;
     },
-    resolveSubjectDefinition(resourceRef: string): RegistrySubjectDefinitionV2 | undefined {
+    resolveSubjectDefinition(
+      resourceRef: string,
+    ): RegistrySubjectDefinitionV2 | RegistrySubjectDefinitionV3 | undefined {
       const resource = resourcesByRef.get(resourceRef);
       return resource?.kind === "subject-definition" ? resource : undefined;
     },
@@ -254,10 +434,65 @@ export function createSubjectResourceRegistry(
       const resource = resourcesByRef.get(resourceRef);
       return resource?.kind === "collider-derivation-profile" ? resource : undefined;
     },
+    resolveMotionKernel(resourceRef: string): MotionKernelDefinitionV1 | undefined {
+      const resource = resourcesByRef.get(resourceRef);
+      return resource?.kind === "motion-kernel" ? resource : undefined;
+    },
+    resolveMotionProfile(resourceRef: string): MotionProfileV1 | undefined {
+      const resource = resourcesByRef.get(resourceRef);
+      return resource?.kind === "motion-profile" ? resource : undefined;
+    },
+    resolveControlProfile(resourceRef: string): ControlProfileV1 | undefined {
+      const resource = resourcesByRef.get(resourceRef);
+      return resource?.kind === "control-profile" ? resource : undefined;
+    },
+    resolveCameraRigAlgorithm(
+      resourceRef: string,
+    ): CameraRigAlgorithmDefinitionV1 | undefined {
+      const resource = resourcesByRef.get(resourceRef);
+      return resource?.kind === "camera-rig-algorithm" ? resource : undefined;
+    },
+    resolveCameraRigProfile(resourceRef: string): CameraRigProfileV1 | undefined {
+      const resource = resourcesByRef.get(resourceRef);
+      return resource?.kind === "camera-rig-profile" ? resource : undefined;
+    },
+    resolveCameraContextProfile(resourceRef: string): CameraContextProfileV1 | undefined {
+      const resource = resourcesByRef.get(resourceRef);
+      return resource?.kind === "camera-context-profile" ? resource : undefined;
+    },
+    resolveMediumProfile(resourceRef: string): MediumProfileV1 | undefined {
+      const resource = resourcesByRef.get(resourceRef);
+      return resource?.kind === "medium-profile" ? resource : undefined;
+    },
+    resolveRelationshipProfile(resourceRef: string): RelationshipProfileV1 | undefined {
+      const resource = resourcesByRef.get(resourceRef);
+      return resource?.kind === "relationship-profile" ? resource : undefined;
+    },
+    resolveHarnessProfile(resourceRef: string): HarnessProfileV1 | undefined {
+      const resource = resourcesByRef.get(resourceRef);
+      return resource?.kind === "harness-profile" ? resource : undefined;
+    },
+    resolvePoseSetProfile(resourceRef: string): PoseSetProfileV1 | undefined {
+      const resource = resourcesByRef.get(resourceRef);
+      return resource?.kind === "pose-set-profile" ? resource : undefined;
+    },
+    resolveRenderBindingProfile(resourceRef: string): RenderBindingProfileV1 | undefined {
+      const resource = resourcesByRef.get(resourceRef);
+      return resource?.kind === "render-binding-profile" ? resource : undefined;
+    },
     listSubjectDefinitions(): readonly RegistrySubjectDefinitionV2[] {
+      return stableLegacySubjectDefinitions;
+    },
+    listAllSubjectDefinitions(): readonly (
+      | RegistrySubjectDefinitionV2
+      | RegistrySubjectDefinitionV3
+    )[] {
       return stableSubjectDefinitions;
     },
     listResources(): readonly SubjectRegistryResourceV1[] {
+      return stableLegacyResources;
+    },
+    listAllResources(): readonly SubjectRegistryResourceV3[] {
       return stableResources;
     },
   });
@@ -265,5 +500,8 @@ export function createSubjectResourceRegistry(
 
 export const builtInSubjectResourceRegistry = createSubjectResourceRegistry([
   ...BUILT_IN_SUBJECT_DEFINITIONS,
+  ...(subjectDefinitionsV3 as unknown as readonly RegistrySubjectDefinitionInputV3[]),
   ...BUILT_IN_SUBJECT_RESOURCE_MANIFESTS,
+  ...BUILT_IN_CAPABILITY_MANIFESTS,
+  ...BUILT_IN_CAPABILITY_RESOURCES,
 ]);

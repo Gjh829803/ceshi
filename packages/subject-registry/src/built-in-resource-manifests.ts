@@ -168,9 +168,9 @@ const G_BOT_SUBJECT_ASSET: SubjectAssetManifestInputV1 = {
   format: "glb",
   artifact: {
     mediaType: "model/gltf-binary",
-    byteLength: 3_362_888,
+    byteLength: 5_302_160,
     contentHash:
-      "sha256:74bbf9426577caa1b7e808bf388bd9a6b8b48d50cc80ab7b0abef10c2693c286",
+      "sha256:41833210e735788da0777fc37badcec03f90ccf17ab5a7d89103f0727abeeb1b",
   },
   coordinateConvention: {
     forwardAxis: "-Z",
@@ -188,19 +188,33 @@ const G_BOT_SUBJECT_ASSET: SubjectAssetManifestInputV1 = {
     triangleCount: 49_112,
     skeletonCount: 1,
     boneCount: 65,
+    animationClipCount: 25,
     animationClipNames: [
       "idle",
+      "idle.gaming",
       "walk",
+      "walk.step",
       "run",
       "jump",
       "fall",
+      "land.hard",
+      "land.hard.alt",
+      "fly",
       "float",
       "swim.surface",
       "swim.tread",
+      "swim.exit",
       "sit",
       "sit.idle",
+      "sit.ground.idle",
+      "sit.toStand",
       "stand",
-      "swim.exit",
+      "lay.idle",
+      "roll.toRun",
+      "fight.enter",
+      "emote.salute",
+      "emote.angry",
+      "dance.rumba",
     ],
   },
   provenance: {
@@ -208,9 +222,13 @@ const G_BOT_SUBJECT_ASSET: SubjectAssetManifestInputV1 = {
     redistributionPolicy: "internal-only",
     author: "Loopit asset team",
   },
+  runtimeReadiness: {
+    productionReady: false,
+    runtimeStateBinding: "not-implemented",
+  },
   aiMetadata: {
     displayName: "G Bot Golden",
-    description: "Project-owned Mixamo-rigged G Bot with twelve semantic animation clips.",
+    description: "Project-owned Mixamo-rigged G Bot with twenty-five art-ready semantic animation clips; runtime state binding is not implemented.",
     semanticTags: ["biped", "g-bot", "humanoid", "rigged"],
   },
 };
@@ -253,17 +271,30 @@ const G_BOT_RIG_PROFILE: RigProfileManifestInputV1 = {
 
 const G_BOT_ACTION_BINDINGS = [
   ["idle", "repeat", 0.2],
+  ["idle.gaming", "repeat", 0.2],
   ["walk", "repeat", 0.15],
+  ["walk.step", "once", 0.12],
   ["run", "repeat", 0.12],
   ["jump", "once", 0.1],
   ["fall", "repeat", 0.12],
+  ["land.hard", "once", 0.08],
+  ["land.hard.alt", "once", 0.08],
+  ["fly", "repeat", 0.18],
   ["float", "repeat", 0.2],
   ["swim.surface", "repeat", 0.18],
   ["swim.tread", "repeat", 0.2],
+  ["swim.exit", "once", 0.15],
   ["sit", "once", 0.2],
   ["sit.idle", "repeat", 0.2],
+  ["sit.ground.idle", "repeat", 0.2],
+  ["sit.toStand", "once", 0.15],
   ["stand", "once", 0.18],
-  ["swim.exit", "once", 0.15],
+  ["lay.idle", "repeat", 0.2],
+  ["roll.toRun", "once", 0.08],
+  ["fight.enter", "once", 0.12],
+  ["emote.salute", "once", 0.15],
+  ["emote.angry", "once", 0.15],
+  ["dance.rumba", "repeat", 0.2],
 ] as const satisfies readonly [
   GroundHumanoidActionIdV1,
   "repeat" | "once",
@@ -291,7 +322,7 @@ const G_BOT_ALL_ACTIONS: AnimationSetManifestInputV1 = {
   ),
   aiMetadata: {
     displayName: "G Bot Complete Action Set",
-    description: "Twelve explicit in-place semantic action mappings for G Bot.",
+    description: "Twenty-five explicit in-place art-ready semantic mappings for G Bot; runtime state binding remains separate.",
     semanticTags: ["animation", "g-bot", "humanoid"]
   },
 };
@@ -335,16 +366,7 @@ const MEDIUM_CHARACTER_PHYSICS_BODY_PROFILE: PhysicsBodyProfileManifestInputV1 =
   id: "character.medium",
   version: 1,
   resourceRef: "worldkit://physics-body-profile/character.medium@1",
-  supportedBodyTopologies: [
-    "biped",
-    "quadruped",
-    "four-wheel",
-    "surface-craft",
-    "watercraft",
-    "glider",
-    "composite",
-    "custom",
-  ],
+  supportedBodyTopologies: ["biped", "quadruped", "custom"],
   physicsBody: {
     mode: "character",
     massKilograms: 75,
@@ -378,12 +400,60 @@ const STANDARD_GROUND_LOCOMOTION_PROFILE: LocomotionProfileManifestInputV1 = {
   },
 };
 
+const CAPABILITY_CHARACTER_PHYSICS_BODY_PROFILE: PhysicsBodyProfileManifestInputV1 = {
+  kind: "physics-body-profile",
+  id: "character.capability-medium",
+  version: 1,
+  resourceRef: "worldkit://physics-body-profile/character.capability-medium@1",
+  supportedBodyTopologies: [
+    "biped",
+    "quadruped",
+    "four-wheel",
+    "surface-craft",
+    "watercraft",
+    "glider",
+    "composite",
+    "custom",
+  ],
+  physicsBody: {
+    mode: "character",
+    massKilograms: 75,
+    maxSlopeDegrees: 42,
+    maxStepHeightMeters: 0.3,
+  },
+  aiMetadata: {
+    displayName: "Capability subject body",
+    description: "Shared character-controller body adapter for capability-driven whitebox subjects.",
+    semanticTags: ["capability-driven", "character", "physics"],
+  },
+};
+
 const VERTICAL_CHARACTER_CAPSULE_PROFILE: ColliderDerivationProfileManifestInputV1 = {
   kind: "collider-derivation-profile",
   id: "vertical-character-capsule",
   version: 1,
   resourceRef:
     "worldkit://collider-derivation-profile/vertical-character-capsule@1",
+  supportedBodyTopologies: ["biped", "quadruped", "custom"],
+  colliderDerivation: {
+    algorithm: "vertical-character-capsule",
+    supportOriginToleranceMeters: 0.01,
+    maximumRadiusMeters: 2,
+    maximumHeightMeters: 4,
+  },
+  aiMetadata: {
+    displayName: "Vertical character capsule",
+    description: "Derives one grounded vertical capsule from included primitive bounds.",
+    semanticTags: ["automatic", "capsule", "character", "collider"],
+  },
+};
+
+const CAPABILITY_VERTICAL_CAPSULE_PROFILE: ColliderDerivationProfileManifestInputV1 = {
+  kind: "collider-derivation-profile",
+  id: "vertical-capability-capsule",
+  version: 1,
+  resourceRef:
+    "worldkit://collider-derivation-profile/vertical-capability-capsule@1",
   supportedBodyTopologies: [
     "biped",
     "quadruped",
@@ -401,9 +471,9 @@ const VERTICAL_CHARACTER_CAPSULE_PROFILE: ColliderDerivationProfileManifestInput
     maximumHeightMeters: 4,
   },
   aiMetadata: {
-    displayName: "Vertical character capsule",
-    description: "Derives one grounded vertical capsule from included primitive bounds.",
-    semanticTags: ["automatic", "capsule", "character", "collider"],
+    displayName: "Vertical capability capsule",
+    description: "Derives one bounded capsule for capability-driven whitebox subjects.",
+    semanticTags: ["automatic", "capability-driven", "capsule", "collider"],
   },
 };
 
@@ -417,8 +487,10 @@ export const BUILT_IN_SUBJECT_RESOURCE_MANIFESTS = [
   MEDIUM_HUMANOID_CAPSULE_PROFILE,
   GROUND_LOCOMOTION_CAPABILITY,
   MEDIUM_CHARACTER_PHYSICS_BODY_PROFILE,
+  CAPABILITY_CHARACTER_PHYSICS_BODY_PROFILE,
   STANDARD_GROUND_LOCOMOTION_PROFILE,
   VERTICAL_CHARACTER_CAPSULE_PROFILE,
+  CAPABILITY_VERTICAL_CAPSULE_PROFILE,
 ] as const satisfies readonly (
   | SubjectAssetManifestInputV1
   | RigProfileManifestInputV1

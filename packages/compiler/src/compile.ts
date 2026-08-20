@@ -3,6 +3,7 @@ import type {
   NormalizedColliderProfileV1,
   NormalizedRigProfileV1,
   NormalizedSubjectAssetV1,
+  NormalizedSubjectDefinitionV2,
   NormalizedWorldIRV3,
   NormalizedLayoutAssertionV1,
   NormalizedWorldNodeV3,
@@ -495,6 +496,106 @@ function compileSubjectSocketV3(socket: NormalizedSubjectSocketV2): SubjectSocke
   };
 }
 
+function compileCapabilityAssemblyV1(
+  assembly: NonNullable<NormalizedSubjectDefinitionV2["capabilityAssembly"]>,
+): NonNullable<ExecutionSubjectV3["capabilityAssembly"]> {
+  const compileMotionProfile = (
+    profile: typeof assembly.defaultMotionProfile,
+  ): NonNullable<ExecutionSubjectV3["capabilityAssembly"]>["defaultMotionProfile"] => ({
+    resourceRef: profile.resourceRef,
+    motionKernelRef: profile.motionKernelRef,
+    parameters: structuredClone(profile.parameters),
+    safetyLimits: structuredClone(profile.safetyLimits),
+    motionTags: [...profile.motionTags],
+  });
+  const implementationId = assembly.motionKernel.implementationId;
+  if (
+    implementationId !== "free-ground" &&
+    implementationId !== "forward-steer" &&
+    implementationId !== "wheeled-arcade" &&
+    implementationId !== "surface-slide" &&
+    implementationId !== "water-surface" &&
+    implementationId !== "unpowered-glide"
+  ) {
+    throw new Error(
+      `NormalizedWorldIRV3 invariant violated: reserved Motion Kernel '${assembly.motionKernel.resourceRef}' cannot enter an Execution Plan.`,
+    );
+  }
+  const relationshipProfiles = assembly.relationshipProfiles.map((profile) => {
+    if (profile.relationshipType === "mount") {
+      throw new Error(
+        `NormalizedWorldIRV3 invariant violated: reserved Mount Profile '${profile.resourceRef}' cannot enter an Execution Plan.`,
+      );
+    }
+    return {
+      resourceRef: profile.resourceRef,
+      relationshipType: profile.relationshipType,
+      requiredSourceSocketIds: [...profile.requiredSourceSocketIds],
+      requiredTargetSocketIds: [...profile.requiredTargetSocketIds],
+      controlTransferPolicy: profile.controlTransferPolicy,
+      cameraTargetPolicy: profile.cameraTargetPolicy,
+      ...(profile.maximumDistanceMeters === undefined
+        ? {}
+        : { maximumDistanceMeters: profile.maximumDistanceMeters }),
+    };
+  });
+  return {
+    agentAccessLevel: assembly.agentAccessLevel,
+    defaultMotionProfile: compileMotionProfile(assembly.defaultMotionProfile),
+    optionalMotionProfiles: assembly.optionalMotionProfiles.map(compileMotionProfile),
+    fallbackMotionProfile: compileMotionProfile(assembly.fallbackMotionProfile),
+    motionKernel: {
+      resourceRef: assembly.motionKernel.resourceRef,
+      implementationId,
+      commandKind: assembly.motionKernel.commandKind,
+      supportedMediums: [...assembly.motionKernel.supportedMediums],
+      fallbackMotionProfileRef: assembly.motionKernel.fallbackMotionProfileRef,
+      deterministic: true,
+    },
+    controlProfile: {
+      resourceRef: assembly.controlProfile.resourceRef,
+      commandKind: assembly.controlProfile.commandKind,
+      inputSpace: assembly.controlProfile.inputSpace,
+      facingPolicy: assembly.controlProfile.facingPolicy,
+      lateralMovementPolicy: assembly.controlProfile.lateralMovementPolicy,
+    },
+    cameraContext: {
+      resourceRef: assembly.cameraContextProfile.resourceRef,
+      defaultCameraRigProfileRef:
+        assembly.cameraContextProfile.defaultCameraRigProfileRef,
+      ...(assembly.cameraContextProfile.firstPersonCameraRigProfileRef === undefined
+        ? {}
+        : {
+            firstPersonCameraRigProfileRef:
+              assembly.cameraContextProfile.firstPersonCameraRigProfileRef,
+          }),
+      rules: structuredClone(assembly.cameraContextProfile.rules),
+      cameraRigProfiles: assembly.cameraRigProfiles.map((profile) => ({
+        resourceRef: profile.resourceRef,
+        algorithmRef: profile.algorithmRef,
+        preferredSocketIds: [...profile.preferredSocketIds],
+        parameters: structuredClone(profile.parameters),
+      })),
+    },
+    mediumProfile: {
+      resourceRef: assembly.mediumProfile.resourceRef,
+      supportedMediums: [...assembly.mediumProfile.supportedMediums],
+      ground: structuredClone(assembly.mediumProfile.ground),
+      ...(assembly.mediumProfile.water === undefined
+        ? {}
+        : { water: structuredClone(assembly.mediumProfile.water) }),
+      ...(assembly.mediumProfile.air === undefined
+        ? {}
+        : { air: structuredClone(assembly.mediumProfile.air) }),
+    },
+    relationshipProfiles,
+    harnessProfileRef: assembly.harnessProfile.resourceRef,
+    requiredHarnessCheckIds: [...assembly.harnessProfile.requiredCheckIds],
+    actionOrPoseSetRef: assembly.actionOrPoseSetRef,
+    renderBindingProfileRef: assembly.renderBindingProfile.resourceRef,
+  };
+}
+
 function colliderProfileMatchesDefinitionV3(
   profile: NormalizedColliderProfileV1,
   definitionCollider: ExecutionSubjectV3["collider"],
@@ -712,6 +813,13 @@ function compileSubjectsV3(
           jumpSpeedMetersPerSecond:
             definition.locomotion.jumpSpeedMetersPerSecond,
         },
+        ...(definition.capabilityAssembly === undefined
+          ? {}
+          : {
+              capabilityAssembly: compileCapabilityAssemblyV1(
+                definition.capabilityAssembly,
+              ),
+            }),
       };
     })
     .sort((left, right) => left.entityId.localeCompare(right.entityId));

@@ -8,11 +8,14 @@ import type {
   WorldSnapshot,
 } from "./playground-world.js";
 import type { BabylonWorldAdapter } from "./babylon-world-adapter.js";
-import { createFetchSubjectAssetResolver, PLAYGROUND_SUBJECT_ASSET_URI_BY_REF_V1 } from "./worldkit-asset-resolver.js";
+import type { WorldkitBrowserApiV3 } from "@whitebox-world/runtime-contracts";
+import { createFetchSubjectAssetResolver, PLAYGROUND_CAPABILITY_SUBJECT_ASSET_URI_BY_REF_V1 } from "./worldkit-asset-resolver.js";
 import { installDeferredWorldkitBrowserApi } from "./worldkit-browser-api.js";
 
 const app = document.querySelector<HTMLDivElement>("#app");
 if (app === null) throw new Error("Missing #app container");
+const urlParameters = new URLSearchParams(window.location.search);
+const authoringMode = urlParameters.get("authoring") === "1";
 
 app.innerHTML = `
   <main class="shell">
@@ -45,13 +48,13 @@ app.innerHTML = `
             <div class="hud-card hud-wide"><span id="controlled-entity-label">PLAYER</span><strong id="player-position">0.0 / 0.0 / 0.0</strong></div>
             <div class="hud-card"><span>ACTION</span><strong id="player-action">IDLE</strong></div>
           </div>
-          <div class="controls-card">
+          <div class="controls-card" id="controls-card">
             <p>移动控制</p>
             <div><kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd><span>移动</span></div>
             <div><kbd>⇧</kbd><span>奔跑</span><kbd>空格</kbd><span>跳跃</span></div>
-            <div><kbd>↑</kbd><kbd>↓</kbd><span>上下移动视角</span></div>
-            <div><span class="mouse-icon">↖</span><span>拖拽镜头</span></div>
-            <div><span class="wheel-icon">↕</span><span>滚轮缩放</span></div>
+            ${authoringMode
+              ? '<div><span>右侧 Camera Preference</span><span>切换镜头</span></div>'
+              : '<div><kbd>↑</kbd><kbd>↓</kbd><span>上下移动视角</span></div><div><span class="mouse-icon">↖</span><span>拖拽镜头</span></div><div><span class="wheel-icon">↕</span><span>滚轮缩放</span></div>'}
           </div>
           <button class="pause-button" id="pause-button" type="button" aria-label="暂停模拟">Ⅱ</button>
           <div class="recording-indicator" id="recording-indicator" aria-live="polite" hidden>
@@ -84,6 +87,22 @@ app.innerHTML = `
           <pre id="smoke-output">ready</pre>
           <img id="composition-mask" alt="Opening composition semantic mask" hidden />
         </div>
+        <div class="capability-card" id="capability-card" hidden>
+          <div class="capability-card-heading">
+            <div><p>CAPABILITY AUTHORING</p><strong>主体 / 运动 / 相机</strong></div>
+            <span>T0–T2</span>
+          </div>
+          <label>Subject Package<select id="subject-package-select"></select></label>
+          <div class="capability-context" id="capability-context"></div>
+          <label>Camera Preference<select id="camera-preference-select"></select></label>
+          <div class="parameter-drafts" id="parameter-drafts"></div>
+          <div class="capability-actions">
+            <button id="fallback-button" type="button">注入 Safe Fallback</button>
+            <button id="harness-button" type="button">运行 H01–H09</button>
+            <button id="export-package-button" type="button">导出配置 JSON</button>
+          </div>
+          <pre id="harness-output">ready</pre>
+        </div>
       </aside>
     </section>
   </main>
@@ -107,8 +126,160 @@ function escapeHtml(value: string): string {
 const viewport = requiredElement<HTMLDivElement>("#viewport");
 const featureList = requiredElement<HTMLDivElement>("#feature-list");
 const inspection = requiredElement<HTMLDivElement>("#inspection");
-const urlParameters = new URLSearchParams(window.location.search);
-const authoringMode = urlParameters.get("authoring") === "1";
+function installCapabilityAuthoringPanel(api: WorldkitBrowserApiV3): void {
+  const definitions = api.listSubjectDefinitions?.() ?? [];
+  if (definitions.length === 0) return;
+  const panel = requiredElement<HTMLDivElement>("#capability-card");
+  panel.hidden = false;
+  const packageSelect = requiredElement<HTMLSelectElement>("#subject-package-select");
+  const cameraSelect = requiredElement<HTMLSelectElement>("#camera-preference-select");
+  const context = requiredElement<HTMLDivElement>("#capability-context");
+  const drafts = requiredElement<HTMLDivElement>("#parameter-drafts");
+  const harnessOutput = requiredElement<HTMLPreElement>("#harness-output");
+  const snapshot = api.getSnapshot();
+  const activeSubject = snapshot.subjectStatesByEntityId[snapshot.controlledEntityId];
+  const requestedDefinitionRef = urlParameters.get("subjectDefinitionRef");
+  const activeDefinitionRef = requestedDefinitionRef ?? activeSubject?.subjectDefinitionRef ??
+    definitions[0]!.resourceRef;
+  packageSelect.replaceChildren(...definitions.map((definition) => {
+    const option = document.createElement("option");
+    option.value = definition.resourceRef;
+    option.textContent = `${definition.displayName} · ${definition.agentAccessLevel}`;
+    option.selected = definition.resourceRef === activeDefinitionRef;
+    return option;
+  }));
+
+  const definition = definitions.find((row) => row.resourceRef === packageSelect.value) ??
+    definitions[0]!;
+  const activeKernel = api.listMotionKernels?.().find(
+    (kernel) => kernel.resourceRef === activeSubject?.activeMotionKernelRef,
+  );
+  const controls = requiredElement<HTMLDivElement>("#controls-card");
+  controls.innerHTML = activeKernel?.commandKind === "throttle-steer"
+    ? `
+        <p>油门 / 转向</p>
+        <div><kbd>W</kbd><kbd>S</kbd><span>前进 / 倒退</span></div>
+        <div><kbd>A</kbd><kbd>D</kbd><span>左转 / 右转</span></div>
+        <div><span>右侧 Camera Preference</span><span>切换镜头</span></div>
+      `
+    : activeKernel?.commandKind === "flight-attitude"
+      ? `
+          <p>飞行姿态</p>
+          <div><kbd>W</kbd><kbd>S</kbd><span>俯仰</span></div>
+          <div><kbd>A</kbd><kbd>D</kbd><span>偏航 / 倾斜</span></div>
+          <div><span>右侧 Camera Preference</span><span>切换镜头</span></div>
+        `
+      : `
+          <p>平面移动</p>
+          <div><kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd><span>移动</span></div>
+          <div><kbd>⇧</kbd><span>奔跑</span><kbd>空格</kbd><span>跳跃</span></div>
+          <div><span>右侧 Camera Preference</span><span>切换镜头</span></div>
+        `;
+  const profiles = api.listCompatibleProfiles?.(definition.resourceRef) ?? [];
+  const motionProfiles = profiles.filter((row) => row.kind === "motion-profile");
+  const cameraProfiles = profiles.filter((row) => row.kind === "camera-rig-profile");
+  cameraSelect.replaceChildren(
+    ...[
+      ["auto", "Auto · Context Policy"],
+      ["first-person", "First Person"],
+      ...cameraProfiles.map((row) => [row.resourceRef, row.displayName]),
+    ].map(([value, label]) => {
+      const option = document.createElement("option");
+      option.value = value!;
+      option.textContent = label!;
+      return option;
+    }),
+  );
+  context.innerHTML = `
+    <div><span>Kernel</span><code>${escapeHtml(activeSubject?.activeMotionKernelRef ?? definition.defaultMotionProfileRef)}</code></div>
+    <div><span>Control</span><code>${escapeHtml(definition.controlProfileRef)}</code></div>
+    <div><span>Camera</span><code>${escapeHtml(snapshot.camera.activeCameraProfileRef ?? definition.cameraContextProfileRef)}</code></div>
+    <div><span>Medium</span><code>${escapeHtml(activeSubject?.movementMedium ?? "ground")}</code></div>
+  `;
+
+  const parameterDraft: Record<string, number | boolean> = {};
+  const defaultMotion = motionProfiles.find((row) => row.role === "default");
+  if (defaultMotion?.safetyLimits !== undefined) {
+    const title = document.createElement("p");
+    title.textContent = "安全参数草稿（导出后重新编译生效）";
+    drafts.append(title);
+    for (const [name, limit] of Object.entries(defaultMotion.safetyLimits)) {
+      const value = defaultMotion.parameters?.[name];
+      if (typeof value !== "number" || limit.minimum === limit.maximum) continue;
+      parameterDraft[name] = value;
+      const label = document.createElement("label");
+      const valueOutput = document.createElement("output");
+      valueOutput.textContent = String(value);
+      const input = document.createElement("input");
+      input.type = "range";
+      input.min = String(limit.minimum);
+      input.max = String(limit.maximum);
+      input.step = String(Math.max(0.01, (limit.maximum - limit.minimum) / 100));
+      input.value = String(value);
+      input.addEventListener("input", () => {
+        parameterDraft[name] = Number(input.value);
+        valueOutput.textContent = Number(input.value).toFixed(2);
+        localStorage.setItem(
+          `worldkit.motion-draft.${definition.resourceRef}`,
+          JSON.stringify(parameterDraft),
+        );
+      });
+      const header = document.createElement("span");
+      header.textContent = name;
+      label.append(header, input, valueOutput);
+      drafts.append(label);
+    }
+  }
+
+  packageSelect.addEventListener("change", () => {
+    localStorage.setItem("worldkit.subject-package", packageSelect.value);
+    const next = new URL(window.location.href);
+    next.searchParams.set("authoring", "1");
+    next.searchParams.set("subjectDefinitionRef", packageSelect.value);
+    window.location.assign(next);
+  });
+  cameraSelect.addEventListener("change", () => {
+    api.setCameraPreference?.(cameraSelect.value);
+    localStorage.setItem("worldkit.camera-preference", cameraSelect.value);
+  });
+  requiredElement<HTMLButtonElement>("#fallback-button").addEventListener("click", async () => {
+    const fallback = motionProfiles.find((row) => row.role === "fallback");
+    if (fallback === undefined || api.setMotionProfile === undefined) return;
+    const after = await api.setMotionProfile(snapshot.controlledEntityId, fallback.resourceRef);
+    harnessOutput.textContent = JSON.stringify(
+      after.subjectStatesByEntityId[snapshot.controlledEntityId],
+      null,
+      2,
+    );
+  });
+  requiredElement<HTMLButtonElement>("#harness-button").addEventListener("click", async () => {
+    if (api.runHarness === undefined) return;
+    harnessOutput.textContent = "running…";
+    harnessOutput.textContent = JSON.stringify(
+      await api.runHarness(snapshot.controlledEntityId),
+      null,
+      2,
+    );
+  });
+  requiredElement<HTMLButtonElement>("#export-package-button").addEventListener("click", () => {
+    const payload = {
+      schemaVersion: 1,
+      subjectDefinition: definition,
+      compatibleProfiles: profiles,
+      motionParameterDraft: parameterDraft,
+      resourceLockRequired: true,
+    };
+    const blob = new Blob([`${JSON.stringify(payload, null, 2)}\n`], {
+      type: "application/json",
+    });
+    const link = document.createElement("a");
+    link.href = URL.createObjectURL(blob);
+    link.download = `${definition.semanticClassId.replaceAll(".", "-")}.worldkit-package.json`;
+    link.click();
+    URL.revokeObjectURL(link.href);
+  });
+}
+
 if (authoringMode) {
   let createdAdapter: BabylonWorldAdapter | null = null;
   const browserInstallation = installDeferredWorldkitBrowserApi({
@@ -116,13 +287,17 @@ if (authoringMode) {
     statusElement: document.documentElement,
     initialize: async ({ trackAdapter }) => {
       const subjectAssetResolver = createFetchSubjectAssetResolver(
-        PLAYGROUND_SUBJECT_ASSET_URI_BY_REF_V1,
+        PLAYGROUND_CAPABILITY_SUBJECT_ASSET_URI_BY_REF_V1,
       );
       const [{ loadAuthoringScene }, { BabylonWorldAdapter }] = await Promise.all([
         import("./authoring-loader.js"),
         import("./babylon-world-adapter.js"),
       ]);
-      const loaded = await loadAuthoringScene();
+      const loaded = await loadAuthoringScene(undefined, {
+        ...(urlParameters.get("subjectDefinitionRef") === null
+          ? {}
+          : { subjectDefinitionRef: urlParameters.get("subjectDefinitionRef")! }),
+      });
       if (!loaded.ok || loaded.executionPlan === undefined) {
         inspection.innerHTML = `<pre>${escapeHtml(JSON.stringify(loaded.diagnostics, null, 2))}</pre>`;
         throw new Error("WORLDKIT_AUTHORING_LOAD_FAILED");
@@ -139,6 +314,7 @@ if (authoringMode) {
   });
   const initialized = await browserInstallation.initialization;
   if (initialized !== undefined && createdAdapter !== null) {
+    installCapabilityAuthoringPanel(browserInstallation.api);
     startPlayground(createdAdapter, () => browserInstallation.dispose());
   } else {
     inspection.innerHTML = `<pre>${escapeHtml(JSON.stringify(browserInstallation.api.getDiagnostics(), null, 2))}</pre>`;

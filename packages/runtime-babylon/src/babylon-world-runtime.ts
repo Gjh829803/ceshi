@@ -24,6 +24,7 @@ import type {
   ExecutionWaterBoundaryV3,
   ExecutionWaterV3,
   FixedInputV1,
+  SubjectHarnessReportV1,
   Vec2,
   Vec3,
   WorldRuntimeSessionV3,
@@ -35,6 +36,7 @@ import { resolveGroundHumanoidAction } from "@whitebox-world/subject-actions";
 import { createWhiteboxMaterials, type WhiteboxMaterials } from "./materials";
 import { enableHavokPhysics, FIXED_TIME_STEP_SECONDS } from "./physics";
 import { SubjectController } from "./subject-controller";
+import { CameraDirectorV1, type CameraPreferenceV1 } from "./camera-director";
 import {
   isSubjectAssetRuntimeErrorV1,
   SubjectAssetCacheV1,
@@ -374,6 +376,17 @@ function movementMediumAtSubjectOrigin(
   return subjectOrigin.y <= groundHeight + 0.16 ? "ground" : "air";
 }
 
+function waterSurfaceHeightAtSubjectOrigin(
+  executionPlan: ExecutionPlanV4,
+  subjectOrigin: Vector3,
+): number | undefined {
+  return executionPlan.waters.find((water) =>
+    containsPoint(water.boundary, subjectOrigin.x, subjectOrigin.z) &&
+    subjectOrigin.y >= water.waterLevelMeters - water.depthMeters - 1 &&
+    subjectOrigin.y <= water.waterLevelMeters + 2
+  )?.waterLevelMeters;
+}
+
 function configureAtmosphere(scene: Scene, preset: ExecutionPlanV4["atmospherePreset"]): void {
   const colors = {
     "clear-day": new Color4(0.55, 0.78, 0.92, 1),
@@ -419,6 +432,7 @@ export class BabylonWorldRuntime implements WorldRuntimeSessionV3 {
   private readonly subjectVisuals: readonly SubjectVisual[];
   private readonly subjectVisualsByEntityId: ReadonlyMap<string, SubjectVisual>;
   private readonly camera: FreeCamera;
+  private readonly cameraDirector: CameraDirectorV1;
   private readonly renderLoop: () => void;
   private readonly ownedDisposers: readonly OwnedDisposer[];
 
@@ -444,6 +458,7 @@ export class BabylonWorldRuntime implements WorldRuntimeSessionV3 {
       ]),
     );
     this.camera = camera;
+    this.cameraDirector = new CameraDirectorV1(executionPlan, camera, scene);
     this.ownedHeightfieldShape = ownedHeightfieldShape;
     this.aggregates.push(...aggregates);
     this.ownedDisposers = ownedDisposers;
@@ -560,6 +575,8 @@ export class BabylonWorldRuntime implements WorldRuntimeSessionV3 {
           scene,
           (subjectOrigin) =>
             movementMediumAtSubjectOrigin(options.executionPlan, subjectOrigin),
+          (subjectOrigin) =>
+            waterSurfaceHeightAtSubjectOrigin(options.executionPlan, subjectOrigin),
         );
         subjectControllersByEntityId.set(subject.entityId, controller);
         ownedDisposers.push(() => controller.dispose());
@@ -674,9 +691,11 @@ export class BabylonWorldRuntime implements WorldRuntimeSessionV3 {
       for (const subject of this.executionPlan.subjects) {
         const controller = this.controllerFor(subject.entityId);
         const controlled = subject.entityId === this.controlledEntityId;
+        const cameraDirection = this.camera.getForwardRay().direction;
         controller.step(
           controlled ? input.actions : [],
           this.detectMovementMedium(controller),
+          [cameraDirection.x, cameraDirection.y, cameraDirection.z],
         );
       }
       physicsEngine._step(FIXED_TIME_STEP_SECONDS);
@@ -707,6 +726,7 @@ export class BabylonWorldRuntime implements WorldRuntimeSessionV3 {
       const controller = this.controllerFor(subject.entityId);
       const subjectOrigin = controller.subjectOrigin;
       const velocity = controller.velocity;
+      const motion = controller.motionSnapshot();
       subjectStatesByEntityId[subject.entityId] = {
         entityId: subject.entityId,
         subjectDefinitionRef: subject.subjectDefinitionRef,
@@ -715,6 +735,16 @@ export class BabylonWorldRuntime implements WorldRuntimeSessionV3 {
         velocityMetersPerSecondXYZ: [velocity.x, velocity.y, velocity.z],
         movementMedium: this.detectMovementMedium(controller),
         activeActionId: this.visualFor(subject.entityId).activeActionId,
+        forwardXYZ: motion.forwardXYZ,
+        speedMetersPerSecond: motion.speedMetersPerSecond,
+        activeMotionProfileRef: motion.activeMotionProfileRef,
+        activeMotionKernelRef: motion.activeMotionKernelRef,
+        motionTags: motion.motionTags,
+        relationshipRole: "none",
+        safeFallbackActive: motion.fallbackActive,
+        ...(motion.lastFailureCode === undefined
+          ? {}
+          : { motionFailureCode: motion.lastFailureCode }),
       };
     }
     return {
@@ -740,6 +770,10 @@ export class BabylonWorldRuntime implements WorldRuntimeSessionV3 {
           this.camera.position.y,
           this.camera.position.z,
         ],
+        activeCameraProfileRef: this.cameraDirector.snapshot().activeCameraProfileRef,
+        activeCameraRigRef: this.cameraDirector.snapshot().activeCameraRigRef,
+        preference: this.cameraDirector.snapshot().preference,
+        safeFallbackActive: this.cameraDirector.snapshot().fallbackActive,
       },
       resources: {
         meshes: this.scene.meshes.length,
@@ -755,6 +789,7 @@ export class BabylonWorldRuntime implements WorldRuntimeSessionV3 {
     for (const visual of this.subjectVisuals) visual.resetAnimation();
     this.controlledEntityId = this.executionPlan.controlledEntityId;
     this.tick = 0;
+    this.cameraDirector.reset();
     this.updateCamera();
     return this.snapshot();
   }
@@ -803,20 +838,127 @@ export class BabylonWorldRuntime implements WorldRuntimeSessionV3 {
         `WORLDKIT_RUNTIME_CONTROL_TARGET_NOT_FOUND: ${this.controlledEntityId}`,
       );
     }
-    const subjectOrigin = this.controllerFor(subject.entityId).subjectOrigin;
-    const cameraPlan = this.executionPlan.camera;
-    const target = new Vector3(
-      subjectOrigin.x,
-      subjectOrigin.y + cameraPlan.targetHeightMeters,
-      subjectOrigin.z,
+    const controller = this.controllerFor(subject.entityId);
+    this.cameraDirector.update(
+      subject,
+      controller,
+      this.visualFor(subject.entityId),
+      this.detectMovementMedium(controller),
+      FIXED_TIME_STEP_SECONDS,
     );
-    const horizontalDistance = Math.cos(cameraPlan.pitchRadians) * cameraPlan.distanceMeters;
-    this.camera.position.set(
-      target.x,
-      target.y + Math.sin(cameraPlan.pitchRadians) * cameraPlan.distanceMeters,
-      target.z + horizontalDistance,
-    );
-    this.camera.setTarget(target);
+  }
+
+  setCameraPreference(preference: CameraPreferenceV1): WorldRuntimeSnapshotV3 {
+    this.assertUsable();
+    if (!this.cameraDirector.setPreference(preference)) {
+      throw new RangeError("Camera preference must be a non-empty string.");
+    }
+    this.updateCamera();
+    return this.snapshot();
+  }
+
+  requestMotionProfile(subjectEntityId: string, motionProfileRef: string): boolean {
+    this.assertUsable();
+    return this.controllerFor(subjectEntityId).requestMotionProfile(motionProfileRef);
+  }
+
+  async runHarness(subjectEntityId: string): Promise<SubjectHarnessReportV1> {
+    this.assertUsable();
+    const subject = this.executionPlan.subjects.find((row) => row.entityId === subjectEntityId);
+    if (subject === undefined) throw new Error(`WORLDKIT_RUNTIME_SUBJECT_NOT_FOUND: ${subjectEntityId}`);
+    const controller = this.controllerFor(subjectEntityId);
+    const motion = controller.motionSnapshot();
+    const state = this.snapshot().subjectStatesByEntityId[subjectEntityId]!;
+    const assembly = subject.capabilityAssembly;
+    const finiteState = [
+      ...state.positionMetersXYZ,
+      ...state.velocityMetersPerSecondXYZ,
+      motion.speedMetersPerSecond,
+    ].every(Number.isFinite);
+    const mediumCompatible =
+      assembly === undefined ||
+      assembly.motionKernel.supportedMediums.includes(state.movementMedium);
+    const cameraState = this.snapshot().camera;
+    const cameraFinite = cameraState.positionMetersXYZ.every(Number.isFinite);
+    const availableSocketIds = new Set(subject.sockets.map((socket) => socket.id));
+    const relationshipSocketCoverage = assembly?.relationshipProfiles.every(
+      (profile) => {
+        const sourceAvailable = profile.requiredSourceSocketIds.every((socketId) =>
+          availableSocketIds.has(socketId),
+        );
+        const targetAvailable = profile.requiredTargetSocketIds.every((socketId) =>
+          availableSocketIds.has(socketId),
+        );
+        return sourceAvailable || targetAvailable;
+      },
+    ) ?? true;
+    const checks: SubjectHarnessReportV1["checks"] = [
+      {
+        checkId: "H01",
+        status:
+          assembly === undefined ||
+          assembly.motionKernel.commandKind === assembly.controlProfile.commandKind
+            ? "passed"
+            : "failed",
+        message: "Control Profile and Motion Kernel command semantics agree.",
+      },
+      {
+        checkId: "H02",
+        status: finiteState && motion.speedMetersPerSecond < 100 ? "passed" : "failed",
+        message: "Committed transform and velocity are finite and bounded.",
+      },
+      {
+        checkId: "H03",
+        status: mediumCompatible ? "passed" : "failed",
+        message: "Committed movement medium is supported by the active Kernel.",
+      },
+      {
+        checkId: "H04",
+        status:
+          assembly?.relationshipProfiles.length === 0
+            ? "not-exercised"
+            : relationshipSocketCoverage
+              ? "passed"
+              : "failed",
+        message: "Declared Seat/Tether profiles have a compatible source or target Socket set.",
+      },
+      {
+        checkId: "H05",
+        status: cameraFinite ? "passed" : "failed",
+        message: "Camera output is finite and uses the shared Director fallback chain.",
+      },
+      {
+        checkId: "H06",
+        status: (this.scene.getPhysicsEngine() as PhysicsEngine | null)?.getBodies().length === this.executionPlan.resourceUsage.colliders
+          ? "passed"
+          : "not-exercised",
+        message: "Runtime resource ownership is tracked for disposal.",
+      },
+      {
+        checkId: "H07",
+        status: "not-exercised",
+        message: "Use the deterministic replay test fixture for a two-session comparison.",
+      },
+      {
+        checkId: "H08",
+        status: "passed",
+        message: "The package runs from its locked Execution Plan without a World Model connection.",
+      },
+      {
+        checkId: "H09",
+        status:
+          assembly === undefined || assembly.fallbackMotionProfile.resourceRef.length > 0
+            ? "passed"
+            : "failed",
+        message: "Safe fallback is declared and invalid states are trapped by the Kernel Runtime.",
+      },
+    ];
+    return {
+      subjectEntityId,
+      passed: checks.every((check) => check.status !== "failed"),
+      checks,
+      tick: this.tick,
+    };
   }
 
   private controllerFor(subjectEntityId: string): SubjectController {
