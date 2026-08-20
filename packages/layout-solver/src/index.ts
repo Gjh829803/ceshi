@@ -14,6 +14,7 @@ export {
   validatePolygonXZ,
 } from "./geometry.js";
 export { generateLayoutCandidatesV1 } from "./candidates.js";
+export { evaluatePlacementConstraintV1 } from "./evaluators.js";
 export type {
   LayoutSolverProfileV1,
   ResolvedLayoutSolverProfileV1,
@@ -32,4 +33,9 @@ export type {
   LayoutVec3V1,
   ResolvedLayoutEntityV1,
   ResolvedLayoutPlacementV1,
+  ConstraintEvaluationV1,
+  LayoutConstraintEvaluationContextV1,
+  LayoutEvaluationEntityV1,
+  PlacementConstraintViolationCodeV1,
+  ResolvedPlacementConstraintV1,
 } from "./types.js";

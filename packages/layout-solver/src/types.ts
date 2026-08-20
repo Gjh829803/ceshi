@@ -155,3 +155,71 @@ export interface LayoutCandidateV1 {
   readonly transform: LayoutTransformV1;
   readonly bounds: LayoutAabbV1;
 }
+
+type ResolvedRequiredConstraintV1 = Readonly<{
+  requirement: "required";
+  preferenceWeightRatio?: never;
+}>;
+
+type ResolvedPreferredConstraintV1 = Readonly<{
+  requirement: "preferred";
+  preferenceWeightRatio: number;
+}>;
+
+type ResolvedConstraintBaseV1 = Readonly<{ id: string }> &
+  (ResolvedRequiredConstraintV1 | ResolvedPreferredConstraintV1);
+
+export type ResolvedPlacementConstraintV1 = ResolvedConstraintBaseV1 &
+  (
+    | Readonly<{ kind: "inside-region"; entityId: string; regionId: string; boundaryClearanceMeters: number }>
+    | Readonly<{ kind: "outside-region"; entityId: string; regionId: string; boundaryClearanceMeters: number }>
+    | Readonly<{ kind: "distance-range"; entityId: string; referenceEntityId: string; minimumDistanceMeters: number; maximumDistanceMeters: number }>
+    | Readonly<{ kind: "faces-entity"; facingEntityId: string; targetEntityId: string; maximumAngularDeviationDegrees: number }>
+    | Readonly<{ kind: "supported-by"; supportedEntityId: string; supportingEntityId: string; maximumSupportGapMeters: number; minimumSupportRatio: number }>
+    | (Readonly<{ kind: "minimum-clearance"; entityId: string; clearanceMeters: number }> &
+        (Readonly<{ otherEntityIds: readonly string[]; semanticClassIds?: never }> |
+          Readonly<{ semanticClassIds: readonly string[]; otherEntityIds?: never }>))
+    | (Readonly<{ kind: "within-slope-limit"; terrainEntityId: string; maximumSlopeDegrees: number }> &
+        (Readonly<{ entityId: string; routeId?: never }> |
+          Readonly<{ routeId: string; entityId?: never }>))
+    | Readonly<{ kind: "visible-in-camera-region"; visibleEntityId: string; cameraEntityId: string; screenRegionId: string; minimumVisibleRatio: number; minimumProjectedAreaRatio: number }>
+  );
+
+export interface LayoutEvaluationEntityV1 {
+  readonly id: string;
+  readonly semanticClassId?: string;
+}
+
+export interface LayoutConstraintEvaluationContextV1 {
+  readonly profile: LayoutSolverProfileV1;
+  readonly entitiesById: Readonly<Record<string, LayoutEvaluationEntityV1>>;
+  readonly regionsById: Readonly<Record<string, LayoutSpatialRegionV1>>;
+  readonly routesById: Readonly<Record<string, LayoutRouteV1>>;
+  readonly screenRegionsById: Readonly<Record<string, LayoutScreenRegionV1>>;
+  readonly geometry: LayoutGeometryQueryV1;
+}
+
+export type PlacementConstraintViolationCodeV1 =
+  | "PLACEMENT_REFERENCE_NOT_FOUND"
+  | "PLACEMENT_NON_FINITE_MEASUREMENT"
+  | "PLACEMENT_REGION_CONSTRAINT_UNSATISFIED"
+  | "PLACEMENT_DISTANCE_RANGE_UNSATISFIED"
+  | "PLACEMENT_FACING_CONSTRAINT_UNSATISFIED"
+  | "PLACEMENT_SUPPORT_CONSTRAINT_UNSATISFIED"
+  | "PLACEMENT_CLEARANCE_CONFLICT"
+  | "PLACEMENT_SLOPE_LIMIT_EXCEEDED"
+  | "PLACEMENT_CAMERA_PROJECTED_AREA_TOO_SMALL"
+  | "PLACEMENT_CAMERA_REGION_OCCLUDED"
+  | "PLACEMENT_CAMERA_REGION_UNSATISFIED";
+
+export interface ConstraintEvaluationV1 {
+  readonly constraintId: string;
+  readonly kind: ResolvedPlacementConstraintV1["kind"];
+  readonly requirement: "required" | "preferred";
+  readonly satisfied: boolean;
+  readonly preferenceCostRatio: number;
+  readonly measurements: Readonly<Record<string, number | boolean | string>>;
+  readonly tolerances: Readonly<Record<string, number>>;
+  readonly evidenceIds: readonly string[];
+  readonly violationCode?: PlacementConstraintViolationCodeV1;
+}
