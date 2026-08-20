@@ -590,6 +590,53 @@ describe("subject resource registry", () => {
     });
   });
 
+  it("locks the exact canonical hashes for every G Bot binding resource", () => {
+    const resources = [
+      builtInSubjectResourceRegistry.resolveSubjectAsset(G_BOT_SUBJECT_ASSET_REF),
+      builtInSubjectResourceRegistry.resolveRigProfile(G_BOT_RIG_PROFILE_REF),
+      builtInSubjectResourceRegistry.resolveAnimationSet(G_BOT_ANIMATION_SET_REF),
+      builtInSubjectResourceRegistry.resolveColliderProfile(
+        G_BOT_COLLIDER_PROFILE_REF,
+      ),
+      builtInSubjectResourceRegistry.resolveSubjectDefinition(
+        G_BOT_SUBJECT_DEFINITION_REF,
+      ),
+    ];
+
+    expect(
+      resources.map((resource) => ({
+        resourceRef: resource?.resourceRef,
+        contentHash: resource?.contentHash,
+      })),
+    ).toEqual([
+      {
+        resourceRef: G_BOT_SUBJECT_ASSET_REF,
+        contentHash:
+          "sha256:21186440a35417b23931e6b7a0c244a2323d83440842803522c052e58414e335",
+      },
+      {
+        resourceRef: G_BOT_RIG_PROFILE_REF,
+        contentHash:
+          "sha256:c73a33e59d5394f6b3190272177c2f30483cdfe7a5705ed8bbc6dadecd869545",
+      },
+      {
+        resourceRef: G_BOT_ANIMATION_SET_REF,
+        contentHash:
+          "sha256:7853d41739601d4e3a2b35cabc558d074a9070cb91afcb3ef9ba25bff75690f5",
+      },
+      {
+        resourceRef: G_BOT_COLLIDER_PROFILE_REF,
+        contentHash:
+          "sha256:229d120df97e2ffeb41f6884c47e83742a1848f5fcc056068e5c0d88fb228140",
+      },
+      {
+        resourceRef: G_BOT_SUBJECT_DEFINITION_REF,
+        contentHash:
+          "sha256:2c8f17a171ab4a17ac1bd1477aabebcf7775eb8898ccf274b84e0c20216ebbfe",
+      },
+    ]);
+  });
+
   it("rejects non-exact Golden refs", () => {
     const cases = [
       {

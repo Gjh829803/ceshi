@@ -733,7 +733,20 @@ describe("BabylonWorldRuntime", () => {
           }
         : node,
     );
-    const executionPlan = compileExecutionPlan(spec);
+    const baseExecutionPlan = compileExecutionPlan(spec);
+    const primarySubject = baseExecutionPlan.subjects[0]!;
+    const executionPlan: ExecutionPlanV4 = {
+      ...baseExecutionPlan,
+      subjects: [
+        primarySubject,
+        {
+          ...primarySubject,
+          entityId: "g-bot-secondary",
+          spawnAnchorEntityId: "spawn-g-bot-secondary",
+          spawnSubjectOriginPositionMetersXYZ: [4, 0, 30],
+        },
+      ],
+    };
     expect(executionPlan.rigProfiles).toEqual([
       expect.objectContaining({
         skeletonRootBoneName: "mixamorig:Hips",
@@ -747,14 +760,41 @@ describe("BabylonWorldRuntime", () => {
     const runtime = await createRuntime(executionPlan, {
       subjectAssetResolver: createMemoryResolver(gBotSubjectAssetBytes),
     });
-    const visual = createRiggedRuntimeProbe(runtime).visual("player");
-    expect(visual.assetInstance?.skeletons[0]?.bones).toHaveLength(65);
+    const probe = createRiggedRuntimeProbe(runtime);
+    const visual = probe.visual("player");
+    const secondaryVisual = probe.visual("g-bot-secondary");
+    const primaryInstance = visual.assetInstance!;
+    const secondaryInstance = secondaryVisual.assetInstance!;
+    const primaryHandSocket = visual.socketNodesById.get("hand.right")!;
+    const secondaryHandSocket = secondaryVisual.socketNodesById.get("hand.right")!;
+    expect(primaryInstance.skeletons[0]?.bones).toHaveLength(65);
     expect(
-      visual.assetInstance?.skeletons[0]?.bones
+      primaryInstance.skeletons[0]?.bones
         .filter((bone) => bone.getParent() === null)
         .map((bone) => bone.name),
     ).toEqual(["mixamorig:Hips"]);
-    expect([...visual.socketNodesById.keys()]).toContain("hand.right");
+    expect(primaryInstance.rootNodes[0]).not.toBe(secondaryInstance.rootNodes[0]);
+    expect(primaryInstance.meshes[0]).not.toBe(secondaryInstance.meshes[0]);
+    expect(primaryInstance.skeletons[0]).not.toBe(secondaryInstance.skeletons[0]);
+    expect(primaryInstance.animationGroups[0]).not.toBe(
+      secondaryInstance.animationGroups[0],
+    );
+    expect(primaryHandSocket).not.toBe(secondaryHandSocket);
+    const relativeSocketPosition = (
+      socket: TransformNode,
+      visualRoot: TransformNode,
+    ): Vector3 => {
+      visualRoot.computeWorldMatrix(true);
+      socket.computeWorldMatrix(true);
+      return Vector3.TransformCoordinates(
+        socket.getAbsolutePosition(),
+        visualRoot.getWorldMatrix().clone().invert(),
+      );
+    };
+    const primaryHandPositionBefore = relativeSocketPosition(
+      primaryHandSocket,
+      visual.root,
+    );
     expect(runtime.snapshot().subjectStatesByEntityId.player?.activeActionId).toBe(
       "idle",
     );
@@ -763,13 +803,36 @@ describe("BabylonWorldRuntime", () => {
         .subjectStatesByEntityId.player?.activeActionId,
     ).toBe("walk");
     expect(
-      (await runtime.runFixedInput({ actions: ["move-right", "run"], ticks: 2 }))
+      (await runtime.runFixedInput({ actions: ["move-right", "run"], ticks: 30 }))
         .subjectStatesByEntityId.player?.activeActionId,
     ).toBe("run");
+    runtime.renderFrame();
+    expect(
+      primaryInstance.animationGroups.find((group) => group.name === "run")
+        ?.isStarted,
+    ).toBe(true);
+    expect(
+      secondaryInstance.animationGroups.find((group) => group.name === "run")
+        ?.isStarted,
+    ).toBeFalsy();
+    expect(
+      relativeSocketPosition(primaryHandSocket, visual.root)
+        .subtract(primaryHandPositionBefore)
+        .length(),
+    ).toBeGreaterThan(0.001);
     expect(
       (await runtime.runFixedInput({ actions: ["jump"], ticks: 4 }))
         .subjectStatesByEntityId.player?.activeActionId,
     ).toBe("jump");
+    expect(
+      runtime.snapshot().subjectStatesByEntityId["g-bot-secondary"]
+        ?.activeActionId,
+    ).toBe("idle");
+    visual.dispose();
+    expect(primaryHandSocket.isDisposed()).toBe(true);
+    expect(primaryInstance.rootNodes[0]?.isDisposed()).toBe(true);
+    expect(secondaryHandSocket.isDisposed()).toBe(false);
+    expect(secondaryInstance.rootNodes[0]?.isDisposed()).toBe(false);
     await runtime.dispose();
   });
 

@@ -583,7 +583,10 @@ describe("Package Subject Definition normalization", () => {
       "/resources/subjectDefinitions/0/visualParts/0/subjectAssetRef",
       "worldkit://subject-asset/missing@1",
       "availableSubjectAssetRefs",
-      SUBJECT_ASSET_REF,
+      [
+        "worldkit://subject-asset/actor.humanoid.g-bot@1",
+        SUBJECT_ASSET_REF,
+      ],
     ],
     [
       "SUBJECT_RIG_PROFILE_NOT_FOUND",
@@ -591,7 +594,7 @@ describe("Package Subject Definition normalization", () => {
       "/resources/subjectDefinitions/0/visualBinding/rigProfileRef",
       "worldkit://rig-profile/missing@1",
       "compatibleRigProfileRefs",
-      RIG_PROFILE_REF,
+      [RIG_PROFILE_REF],
     ],
     [
       "SUBJECT_ANIMATION_SET_NOT_FOUND",
@@ -599,7 +602,7 @@ describe("Package Subject Definition normalization", () => {
       "/resources/subjectDefinitions/0/visualBinding/animationSetRef",
       "worldkit://animation-set/missing@1",
       "compatibleAnimationSetRefs",
-      ANIMATION_SET_REF,
+      [ANIMATION_SET_REF],
     ],
     [
       "SUBJECT_COLLIDER_PROFILE_NOT_FOUND",
@@ -607,11 +610,14 @@ describe("Package Subject Definition normalization", () => {
       "/resources/subjectDefinitions/0/colliderPolicy/colliderProfileRef",
       "worldkit://collider-profile/missing@1",
       "compatibleColliderProfileRefs",
-      COLLIDER_PROFILE_REF,
+      [
+        "worldkit://collider-profile/humanoid.g-bot-capsule@1",
+        COLLIDER_PROFILE_REF,
+      ],
     ],
   ] as const)(
     "emits %s with the exact path and offending Ref",
-    (code, missingKind, instancePath, resourceRef, availableKey, availableRef) => {
+    (code, missingKind, instancePath, resourceRef, availableKey, availableRefs) => {
       const diagnostics = diagnosticForRiggedWorld(
         builtInSubjectResourceRegistry,
         (world) => {
@@ -640,7 +646,7 @@ describe("Package Subject Definition normalization", () => {
           instancePath,
           details: expect.objectContaining({
             resourceRef,
-            [availableKey]: [availableRef],
+            [availableKey]: availableRefs,
           }),
         }),
       );
