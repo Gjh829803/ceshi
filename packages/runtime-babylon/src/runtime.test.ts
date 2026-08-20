@@ -54,6 +54,7 @@ import {
   type BabylonWorldRuntimeOptions,
 } from "./index";
 import { SubjectAnimationPlayer } from "./subject-animation-player";
+import { sampleExecutionTerrainHeight } from "./terrain";
 
 const loadAssetContainerImplementation = vi
   .mocked(LoadAssetContainerAsync)
@@ -94,6 +95,20 @@ const gBotSubjectAssetBytes = new Uint8Array(
     ),
   ),
 );
+
+describe("Babylon terrain surface", () => {
+  it("samples the canonical rendered triangle across an asymmetric saddle cell", () => {
+    const terrain = {
+      ...createRiggedExecutionPlan().terrain,
+      centerMetersXZ: [0, 0] as const,
+      sizeMetersXZ: [2, 2] as const,
+      resolutionCellsXZ: [2, 2] as const,
+      heightSamplesMeters: [0, 2, 4, 0],
+    };
+
+    expect(sampleExecutionTerrainHeight(terrain, 0, 0)).toBe(3);
+  });
+});
 
 const gBotAuthoringSpec = JSON.parse(
   await readFile(
@@ -413,7 +428,27 @@ function moveRightForTicks(tickCount: number): FixedInputV1 {
 }
 
 function compileExecutionPlan(spec: AuthoringSpecV3): ExecutionPlanV4 {
-  const normalized = normalizeAuthoringSpec(spec);
+  const runtimeFixture = structuredClone(spec);
+  runtimeFixture.nodes = runtimeFixture.nodes.map((node) =>
+    node.kind === "terrain" &&
+      node.components.terrain.source.kind === "procedural"
+      ? {
+          ...node,
+          components: {
+            terrain: {
+              ...node.components.terrain,
+              source: {
+                ...node.components.terrain.source,
+                relief: "flat" as const,
+                baseHeightMeters: 0,
+                amplitudeMeters: 0,
+              },
+            },
+          },
+        }
+      : node,
+  );
+  const normalized = normalizeAuthoringSpec(runtimeFixture);
   if (
     !normalized.ok ||
     normalized.value === undefined ||
@@ -728,6 +763,38 @@ describe("BabylonWorldRuntime", () => {
         subject.collider.centerOffsetFromSubjectOriginMetersXYZ,
       ),
     );
+    await runtime.dispose();
+  });
+
+  it("initializes and resets Subject yaw from the solved spawn facing", async () => {
+    const base = createExecutionPlan();
+    const executionPlan: ExecutionPlanV4 = {
+      ...base,
+      subjects: base.subjects.map((subject) =>
+        subject.entityId === "player"
+          ? { ...subject, spawnSubjectFacingRadians: Math.PI / 2 }
+          : subject,
+      ),
+    };
+    const runtime = await createRuntime(executionPlan);
+    const debug = createRuntimeDebugProbe(runtime);
+
+    expect(runtime.snapshot().subjectStatesByEntityId.player?.forwardXYZ).toEqual([
+      -1,
+      0,
+      -Math.cos(Math.PI / 2),
+    ]);
+    expect(debug.visualRootYawRadians("player")).toBeCloseTo(Math.PI / 2, 12);
+
+    await runtime.runFixedInput(moveRightForTicks(1));
+    const reset = runtime.reset();
+
+    expect(reset.subjectStatesByEntityId.player?.forwardXYZ).toEqual([
+      -1,
+      0,
+      -Math.cos(Math.PI / 2),
+    ]);
+    expect(debug.visualRootYawRadians("player")).toBeCloseTo(Math.PI / 2, 12);
     await runtime.dispose();
   });
 

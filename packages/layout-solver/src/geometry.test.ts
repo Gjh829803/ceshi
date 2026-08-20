@@ -73,6 +73,25 @@ describe("engine-neutral layout geometry", () => {
     ).toThrow("LAYOUT_GEOMETRY_NON_FINITE");
   });
 
+  it("samples the canonical rendered triangle across an asymmetric saddle cell", () => {
+    const heightfield: LayoutHeightfieldV1 = {
+      terrainEntityId: "terrain-saddle",
+      centerMetersXZ: [0, 0],
+      sizeMetersXZ: [2, 2],
+      resolutionVerticesXZ: [2, 2],
+      heightSamplesMeters: [0, 2, 4, 0],
+    };
+
+    const sample = sampleHeightfieldV1(heightfield, [0, 0]);
+
+    expect(sample).toEqual({
+      heightMeters: 3,
+      normalXYZ: [-0.408248, 0.408248, -0.816497],
+      slopeDegrees: 65.905157,
+    });
+    expect(Math.hypot(...sample!.normalXYZ)).toBeCloseTo(1, 6);
+  });
+
   it("samples route polylines at a deterministic profile spacing", () => {
     expect(sampleRoutePolylineV1([[0, 0], [4, 0]], 2)).toEqual([
       [0, 0],

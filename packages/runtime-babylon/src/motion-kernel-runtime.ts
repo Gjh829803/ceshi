@@ -68,7 +68,7 @@ export class MotionKernelRuntimeV1 {
   private readonly up = Vector3.Up();
   private readonly colliderCenterOffset: Vector3;
   private readonly motionModeResolver: MotionModeResolverV1;
-  private yawRadians = 0;
+  private yawRadians: number;
   private forwardSpeedMetersPerSecond = 0;
   private slideVelocity = Vector3.Zero();
   private jumpInProgress = false;
@@ -93,6 +93,7 @@ export class MotionKernelRuntimeV1 {
     ) => number | undefined,
   ) {
     this.gravity = new Vector3(...gravityMetersPerSecondSquaredXYZ);
+    this.yawRadians = subject.spawnSubjectFacingRadians;
     this.colliderCenterOffset = new Vector3(
       ...subject.collider.centerOffsetFromSubjectOriginMetersXYZ,
     );
@@ -262,7 +263,7 @@ export class MotionKernelRuntimeV1 {
     this.physicsController.setVelocity(Vector3.Zero());
     this.motionModeResolver.reset();
     this.clearParameterTuning();
-    this.yawRadians = 0;
+    this.yawRadians = this.subject.spawnSubjectFacingRadians;
     this.forwardSpeedMetersPerSecond = 0;
     this.slideVelocity.setAll(0);
     this.jumpInProgress = false;

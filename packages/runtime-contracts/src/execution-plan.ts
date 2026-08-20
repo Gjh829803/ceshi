@@ -356,6 +356,7 @@ export interface ExecutionSubjectV3 {
   semanticClassId: string;
   spawnAnchorEntityId: string;
   spawnSubjectOriginPositionMetersXYZ: Vec3;
+  spawnSubjectFacingRadians: number;
   forwardDirection: "-z";
   visualParts: readonly SubjectVisualPartV3[];
   visualBinding: ExecutionSubjectVisualBindingV1;

@@ -305,7 +305,7 @@ describe("compileWorld", () => {
         normalizedWorldIrHash: rigged.normalizedWorldIrHash!,
       }).executionPlanHash,
     ).toBe(
-      "sha256:0b64e4abc8edc25ce9d8d1bc4715ef48f408a9f19626883c7082685ad3661caa",
+      "sha256:3dd15d8544b3114a7f86c768c388f43fc8685540c16956745d513736e836f9e2",
     );
   });
 
@@ -695,25 +695,20 @@ describe("compileWorld", () => {
     );
   });
 
-  it("places Subject Origin on sampled Terrain without adding Collider height", () => {
+  it("copies fixed Anchor position without adding Terrain or Collider height", () => {
     const result = compilePackageWorld();
     const executionPlan = result.executionPlan!;
     const subject = executionPlan.subjects.find(
       (candidate) => candidate.entityId === "pack-animal-a",
     )!;
 
-    expect(subject.spawnSubjectOriginPositionMetersXYZ[1]).toBeCloseTo(
-      sampleTerrainHeight(executionPlan.terrain, [-4, 5]),
-    );
+    expect(sampleTerrainHeight(executionPlan.terrain, [-4, 5])).not.toBe(0);
+    expect(subject.spawnSubjectOriginPositionMetersXYZ).toEqual([-4, 0, 5]);
     expect(subject.collider).toMatchObject({
       radiusMeters: 0.7,
       heightMeters: 1.4,
       centerOffsetFromSubjectOriginMetersXYZ: [0, 0.7, 0],
     });
-    expect(subject.spawnSubjectOriginPositionMetersXYZ[1]).not.toBeCloseTo(
-      sampleTerrainHeight(executionPlan.terrain, [-4, 5]) +
-        subject.collider.heightMeters / 2,
-    );
   });
 
   it("samples the exact rendered Terrain triangles rather than a bilinear surface", () => {
@@ -725,8 +720,7 @@ describe("compileWorld", () => {
       heightSamplesMeters: [0, 2, 4, 0],
     };
 
-    expect(sampleTerrainHeight(terrain, [-0.5, -0.5])).toBe(1.5);
-    expect(sampleTerrainHeight(terrain, [0.5, 0.5])).toBe(1.5);
+    expect(sampleTerrainHeight(terrain, [0, 0])).toBe(3);
   });
 
   it("propagates stable Sockets and normalized visual composition", () => {
@@ -857,8 +851,39 @@ describe("compileWorld", () => {
     expect(serialized).not.toContain('"constraints"');
     expect(serialized).not.toMatch(/candidateRegionIds|sourceUri|licenseUri|providerHandle/);
     expect(result.executionPlanHash).toBe(
-      "sha256:2885a9fd1d3446c629ada75fcc0480d48fd220441e1d3387b84bed0acec04d67",
+      "sha256:c0400052aea7146cb0b7530e02c7d6ad3c28508b008123162e1e67d757b85f87",
     );
+  });
+
+  it("copies the solved spawn position and Y rotation without terrain resampling", () => {
+    const normalized = normalizeSolvedLayoutWorldV3();
+    const world = structuredClone(normalized.value!) as unknown as {
+      nodes: Array<NormalizedWorldIRV3["nodes"][number]>;
+    } & NormalizedWorldIRV3;
+    const spawnAnchor = world.nodes.find(
+      (node) => node.kind === "anchor" && node.id === "spawn-main",
+    );
+    if (spawnAnchor === undefined || spawnAnchor.kind !== "anchor") {
+      throw new Error("Solved spawn Anchor fixture is missing.");
+    }
+    Object.assign(spawnAnchor, {
+      transform: {
+        ...spawnAnchor.transform,
+        positionMetersXYZ: [0, 7.25, 0],
+        rotationEulerRadiansXYZ: [0, Math.PI / 2, 0],
+      },
+    });
+
+    const result = compileNormalizedWorld(world);
+    const terrain = result.executionPlan!.terrain;
+    const subject = result.executionPlan?.subjects.find(
+      (candidate) => candidate.entityId === "player",
+    );
+
+    expect(new Set(terrain.heightSamplesMeters).size).toBeGreaterThan(1);
+    expect(sampleTerrainHeight(terrain, [0, 0])).not.toBe(0);
+    expect(subject?.spawnSubjectOriginPositionMetersXYZ).toEqual([0, 7.25, 0]);
+    expect(subject?.spawnSubjectFacingRadians).toBe(Math.PI / 2);
   });
 
   it("projects forged nested IR objects explicitly and rejects a V3 IR hash mismatch", () => {

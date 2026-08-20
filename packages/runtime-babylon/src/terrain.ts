@@ -5,6 +5,7 @@ import type { StandardMaterial } from "@babylonjs/core/Materials/standardMateria
 import type { Scene } from "@babylonjs/core/scene.pure.js";
 
 import type { ExecutionTerrainV3 } from "@whitebox-world/runtime-contracts";
+import { sampleTriangleHeightfieldSurface } from "@whitebox-world/terrain-surface";
 
 export function createTerrainMesh(
   terrain: ExecutionTerrainV3,
@@ -81,27 +82,25 @@ export function toBabylonHeightfieldData(terrain: ExecutionTerrainV3): Float32Ar
   return result;
 }
 
-export function sampleExecutionTerrainHeight(terrain: ExecutionTerrainV3, x: number, z: number): number {
-  const [columns, rows] = terrain.resolutionCellsXZ;
+export function sampleExecutionTerrainHeight(
+  terrain: ExecutionTerrainV3,
+  x: number,
+  z: number,
+): number {
   const minimumX = terrain.centerMetersXZ[0] - terrain.sizeMetersXZ[0] / 2;
   const minimumZ = terrain.centerMetersXZ[1] - terrain.sizeMetersXZ[1] / 2;
-  const column = Math.max(0, Math.min(columns - 1, ((x - minimumX) / terrain.sizeMetersXZ[0]) * (columns - 1)));
-  const row = Math.max(0, Math.min(rows - 1, ((z - minimumZ) / terrain.sizeMetersXZ[1]) * (rows - 1)));
-  const x0 = Math.floor(column);
-  const z0 = Math.floor(row);
-  const x1 = Math.min(columns - 1, x0 + 1);
-  const z1 = Math.min(rows - 1, z0 + 1);
-  const tx = column - x0;
-  const tz = row - z0;
-  const at = (columnIndex: number, rowIndex: number): number =>
-    terrain.heightSamplesMeters[rowIndex * columns + columnIndex] ?? 0;
-  const topLeft = at(x0, z0);
-  const topRight = at(x1, z0);
-  const bottomLeft = at(x0, z1);
-  const bottomRight = at(x1, z1);
-  return tx + tz <= 1
-    ? topLeft + (topRight - topLeft) * tx + (bottomLeft - topLeft) * tz
-    : bottomRight +
-        (bottomLeft - bottomRight) * (1 - tx) +
-        (topRight - bottomRight) * (1 - tz);
+  const maximumX = minimumX + terrain.sizeMetersXZ[0];
+  const maximumZ = minimumZ + terrain.sizeMetersXZ[1];
+  return sampleTriangleHeightfieldSurface(
+    {
+      centerMetersXZ: terrain.centerMetersXZ,
+      sizeMetersXZ: terrain.sizeMetersXZ,
+      resolutionVerticesXZ: terrain.resolutionCellsXZ,
+      heightSamplesMeters: terrain.heightSamplesMeters,
+    },
+    [
+      Math.max(minimumX, Math.min(maximumX, x)),
+      Math.max(minimumZ, Math.min(maximumZ, z)),
+    ],
+  )!.heightMeters;
 }

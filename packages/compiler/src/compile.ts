@@ -13,6 +13,7 @@ import type {
   Vec2,
 } from "@whitebox-world/authoring";
 import { sha256CanonicalJson } from "@whitebox-world/protocol";
+import { sampleTriangleHeightfieldSurface } from "@whitebox-world/terrain-surface";
 import type {
   CompileDiagnostic,
   CompileWorldResultV4,
@@ -86,37 +87,20 @@ export function sampleTerrainHeight(
   const [columns, rows] = terrain.resolutionCellsXZ;
   const minimumX = terrain.centerMetersXZ[0] - terrain.sizeMetersXZ[0] / 2;
   const minimumZ = terrain.centerMetersXZ[1] - terrain.sizeMetersXZ[1] / 2;
-  const x = Math.max(
-    0,
-    Math.min(
-      columns - 1,
-      ((pointMetersXZ[0] - minimumX) / terrain.sizeMetersXZ[0]) * (columns - 1),
-    ),
-  );
-  const z = Math.max(
-    0,
-    Math.min(
-      rows - 1,
-      ((pointMetersXZ[1] - minimumZ) / terrain.sizeMetersXZ[1]) * (rows - 1),
-    ),
-  );
-  const x0 = Math.floor(x);
-  const z0 = Math.floor(z);
-  const x1 = Math.min(columns - 1, x0 + 1);
-  const z1 = Math.min(rows - 1, z0 + 1);
-  const tx = x - x0;
-  const tz = z - z0;
-  const at = (column: number, row: number): number =>
-    terrain.heightSamplesMeters[row * columns + column] ?? 0;
-  const topLeft = at(x0, z0);
-  const topRight = at(x1, z0);
-  const bottomLeft = at(x0, z1);
-  const bottomRight = at(x1, z1);
-  return tx + tz <= 1
-    ? topLeft + (topRight - topLeft) * tx + (bottomLeft - topLeft) * tz
-    : bottomRight +
-        (bottomLeft - bottomRight) * (1 - tx) +
-        (topRight - bottomRight) * (1 - tz);
+  const maximumX = minimumX + terrain.sizeMetersXZ[0];
+  const maximumZ = minimumZ + terrain.sizeMetersXZ[1];
+  return sampleTriangleHeightfieldSurface(
+    {
+      centerMetersXZ: terrain.centerMetersXZ,
+      sizeMetersXZ: terrain.sizeMetersXZ,
+      resolutionVerticesXZ: terrain.resolutionCellsXZ,
+      heightSamplesMeters: terrain.heightSamplesMeters,
+    },
+    [
+      Math.max(minimumX, Math.min(maximumX, pointMetersXZ[0])),
+      Math.max(minimumZ, Math.min(maximumZ, pointMetersXZ[1])),
+    ],
+  )!.heightMeters;
 }
 
 function findOnlyNodeV3<K extends NormalizedWorldNodeV3["kind"]>(
@@ -621,7 +605,6 @@ function colliderProfileMatchesDefinitionV3(
 
 function compileSubjectsV3(
   world: NormalizedWorldIRV3,
-  terrain: ExecutionTerrainV3,
 ): CompiledSubjectsV3 {
   const definitionsByRef = new Map(
     world.resources.subjectDefinitions.map((definition) => [
@@ -773,9 +756,6 @@ function compileSubjectsV3(
         );
       }
 
-      const [spawnX, spawnYOffset, spawnZ] =
-        spawnAnchor.transform.positionMetersXYZ;
-      const groundHeightMeters = sampleTerrainHeight(terrain, [spawnX, spawnZ]);
       return {
         entityId: node.id,
         subjectDefinitionRef: definition.subjectDefinitionRef,
@@ -784,10 +764,10 @@ function compileSubjectsV3(
         semanticClassId: definition.semanticClassId,
         spawnAnchorEntityId: spawnAnchor.id,
         spawnSubjectOriginPositionMetersXYZ: [
-          spawnX,
-          groundHeightMeters + spawnYOffset,
-          spawnZ,
+          ...spawnAnchor.transform.positionMetersXYZ,
         ],
+        spawnSubjectFacingRadians:
+          spawnAnchor.transform.rotationEulerRadiansXYZ[1],
         forwardDirection: "-z",
         visualParts: definition.visualParts.map(compileSubjectVisualPartV3),
         visualBinding: definition.visualBinding.mode === "static"
@@ -929,7 +909,7 @@ function compileWorldCore(input: CompileWorldCoreInput): CompileWorldCoreResult 
       animationSets,
       colliderProfiles,
       resourceCost: subjectResourceCost,
-    } = compileSubjectsV3(world, terrain);
+    } = compileSubjectsV3(world);
     const cameraNode = findOnlyNodeV3(world.nodes, "camera");
     const terrainVertices =
       terrain.resolutionCellsXZ[0] * terrain.resolutionCellsXZ[1];

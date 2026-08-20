@@ -69,6 +69,7 @@ describe("runtime contracts V3", () => {
       semanticClassId: "subject.animal.pack",
       spawnAnchorEntityId: "spawn-pack-animal-a",
       spawnSubjectOriginPositionMetersXYZ: [4, 0, 2],
+      spawnSubjectFacingRadians: Math.PI / 2,
       forwardDirection: "-z",
       visualParts: [],
       visualBinding: { mode: "static" },
@@ -96,6 +97,7 @@ describe("runtime contracts V3", () => {
         "package://subject-definition/coastal-pack-animal@1",
       subjectDefinitionHash: expect.stringMatching(/^sha256:/),
       spawnSubjectOriginPositionMetersXYZ: [4, 0, 2],
+      spawnSubjectFacingRadians: Math.PI / 2,
       collider: {
         centerOffsetFromSubjectOriginMetersXYZ: [0, 0.7, 0],
       },

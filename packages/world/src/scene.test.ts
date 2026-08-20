@@ -5,6 +5,18 @@ import { compileOutdoorScene, defineOutdoorScene, SceneCompilationError } from "
 import { Heightfield, HeightfieldGrid } from "./terrain";
 
 describe("outdoor scene authoring", () => {
+  it("samples the canonical rendered triangle across an asymmetric saddle cell", () => {
+    const terrain = new Heightfield({
+      width: 2,
+      depth: 2,
+      xSegments: 1,
+      zSegments: 1,
+    });
+    terrain.heights.set([0, 2, 4, 0]);
+
+    expect(terrain.sampleHeight(0, 0)).toBe(3);
+  });
+
   it("uses explicit relief profiles instead of applying strong noise to every world", () => {
     const makeScene = (relief: "flat" | "plain" | "hills") => defineOutdoorScene({
       id: `relief-${relief}`,

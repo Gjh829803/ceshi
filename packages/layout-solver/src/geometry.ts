@@ -5,6 +5,7 @@ import type {
   LayoutVec2V1,
   LayoutVec3V1,
 } from "./types.js";
+import { sampleTriangleHeightfieldSurface } from "@whitebox-world/terrain-surface";
 
 const EPSILON = 1e-9;
 
@@ -175,42 +176,18 @@ export function sampleHeightfieldV1(
 }> | undefined {
   validateHeightfield(heightfield);
   assertFiniteVector(pointMetersXZ);
-  const [columns, rows] = heightfield.resolutionVerticesXZ;
-  const minimumX = heightfield.centerMetersXZ[0] - heightfield.sizeMetersXZ[0] / 2;
-  const minimumZ = heightfield.centerMetersXZ[1] - heightfield.sizeMetersXZ[1] / 2;
-  const u = (pointMetersXZ[0] - minimumX) / heightfield.sizeMetersXZ[0];
-  const v = (pointMetersXZ[1] - minimumZ) / heightfield.sizeMetersXZ[1];
-  if (u < 0 || u > 1 || v < 0 || v > 1) return undefined;
-
-  const columnPosition = u * (columns - 1);
-  const rowPosition = v * (rows - 1);
-  const column = Math.min(columns - 2, Math.floor(columnPosition));
-  const row = Math.min(rows - 2, Math.floor(rowPosition));
-  const tx = columnPosition - column;
-  const tz = rowPosition - row;
-  const sample = (x: number, z: number) => heightfield.heightSamplesMeters[z * columns + x]!;
-  const h00 = sample(column, row);
-  const h10 = sample(column + 1, row);
-  const h01 = sample(column, row + 1);
-  const h11 = sample(column + 1, row + 1);
-  const near = h00 * (1 - tx) + h10 * tx;
-  const far = h01 * (1 - tx) + h11 * tx;
-  const heightMeters = near * (1 - tz) + far * tz;
-  const dxMeters = heightfield.sizeMetersXZ[0] / (columns - 1);
-  const dzMeters = heightfield.sizeMetersXZ[1] / (rows - 1);
-  const derivativeX = ((h10 - h00) * (1 - tz) + (h11 - h01) * tz) / dxMeters;
-  const derivativeZ = ((h01 - h00) * (1 - tx) + (h11 - h10) * tx) / dzMeters;
-  const length = Math.hypot(derivativeX, 1, derivativeZ);
+  const sample = sampleTriangleHeightfieldSurface(heightfield, pointMetersXZ);
+  if (sample === undefined) return undefined;
   const normalXYZ: LayoutVec3V1 = [
-    quantizeFinite(-derivativeX / length, 0.000001),
-    quantizeFinite(1 / length, 0.000001),
-    quantizeFinite(-derivativeZ / length, 0.000001),
+    quantizeFinite(sample.normalXYZ[0], 0.000001),
+    quantizeFinite(sample.normalXYZ[1], 0.000001),
+    quantizeFinite(sample.normalXYZ[2], 0.000001),
   ];
-  const slopeDegrees = quantizeFinite(
-    Math.atan(Math.hypot(derivativeX, derivativeZ)) * 180 / Math.PI,
-    0.000001,
-  );
-  return { heightMeters: quantizeFinite(heightMeters, 0.000001), normalXYZ, slopeDegrees };
+  return {
+    heightMeters: quantizeFinite(sample.heightMeters, 0.000001),
+    normalXYZ,
+    slopeDegrees: quantizeFinite(sample.slopeDegrees, 0.000001),
+  };
 }
 
 export function sampleRoutePolylineV1(

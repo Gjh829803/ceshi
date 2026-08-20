@@ -1,6 +1,7 @@
 import { BufferAttribute, BufferGeometry } from "three";
 
 import type { Vec2Tuple, Vec3Tuple } from "@whitebox-world/contracts";
+import { sampleTriangleHeightfieldSurface } from "@whitebox-world/terrain-surface";
 
 import { SeededNoise2D, type Seed } from "./random";
 import type { FalloffCurve, Shape2D } from "./shapes";
@@ -510,18 +511,15 @@ export class Heightfield implements TerrainSurface {
   }
 
   sampleHeight(x: number, z: number): number | undefined {
-    const localX = ((x - this.origin[0] + this.width / 2) / this.width) * this.xSegments;
-    const localZ = ((z - this.origin[1] + this.depth / 2) / this.depth) * this.zSegments;
-    if (localX < 0 || localX > this.xSegments || localZ < 0 || localZ > this.zSegments) return undefined;
-    const x0 = Math.floor(localX);
-    const z0 = Math.floor(localZ);
-    const x1 = Math.min(this.xSegments, x0 + 1);
-    const z1 = Math.min(this.zSegments, z0 + 1);
-    const tx = localX - x0;
-    const tz = localZ - z0;
-    const top = this.getHeight(x0, z0) * (1 - tx) + this.getHeight(x1, z0) * tx;
-    const bottom = this.getHeight(x0, z1) * (1 - tx) + this.getHeight(x1, z1) * tx;
-    return top * (1 - tz) + bottom * tz;
+    return sampleTriangleHeightfieldSurface(
+      {
+        centerMetersXZ: this.origin,
+        sizeMetersXZ: [this.width, this.depth],
+        resolutionVerticesXZ: [this.xSegments + 1, this.zSegments + 1],
+        heightSamplesMeters: this.heights,
+      },
+      [x, z],
+    )?.heightMeters;
   }
 
   toGeometryData(normalSource: TerrainSurface = this): HeightfieldGeometryData {
