@@ -474,9 +474,9 @@ describe("subject resource registry", () => {
       resourceRef: G_BOT_SUBJECT_ASSET_REF,
       artifact: {
         mediaType: "model/gltf-binary",
-        byteLength: 3_362_888,
+        byteLength: 5_302_160,
         contentHash:
-          "sha256:74bbf9426577caa1b7e808bf388bd9a6b8b48d50cc80ab7b0abef10c2693c286",
+          "sha256:41833210e735788da0777fc37badcec03f90ccf17ab5a7d89103f0727abeeb1b",
       },
       bounds: {
         minimumMetersXYZ: [-0.9025661945343018, -0.0003511549439281225, -0.14895710349082947],
@@ -489,18 +489,31 @@ describe("subject resource registry", () => {
         skeletonCount: 1,
         boneCount: 65,
         animationClipNames: [
+          "dance.rumba",
+          "emote.angry",
+          "emote.salute",
           "fall",
+          "fight.enter",
           "float",
+          "fly",
           "idle",
+          "idle.gaming",
           "jump",
+          "land.hard",
+          "land.hard.alt",
+          "lay.idle",
+          "roll.toRun",
           "run",
           "sit",
+          "sit.ground.idle",
           "sit.idle",
+          "sit.toStand",
           "stand",
           "swim.exit",
           "swim.surface",
           "swim.tread",
           "walk",
+          "walk.step",
         ],
       },
       provenance: {
@@ -612,7 +625,7 @@ describe("subject resource registry", () => {
       {
         resourceRef: G_BOT_SUBJECT_ASSET_REF,
         contentHash:
-          "sha256:21186440a35417b23931e6b7a0c244a2323d83440842803522c052e58414e335",
+          "sha256:ab59e67e2ff74448cad2a0b520524d019d7a78b02c8335f82428842b0f0fd7e4",
       },
       {
         resourceRef: G_BOT_RIG_PROFILE_REF,

@@ -442,7 +442,7 @@ Rig/Clip/Collider 绑定、四种固定 Tick 动作、双实例隔离、Havok �
 五张 936×596 截图和篡改后的稳定失败；它是通用底座回归，不替代具体产品资产验收。
 
 `verify:g-bot-subject` 对首个产品 G Bot 独立验证 GLB/Manifest/Registry 映射、
-65 根源 Bone、12 个源 Clip、当前四个 Semantic Action、双实例隔离、墙体碰撞和
+65 根源 Bone、25 个源 Clip、当前四个 Semantic Action、双实例隔离、墙体碰撞和
 五张 936×596 截图。普通 JSON 示例只写
 `worldkit://subject-definition/humanoid.g-bot@1`，不写模型 URL、Mixamo Bone 或 Clip 名。
 

@@ -200,10 +200,10 @@ Bundle 只提供资产事实和参考；最终 Collider、控制、物理和 Cam
 
 | 必需输入 | 当前 S1b 契约 | Golden / G Bot 已验收参考值 |
 |---|---|---|
-| GLB bytes | 单文件、自包含 GLB 2.0；不允许外部 Buffer/Image URI | Golden 43,656 bytes；G Bot 3,362,888 bytes |
+| GLB bytes | 单文件、自包含 GLB 2.0；不允许外部 Buffer/Image URI | Golden 43,656 bytes；G Bot 5,302,160 bytes |
 | Coordinate convention | `-Z` Forward、`+Y` Up、1 meter/unit | 同契约 |
 | Pivot | `support-center`，主体 Origin 与 Collider/Camera/Snapshot 共用 | 同契约 |
-| Asset Hash | 对原始 GLB bytes 计算 `sha256:`，并记录精确 `byteLength` | Golden `sha256:1095fd…8c2c2`；G Bot `sha256:74bbf9…3c286` |
+| Asset Hash | 对原始 GLB bytes 计算 `sha256:`，并记录精确 `byteLength` | Golden `sha256:1095fd…8c2c2`；G Bot `sha256:418332…eeb1b` |
 | License/Provenance | SPDX 或内部 License ID、再分发策略、作者；可选来源/许可证 URI 只留在 Registry Manifest | `LicenseRef-Project-Owned`、`allowed`、`Agent Whitebox World SDK` |
 | Bone mapping | 版本化 Rig Profile：唯一 Skeleton Root 独立声明，17 个解剖语义 Bone ID → 源节点名 | Golden `biped.golden@1`；G Bot `biped.mixamo-g-bot@1` |
 | Clip mappings (4) | 版本化 Animation Set：每个语义 Action 显式映射源 Clip、Loop、速度、Blend、Root Motion | Golden 与 G Bot 均显式映射 `idle/walk/run/jump`，全部 in-place |

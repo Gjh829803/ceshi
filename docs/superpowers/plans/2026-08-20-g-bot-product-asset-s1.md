@@ -133,7 +133,7 @@ Register the Asset, Rig, Animation Set, Collider, and Definition with explicit c
 
 Run: `pnpm vitest run packages/subject-registry/src/subject-registry.test.ts apps/playground/src/worldkit-asset-resolver.test.ts packages/runtime-babylon/src/runtime.test.ts`
 
-Expected: all Registry, resolver, and Runtime tests pass against the actual 3.36MB asset.
+Expected: all Registry, resolver, and Runtime tests pass against the actual 5.30MB asset.
 
 - [x] **Step 5: Commit Task 2**
 
@@ -211,7 +211,7 @@ git commit -m "feat: add G Bot authoring example"
 
 - [x] **Step 1: Write RED evidence-helper tests**
 
-Parse the committed GLB JSON chunk and product manifests, then assert exact hash/inventory, the twelve declared source clips, the four supported ground bindings, unique Bone names, Hips-root hierarchy, no forbidden content, and non-empty per-action timing.
+Parse the committed GLB JSON chunk and product manifests, then assert exact hash/inventory, the twenty-five declared source clips, the four supported ground bindings, unique Bone names, Hips-root hierarchy, no forbidden content, and non-empty per-action timing.
 
 - [x] **Step 2: Run the focused helper test and verify RED**
 
@@ -321,4 +321,4 @@ git commit -m "docs: complete G Bot product asset slice"
 
 Review the full feature range against the approved design, exact generated artifacts, and complete verification output. Any P0-P2 finding must be reproduced with a failing test before correction.
 
-Final independent review: CLEAN for `84d60e1..1ba48e7`, with no remaining P0-P2 findings. Registry canonical-hash coverage and real-byte G Bot clone/Clip/Socket/disposal isolation were added before closure.
+Initial integration independent review: CLEAN for `84d60e1..1ba48e7`, with no remaining P0-P2 findings. Registry canonical-hash coverage and real-byte G Bot clone/Clip/Socket/disposal isolation were added before closure. The later `main` synchronization adopts product asset update `7f8a48b` (25 source Clips) and requires its own final review before merge.

@@ -104,7 +104,7 @@ Subject Node 中引用 `worldkit://subject-definition/humanoid.rigged-golden@1`�
   前后 Hash 不变。
 
 这些事实证明项目自有 Golden Fixture 的完整管线。首个产品 G Bot 另由
-`pnpm verify:g-bot-subject` 独立验收：3,362,888-byte GLB、65 Bone、12 源 Clip、
+`pnpm verify:g-bot-subject` 独立验收：5,302,160-byte GLB、65 Bone、25 源 Clip、
 `idle/walk/run/jump` 显式映射、双实例隔离、墙体停止和五张 936×596 截图均通过。
 这仍不证明任意后续产品资产、Compound Collider、LOD、更多拓扑或完整 Semantic
 Actions 已经通过验收。

@@ -5,7 +5,7 @@
 - Date: 2026-08-20
 - Decision: implemented and verified; independent review findings resolved
 - Scope: first product-authored humanoid asset through the existing Canonical Registry → Authoring → Compiler → Babylon/Havok pipeline
-- Input commit: `4ccfaa1b4fbdccb8111af8c97dda39e48b257c98`
+- Input commits: initial package `4ccfaa1b4fbdccb8111af8c97dda39e48b257c98`; 25-Clip update `7f8a48ba960088ba5a99305014b0afca0add7cec`
 
 ## Goal
 
@@ -15,11 +15,11 @@ Integrate the committed G Bot GLB as a versioned Registry Subject Definition and
 
 The committed asset has already passed a read-only loader probe through `SubjectAssetCacheV1`:
 
-- self-contained GLB 2.0, 3,362,888 bytes;
-- SHA-256 `74bbf9426577caa1b7e808bf388bd9a6b8b48d50cc80ab7b0abef10c2693c286`;
+- self-contained GLB 2.0, 5,302,160 bytes;
+- SHA-256 `41833210e735788da0777fc37badcec03f90ccf17ab5a7d89103f0727abeeb1b`;
 - two renderable meshes, 28,374 vertices, and 49,112 triangles;
 - one Skeleton with 65 Bones and one parentless Bone named `mixamorig:Hips`;
-- twelve uniquely named Animation Clips;
+- twenty-five uniquely named Animation Clips;
 - Babylon world bounds approximately `[-0.902566, -0.000351, -0.148957]` to `[0.902567, 1.808883, 0.171742]` meters;
 - no external Buffer/Image URI, Camera, Light, Sound, ActionManager, or Node Behavior.
 

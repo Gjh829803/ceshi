@@ -306,8 +306,8 @@ Snapshot 和确定性 Reset。
 已可用。
 
 `verify:g-bot-subject` 会验证首个产品 G Bot GLB、产品交付 Manifest、65 根源 Bone、
-12 个源 Clip、17 个语义 Bone 映射、当前开放的四个 Semantic Action、双实例隔离、
-Havok 墙体停止和五张 936×596 截图。它证明这一版本 G Bot 已接入，不把其余八个
+25 个源 Clip、17 个语义 Bone 映射、当前开放的四个 Semantic Action、双实例隔离、
+Havok 墙体停止和五张 936×596 截图。它证明这一版本 G Bot 已接入，不把其余 21 个
 Clip、游泳、装备、坐骑、LOD 或任意后续产品包标记为可用。
 
 `verify:placement-layout` 会验证海湾 Fixture 的 19 条约束、八种 S1 Constraint、

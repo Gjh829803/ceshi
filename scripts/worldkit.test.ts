@@ -558,8 +558,8 @@ describe("worldkit CLI", () => {
       {
         subjectAssetRef: "worldkit://subject-asset/actor.humanoid.g-bot@1",
         artifactContentHash:
-          "sha256:74bbf9426577caa1b7e808bf388bd9a6b8b48d50cc80ab7b0abef10c2693c286",
-        byteLength: 3_362_888,
+          "sha256:41833210e735788da0777fc37badcec03f90ccf17ab5a7d89103f0727abeeb1b",
+        byteLength: 5_302_160,
         format: "glb",
         inventory: expect.any(Object),
         mediaType: "model/gltf-binary",

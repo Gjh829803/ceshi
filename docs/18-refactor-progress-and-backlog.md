@@ -9,7 +9,7 @@
 > Golden Humanoid S1b 首个可视纵向切片已完成并进入回归；S1b 整体与 Semantic Actions 整体仍未完成.
 
 > 首个产品资产 G Bot 已通过独立 Registry/CLI/Babylon/Havok/Browser Gate；这只代表
-> 当前版本 G Bot 的 `idle/walk/run/jump`，不代表任意产品包或其余八个 Clip 已开放。
+> 当前版本 G Bot 的 `idle/walk/run/jump`，不代表任意产品包或其余 21 个 Clip 已开放。
 
 > Placement Solver S1 首个海湾纵向切片已完成并进入回归；通用 Terrain Mask/Route Graph、更多 Constraint 与 P0.1 整体仍未完成。
 
@@ -99,7 +99,7 @@ Subject、首个产品 G Bot、Placement S1、截图和查询。它不代表任�
 - [x] CLI/Browser 两实例、墙体停止、五张动作/世界截图与 Hash 篡改失败 E2E。
 - [x] G Bot 通过产品 Manifest → Registry Rig/Animation/Collider/Definition 映射；
   World JSON 只引用稳定 `subjectDefinitionRef`。
-- [x] G Bot 真实 3.36MB GLB、65 Bone、12 源 Clip 与当前四动作通过独立
+- [x] G Bot 真实 5.30MB GLB、65 Bone、25 源 Clip 与当前四动作通过独立
   `pnpm verify:g-bot-subject` Gate、双实例隔离、墙体停止与五张截图。
 
 未完成：更多产品资产、Compound Collider、LOD、更多拓扑、独立动画资产、通用姿态、
@@ -129,7 +129,7 @@ Subject、首个产品 G Bot、Placement S1、截图和查询。它不代表任�
   最低为 0.298178。
 - `pnpm verify:g-bot-subject`：首个产品 G Bot 的 GLB/Manifest/Registry 映射、
   `idle/walk/run/jump`、双实例隔离和墙体停止通过；资产 Hash 为
-  `sha256:74bbf9426577caa1b7e808bf388bd9a6b8b48d50cc80ab7b0abef10c2693c286`，
+  `sha256:41833210e735788da0777fc37badcec03f90ccf17ab5a7d89103f0727abeeb1b`，
   Walk 在 Tick 16、Jump 在 Tick 30 捕获，六组姿态差异率最低高于 0.79。
 - `pnpm verify:placement-layout`：八种 Constraint、19 条海湾约束、Report → IR →
   Plan → Snapshot、Runtime Assertion、连续/并发确定性、冲突、篡改和预算门禁全部通过；

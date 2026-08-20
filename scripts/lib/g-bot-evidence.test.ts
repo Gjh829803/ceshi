@@ -36,8 +36,8 @@ describe("G Bot product asset evidence", () => {
       schemaVersion: 1,
       subjectAssetRef: "worldkit://subject-asset/actor.humanoid.g-bot@1",
       artifactContentHash:
-        "sha256:74bbf9426577caa1b7e808bf388bd9a6b8b48d50cc80ab7b0abef10c2693c286",
-      byteLength: 3_362_888,
+        "sha256:41833210e735788da0777fc37badcec03f90ccf17ab5a7d89103f0727abeeb1b",
+      byteLength: 5_302_160,
       formatVersion: "2.0",
       meshCount: 2,
       jointCount: 65,
@@ -48,17 +48,30 @@ describe("G Bot product asset evidence", () => {
     });
     expect(evidence.sourceClipNames).toEqual([
       "idle",
+      "idle.gaming",
       "walk",
+      "walk.step",
       "run",
       "jump",
       "fall",
+      "land.hard",
+      "land.hard.alt",
+      "fly",
       "float",
       "swim.surface",
       "swim.tread",
+      "swim.exit",
       "sit",
       "sit.idle",
+      "sit.ground.idle",
+      "sit.toStand",
       "stand",
-      "swim.exit",
+      "lay.idle",
+      "roll.toRun",
+      "fight.enter",
+      "emote.salute",
+      "emote.angry",
+      "dance.rumba",
     ]);
     expect(evidence.supportedActionBindings).toEqual([
       { actionId: "idle", sourceClip: "idle" },
@@ -66,7 +79,7 @@ describe("G Bot product asset evidence", () => {
       { actionId: "run", sourceClip: "run" },
       { actionId: "jump", sourceClip: "jump" },
     ]);
-    expect(evidence.sourceClipTimings).toHaveLength(12);
+    expect(evidence.sourceClipTimings).toHaveLength(25);
     for (const timing of evidence.sourceClipTimings) {
       expect(timing.durationSeconds).toBeGreaterThan(0);
       expect(timing.minimumTimeSeconds).toBeGreaterThanOrEqual(0);
