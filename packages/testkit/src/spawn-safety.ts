@@ -102,6 +102,90 @@ function footprintContains(
   return inside;
 }
 
+function pointToSegmentDistanceSquared(
+  point: readonly [number, number],
+  from: readonly [number, number],
+  to: readonly [number, number],
+): number {
+  const edgeX = to[0] - from[0];
+  const edgeZ = to[1] - from[1];
+  const lengthSquared = edgeX * edgeX + edgeZ * edgeZ;
+  if (lengthSquared === 0) {
+    return (point[0] - from[0]) ** 2 + (point[1] - from[1]) ** 2;
+  }
+  const projection = Math.max(0, Math.min(1,
+    ((point[0] - from[0]) * edgeX + (point[1] - from[1]) * edgeZ) /
+      lengthSquared,
+  ));
+  const closestX = from[0] + projection * edgeX;
+  const closestZ = from[1] + projection * edgeZ;
+  return (point[0] - closestX) ** 2 + (point[1] - closestZ) ** 2;
+}
+
+function pointToEllipseDistanceSquared(
+  point: readonly [number, number],
+  center: readonly [number, number],
+  radii: readonly [number, number],
+): number {
+  const x = Math.abs(point[0] - center[0]);
+  const z = Math.abs(point[1] - center[1]);
+  const radiusX = radii[0];
+  const radiusZ = radii[1];
+  const normalizedDistanceSquared =
+    (x / radiusX) ** 2 + (z / radiusZ) ** 2;
+  if (normalizedDistanceSquared <= 1) return 0;
+
+  const equation = (lambda: number) =>
+    (radiusX * x / (lambda + radiusX * radiusX)) ** 2 +
+    (radiusZ * z / (lambda + radiusZ * radiusZ)) ** 2 - 1;
+  let lower = 0;
+  let upper = Math.max(
+    1,
+    radiusX * radiusX,
+    radiusZ * radiusZ,
+    radiusX * x,
+    radiusZ * z,
+  );
+  while (equation(upper) > 0) upper *= 2;
+  for (let iteration = 0; iteration < 64; iteration += 1) {
+    const middle = (lower + upper) / 2;
+    if (equation(middle) > 0) lower = middle;
+    else upper = middle;
+  }
+  const closestX = radiusX * radiusX * x /
+    (upper + radiusX * radiusX);
+  const closestZ = radiusZ * radiusZ * z /
+    (upper + radiusZ * radiusZ);
+  return (x - closestX) ** 2 + (z - closestZ) ** 2;
+}
+
+function discIntersectsFootprint(
+  boundary: SpawnFootprintBoundary,
+  center: readonly [number, number],
+  radius: number,
+): boolean {
+  const maximumDistanceSquared = (radius + EPSILON) ** 2;
+  if (boundary.kind === "circle") {
+    return Math.hypot(
+      center[0] - boundary.centerMetersXZ[0],
+      center[1] - boundary.centerMetersXZ[1],
+    ) <= boundary.radiusMeters + radius + EPSILON;
+  }
+  if (boundary.kind === "ellipse") {
+    return pointToEllipseDistanceSquared(
+      center,
+      boundary.centerMetersXZ,
+      boundary.radiusMetersXZ,
+    ) <= maximumDistanceSquared;
+  }
+  if (footprintContains(boundary, center)) return true;
+  return boundary.pointsMetersXZ.some((from, index) => {
+    const to = boundary.pointsMetersXZ[(index + 1) % boundary.pointsMetersXZ.length];
+    return to !== undefined &&
+      pointToSegmentDistanceSquared(center, from, to) <= maximumDistanceSquared;
+  });
+}
+
 export function validateSpawnSafety(input: SpawnSafetyInput): Diagnostic[] {
   const diagnostics: Diagnostic[] = [];
   const radius = input.capsule?.radius ?? DEFAULT_RADIUS;
@@ -168,7 +252,7 @@ export function validateSpawnSafety(input: SpawnSafetyInput): Diagnostic[] {
     const waterMinimum = water.waterLevelMeters - water.depthMeters;
     if (
       water.traversalMode !== "blocked" ||
-      !footprintContains(water.boundary, positionXZ) ||
+      !discIntersectsFootprint(water.boundary, positionXZ, radius) ||
       !intervalsStrictlyOverlap(
         subjectMinimum,
         subjectMaximum,
@@ -189,7 +273,7 @@ export function validateSpawnSafety(input: SpawnSafetyInput): Diagnostic[] {
   }
 
   for (const blocker of input.staticBlockingObjects ?? []) {
-    if (!footprintContains(blocker.footprint, positionXZ)) continue;
+    if (!discIntersectsFootprint(blocker.footprint, positionXZ, radius)) continue;
     if (blocker.heightRangeMeters !== undefined) {
       const [minimum, maximum] = blocker.heightRangeMeters;
       const subjectMinimum = input.position[1];

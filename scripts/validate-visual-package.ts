@@ -10,7 +10,7 @@ import {
   verifyFrozenWorldPlan,
 } from "./lib/plan-lock.js";
 import {
-  validatePersistedCompositionReport,
+  validateVisualCompositionEvidence,
   type PlanningManifest,
 } from "./lib/composition-gate.js";
 
@@ -60,29 +60,27 @@ const verifiedManifestPath = path.join(projectRoot, "artifacts", "scenes", optio
 const verifiedManifestContents = await readFile(verifiedManifestPath, "utf8");
 const verifiedManifest = JSON.parse(verifiedManifestContents) as PlanningManifest;
 const spec = await loadWorldSpec(projectRoot, options.sceneId);
-if ((spec.source.referenceImages?.length ?? 0) > 0) {
-  let report: unknown;
-  try {
-    report = JSON.parse(await readFile(path.join(
-      projectRoot,
-      "apps/playground/public/scene-plans",
-      options.sceneId,
-      "opening-composition-report.json",
-    ), "utf8"));
-  } catch {
-    report = undefined;
-  }
-  const composition = validatePersistedCompositionReport({
-    sceneId: options.sceneId,
-    worldSpec: spec,
-    frozenPlan,
-    planLockSha256,
-    planningManifest: verifiedManifest,
-    report,
-  });
-  if (!composition.ok) {
-    throw new Error(`${composition.code}: ${composition.message}`);
-  }
+let report: unknown;
+try {
+  report = JSON.parse(await readFile(path.join(
+    projectRoot,
+    "apps/playground/public/scene-plans",
+    options.sceneId,
+    "opening-composition-report.json",
+  ), "utf8"));
+} catch {
+  report = undefined;
+}
+const composition = validateVisualCompositionEvidence({
+  sceneId: options.sceneId,
+  worldSpec: spec,
+  frozenPlan,
+  planLockSha256,
+  planningManifest: verifiedManifest,
+  report,
+});
+if (!composition.ok) {
+  throw new Error(`${composition.code}: ${composition.message}`);
 }
 if (
   verifiedManifest.workflowStage !== "verified" ||

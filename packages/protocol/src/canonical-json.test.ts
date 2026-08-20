@@ -97,4 +97,40 @@ describe("canonical JSON protocol", () => {
       );
     },
   );
+
+  it.each(["stringify", "hash"] as const)(
+    "rejects sparse arrays at root and nested canonical paths through %s",
+    (operation) => {
+      const canonicalOperation = (value: unknown) => operation === "stringify"
+        ? stringifyCanonicalJson(value)
+        : sha256CanonicalJson(value);
+
+      expect(() => canonicalOperation(new Array(1))).toThrow(
+        "Non-canonical array shape at / is unsupported canonical JSON.",
+      );
+      expect(() => canonicalOperation({ nested: [1, , 3] })).toThrow(
+        "Non-canonical array shape at /nested is unsupported canonical JSON.",
+      );
+    },
+  );
+
+  it.each(["stringify", "hash"] as const)(
+    "rejects extra own string keys on root and nested arrays through %s",
+    (operation) => {
+      const root = [1] as number[] & { semantic?: string };
+      root.semantic = "kept";
+      const nested = [1] as number[] & { semantic?: string };
+      Object.defineProperty(nested, "semantic", { value: "kept" });
+      const canonicalOperation = (value: unknown) => operation === "stringify"
+        ? stringifyCanonicalJson(value)
+        : sha256CanonicalJson(value);
+
+      expect(() => canonicalOperation(root)).toThrow(
+        "Non-canonical array shape at / is unsupported canonical JSON.",
+      );
+      expect(() => canonicalOperation({ nested })).toThrow(
+        "Non-canonical array shape at /nested is unsupported canonical JSON.",
+      );
+    },
+  );
 });

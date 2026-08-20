@@ -427,18 +427,12 @@ describe("compileWorld", () => {
       "normalized-rig-provider-handle",
       "normalized-animation-source-uri",
       "normalized-collider-provider-handle",
-      "normalized-collider-center-source-uri",
       "normalized-binding-provider-handle",
       "normalized-asset-transform-provider-handle",
-      "normalized-asset-position-source-uri",
-      "normalized-asset-scale-provider-handle",
       "normalized-appearance-source-uri",
       "normalized-bone-transform-provider-handle",
-      "normalized-bone-position-source-uri",
       "normalized-local-transform-provider-handle",
-      "normalized-local-position-source-uri",
       "normalized-subject-collider-provider-handle",
-      "normalized-subject-collider-center-source-uri",
       "normalized-locomotion-provider-handle",
     ] as const;
     const normalized = normalizeRiggedWorld();
@@ -453,45 +447,28 @@ describe("compileWorld", () => {
       Object.assign(binding, { sourceUri: forbiddenValues[2] });
     }
     Object.assign(colliderProfile.collider, { providerHandle: forbiddenValues[3] });
-    Object.assign(colliderProfile.collider.centerOffsetFromSubjectOriginMetersXYZ, {
-      sourceUri: forbiddenValues[4],
-    });
     const definition = world.resources.subjectDefinitions[0]!;
-    Object.assign(definition.visualBinding, { providerHandle: forbiddenValues[5] });
+    Object.assign(definition.visualBinding, { providerHandle: forbiddenValues[4] });
     const assetPart = definition.visualParts.find((part) => part.kind === "asset")!;
-    Object.assign(assetPart.localTransform, { providerHandle: forbiddenValues[6] });
-    Object.assign(assetPart.localTransform.positionMetersXYZ, {
-      sourceUri: forbiddenValues[7],
-    });
-    Object.assign(assetPart.localTransform.scaleXYZ, {
-      providerHandle: forbiddenValues[8],
-    });
-    Object.assign(assetPart.appearance, { sourceUri: forbiddenValues[9] });
+    Object.assign(assetPart.localTransform, { providerHandle: forbiddenValues[5] });
+    Object.assign(assetPart.appearance, { sourceUri: forbiddenValues[6] });
     const boneSocket = definition.sockets.find((socket) => socket.kind === "bone")!;
-    Object.assign(boneSocket.offsetTransform, { providerHandle: forbiddenValues[10] });
-    Object.assign(boneSocket.offsetTransform.positionMetersXYZ, {
-      sourceUri: forbiddenValues[11],
-    });
+    Object.assign(boneSocket.offsetTransform, { providerHandle: forbiddenValues[7] });
     definition.sockets = [
       ...definition.sockets,
       {
         id: "test.local",
         kind: "local",
         localTransform: {
-          positionMetersXYZ: Object.assign([0, 0, 0] as [number, number, number], {
-            sourceUri: forbiddenValues[13],
-          }),
+          positionMetersXYZ: [0, 0, 0],
           rotationEulerRadiansXYZ: [0, 0, 0],
-          providerHandle: forbiddenValues[12],
+          providerHandle: forbiddenValues[8],
         },
         semanticTags: ["test"],
       } as unknown as (typeof definition.sockets)[number],
     ];
-    Object.assign(definition.collider, { providerHandle: forbiddenValues[14] });
-    Object.assign(definition.collider.centerOffsetFromSubjectOriginMetersXYZ, {
-      sourceUri: forbiddenValues[15],
-    });
-    Object.assign(definition.locomotion, { providerHandle: forbiddenValues[16] });
+    Object.assign(definition.collider, { providerHandle: forbiddenValues[9] });
+    Object.assign(definition.locomotion, { providerHandle: forbiddenValues[10] });
     const beforeCompile = structuredClone(world);
 
     const result = compileNormalizedWorld(world);
@@ -955,6 +932,31 @@ describe("compileWorld", () => {
     }));
   });
 
+  it("rejects capsule-disc overlap with blocked water when the spawn center is outside", () => {
+    const spec = createValidAuthoringSpec();
+    const water = spec.nodes.find((node) => node.kind === "water");
+    const spawn = spec.nodes.find((node) => node.kind === "anchor" && node.id === "spawn-main");
+    if (water?.kind !== "water" || spawn?.kind !== "anchor" || spawn.placement.kind !== "fixed") {
+      throw new Error("Canonical blocked-water edge fixture is incomplete.");
+    }
+    water.components.water.traversalMode = "blocked";
+    water.components.water.waterLevelMeters = 1;
+    water.components.water.depthMeters = 2;
+    spawn.placement.transform.positionMetersXYZ = [37.2, 0, 0];
+
+    const normalized = normalizeAuthoringSpec(spec);
+    if (!normalized.ok || normalized.value === undefined || normalized.normalizedWorldIrHash === undefined) {
+      throw new Error(`Blocked-water edge fixture did not normalize: ${JSON.stringify(normalized.diagnostics)}`);
+    }
+
+    expect(compileWorld({
+      normalizedWorldIr: normalized.value,
+      normalizedWorldIrHash: normalized.normalizedWorldIrHash,
+    }).diagnostics).toContainEqual(expect.objectContaining({
+      code: "COMPILER_SPAWN_IN_BLOCKED_WATER",
+    }));
+  });
+
   it.each([
     { label: "outside blocked water", traversalMode: "blocked" as const, spawn: [0, 0, 30] as const },
     { label: "inside explicitly walkable water", traversalMode: "walkable" as const, spawn: [25, 0, 0] as const },
@@ -1028,6 +1030,43 @@ describe("compileWorld", () => {
       code: "COMPILER_SPAWN_INSIDE_STATIC_BLOCKER",
       instancePath: "/nodes/player/spawnAnchorEntityId",
       details: { subjectEntityId: "player", objectEntityId: "wall-east" },
+    }));
+  });
+
+  it("conservatively rejects overlap along a non-uniform sphere blocker's long axis", () => {
+    const spec = createValidAuthoringSpec();
+    const prototypes = spec.resources.prototypes as unknown as Array<
+      (typeof spec.resources.prototypes)[number]
+    >;
+    prototypes[0] = {
+      id: "wall",
+      version: 1,
+      kind: "primitive",
+      primitive: "sphere",
+      radiusMeters: 1,
+      collisionEnabled: true,
+      semantic: { classId: "obstacle.sphere" },
+    };
+    const object = spec.nodes.find((node) => node.kind === "object");
+    const spawn = spec.nodes.find((node) => node.kind === "anchor" && node.id === "spawn-main");
+    if (object?.kind !== "object" || object.placement.kind !== "fixed" ||
+        spawn?.kind !== "anchor" || spawn.placement.kind !== "fixed") {
+      throw new Error("Canonical non-uniform blocker fixture is incomplete.");
+    }
+    object.placement.transform.positionMetersXYZ = [0, 1, 30];
+    object.placement.transform.scaleXYZ = [4, 1, 1];
+    spawn.placement.transform.positionMetersXYZ = [4.2, 0, 30];
+
+    const normalized = normalizeAuthoringSpec(spec);
+    if (!normalized.ok || normalized.value === undefined || normalized.normalizedWorldIrHash === undefined) {
+      throw new Error(`Non-uniform blocker fixture did not normalize: ${JSON.stringify(normalized.diagnostics)}`);
+    }
+
+    expect(compileWorld({
+      normalizedWorldIr: normalized.value,
+      normalizedWorldIrHash: normalized.normalizedWorldIrHash,
+    }).diagnostics).toContainEqual(expect.objectContaining({
+      code: "COMPILER_SPAWN_INSIDE_STATIC_BLOCKER",
     }));
   });
 

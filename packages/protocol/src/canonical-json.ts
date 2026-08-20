@@ -13,6 +13,17 @@ function rejectOwnSymbolKeys(value: object, path: string): void {
   }
 }
 
+function hasCanonicalArrayShape(value: unknown[]): boolean {
+  const ownPropertyNames = Object.getOwnPropertyNames(value);
+  if (ownPropertyNames.length !== value.length + 1) return false;
+  for (let index = 0; index < value.length; index += 1) {
+    if (!Object.prototype.hasOwnProperty.call(value, index)) return false;
+  }
+  const lengthDescriptor = Object.getOwnPropertyDescriptor(value, "length");
+  return lengthDescriptor?.enumerable === false &&
+    ownPropertyNames.every((key) => key === "length" || /^\d+$/.test(key));
+}
+
 function canonicalize(value: unknown, path: string): unknown {
   if (value === null || typeof value === "boolean" || typeof value === "string") return value;
   if (typeof value === "number") {
@@ -28,6 +39,11 @@ function canonicalize(value: unknown, path: string): unknown {
       );
     }
     rejectOwnSymbolKeys(value, path);
+    if (!hasCanonicalArrayShape(value)) {
+      throw new TypeError(
+        `Non-canonical array shape at ${canonicalJsonPath(path)} is unsupported canonical JSON.`,
+      );
+    }
     return value.map((item, index) => canonicalize(item, `${path}/${index}`));
   }
   if (typeof value === "object") {

@@ -289,7 +289,7 @@ function primitiveSpawnBlocker(
     footprint = {
       kind: "circle",
       centerMetersXZ: [centerX, centerZ],
-      radiusMeters: (primitive.radius ?? 1) * Math.min(scaleX, scaleZ),
+      radiusMeters: (primitive.radius ?? 1) * Math.max(scaleX, scaleZ),
     };
     halfHeightMeters = primitive.primitive === "sphere"
       ? (primitive.radius ?? 1) * scaleY

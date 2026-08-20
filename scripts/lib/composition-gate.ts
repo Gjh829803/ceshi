@@ -321,6 +321,13 @@ export function validatePersistedCompositionReport(
   return validateCompositionReport(input, true);
 }
 
+export function validateVisualCompositionEvidence(
+  input: CompositionGateInput,
+): CompositionGateResult | { ok: true } {
+  if (!requiresCompositionPromotion(input.worldSpec)) return { ok: true };
+  return validatePersistedCompositionReport(input);
+}
+
 export function promotePlanningManifest(
   manifest: PlanningManifest,
   report: TrustedCompositionReport,

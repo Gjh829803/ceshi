@@ -387,7 +387,6 @@ describe("Package Subject Definition normalization", () => {
       "registry-rig-provider-handle",
       "registry-animation-source-uri",
       "registry-collider-provider-handle",
-      "registry-collider-center-source-uri",
       "registry-locomotion-provider-handle",
     ] as const;
     const subjectResourceRegistry = registryFrom((resource) => {
@@ -416,26 +415,20 @@ describe("Package Subject Definition normalization", () => {
               sourceUri: forbiddenValues[2],
             })),
           } as SubjectRegistryResourceInputV1;
-        case "collider-profile": {
-          const centerOffset = Object.assign(
-            [...resource.collider.centerOffsetFromSubjectOriginMetersXYZ],
-            { sourceUri: forbiddenValues[4] },
-          );
+        case "collider-profile":
           return {
             ...resource,
             collider: {
               ...resource.collider,
-              centerOffsetFromSubjectOriginMetersXYZ: centerOffset,
               providerHandle: forbiddenValues[3],
             },
           } as unknown as SubjectRegistryResourceInputV1;
-        }
         case "locomotion-profile":
           return {
             ...resource,
             locomotion: {
               ...resource.locomotion,
-              providerHandle: forbiddenValues[5],
+              providerHandle: forbiddenValues[4],
             },
           } as SubjectRegistryResourceInputV1;
         default:

@@ -6,6 +6,7 @@ import {
   requiresCompositionPromotion,
   validatePersistedCompositionReport,
   validateSubmittedCompositionReport,
+  validateVisualCompositionEvidence,
 } from "./composition-gate.js";
 
 const SPEC_SHA256 = "8e636068f4dbb5fb8d6ab390b0f75f90ef71c5afd7944d378d58643d59c90324";
@@ -164,5 +165,74 @@ describe("composition gate", () => {
       planningManifest: { ...planningManifest, workflowStage: "verified" },
       report: result.trustedReport,
     })).toMatchObject({ ok: true });
+  });
+
+  it("requires trusted persisted evidence for guide-only Visual promotion", () => {
+    const guideOnlyWorldSpec = {
+      ...worldSpec,
+      id: "guide-only-scene",
+      source: { referenceImages: [] },
+    };
+    const guideOnlyInput = {
+      sceneId: "guide-only-scene",
+      worldSpec: guideOnlyWorldSpec,
+      frozenPlan: {
+        ...frozenPlan,
+        sceneId: "guide-only-scene",
+        specSha256: "ce8c7a6bbac16bee00052d6754bd37fef3c34368995569035ae2f1db523b8d0d",
+      },
+      planLockSha256: PLAN_LOCK_SHA256,
+      planningManifest: {
+        ...planningManifest,
+        workflowStage: "verified",
+        sceneId: "guide-only-scene",
+        specHash: "bafc42e6",
+        frozenPlanSpecSha256:
+          "ce8c7a6bbac16bee00052d6754bd37fef3c34368995569035ae2f1db523b8d0d",
+      },
+    };
+    const trustedIdentity = {
+      sceneId: "guide-only-scene",
+      specHash: "bafc42e6",
+      frozenPlanSpecSha256:
+        "ce8c7a6bbac16bee00052d6754bd37fef3c34368995569035ae2f1db523b8d0d",
+      planLockSha256: PLAN_LOCK_SHA256,
+    };
+
+    expect(validateVisualCompositionEvidence({
+      ...guideOnlyInput,
+      report: undefined,
+    })).toMatchObject({
+      ok: false,
+      code: "COMPOSITION_REPORT_MISSING",
+    });
+    expect(validateVisualCompositionEvidence({
+      ...guideOnlyInput,
+      report: {
+        ...passingMetrics,
+        planIdentity: { ...trustedIdentity, specHash: "stale" },
+      },
+    })).toMatchObject({ ok: false, code: "COMPOSITION_REPORT_STALE" });
+    expect(validateVisualCompositionEvidence({
+      ...guideOnlyInput,
+      report: {
+        ...passingMetrics,
+        score: 0.4,
+        planIdentity: trustedIdentity,
+      },
+    })).toMatchObject({ ok: false, code: "COMPOSITION_REPORT_FAILED" });
+    expect(validateVisualCompositionEvidence({
+      ...guideOnlyInput,
+      report: { ...passingMetrics, planIdentity: trustedIdentity },
+    })).toMatchObject({ ok: true, trustedReport: { pass: true } });
+    expect(validateVisualCompositionEvidence({
+      ...guideOnlyInput,
+      worldSpec: {
+        id: "plain-scene",
+        source: { referenceImages: [] },
+        entry: { composition: {} },
+      },
+      report: undefined,
+    })).toEqual({ ok: true });
   });
 });

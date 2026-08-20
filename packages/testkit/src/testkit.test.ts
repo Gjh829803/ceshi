@@ -111,10 +111,39 @@ describe("validateSpawnSafety", () => {
     }
   });
 
+  it("rejects horizontal capsule-disc overlap when the center is outside circular footprints", () => {
+    const circle = {
+      kind: "circle" as const,
+      centerMetersXZ: [0, 0] as const,
+      radiusMeters: 1,
+    };
+
+    expect(validateSpawnSafety({
+      entityId: "player",
+      position: [1.2, 0, 0],
+      capsule: { radius: 0.35, height: 1.8 },
+      waterSurfaces: [{
+        entityId: "pond",
+        boundary: circle,
+        waterLevelMeters: 1,
+        depthMeters: 2,
+        traversalMode: "blocked",
+      }],
+      staticBlockingObjects: [{
+        entityId: "column",
+        footprint: circle,
+        heightRangeMeters: [-1, 2],
+      }],
+    }).map((diagnostic) => diagnostic.code)).toEqual([
+      "SPAWN_IN_BLOCKED_WATER",
+      "SPAWN_INSIDE_STATIC_BLOCKER",
+    ]);
+  });
+
   it("allows a spawn below an elevated blocked-water volume", () => {
     expect(validateSpawnSafety({
       entityId: "player",
-      position: [0, 0, 0],
+      position: [4.2, 0, 0],
       capsule: { radius: 0.35, height: 1.8 },
       waterSurfaces: [{
         entityId: "elevated-reservoir",

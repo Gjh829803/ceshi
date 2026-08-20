@@ -263,6 +263,33 @@ describe("outdoor scene authoring", () => {
     }
   });
 
+  it("rejects capsule-disc overlap with blocked water when the spawn center is outside", () => {
+    const scene = defineOutdoorScene({
+      id: "blocked-water-edge-spawn",
+      build(world) {
+        const terrain = world.terrain.rolling({
+          id: "ground",
+          size: [40, 40],
+          segments: [8, 8],
+          amplitude: 0,
+          frequency: 0.1,
+        });
+        world.water.lake({
+          id: "blocked-lake",
+          terrain,
+          center: [0, 0],
+          radius: [1, 1],
+          depth: 2,
+          waterLevel: 1,
+          traversal: "blocked",
+        });
+        world.player.spawn({ terrain, at: [1.2, 0] });
+      },
+    });
+
+    expect(() => compileOutdoorScene(scene)).toThrow(SceneCompilationError);
+  });
+
   it("allows a spawn inside an explicitly walkable water surface", () => {
     const scene = defineOutdoorScene({
       id: "walkable-water-spawn",
@@ -365,6 +392,33 @@ describe("outdoor scene authoring", () => {
         }),
       );
     }
+  });
+
+  it("conservatively rejects overlap along a non-uniform sphere blocker's long axis", () => {
+    const scene = defineOutdoorScene({
+      id: "non-uniform-sphere-blocker",
+      build(world) {
+        const terrain = world.terrain.rolling({
+          id: "ground",
+          size: [40, 40],
+          segments: [8, 8],
+          amplitude: 0,
+          frequency: 0.1,
+        });
+        world.landmark.compound({
+          id: "scaled-sphere",
+          children: [{
+            id: "sphere",
+            kind: "sphere",
+            radius: 1,
+            transform: { position: [0, 1, 0], scale: [4, 1, 1] },
+          }],
+        });
+        world.player.spawn({ terrain, at: [4.2, 0] });
+      },
+    });
+
+    expect(() => compileOutdoorScene(scene)).toThrow(SceneCompilationError);
   });
 
   it("allows a spawn standing exactly on top of a static blocking landmark", () => {

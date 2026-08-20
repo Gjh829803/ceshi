@@ -295,7 +295,7 @@ function staticObjectFootprintV3(
     };
     halfHeightMeters = object.primitive.sizeMetersXYZ[1] * scaleY / 2;
   } else {
-    const radiusMeters = object.primitive.radiusMeters * Math.min(scaleX, scaleZ);
+    const radiusMeters = object.primitive.radiusMeters * Math.max(scaleX, scaleZ);
     footprint = {
       kind: "circle",
       centerMetersXZ: [centerX, centerZ],
