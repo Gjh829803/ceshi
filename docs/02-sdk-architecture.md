@@ -1,309 +1,404 @@
-# SDK 总体架构
+# SDK 分层架构
 
-> 本文同时包含已实现模块和目标架构。状态标记：`Alpha` 表示当前仓库已有可运行实现，`Partial` 表示只有部分能力，`Design` 表示只有方案/契约，`Planned` 表示尚未开始。
+> 状态：Active。本文是当前重构后 SDK 的分层架构入口。
+>
+> 当前 Canonical 主链路为：`AuthoringSpec V3 → Placement Solver S1 →
+> NormalizedWorldIR V3 → ExecutionPlan V4 → Babylon.js/Havok Runtime`。
+>
+> 图中状态说明：**已实现**表示已有代码和回归门禁；**部分实现**表示只有窄纵向
+> 切片；**设计**表示已有专项方案但尚未形成完整生产实现。
 
-## 1. 一级模块
+README 中的“核心链路”回答的是数据先后经过哪些步骤；本文回答的是系统由哪些层
+组成、各层负责什么、代码依赖可以朝哪个方向流动，以及 Babylon/Havok 被隔离在
+哪里。
 
-```text
-World SDK
-├── Core Runtime                 [Alpha]
-├── World Construction           [Alpha: outdoor heightfield]
-├── Subject Kits                 [Partial: humanoid.third_person]
-├── Control & Camera             [Partial: third person]
-├── Motion & Simulation          [Partial: humanoid + Rapier]
-├── Gameplay                     [Planned]
-├── NPC                          [Planned]
-├── Runtime World Director       [Design]
-├── Render Bridge                [Design]
-└── Agent Tooling                [Alpha: plan-first outdoor]
+## 1. 系统上下文
+
+SDK 位于上游 AI、产品资产、3D 游戏引擎和下游视频模型之间。它不负责通用 Agent
+推理，也不负责生成最终高质量视觉；它负责把结构化世界意图变成确定、可运行、可
+验证的白模世界。
+
+```mermaid
+flowchart LR
+    USER["用户<br/>Prompt + Reference Image"] --> AGENT["外部 Planning / Coding Agent<br/>不在本仓库"]
+
+    ASSET_TEAM["产品 3D 资产团队<br/>GLB · Rig · Animation · Collider Metadata"] --> ASSET_STORE["Host Asset Storage"]
+
+    subgraph SDK["Agent Whitebox World SDK"]
+        API["Public Interfaces<br/>TypeScript · CLI · Browser Protocol"]
+        AUTHORING["Authoring + Deterministic Compilation"]
+        RUNTIME["Babylon Runtime + Havok Physics"]
+        EVIDENCE["Snapshot · Screenshot · Validation Evidence"]
+        API --> AUTHORING --> RUNTIME --> EVIDENCE
+        API --> RUNTIME
+    end
+
+    AGENT -->|"Canonical AuthoringSpec V3"| API
+    ASSET_STORE -->|"Host Resolver 提供受控字节"| RUNTIME
+    HOST["Host Application / CI / Playwright"] <--> API
+    EVIDENCE -->|"白模、状态与结构证据"| ADAPTER["Video Model Adapter<br/>设计"]
+    ADAPTER --> VIDEO["Final Generated Video"]
 ```
 
-| 模块 | 当前仓库 | 下一阶段 |
-|---|---|---|
-| Core Runtime | World、Entity、Transform、fixed timestep、Input、EventBus | 生命周期/快照协议继续收敛 |
-| World Construction | Terrain、全局 Raster/Mask、高度场语义层、Water、Landmark、FeatureRegistry、Outdoor Scene DSL | 路径/曲线、更多 QA、室内另行设计 |
-| Subject/Camera/Motion | 第三人称人形、Rapier motor、idle/walk/run、本地 rig 加载 | jump 动作、更多主体与第一人称 |
-| Agent Tooling | Planner/Builder/Visual Bible 隔离流程、WorldSpec/WorldPrompt/Entity Catalog、冻结锁、内置图片生成、白膜三视图、规划工件、场景测试、检查器、固定输入、首帧语义构图评分 | 多参考图视觉嵌入评分、可达性和性能报告 |
-| Gameplay/NPC | 无 | 后续定义后实现 |
-| Runtime Director | 完整设计文档，无运行时代码 | Director SDK 的 Observation/Command/Task |
-| Render Bridge | 目标契约，无多 pass 导出 | 与 World Model 团队先做离线 RenderFrame |
+边界含义：
 
-Agent Tooling 的规划链路是：`用户输入 → Planner: WorldSpec + World Plan + Opening Shot → 冻结锁 → Builder: 白膜实现 → SDK 派生 Top-down + Height/Slope + 白膜三视图 → Visual Bible: 样式三视图 + 渲染首帧`。规划图和样式图不进入物理判定；它们与 `WorldSpec` 一起约束空间与视觉意图，运行时白膜仍是最终真相。
+- 外部 Agent 只提交 Canonical JSON，不接触 Babylon、Havok、DOM、Mesh 或物理
+  Handle。
+- 产品资产由 Host 保存；Runtime 只通过受控 Asset Resolver 获取经过长度、Hash、
+  GLB 结构和 Inventory 校验的字节。
+- 视频 Adapter 只能消费白模和结构证据，不能重新决定主体数量、位置、碰撞和动作
+  结果。
+- Babylon/Havok Runtime 是白模世界运行时真相，最终视频不是 Gameplay 真相。
 
-## 2. Core Runtime
+## 2. SDK 分层架构
 
-提供所有系统共用的底座：
+```mermaid
+flowchart TB
+    subgraph L1["L1 接入层 · Integration"]
+        AIP["AI Schema Profile / Provider Adapter<br/>设计"]
+        TS["TypeScript API"]
+        CLI["worldkit CLI"]
+        BP["Browser Protocol V3"]
+        PW["Playwright / CI Driver<br/>部分实现"]
+    end
 
-```text
-Core Runtime
-├── World
-├── Entity
-├── Transform
-├── Component
-├── Game Loop
-├── Time
-├── Input
-├── Event
-├── Entity Lifecycle
-├── Asset Registry
-└── Semantic Metadata
+    subgraph L2["L2 AI 公共协议层 · Public Contracts"]
+        AS["Canonical AuthoringSpec V3"]
+        RP["Registry Query / Package Definitions"]
+        CP["Commands · Events · Snapshots<br/>部分实现"]
+        WCS["WorldChangeSet<br/>设计"]
+        DIAG["Stable Diagnostics"]
+    end
+
+    subgraph L3["L3 世界解析与编译层 · Authoring & Compilation"]
+        CHANGE["WorldChangeSet Validate / Apply<br/>设计"]
+        SV["Schema + Semantic Validation"]
+        RR["Registry Resolution + Resource Lock"]
+        PREP["Base Normalization + Terrain / Region Resolution"]
+        LS["Placement Layout Solver S1"]
+        NM["Final IR Projection + Canonicalization"]
+        CO["Deterministic Compiler"]
+    end
+
+    subgraph L4["L4 确定性数据边界 · Canonical Artifacts"]
+        IR["NormalizedWorldIR V3"]
+        LOCK["Resource Lock + Canonical Hash"]
+        LSR["LayoutSolveReport S1"]
+        EP["ExecutionPlan V4"]
+        WP["WorldPackage<br/>设计"]
+        TAKE["Simulation Take<br/>设计"]
+    end
+
+    subgraph L5["L5 引擎无关领域层 · Engine-neutral Domain"]
+        WORLD["World · Terrain · Water · Object"]
+        SUBJECT["Subject Definition · Composition · Socket"]
+        CAP["Capability · Profile · Kit Manifests<br/>部分实现"]
+        REL["Typed Relationship Contracts<br/>设计"]
+        ACTION["Semantic Action Contracts<br/>部分实现"]
+        CONTROL["Control · Camera · Physics Contracts"]
+        PORTS["Render · Physics · Asset · Input · Capture Ports<br/>部分实现"]
+    end
+
+    subgraph L6["L6 引擎适配层 · Engine Adapters"]
+        HAR["Host Asset Resolver"]
+        BWA["Babylon Scene / Asset / Animation Adapter"]
+        HPA["Havok Physics Adapter"]
+    end
+
+    subgraph L7["L7 运行时层 · Runtime"]
+        SESSION["Formal Runtime Session<br/>设计；当前 Browser Runtime 已有"]
+        BWR["BabylonWorldRuntime"]
+        TICK["Fixed Tick Loop"]
+        CTRL["Subject Controller + Control Binding"]
+        ANIM["Rig + Animation State"]
+        STATE["Runtime State + Snapshot"]
+    end
+
+    subgraph L8["L8 证据与输出层 · Evidence & Delivery"]
+        SS["Snapshot + Single Screenshot<br/>已实现"]
+        CCB["Control Capture Bundle + Multi-pass<br/>设计"]
+        VR["Unified Validation Report<br/>设计；专项 Gate 已实现"]
+        VMA["Video Model Adapter<br/>设计"]
+    end
+
+    AIP --> AS
+    TS --> AS
+    CLI --> AS
+    BP --> CP
+    PW --> BP
+    AS -.-> CHANGE
+    WCS -.-> CHANGE
+    CHANGE -.-> SV
+
+    AS --> SV --> RR --> PREP --> LS --> LSR --> NM
+    RP --> RR
+    DIAG -.-> SV
+    DIAG -.-> RR
+    DIAG -.-> LS
+
+    WORLD -.-> PREP
+    SUBJECT -.-> RR
+    CAP -.-> RR
+    CAP -.-> CO
+    REL -.-> RR
+    REL -.-> CO
+    ACTION -.-> CO
+    CONTROL -.-> CO
+    PORTS -.-> BWA
+    PORTS -.-> HPA
+
+    NM --> IR
+    RR --> LOCK
+    IR --> CO
+    LOCK --> CO
+    CO --> EP
+    EP -.-> WP
+    WP -.-> TAKE
+
+    EP --> BWR
+    TAKE -.-> SESSION
+    SESSION -.-> BWR
+    HAR --> BWA
+    BWA --> BWR
+    HPA --> BWR
+    BWR --> TICK --> CTRL --> STATE
+    TICK --> ANIM --> STATE
+
+    STATE --> SS
+    STATE -.-> CCB
+    TAKE -.-> CCB
+    SS --> VR
+    CCB -.-> VR
+    CCB -.-> VMA
 ```
 
-第一阶段可以使用简单的 Entity/Component 结构，不要求立即引入完整 ECS。
+这不是“上层可以随意调用所有下层”的图。正式依赖必须服从以下方向：
 
-## 3. World Construction
+1. 接入层只能通过公共协议进入 SDK。
+2. Authoring/Compiler 可以依赖引擎无关领域契约，不能依赖 Babylon/Havok。
+3. Runtime 只消费 ExecutionPlan，不重新读取原始 Prompt 或 AuthoringSpec。
+4. Babylon/Havok 类型只能留在引擎适配层和 Runtime 实现内部。
+5. Snapshot/Capture/Validation 读取运行结果，但不能反向偷偷修改世界真相。
 
-### 3.1 环境与地形
+## 3. 每层具体负责什么
 
-负责定义可通行空间和宏观环境：
-
-- 平面地形
-- 高度图地形
-- 程序化起伏地形
-- 道路和路径
-- 平台、坡道和边界
-- 天空、雾和地平线语义
-- 少量典型光照 preset
-
-建议的基础光照 preset：
-
-- `noon_hard`
-- `overcast_soft`
-- `sunset_side`
-- `night_moon`
-- `indoor_top`
-- `neutral_flat`
-
-当前室外 Alpha 实际公开的是 `clear-day / golden-hour / overcast / night`。上面的 `noon_hard` 等名称是目标方向，尚未作为现有 API 发布；`indoor_top` 要等室内阶段。
-
-对于图片参考，Builder 不必把所有海岸、山脊和道路预置成 SDK 名词。它可以用 `createScalarRasterField(...)` 生成可追踪的高度场，再用 `context.terrain.raster(...)` 一次写入全局世界坐标；多个 `context.semantic.terrainLayer(...)` Mask 分别标出草地、岩壁、道路等区域。相同 Raster 在每个 tile 上按世界坐标采样，因此共享边不会重复纹理或裂开。
-
-这些 preset 主要用于白膜可读性和向世界模型传达环境意图，不代表最终生成画面的固定光照。
-
-### 3.2 标志物
-
-使用基础几何体和低多边形组合表达关键空间结构：
-
-- Box、Sphere、Cylinder、Cone、Plane
-- 墙、门、平台、坡道
-- 房屋、塔、桥、城门
-- 复合几何和自定义低多边形 GLB
-
-标志物至少具有：
-
-- Transform
-- 白膜几何
-- 可选碰撞体
-- 导航影响
-- 语义名称
-- 重要程度
-- 世界模型外观描述
-
-## 4. Subject Kits
-
-面向 Agent 的核心抽象。每个主体套餐包含一套经过验证的完整体验：
-
-```text
-SubjectKit
-├── Whitebox Model
-├── Collider / Rigid Body
-├── Input Mapping
-├── Motion Controller
-├── Default Camera Rig
-├── Action Binding
-├── Possession Rules
-├── Semantic Identity
-└── Render Binding
-```
-
-规划中的主体套餐：
-
-| ID | 白膜 | 运动 | 默认镜头 |
+| 层 | 核心职责 | 明确不负责 | 当前主要代码 |
 |---|---|---|---|
-| `humanoid.first_person` | 人形或简化手臂 | 走、跑、跳 | 第一人称 |
-| `humanoid.third_person` | 骨骼人形 | 走、跑、跳 | 第三人称跟随 |
-| `car.third_person` | 低多边形汽车 | 油门、刹车、转向 | 车辆跟随 |
-| `horse_rider.third_person` | 马和骑手组合 | 走、小跑、奔跑 | 骑乘跟随 |
+| L1 接入层 | 给人、Agent、Host 和自动化程序提供稳定入口，并把 Provider 能力投影回唯一 Canonical 方言 | 不包含第二套 Provider 私有世界语义 | `scripts/worldkit.ts`、`apps/playground`；AI Schema Provider Adapter 尚在设计 |
+| L2 公共协议层 | 定义 AI 可以写什么、Host 可以调用什么、Runtime 返回什么 | 不执行地形、物理或渲染 | `packages/protocol`、`packages/authoring` 的公开 Schema、`packages/runtime-contracts` |
+| L3 解析与编译层 | 校验、资源/地形/Region 解析、Constraint 求解、最终 IR 投影和确定性编译 | 不创建 Babylon Scene、Mesh 或 Havok Body | `packages/authoring`、`packages/layout-solver`、`packages/compiler` |
+| L4 数据边界 | 保存版本化、可哈希、可验证的世界与操作计划 | 不包含可变运行时 Handle | IR、Resource Lock、ExecutionPlan；WorldPackage/Simulation Take 尚在设计 |
+| L5 领域层 | 定义世界、主体、Capability、Relationship、动作、控制、相机、物理和 Runtime Port 的引擎无关语义 | 不决定 Babylon API 的调用方式 | 当前分布在 `packages/authoring`、`subject-composition`、`subject-actions`、`subject-registry` 与 `runtime-contracts`；通用 Capability/Relationship/Port 仍未完成 |
+| L6 引擎适配层 | 把 ExecutionPlan 和资产字节翻译为 Babylon/Havok 对象 | 不补写 AI 意图、不修改 Schema | `packages/runtime-babylon` 内的 Asset Resolver、Cache、Visual、Physics Adapter |
+| L7 运行时层 | Session、固定 Tick、控制绑定、物理移动、动画状态、相机跟随和 Snapshot | 不重新求解 Placement，不读取 Registry URI | `packages/runtime-babylon`；正式持久 Session 尚在设计 |
+| L8 证据层 | 输出截图、状态、Hash、指标和下游模型输入 | 不用视觉结果掩盖结构错误 | 当前 verifier、snapshot/screenshot；Take、Bundle、统一报告待实现 |
 
-第一期只实现 `humanoid.third_person`。其他主体套餐属于第二期或更晚阶段。
+`Registry` 是横跨 L2、L3 和 L5 的“乐高零件目录”：公共面提供可发现的 Ref 和
+Manifest，Authoring 负责解析并锁定版本，领域定义则描述 Subject、Rig、Animation、
+Collider、Capability 和 Profile 的含义。Runtime 不直接查询 Registry，而是消费已经
+投影进 ExecutionPlan 的最小描述。
 
-后续候选：
+Capability 与 Relationship 是长期扩展性的核心：主体类别不直接决定行为；移动、
+骑乘、拖拽、装备和飞行由版本化 Capability/Profile 与类型化 Relationship 表达。
+Compiler Core 处理统一依赖、Manifest 和事务协议，不应为“马”“汽车”或“飞龙”持续
+增加产品特有分支。
 
-- `animal.third_person`
-- `flying.third_person`
-- `swimming.third_person`
-- `spectator.free_camera`
+## 4. 逻辑图、渲染图和物理图
 
-## 5. Control & Camera
+Runtime 内部不是一棵万能节点树，而是三套通过明确 Binding 同步的图：
 
-### 5.1 控制链路
+```mermaid
+flowchart LR
+    EP["ExecutionPlan V4"] --> ENTITY
+
+    subgraph LOGIC["逻辑图 · Gameplay Truth"]
+        ENTITY["RuntimeEntity"]
+        COMPONENT["Component / Capability"]
+        RELATION["Typed Relationship"]
+        ACTION["Action / Control / State"]
+        ENTITY --- COMPONENT
+        ENTITY --- RELATION
+        ENTITY --- ACTION
+    end
+
+    subgraph PHYSICS["物理图 · Collision and Movement Truth"]
+        BODY["Havok Body / Character Controller"]
+        SHAPE["Collider / Trigger / Joint"]
+        BODY --- SHAPE
+    end
+
+    subgraph RENDER["渲染图 · Visual Truth"]
+        NODE["Babylon TransformNode / Mesh"]
+        RIG["Skeleton / Animation / Bone Socket"]
+        CAMERA["Camera / Light"]
+        NODE --- RIG
+        NODE --- CAMERA
+    end
+
+    COMPONENT -->|"Physics Profile"| BODY
+    ACTION -->|"Movement Intent"| BODY
+    BODY -->|"权威 Transform / Contact / Support"| ENTITY
+    ENTITY -->|"Transform / Appearance"| NODE
+    ACTION -->|"Semantic Action"| RIG
+    NODE -->|"只返回可见性、Bounds 与 Capture 证据"| ENTITY
+```
+
+- **逻辑图**决定“世界里是谁、拥有什么能力、与谁是什么关系、当前执行什么动作”。
+- **物理图**决定“实际上能移动到哪里、是否碰撞、是否被支撑、Joint 是否成立”。
+- **渲染图**决定“如何画出来、骨骼怎样播放、Socket 对应哪个 Bone、相机怎样观察”。
+
+Babylon 父子节点只是 Render Binding 的实现结果，不能代替 `mountedOn`、装备、拖拽
+或控制权等 Gameplay Relationship；Havok Joint 也只是关系事务提交后的物理派生物。
+关系解除时，逻辑边、视觉挂载、Collider/Joint、Action Lock、Listener 和控制绑定必须
+作为一个事务完整回滚，不能只把 Mesh 从父节点摘下来。
+
+## 5. 三个最重要的数据边界
+
+### 5.1 AuthoringSpec V3：AI 的设计意图
+
+由外部 Agent 编写，描述世界、主体、资源引用和 Placement Constraint。它可以表达
+“灯塔位于海湾右侧”“人物与水面至少保持两米”等空间意图，不要求 AI 猜出所有最终
+坐标。
+
+### 5.2 NormalizedWorldIR V3：确定的内部施工图
+
+由 SDK 生成。默认值、Registry 资源、Resource Lock、最终 Transform、Placement
+Provenance、冻结断言和 `layoutSolveReportHash` 已经确定并进入 Canonical Hash。完整
+`LayoutSolveReport` 是独立求解证据，不会整体内联到 IR。IR 不包含 Babylon/Havok
+类型，也不包含 Host 的资产 URI。
+
+### 5.3 ExecutionPlan V4：Runtime 的施工任务单
+
+由 Compiler 从 IR 生成，只保留 Runtime 创建地形、主体、碰撞体、动画、控制和相机
+所需的信息。Runtime 不需要理解 AI 为什么这样设计，只需严格执行并复验冻结断言。
 
 ```text
-Player Input
-    ↓
-Input Mapping
-    ↓
-Movement Intent
-    ↓
-Motion Controller
-    ↓
-Physics
-    ↓
-Transform + Action State
+AI 可编辑                    SDK 拥有                         Runtime 只读
+AuthoringSpec V3  ───────→  NormalizedWorldIR V3  ───────→  ExecutionPlan V4
+空间意图 / Ref / Constraint   最终 Transform / Lock / Hash    运行描述 / Assertion
 ```
 
-镜头不直接控制刚体，但可以参与解释输入方向：
+这三个对象不能合并：如果 Runtime 直接消费 AI 原始 JSON，就会被迫在运行时补默认值、
+查 Registry 和猜布局，结果无法稳定复现；如果 AI 直接写 ExecutionPlan，又会重新承担
+大量底层 3D 坐标和引擎细节。
 
-- 第三人称人形通常相对镜头方向移动。
-- 第一人称的视线与主体朝向高度一致。
-- 汽车和马通常相对自身朝向运动，镜头可以独立观察。
+## 6. 从 JSON 到截图的运行时序列
 
-内部应支持明确的方向参考：
+```mermaid
+sequenceDiagram
+    autonumber
+    participant A as External Agent / Host
+    participant I as CLI / Browser API
+    participant AU as Authoring
+    participant R as Registry
+    participant L as Layout Solver
+    participant C as Compiler
+    participant X as Host Asset Resolver
+    participant RT as BabylonWorldRuntime
+    participant H as Havok
+    participant B as Babylon Renderer
 
-```ts
-type MovementReference = "camera" | "body" | "vehicle" | "world";
+    A->>I: AuthoringSpec V3
+    I->>AU: validate + normalize
+    AU->>R: resolve exact resource refs
+    R-->>AU: manifests + content hashes
+    AU->>L: ResolvedLayoutInput
+    L-->>AU: LayoutSolveReport + final transforms
+    AU-->>I: NormalizedWorldIR V3 + IR hash + Resource Lock
+    I->>C: compile(IR)
+    C-->>I: ExecutionPlan V4 + Plan hash
+    I->>RT: create(ExecutionPlan)
+    RT->>X: resolve required GLB bytes
+    X-->>RT: hash-verifiable bytes
+    RT->>H: create terrain, colliders, controllers
+    RT->>B: create scene, assets, skeletons, animations, camera
+    A->>I: bindControl + runFixedInput
+    I->>RT: semantic fixed input
+    loop Every fixed tick
+        RT->>H: calculate authoritative movement
+        H-->>RT: position + support + collision result
+        RT->>B: apply transform + action frame + camera
+    end
+    A->>I: snapshot / screenshot
+    I->>RT: capture current deterministic state
+    RT-->>I: Snapshot V3 + PNG
+    I-->>A: state, image, hashes, diagnostics
 ```
 
-### 5.2 镜头
+当前序列已经覆盖单截图和固定输入。未来 `Simulation Take` 会把一段控制时间线变成
+版本化制品，`Control Capture Bundle` 会把同一 Tick 的 Neutral Color、Linear Depth、
+Semantic、Instance、Normal 等通道绑定到一起；它们目前仍是设计能力。
 
-第一期：
+## 7. 核心代码包与依赖边界
 
-- 标准第三人称跟随镜头
+### 7.1 Canonical 生产方向
 
-第二期再扩展第一人称镜头和其他主体所需的专用镜头。
+| 包 | 架构位置 | 作用 |
+|---|---|---|
+| `@whitebox-world/protocol` | L2/L4 基础 | Canonical JSON、Hash 等无引擎协议基础 |
+| `@whitebox-world/subject-composition` | L5 | Subject Definition、Visual Part、Socket 等组合语义 |
+| `@whitebox-world/subject-actions` | L5 | 引擎无关的语义 Action 契约 |
+| `@whitebox-world/subject-registry` | L2/L3/L5 | 版本化 Subject、Asset、Rig、Animation、Collider 和 Profile Registry |
+| `@whitebox-world/layout-solver` | L3 | 纯函数、确定性的 Placement Constraint 求解 |
+| `@whitebox-world/authoring` | L2/L3/L4 | Schema、校验、资源锁定、Normalizer 和 IR |
+| `@whitebox-world/runtime-contracts` | L2/L4/L5 | ExecutionPlan、Snapshot 和 Runtime 公共契约 |
+| `@whitebox-world/compiler` | L3/L4 | IR → ExecutionPlan 的确定性编译 |
+| `@whitebox-world/runtime-babylon` | L6/L7 | Babylon/Havok 运行、资产、骨骼动画、控制、相机和状态 |
 
-内部能力：
+### 7.2 Legacy 回归路径
 
-- 鼠标/触屏旋转
-- FOV
-- 灵敏度
-- 跟随目标和观察点
-- 平滑与阻尼
-- 镜头碰撞
-- 第一/第三人称切换基础设施
+`packages/contracts`、`core`、`world`、`camera`、`physics`、`subjects`、`animation` 和
+相关 `testkit` 仍包含旧 Three.js/Rapier 路径，用于旧场景回归与迁移对照。它们不是
+Canonical Babylon Runtime 的公共协议，也不能把 Three/Rapier 类型反向带入
+Authoring、IR、ExecutionPlan 或 Browser Protocol。
 
-## 6. Motion & Simulation
+`apps/playground` 在迁移期间同时承载 Canonical Browser Gate 和 Legacy 场景回归，
+因此看到它同时依赖两组包并不代表两套 Runtime 可以在 Canonical 协议内混用。
 
-### 6.1 Motion Controller
+## 8. 横向基础能力
 
-```text
-MotionController
-├── HumanoidLocomotion
-├── HorseLocomotion
-├── VehicleController
-├── AnimalLocomotion
-└── GenericMotion
-```
+下列能力不属于单独的一层，而是所有层共同遵守的基础规则：
 
-运动系统表达“希望如何移动”，物理系统决定“实际能够如何移动”。
+- **Canonical Hash**：IR、Resource Lock、ExecutionPlan 和证据必须可以稳定哈希。
+- **Stable Diagnostic**：错误使用稳定 Code、精确 Path 和安全详情，不能泄露 Provider
+  私有信息。
+- **Security Boundary**：资产字节、外部工具输出和生成结果默认不可信，必须校验后
+  才能进入 Runtime。
+- **Resource Budget**：顶点、三角面、Collider、资产字节和运行资源都必须受限。
+- **Deterministic Tick**：Gameplay 状态由固定 Tick 推进，不能依赖截图时机或浏览器
+  帧率。
+- **Ownership / Disposal**：Asset、Skeleton、Animation、Collider、Scene 和 Engine
+  必须有明确所有者，并支持失败回滚与幂等释放。
 
-### 6.2 Physics
+## 9. 当前完成边界
 
-建议基于 Rapier 接入：
+截至 2026-08-20，以下窄纵向切片已经运行并进入回归：
 
-- 静态、动态和运动学刚体
-- 基础碰撞体与复合碰撞体
-- 重力
-- 地面检测
-- 触发区域
-- 射线检测
-- 碰撞事件
-- 后续主体所需的少量关节
+- Canonical Authoring V3 → IR V3 → ExecutionPlan V4；
+- Placement Solver S1 的八种 Constraint 和海湾 Golden 场景；
+- Babylon/Havok Heightfield、障碍、水域、第三人称和多主体控制；
+- Golden Humanoid GLB、18 根语义骨骼、Bone Socket 与 `idle/walk/run/jump`；
+- CLI/Browser V3 的校验、编译、运行、控制、Snapshot 和单截图；
+- Canonical、Rigged Subject 和 Placement Layout 三条真实 Chromium Gate。
 
-### 6.3 Action
+以下能力不能从图中误读为已经完成：
 
-统一使用语义动作：
+- 通用 Relationship、骑乘、装备、拖拽、Joint 和事务回滚；
+- 通用 Semantic Action、攻击、游泳、飞行、车辆和 NPC；
+- 任意产品资产自动 Retarget、Compound Collider、LOD 和更多拓扑；
+- 完整 WorldPackage、WorldChangeSet、持久 Runtime Session；
+- Simulation Take、Control Capture Bundle、多 Pass 和视频序列；
+- 统一 Validation Profile/Report 与生产 Video Model Adapter；
+- 室内、洞穴、Overhang、联网和完整 Gameplay。
 
-- `idle`
-- `walk`
-- `run`
-- `jump`
-- `drive`
-- `ride`
-- `attack`
-- `hit`
-- `interact`
+最新完成度、优先级和验收证据以
+[SDK 重构总进度与 Backlog](18-refactor-progress-and-backlog.md)为准。
 
-动作可以绑定骨骼动画、程序动画或只作为世界模型条件输出。人形优先使用可绑定动作的标准白膜；其他主体可以先使用低多边形白膜和有限动作。
+## 10. 相关设计文档
 
-## 7. Gameplay
-
-仅有可移动世界还不是游戏。以下是后续最低目标，当前仓库尚未实现：
-
-- Trigger Zone
-- Enter / Exit / Touch / Use
-- 控制权切换和进入/离开载具
-- Spawn / Respawn
-- Timer
-- Objective
-- Win / Lose
-- Game State 与变量
-- Condition → Effect 规则
-
-## 8. NPC
-
-本模块尚未实现。下述内容是目标复用关系，不是当前公开 API。
-
-NPC 与玩家复用相同主体套餐，区别仅在控制源：
-
-```text
-Player Input ─┐
-NPC Behavior ─┼→ SubjectKit
-Script ───────┘
-```
-
-后续阶段的候选行为：
-
-- 移动到目标点
-- 巡逻
-- 跟随
-- 逃离
-- 追逐
-- 看向目标
-- 停留
-- 播放动作
-- 简单状态机
-
-## 9. Agent Tooling
-
-目标上为 Coding Agent 提供：
-
-- 启动和热更新
-- 结构化错误
-- 场景截图
-- 输入录制和重放
-- 自动控制玩家执行测试路线
-- 出生点与碰撞检查
-- 地图可达性检查
-- 摄像机遮挡检查
-- 缺失语义检查
-- 性能预算检查
-- 世界 snapshot
-
-Agent 默认只能修改游戏项目目录，不应修改 SDK 内部控制器实现。
-
-当前已实现启动/热更新、结构化场景编译错误、截图、固定输入、出生点/坡度检查、资源所有权、预算、Feature 检查器和 world snapshot。完整可达性、镜头遮挡、语义与性能报告仍是后续工作。
-
-## 10. Runtime World Director
-
-这是后续的运行时 LLM 操作系统，不属于当前实现。严格说它由 SDK 外的 `Director LLM` 和 SDK 内的下列模块组成；LLM 负责理解/规划，SDK 负责观察、权限、校验和执行：
-
-```text
-Runtime World Director
-├── Observation Service
-├── Entity Resolver
-├── Command Schema Registry
-├── Capability / Policy Engine
-├── Planner / Dry Run
-├── Transaction Queue
-├── Runtime Task Manager
-└── Receipt / Event Log
-```
-
-目标上它支持受控的 Transform、生命周期、语义动作、NPC 导航、行为和后续 Feature 更新，但不逐帧驱动刚体。所有变更在固定 tick 边界提交，并同步更新物理、导航、渲染身份和 Render Bridge 状态。
-
-纯视觉变化走独立 `Render Directive`；影响碰撞、导航、数量、动作或关键轮廓的变化必须走 `World Command`。完整方案见 [运行时世界导演与受控世界操作协议](09-runtime-world-director.md)。
-
-## 11. Render Bridge
-
-Render Bridge 当前只有[目标契约](04-render-contract.md)，尚未实现 Depth、Normal、Instance/Semantic ID、Motion Vector 或实时模型连接。世界模型团队的近期接入拆分见[接入说明](11-world-model-team-handoff.md)。
+- [AI-first LEGO 游戏 SDK 总体设计](superpowers/specs/2026-08-17-ai-first-lego-game-sdk-design.md)
+- [可扩展 Subject Authoring 设计](superpowers/specs/2026-08-19-extensible-subject-authoring-design.md)
+- [Placement Constraint 与 Layout Solver 设计](superpowers/specs/2026-08-19-placement-constraint-layout-solver-design.md)
+- [Simulation Take 与 Control Capture 设计](superpowers/specs/2026-08-19-simulation-take-control-capture-design.md)
+- [World Validation Report 与质量门禁设计](superpowers/specs/2026-08-19-world-validation-report-and-quality-gates-design.md)
+- [ADR-0006：AuthoringSpec 编译架构与 Babylon Runtime](../decisions/0006-authoring-spec-compiler-architecture.md)
