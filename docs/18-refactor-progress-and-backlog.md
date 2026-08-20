@@ -33,6 +33,7 @@
 - [`2026-08-19-placement-constraint-layout-solver-design.md`](superpowers/specs/2026-08-19-placement-constraint-layout-solver-design.md)：AI 空间意图、最终 Transform 求解与冲突报告专项规格；
 - [`2026-08-19-simulation-take-control-capture-design.md`](superpowers/specs/2026-08-19-simulation-take-control-capture-design.md)：WorldPackage、Take、Session、多 Pass Capture 与视频 Adapter 边界；
 - [`2026-08-19-world-validation-report-and-quality-gates-design.md`](superpowers/specs/2026-08-19-world-validation-report-and-quality-gates-design.md)：量化 Gate、Metric、Evidence 和生产阻断协议；
+- [`2026-08-20-ai-authored-geometry-extension-design.md`](superpowers/specs/2026-08-20-ai-authored-geometry-extension-design.md)：未来可能需要的 AI 自定义几何能力及候选技术，仅供调研评审，不属于当前 Roadmap；
 - `docs/superpowers/plans/`：已经进入实施阶段的单个纵向切片计划与证据。
 
 如果本文与已接受的 ADR、Canonical Schema 或真实代码不一致，以已接受 ADR、
@@ -452,6 +453,13 @@ Sensor 和 Capability 组合触发，而不是按 Mesh 名称、颜色、材质�
 
 它们只有在目标、Owner、依赖和验收 Fixture 被明确后才拆成正式实施计划，不能
 为了提高总进度数字提前计为已开始。
+
+> **未来探索议题，不属于上述 Backlog：** 是否需要让 AI 超越现有 Preset 自定义静态
+> 场景几何。目前只有一份
+> [候选技术草案](superpowers/specs/2026-08-20-ai-authored-geometry-extension-design.md)，
+> 不表示确定会做、没有优先级和里程碑，也没有选定 Recipe、MeshDraft、GLB、Sandbox、
+> Three Bridge 或其他技术路线。只有未来出现明确产品需求、Owner、实验依据和立项决定后，
+> 才重新调研、选择方案并建立正式 Backlog/实施计划；当前不计入任何完成度。
 
 ## 5. 推荐实施顺序与依赖
 

@@ -354,6 +354,7 @@ Compiler 和 Runtime 不能反向读取 Agent Prompt；Runtime Adapter 不能把
 - [Placement Constraint 与确定性 Layout Solver 设计](docs/superpowers/specs/2026-08-19-placement-constraint-layout-solver-design.md)
 - [Simulation Take 与 Control Capture Bundle 设计](docs/superpowers/specs/2026-08-19-simulation-take-control-capture-design.md)
 - [World Validation Report 与质量门禁设计](docs/superpowers/specs/2026-08-19-world-validation-report-and-quality-gates-design.md)
+- [AI 自定义场景几何扩展候选方案（未来探索）](docs/superpowers/specs/2026-08-20-ai-authored-geometry-extension-design.md)
 - [Package 局部 Subject Definition（S1a）设计](docs/superpowers/specs/2026-08-19-package-subject-definition-design.md)
 - [主体资产与 3C 配置接入契约](docs/16-subject-assets-3c-integration.md)
 - [世界模型团队接入说明](docs/11-world-model-team-handoff.md)
@@ -364,6 +365,12 @@ Compiler 和 Runtime 不能反向读取 Agent Prompt；Runtime Adapter 不能把
 - [业界对照与可落地性核查报告](docs/superpowers/specs/2026-08-18-industry-alignment-and-feasibility-review.md)
 - [Agentic 白模世界到可控视频：开源方案调研与架构启示](docs/superpowers/specs/2026-08-19-agentic-whitebox-to-video-open-source-research.md)
 - [阶段 0 技术探针计划与外部资料核查](docs/superpowers/specs/2026-08-18-phase0-probe-plan-and-external-research.md)
+
+### 未来探索（非 Roadmap）
+
+- [AI 自定义场景几何扩展候选方案](docs/superpowers/specs/2026-08-20-ai-authored-geometry-extension-design.md)：
+  只记录未来可能需要解决的能力缺口和候选技术，不表示确定会做、没有排期，也没有
+  选定 Recipe、MeshDraft、GLB、Sandbox 或 Three Authoring Bridge 等技术路线。
 
 ### 已完成实施切片
 
