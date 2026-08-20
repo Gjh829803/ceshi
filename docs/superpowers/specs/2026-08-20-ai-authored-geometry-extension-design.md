@@ -1,6 +1,6 @@
 # AI 自定义场景几何扩展设计
 
-- 状态：Draft for standards review
+- 状态：Exploratory options memo；非 Roadmap、非已批准设计、非实施计划
 - 日期：2026-08-20
 - 目标仓库：`agent-whitebox-world-sdk`
 - 目标读者：SDK 团队、上游 Agent 团队、Runtime 团队、资产工具团队、评审 Agent
@@ -8,14 +8,20 @@
 - 相关架构：[`../../02-sdk-architecture.md`](../../02-sdk-architecture.md)
 - Agent 接口边界：[`../../03-agent-facing-api.md`](../../03-agent-facing-api.md)
 - Subject 资源范式：[`2026-08-19-package-subject-definition-design.md`](./2026-08-19-package-subject-definition-design.md)
+- 跟踪位置：[`重构 Backlog 的“未来探索议题”说明`](../../18-refactor-progress-and-backlog.md)
+
+> 本文只保存问题背景、可选方案和评审维度。项目尚未决定是否实现这项能力，也没有
+> 确定 Recipe、MeshDraft、GLB、Sandbox、Three Bridge 或文中任何具体技术路线。文中的
+> `MUST`、接口、阶段和验收条件只描述“如果未来选择该候选方案，它至少需要满足什么”，
+> 当前不产生 Backlog、排期、版本升级、依赖引入或实现授权，也不提高 SDK 总完成度。
 
 ## 1. 决策摘要
 
 本设计解决一个新的核心问题：当图像理解与代码生成模型已经能够根据参考图生成较好的 Three.js 几何时，SDK 是否仍应把 AI 限制在少量预设模型中。
 
-结论是：**不应把 Preset 当作能力上限，但也不能让 AI 直接把任意 Three.js、Babylon.js 或运行时代码注入游戏。**
+当前研究假设是：**如果未来确认 Preset 限制了产品效果，可以探索更开放的几何生成能力；但任何方案都不应直接把任意 Three.js、Babylon.js 或运行时代码注入游戏。**
 
-正式方案采用三层几何能力，并把自由度逐层受控地编译为确定性数据：
+本文供未来评审的候选方案采用三层几何能力，并把自由度逐层受控地编译为确定性数据：
 
 1. **Preset / Kit**：经过验证的大积木，覆盖高频对象和稳定默认值。
 2. **Procedural Geometry Recipe**：引擎无关、可组合、可校验的几何配方，覆盖 Primitive、Compound、Extrude、Lathe、Sweep、Deform 和确定性实例化。
@@ -231,7 +237,7 @@ AI Source / Recipe ──→ Geometry Build Record ──→ Geometry Asset + Ex
 | Runtime 直接执行 Three/Babylon 代码 | 极高 | 极低 | 极低 | 极低 | 拒绝 |
 | 只允许原始顶点数组 | 高 | 中 | 中 | 高 | 对 AI 冗长，缺少可解释高层意图 |
 | Preset + Recipe | 中到高 | 高 | 高 | 高 | 适合作为默认主路径 |
-| Preset + Recipe + 受控 Mesh + 构建期沙箱 | 高 | 高 | 高 | 高 | 推荐正式方案 |
+| Preset + Recipe + 受控 Mesh + 构建期沙箱 | 高 | 高 | 高 | 高 | 候选组合，待未来验证 |
 
 ## 6. 总体架构
 
@@ -285,7 +291,8 @@ tools/
   geometry-authoring-three/ # 可选、非 Canonical 的 Three BufferGeometry bridge
 ```
 
-包名可以在实施计划中结合现有 workspace 进一步收敛；逻辑职责不能合并到场景脚本或 `runtime-babylon`。
+如果未来立项，包名还需要结合届时的 workspace 和实验结果重新评审；下述职责拆分也只是
+候选边界，不是已批准的代码结构。
 
 ## 7. 三层 AI Authoring 模型
 
@@ -1246,7 +1253,8 @@ type SubjectVisualPartVNext =
 
 ## 22. 兼容与迁移策略
 
-当前 SDK 仍处于未发布私有开发期，可以批准一次 Clean Break：
+如果未来立项时 SDK 仍处于未发布私有开发期，可以再评审是否采用一次 Clean Break；
+当前没有批准任何版本迁移。候选迁移步骤是：
 
 1. 将 `PrimitivePrototypeSpec` 扩展或替换为 `ObjectPrototypeSpec`；
 2. 把现有 Primitive 自动表示为内置 Geometry Definition；
@@ -1257,7 +1265,7 @@ type SubjectVisualPartVNext =
 
 不建议一次删除现有 WorldFeature。WorldFeature 仍适合封装跨 Terrain、Water、Landmark 和 Semantic 的领域操作；它的输出应改为正式 Geometry/Prototype/Instance 资源，而不是直接创建引擎对象。
 
-## 23. 分阶段实施
+## 23. 候选分阶段验证（仅在未来立项后）
 
 ### Phase G0：协议冻结与垂直切片
 
@@ -1286,6 +1294,8 @@ type SubjectVisualPartVNext =
 - CPU/内存/输出限制；
 - 三次重复构建确定性 Gate；
 - Source/Compiler/Dependency 完整 Provenance。
+
+G2 完成标准：Sandbox 使用独立隔离边界，越权、Crash、Timeout、Oversized IPC、依赖篡改和 Process-tree Cleanup 测试全部通过；同一锁定 Source 连续三次生成相同 Geometry Asset Hash，并且 Runtime/WorldPackage 中不存在 Source Code。
 
 ### Phase G3：Three Authoring Bridge 与实例化
 
@@ -1384,12 +1394,12 @@ G4 每项都需要独立 Design/Threat/Performance Review，不能作为 G0 的�
 - 发布包只包含声明的 Public Export，TypeScript Internal Type 不意外成为兼容承诺；
 - Golden Hash 更新必须附带语义原因和人工可视检查，禁止无解释地批量接受新 Snapshot。
 
-## 25. G0 验收标准
+## 25. 假设性 G0 验收标准（仅在未来立项后）
 
 G0 只有同时满足以下条件才算完成：
 
 1. AI 可以仅通过 Canonical JSON 定义一块非对称岩石并生成三个实例。
-2. AI 可以通过 Sandbox Builder 输出一个目录中不存在的自定义静态物体。
+2. AI 可以通过受控 `MeshDraftV1` 构建输入输出一个目录中不存在的自定义静态物体；G0 不执行不可信 Source Module。
 3. 两种输入都生成 Geometry Definition、Geometry Asset、Build Record 和稳定 Hash。
 4. Authoring、IR、ExecutionPlan 和 Browser Protocol 不包含 Three/Babylon/Havok 类型或 Host URI。
 5. Babylon Runtime 通过 Host Resolver 加载冻结字节，复验 Hash 与 Inventory。
@@ -1404,7 +1414,7 @@ G0 只有同时满足以下条件才算完成：
 14. 每个 GLB 通过 Khronos Validator，且 Extension/Warning Policy 无未审批例外。
 15. SDK `-Z forward` 与 glTF `+Z forward` 的 Round-trip、Front/Right/Back、Winding、Normal 和 Collider Fixture 全部通过。
 16. Package/Schema/Resource/Resolved Version 与 Compatibility Matrix 可由 CLI 查询，并在不兼容输入上 Fail Closed。
-17. Sandbox 使用独立隔离边界；越权、Crash、Timeout、Oversized IPC 和依赖篡改测试通过。
+17. G0 对 Sandbox Source Module 返回稳定 Unsupported Diagnostic，不存在任何 Runtime 或进程内代码执行旁路；完整 Sandbox 隔离验收属于 G2。
 18. Build Record 与 Attestation 分离；Artifact Hash 不受时间、Invocation ID、绝对路径或 Builder Host 影响。
 
 ## 26. 风险与缓解
