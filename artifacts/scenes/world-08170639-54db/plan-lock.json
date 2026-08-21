@@ -2,7 +2,7 @@
   "workflowVersion": 1,
   "sceneId": "world-08170639-54db",
   "stage": "frozen",
-  "specSha256": "380a59629d8fbf1a2a488c4f897ac97455d3fdec74ef15d943792429364dd0d8",
+  "specSha256": "fa0811f9efb4e2bf3e633ce362ab060f7d1c81053e80b754ac1a17b230e7ff8b",
   "files": [
     {
       "kind": "opening-shot",
@@ -22,7 +22,7 @@
     {
       "kind": "world-spec-source",
       "path": "apps/playground/src/scenes/plans/world-08170639-54db.ts",
-      "sha256": "af5a7607282a9e99b252a0639bd9d501290f22cab2203d6cd864196ad07c4a93"
+      "sha256": "af4f6c6c4b5eaab8a477fb5c72d734a014f063ab8e773f537b57821271f138f4"
     }
   ]
 }

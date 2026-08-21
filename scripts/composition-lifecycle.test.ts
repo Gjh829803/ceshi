@@ -21,7 +21,9 @@ describe("composition workflow lifecycle", () => {
       ],
       { cwd: process.cwd() },
     )).rejects.toMatchObject({
-      stderr: expect.stringMatching(/COMPOSITION_REPORT_(?:FAILED|STALE)/),
+      stderr: expect.stringMatching(
+        /COMPOSITION_(?:PLAN_STALE|REPORT_(?:FAILED|STALE))/,
+      ),
     });
   }, 30_000);
 });

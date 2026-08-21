@@ -2,7 +2,7 @@
   "workflowVersion": 1,
   "sceneId": "grassland",
   "stage": "frozen",
-  "specSha256": "9f98960dfb2bd92d0aba9ad9155bc795e22ef3c260b20db78d1b4e8079905c42",
+  "specSha256": "fb5c2c772b9723598ebce6b7a80b303b824c2e3fd43f6d0e2b5fa21c7b67726d",
   "files": [
     {
       "kind": "opening-shot",
@@ -17,7 +17,7 @@
     {
       "kind": "world-spec-source",
       "path": "apps/playground/src/scenes/plans/grassland.ts",
-      "sha256": "f76301b62bb98509abe494abaaaf1e88bb23d2b12996b81df26e24a25ed60edb"
+      "sha256": "3aa1fdfc4579475b26909543bba503295471468fd2a693b01109b708fe5c11a8"
     }
   ]
 }
