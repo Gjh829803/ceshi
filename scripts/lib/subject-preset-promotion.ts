@@ -37,6 +37,10 @@ import {
   type SubjectResourceRegistryV3,
 } from "@whitebox-world/subject-registry";
 
+import { isEmpty, isEqual, isNil } from "lodash-es";
+
+import { parseTrustedSourceCommit } from "./worldkit-source-commit";
+
 import {
   BUILT_IN_CAPABILITY_MANIFESTS,
   BUILT_IN_CAPABILITY_RESOURCES,
@@ -105,6 +109,8 @@ export interface SubjectPresetPromotionOptionsV1
   extends SubjectPresetPromotionPlanningOptionsV1 {
   plan: SubjectPresetPromotionPlanV1;
   planPath?: string;
+  harnessReceiptPath?: string;
+  harnessReceipt?: unknown;
   write: boolean;
   injectFailure?: (
     point: SubjectPresetPromotionFaultPointV1,
@@ -114,6 +120,150 @@ export interface SubjectPresetPromotionOptionsV1
 export interface SubjectPresetPromotionResultV1 {
   planHash: string;
   writtenLogicalPaths: string[];
+}
+
+export interface SubjectPresetHarnessReceiptV1 {
+  kind: "worldkit-subject-preset-harness-receipt";
+  schemaVersion: 1;
+  candidateSemanticContentHash: string;
+  planHash: string;
+  harnessProfileRef: string;
+  passedCheckIds: readonly string[];
+  sourceCommit: string;
+  runtimeBuild: string;
+}
+
+export function validateSubjectPresetHarnessReceiptV1(
+  value: unknown,
+  expected: {
+    candidateSemanticContentHash: string;
+    planHash: string;
+    harnessProfileRef: string;
+    requiredPassedCheckIds: readonly string[];
+    sourceCommit: string;
+    runtimeBuild: string;
+  },
+): SubjectPresetHarnessReceiptV1 {
+  if (!isPlainRecord(value)) {
+    fail(
+      "SUBJECT_PRESET_HARNESS_RECEIPT_INVALID_SHAPE",
+      "Harness receipt must be a plain object.",
+    );
+  }
+  const unknown = Object.keys(value).find((key) =>
+    ![
+      "kind",
+      "schemaVersion",
+      "candidateSemanticContentHash",
+      "planHash",
+      "harnessProfileRef",
+      "passedCheckIds",
+      "sourceCommit",
+      "runtimeBuild",
+    ].includes(key)
+  );
+  if (unknown !== undefined) {
+    fail(
+      "SUBJECT_PRESET_HARNESS_RECEIPT_UNKNOWN_FIELD",
+      `Unexpected field '${unknown}'.`,
+    );
+  }
+  if (value.kind !== "worldkit-subject-preset-harness-receipt") {
+    fail("SUBJECT_PRESET_HARNESS_RECEIPT_KIND_MISMATCH", "Unexpected receipt kind.");
+  }
+  if (value.schemaVersion !== 1) {
+    fail(
+      "SUBJECT_PRESET_HARNESS_RECEIPT_SCHEMA_VERSION_MISMATCH",
+      "schemaVersion must be 1.",
+    );
+  }
+  if (value.candidateSemanticContentHash !== expected.candidateSemanticContentHash) {
+    fail(
+      "SUBJECT_PRESET_HARNESS_RECEIPT_CANDIDATE_MISMATCH",
+      "Receipt candidate hash does not match the Candidate.",
+    );
+  }
+  if (value.planHash !== expected.planHash) {
+    fail(
+      "SUBJECT_PRESET_HARNESS_RECEIPT_PLAN_MISMATCH",
+      "Receipt plan hash does not match the promotion plan.",
+    );
+  }
+  if (value.harnessProfileRef !== expected.harnessProfileRef) {
+    fail(
+      "SUBJECT_PRESET_HARNESS_RECEIPT_HARNESS_MISMATCH",
+      "Receipt Harness Profile does not match the locked profile.",
+    );
+  }
+  if (!Array.isArray(value.passedCheckIds)) {
+    fail(
+      "SUBJECT_PRESET_HARNESS_RECEIPT_INCOMPLETE",
+      "passedCheckIds must be an array.",
+    );
+  }
+  const passedCheckIds = value.passedCheckIds.map((checkId, index) => {
+    if (typeof checkId !== "string") {
+      fail(
+        "SUBJECT_PRESET_HARNESS_RECEIPT_INCOMPLETE",
+        `passedCheckIds[${index}] must be a string.`,
+      );
+    }
+    return checkId;
+  });
+  if (
+    isEmpty(expected.requiredPassedCheckIds) ||
+    !isEqual([...passedCheckIds].sort(), [...expected.requiredPassedCheckIds].sort())
+  ) {
+    fail(
+      "SUBJECT_PRESET_HARNESS_RECEIPT_INCOMPLETE",
+      "Receipt must include every check declared by the locked Harness Profile.",
+    );
+  }
+  if (typeof value.sourceCommit !== "string" || isNil(parseTrustedSourceCommit(value.sourceCommit))) {
+    fail(
+      "SUBJECT_PRESET_HARNESS_RECEIPT_SOURCE_COMMIT",
+      "sourceCommit must be a trusted 40-character commit id.",
+    );
+  }
+  if (value.sourceCommit !== expected.sourceCommit) {
+    fail(
+      "SUBJECT_PRESET_HARNESS_RECEIPT_SOURCE_COMMIT_MISMATCH",
+      "Receipt sourceCommit does not match the Candidate source commit.",
+    );
+  }
+  if (typeof value.runtimeBuild !== "string" || value.runtimeBuild.length === 0) {
+    fail(
+      "SUBJECT_PRESET_HARNESS_RECEIPT_RUNTIME_BUILD",
+      "runtimeBuild must be a non-empty string.",
+    );
+  }
+  if (value.runtimeBuild !== expected.runtimeBuild) {
+    fail(
+      "SUBJECT_PRESET_HARNESS_RECEIPT_RUNTIME_BUILD_MISMATCH",
+      "Receipt runtimeBuild does not match the trusted Git build.",
+    );
+  }
+  if (
+    typeof value.candidateSemanticContentHash !== "string" ||
+    !HASH_PATTERN.test(value.candidateSemanticContentHash) ||
+    typeof value.planHash !== "string" ||
+    !HASH_PATTERN.test(value.planHash)
+  ) {
+    fail(
+      "SUBJECT_PRESET_HARNESS_RECEIPT_HASH_INVALID",
+      "Candidate and plan hashes must be sha256 content hashes.",
+    );
+  }
+  return {
+    kind: "worldkit-subject-preset-harness-receipt",
+    schemaVersion: 1,
+    candidateSemanticContentHash: value.candidateSemanticContentHash,
+    planHash: value.planHash,
+    harnessProfileRef: value.harnessProfileRef,
+    passedCheckIds,
+    sourceCommit: value.sourceCommit,
+    runtimeBuild: value.runtimeBuild,
+  };
 }
 
 function fail(code: string, message: string): never {
@@ -683,6 +833,15 @@ async function materializePromotion(
     definitionCatalog,
     candidate.semanticContent.subjectDefinitionId,
   );
+  if (
+    candidate.semanticContent.selections.selectedMotionProfileRef ===
+      candidate.semanticContent.selections.motionRoles.fallback.sourceProfileRef
+  ) {
+    fail(
+      "SUBJECT_PRESET_PROMOTION_FALLBACK_DEFAULT_FORBIDDEN",
+      "Safe-stop fallback Motion cannot be published as the next Definition default.",
+    );
+  }
   const proposedDefinition: RegistrySubjectDefinitionInputV3 = {
     ...stripContentHash(baseDefinition),
     version: definitionVersion,
@@ -874,6 +1033,15 @@ export async function planSubjectPresetPromotion(
   const materialized = await materializePromotion(candidate, repositoryRoot, registry);
   const fixtureLogicalPath =
     `.codex-tmp/subject-presets/${candidate.semanticContent.candidateId}.registry-fixture.json`;
+  const harnessProfile = registry.resolveHarnessProfile(
+    candidate.evidence.harnessProfileRef,
+  );
+  if (isNil(harnessProfile)) {
+    fail(
+      "SUBJECT_PRESET_PROMOTION_HARNESS_MISSING",
+      `Harness Profile '${candidate.evidence.harnessProfileRef}' is missing.`,
+    );
+  }
   const fixture = {
     kind: PROMOTION_FIXTURE_KIND,
     schemaVersion: 1,
@@ -884,8 +1052,8 @@ export async function planSubjectPresetPromotion(
     subjectDefinitionContentHash: materialized.proposedDefinitionHash,
     generatedResources: materialized.generatedResources,
     harness: {
-      harnessProfileRef: candidate.evidence.harnessProfileRef,
-      requiredPassedCheckIds: candidate.evidence.passedCheckIds,
+      harnessProfileRef: harnessProfile.resourceRef,
+      requiredPassedCheckIds: [...harnessProfile.requiredCheckIds],
     },
   };
   const targets = [
@@ -1051,6 +1219,19 @@ export async function readSubjectPresetPromotionPlanFileV1(
   return parseSubjectPresetPromotionPlanV1(
     parseJsonBytes(bytes, "Subject Preset promotion plan"),
   );
+}
+
+export async function readSubjectPresetHarnessReceiptFileV1(
+  receiptPath: string,
+): Promise<unknown> {
+  const bytes = await readFile(receiptPath);
+  if (bytes.byteLength > 1024 * 1024) {
+    fail(
+      "SUBJECT_PRESET_HARNESS_RECEIPT_TOO_LARGE",
+      "Harness receipt files may not exceed 1 MiB.",
+    );
+  }
+  return parseJsonBytes(bytes, "Subject Preset Harness receipt");
 }
 
 function assertNoProposedVersionCollisions(plan: SubjectPresetPromotionPlanV1): void {
@@ -1365,10 +1546,22 @@ export async function promoteSubjectPresetTransactionally(
       "Promotion requires an explicit --write flag.",
     );
   }
+  if (isNil(options.harnessReceipt)) {
+    fail(
+      "SUBJECT_PRESET_PROMOTION_HARNESS_RECEIPT_REQUIRED",
+      "Promotion requires a trusted Candidate-specific Harness receipt.",
+    );
+  }
   const repositoryRoot = exactRepositoryRoot(options.repositoryRoot);
   assertSubjectPresetArtifactLocationV1(candidatePath, repositoryRoot);
   if (options.planPath !== undefined) {
     assertSubjectPresetArtifactLocationV1(options.planPath, repositoryRoot);
+  }
+  if (!isNil(options.harnessReceiptPath)) {
+    assertSubjectPresetArtifactLocationV1(
+      options.harnessReceiptPath,
+      repositoryRoot,
+    );
   }
   const plan = parseSubjectPresetPromotionPlanV1(options.plan);
   assertNoProposedVersionCollisions(plan);
@@ -1389,6 +1582,12 @@ export async function promoteSubjectPresetTransactionally(
   }
   const candidate = options.candidate ??
     await validateSubjectPresetCandidateFile(candidatePath, { registry });
+  if (candidate.provenance.sourceCommit !== gitState.headCommit) {
+    fail(
+      "SUBJECT_PRESET_PROMOTION_SOURCE_COMMIT_MISMATCH",
+      "Candidate sourceCommit must match the exact clean feature-branch HEAD.",
+    );
+  }
   if (
     plan.candidateId !== candidate.semanticContent.candidateId ||
     plan.candidateSemanticContentHash !== candidate.semanticContentHash
@@ -1409,6 +1608,23 @@ export async function promoteSubjectPresetTransactionally(
       "Promotion plan no longer matches deterministic Registry materialization.",
     );
   }
+  const harnessProfile = registry.resolveHarnessProfile(
+    candidate.evidence.harnessProfileRef,
+  );
+  if (isNil(harnessProfile)) {
+    fail(
+      "SUBJECT_PRESET_PROMOTION_HARNESS_MISSING",
+      `Harness Profile '${candidate.evidence.harnessProfileRef}' is missing.`,
+    );
+  }
+  validateSubjectPresetHarnessReceiptV1(options.harnessReceipt, {
+    candidateSemanticContentHash: candidate.semanticContentHash,
+    planHash: plan.planHash,
+    harnessProfileRef: harnessProfile.resourceRef,
+    requiredPassedCheckIds: harnessProfile.requiredCheckIds,
+    sourceCommit: candidate.provenance.sourceCommit,
+    runtimeBuild: `git:${gitState.headCommit}`,
+  });
   assertSameGitState(gitState, await inspectGitState(repositoryRoot));
   await promoteTargetsTransactionally(plan, repositoryRoot, gitState, options);
   return {

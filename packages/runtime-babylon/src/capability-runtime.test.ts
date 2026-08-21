@@ -2,7 +2,10 @@ import { readFile } from "node:fs/promises";
 import { createRequire } from "node:module";
 
 import { NullEngine } from "@babylonjs/core/Engines/nullEngine.pure.js";
-import type { ExecutionPlanV4 } from "@whitebox-world/runtime-contracts";
+import {
+  TRUSTED_DEFAULT_CONTROLLER_ID,
+  type ExecutionPlanV4,
+} from "@whitebox-world/runtime-contracts";
 import { isNil } from "lodash-es";
 import { describe, expect, it } from "vitest";
 
@@ -861,9 +864,16 @@ describe("capability package runtime smoke tests", () => {
     const assembly = subject.capabilityAssembly!;
     const originalKernelRef = "worldkit://motion-kernel/free-ground@1";
     const aliasedKernelRef = "worldkit://motion-kernel/custom-steering-implementation@1";
-    const optionalProfile = assembly.optionalMotionProfiles.find(
-      (profile) => profile.motionKernelRef === originalKernelRef,
-    )!;
+    const optionalProfile = {
+      ...structuredClone(assembly.defaultMotionProfile),
+      resourceRef: "worldkit://motion-profile/custom-steering-profile@1",
+      contentHash:
+        "sha256:1111111111111111111111111111111111111111111111111111111111111111",
+    };
+    assembly.optionalMotionProfiles = [
+      ...assembly.optionalMotionProfiles,
+      optionalProfile,
+    ];
     const optionalKernel = assembly.motionKernels.find(
       (kernel) => kernel.resourceRef === originalKernelRef,
     )!;
@@ -1058,14 +1068,161 @@ describe("capability package runtime smoke tests", () => {
         cameraOverridesByProfileRef: {},
         cameraPreference: "auto",
       });
-      expect(extraFeelOnly.status).toBe("committed");
-      expect(extraFeelOnly.snapshot.subjectStatesByEntityId.extra)
-        .toMatchObject({ activeControlFeelProfileRef: MEDIUM_FEEL_REF });
+      expect(extraFeelOnly.status).toBe("rejected");
+      expect(extraFeelOnly.diagnostic?.code).toBe(
+        "SUBJECT_PRESET_CAMERA_OWNERSHIP_FORBIDDEN",
+      );
       expect(runtime.snapshot().camera.tuning).toEqual({ targetHeightMeters: 1.4 });
+      expect(runtime.requestControlFeelProfile("extra", HEAVY_FEEL_REF)).toBe(true);
       const extraAfterTick = await runtime.runFixedInput({ actions: [], ticks: 1 });
       expect(extraAfterTick.subjectStatesByEntityId.extra!.activeControlFeelProfileRef)
         .toBe(HEAVY_FEEL_REF);
       expect(extraAfterTick.camera.tuning).toEqual({ targetHeightMeters: 1.4 });
+    } finally {
+      await runtime.dispose();
+    }
+  }, 15_000);
+
+  it("rejects Camera writes from the previous owner after bindControl rebind", async () => {
+    const loaded = await loadAuthoringScene(
+      async () => new Response(JSON.stringify(createFlatTerrainCapabilitySpec())),
+      { subjectDefinitionRef: "worldkit://subject-definition/humanoid.g-bot@1" },
+    );
+    if (!loaded.ok || loaded.executionPlan === undefined) {
+      throw new Error(
+        `G Bot package failed to load: ${JSON.stringify(loaded.diagnostics)}`,
+      );
+    }
+    const executionPlan = withExtraCapabilitySubject(loaded.executionPlan);
+    const playerSubject = executionPlan.subjects[0]!;
+    const extraSubject = executionPlan.subjects[1]!;
+    const capabilityAssembly = playerSubject.capabilityAssembly!;
+    const orbitProfile = capabilityAssembly.cameraContext.cameraRigProfiles.find(
+      (profile) => profile.resourceRef === "worldkit://camera-profile/orbit.medium@1",
+    )!;
+    const runtime = await BabylonWorldRuntime.create({
+      executionPlan,
+      havokWasmBinary,
+      subjectAssetResolver: {
+        async resolveSubjectAsset() {
+          return { bytes: gBotAssetBytes, sourceLabel: "g-bot-test" };
+        },
+      },
+      engineFactory: () =>
+        new NullEngine({
+          renderWidth: 640,
+          renderHeight: 360,
+          textureSize: 512,
+          deterministicLockstep: true,
+          lockstepMaxSteps: 4,
+        }),
+    });
+    try {
+      await runtime.runFixedInput({ actions: [], ticks: 4 });
+      runtime.setCameraPreference(orbitProfile.resourceRef);
+      expect(runtime.setCameraTuning({ targetHeightMeters: 1.4 }).camera.tuning)
+        .toEqual({ targetHeightMeters: 1.4 });
+
+      const rebound = runtime.bindControl({
+        controllerId: TRUSTED_DEFAULT_CONTROLLER_ID,
+        expectedControlledEntityId: "player",
+        controlledEntityId: extraSubject.entityId,
+      });
+      expect(rebound.status).toBe("committed");
+      expect(runtime.snapshot().camera.targetEntityId).toBe(extraSubject.entityId);
+
+      const formerOwnerNumeric = runtime.applySubjectPresetTuning({
+        subjectEntityId: playerSubject.entityId,
+        expectedSubjectDefinitionRef: playerSubject.subjectDefinitionRef,
+        expectedSubjectDefinitionContentHash: playerSubject.subjectDefinitionHash,
+        selectedMotionProfileRef: capabilityAssembly.defaultMotionProfile.resourceRef,
+        selectedControlFeelProfileRef: HEAVY_FEEL_REF,
+        selectedControlProfileRef: capabilityAssembly.controlProfile.resourceRef,
+        cameraOverridesByProfileRef: {
+          [orbitProfile.resourceRef]: {
+            baseResourceRef: orbitProfile.resourceRef,
+            baseContentHash: orbitProfile.contentHash,
+            values: { targetHeightMeters: 1.8 },
+          },
+        },
+        cameraPreference: orbitProfile.resourceRef,
+      });
+      expect(formerOwnerNumeric.status).toBe("rejected");
+      expect(formerOwnerNumeric.diagnostic?.code).toBe(
+        "SUBJECT_PRESET_CAMERA_OWNERSHIP_FORBIDDEN",
+      );
+
+      const formerOwnerPreferenceOnly = runtime.applySubjectPresetTuning({
+        subjectEntityId: playerSubject.entityId,
+        expectedSubjectDefinitionRef: playerSubject.subjectDefinitionRef,
+        expectedSubjectDefinitionContentHash: playerSubject.subjectDefinitionHash,
+        selectedMotionProfileRef: capabilityAssembly.defaultMotionProfile.resourceRef,
+        selectedControlFeelProfileRef: HEAVY_FEEL_REF,
+        selectedControlProfileRef: capabilityAssembly.controlProfile.resourceRef,
+        cameraOverridesByProfileRef: {},
+        cameraPreference: "auto",
+      });
+      expect(formerOwnerPreferenceOnly.status).toBe("rejected");
+      expect(formerOwnerPreferenceOnly.diagnostic?.code).toBe(
+        "SUBJECT_PRESET_CAMERA_OWNERSHIP_FORBIDDEN",
+      );
+      expect(runtime.snapshot().camera.tuning).toEqual({ targetHeightMeters: 1.4 });
+    } finally {
+      await runtime.dispose();
+    }
+  }, 15_000);
+
+  it("zeros locomotion intent when safe-ground fallback is active even if move is held", async () => {
+    const loaded = await loadAuthoringScene(
+      async () => new Response(JSON.stringify(createFlatTerrainCapabilitySpec())),
+      { subjectDefinitionRef: "worldkit://subject-definition/humanoid.g-bot@1" },
+    );
+    if (!loaded.ok || loaded.executionPlan === undefined) {
+      throw new Error(
+        `G Bot package failed to load: ${JSON.stringify(loaded.diagnostics)}`,
+      );
+    }
+    const runtime = await BabylonWorldRuntime.create({
+      executionPlan: loaded.executionPlan,
+      havokWasmBinary,
+      subjectAssetResolver: {
+        async resolveSubjectAsset() {
+          return { bytes: gBotAssetBytes, sourceLabel: "g-bot-test" };
+        },
+      },
+      engineFactory: () =>
+        new NullEngine({
+          renderWidth: 640,
+          renderHeight: 360,
+          textureSize: 512,
+          deterministicLockstep: true,
+          lockstepMaxSteps: 4,
+        }),
+    });
+    try {
+      const moving = await runtime.runFixedInput({
+        actions: ["move-forward"],
+        ticks: 45,
+      });
+      const movingPlayer = moving.subjectStatesByEntityId.player!;
+      expect(movingPlayer.speedMetersPerSecond ?? 0).toBeGreaterThan(0.4);
+      const movingZ = movingPlayer.positionMetersXYZ[2];
+
+      expect(runtime.requestMotionProfile(
+        "player",
+        "worldkit://motion-profile/safe-ground@1",
+      )).toBe(true);
+      const stopped = await runtime.runFixedInput({
+        actions: ["move-forward", "jump"],
+        ticks: 90,
+      });
+      const stoppedPlayer = stopped.subjectStatesByEntityId.player!;
+      expect(stoppedPlayer.safeFallbackActive).toBe(true);
+      expect(stoppedPlayer.activeMotionProfileRef).toBe(
+        "worldkit://motion-profile/safe-ground@1",
+      );
+      expect(stoppedPlayer.speedMetersPerSecond ?? 1).toBeLessThan(0.05);
+      expect(Math.abs(stoppedPlayer.positionMetersXYZ[2] - movingZ)).toBeLessThan(0.35);
     } finally {
       await runtime.dispose();
     }

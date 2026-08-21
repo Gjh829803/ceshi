@@ -4,6 +4,7 @@ export {
   resolveTraversalDriverProfileV1,
   resolveTraversalGraphBuilderProfileV1,
   validateTraversalDriverProfileV1,
+  validateTraversalGraphBuilderProfileV1,
 } from "./profile-registry.js";
 export type {
   ResolvedTraversalDriverProfileV1,

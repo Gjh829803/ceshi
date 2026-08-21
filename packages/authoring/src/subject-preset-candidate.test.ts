@@ -142,7 +142,7 @@ function validInput(): SubjectPresetCandidateInputV1 {
     },
     evidence: {
       harnessProfileRef: HARNESS_REF,
-      passedCheckIds: ["H01", "H02", "H03"],
+      passedCheckIds: ["H01", "H02", "H03", "H04", "H05", "H06", "H07", "H08", "H09"],
       runtimeBuild: "playground-2026.08.21",
     },
   };
@@ -366,6 +366,26 @@ describe("subject preset candidate V1", () => {
     expect(() => parseSubjectPresetCandidateV1(invalidCommit)).toThrow(
       "SUBJECT_PRESET_CANDIDATE_INVALID_SOURCE_COMMIT",
     );
+
+    const forgedZeroCommit = clone(validCandidate());
+    forgedZeroCommit.provenance.sourceCommit = "0".repeat(40);
+    expect(() => parseSubjectPresetCandidateV1(forgedZeroCommit)).toThrow(
+      "SUBJECT_PRESET_CANDIDATE_INVALID_SOURCE_COMMIT",
+    );
+  });
+
+  it("keeps partial browser harness evidence as informational provenance", () => {
+    const incomplete = clone(validCandidate());
+    incomplete.evidence.passedCheckIds = ["H01", "H02", "H03"];
+    expect(parseSubjectPresetCandidateV1(incomplete).evidence.passedCheckIds).toEqual([
+      "H01",
+      "H02",
+      "H03",
+    ]);
+
+    const emptyEvidence = clone(validCandidate());
+    emptyEvidence.evidence.passedCheckIds = [];
+    expect(parseSubjectPresetCandidateV1(emptyEvidence).evidence.passedCheckIds).toEqual([]);
   });
 
   it("rejects malformed Unicode and calendar-invalid ISO timestamps", () => {
@@ -559,7 +579,7 @@ describe("legacy Authoring snapshot V4 adapter", () => {
     createdAtIso: "2026-08-21T08:00:00.000Z",
     sourceCommit: "0123456789abcdef0123456789abcdef01234567",
     runtimeBuild: "playground-2026.08.21",
-    passedCheckIds: ["H01", "H02"] as const,
+    passedCheckIds: ["H01", "H02", "H03", "H04", "H05", "H06", "H07", "H08", "H09"] as const,
   };
 
   it("resolves the canonical Registry baseline and keeps only supported numeric differences", () => {

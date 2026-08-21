@@ -19,6 +19,8 @@ export interface ResolvedTraversalLockV1 {
   readonly physicsBodyProfileHash: `sha256:${string}`;
   readonly locomotionProfileRef: string;
   readonly locomotionProfileHash: `sha256:${string}`;
+  readonly locomotionCapabilityRef: string;
+  readonly locomotionCapabilityHash: `sha256:${string}`;
   readonly controlFeelProfileRef: string;
   readonly controlFeelProfileHash: `sha256:${string}`;
   readonly controlProfileRef: string;
@@ -32,6 +34,9 @@ export interface ResolvedTraversalLockV1 {
   readonly runtimeBackendRef: string;
   readonly runtimeBackendResolvedVersion: string;
   readonly runtimeBackendHash: `sha256:${string}`;
+  readonly runtimeAdapterRef: string;
+  readonly runtimeAdapterResolvedVersion: string;
+  readonly runtimeAdapterHash: `sha256:${string}`;
   readonly capsuleRadiusMeters: number;
   readonly capsuleHeightMeters: number;
   readonly colliderCenterOffsetMetersXYZ: readonly [number, number, number];

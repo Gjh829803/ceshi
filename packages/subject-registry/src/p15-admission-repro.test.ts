@@ -221,4 +221,23 @@ describe("P1.5 admission clean-break", () => {
       ]),
     ).toThrow(/PHYSICS_BODY_TRAVERSAL_LIMIT_INVALID/);
   });
+
+  it("rejects a Subject Definition whose default Motion is the safe-stop fallback", async () => {
+    const { G_BOT_HUMANOID_DEFINITION } = await import(
+      "./built-in-subject-definitions.js"
+    );
+    expect(() => createSubjectResourceRegistry([
+      {
+        ...G_BOT_HUMANOID_DEFINITION,
+        profiles: {
+          ...G_BOT_HUMANOID_DEFINITION.profiles,
+          motion: {
+            ...G_BOT_HUMANOID_DEFINITION.profiles.motion,
+            defaultMotionProfileRef:
+              G_BOT_HUMANOID_DEFINITION.profiles.motion.fallbackMotionProfileRef,
+          },
+        },
+      },
+    ])).toThrow(/MOTION_FALLBACK_DEFAULT_COLLISION/);
+  });
 });

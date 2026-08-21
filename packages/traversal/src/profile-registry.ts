@@ -14,14 +14,35 @@ export const BUILT_IN_TRAVERSAL_DRIVER_PROFILE_REF =
 export const BUILT_IN_TRAVERSAL_GRAPH_BUILDER_PROFILE_REF =
   "worldkit://traversal-graph-builder-profile/outdoor-humanoid.r1@1" as const;
 
-const TRAVERSAL_DRIVER_PROFILE_ALLOWED_KEYS = new Set([
+const TRAVERSAL_DRIVER_PROFILE_REQUIRED_KEYS = [
   "kind",
   "schemaVersion",
   "pathLookaheadMeters",
   "cornerSelectionMode",
   "intentDirectionQuantizationRatio",
   "locomotionIntentMode",
-]);
+] as const;
+
+const TRAVERSAL_DRIVER_PROFILE_ALLOWED_KEYS = new Set(
+  TRAVERSAL_DRIVER_PROFILE_REQUIRED_KEYS,
+);
+
+const TRAVERSAL_GRAPH_BUILDER_PROFILE_REQUIRED_KEYS = [
+  "kind",
+  "schemaVersion",
+  "clearanceMarginMeters",
+  "positionQuantizationMeters",
+  "slopeCostWeight",
+  "stepCostWeight",
+  "maximumNodes",
+  "maximumEdges",
+  "maximumTiles",
+  "maximumSearchSteps",
+] as const;
+
+const TRAVERSAL_GRAPH_BUILDER_PROFILE_ALLOWED_KEYS = new Set(
+  TRAVERSAL_GRAPH_BUILDER_PROFILE_REQUIRED_KEYS,
+);
 
 const BUILT_IN_WALK_HARD_RIBBON_DRIVER_PROFILE: TraversalDriverProfileV1 = {
   kind: "traversal-driver-profile",
@@ -55,21 +76,214 @@ function contentHashOf(value: unknown): `sha256:${string}` {
   return sha256CanonicalJson(value) as `sha256:${string}`;
 }
 
-export function validateTraversalDriverProfileV1(value: unknown): void {
-  if (isNil(value) || typeof value !== "object") {
-    throw new Error("TRAVERSAL_DRIVER_PROFILE_INVALID: expected an object.");
-  }
+function isPlainRecord(value: unknown): value is Record<string, unknown> {
+  return value !== null &&
+    typeof value === "object" &&
+    !Array.isArray(value) &&
+    Object.getPrototypeOf(value) === Object.prototype;
+}
 
-  const forbiddenKeys = Object.keys(value).filter(
-    (key) => !TRAVERSAL_DRIVER_PROFILE_ALLOWED_KEYS.has(key),
-  );
+function requirePlainProfile(
+  value: unknown,
+  notPlainCode: string,
+): Record<string, unknown> {
+  if (!isPlainRecord(value)) {
+    throw new Error(`${notPlainCode}: expected a plain object.`);
+  }
+  return value;
+}
+
+function rejectForbiddenAndMissingKeys(
+  source: Record<string, unknown>,
+  allowedKeys: ReadonlySet<string>,
+  requiredKeys: readonly string[],
+  forbiddenCode: string,
+  missingCode: string,
+): void {
+  const forbiddenKeys = Object.keys(source).filter((key) => !allowedKeys.has(key));
   if (!isEmpty(forbiddenKeys)) {
     const forbiddenKey = forbiddenKeys[0];
     if (isNil(forbiddenKey)) {
-      throw new Error("TRAVERSAL_DRIVER_FIELD_FORBIDDEN");
+      throw new Error(forbiddenCode);
     }
-    throw new Error(`TRAVERSAL_DRIVER_FIELD_FORBIDDEN: '${forbiddenKey}'.`);
+    throw new Error(`${forbiddenCode}: '${forbiddenKey}'.`);
   }
+  const missingKey = requiredKeys.find(
+    (key) => !Object.prototype.hasOwnProperty.call(source, key),
+  );
+  if (missingKey !== undefined) {
+    throw new Error(`${missingCode}: '${missingKey}'.`);
+  }
+}
+
+function requireFiniteNumber(
+  value: unknown,
+  code: string,
+  field: string,
+): number {
+  if (typeof value !== "number" || !Number.isFinite(value)) {
+    throw new Error(`${code}: '${field}' must be a finite number.`);
+  }
+  return value;
+}
+
+function requirePositiveNumber(
+  value: unknown,
+  code: string,
+  field: string,
+  maximum: number,
+): number {
+  const numberValue = requireFiniteNumber(value, code, field);
+  if (!(numberValue > 0) || numberValue > maximum) {
+    throw new Error(`${code}: '${field}' must be > 0 and <= ${maximum}.`);
+  }
+  return numberValue;
+}
+
+function requireNonNegativeNumber(
+  value: unknown,
+  code: string,
+  field: string,
+  maximum: number,
+): number {
+  const numberValue = requireFiniteNumber(value, code, field);
+  if (numberValue < 0 || numberValue > maximum) {
+    throw new Error(`${code}: '${field}' must be >= 0 and <= ${maximum}.`);
+  }
+  return numberValue;
+}
+
+function requireSafeIntegerInRange(
+  value: unknown,
+  code: string,
+  field: string,
+  minimum: number,
+  maximum: number,
+): number {
+  if (
+    typeof value !== "number" ||
+    !Number.isSafeInteger(value) ||
+    value < minimum ||
+    value > maximum
+  ) {
+    throw new Error(
+      `${code}: '${field}' must be a safe integer from ${minimum} through ${maximum}.`,
+    );
+  }
+  return value;
+}
+
+export function validateTraversalDriverProfileV1(value: unknown): void {
+  const source = requirePlainProfile(value, "TRAVERSAL_DRIVER_PROFILE_NOT_PLAIN");
+  rejectForbiddenAndMissingKeys(
+    source,
+    TRAVERSAL_DRIVER_PROFILE_ALLOWED_KEYS,
+    TRAVERSAL_DRIVER_PROFILE_REQUIRED_KEYS,
+    "TRAVERSAL_DRIVER_FIELD_FORBIDDEN",
+    "TRAVERSAL_DRIVER_FIELD_MISSING",
+  );
+  if (source.kind !== "traversal-driver-profile") {
+    throw new Error("TRAVERSAL_DRIVER_KIND_MISMATCH: kind must be traversal-driver-profile.");
+  }
+  if (source.schemaVersion !== 1) {
+    throw new Error("TRAVERSAL_DRIVER_SCHEMA_VERSION_MISMATCH: schemaVersion must be 1.");
+  }
+  requirePositiveNumber(
+    source.pathLookaheadMeters,
+    "TRAVERSAL_DRIVER_NUMBER_INVALID",
+    "pathLookaheadMeters",
+    32,
+  );
+  requirePositiveNumber(
+    source.intentDirectionQuantizationRatio,
+    "TRAVERSAL_DRIVER_NUMBER_INVALID",
+    "intentDirectionQuantizationRatio",
+    1,
+  );
+  if (source.cornerSelectionMode !== "next-visible-segment") {
+    throw new Error(
+      "TRAVERSAL_DRIVER_ENUM_INVALID: cornerSelectionMode must be next-visible-segment.",
+    );
+  }
+  if (source.locomotionIntentMode !== "walk") {
+    throw new Error("TRAVERSAL_DRIVER_ENUM_INVALID: locomotionIntentMode must be walk.");
+  }
+}
+
+export function validateTraversalGraphBuilderProfileV1(value: unknown): void {
+  const source = requirePlainProfile(
+    value,
+    "TRAVERSAL_GRAPH_BUILDER_PROFILE_NOT_PLAIN",
+  );
+  rejectForbiddenAndMissingKeys(
+    source,
+    TRAVERSAL_GRAPH_BUILDER_PROFILE_ALLOWED_KEYS,
+    TRAVERSAL_GRAPH_BUILDER_PROFILE_REQUIRED_KEYS,
+    "TRAVERSAL_GRAPH_BUILDER_FIELD_FORBIDDEN",
+    "TRAVERSAL_GRAPH_BUILDER_FIELD_MISSING",
+  );
+  if (source.kind !== "traversal-graph-builder-profile") {
+    throw new Error(
+      "TRAVERSAL_GRAPH_BUILDER_KIND_MISMATCH: kind must be traversal-graph-builder-profile.",
+    );
+  }
+  if (source.schemaVersion !== 1) {
+    throw new Error(
+      "TRAVERSAL_GRAPH_BUILDER_SCHEMA_VERSION_MISMATCH: schemaVersion must be 1.",
+    );
+  }
+  requireNonNegativeNumber(
+    source.clearanceMarginMeters,
+    "TRAVERSAL_GRAPH_BUILDER_NUMBER_INVALID",
+    "clearanceMarginMeters",
+    2,
+  );
+  requirePositiveNumber(
+    source.positionQuantizationMeters,
+    "TRAVERSAL_GRAPH_BUILDER_NUMBER_INVALID",
+    "positionQuantizationMeters",
+    1,
+  );
+  requireNonNegativeNumber(
+    source.slopeCostWeight,
+    "TRAVERSAL_GRAPH_BUILDER_NUMBER_INVALID",
+    "slopeCostWeight",
+    100,
+  );
+  requireNonNegativeNumber(
+    source.stepCostWeight,
+    "TRAVERSAL_GRAPH_BUILDER_NUMBER_INVALID",
+    "stepCostWeight",
+    100,
+  );
+  requireSafeIntegerInRange(
+    source.maximumNodes,
+    "TRAVERSAL_GRAPH_BUILDER_NUMBER_INVALID",
+    "maximumNodes",
+    1,
+    1_000_000,
+  );
+  requireSafeIntegerInRange(
+    source.maximumEdges,
+    "TRAVERSAL_GRAPH_BUILDER_NUMBER_INVALID",
+    "maximumEdges",
+    1,
+    2_000_000,
+  );
+  requireSafeIntegerInRange(
+    source.maximumTiles,
+    "TRAVERSAL_GRAPH_BUILDER_NUMBER_INVALID",
+    "maximumTiles",
+    1,
+    4096,
+  );
+  requireSafeIntegerInRange(
+    source.maximumSearchSteps,
+    "TRAVERSAL_GRAPH_BUILDER_NUMBER_INVALID",
+    "maximumSearchSteps",
+    1,
+    1_000_000,
+  );
 }
 
 export function resolveTraversalDriverProfileV1(
@@ -79,13 +293,13 @@ export function resolveTraversalDriverProfileV1(
     throw new Error(`TRAVERSAL_DRIVER_PROFILE_NOT_FOUND: '${resourceRef}'.`);
   }
 
-  const profile = deepFreeze(structuredClone(BUILT_IN_WALK_HARD_RIBBON_DRIVER_PROFILE));
+  const profile = structuredClone(BUILT_IN_WALK_HARD_RIBBON_DRIVER_PROFILE);
   validateTraversalDriverProfileV1(profile);
   return deepFreeze({
     resourceRef: BUILT_IN_TRAVERSAL_DRIVER_PROFILE_REF,
     resolvedVersion: "1",
     contentHash: contentHashOf(profile),
-    profile,
+    profile: deepFreeze(profile),
   });
 }
 
@@ -96,13 +310,12 @@ export function resolveTraversalGraphBuilderProfileV1(
     throw new Error(`TRAVERSAL_GRAPH_BUILDER_PROFILE_NOT_FOUND: '${resourceRef}'.`);
   }
 
-  const profile = deepFreeze(
-    structuredClone(BUILT_IN_OUTDOOR_HUMANOID_GRAPH_BUILDER_PROFILE),
-  );
+  const profile = structuredClone(BUILT_IN_OUTDOOR_HUMANOID_GRAPH_BUILDER_PROFILE);
+  validateTraversalGraphBuilderProfileV1(profile);
   return deepFreeze({
     resourceRef: BUILT_IN_TRAVERSAL_GRAPH_BUILDER_PROFILE_REF,
     resolvedVersion: "1",
     contentHash: contentHashOf(profile),
-    profile,
+    profile: deepFreeze(profile),
   });
 }

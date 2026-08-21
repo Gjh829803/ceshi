@@ -1,6 +1,7 @@
 import "./style.css";
 
 import { createSubjectPresetCandidateFromSelectionsV1 } from "@whitebox-world/authoring";
+import { builtInSubjectResourceRegistry } from "@whitebox-world/subject-registry";
 import type {
   CameraTuningV1,
   CompatibleProfileSummaryV1,
@@ -20,7 +21,7 @@ import type {
 } from "./playground-world.js";
 import type { BabylonWorldAdapter } from "./babylon-world-adapter.js";
 import type { CapabilityDemoHostOverlayV1 } from "./authoring-loader.js";
-import { withCapabilityDemoHarnessScope } from "./authoring-export.js";
+import { withCapabilityDemoHarnessScope, loadTrustedSourceCommitV1 } from "./authoring-export.js";
 import { createFetchSubjectAssetResolver, PLAYGROUND_CAPABILITY_SUBJECT_ASSET_URI_BY_REF_V1 } from "./worldkit-asset-resolver.js";
 import {
   installDeferredWorldkitBrowserApi,
@@ -434,7 +435,7 @@ interface TuningWorkbenchControllerV1 {
   setCameraPreferenceFromCompact(preference: string): void;
   setSelectedMotionProfileFromCompact(motionProfileRef: string): boolean;
   reapplyWorkingDraftAfterSimulationReset(): void;
-  exportPublicationCandidate(): boolean;
+  exportPublicationCandidate(): Promise<boolean>;
 }
 
 function installTuningWorkbench(
@@ -1222,12 +1223,16 @@ function installTuningWorkbench(
   const relationshipPreviewOnly = workbenchContext.hostOverlay?.changes.some(
     (change) => change.type === "relationship-capabilities-deferred",
   ) === true;
+  let lastHarnessPassedCheckIds: string[] | undefined;
   const runHarness = async (): Promise<void> => {
     if (api.runHarness === undefined) return;
     result.textContent = "正在检查操作、物理、相机、清理和安全回退…";
     try {
       const report = await api.runHarness(workbenchContext.controlledEntityId);
-      const passed = report.checks.filter((check) => check.status === "passed").length;
+      lastHarnessPassedCheckIds = report.checks
+        .filter((check) => check.status === "passed")
+        .map((check) => check.checkId);
+      const passed = lastHarnessPassedCheckIds.length;
       const failed = report.checks.filter((check) => check.status === "failed");
       result.textContent = failed.length === 0
         ? relationshipPreviewOnly
@@ -1235,12 +1240,13 @@ function installTuningWorkbench(
           : `检查完成：${passed}/9 项通过，可以导出。`
         : `检查完成：${passed}/9 项通过。需要关注：${failed.map((check) => check.checkId).join("、")}`;
     } catch {
+      lastHarnessPassedCheckIds = undefined;
       result.textContent = "自动检查没有完成，世界状态未被修改。";
     }
   };
   requiredElement<HTMLButtonElement>("#tuning-harness-button").addEventListener("click", () => void runHarness());
 
-  const exportCurrent = (): boolean => {
+  const exportCurrent = async (): Promise<boolean> => {
     const draft = persistWorkingDraft() ?? createCurrentWorkingDraft();
     if (draft === undefined || localBaseline === undefined || exactBaseline === undefined) {
       saveStatus.textContent = "当前主体没有完整的 Registry 基线，无法导出 Candidate";
@@ -1253,12 +1259,23 @@ function installTuningWorkbench(
       saveStatus.textContent = "基线缺少 Harness Profile，无法导出 Candidate";
       return false;
     }
+    const harnessProfile = builtInSubjectResourceRegistry.resolveHarnessProfile(
+      harness.resourceRef,
+    );
+    const passedCheckIds = lastHarnessPassedCheckIds === undefined
+      ? []
+      : [...lastHarnessPassedCheckIds].sort();
+    if (harnessProfile === undefined) {
+      saveStatus.textContent = "锁定的 Harness Profile 无法解析，不能导出 Candidate";
+      return false;
+    }
     const defaultCameraRigProfileRef =
       cameraPreference !== "auto" &&
         cameraRows.some((profile) => profile.resourceRef === cameraPreference)
         ? cameraPreference
         : localBaseline.defaultCameraProfileRef;
     try {
+      const sourceCommit = await loadTrustedSourceCommitV1();
       const candidate = createSubjectPresetCandidateFromSelectionsV1({
         candidateId: `playground-export-${Date.now()}`,
         subjectDefinitionRef: draft.baseSubjectDefinitionRef,
@@ -1273,11 +1290,11 @@ function installTuningWorkbench(
           displayName: `${subjectFriendlyName(workbenchContext.definition)} playground candidate`,
           notes: "Exported from the Playground authoring workbench.",
           createdAtIso: new Date().toISOString(),
-          sourceCommit: "0".repeat(40),
+          sourceCommit,
         },
         evidence: {
           harnessProfileRef: harness.resourceRef,
-          passedCheckIds: [],
+          passedCheckIds,
           runtimeBuild: "playground-local",
         },
       });
@@ -1285,7 +1302,8 @@ function installTuningWorkbench(
         `${workbenchContext.definition.semanticClassId.replaceAll(".", "-")}.worldkit-subject-preset-candidate.json`,
         candidate,
       );
-      saveStatus.textContent = "Publication Candidate 已导出";
+      saveStatus.textContent =
+        "Publication Candidate 已导出；浏览器检查仅作参考，promote 仍需可信 Harness Receipt";
       return true;
     } catch (error) {
       saveStatus.textContent = error instanceof Error
@@ -1296,7 +1314,7 @@ function installTuningWorkbench(
   };
   for (const selector of ["#tuning-export-button", "#tuning-export-footer-button"]) {
     requiredElement<HTMLButtonElement>(selector).addEventListener("click", () => {
-      exportCurrent();
+      void exportCurrent();
     });
   }
   return {
@@ -1315,7 +1333,7 @@ function installTuningWorkbench(
       if (draft === undefined) return;
       applyWorkingDraftAtomically(draft);
     },
-    exportPublicationCandidate(): boolean {
+    exportPublicationCandidate(): Promise<boolean> {
       return exportCurrent();
     },
   };
@@ -1589,9 +1607,11 @@ function installCapabilityAuthoringPanel(
     }
   });
   requiredElement<HTMLButtonElement>("#export-package-button").addEventListener("click", () => {
-    if (!tuningWorkbench.exportPublicationCandidate()) {
-      harnessOutput.textContent = authoringActionFailure();
-    }
+    void tuningWorkbench.exportPublicationCandidate().then((exported) => {
+      if (!exported) {
+        harnessOutput.textContent = authoringActionFailure();
+      }
+    });
   });
   return tuningWorkbench;
 }

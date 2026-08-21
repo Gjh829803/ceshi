@@ -2350,6 +2350,27 @@ describe("BabylonWorldRuntime", () => {
     await runtime.dispose();
   });
 
+  it("keeps legacy compatibility motion active after reset", async () => {
+    const { runtime } = await createRuntimeWithPackageSubject();
+    try {
+      const reset = runtime.reset();
+      const resetPlayer = reset.subjectStatesByEntityId.player!;
+
+      const moved = await runtime.runFixedInput({
+        actions: ["move-forward"],
+        ticks: 60,
+      });
+      expect(
+        Math.abs(
+          moved.subjectStatesByEntityId.player!.positionMetersXYZ[2] -
+            resetPlayer.positionMetersXYZ[2],
+        ),
+      ).toBeGreaterThan(0.5);
+    } finally {
+      await runtime.dispose();
+    }
+  });
+
   it("keeps published movementMedium on support while walking through scenery water", async () => {
     const executionPlan = createFlatPackageExecutionPlan((spec) => {
       const water = spec.nodes.find((node) => node.kind === "water");
