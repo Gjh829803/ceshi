@@ -1,6 +1,10 @@
 export {
   builtInSubjectResourceRegistry,
+} from "./built-in-subject-resource-registry";
+export {
   createSubjectResourceRegistry,
+  FIRST_SLICE_ALLOWED_OVERRIDE_PATHS,
+  assertAllowedOverridePath,
 } from "./subject-resource-registry";
 export * from "./types-v2";
 export * from "./types-v3";

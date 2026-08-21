@@ -15,6 +15,20 @@ const baseline: SubjectPresetLocalBaselineV1 = {
     resourceRef: "worldkit://motion-profile/wheeled-arcade.medium@1",
     contentHash: `sha256:${"2".repeat(64)}`,
   },
+  controlFeelProfile: {
+    resourceRef: "worldkit://control-feel-profile/humanoid.medium-ground@1",
+    contentHash: `sha256:${"6".repeat(64)}`,
+  },
+  availableControlFeelProfiles: [
+    {
+      resourceRef: "worldkit://control-feel-profile/humanoid.medium-ground@1",
+      contentHash: `sha256:${"6".repeat(64)}`,
+    },
+    {
+      resourceRef: "worldkit://control-feel-profile/humanoid.heavy-ground@1",
+      contentHash: `sha256:${"7".repeat(64)}`,
+    },
+  ],
   controlProfile: {
     resourceRef: "worldkit://control-profile/throttle-steer.subject-local@1",
     contentHash: `sha256:${"3".repeat(64)}`,
@@ -56,17 +70,18 @@ describe("subject preset workbench projection", () => {
         createdAtIso: "2026-08-21T08:00:00.000Z",
         updatedAtIso: "2026-08-21T09:00:00.000Z",
       },
+      selectedControlFeelProfileRef: baseline.controlFeelProfile.resourceRef,
       selectedCameraPreferenceRef:
         "worldkit://camera-profile/orbit.medium@1",
-      motion: {
-        baseParameters: { maximumSpeedMetersPerSecond: 12, dragPerSecond: 0.7 },
-        currentValues: { maximumSpeedMetersPerSecond: 10, dragPerSecond: 0.7 },
-        runtimeParameterNames: ["maximumSpeedMetersPerSecond", "dragPerSecond"],
+      controlFeel: {
+        baseParameters: { runSpeedMetersPerSecond: 12, airControlRatio: 0.7 },
+        currentValues: { runSpeedMetersPerSecond: 10, airControlRatio: 0.7 },
+        runtimeParameterNames: ["runSpeedMetersPerSecond", "airControlRatio"],
       },
       control: {
-        baseParameters: { moveDeadzoneRatio: 0.08, responseExponent: 1 },
-        currentValues: { moveDeadzoneRatio: 0.08, responseExponent: 1.4 },
-        runtimeParameterNames: ["moveDeadzoneRatio", "responseExponent"],
+        baseParameters: { moveDeadzoneRatio: 0.08 },
+        currentValues: { moveDeadzoneRatio: 0.12 },
+        runtimeParameterNames: ["moveDeadzoneRatio"],
       },
       cameraByProfileRef: {
         "worldkit://camera-profile/orbit.medium@1": {
@@ -80,18 +95,18 @@ describe("subject preset workbench projection", () => {
       },
     });
 
-    expect(draft.motionOverridesByProfileRef).toEqual({
-      [baseline.defaultMotionProfile.resourceRef]: {
-        baseResourceRef: baseline.defaultMotionProfile.resourceRef,
-        baseContentHash: baseline.defaultMotionProfile.contentHash,
-        values: { maximumSpeedMetersPerSecond: 10 },
+    expect(draft.controlFeelOverridesByProfileRef).toEqual({
+      [baseline.controlFeelProfile.resourceRef]: {
+        baseResourceRef: baseline.controlFeelProfile.resourceRef,
+        baseContentHash: baseline.controlFeelProfile.contentHash,
+        values: { runSpeedMetersPerSecond: 10 },
       },
     });
     expect(draft.controlOverridesByProfileRef).toEqual({
       [baseline.controlProfile.resourceRef]: {
         baseResourceRef: baseline.controlProfile.resourceRef,
         baseContentHash: baseline.controlProfile.contentHash,
-        values: { responseExponent: 1.4 },
+        values: { moveDeadzoneRatio: 0.12 },
       },
     });
     expect(draft.cameraOverridesByProfileRef).toEqual({
@@ -116,11 +131,13 @@ describe("subject preset workbench projection", () => {
         createdAtIso: "2026-08-21T08:00:00.000Z",
         updatedAtIso: "2026-08-21T09:00:00.000Z",
       },
+      selectedControlFeelProfileRef:
+        "worldkit://control-feel-profile/humanoid.heavy-ground@1",
       selectedCameraPreferenceRef: null,
-      motion: {
-        baseParameters: { maximumSpeedMetersPerSecond: 12 },
-        currentValues: { maximumSpeedMetersPerSecond: 12 },
-        runtimeParameterNames: ["maximumSpeedMetersPerSecond"],
+      controlFeel: {
+        baseParameters: { runSpeedMetersPerSecond: 3 },
+        currentValues: { runSpeedMetersPerSecond: 2.8 },
+        runtimeParameterNames: ["runSpeedMetersPerSecond"],
       },
       control: {
         baseParameters: { moveDeadzoneRatio: 0.08 },
@@ -130,12 +147,22 @@ describe("subject preset workbench projection", () => {
       cameraByProfileRef: {},
     });
 
+    expect(draft.controlFeelOverridesByProfileRef).toEqual({
+      "worldkit://control-feel-profile/humanoid.heavy-ground@1": {
+        baseResourceRef:
+          "worldkit://control-feel-profile/humanoid.heavy-ground@1",
+        baseContentHash: `sha256:${"7".repeat(64)}`,
+        values: { runSpeedMetersPerSecond: 2.8 },
+      },
+    });
+
     expect(subjectPresetTuningRequestFromDraftV1(draft, "player")).toEqual({
       subjectEntityId: "player",
       expectedSubjectDefinitionRef: baseline.subjectDefinitionRef,
       expectedSubjectDefinitionContentHash: baseline.subjectDefinitionContentHash,
-      motionOverridesByProfileRef: {},
-      controlOverridesByProfileRef: {},
+      selectedControlFeelProfileRef:
+        "worldkit://control-feel-profile/humanoid.heavy-ground@1",
+      selectedControlProfileRef: baseline.controlProfile.resourceRef,
       cameraOverridesByProfileRef: {},
       cameraPreference: "auto",
     });

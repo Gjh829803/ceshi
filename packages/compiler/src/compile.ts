@@ -42,6 +42,29 @@ import type {
 
 import { sampleFractalNoise } from "./noise";
 
+export function assertPublishedMovementMediumSupported(
+  movementMedium: string,
+): void {
+  if (movementMedium === "water") {
+    throw new Error("SUBJECT_MOVEMENT_MEDIUM_UNSUPPORTED:");
+  }
+}
+
+function rejectPublishedWaterMediumProfile(mediumProfile: object): void {
+  // The V1 Medium Profile type has no water fields; this guards forged or
+  // stale Normalized IR that still smuggles them in at runtime.
+  const forged = mediumProfile as {
+    water?: unknown;
+    supportedMediums?: readonly string[];
+  };
+  if (
+    forged.water !== undefined ||
+    forged.supportedMediums?.includes("water")
+  ) {
+    assertPublishedMovementMediumSupported("water");
+  }
+}
+
 const EXECUTION_BIPED_BONE_IDS = [
   "chest",
   "foot.left",
@@ -625,9 +648,6 @@ function compileCapabilityAssemblyV1(
     resourceRef: profile.resourceRef,
     contentHash: profile.contentHash,
     motionKernelRef: profile.motionKernelRef,
-    parameters: structuredClone(profile.parameters),
-    safetyLimits: structuredClone(profile.safetyLimits),
-    authoringRanges: structuredClone(profile.authoringRanges ?? {}),
     motionTags: [...profile.motionTags],
   });
   const compileMotionKernel = (
@@ -674,6 +694,7 @@ function compileCapabilityAssemblyV1(
         : { maximumDistanceMeters: profile.maximumDistanceMeters }),
     };
   });
+  rejectPublishedWaterMediumProfile(assembly.mediumProfile);
   return {
     authoringAvailability: assembly.authoringAvailability,
     defaultMotionProfile: compileMotionProfile(assembly.defaultMotionProfile),
@@ -687,10 +708,7 @@ function compileCapabilityAssemblyV1(
       inputSpace: assembly.controlProfile.inputSpace,
       facingPolicy: assembly.controlProfile.facingPolicy,
       lateralMovementPolicy: assembly.controlProfile.lateralMovementPolicy,
-      inputTuning: structuredClone(assembly.controlProfile.inputTuning),
-      safetyLimits: structuredClone(assembly.controlProfile.safetyLimits),
-      authoringRanges: structuredClone(assembly.controlProfile.authoringRanges),
-      runtimeParameterNames: [...assembly.controlProfile.runtimeParameterNames],
+      moveDeadzoneRatio: assembly.controlProfile.moveDeadzoneRatio,
     },
     cameraContext: {
       resourceRef: assembly.cameraContextProfile.resourceRef,
@@ -731,14 +749,10 @@ function compileCapabilityAssemblyV1(
     },
     mediumProfile: {
       resourceRef: assembly.mediumProfile.resourceRef,
-      supportedMediums: [...assembly.mediumProfile.supportedMediums],
-      ground: structuredClone(assembly.mediumProfile.ground),
-      ...(assembly.mediumProfile.water === undefined
-        ? {}
-        : { water: structuredClone(assembly.mediumProfile.water) }),
-      ...(assembly.mediumProfile.air === undefined
-        ? {}
-        : { air: structuredClone(assembly.mediumProfile.air) }),
+      air: {
+        gravityRatio: assembly.mediumProfile.air.gravityRatio,
+        linearDragPerSecond: assembly.mediumProfile.air.linearDragPerSecond,
+      },
     },
     relationshipProfiles,
     harnessProfileRef: assembly.harnessProfile.resourceRef,
@@ -951,16 +965,48 @@ function compileSubjectsV3(
           maxStepHeightMeters: definition.collider.maxStepHeightMeters,
         },
         locomotion: {
-          mode: definition.locomotion.mode,
-          walkSpeedMetersPerSecond:
-            definition.locomotion.walkSpeedMetersPerSecond,
-          runSpeedMetersPerSecond:
-            definition.locomotion.runSpeedMetersPerSecond,
-          waterSpeedMetersPerSecond:
-            definition.locomotion.waterSpeedMetersPerSecond,
-          jumpSpeedMetersPerSecond:
-            definition.locomotion.jumpSpeedMetersPerSecond,
+          allowWalk: definition.locomotion.allowWalk,
+          allowRun: definition.locomotion.allowRun,
+          allowJump: definition.locomotion.allowJump,
         },
+        controlFeel: {
+          resourceRef: definition.controlFeel.resourceRef,
+          contentHash: definition.controlFeel.contentHash,
+          walkSpeedMetersPerSecond: definition.controlFeel.walkSpeedMetersPerSecond,
+          runSpeedMetersPerSecond: definition.controlFeel.runSpeedMetersPerSecond,
+          jumpSpeedMetersPerSecond: definition.controlFeel.jumpSpeedMetersPerSecond,
+          accelerationMetersPerSecondSquared:
+            definition.controlFeel.accelerationMetersPerSecondSquared,
+          decelerationMetersPerSecondSquared:
+            definition.controlFeel.decelerationMetersPerSecondSquared,
+          turnRateRadiansPerSecond: definition.controlFeel.turnRateRadiansPerSecond,
+          moveResponseExponent: definition.controlFeel.moveResponseExponent,
+          airControlRatio: definition.controlFeel.airControlRatio,
+          coyoteTimeSeconds: definition.controlFeel.coyoteTimeSeconds,
+          jumpBufferSeconds: definition.controlFeel.jumpBufferSeconds,
+          variableJumpHoldSeconds: definition.controlFeel.variableJumpHoldSeconds,
+          jumpHoldGravityRatio: definition.controlFeel.jumpHoldGravityRatio,
+          jumpReleaseGravityRatio: definition.controlFeel.jumpReleaseGravityRatio,
+        },
+        availableControlFeels: definition.availableControlFeels.map((feel) => ({
+          resourceRef: feel.resourceRef,
+          contentHash: feel.contentHash,
+          walkSpeedMetersPerSecond: feel.walkSpeedMetersPerSecond,
+          runSpeedMetersPerSecond: feel.runSpeedMetersPerSecond,
+          jumpSpeedMetersPerSecond: feel.jumpSpeedMetersPerSecond,
+          accelerationMetersPerSecondSquared:
+            feel.accelerationMetersPerSecondSquared,
+          decelerationMetersPerSecondSquared:
+            feel.decelerationMetersPerSecondSquared,
+          turnRateRadiansPerSecond: feel.turnRateRadiansPerSecond,
+          moveResponseExponent: feel.moveResponseExponent,
+          airControlRatio: feel.airControlRatio,
+          coyoteTimeSeconds: feel.coyoteTimeSeconds,
+          jumpBufferSeconds: feel.jumpBufferSeconds,
+          variableJumpHoldSeconds: feel.variableJumpHoldSeconds,
+          jumpHoldGravityRatio: feel.jumpHoldGravityRatio,
+          jumpReleaseGravityRatio: feel.jumpReleaseGravityRatio,
+        })),
         ...(definition.capabilityAssembly === undefined
           ? {}
           : {

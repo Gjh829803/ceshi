@@ -3,20 +3,16 @@ import type { TransformNode } from "@babylonjs/core/Meshes/transformNode.js";
 import type { Scene } from "@babylonjs/core/scene.pure.js";
 
 import type {
-  ExecutionMovementMediumV1,
+  ExecutionControlProfileV1,
   ExecutionSubjectV3,
   ControlInputAxesV2,
-  ControlTuningV1,
-  MotionParameterTuningV1,
+  PublishedMovementMediumV1,
   SemanticInputActionV1,
   Vec3,
   ViewControlFrameV1,
 } from "@whitebox-world/runtime-contracts";
 
-import {
-  compileMotionCommandV1,
-  withControlTuningV1,
-} from "./control-profile-runtime";
+import { compileMotionCommandV1 } from "./control-profile-runtime";
 import {
   MotionKernelRuntimeV1,
   type MotionKernelSnapshotV1,
@@ -25,7 +21,7 @@ import {
 export interface SubjectMotionSampleV1 {
   horizontalSpeedMetersPerSecond: number;
   runRequested: boolean;
-  movementMedium: "ground" | "air" | "water";
+  movementMedium: PublishedMovementMediumV1;
 }
 
 const LEGACY_CONTROL_PROFILE = {
@@ -35,20 +31,8 @@ const LEGACY_CONTROL_PROFILE = {
   inputSpace: "camera-relative",
   facingPolicy: "align-to-move",
   lateralMovementPolicy: "allowed",
-  inputTuning: {
-    moveDeadzoneRatio: 0.1,
-    responseExponent: 1.4,
-  },
-  safetyLimits: {
-    moveDeadzoneRatio: { minimum: 0, maximum: 0.95 },
-    responseExponent: { minimum: 0.25, maximum: 4 },
-  },
-  authoringRanges: {
-    moveDeadzoneRatio: { minimum: 0, maximum: 0.5, step: 0.01 },
-    responseExponent: { minimum: 0.25, maximum: 3, step: 0.05 },
-  },
-  runtimeParameterNames: ["moveDeadzoneRatio", "responseExponent"],
-} as const;
+  moveDeadzoneRatio: 0.1,
+} as const satisfies ExecutionControlProfileV1;
 
 /**
  * Compatibility facade. Input interpretation and movement execution are owned by
@@ -56,7 +40,6 @@ const LEGACY_CONTROL_PROFILE = {
  */
 export class SubjectController {
   private readonly motionKernel: MotionKernelRuntimeV1;
-  private controlTuning: ControlTuningV1 = {};
   readonly physicsController: MotionKernelRuntimeV1["physicsController"];
 
   constructor(
@@ -88,10 +71,8 @@ export class SubjectController {
     axes: Readonly<ControlInputAxesV2> = {},
   ): void {
     const command = compileMotionCommandV1(
-      withControlTuningV1(
-        this.subject.capabilityAssembly?.controlProfile ?? LEGACY_CONTROL_PROFILE,
-        this.controlTuning,
-      ),
+      this.subject.capabilityAssembly?.controlProfile ?? LEGACY_CONTROL_PROFILE,
+      this.motionKernel.activeControlFeel.moveResponseExponent,
       actions,
       viewControlFrame,
       axes,
@@ -99,57 +80,25 @@ export class SubjectController {
     this.motionKernel.step(command);
   }
 
+  publishSupport(): void {
+    this.motionKernel.publishSupport();
+  }
+
   requestMotionProfile(resourceRef: string): boolean {
     if (this.subject.capabilityAssembly === undefined) return false;
     return this.motionKernel.requestMotionProfile(resourceRef);
   }
 
-  setMotionTuning(tuning: MotionParameterTuningV1): boolean {
-    if (this.subject.capabilityAssembly === undefined) return false;
-    return this.motionKernel.setParameterTuning(tuning);
+  requestControlFeelProfile(resourceRef: string): boolean {
+    return this.motionKernel.requestControlFeelProfile(resourceRef);
   }
 
-  canSetMotionTuning(tuning: MotionParameterTuningV1): boolean {
-    if (this.subject.capabilityAssembly === undefined) return false;
-    return this.motionKernel.canSetParameterTuning(tuning);
-  }
-
-  setControlTuning(tuning: ControlTuningV1): boolean {
-    const profile = this.subject.capabilityAssembly?.controlProfile;
-    if (profile === undefined || !this.canSetControlTuning(tuning)) return false;
-    this.controlTuning = { ...tuning };
-    return true;
-  }
-
-  canSetControlTuning(tuning: ControlTuningV1): boolean {
-    const profile = this.subject.capabilityAssembly?.controlProfile;
-    if (profile === undefined) return false;
-    const entries = Object.entries(tuning);
-    return entries.every(([name, value]) => {
-      if (
-        !profile.runtimeParameterNames.includes(
-          name as (typeof profile.runtimeParameterNames)[number],
-        ) ||
-        typeof value !== "number" ||
-        !Number.isFinite(value)
-      ) return false;
-      const limit = profile.safetyLimits[
-        name as keyof typeof profile.safetyLimits
-      ];
-      return limit !== undefined && value >= limit.minimum && value <= limit.maximum;
-    });
-  }
-
-  getControlTuning(): ControlTuningV1 {
-    return { ...this.controlTuning };
+  get activeControlFeel(): MotionKernelRuntimeV1["activeControlFeel"] {
+    return this.motionKernel.activeControlFeel;
   }
 
   synchronizeVisual(): void {
     this.motionKernel.synchronizeVisual();
-  }
-
-  refreshMovementMedium(): void {
-    this.motionKernel.refreshMovementMedium();
   }
 
   sampleMotion(runRequested: boolean): SubjectMotionSampleV1 {
@@ -177,12 +126,8 @@ export class SubjectController {
     return this.motionKernel.controllerCenter;
   }
 
-  get movementMedium(): ExecutionMovementMediumV1 {
+  get movementMedium(): PublishedMovementMediumV1 {
     return this.motionKernel.movementMedium;
-  }
-
-  get hasPendingInitialGroundSupport(): boolean {
-    return this.motionKernel.hasPendingInitialGroundSupport;
   }
 
   get facingYawRadians(): number {
@@ -194,7 +139,6 @@ export class SubjectController {
   }
 
   reset(): void {
-    this.controlTuning = {};
     this.motionKernel.reset();
   }
 

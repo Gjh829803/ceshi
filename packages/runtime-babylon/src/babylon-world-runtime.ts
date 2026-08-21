@@ -25,7 +25,6 @@ import type {
   CameraTuningV1,
   CameraViewInputV1,
   ControlCaptureCapabilitiesV1,
-  ControlTuningV1,
   ControlCaptureRequestV1,
   ControlInputAxesV2,
   ControlBindingReceiptV2,
@@ -37,7 +36,7 @@ import type {
   ExecutionWaterBoundaryV3,
   ExecutionWaterV3,
   FixedInputV1,
-  MotionParameterTuningV1,
+  PublishedMovementMediumV1,
   RenderReadyReceiptV1,
   RuntimeControlCaptureFrameV1,
   SemanticInputActionV1,
@@ -51,6 +50,10 @@ import type {
 } from "@whitebox-world/runtime-contracts";
 import { TRUSTED_DEFAULT_CONTROLLER_ID } from "@whitebox-world/runtime-contracts";
 import { resolveGroundHumanoidAction } from "@whitebox-world/subject-actions";
+import {
+  queryLockedColliderSupportHeightMeters,
+  type LockedSupportColliderV1,
+} from "@whitebox-world/terrain-surface";
 
 import "./babylon-shader-bootstrap";
 import { createWhiteboxMaterials, type WhiteboxMaterials } from "./materials";
@@ -97,24 +100,15 @@ export interface BabylonWorldRuntimeOptions {
 type OwnedDisposer = () => void | Promise<void>;
 
 const WATER_SURFACE_CLASSIFICATION_EPSILON_METERS = 0.1;
-const LEGACY_CAMERA_RELATIVE_CONTROL_PROFILE: ExecutionControlProfileV1 = {
+const LEGACY_CAMERA_RELATIVE_CONTROL_PROFILE = {
   resourceRef: "worldkit://control-profile/legacy.camera-relative@1",
   contentHash: "sha256:legacy-control-profile",
   commandKind: "planar-vector",
   inputSpace: "camera-relative",
   facingPolicy: "align-to-move",
   lateralMovementPolicy: "allowed",
-  inputTuning: { moveDeadzoneRatio: 0, responseExponent: 1 },
-  safetyLimits: {
-    moveDeadzoneRatio: { minimum: 0, maximum: 0.95 },
-    responseExponent: { minimum: 0.25, maximum: 4 },
-  },
-  authoringRanges: {
-    moveDeadzoneRatio: { minimum: 0, maximum: 0.5, step: 0.01 },
-    responseExponent: { minimum: 0.25, maximum: 3, step: 0.05 },
-  },
-  runtimeParameterNames: ["moveDeadzoneRatio", "responseExponent"],
-};
+  moveDeadzoneRatio: 0,
+} as const satisfies ExecutionControlProfileV1;
 
 class WorldRuntimeDisposeErrorV1 extends Error {
   readonly name = "WorldRuntimeDisposeErrorV1";
@@ -222,6 +216,61 @@ function runtimeAabbsOverlap(
   );
 }
 
+/**
+ * Derives the locked support collider for a placed object from its execution
+ * primitive and frozen placement transform. Kinds or transforms the locked
+ * collider cannot represent throw OBJECT_SUPPORT_SURFACE_QUERY_UNSUPPORTED;
+ * the AABB top is never a fallback support surface.
+ */
+function lockedSupportColliderForPlacement(
+  executionPlan: ExecutionPlanV4,
+  placement: ExecutionLayoutPlacementV1,
+): LockedSupportColliderV1 {
+  const object = executionPlan.objects.find((row) => row.entityId === placement.entityId);
+  if (object === undefined) {
+    throw new Error(
+      `OBJECT_SUPPORT_SURFACE_QUERY_UNSUPPORTED: Supporting entity "${placement.entityId}" has no locked object collider.`,
+    );
+  }
+  const { positionMetersXYZ, rotationEulerRadiansXYZ, scaleXYZ } = placement.transform;
+  const primitive = object.primitive;
+  if (primitive.kind === "box") {
+    return {
+      kind: "box",
+      centerMetersXYZ: positionMetersXYZ,
+      halfExtentsMetersXYZ: [
+        (primitive.sizeMetersXYZ[0] / 2) * scaleXYZ[0],
+        (primitive.sizeMetersXYZ[1] / 2) * scaleXYZ[1],
+        (primitive.sizeMetersXYZ[2] / 2) * scaleXYZ[2],
+      ],
+      rotationEulerRadiansXYZ,
+    };
+  }
+  if (primitive.kind === "sphere" && scaleXYZ[0] === scaleXYZ[1] && scaleXYZ[1] === scaleXYZ[2]) {
+    return {
+      kind: "sphere",
+      centerMetersXYZ: positionMetersXYZ,
+      radiusMeters: primitive.radiusMeters * scaleXYZ[0],
+    };
+  }
+  if (
+    primitive.kind === "cylinder" &&
+    scaleXYZ[0] === scaleXYZ[2] &&
+    rotationEulerRadiansXYZ[0] === 0 &&
+    rotationEulerRadiansXYZ[2] === 0
+  ) {
+    return {
+      kind: "cylinder",
+      centerMetersXYZ: positionMetersXYZ,
+      radiusMeters: primitive.radiusMeters * scaleXYZ[0],
+      heightMeters: primitive.heightMeters * scaleXYZ[1],
+    };
+  }
+  throw new Error(
+    `OBJECT_SUPPORT_SURFACE_QUERY_UNSUPPORTED: Object "${object.entityId}" primitive kind "${primitive.kind}" with this transform has no locked support collider.`,
+  );
+}
+
 function revalidateSupportAssertion(
   executionPlan: ExecutionPlanV4,
   assertion: Extract<ExecutionLayoutAssertionV1, { kind: "supported-by" }>,
@@ -241,16 +290,22 @@ function revalidateSupportAssertion(
     return Math.max(...gaps) <= assertion.maximumSupportGapMeters + supportGapTolerance &&
       passing / gaps.length + 0.000001 >= assertion.minimumSupportRatio;
   }
-  const supporting = boundsByEntityId[assertion.supportingEntityId];
-  if (supporting === undefined) return false;
-  const overlapX = Math.max(0, Math.min(supported.maximumMetersXYZ[0], supporting.maximumMetersXYZ[0]) - Math.max(supported.minimumMetersXYZ[0], supporting.minimumMetersXYZ[0]));
-  const overlapZ = Math.max(0, Math.min(supported.maximumMetersXYZ[2], supporting.maximumMetersXYZ[2]) - Math.max(supported.minimumMetersXYZ[2], supporting.minimumMetersXYZ[2]));
-  const area = (supported.maximumMetersXYZ[0] - supported.minimumMetersXYZ[0]) *
-    (supported.maximumMetersXYZ[2] - supported.minimumMetersXYZ[2]);
-  const ratio = area === 0 ? 0 : overlapX * overlapZ / area;
-  const gap = Math.abs(bottom - supporting.maximumMetersXYZ[1]);
-  return gap <= assertion.maximumSupportGapMeters + supportGapTolerance &&
-    ratio + 0.000001 >= assertion.minimumSupportRatio;
+  const supportingPlacement =
+    executionPlan.layout.placementsByEntityId[assertion.supportingEntityId];
+  if (supportingPlacement === undefined) return false;
+  const collider = lockedSupportColliderForPlacement(executionPlan, supportingPlacement);
+  const samples = runtimeSupportSamples(supported);
+  const gaps: number[] = [];
+  for (const point of samples) {
+    const heightMeters = queryLockedColliderSupportHeightMeters(collider, point);
+    if (heightMeters !== undefined) gaps.push(Math.abs(bottom - heightMeters));
+  }
+  if (gaps.length === 0) return false;
+  const passing = gaps.filter((gap) =>
+    gap <= assertion.maximumSupportGapMeters + supportGapTolerance
+  ).length;
+  return Math.max(...gaps) <= assertion.maximumSupportGapMeters + supportGapTolerance &&
+    passing / samples.length + 0.000001 >= assertion.minimumSupportRatio;
 }
 
 function revalidateClearanceAssertion(
@@ -747,16 +802,17 @@ export class BabylonWorldRuntime implements WorldRuntimeSessionV3 {
       for (const subject of this.executionPlan.subjects) {
         const controller = this.controllerFor(subject.entityId);
         const controlled = subject.entityId === this.controlledEntityId;
-        if (
-          controlled ||
-          controller.movementMedium !== "ground" ||
-          controller.hasPendingInitialGroundSupport
-        ) {
+        if (controlled || controller.movementMedium !== "ground") {
           controller.step(
             controlled ? input.actions : [],
             viewControlFrame,
             controlled ? input.axes : undefined,
           );
+        } else {
+          // Uncontrolled grounded subjects are not simulated with input or
+          // gravity, but they still appear in the Snapshot, so they receive
+          // one support query and resolver publish per fixed tick.
+          controller.publishSupport();
         }
       }
       physicsEngine._step(FIXED_TIME_STEP_SECONDS);
@@ -765,7 +821,6 @@ export class BabylonWorldRuntime implements WorldRuntimeSessionV3 {
         const controller = this.controllerFor(subject.entityId);
         const visual = this.visualFor(subject.entityId);
         controller.synchronizeVisual();
-        controller.refreshMovementMedium();
         if (subject.entityId !== this.controlledEntityId) {
           visual.stepAnimation(this.tick, "idle");
           continue;
@@ -799,8 +854,6 @@ export class BabylonWorldRuntime implements WorldRuntimeSessionV3 {
             motionTags: motion.motionTags,
             relationshipRole: "none" as const,
             safeFallbackActive: motion.fallbackActive,
-            motionParameterTuning: motion.parameterTuning,
-            controlParameterTuning: controller.getControlTuning(),
             ...(motion.lastFailureCode === undefined
               ? {}
               : { motionFailureCode: motion.lastFailureCode }),
@@ -815,6 +868,8 @@ export class BabylonWorldRuntime implements WorldRuntimeSessionV3 {
         activeActionId: this.visualFor(subject.entityId).activeActionId,
         forwardXYZ: motion.forwardXYZ,
         speedMetersPerSecond: motion.speedMetersPerSecond,
+        activeControlFeelProfileRef: motion.activeControlFeelProfileRef,
+        locomotionMode: motion.locomotionMode,
         ...capabilityState,
       };
     }
@@ -1020,7 +1075,7 @@ export class BabylonWorldRuntime implements WorldRuntimeSessionV3 {
 
   private detectMovementMedium(
     controller: SubjectController,
-  ): "ground" | "air" | "water" {
+  ): PublishedMovementMediumV1 {
     return controller.movementMedium;
   }
 
@@ -1059,7 +1114,9 @@ export class BabylonWorldRuntime implements WorldRuntimeSessionV3 {
       relationshipRole: "none",
       cameraContextTags: [
         ...(hasForwardControlIntentV1(
-          subject.capabilityAssembly?.controlProfile ?? LEGACY_CAMERA_RELATIVE_CONTROL_PROFILE,
+          subject.capabilityAssembly?.controlProfile ??
+            LEGACY_CAMERA_RELATIVE_CONTROL_PROFILE,
+          controller.activeControlFeel.moveResponseExponent,
           this.activeInputActions,
           this.activeInputAxes,
         )
@@ -1129,30 +1186,13 @@ export class BabylonWorldRuntime implements WorldRuntimeSessionV3 {
     return changed;
   }
 
-  setMotionTuning(
-    subjectEntityId: string,
-    tuning: MotionParameterTuningV1,
-  ): WorldRuntimeSnapshotV3 {
+  requestControlFeelProfile(subjectEntityId: string, resourceRef: string): boolean {
     this.assertUsable();
-    if (!this.controllerFor(subjectEntityId).setMotionTuning(tuning)) {
-      throw new RangeError("Motion tuning must use registered parameters inside safety limits.");
-    }
-    this.latestRenderReadyReceipt = undefined;
-    return this.snapshot();
-  }
-
-  setControlTuning(
-    subjectEntityId: string,
-    tuning: ControlTuningV1,
-  ): WorldRuntimeSnapshotV3 {
-    this.assertUsable();
-    if (!this.controllerFor(subjectEntityId).setControlTuning(tuning)) {
-      throw new RangeError(
-        "Control tuning must use registered parameters inside safety limits.",
-      );
-    }
-    this.latestRenderReadyReceipt = undefined;
-    return this.snapshot();
+    const changed = this.controllerFor(subjectEntityId).requestControlFeelProfile(
+      resourceRef,
+    );
+    if (changed) this.latestRenderReadyReceipt = undefined;
+    return changed;
   }
 
   applySubjectPresetTuning(
@@ -1190,49 +1230,25 @@ export class BabylonWorldRuntime implements WorldRuntimeSessionV3 {
       );
     }
     const controller = this.controllerFor(subject.entityId);
-    const motionProfiles = [
-      assembly.defaultMotionProfile,
-      ...assembly.optionalMotionProfiles,
-      assembly.fallbackMotionProfile,
+    const controlFeelProfiles = [
+      subject.controlFeel,
+      ...subject.availableControlFeels.filter(
+        (profile) => profile.resourceRef !== subject.controlFeel.resourceRef,
+      ),
     ];
-    const motionOverrides = Object.entries(request.motionOverridesByProfileRef);
-    const activeMotionProfileRef = controller.motionSnapshot().activeMotionProfileRef;
-    if (motionOverrides.some(([profileRef, override]) => {
-      const profile = motionProfiles.find((candidate) => candidate.resourceRef === profileRef);
-      return profile === undefined ||
-        override.baseResourceRef !== profileRef ||
-        override.baseContentHash !== profile.contentHash ||
-        profileRef !== activeMotionProfileRef;
-    })) {
+    const selectedControlFeelProfile = controlFeelProfiles.find(
+      (profile) => profile.resourceRef === request.selectedControlFeelProfileRef,
+    );
+    if (selectedControlFeelProfile === undefined) {
       return reject(
-        "SUBJECT_PRESET_MOTION_PROFILE_MISMATCH",
-        "Motion overrides must target the active exact locked Motion Profile.",
+        "SUBJECT_PRESET_CONTROL_FEEL_PROFILE_MISMATCH",
+        "The selected Control Feel Profile is not locked in the Subject Execution Plan.",
       );
     }
-    const motionTuning = motionOverrides[0]?.[1].values ?? {};
-    if (motionOverrides.length > 1 || !controller.canSetMotionTuning(motionTuning)) {
-      return reject(
-        "SUBJECT_PRESET_INVALID_MOTION_TUNING",
-        "Motion tuning is unsupported or outside its safety limits.",
-      );
-    }
-
-    const controlOverrides = Object.entries(request.controlOverridesByProfileRef);
-    if (controlOverrides.some(([profileRef, override]) =>
-      profileRef !== assembly.controlProfile.resourceRef ||
-      override.baseResourceRef !== profileRef ||
-      override.baseContentHash !== assembly.controlProfile.contentHash
-    )) {
+    if (request.selectedControlProfileRef !== assembly.controlProfile.resourceRef) {
       return reject(
         "SUBJECT_PRESET_CONTROL_PROFILE_MISMATCH",
-        "Control overrides must target the exact locked Control Profile.",
-      );
-    }
-    const controlTuning = controlOverrides[0]?.[1].values ?? {};
-    if (controlOverrides.length > 1 || !controller.canSetControlTuning(controlTuning)) {
-      return reject(
-        "SUBJECT_PRESET_INVALID_CONTROL_TUNING",
-        "Control tuning is unsupported or outside its safety limits.",
+        "The selected Control Profile does not match the exact locked Control Profile.",
       );
     }
 
@@ -1266,12 +1282,9 @@ export class BabylonWorldRuntime implements WorldRuntimeSessionV3 {
         "Camera tuning or preference is unsupported by the selected Camera Profile.",
       );
     }
-    if (
-      !controller.setMotionTuning(motionTuning) ||
-      !controller.setControlTuning(controlTuning)
-    ) {
+    if (!controller.requestControlFeelProfile(selectedControlFeelProfile.resourceRef)) {
       throw new Error(
-        "Preset tuning validation diverged from fixed-tick Runtime application.",
+        "Preset profile validation diverged from fixed-tick Runtime application.",
       );
     }
     this.latestRenderReadyReceipt = undefined;
@@ -1296,8 +1309,7 @@ export class BabylonWorldRuntime implements WorldRuntimeSessionV3 {
       motion.speedMetersPerSecond,
     ].every(Number.isFinite);
     const mediumCompatible =
-      assembly === undefined ||
-      activeMotionKernel?.supportedMediums.includes(state.movementMedium) === true;
+      state.movementMedium === "ground" || state.movementMedium === "air";
     const cameraState = this.snapshot().camera;
     const cameraFinite = cameraState.positionMetersXYZ.every(Number.isFinite);
     const availableSocketIds = new Set(subject.sockets.map((socket) => socket.id));

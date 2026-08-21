@@ -16,10 +16,12 @@ import {
 
 const SUBJECT_REF =
   "worldkit://subject-definition/animal.quadruped.forward-steer@1";
-const MOTION_REF = "worldkit://motion-profile/forward-steer.medium@1";
+const MOTION_REF = "worldkit://motion-profile/free-ground.humanoid-medium@1";
 const FALLBACK_MOTION_REF = "worldkit://motion-profile/safe-ground@1";
 const CONTROL_REF =
-  "worldkit://control-profile/throttle-steer.subject-local@1";
+  "worldkit://control-profile/planar.camera-relative@1";
+const CONTROL_FEEL_REF =
+  "worldkit://control-feel-profile/humanoid.medium-ground@1";
 const CAMERA_CONTEXT_REF =
   "worldkit://camera-context/capability-driven.default@1";
 const ORBIT_CAMERA_REF = "worldkit://camera-profile/orbit.medium@1";
@@ -72,7 +74,7 @@ function validInput(): SubjectPresetCandidateInputV1 {
           default: {
             sourceProfileRef: MOTION_REF,
             sourceContentHash: lockedHash(MOTION_REF),
-            disposition: "derive",
+            disposition: "preserve",
           },
           optional: [{
             sourceProfileRef: FALLBACK_MOTION_REF,
@@ -85,6 +87,11 @@ function validInput(): SubjectPresetCandidateInputV1 {
             disposition: "preserve",
           },
         },
+        controlFeel: {
+          profileRef: CONTROL_FEEL_REF,
+          contentHash: lockedHash(CONTROL_FEEL_REF),
+          disposition: "derive",
+        },
         control: {
           profileRef: CONTROL_REF,
           contentHash: lockedHash(CONTROL_REF),
@@ -94,10 +101,10 @@ function validInput(): SubjectPresetCandidateInputV1 {
         defaultCameraRigProfileRef: ORBIT_CAMERA_REF,
       },
       overrides: {
-        motionByProfileRef: {
-          [MOTION_REF]: {
-            baseResourceRef: MOTION_REF,
-            baseContentHash: lockedHash(MOTION_REF),
+        controlFeelByProfileRef: {
+          [CONTROL_FEEL_REF]: {
+            baseResourceRef: CONTROL_FEEL_REF,
+            baseContentHash: lockedHash(CONTROL_FEEL_REF),
             values: { turnRateRadiansPerSecond: 2.4 },
           },
         },
@@ -283,7 +290,7 @@ describe("subject preset candidate V1", () => {
     );
   });
 
-  it("locks every Motion role and materializes exactly the profiles marked derive", () => {
+  it("locks every Motion role and rejects numeric Motion derivation", () => {
     const wrongOptionalRole = clone(validCandidate());
     wrongOptionalRole.semanticContent.selections.motionRoles.optional = [];
     expect(() => parseSubjectPresetCandidateV1(rehash(wrongOptionalRole))).toThrow(
@@ -296,7 +303,7 @@ describe("subject preset candidate V1", () => {
     derivedFallbackWithoutOverride.semanticContent.selections.motionRoles.optional[0]!.disposition =
       "derive";
     expect(() => parseSubjectPresetCandidateV1(rehash(derivedFallbackWithoutOverride))).toThrow(
-      "SUBJECT_PRESET_CANDIDATE_MOTION_OVERRIDE_SET_MISMATCH",
+      "SUBJECT_PRESET_CANDIDATE_MOTION_DERIVATION_UNSUPPORTED",
     );
 
     const staleRole = clone(validCandidate());
@@ -309,15 +316,15 @@ describe("subject preset candidate V1", () => {
 
   it("rejects unknown, non-finite, and out-of-range Runtime parameters", () => {
     const unknown = clone(validCandidate());
-    unknown.semanticContent.overrides.motionByProfileRef[MOTION_REF]!.values = {
+    unknown.semanticContent.overrides.controlFeelByProfileRef[CONTROL_FEEL_REF]!.values = {
       doesNotExist: 1,
     };
     expect(() => parseSubjectPresetCandidateV1(rehash(unknown))).toThrow(
-      "SUBJECT_PRESET_CANDIDATE_UNKNOWN_PARAMETER",
+      "SUBJECT_PRESET_CANDIDATE_INVALID_CONTROL_FEEL_OVERRIDE",
     );
 
     const nonFinite = clone(validCandidate());
-    nonFinite.semanticContent.overrides.motionByProfileRef[MOTION_REF]!.values = {
+    nonFinite.semanticContent.overrides.controlFeelByProfileRef[CONTROL_FEEL_REF]!.values = {
       turnRateRadiansPerSecond: Number.NaN,
     };
     expect(() => parseSubjectPresetCandidateV1(nonFinite)).toThrow(
@@ -325,11 +332,11 @@ describe("subject preset candidate V1", () => {
     );
 
     const unsafe = clone(validCandidate());
-    unsafe.semanticContent.overrides.motionByProfileRef[MOTION_REF]!.values = {
+    unsafe.semanticContent.overrides.controlFeelByProfileRef[CONTROL_FEEL_REF]!.values = {
       turnRateRadiansPerSecond: 100,
     };
     expect(() => parseSubjectPresetCandidateV1(rehash(unsafe))).toThrow(
-      "SUBJECT_PRESET_CANDIDATE_PARAMETER_OUT_OF_RANGE",
+      "SUBJECT_PRESET_CANDIDATE_INVALID_CONTROL_FEEL_OVERRIDE",
     );
   });
 
@@ -376,8 +383,12 @@ describe("subject preset candidate V1", () => {
 function legacySnapshot(): Record<string, unknown> {
   const definition = builtInSubjectResourceRegistry.resolveSubjectDefinition(SUBJECT_REF);
   const motion = builtInSubjectResourceRegistry.resolveMotionProfile(MOTION_REF);
+  const controlFeel = builtInSubjectResourceRegistry.resolveControlFeelProfile(CONTROL_FEEL_REF);
   const camera = builtInSubjectResourceRegistry.resolveCameraRigProfile(ORBIT_CAMERA_REF);
-  if (definition === undefined || motion === undefined || camera === undefined) {
+  if (
+    definition === undefined || motion === undefined || controlFeel === undefined ||
+    camera === undefined
+  ) {
     throw new Error("Missing legacy fixture resources");
   }
   return {
@@ -401,15 +412,28 @@ function legacySnapshot(): Record<string, unknown> {
       collisionRecoveryMetersPerSecond: 3.25,
     },
     motionParameterDraft: {
-      ...motion.parameters,
+      ...Object.fromEntries([
+        "walkSpeedMetersPerSecond",
+        "runSpeedMetersPerSecond",
+        "jumpSpeedMetersPerSecond",
+        "accelerationMetersPerSecondSquared",
+        "decelerationMetersPerSecondSquared",
+        "turnRateRadiansPerSecond",
+        "moveResponseExponent",
+        "airControlRatio",
+        "coyoteTimeSeconds",
+        "jumpBufferSeconds",
+        "variableJumpHoldSeconds",
+        "jumpHoldGravityRatio",
+        "jumpReleaseGravityRatio",
+      ].map((name) => [name, controlFeel[name as keyof typeof controlFeel]])),
       turnRateRadiansPerSecond: 2.4,
       jumpSpeedMetersPerSecond: 3.1,
-      bodyLeanMaximumRadians: 0.09,
     },
     motionParameterSupport: {
-      runtimeParameterNames: Object.keys(motion.parameters),
+      runtimeParameterNames: [],
       draftOnlyParameterNames: [],
-      authoringRanges: motion.authoringRanges ?? {},
+      authoringRanges: {},
     },
     inputGuide: [],
     compatibleProfiles: [
@@ -417,7 +441,11 @@ function legacySnapshot(): Record<string, unknown> {
         resourceRef: MOTION_REF,
         contentHash: motion.contentHash,
         kind: "motion-profile",
-        parameters: motion.parameters,
+      },
+      {
+        resourceRef: CONTROL_FEEL_REF,
+        contentHash: controlFeel.contentHash,
+        kind: "control-feel-profile",
       },
       {
         resourceRef: ORBIT_CAMERA_REF,
@@ -461,12 +489,11 @@ describe("legacy Authoring snapshot V4 adapter", () => {
       importOptions,
     );
 
-    expect(candidate.semanticContent.overrides.motionByProfileRef).toEqual({
-      [MOTION_REF]: {
-        baseResourceRef: MOTION_REF,
-        baseContentHash: lockedHash(MOTION_REF),
+    expect(candidate.semanticContent.overrides.controlFeelByProfileRef).toEqual({
+      [CONTROL_FEEL_REF]: {
+        baseResourceRef: CONTROL_FEEL_REF,
+        baseContentHash: lockedHash(CONTROL_FEEL_REF),
         values: {
-          bodyLeanMaximumRadians: 0.09,
           jumpSpeedMetersPerSecond: 3.1,
           turnRateRadiansPerSecond: 2.4,
         },
@@ -508,7 +535,7 @@ describe("legacy Authoring snapshot V4 adapter", () => {
         resourceRef: control.resourceRef,
         contentHash: control.contentHash,
         kind: "control-profile",
-        parameters: control.inputTuning,
+        parameters: { moveDeadzoneRatio: control.moveDeadzoneRatio },
       },
       {
         resourceRef: secondaryCamera.resourceRef,
@@ -518,7 +545,6 @@ describe("legacy Authoring snapshot V4 adapter", () => {
       },
     );
     snapshot.controlTuning = {
-      ...control.inputTuning,
       moveDeadzoneRatio: 0.2,
     };
     snapshot.cameraTuningByProfileRef = {

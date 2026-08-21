@@ -47,7 +47,7 @@ describe("subject public-default registry", () => {
     expect(defaults.every(Object.isFrozen)).toBe(true);
   });
 
-  it("publishes the reviewed quadruped movement and orbit tuning as immutable v2", () => {
+  it("publishes the P1.5 quadruped default with Motion and Control Feel authority separated", () => {
     const entry = builtInSubjectDefaultRegistry.resolvePublicDefault(
       "animal.quadruped.forward-steer",
     );
@@ -63,23 +63,13 @@ describe("subject public-default registry", () => {
     const motion = builtInSubjectResourceRegistry.resolveMotionProfile(
       definition.profiles.motion.defaultMotionProfileRef,
     );
-    const context = builtInSubjectResourceRegistry.resolveCameraContextProfile(
-      definition.profiles.cameraContextProfileRef,
+    const controlFeel = builtInSubjectResourceRegistry.resolveControlFeelProfile(
+      definition.profiles.controlFeelProfileRef,
     );
-    const camera = context === undefined
-      ? undefined
-      : builtInSubjectResourceRegistry.resolveCameraRigProfile(
-          context.defaultCameraRigProfileRef,
-        );
-    expect(motion?.parameters).toMatchObject({
+    expect(motion).not.toHaveProperty("parameters");
+    expect(controlFeel).toMatchObject({
       turnRateRadiansPerSecond: 2.4,
       jumpSpeedMetersPerSecond: 3.1,
-      bodyLeanMaximumRadians: 0.09,
-    });
-    expect(camera?.parameters).toMatchObject({
-      targetHeightMeters: 1.35,
-      collisionRetractionMetersPerSecond: 4.5,
-      collisionRecoveryMetersPerSecond: 3.25,
     });
   });
 

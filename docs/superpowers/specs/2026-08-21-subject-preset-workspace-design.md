@@ -1,6 +1,6 @@
 # Subject Preset Workspace and Versioned Publishing Design
 
-- Status: approved for implementation
+- Status: implemented; amended for the P1.5 authority model
 - Date: 2026-08-21
 - Target branch after verification: `main`
 - Development branch: `feature/subject-preset-workspace`
@@ -9,7 +9,9 @@
 
 ## 1. Decision
 
-Add one authoring workspace for tuning a Subject Package's Motion, Control, and Camera Profiles, saving named local versions, choosing one local default, exporting a locked publication candidate, promoting that candidate to immutable Registry resource versions, and selecting one exact public default per stable Subject Definition id from a Git-controlled catalog.
+Add one authoring workspace for selecting a Subject Package's Motion algorithm and tuning its Control Feel, Control deadzone, and Camera Profiles. The workspace saves named local versions, chooses one local default, exports a locked publication candidate, promotes that candidate to immutable Registry resource versions, and selects one exact public default per stable Subject Definition id from a Git-controlled catalog.
+
+P1.5 owns the final authority split: Motion Profiles select an algorithm and carry no numeric parameter bag; Control Feel owns movement speeds, acceleration/deceleration, turn rate, jump behavior and response exponent; Control owns only input interpretation such as `moveDeadzoneRatio`; Camera owns framing. Subject Preset publication must preserve this split rather than recreating Motion tuning as an overlay.
 
 The browser remains an untrusted preview and authoring client. It may read files selected by the user, store local drafts, and download JSON, but it must not write the repository, invoke Git, commit, push, or merge. A local CLI performs validation, deterministic planning, and explicit repository writes on a non-`main` branch. Git review, verification, and merge remain the authority that turns a candidate into the public default.
 
@@ -33,7 +35,8 @@ Publication Candidate
   portable, immutable, locked, untrusted JSON
       ↓ validate / plan / promote on a branch
 Registry Resource Versions
-  immutable Motion, Control, Camera and Subject Definition resources
+  immutable Control Feel, Control, Camera and Subject Definition resources;
+  exact Motion selections remain reusable
       ↓ update Git-controlled pointer and merge
 Public Default
   one exact Subject Definition Ref and Hash per Subject Definition id on `main`
@@ -45,8 +48,9 @@ The public default is not “the newest version” and Runtime must never guess 
 
 ### 3.1 Included
 
-- Motion parameters declared by the active Motion Profile and Kernel.
-- Control input tuning that the current Runtime consumes: deadzone and response curve. Vehicle steering response/return and speed-dependent turn sensitivity remain Motion parameters. Structural input-space and facing policies remain Registry-authored.
+- Exact default/optional/fallback Motion Profile selections. Motion Profiles are bag-free algorithm selectors and are never numerically derived.
+- Control Feel tuning for the closed P1.5 Ground/Air vocabulary, including speed, acceleration/deceleration, turn rate, jump behavior and response exponent.
+- Control input tuning for the current Runtime's `moveDeadzoneRatio`. Structural input-space and facing policies remain Registry-authored.
 - Every compatible Camera Rig Profile, with independent tuning per profile rather than one global tuning object.
 - Named local versions, a local default pointer, restore, compare, duplicate, rename and delete operations.
 - Migration from current fragmented `worldkit.motion-draft.v4.*`, `worldkit.camera-tuning.v4.*`, subject selection and camera-preference keys.
@@ -56,7 +60,7 @@ The public default is not “the newest version” and Runtime must never guess 
 - A Git-controlled public-default catalog.
 - A typed Subject Onboarding Manifest, validation, planning and generation for supported asset/whitebox subjects.
 - Playground panels for tuning, local versions, publication evidence and subject onboarding.
-- Stable Browser APIs for reading baseline closure, applying transient tuning and exporting snapshots.
+- Stable Browser APIs for reading baseline closure, selecting exact locked Feel/Control Refs, applying Camera session preview, and exporting snapshots.
 - Tests proving local isolation, resource-lock integrity, Runtime support, deterministic promotion and all-six existing Subject Package compatibility.
 
 ### 3.2 Excluded
@@ -82,9 +86,10 @@ interface SubjectPresetWorkingDraftV1 {
   baseSubjectDefinitionRef: string;
   baseSubjectDefinitionContentHash: string;
   selectedMotionProfileRef: string;
+  selectedControlFeelProfileRef: string;
   selectedControlProfileRef: string;
   selectedCameraPreferenceRef: string | null;
-  motionOverridesByProfileRef: Readonly<Record<string, NumericProfileOverrideV1>>;
+  controlFeelOverridesByProfileRef: Readonly<Record<string, NumericProfileOverrideV1>>;
   controlOverridesByProfileRef: Readonly<Record<string, NumericProfileOverrideV1>>;
   cameraOverridesByProfileRef: Readonly<Record<string, NumericProfileOverrideV1>>;
   createdAtIso: string;
@@ -141,37 +146,23 @@ The first migration reads the existing V4 motion and camera keys once, creates o
 
 ## 5. Runtime tuning authority
 
-### 5.1 Motion
+### 5.1 Motion and Control Feel
 
-Motion tuning continues through the active `MotionProfileV1`. Only `runtimeParameterNames` are applied live. Values must be finite, within `safetyLimits`, and named in the Profile. The UI uses `authoringRanges` for sliders.
+Motion is selection-only. A `MotionProfileV1` identifies the locked Kernel/algorithm and semantic motion tags; it exposes no `parameters`, `safetyLimits` or `authoringRanges` fields. All Motion publication roles must therefore use `preserve` in Candidate V1.
+
+Control Feel is the numeric movement-authority lane, but Runtime consumes it only as an exact locked `control-feel-profile` Ref/hash embedded in the Execution Plan. A local draft may hold proposed numeric differences for the centralized P1.5 vocabulary; those values do not change the running subject until `promote` materializes a new Registry resource and the resulting locked Ref is selected. Runtime snapshots publish the active Control Feel Ref, never a second transient numeric overlay.
 
 ### 5.2 Control
 
-Control becomes a first-class transient tuning surface.
+Control is a separate, narrow authoring surface.
 
 ```ts
 interface ControlTuningV1 {
   moveDeadzoneRatio?: number;
-  responseExponent?: number;
 }
 ```
 
-These are the exact two fields already consumed by
-`ControlProfileRuntime`. Digital and analog longitudinal/lateral intent is
-resolved once, and `hasForwardControlIntentV1` consumes the same resolved axes
-as command compilation. `ControlProfileV1` declares this closed numeric
-vocabulary, safety limits, authoring ranges and `runtimeParameterNames`.
-Runtime accepts only registered names. Transient tuning does not mutate the
-locked Control Profile and resets with the session.
-
-The frozen but not yet implemented P1.5 design moves response/character feel
-numbers to a future `control-feel-profile`. This workspace does not implement
-or compete with that migration. Its persistence and publication envelopes are
-resource-ref/hash based, so a later schema version can add
-`control-feel-profile` as another typed lane without changing local-version,
-candidate or public-default lifecycles.
-
-Browser and Runtime contracts add `setControlTuning`, `getControlTuning`, and the relevant snapshot evidence. Input compilation consumes the active merged values exactly once; no Adapter or physical-key handler owns a competing curve.
+This is the exact draft field later materialized into a `ControlProfileV1`. Digital and analog longitudinal/lateral intent is resolved once, and `hasForwardControlIntentV1` consumes the same locked deadzone and Control Feel response exponent as command compilation. Runtime and Browser expose no Feel/Control numeric setter or getter. This prevents one Profile Ref/hash from producing multiple physical behaviors and keeps the Registry Lock reproducible.
 
 ### 5.3 Camera
 
@@ -179,12 +170,7 @@ Camera tuning remains per Camera Rig Profile. Local data stores a map keyed by e
 
 The workspace labels conditional parameters truthfully. A control is disabled or annotated when the active algorithm, `headingSource`, or `recenterMode` cannot consume it. No slider may claim “applied” without Runtime snapshot or trace evidence.
 
-Named-version restore uses one atomic `applySubjectPresetTuning` Runtime
-request containing Motion and Control overrides plus all Camera overrides keyed
-by exact Profile Ref and hash. Runtime validates the complete request before
-changing state and returns a committed/rejected receipt. Individual setters
-remain available for slider preview; restore/default application does not
-simulate a transaction by switching Camera Profiles one at a time.
+Named-version restore uses one atomic `applySubjectPresetTuning` Runtime request containing `selectedControlFeelProfileRef`, `selectedControlProfileRef`, all Camera overrides keyed by exact Profile Ref/hash, and the Camera preference. Runtime first validates the selected Feel against `availableControlFeels`, requires the exact compiled Control Ref, validates every Camera entry, and only then changes state. Feel/Control numeric draft maps are deliberately absent from this request. Camera keeps its session-preview setters because its transient view state is separately published in the Camera snapshot.
 
 ## 6. Publication candidate
 
@@ -209,6 +195,11 @@ interface SubjectPresetCandidateV1 {
         optional: readonly MotionPublicationRoleV1[];
         fallback: MotionPublicationRoleV1;
       };
+      controlFeel: {
+        profileRef: string;
+        contentHash: string;
+        disposition: "derive" | "preserve";
+      };
       control: {
         profileRef: string;
         contentHash: string;
@@ -218,7 +209,7 @@ interface SubjectPresetCandidateV1 {
       defaultCameraRigProfileRef: string;
     };
     overrides: {
-      motionByProfileRef: Readonly<Record<string, NumericProfileOverrideV1>>;
+      controlFeelByProfileRef: Readonly<Record<string, NumericProfileOverrideV1>>;
       controlByProfileRef: Readonly<Record<string, NumericProfileOverrideV1>>;
       cameraByProfileRef: Readonly<Record<string, NumericProfileOverrideV1>>;
       cameraPublicationBySourceProfileRef: Readonly<Record<string, {
@@ -251,14 +242,15 @@ candidate import derives and verifies it instead of trusting free-form input.
 `NumericProfileOverrideV1` is
 `{ baseResourceRef, baseContentHash, values }`, where `values` is a closed
 numeric parameter map. `MotionPublicationRoleV1` records the exact source
-Ref/hash plus a `derive | preserve` disposition. Only `semanticContent`
+Ref/hash; Candidate V1 requires its disposition to remain `preserve`. Numeric
+derivation is available on the selected Control Feel and Control lanes. Only `semanticContent`
 participates in `semanticContentHash`. Provenance is validated but can change
 without changing proposed Registry resources.
 
 The sole closure authority is the pure
 `resolveSubjectPresetClosureV1(registry, subjectDefinitionRef)` function in
 `subject-registry`. It traverses the exact Subject Definition;
-default/optional/fallback Motion Profiles and Kernels; Control Profile; Camera
+default/optional/fallback Motion Profiles and Kernels; Control Feel and Control Profiles; Camera
 Context, every reachable Rig Profile, Algorithm and Modifier; Medium, Harness,
 Pose and Render resources; and asset, rig, animation and collider dependencies.
 It rejects cycles and missing refs, deduplicates by Ref, sorts lexicographically
@@ -279,6 +271,10 @@ disposition is `derive`, otherwise the exact preserved Ref. The keys of
 `derive`; a preserved Profile cannot have overrides, and a derived Profile
 must have at least one override. Modifier-only rules need no synthetic Camera
 Profile entry. Any mismatch is rejected rather than ignored.
+
+Control Feel V1 permits only the selected locked Control Feel Profile. Its
+override map must be empty when `preserve`, or contain exactly that Ref/hash
+when `derive`; promotion materializes one subject-scoped Control Feel Profile.
 
 Control V1 permits only the selected locked Control Profile. If
 `controlByProfileRef` contains an override, its sole key must equal
@@ -303,9 +299,9 @@ The candidate parser rejects:
 - forged or malformed browser-reported harness provenance;
 - arbitrary paths, URIs, scripts or executable payloads.
 
-Default, optional and fallback Motion roles are always recorded. A role marked
-`derive` is materialized; a role marked `preserve` keeps its exact Ref/hash.
-The plan validates every reachable Kernel and role, while retaining explicitly
+Default, optional and fallback Motion roles are always recorded and must be
+`preserve`; numeric Motion derivation is rejected. The plan validates every
+reachable Kernel and role, while retaining explicitly
 declared safe-stop fallbacks that intentionally emit no active command.
 
 ## 7. Versioned promotion
@@ -350,12 +346,12 @@ removes new targets.
 
 ### 7.2 Subject-scoped derived resources
 
-Normal publication creates subject-scoped Motion, Control and Camera Profile versions. Shared algorithms, Kernels and generic base Profiles remain reusable. Tuning one subject therefore cannot mutate another subject's effective defaults.
+Normal publication creates subject-scoped Control Feel, Control and Camera Profile versions. Motion Profiles remain exact reusable algorithm selections. Shared algorithms, Kernels and generic base Profiles remain reusable. Tuning one subject therefore cannot mutate another subject's effective defaults.
 
 Deterministic derived identities use the Subject Definition id plus role, for example:
 
 ```text
-worldkit://motion-profile/subject.vehicle.four-wheel.arcade.default@1
+worldkit://control-feel-profile/subject.vehicle.four-wheel.arcade.default@1
 worldkit://control-profile/subject.vehicle.four-wheel.arcade.default@1
 worldkit://camera-profile/subject.vehicle.four-wheel.arcade.chase-surface-fast@1
 worldkit://camera-context/subject.vehicle.four-wheel.arcade.default@1
@@ -398,7 +394,7 @@ versions; it never infers “latest.”
 The large tuning workspace has five areas:
 
 1. **Subject and baseline** — selected Subject Package, public default Ref/version/hash, local-default status and validation state.
-2. **Tuning** — Motion, Control and Camera tabs; compatible Camera Profiles stay independently editable.
+2. **Tuning** — Motion selection plus Control Feel, Control and Camera tabs; compatible Camera Profiles stay independently editable.
 3. **Local versions** — save named version, duplicate, rename, compare, restore, set local default and delete.
 4. **Evidence** — live Runtime support, committed snapshot values, harness results and warnings for conditional/draft-only parameters.
 5. **Publish** — compare with public default, export strict candidate, show CLI commands and promotion status. It never offers “push main.”
@@ -535,23 +531,26 @@ Add or extend the following engine-neutral Registry/Runtime interfaces:
 
 ```text
 getSubjectPresetBaseline
-setControlTuning
-getControlTuning
+listCompatibleProfiles
 applySubjectPresetTuning
-getSubjectPresetSnapshot
+getSubjectSnapshot
+getCameraSnapshot
 ```
 
 Local version CRUD, compare, migration, candidate construction and download are
 Playground-owned services and are not part of the cross-host Browser/Runtime
-API. Registry baseline/closure, transient Runtime tuning, atomic receipts and
-snapshots belong in typed public contracts. No public API exposes localStorage,
-a filesystem path, Git credential or Registry mutation.
+API. Browser profile discovery publishes identity and compatibility for Control
+Feel/Control, not generic numeric parameter bags. Their authoring ranges and
+draft values stay in the Playground authoring module and candidate pipeline.
+Registry baseline/closure, exact Ref selection, Camera session preview, atomic
+receipts and snapshots belong in typed public contracts. No public API exposes
+localStorage, a filesystem path, Git credential or Registry mutation.
 
 ## 11. Failure behavior
 
 - Storage unavailable/full: keep the live draft in memory, display “not persisted,” and never claim a local version was saved.
 - Local hash drift: preserve data, disable auto-application, offer compare/export, and require an explicit rebase.
-- Runtime tuning rejection: keep the previous committed tuning and show the exact parameter diagnostic.
+- Runtime profile/Camera rejection: keep the previous committed state and show the exact diagnostic.
 - Candidate source drift: fail validation before planning.
 - Promotion conflict or stale plan: write nothing.
 - Any generated Registry failure: roll back every created or modified file.
@@ -563,7 +562,7 @@ a filesystem path, Git credential or Registry mutation.
 
 ### Local workspace
 
-- multiple named versions round-trip all Motion, Control and multiple Camera Profile overrides;
+- multiple named versions round-trip Motion selection, Control Feel, Control and multiple Camera Profile overrides;
 - local default applies only to the exact subject/hash baseline;
 - V4 fragmented keys migrate once and malformed values fail safely;
 - storage exceptions do not crash Runtime or claim persistence;
@@ -571,8 +570,8 @@ a filesystem path, Git credential or Registry mutation.
 
 ### Runtime
 
-- every displayed live Motion/Control/Camera slider produces measurable Snapshot or trajectory evidence;
-- Control deadzone and response changes produce deterministic differences;
+- every displayed live Control Feel/Control/Camera slider produces measurable Snapshot or trajectory evidence;
+- Control deadzone and Control Feel response changes produce deterministic differences;
 - switching Camera Profiles restores isolated tuning;
 - reset and subject switch restore declared baseline/local default without leaking state;
 - fixed input with identical seed, resource lock and preset is deterministic.
@@ -623,23 +622,25 @@ the first strict candidate. Its approved differences are:
 
 - Camera `orbit.medium@1`: target height `1.25 → 1.35`, collision retraction
   `30 → 4.5`, collision recovery `6 → 3.25`;
-- Motion `forward-steer.medium@1`: turn rate `2.2 → 2.4`, jump speed
-  `4.5 → 3.1`, maximum body lean `0.14 → 0.09`.
+- Control Feel `ground-air.humanoid.default@1`: turn rate `2.2 → 2.4` and
+  jump speed `4.5 → 3.1`.
 
-All six values are already Runtime-consumed and remain subject to current
-safety/authoring ranges. Promotion creates subject-scoped derivative resources,
-a new exact quadruped Subject Definition version and the first quadruped public
-default entry. The original shared Profiles and `@1` definition remain
-unchanged.
+All five retained values are Runtime-consumed and remain subject to centralized
+safety/authoring ranges. The legacy `maximumBodyLeanRadians` value is not
+carried forward because it is outside the P1.5 Ground/Air Control Feel contract.
+Promotion creates subject-scoped Control Feel and Camera derivative resources,
+a copied Camera Context, a new exact quadruped Subject Definition version and
+the first quadruped public-default entry. The exact Motion and Control resources,
+the original shared Profiles and the `@1` definition remain unchanged.
 
 ## 14. Frozen decisions
 
-1. Motion, Control and Camera tuning are all included.
+1. Motion selection and Control Feel, Control and Camera tuning are all included.
 2. Multiple Camera Profiles are stored independently.
 3. Local drafts, named local versions, local defaults, candidates, Registry versions and public defaults are distinct types.
 4. Registry resources are append-only by version; existing `@N` resources are never overwritten.
 5. Public default selection is explicit and Git-controlled; Runtime never infers latest.
-6. Publication normally creates subject-scoped derivative Profiles so one subject cannot accidentally alter another.
+6. Publication normally creates subject-scoped Control Feel, Control and Camera derivative Profiles; Motion remains an exact reusable algorithm selection.
 7. Browser code cannot write the repository or Git.
 8. Promotion and onboarding writes require explicit CLI `--write`, a non-`main` branch, a clean baseline, an exact plan and a transaction.
 9. New subjects reuse registered algorithms and archetype Profiles; onboarding cannot install implementation code.

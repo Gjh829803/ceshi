@@ -34,17 +34,17 @@ describe("subject preset resource closure", () => {
         version: 1,
       }),
       expect.objectContaining({
-        resourceRef: "worldkit://motion-profile/wheeled-arcade.medium@1",
+        resourceRef: "worldkit://motion-profile/free-ground.humanoid-medium@1",
         resourceKind: "motion-profile",
         version: 1,
       }),
       expect.objectContaining({
-        resourceRef: "worldkit://motion-profile/forward-steer.medium@1",
-        resourceKind: "motion-profile",
+        resourceRef: "worldkit://control-feel-profile/humanoid.medium-ground@1",
+        resourceKind: "control-feel-profile",
         version: 1,
       }),
       expect.objectContaining({
-        resourceRef: "worldkit://motion-kernel/wheeled-arcade@1",
+        resourceRef: "worldkit://motion-kernel/free-ground@1",
         resourceKind: "motion-kernel",
         version: 1,
       }),
@@ -69,7 +69,7 @@ describe("subject preset resource closure", () => {
         version: 1,
       }),
       expect.objectContaining({
-        resourceRef: "worldkit://medium-profile/ground-water-air.standard@1",
+        resourceRef: "worldkit://medium-profile/ground-air.standard@1",
         resourceKind: "medium-profile",
         version: 1,
       }),
@@ -120,7 +120,7 @@ describe("subject preset resource closure", () => {
     const registry = {
       ...builtInSubjectResourceRegistry,
       resolveMediumProfile(resourceRef: string) {
-        if (resourceRef === "worldkit://medium-profile/ground-water-air.standard@1") {
+        if (resourceRef === "worldkit://medium-profile/ground-air.standard@1") {
           return undefined;
         }
         return builtInSubjectResourceRegistry.resolveMediumProfile(resourceRef);

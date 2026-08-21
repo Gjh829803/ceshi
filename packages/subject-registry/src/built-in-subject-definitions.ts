@@ -16,9 +16,16 @@ const SHARED_COLLIDER_POLICY = {
 
 const SHARED_CAPABILITY_REFS = ["worldkit://capability/locomotion.ground@1"] as const;
 
+const SHARED_GROUND_FEEL_PROFILE_REF =
+  "worldkit://control-feel-profile/humanoid.medium-ground@1" as const;
+
+const SHARED_GROUND_MEDIUM_PROFILE_REF =
+  "worldkit://medium-profile/ground-air.standard@1" as const;
+
 const SHARED_PROFILES = {
   physicsBodyProfileRef: "worldkit://physics-body-profile/character.medium@1",
   locomotionProfileRef: "worldkit://locomotion-profile/ground.standard@1",
+  controlFeelProfileRef: SHARED_GROUND_FEEL_PROFILE_REF,
 } as const;
 
 const HUMANOID_THIRD_PERSON_DEFINITION: RegistrySubjectDefinitionInputV2 = {
@@ -175,11 +182,13 @@ const QUADRUPED_GROUND_PROXY_DEFINITION: RegistrySubjectDefinitionInputV2 = {
   },
 };
 
-const RIGGED_GOLDEN_HUMANOID_DEFINITION: RegistrySubjectDefinitionInputV2 = {
+const RIGGED_GOLDEN_HUMANOID_DEFINITION: RegistrySubjectDefinitionInputV3 = {
   kind: "subject-definition",
+  schemaVersion: 3,
   id: "humanoid.rigged-golden",
   version: 1,
   resourceRef: "worldkit://subject-definition/humanoid.rigged-golden@1",
+  authoringAvailability: "recommended",
   category: "human",
   bodyTopology: "biped",
   semanticClassId: "subject.humanoid.rigged",
@@ -221,7 +230,25 @@ const RIGGED_GOLDEN_HUMANOID_DEFINITION: RegistrySubjectDefinitionInputV2 = {
       "worldkit://collider-profile/humanoid.medium-capsule@1",
   },
   capabilityRefs: SHARED_CAPABILITY_REFS,
-  profiles: SHARED_PROFILES,
+  profiles: {
+    physicsBodyProfileRef: SHARED_PROFILES.physicsBodyProfileRef,
+    locomotionProfileRef: SHARED_PROFILES.locomotionProfileRef,
+    controlFeelProfileRef: SHARED_GROUND_FEEL_PROFILE_REF,
+    motion: {
+      defaultMotionProfileRef:
+        "worldkit://motion-profile/free-ground.humanoid-medium@1",
+      optionalMotionProfileRefs: ["worldkit://motion-profile/safe-ground@1"],
+      fallbackMotionProfileRef: "worldkit://motion-profile/safe-ground@1",
+    },
+    controlProfileRef: "worldkit://control-profile/planar.camera-relative@1",
+    cameraContextProfileRef:
+      "worldkit://camera-context/capability-driven.default@1",
+    mediumProfileRef: SHARED_GROUND_MEDIUM_PROFILE_REF,
+    harnessProfileRef: "worldkit://harness-profile/subject.standard@1",
+  },
+  relationshipCapabilityRefs: [],
+  actionOrPoseSetRef: "worldkit://animation-set/humanoid.ground.golden@1",
+  renderBindingProfileRef: "worldkit://render-binding/subject.standard@1",
   aiMetadata: {
     displayName: "Rigged Golden humanoid",
     description: "Project-owned rigged humanoid for the complete asset Subject pipeline.",
@@ -229,7 +256,7 @@ const RIGGED_GOLDEN_HUMANOID_DEFINITION: RegistrySubjectDefinitionInputV2 = {
   },
 };
 
-const G_BOT_HUMANOID_DEFINITION: RegistrySubjectDefinitionInputV3 = {
+export const G_BOT_HUMANOID_DEFINITION: RegistrySubjectDefinitionInputV3 = {
   kind: "subject-definition",
   schemaVersion: 3,
   id: "humanoid.g-bot",
@@ -327,6 +354,7 @@ const G_BOT_HUMANOID_DEFINITION: RegistrySubjectDefinitionInputV3 = {
     physicsBodyProfileRef:
       "worldkit://physics-body-profile/character.capability-medium@1",
     locomotionProfileRef: SHARED_PROFILES.locomotionProfileRef,
+    controlFeelProfileRef: SHARED_GROUND_FEEL_PROFILE_REF,
     motion: {
       defaultMotionProfileRef:
         "worldkit://motion-profile/free-ground.humanoid-medium@1",
@@ -336,7 +364,7 @@ const G_BOT_HUMANOID_DEFINITION: RegistrySubjectDefinitionInputV3 = {
     controlProfileRef: "worldkit://control-profile/planar.camera-relative@1",
     cameraContextProfileRef:
       "worldkit://camera-context/capability-driven.default@1",
-    mediumProfileRef: "worldkit://medium-profile/ground-water-air.standard@1",
+    mediumProfileRef: SHARED_GROUND_MEDIUM_PROFILE_REF,
     harnessProfileRef: "worldkit://harness-profile/subject.standard@1",
   },
   relationshipCapabilityRefs: [],

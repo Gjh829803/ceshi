@@ -1,8 +1,10 @@
 import {
   applyCameraRigParameterOverridesV1,
   CAMERA_TUNING_SAFETY_LIMITS_V1,
+  CONTROL_FEEL_PARAMETER_NAMES_V1,
   isCameraRigParameterOverrideSupportedV1,
   isCameraTuningParameterNameV1,
+  resolveControlFeelParametersV1,
   type CameraRigParametersV1,
   type NumericProfileOverrideV1,
 } from "@whitebox-world/runtime-contracts";
@@ -10,6 +12,7 @@ import {
   builtInSubjectResourceRegistry,
   resolveSubjectPresetClosureV1,
   type CameraRigProfileV1,
+  type ControlFeelProfileV1,
   type ControlProfileV1,
   type MotionProfileV1,
   type RegistrySubjectDefinitionV3,
@@ -56,6 +59,11 @@ export interface SubjectPresetSemanticContentV1 {
       optional: MotionPublicationRoleV1[];
       fallback: MotionPublicationRoleV1;
     };
+    controlFeel: {
+      profileRef: string;
+      contentHash: string;
+      disposition: SubjectPresetPublicationDispositionV1;
+    };
     control: {
       profileRef: string;
       contentHash: string;
@@ -65,7 +73,7 @@ export interface SubjectPresetSemanticContentV1 {
     defaultCameraRigProfileRef: string;
   };
   overrides: {
-    motionByProfileRef: Record<string, NumericProfileOverrideV1>;
+    controlFeelByProfileRef: Record<string, NumericProfileOverrideV1>;
     controlByProfileRef: Record<string, NumericProfileOverrideV1>;
     cameraByProfileRef: Record<string, NumericProfileOverrideV1>;
     cameraPublicationBySourceProfileRef: Record<
@@ -389,7 +397,7 @@ function parseSemanticContent(value: unknown): SubjectPresetSemanticContentV1 {
   const selectionsSource = record(source.selections, "semanticContent.selections");
   exactKeys(
     selectionsSource,
-    ["motionRoles", "control", "cameraContextProfileRef", "defaultCameraRigProfileRef"],
+    ["motionRoles", "controlFeel", "control", "cameraContextProfileRef", "defaultCameraRigProfileRef"],
     "semanticContent.selections",
   );
   const motionRolesSource = record(
@@ -409,12 +417,21 @@ function parseSemanticContent(value: unknown): SubjectPresetSemanticContentV1 {
     "semanticContent.selections.control",
   );
   exactKeys(controlSource, ["profileRef", "contentHash", "disposition"], "selections.control");
+  const controlFeelSource = record(
+    selectionsSource.controlFeel,
+    "semanticContent.selections.controlFeel",
+  );
+  exactKeys(
+    controlFeelSource,
+    ["profileRef", "contentHash", "disposition"],
+    "selections.controlFeel",
+  );
 
   const overridesSource = record(source.overrides, "semanticContent.overrides");
   exactKeys(
     overridesSource,
     [
-      "motionByProfileRef",
+      "controlFeelByProfileRef",
       "controlByProfileRef",
       "cameraByProfileRef",
       "cameraPublicationBySourceProfileRef",
@@ -446,6 +463,20 @@ function parseSemanticContent(value: unknown): SubjectPresetSemanticContentV1 {
         ),
         fallback: parseRole(motionRolesSource.fallback, "motionRoles.fallback"),
       },
+      controlFeel: {
+        profileRef: stringValue(
+          controlFeelSource.profileRef,
+          "selections.controlFeel.profileRef",
+        ),
+        contentHash: exactHash(
+          controlFeelSource.contentHash,
+          "selections.controlFeel.contentHash",
+        ),
+        disposition: disposition(
+          controlFeelSource.disposition,
+          "selections.controlFeel.disposition",
+        ),
+      },
       control: {
         profileRef: stringValue(controlSource.profileRef, "selections.control.profileRef"),
         contentHash: exactHash(controlSource.contentHash, "selections.control.contentHash"),
@@ -461,9 +492,9 @@ function parseSemanticContent(value: unknown): SubjectPresetSemanticContentV1 {
       ),
     },
     overrides: {
-      motionByProfileRef: parseOverrideMap(
-        overridesSource.motionByProfileRef,
-        "motionByProfileRef",
+      controlFeelByProfileRef: parseOverrideMap(
+        overridesSource.controlFeelByProfileRef,
+        "controlFeelByProfileRef",
       ),
       controlByProfileRef: parseOverrideMap(
         overridesSource.controlByProfileRef,
@@ -585,42 +616,28 @@ function assertOverrideHash(
   }
 }
 
-function assertMotionOverride(
-  registry: SubjectResourceRegistryV3,
+function assertControlFeelOverride(
+  profile: ControlFeelProfileV1,
   profileRef: string,
   override: NumericProfileOverrideV1,
 ): void {
-  const profile = registry.resolveMotionProfile(profileRef);
-  if (profile === undefined) {
-    fail("SUBJECT_PRESET_CANDIDATE_SOURCE_DRIFT", `Motion Profile '${profileRef}' is missing.`);
-  }
   assertOverrideHash(profileRef, override, profile.contentHash);
-  const kernel = registry.resolveMotionKernel(profile.motionKernelRef);
-  if (kernel === undefined || kernel.runtimeStatus !== "implemented") {
-    fail(
-      "SUBJECT_PRESET_CANDIDATE_RESERVED_IMPLEMENTATION",
-      `Motion Profile '${profileRef}' has no implemented Kernel.`,
-    );
-  }
-  for (const [name, value] of Object.entries(override.values)) {
-    const baseline = profile.parameters[name];
-    const limit = profile.safetyLimits[name];
+  try {
+    if (resolveControlFeelParametersV1(profile, override.values) === undefined) {
+      fail(
+        "SUBJECT_PRESET_CANDIDATE_INVALID_CONTROL_FEEL_OVERRIDE",
+        `Control Feel override '${profileRef}' contains an unknown or out-of-range parameter.`,
+      );
+    }
+  } catch (error) {
     if (
-      typeof baseline !== "number" ||
-      !kernel.runtimeParameterNames.includes(name) ||
-      limit === undefined
+      error instanceof TypeError &&
+      error.message.startsWith("SUBJECT_PRESET_CANDIDATE_INVALID_CONTROL_FEEL_OVERRIDE")
     ) {
-      fail(
-        "SUBJECT_PRESET_CANDIDATE_UNKNOWN_PARAMETER",
-        `'${name}' is not a supported numeric Runtime parameter of '${profileRef}'.`,
-      );
+      throw error;
     }
-    if (value < limit.minimum || value > limit.maximum) {
-      fail(
-        "SUBJECT_PRESET_CANDIDATE_PARAMETER_OUT_OF_RANGE",
-        `'${name}' is outside the safety limits of '${profileRef}'.`,
-      );
-    }
+    const message = error instanceof Error ? error.message : String(error);
+    fail("SUBJECT_PRESET_CANDIDATE_INVALID_CONTROL_FEEL_OVERRIDE", message);
   }
 }
 
@@ -630,21 +647,13 @@ function assertControlOverride(
 ): void {
   assertOverrideHash(profile.resourceRef, override, profile.contentHash);
   for (const [name, value] of Object.entries(override.values)) {
-    if (
-      !profile.runtimeParameterNames.includes(
-        name as (typeof profile.runtimeParameterNames)[number],
-      ) ||
-      !(name in profile.inputTuning)
-    ) {
+    if (name !== "moveDeadzoneRatio") {
       fail(
         "SUBJECT_PRESET_CANDIDATE_UNKNOWN_PARAMETER",
         `'${name}' is not supported by Control Profile '${profile.resourceRef}'.`,
       );
     }
-    const limit = profile.safetyLimits[
-      name as keyof typeof profile.safetyLimits
-    ];
-    if (limit === undefined || value < limit.minimum || value > limit.maximum) {
+    if (value < 0 || value > 0.4) {
       fail(
         "SUBJECT_PRESET_CANDIDATE_PARAMETER_OUT_OF_RANGE",
         `'${name}' is outside the safety limits of '${profile.resourceRef}'.`,
@@ -779,19 +788,45 @@ function validateCandidateAgainstRegistry(
     }
     dispositionsByMotionRef.set(role.sourceProfileRef, role.disposition);
   }
-  const derivedMotionRefs = [...dispositionsByMotionRef.entries()]
-    .filter(([, value]) => value === "derive")
-    .map(([profileRef]) => profileRef)
-    .sort();
-  const motionOverrideRefs = Object.keys(semantic.overrides.motionByProfileRef).sort();
-  if (!sameJson(motionOverrideRefs, derivedMotionRefs)) {
+  if ([...dispositionsByMotionRef.values()].some((value) => value !== "preserve")) {
     fail(
-      "SUBJECT_PRESET_CANDIDATE_MOTION_OVERRIDE_SET_MISMATCH",
-      "Motion overrides must exactly match distinct roles marked derive.",
+      "SUBJECT_PRESET_CANDIDATE_MOTION_DERIVATION_UNSUPPORTED",
+      "Motion Profiles select algorithms only; numeric feel derivation belongs to Control Feel.",
     );
   }
-  for (const profileRef of motionOverrideRefs) {
-    assertMotionOverride(registry, profileRef, semantic.overrides.motionByProfileRef[profileRef]!);
+
+  const controlFeel = registry.resolveControlFeelProfile(
+    definition.profiles.controlFeelProfileRef,
+  );
+  if (
+    controlFeel === undefined ||
+    semantic.selections.controlFeel.profileRef !== controlFeel.resourceRef ||
+    semantic.selections.controlFeel.contentHash !== controlFeel.contentHash
+  ) {
+    fail(
+      "SUBJECT_PRESET_CANDIDATE_SOURCE_DRIFT",
+      "The selected Control Feel Profile is not the exact locked profile.",
+    );
+  }
+  const expectedControlFeelOverrideRefs =
+    semantic.selections.controlFeel.disposition === "derive"
+      ? [controlFeel.resourceRef]
+      : [];
+  const controlFeelOverrideRefs = Object.keys(
+    semantic.overrides.controlFeelByProfileRef,
+  ).sort();
+  if (!sameJson(controlFeelOverrideRefs, expectedControlFeelOverrideRefs)) {
+    fail(
+      "SUBJECT_PRESET_CANDIDATE_CONTROL_FEEL_OVERRIDE_SET_MISMATCH",
+      "Control Feel V1 permits only the selected profile and only when marked derive.",
+    );
+  }
+  if (controlFeelOverrideRefs.length === 1) {
+    assertControlFeelOverride(
+      controlFeel,
+      controlFeel.resourceRef,
+      semantic.overrides.controlFeelByProfileRef[controlFeel.resourceRef]!,
+    );
   }
 
   const control = registry.resolveControlProfile(definition.profiles.controlProfileRef);
@@ -1030,17 +1065,13 @@ function legacyCompatibleProfileHashes(
 
 function legacyNumericDifferences(
   value: unknown,
-  profile: MotionProfileV1 | CameraRigProfileV1,
-  kind: "motion" | "camera",
-  registry: SubjectResourceRegistryV3,
+  profile: ControlFeelProfileV1 | CameraRigProfileV1,
+  kind: "control-feel" | "camera",
 ): Record<string, number> {
   const source = record(value, `${kind} tuning`);
   const result: [string, number][] = [];
-  const motionKernel = profile.kind === "motion-profile"
-    ? registry.resolveMotionKernel(profile.motionKernelRef)
-    : undefined;
   if (
-    (kind === "motion" && profile.kind !== "motion-profile") ||
+    (kind === "control-feel" && profile.kind !== "control-feel-profile") ||
     (kind === "camera" && profile.kind !== "camera-rig-profile")
   ) {
     fail("SUBJECT_PRESET_LEGACY_INVALID", `Legacy ${kind} Profile kind is invalid.`);
@@ -1051,12 +1082,14 @@ function legacyNumericDifferences(
     if (typeof rawValue !== "number" || !Number.isFinite(rawValue)) {
       fail("SUBJECT_PRESET_LEGACY_NON_FINITE_PARAMETER", `'${name}' must be finite.`);
     }
-    const baseline = profile.parameters[name as keyof typeof profile.parameters];
-    const supported = profile.kind === "motion-profile"
-      ? kind === "motion" &&
-        motionKernel !== undefined &&
-        motionKernel.runtimeParameterNames.includes(name) &&
-        typeof baseline === "number"
+    const baseline = profile.kind === "control-feel-profile"
+      ? profile[name as keyof ControlFeelProfileV1]
+      : profile.parameters[name as keyof typeof profile.parameters];
+    const supported = profile.kind === "control-feel-profile"
+      ? kind === "control-feel" &&
+        CONTROL_FEEL_PARAMETER_NAMES_V1.includes(
+          name as (typeof CONTROL_FEEL_PARAMETER_NAMES_V1)[number],
+        ) && typeof baseline === "number"
       : kind === "camera" &&
         isCameraTuningParameterNameV1(name) &&
         Object.prototype.hasOwnProperty.call(profile.parameters, name) &&
@@ -1077,13 +1110,12 @@ function legacyControlDifferences(
   profile: ControlProfileV1,
 ): Record<string, number> {
   const source = record(value, "control tuning");
-  const runtimeParameterNames = new Set(profile.runtimeParameterNames);
   const result: [string, number][] = [];
   for (const [name, rawValue] of Object.entries(source).sort(([left], [right]) =>
     left.localeCompare(right)
   )) {
     if (
-      !runtimeParameterNames.has(name as keyof typeof profile.inputTuning) ||
+      name !== "moveDeadzoneRatio" ||
       typeof rawValue !== "number" ||
       !Number.isFinite(rawValue)
     ) {
@@ -1094,7 +1126,7 @@ function legacyControlDifferences(
         `'${name}' is not a supported finite Control parameter.`,
       );
     }
-    const baseline = profile.inputTuning[name as keyof typeof profile.inputTuning];
+    const baseline = profile.moveDeadzoneRatio;
     if (rawValue !== baseline) result.push([name, Object.is(rawValue, -0) ? 0 : rawValue]);
   }
   return Object.fromEntries(result);
@@ -1232,11 +1264,16 @@ export function importLegacyAuthoringSnapshotV4(
     );
   }
 
-  const motionValues = legacyNumericDifferences(
+  const controlFeel = registry.resolveControlFeelProfile(
+    definition.profiles.controlFeelProfileRef,
+  );
+  if (controlFeel === undefined) {
+    fail("SUBJECT_PRESET_LEGACY_SOURCE_DRIFT", "The selected Control Feel Profile is missing.");
+  }
+  const controlFeelValues = legacyNumericDifferences(
     source.motionParameterDraft,
-    motionProfile,
-    "motion",
-    registry,
+    controlFeel,
+    "control-feel",
   );
   const cameraTuningByProfileRef = source.cameraTuningByProfileRef === undefined
     ? {}
@@ -1267,7 +1304,7 @@ export function importLegacyAuthoringSnapshotV4(
         `The exact Camera Profile summary for '${profileRef}' is required.`,
       );
     }
-    const values = legacyNumericDifferences(rawTuning, profile, "camera", registry);
+    const values = legacyNumericDifferences(rawTuning, profile, "camera");
     if (Object.keys(values).length === 0) continue;
     cameraOverrides[profileRef] = {
       baseResourceRef: profileRef,
@@ -1276,7 +1313,9 @@ export function importLegacyAuthoringSnapshotV4(
     };
     cameraDispositions.set(profileRef, "derive");
   }
-  const motionDisposition = Object.keys(motionValues).length === 0 ? "preserve" : "derive";
+  const controlFeelDisposition = Object.keys(controlFeelValues).length === 0
+    ? "preserve"
+    : "derive";
 
   const role = (
     profileRef: string,
@@ -1325,11 +1364,16 @@ export function importLegacyAuthoringSnapshotV4(
       },
       selections: {
         motionRoles: {
-          default: role(motionProfileRef, motionDisposition),
+          default: role(motionProfileRef, "preserve"),
           optional: definition.profiles.motion.optionalMotionProfileRefs.map((profileRef) =>
             role(profileRef, "preserve")
           ),
           fallback: role(definition.profiles.motion.fallbackMotionProfileRef, "preserve"),
+        },
+        controlFeel: {
+          profileRef: controlFeel.resourceRef,
+          contentHash: controlFeel.contentHash,
+          disposition: controlFeelDisposition,
         },
         control: {
           profileRef: control.resourceRef,
@@ -1340,11 +1384,11 @@ export function importLegacyAuthoringSnapshotV4(
         defaultCameraRigProfileRef: selectedCameraRef,
       },
       overrides: {
-        motionByProfileRef: motionDisposition === "derive" ? {
-          [motionProfileRef]: {
-            baseResourceRef: motionProfileRef,
-            baseContentHash: motionProfile.contentHash,
-            values: motionValues,
+        controlFeelByProfileRef: controlFeelDisposition === "derive" ? {
+          [controlFeel.resourceRef]: {
+            baseResourceRef: controlFeel.resourceRef,
+            baseContentHash: controlFeel.contentHash,
+            values: controlFeelValues,
           },
         } : {},
         controlByProfileRef: controlDisposition === "derive" ? {

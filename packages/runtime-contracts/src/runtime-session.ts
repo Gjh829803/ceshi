@@ -47,15 +47,33 @@ export interface CameraViewInputV1 {
   zoomDeltaMeters?: number;
 }
 
-export type MotionParameterTuningV1 = Readonly<Record<string, number>>;
+export type PublishedMovementMediumV1 = "ground" | "air";
+export type LocomotionModeV1 = "idle" | "walk" | "run" | "airborne";
 
-export type ControlTuningParameterNameV1 =
-  | "moveDeadzoneRatio"
-  | "responseExponent";
+export type ControlFeelTuningParameterNameV1 =
+  | "walkSpeedMetersPerSecond"
+  | "runSpeedMetersPerSecond"
+  | "jumpSpeedMetersPerSecond"
+  | "accelerationMetersPerSecondSquared"
+  | "decelerationMetersPerSecondSquared"
+  | "turnRateRadiansPerSecond"
+  | "moveResponseExponent"
+  | "airControlRatio"
+  | "coyoteTimeSeconds"
+  | "jumpBufferSeconds"
+  | "variableJumpHoldSeconds"
+  | "jumpHoldGravityRatio"
+  | "jumpReleaseGravityRatio";
+
+export type ControlFeelTuningV1 = Readonly<
+  Partial<Record<ControlFeelTuningParameterNameV1, number>>
+>;
+
+export type ControlTuningParameterNameV1 = "moveDeadzoneRatio";
 
 /**
- * Session-local overrides for the two numeric input-curve values consumed by
- * ControlProfileRuntime. These values never mutate the locked Registry profile.
+ * Session-local override for the input deadzone owned by Control Profile.
+ * Response shaping remains owned by Control Feel.
  */
 export type ControlTuningV1 = Readonly<
   Partial<Record<ControlTuningParameterNameV1, number>>
@@ -77,7 +95,7 @@ export interface ViewTargetSampleV1 {
   socketPositionsMetersXYZById: Readonly<Record<string, Vec3>>;
   activeMotionKernelRef: string;
   motionTags: readonly string[];
-  movementMedium: "ground" | "water" | "air";
+  movementMedium: PublishedMovementMediumV1;
   relationshipRole: "none" | "rider" | "driver" | "passenger" | "tethered";
   cameraContextTags: readonly string[];
 }
@@ -117,30 +135,26 @@ export interface SubjectRuntimeStateV3 {
   subjectDefinitionHash: string;
   positionMetersXYZ: Vec3;
   velocityMetersPerSecondXYZ: Vec3;
-  movementMedium: "ground" | "air" | "water";
+  movementMedium: PublishedMovementMediumV1;
   activeActionId: string;
   forwardXYZ?: Vec3;
   speedMetersPerSecond?: number;
+  activeControlFeelProfileRef?: string;
+  locomotionMode?: LocomotionModeV1;
   activeMotionProfileRef?: string;
   activeMotionKernelRef?: string;
   motionTags?: readonly string[];
   relationshipRole?: "none" | "rider" | "driver" | "passenger" | "tethered";
   safeFallbackActive?: boolean;
   motionFailureCode?: string;
-  motionParameterTuning?: MotionParameterTuningV1;
-  controlParameterTuning?: ControlTuningV1;
 }
 
 export interface ApplySubjectPresetTuningRequestV1 {
   subjectEntityId: string;
   expectedSubjectDefinitionRef: string;
   expectedSubjectDefinitionContentHash: string;
-  motionOverridesByProfileRef: Readonly<
-    Record<string, NumericProfileOverrideV1>
-  >;
-  controlOverridesByProfileRef: Readonly<
-    Record<string, NumericProfileOverrideV1>
-  >;
+  selectedControlFeelProfileRef: string;
+  selectedControlProfileRef: string;
   cameraOverridesByProfileRef: Readonly<
     Record<string, NumericProfileOverrideV1>
   >;
@@ -312,9 +326,13 @@ export interface CapabilityDiscoveryOptionsV1 {
 export interface CompatibleProfileSummaryV1 {
   resourceRef: string;
   contentHash: string;
-  kind: "motion-profile" | "control-profile" | "camera-rig-profile";
+  kind:
+    | "motion-profile"
+    | "control-feel-profile"
+    | "control-profile"
+    | "camera-rig-profile";
   displayName: string;
-  role?: "default" | "optional" | "fallback" | "camera";
+  role?: "default" | "optional" | "fallback" | "feel" | "control" | "camera";
   baseMode?: "first-person" | "free-orbit" | "stable-follow" | "speed-chase" | "flight-horizon";
   headingSource?: "view" | "target-forward" | "target-velocity";
   recenterMode?: "off" | "forward-motion" | "always";
@@ -390,15 +408,6 @@ export interface WorldkitBrowserApiV3 {
   adjustCameraView?(input: CameraViewInputV1): WorldRuntimeSnapshotV3;
   resetCameraView?(): WorldRuntimeSnapshotV3;
   setCameraTuning?(tuning: CameraTuningV1): WorldRuntimeSnapshotV3;
-  setMotionTuning?(
-    subjectEntityId: string,
-    tuning: MotionParameterTuningV1,
-  ): WorldRuntimeSnapshotV3;
-  setControlTuning?(
-    subjectEntityId: string,
-    tuning: ControlTuningV1,
-  ): WorldRuntimeSnapshotV3;
-  getControlTuning?(subjectEntityId: string): ControlTuningV1;
   applySubjectPresetTuning?(
     request: ApplySubjectPresetTuningRequestV1,
   ): SubjectPresetTuningReceiptV1;

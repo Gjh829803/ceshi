@@ -6,17 +6,18 @@ import {
   type SubjectResourceRegistryV3,
 } from "@whitebox-world/subject-registry";
 import {
+  CONTROL_FEEL_PARAMETER_BOUNDS_V1,
+  CONTROL_FEEL_PARAMETER_NAMES_V1,
   WORLDKIT_BROWSER_PROTOCOL_VERSION,
   type ApplySubjectPresetTuningRequestV1,
   type BindControlRequestV2,
   type CameraTuningV1,
   type CameraViewInputV1,
+  type CompatibleProfileSummaryV1,
   type ControlCaptureCapabilitiesV1,
   type ControlCaptureRequestV1,
   type ControlBindingReceiptV2,
-  type ControlTuningV1,
   type FixedInputV1,
-  type MotionParameterTuningV1,
   type RenderReadyReceiptV1,
   type RuntimeControlCaptureFrameV1,
   type WorldRuntimeSnapshotV3,
@@ -45,14 +46,6 @@ export interface DeferredWorldkitBrowserRuntimeAdapterV1 {
   adjustCameraViewRuntime?(input: CameraViewInputV1): WorldRuntimeSnapshotV3;
   resetCameraViewRuntime?(): WorldRuntimeSnapshotV3;
   setCameraTuningRuntime?(tuning: CameraTuningV1): WorldRuntimeSnapshotV3;
-  setMotionTuningRuntime?(
-    subjectEntityId: string,
-    tuning: MotionParameterTuningV1,
-  ): WorldRuntimeSnapshotV3;
-  setControlTuningRuntime?(
-    subjectEntityId: string,
-    tuning: ControlTuningV1,
-  ): WorldRuntimeSnapshotV3;
   applySubjectPresetTuningRuntime?(
     request: ApplySubjectPresetTuningRequestV1,
   ): SubjectPresetTuningReceiptV1;
@@ -306,6 +299,141 @@ export function validateSubjectPackageAgainstRegistry(
   return { valid: diagnostics.length === 0, subjectDefinitionRef, diagnostics };
 }
 
+/**
+ * Playground-local authoring metadata. Numeric Feel/Control values are used to
+ * build drafts and promotion candidates; they are deliberately not part of the
+ * Browser runtime protocol returned by `listCompatibleProfiles`.
+ */
+export function listSubjectPresetAuthoringProfilesV1(
+  subjectDefinitionRef: string,
+): readonly CompatibleProfileSummaryV1[] {
+  const definition = builtInSubjectResourceRegistry.resolveSubjectDefinition(
+    subjectDefinitionRef,
+  );
+  if (definition === undefined || !("schemaVersion" in definition)) return [];
+  const motionRefs = new Set([
+    definition.profiles.motion.defaultMotionProfileRef,
+    ...definition.profiles.motion.optionalMotionProfileRefs,
+    definition.profiles.motion.fallbackMotionProfileRef,
+  ]);
+  const cameraContext = builtInSubjectResourceRegistry.resolveCameraContextProfile(
+    definition.profiles.cameraContextProfileRef,
+  );
+  const cameraRefs = new Set<string>();
+  if (cameraContext !== undefined) {
+    cameraRefs.add(cameraContext.defaultCameraRigProfileRef);
+    if (cameraContext.firstPersonCameraRigProfileRef !== undefined) {
+      cameraRefs.add(cameraContext.firstPersonCameraRigProfileRef);
+    }
+    cameraContext.rules.forEach((rule) => {
+      if (rule.cameraRigProfileRef !== undefined) {
+        cameraRefs.add(rule.cameraRigProfileRef);
+      }
+    });
+  }
+  const controlFeelResources = builtInSubjectResourceRegistry
+    .listCapabilityResources()
+    .filter((resource) => resource.kind === "control-feel-profile");
+  return [
+    ...[...motionRefs].flatMap((resourceRef) => {
+      const resource = builtInSubjectResourceRegistry.resolveMotionProfile(resourceRef);
+      return resource === undefined
+        ? []
+        : [{
+            resourceRef,
+            contentHash: resource.contentHash,
+            kind: "motion-profile" as const,
+            displayName: resource.aiMetadata.displayName,
+            role: resourceRef === definition.profiles.motion.defaultMotionProfileRef
+              ? "default" as const
+              : resourceRef === definition.profiles.motion.fallbackMotionProfileRef
+                ? "fallback" as const
+                : "optional" as const,
+          }];
+    }),
+    ...controlFeelResources.map((resource) => ({
+      resourceRef: resource.resourceRef,
+      contentHash: resource.contentHash,
+      kind: "control-feel-profile" as const,
+      displayName: resource.aiMetadata.displayName,
+      role: resource.resourceRef === definition.profiles.controlFeelProfileRef
+        ? "default" as const
+        : "optional" as const,
+      parameters: Object.fromEntries(
+        CONTROL_FEEL_PARAMETER_NAMES_V1.map((name) => [name, resource[name]]),
+      ),
+      safetyLimits: CONTROL_FEEL_PARAMETER_BOUNDS_V1,
+      authoringRanges: Object.fromEntries(
+        CONTROL_FEEL_PARAMETER_NAMES_V1.map((name) => {
+          const bounds = CONTROL_FEEL_PARAMETER_BOUNDS_V1[name];
+          return [name, {
+            ...bounds,
+            step: Math.max(0.01, (bounds.maximum - bounds.minimum) / 100),
+          }];
+        }),
+      ),
+      draftOnlyParameterNames: CONTROL_FEEL_PARAMETER_NAMES_V1,
+    })),
+    ...(() => {
+      const resource = builtInSubjectResourceRegistry.resolveControlProfile(
+        definition.profiles.controlProfileRef,
+      );
+      return resource === undefined
+        ? []
+        : [{
+            resourceRef: resource.resourceRef,
+            contentHash: resource.contentHash,
+            kind: "control-profile" as const,
+            displayName: resource.aiMetadata.displayName,
+            role: "control" as const,
+            parameters: { moveDeadzoneRatio: resource.moveDeadzoneRatio },
+            safetyLimits: {
+              moveDeadzoneRatio: { minimum: 0, maximum: 0.4 },
+            },
+            authoringRanges: {
+              moveDeadzoneRatio: { minimum: 0, maximum: 0.4, step: 0.01 },
+            },
+            draftOnlyParameterNames: ["moveDeadzoneRatio"],
+          }];
+    })(),
+    ...[...cameraRefs].flatMap((resourceRef) => {
+      const resource = builtInSubjectResourceRegistry.resolveCameraRigProfile(resourceRef);
+      return resource === undefined
+        ? []
+        : [{
+            resourceRef,
+            contentHash: resource.contentHash,
+            kind: "camera-rig-profile" as const,
+            displayName: resource.aiMetadata.displayName,
+            role: "camera" as const,
+            baseMode: resource.baseMode,
+            headingSource: resource.headingSource,
+            recenterMode: resource.recenterMode,
+            parameters: resource.parameters,
+            ...(resource.authoringRanges === undefined
+              ? {}
+              : { authoringRanges: resource.authoringRanges }),
+          }];
+    }),
+  ].sort((left, right) => left.resourceRef.localeCompare(right.resourceRef));
+}
+
+function runtimeProfileDiscoverySummaryV1(
+  profile: CompatibleProfileSummaryV1,
+): CompatibleProfileSummaryV1 {
+  if (
+    profile.kind !== "control-feel-profile" &&
+    profile.kind !== "control-profile"
+  ) return profile;
+  return {
+    resourceRef: profile.resourceRef,
+    contentHash: profile.contentHash,
+    kind: profile.kind,
+    displayName: profile.displayName,
+    ...(profile.role === undefined ? {} : { role: profile.role }),
+  };
+}
+
 export function installDeferredWorldkitBrowserApi(options: {
   target: WorldkitBrowserApiTargetV1;
   statusElement: WorldkitBrowserStatusTargetV1;
@@ -412,100 +540,9 @@ export function installDeferredWorldkitBrowserApi(options: {
           runtimeStatus: resource.runtimeStatus,
           authoringAvailability: resource.authoringAvailability,
         })),
-    listCompatibleProfiles: (subjectDefinitionRef) => {
-      const definition = builtInSubjectResourceRegistry.resolveSubjectDefinition(
-        subjectDefinitionRef,
-      );
-      if (definition === undefined || !("schemaVersion" in definition)) return [];
-      const motionRefs = new Set([
-        definition.profiles.motion.defaultMotionProfileRef,
-        ...definition.profiles.motion.optionalMotionProfileRefs,
-        definition.profiles.motion.fallbackMotionProfileRef,
-      ]);
-      const cameraContext = builtInSubjectResourceRegistry.resolveCameraContextProfile(
-        definition.profiles.cameraContextProfileRef,
-      );
-      const cameraRefs = new Set<string>();
-      if (cameraContext !== undefined) {
-        cameraRefs.add(cameraContext.defaultCameraRigProfileRef);
-        if (cameraContext.firstPersonCameraRigProfileRef !== undefined) {
-          cameraRefs.add(cameraContext.firstPersonCameraRigProfileRef);
-        }
-        cameraContext.rules.forEach((rule) => {
-          if (rule.cameraRigProfileRef !== undefined) {
-            cameraRefs.add(rule.cameraRigProfileRef);
-          }
-        });
-      }
-      return [
-        ...[...motionRefs].flatMap((resourceRef) => {
-          const resource = builtInSubjectResourceRegistry.resolveMotionProfile(resourceRef);
-          const kernel = resource === undefined
-            ? undefined
-            : builtInSubjectResourceRegistry.resolveMotionKernel(resource.motionKernelRef);
-          return resource === undefined
-            ? []
-            : [{
-                resourceRef,
-                contentHash: resource.contentHash,
-                kind: "motion-profile" as const,
-                displayName: resource.aiMetadata.displayName,
-                role: resourceRef === definition.profiles.motion.defaultMotionProfileRef
-                  ? "default" as const
-                  : resourceRef === definition.profiles.motion.fallbackMotionProfileRef
-                    ? "fallback" as const
-                    : "optional" as const,
-                parameters: resource.parameters,
-                safetyLimits: resource.safetyLimits,
-                ...(resource.authoringRanges === undefined
-                  ? {}
-                  : { authoringRanges: resource.authoringRanges }),
-                runtimeParameterNames: kernel?.runtimeParameterNames ?? [],
-                draftOnlyParameterNames: Object.keys(resource.parameters).filter(
-                  (name) => !(kernel?.runtimeParameterNames ?? []).includes(name),
-                ),
-              }];
-        }),
-        ...(() => {
-          const resource = builtInSubjectResourceRegistry.resolveControlProfile(
-            definition.profiles.controlProfileRef,
-          );
-          return resource === undefined
-            ? []
-            : [{
-                resourceRef: resource.resourceRef,
-                contentHash: resource.contentHash,
-                kind: "control-profile" as const,
-                displayName: resource.aiMetadata.displayName,
-                role: "default" as const,
-                parameters: resource.inputTuning,
-                safetyLimits: resource.safetyLimits,
-                authoringRanges: resource.authoringRanges,
-                runtimeParameterNames: resource.runtimeParameterNames,
-                draftOnlyParameterNames: [],
-              }];
-        })(),
-        ...[...cameraRefs].flatMap((resourceRef) => {
-          const resource = builtInSubjectResourceRegistry.resolveCameraRigProfile(resourceRef);
-          return resource === undefined
-            ? []
-            : [{
-                resourceRef,
-                contentHash: resource.contentHash,
-                kind: "camera-rig-profile" as const,
-                displayName: resource.aiMetadata.displayName,
-                role: "camera" as const,
-                baseMode: resource.baseMode,
-                headingSource: resource.headingSource,
-                recenterMode: resource.recenterMode,
-                parameters: resource.parameters,
-                ...(resource.authoringRanges === undefined
-                  ? {}
-                  : { authoringRanges: resource.authoringRanges }),
-              }];
-        }),
-      ].sort((left, right) => left.resourceRef.localeCompare(right.resourceRef));
-    },
+    listCompatibleProfiles: (subjectDefinitionRef) =>
+      listSubjectPresetAuthoringProfilesV1(subjectDefinitionRef)
+        .map(runtimeProfileDiscoverySummaryV1),
     getSubjectPresetBaseline: (subjectDefinitionRef) => {
       const closure = resolveSubjectPresetClosureV1(
         builtInSubjectResourceRegistry,
@@ -574,23 +611,6 @@ export function installDeferredWorldkitBrowserApi(options: {
       }
       return adapter.setCameraTuningRuntime(tuning);
     },
-    setMotionTuning: (subjectEntityId, tuning) => {
-      const adapter = requireReadyAdapter();
-      if (adapter.setMotionTuningRuntime === undefined) {
-        throw new Error("WORLDKIT_MOTION_TUNING_UNAVAILABLE");
-      }
-      return adapter.setMotionTuningRuntime(subjectEntityId, tuning);
-    },
-    setControlTuning: (subjectEntityId, tuning) => {
-      const adapter = requireReadyAdapter();
-      if (adapter.setControlTuningRuntime === undefined) {
-        throw new Error("WORLDKIT_CONTROL_TUNING_UNAVAILABLE");
-      }
-      return adapter.setControlTuningRuntime(subjectEntityId, tuning);
-    },
-    getControlTuning: (subjectEntityId) =>
-      requireReadyAdapter().runtimeSnapshot().subjectStatesByEntityId[subjectEntityId]
-        ?.controlParameterTuning ?? {},
     applySubjectPresetTuning: (request) => {
       const adapter = requireReadyAdapter();
       if (adapter.applySubjectPresetTuningRuntime === undefined) {
@@ -625,7 +645,6 @@ export function installDeferredWorldkitBrowserApi(options: {
     "adjustCameraView",
     "applySubjectPresetTuning",
     "getCameraSnapshot",
-    "getControlTuning",
     "getSubjectPresetBaseline",
     "getSubjectSnapshot",
     "listCompatibleProfiles",
@@ -635,10 +654,8 @@ export function installDeferredWorldkitBrowserApi(options: {
     "resetCameraView",
     "setCameraPreference",
     "setCameraTuning",
-    "setControlTuning",
     "setIntent",
     "setMotionProfile",
-    "setMotionTuning",
     "validateSubjectPackage",
   ] as const) {
     const descriptor = Object.getOwnPropertyDescriptor(api, extensionName);

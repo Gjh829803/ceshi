@@ -236,6 +236,7 @@ export interface PackageSubjectDefinitionV1 {
   profiles: {
     physicsBodyProfileRef: string;
     locomotionProfileRef: string;
+    controlFeelProfileRef: string;
   };
   aiMetadata: {
     displayName: string;
@@ -478,12 +479,32 @@ export interface NormalizedSubjectDefinitionV2 {
     maxStepHeightMeters: number;
   };
   locomotion: {
-    mode: "ground";
+    allowWalk: boolean;
+    allowRun: boolean;
+    allowJump: boolean;
+  };
+  controlFeel: {
+    resourceRef: string;
+    contentHash: string;
     walkSpeedMetersPerSecond: number;
     runSpeedMetersPerSecond: number;
-    waterSpeedMetersPerSecond: number;
     jumpSpeedMetersPerSecond: number;
+    accelerationMetersPerSecondSquared: number;
+    decelerationMetersPerSecondSquared: number;
+    turnRateRadiansPerSecond: number;
+    moveResponseExponent: number;
+    airControlRatio: number;
+    coyoteTimeSeconds: number;
+    jumpBufferSeconds: number;
+    variableJumpHoldSeconds: number;
+    jumpHoldGravityRatio: number;
+    jumpReleaseGravityRatio: number;
   };
+  /**
+   * First-slice Feel surfaces locked from the Registry at normalize time so the
+   * Runtime can switch Feel without reverse-reading the Registry.
+   */
+  availableControlFeels: readonly NormalizedSubjectDefinitionV2["controlFeel"][];
   resourceCost: {
     vertices: number;
     triangles: number;
@@ -501,6 +522,7 @@ export type ResolvedResourceKindV1 =
   | "capability"
   | "physics-body-profile"
   | "locomotion-profile"
+  | "control-feel-profile"
   | "collider-derivation-profile"
   | "motion-kernel"
   | "motion-profile"

@@ -5,6 +5,7 @@ import {
   mkdir,
   open,
   readFile,
+  realpath,
   rename,
   rm,
 } from "node:fs/promises";
@@ -15,7 +16,6 @@ import {
   importLegacyAuthoringSnapshotV4,
   parseSubjectPresetCandidateV1,
   type LegacyAuthoringSnapshotV4ImportOptionsV1,
-  type MotionPublicationRoleV1,
   type SubjectPresetCandidateV1,
 } from "@whitebox-world/authoring";
 import {
@@ -28,8 +28,8 @@ import {
   createSubjectResourceRegistry,
   type CameraContextProfileInputV1,
   type CameraRigProfileInputV1,
+  type ControlFeelProfileInputV1,
   type ControlProfileInputV1,
-  type MotionProfileInputV1,
   type RegistrySubjectDefinitionInputV3,
   type SubjectDefaultCatalogV1,
   type SubjectRegistryResourceInputV3,
@@ -52,6 +52,7 @@ const PROMOTION_FIXTURE_KIND = "worldkit-subject-preset-registry-fixture";
 
 const CATALOG_PATHS = {
   camera: "assets/registry/camera-profiles/catalog.json",
+  controlFeel: "assets/registry/control-feel-profiles/catalog.json",
   control: "assets/registry/control-profiles/catalog.json",
   motion: "assets/registry/motion-profiles/catalog.json",
   defaults: "assets/registry/subject-defaults/catalog.json",
@@ -440,24 +441,24 @@ function resolveResource(
   ].find((resource) => resource.resourceRef === resourceRefValue);
 }
 
-function cloneMotionProfile(
+function cloneControlFeelProfile(
   sourceRef: string,
   id: string,
   version: number,
   values: Readonly<Record<string, number>>,
   registry: SubjectResourceRegistryV3,
-): MotionProfileInputV1 {
-  const source = registry.resolveMotionProfile(sourceRef);
+): ControlFeelProfileInputV1 {
+  const source = registry.resolveControlFeelProfile(sourceRef);
   if (source === undefined) {
-    fail("SUBJECT_PRESET_PROMOTION_SOURCE_DRIFT", `Missing Motion Profile '${sourceRef}'.`);
+    fail("SUBJECT_PRESET_PROMOTION_SOURCE_DRIFT", `Missing Control Feel Profile '${sourceRef}'.`);
   }
   return {
     ...stripContentHash(source),
     id,
     version,
-    resourceRef: resourceRef("motion-profile", id, version),
-    parameters: { ...source.parameters, ...values },
-  };
+    resourceRef: resourceRef("control-feel-profile", id, version),
+    ...values,
+  } as ControlFeelProfileInputV1;
 }
 
 function cloneControlProfile(
@@ -476,7 +477,7 @@ function cloneControlProfile(
     id,
     version,
     resourceRef: resourceRef("control-profile", id, version),
-    inputTuning: { ...source.inputTuning, ...values },
+    ...values,
   } as ControlProfileInputV1;
 }
 
@@ -500,63 +501,6 @@ function cloneCameraProfile(
   } as CameraRigProfileInputV1;
 }
 
-function materializeMotionRoles(
-  candidate: SubjectPresetCandidateV1,
-  motionCatalog: readonly Record<string, unknown>[],
-  registry: SubjectResourceRegistryV3,
-): {
-  generated: MotionProfileInputV1[];
-  defaultMotionProfileRef: string;
-  optionalMotionProfileRefs: string[];
-  fallbackMotionProfileRef: string;
-} {
-  const generated: MotionProfileInputV1[] = [];
-  const usedIds = new Set<string>();
-  const materialize = (
-    role: MotionPublicationRoleV1,
-    roleId: string,
-  ): string => {
-    if (role.disposition === "preserve") return role.sourceProfileRef;
-    const id = subjectScopedId(candidate.semanticContent.subjectDefinitionId, roleId);
-    if (usedIds.has(id)) {
-      fail(
-        "SUBJECT_PRESET_PROMOTION_VERSION_COLLISION",
-        `Motion publication role '${id}' is duplicated.`,
-      );
-    }
-    usedIds.add(id);
-    const version = nextVersion(motionCatalog, id);
-    const override = candidate.semanticContent.overrides.motionByProfileRef[
-      role.sourceProfileRef
-    ];
-    if (override === undefined) {
-      fail(
-        "SUBJECT_PRESET_PROMOTION_SOURCE_DRIFT",
-        `Motion override '${role.sourceProfileRef}' is missing.`,
-      );
-    }
-    const generatedProfile = cloneMotionProfile(
-      role.sourceProfileRef,
-      id,
-      version,
-      override.values,
-      registry,
-    );
-    generated.push(generatedProfile);
-    return generatedProfile.resourceRef;
-  };
-
-  const roles = candidate.semanticContent.selections.motionRoles;
-  return {
-    generated,
-    defaultMotionProfileRef: materialize(roles.default, "default"),
-    optionalMotionProfileRefs: roles.optional.map((role, index) =>
-      materialize(role, `optional-${index + 1}`)
-    ),
-    fallbackMotionProfileRef: materialize(roles.fallback, "fallback"),
-  };
-}
-
 interface MaterializedPromotion {
   generatedInputs: SubjectRegistryResourceInputV3[];
   generatedRegistry: SubjectResourceRegistryV3;
@@ -571,7 +515,10 @@ async function materializePromotion(
   repositoryRoot: string,
   registry: SubjectResourceRegistryV3,
 ): Promise<MaterializedPromotion> {
-  const motionCatalog = await readArrayCatalog(repositoryRoot, CATALOG_PATHS.motion);
+  const controlFeelCatalog = await readArrayCatalog(
+    repositoryRoot,
+    CATALOG_PATHS.controlFeel,
+  );
   const controlCatalog = await readArrayCatalog(repositoryRoot, CATALOG_PATHS.control);
   const cameraCatalog = await readCameraCatalog(repositoryRoot);
   const cameraResources = [
@@ -596,8 +543,31 @@ async function materializePromotion(
     );
   }
 
-  const motion = materializeMotionRoles(candidate, motionCatalog, registry);
-  const generatedInputs: SubjectRegistryResourceInputV3[] = [...motion.generated];
+  const generatedInputs: SubjectRegistryResourceInputV3[] = [];
+
+  let controlFeelProfileRef = candidate.semanticContent.selections.controlFeel.profileRef;
+  if (candidate.semanticContent.selections.controlFeel.disposition === "derive") {
+    const id = subjectScopedId(candidate.semanticContent.subjectDefinitionId, "default");
+    const version = nextVersion(controlFeelCatalog, id);
+    const override = candidate.semanticContent.overrides.controlFeelByProfileRef[
+      controlFeelProfileRef
+    ];
+    if (override === undefined) {
+      fail(
+        "SUBJECT_PRESET_PROMOTION_SOURCE_DRIFT",
+        `Control Feel override '${controlFeelProfileRef}' is missing.`,
+      );
+    }
+    const controlFeel = cloneControlFeelProfile(
+      controlFeelProfileRef,
+      id,
+      version,
+      override.values,
+      registry,
+    );
+    generatedInputs.push(controlFeel);
+    controlFeelProfileRef = controlFeel.resourceRef;
+  }
 
   let controlProfileRef = candidate.semanticContent.selections.control.profileRef;
   if (candidate.semanticContent.selections.control.disposition === "derive") {
@@ -724,10 +694,16 @@ async function materializePromotion(
     profiles: {
       ...structuredClone(baseDefinition.profiles),
       motion: {
-        defaultMotionProfileRef: motion.defaultMotionProfileRef,
-        optionalMotionProfileRefs: motion.optionalMotionProfileRefs,
-        fallbackMotionProfileRef: motion.fallbackMotionProfileRef,
+        defaultMotionProfileRef:
+          candidate.semanticContent.selections.motionRoles.default.sourceProfileRef,
+        optionalMotionProfileRefs:
+          candidate.semanticContent.selections.motionRoles.optional.map(
+            (role) => role.sourceProfileRef,
+          ),
+        fallbackMotionProfileRef:
+          candidate.semanticContent.selections.motionRoles.fallback.sourceProfileRef,
       },
+      controlFeelProfileRef,
       controlProfileRef,
       cameraContextProfileRef: cameraContext.resourceRef,
     },
@@ -767,10 +743,13 @@ async function materializePromotion(
   }
 
   const changedCatalogs = new Map<string, unknown>();
-  if (motion.generated.length > 0) {
-    changedCatalogs.set(CATALOG_PATHS.motion, [
-      ...motionCatalog,
-      ...motion.generated,
+  const generatedControlFeel = generatedInputs.filter((resource) =>
+    resource.kind === "control-feel-profile"
+  );
+  if (generatedControlFeel.length > 0) {
+    changedCatalogs.set(CATALOG_PATHS.controlFeel, [
+      ...controlFeelCatalog,
+      ...generatedControlFeel,
     ].sort((left, right) =>
       String(left.resourceRef).localeCompare(String(right.resourceRef))
     ));
@@ -1159,8 +1138,11 @@ async function inspectGitState(repositoryRoot: string): Promise<GitState> {
       "Promotion requires a known Git repository.",
     );
   }
-  const normalizedDiscoveredRoot = path.resolve(discoveredRoot.trim());
-  if (normalizedDiscoveredRoot.toLowerCase() !== repositoryRoot.toLowerCase()) {
+  const [normalizedDiscoveredRoot, normalizedRepositoryRoot] = await Promise.all([
+    realpath(path.resolve(discoveredRoot.trim())),
+    realpath(repositoryRoot),
+  ]);
+  if (normalizedDiscoveredRoot.toLowerCase() !== normalizedRepositoryRoot.toLowerCase()) {
     fail(
       "SUBJECT_PRESET_PROMOTION_REPOSITORY_ROOT_MISMATCH",
       "Promotion repositoryRoot must be the exact Git worktree root.",
@@ -1381,10 +1363,10 @@ export async function promoteSubjectPresetTransactionally(
   }
   const plan = parseSubjectPresetPromotionPlanV1(options.plan);
   assertNoProposedVersionCollisions(plan);
-  const gitState = await inspectGitState(repositoryRoot);
   for (const target of plan.targets) {
     await assertNoSymlinkComponents(repositoryRoot, target.logicalPath);
   }
+  const gitState = await inspectGitState(repositoryRoot);
   await assertPreimagesCurrent(plan, repositoryRoot);
 
   const registry = options.registry ?? builtInSubjectResourceRegistry;

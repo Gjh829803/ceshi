@@ -1,3 +1,8 @@
+export {
+  queryLockedColliderSupportHeightMeters,
+  type LockedSupportColliderV1,
+} from "./collider-support.js";
+
 export type TerrainSurfaceVec2 = readonly [x: number, z: number];
 export type TerrainSurfaceVec3 = readonly [x: number, y: number, z: number];
 

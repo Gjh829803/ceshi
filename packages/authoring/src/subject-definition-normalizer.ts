@@ -5,6 +5,7 @@ import {
 } from "@whitebox-world/subject-composition";
 import type {
   AnimationSetManifestV1,
+  ControlFeelProfileV1,
   RegistrySubjectDefinitionV3,
   RegistrySubjectDefinitionV2,
   RigProfileManifestV1,
@@ -47,6 +48,105 @@ interface NormalizedRiggedVisualResourcesV1 {
 }
 
 const REQUIRED_GROUND_ACTION_IDS = ["idle", "jump", "run", "walk"] as const;
+
+type NormalizedControlFeelV1 = NormalizedSubjectDefinitionV2["controlFeel"];
+
+function controlFeelProfileRefForDefinition(
+  definition: SubjectDefinitionSourceV2,
+): string | undefined {
+  const controlFeelProfileRef = definition.profiles.controlFeelProfileRef;
+  if (
+    controlFeelProfileRef === undefined ||
+    controlFeelProfileRef === null ||
+    controlFeelProfileRef === ""
+  ) {
+    return undefined;
+  }
+  return controlFeelProfileRef;
+}
+
+function projectControlFeelProfile(
+  profile: ControlFeelProfileV1,
+): NormalizedControlFeelV1 {
+  return {
+    resourceRef: profile.resourceRef,
+    contentHash: profile.contentHash,
+    walkSpeedMetersPerSecond: profile.walkSpeedMetersPerSecond,
+    runSpeedMetersPerSecond: profile.runSpeedMetersPerSecond,
+    jumpSpeedMetersPerSecond: profile.jumpSpeedMetersPerSecond,
+    accelerationMetersPerSecondSquared: profile.accelerationMetersPerSecondSquared,
+    decelerationMetersPerSecondSquared: profile.decelerationMetersPerSecondSquared,
+    turnRateRadiansPerSecond: profile.turnRateRadiansPerSecond,
+    moveResponseExponent: profile.moveResponseExponent,
+    airControlRatio: profile.airControlRatio,
+    coyoteTimeSeconds: profile.coyoteTimeSeconds,
+    jumpBufferSeconds: profile.jumpBufferSeconds,
+    variableJumpHoldSeconds: profile.variableJumpHoldSeconds,
+    jumpHoldGravityRatio: profile.jumpHoldGravityRatio,
+    jumpReleaseGravityRatio: profile.jumpReleaseGravityRatio,
+  };
+}
+
+function resolveControlFeelProfileV1(
+  definition: SubjectDefinitionSourceV2,
+  request: NormalizeSubjectDefinitionRequestV2,
+): ControlFeelProfileV1 | undefined {
+  const registry = request.subjectResourceRegistry as Partial<SubjectResourceRegistryV3>;
+  if (typeof registry.resolveControlFeelProfile !== "function") {
+    addError(
+      request.diagnostics,
+      "SUBJECT_CAPABILITY_UNSATISFIED",
+      `${request.instancePath}/profiles/controlFeelProfileRef`,
+      "Control Feel Profile resolution requires a capability-driven Subject Registry.",
+      { subjectDefinitionRef: request.subjectDefinitionRef },
+    );
+    return undefined;
+  }
+  const controlFeelProfileRef = controlFeelProfileRefForDefinition(definition);
+  if (controlFeelProfileRef === undefined) {
+    addError(
+      request.diagnostics,
+      "SUBJECT_CONTROL_FEEL_PROFILE_REQUIRED",
+      `${request.instancePath}/profiles/controlFeelProfileRef`,
+      `SUBJECT_CONTROL_FEEL_PROFILE_REQUIRED: '${request.subjectDefinitionRef}'.`,
+      { subjectDefinitionRef: request.subjectDefinitionRef },
+    );
+    return undefined;
+  }
+  const controlFeelProfile = registry.resolveControlFeelProfile(controlFeelProfileRef);
+  if (controlFeelProfile === undefined) {
+    addError(
+      request.diagnostics,
+      "SUBJECT_CAPABILITY_UNSATISFIED",
+      `${request.instancePath}/profiles/controlFeelProfileRef`,
+      `Control Feel Profile '${controlFeelProfileRef}' is not registered at the exact requested version.`,
+      { expectedKind: "control-feel-profile", resourceRef: controlFeelProfileRef },
+    );
+    return undefined;
+  }
+  request.resourceLockBuilder.addRegistryResource(
+    controlFeelProfile,
+    `${request.instancePath}/profiles/controlFeelProfileRef`,
+    request.diagnostics,
+  );
+  return controlFeelProfile;
+}
+
+const FIRST_SLICE_AVAILABLE_CONTROL_FEEL_PROFILE_REFS = [
+  "worldkit://control-feel-profile/humanoid.medium-ground@1",
+  "worldkit://control-feel-profile/humanoid.heavy-ground@1",
+] as const;
+
+function resolveAvailableControlFeelsV1(
+  request: NormalizeSubjectDefinitionRequestV2,
+): readonly NormalizedControlFeelV1[] {
+  const registry = request.subjectResourceRegistry as Partial<SubjectResourceRegistryV3>;
+  if (typeof registry.resolveControlFeelProfile !== "function") return [];
+  return FIRST_SLICE_AVAILABLE_CONTROL_FEEL_PROFILE_REFS.flatMap((resourceRef) => {
+    const profile = registry.resolveControlFeelProfile!(resourceRef);
+    return profile === undefined ? [] : [projectControlFeelProfile(profile)];
+  });
+}
 
 type NormalizedCapabilityAssemblyV1 = NonNullable<
   NormalizedSubjectDefinitionV2["capabilityAssembly"]
@@ -780,6 +880,7 @@ export function normalizeSubjectDefinitionV2(
     resourceLockBuilder.addRegistryResource(locomotionProfile,
       `${instancePath}/profiles/locomotionProfileRef`, diagnostics);
   }
+  const controlFeelProfile = resolveControlFeelProfileV1(definition, request);
 
   for (const capability of capabilities) {
     for (const requiredRef of capability.requiredCapabilityRefs) {
@@ -876,7 +977,8 @@ export function normalizeSubjectDefinitionV2(
 
   const finalErrorCount = diagnostics.filter((item) => item.severity === "error").length;
   if (finalErrorCount > initialErrorCount || physicsBodyProfile === undefined ||
-    locomotionProfile === undefined || normalizedCollider === undefined ||
+    locomotionProfile === undefined || controlFeelProfile === undefined ||
+    normalizedCollider === undefined ||
     (definition.visualBinding.mode === "rigged" && riggedResources === undefined)) {
     return undefined;
   }
@@ -902,6 +1004,12 @@ export function normalizeSubjectDefinitionV2(
     colliderPolicy: structuredClone(definition.colliderPolicy),
     capabilityRefs,
     profiles: structuredClone(definition.profiles),
+    locomotion: {
+      allowWalk: locomotionProfile.allowWalk,
+      allowRun: locomotionProfile.allowRun,
+      allowJump: locomotionProfile.allowJump,
+    },
+    controlFeel: projectControlFeelProfile(controlFeelProfile),
     ...(capabilityAssembly === undefined ? {} : { capabilityAssembly }),
     aiMetadata: {
       ...structuredClone(definition.aiMetadata),
@@ -917,22 +1025,12 @@ export function normalizeSubjectDefinitionV2(
     ...normalizedDefinitionHashInput,
     subjectDefinitionHash,
     source,
+    availableControlFeels: resolveAvailableControlFeelsV1(request),
     collider: {
       ...normalizedCollider,
       massKilograms: physicsBodyProfile.physicsBody.massKilograms,
       maxSlopeDegrees: physicsBodyProfile.physicsBody.maxSlopeDegrees,
       maxStepHeightMeters: physicsBodyProfile.physicsBody.maxStepHeightMeters,
-    },
-    locomotion: {
-      mode: locomotionProfile.locomotion.mode,
-      walkSpeedMetersPerSecond:
-        locomotionProfile.locomotion.walkSpeedMetersPerSecond,
-      runSpeedMetersPerSecond:
-        locomotionProfile.locomotion.runSpeedMetersPerSecond,
-      waterSpeedMetersPerSecond:
-        locomotionProfile.locomotion.waterSpeedMetersPerSecond,
-      jumpSpeedMetersPerSecond:
-        locomotionProfile.locomotion.jumpSpeedMetersPerSecond,
     },
     resourceCost,
   };

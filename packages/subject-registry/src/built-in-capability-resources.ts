@@ -1,4 +1,5 @@
 import cameraCatalog from "../../../assets/registry/camera-profiles/catalog.json";
+import controlFeelProfiles from "../../../assets/registry/control-feel-profiles/catalog.json";
 import controlProfiles from "../../../assets/registry/control-profiles/catalog.json";
 import harnessProfiles from "../../../assets/registry/harness-profiles/catalog.json";
 import mediumProfiles from "../../../assets/registry/medium-profiles/catalog.json";
@@ -128,6 +129,7 @@ const CAPABILITY_MANIFESTS = [
 export const BUILT_IN_CAPABILITY_RESOURCES = [
   ...motionKernels,
   ...motionProfiles,
+  ...controlFeelProfiles,
   ...controlProfiles,
   ...cameraCatalog.algorithms,
   ...cameraCatalog.profiles,

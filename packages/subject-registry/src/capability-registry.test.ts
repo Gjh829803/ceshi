@@ -11,6 +11,7 @@ const SUBJECT_DEFINITION_REFS = [
   "worldkit://subject-definition/animal.quadruped.forward-steer@2",
   "worldkit://subject-definition/glider.paraglider.unpowered@1",
   "worldkit://subject-definition/humanoid.g-bot@1",
+  "worldkit://subject-definition/humanoid.rigged-golden@1",
   "worldkit://subject-definition/surface-craft.ice-skimmer@1",
   "worldkit://subject-definition/vehicle.four-wheel.arcade@1",
   "worldkit://subject-definition/watercraft.kayak.surface@1",
@@ -63,7 +64,7 @@ function capabilityDefinitions(): readonly RegistrySubjectDefinitionV3[] {
 }
 
 describe("capability-driven subject registry", () => {
-  it("keeps immutable Subject versions while publishing exactly six phase-one defaults", () => {
+  it("keeps immutable Subject versions and exact public defaults while retaining three CLI definitions", () => {
     expect(capabilityDefinitions().map((definition) => definition.resourceRef)).toEqual(
       SUBJECT_DEFINITION_REFS,
     );
@@ -71,7 +72,7 @@ describe("capability-driven subject registry", () => {
       builtInSubjectDefaultRegistry.listPublicDefaults()
         .map((entry) => entry.subjectDefinitionRef),
     ).toEqual(PUBLIC_DEFAULT_REFS);
-    expect(builtInSubjectResourceRegistry.listSubjectDefinitions()).toHaveLength(4);
+    expect(builtInSubjectResourceRegistry.listSubjectDefinitions()).toHaveLength(3);
   });
 
   it("freezes ten kernel IDs and exposes only K01, K02, K03, K04, K06 and K08 as runtime implementations", () => {
@@ -164,29 +165,16 @@ describe("capability-driven subject registry", () => {
     }
   });
 
-  it("keeps movement control tuning independent from camera look input", () => {
+  it("keeps movement control deadzone on the control profile root", () => {
     const controls = builtInSubjectResourceRegistry
       .listCapabilityResources()
       .filter((resource) => resource.kind === "control-profile");
 
-    expect(controls.length).toBeGreaterThan(0);
+    expect(controls).toHaveLength(2);
     for (const control of controls) {
-      expect(Object.keys(control.inputTuning).sort()).toEqual([
-        "moveDeadzoneRatio",
-        "responseExponent",
-      ]);
-      expect(control.runtimeParameterNames).toEqual([
-        "moveDeadzoneRatio",
-        "responseExponent",
-      ]);
-      expect(control.safetyLimits).toEqual({
-        moveDeadzoneRatio: { minimum: 0, maximum: 0.95 },
-        responseExponent: { minimum: 0.25, maximum: 4 },
-      });
-      expect(control.authoringRanges).toEqual({
-        moveDeadzoneRatio: { minimum: 0, maximum: 0.5, step: 0.01 },
-        responseExponent: { minimum: 0.25, maximum: 3, step: 0.05 },
-      });
+      expect(control.moveDeadzoneRatio).toBe(0.1);
+      expect(control).not.toHaveProperty("inputTuning");
+      expect(control).not.toHaveProperty("responseExponent");
     }
   });
 
@@ -234,39 +222,25 @@ describe("capability-driven subject registry", () => {
     );
   });
 
-  it("separates hard safety limits, authoring ranges and runtime parameter support", () => {
+  it("keeps motion profiles bag-free while kernels retain runtime parameter names", () => {
     const vehicle = builtInSubjectResourceRegistry.resolveMotionProfile(
       "worldkit://motion-profile/wheeled-arcade.medium@1",
     );
     const vehicleKernel = builtInSubjectResourceRegistry.resolveMotionKernel(
       "worldkit://motion-kernel/wheeled-arcade@1",
     );
-    expect(vehicle?.parameters).toMatchObject({
-      lowSpeedTurnRateRadiansPerSecond: 1,
-      highSpeedTurnRateRadiansPerSecond: 0.38,
-      steeringResponsePerSecond: 3.5,
-      steeringReturnPerSecond: 6,
-      fullSteeringAuthoritySpeedMetersPerSecond: 2.5,
-      turnRateSpeedCurveExponent: 1.35,
-      dragPerSecond: 0.7,
+    expect(vehicle).toMatchObject({
+      kind: "motion-profile",
+      motionKernelRef: "worldkit://motion-kernel/wheeled-arcade@1",
+      motionTags: ["arcade", "ground", "surface-fast", "wheeled"],
     });
-    expect(vehicle?.authoringRanges?.lowSpeedTurnRateRadiansPerSecond).toEqual({
-      minimum: 0.2,
-      maximum: 5,
-      step: 0.01,
-    });
-    expect(vehicleKernel?.runtimeParameterNames).toEqual(
-      expect.arrayContaining(Object.keys(vehicle?.authoringRanges ?? {})),
-    );
+    expect(vehicle).not.toHaveProperty("parameters");
+    expect(vehicleKernel?.runtimeParameterNames.length).toBeGreaterThan(0);
 
-    const slide = builtInSubjectResourceRegistry.resolveMotionProfile(
-      "worldkit://motion-profile/surface-slide.skimmer@1",
+    const feel = builtInSubjectResourceRegistry.resolveControlFeelProfile(
+      "worldkit://control-feel-profile/humanoid.medium-ground@1",
     );
-    const slideKernel = builtInSubjectResourceRegistry.resolveMotionKernel(
-      "worldkit://motion-kernel/surface-slide@1",
-    );
-    expect(slide?.parameters.slopeGravityRatio).toBeDefined();
-    expect(slideKernel?.runtimeParameterNames).toContain("slopeGravityRatio");
+    expect(feel?.accelerationMetersPerSecondSquared).toBe(16);
   });
 
   it("maps the seven reusable camera presets to explicit heading behavior", () => {

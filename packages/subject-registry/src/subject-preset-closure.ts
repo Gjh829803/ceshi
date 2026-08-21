@@ -66,6 +66,8 @@ function resolveResourceByKind(
       return registry.resolveMotionKernel(resourceRef);
     case "motion-profile":
       return registry.resolveMotionProfile(resourceRef);
+    case "control-feel-profile":
+      return registry.resolveControlFeelProfile(resourceRef);
     case "control-profile":
       return registry.resolveControlProfile(resourceRef);
     case "camera-rig-algorithm":
@@ -208,6 +210,7 @@ export function resolveSubjectPresetClosureV1(
         }
         visit(resource.profiles.physicsBodyProfileRef, "physics-body-profile");
         visit(resource.profiles.locomotionProfileRef, "locomotion-profile");
+        visit(resource.profiles.controlFeelProfileRef, "control-feel-profile");
         for (const motionProfileRef of [
           resource.profiles.motion.defaultMotionProfileRef,
           ...resource.profiles.motion.optionalMotionProfileRefs,

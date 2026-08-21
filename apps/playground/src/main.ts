@@ -23,7 +23,10 @@ import type {
   WorldkitBrowserApiV3,
 } from "@whitebox-world/runtime-contracts";
 import { createFetchSubjectAssetResolver, PLAYGROUND_CAPABILITY_SUBJECT_ASSET_URI_BY_REF_V1 } from "./worldkit-asset-resolver.js";
-import { installDeferredWorldkitBrowserApi } from "./worldkit-browser-api.js";
+import {
+  installDeferredWorldkitBrowserApi,
+  listSubjectPresetAuthoringProfilesV1,
+} from "./worldkit-browser-api.js";
 import {
   createSubjectPresetLocalRepository,
   type SubjectPresetLocalBaselineV1,
@@ -171,11 +174,11 @@ app.innerHTML = `
             <div class="tuning-inline-status" id="tuning-input-status">等待试跑</div>
           </section>
           <section class="tuning-section" id="tuning-motion">
-            <div class="tuning-section-heading"><span>03</span><div><h3>调整运动手感</h3><p>滑杆使用策划推荐范围，并明确标出“即时生效”或“仅草稿、待接入”。</p></div></div>
+            <div class="tuning-section-heading"><span>03</span><div><h3>调整运动手感草稿</h3><p>滑杆只编辑本地候选值；运行时继续使用已锁定的 Control Feel Ref，发布前需 promote。</p></div></div>
             <div class="friendly-slider-grid" id="tuning-motion-sliders"></div>
           </section>
           <section class="tuning-section" id="tuning-control">
-            <div class="tuning-section-heading"><span>04</span><div><h3>调整输入手感</h3><p>这两项只改变“按键或摇杆怎样变成操作意图”，不会改动主体速度和相机。</p></div></div>
+            <div class="tuning-section-heading"><span>04</span><div><h3>调整输入手感草稿</h3><p>候选值只描述“按键或摇杆怎样变成操作意图”，promote 为新 Control Profile 后才影响运行时。</p></div></div>
             <div class="friendly-slider-grid" id="tuning-control-sliders"></div>
           </section>
           <section class="tuning-section" id="tuning-camera">
@@ -416,6 +419,8 @@ interface TuningWorkbenchContextV1 {
   definition: SubjectDefinitionSummaryV1;
   activeKernel: MotionKernelSummaryV1 | undefined;
   motionProfiles: readonly CompatibleProfileSummaryV1[];
+  controlFeelProfiles: readonly CompatibleProfileSummaryV1[];
+  controlFeelProfile: CompatibleProfileSummaryV1 | undefined;
   controlProfile: CompatibleProfileSummaryV1 | undefined;
   cameraProfiles: readonly CompatibleProfileSummaryV1[];
   parameterDraft: Record<string, number | boolean>;
@@ -472,7 +477,7 @@ function installTuningWorkbench(
   summary.innerHTML = `
     <div><span>现在调的是</span><strong>${escapeHtml(subjectFriendlyName(workbenchContext.definition))}</strong></div>
     <div><span>移动方式</span><strong>${escapeHtml(kernelFriendlyName(workbenchContext.activeKernel))}</strong></div>
-    <div><span>所在环境</span><strong>${currentSubject?.movementMedium === "water" ? "水面" : currentSubject?.movementMedium === "air" ? "空中" : "地面"}</strong></div>
+    <div><span>所在环境</span><strong>${currentSubject?.movementMedium === "air" ? "空中" : "地面"}</strong></div>
     <div><span>配置权限</span><strong>${workbenchContext.definition.authoringAvailability}</strong></div>
   `;
 
@@ -538,9 +543,10 @@ function installTuningWorkbench(
   const cameraCards = requiredElement<HTMLDivElement>("#tuning-camera-cards");
   const cameraSliders = requiredElement<HTMLDivElement>("#tuning-camera-sliders");
   const defaultMotion = workbenchContext.motionProfiles.find((row) => row.role === "default");
+  const controlFeelProfiles = workbenchContext.controlFeelProfiles;
+  const controlFeelProfile = workbenchContext.controlFeelProfile;
   const controlProfile = workbenchContext.controlProfile;
   const cameraRows = workbenchContext.cameraProfiles;
-  const liveMotionParameterNames = new Set(defaultMotion?.runtimeParameterNames ?? []);
 
   const numericParameters = (
     parameters: Readonly<Record<string, number | boolean>> | undefined,
@@ -549,7 +555,6 @@ function installTuningWorkbench(
       (entry): entry is [string, number] => typeof entry[1] === "number" && Number.isFinite(entry[1]),
     ),
   );
-  const motionBaseParameters = numericParameters(defaultMotion?.parameters);
   const controlBaseParameters = numericParameters(controlProfile?.parameters);
   let controlTuning: ControlTuningV1 = { ...controlBaseParameters };
   const cameraTuningByProfileRef: Record<string, Record<string, number>> = Object.fromEntries(
@@ -562,12 +567,18 @@ function installTuningWorkbench(
     cameraPreference = "auto";
   }
   let cameraTuning: CameraTuningV1 = {};
+  let selectedControlFeelProfileRef = controlFeelProfile?.resourceRef ?? "";
+  const selectedControlFeelProfile = (): CompatibleProfileSummaryV1 | undefined =>
+    controlFeelProfiles.find(
+      (profile) => profile.resourceRef === selectedControlFeelProfileRef,
+    ) ?? controlFeelProfile;
 
   const exactBaseline = api.getSubjectPresetBaseline?.(workbenchContext.definition.resourceRef);
   const defaultCameraProfileRef = exactBaseline?.defaultCameraRigProfileRef;
   const localBaseline: SubjectPresetLocalBaselineV1 | undefined =
     exactBaseline !== undefined &&
       defaultMotion !== undefined &&
+      controlFeelProfile !== undefined &&
       controlProfile !== undefined &&
       defaultCameraProfileRef !== undefined
       ? {
@@ -578,6 +589,14 @@ function installTuningWorkbench(
             resourceRef: defaultMotion.resourceRef,
             contentHash: defaultMotion.contentHash,
           },
+          controlFeelProfile: {
+            resourceRef: controlFeelProfile.resourceRef,
+            contentHash: controlFeelProfile.contentHash,
+          },
+          availableControlFeelProfiles: controlFeelProfiles.map((profile) => ({
+            resourceRef: profile.resourceRef,
+            contentHash: profile.contentHash,
+          })),
           controlProfile: {
             resourceRef: controlProfile.resourceRef,
             contentHash: controlProfile.contentHash,
@@ -622,10 +641,11 @@ function installTuningWorkbench(
   };
 
   const resetTuningStateToRegistry = (): void => {
+    selectedControlFeelProfileRef = controlFeelProfile?.resourceRef ?? "";
     for (const name of Object.keys(workbenchContext.parameterDraft)) {
       delete workbenchContext.parameterDraft[name];
     }
-    Object.assign(workbenchContext.parameterDraft, defaultMotion?.parameters ?? {});
+    Object.assign(workbenchContext.parameterDraft, selectedControlFeelProfile()?.parameters ?? {});
     controlTuning = { ...controlBaseParameters };
     for (const profile of cameraRows) {
       cameraTuningByProfileRef[profile.resourceRef] = {};
@@ -635,13 +655,27 @@ function installTuningWorkbench(
 
   const loadDraftIntoTuningState = (draft: SubjectPresetWorkingDraftV1): void => {
     resetTuningStateToRegistry();
+    if (controlFeelProfiles.some(
+      (profile) => profile.resourceRef === draft.selectedControlFeelProfileRef,
+    )) {
+      selectedControlFeelProfileRef = draft.selectedControlFeelProfileRef;
+      for (const name of Object.keys(workbenchContext.parameterDraft)) {
+        delete workbenchContext.parameterDraft[name];
+      }
+      Object.assign(
+        workbenchContext.parameterDraft,
+        selectedControlFeelProfile()?.parameters ?? {},
+      );
+    }
     draftIdentity = {
       draftId: draft.draftId,
       createdAtIso: draft.createdAtIso,
       updatedAtIso: draft.updatedAtIso,
     };
-    const motionValues = draft.motionOverridesByProfileRef[defaultMotion?.resourceRef ?? ""]?.values ?? {};
-    Object.assign(workbenchContext.parameterDraft, motionValues);
+    const controlFeelValues = draft.controlFeelOverridesByProfileRef[
+      selectedControlFeelProfileRef
+    ]?.values ?? {};
+    Object.assign(workbenchContext.parameterDraft, controlFeelValues);
     const controlValues = draft.controlOverridesByProfileRef[controlProfile?.resourceRef ?? ""]?.values ?? {};
     controlTuning = { ...controlBaseParameters, ...controlValues };
     for (const profile of cameraRows) {
@@ -661,17 +695,20 @@ function installTuningWorkbench(
 
   const createCurrentWorkingDraft = (): SubjectPresetWorkingDraftV1 | undefined => {
     if (localBaseline === undefined) return undefined;
+    const activeControlFeelProfile = selectedControlFeelProfile();
+    if (activeControlFeelProfile === undefined) return undefined;
     const updatedAtIso = new Date().toISOString();
     return createSubjectPresetWorkbenchDraftV1({
       baseline: localBaseline,
       draftIdentity: { ...draftIdentity, updatedAtIso },
+      selectedControlFeelProfileRef: activeControlFeelProfile.resourceRef,
       selectedCameraPreferenceRef: cameraPreference === "auto" ? null : cameraPreference,
-      motion: {
-        baseParameters: defaultMotion?.parameters ?? {},
+      controlFeel: {
+        baseParameters: activeControlFeelProfile.parameters ?? {},
         currentValues: numericParameters(workbenchContext.parameterDraft),
-        ...(defaultMotion?.runtimeParameterNames === undefined
+        ...(activeControlFeelProfile.runtimeParameterNames === undefined
           ? {}
-          : { runtimeParameterNames: defaultMotion.runtimeParameterNames }),
+          : { runtimeParameterNames: activeControlFeelProfile.runtimeParameterNames }),
       },
       control: {
         baseParameters: controlProfile?.parameters ?? {},
@@ -741,37 +778,23 @@ function installTuningWorkbench(
     }
   }
 
-  const applyMotionTuning = (): void => {
-    const numericTuning = Object.fromEntries(
-      Object.entries(workbenchContext.parameterDraft).filter(
-        (entry): entry is [string, number] =>
-          typeof entry[1] === "number" && liveMotionParameterNames.has(entry[0]),
-      ),
-    );
-    try {
-      api.setMotionTuning?.(workbenchContext.controlledEntityId, numericTuning);
-    } catch {
-      saveStatus.textContent = "运动参数未能应用，当前主体仍使用上一组稳定配置";
-    }
-  };
-
   const renderMotionSliders = (): void => {
-    if (defaultMotion?.safetyLimits === undefined) {
+    const activeControlFeelProfile = selectedControlFeelProfile();
+    if (activeControlFeelProfile?.safetyLimits === undefined) {
       motionSliderGrid.innerHTML = '<p class="friendly-empty">当前主体没有开放可调的运动参数。</p>';
       return;
     }
-    motionSliderGrid.replaceChildren(...Object.entries(defaultMotion.safetyLimits).flatMap(([name, safetyLimit]) => {
+    motionSliderGrid.replaceChildren(...Object.entries(activeControlFeelProfile.safetyLimits).flatMap(([name, safetyLimit]) => {
       const value = workbenchContext.parameterDraft[name];
-      const range = defaultMotion.authoringRanges?.[name] ?? {
+      const range = activeControlFeelProfile.authoringRanges?.[name] ?? {
         ...safetyLimit,
         step: Math.max(0.01, (safetyLimit.maximum - safetyLimit.minimum) / 100),
       };
       if (typeof value !== "number" || range.minimum === range.maximum) return [];
-      const runtimeSupported = liveMotionParameterNames.has(name);
       const [labelText, helpText] = FRIENDLY_MOTION_PARAMETERS[name] ?? [name, "安全范围内的运动参数"];
       const label = document.createElement("label");
       label.className = "friendly-slider";
-      label.innerHTML = `<span><strong>${escapeHtml(labelText)} · ${runtimeSupported ? "即时生效" : "仅草稿"}</strong><small>${escapeHtml(helpText)}${runtimeSupported ? "" : "；当前 Runtime 尚未接入"}</small></span>`;
+      label.innerHTML = `<span><strong>${escapeHtml(labelText)} · 仅草稿</strong><small>${escapeHtml(helpText)}；运动手感由锁定的 Feel 配置驱动，数值袋不再即时下发</small></span>`;
       const control = document.createElement("div");
       const input = document.createElement("input");
       input.type = "range";
@@ -787,18 +810,12 @@ function installTuningWorkbench(
         output.textContent = nextValue.toFixed(2);
         writeLocalDraft(workbenchContext.motionDraftStorageKey, JSON.stringify(workbenchContext.parameterDraft));
         persistWorkingDraft();
-        if (runtimeSupported) {
-          applyMotionTuning();
-          saveStatus.textContent = `“${labelText}”已应用，并保存到本机草稿`;
-        } else {
-          saveStatus.textContent = `“${labelText}”只保存为草稿，当前还不能影响预览`;
-        }
+        saveStatus.textContent = `“${labelText}”只保存为草稿；发布前需 promote 为新的 Feel Profile`;
       });
       control.append(input, output);
       label.append(control);
       return [label];
     }));
-    applyMotionTuning();
   };
 
   const renderControlSliders = (): void => {
@@ -808,9 +825,8 @@ function installTuningWorkbench(
     }
     const copy: Readonly<Record<string, readonly [string, string]>> = {
       moveDeadzoneRatio: ["移动输入死区", "忽略很小的摇杆偏移；键盘操作通常感觉不明显，手柄可防止角色自己慢慢移动"],
-      responseExponent: ["输入响应曲线", "数值越大，小幅输入越细腻；数值越小，方向和油门越快接近满幅"],
     };
-    controlSliderGrid.replaceChildren(...["moveDeadzoneRatio", "responseExponent"].flatMap((name) => {
+    controlSliderGrid.replaceChildren(...["moveDeadzoneRatio"].flatMap((name) => {
       const value = controlTuning[name as keyof ControlTuningV1];
       const safetyLimit = controlProfile.safetyLimits?.[name];
       const range = controlProfile.authoringRanges?.[name] ?? (safetyLimit === undefined ? undefined : {
@@ -821,7 +837,7 @@ function installTuningWorkbench(
       const [labelText, helpText] = copy[name] ?? [name, "输入曲线参数"];
       const label = document.createElement("label");
       label.className = "friendly-slider";
-      label.innerHTML = `<span><strong>${escapeHtml(labelText)} · 即时生效</strong><small>${escapeHtml(helpText)}</small></span>`;
+      label.innerHTML = `<span><strong>${escapeHtml(labelText)} · 仅草稿</strong><small>${escapeHtml(helpText)}；发布前需 promote 为新的 Control Profile</small></span>`;
       const control = document.createElement("div");
       const input = document.createElement("input");
       input.type = "range";
@@ -835,23 +851,13 @@ function installTuningWorkbench(
         const nextValue = Number(input.value);
         controlTuning = { ...controlTuning, [name]: nextValue };
         output.textContent = nextValue.toFixed(2);
-        try {
-          api.setControlTuning?.(workbenchContext.controlledEntityId, controlTuning);
-          persistWorkingDraft();
-          saveStatus.textContent = `“${labelText}”已应用，并保存到本机草稿`;
-        } catch {
-          saveStatus.textContent = `“${labelText}”未能应用，上一组输入设置已保留`;
-        }
+        persistWorkingDraft();
+        saveStatus.textContent = `“${labelText}”只保存为草稿；当前预览继续使用锁定的 Control Profile`;
       });
       control.append(input, output);
       label.append(control);
       return [label];
     }));
-    try {
-      api.setControlTuning?.(workbenchContext.controlledEntityId, controlTuning);
-    } catch {
-      saveStatus.textContent = "输入手感参数未能应用，当前主体仍使用 Registry 默认值";
-    }
   };
 
   const activeTunableCameraProfile = (): CompatibleProfileSummaryV1 | undefined => {
@@ -1005,12 +1011,6 @@ function installTuningWorkbench(
   const saveVersionButton = requiredElement<HTMLButtonElement>("#tuning-save-version-button");
 
   const refreshWorkbenchAfterRestore = (): void => {
-    applyMotionTuning();
-    try {
-      api.setControlTuning?.(workbenchContext.controlledEntityId, controlTuning);
-    } catch {
-      // The atomic apply already protects the committed Runtime state.
-    }
     refreshCameraCards();
     renderCameraSliders();
     renderMotionSliders();
@@ -1069,7 +1069,7 @@ function installTuningWorkbench(
           }
           refreshWorkbenchAfterRestore();
           writeLocalDraft("worldkit.camera-preference", cameraPreference);
-          saveStatus.textContent = `已恢复“${version.displayName}”，运动、输入和相机已一起应用`;
+          saveStatus.textContent = `已恢复“${version.displayName}”：锁定的 Feel/Control Ref 与相机预览已应用，未 promote 的数字仍保留为草稿`;
         } catch {
           if (previousDraft !== undefined) loadDraftIntoTuningState(previousDraft);
           refreshWorkbenchAfterRestore();
@@ -1185,20 +1185,24 @@ function installTuningWorkbench(
       cameraTuning,
       cameraTuningByProfileRef,
       controlTuning,
+      // Schema V4 keeps this historical export key; its values now come only
+      // from the selected Control Feel profile and the legacy importer maps it
+      // into the P1.5 Control Feel lane.
       motionParameterDraft: workbenchContext.parameterDraft,
       motionParameterSupport: {
-        runtimeParameterNames: defaultMotion?.runtimeParameterNames ?? [],
-        draftOnlyParameterNames: defaultMotion?.draftOnlyParameterNames ?? [],
-        authoringRanges: defaultMotion?.authoringRanges ?? {},
+        runtimeParameterNames: selectedControlFeelProfile()?.runtimeParameterNames ?? [],
+        draftOnlyParameterNames: selectedControlFeelProfile()?.draftOnlyParameterNames ?? [],
+        authoringRanges: selectedControlFeelProfile()?.authoringRanges ?? {},
       },
       inputGuide: inputItems.map((item) => ({ key: item.keyLabel, action: item.title, meaning: item.explanation })),
       compatibleProfiles: [
         ...workbenchContext.motionProfiles,
+        ...workbenchContext.controlFeelProfiles,
         ...(workbenchContext.controlProfile === undefined ? [] : [workbenchContext.controlProfile]),
         ...workbenchContext.cameraProfiles,
       ],
       resourceLockRequired: true,
-      note: "标记为即时生效的参数已在当前会话预览；仅草稿参数需接入 Runtime 后才能成为正式预制。",
+      note: "Control Feel 与 Control 数值只保存在草稿中；运行时只预览锁定 Ref，相机数值可作为会话预览。",
     }, workbenchContext.hostOverlay);
     downloadJson(
       `${workbenchContext.definition.semanticClassId.replaceAll(".", "-")}.worldkit-authoring.json`,
@@ -1332,8 +1336,14 @@ function installCapabilityAuthoringPanel(
           <div><kbd>F</kbd><span>瞄准</span><kbd>R</kbd><span>镜头回正</span></div>
           <div><span>鼠标拖动 / 滚轮</span><span>旋转 / 缩放镜头</span></div>
         `;
-  const profiles = api.listCompatibleProfiles?.(definition.resourceRef) ?? [];
+  const profiles = listSubjectPresetAuthoringProfilesV1(definition.resourceRef);
   const motionProfiles = profiles.filter((row) => row.kind === "motion-profile");
+  const controlFeelProfiles = profiles.filter(
+    (row) => row.kind === "control-feel-profile",
+  );
+  const controlFeelProfile = controlFeelProfiles.find(
+    (row) => row.kind === "control-feel-profile" && row.role === "default",
+  );
   const controlProfile = profiles.find((row) => row.kind === "control-profile");
   const cameraProfiles = profiles.filter((row) => row.kind === "camera-rig-profile");
   cameraSelect.replaceChildren(
@@ -1373,8 +1383,8 @@ function installCapabilityAuthoringPanel(
 
   const parameterDraft: Record<string, number | boolean> = {};
   const defaultMotion = motionProfiles.find((row) => row.role === "default");
-  const motionDraftStorageKey = `worldkit.motion-draft.v4.${definition.resourceRef}.${defaultMotion?.resourceRef ?? "none"}.${defaultMotion?.contentHash ?? "unlocked"}`;
-  if (defaultMotion?.safetyLimits !== undefined) {
+  const motionDraftStorageKey = `worldkit.control-feel-draft.v1.${definition.resourceRef}.${controlFeelProfile?.resourceRef ?? "none"}.${controlFeelProfile?.contentHash ?? "unlocked"}`;
+  if (controlFeelProfile?.safetyLimits !== undefined) {
     let storedDraft: Readonly<Record<string, unknown>> = {};
     try {
       const rawDraft = readLocalDraft(motionDraftStorageKey);
@@ -1388,12 +1398,12 @@ function installCapabilityAuthoringPanel(
     const title = document.createElement("p");
     title.textContent = "安全参数草稿（导出后重新编译生效）";
     drafts.append(title);
-    for (const [name, safetyLimit] of Object.entries(defaultMotion.safetyLimits)) {
-      const range = defaultMotion.authoringRanges?.[name] ?? {
+    for (const [name, safetyLimit] of Object.entries(controlFeelProfile.safetyLimits)) {
+      const range = controlFeelProfile.authoringRanges?.[name] ?? {
         ...safetyLimit,
         step: Math.max(0.01, (safetyLimit.maximum - safetyLimit.minimum) / 100),
       };
-      const value = defaultMotion.parameters?.[name];
+      const value = controlFeelProfile.parameters?.[name];
       if (typeof value !== "number" || range.minimum === range.maximum) continue;
       const storedValue = storedDraft[name];
       const draftValue = typeof storedValue === "number" &&
@@ -1430,6 +1440,8 @@ function installCapabilityAuthoringPanel(
     definition,
     activeKernel,
     motionProfiles,
+    controlFeelProfiles,
+    controlFeelProfile,
     controlProfile,
     cameraProfiles,
     parameterDraft,
@@ -1484,6 +1496,7 @@ function installCapabilityAuthoringPanel(
       schemaVersion: 4,
       subjectDefinition: definition,
       compatibleProfiles: profiles,
+      // Schema V4 compatibility key; parameterDraft is Control Feel tuning.
       motionParameterDraft: parameterDraft,
       resourceLockRequired: true,
     }, hostOverlay);

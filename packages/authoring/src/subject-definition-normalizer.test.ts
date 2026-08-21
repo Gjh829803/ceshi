@@ -3,9 +3,17 @@ import { describe, expect, it } from "vitest";
 import {
   builtInSubjectResourceRegistry,
   createSubjectResourceRegistry,
-  type SubjectRegistryResourceInputV1,
+  type SubjectRegistryResourceInputV3,
   type SubjectResourceRegistryV2,
 } from "@whitebox-world/subject-registry";
+import subjectDefinitionsV3 from "../../../assets/registry/subject-definitions/catalog.json";
+import {
+  BUILT_IN_CAPABILITY_MANIFESTS,
+  BUILT_IN_CAPABILITY_RESOURCES,
+} from "../../subject-registry/src/built-in-capability-resources";
+import { BUILT_IN_SUBJECT_DEFINITIONS } from "../../subject-registry/src/built-in-subject-definitions";
+import { BUILT_IN_SUBJECT_RESOURCE_MANIFESTS } from "../../subject-registry/src/built-in-resource-manifests";
+import type { RegistrySubjectDefinitionInputV3 } from "../../subject-registry/src/types-v3";
 
 import {
   normalizeAuthoringSpec,
@@ -45,22 +53,28 @@ const BIPED_BONE_IDS = [
   "upper-leg.right",
 ] as const;
 
+const ALL_BUILT_IN_REGISTRY_INPUTS = [
+  ...BUILT_IN_SUBJECT_DEFINITIONS,
+  ...(subjectDefinitionsV3 as unknown as readonly RegistrySubjectDefinitionInputV3[]),
+  ...BUILT_IN_SUBJECT_RESOURCE_MANIFESTS,
+  ...BUILT_IN_CAPABILITY_MANIFESTS,
+  ...BUILT_IN_CAPABILITY_RESOURCES,
+] as const;
+
 function expectExactKeys(value: object, expectedKeys: readonly string[]): void {
   expect(Object.keys(value).sort()).toEqual([...expectedKeys].sort());
 }
 
 function registryFrom(
   transform: (
-    resource: SubjectRegistryResourceInputV1,
-  ) => SubjectRegistryResourceInputV1 | undefined,
+    resource: SubjectRegistryResourceInputV3,
+  ) => SubjectRegistryResourceInputV3 | undefined,
 ): SubjectResourceRegistryV2 {
   return createSubjectResourceRegistry(
-    builtInSubjectResourceRegistry
-      .listResources()
-      .flatMap((resource) => {
-        const transformed = transform(structuredClone(resource));
-        return transformed === undefined ? [] : [transformed];
-      }),
+    ALL_BUILT_IN_REGISTRY_INPUTS.flatMap((resource) => {
+      const transformed = transform(structuredClone(resource));
+      return transformed === undefined ? [] : [transformed];
+    }),
   );
 }
 
@@ -71,7 +85,7 @@ function registryWithPermutedNewResourceCollections(
     isReversed ? [...values].reverse() : [...values];
 
   return createSubjectResourceRegistry(
-    builtInSubjectResourceRegistry.listResources().map((resource) => {
+    ALL_BUILT_IN_REGISTRY_INPUTS.map((resource) => {
       const input = structuredClone(resource);
       switch (input.kind) {
         case "subject-asset":
@@ -216,6 +230,7 @@ describe("Package Subject Definition normalization", () => {
       ANIMATION_SET_REF,
       "worldkit://capability/locomotion.ground@1",
       COLLIDER_PROFILE_REF,
+      "worldkit://control-feel-profile/humanoid.medium-ground@1",
       "worldkit://locomotion-profile/ground.standard@1",
       "worldkit://physics-body-profile/character.medium@1",
       RIG_PROFILE_REF,
@@ -232,13 +247,13 @@ describe("Package Subject Definition normalization", () => {
 
     expect(result.ok).toBe(true);
     expect(packageDefinitionHash(result)).toBe(
-      "sha256:2949c4c8f7ebbb321a3a40ea10890f4dd608178c26424c530e771c1b529d0a1b",
+      "sha256:c8736597374c3823aef21924c7b5cc778e8a11a0edb1c945df0e717c6a287061",
     );
     expect(result.value?.resources.resourceLockHash).toBe(
-      "sha256:2e685dbfad9f563ae9b5ec3ca966bc8a6e3c85b6daa3b12280b4ca3dd989c3b0",
+      "sha256:fe1352a60cdbdeef0a203a7b18dac4537c9057c0bd2252b56139e4f8b77f6e56",
     );
     expect(result.normalizedWorldIrHash).toBe(
-      "sha256:4f754cbe820da4519478dff3f3ed5b4c96240fb36397ca97b2bbe2f3ec58aae9",
+      "sha256:0f1f8399b5c531843af7a03244f04b0ef964264c86519c03c6d5ecb7974526fc",
     );
   });
 
@@ -398,7 +413,7 @@ describe("Package Subject Definition normalization", () => {
               ...resource.inventory,
               providerHandle: forbiddenValues[0],
             },
-          } as unknown as SubjectRegistryResourceInputV1;
+          } as unknown as SubjectRegistryResourceInputV3;
         case "rig-profile":
           return {
             ...resource,
@@ -406,7 +421,7 @@ describe("Package Subject Definition normalization", () => {
               ...resource.sourceNodeNameByBoneId,
               providerHandle: forbiddenValues[1],
             },
-          } as SubjectRegistryResourceInputV1;
+          } as SubjectRegistryResourceInputV3;
         case "animation-set":
           return {
             ...resource,
@@ -414,7 +429,7 @@ describe("Package Subject Definition normalization", () => {
               ...binding,
               sourceUri: forbiddenValues[2],
             })),
-          } as SubjectRegistryResourceInputV1;
+          } as SubjectRegistryResourceInputV3;
         case "collider-profile":
           return {
             ...resource,
@@ -422,15 +437,12 @@ describe("Package Subject Definition normalization", () => {
               ...resource.collider,
               providerHandle: forbiddenValues[3],
             },
-          } as unknown as SubjectRegistryResourceInputV1;
-        case "locomotion-profile":
+          } as unknown as SubjectRegistryResourceInputV3;
+        case "control-feel-profile":
           return {
             ...resource,
-            locomotion: {
-              ...resource.locomotion,
-              providerHandle: forbiddenValues[4],
-            },
-          } as SubjectRegistryResourceInputV1;
+            providerHandle: forbiddenValues[4],
+          } as unknown as SubjectRegistryResourceInputV3;
         default:
           return resource;
       }
@@ -510,13 +522,34 @@ describe("Package Subject Definition normalization", () => {
       normalizedDefinition.collider.centerOffsetFromSubjectOriginMetersXYZ,
       ["0", "1", "2"],
     );
-    expectExactKeys(normalizedDefinition.locomotion, [
+    expectExactKeys(normalizedDefinition.locomotion, ["allowJump", "allowRun", "allowWalk"]);
+    const controlFeelKeys = [
+      "accelerationMetersPerSecondSquared",
+      "airControlRatio",
+      "contentHash",
+      "coyoteTimeSeconds",
+      "decelerationMetersPerSecondSquared",
+      "jumpBufferSeconds",
+      "jumpHoldGravityRatio",
+      "jumpReleaseGravityRatio",
       "jumpSpeedMetersPerSecond",
-      "mode",
+      "moveResponseExponent",
+      "resourceRef",
       "runSpeedMetersPerSecond",
+      "turnRateRadiansPerSecond",
+      "variableJumpHoldSeconds",
       "walkSpeedMetersPerSecond",
-      "waterSpeedMetersPerSecond",
+    ] as const;
+    expectExactKeys(normalizedDefinition.controlFeel, controlFeelKeys);
+    expect(
+      normalizedDefinition.availableControlFeels.map((feel) => feel.resourceRef),
+    ).toEqual([
+      "worldkit://control-feel-profile/humanoid.medium-ground@1",
+      "worldkit://control-feel-profile/humanoid.heavy-ground@1",
     ]);
+    for (const availableFeel of normalizedDefinition.availableControlFeels) {
+      expectExactKeys(availableFeel, controlFeelKeys);
+    }
     const normalizedAssetPart = normalizedDefinition.visualParts.find(
       (part) => part.kind === "asset",
     )!;
@@ -652,7 +685,7 @@ describe("Package Subject Definition normalization", () => {
   it.each([
     {
       label: "Rig rejects the Asset",
-      transform: (resource: SubjectRegistryResourceInputV1) =>
+      transform: (resource: SubjectRegistryResourceInputV3) =>
         resource.kind === "rig-profile"
           ? { ...resource, compatibleSubjectAssetRefs: [] }
           : resource,
@@ -665,7 +698,7 @@ describe("Package Subject Definition normalization", () => {
     },
     {
       label: "Animation Set targets another Asset",
-      transform: (resource: SubjectRegistryResourceInputV1) =>
+      transform: (resource: SubjectRegistryResourceInputV3) =>
         resource.kind === "animation-set"
           ? {
               ...resource,
@@ -681,7 +714,7 @@ describe("Package Subject Definition normalization", () => {
     },
     {
       label: "Animation Set targets another Rig",
-      transform: (resource: SubjectRegistryResourceInputV1) =>
+      transform: (resource: SubjectRegistryResourceInputV3) =>
         resource.kind === "animation-set"
           ? {
               ...resource,
@@ -697,7 +730,7 @@ describe("Package Subject Definition normalization", () => {
     },
     {
       label: "required Action IDs are incomplete",
-      transform: (resource: SubjectRegistryResourceInputV1) =>
+      transform: (resource: SubjectRegistryResourceInputV3) =>
         resource.kind === "animation-set"
           ? { ...resource, requiredActionIds: ["idle", "walk", "run"] as const }
           : resource,
@@ -706,7 +739,7 @@ describe("Package Subject Definition normalization", () => {
     },
     {
       label: "mapped Clip is absent from Asset inventory",
-      transform: (resource: SubjectRegistryResourceInputV1) =>
+      transform: (resource: SubjectRegistryResourceInputV3) =>
         resource.kind === "subject-asset"
           ? {
               ...resource,
@@ -721,7 +754,7 @@ describe("Package Subject Definition normalization", () => {
     },
     {
       label: "Bone Socket targets an undeclared Bone",
-      transform: (resource: SubjectRegistryResourceInputV1) =>
+      transform: (resource: SubjectRegistryResourceInputV3) =>
         resource.kind === "rig-profile"
           ? {
               ...resource,
@@ -735,7 +768,7 @@ describe("Package Subject Definition normalization", () => {
     },
     {
       label: "Rig omits a required Bone mapping",
-      transform: (resource: SubjectRegistryResourceInputV1) => {
+      transform: (resource: SubjectRegistryResourceInputV3) => {
         if (resource.kind !== "rig-profile") return resource;
         const sourceNodeNameByBoneId: Record<string, string> = {
           ...resource.sourceNodeNameByBoneId,
@@ -744,14 +777,14 @@ describe("Package Subject Definition normalization", () => {
         return {
           ...resource,
           sourceNodeNameByBoneId,
-        } as SubjectRegistryResourceInputV1;
+        } as SubjectRegistryResourceInputV3;
       },
       instancePath: "/resources/subjectDefinitions/0/visualBinding/rigProfileRef",
       details: { missingBoneIds: ["head"], rigProfileRef: RIG_PROFILE_REF },
     },
     {
       label: "Collider profile violates support-center origin",
-      transform: (resource: SubjectRegistryResourceInputV1) =>
+      transform: (resource: SubjectRegistryResourceInputV3) =>
         resource.kind === "collider-profile"
           ? {
               ...resource,
@@ -954,6 +987,7 @@ describe("Package Subject Definition normalization", () => {
       "package://subject-definition/coastal-pack-animal@1",
       "worldkit://capability/locomotion.ground@1",
       "worldkit://collider-derivation-profile/vertical-character-capsule@1",
+      "worldkit://control-feel-profile/humanoid.medium-ground@1",
       "worldkit://locomotion-profile/ground.standard@1",
       "worldkit://physics-body-profile/character.medium@1",
       "worldkit://subject-definition/humanoid.third-person@1",
@@ -1024,6 +1058,38 @@ describe("Package Subject Definition normalization", () => {
         code: "SUBJECT_CAPABILITY_UNSATISFIED",
         instancePath:
           "/resources/subjectDefinitions/0/profiles/locomotionProfileRef",
+      }),
+    );
+  });
+
+  it("rejects a missing controlFeelProfileRef", () => {
+    const spec = createValidPackageSubjectWorld();
+    const definition = structuredClone(spec.resources.subjectDefinitions[0]!);
+    const { controlFeelProfileRef: _omittedControlFeelProfileRef, ...profiles } =
+      definition.profiles;
+    const diagnostics: Array<{
+      code: string;
+      instancePath: string;
+      message?: string;
+    }> = [];
+
+    const result = normalizeSubjectDefinitionV2({
+      definition: { ...definition, profiles: profiles as typeof definition.profiles },
+      subjectDefinitionRef: "package://subject-definition/coastal-pack-animal@1",
+      source: "package",
+      instancePath: "/resources/subjectDefinitions/0",
+      subjectResourceRegistry: builtInSubjectResourceRegistry,
+      resourceLockBuilder: new ResourceLockBuilderV1(),
+      diagnostics: diagnostics as never,
+    });
+
+    expect(result).toBeUndefined();
+    expect(diagnostics).toContainEqual(
+      expect.objectContaining({
+        code: "SUBJECT_CONTROL_FEEL_PROFILE_REQUIRED",
+        message: expect.stringMatching(/^SUBJECT_CONTROL_FEEL_PROFILE_REQUIRED:/),
+        instancePath:
+          "/resources/subjectDefinitions/0/profiles/controlFeelProfileRef",
       }),
     );
   });

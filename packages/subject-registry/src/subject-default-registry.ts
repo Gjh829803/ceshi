@@ -1,6 +1,6 @@
 import defaultCatalog from "../../../assets/registry/subject-defaults/catalog.json";
 
-import { builtInSubjectResourceRegistry } from "./subject-resource-registry";
+import { builtInSubjectResourceRegistry } from "./built-in-subject-resource-registry";
 import type { RegistrySubjectDefinitionV3, SubjectResourceRegistryV3 } from "./types-v3";
 
 export interface SubjectDefaultEntryV1 {

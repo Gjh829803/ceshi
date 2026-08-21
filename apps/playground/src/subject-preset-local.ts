@@ -21,9 +21,10 @@ export interface SubjectPresetSemanticContentV1 {
   baseSubjectDefinitionRef: string;
   baseSubjectDefinitionContentHash: string;
   selectedMotionProfileRef: string;
+  selectedControlFeelProfileRef: string;
   selectedControlProfileRef: string;
   selectedCameraPreferenceRef: string | null;
-  motionOverridesByProfileRef: Readonly<Record<string, NumericProfileOverrideV1>>;
+  controlFeelOverridesByProfileRef: Readonly<Record<string, NumericProfileOverrideV1>>;
   controlOverridesByProfileRef: Readonly<Record<string, NumericProfileOverrideV1>>;
   cameraOverridesByProfileRef: Readonly<Record<string, NumericProfileOverrideV1>>;
 }
@@ -66,6 +67,8 @@ export interface SubjectPresetLocalBaselineV1 {
   subjectDefinitionRef: string;
   subjectDefinitionContentHash: string;
   defaultMotionProfile: SubjectPresetProfileLockV1;
+  controlFeelProfile: SubjectPresetProfileLockV1;
+  availableControlFeelProfiles?: readonly SubjectPresetProfileLockV1[];
   controlProfile: SubjectPresetProfileLockV1;
   cameraProfiles: readonly SubjectPresetProfileLockV1[];
   defaultCameraProfileRef: string;
@@ -101,6 +104,7 @@ export interface SubjectPresetCompareOptionsV1 {
 export interface SubjectPresetSelectionChangeV1 {
   field:
     | "selectedMotionProfileRef"
+    | "selectedControlFeelProfileRef"
     | "selectedControlProfileRef"
     | "selectedCameraPreferenceRef";
   before: string | null;
@@ -113,7 +117,7 @@ export interface SubjectPresetParameterValueV1 {
 }
 
 export interface SubjectPresetParameterChangeV1 {
-  profileKind: "motion" | "control" | "camera";
+  profileKind: "control-feel" | "control" | "camera";
   profileRef: string;
   parameterName: string;
   before: SubjectPresetParameterValueV1;
@@ -346,9 +350,10 @@ export function parseSubjectPresetSemanticContentV1(
       "baseSubjectDefinitionRef",
       "baseSubjectDefinitionContentHash",
       "selectedMotionProfileRef",
+      "selectedControlFeelProfileRef",
       "selectedControlProfileRef",
       "selectedCameraPreferenceRef",
-      "motionOverridesByProfileRef",
+      "controlFeelOverridesByProfileRef",
       "controlOverridesByProfileRef",
       "cameraOverridesByProfileRef",
     ],
@@ -358,6 +363,7 @@ export function parseSubjectPresetSemanticContentV1(
   assertString(input.baseSubjectDefinitionRef, "baseSubjectDefinitionRef");
   assertHash(input.baseSubjectDefinitionContentHash, "baseSubjectDefinitionContentHash");
   assertString(input.selectedMotionProfileRef, "selectedMotionProfileRef");
+  assertString(input.selectedControlFeelProfileRef, "selectedControlFeelProfileRef");
   assertString(input.selectedControlProfileRef, "selectedControlProfileRef");
   if (input.selectedCameraPreferenceRef !== null) {
     assertString(input.selectedCameraPreferenceRef, "selectedCameraPreferenceRef");
@@ -367,11 +373,12 @@ export function parseSubjectPresetSemanticContentV1(
     baseSubjectDefinitionRef: input.baseSubjectDefinitionRef,
     baseSubjectDefinitionContentHash: input.baseSubjectDefinitionContentHash,
     selectedMotionProfileRef: input.selectedMotionProfileRef,
+    selectedControlFeelProfileRef: input.selectedControlFeelProfileRef,
     selectedControlProfileRef: input.selectedControlProfileRef,
     selectedCameraPreferenceRef: input.selectedCameraPreferenceRef,
-    motionOverridesByProfileRef: normalizeOverrideMap(
-      input.motionOverridesByProfileRef,
-      "motionOverridesByProfileRef",
+    controlFeelOverridesByProfileRef: normalizeOverrideMap(
+      input.controlFeelOverridesByProfileRef,
+      "controlFeelOverridesByProfileRef",
     ),
     controlOverridesByProfileRef: normalizeOverrideMap(
       input.controlOverridesByProfileRef,
@@ -398,9 +405,10 @@ export function parseSubjectPresetWorkingDraftV1(
       "baseSubjectDefinitionRef",
       "baseSubjectDefinitionContentHash",
       "selectedMotionProfileRef",
+      "selectedControlFeelProfileRef",
       "selectedControlProfileRef",
       "selectedCameraPreferenceRef",
-      "motionOverridesByProfileRef",
+      "controlFeelOverridesByProfileRef",
       "controlOverridesByProfileRef",
       "cameraOverridesByProfileRef",
       "createdAtIso",
@@ -422,9 +430,10 @@ export function parseSubjectPresetWorkingDraftV1(
     baseSubjectDefinitionRef: source.baseSubjectDefinitionRef,
     baseSubjectDefinitionContentHash: source.baseSubjectDefinitionContentHash,
     selectedMotionProfileRef: source.selectedMotionProfileRef,
+    selectedControlFeelProfileRef: source.selectedControlFeelProfileRef,
     selectedControlProfileRef: source.selectedControlProfileRef,
     selectedCameraPreferenceRef: source.selectedCameraPreferenceRef,
-    motionOverridesByProfileRef: source.motionOverridesByProfileRef,
+    controlFeelOverridesByProfileRef: source.controlFeelOverridesByProfileRef,
     controlOverridesByProfileRef: source.controlOverridesByProfileRef,
     cameraOverridesByProfileRef: source.cameraOverridesByProfileRef,
   });
@@ -446,9 +455,10 @@ function semanticContentFromWorkingDraft(
     baseSubjectDefinitionRef: draft.baseSubjectDefinitionRef,
     baseSubjectDefinitionContentHash: draft.baseSubjectDefinitionContentHash,
     selectedMotionProfileRef: draft.selectedMotionProfileRef,
+    selectedControlFeelProfileRef: draft.selectedControlFeelProfileRef,
     selectedControlProfileRef: draft.selectedControlProfileRef,
     selectedCameraPreferenceRef: draft.selectedCameraPreferenceRef,
-    motionOverridesByProfileRef: draft.motionOverridesByProfileRef,
+    controlFeelOverridesByProfileRef: draft.controlFeelOverridesByProfileRef,
     controlOverridesByProfileRef: draft.controlOverridesByProfileRef,
     cameraOverridesByProfileRef: draft.cameraOverridesByProfileRef,
   });
@@ -501,6 +511,7 @@ export function compareSubjectPresetSemanticContentV1(
       : "different";
   const selectionFields = [
     "selectedMotionProfileRef",
+    "selectedControlFeelProfileRef",
     "selectedControlProfileRef",
     "selectedCameraPreferenceRef",
   ] as const;
@@ -510,12 +521,12 @@ export function compareSubjectPresetSemanticContentV1(
       : [{ field, before: before[field], after: after[field] }],
   );
   const beforeValues = new Map([
-    ...flattenedOverrideValues("motion", before.motionOverridesByProfileRef),
+    ...flattenedOverrideValues("control-feel", before.controlFeelOverridesByProfileRef),
     ...flattenedOverrideValues("control", before.controlOverridesByProfileRef),
     ...flattenedOverrideValues("camera", before.cameraOverridesByProfileRef),
   ]);
   const afterValues = new Map([
-    ...flattenedOverrideValues("motion", after.motionOverridesByProfileRef),
+    ...flattenedOverrideValues("control-feel", after.controlFeelOverridesByProfileRef),
     ...flattenedOverrideValues("control", after.controlOverridesByProfileRef),
     ...flattenedOverrideValues("camera", after.cameraOverridesByProfileRef),
   ]);
@@ -800,6 +811,8 @@ function validateLocalBaseline(source: SubjectPresetLocalBaselineV1): void {
   assertHash(source.subjectDefinitionContentHash, "baseline.subjectDefinitionContentHash");
   assertString(source.defaultMotionProfile.resourceRef, "baseline.defaultMotionProfile.resourceRef");
   assertHash(source.defaultMotionProfile.contentHash, "baseline.defaultMotionProfile.contentHash");
+  assertString(source.controlFeelProfile.resourceRef, "baseline.controlFeelProfile.resourceRef");
+  assertHash(source.controlFeelProfile.contentHash, "baseline.controlFeelProfile.contentHash");
   assertString(source.controlProfile.resourceRef, "baseline.controlProfile.resourceRef");
   assertHash(source.controlProfile.contentHash, "baseline.controlProfile.contentHash");
   const cameraRefs = new Set<string>();
@@ -1224,15 +1237,16 @@ export function createSubjectPresetLocalRepository(
           baseSubjectDefinitionRef: baseline.subjectDefinitionRef,
           baseSubjectDefinitionContentHash: baseline.subjectDefinitionContentHash,
           selectedMotionProfileRef: baseline.defaultMotionProfile.resourceRef,
+          selectedControlFeelProfileRef: baseline.controlFeelProfile.resourceRef,
           selectedControlProfileRef: baseline.controlProfile.resourceRef,
           selectedCameraPreferenceRef,
-          motionOverridesByProfileRef:
+          controlFeelOverridesByProfileRef:
             motionValues === undefined
               ? {}
               : {
-                  [baseline.defaultMotionProfile.resourceRef]: {
-                    baseResourceRef: baseline.defaultMotionProfile.resourceRef,
-                    baseContentHash: baseline.defaultMotionProfile.contentHash,
+                  [baseline.controlFeelProfile.resourceRef]: {
+                    baseResourceRef: baseline.controlFeelProfile.resourceRef,
+                    baseContentHash: baseline.controlFeelProfile.contentHash,
                     values: motionValues,
                   },
                 },

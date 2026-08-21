@@ -1,3 +1,5 @@
+import { queryLockedColliderSupportHeightMeters } from "@whitebox-world/terrain-surface";
+
 import {
   aabbOverlapDepthMetersXYZ,
   aabbSeparationMeters,
@@ -307,10 +309,16 @@ function evaluateSupport(
   const supported = assignments[constraint.supportedEntityId];
   if (supported === undefined) return missing(constraint, [constraint.supportedEntityId]);
   const terrain = context.geometry.heightfieldsByTerrainEntityId[constraint.supportingEntityId];
-  const supportingBounds = assignments[constraint.supportingEntityId]?.bounds ??
-    context.geometry.staticBoundsByEntityId[constraint.supportingEntityId];
-  if (terrain === undefined && supportingBounds === undefined) {
-    return missing(constraint, [constraint.supportingEntityId]);
+  const collider = context.geometry.collidersByEntityId?.[constraint.supportingEntityId];
+  if (terrain === undefined && collider === undefined) {
+    const supportingBounds = assignments[constraint.supportingEntityId]?.bounds ??
+      context.geometry.staticBoundsByEntityId[constraint.supportingEntityId];
+    if (supportingBounds === undefined) {
+      return missing(constraint, [constraint.supportingEntityId]);
+    }
+    throw new Error(
+      `OBJECT_SUPPORT_SURFACE_QUERY_UNSUPPORTED: Supporting entity "${constraint.supportingEntityId}" only exposes an AABB; object supported-by requires its locked collider.`,
+    );
   }
   const bottom = supported.bounds.minimumMetersXYZ[1];
   const gaps: number[] = [];
@@ -319,23 +327,11 @@ function evaluateSupport(
       const sample = sampleHeightfieldV1(terrain, point);
       if (sample !== undefined) gaps.push(Math.abs(bottom - sample.heightMeters));
     }
-  } else if (supportingBounds !== undefined) {
-    const horizontalOverlapX = Math.max(0, Math.min(supported.bounds.maximumMetersXYZ[0], supportingBounds.maximumMetersXYZ[0]) - Math.max(supported.bounds.minimumMetersXYZ[0], supportingBounds.minimumMetersXYZ[0]));
-    const horizontalOverlapZ = Math.max(0, Math.min(supported.bounds.maximumMetersXYZ[2], supportingBounds.maximumMetersXYZ[2]) - Math.max(supported.bounds.minimumMetersXYZ[2], supportingBounds.minimumMetersXYZ[2]));
-    const supportedArea = (supported.bounds.maximumMetersXYZ[0] - supported.bounds.minimumMetersXYZ[0]) *
-      (supported.bounds.maximumMetersXYZ[2] - supported.bounds.minimumMetersXYZ[2]);
-    const ratio = supportedArea === 0 ? 0 : horizontalOverlapX * horizontalOverlapZ / supportedArea;
-    const gap = Math.abs(bottom - supportingBounds.maximumMetersXYZ[1]);
-    const satisfied = gap <= constraint.maximumSupportGapMeters + context.profile.tolerances.supportGapMeters &&
-      ratio + context.profile.quantization.ratioStep >= constraint.minimumSupportRatio;
-    return result(
-      constraint,
-      satisfied,
-      { maximumSupportGapMeters: quantizeFinite(gap, context.profile.quantization.positionStepMeters), supportRatio: quantizeFinite(ratio, context.profile.quantization.ratioStep) },
-      { supportGapMeters: context.profile.tolerances.supportGapMeters },
-      [constraint.supportedEntityId, constraint.supportingEntityId],
-      satisfied ? undefined : "PLACEMENT_SUPPORT_CONSTRAINT_UNSATISFIED",
-    );
+  } else {
+    for (const point of supportSamples(supported.bounds)) {
+      const heightMeters = queryLockedColliderSupportHeightMeters(collider!, point);
+      if (heightMeters !== undefined) gaps.push(Math.abs(bottom - heightMeters));
+    }
   }
   const maximumGap = gaps.length === 0 ? Number.POSITIVE_INFINITY : Math.max(...gaps);
   const supportRatio = gaps.filter((gap) =>

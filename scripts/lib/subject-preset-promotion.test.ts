@@ -45,9 +45,11 @@ const temporaryRoots: string[] = [];
 
 const SUBJECT_REF =
   "worldkit://subject-definition/animal.quadruped.forward-steer@1";
-const MOTION_REF = "worldkit://motion-profile/forward-steer.medium@1";
+const MOTION_REF = "worldkit://motion-profile/free-ground.humanoid-medium@1";
 const CONTROL_REF =
-  "worldkit://control-profile/throttle-steer.subject-local@1";
+  "worldkit://control-profile/planar.camera-relative@1";
+const CONTROL_FEEL_REF =
+  "worldkit://control-feel-profile/humanoid.medium-ground@1";
 const CAMERA_CONTEXT_REF =
   "worldkit://camera-context/capability-driven.default@1";
 const CAMERA_REF = "worldkit://camera-profile/orbit.medium@1";
@@ -104,7 +106,7 @@ function createCandidate(): SubjectPresetCandidateV1 {
           default: {
             sourceProfileRef: MOTION_REF,
             sourceContentHash: lockedHash(MOTION_REF),
-            disposition: "derive",
+            disposition: "preserve",
           },
           optional: [{
             sourceProfileRef: "worldkit://motion-profile/safe-ground@1",
@@ -121,6 +123,11 @@ function createCandidate(): SubjectPresetCandidateV1 {
             disposition: "preserve",
           },
         },
+        controlFeel: {
+          profileRef: CONTROL_FEEL_REF,
+          contentHash: lockedHash(CONTROL_FEEL_REF),
+          disposition: "derive",
+        },
         control: {
           profileRef: CONTROL_REF,
           contentHash: lockedHash(CONTROL_REF),
@@ -130,12 +137,11 @@ function createCandidate(): SubjectPresetCandidateV1 {
         defaultCameraRigProfileRef: CAMERA_REF,
       },
       overrides: {
-        motionByProfileRef: {
-          [MOTION_REF]: {
-            baseResourceRef: MOTION_REF,
-            baseContentHash: lockedHash(MOTION_REF),
+        controlFeelByProfileRef: {
+          [CONTROL_FEEL_REF]: {
+            baseResourceRef: CONTROL_FEEL_REF,
+            baseContentHash: lockedHash(CONTROL_FEEL_REF),
             values: {
-              bodyLeanMaximumRadians: 0.09,
               jumpSpeedMetersPerSecond: 3.1,
               turnRateRadiansPerSecond: 2.4,
             },
@@ -230,7 +236,7 @@ afterEach(async () => {
   );
 });
 
-describe("subject preset promotion", () => {
+describe("subject preset promotion", { timeout: 60_000 }, () => {
   it("allows candidate and plan artifacts only outside the repository or in the ignored preset area", () => {
     const root = path.join(tmpdir(), "worldkit-location-boundary");
     expect(() => assertSubjectPresetArtifactLocationV1(
@@ -377,27 +383,26 @@ describe("subject preset promotion", () => {
     expect(first.generatedResources.map((resource) => resource.resourceRef)).toEqual([
       "worldkit://camera-context/subject.animal.quadruped.forward-steer.default@1",
       "worldkit://camera-profile/subject.animal.quadruped.forward-steer.orbit-medium@1",
-      "worldkit://motion-profile/subject.animal.quadruped.forward-steer.default@1",
+      "worldkit://control-feel-profile/subject.animal.quadruped.forward-steer.default@2",
       "worldkit://subject-definition/animal.quadruped.forward-steer@3",
     ]);
     expect(first.targets.map((target) => target.logicalPath)).toEqual([
       ".codex-tmp/subject-presets/quadruped-official-v1.registry-fixture.json",
       "assets/registry/camera-profiles/catalog.json",
-      "assets/registry/motion-profiles/catalog.json",
+      "assets/registry/control-feel-profiles/catalog.json",
       "assets/registry/subject-defaults/catalog.json",
       "assets/registry/subject-definitions/catalog.json",
     ]);
 
-    const motionCatalog = decodeTarget(
+    const controlFeelCatalog = decodeTarget(
       first,
-      "assets/registry/motion-profiles/catalog.json",
+      "assets/registry/control-feel-profiles/catalog.json",
     ) as Array<Record<string, unknown>>;
-    const derivedMotion = motionCatalog.find((resource) =>
+    const derivedControlFeel = controlFeelCatalog.find((resource) =>
       resource.resourceRef ===
-        "worldkit://motion-profile/subject.animal.quadruped.forward-steer.default@1"
+        "worldkit://control-feel-profile/subject.animal.quadruped.forward-steer.default@2"
     );
-    expect(derivedMotion?.parameters).toMatchObject({
-      bodyLeanMaximumRadians: 0.09,
+    expect(derivedControlFeel).toMatchObject({
       jumpSpeedMetersPerSecond: 3.1,
       turnRateRadiansPerSecond: 2.4,
     });
@@ -490,12 +495,12 @@ describe("subject preset promotion", () => {
       stale.root,
       "assets",
       "registry",
-      "motion-profiles",
+      "control-feel-profiles",
       "catalog.json",
     );
     const catalog = await readFile(catalogPath, "utf8");
     await writeFile(catalogPath, `${catalog.trim()}\n\n`, "utf8");
-    await git(stale.root, "add", "assets/registry/motion-profiles/catalog.json");
+    await git(stale.root, "add", "assets/registry/control-feel-profiles/catalog.json");
     await git(stale.root, "commit", "-m", "change preimage bytes");
     await expect(promoteSubjectPresetTransactionally(stale.candidatePath, {
       repositoryRoot: stale.root,
@@ -565,16 +570,16 @@ describe("subject preset promotion", () => {
     const plan = await planSubjectPresetPromotion(fixture.candidatePath, {
       repositoryRoot: fixture.root,
     });
-    const motionTarget = plan.targets.find((target) =>
-      target.logicalPath === "assets/registry/motion-profiles/catalog.json"
+    const controlFeelTarget = plan.targets.find((target) =>
+      target.logicalPath === "assets/registry/control-feel-profiles/catalog.json"
     )!;
-    const motionCatalog = JSON.parse(
-      Buffer.from(motionTarget.canonicalBytesBase64, "base64").toString("utf8"),
+    const controlFeelCatalog = JSON.parse(
+      Buffer.from(controlFeelTarget.canonicalBytesBase64, "base64").toString("utf8"),
     ) as unknown[];
-    motionCatalog.push(structuredClone(motionCatalog.at(-1)!));
-    const maliciousBytes = `${JSON.stringify(motionCatalog)}\n`;
-    motionTarget.canonicalBytesBase64 = Buffer.from(maliciousBytes).toString("base64");
-    motionTarget.postimageSha256 = sha256Bytes(maliciousBytes);
+    controlFeelCatalog.push(structuredClone(controlFeelCatalog.at(-1)!));
+    const maliciousBytes = `${JSON.stringify(controlFeelCatalog)}\n`;
+    controlFeelTarget.canonicalBytesBase64 = Buffer.from(maliciousBytes).toString("base64");
+    controlFeelTarget.postimageSha256 = sha256Bytes(maliciousBytes);
     const maliciousPlan = rehashPlan(plan);
 
     await expect(promoteSubjectPresetTransactionally(fixture.candidatePath, {

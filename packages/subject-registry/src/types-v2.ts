@@ -223,6 +223,7 @@ export interface RegistrySubjectDefinitionInputV2 extends SubjectRegistryResourc
   profiles: {
     physicsBodyProfileRef: string;
     locomotionProfileRef: string;
+    controlFeelProfileRef: string;
   };
 }
 
@@ -261,13 +262,9 @@ export interface LocomotionProfileManifestInputV1
   extends SubjectRegistryResourceBaseInputV1 {
   kind: "locomotion-profile";
   requiredCapabilityRefs: readonly string[];
-  locomotion: {
-    mode: "ground";
-    walkSpeedMetersPerSecond: number;
-    runSpeedMetersPerSecond: number;
-    waterSpeedMetersPerSecond: number;
-    jumpSpeedMetersPerSecond: number;
-  };
+  allowWalk: boolean;
+  allowRun: boolean;
+  allowJump: boolean;
 }
 
 export interface ColliderDerivationProfileManifestInputV1

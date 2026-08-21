@@ -215,7 +215,7 @@ describe("loadAuthoringScene", () => {
           capabilityAssembly: expect.objectContaining({
             relationshipProfiles: [],
             motionKernels: [expect.objectContaining({
-              resourceRef: "worldkit://motion-kernel/water-surface@1",
+              resourceRef: "worldkit://motion-kernel/free-ground@1",
             })],
           }),
         })],
@@ -245,12 +245,6 @@ describe("loadAuthoringScene", () => {
               "worldkit://capability/relationship.seat@1",
             ],
           },
-          {
-            type: "spawn-position-changed",
-            spawnAnchorEntityId: "spawn-main",
-            beforePositionMetersXYZ: [0, 0, 30],
-            afterPositionMetersXYZ: [25, 0, 0],
-          },
         ],
       },
     });
@@ -264,7 +258,7 @@ describe("loadAuthoringScene", () => {
           capabilityAssembly: expect.objectContaining({
             relationshipProfiles: [],
             motionKernels: expect.arrayContaining([expect.objectContaining({
-              resourceRef: "worldkit://motion-kernel/unpowered-glide@1",
+              resourceRef: "worldkit://motion-kernel/free-ground@1",
             })]),
           }),
         })],
@@ -294,12 +288,6 @@ describe("loadAuthoringScene", () => {
               "worldkit://capability/relationship.tether@1",
             ],
           },
-          {
-            type: "spawn-position-changed",
-            spawnAnchorEntityId: "spawn-main",
-            beforePositionMetersXYZ: [0, 0, 30],
-            afterPositionMetersXYZ: [0, 12, 30],
-          },
         ],
       },
     });
@@ -311,19 +299,11 @@ describe("loadAuthoringScene", () => {
     expect(Object.isFrozen(waterLoaded.hostOverlay?.changes)).toBe(true);
     expect(Object.isFrozen(waterLoaded.hostOverlay?.changes[0])).toBe(true);
     expect(Object.isFrozen(waterLoaded.hostOverlay?.changes[1])).toBe(true);
-    expect(Object.isFrozen(waterLoaded.hostOverlay?.changes[2])).toBe(true);
     expect(
       Object.isFrozen(
         waterLoaded.hostOverlay?.changes[1]?.type ===
           "relationship-capabilities-deferred"
           ? waterLoaded.hostOverlay.changes[1].deferredCapabilityRefs
-          : undefined,
-      ),
-    ).toBe(true);
-    expect(
-      Object.isFrozen(
-        waterLoaded.hostOverlay?.changes[2]?.type === "spawn-position-changed"
-          ? waterLoaded.hostOverlay.changes[2].afterPositionMetersXYZ
           : undefined,
       ),
     ).toBe(true);
@@ -345,15 +325,16 @@ describe("loadAuthoringScene", () => {
         subjects: [expect.objectContaining({
           subjectDefinitionRef:
             "worldkit://subject-definition/playground-preview.animal.quadruped.forward-steer@2",
+          controlFeel: expect.objectContaining({
+            resourceRef:
+              "worldkit://control-feel-profile/subject.animal.quadruped.forward-steer.default@1",
+            turnRateRadiansPerSecond: 2.4,
+            jumpSpeedMetersPerSecond: 3.1,
+          }),
           capabilityAssembly: expect.objectContaining({
             defaultMotionProfile: expect.objectContaining({
               resourceRef:
-                "worldkit://motion-profile/forward-steer.quadruped-official@1",
-              parameters: expect.objectContaining({
-                turnRateRadiansPerSecond: 2.4,
-                jumpSpeedMetersPerSecond: 3.1,
-                bodyLeanMaximumRadians: 0.09,
-              }),
+                "worldkit://motion-profile/free-ground.humanoid-medium@1",
             }),
             cameraContext: expect.objectContaining({
               resourceRef:

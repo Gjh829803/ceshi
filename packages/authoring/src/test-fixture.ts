@@ -190,6 +190,8 @@ function createPackageSubjectDefinition(
     profiles: {
       physicsBodyProfileRef: "worldkit://physics-body-profile/character.medium@1",
       locomotionProfileRef: "worldkit://locomotion-profile/ground.standard@1",
+      controlFeelProfileRef:
+        "worldkit://control-feel-profile/humanoid.medium-ground@1",
     },
     aiMetadata: {
       displayName: "Coastal pack animal",
@@ -317,6 +319,8 @@ export function createValidRiggedPackageDefinition(): PackageSubjectDefinitionV1
     profiles: {
       physicsBodyProfileRef: "worldkit://physics-body-profile/character.medium@1",
       locomotionProfileRef: "worldkit://locomotion-profile/ground.standard@1",
+      controlFeelProfileRef:
+        "worldkit://control-feel-profile/humanoid.medium-ground@1",
     },
     aiMetadata: {
       displayName: "Package rigged Golden humanoid",

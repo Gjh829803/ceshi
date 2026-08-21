@@ -47,6 +47,8 @@ const SUBJECT_REF = "worldkit://subject-definition/vehicle.four-wheel.arcade@1";
 const SUBJECT_HASH = `sha256:${"1".repeat(64)}`;
 const MOTION_REF = "worldkit://motion-profile/wheeled-arcade.four-wheel@1";
 const MOTION_HASH = `sha256:${"2".repeat(64)}`;
+const CONTROL_FEEL_REF = "worldkit://control-feel-profile/humanoid.medium-ground@1";
+const CONTROL_FEEL_HASH = `sha256:${"6".repeat(64)}`;
 const CONTROL_REF = "worldkit://control-profile/throttle-steer.subject-local@1";
 const CONTROL_HASH = `sha256:${"3".repeat(64)}`;
 const ORBIT_REF = "worldkit://camera-profile/orbit.medium@1";
@@ -73,11 +75,12 @@ function fixtureDraft(
     baseSubjectDefinitionRef: SUBJECT_REF,
     baseSubjectDefinitionContentHash: SUBJECT_HASH,
     selectedMotionProfileRef: MOTION_REF,
+    selectedControlFeelProfileRef: CONTROL_FEEL_REF,
     selectedControlProfileRef: CONTROL_REF,
     selectedCameraPreferenceRef: ORBIT_REF,
-    motionOverridesByProfileRef: {
-      [MOTION_REF]: override(MOTION_REF, MOTION_HASH, {
-        lowSpeedTurnRateRadiansPerSecond: 0.8,
+    controlFeelOverridesByProfileRef: {
+      [CONTROL_FEEL_REF]: override(CONTROL_FEEL_REF, CONTROL_FEEL_HASH, {
+        turnRateRadiansPerSecond: 0.8,
       }),
     },
     controlOverridesByProfileRef: {
@@ -103,6 +106,10 @@ function fixtureBaseline(): SubjectPresetLocalBaselineV1 {
     defaultMotionProfile: {
       resourceRef: MOTION_REF,
       contentHash: MOTION_HASH,
+    },
+    controlFeelProfile: {
+      resourceRef: CONTROL_FEEL_REF,
+      contentHash: CONTROL_FEEL_HASH,
     },
     controlProfile: {
       resourceRef: CONTROL_REF,
@@ -239,9 +246,9 @@ describe("subject preset local repository", () => {
     }))).toThrow(/exact map key/);
 
     expect(() => parseSubjectPresetWorkingDraftV1(fixtureDraft({
-      motionOverridesByProfileRef: {
-        [MOTION_REF]: override(MOTION_REF, MOTION_HASH, {
-          lowSpeedTurnRateRadiansPerSecond: Number.NaN,
+      controlFeelOverridesByProfileRef: {
+        [CONTROL_FEEL_REF]: override(CONTROL_FEEL_REF, CONTROL_FEEL_HASH, {
+          turnRateRadiansPerSecond: Number.NaN,
         }),
       },
     }))).toThrow(/must be finite/);
@@ -274,9 +281,9 @@ describe("subject preset local repository", () => {
     const after: SubjectPresetSemanticContentV1 = {
       ...structuredClone(before),
       selectedCameraPreferenceRef: CHASE_REF,
-      motionOverridesByProfileRef: {
-        [MOTION_REF]: override(MOTION_REF, MOTION_HASH, {
-          lowSpeedTurnRateRadiansPerSecond: 0.6,
+      controlFeelOverridesByProfileRef: {
+        [CONTROL_FEEL_REF]: override(CONTROL_FEEL_REF, CONTROL_FEEL_HASH, {
+          turnRateRadiansPerSecond: 0.6,
         }),
       },
       cameraOverridesByProfileRef: {
@@ -289,7 +296,7 @@ describe("subject preset local repository", () => {
 
     expect(compareSubjectPresetSemanticContentV1(before, after, {
       runtimeParameterNamesByProfileRef: {
-        [MOTION_REF]: ["lowSpeedTurnRateRadiansPerSecond"],
+        [CONTROL_FEEL_REF]: ["turnRateRadiansPerSecond"],
         [CHASE_REF]: ["distanceMeters"],
       },
     })).toEqual({
@@ -318,9 +325,9 @@ describe("subject preset local repository", () => {
           runtimeSupport: "unknown",
         },
         {
-          profileKind: "motion",
-          profileRef: MOTION_REF,
-          parameterName: "lowSpeedTurnRateRadiansPerSecond",
+          profileKind: "control-feel",
+          profileRef: CONTROL_FEEL_REF,
+          parameterName: "turnRateRadiansPerSecond",
           before: { source: "override", value: 0.8 },
           after: { source: "override", value: 0.6 },
           runtimeSupport: "supported",
@@ -412,10 +419,10 @@ describe("subject preset local repository", () => {
     expect(versions).toHaveLength(1);
     expect(versions[0]?.content).toMatchObject({
       selectedCameraPreferenceRef: ORBIT_REF,
-      motionOverridesByProfileRef: {
-        [MOTION_REF]: {
-          baseResourceRef: MOTION_REF,
-          baseContentHash: MOTION_HASH,
+      controlFeelOverridesByProfileRef: {
+        [CONTROL_FEEL_REF]: {
+          baseResourceRef: CONTROL_FEEL_REF,
+          baseContentHash: CONTROL_FEEL_HASH,
           values: { lowSpeedTurnRateRadiansPerSecond: 0.7 },
         },
       },

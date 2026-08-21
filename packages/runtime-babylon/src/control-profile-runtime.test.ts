@@ -5,7 +5,6 @@ import type { ExecutionControlProfileV1 } from "@whitebox-world/runtime-contract
 import {
   compileMotionCommandV1,
   hasForwardControlIntentV1,
-  withControlTuningV1,
 } from "./control-profile-runtime";
 
 const DEFAULT_VIEW_FRAME = {
@@ -32,31 +31,20 @@ function profile(
             ? "fixed"
             : "steering-derived",
     lateralMovementPolicy: commandKind === "planar-vector" ? "allowed" : "forbidden",
-    inputTuning: {
-      moveDeadzoneRatio: 0,
-      responseExponent: 1,
-    },
-    safetyLimits: {
-      moveDeadzoneRatio: { minimum: 0, maximum: 0.95 },
-      responseExponent: { minimum: 0.25, maximum: 4 },
-    },
-    authoringRanges: {
-      moveDeadzoneRatio: { minimum: 0, maximum: 0.5, step: 0.01 },
-      responseExponent: { minimum: 0.25, maximum: 3, step: 0.05 },
-    },
-    runtimeParameterNames: ["moveDeadzoneRatio", "responseExponent"],
+    moveDeadzoneRatio: 0,
   };
 }
 
+const NEUTRAL_MOVE_RESPONSE_EXPONENT = 1;
+
 describe("compileMotionCommandV1", () => {
-  it("uses the same transient control tuning for motion commands and camera forward intent", () => {
-    const tuned = withControlTuningV1(
-      profile("planar-vector", "camera-relative"),
-      { moveDeadzoneRatio: 0.4, responseExponent: 2 },
-    );
+  it("uses the same locked Control deadzone and Control Feel response curve for motion and camera intent", () => {
+    const tuned = profile("planar-vector", "camera-relative");
+    tuned.moveDeadzoneRatio = 0.4;
 
     expect(compileMotionCommandV1(
       tuned,
+      2,
       [],
       DEFAULT_VIEW_FRAME,
       { moveYRatio: 0.3 },
@@ -64,11 +52,12 @@ describe("compileMotionCommandV1", () => {
       kind: "planar-vector",
       directionMetersXZ: [0, 0],
     });
-    expect(hasForwardControlIntentV1(tuned, [], { moveYRatio: 0.3 }))
+    expect(hasForwardControlIntentV1(tuned, 2, [], { moveYRatio: 0.3 }))
       .toBe(false);
 
     const aboveDeadzone = compileMotionCommandV1(
       tuned,
+      2,
       [],
       DEFAULT_VIEW_FRAME,
       { moveYRatio: 0.7 },
@@ -77,13 +66,14 @@ describe("compileMotionCommandV1", () => {
     if (aboveDeadzone.kind === "planar-vector") {
       expect(aboveDeadzone.directionMetersXZ[1]).toBeCloseTo(-0.25, 12);
     }
-    expect(hasForwardControlIntentV1(tuned, [], { moveYRatio: 0.7 }))
+    expect(hasForwardControlIntentV1(tuned, 2, [], { moveYRatio: 0.7 }))
       .toBe(true);
   });
 
   it("turns camera-relative planar intent into a normalized world-space direction", () => {
     const command = compileMotionCommandV1(
         profile("planar-vector", "camera-relative"),
+        NEUTRAL_MOVE_RESPONSE_EXPONENT,
         ["move-forward", "move-right", "run", "jump"],
         { forwardXYZ: [1, 0, 0], rightXYZ: [0, 0, 1], committedTick: 12 },
       );
@@ -103,6 +93,7 @@ describe("compileMotionCommandV1", () => {
     expect(
       compileMotionCommandV1(
         profile("throttle-steer", "subject-local"),
+        NEUTRAL_MOVE_RESPONSE_EXPONENT,
         ["move-forward", "move-left"],
         DEFAULT_VIEW_FRAME,
       ),
@@ -122,6 +113,7 @@ describe("compileMotionCommandV1", () => {
     expect(
       compileMotionCommandV1(
         profile("throttle-steer", "subject-local"),
+        NEUTRAL_MOVE_RESPONSE_EXPONENT,
         ["move-forward", "boost", "brake", "primary-action"],
         DEFAULT_VIEW_FRAME,
       ),
@@ -139,6 +131,7 @@ describe("compileMotionCommandV1", () => {
     expect(
       compileMotionCommandV1(
         profile("flight-attitude", "flight-frame"),
+        NEUTRAL_MOVE_RESPONSE_EXPONENT,
         ["move-forward", "move-right", "jump"],
         DEFAULT_VIEW_FRAME,
       ),
@@ -155,6 +148,7 @@ describe("compileMotionCommandV1", () => {
     expect(
       compileMotionCommandV1(
         profile("none", "none"),
+        NEUTRAL_MOVE_RESPONSE_EXPONENT,
         ["move-forward", "run", "jump"],
         DEFAULT_VIEW_FRAME,
       ),
@@ -163,13 +157,10 @@ describe("compileMotionCommandV1", () => {
 
   it("applies device-neutral deadzones and response curves before producing motion", () => {
     const analogProfile = profile("throttle-steer", "subject-local");
-    analogProfile.inputTuning = {
-      ...analogProfile.inputTuning,
-      moveDeadzoneRatio: 0.2,
-      responseExponent: 2,
-    };
+    analogProfile.moveDeadzoneRatio = 0.2;
     const command = compileMotionCommandV1(
       analogProfile,
+      2,
       [],
       DEFAULT_VIEW_FRAME,
       { moveXRatio: 0.1, moveYRatio: 0.6 },
@@ -182,6 +173,7 @@ describe("compileMotionCommandV1", () => {
   it("neutralizes non-finite analog throttle and brake input", () => {
     const command = compileMotionCommandV1(
       profile("throttle-steer", "subject-local"),
+      NEUTRAL_MOVE_RESPONSE_EXPONENT,
       [],
       DEFAULT_VIEW_FRAME,
       { throttleRatio: Number.NaN, brakeRatio: Number.POSITIVE_INFINITY },
@@ -205,6 +197,7 @@ describe("compileMotionCommandV1", () => {
     alignToView.lateralMovementPolicy = "forbidden";
     expect(compileMotionCommandV1(
       alignToView,
+      NEUTRAL_MOVE_RESPONSE_EXPONENT,
       ["move-right"],
       { forwardXYZ: [1, 0, 0], rightXYZ: [0, 0, 1], committedTick: 7 },
     )).toMatchObject({
@@ -218,30 +211,37 @@ describe("compileMotionCommandV1", () => {
   it("derives camera forward intent from the same effective input as motion", () => {
     const planar = profile("planar-vector", "camera-relative");
     const throttle = profile("throttle-steer", "subject-local");
-    expect(hasForwardControlIntentV1(planar, [], { moveYRatio: 0.7 })).toBe(true);
+    const neutral = NEUTRAL_MOVE_RESPONSE_EXPONENT;
+    expect(hasForwardControlIntentV1(planar, neutral, [], { moveYRatio: 0.7 })).toBe(true);
     expect(hasForwardControlIntentV1(
       planar,
+      neutral,
       [],
       { moveYRatio: 0.7, throttleRatio: 0 },
     )).toBe(true);
     expect(hasForwardControlIntentV1(
       throttle,
+      neutral,
       [],
       { moveYRatio: 0.7, throttleRatio: 0 },
     )).toBe(false);
-    expect(hasForwardControlIntentV1(throttle, [], { throttleRatio: 0.4 })).toBe(true);
+    expect(
+      hasForwardControlIntentV1(throttle, neutral, [], { throttleRatio: 0.4 }),
+    ).toBe(true);
     expect(hasForwardControlIntentV1(
       planar,
+      neutral,
       ["move-forward"],
       { moveYRatio: -0.2 },
     )).toBe(false);
-    expect(hasForwardControlIntentV1(planar, ["move-forward"], {})).toBe(true);
+    expect(hasForwardControlIntentV1(planar, neutral, ["move-forward"], {})).toBe(true);
 
-    planar.inputTuning = { moveDeadzoneRatio: 0.1, responseExponent: 2 };
-    expect(hasForwardControlIntentV1(planar, [], { moveYRatio: 0.05 })).toBe(false);
-    expect(hasForwardControlIntentV1(planar, [], { moveYRatio: 0.2 })).toBe(true);
+    planar.moveDeadzoneRatio = 0.1;
+    expect(hasForwardControlIntentV1(planar, 2, [], { moveYRatio: 0.05 })).toBe(false);
+    expect(hasForwardControlIntentV1(planar, 2, [], { moveYRatio: 0.2 })).toBe(true);
     expect(hasForwardControlIntentV1(
       throttle,
+      2,
       [],
       { throttleRatio: 0.4, moveYRatio: -1 },
     )).toBe(false);
@@ -251,6 +251,7 @@ describe("compileMotionCommandV1", () => {
     expect(
       compileMotionCommandV1(
         profile("throttle-steer", "subject-local"),
+        NEUTRAL_MOVE_RESPONSE_EXPONENT,
         ["boost", "brake", "handbrake", "primary-action"],
         DEFAULT_VIEW_FRAME,
       ),
@@ -265,6 +266,7 @@ describe("compileMotionCommandV1", () => {
     expect(
       compileMotionCommandV1(
         profile("flight-attitude", "flight-frame"),
+        NEUTRAL_MOVE_RESPONSE_EXPONENT,
         ["boost"],
         DEFAULT_VIEW_FRAME,
       ),
@@ -272,6 +274,7 @@ describe("compileMotionCommandV1", () => {
     expect(
       compileMotionCommandV1(
         profile("planar-vector", "camera-relative"),
+        NEUTRAL_MOVE_RESPONSE_EXPONENT,
         ["aim"],
         { forwardXYZ: [1, 0, 0], rightXYZ: [0, 0, 1], committedTick: 2 },
       ),

@@ -251,11 +251,6 @@ export interface ExecutionMotionProfileV1 {
   resourceRef: string;
   contentHash: string;
   motionKernelRef: string;
-  parameters: Readonly<Record<string, number | boolean>>;
-  safetyLimits: Readonly<Record<string, { minimum: number; maximum: number }>>;
-  authoringRanges?: Readonly<
-    Record<string, { minimum: number; maximum: number; step: number }>
-  >;
   motionTags: readonly string[];
 }
 
@@ -287,24 +282,7 @@ export interface ExecutionControlProfileV1 {
     | "flight-derived"
     | "fixed";
   lateralMovementPolicy: "allowed" | "forbidden";
-  inputTuning: {
-    moveDeadzoneRatio: number;
-    responseExponent: number;
-  };
-  safetyLimits: Readonly<
-    Record<"moveDeadzoneRatio" | "responseExponent", {
-      minimum: number;
-      maximum: number;
-    }>
-  >;
-  authoringRanges: Readonly<
-    Record<"moveDeadzoneRatio" | "responseExponent", {
-      minimum: number;
-      maximum: number;
-      step: number;
-    }>
-  >;
-  runtimeParameterNames: readonly ("moveDeadzoneRatio" | "responseExponent")[];
+  moveDeadzoneRatio: number;
 }
 
 export interface ExecutionCameraRigProfileV1 {
@@ -369,10 +347,7 @@ export interface ExecutionSubjectCapabilityAssemblyV1 {
   };
   mediumProfile: {
     resourceRef: string;
-    supportedMediums: readonly ExecutionMovementMediumV1[];
-    ground: { groundingToleranceMeters: number };
-    water?: { surfaceHoldStrength: number; linearDragPerSecond: number };
-    air?: { gravityScale: number; linearDragPerSecond: number };
+    air: { gravityRatio: number; linearDragPerSecond: number };
   };
   relationshipProfiles: readonly {
     resourceRef: string;
@@ -412,12 +387,32 @@ export interface ExecutionSubjectV3 {
     maxStepHeightMeters: number;
   };
   locomotion: {
-    mode: "ground";
+    allowWalk: boolean;
+    allowRun: boolean;
+    allowJump: boolean;
+  };
+  controlFeel: {
+    resourceRef: string;
+    contentHash: string;
     walkSpeedMetersPerSecond: number;
     runSpeedMetersPerSecond: number;
-    waterSpeedMetersPerSecond: number;
     jumpSpeedMetersPerSecond: number;
+    accelerationMetersPerSecondSquared: number;
+    decelerationMetersPerSecondSquared: number;
+    turnRateRadiansPerSecond: number;
+    moveResponseExponent: number;
+    airControlRatio: number;
+    coyoteTimeSeconds: number;
+    jumpBufferSeconds: number;
+    variableJumpHoldSeconds: number;
+    jumpHoldGravityRatio: number;
+    jumpReleaseGravityRatio: number;
   };
+  /**
+   * Compiler-locked Feel surfaces the Runtime may switch among. Copied from
+   * Registry at compile time; the Runtime never reverse-reads the Registry.
+   */
+  availableControlFeels: readonly ExecutionSubjectV3["controlFeel"][];
   capabilityAssembly?: ExecutionSubjectCapabilityAssemblyV1;
 }
 

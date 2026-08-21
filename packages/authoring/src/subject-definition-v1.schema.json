@@ -60,7 +60,11 @@
     "profiles": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["physicsBodyProfileRef", "locomotionProfileRef"],
+      "required": [
+        "physicsBodyProfileRef",
+        "locomotionProfileRef",
+        "controlFeelProfileRef"
+      ],
       "properties": {
         "physicsBodyProfileRef": {
           "type": "string",
@@ -69,6 +73,10 @@
         "locomotionProfileRef": {
           "type": "string",
           "format": "locomotion-profile-ref"
+        },
+        "controlFeelProfileRef": {
+          "type": "string",
+          "pattern": "^worldkit://control-feel-profile/[a-z0-9][a-z0-9.-]{0,63}@[1-9][0-9]*$"
         }
       }
     },

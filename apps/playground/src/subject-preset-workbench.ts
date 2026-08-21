@@ -37,8 +37,9 @@ export interface CreateSubjectPresetWorkbenchDraftInputV1 {
     createdAtIso: string;
     updatedAtIso: string;
   };
+  selectedControlFeelProfileRef: string;
   selectedCameraPreferenceRef: string | null;
-  motion: WorkbenchNumericProfileStateV1;
+  controlFeel: WorkbenchNumericProfileStateV1;
   control: WorkbenchNumericProfileStateV1;
   cameraByProfileRef: Readonly<Record<string, WorkbenchNumericProfileStateV1>>;
 }
@@ -75,6 +76,17 @@ function optionalOverride(
 export function createSubjectPresetWorkbenchDraftV1(
   input: CreateSubjectPresetWorkbenchDraftInputV1,
 ): SubjectPresetWorkingDraftV1 {
+  const controlFeelLocks = input.baseline.availableControlFeelProfiles ?? [
+    input.baseline.controlFeelProfile,
+  ];
+  const selectedControlFeelLock = controlFeelLocks.find(
+    (profile) => profile.resourceRef === input.selectedControlFeelProfileRef,
+  );
+  if (selectedControlFeelLock === undefined) {
+    throw new TypeError(
+      "SUBJECT_PRESET_WORKBENCH_CONTROL_FEEL_UNREACHABLE: selected Control Feel Profile is not in the exact baseline.",
+    );
+  }
   const cameraLocks = new Map(
     input.baseline.cameraProfiles.map((profile) => [profile.resourceRef, profile]),
   );
@@ -107,12 +119,13 @@ export function createSubjectPresetWorkbenchDraftV1(
     baseSubjectDefinitionRef: input.baseline.subjectDefinitionRef,
     baseSubjectDefinitionContentHash: input.baseline.subjectDefinitionContentHash,
     selectedMotionProfileRef: input.baseline.defaultMotionProfile.resourceRef,
+    selectedControlFeelProfileRef: selectedControlFeelLock.resourceRef,
     selectedControlProfileRef: input.baseline.controlProfile.resourceRef,
     selectedCameraPreferenceRef: input.selectedCameraPreferenceRef,
-    motionOverridesByProfileRef: Object.fromEntries(optionalOverride(
-      input.baseline.defaultMotionProfile.resourceRef,
-      input.baseline.defaultMotionProfile.contentHash,
-      input.motion,
+    controlFeelOverridesByProfileRef: Object.fromEntries(optionalOverride(
+      selectedControlFeelLock.resourceRef,
+      selectedControlFeelLock.contentHash,
+      input.controlFeel,
     )),
     controlOverridesByProfileRef: Object.fromEntries(optionalOverride(
       input.baseline.controlProfile.resourceRef,
@@ -133,8 +146,8 @@ export function subjectPresetTuningRequestFromDraftV1(
     subjectEntityId,
     expectedSubjectDefinitionRef: draft.baseSubjectDefinitionRef,
     expectedSubjectDefinitionContentHash: draft.baseSubjectDefinitionContentHash,
-    motionOverridesByProfileRef: draft.motionOverridesByProfileRef,
-    controlOverridesByProfileRef: draft.controlOverridesByProfileRef,
+    selectedControlFeelProfileRef: draft.selectedControlFeelProfileRef,
+    selectedControlProfileRef: draft.selectedControlProfileRef,
     cameraOverridesByProfileRef: draft.cameraOverridesByProfileRef,
     cameraPreference: draft.selectedCameraPreferenceRef ?? "auto",
   };

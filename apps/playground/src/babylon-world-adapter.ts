@@ -6,10 +6,8 @@ import type {
   ControlCaptureCapabilitiesV1,
   ControlCaptureRequestV1,
   ControlBindingReceiptV2,
-  ControlTuningV1,
   ExecutionPlanV4,
   FixedInputV1,
-  MotionParameterTuningV1,
   RenderReadyReceiptV1,
   RuntimeControlCaptureFrameV1,
   SemanticInputActionV1,
@@ -471,28 +469,6 @@ export class BabylonWorldAdapter implements PlaygroundWorldAdapter {
     return snapshot;
   }
 
-  setMotionTuningRuntime(
-    subjectEntityId: string,
-    tuning: MotionParameterTuningV1,
-  ): WorldRuntimeSnapshotV3 {
-    this.captureReservationReceiptId = undefined;
-    const snapshot = this.runtime.setMotionTuning(subjectEntityId, tuning);
-    this.render();
-    this.emit();
-    return snapshot;
-  }
-
-  setControlTuningRuntime(
-    subjectEntityId: string,
-    tuning: ControlTuningV1,
-  ): WorldRuntimeSnapshotV3 {
-    this.captureReservationReceiptId = undefined;
-    const snapshot = this.runtime.setControlTuning(subjectEntityId, tuning);
-    this.render();
-    this.emit();
-    return snapshot;
-  }
-
   applySubjectPresetTuningRuntime(
     request: ApplySubjectPresetTuningRequestV1,
   ): SubjectPresetTuningReceiptV1 {
@@ -502,7 +478,6 @@ export class BabylonWorldAdapter implements PlaygroundWorldAdapter {
     this.emit();
     return receipt;
   }
-
   runSubjectHarness(subjectEntityId: string) {
     return this.runtime.runHarness(subjectEntityId);
   }

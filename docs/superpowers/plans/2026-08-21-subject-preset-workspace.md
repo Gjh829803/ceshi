@@ -2,9 +2,9 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** Build a typed local tuning workspace for Motion, Control, and multiple Camera Profiles, then export and safely promote immutable public-default versions.
+**Goal:** Build a typed local workspace for Motion selection plus Control Feel, Control, and multiple Camera Profile tuning, then export and safely promote immutable public-default versions.
 
-**Architecture:** Playground owns mutable/local data and candidate download. Subject Registry owns exact resource closure and public-default validation. Babylon Runtime owns transient tuning and atomic application. A local CLI validates and transactionally writes versioned resources on a clean non-main branch; it never performs mutating Git operations.
+**Architecture:** Playground owns mutable/local Feel/Control drafts, Camera session preview, and candidate download. Subject Registry owns exact resource closure and public-default validation. Babylon Runtime owns exact compiled Profile selection plus atomic Camera application; it does not own a second Feel/Control numeric overlay. A local CLI validates and transactionally writes versioned resources on a clean non-main branch; it never performs mutating Git operations.
 
 **Tech Stack:** TypeScript 5.9, Vitest, Babylon.js 9.21, Vite, Node.js CLI, JSON catalogs, localStorage, canonical SHA-256 helpers.
 
@@ -16,11 +16,13 @@
 - Public defaults are explicit exact Ref/hash entries; never infer newest.
 - Browser code cannot write the repository, invoke Git, or use network credentials.
 - Candidate and local override maps are numeric, closed, finite, range-checked, and include exact base Ref/hash.
-- Control V1 exposes only the current Runtime's `moveDeadzoneRatio` and `responseExponent`.
+- Motion Profiles are parameter-free algorithm selections and are preserved by exact Ref/hash.
+- Control Feel owns the centralized P1.5 movement values, including response exponent.
+- Control V1 exposes only the current Runtime's `moveDeadzoneRatio`.
 - Relationship-stripped Playground preview clones cannot be promoted.
 - CLI writes require `--write`, a clean symbolic non-`main` branch, an exact fresh plan, allowlisted paths, and transactional rollback.
-- P1.5 `control-feel-profile` remains a future migration; this plan does not implement or contradict it.
-- Follow `docs/reviews/runtime-deep-review-checklist.md` for Control and Camera changes.
+- P1.5 `control-feel-profile` is implemented and is the sole numeric movement-feel authority.
+- Follow `docs/reviews/runtime-deep-review-checklist.md` for Control Feel, Control and Camera changes.
 
 ---
 
@@ -213,7 +215,7 @@ git add apps/playground/src/subject-preset-local.ts apps/playground/src/subject-
 git commit -m "feat: add local subject preset versions"
 ```
 
-### Task 3: Control tuning and atomic Runtime preset application
+### Task 3: Control Feel, Control and atomic Runtime preset application
 
 **Files:**
 - Modify: `packages/subject-registry/src/types-v3.ts`
@@ -229,38 +231,41 @@ git commit -m "feat: add local subject preset versions"
 - Modify: `packages/subject-registry/src/subject-registry.test.ts`
 
 **Interfaces:**
-- Produces: `ControlTuningV1 = Partial<Record<"moveDeadzoneRatio" | "responseExponent", number>>`
+- Produces: local draft numeric differences limited to the centralized P1.5 parameter contract
+- Produces: Runtime selection of exact compiled Control Feel/Control Profile Refs
 - Produces: `applySubjectPresetTuning(request): SubjectPresetTuningReceiptV1`
 
-- [ ] **Step 1: Write RED tests for Control tuning**
+- [ ] **Step 1: Write RED tests for locked Control Feel/Control authority**
 
 ```ts
-it("uses transient deadzone and response tuning for command and forward intent", () => {
-  const tuned = withControlTuning(planarProfile(), {
-    moveDeadzoneRatio: 0.4,
-    responseExponent: 2,
-  });
-  expect(compileMotionCommandV1(tuned, [], frame(), { moveYRatio: 0.3 }))
+it("uses the locked Control deadzone and Control Feel response exactly once", () => {
+  const lockedControl = planarProfile({ moveDeadzoneRatio: 0.4 });
+  expect(compileMotionCommandV1(lockedControl, [], frame(), { moveYRatio: 0.3 }, 2))
     .toMatchObject({ directionMetersXZ: [0, 0] });
-  expect(hasForwardControlIntentV1(tuned, [], { moveYRatio: 0.3 })).toBe(false);
+  expect(hasForwardControlIntentV1(lockedControl, [], { moveYRatio: 0.3 }, 2)).toBe(false);
 });
 ```
 
-Add integration tests that invalid tuning preserves old state, reset clears transient tuning, and snapshot reports effective Control tuning.
+Add integration tests proving Browser/Runtime numeric setters are absent, Snapshot
+contains no Feel/Control tuning bags, exact locked Feel Ref switching succeeds,
+and an unavailable Ref rejects atomically without changing Camera or Subject state.
 
 - [ ] **Step 2: Run focused tests and verify RED**
 
 Run: `pnpm exec vitest run packages/runtime-babylon/src/control-profile-runtime.test.ts packages/runtime-babylon/src/capability-runtime.test.ts`
 
-Expected: FAIL on missing contracts and setters.
+Expected: FAIL while the obsolete session overlay remains exposed.
 
-- [ ] **Step 3: Extend Control Profile declarations without new feel fields**
+- [ ] **Step 3: Keep Control Profile declarations free of movement-feel fields**
 
-Add numeric `safetyLimits`, `authoringRanges`, and `runtimeParameterNames` for the existing two input-tuning fields. Catalog defaults remain byte-for-byte equivalent in effective behavior. Registry rejects unknown/non-finite/unsafe tuning declarations.
+Keep numeric `safetyLimits` and `authoringRanges` in the authoring/candidate lane for the existing input-tuning fields. Browser runtime discovery publishes only exact Profile identity for Feel/Control. Catalog defaults remain byte-for-byte equivalent in effective behavior, and Registry admission rejects unknown/non-finite/unsafe materialized resources.
 
-- [ ] **Step 4: Implement Runtime-owned transient Control tuning**
+- [ ] **Step 4: Keep Runtime on exact locked Control Feel and Control resources**
 
-SubjectController stores a validated transient map and produces one resolved Execution Control Profile per tick. `compileMotionCommandV1` and `hasForwardControlIntentV1` receive the same resolved profile. Snapshot includes exact effective tuning.
+SubjectController stores no transient Feel/Control maps. It consumes one compiled
+Control Profile and one exact locked Control Feel per tick; `compileMotionCommandV1`
+and `hasForwardControlIntentV1` receive the same deadzone and response exponent.
+Snapshot publishes the active exact Control Feel Ref and no numeric overlay.
 
 - [ ] **Step 5: Add atomic preset request and receipt**
 
@@ -269,8 +274,8 @@ export interface ApplySubjectPresetTuningRequestV1 {
   subjectEntityId: string;
   expectedSubjectDefinitionRef: string;
   expectedSubjectDefinitionContentHash: string;
-  motionOverridesByProfileRef: Readonly<Record<string, NumericProfileOverrideV1>>;
-  controlOverridesByProfileRef: Readonly<Record<string, NumericProfileOverrideV1>>;
+  selectedControlFeelProfileRef: string;
+  selectedControlProfileRef: string;
   cameraOverridesByProfileRef: Readonly<Record<string, NumericProfileOverrideV1>>;
   cameraPreference: string;
 }
@@ -282,7 +287,7 @@ export interface SubjectPresetTuningReceiptV1 {
 }
 ```
 
-Validate every profile ref/hash/name/value and Camera algorithm support before mutation. Commit all maps and preference together; on any failure return the previous snapshot unchanged.
+Validate the selected Feel against the compiled `availableControlFeels`, require the exact compiled Control Ref, then validate every Camera ref/hash/name/value and algorithm before mutation. Commit the Ref selections, Camera maps and preference together; on any failure return the previous snapshot unchanged. Feel/Control numeric differences remain local/candidate-only until promotion materializes new Registry versions.
 
 - [ ] **Step 6: Run focused and contract tests**
 
@@ -294,7 +299,7 @@ Expected: PASS.
 
 ```bash
 git add packages/runtime-contracts packages/runtime-babylon packages/subject-registry assets/registry/control-profiles
-git commit -m "feat: add control and atomic preset tuning"
+git commit -m "feat: add ref-locked preset preview"
 ```
 
 ### Task 4: Candidate schema, legacy import, and Browser baseline API
@@ -340,7 +345,9 @@ Accept only the existing `schemaVersion: 4` authoring export shape. Resolve its 
 
 - [ ] **Step 5: Expose read-only baseline and atomic apply in Browser API**
 
-Return a deep-frozen closure plus compatible Motion/Control/Camera summaries and public-default entry. Preserve Browser protocol compatibility by adding non-enumerable optional extensions in the existing wrapper pattern.
+Return a deep-frozen closure plus compatible Motion/Control Feel/Control/Camera
+summaries and public-default entry. Preserve Browser protocol compatibility by
+adding non-enumerable optional extensions in the existing wrapper pattern.
 
 - [ ] **Step 6: Run tests and typecheck**
 
@@ -387,7 +394,12 @@ Expected: FAIL.
 
 - [ ] **Step 3: Implement deterministic plan materialization**
 
-Create subject-scoped Motion/Control/Camera Profile refs, copy/rewrite Camera Context refs, create the next Subject Definition version, and optionally update defaults. Every plan target includes logical relative path, preimage hash or `null`, postimage hash and canonical bytes. Generate a candidate-specific fixture path in `.codex-tmp/subject-presets/`.
+Preserve exact Motion Profile refs; create subject-scoped Control Feel, Control
+and Camera Profile refs as requested; copy/rewrite Camera Context refs; create
+the next Subject Definition version; and optionally update defaults. Every plan
+target includes logical relative path, preimage hash or `null`, postimage hash
+and canonical bytes. Generate a candidate-specific fixture path in
+`.codex-tmp/subject-presets/`.
 
 - [ ] **Step 4: Implement read-only Git guard and transaction**
 
@@ -455,7 +467,9 @@ Run the exact generated plan through `subject-preset promote --write`.
 
 - [ ] **Step 4: Add regression assertions**
 
-Assert the default Registry resolves `animal.quadruped.forward-steer` to the new exact Subject Definition/hash and that the derived Motion and Camera resources contain all six values.
+Assert the default Registry resolves `animal.quadruped.forward-steer` to the new
+exact Subject Definition/hash, its Motion roles retain the baseline refs, and
+the derived Control Feel and Camera resources contain the five retained values.
 
 - [ ] **Step 5: Run Registry and Runtime harness tests**
 
@@ -504,11 +518,19 @@ Expected: FAIL.
 
 - [ ] **Step 3: Extract the authoring panel from main.ts**
 
-Build a focused controller/view module. Render sections: baseline, Motion/Control/Camera tabs, local versions, evidence, publish. Use plain Chinese labels such as “保存本地版本”, “设为本机默认”, “恢复此版本”, “与公共默认对比”, and “导出待发布配置”. Do not show callback/Registry implementation jargon.
+Build a focused controller/view module. Render sections: baseline, Motion
+selection, Control Feel/Control/Camera tabs, local versions, evidence and
+publish. Use plain Chinese labels such as “保存本地版本”, “设为本机默认”,
+“恢复此版本”, “与公共默认对比”, and “导出待发布配置”. Do not show
+callback/Registry implementation jargon.
 
 - [ ] **Step 4: Render truthful parameter state**
 
-Each row shows default, current value, source, authoring range, Runtime support and apply receipt. Camera tabs retain separate maps. Conditional controls are disabled with a reason. Control displays only deadzone and response; steering response remains in Motion.
+Each row shows default, current value, source, authoring range, Runtime support
+and apply receipt. Camera tabs retain separate maps. Conditional controls are
+disabled with a reason. Control displays only deadzone; response and all other
+movement-feel values are displayed under Control Feel. Motion has no numeric
+slider surface.
 
 - [ ] **Step 5: Wire versions and candidate export**
 
@@ -564,7 +586,11 @@ Run: `pnpm verify:g-bot-subject`
 
 - [ ] **Step 4: Browser QA**
 
-Open Authoring Playground and verify: select all six frozen Subject refs; tune Motion/Control/two Camera Profiles; save two local versions; set/restore local default across refresh; export candidate; validate quadruped default; confirm no diagnostics, NaN, startup failure or relationship-truthfulness regression.
+Open Authoring Playground and verify: select all six frozen Subject refs; select
+Motion and tune Control Feel/Control/two Camera Profiles; save two local
+versions; set/restore local default across refresh; export candidate; validate
+quadruped default; confirm no diagnostics, NaN, startup failure or
+relationship-truthfulness regression.
 
 - [ ] **Step 5: Independent review**
 

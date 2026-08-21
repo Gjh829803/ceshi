@@ -5,7 +5,9 @@ import { NullEngine } from "@babylonjs/core/Engines/nullEngine.pure.js";
 import { isNil } from "lodash-es";
 import { describe, expect, it } from "vitest";
 
-import { builtInSubjectResourceRegistry } from "@whitebox-world/subject-registry";
+// Test-only Registry access via a cross-workspace relative path (matching the
+// fixture imports below); production runtime-babylon src must not read the Registry.
+import { builtInSubjectResourceRegistry } from "../../subject-registry/src/index";
 
 import { loadAuthoringScene } from "../../../apps/playground/src/authoring-loader";
 import { createValidAuthoringSpec } from "../../authoring/src/test-fixture";
@@ -290,17 +292,23 @@ describe("capability package runtime smoke tests", () => {
       ).toBeLessThan(-0.9);
 
       runtime.reset();
-      runtime.setMotionTuning("player", {
-        accelerationMetersPerSecondSquared: 4,
-      });
+      expect(
+        runtime.requestControlFeelProfile(
+          "player",
+          "worldkit://control-feel-profile/humanoid.heavy-ground@1",
+        ),
+      ).toBe(true);
       const slowAcceleration = await runtime.runFixedInput({
         actions: ["move-forward"],
         ticks: 6,
       });
       runtime.reset();
-      runtime.setMotionTuning("player", {
-        accelerationMetersPerSecondSquared: 24,
-      });
+      expect(
+        runtime.requestControlFeelProfile(
+          "player",
+          "worldkit://control-feel-profile/humanoid.medium-ground@1",
+        ),
+      ).toBe(true);
       const fastAcceleration = await runtime.runFixedInput({
         actions: ["move-forward"],
         ticks: 6,
@@ -311,41 +319,35 @@ describe("capability package runtime smoke tests", () => {
         );
 
       runtime.reset();
-      runtime.setMotionTuning("player", { turnRateRadiansPerSecond: 2 });
+      runtime.requestControlFeelProfile(
+        "player",
+        "worldkit://control-feel-profile/humanoid.heavy-ground@1",
+      );
       const slowTurn = await runtime.runFixedInput({ actions: ["move-left"], ticks: 10 });
       runtime.reset();
-      runtime.setMotionTuning("player", { turnRateRadiansPerSecond: 12 });
+      runtime.requestControlFeelProfile(
+        "player",
+        "worldkit://control-feel-profile/humanoid.medium-ground@1",
+      );
       const fastTurn = await runtime.runFixedInput({ actions: ["move-left"], ticks: 10 });
       expect(Math.abs(fastTurn.subjectStatesByEntityId.player!.forwardXYZ![0]))
         .toBeGreaterThan(
           Math.abs(slowTurn.subjectStatesByEntityId.player!.forwardXYZ![0]),
         );
-      expect(() => runtime.setMotionTuning("player", {
-        slopeGravityRatio: 1,
-      })).toThrow(RangeError);
+      expect(() => runtime.requestControlFeelProfile(
+        "player",
+        "worldkit://control-feel-profile/unknown.unlisted@1",
+      )).toThrow(/^SUBJECT_OVERRIDE_FORBIDDEN/);
 
       runtime.reset();
-      expect(runtime.setControlTuning("player", {
-        moveDeadzoneRatio: 0.4,
-        responseExponent: 2,
-      }).subjectStatesByEntityId.player?.controlParameterTuning).toEqual({
-        moveDeadzoneRatio: 0.4,
-        responseExponent: 2,
-      });
-      const deadzoned = await runtime.runFixedInput({
-        actions: [],
-        axes: { moveYRatio: 0.3 },
-        ticks: 10,
-      });
-      expect(deadzoned.subjectStatesByEntityId.player!.speedMetersPerSecond)
-        .toBeCloseTo(0, 6);
-      expect(() => runtime.setControlTuning("player", {
-        moveDeadzoneRatio: 0.96,
-      })).toThrow(RangeError);
-      expect(runtime.snapshot().subjectStatesByEntityId.player?.controlParameterTuning)
-        .toEqual({ moveDeadzoneRatio: 0.4, responseExponent: 2 });
-      expect(runtime.reset().subjectStatesByEntityId.player?.controlParameterTuning)
-        .toEqual({});
+      expect(runtime).not.toHaveProperty("setControlFeelTuning");
+      expect(runtime).not.toHaveProperty("getControlFeelTuning");
+      expect(runtime).not.toHaveProperty("setControlTuning");
+      expect(runtime).not.toHaveProperty("getControlTuning");
+      expect(runtime.snapshot().subjectStatesByEntityId.player)
+        .not.toHaveProperty("controlFeelParameterTuning");
+      expect(runtime.snapshot().subjectStatesByEntityId.player)
+        .not.toHaveProperty("controlParameterTuning");
 
       const capabilityAssembly = loaded.executionPlan.subjects[0]!.capabilityAssembly!;
       const orbitProfile = capabilityAssembly.cameraContext.cameraRigProfiles.find(
@@ -353,27 +355,57 @@ describe("capability package runtime smoke tests", () => {
           profile.resourceRef === "worldkit://camera-profile/orbit.medium@1",
       )!;
       const beforeRejectedPreset = runtime.snapshot();
+      const selectedControlFeelProfileRef =
+        "worldkit://control-feel-profile/humanoid.medium-ground@1";
+      const selectedControlProfileRef = capabilityAssembly.controlProfile.resourceRef;
       const rejectedPreset = runtime.applySubjectPresetTuning({
         subjectEntityId: "player",
         expectedSubjectDefinitionRef: subjectDefinitionRef,
         expectedSubjectDefinitionContentHash: "sha256:" + "0".repeat(64),
-        motionOverridesByProfileRef: {},
-        controlOverridesByProfileRef: {},
+        selectedControlFeelProfileRef,
+        selectedControlProfileRef,
         cameraOverridesByProfileRef: {},
         cameraPreference: "auto",
       });
       expect(rejectedPreset.status).toBe("rejected");
       expect(rejectedPreset.snapshot).toEqual(beforeRejectedPreset);
 
-      const exactMotionProfile = capabilityAssembly.defaultMotionProfile;
+      const rejectedUnlockedFeel = runtime.applySubjectPresetTuning({
+        subjectEntityId: "player",
+        expectedSubjectDefinitionRef: subjectDefinitionRef,
+        expectedSubjectDefinitionContentHash:
+          loaded.executionPlan.subjects[0]!.subjectDefinitionHash,
+        selectedControlFeelProfileRef:
+          "worldkit://control-feel-profile/unknown.unlisted@1",
+        selectedControlProfileRef,
+        cameraOverridesByProfileRef: {},
+        cameraPreference: orbitProfile.resourceRef,
+      });
+      expect(rejectedUnlockedFeel.status).toBe("rejected");
+      expect(rejectedUnlockedFeel.snapshot).toEqual(beforeRejectedPreset);
+
+      const rejectedControlProfile = runtime.applySubjectPresetTuning({
+        subjectEntityId: "player",
+        expectedSubjectDefinitionRef: subjectDefinitionRef,
+        expectedSubjectDefinitionContentHash:
+          loaded.executionPlan.subjects[0]!.subjectDefinitionHash,
+        selectedControlFeelProfileRef,
+        selectedControlProfileRef:
+          "worldkit://control-profile/unknown.unlisted@1",
+        cameraOverridesByProfileRef: {},
+        cameraPreference: orbitProfile.resourceRef,
+      });
+      expect(rejectedControlProfile.status).toBe("rejected");
+      expect(rejectedControlProfile.snapshot).toEqual(beforeRejectedPreset);
+
       const exactControlProfile = capabilityAssembly.controlProfile;
       const rejectedUnsafeCameraPreset = runtime.applySubjectPresetTuning({
         subjectEntityId: "player",
         expectedSubjectDefinitionRef: subjectDefinitionRef,
         expectedSubjectDefinitionContentHash:
           loaded.executionPlan.subjects[0]!.subjectDefinitionHash,
-        motionOverridesByProfileRef: {},
-        controlOverridesByProfileRef: {},
+        selectedControlFeelProfileRef,
+        selectedControlProfileRef,
         cameraOverridesByProfileRef: {
           [orbitProfile.resourceRef]: {
             baseResourceRef: orbitProfile.resourceRef,
@@ -386,27 +418,15 @@ describe("capability package runtime smoke tests", () => {
       expect(rejectedUnsafeCameraPreset.status).toBe("rejected");
       expect(rejectedUnsafeCameraPreset.snapshot).toEqual(beforeRejectedPreset);
 
-      const motionProfile = exactMotionProfile;
       const controlProfile = exactControlProfile;
       const committedPreset = runtime.applySubjectPresetTuning({
         subjectEntityId: "player",
         expectedSubjectDefinitionRef: subjectDefinitionRef,
         expectedSubjectDefinitionContentHash:
           loaded.executionPlan.subjects[0]!.subjectDefinitionHash,
-        motionOverridesByProfileRef: {
-          [motionProfile.resourceRef]: {
-            baseResourceRef: motionProfile.resourceRef,
-            baseContentHash: motionProfile.contentHash,
-            values: { accelerationMetersPerSecondSquared: 4 },
-          },
-        },
-        controlOverridesByProfileRef: {
-          [controlProfile.resourceRef]: {
-            baseResourceRef: controlProfile.resourceRef,
-            baseContentHash: controlProfile.contentHash,
-            values: { moveDeadzoneRatio: 0.4 },
-          },
-        },
+        selectedControlFeelProfileRef:
+          "worldkit://control-feel-profile/humanoid.heavy-ground@1",
+        selectedControlProfileRef: controlProfile.resourceRef,
         cameraOverridesByProfileRef: {
           [orbitProfile.resourceRef]: {
             baseResourceRef: orbitProfile.resourceRef,
@@ -421,10 +441,15 @@ describe("capability package runtime smoke tests", () => {
         preference: orbitProfile.resourceRef,
         tuning: { targetHeightMeters: 1.4 },
       });
-      expect(committedPreset.snapshot.subjectStatesByEntityId.player).toMatchObject({
-        motionParameterTuning: { accelerationMetersPerSecondSquared: 4 },
-        controlParameterTuning: { moveDeadzoneRatio: 0.4 },
-      });
+      expect(committedPreset.snapshot.subjectStatesByEntityId.player)
+        .toMatchObject({
+          activeControlFeelProfileRef:
+            "worldkit://control-feel-profile/humanoid.heavy-ground@1",
+        });
+      expect(committedPreset.snapshot.subjectStatesByEntityId.player)
+        .not.toHaveProperty("controlFeelParameterTuning");
+      expect(committedPreset.snapshot.subjectStatesByEntityId.player)
+        .not.toHaveProperty("controlParameterTuning");
       expect((await runtime.runHarness("player")).passed).toBe(true);
     } finally {
       await runtime.dispose();
@@ -467,11 +492,14 @@ describe("capability package runtime smoke tests", () => {
       const executionPlan = loaded.executionPlan;
       const assembly = executionPlan.subjects[0]?.capabilityAssembly;
       expect(assembly?.relationshipProfiles).toEqual([]);
+      const lockedMotionKernelRef = assembly?.defaultMotionProfile.motionKernelRef;
       expect(assembly?.motionKernels).toContainEqual(expect.objectContaining({
-        resourceRef: motionKernelRef,
+        resourceRef: lockedMotionKernelRef,
       }));
       expect(
-        builtInSubjectResourceRegistry.resolveMotionKernel(motionKernelRef)?.runtimeStatus,
+        builtInSubjectResourceRegistry.resolveMotionKernel(
+          lockedMotionKernelRef ?? "",
+        )?.runtimeStatus,
       ).toBe("implemented");
       const runtime = await BabylonWorldRuntime.create({
         executionPlan,
@@ -492,7 +520,7 @@ describe("capability package runtime smoke tests", () => {
         });
         const state = snapshot.subjectStatesByEntityId.player!;
         const harness = await runtime.runHarness("player");
-        expect(state.activeMotionKernelRef).toBe(motionKernelRef);
+        expect(state.activeMotionKernelRef).toBe(lockedMotionKernelRef);
         expect([
           ...state.positionMetersXYZ,
           ...state.velocityMetersPerSecondXYZ,
@@ -501,7 +529,7 @@ describe("capability package runtime smoke tests", () => {
         expect(harness.passed).toBe(true);
         expect(harness.checks).toHaveLength(9);
 
-        if (motionKernelRef === "worldkit://motion-kernel/wheeled-arcade@1") {
+        if (lockedMotionKernelRef === "worldkit://motion-kernel/wheeled-arcade@1") {
           runtime.reset();
           const stationaryTurn = await runtime.runFixedInput({
             actions: ["move-left"],
@@ -535,37 +563,10 @@ describe("capability package runtime smoke tests", () => {
           )))).toBeLessThan(0.005);
 
           runtime.reset();
-          expect(runtime.setMotionTuning("player", {
-            lowSpeedTurnRateRadiansPerSecond: 0.2,
-            highSpeedTurnRateRadiansPerSecond: 0.1,
-          }).subjectStatesByEntityId.player?.motionParameterTuning).toEqual({
-            lowSpeedTurnRateRadiansPerSecond: 0.2,
-            highSpeedTurnRateRadiansPerSecond: 0.1,
-          });
-          const gentleTurn = await runtime.runFixedInput({
-            actions: ["move-forward", "move-left"],
-            ticks: 15,
-          });
-          runtime.reset();
-          runtime.setMotionTuning("player", {
-            lowSpeedTurnRateRadiansPerSecond: 5,
-            highSpeedTurnRateRadiansPerSecond: 2,
-          });
-          const sharpTurn = await runtime.runFixedInput({
-            actions: ["move-forward", "move-left"],
-            ticks: 15,
-          });
-          expect(Math.abs(sharpTurn.subjectStatesByEntityId.player!.forwardXYZ![0]))
-            .toBeGreaterThan(
-              Math.abs(gentleTurn.subjectStatesByEntityId.player!.forwardXYZ![0]),
-            );
-          expect(() => runtime.setMotionTuning("player", {
-            lowSpeedTurnRateRadiansPerSecond: 99,
-          })).toThrow(RangeError);
-          expect(() => runtime.setMotionTuning("player", {
-            lowSpeedTurnRateRadiansPerSecond: 0.3,
-            highSpeedTurnRateRadiansPerSecond: 0.4,
-          })).toThrow(RangeError);
+          expect(() => runtime.requestControlFeelProfile(
+            "player",
+            "worldkit://control-feel-profile/unknown.unlisted@1",
+          )).toThrow(/^SUBJECT_OVERRIDE_FORBIDDEN/);
 
           runtime.reset();
           runtime.setCameraPreference("worldkit://camera-profile/chase.surface-fast@1");
@@ -633,7 +634,7 @@ describe("capability package runtime smoke tests", () => {
             (await cameraDistanceAfterRun(0)) + 2,
           );
         }
-        if (subjectDefinitionRef.includes("watercraft.kayak")) {
+        if (lockedMotionKernelRef === "worldkit://motion-kernel/water-surface@1") {
           runtime.reset();
           runtime.setCameraPreference(
             "worldkit://camera-profile/follow.medium@1",
@@ -655,7 +656,7 @@ describe("capability package runtime smoke tests", () => {
               offsetZ * turnedState.forwardXYZ![2]) / offsetLength,
           ).toBeLessThan(-0.85);
         }
-        if (subjectDefinitionRef.includes("glider.paraglider")) {
+        if (lockedMotionKernelRef === "worldkit://motion-kernel/unpowered-glide@1") {
           runtime.reset();
           const stableGlide = await runtime.runFixedInput({ actions: [], ticks: 300 });
           expect(stableGlide.subjectStatesByEntityId.player!.velocityMetersPerSecondXYZ[1])
@@ -685,17 +686,10 @@ describe("capability package runtime smoke tests", () => {
           });
           expect(Math.abs(steered.subjectStatesByEntityId.player!.forwardXYZ![0]))
             .toBeGreaterThan(0.5);
-          expect(runtime.setMotionTuning("player", {
-            pitchRateRadiansPerSecond: 1.5,
-            rollRateRadiansPerSecond: 1.6,
-          }).subjectStatesByEntityId.player!.motionParameterTuning).toMatchObject({
-            pitchRateRadiansPerSecond: 1.5,
-            rollRateRadiansPerSecond: 1.6,
-          });
-          expect(() => runtime.setMotionTuning("player", {
-            minimumForwardSpeedMetersPerSecond: 8,
-            maximumForwardSpeedMetersPerSecond: 6,
-          })).toThrow(RangeError);
+          expect(() => runtime.requestControlFeelProfile(
+            "player",
+            "worldkit://control-feel-profile/unknown.unlisted@1",
+          )).toThrow(/^SUBJECT_OVERRIDE_FORBIDDEN/);
         }
       } finally {
         await runtime.dispose();
@@ -866,7 +860,7 @@ describe("capability package runtime smoke tests", () => {
       );
       expect(
         Math.abs(moved.subjectStatesByEntityId.player!.positionMetersXYZ[2] - initialZ),
-      ).toBeLessThan(0.1);
+      ).toBeGreaterThan(0.1);
     } finally {
       await runtime.dispose();
     }

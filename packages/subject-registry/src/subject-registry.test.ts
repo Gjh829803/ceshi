@@ -134,8 +134,14 @@ function registryWithPermutedNewResourceCollections(
     isReversed ? [...values].reverse() : [...values];
 
   return createSubjectResourceRegistry(
-    builtInSubjectResourceRegistry.listResources().map((resource) => {
-      const input = structuredClone(resource);
+    builtInSubjectResourceRegistry
+      .listResources()
+      .filter(
+        (resource) =>
+          resource.resourceRef !== RIGGED_SUBJECT_DEFINITION_REF,
+      )
+      .map((resource) => {
+      const { contentHash: _contentHash, ...input } = structuredClone(resource);
       switch (input.kind) {
         case "subject-asset":
           return {
@@ -204,7 +210,6 @@ describe("subject resource registry", () => {
         .map((definition) => definition.resourceRef),
     ).toEqual([
       G_BOT_SUBJECT_DEFINITION_REF,
-      RIGGED_SUBJECT_DEFINITION_REF,
       "worldkit://subject-definition/humanoid.third-person@1",
       "worldkit://subject-definition/quadruped.ground-proxy@1",
     ]);
@@ -212,9 +217,6 @@ describe("subject resource registry", () => {
 
   it("shares the exact closed Subject unions across built-in definitions", () => {
     const definitions = builtInSubjectResourceRegistry.listSubjectDefinitions();
-    const rigged = definitions.find(
-      (definition) => definition.resourceRef === RIGGED_SUBJECT_DEFINITION_REF,
-    )!;
     const staticHumanoid = definitions.find(
       (definition) =>
         definition.resourceRef ===
@@ -225,9 +227,19 @@ describe("subject resource registry", () => {
         definition.resourceRef ===
         "worldkit://subject-definition/quadruped.ground-proxy@1",
     )!;
+    const riggedGolden =
+      builtInSubjectResourceRegistry.resolveSubjectDefinition(
+        RIGGED_SUBJECT_DEFINITION_REF,
+      )!;
 
-    expect(rigged).toMatchObject({
+    expect(riggedGolden).toMatchObject({
+      schemaVersion: 3,
       resourceRef: RIGGED_SUBJECT_DEFINITION_REF,
+      profiles: {
+        controlFeelProfileRef:
+          "worldkit://control-feel-profile/humanoid.medium-ground@1",
+        mediumProfileRef: "worldkit://medium-profile/ground-air.standard@1",
+      },
       visualParts: [
         {
           id: "body.asset",
@@ -350,19 +362,23 @@ describe("subject resource registry", () => {
     );
     expect(locomotionProfile).toMatchObject({
       kind: "locomotion-profile",
-      locomotion: {
-        mode: "ground",
-        walkSpeedMetersPerSecond: 2.4,
-        runSpeedMetersPerSecond: 4,
-        waterSpeedMetersPerSecond: 2.2,
-        jumpSpeedMetersPerSecond: 5.5,
-      },
+      allowWalk: true,
+      allowRun: true,
+      allowJump: true,
+    });
+    expect(locomotionProfile).not.toHaveProperty("locomotion");
+    expect(
+      builtInSubjectResourceRegistry.resolveControlFeelProfile(
+        "worldkit://control-feel-profile/humanoid.medium-ground@1",
+      ),
+    ).toMatchObject({
+      kind: "control-feel-profile",
+      walkSpeedMetersPerSecond: 2.4,
+      runSpeedMetersPerSecond: 4,
+      accelerationMetersPerSecondSquared: 16,
     });
     expect(locomotionProfile?.contentHash).toBe(
-      "sha256:a8d223d132e45027e5156f6857f9833b5ba89bdcd7408bea1cec7cf6ba47ac11",
-    );
-    expect(locomotionProfile?.locomotion).not.toHaveProperty(
-      "groundSpeedMetersPerSecond",
+      "sha256:8fa9019914d503e8813315e59cafdcbed2d750c4d9cc539e404ee741357c5cb3",
     );
     expect(
       builtInSubjectResourceRegistry.resolveColliderDerivationProfile(
@@ -717,7 +733,7 @@ describe("subject resource registry", () => {
       {
         resourceRef: G_BOT_SUBJECT_DEFINITION_REF,
         contentHash:
-          "sha256:0a8f32a97d3e0b764ee30fbc90d5edd1059fcc61e645699b21b2e9dae71ea3ee",
+          "sha256:21a8265f0ec54b540f8ef7bb536dc5b4ac40a300c2d42906d52c5fc53519e506",
       },
     ]);
   });
@@ -919,27 +935,27 @@ describe("subject resource registry", () => {
 
     expect(() => createSubjectResourceRegistry([{
       ...control!,
-      inputTuning: { ...control!.inputTuning, moveDeadzoneRatio: Number.NaN },
+      moveDeadzoneRatio: Number.NaN,
     }])).toThrowError(/SUBJECT_REGISTRY_INVALID_CONTROL_INPUT_TUNING/);
     expect(() => createSubjectResourceRegistry([{
       ...control!,
-      inputTuning: { ...control!.inputTuning, responseExponent: 0 },
+      moveDeadzoneRatio: 0.5,
     }])).toThrowError(/SUBJECT_REGISTRY_INVALID_CONTROL_INPUT_TUNING/);
   });
 
   it("rejects Control Profile policies that its command runtime cannot execute", () => {
-    const controls = builtInSubjectResourceRegistry
+    const planar = builtInSubjectResourceRegistry
       .listCapabilityResources()
-      .filter((resource) => resource.kind === "control-profile");
-    const planar = controls.find((resource) => resource.commandKind === "planar-vector")!;
-    const throttle = controls.find((resource) => resource.commandKind === "throttle-steer")!;
+      .filter((resource) => resource.kind === "control-profile")
+      .find((resource) => resource.resourceRef ===
+        "worldkit://control-profile/planar.camera-relative@1")!;
 
     expect(() => createSubjectResourceRegistry([{
       ...planar,
       inputSpace: "subject-local",
     }])).toThrowError(/SUBJECT_REGISTRY_INVALID_CONTROL_PROFILE_COMBINATION/);
     expect(() => createSubjectResourceRegistry([{
-      ...throttle,
+      ...planar,
       facingPolicy: "fixed",
     }])).toThrowError(/SUBJECT_REGISTRY_INVALID_CONTROL_PROFILE_COMBINATION/);
   });

@@ -5,13 +5,6 @@ import {
   isCameraRigParameterNameV1,
 } from "@whitebox-world/runtime-contracts";
 
-import { BUILT_IN_SUBJECT_RESOURCE_MANIFESTS } from "./built-in-resource-manifests";
-import { BUILT_IN_SUBJECT_DEFINITIONS } from "./built-in-subject-definitions";
-import {
-  BUILT_IN_CAPABILITY_MANIFESTS,
-  BUILT_IN_CAPABILITY_RESOURCES,
-} from "./built-in-capability-resources";
-import subjectDefinitionsV3 from "../../../assets/registry/subject-definitions/catalog.json";
 import type {
   AnimationSetManifestInputV1,
   AnimationSetManifestV1,
@@ -19,7 +12,9 @@ import type {
   ColliderProfileManifestInputV1,
   ColliderProfileManifestV1,
   ColliderDerivationProfileManifestV1,
+  LocomotionProfileManifestInputV1,
   LocomotionProfileManifestV1,
+  PhysicsBodyProfileManifestInputV1,
   PhysicsBodyProfileManifestV1,
   RigProfileManifestInputV1,
   RegistrySubjectDefinitionV2,
@@ -35,9 +30,12 @@ import type {
   CameraRigAlgorithmDefinitionV1,
   CameraRigProfileInputV1,
   CameraRigProfileV1,
+  ControlFeelProfileInputV1,
   ControlProfileInputV1,
   ControlProfileV1,
+  ControlFeelProfileV1,
   HarnessProfileV1,
+  MediumProfileInputV1,
   MediumProfileV1,
   MotionKernelDefinitionV1,
   MotionProfileInputV1,
@@ -52,6 +50,99 @@ import type {
   SubjectCapabilityResourceV1,
   SubjectResourceRegistryV3,
 } from "./types-v3";
+
+export const FIRST_SLICE_ALLOWED_OVERRIDE_PATHS = [
+  "profiles.controlFeelProfileRef",
+  "profiles.controlProfileRef",
+  "profiles.motion.defaultMotionProfileRef",
+] as const;
+
+export function assertAllowedOverridePath(path: string): void {
+  if (
+    !FIRST_SLICE_ALLOWED_OVERRIDE_PATHS.some(
+      (allowedPath) => allowedPath === path,
+    )
+  ) {
+    throw new Error(`SUBJECT_OVERRIDE_FORBIDDEN: '${path}'.`);
+  }
+}
+
+const LOCOMOTION_ALLOWED_KEYS = new Set([
+  "kind",
+  "id",
+  "version",
+  "resourceRef",
+  "aiMetadata",
+  "requiredCapabilityRefs",
+  "allowWalk",
+  "allowRun",
+  "allowJump",
+]);
+
+const LOCOMOTION_SPEED_FIELD_PATTERN =
+  /Speed|Acceleration|Deceleration|TurnRate|Gravity|Slope|StepHeight|Seconds|Meters|Radians|Ratio/;
+
+const LOCOMOTION_FORBIDDEN_OBJECT_KEYS = new Set([
+  "locomotion",
+  "parameters",
+  "tuning",
+  "supportedMediums",
+  "allowedMotionKernelRefs",
+]);
+
+const MOTION_ALLOWED_KEYS = new Set([
+  "kind",
+  "id",
+  "version",
+  "resourceRef",
+  "authoringAvailability",
+  "aiMetadata",
+  "motionKernelRef",
+  "motionTags",
+]);
+
+const MOTION_NUMERIC_FIELD_PATTERN =
+  /Speed|Acceleration|Deceleration|TurnRate|Gravity|Slope|StepHeight|Seconds|Meters|Radians|Ratio/;
+
+const MEDIUM_FORBIDDEN_KEYS = new Set([
+  "supportedMediums",
+  "ground",
+  "water",
+  "gravityScale",
+]);
+
+const CONTROL_FEEL_BOUNDS: Readonly<
+  Record<
+    | "walkSpeedMetersPerSecond"
+    | "runSpeedMetersPerSecond"
+    | "jumpSpeedMetersPerSecond"
+    | "accelerationMetersPerSecondSquared"
+    | "decelerationMetersPerSecondSquared"
+    | "turnRateRadiansPerSecond"
+    | "moveResponseExponent"
+    | "airControlRatio"
+    | "coyoteTimeSeconds"
+    | "jumpBufferSeconds"
+    | "variableJumpHoldSeconds"
+    | "jumpHoldGravityRatio"
+    | "jumpReleaseGravityRatio",
+    readonly [number, number]
+  >
+> = {
+  walkSpeedMetersPerSecond: [0, 8],
+  runSpeedMetersPerSecond: [0, 12],
+  jumpSpeedMetersPerSecond: [0, 12],
+  accelerationMetersPerSecondSquared: [0, 60],
+  decelerationMetersPerSecondSquared: [0, 80],
+  turnRateRadiansPerSecond: [0, 20],
+  moveResponseExponent: [1, 3],
+  airControlRatio: [0, 1],
+  coyoteTimeSeconds: [0, 0.4],
+  jumpBufferSeconds: [0, 0.4],
+  variableJumpHoldSeconds: [0, 0.5],
+  jumpHoldGravityRatio: [0.1, 1],
+  jumpReleaseGravityRatio: [1, 5],
+};
 
 function deepFreeze<T>(value: T): T {
   if (value === null || typeof value !== "object" || Object.isFrozen(value)) return value;
@@ -216,113 +307,102 @@ function lockResource(source: SubjectRegistryResourceInputV3): SubjectRegistryRe
   } as SubjectRegistryResourceV3);
 }
 
-function validateMotionProfile(source: MotionProfileInputV1): void {
-  for (const [parameterName, parameterValue] of Object.entries(source.parameters)) {
-    if (typeof parameterValue !== "number") continue;
-    if (!Number.isFinite(parameterValue)) {
+function validateLocomotionProfile(source: LocomotionProfileManifestInputV1): void {
+  const rawSource = source as unknown as Record<string, unknown>;
+  for (const key of Object.keys(rawSource)) {
+    if (LOCOMOTION_FORBIDDEN_OBJECT_KEYS.has(key)) {
       throw new Error(
-        `SUBJECT_REGISTRY_NON_FINITE_PARAMETER: '${parameterName}' in '${source.resourceRef}'.`,
+        key === "locomotion"
+          ? `LOCOMOTION_PROFILE_SPEED_FORBIDDEN: '${source.resourceRef}'.`
+          : `LOCOMOTION_PROFILE_FIELD_FORBIDDEN: '${source.resourceRef}'.`,
       );
     }
-    const limit = source.safetyLimits[parameterName];
-    if (limit === undefined) {
+    if (!LOCOMOTION_ALLOWED_KEYS.has(key)) {
       throw new Error(
-        `SUBJECT_REGISTRY_MISSING_SAFETY_LIMIT: '${parameterName}' in '${source.resourceRef}'.`,
-      );
-    }
-    if (parameterValue < limit.minimum || parameterValue > limit.maximum) {
-      throw new Error(
-        `SUBJECT_REGISTRY_PARAMETER_OUT_OF_RANGE: '${parameterName}' in '${source.resourceRef}'.`,
+        LOCOMOTION_SPEED_FIELD_PATTERN.test(key)
+          ? `LOCOMOTION_PROFILE_SPEED_FORBIDDEN: '${source.resourceRef}'.`
+          : `LOCOMOTION_PROFILE_FIELD_FORBIDDEN: '${source.resourceRef}'.`,
       );
     }
   }
-  for (const [parameterName, range] of Object.entries(source.authoringRanges ?? {})) {
-    const safetyLimit = source.safetyLimits[parameterName];
-    const parameterValue = source.parameters[parameterName];
-    if (
-      safetyLimit === undefined ||
-      typeof parameterValue !== "number" ||
-      ![range.minimum, range.maximum, range.step].every(Number.isFinite) ||
-      range.minimum > range.maximum ||
-      range.step <= 0 ||
-      range.minimum < safetyLimit.minimum ||
-      range.maximum > safetyLimit.maximum ||
-      parameterValue < range.minimum ||
-      parameterValue > range.maximum
-    ) {
+  if (source.allowWalk !== true) {
+    throw new Error(
+      `LOCOMOTION_PROFILE_FIELD_FORBIDDEN: '${source.resourceRef}' requires allowWalk === true.`,
+    );
+  }
+}
+
+function validateMotionProfile(source: MotionProfileInputV1): void {
+  const rawSource = source as unknown as Record<string, unknown>;
+  if (
+    "parameters" in rawSource ||
+    "safetyLimits" in rawSource ||
+    "authoringRanges" in rawSource
+  ) {
+    throw new Error(
+      `MOTION_PROFILE_NUMERIC_BAG_FORBIDDEN: '${source.resourceRef}'.`,
+    );
+  }
+  for (const key of Object.keys(rawSource)) {
+    if (!MOTION_ALLOWED_KEYS.has(key) && MOTION_NUMERIC_FIELD_PATTERN.test(key)) {
       throw new Error(
-        `SUBJECT_REGISTRY_INVALID_AUTHORING_RANGE: '${parameterName}' in '${source.resourceRef}'.`,
+        `MOTION_PROFILE_NUMERIC_BAG_FORBIDDEN: '${source.resourceRef}'.`,
       );
     }
   }
 }
 
+function isFiniteInRange(value: number, minimum: number, maximum: number): boolean {
+  return Number.isFinite(value) && value >= minimum && value <= maximum;
+}
+
+function validateControlFeelProfile(source: ControlFeelProfileInputV1): void {
+  for (const [fieldName, [minimum, maximum]] of Object.entries(CONTROL_FEEL_BOUNDS)) {
+    const value = source[fieldName as keyof ControlFeelProfileInputV1];
+    if (typeof value !== "number" || !isFiniteInRange(value, minimum, maximum)) {
+      throw new Error(
+        `CONTROL_FEEL_PROFILE_INVALID: '${fieldName}' in '${source.resourceRef}'.`,
+      );
+    }
+  }
+  if (source.walkSpeedMetersPerSecond > source.runSpeedMetersPerSecond) {
+    throw new Error(
+      `CONTROL_FEEL_PROFILE_INVALID: walkSpeedMetersPerSecond exceeds runSpeedMetersPerSecond in '${source.resourceRef}'.`,
+    );
+  }
+  if (source.airControlRatio < 0 || source.airControlRatio > 1) {
+    throw new Error(
+      `CONTROL_FEEL_PROFILE_INVALID: airControlRatio in '${source.resourceRef}'.`,
+    );
+  }
+  if (source.jumpHoldGravityRatio < 0 || source.jumpHoldGravityRatio > 1) {
+    throw new Error(
+      `CONTROL_FEEL_PROFILE_INVALID: jumpHoldGravityRatio in '${source.resourceRef}'.`,
+    );
+  }
+  if (source.jumpReleaseGravityRatio < 1) {
+    throw new Error(
+      `CONTROL_FEEL_PROFILE_INVALID: jumpReleaseGravityRatio in '${source.resourceRef}'.`,
+    );
+  }
+}
+
 function validateControlProfile(source: ControlProfileInputV1): void {
-  const { moveDeadzoneRatio, responseExponent } = source.inputTuning;
-  const expectedRuntimeParameterNames = [
-    "moveDeadzoneRatio",
-    "responseExponent",
-  ] as const;
   if (
-    !Number.isFinite(moveDeadzoneRatio) ||
-    moveDeadzoneRatio < 0 ||
-    moveDeadzoneRatio >= 1 ||
-    !Number.isFinite(responseExponent) ||
-    responseExponent <= 0
+    !Number.isFinite(source.moveDeadzoneRatio) ||
+    source.moveDeadzoneRatio < 0 ||
+    source.moveDeadzoneRatio > 0.4
   ) {
     throw new Error(
       `SUBJECT_REGISTRY_INVALID_CONTROL_INPUT_TUNING: '${source.resourceRef}'.`,
     );
   }
-  if (
-    source.runtimeParameterNames.length !== expectedRuntimeParameterNames.length ||
-    expectedRuntimeParameterNames.some((name, index) =>
-      source.runtimeParameterNames[index] !== name
-    )
-  ) {
-    throw new Error(
-      `SUBJECT_REGISTRY_INVALID_CONTROL_RUNTIME_PARAMETERS: '${source.resourceRef}'.`,
-    );
-  }
-  for (const parameterName of expectedRuntimeParameterNames) {
-    const value = source.inputTuning[parameterName];
-    const limit = source.safetyLimits[parameterName];
-    const range = source.authoringRanges[parameterName];
-    if (
-      limit === undefined ||
-      range === undefined ||
-      ![limit.minimum, limit.maximum, range.minimum, range.maximum, range.step]
-        .every(Number.isFinite) ||
-      limit.minimum > limit.maximum ||
-      range.minimum > range.maximum ||
-      range.step <= 0 ||
-      range.minimum < limit.minimum ||
-      range.maximum > limit.maximum ||
-      value < limit.minimum ||
-      value > limit.maximum ||
-      value < range.minimum ||
-      value > range.maximum
-    ) {
-      throw new Error(
-        `SUBJECT_REGISTRY_INVALID_CONTROL_PARAMETER_RANGE: '${parameterName}' in '${source.resourceRef}'.`,
-      );
-    }
-  }
-
   const hasExecutablePolicyCombination = (() => {
     switch (source.commandKind) {
       case "planar-vector":
         return source.inputSpace === "camera-relative" &&
           (source.facingPolicy === "align-to-move" ||
             source.facingPolicy === "align-to-view");
-      case "throttle-steer":
-        return source.inputSpace === "subject-local" &&
-          source.facingPolicy === "steering-derived" &&
-          source.lateralMovementPolicy === "forbidden";
-      case "flight-attitude":
-        return source.inputSpace === "flight-frame" &&
-          source.facingPolicy === "flight-derived" &&
-          source.lateralMovementPolicy === "forbidden";
       case "none":
         return source.inputSpace === "none" &&
           source.facingPolicy === "fixed" &&
@@ -334,6 +414,65 @@ function validateControlProfile(source: ControlProfileInputV1): void {
   if (!hasExecutablePolicyCombination) {
     throw new Error(
       `SUBJECT_REGISTRY_INVALID_CONTROL_PROFILE_COMBINATION: '${source.resourceRef}'.`,
+    );
+  }
+}
+
+function validateMediumProfile(source: MediumProfileInputV1): void {
+  const rawSource = source as unknown as Record<string, unknown>;
+  for (const key of Object.keys(rawSource)) {
+    if (MEDIUM_FORBIDDEN_KEYS.has(key)) {
+      throw new Error(
+        `MEDIUM_PROFILE_FIELD_FORBIDDEN: '${source.resourceRef}'.`,
+      );
+    }
+  }
+  const ground = rawSource.ground;
+  if (
+    ground !== undefined &&
+    typeof ground === "object" &&
+    ground !== null &&
+    "groundingToleranceMeters" in ground
+  ) {
+    throw new Error(
+      `MEDIUM_PROFILE_FIELD_FORBIDDEN: '${source.resourceRef}'.`,
+    );
+  }
+  if (
+    !isFiniteInRange(source.air.gravityRatio, 0, 4) ||
+    !isFiniteInRange(source.air.linearDragPerSecond, 0, 20)
+  ) {
+    throw new Error(
+      `MEDIUM_PROFILE_FIELD_FORBIDDEN: '${source.resourceRef}'.`,
+    );
+  }
+}
+
+function validatePhysicsBodyProfile(source: PhysicsBodyProfileManifestInputV1): void {
+  const { maxSlopeDegrees, maxStepHeightMeters } = source.physicsBody;
+  if (
+    !Number.isFinite(maxSlopeDegrees) ||
+    maxSlopeDegrees <= 0 ||
+    maxSlopeDegrees > 90 ||
+    !Number.isFinite(maxStepHeightMeters) ||
+    maxStepHeightMeters < 0 ||
+    maxStepHeightMeters > 2
+  ) {
+    throw new Error(
+      `PHYSICS_BODY_TRAVERSAL_LIMIT_INVALID: '${source.resourceRef}'.`,
+    );
+  }
+}
+
+function validateSubjectDefinitionV3(source: RegistrySubjectDefinitionInputV3): void {
+  const controlFeelProfileRef = source.profiles.controlFeelProfileRef;
+  if (
+    controlFeelProfileRef === undefined ||
+    controlFeelProfileRef === null ||
+    controlFeelProfileRef === ""
+  ) {
+    throw new Error(
+      `SUBJECT_CONTROL_FEEL_PROFILE_REQUIRED: '${source.resourceRef}'.`,
     );
   }
 }
@@ -578,6 +717,11 @@ function validateReferences(resourcesByRef: ReadonlyMap<string, SubjectRegistryR
       requireRef(subject.resourceRef, subject.profiles.harnessProfileRef, "harness-profile");
       requireRef(
         subject.resourceRef,
+        subject.profiles.controlFeelProfileRef,
+        "control-feel-profile",
+      );
+      requireRef(
+        subject.resourceRef,
         subject.renderBindingProfileRef,
         "render-binding-profile",
       );
@@ -618,10 +762,17 @@ export function createSubjectResourceRegistry(
     if (source.kind === "animation-set") validateAnimationSet(source);
     if (source.kind === "rig-profile") validateRigProfile(source);
     if (source.kind === "collider-profile") validateColliderProfile(source);
+    if (source.kind === "locomotion-profile") validateLocomotionProfile(source);
+    if (source.kind === "physics-body-profile") validatePhysicsBodyProfile(source);
     if (source.kind === "motion-profile") validateMotionProfile(source);
+    if (source.kind === "control-feel-profile") validateControlFeelProfile(source);
     if (source.kind === "control-profile") validateControlProfile(source);
+    if (source.kind === "medium-profile") validateMediumProfile(source);
     if (source.kind === "camera-rig-profile") validateCameraProfile(source);
     if (source.kind === "camera-modifier-profile") validateCameraModifierProfile(source);
+    if (source.kind === "subject-definition" && "schemaVersion" in source) {
+      validateSubjectDefinitionV3(source);
+    }
     if (source.kind === "motion-kernel") {
       const duplicateParameterName = duplicateValue(source.runtimeParameterNames);
       if (duplicateParameterName !== undefined) {
@@ -759,6 +910,10 @@ export function createSubjectResourceRegistry(
       const resource = resourcesByRef.get(resourceRef);
       return resource?.kind === "motion-profile" ? resource : undefined;
     },
+    resolveControlFeelProfile(resourceRef: string): ControlFeelProfileV1 | undefined {
+      const resource = resourcesByRef.get(resourceRef);
+      return resource?.kind === "control-feel-profile" ? resource : undefined;
+    },
     resolveControlProfile(resourceRef: string): ControlProfileV1 | undefined {
       const resource = resourcesByRef.get(resourceRef);
       return resource?.kind === "control-profile" ? resource : undefined;
@@ -818,11 +973,3 @@ export function createSubjectResourceRegistry(
     },
   });
 }
-
-export const builtInSubjectResourceRegistry = createSubjectResourceRegistry([
-  ...BUILT_IN_SUBJECT_DEFINITIONS,
-  ...(subjectDefinitionsV3 as unknown as readonly RegistrySubjectDefinitionInputV3[]),
-  ...BUILT_IN_SUBJECT_RESOURCE_MANIFESTS,
-  ...BUILT_IN_CAPABILITY_MANIFESTS,
-  ...BUILT_IN_CAPABILITY_RESOURCES,
-]);

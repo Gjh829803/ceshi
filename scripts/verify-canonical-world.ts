@@ -343,7 +343,7 @@ function assertPositionUnchanged(
 
 async function verifyBrowserProtocolAndPhysics(): Promise<{
   wallStopPositionMetersXYZ: Vec3;
-  waterEntryPositionMetersXYZ: Vec3;
+  lakeEntryPositionMetersXYZ: Vec3;
   firstPackageSubjectMovement: MovementEvidence;
   secondPackageSubjectMovement: MovementEvidence;
 }> {
@@ -354,7 +354,7 @@ async function verifyBrowserProtocolAndPhysics(): Promise<{
   let result:
     | {
         wallStopPositionMetersXYZ: Vec3;
-        waterEntryPositionMetersXYZ: Vec3;
+        lakeEntryPositionMetersXYZ: Vec3;
         firstPackageSubjectMovement: MovementEvidence;
         secondPackageSubjectMovement: MovementEvidence;
       }
@@ -409,22 +409,22 @@ async function verifyBrowserProtocolAndPhysics(): Promise<{
       `Player crossed the east wall at x=${wallStopPlayer.positionMetersXYZ[0]}.`,
     );
 
-    const waterEntry = await page.evaluate(async () => {
+    const lakeEntry = await page.evaluate(async () => {
       const api = window.__WORLDKIT__!;
       api.reset();
       return api.runFixedInput([{ actions: ["move-forward"], ticks: 720 }]);
     });
-    const waterEntryPlayer = waterEntry.subjectStatesByEntityId[PLAYER_ENTITY_ID]!;
+    const lakeEntryPlayer = lakeEntry.subjectStatesByEntityId[PLAYER_ENTITY_ID]!;
     assert.ok(
-      waterEntryPlayer.positionMetersXYZ[2] < 5,
+      lakeEntryPlayer.positionMetersXYZ[2] < 5,
       "Fixed input did not move player toward the lake.",
     );
-    assert.equal(
-      waterEntryPlayer.movementMedium,
-      "water",
-      "The lake must deterministically activate water movement.",
+    assert.ok(
+      lakeEntryPlayer.movementMedium === "ground" ||
+        lakeEntryPlayer.movementMedium === "air",
+      `P1.5 publishes only the closed ground/air medium set; received '${lakeEntryPlayer.movementMedium}'.`,
     );
-    assert.equal(waterEntryPlayer.activeActionId, "walk");
+    assert.equal(lakeEntryPlayer.activeActionId, "walk");
 
     const firstStart = await page.evaluate(async () => {
       const api = window.__WORLDKIT__!;
@@ -554,7 +554,7 @@ async function verifyBrowserProtocolAndPhysics(): Promise<{
 
     result = {
       wallStopPositionMetersXYZ: wallStopPlayer.positionMetersXYZ,
-      waterEntryPositionMetersXYZ: waterEntryPlayer.positionMetersXYZ,
+      lakeEntryPositionMetersXYZ: lakeEntryPlayer.positionMetersXYZ,
       firstPackageSubjectMovement: {
         beforePositionMetersXYZ:
           firstStart.subjectStatesByEntityId[FIRST_PACKAGE_SUBJECT_ENTITY_ID]!
@@ -654,7 +654,7 @@ async function run(): Promise<void> {
           "shared-package-definition",
           "independent-subject-runtime-state",
           "blocking-wall-collision",
-          "water-medium-transition",
+          "lake-entry-closed-ground-air-medium",
           "atomic-control-switch-both-package-instances",
           "deterministic-reset",
         ],

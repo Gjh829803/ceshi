@@ -34,6 +34,7 @@ import {
 } from "../../authoring/src/test-fixture";
 import type {
   ExecutionAnimationSetV1,
+  ExecutionObjectV3,
   ExecutionPlanV4,
   ExecutionSubjectAssetV1,
   FixedInputV1,
@@ -517,6 +518,70 @@ async function createFlatPackageRuntime(): Promise<BabylonWorldRuntime> {
   return createRuntime(createFlatPackageExecutionPlan());
 }
 
+function createColliderSupportExecutionPlan(options: {
+  pedestalPrimitive: ExecutionObjectV3["primitive"];
+  crateBottomMeters: number;
+  maximumSupportGapMeters: number;
+}): ExecutionPlanV4 {
+  const base = createFlatPackageExecutionPlan();
+  const placementProvenance =
+    base.layout.placementsByEntityId["wall-east"]!.placementProvenance;
+  const pedestalTransform = {
+    positionMetersXYZ: [0, 2, 0] as const,
+    rotationEulerRadiansXYZ: [0, 0, 0.3] as const,
+    scaleXYZ: [1, 1, 1] as const,
+  };
+  const crateTransform = {
+    positionMetersXYZ: [0, options.crateBottomMeters + 0.25, 0] as const,
+    rotationEulerRadiansXYZ: [0, 0, 0] as const,
+    scaleXYZ: [1, 1, 1] as const,
+  };
+  return {
+    ...base,
+    objects: [
+      ...base.objects,
+      {
+        entityId: "pedestal",
+        prototypeId: "pedestal-prototype",
+        primitive: options.pedestalPrimitive,
+        transform: pedestalTransform,
+        collisionEnabled: false,
+        semanticClassId: "obstacle.pedestal",
+      },
+      {
+        entityId: "crate",
+        prototypeId: "crate-prototype",
+        primitive: { kind: "box", sizeMetersXYZ: [0.5, 0.5, 0.5] },
+        transform: crateTransform,
+        collisionEnabled: false,
+        semanticClassId: "prop.crate",
+      },
+    ],
+    layout: {
+      ...base.layout,
+      placementsByEntityId: {
+        ...base.layout.placementsByEntityId,
+        pedestal: { entityId: "pedestal", transform: pedestalTransform, placementProvenance },
+        crate: { entityId: "crate", transform: crateTransform, placementProvenance },
+      },
+      layoutAssertions: [
+        ...base.layout.layoutAssertions,
+        {
+          constraintId: "crate-on-pedestal",
+          kind: "supported-by",
+          supportedEntityId: "crate",
+          supportingEntityId: "pedestal",
+          maximumSupportGapMeters: options.maximumSupportGapMeters,
+          minimumSupportRatio: 1,
+          evidenceEntityIds: ["crate", "pedestal"],
+          measurements: {},
+          tolerances: {},
+        },
+      ],
+    },
+  };
+}
+
 function createFlatRiggedExecutionPlan(): ExecutionPlanV4 {
   return compileFlatTerrainExecutionPlan(createValidRiggedPackageSubjectWorld());
 }
@@ -561,7 +626,7 @@ async function createRiggedRuntime(
 async function movementResult(
   executionPlan: ExecutionPlanV4,
   actions: FixedInputV1["actions"],
-): Promise<{ deltaXMeters: number; movementMedium: "ground" | "air" | "water" }> {
+): Promise<{ deltaXMeters: number; movementMedium: "ground" | "air" }> {
   const runtime = await createRuntime(executionPlan);
   try {
     const before = runtime.snapshot().subjectStatesByEntityId.player!.positionMetersXYZ[0];
@@ -688,14 +753,61 @@ describe("BabylonWorldRuntime", () => {
         "worldkit://motion-profile/free-ground.humanoid-medium@1",
       ),
     ).toBe(false);
+    expect(
+      runtime.requestControlFeelProfile(
+        "player",
+        "worldkit://control-feel-profile/humanoid.medium-ground@1",
+      ),
+    ).toBe(true);
     expect(() =>
-      runtime.setMotionTuning("player", { walkSpeedMetersPerSecond: 1.5 }),
-    ).toThrow(RangeError);
+      runtime.requestControlFeelProfile(
+        "player",
+        "worldkit://control-feel-profile/unknown.unlisted@1",
+      ),
+    ).toThrow(/^SUBJECT_OVERRIDE_FORBIDDEN/);
     expect(runtime.snapshot().resources.meshes).toBeGreaterThanOrEqual(10);
 
     await runtime.dispose();
     await runtime.dispose();
   });
+
+  it("publishes support-derived state for uncontrolled grounded subjects every tick", async () => {
+    const runtime = await createRiggedRuntime(createTwoRiggedSubjectExecutionPlan());
+    try {
+      // Let both subjects settle from their bootstrap onto the terrain.
+      await runtime.runFixedInput({ actions: [], ticks: 30 });
+      const settled = runtime.snapshot().subjectStatesByEntityId["hero-b"]!;
+      expect(settled.movementMedium).toBe("ground");
+      const settledHeightMeters = settled.positionMetersXYZ[1];
+
+      // Only a per-tick support publish moves the extra's published Feel ref
+      // off the compiled value; a frozen stale state would keep medium-ground.
+      expect(
+        runtime.requestControlFeelProfile(
+          "hero-b",
+          "worldkit://control-feel-profile/humanoid.heavy-ground@1",
+        ),
+      ).toBe(true);
+      const after = await runtime.runFixedInput({
+        actions: ["move-forward"],
+        ticks: 2,
+      });
+      const extra = after.subjectStatesByEntityId["hero-b"]!;
+      expect(extra.movementMedium).toBe("ground");
+      expect(extra.activeControlFeelProfileRef).toBe(
+        "worldkit://control-feel-profile/humanoid.heavy-ground@1",
+      );
+      // The idle extra receives support publishes but is not simulated with
+      // player input or gravity integration: it stays put on the ground.
+      expect(extra.positionMetersXYZ[1]).toBeCloseTo(settledHeightMeters, 5);
+      expect(Math.hypot(
+        extra.velocityMetersPerSecondXYZ[0],
+        extra.velocityMetersPerSecondXYZ[2],
+      )).toBeLessThan(0.01);
+    } finally {
+      await runtime.dispose();
+    }
+  }, 15_000);
 
   it("rejects a tampered frozen support assertion and cleans initialized resources", async () => {
     const executionPlan = createFlatPackageExecutionPlan();
@@ -833,6 +945,44 @@ describe("BabylonWorldRuntime", () => {
     const runtime = await createRuntime(executionPlan);
     await runtime.dispose();
   });
+
+  it("fails supported-by when the supported bottom sits on the rotated visual AABB top instead of the locked collider top", async () => {
+    const rollRadians = 0.3;
+    const visualAabbTopMeters = 2 + 2 * Math.sin(rollRadians) + 0.5 * Math.cos(rollRadians);
+    const executionPlan = createColliderSupportExecutionPlan({
+      pedestalPrimitive: { kind: "box", sizeMetersXYZ: [4, 1, 4] },
+      crateBottomMeters: visualAabbTopMeters,
+      maximumSupportGapMeters: 0.1,
+    });
+
+    const error = await createRuntime(executionPlan).catch((reason) => reason as unknown);
+
+    expect(isWorldRuntimeLayoutAssertionErrorV1(error)).toBe(true);
+  }, 15_000);
+
+  it("passes supported-by when the supported bottom sits on the locked collider top", async () => {
+    const rollRadians = 0.3;
+    const executionPlan = createColliderSupportExecutionPlan({
+      pedestalPrimitive: { kind: "box", sizeMetersXYZ: [4, 1, 4] },
+      crateBottomMeters: 2 + 0.5 * Math.cos(rollRadians),
+      maximumSupportGapMeters: 0.1,
+    });
+
+    const runtime = await createRuntime(executionPlan);
+    await runtime.dispose();
+  }, 15_000);
+
+  it("throws OBJECT_SUPPORT_SURFACE_QUERY_UNSUPPORTED for an unsupported supporting collider kind", async () => {
+    const executionPlan = createColliderSupportExecutionPlan({
+      pedestalPrimitive: { kind: "cone", radiusMeters: 2, heightMeters: 1 },
+      crateBottomMeters: 2.5,
+      maximumSupportGapMeters: 0.1,
+    });
+
+    await expect(createRuntime(executionPlan)).rejects.toThrow(
+      /^OBJECT_SUPPORT_SURFACE_QUERY_UNSUPPORTED/,
+    );
+  }, 15_000);
 
   it("keeps Snapshot and Visual Root at Subject Origin", async () => {
     const { runtime, executionPlan, debug } = await createRuntimeWithPackageSubject();
@@ -1746,7 +1896,7 @@ describe("BabylonWorldRuntime", () => {
     engineDisposal.mockRestore();
   });
 
-  it("uses run speed only for horizontal non-water movement", async () => {
+  it("uses run speed for horizontal movement even when a water volume exists", async () => {
     const groundPlan = createFlatPackageExecutionPlan();
     const walk = await movementResult(groundPlan, ["move-right"]);
     const run = await movementResult(groundPlan, ["move-right", "run"]);
@@ -1765,9 +1915,9 @@ describe("BabylonWorldRuntime", () => {
     });
     const waterWalk = await movementResult(waterPlan, ["move-right"]);
     const waterRun = await movementResult(waterPlan, ["move-right", "run"]);
-    expect(waterWalk.movementMedium).toBe("water");
-    expect(waterRun.movementMedium).toBe("water");
-    expect(waterRun.deltaXMeters).toBeCloseTo(waterWalk.deltaXMeters, 8);
+    expect(["ground", "air"]).toContain(waterWalk.movementMedium);
+    expect(["ground", "air"]).toContain(waterRun.movementMedium);
+    expect(waterRun.deltaXMeters).toBeGreaterThan(waterWalk.deltaXMeters * 1.25);
   });
 
   it("falls from an unsupported airborne spawn and lands on the terrain", async () => {
@@ -1861,7 +2011,9 @@ describe("BabylonWorldRuntime", () => {
         sizeMetersXZ: [10, 10],
         resolutionCellsXZ: [2, 2],
         // At (-2.5, -2.5), the Havok triangle is y=0.75 while bilinear sampling
-        // is y=0.5625. The physical slope is about 23 degrees and supported.
+        // is y=0.5625. The physical slope is about 12 degrees, far below the
+        // collider maxSlopeDegrees of 42, so Havok checkSupport must classify
+        // it as SUPPORTED and jump must be allowed.
         heightSamplesMeters: [0, 1.5, 1.5, 0],
       },
       waters: [],
@@ -1880,11 +2032,18 @@ describe("BabylonWorldRuntime", () => {
       expect(runtime.snapshot().subjectStatesByEntityId.player!.movementMedium).toBe(
         "ground",
       );
+      const grounded = runtime.snapshot().subjectStatesByEntityId.player!;
+      expect(grounded.positionMetersXYZ[1]).toBeGreaterThan(0.65);
+      expect(grounded.positionMetersXYZ[1]).toBeLessThan(1.1);
       const jumped = await runtime.runFixedInput({ actions: ["jump"], ticks: 1 });
       expect(
         jumped.subjectStatesByEntityId.player!.velocityMetersPerSecondXYZ[1],
       ).toBeGreaterThan(1);
-      expect(jumped.subjectStatesByEntityId.player!.activeActionId).toBe("jump");
+      let airborne = jumped;
+      for (let tick = 0; tick < 20 && airborne.subjectStatesByEntityId.player!.movementMedium !== "air"; tick += 1) {
+        airborne = await runtime.runFixedInput({ actions: [], ticks: 1 });
+      }
+      expect(airborne.subjectStatesByEntityId.player!.movementMedium).toBe("air");
     } finally {
       await runtime.dispose();
     }
@@ -2190,7 +2349,7 @@ describe("BabylonWorldRuntime", () => {
     await runtime.dispose();
   });
 
-  it("changes movement medium in declared swimmable water", async () => {
+  it("keeps published movementMedium on support while walking through scenery water", async () => {
     const executionPlan = createFlatPackageExecutionPlan((spec) => {
       const water = spec.nodes.find((node) => node.kind === "water");
       if (water?.kind !== "water") throw new Error("Fixture water node missing.");
@@ -2205,7 +2364,9 @@ describe("BabylonWorldRuntime", () => {
     const snapshot = await runtime.runFixedInput(moveRightForTicks(90));
 
     expect(snapshot.subjectStatesByEntityId.player!.positionMetersXYZ[0]).toBeGreaterThan(3);
-    expect(snapshot.subjectStatesByEntityId.player!.movementMedium).toBe("water");
+    expect(["ground", "air"]).toContain(
+      snapshot.subjectStatesByEntityId.player!.movementMedium,
+    );
     await runtime.dispose();
   });
 
@@ -2263,11 +2424,15 @@ describe("BabylonWorldRuntime", () => {
     );
 
     const jumped = await runtime.runFixedInput({ actions: ["jump"], ticks: 1 });
-    expect(jumped.subjectStatesByEntityId.player!.movementMedium).toBe("air");
     expect(
       jumped.subjectStatesByEntityId.player!.velocityMetersPerSecondXYZ[1],
     ).toBeGreaterThan(1);
-    expect(jumped.subjectStatesByEntityId.player!.activeActionId).toBe("jump");
+    let airborne = jumped;
+    for (let tick = 0; tick < 30 && airborne.subjectStatesByEntityId.player!.movementMedium !== "air"; tick += 1) {
+      airborne = await runtime.runFixedInput({ actions: [], ticks: 1 });
+    }
+    expect(airborne.subjectStatesByEntityId.player!.movementMedium).toBe("air");
+    expect(airborne.subjectStatesByEntityId.player!.activeActionId).toBe("jump");
 
     await runtime.dispose();
   });

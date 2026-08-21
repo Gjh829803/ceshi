@@ -204,6 +204,10 @@ describe("installDeferredWorldkitBrowserApi", () => {
     await expect(installation.initialization).resolves.toBe(adapter);
     await expect(api.ready()).resolves.toEqual(snapshotFixture());
     await expect(pendingRun).resolves.toEqual(snapshotFixture("run"));
+    expect(api).not.toHaveProperty("setControlFeelTuning");
+    expect(api).not.toHaveProperty("getControlFeelTuning");
+    expect(api).not.toHaveProperty("setControlTuning");
+    expect(api).not.toHaveProperty("getControlTuning");
     expect(api.getControlCaptureCapabilities().available).toBe(true);
     await expect(api.waitForSimulationTick(0)).resolves.toMatchObject({ tick: 0 });
     const receipt = await api.waitForRenderReady(0);
@@ -284,6 +288,20 @@ describe("installDeferredWorldkitBrowserApi", () => {
       ),
     ).toBe(true);
     expect(allKernels).toHaveLength(10);
+
+    const compatibleProfiles = installation.api.listCompatibleProfiles?.(
+      "worldkit://subject-definition/humanoid.g-bot@1",
+    ) ?? [];
+    for (const profile of compatibleProfiles.filter((candidate) =>
+      candidate.kind === "control-feel-profile" ||
+      candidate.kind === "control-profile"
+    )) {
+      expect(profile).not.toHaveProperty("parameters");
+      expect(profile).not.toHaveProperty("safetyLimits");
+      expect(profile).not.toHaveProperty("authoringRanges");
+      expect(profile).not.toHaveProperty("runtimeParameterNames");
+      expect(profile).not.toHaveProperty("draftOnlyParameterNames");
+    }
   });
 
   it.each([

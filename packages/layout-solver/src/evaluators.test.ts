@@ -249,6 +249,160 @@ describe("placement constraint evaluator", () => {
     });
   });
 
+  it("supports objects from the locked collider top", () => {
+    const constraint: ResolvedPlacementConstraintV1 = {
+      id: "tower-on-pedestal",
+      kind: "supported-by",
+      requirement: "required",
+      supportedEntityId: "tower",
+      supportingEntityId: "pedestal",
+      maximumSupportGapMeters: 0,
+      minimumSupportRatio: 1,
+    };
+    const base = context();
+    const evaluationContext: LayoutConstraintEvaluationContextV1 = {
+      ...base,
+      geometry: {
+        ...base.geometry,
+        collidersByEntityId: {
+          pedestal: {
+            kind: "box",
+            centerMetersXYZ: [0, -0.5, 0],
+            halfExtentsMetersXYZ: [2, 0.5, 2],
+            rotationEulerRadiansXYZ: [0, 0, 0],
+          },
+        },
+      },
+    };
+    // Tower bottom rests exactly on the collider top at Y = 0.
+    expect(evaluatePlacementConstraintV1(evaluationContext, constraint, assignments())).toMatchObject({
+      satisfied: true,
+      measurements: { maximumSupportGapMeters: 0, supportRatio: 1 },
+    });
+  });
+
+  it("rejects an object supported on the inflated AABB top of a rotated collider", () => {
+    const rollRadians = 0.4;
+    const constraint: ResolvedPlacementConstraintV1 = {
+      id: "tower-on-rolled-pedestal",
+      kind: "supported-by",
+      requirement: "required",
+      supportedEntityId: "tower",
+      supportingEntityId: "pedestal",
+      maximumSupportGapMeters: 0.2,
+      minimumSupportRatio: 1,
+    };
+    const base = context();
+    const evaluationContext: LayoutConstraintEvaluationContextV1 = {
+      ...base,
+      geometry: {
+        ...base.geometry,
+        collidersByEntityId: {
+          pedestal: {
+            kind: "box",
+            centerMetersXYZ: [0, -2, 0],
+            halfExtentsMetersXYZ: [3, 0.5, 3],
+            rotationEulerRadiansXYZ: [0, 0, rollRadians],
+          },
+        },
+      },
+    };
+    // Narrow supported footprint so the rolled top varies little across it.
+    const towerHalfExtentsMetersXYZ = [0.25, 1, 0.25] as const;
+    const aabbTopMeters = -2 + 3 * Math.sin(rollRadians) + 0.5 * Math.cos(rollRadians);
+    const placedOnAabbTop = {
+      ...assignments(),
+      tower: candidate("tower", [0, aabbTopMeters + 1, 0], towerHalfExtentsMetersXYZ),
+    };
+    expect(
+      evaluatePlacementConstraintV1(evaluationContext, constraint, placedOnAabbTop),
+    ).toMatchObject({
+      satisfied: false,
+      violationCode: "PLACEMENT_SUPPORT_CONSTRAINT_UNSATISFIED",
+    });
+
+    const colliderTopAtCenterMeters = -2 + 0.5 * Math.cos(rollRadians);
+    const placedOnColliderTop = {
+      ...assignments(),
+      tower: candidate(
+        "tower",
+        [0, colliderTopAtCenterMeters + 1, 0],
+        towerHalfExtentsMetersXYZ,
+      ),
+    };
+    expect(
+      evaluatePlacementConstraintV1(evaluationContext, constraint, placedOnColliderTop),
+    ).toMatchObject({ satisfied: true });
+  });
+
+  it("counts footprint samples off the collider against the support ratio", () => {
+    const base = context();
+    const evaluationContext: LayoutConstraintEvaluationContextV1 = {
+      ...base,
+      geometry: {
+        ...base.geometry,
+        collidersByEntityId: {
+          pedestal: {
+            kind: "box",
+            centerMetersXYZ: [0, -0.5, 0],
+            halfExtentsMetersXYZ: [0.5, 0.5, 0.5],
+            rotationEulerRadiansXYZ: [0, 0, 0],
+          },
+        },
+      },
+    };
+    const constraint: ResolvedPlacementConstraintV1 = {
+      id: "tower-overhangs-pedestal",
+      kind: "supported-by",
+      requirement: "required",
+      supportedEntityId: "tower",
+      supportingEntityId: "pedestal",
+      maximumSupportGapMeters: 0,
+      minimumSupportRatio: 1,
+    };
+    // Only the center of the 2x2 m tower footprint hits the 1x1 m collider.
+    expect(evaluatePlacementConstraintV1(evaluationContext, constraint, assignments())).toMatchObject({
+      satisfied: false,
+      violationCode: "PLACEMENT_SUPPORT_CONSTRAINT_UNSATISFIED",
+      measurements: { supportRatio: 0.2 },
+    });
+    expect(
+      evaluatePlacementConstraintV1(
+        evaluationContext,
+        { ...constraint, minimumSupportRatio: 0.2 },
+        assignments(),
+      ),
+    ).toMatchObject({ satisfied: true });
+  });
+
+  it("throws OBJECT_SUPPORT_SURFACE_QUERY_UNSUPPORTED when only an AABB exists for the supporting object", () => {
+    const constraint: ResolvedPlacementConstraintV1 = {
+      id: "tower-on-aabb-only",
+      kind: "supported-by",
+      requirement: "required",
+      supportedEntityId: "tower",
+      supportingEntityId: "pedestal",
+      maximumSupportGapMeters: 0,
+      minimumSupportRatio: 1,
+    };
+    const staticOnly = context();
+    (staticOnly.geometry.staticBoundsByEntityId as Record<string, unknown>).pedestal = {
+      minimumMetersXYZ: [-2, -1, -2],
+      maximumMetersXYZ: [2, 0, 2],
+    };
+    expect(() =>
+      evaluatePlacementConstraintV1(staticOnly, constraint, assignments()),
+    ).toThrow(/^OBJECT_SUPPORT_SURFACE_QUERY_UNSUPPORTED/);
+
+    const solvedOnly = context();
+    expect(() =>
+      evaluatePlacementConstraintV1(solvedOnly, constraint, {
+        ...assignments(),
+        pedestal: candidate("pedestal", [0, -1, 0], [2, 1, 2]),
+      }),
+    ).toThrow(/^OBJECT_SUPPORT_SURFACE_QUERY_UNSUPPORTED/);
+  });
+
   it("uses -Z as forward for faces-entity", () => {
     expect(evaluatePlacementConstraintV1(context(), SATISFIED[3]!, assignments()).measurements)
       .toMatchObject({ angularDeviationDegrees: 0 });
