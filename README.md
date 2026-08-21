@@ -460,6 +460,7 @@ Compiler 和 Runtime 不能反向读取 Agent Prompt；Runtime Adapter 不能把
 ### 已完成首个切片、继续回归
 
 - [Asset Subject S1b 可视切片实施计划](docs/superpowers/plans/2026-08-19-asset-subject-s1b-visible-slice.md)：项目自有 Golden GLB、Rig、Collider Profile、`idle/walk/run/jump` 和 Babylon/Havok 端到端接入已完成；S1b 后续能力仍按 Backlog 推进。
+- [P1.5 Control Feel / Medium / State Resolver](docs/superpowers/plans/2026-08-21-p15-control-feel-state-resolver.md)：Ground/Air 首切片已通过生产 Gate 并由 PR #10 合入 `main`；Motion 仅选择算法，速度与跳跃归锁定 Control Feel，Character 支撑由每 Tick 唯一一次 Havok `checkSupport()` 决定。水介质和 P1.5 合入后收尾仍按 Backlog 推进。
 
 ### 架构决策
 

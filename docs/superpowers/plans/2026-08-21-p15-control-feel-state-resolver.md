@@ -2,6 +2,11 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
+> **Status:** Ground/Air first slice completed and merged to `main` by PR #10
+> (`a64177bf2916ab06d0e2879a03105c0cdd887051`). All eight tasks and their
+> focused gates are complete. The broader M7 milestone remains open for water,
+> CLI/Browser E2E, and the explicitly listed post-merge cleanup work.
+
 **Goal:** Make Ground/Air humanoid feel, support, and movement medium follow one locked Profile set and one `checkSupport()` per tick, then prove it with Golden and G Bot gates.
 
 **Architecture:** Clean-break Registry contracts move speeds into `control-feel-profile`, keep slope/step on `physics-body-profile`, and shrink `locomotion-profile` / `motion-profile` / `medium-profile` to their spec owners. A pure State Resolver writes `movementMedium: "ground" | "air"`. The Babylon adapter only executes compiled numbers, bootstraps contact with one unpublished integrate, and never raycasts or uses AABB tops.
@@ -116,7 +121,7 @@ Golden and G Bot Definitions must set `profiles.controlFeelProfileRef` to `human
 - Consumes: current `main` Registry and Runtime APIs.
 - Produces: failing tests that name the debt. Do not change production code in this task.
 
-- [ ] **Step 1: Write Registry admission RED tests**
+- [x] **Step 1: Write Registry admission RED tests**
 
 ```ts
 import { describe, expect, it } from "vitest";
@@ -168,7 +173,7 @@ describe("P1.5 admission debt", () => {
 });
 ```
 
-- [ ] **Step 2: Write Runtime debt RED tests that inspect current behavior**
+- [x] **Step 2: Write Runtime debt RED tests that inspect current behavior**
 
 ```ts
 import { readFileSync } from "node:fs";
@@ -205,13 +210,13 @@ describe("P1.5 runtime debt", () => {
 });
 ```
 
-- [ ] **Step 3: Run the new tests**
+- [x] **Step 3: Run the new tests**
 
 Run: `pnpm vitest run packages/subject-registry/src/p15-admission-repro.test.ts packages/runtime-babylon/src/p15-runtime-debt-repro.test.ts`
 
 Expected: PASS against current `main` (they document debt). After later tasks flip these files into inverted assertions, they must still pass.
 
-- [ ] **Step 4: Commit**
+- [x] **Step 4: Commit**
 
 ```bash
 git add packages/subject-registry/src/p15-admission-repro.test.ts packages/runtime-babylon/src/p15-runtime-debt-repro.test.ts
@@ -234,7 +239,7 @@ git commit -m "test: lock P1.5 feel and support debt reproducers"
 - Produces: `ControlFeelProfileInputV1`, boolean-only `LocomotionProfileManifestInputV1`, bag-free `MotionProfileInputV1`, first-slice `ControlProfileInputV1`, first-slice `MediumProfileInputV1`, `profiles.controlFeelProfileRef` on `RegistrySubjectDefinitionInputV3`.
 - Admission functions throw the spec codes from spec §11.
 
-- [ ] **Step 1: Write inverted admission tests first**
+- [x] **Step 1: Write inverted admission tests first**
 
 Replace Task 1 Registry assertions with:
 
@@ -308,12 +313,12 @@ it("rejects a subject definition without controlFeelProfileRef", () => {
 
 Also add range tests for Feel: `walk > run`, `airControlRatio > 1`, `jumpReleaseGravityRatio < 1` → `CONTROL_FEEL_PROFILE_INVALID`. Physics `maxStepHeightMeters: Number.NaN` → `PHYSICS_BODY_TRAVERSAL_LIMIT_INVALID`.
 
-- [ ] **Step 2: Run RED**
+- [x] **Step 2: Run RED**
 
 Run: `pnpm vitest run packages/subject-registry/src/p15-admission-repro.test.ts`
 Expected: FAIL because current types still accept the old bags.
 
-- [ ] **Step 3: Replace the types**
+- [x] **Step 3: Replace the types**
 
 `LocomotionProfileManifestInputV1` in `types-v2.ts`:
 
@@ -361,7 +366,7 @@ Add `controlFeelProfileRef: string` to `RegistrySubjectDefinitionInputV3.profile
 
 Union `ControlFeelProfileInputV1` into `SubjectCapabilityResourceInputV1` and hashed exports.
 
-- [ ] **Step 4: Rewrite admission**
+- [x] **Step 4: Rewrite admission**
 
 In `subject-resource-registry.ts`:
 
@@ -373,14 +378,14 @@ In `subject-resource-registry.ts`:
 - Subject definition: missing/unlocked `controlFeelProfileRef` → `SUBJECT_CONTROL_FEEL_PROFILE_REQUIRED`.
 - `allowedOverridePaths` first slice: only `profiles.controlFeelProfileRef`, `profiles.controlProfileRef`, `profiles.motion.defaultMotionProfileRef`. Anything else, including `parameters.*`, → `SUBJECT_OVERRIDE_FORBIDDEN`.
 
-- [ ] **Step 5: Run Registry unit tests**
+- [x] **Step 5: Run Registry unit tests**
 
 Run: `pnpm vitest run packages/subject-registry/src`
 Expected: FAIL on catalog/definition fixtures until Task 3. Do not edit catalogs in this task except to keep types compiling if needed; prefer Task 3 for fixture rewrite. If TypeScript cannot compile, stub the built-in catalog loaders only enough to finish typecheck of this package, then immediately continue Task 3 in the same working tree before claiming Task 2 done.
 
 If `pnpm typecheck` fails globally because catalogs still have old fields, that is expected. Task 2 is done when the new types and validators exist and the new admission tests fail only on missing catalog entries, not on validator absence.
 
-- [ ] **Step 6: Commit**
+- [x] **Step 6: Commit**
 
 ```bash
 git add packages/subject-registry/src/types-v2.ts packages/subject-registry/src/types-v3.ts packages/subject-registry/src/subject-resource-registry.ts packages/subject-registry/src/p15-admission-repro.test.ts
@@ -407,7 +412,7 @@ git commit -m "feat: clean-break P1.5 registry profile contracts"
 - Consumes: Task 2 types.
 - Produces: loadable built-in registry with two Feel Refs, boolean locomotion, bag-free motion, `ground-air.standard@1`, and Definitions that bind `controlFeelProfileRef`.
 
-- [ ] **Step 1: Write catalog presence tests**
+- [x] **Step 1: Write catalog presence tests**
 
 ```ts
 it("registers two distinguishable built-in feel profiles", () => {
@@ -452,12 +457,12 @@ it("replaces water medium and binds feel on G Bot and Golden", () => {
 });
 ```
 
-- [ ] **Step 2: Run RED**
+- [x] **Step 2: Run RED**
 
 Run: `pnpm vitest run packages/subject-registry/src/p15-admission-repro.test.ts`
 Expected: FAIL, missing Feel catalog.
 
-- [ ] **Step 3: Rewrite catalogs and built-ins**
+- [x] **Step 3: Rewrite catalogs and built-ins**
 
 `assets/registry/control-feel-profiles/catalog.json`: the two Feel objects using locked numbers above. `authoringAvailability` is `"recommended"` for medium and `"advanced"` for heavy.
 
@@ -473,16 +478,16 @@ Expected: FAIL, missing Feel catalog.
 
 `built-in-subject-definitions.ts`: add `controlFeelProfileRef` and switch medium Ref on every V3 definition.
 
-- [ ] **Step 4: Update existing Registry tests**
+- [x] **Step 4: Update existing Registry tests**
 
 Remove expectations for `walkSpeedMetersPerSecond` on locomotion, motion `parameters`, `ground-water-air`, and deleted control profiles. Assert boolean locomotion and Feel Ref instead.
 
-- [ ] **Step 5: Run Registry package tests**
+- [x] **Step 5: Run Registry package tests**
 
 Run: `pnpm vitest run packages/subject-registry/src`
 Expected: PASS.
 
-- [ ] **Step 6: Commit**
+- [x] **Step 6: Commit**
 
 ```bash
 git add assets/registry packages/subject-registry/src
@@ -509,7 +514,7 @@ git commit -m "feat: clean-break built-in feel, medium, and locomotion catalogs"
 - Produces: `ExecutionSubjectV3.controlFeel`, `ExecutionSubjectV3.mediumProfile`, bag-free `ExecutionMotionProfileV1`, `ExecutionControlProfileV1.moveDeadzoneRatio`, Snapshot `movementMedium: "ground" | "air"`, Snapshot `activeControlFeelProfileRef`.
 - Deletes: `ExecutionSubjectV3.locomotion.*Speed*`, `ExecutionMotionProfileV1.parameters`, `capabilityAssembly.mediumProfile.water`, `setMotionTuning` numeric bag from the production session contract.
 
-- [ ] **Step 1: Write Compiler projection tests**
+- [x] **Step 1: Write Compiler projection tests**
 
 ```ts
 it("projects feel and body traversal, not locomotion speeds", () => {
@@ -553,12 +558,12 @@ it("refuses to compile a published water movementMedium", () => {
 });
 ```
 
-- [ ] **Step 2: Run RED**
+- [x] **Step 2: Run RED**
 
 Run: `pnpm vitest run packages/compiler/src/compile.test.ts packages/authoring/src/subject-definition-normalizer.test.ts packages/runtime-contracts/src/runtime-contracts.test.ts`
 Expected: FAIL on missing `controlFeel` / leftover speeds.
 
-- [ ] **Step 3: Change the contracts**
+- [x] **Step 3: Change the contracts**
 
 `ExecutionSubjectV3.locomotion`:
 
@@ -600,16 +605,16 @@ Authoring normalizer reads Feel from `profiles.controlFeelProfileRef` and copies
 
 Compiler copies the same fields. If any compiled snapshot/default medium is `"water"`, throw `SUBJECT_MOVEMENT_MEDIUM_UNSUPPORTED`.
 
-- [ ] **Step 4: Update tests and fixtures**
+- [x] **Step 4: Update tests and fixtures**
 
 Replace every `walkSpeedMetersPerSecond` expectation on locomotion with Feel. Replace `setMotionTuning` tests later in Task 6; in this task only fix compile/authoring/contract tests so they compile.
 
-- [ ] **Step 5: Run focused gates**
+- [x] **Step 5: Run focused gates**
 
 Run: `pnpm vitest run packages/authoring/src packages/compiler/src packages/runtime-contracts/src`
 Expected: PASS.
 
-- [ ] **Step 6: Commit**
+- [x] **Step 6: Commit**
 
 ```bash
 git add packages/authoring/src packages/compiler/src packages/runtime-contracts/src
@@ -677,7 +682,7 @@ export interface ResolveCharacterStateInputV1 {
 }
 ```
 
-- [ ] **Step 1: Write resolver tests**
+- [x] **Step 1: Write resolver tests**
 
 ```ts
 it("maps unsupported to air and does not publish water", () => {
@@ -759,23 +764,23 @@ it("fails when support sample is missing", () => {
 
 `isNil` for missing refs/samples. Coyote must not set `movementMedium` back to `"ground"`.
 
-- [ ] **Step 2: Run RED**
+- [x] **Step 2: Run RED**
 
 Run: `pnpm vitest run packages/subject-actions/src/character-state-resolver.test.ts`
 Expected: FAIL, module missing.
 
-- [ ] **Step 3: Implement the resolver**
+- [x] **Step 3: Implement the resolver**
 
 Follow spec §7 order exactly. Map Provider-neutral support states only. Cold start with an incomplete lock throws `SUBJECT_CONTROL_FEEL_PROFILE_REQUIRED` rather than inventing defaults.
 
 Change `GroundHumanoidActionInputV1.movementMedium` to `"ground" | "air"`. Update action tests that used `"water"`: they must now treat a water volume as still `"ground"` or `"air"` from support, never a third medium.
 
-- [ ] **Step 4: Run subject-actions tests**
+- [x] **Step 4: Run subject-actions tests**
 
 Run: `pnpm vitest run packages/subject-actions/src`
 Expected: PASS.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add packages/subject-actions/src
@@ -799,7 +804,7 @@ git commit -m "feat: add ground/air character state resolver"
 - Consumes: `ExecutionSubjectV3.controlFeel`, Task 5 resolver, `PhysicsCharacterController` from `@babylonjs/core/Physics/v2/characterController.js`.
 - Produces: adapter that reads Feel, maps Body slope/step once, bootstraps without publishing, and never writes water.
 
-- [ ] **Step 1: Invert the debt tests**
+- [x] **Step 1: Invert the debt tests**
 
 ```ts
 it("does not bootstrap ground with a physics raycast", () => {
@@ -822,12 +827,12 @@ Add a runtime integration test: after `reset()`, first published snapshot `movem
 
 Add a Feel switch test: same world, same input ticks, `humanoid.medium-ground@1` vs `humanoid.heavy-ground@1` produce different `speedMetersPerSecond` or yaw; both hashes differ; no `setMotionTuning`.
 
-- [ ] **Step 2: Run RED**
+- [x] **Step 2: Run RED**
 
 Run: `pnpm vitest run packages/runtime-babylon/src/p15-runtime-debt-repro.test.ts`
 Expected: FAIL until the adapter is rewritten.
 
-- [ ] **Step 3: Rewrite MotionKernelRuntimeV1**
+- [x] **Step 3: Rewrite MotionKernelRuntimeV1**
 
 Constructor:
 
@@ -893,12 +898,12 @@ Rewrite water tests in `runtime.test.ts`: a water volume may exist as scenery, b
 
 Rewrite capability tuning tests to switch Feel Refs.
 
-- [ ] **Step 4: Run runtime tests**
+- [x] **Step 4: Run runtime tests**
 
 Run: `pnpm vitest run packages/runtime-babylon/src`
 Expected: PASS.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add packages/runtime-babylon/src packages/animation/src
@@ -946,7 +951,7 @@ export function queryLockedColliderSupportHeightMeters(
 - Consumes: locked object collider, not mesh bounds.
 - Produces: support height for Layout evaluation and Runtime revalidation. Unsupported kinds throw `OBJECT_SUPPORT_SURFACE_QUERY_UNSUPPORTED`.
 
-- [ ] **Step 1: Write surface tests**
+- [x] **Step 1: Write surface tests**
 
 ```ts
 it("returns the box top at an interior XZ sample, not an inflated AABB after rotation", () => {
@@ -981,12 +986,12 @@ Add a Runtime test: object visual box taller than collider must fail `supported-
 
 Invert the debt test: `babylon-world-runtime.ts` must not contain `supporting.maximumMetersXYZ[1]` as the object support height.
 
-- [ ] **Step 2: Run RED**
+- [x] **Step 2: Run RED**
 
 Run: `pnpm vitest run packages/terrain-surface/src/terrain-surface.test.ts`
 Expected: FAIL, helper missing.
 
-- [ ] **Step 3: Implement the helper and wire both call sites**
+- [x] **Step 3: Implement the helper and wire both call sites**
 
 Box: transform the sample into collider local XZ, reject outside `[-hx, hx] × [-hz, hz]`, return world Y of the local top face.
 
@@ -1002,12 +1007,12 @@ Convex: reject if the vertical ray at the sample misses the hull; otherwise retu
 
 This query must not write Character `movementMedium` or `isGrounded`.
 
-- [ ] **Step 4: Run focused tests**
+- [x] **Step 4: Run focused tests**
 
 Run: `pnpm vitest run packages/terrain-surface/src packages/layout-solver/src/evaluators.test.ts packages/runtime-babylon/src/runtime.test.ts packages/runtime-babylon/src/p15-runtime-debt-repro.test.ts`
 Expected: PASS.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add packages/terrain-surface/src packages/layout-solver/src packages/runtime-babylon/src
@@ -1027,7 +1032,7 @@ git commit -m "feat: query locked colliders for object supported-by"
 - Consumes: Tasks 3–7.
 - Produces: closed-set evidence and updated backlog checkboxes after gates pass.
 
-- [ ] **Step 1: Add adversarial runtime tests**
+- [x] **Step 1: Add adversarial runtime tests**
 
 Cover all of these in `runtime.test.ts` or a new `p15-conformance.test.ts`:
 
@@ -1039,12 +1044,12 @@ Cover all of these in `runtime.test.ts` or a new `p15-conformance.test.ts`:
 6. Rebind/reset restores controller, body, and listener counts.
 7. Publishing `"water"` through the resolver/compiler path throws `SUBJECT_MOVEMENT_MEDIUM_UNSUPPORTED`.
 
-- [ ] **Step 2: Run the new tests**
+- [x] **Step 2: Run the new tests**
 
 Run: `pnpm vitest run packages/runtime-babylon/src/p15-conformance.test.ts`
 Expected: FAIL if a case is missing, then PASS after the cases exist and the adapter already satisfies them.
 
-- [ ] **Step 3: Run package tests and typecheck**
+- [x] **Step 3: Run package tests and typecheck**
 
 Run:
 
@@ -1055,7 +1060,7 @@ pnpm vitest run packages/subject-registry/src packages/authoring/src packages/co
 
 Expected: exit 0.
 
-- [ ] **Step 4: Run the repository production gates named by the spec**
+- [x] **Step 4: Run the repository production gates named by the spec**
 
 Run:
 
@@ -1073,7 +1078,7 @@ Expected: exit 0. Update Golden/G Bot hashes only when the Definition/Feel conte
 
 If a gate fails, fix the owning task. Do not weaken Feel numbers, restore `stepHeightMeters` on Motion, or reintroduce ray/AABB.
 
-- [ ] **Step 5: Update backlog only after gates pass**
+- [x] **Step 5: Update backlog only after gates pass**
 
 In `docs/18-refactor-progress-and-backlog.md`:
 
@@ -1082,7 +1087,7 @@ In `docs/18-refactor-progress-and-backlog.md`:
 - Leave water/swim, Hybrid Surface, Validation, and CLI/Browser new protocol boxes unchecked.
 - Recalculate progress only if the slice changed a workflow percentage under the 20% design / full-gate rule.
 
-- [ ] **Step 6: Commit**
+- [x] **Step 6: Commit**
 
 ```bash
 git add packages/runtime-babylon/src docs/18-refactor-progress-and-backlog.md

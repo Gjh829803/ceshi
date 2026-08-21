@@ -188,8 +188,8 @@ P1.5、P1.6、P2.5 与 P2.6 是把既有总体设计和产品对接契约显式�
   Driver 关闭白名单、Surface 身份、Evidence 与 Diagnostic 字段；通过下一 Canonical Major
   干净升级，不向已实现 V3 偷加空枚举。
 - [ ] R1 实现普通人形 Heightfield Route：坡度、静态阻挡、胶囊宽高净空、缝隙、确定性
-  Path Query 与真实固定 Tick Character Controller Gate；阻塞依赖是 P1.5 Ground/Air
-  Runtime 已删除步高/坡度 Motion fallback、spawn ray 和 AABB Support 旁路。
+  Path Query 与真实固定 Tick Character Controller Gate；P1.5 Ground/Air Runtime 已删除
+  步高/坡度 Motion fallback、spawn ray 和 AABB Support 旁路，原前置阻塞已解除。
 - [ ] R1b 与 P2.6 H1 共享最小 Traversal Surface → Collider Subshape 合同，覆盖地形、
   台阶、坡道和普通静态平台；阈值从同一 `resolvedTraversalLockHash` 推导，当前锁定
   `0.3m` 人形 Profile 的 Golden 要求 `0.25m` 通过、`0.35m` 失败。
@@ -642,7 +642,8 @@ Placement S1、Simulation Take / Control Capture V1 与 Validation Capture/Integ
 
 ## 6. 下一里程碑
 
-M5 R0 当前没有代码阻塞项；M5 R1/R1b 仍受 M7 P1.5 Runtime 权威实现阻塞。S1b Golden、
+M5 R0 当前没有代码阻塞项；M5 R1/R1b 所需的 M7 P1.5 Ground/Air Runtime 前置依赖
+已随 PR #10 合入，后续仍需各自完成 Route/Traversal 合同与 Gate。S1b Golden、
 首个产品 G Bot、Placement Solver S1、Control Capture V1 与 Validation Capture/Integrity V1
 都已进入回归，下一步：
 
@@ -655,16 +656,17 @@ M5 R0 当前没有代码阻塞项；M5 R1/R1b 仍受 M7 P1.5 Runtime 权威实�
 4. **M4（已完成）：实现 P0.3 统一 Validation Profile/Report 的 Capture/Integrity 窄切片，把现有 Bundle Gate 纳入同一报告协议**；
 5. **M5：完成 Route Graph 与主体可通行性 R0/R1/R1b**：M4 报告形状已经落地，R0 现在按
    [实施计划](superpowers/plans/2026-08-21-route-graph-traversability-r0-implementation-plan.md)
-   推进；R1/R1b 必须等待 M7 的 P1.5 Ground/Air Runtime 权威实现。之后复用既有
+   推进；R1/R1b 的 P1.5 Ground/Air Runtime 前置依赖已经满足。之后复用既有
    Route/Region，按主体 Lock 从 Heightfield 与显式 Traversal Surface 构建分层 3D Graph，
    并用真实 Babylon/Havok 人物控制器证明地形→台阶/坡道→静态平台路线；只有 Required
    Route 接入 Blocking Validation、成功 Fixture 走通且失败 Fixture 给出结构化 Diagnostic
    后完成；
 6. **M6：在 Placement + Take + Validation 闭环上接入实验 Video Model Adapter**；
-7. **M7：评审冻结 P1.5 的 Control Feel/Physics Medium/State Resolver 首条纵向范围，清除
-   Canonical Babylon 路径中的对应硬编码**：首条 Ground/Air 切片的
-   [实施计划](superpowers/plans/2026-08-21-p15-control-feel-state-resolver.md) 已存在并已实施、
-   通过全部生产 Gate；水介质、`ControlMethodProfile`、CLI/Browser E2E 覆盖，以及
+7. **M7（Ground/Air 首切片已完成）：继续扩展 P1.5 Control Feel/Physics Medium/State
+   Resolver**：首条 Ground/Air 切片的
+   [实施计划](superpowers/plans/2026-08-21-p15-control-feel-state-resolver.md) 已实施、
+   通过全部生产 Gate，并由 PR #10 合入 `main`；水介质、`ControlMethodProfile`、
+   CLI/Browser E2E 覆盖，以及
    P1.5 条目下的合入后收尾（相机 overlay、作者面板 Feel 范围、session 数字袋类型、
    整支审查）仍未交付，M7 不标记完成；
 8. **M8：按产品优先级选择 Semantic Action 后续或 Typed Relationship 窄可视切片**；
@@ -672,6 +674,12 @@ M5 R0 当前没有代码阻塞项；M5 R1/R1b 仍受 M7 P1.5 Runtime 权威实�
    P1.6 AI Schema/WorldChangeSet 的专项设计，禁止临时增加公共字段或场景脚本旁路**。
 10. **M10：P1.1 与 P2.5 边界稳定后评审 P2.6 H1 Bridge Fixture；先验证同 XZ 双层支撑、
    Static Collider 和唯一 Ground Support，不直接并行启动完整洞穴/室内**。
+11. **M11：在公共 SDK 正式发布前完成协议类型命名与版本后缀治理**：审计
+   `ExecutionSubjectV3`、`ExecutionControlProfileV1`、`ControlInputAxesV2` 等公共类型；
+   仅对可独立序列化、校验和迁移的顶层协议保留 `Vn` 后缀与 `schemaVersion`，普通值对象
+   和父协议内嵌投影改用无版本名称或由所属协议统一定版。该任务必须同步更新 Canonical
+   Schema、AI Schema Profile、CLI/Browser Protocol、示例、生成类型和 Conformance，
+   并利用当前未正式发布阶段执行一次明确的 clean break，不保留永久别名字段**。
 
 Validation Capture/Integrity V1 字段已经冻结；后续 Subject、Gate 或 Profile 组合扩展
 必须增加明确版本，不能静默改 V1，也不能把 Babylon、Playwright 或 Provider 字段泄漏
