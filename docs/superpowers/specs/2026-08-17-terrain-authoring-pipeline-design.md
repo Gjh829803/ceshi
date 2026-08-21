@@ -5,6 +5,8 @@
 - 状态：Draft，进入接口级评审前不得作为已冻结 Public API。
 - 所属系统：Agent Whitebox World SDK。
 - 上位规格：`2026-08-17-ai-first-lego-game-sdk-design.md`。
+- 非 Heightfield 子规格：
+  [`2026-08-21-hybrid-terrain-and-non-heightfield-topology-design.md`](2026-08-21-hybrid-terrain-and-non-heightfield-topology-design.md)。
 - 目标读者：World Planner Agent 团队、SDK Schema/Compiler 团队、Babylon/Havok Runtime 团队和自动验收团队。
 - 设计前提：当前仓库中的 Three.js/Rapier 实现是 Demo 和回归基准，不拥有新架构兼容性要求。
 
@@ -37,7 +39,10 @@
 - 程序化地形参数。
 - 多来源组合。
 
-单目深度估计和直接生成 3D Mesh 只作为可选证据或未来插件，不是第一版权威地形来源。
+单目深度估计和直接生成 3D Mesh 只作为可选证据或制作来源，不是第一版权威地形来源。
+桥梁、桥洞、垂直崖壁、天然拱门、悬挑和洞穴长期采用 Heightfield + Terrain Opening +
+Static Structure + Walkable Surface + Interior Region/Portal 的混合拓扑，不把非 Heightfield
+结构塞进 Height Raster，也不要求 AI 直接操作 Babylon/Havok。
 
 外部工具调研后的格式决策是：**生成图片是规划/控制输入，米制 Heightfield 才是地形高度的单一真相，地表语义、路线、保护区和证据来源使用独立 Mask/Layer 表达。** 编译产物默认使用带固定 Scale/Offset 的 `R16`，需要超大高度范围或更高精度时使用直接存储米制高度的 `F32`；语义与约束 Mask 使用 `R8`。具体图片模型、Houdini、Gaea、World Machine 等工具只能出现在上游配置、Host Registry 和 Provenance 中，不能成为 AuthoringSpec 或 Runtime 的必需依赖。
 
@@ -59,7 +64,8 @@
 
 - 不承诺从单张透视图恢复唯一真实三维地形。
 - 不把云、花、纹理、笔触、树叶等表现细节编码成碰撞高度。
-- 第一版不支持洞穴、天然拱门、悬挑、垂直墙体内部空间等非 Heightfield 拓扑。
+- 第一版不支持洞穴、天然拱门、悬挑、垂直墙体内部空间等非 Heightfield 拓扑；长期支持
+  路线由独立的 Hybrid Terrain 子规格定义，不能把该边界误读为永久不支持。
 - 不要求图像生成模型输出像素级精确的颜色或无噪声高度图。
 - 不允许 AuthoringSpec 携带任意图像处理脚本、Shader、模块路径或动态代码。
 - 不将某个模型名称写成 Terrain Source 的公共类型。
@@ -220,7 +226,9 @@
 - 难以保证路线坡度、出生点、Tile LOD 和物理一致性。
 - 不符合当前户外 Heightfield 阶段边界。
 
-决策：不作为当前生产路线；未来如果进入非 Heightfield 世界，单独设计 Mesh Terrain/Volume Terrain 子系统。
+决策：不把“模型直接生成整片 3D Terrain Mesh”作为当前生产路线。长期非 Heightfield
+能力采用已定义的 Hybrid Terrain 子规格：Heightfield 保持连续地表真相，经过验证的
+Static Structure/Geometry Resource 只承载桥、洞穴外壳、崖壁等局部拓扑。
 
 ### 5.8 推荐：图像引导的混合控制方案
 
@@ -353,6 +361,26 @@ WorldClaw 为“图像模型生成语义区域图，再由工程 Compiler 生成
 - 第四条路线必须与离散色带、连续灰度、概念图转 Canonical Map 使用同一 Dataset、Constraint 和 Runtime Gate。
 - 只有当第四条路线显著改善宏观拓扑、区域一致性或 Agent 收敛，并能给出稳定 Canonicalization 规则时，才提出新的公共 Source ID；否则它保持为 Composite Source 的上游生成 Profile。
 
+### 5.13 非 Heightfield 特殊地形的业界共同模式
+
+Heightfield 无法在同一 XZ 表达桥面/桥下地面或洞穴地板/洞顶。成熟引擎通常不因此放弃
+Heightfield，而是把开洞和额外 Static Mesh 组合使用：
+
+- Godot [`HeightMapShape3D`](https://docs.godotengine.org/en/4.4/classes/class_heightmapshape3d.html)
+  明确说明 Heightmap 不能存储洞穴等悬挑结构；
+- Unity [`Terrain Holes`](https://docs.unity3d.com/ja/2023.2/Manual/terrain-PaintHoles.html)
+  使用 Mask 同时移除 Terrain 的视觉、碰撞和 NavMesh 数据，并建议用岩石 Mesh 衔接洞口；
+- Unreal [`Landscape Visibility`](https://dev.epicgames.com/documentation/en-us/unreal-engine/visibility?application_version=4.27)
+  同样使用 Landscape Hole 配合额外 Static Mesh Actor 创建洞穴；
+- Godot [`3D Collision Shapes`](https://docs.godotengine.org/en/stable/tutorials/physics/collision_shapes_3d.html)
+  建议动态对象优先使用 Primitive/Convex，并将 Concave/Trimesh 用于 Static Body 和简化
+  关卡碰撞。
+
+本 SDK 采用相同原则，但将其提升为引擎无关、可哈希、可解释的协议：Terrain Opening
+控制 Heightfield 移除，Static Structure 提供视觉/碰撞，Walkable Surface 提供可通行
+语义，Region/Portal 提供空间连通。完整职责、查询和 Gate 见
+[`Hybrid Terrain 与非 Heightfield 特殊地形设计`](2026-08-21-hybrid-terrain-and-non-heightfield-topology-design.md)。
+
 ## 6. 总体架构
 
 ```mermaid
@@ -389,6 +417,23 @@ flowchart TD
 - Constraint Solver 对所有 Source 使用同一套 Gameplay 约束。
 - NormalizedTerrainIR 是 Compiler 与 Runtime 之间唯一权威协议。
 - Mesh、Collider 和调试图都从同一 NormalizedTerrainIR 派生。
+
+### 6.1 与 Hybrid Terrain 的组合边界
+
+上图只描述 Heightfield Terrain 的生产链路。进入特殊地形阶段后，它不会被另一套全 Mesh
+Terrain Compiler 替代，而是与正交的 Structure Pipeline 汇合：
+
+```text
+NormalizedTerrainIR + Opening Results
+  + Structure Geometry/Collider Resources
+  + Walkable Surface / Region / Portal Descriptors
+  → Layout + Connectivity + Physics Validation
+  → ExecutionPlan
+```
+
+Heightfield、Opening 和 Terrain Query 仍由 Terrain 包拥有；Structure Geometry/Collider
+由通用 Object/Geometry 能力拥有；实际 Ground Support 由 Runtime 物理接触的唯一 Resolver
+拥有。任何层都不能为了桥梁或洞穴复制另一份地形高度、碰撞或 `isGrounded` 真相。
 
 ## 7. Terrain Source 插件协议
 
@@ -1267,6 +1312,21 @@ T 阶段与上位规格阶段 0–F 的依赖关系：T0 与阶段 A 并行执�
 
 不在 T2 前同时实现所有 Source，先用推荐路线验证公共 IR 和 Compiler 边界。
 
+### T7：Hybrid Terrain 纵向切片
+
+T7 不阻塞 T0～T6 的 Heightfield Pipeline，必须在 P1.1 Terrain/Mask、静态 Object/Collider
+基础和 Surface Semantics 边界稳定后按独立计划推进：
+
+- H1：桥梁/垂直崖壁、Static Structure、Walkable Surface 和同 XZ 双层支撑 Fixture；
+- H2：Terrain Opening、洞口 Structure 和 Render/Physics/Query 一致 Gate；
+- H3：Interior Region、Portal、Route Connection 和可进入洞穴 Fixture；
+- H4：Tile/Cell Streaming、LOD、资源 Lease、失败回滚和性能预算；
+- H5：只有产品需要时再扩展多层 Navigation、完整室内或 Voxel/SDF。
+
+详细依赖和完成标准以
+[`Hybrid Terrain 与非 Heightfield 特殊地形设计`](2026-08-21-hybrid-terrain-and-non-heightfield-topology-design.md)
+为准。一个可见洞口或桥梁截图不能替代多层支撑、碰撞、路线和资源生命周期证据。
+
 ## 18. 生产验收标准
 
 1. Agent 不需要输出密集高度数组或完整等高线集合即可表达参考驱动地形。
@@ -1286,6 +1346,12 @@ T 阶段与上位规格阶段 0–F 的依赖关系：T0 与阶段 A 并行执�
 15. 默认 Image Profile 必须由真实参考集 Bake-off 决定，而不是仅凭单个模型样例或主观画质决定。
 16. Refiner 必须声明确定性等级；非确定性 Authoring Aid 先冻结为内容寻址 Height/Mask 和 Output Lock，Recipe/Seed 不能代替输出 Hash。
 17. TerrainBenchmarkManifest 固定 Dataset Hash、Development/Holdout、重复次数、Metric 和阻断阈值；正式结果保存完整制品与失败分类，且关键 Gate 不能被总分覆盖。
+18. 特殊地形不改变 Heightfield 的权威职责；Opening、Structure、Surface 和 Portal 使用
+    独立锁定制品组合。
+19. Terrain Opening 必须同时影响当前 Render、Physics 和 Query；引入 Navigation 后必须
+    同步影响 Navigation，不能产生可见洞口、不可见 Collider 或过期可行走区域。
+20. Bridge/Cave Fixture 必须证明同一 XZ 多层表面、唯一 Ground Support、接缝、净空和
+    固定 Tick Replay 正确，才能声明对应能力完成。
 
 ## 19. 冻结决策与待验证问题
 
@@ -1302,6 +1368,10 @@ T 阶段与上位规格阶段 0–F 的依赖关系：T0 与阶段 A 并行执�
 - Refiner 分为确定性 Compiler Stage 与非确定性 Authoring Aid；后者必须冻结输出后再进入 Compiler。
 - 权威 Heightfield 使用 `R16`/`F32`，Semantic、Evidence 与 Protected Layer 使用独立 `R8` Mask。
 - Image Profile 和 Refiner 选择由版本化 TerrainBenchmarkManifest 与 Holdout Gate 决定，不以单张效果图或成本决定。
+- 非 Heightfield 特殊地形采用 Heightfield + Opening + Static Structure + Walkable Surface +
+  Region/Portal 的混合拓扑；不切换为全 Mesh 或全 Voxel 世界。
+- 实际 Ground Support 由物理接触的唯一 Resolver 拥有，Terrain/Surface Query、Medium、
+  Animation 和 Camera 不独立推断第二份落地状态。
 
 ### 19.2 T2 技术探针必须回答
 

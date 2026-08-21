@@ -27,6 +27,7 @@
 - [`17-canonical-json-quickstart.md`](17-canonical-json-quickstart.md)：当前唯一可用协议和命令；
 - [`2026-08-17-ai-first-lego-game-sdk-design.md`](superpowers/specs/2026-08-17-ai-first-lego-game-sdk-design.md)：长期架构规格；
 - [`2026-08-17-terrain-authoring-pipeline-design.md`](superpowers/specs/2026-08-17-terrain-authoring-pipeline-design.md)：地形专项规格；
+- [`2026-08-21-hybrid-terrain-and-non-heightfield-topology-design.md`](superpowers/specs/2026-08-21-hybrid-terrain-and-non-heightfield-topology-design.md)：桥梁、悬挑、洞口、洞穴和多层可行走表面的长期专项规格；
 - [`2026-08-19-extensible-subject-authoring-design.md`](superpowers/specs/2026-08-19-extensible-subject-authoring-design.md)：主体组装、Relationship、坐骑、装备和飞行的专项规格；
 - [`2026-08-19-asset-subject-s1b-visible-slice-design.md`](superpowers/specs/2026-08-19-asset-subject-s1b-visible-slice-design.md)：首个 GLB/Rig/Animation/Collider Profile 资产主体纵向切片；
 - [`2026-08-20-g-bot-product-asset-s1-design.md`](superpowers/specs/2026-08-20-g-bot-product-asset-s1-design.md)：首个真实产品人物 G Bot 的版本化映射与可视验收；
@@ -143,7 +144,7 @@ Subject、首个产品 G Bot、Placement S1、截图和查询。它不代表任�
 每个新纵向切片在实施前必须有独立设计或实施计划；本文不替代具体 Schema 和
 测试规格。
 
-P1.5、P1.6 与 P2.5 是把既有总体设计和产品对接契约显式落入可验收 Backlog，未扩大
+P1.5、P1.6、P2.5 与 P2.6 是把既有总体设计和产品对接契约显式落入可验收 Backlog，未扩大
 既定产品范围，也不因“写入待办”提高当前完成度。
 
 ### P0：完成产品核心闭环
@@ -420,6 +421,51 @@ Sensor 和 Capability 组合触发，而不是按 Mesh 名称、颜色、材质�
 完成标准：场景只声明权威 Surface/Volume 语义和主体 Profile，Runtime 就能在固定 Tick
 下自动选择正确运动/动作模式；删除或修改视觉材质不会改变 Gameplay 结果。
 
+#### P2.6 Hybrid Terrain、特殊拓扑与多层可行走表面
+
+目标：长期支持桥梁、桥洞、垂直崖壁、天然拱门、悬挑、洞口和可进入洞穴，同时保留
+Heightfield 在大面积户外地表上的性能、确定性和工具链优势。采用
+[`Hybrid Terrain 与非 Heightfield 特殊地形设计`](superpowers/specs/2026-08-21-hybrid-terrain-and-non-heightfield-topology-design.md)
+冻结的 Heightfield + Opening + Static Structure + Walkable Surface + Region/Portal 组合，
+不建立全 Mesh/全 Voxel 第二世界，也不让 AI 接触 Babylon/Havok。
+
+- [x] 编写 Hybrid Terrain 与非 Heightfield 特殊地形专项设计，明确业界依据、职责、
+  分阶段顺序和生产 Gate。
+- [ ] 评审并冻结 H1 Bridge Fixture；公共字段冻结前先核实当前 Babylon/Havok 版本的
+  Static Triangle Collider、Contact、Shape Lease 和 Character Controller 语义。
+- [ ] 冻结 Static Structure 的 Geometry/Collider/Inventory/Provenance 资源边界；产品 GLB、
+  Registry Prototype 和可选 Geometry Recipe 必须汇聚到相同锁定制品。
+- [ ] 冻结 Terrain Opening 的内容寻址 Mask/Shape、Tile 编译和 Visual/Physics/Query 一致
+  语义；后端 Heightfield 不支持洞时使用经过预算验证的静态 Tile Collider 路径。
+- [ ] 定义 Walkable Surface 与 Collider Subshape 的稳定绑定；视觉 Mesh 不自动可走，
+  `walkable`、`climbable` 等语义不能从材质、颜色或 Mesh 名推断。
+- [ ] 定义引擎无关 Support Surface Query：请求携带 3D Origin、方向、距离和过滤条件，
+  命中返回稳定 Surface/Entity ID、米制位置、法线、距离和语义，并支持同一 XZ 多层排序。
+- [ ] 保持 Runtime Ground Support 单一所有者：实际支撑来自 Havok Contact/Controller，
+  唯一 Resolver 映射到 Surface ID；Terrain Query、Medium、Action、Animation 和 Camera
+  不得独立产生第二份 `isGrounded`。
+- [ ] H1 Bridge/Cliff Fixture 验证桥面与桥下地面同 XZ 双层命中、上下路线、桥边离开、
+  落地、净空、Camera、Reset、Rebind 和 30/60/120 Hz-like Replay。
+- [ ] H2 Terrain Opening/Cave Entrance Fixture 验证洞口 Render、Collider、Query、Debug
+  Overlay 同时移除，Structure 接缝没有不可见墙、跌落缝或角色卡点。
+- [ ] H3 冻结 Interior Region、Portal 与既有 Region Graph/Route Graph 的唯一归属；实现
+  室外→洞穴→室外的固定 Tick 纵向切片，但不把它冒充完整室内/NPC Navigation。
+- [ ] H4 实现 Terrain Tile、Opening、Structure、Surface、Region、Portal 的原子 Cell 加载、
+  LOD、共享资源 Lease、部分构造失败回滚、Dispose 和性能预算。
+- [ ] CLI/Browser/Validation 输出 Opening Mask、Visual/Collider/Surface Overlay、Support
+  Hit、Region/Portal、Seam/Clearance/Slope/Route Diagnostic 和全部 Resource/Profile Hash。
+- [ ] 增加 AI Authoring Conformance：普通 AI 只提交 `prototypeRef`、Transform 和必要
+  Placement/Route Constraint，Registry/Compiler 自动展开 Collider、Opening、Surface、
+  Region 和 Portal；至少两个结构化输出 Adapter 使用相同 Canonical 字段完成 Bridge/Cave
+  Fixture 及 Diagnostic 修复，不产生 Provider 方言或引擎字段。
+- [ ] 只有出现明确产品需求后，才为多层 Navigation、完整室内、运行时雕刻/破坏或
+  Voxel/SDF 建立独立设计与实施计划；不得提前泄漏实验字段到 Canonical Schema。
+
+完成标准：Bridge 与可进入 Cave 两个 Golden Fixture 分别证明同一 XZ 多层支撑、Terrain
+Opening 当前 Render/Physics/Query 一致、物理接触唯一 Ground Support、可玩路线、固定 Tick
+Replay、Streaming/Dispose 和自动 Diagnostic；普通 Agent 只引用稳定 Prototype/Profile/关系
+即可组装场景，并通过 AI Authoring Conformance。
+
 ### P3：生产收敛与默认切换
 
 #### P3.1 Production Gates
@@ -448,18 +494,19 @@ Sensor 和 Capability 组合触发，而不是按 Mesh 名称、颜色、材质�
 
 - [ ] Runtime World Director；
 - [ ] NPC、导航、任务和 Gameplay Framework；
-- [ ] 完整室内、洞穴、Overhang 和流式开放世界；
+- [ ] P2.6 基础洞穴切片之外的完整室内、Room/Visibility、多层 NPC Navigation 和超大
+  流式开放世界；
 - [ ] 联网、多人、UI、音频、复杂布料、流体和破坏。
 
 它们只有在目标、Owner、依赖和验收 Fixture 被明确后才拆成正式实施计划，不能
 为了提高总进度数字提前计为已开始。
 
-> **未来探索议题，不属于上述 Backlog：** 是否需要让 AI 超越现有 Preset 自定义静态
-> 场景几何。目前只有一份
+> **仍属未来探索、但不阻塞 P2.6：** 是否需要让 AI 超越 Registry Prototype/产品资产，
+> 自定义任意静态场景几何。目前只有一份
 > [候选技术草案](superpowers/specs/2026-08-20-ai-authored-geometry-extension-design.md)，
-> 不表示确定会做、没有优先级和里程碑，也没有选定 Recipe、MeshDraft、GLB、Sandbox、
-> Three Bridge 或其他技术路线。只有未来出现明确产品需求、Owner、实验依据和立项决定后，
-> 才重新调研、选择方案并建立正式 Backlog/实施计划；当前不计入任何完成度。
+> 没有选定 Recipe、MeshDraft、Sandbox 或其他开放制作 Provider。P2.6 只要求稳定的静态
+> Structure Resource/Collider/Surface 消费边界，可以先使用审核过的 Prototype 和产品 GLB；
+> AI 自定义几何只有在出现明确产品需求、Owner 和实验依据后才建立独立实施计划。
 
 ## 5. 推荐实施顺序与依赖
 
@@ -482,6 +529,13 @@ P1.2 Asset Subject + P1.3 Semantic Action + P1.5 Control Feel / Physics Medium
 
 P1.1 Terrain / Region / Mask + P1.5 State Resolver
   └── P2.5 Surface Semantics / Traversal
+
+P1.1 Terrain / Region / Mask + P2.5 Surface Query + Static Structure Resource
+  └── P2.6 Hybrid Terrain / Multi-level Walkable Surface
+        ├── H1 Bridge / Cliff
+        ├── H2 Terrain Opening / Cave Entrance
+        ├── H3 Interior Region / Portal / Playable Cave
+        └── H4 Streaming / LOD / Lifecycle
 
 P1.4 WorldPackage + P1.6 AI Schema / WorldChangeSet + P2.4 Controller/Camera/Driver
   └── P3.1 Production Gates（复用 P0.3 协议并扩展生产 Profile）
@@ -506,6 +560,8 @@ Placement S1 已形成首个回归纵向切片；Capture 与 Validation 两条 P
 7. **M7：按产品优先级选择 Semantic Action 后续或 Typed Relationship 窄可视切片**；
 8. **M8：在实现游泳、攀爬或增量 Agent 修复前，分别冻结 P2.5 Surface/Traversal 与
    P1.6 AI Schema/WorldChangeSet 的专项设计，禁止临时增加公共字段或场景脚本旁路**。
+9. **M9：P1.1 与 P2.5 边界稳定后评审 P2.6 H1 Bridge Fixture；先验证同 XZ 双层支撑、
+   Static Collider 和唯一 Ground Support，不直接并行启动完整洞穴/室内**。
 
 Take/Capture 与 Validation 字段冻结前不得实现公共协议字段；技术探针可以验证 Capture
 Encoding 或 Runtime Query 可行性，但其实现不得泄漏到 Canonical Schema。
@@ -528,6 +584,8 @@ Encoding 或 Runtime Query 可行性，但其实现不得泄漏到 Canonical Sch
 | 世界定义、动作脚本和视频捕获混成一个 JSON | P0.2 分离 WorldPackage、Simulation Take 和 Control Capture Bundle |
 | 测试阈值分散或总体分数掩盖关键失败 | P0.3 统一 Validation Profile/Report，Blocking Gate 一票否决 |
 | 图片生成结果被误当作权威地形 | P1.1 固化为 Height/Mask，重新执行确定性 Compiler 和 Gate |
+| 为支持洞穴而把 Heightfield 替换成全 Mesh/全 Voxel，失去现有确定性与性能边界 | P2.6 使用 Heightfield + Opening + Structure + Surface + Region/Portal 的混合拓扑 |
+| 桥面、Terrain Query 和物理接触各自判断落地，导致多层空间状态漂移 | Runtime Ground Support 只由物理接触 Resolver 拥有，P2.6 Fixture 覆盖同 XZ 双层表面 |
 | 任意 Blender/Python 代码进入生产世界 | 只允许隔离制作 Provider；Runtime 只消费锁定制品 |
 | 机器人研究仓库的格式污染 Web SDK | 只借鉴 Solver、Gate、Registry 和 Capture 思想，通过 Adapter 映射 |
 | S0/S1a/Golden/G Bot S1b 切片完成被误读为整个 Subject 系统完成 | 本文分别追踪 S1b 未完成项、S2、S3 和 S4 |
