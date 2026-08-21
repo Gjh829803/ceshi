@@ -5,9 +5,11 @@ import type { Scene } from "@babylonjs/core/scene.pure.js";
 import type {
   ExecutionMovementMediumV1,
   ExecutionSubjectV3,
+  ControlInputAxesV2,
   MotionParameterTuningV1,
   SemanticInputActionV1,
   Vec3,
+  ViewControlFrameV1,
 } from "@whitebox-world/runtime-contracts";
 
 import { compileMotionCommandV1 } from "./control-profile-runtime";
@@ -28,6 +30,10 @@ const LEGACY_CONTROL_PROFILE = {
   inputSpace: "camera-relative",
   facingPolicy: "align-to-move",
   lateralMovementPolicy: "allowed",
+  inputTuning: {
+    moveDeadzoneRatio: 0.1,
+    responseExponent: 1.4,
+  },
 } as const;
 
 /**
@@ -59,12 +65,18 @@ export class SubjectController {
 
   step(
     actions: readonly SemanticInputActionV1[],
-    cameraForwardXYZ: Vec3 = [0, 0, -1],
+    viewControlFrame: ViewControlFrameV1 = {
+      forwardXYZ: [0, 0, -1],
+      rightXYZ: [1, 0, 0],
+      committedTick: 0,
+    },
+    axes: Readonly<ControlInputAxesV2> = {},
   ): void {
     const command = compileMotionCommandV1(
       this.subject.capabilityAssembly?.controlProfile ?? LEGACY_CONTROL_PROFILE,
       actions,
-      cameraForwardXYZ,
+      viewControlFrame,
+      axes,
     );
     this.motionKernel.step(command);
   }

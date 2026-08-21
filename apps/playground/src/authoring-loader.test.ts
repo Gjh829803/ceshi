@@ -105,6 +105,21 @@ describe("loadAuthoringScene", () => {
     expect(tracker.actions()).toEqual(["run"]);
     tracker.clear();
     expect(tracker.actions()).toEqual([]);
+    tracker.press("ShiftLeft");
+    tracker.press("Space");
+    tracker.press("ControlLeft");
+    tracker.press("AltLeft");
+    tracker.press("KeyF");
+    tracker.press("KeyC");
+    expect(
+      tracker.actions("worldkit://motion-kernel/wheeled-arcade@1"),
+    ).toEqual(["boost", "brake", "handbrake", "aim", "camera-look-back"]);
+    tracker.clear();
+    tracker.press("Space");
+    expect(
+      tracker.actions("worldkit://motion-kernel/unpowered-glide@1"),
+    ).toEqual(["primary-action"]);
+    tracker.clear();
     expect(mapPlaygroundInputActions(["forward", "run"])).toEqual([
       "move-forward",
       "run",
@@ -171,7 +186,7 @@ describe("loadAuthoringScene", () => {
     expect(loaded).not.toHaveProperty("hostOverlay");
   });
 
-  it("reports immutable water and air host overlays even when package validation fails", async () => {
+  it("previews water and air packages without claiming their reserved relationships run", async () => {
     const mutableSource = createValidAuthoringSpec();
     const sourceSnapshot = structuredClone(mutableSource);
     const source = deepFreeze(mutableSource);
@@ -191,13 +206,20 @@ describe("loadAuthoringScene", () => {
     );
 
     expect(waterLoaded).toMatchObject({
-      ok: false,
-      diagnostics: [expect.objectContaining({
-        code: "SUBJECT_CAPABILITY_UNSATISFIED",
-        details: expect.objectContaining({
-          capabilityRef: "worldkit://capability/relationship.seat@1",
-        }),
-      })],
+      ok: true,
+      diagnostics: [],
+      executionPlan: {
+        subjects: [expect.objectContaining({
+          subjectDefinitionRef:
+            "worldkit://subject-definition/playground-preview.watercraft.kayak.surface@1",
+          capabilityAssembly: expect.objectContaining({
+            relationshipProfiles: [],
+            motionKernels: [expect.objectContaining({
+              resourceRef: "worldkit://motion-kernel/water-surface@1",
+            })],
+          }),
+        })],
+      },
       hostOverlay: {
         schemaVersion: 1,
         kind: "capability-demo",
@@ -211,7 +233,17 @@ describe("loadAuthoringScene", () => {
             beforeSubjectDefinitionRef:
               "worldkit://subject-definition/humanoid.third-person@1",
             afterSubjectDefinitionRef:
+              "worldkit://subject-definition/playground-preview.watercraft.kayak.surface@1",
+          },
+          {
+            type: "relationship-capabilities-deferred",
+            sourceSubjectDefinitionRef:
               "worldkit://subject-definition/watercraft.kayak.surface@1",
+            runtimeSubjectDefinitionRef:
+              "worldkit://subject-definition/playground-preview.watercraft.kayak.surface@1",
+            deferredCapabilityRefs: [
+              "worldkit://capability/relationship.seat@1",
+            ],
           },
           {
             type: "spawn-position-changed",
@@ -222,15 +254,21 @@ describe("loadAuthoringScene", () => {
         ],
       },
     });
-    expect(waterLoaded.executionPlan).toBeUndefined();
     expect(airLoaded).toMatchObject({
-      ok: false,
-      diagnostics: [expect.objectContaining({
-        code: "SUBJECT_CAPABILITY_UNSATISFIED",
-        details: expect.objectContaining({
-          capabilityRef: "worldkit://capability/relationship.tether@1",
-        }),
-      })],
+      ok: true,
+      diagnostics: [],
+      executionPlan: {
+        subjects: [expect.objectContaining({
+          subjectDefinitionRef:
+            "worldkit://subject-definition/playground-preview.glider.paraglider.unpowered@1",
+          capabilityAssembly: expect.objectContaining({
+            relationshipProfiles: [],
+            motionKernels: expect.arrayContaining([expect.objectContaining({
+              resourceRef: "worldkit://motion-kernel/unpowered-glide@1",
+            })]),
+          }),
+        })],
+      },
       hostOverlay: {
         schemaVersion: 1,
         kind: "capability-demo",
@@ -244,7 +282,17 @@ describe("loadAuthoringScene", () => {
             beforeSubjectDefinitionRef:
               "worldkit://subject-definition/humanoid.third-person@1",
             afterSubjectDefinitionRef:
+              "worldkit://subject-definition/playground-preview.glider.paraglider.unpowered@1",
+          },
+          {
+            type: "relationship-capabilities-deferred",
+            sourceSubjectDefinitionRef:
               "worldkit://subject-definition/glider.paraglider.unpowered@1",
+            runtimeSubjectDefinitionRef:
+              "worldkit://subject-definition/playground-preview.glider.paraglider.unpowered@1",
+            deferredCapabilityRefs: [
+              "worldkit://capability/relationship.tether@1",
+            ],
           },
           {
             type: "spawn-position-changed",
@@ -255,7 +303,6 @@ describe("loadAuthoringScene", () => {
         ],
       },
     });
-    expect(airLoaded.executionPlan).toBeUndefined();
     expect(source).toEqual(sourceSnapshot);
     expect(Object.isFrozen(source)).toBe(true);
     expect(Object.isFrozen(source.nodes)).toBe(true);
@@ -264,10 +311,19 @@ describe("loadAuthoringScene", () => {
     expect(Object.isFrozen(waterLoaded.hostOverlay?.changes)).toBe(true);
     expect(Object.isFrozen(waterLoaded.hostOverlay?.changes[0])).toBe(true);
     expect(Object.isFrozen(waterLoaded.hostOverlay?.changes[1])).toBe(true);
+    expect(Object.isFrozen(waterLoaded.hostOverlay?.changes[2])).toBe(true);
     expect(
       Object.isFrozen(
-        waterLoaded.hostOverlay?.changes[1]?.type === "spawn-position-changed"
-          ? waterLoaded.hostOverlay.changes[1].afterPositionMetersXYZ
+        waterLoaded.hostOverlay?.changes[1]?.type ===
+          "relationship-capabilities-deferred"
+          ? waterLoaded.hostOverlay.changes[1].deferredCapabilityRefs
+          : undefined,
+      ),
+    ).toBe(true);
+    expect(
+      Object.isFrozen(
+        waterLoaded.hostOverlay?.changes[2]?.type === "spawn-position-changed"
+          ? waterLoaded.hostOverlay.changes[2].afterPositionMetersXYZ
           : undefined,
       ),
     ).toBe(true);

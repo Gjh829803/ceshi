@@ -185,13 +185,19 @@ function normalizeCapabilityAssemblyV1(
   }
 
   const cameraRigProfileRefs = new Set<string>();
+  const cameraModifierProfileRefs = new Set<string>();
   if (cameraContextProfile !== undefined) {
     cameraRigProfileRefs.add(cameraContextProfile.defaultCameraRigProfileRef);
     if (cameraContextProfile.firstPersonCameraRigProfileRef !== undefined) {
       cameraRigProfileRefs.add(cameraContextProfile.firstPersonCameraRigProfileRef);
     }
     for (const rule of cameraContextProfile.rules) {
-      cameraRigProfileRefs.add(rule.cameraRigProfileRef);
+      if (rule.cameraRigProfileRef !== undefined) {
+        cameraRigProfileRefs.add(rule.cameraRigProfileRef);
+      }
+      for (const modifierRef of rule.cameraModifierRefs ?? []) {
+        cameraModifierProfileRefs.add(modifierRef);
+      }
     }
   }
   const cameraRigProfiles = [...cameraRigProfileRefs]
@@ -206,6 +212,13 @@ function normalizeCapabilityAssemblyV1(
     .flatMap((resourceRef) => {
       const resource = registry.resolveCameraRigAlgorithm!(resourceRef);
       if (resource === undefined) missing(resourceRef, "Camera Rig Algorithm");
+      return resource === undefined ? [] : [resource];
+    });
+  const cameraModifierProfiles = [...cameraModifierProfileRefs]
+    .sort((left, right) => left.localeCompare(right))
+    .flatMap((resourceRef) => {
+      const resource = registry.resolveCameraModifierProfile!(resourceRef);
+      if (resource === undefined) missing(resourceRef, "Camera Modifier Profile");
       return resource === undefined ? [] : [resource];
     });
 
@@ -287,6 +300,7 @@ function normalizeCapabilityAssemblyV1(
     cameraContextProfile,
     ...cameraRigProfiles,
     ...cameraRigAlgorithms,
+    ...cameraModifierProfiles,
     mediumProfile,
     ...relationshipProfiles,
     harnessProfile,
@@ -303,6 +317,7 @@ function normalizeCapabilityAssemblyV1(
     cameraContextProfile,
     cameraRigProfiles,
     cameraRigAlgorithms,
+    cameraModifierProfiles,
     mediumProfile,
     relationshipProfiles,
     harnessProfile,

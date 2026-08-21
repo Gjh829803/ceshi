@@ -121,9 +121,16 @@ describe("capability-driven subject registry", () => {
       expect(
         cameraContext!.rules.every(
           (rule) =>
-            builtInSubjectResourceRegistry.resolveCameraRigProfile(
-              rule.cameraRigProfileRef,
-            ) !== undefined,
+            (rule.cameraRigProfileRef === undefined ||
+              builtInSubjectResourceRegistry.resolveCameraRigProfile(
+                rule.cameraRigProfileRef,
+              ) !== undefined) &&
+            (rule.cameraModifierRefs ?? []).every(
+              (resourceRef) =>
+                builtInSubjectResourceRegistry.resolveCameraModifierProfile(
+                  resourceRef,
+                ) !== undefined,
+            ),
         ),
       ).toBe(true);
       expect(harness?.requiredCheckIds).toEqual([
@@ -136,6 +143,20 @@ describe("capability-driven subject registry", () => {
         "H07",
         "H08",
         "H09",
+      ]);
+    }
+  });
+
+  it("keeps movement control tuning independent from camera look input", () => {
+    const controls = builtInSubjectResourceRegistry
+      .listCapabilityResources()
+      .filter((resource) => resource.kind === "control-profile");
+
+    expect(controls.length).toBeGreaterThan(0);
+    for (const control of controls) {
+      expect(Object.keys(control.inputTuning).sort()).toEqual([
+        "moveDeadzoneRatio",
+        "responseExponent",
       ]);
     }
   });
@@ -182,5 +203,76 @@ describe("capability-driven subject registry", () => {
     expect(actionSet?.animationBindings.map((binding) => binding.sourceClipName).sort()).toEqual(
       [...G_BOT_CLIPS].sort(),
     );
+  });
+
+  it("separates hard safety limits, authoring ranges and runtime parameter support", () => {
+    const vehicle = builtInSubjectResourceRegistry.resolveMotionProfile(
+      "worldkit://motion-profile/wheeled-arcade.medium@1",
+    );
+    const vehicleKernel = builtInSubjectResourceRegistry.resolveMotionKernel(
+      "worldkit://motion-kernel/wheeled-arcade@1",
+    );
+    expect(vehicle?.parameters).toMatchObject({
+      lowSpeedTurnRateRadiansPerSecond: 1,
+      highSpeedTurnRateRadiansPerSecond: 0.38,
+      steeringResponsePerSecond: 3.5,
+      steeringReturnPerSecond: 6,
+      fullSteeringAuthoritySpeedMetersPerSecond: 2.5,
+      turnRateSpeedCurveExponent: 1.35,
+      dragPerSecond: 0.7,
+    });
+    expect(vehicle?.authoringRanges?.lowSpeedTurnRateRadiansPerSecond).toEqual({
+      minimum: 0.2,
+      maximum: 5,
+      step: 0.01,
+    });
+    expect(vehicleKernel?.runtimeParameterNames).toEqual(
+      expect.arrayContaining(Object.keys(vehicle?.authoringRanges ?? {})),
+    );
+
+    const slide = builtInSubjectResourceRegistry.resolveMotionProfile(
+      "worldkit://motion-profile/surface-slide.skimmer@1",
+    );
+    const slideKernel = builtInSubjectResourceRegistry.resolveMotionKernel(
+      "worldkit://motion-kernel/surface-slide@1",
+    );
+    expect(slide?.parameters.slopeGravityRatio).toBeDefined();
+    expect(slideKernel?.runtimeParameterNames).toContain("slopeGravityRatio");
+  });
+
+  it("maps the seven reusable camera presets to explicit heading behavior", () => {
+    const expectedHeadingSources = {
+      "worldkit://camera-profile/first-person.standard@1": "target-forward",
+      "worldkit://camera-profile/orbit.medium@1": "view",
+      "worldkit://camera-profile/follow.medium@1": "target-forward",
+      "worldkit://camera-profile/chase.surface-fast@1": "target-velocity",
+      "worldkit://camera-profile/follow.water-surface@1": "target-forward",
+      "worldkit://camera-profile/flight.glide@1": "target-velocity",
+      "worldkit://camera-profile/follow.mounted@1": "target-forward",
+    } as const;
+    for (const [resourceRef, headingSource] of Object.entries(expectedHeadingSources)) {
+      const profile = builtInSubjectResourceRegistry.resolveCameraRigProfile(resourceRef);
+      expect(profile?.headingSource).toBe(headingSource);
+      expect(profile?.authoringRanges?.transitionSeconds).toBeDefined();
+      expect(profile?.authoringRanges?.maximumPositionLagMeters?.minimum).toBe(0);
+    }
+    expect(
+      builtInSubjectResourceRegistry.resolveCameraRigProfile(
+        "worldkit://camera-profile/orbit.medium@1",
+      )?.parameters.lookAheadSeconds,
+    ).toBe(0);
+    expect(
+      builtInSubjectResourceRegistry.resolveCameraRigProfile(
+        "worldkit://camera-profile/chase.surface-fast@1",
+      )?.reverseHeadingPolicy,
+    ).toBe("preserve-target-forward");
+    expect(
+      builtInSubjectResourceRegistry.resolveMotionKernel(
+        "worldkit://motion-kernel/unpowered-glide@1",
+      )?.runtimeParameterNames,
+    ).toEqual(expect.arrayContaining([
+      "pitchRateRadiansPerSecond",
+      "rollRateRadiansPerSecond",
+    ]));
   });
 });
