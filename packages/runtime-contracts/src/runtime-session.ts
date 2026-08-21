@@ -24,8 +24,6 @@ export type SemanticInputActionV1 =
 export interface ControlInputAxesV2 {
   moveXRatio?: number;
   moveYRatio?: number;
-  lookXRatio?: number;
-  lookYRatio?: number;
   throttleRatio?: number;
   brakeRatio?: number;
 }

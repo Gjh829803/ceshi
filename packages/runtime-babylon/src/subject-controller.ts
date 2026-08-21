@@ -32,12 +32,7 @@ const LEGACY_CONTROL_PROFILE = {
   lateralMovementPolicy: "allowed",
   inputTuning: {
     moveDeadzoneRatio: 0.1,
-    lookDeadzoneRatio: 0.08,
     responseExponent: 1.4,
-    lookSensitivityXRatio: 1,
-    lookSensitivityYRatio: 0.8,
-    invertLookX: false,
-    invertLookY: false,
   },
 } as const;
 

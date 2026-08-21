@@ -8,6 +8,8 @@ import type {
   WorldSnapshot,
 } from "./playground-world.js";
 import type { BabylonWorldAdapter } from "./babylon-world-adapter.js";
+import type { CapabilityDemoHostOverlayV1 } from "./authoring-loader.js";
+import { withCapabilityDemoHostOverlay } from "./authoring-export.js";
 import type {
   CameraTuningV1,
   CompatibleProfileSummaryV1,
@@ -389,6 +391,7 @@ interface TuningWorkbenchContextV1 {
   motionDraftStorageKey: string;
   controlledEntityId: string;
   initialCameraPreference: string;
+  hostOverlay?: CapabilityDemoHostOverlayV1;
 }
 
 function installTuningWorkbench(
@@ -699,6 +702,9 @@ function installTuningWorkbench(
   });
 
   const result = requiredElement<HTMLPreElement>("#tuning-result");
+  const relationshipPreviewOnly = workbenchContext.hostOverlay?.changes.some(
+    (change) => change.type === "relationship-capabilities-deferred",
+  ) === true;
   const runHarness = async (): Promise<void> => {
     if (api.runHarness === undefined) return;
     result.textContent = "正在检查操作、物理、相机、清理和安全回退…";
@@ -707,7 +713,9 @@ function installTuningWorkbench(
       const passed = report.checks.filter((check) => check.status === "passed").length;
       const failed = report.checks.filter((check) => check.status === "failed");
       result.textContent = failed.length === 0
-        ? `检查完成：${passed}/9 项通过，可以导出。`
+        ? relationshipPreviewOnly
+          ? `检查完成：${passed}/9 项通过。运动和相机预览可以导出；Seat、Tether 或 Mount 关系尚未参与本次验收，导出文件会保留暂缓说明。`
+          : `检查完成：${passed}/9 项通过，可以导出。`
         : `检查完成：${passed}/9 项通过。需要关注：${failed.map((check) => check.checkId).join("、")}`;
     } catch {
       result.textContent = "自动检查没有完成，世界状态未被修改。";
@@ -716,7 +724,7 @@ function installTuningWorkbench(
   requiredElement<HTMLButtonElement>("#tuning-harness-button").addEventListener("click", () => void runHarness());
 
   const exportCurrent = (): void => {
-    const payload = {
+    const payload = withCapabilityDemoHostOverlay({
       schemaVersion: 4,
       subjectDefinition: workbenchContext.definition,
       selectedCameraPreference: cameraPreference,
@@ -735,7 +743,7 @@ function installTuningWorkbench(
       compatibleProfiles: [...workbenchContext.motionProfiles, ...workbenchContext.cameraProfiles],
       resourceLockRequired: true,
       note: "标记为即时生效的参数已在当前会话预览；仅草稿参数需接入 Runtime 后才能成为正式预制。",
-    };
+    }, workbenchContext.hostOverlay);
     downloadJson(
       `${workbenchContext.definition.semanticClassId.replaceAll(".", "-")}.worldkit-authoring.json`,
       payload,
@@ -798,7 +806,10 @@ function installAuthoringRecoveryPanel(api: WorldkitBrowserApiV3): void {
   exportButton.disabled = true;
 }
 
-function installCapabilityAuthoringPanel(api: WorldkitBrowserApiV3): void {
+function installCapabilityAuthoringPanel(
+  api: WorldkitBrowserApiV3,
+  hostOverlay?: CapabilityDemoHostOverlayV1,
+): void {
   const definitions = api.listSubjectDefinitions?.({ includeExperimental: true }) ?? [];
   if (definitions.length === 0) return;
   const panel = requiredElement<HTMLDivElement>("#capability-card");
@@ -888,6 +899,9 @@ function installCapabilityAuthoringPanel(api: WorldkitBrowserApiV3): void {
     <div><span>移动方式</span><code>${escapeHtml(kernelFriendlyName(activeKernel))}</code></div>
     <div><span>当前镜头</span><code>${escapeHtml(FRIENDLY_CAMERA_PROFILES[snapshot.camera.activeCameraProfileRef ?? ""]?.[0] ?? "自动")}</code></div>
     <div><span>自动镜头效果</span><code>${escapeHtml((snapshot.camera.activeCameraModifierRefs ?? []).map((resourceRef) => FRIENDLY_CAMERA_MODIFIERS[resourceRef] ?? resourceRef).join("、") || "无")}</code></div>
+    ${hostOverlay?.changes.some((change) => change.type === "relationship-capabilities-deferred") === true
+      ? "<div><span>关系能力</span><code>运动预览；Seat / Tether / Mount 暂缓</code></div>"
+      : ""}
     <div><span>使用提示</span><code>打开大尺寸调控台</code></div>
   `;
 
@@ -955,6 +969,7 @@ function installCapabilityAuthoringPanel(api: WorldkitBrowserApiV3): void {
     motionDraftStorageKey,
     controlledEntityId: snapshot.controlledEntityId,
     initialCameraPreference: cameraSelect.value,
+    ...(hostOverlay === undefined ? {} : { hostOverlay }),
   });
 
   packageSelect.addEventListener("change", () => {
@@ -996,13 +1011,13 @@ function installCapabilityAuthoringPanel(api: WorldkitBrowserApiV3): void {
     }
   });
   requiredElement<HTMLButtonElement>("#export-package-button").addEventListener("click", () => {
-    const payload = {
+    const payload = withCapabilityDemoHostOverlay({
       schemaVersion: 4,
       subjectDefinition: definition,
       compatibleProfiles: profiles,
       motionParameterDraft: parameterDraft,
       resourceLockRequired: true,
-    };
+    }, hostOverlay);
     const blob = new Blob([`${JSON.stringify(payload, null, 2)}\n`], {
       type: "application/json",
     });
@@ -1016,6 +1031,7 @@ function installCapabilityAuthoringPanel(api: WorldkitBrowserApiV3): void {
 
 if (authoringMode) {
   let createdAdapter: BabylonWorldAdapter | null = null;
+  let createdHostOverlay: CapabilityDemoHostOverlayV1 | undefined;
   const browserInstallation = installDeferredWorldkitBrowserApi({
     target: window,
     statusElement: document.documentElement,
@@ -1048,6 +1064,7 @@ if (authoringMode) {
           },
         });
         createdAdapter = adapter;
+        createdHostOverlay = loaded.hostOverlay;
         trackAdapter(adapter);
         startupStage = "adapter-mount";
         adapter.mount(viewport);
@@ -1062,7 +1079,7 @@ if (authoringMode) {
   });
   const initialized = await browserInstallation.initialization;
   if (initialized !== undefined && createdAdapter !== null) {
-    installCapabilityAuthoringPanel(browserInstallation.api);
+    installCapabilityAuthoringPanel(browserInstallation.api, createdHostOverlay);
     startPlayground(createdAdapter, () => browserInstallation.dispose());
   } else {
     inspection.innerHTML = `<pre>${escapeHtml(JSON.stringify(authoringStartupEvidence(browserInstallation.api), null, 2))}</pre>`;

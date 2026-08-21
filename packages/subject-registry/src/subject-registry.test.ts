@@ -910,4 +910,39 @@ describe("subject resource registry", () => {
       },
     ])).toThrowError(/SUBJECT_REGISTRY_DUPLICATE_BODY_TOPOLOGY/);
   });
+
+  it("rejects non-finite or out-of-range Control Profile tuning", () => {
+    const control = builtInSubjectResourceRegistry.listCapabilityResources().find(
+      (resource) => resource.kind === "control-profile",
+    );
+    expect(control).toBeDefined();
+
+    expect(() => createSubjectResourceRegistry([{
+      ...control!,
+      inputTuning: { ...control!.inputTuning, moveDeadzoneRatio: Number.NaN },
+    }])).toThrowError(/SUBJECT_REGISTRY_INVALID_CONTROL_INPUT_TUNING/);
+    expect(() => createSubjectResourceRegistry([{
+      ...control!,
+      inputTuning: { ...control!.inputTuning, responseExponent: 0 },
+    }])).toThrowError(/SUBJECT_REGISTRY_INVALID_CONTROL_INPUT_TUNING/);
+  });
+
+  it("rejects non-finite or internally inconsistent Camera Profile parameters", () => {
+    const camera = builtInSubjectResourceRegistry.listCapabilityResources().find(
+      (resource) => resource.kind === "camera-rig-profile",
+    );
+    expect(camera).toBeDefined();
+
+    expect(() => createSubjectResourceRegistry([{
+      ...camera!,
+      parameters: { ...camera!.parameters, yawDampingPerSecond: Number.POSITIVE_INFINITY },
+    }])).toThrowError(/SUBJECT_REGISTRY_INVALID_CAMERA_PARAMETERS/);
+    expect(() => createSubjectResourceRegistry([{
+      ...camera!,
+      parameters: {
+        ...camera!.parameters,
+        minimumDistanceMeters: camera!.parameters.maximumDistanceMeters + 1,
+      },
+    }])).toThrowError(/SUBJECT_REGISTRY_INVALID_CAMERA_PARAMETERS/);
+  });
 });

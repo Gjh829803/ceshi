@@ -22,6 +22,7 @@ import type {
   BindControlRequestV2,
   CameraTuningV1,
   CameraViewInputV1,
+  ControlInputAxesV2,
   ControlBindingReceiptV2,
   ExecutionObjectV3,
   ExecutionLayoutAssertionV1,
@@ -47,6 +48,7 @@ import { createWhiteboxMaterials, type WhiteboxMaterials } from "./materials";
 import { enableHavokPhysics, FIXED_TIME_STEP_SECONDS } from "./physics";
 import { SubjectController } from "./subject-controller";
 import { CameraDirectorV1, type CameraPreferenceV1 } from "./camera-director";
+import { hasForwardControlIntentV1 } from "./control-profile-runtime";
 import {
   isSubjectAssetRuntimeErrorV1,
   SubjectAssetCacheV1,
@@ -439,6 +441,7 @@ export class BabylonWorldRuntime implements WorldRuntimeSessionV3 {
   private readonly renderLoop: () => void;
   private readonly ownedDisposers: readonly OwnedDisposer[];
   private activeInputActions: readonly SemanticInputActionV1[] = [];
+  private activeInputAxes: Readonly<ControlInputAxesV2> = {};
 
   private constructor(
     private readonly executionPlan: ExecutionPlanV4,
@@ -701,6 +704,7 @@ export class BabylonWorldRuntime implements WorldRuntimeSessionV3 {
     if (physicsEngine === null) throw new Error("WORLDKIT_HAVOK_ENGINE_MISSING");
     for (let index = 0; index < input.ticks; index += 1) {
       this.activeInputActions = [...input.actions];
+      this.activeInputAxes = input.axes === undefined ? {} : { ...input.axes };
       this.cameraDirector.setInputActions(this.activeInputActions);
       const viewControlFrame = this.cameraDirector.controlFrame(this.tick);
       for (const subject of this.executionPlan.subjects) {
@@ -825,6 +829,7 @@ export class BabylonWorldRuntime implements WorldRuntimeSessionV3 {
     this.controlledEntityId = this.executionPlan.controlledEntityId;
     this.tick = 0;
     this.activeInputActions = [];
+    this.activeInputAxes = {};
     this.cameraDirector.reset();
     this.updateCamera();
     return this.snapshot();
@@ -899,8 +904,10 @@ export class BabylonWorldRuntime implements WorldRuntimeSessionV3 {
       movementMedium: this.detectMovementMedium(controller),
       relationshipRole: "none",
       cameraContextTags: [
-        ...(this.activeInputActions.includes("move-forward") &&
-            !this.activeInputActions.includes("move-backward")
+        ...(hasForwardControlIntentV1(
+          this.activeInputActions,
+          this.activeInputAxes,
+        )
           ? ["forward-intent"]
           : []),
         ...(this.activeInputActions.includes("aim") ? ["aim"] : []),

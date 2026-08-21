@@ -44,6 +44,19 @@ function clampUnit(value: number): number {
   return Math.max(-1, Math.min(1, value));
 }
 
+export function hasForwardControlIntentV1(
+  actions: readonly SemanticInputActionV1[],
+  axes: Readonly<ControlInputAxesV2> = {},
+): boolean {
+  if (axes.throttleRatio !== undefined) {
+    return Number.isFinite(axes.throttleRatio) && axes.throttleRatio > 0.000001;
+  }
+  if (axes.moveYRatio !== undefined) {
+    return Number.isFinite(axes.moveYRatio) && axes.moveYRatio > 0.000001;
+  }
+  return hasAction(actions, "move-forward") && !hasAction(actions, "move-backward");
+}
+
 function normalizedAxis(
   value: number,
   deadzoneRatio: number,
@@ -81,6 +94,7 @@ export function compileMotionCommandV1(
     : normalizedAxis(axes.moveXRatio, moveDeadzoneRatio, responseExponent);
 
   if (profile.commandKind === "planar-vector") {
+    const planarLateral = profile.lateralMovementPolicy === "allowed" ? lateral : 0;
     const cameraForwardXYZ = viewControlFrame.forwardXYZ;
     const cameraRightXYZ = viewControlFrame.rightXYZ;
     const forwardLength = Math.hypot(cameraForwardXYZ[0], cameraForwardXYZ[2]);
@@ -93,8 +107,8 @@ export function compileMotionCommandV1(
     const rightZ = rightLength <= 0.000001
       ? forwardX
       : cameraRightXYZ[2] / rightLength;
-    const rawX = forwardX * longitudinal + rightX * lateral;
-    const rawZ = forwardZ * longitudinal + rightZ * lateral;
+    const rawX = forwardX * longitudinal + rightX * planarLateral;
+    const rawZ = forwardZ * longitudinal + rightZ * planarLateral;
     const length = Math.hypot(rawX, rawZ);
     return {
       kind: "planar-vector",
@@ -102,7 +116,8 @@ export function compileMotionCommandV1(
         length > 1 ? [rawX / length, rawZ / length] : [rawX, rawZ],
       runRequested: hasAction(actions, "run") || hasAction(actions, "boost"),
       jumpRequested: hasAction(actions, "jump"),
-      aimRequested: hasAction(actions, "aim"),
+      aimRequested:
+        profile.facingPolicy === "align-to-view" || hasAction(actions, "aim"),
       facingDirectionMetersXZ: [forwardX, forwardZ],
     };
   }

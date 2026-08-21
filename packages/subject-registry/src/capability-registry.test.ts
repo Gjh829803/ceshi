@@ -147,6 +147,20 @@ describe("capability-driven subject registry", () => {
     }
   });
 
+  it("keeps movement control tuning independent from camera look input", () => {
+    const controls = builtInSubjectResourceRegistry
+      .listCapabilityResources()
+      .filter((resource) => resource.kind === "control-profile");
+
+    expect(controls.length).toBeGreaterThan(0);
+    for (const control of controls) {
+      expect(Object.keys(control.inputTuning).sort()).toEqual([
+        "moveDeadzoneRatio",
+        "responseExponent",
+      ]);
+    }
+  });
+
   it("publishes relationship profiles as reserved until their runtime behavior exists", () => {
     expect([
       "worldkit://relationship-profile/mount.reserved@1",

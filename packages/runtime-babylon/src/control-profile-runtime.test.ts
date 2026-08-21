@@ -2,7 +2,10 @@ import { describe, expect, it } from "vitest";
 
 import type { ExecutionControlProfileV1 } from "@whitebox-world/runtime-contracts";
 
-import { compileMotionCommandV1 } from "./control-profile-runtime";
+import {
+  compileMotionCommandV1,
+  hasForwardControlIntentV1,
+} from "./control-profile-runtime";
 
 const DEFAULT_VIEW_FRAME = {
   forwardXYZ: [0, 0, -1],
@@ -29,12 +32,7 @@ function profile(
     lateralMovementPolicy: commandKind === "planar-vector" ? "allowed" : "forbidden",
     inputTuning: {
       moveDeadzoneRatio: 0,
-      lookDeadzoneRatio: 0,
       responseExponent: 1,
-      lookSensitivityXRatio: 1,
-      lookSensitivityYRatio: 1,
-      invertLookX: false,
-      invertLookY: false,
     },
   };
 }
@@ -136,6 +134,29 @@ describe("compileMotionCommandV1", () => {
     expect(command).toMatchObject({ kind: "throttle-steer", steering: 0 });
     expect(command.kind).toBe("throttle-steer");
     if (command.kind === "throttle-steer") expect(command.throttle).toBeCloseTo(0.25, 12);
+  });
+
+  it("executes facing and lateral policies instead of publishing inert control fields", () => {
+    const alignToView = profile("planar-vector", "camera-relative");
+    alignToView.facingPolicy = "align-to-view";
+    alignToView.lateralMovementPolicy = "forbidden";
+    expect(compileMotionCommandV1(
+      alignToView,
+      ["move-right"],
+      { forwardXYZ: [1, 0, 0], rightXYZ: [0, 0, 1], committedTick: 7 },
+    )).toMatchObject({
+      kind: "planar-vector",
+      directionMetersXZ: [0, 0],
+      aimRequested: true,
+      facingDirectionMetersXZ: [1, 0],
+    });
+  });
+
+  it("treats analog-only forward input as camera forward intent", () => {
+    expect(hasForwardControlIntentV1([], { moveYRatio: 0.7 })).toBe(true);
+    expect(hasForwardControlIntentV1([], { throttleRatio: 0.4 })).toBe(true);
+    expect(hasForwardControlIntentV1(["move-forward"], { moveYRatio: -0.2 })).toBe(false);
+    expect(hasForwardControlIntentV1(["move-forward"], {})).toBe(true);
   });
 
   it("keeps skills, aim, boost, brake and handbrake as independent semantic actions", () => {

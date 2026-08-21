@@ -11,12 +11,7 @@
     "lateralMovementPolicy": "allowed",
     "inputTuning": {
       "moveDeadzoneRatio": 0.1,
-      "lookDeadzoneRatio": 0.08,
-      "responseExponent": 1.4,
-      "lookSensitivityXRatio": 1,
-      "lookSensitivityYRatio": 0.8,
-      "invertLookX": false,
-      "invertLookY": false
+      "responseExponent": 1.4
     },
     "aiMetadata": {
       "displayName": "Camera-relative Planar Control",
@@ -36,12 +31,7 @@
     "lateralMovementPolicy": "allowed",
     "inputTuning": {
       "moveDeadzoneRatio": 0.1,
-      "lookDeadzoneRatio": 0.08,
-      "responseExponent": 1.3,
-      "lookSensitivityXRatio": 0.72,
-      "lookSensitivityYRatio": 0.62,
-      "invertLookX": false,
-      "invertLookY": false
+      "responseExponent": 1.3
     },
     "aiMetadata": {
       "displayName": "Aim-relative Planar Control",
@@ -61,12 +51,7 @@
     "lateralMovementPolicy": "forbidden",
     "inputTuning": {
       "moveDeadzoneRatio": 0.08,
-      "lookDeadzoneRatio": 0.08,
-      "responseExponent": 1.55,
-      "lookSensitivityXRatio": 1,
-      "lookSensitivityYRatio": 0.8,
-      "invertLookX": false,
-      "invertLookY": false
+      "responseExponent": 1.55
     },
     "aiMetadata": {
       "displayName": "Subject-local Throttle and Steer",
@@ -86,16 +71,11 @@
     "lateralMovementPolicy": "forbidden",
     "inputTuning": {
       "moveDeadzoneRatio": 0.08,
-      "lookDeadzoneRatio": 0.06,
-      "responseExponent": 1.35,
-      "lookSensitivityXRatio": 0.82,
-      "lookSensitivityYRatio": 0.72,
-      "invertLookX": false,
-      "invertLookY": false
+      "responseExponent": 1.35
     },
     "aiMetadata": {
       "displayName": "Flight Attitude Control",
-      "description": "Maps semantic movement and look input to pitch, yaw and bank commands.",
+      "description": "Maps semantic movement axes to pitch, yaw and bank commands.",
       "semanticTags": ["attitude", "flight"]
     }
   },
@@ -111,12 +91,7 @@
     "lateralMovementPolicy": "forbidden",
     "inputTuning": {
       "moveDeadzoneRatio": 0,
-      "lookDeadzoneRatio": 0,
-      "responseExponent": 1,
-      "lookSensitivityXRatio": 1,
-      "lookSensitivityYRatio": 1,
-      "invertLookX": false,
-      "invertLookY": false
+      "responseExponent": 1
     },
     "aiMetadata": {
       "displayName": "Safe No Control",

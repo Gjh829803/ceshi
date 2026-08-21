@@ -282,12 +282,7 @@ export interface ExecutionControlProfileV1 {
   lateralMovementPolicy: "allowed" | "forbidden";
   inputTuning: {
     moveDeadzoneRatio: number;
-    lookDeadzoneRatio: number;
     responseExponent: number;
-    lookSensitivityXRatio: number;
-    lookSensitivityYRatio: number;
-    invertLookX: boolean;
-    invertLookY: boolean;
   };
 }
 

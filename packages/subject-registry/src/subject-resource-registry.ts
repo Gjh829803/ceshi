@@ -29,6 +29,7 @@ import type {
   CameraRigAlgorithmDefinitionV1,
   CameraRigProfileInputV1,
   CameraRigProfileV1,
+  ControlProfileInputV1,
   ControlProfileV1,
   HarnessProfileV1,
   MediumProfileV1,
@@ -250,7 +251,53 @@ function validateMotionProfile(source: MotionProfileInputV1): void {
   }
 }
 
+function validateControlProfile(source: ControlProfileInputV1): void {
+  const { moveDeadzoneRatio, responseExponent } = source.inputTuning;
+  if (
+    !Number.isFinite(moveDeadzoneRatio) ||
+    moveDeadzoneRatio < 0 ||
+    moveDeadzoneRatio >= 1 ||
+    !Number.isFinite(responseExponent) ||
+    responseExponent <= 0
+  ) {
+    throw new Error(
+      `SUBJECT_REGISTRY_INVALID_CONTROL_INPUT_TUNING: '${source.resourceRef}'.`,
+    );
+  }
+}
+
 function validateCameraProfile(source: CameraRigProfileInputV1): void {
+  const parameters = source.parameters;
+  const negativeAllowed = new Set<keyof typeof parameters>([
+    "shoulderOffsetMeters",
+    "pitchRadians",
+    "minimumPitchRadians",
+    "maximumPitchRadians",
+  ]);
+  const containsInvalidNumber = Object.entries(parameters).some(
+    ([name, value]) =>
+      !Number.isFinite(value) ||
+      (!negativeAllowed.has(name as keyof typeof parameters) && value < 0),
+  );
+  if (
+    containsInvalidNumber ||
+    parameters.minimumDistanceMeters > parameters.maximumDistanceMeters ||
+    parameters.distanceMeters < parameters.minimumDistanceMeters ||
+    parameters.distanceMeters > parameters.maximumDistanceMeters ||
+    parameters.minimumPitchRadians > parameters.maximumPitchRadians ||
+    parameters.pitchRadians < parameters.minimumPitchRadians ||
+    parameters.pitchRadians > parameters.maximumPitchRadians ||
+    parameters.horizontalDeadZoneRatio > 1 ||
+    parameters.verticalDeadZoneRatio > 1 ||
+    parameters.baseFovDegrees <= 0 ||
+    parameters.baseFovDegrees >= 180 ||
+    parameters.lookSensitivityXRatio <= 0 ||
+    parameters.lookSensitivityYRatio <= 0
+  ) {
+    throw new Error(
+      `SUBJECT_REGISTRY_INVALID_CAMERA_PARAMETERS: '${source.resourceRef}'.`,
+    );
+  }
   for (const [parameterName, range] of Object.entries(source.authoringRanges ?? {})) {
     const parameterValue = source.parameters[
       parameterName as keyof CameraRigProfileInputV1["parameters"]
@@ -392,6 +439,7 @@ export function createSubjectResourceRegistry(
     if (source.kind === "rig-profile") validateRigProfile(source);
     if (source.kind === "collider-profile") validateColliderProfile(source);
     if (source.kind === "motion-profile") validateMotionProfile(source);
+    if (source.kind === "control-profile") validateControlProfile(source);
     if (source.kind === "camera-rig-profile") validateCameraProfile(source);
     if (source.kind === "motion-kernel") {
       const duplicateParameterName = duplicateValue(source.runtimeParameterNames);
