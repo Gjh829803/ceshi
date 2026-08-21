@@ -229,7 +229,7 @@ const RIGGED_GOLDEN_HUMANOID_DEFINITION: RegistrySubjectDefinitionInputV2 = {
   },
 };
 
-const G_BOT_HUMANOID_DEFINITION: RegistrySubjectDefinitionInputV3 = {
+export const G_BOT_HUMANOID_DEFINITION: RegistrySubjectDefinitionInputV3 = {
   kind: "subject-definition",
   schemaVersion: 3,
   id: "humanoid.g-bot",

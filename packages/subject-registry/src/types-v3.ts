@@ -68,30 +68,45 @@ export interface ParameterAuthoringRangeV1 extends MotionParameterLimitV1 {
   step: number;
 }
 
+export type ControlProfileCommandKindV1 = "planar-vector" | "none";
+
+export type ControlProfileInputSpaceV1 = "camera-relative" | "subject-local" | "none";
+
+export type ControlProfileFacingPolicyV1 =
+  | "align-to-move"
+  | "align-to-view"
+  | "fixed";
+
+export interface ControlFeelProfileInputV1 extends CapabilityResourceBaseInputV1 {
+  kind: "control-feel-profile";
+  walkSpeedMetersPerSecond: number;
+  runSpeedMetersPerSecond: number;
+  jumpSpeedMetersPerSecond: number;
+  accelerationMetersPerSecondSquared: number;
+  decelerationMetersPerSecondSquared: number;
+  turnRateRadiansPerSecond: number;
+  moveResponseExponent: number;
+  airControlRatio: number;
+  coyoteTimeSeconds: number;
+  jumpBufferSeconds: number;
+  variableJumpHoldSeconds: number;
+  jumpHoldGravityRatio: number;
+  jumpReleaseGravityRatio: number;
+}
+
 export interface MotionProfileInputV1 extends CapabilityResourceBaseInputV1 {
   kind: "motion-profile";
   motionKernelRef: string;
-  parameters: Readonly<Record<string, MotionParameterValueV1>>;
-  safetyLimits: Readonly<Record<string, MotionParameterLimitV1>>;
-  authoringRanges?: Readonly<Record<string, ParameterAuthoringRangeV1>>;
   motionTags: readonly string[];
 }
 
 export interface ControlProfileInputV1 extends CapabilityResourceBaseInputV1 {
   kind: "control-profile";
-  commandKind: MotionCommandKindV1;
-  inputSpace: "camera-relative" | "subject-local" | "flight-frame" | "none";
-  facingPolicy:
-    | "align-to-move"
-    | "align-to-view"
-    | "steering-derived"
-    | "flight-derived"
-    | "fixed";
+  commandKind: ControlProfileCommandKindV1;
+  inputSpace: ControlProfileInputSpaceV1;
+  facingPolicy: ControlProfileFacingPolicyV1;
   lateralMovementPolicy: "allowed" | "forbidden";
-  inputTuning: {
-    moveDeadzoneRatio: number;
-    responseExponent: number;
-  };
+  moveDeadzoneRatio: number;
 }
 
 export type CameraRigAlgorithmRefV1 =
@@ -174,16 +189,8 @@ export interface CameraContextProfileInputV1
 
 export interface MediumProfileInputV1 extends CapabilityResourceBaseInputV1 {
   kind: "medium-profile";
-  supportedMediums: readonly MovementMediumV1[];
-  ground: {
-    groundingToleranceMeters: number;
-  };
-  water?: {
-    surfaceHoldStrength: number;
-    linearDragPerSecond: number;
-  };
-  air?: {
-    gravityScale: number;
+  air: {
+    gravityRatio: number;
     linearDragPerSecond: number;
   };
 }
@@ -255,8 +262,8 @@ export interface RegistrySubjectDefinitionInputV3
     | "custom";
   profiles: {
     physicsBodyProfileRef: string;
-    /** Compatibility projection for Authoring V2; V3 runtime uses motion.defaultMotionProfileRef. */
     locomotionProfileRef: string;
+    controlFeelProfileRef: string;
     motion: {
       defaultMotionProfileRef: string;
       optionalMotionProfileRefs: readonly string[];
@@ -274,6 +281,7 @@ export interface RegistrySubjectDefinitionInputV3
 
 type WithContentHash<T> = Readonly<T & { contentHash: string }>;
 
+export type ControlFeelProfileV1 = WithContentHash<ControlFeelProfileInputV1>;
 export type MotionKernelDefinitionV1 = WithContentHash<MotionKernelDefinitionInputV1>;
 export type MotionProfileV1 = WithContentHash<MotionProfileInputV1>;
 export type ControlProfileV1 = WithContentHash<ControlProfileInputV1>;
@@ -292,6 +300,7 @@ export type RegistrySubjectDefinitionV3 = WithContentHash<RegistrySubjectDefinit
 export type SubjectCapabilityResourceInputV1 =
   | MotionKernelDefinitionInputV1
   | MotionProfileInputV1
+  | ControlFeelProfileInputV1
   | ControlProfileInputV1
   | CameraRigAlgorithmDefinitionInputV1
   | CameraRigProfileInputV1
@@ -306,6 +315,7 @@ export type SubjectCapabilityResourceInputV1 =
 export type SubjectCapabilityResourceV1 =
   | MotionKernelDefinitionV1
   | MotionProfileV1
+  | ControlFeelProfileV1
   | ControlProfileV1
   | CameraRigAlgorithmDefinitionV1
   | CameraRigProfileV1
@@ -333,6 +343,7 @@ export interface SubjectResourceRegistryV3 extends SubjectResourceRegistryV2 {
   ): RegistrySubjectDefinitionV2 | RegistrySubjectDefinitionV3 | undefined;
   resolveMotionKernel(resourceRef: string): MotionKernelDefinitionV1 | undefined;
   resolveMotionProfile(resourceRef: string): MotionProfileV1 | undefined;
+  resolveControlFeelProfile(resourceRef: string): ControlFeelProfileV1 | undefined;
   resolveControlProfile(resourceRef: string): ControlProfileV1 | undefined;
   resolveCameraRigAlgorithm(
     resourceRef: string,
