@@ -223,6 +223,7 @@ export interface RegistrySubjectDefinitionInputV2 extends SubjectRegistryResourc
   profiles: {
     physicsBodyProfileRef: string;
     locomotionProfileRef: string;
+    controlFeelProfileRef: string;
   };
 }
 

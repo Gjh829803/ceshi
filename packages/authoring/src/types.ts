@@ -236,6 +236,7 @@ export interface PackageSubjectDefinitionV1 {
   profiles: {
     physicsBodyProfileRef: string;
     locomotionProfileRef: string;
+    controlFeelProfileRef: string;
   };
   aiMetadata: {
     displayName: string;

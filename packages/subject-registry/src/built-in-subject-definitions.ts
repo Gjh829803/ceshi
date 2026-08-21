@@ -25,6 +25,7 @@ const SHARED_GROUND_MEDIUM_PROFILE_REF =
 const SHARED_PROFILES = {
   physicsBodyProfileRef: "worldkit://physics-body-profile/character.medium@1",
   locomotionProfileRef: "worldkit://locomotion-profile/ground.standard@1",
+  controlFeelProfileRef: SHARED_GROUND_FEEL_PROFILE_REF,
 } as const;
 
 const HUMANOID_THIRD_PERSON_DEFINITION: RegistrySubjectDefinitionInputV2 = {

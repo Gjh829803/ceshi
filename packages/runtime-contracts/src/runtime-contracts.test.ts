@@ -46,6 +46,8 @@ function createSnapshotFixtureV3(): WorldRuntimeSnapshotV3 {
         velocityMetersPerSecondXYZ: [0, 0, -4],
         movementMedium: "ground",
         activeActionId: "run",
+        activeControlFeelProfileRef:
+          "worldkit://control-feel-profile/humanoid.medium-ground@1",
       },
     },
     camera: {
@@ -125,6 +127,9 @@ describe("runtime contracts V3", () => {
     const player = snapshot.subjectStatesByEntityId.player!;
 
     expect(player.movementMedium).toBe("ground");
+    expect(player.activeControlFeelProfileRef).toBe(
+      "worldkit://control-feel-profile/humanoid.medium-ground@1",
+    );
     expect(player).not.toHaveProperty("motionParameterTuning");
     expect(["ground", "air"]).toContain(player.movementMedium);
   });

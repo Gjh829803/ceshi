@@ -49,18 +49,20 @@ interface NormalizedRiggedVisualResourcesV1 {
 
 const REQUIRED_GROUND_ACTION_IDS = ["idle", "jump", "run", "walk"] as const;
 
-const DEFAULT_CONTROL_FEEL_PROFILE_REF =
-  "worldkit://control-feel-profile/humanoid.medium-ground@1" as const;
-
 type NormalizedControlFeelV1 = NormalizedSubjectDefinitionV2["controlFeel"];
 
 function controlFeelProfileRefForDefinition(
   definition: SubjectDefinitionSourceV2,
-): string {
-  if ("schemaVersion" in definition && definition.schemaVersion === 3) {
-    return (definition as RegistrySubjectDefinitionV3).profiles.controlFeelProfileRef;
+): string | undefined {
+  const controlFeelProfileRef = definition.profiles.controlFeelProfileRef;
+  if (
+    controlFeelProfileRef === undefined ||
+    controlFeelProfileRef === null ||
+    controlFeelProfileRef === ""
+  ) {
+    return undefined;
   }
-  return DEFAULT_CONTROL_FEEL_PROFILE_REF;
+  return controlFeelProfileRef;
 }
 
 function projectControlFeelProfile(
@@ -100,6 +102,16 @@ function resolveControlFeelProfileV1(
     return undefined;
   }
   const controlFeelProfileRef = controlFeelProfileRefForDefinition(definition);
+  if (controlFeelProfileRef === undefined) {
+    addError(
+      request.diagnostics,
+      "SUBJECT_CONTROL_FEEL_PROFILE_REQUIRED",
+      `${request.instancePath}/profiles/controlFeelProfileRef`,
+      `SUBJECT_CONTROL_FEEL_PROFILE_REQUIRED: '${request.subjectDefinitionRef}'.`,
+      { subjectDefinitionRef: request.subjectDefinitionRef },
+    );
+    return undefined;
+  }
   const controlFeelProfile = registry.resolveControlFeelProfile(controlFeelProfileRef);
   if (controlFeelProfile === undefined) {
     addError(
