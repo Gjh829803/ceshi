@@ -16,11 +16,17 @@
 > Golden Humanoid S1b 首个可视纵向切片已完成并进入回归；S1b 整体与 Semantic Actions 整体仍未完成.
 >
 > P1.5 Control Feel / Physics Medium / State Resolver 的公共字段、支撑权威和第一切片
-> 范围以
+> 范围以已冻结的
 > [`2026-08-21-control-feel-physics-medium-state-resolver-design.md`](superpowers/specs/2026-08-21-control-feel-physics-medium-state-resolver-design.md)
-> 为准。本文 §4 / §6 / §7 的概念名不得再当作可实施合同：`ControlMethodProfile` 对应
-> 已有 `control-profile`；速度只属于 `control-feel-profile`；`PhysicsMediumProfile`
-> 未带单位的字段名作废。
+> 为实施权威。本文保留产品概念说明，但以下旧名和旧字段不再是公共合同：
+>
+> | 本文历史/产品名 | Canonical kind / field | 处理 |
+> |---|---|---|
+> | `ControlMethodProfile` / `controlMethodProfileRef` | `control-profile` / `controlProfileRef` | 旧名作废，不设 alias |
+> | `ControlFeelProfile` | `control-feel-profile` / `controlFeelProfileRef` | 概念保留，Schema 只用 canonical kind |
+> | `PhysicsMediumProfile` / `mediumPhysicsProfileRef` | `medium-profile` / `mediumProfileRef` | 旧名与无单位字段作废，不设 alias |
+> | 带速度的 `LocomotionProfile` | `locomotion-profile` | 只保留 `allow...` 布尔能力；速度迁入 Feel |
+> | `motion-profile.parameters` | 无 | 整袋删除；Motion 不绑定 Feel |
 
 ## 1. 结论
 
@@ -78,10 +84,11 @@ Controller 在多个主体之间原子切换。
 | Collider Profile | `BodyProfile` + `PhysicsProfile` | 权威空间、质量和查询代理 |
 | Anchor / Socket Profile | `RigProfile` + `SocketProfile` | 相机、手、座位、退出点等空间接口 |
 | Character State Profile | `SubjectStateProfile` + `StateResolver` | 分层状态和优先级 |
-| Control Method Chain | `ControlMethodProfile` + Capability Pipeline | Intent 如何转换为运动请求 |
-| Feel Profile | `ControlFeelProfile` | 速度、加减速、转向、响应曲线 |
+| Control Method Chain | `control-profile` + Capability Pipeline | Intent 如何转换为运动请求；旧名 `ControlMethodProfile` 作废 |
+| Feel Profile | `control-feel-profile` | 速度、加减速、转向、响应曲线；由 Definition 唯一绑定 |
+| Locomotion Capability | `locomotion-profile` | 只声明 `allow...` 布尔能力，不保存速度或 Kernel 白名单 |
 | Camera Method Chain | `CameraRigProfile` + Camera Capability | 目标、构图、跟随、避障和 FOV |
-| Physics / Medium Profile | `PhysicsMediumProfile` + Medium Sensor | 接地、浸没、浮力、阻力和状态阈值 |
+| Physics / Medium Profile | `medium-profile` + State Resolver | P1.5 只含 Ground/Air 响应；Water Sensor/浮力由 P2.5 另冻版本 |
 | Mount Binding Profile | `MountBindingProfile` + Relationship Transaction | 座位、控制权、Collider、相机和退出 |
 | Render Binding | `RenderBindingProfile` | 向世界模型暴露稳定语义状态 |
 
@@ -128,10 +135,11 @@ interface RegistrySubjectDefinition {
     rigProfileRef?: ResourceRef;
     socketSetRef: ResourceRef;
     stateModelRef: ResourceRef;
-    controlMethodProfileRef: ResourceRef;
+    locomotionProfileRef: ResourceRef;
+    controlProfileRef: ResourceRef;
     controlFeelProfileRef: ResourceRef;
     cameraRigRef: ResourceRef;
-    mediumPhysicsProfileRef: ResourceRef;
+    mediumProfileRef: ResourceRef;
     renderBindingProfileRef: ResourceRef;
     animationSetRef?: ResourceRef;
     poseSetRef?: ResourceRef;
@@ -279,6 +287,11 @@ interface SubjectStateSnapshot {
 }
 ```
 
+上面的 `"water"` 是产品目标态的宽联合。P1.5 第一切片的 Resolver 与 Snapshot 投影
+严格关闭为 `"ground" | "air"`；在 P2.5 冻结 Water Sensor、迟滞、浮力和 Swim 合同
+之前，生产 Runtime 写出 `"water"` 必须返回
+`SUBJECT_MOVEMENT_MEDIUM_UNSUPPORTED`。
+
 ### 6.2 人物进入水中的标准链路
 
 Scene Agent 只负责创建人物和水体；SDK 自动执行：
@@ -293,33 +306,16 @@ Physics/Water Query
   → Render Binding 发布 movementMedium=water、locomotionMode=swim 等稳定状态
 ```
 
-```ts
-interface PhysicsMediumProfile {
-  id: string;
-  version: number;
-  ground: {
-    maxSlopeDegrees: number;
-    maxStepHeightMeters: number;
-    groundingToleranceMeters: number;
-  };
-  water?: {
-    enterDepthMeters: number;
-    exitDepthMeters: number;
-    enterImmersionRatio: number;
-    exitImmersionRatio: number;
-    buoyancyScale: number;
-    linearDragCoefficient: number;
-    angularDragCoefficient: number;
-    surfaceHoldStrength: number;
-  };
-  air?: {
-    gravityScale: number;
-    dragCoefficient: number;
-  };
-}
-```
+这条链路是 **P2.5 产品目标态，不是 P1.5 第一切片合同**。旧的
+`PhysicsMediumProfile`、`groundingToleranceMeters`、`gravityScale`、
+`linearDragCoefficient`、`surfaceHoldStrength` 等概念字段全部作废，不能据此生成
+Schema 或 Catalog。P1.5 只冻结 `medium-profile` 的 Ground/Air 版本；坡度和台阶只在
+`physics-body-profile`，重力倍率使用 `gravityRatio`，线性阻力使用
+`linearDragPerSecond`。Water 的进入/退出迟滞、浮力和表面保持必须由 P2.5 以新 Schema
+版本一次冻结，不能提前塞入 P1.5。
 
-进入与退出必须使用不同阈值形成迟滞，防止水面边界抖动。水中优先级高于未骑乘翼装；骑乘时继承被骑对象的运动方法。切换失败时保留上一稳定状态并产生 Diagnostic，不能出现一半游泳、一半地面碰撞的中间态。
+P2.5 实现后，进入与退出仍必须使用不同阈值形成迟滞，切换失败时保留上一稳定状态并
+产生 Diagnostic，不能出现一半游泳、一半地面碰撞的中间态。
 
 ## 7. Control：来源、归属和运动方法分离
 
@@ -378,23 +374,12 @@ Input Mapping
   → Physics Drive
 ```
 
-```ts
-interface ControlMethodProfile {
-  id: string;
-  version: number;
-  inputSpace: "camera-relative" | "subject-local" | "flight-frame";
-  locomotionModel:
-    | "direct-move-facing"
-    | "forward-steer"
-    | "wheeled-vehicle"
-    | "watercraft-steer"
-    | "flight-steer"
-    | "none";
-  facingPolicy: "align-to-move" | "steering-derived" | "flight-derived" | "fixed";
-  lateralMovementPolicy: "allowed" | "forbidden" | "profile";
-  feelProfileRef: ResourceRef;
-}
-```
+P1.5 的 canonical 类型是 `control-profile`，不是 `ControlMethodProfile`。第一切片只
+允许 Ground Character 的 `planar-vector | none`、
+`camera-relative | subject-local | none` 与
+`align-to-move | align-to-view | fixed`。它不含 `feelProfileRef`；Feel 只由 Subject
+Definition 的 `controlFeelProfileRef` 绑定。Steering、Watercraft 与 Flight 必须在对应
+能力切片中扩展新的 Schema 版本，不能通过当前 Catalog 暗示已生产支持。
 
 同一个 `move` Intent 可以在控制权转移后自然改变解释方式：人物是相机相对移动，汽车是油门和车轮转向，飞龙是飞行趋势。外部 Agent 不需要改写命令词汇。
 
