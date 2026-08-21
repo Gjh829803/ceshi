@@ -191,6 +191,10 @@ P1.5、P1.6、P2.5 与 P2.6 是把既有总体设计和产品对接契约显式�
   合同，不表示 `route-connectivity` / `route-runtime-conformance` 已实现。已评 Runtime
   Metric 必须引用 `route-runtime-probe-receipt`；主体步高/坡度/净空/缝隙阈值来自 Lock，
   不写进 Validation Profile。
+- [x] 编写 [R1 Heightfield 实施计划](superpowers/plans/2026-08-22-route-graph-traversability-r1-heightfield-implementation-plan.md)，
+  将 Authoring V4 → IR V4 → ExecutionPlan V5、Recast Provider Adapter、确定性 Graph/Query、
+  单一 `checkSupport()` Runtime Evidence、真实 Babylon/Havok Probe、双 Blocking Gate、CLI/Browser
+  与对抗 Fixture 拆成可追踪任务；R1 计划完成不表示 R1 Runtime 已实现。
 - [ ] R1 实现普通人形 Heightfield Route：坡度、静态阻挡、胶囊宽高净空、缝隙、确定性
   Path Query 与真实固定 Tick Character Controller Gate；P1.5 Ground/Air Runtime 已删除
   步高/坡度 Motion fallback、spawn ray 和 AABB Support 旁路，原前置阻塞已解除。

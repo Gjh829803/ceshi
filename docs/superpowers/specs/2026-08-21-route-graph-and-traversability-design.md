@@ -22,7 +22,8 @@
   - [Package Subject Definition](./2026-08-19-package-subject-definition-design.md)
   - [Subject Control Feel、Physics Medium 与 State Resolver](./2026-08-21-control-feel-physics-medium-state-resolver-design.md)
 - 实施入口：
-  [Route Graph / Traversability R0 实施计划](../plans/2026-08-21-route-graph-traversability-r0-implementation-plan.md)。
+  [Route Graph / Traversability R0 实施计划](../plans/2026-08-21-route-graph-traversability-r0-implementation-plan.md)；
+  [R1 Heightfield 实施计划](../plans/2026-08-22-route-graph-traversability-r1-heightfield-implementation-plan.md)。
 
 本文解决的是“指定主体是否能从声明的起点实际到达声明的终点”。它不把 NPC 行为、
 动态避障、任务系统或自动驾驶混入当前范围，也不建立与既有 `spatial.routes`、Surface、
