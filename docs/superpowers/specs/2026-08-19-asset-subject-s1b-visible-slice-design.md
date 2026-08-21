@@ -621,7 +621,9 @@ Golden Fixture 只验证 SDK 管线，不作为产品人物视觉标准。
 保留源资产事实，Registry `RigProfile` / `AnimationSet` 显式映射 65 根源 Bone 和
 25 个源 Clip 中当前开放的 `idle/walk/run/jump`；普通 World JSON 只引用
 `worldkit://subject-definition/humanoid.g-bot@1`。独立验收命令为
-`pnpm verify:g-bot-subject`。
+`pnpm verify:g-bot-subject`。后续产品人物按
+[`Product Asset Intake Template`](2026-08-21-product-asset-intake-template-design.md)
+复制 Fixture，不要再复制 G Bot 专用脚本。
 
 ## 13. 验收标准
 

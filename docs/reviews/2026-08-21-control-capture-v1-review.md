@@ -167,6 +167,12 @@ Runtime Session、Babylon Runtime、Browser API 和 Playground Adapter 存在语
   受影响的 Screenshot、Snapshot、Build 与 Verification Artifact；Pose Difference、双实例
   隔离、墙体阻挡、资产篡改和 Capture Pass Hash 门禁仍成立。
 
+最终快进前 `origin/main` 又推进到产品资产接入模板 `67dca5f`。第二次三方合并仅在本
+Backlog 的里程碑状态产生文本冲突：保留已完成的 Capture M2/M3，同时吸收并标记已完成
+的产品资产模板 M1。新增 Product Asset Intake 的 3 个测试文件、12 Tests、类型检查和
+更新后的真实 G Bot Gate 均通过；G Bot 派生 Artifact 二次运行保持干净，证明两条纵向
+切片可以共存且证据生成稳定。
+
 ## 8. 最终结论
 
 没有未处置的 P0/P1/P2 级发现。V1 达到计划中的窄纵向切片完成标准，可以合入
