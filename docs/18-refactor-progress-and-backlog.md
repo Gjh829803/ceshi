@@ -31,6 +31,7 @@
 - [`2026-08-19-extensible-subject-authoring-design.md`](superpowers/specs/2026-08-19-extensible-subject-authoring-design.md)：主体组装、Relationship、坐骑、装备和飞行的专项规格；
 - [`2026-08-19-asset-subject-s1b-visible-slice-design.md`](superpowers/specs/2026-08-19-asset-subject-s1b-visible-slice-design.md)：首个 GLB/Rig/Animation/Collider Profile 资产主体纵向切片；
 - [`2026-08-20-g-bot-product-asset-s1-design.md`](superpowers/specs/2026-08-20-g-bot-product-asset-s1-design.md)：首个真实产品人物 G Bot 的版本化映射与可视验收；
+- [`2026-08-21-product-asset-intake-template-design.md`](superpowers/specs/2026-08-21-product-asset-intake-template-design.md)：把 G Bot Gate 固化为后续产品资产接入模板；执行步骤见 [`product-asset-intake`](superpowers/skills/product-asset-intake.md)；
 - [`2026-08-19-placement-constraint-layout-solver-design.md`](superpowers/specs/2026-08-19-placement-constraint-layout-solver-design.md)：AI 空间意图、最终 Transform 求解与冲突报告专项规格；
 - [`2026-08-19-simulation-take-control-capture-design.md`](superpowers/specs/2026-08-19-simulation-take-control-capture-design.md)：WorldPackage、Take、Session、多 Pass Capture 与视频 Adapter 边界；
 - [`2026-08-19-world-validation-report-and-quality-gates-design.md`](superpowers/specs/2026-08-19-world-validation-report-and-quality-gates-design.md)：量化 Gate、Metric、Evidence 和生产阻断协议；
@@ -247,6 +248,9 @@ P0.1 整体仍以上述三项开放能力及生产范围扩展为完成标准。
 - [ ] 建立资产导入、License/Hash、预算、LOD、Skeleton 和动画 Clip 验收。
 - [ ] 证明 Primitive 白模可以替换为人形、四足或非人形资产而不改变 Entity ID 和 Gameplay 身份。
 - [x] Golden 切片中缺少 Rig、Clip、Collider 或 Socket 时返回稳定 Diagnostic，不静默猜测。
+- [x] 把 G Bot 的 Manifest/Registry/Gate 固化为
+  [`Product Asset Intake Template`](superpowers/specs/2026-08-21-product-asset-intake-template-design.md)
+  与 Fixture `examples/product-asset-intakes/humanoid.g-bot@1.json`；未接入第二个产品 GLB。
 
 #### P1.3 Semantic Action 与 Animation Binding
 
@@ -550,7 +554,10 @@ Placement S1 已形成首个回归纵向切片；Capture 与 Validation 两条 P
 
 当前没有代码阻塞项。S1b Golden、首个产品 G Bot 与 Placement Solver S1 都已进入回归，下一步：
 
-1. **M1：把 G Bot 的交付 Manifest/Registry 映射/Gate 固化为后续产品资产接入模板**；
+1. **M1：把 G Bot 的交付 Manifest/Registry 映射/Gate 固化为后续产品资产接入模板**
+   （专项 [`product-asset-intake-template`](superpowers/specs/2026-08-21-product-asset-intake-template-design.md)，
+   执行 [`product-asset-intake`](superpowers/skills/product-asset-intake.md)；G Bot Fixture
+   `examples/product-asset-intakes/humanoid.g-bot@1.json`）；
 2. **M2：评审冻结 Take/Capture 与 Validation 两份协议的首条实施范围**；
 3. **M3：为 P0.2 编写五 Pass Capture 的窄纵向切片计划，并复用 Placement WorldPackage/Hash**；
 4. **M4：扩展 P0.1 的 Terrain Mask/Route Graph，而不是新增第二套 Region/Route 语义**；
