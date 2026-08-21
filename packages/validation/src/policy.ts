@@ -1,29 +1,49 @@
 import { isNil } from "lodash-es";
 
 import type {
-  GateDefinitionV1,
-  GateResultV1,
-  MetricDefinitionV1,
-  MetricResultV1,
+  ValidationGateRequirementV1,
   ValidationGateStatusV1,
-  ValidationProfileV1,
+  ValidationMetricStatusV1,
   ValidationReportStatusV1,
 } from "./types";
 
+interface RequiredMetricDefinitionLike {
+  readonly id: string;
+  readonly isRequired: boolean;
+}
+
+interface GateDefinitionLike {
+  readonly id: string;
+  readonly requirement: ValidationGateRequirementV1;
+  readonly metricDefinitionsById: Readonly<
+    Record<string, RequiredMetricDefinitionLike>
+  >;
+}
+
+interface MetricResultLike {
+  readonly status: ValidationMetricStatusV1;
+}
+
+interface GateResultLike {
+  readonly metricResultsById: Readonly<Record<string, MetricResultLike>>;
+}
+
+interface ValidationProfileLike {
+  readonly gateDefinitionsById: Readonly<Record<string, GateDefinitionLike>>;
+}
+
 function requiredMetricResults(
-  gateDefinition: GateDefinitionV1,
-  gateResult: GateResultV1,
-): readonly (MetricResultV1 | undefined)[] {
+  gateDefinition: GateDefinitionLike,
+  gateResult: GateResultLike,
+): readonly (MetricResultLike | undefined)[] {
   return Object.values(gateDefinition.metricDefinitionsById)
-    .filter((metricDefinition: MetricDefinitionV1) => metricDefinition.isRequired)
-    .map((metricDefinition) =>
-      gateResult.metricResultsById[metricDefinition.id]
-    );
+    .filter((metricDefinition) => metricDefinition.isRequired)
+    .map((metricDefinition) => gateResult.metricResultsById[metricDefinition.id]);
 }
 
 export function deriveValidationGateStatusV1(
-  gateDefinition: GateDefinitionV1,
-  gateResult: GateResultV1 | undefined,
+  gateDefinition: GateDefinitionLike,
+  gateResult: GateResultLike | undefined,
 ): ValidationGateStatusV1 {
   if (isNil(gateResult)) return "incomplete";
   const requiredResults = requiredMetricResults(gateDefinition, gateResult);
@@ -46,8 +66,8 @@ export function deriveValidationGateStatusV1(
 }
 
 export function deriveValidationReportStatusV1(
-  profile: ValidationProfileV1,
-  gateResultsById: Readonly<Record<string, GateResultV1>>,
+  profile: ValidationProfileLike,
+  gateResultsById: Readonly<Record<string, GateResultLike>>,
 ): ValidationReportStatusV1 {
   const gateEvaluations = Object.values(profile.gateDefinitionsById).map(
     (gateDefinition) => ({
@@ -81,3 +101,6 @@ export function deriveValidationReportStatusV1(
   }
   return "passed";
 }
+
+export const deriveValidationGateStatusV2 = deriveValidationGateStatusV1;
+export const deriveValidationReportStatusV2 = deriveValidationReportStatusV1;
