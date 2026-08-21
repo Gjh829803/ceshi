@@ -757,3 +757,43 @@ M5 完成标准已经够严：**不要放松**。不要把「Graph 通了」或�
 **不能接受作者审查「无开放 P0/P1/P2」。** 没有成立的 P0；有多条成立的 P1。最重的是：R1b 把「0.3m Profile」当成已经存在的单一 Runtime 真相，但 Canonical `free-ground` 每 Tick 把步高写成 `0.35`、坡度写成 `50°`。按现状实施，M5 会验收一套与玩法人物不同的控制器。
 
 当前只能说：方向可采纳，**修改并真正冻结 R0 合同之前不要开始 R1 代码**。本规格、R0/R1/R1b、Validation Gate、台阶/平台通行能力均未实现。
+
+## 9. Disposition（2026-08-21，处置复核基线 `main@14672e6`）
+
+处置规则：保留以上独立审查原文和基线，不回写历史证据。下表只记录权威规格如何吸收
+Finding；“设计已处置”不代表 Runtime、Schema、Fixture 或 Gate 已实现。处置修改涉及：
+
+- `docs/superpowers/specs/2026-08-21-route-graph-and-traversability-design.md`；
+- `docs/superpowers/specs/2026-08-21-hybrid-terrain-and-non-heightfield-topology-design.md`；
+- `docs/superpowers/specs/2026-08-19-world-validation-report-and-quality-gates-design.md`；
+- `docs/superpowers/plans/2026-08-21-route-graph-traversability-r0-implementation-plan.md`；
+- `docs/18-refactor-progress-and-backlog.md` 与 `README.md`。
+
+本审查完成后，`main` 已合入 P1.5 冻结规格。P1.5 已在**设计层**规定坡度/步高只属于
+`physics-body-profile`、删除 Motion/Adapter 覆写、spawn ray 和 AABB Support 旁路；当前
+源码尚未实施。因此相关 Finding 从“缺少权威设计”更新为“M5 R1/R1b 的阻塞实现依赖”，
+不能标记为 Runtime 已修复。
+
+| Finding | 处置 | 当前状态 |
+| --- | --- | --- |
+| P1：`0.3m` Physics 与 `0.35m/50°` Runtime 覆写 | **采纳**。Route 规格新增 `resolvedTraversalLockHash`，锁定实际 Subject/Collider/Physics/Control Feel/Motion/Medium/Backend；步高和坡度只从 Physics Body 编译。Driver 只生成 Intent，Gate 阈值只归统一 Validation Profile。R1/R1b 显式等待 P1.5 实现 | 设计已处置；源码债务开放 |
+| P1：Route Corridor 语义和高度层未冻 | **采纳并调整建议**。R1/R1b 只冻结 `hard-ribbon`，不增加让 AI 选择的 `routeCorridorMode`；层由起终 Anchor 与 Surface 连通性选择，歧义返回 `ROUTE_CORRIDOR_LAYER_AMBIGUOUS` | 设计已处置；R0 未实施 |
+| P1：`routeTraversalCostSeconds` 量纲冲突 | **采纳**。改为无量纲 `routePathCost`，真实耗时只使用 `completionDurationTicks`；R1 不发布估算秒数 | 设计已处置；R0 未实施 |
+| P1：Heightfield 缺 Support Surface ID | **采纳**。统一并区分 `traversalSurfaceId`、`surfaceEntityId`、`colliderSubshapeId`；M5 R0 先冻结 Heightfield 最小身份，H1 复用扩展 | 设计已处置；R0 未实施 |
+| P1：当前 Planner Route 方言未进入 M5 | **采纳**。Planner Route Clean Break 为 Canonical 同名单位字段，`maximumDesignSlopeDegrees` 只属规划证据；增加确定性 Planner→Canonical 投影和纵向 Gate 要求 | 设计已处置；R0 未实施 |
+| P1：Hybrid Surface 与 Resolver 双写 Support | **采纳**。Hybrid 删除 Surface 的进入/离开/失去支撑 Tick 所有权，只保留 Resolver 消费的静态数据；唯一 `checkSupport()`/Resolver 写 Runtime 状态 | 设计已处置；P1.5/H1 实现开放 |
+| P1：缺坡度失败 Fixture | **采纳**。矩阵新增 Heightfield 超坡和显式静态斜面超坡，均要求 `ROUTE_SLOPE_EXCEEDED` | 设计已处置；R1 Fixture 开放 |
+| P1：Graph/Probe Lock 无相等失败码 | **采纳**。新增 `ROUTE_TRAVERSAL_LOCK_MISMATCH`；Evidence 必须携带同一 Lock Hash，不等时在 Query 前阻断 | 设计已处置；R0 未实施 |
+| P1 风险：spawn ray 与 AABB `supported-by` 旁路 | **采纳**。Route Gate 禁止这些旁路，并把 P1.5 Ground/Air Runtime 实现设为 R1/R1b 阻塞依赖 | 设计已处置；源码债务开放 |
+| P1 风险：Support Loss/SLIDING 无语义 | **部分采纳**。`SLIDING` 明确为有支撑；连续 `UNSUPPORTED` 可有 Gate 容差。未采纳“等 Coyote 耗尽才算物理失去支撑”：Coyote 只管跳跃准入，不能成为第二份 Ground 状态 | 设计已处置；Probe 实现开放 |
+| P1 风险：Graph 过滤未覆盖 Babylon 半径/步高/坡度耦合 | **采纳**。锁定 Provider Adapter 将同一 Lock 编译为 Provider-neutral Capability Envelope，以等价探针覆盖安装版本；Provider 公式不进入公共 Schema，Runtime Gate 仍是最终真相 | 设计已处置；R1 Adapter/Fixture 开放 |
+| P2：`walkable-surface descriptors` 残留 | **采纳**。统一为 `traversal-surface descriptors` | 已处置 |
+| P2：Surface/Metric/净空命名漂移 | **采纳**。Surface 三种身份明确分责；Validation 使用 `maximumObserved*`/`minimumObserved*`；Graph Builder Profile 显式 `clearanceMarginMeters`，只能保守侵蚀 | 设计已处置；R0 未实施 |
+| P2：M5 依赖 M4 Validation | **采纳**。后续 `main` 已实现 M4 Capture/Integrity Validation 基础合同；R0 计划直接扩展 `@whitebox-world/validation`，Route 不创建专用 Report，也不在 Traversal 包复制 Metric/Diagnostic | 依赖已满足；R0 未实施 |
+| P2：缺独立 Spawn 失败行 | **采纳**。矩阵新增 Water、Collider 内、悬空和第一 Tick 后跌落场景 | 设计已处置；R1 Fixture 开放 |
+| P3：Typed Traversal Link 扩展 | **保持**。Jump/Drop/Climb/Swim/Mount/Vehicle/Flight/Dynamic Platform 继续作为独立 Typed Link/Profile 切片，不进入普通 `walk` 边 | 非当前缺口 |
+
+处置后的结论：独立审查提出的开放设计问题已经进入权威规格和 R0 实施计划；没有把任何
+Finding 标成已交付能力。M4 Report 基础合同已就绪，当前允许执行 R0 合同工作；**仍禁止
+在 P1.5 Runtime 权威实现前开始 R1/R1b**。M5、台阶/平台通行和两个 Route Blocking Gate
+继续保持未完成。

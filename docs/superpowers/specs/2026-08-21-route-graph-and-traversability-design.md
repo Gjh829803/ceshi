@@ -2,9 +2,12 @@
 
 ## 1. 文档状态
 
-- 状态：**Reviewed / Field Freeze Pending（2026-08-21）**。架构边界与 M5 完成标准已
-  通过静态规格审查；新增公共字段仍须在实施计划开始前完成字段级评审和版本冻结。审查
-  记录见 [Route Graph 与主体可通行性设计审查](../../reviews/2026-08-21-route-graph-traversability-design-review.md)。
+- 状态：**Independent Review Dispositioned / R0 Field Freeze Pending（2026-08-21）**。
+  架构分层成立；独立审查发现的 Lock、Route 走廊、Surface 身份、Planner 入口和 Runtime
+  Probe 合同问题已在本文收口。新增公共字段仍须按 R0 实施计划完成 Schema、生成类型、
+  Fixture 和 Conformance 后才能冻结。审查记录见
+  [作者审查](../../reviews/2026-08-21-route-graph-traversability-design-review.md)与
+  [独立审查及处置](../../reviews/2026-08-21-route-graph-traversability-independent-review.md)。
 - 所属里程碑：P0.1 / M5。
 - 当前问题：Canonical 世界可以通过 Schema、编译、渲染和局部碰撞检查，却仍可能出现
   出生点与目标之间没有人物可走通的连续路线。
@@ -17,6 +20,9 @@
 - 依赖规格：
   - [Hybrid Terrain 与非 Heightfield 特殊地形](./2026-08-21-hybrid-terrain-and-non-heightfield-topology-design.md)
   - [Package Subject Definition](./2026-08-19-package-subject-definition-design.md)
+  - [Subject Control Feel、Physics Medium 与 State Resolver](./2026-08-21-control-feel-physics-medium-state-resolver-design.md)
+- 实施入口：
+  [Route Graph / Traversability R0 实施计划](../plans/2026-08-21-route-graph-traversability-r0-implementation-plan.md)。
 
 本文解决的是“指定主体是否能从声明的起点实际到达声明的终点”。它不把 NPC 行为、
 动态避障、任务系统或自动驾驶混入当前范围，也不建立与既有 `spatial.routes`、Surface、
@@ -38,10 +44,10 @@ Collider 或 Validation Report 竞争的第二套协议。
 
 因此完成标准不是“生成了一张 NavMesh”或“路径查询返回非空”，而是：
 
-> 对每条 Required Route，SDK 必须使用指定主体的锁定 Collider、Locomotion 与 Capability
-> Profile，在权威 Collider/Surface 上生成确定性 Traversal Graph，并由真实固定 Tick
-> Character Controller 完成路线。任一阶段失败都形成 Blocking Validation Gate 和可修复
-> Diagnostic，不允许把不可通行场景作为合格世界交付。
+> 对每条 Required Route，SDK 必须使用指定主体唯一的 `resolvedTraversalLockHash`，在权威
+> Collider/Surface 上生成确定性 Traversal Graph，并由同一锁、同一 Runtime Backend 和真实
+> 固定 Tick Character Controller 完成路线。任一阶段失败都形成 Blocking Validation Gate
+> 和可修复 Diagnostic，不允许把不可通行场景作为合格世界交付。
 
 ## 3. 决策摘要
 
@@ -65,6 +71,9 @@ Collider 或 Validation Report 竞争的第二套协议。
 9. Required 路线失败一票否决；总体构图分数、截图相似度或 Advisory 指标不能抵消。
 10. Recast/Detour 或其他 Provider 可以作为内部 Graph Builder，但 AI-facing Schema、
     Canonical Artifact、Diagnostic 和 Hash 不携带 Provider 方言。
+11. R1/R1b 的真实 Controller Gate 依赖 P1.5 Ground/Air Runtime 权威收口：坡度和步高只
+    来自 `physics-body-profile`，不得继续使用 Motion 参数或 Adapter fallback 覆写；Spawn、
+    Reset 和 Object 支撑不得使用 Ray/AABB 旁路。
 
 ## 4. 权威职责
 
@@ -74,7 +83,7 @@ Collider 或 Validation Report 竞争的第二套协议。
 | 最终 Entity Transform | Placement Solver | Navigation 在 Runtime 重新摆放实体 |
 | 可支撑几何 | Heightfield / Collider Subshape | 独立复制的 NavMesh 顶点反向充当 Collider |
 | 候选通行语义 | Traversal Surface Profile | 任意朝上的三角形默认可走 |
-| 主体尺寸和运动限制 | resolved Subject/Physics/Locomotion/Capability Lock | Graph Builder 自带另一套半径、步高或坡度默认值 |
+| 主体通行与实际控制参数 | `resolvedTraversalLockHash` 对应的锁定 Subject/Collider/Physics Body/Locomotion Capability/Control Feel/Control/Motion/Medium 与 Runtime Backend | Graph Builder、Driver、Motion 参数或 Adapter fallback 自带另一套半径、速度、步高或坡度 |
 | 抽象连通性 | Traversal Graph + Query Result | Agent 根据截图主观声明“应该能走” |
 | 实际支撑与移动结果 | Havok Character Controller / Ground Support Resolver | Terrain Height 或 Route Graph 独立写 `isGrounded` |
 | 生产通过决策 | Validation Report | 单独脚本日志或总体分数覆盖 Blocking Failure |
@@ -99,16 +108,47 @@ R1 不新增第二个 `paths`、`navigationRoutes` 或 `walkways` 集合。继�
 }
 ```
 
-Polyline 是意图走廊和求解边界，不是可通行结论。`pointsMetersXZ` 不承担多层高度真相；
-Graph Builder 从起点 Anchor、终点 Anchor、Surface 连通性和真实世界 Y 选择正确高度层。
+Polyline 是意图走廊和**硬求解边界**，不是可通行结论。R1/R1b 只冻结一种语义：以中心
+Polyline 按 `widthMeters / 2` 在 XZ 平面膨胀得到 `hard-ribbon`，Graph Node、Path 与 Runtime
+Probe 的主体原点都必须留在该闭合区域内。Graph Builder 还必须按锁定 Capsule Radius 与
+`clearanceMarginMeters` 向内侵蚀，得到主体中心可用区域；侵蚀后为空时返回
+`ROUTE_CLEARANCE_WIDTH_INSUFFICIENT`。区域外即使存在绕行也不能让 Required Route 通过。
+当前版本不增加 `routeCorridorMode` 让 Agent 在“硬约束/提示/搜索框”之间猜测。
+
+`pointsMetersXZ` 不承担多层高度真相，`hard-ribbon` 也不是无限 Y 挤出的 Volume。Graph
+Builder 从起点 Anchor 所在 `traversalSurfaceId` 开始，只沿满足同一锁的 Surface 邻接到达
+终点 Anchor；同 XZ 的另一高度层若没有显式邻接或 Typed Traversal Link，不属于本 Route。
+若起点或终点命中多个无法唯一选择的层，以 `ROUTE_CORRIDOR_LAYER_AMBIGUOUS` 拒绝，不能
+按最近 Y、最高面或 Mesh 顺序猜测。
+
 Route 的 `locomotionProfileRef` 声明该走廊面向的运动类型；`connected-by-route` 仍必须从
-`traversingEntityId` 解析完整 Subject/Physics/Collider/Capability Lock。Registry
+`traversingEntityId` 解析完整 `resolvedTraversalLockHash`。Registry
 Compatibility 需要证明二者兼容，不能按 Ref 字符串猜测；不兼容时以
 `ROUTE_LOCOMOTION_PROFILE_MISMATCH` 拒绝。
 
-### 5.2 `connected-by-route` 候选合同
+### 5.2 Planner Route 到 Canonical Route 的唯一归一化
 
-字段级评审应在下一版 Authoring 中只增加一种角色化约束，不向已发布 V3 枚举偷偷加值：
+当前 Agent 白模入口 `OutdoorWorldSpec.PlannedRoute` 仍使用 `points`、`width` 和
+`maxSlopeDegrees`，而 Canonical Route 使用 `pointsMetersXZ`、`widthMeters` 和
+`locomotionProfileRef`。R0 采用未发布私有 Schema 的 Clean Break，不保留两套永久方言：
+
+- Planner Route 改用 `pointsMetersXZ` 与 `widthMeters`；
+- 新增必填 `locomotionProfileRef`，其兼容性最终由 Traversing Subject Lock 证明；
+- 规划阶段希望保留的坡度裕量改名为 `maximumDesignSlopeDegrees`，它只是 World Plan 的
+  构图/舒适度限制，不得覆盖 `physics-body-profile.maxSlopeDegrees`，也不得进入 Canonical
+  Route 充当物理能力；
+- `priority` 与 `evidence` 仍是 Planner Provenance，Normalizer 只把 Route 公共字段投影到
+  Canonical `spatial.routes`，并把规划元数据留在可审计来源中；
+- `plan:scene:check` 的 Heightfield 坡度通过只产生规划证据。M5 完成后，Required Route
+  必须继续经过 `route-connectivity` 与 `route-runtime-conformance`，前者不能替代后者。
+
+R0 必须为该投影提供同输入同 Hash 的 Golden Fixture；不新增第三个 Adapter Route DTO，
+也不把 `maxSlopeDegrees` 复制进 Authoring V3/V4 Route。
+
+### 5.3 `connected-by-route` 候选合同
+
+字段级评审应在下一版 Authoring 的 `constraints.connectivity` 中只增加一种角色化约束，
+不把它塞进 Placement Union，也不向已发布 V3 枚举偷偷加值：
 
 ```json
 {
@@ -122,15 +162,15 @@ Compatibility 需要证明二者兼容，不能按 Ref 字符串猜测；不兼�
 }
 ```
 
-语义固定为：使用 `traversingEntityId` 所绑定并锁定的 Physics Body、Collider、Locomotion
-和 Capability Profile，证明两个 Anchor 在指定 Route 走廊中连通。字段不用通用
+语义固定为：使用 `traversingEntityId` 所绑定的 `resolvedTraversalLockHash`，证明两个
+Anchor 在指定 Route 的 `hard-ribbon` 中连通。字段不用通用
 `subjectId/targetId/params`，也不接受自由文本能力说明。
 
 R1/R1b 的起点和终点必须是显式 Anchor Entity，避免从对象 Bounds 中心猜入口。未来
 Region/Portal 路线可以增加新的关闭 Endpoint Union，但不得把同一字段在 Entity、Region、
 世界坐标和自由文本之间隐式切换。
 
-### 5.3 Agent 默认操作
+### 5.4 Agent 默认操作
 
 上游 Agent 的最小责任是：
 
@@ -150,15 +190,20 @@ Provider。
 
 - `authoringSpecHash`、`layoutSolveReportHash` 和 `resourceLockHash`；
 - Terrain/Collider/Surface Artifact Hash；
-- traversing Subject Definition、Physics Body、Collider、Locomotion 和 Capability Profile Ref/Hash；
+- `resolvedTraversalLockHash`，其 Canonical Bytes 锁定 traversing Subject Definition、Collider、
+  Physics Body、Locomotion Capability、Control Feel、Control、Motion/Kernel、Medium 与实际
+  Runtime Backend/Adapter 版本；
 - Graph Builder Profile Ref、Resolved Version、内容 Hash、量化和 Tile 参数；
 - Route ID、起终点 Anchor ID 与构建预算；
 - `traversalNodesById` 和 `traversalEdgesById`。
 
-Graph 节点至少保存稳定 `id`、`surfaceId`、`positionMetersXYZ`、所在 Tile、可用净空和
-来源 Collider/Subshape 证据。Graph Edge 使用角色化 `fromTraversalNodeId` 与
+Graph 节点至少保存稳定 `id`、`traversalSurfaceId`、`surfaceEntityId`、
+`colliderSubshapeId`、`positionMetersXYZ`、所在 Tile、可用净空和来源证据。三个 Surface
+字段职责不同：Traversal Surface 是候选通行语义，Surface Entity 是世界所有者，Collider
+Subshape 是几何命中；不得把它们缩成同义的 `surfaceId`。Graph Edge 使用角色化
+`fromTraversalNodeId` 与
 `toTraversalNodeId`，并以关闭 `type` 表达 `walk`、`slope` 或 `step`。边保存米制距离、
-高度差、坡度、最小净空和确定性通行成本。
+高度差、坡度、最小宽度/高度净空和确定性通行成本。
 
 Runtime Handle、Mesh 数组序号、Recast Poly Ref、Havok Shape 指针和加载顺序不能进入
 Canonical ID。内部 Provider ID 只能存在于可丢弃的 Adapter Audit 中。
@@ -170,7 +215,9 @@ Overlay/Debug 文件，整个目录另算 `traversalArtifactRootHash`，不得�
 ### 6.2 分层 3D 图
 
 Heightfield 可使用 Tile/Raster 邻接作为构建输入，但 Graph 节点保存 3D 世界位置与稳定
-Surface ID。静态平台来自显式 Traversal Surface，因此同一 XZ 可以同时存在：
+`traversalSurfaceId`。Heightfield 的最小稳定身份必须从 Terrain Entity ID、稳定逻辑
+Collider Subshape ID 和锁定资源版本派生；Tile 拆分、LOD、数组顺序和 Runtime Handle
+不得改变该身份。静态平台来自显式 Traversal Surface，因此同一 XZ 可以同时存在：
 
 ```text
 bridge-deck surface  y = 8m
@@ -188,21 +235,37 @@ Builder 不使用“最近 Y”把两层静默合并，也不把垂直距离小�
 - `maxSlopeDegrees`；
 - `maxStepHeightMeters`；
 - Surface/Medium Capability；
-- Authoring 安全余量和 Graph 量化参数。
+- `TraversalGraphBuilderProfile` 的 `clearanceMarginMeters` 与 Graph 量化参数。
 
 Graph Builder 使用主体半径侵蚀可走区域，使用主体高度排除低顶区域，按最大坡度排除
-坡面，按最大跨阶判断相邻表面。R1b 必须使用当前人形 Profile 的 `0.3m` 跨阶上限证明：
-安全余量内的台阶可走，超过上限的立面不可走。不能为了让失败 Fixture 通过而在 Graph
-Builder 中另写一个更大的台阶默认值。
+坡面，按最大跨阶判断相邻表面。`clearanceMarginMeters` 只能让图更保守地侵蚀净空，不能
+放宽 `maxStepHeightMeters`、`maxSlopeDegrees` 或缩小真实胶囊。坡度和步高只从
+`physics-body-profile` 编译，Collider 尺寸只从锁定 Collider 编译；Motion、Feel、Medium、
+Driver 和 Adapter fallback 均不得覆盖。
+
+Graph Provider Adapter 必须把同一锁编译为 Provider-neutral `TraversalCapabilityEnvelope`，
+并针对锁定 Babylon 版本覆盖胶囊半径、步高与坡度接触的耦合语义。Provider 公式不进入
+AI-facing Schema；等价探针和 Backend/Adapter 版本进入 Evidence。Graph 是保守预测，真实
+Controller 仍是最终真相，但 Builder 不得明知使用与锁定 Controller 不等价的独立公式。
+
+R1b 的成功/失败高度从 Fixture 锁中的 `maxStepHeightMeters` 推导。当前 `0.3m` 人形锁下
+保留 `0.25m` 成功和 `0.35m` 失败 Fixture；若未来 Profile 版本变化，Fixture 必须显式锁
+旧版本或同步更新预言，不能继续依赖散文常量。
 
 ### 6.4 代价与确定性
 
-R1 的路径选择成本只由 Profile 中的关闭公式组成：平面距离、坡度代价和跨阶代价。
+R1 的 `routePathCost` 是无量纲、仅用于稳定排序的关闭公式结果，由平面距离、坡度和跨阶
+经过 `TraversalGraphBuilderProfile` 的锁定权重归一化得到。它不是秒数，也不读取 walk/run
+速度。真实耗时只由 Runtime Gate 的 `completionDurationTicks` 表达；第一切片不提供估算
+秒数，避免从 Control Feel、Motion 或 Driver 再读取第二套速度。
+
 相同输入、Lock、Profile、Seed、Tile 和预算必须产生同一节点/边顺序、Path 与 Hash。
 
 成本仅用于在多条合格路线中稳定选择，不允许把不可通行边变成“高成本可通行”。浮点
 输入先按 Profile 量化；同成本路径按稳定 Node/Edge ID 排序。超出节点、边、Tile、搜索
-步数或墙钟预算时返回 `incomplete`，不能随机选择或假装不连通。
+步数等确定性语义预算时返回 `incomplete`，不能随机选择或假装不连通。Host 墙钟 Deadline
+只能取消执行并形成 Infrastructure `incomplete` Evidence，不能进入 Canonical Graph/Path
+选择、Hash 或把同一输入变成 `unreachable`。
 
 ## 7. 从几何到 Graph 的工程链路
 
@@ -237,22 +300,41 @@ Adapter 结果。是否引入依赖由技术探针依据确定性、WASM/Bundle 
 
 抽象路径通过后，Validation Runner 使用同一 Runtime Backend 和锁定主体：
 
-1. 解析并锁定 `TraversalDriverProfile`；它声明 Path Corridor 跟随、转向、到达容差、
-   卡住窗口和最大 Tick，Profile Ref/Version/Hash 进入 Evidence；
-2. Reset 到 `startAnchorEntityId` 对应的合法 Spawn；
-3. 绑定唯一 Controller；
-4. 将确定性 Path Corridor 投影为固定 Tick 控制输入，不瞬移主体；
-5. 每 Tick 记录 Subject Position、Support Surface ID、Movement Medium、Collision/Action 和 Progress；
-6. 到达终点容差内后记录完成 Tick；
-7. 出现卡住、离开 Route、穿插、悬空、跌落、错误 Surface 或超时即失败；
-8. Reset 后验证 Controller、Listener、Physics Body 和资源数量回到基线。
+1. 在 Query 前比较 Graph 与 Probe 的 `resolvedTraversalLockHash`；不同则返回
+   `ROUTE_TRAVERSAL_LOCK_MISMATCH`，禁止开始路径执行；
+2. 解析并锁定 `TraversalDriverProfile`。其关闭白名单只允许 Path Lookahead、Corner 选择、
+   Intent 量化和固定 `walk` Intent 政策；禁止速度、加减速、转向速率、到达/偏离/卡住/
+   Support Loss 阈值、最大 Tick、跳跃、胶囊、步高、坡度、重力或 Medium 数字。Driver
+   Profile Ref/Version/Hash 独立进入 Evidence，不并入主体物理真相；
+3. 从 `worldkit://validation-profile/outdoor-world-package-dev@1` 读取唯一
+   `RouteRuntimeGateThresholds`：到达容差、偏离阈值、最小进度、卡住窗口、连续
+   Unsupported 容差和最大 Probe Ticks。Driver 可以消费这些值决定何时停止发 Intent，但
+   不得重新声明或覆盖；
+4. Reset 到 `startAnchorEntityId` 对应的合法 Spawn。R1/R1b 只有在 P1.5 的无 Ray Bootstrap、
+   唯一 `checkSupport()` 和 Collider-backed Support Query 已实现后才能运行；
+5. 绑定唯一 Controller，并确认实际 Controller 的 Collider、步高、坡度和 Backend 版本与
+   `resolvedTraversalLockHash` 一致；
+6. 将确定性 Path Corridor 投影为固定 Tick Canonical Intent，不瞬移主体；
+7. 每 Tick 记录 Subject Position、`traversalSurfaceId`、`surfaceEntityId`、
+   `colliderSubshapeId`、原始 Support State、Movement Medium、Collision/Action 和 Progress；
+8. 到达 Validation Profile 的终点容差内后记录完成 Tick；
+9. 出现卡住、离开 `hard-ribbon`、穿插、悬空、跌落、错误 Surface 或超时即失败；
+10. Reset 后验证 Controller、Listener、Physics Body 和资源数量回到基线。
+
+Support 语义不复用 Coyote Time：`SLIDING` 仍是有物理支撑的独立状态，不记作 Support
+Loss；`UNSUPPORTED` 从出现的第一个 Tick 起进入原始 Evidence 并使 Runtime Medium 按 P1.5
+Resolver 更新。Gate 只在连续 `UNSUPPORTED` 超过 Validation Profile 的关闭容差后生成
+`ROUTE_RUNTIME_SUPPORT_LOST`，该容差只决定验证结果，不能反向修改 Ground/Air、跳跃准入
+或 Controller。Reset/Rebind 不继承上一次的连续计数。
 
 Runner 不根据渲染帧推进模拟，不修改 `maxStepHeightMeters`，不临时关闭 Collider，也不在
-失败位置把主体传送到下一节点。30/60/120 Hz-like 渲染节奏必须得到相同 Fixed-Tick 结果。
+失败位置把主体传送到下一节点；不得用 spawn ray、Terrain Height、Visual/AABB 顶面伪造
+起点支撑。30/60/120 Hz-like 渲染节奏必须得到相同 Fixed-Tick 结果。
 
 ## 9. Validation Profile、Gate 与 Metric
 
-统一 Validation Report 新增两个 Blocking Gate，不创建 Route 专用报告格式。
+`@whitebox-world/validation` 的 `ValidationReportV2` 为 `world-package` Subject 新增两个
+Blocking Gate，不创建 Route 专用报告格式，也不修改 Capture-only `ValidationReportV1`。
 
 ### 9.1 `route-connectivity`
 
@@ -266,8 +348,11 @@ Runner 不根据渲染帧推进模拟，不修改 `maxStepHeightMeters`，不临
 - `minimumObservedClearanceHeightMeters`；
 - `maximumObservedSurfaceGapMeters`；
 - `routePathDistanceMeters`；
-- `routeTraversalCostSeconds`；
+- `routePathCost`；
 - `traversalGraphNodeCount`、`traversalGraphEdgeCount` 和 `traversalGraphHash`。
+
+Evidence 必须同时携带 `resolvedTraversalLockHash`、Graph Builder Profile Hash、Runtime
+Backend/Adapter 版本；它们不是可以用总体 Metric 代替的调试文本。
 
 ### 9.2 `route-runtime-conformance`
 
@@ -277,7 +362,8 @@ Runner 不根据渲染帧推进模拟，不修改 `maxStepHeightMeters`，不临
 - `failedRequiredRouteCount`；
 - `maximumStalledDurationTicks`；
 - `maximumRouteDeviationMeters`；
-- `unexpectedAirborneDurationTicks`；
+- `maximumConsecutiveUnexpectedUnsupportedTicks`；
+- `slidingDurationTicks`；
 - `unexpectedSupportLossCount`；
 - `wrongSupportSurfaceCount`；
 - `invalidPhysicsValueCount`；
@@ -301,6 +387,9 @@ Graph 通过而 Runtime 失败时，以 Runtime Gate 失败为最终结论，同
 - `ROUTE_SURFACE_GAP_EXCEEDED`；
 - `ROUTE_SURFACE_PROFILE_MISSING`；
 - `ROUTE_LOCOMOTION_PROFILE_MISMATCH`；
+- `ROUTE_TRAVERSAL_LOCK_MISMATCH`；
+- `ROUTE_CORRIDOR_LAYER_AMBIGUOUS`；
+- `ROUTE_START_SUPPORT_INVALID`；
 - `ROUTE_RUNTIME_STALLED`；
 - `ROUTE_RUNTIME_DEVIATED`；
 - `ROUTE_RUNTIME_SUPPORT_LOST`；
@@ -314,21 +403,34 @@ Diagnostic 必须包含 Route、Traversing Entity、起终点 Anchor、Surface/C
 
 ### R0：协议冻结
 
-- 复用 Route/Surface/Validation 术语并冻结边界；
-- 完成 `connected-by-route`、Traversal Graph、Profile Lock、Report Evidence 和 Diagnostic 字段评审；
+- 将 Planner Route Clean Break 为 Canonical 同名字段，并冻结 `hard-ribbon`、Anchor 层选择和
+  `maximumDesignSlopeDegrees` 只属规划证据的语义；
+- 冻结 `traversalSurfaceId`、`surfaceEntityId`、`colliderSubshapeId` 的不同职责；
+- 完成 `connected-by-route`、Traversal Graph、`resolvedTraversalLockHash`、Driver 关闭白名单、
+  Validation Profile 的 `RouteRuntimeGateThresholds`、Report Evidence、Metric 和 Diagnostic
+  字段评审；
+- Graph/Probe Lock 不同必须在 Query 前以 `ROUTE_TRAVERSAL_LOCK_MISMATCH` 阻断；
+- 在 M4 已实现的 `@whitebox-world/validation` 中增加 `world-package` Subject 的 V2 合同和
+  `worldkit://validation-profile/outdoor-world-package-dev@1`；Route Metric、Gate 阈值和
+  Diagnostic 只进入统一 Validation 包，不得改写 Capture V1、另建 Route Report 或在
+  Traversal 包复制；
 - 确认 V3 到下一 Canonical 版本的干净升级策略，不添加未实现枚举值。
 
 ### R1：Heightfield Route
 
+- 阻塞依赖：P1.5 Ground/Air Runtime 权威实现已删除 Motion/Adapter 的步高坡度覆写、spawn
+  ray bootstrap 和 AABB `supported-by`，并证明每 Tick 只采一次 `checkSupport()`；
 - 一个普通人形从 Spawn 沿 Heightfield Route 到达目标 Anchor；
 - 覆盖坡度、阻挡物、胶囊宽度、顶部净空、缝隙、确定性和预算失败；
+- 覆盖 Planner Route → Canonical Route → 双 Gate 的当前 Agent 白模入口；
 - Graph Query 与真实 Character Controller Gate 都通过。
 
 ### R1b：Static Platform Route
 
 - 与 Hybrid Terrain H1 共享最小 Traversal Surface → Collider Subshape 合同；
 - 覆盖地形→台阶→平台和平台→坡道→地形；
-- `0.25m` 台阶通过、`0.35m` 台阶在当前 `0.3m` Profile 下失败；
+- 成败阈值从 `resolvedTraversalLockHash` 中的 `physics-body-profile.maxStepHeightMeters` 推导；
+  当前锁定 `0.3m` Profile 的 Golden 仍要求 `0.25m` 通过、`0.35m` 失败；
 - 覆盖平台接缝、窄踏面、低顶、错误 Collider、错误 Surface 身份和边缘跌落；
 - 真实人物可以完整走通成功 Fixture，失败 Fixture 被 Blocking Gate 拒绝。
 
@@ -355,14 +457,22 @@ Fixture 仍属于 P2.6 H1/M10，不由普通静态平台 Fixture 冒充完成。
 | --- | --- |
 | 连续平地与缓坡 | Graph 和 Runtime 都通过 |
 | Route 被静态墙截断 | `ROUTE_REQUIRED_PATH_UNREACHABLE` |
-| `0.25m` 连续台阶 | 当前人形 Profile 通过 |
-| `0.35m` 垂直台阶 | `ROUTE_STEP_HEIGHT_EXCEEDED` |
+| `hard-ribbon` 外存在绕行 | 仍为 `ROUTE_REQUIRED_PATH_UNREACHABLE` |
+| 起终 Anchor 同 XZ 命中多个未连接层 | `ROUTE_CORRIDOR_LAYER_AMBIGUOUS` |
+| Heightfield 超过锁定坡度 | `ROUTE_SLOPE_EXCEEDED` |
+| 显式 Traversal Surface 静态斜面超过锁定坡度 | `ROUTE_SLOPE_EXCEEDED` |
+| `0.25m` 连续台阶（锁定步高 `0.3m`） | Graph 和 Runtime 都通过；`SLIDING` 不误报 Support Loss |
+| `0.35m` 垂直台阶（锁定步高 `0.3m`） | `ROUTE_STEP_HEIGHT_EXCEEDED` |
 | 视觉相接、Collider 留缝 | `ROUTE_SURFACE_GAP_EXCEEDED` |
 | 踏面比胶囊安全宽度更窄 | `ROUTE_CLEARANCE_WIDTH_INSUFFICIENT` |
 | 平台上方有低顶 | `ROUTE_OVERHEAD_CLEARANCE_INSUFFICIENT` |
 | 同 XZ 的桥面和桥下地面 | Graph 合同可表达两层 Node；完整 Runtime Gate 由 P2.6 H1/M10 验收 |
 | 未声明 Traversal Surface 的装饰 Mesh | 不进入 Graph |
 | Graph 通过、Controller 在 Collider 接缝卡住 | Runtime Conformance 失败 |
+| Graph 与 Runtime 使用不同 Traversal Lock | Query 前 `ROUTE_TRAVERSAL_LOCK_MISMATCH` |
+| Spawn 位于 Water、Collider 内或悬空 | `ROUTE_START_SUPPORT_INVALID` 或 `ROUTE_START_SURFACE_NOT_FOUND` |
+| Spawn 第一 Tick 有支撑、随后无预期跌落 | `ROUTE_RUNTIME_SUPPORT_LOST` |
+| 小步高/大半径 Profile 在坡面触发 Backend 耦合 | Graph Adapter 与真实 Controller 结论一致或双 Gate 阻断并给 Provider Evidence |
 | 两个不同 Collider/Locomotion Profile | 得到独立锁和可比较的不同结果 |
 | 30/60/120 Hz-like Render 节奏 | Fixed-Tick 路线结果一致 |
 | 连续与并发重复构建 | Graph、Path、Report Hash 一致 |

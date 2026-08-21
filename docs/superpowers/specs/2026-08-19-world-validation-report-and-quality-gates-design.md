@@ -386,14 +386,26 @@ Metric `status` 关闭为 `passed | failed | not-applicable | not-evaluated`。R
 
 ### 5.4 Playability 与 Route Gate
 
+已实现的 Capture/Integrity `ValidationProfileV1` / `ValidationReportV1` 及
+`worldkit://validation-profile/outdoor-control-video-dev@1` 保持不可变。M5 R0 在同一个
+`@whitebox-world/validation` 包中增加 `ValidationProfileV2` / `ValidationReportV2` 的
+`world-package` Subject 分支，首个 Route Profile Ref 固定为
+`worldkit://validation-profile/outdoor-world-package-dev@1`。它复用 Gate/Metric/Evidence/
+Diagnostic/Policy 结构和 Canonical Hash 原则，不创建 Route 私有报告，也不把 Route Gate
+塞进 Capture-only V1。跨阶段结果通过明确 `dependencyReportRefs` 关联，不在一个 Report
+混合两个 Subject。
+
 - Spawn 位于 Terrain 内且不在禁止 Water/Collider；
-- `requiredSpawnReachableRatio`；
+- `requiredRouteCount`；
 - `unreachableRequiredRouteCount`；
-- `maximumRouteSlopeDegrees`；
-- `minimumRouteClearanceMeters`；
-- `maximumStepHeightMeters`；
-- `minimumRouteWidthMeters`；
-- 固定 Locomotion Script 的完成状态、耗时 Ticks 和异常位移。
+- `maximumObservedSlopeDegrees`；
+- `maximumObservedStepHeightMeters`；
+- `minimumObservedClearanceWidthMeters`；
+- `minimumObservedClearanceHeightMeters`；
+- `maximumObservedSurfaceGapMeters`；
+- `routePathDistanceMeters` 与无量纲 `routePathCost`；
+- 固定 Locomotion Script 的 `completionDurationTicks`、最大连续异常 Unsupported Ticks、
+  Sliding Ticks、Surface 身份和异常位移。
 
 可达性必须声明 Locomotion Profile；人形、轮式车辆和飞行主体不能共享一个含糊的“可达”。当前阶段只承诺室外人形 Heightfield Route。
 
@@ -404,6 +416,19 @@ M5 将该类别拆成两个 Blocking Gate：
    缝隙阈值的确定性路径；
 2. `route-runtime-conformance`：使用相同 Profile 和真实 Babylon/Havok Character Controller
    在固定 Tick 下完成该路径，验证没有卡住、穿插、异常离地、错误 Surface、超时或状态残留。
+
+两 Gate 的 Evidence 必须携带完全相同的 `resolvedTraversalLockHash`。Graph 与 Probe Lock
+不同，以 `ROUTE_TRAVERSAL_LOCK_MISMATCH` 在 Query 前阻断；`locomotionProfileRef` 兼容但
+Collider、Physics Body、Control Feel、Motion/Kernel、Medium 或 Backend 任一锁不同都不能
+继续比较。`TraversalDriverProfile` 只锁定 Path 跟随和 Canonical Intent 生成政策，禁止携带
+速度、坡度、步高、重力或任何 Gate 阈值。到达、偏离、最小进度、卡住、连续 Unsupported
+和最大 Probe Ticks 统一属于 Validation Profile 的 `RouteRuntimeGateThresholds`，Runner
+只消费一份。
+
+R1/R1b 的 Runtime Gate 依赖 P1.5 Ground/Air Runtime 权威实现：Spawn/Reset 后的支撑只信
+唯一 `checkSupport()`，不得用 Ray、Terrain Height 或 AABB 顶面伪造 Ground。`SLIDING` 单独
+记录且不算 Support Loss；连续 `UNSUPPORTED` 的 Gate 容差只决定验证结论，不得反向修改
+Movement Medium 或复用 Coyote Time。
 
 Graph Query 通过但真实 Controller 失败时，报告仍为 `failed`；静态图不能覆盖实际物理
 证据。缺少 Required Traversal Surface/Profile/Evidence 或构建预算耗尽时报告
@@ -572,11 +597,21 @@ Diagnostic 至少包含 Code、Gate/Metric ID、JSON Pointer/Entity ID、Expecte
 - `PHYSICS_REQUIRED_ENTITY_UNSUPPORTED`；
 - `ROUTE_REQUIRED_PATH_UNREACHABLE`；
 - `ROUTE_STEP_HEIGHT_EXCEEDED`；
+- `ROUTE_SLOPE_EXCEEDED`；
 - `ROUTE_CLEARANCE_WIDTH_INSUFFICIENT`；
 - `ROUTE_OVERHEAD_CLEARANCE_INSUFFICIENT`；
 - `ROUTE_SURFACE_GAP_EXCEEDED`；
+- `ROUTE_START_SURFACE_NOT_FOUND`；
+- `ROUTE_DESTINATION_SURFACE_NOT_FOUND`；
+- `ROUTE_START_SUPPORT_INVALID`；
+- `ROUTE_SURFACE_PROFILE_MISSING`；
+- `ROUTE_LOCOMOTION_PROFILE_MISMATCH`；
+- `ROUTE_TRAVERSAL_LOCK_MISMATCH`；
+- `ROUTE_CORRIDOR_LAYER_AMBIGUOUS`；
 - `ROUTE_RUNTIME_STALLED`；
+- `ROUTE_RUNTIME_DEVIATED`；
 - `ROUTE_RUNTIME_SUPPORT_LOST`；
+- `ROUTE_GRAPH_BUDGET_EXCEEDED`；
 - `COMPOSITION_REQUIRED_ANCHOR_MISSING`；
 - `CAPTURE_REQUIRED_PASS_MISSING`；
 - `CAPTURE_FRAME_OWNERSHIP_MISMATCH`；
@@ -656,10 +691,11 @@ Integrity、Capture Completeness 和 Capture Ownership。它复用现有 Bundle 
 补齐 Linear Depth 数值语义，并通过独立 Canonical Report、CLI 与 Conformance Gate
 验证正常 Bundle、缺失 Pass、错误 Depth、混入其他 Take 和损坏 Hash。
 
-Placement 与 Capture 最终仍应共同使用 `outdoor-control-video-dev@1` 的统一协议；后续
-Profile 扩展目标包括 Schema/Reference、Layout Required Constraint、Physics、Route、
-Opening Shot、Replay 和资源预算。浮空 Landmark、穿插墙体、不可达 Spawn 与缺失 Anchor
-仍是待接入的 Placement/Runtime/Composition Fixture，不能因为 Capture V1 已完成而勾销。
+Placement 与 Capture 最终仍应共同使用 `@whitebox-world/validation` 的统一协议层、Policy
+和 Dependency Report 链，但已冻结的 Capture `outdoor-control-video-dev@1` 不原地扩容。
+World Package 的 Route/Placement/Physics 使用后续版本化 Profile；Capture、Replay 和 Video
+各自验证一个关闭 Subject。浮空 Landmark、穿插墙体、不可达 Spawn 与缺失 Anchor仍是待
+接入的 Placement/Runtime/Composition Fixture，不能因为 Capture V1 已完成而勾销。
 
 ## 15. 实施分解
 

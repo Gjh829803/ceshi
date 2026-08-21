@@ -176,15 +176,22 @@ P1.5、P1.6、P2.5 与 P2.6 是把既有总体设计和产品对接契约显式�
 - [x] Golden Fixture 证明相同输入和 Lock 在连续/并发执行中得到相同 Transform 与 Report Hash。
 - [ ] 引入通用 Terrain Mask 与内容寻址 Region 数据，不复制 Heightfield/Water 真相。
 - [x] 编写 [Route Graph 与主体可通行性专项设计](superpowers/specs/2026-08-21-route-graph-and-traversability-design.md)，
-  并完成 [静态规格审查](reviews/2026-08-21-route-graph-traversability-design-review.md)；明确
-  AI Route 意图、分层 3D Graph、主体 Profile Filter、真实控制器 Gate 与 M5 完成标准。
-- [ ] R0 评审并冻结 `connected-by-route`、Traversal Graph、Profile Lock、Evidence 与
-  Diagnostic 字段；通过下一 Canonical Major 干净升级，不向已实现 V3 偷加空枚举。
+  并完成 [作者审查](reviews/2026-08-21-route-graph-traversability-design-review.md)与
+  [独立审查/处置](reviews/2026-08-21-route-graph-traversability-independent-review.md)；明确
+  AI Route 意图、`hard-ribbon`、分层 3D Graph、单一 Traversal Lock、真实控制器 Gate 与
+  M5 完成标准。
+- [x] 编写 [R0 实施计划](superpowers/plans/2026-08-21-route-graph-traversability-r0-implementation-plan.md)，
+  将 Planner Route 归一化、Surface 身份、Lock/Driver、Metric/Diagnostic 和 Conformance
+  拆成可追踪任务；计划完成不等于字段已冻结。
+- [ ] R0 实施并冻结 `connected-by-route`、Traversal Graph、`resolvedTraversalLockHash`、
+  Driver 关闭白名单、Surface 身份、Evidence 与 Diagnostic 字段；通过下一 Canonical Major
+  干净升级，不向已实现 V3 偷加空枚举。
 - [ ] R1 实现普通人形 Heightfield Route：坡度、静态阻挡、胶囊宽高净空、缝隙、确定性
-  Path Query 与真实固定 Tick Character Controller Gate。
+  Path Query 与真实固定 Tick Character Controller Gate；阻塞依赖是 P1.5 Ground/Air
+  Runtime 已删除步高/坡度 Motion fallback、spawn ray 和 AABB Support 旁路。
 - [ ] R1b 与 P2.6 H1 共享最小 Traversal Surface → Collider Subshape 合同，覆盖地形、
-  台阶、坡道和普通静态平台；`0.25m` 台阶通过，`0.35m` 台阶在当前
-  `0.3m` 人形 Profile 下失败。
+  台阶、坡道和普通静态平台；阈值从同一 `resolvedTraversalLockHash` 推导，当前锁定
+  `0.3m` 人形 Profile 的 Golden 要求 `0.25m` 通过、`0.35m` 失败。
 - [ ] Required 路线接入统一 Validation Report；Graph 通过但真实 Controller 卡住仍为
   Blocking Failure，并输出台阶、坡度、宽高净空、缝隙、Surface 身份和卡住坐标。
 - [ ] 增加 S1 之外的 Constraint、增量求解等价证明和通用 ValidationReport。
@@ -599,8 +606,9 @@ Placement S1、Simulation Take / Control Capture V1 与 Validation Capture/Integ
 
 ## 6. 下一里程碑
 
-当前没有代码阻塞项。S1b Golden、首个产品 G Bot、Placement Solver S1 与 Control
-Capture V1 都已进入回归，下一步：
+M5 R0 当前没有代码阻塞项；M5 R1/R1b 仍受 M7 P1.5 Runtime 权威实现阻塞。S1b Golden、
+首个产品 G Bot、Placement Solver S1、Control Capture V1 与 Validation Capture/Integrity V1
+都已进入回归，下一步：
 
 1. **M1（已完成）：把 G Bot 的交付 Manifest/Registry 映射/Gate 固化为后续产品资产接入模板**
    （专项 [`product-asset-intake-template`](superpowers/specs/2026-08-21-product-asset-intake-template-design.md)，
@@ -609,13 +617,17 @@ Capture V1 都已进入回归，下一步：
 2. **M2（已完成）：冻结 Take/Capture V1 首条实施范围**；
 3. **M3（已完成）：实现五 Pass Capture 窄纵向切片并复用 Placement World Identity/Hash**；
 4. **M4（已完成）：实现 P0.3 统一 Validation Profile/Report 的 Capture/Integrity 窄切片，把现有 Bundle Gate 纳入同一报告协议**；
-5. **M5：完成 Route Graph 与主体可通行性 R0/R1/R1b**：复用既有 Route/Region，按主体
-   Profile 从 Heightfield 与显式 Traversal Surface 构建分层 3D Graph，并用真实
-   Babylon/Havok 人物控制器证明地形→台阶/坡道→静态平台路线；只有 Required Route
-   接入 Blocking Validation、成功 Fixture 走通且失败 Fixture 给出结构化 Diagnostic 后完成；
+5. **M5：完成 Route Graph 与主体可通行性 R0/R1/R1b**：M4 报告形状已经落地，R0 现在按
+   [实施计划](superpowers/plans/2026-08-21-route-graph-traversability-r0-implementation-plan.md)
+   推进；R1/R1b 必须等待 M7 的 P1.5 Ground/Air Runtime 权威实现。之后复用既有
+   Route/Region，按主体 Lock 从 Heightfield 与显式 Traversal Surface 构建分层 3D Graph，
+   并用真实 Babylon/Havok 人物控制器证明地形→台阶/坡道→静态平台路线；只有 Required
+   Route 接入 Blocking Validation、成功 Fixture 走通且失败 Fixture 给出结构化 Diagnostic
+   后完成；
 6. **M6：在 Placement + Take + Validation 闭环上接入实验 Video Model Adapter**；
-7. **M7：评审冻结 P1.5 的 Control Feel/Physics Medium/State Resolver 首条纵向范围，清除
-   Canonical Babylon 路径中的对应硬编码**；
+7. **M7：实施已经冻结的 P1.5 Control Feel/Physics Medium/State Resolver 首条纵向范围，
+   清除 Canonical Babylon 路径中的步高/坡度/速度双写、spawn ray 和 AABB Support 旁路；
+   这是 M5 R1/R1b 的阻塞依赖**；
 8. **M8：按产品优先级选择 Semantic Action 后续或 Typed Relationship 窄可视切片**；
 9. **M9：在实现游泳、攀爬或增量 Agent 修复前，分别冻结 P2.5 Surface/Traversal 与
    P1.6 AI Schema/WorldChangeSet 的专项设计，禁止临时增加公共字段或场景脚本旁路**。

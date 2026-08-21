@@ -89,3 +89,10 @@ Diagnostic，而不是通过调大默认步高或关闭碰撞掩盖。
 当前只可声明“设计已成稿并通过本轮静态规格审查”。R0 字段冻结、R1 Heightfield Fixture、
 R1b Static Platform Fixture、统一 Validation 集成和真实 Browser Gate 均未实现，不能据此
 宣称 M5 或台阶/平台通行能力已经交付。
+
+## 6. 后续审查状态
+
+本文件记录作者在 `4cfbf07..9d1e47e` 上的首次静态自审，其“没有开放 P0/P1/P2”结论已被
+[独立审查及 disposition](./2026-08-21-route-graph-traversability-independent-review.md)
+取代。后续实现必须读取修订后的权威 Route/Hybrid/Validation 规格和 R0 实施计划，不能以
+本文件第 3 节作为跳过 R0、P1.5 Runtime 依赖或对抗 Fixture 的依据。

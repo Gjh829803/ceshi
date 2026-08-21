@@ -184,11 +184,15 @@ Collider Primitive、Convex 或逻辑 Collider Subshape，不复制 Mesh 顶点�
 它负责：
 
 - 稳定 Surface ID 与所属 Entity ID；
-- 可行走区域或 Collider Subshape 的引用；
+- 候选通行区域或 Collider Subshape 的引用；
 - Surface Semantic/Profile Ref；
 - 坡度、净空、单/双面和边缘策略；
 - 允许的 Locomotion/Subject Profile；
-- 进入、离开和失去支撑时的固定 Tick 语义。
+- 供 Ground Support Resolver 消费的静态边缘政策与语义数据。
+
+Traversal Surface 不写 `isGrounded`、进入/离开 Tick 或 Support Loss。真实支撑只来自每个
+固定 Tick 唯一一次 Character Controller `checkSupport()`，由 Ground Support Resolver 映射
+到稳定 Surface/Entity ID；Surface、Graph、Medium 和动画均不得另推一份。
 
 `walkable` 不是任意 Mesh 的默认属性。没有显式 Traversal Surface Capability 的 Structure 可以阻挡
 主体，但不能自动成为 Placement、Route 或 Navigation 的合法支撑面。Surface 禁止携带
@@ -196,9 +200,11 @@ Collider Primitive、Convex 或逻辑 Collider Subshape，不复制 Mesh 顶点�
 Navigation 可以从同一份 Collider + Subject/Locomotion Profile 派生简化 Raster/NavMesh，
 但它是派生查询数据，不是第二份作者几何，也不能反过来充当碰撞体。
 
-Surface 身份从 H1 起稳定：由所属 Entity ID、Registry 中稳定的逻辑 Subshape ID 和
-resolved Kit/Resource Version 派生。不得使用数组序号、Runtime Handle、Tile 拆分、Render
-LOD 或加载顺序作为身份组成部分。
+M5 R0 先冻结所有候选地面的最小稳定身份：`traversalSurfaceId` 由所属
+`surfaceEntityId`、Registry 中稳定的 `colliderSubshapeId` 和 resolved Kit/Resource
+Version 派生。Heightfield 的逻辑 Subshape 也必须稳定，改变 Tile 拆分、Render LOD 或加载
+顺序不得改变身份。H1 在此合同上扩展同 XZ 多层 Structure/Opening，不另造第二套 Surface
+ID。数组序号、Runtime Handle、Triangle Index 和 Mesh 名均不得成为身份组成部分。
 
 ### 5.5 Interior Region 与 Portal
 
@@ -285,7 +291,7 @@ Terrain Compiler
 Structure Compiler
   ├── visual geometry descriptors
   ├── collider descriptors
-  ├── walkable-surface descriptors
+  ├── traversal-surface descriptors
   └── bounds/resource inventory
         ↓
 Layout + Connectivity Validation
@@ -312,7 +318,9 @@ Query 边界。候选结果至少包含：
 
 ```ts
 interface SupportSurfaceHit {
+  readonly traversalSurfaceId: string;
   readonly surfaceEntityId: string;
+  readonly colliderSubshapeId: string;
   readonly supportPointMetersXYZ: readonly [number, number, number];
   readonly normalXYZ: readonly [number, number, number];
   readonly distanceMeters: number;
