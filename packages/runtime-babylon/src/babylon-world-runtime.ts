@@ -24,9 +24,7 @@ import type {
   BindControlRequestV2,
   CameraTuningV1,
   CameraViewInputV1,
-  ControlFeelTuningV1,
   ControlCaptureCapabilitiesV1,
-  ControlTuningV1,
   ControlCaptureRequestV1,
   ControlInputAxesV2,
   ControlBindingReceiptV2,
@@ -856,8 +854,6 @@ export class BabylonWorldRuntime implements WorldRuntimeSessionV3 {
             motionTags: motion.motionTags,
             relationshipRole: "none" as const,
             safeFallbackActive: motion.fallbackActive,
-            controlFeelParameterTuning: controller.getControlFeelTuning(),
-            controlParameterTuning: controller.getControlTuning(),
             ...(motion.lastFailureCode === undefined
               ? {}
               : { motionFailureCode: motion.lastFailureCode }),
@@ -1199,39 +1195,6 @@ export class BabylonWorldRuntime implements WorldRuntimeSessionV3 {
     return changed;
   }
 
-  setControlFeelTuning(
-    subjectEntityId: string,
-    tuning: ControlFeelTuningV1,
-  ): WorldRuntimeSnapshotV3 {
-    this.assertUsable();
-    if (!this.controllerFor(subjectEntityId).setControlFeelTuning(tuning)) {
-      throw new RangeError(
-        "Control Feel tuning must use canonical finite parameters inside P1.5 limits.",
-      );
-    }
-    this.latestRenderReadyReceipt = undefined;
-    return this.snapshot();
-  }
-
-  getControlFeelTuning(subjectEntityId: string): ControlFeelTuningV1 {
-    this.assertUsable();
-    return this.controllerFor(subjectEntityId).getControlFeelTuning();
-  }
-
-  setControlTuning(
-    subjectEntityId: string,
-    tuning: ControlTuningV1,
-  ): WorldRuntimeSnapshotV3 {
-    this.assertUsable();
-    if (!this.controllerFor(subjectEntityId).setControlTuning(tuning)) {
-      throw new RangeError(
-        "Control tuning must use registered parameters inside safety limits.",
-      );
-    }
-    this.latestRenderReadyReceipt = undefined;
-    return this.snapshot();
-  }
-
   applySubjectPresetTuning(
     request: ApplySubjectPresetTuningRequestV1,
   ): SubjectPresetTuningReceiptV1 {
@@ -1273,52 +1236,19 @@ export class BabylonWorldRuntime implements WorldRuntimeSessionV3 {
         (profile) => profile.resourceRef !== subject.controlFeel.resourceRef,
       ),
     ];
-    const controlFeelOverrides = Object.entries(
-      request.controlFeelOverridesByProfileRef,
+    const selectedControlFeelProfile = controlFeelProfiles.find(
+      (profile) => profile.resourceRef === request.selectedControlFeelProfileRef,
     );
-    const activeControlFeelProfileRef = controller.motionSnapshot()
-      .activeControlFeelProfileRef;
-    if (controlFeelOverrides.some(([profileRef, override]) => {
-      const profile = controlFeelProfiles.find(
-        (candidate) => candidate.resourceRef === profileRef,
-      );
-      return profile === undefined ||
-        override.baseResourceRef !== profileRef ||
-        override.baseContentHash !== profile.contentHash ||
-        profileRef !== activeControlFeelProfileRef;
-    })) {
+    if (selectedControlFeelProfile === undefined) {
       return reject(
         "SUBJECT_PRESET_CONTROL_FEEL_PROFILE_MISMATCH",
-        "Control Feel overrides must target the active exact locked Control Feel Profile.",
+        "The selected Control Feel Profile is not locked in the Subject Execution Plan.",
       );
     }
-    const controlFeelTuning = controlFeelOverrides[0]?.[1].values ?? {};
-    if (
-      controlFeelOverrides.length > 1 ||
-      !controller.canSetControlFeelTuning(controlFeelTuning)
-    ) {
-      return reject(
-        "SUBJECT_PRESET_INVALID_CONTROL_FEEL_TUNING",
-        "Control Feel tuning is unsupported or outside its canonical limits.",
-      );
-    }
-
-    const controlOverrides = Object.entries(request.controlOverridesByProfileRef);
-    if (controlOverrides.some(([profileRef, override]) =>
-      profileRef !== assembly.controlProfile.resourceRef ||
-      override.baseResourceRef !== profileRef ||
-      override.baseContentHash !== assembly.controlProfile.contentHash
-    )) {
+    if (request.selectedControlProfileRef !== assembly.controlProfile.resourceRef) {
       return reject(
         "SUBJECT_PRESET_CONTROL_PROFILE_MISMATCH",
-        "Control overrides must target the exact locked Control Profile.",
-      );
-    }
-    const controlTuning = controlOverrides[0]?.[1].values ?? {};
-    if (controlOverrides.length > 1 || !controller.canSetControlTuning(controlTuning)) {
-      return reject(
-        "SUBJECT_PRESET_INVALID_CONTROL_TUNING",
-        "Control tuning is unsupported or outside its safety limits.",
+        "The selected Control Profile does not match the exact locked Control Profile.",
       );
     }
 
@@ -1352,12 +1282,9 @@ export class BabylonWorldRuntime implements WorldRuntimeSessionV3 {
         "Camera tuning or preference is unsupported by the selected Camera Profile.",
       );
     }
-    if (
-      !controller.setControlFeelTuning(controlFeelTuning) ||
-      !controller.setControlTuning(controlTuning)
-    ) {
+    if (!controller.requestControlFeelProfile(selectedControlFeelProfile.resourceRef)) {
       throw new Error(
-        "Preset tuning validation diverged from fixed-tick Runtime application.",
+        "Preset profile validation diverged from fixed-tick Runtime application.",
       );
     }
     this.latestRenderReadyReceipt = undefined;

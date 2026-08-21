@@ -60,7 +60,7 @@ The public default is not “the newest version” and Runtime must never guess 
 - A Git-controlled public-default catalog.
 - A typed Subject Onboarding Manifest, validation, planning and generation for supported asset/whitebox subjects.
 - Playground panels for tuning, local versions, publication evidence and subject onboarding.
-- Stable Browser APIs for reading baseline closure, applying transient tuning and exporting snapshots.
+- Stable Browser APIs for reading baseline closure, selecting exact locked Feel/Control Refs, applying Camera session preview, and exporting snapshots.
 - Tests proving local isolation, resource-lock integrity, Runtime support, deterministic promotion and all-six existing Subject Package compatibility.
 
 ### 3.2 Excluded
@@ -150,11 +150,11 @@ The first migration reads the existing V4 motion and camera keys once, creates o
 
 Motion is selection-only. A `MotionProfileV1` identifies the locked Kernel/algorithm and semantic motion tags; it exposes no `parameters`, `safetyLimits` or `authoringRanges` fields. All Motion publication roles must therefore use `preserve` in Candidate V1.
 
-Control Feel is the numeric movement-authority lane. The active locked `control-feel-profile` supplies the base values; transient overrides are accepted only for the centralized P1.5 parameter vocabulary and bounds, must be finite, and must preserve cross-field invariants such as walk speed not exceeding run speed. Runtime snapshots carry the exact Control Feel Ref/hash and effective transient tuning.
+Control Feel is the numeric movement-authority lane, but Runtime consumes it only as an exact locked `control-feel-profile` Ref/hash embedded in the Execution Plan. A local draft may hold proposed numeric differences for the centralized P1.5 vocabulary; those values do not change the running subject until `promote` materializes a new Registry resource and the resulting locked Ref is selected. Runtime snapshots publish the active Control Feel Ref, never a second transient numeric overlay.
 
 ### 5.2 Control
 
-Control is a separate, narrow transient tuning surface.
+Control is a separate, narrow authoring surface.
 
 ```ts
 interface ControlTuningV1 {
@@ -162,13 +162,7 @@ interface ControlTuningV1 {
 }
 ```
 
-This is the exact field consumed by `ControlProfileRuntime`. Digital and analog longitudinal/lateral intent is
-resolved once, and `hasForwardControlIntentV1` consumes the same resolved axes
-as command compilation. `ControlProfileV1` declares the deadzone at its root.
-Runtime accepts only registered names. Transient tuning does not mutate the
-locked Control Profile and resets with the session.
-
-Browser and Runtime contracts expose separate `setControlFeelTuning` / `getControlFeelTuning` and `setControlTuning` / `getControlTuning` operations. Input compilation consumes the Control deadzone and the active Control Feel response exponent exactly once; no Adapter or physical-key handler owns a competing curve.
+This is the exact draft field later materialized into a `ControlProfileV1`. Digital and analog longitudinal/lateral intent is resolved once, and `hasForwardControlIntentV1` consumes the same locked deadzone and Control Feel response exponent as command compilation. Runtime and Browser expose no Feel/Control numeric setter or getter. This prevents one Profile Ref/hash from producing multiple physical behaviors and keeps the Registry Lock reproducible.
 
 ### 5.3 Camera
 
@@ -176,12 +170,7 @@ Camera tuning remains per Camera Rig Profile. Local data stores a map keyed by e
 
 The workspace labels conditional parameters truthfully. A control is disabled or annotated when the active algorithm, `headingSource`, or `recenterMode` cannot consume it. No slider may claim “applied” without Runtime snapshot or trace evidence.
 
-Named-version restore uses one atomic `applySubjectPresetTuning` Runtime
-request containing Control Feel and Control overrides plus all Camera overrides keyed
-by exact Profile Ref and hash. Runtime validates the complete request before
-changing state and returns a committed/rejected receipt. Individual setters
-remain available for slider preview; restore/default application does not
-simulate a transaction by switching Camera Profiles one at a time.
+Named-version restore uses one atomic `applySubjectPresetTuning` Runtime request containing `selectedControlFeelProfileRef`, `selectedControlProfileRef`, all Camera overrides keyed by exact Profile Ref/hash, and the Camera preference. Runtime first validates the selected Feel against `availableControlFeels`, requires the exact compiled Control Ref, validates every Camera entry, and only then changes state. Feel/Control numeric draft maps are deliberately absent from this request. Camera keeps its session-preview setters because its transient view state is separately published in the Camera snapshot.
 
 ## 6. Publication candidate
 
@@ -542,25 +531,26 @@ Add or extend the following engine-neutral Registry/Runtime interfaces:
 
 ```text
 getSubjectPresetBaseline
-setControlFeelTuning
-getControlFeelTuning
-setControlTuning
-getControlTuning
+listCompatibleProfiles
 applySubjectPresetTuning
-getSubjectPresetSnapshot
+getSubjectSnapshot
+getCameraSnapshot
 ```
 
 Local version CRUD, compare, migration, candidate construction and download are
 Playground-owned services and are not part of the cross-host Browser/Runtime
-API. Registry baseline/closure, transient Runtime tuning, atomic receipts and
-snapshots belong in typed public contracts. No public API exposes localStorage,
-a filesystem path, Git credential or Registry mutation.
+API. Browser profile discovery publishes identity and compatibility for Control
+Feel/Control, not generic numeric parameter bags. Their authoring ranges and
+draft values stay in the Playground authoring module and candidate pipeline.
+Registry baseline/closure, exact Ref selection, Camera session preview, atomic
+receipts and snapshots belong in typed public contracts. No public API exposes
+localStorage, a filesystem path, Git credential or Registry mutation.
 
 ## 11. Failure behavior
 
 - Storage unavailable/full: keep the live draft in memory, display “not persisted,” and never claim a local version was saved.
 - Local hash drift: preserve data, disable auto-application, offer compare/export, and require an explicit rebase.
-- Runtime tuning rejection: keep the previous committed tuning and show the exact parameter diagnostic.
+- Runtime profile/Camera rejection: keep the previous committed state and show the exact diagnostic.
 - Candidate source drift: fail validation before planning.
 - Promotion conflict or stale plan: write nothing.
 - Any generated Registry failure: roll back every created or modified file.

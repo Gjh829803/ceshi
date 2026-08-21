@@ -5,7 +5,6 @@ import type { ExecutionControlProfileV1 } from "@whitebox-world/runtime-contract
 import {
   compileMotionCommandV1,
   hasForwardControlIntentV1,
-  withControlTuningV1,
 } from "./control-profile-runtime";
 
 const DEFAULT_VIEW_FRAME = {
@@ -39,11 +38,9 @@ function profile(
 const NEUTRAL_MOVE_RESPONSE_EXPONENT = 1;
 
 describe("compileMotionCommandV1", () => {
-  it("uses the same transient deadzone and Control Feel response curve for motion and camera intent", () => {
-    const tuned = withControlTuningV1(
-      profile("planar-vector", "camera-relative"),
-      { moveDeadzoneRatio: 0.4 },
-    );
+  it("uses the same locked Control deadzone and Control Feel response curve for motion and camera intent", () => {
+    const tuned = profile("planar-vector", "camera-relative");
+    tuned.moveDeadzoneRatio = 0.4;
 
     expect(compileMotionCommandV1(
       tuned,

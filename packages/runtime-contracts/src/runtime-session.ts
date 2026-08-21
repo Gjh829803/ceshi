@@ -147,20 +147,14 @@ export interface SubjectRuntimeStateV3 {
   relationshipRole?: "none" | "rider" | "driver" | "passenger" | "tethered";
   safeFallbackActive?: boolean;
   motionFailureCode?: string;
-  controlFeelParameterTuning?: ControlFeelTuningV1;
-  controlParameterTuning?: ControlTuningV1;
 }
 
 export interface ApplySubjectPresetTuningRequestV1 {
   subjectEntityId: string;
   expectedSubjectDefinitionRef: string;
   expectedSubjectDefinitionContentHash: string;
-  controlFeelOverridesByProfileRef: Readonly<
-    Record<string, NumericProfileOverrideV1>
-  >;
-  controlOverridesByProfileRef: Readonly<
-    Record<string, NumericProfileOverrideV1>
-  >;
+  selectedControlFeelProfileRef: string;
+  selectedControlProfileRef: string;
   cameraOverridesByProfileRef: Readonly<
     Record<string, NumericProfileOverrideV1>
   >;
@@ -414,16 +408,6 @@ export interface WorldkitBrowserApiV3 {
   adjustCameraView?(input: CameraViewInputV1): WorldRuntimeSnapshotV3;
   resetCameraView?(): WorldRuntimeSnapshotV3;
   setCameraTuning?(tuning: CameraTuningV1): WorldRuntimeSnapshotV3;
-  setControlFeelTuning?(
-    subjectEntityId: string,
-    tuning: ControlFeelTuningV1,
-  ): WorldRuntimeSnapshotV3;
-  getControlFeelTuning?(subjectEntityId: string): ControlFeelTuningV1;
-  setControlTuning?(
-    subjectEntityId: string,
-    tuning: ControlTuningV1,
-  ): WorldRuntimeSnapshotV3;
-  getControlTuning?(subjectEntityId: string): ControlTuningV1;
   applySubjectPresetTuning?(
     request: ApplySubjectPresetTuningRequestV1,
   ): SubjectPresetTuningReceiptV1;

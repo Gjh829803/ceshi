@@ -365,6 +365,9 @@ placement-layout / rigged-subject / g-bot-subject）；专项规格见
   节奏下的同输入固定 Tick Replay、Reset Bootstrap + `checkSupport`、双实例 Feel 隔离、
   0.4 m Ledge/Coyote/Jump Buffer 与 Hold/Release 重力比；缺少 Profile 时返回稳定
   Diagnostic。
+- [x] Runtime/Browser 只允许在 Execution Plan 已锁定的 Control Feel Ref 间切换；移除
+  Feel/Control 会话数字 overlay、Snapshot 数字袋与通用 Browser 数字调参入口。本地草稿和
+  Candidate 仍可保存数字差异，但必须经 `promote` 物化为新 Registry 版本后才影响玩法。
 - [ ] CLI/Browser/E2E 覆盖不同主体重力倍率、Ground→Water→Air 稳定切换与边界抖动
   （不新增 CLI/Browser 协议字段，随后续切片交付）。
 

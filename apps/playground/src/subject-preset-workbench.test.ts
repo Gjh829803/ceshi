@@ -19,6 +19,16 @@ const baseline: SubjectPresetLocalBaselineV1 = {
     resourceRef: "worldkit://control-feel-profile/humanoid.medium-ground@1",
     contentHash: `sha256:${"6".repeat(64)}`,
   },
+  availableControlFeelProfiles: [
+    {
+      resourceRef: "worldkit://control-feel-profile/humanoid.medium-ground@1",
+      contentHash: `sha256:${"6".repeat(64)}`,
+    },
+    {
+      resourceRef: "worldkit://control-feel-profile/humanoid.heavy-ground@1",
+      contentHash: `sha256:${"7".repeat(64)}`,
+    },
+  ],
   controlProfile: {
     resourceRef: "worldkit://control-profile/throttle-steer.subject-local@1",
     contentHash: `sha256:${"3".repeat(64)}`,
@@ -60,6 +70,7 @@ describe("subject preset workbench projection", () => {
         createdAtIso: "2026-08-21T08:00:00.000Z",
         updatedAtIso: "2026-08-21T09:00:00.000Z",
       },
+      selectedControlFeelProfileRef: baseline.controlFeelProfile.resourceRef,
       selectedCameraPreferenceRef:
         "worldkit://camera-profile/orbit.medium@1",
       controlFeel: {
@@ -120,10 +131,12 @@ describe("subject preset workbench projection", () => {
         createdAtIso: "2026-08-21T08:00:00.000Z",
         updatedAtIso: "2026-08-21T09:00:00.000Z",
       },
+      selectedControlFeelProfileRef:
+        "worldkit://control-feel-profile/humanoid.heavy-ground@1",
       selectedCameraPreferenceRef: null,
       controlFeel: {
-        baseParameters: { runSpeedMetersPerSecond: 12 },
-        currentValues: { runSpeedMetersPerSecond: 12 },
+        baseParameters: { runSpeedMetersPerSecond: 3 },
+        currentValues: { runSpeedMetersPerSecond: 2.8 },
         runtimeParameterNames: ["runSpeedMetersPerSecond"],
       },
       control: {
@@ -134,12 +147,22 @@ describe("subject preset workbench projection", () => {
       cameraByProfileRef: {},
     });
 
+    expect(draft.controlFeelOverridesByProfileRef).toEqual({
+      "worldkit://control-feel-profile/humanoid.heavy-ground@1": {
+        baseResourceRef:
+          "worldkit://control-feel-profile/humanoid.heavy-ground@1",
+        baseContentHash: `sha256:${"7".repeat(64)}`,
+        values: { runSpeedMetersPerSecond: 2.8 },
+      },
+    });
+
     expect(subjectPresetTuningRequestFromDraftV1(draft, "player")).toEqual({
       subjectEntityId: "player",
       expectedSubjectDefinitionRef: baseline.subjectDefinitionRef,
       expectedSubjectDefinitionContentHash: baseline.subjectDefinitionContentHash,
-      controlFeelOverridesByProfileRef: {},
-      controlOverridesByProfileRef: {},
+      selectedControlFeelProfileRef:
+        "worldkit://control-feel-profile/humanoid.heavy-ground@1",
+      selectedControlProfileRef: baseline.controlProfile.resourceRef,
       cameraOverridesByProfileRef: {},
       cameraPreference: "auto",
     });

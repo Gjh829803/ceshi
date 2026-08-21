@@ -3,7 +3,7 @@
 这套工作区把“我正在试的参数”和“所有人拉取后使用的公共默认”分成不同生命周期，避免一次本地试调意外覆盖团队配置。
 
 ```text
-实时预览草稿
+本地工作草稿 + 锁定 Ref 预览
   → 命名的本地版本
   → 本机默认
   → 锁定候选 JSON
@@ -13,11 +13,11 @@
 
 ## 在页面里调参与保存
 
-打开 Playground 的 Authoring 模式和“大尺寸调控台”。Motion 只选择运动算法；速度、加减速、转向、跳跃和响应曲线归 Control Feel；输入死区归 Control；相机参数归 Camera。可调参数会即时进入当前 Runtime 预览，每套相机的微调按 Camera Profile 分开保存。
+打开 Playground 的 Authoring 模式和“大尺寸调控台”。Motion 只选择运动算法；速度、加减速、转向、跳跃和响应曲线归 Control Feel；输入死区归 Control；相机参数归 Camera。Runtime 只预览已编译并锁定的 Motion / Control Feel / Control Ref；Feel 与 Control 的数字调整先保存在本地草稿，必须通过 `promote` 物化成新的 Registry 资源后才能改变玩法。相机微调是独立的会话预览，并按 Camera Profile 分开保存。
 
 - **保存本地版本**：为当前 Motion 选择、Control Feel、Control 和全部已调 Camera 参数创建一个命名快照。
 - **设为本机默认**：以后在同一台电脑打开相同 Subject Definition 与内容哈希时自动恢复该版本。
-- **恢复版本**：原子恢复整组参数；任意 Ref、内容哈希或安全范围不匹配时整次拒绝，不会只恢复一半。
+- **恢复版本**：原子恢复已锁定的 Feel/Control Ref 与相机预览；任意 Ref、内容哈希或安全范围不匹配时整次拒绝，不会只恢复一半。尚未 promote 的 Feel/Control 数字仍只是草稿。
 - **导出候选**：生成带完整 Registry 依赖锁的 JSON，供本地 CLI 验证和生成发布计划。浏览器不会写仓库、提交或推送 Git。
 
 本地版本属于浏览器 `localStorage`，可以自由增删，不影响其他人。Registry 内容变化后，旧本机默认不会被静默套用到新版本，必须重新检查。

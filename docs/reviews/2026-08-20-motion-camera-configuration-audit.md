@@ -6,6 +6,8 @@
 
 `safetyLimits` 继续作为 Runtime 硬边界，新增的 `authoringRanges` 只负责调控台中的推荐区间和步长。调控台会依据 Motion Kernel 的 `runtimeParameterNames` 区分“即时生效”和“仅草稿、待接入”。
 
+> 2026-08-21 disposition：P1.5 的最终资源锁合同取代上述通用“即时生效”描述。Control Feel 与 Control 数字现在仅进入本地草稿/Candidate，Runtime 和 Browser 只选择已锁定 Ref；Camera 会话预览仍可即时生效。
+
 ## 已进入 Runtime 的运动参数
 
 | Kernel | 已消费参数 |

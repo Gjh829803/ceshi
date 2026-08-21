@@ -8,15 +8,12 @@ import type { TransformNode } from "@babylonjs/core/Meshes/transformNode.js";
 import type { Scene } from "@babylonjs/core/scene.pure.js";
 
 import type {
-  ControlFeelParametersV1,
-  ControlFeelTuningV1,
   ExecutionMotionProfileV1,
   ExecutionSubjectV3,
   LocomotionModeV1,
   PublishedMovementMediumV1,
   Vec3,
 } from "@whitebox-world/runtime-contracts";
-import { resolveControlFeelParametersV1 } from "@whitebox-world/runtime-contracts";
 import {
   resolveCharacterStateV1,
   type CharacterSupportStateV1,
@@ -169,9 +166,7 @@ export class MotionKernelRuntimeV1 {
   private readonly up = Vector3.Up();
   private readonly colliderCenterOffset: Vector3;
   private readonly motionModeResolver: MotionModeResolverV1;
-  private controlFeelBase: ControlFeelSurfaceV1;
   private controlFeel: ControlFeelSurfaceV1;
-  private controlFeelTuning: ControlFeelTuningV1 = {};
   private resolvedState: SubjectResolvedStateV1 | undefined;
   private yawRadians: number;
   private forwardSpeedMetersPerSecond = 0;
@@ -201,8 +196,7 @@ export class MotionKernelRuntimeV1 {
       subjectOrigin: Vector3,
     ) => number | undefined,
   ) {
-    this.controlFeelBase = requireControlFeel(subject);
-    this.controlFeel = copyControlFeelSurface(this.controlFeelBase);
+    this.controlFeel = requireControlFeel(subject);
     if (subject.capabilityAssembly !== undefined) {
       if (subject.capabilityAssembly.mediumProfile.air === undefined) {
         throw new Error(
@@ -278,29 +272,12 @@ export class MotionKernelRuntimeV1 {
         `SUBJECT_OVERRIDE_FORBIDDEN: control-feel profile '${resourceRef}' is not locked on this subject.`,
       );
     }
-    this.controlFeelBase = copyControlFeelSurface(nextFeel);
     this.controlFeel = copyControlFeelSurface(nextFeel);
-    this.controlFeelTuning = {};
+    this.publishResolvedState(
+      this.physicsController.checkSupport(FIXED_TIME_STEP_SECONDS, this.gravityDirection),
+      { moveRequested: false, runRequested: false },
+    );
     return true;
-  }
-
-  canSetControlFeelTuning(tuning: ControlFeelTuningV1): boolean {
-    return resolveControlFeelParametersV1(this.controlFeelBase, tuning) !== undefined;
-  }
-
-  setControlFeelTuning(tuning: ControlFeelTuningV1): boolean {
-    const resolved = resolveControlFeelParametersV1(this.controlFeelBase, tuning);
-    if (resolved === undefined) return false;
-    this.controlFeelTuning = { ...tuning };
-    this.controlFeel = {
-      ...this.controlFeelBase,
-      ...resolved,
-    };
-    return true;
-  }
-
-  getControlFeelTuning(): ControlFeelTuningV1 {
-    return { ...this.controlFeelTuning };
   }
 
   get activeControlFeel(): ControlFeelSurfaceV1 {
@@ -399,9 +376,7 @@ export class MotionKernelRuntimeV1 {
     this.physicsController.setPosition(spawn.add(this.colliderCenterOffset));
     this.physicsController.setVelocity(Vector3.Zero());
     this.motionModeResolver.reset();
-    this.controlFeelBase = requireControlFeel(this.subject);
-    this.controlFeel = copyControlFeelSurface(this.controlFeelBase);
-    this.controlFeelTuning = {};
+    this.controlFeel = requireControlFeel(this.subject);
     this.yawRadians = this.subject.spawnSubjectFacingRadians;
     this.forwardSpeedMetersPerSecond = 0;
     this.planarVelocity.setAll(0);

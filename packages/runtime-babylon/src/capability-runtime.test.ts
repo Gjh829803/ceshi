@@ -340,37 +340,14 @@ describe("capability package runtime smoke tests", () => {
       )).toThrow(/^SUBJECT_OVERRIDE_FORBIDDEN/);
 
       runtime.reset();
-      expect(runtime.setControlFeelTuning("player", {
-        accelerationMetersPerSecondSquared: 8,
-        moveResponseExponent: 1.8,
-      }).subjectStatesByEntityId.player?.controlFeelParameterTuning).toEqual({
-        accelerationMetersPerSecondSquared: 8,
-        moveResponseExponent: 1.8,
-      });
-      expect(runtime.setControlTuning("player", {
-        moveDeadzoneRatio: 0.4,
-      }).subjectStatesByEntityId.player?.controlParameterTuning).toEqual({
-        moveDeadzoneRatio: 0.4,
-      });
-      const deadzoned = await runtime.runFixedInput({
-        actions: [],
-        axes: { moveYRatio: 0.3 },
-        ticks: 10,
-      });
-      expect(deadzoned.subjectStatesByEntityId.player!.speedMetersPerSecond)
-        .toBeCloseTo(0, 6);
-      expect(() => runtime.setControlTuning("player", {
-        moveDeadzoneRatio: 0.41,
-      })).toThrow(RangeError);
-      expect(runtime.snapshot().subjectStatesByEntityId.player?.controlParameterTuning)
-        .toEqual({ moveDeadzoneRatio: 0.4 });
-      expect(() => runtime.setControlFeelTuning("player", {
-        walkSpeedMetersPerSecond: 5,
-      })).toThrow(RangeError);
-      expect(runtime.reset().subjectStatesByEntityId.player?.controlParameterTuning)
-        .toEqual({});
-      expect(runtime.snapshot().subjectStatesByEntityId.player?.controlFeelParameterTuning)
-        .toEqual({});
+      expect(runtime).not.toHaveProperty("setControlFeelTuning");
+      expect(runtime).not.toHaveProperty("getControlFeelTuning");
+      expect(runtime).not.toHaveProperty("setControlTuning");
+      expect(runtime).not.toHaveProperty("getControlTuning");
+      expect(runtime.snapshot().subjectStatesByEntityId.player)
+        .not.toHaveProperty("controlFeelParameterTuning");
+      expect(runtime.snapshot().subjectStatesByEntityId.player)
+        .not.toHaveProperty("controlParameterTuning");
 
       const capabilityAssembly = loaded.executionPlan.subjects[0]!.capabilityAssembly!;
       const orbitProfile = capabilityAssembly.cameraContext.cameraRigProfiles.find(
@@ -378,17 +355,48 @@ describe("capability package runtime smoke tests", () => {
           profile.resourceRef === "worldkit://camera-profile/orbit.medium@1",
       )!;
       const beforeRejectedPreset = runtime.snapshot();
+      const selectedControlFeelProfileRef =
+        "worldkit://control-feel-profile/humanoid.medium-ground@1";
+      const selectedControlProfileRef = capabilityAssembly.controlProfile.resourceRef;
       const rejectedPreset = runtime.applySubjectPresetTuning({
         subjectEntityId: "player",
         expectedSubjectDefinitionRef: subjectDefinitionRef,
         expectedSubjectDefinitionContentHash: "sha256:" + "0".repeat(64),
-        controlFeelOverridesByProfileRef: {},
-        controlOverridesByProfileRef: {},
+        selectedControlFeelProfileRef,
+        selectedControlProfileRef,
         cameraOverridesByProfileRef: {},
         cameraPreference: "auto",
       });
       expect(rejectedPreset.status).toBe("rejected");
       expect(rejectedPreset.snapshot).toEqual(beforeRejectedPreset);
+
+      const rejectedUnlockedFeel = runtime.applySubjectPresetTuning({
+        subjectEntityId: "player",
+        expectedSubjectDefinitionRef: subjectDefinitionRef,
+        expectedSubjectDefinitionContentHash:
+          loaded.executionPlan.subjects[0]!.subjectDefinitionHash,
+        selectedControlFeelProfileRef:
+          "worldkit://control-feel-profile/unknown.unlisted@1",
+        selectedControlProfileRef,
+        cameraOverridesByProfileRef: {},
+        cameraPreference: orbitProfile.resourceRef,
+      });
+      expect(rejectedUnlockedFeel.status).toBe("rejected");
+      expect(rejectedUnlockedFeel.snapshot).toEqual(beforeRejectedPreset);
+
+      const rejectedControlProfile = runtime.applySubjectPresetTuning({
+        subjectEntityId: "player",
+        expectedSubjectDefinitionRef: subjectDefinitionRef,
+        expectedSubjectDefinitionContentHash:
+          loaded.executionPlan.subjects[0]!.subjectDefinitionHash,
+        selectedControlFeelProfileRef,
+        selectedControlProfileRef:
+          "worldkit://control-profile/unknown.unlisted@1",
+        cameraOverridesByProfileRef: {},
+        cameraPreference: orbitProfile.resourceRef,
+      });
+      expect(rejectedControlProfile.status).toBe("rejected");
+      expect(rejectedControlProfile.snapshot).toEqual(beforeRejectedPreset);
 
       const exactControlProfile = capabilityAssembly.controlProfile;
       const rejectedUnsafeCameraPreset = runtime.applySubjectPresetTuning({
@@ -396,8 +404,8 @@ describe("capability package runtime smoke tests", () => {
         expectedSubjectDefinitionRef: subjectDefinitionRef,
         expectedSubjectDefinitionContentHash:
           loaded.executionPlan.subjects[0]!.subjectDefinitionHash,
-        controlFeelOverridesByProfileRef: {},
-        controlOverridesByProfileRef: {},
+        selectedControlFeelProfileRef,
+        selectedControlProfileRef,
         cameraOverridesByProfileRef: {
           [orbitProfile.resourceRef]: {
             baseResourceRef: orbitProfile.resourceRef,
@@ -410,27 +418,15 @@ describe("capability package runtime smoke tests", () => {
       expect(rejectedUnsafeCameraPreset.status).toBe("rejected");
       expect(rejectedUnsafeCameraPreset.snapshot).toEqual(beforeRejectedPreset);
 
-      const controlFeelProfile = loaded.executionPlan.subjects[0]!.controlFeel;
       const controlProfile = exactControlProfile;
       const committedPreset = runtime.applySubjectPresetTuning({
         subjectEntityId: "player",
         expectedSubjectDefinitionRef: subjectDefinitionRef,
         expectedSubjectDefinitionContentHash:
           loaded.executionPlan.subjects[0]!.subjectDefinitionHash,
-        controlFeelOverridesByProfileRef: {
-          [controlFeelProfile.resourceRef]: {
-            baseResourceRef: controlFeelProfile.resourceRef,
-            baseContentHash: controlFeelProfile.contentHash,
-            values: { accelerationMetersPerSecondSquared: 4 },
-          },
-        },
-        controlOverridesByProfileRef: {
-          [controlProfile.resourceRef]: {
-            baseResourceRef: controlProfile.resourceRef,
-            baseContentHash: controlProfile.contentHash,
-            values: { moveDeadzoneRatio: 0.4 },
-          },
-        },
+        selectedControlFeelProfileRef:
+          "worldkit://control-feel-profile/humanoid.heavy-ground@1",
+        selectedControlProfileRef: controlProfile.resourceRef,
         cameraOverridesByProfileRef: {
           [orbitProfile.resourceRef]: {
             baseResourceRef: orbitProfile.resourceRef,
@@ -445,10 +441,15 @@ describe("capability package runtime smoke tests", () => {
         preference: orbitProfile.resourceRef,
         tuning: { targetHeightMeters: 1.4 },
       });
-      expect(committedPreset.snapshot.subjectStatesByEntityId.player).toMatchObject({
-        controlFeelParameterTuning: { accelerationMetersPerSecondSquared: 4 },
-        controlParameterTuning: { moveDeadzoneRatio: 0.4 },
-      });
+      expect(committedPreset.snapshot.subjectStatesByEntityId.player)
+        .toMatchObject({
+          activeControlFeelProfileRef:
+            "worldkit://control-feel-profile/humanoid.heavy-ground@1",
+        });
+      expect(committedPreset.snapshot.subjectStatesByEntityId.player)
+        .not.toHaveProperty("controlFeelParameterTuning");
+      expect(committedPreset.snapshot.subjectStatesByEntityId.player)
+        .not.toHaveProperty("controlParameterTuning");
       expect((await runtime.runHarness("player")).passed).toBe(true);
     } finally {
       await runtime.dispose();

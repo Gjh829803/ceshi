@@ -6,18 +6,13 @@ import type {
   ExecutionControlProfileV1,
   ExecutionSubjectV3,
   ControlInputAxesV2,
-  ControlFeelTuningV1,
-  ControlTuningV1,
   PublishedMovementMediumV1,
   SemanticInputActionV1,
   Vec3,
   ViewControlFrameV1,
 } from "@whitebox-world/runtime-contracts";
 
-import {
-  compileMotionCommandV1,
-  withControlTuningV1,
-} from "./control-profile-runtime";
+import { compileMotionCommandV1 } from "./control-profile-runtime";
 import {
   MotionKernelRuntimeV1,
   type MotionKernelSnapshotV1,
@@ -45,7 +40,6 @@ const LEGACY_CONTROL_PROFILE = {
  */
 export class SubjectController {
   private readonly motionKernel: MotionKernelRuntimeV1;
-  private controlTuning: ControlTuningV1 = {};
   readonly physicsController: MotionKernelRuntimeV1["physicsController"];
 
   constructor(
@@ -77,10 +71,7 @@ export class SubjectController {
     axes: Readonly<ControlInputAxesV2> = {},
   ): void {
     const command = compileMotionCommandV1(
-      withControlTuningV1(
-        this.subject.capabilityAssembly?.controlProfile ?? LEGACY_CONTROL_PROFILE,
-        this.controlTuning,
-      ),
+      this.subject.capabilityAssembly?.controlProfile ?? LEGACY_CONTROL_PROFILE,
       this.motionKernel.activeControlFeel.moveResponseExponent,
       actions,
       viewControlFrame,
@@ -104,40 +95,6 @@ export class SubjectController {
 
   get activeControlFeel(): MotionKernelRuntimeV1["activeControlFeel"] {
     return this.motionKernel.activeControlFeel;
-  }
-
-  setControlFeelTuning(tuning: ControlFeelTuningV1): boolean {
-    return this.motionKernel.setControlFeelTuning(tuning);
-  }
-
-  canSetControlFeelTuning(tuning: ControlFeelTuningV1): boolean {
-    return this.motionKernel.canSetControlFeelTuning(tuning);
-  }
-
-  getControlFeelTuning(): ControlFeelTuningV1 {
-    return this.motionKernel.getControlFeelTuning();
-  }
-
-  setControlTuning(tuning: ControlTuningV1): boolean {
-    const profile = this.subject.capabilityAssembly?.controlProfile;
-    if (profile === undefined || !this.canSetControlTuning(tuning)) return false;
-    this.controlTuning = { ...tuning };
-    return true;
-  }
-
-  canSetControlTuning(tuning: ControlTuningV1): boolean {
-    const profile = this.subject.capabilityAssembly?.controlProfile;
-    if (profile === undefined) return false;
-    const keys = Object.keys(tuning);
-    return keys.every((name) => name === "moveDeadzoneRatio") &&
-      (tuning.moveDeadzoneRatio === undefined ||
-        (Number.isFinite(tuning.moveDeadzoneRatio) &&
-          tuning.moveDeadzoneRatio >= 0 &&
-          tuning.moveDeadzoneRatio <= 0.4));
-  }
-
-  getControlTuning(): ControlTuningV1 {
-    return { ...this.controlTuning };
   }
 
   synchronizeVisual(): void {
@@ -182,7 +139,6 @@ export class SubjectController {
   }
 
   reset(): void {
-    this.controlTuning = {};
     this.motionKernel.reset();
   }
 
