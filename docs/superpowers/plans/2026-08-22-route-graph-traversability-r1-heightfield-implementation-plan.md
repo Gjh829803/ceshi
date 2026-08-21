@@ -191,23 +191,43 @@ Expected: PASS, and the R0 verifier remains byte-stable.
 - Modify: `packages/traversal/src/graph-contract.test.ts`
 - Create: `packages/traversal/src/capability-envelope.ts`
 - Create: `packages/traversal/src/capability-envelope.test.ts`
+- Create: `packages/traversal/src/build-budget.ts`
+- Create: `packages/traversal/src/build-budget.test.ts`
 - Modify: `packages/traversal/src/index.ts`
 - Create: `packages/traversal-recast/package.json`
 - Create: `packages/traversal-recast/src/adapter-identity.ts`
 - Create: `packages/traversal-recast/src/adapter-identity.test.ts`
+- Create: `packages/traversal-recast/src/recast-config.ts`
+- Create: `packages/traversal-recast/src/recast-config.test.ts`
+- Create: `packages/traversal-recast/src/provider-lifecycle.ts`
+- Create: `packages/traversal-recast/src/provider-lifecycle.test.ts`
+- Create: `packages/traversal-recast/src/provider-acceptance.test.ts`
 - Create: `packages/traversal-recast/src/index.ts`
+- Create: `packages/runtime-babylon/src/traversal-implementation-identity.ts`
+- Create: `packages/runtime-babylon/src/traversal-implementation-identity.test.ts`
+- Modify: `packages/runtime-babylon/src/index.ts`
+- Modify: `packages/runtime-babylon/package.json`
 - Modify: `pnpm-lock.yaml`
 
 **Interfaces:**
 - Adds `TraversalGraphBuilderProfileV2`, `ResolvedTraversalGraphBuilderProfileV2`, a version-dispatching `resolveTraversalGraphBuilderProfile()`, `TraversalCapabilityEnvelopeV1`, and `createTraversalCapabilityEnvelopeV1()` without mutating frozen V1.
 - Built-in ref: `worldkit://traversal-graph-builder-profile/outdoor-humanoid.heightfield-r1@1`.
 - V2 adds provider-neutral voxel/tile build policy required by a real builder: `voxelCellSizeMeters`, `voxelCellHeightMeters`, `tileSizeCells`, `maximumEdgeLengthMeters`, `maximumSimplificationErrorMeters`, and the existing quantization/cost/budget fields.
+- The built-in V2 Profile is fully frozen rather than left to adapter defaults: `clearanceMarginMeters: 0.05`, `voxelCellSizeMeters: 0.15`, `voxelCellHeightMeters: 0.1`, `tileSizeCells: 64`, `maximumEdgeLengthMeters: 2.4`, `maximumSimplificationErrorMeters: 0.15`, `positionQuantizationMeters: 0.001`, both cost weights `1`, `maximumNodes: 100000`, `maximumEdges: 200000`, `maximumTiles: 1024`, and `maximumSearchSteps: 100000`. Validation accepts finite clearance in `[0, 2]`, cell sizes in `[0.001m, 4m]`/`[0.001m, 2m]`, integer tile size in `[16, 1024]`, positive maximum edge length no greater than `256m` and no smaller than one horizontal cell, positive simplification error no greater than `16m`, and the existing V1 cost/budget domains. These are canonical policy values and units, not Recast names or defaults.
 - `@whitebox-world/traversal-recast` owns the pinned provider dependency and conversion only; `@whitebox-world/traversal` stays provider-neutral.
-- The Capability Envelope is derived from the frozen V1 lock receipt plus the resolved V2 Graph Builder Profile. It contains canonical geometry/capability units, the locked ground capability/Profile identities, conservative builder clearance, the `resolvedTraversalLockHash`, Graph Builder Profile identity, and the locked provider-neutral Backend/Adapter identity needed for an audited equivalence mapping. It does not mutate the R0 lock and contains no Recast field names, poly refs, WASM identity, validation thresholds, speed, acceleration, gravity, or Driver policy.
+- The Capability Envelope is derived from the frozen V1 lock receipt plus the resolved V2 Graph Builder Profile. It contains canonical geometry/capability units, the locked ground capability/Profile identities, conservative builder clearance, the complete V2 voxel/tile/quantization/cost/budget policy, the `resolvedTraversalLockHash`, Graph Builder Profile identity, and the locked provider-neutral Backend/Adapter identity needed for an audited equivalence mapping. It does not mutate the R0 lock and contains no Recast field names, poly refs, WASM identity, validation thresholds, speed, acceleration, gravity, Control/Feel/Motion/Medium identity, or Driver policy.
+- `TraversalCapabilityEnvelopeV1` is a closed object with `kind: "traversal-capability-envelope"`, `schemaVersion: 1`, `traversalMode: "ground"`, and no self-hash field. Its factory returns `{ envelope, traversalCapabilityEnvelopeHash }`, where the hash is `sha256CanonicalJson(envelope)`. In addition to the lock/profile receipt hashes and exact identities, the Envelope copies only these payload fields: `subjectEntityId`, capsule radius/height/center offset, slope/step limits, Collider/Physics Body/Locomotion/Ground Capability refs and hashes, Runtime Backend/Adapter refs/versions/hashes, Graph Builder ref/version/hash, and every V2 build-policy field. The adapter accepts the Envelope only; it never accepts a raw lock, Profile, Subject, or Registry.
+- Registry Subject Definition bytes and normalized Definition bytes remain separate as frozen in Task 1. The Envelope does not copy either Subject Definition hash because Recast mapping needs the already-bound `resolvedTraversalLockHash`, capability identities, and geometry rather than visual/semantic Definition identity.
+- V2 uses `schemaVersion: 2`, resource version `@1`, and `resolvedVersion: "1"`. The dispatcher is an exact two-ref table; it does not infer versions from a suffix or payload. `resolveTraversalGraphBuilderProfileV1()` and the exact V1 hash remain byte-stable.
+- Receipt validation is independent: lock receipt hash must equal `sha256CanonicalJson(lock)`; Profile content hash must equal `sha256CanonicalJson(profile)` and its exact Registry resolution; V1 Profiles are rejected by the Envelope factory. The lock hash is never compared with the Profile hash.
+- `@whitebox-world/runtime-babylon` owns and exports the one production `TraversalRuntimeImplementationIdentityV1`. Its Backend manifest is canonical JSON over `{ kind: "traversal-runtime-backend-manifest", schemaVersion: 1, resourceRef: "worldkit://runtime-backend/babylon-havok@1", resolvedVersion: "9.21.2+1.3.14", babylonCoreVersion: "9.21.2", havokPluginVersion: "1.3.14" }`; its Adapter manifest is canonical JSON over `{ kind: "traversal-runtime-adapter-manifest", schemaVersion: 1, resourceRef: "worldkit://runtime-adapter/babylon.character-controller@1", resolvedVersion: "1", runtimeBackendRef: "worldkit://runtime-backend/babylon-havok@1", runtimeBackendResolvedVersion: "9.21.2+1.3.14", adapterContractVersion: "character-controller-ground-support.v1" }`. The two content hashes are `sha256CanonicalJson()` of those exact manifests. No fixture hash or legacy `babylon-world-runtime@1` Ref is accepted as production identity.
+- Task 2 pins `@babylonjs/core` and `@babylonjs/loaders` to exact `9.21.2` and `@babylonjs/havok` to exact `1.3.14` in `runtime-babylon` rather than leaving compatible ranges. The identity test reads the package's declared direct dependency versions and fails if they drift from the manifest before a manifest/hash update; an upgraded engine cannot retain the old production identity silently.
+- `@whitebox-world/traversal-recast` keeps a compatibility allowlist keyed by that exact six-field Runtime identity tuple, but its production code does not import Runtime Babylon or invent a competing Runtime identity. Its test package declares Runtime Babylon as a dev dependency and proves the exported production tuple is accepted, while R0 placeholder hashes and the legacy Adapter Ref fail with `TRAVERSAL_RECAST_BACKEND_MAPPING_NOT_AUDITED`. Recast provider identity uses separate internal `graphProviderAdapter...` fields and never enters Profile, Envelope, Lock, canonical Graph, or Runtime identity.
+- R1 uses `generateTiledNavMesh`. `tileSizeCells` is required, integer, and mapped to the tiled generator. `maximumTiles` is not a Recast config field: the provider-neutral `estimateHeightfieldTileCountV1()` first applies the same integer-micrometer normalization and computes `ceil(widthMicrometers / (tileSizeCells * voxelCellSizeMicrometers)) * ceil(depthMicrometers / (tileSizeCells * voxelCellSizeMicrometers))` for the one-layer R1 Heightfield. `assertTraversalGraphBuildBudgetV1()` fails with `ROUTE_GRAPH_BUDGET_EXCEEDED` before any WASM allocation when the estimate exceeds the Envelope budget. Task 3 must call this named guard before invoking the provider. Solo generation is not an R1 fallback.
 
 - [ ] **Step 1: Write RED profile tests**
 
-Prove that V2 accepts only its closed field set, rejects Subject/Validation values such as `capsuleRadiusMeters`, `maxSlopeDegrees`, `walkSpeedMetersPerSecond`, and `maximumProbeTicks`, and produces a stable Registry content hash.
+Prove that V2 accepts only its closed field set, rejects Subject/Validation values such as `capsuleRadiusMeters`, `maxSlopeDegrees`, `maxStepHeightMeters`, `walkSpeedMetersPerSecond`, `gravityMetersPerSecondSquared`, and `maximumProbeTicks`, rejects Provider dialects such as `cs`, `ch`, `walkableRadius`, `walkableClimb`, and `agentRadius`, and produces a stable Registry content hash. Lock `schemaVersion: 2`, resource `resolvedVersion: "1"`, the exact V1 hash `sha256:0c716c3d733d679d8518018ec2e54d678bc26715beac98c9928218862778d4a1`, and mismatched V1/V2 Ref-hash pairs in Graph validation.
 
 - [ ] **Step 2: Run the RED profile test**
 
@@ -219,23 +239,27 @@ Expected: FAIL because V2 resolution is absent.
 
 Keep Subject geometry and motion values out of the profile. At build time, locked Subject geometry and traversal limits come from `ResolvedTraversalLockReceiptV1`, while conservative builder clearance and voxel/tile policy come from the separately resolved `ResolvedTraversalGraphBuilderProfileV2`. Those two immutable inputs are joined exactly once by `createTraversalCapabilityEnvelopeV1()`; do not add either input's fields to the other contract. Update Graph validation to resolve either the frozen V1 profile or the new V2 profile by exact resource ref/hash; do not weaken validation to accept arbitrary profiles.
 
-- [ ] **Step 4: Write and run RED Capability Envelope tests**
+- [ ] **Step 4: Write and run RED Capability Envelope and build-budget tests**
 
-Prove that `createTraversalCapabilityEnvelopeV1()` accepts only one immutable `ResolvedTraversalLockReceiptV1` plus one immutable `ResolvedTraversalGraphBuilderProfileV2`, copies every geometry/capability/identity field from the correct owner, rejects lock/profile hash mismatch and non-finite values, returns immutable canonical bytes, and contains no Validation, Driver, speed, gravity, Provider, or Recast field. Run: `pnpm vitest run packages/traversal/src/capability-envelope.test.ts`. Expected: FAIL because the factory does not exist.
+Prove that `createTraversalCapabilityEnvelopeV1()` accepts only one immutable `ResolvedTraversalLockReceiptV1` plus one immutable `ResolvedTraversalGraphBuilderProfileV2`, copies every geometry/capability/identity and V2 policy field from the correct owner, independently validates each receipt's canonical hash and exact Profile Registry identity, rejects V1 Profiles and non-finite values, returns immutable canonical bytes plus a non-self-referential envelope hash, and contains no Validation, Driver, speed, gravity, Control/Feel/Motion/Medium, Provider, or Recast field. Changing only `capsuleRadiusMeters`, `clearanceMarginMeters`, or `voxelCellSizeMeters` must change the Envelope hash. Separately prove exact-multiple and boundary tile estimates, one-layer semantics, integer-overflow rejection, and stable `ROUTE_GRAPH_BUDGET_EXCEEDED` before a provider callback can run. Run: `pnpm vitest run packages/traversal/src/capability-envelope.test.ts packages/traversal/src/build-budget.test.ts`. Expected: FAIL because the factories do not exist.
 
-- [ ] **Step 5: Implement the canonical Capability Envelope**
+- [ ] **Step 5: Implement the canonical Capability Envelope and pre-provider budget guard**
 
-Implement and export the strict Envelope factory in `@whitebox-world/traversal` before adding any Recast mapping. No adapter code may accept a raw lock or Graph Builder Profile.
+Implement and export the strict Envelope factory plus the pure Heightfield tile estimator/budget guard in `@whitebox-world/traversal` before adding any Recast mapping. No adapter code may accept a raw lock or Graph Builder Profile. The guard owns no WASM or provider values and Task 3 must invoke it before the first provider call.
 
 - [ ] **Step 6: Add the isolated Recast package**
 
-Declare `recast-navigation` `0.43.1` as a direct dependency of `@whitebox-world/traversal-recast`. Do not add it to the root or `runtime-babylon` package. Define an internal adapter identity/hash that is resolved by the profile implementation but never serialized into `TraversalGraphV1`.
+Declare `recast-navigation` `0.43.1` as a direct dependency of `@whitebox-world/traversal-recast`. Do not add it to the root or `runtime-babylon` package. Define a separate internal Graph Provider Adapter identity/hash over the exact package version, tiled-generator choice, closed mapping/rounding formulas, and every remaining explicit provider constant. It is not resolved by the Graph Builder Profile and is never serialized into the Profile, Envelope, Lock, or `TraversalGraphV1`.
 
 The Recast adapter accepts only the already-derived Envelope and maps it to provider build parameters; Recast radius, height, climb, slope, and erosion inputs must come only from that mapping. The adapter may conservatively transform canonical values but may not accept or reread Subject, Physics Body, Locomotion, raw Lock, or Graph Builder Profile records.
 
+Source audit of published `recast-navigation` `0.43.1` freezes the mapping boundary: `cs`/`ch` are world units; `walkableHeight`, `walkableClimb`, `walkableRadius`, `maxEdgeLen`, and `maxSimplificationError` are voxel-domain inputs in the high-level generator. Map exactly once inside the adapter after normalizing meter values to nearest integer micrometers (`round(meters * 1_000_000)`) so decimal policy values do not lose a voxel through IEEE-754 division: height uses integer `ceil(capsuleHeightMicrometers / voxelCellHeightMicrometers)`, climb uses integer `floor(maxStepHeightMicrometers / voxelCellHeightMicrometers)`, radius uses integer `ceil((capsuleRadiusMicrometers + clearanceMarginMicrometers) / voxelCellSizeMicrometers)`, maximum edge length uses integer `floor(maximumEdgeLengthMicrometers / voxelCellSizeMicrometers)` with V2 requiring at least one cell, simplification error uses `maximumSimplificationErrorMicrometers / voxelCellSizeMicrometers`, and slope remains degrees. `walkableHeight` never uses collider center offset. RED locks `0.3m / 0.1m -> 3`, `2.4m / 0.15m -> 16`, and `0.299m / 0.1m -> 2`. Remaining generator values are closed adapter constants included in the internal adapter hash: input `borderSize: 0` (the pinned tiled generator derives effective border as walkable radius plus three cells), `minRegionArea: 8`, `mergeRegionArea: 20`, `maxVertsPerPoly: 6`, `detailSampleDist: 6`, `detailSampleMaxError: 1`, `buildBvTree: true`, and `chunkyTriMeshTrisPerChunk: 128`; library defaults are not accepted implicitly. Unknown Runtime Backend/Adapter identity tuples fail with `TRAVERSAL_RECAST_BACKEND_MAPPING_NOT_AUDITED`.
+
 - [ ] **Step 7: Add the provider acceptance test**
 
-The test must initialize/destroy the WASM provider repeatedly, prove Node compatibility, prove a right-handed Y-up triangle is interpreted correctly, and prove that provider refs/polygon refs do not appear in canonical JSON. It must prove at least two locked Capability Envelopes map deterministically without reading any external Subject/Profile value. The package must define one lifecycle owner: either serialize calls through one initialized provider or allocate isolated provider state per build; repeated and concurrent tests must prove that the selected policy neither races initialization nor destroys shared state early. Real Babylon/Havok equivalence probes belong to the cross-package integration matrix in Task 9 so the provider adapter does not acquire a Runtime dependency.
+The test must initialize/use the real WASM provider repeatedly, prove Node compatibility, prove a right-handed Y-up counter-clockwise triangle is walkable while reversed winding is not accepted as the same walkable surface, and prove that provider refs/polygon refs do not appear in canonical JSON. It must prove at least two locked Capability Envelopes map deterministically without reading any external Subject/Profile value. Canonical changes always change the Envelope hash, but quantization-equivalent inputs may intentionally map to the same voxel parameters; mapping tests therefore prove that crossing a voxel boundary changes the mapped value and that the effective eroded radius in meters is always greater than or equal to `capsuleRadiusMeters + clearanceMarginMeters`.
+
+Lifecycle is frozen to one process-level idempotent `init()` Promise because 0.43.1 exposes no global shutdown and documents repeated `init()` as immediate. All provider build/query operations share one package-owned asynchronous mutex. Each operation owns and destroys only its NavMesh/query/intermediate objects in reverse order, including partial construction and thrown paths; no test or production path destroys global WASM. Repeated and concurrent real-WASM tests must prove the selected policy neither races initialization nor destroys shared state early.
 
 If any provider acceptance assertion fails, stop this plan and write a short ADR under `docs/reviews/`; do not silently ship a second custom graph dialect.
 
@@ -244,11 +268,12 @@ If any provider acceptance assertion fails, stop this plan and write a short ADR
 Run:
 
 ```bash
-pnpm vitest run packages/traversal/src/profile-registry.test.ts packages/traversal/src/capability-envelope.test.ts packages/traversal/src/graph-contract.test.ts packages/traversal-recast/src/adapter-identity.test.ts
+pnpm vitest run packages/traversal/src/profile-registry.test.ts packages/traversal/src/capability-envelope.test.ts packages/traversal/src/build-budget.test.ts packages/traversal/src/graph-contract.test.ts packages/runtime-babylon/src/traversal-implementation-identity.test.ts packages/traversal-recast/src/adapter-identity.test.ts packages/traversal-recast/src/recast-config.test.ts packages/traversal-recast/src/provider-lifecycle.test.ts packages/traversal-recast/src/provider-acceptance.test.ts
 pnpm typecheck
+pnpm verify:route-r0-contract
 ```
 
-Expected: PASS. Also run a dependency/grep guard proving `packages/traversal` does not import `@whitebox-world/validation` or expose Validation threshold names.
+Expected: PASS. Also run dependency/grep guards proving `packages/traversal` does not import `@whitebox-world/validation` or `recast-navigation`, does not expose Validation threshold names, and `traversal-recast` public exports do not expose Recast config/WASM/handle types.
 
 ---
 
@@ -296,7 +321,7 @@ Use ExecutionPlan V5 only. Generate collision triangle soup from `ExecutionStati
 
 - [ ] **Step 4: Add input budget checks**
 
-Reject non-finite values and stop before WASM allocation when source triangle/tile estimates exceed the locked builder profile. Return stable structured failure data for `ROUTE_GRAPH_BUDGET_EXCEEDED`.
+Reject non-finite values and call the Task 2 `assertTraversalGraphBuildBudgetV1()` guard before WASM allocation; do not duplicate its integer-micrometer tile estimate. Stop when source triangle/tile estimates exceed the locked builder profile and return stable structured failure data for `ROUTE_GRAPH_BUDGET_EXCEEDED`.
 
 - [ ] **Step 5: Run focused gates**
 
@@ -388,8 +413,6 @@ Expected: PASS, including repeated construction/disposal and throwing cleanup.
 - Modify: `packages/runtime-babylon/src/camera-director.ts`
 - Modify: `packages/runtime-babylon/src/subject-visual.ts`
 - Modify: `packages/runtime-babylon/src/terrain.ts`
-- Create: `packages/runtime-babylon/src/traversal-implementation-identity.ts`
-- Create: `packages/runtime-babylon/src/traversal-implementation-identity.test.ts`
 - Create: `packages/runtime-babylon/src/traversal-runtime-port.ts`
 - Create: `packages/runtime-babylon/src/traversal-runtime-port.test.ts`
 - Modify: `packages/runtime-babylon/src/index.ts`
@@ -402,7 +425,7 @@ Expected: PASS, including repeated construction/disposal and throwing cleanup.
 - Babylon Runtime accepts `ExecutionPlanV4 | ExecutionPlanV5`; V5 static bodies are created only from `ExecutionPlanV5.staticColliders`, while existing V4 fixtures retain their current compatibility projection.
 - The V5 terrain body uses `PhysicsShapeMesh` over the exact compiled Heightfield triangle topology. V4 retains its current square-HeightField/rectangular-Mesh compatibility path and is covered by unchanged fixtures.
 - Camera and Subject Visual consumers are widened only to the explicit `ExecutionPlanV4 | ExecutionPlanV5` union (or a named common read-only projection); they must not accept arbitrary plan-shaped objects or fork behavior by duplicating camera/visual logic.
-- `@whitebox-world/runtime-babylon` exports one immutable `TraversalRuntimeImplementationIdentityV1` value. Its Backend and Adapter content hashes are computed from canonical implementation manifests that pin the actual Babylon/Havok dependency versions and this adapter contract version; neither Compiler, CLI, tests, nor Recast may substitute fixture hashes.
+- `@whitebox-world/runtime-babylon` uses the immutable `TraversalRuntimeImplementationIdentityV1` value already frozen and exported in Task 2; Task 5 does not redefine its manifests, hashes, Ref, or version. Neither Compiler, CLI, tests, nor Recast may substitute fixture hashes.
 
 - [ ] **Step 1: Write a RED call-count regression**
 
