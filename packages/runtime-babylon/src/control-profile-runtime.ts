@@ -45,10 +45,11 @@ function clampUnit(value: number): number {
 }
 
 export function hasForwardControlIntentV1(
+  commandKind: ExecutionControlProfileV1["commandKind"],
   actions: readonly SemanticInputActionV1[],
   axes: Readonly<ControlInputAxesV2> = {},
 ): boolean {
-  if (axes.throttleRatio !== undefined) {
+  if (commandKind === "throttle-steer" && axes.throttleRatio !== undefined) {
     return Number.isFinite(axes.throttleRatio) && axes.throttleRatio > 0.000001;
   }
   if (axes.moveYRatio !== undefined) {

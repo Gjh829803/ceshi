@@ -9,7 +9,10 @@ import type {
 } from "./playground-world.js";
 import type { BabylonWorldAdapter } from "./babylon-world-adapter.js";
 import type { CapabilityDemoHostOverlayV1 } from "./authoring-loader.js";
-import { withCapabilityDemoHostOverlay } from "./authoring-export.js";
+import {
+  withCapabilityDemoHarnessScope,
+  withCapabilityDemoHostOverlay,
+} from "./authoring-export.js";
 import type {
   CameraTuningV1,
   CompatibleProfileSummaryV1,
@@ -1001,8 +1004,9 @@ function installCapabilityAuthoringPanel(
     if (api.runHarness === undefined) return;
     harnessOutput.textContent = "running…";
     try {
+      const report = await api.runHarness(snapshot.controlledEntityId);
       harnessOutput.textContent = JSON.stringify(
-        await api.runHarness(snapshot.controlledEntityId),
+        withCapabilityDemoHarnessScope(report, hostOverlay),
         null,
         2,
       );

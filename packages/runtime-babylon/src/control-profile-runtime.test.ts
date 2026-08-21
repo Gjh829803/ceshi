@@ -153,10 +153,24 @@ describe("compileMotionCommandV1", () => {
   });
 
   it("treats analog-only forward input as camera forward intent", () => {
-    expect(hasForwardControlIntentV1([], { moveYRatio: 0.7 })).toBe(true);
-    expect(hasForwardControlIntentV1([], { throttleRatio: 0.4 })).toBe(true);
-    expect(hasForwardControlIntentV1(["move-forward"], { moveYRatio: -0.2 })).toBe(false);
-    expect(hasForwardControlIntentV1(["move-forward"], {})).toBe(true);
+    expect(hasForwardControlIntentV1("planar-vector", [], { moveYRatio: 0.7 })).toBe(true);
+    expect(hasForwardControlIntentV1(
+      "planar-vector",
+      [],
+      { moveYRatio: 0.7, throttleRatio: 0 },
+    )).toBe(true);
+    expect(hasForwardControlIntentV1(
+      "throttle-steer",
+      [],
+      { moveYRatio: 0.7, throttleRatio: 0 },
+    )).toBe(false);
+    expect(hasForwardControlIntentV1("throttle-steer", [], { throttleRatio: 0.4 })).toBe(true);
+    expect(hasForwardControlIntentV1(
+      "planar-vector",
+      ["move-forward"],
+      { moveYRatio: -0.2 },
+    )).toBe(false);
+    expect(hasForwardControlIntentV1("planar-vector", ["move-forward"], {})).toBe(true);
   });
 
   it("keeps skills, aim, boost, brake and handbrake as independent semantic actions", () => {

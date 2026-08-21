@@ -905,6 +905,7 @@ export class BabylonWorldRuntime implements WorldRuntimeSessionV3 {
       relationshipRole: "none",
       cameraContextTags: [
         ...(hasForwardControlIntentV1(
+          subject.capabilityAssembly?.controlProfile.commandKind ?? "planar-vector",
           this.activeInputActions,
           this.activeInputAxes,
         )

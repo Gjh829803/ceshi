@@ -1,7 +1,10 @@
 import { describe, expect, it } from "vitest";
 
 import type { CapabilityDemoHostOverlayV1 } from "./authoring-loader";
-import { withCapabilityDemoHostOverlay } from "./authoring-export";
+import {
+  withCapabilityDemoHarnessScope,
+  withCapabilityDemoHostOverlay,
+} from "./authoring-export";
 
 const RELATIONSHIP_DEFERRED_OVERLAY: CapabilityDemoHostOverlayV1 = {
   kind: "capability-demo",
@@ -38,6 +41,23 @@ describe("withCapabilityDemoHostOverlay", () => {
     )).toEqual({
       schemaVersion: 4,
       subjectDefinition: { resourceRef: "canonical" },
+    });
+  });
+
+  it("scopes a passed harness to motion and camera when relationships were deferred", () => {
+    expect(withCapabilityDemoHarnessScope(
+      { passed: true, checks: [{ checkId: "H04", status: "not-exercised" }] },
+      RELATIONSHIP_DEFERRED_OVERLAY,
+    )).toEqual({
+      previewScope: {
+        kind: "motion-camera-preview",
+        canonicalPackageValidation: "not-claimed",
+        relationshipCapabilities: "deferred",
+      },
+      runtimeHarness: {
+        passed: true,
+        checks: [{ checkId: "H04", status: "not-exercised" }],
+      },
     });
   });
 });
