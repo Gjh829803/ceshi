@@ -17,6 +17,12 @@ importers:
       '@whitebox-world/compiler':
         specifier: workspace:*
         version: link:packages/compiler
+      '@whitebox-world/control-capture':
+        specifier: workspace:*
+        version: link:packages/control-capture
+      '@whitebox-world/protocol':
+        specifier: workspace:*
+        version: link:packages/protocol
       '@whitebox-world/runtime-contracts':
         specifier: workspace:*
         version: link:packages/runtime-contracts
