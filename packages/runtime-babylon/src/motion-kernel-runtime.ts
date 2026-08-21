@@ -429,6 +429,11 @@ export class MotionKernelRuntimeV1 {
       unsupported,
       this.gravity,
     );
+    // The integrate exists only to prime the support contact manifold before
+    // the first checkSupport. Its solver output can include a penetration
+    // recovery velocity, which must not leak into the published spawn or
+    // reset state: both contracts publish cleared velocity.
+    this.physicsController.setVelocity(Vector3.Zero());
   }
 
   private lockedCombination(): ResolveLockedCombination {

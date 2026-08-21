@@ -52,11 +52,17 @@ function clampRatio(value: number): number {
 
 export function hasForwardControlIntentV1(
   profile: ExecutionControlProfileV1,
+  moveResponseExponent: number,
   actions: readonly SemanticInputActionV1[],
   axes: Readonly<ControlInputAxesV2> = {},
 ): boolean {
   if (profile.commandKind === "none" || profile.inputSpace === "none") return false;
-  const { longitudinal } = resolveControlAxesV1(profile, actions, axes);
+  const { longitudinal } = resolveControlAxesV1(
+    profile,
+    moveResponseExponent,
+    actions,
+    axes,
+  );
   if (profile.commandKind === "throttle-steer") {
     return resolveThrottleV1(longitudinal, axes) > 0.000001;
   }
@@ -77,6 +83,7 @@ function normalizedAxis(
 
 function resolveControlAxesV1(
   profile: ExecutionControlProfileV1,
+  moveResponseExponent: number,
   actions: readonly SemanticInputActionV1[],
   axes: Readonly<ControlInputAxesV2>,
 ): { longitudinal: number; lateral: number } {
@@ -86,14 +93,14 @@ function resolveControlAxesV1(
   const digitalLateral =
     (hasAction(actions, "move-right") ? 1 : 0) -
     (hasAction(actions, "move-left") ? 1 : 0);
-  const { moveDeadzoneRatio, responseExponent } = profile.inputTuning;
+  const { moveDeadzoneRatio } = profile;
   return {
     longitudinal: axes.moveYRatio === undefined
       ? digitalLongitudinal
-      : normalizedAxis(axes.moveYRatio, moveDeadzoneRatio, responseExponent),
+      : normalizedAxis(axes.moveYRatio, moveDeadzoneRatio, moveResponseExponent),
     lateral: axes.moveXRatio === undefined
       ? digitalLateral
-      : normalizedAxis(axes.moveXRatio, moveDeadzoneRatio, responseExponent),
+      : normalizedAxis(axes.moveXRatio, moveDeadzoneRatio, moveResponseExponent),
   };
 }
 
@@ -108,6 +115,7 @@ function resolveThrottleV1(
 
 export function compileMotionCommandV1(
   profile: ExecutionControlProfileV1,
+  moveResponseExponent: number,
   actions: readonly SemanticInputActionV1[],
   viewControlFrame: ViewControlFrameV1,
   axes: Readonly<ControlInputAxesV2> = {},
@@ -115,7 +123,12 @@ export function compileMotionCommandV1(
   if (profile.commandKind === "none" || profile.inputSpace === "none") {
     return { kind: "none" };
   }
-  const { longitudinal, lateral } = resolveControlAxesV1(profile, actions, axes);
+  const { longitudinal, lateral } = resolveControlAxesV1(
+    profile,
+    moveResponseExponent,
+    actions,
+    axes,
+  );
 
   if (profile.commandKind === "planar-vector") {
     const planarLateral = profile.lateralMovementPolicy === "allowed" ? lateral : 0;

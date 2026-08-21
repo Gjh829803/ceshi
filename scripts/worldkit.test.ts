@@ -332,7 +332,6 @@ describe("worldkit CLI", () => {
     });
     expect(first.resources.map((resource) => resource.resourceRef)).toEqual([
       "worldkit://subject-definition/humanoid.g-bot@1",
-      "worldkit://subject-definition/humanoid.rigged-golden@1",
       "worldkit://subject-definition/humanoid.third-person@1",
       "worldkit://subject-definition/quadruped.ground-proxy@1",
     ]);

@@ -4,33 +4,22 @@ import type { ExecutionMotionProfileV1 } from "@whitebox-world/runtime-contracts
 
 import { MotionModeResolverV1 } from "./motion-mode-resolver";
 
-function profile(id: string, speed: number): ExecutionMotionProfileV1 {
+function profile(id: string): ExecutionMotionProfileV1 {
   return {
     resourceRef: `worldkit://motion-profile/${id}@1`,
     motionKernelRef: `worldkit://motion-kernel/${id}@1`,
-    parameters: { speed },
-    safetyLimits: { speed: { minimum: 0, maximum: 10 } },
     motionTags: [id],
   };
 }
 
-const valid = (candidate: ExecutionMotionProfileV1): boolean => {
-  const speed = candidate.parameters.speed;
-  const limit = candidate.safetyLimits.speed;
-  return (
-    typeof speed === "number" &&
-    Number.isFinite(speed) &&
-    limit !== undefined &&
-    speed >= limit.minimum &&
-    speed <= limit.maximum
-  );
-};
+const valid = (candidate: ExecutionMotionProfileV1): boolean =>
+  !candidate.motionTags.includes("invalid");
 
 describe("MotionModeResolverV1", () => {
   it("keeps a requested mode pending until the fixed Tick boundary", () => {
-    const defaultProfile = profile("default", 4);
-    const optionalProfile = profile("optional", 7);
-    const fallbackProfile = profile("fallback", 0);
+    const defaultProfile = profile("default");
+    const optionalProfile = profile("optional");
+    const fallbackProfile = profile("fallback");
     const resolver = new MotionModeResolverV1(
       defaultProfile,
       fallbackProfile,
@@ -50,8 +39,8 @@ describe("MotionModeResolverV1", () => {
   });
 
   it("rejects unknown modes and atomically enters the declared fallback on failure", () => {
-    const defaultProfile = profile("default", 4);
-    const fallbackProfile = profile("fallback", 0);
+    const defaultProfile = profile("default");
+    const fallbackProfile = profile("fallback");
     const resolver = new MotionModeResolverV1(
       defaultProfile,
       fallbackProfile,

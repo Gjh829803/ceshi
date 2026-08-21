@@ -31,30 +31,7 @@ const LEGACY_CONTROL_PROFILE = {
   facingPolicy: "align-to-move",
   lateralMovementPolicy: "allowed",
   moveDeadzoneRatio: 0.1,
-  inputTuning: {
-    moveDeadzoneRatio: 0.1,
-    responseExponent: 1.4,
-  },
-} as const;
-
-function commandControlProfile(
-  profile: ExecutionControlProfileV1,
-  responseExponent: number,
-): ExecutionControlProfileV1 {
-  const candidate = profile as ExecutionControlProfileV1 & {
-    inputTuning?: { moveDeadzoneRatio: number; responseExponent: number };
-  };
-  const deadzone = candidate.inputTuning?.moveDeadzoneRatio ??
-    profile.moveDeadzoneRatio;
-  return {
-    ...profile,
-    moveDeadzoneRatio: deadzone,
-    inputTuning: {
-      moveDeadzoneRatio: deadzone,
-      responseExponent,
-    },
-  } as ExecutionControlProfileV1;
-}
+} as const satisfies ExecutionControlProfileV1;
 
 /**
  * Compatibility facade. Input interpretation and movement execution are owned by
@@ -93,10 +70,8 @@ export class SubjectController {
     axes: Readonly<ControlInputAxesV2> = {},
   ): void {
     const command = compileMotionCommandV1(
-      commandControlProfile(
-        this.subject.capabilityAssembly?.controlProfile ?? LEGACY_CONTROL_PROFILE,
-        this.motionKernel.activeControlFeel.moveResponseExponent,
-      ),
+      this.subject.capabilityAssembly?.controlProfile ?? LEGACY_CONTROL_PROFILE,
+      this.motionKernel.activeControlFeel.moveResponseExponent,
       actions,
       viewControlFrame,
       axes,

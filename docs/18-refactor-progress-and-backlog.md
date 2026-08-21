@@ -117,7 +117,8 @@ Capture V1 是独立的新纵向切片，不改变该 90% 口径。
 ### 3.4 当前 Runtime 与工具纵向切片
 
 - [x] Babylon.js 右手坐标 Runtime 与 Havok WASM。
-- [x] Heightfield、静态障碍物、角色碰撞和水域状态切换。
+- [x] Heightfield、静态障碍物、角色碰撞与固定 Tick Ground/Air 介质解析
+  （水介质状态切换已随 P1.5 首切片收敛到 P2.5，不再由 Adapter 硬编码发布）。
 - [x] 第三人称跟随相机和受控主体切换。
 - [x] `worldkit validate / build / run / capture`。
 - [x] Browser Protocol V3 的加载、固定输入、绑定、Snapshot、Reset 和截图。
@@ -129,8 +130,8 @@ Capture V1 是独立的新纵向切片，不改变该 90% 口径。
 - `pnpm test`：49 个测试文件、441 项测试通过；
 - `pnpm verify:canonical`：Authoring 3、Normalized IR 3、ExecutionPlan 4、
   Runtime Snapshot 3、Browser Protocol 3 全部通过；
-- Canonical Browser Gate 覆盖 Babylon/Havok、墙体阻挡、水域切换、两个
-  Package Subject 独立控制和确定性重置。
+- Canonical Browser Gate 覆盖 Babylon/Havok、墙体阻挡、湖区进入时保持封闭
+  Ground/Air 介质集合、两个 Package Subject 独立控制和确定性重置。
 - `pnpm verify:rigged-subject`：项目自有 Golden GLB、Rig、Collider Profile、
   `idle/walk/run/jump`、双实例隔离、墙体停止、936×596 截图与
   `SUBJECT_ASSET_HASH_MISMATCH` 篡改 Gate 全部通过；`verification.json` V2 还用
@@ -307,31 +308,51 @@ Babylon/Havok Adapter 的硬编码分支中。字段职责以
 [`主体资产与 3C 对接设计`](16-subject-assets-3c-integration.md)为基础，实施前必须完成
 专项评审；本 Backlog 不提前冻结最终公共字段名。
 
-- [ ] 评审并冻结 `LocomotionProfile` 与 `ControlFeelProfile` 的唯一字段归属：前者负责
+首条 Ground/Air 纵向切片已按
+[`P1.5 Control Feel / State Resolver 首切片实施计划`](superpowers/plans/2026-08-21-p15-control-feel-state-resolver.md)
+实施并通过全部生产 Gate（typecheck、test、build、verify:canonical /
+placement-layout / rigged-subject / g-bot-subject）；专项规格见
+[`Control Feel、Physics Medium 与 State Resolver 设计`](superpowers/specs/2026-08-21-control-feel-physics-medium-state-resolver-design.md)。
+水/游泳介质、Hybrid Surface、统一 Validation 与新 CLI/Browser 协议字段均未随该切片交付。
+
+- [x] 评审并冻结 `LocomotionProfile` 与 `ControlFeelProfile` 的唯一字段归属：前者负责
   运动模式及能力边界，后者负责加速度、减速度、转向速率、响应曲线和空中控制比例；
   奔跑等速度不得在两种 Profile 中形成同义字段或双重真相。
 - [ ] 冻结 `ControlMethodProfile` 与语义 Intent Pipeline：Direct Move、Steering、Swim、
   Flight 等方法复用同一控制协议，由 Capability/Context 选择，World Agent 不直接调用
   人物 Motor、车辆控制器或飞行实现。
-- [ ] 定义版本化 `PhysicsMediumProfile`：世界保留唯一全局重力向量，主体/介质只声明
-  相对重力倍率、线性/角阻力、浮力、表面保持和单位明确的安全边界；最终数值字段必须
-  按命名规则携带 `Ratio`/单位后缀，不能直接沿用未冻结概念稿中的含糊名称。
-- [ ] 定义 `MediumSensor`、`SubjectStateProfile` 与纯固定 Tick `StateResolver`；Ground、
-  Water、Air 的进入/退出使用迟滞阈值和明确优先级，不依赖动画状态或渲染帧率判断。
+- [x] 定义版本化 `PhysicsMediumProfile` 的 Ground/Air 首切片
+  （`worldkit://medium-profile/ground-air.standard@1`）：世界保留唯一全局重力向量，
+  介质只声明相对重力倍率与线性阻力，数值字段按命名规则携带 `Ratio`/单位后缀；
+  发布 `water` 介质在 Resolver/Compiler 路径以 `SUBJECT_MOVEMENT_MEDIUM_UNSUPPORTED`
+  稳定失败。
+- [ ] 扩展水介质：浮力、表面保持与水中安全边界（随 P2.5 水切片交付，不提前发布
+  `movementMedium: "water"`）。
+- [x] 纯固定 Tick `StateResolver` 首切片：发布的 `movementMedium` 只有
+  `ground`/`air`，支撑状态由 Havok `checkSupport` 唯一拥有，Sliding 不允许起跳、
+  不重置 Coyote，不依赖动画状态或渲染帧率判断。
+- [ ] 定义 `MediumSensor` 与 `SubjectStateProfile`；Water 的进入/退出使用迟滞阈值和
+  明确优先级（随 P2.5 交付）。
 - [ ] 普通 Agent 只选择已注册 Profile；高级覆盖必须经过 Definition 的
   `allowedOverridePaths`、Schema 范围、Host Policy 和 Resource Budget，禁止直接填写
-  Babylon/Havok Handle 或控制器实现参数。
+  Babylon/Havok Handle 或控制器实现参数（首切片改用编译后的
+  `availableControlFeels` + `requestControlFeelProfile`，未冻结公共
+  `allowedOverridePaths` 结构）。
 - [ ] 为所有数值字段声明单位、有限值、最小/最大值和跨字段约束；非法 Profile 在
   Registry Admission 阶段失败，不能等到 Runtime 再钳制或猜测。
 - [ ] Profile 的精确版本、Canonical Hash 和依赖进入 Registry Lock；Normalizer 和
   Compiler 将最小、引擎无关描述投影进 IR/ExecutionPlan，Runtime 不反向读取 Registry。
-- [ ] Babylon/Havok 去除主体加速度、水中重力倍率和相关介质响应硬编码；Adapter 只
+- [x] Babylon/Havok 去除主体加速度、水中重力倍率和相关介质响应硬编码；Adapter 只
   执行已编译参数，并保持固定 Tick、失败回滚、幂等 Dispose 与资源所有权边界。
-- [ ] Snapshot/Render Binding 暴露实际 `movementMedium`、`locomotionMode`、状态与生效
+- [x] Snapshot/Render Binding 暴露实际 `movementMedium`、`locomotionMode`、状态与生效
   Profile 引用，使 Agent、Capture 和视频 Adapter 不需要从动画 Clip 猜 Gameplay 状态。
-- [ ] CLI/Browser/E2E 至少覆盖两种 Control Feel、不同主体重力倍率、Ground→Water→Air
-  稳定切换、边界抖动、Reset、双实例隔离和同输入 Replay；缺少 Profile 或切换失败时
-  保留上一稳定状态并返回稳定 Diagnostic。
+- [x] Runtime Conformance 覆盖两种可区分 Control Feel
+  （`humanoid.medium-ground@1` / `humanoid.heavy-ground@1`）、30/60/120 Hz-like 渲染
+  节奏下的同输入固定 Tick Replay、Reset Bootstrap + `checkSupport`、双实例 Feel 隔离、
+  0.4 m Ledge/Coyote/Jump Buffer 与 Hold/Release 重力比；缺少 Profile 时返回稳定
+  Diagnostic。
+- [ ] CLI/Browser/E2E 覆盖不同主体重力倍率、Ground→Water→Air 稳定切换与边界抖动
+  （不新增 CLI/Browser 协议字段，随后续切片交付）。
 
 完成标准：仅替换版本化 Profile 就能改变主体的加减速、转向、介质重力/阻力和浮力，
 同一输入与 Registry Lock 在固定 Tick 下得到相同 Snapshot/Hash；普通场景 JSON 不需要
@@ -608,7 +629,10 @@ Capture V1 都已进入回归，下一步：
    接入 Blocking Validation、成功 Fixture 走通且失败 Fixture 给出结构化 Diagnostic 后完成；
 6. **M6：在 Placement + Take + Validation 闭环上接入实验 Video Model Adapter**；
 7. **M7：评审冻结 P1.5 的 Control Feel/Physics Medium/State Resolver 首条纵向范围，清除
-   Canonical Babylon 路径中的对应硬编码**；
+   Canonical Babylon 路径中的对应硬编码**：首条 Ground/Air 切片的
+   [实施计划](superpowers/plans/2026-08-21-p15-control-feel-state-resolver.md) 已存在并已实施、
+   通过全部生产 Gate；水介质、`ControlMethodProfile` 与 CLI/Browser E2E 覆盖仍未交付，
+   M7 不标记完成；
 8. **M8：按产品优先级选择 Semantic Action 后续或 Typed Relationship 窄可视切片**；
 9. **M9：在实现游泳、攀爬或增量 Agent 修复前，分别冻结 P2.5 Surface/Traversal 与
    P1.6 AI Schema/WorldChangeSet 的专项设计，禁止临时增加公共字段或场景脚本旁路**。

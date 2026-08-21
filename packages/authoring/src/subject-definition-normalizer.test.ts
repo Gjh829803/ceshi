@@ -3,7 +3,7 @@ import { describe, expect, it } from "vitest";
 import {
   builtInSubjectResourceRegistry,
   createSubjectResourceRegistry,
-  type SubjectRegistryResourceInputV1,
+  type SubjectRegistryResourceInputV3,
   type SubjectResourceRegistryV2,
 } from "@whitebox-world/subject-registry";
 import subjectDefinitionsV3 from "../../../assets/registry/subject-definitions/catalog.json";
@@ -67,8 +67,8 @@ function expectExactKeys(value: object, expectedKeys: readonly string[]): void {
 
 function registryFrom(
   transform: (
-    resource: SubjectRegistryResourceInputV1,
-  ) => SubjectRegistryResourceInputV1 | undefined,
+    resource: SubjectRegistryResourceInputV3,
+  ) => SubjectRegistryResourceInputV3 | undefined,
 ): SubjectResourceRegistryV2 {
   return createSubjectResourceRegistry(
     ALL_BUILT_IN_REGISTRY_INPUTS.flatMap((resource) => {
@@ -413,7 +413,7 @@ describe("Package Subject Definition normalization", () => {
               ...resource.inventory,
               providerHandle: forbiddenValues[0],
             },
-          } as unknown as SubjectRegistryResourceInputV1;
+          } as unknown as SubjectRegistryResourceInputV3;
         case "rig-profile":
           return {
             ...resource,
@@ -421,7 +421,7 @@ describe("Package Subject Definition normalization", () => {
               ...resource.sourceNodeNameByBoneId,
               providerHandle: forbiddenValues[1],
             },
-          } as SubjectRegistryResourceInputV1;
+          } as SubjectRegistryResourceInputV3;
         case "animation-set":
           return {
             ...resource,
@@ -429,7 +429,7 @@ describe("Package Subject Definition normalization", () => {
               ...binding,
               sourceUri: forbiddenValues[2],
             })),
-          } as SubjectRegistryResourceInputV1;
+          } as SubjectRegistryResourceInputV3;
         case "collider-profile":
           return {
             ...resource,
@@ -437,12 +437,12 @@ describe("Package Subject Definition normalization", () => {
               ...resource.collider,
               providerHandle: forbiddenValues[3],
             },
-          } as unknown as SubjectRegistryResourceInputV1;
+          } as unknown as SubjectRegistryResourceInputV3;
         case "control-feel-profile":
           return {
             ...resource,
             providerHandle: forbiddenValues[4],
-          } as unknown as SubjectRegistryResourceInputV1;
+          } as unknown as SubjectRegistryResourceInputV3;
         default:
           return resource;
       }
@@ -684,7 +684,7 @@ describe("Package Subject Definition normalization", () => {
   it.each([
     {
       label: "Rig rejects the Asset",
-      transform: (resource: SubjectRegistryResourceInputV1) =>
+      transform: (resource: SubjectRegistryResourceInputV3) =>
         resource.kind === "rig-profile"
           ? { ...resource, compatibleSubjectAssetRefs: [] }
           : resource,
@@ -697,7 +697,7 @@ describe("Package Subject Definition normalization", () => {
     },
     {
       label: "Animation Set targets another Asset",
-      transform: (resource: SubjectRegistryResourceInputV1) =>
+      transform: (resource: SubjectRegistryResourceInputV3) =>
         resource.kind === "animation-set"
           ? {
               ...resource,
@@ -713,7 +713,7 @@ describe("Package Subject Definition normalization", () => {
     },
     {
       label: "Animation Set targets another Rig",
-      transform: (resource: SubjectRegistryResourceInputV1) =>
+      transform: (resource: SubjectRegistryResourceInputV3) =>
         resource.kind === "animation-set"
           ? {
               ...resource,
@@ -729,7 +729,7 @@ describe("Package Subject Definition normalization", () => {
     },
     {
       label: "required Action IDs are incomplete",
-      transform: (resource: SubjectRegistryResourceInputV1) =>
+      transform: (resource: SubjectRegistryResourceInputV3) =>
         resource.kind === "animation-set"
           ? { ...resource, requiredActionIds: ["idle", "walk", "run"] as const }
           : resource,
@@ -738,7 +738,7 @@ describe("Package Subject Definition normalization", () => {
     },
     {
       label: "mapped Clip is absent from Asset inventory",
-      transform: (resource: SubjectRegistryResourceInputV1) =>
+      transform: (resource: SubjectRegistryResourceInputV3) =>
         resource.kind === "subject-asset"
           ? {
               ...resource,
@@ -753,7 +753,7 @@ describe("Package Subject Definition normalization", () => {
     },
     {
       label: "Bone Socket targets an undeclared Bone",
-      transform: (resource: SubjectRegistryResourceInputV1) =>
+      transform: (resource: SubjectRegistryResourceInputV3) =>
         resource.kind === "rig-profile"
           ? {
               ...resource,
@@ -767,7 +767,7 @@ describe("Package Subject Definition normalization", () => {
     },
     {
       label: "Rig omits a required Bone mapping",
-      transform: (resource: SubjectRegistryResourceInputV1) => {
+      transform: (resource: SubjectRegistryResourceInputV3) => {
         if (resource.kind !== "rig-profile") return resource;
         const sourceNodeNameByBoneId: Record<string, string> = {
           ...resource.sourceNodeNameByBoneId,
@@ -776,14 +776,14 @@ describe("Package Subject Definition normalization", () => {
         return {
           ...resource,
           sourceNodeNameByBoneId,
-        } as SubjectRegistryResourceInputV1;
+        } as SubjectRegistryResourceInputV3;
       },
       instancePath: "/resources/subjectDefinitions/0/visualBinding/rigProfileRef",
       details: { missingBoneIds: ["head"], rigProfileRef: RIG_PROFILE_REF },
     },
     {
       label: "Collider profile violates support-center origin",
-      transform: (resource: SubjectRegistryResourceInputV1) =>
+      transform: (resource: SubjectRegistryResourceInputV3) =>
         resource.kind === "collider-profile"
           ? {
               ...resource,
@@ -1064,8 +1064,8 @@ describe("Package Subject Definition normalization", () => {
   it("rejects a missing controlFeelProfileRef", () => {
     const spec = createValidPackageSubjectWorld();
     const definition = structuredClone(spec.resources.subjectDefinitions[0]!);
-    const profiles = { ...definition.profiles };
-    delete profiles.controlFeelProfileRef;
+    const { controlFeelProfileRef: _omittedControlFeelProfileRef, ...profiles } =
+      definition.profiles;
     const diagnostics: Array<{
       code: string;
       instancePath: string;

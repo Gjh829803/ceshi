@@ -242,6 +242,7 @@ describe("installDeferredWorldkitBrowserApi", () => {
     expect(productionDefinitions.map((definition) => definition.resourceRef)).toEqual([
       "worldkit://subject-definition/animal.quadruped.forward-steer@1",
       "worldkit://subject-definition/humanoid.g-bot@1",
+      "worldkit://subject-definition/humanoid.rigged-golden@1",
     ]);
     const gBotSummary = productionDefinitions.find(
       (definition) =>
@@ -254,7 +255,7 @@ describe("installDeferredWorldkitBrowserApi", () => {
       )?.contentHash,
     );
     expect(gBotSummary?.contentHash).toMatch(/^sha256:[a-f0-9]{64}$/);
-    expect(allDefinitions).toHaveLength(6);
+    expect(allDefinitions).toHaveLength(7);
     expect(
       allDefinitions.filter(
         (definition) => definition.authoringAvailability === "experimental",

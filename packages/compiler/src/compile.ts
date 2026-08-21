@@ -50,15 +50,16 @@ export function assertPublishedMovementMediumSupported(
   }
 }
 
-function rejectPublishedWaterMediumProfile(
-  mediumProfile: {
+function rejectPublishedWaterMediumProfile(mediumProfile: object): void {
+  // The V1 Medium Profile type has no water fields; this guards forged or
+  // stale Normalized IR that still smuggles them in at runtime.
+  const forged = mediumProfile as {
     water?: unknown;
     supportedMediums?: readonly string[];
-  },
-): void {
+  };
   if (
-    mediumProfile.water !== undefined ||
-    mediumProfile.supportedMediums?.includes("water")
+    forged.water !== undefined ||
+    forged.supportedMediums?.includes("water")
   ) {
     assertPublishedMovementMediumSupported("water");
   }

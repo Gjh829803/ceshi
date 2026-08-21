@@ -291,7 +291,9 @@ describe("compileWorld", () => {
     }
     expect(player.collider.maxStepHeightMeters).toBe(0.3);
     expect(player.collider.maxSlopeDegrees).toBe(42);
-    expect(player.capabilityAssembly?.defaultMotionProfile.parameters).toBeUndefined();
+    expect(player.capabilityAssembly?.defaultMotionProfile).not.toHaveProperty(
+      "parameters",
+    );
     expect(player.capabilityAssembly?.mediumProfile).toEqual({
       resourceRef: "worldkit://medium-profile/ground-air.standard@1",
       air: { gravityRatio: 1, linearDragPerSecond: 0.05 },

@@ -946,6 +946,7 @@ describe("subject resource registry", () => {
   it("rejects Control Profile policies that its command runtime cannot execute", () => {
     const planar = builtInSubjectResourceRegistry
       .listCapabilityResources()
+      .filter((resource) => resource.kind === "control-profile")
       .find((resource) => resource.resourceRef ===
         "worldkit://control-profile/planar.camera-relative@1")!;
 

@@ -308,7 +308,7 @@ function lockResource(source: SubjectRegistryResourceInputV3): SubjectRegistryRe
 }
 
 function validateLocomotionProfile(source: LocomotionProfileManifestInputV1): void {
-  const rawSource = source as Record<string, unknown>;
+  const rawSource = source as unknown as Record<string, unknown>;
   for (const key of Object.keys(rawSource)) {
     if (LOCOMOTION_FORBIDDEN_OBJECT_KEYS.has(key)) {
       throw new Error(
@@ -333,7 +333,7 @@ function validateLocomotionProfile(source: LocomotionProfileManifestInputV1): vo
 }
 
 function validateMotionProfile(source: MotionProfileInputV1): void {
-  const rawSource = source as Record<string, unknown>;
+  const rawSource = source as unknown as Record<string, unknown>;
   if (
     "parameters" in rawSource ||
     "safetyLimits" in rawSource ||
@@ -420,7 +420,7 @@ function validateControlProfile(source: ControlProfileInputV1): void {
 }
 
 function validateMediumProfile(source: MediumProfileInputV1): void {
-  const rawSource = source as Record<string, unknown>;
+  const rawSource = source as unknown as Record<string, unknown>;
   for (const key of Object.keys(rawSource)) {
     if (MEDIUM_FORBIDDEN_KEYS.has(key)) {
       throw new Error(

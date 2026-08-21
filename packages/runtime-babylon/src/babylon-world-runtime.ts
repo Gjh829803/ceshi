@@ -105,10 +105,7 @@ const LEGACY_CAMERA_RELATIVE_CONTROL_PROFILE = {
   facingPolicy: "align-to-move",
   lateralMovementPolicy: "allowed",
   moveDeadzoneRatio: 0,
-  inputTuning: { moveDeadzoneRatio: 0, responseExponent: 1 },
-} as const satisfies ExecutionControlProfileV1 & {
-  inputTuning: { moveDeadzoneRatio: number; responseExponent: number };
-};
+} as const satisfies ExecutionControlProfileV1;
 
 class WorldRuntimeDisposeErrorV1 extends Error {
   readonly name = "WorldRuntimeDisposeErrorV1";
@@ -1114,16 +1111,9 @@ export class BabylonWorldRuntime implements WorldRuntimeSessionV3 {
       relationshipRole: "none",
       cameraContextTags: [
         ...(hasForwardControlIntentV1(
-          {
-            ...(subject.capabilityAssembly?.controlProfile ??
-              LEGACY_CAMERA_RELATIVE_CONTROL_PROFILE),
-            inputTuning: {
-              moveDeadzoneRatio:
-                subject.capabilityAssembly?.controlProfile?.moveDeadzoneRatio ??
-                LEGACY_CAMERA_RELATIVE_CONTROL_PROFILE.moveDeadzoneRatio,
-              responseExponent: controller.activeControlFeel.moveResponseExponent,
-            },
-          } as ExecutionControlProfileV1,
+          subject.capabilityAssembly?.controlProfile ??
+            LEGACY_CAMERA_RELATIVE_CONTROL_PROFILE,
+          controller.activeControlFeel.moveResponseExponent,
           this.activeInputActions,
           this.activeInputAxes,
         )
