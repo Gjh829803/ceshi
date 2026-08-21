@@ -311,6 +311,29 @@ describe("Validation Profile/Report V1", () => {
     });
   });
 
+  it("rejects Metric expectations that drift from the resolved Profile", () => {
+    const driftedExpectation = structuredClone(validReport()) as unknown as Record<
+      string,
+      unknown
+    >;
+    const gates = driftedExpectation.gateResultsById as Record<
+      string,
+      Record<string, unknown>
+    >;
+    const metrics = gates["capture-bundle-integrity"]!
+      .metricResultsById as Record<string, Record<string, unknown>>;
+    const metric = metrics["capture-bundle-integrity-valid"]!;
+    metric.value = false;
+    metric.expectedValue = false;
+
+    expect(validateValidationReportV1(driftedExpectation)).toMatchObject({
+      ok: false,
+      diagnostics: expect.arrayContaining([
+        expect.objectContaining({ code: "VALIDATION_REFERENCE_INVALID" }),
+      ]),
+    });
+  });
+
   it("rejects Reports that omit a Profile-required Gate or Metric", () => {
     const missingGate = structuredClone(validReport()) as unknown as Record<
       string,

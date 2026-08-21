@@ -786,6 +786,49 @@ function validateReportReferences(
   }
 }
 
+function metricResultMatchesDefinition(
+  metricDefinition: MetricDefinitionV1,
+  metricResult: MetricResultV1,
+): boolean {
+  if (
+    metricResult.kind !== metricDefinition.kind ||
+    metricResult.evaluatorProfileRef !== metricDefinition.evaluatorProfileRef
+  ) {
+    return false;
+  }
+  if (
+    metricDefinition.kind === "boolean-assertion" &&
+    metricResult.kind === "boolean-assertion"
+  ) {
+    return metricResult.expectedValue === metricDefinition.expectedValue;
+  }
+  if (
+    metricDefinition.kind === "count-threshold" &&
+    metricResult.kind === "count-threshold"
+  ) {
+    return metricResult.minimumAllowedCount ===
+        metricDefinition.minimumAllowedCount &&
+      metricResult.maximumAllowedCount ===
+        metricDefinition.maximumAllowedCount;
+  }
+  if (
+    metricDefinition.kind === "set-equality" &&
+    metricResult.kind === "set-equality"
+  ) {
+    return isEqual(
+      [...metricResult.expectedValues].sort(),
+      [...metricDefinition.expectedValues].sort(),
+    );
+  }
+  if (
+    metricDefinition.kind === "hash-equality" &&
+    metricResult.kind === "hash-equality"
+  ) {
+    return metricResult.expectedHash === metricDefinition.expectedHash;
+  }
+  return false;
+}
+
 export function validateValidationReportV1(
   value: unknown,
 ): ValidationContractResultV1<ValidationReportV1> {
@@ -971,17 +1014,13 @@ export function validateValidationReportV1(
           );
         } else if (
           !isNil(metricResult) &&
-          (
-            metricResult.kind !== metricDefinition.kind ||
-            metricResult.evaluatorProfileRef !==
-              metricDefinition.evaluatorProfileRef
-          )
+          !metricResultMatchesDefinition(metricDefinition, metricResult)
         ) {
           addDiagnostic(
             diagnostics,
             "VALIDATION_REFERENCE_INVALID",
             `/gateResultsById/${gateId}/metricResultsById/${metricId}`,
-            "Metric result differs from the resolved Profile definition.",
+            "Metric result kind, evaluator, or expected value differs from the resolved Profile definition.",
           );
         }
       }
