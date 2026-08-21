@@ -21,7 +21,7 @@ export function parseTrustedSourceCommit(
 }
 
 export async function resolveTrustedSourceCommit(options: {
-  envCommit?: string;
+  envCommit?: string | undefined;
   gitCommit?: () => Promise<string>;
   repositoryRoot?: string;
 } = {}): Promise<string> {
