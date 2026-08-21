@@ -37,10 +37,10 @@ const cameraDirectorSource = await readFile(
 
 const UNAVAILABLE_RELATIONSHIP_PACKAGES = [
   [
-    "worldkit://subject-definition/animal.quadruped.forward-steer@1",
+    "worldkit://subject-definition/animal.quadruped.forward-steer@2",
     "worldkit://capability/relationship.mount@1",
     "worldkit://motion-kernel/forward-steer@1",
-    "worldkit://subject-definition/playground-preview.animal.quadruped.forward-steer@1",
+    "worldkit://subject-definition/playground-preview.animal.quadruped.forward-steer@2",
   ],
   [
     "worldkit://subject-definition/vehicle.four-wheel.arcade@1",
@@ -338,6 +338,117 @@ describe("capability package runtime smoke tests", () => {
         "player",
         "worldkit://control-feel-profile/unknown.unlisted@1",
       )).toThrow(/^SUBJECT_OVERRIDE_FORBIDDEN/);
+
+      runtime.reset();
+      expect(runtime.setControlFeelTuning("player", {
+        accelerationMetersPerSecondSquared: 8,
+        moveResponseExponent: 1.8,
+      }).subjectStatesByEntityId.player?.controlFeelParameterTuning).toEqual({
+        accelerationMetersPerSecondSquared: 8,
+        moveResponseExponent: 1.8,
+      });
+      expect(runtime.setControlTuning("player", {
+        moveDeadzoneRatio: 0.4,
+      }).subjectStatesByEntityId.player?.controlParameterTuning).toEqual({
+        moveDeadzoneRatio: 0.4,
+      });
+      const deadzoned = await runtime.runFixedInput({
+        actions: [],
+        axes: { moveYRatio: 0.3 },
+        ticks: 10,
+      });
+      expect(deadzoned.subjectStatesByEntityId.player!.speedMetersPerSecond)
+        .toBeCloseTo(0, 6);
+      expect(() => runtime.setControlTuning("player", {
+        moveDeadzoneRatio: 0.41,
+      })).toThrow(RangeError);
+      expect(runtime.snapshot().subjectStatesByEntityId.player?.controlParameterTuning)
+        .toEqual({ moveDeadzoneRatio: 0.4 });
+      expect(() => runtime.setControlFeelTuning("player", {
+        walkSpeedMetersPerSecond: 5,
+      })).toThrow(RangeError);
+      expect(runtime.reset().subjectStatesByEntityId.player?.controlParameterTuning)
+        .toEqual({});
+      expect(runtime.snapshot().subjectStatesByEntityId.player?.controlFeelParameterTuning)
+        .toEqual({});
+
+      const capabilityAssembly = loaded.executionPlan.subjects[0]!.capabilityAssembly!;
+      const orbitProfile = capabilityAssembly.cameraContext.cameraRigProfiles.find(
+        (profile) =>
+          profile.resourceRef === "worldkit://camera-profile/orbit.medium@1",
+      )!;
+      const beforeRejectedPreset = runtime.snapshot();
+      const rejectedPreset = runtime.applySubjectPresetTuning({
+        subjectEntityId: "player",
+        expectedSubjectDefinitionRef: subjectDefinitionRef,
+        expectedSubjectDefinitionContentHash: "sha256:" + "0".repeat(64),
+        controlFeelOverridesByProfileRef: {},
+        controlOverridesByProfileRef: {},
+        cameraOverridesByProfileRef: {},
+        cameraPreference: "auto",
+      });
+      expect(rejectedPreset.status).toBe("rejected");
+      expect(rejectedPreset.snapshot).toEqual(beforeRejectedPreset);
+
+      const exactControlProfile = capabilityAssembly.controlProfile;
+      const rejectedUnsafeCameraPreset = runtime.applySubjectPresetTuning({
+        subjectEntityId: "player",
+        expectedSubjectDefinitionRef: subjectDefinitionRef,
+        expectedSubjectDefinitionContentHash:
+          loaded.executionPlan.subjects[0]!.subjectDefinitionHash,
+        controlFeelOverridesByProfileRef: {},
+        controlOverridesByProfileRef: {},
+        cameraOverridesByProfileRef: {
+          [orbitProfile.resourceRef]: {
+            baseResourceRef: orbitProfile.resourceRef,
+            baseContentHash: orbitProfile.contentHash,
+            values: { targetHeightMeters: 999 },
+          },
+        },
+        cameraPreference: orbitProfile.resourceRef,
+      });
+      expect(rejectedUnsafeCameraPreset.status).toBe("rejected");
+      expect(rejectedUnsafeCameraPreset.snapshot).toEqual(beforeRejectedPreset);
+
+      const controlFeelProfile = loaded.executionPlan.subjects[0]!.controlFeel;
+      const controlProfile = exactControlProfile;
+      const committedPreset = runtime.applySubjectPresetTuning({
+        subjectEntityId: "player",
+        expectedSubjectDefinitionRef: subjectDefinitionRef,
+        expectedSubjectDefinitionContentHash:
+          loaded.executionPlan.subjects[0]!.subjectDefinitionHash,
+        controlFeelOverridesByProfileRef: {
+          [controlFeelProfile.resourceRef]: {
+            baseResourceRef: controlFeelProfile.resourceRef,
+            baseContentHash: controlFeelProfile.contentHash,
+            values: { accelerationMetersPerSecondSquared: 4 },
+          },
+        },
+        controlOverridesByProfileRef: {
+          [controlProfile.resourceRef]: {
+            baseResourceRef: controlProfile.resourceRef,
+            baseContentHash: controlProfile.contentHash,
+            values: { moveDeadzoneRatio: 0.4 },
+          },
+        },
+        cameraOverridesByProfileRef: {
+          [orbitProfile.resourceRef]: {
+            baseResourceRef: orbitProfile.resourceRef,
+            baseContentHash: orbitProfile.contentHash,
+            values: { targetHeightMeters: 1.4 },
+          },
+        },
+        cameraPreference: orbitProfile.resourceRef,
+      });
+      expect(committedPreset.status).toBe("committed");
+      expect(committedPreset.snapshot.camera).toMatchObject({
+        preference: orbitProfile.resourceRef,
+        tuning: { targetHeightMeters: 1.4 },
+      });
+      expect(committedPreset.snapshot.subjectStatesByEntityId.player).toMatchObject({
+        controlFeelParameterTuning: { accelerationMetersPerSecondSquared: 4 },
+        controlParameterTuning: { moveDeadzoneRatio: 0.4 },
+      });
       expect((await runtime.runHarness("player")).passed).toBe(true);
     } finally {
       await runtime.dispose();

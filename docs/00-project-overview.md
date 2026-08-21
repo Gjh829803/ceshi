@@ -47,8 +47,9 @@ Director LLM → Render Directive SDK ────────────┘
 > Placement Solver S1 首个海湾纵向切片已完成并进入回归；通用 Terrain Mask/Route Graph、更多 Constraint 与 P0.1 整体仍未完成。
 
 > Simulation Take / Control Capture V1 已完成固定 Tick 时间线、五 Pass Babylon 捕获、
-> Render Ready Receipt、原子 Bundle 和真实 Chromium Gate；完整 Replay/Resume、统一
-> Validation Report 与 Video Adapter 仍未完成。
+> Render Ready Receipt、原子 Bundle 和真实 Chromium Gate；统一 Validation 的
+> Capture/Integrity V1 也已交付。完整 Replay/Resume、Placement/Physics/Composition
+> Validation 接入与 Video Adapter 仍未完成。
 
 第一期 Alpha 已证明以下链路可以运行：
 
@@ -62,11 +63,15 @@ Director LLM → Render Directive SDK ────────────┘
   Subject 拥有独立 Havok Controller/状态，Browser Protocol V3 可原子切换控制、
   固定输入、复位、查询 Snapshot 和截图。
 - `worldkit` 支持校验、构建、运行、截图、Registry Discovery、独立 Definition
-  校验、Subject Explain、Take validate/inspect/run 与 Capture validate/inspect；真实
-  Chromium 门禁覆盖碰撞、入水、两个自定义实例和五 Pass 控制捕获。
+  校验、Subject Explain、Take validate/inspect/run、Capture validate/inspect，以及
+  `verify capture|explain`；真实 Chromium 门禁覆盖碰撞、入水、两个自定义实例和五
+  Pass 控制捕获。
 - Simulation Take V1 把 Control/Camera Keyframe 编译为 60 Hz 固定 Tick 与精确 Capture
   Schedule；Babylon 从同一 Render Ready 状态输出 Neutral、Depth、Semantic、Instance、
   Normal，Node 端以原子 Bundle 和多层 Hash 保存。
+- Validation Capture/Integrity V1 用版本化 Profile 把 Bundle Integrity、Required Pass、
+  Linear Depth 和 Package/Take/Session 归属转换成独立、严格、可哈希的 Report；
+  Blocking Failure 一票否决，Required Metric 缺失为 `incomplete`。
 - 项目自有、可再分发的 Golden Humanoid GLB 已通过内容 Hash、Rig Profile、
   Animation Set、Collider Profile 与 Host Asset Resolver 的完整 Canonical 链路；
   两个实例拥有独立 Skeleton、动作、Transform 和生命周期。
@@ -147,8 +152,21 @@ Pass、稳定 Semantic/Instance Table、Playwright Driver、原子 Bundle、Inte
 Validate/Inspect 和两个共享 World Identity 的 Take Fixture。
 
 未完成：完整 WorldPackage/Registry Lock、Action/Event/Relationship Receipt、Resume、
-跨平台 Replay Metric、Motion Vector、统一 Validation Report 和 Video Model Adapter。
+跨平台 Replay Metric、Motion Vector、Placement/Physics/Composition 等统一 Validation
+扩展和 Video Model Adapter。
 现有真实浏览器 Gate 是有界单帧 Probe，不冒充完整 240 帧视频级验收。
+
+### Validation Capture/Integrity V1：首个统一报告切片
+
+已完成：引擎无关的 `ValidationProfileV1`、`ValidationReportV1`、Gate、Metric、
+Evidence 和 Diagnostic；内置 `outdoor-control-video-dev@1` Profile；严格解析与
+Canonical Hash；`worldkit verify capture|explain`；正常、缺 Pass、坏 Depth、混
+Take、坏 Hash 的确定性 Conformance Gate。报告写在 Bundle 外部，不造成 Bundle Root
+自引用，也不复制现有 Bundle Validator。
+
+未完成：Placement、Physics、Route、Composition、Replay、Performance 和 Generated
+Video Subject；Profile 组合/Override；`verify compare`；Browser/CI Evidence 发布。
+因此“统一报告协议已有首条切片”不等于全部生产 Gate 已统一。
 
 ### Phase II：更多主体、动作与室内
 

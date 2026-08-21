@@ -5,6 +5,7 @@ import type { ExecutionControlProfileV1 } from "@whitebox-world/runtime-contract
 import {
   compileMotionCommandV1,
   hasForwardControlIntentV1,
+  withControlTuningV1,
 } from "./control-profile-runtime";
 
 const DEFAULT_VIEW_FRAME = {
@@ -19,6 +20,7 @@ function profile(
 ): ExecutionControlProfileV1 {
   return {
     resourceRef: `worldkit://control-profile/test.${commandKind}@1`,
+    contentHash: "sha256:test-control-profile",
     commandKind,
     inputSpace,
     facingPolicy:
@@ -37,6 +39,40 @@ function profile(
 const NEUTRAL_MOVE_RESPONSE_EXPONENT = 1;
 
 describe("compileMotionCommandV1", () => {
+  it("uses the same transient deadzone and Control Feel response curve for motion and camera intent", () => {
+    const tuned = withControlTuningV1(
+      profile("planar-vector", "camera-relative"),
+      { moveDeadzoneRatio: 0.4 },
+    );
+
+    expect(compileMotionCommandV1(
+      tuned,
+      2,
+      [],
+      DEFAULT_VIEW_FRAME,
+      { moveYRatio: 0.3 },
+    )).toMatchObject({
+      kind: "planar-vector",
+      directionMetersXZ: [0, 0],
+    });
+    expect(hasForwardControlIntentV1(tuned, 2, [], { moveYRatio: 0.3 }))
+      .toBe(false);
+
+    const aboveDeadzone = compileMotionCommandV1(
+      tuned,
+      2,
+      [],
+      DEFAULT_VIEW_FRAME,
+      { moveYRatio: 0.7 },
+    );
+    expect(aboveDeadzone.kind).toBe("planar-vector");
+    if (aboveDeadzone.kind === "planar-vector") {
+      expect(aboveDeadzone.directionMetersXZ[1]).toBeCloseTo(-0.25, 12);
+    }
+    expect(hasForwardControlIntentV1(tuned, 2, [], { moveYRatio: 0.7 }))
+      .toBe(true);
+  });
+
   it("turns camera-relative planar intent into a normalized world-space direction", () => {
     const command = compileMotionCommandV1(
         profile("planar-vector", "camera-relative"),

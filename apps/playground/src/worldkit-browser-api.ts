@@ -1,21 +1,29 @@
 import type { SubjectAssetRuntimeErrorCodeV1 } from "@whitebox-world/runtime-babylon";
 import {
+  builtInSubjectDefaultRegistry,
   builtInSubjectResourceRegistry,
+  resolveSubjectPresetClosureV1,
   type SubjectResourceRegistryV3,
 } from "@whitebox-world/subject-registry";
 import {
+  CONTROL_FEEL_PARAMETER_BOUNDS_V1,
+  CONTROL_FEEL_PARAMETER_NAMES_V1,
   WORLDKIT_BROWSER_PROTOCOL_VERSION,
+  type ApplySubjectPresetTuningRequestV1,
   type BindControlRequestV2,
   type CameraTuningV1,
   type CameraViewInputV1,
   type ControlCaptureCapabilitiesV1,
   type ControlCaptureRequestV1,
   type ControlBindingReceiptV2,
+  type ControlFeelTuningV1,
+  type ControlTuningV1,
   type FixedInputV1,
   type RenderReadyReceiptV1,
   type RuntimeControlCaptureFrameV1,
   type WorldRuntimeSnapshotV3,
   type SubjectHarnessReportV1,
+  type SubjectPresetTuningReceiptV1,
   type WorldkitBrowserApiV3,
   type WorldkitBrowserDiagnosticV1,
 } from "@whitebox-world/runtime-contracts";
@@ -39,6 +47,17 @@ export interface DeferredWorldkitBrowserRuntimeAdapterV1 {
   adjustCameraViewRuntime?(input: CameraViewInputV1): WorldRuntimeSnapshotV3;
   resetCameraViewRuntime?(): WorldRuntimeSnapshotV3;
   setCameraTuningRuntime?(tuning: CameraTuningV1): WorldRuntimeSnapshotV3;
+  setControlFeelTuningRuntime?(
+    subjectEntityId: string,
+    tuning: ControlFeelTuningV1,
+  ): WorldRuntimeSnapshotV3;
+  setControlTuningRuntime?(
+    subjectEntityId: string,
+    tuning: ControlTuningV1,
+  ): WorldRuntimeSnapshotV3;
+  applySubjectPresetTuningRuntime?(
+    request: ApplySubjectPresetTuningRequestV1,
+  ): SubjectPresetTuningReceiptV1;
   runSubjectHarness?(subjectEntityId: string): Promise<SubjectHarnessReportV1>;
   setMotionProfileRuntime?(
     subjectEntityId: string,
@@ -348,7 +367,15 @@ export function installDeferredWorldkitBrowserApi(options: {
       return adapter.runtimeSnapshot();
     },
     listSubjectDefinitions: (options = {}) =>
-      builtInSubjectResourceRegistry.listCapabilitySubjectDefinitions()
+      builtInSubjectDefaultRegistry.listPublicDefaults()
+        .flatMap((entry) => {
+          const definition = builtInSubjectResourceRegistry.resolveSubjectDefinition(
+            entry.subjectDefinitionRef,
+          );
+          return definition !== undefined && "schemaVersion" in definition
+            ? [definition]
+            : [];
+        })
         .filter(
           (definition) =>
             options.includeExperimental === true ||
@@ -415,9 +442,6 @@ export function installDeferredWorldkitBrowserApi(options: {
       return [
         ...[...motionRefs].flatMap((resourceRef) => {
           const resource = builtInSubjectResourceRegistry.resolveMotionProfile(resourceRef);
-          const kernel = resource === undefined
-            ? undefined
-            : builtInSubjectResourceRegistry.resolveMotionKernel(resource.motionKernelRef);
           // Motion Profiles no longer expose numeric parameter bags or safety
           // limits; motion feel numbers live on locked control-feel profiles.
           return resource === undefined
@@ -432,9 +456,60 @@ export function installDeferredWorldkitBrowserApi(options: {
                   : resourceRef === definition.profiles.motion.fallbackMotionProfileRef
                     ? "fallback" as const
                     : "optional" as const,
-                runtimeParameterNames: kernel?.runtimeParameterNames ?? [],
               }];
         }),
+        ...(() => {
+          const resource = builtInSubjectResourceRegistry.resolveControlFeelProfile(
+            definition.profiles.controlFeelProfileRef,
+          );
+          return resource === undefined
+            ? []
+            : [{
+                resourceRef: resource.resourceRef,
+                contentHash: resource.contentHash,
+                kind: "control-feel-profile" as const,
+                displayName: resource.aiMetadata.displayName,
+                role: "feel" as const,
+                parameters: Object.fromEntries(
+                  CONTROL_FEEL_PARAMETER_NAMES_V1.map((name) => [name, resource[name]]),
+                ),
+                safetyLimits: CONTROL_FEEL_PARAMETER_BOUNDS_V1,
+                authoringRanges: Object.fromEntries(
+                  CONTROL_FEEL_PARAMETER_NAMES_V1.map((name) => {
+                    const bounds = CONTROL_FEEL_PARAMETER_BOUNDS_V1[name];
+                    return [name, {
+                      ...bounds,
+                      step: Math.max(0.01, (bounds.maximum - bounds.minimum) / 100),
+                    }];
+                  }),
+                ),
+                runtimeParameterNames: CONTROL_FEEL_PARAMETER_NAMES_V1,
+                draftOnlyParameterNames: [],
+              }];
+        })(),
+        ...(() => {
+          const resource = builtInSubjectResourceRegistry.resolveControlProfile(
+            definition.profiles.controlProfileRef,
+          );
+          return resource === undefined
+            ? []
+            : [{
+                resourceRef: resource.resourceRef,
+                contentHash: resource.contentHash,
+                kind: "control-profile" as const,
+                displayName: resource.aiMetadata.displayName,
+                role: "control" as const,
+                parameters: { moveDeadzoneRatio: resource.moveDeadzoneRatio },
+                safetyLimits: {
+                  moveDeadzoneRatio: { minimum: 0, maximum: 0.4 },
+                },
+                authoringRanges: {
+                  moveDeadzoneRatio: { minimum: 0, maximum: 0.4, step: 0.01 },
+                },
+                runtimeParameterNames: ["moveDeadzoneRatio"],
+                draftOnlyParameterNames: [],
+              }];
+        })(),
         ...[...cameraRefs].flatMap((resourceRef) => {
           const resource = builtInSubjectResourceRegistry.resolveCameraRigProfile(resourceRef);
           return resource === undefined
@@ -455,6 +530,37 @@ export function installDeferredWorldkitBrowserApi(options: {
               }];
         }),
       ].sort((left, right) => left.resourceRef.localeCompare(right.resourceRef));
+    },
+    getSubjectPresetBaseline: (subjectDefinitionRef) => {
+      const closure = resolveSubjectPresetClosureV1(
+        builtInSubjectResourceRegistry,
+        subjectDefinitionRef,
+      );
+      const definition = builtInSubjectResourceRegistry.resolveSubjectDefinition(
+        subjectDefinitionRef,
+      );
+      if (definition === undefined || !("schemaVersion" in definition)) {
+        throw new Error(`WORLDKIT_SUBJECT_DEFINITION_NOT_FOUND: ${subjectDefinitionRef}`);
+      }
+      const cameraContext = builtInSubjectResourceRegistry.resolveCameraContextProfile(
+        definition.profiles.cameraContextProfileRef,
+      );
+      if (cameraContext === undefined) {
+        throw new Error(
+          `WORLDKIT_CAMERA_CONTEXT_NOT_FOUND: ${definition.profiles.cameraContextProfileRef}`,
+        );
+      }
+      const publicDefault = builtInSubjectDefaultRegistry.resolvePublicDefault(
+        closure.subjectDefinitionId,
+      );
+      return Object.freeze({
+        closure,
+        defaultCameraRigProfileRef: cameraContext.defaultCameraRigProfileRef,
+        ...(cameraContext.firstPersonCameraRigProfileRef === undefined
+          ? {}
+          : { firstPersonCameraRigProfileRef: cameraContext.firstPersonCameraRigProfileRef }),
+        ...(publicDefault === undefined ? {} : { publicDefault }),
+      });
     },
     validateSubjectPackage: (subjectDefinitionRef) =>
       validateSubjectPackageAgainstRegistry(
@@ -493,6 +599,33 @@ export function installDeferredWorldkitBrowserApi(options: {
       }
       return adapter.setCameraTuningRuntime(tuning);
     },
+    setControlFeelTuning: (subjectEntityId, tuning) => {
+      const adapter = requireReadyAdapter();
+      if (adapter.setControlFeelTuningRuntime === undefined) {
+        throw new Error("WORLDKIT_CONTROL_FEEL_TUNING_UNAVAILABLE");
+      }
+      return adapter.setControlFeelTuningRuntime(subjectEntityId, tuning);
+    },
+    getControlFeelTuning: (subjectEntityId) =>
+      requireReadyAdapter().runtimeSnapshot().subjectStatesByEntityId[subjectEntityId]
+        ?.controlFeelParameterTuning ?? {},
+    setControlTuning: (subjectEntityId, tuning) => {
+      const adapter = requireReadyAdapter();
+      if (adapter.setControlTuningRuntime === undefined) {
+        throw new Error("WORLDKIT_CONTROL_TUNING_UNAVAILABLE");
+      }
+      return adapter.setControlTuningRuntime(subjectEntityId, tuning);
+    },
+    getControlTuning: (subjectEntityId) =>
+      requireReadyAdapter().runtimeSnapshot().subjectStatesByEntityId[subjectEntityId]
+        ?.controlParameterTuning ?? {},
+    applySubjectPresetTuning: (request) => {
+      const adapter = requireReadyAdapter();
+      if (adapter.applySubjectPresetTuningRuntime === undefined) {
+        throw new Error("WORLDKIT_SUBJECT_PRESET_TUNING_UNAVAILABLE");
+      }
+      return adapter.applySubjectPresetTuningRuntime(request);
+    },
     setMotionProfile: async (subjectEntityId, motionProfileRef) => {
       await startupPromise;
       const adapter = requireReadyAdapter();
@@ -518,7 +651,11 @@ export function installDeferredWorldkitBrowserApi(options: {
   // capability-authoring extension is callable but does not mutate that key set.
   for (const extensionName of [
     "adjustCameraView",
+    "applySubjectPresetTuning",
     "getCameraSnapshot",
+    "getControlFeelTuning",
+    "getControlTuning",
+    "getSubjectPresetBaseline",
     "getSubjectSnapshot",
     "listCompatibleProfiles",
     "listMotionKernels",
@@ -527,6 +664,8 @@ export function installDeferredWorldkitBrowserApi(options: {
     "resetCameraView",
     "setCameraPreference",
     "setCameraTuning",
+    "setControlFeelTuning",
+    "setControlTuning",
     "setIntent",
     "setMotionProfile",
     "validateSubjectPackage",

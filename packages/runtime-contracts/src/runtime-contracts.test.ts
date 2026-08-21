@@ -92,6 +92,7 @@ describe("runtime contracts V3", () => {
       },
       controlFeel: {
         resourceRef: "worldkit://control-feel-profile/humanoid.medium-ground@1",
+        contentHash: `sha256:${"1".repeat(64)}`,
         walkSpeedMetersPerSecond: 2.4,
         runSpeedMetersPerSecond: 4,
         jumpSpeedMetersPerSecond: 5.5,
@@ -109,6 +110,7 @@ describe("runtime contracts V3", () => {
       availableControlFeels: [
         {
           resourceRef: "worldkit://control-feel-profile/humanoid.heavy-ground@1",
+          contentHash: `sha256:${"2".repeat(64)}`,
           walkSpeedMetersPerSecond: 1.8,
           runSpeedMetersPerSecond: 3.2,
           jumpSpeedMetersPerSecond: 5,

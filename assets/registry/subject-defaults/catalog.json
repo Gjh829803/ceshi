@@ -1,0 +1,35 @@
+{
+  "schemaVersion": 1,
+  "defaults": [
+    {
+      "subjectDefinitionId": "animal.quadruped.forward-steer",
+      "subjectDefinitionRef": "worldkit://subject-definition/animal.quadruped.forward-steer@2",
+      "subjectDefinitionContentHash": "sha256:11effca74b0af1617cb56132e13b96d838f068108c8ed47f92e21509cfd965a8"
+    },
+    {
+      "subjectDefinitionId": "glider.paraglider.unpowered",
+      "subjectDefinitionRef": "worldkit://subject-definition/glider.paraglider.unpowered@1",
+      "subjectDefinitionContentHash": "sha256:3ee97c70da807e0d601d83a701de4993df684cfefb2d0f278ca0228dff868139"
+    },
+    {
+      "subjectDefinitionId": "humanoid.g-bot",
+      "subjectDefinitionRef": "worldkit://subject-definition/humanoid.g-bot@1",
+      "subjectDefinitionContentHash": "sha256:21a8265f0ec54b540f8ef7bb536dc5b4ac40a300c2d42906d52c5fc53519e506"
+    },
+    {
+      "subjectDefinitionId": "surface-craft.ice-skimmer",
+      "subjectDefinitionRef": "worldkit://subject-definition/surface-craft.ice-skimmer@1",
+      "subjectDefinitionContentHash": "sha256:ef3fa0fe7d6487216e9d088a4612ec6b04936e5d7dda4187be3123a009e0efb6"
+    },
+    {
+      "subjectDefinitionId": "vehicle.four-wheel.arcade",
+      "subjectDefinitionRef": "worldkit://subject-definition/vehicle.four-wheel.arcade@1",
+      "subjectDefinitionContentHash": "sha256:b03a0eff830ed9eea84f0c717b363c91125a21719b7e391aac151c6b7b63875c"
+    },
+    {
+      "subjectDefinitionId": "watercraft.kayak.surface",
+      "subjectDefinitionRef": "worldkit://subject-definition/watercraft.kayak.surface@1",
+      "subjectDefinitionContentHash": "sha256:da3bcb59903a030f533392e47fffe30f27996c3e9f47e0a6ac4a429e8fb2ede9"
+    }
+  ]
+}

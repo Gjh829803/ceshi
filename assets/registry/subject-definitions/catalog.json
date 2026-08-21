@@ -208,13 +208,13 @@
   {
     "kind": "subject-definition",
     "schemaVersion": 3,
-    "id": "vehicle.four-wheel.arcade",
-    "version": 1,
-    "resourceRef": "worldkit://subject-definition/vehicle.four-wheel.arcade@1",
-    "authoringAvailability": "experimental",
-    "category": "vehicle",
-    "bodyTopology": "four-wheel",
-    "semanticClassId": "subject.vehicle.four-wheel",
+    "id": "animal.quadruped.forward-steer",
+    "version": 2,
+    "resourceRef": "worldkit://subject-definition/animal.quadruped.forward-steer@2",
+    "authoringAvailability": "advanced",
+    "category": "animal",
+    "bodyTopology": "quadruped",
+    "semanticClassId": "subject.animal.quadruped",
     "coordinateConvention": {
       "forwardAxis": "-Z",
       "upAxis": "+Y",
@@ -228,196 +228,15 @@
         "shape": {
           "kind": "box",
           "sizeMetersXYZ": [
-            1.8,
             0.8,
-            3.6
+            0.7,
+            1.5
           ]
         },
-        "localTransform": {
-          "positionMetersXYZ": [
-            0,
-            0.4,
-            0
-          ],
-          "rotationEulerRadiansXYZ": [
-            0,
-            0,
-            0
-          ]
-        },
-        "colliderContribution": "include",
-        "semanticTags": [
-          "body",
-          "vehicle"
-        ]
-      },
-      {
-        "id": "cabin",
-        "kind": "primitive",
-        "shape": {
-          "kind": "box",
-          "sizeMetersXYZ": [
-            1.45,
-            0.75,
-            1.7
-          ]
-        },
-        "localTransform": {
-          "positionMetersXYZ": [
-            0,
-            1.3,
-            0.15
-          ],
-          "rotationEulerRadiansXYZ": [
-            0,
-            0,
-            0
-          ]
-        },
-        "colliderContribution": "include",
-        "semanticTags": [
-          "cabin"
-        ]
-      }
-    ],
-    "visualBinding": {
-      "mode": "static"
-    },
-    "sockets": [
-      {
-        "id": "DriverSeat",
-        "kind": "local",
-        "localTransform": {
-          "positionMetersXYZ": [
-            -0.35,
-            1.25,
-            0.25
-          ],
-          "rotationEulerRadiansXYZ": [
-            0,
-            0,
-            0
-          ]
-        },
-        "semanticTags": [
-          "driver",
-          "seat"
-        ]
-      },
-      {
-        "id": "CameraTarget3D",
-        "kind": "local",
-        "localTransform": {
-          "positionMetersXYZ": [
-            0,
-            1.1,
-            0
-          ],
-          "rotationEulerRadiansXYZ": [
-            0,
-            0,
-            0
-          ]
-        },
-        "semanticTags": [
-          "camera",
-          "target"
-        ]
-      },
-      {
-        "id": "LookAhead",
-        "kind": "local",
         "localTransform": {
           "positionMetersXYZ": [
             0,
             0.8,
-            -3
-          ],
-          "rotationEulerRadiansXYZ": [
-            0,
-            0,
-            0
-          ]
-        },
-        "semanticTags": [
-          "camera",
-          "look-ahead"
-        ]
-      }
-    ],
-    "colliderPolicy": {
-      "kind": "derive",
-      "colliderDerivationProfileRef": "worldkit://collider-derivation-profile/vertical-capability-capsule@1"
-    },
-    "capabilityRefs": [
-      "worldkit://capability/locomotion.forward-steer@1",
-      "worldkit://capability/locomotion.wheeled@1",
-      "worldkit://capability/relationship.seat@1"
-    ],
-    "profiles": {
-      "physicsBodyProfileRef": "worldkit://physics-body-profile/character.capability-medium@1",
-      "locomotionProfileRef": "worldkit://locomotion-profile/ground.standard@1",
-      "motion": {
-        "defaultMotionProfileRef": "worldkit://motion-profile/free-ground.humanoid-medium@1",
-        "optionalMotionProfileRefs": [
-          "worldkit://motion-profile/safe-ground@1"
-        ],
-        "fallbackMotionProfileRef": "worldkit://motion-profile/safe-ground@1"
-      },
-      "controlProfileRef": "worldkit://control-profile/planar.camera-relative@1",
-      "cameraContextProfileRef": "worldkit://camera-context/capability-driven.default@1",
-      "mediumProfileRef": "worldkit://medium-profile/ground-air.standard@1",
-      "harnessProfileRef": "worldkit://harness-profile/subject.standard@1",
-      "controlFeelProfileRef": "worldkit://control-feel-profile/humanoid.medium-ground@1"
-    },
-    "relationshipCapabilityRefs": [
-      "worldkit://capability/relationship.seat@1"
-    ],
-    "actionOrPoseSetRef": "worldkit://pose-set/static.whitebox@1",
-    "renderBindingProfileRef": "worldkit://render-binding/subject.standard@1",
-    "aiMetadata": {
-      "displayName": "Four-wheel Arcade",
-      "description": "Whitebox four-wheel package using simplified deterministic K03 motion.",
-      "semanticTags": [
-        "arcade",
-        "four-wheel",
-        "vehicle",
-        "whitebox"
-      ]
-    }
-  },
-  {
-    "kind": "subject-definition",
-    "schemaVersion": 3,
-    "id": "surface-craft.ice-skimmer",
-    "version": 1,
-    "resourceRef": "worldkit://subject-definition/surface-craft.ice-skimmer@1",
-    "authoringAvailability": "experimental",
-    "category": "vehicle",
-    "bodyTopology": "surface-craft",
-    "semanticClassId": "subject.surface-craft.skimmer",
-    "coordinateConvention": {
-      "forwardAxis": "-Z",
-      "upAxis": "+Y",
-      "metersPerUnit": 1,
-      "pivot": "support-center"
-    },
-    "visualParts": [
-      {
-        "id": "deck",
-        "kind": "primitive",
-        "shape": {
-          "kind": "box",
-          "sizeMetersXYZ": [
-            1.4,
-            0.25,
-            2.8
-          ]
-        },
-        "localTransform": {
-          "positionMetersXYZ": [
-            0,
-            0.125,
             0
           ],
           "rotationEulerRadiansXYZ": [
@@ -428,200 +247,52 @@
         },
         "colliderContribution": "include",
         "semanticTags": [
-          "deck",
-          "skimmer"
+          "body"
         ]
       },
       {
-        "id": "seat",
+        "id": "head",
         "kind": "primitive",
         "shape": {
           "kind": "box",
           "sizeMetersXYZ": [
-            0.7,
-            0.7,
-            0.8
+            0.55,
+            0.55,
+            0.6
           ]
         },
-        "localTransform": {
-          "positionMetersXYZ": [
-            0,
-            0.7,
-            0.3
-          ],
-          "rotationEulerRadiansXYZ": [
-            0,
-            0,
-            0
-          ]
-        },
-        "colliderContribution": "include",
-        "semanticTags": [
-          "seat"
-        ]
-      }
-    ],
-    "visualBinding": {
-      "mode": "static"
-    },
-    "sockets": [
-      {
-        "id": "DriverSeat",
-        "kind": "local",
         "localTransform": {
           "positionMetersXYZ": [
             0,
             0.95,
-            0.25
+            -0.95
           ],
           "rotationEulerRadiansXYZ": [
             0,
-            0,
-            0
-          ]
-        },
-        "semanticTags": [
-          "driver",
-          "seat"
-        ]
-      },
-      {
-        "id": "CameraTarget3D",
-        "kind": "local",
-        "localTransform": {
-          "positionMetersXYZ": [
-            0,
-            0.9,
-            0
-          ],
-          "rotationEulerRadiansXYZ": [
-            0,
-            0,
-            0
-          ]
-        },
-        "semanticTags": [
-          "camera",
-          "target"
-        ]
-      },
-      {
-        "id": "LookAhead",
-        "kind": "local",
-        "localTransform": {
-          "positionMetersXYZ": [
-            0,
-            0.5,
-            -2.5
-          ],
-          "rotationEulerRadiansXYZ": [
-            0,
-            0,
-            0
-          ]
-        },
-        "semanticTags": [
-          "camera",
-          "look-ahead"
-        ]
-      }
-    ],
-    "colliderPolicy": {
-      "kind": "derive",
-      "colliderDerivationProfileRef": "worldkit://collider-derivation-profile/vertical-capability-capsule@1"
-    },
-    "capabilityRefs": [
-      "worldkit://capability/locomotion.forward-steer@1",
-      "worldkit://capability/locomotion.surface-slide@1",
-      "worldkit://capability/relationship.seat@1"
-    ],
-    "profiles": {
-      "physicsBodyProfileRef": "worldkit://physics-body-profile/character.capability-medium@1",
-      "locomotionProfileRef": "worldkit://locomotion-profile/ground.standard@1",
-      "motion": {
-        "defaultMotionProfileRef": "worldkit://motion-profile/free-ground.humanoid-medium@1",
-        "optionalMotionProfileRefs": [
-          "worldkit://motion-profile/safe-ground@1"
-        ],
-        "fallbackMotionProfileRef": "worldkit://motion-profile/safe-ground@1"
-      },
-      "controlProfileRef": "worldkit://control-profile/planar.camera-relative@1",
-      "cameraContextProfileRef": "worldkit://camera-context/capability-driven.default@1",
-      "mediumProfileRef": "worldkit://medium-profile/ground-air.standard@1",
-      "harnessProfileRef": "worldkit://harness-profile/subject.standard@1",
-      "controlFeelProfileRef": "worldkit://control-feel-profile/humanoid.medium-ground@1"
-    },
-    "relationshipCapabilityRefs": [
-      "worldkit://capability/relationship.seat@1"
-    ],
-    "actionOrPoseSetRef": "worldkit://pose-set/static.whitebox@1",
-    "renderBindingProfileRef": "worldkit://render-binding/subject.standard@1",
-    "aiMetadata": {
-      "displayName": "Ice Skimmer",
-      "description": "Whitebox surface craft using K04 slope, friction and inertia motion.",
-      "semanticTags": [
-        "ice",
-        "skimmer",
-        "surface-slide",
-        "whitebox"
-      ]
-    }
-  },
-  {
-    "kind": "subject-definition",
-    "schemaVersion": 3,
-    "id": "watercraft.kayak.surface",
-    "version": 1,
-    "resourceRef": "worldkit://subject-definition/watercraft.kayak.surface@1",
-    "authoringAvailability": "experimental",
-    "category": "composite",
-    "bodyTopology": "watercraft",
-    "semanticClassId": "subject.watercraft.kayak",
-    "coordinateConvention": {
-      "forwardAxis": "-Z",
-      "upAxis": "+Y",
-      "metersPerUnit": 1,
-      "pivot": "support-center"
-    },
-    "visualParts": [
-      {
-        "id": "hull",
-        "kind": "primitive",
-        "shape": {
-          "kind": "capsule",
-          "radiusMeters": 0.42,
-          "heightMeters": 3.2
-        },
-        "localTransform": {
-          "positionMetersXYZ": [
-            0,
-            0.42,
-            0
-          ],
-          "rotationEulerRadiansXYZ": [
-            1.5707963267948966,
             0,
             0
           ]
         },
         "colliderContribution": "include",
         "semanticTags": [
-          "hull",
-          "kayak"
+          "head"
         ]
       },
       {
-        "id": "paddler",
+        "id": "legs",
         "kind": "primitive",
         "shape": {
-          "kind": "capsule",
-          "radiusMeters": 0.25,
-          "heightMeters": 1.15
+          "kind": "box",
+          "sizeMetersXYZ": [
+            0.65,
+            0.65,
+            1.1
+          ]
         },
         "localTransform": {
           "positionMetersXYZ": [
             0,
-            0.85,
+            0.33,
             0
           ],
           "rotationEulerRadiansXYZ": [
@@ -630,9 +301,9 @@
             0
           ]
         },
-        "colliderContribution": "exclude",
+        "colliderContribution": "include",
         "semanticTags": [
-          "paddler"
+          "legs"
         ]
       }
     ],
@@ -640,26 +311,6 @@
       "mode": "static"
     },
     "sockets": [
-      {
-        "id": "DriverSeat",
-        "kind": "local",
-        "localTransform": {
-          "positionMetersXYZ": [
-            0,
-            0.55,
-            0
-          ],
-          "rotationEulerRadiansXYZ": [
-            0,
-            0,
-            0
-          ]
-        },
-        "semanticTags": [
-          "driver",
-          "seat"
-        ]
-      },
       {
         "id": "CameraTarget3D",
         "kind": "local",
@@ -686,8 +337,8 @@
         "localTransform": {
           "positionMetersXYZ": [
             0,
-            0.4,
-            -2.3
+            0.9,
+            -1.2
           ],
           "rotationEulerRadiansXYZ": [
             0,
@@ -699,6 +350,26 @@
           "camera",
           "look-ahead"
         ]
+      },
+      {
+        "id": "MountSeat",
+        "kind": "local",
+        "localTransform": {
+          "positionMetersXYZ": [
+            0,
+            1.25,
+            0
+          ],
+          "rotationEulerRadiansXYZ": [
+            0,
+            0,
+            0
+          ]
+        },
+        "semanticTags": [
+          "mount",
+          "relationship"
+        ]
       }
     ],
     "colliderPolicy": {
@@ -706,8 +377,7 @@
       "colliderDerivationProfileRef": "worldkit://collider-derivation-profile/vertical-capability-capsule@1"
     },
     "capabilityRefs": [
-      "worldkit://capability/locomotion.water-surface@1",
-      "worldkit://capability/relationship.seat@1"
+      "worldkit://capability/locomotion.forward-steer@1"
     ],
     "profiles": {
       "physicsBodyProfileRef": "worldkit://physics-body-profile/character.capability-medium@1",
@@ -720,23 +390,24 @@
         "fallbackMotionProfileRef": "worldkit://motion-profile/safe-ground@1"
       },
       "controlProfileRef": "worldkit://control-profile/planar.camera-relative@1",
-      "cameraContextProfileRef": "worldkit://camera-context/capability-driven.default@1",
+      "cameraContextProfileRef": "worldkit://camera-context/capability-driven.quadruped-official@1",
       "mediumProfileRef": "worldkit://medium-profile/ground-air.standard@1",
       "harnessProfileRef": "worldkit://harness-profile/subject.standard@1",
-      "controlFeelProfileRef": "worldkit://control-feel-profile/humanoid.medium-ground@1"
+      "controlFeelProfileRef": "worldkit://control-feel-profile/subject.animal.quadruped.forward-steer.default@1"
     },
     "relationshipCapabilityRefs": [
-      "worldkit://capability/relationship.seat@1"
+      "worldkit://capability/relationship.mount@1"
     ],
     "actionOrPoseSetRef": "worldkit://pose-set/static.whitebox@1",
     "renderBindingProfileRef": "worldkit://render-binding/subject.standard@1",
     "aiMetadata": {
-      "displayName": "Kayak Surface Package",
-      "description": "Whitebox kayak and paddler package using K06 water-surface motion.",
+      "displayName": "Quadruped Forward Steer Official v2",
+      "description": "Reviewed quadruped public default with versioned P1.5 Control Feel and Camera Profiles.",
       "semanticTags": [
-        "kayak",
-        "water-surface",
-        "watercraft",
+        "animal",
+        "forward-steer",
+        "official",
+        "quadruped",
         "whitebox"
       ]
     }
@@ -934,6 +605,542 @@
         "air",
         "glide",
         "paraglider",
+        "whitebox"
+      ]
+    }
+  },
+  {
+    "kind": "subject-definition",
+    "schemaVersion": 3,
+    "id": "surface-craft.ice-skimmer",
+    "version": 1,
+    "resourceRef": "worldkit://subject-definition/surface-craft.ice-skimmer@1",
+    "authoringAvailability": "experimental",
+    "category": "vehicle",
+    "bodyTopology": "surface-craft",
+    "semanticClassId": "subject.surface-craft.skimmer",
+    "coordinateConvention": {
+      "forwardAxis": "-Z",
+      "upAxis": "+Y",
+      "metersPerUnit": 1,
+      "pivot": "support-center"
+    },
+    "visualParts": [
+      {
+        "id": "deck",
+        "kind": "primitive",
+        "shape": {
+          "kind": "box",
+          "sizeMetersXYZ": [
+            1.4,
+            0.25,
+            2.8
+          ]
+        },
+        "localTransform": {
+          "positionMetersXYZ": [
+            0,
+            0.125,
+            0
+          ],
+          "rotationEulerRadiansXYZ": [
+            0,
+            0,
+            0
+          ]
+        },
+        "colliderContribution": "include",
+        "semanticTags": [
+          "deck",
+          "skimmer"
+        ]
+      },
+      {
+        "id": "seat",
+        "kind": "primitive",
+        "shape": {
+          "kind": "box",
+          "sizeMetersXYZ": [
+            0.7,
+            0.7,
+            0.8
+          ]
+        },
+        "localTransform": {
+          "positionMetersXYZ": [
+            0,
+            0.7,
+            0.3
+          ],
+          "rotationEulerRadiansXYZ": [
+            0,
+            0,
+            0
+          ]
+        },
+        "colliderContribution": "include",
+        "semanticTags": [
+          "seat"
+        ]
+      }
+    ],
+    "visualBinding": {
+      "mode": "static"
+    },
+    "sockets": [
+      {
+        "id": "DriverSeat",
+        "kind": "local",
+        "localTransform": {
+          "positionMetersXYZ": [
+            0,
+            0.95,
+            0.25
+          ],
+          "rotationEulerRadiansXYZ": [
+            0,
+            0,
+            0
+          ]
+        },
+        "semanticTags": [
+          "driver",
+          "seat"
+        ]
+      },
+      {
+        "id": "CameraTarget3D",
+        "kind": "local",
+        "localTransform": {
+          "positionMetersXYZ": [
+            0,
+            0.9,
+            0
+          ],
+          "rotationEulerRadiansXYZ": [
+            0,
+            0,
+            0
+          ]
+        },
+        "semanticTags": [
+          "camera",
+          "target"
+        ]
+      },
+      {
+        "id": "LookAhead",
+        "kind": "local",
+        "localTransform": {
+          "positionMetersXYZ": [
+            0,
+            0.5,
+            -2.5
+          ],
+          "rotationEulerRadiansXYZ": [
+            0,
+            0,
+            0
+          ]
+        },
+        "semanticTags": [
+          "camera",
+          "look-ahead"
+        ]
+      }
+    ],
+    "colliderPolicy": {
+      "kind": "derive",
+      "colliderDerivationProfileRef": "worldkit://collider-derivation-profile/vertical-capability-capsule@1"
+    },
+    "capabilityRefs": [
+      "worldkit://capability/locomotion.forward-steer@1",
+      "worldkit://capability/locomotion.surface-slide@1",
+      "worldkit://capability/relationship.seat@1"
+    ],
+    "profiles": {
+      "physicsBodyProfileRef": "worldkit://physics-body-profile/character.capability-medium@1",
+      "locomotionProfileRef": "worldkit://locomotion-profile/ground.standard@1",
+      "motion": {
+        "defaultMotionProfileRef": "worldkit://motion-profile/free-ground.humanoid-medium@1",
+        "optionalMotionProfileRefs": [
+          "worldkit://motion-profile/safe-ground@1"
+        ],
+        "fallbackMotionProfileRef": "worldkit://motion-profile/safe-ground@1"
+      },
+      "controlProfileRef": "worldkit://control-profile/planar.camera-relative@1",
+      "cameraContextProfileRef": "worldkit://camera-context/capability-driven.default@1",
+      "mediumProfileRef": "worldkit://medium-profile/ground-air.standard@1",
+      "harnessProfileRef": "worldkit://harness-profile/subject.standard@1",
+      "controlFeelProfileRef": "worldkit://control-feel-profile/humanoid.medium-ground@1"
+    },
+    "relationshipCapabilityRefs": [
+      "worldkit://capability/relationship.seat@1"
+    ],
+    "actionOrPoseSetRef": "worldkit://pose-set/static.whitebox@1",
+    "renderBindingProfileRef": "worldkit://render-binding/subject.standard@1",
+    "aiMetadata": {
+      "displayName": "Ice Skimmer",
+      "description": "Whitebox surface craft using K04 slope, friction and inertia motion.",
+      "semanticTags": [
+        "ice",
+        "skimmer",
+        "surface-slide",
+        "whitebox"
+      ]
+    }
+  },
+  {
+    "kind": "subject-definition",
+    "schemaVersion": 3,
+    "id": "vehicle.four-wheel.arcade",
+    "version": 1,
+    "resourceRef": "worldkit://subject-definition/vehicle.four-wheel.arcade@1",
+    "authoringAvailability": "experimental",
+    "category": "vehicle",
+    "bodyTopology": "four-wheel",
+    "semanticClassId": "subject.vehicle.four-wheel",
+    "coordinateConvention": {
+      "forwardAxis": "-Z",
+      "upAxis": "+Y",
+      "metersPerUnit": 1,
+      "pivot": "support-center"
+    },
+    "visualParts": [
+      {
+        "id": "body",
+        "kind": "primitive",
+        "shape": {
+          "kind": "box",
+          "sizeMetersXYZ": [
+            1.8,
+            0.8,
+            3.6
+          ]
+        },
+        "localTransform": {
+          "positionMetersXYZ": [
+            0,
+            0.4,
+            0
+          ],
+          "rotationEulerRadiansXYZ": [
+            0,
+            0,
+            0
+          ]
+        },
+        "colliderContribution": "include",
+        "semanticTags": [
+          "body",
+          "vehicle"
+        ]
+      },
+      {
+        "id": "cabin",
+        "kind": "primitive",
+        "shape": {
+          "kind": "box",
+          "sizeMetersXYZ": [
+            1.45,
+            0.75,
+            1.7
+          ]
+        },
+        "localTransform": {
+          "positionMetersXYZ": [
+            0,
+            1.3,
+            0.15
+          ],
+          "rotationEulerRadiansXYZ": [
+            0,
+            0,
+            0
+          ]
+        },
+        "colliderContribution": "include",
+        "semanticTags": [
+          "cabin"
+        ]
+      }
+    ],
+    "visualBinding": {
+      "mode": "static"
+    },
+    "sockets": [
+      {
+        "id": "DriverSeat",
+        "kind": "local",
+        "localTransform": {
+          "positionMetersXYZ": [
+            -0.35,
+            1.25,
+            0.25
+          ],
+          "rotationEulerRadiansXYZ": [
+            0,
+            0,
+            0
+          ]
+        },
+        "semanticTags": [
+          "driver",
+          "seat"
+        ]
+      },
+      {
+        "id": "CameraTarget3D",
+        "kind": "local",
+        "localTransform": {
+          "positionMetersXYZ": [
+            0,
+            1.1,
+            0
+          ],
+          "rotationEulerRadiansXYZ": [
+            0,
+            0,
+            0
+          ]
+        },
+        "semanticTags": [
+          "camera",
+          "target"
+        ]
+      },
+      {
+        "id": "LookAhead",
+        "kind": "local",
+        "localTransform": {
+          "positionMetersXYZ": [
+            0,
+            0.8,
+            -3
+          ],
+          "rotationEulerRadiansXYZ": [
+            0,
+            0,
+            0
+          ]
+        },
+        "semanticTags": [
+          "camera",
+          "look-ahead"
+        ]
+      }
+    ],
+    "colliderPolicy": {
+      "kind": "derive",
+      "colliderDerivationProfileRef": "worldkit://collider-derivation-profile/vertical-capability-capsule@1"
+    },
+    "capabilityRefs": [
+      "worldkit://capability/locomotion.forward-steer@1",
+      "worldkit://capability/locomotion.wheeled@1",
+      "worldkit://capability/relationship.seat@1"
+    ],
+    "profiles": {
+      "physicsBodyProfileRef": "worldkit://physics-body-profile/character.capability-medium@1",
+      "locomotionProfileRef": "worldkit://locomotion-profile/ground.standard@1",
+      "motion": {
+        "defaultMotionProfileRef": "worldkit://motion-profile/free-ground.humanoid-medium@1",
+        "optionalMotionProfileRefs": [
+          "worldkit://motion-profile/safe-ground@1"
+        ],
+        "fallbackMotionProfileRef": "worldkit://motion-profile/safe-ground@1"
+      },
+      "controlProfileRef": "worldkit://control-profile/planar.camera-relative@1",
+      "cameraContextProfileRef": "worldkit://camera-context/capability-driven.default@1",
+      "mediumProfileRef": "worldkit://medium-profile/ground-air.standard@1",
+      "harnessProfileRef": "worldkit://harness-profile/subject.standard@1",
+      "controlFeelProfileRef": "worldkit://control-feel-profile/humanoid.medium-ground@1"
+    },
+    "relationshipCapabilityRefs": [
+      "worldkit://capability/relationship.seat@1"
+    ],
+    "actionOrPoseSetRef": "worldkit://pose-set/static.whitebox@1",
+    "renderBindingProfileRef": "worldkit://render-binding/subject.standard@1",
+    "aiMetadata": {
+      "displayName": "Four-wheel Arcade",
+      "description": "Whitebox four-wheel package using simplified deterministic K03 motion.",
+      "semanticTags": [
+        "arcade",
+        "four-wheel",
+        "vehicle",
+        "whitebox"
+      ]
+    }
+  },
+  {
+    "kind": "subject-definition",
+    "schemaVersion": 3,
+    "id": "watercraft.kayak.surface",
+    "version": 1,
+    "resourceRef": "worldkit://subject-definition/watercraft.kayak.surface@1",
+    "authoringAvailability": "experimental",
+    "category": "composite",
+    "bodyTopology": "watercraft",
+    "semanticClassId": "subject.watercraft.kayak",
+    "coordinateConvention": {
+      "forwardAxis": "-Z",
+      "upAxis": "+Y",
+      "metersPerUnit": 1,
+      "pivot": "support-center"
+    },
+    "visualParts": [
+      {
+        "id": "hull",
+        "kind": "primitive",
+        "shape": {
+          "kind": "capsule",
+          "radiusMeters": 0.42,
+          "heightMeters": 3.2
+        },
+        "localTransform": {
+          "positionMetersXYZ": [
+            0,
+            0.42,
+            0
+          ],
+          "rotationEulerRadiansXYZ": [
+            1.5707963267948966,
+            0,
+            0
+          ]
+        },
+        "colliderContribution": "include",
+        "semanticTags": [
+          "hull",
+          "kayak"
+        ]
+      },
+      {
+        "id": "paddler",
+        "kind": "primitive",
+        "shape": {
+          "kind": "capsule",
+          "radiusMeters": 0.25,
+          "heightMeters": 1.15
+        },
+        "localTransform": {
+          "positionMetersXYZ": [
+            0,
+            0.85,
+            0
+          ],
+          "rotationEulerRadiansXYZ": [
+            0,
+            0,
+            0
+          ]
+        },
+        "colliderContribution": "exclude",
+        "semanticTags": [
+          "paddler"
+        ]
+      }
+    ],
+    "visualBinding": {
+      "mode": "static"
+    },
+    "sockets": [
+      {
+        "id": "DriverSeat",
+        "kind": "local",
+        "localTransform": {
+          "positionMetersXYZ": [
+            0,
+            0.55,
+            0
+          ],
+          "rotationEulerRadiansXYZ": [
+            0,
+            0,
+            0
+          ]
+        },
+        "semanticTags": [
+          "driver",
+          "seat"
+        ]
+      },
+      {
+        "id": "CameraTarget3D",
+        "kind": "local",
+        "localTransform": {
+          "positionMetersXYZ": [
+            0,
+            1,
+            0
+          ],
+          "rotationEulerRadiansXYZ": [
+            0,
+            0,
+            0
+          ]
+        },
+        "semanticTags": [
+          "camera",
+          "target"
+        ]
+      },
+      {
+        "id": "LookAhead",
+        "kind": "local",
+        "localTransform": {
+          "positionMetersXYZ": [
+            0,
+            0.4,
+            -2.3
+          ],
+          "rotationEulerRadiansXYZ": [
+            0,
+            0,
+            0
+          ]
+        },
+        "semanticTags": [
+          "camera",
+          "look-ahead"
+        ]
+      }
+    ],
+    "colliderPolicy": {
+      "kind": "derive",
+      "colliderDerivationProfileRef": "worldkit://collider-derivation-profile/vertical-capability-capsule@1"
+    },
+    "capabilityRefs": [
+      "worldkit://capability/locomotion.water-surface@1",
+      "worldkit://capability/relationship.seat@1"
+    ],
+    "profiles": {
+      "physicsBodyProfileRef": "worldkit://physics-body-profile/character.capability-medium@1",
+      "locomotionProfileRef": "worldkit://locomotion-profile/ground.standard@1",
+      "motion": {
+        "defaultMotionProfileRef": "worldkit://motion-profile/free-ground.humanoid-medium@1",
+        "optionalMotionProfileRefs": [
+          "worldkit://motion-profile/safe-ground@1"
+        ],
+        "fallbackMotionProfileRef": "worldkit://motion-profile/safe-ground@1"
+      },
+      "controlProfileRef": "worldkit://control-profile/planar.camera-relative@1",
+      "cameraContextProfileRef": "worldkit://camera-context/capability-driven.default@1",
+      "mediumProfileRef": "worldkit://medium-profile/ground-air.standard@1",
+      "harnessProfileRef": "worldkit://harness-profile/subject.standard@1",
+      "controlFeelProfileRef": "worldkit://control-feel-profile/humanoid.medium-ground@1"
+    },
+    "relationshipCapabilityRefs": [
+      "worldkit://capability/relationship.seat@1"
+    ],
+    "actionOrPoseSetRef": "worldkit://pose-set/static.whitebox@1",
+    "renderBindingProfileRef": "worldkit://render-binding/subject.standard@1",
+    "aiMetadata": {
+      "displayName": "Kayak Surface Package",
+      "description": "Whitebox kayak and paddler package using K06 water-surface motion.",
+      "semanticTags": [
+        "kayak",
+        "water-surface",
+        "watercraft",
         "whitebox"
       ]
     }

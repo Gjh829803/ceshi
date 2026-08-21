@@ -646,6 +646,7 @@ function compileCapabilityAssemblyV1(
     profile: typeof assembly.defaultMotionProfile,
   ): NonNullable<ExecutionSubjectV3["capabilityAssembly"]>["defaultMotionProfile"] => ({
     resourceRef: profile.resourceRef,
+    contentHash: profile.contentHash,
     motionKernelRef: profile.motionKernelRef,
     motionTags: [...profile.motionTags],
   });
@@ -702,6 +703,7 @@ function compileCapabilityAssemblyV1(
     motionKernels: assembly.motionKernels.map(compileMotionKernel),
     controlProfile: {
       resourceRef: assembly.controlProfile.resourceRef,
+      contentHash: assembly.controlProfile.contentHash,
       commandKind: assembly.controlProfile.commandKind,
       inputSpace: assembly.controlProfile.inputSpace,
       facingPolicy: assembly.controlProfile.facingPolicy,
@@ -721,6 +723,7 @@ function compileCapabilityAssemblyV1(
       rules: structuredClone(assembly.cameraContextProfile.rules),
       cameraRigProfiles: assembly.cameraRigProfiles.map((profile) => ({
         resourceRef: profile.resourceRef,
+        contentHash: profile.contentHash,
         baseMode: profile.baseMode,
         algorithmRef: profile.algorithmRef,
         headingSource: profile.headingSource,
@@ -968,6 +971,7 @@ function compileSubjectsV3(
         },
         controlFeel: {
           resourceRef: definition.controlFeel.resourceRef,
+          contentHash: definition.controlFeel.contentHash,
           walkSpeedMetersPerSecond: definition.controlFeel.walkSpeedMetersPerSecond,
           runSpeedMetersPerSecond: definition.controlFeel.runSpeedMetersPerSecond,
           jumpSpeedMetersPerSecond: definition.controlFeel.jumpSpeedMetersPerSecond,
@@ -986,6 +990,7 @@ function compileSubjectsV3(
         },
         availableControlFeels: definition.availableControlFeels.map((feel) => ({
           resourceRef: feel.resourceRef,
+          contentHash: feel.contentHash,
           walkSpeedMetersPerSecond: feel.walkSpeedMetersPerSecond,
           runSpeedMetersPerSecond: feel.runSpeedMetersPerSecond,
           jumpSpeedMetersPerSecond: feel.jumpSpeedMetersPerSecond,

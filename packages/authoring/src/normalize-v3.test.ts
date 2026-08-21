@@ -129,10 +129,10 @@ describe("normalizeAuthoringSpecV3", () => {
 
   it("locks exact solved and all-fixed Normalized IR hashes", () => {
     expect(normalizeAuthoringSpecV3(world(true)).normalizedWorldIrHash).toBe(
-      "sha256:ef5548e9c07810fb5a55a3466f896037f2cb406d7f0550fdea83815bfa142f40",
+      "sha256:04e055c4de2f5b7a84d5fd714e73b19189c778c0448b8f4c86f86f82552f8ff2",
     );
     expect(normalizeAuthoringSpecV3(world(false)).normalizedWorldIrHash).toBe(
-      "sha256:199d90d78818ef882d09e9e5c582605e2c65f048f5c379cc6f6454348c9ab53c",
+      "sha256:ae005012f6f1353798c15177bd85e39e78239cfd2c995e0139f20d373cf6a3e3",
     );
   });
 });

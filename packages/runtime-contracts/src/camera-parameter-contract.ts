@@ -76,6 +76,56 @@ export const CAMERA_TUNING_PARAMETER_NAMES_V1 = [
 export type CameraTuningParameterNameV1 = typeof CAMERA_TUNING_PARAMETER_NAMES_V1[number];
 export type CameraTuningV1 = Partial<Record<CameraTuningParameterNameV1, number>>;
 
+export const CAMERA_TUNING_SAFETY_LIMITS_V1 = {
+  distanceMeters: { minimum: 0, maximum: 30 },
+  targetHeightMeters: { minimum: 0, maximum: 10 },
+  shoulderOffsetMeters: { minimum: -3, maximum: 3 },
+  pitchRadians: { minimum: -1.4, maximum: 1.4 },
+  positionDampingPerSecond: { minimum: 0, maximum: 40 },
+  horizontalPositionDampingPerSecond: { minimum: 0, maximum: 40 },
+  verticalPositionDampingPerSecond: { minimum: 0, maximum: 40 },
+  maximumPositionLagMeters: { minimum: 0, maximum: 30 },
+  rotationDampingPerSecond: { minimum: 0, maximum: 40 },
+  yawDampingPerSecond: { minimum: 0, maximum: 40 },
+  pitchDampingPerSecond: { minimum: 0, maximum: 40 },
+  collisionRadiusMeters: { minimum: 0, maximum: 2 },
+  collisionRetractionMetersPerSecond: { minimum: 0, maximum: 60 },
+  collisionRecoveryMetersPerSecond: { minimum: 0, maximum: 30 },
+  baseFovDegrees: { minimum: 35, maximum: 100 },
+  speedFovDegreesPerMeterPerSecond: { minimum: 0, maximum: 5 },
+  maximumSpeedFovDegrees: { minimum: 0, maximum: 30 },
+  lookAheadSeconds: { minimum: 0, maximum: 2 },
+  accelerationLookAheadSecondsSquared: { minimum: 0, maximum: 1 },
+  transitionSeconds: { minimum: 0, maximum: 3 },
+  minimumHeadingSpeedMetersPerSecond: { minimum: 0, maximum: 20 },
+  velocityHeadingDampingPerSecond: { minimum: 0, maximum: 40 },
+  fovDampingPerSecond: { minimum: 0, maximum: 30 },
+  horizontalDeadZoneRatio: { minimum: 0, maximum: 0.4 },
+  verticalDeadZoneRatio: { minimum: 0, maximum: 0.4 },
+  recenterDelaySeconds: { minimum: 0, maximum: 5 },
+  recenterDurationSeconds: { minimum: 0, maximum: 5 },
+  recenterMinimumSpeedMetersPerSecond: { minimum: 0, maximum: 10 },
+  teleportSnapDistanceMeters: { minimum: 1, maximum: 100 },
+  lookSensitivityXRatio: { minimum: 0.1, maximum: 3 },
+  lookSensitivityYRatio: { minimum: 0.1, maximum: 3 },
+} as const satisfies Record<
+  CameraTuningParameterNameV1,
+  { minimum: number; maximum: number }
+>;
+
+export function isCameraTuningWithinSafetyLimitsV1(
+  tuning: Readonly<Record<string, unknown>>,
+): tuning is CameraTuningV1 {
+  return Object.entries(tuning).every(([parameterName, value]) => {
+    if (!isCameraTuningParameterNameV1(parameterName)) return false;
+    const limit = CAMERA_TUNING_SAFETY_LIMITS_V1[parameterName];
+    return typeof value === "number" &&
+      Number.isFinite(value) &&
+      value >= limit.minimum &&
+      value <= limit.maximum;
+  });
+}
+
 const CAMERA_RIG_PARAMETER_NAME_SET_V1 = new Set<string>(CAMERA_RIG_PARAMETER_NAMES_V1);
 const CAMERA_TUNING_PARAMETER_NAME_SET_V1 = new Set<string>(CAMERA_TUNING_PARAMETER_NAMES_V1);
 const SOCKET_FIRST_PERSON_IGNORED_MODIFIER_PARAMETERS_V1 = new Set<CameraRigParameterNameV1>([

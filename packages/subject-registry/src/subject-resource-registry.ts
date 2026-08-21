@@ -397,7 +397,6 @@ function validateControlProfile(source: ControlProfileInputV1): void {
       `SUBJECT_REGISTRY_INVALID_CONTROL_INPUT_TUNING: '${source.resourceRef}'.`,
     );
   }
-
   const hasExecutablePolicyCombination = (() => {
     switch (source.commandKind) {
       case "planar-vector":

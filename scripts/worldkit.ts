@@ -1,7 +1,9 @@
 import { randomUUID } from "node:crypto";
-import { mkdir, rename, rm, writeFile } from "node:fs/promises";
+import { execFile as execFileCallback } from "node:child_process";
+import { mkdir, rename, rm, stat, writeFile } from "node:fs/promises";
 import { fileURLToPath } from "node:url";
 import path from "node:path";
+import { promisify } from "node:util";
 
 import {
   normalizeSubjectDefinitionV2,
@@ -10,6 +12,7 @@ import {
   stringifyCanonicalJson,
   validatePackageSubjectDefinition,
   type AuthoringDiagnostic,
+  type SubjectPresetCandidateV1,
 } from "@whitebox-world/authoring";
 import type { WorldRuntimeSnapshotV3 } from "@whitebox-world/runtime-contracts";
 import {
@@ -41,13 +44,30 @@ import {
   validateControlCaptureBundleFileV1,
   validateSimulationTakeFileV1,
 } from "./lib/simulation-take-cli";
+import {
+  assertSubjectPresetArtifactLocationV1,
+  importLegacySubjectPresetCandidateFileV4,
+  planSubjectPresetPromotion,
+  promoteSubjectPresetTransactionally,
+  readSubjectPresetPromotionPlanFileV1,
+  validateSubjectPresetCandidateFile,
+} from "./lib/subject-preset-promotion";
+import {
+  explainValidationReportFileV1,
+  verifyControlCaptureFileV1,
+} from "./lib/validation-cli";
+
+const execFile = promisify(execFileCallback);
+const REPOSITORY_ROOT = path.resolve(
+  fileURLToPath(new URL("../", import.meta.url)),
+);
 
 const HELP = `worldkit - Canonical JSON whitebox world SDK
 
 Usage:
   worldkit validate <file> [--json]
   worldkit build <file> --output <file> [--json]
-  worldkit run <file> [--port <port>] [--json]
+  worldkit run <file> [--port <port>] [--refresh-dependencies] [--json]
   worldkit capture <file> --output <png> [--snapshot <json>] [--port <port>] [--json]
   worldkit registry list --kind subject-definition [--json]
   worldkit registry describe --resource-ref <ref> [--json]
@@ -62,6 +82,11 @@ Usage:
   worldkit take run <take.json> --world <world.json> --output <directory> --width-pixels <integer> --height-pixels <integer> [--port <port>] [--json]
   worldkit capture validate <bundle-directory> [--json]
   worldkit capture inspect <bundle-directory> [--json]
+  worldkit subject-preset validate <candidate.json> [--legacy-v4] [--json]
+  worldkit subject-preset plan <candidate.json> --output <plan.json> [--legacy-v4] [--json]
+  worldkit subject-preset promote <candidate.json> --plan <plan.json> --write [--legacy-v4] [--json]
+  worldkit verify capture <bundle-directory> --output <validation-report.json> [--json]
+  worldkit verify explain <validation-report.json> --gate-id <id> [--json]
 `;
 
 export type { CliDiagnostic } from "./lib/worldkit-pipeline";
@@ -70,7 +95,13 @@ export type WorldkitArgs =
   | { command: "help"; json: false }
   | { command: "validate"; inputPath: string; json: boolean }
   | { command: "build"; inputPath: string; outputPath: string; json: boolean }
-  | { command: "run"; inputPath: string; port?: number; json: boolean }
+  | {
+      command: "run";
+      inputPath: string;
+      port?: number;
+      refreshDependencies?: boolean;
+      json: boolean;
+    }
   | {
       command: "capture";
       inputPath: string;
@@ -111,6 +142,39 @@ export type WorldkitArgs =
     }
   | { command: "capture-validate"; inputPath: string; json: boolean }
   | { command: "capture-inspect"; inputPath: string; json: boolean }
+  | {
+      command: "subject-preset-validate";
+      inputPath: string;
+      legacyV4: boolean;
+      json: boolean;
+    }
+  | {
+      command: "subject-preset-plan";
+      inputPath: string;
+      outputPath: string;
+      legacyV4: boolean;
+      json: boolean;
+    }
+  | {
+      command: "subject-preset-promote";
+      inputPath: string;
+      planPath: string;
+      write: true;
+      legacyV4: boolean;
+      json: boolean;
+    }
+  | {
+      command: "verify-capture";
+      inputPath: string;
+      outputPath: string;
+      json: boolean;
+    }
+  | {
+      command: "verify-explain";
+      inputPath: string;
+      gateId: string;
+      json: boolean;
+    }
   | {
       command: "layout-solve";
       inputPath: string;
@@ -181,14 +245,18 @@ function takeRequiredPositional(tokens: string[], label: string): string {
   return value;
 }
 
-function takeJsonFlag(tokens: string[]): boolean {
-  const index = tokens.indexOf("--json");
+function takeFlag(tokens: string[], option: string): boolean {
+  const index = tokens.indexOf(option);
   if (index === -1) return false;
-  if (tokens.lastIndexOf("--json") !== index) {
-    throw new WorldkitUsageError("--json may be provided only once.");
+  if (tokens.lastIndexOf(option) !== index) {
+    throw new WorldkitUsageError(`${option} may be provided only once.`);
   }
   tokens.splice(index, 1);
   return true;
+}
+
+function takeJsonFlag(tokens: string[]): boolean {
+  return takeFlag(tokens, "--json");
 }
 
 function rejectRemaining(tokens: string[], command: string): void {
@@ -213,6 +281,96 @@ export function parseWorldkitArgs(arguments_: readonly string[]): WorldkitArgs {
 
   const command = tokens.shift();
   const json = takeJsonFlag(tokens);
+
+  if (command === "subject-preset") {
+    const operation = takeRequiredPositional(tokens, "subject-preset operation");
+    const inputPath = takeRequiredPositional(tokens, "Subject Preset candidate file");
+    if (operation === "validate") {
+      const legacyV4 = takeFlag(tokens, "--legacy-v4");
+      rejectRemaining(tokens, "subject-preset validate");
+      return {
+        command: "subject-preset-validate",
+        inputPath,
+        legacyV4,
+        json,
+      };
+    }
+    if (operation === "plan") {
+      const outputPath = takeOption(tokens, "--output");
+      const legacyV4 = takeFlag(tokens, "--legacy-v4");
+      if (outputPath === undefined) {
+        throw new WorldkitUsageError(
+          "subject-preset plan requires --output <plan.json>.",
+        );
+      }
+      rejectRemaining(tokens, "subject-preset plan");
+      return {
+        command: "subject-preset-plan",
+        inputPath,
+        outputPath,
+        legacyV4,
+        json,
+      };
+    }
+    if (operation === "promote") {
+      const planPath = takeOption(tokens, "--plan");
+      const write = takeFlag(tokens, "--write");
+      const legacyV4 = takeFlag(tokens, "--legacy-v4");
+      if (planPath === undefined) {
+        throw new WorldkitUsageError(
+          "subject-preset promote requires --plan <plan.json>.",
+        );
+      }
+      if (!write) {
+        throw new WorldkitUsageError(
+          "subject-preset promote requires explicit --write.",
+        );
+      }
+      rejectRemaining(tokens, "subject-preset promote");
+      return {
+        command: "subject-preset-promote",
+        inputPath,
+        planPath,
+        write: true,
+        legacyV4,
+        json,
+      };
+    }
+    throw new WorldkitUsageError(
+      `Unknown subject-preset operation '${operation}'.`,
+    );
+  }
+
+  if (command === "verify") {
+    const operation = takeRequiredPositional(tokens, "verify operation");
+    const inputPath = takeRequiredPositional(tokens, "Validation input");
+    if (operation === "capture") {
+      const outputPath = takeOption(tokens, "--output");
+      if (outputPath === undefined) {
+        throw new WorldkitUsageError(
+          "verify capture requires --output <validation-report.json>.",
+        );
+      }
+      rejectRemaining(tokens, "verify capture");
+      return {
+        command: "verify-capture",
+        inputPath,
+        outputPath,
+        json,
+      };
+    }
+    if (operation === "explain") {
+      const gateId = takeOption(tokens, "--gate-id");
+      if (gateId === undefined) {
+        throw new WorldkitUsageError(
+          "verify explain requires --gate-id <id>.",
+        );
+      }
+      rejectRemaining(tokens, "verify explain");
+      return { command: "verify-explain", inputPath, gateId, json };
+    }
+    throw new WorldkitUsageError(`Unknown verify operation '${operation}'.`);
+  }
 
   if (command === "take") {
     const operation = takeRequiredPositional(tokens, "take operation");
@@ -371,11 +529,13 @@ export function parseWorldkitArgs(arguments_: readonly string[]): WorldkitArgs {
   }
   if (command === "run") {
     const portValue = takeOption(tokens, "--port");
+    const refreshDependencies = takeFlag(tokens, "--refresh-dependencies");
     rejectRemaining(tokens, "run");
     return {
       command,
       inputPath,
       ...(portValue === undefined ? {} : { port: parsePort(portValue) }),
+      ...(refreshDependencies ? { refreshDependencies: true } : {}),
       json,
     };
   }
@@ -791,6 +951,130 @@ export async function captureFile(
   }
 }
 
+function subjectPresetCliFailure(error: unknown) {
+  const message = error instanceof Error ? error.message : String(error);
+  const code = /^([A-Z][A-Z0-9_]+):/.exec(message)?.[1] ??
+    "SUBJECT_PRESET_PROMOTION_FAILED";
+  return cliFailure(code, message);
+}
+
+async function currentRepositoryCommit(): Promise<string> {
+  const { stdout } = await execFile(
+    "git",
+    ["-C", REPOSITORY_ROOT, "rev-parse", "--verify", "HEAD"],
+  );
+  return stdout.trim();
+}
+
+async function importLegacySubjectPresetForCli(
+  inputPath: string,
+): Promise<SubjectPresetCandidateV1> {
+  return importLegacySubjectPresetCandidateFileV4(inputPath, {
+    candidateId: "legacy-v4-import",
+    displayName: "Legacy V4 Subject Preset import",
+    notes: "Conversion from a locked Authoring V4 export.",
+    createdAtIso: (await stat(inputPath)).mtime.toISOString(),
+    sourceCommit: await currentRepositoryCommit(),
+    runtimeBuild: "legacy-v4-import",
+  });
+}
+
+async function validateSubjectPresetForCli(
+  inputPath: string,
+  legacyV4: boolean,
+) {
+  try {
+    const candidate = legacyV4
+      ? await importLegacySubjectPresetForCli(inputPath)
+      : await validateSubjectPresetCandidateFile(inputPath);
+    return {
+      ok: true as const,
+      exitCode: 0 as const,
+      kind: "worldkit-subject-preset-validation" as const,
+      schemaVersion: 1 as const,
+      diagnostics: [] as const,
+      candidateId: candidate.semanticContent.candidateId,
+      subjectDefinitionId: candidate.semanticContent.subjectDefinitionId,
+      candidateSemanticContentHash: candidate.semanticContentHash,
+      sourceFormat: legacyV4 ? "legacy-authoring-v4" as const : "candidate-v1" as const,
+      generatedRegistryWriteCount: 0 as const,
+    };
+  } catch (error) {
+    return subjectPresetCliFailure(error);
+  }
+}
+
+async function planSubjectPresetForCli(
+  inputPath: string,
+  outputPath: string,
+  legacyV4: boolean,
+) {
+  try {
+    assertSubjectPresetArtifactLocationV1(outputPath, REPOSITORY_ROOT);
+    const candidate = legacyV4
+      ? await importLegacySubjectPresetForCli(inputPath)
+      : undefined;
+    const plan = await planSubjectPresetPromotion(inputPath, {
+      repositoryRoot: REPOSITORY_ROOT,
+      ...(candidate === undefined ? {} : { candidate }),
+    });
+    const absoluteOutputPath = path.resolve(outputPath);
+    if (absoluteOutputPath === path.resolve(inputPath)) {
+      throw new Error(
+        "SUBJECT_PRESET_PROMOTION_OUTPUT_OVERWRITES_INPUT: Plan output must not overwrite its candidate.",
+      );
+    }
+    await writeAtomic(
+      absoluteOutputPath,
+      `${stringifyCanonicalJson(plan)}\n`,
+    );
+    return {
+      ok: true as const,
+      exitCode: 0 as const,
+      kind: "worldkit-subject-preset-promotion-plan" as const,
+      schemaVersion: 1 as const,
+      diagnostics: [] as const,
+      candidateId: plan.candidateId,
+      proposedSubjectDefinitionRef: plan.proposedSubjectDefinitionRef,
+      planHash: plan.planHash,
+      outputPath: absoluteOutputPath,
+    };
+  } catch (error) {
+    return subjectPresetCliFailure(error);
+  }
+}
+
+async function promoteSubjectPresetForCli(
+  inputPath: string,
+  planPath: string,
+  legacyV4: boolean,
+) {
+  try {
+    const plan = await readSubjectPresetPromotionPlanFileV1(planPath);
+    const candidate = legacyV4
+      ? await importLegacySubjectPresetForCli(inputPath)
+      : undefined;
+    const promotion = await promoteSubjectPresetTransactionally(inputPath, {
+      repositoryRoot: REPOSITORY_ROOT,
+      plan,
+      planPath,
+      write: true,
+      ...(candidate === undefined ? {} : { candidate }),
+    });
+    return {
+      ok: true as const,
+      exitCode: 0 as const,
+      kind: "worldkit-subject-preset-promotion" as const,
+      schemaVersion: 1 as const,
+      diagnostics: [] as const,
+      planHash: promotion.planHash,
+      writtenLogicalPaths: promotion.writtenLogicalPaths,
+    };
+  } catch (error) {
+    return subjectPresetCliFailure(error);
+  }
+}
+
 type PrintableResult = {
   ok: boolean;
   exitCode: number;
@@ -799,14 +1083,28 @@ type PrintableResult = {
   executionPlanHash?: string;
   outputPath?: string;
   snapshotPath?: string;
+  kind?: string;
+  schemaVersion?: number;
+  candidateId?: string;
+  subjectDefinitionId?: string;
+  candidateSemanticContentHash?: string;
+  proposedSubjectDefinitionRef?: string;
+  planHash?: string;
+  writtenLogicalPaths?: readonly string[];
+  humanReadableText?: string;
 };
 
 function printResult(result: PrintableResult, json: boolean): void {
   if (json) {
-    process.stdout.write(`${stringifyCanonicalJson(result)}\n`);
+    const { humanReadableText: _humanReadableText, ...machineResult } = result;
+    process.stdout.write(`${stringifyCanonicalJson(machineResult)}\n`);
     return;
   }
   if (result.ok) {
+    if (result.humanReadableText !== undefined) {
+      process.stdout.write(`${result.humanReadableText}\n`);
+      return;
+    }
     const details = [
       result.outputPath,
       result.snapshotPath,
@@ -828,6 +1126,7 @@ function printResult(result: PrintableResult, json: boolean): void {
 async function runUntilSignal(
   inputPath: string,
   port: number | undefined,
+  refreshDependencies: boolean,
   json: boolean,
 ): Promise<number> {
   const validation = await validateFile(inputPath);
@@ -840,6 +1139,7 @@ async function runUntilSignal(
     server = await startWorldkitServer({
       inputPath,
       ...(port === undefined ? { port: 5173 } : { port }),
+      ...(refreshDependencies ? { refreshDependencies: true } : {}),
       forwardOutput: !json,
     });
   } catch (error) {
@@ -889,7 +1189,12 @@ export async function main(
     return 0;
   }
   if (parsed.command === "run") {
-    return runUntilSignal(parsed.inputPath, parsed.port, parsed.json);
+    return runUntilSignal(
+      parsed.inputPath,
+      parsed.port,
+      parsed.refreshDependencies === true,
+      parsed.json,
+    );
   }
   if (parsed.command === "take-validate") {
     const result = await validateSimulationTakeFileV1(parsed.inputPath);
@@ -919,6 +1224,48 @@ export async function main(
   }
   if (parsed.command === "capture-inspect") {
     const result = await inspectControlCaptureBundleFileV1(parsed.inputPath);
+    printResult(result, parsed.json);
+    return result.exitCode;
+  }
+  if (parsed.command === "subject-preset-validate") {
+    const result = await validateSubjectPresetForCli(
+      parsed.inputPath,
+      parsed.legacyV4,
+    );
+    printResult(result, parsed.json);
+    return result.exitCode;
+  }
+  if (parsed.command === "subject-preset-plan") {
+    const result = await planSubjectPresetForCli(
+      parsed.inputPath,
+      parsed.outputPath,
+      parsed.legacyV4,
+    );
+    printResult(result, parsed.json);
+    return result.exitCode;
+  }
+  if (parsed.command === "subject-preset-promote") {
+    const result = await promoteSubjectPresetForCli(
+      parsed.inputPath,
+      parsed.planPath,
+      parsed.legacyV4,
+    );
+    printResult(result, parsed.json);
+    return result.exitCode;
+  }
+  if (parsed.command === "verify-capture") {
+    const result = await verifyControlCaptureFileV1(
+      parsed.inputPath,
+      parsed.outputPath,
+    );
+    printResult(result, parsed.json);
+    return result.exitCode;
+  }
+  if (parsed.command === "verify-explain") {
+    const result = await explainValidationReportFileV1(
+      parsed.inputPath,
+      parsed.gateId,
+    );
     printResult(result, parsed.json);
     return result.exitCode;
   }

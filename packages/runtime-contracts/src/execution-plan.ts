@@ -249,6 +249,7 @@ export type ExecutionMotionCommandKindV1 =
 
 export interface ExecutionMotionProfileV1 {
   resourceRef: string;
+  contentHash: string;
   motionKernelRef: string;
   motionTags: readonly string[];
 }
@@ -271,6 +272,7 @@ export interface ExecutionMotionKernelDefinitionV1 {
 
 export interface ExecutionControlProfileV1 {
   resourceRef: string;
+  contentHash: string;
   commandKind: ExecutionMotionCommandKindV1;
   inputSpace: "camera-relative" | "subject-local" | "flight-frame" | "none";
   facingPolicy:
@@ -285,6 +287,7 @@ export interface ExecutionControlProfileV1 {
 
 export interface ExecutionCameraRigProfileV1 {
   resourceRef: string;
+  contentHash: string;
   baseMode:
     | "first-person"
     | "free-orbit"
@@ -390,6 +393,7 @@ export interface ExecutionSubjectV3 {
   };
   controlFeel: {
     resourceRef: string;
+    contentHash: string;
     walkSpeedMetersPerSecond: number;
     runSpeedMetersPerSecond: number;
     jumpSpeedMetersPerSecond: number;

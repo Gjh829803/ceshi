@@ -201,6 +201,22 @@ describe("BabylonWorldAdapter frame loop", () => {
     expect(requestFrame).toHaveBeenCalledOnce();
   });
 
+  it("maps left and right camera actions to the matching screen-look direction", async () => {
+    const leftProbe = createAdapterProbe();
+    leftProbe.adapter.cameraInput.add("cameraLeft");
+
+    await leftProbe.adapter.animate(17);
+
+    expect(leftProbe.adapter.snapshot().camera.yaw).toBeGreaterThan(0);
+
+    const rightProbe = createAdapterProbe();
+    rightProbe.adapter.cameraInput.add("cameraRight");
+
+    await rightProbe.adapter.animate(17);
+
+    expect(rightProbe.adapter.snapshot().camera.yaw).toBeLessThan(0);
+  });
+
   it("clears held movement and camera input across a protocol reset", async () => {
     const { adapter, runtime } = createAdapterProbe();
     adapter.keyboardInput.press("KeyW");

@@ -309,6 +309,60 @@ describe("loadAuthoringScene", () => {
     ).toBe(true);
   });
 
+  it("loads the exact quadruped public-default version with its tuned motion and camera profiles", async () => {
+    const loaded = await loadAuthoringScene(
+      async () => new Response(JSON.stringify(createValidAuthoringSpec())),
+      {
+        subjectDefinitionRef:
+          "worldkit://subject-definition/animal.quadruped.forward-steer@2",
+      },
+    );
+
+    expect(loaded).toMatchObject({
+      ok: true,
+      diagnostics: [],
+      executionPlan: {
+        subjects: [expect.objectContaining({
+          subjectDefinitionRef:
+            "worldkit://subject-definition/playground-preview.animal.quadruped.forward-steer@2",
+          controlFeel: expect.objectContaining({
+            resourceRef:
+              "worldkit://control-feel-profile/subject.animal.quadruped.forward-steer.default@1",
+            turnRateRadiansPerSecond: 2.4,
+            jumpSpeedMetersPerSecond: 3.1,
+          }),
+          capabilityAssembly: expect.objectContaining({
+            defaultMotionProfile: expect.objectContaining({
+              resourceRef:
+                "worldkit://motion-profile/free-ground.humanoid-medium@1",
+            }),
+            cameraContext: expect.objectContaining({
+              resourceRef:
+                "worldkit://camera-context/capability-driven.quadruped-official@1",
+              defaultCameraRigProfileRef:
+                "worldkit://camera-profile/orbit.quadruped-official@1",
+              cameraRigProfiles: expect.arrayContaining([
+                expect.objectContaining({
+                  resourceRef:
+                    "worldkit://camera-profile/orbit.quadruped-official@1",
+                  parameters: expect.objectContaining({
+                    targetHeightMeters: 1.35,
+                    collisionRetractionMetersPerSecond: 4.5,
+                    collisionRecoveryMetersPerSecond: 3.25,
+                  }),
+                }),
+              ]),
+            }),
+          }),
+        })],
+      },
+      hostOverlay: expect.objectContaining({
+        subjectDefinitionRef:
+          "worldkit://subject-definition/animal.quadruped.forward-steer@2",
+      }),
+    });
+  });
+
   it("gives the capability Playground enough explicit budget for the locked G Bot asset", async () => {
     const source = createValidAuthoringSpec();
     source.world.resourceBudget = {
@@ -506,6 +560,37 @@ describe("loadAuthoringScene", () => {
     expect(loaded).toMatchObject({
       ok: false,
       diagnostics: [{ code: "AUTHORING_SOURCE_UNAVAILABLE", instancePath: "" }],
+    });
+  });
+
+  it("returns the canonical startup command when Authoring mode has no configured source", async () => {
+    const loaded = await loadAuthoringScene(async () =>
+      new Response(JSON.stringify({
+        diagnostics: [{
+          severity: "error",
+          code: "AUTHORING_SOURCE_NOT_CONFIGURED",
+          instancePath: "",
+          message: "WORLDKIT_AUTHORING_SPEC_PATH is not configured for this server.",
+        }],
+      }), {
+        status: 404,
+        headers: { "content-type": "application/json" },
+      }),
+    );
+
+    expect(loaded).toMatchObject({
+      ok: false,
+      diagnostics: [{
+        code: "AUTHORING_SOURCE_UNAVAILABLE",
+        instancePath: "",
+        message: expect.stringContaining(
+          "pnpm worldkit run <world.json>",
+        ),
+        details: {
+          status: 404,
+          sourceDiagnosticCode: "AUTHORING_SOURCE_NOT_CONFIGURED",
+        },
+      }],
     });
   });
 });

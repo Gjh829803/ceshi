@@ -12,6 +12,7 @@
   "dependencies": {
     "@whitebox-world/layout-solver": "workspace:*",
     "@whitebox-world/protocol": "workspace:*",
+    "@whitebox-world/runtime-contracts": "workspace:*",
     "@whitebox-world/subject-composition": "workspace:*",
     "@whitebox-world/subject-registry": "workspace:*",
     "ajv": "^8.17.1",

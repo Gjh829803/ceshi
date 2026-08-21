@@ -7,6 +7,7 @@ import { MotionModeResolverV1 } from "./motion-mode-resolver";
 function profile(id: string): ExecutionMotionProfileV1 {
   return {
     resourceRef: `worldkit://motion-profile/${id}@1`,
+    contentHash: `sha256:test-motion-profile-${id}`,
     motionKernelRef: `worldkit://motion-kernel/${id}@1`,
     motionTags: [id],
   };

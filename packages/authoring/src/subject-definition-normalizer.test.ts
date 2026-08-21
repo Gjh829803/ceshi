@@ -247,13 +247,13 @@ describe("Package Subject Definition normalization", () => {
 
     expect(result.ok).toBe(true);
     expect(packageDefinitionHash(result)).toBe(
-      "sha256:d4b3f85dd6731f5afc6354f07013b2dff01688c61f8e8e0be8140b70dc4ccf62",
+      "sha256:c8736597374c3823aef21924c7b5cc778e8a11a0edb1c945df0e717c6a287061",
     );
     expect(result.value?.resources.resourceLockHash).toBe(
-      "sha256:d893599dae14a380b84e5fe59df14d525677411ea1907e6fbe09988a948e4993",
+      "sha256:fe1352a60cdbdeef0a203a7b18dac4537c9057c0bd2252b56139e4f8b77f6e56",
     );
     expect(result.normalizedWorldIrHash).toBe(
-      "sha256:14fe3c6ea2a90300671cd2381e437f4100d0712ac61e4a77883279003ad6d5ab",
+      "sha256:0f1f8399b5c531843af7a03244f04b0ef964264c86519c03c6d5ecb7974526fc",
     );
   });
 
@@ -526,6 +526,7 @@ describe("Package Subject Definition normalization", () => {
     const controlFeelKeys = [
       "accelerationMetersPerSecondSquared",
       "airControlRatio",
+      "contentHash",
       "coyoteTimeSeconds",
       "decelerationMetersPerSecondSquared",
       "jumpBufferSeconds",

@@ -654,6 +654,92 @@
         "description": "Follow view for committed seat or mount relationships.",
         "semanticTags": ["follow", "mounted"]
       }
+    },
+    {
+      "kind": "camera-rig-profile",
+      "id": "orbit.quadruped-official",
+      "version": 1,
+      "resourceRef": "worldkit://camera-profile/orbit.quadruped-official@1",
+      "authoringAvailability": "advanced",
+      "baseMode": "free-orbit",
+      "algorithmRef": "worldkit://camera-rig/orbit-follow@1",
+      "headingSource": "view",
+      "reverseHeadingPolicy": "preserve-target-forward",
+      "recenterMode": "forward-motion",
+      "preferredSocketIds": ["ThirdPersonTarget", "CameraTarget3D"],
+      "parameters": {
+        "distanceMeters": 5,
+        "minimumDistanceMeters": 0.5,
+        "maximumDistanceMeters": 20,
+        "targetHeightMeters": 1.35,
+        "shoulderOffsetMeters": 0,
+        "pitchRadians": 0.22,
+        "minimumPitchRadians": -1.2,
+        "maximumPitchRadians": 1.2,
+        "positionDampingPerSecond": 18,
+        "horizontalPositionDampingPerSecond": 18,
+        "verticalPositionDampingPerSecond": 20,
+        "maximumPositionLagMeters": 2.5,
+        "rotationDampingPerSecond": 20,
+        "yawDampingPerSecond": 16,
+        "pitchDampingPerSecond": 14,
+        "collisionRadiusMeters": 0.2,
+        "collisionRetractionMetersPerSecond": 4.5,
+        "collisionRecoveryMetersPerSecond": 3.25,
+        "baseFovDegrees": 58,
+        "speedFovDegreesPerMeterPerSecond": 0.4,
+        "maximumSpeedFovDegrees": 4,
+        "lookAheadSeconds": 0,
+        "accelerationLookAheadSecondsSquared": 0,
+        "transitionSeconds": 0.35,
+        "minimumHeadingSpeedMetersPerSecond": 0,
+        "velocityHeadingDampingPerSecond": 16,
+        "fovDampingPerSecond": 8,
+        "horizontalDeadZoneRatio": 0.08,
+        "verticalDeadZoneRatio": 0.05,
+        "recenterDelaySeconds": 1,
+        "recenterDurationSeconds": 1.2,
+        "recenterMinimumSpeedMetersPerSecond": 1.2,
+        "teleportSnapDistanceMeters": 12,
+        "lookSensitivityXRatio": 1,
+        "lookSensitivityYRatio": 0.8
+      },
+      "authoringRanges": {
+        "distanceMeters": { "minimum": 0.5, "maximum": 20, "step": 0.1 },
+        "targetHeightMeters": { "minimum": 0, "maximum": 5, "step": 0.05 },
+        "shoulderOffsetMeters": { "minimum": -3, "maximum": 3, "step": 0.05 },
+        "pitchRadians": { "minimum": -1.2, "maximum": 1.2, "step": 0.01 },
+        "positionDampingPerSecond": { "minimum": 0, "maximum": 40, "step": 0.25 },
+        "maximumPositionLagMeters": { "minimum": 0, "maximum": 20, "step": 0.1 },
+        "rotationDampingPerSecond": { "minimum": 0, "maximum": 40, "step": 0.25 },
+        "collisionRadiusMeters": { "minimum": 0, "maximum": 2, "step": 0.01 },
+        "baseFovDegrees": { "minimum": 35, "maximum": 100, "step": 1 },
+        "lookAheadSeconds": { "minimum": 0, "maximum": 2, "step": 0.01 },
+        "transitionSeconds": { "minimum": 0, "maximum": 3, "step": 0.05 },
+        "horizontalPositionDampingPerSecond": { "minimum": 0, "maximum": 40, "step": 0.25 },
+        "verticalPositionDampingPerSecond": { "minimum": 0, "maximum": 40, "step": 0.25 },
+        "yawDampingPerSecond": { "minimum": 0, "maximum": 40, "step": 0.25 },
+        "pitchDampingPerSecond": { "minimum": 0, "maximum": 40, "step": 0.25 },
+        "collisionRetractionMetersPerSecond": { "minimum": 0, "maximum": 60, "step": 0.5 },
+        "collisionRecoveryMetersPerSecond": { "minimum": 0, "maximum": 30, "step": 0.25 },
+        "accelerationLookAheadSecondsSquared": { "minimum": 0, "maximum": 1, "step": 0.01 },
+        "minimumHeadingSpeedMetersPerSecond": { "minimum": 0, "maximum": 20, "step": 0.1 },
+        "velocityHeadingDampingPerSecond": { "minimum": 0, "maximum": 40, "step": 0.25 },
+        "fovDampingPerSecond": { "minimum": 0, "maximum": 30, "step": 0.25 },
+        "horizontalDeadZoneRatio": { "minimum": 0, "maximum": 0.4, "step": 0.01 },
+        "verticalDeadZoneRatio": { "minimum": 0, "maximum": 0.4, "step": 0.01 },
+        "recenterDelaySeconds": { "minimum": 0, "maximum": 5, "step": 0.05 },
+        "recenterDurationSeconds": { "minimum": 0, "maximum": 5, "step": 0.05 },
+        "recenterMinimumSpeedMetersPerSecond": { "minimum": 0, "maximum": 10, "step": 0.1 },
+        "teleportSnapDistanceMeters": { "minimum": 1, "maximum": 100, "step": 1 },
+        "lookSensitivityXRatio": { "minimum": 0.1, "maximum": 3, "step": 0.05 },
+        "lookSensitivityYRatio": { "minimum": 0.1, "maximum": 3, "step": 0.05 }
+      },
+      "aiMetadata": {
+        "displayName": "Quadruped Official Orbit",
+        "description": "Reviewed quadruped orbit default derived from the local tuning workspace.",
+        "semanticTags": ["official", "orbit", "quadruped"]
+      }
     }
   ],
   "modifiers": [
@@ -823,6 +909,30 @@
         "displayName": "Capability-driven Camera Context",
         "description": "Selects camera behavior from committed relationship, motion and medium state.",
         "semanticTags": ["capability-driven", "context", "default"]
+      }
+    },
+    {
+      "kind": "camera-context-profile",
+      "id": "capability-driven.quadruped-official",
+      "version": 1,
+      "resourceRef": "worldkit://camera-context/capability-driven.quadruped-official@1",
+      "authoringAvailability": "advanced",
+      "defaultCameraRigProfileRef": "worldkit://camera-profile/orbit.quadruped-official@1",
+      "firstPersonCameraRigProfileRef": "worldkit://camera-profile/first-person.standard@1",
+      "rules": [
+        { "id": "aim", "priority": 110, "when": { "requiredCameraContextTags": ["aim"] }, "cameraModifierRefs": ["worldkit://camera-modifier/aim-framing@1"] },
+        { "id": "mounted", "priority": 100, "when": { "relationshipRoles": ["driver", "passenger", "rider"] }, "cameraModifierRefs": ["worldkit://camera-modifier/mounted-framing@1"] },
+        { "id": "reverse", "priority": 95, "when": { "requiredCameraContextTags": ["reverse"] }, "cameraModifierRefs": ["worldkit://camera-modifier/reverse-stability@1"] },
+        { "id": "glide", "priority": 90, "when": { "requiredMotionTags": ["glide"], "movementMediums": ["air"] }, "cameraRigProfileRef": "worldkit://camera-profile/flight.glide@1" },
+        { "id": "water-surface", "priority": 80, "when": { "requiredMotionTags": ["water"], "movementMediums": ["water"] }, "cameraRigProfileRef": "worldkit://camera-profile/follow.medium@1", "cameraModifierRefs": ["worldkit://camera-modifier/water-stability@1"] },
+        { "id": "sprint", "priority": 65, "when": { "requiredCameraContextTags": ["sprint"] }, "cameraModifierRefs": ["worldkit://camera-modifier/sprint-emphasis@1"] },
+        { "id": "surface-fast", "priority": 70, "when": { "requiredMotionTags": ["surface-fast"] }, "cameraRigProfileRef": "worldkit://camera-profile/chase.surface-fast@1" },
+        { "id": "free-ground", "priority": 60, "when": { "requiredMotionTags": ["free-ground"] }, "cameraRigProfileRef": "worldkit://camera-profile/orbit.medium@1" }
+      ],
+      "aiMetadata": {
+        "displayName": "Quadruped Official Camera Context",
+        "description": "Quadruped public default with the reviewed orbit profile as its base view.",
+        "semanticTags": ["capability-driven", "official", "quadruped"]
       }
     }
   ]

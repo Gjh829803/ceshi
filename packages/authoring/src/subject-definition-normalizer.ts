@@ -70,6 +70,7 @@ function projectControlFeelProfile(
 ): NormalizedControlFeelV1 {
   return {
     resourceRef: profile.resourceRef,
+    contentHash: profile.contentHash,
     walkSpeedMetersPerSecond: profile.walkSpeedMetersPerSecond,
     runSpeedMetersPerSecond: profile.runSpeedMetersPerSecond,
     jumpSpeedMetersPerSecond: profile.jumpSpeedMetersPerSecond,

@@ -1,31 +1,6 @@
 [
   {
     "kind": "control-feel-profile",
-    "id": "humanoid.medium-ground",
-    "version": 1,
-    "resourceRef": "worldkit://control-feel-profile/humanoid.medium-ground@1",
-    "authoringAvailability": "recommended",
-    "walkSpeedMetersPerSecond": 2.4,
-    "runSpeedMetersPerSecond": 4,
-    "jumpSpeedMetersPerSecond": 5.5,
-    "accelerationMetersPerSecondSquared": 16,
-    "decelerationMetersPerSecondSquared": 22,
-    "turnRateRadiansPerSecond": 9,
-    "moveResponseExponent": 1.4,
-    "airControlRatio": 0.3,
-    "coyoteTimeSeconds": 0.1,
-    "jumpBufferSeconds": 0.12,
-    "variableJumpHoldSeconds": 0.18,
-    "jumpHoldGravityRatio": 0.45,
-    "jumpReleaseGravityRatio": 2,
-    "aiMetadata": {
-      "displayName": "Medium Ground Humanoid Feel",
-      "description": "Current medium humanoid ground traversal speeds and response.",
-      "semanticTags": ["feel", "ground", "humanoid", "medium"]
-    }
-  },
-  {
-    "kind": "control-feel-profile",
     "id": "humanoid.heavy-ground",
     "version": 1,
     "resourceRef": "worldkit://control-feel-profile/humanoid.heavy-ground@1",
@@ -46,7 +21,72 @@
     "aiMetadata": {
       "displayName": "Heavy Ground Humanoid Feel",
       "description": "Distinguishable heavier ground traversal with lower acceleration and turn rate.",
-      "semanticTags": ["feel", "ground", "heavy", "humanoid"]
+      "semanticTags": [
+        "feel",
+        "ground",
+        "heavy",
+        "humanoid"
+      ]
+    }
+  },
+  {
+    "kind": "control-feel-profile",
+    "id": "humanoid.medium-ground",
+    "version": 1,
+    "resourceRef": "worldkit://control-feel-profile/humanoid.medium-ground@1",
+    "authoringAvailability": "recommended",
+    "walkSpeedMetersPerSecond": 2.4,
+    "runSpeedMetersPerSecond": 4,
+    "jumpSpeedMetersPerSecond": 5.5,
+    "accelerationMetersPerSecondSquared": 16,
+    "decelerationMetersPerSecondSquared": 22,
+    "turnRateRadiansPerSecond": 9,
+    "moveResponseExponent": 1.4,
+    "airControlRatio": 0.3,
+    "coyoteTimeSeconds": 0.1,
+    "jumpBufferSeconds": 0.12,
+    "variableJumpHoldSeconds": 0.18,
+    "jumpHoldGravityRatio": 0.45,
+    "jumpReleaseGravityRatio": 2,
+    "aiMetadata": {
+      "displayName": "Medium Ground Humanoid Feel",
+      "description": "Current medium humanoid ground traversal speeds and response.",
+      "semanticTags": [
+        "feel",
+        "ground",
+        "humanoid",
+        "medium"
+      ]
+    }
+  },
+  {
+    "kind": "control-feel-profile",
+    "id": "subject.animal.quadruped.forward-steer.default",
+    "version": 1,
+    "resourceRef": "worldkit://control-feel-profile/subject.animal.quadruped.forward-steer.default@1",
+    "authoringAvailability": "advanced",
+    "walkSpeedMetersPerSecond": 2.4,
+    "runSpeedMetersPerSecond": 4,
+    "jumpSpeedMetersPerSecond": 3.1,
+    "accelerationMetersPerSecondSquared": 16,
+    "decelerationMetersPerSecondSquared": 22,
+    "turnRateRadiansPerSecond": 2.4,
+    "moveResponseExponent": 1.4,
+    "airControlRatio": 0.3,
+    "coyoteTimeSeconds": 0.1,
+    "jumpBufferSeconds": 0.12,
+    "variableJumpHoldSeconds": 0.18,
+    "jumpHoldGravityRatio": 0.45,
+    "jumpReleaseGravityRatio": 2,
+    "aiMetadata": {
+      "displayName": "Quadruped Official Ground Feel",
+      "description": "Reviewed quadruped jump and turn response migrated from the local tuning workspace into the P1.5 Control Feel authority.",
+      "semanticTags": [
+        "feel",
+        "ground",
+        "official",
+        "quadruped"
+      ]
     }
   }
 ]

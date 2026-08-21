@@ -484,7 +484,7 @@ describe("compileWorld", () => {
     expect(serializedPlan).not.toMatch(
       /Babylon|Havok|AssetContainer|Uint8Array|ArrayBuffer/,
     );
-    expect(serializedPlan).not.toContain('"contentHash"');
+    expect(plan.subjects[0]?.controlFeel.contentHash).toMatch(/^sha256:[a-f0-9]{64}$/);
   });
 
   it("locks the current valid rigged ExecutionPlan hash", () => {
@@ -496,7 +496,7 @@ describe("compileWorld", () => {
         normalizedWorldIrHash: rigged.normalizedWorldIrHash!,
       }).executionPlanHash,
     ).toBe(
-      "sha256:c4c2e04852a4847ca1b1791b8f106b899d7572ace5fe8a1bc7eff303d2d4a26e",
+      "sha256:112475289602d73cda3ae00e2c2428f58ce134d298a4fbfbe1973a4bc911102b",
     );
   });
 
@@ -706,6 +706,7 @@ describe("compileWorld", () => {
     const controlFeelKeys = [
       "accelerationMetersPerSecondSquared",
       "airControlRatio",
+      "contentHash",
       "coyoteTimeSeconds",
       "decelerationMetersPerSecondSquared",
       "jumpBufferSeconds",
@@ -1037,7 +1038,7 @@ describe("compileWorld", () => {
     expect(serialized).not.toContain('"constraints"');
     expect(serialized).not.toMatch(/candidateRegionIds|sourceUri|licenseUri|providerHandle/);
     expect(result.executionPlanHash).toBe(
-      "sha256:934deef1a29c246d4f1062148434f6503d554a2c2ba630f81eccef95dd689251",
+      "sha256:7cdde2842a4412613a2a078bb062983b07e551924216b510c4573ad20805b912",
     );
   });
 

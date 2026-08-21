@@ -175,6 +175,28 @@ function sourceDiagnostic(message: string, details?: Readonly<Record<string, unk
   };
 }
 
+async function sourceResponseDiagnosticCode(
+  response: Response,
+): Promise<string | undefined> {
+  if (!response.headers.get("content-type")?.includes("application/json")) {
+    return undefined;
+  }
+  try {
+    const body: unknown = await response.json();
+    if (typeof body !== "object" || body === null) return undefined;
+    const diagnostics = (body as { diagnostics?: unknown }).diagnostics;
+    if (!Array.isArray(diagnostics)) return undefined;
+    const firstDiagnostic: unknown = diagnostics[0];
+    if (typeof firstDiagnostic !== "object" || firstDiagnostic === null) {
+      return undefined;
+    }
+    const code = (firstDiagnostic as { code?: unknown }).code;
+    return typeof code === "string" ? code : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
 function applyCapabilityDemoContext(
   source: AuthoringSpecV3,
   subjectDefinitionRef: string,
@@ -369,9 +391,16 @@ export async function loadAuthoringScene(
     });
   }
   if (!response.ok) {
-    return sourceDiagnostic(`AuthoringSpec source returned HTTP ${response.status}.`, {
-      status: response.status,
-    });
+    const sourceDiagnosticCode = await sourceResponseDiagnosticCode(response);
+    return sourceDiagnostic(
+      sourceDiagnosticCode === "AUTHORING_SOURCE_NOT_CONFIGURED"
+        ? "AuthoringSpec is not configured. Start Authoring mode with `pnpm worldkit run <world.json>`; do not combine `pnpm dev` with `?authoring=1`."
+        : `AuthoringSpec source returned HTTP ${response.status}.`,
+      {
+        status: response.status,
+        ...(sourceDiagnosticCode === undefined ? {} : { sourceDiagnosticCode }),
+      },
+    );
   }
 
   let sourceText: string;

@@ -1,13 +1,26 @@
 import { describe, expect, it } from "vitest";
 
-import { builtInSubjectResourceRegistry } from "./index";
+import {
+  builtInSubjectDefaultRegistry,
+  builtInSubjectResourceRegistry,
+} from "./index";
 import type { RegistrySubjectDefinitionV3 } from "./types-v3";
 
 const SUBJECT_DEFINITION_REFS = [
   "worldkit://subject-definition/animal.quadruped.forward-steer@1",
+  "worldkit://subject-definition/animal.quadruped.forward-steer@2",
   "worldkit://subject-definition/glider.paraglider.unpowered@1",
   "worldkit://subject-definition/humanoid.g-bot@1",
   "worldkit://subject-definition/humanoid.rigged-golden@1",
+  "worldkit://subject-definition/surface-craft.ice-skimmer@1",
+  "worldkit://subject-definition/vehicle.four-wheel.arcade@1",
+  "worldkit://subject-definition/watercraft.kayak.surface@1",
+] as const;
+
+const PUBLIC_DEFAULT_REFS = [
+  "worldkit://subject-definition/animal.quadruped.forward-steer@2",
+  "worldkit://subject-definition/glider.paraglider.unpowered@1",
+  "worldkit://subject-definition/humanoid.g-bot@1",
   "worldkit://subject-definition/surface-craft.ice-skimmer@1",
   "worldkit://subject-definition/vehicle.four-wheel.arcade@1",
   "worldkit://subject-definition/watercraft.kayak.surface@1",
@@ -51,10 +64,14 @@ function capabilityDefinitions(): readonly RegistrySubjectDefinitionV3[] {
 }
 
 describe("capability-driven subject registry", () => {
-  it("registers the seven phase-one subject packages while keeping three CLI definitions", () => {
+  it("keeps immutable Subject versions and exact public defaults while retaining three CLI definitions", () => {
     expect(capabilityDefinitions().map((definition) => definition.resourceRef)).toEqual(
       SUBJECT_DEFINITION_REFS,
     );
+    expect(
+      builtInSubjectDefaultRegistry.listPublicDefaults()
+        .map((entry) => entry.subjectDefinitionRef),
+    ).toEqual(PUBLIC_DEFAULT_REFS);
     expect(builtInSubjectResourceRegistry.listSubjectDefinitions()).toHaveLength(3);
   });
 
@@ -157,6 +174,7 @@ describe("capability-driven subject registry", () => {
     for (const control of controls) {
       expect(control.moveDeadzoneRatio).toBe(0.1);
       expect(control).not.toHaveProperty("inputTuning");
+      expect(control).not.toHaveProperty("responseExponent");
     }
   });
 

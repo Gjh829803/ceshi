@@ -14,6 +14,7 @@
     "@whitebox-world/contracts": "workspace:*",
     "@whitebox-world/core": "workspace:*",
     "@whitebox-world/physics": "workspace:*",
+    "@whitebox-world/protocol": "workspace:*",
     "@whitebox-world/runtime-babylon": "workspace:*",
     "@whitebox-world/runtime-contracts": "workspace:*",
     "@whitebox-world/subject-registry": "workspace:*",

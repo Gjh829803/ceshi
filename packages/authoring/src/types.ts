@@ -485,6 +485,7 @@ export interface NormalizedSubjectDefinitionV2 {
   };
   controlFeel: {
     resourceRef: string;
+    contentHash: string;
     walkSpeedMetersPerSecond: number;
     runSpeedMetersPerSecond: number;
     jumpSpeedMetersPerSecond: number;

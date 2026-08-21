@@ -1,6 +1,6 @@
 # World Validation Report 与质量门禁设计
 
-- 状态：**Proposed / Design Review Ready**。
+- 状态：**V1 Capture/Integrity implemented; broader subject profiles remain proposed**。
 - Canonical 公共术语：`ValidationProfile`、`ValidationReport`、`GateResult`、`MetricResult`、`EvidenceArtifact`。
 - 适用范围：Authoring、Layout、WorldPackage、Runtime、Simulation Take、Control Capture Bundle、Replay、性能与完整性。
 - 设计目标：用可解释、可量化、可复现的报告决定世界或捕获制品能否进入下一阶段。
@@ -100,23 +100,175 @@ Preview 是方便人类阅读的派生物，不替代原始数值或 Hash。
 
 ## 4. ValidationReport Schema
 
+### 4.0 已冻结的 Capture/Integrity V1 边界
+
+本节是首条实施切片的字段级权威合同；本节与后文较宽的候选设计冲突时，V1 实现以
+本节为准。V1 只验证 `control-capture-bundle`，不提前声明 Layout、Physics、Route、
+Composition、Replay、Performance 或 Generated Video 已进入统一报告。
+
+- 唯一内置 Profile Ref 是
+  `worldkit://validation-profile/outdoor-control-video-dev@1`。V1 不提供 Profile
+  组合、隐式继承、Override 或 Host 放宽；这些能力必须通过后续 Schema 版本进入。
+- `ValidationProfileV1` 是 `kind: worldkit-validation-profile`、
+  `schemaVersion: 1` 的不可变 Registry 资源。Profile 本体包含 `id`、`resourceRef`、
+  `version`、`subjectKind`、`gateDefinitionsById`；解析结果单独保存 `resolvedVersion`
+  与 `validationProfileHash`，避免自引用 Hash。
+- `ValidationReportV1` 是 `kind: worldkit-validation-report`、
+  `schemaVersion: 1` 的独立 Canonical JSON 文件。它不得写回被验证的 Capture Bundle，
+  否则会造成 Bundle Root 自引用；`worldkit verify capture` 必须把报告写到显式
+  `--output` 路径。Capture Bundle 中现有的 `validation-report.json` 只属于早期 Bundle
+  自检占位文件，不是本协议的权威 `ValidationReportV1`。
+- V1 `subject` 关闭为 `kind: control-capture-bundle`，并绑定
+  `worldPackageRootHash`、`takeHash` 与按当前目录实际字节重算的 `bundleRootHash`。
+  无法可靠读取这三个身份字段时，CLI 返回 infrastructure error，不伪造 Subject Hash。
+- Adapter 在 Evaluator 前后复算包含 `integrity.json` 的完整目录字节 Hash；两次不一致时
+  拒绝生成 Report。CLI 对输入目录和输出父目录解析真实文件系统路径，软链接不能绕过
+  “权威 Report 不得写回不可变 Bundle”的边界。
+- `GateResultV1.status` 关闭为 `passed | failed | incomplete | not-applicable`；
+  `MetricResultV1.status` 关闭为
+  `passed | failed | not-evaluated | not-applicable`。V1 内置 Profile 不使用
+  `not-applicable`，它只为后续显式 Profile 条件保留。
+- V1 `MetricResultV1` 冻结四个判别分支：`boolean-assertion`、
+  `count-threshold`、`set-equality`、`hash-equality`。所有分支都必须记录
+  `evaluatorProfileRef`、`evidenceArtifactRefs` 和 `diagnosticIds`；Capture/Integrity
+  首条切片只实例化 `boolean-assertion`，不以未使用的通用性扩大实现范围。
+- `MetricDefinitionV1` 使用布尔字段 `isRequired`，不保留 `required` alias；Report 中的
+  Metric `kind`、Evaluator Ref 与期望参数必须和解析后的 Profile 精确一致。
+- `EvidenceArtifactV1` 必须记录稳定 `id`、关闭的 `kind`、`artifactRef`、
+  `mediaType`、`sizeBytes` 与 `contentHash`。本机绝对路径、时间戳、机器名和日志位置
+  不进入 Canonical Report。
+- `ValidationDiagnosticV1` 必须绑定唯一 `gateId` 与 `metricId`，并提供稳定 `code`、
+  Bundle 内相对 `artifactPath`、`expectedValue`、`actualValue`、`message` 和
+  `suggestedFix`。同一底层错误不得同时归属多个 Gate。
+
+V1 内置 Profile 只有三个 Blocking Gate：
+
+| Gate ID | Required Metric | 权威事实 |
+| --- | --- | --- |
+| `capture-bundle-integrity` | `capture-bundle-integrity-valid` | Bundle 文件清单、字节 Hash、Manifest/Frame/Root Hash 与结构完整性 |
+| `capture-completeness` | `capture-required-passes-valid`、`capture-linear-depth-valid` | 五个 Required Pass 完整，Linear Depth 长度、有限性、正值/零无命中语义合法 |
+| `capture-ownership` | `capture-ownership-valid` | Package、Take、Runtime Session 与 Frame 归属一致 |
+
+现有 `validateControlCaptureBundleV1` 继续是 Bundle 结构、Hash、Pass 和归属的唯一算法
+权威。Validation Adapter 只把其稳定 Diagnostic 映射到上述 Gate/Metric，并补充旧校验器
+尚未覆盖的 Linear Depth 数值语义；不得复制现有 Bundle 校验流程或产生第二套 Hash
+判定。
+
+Policy 的确定优先级冻结为：
+
+1. 任一 Blocking Gate 明确 `failed`，Report 为 `failed`；
+2. 否则，任一 Required Metric 缺失、`not-evaluated`，或 Gate 为 `incomplete`，Report 为
+   `incomplete`；
+3. 否则全部 Blocking Gate 为 `passed` 时 Report 为 `passed`；
+4. Advisory Failure 必须保留，但不能改变 Blocking 结果，也不存在可抵消失败的总分。
+
+V1 没有 Applicability 条件，因此任何 Required Metric 或 Blocking Gate 的
+`not-applicable` 都是非法报告，并按 `incomplete` 处理，不能成为 `passed`。每个已评估
+Metric 必须引用 Evidence；`failed` / `not-evaluated` Metric 必须引用可执行 Diagnostic；
+每条 Diagnostic 只能被其声明的一个 Gate 和一个 Metric 引用。
+
+V1 CLI 冻结为：
+
+```text
+worldkit verify capture <bundle-directory> --output <validation-report.json> [--json]
+worldkit verify explain <validation-report.json> --gate-id <id> [--json]
+```
+
+Exit Code 固定为 `0 = passed`、`2 = failed`、`3 = incomplete`、
+`1 = usage/infrastructure error`。`verify compare`、Browser Evidence 查询、Profile 组合、
+CI 发布和其他 Subject Kind 均不属于本切片。
+
 ```json
 {
   "kind": "worldkit-validation-report",
   "schemaVersion": 1,
-  "id": "coastal-world-production-validation",
+  "id": "coastal-capture-validation",
   "subject": {
-    "kind": "world-package",
-    "worldPackageRootHash": "sha256:...",
-    "normalizedWorldIrHash": "sha256:...",
-    "executionPlanHash": "sha256:...",
-    "registryLockHash": "sha256:..."
+    "kind": "control-capture-bundle",
+    "worldPackageRootHash": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    "takeHash": "sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+    "bundleRootHash": "sha256:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc"
   },
-  "validationProfileRef": "worldkit://validation/outdoor-production@1",
+  "validationProfileRef": "worldkit://validation-profile/outdoor-control-video-dev@1",
   "resolvedVersion": "1.0.0",
-  "validationProfileHash": "sha256:...",
+  "validationProfileHash": "sha256:67edf5d593e17f4fdc7d1036b2e5129586d3b14930931607e55642bb9d0c4318",
   "status": "passed",
-  "gateResultsById": {},
+  "gateResultsById": {
+    "capture-bundle-integrity": {
+      "id": "capture-bundle-integrity",
+      "requirement": "blocking",
+      "status": "passed",
+      "metricResultsById": {
+        "capture-bundle-integrity-valid": {
+          "id": "capture-bundle-integrity-valid",
+          "kind": "boolean-assertion",
+          "status": "passed",
+          "value": true,
+          "expectedValue": true,
+          "evaluatorProfileRef": "worldkit://validation-evaluator/control-capture-bundle-integrity@1",
+          "evidenceArtifactRefs": ["artifact://control-capture-bundle/cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc"],
+          "diagnosticIds": []
+        }
+      },
+      "diagnosticIds": []
+    },
+    "capture-completeness": {
+      "id": "capture-completeness",
+      "requirement": "blocking",
+      "status": "passed",
+      "metricResultsById": {
+        "capture-required-passes-valid": {
+          "id": "capture-required-passes-valid",
+          "kind": "boolean-assertion",
+          "status": "passed",
+          "value": true,
+          "expectedValue": true,
+          "evaluatorProfileRef": "worldkit://validation-evaluator/control-capture-required-passes@1",
+          "evidenceArtifactRefs": ["artifact://control-capture-bundle/cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc"],
+          "diagnosticIds": []
+        },
+        "capture-linear-depth-valid": {
+          "id": "capture-linear-depth-valid",
+          "kind": "boolean-assertion",
+          "status": "passed",
+          "value": true,
+          "expectedValue": true,
+          "evaluatorProfileRef": "worldkit://validation-evaluator/control-capture-linear-depth@1",
+          "evidenceArtifactRefs": ["artifact://control-capture-bundle/cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc"],
+          "diagnosticIds": []
+        }
+      },
+      "diagnosticIds": []
+    },
+    "capture-ownership": {
+      "id": "capture-ownership",
+      "requirement": "blocking",
+      "status": "passed",
+      "metricResultsById": {
+        "capture-ownership-valid": {
+          "id": "capture-ownership-valid",
+          "kind": "boolean-assertion",
+          "status": "passed",
+          "value": true,
+          "expectedValue": true,
+          "evaluatorProfileRef": "worldkit://validation-evaluator/control-capture-ownership@1",
+          "evidenceArtifactRefs": ["artifact://control-capture-bundle/cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc"],
+          "diagnosticIds": []
+        }
+      },
+      "diagnosticIds": []
+    }
+  },
+  "evidenceArtifactsById": {
+    "capture-bundle": {
+      "id": "capture-bundle",
+      "kind": "control-capture-bundle",
+      "artifactRef": "artifact://control-capture-bundle/cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+      "mediaType": "application/vnd.worldkit.control-capture-bundle.v1+directory",
+      "sizeBytes": 1024,
+      "contentHash": "sha256:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc"
+    }
+  },
   "diagnostics": []
 }
 ```
@@ -167,10 +319,11 @@ Report `status` 关闭为：
 }
 ```
 
-Gate `requirement` 关闭为 `blocking | advisory`。Gate `status` 关闭为：
+Gate `requirement` 关闭为 `blocking | advisory`。V1 Gate `status` 关闭为：
 
 - `passed`；
 - `failed`；
+- `incomplete`；
 - `not-applicable`。
 
 `not-applicable` 只有 Profile 明确列出条件且条件证据可验证时合法；没有运行不能标为 `not-applicable`。
@@ -233,14 +386,26 @@ Metric `status` 关闭为 `passed | failed | not-applicable | not-evaluated`。R
 
 ### 5.4 Playability 与 Route Gate
 
+已实现的 Capture/Integrity `ValidationProfileV1` / `ValidationReportV1` 及
+`worldkit://validation-profile/outdoor-control-video-dev@1` 保持不可变。M5 R0 在同一个
+`@whitebox-world/validation` 包中增加 `ValidationProfileV2` / `ValidationReportV2` 的
+`world-package` Subject 分支，首个 Route Profile Ref 固定为
+`worldkit://validation-profile/outdoor-world-package-dev@1`。它复用 Gate/Metric/Evidence/
+Diagnostic/Policy 结构和 Canonical Hash 原则，不创建 Route 私有报告，也不把 Route Gate
+塞进 Capture-only V1。跨阶段结果通过明确 `dependencyReportRefs` 关联，不在一个 Report
+混合两个 Subject。
+
 - Spawn 位于 Terrain 内且不在禁止 Water/Collider；
-- `requiredSpawnReachableRatio`；
+- `requiredRouteCount`；
 - `unreachableRequiredRouteCount`；
-- `maximumRouteSlopeDegrees`；
-- `minimumRouteClearanceMeters`；
-- `maximumStepHeightMeters`；
-- `minimumRouteWidthMeters`；
-- 固定 Locomotion Script 的完成状态、耗时 Ticks 和异常位移。
+- `maximumObservedSlopeDegrees`；
+- `maximumObservedStepHeightMeters`；
+- `minimumObservedClearanceWidthMeters`；
+- `minimumObservedClearanceHeightMeters`；
+- `maximumObservedSurfaceGapMeters`；
+- `routePathDistanceMeters` 与无量纲 `routePathCost`；
+- 固定 Locomotion Script 的 `completionDurationTicks`、最大连续异常 Unsupported Ticks、
+  Sliding Ticks、Surface 身份和异常位移。
 
 可达性必须声明 Locomotion Profile；人形、轮式车辆和飞行主体不能共享一个含糊的“可达”。当前阶段只承诺室外人形 Heightfield Route。
 
@@ -251,6 +416,19 @@ M5 将该类别拆成两个 Blocking Gate：
    缝隙阈值的确定性路径；
 2. `route-runtime-conformance`：使用相同 Profile 和真实 Babylon/Havok Character Controller
    在固定 Tick 下完成该路径，验证没有卡住、穿插、异常离地、错误 Surface、超时或状态残留。
+
+两 Gate 的 Evidence 必须携带完全相同的 `resolvedTraversalLockHash`。Graph 与 Probe Lock
+不同，以 `ROUTE_TRAVERSAL_LOCK_MISMATCH` 在 Query 前阻断；`locomotionProfileRef` 兼容但
+Collider、Physics Body、Control Feel、Motion/Kernel、Medium 或 Backend 任一锁不同都不能
+继续比较。`TraversalDriverProfile` 只锁定 Path 跟随和 Canonical Intent 生成政策，禁止携带
+速度、坡度、步高、重力或任何 Gate 阈值。到达、偏离、最小进度、卡住、连续 Unsupported
+和最大 Probe Ticks 统一属于 Validation Profile 的 `RouteRuntimeGateThresholds`，Runner
+只消费一份。
+
+R1/R1b 的 Runtime Gate 依赖 P1.5 Ground/Air Runtime 权威实现：Spawn/Reset 后的支撑只信
+唯一 `checkSupport()`，不得用 Ray、Terrain Height 或 AABB 顶面伪造 Ground。`SLIDING` 单独
+记录且不算 Support Loss；连续 `UNSUPPORTED` 的 Gate 容差只决定验证结论，不得反向修改
+Movement Medium 或复用 Coyote Time。
 
 Graph Query 通过但真实 Controller 失败时，报告仍为 `failed`；静态图不能覆盖实际物理
 证据。缺少 Required Traversal Surface/Profile/Evidence 或构建预算耗尽时报告
@@ -419,11 +597,21 @@ Diagnostic 至少包含 Code、Gate/Metric ID、JSON Pointer/Entity ID、Expecte
 - `PHYSICS_REQUIRED_ENTITY_UNSUPPORTED`；
 - `ROUTE_REQUIRED_PATH_UNREACHABLE`；
 - `ROUTE_STEP_HEIGHT_EXCEEDED`；
+- `ROUTE_SLOPE_EXCEEDED`；
 - `ROUTE_CLEARANCE_WIDTH_INSUFFICIENT`；
 - `ROUTE_OVERHEAD_CLEARANCE_INSUFFICIENT`；
 - `ROUTE_SURFACE_GAP_EXCEEDED`；
+- `ROUTE_START_SURFACE_NOT_FOUND`；
+- `ROUTE_DESTINATION_SURFACE_NOT_FOUND`；
+- `ROUTE_START_SUPPORT_INVALID`；
+- `ROUTE_SURFACE_PROFILE_MISSING`；
+- `ROUTE_LOCOMOTION_PROFILE_MISMATCH`；
+- `ROUTE_TRAVERSAL_LOCK_MISMATCH`；
+- `ROUTE_CORRIDOR_LAYER_AMBIGUOUS`；
 - `ROUTE_RUNTIME_STALLED`；
+- `ROUTE_RUNTIME_DEVIATED`；
 - `ROUTE_RUNTIME_SUPPORT_LOST`；
+- `ROUTE_GRAPH_BUDGET_EXCEEDED`；
 - `COMPOSITION_REQUIRED_ANCHOR_MISSING`；
 - `CAPTURE_REQUIRED_PASS_MISSING`；
 - `CAPTURE_FRAME_OWNERSHIP_MISMATCH`；
@@ -435,14 +623,14 @@ Diagnostic 至少包含 Code、Gate/Metric ID、JSON Pointer/Entity ID、Expecte
 
 ## 11. CLI、Browser 与 CI
 
-候选命令面：
+长期候选命令面；已实现 V1 的精确命令以 §4.0 为准：
 
 ```text
 worldkit verify authoring <authoring.json> --profile <ref>
 worldkit verify layout <layout-report.json> --profile <ref>
 worldkit verify package <world-package> --profile <ref>
 worldkit verify take <take.json> --profile <ref>
-worldkit verify capture <control-capture-bundle> --profile <ref>
+worldkit verify capture <control-capture-bundle> --output <validation-report.json>
 worldkit verify explain <validation-report.json> --gate-id <id>
 worldkit verify compare <report-a.json> <report-b.json>
 ```
@@ -498,21 +686,27 @@ Audit 时间、机器临时路径和日志顺序不进入确定性结果选择�
 
 ## 14. 第一条实施切片
 
-对 Placement 与 Capture 两条 P0 共同使用一个 `outdoor-control-video-dev@1` Validation Profile，首批 Gate：
+已实现的 V1 是 Capture/Integrity 窄纵向切片，只包含 §4.0 的三个 Gate：Bundle
+Integrity、Capture Completeness 和 Capture Ownership。它复用现有 Bundle Validator，
+补齐 Linear Depth 数值语义，并通过独立 Canonical Report、CLI 与 Conformance Gate
+验证正常 Bundle、缺失 Pass、错误 Depth、混入其他 Take 和损坏 Hash。
 
-1. Schema/Reference；
-2. Layout Required Constraint；
-3. Physics Support/Interpenetration/Settle；
-4. Spawn/Route Reachability；
-5. Opening Shot Region/Anchor；
-6. Five-pass Capture Completeness/ID/Depth/Camera；
-7. Replay Snapshot；
-8. Package/Bundle Integrity；
-9. 基础资源预算。
-
-Fixture 包含故意失败版本：浮空 Landmark、穿插墙体、不可达 Spawn、丢失 Anchor、错误 Depth 单位、混入其他 Take 的帧和损坏 Hash。每种失败必须落到唯一 Gate/Metric/Diagnostic，不只显示“质量不够”。
+Placement 与 Capture 最终仍应共同使用 `@whitebox-world/validation` 的统一协议层、Policy
+和 Dependency Report 链，但已冻结的 Capture `outdoor-control-video-dev@1` 不原地扩容。
+World Package 的 Route/Placement/Physics 使用后续版本化 Profile；Capture、Replay 和 Video
+各自验证一个关闭 Subject。浮空 Landmark、穿插墙体、不可达 Spawn 与缺失 Anchor仍是待
+接入的 Placement/Runtime/Composition Fixture，不能因为 Capture V1 已完成而勾销。
 
 ## 15. 实施分解
+
+Capture/Integrity V1 disposition（2026-08-21）：
+
+- [x] 冻结 V1 Profile/Report/Gate/Metric/Evidence、Canonical Hash 与 Policy；
+- [x] 通过 Adapter 复用 Control Capture Bundle Validator，并补 Linear Depth 语义；
+- [x] 实现 `verify capture`、`verify explain` 与 `verify:validation-capture`；
+- [x] 建立正常、缺 Pass、坏 Depth、混 Take、坏 Hash 的确定性 Fixture；
+- [ ] Placement/Physics/Composition/Replay/Performance Evaluator、Profile 组合、
+  `verify compare`、Browser/CI Evidence 发布与 Video Artifact 仍待后续切片。
 
 1. 冻结 ValidationProfile/Report/Gate/Metric/Evidence Schema 和 Canonical Hash。
 2. 实现 Profile Registry Resolution、组合、Override Audit 和锁。
@@ -525,21 +719,23 @@ Fixture 包含故意失败版本：浮空 Landmark、穿插墙体、不可达 Sp
 
 编码前必须新增独立实施计划并定位现有 Gate 实现，优先抽取共同协议和 Adapter，不对现有测试做一次性大重写。
 
-## 16. 已冻结与待评审
+## 16. 已实现、已冻结与待评审
 
-已冻结的架构方向：
+Capture/Integrity V1 已实现并冻结：
 
 - Profile、Report、Gate、Metric、Evidence 五层；
 - Blocking Failure/Required Missing 一票否决；
 - 数值单位、阈值、实测值和证据必须结构化；
-- Solver/Replay/Capture 报告分责并通过 Ref 关联；
+- Capture Bundle 与独立 Validation Report 分责并通过 Hash/Ref 关联；
+- 一个内置 `outdoor-control-video-dev@1` Profile、三个 Blocking Gate、严格解析、
+  Canonical Report Hash、`verify capture|explain` 与五类 Conformance Fixture；
 - VLM/LLM 第一阶段只能提供 Advisory Evidence。
 
 待评审的字段级细节：
 
 - Profile 组合与 Override Record 的最终 Schema；
 - 首批 Physics/Composition 阈值；
-- Report 是否为每个阶段独立文件或由 Artifact Index 聚合；
+- Placement/Runtime 等后续阶段的独立 Report 与 Artifact Index 聚合方式；
 - Cross-platform Capture 使用 Hash 还是 Perceptual/Geometry Metric；
 - Generated Video 的结构一致性 Gate 何时从 Advisory 升级。任何升级都不能覆盖 SDK 结构真相。
 

@@ -1,16 +1,20 @@
 import type {
+  ApplySubjectPresetTuningRequestV1,
   BindControlRequestV2,
   CameraTuningV1,
   CameraViewInputV1,
+  ControlFeelTuningV1,
   ControlCaptureCapabilitiesV1,
   ControlCaptureRequestV1,
   ControlBindingReceiptV2,
+  ControlTuningV1,
   ExecutionPlanV4,
   FixedInputV1,
   RenderReadyReceiptV1,
   RuntimeControlCaptureFrameV1,
   SemanticInputActionV1,
   WorldRuntimeSnapshotV3,
+  SubjectPresetTuningReceiptV1,
   WorldkitBrowserDiagnosticV1,
 } from "@whitebox-world/runtime-contracts";
 import {
@@ -467,6 +471,37 @@ export class BabylonWorldAdapter implements PlaygroundWorldAdapter {
     return snapshot;
   }
 
+  setControlFeelTuningRuntime(
+    subjectEntityId: string,
+    tuning: ControlFeelTuningV1,
+  ): WorldRuntimeSnapshotV3 {
+    this.captureReservationReceiptId = undefined;
+    const snapshot = this.runtime.setControlFeelTuning(subjectEntityId, tuning);
+    this.render();
+    this.emit();
+    return snapshot;
+  }
+
+  setControlTuningRuntime(
+    subjectEntityId: string,
+    tuning: ControlTuningV1,
+  ): WorldRuntimeSnapshotV3 {
+    this.captureReservationReceiptId = undefined;
+    const snapshot = this.runtime.setControlTuning(subjectEntityId, tuning);
+    this.render();
+    this.emit();
+    return snapshot;
+  }
+
+  applySubjectPresetTuningRuntime(
+    request: ApplySubjectPresetTuningRequestV1,
+  ): SubjectPresetTuningReceiptV1 {
+    this.captureReservationReceiptId = undefined;
+    const receipt = this.runtime.applySubjectPresetTuning(request);
+    this.render();
+    this.emit();
+    return receipt;
+  }
   runSubjectHarness(subjectEntityId: string) {
     return this.runtime.runHarness(subjectEntityId);
   }
@@ -788,7 +823,7 @@ export class BabylonWorldAdapter implements PlaygroundWorldAdapter {
     if (ticks <= 0) return;
     const actionSet = new Set(actions);
     const yawDeltaRadians =
-      (Number(actionSet.has("cameraRight")) - Number(actionSet.has("cameraLeft"))) *
+      (Number(actionSet.has("cameraLeft")) - Number(actionSet.has("cameraRight"))) *
       CAMERA_YAW_RADIANS_PER_TICK *
       ticks;
     const pitchDeltaRadians =
