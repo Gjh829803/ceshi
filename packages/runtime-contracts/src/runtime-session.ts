@@ -1,3 +1,8 @@
+import type {
+  ControlCapturePassIdV1,
+  Sha256HashV1,
+} from "@whitebox-world/control-capture";
+
 import type { Vec3 } from "./execution-plan";
 
 export type SemanticInputActionV1 =
@@ -110,6 +115,88 @@ export interface WorldRuntimeSnapshotV3 {
   };
 }
 
+export interface ControlCaptureCapabilitiesV1 {
+  readonly kind: "worldkit-control-capture-capabilities";
+  readonly schemaVersion: 1;
+  readonly available: boolean;
+  readonly captureProfileRef: "worldkit://capture/profile/control-video@1";
+  readonly captureEncodingProfileRef: "worldkit://capture/encoding/web-v1@1";
+  readonly requiredPassIds: readonly ControlCapturePassIdV1[];
+  readonly maximumWidthPixels: number;
+  readonly maximumHeightPixels: number;
+  readonly diagnostics: readonly {
+    readonly code: "CONTROL_CAPTURE_FLOAT_RENDER_UNAVAILABLE" | "CONTROL_CAPTURE_MRT_UNAVAILABLE";
+    readonly message: string;
+  }[];
+}
+
+export interface RenderReadyReceiptV1 {
+  readonly kind: "worldkit-render-ready-receipt";
+  readonly schemaVersion: 1;
+  readonly id: string;
+  readonly runtimeSessionId: string;
+  readonly simulationTick: number;
+  readonly renderFrameIndex: number;
+}
+
+export interface ControlCaptureRequestV1 {
+  readonly captureFrameIndex: number;
+  readonly expectedSimulationTick: number;
+  readonly renderReadyReceiptId: string;
+  readonly widthPixels: number;
+  readonly heightPixels: number;
+}
+
+export interface ControlCapturePassPayloadV1 {
+  readonly passId: ControlCapturePassIdV1;
+  readonly mediaType: "image/png" | "application/octet-stream";
+  readonly encoding: "png-rgba8-srgb" | "float32-le" | "uint32-le" | "float32x3-le";
+  readonly byteLength: number;
+  readonly contentHash: Sha256HashV1;
+  readonly bytesBase64: string;
+}
+
+export interface ControlCaptureCameraV1 {
+  readonly cameraEntityId: string;
+  readonly cameraRigRef: string;
+  readonly positionMetersXYZ: Vec3;
+  readonly forwardXYZ: Vec3;
+  readonly upXYZ: Vec3;
+  readonly verticalFovRadians: number;
+  readonly nearClipMeters: number;
+  readonly farClipMeters: number;
+  readonly viewMatrixColumnMajor: readonly number[];
+  readonly projectionMatrixColumnMajor: readonly number[];
+}
+
+export interface ControlCaptureSemanticClassEntryV1 {
+  readonly numericId: number;
+  readonly semanticClassId: string;
+}
+
+export interface ControlCaptureInstanceEntryV1 {
+  readonly numericId: number;
+  readonly entityId: string;
+  readonly semanticClassId: string;
+}
+
+export interface RuntimeControlCaptureFrameV1 {
+  readonly kind: "worldkit-control-capture-frame";
+  readonly schemaVersion: 1;
+  readonly runtimeSessionId: string;
+  readonly captureFrameIndex: number;
+  readonly simulationTick: number;
+  readonly renderFrameIndex: number;
+  readonly renderReadyReceiptId: string;
+  readonly widthPixels: number;
+  readonly heightPixels: number;
+  readonly camera: ControlCaptureCameraV1;
+  readonly snapshot: WorldRuntimeSnapshotV3;
+  readonly semanticClasses: readonly ControlCaptureSemanticClassEntryV1[];
+  readonly instances: readonly ControlCaptureInstanceEntryV1[];
+  readonly passesById: Readonly<Record<ControlCapturePassIdV1, ControlCapturePassPayloadV1>>;
+}
+
 export interface WorldRuntimeSessionV3 {
   readonly runtimeBackend: "babylon-havok";
   readonly ready: Promise<void>;
@@ -117,7 +204,10 @@ export interface WorldRuntimeSessionV3 {
   runFixedInput(input: FixedInputV1): Promise<WorldRuntimeSnapshotV3>;
   snapshot(): WorldRuntimeSnapshotV3;
   reset(): WorldRuntimeSnapshotV3;
-  renderFrame(): void;
+  getControlCaptureCapabilities(): ControlCaptureCapabilitiesV1;
+  waitForRenderReady(expectedSimulationTick: number): RenderReadyReceiptV1;
+  captureControlFrame(request: ControlCaptureRequestV1): Promise<RuntimeControlCaptureFrameV1>;
+  renderFrame(): RenderReadyReceiptV1;
   dispose(): Promise<void>;
 }
 
@@ -192,6 +282,10 @@ export interface WorldkitBrowserApiV3 {
   getDiagnostics(): readonly WorldkitBrowserDiagnosticV1[];
   bindControl(request: BindControlRequestV2): ControlBindingReceiptV2;
   runFixedInput(steps: readonly FixedInputV1[]): Promise<WorldRuntimeSnapshotV3>;
+  getControlCaptureCapabilities(): ControlCaptureCapabilitiesV1;
+  waitForSimulationTick(expectedSimulationTick: number): Promise<WorldRuntimeSnapshotV3>;
+  waitForRenderReady(expectedSimulationTick: number): Promise<RenderReadyReceiptV1>;
+  captureControlFrame(request: ControlCaptureRequestV1): Promise<RuntimeControlCaptureFrameV1>;
   captureScreenshot(): string;
   reset(): WorldRuntimeSnapshotV3;
   setPaused(paused: boolean): WorldRuntimeSnapshotV3;

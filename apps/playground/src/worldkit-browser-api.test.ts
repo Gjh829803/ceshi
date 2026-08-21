@@ -6,8 +6,10 @@ import {
 } from "@whitebox-world/runtime-babylon";
 import type {
   BindControlRequestV2,
+  ControlCapturePassPayloadV1,
   ControlBindingReceiptV2,
   FixedInputV1,
+  RuntimeControlCaptureFrameV1,
   WorldRuntimeSnapshotV3,
   WorldkitBrowserApiV3,
   WorldkitBrowserDiagnosticV1,
@@ -64,6 +66,51 @@ function adapterFixture(
   disposeCount: number;
 } {
   const snapshot = snapshotFixture();
+  const pass = (
+    passId: ControlCapturePassPayloadV1["passId"],
+    mediaType: ControlCapturePassPayloadV1["mediaType"],
+    encoding: ControlCapturePassPayloadV1["encoding"],
+  ): ControlCapturePassPayloadV1 => ({
+    passId,
+    mediaType,
+    encoding,
+    byteLength: 0,
+    contentHash: `sha256:${"0".repeat(64)}`,
+    bytesBase64: "",
+  });
+  const captureFrame: RuntimeControlCaptureFrameV1 = {
+    kind: "worldkit-control-capture-frame",
+    schemaVersion: 1,
+    runtimeSessionId: "runtime-session-test",
+    captureFrameIndex: 0,
+    simulationTick: 0,
+    renderFrameIndex: 0,
+    renderReadyReceiptId: "render-ready:test:0",
+    widthPixels: 16,
+    heightPixels: 9,
+    camera: {
+      cameraEntityId: "camera-main",
+      cameraRigRef: "worldkit://camera/third-person.standard@1",
+      positionMetersXYZ: [0, 4, 6],
+      forwardXYZ: [0, 0, -1],
+      upXYZ: [0, 1, 0],
+      verticalFovRadians: 1,
+      nearClipMeters: 0.05,
+      farClipMeters: 1_000,
+      viewMatrixColumnMajor: Array.from({ length: 16 }, (_, index) => index),
+      projectionMatrixColumnMajor: Array.from({ length: 16 }, (_, index) => index),
+    },
+    snapshot,
+    semanticClasses: [],
+    instances: [],
+    passesById: {
+      "neutral-color": pass("neutral-color", "image/png", "png-rgba8-srgb"),
+      "linear-depth-meters": pass("linear-depth-meters", "application/octet-stream", "float32-le"),
+      "semantic-class-id": pass("semantic-class-id", "application/octet-stream", "uint32-le"),
+      "instance-id": pass("instance-id", "application/octet-stream", "uint32-le"),
+      "world-normal": pass("world-normal", "application/octet-stream", "float32x3-le"),
+    },
+  };
   return {
     disposeCount: 0,
     runtimeDiagnostics: () => runtimeDiagnostics,
@@ -77,6 +124,33 @@ function adapterFixture(
       controlledEntityId: request.controlledEntityId,
     }),
     runWorldkitFixedInput: async (_steps: readonly FixedInputV1[]) => snapshotFixture("run"),
+    getControlCaptureCapabilities: () => ({
+      kind: "worldkit-control-capture-capabilities",
+      schemaVersion: 1,
+      available: true,
+      captureProfileRef: "worldkit://capture/profile/control-video@1",
+      captureEncodingProfileRef: "worldkit://capture/encoding/web-v1@1",
+      requiredPassIds: [
+        "neutral-color",
+        "linear-depth-meters",
+        "semantic-class-id",
+        "instance-id",
+        "world-normal",
+      ],
+      maximumWidthPixels: 4_096,
+      maximumHeightPixels: 4_096,
+      diagnostics: [],
+    }),
+    waitForSimulationTick: async () => snapshot,
+    waitForRenderReady: async () => ({
+      kind: "worldkit-render-ready-receipt",
+      schemaVersion: 1,
+      id: "render-ready:test:0",
+      runtimeSessionId: "runtime-session-test",
+      simulationTick: 0,
+      renderFrameIndex: 0,
+    }),
+    captureControlFrame: async () => captureFrame,
     captureScreenshot: () => "data:image/png;base64,",
     resetRuntime: () => snapshot,
     setPaused: () => undefined,
@@ -130,6 +204,22 @@ describe("installDeferredWorldkitBrowserApi", () => {
     await expect(installation.initialization).resolves.toBe(adapter);
     await expect(api.ready()).resolves.toEqual(snapshotFixture());
     await expect(pendingRun).resolves.toEqual(snapshotFixture("run"));
+    expect(api.getControlCaptureCapabilities().available).toBe(true);
+    await expect(api.waitForSimulationTick(0)).resolves.toMatchObject({ tick: 0 });
+    const receipt = await api.waitForRenderReady(0);
+    expect(receipt).toMatchObject({ simulationTick: 0, renderFrameIndex: 0 });
+    await expect(api.captureControlFrame({
+      captureFrameIndex: 0,
+      expectedSimulationTick: 0,
+      renderReadyReceiptId: receipt.id,
+      widthPixels: 16,
+      heightPixels: 9,
+    })).resolves.toMatchObject({
+      captureFrameIndex: 0,
+      simulationTick: 0,
+      widthPixels: 16,
+      heightPixels: 9,
+    });
     expect(statusElement.dataset.worldkitStatus).toBe("ready");
   });
 
@@ -301,7 +391,9 @@ describe("installDeferredWorldkitBrowserApi", () => {
     expect(Object.isFrozen(diagnostics[0]?.details?.measurements)).toBe(true);
     expect(Object.keys(installation.api).sort()).toEqual([
       "bindControl",
+      "captureControlFrame",
       "captureScreenshot",
+      "getControlCaptureCapabilities",
       "getDiagnostics",
       "getSnapshot",
       "ready",
@@ -309,6 +401,8 @@ describe("installDeferredWorldkitBrowserApi", () => {
       "runFixedInput",
       "setPaused",
       "version",
+      "waitForRenderReady",
+      "waitForSimulationTick",
     ]);
     expect(JSON.stringify(installation.api)).not.toMatch(/solve|search|repair|mutate/i);
   });

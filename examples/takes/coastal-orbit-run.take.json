@@ -1,0 +1,92 @@
+{
+  "kind": "worldkit-simulation-take",
+  "schemaVersion": 1,
+  "id": "coastal-orbit-run",
+  "worldPackageRef": "worldkit://world-package/coastal-whitebox@1",
+  "worldPackageRootHash": "sha256:428998f06fd5823c349e29c715c45dfe0410b32b58c452084d206f91bcaa11fc",
+  "seed": 731991,
+  "simulationTickRate": {
+    "numeratorTicks": 60,
+    "denominatorSeconds": 1
+  },
+  "startTick": 0,
+  "endTickExclusive": 600,
+  "controllers": [
+    {
+      "id": "controller-primary",
+      "kind": "scripted",
+      "controlledEntityId": "player",
+      "controlProfileRef": "worldkit://control/character-relative-camera@1",
+      "initialSequence": 0
+    }
+  ],
+  "tracks": [
+    {
+      "id": "player-opening-run",
+      "kind": "control-intent",
+      "controllerId": "controller-primary",
+      "interpolation": "step",
+      "keyframes": [
+        {
+          "tick": 0,
+          "moveAxesXZ": [0, 1],
+          "runEnabled": true,
+          "jumpPressed": false
+        },
+        {
+          "tick": 240,
+          "moveAxesXZ": [-0.35, 1],
+          "runEnabled": true,
+          "jumpPressed": false
+        },
+        {
+          "tick": 420,
+          "moveAxesXZ": [0, 0],
+          "runEnabled": false,
+          "jumpPressed": false
+        }
+      ]
+    },
+    {
+      "id": "opening-orbit-camera",
+      "kind": "camera-rig",
+      "cameraEntityId": "camera-main",
+      "cameraRigRef": "worldkit://camera-rig/third-person-orbit@1",
+      "interpolation": "step",
+      "keyframes": [
+        {
+          "tick": 0,
+          "viewYawOffsetRadians": 0.25,
+          "viewPitchOffsetRadians": -0.05,
+          "viewDistanceOffsetMeters": 0.5
+        },
+        {
+          "tick": 180,
+          "viewYawOffsetRadians": 0.8,
+          "viewPitchOffsetRadians": -0.12,
+          "viewDistanceOffsetMeters": 0.75
+        },
+        {
+          "tick": 360,
+          "viewYawOffsetRadians": -0.45,
+          "viewPitchOffsetRadians": 0.08,
+          "viewDistanceOffsetMeters": 0.25
+        }
+      ]
+    }
+  ],
+  "captureSchedule": {
+    "kind": "constant-frame-rate",
+    "captureFrameRate": {
+      "numeratorFrames": 24,
+      "denominatorSeconds": 1
+    },
+    "firstCaptureTick": 0,
+    "lastCaptureTickInclusive": 599,
+    "renderInterpolation": {
+      "kind": "none"
+    }
+  },
+  "captureProfileRef": "worldkit://capture/profile/control-video@1",
+  "captureEncodingProfileRef": "worldkit://capture/encoding/web-v1@1"
+}

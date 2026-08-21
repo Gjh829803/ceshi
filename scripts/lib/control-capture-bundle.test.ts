@@ -12,6 +12,12 @@ import {
 } from "@whitebox-world/control-capture";
 
 import {
+  sha256Bytes,
+  sha256CanonicalJson,
+  stringifyCanonicalJson,
+} from "@whitebox-world/protocol";
+
+import {
   createControlCaptureBundleWriterV1,
   inspectControlCaptureBundleV1,
   type ControlCaptureFrameInputV1,
@@ -72,8 +78,35 @@ function passBytes(passId: ControlCapturePassIdV1, frameIndex: number): Uint8Arr
   if (passId === "neutral-color") {
     return new Uint8Array([137, 80, 78, 71, frameIndex]);
   }
-  const elementBytes = passId === "world-normal" ? 24 : 8;
-  return new Uint8Array(elementBytes).fill(frameIndex + 1);
+  const bytes = new Uint8Array(passId === "world-normal" ? 24 : 8);
+  const view = new DataView(bytes.buffer);
+  if (passId === "semantic-class-id" || passId === "instance-id") {
+    view.setUint32(0, 0, true);
+    view.setUint32(4, 1, true);
+  } else if (passId === "linear-depth-meters") {
+    view.setFloat32(0, frameIndex + 1, true);
+    view.setFloat32(4, frameIndex + 2, true);
+  } else {
+    [0, 1, 0, 1, 0, 0].forEach((value, index) =>
+      view.setFloat32(index * 4, value, true)
+    );
+  }
+  return bytes;
+}
+
+async function rewriteIntegrity(outputDirectory: string): Promise<void> {
+  const integrityPath = path.join(outputDirectory, "integrity.json");
+  const integrity = JSON.parse(await readFile(integrityPath, "utf8")) as {
+    fileHashesByPath: Record<string, string>;
+    bundleRootHash: string;
+  };
+  for (const filePath of Object.keys(integrity.fileHashesByPath)) {
+    integrity.fileHashesByPath[filePath] = sha256Bytes(
+      new Uint8Array(await readFile(path.join(outputDirectory, filePath))),
+    );
+  }
+  integrity.bundleRootHash = sha256CanonicalJson(integrity.fileHashesByPath);
+  await writeFile(integrityPath, `${stringifyCanonicalJson(integrity)}\n`, "utf8");
 }
 
 function frameInput(
@@ -235,11 +268,32 @@ describe("Control Capture Bundle V1", () => {
     expect((await readdir(parent)).filter((name) => name.includes("staging"))).toEqual([]);
   });
 
+  it("requires the exact compiled capture schedule before finalization", async () => {
+    const parent = await createTemporaryDirectory();
+    const wrongTickOutput = path.join(parent, "wrong-tick");
+    const wrongTickWriter = await createWriter(wrongTickOutput);
+    await wrongTickWriter.appendFrame(frameInput(0, 0));
+    await expect(wrongTickWriter.appendFrame(frameInput(1, 6))).rejects.toThrow(
+      "CAPTURE_FRAME_TICK_INVALID",
+    );
+    await expect(access(wrongTickOutput)).rejects.toThrow();
+
+    const incompleteOutput = path.join(parent, "incomplete");
+    const incompleteWriter = await createWriter(incompleteOutput);
+    await incompleteWriter.appendFrame(frameInput(0, 0));
+    await expect(incompleteWriter.finalize()).rejects.toThrow(
+      "CAPTURE_SCHEDULE_INCOMPLETE",
+    );
+    await expect(access(incompleteOutput)).rejects.toThrow();
+    expect((await readdir(parent)).filter((name) => name.includes("staging"))).toEqual([]);
+  });
+
   it("binds every frame to one Take and World Package and verifies the frame hash", async () => {
     const parent = await createTemporaryDirectory();
     const outputDirectory = path.join(parent, "capture-bundle");
     const writer = await createWriter(outputDirectory);
     await writer.appendFrame(frameInput(0, 0));
+    await writer.appendFrame(frameInput(1, 5));
     await writer.finalize();
 
     const framePath = path.join(outputDirectory, "frames/000000/frame.json");
@@ -256,5 +310,45 @@ describe("Control Capture Bundle V1", () => {
       "CAPTURE_TAKE_MISMATCH",
       "CAPTURE_WORLD_PACKAGE_MISMATCH",
     ]));
+  });
+
+  it("rejects a self-consistent re-hash that detaches the Bundle from its Take", async () => {
+    const parent = await createTemporaryDirectory();
+    const outputDirectory = path.join(parent, "capture-bundle");
+    const writer = await createWriter(outputDirectory);
+    await writer.appendFrame(frameInput(0, 0));
+    await writer.appendFrame(frameInput(1, 5));
+    await writer.finalize();
+
+    const tamperedTakeHash = `sha256:${"d".repeat(64)}`;
+    const manifestPath = path.join(outputDirectory, "bundle.json");
+    const manifest = JSON.parse(await readFile(manifestPath, "utf8")) as Record<string, unknown>;
+    const frames = manifest.frames as Array<Record<string, unknown>>;
+    for (let index = 0; index < frames.length; index += 1) {
+      const framePath = path.join(
+        outputDirectory,
+        "frames",
+        String(index).padStart(6, "0"),
+        "frame.json",
+      );
+      const frame = JSON.parse(await readFile(framePath, "utf8")) as Record<string, unknown>;
+      frame.takeHash = tamperedTakeHash;
+      const { frameHash: _oldFrameHash, ...frameBody } = frame;
+      frame.frameHash = sha256CanonicalJson(frameBody);
+      frames[index]!.frameHash = frame.frameHash;
+      await writeFile(framePath, `${stringifyCanonicalJson(frame)}\n`, "utf8");
+    }
+    manifest.takeHash = tamperedTakeHash;
+    const { bundleManifestHash: _oldManifestHash, ...manifestBody } = manifest;
+    manifest.bundleManifestHash = sha256CanonicalJson(manifestBody);
+    await writeFile(manifestPath, `${stringifyCanonicalJson(manifest)}\n`, "utf8");
+    await rewriteIntegrity(outputDirectory);
+
+    const validation = await validateControlCaptureBundleV1(outputDirectory);
+    expect(validation.ok).toBe(false);
+    expect(validation.diagnostics).toContainEqual(expect.objectContaining({
+      code: "CAPTURE_TAKE_MISMATCH",
+      path: "bundle.json",
+    }));
   });
 });

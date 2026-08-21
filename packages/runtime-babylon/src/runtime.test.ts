@@ -587,6 +587,74 @@ async function createRuntimeWithPackageSubject(): Promise<{
 }
 
 describe("BabylonWorldRuntime", () => {
+  it("keeps Simulation Tick and Render Frame authority separate with reset-safe receipts", async () => {
+    const runtime = await createFlatPackageRuntime();
+    try {
+      expect(runtime.getControlCaptureCapabilities()).toMatchObject({
+        kind: "worldkit-control-capture-capabilities",
+        schemaVersion: 1,
+        captureProfileRef: "worldkit://capture/profile/control-video@1",
+        captureEncodingProfileRef: "worldkit://capture/encoding/web-v1@1",
+        requiredPassIds: [
+          "neutral-color",
+          "linear-depth-meters",
+          "semantic-class-id",
+          "instance-id",
+          "world-normal",
+        ],
+        available: false,
+      });
+      expect(() => runtime.waitForRenderReady(0)).toThrow("CONTROL_CAPTURE_RENDER_READY_REQUIRED");
+
+      const firstReceipt = runtime.renderFrame();
+      expect(firstReceipt).toMatchObject({
+        kind: "worldkit-render-ready-receipt",
+        schemaVersion: 1,
+        simulationTick: 0,
+        renderFrameIndex: 0,
+      });
+      expect(runtime.waitForRenderReady(0)).toEqual(firstReceipt);
+
+      await runtime.runFixedInput({ actions: [], ticks: 2 });
+      expect(() => runtime.waitForRenderReady(2)).toThrow("CONTROL_CAPTURE_RENDER_READY_REQUIRED");
+      const secondReceipt = runtime.renderFrame();
+      expect(secondReceipt).toMatchObject({ simulationTick: 2, renderFrameIndex: 1 });
+      expect(runtime.waitForRenderReady(2)).toEqual(secondReceipt);
+
+      runtime.reset();
+      expect(() => runtime.waitForRenderReady(0)).toThrow("CONTROL_CAPTURE_RENDER_READY_REQUIRED");
+    } finally {
+      await runtime.dispose();
+    }
+  });
+
+  it("rejects control capture without an exact ready receipt or required GPU capabilities", async () => {
+    const runtime = await createFlatPackageRuntime();
+    const request = {
+      captureFrameIndex: 0,
+      expectedSimulationTick: 0,
+      renderReadyReceiptId: "render-ready:missing",
+      widthPixels: 320,
+      heightPixels: 180,
+    } as const;
+    try {
+      await expect(runtime.captureControlFrame(request)).rejects.toThrow(
+        "CONTROL_CAPTURE_RENDER_READY_REQUIRED",
+      );
+
+      const receipt = runtime.renderFrame();
+      await expect(runtime.captureControlFrame(request)).rejects.toThrow(
+        "CONTROL_CAPTURE_RENDER_READY_REQUIRED",
+      );
+      await expect(runtime.captureControlFrame({
+        ...request,
+        renderReadyReceiptId: receipt.id,
+      })).rejects.toThrow("CONTROL_CAPTURE_CAPABILITY_UNAVAILABLE");
+    } finally {
+      await runtime.dispose();
+    }
+  });
+
   it("initializes a right-handed Babylon scene with Havok from ExecutionPlanV4", async () => {
     const runtime = await createFlatPackageRuntime();
 

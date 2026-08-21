@@ -194,9 +194,6 @@ importers:
       '@whitebox-world/protocol':
         specifier: workspace:*
         version: link:../protocol
-      '@whitebox-world/runtime-contracts':
-        specifier: workspace:*
-        version: link:../runtime-contracts
       lodash-es:
         specifier: ^4.18.1
         version: 4.18.1
@@ -251,6 +248,9 @@ importers:
       '@babylonjs/loaders':
         specifier: ^9.21.2
         version: 9.21.2(@babylonjs/core@9.21.2)(babylonjs-gltf2interface@9.21.2)
+      '@whitebox-world/control-capture':
+        specifier: workspace:*
+        version: link:../control-capture
       '@whitebox-world/protocol':
         specifier: workspace:*
         version: link:../protocol
@@ -274,7 +274,11 @@ importers:
         specifier: workspace:*
         version: link:../compiler
 
-  packages/runtime-contracts: {}
+  packages/runtime-contracts:
+    dependencies:
+      '@whitebox-world/control-capture':
+        specifier: workspace:*
+        version: link:../control-capture
 
   packages/subject-actions: {}
 

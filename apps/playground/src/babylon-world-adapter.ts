@@ -2,10 +2,14 @@ import type {
   BindControlRequestV2,
   CameraTuningV1,
   CameraViewInputV1,
+  ControlCaptureCapabilitiesV1,
+  ControlCaptureRequestV1,
   ControlBindingReceiptV2,
   ExecutionPlanV4,
   FixedInputV1,
   MotionParameterTuningV1,
+  RenderReadyReceiptV1,
+  RuntimeControlCaptureFrameV1,
   SemanticInputActionV1,
   WorldRuntimeSnapshotV3,
   WorldkitBrowserDiagnosticV1,
@@ -223,6 +227,7 @@ export class BabylonWorldAdapter implements PlaygroundWorldAdapter {
   private fixedStepAccumulatorSeconds = 0;
   private displayFramesPerSecond = 0;
   private frameLoopDiagnostic: WorldkitBrowserDiagnosticV1 | undefined;
+  private captureReservationReceiptId: string | undefined;
   private activeCameraPointerId: number | null = null;
   private lastCameraPointerPosition: readonly [number, number] = [0, 0];
 
@@ -260,6 +265,7 @@ export class BabylonWorldAdapter implements PlaygroundWorldAdapter {
     const canvas = document.createElement("canvas");
     const runtime = await BabylonWorldRuntime.create({
       executionPlan,
+      runtimeSessionId: crypto.randomUUID(),
       canvas,
       autoStartRenderLoop: false,
       ...options,
@@ -295,6 +301,7 @@ export class BabylonWorldAdapter implements PlaygroundWorldAdapter {
   }
 
   reset(): void {
+    this.captureReservationReceiptId = undefined;
     this.keyboardInput.clear();
     this.cameraInput.clear();
     this.activeCameraPointerId = null;
@@ -306,11 +313,13 @@ export class BabylonWorldAdapter implements PlaygroundWorldAdapter {
   }
 
   render(): void {
+    if (this.captureReservationReceiptId !== undefined) return;
     this.runtime.renderFrame();
     this.frame += 1;
   }
 
   async runFixedInput(steps: readonly FixedInputStep[]): Promise<WorldSnapshot> {
+    this.captureReservationReceiptId = undefined;
     const wasPaused = this.paused;
     this.paused = true;
     for (const step of steps) {
@@ -329,6 +338,7 @@ export class BabylonWorldAdapter implements PlaygroundWorldAdapter {
   }
 
   bindControl(request: BindControlRequestV2): ControlBindingReceiptV2 {
+    this.captureReservationReceiptId = undefined;
     const receipt = this.runtime.bindControl(request);
     if (receipt.status === "committed") {
       this.render();
@@ -338,6 +348,7 @@ export class BabylonWorldAdapter implements PlaygroundWorldAdapter {
   }
 
   async runWorldkitFixedInput(steps: readonly FixedInputV1[]): Promise<WorldRuntimeSnapshotV3> {
+    this.captureReservationReceiptId = undefined;
     const wasPaused = this.paused;
     this.paused = true;
     let snapshot = this.runtime.snapshot();
@@ -349,7 +360,50 @@ export class BabylonWorldAdapter implements PlaygroundWorldAdapter {
     return snapshot;
   }
 
+  getControlCaptureCapabilities(): ControlCaptureCapabilitiesV1 {
+    return this.runtime.getControlCaptureCapabilities();
+  }
+
+  async waitForSimulationTick(
+    expectedSimulationTick: number,
+  ): Promise<WorldRuntimeSnapshotV3> {
+    if (!Number.isSafeInteger(expectedSimulationTick) || expectedSimulationTick < 0) {
+      throw new RangeError("Expected Simulation Tick must be a non-negative safe integer.");
+    }
+    const snapshot = this.runtime.snapshot();
+    if (snapshot.tick !== expectedSimulationTick) {
+      throw new Error("CONTROL_CAPTURE_SIMULATION_TICK_MISMATCH");
+    }
+    return snapshot;
+  }
+
+  async waitForRenderReady(
+    expectedSimulationTick: number,
+  ): Promise<RenderReadyReceiptV1> {
+    const receipt = this.runtime.waitForRenderReady(expectedSimulationTick);
+    this.captureReservationReceiptId = receipt.id;
+    return receipt;
+  }
+
+  async captureControlFrame(
+    request: ControlCaptureRequestV1,
+  ): Promise<RuntimeControlCaptureFrameV1> {
+    if (request.renderReadyReceiptId !== this.captureReservationReceiptId) {
+      throw new Error("CONTROL_CAPTURE_RENDER_READY_REQUIRED");
+    }
+    const wasPaused = this.paused;
+    this.paused = true;
+    try {
+      return await this.runtime.captureControlFrame(request);
+    } finally {
+      this.captureReservationReceiptId = undefined;
+      this.paused = wasPaused;
+      this.resetAnimationClock();
+    }
+  }
+
   setCameraPreferenceRuntime(preference: string): WorldRuntimeSnapshotV3 {
+    this.captureReservationReceiptId = undefined;
     const snapshot = this.runtime.setCameraPreference(preference);
     this.render();
     this.emit();
@@ -357,6 +411,7 @@ export class BabylonWorldAdapter implements PlaygroundWorldAdapter {
   }
 
   adjustCameraViewRuntime(input: CameraViewInputV1): WorldRuntimeSnapshotV3 {
+    this.captureReservationReceiptId = undefined;
     const snapshot = this.runtime.adjustCameraView(input);
     this.render();
     this.emit();
@@ -364,6 +419,7 @@ export class BabylonWorldAdapter implements PlaygroundWorldAdapter {
   }
 
   resetCameraViewRuntime(): WorldRuntimeSnapshotV3 {
+    this.captureReservationReceiptId = undefined;
     const snapshot = this.runtime.resetCameraView();
     this.render();
     this.emit();
@@ -371,6 +427,7 @@ export class BabylonWorldAdapter implements PlaygroundWorldAdapter {
   }
 
   setCameraTuningRuntime(tuning: CameraTuningV1): WorldRuntimeSnapshotV3 {
+    this.captureReservationReceiptId = undefined;
     const snapshot = this.runtime.setCameraTuning(tuning);
     this.render();
     this.emit();
@@ -381,6 +438,7 @@ export class BabylonWorldAdapter implements PlaygroundWorldAdapter {
     subjectEntityId: string,
     tuning: MotionParameterTuningV1,
   ): WorldRuntimeSnapshotV3 {
+    this.captureReservationReceiptId = undefined;
     const snapshot = this.runtime.setMotionTuning(subjectEntityId, tuning);
     this.render();
     this.emit();
@@ -395,6 +453,7 @@ export class BabylonWorldAdapter implements PlaygroundWorldAdapter {
     subjectEntityId: string,
     motionProfileRef: string,
   ): Promise<WorldRuntimeSnapshotV3> {
+    this.captureReservationReceiptId = undefined;
     if (!this.runtime.requestMotionProfile(subjectEntityId, motionProfileRef)) {
       throw new Error("WORLDKIT_MOTION_PROFILE_INCOMPATIBLE");
     }
@@ -430,6 +489,7 @@ export class BabylonWorldAdapter implements PlaygroundWorldAdapter {
   }
 
   resetRuntime(): WorldRuntimeSnapshotV3 {
+    this.captureReservationReceiptId = undefined;
     this.keyboardInput.clear();
     this.cameraInput.clear();
     this.activeCameraPointerId = null;

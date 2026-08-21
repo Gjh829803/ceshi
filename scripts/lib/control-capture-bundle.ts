@@ -14,6 +14,7 @@ import path from "node:path";
 import {
   CONTROL_CAPTURE_PASS_IDS_V1,
   CONTROL_CAPTURE_PROFILE_V1,
+  compileSimulationTakeV1,
   type CompiledSimulationTakeV1,
   type ControlCapturePassIdV1,
   type Sha256HashV1,
@@ -24,7 +25,7 @@ import {
   stringifyCanonicalJson,
 } from "@whitebox-world/protocol";
 import type { WorldRuntimeSnapshotV3 } from "@whitebox-world/runtime-contracts";
-import { isPlainObject } from "lodash-es";
+import { isEqual, isPlainObject } from "lodash-es";
 
 const PASS_FILE_NAMES: Readonly<Record<ControlCapturePassIdV1, string>> = {
   "neutral-color": "neutral-color.png",
@@ -33,6 +34,24 @@ const PASS_FILE_NAMES: Readonly<Record<ControlCapturePassIdV1, string>> = {
   "instance-id": "instance-id.bin",
   "world-normal": "world-normal.bin",
 };
+
+const REQUIRED_BUNDLE_FILE_PATHS = [
+  "bundle.json",
+  "capture-profile-lock.json",
+  "diagnostics.json",
+  "encoding-profile-lock.json",
+  "tables/instances.json",
+  "tables/semantic-classes.json",
+  "take.json",
+  "tracks/actions.ndjson",
+  "tracks/cameras.ndjson",
+  "tracks/events.ndjson",
+  "tracks/inputs.ndjson",
+  "tracks/relationships.ndjson",
+  "tracks/snapshots.ndjson",
+  "validation-report.json",
+  "world-package-ref.json",
+] as const;
 
 interface WorldPackageIdentityV1 {
   readonly worldPackageRef: string;
@@ -122,12 +141,15 @@ export interface ControlCaptureBundleDiagnosticV1 {
     | "CAPTURE_FILE_MISSING"
     | "CAPTURE_FILE_UNDECLARED"
     | "CAPTURE_FRAME_INDEX_INVALID"
+    | "CAPTURE_FRAME_DIMENSIONS_INVALID"
     | "CAPTURE_FRAME_HASH_MISMATCH"
     | "CAPTURE_FRAME_TICK_INVALID"
     | "CAPTURE_MANIFEST_HASH_MISMATCH"
     | "CAPTURE_REQUIRED_PASS_MISSING"
     | "CAPTURE_ROOT_HASH_MISMATCH"
+    | "CAPTURE_PROFILE_MISMATCH"
     | "CAPTURE_SESSION_MISMATCH"
+    | "CAPTURE_TABLE_INVALID"
     | "CAPTURE_TAKE_MISMATCH"
     | "CAPTURE_WORLD_PACKAGE_MISMATCH";
   readonly path: string;
@@ -183,12 +205,20 @@ function assertFrameShape(
   expectedCaptureFrameIndex: number,
   previousSimulationTick: number | undefined,
 ): void {
+  const expectedScheduleEntry =
+    options.compiledTake.captureSchedulePlan.entries[expectedCaptureFrameIndex];
+  if (expectedScheduleEntry === undefined) {
+    throw new Error("CAPTURE_FRAME_INDEX_INVALID: Frame exceeds the compiled Capture Schedule.");
+  }
   if (frame.captureFrameIndex !== expectedCaptureFrameIndex) {
     throw new Error("CAPTURE_FRAME_INDEX_INVALID: Capture frame indices must be contiguous from zero.");
   }
   if (!Number.isSafeInteger(frame.simulationTick) || frame.simulationTick < 0 ||
     (previousSimulationTick !== undefined && frame.simulationTick < previousSimulationTick)) {
     throw new Error("CAPTURE_FRAME_TICK_INVALID: Simulation ticks must be non-decreasing safe integers.");
+  }
+  if (frame.simulationTick !== expectedScheduleEntry.simulationTick) {
+    throw new Error("CAPTURE_FRAME_TICK_INVALID: Frame does not match the compiled Capture Schedule.");
   }
   if (frame.runtimeSessionId !== options.runtimeSessionId) {
     throw new Error("CAPTURE_SESSION_MISMATCH: Frame belongs to another Runtime Session.");
@@ -354,6 +384,14 @@ export async function createControlCaptureBundleWriterV1(
     async finalize(): Promise<FinalizedControlCaptureBundleV1> {
       if (closed) throw new Error("CAPTURE_WRITER_CLOSED");
       try {
+        if (
+          frameManifests.length !==
+          options.compiledTake.captureSchedulePlan.entries.length
+        ) {
+          throw new Error(
+            "CAPTURE_SCHEDULE_INCOMPLETE: Every compiled Capture Schedule entry is required.",
+          );
+        }
         await mkdir(path.join(stagingDirectory, "tables"), { recursive: false });
         await mkdir(path.join(stagingDirectory, "tracks"), { recursive: false });
         await writeCanonicalJson(path.join(stagingDirectory, "take.json"), options.compiledTake.take);
@@ -451,6 +489,78 @@ async function readJsonRecord(
   }
 }
 
+async function readJsonArray(
+  directory: string,
+  filePath: string,
+  diagnostics: ControlCaptureBundleDiagnosticV1[],
+): Promise<readonly unknown[] | undefined> {
+  try {
+    const value: unknown = JSON.parse(await readFile(path.join(directory, filePath), "utf8"));
+    if (!Array.isArray(value)) throw new TypeError("not an array");
+    return value;
+  } catch {
+    addValidationDiagnostic(
+      diagnostics,
+      "CAPTURE_BUNDLE_JSON_INVALID",
+      filePath,
+      "Required JSON array is missing or invalid.",
+    );
+    return undefined;
+  }
+}
+
+function validateIdTable(
+  rows: readonly unknown[] | undefined,
+  filePath: string,
+  requiredStringFields: readonly string[],
+  diagnostics: ControlCaptureBundleDiagnosticV1[],
+): ReadonlySet<number> {
+  const ids = new Set<number>();
+  if (rows === undefined) return ids;
+  rows.forEach((row, index) => {
+    if (!isPlainObject(row)) {
+      addValidationDiagnostic(
+        diagnostics,
+        "CAPTURE_TABLE_INVALID",
+        `${filePath}/${index}`,
+        "ID table entry must be an object.",
+      );
+      return;
+    }
+    const record = row as Record<string, unknown>;
+    const numericId = record.numericId;
+    if (!Number.isSafeInteger(numericId) || numericId !== index + 1 || ids.has(numericId as number)) {
+      addValidationDiagnostic(
+        diagnostics,
+        "CAPTURE_TABLE_INVALID",
+        `${filePath}/${index}/numericId`,
+        "ID table values must be unique contiguous positive integers in canonical order.",
+      );
+    } else {
+      ids.add(numericId as number);
+    }
+    for (const field of requiredStringFields) {
+      if (typeof record[field] !== "string" || record[field] === "") {
+        addValidationDiagnostic(
+          diagnostics,
+          "CAPTURE_TABLE_INVALID",
+          `${filePath}/${index}/${field}`,
+          `ID table field '${field}' must be a non-empty string.`,
+        );
+      }
+    }
+  });
+  return ids;
+}
+
+function uint32ValuesFromBytes(bytes: Uint8Array): readonly number[] {
+  if (bytes.byteLength % 4 !== 0) return [];
+  const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
+  return Array.from({ length: bytes.byteLength / 4 }, (_, index) =>
+    view.getUint32(index * 4, true)
+  );
+}
+
 export async function validateControlCaptureBundleV1(
   directory: string,
 ): Promise<ControlCaptureBundleValidationResultV1> {
@@ -458,7 +568,46 @@ export async function validateControlCaptureBundleV1(
   const diagnostics: ControlCaptureBundleDiagnosticV1[] = [];
   const integrity = await readJsonRecord(resolvedDirectory, "integrity.json", diagnostics);
   const manifest = await readJsonRecord(resolvedDirectory, "bundle.json", diagnostics);
-  if (integrity === undefined || manifest === undefined) return { ok: false, diagnostics };
+  const take = await readJsonRecord(resolvedDirectory, "take.json", diagnostics);
+  const worldPackageIdentity = await readJsonRecord(
+    resolvedDirectory,
+    "world-package-ref.json",
+    diagnostics,
+  );
+  const captureProfileLock = await readJsonRecord(
+    resolvedDirectory,
+    "capture-profile-lock.json",
+    diagnostics,
+  );
+  const encodingProfileLock = await readJsonRecord(
+    resolvedDirectory,
+    "encoding-profile-lock.json",
+    diagnostics,
+  );
+  const semanticClasses = await readJsonArray(
+    resolvedDirectory,
+    "tables/semantic-classes.json",
+    diagnostics,
+  );
+  const instances = await readJsonArray(
+    resolvedDirectory,
+    "tables/instances.json",
+    diagnostics,
+  );
+  if (integrity === undefined || manifest === undefined || take === undefined) {
+    return { ok: false, diagnostics };
+  }
+  let compiledTake: CompiledSimulationTakeV1 | undefined;
+  try {
+    compiledTake = compileSimulationTakeV1(take);
+  } catch {
+    addValidationDiagnostic(
+      diagnostics,
+      "CAPTURE_TAKE_MISMATCH",
+      "take.json",
+      "Simulation Take is invalid.",
+    );
+  }
 
   const declaredHashes = isPlainObject(integrity.fileHashesByPath)
     ? integrity.fileHashesByPath as Record<string, unknown>
@@ -467,6 +616,16 @@ export async function validateControlCaptureBundleV1(
   const actualFilePaths = (await listFilesRecursively(resolvedDirectory)).filter(
     (filePath) => filePath !== "integrity.json",
   ).sort();
+  for (const filePath of REQUIRED_BUNDLE_FILE_PATHS) {
+    if (!actualFilePaths.includes(filePath)) {
+      addValidationDiagnostic(
+        diagnostics,
+        "CAPTURE_FILE_MISSING",
+        filePath,
+        "Required Control Capture Bundle file is missing.",
+      );
+    }
+  }
   for (const filePath of declaredFilePaths) {
     if (!actualFilePaths.includes(filePath)) {
       addValidationDiagnostic(diagnostics, "CAPTURE_FILE_MISSING", filePath, "Declared file is missing.");
@@ -487,11 +646,133 @@ export async function validateControlCaptureBundleV1(
     addValidationDiagnostic(diagnostics, "CAPTURE_ROOT_HASH_MISMATCH", "integrity.json", "Bundle root hash does not match its file hash map.");
   }
 
+  if (compiledTake !== undefined) {
+    if (
+      manifest.takeId !== compiledTake.take.id ||
+      manifest.takeHash !== compiledTake.takeHash
+    ) {
+      addValidationDiagnostic(
+        diagnostics,
+        "CAPTURE_TAKE_MISMATCH",
+        "bundle.json",
+        "Bundle identity does not match the validated Simulation Take.",
+      );
+    }
+    if (
+      manifest.worldPackageRef !== compiledTake.take.worldPackageRef ||
+      manifest.worldPackageRootHash !== compiledTake.take.worldPackageRootHash
+    ) {
+      addValidationDiagnostic(
+        diagnostics,
+        "CAPTURE_WORLD_PACKAGE_MISMATCH",
+        "bundle.json",
+        "Bundle World Package identity does not match the Simulation Take.",
+      );
+    }
+    if (
+      manifest.captureProfileRef !== compiledTake.take.captureProfileRef ||
+      manifest.captureEncodingProfileRef !== compiledTake.take.captureEncodingProfileRef
+    ) {
+      addValidationDiagnostic(
+        diagnostics,
+        "CAPTURE_PROFILE_MISMATCH",
+        "bundle.json",
+        "Bundle capture profiles do not match the Simulation Take.",
+      );
+    }
+  }
+  if (
+    worldPackageIdentity !== undefined &&
+    (
+      worldPackageIdentity.worldPackageRef !== manifest.worldPackageRef ||
+      worldPackageIdentity.worldPackageRootHash !== manifest.worldPackageRootHash ||
+      worldPackageIdentity.normalizedWorldIrHash !== manifest.normalizedWorldIrHash ||
+      worldPackageIdentity.executionPlanHash !== manifest.executionPlanHash
+    )
+  ) {
+    addValidationDiagnostic(
+      diagnostics,
+      "CAPTURE_WORLD_PACKAGE_MISMATCH",
+      "world-package-ref.json",
+      "World Package identity file does not match the Bundle manifest.",
+    );
+  }
+  if (
+    captureProfileLock !== undefined &&
+    (
+      captureProfileLock.resourceRef !== CONTROL_CAPTURE_PROFILE_V1.resourceRef ||
+      !isEqual(captureProfileLock.requiredPassIds, CONTROL_CAPTURE_PROFILE_V1.requiredPassIds)
+    )
+  ) {
+    addValidationDiagnostic(
+      diagnostics,
+      "CAPTURE_PROFILE_MISMATCH",
+      "capture-profile-lock.json",
+      "Capture Profile lock does not match the required V1 pass set.",
+    );
+  }
+  if (
+    encodingProfileLock !== undefined &&
+    !isEqual(encodingProfileLock, CONTROL_CAPTURE_PROFILE_V1.encodingProfile)
+  ) {
+    addValidationDiagnostic(
+      diagnostics,
+      "CAPTURE_PROFILE_MISMATCH",
+      "encoding-profile-lock.json",
+      "Capture Encoding Profile lock does not match web-v1.",
+    );
+  }
+  const semanticNumericIds = validateIdTable(
+    semanticClasses,
+    "tables/semantic-classes.json",
+    ["semanticClassId"],
+    diagnostics,
+  );
+  const instanceNumericIds = validateIdTable(
+    instances,
+    "tables/instances.json",
+    ["entityId", "semanticClassId"],
+    diagnostics,
+  );
+  const semanticClassIds = new Set(
+    (semanticClasses ?? []).flatMap((row) => {
+      if (!isPlainObject(row)) return [];
+      const record = row as Record<string, unknown>;
+      return typeof record.semanticClassId === "string" ? [record.semanticClassId] : [];
+    }),
+  );
+  (instances ?? []).forEach((row, index) => {
+    if (!isPlainObject(row)) return;
+    const record = row as Record<string, unknown>;
+    if (
+      typeof record.semanticClassId === "string" &&
+      !semanticClassIds.has(record.semanticClassId)
+    ) {
+      addValidationDiagnostic(
+        diagnostics,
+        "CAPTURE_TABLE_INVALID",
+        `tables/instances.json/${index}/semanticClassId`,
+        "Instance table references an unknown Semantic Class ID.",
+      );
+    }
+  });
+
   const { bundleManifestHash, ...manifestBody } = manifest;
   if (bundleManifestHash !== sha256CanonicalJson(manifestBody)) {
     addValidationDiagnostic(diagnostics, "CAPTURE_MANIFEST_HASH_MISMATCH", "bundle.json", "Bundle manifest hash is invalid.");
   }
   const frames = Array.isArray(manifest.frames) ? manifest.frames : [];
+  if (
+    compiledTake !== undefined &&
+    frames.length !== compiledTake.captureSchedulePlan.entries.length
+  ) {
+    addValidationDiagnostic(
+      diagnostics,
+      "CAPTURE_FRAME_INDEX_INVALID",
+      "bundle.json/frameCount",
+      "Frame count does not match the compiled Capture Schedule.",
+    );
+  }
   let previousTick: number | undefined;
   for (let index = 0; index < frames.length; index += 1) {
     const frameEntry = frames[index];
@@ -509,6 +790,18 @@ export async function validateControlCaptureBundleV1(
       addValidationDiagnostic(diagnostics, "CAPTURE_FRAME_TICK_INVALID", `bundle.json/frames/${index}`, "Simulation ticks are not non-decreasing.");
     }
     if (Number.isSafeInteger(simulationTick)) previousTick = simulationTick as number;
+    const expectedScheduleEntry = compiledTake?.captureSchedulePlan.entries[index];
+    if (
+      expectedScheduleEntry !== undefined &&
+      simulationTick !== expectedScheduleEntry.simulationTick
+    ) {
+      addValidationDiagnostic(
+        diagnostics,
+        "CAPTURE_FRAME_TICK_INVALID",
+        `bundle.json/frames/${index}`,
+        "Frame tick does not match the compiled Capture Schedule.",
+      );
+    }
     const frameDirectoryName = String(index).padStart(6, "0");
     for (const passId of CONTROL_CAPTURE_PASS_IDS_V1) {
       const passPath = `frames/${frameDirectoryName}/${PASS_FILE_NAMES[passId]}`;
@@ -530,6 +823,42 @@ export async function validateControlCaptureBundleV1(
       addValidationDiagnostic(diagnostics, "CAPTURE_TAKE_MISMATCH", framePath, "Frame belongs to another Simulation Take.");
     }
     if (frame !== undefined) {
+      const widthPixels = frame.widthPixels;
+      const heightPixels = frame.heightPixels;
+      const validDimensions = Number.isSafeInteger(widthPixels) &&
+        Number.isSafeInteger(heightPixels) &&
+        (widthPixels as number) > 0 &&
+        (heightPixels as number) > 0;
+      if (!validDimensions) {
+        addValidationDiagnostic(
+          diagnostics,
+          "CAPTURE_FRAME_DIMENSIONS_INVALID",
+          framePath,
+          "Frame dimensions must be positive safe integers.",
+        );
+      } else {
+        const pixelCount = (widthPixels as number) * (heightPixels as number);
+        for (const [passId, allowedIds] of [
+          ["semantic-class-id", semanticNumericIds],
+          ["instance-id", instanceNumericIds],
+        ] as const) {
+          const passPath = `frames/${frameDirectoryName}/${PASS_FILE_NAMES[passId]}`;
+          if (!actualFilePaths.includes(passPath)) continue;
+          const bytes = new Uint8Array(await readFile(path.join(resolvedDirectory, passPath)));
+          const values = uint32ValuesFromBytes(bytes);
+          if (
+            values.length !== pixelCount ||
+            values.some((value) => value !== 0 && !allowedIds.has(value))
+          ) {
+            addValidationDiagnostic(
+              diagnostics,
+              "CAPTURE_TABLE_INVALID",
+              passPath,
+              `Pass '${passId}' contains an ID outside its locked table or has the wrong pixel count.`,
+            );
+          }
+        }
+      }
       const { frameHash, ...frameBody } = frame;
       const expectedFrameHash = sha256CanonicalJson(frameBody);
       const manifestFrameHash = (frameEntry as Record<string, unknown>).frameHash;

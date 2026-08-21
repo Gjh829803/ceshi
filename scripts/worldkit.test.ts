@@ -93,6 +93,53 @@ describe("worldkit CLI", () => {
 
   it("parses discovery and explain commands without positional guessing", () => {
     expect(
+      parseWorldkitArgs(["take", "validate", "opening.take.json", "--json"]),
+    ).toEqual({
+      command: "take-validate",
+      inputPath: "opening.take.json",
+      json: true,
+    });
+    expect(
+      parseWorldkitArgs(["take", "inspect", "opening.take.json", "--json"]),
+    ).toEqual({
+      command: "take-inspect",
+      inputPath: "opening.take.json",
+      json: true,
+    });
+    expect(
+      parseWorldkitArgs([
+        "take",
+        "run",
+        "opening.take.json",
+        "--world",
+        "world.json",
+        "--output",
+        "capture-bundle",
+        "--width-pixels",
+        "320",
+        "--height-pixels",
+        "180",
+        "--port",
+        "5180",
+        "--json",
+      ]),
+    ).toEqual({
+      command: "take-run",
+      inputPath: "opening.take.json",
+      worldPath: "world.json",
+      outputPath: "capture-bundle",
+      widthPixels: 320,
+      heightPixels: 180,
+      port: 5180,
+      json: true,
+    });
+    expect(
+      parseWorldkitArgs(["capture", "validate", "capture-bundle", "--json"]),
+    ).toEqual({ command: "capture-validate", inputPath: "capture-bundle", json: true });
+    expect(
+      parseWorldkitArgs(["capture", "inspect", "capture-bundle", "--json"]),
+    ).toEqual({ command: "capture-inspect", inputPath: "capture-bundle", json: true });
+    expect(
       parseWorldkitArgs([
         "registry",
         "list",
@@ -215,6 +262,15 @@ describe("worldkit CLI", () => {
     expect(() =>
       parseWorldkitArgs(["layout", "solve", "world.json"]),
     ).toThrow("layout solve requires --output <directory>");
+    expect(() =>
+      parseWorldkitArgs(["take", "run", "opening.take.json", "--world", "world.json"]),
+    ).toThrow("take run requires --output <directory>");
+    expect(() =>
+      parseWorldkitArgs([
+        "take", "run", "opening.take.json", "--world", "world.json",
+        "--output", "bundle", "--width-pixels", "320",
+      ]),
+    ).toThrow("take run requires --height-pixels <integer>");
   });
 
   it("prints one canonical JSON result and keeps stderr empty for layout commands", async () => {

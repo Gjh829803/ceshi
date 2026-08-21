@@ -36,7 +36,8 @@
     "verify:canonical": "tsx scripts/verify-canonical-world.ts",
     "verify:placement-layout": "tsx scripts/verify-placement-layout.ts",
     "verify:rigged-subject": "tsx scripts/verify-rigged-subject-world.ts",
-    "verify:g-bot-subject": "tsx scripts/verify-g-bot-subject-world.ts"
+    "verify:g-bot-subject": "tsx scripts/verify-g-bot-subject-world.ts",
+    "verify:control-capture": "tsx scripts/verify-control-capture.ts"
   },
   "dependencies": {
     "@dimforge/rapier3d-compat": "^0.19.3",

@@ -34,6 +34,13 @@ import {
   startWorldkitServer,
   type WorldkitServerHandle,
 } from "./lib/worldkit-server";
+import {
+  inspectControlCaptureBundleFileV1,
+  inspectSimulationTakeFileV1,
+  runSimulationTakeFileV1,
+  validateControlCaptureBundleFileV1,
+  validateSimulationTakeFileV1,
+} from "./lib/simulation-take-cli";
 
 const HELP = `worldkit - Canonical JSON whitebox world SDK
 
@@ -50,6 +57,11 @@ Usage:
   worldkit layout solve <world-file> --output <directory> [--json]
   worldkit layout explain <layout-report.json> --entity-id <id> [--json]
   worldkit layout explain <layout-report.json> --constraint-id <id> [--json]
+  worldkit take validate <take.json> [--json]
+  worldkit take inspect <take.json> [--json]
+  worldkit take run <take.json> --world <world.json> --output <directory> --width-pixels <integer> --height-pixels <integer> [--port <port>] [--json]
+  worldkit capture validate <bundle-directory> [--json]
+  worldkit capture inspect <bundle-directory> [--json]
 `;
 
 export type { CliDiagnostic } from "./lib/worldkit-pipeline";
@@ -85,6 +97,20 @@ export type WorldkitArgs =
       json: boolean;
     }
   | { command: "layout-validate"; inputPath: string; json: boolean }
+  | { command: "take-validate"; inputPath: string; json: boolean }
+  | { command: "take-inspect"; inputPath: string; json: boolean }
+  | {
+      command: "take-run";
+      inputPath: string;
+      worldPath: string;
+      outputPath: string;
+      widthPixels: number;
+      heightPixels: number;
+      port?: number;
+      json: boolean;
+    }
+  | { command: "capture-validate"; inputPath: string; json: boolean }
+  | { command: "capture-inspect"; inputPath: string; json: boolean }
   | {
       command: "layout-solve";
       inputPath: string;
@@ -123,6 +149,14 @@ function parsePort(value: string | undefined): number {
     );
   }
   return port;
+}
+
+function parsePositiveIntegerOption(value: string, option: string): number {
+  const parsed = Number(value);
+  if (!Number.isSafeInteger(parsed) || parsed < 1) {
+    throw new WorldkitUsageError(`${option} must be a positive safe integer.`);
+  }
+  return parsed;
 }
 
 function takeOption(tokens: string[], option: string): string | undefined {
@@ -179,6 +213,61 @@ export function parseWorldkitArgs(arguments_: readonly string[]): WorldkitArgs {
 
   const command = tokens.shift();
   const json = takeJsonFlag(tokens);
+
+  if (command === "take") {
+    const operation = takeRequiredPositional(tokens, "take operation");
+    const inputPath = takeRequiredPositional(tokens, "Simulation Take input file");
+    if (operation === "validate" || operation === "inspect") {
+      rejectRemaining(tokens, `take ${operation}`);
+      return {
+        command: operation === "validate" ? "take-validate" : "take-inspect",
+        inputPath,
+        json,
+      };
+    }
+    if (operation === "run") {
+      const worldPath = takeOption(tokens, "--world");
+      const outputPath = takeOption(tokens, "--output");
+      const widthValue = takeOption(tokens, "--width-pixels");
+      const heightValue = takeOption(tokens, "--height-pixels");
+      const portValue = takeOption(tokens, "--port");
+      if (worldPath === undefined) {
+        throw new WorldkitUsageError("take run requires --world <world.json>.");
+      }
+      if (outputPath === undefined) {
+        throw new WorldkitUsageError("take run requires --output <directory>.");
+      }
+      if (widthValue === undefined) {
+        throw new WorldkitUsageError("take run requires --width-pixels <integer>.");
+      }
+      if (heightValue === undefined) {
+        throw new WorldkitUsageError("take run requires --height-pixels <integer>.");
+      }
+      rejectRemaining(tokens, "take run");
+      return {
+        command: "take-run",
+        inputPath,
+        worldPath,
+        outputPath,
+        widthPixels: parsePositiveIntegerOption(widthValue, "--width-pixels"),
+        heightPixels: parsePositiveIntegerOption(heightValue, "--height-pixels"),
+        ...(portValue === undefined ? {} : { port: parsePort(portValue) }),
+        json,
+      };
+    }
+    throw new WorldkitUsageError(`Unknown take operation '${operation}'.`);
+  }
+
+  if (command === "capture" && (tokens[0] === "validate" || tokens[0] === "inspect")) {
+    const operation = takeRequiredPositional(tokens, "capture operation");
+    const inputPath = takeRequiredPositional(tokens, "Control Capture Bundle directory");
+    rejectRemaining(tokens, `capture ${operation}`);
+    return {
+      command: operation === "validate" ? "capture-validate" : "capture-inspect",
+      inputPath,
+      json,
+    };
+  }
 
   if (command === "registry") {
     const operation = takeRequiredPositional(tokens, "registry operation");
@@ -801,6 +890,37 @@ export async function main(
   }
   if (parsed.command === "run") {
     return runUntilSignal(parsed.inputPath, parsed.port, parsed.json);
+  }
+  if (parsed.command === "take-validate") {
+    const result = await validateSimulationTakeFileV1(parsed.inputPath);
+    printResult(result, parsed.json);
+    return result.exitCode;
+  }
+  if (parsed.command === "take-inspect") {
+    const result = await inspectSimulationTakeFileV1(parsed.inputPath);
+    printResult(result, parsed.json);
+    return result.exitCode;
+  }
+  if (parsed.command === "take-run") {
+    const result = await runSimulationTakeFileV1(parsed.inputPath, {
+      worldPath: parsed.worldPath,
+      outputPath: parsed.outputPath,
+      widthPixels: parsed.widthPixels,
+      heightPixels: parsed.heightPixels,
+      ...(parsed.port === undefined ? {} : { port: parsed.port }),
+    });
+    printResult(result, parsed.json);
+    return result.exitCode;
+  }
+  if (parsed.command === "capture-validate") {
+    const result = await validateControlCaptureBundleFileV1(parsed.inputPath);
+    printResult(result, parsed.json);
+    return result.exitCode;
+  }
+  if (parsed.command === "capture-inspect") {
+    const result = await inspectControlCaptureBundleFileV1(parsed.inputPath);
+    printResult(result, parsed.json);
+    return result.exitCode;
   }
 
   const result =

@@ -2,8 +2,10 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 
 import type {
   CameraViewInputV1,
+  ControlCaptureRequestV1,
   ExecutionPlanV4,
   FixedInputV1,
+  RuntimeControlCaptureFrameV1,
   WorldRuntimeSnapshotV3,
 } from "@whitebox-world/runtime-contracts";
 
@@ -17,6 +19,9 @@ interface RuntimeProbe {
   renderFrame: ReturnType<typeof vi.fn>;
   reset: ReturnType<typeof vi.fn<() => WorldRuntimeSnapshotV3>>;
   adjustCameraView(input: CameraViewInputV1): WorldRuntimeSnapshotV3;
+  getControlCaptureCapabilities: ReturnType<typeof vi.fn>;
+  waitForRenderReady: ReturnType<typeof vi.fn>;
+  captureControlFrame: ReturnType<typeof vi.fn>;
   snapshot(): WorldRuntimeSnapshotV3;
 }
 
@@ -31,6 +36,10 @@ interface AdapterProbe {
   isPaused(): boolean;
   runtimeDiagnostics(): ReturnType<BabylonWorldAdapter["runtimeDiagnostics"]>;
   resetRuntime(): WorldRuntimeSnapshotV3;
+  render(): void;
+  waitForSimulationTick(expectedSimulationTick: number): Promise<WorldRuntimeSnapshotV3>;
+  waitForRenderReady(expectedSimulationTick: number): Promise<unknown>;
+  captureControlFrame(request: ControlCaptureRequestV1): Promise<RuntimeControlCaptureFrameV1>;
 }
 
 function runtimeSnapshot(
@@ -100,6 +109,20 @@ function createAdapterProbe(): {
       };
       return runtimeSnapshot(tick, cameraView);
     },
+    getControlCaptureCapabilities: vi.fn(() => ({
+      available: true,
+    })),
+    waitForRenderReady: vi.fn((expectedSimulationTick: number) => ({
+      kind: "worldkit-render-ready-receipt",
+      schemaVersion: 1,
+      id: `render-ready:test:${expectedSimulationTick}`,
+      runtimeSessionId: "runtime-session-test",
+      simulationTick: expectedSimulationTick,
+      renderFrameIndex: 0,
+    })),
+    captureControlFrame: vi.fn(async () =>
+      undefined as unknown as RuntimeControlCaptureFrameV1
+    ),
     snapshot: () => runtimeSnapshot(tick, cameraView),
   };
   const executionPlan = {
@@ -189,5 +212,32 @@ describe("BabylonWorldAdapter frame loop", () => {
 
     expect(runtime.runFixedInput).toHaveBeenLastCalledWith({ actions: [], ticks: 1 });
     expect(adapter.snapshot().camera.yaw).toBe(0);
+  });
+
+  it("requires an exact Simulation Tick and freezes adapter simulation during capture", async () => {
+    const { adapter, runtime } = createAdapterProbe();
+    const request = {
+      captureFrameIndex: 0,
+      expectedSimulationTick: 0,
+      renderReadyReceiptId: "render-ready:test:0",
+      widthPixels: 16,
+      heightPixels: 9,
+    } as const;
+
+    await expect(adapter.waitForSimulationTick(1)).rejects.toThrow(
+      "CONTROL_CAPTURE_SIMULATION_TICK_MISMATCH",
+    );
+    await expect(adapter.waitForSimulationTick(0)).resolves.toMatchObject({ tick: 0 });
+
+    await adapter.waitForRenderReady(0);
+    adapter.render();
+    expect(runtime.renderFrame).not.toHaveBeenCalled();
+    const capture = adapter.captureControlFrame(request);
+    expect(adapter.isPaused()).toBe(true);
+    await expect(capture).resolves.toBeUndefined();
+    expect(adapter.isPaused()).toBe(false);
+    expect(runtime.captureControlFrame).toHaveBeenCalledWith(request);
+    adapter.render();
+    expect(runtime.renderFrame).toHaveBeenCalledOnce();
   });
 });

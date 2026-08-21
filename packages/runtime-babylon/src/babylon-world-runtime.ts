@@ -17,11 +17,14 @@ import {
 import { PhysicsShapeType } from "@babylonjs/core/Physics/v2/IPhysicsEnginePlugin.js";
 import type { PhysicsEngine } from "@babylonjs/core/Physics/v2/physicsEngine.js";
 import { Scene } from "@babylonjs/core/scene.pure.js";
+import { CONTROL_CAPTURE_PASS_IDS_V1 } from "@whitebox-world/control-capture";
 
 import type {
   BindControlRequestV2,
   CameraTuningV1,
   CameraViewInputV1,
+  ControlCaptureCapabilitiesV1,
+  ControlCaptureRequestV1,
   ControlBindingReceiptV2,
   ExecutionObjectV3,
   ExecutionLayoutAssertionV1,
@@ -31,6 +34,8 @@ import type {
   ExecutionWaterV3,
   FixedInputV1,
   MotionParameterTuningV1,
+  RenderReadyReceiptV1,
+  RuntimeControlCaptureFrameV1,
   SubjectHarnessReportV1,
   Vec2,
   Vec3,
@@ -57,6 +62,7 @@ import {
   sampleExecutionTerrainHeight,
   toBabylonHeightfieldData,
 } from "./terrain";
+import { captureBabylonControlFrameV1 } from "./control-capture";
 
 export type BabylonWorldRuntimeInitializationStageV1 =
   | "engine"
@@ -69,6 +75,7 @@ export type BabylonWorldRuntimeInitializationStageV1 =
 
 export interface BabylonWorldRuntimeOptions {
   executionPlan: ExecutionPlanV4;
+  runtimeSessionId?: string;
   canvas?: HTMLCanvasElement;
   engineFactory?: () => AbstractEngine;
   autoStartRenderLoop?: boolean;
@@ -425,7 +432,9 @@ export class BabylonWorldRuntime implements WorldRuntimeSessionV3 {
   readonly ready: Promise<void> = Promise.resolve();
 
   private tick = 0;
+  private renderFrameIndex = 0;
   private disposed = false;
+  private latestRenderReadyReceipt: RenderReadyReceiptV1 | undefined;
   private controlledEntityId: string;
   private readonly aggregates: PhysicsAggregate[] = [];
   private readonly ownedTerrainShape: PhysicsShape;
@@ -435,10 +444,12 @@ export class BabylonWorldRuntime implements WorldRuntimeSessionV3 {
   private readonly camera: FreeCamera;
   private readonly cameraDirector: CameraDirectorV1;
   private readonly renderLoop: () => void;
+  private readonly autoStartRenderLoop: boolean;
   private readonly ownedDisposers: readonly OwnedDisposer[];
 
   private constructor(
     private readonly executionPlan: ExecutionPlanV4,
+    private readonly runtimeSessionId: string,
     private readonly engine: AbstractEngine,
     private readonly scene: Scene,
     subjectControllersByEntityId: ReadonlyMap<string, SubjectController>,
@@ -464,6 +475,7 @@ export class BabylonWorldRuntime implements WorldRuntimeSessionV3 {
     this.aggregates.push(...aggregates);
     this.ownedDisposers = ownedDisposers;
     this.renderLoop = () => this.renderFrame();
+    this.autoStartRenderLoop = autoStartRenderLoop;
     this.updateCamera();
     if (autoStartRenderLoop) this.engine.runRenderLoop(this.renderLoop);
   }
@@ -599,6 +611,7 @@ export class BabylonWorldRuntime implements WorldRuntimeSessionV3 {
       options.onInitializationStage?.("ready");
       return new BabylonWorldRuntime(
         options.executionPlan,
+        options.runtimeSessionId ?? "runtime-session-local",
         engine,
         scene,
         subjectControllersByEntityId,
@@ -678,6 +691,7 @@ export class BabylonWorldRuntime implements WorldRuntimeSessionV3 {
     this.controllerFor(this.controlledEntityId).stop();
     this.visualFor(this.controlledEntityId).stepAnimation(this.tick, "idle");
     this.controlledEntityId = request.controlledEntityId;
+    this.latestRenderReadyReceipt = undefined;
     this.updateCamera();
     return {
       kind: "worldkit-control-binding-receipt",
@@ -696,6 +710,7 @@ export class BabylonWorldRuntime implements WorldRuntimeSessionV3 {
     }
     const physicsEngine = this.scene.getPhysicsEngine();
     if (physicsEngine === null) throw new Error("WORLDKIT_HAVOK_ENGINE_MISSING");
+    if (input.ticks > 0) this.latestRenderReadyReceipt = undefined;
     for (let index = 0; index < input.ticks; index += 1) {
       for (const subject of this.executionPlan.subjects) {
         const controller = this.controllerFor(subject.entityId);
@@ -816,19 +831,135 @@ export class BabylonWorldRuntime implements WorldRuntimeSessionV3 {
     this.controlledEntityId = this.executionPlan.controlledEntityId;
     this.tick = 0;
     this.cameraDirector.reset();
+    this.latestRenderReadyReceipt = undefined;
     this.updateCamera();
     return this.snapshot();
   }
 
-  renderFrame(): void {
+  getControlCaptureCapabilities(): ControlCaptureCapabilitiesV1 {
+    this.assertUsable();
+    const capabilities = this.engine.getCaps();
+    const diagnostics: ControlCaptureCapabilitiesV1["diagnostics"][number][] = [];
+    if (!capabilities.textureFloatRender) {
+      diagnostics.push({
+        code: "CONTROL_CAPTURE_FLOAT_RENDER_UNAVAILABLE",
+        message: "The active graphics device cannot render required float depth and normal targets.",
+      });
+    }
+    if (!capabilities.drawBuffersExtension) {
+      diagnostics.push({
+        code: "CONTROL_CAPTURE_MRT_UNAVAILABLE",
+        message: "The active graphics device cannot render the required world-normal G-buffer.",
+      });
+    }
+    const maximumDimensionPixels = Math.min(capabilities.maxTextureSize, 4_096);
+    return {
+      kind: "worldkit-control-capture-capabilities",
+      schemaVersion: 1,
+      available: diagnostics.length === 0,
+      captureProfileRef: "worldkit://capture/profile/control-video@1",
+      captureEncodingProfileRef: "worldkit://capture/encoding/web-v1@1",
+      requiredPassIds: CONTROL_CAPTURE_PASS_IDS_V1,
+      maximumWidthPixels: maximumDimensionPixels,
+      maximumHeightPixels: maximumDimensionPixels,
+      diagnostics,
+    };
+  }
+
+  waitForRenderReady(expectedSimulationTick: number): RenderReadyReceiptV1 {
+    this.assertUsable();
+    if (!Number.isSafeInteger(expectedSimulationTick) || expectedSimulationTick < 0) {
+      throw new RangeError("Expected Simulation Tick must be a non-negative safe integer.");
+    }
+    if (this.latestRenderReadyReceipt?.simulationTick !== expectedSimulationTick) {
+      throw new Error("CONTROL_CAPTURE_RENDER_READY_REQUIRED: No rendered frame matches the requested Simulation Tick.");
+    }
+    return this.latestRenderReadyReceipt;
+  }
+
+  async captureControlFrame(
+    request: ControlCaptureRequestV1,
+  ): Promise<RuntimeControlCaptureFrameV1> {
+    this.assertUsable();
+    if (!Number.isSafeInteger(request.captureFrameIndex) || request.captureFrameIndex < 0) {
+      throw new RangeError("Capture Frame Index must be a non-negative safe integer.");
+    }
+    if (!Number.isSafeInteger(request.expectedSimulationTick) || request.expectedSimulationTick < 0) {
+      throw new RangeError("Expected Simulation Tick must be a non-negative safe integer.");
+    }
+    const receipt = this.latestRenderReadyReceipt;
+    if (
+      receipt === undefined ||
+      receipt.id !== request.renderReadyReceiptId ||
+      receipt.simulationTick !== request.expectedSimulationTick ||
+      receipt.runtimeSessionId !== this.runtimeSessionId
+    ) {
+      throw new Error("CONTROL_CAPTURE_RENDER_READY_REQUIRED: Capture requires the exact current Render Ready receipt.");
+    }
+    const capabilities = this.getControlCaptureCapabilities();
+    if (!capabilities.available) {
+      throw new Error("CONTROL_CAPTURE_CAPABILITY_UNAVAILABLE: The active graphics device cannot produce the locked pass set.");
+    }
+    if (
+      !Number.isSafeInteger(request.widthPixels) ||
+      !Number.isSafeInteger(request.heightPixels) ||
+      request.widthPixels < 1 ||
+      request.heightPixels < 1 ||
+      request.widthPixels > capabilities.maximumWidthPixels ||
+      request.heightPixels > capabilities.maximumHeightPixels
+    ) {
+      throw new RangeError("Capture dimensions exceed the active graphics device limits.");
+    }
+    const snapshot = this.snapshot();
+    const cameraRigRef = snapshot.camera.activeCameraRigRef;
+    if (cameraRigRef === undefined) {
+      throw new Error("CONTROL_CAPTURE_CAMERA_RIG_UNAVAILABLE");
+    }
+    if (this.autoStartRenderLoop) this.engine.stopRenderLoop(this.renderLoop);
+    try {
+      return await captureBabylonControlFrameV1({
+        engine: this.engine,
+        scene: this.scene,
+        camera: this.camera,
+        runtimeSessionId: this.runtimeSessionId,
+        captureFrameIndex: request.captureFrameIndex,
+        simulationTick: receipt.simulationTick,
+        renderFrameIndex: receipt.renderFrameIndex,
+        renderReadyReceiptId: receipt.id,
+        widthPixels: request.widthPixels,
+        heightPixels: request.heightPixels,
+        cameraEntityId: this.executionPlan.camera.cameraEntityId,
+        cameraRigRef,
+        snapshot,
+      });
+    } finally {
+      if (this.autoStartRenderLoop && !this.disposed) {
+        this.engine.runRenderLoop(this.renderLoop);
+      }
+    }
+  }
+
+  renderFrame(): RenderReadyReceiptV1 {
     this.assertUsable();
     for (const visual of this.subjectVisuals) visual.applyAnimationPose();
     this.scene.render();
+    const receipt: RenderReadyReceiptV1 = {
+      kind: "worldkit-render-ready-receipt",
+      schemaVersion: 1,
+      id: `render-ready:${this.runtimeSessionId}:${this.renderFrameIndex}`,
+      runtimeSessionId: this.runtimeSessionId,
+      simulationTick: this.tick,
+      renderFrameIndex: this.renderFrameIndex,
+    };
+    this.renderFrameIndex += 1;
+    this.latestRenderReadyReceipt = receipt;
+    return receipt;
   }
 
   resize(): void {
     this.assertUsable();
     this.engine.resize();
+    this.latestRenderReadyReceipt = undefined;
   }
 
   async dispose(): Promise<void> {
@@ -879,6 +1010,7 @@ export class BabylonWorldRuntime implements WorldRuntimeSessionV3 {
     if (!this.cameraDirector.setPreference(preference)) {
       throw new RangeError("Camera preference must be a non-empty string.");
     }
+    this.latestRenderReadyReceipt = undefined;
     this.updateCamera();
     return this.snapshot();
   }
@@ -888,6 +1020,7 @@ export class BabylonWorldRuntime implements WorldRuntimeSessionV3 {
     if (!this.cameraDirector.adjustView(input)) {
       throw new RangeError("Camera view deltas must be finite numbers.");
     }
+    this.latestRenderReadyReceipt = undefined;
     this.updateCamera();
     return this.snapshot();
   }
@@ -895,6 +1028,7 @@ export class BabylonWorldRuntime implements WorldRuntimeSessionV3 {
   resetCameraView(): WorldRuntimeSnapshotV3 {
     this.assertUsable();
     this.cameraDirector.resetView();
+    this.latestRenderReadyReceipt = undefined;
     this.updateCamera();
     return this.snapshot();
   }
@@ -904,13 +1038,16 @@ export class BabylonWorldRuntime implements WorldRuntimeSessionV3 {
     if (!this.cameraDirector.setTuning(tuning)) {
       throw new RangeError("Camera tuning values must be finite numbers.");
     }
+    this.latestRenderReadyReceipt = undefined;
     this.updateCamera();
     return this.snapshot();
   }
 
   requestMotionProfile(subjectEntityId: string, motionProfileRef: string): boolean {
     this.assertUsable();
-    return this.controllerFor(subjectEntityId).requestMotionProfile(motionProfileRef);
+    const changed = this.controllerFor(subjectEntityId).requestMotionProfile(motionProfileRef);
+    if (changed) this.latestRenderReadyReceipt = undefined;
+    return changed;
   }
 
   setMotionTuning(
@@ -921,6 +1058,7 @@ export class BabylonWorldRuntime implements WorldRuntimeSessionV3 {
     if (!this.controllerFor(subjectEntityId).setMotionTuning(tuning)) {
       throw new RangeError("Motion tuning must use registered parameters inside safety limits.");
     }
+    this.latestRenderReadyReceipt = undefined;
     return this.snapshot();
   }
 

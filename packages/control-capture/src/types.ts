@@ -1,5 +1,3 @@
-import type { SemanticInputActionV1 } from "@whitebox-world/runtime-contracts";
-
 export type Sha256HashV1 = `sha256:${string}`;
 
 export interface SimulationTickRateV1 {
@@ -143,7 +141,3 @@ export type SimulationTakeValidationResultV1 =
       readonly ok: false;
       readonly diagnostics: readonly SimulationTakeDiagnosticV1[];
     };
-
-export interface TickInputStateV1 {
-  readonly actions: readonly SemanticInputActionV1[];
-}

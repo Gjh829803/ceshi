@@ -8,9 +8,13 @@ import {
   type BindControlRequestV2,
   type CameraTuningV1,
   type CameraViewInputV1,
+  type ControlCaptureCapabilitiesV1,
+  type ControlCaptureRequestV1,
   type ControlBindingReceiptV2,
   type FixedInputV1,
   type MotionParameterTuningV1,
+  type RenderReadyReceiptV1,
+  type RuntimeControlCaptureFrameV1,
   type WorldRuntimeSnapshotV3,
   type SubjectHarnessReportV1,
   type WorldkitBrowserApiV3,
@@ -24,6 +28,10 @@ export interface DeferredWorldkitBrowserRuntimeAdapterV1 {
   runWorldkitFixedInput(
     steps: readonly FixedInputV1[],
   ): Promise<WorldRuntimeSnapshotV3>;
+  getControlCaptureCapabilities(): ControlCaptureCapabilitiesV1;
+  waitForSimulationTick(expectedSimulationTick: number): Promise<WorldRuntimeSnapshotV3>;
+  waitForRenderReady(expectedSimulationTick: number): Promise<RenderReadyReceiptV1>;
+  captureControlFrame(request: ControlCaptureRequestV1): Promise<RuntimeControlCaptureFrameV1>;
   captureScreenshot(): string;
   resetRuntime(): WorldRuntimeSnapshotV3;
   setPaused(paused: boolean): void;
@@ -323,6 +331,20 @@ export function installDeferredWorldkitBrowserApi(options: {
     runFixedInput: async (steps) => {
       await startupPromise;
       return requireReadyAdapter().runWorldkitFixedInput(steps);
+    },
+    getControlCaptureCapabilities: () =>
+      requireReadyAdapter().getControlCaptureCapabilities(),
+    waitForSimulationTick: async (expectedSimulationTick) => {
+      await startupPromise;
+      return requireReadyAdapter().waitForSimulationTick(expectedSimulationTick);
+    },
+    waitForRenderReady: async (expectedSimulationTick) => {
+      await startupPromise;
+      return requireReadyAdapter().waitForRenderReady(expectedSimulationTick);
+    },
+    captureControlFrame: async (request) => {
+      await startupPromise;
+      return requireReadyAdapter().captureControlFrame(request);
     },
     captureScreenshot: () => requireReadyAdapter().captureScreenshot(),
     reset: () => requireReadyAdapter().resetRuntime(),
