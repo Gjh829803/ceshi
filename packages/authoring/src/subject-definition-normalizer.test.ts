@@ -253,7 +253,7 @@ describe("Package Subject Definition normalization", () => {
       "sha256:d893599dae14a380b84e5fe59df14d525677411ea1907e6fbe09988a948e4993",
     );
     expect(result.normalizedWorldIrHash).toBe(
-      "sha256:f2e14f9bb6aec746739ca81b789568687edc6d20550b4dbd8431d6e330f7cd43",
+      "sha256:14fe3c6ea2a90300671cd2381e437f4100d0712ac61e4a77883279003ad6d5ab",
     );
   });
 
@@ -523,7 +523,7 @@ describe("Package Subject Definition normalization", () => {
       ["0", "1", "2"],
     );
     expectExactKeys(normalizedDefinition.locomotion, ["allowJump", "allowRun", "allowWalk"]);
-    expectExactKeys(normalizedDefinition.controlFeel, [
+    const controlFeelKeys = [
       "accelerationMetersPerSecondSquared",
       "airControlRatio",
       "coyoteTimeSeconds",
@@ -538,7 +538,17 @@ describe("Package Subject Definition normalization", () => {
       "turnRateRadiansPerSecond",
       "variableJumpHoldSeconds",
       "walkSpeedMetersPerSecond",
+    ] as const;
+    expectExactKeys(normalizedDefinition.controlFeel, controlFeelKeys);
+    expect(
+      normalizedDefinition.availableControlFeels.map((feel) => feel.resourceRef),
+    ).toEqual([
+      "worldkit://control-feel-profile/humanoid.medium-ground@1",
+      "worldkit://control-feel-profile/humanoid.heavy-ground@1",
     ]);
+    for (const availableFeel of normalizedDefinition.availableControlFeels) {
+      expectExactKeys(availableFeel, controlFeelKeys);
+    }
     const normalizedAssetPart = normalizedDefinition.visualParts.find(
       (part) => part.kind === "asset",
     )!;

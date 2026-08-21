@@ -5,7 +5,9 @@ import { NullEngine } from "@babylonjs/core/Engines/nullEngine.pure.js";
 import { isNil } from "lodash-es";
 import { describe, expect, it } from "vitest";
 
-import { builtInSubjectResourceRegistry } from "@whitebox-world/subject-registry";
+// Test-only Registry access via a cross-workspace relative path (matching the
+// fixture imports below); production runtime-babylon src must not read the Registry.
+import { builtInSubjectResourceRegistry } from "../../subject-registry/src/index";
 
 import { loadAuthoringScene } from "../../../apps/playground/src/authoring-loader";
 import { createValidAuthoringSpec } from "../../authoring/src/test-fixture";

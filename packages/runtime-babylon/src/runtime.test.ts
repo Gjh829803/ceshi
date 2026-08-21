@@ -706,6 +706,44 @@ describe("BabylonWorldRuntime", () => {
     await runtime.dispose();
   });
 
+  it("publishes support-derived state for uncontrolled grounded subjects every tick", async () => {
+    const runtime = await createRiggedRuntime(createTwoRiggedSubjectExecutionPlan());
+    try {
+      // Let both subjects settle from their bootstrap onto the terrain.
+      await runtime.runFixedInput({ actions: [], ticks: 30 });
+      const settled = runtime.snapshot().subjectStatesByEntityId["hero-b"]!;
+      expect(settled.movementMedium).toBe("ground");
+      const settledHeightMeters = settled.positionMetersXYZ[1];
+
+      // Only a per-tick support publish moves the extra's published Feel ref
+      // off the compiled value; a frozen stale state would keep medium-ground.
+      expect(
+        runtime.requestControlFeelProfile(
+          "hero-b",
+          "worldkit://control-feel-profile/humanoid.heavy-ground@1",
+        ),
+      ).toBe(true);
+      const after = await runtime.runFixedInput({
+        actions: ["move-forward"],
+        ticks: 2,
+      });
+      const extra = after.subjectStatesByEntityId["hero-b"]!;
+      expect(extra.movementMedium).toBe("ground");
+      expect(extra.activeControlFeelProfileRef).toBe(
+        "worldkit://control-feel-profile/humanoid.heavy-ground@1",
+      );
+      // The idle extra receives support publishes but is not simulated with
+      // player input or gravity integration: it stays put on the ground.
+      expect(extra.positionMetersXYZ[1]).toBeCloseTo(settledHeightMeters, 5);
+      expect(Math.hypot(
+        extra.velocityMetersPerSecondXYZ[0],
+        extra.velocityMetersPerSecondXYZ[2],
+      )).toBeLessThan(0.01);
+    } finally {
+      await runtime.dispose();
+    }
+  }, 15_000);
+
   it("rejects a tampered frozen support assertion and cleans initialized resources", async () => {
     const executionPlan = createFlatPackageExecutionPlan();
     const wallPlacement = executionPlan.layout.placementsByEntityId["wall-east"]!;

@@ -440,7 +440,7 @@ function installTuningWorkbench(
   summary.innerHTML = `
     <div><span>现在调的是</span><strong>${escapeHtml(subjectFriendlyName(workbenchContext.definition))}</strong></div>
     <div><span>移动方式</span><strong>${escapeHtml(kernelFriendlyName(workbenchContext.activeKernel))}</strong></div>
-    <div><span>所在环境</span><strong>${currentSubject?.movementMedium === "water" ? "水面" : currentSubject?.movementMedium === "air" ? "空中" : "地面"}</strong></div>
+    <div><span>所在环境</span><strong>${currentSubject?.movementMedium === "air" ? "空中" : "地面"}</strong></div>
     <div><span>配置权限</span><strong>${workbenchContext.definition.authoringAvailability}</strong></div>
   `;
 
@@ -503,21 +503,6 @@ function installTuningWorkbench(
 
   const motionSliderGrid = requiredElement<HTMLDivElement>("#tuning-motion-sliders");
   const defaultMotion = workbenchContext.motionProfiles.find((row) => row.role === "default");
-  const liveMotionParameterNames = new Set(defaultMotion?.runtimeParameterNames ?? []);
-  const applyMotionTuning = (): void => {
-    const numericTuning = Object.fromEntries(
-      Object.entries(workbenchContext.parameterDraft).filter(
-        (entry): entry is [string, number] =>
-          typeof entry[1] === "number" && liveMotionParameterNames.has(entry[0]),
-      ),
-    );
-    try {
-      api.setMotionTuning?.(workbenchContext.controlledEntityId, numericTuning);
-      saveStatus.textContent = "运动手感已应用到当前主体，并保存到本机草稿";
-    } catch {
-      saveStatus.textContent = "运动参数未能应用，当前主体仍使用上一组稳定配置";
-    }
-  };
   if (defaultMotion?.safetyLimits === undefined) {
     motionSliderGrid.innerHTML = '<p class="friendly-empty">当前主体没有开放可调的运动参数。</p>';
   } else {
@@ -528,11 +513,10 @@ function installTuningWorkbench(
         step: Math.max(0.01, (safetyLimit.maximum - safetyLimit.minimum) / 100),
       };
       if (typeof value !== "number" || range.minimum === range.maximum) return [];
-      const runtimeSupported = liveMotionParameterNames.has(name);
       const [labelText, helpText] = FRIENDLY_MOTION_PARAMETERS[name] ?? [name, "安全范围内的运动参数"];
       const label = document.createElement("label");
       label.className = "friendly-slider";
-      label.innerHTML = `<span><strong>${escapeHtml(labelText)} · ${runtimeSupported ? "即时生效" : "仅草稿"}</strong><small>${escapeHtml(helpText)}${runtimeSupported ? "" : "；当前 Runtime 尚未接入"}</small></span>`;
+      label.innerHTML = `<span><strong>${escapeHtml(labelText)} · 仅草稿</strong><small>${escapeHtml(helpText)}；运动手感由锁定的 Feel 配置驱动，数值袋不再即时下发</small></span>`;
       const control = document.createElement("div");
       const input = document.createElement("input");
       input.type = "range";
@@ -550,18 +534,12 @@ function installTuningWorkbench(
           workbenchContext.motionDraftStorageKey,
           JSON.stringify(workbenchContext.parameterDraft),
         );
-        if (runtimeSupported) {
-          applyMotionTuning();
-          saveStatus.textContent = `“${labelText}”已应用到当前主体，并保存到本机草稿`;
-        } else {
-          saveStatus.textContent = `“${labelText}”只保存为草稿，当前 Runtime 尚未接入`;
-        }
+        saveStatus.textContent = `“${labelText}”只保存为草稿，运动手感由锁定的 Feel 配置驱动`;
       });
       control.append(input, output);
       label.append(control);
       return [label];
     }));
-    applyMotionTuning();
   }
 
   const cameraCards = requiredElement<HTMLDivElement>("#tuning-camera-cards");

@@ -499,6 +499,11 @@ export interface NormalizedSubjectDefinitionV2 {
     jumpHoldGravityRatio: number;
     jumpReleaseGravityRatio: number;
   };
+  /**
+   * First-slice Feel surfaces locked from the Registry at normalize time so the
+   * Runtime can switch Feel without reverse-reading the Registry.
+   */
+  availableControlFeels: readonly NormalizedSubjectDefinitionV2["controlFeel"][];
   resourceCost: {
     vertices: number;
     triangles: number;

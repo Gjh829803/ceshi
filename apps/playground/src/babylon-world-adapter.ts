@@ -7,7 +7,6 @@ import type {
   ControlBindingReceiptV2,
   ExecutionPlanV4,
   FixedInputV1,
-  MotionParameterTuningV1,
   RenderReadyReceiptV1,
   RuntimeControlCaptureFrameV1,
   SemanticInputActionV1,
@@ -463,17 +462,6 @@ export class BabylonWorldAdapter implements PlaygroundWorldAdapter {
   setCameraTuningRuntime(tuning: CameraTuningV1): WorldRuntimeSnapshotV3 {
     this.captureReservationReceiptId = undefined;
     const snapshot = this.runtime.setCameraTuning(tuning);
-    this.render();
-    this.emit();
-    return snapshot;
-  }
-
-  setMotionTuningRuntime(
-    subjectEntityId: string,
-    tuning: MotionParameterTuningV1,
-  ): WorldRuntimeSnapshotV3 {
-    this.captureReservationReceiptId = undefined;
-    const snapshot = this.runtime.setMotionTuning(subjectEntityId, tuning);
     this.render();
     this.emit();
     return snapshot;

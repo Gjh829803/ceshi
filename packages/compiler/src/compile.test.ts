@@ -281,6 +281,14 @@ describe("compileWorld", () => {
         accelerationMetersPerSecondSquared: 16,
       }),
     );
+    expect(player.availableControlFeels.map((feel) => feel.resourceRef)).toEqual([
+      "worldkit://control-feel-profile/humanoid.medium-ground@1",
+      "worldkit://control-feel-profile/humanoid.heavy-ground@1",
+    ]);
+    for (const feel of player.availableControlFeels) {
+      expect(Object.keys(feel).sort()).toEqual(Object.keys(player.controlFeel).sort());
+      expect(feel.walkSpeedMetersPerSecond).toBeGreaterThan(0);
+    }
     expect(player.collider.maxStepHeightMeters).toBe(0.3);
     expect(player.collider.maxSlopeDegrees).toBe(42);
     expect(player.capabilityAssembly?.defaultMotionProfile.parameters).toBeUndefined();
@@ -486,7 +494,7 @@ describe("compileWorld", () => {
         normalizedWorldIrHash: rigged.normalizedWorldIrHash!,
       }).executionPlanHash,
     ).toBe(
-      "sha256:ba26373def874dde57c6c9ab979566827bcec24bbfdef800748eb3c07e108190",
+      "sha256:c4c2e04852a4847ca1b1791b8f106b899d7572ace5fe8a1bc7eff303d2d4a26e",
     );
   });
 
@@ -609,6 +617,9 @@ describe("compileWorld", () => {
     ];
     Object.assign(definition.collider, { providerHandle: forbiddenValues[9] });
     Object.assign(definition.controlFeel, { providerHandle: forbiddenValues[10] });
+    for (const availableFeel of definition.availableControlFeels) {
+      Object.assign(availableFeel, { providerHandle: forbiddenValues[10] });
+    }
     const beforeCompile = structuredClone(world);
 
     const result = compileNormalizedWorld(world);
@@ -690,7 +701,7 @@ describe("compileWorld", () => {
     ]);
     expectExactKeys(subject.collider.centerOffsetFromSubjectOriginMetersXYZ, ["0", "1", "2"]);
     expectExactKeys(subject.locomotion, ["allowJump", "allowRun", "allowWalk"]);
-    expectExactKeys(subject.controlFeel, [
+    const controlFeelKeys = [
       "accelerationMetersPerSecondSquared",
       "airControlRatio",
       "coyoteTimeSeconds",
@@ -705,7 +716,12 @@ describe("compileWorld", () => {
       "turnRateRadiansPerSecond",
       "variableJumpHoldSeconds",
       "walkSpeedMetersPerSecond",
-    ]);
+    ] as const;
+    expectExactKeys(subject.controlFeel, controlFeelKeys);
+    expect(subject.availableControlFeels.length).toBeGreaterThan(0);
+    for (const availableFeel of subject.availableControlFeels) {
+      expectExactKeys(availableFeel, controlFeelKeys);
+    }
     const serializedPlan = JSON.stringify(plan);
     for (const forbiddenValue of forbiddenValues) {
       expect(serializedPlan).not.toContain(forbiddenValue);
@@ -1019,7 +1035,7 @@ describe("compileWorld", () => {
     expect(serialized).not.toContain('"constraints"');
     expect(serialized).not.toMatch(/candidateRegionIds|sourceUri|licenseUri|providerHandle/);
     expect(result.executionPlanHash).toBe(
-      "sha256:2538583a1319b564a5f8af747e2d8f5c8c6b0b1278db3dc95c9757c0e2875be0",
+      "sha256:934deef1a29c246d4f1062148434f6503d554a2c2ba630f81eccef95dd689251",
     );
   });
 

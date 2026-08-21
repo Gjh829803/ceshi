@@ -983,6 +983,24 @@ function compileSubjectsV3(
           jumpHoldGravityRatio: definition.controlFeel.jumpHoldGravityRatio,
           jumpReleaseGravityRatio: definition.controlFeel.jumpReleaseGravityRatio,
         },
+        availableControlFeels: definition.availableControlFeels.map((feel) => ({
+          resourceRef: feel.resourceRef,
+          walkSpeedMetersPerSecond: feel.walkSpeedMetersPerSecond,
+          runSpeedMetersPerSecond: feel.runSpeedMetersPerSecond,
+          jumpSpeedMetersPerSecond: feel.jumpSpeedMetersPerSecond,
+          accelerationMetersPerSecondSquared:
+            feel.accelerationMetersPerSecondSquared,
+          decelerationMetersPerSecondSquared:
+            feel.decelerationMetersPerSecondSquared,
+          turnRateRadiansPerSecond: feel.turnRateRadiansPerSecond,
+          moveResponseExponent: feel.moveResponseExponent,
+          airControlRatio: feel.airControlRatio,
+          coyoteTimeSeconds: feel.coyoteTimeSeconds,
+          jumpBufferSeconds: feel.jumpBufferSeconds,
+          variableJumpHoldSeconds: feel.variableJumpHoldSeconds,
+          jumpHoldGravityRatio: feel.jumpHoldGravityRatio,
+          jumpReleaseGravityRatio: feel.jumpReleaseGravityRatio,
+        })),
         ...(definition.capabilityAssembly === undefined
           ? {}
           : {

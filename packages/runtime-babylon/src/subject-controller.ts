@@ -104,6 +104,10 @@ export class SubjectController {
     this.motionKernel.step(command);
   }
 
+  publishSupport(): void {
+    this.motionKernel.publishSupport();
+  }
+
   requestMotionProfile(resourceRef: string): boolean {
     if (this.subject.capabilityAssembly === undefined) return false;
     return this.motionKernel.requestMotionProfile(resourceRef);

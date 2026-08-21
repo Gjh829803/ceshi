@@ -19,7 +19,6 @@ import {
   type CharacterSupportStateV1,
   type SubjectResolvedStateV1,
 } from "@whitebox-world/subject-actions";
-import { builtInSubjectResourceRegistry } from "@whitebox-world/subject-registry";
 
 import type { MotionCommandV1 } from "./control-profile-runtime";
 import {
@@ -40,11 +39,6 @@ export interface MotionKernelSnapshotV1 {
   lastFailureCode?: "MOTION_PARAMETER_INVALID" | "MOTION_NON_FINITE_STATE";
 }
 
-const ALLOWED_CONTROL_FEEL_PROFILE_REFS = [
-  "worldkit://control-feel-profile/humanoid.medium-ground@1",
-  "worldkit://control-feel-profile/humanoid.heavy-ground@1",
-] as const;
-
 const FIRST_SLICE_PHYSICS_BODY_PROFILE_REF =
   "worldkit://physics-body-profile/character.medium@1";
 const FIRST_SLICE_LOCOMOTION_PROFILE_REF =
@@ -63,29 +57,25 @@ function requireControlFeel(subject: ExecutionSubjectV3): ControlFeelSurfaceV1 {
       "SUBJECT_CONTROL_FEEL_PROFILE_REQUIRED: subject is missing a locked control-feel profile.",
     );
   }
-  return { ...feel };
+  return copyControlFeelSurface(feel);
 }
 
-function toExecutionFeel(
-  profile: NonNullable<
-    ReturnType<typeof builtInSubjectResourceRegistry.resolveControlFeelProfile>
-  >,
-): ControlFeelSurfaceV1 {
+function copyControlFeelSurface(feel: ControlFeelSurfaceV1): ControlFeelSurfaceV1 {
   return {
-    resourceRef: profile.resourceRef,
-    walkSpeedMetersPerSecond: profile.walkSpeedMetersPerSecond,
-    runSpeedMetersPerSecond: profile.runSpeedMetersPerSecond,
-    jumpSpeedMetersPerSecond: profile.jumpSpeedMetersPerSecond,
-    accelerationMetersPerSecondSquared: profile.accelerationMetersPerSecondSquared,
-    decelerationMetersPerSecondSquared: profile.decelerationMetersPerSecondSquared,
-    turnRateRadiansPerSecond: profile.turnRateRadiansPerSecond,
-    moveResponseExponent: profile.moveResponseExponent,
-    airControlRatio: profile.airControlRatio,
-    coyoteTimeSeconds: profile.coyoteTimeSeconds,
-    jumpBufferSeconds: profile.jumpBufferSeconds,
-    variableJumpHoldSeconds: profile.variableJumpHoldSeconds,
-    jumpHoldGravityRatio: profile.jumpHoldGravityRatio,
-    jumpReleaseGravityRatio: profile.jumpReleaseGravityRatio,
+    resourceRef: feel.resourceRef,
+    walkSpeedMetersPerSecond: feel.walkSpeedMetersPerSecond,
+    runSpeedMetersPerSecond: feel.runSpeedMetersPerSecond,
+    jumpSpeedMetersPerSecond: feel.jumpSpeedMetersPerSecond,
+    accelerationMetersPerSecondSquared: feel.accelerationMetersPerSecondSquared,
+    decelerationMetersPerSecondSquared: feel.decelerationMetersPerSecondSquared,
+    turnRateRadiansPerSecond: feel.turnRateRadiansPerSecond,
+    moveResponseExponent: feel.moveResponseExponent,
+    airControlRatio: feel.airControlRatio,
+    coyoteTimeSeconds: feel.coyoteTimeSeconds,
+    jumpBufferSeconds: feel.jumpBufferSeconds,
+    variableJumpHoldSeconds: feel.variableJumpHoldSeconds,
+    jumpHoldGravityRatio: feel.jumpHoldGravityRatio,
+    jumpReleaseGravityRatio: feel.jumpReleaseGravityRatio,
   };
 }
 
@@ -259,41 +249,36 @@ export class MotionKernelRuntimeV1 {
   }
 
   requestControlFeelProfile(resourceRef: string): boolean {
-    if (
-      !(ALLOWED_CONTROL_FEEL_PROFILE_REFS as readonly string[]).includes(resourceRef)
-    ) {
-      throw new Error(
-        `SUBJECT_OVERRIDE_FORBIDDEN: control-feel profile '${resourceRef}' is not on the first-slice allowlist.`,
-      );
-    }
-    const profile = builtInSubjectResourceRegistry.resolveControlFeelProfile(
-      resourceRef,
+    const lockedCandidates = this.subject.availableControlFeels.some(
+      (feel) => feel.resourceRef === this.subject.controlFeel.resourceRef,
+    )
+      ? this.subject.availableControlFeels
+      : [...this.subject.availableControlFeels, this.subject.controlFeel];
+    const nextFeel = lockedCandidates.find(
+      (feel) => feel.resourceRef === resourceRef,
     );
-    if (profile === undefined) {
+    if (nextFeel === undefined) {
       throw new Error(
-        `SUBJECT_OVERRIDE_FORBIDDEN: control-feel profile '${resourceRef}' is unresolved.`,
+        `SUBJECT_OVERRIDE_FORBIDDEN: control-feel profile '${resourceRef}' is not locked on this subject.`,
       );
     }
-    const previous = this.controlFeel;
-    try {
-      this.controlFeel = toExecutionFeel(profile);
-      if (this.resolvedState !== undefined) {
-        this.resolvedState = {
-          ...this.resolvedState,
-          activeControlFeelProfileRef: this.controlFeel.resourceRef,
-        };
-      }
-      return true;
-    } catch {
-      this.controlFeel = previous;
-      throw new Error(
-        `SUBJECT_STATE_RESOLVE_UNCHANGED: failed to switch control-feel profile '${resourceRef}'.`,
-      );
-    }
+    this.controlFeel = copyControlFeelSurface(nextFeel);
+    return true;
   }
 
   get activeControlFeel(): ControlFeelSurfaceV1 {
     return this.controlFeel;
+  }
+
+  /**
+   * Support-only tick for uncontrolled grounded subjects: one checkSupport plus
+   * a resolver publish, without input interpretation or motion integration.
+   */
+  publishSupport(): void {
+    this.publishResolvedState(
+      this.physicsController.checkSupport(FIXED_TIME_STEP_SECONDS, this.gravity),
+      { moveRequested: false, runRequested: false },
+    );
   }
 
   step(command: MotionCommandV1): void {

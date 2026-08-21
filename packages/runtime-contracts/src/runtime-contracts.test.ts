@@ -106,6 +106,24 @@ describe("runtime contracts V3", () => {
         jumpHoldGravityRatio: 0.45,
         jumpReleaseGravityRatio: 2,
       },
+      availableControlFeels: [
+        {
+          resourceRef: "worldkit://control-feel-profile/humanoid.heavy-ground@1",
+          walkSpeedMetersPerSecond: 1.8,
+          runSpeedMetersPerSecond: 3.2,
+          jumpSpeedMetersPerSecond: 5,
+          accelerationMetersPerSecondSquared: 9,
+          decelerationMetersPerSecondSquared: 14,
+          turnRateRadiansPerSecond: 6,
+          moveResponseExponent: 1.6,
+          airControlRatio: 0.2,
+          coyoteTimeSeconds: 0.08,
+          jumpBufferSeconds: 0.1,
+          variableJumpHoldSeconds: 0.14,
+          jumpHoldGravityRatio: 0.55,
+          jumpReleaseGravityRatio: 2.2,
+        },
+      ],
     } satisfies ExecutionSubjectV3;
 
     expect(subject).toMatchObject({
@@ -120,6 +138,9 @@ describe("runtime contracts V3", () => {
     });
     expect(subject).not.toHaveProperty(["kit", "Ref"].join(""));
     expect(subject).not.toHaveProperty("spawnPositionMeters");
+    expect(Object.keys(subject.availableControlFeels[0]!).sort()).toEqual(
+      Object.keys(subject.controlFeel).sort(),
+    );
   });
 
   it("publishes first-slice movement medium and feel refs on SnapshotV3", () => {

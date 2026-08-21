@@ -743,6 +743,11 @@ export class BabylonWorldRuntime implements WorldRuntimeSessionV3 {
             viewControlFrame,
             controlled ? input.axes : undefined,
           );
+        } else {
+          // Uncontrolled grounded subjects are not simulated with input or
+          // gravity, but they still appear in the Snapshot, so they receive
+          // one support query and resolver publish per fixed tick.
+          controller.publishSupport();
         }
       }
       physicsEngine._step(FIXED_TIME_STEP_SECONDS);

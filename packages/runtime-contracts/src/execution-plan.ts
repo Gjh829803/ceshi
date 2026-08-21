@@ -404,6 +404,11 @@ export interface ExecutionSubjectV3 {
     jumpHoldGravityRatio: number;
     jumpReleaseGravityRatio: number;
   };
+  /**
+   * Compiler-locked Feel surfaces the Runtime may switch among. Copied from
+   * Registry at compile time; the Runtime never reverse-reads the Registry.
+   */
+  availableControlFeels: readonly ExecutionSubjectV3["controlFeel"][];
   capabilityAssembly?: ExecutionSubjectCapabilityAssemblyV1;
 }
 

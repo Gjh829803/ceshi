@@ -131,6 +131,22 @@ function resolveControlFeelProfileV1(
   return controlFeelProfile;
 }
 
+const FIRST_SLICE_AVAILABLE_CONTROL_FEEL_PROFILE_REFS = [
+  "worldkit://control-feel-profile/humanoid.medium-ground@1",
+  "worldkit://control-feel-profile/humanoid.heavy-ground@1",
+] as const;
+
+function resolveAvailableControlFeelsV1(
+  request: NormalizeSubjectDefinitionRequestV2,
+): readonly NormalizedControlFeelV1[] {
+  const registry = request.subjectResourceRegistry as Partial<SubjectResourceRegistryV3>;
+  if (typeof registry.resolveControlFeelProfile !== "function") return [];
+  return FIRST_SLICE_AVAILABLE_CONTROL_FEEL_PROFILE_REFS.flatMap((resourceRef) => {
+    const profile = registry.resolveControlFeelProfile!(resourceRef);
+    return profile === undefined ? [] : [projectControlFeelProfile(profile)];
+  });
+}
+
 type NormalizedCapabilityAssemblyV1 = NonNullable<
   NormalizedSubjectDefinitionV2["capabilityAssembly"]
 >;
@@ -1008,6 +1024,7 @@ export function normalizeSubjectDefinitionV2(
     ...normalizedDefinitionHashInput,
     subjectDefinitionHash,
     source,
+    availableControlFeels: resolveAvailableControlFeelsV1(request),
     collider: {
       ...normalizedCollider,
       massKilograms: physicsBodyProfile.physicsBody.massKilograms,
