@@ -14,6 +14,13 @@
 > Relationship、坐骑、装备、多 Controller 与飞行仍是后续契约，不是当前运行能力。
 
 > Golden Humanoid S1b 首个可视纵向切片已完成并进入回归；S1b 整体与 Semantic Actions 整体仍未完成.
+>
+> P1.5 Control Feel / Physics Medium / State Resolver 的公共字段、支撑权威和第一切片
+> 范围以
+> [`2026-08-21-control-feel-physics-medium-state-resolver-design.md`](superpowers/specs/2026-08-21-control-feel-physics-medium-state-resolver-design.md)
+> 为准。本文 §4 / §6 / §7 的概念名不得再当作可实施合同：`ControlMethodProfile` 对应
+> 已有 `control-profile`；速度只属于 `control-feel-profile`；`PhysicsMediumProfile`
+> 未带单位的字段名作废。
 
 ## 1. 结论
 

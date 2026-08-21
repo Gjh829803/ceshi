@@ -31,7 +31,7 @@ Apply these rules whenever adding or changing public Authoring Schema, Registry 
 
 ## Deep runtime review discipline
 
-Apply `docs/reviews/runtime-deep-review-checklist.md` whenever changing or reviewing physics, movement, input, animation, camera, render scheduling, resource ownership, or Browser/CLI runtime behavior. For design-spec reviews, change reviews, or full-repository audits, follow `docs/reviews/full-dimension-review-protocol.md`; it selects the required dimensions per review mode and delegates runtime-specific items back to this checklist.
+Apply `docs/reviews/runtime-deep-review-checklist.md` whenever changing or reviewing physics, movement, input, animation, camera, render scheduling, resource ownership, or Browser/CLI runtime behavior. For design-spec reviews, change reviews, or full-repository audits, follow `docs/reviews/full-dimension-review-protocol.md`; it selects the required dimensions per review mode and delegates runtime-specific items back to this checklist. P1.5 Control Feel / Medium / State Resolver work must follow `docs/superpowers/specs/2026-08-21-control-feel-physics-medium-state-resolver-design.md` before changing Runtime or Catalog fields.
 
 - Identify one authoritative owner for every piece of state. In particular, ground support, movement medium, subject facing, camera orbit, active action, and fixed-step time must not be independently inferred by multiple layers.
 - Verify engine-dependent assumptions against the installed dependency version and source. Do not rely on remembered Babylon or Havok behavior for coordinate order, controller gravity, collision data layout, animation timing, or disposal semantics.
