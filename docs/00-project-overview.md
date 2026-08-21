@@ -46,6 +46,10 @@ Director LLM → Render Directive SDK ────────────┘
 
 > Placement Solver S1 首个海湾纵向切片已完成并进入回归；通用 Terrain Mask/Route Graph、更多 Constraint 与 P0.1 整体仍未完成。
 
+> Simulation Take / Control Capture V1 已完成固定 Tick 时间线、五 Pass Babylon 捕获、
+> Render Ready Receipt、原子 Bundle 和真实 Chromium Gate；完整 Replay/Resume、统一
+> Validation Report 与 Video Adapter 仍未完成。
+
 第一期 Alpha 已证明以下链路可以运行：
 
 - Canonical Authoring V3 唯一输入：严格 JSON、精确版本 Registry、Package
@@ -58,7 +62,11 @@ Director LLM → Render Directive SDK ────────────┘
   Subject 拥有独立 Havok Controller/状态，Browser Protocol V3 可原子切换控制、
   固定输入、复位、查询 Snapshot 和截图。
 - `worldkit` 支持校验、构建、运行、截图、Registry Discovery、独立 Definition
-  校验与 Subject Explain；真实 Chromium 门禁覆盖碰撞、入水和两个自定义实例。
+  校验、Subject Explain、Take validate/inspect/run 与 Capture validate/inspect；真实
+  Chromium 门禁覆盖碰撞、入水、两个自定义实例和五 Pass 控制捕获。
+- Simulation Take V1 把 Control/Camera Keyframe 编译为 60 Hz 固定 Tick 与精确 Capture
+  Schedule；Babylon 从同一 Render Ready 状态输出 Neutral、Depth、Semantic、Instance、
+  Normal，Node 端以原子 Bundle 和多层 Hash 保存。
 - 项目自有、可再分发的 Golden Humanoid GLB 已通过内容 Hash、Rig Profile、
   Animation Set、Collider Profile 与 Host Asset Resolver 的完整 Canonical 链路；
   两个实例拥有独立 Skeleton、动作、Transform 和生命周期。
@@ -130,6 +138,17 @@ Required Runtime Assertion，不重新布局。海湾 Fixture 覆盖接地、净
 未完成：通用 Terrain Mask、Route Graph、更多 Constraint、增量求解、通用
 Validation Report 以及完整 P0.1。S1 证明的是一个受控纵向切片，不是任意开放世界
 布局已经生产完成。
+
+### Simulation Take / Control Capture V1：首个五 Pass 切片
+
+已完成：严格 Take Schema、60 Hz → 24 fps 整数有理数 Schedule、Control Intent 与
+Camera Rig Track、Simulation/Render/Capture 三计数器、Render Ready Receipt、五个锁定
+Pass、稳定 Semantic/Instance Table、Playwright Driver、原子 Bundle、Integrity
+Validate/Inspect 和两个共享 World Identity 的 Take Fixture。
+
+未完成：完整 WorldPackage/Registry Lock、Action/Event/Relationship Receipt、Resume、
+跨平台 Replay Metric、Motion Vector、统一 Validation Report 和 Video Model Adapter。
+现有真实浏览器 Gate 是有界单帧 Probe，不冒充完整 240 帧视频级验收。
 
 ### Phase II：更多主体、动作与室内
 

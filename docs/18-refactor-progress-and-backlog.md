@@ -1,8 +1,8 @@
 # SDK 重构总进度与 Backlog
 
 - 状态：Active，重构执行进度与剩余工作的唯一跟踪入口。
-- 基准日期：2026-08-20。
-- 长期目标总进度：约 **55%**，合理误差范围为 ±5%。
+- 基准日期：2026-08-21。
+- 长期目标总进度：约 **60%**，合理误差范围为 ±5%。
 - 第一条 Canonical 纵向切片：约 **90%**。
 - 当前代码入口：Canonical Authoring V3 → Placement Solver S1 → NormalizedWorldIR V3 → ExecutionPlan V4 → Babylon.js/Havok Runtime。
 
@@ -12,6 +12,10 @@
 > 当前版本 G Bot 的 `idle/walk/run/jump`，不代表任意产品包或其余 21 个 Clip 已开放。
 
 > Placement Solver S1 首个海湾纵向切片已完成并进入回归；通用 Terrain Mask/Route Graph、更多 Constraint 与 P0.1 整体仍未完成。
+
+> Simulation Take / Control Capture V1 已完成 60 Hz → 24 fps 精确时间映射、五 Pass
+> Babylon 捕获、Render Ready Receipt、原子 Bundle、CLI/Browser/Playwright 和真实 Chromium
+> Gate；完整 WorldPackage、统一 Validation Report、恢复续拍与 Video Adapter 仍未完成。
 
 ## 1. 文档职责
 
@@ -49,21 +53,22 @@ Normalizer/Compiler、Runtime、CLI/Browser 和对应 Conformance Gate 的纵向
 
 | 工作流 | 权重 | 当前完成度 | 加权贡献 | 判断依据 |
 |---|---:|---:|---:|---|
-| 架构、边界与命名 | 8% | 92% | 7.4% | 总规格、ADR、主体/地形/3C 和 Placement/Take/Validation 专项已成稿；Placement S1 已冻结，Take/Validation 仍待评审 |
+| 架构、边界与命名 | 8% | 94% | 7.5% | 总规格、ADR、主体/地形/3C 和 Placement/Take/Validation 专项已成稿；Placement S1 与 Take/Capture V1 已冻结，统一 Validation 仍待实现 |
 | Canonical Schema、IR、Registry 与 Compiler | 15% | 82% | 12.3% | V3/V3/V4、Hash、Lock、严格校验、Placement、Primitive 与首个 Asset Subject 资源表已交付；WorldChangeSet、完整 Capability 和 WorldPackage 尚未交付 |
-| Babylon/Havok Runtime、物理与相机 | 15% | 72% | 10.8% | Heightfield、障碍、水域、多主体、第三人称、碰撞、重置、控制切换、Golden/G Bot Rigged Asset 与 Placement Assertion 复验已交付；多视角与完整生产预算尚未完成 |
+| Babylon/Havok Runtime、物理与相机 | 15% | 75% | 11.25% | Heightfield、障碍、水域、多主体、第三人称、碰撞、资产主体、Placement Assertion 与五 Pass Capture 已交付；多视角与完整生产预算尚未完成 |
 | Subject LEGO 组装体系 | 15% | 45% | 6.75% | S0、S1a、Golden 与首个产品 G Bot 可视切片已完成；S1b 后续、S2、S3、S4 尚未完成 |
 | Terrain、Region 与 Placement | 12% | 60% | 7.2% | Alpha 地形和 Placement Solver S1 海湾纵向切片已运行；通用 Terrain Mask/Route Graph、更多 Constraint 与完整 P0.1 未完成 |
-| CLI、Browser Protocol 与自动化 | 10% | 70% | 7.0% | validate/build/run/capture/discovery/explain、layout validate/solve/explain、Browser V3 与 Golden/G Bot 等可视 Gate 已有；持久 Session、完整 Driver、Take 和 Package 工具未完成 |
+| CLI、Browser Protocol 与自动化 | 10% | 80% | 8.0% | 既有命令外已交付 Take validate/inspect/run、Capture validate/inspect、Render Ready Browser API、Playwright Take Driver 与五 Pass Gate；持久 Session 和 Package 工具未完成 |
 | Semantic Action、动画与 Gameplay | 8% | 33% | 2.64% | Golden 与 G Bot `idle/walk/run/jump` 固定 Tick Animation Binding 已交付；通用 Action Request/Receipt、姿态、装备与规则未交付 |
-| Simulation Take、控制通道与视频接入 | 10% | 15% | 1.5% | Take/Capture 专项已成稿，单截图能力已有；多 Pass、时间轨、Bundle 和模型 Adapter 未交付 |
-| 生产 Gate、默认切换与旧实现退出 | 7% | 30% | 2.1% | Validation Profile/Report 专项已成稿，Canonical/Golden Rigged/G Bot/Placement Browser Gate 可运行；统一报告、默认切换和旧路径退出未交付 |
-| **合计** | **100%** |  | **约 58%** | 首个产品资产加入可运行证据；对外按通用 Terrain/Route、生产 Gate 与剩余范围不确定性保守报告 **约 55%** |
+| Simulation Take、控制通道与视频接入 | 10% | 65% | 6.5% | V1 Take Schema/Compiler、五 Pass、Bundle、CLI/Browser 和真实浏览器 Gate 已交付；完整 Replay/Resume、统一 Validation 与模型 Adapter 未交付 |
+| 生产 Gate、默认切换与旧实现退出 | 7% | 35% | 2.45% | Canonical/资产/Placement/Capture 独立 Gate 可运行，Capture 已有严格 Integrity Validator；统一 Profile/Report、默认切换和旧路径退出未交付 |
+| **合计** | **100%** |  | **约 65%** | 对外按通用 Terrain/Route、统一生产 Gate、完整 WorldPackage 与视频闭环的不确定性保守报告 **约 60%** |
 
 “第一条 Canonical 纵向切片约 90%”只指以下较窄范围：AI 提交 JSON，SDK
 完成严格校验、确定性编译、Babylon/Havok 运行、多主体控制、首个 Golden Asset
 Subject、首个产品 G Bot、Placement S1、截图和查询。它不代表任意产品资产、完整 S1b/P0.1、关系、
-完整动作、复杂地形、视频控制输出或生产切换已经完成。
+完整动作、复杂地形、生成式视频闭环或生产切换已经完成。Simulation Take / Control
+Capture V1 是独立的新纵向切片，不改变该 90% 口径。
 
 ## 3. 当前已完成并进入回归的能力
 
@@ -180,20 +185,24 @@ P0.1 整体仍以上述三项开放能力及生产范围扩展为完成标准。
 三个独立、可哈希和可重放的制品。
 
 - [x] 编写 [Simulation Take / Control Capture Bundle 专项设计](superpowers/specs/2026-08-19-simulation-take-control-capture-design.md)。
-- [ ] 评审并冻结专项设计中的字段、编码 Profile、时间映射与 Fixture。
-- [ ] 冻结 WorldPackage、Simulation Take、Runtime Session 与 Control Capture Bundle 的引用关系。
-- [ ] 定义 Controller/Action/Input Track、Camera Track、Tick Range 和 Capture Schedule。
-- [ ] 定义 Simulation Tick、Render Frame 与 Capture Frame 的显式映射。
-- [ ] 定义版本化 Capture Profile 和必需/可选 Pass。
-- [ ] 第一批必需 Pass：Neutral Color、Linear Depth Meters、Semantic Class ID、Stable Instance ID、World Normal。
+- [x] 评审并冻结 V1 字段、`web-v1` 编码 Profile、时间映射与两个 Fixture。
+- [x] 冻结 V1 Simulation Take、Runtime Session、Control Capture Bundle 与过渡期 WorldPackage Root Hash 的引用关系。
+- [x] 定义 V1 Scripted Controller、Control Intent/Camera Rig Track、Tick Range 和 Capture Schedule。
+- [x] 定义 Simulation Tick、Render Frame 与 Capture Frame 的显式映射。
+- [x] 定义版本化 Capture Profile 和第一批必需 Pass。
+- [x] 实现 Neutral Color、Linear Depth Meters、Semantic Class ID、Stable Instance ID、World Normal。
 - [ ] 评估并决定 Motion Vector、Albedo、Roughness、Metallic 和 Lighting Profile 的阶段。
-- [ ] 每帧记录 Camera Intrinsics/Extrinsics、Snapshot/Event/Action/Relationship Receipt。
-- [ ] Bundle 固定 WorldPackage、IR、ExecutionPlan、Registry Lock、Session 和 Take Hash。
-- [ ] CLI/Browser 支持确定性运行 Take、等待 Render Ready、批量捕获和失败恢复。
-- [ ] Playwright Fixture 验证通道尺寸、帧数、ID 集合、深度单位和跨帧 Hash 归属。
+- [x] 每帧记录 Camera Intrinsics/Extrinsics、Snapshot 和三种明确计数器。
+- [ ] 接入 Event/Action/Relationship Receipt；V1 对应 Track 文件为空，不宣称已有事件证据。
+- [x] Bundle 固定过渡期 WorldPackage、IR、ExecutionPlan、Session 和 Take Hash，并交叉验证引用。
+- [ ] 完整 WorldPackage/Registry Lock 发布格式与 Bundle 签名。
+- [x] CLI/Browser 支持确定性运行 Take、等待 Render Ready、批量捕获和原子失败清理。
+- [ ] 可证明相同 Snapshot 的 Resume/续拍协议。
+- [x] Playwright Fixture 验证真实 Chromium 五 Pass 尺寸、ID 集合、深度单位、法线和 Hash 归属。
 
-完成标准：同一个 WorldPackage 可以运行至少两个不同 Take，并生成互不混淆、可
-重放的多通道 Bundle。
+V1 窄纵向切片完成标准已满足：同一个过渡期 WorldPackage Identity 可以运行两个不同
+Take，生成互不混淆且自校验的多通道 Bundle。P0.2 整体仍以上述 Event/Receipt、完整
+WorldPackage、Resume 与完整 Replay Gate 为完成标准。
 
 #### P0.3 Validation Report 与量化质量门禁
 
@@ -542,29 +551,31 @@ P1.4 WorldPackage + P1.6 AI Schema / WorldChangeSet + P2.4 Controller/Camera/Dri
         └── P3.2 默认切换
 ```
 
-Placement S1 已形成首个回归纵向切片；Capture 与 Validation 两条 P0 已形成可评审
-专项设计，可以并行评审，但后续实现仍应保持窄纵向切片；
+Placement S1 与 Simulation Take / Control Capture V1 已形成回归纵向切片；Validation
+专项已形成可评审设计，后续实现仍应保持窄纵向切片；
 不要同时启动坐骑、装备、飞行、NPC 和室内，避免再次形成无法验收的大重构。
 
 ## 6. 下一里程碑
 
-当前没有代码阻塞项。S1b Golden、首个产品 G Bot 与 Placement Solver S1 都已进入回归，下一步：
+当前没有代码阻塞项。S1b Golden、首个产品 G Bot、Placement Solver S1 与 Control
+Capture V1 都已进入回归，下一步：
 
 1. **M1：把 G Bot 的交付 Manifest/Registry 映射/Gate 固化为后续产品资产接入模板**；
-2. **M2：评审冻结 Take/Capture 与 Validation 两份协议的首条实施范围**；
-3. **M3：为 P0.2 编写五 Pass Capture 的窄纵向切片计划，并复用 Placement WorldPackage/Hash**；
-4. **M4：扩展 P0.1 的 Terrain Mask/Route Graph，而不是新增第二套 Region/Route 语义**；
-5. **M5：在 Placement + Take + Validation 闭环上接入实验 Video Model Adapter**；
-6. **M6：评审冻结 P1.5 的 Control Feel/Physics Medium/State Resolver 首条纵向范围，清除
+2. **M2（已完成）：冻结 Take/Capture V1 首条实施范围**；
+3. **M3（已完成）：实现五 Pass Capture 窄纵向切片并复用 Placement World Identity/Hash**；
+4. **M4：实现 P0.3 统一 Validation Profile/Report 的 Capture/Integrity 窄切片，把现有独立 Gate 纳入同一报告协议**；
+5. **M5：扩展 P0.1 的 Terrain Mask/Route Graph，而不是新增第二套 Region/Route 语义**；
+6. **M6：在 Placement + Take + Validation 闭环上接入实验 Video Model Adapter**；
+7. **M7：评审冻结 P1.5 的 Control Feel/Physics Medium/State Resolver 首条纵向范围，清除
    Canonical Babylon 路径中的对应硬编码**；
-7. **M7：按产品优先级选择 Semantic Action 后续或 Typed Relationship 窄可视切片**；
-8. **M8：在实现游泳、攀爬或增量 Agent 修复前，分别冻结 P2.5 Surface/Traversal 与
+8. **M8：按产品优先级选择 Semantic Action 后续或 Typed Relationship 窄可视切片**；
+9. **M9：在实现游泳、攀爬或增量 Agent 修复前，分别冻结 P2.5 Surface/Traversal 与
    P1.6 AI Schema/WorldChangeSet 的专项设计，禁止临时增加公共字段或场景脚本旁路**。
-9. **M9：P1.1 与 P2.5 边界稳定后评审 P2.6 H1 Bridge Fixture；先验证同 XZ 双层支撑、
+10. **M10：P1.1 与 P2.5 边界稳定后评审 P2.6 H1 Bridge Fixture；先验证同 XZ 双层支撑、
    Static Collider 和唯一 Ground Support，不直接并行启动完整洞穴/室内**。
 
-Take/Capture 与 Validation 字段冻结前不得实现公共协议字段；技术探针可以验证 Capture
-Encoding 或 Runtime Query 可行性，但其实现不得泄漏到 Canonical Schema。
+Validation 字段冻结前不得实现新的统一报告公共协议；Capture V1 后续扩展必须增加
+Profile/Schema 版本，不能把 Babylon、Playwright 或 Provider 字段泄漏到 Canonical Schema。
 
 ## 7. 更新规则
 

@@ -1,6 +1,6 @@
 # Simulation Take 与 Control Capture Bundle 设计
 
-- 状态：**Proposed / Design Review Ready**。
+- 状态：**Accepted；V1 窄纵向切片已实现并进入回归**。完整 WorldPackage、Action/Event/Relationship Receipt、恢复执行和 VideoModelAdapter 仍按本文后续阶段推进。
 - 适用范围：WorldPackage、Runtime Session、固定 Tick 控制、Camera、Replay、多 Pass Capture、视频模型 Adapter。
 - 设计目标：把“世界是什么”“本次怎样操作和拍摄”“本次实际捕获了什么”分成独立、可哈希、可重放的制品。
 - 非目标：把具体视频模型 Prompt、Provider 参数或生成结果写回 Gameplay 世界真相。
@@ -16,6 +16,35 @@
 5. 第一版必需控制 Pass 是 `neutral-color`、`linear-depth-meters`、`semantic-class-id`、`instance-id` 和 `world-normal`；具体二进制编码由锁定的 Capture Encoding Profile 定义。
 6. Capture 必须等待命令 Receipt、目标 Tick 和 Render Ready；禁止用任意 `sleep` 推测世界已经稳定。
 7. 模型专属转换只存在于 `VideoModelAdapter`。最终视频是派生 Artifact，不能反向覆盖位置、碰撞、动作、遮挡或身份真相。
+
+### 1.1 已实现的 V1 边界（2026-08-21）
+
+V1 已冻结并实现以下可运行合同：
+
+- `SimulationTakeV1` 只接受一个 `scripted` Controller、`control-intent` / `camera-rig`
+  两种 Track、60 Tick/s、`step` 插值和 `renderInterpolation.kind: none`；Validator
+  关闭未知字段，Compiler 使用整数有理数算法产生精确 Frame-to-Tick Plan。
+- `control-video@1` 必需 Pass 固定为五个；`web-v1` 使用 top-left Pixel Origin：
+  `neutral-color` 为 `png-rgba8-srgb`，Depth 为正值米制 `float32-le` 且无命中为 0，
+  Semantic/Instance 为 `uint32-le` 且背景为 0，World Normal 为世界坐标
+  `float32x3-le`。
+- Runtime 分离 `simulationTick`、`renderFrameIndex` 和 `captureFrameIndex`。Capture
+  必须持有与目标 Tick、Runtime Session 完全匹配的最新 `RenderReadyReceiptV1`；任何
+  Fixed Input、Reset、Resize、Camera 调整或 Control Binding 都使旧 Receipt 失效。
+- Babylon 9.21.2 Adapter 使用隔离 RenderTarget：`DepthRenderer` 输出 Camera-space Z，
+  `GeometryBufferRenderer` 输出 World-space Normal，Semantic/Instance 使用稳定表驱动的
+  无光照材质。所有 Target 在读取前等待自身 Shader/Texture readiness，完成后释放，
+  不修改 Gameplay Material、Camera 或 Physics 状态。
+- Browser 暴露无文件系统权限的 Capability/Tick/RenderReady/Frame Capture 操作；Node
+  CLI 负责 Playwright 驱动、原子 staging/finalize、逐文件 Hash、Frame/Manifest/Root
+  Hash 和跨 Take/World/Session/Profile 引用校验。
+- 当前 Authoring → IR → ExecutionPlan 的三个 Hash 被组合为过渡期
+  `worldPackageRootHash`。它保证当前切片身份稳定，但不冒充尚未交付的完整
+  WorldPackage 目录、Resource Lock 和签名格式。
+
+V1 未实现 `recorded-replay` / `external-session`、Semantic Action/Control Binding/
+World Command Track、Motion Vector、恢复续拍、Provider Adapter 或生成视频；这些能力
+不能由已有空 Track 文件或单帧 Conformance Probe 推断为已支持。
 
 ## 2. 五个对象各自回答什么
 
@@ -207,7 +236,9 @@ Take Compiler 输出规范 `CaptureSchedulePlan`：每个 `captureFrameIndex` �
 | `instance-id` | 每像素稳定 Runtime Entity ID 映射 | 跨帧不因 Draw Order 改变 |
 | `world-normal` | 世界坐标法线 | 坐标方向和编码 Profile 锁定 |
 
-第一版 Control Capture Bundle 必须包含以上五种 Pass；Adapter 可以不消费全部 Pass，但不能让缺失的必需 Pass 冒充合格 Bundle。
+第一版 Control Capture Bundle 必须包含以上五种 Pass；Adapter 可以不消费全部 Pass，但不能让缺失的必需 Pass 冒充合格 Bundle。V1 单边尺寸上限为活动设备
+`maxTextureSize` 与 4096 的较小值，并要求 Float Render Target 与 MRT；Capability 不满足时
+必须在捕获前稳定拒绝，不能降级成伪 Depth 或伪 Normal。
 
 ### 6.2 可选 Pass
 
@@ -232,7 +263,10 @@ Canonical Schema 冻结 Pass 的物理含义，不把某个浏览器读回格式
 - ID 位宽、背景值和 Preview 映射；
 - 分辨率、Pixel Origin 和行方向。
 
-第一版候选实现可使用 PNG 保存 `neutral-color`，使用无损整数/浮点二进制保存 Depth、Semantic、Instance 和 Normal，并额外生成非权威 Preview PNG。最终编码在 Babylon/WebGL/WebGPU Capture Probe 后写入 `web-v1` Profile；改变编码只增加 Profile 版本，不修改 WorldPackage。
+V1 已将 `neutral-color` 冻结为 PNG RGBA8 sRGB，将 Depth/Semantic/Instance/Normal
+分别冻结为 `float32-le` / `uint32-le` / `uint32-le` / `float32x3-le` 原始二进制；所有
+通道为 top-left 行序。非权威 Preview PNG 尚未实现。改变编码只增加 Profile 版本，
+不修改 WorldPackage 或为同一字段保留别名。
 
 ## 7. Camera 与每帧元数据
 
@@ -362,27 +396,27 @@ Bundle 记录 SDK、Runtime Adapter、Physics/WASM、浏览器、平台类别、
 
 ## 11. CLI、Browser 与 Driver
 
-候选命令面：
+V1 已实现命令面：
 
 ```text
-worldkit take validate <take.json>
-worldkit take inspect <take.json>
-worldkit take run <take.json> --session-output <path>
-worldkit capture run <take.json> --output <bundle-directory>
-worldkit capture validate <bundle-directory>
-worldkit capture inspect <bundle-directory> --frame-index <n>
+worldkit take validate <take.json> [--json]
+worldkit take inspect <take.json> [--json]
+worldkit take run <take.json> --world <world.json> --output <bundle-directory> \
+  --width-pixels <integer> --height-pixels <integer> [--port <port>] [--json]
+worldkit capture validate <bundle-directory> [--json]
+worldkit capture inspect <bundle-directory> [--json]
 ```
 
-Browser Protocol 增加：
+V1 Browser Protocol 增加：
 
-- `loadSimulationTake`；
-- `startSimulationTake`；
-- `getSimulationTakeStatus`；
+- `getControlCaptureCapabilities`；
 - `waitForSimulationTick`；
 - `waitForRenderReady`；
-- `captureControlFrame`；
-- `finalizeControlCaptureBundle`；
-- `cancelSimulationTake`。
+- `captureControlFrame`。
+
+Take 的加载/运行、Bundle 文件写入和 Finalize 位于可信 Node CLI/Driver，不放进页面。
+`loadSimulationTake`、持久 Take 状态、取消/恢复协议只有在引入持久 Runtime Session 后
+再进入新版本；V1 不预留同义空 API。
 
 所有写操作带 Session Scope、Request ID、Expected State/Tick 和幂等语义。`capture` 权限不能隐式获得 `control.intent`、`control.bind` 或 `camera.control`。
 
@@ -450,33 +484,40 @@ Control Capture Bundle 至少验证：
 固定一个室外海湾 WorldPackage 和两个 Take：
 
 1. `coastal-walk-opening`：主体沿 Route 行走，第三人称相机跟随；
-2. `coastal-orbit-observation`：主体静止，Camera 围绕 Landmark 进行受控拍摄。
+2. `coastal-orbit-run`：主体运行，Camera 使用不同的 Orbit/Pitch/Distance Track。
 
 每个 Take：
 
 - 10 秒、60 Hz Simulation；
 - 24 FPS Capture；
 - 五个必需 Pass；
-- 每帧 Camera、Snapshot/Event/Action Receipt 和三种计数器；
+- 每帧 Camera、Snapshot 和三种计数器；V1 保留空的 Event/Action/Relationship Track
+  文件，但不把尚未实现的 Receipt 伪装成证据；
 - 同一 Package Root Hash，不同 Take Hash 和 Bundle Root Hash。
 
-验收标准：两个 Bundle 不混淆；帧数/时间映射稳定；Instance/Semantic ID 跨帧一致；Depth 单位正确；重放 Snapshot 达标；故意替换单帧或单 Pass 时 Integrity/Validation Gate 阻断。
+两个源 Take 都是 600 Tick / 240 Frame，已通过严格 Validate/Inspect。CI 使用各自派生的
+1 Tick / 1 Frame Probe 执行真实 Chromium 五 Pass Gate，以控制常规回归成本；完整 240
+Frame Bundle 可通过同一 `take run` 命令生成，不以 Probe 代替完整视频级 Replay 评估。
+
+V1 验收已经覆盖：不同 Take Hash、相同过渡期 WorldPackage Root Hash、精确 Schedule、
+Instance/Semantic Table、正值米制 Depth、单位 World Normal、原子发布、缺 Pass/改字节/
+错误 Tick/混 Session/混 World/混 Take/重算内部 Hash 仍无法脱离权威 Take 的阻断。
 
 ## 17. 实施分解
 
-1. 冻结 SimulationTake、Track、CaptureSchedule、Profile Manifest 和 Bundle Schema。
-2. 完成 Runtime Capture Probe，决定首版 Encoding Profile 和 Platform Profile。
-3. 实现 Take Validator/Compiler 与 Frame-to-Tick Plan。
-4. 扩展 Runtime Session 状态、Receipt 和 Render Ready Protocol。
-5. 实现五个必需 Pass 与稳定 Semantic/Instance Table。
-6. 实现 Bundle Writer、Resume/Finalize、Canonical Integrity 和 Inspect。
-7. 实现 CLI/Browser/Playwright Driver Conformance。
-8. 接入统一 Validation Report、两个 Take Fixture 和 Replay Gate。
-9. 最后再实现第一个实验 VideoModelAdapter；Adapter 不阻塞 SDK 核心协议验收。
+1. [x] 冻结 V1 SimulationTake、Track、CaptureSchedule、Profile Manifest 和 Bundle Schema。
+2. [x] 完成 Runtime Capture Probe，冻结 `web-v1` Encoding Profile 和 Capability Gate。
+3. [x] 实现 Take Validator/Compiler 与 Frame-to-Tick Plan。
+4. [x] 扩展 Runtime Session Tick/Render Authority、Receipt 和 Render Ready Protocol。
+5. [x] 实现五个必需 Pass 与稳定 Semantic/Instance Table。
+6. [x] 实现原子 Bundle Writer、Finalize、Canonical Integrity、Validate 和 Inspect。
+7. [x] 实现 CLI/Browser/Playwright Driver Conformance。
+8. [ ] 接入统一 Validation Profile/Report、完整 Replay Gate 和可证明的 Resume。
+9. [ ] 实现第一个实验 VideoModelAdapter；Adapter 不阻塞 SDK 核心协议验收。
 
 编码前必须新增独立实施计划，列出实际包路径、技术探针、协议版本、测试矩阵和资源预算。多 Pass 与 Session 改动可以共用计划，但不能同时顺带实现模型 Provider、NPC、坐骑或完整 Gameplay。
 
-## 18. 已冻结与待评审
+## 18. 已冻结与后续决策
 
 已冻结的架构方向：
 
@@ -485,10 +526,11 @@ Control Capture Bundle 至少验证：
 - 五个必需 Pass；
 - Render Ready/Receipt 驱动 Capture；
 - Bundle 全链路 Hash 与模型 Adapter 隔离。
+- V1 Capture Encoding Profile、文件名、端序、Pixel Origin、ID 背景和 Depth 无命中值；
+- V1 CLI/Browser 权限边界和 4096 单边硬上限。
 
-待评审的字段级细节：
+后续版本仍需决策：
 
-- 首版 Capture Encoding Profile 的具体文件格式；
 - Camera Matrix Profile 是否同时输出 OpenCV 和 Graphics Projection Adapter；
 - Motion Vector 在 WebGL2 与 WebGPU 的交付阶段；
 - 恢复流程是否允许多 Session Bundle；

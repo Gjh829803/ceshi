@@ -86,7 +86,7 @@ flowchart TB
         LSR["LayoutSolveReport S1"]
         EP["ExecutionPlan V4"]
         WP["WorldPackage<br/>设计"]
-        TAKE["Simulation Take<br/>设计"]
+        TAKE["Simulation Take V1<br/>已实现窄切片"]
     end
 
     subgraph L5["L5 引擎无关领域层 · Engine-neutral Domain"]
@@ -116,7 +116,7 @@ flowchart TB
 
     subgraph L8["L8 证据与输出层 · Evidence & Delivery"]
         SS["Snapshot + Single Screenshot<br/>已实现"]
-        CCB["Control Capture Bundle + Multi-pass<br/>设计"]
+        CCB["Control Capture Bundle + Five-pass<br/>V1 已实现"]
         VR["Unified Validation Report<br/>设计；专项 Gate 已实现"]
         VMA["Video Model Adapter<br/>设计"]
     end
@@ -187,11 +187,11 @@ flowchart TB
 | L1 接入层 | 给人、Agent、Host 和自动化程序提供稳定入口，并把 Provider 能力投影回唯一 Canonical 方言 | 不包含第二套 Provider 私有世界语义 | `scripts/worldkit.ts`、`apps/playground`；AI Schema Provider Adapter 尚在设计 |
 | L2 公共协议层 | 定义 AI 可以写什么、Host 可以调用什么、Runtime 返回什么 | 不执行地形、物理或渲染 | `packages/protocol`、`packages/authoring` 的公开 Schema、`packages/runtime-contracts` |
 | L3 解析与编译层 | 校验、资源/地形/Region 解析、Constraint 求解、最终 IR 投影和确定性编译 | 不创建 Babylon Scene、Mesh 或 Havok Body | `packages/authoring`、`packages/layout-solver`、`packages/compiler` |
-| L4 数据边界 | 保存版本化、可哈希、可验证的世界与操作计划 | 不包含可变运行时 Handle | IR、Resource Lock、ExecutionPlan；WorldPackage/Simulation Take 尚在设计 |
+| L4 数据边界 | 保存版本化、可哈希、可验证的世界与操作计划 | 不包含可变运行时 Handle | IR、Resource Lock、ExecutionPlan、Simulation Take V1；完整 WorldPackage 尚在设计 |
 | L5 领域层 | 定义世界、主体、Capability、Relationship、动作、控制、相机、物理和 Runtime Port 的引擎无关语义 | 不决定 Babylon API 的调用方式 | 当前分布在 `packages/authoring`、`subject-composition`、`subject-actions`、`subject-registry` 与 `runtime-contracts`；通用 Capability/Relationship/Port 仍未完成 |
 | L6 引擎适配层 | 把 ExecutionPlan 和资产字节翻译为 Babylon/Havok 对象 | 不补写 AI 意图、不修改 Schema | `packages/runtime-babylon` 内的 Asset Resolver、Cache、Visual、Physics Adapter |
 | L7 运行时层 | Session、固定 Tick、控制绑定、物理移动、动画状态、相机跟随和 Snapshot | 不重新求解 Placement，不读取 Registry URI | `packages/runtime-babylon`；正式持久 Session 尚在设计 |
-| L8 证据层 | 输出截图、状态、Hash、指标和下游模型输入 | 不用视觉结果掩盖结构错误 | 当前 verifier、snapshot/screenshot；Take、Bundle、统一报告待实现 |
+| L8 证据层 | 输出截图、状态、Hash、指标和下游模型输入 | 不用视觉结果掩盖结构错误 | snapshot/screenshot、五 Pass Control Capture Bundle V1 与 verifier；统一报告待实现 |
 
 `Registry` 是横跨 L2、L3 和 L5 的“乐高零件目录”：公共面提供可发现的 Ref 和
 Manifest，Authoring 负责解析并锁定版本，领域定义则描述 Subject、Rig、Animation、
@@ -325,9 +325,10 @@ sequenceDiagram
     I-->>A: state, image, hashes, diagnostics
 ```
 
-当前序列已经覆盖单截图和固定输入。未来 `Simulation Take` 会把一段控制时间线变成
-版本化制品，`Control Capture Bundle` 会把同一 Tick 的 Neutral Color、Linear Depth、
-Semantic、Instance、Normal 等通道绑定到一起；它们目前仍是设计能力。
+当前序列除单截图和固定输入外，已经由 `Simulation Take V1` 把控制/相机时间线编译为
+精确 Tick Schedule，并由 `Control Capture Bundle V1` 把同一 Render Ready 状态的
+Neutral Color、Linear Depth、Semantic、Instance、Normal 绑定到原子证据包。完整
+WorldPackage、Receipt Track、Resume 和统一 Validation Report 仍是后续能力。
 
 ### 6.1 运行中修改不是直接操作页面
 
@@ -406,14 +407,15 @@ Authoring、IR、ExecutionPlan 或 Browser Protocol。
 
 ## 9. 当前完成边界
 
-截至 2026-08-20，以下窄纵向切片已经运行并进入回归：
+截至 2026-08-21，以下窄纵向切片已经运行并进入回归：
 
 - Canonical Authoring V3 → IR V3 → ExecutionPlan V4；
 - Placement Solver S1 的八种 Constraint 和海湾 Golden 场景；
 - Babylon/Havok Heightfield、障碍、水域、第三人称和多主体控制；
 - Golden Humanoid GLB、17 根解剖语义骨骼、独立 Skeleton Root、Bone Socket 与 `idle/walk/run/jump`；
-- CLI/Browser V3 的校验、编译、运行、控制、Snapshot 和单截图；
-- Canonical、Rigged Subject 和 Placement Layout 三条真实 Chromium Gate。
+- CLI/Browser V3 的校验、编译、运行、控制、Snapshot、单截图和 Take/Capture 操作；
+- Simulation Take V1、五 Pass Babylon Capture、Render Ready Receipt 与原子 Bundle；
+- Canonical、Rigged Subject、G Bot、Placement Layout 和 Control Capture 真实 Chromium Gate。
 
 以下能力不能从图中误读为已经完成：
 
@@ -421,7 +423,7 @@ Authoring、IR、ExecutionPlan 或 Browser Protocol。
 - 通用 Semantic Action、攻击、游泳、飞行、车辆和 NPC；
 - 任意产品资产自动 Retarget、Compound Collider、LOD 和更多拓扑；
 - 完整 WorldPackage、WorldChangeSet、持久 Runtime Session；
-- Simulation Take、Control Capture Bundle、多 Pass 和视频序列；
+- 完整 Replay/Resume、Event/Action/Relationship Receipt、Motion Vector 和视频 Adapter；
 - 统一 Validation Profile/Report 与生产 Video Model Adapter；
 - 室内、洞穴、Overhang、联网和完整 Gameplay。
 

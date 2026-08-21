@@ -414,7 +414,9 @@ async function captureBrowserEvidence(): Promise<BrowserEvidenceV1> {
     );
     assert.deepEqual(captured.apiKeys, [
       "bindControl",
+      "captureControlFrame",
       "captureScreenshot",
+      "getControlCaptureCapabilities",
       "getDiagnostics",
       "getSnapshot",
       "ready",
@@ -422,6 +424,8 @@ async function captureBrowserEvidence(): Promise<BrowserEvidenceV1> {
       "runFixedInput",
       "setPaused",
       "version",
+      "waitForRenderReady",
+      "waitForSimulationTick",
     ]);
     assert.equal(captured.apiKeys.some((key) => /solve|search|repair|mutate/i.test(key)), false);
     const screenshotBytes = Buffer.from(captured.screenshot.split(",", 2)[1] ?? "", "base64");
