@@ -1,0 +1,417 @@
+{
+  "kind": "worldkit-route-r0-contract-fixture",
+  "schemaVersion": 1,
+  "authoringSpec": {
+    "kind": "worldkit-authoring-spec",
+    "id": "basic-world",
+    "seed": 1024,
+    "provenance": {
+      "userPrompt": "Create a playable outdoor whitebox with rolling ground, a lake, a tower, and two corridor walls."
+    },
+    "world": {
+      "coordinateSystem": "right-handed-y-up-minus-z-forward",
+      "bounds": {
+        "centerMetersXZ": [
+          0,
+          0
+        ],
+        "sizeMetersXZ": [
+          120,
+          120
+        ],
+        "heightRangeMeters": [
+          -8,
+          16
+        ]
+      },
+      "gravityMetersPerSecondSquaredXYZ": [
+        0,
+        -9.81,
+        0
+      ],
+      "environment": {
+        "preset": "clear-day"
+      },
+      "resourceBudget": {
+        "maxVertices": 20000,
+        "maxTriangles": 30000,
+        "maxColliders": 16
+      }
+    },
+    "resources": {
+      "prototypes": [
+        {
+          "id": "corridor-wall",
+          "version": 1,
+          "kind": "primitive",
+          "primitive": "box",
+          "sizeMetersXYZ": [
+            2,
+            3,
+            24
+          ],
+          "collisionEnabled": true,
+          "semantic": {
+            "classId": "obstacle.wall"
+          }
+        },
+        {
+          "id": "landmark-tower",
+          "version": 1,
+          "kind": "primitive",
+          "primitive": "cylinder",
+          "radiusMeters": 2.5,
+          "heightMeters": 10,
+          "collisionEnabled": true,
+          "semantic": {
+            "classId": "landmark.tower"
+          }
+        }
+      ],
+      "subjectDefinitions": []
+    },
+    "nodes": [
+      {
+        "id": "terrain-main",
+        "kind": "terrain",
+        "components": {
+          "terrain": {
+            "source": {
+              "kind": "procedural",
+              "relief": "plain",
+              "amplitudeMeters": 1.5
+            },
+            "grid": {
+              "centerMetersXZ": [
+                0,
+                0
+              ],
+              "sizeMetersXZ": [
+                120,
+                120
+              ],
+              "resolutionCellsXZ": [
+                65,
+                65
+              ]
+            },
+            "semantic": {
+              "classId": "terrain.grassland"
+            }
+          }
+        }
+      },
+      {
+        "id": "lake-main",
+        "kind": "water",
+        "components": {
+          "water": {
+            "terrainEntityId": "terrain-main",
+            "boundary": {
+              "kind": "ellipse",
+              "centerMetersXZ": [
+                0,
+                -12
+              ],
+              "radiusMetersXZ": [
+                13,
+                17
+              ]
+            },
+            "depthMeters": 4,
+            "shoreWidthMeters": 3,
+            "waterLevelMeters": 1.5,
+            "traversalMode": "swimmable",
+            "semantic": {
+              "classId": "water.lake"
+            }
+          }
+        }
+      },
+      {
+        "id": "tower",
+        "kind": "object",
+        "prototypeRef": "package://prototype/landmark-tower@1",
+        "placement": {
+          "kind": "fixed",
+          "transform": {
+            "positionMetersXYZ": [
+              17,
+              5,
+              -19
+            ]
+          }
+        }
+      },
+      {
+        "id": "wall-east",
+        "kind": "object",
+        "prototypeRef": "package://prototype/corridor-wall@1",
+        "placement": {
+          "kind": "fixed",
+          "transform": {
+            "positionMetersXYZ": [
+              7,
+              1.5,
+              22
+            ]
+          }
+        }
+      },
+      {
+        "id": "wall-west",
+        "kind": "object",
+        "prototypeRef": "package://prototype/corridor-wall@1",
+        "placement": {
+          "kind": "fixed",
+          "transform": {
+            "positionMetersXYZ": [
+              -7,
+              1.5,
+              22
+            ]
+          }
+        }
+      },
+      {
+        "id": "spawn-main",
+        "kind": "anchor",
+        "semantic": {
+          "classId": "spawn.player"
+        },
+        "placement": {
+          "kind": "fixed",
+          "transform": {
+            "positionMetersXYZ": [
+              0,
+              0,
+              30
+            ]
+          }
+        }
+      },
+      {
+        "id": "player",
+        "kind": "subject",
+        "subjectDefinitionRef": "worldkit://subject-definition/humanoid.third-person@1",
+        "spawnAnchorEntityId": "spawn-main"
+      },
+      {
+        "id": "camera-main",
+        "kind": "camera",
+        "components": {
+          "cameraRig": {
+            "defaultRigRef": "worldkit://camera/third-person.standard@1",
+            "allowedRigRefs": [
+              "worldkit://camera/third-person.standard@1"
+            ],
+            "target": {
+              "targetEntityId": "player",
+              "targetHeightMeters": 1.2
+            },
+            "thirdPerson": {
+              "pitchRadians": 0.22,
+              "distanceMeters": 6,
+              "targetHeightMeters": 1.2,
+              "fovDegrees": 58,
+              "aspectRatio": 1.7777777777777777
+            },
+            "manualSwitchAllowed": false
+          }
+        }
+      },
+      {
+        "id": "watchtower-entry",
+        "kind": "anchor",
+        "semantic": {
+          "classId": "landmark.entry"
+        },
+        "placement": {
+          "kind": "fixed",
+          "transform": {
+            "positionMetersXYZ": [
+              12,
+              0,
+              -10
+            ]
+          }
+        }
+      }
+    ],
+    "relationships": [],
+    "rules": [],
+    "startup": {
+      "spawnAnchorEntityId": "spawn-main",
+      "controlledEntityId": "player",
+      "cameraEntityId": "camera-main"
+    },
+    "schemaVersion": 4,
+    "layout": {
+      "solverProfileRef": "worldkit://layout-solver-profile/outdoor.s1@1"
+    },
+    "spatial": {
+      "regions": [],
+      "routes": [
+        {
+          "id": "spawn-to-watchtower",
+          "kind": "polyline-xz",
+          "pointsMetersXZ": [
+            [
+              0,
+              30
+            ],
+            [
+              12,
+              -10
+            ]
+          ],
+          "widthMeters": 3,
+          "locomotionProfileRef": "worldkit://locomotion-profile/ground.standard@1"
+        }
+      ],
+      "screenRegions": []
+    },
+    "constraints": {
+      "placements": [],
+      "connectivity": [
+        {
+          "id": "player-can-reach-watchtower",
+          "kind": "connected-by-route",
+          "requirement": "required",
+          "traversingEntityId": "player",
+          "startAnchorEntityId": "spawn-main",
+          "destinationAnchorEntityId": "watchtower-entry",
+          "routeId": "spawn-to-watchtower"
+        }
+      ]
+    }
+  },
+  "plannedRoute": {
+    "id": "spawn-to-watchtower",
+    "pointsMetersXZ": [
+      [
+        0,
+        30
+      ],
+      [
+        12,
+        -10
+      ]
+    ],
+    "widthMeters": 3,
+    "locomotionProfileRef": "worldkit://locomotion-profile/ground.standard@1",
+    "priority": "primary",
+    "maximumDesignSlopeDegrees": 35,
+    "evidence": "user-explicit"
+  },
+  "surfaceIdentity": {
+    "traversalSurfaceId": "spawn-apron-surface",
+    "surfaceEntityId": "spawn-apron",
+    "colliderSubshapeId": "spawn-apron-top",
+    "resourceRef": "worldkit://traversal-surface/spawn-apron@1",
+    "resolvedVersion": "1",
+    "resourceHash": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+  },
+  "lock": {
+    "kind": "resolved-traversal-lock",
+    "schemaVersion": 1,
+    "subjectEntityId": "player",
+    "subjectDefinitionRef": "worldkit://subject-definition/player@1",
+    "subjectDefinitionHash": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    "colliderProfileRef": "worldkit://collider-profile/humanoid@1",
+    "colliderProfileHash": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    "physicsBodyProfileRef": "worldkit://physics-body-profile/humanoid@1",
+    "physicsBodyProfileHash": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    "locomotionProfileRef": "worldkit://locomotion-profile/ground.standard@1",
+    "locomotionProfileHash": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    "locomotionCapabilityRef": "worldkit://capability/locomotion.ground@1",
+    "locomotionCapabilityHash": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    "controlFeelProfileRef": "worldkit://control-feel-profile/ground@1",
+    "controlFeelProfileHash": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    "controlProfileRef": "worldkit://control-profile/ground@1",
+    "controlProfileHash": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    "motionProfileRef": "worldkit://motion-profile/ground@1",
+    "motionProfileHash": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    "motionKernelRef": "worldkit://motion-kernel/ground@1",
+    "motionKernelHash": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    "mediumProfileRef": "worldkit://medium-profile/ground@1",
+    "mediumProfileHash": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    "runtimeBackendRef": "worldkit://runtime-backend/babylon-havok@1",
+    "runtimeBackendResolvedVersion": "1",
+    "runtimeBackendHash": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    "runtimeAdapterRef": "worldkit://runtime-adapter/babylon-world-runtime@1",
+    "runtimeAdapterResolvedVersion": "1",
+    "runtimeAdapterHash": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    "capsuleRadiusMeters": 0.35,
+    "capsuleHeightMeters": 1.8,
+    "colliderCenterOffsetMetersXYZ": [
+      0,
+      0.9,
+      0
+    ],
+    "maxSlopeDegrees": 42,
+    "maxStepHeightMeters": 0.3
+  },
+  "graph": {
+    "kind": "traversal-graph",
+    "schemaVersion": 1,
+    "authoringSpecHash": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    "layoutSolveReportHash": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    "resourceLockHash": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    "terrainArtifactHash": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    "colliderArtifactHash": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    "surfaceArtifactHash": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    "resolvedTraversalLockHash": "sha256:3f619d6477b5ee857230b5b042e4572507083fb855df83f71b3daa874e4b01a9",
+    "graphBuilderProfileHash": "sha256:0c716c3d733d679d8518018ec2e54d678bc26715beac98c9928218862778d4a1",
+    "graphBuilderProfileRef": "worldkit://traversal-graph-builder-profile/outdoor-humanoid.r1@1",
+    "graphBuilderResolvedVersion": "1",
+    "routeId": "spawn-to-watchtower",
+    "startAnchorEntityId": "spawn-main",
+    "destinationAnchorEntityId": "watchtower-entry",
+    "traversalNodesById": {
+      "spawn-node": {
+        "id": "spawn-node",
+        "traversalSurfaceId": "spawn-apron-surface",
+        "surfaceEntityId": "spawn-apron",
+        "colliderSubshapeId": "spawn-apron-top",
+        "positionMetersXYZ": [
+          0,
+          0.15,
+          30
+        ],
+        "tileId": "tile-0",
+        "clearanceWidthMeters": 1.2,
+        "clearanceHeightMeters": 2
+      },
+      "watchtower-node": {
+        "id": "watchtower-node",
+        "traversalSurfaceId": "watchtower-deck-surface",
+        "surfaceEntityId": "watchtower-deck",
+        "colliderSubshapeId": "watchtower-deck-top",
+        "positionMetersXYZ": [
+          12,
+          1.2,
+          -10
+        ],
+        "tileId": "tile-1",
+        "clearanceWidthMeters": 1.2,
+        "clearanceHeightMeters": 2
+      }
+    },
+    "traversalEdgesById": {
+      "spawn-to-watchtower-walk": {
+        "id": "spawn-to-watchtower-walk",
+        "type": "walk",
+        "fromTraversalNodeId": "spawn-node",
+        "toTraversalNodeId": "watchtower-node",
+        "distanceMeters": 42,
+        "heightDeltaMeters": 1.05,
+        "slopeDegrees": 1.4,
+        "minimumClearanceWidthMeters": 1.2,
+        "minimumClearanceHeightMeters": 2,
+        "routePathCost": 42
+      }
+    }
+  },
+  "traversalGraphHash": "sha256:20afe3cc6673f084fd0cefb22d5efe3921ab9fc2663bd4bbf205ded54f8ff0f0"
+}

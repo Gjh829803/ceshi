@@ -353,6 +353,7 @@ pnpm verify:g-bot-subject
 pnpm verify:placement-layout
 pnpm verify:control-capture
 pnpm verify:validation-capture
+pnpm verify:route-r0-contract
 ```
 
 `verify:canonical` 会在真实 Chromium 中验证 Canonical Build Artifact、
@@ -383,6 +384,11 @@ Canonical Validation Report，并覆盖正常、缺 Pass、坏 Depth、混 Take 
 Fixture。Blocking Failure 不能被其他 Gate 抵消，Required Metric 缺失会得到
 `incomplete` 而不是静默跳过。
 
+`verify:route-r0-contract` 只验证 Route Graph R0 的 Authoring V4 连通约束、Planner
+投影、Traversal Surface 身份、Lock Hash、Driver 白名单、Canonical Graph Bytes 和
+Validation 词汇。它不构建 Traversal Graph，不跑 Character Controller，也不表示
+`route-connectivity` 或 `route-runtime-conformance` 已经通过。
+
 ## 代码边界
 
 | 路径 | 职责 |
@@ -390,11 +396,12 @@ Fixture。Blocking Failure 不能被其他 Gate 抵消，Required Metric 缺失�
 | `packages/protocol/` | Canonical JSON Bytes 与 Hash |
 | `packages/subject-composition/` | 引擎无关的 Primitive Bounds、Collider 推导和资源成本 |
 | `packages/subject-registry/` | 精确版本的 Definition、Capability 和 Profile Registry |
-| `packages/authoring/` | Authoring V3 Schema、解析、语义校验、资源解析、Solver 编排和 Normalized IR V3 |
+| `packages/authoring/` | Authoring V3 Schema、V4 connectivity、解析、语义校验、资源解析、Solver 编排和 Normalized IR V3 |
 | `packages/layout-solver/` | 引擎无关的候选、八种 Constraint Evaluator、确定性搜索、冲突与 Report |
 | `packages/compiler/` | NormalizedWorldIR → ExecutionPlan 的确定性编译 |
 | `packages/control-capture/` | 引擎无关的 Simulation Take、Schedule、Profile、严格校验与 Hash |
 | `packages/validation/` | 引擎无关的 Validation Profile/Report/Gate/Metric/Evidence、严格解析、Policy 与 Hash |
+| `packages/traversal/` | 引擎无关的 Traversal Surface 身份、Lock、Driver/Graph Builder Profile 与 Graph 合同 |
 | `packages/runtime-contracts/` | ExecutionPlan、Snapshot 与 Browser Protocol 数据协议 |
 | `packages/runtime-babylon/` | Babylon/Havok Runtime Adapter |
 | `apps/playground/` | Canonical Runtime 页面、旧 Alpha 场景和浏览器验证入口 |

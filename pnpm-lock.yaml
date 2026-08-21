@@ -29,9 +29,15 @@ importers:
       '@whitebox-world/subject-registry':
         specifier: workspace:*
         version: link:packages/subject-registry
+      '@whitebox-world/traversal':
+        specifier: workspace:*
+        version: link:packages/traversal
       '@whitebox-world/validation':
         specifier: workspace:*
         version: link:packages/validation
+      '@whitebox-world/world':
+        specifier: workspace:*
+        version: link:packages/world
       lodash-es:
         specifier: ^4.18.1
         version: 4.18.1

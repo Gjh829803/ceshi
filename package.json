@@ -41,7 +41,8 @@
     "verify:rigged-subject": "tsx scripts/verify-rigged-subject-world.ts",
     "verify:g-bot-subject": "tsx scripts/verify-g-bot-subject-world.ts",
     "verify:control-capture": "tsx scripts/verify-control-capture.ts",
-    "verify:validation-capture": "tsx scripts/verify-validation-capture.ts"
+    "verify:validation-capture": "tsx scripts/verify-validation-capture.ts",
+    "verify:route-r0-contract": "tsx scripts/verify-route-r0-contract.ts"
   },
   "dependencies": {
     "@dimforge/rapier3d-compat": "^0.19.3",
@@ -51,7 +52,9 @@
     "@whitebox-world/protocol": "workspace:*",
     "@whitebox-world/runtime-contracts": "workspace:*",
     "@whitebox-world/subject-registry": "workspace:*",
+    "@whitebox-world/traversal": "workspace:*",
     "@whitebox-world/validation": "workspace:*",
+    "@whitebox-world/world": "workspace:*",
     "lodash-es": "^4.18.1",
     "three": "^0.180.0"
   },

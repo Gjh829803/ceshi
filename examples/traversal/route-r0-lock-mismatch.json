@@ -1,0 +1,6 @@
+{
+  "kind": "worldkit-route-r0-lock-mismatch-fixture",
+  "schemaVersion": 1,
+  "graphResolvedTraversalLockHash": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+  "runtimeResolvedTraversalLockHash": "sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+}
