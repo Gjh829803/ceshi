@@ -14,6 +14,7 @@ import { createValidPackageSubjectWorld } from "../../authoring/src/test-fixture
 import type { ExecutionPlanV4, WorldRuntimeSnapshotV3 } from "@whitebox-world/runtime-contracts";
 
 import { BabylonWorldRuntime } from "./babylon-world-runtime";
+import { lockPublishedGroundFeels } from "./lock-published-ground-feels";
 
 const kernelSource = readFileSync(
   new URL("./motion-kernel-runtime.ts", import.meta.url),
@@ -70,7 +71,7 @@ function compileFlatPackagePlan(): ExecutionPlanV4 {
   if (!compiled.ok || compiled.executionPlan === undefined) {
     throw new Error(`Fixture compile failed: ${JSON.stringify(compiled.diagnostics)}`);
   }
-  return compiled.executionPlan;
+  return lockPublishedGroundFeels(compiled.executionPlan);
 }
 
 async function createDebtRuntime(

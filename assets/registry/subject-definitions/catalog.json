@@ -187,7 +187,11 @@
       "cameraContextProfileRef": "worldkit://camera-context/capability-driven.default@1",
       "mediumProfileRef": "worldkit://medium-profile/ground-air.standard@1",
       "harnessProfileRef": "worldkit://harness-profile/subject.standard@1",
-      "controlFeelProfileRef": "worldkit://control-feel-profile/humanoid.medium-ground@1"
+      "controlFeelProfileRef": "worldkit://control-feel-profile/humanoid.medium-ground@1",
+      "allowedControlFeelProfileRefs": [
+        "worldkit://control-feel-profile/humanoid.medium-ground@1",
+        "worldkit://control-feel-profile/humanoid.heavy-ground@1"
+      ]
     },
     "relationshipCapabilityRefs": [
       "worldkit://capability/relationship.mount@1"
@@ -393,7 +397,10 @@
       "cameraContextProfileRef": "worldkit://camera-context/capability-driven.quadruped-official@1",
       "mediumProfileRef": "worldkit://medium-profile/ground-air.standard@1",
       "harnessProfileRef": "worldkit://harness-profile/subject.standard@1",
-      "controlFeelProfileRef": "worldkit://control-feel-profile/subject.animal.quadruped.forward-steer.default@1"
+      "controlFeelProfileRef": "worldkit://control-feel-profile/subject.animal.quadruped.forward-steer.default@1",
+      "allowedControlFeelProfileRefs": [
+        "worldkit://control-feel-profile/subject.animal.quadruped.forward-steer.default@1"
+      ]
     },
     "relationshipCapabilityRefs": [
       "worldkit://capability/relationship.mount@1"
@@ -591,7 +598,10 @@
       "cameraContextProfileRef": "worldkit://camera-context/capability-driven.default@1",
       "mediumProfileRef": "worldkit://medium-profile/ground-air.standard@1",
       "harnessProfileRef": "worldkit://harness-profile/subject.standard@1",
-      "controlFeelProfileRef": "worldkit://control-feel-profile/humanoid.medium-ground@1"
+      "controlFeelProfileRef": "worldkit://control-feel-profile/humanoid.medium-ground@1",
+      "allowedControlFeelProfileRefs": [
+        "worldkit://control-feel-profile/humanoid.medium-ground@1"
+      ]
     },
     "relationshipCapabilityRefs": [
       "worldkit://capability/relationship.tether@1"
@@ -772,7 +782,10 @@
       "cameraContextProfileRef": "worldkit://camera-context/capability-driven.default@1",
       "mediumProfileRef": "worldkit://medium-profile/ground-air.standard@1",
       "harnessProfileRef": "worldkit://harness-profile/subject.standard@1",
-      "controlFeelProfileRef": "worldkit://control-feel-profile/humanoid.medium-ground@1"
+      "controlFeelProfileRef": "worldkit://control-feel-profile/humanoid.medium-ground@1",
+      "allowedControlFeelProfileRefs": [
+        "worldkit://control-feel-profile/humanoid.medium-ground@1"
+      ]
     },
     "relationshipCapabilityRefs": [
       "worldkit://capability/relationship.seat@1"
@@ -953,7 +966,10 @@
       "cameraContextProfileRef": "worldkit://camera-context/capability-driven.default@1",
       "mediumProfileRef": "worldkit://medium-profile/ground-air.standard@1",
       "harnessProfileRef": "worldkit://harness-profile/subject.standard@1",
-      "controlFeelProfileRef": "worldkit://control-feel-profile/humanoid.medium-ground@1"
+      "controlFeelProfileRef": "worldkit://control-feel-profile/humanoid.medium-ground@1",
+      "allowedControlFeelProfileRefs": [
+        "worldkit://control-feel-profile/humanoid.medium-ground@1"
+      ]
     },
     "relationshipCapabilityRefs": [
       "worldkit://capability/relationship.seat@1"
@@ -1127,7 +1143,10 @@
       "cameraContextProfileRef": "worldkit://camera-context/capability-driven.default@1",
       "mediumProfileRef": "worldkit://medium-profile/ground-air.standard@1",
       "harnessProfileRef": "worldkit://harness-profile/subject.standard@1",
-      "controlFeelProfileRef": "worldkit://control-feel-profile/humanoid.medium-ground@1"
+      "controlFeelProfileRef": "worldkit://control-feel-profile/humanoid.medium-ground@1",
+      "allowedControlFeelProfileRefs": [
+        "worldkit://control-feel-profile/humanoid.medium-ground@1"
+      ]
     },
     "relationshipCapabilityRefs": [
       "worldkit://capability/relationship.seat@1"

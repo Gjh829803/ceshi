@@ -253,7 +253,7 @@ describe("Package Subject Definition normalization", () => {
       "sha256:fe1352a60cdbdeef0a203a7b18dac4537c9057c0bd2252b56139e4f8b77f6e56",
     );
     expect(result.normalizedWorldIrHash).toBe(
-      "sha256:0f1f8399b5c531843af7a03244f04b0ef964264c86519c03c6d5ecb7974526fc",
+      "sha256:fd123132074be2540a5c5c363dc7eaa1a51d1a04a64f0b680cc27c66a7901135",
     );
   });
 
@@ -545,7 +545,6 @@ describe("Package Subject Definition normalization", () => {
       normalizedDefinition.availableControlFeels.map((feel) => feel.resourceRef),
     ).toEqual([
       "worldkit://control-feel-profile/humanoid.medium-ground@1",
-      "worldkit://control-feel-profile/humanoid.heavy-ground@1",
     ]);
     for (const availableFeel of normalizedDefinition.availableControlFeels) {
       expectExactKeys(availableFeel, controlFeelKeys);

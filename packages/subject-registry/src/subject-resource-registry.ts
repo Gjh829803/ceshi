@@ -1,4 +1,5 @@
 import { sha256CanonicalJson } from "@whitebox-world/protocol";
+import { isNil } from "lodash-es";
 import {
   applyCameraRigParameterOverridesV1,
   CAMERA_RIG_PARAMETER_NAMES_V1,
@@ -50,6 +51,7 @@ import type {
   SubjectCapabilityResourceV1,
   SubjectResourceRegistryV3,
 } from "./types-v3";
+import { selectableControlFeelProfileRefsV1 } from "./selectable-control-feel";
 
 export const FIRST_SLICE_ALLOWED_OVERRIDE_PATHS = [
   "profiles.controlFeelProfileRef",
@@ -466,15 +468,12 @@ function validatePhysicsBodyProfile(source: PhysicsBodyProfileManifestInputV1): 
 
 function validateSubjectDefinitionV3(source: RegistrySubjectDefinitionInputV3): void {
   const controlFeelProfileRef = source.profiles.controlFeelProfileRef;
-  if (
-    controlFeelProfileRef === undefined ||
-    controlFeelProfileRef === null ||
-    controlFeelProfileRef === ""
-  ) {
+  if (isNil(controlFeelProfileRef) || controlFeelProfileRef === "") {
     throw new Error(
       `SUBJECT_CONTROL_FEEL_PROFILE_REQUIRED: '${source.resourceRef}'.`,
     );
   }
+  selectableControlFeelProfileRefsV1(source.profiles);
 }
 
 type CameraParametersV1 = CameraRigProfileInputV1["parameters"];
@@ -720,6 +719,15 @@ function validateReferences(resourcesByRef: ReadonlyMap<string, SubjectRegistryR
         subject.profiles.controlFeelProfileRef,
         "control-feel-profile",
       );
+      for (const allowedControlFeelProfileRef of selectableControlFeelProfileRefsV1(
+        subject.profiles,
+      )) {
+        requireRef(
+          subject.resourceRef,
+          allowedControlFeelProfileRef,
+          "control-feel-profile",
+        );
+      }
       requireRef(
         subject.resourceRef,
         subject.renderBindingProfileRef,

@@ -67,6 +67,7 @@ export interface SubjectPresetLocalBaselineV1 {
   subjectDefinitionRef: string;
   subjectDefinitionContentHash: string;
   defaultMotionProfile: SubjectPresetProfileLockV1;
+  availableMotionProfiles?: readonly SubjectPresetProfileLockV1[];
   controlFeelProfile: SubjectPresetProfileLockV1;
   availableControlFeelProfiles?: readonly SubjectPresetProfileLockV1[];
   controlProfile: SubjectPresetProfileLockV1;

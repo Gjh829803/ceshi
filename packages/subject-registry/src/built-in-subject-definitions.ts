@@ -19,6 +19,11 @@ const SHARED_CAPABILITY_REFS = ["worldkit://capability/locomotion.ground@1"] as 
 const SHARED_GROUND_FEEL_PROFILE_REF =
   "worldkit://control-feel-profile/humanoid.medium-ground@1" as const;
 
+const SHARED_GROUND_ALLOWED_CONTROL_FEEL_PROFILE_REFS = [
+  "worldkit://control-feel-profile/humanoid.medium-ground@1",
+  "worldkit://control-feel-profile/humanoid.heavy-ground@1",
+] as const;
+
 const SHARED_GROUND_MEDIUM_PROFILE_REF =
   "worldkit://medium-profile/ground-air.standard@1" as const;
 
@@ -234,6 +239,7 @@ const RIGGED_GOLDEN_HUMANOID_DEFINITION: RegistrySubjectDefinitionInputV3 = {
     physicsBodyProfileRef: SHARED_PROFILES.physicsBodyProfileRef,
     locomotionProfileRef: SHARED_PROFILES.locomotionProfileRef,
     controlFeelProfileRef: SHARED_GROUND_FEEL_PROFILE_REF,
+    allowedControlFeelProfileRefs: SHARED_GROUND_ALLOWED_CONTROL_FEEL_PROFILE_REFS,
     motion: {
       defaultMotionProfileRef:
         "worldkit://motion-profile/free-ground.humanoid-medium@1",
@@ -355,6 +361,7 @@ export const G_BOT_HUMANOID_DEFINITION: RegistrySubjectDefinitionInputV3 = {
       "worldkit://physics-body-profile/character.capability-medium@1",
     locomotionProfileRef: SHARED_PROFILES.locomotionProfileRef,
     controlFeelProfileRef: SHARED_GROUND_FEEL_PROFILE_REF,
+    allowedControlFeelProfileRefs: SHARED_GROUND_ALLOWED_CONTROL_FEEL_PROFILE_REFS,
     motion: {
       defaultMotionProfileRef:
         "worldkit://motion-profile/free-ground.humanoid-medium@1",

@@ -16,9 +16,7 @@ import type {
 } from "@whitebox-world/runtime-contracts";
 import {
   applyCameraRigParameterOverridesV1,
-  isCameraRigParameterOverrideSupportedV1,
-  isCameraTuningWithinSafetyLimitsV1,
-  isCameraTuningParameterNameV1,
+  validateCameraTuningV1,
 } from "@whitebox-world/runtime-contracts";
 
 export type CameraPreferenceV1 = "auto" | "first-person" | string;
@@ -234,170 +232,16 @@ export class CameraDirectorV1 {
   }
 
   setTuning(tuning: CameraTuningV1): boolean {
-    const entries = Object.entries(tuning).filter((entry) => entry[1] !== undefined);
-    if (!entries.every((entry) =>
-      isCameraTuningParameterNameV1(entry[0]) &&
-      isCameraRigParameterOverrideSupportedV1(this.activeRigRef, entry[0]) &&
-      typeof entry[1] === "number" &&
-      Number.isFinite(entry[1])
-    )) {
-      return false;
-    }
-    this.tuningByProfileRef.set(this.activeProfileRef, {
-      ...(tuning.distanceMeters === undefined
-        ? {}
-        : { distanceMeters: clamp(tuning.distanceMeters, 0, 30) }),
-      ...(tuning.targetHeightMeters === undefined
-        ? {}
-        : { targetHeightMeters: clamp(tuning.targetHeightMeters, 0, 10) }),
-      ...(tuning.shoulderOffsetMeters === undefined
-        ? {}
-        : { shoulderOffsetMeters: clamp(tuning.shoulderOffsetMeters, -3, 3) }),
-      ...(tuning.pitchRadians === undefined
-        ? {}
-        : { pitchRadians: clamp(tuning.pitchRadians, -1.4, 1.4) }),
-      ...(tuning.positionDampingPerSecond === undefined
-        ? {}
-        : { positionDampingPerSecond: clamp(tuning.positionDampingPerSecond, 0, 40) }),
-      ...(tuning.horizontalPositionDampingPerSecond === undefined
-        ? {}
-        : {
-            horizontalPositionDampingPerSecond: clamp(
-              tuning.horizontalPositionDampingPerSecond,
-              0,
-              40,
-            ),
-          }),
-      ...(tuning.verticalPositionDampingPerSecond === undefined
-        ? {}
-        : {
-            verticalPositionDampingPerSecond: clamp(
-              tuning.verticalPositionDampingPerSecond,
-              0,
-              40,
-            ),
-          }),
-      ...(tuning.maximumPositionLagMeters === undefined
-        ? {}
-        : { maximumPositionLagMeters: clamp(tuning.maximumPositionLagMeters, 0, 30) }),
-      ...(tuning.rotationDampingPerSecond === undefined
-        ? {}
-        : { rotationDampingPerSecond: clamp(tuning.rotationDampingPerSecond, 0, 40) }),
-      ...(tuning.yawDampingPerSecond === undefined
-        ? {}
-        : { yawDampingPerSecond: clamp(tuning.yawDampingPerSecond, 0, 40) }),
-      ...(tuning.pitchDampingPerSecond === undefined
-        ? {}
-        : { pitchDampingPerSecond: clamp(tuning.pitchDampingPerSecond, 0, 40) }),
-      ...(tuning.collisionRadiusMeters === undefined
-        ? {}
-        : { collisionRadiusMeters: clamp(tuning.collisionRadiusMeters, 0, 2) }),
-      ...(tuning.collisionRetractionMetersPerSecond === undefined
-        ? {}
-        : {
-            collisionRetractionMetersPerSecond: clamp(
-              tuning.collisionRetractionMetersPerSecond,
-              0,
-              60,
-            ),
-          }),
-      ...(tuning.collisionRecoveryMetersPerSecond === undefined
-        ? {}
-        : {
-            collisionRecoveryMetersPerSecond: clamp(
-              tuning.collisionRecoveryMetersPerSecond,
-              0,
-              30,
-            ),
-          }),
-      ...(tuning.lookAheadSeconds === undefined
-        ? {}
-        : { lookAheadSeconds: clamp(tuning.lookAheadSeconds, 0, 2) }),
-      ...(tuning.accelerationLookAheadSecondsSquared === undefined
-        ? {}
-        : {
-            accelerationLookAheadSecondsSquared: clamp(
-              tuning.accelerationLookAheadSecondsSquared,
-              0,
-              1,
-            ),
-          }),
-      ...(tuning.minimumHeadingSpeedMetersPerSecond === undefined
-        ? {}
-        : {
-            minimumHeadingSpeedMetersPerSecond: clamp(
-              tuning.minimumHeadingSpeedMetersPerSecond,
-              0,
-              20,
-            ),
-          }),
-      ...(tuning.velocityHeadingDampingPerSecond === undefined
-        ? {}
-        : {
-            velocityHeadingDampingPerSecond: clamp(
-              tuning.velocityHeadingDampingPerSecond,
-              0,
-              40,
-            ),
-          }),
-      ...(tuning.transitionSeconds === undefined
-        ? {}
-        : { transitionSeconds: clamp(tuning.transitionSeconds, 0, 3) }),
-      ...(tuning.baseFovDegrees === undefined
-        ? {}
-        : { baseFovDegrees: clamp(tuning.baseFovDegrees, 35, 100) }),
-      ...(tuning.speedFovDegreesPerMeterPerSecond === undefined
-        ? {}
-        : {
-            speedFovDegreesPerMeterPerSecond: clamp(
-              tuning.speedFovDegreesPerMeterPerSecond,
-              0,
-              5,
-            ),
-          }),
-      ...(tuning.maximumSpeedFovDegrees === undefined
-        ? {}
-        : { maximumSpeedFovDegrees: clamp(tuning.maximumSpeedFovDegrees, 0, 30) }),
-      ...(tuning.fovDampingPerSecond === undefined
-        ? {}
-        : { fovDampingPerSecond: clamp(tuning.fovDampingPerSecond, 0, 30) }),
-      ...(tuning.horizontalDeadZoneRatio === undefined
-        ? {}
-        : { horizontalDeadZoneRatio: clamp(tuning.horizontalDeadZoneRatio, 0, 0.4) }),
-      ...(tuning.verticalDeadZoneRatio === undefined
-        ? {}
-        : { verticalDeadZoneRatio: clamp(tuning.verticalDeadZoneRatio, 0, 0.4) }),
-      ...(tuning.recenterDelaySeconds === undefined
-        ? {}
-        : { recenterDelaySeconds: clamp(tuning.recenterDelaySeconds, 0, 5) }),
-      ...(tuning.recenterDurationSeconds === undefined
-        ? {}
-        : { recenterDurationSeconds: clamp(tuning.recenterDurationSeconds, 0, 5) }),
-      ...(tuning.recenterMinimumSpeedMetersPerSecond === undefined
-        ? {}
-        : {
-            recenterMinimumSpeedMetersPerSecond: clamp(
-              tuning.recenterMinimumSpeedMetersPerSecond,
-              0,
-              10,
-            ),
-          }),
-      ...(tuning.teleportSnapDistanceMeters === undefined
-        ? {}
-        : {
-            teleportSnapDistanceMeters: clamp(
-              tuning.teleportSnapDistanceMeters,
-              1,
-              100,
-            ),
-          }),
-      ...(tuning.lookSensitivityXRatio === undefined
-        ? {}
-        : { lookSensitivityXRatio: clamp(tuning.lookSensitivityXRatio, 0.1, 3) }),
-      ...(tuning.lookSensitivityYRatio === undefined
-        ? {}
-        : { lookSensitivityYRatio: clamp(tuning.lookSensitivityYRatio, 0.1, 3) }),
-    });
+    const profile = this.resolveActiveCameraProfile();
+    const result = validateCameraTuningV1(
+      {
+        algorithmRef: profile?.algorithmRef ?? this.activeRigRef,
+        ...(profile === undefined ? {} : { parameters: profile.parameters }),
+      },
+      tuning,
+    );
+    if (!result.ok) return false;
+    this.tuningByProfileRef.set(this.activeProfileRef, result.tuning);
     return true;
   }
 
@@ -415,33 +259,25 @@ export class CameraDirectorV1 {
         preference !== "first-person" &&
         !profilesByRef.has(preference))
     ) return false;
+    const nextTunings = new Map<string, CameraTuningV1>();
     for (const [profileRef, tuning] of Object.entries(tuningByProfileRef)) {
       const profile = profilesByRef.get(profileRef);
-      if (profile === undefined || !isCameraTuningWithinSafetyLimitsV1(tuning)) return false;
-      const entries = Object.entries(tuning).filter((entry) => entry[1] !== undefined);
-      if (!entries.every(([name, value]) =>
-        isCameraTuningParameterNameV1(name) &&
-        isCameraRigParameterOverrideSupportedV1(profile.algorithmRef, name) &&
-        typeof value === "number" &&
-        Number.isFinite(value)
-      )) return false;
+      if (profile === undefined) return false;
+      const result = validateCameraTuningV1(
+        {
+          algorithmRef: profile.algorithmRef,
+          parameters: profile.parameters,
+        },
+        tuning,
+      );
+      if (!result.ok) return false;
+      nextTunings.set(profileRef, result.tuning);
     }
 
-    const previousProfileRef = this.activeProfileRef;
-    const previousRigRef = this.activeRigRef;
     this.tuningByProfileRef.clear();
-    for (const [profileRef, tuning] of Object.entries(tuningByProfileRef)) {
-      const profile = profilesByRef.get(profileRef)!;
-      this.activeProfileRef = profile.resourceRef;
-      this.activeRigRef = profile.algorithmRef;
-      if (!this.setTuning(tuning)) {
-        throw new Error(
-          "Camera preset validation diverged from Camera tuning application.",
-        );
-      }
+    for (const [profileRef, tuning] of nextTunings) {
+      this.tuningByProfileRef.set(profileRef, tuning);
     }
-    this.activeProfileRef = previousProfileRef;
-    this.activeRigRef = previousRigRef;
     this.preference = preference;
     return true;
   }
@@ -710,7 +546,6 @@ export class CameraDirectorV1 {
 
   reset(): void {
     this.initialized = false;
-    this.preference = "auto";
     this.fallbackActive = false;
     this.smoothedTarget.setAll(0);
     this.targetYawOffsetRadians = 0;
@@ -719,7 +554,6 @@ export class CameraDirectorV1 {
     this.viewYawOffsetRadians = 0;
     this.viewPitchOffsetRadians = 0;
     this.viewDistanceOffsetMeters = 0;
-    this.tuningByProfileRef.clear();
     this.baseHeadingYawRadians = Math.PI;
     this.baseHeadingIdentity = undefined;
     this.lastStableVelocityForward = undefined;
@@ -990,5 +824,15 @@ export class CameraDirectorV1 {
     );
     this.fallbackActive = false;
     this.initialized = true;
+  }
+
+  private resolveActiveCameraProfile(): ExecutionCameraRigProfileV1 | undefined {
+    for (const subject of this.executionPlan.subjects) {
+      const profile = subject.capabilityAssembly?.cameraContext.cameraRigProfiles.find(
+        (candidate) => candidate.resourceRef === this.activeProfileRef,
+      );
+      if (profile !== undefined) return profile;
+    }
+    return undefined;
   }
 }

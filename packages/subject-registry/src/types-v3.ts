@@ -264,6 +264,7 @@ export interface RegistrySubjectDefinitionInputV3
     physicsBodyProfileRef: string;
     locomotionProfileRef: string;
     controlFeelProfileRef: string;
+    allowedControlFeelProfileRefs: readonly string[];
     motion: {
       defaultMotionProfileRef: string;
       optionalMotionProfileRefs: readonly string[];

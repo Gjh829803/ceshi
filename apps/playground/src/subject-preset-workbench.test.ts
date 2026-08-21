@@ -15,6 +15,16 @@ const baseline: SubjectPresetLocalBaselineV1 = {
     resourceRef: "worldkit://motion-profile/wheeled-arcade.medium@1",
     contentHash: `sha256:${"2".repeat(64)}`,
   },
+  availableMotionProfiles: [
+    {
+      resourceRef: "worldkit://motion-profile/wheeled-arcade.medium@1",
+      contentHash: `sha256:${"2".repeat(64)}`,
+    },
+    {
+      resourceRef: "worldkit://motion-profile/safe-ground@1",
+      contentHash: `sha256:${"8".repeat(64)}`,
+    },
+  ],
   controlFeelProfile: {
     resourceRef: "worldkit://control-feel-profile/humanoid.medium-ground@1",
     contentHash: `sha256:${"6".repeat(64)}`,
@@ -70,6 +80,7 @@ describe("subject preset workbench projection", () => {
         createdAtIso: "2026-08-21T08:00:00.000Z",
         updatedAtIso: "2026-08-21T09:00:00.000Z",
       },
+      selectedMotionProfileRef: baseline.defaultMotionProfile.resourceRef,
       selectedControlFeelProfileRef: baseline.controlFeelProfile.resourceRef,
       selectedCameraPreferenceRef:
         "worldkit://camera-profile/orbit.medium@1",
@@ -131,6 +142,7 @@ describe("subject preset workbench projection", () => {
         createdAtIso: "2026-08-21T08:00:00.000Z",
         updatedAtIso: "2026-08-21T09:00:00.000Z",
       },
+      selectedMotionProfileRef: "worldkit://motion-profile/safe-ground@1",
       selectedControlFeelProfileRef:
         "worldkit://control-feel-profile/humanoid.heavy-ground@1",
       selectedCameraPreferenceRef: null,
@@ -147,6 +159,9 @@ describe("subject preset workbench projection", () => {
       cameraByProfileRef: {},
     });
 
+    expect(draft.selectedMotionProfileRef).toBe(
+      "worldkit://motion-profile/safe-ground@1",
+    );
     expect(draft.controlFeelOverridesByProfileRef).toEqual({
       "worldkit://control-feel-profile/humanoid.heavy-ground@1": {
         baseResourceRef:
@@ -160,11 +175,35 @@ describe("subject preset workbench projection", () => {
       subjectEntityId: "player",
       expectedSubjectDefinitionRef: baseline.subjectDefinitionRef,
       expectedSubjectDefinitionContentHash: baseline.subjectDefinitionContentHash,
+      selectedMotionProfileRef: "worldkit://motion-profile/safe-ground@1",
       selectedControlFeelProfileRef:
         "worldkit://control-feel-profile/humanoid.heavy-ground@1",
       selectedControlProfileRef: baseline.controlProfile.resourceRef,
       cameraOverridesByProfileRef: {},
       cameraPreference: "auto",
     });
+  });
+
+  it("rejects a Motion Profile that is not in the exact baseline", () => {
+    expect(() => createSubjectPresetWorkbenchDraftV1({
+      baseline,
+      draftIdentity: {
+        draftId: "draft-unreachable-motion",
+        createdAtIso: "2026-08-21T08:00:00.000Z",
+        updatedAtIso: "2026-08-21T09:00:00.000Z",
+      },
+      selectedMotionProfileRef: "worldkit://motion-profile/unknown@1",
+      selectedControlFeelProfileRef: baseline.controlFeelProfile.resourceRef,
+      selectedCameraPreferenceRef: null,
+      controlFeel: {
+        baseParameters: {},
+        currentValues: {},
+      },
+      control: {
+        baseParameters: {},
+        currentValues: {},
+      },
+      cameraByProfileRef: {},
+    })).toThrow(/SUBJECT_PRESET_WORKBENCH_MOTION_UNREACHABLE/);
   });
 });

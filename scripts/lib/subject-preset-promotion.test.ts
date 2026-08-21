@@ -17,6 +17,7 @@ import { promisify } from "node:util";
 import { afterEach, describe, expect, it } from "vitest";
 
 import {
+  createSubjectPresetCandidateFromSelectionsV1,
   createSubjectPresetCandidateV1,
   type SubjectPresetCandidateV1,
 } from "@whitebox-world/authoring";
@@ -128,6 +129,8 @@ function createCandidate(): SubjectPresetCandidateV1 {
           contentHash: lockedHash(CONTROL_FEEL_REF),
           disposition: "derive",
         },
+        selectedMotionProfileRef: MOTION_REF,
+        selectedMotionContentHash: lockedHash(MOTION_REF),
         control: {
           profileRef: CONTROL_REF,
           contentHash: lockedHash(CONTROL_REF),
@@ -682,5 +685,41 @@ describe("subject preset promotion", { timeout: 60_000 }, () => {
       subjectDefinitionRef:
         "worldkit://subject-definition/animal.quadruped.forward-steer@3",
     }));
+  });
+
+  it("publishes the selected fallback Motion as the next Definition default", async () => {
+    const fixture = await createFixtureRepository();
+    const fallbackMotionRef = "worldkit://motion-profile/safe-ground@1";
+    const candidate = createSubjectPresetCandidateFromSelectionsV1({
+      candidateId: "quadruped-fallback-motion",
+      subjectDefinitionRef: SUBJECT_REF,
+      selectedMotionProfileRef: fallbackMotionRef,
+      selectedControlFeelProfileRef: CONTROL_FEEL_REF,
+      selectedControlProfileRef: CONTROL_REF,
+      defaultCameraRigProfileRef: CAMERA_REF,
+      controlFeelOverridesByProfileRef: {},
+      controlOverridesByProfileRef: {},
+      cameraOverridesByProfileRef: {},
+      provenance: createCandidate().provenance,
+      evidence: createCandidate().evidence,
+    });
+    await writeFile(fixture.candidatePath, `${JSON.stringify(candidate)}\n`, "utf8");
+
+    const plan = await planSubjectPresetPromotion(fixture.candidatePath, {
+      repositoryRoot: fixture.root,
+    });
+    const subjectCatalog = decodeTarget(
+      plan,
+      "assets/registry/subject-definitions/catalog.json",
+    ) as Array<{
+      resourceRef: string;
+      profiles: { motion: { defaultMotionProfileRef: string } };
+    }>;
+    const nextDefinition = subjectCatalog.find((resource) =>
+      resource.resourceRef ===
+        "worldkit://subject-definition/animal.quadruped.forward-steer@3"
+    );
+    expect(nextDefinition?.profiles.motion.defaultMotionProfileRef)
+      .toBe(fallbackMotionRef);
   });
 });

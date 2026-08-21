@@ -37,6 +37,7 @@ export interface CreateSubjectPresetWorkbenchDraftInputV1 {
     createdAtIso: string;
     updatedAtIso: string;
   };
+  selectedMotionProfileRef: string;
   selectedControlFeelProfileRef: string;
   selectedCameraPreferenceRef: string | null;
   controlFeel: WorkbenchNumericProfileStateV1;
@@ -87,6 +88,17 @@ export function createSubjectPresetWorkbenchDraftV1(
       "SUBJECT_PRESET_WORKBENCH_CONTROL_FEEL_UNREACHABLE: selected Control Feel Profile is not in the exact baseline.",
     );
   }
+  const motionLocks = input.baseline.availableMotionProfiles ?? [
+    input.baseline.defaultMotionProfile,
+  ];
+  const selectedMotionLock = motionLocks.find(
+    (profile) => profile.resourceRef === input.selectedMotionProfileRef,
+  );
+  if (selectedMotionLock === undefined) {
+    throw new TypeError(
+      "SUBJECT_PRESET_WORKBENCH_MOTION_UNREACHABLE: selected Motion Profile is not in the exact baseline.",
+    );
+  }
   const cameraLocks = new Map(
     input.baseline.cameraProfiles.map((profile) => [profile.resourceRef, profile]),
   );
@@ -118,7 +130,7 @@ export function createSubjectPresetWorkbenchDraftV1(
     subjectDefinitionId: input.baseline.subjectDefinitionId,
     baseSubjectDefinitionRef: input.baseline.subjectDefinitionRef,
     baseSubjectDefinitionContentHash: input.baseline.subjectDefinitionContentHash,
-    selectedMotionProfileRef: input.baseline.defaultMotionProfile.resourceRef,
+    selectedMotionProfileRef: selectedMotionLock.resourceRef,
     selectedControlFeelProfileRef: selectedControlFeelLock.resourceRef,
     selectedControlProfileRef: input.baseline.controlProfile.resourceRef,
     selectedCameraPreferenceRef: input.selectedCameraPreferenceRef,
@@ -146,6 +158,7 @@ export function subjectPresetTuningRequestFromDraftV1(
     subjectEntityId,
     expectedSubjectDefinitionRef: draft.baseSubjectDefinitionRef,
     expectedSubjectDefinitionContentHash: draft.baseSubjectDefinitionContentHash,
+    selectedMotionProfileRef: draft.selectedMotionProfileRef,
     selectedControlFeelProfileRef: draft.selectedControlFeelProfileRef,
     selectedControlProfileRef: draft.selectedControlProfileRef,
     cameraOverridesByProfileRef: draft.cameraOverridesByProfileRef,

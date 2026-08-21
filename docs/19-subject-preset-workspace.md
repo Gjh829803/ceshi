@@ -32,13 +32,15 @@
 
 ## Candidate 与本地 CLI
 
-候选文件是不受信任的输入。发布前必须经过严格 schema、完整依赖闭包、Ref/hash、安全范围、Runtime 支持状态和相机组合校验。推荐流程：
+候选文件是不受信任的输入。发布前必须经过严格 schema、完整依赖闭包、Ref/hash、安全范围、Runtime 支持状态和相机组合校验。Playground 主 UI 导出的是 canonical Publication Candidate（`*.worldkit-subject-preset-candidate.json`）。推荐流程：
 
 ```bash
-pnpm worldkit subject-preset validate <candidate.json> --legacy-v4 --json
-pnpm worldkit subject-preset plan <candidate.json> --output <plan.json> --legacy-v4 --json
-pnpm worldkit subject-preset promote <candidate.json> --plan <plan.json> --write --legacy-v4 --json
+pnpm worldkit subject-preset validate <candidate.json> --json
+pnpm worldkit subject-preset plan <candidate.json> --output <plan.json> --json
+pnpm worldkit subject-preset promote <candidate.json> --plan <plan.json> --write --json
 ```
+
+旧的 Authoring snapshot V4 只留给隔离迁移工具：加上 `--legacy-v4` 才会走 `importLegacyAuthoringSnapshotV4`。不要把它当成日常发布路径。
 
 `validate` 和 `plan` 不修改仓库。`promote --write` 只允许在干净的非 `main` 分支运行，不提交、不推送；最终仍通过代码评审、测试和 Git 合并成为公共默认。
 

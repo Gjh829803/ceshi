@@ -332,6 +332,8 @@ export interface ExecutionCameraContextRuleV1 {
 
 export interface ExecutionSubjectCapabilityAssemblyV1 {
   authoringAvailability: "recommended" | "advanced" | "experimental";
+  physicsBodyProfileRef: string;
+  locomotionProfileRef: string;
   defaultMotionProfile: ExecutionMotionProfileV1;
   optionalMotionProfiles: readonly ExecutionMotionProfileV1[];
   fallbackMotionProfile: ExecutionMotionProfileV1;
@@ -391,6 +393,8 @@ export interface ExecutionSubjectV3 {
     allowRun: boolean;
     allowJump: boolean;
   };
+  physicsBodyProfileRef: string;
+  locomotionProfileRef: string;
   controlFeel: {
     resourceRef: string;
     contentHash: string;

@@ -3,7 +3,7 @@
   "schemaVersion": 1,
   "id": "coastal-orbit-run",
   "worldPackageRef": "worldkit://world-package/coastal-whitebox@1",
-  "worldPackageRootHash": "sha256:1f285e1d450fbcb9970d652187ee9a254e8fb46f382dbc20e0527ea61b27424e",
+  "worldPackageRootHash": "sha256:16ea169661da248a04db56c7ed3be9e0838e80cfe0bb4887f0c17704b72b44f6",
   "seed": 731991,
   "simulationTickRate": {
     "numeratorTicks": 60,

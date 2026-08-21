@@ -3,6 +3,7 @@ import {
   builtInSubjectDefaultRegistry,
   builtInSubjectResourceRegistry,
   resolveSubjectPresetClosureV1,
+  selectableControlFeelProfileRefsV1,
   type SubjectResourceRegistryV3,
 } from "@whitebox-world/subject-registry";
 import {
@@ -331,9 +332,7 @@ export function listSubjectPresetAuthoringProfilesV1(
       }
     });
   }
-  const controlFeelResources = builtInSubjectResourceRegistry
-    .listCapabilityResources()
-    .filter((resource) => resource.kind === "control-feel-profile");
+  const controlFeelRefs = selectableControlFeelProfileRefsV1(definition.profiles);
   return [
     ...[...motionRefs].flatMap((resourceRef) => {
       const resource = builtInSubjectResourceRegistry.resolveMotionProfile(resourceRef);
@@ -351,29 +350,34 @@ export function listSubjectPresetAuthoringProfilesV1(
                 : "optional" as const,
           }];
     }),
-    ...controlFeelResources.map((resource) => ({
-      resourceRef: resource.resourceRef,
-      contentHash: resource.contentHash,
-      kind: "control-feel-profile" as const,
-      displayName: resource.aiMetadata.displayName,
-      role: resource.resourceRef === definition.profiles.controlFeelProfileRef
-        ? "default" as const
-        : "optional" as const,
-      parameters: Object.fromEntries(
-        CONTROL_FEEL_PARAMETER_NAMES_V1.map((name) => [name, resource[name]]),
-      ),
-      safetyLimits: CONTROL_FEEL_PARAMETER_BOUNDS_V1,
-      authoringRanges: Object.fromEntries(
-        CONTROL_FEEL_PARAMETER_NAMES_V1.map((name) => {
-          const bounds = CONTROL_FEEL_PARAMETER_BOUNDS_V1[name];
-          return [name, {
-            ...bounds,
-            step: Math.max(0.01, (bounds.maximum - bounds.minimum) / 100),
+    ...controlFeelRefs.flatMap((resourceRef) => {
+      const resource = builtInSubjectResourceRegistry.resolveControlFeelProfile(resourceRef);
+      return resource === undefined
+        ? []
+        : [{
+            resourceRef,
+            contentHash: resource.contentHash,
+            kind: "control-feel-profile" as const,
+            displayName: resource.aiMetadata.displayName,
+            role: resourceRef === definition.profiles.controlFeelProfileRef
+              ? "default" as const
+              : "optional" as const,
+            parameters: Object.fromEntries(
+              CONTROL_FEEL_PARAMETER_NAMES_V1.map((name) => [name, resource[name]]),
+            ),
+            safetyLimits: CONTROL_FEEL_PARAMETER_BOUNDS_V1,
+            authoringRanges: Object.fromEntries(
+              CONTROL_FEEL_PARAMETER_NAMES_V1.map((name) => {
+                const bounds = CONTROL_FEEL_PARAMETER_BOUNDS_V1[name];
+                return [name, {
+                  ...bounds,
+                  step: Math.max(0.01, (bounds.maximum - bounds.minimum) / 100),
+                }];
+              }),
+            ),
+            draftOnlyParameterNames: CONTROL_FEEL_PARAMETER_NAMES_V1,
           }];
-        }),
-      ),
-      draftOnlyParameterNames: CONTROL_FEEL_PARAMETER_NAMES_V1,
-    })),
+    }),
     ...(() => {
       const resource = builtInSubjectResourceRegistry.resolveControlProfile(
         definition.profiles.controlProfileRef,
