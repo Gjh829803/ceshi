@@ -103,10 +103,11 @@ export const worldSpec = defineOutdoorWorldSpec({
   }],
   routes: [{
     id: "primary-route",
-    points: [[0, 45], [-20, 20], [-45, -55]],
-    width: 8,
+    pointsMetersXZ: [[0, 45], [-20, 20], [-45, -55]],
+    widthMeters: 8,
+    locomotionProfileRef: "worldkit://locomotion-profile/ground.standard@1",
     priority: "primary",
-    maxSlopeDegrees: 35,
+    maximumDesignSlopeDegrees: 35,
     evidence: "planner-inferred",
   }],
   entry: {

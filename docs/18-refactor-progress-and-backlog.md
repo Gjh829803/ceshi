@@ -184,9 +184,12 @@ P1.5、P1.6、P2.5 与 P2.6 是把既有总体设计和产品对接契约显式�
 - [x] 编写 [R0 实施计划](superpowers/plans/2026-08-21-route-graph-traversability-r0-implementation-plan.md)，
   将 Planner Route 归一化、Surface 身份、Lock/Driver、Metric/Diagnostic 和 Conformance
   拆成可追踪任务；计划完成不等于字段已冻结。
-- [ ] R0 实施并冻结 `connected-by-route`、Traversal Graph、`resolvedTraversalLockHash`、
+- [x] R0 实施并冻结 `connected-by-route`、Traversal Graph、`resolvedTraversalLockHash`、
   Driver 关闭白名单、Surface 身份、Evidence 与 Diagnostic 字段；通过下一 Canonical Major
-  干净升级，不向已实现 V3 偷加空枚举。
+  干净升级，不向已实现 V3 偷加空枚举。证据：`pnpm verify:route-r0-contract`。该命令只冻结
+  合同，不表示 `route-connectivity` / `route-runtime-conformance` 已实现。已评 Runtime
+  Metric 必须引用 `route-runtime-probe-receipt`；主体步高/坡度/净空/缝隙阈值来自 Lock，
+  不写进 Validation Profile。
 - [ ] R1 实现普通人形 Heightfield Route：坡度、静态阻挡、胶囊宽高净空、缝隙、确定性
   Path Query 与真实固定 Tick Character Controller Gate；P1.5 Ground/Air Runtime 已删除
   步高/坡度 Motion fallback、spawn ray 和 AABB Support 旁路，原前置阻塞已解除。
@@ -641,8 +644,9 @@ Placement S1、Simulation Take / Control Capture V1 与 Validation Capture/Integ
 
 ## 6. 下一里程碑
 
-M5 R0 当前没有代码阻塞项；M5 R1/R1b 所需的 M7 P1.5 Ground/Air Runtime 前置依赖
-已随 PR #10 合入，后续仍需各自完成 Route/Traversal 合同与 Gate。S1b Golden、
+M5 R0 字段冻结已由 `pnpm verify:route-r0-contract` 完成；M5 R1/R1b 所需的 M7 P1.5
+Ground/Air Runtime 前置依赖已随 PR #10 合入，后续仍需实现 Graph Builder、Runtime Probe
+与两条生产 Route Gate。S1b Golden、
 首个产品 G Bot、Placement Solver S1、Control Capture V1 与 Validation Capture/Integrity V1
 都已进入回归，下一步：
 
@@ -653,9 +657,9 @@ M5 R0 当前没有代码阻塞项；M5 R1/R1b 所需的 M7 P1.5 Ground/Air Runti
 2. **M2（已完成）：冻结 Take/Capture V1 首条实施范围**；
 3. **M3（已完成）：实现五 Pass Capture 窄纵向切片并复用 Placement World Identity/Hash**；
 4. **M4（已完成）：实现 P0.3 统一 Validation Profile/Report 的 Capture/Integrity 窄切片，把现有 Bundle Gate 纳入同一报告协议**；
-5. **M5：完成 Route Graph 与主体可通行性 R0/R1/R1b**：M4 报告形状已经落地，R0 现在按
-   [实施计划](superpowers/plans/2026-08-21-route-graph-traversability-r0-implementation-plan.md)
-   推进；R1/R1b 的 P1.5 Ground/Air Runtime 前置依赖已经满足。之后复用既有
+5. **M5：完成 Route Graph 与主体可通行性 R0/R1/R1b**：R0 字段冻结已由
+   `pnpm verify:route-r0-contract` 证明；R1/R1b 仍未实现 Graph Builder、Runtime Probe
+   或两条生产 Route Gate。P1.5 Ground/Air Runtime 前置依赖已经满足。之后复用既有
    Route/Region，按主体 Lock 从 Heightfield 与显式 Traversal Surface 构建分层 3D Graph，
    并用真实 Babylon/Havok 人物控制器证明地形→台阶/坡道→静态平台路线；只有 Required
    Route 接入 Blocking Validation、成功 Fixture 走通且失败 Fixture 给出结构化 Diagnostic

@@ -2,10 +2,10 @@
 
 ## 1. 文档状态
 
-- 状态：**Independent Review Dispositioned / R0 Field Freeze Pending（2026-08-21）**。
-  架构分层成立；独立审查发现的 Lock、Route 走廊、Surface 身份、Planner 入口和 Runtime
-  Probe 合同问题已在本文收口。新增公共字段仍须按 R0 实施计划完成 Schema、生成类型、
-  Fixture 和 Conformance 后才能冻结。审查记录见
+- 状态：**R0 Contract Frozen / R1 Runtime Pending（2026-08-21）**。
+  Authoring V4、Traversal Lock/Graph 合同、Validation Profile V2 与
+  `pnpm verify:route-r0-contract` 已冻结协议层。这不表示 Graph Builder、Runtime Probe
+  或两条生产 Route Gate 已经通过。审查记录见
   [作者审查](../../reviews/2026-08-21-route-graph-traversability-design-review.md)与
   [独立审查及处置](../../reviews/2026-08-21-route-graph-traversability-independent-review.md)。
 - 所属里程碑：P0.1 / M5。
@@ -351,8 +351,12 @@ Blocking Gate，不创建 Route 专用报告格式，也不修改 Capture-only `
 - `routePathCost`；
 - `traversalGraphNodeCount`、`traversalGraphEdgeCount` 和 `traversalGraphHash`。
 
-Evidence 必须同时携带 `resolvedTraversalLockHash`、Graph Builder Profile Hash、Runtime
-Backend/Adapter 版本；它们不是可以用总体 Metric 代替的调试文本。
+已评（`passed` / `failed`）Metric 必须至少引用 `traversal-graph` 或 `route-path-receipt`。
+该类 Evidence 必须携带同一 `resolvedTraversalLockHash` 以及与 Registry 一致的 Graph
+Builder `resourceRef` / `resolvedVersion` / `contentHash`。步高、坡度、净空和缝隙阈值不写入
+Validation Profile；观测 Metric 在评测时对照 Lock。Profile 只冻结到达容差、卡住窗口和
+最大 Probe Ticks。Canonical Graph 的 `distanceMeters >= 0`，节点/边净空 `> 0`，
+`slopeDegrees` 落在 `[0, 90]`。
 
 ### 9.2 `route-runtime-conformance`
 
@@ -368,6 +372,12 @@ Backend/Adapter 版本；它们不是可以用总体 Metric 代替的调试文�
 - `wrongSupportSurfaceCount`；
 - `invalidPhysicsValueCount`；
 - `completionDurationTicks`。
+
+已评（`passed` / `failed`）Metric 必须至少引用 `route-runtime-probe-receipt`。该类
+Evidence 必须携带与 Graph 相同的 `resolvedTraversalLockHash`、与 Registry 一致的
+Driver 身份，以及 Runtime Backend/Adapter 的 `resourceRef` / `resolvedVersion` /
+`contentHash`。一份 Traversal Graph 不能让 Runtime Gate 通过；缺 Probe 证据时报告
+`incomplete`，不能写成 `passed`。
 
 Graph 通过而 Runtime 失败时，以 Runtime Gate 失败为最终结论，同时保留 Graph 证据用于
 定位 Collider/Controller 差异。Graph 构建缺少 Required Surface/Profile/Evidence 时报告

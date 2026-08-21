@@ -115,9 +115,9 @@ function sampleRoute(
   let samples = 0;
   let steepestDegrees = 0;
   let steepestAt: Vec2Tuple | undefined;
-  for (let index = 1; index < route.points.length; index += 1) {
-    const from = route.points[index - 1];
-    const to = route.points[index];
+  for (let index = 1; index < route.pointsMetersXZ.length; index += 1) {
+    const from = route.pointsMetersXZ[index - 1];
+    const to = route.pointsMetersXZ[index];
     if (from === undefined || to === undefined) continue;
     const length = Math.hypot(to[0] - from[0], to[1] - from[1]);
     const steps = Math.max(1, Math.ceil(length / spacing));
@@ -141,8 +141,8 @@ function sampleRoute(
     samples,
     steepestDegrees,
     ...(steepestAt === undefined ? {} : { steepestAt }),
-    limitDegrees: route.maxSlopeDegrees,
-    pass: samples > 0 && steepestDegrees <= route.maxSlopeDegrees,
+    limitDegrees: route.maximumDesignSlopeDegrees,
+    pass: samples > 0 && steepestDegrees <= route.maximumDesignSlopeDegrees,
   };
 }
 
@@ -198,10 +198,10 @@ export function deriveWorldPlanArtifacts(
     .filter((route) => !route.pass)
     .map((route) => ({
       severity: "error" as const,
-      code: "WORLD_SPEC_ROUTE_NOT_WALKABLE",
+      code: "WORLD_SPEC_ROUTE_PLANNING_EVIDENCE",
       message: route.samples === 0
-        ? `Route ${route.routeId} has no valid terrain samples.`
-        : `Route ${route.routeId} reaches ${route.steepestDegrees.toFixed(1)}°, above its ${route.limitDegrees}° limit.`,
+        ? `planning-evidence: route ${route.routeId} has no valid terrain samples. This is not route playability.`
+        : `planning-evidence: route ${route.routeId} heightfield slope ${route.steepestDegrees.toFixed(1)}° exceeds planned maximumDesignSlopeDegrees ${route.limitDegrees}°. This is not route playability.`,
       suggestions: ["Flatten/smooth the route corridor or update the planned route deliberately."],
     }));
   if (

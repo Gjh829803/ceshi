@@ -1,3 +1,6 @@
+import { readFileSync } from "node:fs";
+import { fileURLToPath } from "node:url";
+
 import { describe, expect, it } from "vitest";
 
 import {
@@ -109,10 +112,11 @@ function validSpec() {
     routes: [
       {
         id: "route",
-        points: [[0, 20], [0, -20]] as const,
-        width: 5,
+        pointsMetersXZ: [[0, 20], [0, -20]] as const,
+        widthMeters: 5,
+        locomotionProfileRef: "worldkit://locomotion-profile/ground.standard@1",
         priority: "primary" as const,
-        maxSlopeDegrees: 35,
+        maximumDesignSlopeDegrees: 35,
         evidence: "planner-inferred" as const,
       },
     ],
@@ -202,7 +206,7 @@ describe("OutdoorWorldSpec", () => {
 
   it("reports a primary route that was planned above the recommended slope margin", () => {
     const spec = validSpec();
-    spec.routes[0] = { ...spec.routes[0]!, maxSlopeDegrees: 40 };
+    spec.routes[0] = { ...spec.routes[0]!, maximumDesignSlopeDegrees: 40 };
     expect(validateOutdoorWorldSpec(spec)).toContainEqual(
       expect.objectContaining({ severity: "warning", code: "WORLD_SPEC_PRIMARY_ROUTE_STEEP" }),
     );
@@ -213,7 +217,7 @@ describe("OutdoorWorldSpec", () => {
     const spec = {
       ...base,
       landmarks: [{ ...base.landmarks[0]!, position: [80, 0, -20] as const }],
-      routes: [{ ...base.routes[0]!, points: [[0, 20], [0, -80]] as const }],
+      routes: [{ ...base.routes[0]!, pointsMetersXZ: [[0, 20], [0, -80]] as const }],
     };
     const codes = validateOutdoorWorldSpec(spec).map((item) => item.code);
     expect(codes).toContain("WORLD_SPEC_LANDMARK_OUTSIDE_BOUNDS");
@@ -271,5 +275,17 @@ describe("OutdoorWorldSpec", () => {
     expect(diagnostics).toContainEqual(
       expect.objectContaining({ severity: "error", code: "WORLD_SPEC_BOUNDS_MISMATCH" }),
     );
+  });
+
+  it("drops legacy Planner Route field names from PlannedRoute", () => {
+    const source = readFileSync(fileURLToPath(new URL("./world-spec.ts", import.meta.url)), "utf8");
+    const block = source.match(/export interface PlannedRoute \{[\s\S]*?\n\}/)?.[0];
+    expect(block).toEqual(expect.stringContaining("pointsMetersXZ"));
+    expect(block).toEqual(expect.stringContaining("widthMeters"));
+    expect(block).toEqual(expect.stringContaining("maximumDesignSlopeDegrees"));
+    expect(block).toEqual(expect.stringContaining("locomotionProfileRef"));
+    expect(block).not.toMatch(/(^|\n)\s*points:/);
+    expect(block).not.toMatch(/(^|\n)\s*width:/);
+    expect(block).not.toMatch(/(^|\n)\s*maxSlopeDegrees:/);
   });
 });
