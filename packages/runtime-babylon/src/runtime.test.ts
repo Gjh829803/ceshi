@@ -54,6 +54,7 @@ import {
   type SubjectVisual,
   type BabylonWorldRuntimeOptions,
 } from "./index";
+import { lockPublishedGroundFeels } from "./lock-published-ground-feels";
 import { SubjectAnimationPlayer } from "./subject-animation-player";
 import { sampleExecutionTerrainHeight } from "./terrain";
 
@@ -589,7 +590,7 @@ function createFlatRiggedExecutionPlan(): ExecutionPlanV4 {
 function createTwoRiggedSubjectExecutionPlan(): ExecutionPlanV4 {
   const executionPlan = createFlatRiggedExecutionPlan();
   const player = executionPlan.subjects[0]!;
-  return {
+  return lockPublishedGroundFeels({
     ...executionPlan,
     subjects: [
       player,
@@ -600,7 +601,7 @@ function createTwoRiggedSubjectExecutionPlan(): ExecutionPlanV4 {
         spawnSubjectOriginPositionMetersXYZ: [4, 0, 30],
       },
     ],
-  };
+  });
 }
 
 async function expectRiggedRuntimeFailure(

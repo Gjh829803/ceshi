@@ -25,6 +25,7 @@ import type {
 } from "@whitebox-world/runtime-contracts";
 
 import { BabylonWorldRuntime } from "./babylon-world-runtime";
+import { lockPublishedGroundFeels } from "./lock-published-ground-feels";
 
 const MEDIUM_FEEL_REF = "worldkit://control-feel-profile/humanoid.medium-ground@1";
 const HEAVY_FEEL_REF = "worldkit://control-feel-profile/humanoid.heavy-ground@1";
@@ -77,7 +78,7 @@ function compileFlatPackagePlan(): ExecutionPlanV4 {
   if (!compiled.ok || compiled.executionPlan === undefined) {
     throw new Error(`Fixture compile failed: ${JSON.stringify(compiled.diagnostics)}`);
   }
-  return compiled.executionPlan;
+  return lockPublishedGroundFeels(compiled.executionPlan);
 }
 
 /**

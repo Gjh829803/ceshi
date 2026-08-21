@@ -127,8 +127,8 @@ export function cameraTuningBoundsV1(
   parameters?: CameraRigParametersV1,
 ): { minimum: number; maximum: number } {
   const safety = CAMERA_TUNING_SAFETY_LIMITS_V1[parameterName];
-  let minimum = safety.minimum;
-  let maximum = safety.maximum;
+  let minimum: number = safety.minimum;
+  let maximum: number = safety.maximum;
   if (parameterName === "pitchRadians" && parameters !== undefined) {
     minimum = Math.max(minimum, parameters.minimumPitchRadians);
     maximum = Math.min(maximum, parameters.maximumPitchRadians);
