@@ -41,7 +41,13 @@ function hasAction(
 }
 
 function clampUnit(value: number): number {
-  return Math.max(-1, Math.min(1, value));
+  const finiteValue = Number.isFinite(value) ? value : 0;
+  return Math.max(-1, Math.min(1, finiteValue));
+}
+
+function clampRatio(value: number): number {
+  const finiteValue = Number.isFinite(value) ? value : 0;
+  return Math.max(0, Math.min(1, finiteValue));
 }
 
 export function hasForwardControlIntentV1(
@@ -132,7 +138,7 @@ export function compileMotionCommandV1(
       brakeRequested: hasAction(actions, "brake"),
       brakeRatio: Math.max(
         hasAction(actions, "brake") ? 1 : 0,
-        Math.max(0, Math.min(1, axes.brakeRatio ?? 0)),
+        clampRatio(axes.brakeRatio ?? 0),
       ),
       handbrakeRequested: hasAction(actions, "handbrake"),
       jumpRequested: hasAction(actions, "jump"),

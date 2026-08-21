@@ -927,6 +927,23 @@ describe("subject resource registry", () => {
     }])).toThrowError(/SUBJECT_REGISTRY_INVALID_CONTROL_INPUT_TUNING/);
   });
 
+  it("rejects Control Profile policies that its command runtime cannot execute", () => {
+    const controls = builtInSubjectResourceRegistry
+      .listCapabilityResources()
+      .filter((resource) => resource.kind === "control-profile");
+    const planar = controls.find((resource) => resource.commandKind === "planar-vector")!;
+    const throttle = controls.find((resource) => resource.commandKind === "throttle-steer")!;
+
+    expect(() => createSubjectResourceRegistry([{
+      ...planar,
+      inputSpace: "subject-local",
+    }])).toThrowError(/SUBJECT_REGISTRY_INVALID_CONTROL_PROFILE_COMBINATION/);
+    expect(() => createSubjectResourceRegistry([{
+      ...throttle,
+      facingPolicy: "fixed",
+    }])).toThrowError(/SUBJECT_REGISTRY_INVALID_CONTROL_PROFILE_COMBINATION/);
+  });
+
   it("rejects non-finite or internally inconsistent Camera Profile parameters", () => {
     const camera = builtInSubjectResourceRegistry.listCapabilityResources().find(
       (resource) => resource.kind === "camera-rig-profile",
@@ -944,5 +961,175 @@ describe("subject resource registry", () => {
         minimumDistanceMeters: camera!.parameters.maximumDistanceMeters + 1,
       },
     }])).toThrowError(/SUBJECT_REGISTRY_INVALID_CAMERA_PARAMETERS/);
+    expect(() => createSubjectResourceRegistry([{
+      ...camera!,
+      parameters: {
+        ...camera!.parameters,
+        baseFovDegrees: 170,
+        maximumSpeedFovDegrees: 20,
+      },
+    }])).toThrowError(/SUBJECT_REGISTRY_INVALID_CAMERA_PARAMETERS/);
+  });
+
+  it("rejects finite Camera Modifiers that violate camera parameter invariants", () => {
+    const modifier = builtInSubjectResourceRegistry.listCapabilityResources().find(
+      (resource) => resource.kind === "camera-modifier-profile",
+    );
+    expect(modifier).toBeDefined();
+
+    expect(() => createSubjectResourceRegistry([{
+      ...modifier!,
+      parameterOverrides: {
+        ...modifier!.parameterOverrides,
+        baseFovDegrees: 200,
+      },
+    }])).toThrowError(/SUBJECT_REGISTRY_INVALID_CAMERA_MODIFIER_PARAMETERS/);
+  });
+
+  it("rejects a Camera Modifier that makes its Context base profile inconsistent", () => {
+    const context = builtInSubjectResourceRegistry.resolveCameraContextProfile(
+      "worldkit://camera-context/capability-driven.default@1",
+    )!;
+    const baseProfile = builtInSubjectResourceRegistry.resolveCameraRigProfile(
+      context.defaultCameraRigProfileRef,
+    )!;
+    const algorithm = builtInSubjectResourceRegistry.resolveCameraRigAlgorithm(
+      baseProfile.algorithmRef,
+    )!;
+    const modifier = builtInSubjectResourceRegistry.resolveCameraModifierProfile(
+      "worldkit://camera-modifier/mounted-framing@1",
+    )!;
+    const resources = [
+      algorithm,
+      baseProfile,
+      {
+        ...modifier,
+        parameterOverrides: { minimumDistanceMeters: 21 },
+      },
+      {
+        kind: context.kind,
+        id: context.id,
+        version: context.version,
+        resourceRef: context.resourceRef,
+        authoringAvailability: context.authoringAvailability,
+        defaultCameraRigProfileRef: context.defaultCameraRigProfileRef,
+        rules: [{
+          id: "invalid-composition",
+          priority: 1,
+          when: {},
+          cameraModifierRefs: [modifier.resourceRef],
+        }],
+        aiMetadata: context.aiMetadata,
+      },
+    ];
+
+    expect(() => createSubjectResourceRegistry(resources)).toThrowError(
+      /SUBJECT_REGISTRY_INVALID_CAMERA_CONTEXT_PARAMETERS/,
+    );
+  });
+
+  it("checks Context Modifiers against a manually selected first-person base", () => {
+    const context = builtInSubjectResourceRegistry.resolveCameraContextProfile(
+      "worldkit://camera-context/capability-driven.default@1",
+    )!;
+    const defaultProfile = builtInSubjectResourceRegistry.resolveCameraRigProfile(
+      context.defaultCameraRigProfileRef,
+    )!;
+    const firstPersonProfile = builtInSubjectResourceRegistry.resolveCameraRigProfile(
+      context.firstPersonCameraRigProfileRef!,
+    )!;
+    const algorithms = [defaultProfile, firstPersonProfile].map((profile) =>
+      builtInSubjectResourceRegistry.resolveCameraRigAlgorithm(profile.algorithmRef)!
+    );
+    const modifier = builtInSubjectResourceRegistry.resolveCameraModifierProfile(
+      "worldkit://camera-modifier/mounted-framing@1",
+    )!;
+    const zeroDistanceFirstPersonProfile = {
+      ...firstPersonProfile,
+      parameters: {
+        ...firstPersonProfile.parameters,
+        maximumDistanceMeters: 0,
+      },
+    };
+
+    expect(() => createSubjectResourceRegistry([
+      ...algorithms,
+      defaultProfile,
+      zeroDistanceFirstPersonProfile,
+      modifier,
+      {
+        kind: context.kind,
+        id: context.id,
+        version: context.version,
+        resourceRef: context.resourceRef,
+        authoringAvailability: context.authoringAvailability,
+        defaultCameraRigProfileRef: defaultProfile.resourceRef,
+        firstPersonCameraRigProfileRef: firstPersonProfile.resourceRef,
+        rules: [{
+          id: "mounted",
+          priority: 1,
+          when: {},
+          cameraModifierRefs: [modifier.resourceRef],
+        }],
+        aiMetadata: context.aiMetadata,
+      },
+    ])).toThrowError(/SUBJECT_REGISTRY_INVALID_CAMERA_CONTEXT_PARAMETERS/);
+  });
+
+  it("rejects two independently valid Context Modifiers whose composition is invalid", () => {
+    const context = builtInSubjectResourceRegistry.resolveCameraContextProfile(
+      "worldkit://camera-context/capability-driven.default@1",
+    )!;
+    const baseProfile = builtInSubjectResourceRegistry.resolveCameraRigProfile(
+      context.defaultCameraRigProfileRef,
+    )!;
+    const algorithm = builtInSubjectResourceRegistry.resolveCameraRigAlgorithm(
+      baseProfile.algorithmRef,
+    )!;
+    const modifierTemplate = builtInSubjectResourceRegistry.resolveCameraModifierProfile(
+      "worldkit://camera-modifier/mounted-framing@1",
+    )!;
+    const distanceModifier = {
+      ...modifierTemplate,
+      id: "test-distance",
+      resourceRef: "worldkit://camera-modifier/test-distance@1",
+      parameterOverrides: { distanceMeters: 18 },
+    };
+    const maximumModifier = {
+      ...modifierTemplate,
+      id: "test-maximum",
+      resourceRef: "worldkit://camera-modifier/test-maximum@1",
+      parameterOverrides: { maximumDistanceMeters: 10 },
+    };
+
+    expect(() => createSubjectResourceRegistry([
+      algorithm,
+      baseProfile,
+      distanceModifier,
+      maximumModifier,
+      {
+        kind: context.kind,
+        id: context.id,
+        version: context.version,
+        resourceRef: context.resourceRef,
+        authoringAvailability: context.authoringAvailability,
+        defaultCameraRigProfileRef: baseProfile.resourceRef,
+        rules: [
+          {
+            id: "distance",
+            priority: 2,
+            when: {},
+            cameraModifierRefs: [distanceModifier.resourceRef],
+          },
+          {
+            id: "maximum",
+            priority: 1,
+            when: {},
+            cameraModifierRefs: [maximumModifier.resourceRef],
+          },
+        ],
+        aiMetadata: context.aiMetadata,
+      },
+    ])).toThrowError(/SUBJECT_REGISTRY_INVALID_CAMERA_CONTEXT_PARAMETERS/);
   });
 });

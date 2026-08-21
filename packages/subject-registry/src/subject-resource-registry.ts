@@ -25,6 +25,7 @@ import type {
 } from "./types-v2";
 import type {
   CameraContextProfileV1,
+  CameraModifierProfileInputV1,
   CameraModifierProfileV1,
   CameraRigAlgorithmDefinitionV1,
   CameraRigProfileInputV1,
@@ -264,11 +265,42 @@ function validateControlProfile(source: ControlProfileInputV1): void {
       `SUBJECT_REGISTRY_INVALID_CONTROL_INPUT_TUNING: '${source.resourceRef}'.`,
     );
   }
+
+  const hasExecutablePolicyCombination = (() => {
+    switch (source.commandKind) {
+      case "planar-vector":
+        return source.inputSpace === "camera-relative" &&
+          (source.facingPolicy === "align-to-move" ||
+            source.facingPolicy === "align-to-view");
+      case "throttle-steer":
+        return source.inputSpace === "subject-local" &&
+          source.facingPolicy === "steering-derived" &&
+          source.lateralMovementPolicy === "forbidden";
+      case "flight-attitude":
+        return source.inputSpace === "flight-frame" &&
+          source.facingPolicy === "flight-derived" &&
+          source.lateralMovementPolicy === "forbidden";
+      case "none":
+        return source.inputSpace === "none" &&
+          source.facingPolicy === "fixed" &&
+          source.lateralMovementPolicy === "forbidden";
+      default:
+        return false;
+    }
+  })();
+  if (!hasExecutablePolicyCombination) {
+    throw new Error(
+      `SUBJECT_REGISTRY_INVALID_CONTROL_PROFILE_COMBINATION: '${source.resourceRef}'.`,
+    );
+  }
 }
 
-function validateCameraProfile(source: CameraRigProfileInputV1): void {
-  const parameters = source.parameters;
-  const negativeAllowed = new Set<keyof typeof parameters>([
+type CameraParametersV1 = CameraRigProfileInputV1["parameters"];
+
+function hasInvalidCameraParameters(
+  parameters: Readonly<Partial<CameraParametersV1>>,
+): boolean {
+  const negativeAllowed = new Set<keyof CameraParametersV1>([
     "shoulderOffsetMeters",
     "pitchRadians",
     "minimumPitchRadians",
@@ -277,23 +309,39 @@ function validateCameraProfile(source: CameraRigProfileInputV1): void {
   const containsInvalidNumber = Object.entries(parameters).some(
     ([name, value]) =>
       !Number.isFinite(value) ||
-      (!negativeAllowed.has(name as keyof typeof parameters) && value < 0),
+      (!negativeAllowed.has(name as keyof CameraParametersV1) && value < 0),
   );
-  if (
-    containsInvalidNumber ||
-    parameters.minimumDistanceMeters > parameters.maximumDistanceMeters ||
-    parameters.distanceMeters < parameters.minimumDistanceMeters ||
-    parameters.distanceMeters > parameters.maximumDistanceMeters ||
-    parameters.minimumPitchRadians > parameters.maximumPitchRadians ||
-    parameters.pitchRadians < parameters.minimumPitchRadians ||
-    parameters.pitchRadians > parameters.maximumPitchRadians ||
-    parameters.horizontalDeadZoneRatio > 1 ||
-    parameters.verticalDeadZoneRatio > 1 ||
-    parameters.baseFovDegrees <= 0 ||
-    parameters.baseFovDegrees >= 180 ||
-    parameters.lookSensitivityXRatio <= 0 ||
-    parameters.lookSensitivityYRatio <= 0
-  ) {
+  const minimumDistance = parameters.minimumDistanceMeters;
+  const maximumDistance = parameters.maximumDistanceMeters;
+  const distance = parameters.distanceMeters;
+  const minimumPitch = parameters.minimumPitchRadians;
+  const maximumPitch = parameters.maximumPitchRadians;
+  const pitch = parameters.pitchRadians;
+  return containsInvalidNumber ||
+    (minimumDistance !== undefined && maximumDistance !== undefined &&
+      minimumDistance > maximumDistance) ||
+    (distance !== undefined && minimumDistance !== undefined && distance < minimumDistance) ||
+    (distance !== undefined && maximumDistance !== undefined && distance > maximumDistance) ||
+    (minimumPitch !== undefined && maximumPitch !== undefined && minimumPitch > maximumPitch) ||
+    (pitch !== undefined && minimumPitch !== undefined && pitch < minimumPitch) ||
+    (pitch !== undefined && maximumPitch !== undefined && pitch > maximumPitch) ||
+    (parameters.horizontalDeadZoneRatio !== undefined &&
+      parameters.horizontalDeadZoneRatio > 1) ||
+    (parameters.verticalDeadZoneRatio !== undefined &&
+      parameters.verticalDeadZoneRatio > 1) ||
+    (parameters.baseFovDegrees !== undefined &&
+      (parameters.baseFovDegrees <= 0 || parameters.baseFovDegrees >= 180)) ||
+    (parameters.baseFovDegrees !== undefined &&
+      parameters.maximumSpeedFovDegrees !== undefined &&
+      parameters.baseFovDegrees + parameters.maximumSpeedFovDegrees >= 180) ||
+    (parameters.lookSensitivityXRatio !== undefined &&
+      parameters.lookSensitivityXRatio <= 0) ||
+    (parameters.lookSensitivityYRatio !== undefined &&
+      parameters.lookSensitivityYRatio <= 0);
+}
+
+function validateCameraProfile(source: CameraRigProfileInputV1): void {
+  if (hasInvalidCameraParameters(source.parameters)) {
     throw new Error(
       `SUBJECT_REGISTRY_INVALID_CAMERA_PARAMETERS: '${source.resourceRef}'.`,
     );
@@ -314,6 +362,22 @@ function validateCameraProfile(source: CameraRigProfileInputV1): void {
         `SUBJECT_REGISTRY_INVALID_AUTHORING_RANGE: '${parameterName}' in '${source.resourceRef}'.`,
       );
     }
+  }
+}
+
+function validateCameraModifierProfile(source: CameraModifierProfileInputV1): void {
+  const nonFiniteParameter = Object.entries(source.parameterOverrides).find(
+    ([, value]) => !Number.isFinite(value),
+  );
+  if (nonFiniteParameter !== undefined) {
+    throw new Error(
+      `SUBJECT_REGISTRY_NON_FINITE_PARAMETER: '${nonFiniteParameter[0]}' in '${source.resourceRef}'.`,
+    );
+  }
+  if (hasInvalidCameraParameters(source.parameterOverrides)) {
+    throw new Error(
+      `SUBJECT_REGISTRY_INVALID_CAMERA_MODIFIER_PARAMETERS: '${source.resourceRef}'.`,
+    );
   }
 }
 
@@ -340,17 +404,6 @@ function validateReferences(resourcesByRef: ReadonlyMap<string, SubjectRegistryR
     if (resource.kind === "camera-rig-profile") {
       requireRef(resource.resourceRef, resource.algorithmRef, "camera-rig-algorithm");
     }
-    if (resource.kind === "camera-modifier-profile") {
-      for (const [parameterName, parameterValue] of Object.entries(
-        resource.parameterOverrides,
-      )) {
-        if (!Number.isFinite(parameterValue)) {
-          throw new Error(
-            `SUBJECT_REGISTRY_NON_FINITE_PARAMETER: '${parameterName}' in '${resource.resourceRef}'.`,
-          );
-        }
-      }
-    }
     if (resource.kind === "camera-context-profile") {
       requireRef(
         resource.resourceRef,
@@ -370,6 +423,47 @@ function validateReferences(resourcesByRef: ReadonlyMap<string, SubjectRegistryR
         }
         for (const modifierRef of rule.cameraModifierRefs ?? []) {
           requireRef(resource.resourceRef, modifierRef, "camera-modifier-profile");
+        }
+      }
+
+      const reachableBaseProfileRefs = new Set([
+        resource.defaultCameraRigProfileRef,
+        ...(resource.firstPersonCameraRigProfileRef === undefined
+          ? []
+          : [resource.firstPersonCameraRigProfileRef]),
+        ...resource.rules.flatMap((rule) =>
+          rule.cameraRigProfileRef === undefined ? [] : [rule.cameraRigProfileRef]
+        ),
+      ]);
+      const reachableModifiers = [...new Set(
+        resource.rules.flatMap((rule) => rule.cameraModifierRefs ?? []),
+      )].flatMap((modifierRef) => {
+        const modifier = resourcesByRef.get(modifierRef);
+        return modifier?.kind === "camera-modifier-profile" ? [modifier] : [];
+      });
+      const modifierSequences: readonly (readonly CameraModifierProfileV1[])[] = [
+        ...reachableModifiers.map((modifier) => [modifier]),
+        ...reachableModifiers.flatMap((first) =>
+          reachableModifiers.flatMap((second) =>
+            first.resourceRef === second.resourceRef ? [] : [[first, second]]
+          )
+        ),
+      ];
+      for (const baseProfileRef of reachableBaseProfileRefs) {
+        const baseProfile = resourcesByRef.get(baseProfileRef);
+        if (baseProfile?.kind !== "camera-rig-profile") continue;
+        for (const modifiers of modifierSequences) {
+          const composedParameters = modifiers.reduce<CameraParametersV1>(
+            (parameters, modifier) => ({
+              ...parameters,
+              ...modifier.parameterOverrides,
+            }),
+            { ...baseProfile.parameters },
+          );
+          if (!hasInvalidCameraParameters(composedParameters)) continue;
+          throw new Error(
+            `SUBJECT_REGISTRY_INVALID_CAMERA_CONTEXT_PARAMETERS: '${resource.resourceRef}' combines '${baseProfileRef}' with '${modifiers.map((modifier) => modifier.resourceRef).join("', '")}'.`,
+          );
         }
       }
     }
@@ -441,6 +535,7 @@ export function createSubjectResourceRegistry(
     if (source.kind === "motion-profile") validateMotionProfile(source);
     if (source.kind === "control-profile") validateControlProfile(source);
     if (source.kind === "camera-rig-profile") validateCameraProfile(source);
+    if (source.kind === "camera-modifier-profile") validateCameraModifierProfile(source);
     if (source.kind === "motion-kernel") {
       const duplicateParameterName = duplicateValue(source.runtimeParameterNames);
       if (duplicateParameterName !== undefined) {

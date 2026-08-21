@@ -136,6 +136,26 @@ describe("compileMotionCommandV1", () => {
     if (command.kind === "throttle-steer") expect(command.throttle).toBeCloseTo(0.25, 12);
   });
 
+  it("neutralizes non-finite analog throttle and brake input", () => {
+    const command = compileMotionCommandV1(
+      profile("throttle-steer", "subject-local"),
+      [],
+      DEFAULT_VIEW_FRAME,
+      { throttleRatio: Number.NaN, brakeRatio: Number.POSITIVE_INFINITY },
+    );
+
+    expect(command).toEqual({
+      kind: "throttle-steer",
+      throttle: 0,
+      steering: 0,
+      brakeRequested: false,
+      brakeRatio: 0,
+      handbrakeRequested: false,
+      jumpRequested: false,
+      boostRequested: false,
+    });
+  });
+
   it("executes facing and lateral policies instead of publishing inert control fields", () => {
     const alignToView = profile("planar-vector", "camera-relative");
     alignToView.facingPolicy = "align-to-view";

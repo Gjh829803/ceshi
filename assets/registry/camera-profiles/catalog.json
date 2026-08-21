@@ -73,7 +73,7 @@
       "parameters": {
         "distanceMeters": 0,
         "minimumDistanceMeters": 0,
-        "maximumDistanceMeters": 0,
+        "maximumDistanceMeters": 20,
         "targetHeightMeters": 1.64,
         "shoulderOffsetMeters": 0,
         "pitchRadians": 0,
