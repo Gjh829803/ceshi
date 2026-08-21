@@ -24,6 +24,7 @@ import type {
   CameraViewInputV1,
   ControlInputAxesV2,
   ControlBindingReceiptV2,
+  ExecutionControlProfileV1,
   ExecutionObjectV3,
   ExecutionLayoutAssertionV1,
   ExecutionLayoutPlacementV1,
@@ -86,6 +87,14 @@ export interface BabylonWorldRuntimeOptions {
 type OwnedDisposer = () => void | Promise<void>;
 
 const WATER_SURFACE_CLASSIFICATION_EPSILON_METERS = 0.1;
+const LEGACY_CAMERA_RELATIVE_CONTROL_PROFILE: ExecutionControlProfileV1 = {
+  resourceRef: "worldkit://control-profile/legacy.camera-relative@1",
+  commandKind: "planar-vector",
+  inputSpace: "camera-relative",
+  facingPolicy: "align-to-move",
+  lateralMovementPolicy: "allowed",
+  inputTuning: { moveDeadzoneRatio: 0, responseExponent: 1 },
+};
 
 class WorldRuntimeDisposeErrorV1 extends Error {
   readonly name = "WorldRuntimeDisposeErrorV1";
@@ -905,7 +914,7 @@ export class BabylonWorldRuntime implements WorldRuntimeSessionV3 {
       relationshipRole: "none",
       cameraContextTags: [
         ...(hasForwardControlIntentV1(
-          subject.capabilityAssembly?.controlProfile.commandKind ?? "planar-vector",
+          subject.capabilityAssembly?.controlProfile ?? LEGACY_CAMERA_RELATIVE_CONTROL_PROFILE,
           this.activeInputActions,
           this.activeInputAxes,
         )
@@ -956,7 +965,9 @@ export class BabylonWorldRuntime implements WorldRuntimeSessionV3 {
   setCameraTuning(tuning: CameraTuningV1): WorldRuntimeSnapshotV3 {
     this.assertUsable();
     if (!this.cameraDirector.setTuning(tuning)) {
-      throw new RangeError("Camera tuning values must be finite numbers.");
+      throw new RangeError(
+        "Camera tuning must use supported registered finite parameters.",
+      );
     }
     this.updateCamera();
     return this.snapshot();

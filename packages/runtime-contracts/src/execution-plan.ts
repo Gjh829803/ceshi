@@ -1,3 +1,8 @@
+import type {
+  CameraRigParameterNameV1,
+  CameraRigParametersV1,
+} from "./camera-parameter-contract";
+
 export type Vec2 = readonly [x: number, z: number];
 export type Vec3 = readonly [x: number, y: number, z: number];
 
@@ -299,46 +304,10 @@ export interface ExecutionCameraRigProfileV1 {
   reverseHeadingPolicy: "follow-velocity" | "preserve-target-forward";
   recenterMode: "off" | "forward-motion" | "always";
   preferredSocketIds: readonly string[];
-  parameters: {
-    distanceMeters: number;
-    minimumDistanceMeters: number;
-    maximumDistanceMeters: number;
-    targetHeightMeters: number;
-    shoulderOffsetMeters: number;
-    pitchRadians: number;
-    minimumPitchRadians: number;
-    maximumPitchRadians: number;
-    positionDampingPerSecond: number;
-    horizontalPositionDampingPerSecond: number;
-    verticalPositionDampingPerSecond: number;
-    maximumPositionLagMeters: number;
-    rotationDampingPerSecond: number;
-    yawDampingPerSecond: number;
-    pitchDampingPerSecond: number;
-    collisionRadiusMeters: number;
-    collisionRetractionMetersPerSecond: number;
-    collisionRecoveryMetersPerSecond: number;
-    baseFovDegrees: number;
-    speedFovDegreesPerMeterPerSecond: number;
-    maximumSpeedFovDegrees: number;
-    lookAheadSeconds: number;
-    accelerationLookAheadSecondsSquared: number;
-    transitionSeconds: number;
-    minimumHeadingSpeedMetersPerSecond: number;
-    velocityHeadingDampingPerSecond: number;
-    fovDampingPerSecond: number;
-    horizontalDeadZoneRatio: number;
-    verticalDeadZoneRatio: number;
-    recenterDelaySeconds: number;
-    recenterDurationSeconds: number;
-    recenterMinimumSpeedMetersPerSecond: number;
-    teleportSnapDistanceMeters: number;
-    lookSensitivityXRatio: number;
-    lookSensitivityYRatio: number;
-  };
-  authoringRanges?: Readonly<
-    Record<string, { minimum: number; maximum: number; step: number }>
-  >;
+  parameters: CameraRigParametersV1;
+  authoringRanges?: Readonly<Partial<
+    Record<CameraRigParameterNameV1, { minimum: number; maximum: number; step: number }>
+  >>;
 }
 
 export interface ExecutionCameraModifierProfileV1 {

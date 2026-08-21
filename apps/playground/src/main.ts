@@ -604,7 +604,7 @@ function installTuningWorkbench(
       fallback: number;
     }> = [
       { key: "distanceMeters", label: "跟随距离", help: "镜头离主体有多远", minimum: 0, maximum: 16, step: 0.1, fallback: Number(base.distanceMeters ?? 5) },
-      { key: "targetHeightMeters", label: "观察高度", help: "镜头对准主体的高度", minimum: 0, maximum: 4, step: 0.05, fallback: Number(base.targetHeightMeters ?? 1.2) },
+      { key: "targetHeightMeters", label: "观察高度", help: "没有专用相机挂点时，镜头对准主体的高度；有挂点时由资产位置决定", minimum: 0, maximum: 4, step: 0.05, fallback: Number(base.targetHeightMeters ?? 1.2) },
       { key: "shoulderOffsetMeters", label: "肩部偏移", help: "让镜头从主体左侧或右侧观察", minimum: -2, maximum: 2, step: 0.05, fallback: Number(base.shoulderOffsetMeters ?? 0) },
       { key: "pitchRadians", label: "镜头俯仰角", help: "调整镜头从上方或下方观察的角度", minimum: -1.2, maximum: 1.2, step: 0.01, fallback: Number(base.pitchRadians ?? 0.25) },
       { key: "horizontalPositionDampingPerSecond", label: "水平跟随速度", help: "调低后主体会在画面左右/前后先行，调高后镜头更快追上", minimum: 0, maximum: 40, step: 0.1, fallback: Number(base.horizontalPositionDampingPerSecond ?? base.positionDampingPerSecond ?? 12) },

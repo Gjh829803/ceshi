@@ -14,6 +14,11 @@ import type {
   ViewControlFrameV1,
   ViewTargetSampleV1,
 } from "@whitebox-world/runtime-contracts";
+import {
+  applyCameraRigParameterOverridesV1,
+  isCameraRigParameterOverrideSupportedV1,
+  isCameraTuningParameterNameV1,
+} from "@whitebox-world/runtime-contracts";
 
 export type CameraPreferenceV1 = "auto" | "first-person" | string;
 
@@ -229,7 +234,12 @@ export class CameraDirectorV1 {
 
   setTuning(tuning: CameraTuningV1): boolean {
     const entries = Object.entries(tuning).filter((entry) => entry[1] !== undefined);
-    if (!entries.every((entry) => typeof entry[1] === "number" && Number.isFinite(entry[1]))) {
+    if (!entries.every((entry) =>
+      isCameraTuningParameterNameV1(entry[0]) &&
+      isCameraRigParameterOverrideSupportedV1(this.activeRigRef, entry[0]) &&
+      typeof entry[1] === "number" &&
+      Number.isFinite(entry[1])
+    )) {
       return false;
     }
     this.tuningByProfileRef.set(this.activeProfileRef, {
@@ -426,10 +436,11 @@ export class CameraDirectorV1 {
         ...(modifier.recenterModeOverride === undefined
           ? {}
           : { recenterMode: modifier.recenterModeOverride }),
-        parameters: {
-          ...current.parameters,
-          ...modifier.parameterOverrides,
-        },
+        parameters: applyCameraRigParameterOverridesV1(
+          baseProfile.algorithmRef,
+          current.parameters,
+          modifier.parameterOverrides,
+        ),
       }),
       baseProfile,
     );
@@ -451,26 +462,11 @@ export class CameraDirectorV1 {
     this.activeRigRef = profile.algorithmRef;
     this.activeModifierRefs = nextModifierRefs;
     const tuning = this.tuningByProfileRef.get(profile.resourceRef) ?? {};
-    const parameters = { ...profile.parameters, ...tuning };
-    // Keep the pre-axis tuning keys working for Browser API clients while the
-    // authoring UI exposes the more precise horizontal/vertical controls.
-    if (tuning.positionDampingPerSecond !== undefined) {
-      if (tuning.horizontalPositionDampingPerSecond === undefined) {
-        parameters.horizontalPositionDampingPerSecond = tuning.positionDampingPerSecond;
-      }
-      if (tuning.verticalPositionDampingPerSecond === undefined) {
-        parameters.verticalPositionDampingPerSecond = tuning.positionDampingPerSecond;
-      }
-    }
-    if (tuning.rotationDampingPerSecond !== undefined) {
-      if (tuning.yawDampingPerSecond === undefined) {
-        parameters.yawDampingPerSecond = tuning.rotationDampingPerSecond;
-      }
-      if (tuning.pitchDampingPerSecond === undefined) {
-        parameters.pitchDampingPerSecond = tuning.rotationDampingPerSecond;
-      }
-      parameters.velocityHeadingDampingPerSecond = tuning.rotationDampingPerSecond;
-    }
+    const parameters = applyCameraRigParameterOverridesV1(
+      profile.algorithmRef,
+      profile.parameters,
+      tuning,
+    );
     this.activeParameters = parameters;
     if (profileChanged) this.transitionDurationSeconds = parameters.transitionSeconds;
 
@@ -734,7 +730,7 @@ export class CameraDirectorV1 {
       const horizontalSpeed = Math.hypot(velocity.x, velocity.z);
       if (
         horizontalVelocity !== undefined &&
-        horizontalSpeed >= profile.parameters.minimumHeadingSpeedMetersPerSecond
+        horizontalSpeed >= parameters.minimumHeadingSpeedMetersPerSecond
       ) {
         this.lastStableVelocityForward =
           profile.reverseHeadingPolicy === "preserve-target-forward" &&

@@ -51,17 +51,16 @@ function clampRatio(value: number): number {
 }
 
 export function hasForwardControlIntentV1(
-  commandKind: ExecutionControlProfileV1["commandKind"],
+  profile: ExecutionControlProfileV1,
   actions: readonly SemanticInputActionV1[],
   axes: Readonly<ControlInputAxesV2> = {},
 ): boolean {
-  if (commandKind === "throttle-steer" && axes.throttleRatio !== undefined) {
-    return Number.isFinite(axes.throttleRatio) && axes.throttleRatio > 0.000001;
+  if (profile.commandKind === "none" || profile.inputSpace === "none") return false;
+  const { longitudinal } = resolveControlAxesV1(profile, actions, axes);
+  if (profile.commandKind === "throttle-steer") {
+    return resolveThrottleV1(longitudinal, axes) > 0.000001;
   }
-  if (axes.moveYRatio !== undefined) {
-    return Number.isFinite(axes.moveYRatio) && axes.moveYRatio > 0.000001;
-  }
-  return hasAction(actions, "move-forward") && !hasAction(actions, "move-backward");
+  return longitudinal > 0.000001;
 }
 
 function normalizedAxis(
@@ -76,6 +75,37 @@ function normalizedAxis(
   return Math.sign(clamped) * Math.pow(normalized, responseExponent);
 }
 
+function resolveControlAxesV1(
+  profile: ExecutionControlProfileV1,
+  actions: readonly SemanticInputActionV1[],
+  axes: Readonly<ControlInputAxesV2>,
+): { longitudinal: number; lateral: number } {
+  const digitalLongitudinal =
+    (hasAction(actions, "move-forward") ? 1 : 0) -
+    (hasAction(actions, "move-backward") ? 1 : 0);
+  const digitalLateral =
+    (hasAction(actions, "move-right") ? 1 : 0) -
+    (hasAction(actions, "move-left") ? 1 : 0);
+  const { moveDeadzoneRatio, responseExponent } = profile.inputTuning;
+  return {
+    longitudinal: axes.moveYRatio === undefined
+      ? digitalLongitudinal
+      : normalizedAxis(axes.moveYRatio, moveDeadzoneRatio, responseExponent),
+    lateral: axes.moveXRatio === undefined
+      ? digitalLateral
+      : normalizedAxis(axes.moveXRatio, moveDeadzoneRatio, responseExponent),
+  };
+}
+
+function resolveThrottleV1(
+  longitudinal: number,
+  axes: Readonly<ControlInputAxesV2>,
+): number {
+  return axes.throttleRatio === undefined
+    ? clampUnit(longitudinal)
+    : clampUnit(axes.throttleRatio - Math.max(0, -longitudinal));
+}
+
 export function compileMotionCommandV1(
   profile: ExecutionControlProfileV1,
   actions: readonly SemanticInputActionV1[],
@@ -85,20 +115,7 @@ export function compileMotionCommandV1(
   if (profile.commandKind === "none" || profile.inputSpace === "none") {
     return { kind: "none" };
   }
-  const digitalLongitudinal =
-    (hasAction(actions, "move-forward") ? 1 : 0) -
-    (hasAction(actions, "move-backward") ? 1 : 0);
-  const digitalLateral =
-    (hasAction(actions, "move-right") ? 1 : 0) -
-    (hasAction(actions, "move-left") ? 1 : 0);
-  const moveDeadzoneRatio = profile.inputTuning.moveDeadzoneRatio;
-  const responseExponent = profile.inputTuning.responseExponent;
-  const longitudinal = axes.moveYRatio === undefined
-    ? digitalLongitudinal
-    : normalizedAxis(axes.moveYRatio, moveDeadzoneRatio, responseExponent);
-  const lateral = axes.moveXRatio === undefined
-    ? digitalLateral
-    : normalizedAxis(axes.moveXRatio, moveDeadzoneRatio, responseExponent);
+  const { longitudinal, lateral } = resolveControlAxesV1(profile, actions, axes);
 
   if (profile.commandKind === "planar-vector") {
     const planarLateral = profile.lateralMovementPolicy === "allowed" ? lateral : 0;
@@ -131,9 +148,7 @@ export function compileMotionCommandV1(
   if (profile.commandKind === "throttle-steer") {
     return {
       kind: "throttle-steer",
-      throttle: axes.throttleRatio === undefined
-        ? clampUnit(longitudinal)
-        : clampUnit(axes.throttleRatio - Math.max(0, -longitudinal)),
+      throttle: resolveThrottleV1(longitudinal, axes),
       steering: clampUnit(lateral),
       brakeRequested: hasAction(actions, "brake"),
       brakeRatio: Math.max(

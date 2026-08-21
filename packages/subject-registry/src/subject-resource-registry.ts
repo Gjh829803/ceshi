@@ -1,4 +1,9 @@
 import { sha256CanonicalJson } from "@whitebox-world/protocol";
+import {
+  applyCameraRigParameterOverridesV1,
+  CAMERA_RIG_PARAMETER_NAMES_V1,
+  isCameraRigParameterNameV1,
+} from "@whitebox-world/runtime-contracts";
 
 import { BUILT_IN_SUBJECT_RESOURCE_MANIFESTS } from "./built-in-resource-manifests";
 import { BUILT_IN_SUBJECT_DEFINITIONS } from "./built-in-subject-definitions";
@@ -341,9 +346,37 @@ function hasInvalidCameraParameters(
 }
 
 function validateCameraProfile(source: CameraRigProfileInputV1): void {
+  const unknownParameterName = Object.keys(source.parameters).find(
+    (parameterName) => !isCameraRigParameterNameV1(parameterName),
+  );
+  if (unknownParameterName !== undefined) {
+    throw new Error(
+      `SUBJECT_REGISTRY_UNKNOWN_CAMERA_PARAMETER: '${unknownParameterName}' in '${source.resourceRef}'.`,
+    );
+  }
+  const missingParameterName = CAMERA_RIG_PARAMETER_NAMES_V1.find(
+    (parameterName) => !Object.prototype.hasOwnProperty.call(source.parameters, parameterName),
+  );
+  if (missingParameterName !== undefined) {
+    throw new Error(
+      `SUBJECT_REGISTRY_MISSING_CAMERA_PARAMETER: '${missingParameterName}' in '${source.resourceRef}'.`,
+    );
+  }
   if (hasInvalidCameraParameters(source.parameters)) {
     throw new Error(
       `SUBJECT_REGISTRY_INVALID_CAMERA_PARAMETERS: '${source.resourceRef}'.`,
+    );
+  }
+  const expectedAlgorithmRefByBaseMode = {
+    "first-person": "worldkit://camera-rig/socket-first-person@1",
+    "free-orbit": "worldkit://camera-rig/orbit-follow@1",
+    "stable-follow": "worldkit://camera-rig/orbit-follow@1",
+    "speed-chase": "worldkit://camera-rig/velocity-chase@1",
+    "flight-horizon": "worldkit://camera-rig/flight-horizon@1",
+  } as const satisfies Record<CameraRigProfileInputV1["baseMode"], string>;
+  if (source.algorithmRef !== expectedAlgorithmRefByBaseMode[source.baseMode]) {
+    throw new Error(
+      `SUBJECT_REGISTRY_CAMERA_MODE_ALGORITHM_MISMATCH: '${source.resourceRef}' declares '${source.baseMode}' with '${source.algorithmRef}'.`,
     );
   }
   for (const [parameterName, range] of Object.entries(source.authoringRanges ?? {})) {
@@ -366,6 +399,14 @@ function validateCameraProfile(source: CameraRigProfileInputV1): void {
 }
 
 function validateCameraModifierProfile(source: CameraModifierProfileInputV1): void {
+  const unknownParameterName = Object.keys(source.parameterOverrides).find(
+    (parameterName) => !isCameraRigParameterNameV1(parameterName),
+  );
+  if (unknownParameterName !== undefined) {
+    throw new Error(
+      `SUBJECT_REGISTRY_UNKNOWN_CAMERA_PARAMETER: '${unknownParameterName}' in '${source.resourceRef}'.`,
+    );
+  }
   const nonFiniteParameter = Object.entries(source.parameterOverrides).find(
     ([, value]) => !Number.isFinite(value),
   );
@@ -403,6 +444,12 @@ function validateReferences(resourcesByRef: ReadonlyMap<string, SubjectRegistryR
     }
     if (resource.kind === "camera-rig-profile") {
       requireRef(resource.resourceRef, resource.algorithmRef, "camera-rig-algorithm");
+      const algorithm = resourcesByRef.get(resource.algorithmRef);
+      if (algorithm?.kind === "camera-rig-algorithm" && algorithm.runtimeStatus === "reserved") {
+        throw new Error(
+          `SUBJECT_REGISTRY_RESERVED_CAMERA_ALGORITHM: '${resource.resourceRef}' targets '${algorithm.resourceRef}'.`,
+        );
+      }
     }
     if (resource.kind === "camera-context-profile") {
       requireRef(
@@ -454,10 +501,11 @@ function validateReferences(resourcesByRef: ReadonlyMap<string, SubjectRegistryR
         if (baseProfile?.kind !== "camera-rig-profile") continue;
         for (const modifiers of modifierSequences) {
           const composedParameters = modifiers.reduce<CameraParametersV1>(
-            (parameters, modifier) => ({
-              ...parameters,
-              ...modifier.parameterOverrides,
-            }),
+            (parameters, modifier) => applyCameraRigParameterOverridesV1(
+              baseProfile.algorithmRef,
+              parameters,
+              modifier.parameterOverrides,
+            ),
             { ...baseProfile.parameters },
           );
           if (!hasInvalidCameraParameters(composedParameters)) continue;

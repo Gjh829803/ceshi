@@ -172,25 +172,36 @@ describe("compileMotionCommandV1", () => {
     });
   });
 
-  it("treats analog-only forward input as camera forward intent", () => {
-    expect(hasForwardControlIntentV1("planar-vector", [], { moveYRatio: 0.7 })).toBe(true);
+  it("derives camera forward intent from the same effective input as motion", () => {
+    const planar = profile("planar-vector", "camera-relative");
+    const throttle = profile("throttle-steer", "subject-local");
+    expect(hasForwardControlIntentV1(planar, [], { moveYRatio: 0.7 })).toBe(true);
     expect(hasForwardControlIntentV1(
-      "planar-vector",
+      planar,
       [],
       { moveYRatio: 0.7, throttleRatio: 0 },
     )).toBe(true);
     expect(hasForwardControlIntentV1(
-      "throttle-steer",
+      throttle,
       [],
       { moveYRatio: 0.7, throttleRatio: 0 },
     )).toBe(false);
-    expect(hasForwardControlIntentV1("throttle-steer", [], { throttleRatio: 0.4 })).toBe(true);
+    expect(hasForwardControlIntentV1(throttle, [], { throttleRatio: 0.4 })).toBe(true);
     expect(hasForwardControlIntentV1(
-      "planar-vector",
+      planar,
       ["move-forward"],
       { moveYRatio: -0.2 },
     )).toBe(false);
-    expect(hasForwardControlIntentV1("planar-vector", ["move-forward"], {})).toBe(true);
+    expect(hasForwardControlIntentV1(planar, ["move-forward"], {})).toBe(true);
+
+    planar.inputTuning = { moveDeadzoneRatio: 0.1, responseExponent: 2 };
+    expect(hasForwardControlIntentV1(planar, [], { moveYRatio: 0.05 })).toBe(false);
+    expect(hasForwardControlIntentV1(planar, [], { moveYRatio: 0.2 })).toBe(true);
+    expect(hasForwardControlIntentV1(
+      throttle,
+      [],
+      { throttleRatio: 0.4, moveYRatio: -1 },
+    )).toBe(false);
   });
 
   it("keeps skills, aim, boost, brake and handbrake as independent semantic actions", () => {

@@ -1,4 +1,9 @@
 import type {
+  CameraRigParameterNameV1,
+  CameraRigParametersV1,
+} from "@whitebox-world/runtime-contracts";
+
+import type {
   RegistrySubjectDefinitionInputV2,
   RegistrySubjectDefinitionV2,
   SubjectRegistryResourceInputV1,
@@ -120,44 +125,10 @@ export interface CameraRigProfileInputV1
   reverseHeadingPolicy: "follow-velocity" | "preserve-target-forward";
   recenterMode: "off" | "forward-motion" | "always";
   preferredSocketIds: readonly string[];
-  parameters: {
-    distanceMeters: number;
-    minimumDistanceMeters: number;
-    maximumDistanceMeters: number;
-    targetHeightMeters: number;
-    shoulderOffsetMeters: number;
-    pitchRadians: number;
-    minimumPitchRadians: number;
-    maximumPitchRadians: number;
-    positionDampingPerSecond: number;
-    horizontalPositionDampingPerSecond: number;
-    verticalPositionDampingPerSecond: number;
-    maximumPositionLagMeters: number;
-    rotationDampingPerSecond: number;
-    yawDampingPerSecond: number;
-    pitchDampingPerSecond: number;
-    collisionRadiusMeters: number;
-    collisionRetractionMetersPerSecond: number;
-    collisionRecoveryMetersPerSecond: number;
-    baseFovDegrees: number;
-    speedFovDegreesPerMeterPerSecond: number;
-    maximumSpeedFovDegrees: number;
-    lookAheadSeconds: number;
-    accelerationLookAheadSecondsSquared: number;
-    transitionSeconds: number;
-    minimumHeadingSpeedMetersPerSecond: number;
-    velocityHeadingDampingPerSecond: number;
-    fovDampingPerSecond: number;
-    horizontalDeadZoneRatio: number;
-    verticalDeadZoneRatio: number;
-    recenterDelaySeconds: number;
-    recenterDurationSeconds: number;
-    recenterMinimumSpeedMetersPerSecond: number;
-    teleportSnapDistanceMeters: number;
-    lookSensitivityXRatio: number;
-    lookSensitivityYRatio: number;
-  };
-  authoringRanges?: Readonly<Record<string, ParameterAuthoringRangeV1>>;
+  parameters: CameraRigParametersV1;
+  authoringRanges?: Readonly<Partial<
+    Record<CameraRigParameterNameV1, ParameterAuthoringRangeV1>
+  >>;
 }
 
 export interface CameraModifierProfileInputV1

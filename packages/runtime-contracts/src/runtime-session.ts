@@ -1,3 +1,4 @@
+import type { CameraTuningV1 } from "./camera-parameter-contract";
 import type { Vec3 } from "./execution-plan";
 
 export type SemanticInputActionV1 =
@@ -38,40 +39,6 @@ export interface CameraViewInputV1 {
   yawDeltaRadians?: number;
   pitchDeltaRadians?: number;
   zoomDeltaMeters?: number;
-}
-
-export interface CameraTuningV1 {
-  distanceMeters?: number;
-  targetHeightMeters?: number;
-  shoulderOffsetMeters?: number;
-  pitchRadians?: number;
-  positionDampingPerSecond?: number;
-  horizontalPositionDampingPerSecond?: number;
-  verticalPositionDampingPerSecond?: number;
-  maximumPositionLagMeters?: number;
-  rotationDampingPerSecond?: number;
-  yawDampingPerSecond?: number;
-  pitchDampingPerSecond?: number;
-  collisionRadiusMeters?: number;
-  collisionRetractionMetersPerSecond?: number;
-  collisionRecoveryMetersPerSecond?: number;
-  lookAheadSeconds?: number;
-  accelerationLookAheadSecondsSquared?: number;
-  minimumHeadingSpeedMetersPerSecond?: number;
-  velocityHeadingDampingPerSecond?: number;
-  transitionSeconds?: number;
-  baseFovDegrees?: number;
-  speedFovDegreesPerMeterPerSecond?: number;
-  maximumSpeedFovDegrees?: number;
-  fovDampingPerSecond?: number;
-  horizontalDeadZoneRatio?: number;
-  verticalDeadZoneRatio?: number;
-  recenterDelaySeconds?: number;
-  recenterDurationSeconds?: number;
-  recenterMinimumSpeedMetersPerSecond?: number;
-  teleportSnapDistanceMeters?: number;
-  lookSensitivityXRatio?: number;
-  lookSensitivityYRatio?: number;
 }
 
 export type MotionParameterTuningV1 = Readonly<Record<string, number>>;

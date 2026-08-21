@@ -184,6 +184,12 @@ describe("capability package runtime smoke tests", () => {
         });
         expect(camera.positionMetersXYZ.every(Number.isFinite)).toBe(true);
       }
+      runtime.setCameraPreference("worldkit://camera-profile/first-person.standard@1");
+      expect(() => runtime.setCameraTuning({ distanceMeters: 6 }))
+        .toThrow(/supported registered finite parameters/);
+      expect(() => runtime.setCameraTuning({
+        minimumDistanceMeters: 1,
+      } as never)).toThrow(/supported registered finite parameters/);
       runtime.setCameraPreference("worldkit://camera-profile/orbit.medium@1");
       const adjustedCamera = runtime.adjustCameraView({
         yawDeltaRadians: 0.5,
@@ -202,6 +208,9 @@ describe("capability package runtime smoke tests", () => {
         rotationDampingPerSecond: 18,
         lookAheadSeconds: 0.4,
       });
+      expect(() => runtime.setCameraTuning({
+        inventedCameraKnob: 1,
+      } as never)).toThrow(/supported registered finite parameters/);
       runtime.resetCameraView();
       expect(runtime.setCameraPreference("auto").camera.preference).toBe("auto");
       runtime.reset();
@@ -476,6 +485,29 @@ describe("capability package runtime smoke tests", () => {
               reverseOffsetZ * reversingState.forwardXYZ![2]) /
               reverseOffsetLength,
           ).toBeLessThan(-0.8);
+
+          const cameraPositionAfterTurn = async (
+            minimumHeadingSpeedMetersPerSecond: number,
+          ) => {
+            runtime.reset();
+            runtime.setCameraPreference("worldkit://camera-profile/chase.surface-fast@1");
+            runtime.setCameraTuning({
+              minimumHeadingSpeedMetersPerSecond,
+              velocityHeadingDampingPerSecond: 40,
+              yawDampingPerSecond: 40,
+              transitionSeconds: 0,
+            });
+            return (await runtime.runFixedInput({
+              actions: ["move-forward", "move-left"],
+              ticks: 90,
+            })).camera.positionMetersXYZ;
+          };
+          const velocityHeadingCamera = await cameraPositionAfterTurn(0);
+          const stableHeadingCamera = await cameraPositionAfterTurn(20);
+          expect(Math.hypot(
+            velocityHeadingCamera[0] - stableHeadingCamera[0],
+            velocityHeadingCamera[2] - stableHeadingCamera[2],
+          )).toBeGreaterThan(1);
 
           const cameraDistanceAfterRun = async (maximumPositionLagMeters: number) => {
             runtime.reset();

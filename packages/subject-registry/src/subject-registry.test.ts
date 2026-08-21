@@ -971,6 +971,56 @@ describe("subject resource registry", () => {
     }])).toThrowError(/SUBJECT_REGISTRY_INVALID_CAMERA_PARAMETERS/);
   });
 
+  it("rejects Camera Profiles with missing or unknown parameter fields", () => {
+    const camera = builtInSubjectResourceRegistry.listCapabilityResources().find(
+      (resource) => resource.kind === "camera-rig-profile",
+    )!;
+    const { yawDampingPerSecond: _missing, ...missingParameters } = camera.parameters;
+
+    expect(() => createSubjectResourceRegistry([{
+      ...camera,
+      parameters: missingParameters as typeof camera.parameters,
+    }])).toThrowError(/SUBJECT_REGISTRY_MISSING_CAMERA_PARAMETER/);
+    expect(() => createSubjectResourceRegistry([{
+      ...camera,
+      parameters: {
+        ...camera.parameters,
+        inventedCameraKnob: 1,
+      } as typeof camera.parameters,
+    }])).toThrowError(/SUBJECT_REGISTRY_UNKNOWN_CAMERA_PARAMETER/);
+  });
+
+  it("rejects unknown Camera Modifier parameters", () => {
+    const modifier = builtInSubjectResourceRegistry.listCapabilityResources().find(
+      (resource) => resource.kind === "camera-modifier-profile",
+    )!;
+
+    expect(() => createSubjectResourceRegistry([{
+      ...modifier,
+      parameterOverrides: {
+        inventedCameraKnob: 1,
+      } as typeof modifier.parameterOverrides,
+    }])).toThrowError(/SUBJECT_REGISTRY_UNKNOWN_CAMERA_PARAMETER/);
+  });
+
+  it("rejects Camera Profile mode/algorithm mismatches and reserved algorithms", () => {
+    const profile = builtInSubjectResourceRegistry.resolveCameraRigProfile(
+      "worldkit://camera-profile/orbit.medium@1",
+    )!;
+    const algorithm = builtInSubjectResourceRegistry.resolveCameraRigAlgorithm(
+      profile.algorithmRef,
+    )!;
+
+    expect(() => createSubjectResourceRegistry([
+      algorithm,
+      { ...profile, baseMode: "first-person" },
+    ])).toThrowError(/SUBJECT_REGISTRY_CAMERA_MODE_ALGORITHM_MISMATCH/);
+    expect(() => createSubjectResourceRegistry([
+      { ...algorithm, runtimeStatus: "reserved" },
+      profile,
+    ])).toThrowError(/SUBJECT_REGISTRY_RESERVED_CAMERA_ALGORITHM/);
+  });
+
   it("rejects finite Camera Modifiers that violate camera parameter invariants", () => {
     const modifier = builtInSubjectResourceRegistry.listCapabilityResources().find(
       (resource) => resource.kind === "camera-modifier-profile",
@@ -1028,7 +1078,7 @@ describe("subject resource registry", () => {
     );
   });
 
-  it("checks Context Modifiers against a manually selected first-person base", () => {
+  it("ignores third-person-only Context Modifier fields for a first-person base", () => {
     const context = builtInSubjectResourceRegistry.resolveCameraContextProfile(
       "worldkit://camera-context/capability-driven.default@1",
     )!;
@@ -1073,7 +1123,7 @@ describe("subject resource registry", () => {
         }],
         aiMetadata: context.aiMetadata,
       },
-    ])).toThrowError(/SUBJECT_REGISTRY_INVALID_CAMERA_CONTEXT_PARAMETERS/);
+    ])).not.toThrow();
   });
 
   it("rejects two independently valid Context Modifiers whose composition is invalid", () => {
