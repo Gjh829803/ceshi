@@ -353,10 +353,17 @@ Visibility、Camera、Navigation 和更复杂的构图要求。它属于后续�
    Camera 和碰撞接缝通过。
 5. **Resource Lifecycle Fixture**：重复加载/卸载 Tile 与 Structure，无 Body、Shape、Mesh、
    Listener、Surface Index 或 Portal 残留。
+6. **AI Authoring Conformance Fixture**：普通 AI Schema Profile 只允许 Agent 提交稳定
+   `prototypeRef`、实例 Transform 和必要 Placement/Route Constraint；Bridge/Cave Kit 的
+   Collider、Opening、Surface、Region 和 Portal 由 Registry/Compiler 确定性展开。至少
+   两个结构化输出 Adapter 使用同一 Canonical 字段生成有效 Fixture，并能根据结构化
+   Diagnostic 完成修复，不创建 Provider 方言或底层引擎字段。
 
 ### 11.2 阻断 Gate
 
 - Schema/Registry/Hash/Resource Lock 完整；
+- 普通 AI Schema Profile 不暴露 Collider、Opening、Surface、Portal 或 Babylon/Havok
+  实现字段；高级 Profile 只能使用显式允许且仍属于 Canonical Schema 的组合字段；
 - Geometry 与 Collider Topology 分别合格；
 - Visual/Collider/Surface ID 集合和 Transform 一致；
 - Terrain Opening 在当前 Render、Physics、Query 三个通道一致；未来存在 Navigation

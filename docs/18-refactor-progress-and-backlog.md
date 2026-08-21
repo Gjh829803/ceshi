@@ -454,13 +454,17 @@ Heightfield 在大面积户外地表上的性能、确定性和工具链优势�
   LOD、共享资源 Lease、部分构造失败回滚、Dispose 和性能预算。
 - [ ] CLI/Browser/Validation 输出 Opening Mask、Visual/Collider/Surface Overlay、Support
   Hit、Region/Portal、Seam/Clearance/Slope/Route Diagnostic 和全部 Resource/Profile Hash。
+- [ ] 增加 AI Authoring Conformance：普通 AI 只提交 `prototypeRef`、Transform 和必要
+  Placement/Route Constraint，Registry/Compiler 自动展开 Collider、Opening、Surface、
+  Region 和 Portal；至少两个结构化输出 Adapter 使用相同 Canonical 字段完成 Bridge/Cave
+  Fixture 及 Diagnostic 修复，不产生 Provider 方言或引擎字段。
 - [ ] 只有出现明确产品需求后，才为多层 Navigation、完整室内、运行时雕刻/破坏或
   Voxel/SDF 建立独立设计与实施计划；不得提前泄漏实验字段到 Canonical Schema。
 
 完成标准：Bridge 与可进入 Cave 两个 Golden Fixture 分别证明同一 XZ 多层支撑、Terrain
-Opening 当前 Render/Physics/Query 一致、物理接触唯一 Ground Support、可玩路线、固定 Tick Replay、
-Streaming/Dispose 和自动 Diagnostic；普通 Agent 只引用稳定 Prototype/Profile/关系即可
-组装场景。
+Opening 当前 Render/Physics/Query 一致、物理接触唯一 Ground Support、可玩路线、固定 Tick
+Replay、Streaming/Dispose 和自动 Diagnostic；普通 Agent 只引用稳定 Prototype/Profile/关系
+即可组装场景，并通过 AI Authoring Conformance。
 
 ### P3：生产收敛与默认切换
 
