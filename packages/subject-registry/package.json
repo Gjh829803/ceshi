@@ -9,7 +9,6 @@
   "dependencies": {
     "@whitebox-world/protocol": "workspace:*",
     "@whitebox-world/runtime-contracts": "workspace:*",
-    "@whitebox-world/subject-composition": "workspace:*",
-    "lodash-es": "^4.17.21"
+    "@whitebox-world/subject-composition": "workspace:*"
   }
 }

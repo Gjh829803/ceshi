@@ -4,7 +4,6 @@ import {
   CAMERA_RIG_PARAMETER_NAMES_V1,
   isCameraRigParameterNameV1,
 } from "@whitebox-world/runtime-contracts";
-import { isEmpty, isNil } from "lodash-es";
 
 import type {
   AnimationSetManifestInputV1,
@@ -468,7 +467,11 @@ function validatePhysicsBodyProfile(source: PhysicsBodyProfileManifestInputV1): 
 
 function validateSubjectDefinitionV3(source: RegistrySubjectDefinitionInputV3): void {
   const controlFeelProfileRef = source.profiles.controlFeelProfileRef;
-  if (isNil(controlFeelProfileRef) || isEmpty(controlFeelProfileRef)) {
+  if (
+    controlFeelProfileRef === undefined ||
+    controlFeelProfileRef === null ||
+    controlFeelProfileRef === ""
+  ) {
     throw new Error(
       `SUBJECT_CONTROL_FEEL_PROFILE_REQUIRED: '${source.resourceRef}'.`,
     );
