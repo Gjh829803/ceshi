@@ -257,12 +257,12 @@ export const worldSpec = defineOutdoorWorldSpec({
     { id: "east-cove-sailboat-anchor", semantic: "tiny_east_cove_sailboat", position: [215, 1, -15], approximateSize: [3.2, 5.5, 7], importance: "background", featureId: "east-cove-sailboat", evidence: "planner-inferred" },
   ],
   routes: [
-    { id: "central-overlook-descent", points: [[0, 355], [0, 320], [-5, 295], [0, 280]], width: 9, priority: "primary", maxSlopeDegrees: 30, evidence: "user-explicit" },
-    { id: "east-lighthouse-branch", points: [[0, 280], [45, 260], [75, 210], [100, 150], [110, 100]], width: 8, priority: "primary", maxSlopeDegrees: 32, evidence: "planner-inferred" },
-    { id: "west-coast-terrace-route", points: [[0, 280], [-130, 270], [-205, 210], [-255, 115], [-290, 5], [-345, -95], [-385, -210]], width: 8, priority: "primary", maxSlopeDegrees: 33, evidence: "planner-inferred" },
-    { id: "east-coast-north-route", points: [[110, 100], [200, -40], [300, -195], [405, -325]], width: 7, priority: "secondary", maxSlopeDegrees: 34, evidence: "planner-inferred" },
-    { id: "southern-rear-loop-west", points: [[0, 355], [-120, 405], [-275, 390], [-410, 310], [-350, 165], [-235, 100]], width: 9, priority: "primary", maxSlopeDegrees: 34, evidence: "planner-inferred" },
-    { id: "southern-rear-loop-east", points: [[0, 355], [135, 415], [290, 390], [420, 300], [350, 170], [230, 100]], width: 9, priority: "primary", maxSlopeDegrees: 34, evidence: "planner-inferred" },
+    { id: "central-overlook-descent", pointsMetersXZ: [[0, 355], [0, 320], [-5, 295], [0, 280]], widthMeters: 9, locomotionProfileRef: "worldkit://locomotion-profile/ground.standard@1", priority: "primary", maximumDesignSlopeDegrees: 30, evidence: "user-explicit" },
+    { id: "east-lighthouse-branch", pointsMetersXZ: [[0, 280], [45, 260], [75, 210], [100, 150], [110, 100]], widthMeters: 8, locomotionProfileRef: "worldkit://locomotion-profile/ground.standard@1", priority: "primary", maximumDesignSlopeDegrees: 32, evidence: "planner-inferred" },
+    { id: "west-coast-terrace-route", pointsMetersXZ: [[0, 280], [-130, 270], [-205, 210], [-255, 115], [-290, 5], [-345, -95], [-385, -210]], widthMeters: 8, locomotionProfileRef: "worldkit://locomotion-profile/ground.standard@1", priority: "primary", maximumDesignSlopeDegrees: 33, evidence: "planner-inferred" },
+    { id: "east-coast-north-route", pointsMetersXZ: [[110, 100], [200, -40], [300, -195], [405, -325]], widthMeters: 7, locomotionProfileRef: "worldkit://locomotion-profile/ground.standard@1", priority: "secondary", maximumDesignSlopeDegrees: 34, evidence: "planner-inferred" },
+    { id: "southern-rear-loop-west", pointsMetersXZ: [[0, 355], [-120, 405], [-275, 390], [-410, 310], [-350, 165], [-235, 100]], widthMeters: 9, locomotionProfileRef: "worldkit://locomotion-profile/ground.standard@1", priority: "primary", maximumDesignSlopeDegrees: 34, evidence: "planner-inferred" },
+    { id: "southern-rear-loop-east", pointsMetersXZ: [[0, 355], [135, 415], [290, 390], [420, 300], [350, 170], [230, 100]], widthMeters: 9, locomotionProfileRef: "worldkit://locomotion-profile/ground.standard@1", priority: "primary", maximumDesignSlopeDegrees: 34, evidence: "planner-inferred" },
   ],
   entry: {
     spawn: [0, 355],

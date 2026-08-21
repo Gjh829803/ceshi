@@ -97,10 +97,11 @@ export interface PlannedLandmark {
 
 export interface PlannedRoute {
   id: string;
-  points: readonly Vec2Tuple[];
-  width: number;
+  pointsMetersXZ: readonly Vec2Tuple[];
+  widthMeters: number;
+  locomotionProfileRef: string;
   priority: "primary" | "secondary";
-  maxSlopeDegrees: number;
+  maximumDesignSlopeDegrees: number;
   evidence: WorldPlanEvidence;
 }
 
@@ -396,7 +397,7 @@ export function validateOutdoorWorldSpec(
   }
   for (const route of spec.routes) {
     addUnique(route.id, "Route");
-    if (route.points.length < 2 || route.points.some((point) => !isFiniteTuple(point, 2))) {
+    if (route.pointsMetersXZ.length < 2 || route.pointsMetersXZ.some((point) => !isFiniteTuple(point, 2))) {
       diagnostics.push(
         diagnostic(
           "error",
@@ -405,7 +406,7 @@ export function validateOutdoorWorldSpec(
         ),
       );
     }
-    if (route.points.some((point) => !insideBounds(point, spec.bounds))) {
+    if (route.pointsMetersXZ.some((point) => !insideBounds(point, spec.bounds))) {
       diagnostics.push(
         diagnostic(
           "error",
@@ -414,20 +415,34 @@ export function validateOutdoorWorldSpec(
         ),
       );
     }
-    if (!(route.width > 0) || !(route.maxSlopeDegrees > 0 && route.maxSlopeDegrees <= 90)) {
+    if (
+      route.locomotionProfileRef.trim() === ""
+    ) {
       diagnostics.push(
         diagnostic(
           "error",
           "WORLD_SPEC_ROUTE_CONSTRAINT_INVALID",
-          `Route ${route.id} requires a positive width and maxSlopeDegrees in (0, 90].`,
+          `Route ${route.id} requires a locomotionProfileRef.`,
         ),
       );
-    } else if (route.priority === "primary" && route.maxSlopeDegrees > 35) {
+    }
+    if (
+      !(route.widthMeters > 0) ||
+      !(route.maximumDesignSlopeDegrees > 0 && route.maximumDesignSlopeDegrees <= 90)
+    ) {
+      diagnostics.push(
+        diagnostic(
+          "error",
+          "WORLD_SPEC_ROUTE_CONSTRAINT_INVALID",
+          `Route ${route.id} requires a positive widthMeters and maximumDesignSlopeDegrees in (0, 90].`,
+        ),
+      );
+    } else if (route.priority === "primary" && route.maximumDesignSlopeDegrees > 35) {
       diagnostics.push(
         diagnostic(
           "warning",
           "WORLD_SPEC_PRIMARY_ROUTE_STEEP",
-          `Primary route ${route.id} allows ${route.maxSlopeDegrees}°, above the recommended 35° margin.`,
+          `Primary route ${route.id} allows ${route.maximumDesignSlopeDegrees}°, above the recommended 35° margin.`,
         ),
       );
     }

@@ -85,11 +85,11 @@ export const worldSpec = defineOutdoorWorldSpec({
     { id: "station-shelter-anchor", semantic: "small_station_shelter_east", position: [105, 4.3, 18], approximateSize: [5, 4.2, 12], importance: "background", featureId: "coastal-station-shelter", evidence: "planner-inferred" },
   ],
   routes: [
-    { id: "inland-to-opening-apron", points: [[0, 118], [0, 78], [0, 45]], width: 8, priority: "primary", maxSlopeDegrees: 8, evidence: "planner-inferred" },
-    { id: "west-safe-crossing-loop", points: [[0, 45], [-55, 48], [-110, 42], [-135, 28], [-140, 5], [-140, -40], [-110, -68]], width: 7, priority: "primary", maxSlopeDegrees: 10, evidence: "planner-inferred" },
-    { id: "east-station-loop", points: [[0, 45], [55, 52], [105, 45], [135, 25], [140, -8], [140, -52], [105, -68]], width: 7, priority: "primary", maxSlopeDegrees: 10, evidence: "planner-inferred" },
-    { id: "seawall-promenade-route", points: [[-110, -68], [-55, -70], [0, -70], [55, -70], [105, -68]], width: 8, priority: "primary", maxSlopeDegrees: 4, evidence: "planner-inferred" },
-    { id: "station-forecourt-connector", points: [[-110, 42], [-90, 95], [-35, 120], [35, 120], [95, 90], [105, 45]], width: 8, priority: "secondary", maxSlopeDegrees: 12, evidence: "planner-inferred" },
+    { id: "inland-to-opening-apron", pointsMetersXZ: [[0, 118], [0, 78], [0, 45]], widthMeters: 8, locomotionProfileRef: "worldkit://locomotion-profile/ground.standard@1", priority: "primary", maximumDesignSlopeDegrees: 8, evidence: "planner-inferred" },
+    { id: "west-safe-crossing-loop", pointsMetersXZ: [[0, 45], [-55, 48], [-110, 42], [-135, 28], [-140, 5], [-140, -40], [-110, -68]], widthMeters: 7, locomotionProfileRef: "worldkit://locomotion-profile/ground.standard@1", priority: "primary", maximumDesignSlopeDegrees: 10, evidence: "planner-inferred" },
+    { id: "east-station-loop", pointsMetersXZ: [[0, 45], [55, 52], [105, 45], [135, 25], [140, -8], [140, -52], [105, -68]], widthMeters: 7, locomotionProfileRef: "worldkit://locomotion-profile/ground.standard@1", priority: "primary", maximumDesignSlopeDegrees: 10, evidence: "planner-inferred" },
+    { id: "seawall-promenade-route", pointsMetersXZ: [[-110, -68], [-55, -70], [0, -70], [55, -70], [105, -68]], widthMeters: 8, locomotionProfileRef: "worldkit://locomotion-profile/ground.standard@1", priority: "primary", maximumDesignSlopeDegrees: 4, evidence: "planner-inferred" },
+    { id: "station-forecourt-connector", pointsMetersXZ: [[-110, 42], [-90, 95], [-35, 120], [35, 120], [95, 90], [105, 45]], widthMeters: 8, locomotionProfileRef: "worldkit://locomotion-profile/ground.standard@1", priority: "secondary", maximumDesignSlopeDegrees: 12, evidence: "planner-inferred" },
   ],
   entry: {
     spawn: [0, 45], facingRadians: 0,

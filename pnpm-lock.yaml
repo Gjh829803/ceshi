@@ -357,6 +357,9 @@ importers:
 
   packages/world:
     dependencies:
+      '@whitebox-world/authoring':
+        specifier: workspace:*
+        version: link:../authoring
       '@whitebox-world/contracts':
         specifier: workspace:*
         version: link:../contracts

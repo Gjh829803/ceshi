@@ -1,3 +1,4 @@
+export * from "./canonical-route-projection";
 export * from "./features";
 export * from "./landmarks";
 export * from "./official-features";

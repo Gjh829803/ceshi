@@ -93,10 +93,11 @@ const spec = defineOutdoorWorldSpec({
   routes: [
     {
       id: "entry-to-tower",
-      points: [[0, 20], [0, -20]],
-      width: 5,
+      pointsMetersXZ: [[0, 20], [0, -20]],
+      widthMeters: 5,
+      locomotionProfileRef: "worldkit://locomotion-profile/ground.standard@1",
       priority: "primary",
-      maxSlopeDegrees: 10,
+      maximumDesignSlopeDegrees: 10,
       evidence: "planner-inferred",
     },
   ],

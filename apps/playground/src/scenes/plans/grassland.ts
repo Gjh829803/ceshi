@@ -132,10 +132,11 @@ export const worldSpec = defineOutdoorWorldSpec({
   routes: [
     {
       id: "entry-to-watchtower-west-route",
-      points: [[0, 68], [-100, 70], [-110, 20], [-105, -40], [-95, -65]],
-      width: 10,
+      pointsMetersXZ: [[0, 68], [-100, 70], [-110, 20], [-105, -40], [-95, -65]],
+      widthMeters: 10,
+      locomotionProfileRef: "worldkit://locomotion-profile/ground.standard@1",
       priority: "primary",
-      maxSlopeDegrees: 35,
+      maximumDesignSlopeDegrees: 35,
       evidence: "planner-inferred",
     },
   ],
