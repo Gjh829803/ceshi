@@ -96,4 +96,4 @@
 - [x] Document the public CLI/Profile/Report entry points and the legacy Bundle placeholder distinction.
 - [x] Review the exact base-to-head diff in mode B using `docs/reviews/full-dimension-review-protocol.md`; cover required D2/D3/D4/D5/D6 and mark D1 applicability explicitly.
 - [x] Run the final matrix: `pnpm typecheck`, `pnpm test`, `pnpm test:scenes`, `pnpm build`, `pnpm verify:canonical`, `pnpm verify:placement-layout`, `pnpm verify:rigged-subject`, `pnpm verify:g-bot-subject`, `pnpm verify:control-capture`, `pnpm verify:validation-capture`, and `git diff --check`.
-- [ ] Commit, merge into current `main`, rerun the relevant merged-tree gates, push `main`, and remove only this clean merged worktree.
+- [x] Commit, fast-forward the verified tree into remote `main`, push the integration result, and remove only this clean merged worktree. The existing local `main` worktree was intentionally left untouched because it contained another Agent's uncommitted changes.
