@@ -921,6 +921,9 @@ Babylon Physics Shape 可以被多个 Body 共享，且释放 Body 不会自动�
 - 如果一个对象承担主要行走表面，必须通过专门的 Walkable Surface Capability 和验证，不允许仅凭 Mesh 可见就默认可走。
 
 这能防止“画面看起来像游戏场景”但碰撞、导航和相机仍不成立。
+桥梁、桥洞、垂直崖壁、天然拱门、悬挑、Terrain Opening 和可进入洞穴的正式组合边界
+由 [`Hybrid Terrain 与非 Heightfield 特殊地形设计`](2026-08-21-hybrid-terrain-and-non-heightfield-topology-design.md)
+负责；本文只定义 Geometry 的可选制作来源，不能单独作为特殊地形生产支持的完成证据。
 
 ## 13. Instance、Scatter 与复用
 
