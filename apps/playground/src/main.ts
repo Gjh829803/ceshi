@@ -157,8 +157,8 @@ app.innerHTML = `
             <div class="friendly-slider-grid" id="tuning-motion-sliders"></div>
           </section>
           <section class="tuning-section" id="tuning-camera">
-            <div class="tuning-section-heading"><span>04</span><div><h3>选择并微调相机</h3><p>7 套预制共享同一套拖动、旋转、平滑和碰撞保护；第一人称不使用滚轮距离。</p></div></div>
-            <div class="camera-instructions"><span>鼠标左键拖动</span>旋转镜头 <span>滚轮</span>拉近或拉远 <button id="reset-camera-view-button" type="button">镜头回正</button></div>
+            <div class="tuning-section-heading"><span>04</span><div><h3>选择并微调相机</h3><p>5 类基础镜头跨主体复用；水面、乘坐、倒车、冲刺和瞄准作为自动叠加的行为修饰，不再重复造镜头。</p></div></div>
+            <div class="camera-instructions"><span>鼠标左键拖动</span>旋转 <span>滚轮</span>缩放 <span>R</span>回正 <span>C</span>回头看 <span>V</span>换肩 <button id="reset-camera-view-button" type="button">镜头回正</button></div>
             <div class="camera-card-grid" id="tuning-camera-cards"></div>
             <div class="friendly-slider-grid camera-tuning-grid" id="tuning-camera-sliders"></div>
           </section>
@@ -263,7 +263,7 @@ const FRIENDLY_MOTION_PARAMETERS: Readonly<Record<string, readonly [string, stri
   driveAccelerationMetersPerSecondSquared: ["推进力度", "数值越高，滑行起步越快"],
   glideAccelerationMetersPerSecondSquared: ["滑翔加速", "向前滑翔时累积速度的快慢"],
   decelerationMetersPerSecondSquared: ["松手减速", "松开方向键后停下来的快慢"],
-  brakeMetersPerSecondSquared: ["制动力度", "按空格制动时停下来的快慢"],
+  brakeMetersPerSecondSquared: ["制动力度", "按 Ctrl 或当前主体的制动键时停下来的快慢"],
   turnRateRadiansPerSecond: ["转向速度", "数值越高，转弯越灵敏"],
   lowSpeedTurnRateRadiansPerSecond: ["低速转向", "慢速时方向盘的灵敏度"],
   highSpeedTurnRateRadiansPerSecond: ["高速转向", "高速时方向盘的灵敏度"],
@@ -283,6 +283,40 @@ const FRIENDLY_MOTION_PARAMETERS: Readonly<Record<string, readonly [string, stri
   surfaceHoldStrengthPerSecond: ["贴水稳定度", "主体保持在水面附近的力度"],
   stallSpeedMetersPerSecond: ["失速速度", "低于它时升力明显不足"],
   boostMultiplier: ["Shift 加速倍率", "按住 Shift 后速度放大的倍数"],
+  coyoteTimeSeconds: ["离地宽容时间", "刚离开台阶后仍允许跳跃的短暂时间"],
+  jumpBufferSeconds: ["跳跃预输入时间", "落地前提前按跳跃时，系统可以记住输入多久"],
+  variableJumpHoldSeconds: ["长按跳跃有效时间", "按住跳跃可以继续减弱重力的最长时间"],
+  jumpHoldGravityScale: ["长按跳跃重力", "越低，按住空格时上升更持久"],
+  jumpReleaseGravityScale: ["松开跳跃重力", "越高，提前松开空格后下落越干脆"],
+  maximumSlopeDegrees: ["可行走最大坡度", "超过该坡度时不再当作正常地面"],
+  stepHeightMeters: ["自动跨台阶高度", "主体无需跳跃即可跨过的小台阶高度"],
+  minimumSteeringAuthorityRatio: ["最低转向权限", "低速仍保留的转向比例；设为 0 可完全禁止原地转向"],
+  bodyLeanMaximumRadians: ["转弯身体倾斜", "四足等主体转向时视觉倾斜的上限；设为 0 关闭"],
+  steeringDeadzoneRatio: ["转向输入死区", "忽略很小的方向输入，避免手柄漂移；键盘也复用同一规则"],
+  steeringInputExponent: ["转向输入曲线", "大于 1 时小幅方向更精细，接近打满时仍可达到最大转向"],
+  lateralGripPerSecond: ["车辆侧向抓地", "越高越贴路线，越低越容易侧滑"],
+  handbrakeLateralGripPerSecond: ["手刹时侧向抓地", "按 Alt 手刹时保留多少抓地；越低越容易甩尾"],
+  handbrakeTurnMultiplier: ["手刹转向倍率", "按 Alt 手刹时额外放大的转弯能力"],
+  brakeToReverseDelaySeconds: ["刹车切倒挡延迟", "前进时按后退，先刹停再进入倒车的等待时间"],
+  driveResponsePerSecond: ["滑行器推进响应", "油门改变后，推进力跟上的快慢"],
+  lateralFrictionPerSecond: ["滑行横向摩擦", "越高越快消除横向漂移；设为 0 保留惯性"],
+  maximumDriftAngleRadians: ["最大漂移夹角", "速度方向与主体面向允许偏离的最大角度"],
+  turnAccelerationRadiansPerSecondSquared: ["水面转向加速度", "皮划艇开始转身时角速度建立的快慢"],
+  turnDampingPerSecond: ["水面转向阻尼", "松开方向后皮划艇停止转动的快慢"],
+  reverseTurnMultiplier: ["倒划转向倍率", "倒退划行时的转向能力比例"],
+  surfaceVerticalSpeedLimitMetersPerSecond: ["水面上下速度上限", "限制水面约束修正时的垂直速度"],
+  waterGravityScale: ["水面重力影响", "主体在水面附近仍保留的重力比例；设为 0 关闭"],
+  maximumPitchRadians: ["滑翔最大俯仰", "滑翔伞抬头和俯冲的姿态上限"],
+  maximumRollRadians: ["滑翔最大横滚", "滑翔伞左右倾斜的姿态上限"],
+  pitchCenteringPerSecond: ["俯仰自动回正", "松开 W/S 后恢复中立俯仰的速度；设为 0 关闭"],
+  rollCenteringPerSecond: ["横滚自动回正", "松开 A/D 后恢复水平的速度；设为 0 关闭"],
+  yawRollCouplingRatio: ["转弯带倾斜", "偏航时自动带出横滚的比例；设为 0 解耦"],
+  pitchToForwardSpeedRatio: ["俯冲换速度", "俯冲姿态对前向速度的影响比例"],
+  pitchToVerticalSpeedMetersPerSecondPerRadian: ["俯仰升降效率", "俯仰角每变化一弧度带来的升降速度"],
+  maximumSinkSpeedMetersPerSecond: ["最大下沉速度", "限制滑翔伞不会无限加速坠落"],
+  maximumClimbSpeedMetersPerSecond: ["最大爬升速度", "限制滑翔伞靠姿态获得的向上速度"],
+  verticalResponseMetersPerSecondSquared: ["垂直速度响应", "升降目标改变后实际垂直速度跟上的快慢"],
+  stallSinkSpeedMetersPerSecond: ["失速下沉速度", "失速时目标下沉速度；配合失速速度一起调"],
 };
 
 const FRIENDLY_CAMERA_PROFILES: Readonly<Record<string, readonly [string, string]>> = {
@@ -293,6 +327,22 @@ const FRIENDLY_CAMERA_PROFILES: Readonly<Record<string, readonly [string, string
   "worldkit://camera-profile/follow.water-surface@1": ["水面跟随", "变化较慢，尽量保留水面与地平线"],
   "worldkit://camera-profile/flight.glide@1": ["滑翔视角", "保持地平线稳定，同时预看飞行方向"],
   "worldkit://camera-profile/follow.mounted@1": ["乘坐跟随", "面向骑乘、驾驶和座位组合的中距离镜头"],
+};
+
+const FRIENDLY_CAMERA_BASE_MODES: Readonly<Record<string, string>> = {
+  "first-person": "第一人称",
+  "free-orbit": "自由环绕",
+  "stable-follow": "稳定跟随",
+  "speed-chase": "速度追逐",
+  "flight-horizon": "飞行地平线",
+};
+
+const FRIENDLY_CAMERA_MODIFIERS: Readonly<Record<string, string>> = {
+  "worldkit://camera-modifier/water-stability@1": "水面稳定",
+  "worldkit://camera-modifier/mounted-framing@1": "乘坐构图",
+  "worldkit://camera-modifier/reverse-stability@1": "倒车稳定",
+  "worldkit://camera-modifier/sprint-emphasis@1": "冲刺强调",
+  "worldkit://camera-modifier/aim-framing@1": "越肩瞄准",
 };
 
 function subjectFriendlyName(definition: SubjectDefinitionSummaryV1): string {
@@ -392,6 +442,8 @@ function installTuningWorkbench(
   const inputStatus = requiredElement<HTMLDivElement>("#tuning-input-status");
   const commandKind = workbenchContext.activeKernel?.commandKind ?? "planar-vector";
   const forwardSteer = workbenchContext.activeKernel?.resourceRef.includes("forward-steer") === true;
+  const wheeled = workbenchContext.activeKernel?.resourceRef.includes("wheeled-arcade") === true;
+  const gliding = workbenchContext.activeKernel?.resourceRef.includes("unpowered-glide") === true;
   const inputItems: Array<{
     keyLabel: string;
     title: string;
@@ -401,8 +453,31 @@ function installTuningWorkbench(
     { keyLabel: "W", title: commandKind === "flight-attitude" ? "向下俯冲" : "向前", explanation: commandKind === "planar-vector" ? "按照镜头朝向前进" : "按照主体自身朝向前进", steps: [{ actions: ["move-forward"], ticks: 24 }] },
     { keyLabel: "S", title: commandKind === "flight-attitude" ? "抬头减速" : "向后", explanation: commandKind === "planar-vector" ? "按照镜头朝向后退" : "倒退或降低油门", steps: [{ actions: ["move-backward"], ticks: 18 }] },
     { keyLabel: "A / D", title: commandKind === "planar-vector" ? "横向移动" : "左右转向", explanation: commandKind === "flight-attitude" ? "偏航并带动机体倾斜" : "改变主体的移动方向", steps: [{ actions: ["move-left"], ticks: 18 }] },
-    { keyLabel: "Shift", title: commandKind === "flight-attitude" ? "飞行动作请求" : forwardSteer ? "冲刺" : commandKind === "throttle-steer" ? "增强推进" : "奔跑", explanation: commandKind === "flight-attitude" ? "输入已识别，具体技能由后续动作配置绑定" : "按住时使用配置表中的加速倍率", steps: [{ actions: ["move-forward", "run"], ticks: 30 }] },
-    { keyLabel: "空格", title: commandKind === "planar-vector" || forwardSteer ? "跳跃" : commandKind === "throttle-steer" ? "制动" : "飞行动作请求", explanation: commandKind === "flight-attitude" ? "输入已识别，当前简化滑翔内核不额外消耗它" : commandKind === "throttle-steer" && !forwardSteer ? "让载具、滑行器或水面主体减速" : "只有脚下有支撑时才会起跳", steps: commandKind === "throttle-steer" && !forwardSteer ? [{ actions: ["move-forward"], ticks: 18 }, { actions: ["jump"], ticks: 12 }] : [{ actions: ["jump"], ticks: 2 }] },
+    {
+      keyLabel: "Shift",
+      title: commandKind === "flight-attitude" ? "滑翔动作" : forwardSteer ? "冲刺" : commandKind === "throttle-steer" ? "增强推进" : "奔跑",
+      explanation: commandKind === "flight-attitude" ? "提交滑翔主动作请求；可继续由动作表绑定展开" : "按住时使用配置表中的加速倍率",
+      steps: [{ actions: ["move-forward", commandKind === "planar-vector" || forwardSteer ? "run" : "boost"], ticks: 30 }],
+    },
+    {
+      keyLabel: "空格",
+      title: commandKind === "planar-vector" || forwardSteer ? "跳跃" : gliding ? "滑翔主动作" : "制动",
+      explanation: gliding ? "提交主动作请求，不会再被误当成制动" : commandKind === "throttle-steer" && !forwardSteer ? "按住时使用独立制动，不再和技能键混用" : "支持离地宽容、预输入和长短跳",
+      steps: commandKind === "throttle-steer" && !forwardSteer
+        ? [{ actions: ["move-forward"], ticks: 18 }, { actions: ["brake"], ticks: 12 }]
+        : [{ actions: [gliding ? "primary-action" : "jump"], ticks: 2 }],
+    },
+    ...(commandKind === "throttle-steer" && !forwardSteer
+      ? [{ keyLabel: "Ctrl", title: "脚刹 / 主制动", explanation: "连续制动，车辆会先减速再按配置延迟进入倒挡", steps: [{ actions: ["move-forward" as const], ticks: 18 }, { actions: ["brake" as const], ticks: 12 }] }]
+      : []),
+    ...(wheeled
+      ? [{ keyLabel: "Alt", title: "手刹甩尾", explanation: "降低侧向抓地并放大转向；强度由车辆配表控制", steps: [{ actions: ["move-forward" as const, "move-left" as const, "handbrake" as const], ticks: 18 }] }]
+      : []),
+    { keyLabel: "E / Q", title: "主 / 次动作", explanation: "与移动、制动完全分离，供技能或互动动作表绑定", steps: [{ actions: ["primary-action"], ticks: 2 }] },
+    { keyLabel: "F", title: "瞄准构图", explanation: "角色面向镜头方向，同时叠加越肩瞄准镜头；松开即恢复", steps: [{ actions: ["aim"], ticks: 12 }] },
+    { keyLabel: "R", title: "镜头回正", explanation: "清除手动环绕偏移，平滑回到当前基础镜头方向", steps: [{ actions: ["camera-recenter"], ticks: 1 }] },
+    { keyLabel: "C", title: "回头看", explanation: "只临时旋转镜头，不反转人物或载具的移动输入", steps: [{ actions: ["camera-look-back"], ticks: 18 }, { actions: [], ticks: 12 }] },
+    { keyLabel: "V", title: "左右换肩", explanation: "切换越肩构图的观察侧，不改变主体运动", steps: [{ actions: ["camera-shoulder-swap"], ticks: 1 }] },
   ];
   inputGrid.replaceChildren(...inputItems.map((item) => {
     const card = document.createElement("article");
@@ -506,7 +581,7 @@ function installTuningWorkbench(
       : cameraPreference;
     const profile = cameraRows.find((row) => row.resourceRef === activeProfileRef) ?? cameraRows[0];
     const base = profile?.parameters ?? {};
-    const storageKey = `worldkit.camera-tuning.v2.${workbenchContext.definition.resourceRef}.${profile?.resourceRef ?? "auto"}.${profile?.contentHash ?? "unlocked"}`;
+    const storageKey = `worldkit.camera-tuning.v4.${workbenchContext.definition.resourceRef}.${profile?.resourceRef ?? "auto"}.${profile?.contentHash ?? "unlocked"}`;
     try {
       const stored = readLocalDraft(storageKey);
       cameraTuning = stored === null ? {} : JSON.parse(stored) as CameraTuningV1;
@@ -526,14 +601,31 @@ function installTuningWorkbench(
       { key: "targetHeightMeters", label: "观察高度", help: "镜头对准主体的高度", minimum: 0, maximum: 4, step: 0.05, fallback: Number(base.targetHeightMeters ?? 1.2) },
       { key: "shoulderOffsetMeters", label: "肩部偏移", help: "让镜头从主体左侧或右侧观察", minimum: -2, maximum: 2, step: 0.05, fallback: Number(base.shoulderOffsetMeters ?? 0) },
       { key: "pitchRadians", label: "镜头俯仰角", help: "调整镜头从上方或下方观察的角度", minimum: -1.2, maximum: 1.2, step: 0.01, fallback: Number(base.pitchRadians ?? 0.25) },
-      { key: "positionDampingPerSecond", label: "位置跟随速度", help: "越高越贴紧，越低越有惯性", minimum: 1, maximum: 40, step: 0.1, fallback: Number(base.positionDampingPerSecond ?? 12) },
-      { key: "rotationDampingPerSecond", label: "旋转稳定度", help: "越高转向越快，越低镜头越柔和", minimum: 1, maximum: 40, step: 0.1, fallback: Number(base.rotationDampingPerSecond ?? 14) },
+      { key: "horizontalPositionDampingPerSecond", label: "水平跟随速度", help: "调低后主体会在画面左右/前后先行，调高后镜头更快追上", minimum: 0, maximum: 40, step: 0.1, fallback: Number(base.horizontalPositionDampingPerSecond ?? base.positionDampingPerSecond ?? 12) },
+      { key: "verticalPositionDampingPerSecond", label: "垂直跟随速度", help: "单独控制跳跃、坡面和水面起伏时镜头上下跟随的快慢", minimum: 0, maximum: 40, step: 0.1, fallback: Number(base.verticalPositionDampingPerSecond ?? base.positionDampingPerSecond ?? 12) },
+      { key: "maximumPositionLagMeters", label: "主体最多领先镜头的距离", help: "限制主体最多能冲到镜头前方多远；设为 0 时镜头位置紧跟", minimum: 0, maximum: 30, step: 0.1, fallback: Number(base.maximumPositionLagMeters ?? 4) },
+      { key: "yawDampingPerSecond", label: "水平旋转跟随", help: "越高越快跟上主体转向，越低越有电影感", minimum: 0, maximum: 40, step: 0.1, fallback: Number(base.yawDampingPerSecond ?? base.rotationDampingPerSecond ?? 14) },
+      { key: "pitchDampingPerSecond", label: "俯仰旋转跟随", help: "单独控制镜头上下抬落的平滑速度", minimum: 0, maximum: 40, step: 0.1, fallback: Number(base.pitchDampingPerSecond ?? base.rotationDampingPerSecond ?? 14) },
+      { key: "lookSensitivityXRatio", label: "水平拖动灵敏度", help: "鼠标左右拖动的响应倍率", minimum: 0.1, maximum: 3, step: 0.05, fallback: Number(base.lookSensitivityXRatio ?? 1) },
+      { key: "lookSensitivityYRatio", label: "垂直拖动灵敏度", help: "鼠标上下拖动的响应倍率", minimum: 0.1, maximum: 3, step: 0.05, fallback: Number(base.lookSensitivityYRatio ?? 1) },
       { key: "collisionRadiusMeters", label: "碰撞保护距离", help: "镜头接近墙面时保留的安全距离", minimum: 0.05, maximum: 1, step: 0.01, fallback: Number(base.collisionRadiusMeters ?? 0.25) },
+      { key: "collisionRetractionMetersPerSecond", label: "遇墙缩近速度", help: "遮挡出现时镜头向主体收回的速度", minimum: 0, maximum: 60, step: 0.25, fallback: Number(base.collisionRetractionMetersPerSecond ?? 30) },
+      { key: "collisionRecoveryMetersPerSecond", label: "离墙恢复速度", help: "遮挡消失后镜头慢慢回到原距离的速度", minimum: 0, maximum: 30, step: 0.25, fallback: Number(base.collisionRecoveryMetersPerSecond ?? 5) },
       { key: "lookAheadSeconds", label: "启动时镜头向前带", help: "主体移动时焦点沿前进方向预看；设为 0 完全关闭", minimum: 0, maximum: 2, step: 0.01, fallback: Number(base.lookAheadSeconds ?? 0.2) },
+      { key: "accelerationLookAheadSecondsSquared", label: "加速预判", help: "急加速和急转时根据加速度额外预看；设为 0 关闭", minimum: 0, maximum: 1, step: 0.01, fallback: Number(base.accelerationLookAheadSecondsSquared ?? 0) },
+      { key: "minimumHeadingSpeedMetersPerSecond", label: "速度镜头起效门槛", help: "低于该速度时保持最后稳定方向，避免停车或低速抖动", minimum: 0, maximum: 20, step: 0.1, fallback: Number(base.minimumHeadingSpeedMetersPerSecond ?? 0.5) },
+      { key: "velocityHeadingDampingPerSecond", label: "追逐方向跟随速度", help: "速度方向改变后镜头旋转跟上的快慢", minimum: 0, maximum: 40, step: 0.25, fallback: Number(base.velocityHeadingDampingPerSecond ?? 10) },
       { key: "transitionSeconds", label: "镜头切换时间", help: "切换预制时连续过渡所用的时间", minimum: 0, maximum: 3, step: 0.05, fallback: Number(base.transitionSeconds ?? 0.35) },
       { key: "baseFovDegrees", label: "视野宽度", help: "越大看到的范围越广", minimum: 35, maximum: 100, step: 0.5, fallback: Number(base.baseFovDegrees ?? 60) },
       { key: "speedFovDegreesPerMeterPerSecond", label: "加速时视野变宽", help: "速度越快画面越有冲刺感；设为 0 完全关闭", minimum: 0, maximum: 5, step: 0.05, fallback: Number(base.speedFovDegreesPerMeterPerSecond ?? 0) },
       { key: "maximumSpeedFovDegrees", label: "冲刺视野上限", help: "限制高速时最多额外增加多少视野", minimum: 0, maximum: 30, step: 0.5, fallback: Number(base.maximumSpeedFovDegrees ?? 0) },
+      { key: "fovDampingPerSecond", label: "视野变化平滑", help: "速度变化时视野宽度跟上的快慢", minimum: 0, maximum: 30, step: 0.25, fallback: Number(base.fovDampingPerSecond ?? 8) },
+      { key: "horizontalDeadZoneRatio", label: "画面水平容忍区", help: "主体在画面中心附近移动时允许镜头暂不跟随；设为 0 关闭", minimum: 0, maximum: 0.4, step: 0.01, fallback: Number(base.horizontalDeadZoneRatio ?? 0) },
+      { key: "verticalDeadZoneRatio", label: "画面垂直容忍区", help: "跳跃或起伏在小范围内时允许镜头保持稳定；设为 0 关闭", minimum: 0, maximum: 0.4, step: 0.01, fallback: Number(base.verticalDeadZoneRatio ?? 0) },
+      { key: "recenterDelaySeconds", label: "自动回正等待", help: "停止手动拖动后等待多久才开始自动回正", minimum: 0, maximum: 5, step: 0.05, fallback: Number(base.recenterDelaySeconds ?? 1.2) },
+      { key: "recenterDurationSeconds", label: "自动回正时长", help: "镜头回到基础方向所需的柔和时间；设为 0 立即回正", minimum: 0, maximum: 5, step: 0.05, fallback: Number(base.recenterDurationSeconds ?? 0.8) },
+      { key: "recenterMinimumSpeedMetersPerSecond", label: "触发回正的最低速度", help: "低于这个速度时不因前进自动回正，避免原地镜头摆动", minimum: 0, maximum: 10, step: 0.1, fallback: Number(base.recenterMinimumSpeedMetersPerSecond ?? 0.8) },
+      { key: "teleportSnapDistanceMeters", label: "瞬移识别距离", help: "主体一帧跨过该距离时镜头直接同步，避免从远处慢慢追", minimum: 1, maximum: 100, step: 1, fallback: Number(base.teleportSnapDistanceMeters ?? 20) },
     ];
     cameraSliders.replaceChildren(...settings.flatMap((setting) => {
       const range = profile?.authoringRanges?.[setting.key];
@@ -571,7 +663,8 @@ function installTuningWorkbench(
       { resourceRef: "auto", displayName: "自动选择", description: "根据地面、水面、飞行、速度和关系自动选择合适镜头" },
       ...cameraRows.map((row) => {
         const friendly = FRIENDLY_CAMERA_PROFILES[row.resourceRef];
-        return { resourceRef: row.resourceRef, displayName: friendly?.[0] ?? row.displayName, description: friendly?.[1] ?? "通用相机预制" };
+        const mode = row.baseMode === undefined ? "通用" : FRIENDLY_CAMERA_BASE_MODES[row.baseMode] ?? row.baseMode;
+        return { resourceRef: row.resourceRef, displayName: friendly?.[0] ?? row.displayName, description: `${mode} · ${friendly?.[1] ?? "通用相机预制"}` };
       }),
     ].map((row) => {
       const card = document.createElement("article");
@@ -624,9 +717,13 @@ function installTuningWorkbench(
 
   const exportCurrent = (): void => {
     const payload = {
-      schemaVersion: 3,
+      schemaVersion: 4,
       subjectDefinition: workbenchContext.definition,
       selectedCameraPreference: cameraPreference,
+      activeCameraModifiers: (api.getCameraSnapshot?.().activeCameraModifierRefs ?? []).map((resourceRef) => ({
+        resourceRef,
+        displayName: FRIENDLY_CAMERA_MODIFIERS[resourceRef] ?? resourceRef,
+      })),
       cameraTuning,
       motionParameterDraft: workbenchContext.parameterDraft,
       motionParameterSupport: {
@@ -739,6 +836,8 @@ function installCapabilityAuthoringPanel(api: WorldkitBrowserApiV3): void {
         <div><kbd>W</kbd><kbd>S</kbd><span>前进 / 倒退</span></div>
         <div><kbd>A</kbd><kbd>D</kbd><span>左转 / 右转</span></div>
         <div><kbd>⇧</kbd><span>增强推进</span><kbd>空格</kbd><span>${activeKernel.resourceRef.includes("forward-steer") ? "跳跃" : "制动"}</span></div>
+        <div><kbd>Ctrl</kbd><span>独立制动</span><kbd>Alt</kbd><span>手刹</span></div>
+        <div><kbd>R</kbd><span>镜头回正</span><kbd>C</kbd><span>回头看</span></div>
         <div><span>鼠标拖动 / 滚轮</span><span>旋转 / 缩放镜头</span></div>
       `
     : activeKernel?.commandKind === "flight-attitude"
@@ -746,13 +845,15 @@ function installCapabilityAuthoringPanel(api: WorldkitBrowserApiV3): void {
           <p>飞行姿态</p>
           <div><kbd>W</kbd><kbd>S</kbd><span>俯仰</span></div>
           <div><kbd>A</kbd><kbd>D</kbd><span>偏航 / 倾斜</span></div>
-          <div><kbd>⇧</kbd><kbd>空格</kbd><span>飞行动作请求</span></div>
+          <div><kbd>⇧</kbd><kbd>空格</kbd><span>滑翔主动作</span></div>
+          <div><kbd>R</kbd><span>镜头回正</span><kbd>C</kbd><span>回头看</span></div>
           <div><span>鼠标拖动 / 滚轮</span><span>旋转 / 缩放镜头</span></div>
         `
       : `
           <p>平面移动</p>
           <div><kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd><span>移动</span></div>
           <div><kbd>⇧</kbd><span>奔跑</span><kbd>空格</kbd><span>跳跃</span></div>
+          <div><kbd>F</kbd><span>瞄准</span><kbd>R</kbd><span>镜头回正</span></div>
           <div><span>鼠标拖动 / 滚轮</span><span>旋转 / 缩放镜头</span></div>
         `;
   const profiles = api.listCompatibleProfiles?.(definition.resourceRef) ?? [];
@@ -786,12 +887,13 @@ function installCapabilityAuthoringPanel(api: WorldkitBrowserApiV3): void {
     <div><span>当前主体</span><code>${escapeHtml(subjectFriendlyName(definition))}</code></div>
     <div><span>移动方式</span><code>${escapeHtml(kernelFriendlyName(activeKernel))}</code></div>
     <div><span>当前镜头</span><code>${escapeHtml(FRIENDLY_CAMERA_PROFILES[snapshot.camera.activeCameraProfileRef ?? ""]?.[0] ?? "自动")}</code></div>
+    <div><span>自动镜头效果</span><code>${escapeHtml((snapshot.camera.activeCameraModifierRefs ?? []).map((resourceRef) => FRIENDLY_CAMERA_MODIFIERS[resourceRef] ?? resourceRef).join("、") || "无")}</code></div>
     <div><span>使用提示</span><code>打开大尺寸调控台</code></div>
   `;
 
   const parameterDraft: Record<string, number | boolean> = {};
   const defaultMotion = motionProfiles.find((row) => row.role === "default");
-  const motionDraftStorageKey = `worldkit.motion-draft.v2.${definition.resourceRef}.${defaultMotion?.resourceRef ?? "none"}.${defaultMotion?.contentHash ?? "unlocked"}`;
+  const motionDraftStorageKey = `worldkit.motion-draft.v4.${definition.resourceRef}.${defaultMotion?.resourceRef ?? "none"}.${defaultMotion?.contentHash ?? "unlocked"}`;
   if (defaultMotion?.safetyLimits !== undefined) {
     let storedDraft: Readonly<Record<string, unknown>> = {};
     try {
@@ -841,7 +943,7 @@ function installCapabilityAuthoringPanel(api: WorldkitBrowserApiV3): void {
       drafts.append(label);
     }
   }
-  drafts.innerHTML = "<p>完整的运动手感滑杆、操作说明和 7 套相机都已移到大尺寸调控台。</p>";
+  drafts.innerHTML = "<p>完整的运动手感滑杆、操作说明、5 类基础镜头和自动行为修饰器都已移到大尺寸调控台。</p>";
 
   installTuningWorkbench(api, {
     definitions,
@@ -895,7 +997,7 @@ function installCapabilityAuthoringPanel(api: WorldkitBrowserApiV3): void {
   });
   requiredElement<HTMLButtonElement>("#export-package-button").addEventListener("click", () => {
     const payload = {
-      schemaVersion: 3,
+      schemaVersion: 4,
       subjectDefinition: definition,
       compatibleProfiles: profiles,
       motionParameterDraft: parameterDraft,

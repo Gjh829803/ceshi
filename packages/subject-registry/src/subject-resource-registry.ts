@@ -25,6 +25,7 @@ import type {
 } from "./types-v2";
 import type {
   CameraContextProfileV1,
+  CameraModifierProfileV1,
   CameraRigAlgorithmDefinitionV1,
   CameraRigProfileInputV1,
   CameraRigProfileV1,
@@ -292,6 +293,17 @@ function validateReferences(resourcesByRef: ReadonlyMap<string, SubjectRegistryR
     if (resource.kind === "camera-rig-profile") {
       requireRef(resource.resourceRef, resource.algorithmRef, "camera-rig-algorithm");
     }
+    if (resource.kind === "camera-modifier-profile") {
+      for (const [parameterName, parameterValue] of Object.entries(
+        resource.parameterOverrides,
+      )) {
+        if (!Number.isFinite(parameterValue)) {
+          throw new Error(
+            `SUBJECT_REGISTRY_NON_FINITE_PARAMETER: '${parameterName}' in '${resource.resourceRef}'.`,
+          );
+        }
+      }
+    }
     if (resource.kind === "camera-context-profile") {
       requireRef(
         resource.resourceRef,
@@ -306,7 +318,12 @@ function validateReferences(resourcesByRef: ReadonlyMap<string, SubjectRegistryR
         );
       }
       for (const rule of resource.rules) {
-        requireRef(resource.resourceRef, rule.cameraRigProfileRef, "camera-rig-profile");
+        if (rule.cameraRigProfileRef !== undefined) {
+          requireRef(resource.resourceRef, rule.cameraRigProfileRef, "camera-rig-profile");
+        }
+        for (const modifierRef of rule.cameraModifierRefs ?? []) {
+          requireRef(resource.resourceRef, modifierRef, "camera-modifier-profile");
+        }
       }
     }
     if (resource.kind === "subject-definition" && "schemaVersion" in resource) {
@@ -526,6 +543,10 @@ export function createSubjectResourceRegistry(
     resolveCameraRigProfile(resourceRef: string): CameraRigProfileV1 | undefined {
       const resource = resourcesByRef.get(resourceRef);
       return resource?.kind === "camera-rig-profile" ? resource : undefined;
+    },
+    resolveCameraModifierProfile(resourceRef: string): CameraModifierProfileV1 | undefined {
+      const resource = resourcesByRef.get(resourceRef);
+      return resource?.kind === "camera-modifier-profile" ? resource : undefined;
     },
     resolveCameraContextProfile(resourceRef: string): CameraContextProfileV1 | undefined {
       const resource = resourcesByRef.get(resourceRef);

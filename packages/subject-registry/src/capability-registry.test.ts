@@ -121,9 +121,16 @@ describe("capability-driven subject registry", () => {
       expect(
         cameraContext!.rules.every(
           (rule) =>
-            builtInSubjectResourceRegistry.resolveCameraRigProfile(
-              rule.cameraRigProfileRef,
-            ) !== undefined,
+            (rule.cameraRigProfileRef === undefined ||
+              builtInSubjectResourceRegistry.resolveCameraRigProfile(
+                rule.cameraRigProfileRef,
+              ) !== undefined) &&
+            (rule.cameraModifierRefs ?? []).every(
+              (resourceRef) =>
+                builtInSubjectResourceRegistry.resolveCameraModifierProfile(
+                  resourceRef,
+                ) !== undefined,
+            ),
         ),
       ).toBe(true);
       expect(harness?.requiredCheckIds).toEqual([
@@ -192,17 +199,17 @@ describe("capability-driven subject registry", () => {
       "worldkit://motion-kernel/wheeled-arcade@1",
     );
     expect(vehicle?.parameters).toMatchObject({
-      lowSpeedTurnRateRadiansPerSecond: 1.15,
-      highSpeedTurnRateRadiansPerSecond: 0.42,
-      steeringResponsePerSecond: 4.5,
-      steeringReturnPerSecond: 7,
+      lowSpeedTurnRateRadiansPerSecond: 1,
+      highSpeedTurnRateRadiansPerSecond: 0.38,
+      steeringResponsePerSecond: 3.5,
+      steeringReturnPerSecond: 6,
       fullSteeringAuthoritySpeedMetersPerSecond: 2.5,
       turnRateSpeedCurveExponent: 1.35,
       dragPerSecond: 0.7,
     });
     expect(vehicle?.authoringRanges?.lowSpeedTurnRateRadiansPerSecond).toEqual({
-      minimum: 0.3,
-      maximum: 2,
+      minimum: 0.2,
+      maximum: 5,
       step: 0.01,
     });
     expect(vehicleKernel?.runtimeParameterNames).toEqual(
@@ -216,7 +223,7 @@ describe("capability-driven subject registry", () => {
       "worldkit://motion-kernel/surface-slide@1",
     );
     expect(slide?.parameters.slopeGravityRatio).toBeDefined();
-    expect(slideKernel?.runtimeParameterNames).not.toContain("slopeGravityRatio");
+    expect(slideKernel?.runtimeParameterNames).toContain("slopeGravityRatio");
   });
 
   it("maps the seven reusable camera presets to explicit heading behavior", () => {
@@ -225,7 +232,7 @@ describe("capability-driven subject registry", () => {
       "worldkit://camera-profile/orbit.medium@1": "view",
       "worldkit://camera-profile/follow.medium@1": "target-forward",
       "worldkit://camera-profile/chase.surface-fast@1": "target-velocity",
-      "worldkit://camera-profile/follow.water-surface@1": "target-velocity",
+      "worldkit://camera-profile/follow.water-surface@1": "target-forward",
       "worldkit://camera-profile/flight.glide@1": "target-velocity",
       "worldkit://camera-profile/follow.mounted@1": "target-forward",
     } as const;
@@ -233,11 +240,25 @@ describe("capability-driven subject registry", () => {
       const profile = builtInSubjectResourceRegistry.resolveCameraRigProfile(resourceRef);
       expect(profile?.headingSource).toBe(headingSource);
       expect(profile?.authoringRanges?.transitionSeconds).toBeDefined();
+      expect(profile?.authoringRanges?.maximumPositionLagMeters?.minimum).toBe(0);
     }
     expect(
       builtInSubjectResourceRegistry.resolveCameraRigProfile(
         "worldkit://camera-profile/orbit.medium@1",
       )?.parameters.lookAheadSeconds,
     ).toBe(0);
+    expect(
+      builtInSubjectResourceRegistry.resolveCameraRigProfile(
+        "worldkit://camera-profile/chase.surface-fast@1",
+      )?.reverseHeadingPolicy,
+    ).toBe("preserve-target-forward");
+    expect(
+      builtInSubjectResourceRegistry.resolveMotionKernel(
+        "worldkit://motion-kernel/unpowered-glide@1",
+      )?.runtimeParameterNames,
+    ).toEqual(expect.arrayContaining([
+      "pitchRateRadiansPerSecond",
+      "rollRateRadiansPerSecond",
+    ]));
   });
 });

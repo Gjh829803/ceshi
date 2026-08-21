@@ -9,10 +9,44 @@
     "inputSpace": "camera-relative",
     "facingPolicy": "align-to-move",
     "lateralMovementPolicy": "allowed",
+    "inputTuning": {
+      "moveDeadzoneRatio": 0.1,
+      "lookDeadzoneRatio": 0.08,
+      "responseExponent": 1.4,
+      "lookSensitivityXRatio": 1,
+      "lookSensitivityYRatio": 0.8,
+      "invertLookX": false,
+      "invertLookY": false
+    },
     "aiMetadata": {
       "displayName": "Camera-relative Planar Control",
       "description": "Maps semantic movement to a camera-relative planar direction.",
       "semanticTags": ["camera-relative", "planar"]
+    }
+  },
+  {
+    "kind": "control-profile",
+    "id": "planar.aim-relative",
+    "version": 1,
+    "resourceRef": "worldkit://control-profile/planar.aim-relative@1",
+    "authoringAvailability": "advanced",
+    "commandKind": "planar-vector",
+    "inputSpace": "camera-relative",
+    "facingPolicy": "align-to-view",
+    "lateralMovementPolicy": "allowed",
+    "inputTuning": {
+      "moveDeadzoneRatio": 0.1,
+      "lookDeadzoneRatio": 0.08,
+      "responseExponent": 1.3,
+      "lookSensitivityXRatio": 0.72,
+      "lookSensitivityYRatio": 0.62,
+      "invertLookX": false,
+      "invertLookY": false
+    },
+    "aiMetadata": {
+      "displayName": "Aim-relative Planar Control",
+      "description": "Keeps the subject aligned to the view while allowing camera-relative strafing.",
+      "semanticTags": ["aim", "camera-relative", "planar", "strafe"]
     }
   },
   {
@@ -25,6 +59,15 @@
     "inputSpace": "subject-local",
     "facingPolicy": "steering-derived",
     "lateralMovementPolicy": "forbidden",
+    "inputTuning": {
+      "moveDeadzoneRatio": 0.08,
+      "lookDeadzoneRatio": 0.08,
+      "responseExponent": 1.55,
+      "lookSensitivityXRatio": 1,
+      "lookSensitivityYRatio": 0.8,
+      "invertLookX": false,
+      "invertLookY": false
+    },
     "aiMetadata": {
       "displayName": "Subject-local Throttle and Steer",
       "description": "Maps forward input to throttle and lateral input to steering.",
@@ -41,6 +84,15 @@
     "inputSpace": "flight-frame",
     "facingPolicy": "flight-derived",
     "lateralMovementPolicy": "forbidden",
+    "inputTuning": {
+      "moveDeadzoneRatio": 0.08,
+      "lookDeadzoneRatio": 0.06,
+      "responseExponent": 1.35,
+      "lookSensitivityXRatio": 0.82,
+      "lookSensitivityYRatio": 0.72,
+      "invertLookX": false,
+      "invertLookY": false
+    },
     "aiMetadata": {
       "displayName": "Flight Attitude Control",
       "description": "Maps semantic movement and look input to pitch, yaw and bank commands.",
@@ -57,6 +109,15 @@
     "inputSpace": "none",
     "facingPolicy": "fixed",
     "lateralMovementPolicy": "forbidden",
+    "inputTuning": {
+      "moveDeadzoneRatio": 0,
+      "lookDeadzoneRatio": 0,
+      "responseExponent": 1,
+      "lookSensitivityXRatio": 1,
+      "lookSensitivityYRatio": 1,
+      "invertLookX": false,
+      "invertLookY": false
+    },
     "aiMetadata": {
       "displayName": "Safe No Control",
       "description": "Internal control profile that emits no active movement command.",

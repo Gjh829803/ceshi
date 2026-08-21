@@ -31,6 +31,7 @@ import type {
   ExecutionWaterV3,
   FixedInputV1,
   MotionParameterTuningV1,
+  SemanticInputActionV1,
   SubjectHarnessReportV1,
   Vec2,
   Vec3,
@@ -437,6 +438,7 @@ export class BabylonWorldRuntime implements WorldRuntimeSessionV3 {
   private readonly cameraDirector: CameraDirectorV1;
   private readonly renderLoop: () => void;
   private readonly ownedDisposers: readonly OwnedDisposer[];
+  private activeInputActions: readonly SemanticInputActionV1[] = [];
 
   private constructor(
     private readonly executionPlan: ExecutionPlanV4,
@@ -698,6 +700,8 @@ export class BabylonWorldRuntime implements WorldRuntimeSessionV3 {
     const physicsEngine = this.scene.getPhysicsEngine();
     if (physicsEngine === null) throw new Error("WORLDKIT_HAVOK_ENGINE_MISSING");
     for (let index = 0; index < input.ticks; index += 1) {
+      this.activeInputActions = [...input.actions];
+      this.cameraDirector.setInputActions(this.activeInputActions);
       const viewControlFrame = this.cameraDirector.controlFrame(this.tick);
       for (const subject of this.executionPlan.subjects) {
         const controller = this.controllerFor(subject.entityId);
@@ -707,7 +711,11 @@ export class BabylonWorldRuntime implements WorldRuntimeSessionV3 {
           controller.movementMedium !== "ground" ||
           controller.hasPendingInitialGroundSupport
         ) {
-          controller.step(controlled ? input.actions : [], viewControlFrame);
+          controller.step(
+            controlled ? input.actions : [],
+            viewControlFrame,
+            controlled ? input.axes : undefined,
+          );
         }
       }
       physicsEngine._step(FIXED_TIME_STEP_SECONDS);
@@ -721,7 +729,9 @@ export class BabylonWorldRuntime implements WorldRuntimeSessionV3 {
           visual.stepAnimation(this.tick, "idle");
           continue;
         }
-        const motion = controller.sampleMotion(input.actions.includes("run"));
+        const motion = controller.sampleMotion(
+          input.actions.includes("run") || input.actions.includes("boost"),
+        );
         visual.stepAnimation(this.tick, resolveGroundHumanoidAction(motion));
       }
       this.updateCamera();
@@ -792,6 +802,7 @@ export class BabylonWorldRuntime implements WorldRuntimeSessionV3 {
         ],
         activeCameraProfileRef: cameraDirectorSnapshot.activeCameraProfileRef,
         activeCameraRigRef: cameraDirectorSnapshot.activeCameraRigRef,
+        activeCameraModifierRefs: cameraDirectorSnapshot.activeCameraModifierRefs,
         preference: cameraDirectorSnapshot.preference,
         safeFallbackActive: cameraDirectorSnapshot.fallbackActive,
         viewYawOffsetRadians: cameraDirectorSnapshot.viewYawOffsetRadians,
@@ -813,6 +824,7 @@ export class BabylonWorldRuntime implements WorldRuntimeSessionV3 {
     for (const visual of this.subjectVisuals) visual.resetAnimation();
     this.controlledEntityId = this.executionPlan.controlledEntityId;
     this.tick = 0;
+    this.activeInputActions = [];
     this.cameraDirector.reset();
     this.updateCamera();
     return this.snapshot();
@@ -868,7 +880,9 @@ export class BabylonWorldRuntime implements WorldRuntimeSessionV3 {
     const velocity = controller.velocity;
     const motion = controller.motionSnapshot();
     const socketPositionsMetersXYZById: Record<string, Vec3> = {};
+    visual.root.computeWorldMatrix(true);
     for (const [socketId, socketNode] of visual.socketNodesById) {
+      socketNode.computeWorldMatrix(true);
       const position = socketNode.getAbsolutePosition();
       socketPositionsMetersXYZById[socketId] = [position.x, position.y, position.z];
     }
@@ -884,6 +898,20 @@ export class BabylonWorldRuntime implements WorldRuntimeSessionV3 {
       motionTags: motion.motionTags,
       movementMedium: this.detectMovementMedium(controller),
       relationshipRole: "none",
+      cameraContextTags: [
+        ...(this.activeInputActions.includes("move-forward") &&
+            !this.activeInputActions.includes("move-backward")
+          ? ["forward-intent"]
+          : []),
+        ...(this.activeInputActions.includes("aim") ? ["aim"] : []),
+        ...(this.activeInputActions.includes("run") ||
+            this.activeInputActions.includes("boost")
+          ? ["sprint"]
+          : []),
+        ...(Vector3.Dot(velocity, new Vector3(...motion.forwardXYZ)) < -0.1
+          ? ["reverse"]
+          : []),
+      ],
     };
     this.cameraDirector.update(
       subject.capabilityAssembly?.cameraContext,

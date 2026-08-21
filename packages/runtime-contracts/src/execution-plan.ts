@@ -273,14 +273,36 @@ export interface ExecutionControlProfileV1 {
   resourceRef: string;
   commandKind: ExecutionMotionCommandKindV1;
   inputSpace: "camera-relative" | "subject-local" | "flight-frame" | "none";
-  facingPolicy: "align-to-move" | "steering-derived" | "flight-derived" | "fixed";
+  facingPolicy:
+    | "align-to-move"
+    | "align-to-view"
+    | "steering-derived"
+    | "flight-derived"
+    | "fixed";
   lateralMovementPolicy: "allowed" | "forbidden";
+  inputTuning: {
+    moveDeadzoneRatio: number;
+    lookDeadzoneRatio: number;
+    responseExponent: number;
+    lookSensitivityXRatio: number;
+    lookSensitivityYRatio: number;
+    invertLookX: boolean;
+    invertLookY: boolean;
+  };
 }
 
 export interface ExecutionCameraRigProfileV1 {
   resourceRef: string;
+  baseMode:
+    | "first-person"
+    | "free-orbit"
+    | "stable-follow"
+    | "speed-chase"
+    | "flight-horizon";
   algorithmRef: string;
   headingSource: "view" | "target-forward" | "target-velocity";
+  reverseHeadingPolicy: "follow-velocity" | "preserve-target-forward";
+  recenterMode: "off" | "forward-motion" | "always";
   preferredSocketIds: readonly string[];
   parameters: {
     distanceMeters: number;
@@ -292,18 +314,44 @@ export interface ExecutionCameraRigProfileV1 {
     minimumPitchRadians: number;
     maximumPitchRadians: number;
     positionDampingPerSecond: number;
+    horizontalPositionDampingPerSecond: number;
+    verticalPositionDampingPerSecond: number;
+    maximumPositionLagMeters: number;
     rotationDampingPerSecond: number;
+    yawDampingPerSecond: number;
+    pitchDampingPerSecond: number;
     collisionRadiusMeters: number;
+    collisionRetractionMetersPerSecond: number;
+    collisionRecoveryMetersPerSecond: number;
     baseFovDegrees: number;
     speedFovDegreesPerMeterPerSecond: number;
     maximumSpeedFovDegrees: number;
     lookAheadSeconds: number;
+    accelerationLookAheadSecondsSquared: number;
     transitionSeconds: number;
     minimumHeadingSpeedMetersPerSecond: number;
+    velocityHeadingDampingPerSecond: number;
+    fovDampingPerSecond: number;
+    horizontalDeadZoneRatio: number;
+    verticalDeadZoneRatio: number;
+    recenterDelaySeconds: number;
+    recenterDurationSeconds: number;
+    recenterMinimumSpeedMetersPerSecond: number;
+    teleportSnapDistanceMeters: number;
+    lookSensitivityXRatio: number;
+    lookSensitivityYRatio: number;
   };
   authoringRanges?: Readonly<
     Record<string, { minimum: number; maximum: number; step: number }>
   >;
+}
+
+export interface ExecutionCameraModifierProfileV1 {
+  resourceRef: string;
+  parameterOverrides: Readonly<Partial<ExecutionCameraRigProfileV1["parameters"]>>;
+  headingSourceOverride?: ExecutionCameraRigProfileV1["headingSource"];
+  reverseHeadingPolicyOverride?: ExecutionCameraRigProfileV1["reverseHeadingPolicy"];
+  recenterModeOverride?: ExecutionCameraRigProfileV1["recenterMode"];
 }
 
 export interface ExecutionCameraContextRuleV1 {
@@ -317,8 +365,10 @@ export interface ExecutionCameraContextRuleV1 {
     minimumSpeedMetersPerSecond?: number;
     maximumSpeedMetersPerSecond?: number;
     requiredSocketIds?: readonly string[];
+    requiredCameraContextTags?: readonly string[];
   };
-  cameraRigProfileRef: string;
+  cameraRigProfileRef?: string;
+  cameraModifierRefs?: readonly string[];
 }
 
 export interface ExecutionSubjectCapabilityAssemblyV1 {
@@ -334,6 +384,7 @@ export interface ExecutionSubjectCapabilityAssemblyV1 {
     firstPersonCameraRigProfileRef?: string;
     rules: readonly ExecutionCameraContextRuleV1[];
     cameraRigProfiles: readonly ExecutionCameraRigProfileV1[];
+    cameraModifierProfiles: readonly ExecutionCameraModifierProfileV1[];
   };
   mediumProfile: {
     resourceRef: string;

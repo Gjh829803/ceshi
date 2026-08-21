@@ -62,6 +62,10 @@ function moveTowards(current: number, target: number, maximumDelta: number): num
   return current + Math.sign(target - current) * maximumDelta;
 }
 
+function clamp(value: number, minimum: number, maximum: number): number {
+  return Math.max(minimum, Math.min(maximum, value));
+}
+
 function moveVectorTowards(
   current: Vector3,
   target: Vector3,
@@ -84,12 +88,38 @@ function smoothstep01(value: number): number {
 }
 
 function kernelParameterRelationshipsAreValid(profile: ExecutionMotionProfileV1): boolean {
-  const lowSpeedTurnRate = profile.parameters.lowSpeedTurnRateRadiansPerSecond;
-  const highSpeedTurnRate = profile.parameters.highSpeedTurnRateRadiansPerSecond;
-  if (typeof lowSpeedTurnRate !== "number" || typeof highSpeedTurnRate !== "number") {
-    return true;
+  const parameters = profile.parameters;
+  const walkSpeed = parameters.walkSpeedMetersPerSecond;
+  const runSpeed = parameters.runSpeedMetersPerSecond;
+  if (typeof walkSpeed === "number" && typeof runSpeed === "number" && walkSpeed > runSpeed) {
+    return false;
   }
-  return highSpeedTurnRate <= lowSpeedTurnRate;
+  const lowSpeedTurnRate = parameters.lowSpeedTurnRateRadiansPerSecond;
+  const highSpeedTurnRate = parameters.highSpeedTurnRateRadiansPerSecond;
+  if (
+    typeof lowSpeedTurnRate === "number" &&
+    typeof highSpeedTurnRate === "number" &&
+    highSpeedTurnRate > lowSpeedTurnRate
+  ) {
+    return false;
+  }
+  const minimumSpeed = parameters.minimumForwardSpeedMetersPerSecond;
+  const maximumSpeed = parameters.maximumForwardSpeedMetersPerSecond;
+  const stallSpeed = parameters.stallSpeedMetersPerSecond;
+  if (
+    typeof minimumSpeed === "number" &&
+    typeof maximumSpeed === "number" &&
+    (minimumSpeed > maximumSpeed ||
+      (typeof stallSpeed === "number" &&
+        (stallSpeed < minimumSpeed || stallSpeed > maximumSpeed)))
+  ) {
+    return false;
+  }
+  const maximumSinkSpeed = parameters.maximumSinkSpeedMetersPerSecond;
+  const maximumClimbSpeed = parameters.maximumClimbSpeedMetersPerSecond;
+  if (typeof maximumSinkSpeed === "number" && maximumSinkSpeed < 0) return false;
+  if (typeof maximumClimbSpeed === "number" && maximumClimbSpeed < 0) return false;
+  return true;
 }
 
 export class MotionKernelRuntimeV1 {
@@ -103,6 +133,14 @@ export class MotionKernelRuntimeV1 {
   private planarVelocity = Vector3.Zero();
   private steeringInput = 0;
   private slideVelocity = Vector3.Zero();
+  private flightPitchRadians = 0;
+  private flightRollRadians = 0;
+  private bodyLeanRadians = 0;
+  private turnVelocityRadiansPerSecond = 0;
+  private brakeToReverseElapsedSeconds = 0;
+  private coyoteRemainingSeconds = 0;
+  private jumpBufferRemainingSeconds = 0;
+  private jumpHoldElapsedSeconds = 0;
   private jumpInProgress = false;
   private jumpActionWasActive = false;
   private currentMovementMedium: ExecutionMovementMediumV1 = "air";
@@ -311,6 +349,14 @@ export class MotionKernelRuntimeV1 {
     this.planarVelocity.setAll(0);
     this.steeringInput = 0;
     this.slideVelocity.setAll(0);
+    this.flightPitchRadians = 0;
+    this.flightRollRadians = 0;
+    this.bodyLeanRadians = 0;
+    this.turnVelocityRadiansPerSecond = 0;
+    this.brakeToReverseElapsedSeconds = 0;
+    this.coyoteRemainingSeconds = 0;
+    this.jumpBufferRemainingSeconds = 0;
+    this.jumpHoldElapsedSeconds = 0;
     this.jumpInProgress = false;
     this.jumpActionWasActive = false;
     this.syncVisual(spawn);
@@ -325,6 +371,14 @@ export class MotionKernelRuntimeV1 {
     this.planarVelocity.setAll(0);
     this.steeringInput = 0;
     this.slideVelocity.setAll(0);
+    this.flightPitchRadians = 0;
+    this.flightRollRadians = 0;
+    this.bodyLeanRadians = 0;
+    this.turnVelocityRadiansPerSecond = 0;
+    this.brakeToReverseElapsedSeconds = 0;
+    this.coyoteRemainingSeconds = 0;
+    this.jumpBufferRemainingSeconds = 0;
+    this.jumpHoldElapsedSeconds = 0;
     this.physicsController.setVelocity(Vector3.Zero());
   }
 
@@ -340,6 +394,17 @@ export class MotionKernelRuntimeV1 {
       this.stepGlide(command);
       return;
     }
+    if (implementationId === "free-ground") {
+      this.physicsController.maxSlopeCosine = Math.cos(
+        numberParameter(this.activeProfile, "maximumSlopeDegrees", 50) *
+          Math.PI / 180,
+      );
+      this.physicsController.maxStepHeight = numberParameter(
+        this.activeProfile,
+        "stepHeightMeters",
+        0.35,
+      );
+    }
     const support = this.physicsController.checkSupport(
       FIXED_TIME_STEP_SECONDS,
       this.gravity,
@@ -348,16 +413,25 @@ export class MotionKernelRuntimeV1 {
       support.supportedState === CharacterSupportedState.UNSUPPORTED;
     const movementMedium = this.movementMediumForSupport(support.supportedState);
     this.currentMovementMedium = movementMedium;
-    const jumpActionActive =
+    const jumpHeldThisTick =
       (command.kind === "planar-vector" || command.kind === "throttle-steer") &&
       command.jumpRequested;
-    const jumpRequestedThisTick =
-      jumpActionActive &&
-      !this.jumpActionWasActive &&
-      movementMedium === "ground" &&
-      !this.jumpInProgress;
-    this.jumpActionWasActive = jumpActionActive;
+    if (!unsupported) {
+      this.coyoteRemainingSeconds = numberParameter(
+        this.activeProfile,
+        "coyoteTimeSeconds",
+        0.1,
+      );
+    } else {
+      this.coyoteRemainingSeconds = Math.max(
+        0,
+        this.coyoteRemainingSeconds - FIXED_TIME_STEP_SECONDS,
+      );
+    }
     let desired = Vector3.Zero();
+    let jumpRequestedThisTick = false;
+    const jumpPressedThisTick = jumpHeldThisTick && !this.jumpActionWasActive;
+    this.jumpActionWasActive = jumpHeldThisTick;
 
     if (implementationId === "free-ground") {
       const planar = command.kind === "planar-vector" ? command : undefined;
@@ -399,10 +473,13 @@ export class MotionKernelRuntimeV1 {
         response * airControl * FIXED_TIME_STEP_SECONDS,
       );
       desired.copyFrom(this.planarVelocity);
-      if (targetPlanarVelocity.lengthSquared() > 0.000001) {
+      if (targetPlanarVelocity.lengthSquared() > 0.000001 || planar?.aimRequested === true) {
+        const facingDirection = planar?.aimRequested === true
+          ? planar.facingDirectionMetersXZ
+          : [targetPlanarVelocity.x, targetPlanarVelocity.z] as const;
         const targetYaw = Math.atan2(
-          -targetPlanarVelocity.x,
-          -targetPlanarVelocity.z,
+          -facingDirection[0],
+          -facingDirection[1],
         );
         const turnRate = numberParameter(
           this.activeProfile,
@@ -414,6 +491,29 @@ export class MotionKernelRuntimeV1 {
           targetYaw,
           turnRate * airControl * FIXED_TIME_STEP_SECONDS,
         );
+      }
+      if (planar?.jumpRequested === true && jumpPressedThisTick) {
+        this.jumpBufferRemainingSeconds = numberParameter(
+          this.activeProfile,
+          "jumpBufferSeconds",
+          0.12,
+        );
+      } else {
+        this.jumpBufferRemainingSeconds = Math.max(
+          0,
+          this.jumpBufferRemainingSeconds - FIXED_TIME_STEP_SECONDS,
+        );
+      }
+      if (
+        this.jumpBufferRemainingSeconds > 0 &&
+        (movementMedium === "ground" || !unsupported || this.coyoteRemainingSeconds > 0) &&
+        !this.jumpInProgress
+      ) {
+        this.jumpInProgress = true;
+        jumpRequestedThisTick = true;
+        this.jumpBufferRemainingSeconds = 0;
+        this.coyoteRemainingSeconds = 0;
+        this.jumpHoldElapsedSeconds = 0;
       }
     } else {
       const throttleCommand = command.kind === "throttle-steer" ? command : undefined;
@@ -434,7 +534,11 @@ export class MotionKernelRuntimeV1 {
       const boostMultiplier = throttleCommand?.boostRequested === true
         ? numberParameter(this.activeProfile, "boostMultiplier", 1.2)
         : 1;
-      const braking = throttleCommand?.brakeRequested === true &&
+      const brakeRatio = Math.max(
+        throttleCommand?.brakeRequested === true ? 1 : 0,
+        throttleCommand?.brakeRatio ?? 0,
+      );
+      const braking = brakeRatio > 0 &&
         implementationId !== "forward-steer";
       const targetSpeed = braking
         ? 0
@@ -462,12 +566,23 @@ export class MotionKernelRuntimeV1 {
               this.activeProfile,
               "brakeMetersPerSecondSquared",
               10,
-            ) * FIXED_TIME_STEP_SECONDS,
+            ) * brakeRatio * FIXED_TIME_STEP_SECONDS,
           );
         } else if (Math.abs(throttle) > 0.000001) {
           const changingDirection =
             Math.sign(targetSpeed) !== Math.sign(this.forwardSpeedMetersPerSecond) &&
             Math.abs(this.forwardSpeedMetersPerSecond) > 0.000001;
+          if (changingDirection) {
+            this.brakeToReverseElapsedSeconds += FIXED_TIME_STEP_SECONDS;
+          } else {
+            this.brakeToReverseElapsedSeconds = 0;
+          }
+          const reverseDelaySatisfied =
+            this.brakeToReverseElapsedSeconds >= numberParameter(
+              this.activeProfile,
+              "brakeToReverseDelaySeconds",
+              0.18,
+            );
           const response = changingDirection ||
               Math.abs(targetSpeed) < Math.abs(this.forwardSpeedMetersPerSecond)
             ? numberParameter(
@@ -478,10 +593,11 @@ export class MotionKernelRuntimeV1 {
             : acceleration;
           this.forwardSpeedMetersPerSecond = moveTowards(
             this.forwardSpeedMetersPerSecond,
-            targetSpeed,
+            changingDirection && !reverseDelaySatisfied ? 0 : targetSpeed,
             response * FIXED_TIME_STEP_SECONDS,
           );
         } else {
+          this.brakeToReverseElapsedSeconds = 0;
           this.forwardSpeedMetersPerSecond *= Math.exp(
             -numberParameter(this.activeProfile, "dragPerSecond", 0.7) *
               FIXED_TIME_STEP_SECONDS,
@@ -506,55 +622,158 @@ export class MotionKernelRuntimeV1 {
       let steeringAuthority = 1;
       let drivingDirection = 1;
       if (implementationId === "wheeled-arcade") {
+        const deadzone = numberParameter(
+          this.activeProfile,
+          "steeringDeadzoneRatio",
+          0.05,
+        );
+        const magnitude = Math.abs(steering);
+        const normalized = magnitude <= deadzone
+          ? 0
+          : (magnitude - deadzone) / Math.max(0.000001, 1 - deadzone);
+        appliedSteering = Math.sign(steering) * Math.pow(
+          normalized,
+          numberParameter(this.activeProfile, "steeringInputExponent", 1.6),
+        );
+      }
+      if (
+        implementationId === "wheeled-arcade" ||
+        implementationId === "forward-steer" ||
+        implementationId === "surface-slide"
+      ) {
         const steeringResponse = numberParameter(
           this.activeProfile,
-          Math.abs(steering) > 0.000001
+          Math.abs(appliedSteering) > 0.000001
             ? "steeringResponsePerSecond"
             : "steeringReturnPerSecond",
-          Math.abs(steering) > 0.000001 ? 4.5 : 7,
+          Math.abs(appliedSteering) > 0.000001 ? 4.5 : 7,
         );
         this.steeringInput = moveTowards(
           this.steeringInput,
-          steering,
+          appliedSteering,
           steeringResponse * FIXED_TIME_STEP_SECONDS,
         );
         appliedSteering = this.steeringInput;
-        steeringAuthority = smoothstep01(
-          Math.abs(this.forwardSpeedMetersPerSecond) /
-            numberParameter(
-              this.activeProfile,
-              "fullSteeringAuthoritySpeedMetersPerSecond",
-              2.5,
-            ),
-        );
-        drivingDirection = Math.sign(this.forwardSpeedMetersPerSecond);
       }
-      const turnRate = implementationId === "wheeled-arcade"
+      if (
+        implementationId === "wheeled-arcade" ||
+        implementationId === "forward-steer" ||
+        implementationId === "water-surface"
+      ) {
+        const fullAuthority = numberParameter(
+          this.activeProfile,
+          "fullSteeringAuthoritySpeedMetersPerSecond",
+          implementationId === "wheeled-arcade" ? 2.5 : 2,
+        );
+        const minimumAuthority = implementationId === "wheeled-arcade"
+          ? 0
+          : numberParameter(
+              this.activeProfile,
+              "minimumSteeringAuthorityRatio",
+              implementationId === "water-surface" ? 0.2 : 0.25,
+            );
+        steeringAuthority = minimumAuthority + (1 - minimumAuthority) * smoothstep01(
+          Math.abs(this.forwardSpeedMetersPerSecond) /
+            Math.max(0.001, fullAuthority),
+        );
+        drivingDirection = Math.sign(this.forwardSpeedMetersPerSecond) ||
+          Math.sign(throttle) || 1;
+        if (drivingDirection < 0 && implementationId === "water-surface") {
+          drivingDirection *= numberParameter(
+            this.activeProfile,
+            "reverseTurnMultiplier",
+            0.75,
+          );
+        }
+      }
+      const turnRate =
+        implementationId === "wheeled-arcade" || implementationId === "forward-steer"
         ? (() => {
             const curve = Math.pow(
               speedRatio,
               numberParameter(
                 this.activeProfile,
                 "turnRateSpeedCurveExponent",
-                1.35,
+                implementationId === "wheeled-arcade" ? 1.35 : 1.2,
               ),
             );
             return numberParameter(
               this.activeProfile,
               "lowSpeedTurnRateRadiansPerSecond",
-              1.15,
+              implementationId === "wheeled-arcade"
+                ? 1.15
+                : numberParameter(this.activeProfile, "turnRateRadiansPerSecond", 2.2),
             ) * (1 - curve) +
               numberParameter(
                 this.activeProfile,
                 "highSpeedTurnRateRadiansPerSecond",
-                0.42,
+                implementationId === "wheeled-arcade" ? 0.42 : 1.3,
               ) * curve;
           })()
         : numberParameter(this.activeProfile, "turnRateRadiansPerSecond", 1.8);
-      this.yawRadians -= appliedSteering * turnRate * steeringAuthority *
-        drivingDirection * FIXED_TIME_STEP_SECONDS;
+      const handbrakeTurnMultiplier = throttleCommand?.handbrakeRequested === true
+        ? numberParameter(this.activeProfile, "handbrakeTurnMultiplier", 1.35)
+        : 1;
+      if (implementationId === "water-surface") {
+        const targetTurnVelocity = steering * turnRate * steeringAuthority *
+          drivingDirection;
+        this.turnVelocityRadiansPerSecond = moveTowards(
+          this.turnVelocityRadiansPerSecond,
+          targetTurnVelocity,
+          numberParameter(
+            this.activeProfile,
+            "turnAccelerationRadiansPerSecondSquared",
+            2.5,
+          ) * FIXED_TIME_STEP_SECONDS,
+        );
+        if (Math.abs(steering) <= 0.000001) {
+          this.turnVelocityRadiansPerSecond *= Math.exp(
+            -numberParameter(this.activeProfile, "turnDampingPerSecond", 3) *
+              FIXED_TIME_STEP_SECONDS,
+          );
+        }
+        this.yawRadians -= this.turnVelocityRadiansPerSecond * FIXED_TIME_STEP_SECONDS;
+      } else {
+        this.yawRadians -= appliedSteering * turnRate * steeringAuthority *
+          drivingDirection * handbrakeTurnMultiplier * FIXED_TIME_STEP_SECONDS;
+      }
+      const leanTarget = implementationId === "forward-steer"
+        ? -appliedSteering * numberParameter(
+            this.activeProfile,
+            "bodyLeanMaximumRadians",
+            0.14,
+          ) * Math.min(1, speedRatio + 0.2)
+        : 0;
+      this.bodyLeanRadians = moveTowards(
+        this.bodyLeanRadians,
+        leanTarget,
+        2.5 * FIXED_TIME_STEP_SECONDS,
+      );
       desired = this.forward.scale(this.forwardSpeedMetersPerSecond);
 
+      if (implementationId === "wheeled-arcade") {
+        const currentVelocity = this.physicsController.getVelocity();
+        const currentPlanar = new Vector3(currentVelocity.x, 0, currentVelocity.z);
+        const currentForwardSpeed = Vector3.Dot(currentPlanar, this.forward);
+        const lateral = currentPlanar.subtract(
+          this.forward.scale(currentForwardSpeed),
+        );
+        const grip = throttleCommand?.handbrakeRequested === true
+          ? numberParameter(this.activeProfile, "handbrakeLateralGripPerSecond", 1.5)
+          : numberParameter(this.activeProfile, "lateralGripPerSecond", 6);
+        lateral.scaleInPlace(Math.exp(-grip * FIXED_TIME_STEP_SECONDS));
+        desired.addInPlace(lateral);
+      }
+
+      if (
+        implementationId === "forward-steer" &&
+        throttleCommand?.jumpRequested === true &&
+        jumpPressedThisTick &&
+        movementMedium === "ground"
+      ) {
+        this.jumpInProgress = true;
+        jumpRequestedThisTick = true;
+      }
       if (implementationId === "surface-slide") {
         const drive = desired.scale(
           numberParameter(this.activeProfile, "driveResponsePerSecond", 1.8) *
@@ -569,13 +788,42 @@ export class MotionKernelRuntimeV1 {
         this.slideVelocity.scaleInPlace(
           Math.max(0, 1 - friction * FIXED_TIME_STEP_SECONDS),
         );
+        const longitudinalSpeed = Vector3.Dot(this.slideVelocity, this.forward);
+        const longitudinalVelocity = this.forward.scale(longitudinalSpeed);
+        const lateralVelocity = this.slideVelocity.subtract(longitudinalVelocity);
+        lateralVelocity.scaleInPlace(
+          Math.exp(
+            -numberParameter(
+              this.activeProfile,
+              "lateralFrictionPerSecond",
+              0.22,
+            ) * FIXED_TIME_STEP_SECONDS,
+          ),
+        );
+        const maximumDriftAngle = numberParameter(
+          this.activeProfile,
+          "maximumDriftAngleRadians",
+          1.25,
+        );
+        const maximumLateralSpeed = Math.abs(longitudinalSpeed) *
+          Math.tan(Math.min(1.45, maximumDriftAngle)) + 0.5;
+        if (lateralVelocity.length() > maximumLateralSpeed) {
+          lateralVelocity.normalize().scaleInPlace(maximumLateralSpeed);
+        }
+        this.slideVelocity.copyFrom(longitudinalVelocity.add(lateralVelocity));
         if (!unsupported) {
           const normal = support.averageSurfaceNormal.normalizeToNew();
           const slopeAcceleration = this.gravity.subtract(
             normal.scale(Vector3.Dot(this.gravity, normal)),
           );
           this.slideVelocity.addInPlace(
-            slopeAcceleration.scale(FIXED_TIME_STEP_SECONDS),
+            slopeAcceleration.scale(
+              FIXED_TIME_STEP_SECONDS * numberParameter(
+                this.activeProfile,
+                "slopeGravityRatio",
+                1,
+              ),
+            ),
           );
         }
         const maxSpeed = numberParameter(
@@ -606,11 +854,29 @@ export class MotionKernelRuntimeV1 {
       this.jumpInProgress = true;
       calculated.y = numberParameter(this.activeProfile, "jumpSpeedMetersPerSecond", 5);
     } else if (!isPhysicallySupported || (this.jumpInProgress && current.y > 0)) {
+      const variableJumpHoldSeconds = numberParameter(
+        this.activeProfile,
+        "variableJumpHoldSeconds",
+        0.18,
+      );
+      if (
+        this.jumpInProgress &&
+        jumpHeldThisTick &&
+        this.jumpHoldElapsedSeconds < variableJumpHoldSeconds
+      ) {
+        this.jumpHoldElapsedSeconds += FIXED_TIME_STEP_SECONDS;
+      }
+      const gravityScale = this.jumpInProgress && jumpHeldThisTick &&
+          this.jumpHoldElapsedSeconds < variableJumpHoldSeconds
+        ? numberParameter(this.activeProfile, "jumpHoldGravityScale", 0.45)
+        : this.jumpInProgress && current.y > 0
+          ? numberParameter(this.activeProfile, "jumpReleaseGravityScale", 2)
+          : movementMedium === "water"
+            ? 0.15
+            : 1;
       calculated.y = current.y;
       calculated.addInPlace(
-        (movementMedium === "water" ? this.gravity.scale(0.15) : this.gravity).scale(
-          FIXED_TIME_STEP_SECONDS,
-        ),
+        this.gravity.scale(FIXED_TIME_STEP_SECONDS * gravityScale),
       );
     } else {
       calculated.y = support.averageSurfaceVelocity.y;
@@ -621,9 +887,17 @@ export class MotionKernelRuntimeV1 {
       const waterLevel = this.waterSurfaceHeightAtSubjectOrigin(this.subjectOrigin);
       const hold = numberParameter(this.activeProfile, "surfaceHoldStrengthPerSecond", 8);
       if (waterLevel !== undefined) {
+        const verticalSpeedLimit = numberParameter(
+          this.activeProfile,
+          "surfaceVerticalSpeedLimitMetersPerSecond",
+          2,
+        );
         calculated.y = Math.max(
-          -2,
-          Math.min(2, (waterLevel - this.subjectOrigin.y) * hold),
+          -verticalSpeedLimit,
+          Math.min(
+            verticalSpeedLimit,
+            (waterLevel - this.subjectOrigin.y) * hold,
+          ),
         );
       }
       calculated.scaleInPlace(
@@ -637,7 +911,9 @@ export class MotionKernelRuntimeV1 {
     }
     this.physicsController.setVelocity(calculated);
     const appliedGravity = implementationId === "water-surface"
-      ? this.gravity.scale(0.05)
+      ? this.gravity.scale(
+          numberParameter(this.activeProfile, "waterGravityScale", 0.05),
+        )
       : movementMedium === "water"
         ? this.gravity.scale(0.15)
         : this.gravity;
@@ -691,8 +967,46 @@ export class MotionKernelRuntimeV1 {
     this.jumpActionWasActive = false;
     this.currentMovementMedium = "air";
     const flight = command.kind === "flight-attitude" ? command : undefined;
+    const pitchInput = flight?.pitch ?? 0;
+    const rollInput = flight?.roll ?? 0;
+    const maximumPitchRadians = numberParameter(
+      this.activeProfile,
+      "maximumPitchRadians",
+      0.45,
+    );
+    const maximumRollRadians = numberParameter(
+      this.activeProfile,
+      "maximumRollRadians",
+      0.55,
+    );
+    this.flightPitchRadians = moveTowards(
+      this.flightPitchRadians,
+      pitchInput * maximumPitchRadians,
+      numberParameter(
+        this.activeProfile,
+        Math.abs(pitchInput) > 0.000001
+          ? "pitchRateRadiansPerSecond"
+          : "pitchCenteringPerSecond",
+        Math.abs(pitchInput) > 0.000001 ? 1 : 1.5,
+      ) *
+        FIXED_TIME_STEP_SECONDS,
+    );
+    this.flightRollRadians = moveTowards(
+      this.flightRollRadians,
+      -rollInput * maximumRollRadians,
+      numberParameter(
+        this.activeProfile,
+        Math.abs(rollInput) > 0.000001
+          ? "rollRateRadiansPerSecond"
+          : "rollCenteringPerSecond",
+        Math.abs(rollInput) > 0.000001 ? 1.1 : 1.8,
+      ) *
+        FIXED_TIME_STEP_SECONDS,
+    );
     this.yawRadians -=
-      (flight?.yaw ?? 0) *
+      ((flight?.yaw ?? 0) +
+        -this.flightRollRadians / Math.max(0.001, maximumRollRadians) *
+          numberParameter(this.activeProfile, "yawRollCouplingRatio", 0.35)) *
       numberParameter(this.activeProfile, "yawRateRadiansPerSecond", 0.8) *
       FIXED_TIME_STEP_SECONDS;
     const current = this.physicsController.getVelocity();
@@ -706,32 +1020,70 @@ export class MotionKernelRuntimeV1 {
       "maximumForwardSpeedMetersPerSecond",
       15,
     );
-    this.forwardSpeedMetersPerSecond = Math.max(
-      minSpeed,
-      Math.min(
-        maxSpeed,
-        Math.max(this.forwardSpeedMetersPerSecond, minSpeed) +
-          numberParameter(
-            this.activeProfile,
-            "glideAccelerationMetersPerSecondSquared",
-            1,
-          ) * FIXED_TIME_STEP_SECONDS,
+    const targetSpeed = minSpeed + (maxSpeed - minSpeed) * clamp(
+      0.5 - pitchInput * numberParameter(
+        this.activeProfile,
+        "pitchToForwardSpeedRatio",
+        0.35,
       ),
+      0,
+      1,
     );
-    const pitchInput = flight?.pitch ?? 0;
+    this.forwardSpeedMetersPerSecond = moveTowards(
+      Math.max(this.forwardSpeedMetersPerSecond, minSpeed),
+      targetSpeed,
+      numberParameter(
+        this.activeProfile,
+        "glideAccelerationMetersPerSecondSquared",
+        1,
+      ) * FIXED_TIME_STEP_SECONDS,
+    );
     const gravityScale = numberParameter(this.activeProfile, "gravityScale", 0.65);
     const liftRatio = numberParameter(this.activeProfile, "liftRatio", 0.65);
-    const liftAcceleration =
-      Math.max(0, this.forwardSpeedMetersPerSecond - numberParameter(
-        this.activeProfile,
-        "stallSpeedMetersPerSecond",
-        4,
-      )) * liftRatio;
+    const stallSpeed = numberParameter(this.activeProfile, "stallSpeedMetersPerSecond", 4);
+    const liftSpeedRange = Math.max(0.001, maxSpeed - stallSpeed);
+    const liftFactor = clamp(
+      (this.forwardSpeedMetersPerSecond - stallSpeed) / liftSpeedRange,
+      0,
+      1,
+    );
+    const maximumSinkSpeed = numberParameter(
+      this.activeProfile,
+      "maximumSinkSpeedMetersPerSecond",
+      6,
+    );
+    const maximumClimbSpeed = numberParameter(
+      this.activeProfile,
+      "maximumClimbSpeedMetersPerSecond",
+      1.5,
+    );
+    const stallSinkSpeed = numberParameter(
+      this.activeProfile,
+      "stallSinkSpeedMetersPerSecond",
+      3.5,
+    );
+    const targetVerticalSpeed = clamp(
+      -Math.max(0.6, gravityScale * 3) +
+        liftRatio * 1.5 * liftFactor +
+        this.flightPitchRadians * numberParameter(
+          this.activeProfile,
+          "pitchToVerticalSpeedMetersPerSecondPerRadian",
+          5,
+        ) -
+        (1 - liftFactor) * stallSinkSpeed,
+      -maximumSinkSpeed,
+      maximumClimbSpeed,
+    );
     const velocity = this.forward.scale(this.forwardSpeedMetersPerSecond);
-    velocity.y =
-      current.y +
-      (this.gravity.y * gravityScale + liftAcceleration - pitchInput * 3) *
-        FIXED_TIME_STEP_SECONDS;
+    velocity.y = moveTowards(
+      current.y,
+      targetVerticalSpeed,
+      numberParameter(
+        this.activeProfile,
+        "verticalResponseMetersPerSecondSquared",
+        4,
+      ) * FIXED_TIME_STEP_SECONDS,
+    );
     const support = this.physicsController.checkSupport(
       FIXED_TIME_STEP_SECONDS,
       this.gravity,
@@ -752,6 +1104,14 @@ export class MotionKernelRuntimeV1 {
       this.planarVelocity.setAll(0);
       this.steeringInput = 0;
       this.slideVelocity.setAll(0);
+      this.flightPitchRadians = 0;
+      this.flightRollRadians = 0;
+      this.bodyLeanRadians = 0;
+      this.turnVelocityRadiansPerSecond = 0;
+      this.brakeToReverseElapsedSeconds = 0;
+      this.coyoteRemainingSeconds = 0;
+      this.jumpBufferRemainingSeconds = 0;
+      this.jumpHoldElapsedSeconds = 0;
     }
   }
 
@@ -806,6 +1166,10 @@ export class MotionKernelRuntimeV1 {
         center.z - this.colliderCenterOffset.z,
       );
     }
-    this.visualRoot.rotationQuaternion = Quaternion.FromEulerAngles(0, this.yawRadians, 0);
+    this.visualRoot.rotationQuaternion = Quaternion.FromEulerAngles(
+      this.flightPitchRadians,
+      this.yawRadians,
+      this.flightRollRadians + this.bodyLeanRadians,
+    );
   }
 }

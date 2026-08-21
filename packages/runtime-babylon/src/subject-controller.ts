@@ -5,6 +5,7 @@ import type { Scene } from "@babylonjs/core/scene.pure.js";
 import type {
   ExecutionMovementMediumV1,
   ExecutionSubjectV3,
+  ControlInputAxesV2,
   MotionParameterTuningV1,
   SemanticInputActionV1,
   Vec3,
@@ -29,6 +30,15 @@ const LEGACY_CONTROL_PROFILE = {
   inputSpace: "camera-relative",
   facingPolicy: "align-to-move",
   lateralMovementPolicy: "allowed",
+  inputTuning: {
+    moveDeadzoneRatio: 0.1,
+    lookDeadzoneRatio: 0.08,
+    responseExponent: 1.4,
+    lookSensitivityXRatio: 1,
+    lookSensitivityYRatio: 0.8,
+    invertLookX: false,
+    invertLookY: false,
+  },
 } as const;
 
 /**
@@ -65,11 +75,13 @@ export class SubjectController {
       rightXYZ: [1, 0, 0],
       committedTick: 0,
     },
+    axes: Readonly<ControlInputAxesV2> = {},
   ): void {
     const command = compileMotionCommandV1(
       this.subject.capabilityAssembly?.controlProfile ?? LEGACY_CONTROL_PROFILE,
       actions,
       viewControlFrame,
+      axes,
     );
     this.motionKernel.step(command);
   }

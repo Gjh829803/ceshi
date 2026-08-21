@@ -2,16 +2,10 @@ import { readFile } from "node:fs/promises";
 import { createRequire } from "node:module";
 
 import { NullEngine } from "@babylonjs/core/Engines/nullEngine.pure.js";
-import { normalizeAuthoringSpec, sha256CanonicalJson } from "@whitebox-world/authoring";
-import { compileWorld } from "@whitebox-world/compiler";
 import { isNil } from "lodash-es";
 import { describe, expect, it } from "vitest";
 
-import {
-  builtInSubjectResourceRegistry,
-  type RegistrySubjectDefinitionV3,
-  type SubjectResourceRegistryV3,
-} from "@whitebox-world/subject-registry";
+import { builtInSubjectResourceRegistry } from "@whitebox-world/subject-registry";
 
 import { loadAuthoringScene } from "../../../apps/playground/src/authoring-loader";
 import { createValidAuthoringSpec } from "../../authoring/src/test-fixture";
@@ -44,26 +38,31 @@ const UNAVAILABLE_RELATIONSHIP_PACKAGES = [
     "worldkit://subject-definition/animal.quadruped.forward-steer@1",
     "worldkit://capability/relationship.mount@1",
     "worldkit://motion-kernel/forward-steer@1",
+    "worldkit://subject-definition/playground-preview.animal.quadruped.forward-steer@1",
   ],
   [
     "worldkit://subject-definition/vehicle.four-wheel.arcade@1",
     "worldkit://capability/relationship.seat@1",
     "worldkit://motion-kernel/wheeled-arcade@1",
+    "worldkit://subject-definition/playground-preview.vehicle.four-wheel.arcade@1",
   ],
   [
     "worldkit://subject-definition/surface-craft.ice-skimmer@1",
     "worldkit://capability/relationship.seat@1",
     "worldkit://motion-kernel/surface-slide@1",
+    "worldkit://subject-definition/playground-preview.surface-craft.ice-skimmer@1",
   ],
   [
     "worldkit://subject-definition/watercraft.kayak.surface@1",
     "worldkit://capability/relationship.seat@1",
     "worldkit://motion-kernel/water-surface@1",
+    "worldkit://subject-definition/playground-preview.watercraft.kayak.surface@1",
   ],
   [
     "worldkit://subject-definition/glider.paraglider.unpowered@1",
     "worldkit://capability/relationship.tether@1",
     "worldkit://motion-kernel/unpowered-glide@1",
+    "worldkit://subject-definition/playground-preview.glider.paraglider.unpowered@1",
   ],
 ] as const;
 
@@ -85,16 +84,8 @@ const CAMERA_PROFILES = [
     "worldkit://camera-rig/velocity-chase@1",
   ],
   [
-    "worldkit://camera-profile/follow.water-surface@1",
-    "worldkit://camera-rig/orbit-follow@1",
-  ],
-  [
     "worldkit://camera-profile/flight.glide@1",
     "worldkit://camera-rig/flight-horizon@1",
-  ],
-  [
-    "worldkit://camera-profile/follow.mounted@1",
-    "worldkit://camera-rig/orbit-follow@1",
   ],
 ] as const;
 
@@ -111,101 +102,6 @@ function createFlatTerrainCapabilitySpec() {
     amplitudeMeters: 0,
   };
   return spec;
-}
-
-function relationshipFreeTestDefinition(
-  sourceDefinitionRef: string,
-): {
-  definition: RegistrySubjectDefinitionV3;
-  registry: SubjectResourceRegistryV3;
-} {
-  const source = builtInSubjectResourceRegistry.resolveSubjectDefinition(
-    sourceDefinitionRef,
-  );
-  if (source === undefined || !("schemaVersion" in source) || source.schemaVersion !== 3) {
-    throw new Error(`Capability Definition is unavailable: ${sourceDefinitionRef}`);
-  }
-  const { contentHash: _contentHash, ...sourceInput } = structuredClone(source);
-  const input = {
-    ...sourceInput,
-    id: `runtime-test.${source.id}`,
-    resourceRef: `worldkit://subject-definition/runtime-test.${source.id}@1`,
-    capabilityRefs: source.capabilityRefs.filter(
-      (capabilityRef) => !capabilityRef.includes("/relationship."),
-    ),
-    relationshipCapabilityRefs: [],
-  };
-  const definition = Object.freeze({
-    ...input,
-    contentHash: sha256CanonicalJson(input),
-  }) as RegistrySubjectDefinitionV3;
-  const registry: SubjectResourceRegistryV3 = Object.freeze({
-    ...builtInSubjectResourceRegistry,
-    resolveSubjectDefinition(resourceRef: string) {
-      return resourceRef === definition.resourceRef
-        ? definition
-        : builtInSubjectResourceRegistry.resolveSubjectDefinition(resourceRef);
-    },
-    listSubjectDefinitions() {
-      return [...builtInSubjectResourceRegistry.listSubjectDefinitions(), definition];
-    },
-    listCapabilitySubjectDefinitions() {
-      return [
-        ...builtInSubjectResourceRegistry.listCapabilitySubjectDefinitions(),
-        definition,
-      ];
-    },
-  });
-  return { definition, registry };
-}
-
-function compileRelationshipFreeKernelPlan(sourceDefinitionRef: string) {
-  const { definition, registry } = relationshipFreeTestDefinition(sourceDefinitionRef);
-  const spec = createFlatTerrainCapabilitySpec();
-  const controlledSubject = spec.nodes.find(
-    (node) => node.kind === "subject" && node.id === spec.startup.controlledEntityId,
-  );
-  const spawn = spec.nodes.find(
-    (node) => node.kind === "anchor" && node.id === spec.startup.spawnAnchorEntityId,
-  );
-  if (
-    controlledSubject?.kind !== "subject" ||
-    spawn?.kind !== "anchor" ||
-    spawn.placement.kind !== "fixed"
-  ) {
-    throw new Error("Capability runtime fixture is missing its controlled Subject or spawn.");
-  }
-  controlledSubject.subjectDefinitionRef = definition.resourceRef;
-  const kernelRef = builtInSubjectResourceRegistry.resolveMotionProfile(
-    definition.profiles.motion.defaultMotionProfileRef,
-  )?.motionKernelRef;
-  if (kernelRef === "worldkit://motion-kernel/water-surface@1") {
-    spawn.placement.transform.positionMetersXYZ = [25, 0, 0];
-  } else if (kernelRef === "worldkit://motion-kernel/unpowered-glide@1") {
-    spawn.placement.transform.positionMetersXYZ = [0, 12, 30];
-  }
-  const normalized = normalizeAuthoringSpec(spec, {
-    subjectResourceRegistry: registry,
-  });
-  if (
-    !normalized.ok ||
-    normalized.value === undefined ||
-    normalized.normalizedWorldIrHash === undefined
-  ) {
-    throw new Error(
-      `Relationship-free Definition failed to normalize: ${JSON.stringify(normalized.diagnostics)}`,
-    );
-  }
-  const compiled = compileWorld({
-    normalizedWorldIr: normalized.value,
-    normalizedWorldIrHash: normalized.normalizedWorldIrHash,
-  });
-  if (!compiled.ok || compiled.executionPlan === undefined) {
-    throw new Error(
-      `Relationship-free Definition failed to compile: ${JSON.stringify(compiled.diagnostics)}`,
-    );
-  }
-  return compiled.executionPlan;
 }
 
 describe("capability package runtime smoke tests", () => {
@@ -270,6 +166,14 @@ describe("capability package runtime smoke tests", () => {
         activeMotionKernelRef: "worldkit://motion-kernel/free-ground@1",
         activeActionId: "walk",
       });
+      expect(
+        (await runtime.runFixedInput({ actions: ["aim"], ticks: 1 })).camera
+          .activeCameraModifierRefs,
+      ).toContain("worldkit://camera-modifier/aim-framing@1");
+      expect(
+        (await runtime.runFixedInput({ actions: ["move-forward", "run"], ticks: 1 }))
+          .camera.activeCameraModifierRefs,
+      ).toContain("worldkit://camera-modifier/sprint-emphasis@1");
       for (const [cameraProfileRef, cameraRigRef] of CAMERA_PROFILES) {
         const camera = runtime.setCameraPreference(cameraProfileRef).camera;
         expect(camera).toMatchObject({
@@ -328,6 +232,27 @@ describe("capability package runtime smoke tests", () => {
         .toBeGreaterThan(0.995);
       expect(Math.abs(afterStrafe.subjectStatesByEntityId.player!.forwardXYZ![0]))
         .toBeGreaterThan(0.9);
+
+      runtime.reset();
+      runtime.setCameraPreference("worldkit://camera-profile/orbit.medium@1");
+      const movingNormally = await runtime.runFixedInput({
+        actions: ["move-forward"],
+        ticks: 60,
+      });
+      runtime.reset();
+      runtime.setCameraPreference("worldkit://camera-profile/orbit.medium@1");
+      const movingWhileLookingBack = await runtime.runFixedInput({
+        actions: ["move-forward", "camera-look-back"],
+        ticks: 60,
+      });
+      const normalPosition = movingNormally.subjectStatesByEntityId.player!.positionMetersXYZ;
+      const lookBackPosition = movingWhileLookingBack.subjectStatesByEntityId.player!.positionMetersXYZ;
+      const normalLength = Math.hypot(normalPosition[0], normalPosition[2]);
+      const lookBackLength = Math.hypot(lookBackPosition[0], lookBackPosition[2]);
+      expect(
+        (normalPosition[0] * lookBackPosition[0] + normalPosition[2] * lookBackPosition[2]) /
+          (normalLength * lookBackLength),
+      ).toBeGreaterThan(0.995);
 
       runtime.reset();
       runtime.setCameraPreference("worldkit://camera-profile/orbit.medium@1");
@@ -396,26 +321,39 @@ describe("capability package runtime smoke tests", () => {
   }, 15_000);
 
   it.each(UNAVAILABLE_RELATIONSHIP_PACKAGES)(
-    "refuses to load %s while required relationship behavior is unavailable",
-    async (subjectDefinitionRef, capabilityRef) => {
+    "loads %s through an explicit motion-only Playground preview",
+    async (subjectDefinitionRef, capabilityRef, _motionKernelRef, previewDefinitionRef) => {
       const loaded = await loadAuthoringScene(
         async () => new Response(JSON.stringify(createFlatTerrainCapabilitySpec())),
         { subjectDefinitionRef },
       );
 
-      expect(loaded.ok).toBe(false);
-      expect(loaded.executionPlan).toBeUndefined();
-      expect(loaded.diagnostics).toContainEqual(expect.objectContaining({
-        code: "SUBJECT_CAPABILITY_UNSATISFIED",
-        details: expect.objectContaining({ capabilityRef }),
-      }));
+      expect(loaded.ok).toBe(true);
+      expect(loaded.diagnostics).toEqual([]);
+      expect(loaded.executionPlan?.subjects[0]?.subjectDefinitionRef)
+        .toBe(previewDefinitionRef);
+      expect(loaded.executionPlan?.subjects[0]?.capabilityAssembly?.relationshipProfiles)
+        .toEqual([]);
+      expect(loaded.hostOverlay?.changes).toContainEqual({
+        type: "relationship-capabilities-deferred",
+        sourceSubjectDefinitionRef: subjectDefinitionRef,
+        runtimeSubjectDefinitionRef: previewDefinitionRef,
+        deferredCapabilityRefs: [capabilityRef],
+      });
     },
   );
 
   it.each(UNAVAILABLE_RELATIONSHIP_PACKAGES)(
-    "executes implemented Kernel for %s through a relationship-free test Definition",
+    "executes implemented Kernel for %s through the Playground preview Definition",
     async (subjectDefinitionRef, _capabilityRef, motionKernelRef) => {
-      const executionPlan = compileRelationshipFreeKernelPlan(subjectDefinitionRef);
+      const loaded = await loadAuthoringScene(
+        async () => new Response(JSON.stringify(createFlatTerrainCapabilitySpec())),
+        { subjectDefinitionRef },
+      );
+      if (!loaded.ok || loaded.executionPlan === undefined) {
+        throw new Error(`Playground preview failed: ${JSON.stringify(loaded.diagnostics)}`);
+      }
+      const executionPlan = loaded.executionPlan;
       const assembly = executionPlan.subjects[0]?.capabilityAssembly;
       expect(assembly?.relationshipProfiles).toEqual([]);
       expect(assembly?.motionKernels).toContainEqual(expect.objectContaining({
@@ -516,6 +454,113 @@ describe("capability package runtime smoke tests", () => {
           expect(() => runtime.setMotionTuning("player", {
             lowSpeedTurnRateRadiansPerSecond: 0.3,
             highSpeedTurnRateRadiansPerSecond: 0.4,
+          })).toThrow(RangeError);
+
+          runtime.reset();
+          runtime.setCameraPreference("worldkit://camera-profile/chase.surface-fast@1");
+          const reversing = await runtime.runFixedInput({
+            actions: ["move-backward"],
+            ticks: 90,
+          });
+          const reversingState = reversing.subjectStatesByEntityId.player!;
+          expect(reversing.camera.activeCameraModifierRefs).toContain(
+            "worldkit://camera-modifier/reverse-stability@1",
+          );
+          const reverseOffsetX = reversing.camera.positionMetersXYZ[0] -
+            reversingState.positionMetersXYZ[0];
+          const reverseOffsetZ = reversing.camera.positionMetersXYZ[2] -
+            reversingState.positionMetersXYZ[2];
+          const reverseOffsetLength = Math.hypot(reverseOffsetX, reverseOffsetZ);
+          expect(
+            (reverseOffsetX * reversingState.forwardXYZ![0] +
+              reverseOffsetZ * reversingState.forwardXYZ![2]) /
+              reverseOffsetLength,
+          ).toBeLessThan(-0.8);
+
+          const cameraDistanceAfterRun = async (maximumPositionLagMeters: number) => {
+            runtime.reset();
+            runtime.setCameraPreference("worldkit://camera-profile/chase.surface-fast@1");
+            runtime.setCameraTuning({
+              positionDampingPerSecond: 0,
+              maximumPositionLagMeters,
+              lookAheadSeconds: 0,
+            });
+            const after = await runtime.runFixedInput({
+              actions: ["move-forward"],
+              ticks: 90,
+            });
+            const afterState = after.subjectStatesByEntityId.player!;
+            return Math.hypot(
+              after.camera.positionMetersXYZ[0] - afterState.positionMetersXYZ[0],
+              after.camera.positionMetersXYZ[2] - afterState.positionMetersXYZ[2],
+            );
+          };
+          expect(await cameraDistanceAfterRun(20)).toBeGreaterThan(
+            (await cameraDistanceAfterRun(0)) + 2,
+          );
+        }
+        if (subjectDefinitionRef.includes("watercraft.kayak")) {
+          runtime.reset();
+          runtime.setCameraPreference(
+            "worldkit://camera-profile/follow.medium@1",
+          );
+          await runtime.runFixedInput({
+            actions: ["move-forward", "move-left"],
+            ticks: 60,
+          });
+          const turned = await runtime.runFixedInput({ actions: [], ticks: 120 });
+          const turnedState = turned.subjectStatesByEntityId.player!;
+          expect(turned.camera.activeCameraModifierRefs).toContain(
+            "worldkit://camera-modifier/water-stability@1",
+          );
+          const offsetX = turned.camera.positionMetersXYZ[0] - turnedState.positionMetersXYZ[0];
+          const offsetZ = turned.camera.positionMetersXYZ[2] - turnedState.positionMetersXYZ[2];
+          const offsetLength = Math.hypot(offsetX, offsetZ);
+          expect(
+            (offsetX * turnedState.forwardXYZ![0] +
+              offsetZ * turnedState.forwardXYZ![2]) / offsetLength,
+          ).toBeLessThan(-0.85);
+        }
+        if (subjectDefinitionRef.includes("glider.paraglider")) {
+          runtime.reset();
+          const stableGlide = await runtime.runFixedInput({ actions: [], ticks: 300 });
+          expect(stableGlide.subjectStatesByEntityId.player!.velocityMetersPerSecondXYZ[1])
+            .toBeGreaterThanOrEqual(-6.01);
+          expect(stableGlide.subjectStatesByEntityId.player!.velocityMetersPerSecondXYZ[1])
+            .toBeLessThanOrEqual(1.51);
+
+          runtime.reset();
+          const climb = await runtime.runFixedInput({
+            actions: ["move-backward"],
+            ticks: 90,
+          });
+          runtime.reset();
+          const dive = await runtime.runFixedInput({
+            actions: ["move-forward"],
+            ticks: 90,
+          });
+          expect(climb.subjectStatesByEntityId.player!.velocityMetersPerSecondXYZ[1])
+            .toBeGreaterThan(
+              dive.subjectStatesByEntityId.player!.velocityMetersPerSecondXYZ[1],
+            );
+
+          runtime.reset();
+          const steered = await runtime.runFixedInput({
+            actions: ["move-left"],
+            ticks: 60,
+          });
+          expect(Math.abs(steered.subjectStatesByEntityId.player!.forwardXYZ![0]))
+            .toBeGreaterThan(0.5);
+          expect(runtime.setMotionTuning("player", {
+            pitchRateRadiansPerSecond: 1.5,
+            rollRateRadiansPerSecond: 1.6,
+          }).subjectStatesByEntityId.player!.motionParameterTuning).toMatchObject({
+            pitchRateRadiansPerSecond: 1.5,
+            rollRateRadiansPerSecond: 1.6,
+          });
+          expect(() => runtime.setMotionTuning("player", {
+            minimumForwardSpeedMetersPerSecond: 8,
+            maximumForwardSpeedMetersPerSecond: 6,
           })).toThrow(RangeError);
         }
       } finally {

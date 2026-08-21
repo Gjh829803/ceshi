@@ -1,4 +1,5 @@
 import type {
+  ControlInputAxesV2,
   ExecutionControlProfileV1,
   SemanticInputActionV1,
   ViewControlFrameV1,
@@ -10,12 +11,16 @@ export type MotionCommandV1 =
       directionMetersXZ: readonly [x: number, z: number];
       runRequested: boolean;
       jumpRequested: boolean;
+      aimRequested: boolean;
+      facingDirectionMetersXZ: readonly [x: number, z: number];
     }
   | {
       kind: "throttle-steer";
       throttle: number;
       steering: number;
       brakeRequested: boolean;
+      brakeRatio: number;
+      handbrakeRequested: boolean;
       jumpRequested: boolean;
       boostRequested: boolean;
     }
@@ -39,20 +44,41 @@ function clampUnit(value: number): number {
   return Math.max(-1, Math.min(1, value));
 }
 
+function normalizedAxis(
+  value: number,
+  deadzoneRatio: number,
+  responseExponent: number,
+): number {
+  const clamped = clampUnit(Number.isFinite(value) ? value : 0);
+  const magnitude = Math.abs(clamped);
+  if (magnitude <= deadzoneRatio) return 0;
+  const normalized = (magnitude - deadzoneRatio) / Math.max(0.000001, 1 - deadzoneRatio);
+  return Math.sign(clamped) * Math.pow(normalized, responseExponent);
+}
+
 export function compileMotionCommandV1(
   profile: ExecutionControlProfileV1,
   actions: readonly SemanticInputActionV1[],
   viewControlFrame: ViewControlFrameV1,
+  axes: Readonly<ControlInputAxesV2> = {},
 ): MotionCommandV1 {
   if (profile.commandKind === "none" || profile.inputSpace === "none") {
     return { kind: "none" };
   }
-  const longitudinal =
+  const digitalLongitudinal =
     (hasAction(actions, "move-forward") ? 1 : 0) -
     (hasAction(actions, "move-backward") ? 1 : 0);
-  const lateral =
+  const digitalLateral =
     (hasAction(actions, "move-right") ? 1 : 0) -
     (hasAction(actions, "move-left") ? 1 : 0);
+  const moveDeadzoneRatio = profile.inputTuning.moveDeadzoneRatio;
+  const responseExponent = profile.inputTuning.responseExponent;
+  const longitudinal = axes.moveYRatio === undefined
+    ? digitalLongitudinal
+    : normalizedAxis(axes.moveYRatio, moveDeadzoneRatio, responseExponent);
+  const lateral = axes.moveXRatio === undefined
+    ? digitalLateral
+    : normalizedAxis(axes.moveXRatio, moveDeadzoneRatio, responseExponent);
 
   if (profile.commandKind === "planar-vector") {
     const cameraForwardXYZ = viewControlFrame.forwardXYZ;
@@ -74,18 +100,27 @@ export function compileMotionCommandV1(
       kind: "planar-vector",
       directionMetersXZ:
         length > 1 ? [rawX / length, rawZ / length] : [rawX, rawZ],
-      runRequested: hasAction(actions, "run"),
+      runRequested: hasAction(actions, "run") || hasAction(actions, "boost"),
       jumpRequested: hasAction(actions, "jump"),
+      aimRequested: hasAction(actions, "aim"),
+      facingDirectionMetersXZ: [forwardX, forwardZ],
     };
   }
   if (profile.commandKind === "throttle-steer") {
     return {
       kind: "throttle-steer",
-      throttle: clampUnit(longitudinal),
+      throttle: axes.throttleRatio === undefined
+        ? clampUnit(longitudinal)
+        : clampUnit(axes.throttleRatio - Math.max(0, -longitudinal)),
       steering: clampUnit(lateral),
-      brakeRequested: hasAction(actions, "jump"),
+      brakeRequested: hasAction(actions, "brake"),
+      brakeRatio: Math.max(
+        hasAction(actions, "brake") ? 1 : 0,
+        Math.max(0, Math.min(1, axes.brakeRatio ?? 0)),
+      ),
+      handbrakeRequested: hasAction(actions, "handbrake"),
       jumpRequested: hasAction(actions, "jump"),
-      boostRequested: hasAction(actions, "run"),
+      boostRequested: hasAction(actions, "boost") || hasAction(actions, "run"),
     };
   }
   return {
@@ -93,6 +128,11 @@ export function compileMotionCommandV1(
     pitch: clampUnit(-longitudinal),
     yaw: clampUnit(lateral),
     roll: clampUnit(lateral),
-    actionRequested: hasAction(actions, "jump") || hasAction(actions, "run"),
+    actionRequested:
+      hasAction(actions, "primary-action") ||
+      hasAction(actions, "secondary-action") ||
+      hasAction(actions, "jump") ||
+      hasAction(actions, "run") ||
+      hasAction(actions, "boost"),
   };
 }

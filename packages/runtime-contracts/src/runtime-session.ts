@@ -6,10 +6,33 @@ export type SemanticInputActionV1 =
   | "move-left"
   | "move-right"
   | "jump"
-  | "run";
+  | "run"
+  | "boost"
+  | "brake"
+  | "handbrake"
+  | "primary-action"
+  | "secondary-action"
+  | "aim"
+  | "camera-recenter"
+  | "camera-look-back"
+  | "camera-shoulder-swap";
+
+/**
+ * Device-neutral continuous input. Keyboard callers may omit this and keep
+ * using semantic actions; gamepads and agents can provide normalized axes.
+ */
+export interface ControlInputAxesV2 {
+  moveXRatio?: number;
+  moveYRatio?: number;
+  lookXRatio?: number;
+  lookYRatio?: number;
+  throttleRatio?: number;
+  brakeRatio?: number;
+}
 
 export interface FixedInputV1 {
   actions: readonly SemanticInputActionV1[];
+  axes?: Readonly<ControlInputAxesV2>;
   ticks: number;
 }
 
@@ -25,13 +48,32 @@ export interface CameraTuningV1 {
   shoulderOffsetMeters?: number;
   pitchRadians?: number;
   positionDampingPerSecond?: number;
+  horizontalPositionDampingPerSecond?: number;
+  verticalPositionDampingPerSecond?: number;
+  maximumPositionLagMeters?: number;
   rotationDampingPerSecond?: number;
+  yawDampingPerSecond?: number;
+  pitchDampingPerSecond?: number;
   collisionRadiusMeters?: number;
+  collisionRetractionMetersPerSecond?: number;
+  collisionRecoveryMetersPerSecond?: number;
   lookAheadSeconds?: number;
+  accelerationLookAheadSecondsSquared?: number;
+  minimumHeadingSpeedMetersPerSecond?: number;
+  velocityHeadingDampingPerSecond?: number;
   transitionSeconds?: number;
   baseFovDegrees?: number;
   speedFovDegreesPerMeterPerSecond?: number;
   maximumSpeedFovDegrees?: number;
+  fovDampingPerSecond?: number;
+  horizontalDeadZoneRatio?: number;
+  verticalDeadZoneRatio?: number;
+  recenterDelaySeconds?: number;
+  recenterDurationSeconds?: number;
+  recenterMinimumSpeedMetersPerSecond?: number;
+  teleportSnapDistanceMeters?: number;
+  lookSensitivityXRatio?: number;
+  lookSensitivityYRatio?: number;
 }
 
 export type MotionParameterTuningV1 = Readonly<Record<string, number>>;
@@ -54,6 +96,7 @@ export interface ViewTargetSampleV1 {
   motionTags: readonly string[];
   movementMedium: "ground" | "water" | "air";
   relationshipRole: "none" | "rider" | "driver" | "passenger" | "tethered";
+  cameraContextTags: readonly string[];
 }
 
 export const TRUSTED_DEFAULT_CONTROLLER_ID = "controller-primary" as const;
@@ -119,6 +162,7 @@ export interface WorldRuntimeSnapshotV3 {
     positionMetersXYZ: Vec3;
     activeCameraProfileRef?: string;
     activeCameraRigRef?: string;
+    activeCameraModifierRefs?: readonly string[];
     preference?: string;
     safeFallbackActive?: boolean;
     viewYawOffsetRadians?: number;
@@ -177,6 +221,9 @@ export interface CompatibleProfileSummaryV1 {
   kind: "motion-profile" | "camera-rig-profile";
   displayName: string;
   role?: "default" | "optional" | "fallback" | "camera";
+  baseMode?: "first-person" | "free-orbit" | "stable-follow" | "speed-chase" | "flight-horizon";
+  headingSource?: "view" | "target-forward" | "target-velocity";
+  recenterMode?: "off" | "forward-motion" | "always";
   parameters?: Readonly<Record<string, number | boolean>>;
   safetyLimits?: Readonly<Record<string, { minimum: number; maximum: number }>>;
   authoringRanges?: Readonly<
