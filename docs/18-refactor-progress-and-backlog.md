@@ -32,6 +32,7 @@
 - [`2026-08-17-ai-first-lego-game-sdk-design.md`](superpowers/specs/2026-08-17-ai-first-lego-game-sdk-design.md)：长期架构规格；
 - [`2026-08-17-terrain-authoring-pipeline-design.md`](superpowers/specs/2026-08-17-terrain-authoring-pipeline-design.md)：地形专项规格；
 - [`2026-08-21-hybrid-terrain-and-non-heightfield-topology-design.md`](superpowers/specs/2026-08-21-hybrid-terrain-and-non-heightfield-topology-design.md)：桥梁、悬挑、洞口、洞穴和多层可行走表面的长期专项规格；
+- [`2026-08-21-hybrid-terrain-design-review.md`](reviews/2026-08-21-hybrid-terrain-design-review.md)：对该专项的业界对照审查；方向成立，H0 合同未冻前不开始 H1；
 - [`2026-08-19-extensible-subject-authoring-design.md`](superpowers/specs/2026-08-19-extensible-subject-authoring-design.md)：主体组装、Relationship、坐骑、装备和飞行的专项规格；
 - [`2026-08-19-asset-subject-s1b-visible-slice-design.md`](superpowers/specs/2026-08-19-asset-subject-s1b-visible-slice-design.md)：首个 GLB/Rig/Animation/Collider Profile 资产主体纵向切片；
 - [`2026-08-20-g-bot-product-asset-s1-design.md`](superpowers/specs/2026-08-20-g-bot-product-asset-s1-design.md)：首个真实产品人物 G Bot 的版本化映射与可视验收；
@@ -444,33 +445,51 @@ Heightfield 在大面积户外地表上的性能、确定性和工具链优势�
 
 - [x] 编写 Hybrid Terrain 与非 Heightfield 特殊地形专项设计，明确业界依据、职责、
   分阶段顺序和生产 Gate。
+- [x] 2026-08-21 设计审查已按“修改后采纳”处置：混合拓扑方向成立；H0 须先按
+  [`hybrid-terrain-design-review`](reviews/2026-08-21-hybrid-terrain-design-review.md)
+  收紧 Opening Kit Contract、Collider 同源 Surface、cells/vertices、Portal 归属和 H1
+  最小闭合集；审查正文保留为证据，权威合同已回写专项设计。
 - [ ] 评审并冻结 H1 Bridge Fixture；公共字段冻结前先核实当前 Babylon/Havok 版本的
   Static Triangle Collider、Contact、Shape Lease 和 Character Controller 语义。
+- [x] 锁文件与已安装 `@babylonjs/core@9.21.2` / `@babylonjs/havok@1.3.14` 源码确认公开
+  Heightfield API 没有 Hole/Mask 参数；这只关闭源码证据，不替代下一条可执行探针。
+- [ ] 运行锁版本 Static Triangle Collider 探针，覆盖 Winding/Sidedness、方形/矩形 Tile、
+  接缝、Character Controller 支撑、Shape Lease、Dispose 和资源成本；通过后才把受影响
+  Tile 的 Static Triangle Collider 冻结为当前 Runtime Profile 默认路径。
 - [ ] 冻结 Static Structure 的 Geometry/Collider/Inventory/Provenance 资源边界；产品 GLB、
   Registry Prototype 和可选 Geometry Recipe 必须汇聚到相同锁定制品。
 - [ ] 冻结 Terrain Opening 的内容寻址 Mask/Shape、Tile 编译和 Visual/Physics/Query 一致
-  语义；后端 Heightfield 不支持洞时使用经过预算验证的静态 Tile Collider 路径。
+  语义；Height 使用 Vertex Grid，Opening 使用 Cell Mask（每轴 vertex - 1），并一次性迁移
+  现有 `resolutionCellsXZ` 被当作顶点数使用的历史方言。
+- [ ] 冻结 Kit Opening Contract：闭合判别“无需 Opening/必须 Opening”，后者引用内容寻址
+  Opening Recipe；不提前冻结单个 `requiresTerrainOpening` 布尔字段。
 - [ ] 定义 Walkable Surface 与 Collider Subshape 的稳定绑定；视觉 Mesh 不自动可走，
-  `walkable`、`climbable` 等语义不能从材质、颜色或 Mesh 名推断。
+  `walkable`、`climbable` 等语义不能从材质、颜色或 Mesh 名推断；Surface ID 使用 Entity
+  ID + 稳定逻辑 Subshape ID + resolved Resource Version，不使用数组序号或 Runtime Handle。
 - [ ] 定义引擎无关 Support Surface Query：请求携带 3D Origin、方向、距离和过滤条件，
   命中返回稳定 Surface/Entity ID、米制位置、法线、距离和语义，并支持同一 XZ 多层排序。
 - [ ] 保持 Runtime Ground Support 单一所有者：实际支撑来自 Havok Contact/Controller，
   唯一 Resolver 映射到 Surface ID；Terrain Query、Medium、Action、Animation 和 Camera
   不得独立产生第二份 `isGrounded`。
+- [ ] H1 内收口现有两条支撑旁路：Spawn 的 `hasWalkablePhysicalGroundAt` 与 Controller
+  Support 映射同一 Surface；Object `supported-by` 从 AABB 顶面切换为声明的 Collider
+  Subshape Query。先补 Bridge 失败 Fixture，不把它们当作当前 Heightfield 场景的紧急 Bug。
 - [ ] H1 Bridge/Cliff Fixture 验证桥面与桥下地面同 XZ 双层命中、上下路线、桥边离开、
-  落地、净空、Camera、Reset、Rebind 和 30/60/120 Hz-like Replay。
+  落地、净空、桥下有水、脚底接触过滤、Camera、Reset、Rebind 和 30/60/120 Hz-like Replay。
 - [ ] H2 Terrain Opening/Cave Entrance Fixture 验证洞口 Render、Collider、Query、Debug
   Overlay 同时移除，Structure 接缝没有不可见墙、跌落缝或角色卡点。
-- [ ] H3 冻结 Interior Region、Portal 与既有 Region Graph/Route Graph 的唯一归属；实现
-  室外→洞穴→室外的固定 Tick 纵向切片，但不把它冒充完整室内/NPC Navigation。
+- [ ] H3 冻结 Interior Region、AI-facing Portal 意图与既有 Region Graph/Route Graph 的唯一
+  归属；允许 Compiler 从同一身份派生 Visibility/Acoustics/Streaming/Navigation Portal
+  Metadata，实现室外→洞穴→室外固定 Tick 切片，但不冒充完整室内/NPC Navigation。
 - [ ] H4 实现 Terrain Tile、Opening、Structure、Surface、Region、Portal 的原子 Cell 加载、
   LOD、共享资源 Lease、部分构造失败回滚、Dispose 和性能预算。
 - [ ] CLI/Browser/Validation 输出 Opening Mask、Visual/Collider/Surface Overlay、Support
   Hit、Region/Portal、Seam/Clearance/Slope/Route Diagnostic 和全部 Resource/Profile Hash。
-- [ ] 增加 AI Authoring Conformance：普通 AI 只提交 `prototypeRef`、Transform 和必要
+- [ ] 增加 AI Authoring Conformance：普通 AI 只提交 `prototypeRef`、Placement 和必要
   Placement/Route Constraint，Registry/Compiler 自动展开 Collider、Opening、Surface、
-  Region 和 Portal；至少两个结构化输出 Adapter 使用相同 Canonical 字段完成 Bridge/Cave
-  Fixture 及 Diagnostic 修复，不产生 Provider 方言或引擎字段。
+  Region 和 Route Connection；CLI Canonical JSON 与 Browser Protocol 两种宿主编码使用
+  相同 Canonical 字段完成 Bridge/Cave Fixture 及 Diagnostic 修复，不产生 Provider 方言、
+  第二套 Geometry Adapter 或引擎字段。
 - [ ] 只有出现明确产品需求后，才为多层 Navigation、完整室内、运行时雕刻/破坏或
   Voxel/SDF 建立独立设计与实施计划；不得提前泄漏实验字段到 Canonical Schema。
 
