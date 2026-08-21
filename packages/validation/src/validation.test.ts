@@ -248,6 +248,49 @@ describe("Validation Profile/Report V1", () => {
     });
   });
 
+  it("rejects Evidence or Diagnostic ownership that drifts from the Report", () => {
+    const evidenceDrift = structuredClone(validReport()) as unknown as Record<
+      string,
+      unknown
+    >;
+    const evidenceById = evidenceDrift.evidenceArtifactsById as Record<
+      string,
+      Record<string, unknown>
+    >;
+    evidenceById["capture-bundle"]!.contentHash = HASH_A;
+    expect(validateValidationReportV1(evidenceDrift)).toMatchObject({
+      ok: false,
+      diagnostics: expect.arrayContaining([
+        expect.objectContaining({ code: "VALIDATION_REFERENCE_INVALID" }),
+      ]),
+    });
+
+    const diagnosticDrift = structuredClone(validReport()) as unknown as Record<
+      string,
+      unknown
+    >;
+    diagnosticDrift.diagnostics = [
+      {
+        id: "foreign-diagnostic",
+        code: "CAPTURE_FILE_HASH_MISMATCH",
+        severity: "error",
+        gateId: "not-a-profile-gate",
+        metricId: "not-a-profile-metric",
+        artifactPath: "bundle.json",
+        expectedValue: "valid",
+        actualValue: "invalid",
+        message: "Foreign ownership.",
+        suggestedFix: "Regenerate.",
+      },
+    ];
+    expect(validateValidationReportV1(diagnosticDrift)).toMatchObject({
+      ok: false,
+      diagnostics: expect.arrayContaining([
+        expect.objectContaining({ code: "VALIDATION_REFERENCE_INVALID" }),
+      ]),
+    });
+  });
+
   it("gives explicit Blocking Failure priority over incomplete evidence", () => {
     const gateResultsById = passedGateResults();
     const integrityMetric = gateResultsById["capture-bundle-integrity"]!

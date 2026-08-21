@@ -23,6 +23,27 @@ import type {
 } from "./types";
 
 const SHA256_PATTERN = /^sha256:[a-f0-9]{64}$/;
+const VALIDATION_DIAGNOSTIC_CODES_V1 = [
+  "CAPTURE_BUNDLE_JSON_INVALID",
+  "CAPTURE_FILE_HASH_MISMATCH",
+  "CAPTURE_FILE_MISSING",
+  "CAPTURE_FILE_UNDECLARED",
+  "CAPTURE_FRAME_INDEX_INVALID",
+  "CAPTURE_FRAME_DIMENSIONS_INVALID",
+  "CAPTURE_FRAME_HASH_MISMATCH",
+  "CAPTURE_FRAME_TICK_INVALID",
+  "CAPTURE_LINEAR_DEPTH_INVALID",
+  "CAPTURE_MANIFEST_HASH_MISMATCH",
+  "CAPTURE_REQUIRED_PASS_MISSING",
+  "CAPTURE_ROOT_HASH_MISMATCH",
+  "CAPTURE_PROFILE_MISMATCH",
+  "CAPTURE_SESSION_MISMATCH",
+  "CAPTURE_TABLE_INVALID",
+  "CAPTURE_TAKE_MISMATCH",
+  "CAPTURE_WORLD_PACKAGE_MISMATCH",
+  "VALIDATION_EVALUATOR_FAILED",
+  "VALIDATION_REQUIRED_METRIC_MISSING",
+] as const;
 
 function addDiagnostic(
   diagnostics: ValidationContractDiagnosticV1[],
@@ -617,7 +638,6 @@ function validateReportDiagnostic(
   );
   for (const field of [
     "id",
-    "code",
     "gateId",
     "metricId",
     "artifactPath",
@@ -628,6 +648,12 @@ function validateReportDiagnostic(
   ]) {
     requireString(record[field], `${path}/${field}`, diagnostics);
   }
+  requireEnum(
+    record.code,
+    VALIDATION_DIAGNOSTIC_CODES_V1,
+    `${path}/code`,
+    diagnostics,
+  );
   requireEnum(
     record.severity,
     ["error", "warning"],
@@ -648,6 +674,26 @@ function validateReportReferences(
   const diagnosticIds = new Set(
     report.diagnostics.map((diagnostic: ValidationDiagnosticV1) => diagnostic.id),
   );
+  if (diagnosticIds.size !== report.diagnostics.length) {
+    addDiagnostic(
+      diagnostics,
+      "VALIDATION_REFERENCE_INVALID",
+      "/diagnostics",
+      "Diagnostic IDs must be unique.",
+    );
+  }
+  const captureBundleArtifact = report.evidenceArtifactsById["capture-bundle"];
+  if (
+    captureBundleArtifact === undefined ||
+    captureBundleArtifact.contentHash !== report.subject.bundleRootHash
+  ) {
+    addDiagnostic(
+      diagnostics,
+      "VALIDATION_REFERENCE_INVALID",
+      "/evidenceArtifactsById/capture-bundle/contentHash",
+      "Capture Bundle Evidence contentHash must match the Subject bundleRootHash.",
+    );
+  }
   for (const [gateId, gateResult] of Object.entries(report.gateResultsById)) {
     for (const metricResult of Object.values(gateResult.metricResultsById)) {
       for (const artifactRef of metricResult.evidenceArtifactRefs) {
@@ -680,6 +726,23 @@ function validateReportReferences(
           `Unknown Diagnostic ID '${diagnosticId}'.`,
         );
       }
+    }
+  }
+  for (const [index, diagnostic] of report.diagnostics.entries()) {
+    const gateResult = report.gateResultsById[diagnostic.gateId];
+    const metricResult = gateResult?.metricResultsById[diagnostic.metricId];
+    if (
+      gateResult === undefined ||
+      metricResult === undefined ||
+      !gateResult.diagnosticIds.includes(diagnostic.id) ||
+      !metricResult.diagnosticIds.includes(diagnostic.id)
+    ) {
+      addDiagnostic(
+        diagnostics,
+        "VALIDATION_REFERENCE_INVALID",
+        `/diagnostics/${index}`,
+        "Diagnostic ownership must resolve to one Gate and Metric that both reference its ID.",
+      );
     }
   }
 }
