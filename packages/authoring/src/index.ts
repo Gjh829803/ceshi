@@ -5,6 +5,7 @@ export {
   normalizeAuthoringSpecV3,
   normalizeAuthoringSpecV3 as normalizeAuthoringSpec,
 } from "./normalize-v3";
+export { normalizeAuthoringSpecV4 } from "./normalize-v4";
 export * from "./parse";
 export * from "./parse-v3";
 export * from "./parse-v4";

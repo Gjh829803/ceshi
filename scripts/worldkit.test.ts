@@ -6,9 +6,16 @@ import { fileURLToPath } from "node:url";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import {
+  createValidAuthoringSpec,
   createValidPackageSubjectWorld,
   createValidRiggedPackageDefinition,
 } from "../packages/authoring/src/test-fixture";
+import type { AuthoringSpecV4 } from "@whitebox-world/authoring";
+
+import {
+  loadWorldkitPipeline,
+  loadWorldkitRoutePipeline,
+} from "./lib/worldkit-pipeline";
 
 import { explainSubjectFile } from "./lib/subject-explain";
 import {
@@ -41,6 +48,45 @@ async function writePackageWorld(directory: string): Promise<string> {
   return inputPath;
 }
 
+async function writeRouteWorld(directory: string): Promise<string> {
+  const source = createValidAuthoringSpec();
+  const world: AuthoringSpecV4 = {
+    ...source,
+    schemaVersion: 4,
+    spatial: {
+      ...source.spatial,
+      routes: [{
+        id: "main-route",
+        kind: "polyline-xz",
+        pointsMetersXZ: [[0, 30], [0, -20]],
+        widthMeters: 4,
+        locomotionProfileRef: "worldkit://locomotion-profile/ground.standard@1",
+      }],
+    },
+    nodes: [...source.nodes, {
+      id: "goal",
+      kind: "anchor",
+      placement: { kind: "fixed", transform: { positionMetersXYZ: [0, 0, -20] } },
+      semantic: { classId: "route.destination" },
+    }],
+    constraints: {
+      placements: source.constraints.placements,
+      connectivity: [{
+        id: "hero-to-goal",
+        kind: "connected-by-route",
+        requirement: "required",
+        traversingEntityId: "player",
+        startAnchorEntityId: "spawn-main",
+        destinationAnchorEntityId: "goal",
+        routeId: "main-route",
+      }],
+    },
+  };
+  const inputPath = path.join(directory, "route-world.json");
+  await writeFile(inputPath, JSON.stringify(world), "utf8");
+  return inputPath;
+}
+
 const RIGGED_SUBJECT_WORLD_PATH = path.resolve(
   fileURLToPath(new URL("../examples/authoring/rigged-subject-world.json", import.meta.url)),
 );
@@ -64,6 +110,20 @@ afterEach(async () => {
 });
 
 describe("worldkit CLI", () => {
+  it("loads V4 Route worlds only through the explicit V4/V5 pipeline", async () => {
+    const directory = await createTemporaryDirectory();
+    const inputPath = await writeRouteWorld(directory);
+    const route = await loadWorldkitRoutePipeline(inputPath);
+    const legacy = await loadWorldkitPipeline(inputPath);
+
+    expect(route).toMatchObject({
+      ok: true,
+      normalizedWorldIr: { schemaVersion: 4 },
+      executionPlan: { schemaVersion: 5 },
+    });
+    expect(legacy).toMatchObject({ ok: false, exitCode: 2 });
+  });
+
   it("parses an explicit dependency refresh for local Runtime startup", () => {
     expect(
       parseWorldkitArgs([

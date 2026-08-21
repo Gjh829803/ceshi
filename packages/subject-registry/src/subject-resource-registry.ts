@@ -838,7 +838,9 @@ export function createSubjectResourceRegistry(
       ): resource is RegistrySubjectDefinitionV2 | RegistrySubjectDefinitionV3 =>
         !("schemaVersion" in resource) ||
         resource.resourceRef ===
-          "worldkit://subject-definition/humanoid.g-bot@1",
+          "worldkit://subject-definition/humanoid.g-bot@1" ||
+        resource.resourceRef ===
+          "worldkit://subject-definition/humanoid.third-person@1",
     ),
   );
   const stableCapabilitySubjectDefinitions = deepFreeze(
@@ -867,7 +869,6 @@ export function createSubjectResourceRegistry(
     "worldkit://collider-profile/humanoid.medium-capsule@1",
     "worldkit://collider-profile/humanoid.g-bot-capsule@1",
     "worldkit://subject-definition/humanoid.rigged-golden@1",
-    "worldkit://subject-definition/humanoid.third-person@1",
     "worldkit://subject-definition/quadruped.ground-proxy@1",
     "worldkit://capability/locomotion.ground@1",
     "worldkit://physics-body-profile/character.medium@1",

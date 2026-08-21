@@ -74,7 +74,7 @@ This plan delivers **R1 Heightfield Route only**. It does not close M5 by itself
 - Modify: `packages/compiler/src/index.ts`
 - Modify: `packages/compiler/package.json`
 - Modify: `packages/runtime-babylon/src/runtime.test.ts`
-- Modify: `apps/playground/src/authoring-loader.test.ts`
+- Verify: `apps/playground/src/authoring-loader.test.ts`
 - Modify: `scripts/worldkit.test.ts`
 - Modify: `scripts/lib/worldkit-pipeline.ts`
 - Modify: `pnpm-lock.yaml`
@@ -86,8 +86,9 @@ This plan delivers **R1 Heightfield Route only**. It does not close M5 by itself
 - The R1 Heightfield surface identity is compiler-derived from the locked terrain entity and content hashes; no Authoring duplicate is introduced.
 - The built-in primitive `humanoid.third-person@1` is clean-broken from legacy Subject Definition V2 to capability-driven V3 while retaining primitive visuals and the static whitebox Pose Set. It selects the explicit `worldkit://collider-profile/humanoid.medium-capsule@1` rather than a derivation profile, so frozen `colliderProfileRef/Hash` keep their literal contract meaning. It uses the capability-driven Character Physics Body and complete Motion/Control/Feel/Medium assembly. This gives R1 a GLB-independent humanoid whose every lock resource exists in the normalized Resource Lock; the lock compiler must never synthesize missing legacy identities or store a Collider Derivation Profile in a `colliderProfileRef` field.
 - Registry discovery classifies the migrated primitive exactly like other V3 capability Subjects: it appears once in both the canonical CLI Subject Definition list and capability Subject list, is absent from the legacy `listResources()` projection, and resolves to the same frozen content hash through every supported discovery path.
+- Registry `resourceLock[].contentHash` locks the immutable Registry resource bytes, while `ExecutionSubjectV3.subjectDefinitionHash` and `ResolvedTraversalLockV1.subjectDefinitionHash` lock the normalized Definition bytes. These byte domains are intentionally distinct for Registry Subjects and must never be compared as aliases. The lock compiler binds them by validating the complete canonical `resourceLockHash` against both Normalized IR and Execution Plan, while separately validating Plan-to-normalized-Definition identity.
 
-- [ ] **Step 1: Write RED normalization tests**
+- [x] **Step 1: Write RED normalization tests**
 
 Cover all of the following:
 
@@ -116,19 +117,19 @@ Also prove that the explicit V3 normalizer still rejects V4 and that V4 normaliz
 
 Add Registry and Authoring Subject Normalizer regressions proving the primitive R1 humanoid resolves as schemaVersion 3, uses `worldkit://pose-set/static.whitebox@1`, has exactly one ground-locomotion capability, and contributes every resource required by `ResolvedTraversalLockV1` to the normalized Resource Lock without loading a GLB. Prove CLI/capability discovery returns it exactly once with the resolved content hash and that the legacy resource projection no longer returns the V3 definition.
 
-- [ ] **Step 2: Run the RED normalization test**
+- [x] **Step 2: Run the RED normalization test**
 
 Run: `pnpm vitest run packages/authoring/src/normalize-v4.test.ts`
 
 Expected: FAIL because `normalizeAuthoringSpecV4` and `NormalizedWorldIRV4` do not exist.
 
-- [ ] **Step 3: Implement V4 normalization without duplicating the layout solver**
+- [x] **Step 3: Implement V4 normalization without duplicating the layout solver**
 
 Implement an explicit V4-to-V3 placement projection for the existing solver, then wrap the solved V3 result with sorted connectivity requirements and recompute the V4 canonical hash. The inner V3 hash is an implementation detail and must not be returned as the V4 hash.
 
 Do not mutate `NormalizedWorldIRV3`, do not add empty connectivity fields to it, and do not alias `normalizeAuthoringSpecV4` to the V3 function.
 
-- [ ] **Step 4: Write RED compiler tests for `ExecutionPlanV5.traversal`**
+- [x] **Step 4: Write RED compiler tests for `ExecutionPlanV5.traversal`**
 
 The tests must prove:
 
@@ -143,33 +144,34 @@ The tests must prove:
 - the execution plan hash includes connectivity and surface identity;
 - no Recast/provider field exists in the plan.
 
-- [ ] **Step 5: Implement `ExecutionPlanV5` and `compileWorldV5()`**
+- [x] **Step 5: Implement `ExecutionPlanV5` and `compileWorldV5()`**
 
 Use the existing V4 compiler core for shared world projection, then add the V5 traversal section, explicit static colliders, and recompute the plan hash. The derived Heightfield surface uses a stable package resource ref and a content hash over the canonical locked terrain source only; every Static Collider row has its own canonical hash, the Execution Plan hash covers both collections, and the later Graph Build Input hash covers the combined terrain/collider source. The Graph Builder consumes `staticColliders`; Task 5 changes Runtime V5 to consume the same rows. Visual object primitives remain rendering input only.
 
 `ExecutionPlanV5` and the Compiler must reuse `TraversalSurfaceIdentityV1` and `TraversalRuntimeImplementationIdentityV1` from `@whitebox-world/traversal` through declared direct package dependencies rather than relying on workspace hoisting or copying competing shapes. This direction remains acyclic: Traversal does not import Runtime Contracts or Compiler.
 
-- [ ] **Step 6: Write RED lock-compilation tests**
+- [x] **Step 6: Write RED lock-compilation tests**
 
 Prove that `compileResolvedTraversalLockV1()`:
 
 - resolves every Subject/Profile/Capability/Kernel hash from the normalized resource lock and compiled Subject rather than fixture constants;
+- rejects a one-sided mutation in either the Resource Lock hash chain or the Plan-to-normalized-Definition hash chain without comparing their unlike Subject Definition hashes;
 - requires exactly one compatible ground-locomotion capability for the R1 subject and fails closed on missing or ambiguous capability identity;
 - rejects legacy/incomplete Subjects instead of filling absent Control/Motion/Medium hashes from Runtime constants;
 - requires a complete trusted `TraversalRuntimeImplementationIdentityV1` and changes the lock hash when Backend or Adapter identity changes;
 - returns byte-identical immutable receipts across reordered normalized inputs;
-- is the only seam used by Graph build and Runtime orchestration, which receive its receipt instead of constructing locks.
+- exposes the only lock-construction seam for Graph build and Runtime orchestration; Tasks 3-9 must prove those consumers receive its receipt instead of reconstructing locks when the consumers exist.
 
-- [ ] **Step 7: Implement the unique lock compiler and add a route-specific pipeline entry**
+- [x] **Step 7: Implement the unique lock compiler and add a route-specific pipeline entry**
 
 `compileResolvedTraversalLockV1()` accepts `NormalizedWorldIRV4`, `ExecutionPlanV5`, `traversingEntityId`, and a trusted provider-neutral Runtime implementation identity. It delegates final closed validation/hash construction to `resolveTraversalLockV1()` and never reads a Registry at Runtime. `loadWorldkitRoutePipeline()` must require Authoring V4 and return `NormalizedWorldIRV4` plus `ExecutionPlanV5`. Existing `loadWorldkitPipeline()` remains the V3 runtime entry until a separately reviewed default-version migration; R1 must not silently reinterpret existing V3 worlds.
 
-- [ ] **Step 8: Run focused and dependency gates**
+- [x] **Step 8: Run focused and dependency gates**
 
 Run:
 
 ```bash
-pnpm vitest run packages/authoring/src/normalize-v4.test.ts packages/authoring/src/subject-definition-normalizer.test.ts packages/subject-registry/src/subject-registry.test.ts packages/subject-registry/src/capability-registry.test.ts packages/compiler/src/compile.test.ts packages/compiler/src/compile-traversal-lock.test.ts packages/runtime-contracts/src/runtime-contracts.test.ts packages/traversal/src/collider-subshape-id.test.ts packages/runtime-babylon/src/runtime.test.ts apps/playground/src/authoring-loader.test.ts scripts/worldkit.test.ts
+pnpm vitest run packages/authoring/src/normalize-v4.test.ts packages/authoring/src/subject-definition-normalizer.test.ts packages/subject-registry/src/subject-registry.test.ts packages/subject-registry/src/capability-registry.test.ts packages/compiler/src/compile.test.ts packages/compiler/src/compile-v5.test.ts packages/compiler/src/compile-traversal-lock.test.ts packages/runtime-contracts/src/runtime-contracts.test.ts packages/traversal/src/collider-subshape-id.test.ts packages/runtime-babylon/src/runtime.test.ts apps/playground/src/authoring-loader.test.ts scripts/worldkit.test.ts
 pnpm verify:route-r0-contract
 pnpm typecheck
 pnpm test

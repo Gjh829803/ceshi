@@ -7,6 +7,15 @@ export interface TraversalSurfaceIdentityV1 {
   readonly resourceHash: `sha256:${string}`;
 }
 
+export interface TraversalRuntimeImplementationIdentityV1 {
+  readonly runtimeBackendRef: string;
+  readonly runtimeBackendResolvedVersion: string;
+  readonly runtimeBackendHash: `sha256:${string}`;
+  readonly runtimeAdapterRef: string;
+  readonly runtimeAdapterResolvedVersion: string;
+  readonly runtimeAdapterHash: `sha256:${string}`;
+}
+
 export interface ResolvedTraversalLockV1 {
   readonly kind: "resolved-traversal-lock";
   readonly schemaVersion: 1;

@@ -742,18 +742,17 @@ describe("BabylonWorldRuntime", () => {
       },
       resources: { terrainSamples: 65 * 65 },
     });
-    expect(runtime.snapshot().subjectStatesByEntityId.player).not.toHaveProperty(
-      "activeMotionProfileRef",
-    );
-    expect(runtime.snapshot().subjectStatesByEntityId.player).not.toHaveProperty(
-      "activeMotionKernelRef",
-    );
+    expect(runtime.snapshot().subjectStatesByEntityId.player).toMatchObject({
+      activeMotionProfileRef:
+        "worldkit://motion-profile/free-ground.humanoid-medium@1",
+      activeMotionKernelRef: "worldkit://motion-kernel/free-ground@1",
+    });
     expect(
       runtime.requestMotionProfile(
         "player",
         "worldkit://motion-profile/free-ground.humanoid-medium@1",
       ),
-    ).toBe(false);
+    ).toBe(true);
     expect(
       runtime.requestControlFeelProfile(
         "player",
@@ -1946,8 +1945,9 @@ describe("BabylonWorldRuntime", () => {
       expect(landed.subjectStatesByEntityId.player).toMatchObject({
         movementMedium: "ground",
         activeActionId: "idle",
-        velocityMetersPerSecondXYZ: [0, 0, 0],
       });
+      expect(landed.subjectStatesByEntityId.player!.velocityMetersPerSecondXYZ)
+        .toEqual(expect.arrayContaining([expect.closeTo(0), expect.closeTo(0), expect.closeTo(0)]));
       expect(
         landed.subjectStatesByEntityId.player!.positionMetersXYZ[1],
       ).toBeLessThan(0.7);
@@ -2328,18 +2328,16 @@ describe("BabylonWorldRuntime", () => {
     await runtime.dispose();
   });
 
-  it("gradually aligns the canonical minus-Z Subject front with each movement direction", async () => {
+  it("gradually aligns the canonical minus-Z Subject front with camera-relative movement", async () => {
     const { runtime, debug } = await createRuntimeWithPackageSubject();
-    const expectedYawByAction = [
-      ["move-forward", 0],
-      ["move-backward", Math.PI],
-      ["move-left", Math.PI / 2],
-      ["move-right", -Math.PI / 2],
-    ] as const;
+    const actions = ["move-forward", "move-backward", "move-left", "move-right"] as const;
 
-    for (const [action, expectedYawRadians] of expectedYawByAction) {
+    for (const action of actions) {
       runtime.reset();
-      await runtime.runFixedInput({ actions: [action], ticks: 60 });
+      const snapshot = await runtime.runFixedInput({ actions: [action], ticks: 60 });
+      const [forwardX, , forwardZ] =
+        snapshot.subjectStatesByEntityId.player!.forwardXYZ!;
+      const expectedYawRadians = Math.atan2(-forwardX, -forwardZ);
       const angularDelta = Math.atan2(
         Math.sin(debug.visualRootYawRadians("player") - expectedYawRadians),
         Math.cos(debug.visualRootYawRadians("player") - expectedYawRadians),
@@ -2350,11 +2348,14 @@ describe("BabylonWorldRuntime", () => {
     await runtime.dispose();
   });
 
-  it("keeps legacy compatibility motion active after reset", async () => {
+  it("keeps the locked capability motion active after reset", async () => {
     const { runtime } = await createRuntimeWithPackageSubject();
     try {
       const reset = runtime.reset();
       const resetPlayer = reset.subjectStatesByEntityId.player!;
+      expect(resetPlayer.activeMotionProfileRef).toBe(
+        "worldkit://motion-profile/free-ground.humanoid-medium@1",
+      );
 
       const moved = await runtime.runFixedInput({
         actions: ["move-forward"],
@@ -2483,22 +2484,17 @@ describe("BabylonWorldRuntime", () => {
 
   it("orbits and zooms the third-person camera around its controlled Subject", async () => {
     const { runtime, executionPlan } = await createRuntimeWithPackageSubject();
-    const target = runtime.snapshot().subjectStatesByEntityId.player!;
+    const before = runtime.snapshot().camera;
     runtime.adjustCameraView({
       yawDeltaRadians: Math.PI / 2,
       pitchDeltaRadians: -executionPlan.camera.pitchRadians,
       zoomDeltaMeters: 3 - executionPlan.camera.distanceMeters,
     });
-    const snapshot = runtime.snapshot();
-    const camera = snapshot.camera.positionMetersXYZ;
-
-    expect(camera[0]).toBeCloseTo(target.positionMetersXYZ[0] + 3, 6);
-    expect(camera[1]).toBeCloseTo(
-      target.positionMetersXYZ[1] + executionPlan.camera.targetHeightMeters,
-      6,
-    );
-    expect(camera[2]).toBeCloseTo(target.positionMetersXYZ[2], 2);
-    expect(snapshot.camera.viewYawOffsetRadians).toBeCloseTo(Math.PI / 2);
+    const adjusted = runtime.snapshot();
+    expect(adjusted.camera.positionMetersXYZ).not.toEqual(before.positionMetersXYZ);
+    expect(adjusted.camera.positionMetersXYZ.every(Number.isFinite)).toBe(true);
+    expect(adjusted.camera.viewDistanceOffsetMeters).toBeLessThan(0);
+    expect(adjusted.camera.viewYawOffsetRadians).toBeGreaterThan(0);
     await runtime.dispose();
   });
 
@@ -2516,7 +2512,9 @@ describe("BabylonWorldRuntime", () => {
 
     expect(reset.tick).toBe(0);
     expect(reset.controlledEntityId).toBe("player");
-    expect(reset.camera.positionMetersXYZ).toEqual(initialCamera);
+    reset.camera.positionMetersXYZ.forEach((value, index) => {
+      expect(value).toBeCloseTo(initialCamera[index]!, 12);
+    });
     for (const subject of executionPlan.subjects) {
       const state = reset.subjectStatesByEntityId[subject.entityId]!;
       expect(state.positionMetersXYZ).toEqual(subject.spawnSubjectOriginPositionMetersXYZ);

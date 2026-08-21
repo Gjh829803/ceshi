@@ -3,14 +3,18 @@ import path from "node:path";
 
 import {
   normalizeAuthoringSpec,
+  normalizeAuthoringSpecV4,
   parseAuthoringSpecJson,
+  parseAuthoringSpecV4,
   type AuthoringDiagnostic,
   type NormalizedWorldIRV3,
+  type NormalizedWorldIRV4,
 } from "@whitebox-world/authoring";
-import { compileWorld } from "@whitebox-world/compiler";
+import { compileWorld, compileWorldV5 } from "@whitebox-world/compiler";
 import type {
   CompileDiagnostic,
   ExecutionPlanV4,
+  ExecutionPlanV5,
 } from "@whitebox-world/runtime-contracts";
 
 export interface CliDiagnostic {
@@ -40,6 +44,17 @@ export interface WorldkitPipelineSuccess {
   normalizedWorldIr: NormalizedWorldIRV3;
   normalizedWorldIrHash: string;
   executionPlan: ExecutionPlanV4;
+  executionPlanHash: string;
+}
+
+export interface WorldkitRoutePipelineSuccess {
+  ok: true;
+  exitCode: 0;
+  diagnostics: readonly [];
+  absoluteInputPath: string;
+  normalizedWorldIr: NormalizedWorldIRV4;
+  normalizedWorldIrHash: string;
+  executionPlan: ExecutionPlanV5;
   executionPlanHash: string;
 }
 
@@ -112,6 +127,41 @@ export async function loadWorldkitPipeline(
     compiled.executionPlan === undefined ||
     compiled.executionPlanHash === undefined
   ) {
+    return { ok: false, exitCode: 2, diagnostics: compiled.diagnostics };
+  }
+  return {
+    ok: true,
+    exitCode: 0,
+    diagnostics: [],
+    absoluteInputPath: input.absoluteInputPath,
+    normalizedWorldIr: normalized.value,
+    normalizedWorldIrHash: normalized.normalizedWorldIrHash,
+    executionPlan: compiled.executionPlan,
+    executionPlanHash: compiled.executionPlanHash,
+  };
+}
+
+export async function loadWorldkitRoutePipeline(
+  inputPath: string,
+): Promise<WorldkitRoutePipelineSuccess | WorldkitFailure> {
+  const input = await readWorldkitInput(inputPath);
+  if (!input.ok) return input;
+
+  const parsed = parseAuthoringSpecV4(input.sourceText);
+  if (!parsed.ok || parsed.value === undefined) {
+    return { ok: false, exitCode: 2, diagnostics: parsed.diagnostics };
+  }
+  const normalized = normalizeAuthoringSpecV4(parsed.value);
+  if (!normalized.ok || normalized.value === undefined ||
+    normalized.normalizedWorldIrHash === undefined) {
+    return { ok: false, exitCode: 2, diagnostics: normalized.diagnostics };
+  }
+  const compiled = compileWorldV5({
+    normalizedWorldIr: normalized.value,
+    normalizedWorldIrHash: normalized.normalizedWorldIrHash,
+  });
+  if (!compiled.ok || compiled.executionPlan === undefined ||
+    compiled.executionPlanHash === undefined) {
     return { ok: false, exitCode: 2, diagnostics: compiled.diagnostics };
   }
   return {

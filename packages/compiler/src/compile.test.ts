@@ -809,7 +809,9 @@ describe("compileWorld", () => {
       subjectAssets: [],
       rigProfiles: [],
       animationSets: [],
-      colliderProfiles: [],
+      colliderProfiles: [expect.objectContaining({
+        colliderProfileRef: COLLIDER_PROFILE_REF,
+      })],
     });
   });
 
@@ -1047,7 +1049,7 @@ describe("compileWorld", () => {
     expect(serialized).not.toContain('"constraints"');
     expect(serialized).not.toMatch(/candidateRegionIds|sourceUri|licenseUri|providerHandle/);
     expect(result.executionPlanHash).toBe(
-      "sha256:0700865bc4f6e839f7c8362591bea5d0dad141774ee523430763ca29b03507fa",
+      "sha256:5c70313404f4b16e033fbf0bc150e2e6887db7272894c58b9d4c96fdb8b784a4",
     );
   });
 

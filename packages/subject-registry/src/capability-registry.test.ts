@@ -12,6 +12,7 @@ const SUBJECT_DEFINITION_REFS = [
   "worldkit://subject-definition/glider.paraglider.unpowered@1",
   "worldkit://subject-definition/humanoid.g-bot@1",
   "worldkit://subject-definition/humanoid.rigged-golden@1",
+  "worldkit://subject-definition/humanoid.third-person@1",
   "worldkit://subject-definition/surface-craft.ice-skimmer@1",
   "worldkit://subject-definition/vehicle.four-wheel.arcade@1",
   "worldkit://subject-definition/watercraft.kayak.surface@1",
@@ -73,6 +74,38 @@ describe("capability-driven subject registry", () => {
         .map((entry) => entry.subjectDefinitionRef),
     ).toEqual(PUBLIC_DEFAULT_REFS);
     expect(builtInSubjectResourceRegistry.listSubjectDefinitions()).toHaveLength(3);
+  });
+
+  it("discovers the primitive humanoid as one capability-driven V3 Definition", () => {
+    const resourceRef = "worldkit://subject-definition/humanoid.third-person@1";
+    const cliRows = builtInSubjectResourceRegistry.listSubjectDefinitions()
+      .filter((definition) => definition.resourceRef === resourceRef);
+    const capabilityRows = builtInSubjectResourceRegistry.listCapabilitySubjectDefinitions()
+      .filter((definition) => definition.resourceRef === resourceRef);
+    const resolved = builtInSubjectResourceRegistry.resolveSubjectDefinition(resourceRef);
+
+    expect(cliRows).toHaveLength(1);
+    expect(capabilityRows).toHaveLength(1);
+    expect(cliRows[0]?.contentHash).toBe(resolved?.contentHash);
+    expect(capabilityRows[0]?.contentHash).toBe(resolved?.contentHash);
+    expect(resolved).toMatchObject({
+      schemaVersion: 3,
+      actionOrPoseSetRef: "worldkit://pose-set/static.whitebox@1",
+      colliderPolicy: {
+        kind: "profile",
+        colliderProfileRef: "worldkit://collider-profile/humanoid.medium-capsule@1",
+      },
+      capabilityRefs: ["worldkit://capability/locomotion.ground@1"],
+      profiles: {
+        physicsBodyProfileRef:
+          "worldkit://physics-body-profile/character.capability-medium@1",
+      },
+      visualBinding: { mode: "static" },
+    });
+    expect(
+      builtInSubjectResourceRegistry.listResources()
+        .filter((resource) => resource.resourceRef === resourceRef),
+    ).toEqual([]);
   });
 
   it("freezes ten kernel IDs and exposes only K01, K02, K03, K04, K06 and K08 as runtime implementations", () => {

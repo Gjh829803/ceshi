@@ -204,6 +204,12 @@ importers:
       '@whitebox-world/testkit':
         specifier: workspace:*
         version: link:../testkit
+      '@whitebox-world/traversal':
+        specifier: workspace:*
+        version: link:../traversal
+      lodash-es:
+        specifier: ^4.18.1
+        version: 4.18.1
 
   packages/contracts: {}
 
@@ -297,6 +303,9 @@ importers:
       '@whitebox-world/control-capture':
         specifier: workspace:*
         version: link:../control-capture
+      '@whitebox-world/traversal':
+        specifier: workspace:*
+        version: link:../traversal
 
   packages/subject-actions: {}
 

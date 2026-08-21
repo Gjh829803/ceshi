@@ -2,6 +2,7 @@ import type {
   CameraRigParameterNameV1,
   CameraRigParametersV1,
 } from "./camera-parameter-contract";
+import type { TraversalSurfaceIdentityV1 } from "@whitebox-world/traversal";
 
 export type Vec2 = readonly [x: number, z: number];
 export type Vec3 = readonly [x: number, y: number, z: number];
@@ -537,6 +538,54 @@ export interface ExecutionPlanV4 {
 export interface CompileWorldResultV4 {
   readonly ok: boolean;
   readonly executionPlan?: ExecutionPlanV4;
+  readonly executionPlanHash?: string;
+  readonly diagnostics: readonly CompileDiagnostic[];
+}
+
+export interface ExecutionHeightfieldTraversalSurfaceV1
+  extends TraversalSurfaceIdentityV1 {
+  readonly kind: "heightfield";
+}
+
+export type ExecutionTraversalSurfaceV1 =
+  | ExecutionHeightfieldTraversalSurfaceV1;
+
+export type ExecutionStaticColliderShapeV1 =
+  | Readonly<{ kind: "box"; sizeMetersXYZ: Vec3 }>
+  | Readonly<{ kind: "sphere"; radiusMeters: number }>
+  | Readonly<{ kind: "cylinder"; radiusMeters: number; heightMeters: number }>;
+
+export interface ExecutionStaticColliderV1 {
+  readonly entityId: string;
+  readonly logicalSubshapeId: string;
+  readonly colliderSubshapeId: string;
+  readonly transform: ExecutionTransformV3;
+  readonly shape: ExecutionStaticColliderShapeV1;
+  readonly colliderHash: `sha256:${string}`;
+}
+
+export interface ExecutionConnectivityRequirementV1 {
+  readonly constraintId: string;
+  readonly kind: "connected-by-route";
+  readonly traversingEntityId: string;
+  readonly startAnchorEntityId: string;
+  readonly destinationAnchorEntityId: string;
+  readonly routeId: string;
+}
+
+export interface ExecutionPlanV5
+  extends Omit<ExecutionPlanV4, "schemaVersion"> {
+  readonly schemaVersion: 5;
+  readonly traversal: Readonly<{
+    surfaces: readonly ExecutionTraversalSurfaceV1[];
+    connectivityRequirements: readonly ExecutionConnectivityRequirementV1[];
+  }>;
+  readonly staticColliders: readonly ExecutionStaticColliderV1[];
+}
+
+export interface CompileWorldResultV5 {
+  readonly ok: boolean;
+  readonly executionPlan?: ExecutionPlanV5;
   readonly executionPlanHash?: string;
   readonly diagnostics: readonly CompileDiagnostic[];
 }

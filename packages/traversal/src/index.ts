@@ -8,6 +8,7 @@ export type {
   TraversalGraphV1,
   TraversalNodeV1,
 } from "./graph-contract.js";
+export { deriveColliderSubshapeIdV1 } from "./collider-subshape-id.js";
 export {
   assertMatchingTraversalLocksV1,
   resolveTraversalLockV1,
@@ -27,5 +28,6 @@ export type {
   ResolvedTraversalLockV1,
   TraversalDriverProfileV1,
   TraversalGraphBuilderProfileV1,
+  TraversalRuntimeImplementationIdentityV1,
   TraversalSurfaceIdentityV1,
 } from "./types.js";

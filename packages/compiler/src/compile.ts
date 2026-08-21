@@ -5,6 +5,7 @@ import type {
   NormalizedSubjectAssetV1,
   NormalizedSubjectDefinitionV2,
   NormalizedWorldIRV3,
+  NormalizedWorldIRV4,
   NormalizedLayoutAssertionV1,
   NormalizedWorldNodeV3,
   NormalizedSubjectSocketV2,
@@ -39,6 +40,15 @@ import type {
   SubjectSocketV3,
   SubjectVisualPartV3,
 } from "@whitebox-world/runtime-contracts";
+import type {
+  CompileWorldResultV5,
+  ExecutionConnectivityRequirementV1,
+  ExecutionHeightfieldTraversalSurfaceV1,
+  ExecutionPlanV5,
+  ExecutionStaticColliderShapeV1,
+  ExecutionStaticColliderV1,
+} from "@whitebox-world/runtime-contracts";
+import { deriveColliderSubshapeIdV1 } from "@whitebox-world/traversal";
 
 import { sampleFractalNoise } from "./noise";
 
@@ -105,6 +115,11 @@ interface CompileWorldCoreResult {
 
 export interface CompileWorldInputV4 {
   readonly normalizedWorldIr: NormalizedWorldIRV3;
+  readonly normalizedWorldIrHash: string;
+}
+
+export interface CompileWorldInputV5 {
+  readonly normalizedWorldIr: NormalizedWorldIRV4;
   readonly normalizedWorldIrHash: string;
 }
 
@@ -1502,6 +1517,159 @@ export function compileWorldV4(input: CompileWorldInputV4): CompileWorldResultV4
         code: "COMPILER_NORMALIZED_IR_INVALID",
         instancePath: "/normalizedWorldIr",
         message: cause instanceof Error ? cause.message : "NormalizedWorldIRV3 could not be compiled.",
+      }],
+    };
+  }
+}
+
+function projectNormalizedWorldV4ToV3(world: NormalizedWorldIRV4): NormalizedWorldIRV3 {
+  const clone = structuredClone(world);
+  const {
+    connectivityRequirements: _connectivityRequirements,
+    ...layout
+  } = clone.layout;
+  return {
+    ...clone,
+    schemaVersion: 3,
+    layout,
+  };
+}
+
+function compileHeightfieldTraversalSurfaceV1(
+  plan: ExecutionPlanV4,
+): ExecutionHeightfieldTraversalSurfaceV1 {
+  const surfaceEntityId = plan.terrain.entityId;
+  const colliderSubshapeId = deriveColliderSubshapeIdV1(
+    surfaceEntityId,
+    "heightfield",
+  );
+  return {
+    kind: "heightfield",
+    traversalSurfaceId: `traversal-surface:${sha256CanonicalJson({
+      surfaceEntityId,
+      logicalSubshapeId: "heightfield",
+    })}`,
+    surfaceEntityId,
+    colliderSubshapeId,
+    resourceRef: `package://traversal-surface/${surfaceEntityId}.heightfield@1`,
+    resolvedVersion: "1",
+    resourceHash: sha256CanonicalJson({
+      surfaceEntityId,
+      centerMetersXZ: plan.terrain.centerMetersXZ,
+      sizeMetersXZ: plan.terrain.sizeMetersXZ,
+      resolutionCellsXZ: plan.terrain.resolutionCellsXZ,
+      heightSamplesMeters: plan.terrain.heightSamplesMeters,
+    }) as `sha256:${string}`,
+  };
+}
+
+function staticColliderShapeV1(
+  primitive: ExecutionObjectV3["primitive"],
+): ExecutionStaticColliderShapeV1 {
+  switch (primitive.kind) {
+    case "box":
+      return { kind: "box", sizeMetersXYZ: [...primitive.sizeMetersXYZ] };
+    case "sphere":
+      return { kind: "sphere", radiusMeters: primitive.radiusMeters };
+    case "cylinder":
+    case "cone":
+      return {
+        kind: "cylinder",
+        radiusMeters: primitive.radiusMeters,
+        heightMeters: primitive.heightMeters,
+      };
+  }
+}
+
+function compileStaticColliderV1(
+  object: ExecutionObjectV3,
+): ExecutionStaticColliderV1 {
+  const logicalSubshapeId = "primary";
+  const colliderSubshapeId = deriveColliderSubshapeIdV1(
+    object.entityId,
+    logicalSubshapeId,
+  );
+  const hashInput = {
+    entityId: object.entityId,
+    logicalSubshapeId,
+    colliderSubshapeId,
+    transform: structuredClone(object.transform),
+    shape: staticColliderShapeV1(object.primitive),
+  };
+  return {
+    ...hashInput,
+    colliderHash: sha256CanonicalJson(hashInput) as `sha256:${string}`,
+  };
+}
+
+function compileConnectivityRequirementV1(
+  requirement: NormalizedWorldIRV4["layout"]["connectivityRequirements"][number],
+): ExecutionConnectivityRequirementV1 {
+  return structuredClone(requirement);
+}
+
+export function compileWorldV5(input: CompileWorldInputV5): CompileWorldResultV5 {
+  const actualNormalizedWorldIrHash = sha256CanonicalJson(input.normalizedWorldIr);
+  if (input.normalizedWorldIrHash !== actualNormalizedWorldIrHash) {
+    return {
+      ok: false,
+      diagnostics: [{
+        severity: "error",
+        code: "COMPILER_NORMALIZED_HASH_MISMATCH",
+        instancePath: "/normalizedWorldIrHash",
+        message: "The supplied normalizedWorldIrHash does not match NormalizedWorldIRV4.",
+        details: {
+          expected: actualNormalizedWorldIrHash,
+          actual: input.normalizedWorldIrHash,
+        },
+      }],
+    };
+  }
+
+  try {
+    const projectedWorld = projectNormalizedWorldV4ToV3(input.normalizedWorldIr);
+    const compiledV4 = compileWorldV4({
+      normalizedWorldIr: projectedWorld,
+      normalizedWorldIrHash: sha256CanonicalJson(projectedWorld),
+    });
+    if (!compiledV4.ok || compiledV4.executionPlan === undefined) {
+      return { ok: false, diagnostics: compiledV4.diagnostics };
+    }
+
+    const planV4 = compiledV4.executionPlan;
+    const plan: ExecutionPlanV5 = {
+      ...planV4,
+      schemaVersion: 5,
+      normalizedWorldIrHash: input.normalizedWorldIrHash,
+      traversal: {
+        surfaces: [compileHeightfieldTraversalSurfaceV1(planV4)],
+        connectivityRequirements: input.normalizedWorldIr.layout
+          .connectivityRequirements
+          .map(compileConnectivityRequirementV1)
+          .sort((left, right) => left.constraintId.localeCompare(right.constraintId)),
+      },
+      staticColliders: planV4.objects
+        .filter((object) => object.collisionEnabled)
+        .map(compileStaticColliderV1)
+        .sort((left, right) =>
+          left.colliderSubshapeId.localeCompare(right.colliderSubshapeId)),
+    };
+    return {
+      ok: true,
+      executionPlan: plan,
+      executionPlanHash: sha256CanonicalJson(plan),
+      diagnostics: [],
+    };
+  } catch (cause) {
+    return {
+      ok: false,
+      diagnostics: [{
+        severity: "error",
+        code: "COMPILER_NORMALIZED_IR_INVALID",
+        instancePath: "/normalizedWorldIr",
+        message: cause instanceof Error
+          ? cause.message
+          : "NormalizedWorldIRV4 could not be compiled.",
       }],
     };
   }

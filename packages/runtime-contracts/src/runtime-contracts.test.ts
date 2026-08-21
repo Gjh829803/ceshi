@@ -9,6 +9,8 @@ import {
   type ExecutionSubjectAssetV1,
   type ExecutionSubjectV3,
   type ExecutionLayoutAssertionV1,
+  type ExecutionStaticColliderV1,
+  type ExecutionTraversalSurfaceV1,
   type FixedInputV1,
   type WorldRuntimeSnapshotV3,
   type WorldkitBrowserApiV3,
@@ -61,6 +63,48 @@ function createSnapshotFixtureV3(): WorldRuntimeSnapshotV3 {
 }
 
 describe("runtime contracts V3", () => {
+  it("keeps V5 traversal surfaces closed and static Collider Subshape identity explicit", () => {
+    const surface = {
+      kind: "heightfield",
+      traversalSurfaceId: `traversal-surface:sha256:${"1".repeat(64)}`,
+      surfaceEntityId: "terrain-main",
+      colliderSubshapeId: `collider-subshape:sha256:${"2".repeat(64)}`,
+      resourceRef: "package://traversal-surface/terrain-main.heightfield@1",
+      resolvedVersion: "1",
+      resourceHash: `sha256:${"3".repeat(64)}`,
+    } satisfies ExecutionTraversalSurfaceV1;
+    const collider = {
+      entityId: "wall-east",
+      logicalSubshapeId: "primary",
+      colliderSubshapeId: `collider-subshape:sha256:${"4".repeat(64)}`,
+      transform: {
+        positionMetersXYZ: [12, 2, 10],
+        rotationEulerRadiansXYZ: [0, 0, 0],
+        scaleXYZ: [1, 1, 1],
+      },
+      shape: { kind: "box", sizeMetersXYZ: [2, 4, 14] },
+      colliderHash: `sha256:${"5".repeat(64)}`,
+    } satisfies ExecutionStaticColliderV1;
+
+    expect(Object.keys(surface).sort()).toEqual([
+      "colliderSubshapeId",
+      "kind",
+      "resolvedVersion",
+      "resourceHash",
+      "resourceRef",
+      "surfaceEntityId",
+      "traversalSurfaceId",
+    ]);
+    expect(collider).toMatchObject({
+      entityId: "wall-east",
+      logicalSubshapeId: "primary",
+      shape: { kind: "box" },
+    });
+    expect(JSON.stringify({ surface, collider })).not.toMatch(
+      /Babylon|Havok|Recast|Detour|provider|handle|polyRef/,
+    );
+  });
+
   it("separates Subject Origin from Collider center in ExecutionSubjectV3", () => {
     const subject = {
       entityId: "pack-animal-a",
