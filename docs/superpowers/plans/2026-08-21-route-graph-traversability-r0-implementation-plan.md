@@ -39,7 +39,7 @@
 - Modify: `pnpm-lock.yaml`
 
 **Interfaces:**
-- Produces: `TraversalSurfaceIdentityV1`, `ResolvedTraversalLockV1`, `ResolvedTraversalLockReceiptV1`, `TraversalGraphBuilderProfileV1`, `TraversalDriverProfileV1`, `validateTraversalDriverProfileV1()`, `resolveTraversalGraphBuilderProfileV1()`, and `resolveTraversalDriverProfileV1()`.
+- Produces: `TraversalSurfaceIdentityV1`, `ResolvedTraversalLockV1`, `ResolvedTraversalLockReceiptV1`, `TraversalGraphBuilderProfileV1`, `TraversalDriverProfileV1`, `validateTraversalDriverProfileV1()`, `validateTraversalGraphBuilderProfileV1()`, `resolveTraversalGraphBuilderProfileV1()`, and `resolveTraversalDriverProfileV1()`.
 - Built-in refs are exactly `worldkit://traversal-graph-builder-profile/outdoor-humanoid.r1@1` and `worldkit://traversal-driver-profile/walk-hard-ribbon.r1@1`.
 
 - [ ] **Step 1: Write RED tests for closed profiles and forbidden Driver fields**
@@ -95,6 +95,8 @@ export interface ResolvedTraversalLockV1 {
   readonly physicsBodyProfileHash: `sha256:${string}`;
   readonly locomotionProfileRef: string;
   readonly locomotionProfileHash: `sha256:${string}`;
+  readonly locomotionCapabilityRef: string;
+  readonly locomotionCapabilityHash: `sha256:${string}`;
   readonly controlFeelProfileRef: string;
   readonly controlFeelProfileHash: `sha256:${string}`;
   readonly controlProfileRef: string;
@@ -108,6 +110,9 @@ export interface ResolvedTraversalLockV1 {
   readonly runtimeBackendRef: string;
   readonly runtimeBackendResolvedVersion: string;
   readonly runtimeBackendHash: `sha256:${string}`;
+  readonly runtimeAdapterRef: string;
+  readonly runtimeAdapterResolvedVersion: string;
+  readonly runtimeAdapterHash: `sha256:${string}`;
   readonly capsuleRadiusMeters: number;
   readonly capsuleHeightMeters: number;
   readonly colliderCenterOffsetMetersXYZ: readonly [number, number, number];
@@ -143,7 +148,7 @@ export interface TraversalGraphBuilderProfileV1 {
 }
 ```
 
-The Driver validator must reject unknown fields through an explicit allowed-key set; generic AJV `additionalProperties:false` alone is not sufficient evidence for programmatic construction. Registry resolution returns frozen projections and hashes canonical bytes with `@whitebox-world/protocol`.
+Driver and Graph Builder validators must be the same Admission strength: reject arrays and null-prototype objects, require discriminators and closed enums, reject unknown fields through an explicit allowed-key set, and reject non-finite, negative, or out-of-range numbers with stable Diagnostic codes. Generic AJV `additionalProperties:false` alone is not sufficient evidence for programmatic construction. Registry resolution returns frozen projections and hashes canonical bytes with `@whitebox-world/protocol`.
 
 - [ ] **Step 4: Run focused tests and typecheck**
 
@@ -359,7 +364,7 @@ expect(OUTDOOR_CONTROL_VIDEO_DEV_VALIDATION_PROFILE_V1.subjectKind)
   .toBe("control-capture-bundle");
 ```
 
-Include adversarial cases where only Control Feel, Motion Kernel, Backend version, Collider hash, or Physics Body hash differs. Every difference must change the lock hash even when the Graph Builder consumes only a subset.
+Include adversarial cases where only Control Feel, Motion Kernel, Locomotion Capability, Backend version, Adapter Ref/Hash, Collider hash, or Physics Body hash differs. Every difference must change the lock hash even when the Graph Builder consumes only a subset.
 
 - [ ] **Step 2: Run the RED gate**
 

@@ -125,6 +125,45 @@ function smoothstep01(value: number): number {
   return clamped * clamped * (3 - 2 * clamped);
 }
 
+function isSafeStoppedMotionTags(tags: readonly string[]): boolean {
+  return tags.includes("safe") && tags.includes("stopped");
+}
+
+function zeroIntentCommand(command: MotionCommandV1): MotionCommandV1 {
+  if (command.kind === "planar-vector") {
+    return {
+      kind: "planar-vector",
+      directionMetersXZ: [0, 0],
+      runRequested: false,
+      jumpRequested: false,
+      aimRequested: false,
+      facingDirectionMetersXZ: command.facingDirectionMetersXZ,
+    };
+  }
+  if (command.kind === "throttle-steer") {
+    return {
+      kind: "throttle-steer",
+      throttle: 0,
+      steering: 0,
+      brakeRequested: false,
+      brakeRatio: 0,
+      handbrakeRequested: false,
+      jumpRequested: false,
+      boostRequested: false,
+    };
+  }
+  if (command.kind === "flight-attitude") {
+    return {
+      kind: "flight-attitude",
+      pitch: 0,
+      yaw: 0,
+      roll: 0,
+      actionRequested: false,
+    };
+  }
+  return { kind: "none" };
+}
+
 function requestedFromCommand(command: MotionCommandV1): {
   moveRequested: boolean;
   runRequested: boolean;
@@ -302,16 +341,22 @@ export class MotionKernelRuntimeV1 {
   step(command: MotionCommandV1): void {
     this.commitPendingProfile();
     this.commitPendingFeel();
+    const effectiveCommand = this.shouldEmitZeroIntent()
+      ? zeroIntentCommand(command)
+      : command;
     try {
       const support = this.physicsController.checkSupport(
         FIXED_TIME_STEP_SECONDS,
         this.gravityDirection,
       );
-      const resolved = this.publishResolvedState(support, requestedFromCommand(command));
+      const resolved = this.publishResolvedState(
+        support,
+        requestedFromCommand(effectiveCommand),
+      );
       if (this.activeKernelImplementationId() === "unpowered-glide") {
-        this.stepGlide(command, support);
+        this.stepGlide(effectiveCommand, support);
       } else {
-        this.stepActiveKernel(command, support, resolved);
+        this.stepActiveKernel(effectiveCommand, support, resolved);
       }
       const velocity = this.physicsController.getVelocity();
       if (![velocity.x, velocity.y, velocity.z].every(Number.isFinite)) {
@@ -971,6 +1016,11 @@ export class MotionKernelRuntimeV1 {
 
   private get activeProfile(): ExecutionMotionProfileV1 {
     return this.motionModeResolver.currentProfile;
+  }
+
+  private shouldEmitZeroIntent(): boolean {
+    const mode = this.motionModeResolver.snapshot();
+    return mode.fallbackActive || isSafeStoppedMotionTags(mode.activeProfile.motionTags);
   }
 
   private activeKernelImplementationId():

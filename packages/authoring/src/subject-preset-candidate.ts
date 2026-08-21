@@ -19,12 +19,13 @@ import {
   type SubjectPresetResourceLockEntryV1,
   type SubjectResourceRegistryV3,
 } from "@whitebox-world/subject-registry";
-import { isNil } from "lodash-es";
+import { isEmpty, isEqual, isNil } from "lodash-es";
 
 import { sha256CanonicalJson } from "./canonical-json";
 
 const SHA256_PATTERN = /^sha256:[a-f0-9]{64}$/;
 const COMMIT_PATTERN = /^[a-f0-9]{40}$/;
+const FORGED_ZERO_SOURCE_COMMIT = "0".repeat(40);
 const CANDIDATE_ID_PATTERN = /^[a-z0-9][a-z0-9-]{2,63}$/;
 const ISO_TIMESTAMP_PATTERN =
   /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d{3})?Z$/;
@@ -549,10 +550,10 @@ function parseProvenance(value: unknown): SubjectPresetCandidateV1["provenance"]
     fail("SUBJECT_PRESET_CANDIDATE_INVALID_TIMESTAMP", "createdAtIso must be UTC ISO-8601.");
   }
   const sourceCommit = stringValue(source.sourceCommit, "provenance.sourceCommit");
-  if (!COMMIT_PATTERN.test(sourceCommit)) {
+  if (!COMMIT_PATTERN.test(sourceCommit) || sourceCommit === FORGED_ZERO_SOURCE_COMMIT) {
     fail(
       "SUBJECT_PRESET_CANDIDATE_INVALID_SOURCE_COMMIT",
-      "sourceCommit must be a full 40-character hexadecimal commit id.",
+      "sourceCommit must be a full 40-character hexadecimal commit id injected by the trusted host.",
     );
   }
   return { displayName, notes, createdAtIso, sourceCommit };
@@ -939,15 +940,29 @@ function validateCandidateAgainstRegistry(
     );
   }
   const harness = registry.resolveHarnessProfile(candidate.evidence.harnessProfileRef);
-  if (
-    harness === undefined ||
-    candidate.evidence.passedCheckIds.some((checkId) =>
-      !harness.requiredCheckIds.includes(checkId as (typeof harness.requiredCheckIds)[number])
-    )
-  ) {
+  if (isNil(harness)) {
+    fail(
+      "SUBJECT_PRESET_CANDIDATE_INVALID_EVIDENCE",
+      "Evidence must name the locked Subject Definition Harness Profile.",
+    );
+  }
+  const unknownCheckId = candidate.evidence.passedCheckIds.find(
+    (checkId) => !harness.requiredCheckIds.includes(
+      checkId as (typeof harness.requiredCheckIds)[number],
+    ),
+  );
+  if (unknownCheckId !== undefined) {
     fail(
       "SUBJECT_PRESET_CANDIDATE_INVALID_EVIDENCE",
       "Evidence contains a check not declared by the locked Harness Profile.",
+    );
+  }
+  const requiredCheckIds = [...harness.requiredCheckIds].sort();
+  const passedCheckIds = [...candidate.evidence.passedCheckIds].sort();
+  if (isEmpty(requiredCheckIds) || !isEqual(requiredCheckIds, passedCheckIds)) {
+    fail(
+      "SUBJECT_PRESET_CANDIDATE_INCOMPLETE_EVIDENCE",
+      "Evidence must include every check declared by the locked Harness Profile.",
     );
   }
 }

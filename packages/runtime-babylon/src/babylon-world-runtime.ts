@@ -18,8 +18,6 @@ import { PhysicsShapeType } from "@babylonjs/core/Physics/v2/IPhysicsEnginePlugi
 import type { PhysicsEngine } from "@babylonjs/core/Physics/v2/physicsEngine.js";
 import { Scene } from "@babylonjs/core/scene.pure.js";
 import { CONTROL_CAPTURE_PASS_IDS_V1 } from "@whitebox-world/control-capture";
-import { isEmpty } from "lodash-es";
-
 import type {
   ApplySubjectPresetTuningRequestV1,
   BindControlRequestV2,
@@ -1265,47 +1263,42 @@ export class BabylonWorldRuntime implements WorldRuntimeSessionV3 {
         "The selected Motion Profile is not locked in the Subject Execution Plan.",
       );
     }
-    const isCameraOwner =
-      request.subjectEntityId === this.controlledEntityId ||
-      request.subjectEntityId === this.executionPlan.camera.targetEntityId;
-    if (!isCameraOwner && !isEmpty(request.cameraOverridesByProfileRef)) {
+    if (request.subjectEntityId !== this.controlledEntityId) {
       return reject(
         "SUBJECT_PRESET_CAMERA_OWNERSHIP_FORBIDDEN",
-        "Camera overrides may only be applied by the controlled camera-target Subject.",
+        "Camera preference and overrides may only be applied by the current runtime camera-target Subject.",
       );
     }
 
-    if (isCameraOwner) {
-      const cameraProfiles = assembly.cameraContext.cameraRigProfiles;
-      const cameraTuningByProfileRef: Record<string, CameraTuningV1> = {};
-      for (const [profileRef, override] of Object.entries(
-        request.cameraOverridesByProfileRef,
-      )) {
-        const profile = cameraProfiles.find(
-          (candidate) => candidate.resourceRef === profileRef,
-        );
-        if (
-          profile === undefined ||
-          override.baseResourceRef !== profileRef ||
-          override.baseContentHash !== profile.contentHash
-        ) {
-          return reject(
-            "SUBJECT_PRESET_CAMERA_PROFILE_MISMATCH",
-            "Camera overrides must target exact Camera Profiles reachable from the Context.",
-          );
-        }
-        cameraTuningByProfileRef[profileRef] = { ...override.values };
-      }
-      if (!this.cameraDirector.replacePresetTunings(
-        cameraTuningByProfileRef,
-        cameraProfiles,
-        request.cameraPreference,
-      )) {
+    const cameraProfiles = assembly.cameraContext.cameraRigProfiles;
+    const cameraTuningByProfileRef: Record<string, CameraTuningV1> = {};
+    for (const [profileRef, override] of Object.entries(
+      request.cameraOverridesByProfileRef,
+    )) {
+      const profile = cameraProfiles.find(
+        (candidate) => candidate.resourceRef === profileRef,
+      );
+      if (
+        profile === undefined ||
+        override.baseResourceRef !== profileRef ||
+        override.baseContentHash !== profile.contentHash
+      ) {
         return reject(
-          "SUBJECT_PRESET_INVALID_CAMERA_TUNING",
-          "Camera tuning or preference is unsupported by the selected Camera Profile.",
+          "SUBJECT_PRESET_CAMERA_PROFILE_MISMATCH",
+          "Camera overrides must target exact Camera Profiles reachable from the Context.",
         );
       }
+      cameraTuningByProfileRef[profileRef] = { ...override.values };
+    }
+    if (!this.cameraDirector.replacePresetTunings(
+      cameraTuningByProfileRef,
+      cameraProfiles,
+      request.cameraPreference,
+    )) {
+      return reject(
+        "SUBJECT_PRESET_INVALID_CAMERA_TUNING",
+        "Camera tuning or preference is unsupported by the selected Camera Profile.",
+      );
     }
     if (!controller.requestControlFeelProfile(selectedControlFeelProfile.resourceRef)) {
       throw new Error(

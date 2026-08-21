@@ -32,6 +32,7 @@ import {
   planSubjectPresetPromotion,
   promoteSubjectPresetTransactionally,
   validateSubjectPresetCandidateFile,
+  validateSubjectPresetHarnessReceiptV1,
   type SubjectPresetPromotionPlanV1,
 } from "./subject-preset-promotion";
 import {
@@ -185,7 +186,7 @@ function createCandidate(): SubjectPresetCandidateV1 {
     },
     evidence: {
       harnessProfileRef: "worldkit://harness-profile/subject.standard@1",
-      passedCheckIds: ["H01", "H02", "H03"],
+      passedCheckIds: ["H01", "H02", "H03", "H04", "H05", "H06", "H07", "H08", "H09"],
       runtimeBuild: "playground-2026.08.21",
     },
   });
@@ -687,7 +688,108 @@ describe("subject preset promotion", { timeout: 60_000 }, () => {
     }));
   });
 
-  it("publishes the selected fallback Motion as the next Definition default", async () => {
+  it("derives fixture required harness checks from the locked profile, not candidate evidence", async () => {
+    const fixture = await createFixtureRepository();
+    const plan = await planSubjectPresetPromotion(fixture.candidatePath, {
+      repositoryRoot: fixture.root,
+    });
+    const registryFixture = decodeTarget(
+      plan,
+      `.codex-tmp/subject-presets/${createCandidate().semanticContent.candidateId}.registry-fixture.json`,
+    ) as {
+      harness: { harnessProfileRef: string; requiredPassedCheckIds: string[] };
+    };
+    const harness = builtInSubjectResourceRegistry.resolveHarnessProfile(
+      "worldkit://harness-profile/subject.standard@1",
+    );
+
+    expect(createCandidate().evidence.passedCheckIds).toEqual([
+      "H01",
+      "H02",
+      "H03",
+      "H04",
+      "H05",
+      "H06",
+      "H07",
+      "H08",
+      "H09",
+    ]);
+    expect(registryFixture.harness.harnessProfileRef).toBe(
+      "worldkit://harness-profile/subject.standard@1",
+    );
+    expect(registryFixture.harness.requiredPassedCheckIds).toEqual(
+      harness?.requiredCheckIds,
+    );
+    expect(registryFixture.harness.requiredPassedCheckIds).toEqual([
+      "H01",
+      "H02",
+      "H03",
+      "H04",
+      "H05",
+      "H06",
+      "H07",
+      "H08",
+      "H09",
+    ]);
+  });
+
+  it("accepts a harness receipt only when it binds the candidate, plan hash, and complete checks", async () => {
+    const fixture = await createFixtureRepository();
+    const plan = await planSubjectPresetPromotion(fixture.candidatePath, {
+      repositoryRoot: fixture.root,
+    });
+    const candidate = createCandidate();
+    const requiredPassedCheckIds = [
+      "H01",
+      "H02",
+      "H03",
+      "H04",
+      "H05",
+      "H06",
+      "H07",
+      "H08",
+      "H09",
+    ];
+    const validReceipt = {
+      kind: "worldkit-subject-preset-harness-receipt",
+      schemaVersion: 1,
+      candidateSemanticContentHash: candidate.semanticContentHash,
+      planHash: plan.planHash,
+      harnessProfileRef: "worldkit://harness-profile/subject.standard@1",
+      passedCheckIds: requiredPassedCheckIds,
+      sourceCommit: candidate.provenance.sourceCommit,
+      runtimeBuild: "ci-harness-2026.08.21",
+    };
+
+    expect(validateSubjectPresetHarnessReceiptV1(validReceipt, {
+      candidateSemanticContentHash: candidate.semanticContentHash,
+      planHash: plan.planHash,
+      harnessProfileRef: "worldkit://harness-profile/subject.standard@1",
+      requiredPassedCheckIds,
+    })).toEqual(validReceipt);
+
+    expect(() => validateSubjectPresetHarnessReceiptV1({
+      ...validReceipt,
+      passedCheckIds: [],
+    }, {
+      candidateSemanticContentHash: candidate.semanticContentHash,
+      planHash: plan.planHash,
+      harnessProfileRef: "worldkit://harness-profile/subject.standard@1",
+      requiredPassedCheckIds,
+    })).toThrow("SUBJECT_PRESET_HARNESS_RECEIPT_INCOMPLETE");
+
+    expect(() => validateSubjectPresetHarnessReceiptV1({
+      ...validReceipt,
+      planHash: "sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+    }, {
+      candidateSemanticContentHash: candidate.semanticContentHash,
+      planHash: plan.planHash,
+      harnessProfileRef: "worldkit://harness-profile/subject.standard@1",
+      requiredPassedCheckIds,
+    })).toThrow("SUBJECT_PRESET_HARNESS_RECEIPT_PLAN_MISMATCH");
+  });
+
+  it("rejects publishing the selected fallback Motion as the next Definition default", async () => {
     const fixture = await createFixtureRepository();
     const fallbackMotionRef = "worldkit://motion-profile/safe-ground@1";
     const candidate = createSubjectPresetCandidateFromSelectionsV1({
@@ -705,21 +807,8 @@ describe("subject preset promotion", { timeout: 60_000 }, () => {
     });
     await writeFile(fixture.candidatePath, `${JSON.stringify(candidate)}\n`, "utf8");
 
-    const plan = await planSubjectPresetPromotion(fixture.candidatePath, {
+    await expect(planSubjectPresetPromotion(fixture.candidatePath, {
       repositoryRoot: fixture.root,
-    });
-    const subjectCatalog = decodeTarget(
-      plan,
-      "assets/registry/subject-definitions/catalog.json",
-    ) as Array<{
-      resourceRef: string;
-      profiles: { motion: { defaultMotionProfileRef: string } };
-    }>;
-    const nextDefinition = subjectCatalog.find((resource) =>
-      resource.resourceRef ===
-        "worldkit://subject-definition/animal.quadruped.forward-steer@3"
-    );
-    expect(nextDefinition?.profiles.motion.defaultMotionProfileRef)
-      .toBe(fallbackMotionRef);
+    })).rejects.toThrow("SUBJECT_PRESET_PROMOTION_FALLBACK_DEFAULT_FORBIDDEN");
   });
 });

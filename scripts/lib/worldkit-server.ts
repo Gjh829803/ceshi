@@ -4,6 +4,8 @@ import { fileURLToPath } from "node:url";
 import net from "node:net";
 import path from "node:path";
 
+import { resolveTrustedSourceCommit } from "./worldkit-source-commit";
+
 const REPOSITORY_ROOT = fileURLToPath(new URL("../../", import.meta.url));
 const PLAYGROUND_ROOT = path.join(REPOSITORY_ROOT, "apps/playground");
 const VITE_CLI_PATH = path.join(REPOSITORY_ROOT, "node_modules/vite/bin/vite.js");
@@ -220,6 +222,10 @@ async function waitUntilReady(options: {
 
 async function startOne(options: StartWorldkitServerOptions, port: number): Promise<WorldkitServerHandle> {
   const nonce = randomUUID();
+  const sourceCommit = await resolveTrustedSourceCommit({
+    envCommit: process.env.WORLDKIT_SOURCE_COMMIT,
+    repositoryRoot: REPOSITORY_ROOT,
+  }).catch(() => undefined);
   const child = spawn(
     process.execPath,
     [
@@ -240,6 +246,7 @@ async function startOne(options: StartWorldkitServerOptions, port: number): Prom
         ...process.env,
         WORLDKIT_AUTHORING_SPEC_PATH: path.resolve(options.inputPath),
         WORLDKIT_AUTHORING_SERVER_NONCE: nonce,
+        ...(sourceCommit === undefined ? {} : { WORLDKIT_SOURCE_COMMIT: sourceCommit }),
       },
       stdio: ["pipe", "pipe", "pipe"],
     },

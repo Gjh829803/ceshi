@@ -7,6 +7,7 @@ import {
   resolveTraversalDriverProfileV1,
   resolveTraversalGraphBuilderProfileV1,
   validateTraversalDriverProfileV1,
+  validateTraversalGraphBuilderProfileV1,
 } from "./index.js";
 import type {
   ResolvedTraversalLockReceiptV1,
@@ -132,6 +133,43 @@ describe("traversal driver profile registry", () => {
 
     expect(() => validateTraversalDriverProfileV1(CLOSED_DRIVER_PROFILE)).not.toThrow();
   });
+
+  it("rejects empty objects, wrong discriminators, missing fields, and invalid numbers", () => {
+    expect(() => validateTraversalDriverProfileV1({})).toThrow(
+      "TRAVERSAL_DRIVER_FIELD_MISSING",
+    );
+    expect(() => validateTraversalDriverProfileV1([])).toThrow(
+      "TRAVERSAL_DRIVER_PROFILE_NOT_PLAIN",
+    );
+    expect(() => validateTraversalDriverProfileV1(Object.create(null))).toThrow(
+      "TRAVERSAL_DRIVER_PROFILE_NOT_PLAIN",
+    );
+    expect(() => validateTraversalDriverProfileV1({
+      ...CLOSED_DRIVER_PROFILE,
+      kind: "locomotion-profile",
+    })).toThrow("TRAVERSAL_DRIVER_KIND_MISMATCH");
+    expect(() => validateTraversalDriverProfileV1({
+      ...CLOSED_DRIVER_PROFILE,
+      schemaVersion: 2,
+    })).toThrow("TRAVERSAL_DRIVER_SCHEMA_VERSION_MISMATCH");
+    expect(() => validateTraversalDriverProfileV1({
+      ...CLOSED_DRIVER_PROFILE,
+      pathLookaheadMeters: -1,
+    })).toThrow("TRAVERSAL_DRIVER_NUMBER_INVALID");
+    expect(() => validateTraversalDriverProfileV1({
+      ...CLOSED_DRIVER_PROFILE,
+      pathLookaheadMeters: Number.NaN,
+    })).toThrow("TRAVERSAL_DRIVER_NUMBER_INVALID");
+    expect(() => validateTraversalDriverProfileV1({
+      ...CLOSED_DRIVER_PROFILE,
+      cornerSelectionMode: "shortest-path",
+    })).toThrow("TRAVERSAL_DRIVER_ENUM_INVALID");
+    expect(() => validateTraversalDriverProfileV1({
+      kind: "traversal-driver-profile",
+      schemaVersion: 1,
+      pathLookaheadMeters: 2.4,
+    })).toThrow("TRAVERSAL_DRIVER_FIELD_MISSING");
+  });
 });
 
 describe("traversal graph builder profile registry", () => {
@@ -179,6 +217,40 @@ describe("traversal graph builder profile registry", () => {
     }).toThrow(TypeError);
     expect(second.profile.maximumNodes).toBe(100000);
   });
+
+  it("rejects empty objects, wrong discriminators, missing fields, and invalid numbers", () => {
+    expect(() => validateTraversalGraphBuilderProfileV1({})).toThrow(
+      "TRAVERSAL_GRAPH_BUILDER_FIELD_MISSING",
+    );
+    expect(() => validateTraversalGraphBuilderProfileV1([])).toThrow(
+      "TRAVERSAL_GRAPH_BUILDER_PROFILE_NOT_PLAIN",
+    );
+    expect(() => validateTraversalGraphBuilderProfileV1(Object.create(null))).toThrow(
+      "TRAVERSAL_GRAPH_BUILDER_PROFILE_NOT_PLAIN",
+    );
+    expect(() => validateTraversalGraphBuilderProfileV1({
+      ...CLOSED_GRAPH_BUILDER_PROFILE,
+      kind: "traversal-driver-profile",
+    })).toThrow("TRAVERSAL_GRAPH_BUILDER_KIND_MISMATCH");
+    expect(() => validateTraversalGraphBuilderProfileV1({
+      ...CLOSED_GRAPH_BUILDER_PROFILE,
+      schemaVersion: 2,
+    })).toThrow("TRAVERSAL_GRAPH_BUILDER_SCHEMA_VERSION_MISMATCH");
+    expect(() => validateTraversalGraphBuilderProfileV1({
+      ...CLOSED_GRAPH_BUILDER_PROFILE,
+      clearanceMarginMeters: -0.1,
+    })).toThrow("TRAVERSAL_GRAPH_BUILDER_NUMBER_INVALID");
+    expect(() => validateTraversalGraphBuilderProfileV1({
+      ...CLOSED_GRAPH_BUILDER_PROFILE,
+      maximumNodes: 1.5,
+    })).toThrow("TRAVERSAL_GRAPH_BUILDER_NUMBER_INVALID");
+    expect(() => validateTraversalGraphBuilderProfileV1({
+      ...CLOSED_GRAPH_BUILDER_PROFILE,
+      walkSpeedMetersPerSecond: 3,
+    })).toThrow("TRAVERSAL_GRAPH_BUILDER_FIELD_FORBIDDEN");
+    expect(() => validateTraversalGraphBuilderProfileV1(CLOSED_GRAPH_BUILDER_PROFILE))
+      .not.toThrow();
+  });
 });
 
 describe("traversal contract type exports", () => {
@@ -203,6 +275,8 @@ describe("traversal contract type exports", () => {
       physicsBodyProfileHash: identity.resourceHash,
       locomotionProfileRef: "worldkit://locomotion-profile/ground.standard@1",
       locomotionProfileHash: identity.resourceHash,
+      locomotionCapabilityRef: "worldkit://capability/locomotion.ground@1",
+      locomotionCapabilityHash: identity.resourceHash,
       controlFeelProfileRef: "worldkit://control-feel-profile/ground@1",
       controlFeelProfileHash: identity.resourceHash,
       controlProfileRef: "worldkit://control-profile/ground@1",
@@ -216,6 +290,9 @@ describe("traversal contract type exports", () => {
       runtimeBackendRef: "worldkit://runtime-backend/babylon-havok@1",
       runtimeBackendResolvedVersion: "1",
       runtimeBackendHash: identity.resourceHash,
+      runtimeAdapterRef: "worldkit://runtime-adapter/babylon-world-runtime@1",
+      runtimeAdapterResolvedVersion: "1",
+      runtimeAdapterHash: identity.resourceHash,
       capsuleRadiusMeters: 0.35,
       capsuleHeightMeters: 1.8,
       colliderCenterOffsetMetersXYZ: [0, 0.9, 0],
@@ -231,5 +308,22 @@ describe("traversal contract type exports", () => {
     expect(identity.surfaceEntityId).not.toBe(identity.colliderSubshapeId);
     expect(receipt.lock.kind).toBe("resolved-traversal-lock");
     expect(receipt.lock.schemaVersion).toBe(1);
+    expect(receipt.lock.locomotionCapabilityRef).toBe(
+      "worldkit://capability/locomotion.ground@1",
+    );
+    expect(receipt.lock.runtimeAdapterRef).toBe(
+      "worldkit://runtime-adapter/babylon-world-runtime@1",
+    );
+    const capabilityMismatch: ResolvedTraversalLockV1 = {
+      ...lock,
+      locomotionCapabilityRef: "worldkit://capability/locomotion.ground@2",
+    };
+    const adapterMismatch: ResolvedTraversalLockV1 = {
+      ...lock,
+      runtimeAdapterHash:
+        "sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+    };
+    expect(sha256CanonicalJson(capabilityMismatch)).not.toBe(sha256CanonicalJson(lock));
+    expect(sha256CanonicalJson(adapterMismatch)).not.toBe(sha256CanonicalJson(lock));
   });
 });

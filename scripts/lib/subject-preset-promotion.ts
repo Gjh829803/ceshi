@@ -37,6 +37,10 @@ import {
   type SubjectResourceRegistryV3,
 } from "@whitebox-world/subject-registry";
 
+import { isEmpty, isEqual, isNil } from "lodash-es";
+
+import { parseTrustedSourceCommit } from "./worldkit-source-commit";
+
 import {
   BUILT_IN_CAPABILITY_MANIFESTS,
   BUILT_IN_CAPABILITY_RESOURCES,
@@ -114,6 +118,136 @@ export interface SubjectPresetPromotionOptionsV1
 export interface SubjectPresetPromotionResultV1 {
   planHash: string;
   writtenLogicalPaths: string[];
+}
+
+export interface SubjectPresetHarnessReceiptV1 {
+  kind: "worldkit-subject-preset-harness-receipt";
+  schemaVersion: 1;
+  candidateSemanticContentHash: string;
+  planHash: string;
+  harnessProfileRef: string;
+  passedCheckIds: readonly string[];
+  sourceCommit: string;
+  runtimeBuild: string;
+}
+
+export function validateSubjectPresetHarnessReceiptV1(
+  value: unknown,
+  expected: {
+    candidateSemanticContentHash: string;
+    planHash: string;
+    harnessProfileRef: string;
+    requiredPassedCheckIds: readonly string[];
+  },
+): SubjectPresetHarnessReceiptV1 {
+  if (!isPlainRecord(value)) {
+    fail(
+      "SUBJECT_PRESET_HARNESS_RECEIPT_INVALID_SHAPE",
+      "Harness receipt must be a plain object.",
+    );
+  }
+  const unknown = Object.keys(value).find((key) =>
+    ![
+      "kind",
+      "schemaVersion",
+      "candidateSemanticContentHash",
+      "planHash",
+      "harnessProfileRef",
+      "passedCheckIds",
+      "sourceCommit",
+      "runtimeBuild",
+    ].includes(key)
+  );
+  if (unknown !== undefined) {
+    fail(
+      "SUBJECT_PRESET_HARNESS_RECEIPT_UNKNOWN_FIELD",
+      `Unexpected field '${unknown}'.`,
+    );
+  }
+  if (value.kind !== "worldkit-subject-preset-harness-receipt") {
+    fail("SUBJECT_PRESET_HARNESS_RECEIPT_KIND_MISMATCH", "Unexpected receipt kind.");
+  }
+  if (value.schemaVersion !== 1) {
+    fail(
+      "SUBJECT_PRESET_HARNESS_RECEIPT_SCHEMA_VERSION_MISMATCH",
+      "schemaVersion must be 1.",
+    );
+  }
+  if (value.candidateSemanticContentHash !== expected.candidateSemanticContentHash) {
+    fail(
+      "SUBJECT_PRESET_HARNESS_RECEIPT_CANDIDATE_MISMATCH",
+      "Receipt candidate hash does not match the Candidate.",
+    );
+  }
+  if (value.planHash !== expected.planHash) {
+    fail(
+      "SUBJECT_PRESET_HARNESS_RECEIPT_PLAN_MISMATCH",
+      "Receipt plan hash does not match the promotion plan.",
+    );
+  }
+  if (value.harnessProfileRef !== expected.harnessProfileRef) {
+    fail(
+      "SUBJECT_PRESET_HARNESS_RECEIPT_HARNESS_MISMATCH",
+      "Receipt Harness Profile does not match the locked profile.",
+    );
+  }
+  if (!Array.isArray(value.passedCheckIds)) {
+    fail(
+      "SUBJECT_PRESET_HARNESS_RECEIPT_INCOMPLETE",
+      "passedCheckIds must be an array.",
+    );
+  }
+  const passedCheckIds = value.passedCheckIds.map((checkId, index) => {
+    if (typeof checkId !== "string") {
+      fail(
+        "SUBJECT_PRESET_HARNESS_RECEIPT_INCOMPLETE",
+        `passedCheckIds[${index}] must be a string.`,
+      );
+    }
+    return checkId;
+  });
+  if (
+    isEmpty(expected.requiredPassedCheckIds) ||
+    !isEqual([...passedCheckIds].sort(), [...expected.requiredPassedCheckIds].sort())
+  ) {
+    fail(
+      "SUBJECT_PRESET_HARNESS_RECEIPT_INCOMPLETE",
+      "Receipt must include every check declared by the locked Harness Profile.",
+    );
+  }
+  if (typeof value.sourceCommit !== "string" || isNil(parseTrustedSourceCommit(value.sourceCommit))) {
+    fail(
+      "SUBJECT_PRESET_HARNESS_RECEIPT_SOURCE_COMMIT",
+      "sourceCommit must be a trusted 40-character commit id.",
+    );
+  }
+  if (typeof value.runtimeBuild !== "string" || value.runtimeBuild.length === 0) {
+    fail(
+      "SUBJECT_PRESET_HARNESS_RECEIPT_RUNTIME_BUILD",
+      "runtimeBuild must be a non-empty string.",
+    );
+  }
+  if (
+    typeof value.candidateSemanticContentHash !== "string" ||
+    !HASH_PATTERN.test(value.candidateSemanticContentHash) ||
+    typeof value.planHash !== "string" ||
+    !HASH_PATTERN.test(value.planHash)
+  ) {
+    fail(
+      "SUBJECT_PRESET_HARNESS_RECEIPT_HASH_INVALID",
+      "Candidate and plan hashes must be sha256 content hashes.",
+    );
+  }
+  return {
+    kind: "worldkit-subject-preset-harness-receipt",
+    schemaVersion: 1,
+    candidateSemanticContentHash: value.candidateSemanticContentHash,
+    planHash: value.planHash,
+    harnessProfileRef: value.harnessProfileRef,
+    passedCheckIds,
+    sourceCommit: value.sourceCommit,
+    runtimeBuild: value.runtimeBuild,
+  };
 }
 
 function fail(code: string, message: string): never {
@@ -683,6 +817,15 @@ async function materializePromotion(
     definitionCatalog,
     candidate.semanticContent.subjectDefinitionId,
   );
+  if (
+    candidate.semanticContent.selections.selectedMotionProfileRef ===
+      candidate.semanticContent.selections.motionRoles.fallback.sourceProfileRef
+  ) {
+    fail(
+      "SUBJECT_PRESET_PROMOTION_FALLBACK_DEFAULT_FORBIDDEN",
+      "Safe-stop fallback Motion cannot be published as the next Definition default.",
+    );
+  }
   const proposedDefinition: RegistrySubjectDefinitionInputV3 = {
     ...stripContentHash(baseDefinition),
     version: definitionVersion,
@@ -874,6 +1017,15 @@ export async function planSubjectPresetPromotion(
   const materialized = await materializePromotion(candidate, repositoryRoot, registry);
   const fixtureLogicalPath =
     `.codex-tmp/subject-presets/${candidate.semanticContent.candidateId}.registry-fixture.json`;
+  const harnessProfile = registry.resolveHarnessProfile(
+    candidate.evidence.harnessProfileRef,
+  );
+  if (isNil(harnessProfile)) {
+    fail(
+      "SUBJECT_PRESET_PROMOTION_HARNESS_MISSING",
+      `Harness Profile '${candidate.evidence.harnessProfileRef}' is missing.`,
+    );
+  }
   const fixture = {
     kind: PROMOTION_FIXTURE_KIND,
     schemaVersion: 1,
@@ -884,8 +1036,8 @@ export async function planSubjectPresetPromotion(
     subjectDefinitionContentHash: materialized.proposedDefinitionHash,
     generatedResources: materialized.generatedResources,
     harness: {
-      harnessProfileRef: candidate.evidence.harnessProfileRef,
-      requiredPassedCheckIds: candidate.evidence.passedCheckIds,
+      harnessProfileRef: harnessProfile.resourceRef,
+      requiredPassedCheckIds: [...harnessProfile.requiredCheckIds],
     },
   };
   const targets = [

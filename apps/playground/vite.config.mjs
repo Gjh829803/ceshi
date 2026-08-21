@@ -8,6 +8,10 @@ import {
 } from "../../scripts/lib/composition-gate.ts";
 import { promoteArtifactsTransactionally } from
   "../../scripts/lib/transactional-artifact-promotion.ts";
+import {
+  SOURCE_COMMIT_ENDPOINT,
+  resolveTrustedSourceCommit,
+} from "../../scripts/lib/worldkit-source-commit.ts";
 
 const MAX_AUTHORING_BYTES = 8 * 1024 * 1024;
 const SERVER_NONCE_HEADER = "x-worldkit-server-nonce";
@@ -86,6 +90,43 @@ export function worldkitAuthoringSource() {
             diagnostics: [{
               severity: "error",
               code: "AUTHORING_SOURCE_UNAVAILABLE",
+              instancePath: "",
+              message: error instanceof Error ? error.message : String(error),
+            }],
+          });
+        });
+      });
+      server.middlewares.use(SOURCE_COMMIT_ENDPOINT, (request, response) => {
+        if (request.method !== "GET" && request.method !== "HEAD") {
+          writeJsonResponse(response, 405, {
+            diagnostics: [{
+              severity: "error",
+              code: "WORLDKIT_SOURCE_COMMIT_METHOD_NOT_ALLOWED",
+              instancePath: "",
+              message: "The source-commit endpoint accepts only GET and HEAD.",
+            }],
+          });
+          return;
+        }
+        void (async () => {
+          const sourceCommit = await resolveTrustedSourceCommit({
+            envCommit: process.env.WORLDKIT_SOURCE_COMMIT,
+            repositoryRoot: path.resolve(process.cwd(), "../.."),
+          });
+          if (request.method === "HEAD") {
+            response.statusCode = 200;
+            setServerNonceHeader(response);
+            response.setHeader("content-type", "application/json; charset=utf-8");
+            response.setHeader("cache-control", "no-store");
+            response.end();
+            return;
+          }
+          writeJsonResponse(response, 200, { sourceCommit });
+        })().catch((error) => {
+          writeJsonResponse(response, 404, {
+            diagnostics: [{
+              severity: "error",
+              code: "WORLDKIT_SOURCE_COMMIT_UNTRUSTED",
               instancePath: "",
               message: error instanceof Error ? error.message : String(error),
             }],

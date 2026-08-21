@@ -474,6 +474,12 @@ function validateSubjectDefinitionV3(source: RegistrySubjectDefinitionInputV3): 
     );
   }
   selectableControlFeelProfileRefsV1(source.profiles);
+  if (
+    source.profiles.motion.defaultMotionProfileRef ===
+      source.profiles.motion.fallbackMotionProfileRef
+  ) {
+    throw new Error(`MOTION_FALLBACK_DEFAULT_COLLISION: '${source.resourceRef}'.`);
+  }
 }
 
 type CameraParametersV1 = CameraRigProfileInputV1["parameters"];
@@ -705,6 +711,26 @@ function validateReferences(resourcesByRef: ReadonlyMap<string, SubjectRegistryR
       ];
       for (const ref of allMotionProfileRefs) {
         requireRef(subject.resourceRef, ref, "motion-profile");
+      }
+      const defaultMotion = resourcesByRef.get(
+        subject.profiles.motion.defaultMotionProfileRef,
+      );
+      const fallbackMotion = resourcesByRef.get(
+        subject.profiles.motion.fallbackMotionProfileRef,
+      );
+      if (defaultMotion?.kind === "motion-profile" && fallbackMotion?.kind === "motion-profile") {
+        if (
+          !(fallbackMotion.motionTags.includes("safe") &&
+            fallbackMotion.motionTags.includes("stopped"))
+        ) {
+          throw new Error(`MOTION_FALLBACK_NOT_SAFE_STOP: '${subject.resourceRef}'.`);
+        }
+        if (
+          defaultMotion.motionTags.includes("safe") &&
+          defaultMotion.motionTags.includes("stopped")
+        ) {
+          throw new Error(`MOTION_DEFAULT_SAFE_STOP_FORBIDDEN: '${subject.resourceRef}'.`);
+        }
       }
       requireRef(subject.resourceRef, subject.profiles.controlProfileRef, "control-profile");
       requireRef(

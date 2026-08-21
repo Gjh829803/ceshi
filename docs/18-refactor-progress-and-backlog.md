@@ -370,18 +370,17 @@ placement-layout / rigged-subject / g-bot-subject）；专项规格见
   Candidate 仍可保存数字差异，但必须经 `promote` 物化为新 Registry 版本后才影响玩法。
 - [ ] CLI/Browser/E2E 覆盖不同主体重力倍率、Ground→Water→Air 稳定切换与边界抖动
   （不新增 CLI/Browser 协议字段，随后续切片交付）。
-- [x] **P1.5 合入后统一收尾**（不阻塞 Ground/Air 首切片，不在本切片内再改合同）：
+- [x] Playground `listSubjectPresetAuthoringProfilesV1` 只列出该主体 Definition 声明的
+  `allowedControlFeelProfileRefs`（经 `selectableControlFeelProfileRefsV1`），不再枚举
+  Registry 全部 `control-feel-profile`。
+- [x] `ControlFeelTuningV1` / `ControlTuningV1` 已迁到 `control-feel-parameter-contract.ts`；
+  Runtime 会话类型不再暴露 Feel/Control 数字袋方言。草稿数字只在 authoring workspace，
+  发布时物化新 Registry 版本。
+- [ ] **P1.5 合入后仍待收尾**（不阻塞 Ground/Air 首切片）：
   1. 相机仍保留会话数字 overlay（`setCameraTuning`、
      `applySubjectPresetTuning.cameraOverridesByProfileRef`、Snapshot `camera.tuning`）。
      后续与 Feel 一样收成锁定 Camera Profile Ref，或明确把相机预览定义为独立会话状态。
-  2. Playground `listSubjectPresetAuthoringProfilesV1` 只列出该主体 Definition 声明的
-     `allowedControlFeelProfileRefs`（经 `selectableControlFeelProfileRefsV1`），不再枚举
-     Registry 全部 `control-feel-profile`。
-  3. `ControlFeelTuningV1` / `ControlTuningV1` 已迁到 `control-feel-parameter-contract.ts`；
-     Runtime 会话类型不再暴露 Feel/Control 数字袋方言。草稿数字只在 authoring workspace，
-     发布时物化新 Registry 版本。
-  4. P1.5 + Subject Preset 合并后的整支分支 review 被推迟；另开一次对抗审查，不把它
-     当成合入门禁。
+  2. P1.5 + Subject Preset 合并后的整支分支对抗审查另开，不把它当成合入门禁。
 
 完成标准：仅替换版本化 Profile 就能改变主体的加减速、转向、介质重力/阻力和浮力，
 同一输入与 Registry Lock 在固定 Tick 下得到相同 Snapshot/Hash；普通场景 JSON 不需要
