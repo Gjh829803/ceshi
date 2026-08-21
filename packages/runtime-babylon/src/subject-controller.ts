@@ -3,10 +3,10 @@ import type { TransformNode } from "@babylonjs/core/Meshes/transformNode.js";
 import type { Scene } from "@babylonjs/core/scene.pure.js";
 
 import type {
-  ExecutionMovementMediumV1,
+  ExecutionControlProfileV1,
   ExecutionSubjectV3,
   ControlInputAxesV2,
-  MotionParameterTuningV1,
+  PublishedMovementMediumV1,
   SemanticInputActionV1,
   Vec3,
   ViewControlFrameV1,
@@ -21,7 +21,7 @@ import {
 export interface SubjectMotionSampleV1 {
   horizontalSpeedMetersPerSecond: number;
   runRequested: boolean;
-  movementMedium: "ground" | "air" | "water";
+  movementMedium: PublishedMovementMediumV1;
 }
 
 const LEGACY_CONTROL_PROFILE = {
@@ -30,11 +30,31 @@ const LEGACY_CONTROL_PROFILE = {
   inputSpace: "camera-relative",
   facingPolicy: "align-to-move",
   lateralMovementPolicy: "allowed",
+  moveDeadzoneRatio: 0.1,
   inputTuning: {
     moveDeadzoneRatio: 0.1,
     responseExponent: 1.4,
   },
 } as const;
+
+function commandControlProfile(
+  profile: ExecutionControlProfileV1,
+  responseExponent: number,
+): ExecutionControlProfileV1 {
+  const candidate = profile as ExecutionControlProfileV1 & {
+    inputTuning?: { moveDeadzoneRatio: number; responseExponent: number };
+  };
+  const deadzone = candidate.inputTuning?.moveDeadzoneRatio ??
+    profile.moveDeadzoneRatio;
+  return {
+    ...profile,
+    moveDeadzoneRatio: deadzone,
+    inputTuning: {
+      moveDeadzoneRatio: deadzone,
+      responseExponent,
+    },
+  } as ExecutionControlProfileV1;
+}
 
 /**
  * Compatibility facade. Input interpretation and movement execution are owned by
@@ -73,7 +93,10 @@ export class SubjectController {
     axes: Readonly<ControlInputAxesV2> = {},
   ): void {
     const command = compileMotionCommandV1(
-      this.subject.capabilityAssembly?.controlProfile ?? LEGACY_CONTROL_PROFILE,
+      commandControlProfile(
+        this.subject.capabilityAssembly?.controlProfile ?? LEGACY_CONTROL_PROFILE,
+        this.motionKernel.activeControlFeel.moveResponseExponent,
+      ),
       actions,
       viewControlFrame,
       axes,
@@ -86,17 +109,16 @@ export class SubjectController {
     return this.motionKernel.requestMotionProfile(resourceRef);
   }
 
-  setMotionTuning(tuning: MotionParameterTuningV1): boolean {
-    if (this.subject.capabilityAssembly === undefined) return false;
-    return this.motionKernel.setParameterTuning(tuning);
+  requestControlFeelProfile(resourceRef: string): boolean {
+    return this.motionKernel.requestControlFeelProfile(resourceRef);
+  }
+
+  get activeControlFeel(): MotionKernelRuntimeV1["activeControlFeel"] {
+    return this.motionKernel.activeControlFeel;
   }
 
   synchronizeVisual(): void {
     this.motionKernel.synchronizeVisual();
-  }
-
-  refreshMovementMedium(): void {
-    this.motionKernel.refreshMovementMedium();
   }
 
   sampleMotion(runRequested: boolean): SubjectMotionSampleV1 {
@@ -124,12 +146,8 @@ export class SubjectController {
     return this.motionKernel.controllerCenter;
   }
 
-  get movementMedium(): ExecutionMovementMediumV1 {
+  get movementMedium(): PublishedMovementMediumV1 {
     return this.motionKernel.movementMedium;
-  }
-
-  get hasPendingInitialGroundSupport(): boolean {
-    return this.motionKernel.hasPendingInitialGroundSupport;
   }
 
   get facingYawRadians(): number {

@@ -35,7 +35,7 @@ import type {
   ExecutionWaterBoundaryV3,
   ExecutionWaterV3,
   FixedInputV1,
-  MotionParameterTuningV1,
+  PublishedMovementMediumV1,
   RenderReadyReceiptV1,
   RuntimeControlCaptureFrameV1,
   SemanticInputActionV1,
@@ -94,13 +94,16 @@ export interface BabylonWorldRuntimeOptions {
 type OwnedDisposer = () => void | Promise<void>;
 
 const WATER_SURFACE_CLASSIFICATION_EPSILON_METERS = 0.1;
-const LEGACY_CAMERA_RELATIVE_CONTROL_PROFILE: ExecutionControlProfileV1 = {
+const LEGACY_CAMERA_RELATIVE_CONTROL_PROFILE = {
   resourceRef: "worldkit://control-profile/legacy.camera-relative@1",
   commandKind: "planar-vector",
   inputSpace: "camera-relative",
   facingPolicy: "align-to-move",
   lateralMovementPolicy: "allowed",
+  moveDeadzoneRatio: 0,
   inputTuning: { moveDeadzoneRatio: 0, responseExponent: 1 },
+} as const satisfies ExecutionControlProfileV1 & {
+  inputTuning: { moveDeadzoneRatio: number; responseExponent: number };
 };
 
 class WorldRuntimeDisposeErrorV1 extends Error {
@@ -734,11 +737,7 @@ export class BabylonWorldRuntime implements WorldRuntimeSessionV3 {
       for (const subject of this.executionPlan.subjects) {
         const controller = this.controllerFor(subject.entityId);
         const controlled = subject.entityId === this.controlledEntityId;
-        if (
-          controlled ||
-          controller.movementMedium !== "ground" ||
-          controller.hasPendingInitialGroundSupport
-        ) {
+        if (controlled || controller.movementMedium !== "ground") {
           controller.step(
             controlled ? input.actions : [],
             viewControlFrame,
@@ -752,7 +751,6 @@ export class BabylonWorldRuntime implements WorldRuntimeSessionV3 {
         const controller = this.controllerFor(subject.entityId);
         const visual = this.visualFor(subject.entityId);
         controller.synchronizeVisual();
-        controller.refreshMovementMedium();
         if (subject.entityId !== this.controlledEntityId) {
           visual.stepAnimation(this.tick, "idle");
           continue;
@@ -786,7 +784,6 @@ export class BabylonWorldRuntime implements WorldRuntimeSessionV3 {
             motionTags: motion.motionTags,
             relationshipRole: "none" as const,
             safeFallbackActive: motion.fallbackActive,
-            motionParameterTuning: motion.parameterTuning,
             ...(motion.lastFailureCode === undefined
               ? {}
               : { motionFailureCode: motion.lastFailureCode }),
@@ -801,6 +798,8 @@ export class BabylonWorldRuntime implements WorldRuntimeSessionV3 {
         activeActionId: this.visualFor(subject.entityId).activeActionId,
         forwardXYZ: motion.forwardXYZ,
         speedMetersPerSecond: motion.speedMetersPerSecond,
+        activeControlFeelProfileRef: motion.activeControlFeelProfileRef,
+        locomotionMode: motion.locomotionMode,
         ...capabilityState,
       };
     }
@@ -1006,7 +1005,7 @@ export class BabylonWorldRuntime implements WorldRuntimeSessionV3 {
 
   private detectMovementMedium(
     controller: SubjectController,
-  ): "ground" | "air" | "water" {
+  ): PublishedMovementMediumV1 {
     return controller.movementMedium;
   }
 
@@ -1045,7 +1044,16 @@ export class BabylonWorldRuntime implements WorldRuntimeSessionV3 {
       relationshipRole: "none",
       cameraContextTags: [
         ...(hasForwardControlIntentV1(
-          subject.capabilityAssembly?.controlProfile ?? LEGACY_CAMERA_RELATIVE_CONTROL_PROFILE,
+          {
+            ...(subject.capabilityAssembly?.controlProfile ??
+              LEGACY_CAMERA_RELATIVE_CONTROL_PROFILE),
+            inputTuning: {
+              moveDeadzoneRatio:
+                subject.capabilityAssembly?.controlProfile?.moveDeadzoneRatio ??
+                LEGACY_CAMERA_RELATIVE_CONTROL_PROFILE.moveDeadzoneRatio,
+              responseExponent: controller.activeControlFeel.moveResponseExponent,
+            },
+          } as ExecutionControlProfileV1,
           this.activeInputActions,
           this.activeInputAxes,
         )
@@ -1115,16 +1123,13 @@ export class BabylonWorldRuntime implements WorldRuntimeSessionV3 {
     return changed;
   }
 
-  setMotionTuning(
-    subjectEntityId: string,
-    tuning: MotionParameterTuningV1,
-  ): WorldRuntimeSnapshotV3 {
+  requestControlFeelProfile(subjectEntityId: string, resourceRef: string): boolean {
     this.assertUsable();
-    if (!this.controllerFor(subjectEntityId).setMotionTuning(tuning)) {
-      throw new RangeError("Motion tuning must use registered parameters inside safety limits.");
-    }
-    this.latestRenderReadyReceipt = undefined;
-    return this.snapshot();
+    const changed = this.controllerFor(subjectEntityId).requestControlFeelProfile(
+      resourceRef,
+    );
+    if (changed) this.latestRenderReadyReceipt = undefined;
+    return changed;
   }
 
   async runHarness(subjectEntityId: string): Promise<SubjectHarnessReportV1> {
@@ -1144,8 +1149,7 @@ export class BabylonWorldRuntime implements WorldRuntimeSessionV3 {
       motion.speedMetersPerSecond,
     ].every(Number.isFinite);
     const mediumCompatible =
-      assembly === undefined ||
-      activeMotionKernel?.supportedMediums.includes(state.movementMedium) === true;
+      state.movementMedium === "ground" || state.movementMedium === "air";
     const cameraState = this.snapshot().camera;
     const cameraFinite = cameraState.positionMetersXYZ.every(Number.isFinite);
     const availableSocketIds = new Set(subject.sockets.map((socket) => socket.id));

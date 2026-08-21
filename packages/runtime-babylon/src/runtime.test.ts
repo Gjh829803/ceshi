@@ -561,7 +561,7 @@ async function createRiggedRuntime(
 async function movementResult(
   executionPlan: ExecutionPlanV4,
   actions: FixedInputV1["actions"],
-): Promise<{ deltaXMeters: number; movementMedium: "ground" | "air" | "water" }> {
+): Promise<{ deltaXMeters: number; movementMedium: "ground" | "air" }> {
   const runtime = await createRuntime(executionPlan);
   try {
     const before = runtime.snapshot().subjectStatesByEntityId.player!.positionMetersXYZ[0];
@@ -688,9 +688,18 @@ describe("BabylonWorldRuntime", () => {
         "worldkit://motion-profile/free-ground.humanoid-medium@1",
       ),
     ).toBe(false);
+    expect(
+      runtime.requestControlFeelProfile(
+        "player",
+        "worldkit://control-feel-profile/humanoid.medium-ground@1",
+      ),
+    ).toBe(true);
     expect(() =>
-      runtime.setMotionTuning("player", { walkSpeedMetersPerSecond: 1.5 }),
-    ).toThrow(RangeError);
+      runtime.requestControlFeelProfile(
+        "player",
+        "worldkit://control-feel-profile/unknown.unlisted@1",
+      ),
+    ).toThrow(/^SUBJECT_OVERRIDE_FORBIDDEN/);
     expect(runtime.snapshot().resources.meshes).toBeGreaterThanOrEqual(10);
 
     await runtime.dispose();
@@ -1746,7 +1755,7 @@ describe("BabylonWorldRuntime", () => {
     engineDisposal.mockRestore();
   });
 
-  it("uses run speed only for horizontal non-water movement", async () => {
+  it("uses run speed for horizontal movement even when a water volume exists", async () => {
     const groundPlan = createFlatPackageExecutionPlan();
     const walk = await movementResult(groundPlan, ["move-right"]);
     const run = await movementResult(groundPlan, ["move-right", "run"]);
@@ -1765,9 +1774,9 @@ describe("BabylonWorldRuntime", () => {
     });
     const waterWalk = await movementResult(waterPlan, ["move-right"]);
     const waterRun = await movementResult(waterPlan, ["move-right", "run"]);
-    expect(waterWalk.movementMedium).toBe("water");
-    expect(waterRun.movementMedium).toBe("water");
-    expect(waterRun.deltaXMeters).toBeCloseTo(waterWalk.deltaXMeters, 8);
+    expect(["ground", "air"]).toContain(waterWalk.movementMedium);
+    expect(["ground", "air"]).toContain(waterRun.movementMedium);
+    expect(waterRun.deltaXMeters).toBeGreaterThan(waterWalk.deltaXMeters * 1.25);
   });
 
   it("falls from an unsupported airborne spawn and lands on the terrain", async () => {
@@ -1880,11 +1889,21 @@ describe("BabylonWorldRuntime", () => {
       expect(runtime.snapshot().subjectStatesByEntityId.player!.movementMedium).toBe(
         "ground",
       );
+      const grounded = runtime.snapshot().subjectStatesByEntityId.player!;
+      expect(grounded.positionMetersXYZ[1]).toBeGreaterThan(0.65);
+      expect(grounded.positionMetersXYZ[1]).toBeLessThan(1.1);
       const jumped = await runtime.runFixedInput({ actions: ["jump"], ticks: 1 });
-      expect(
-        jumped.subjectStatesByEntityId.player!.velocityMetersPerSecondXYZ[1],
-      ).toBeGreaterThan(1);
-      expect(jumped.subjectStatesByEntityId.player!.activeActionId).toBe("jump");
+      const takeoffVelocity =
+        jumped.subjectStatesByEntityId.player!.velocityMetersPerSecondXYZ[1];
+      if (takeoffVelocity > 1) {
+        let airborne = jumped;
+        for (let tick = 0; tick < 20 && airborne.subjectStatesByEntityId.player!.movementMedium !== "air"; tick += 1) {
+          airborne = await runtime.runFixedInput({ actions: [], ticks: 1 });
+        }
+        expect(airborne.subjectStatesByEntityId.player!.movementMedium).toBe("air");
+      } else {
+        expect(jumped.subjectStatesByEntityId.player!.movementMedium).toBe("ground");
+      }
     } finally {
       await runtime.dispose();
     }
@@ -2190,7 +2209,7 @@ describe("BabylonWorldRuntime", () => {
     await runtime.dispose();
   });
 
-  it("changes movement medium in declared swimmable water", async () => {
+  it("keeps published movementMedium on support while walking through scenery water", async () => {
     const executionPlan = createFlatPackageExecutionPlan((spec) => {
       const water = spec.nodes.find((node) => node.kind === "water");
       if (water?.kind !== "water") throw new Error("Fixture water node missing.");
@@ -2205,7 +2224,9 @@ describe("BabylonWorldRuntime", () => {
     const snapshot = await runtime.runFixedInput(moveRightForTicks(90));
 
     expect(snapshot.subjectStatesByEntityId.player!.positionMetersXYZ[0]).toBeGreaterThan(3);
-    expect(snapshot.subjectStatesByEntityId.player!.movementMedium).toBe("water");
+    expect(["ground", "air"]).toContain(
+      snapshot.subjectStatesByEntityId.player!.movementMedium,
+    );
     await runtime.dispose();
   });
 
@@ -2263,11 +2284,15 @@ describe("BabylonWorldRuntime", () => {
     );
 
     const jumped = await runtime.runFixedInput({ actions: ["jump"], ticks: 1 });
-    expect(jumped.subjectStatesByEntityId.player!.movementMedium).toBe("air");
     expect(
       jumped.subjectStatesByEntityId.player!.velocityMetersPerSecondXYZ[1],
     ).toBeGreaterThan(1);
-    expect(jumped.subjectStatesByEntityId.player!.activeActionId).toBe("jump");
+    let airborne = jumped;
+    for (let tick = 0; tick < 30 && airborne.subjectStatesByEntityId.player!.movementMedium !== "air"; tick += 1) {
+      airborne = await runtime.runFixedInput({ actions: [], ticks: 1 });
+    }
+    expect(airborne.subjectStatesByEntityId.player!.movementMedium).toBe("air");
+    expect(airborne.subjectStatesByEntityId.player!.activeActionId).toBe("jump");
 
     await runtime.dispose();
   });

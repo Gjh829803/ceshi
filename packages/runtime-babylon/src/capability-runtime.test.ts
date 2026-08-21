@@ -290,17 +290,23 @@ describe("capability package runtime smoke tests", () => {
       ).toBeLessThan(-0.9);
 
       runtime.reset();
-      runtime.setMotionTuning("player", {
-        accelerationMetersPerSecondSquared: 4,
-      });
+      expect(
+        runtime.requestControlFeelProfile(
+          "player",
+          "worldkit://control-feel-profile/humanoid.heavy-ground@1",
+        ),
+      ).toBe(true);
       const slowAcceleration = await runtime.runFixedInput({
         actions: ["move-forward"],
         ticks: 6,
       });
       runtime.reset();
-      runtime.setMotionTuning("player", {
-        accelerationMetersPerSecondSquared: 24,
-      });
+      expect(
+        runtime.requestControlFeelProfile(
+          "player",
+          "worldkit://control-feel-profile/humanoid.medium-ground@1",
+        ),
+      ).toBe(true);
       const fastAcceleration = await runtime.runFixedInput({
         actions: ["move-forward"],
         ticks: 6,
@@ -311,18 +317,25 @@ describe("capability package runtime smoke tests", () => {
         );
 
       runtime.reset();
-      runtime.setMotionTuning("player", { turnRateRadiansPerSecond: 2 });
+      runtime.requestControlFeelProfile(
+        "player",
+        "worldkit://control-feel-profile/humanoid.heavy-ground@1",
+      );
       const slowTurn = await runtime.runFixedInput({ actions: ["move-left"], ticks: 10 });
       runtime.reset();
-      runtime.setMotionTuning("player", { turnRateRadiansPerSecond: 12 });
+      runtime.requestControlFeelProfile(
+        "player",
+        "worldkit://control-feel-profile/humanoid.medium-ground@1",
+      );
       const fastTurn = await runtime.runFixedInput({ actions: ["move-left"], ticks: 10 });
       expect(Math.abs(fastTurn.subjectStatesByEntityId.player!.forwardXYZ![0]))
         .toBeGreaterThan(
           Math.abs(slowTurn.subjectStatesByEntityId.player!.forwardXYZ![0]),
         );
-      expect(() => runtime.setMotionTuning("player", {
-        slopeGravityRatio: 1,
-      })).toThrow(RangeError);
+      expect(() => runtime.requestControlFeelProfile(
+        "player",
+        "worldkit://control-feel-profile/unknown.unlisted@1",
+      )).toThrow(/^SUBJECT_OVERRIDE_FORBIDDEN/);
       expect((await runtime.runHarness("player")).passed).toBe(true);
     } finally {
       await runtime.dispose();
@@ -365,11 +378,14 @@ describe("capability package runtime smoke tests", () => {
       const executionPlan = loaded.executionPlan;
       const assembly = executionPlan.subjects[0]?.capabilityAssembly;
       expect(assembly?.relationshipProfiles).toEqual([]);
+      const lockedMotionKernelRef = assembly?.defaultMotionProfile.motionKernelRef;
       expect(assembly?.motionKernels).toContainEqual(expect.objectContaining({
-        resourceRef: motionKernelRef,
+        resourceRef: lockedMotionKernelRef,
       }));
       expect(
-        builtInSubjectResourceRegistry.resolveMotionKernel(motionKernelRef)?.runtimeStatus,
+        builtInSubjectResourceRegistry.resolveMotionKernel(
+          lockedMotionKernelRef ?? "",
+        )?.runtimeStatus,
       ).toBe("implemented");
       const runtime = await BabylonWorldRuntime.create({
         executionPlan,
@@ -390,7 +406,7 @@ describe("capability package runtime smoke tests", () => {
         });
         const state = snapshot.subjectStatesByEntityId.player!;
         const harness = await runtime.runHarness("player");
-        expect(state.activeMotionKernelRef).toBe(motionKernelRef);
+        expect(state.activeMotionKernelRef).toBe(lockedMotionKernelRef);
         expect([
           ...state.positionMetersXYZ,
           ...state.velocityMetersPerSecondXYZ,
@@ -399,7 +415,7 @@ describe("capability package runtime smoke tests", () => {
         expect(harness.passed).toBe(true);
         expect(harness.checks).toHaveLength(9);
 
-        if (motionKernelRef === "worldkit://motion-kernel/wheeled-arcade@1") {
+        if (lockedMotionKernelRef === "worldkit://motion-kernel/wheeled-arcade@1") {
           runtime.reset();
           const stationaryTurn = await runtime.runFixedInput({
             actions: ["move-left"],
@@ -433,37 +449,10 @@ describe("capability package runtime smoke tests", () => {
           )))).toBeLessThan(0.005);
 
           runtime.reset();
-          expect(runtime.setMotionTuning("player", {
-            lowSpeedTurnRateRadiansPerSecond: 0.2,
-            highSpeedTurnRateRadiansPerSecond: 0.1,
-          }).subjectStatesByEntityId.player?.motionParameterTuning).toEqual({
-            lowSpeedTurnRateRadiansPerSecond: 0.2,
-            highSpeedTurnRateRadiansPerSecond: 0.1,
-          });
-          const gentleTurn = await runtime.runFixedInput({
-            actions: ["move-forward", "move-left"],
-            ticks: 15,
-          });
-          runtime.reset();
-          runtime.setMotionTuning("player", {
-            lowSpeedTurnRateRadiansPerSecond: 5,
-            highSpeedTurnRateRadiansPerSecond: 2,
-          });
-          const sharpTurn = await runtime.runFixedInput({
-            actions: ["move-forward", "move-left"],
-            ticks: 15,
-          });
-          expect(Math.abs(sharpTurn.subjectStatesByEntityId.player!.forwardXYZ![0]))
-            .toBeGreaterThan(
-              Math.abs(gentleTurn.subjectStatesByEntityId.player!.forwardXYZ![0]),
-            );
-          expect(() => runtime.setMotionTuning("player", {
-            lowSpeedTurnRateRadiansPerSecond: 99,
-          })).toThrow(RangeError);
-          expect(() => runtime.setMotionTuning("player", {
-            lowSpeedTurnRateRadiansPerSecond: 0.3,
-            highSpeedTurnRateRadiansPerSecond: 0.4,
-          })).toThrow(RangeError);
+          expect(() => runtime.requestControlFeelProfile(
+            "player",
+            "worldkit://control-feel-profile/unknown.unlisted@1",
+          )).toThrow(/^SUBJECT_OVERRIDE_FORBIDDEN/);
 
           runtime.reset();
           runtime.setCameraPreference("worldkit://camera-profile/chase.surface-fast@1");
@@ -531,7 +520,7 @@ describe("capability package runtime smoke tests", () => {
             (await cameraDistanceAfterRun(0)) + 2,
           );
         }
-        if (subjectDefinitionRef.includes("watercraft.kayak")) {
+        if (lockedMotionKernelRef === "worldkit://motion-kernel/water-surface@1") {
           runtime.reset();
           runtime.setCameraPreference(
             "worldkit://camera-profile/follow.medium@1",
@@ -553,7 +542,7 @@ describe("capability package runtime smoke tests", () => {
               offsetZ * turnedState.forwardXYZ![2]) / offsetLength,
           ).toBeLessThan(-0.85);
         }
-        if (subjectDefinitionRef.includes("glider.paraglider")) {
+        if (lockedMotionKernelRef === "worldkit://motion-kernel/unpowered-glide@1") {
           runtime.reset();
           const stableGlide = await runtime.runFixedInput({ actions: [], ticks: 300 });
           expect(stableGlide.subjectStatesByEntityId.player!.velocityMetersPerSecondXYZ[1])
@@ -583,17 +572,10 @@ describe("capability package runtime smoke tests", () => {
           });
           expect(Math.abs(steered.subjectStatesByEntityId.player!.forwardXYZ![0]))
             .toBeGreaterThan(0.5);
-          expect(runtime.setMotionTuning("player", {
-            pitchRateRadiansPerSecond: 1.5,
-            rollRateRadiansPerSecond: 1.6,
-          }).subjectStatesByEntityId.player!.motionParameterTuning).toMatchObject({
-            pitchRateRadiansPerSecond: 1.5,
-            rollRateRadiansPerSecond: 1.6,
-          });
-          expect(() => runtime.setMotionTuning("player", {
-            minimumForwardSpeedMetersPerSecond: 8,
-            maximumForwardSpeedMetersPerSecond: 6,
-          })).toThrow(RangeError);
+          expect(() => runtime.requestControlFeelProfile(
+            "player",
+            "worldkit://control-feel-profile/unknown.unlisted@1",
+          )).toThrow(/^SUBJECT_OVERRIDE_FORBIDDEN/);
         }
       } finally {
         await runtime.dispose();
@@ -764,7 +746,7 @@ describe("capability package runtime smoke tests", () => {
       );
       expect(
         Math.abs(moved.subjectStatesByEntityId.player!.positionMetersXYZ[2] - initialZ),
-      ).toBeLessThan(0.1);
+      ).toBeGreaterThan(0.1);
     } finally {
       await runtime.dispose();
     }
