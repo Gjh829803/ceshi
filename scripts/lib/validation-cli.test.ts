@@ -1,4 +1,5 @@
 import {
+  access,
   mkdtemp,
   readFile,
   readdir,
@@ -14,7 +15,10 @@ import { afterEach, describe, expect, it } from "vitest";
 import { validateValidationReportV1 } from "@whitebox-world/validation";
 
 import { createControlCaptureValidationReportV1 } from "./control-capture-validation";
-import { createControlCaptureValidationFixtureV1 } from "./control-capture-validation-fixture";
+import {
+  createControlCaptureValidationFixtureV1,
+  snapshotControlCaptureFileHashesV1,
+} from "./control-capture-validation-fixture";
 import {
   explainValidationReportFileV1,
   validationStatusExitCodeV1,
@@ -160,6 +164,40 @@ describe("Validation CLI", () => {
     await expect(readFile(
       path.join(bundleDirectory, "authoritative-output.json"),
     )).rejects.toThrow();
+  });
+
+  it("does not create missing output directories through a Bundle symlink", async () => {
+    const { parentDirectory, bundleDirectory } = await createFixture();
+    const beforeHashes = await snapshotControlCaptureFileHashesV1(
+      bundleDirectory,
+    );
+    const outputParentAlias = path.join(parentDirectory, "nested-output");
+    await symlink(bundleDirectory, outputParentAlias, "dir");
+    const outputPath = path.join(
+      outputParentAlias,
+      "new",
+      "reports",
+      "authoritative-output.json",
+    );
+
+    const result = await verifyControlCaptureFileV1(
+      bundleDirectory,
+      outputPath,
+    );
+
+    expect(result).toMatchObject({
+      ok: false,
+      exitCode: 1,
+      diagnostics: [
+        expect.objectContaining({
+          code: "VALIDATION_OUTPUT_INSIDE_SUBJECT",
+        }),
+      ],
+    });
+    expect(await snapshotControlCaptureFileHashesV1(bundleDirectory)).toEqual(
+      beforeHashes,
+    );
+    await expect(access(path.join(bundleDirectory, "new"))).rejects.toThrow();
   });
 
   it("uses stable exit codes for all report statuses", () => {

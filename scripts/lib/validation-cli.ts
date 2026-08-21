@@ -154,6 +154,31 @@ async function pathExists(filePath: string): Promise<boolean> {
   }
 }
 
+async function resolveProspectiveRealPathV1(filePath: string): Promise<string> {
+  let existingAncestor = path.resolve(filePath);
+  const missingSegments: string[] = [];
+  while (true) {
+    try {
+      return path.join(
+        await realpath(existingAncestor),
+        ...missingSegments,
+      );
+    } catch (error) {
+      if (
+        !(error instanceof Error) ||
+        !("code" in error) ||
+        error.code !== "ENOENT"
+      ) {
+        throw error;
+      }
+      const parentPath = path.dirname(existingAncestor);
+      if (parentPath === existingAncestor) throw error;
+      missingSegments.unshift(path.basename(existingAncestor));
+      existingAncestor = parentPath;
+    }
+  }
+}
+
 export async function writeValidationReportFileNoReplaceV1(
   outputPath: string,
   report: ValidationReportV1,
@@ -194,10 +219,29 @@ export async function verifyControlCaptureFileV1(
     const canonicalBundleDirectory = await realpath(
       absoluteBundleDirectory,
     );
-    await mkdir(path.dirname(absoluteOutputPath), { recursive: true });
-    const canonicalOutputParent = await realpath(
-      path.dirname(absoluteOutputPath),
+    const outputParentPath = path.dirname(absoluteOutputPath);
+    const prospectiveOutputParent = await resolveProspectiveRealPathV1(
+      outputParentPath,
     );
+    const prospectiveOutputPath = path.join(
+      prospectiveOutputParent,
+      path.basename(absoluteOutputPath),
+    );
+    if (outputIsInsideBundle(
+      canonicalBundleDirectory,
+      prospectiveOutputPath,
+    )) {
+      return cliInfrastructureFailure(
+        "VALIDATION_OUTPUT_INSIDE_SUBJECT",
+        "Validation Report output must be outside the immutable Control Capture Bundle.",
+        {
+          inputDirectory: canonicalBundleDirectory,
+          outputPath: prospectiveOutputPath,
+        },
+      );
+    }
+    await mkdir(outputParentPath, { recursive: true });
+    const canonicalOutputParent = await realpath(outputParentPath);
     const canonicalOutputPath = path.join(
       canonicalOutputParent,
       path.basename(absoluteOutputPath),
