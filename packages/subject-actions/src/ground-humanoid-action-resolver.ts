@@ -17,6 +17,5 @@ export function resolveGroundHumanoidAction(
   if (input.movementMedium === "air") return "jump";
   if (input.horizontalSpeedMetersPerSecond <= 0.08) return "idle";
 
-  // Water intentionally uses the ground movement action table as the S1b fallback.
   return input.runRequested ? "run" : "walk";
 }

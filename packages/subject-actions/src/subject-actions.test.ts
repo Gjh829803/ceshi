@@ -9,13 +9,6 @@ describe("resolveGroundHumanoidAction", () => {
     [{ movementMedium: "ground", horizontalSpeedMetersPerSecond: 0.08, runRequested: true }, "idle"],
     [{ movementMedium: "ground", horizontalSpeedMetersPerSecond: 0.081, runRequested: false }, "walk"],
     [{ movementMedium: "ground", horizontalSpeedMetersPerSecond: 0.081, runRequested: true }, "run"],
-    // Water temporarily uses the ground idle/walk/run table in S1b.
-    [{ movementMedium: "water", horizontalSpeedMetersPerSecond: 0, runRequested: false }, "idle"],
-    [{ movementMedium: "water", horizontalSpeedMetersPerSecond: 0, runRequested: true }, "idle"],
-    [{ movementMedium: "water", horizontalSpeedMetersPerSecond: 0.08, runRequested: false }, "idle"],
-    [{ movementMedium: "water", horizontalSpeedMetersPerSecond: 0.08, runRequested: true }, "idle"],
-    [{ movementMedium: "water", horizontalSpeedMetersPerSecond: 0.081, runRequested: false }, "walk"],
-    [{ movementMedium: "water", horizontalSpeedMetersPerSecond: 0.081, runRequested: true }, "run"],
     [{ movementMedium: "air", horizontalSpeedMetersPerSecond: 0, runRequested: false }, "jump"],
     [{ movementMedium: "air", horizontalSpeedMetersPerSecond: 0, runRequested: true }, "jump"],
     [{ movementMedium: "air", horizontalSpeedMetersPerSecond: 2.4, runRequested: false }, "jump"],

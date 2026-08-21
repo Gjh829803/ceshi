@@ -26,7 +26,7 @@ export type GroundHumanoidActionIdV1 =
   | "dance.rumba";
 
 export interface GroundHumanoidActionInputV1 {
-  movementMedium: "ground" | "air" | "water";
+  movementMedium: "ground" | "air";
   horizontalSpeedMetersPerSecond: number;
   runRequested: boolean;
 }
