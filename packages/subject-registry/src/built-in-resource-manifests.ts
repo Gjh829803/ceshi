@@ -404,17 +404,13 @@ const STANDARD_GROUND_LOCOMOTION_PROFILE: LocomotionProfileManifestInputV1 = {
   version: 1,
   resourceRef: "worldkit://locomotion-profile/ground.standard@1",
   requiredCapabilityRefs: ["worldkit://capability/locomotion.ground@1"],
-  locomotion: {
-    mode: "ground",
-    walkSpeedMetersPerSecond: 2.4,
-    runSpeedMetersPerSecond: 4,
-    waterSpeedMetersPerSecond: 2.2,
-    jumpSpeedMetersPerSecond: 5.5,
-  },
+  allowWalk: true,
+  allowRun: true,
+  allowJump: true,
   aiMetadata: {
     displayName: "Standard ground locomotion",
-    description: "Default walking, swimming, and jumping speeds for ground characters.",
-    semanticTags: ["ground", "jump", "locomotion", "swim"],
+    description: "Default walking, running, and jumping capability flags for ground characters.",
+    semanticTags: ["ground", "jump", "locomotion", "run", "walk"],
   },
 };
 

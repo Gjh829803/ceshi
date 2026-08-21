@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 
+import { builtInSubjectResourceRegistry } from "./index.js";
 import { createSubjectResourceRegistry } from "./subject-resource-registry.js";
 
 describe("P1.5 admission clean-break", () => {
@@ -151,6 +152,38 @@ describe("P1.5 admission clean-break", () => {
         },
       ]),
     ).toThrow(/CONTROL_FEEL_PROFILE_INVALID/);
+  });
+
+  it("registers two distinguishable built-in feel profiles", () => {
+    const medium = builtInSubjectResourceRegistry.resolveControlFeelProfile(
+      "worldkit://control-feel-profile/humanoid.medium-ground@1",
+    );
+    const heavy = builtInSubjectResourceRegistry.resolveControlFeelProfile(
+      "worldkit://control-feel-profile/humanoid.heavy-ground@1",
+    );
+    expect(medium?.kind).toBe("control-feel-profile");
+    expect(heavy?.kind).toBe("control-feel-profile");
+    expect(medium?.accelerationMetersPerSecondSquared).toBe(16);
+    expect(heavy?.accelerationMetersPerSecondSquared).toBe(8);
+  });
+
+  it("replaces water medium and binds feel on G Bot and Golden", () => {
+    expect(
+      builtInSubjectResourceRegistry.resolveMediumProfile(
+        "worldkit://medium-profile/ground-water-air.standard@1",
+      ),
+    ).toBeUndefined();
+    for (const ref of [
+      "worldkit://subject-definition/humanoid.g-bot@1",
+      "worldkit://subject-definition/humanoid.rigged-golden@1",
+    ]) {
+      const subject = builtInSubjectResourceRegistry.resolveSubjectDefinition(ref);
+      expect(subject?.profiles).toMatchObject({
+        controlFeelProfileRef:
+          "worldkit://control-feel-profile/humanoid.medium-ground@1",
+        mediumProfileRef: "worldkit://medium-profile/ground-air.standard@1",
+      });
+    }
   });
 
   it("rejects physics body profile with non-finite maxStepHeightMeters", () => {
