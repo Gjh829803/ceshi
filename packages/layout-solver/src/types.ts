@@ -1,3 +1,5 @@
+import type { LockedSupportColliderV1 } from "@whitebox-world/terrain-surface";
+
 export interface LayoutSolverProfileV1 {
   readonly kind: "layout-solver-profile";
   readonly schemaVersion: 1;
@@ -129,6 +131,8 @@ export type LayoutCameraV1 = LayoutFixedCameraV1 | LayoutThirdPersonCameraV1;
 export interface LayoutGeometryQueryV1 {
   readonly heightfieldsByTerrainEntityId: Readonly<Record<string, LayoutHeightfieldV1>>;
   readonly staticBoundsByEntityId: Readonly<Record<string, LayoutAabbV1>>;
+  /** Locked support colliders in world space; object supported-by requires one. */
+  readonly collidersByEntityId?: Readonly<Record<string, LockedSupportColliderV1>>;
   readonly camerasByEntityId: Readonly<Record<string, LayoutCameraV1>>;
 }
 

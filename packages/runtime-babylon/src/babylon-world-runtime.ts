@@ -48,6 +48,10 @@ import type {
 } from "@whitebox-world/runtime-contracts";
 import { TRUSTED_DEFAULT_CONTROLLER_ID } from "@whitebox-world/runtime-contracts";
 import { resolveGroundHumanoidAction } from "@whitebox-world/subject-actions";
+import {
+  queryLockedColliderSupportHeightMeters,
+  type LockedSupportColliderV1,
+} from "@whitebox-world/terrain-surface";
 
 import "./babylon-shader-bootstrap";
 import { createWhiteboxMaterials, type WhiteboxMaterials } from "./materials";
@@ -212,6 +216,61 @@ function runtimeAabbsOverlap(
   );
 }
 
+/**
+ * Derives the locked support collider for a placed object from its execution
+ * primitive and frozen placement transform. Kinds or transforms the locked
+ * collider cannot represent throw OBJECT_SUPPORT_SURFACE_QUERY_UNSUPPORTED;
+ * the AABB top is never a fallback support surface.
+ */
+function lockedSupportColliderForPlacement(
+  executionPlan: ExecutionPlanV4,
+  placement: ExecutionLayoutPlacementV1,
+): LockedSupportColliderV1 {
+  const object = executionPlan.objects.find((row) => row.entityId === placement.entityId);
+  if (object === undefined) {
+    throw new Error(
+      `OBJECT_SUPPORT_SURFACE_QUERY_UNSUPPORTED: Supporting entity "${placement.entityId}" has no locked object collider.`,
+    );
+  }
+  const { positionMetersXYZ, rotationEulerRadiansXYZ, scaleXYZ } = placement.transform;
+  const primitive = object.primitive;
+  if (primitive.kind === "box") {
+    return {
+      kind: "box",
+      centerMetersXYZ: positionMetersXYZ,
+      halfExtentsMetersXYZ: [
+        (primitive.sizeMetersXYZ[0] / 2) * scaleXYZ[0],
+        (primitive.sizeMetersXYZ[1] / 2) * scaleXYZ[1],
+        (primitive.sizeMetersXYZ[2] / 2) * scaleXYZ[2],
+      ],
+      rotationEulerRadiansXYZ,
+    };
+  }
+  if (primitive.kind === "sphere" && scaleXYZ[0] === scaleXYZ[1] && scaleXYZ[1] === scaleXYZ[2]) {
+    return {
+      kind: "sphere",
+      centerMetersXYZ: positionMetersXYZ,
+      radiusMeters: primitive.radiusMeters * scaleXYZ[0],
+    };
+  }
+  if (
+    primitive.kind === "cylinder" &&
+    scaleXYZ[0] === scaleXYZ[2] &&
+    rotationEulerRadiansXYZ[0] === 0 &&
+    rotationEulerRadiansXYZ[2] === 0
+  ) {
+    return {
+      kind: "cylinder",
+      centerMetersXYZ: positionMetersXYZ,
+      radiusMeters: primitive.radiusMeters * scaleXYZ[0],
+      heightMeters: primitive.heightMeters * scaleXYZ[1],
+    };
+  }
+  throw new Error(
+    `OBJECT_SUPPORT_SURFACE_QUERY_UNSUPPORTED: Object "${object.entityId}" primitive kind "${primitive.kind}" with this transform has no locked support collider.`,
+  );
+}
+
 function revalidateSupportAssertion(
   executionPlan: ExecutionPlanV4,
   assertion: Extract<ExecutionLayoutAssertionV1, { kind: "supported-by" }>,
@@ -231,16 +290,22 @@ function revalidateSupportAssertion(
     return Math.max(...gaps) <= assertion.maximumSupportGapMeters + supportGapTolerance &&
       passing / gaps.length + 0.000001 >= assertion.minimumSupportRatio;
   }
-  const supporting = boundsByEntityId[assertion.supportingEntityId];
-  if (supporting === undefined) return false;
-  const overlapX = Math.max(0, Math.min(supported.maximumMetersXYZ[0], supporting.maximumMetersXYZ[0]) - Math.max(supported.minimumMetersXYZ[0], supporting.minimumMetersXYZ[0]));
-  const overlapZ = Math.max(0, Math.min(supported.maximumMetersXYZ[2], supporting.maximumMetersXYZ[2]) - Math.max(supported.minimumMetersXYZ[2], supporting.minimumMetersXYZ[2]));
-  const area = (supported.maximumMetersXYZ[0] - supported.minimumMetersXYZ[0]) *
-    (supported.maximumMetersXYZ[2] - supported.minimumMetersXYZ[2]);
-  const ratio = area === 0 ? 0 : overlapX * overlapZ / area;
-  const gap = Math.abs(bottom - supporting.maximumMetersXYZ[1]);
-  return gap <= assertion.maximumSupportGapMeters + supportGapTolerance &&
-    ratio + 0.000001 >= assertion.minimumSupportRatio;
+  const supportingPlacement =
+    executionPlan.layout.placementsByEntityId[assertion.supportingEntityId];
+  if (supportingPlacement === undefined) return false;
+  const collider = lockedSupportColliderForPlacement(executionPlan, supportingPlacement);
+  const samples = runtimeSupportSamples(supported);
+  const gaps: number[] = [];
+  for (const point of samples) {
+    const heightMeters = queryLockedColliderSupportHeightMeters(collider, point);
+    if (heightMeters !== undefined) gaps.push(Math.abs(bottom - heightMeters));
+  }
+  if (gaps.length === 0) return false;
+  const passing = gaps.filter((gap) =>
+    gap <= assertion.maximumSupportGapMeters + supportGapTolerance
+  ).length;
+  return Math.max(...gaps) <= assertion.maximumSupportGapMeters + supportGapTolerance &&
+    passing / samples.length + 0.000001 >= assertion.minimumSupportRatio;
 }
 
 function revalidateClearanceAssertion(

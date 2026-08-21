@@ -34,6 +34,7 @@ import {
 } from "../../authoring/src/test-fixture";
 import type {
   ExecutionAnimationSetV1,
+  ExecutionObjectV3,
   ExecutionPlanV4,
   ExecutionSubjectAssetV1,
   FixedInputV1,
@@ -517,6 +518,70 @@ async function createFlatPackageRuntime(): Promise<BabylonWorldRuntime> {
   return createRuntime(createFlatPackageExecutionPlan());
 }
 
+function createColliderSupportExecutionPlan(options: {
+  pedestalPrimitive: ExecutionObjectV3["primitive"];
+  crateBottomMeters: number;
+  maximumSupportGapMeters: number;
+}): ExecutionPlanV4 {
+  const base = createFlatPackageExecutionPlan();
+  const placementProvenance =
+    base.layout.placementsByEntityId["wall-east"]!.placementProvenance;
+  const pedestalTransform = {
+    positionMetersXYZ: [0, 2, 0] as const,
+    rotationEulerRadiansXYZ: [0, 0, 0.3] as const,
+    scaleXYZ: [1, 1, 1] as const,
+  };
+  const crateTransform = {
+    positionMetersXYZ: [0, options.crateBottomMeters + 0.25, 0] as const,
+    rotationEulerRadiansXYZ: [0, 0, 0] as const,
+    scaleXYZ: [1, 1, 1] as const,
+  };
+  return {
+    ...base,
+    objects: [
+      ...base.objects,
+      {
+        entityId: "pedestal",
+        prototypeId: "pedestal-prototype",
+        primitive: options.pedestalPrimitive,
+        transform: pedestalTransform,
+        collisionEnabled: false,
+        semanticClassId: "obstacle.pedestal",
+      },
+      {
+        entityId: "crate",
+        prototypeId: "crate-prototype",
+        primitive: { kind: "box", sizeMetersXYZ: [0.5, 0.5, 0.5] },
+        transform: crateTransform,
+        collisionEnabled: false,
+        semanticClassId: "prop.crate",
+      },
+    ],
+    layout: {
+      ...base.layout,
+      placementsByEntityId: {
+        ...base.layout.placementsByEntityId,
+        pedestal: { entityId: "pedestal", transform: pedestalTransform, placementProvenance },
+        crate: { entityId: "crate", transform: crateTransform, placementProvenance },
+      },
+      layoutAssertions: [
+        ...base.layout.layoutAssertions,
+        {
+          constraintId: "crate-on-pedestal",
+          kind: "supported-by",
+          supportedEntityId: "crate",
+          supportingEntityId: "pedestal",
+          maximumSupportGapMeters: options.maximumSupportGapMeters,
+          minimumSupportRatio: 1,
+          evidenceEntityIds: ["crate", "pedestal"],
+          measurements: {},
+          tolerances: {},
+        },
+      ],
+    },
+  };
+}
+
 function createFlatRiggedExecutionPlan(): ExecutionPlanV4 {
   return compileFlatTerrainExecutionPlan(createValidRiggedPackageSubjectWorld());
 }
@@ -880,6 +945,44 @@ describe("BabylonWorldRuntime", () => {
     const runtime = await createRuntime(executionPlan);
     await runtime.dispose();
   });
+
+  it("fails supported-by when the supported bottom sits on the rotated visual AABB top instead of the locked collider top", async () => {
+    const rollRadians = 0.3;
+    const visualAabbTopMeters = 2 + 2 * Math.sin(rollRadians) + 0.5 * Math.cos(rollRadians);
+    const executionPlan = createColliderSupportExecutionPlan({
+      pedestalPrimitive: { kind: "box", sizeMetersXYZ: [4, 1, 4] },
+      crateBottomMeters: visualAabbTopMeters,
+      maximumSupportGapMeters: 0.1,
+    });
+
+    const error = await createRuntime(executionPlan).catch((reason) => reason as unknown);
+
+    expect(isWorldRuntimeLayoutAssertionErrorV1(error)).toBe(true);
+  }, 15_000);
+
+  it("passes supported-by when the supported bottom sits on the locked collider top", async () => {
+    const rollRadians = 0.3;
+    const executionPlan = createColliderSupportExecutionPlan({
+      pedestalPrimitive: { kind: "box", sizeMetersXYZ: [4, 1, 4] },
+      crateBottomMeters: 2 + 0.5 * Math.cos(rollRadians),
+      maximumSupportGapMeters: 0.1,
+    });
+
+    const runtime = await createRuntime(executionPlan);
+    await runtime.dispose();
+  }, 15_000);
+
+  it("throws OBJECT_SUPPORT_SURFACE_QUERY_UNSUPPORTED for an unsupported supporting collider kind", async () => {
+    const executionPlan = createColliderSupportExecutionPlan({
+      pedestalPrimitive: { kind: "cone", radiusMeters: 2, heightMeters: 1 },
+      crateBottomMeters: 2.5,
+      maximumSupportGapMeters: 0.1,
+    });
+
+    await expect(createRuntime(executionPlan)).rejects.toThrow(
+      /^OBJECT_SUPPORT_SURFACE_QUERY_UNSUPPORTED/,
+    );
+  }, 15_000);
 
   it("keeps Snapshot and Visual Root at Subject Origin", async () => {
     const { runtime, executionPlan, debug } = await createRuntimeWithPackageSubject();

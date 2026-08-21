@@ -118,8 +118,8 @@ describe("P1.5 runtime debt", () => {
     expect(kernelSource.includes('return "water"')).toBe(false);
   });
 
-  it("still revalidates object supported-by with AABB Y", () => {
-    expect(worldSource.includes("supporting.maximumMetersXYZ[1]")).toBe(true);
+  it("no longer revalidates object supported-by with the AABB top", () => {
+    expect(worldSource.includes("supporting.maximumMetersXYZ[1]")).toBe(false);
   });
 
   it("publishes air from checkSupport after reset when spawned 0.4 m above terrain", async () => {
