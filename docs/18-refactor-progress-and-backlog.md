@@ -370,6 +370,18 @@ placement-layout / rigged-subject / g-bot-subject）；专项规格见
   Candidate 仍可保存数字差异，但必须经 `promote` 物化为新 Registry 版本后才影响玩法。
 - [ ] CLI/Browser/E2E 覆盖不同主体重力倍率、Ground→Water→Air 稳定切换与边界抖动
   （不新增 CLI/Browser 协议字段，随后续切片交付）。
+- [ ] **P1.5 合入后统一收尾**（不阻塞 Ground/Air 首切片，不在本切片内再改合同）：
+  1. 相机仍保留会话数字 overlay（`setCameraTuning`、
+     `applySubjectPresetTuning.cameraOverridesByProfileRef`、Snapshot `camera.tuning`）。
+     后续与 Feel 一样收成锁定 Camera Profile Ref，或明确把相机预览定义为独立会话状态。
+  2. Playground `listSubjectPresetAuthoringProfilesV1` 当前枚举 Registry 全部
+     `control-feel-profile`；应改为只列出该主体 Execution Plan 已锁定的
+     `availableControlFeels`，避免草稿选中未编译 Feel 后被 Runtime 拒绝。
+  3. `ControlFeelTuningV1` / `ControlTuningV1` 仍留在 `runtime-session.ts`，且 Control
+     注释仍写 Session-local override。应迁到 Authoring/Candidate 合同，Runtime 会话类型
+     不再暴露数字袋方言。
+  4. P1.5 + Subject Preset 合并后的整支分支 review 被推迟；另开一次对抗审查，不把它
+     当成合入门禁。
 
 完成标准：仅替换版本化 Profile 就能改变主体的加减速、转向、介质重力/阻力和浮力，
 同一输入与 Registry Lock 在固定 Tick 下得到相同 Snapshot/Hash；普通场景 JSON 不需要
@@ -652,8 +664,9 @@ M5 R0 当前没有代码阻塞项；M5 R1/R1b 仍受 M7 P1.5 Runtime 权威实�
 7. **M7：评审冻结 P1.5 的 Control Feel/Physics Medium/State Resolver 首条纵向范围，清除
    Canonical Babylon 路径中的对应硬编码**：首条 Ground/Air 切片的
    [实施计划](superpowers/plans/2026-08-21-p15-control-feel-state-resolver.md) 已存在并已实施、
-   通过全部生产 Gate；水介质、`ControlMethodProfile` 与 CLI/Browser E2E 覆盖仍未交付，
-   M7 不标记完成；
+   通过全部生产 Gate；水介质、`ControlMethodProfile`、CLI/Browser E2E 覆盖，以及
+   P1.5 条目下的合入后收尾（相机 overlay、作者面板 Feel 范围、session 数字袋类型、
+   整支审查）仍未交付，M7 不标记完成；
 8. **M8：按产品优先级选择 Semantic Action 后续或 Typed Relationship 窄可视切片**；
 9. **M9：在实现游泳、攀爬或增量 Agent 修复前，分别冻结 P2.5 Surface/Traversal 与
    P1.6 AI Schema/WorldChangeSet 的专项设计，禁止临时增加公共字段或场景脚本旁路**。

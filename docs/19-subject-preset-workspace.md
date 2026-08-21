@@ -51,3 +51,7 @@ pnpm worldkit subject-preset promote <candidate.json> --plan <plan.json> --write
 - 当前页面中除 G Bot 外的五个主体仍是 Registry `visualParts` 生成的程序化白模。源 FBX 没有注册到 Asset Resolver，因此不会冒充可运行主体。
 
 新增主体时，先选择可复用的 Motion、Control Feel、Control、Camera Context 与物理/介质 Profile；只有确有差异的参数才派生主体专属版本。一般应按“运动行为类别”复用算法、手感、相机和操控，再为少量体型、挂点或手感差异建立覆盖，而不是每个模型复制一整套代码。
+
+## 合入后收尾
+
+相机会话 overlay、作者面板 Feel 枚举范围，以及 `ControlFeelTuningV1` / `ControlTuningV1` 从 Runtime 会话类型迁走，记在 [`docs/18` P1.5 合入后统一收尾](18-refactor-progress-and-backlog.md)。不在本页另开第二份清单。
