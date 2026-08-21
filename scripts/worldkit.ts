@@ -51,7 +51,7 @@ const HELP = `worldkit - Canonical JSON whitebox world SDK
 Usage:
   worldkit validate <file> [--json]
   worldkit build <file> --output <file> [--json]
-  worldkit run <file> [--port <port>] [--json]
+  worldkit run <file> [--port <port>] [--refresh-dependencies] [--json]
   worldkit capture <file> --output <png> [--snapshot <json>] [--port <port>] [--json]
   worldkit registry list --kind subject-definition [--json]
   worldkit registry describe --resource-ref <ref> [--json]
@@ -76,7 +76,13 @@ export type WorldkitArgs =
   | { command: "help"; json: false }
   | { command: "validate"; inputPath: string; json: boolean }
   | { command: "build"; inputPath: string; outputPath: string; json: boolean }
-  | { command: "run"; inputPath: string; port?: number; json: boolean }
+  | {
+      command: "run";
+      inputPath: string;
+      port?: number;
+      refreshDependencies?: boolean;
+      json: boolean;
+    }
   | {
       command: "capture";
       inputPath: string;
@@ -199,14 +205,18 @@ function takeRequiredPositional(tokens: string[], label: string): string {
   return value;
 }
 
-function takeJsonFlag(tokens: string[]): boolean {
-  const index = tokens.indexOf("--json");
+function takeFlag(tokens: string[], option: string): boolean {
+  const index = tokens.indexOf(option);
   if (index === -1) return false;
-  if (tokens.lastIndexOf("--json") !== index) {
-    throw new WorldkitUsageError("--json may be provided only once.");
+  if (tokens.lastIndexOf(option) !== index) {
+    throw new WorldkitUsageError(`${option} may be provided only once.`);
   }
   tokens.splice(index, 1);
   return true;
+}
+
+function takeJsonFlag(tokens: string[]): boolean {
+  return takeFlag(tokens, "--json");
 }
 
 function rejectRemaining(tokens: string[], command: string): void {
@@ -420,11 +430,13 @@ export function parseWorldkitArgs(arguments_: readonly string[]): WorldkitArgs {
   }
   if (command === "run") {
     const portValue = takeOption(tokens, "--port");
+    const refreshDependencies = takeFlag(tokens, "--refresh-dependencies");
     rejectRemaining(tokens, "run");
     return {
       command,
       inputPath,
       ...(portValue === undefined ? {} : { port: parsePort(portValue) }),
+      ...(refreshDependencies ? { refreshDependencies: true } : {}),
       json,
     };
   }
@@ -883,6 +895,7 @@ function printResult(result: PrintableResult, json: boolean): void {
 async function runUntilSignal(
   inputPath: string,
   port: number | undefined,
+  refreshDependencies: boolean,
   json: boolean,
 ): Promise<number> {
   const validation = await validateFile(inputPath);
@@ -895,6 +908,7 @@ async function runUntilSignal(
     server = await startWorldkitServer({
       inputPath,
       ...(port === undefined ? { port: 5173 } : { port }),
+      ...(refreshDependencies ? { refreshDependencies: true } : {}),
       forwardOutput: !json,
     });
   } catch (error) {
@@ -944,7 +958,12 @@ export async function main(
     return 0;
   }
   if (parsed.command === "run") {
-    return runUntilSignal(parsed.inputPath, parsed.port, parsed.json);
+    return runUntilSignal(
+      parsed.inputPath,
+      parsed.port,
+      parsed.refreshDependencies === true,
+      parsed.json,
+    );
   }
   if (parsed.command === "take-validate") {
     const result = await validateSimulationTakeFileV1(parsed.inputPath);

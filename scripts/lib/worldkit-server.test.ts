@@ -17,6 +17,41 @@ afterEach(async () => {
 });
 
 describe("startWorldkitServer", () => {
+  it("forwards an explicit dependency refresh to the owned Vite server", async () => {
+    const source = `
+      import { startWorldkitServer } from ${JSON.stringify(
+        new URL("./worldkit-server.ts", import.meta.url).href,
+      )};
+      const handle = await startWorldkitServer({
+        inputPath: ${JSON.stringify(INPUT_PATH)},
+        refreshDependencies: true,
+        forwardOutput: true,
+        startupTimeoutMilliseconds: 30000,
+      });
+      await handle.stop();
+    `;
+    const child = spawn(
+      process.execPath,
+      ["--import", "tsx", "--eval", source],
+      {
+        cwd: fileURLToPath(new URL("../../", import.meta.url)),
+        stdio: ["ignore", "pipe", "pipe"],
+      },
+    );
+    let stdout = "";
+    child.stdout.setEncoding("utf8");
+    child.stdout.on("data", (chunk: string) => {
+      stdout += chunk;
+    });
+    child.stderr.resume();
+    const exitCode = await new Promise<number | null>((resolve) => {
+      child.once("exit", resolve);
+    });
+
+    expect(exitCode).toBe(0);
+    expect(stdout).toContain("Forced re-optimization of dependencies");
+  }, 30_000);
+
   it("proves readiness belongs to its nonce and reuses stop/exit promises", async () => {
     const handle = await startWorldkitServer({ inputPath: INPUT_PATH });
     handles.push(handle);

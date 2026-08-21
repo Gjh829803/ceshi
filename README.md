@@ -236,6 +236,24 @@ pnpm worldkit subject explain \
 pnpm worldkit run examples/authoring/package-subject-world.json
 ```
 
+本地体验产品 G Bot 时使用固定入口；它会同时注入 AuthoringSpec 并打开
+`?authoring=1` 对应的 Canonical Runtime：
+
+```bash
+pnpm dev:g-bot
+```
+
+不要用普通 `pnpm dev` 配合 `?authoring=1`。普通 Vite Playground 没有配置
+`WORLDKIT_AUTHORING_SPEC_PATH`，该组合会被明确拒绝。如果切换分支或依赖后浏览器
+出现 `504 Outdated Optimize Dep`，停止旧服务后只执行一次：
+
+```bash
+pnpm dev:g-bot:refresh
+```
+
+刷新命令只重建 Vite 的本地依赖缓存，不修改 SDK 源码、AuthoringSpec 或资产；正常
+启动不要默认使用它。
+
 截图并保存 Runtime Snapshot：
 
 ```bash
@@ -447,7 +465,9 @@ pnpm dev
 pnpm studio
 ```
 
-这些入口不是新程序的 Canonical 协议真相，不再承接新的底层能力。新外部程序应
+`pnpm dev` 只用于 Legacy/场景目录 Playground，不能为 `?authoring=1` 注入
+AuthoringSpec。Canonical G Bot 体验使用 `pnpm dev:g-bot`。这些 Legacy 入口不是新
+程序的 Canonical 协议真相，不再承接新的底层能力。新外部程序应
 使用 `worldkit`、Authoring V3 和 Browser Protocol V3。最终切换计划见
 [重构总进度与 Backlog](docs/18-refactor-progress-and-backlog.md#p32-默认实现切换)。
 

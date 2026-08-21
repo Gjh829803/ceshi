@@ -64,6 +64,22 @@ afterEach(async () => {
 });
 
 describe("worldkit CLI", () => {
+  it("parses an explicit dependency refresh for local Runtime startup", () => {
+    expect(
+      parseWorldkitArgs([
+        "run",
+        "world.json",
+        "--refresh-dependencies",
+        "--json",
+      ]),
+    ).toEqual({
+      command: "run",
+      inputPath: "world.json",
+      refreshDependencies: true,
+      json: true,
+    });
+  });
+
   it("retries background-only browser captures and stops at the first visible world", async () => {
     const sampledRgbColorCounts = [1, 2, 4];
     let attempts = 0;

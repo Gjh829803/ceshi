@@ -61,6 +61,13 @@ Apply `docs/reviews/runtime-deep-review-checklist.md` whenever changing or revie
 
 Do not modify `sdk-world-adapter.ts`, physics, camera, or rendering code merely to create a scene.
 
+## Local Runtime startup
+
+- When a user asks to view the product G Bot locally, run `pnpm dev:g-bot` and open the URL printed by the command.
+- `?authoring=1` requires an AuthoringSpec injected by `worldkit run <world.json>`. Never combine plain `pnpm dev` with `?authoring=1` or present that combination to a user.
+- If the browser reports `504 Outdated Optimize Dep` after a branch or dependency change, stop the old server and run `pnpm dev:g-bot:refresh` once. Do not change Babylon, physics, camera, or runtime code to repair a stale Vite dependency cache.
+- Use `pnpm dev` only for the Legacy/catalog Playground. Do not describe it as the Canonical Authoring Runtime entry.
+
 ## Preferred APIs
 
 - `world.terrain.landscape({ relief: ... })` for large terrain. Choose the relief from the user's scene: `flat` for cities and constructed ground, `plain` for gently rolling open land, `hills` for broad hill country, and `mountains` for intentionally steep regions.
