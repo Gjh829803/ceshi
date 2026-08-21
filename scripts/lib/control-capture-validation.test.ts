@@ -13,16 +13,11 @@ import { afterEach, describe, expect, it } from "vitest";
 import {
   validateValidationReportV1,
 } from "@whitebox-world/validation";
-import {
-  sha256CanonicalJson,
-  stringifyCanonicalJson,
-} from "@whitebox-world/protocol";
-
 import { validateControlCaptureBundleV1 } from "./control-capture-bundle";
 import {
   createControlCaptureValidationFixtureV1,
   rewriteControlCaptureFrameAndManifestHashesV1,
-  rewriteControlCaptureIntegrityV1,
+  rewriteControlCaptureTakeHashV1,
   snapshotControlCaptureFileHashesV1,
 } from "./control-capture-validation-fixture";
 import { createControlCaptureValidationReportV1 } from "./control-capture-validation";
@@ -126,35 +121,10 @@ describe("Control Capture Validation adapter", () => {
 
   it("maps a self-consistent mixed Take to Capture Ownership", async () => {
     const bundleDirectory = await createBundle();
-    const mixedTakeHash = `sha256:${"d".repeat(64)}`;
-    const bundlePath = path.join(bundleDirectory, "bundle.json");
-    const bundle = JSON.parse(await readFile(bundlePath, "utf8")) as Record<
-      string,
-      unknown
-    >;
-    const frames = bundle.frames as Array<Record<string, unknown>>;
-    for (let captureFrameIndex = 0; captureFrameIndex < frames.length; captureFrameIndex += 1) {
-      const framePath = path.join(
-        bundleDirectory,
-        "frames",
-        String(captureFrameIndex).padStart(6, "0"),
-        "frame.json",
-      );
-      const frame = JSON.parse(await readFile(framePath, "utf8")) as Record<
-        string,
-        unknown
-      >;
-      frame.takeHash = mixedTakeHash;
-      const { frameHash: _oldFrameHash, ...frameBody } = frame;
-      frame.frameHash = sha256CanonicalJson(frameBody);
-      frames[captureFrameIndex]!.frameHash = frame.frameHash;
-      await writeFile(framePath, `${stringifyCanonicalJson(frame)}\n`, "utf8");
-    }
-    bundle.takeHash = mixedTakeHash;
-    const { bundleManifestHash: _oldManifestHash, ...bundleBody } = bundle;
-    bundle.bundleManifestHash = sha256CanonicalJson(bundleBody);
-    await writeFile(bundlePath, `${stringifyCanonicalJson(bundle)}\n`, "utf8");
-    await rewriteControlCaptureIntegrityV1(bundleDirectory);
+    await rewriteControlCaptureTakeHashV1(
+      bundleDirectory,
+      `sha256:${"d".repeat(64)}`,
+    );
 
     const { report } = await createControlCaptureValidationReportV1(
       bundleDirectory,

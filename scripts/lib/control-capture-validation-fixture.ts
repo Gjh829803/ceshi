@@ -246,6 +246,44 @@ export async function rewriteControlCaptureFrameAndManifestHashesV1(
   await rewriteControlCaptureIntegrityV1(outputDirectory);
 }
 
+export async function rewriteControlCaptureTakeHashV1(
+  outputDirectory: string,
+  takeHash: Sha256HashV1,
+): Promise<void> {
+  const bundlePath = path.join(outputDirectory, "bundle.json");
+  const bundle = JSON.parse(await readFile(bundlePath, "utf8")) as Record<
+    string,
+    unknown
+  >;
+  const frames = bundle.frames as Array<Record<string, unknown>>;
+  for (
+    let captureFrameIndex = 0;
+    captureFrameIndex < frames.length;
+    captureFrameIndex += 1
+  ) {
+    const framePath = path.join(
+      outputDirectory,
+      "frames",
+      String(captureFrameIndex).padStart(6, "0"),
+      "frame.json",
+    );
+    const frame = JSON.parse(await readFile(framePath, "utf8")) as Record<
+      string,
+      unknown
+    >;
+    frame.takeHash = takeHash;
+    const { frameHash: _oldFrameHash, ...frameBody } = frame;
+    frame.frameHash = sha256CanonicalJson(frameBody);
+    frames[captureFrameIndex]!.frameHash = frame.frameHash;
+    await writeFile(framePath, `${stringifyCanonicalJson(frame)}\n`, "utf8");
+  }
+  bundle.takeHash = takeHash;
+  const { bundleManifestHash: _oldManifestHash, ...bundleBody } = bundle;
+  bundle.bundleManifestHash = sha256CanonicalJson(bundleBody);
+  await writeFile(bundlePath, `${stringifyCanonicalJson(bundle)}\n`, "utf8");
+  await rewriteControlCaptureIntegrityV1(outputDirectory);
+}
+
 export async function snapshotControlCaptureFileHashesV1(
   outputDirectory: string,
 ): Promise<Readonly<Record<string, Sha256HashV1>>> {
