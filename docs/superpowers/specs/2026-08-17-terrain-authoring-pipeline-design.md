@@ -41,7 +41,7 @@
 
 单目深度估计和直接生成 3D Mesh 只作为可选证据或制作来源，不是第一版权威地形来源。
 桥梁、桥洞、垂直崖壁、天然拱门、悬挑和洞穴长期采用 Heightfield + Terrain Opening +
-Static Structure + Walkable Surface + Interior Region/Portal 的混合拓扑，不把非 Heightfield
+Static Structure + Traversal Surface + Interior Region/Portal 的混合拓扑，不把非 Heightfield
 结构塞进 Height Raster，也不要求 AI 直接操作 Babylon/Havok。
 
 外部工具调研后的格式决策是：**生成图片是规划/控制输入，米制 Heightfield 才是地形高度的单一真相，地表语义、路线、保护区和证据来源使用独立 Mask/Layer 表达。** 编译产物默认使用带固定 Scale/Offset 的 `R16`，需要超大高度范围或更高精度时使用直接存储米制高度的 `F32`；语义与约束 Mask 使用 `R8`。具体图片模型、Houdini、Gaea、World Machine 等工具只能出现在上游配置、Host Registry 和 Provenance 中，不能成为 AuthoringSpec 或 Runtime 的必需依赖。
@@ -377,7 +377,7 @@ Heightfield，而是把开洞和额外 Static Mesh 组合使用：
   关卡碰撞。
 
 本 SDK 采用相同原则，但将其提升为引擎无关、可哈希、可解释的协议：Terrain Opening
-控制 Heightfield 移除，Static Structure 提供视觉/碰撞，Walkable Surface 提供可通行
+控制 Heightfield 移除，Static Structure 提供视觉/碰撞，Traversal Surface 提供候选通行
 语义，Region/Portal 提供空间连通。完整职责、查询和 Gate 见
 [`Hybrid Terrain 与非 Heightfield 特殊地形设计`](2026-08-21-hybrid-terrain-and-non-heightfield-topology-design.md)。
 
@@ -426,7 +426,7 @@ Terrain Compiler 替代，而是与正交的 Structure Pipeline 汇合：
 ```text
 NormalizedTerrainIR + Opening Results
   + Structure Geometry/Collider Resources
-  + Walkable Surface / Region / Portal Descriptors
+  + Traversal Surface / Region / Portal Descriptors
   → Layout + Connectivity + Physics Validation
   → ExecutionPlan
 ```
@@ -1317,7 +1317,7 @@ T 阶段与上位规格阶段 0–F 的依赖关系：T0 与阶段 A 并行执�
 T7 不阻塞 T0～T6 的 Heightfield Pipeline，必须在 P1.1 Terrain/Mask、静态 Object/Collider
 基础和 Surface Semantics 边界稳定后按独立计划推进：
 
-- H1：桥梁/垂直崖壁、Static Structure、Walkable Surface 和同 XZ 双层支撑 Fixture；
+- H1：桥梁/垂直崖壁、Static Structure、Traversal Surface 和同 XZ 双层支撑 Fixture；
 - H2：Terrain Opening、洞口 Structure 和 Render/Physics/Query 一致 Gate；
 - H3：Interior Region、Portal、Route Connection 和可进入洞穴 Fixture；
 - H4：Tile/Cell Streaming、LOD、资源 Lease、失败回滚和性能预算；
@@ -1368,7 +1368,7 @@ T7 不阻塞 T0～T6 的 Heightfield Pipeline，必须在 P1.1 Terrain/Mask、�
 - Refiner 分为确定性 Compiler Stage 与非确定性 Authoring Aid；后者必须冻结输出后再进入 Compiler。
 - 权威 Heightfield 使用 `R16`/`F32`，Semantic、Evidence 与 Protected Layer 使用独立 `R8` Mask。
 - Image Profile 和 Refiner 选择由版本化 TerrainBenchmarkManifest 与 Holdout Gate 决定，不以单张效果图或成本决定。
-- 非 Heightfield 特殊地形采用 Heightfield + Opening + Static Structure + Walkable Surface +
+- 非 Heightfield 特殊地形采用 Heightfield + Opening + Static Structure + Traversal Surface +
   Region/Portal 的混合拓扑；不切换为全 Mesh 或全 Voxel 世界。
 - 实际 Ground Support 由物理接触的唯一 Resolver 拥有，Terrain/Surface Query、Medium、
   Animation 和 Camera 不独立推断第二份落地状态。

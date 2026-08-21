@@ -7,6 +7,7 @@
 - 非目标：以一个综合美学分数替代 Schema、物理、可达性、构图、Capture 或完整性事实。
 - 上位规格：[AI-first LEGO 游戏 SDK 设计](./2026-08-17-ai-first-lego-game-sdk-design.md)。
 - 关联规格：[Placement Constraint 与确定性 Layout Solver](./2026-08-19-placement-constraint-layout-solver-design.md)、[Simulation Take 与 Control Capture Bundle](./2026-08-19-simulation-take-control-capture-design.md)。
+- Route 专项：[Route Graph 与主体可通行性](./2026-08-21-route-graph-and-traversability-design.md)。
 
 ## 1. 决策摘要
 
@@ -243,6 +244,20 @@ Metric `status` 关闭为 `passed | failed | not-applicable | not-evaluated`。R
 
 可达性必须声明 Locomotion Profile；人形、轮式车辆和飞行主体不能共享一个含糊的“可达”。当前阶段只承诺室外人形 Heightfield Route。
 
+M5 将该类别拆成两个 Blocking Gate：
+
+1. `route-connectivity`：根据锁定 Collider、Heightfield、Traversal Surface 和主体 Profile
+   构建分层 3D Traversal Graph，证明 Required Route 存在满足坡度、步高、宽高净空和
+   缝隙阈值的确定性路径；
+2. `route-runtime-conformance`：使用相同 Profile 和真实 Babylon/Havok Character Controller
+   在固定 Tick 下完成该路径，验证没有卡住、穿插、异常离地、错误 Surface、超时或状态残留。
+
+Graph Query 通过但真实 Controller 失败时，报告仍为 `failed`；静态图不能覆盖实际物理
+证据。缺少 Required Traversal Surface/Profile/Evidence 或构建预算耗尽时报告
+`incomplete`，不能等同于 `not-applicable`。R1b 完成后，当前承诺扩展为“室外人形
+Heightfield + 具有显式 Traversal Surface 的静态平台”，仍不包含跳跃、攀爬、载具、
+动态平台、NPC Navigation 或完整室内。
+
 ### 5.5 Composition 与 Semantic Gate
 
 - Required Region 的屏幕覆盖比；
@@ -403,6 +418,12 @@ Diagnostic 至少包含 Code、Gate/Metric ID、JSON Pointer/Entity ID、Expecte
 - `PHYSICS_INTERPENETRATION_EXCEEDED`；
 - `PHYSICS_REQUIRED_ENTITY_UNSUPPORTED`；
 - `ROUTE_REQUIRED_PATH_UNREACHABLE`；
+- `ROUTE_STEP_HEIGHT_EXCEEDED`；
+- `ROUTE_CLEARANCE_WIDTH_INSUFFICIENT`；
+- `ROUTE_OVERHEAD_CLEARANCE_INSUFFICIENT`；
+- `ROUTE_SURFACE_GAP_EXCEEDED`；
+- `ROUTE_RUNTIME_STALLED`；
+- `ROUTE_RUNTIME_SUPPORT_LOST`；
 - `COMPOSITION_REQUIRED_ANCHOR_MISSING`；
 - `CAPTURE_REQUIRED_PASS_MISSING`；
 - `CAPTURE_FRAME_OWNERSHIP_MISMATCH`；

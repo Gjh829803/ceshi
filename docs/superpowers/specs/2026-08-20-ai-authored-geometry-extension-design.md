@@ -918,7 +918,8 @@ Babylon Physics Shape 可以被多个 Body 共享，且释放 Body 不会自动�
 - 地表连续行走、坡度、出生点和水域仍以 Heightfield 为真相；
 - 岩石、墙、桥墩等作为独立 Collider 叠加；
 - Custom Mesh 可以形成视觉悬挑，但不能据此宣称 Cave/Overhang Navigation 已支持；
-- 如果一个对象承担主要行走表面，必须通过专门的 Walkable Surface Capability 和验证，不允许仅凭 Mesh 可见就默认可走。
+- 如果一个对象承担主要通行表面，必须通过专门的 Traversal Surface Capability 将语义
+  绑定到 Collider Subshape，并按主体 Profile 验证；不允许仅凭 Mesh 可见就默认可走。
 
 这能防止“画面看起来像游戏场景”但碰撞、导航和相机仍不成立。
 桥梁、桥洞、垂直崖壁、天然拱门、悬挑、Terrain Opening 和可进入洞穴的正式组合边界

@@ -193,7 +193,7 @@ Socket 和类型化关系表达。
 
 | 领域 | 当前已交付 | 尚未交付 |
 |---|---|---|
-| 世界输入 | Canonical Authoring V3、严格 Schema、Registry/Package Definition、八种 Placement Constraint 与确定性 Solver S1 | 通用 Terrain Mask/Route Graph、更多 Constraint、完整 WorldPackage |
+| 世界输入 | Canonical Authoring V3、严格 Schema、Registry/Package Definition、八种 Placement Constraint 与确定性 Solver S1 | 通用 Terrain Mask、Route Graph、主体 Profile 驱动的真实通行 Gate、更多 Constraint、完整 WorldPackage |
 | 地形 | 室外 Heightfield、基础 Relief、静态障碍、水域和物理查询 | Canonical Raster/Mask/Region Pipeline；已设计但未实现的 Hybrid Terrain、洞穴、Overhang、多层可行走表面和完整室内 |
 | 主体 | Primitive 人形/四足代理；Golden 与首个产品 G Bot 的 GLB、Rig/Animation/Collider Profile、多实例与独立控制 | 更多产品资产、Compound Collider、LOD、更多拓扑和独立动画资产 |
 | 关系 | Socket 数据可以声明和查询 | 动态 Bind、骑乘、装备、拖拽、Joint、事务与回滚 |
@@ -376,6 +376,8 @@ Compiler 和 Runtime 不能反向读取 Agent Prompt；Runtime Adapter 不能把
 - [可扩展主体组装 Authoring 专项设计](docs/superpowers/specs/2026-08-19-extensible-subject-authoring-design.md)
 - [Asset Subject S1b 可视切片字段级设计](docs/superpowers/specs/2026-08-19-asset-subject-s1b-visible-slice-design.md)
 - [Placement Constraint 与确定性 Layout Solver 设计](docs/superpowers/specs/2026-08-19-placement-constraint-layout-solver-design.md)
+- [Route Graph 与主体可通行性设计](docs/superpowers/specs/2026-08-21-route-graph-and-traversability-design.md)
+- [Route Graph 与主体可通行性设计审查](docs/reviews/2026-08-21-route-graph-traversability-design-review.md)
 - [Simulation Take 与 Control Capture Bundle 设计](docs/superpowers/specs/2026-08-19-simulation-take-control-capture-design.md)
 - [World Validation Report 与质量门禁设计](docs/superpowers/specs/2026-08-19-world-validation-report-and-quality-gates-design.md)
 - [AI 自定义场景几何扩展候选方案（未来探索）](docs/superpowers/specs/2026-08-20-ai-authored-geometry-extension-design.md)

@@ -17,6 +17,9 @@
 - 当前实现状态：尚未实现。本文件不会把洞穴、悬挑、桥下空间或完整室内描述为当前
   可交付能力，也不改变 [`Canonical JSON 快速接入`](../../17-canonical-json-quickstart.md)
   中的现状边界。
+- 术语说明：早期审查记录使用 `Walkable Surface`；公共字段尚未冻结，现统一采用更
+  通用的 `Traversal Surface`。它表示 Collider Subshape 的候选通行语义，不表示所有
+  主体都能步行通过。历史 review 保留原文作为当时证据，不作为当前命名权威。
 
 本文定义长期支持桥梁、桥洞、垂直崖壁、天然拱门、悬挑、洞口、洞穴和多层可行走
 空间时的稳定架构。目标不是用一种几何表示承载整个世界，而是让不同拓扑使用最适合
@@ -24,7 +27,7 @@
 
 ## 2. 决策摘要
 
-长期方案采用 **Heightfield Terrain + Terrain Opening + Static Structure + Walkable
+长期方案采用 **Heightfield Terrain + Terrain Opening + Static Structure + Traversal
 Surface + Interior Region/Portal** 的混合拓扑架构：
 
 ```text
@@ -35,8 +38,8 @@ World
   │     └── 洞口、隧道入口、需要移除地形三角形与碰撞的区域
   ├── Static Structure
   │     └── 桥、崖壁、拱门、洞穴外壳、洞穴地板/墙壁/顶部
-  ├── Walkable Surface
-  │     └── 桥面、洞穴地板、平台等可被主体支撑的表面
+  ├── Traversal Surface
+  │     └── 将桥面、洞穴地板、平台等 Collider Subshape 绑定到候选通行语义
   └── Spatial Graph
         ├── Region + Membership Volume
         │     └── 洞穴内部、隧道、室内等空间语义和环境上下文
@@ -59,7 +62,7 @@ World
    Handle，也不需要理解 Triangle Mesh Collider 的引擎参数。
 7. Voxel/SDF、运行时挖洞、可破坏地形和任意 Boolean CSG 不进入首批生产路线。
 
-分阶段边界也是架构的一部分：H1 只交付 Heightfield + Static Structure + Walkable
+分阶段边界也是架构的一部分：H1 只交付 Heightfield + Static Structure + Traversal
 Surface；H2 才引入 Terrain Opening；H3 才冻结 Interior Region 与类型化 Route
 Connection。不得为了展示完整洞穴而在 H1 提前增加未验证的公共字段。
 
@@ -172,9 +175,11 @@ Recipe。这里先冻结职责，不把单个 `requiresTerrainOpening` 布尔值
 为公共协议。跨谷桥属于无需 Opening 的 H1 Kit；穿过山脊的拱门属于需要 Opening 的 H2
 Kit。Agent 不得手写坐标补偿 Manifest 缺失的 Opening Contract。
 
-### 5.4 Walkable Surface
+### 5.4 Traversal Surface
 
-Walkable Surface 表达“某个已锁定碰撞表面可以怎样被主体使用”。它的几何权威只能是
+Traversal Surface 表达“某个已锁定碰撞表面可以怎样被主体使用”。它不是全局
+`walkable: true`，而是把候选通行语义绑定到 Collider Subshape；最终能否通行由主体的
+Collider、Locomotion、Capability Profile 与 Route Query 共同决定。它的几何权威只能是
 Collider Primitive、Convex 或逻辑 Collider Subshape，不复制 Mesh 顶点或 Collider 数据。
 它负责：
 
@@ -185,7 +190,7 @@ Collider Primitive、Convex 或逻辑 Collider Subshape，不复制 Mesh 顶点�
 - 允许的 Locomotion/Subject Profile；
 - 进入、离开和失去支撑时的固定 Tick 语义。
 
-`walkable` 不是任意 Mesh 的默认属性。没有显式 Surface Capability 的 Structure 可以阻挡
+`walkable` 不是任意 Mesh 的默认属性。没有显式 Traversal Surface Capability 的 Structure 可以阻挡
 主体，但不能自动成为 Placement、Route 或 Navigation 的合法支撑面。Surface 禁止携带
 独立 vertex/index buffer；其锁定 Hash 必须覆盖被引用 Collider/Subshape 的 Hash。未来
 Navigation 可以从同一份 Collider + Subject/Locomotion Profile 派生简化 Raster/NavMesh，
@@ -200,7 +205,7 @@ LOD 或加载顺序作为身份组成部分。
 Interior Region 复用现有 Region Graph，描述洞穴内部、隧道、室内或半开放拱廊等空间
 上下文。Region 不拥有阻挡或支撑几何，但必须允许引用非阻挡、非支撑的 Membership
 Volume，用于确定“主体位于哪个空间上下文”；它可影响环境、音频、Camera Context、
-Capture 标签和未来 Gameplay，但不能取代 Collider 或 Walkable Surface。
+Capture 标签和未来 Gameplay，但不能取代 Collider 或 Traversal Surface。
 
 AI-facing 的 Portal 连通意图由现有 Route Graph 的类型化 Connection/Edge 拥有，不能新增
 第二套 Region/Route 方言。该边记录两端 Region/Route Node、入口几何、方向、宽高、净空、
@@ -296,7 +301,7 @@ Runtime Adapters
 
 Terrain Compiler 和 Structure Compiler 分别拥有自己的输入与缓存，但最终在 Layout、
 Connectivity 和 Validation 阶段汇合。Runtime 不重新生成 Collider、不重新判断 Opening，
-也不从 Visual Mesh 反推 Walkable Surface。Layout Surface Query 必须命中同一份锁定
+也不从 Visual Mesh 反推 Traversal Surface。Layout Surface Query 必须命中同一份锁定
 Collider Primitive/Subshape；不得对 Visual LOD、Object AABB 顶面或旧的
 `terrainHeight(x, z)` 建立旁路。
 
@@ -353,7 +358,7 @@ Godot 的官方
 
 额外规则：
 
-- Visual、Collider、Walkable Surface 分别生成 Hash 和 Debug Overlay。
+- Visual、Collider、Traversal Surface 分别生成 Hash 和 Debug Overlay。
 - Static Triangle Collider 必须移除退化/重复面，固定 Winding/Sidedness 和局部 Transform。
 - 洞穴外壳可以是开放视觉网格，但支撑/阻挡 Collider 必须满足所选 Profile 的拓扑要求。
 - Opening 边缘、Terrain 与 Structure 接缝不得形成不可见墙、跌落缝或角色卡点。
@@ -367,13 +372,13 @@ Godot 的官方
 
 - Heightfield 表达崖顶、崖底和两侧连续地表。
 - 独立 Static Structure 表达垂直/负坡度岩壁轮廓。
-- 简化 Collider 负责阻挡；只有崖顶/崖底声明 Walkable Surface。
+- 简化 Collider 负责阻挡；只有崖顶/崖底声明 Traversal Surface。
 - Terrain 与崖壁交界必须通过 Seam Gate。
 
 ### 10.2 桥与桥洞
 
 - 桥是 Object/Prototype Instance，不是 Terrain 的凸起。
-- 桥面具有 Walkable Surface，桥墩/拱体具有静态 Collider。
+- 桥面具有 Traversal Surface，桥墩/拱体具有静态 Collider。
 - 桥下保持原 Terrain 或 Water，形成同一 XZ 上的两层空间。
 - Route Graph 分别连接桥上路线和桥下路线；没有 Portal/Route Connection 时不能假定互通。
 - 跨越谷地或水面的桥不删除 Terrain，属于 H1；穿过山脊、需要移除 Terrain Cell 的拱桥
@@ -459,7 +464,7 @@ H2 Fixture 与主体 Profile 冻结，本设计不提前猜测通用常量。
 CLI/Browser 至少需要输出：
 
 - Terrain Opening Mask；
-- Visual/Collider/Walkable Surface Overlay；
+- Visual/Collider/Traversal Surface Overlay；
 - Surface ID、Region ID 与 Portal Connection；
 - 多层 Support Ray 命中列表；
 - Seam、Clearance、Slope 和 Route Failure；
@@ -503,7 +508,7 @@ Validated MeshDraft ┘
 ### H0：协议与 Fixture 冻结
 
 - 评审本文并冻结首个 Bridge Fixture 的范围。
-- 冻结 Kit Opening Contract、Static Structure Resource、Collider-backed Walkable Surface
+- 冻结 Kit Opening Contract、Static Structure Resource、Collider-backed Traversal Surface
   和 Support Query 的职责，不一次冻结完整室内协议。
 - 用锁定 Babylon/Havok 版本完成 Static Triangle Collider、Controller Contact、Shape Lease
   和资源释放探针；探针通过前只把 Tile Mesh 作为候选默认路径。
@@ -516,7 +521,7 @@ Validated MeshDraft ┘
 ### H1：桥梁/垂直崖壁纵向切片
 
 - 接入一个版本化白模桥 Prototype 和简化 Static Collider。
-- 实现 Structure Walkable Surface 与统一 Support Surface Query。
+- 实现 Structure Traversal Surface 与统一 Support Surface Query。
 - 同一 XZ 上验证桥面/桥下地面的双层命中和实际物理支撑。
 - 收口 Spawn Raycast 和 Object AABB 顶面两条支撑旁路，使 Layout Query 与 Runtime Contact
   映射到同一锁定 Surface；桥下有水不能把桥面误判成 Water Surface。
@@ -532,7 +537,7 @@ Validated MeshDraft ┘
 ### H3：可进入洞穴纵向切片
 
 - 增加 Interior Region、Portal 和 Route Connection。
-- 实现洞穴地板/墙体/顶面 Collider 与 Walkable Surface。
+- 实现洞穴地板/墙体/顶面 Collider 与 Traversal Surface。
 - 固定 Tick 验证室外→洞穴→室外、Reset、控制切换、Capture 和 Replay。
 
 ### H4：Streaming/LOD 与多实例收敛
@@ -576,8 +581,8 @@ H1～H4 每个阶段都必须有独立实施计划和 Golden Fixture。不能把
   Navigation 数据。
 - Bridge/Cave 是可组合 Assembly，不增加不断膨胀的特殊顶层 Node Kind。
 - Static Structure 可以使用预算内简化 Triangle Collider；动态对象不允许。
-- Walkable Surface 必须显式声明，视觉 Mesh 不自动可走。
-- Walkable Surface 的几何权威是锁定 Collider/Subshape；Navigation 只能从同源 Collider +
+- Traversal Surface 必须显式声明，视觉 Mesh 不自动可走。
+- Traversal Surface 的几何权威是锁定 Collider/Subshape；Navigation 只能从同源 Collider +
   Profile 派生，不得成为作者平行几何或碰撞真相。
 - 物理接触拥有实际 Ground Support；Surface Query 不创建第二份 Grounded 真相。
 - AI-facing 连通关系复用现有 Region/Route Graph；Compiler 可以派生 Portal Runtime 元数据，
@@ -593,7 +598,7 @@ H1～H4 每个阶段都必须有独立实施计划和 Golden Fixture。不能把
 
 - Opening 由 Kit Manifest 的闭合判别 Contract 和内容寻址 Recipe 确定性展开；不提前冻结
   单个布尔字段。跨谷桥不切地形，穿脊拱门才进入 H2；
-- Walkable Surface 只允许引用 Collider Subshape，禁止平行 walkable vertex buffer；
+- Traversal Surface 只允许引用 Collider Subshape，禁止平行 walkable vertex buffer；
   P2.5 第一 Fixture 就是 H1 桥面；
 - Layout Surface Query 与 Havok 接触必须采样同一份已锁定 Collider 三角；
 - 当前 Babylon/Havok 公开锁定接口无 Heightfield Hole 参数；受影响 Tile 的 Static

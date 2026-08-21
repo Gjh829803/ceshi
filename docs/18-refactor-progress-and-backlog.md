@@ -174,7 +174,18 @@ P1.5、P1.6、P2.5 与 P2.6 是把既有总体设计和产品对接契约显式�
 - [x] Browser Fixture 覆盖接地、无穿插、Spawn/Route 坡度和 Opening Shot Anchor。
 - [x] Golden Fixture 证明相同输入和 Lock 在连续/并发执行中得到相同 Transform 与 Report Hash。
 - [ ] 引入通用 Terrain Mask 与内容寻址 Region 数据，不复制 Heightfield/Water 真相。
-- [ ] 引入完整 Route Graph、Locomotion Cost 与 `connected-by-route`。
+- [x] 编写 [Route Graph 与主体可通行性专项设计](superpowers/specs/2026-08-21-route-graph-and-traversability-design.md)，
+  并完成 [静态规格审查](reviews/2026-08-21-route-graph-traversability-design-review.md)；明确
+  AI Route 意图、分层 3D Graph、主体 Profile Filter、真实控制器 Gate 与 M5 完成标准。
+- [ ] R0 评审并冻结 `connected-by-route`、Traversal Graph、Profile Lock、Evidence 与
+  Diagnostic 字段；通过下一 Canonical Major 干净升级，不向已实现 V3 偷加空枚举。
+- [ ] R1 实现普通人形 Heightfield Route：坡度、静态阻挡、胶囊宽高净空、缝隙、确定性
+  Path Query 与真实固定 Tick Character Controller Gate。
+- [ ] R1b 与 P2.6 H1 共享最小 Traversal Surface → Collider Subshape 合同，覆盖地形、
+  台阶、坡道和普通静态平台；`0.25m` 台阶通过，`0.35m` 台阶在当前
+  `0.3m` 人形 Profile 下失败。
+- [ ] Required 路线接入统一 Validation Report；Graph 通过但真实 Controller 卡住仍为
+  Blocking Failure，并输出台阶、坡度、宽高净空、缝隙、Surface 身份和卡住坐标。
 - [ ] 增加 S1 之外的 Constraint、增量求解等价证明和通用 ValidationReport。
 
 S1 纵向切片完成标准已满足：一个室外海湾场景不依赖 Agent 手写三个地标和 Spawn
@@ -440,7 +451,7 @@ Sensor 和 Capability 组合触发，而不是按 Mesh 名称、颜色、材质�
 目标：长期支持桥梁、桥洞、垂直崖壁、天然拱门、悬挑、洞口和可进入洞穴，同时保留
 Heightfield 在大面积户外地表上的性能、确定性和工具链优势。采用
 [`Hybrid Terrain 与非 Heightfield 特殊地形设计`](superpowers/specs/2026-08-21-hybrid-terrain-and-non-heightfield-topology-design.md)
-冻结的 Heightfield + Opening + Static Structure + Walkable Surface + Region/Portal 组合，
+冻结的 Heightfield + Opening + Static Structure + Traversal Surface + Region/Portal 组合，
 不建立全 Mesh/全 Voxel 第二世界，也不让 AI 接触 Babylon/Havok。
 
 - [x] 编写 Hybrid Terrain 与非 Heightfield 特殊地形专项设计，明确业界依据、职责、
@@ -463,7 +474,8 @@ Heightfield 在大面积户外地表上的性能、确定性和工具链优势�
   现有 `resolutionCellsXZ` 被当作顶点数使用的历史方言。
 - [ ] 冻结 Kit Opening Contract：闭合判别“无需 Opening/必须 Opening”，后者引用内容寻址
   Opening Recipe；不提前冻结单个 `requiresTerrainOpening` 布尔字段。
-- [ ] 定义 Walkable Surface 与 Collider Subshape 的稳定绑定；视觉 Mesh 不自动可走，
+- [ ] 定义 Traversal Surface 与 Collider Subshape 的稳定绑定；Surface 不表示全局
+  `walkable: true`，视觉 Mesh 不自动可走，
   `walkable`、`climbable` 等语义不能从材质、颜色或 Mesh 名推断；Surface ID 使用 Entity
   ID + 稳定逻辑 Subshape ID + resolved Resource Version，不使用数组序号或 Runtime Handle。
 - [ ] 定义引擎无关 Support Surface Query：请求携带 3D Origin、方向、距离和过滤条件，
@@ -563,7 +575,7 @@ P1.1 Terrain / Region / Mask + P1.5 State Resolver
   └── P2.5 Surface Semantics / Traversal
 
 P1.1 Terrain / Region / Mask + P2.5 Surface Query + Static Structure Resource
-  └── P2.6 Hybrid Terrain / Multi-level Walkable Surface
+  └── P2.6 Hybrid Terrain / Multi-level Traversal Surface
         ├── H1 Bridge / Cliff
         ├── H2 Terrain Opening / Cave Entrance
         ├── H3 Interior Region / Portal / Playable Cave
@@ -590,7 +602,10 @@ Capture V1 都已进入回归，下一步：
 2. **M2（已完成）：冻结 Take/Capture V1 首条实施范围**；
 3. **M3（已完成）：实现五 Pass Capture 窄纵向切片并复用 Placement World Identity/Hash**；
 4. **M4：实现 P0.3 统一 Validation Profile/Report 的 Capture/Integrity 窄切片，把现有独立 Gate 纳入同一报告协议**；
-5. **M5：扩展 P0.1 的 Terrain Mask/Route Graph，而不是新增第二套 Region/Route 语义**；
+5. **M5：完成 Route Graph 与主体可通行性 R0/R1/R1b**：复用既有 Route/Region，按主体
+   Profile 从 Heightfield 与显式 Traversal Surface 构建分层 3D Graph，并用真实
+   Babylon/Havok 人物控制器证明地形→台阶/坡道→静态平台路线；只有 Required Route
+   接入 Blocking Validation、成功 Fixture 走通且失败 Fixture 给出结构化 Diagnostic 后完成；
 6. **M6：在 Placement + Take + Validation 闭环上接入实验 Video Model Adapter**；
 7. **M7：评审冻结 P1.5 的 Control Feel/Physics Medium/State Resolver 首条纵向范围，清除
    Canonical Babylon 路径中的对应硬编码**；

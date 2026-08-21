@@ -9,6 +9,7 @@
 - 非目标：运行时骑乘、装备、拖拽、控制权等 Gameplay Relationship。
 - 上位规格：[AI-first LEGO 游戏 SDK 设计](./2026-08-17-ai-first-lego-game-sdk-design.md)。
 - 调研依据：[Agentic 白模世界到可控视频：开源方案调研与架构启示](./2026-08-19-agentic-whitebox-to-video-open-source-research.md)。
+- 后续专项：[Route Graph 与主体可通行性设计](./2026-08-21-route-graph-and-traversability-design.md)。
 
 ## 1. 决策摘要
 
@@ -77,6 +78,27 @@ Reference Image + Prompt
 - 不把“灯塔在东侧山脊”写成运行时 Relationship。
 - 不让 RenderNode 父子关系成为任一逻辑真相。
 - 不使用通用 `subjectId/targetId/params` 三元组；每种约束和关系都使用角色化端点。
+
+### 3.4 Placement 与 Traversability
+
+Placement 负责求出 Entity 的最终 Transform 和局部约束事实；Traversability 负责证明
+指定主体能否从声明起点到达声明终点。两者顺序固定为：
+
+```text
+Placement Solve
+  → Resolved Transform / Collider / Traversal Surface
+  → Traversal Graph Build
+  → Route Query
+  → Fixed-tick Runtime Traversal Gate
+```
+
+`supported-by`、`minimum-clearance` 和 `within-slope-limit` 可以证明单个 Entity 或已声明
+Route 的局部事实，但它们不能替代端到端连通性。反过来，Traversal Graph 不能重新移动
+Entity 来制造可达结果；路径失败必须返回 Diagnostic/ChangeSet 建议并重新执行 Placement。
+
+AI-facing Route 意图继续使用 `spatial.routes`。SDK 从 Heightfield、显式 Traversal Surface、
+权威 Collider 和主体 Profile 派生分层 3D Graph，不要求 AI 手写 NavMesh 节点或 Provider
+参数。字段、Gate 和第一期静态台阶/平台 Fixture 由后续专项统一定义。
 
 ## 4. Authoring Schema 形状
 
@@ -191,9 +213,11 @@ SolvedPlacement
 - `supported-by` 第一阶段只支持静态 Terrain/Object Surface；动态平台属于 Runtime Gameplay。
 - `avoid-overlap` 不单独公开；它是 `minimum-clearance` 的 `clearanceMeters: 0` 特例，避免同义字段。
 
-`relative-direction` 与 `connected-by-route` 延后到下一切片：前者需要先冻结参考坐标帧，
-后者需要完整的 Route Graph/Locomotion Cost 协议。S1 仍会验证已声明 Route 的坡度、
-净空与 Browser 可达性，但不允许 AI 用一个尚未实现的 Constraint Kind 表达连通性。
+`relative-direction` 与 `connected-by-route` 不属于已实现 S1：前者需要先冻结参考坐标帧；
+后者由 [Route Graph 与主体可通行性专项设计](./2026-08-21-route-graph-and-traversability-design.md)
+进入 M5 R0/R1/R1b，依赖完整 Graph/Profile/Runtime Gate。S1 仍会验证已声明 Route 的
+坡度、净空与窄 Fixture Browser 证据，但不允许 AI 用一个尚未实现的 Constraint Kind
+表达连通性。
 
 ### 4.4 S1 Region、Route 与 Camera Region 输入
 
@@ -445,7 +469,9 @@ Solver Report、修改 Seed/Profile/Bounds、篡改 Report Hash、耗尽预算�
 IR Hash 为 `sha256:869fbf4e48fc6200d8512a643914d091358e3f8e254e705dffd315233e7c7190`，
 Plan Hash 为 `sha256:e55aa781caa92af917b5224a3846e0ddd5e672b1ab9f3613fcb62645b3b98b6d`。
 
-Placement Solver S1 首个海湾纵向切片已完成并进入回归；通用 Terrain Mask/Route Graph、更多 Constraint 与 P0.1 整体仍未完成。
+Placement Solver S1 首个海湾纵向切片已完成并进入回归；通用 Terrain Mask、Route Graph
+与真实主体可通行性 Gate、更多 Constraint 与 P0.1 整体仍未完成。M5 范围与完成标准见
+[Route Graph 与主体可通行性专项设计](./2026-08-21-route-graph-and-traversability-design.md)。
 
 ## 15. 已冻结的实施决策
 
