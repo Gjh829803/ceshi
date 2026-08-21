@@ -69,6 +69,7 @@ describe("runtime contracts V3", () => {
       semanticClassId: "subject.animal.pack",
       spawnAnchorEntityId: "spawn-pack-animal-a",
       spawnSubjectOriginPositionMetersXYZ: [4, 0, 2],
+      spawnSubjectFacingRadians: Math.PI / 2,
       forwardDirection: "-z",
       visualParts: [],
       visualBinding: { mode: "static" },
@@ -96,6 +97,7 @@ describe("runtime contracts V3", () => {
         "package://subject-definition/coastal-pack-animal@1",
       subjectDefinitionHash: expect.stringMatching(/^sha256:/),
       spawnSubjectOriginPositionMetersXYZ: [4, 0, 2],
+      spawnSubjectFacingRadians: Math.PI / 2,
       collider: {
         centerOffsetFromSubjectOriginMetersXYZ: [0, 0.7, 0],
       },
@@ -123,10 +125,9 @@ describe("runtime contracts V3", () => {
     const rigProfile = {
       rigProfileRef: "worldkit://rig-profile/biped.golden@1",
       bodyTopology: "biped",
-      skeletonRootNodeName: "root",
-      requiredBoneIds: ["root", "hand.right"],
+      skeletonRootBoneName: "root",
+      requiredBoneIds: ["hips", "hand.right"],
       sourceNodeNameByBoneId: {
-        root: "root",
         hips: "hips",
         spine: "spine",
         chest: "chest",
@@ -186,7 +187,7 @@ describe("runtime contracts V3", () => {
       "bodyTopology",
       "requiredBoneIds",
       "rigProfileRef",
-      "skeletonRootNodeName",
+      "skeletonRootBoneName",
       "sourceNodeNameByBoneId",
     ]);
     expect(Object.keys(animationSet).sort()).toEqual([

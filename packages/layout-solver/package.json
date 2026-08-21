@@ -7,6 +7,7 @@
     ".": "./src/index.ts"
   },
   "dependencies": {
-    "@whitebox-world/protocol": "workspace:*"
+    "@whitebox-world/protocol": "workspace:*",
+    "@whitebox-world/terrain-surface": "workspace:*"
   }
 }

@@ -181,7 +181,7 @@
         "transform": {
           "positionMetersXYZ": [
             -3,
-            0,
+            -0.976004939803828,
             30
           ]
         }
@@ -198,7 +198,7 @@
         "transform": {
           "positionMetersXYZ": [
             3,
-            0,
+            -0.9764188420353316,
             30
           ]
         }

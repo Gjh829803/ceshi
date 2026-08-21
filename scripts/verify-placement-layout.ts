@@ -298,10 +298,25 @@ function assertProjectionAgreement(
   const spawn = report.placementsByEntityId["spawn-main"]!;
   const player = executionPlan.subjects.find((subject) => subject.entityId === "player");
   assert.ok(player !== undefined);
+  assert.notEqual(
+    spawn.transform.positionMetersXYZ[1],
+    0,
+    "Placement fixture did not exercise a non-zero solved spawn height.",
+  );
   deepEqualCanonical(
     player.spawnSubjectOriginPositionMetersXYZ,
     spawn.transform.positionMetersXYZ,
     "Player spawn did not follow solved Anchor.",
+  );
+  assert.notEqual(
+    spawn.transform.rotationEulerRadiansXYZ[1],
+    0,
+    "Placement fixture did not exercise a non-zero solved spawn facing.",
+  );
+  assert.equal(
+    player.spawnSubjectFacingRadians,
+    spawn.transform.rotationEulerRadiansXYZ[1],
+    "Player facing did not follow solved Anchor Y rotation.",
   );
   const requiredResults = Object.values(report.constraintResultsById).filter(
     (result) => result.requirement === "required",
@@ -395,7 +410,7 @@ async function captureBrowserEvidence(): Promise<BrowserEvidenceV1> {
     assert.equal(captured.snapshot.controlledEntityId, "player");
     assert.deepEqual(
       captured.snapshot.subjectStatesByEntityId.player?.positionMetersXYZ,
-      [-2, 0, 28],
+      [-2, 2, 28],
     );
     assert.deepEqual(captured.apiKeys, [
       "bindControl",

@@ -1,6 +1,6 @@
 {
   "artifactVersion": 1,
-  "workflowStage": "verified",
+  "workflowStage": "whitebox-built",
   "sceneId": "sunlit-flower-bay",
   "specHash": "ada9b13b",
   "frozenPlanSpecSha256": "f31fc7c1dc0af09efbeaa762881e1fc64de9273d8a0f16ea2732681a30e0ab72",

@@ -115,6 +115,23 @@ function normalizeCapabilityAssemblyV1(
       request.diagnostics,
     );
 
+  const unavailableRelationshipCapabilityRef = subject.relationshipCapabilityRefs.find(
+    (resourceRef) =>
+      resourceRef === "worldkit://capability/relationship.mount@1" ||
+      resourceRef === "worldkit://capability/relationship.seat@1" ||
+      resourceRef === "worldkit://capability/relationship.tether@1",
+  );
+  if (unavailableRelationshipCapabilityRef !== undefined) {
+    addError(
+      request.diagnostics,
+      "SUBJECT_CAPABILITY_UNSATISFIED",
+      request.instancePath,
+      `Relationship capability '${unavailableRelationshipCapabilityRef}' is unavailable in the canonical runtime.`,
+      { capabilityRef: unavailableRelationshipCapabilityRef, runtimeStatus: "reserved" },
+    );
+    return undefined;
+  }
+
   const defaultMotionProfile = registry.resolveMotionProfile(
     subject.profiles.motion.defaultMotionProfileRef,
   );
@@ -134,13 +151,20 @@ function normalizeCapabilityAssemblyV1(
   if (fallbackMotionProfile === undefined) {
     missing(subject.profiles.motion.fallbackMotionProfileRef, "Fallback Motion Profile");
   }
-  const motionKernel =
-    defaultMotionProfile === undefined
-      ? undefined
-      : registry.resolveMotionKernel(defaultMotionProfile.motionKernelRef);
-  if (defaultMotionProfile !== undefined && motionKernel === undefined) {
-    missing(defaultMotionProfile.motionKernelRef, "Motion Kernel");
-  }
+  const resolvedMotionProfiles = [
+    ...(defaultMotionProfile === undefined ? [] : [defaultMotionProfile]),
+    ...optionalMotionProfiles,
+    ...(fallbackMotionProfile === undefined ? [] : [fallbackMotionProfile]),
+  ];
+  const motionKernels = [...new Set(
+    resolvedMotionProfiles.map((profile) => profile.motionKernelRef),
+  )]
+    .sort((left, right) => left.localeCompare(right))
+    .flatMap((resourceRef) => {
+      const resource = registry.resolveMotionKernel!(resourceRef);
+      if (resource === undefined) missing(resourceRef, "Motion Kernel");
+      return resource === undefined ? [] : [resource];
+    });
   const controlProfile = registry.resolveControlProfile(subject.profiles.controlProfileRef);
   if (controlProfile === undefined) missing(subject.profiles.controlProfileRef, "Control Profile");
   const cameraContextProfile = registry.resolveCameraContextProfile(
@@ -186,6 +210,9 @@ function normalizeCapabilityAssemblyV1(
     });
 
   const relationshipProfileRefs = subject.relationshipCapabilityRefs.flatMap((resourceRef) => {
+    if (resourceRef === "worldkit://capability/relationship.mount@1") {
+      return ["worldkit://relationship-profile/mount.reserved@1"];
+    }
     if (resourceRef === "worldkit://capability/relationship.seat@1") {
       return ["worldkit://relationship-profile/seat.driver@1"];
     }
@@ -203,7 +230,9 @@ function normalizeCapabilityAssemblyV1(
   if (
     defaultMotionProfile === undefined ||
     fallbackMotionProfile === undefined ||
-    motionKernel === undefined ||
+    motionKernels.length !== new Set(
+      resolvedMotionProfiles.map((profile) => profile.motionKernelRef),
+    ).size ||
     controlProfile === undefined ||
     cameraContextProfile === undefined ||
     mediumProfile === undefined ||
@@ -212,13 +241,39 @@ function normalizeCapabilityAssemblyV1(
   ) {
     return undefined;
   }
-  if (motionKernel.commandKind !== controlProfile.commandKind) {
+  const incompatibleMotionKernel = motionKernels.find(
+    (motionKernel) => motionKernel.runtimeStatus !== "implemented",
+  );
+  if (incompatibleMotionKernel !== undefined) {
     addError(
       request.diagnostics,
       "SUBJECT_CAPABILITY_UNSATISFIED",
       request.instancePath,
-      `Motion Kernel '${motionKernel.resourceRef}' and Control Profile '${controlProfile.resourceRef}' use different command kinds.`,
-      { kernelCommandKind: motionKernel.commandKind, controlCommandKind: controlProfile.commandKind },
+      `Motion Kernel '${incompatibleMotionKernel.resourceRef}' is not implemented by the canonical runtime.`,
+      {
+        kernelCommandKind: incompatibleMotionKernel.commandKind,
+        controlCommandKind: controlProfile.commandKind,
+        runtimeStatus: incompatibleMotionKernel.runtimeStatus,
+      },
+    );
+    return undefined;
+  }
+  const defaultMotionKernel = motionKernels.find(
+    (motionKernel) => motionKernel.resourceRef === defaultMotionProfile.motionKernelRef,
+  );
+  if (
+    defaultMotionKernel === undefined ||
+    defaultMotionKernel.commandKind !== controlProfile.commandKind
+  ) {
+    addError(
+      request.diagnostics,
+      "SUBJECT_CAPABILITY_UNSATISFIED",
+      request.instancePath,
+      `Default Motion Kernel '${defaultMotionProfile.motionKernelRef}' and Control Profile '${controlProfile.resourceRef}' use different command kinds.`,
+      {
+        kernelCommandKind: defaultMotionKernel?.commandKind,
+        controlCommandKind: controlProfile.commandKind,
+      },
     );
     return undefined;
   }
@@ -227,7 +282,7 @@ function normalizeCapabilityAssemblyV1(
     defaultMotionProfile,
     ...optionalMotionProfiles,
     fallbackMotionProfile,
-    motionKernel,
+    ...motionKernels,
     controlProfile,
     cameraContextProfile,
     ...cameraRigProfiles,
@@ -239,11 +294,11 @@ function normalizeCapabilityAssemblyV1(
   ].forEach(addLock);
 
   return {
-    agentAccessLevel: subject.agentAccessLevel,
+    authoringAvailability: subject.authoringAvailability,
     defaultMotionProfile,
     optionalMotionProfiles,
     fallbackMotionProfile,
-    motionKernel,
+    motionKernels,
     controlProfile,
     cameraContextProfile,
     cameraRigProfiles,

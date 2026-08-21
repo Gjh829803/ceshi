@@ -38,7 +38,6 @@ const BIPED_BONE_IDS = [
   "lower-leg.left",
   "lower-leg.right",
   "neck",
-  "root",
   "spine",
   "upper-arm.left",
   "upper-arm.right",
@@ -236,10 +235,10 @@ describe("Package Subject Definition normalization", () => {
       "sha256:2949c4c8f7ebbb321a3a40ea10890f4dd608178c26424c530e771c1b529d0a1b",
     );
     expect(result.value?.resources.resourceLockHash).toBe(
-      "sha256:73caff41be6267df95087c08f870a3943ab6f38107a1feff4fa4ac43ff2d4aec",
+      "sha256:2e685dbfad9f563ae9b5ec3ca966bc8a6e3c85b6daa3b12280b4ca3dd989c3b0",
     );
     expect(result.normalizedWorldIrHash).toBe(
-      "sha256:272dd718b5f76d6902bd057c34efdc2e60675e2f7daa88ad92446232ee8eeb74",
+      "sha256:4f754cbe820da4519478dff3f3ed5b4c96240fb36397ca97b2bbe2f3ec58aae9",
     );
   });
 
@@ -337,7 +336,7 @@ describe("Package Subject Definition normalization", () => {
       "bodyTopology",
       "requiredBoneIds",
       "rigProfileRef",
-      "skeletonRootNodeName",
+      "skeletonRootBoneName",
       "sourceNodeNameByBoneId",
     ]);
     expect(Object.keys(tables.animationSets[0]!).sort()).toEqual([
@@ -388,7 +387,6 @@ describe("Package Subject Definition normalization", () => {
       "registry-rig-provider-handle",
       "registry-animation-source-uri",
       "registry-collider-provider-handle",
-      "registry-collider-center-source-uri",
       "registry-locomotion-provider-handle",
     ] as const;
     const subjectResourceRegistry = registryFrom((resource) => {
@@ -417,26 +415,20 @@ describe("Package Subject Definition normalization", () => {
               sourceUri: forbiddenValues[2],
             })),
           } as SubjectRegistryResourceInputV1;
-        case "collider-profile": {
-          const centerOffset = Object.assign(
-            [...resource.collider.centerOffsetFromSubjectOriginMetersXYZ],
-            { sourceUri: forbiddenValues[4] },
-          );
+        case "collider-profile":
           return {
             ...resource,
             collider: {
               ...resource.collider,
-              centerOffsetFromSubjectOriginMetersXYZ: centerOffset,
               providerHandle: forbiddenValues[3],
             },
           } as unknown as SubjectRegistryResourceInputV1;
-        }
         case "locomotion-profile":
           return {
             ...resource,
             locomotion: {
               ...resource.locomotion,
-              providerHandle: forbiddenValues[5],
+              providerHandle: forbiddenValues[4],
             },
           } as SubjectRegistryResourceInputV1;
         default:
@@ -584,7 +576,10 @@ describe("Package Subject Definition normalization", () => {
       "/resources/subjectDefinitions/0/visualParts/0/subjectAssetRef",
       "worldkit://subject-asset/missing@1",
       "availableSubjectAssetRefs",
-      SUBJECT_ASSET_REF,
+      [
+        "worldkit://subject-asset/actor.humanoid.g-bot@1",
+        SUBJECT_ASSET_REF,
+      ],
     ],
     [
       "SUBJECT_RIG_PROFILE_NOT_FOUND",
@@ -592,7 +587,7 @@ describe("Package Subject Definition normalization", () => {
       "/resources/subjectDefinitions/0/visualBinding/rigProfileRef",
       "worldkit://rig-profile/missing@1",
       "compatibleRigProfileRefs",
-      RIG_PROFILE_REF,
+      [RIG_PROFILE_REF],
     ],
     [
       "SUBJECT_ANIMATION_SET_NOT_FOUND",
@@ -600,7 +595,7 @@ describe("Package Subject Definition normalization", () => {
       "/resources/subjectDefinitions/0/visualBinding/animationSetRef",
       "worldkit://animation-set/missing@1",
       "compatibleAnimationSetRefs",
-      ANIMATION_SET_REF,
+      [ANIMATION_SET_REF],
     ],
     [
       "SUBJECT_COLLIDER_PROFILE_NOT_FOUND",
@@ -608,11 +603,14 @@ describe("Package Subject Definition normalization", () => {
       "/resources/subjectDefinitions/0/colliderPolicy/colliderProfileRef",
       "worldkit://collider-profile/missing@1",
       "compatibleColliderProfileRefs",
-      COLLIDER_PROFILE_REF,
+      [
+        "worldkit://collider-profile/humanoid.g-bot-capsule@1",
+        COLLIDER_PROFILE_REF,
+      ],
     ],
   ] as const)(
     "emits %s with the exact path and offending Ref",
-    (code, missingKind, instancePath, resourceRef, availableKey, availableRef) => {
+    (code, missingKind, instancePath, resourceRef, availableKey, availableRefs) => {
       const diagnostics = diagnosticForRiggedWorld(
         builtInSubjectResourceRegistry,
         (world) => {
@@ -641,7 +639,7 @@ describe("Package Subject Definition normalization", () => {
           instancePath,
           details: expect.objectContaining({
             resourceRef,
-            [availableKey]: [availableRef],
+            [availableKey]: availableRefs,
           }),
         }),
       );

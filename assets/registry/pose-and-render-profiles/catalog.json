@@ -5,7 +5,7 @@
       "id": "static.whitebox",
       "version": 1,
       "resourceRef": "worldkit://pose-set/static.whitebox@1",
-      "agentAccessLevel": "T0",
+      "authoringAvailability": "recommended",
       "poseIds": ["idle", "move", "fall"],
       "defaultPoseId": "idle",
       "aiMetadata": {
@@ -21,7 +21,7 @@
       "id": "subject.standard",
       "version": 1,
       "resourceRef": "worldkit://render-binding/subject.standard@1",
-      "agentAccessLevel": "T0",
+      "authoringAvailability": "recommended",
       "publishedStateFields": [
         "semanticClassId",
         "bodyTopology",

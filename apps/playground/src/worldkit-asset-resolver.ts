@@ -1,6 +1,8 @@
 import type { SubjectAssetResolverV1 } from "@whitebox-world/runtime-babylon";
 
 export const PLAYGROUND_SUBJECT_ASSET_URI_BY_REF_V1 = Object.freeze({
+  "worldkit://subject-asset/actor.humanoid.g-bot@1":
+    "/subject-assets/humanoid/g-bot/v1/g-bot.glb",
   "worldkit://subject-asset/humanoid.golden@1":
     "/worldkit-assets/golden-humanoid.glb",
 });

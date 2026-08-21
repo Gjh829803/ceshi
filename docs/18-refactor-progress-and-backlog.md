@@ -2,11 +2,14 @@
 
 - 状态：Active，重构执行进度与剩余工作的唯一跟踪入口。
 - 基准日期：2026-08-20。
-- 长期目标总进度：约 **50%**，合理误差范围为 ±5%。
+- 长期目标总进度：约 **55%**，合理误差范围为 ±5%。
 - 第一条 Canonical 纵向切片：约 **90%**。
 - 当前代码入口：Canonical Authoring V3 → Placement Solver S1 → NormalizedWorldIR V3 → ExecutionPlan V4 → Babylon.js/Havok Runtime。
 
 > Golden Humanoid S1b 首个可视纵向切片已完成并进入回归；S1b 整体与 Semantic Actions 整体仍未完成.
+
+> 首个产品资产 G Bot 已通过独立 Registry/CLI/Babylon/Havok/Browser Gate；这只代表
+> 当前版本 G Bot 的 `idle/walk/run/jump`，不代表任意产品包或其余 21 个 Clip 已开放。
 
 > Placement Solver S1 首个海湾纵向切片已完成并进入回归；通用 Terrain Mask/Route Graph、更多 Constraint 与 P0.1 整体仍未完成。
 
@@ -26,9 +29,11 @@
 - [`2026-08-17-terrain-authoring-pipeline-design.md`](superpowers/specs/2026-08-17-terrain-authoring-pipeline-design.md)：地形专项规格；
 - [`2026-08-19-extensible-subject-authoring-design.md`](superpowers/specs/2026-08-19-extensible-subject-authoring-design.md)：主体组装、Relationship、坐骑、装备和飞行的专项规格；
 - [`2026-08-19-asset-subject-s1b-visible-slice-design.md`](superpowers/specs/2026-08-19-asset-subject-s1b-visible-slice-design.md)：首个 GLB/Rig/Animation/Collider Profile 资产主体纵向切片；
+- [`2026-08-20-g-bot-product-asset-s1-design.md`](superpowers/specs/2026-08-20-g-bot-product-asset-s1-design.md)：首个真实产品人物 G Bot 的版本化映射与可视验收；
 - [`2026-08-19-placement-constraint-layout-solver-design.md`](superpowers/specs/2026-08-19-placement-constraint-layout-solver-design.md)：AI 空间意图、最终 Transform 求解与冲突报告专项规格；
 - [`2026-08-19-simulation-take-control-capture-design.md`](superpowers/specs/2026-08-19-simulation-take-control-capture-design.md)：WorldPackage、Take、Session、多 Pass Capture 与视频 Adapter 边界；
 - [`2026-08-19-world-validation-report-and-quality-gates-design.md`](superpowers/specs/2026-08-19-world-validation-report-and-quality-gates-design.md)：量化 Gate、Metric、Evidence 和生产阻断协议；
+- [`2026-08-20-ai-authored-geometry-extension-design.md`](superpowers/specs/2026-08-20-ai-authored-geometry-extension-design.md)：未来可能需要的 AI 自定义几何能力及候选技术，仅供调研评审，不属于当前 Roadmap；
 - `docs/superpowers/plans/`：已经进入实施阶段的单个纵向切片计划与证据。
 
 如果本文与已接受的 ADR、Canonical Schema 或真实代码不一致，以已接受 ADR、
@@ -45,18 +50,18 @@ Normalizer/Compiler、Runtime、CLI/Browser 和对应 Conformance Gate 的纵向
 |---|---:|---:|---:|---|
 | 架构、边界与命名 | 8% | 92% | 7.4% | 总规格、ADR、主体/地形/3C 和 Placement/Take/Validation 专项已成稿；Placement S1 已冻结，Take/Validation 仍待评审 |
 | Canonical Schema、IR、Registry 与 Compiler | 15% | 82% | 12.3% | V3/V3/V4、Hash、Lock、严格校验、Placement、Primitive 与首个 Asset Subject 资源表已交付；WorldChangeSet、完整 Capability 和 WorldPackage 尚未交付 |
-| Babylon/Havok Runtime、物理与相机 | 15% | 70% | 10.5% | Heightfield、障碍、水域、多主体、第三人称、碰撞、重置、控制切换、Rigged Asset 与 Placement Assertion 复验已交付；多视角与完整生产预算尚未完成 |
-| Subject LEGO 组装体系 | 15% | 40% | 6.0% | S0、S1a 与 S1b 首个 Golden 可视切片已完成；S1b 后续、S2、S3、S4 尚未完成 |
+| Babylon/Havok Runtime、物理与相机 | 15% | 72% | 10.8% | Heightfield、障碍、水域、多主体、第三人称、碰撞、重置、控制切换、Golden/G Bot Rigged Asset 与 Placement Assertion 复验已交付；多视角与完整生产预算尚未完成 |
+| Subject LEGO 组装体系 | 15% | 45% | 6.75% | S0、S1a、Golden 与首个产品 G Bot 可视切片已完成；S1b 后续、S2、S3、S4 尚未完成 |
 | Terrain、Region 与 Placement | 12% | 60% | 7.2% | Alpha 地形和 Placement Solver S1 海湾纵向切片已运行；通用 Terrain Mask/Route Graph、更多 Constraint 与完整 P0.1 未完成 |
-| CLI、Browser Protocol 与自动化 | 10% | 68% | 6.8% | validate/build/run/capture/discovery/explain、layout validate/solve/explain、Browser V3 与三条可视 Gate 已有；持久 Session、完整 Driver、Take 和 Package 工具未完成 |
-| Semantic Action、动画与 Gameplay | 8% | 30% | 2.4% | Golden `idle/walk/run/jump` 固定 Tick Animation Binding 已交付；通用 Action Request/Receipt、姿态、装备与规则未交付 |
+| CLI、Browser Protocol 与自动化 | 10% | 70% | 7.0% | validate/build/run/capture/discovery/explain、layout validate/solve/explain、Browser V3 与 Golden/G Bot 等可视 Gate 已有；持久 Session、完整 Driver、Take 和 Package 工具未完成 |
+| Semantic Action、动画与 Gameplay | 8% | 33% | 2.64% | Golden 与 G Bot `idle/walk/run/jump` 固定 Tick Animation Binding 已交付；通用 Action Request/Receipt、姿态、装备与规则未交付 |
 | Simulation Take、控制通道与视频接入 | 10% | 15% | 1.5% | Take/Capture 专项已成稿，单截图能力已有；多 Pass、时间轨、Bundle 和模型 Adapter 未交付 |
-| 生产 Gate、默认切换与旧实现退出 | 7% | 25% | 1.75% | Validation Profile/Report 专项已成稿，Canonical/Rigged/Placement Browser Gate 可运行；统一报告、默认切换和旧路径退出未交付 |
-| **合计** | **100%** |  | **约 56%** | Placement S1 新增可运行证据；对外按通用 Terrain/Route、生产 Gate 与剩余范围不确定性保守报告 **约 50%** |
+| 生产 Gate、默认切换与旧实现退出 | 7% | 30% | 2.1% | Validation Profile/Report 专项已成稿，Canonical/Golden Rigged/G Bot/Placement Browser Gate 可运行；统一报告、默认切换和旧路径退出未交付 |
+| **合计** | **100%** |  | **约 58%** | 首个产品资产加入可运行证据；对外按通用 Terrain/Route、生产 Gate 与剩余范围不确定性保守报告 **约 55%** |
 
 “第一条 Canonical 纵向切片约 90%”只指以下较窄范围：AI 提交 JSON，SDK
 完成严格校验、确定性编译、Babylon/Havok 运行、多主体控制、首个 Golden Asset
-Subject、Placement S1、截图和查询。它不代表任意产品资产、完整 S1b/P0.1、关系、
+Subject、首个产品 G Bot、Placement S1、截图和查询。它不代表任意产品资产、完整 S1b/P0.1、关系、
 完整动作、复杂地形、视频控制输出或生产切换已经完成。
 
 ## 3. 当前已完成并进入回归的能力
@@ -85,7 +90,7 @@ Subject、Placement S1、截图和查询。它不代表任意产品资产、完�
 - [`Subject Foundation Visible Slice`](superpowers/plans/2026-08-19-subject-foundation-visible-slice.md)：49 项完成、0 项打开；
 - [`Package Subject Definition Visible Slice`](superpowers/plans/2026-08-19-package-subject-definition-visible-slice.md)：73 项完成、0 项打开。
 
-### 3.3 Subject S1b 首个 Golden Asset 可视切片
+### 3.3 Subject S1b Golden 与首个产品 G Bot 可视切片
 
 - [x] 项目自有、自包含 Golden GLB、原始字节 SHA-256 与精确 Inventory。
 - [x] Subject Asset、Rig Profile、Animation Set、Collider Profile 与 Definition Registry。
@@ -93,8 +98,12 @@ Subject、Placement S1、截图和查询。它不代表任意产品资产、完�
 - [x] 独立 Skeleton/Animation/Transform/Dispose、Bone Socket 与白模材质。
 - [x] 固定 Tick `idle/walk/run/jump`、Snapshot `activeActionId` 与 Havok 权威位移。
 - [x] CLI/Browser 两实例、墙体停止、五张动作/世界截图与 Hash 篡改失败 E2E。
+- [x] G Bot 通过产品 Manifest → Registry Rig/Animation/Collider/Definition 映射；
+  World JSON 只引用稳定 `subjectDefinitionRef`。
+- [x] G Bot 真实 5.30MB GLB、65 Bone、25 源 Clip 与当前四动作通过独立
+  `pnpm verify:g-bot-subject` Gate、双实例隔离、墙体停止与五张截图。
 
-未完成：产品资产验收、Compound Collider、LOD、更多拓扑、独立动画资产、通用姿态、
+未完成：更多产品资产、Compound Collider、LOD、更多拓扑、独立动画资产、通用姿态、
 游泳、装备、坐骑和飞行。
 
 ### 3.4 当前 Runtime 与工具纵向切片
@@ -109,7 +118,7 @@ Subject、Placement S1、截图和查询。它不代表任意产品资产、完�
 2026-08-20 的新鲜验证证据：
 
 - `pnpm typecheck`：通过；
-- `pnpm test`：48 个测试文件、435 项测试通过；
+- `pnpm test`：49 个测试文件、441 项测试通过；
 - `pnpm verify:canonical`：Authoring 3、Normalized IR 3、ExecutionPlan 4、
   Runtime Snapshot 3、Browser Protocol 3 全部通过；
 - Canonical Browser Gate 覆盖 Babylon/Havok、墙体阻挡、水域切换、两个
@@ -118,7 +127,11 @@ Subject、Placement S1、截图和查询。它不代表任意产品资产、完�
   `idle/walk/run/jump`、双实例隔离、墙体停止、936×596 截图与
   `SUBJECT_ASSET_HASH_MISMATCH` 篡改 Gate 全部通过；`verification.json` V2 还用
   Foreground-origin Subject Silhouette 证明六组动作姿态差异率均高于 0.15，
-  最低为 0.298178。
+  最低为 0.281609。
+- `pnpm verify:g-bot-subject`：首个产品 G Bot 的 GLB/Manifest/Registry 映射、
+  `idle/walk/run/jump`、双实例隔离和墙体停止通过；资产 Hash 为
+  `sha256:41833210e735788da0777fc37badcec03f90ccf17ab5a7d89103f0727abeeb1b`，
+  Walk 在 Tick 16、Jump 在 Tick 30 捕获，六组姿态差异率最低高于 0.79。
 - `pnpm verify:placement-layout`：八种 Constraint、19 条海湾约束、Report → IR →
   Plan → Snapshot、Runtime Assertion、连续/并发确定性、冲突、篡改和预算门禁全部通过；
   936×596 Screenshot Hash 为
@@ -129,6 +142,9 @@ Subject、Placement S1、截图和查询。它不代表任意产品资产、完�
 优先级表示产品验证和架构依赖顺序，不表示可以跳过低优先级能力的生产门禁。
 每个新纵向切片在实施前必须有独立设计或实施计划；本文不替代具体 Schema 和
 测试规格。
+
+P1.5、P1.6 与 P2.5 是把既有总体设计和产品对接契约显式落入可验收 Backlog，未扩大
+既定产品范围，也不因“写入待办”提高当前完成度。
 
 ### P0：完成产品核心闭环
 
@@ -235,6 +251,8 @@ P0.1 整体仍以上述三项开放能力及生产范围扩展为完成标准。
 
 - [ ] 冻结 ActionDefinition、Action Request/Receipt、Context 和 Channel Lock。
 - [x] 实现首个 Golden `idle/walk/run/jump` 固定 Tick Action 与动画映射。
+- [ ] 冻结版本化 `ActionVariantSet` 与 `PoseSetProfile`；人形动作变体和非人形稳定姿势
+  都必须由语义 Action/Context 解析，不能从 Clip 名、骨骼名或资产文件名反推。
 - [ ] 冻结 `HumanoidPostureModeV1 = "standing" | "crouched" | "prone"`；Runtime Snapshot 必须同时暴露实际 `postureMode` 与 `activeActionId`，不能根据动画名称反推姿态。
 - [ ] 增加通用 Humanoid Action Pack：`fall`、`land`、`crouch-enter`、`crouch-idle`、`crouch-walk`、`crouch-exit`、`prone-enter`、`prone-idle`、`crawl`、`prone-exit`；源 Clip 名只允许在版本化 Animation Set 中映射。
 - [ ] 为站立、蹲伏、趴伏定义版本化 Capsule；切换时保持 Support Center/脚底位置，起身前使用 Havok Shape Proximity 做净空检测，空间不足返回稳定 `SUBJECT_POSTURE_BLOCKED`，不允许穿入低矮障碍。
@@ -254,6 +272,96 @@ P0.1 整体仍以上述三项开放能力及生产范围扩展为完成标准。
 - [ ] CLI 支持 package、inspect、load 和 run-session。
 - [ ] Runtime Session 支持 NDJSON 或等价的有生命周期协议、Request ID、Receipt 和恢复语义。
 - [ ] 加载新 Package 前完成旧世界 Dispose、Ownership Ledger 清空和 World Ready Gate。
+
+#### P1.5 Subject Control Feel、Physics Medium 与 State Resolver
+
+目标：把“主体怎样响应输入”“主体在地面、水中和空中受到什么物理影响”“当前应该
+激活哪种运动和动作状态”变成版本化、可组合、可锁定的 Profile，而不是继续留在
+Babylon/Havok Adapter 的硬编码分支中。字段职责以
+[`主体资产与 3C 对接设计`](16-subject-assets-3c-integration.md)为基础，实施前必须完成
+专项评审；本 Backlog 不提前冻结最终公共字段名。
+
+- [ ] 评审并冻结 `LocomotionProfile` 与 `ControlFeelProfile` 的唯一字段归属：前者负责
+  运动模式及能力边界，后者负责加速度、减速度、转向速率、响应曲线和空中控制比例；
+  奔跑等速度不得在两种 Profile 中形成同义字段或双重真相。
+- [ ] 冻结 `ControlMethodProfile` 与语义 Intent Pipeline：Direct Move、Steering、Swim、
+  Flight 等方法复用同一控制协议，由 Capability/Context 选择，World Agent 不直接调用
+  人物 Motor、车辆控制器或飞行实现。
+- [ ] 定义版本化 `PhysicsMediumProfile`：世界保留唯一全局重力向量，主体/介质只声明
+  相对重力倍率、线性/角阻力、浮力、表面保持和单位明确的安全边界；最终数值字段必须
+  按命名规则携带 `Ratio`/单位后缀，不能直接沿用未冻结概念稿中的含糊名称。
+- [ ] 定义 `MediumSensor`、`SubjectStateProfile` 与纯固定 Tick `StateResolver`；Ground、
+  Water、Air 的进入/退出使用迟滞阈值和明确优先级，不依赖动画状态或渲染帧率判断。
+- [ ] 普通 Agent 只选择已注册 Profile；高级覆盖必须经过 Definition 的
+  `allowedOverridePaths`、Schema 范围、Host Policy 和 Resource Budget，禁止直接填写
+  Babylon/Havok Handle 或控制器实现参数。
+- [ ] 为所有数值字段声明单位、有限值、最小/最大值和跨字段约束；非法 Profile 在
+  Registry Admission 阶段失败，不能等到 Runtime 再钳制或猜测。
+- [ ] Profile 的精确版本、Canonical Hash 和依赖进入 Registry Lock；Normalizer 和
+  Compiler 将最小、引擎无关描述投影进 IR/ExecutionPlan，Runtime 不反向读取 Registry。
+- [ ] Babylon/Havok 去除主体加速度、水中重力倍率和相关介质响应硬编码；Adapter 只
+  执行已编译参数，并保持固定 Tick、失败回滚、幂等 Dispose 与资源所有权边界。
+- [ ] Snapshot/Render Binding 暴露实际 `movementMedium`、`locomotionMode`、状态与生效
+  Profile 引用，使 Agent、Capture 和视频 Adapter 不需要从动画 Clip 猜 Gameplay 状态。
+- [ ] CLI/Browser/E2E 至少覆盖两种 Control Feel、不同主体重力倍率、Ground→Water→Air
+  稳定切换、边界抖动、Reset、双实例隔离和同输入 Replay；缺少 Profile 或切换失败时
+  保留上一稳定状态并返回稳定 Diagnostic。
+
+完成标准：仅替换版本化 Profile 就能改变主体的加减速、转向、介质重力/阻力和浮力，
+同一输入与 Registry Lock 在固定 Tick 下得到相同 Snapshot/Hash；普通场景 JSON 不需要
+复制底层参数，Canonical Runtime 中不存在对应 Provider 硬编码。
+
+#### P1.6 AI Schema Profile、受控覆盖与 WorldChangeSet
+
+目标：让上游 Agent 获得“小而稳定、能力感知”的 Schema，并能用领域操作增量修复
+世界；不能要求 Agent 每次重写大型 Authoring JSON，也不能让 Provider Adapter 形成
+第二套公共方言。
+
+- [ ] 为 Canonical Schema + Registry Lock + 允许 Capability 集冻结版本化 AI Schema
+  Profile/Projector；记录 Profile Hash、Registry Lock Hash、Capability Set Hash、规模
+  预算和降级原因。
+- [ ] Registry 枚举超过 Provider 结构化输出预算时，只能按 Profile 降级为带
+  `format`/`pattern` 的 Canonical Ref；字段名称、语义和验证规则不得改变。
+- [ ] 实现跨 Definition 通用的 `allowedOverridePaths` 校验、Explain 和拒绝诊断；
+  Override 不能修改版本/Hash、权限、Provider 类型或未开放 Collider/Socket 内部结构。
+- [ ] 冻结 `WorldChangeSet`/`ChangeReceipt`：稳定 ID、`baseAuthoringSpecHash`、Precondition、
+  Dry Run、原子提交、幂等重试和增量/全量编译等价性，不使用数组位置驱动的通用 Patch
+  作为生产协议。
+- [ ] 明确两条写入平面：移动、攻击、骑乘等已有实体状态只走有权限的固定 Tick Runtime
+  Command；增加/删除人物、房屋、障碍、资源或地形属于 Authoring 结构修改，只走
+  `WorldChangeSet`，两者不能共用通用 `patch`/`execute` 接口。
+- [ ] 第一条生产切片采用 Full Reload：在隔离候选中完成 ChangeSet Apply、完整
+  Normalize/Compile/Package、预算与必需 Gate，再准备 Replacement Runtime；只有新 Runtime
+  Ready 后才在 Phase Barrier 原子切换 Host/Browser 句柄并释放旧 Runtime，任一步失败都
+  保留旧世界。
+- [ ] Full Reload 默认创建新的 Runtime Instance、从 Tick 0 启动，不隐式搬运人物位置、
+  速度、Action、Controller Binding 或 Camera 状态；允许保留的 Bootstrap/View Preference
+  必须有显式输入，Receipt 必须列出替换、保留、重置和受影响的 ID/Hash。
+- [ ] 第二条切片才支持受限 Incremental Hot Apply：每种 Operation/Node Kind 必须声明
+  Transaction Handler、状态迁移策略和回滚；未受影响实体保持身份及运行状态，地形、
+  全局物理、Schema/Profile Major、插件或不支持的资源变化必须稳定降级为 Full Reload。
+- [ ] Incremental Commit 只能发生在固定 Tick Phase Barrier；Visual、Physics、Control、
+  Camera、Relationship 和 Ownership Ledger 必须同时发布或同时回滚，并用 Differential
+  Test 证明最终 Authoring/IR/ExecutionPlan 与 Full Build 完全等价。
+- [ ] Runtime 发布请求除 `baseAuthoringSpecHash` 外，还必须绑定 Request/Session、期望的
+  Runtime Instance/WorldPackage 和目标 Phase Barrier；过期或并发冲突稳定失败，不能把
+  已验证的 ChangeSet 静默应用到另一个正在运行的世界实例。
+- [ ] 已发布协议的破坏性升级使用显式 Version Migration，并输出迁移前后 Hash 和报告；
+  未发布私有 Schema 仍按评审批准的 Clean Break 规则处理，不保留永久别名字段。
+- [ ] CLI/Browser 提供 Schema Profile、Registry Search、Dry Run、Explain、Diff、Apply 和
+  Receipt；结构写入只对受信 Authoring/Edit Session Scope 开放，不能因拥有页面脚本、
+  `control.intent`、`capture` 或普通 `load` 权限而派生新世界；`load` 只允许加载 Host
+  已批准的不可变 Package，任何调用方都不能直接修改 DOM、Babylon Scene 或 Havok World；
+  Provider Adapter 输出必须重新通过 Canonical Schema 与语义验证。
+- [ ] Conformance 覆盖 Schema 规模预算、Provider 降级、非法 Override、过期 Base Hash、
+  重复 Request、Replacement Runtime 准备失败时旧世界仍可运行、Full Reload 状态重置、
+  Incremental 未影响实体状态保留、部分失败回滚、增量/全量结果等价和 Migration Golden
+  Fixture。
+
+完成标准：至少两个结构化输出 Provider 使用同一 Canonical 字段生成有效世界；一次 AI
+修复通过 WorldChangeSet 原子应用并可重放，Adapter、CLI 和 Browser 不产生同义字段或
+绕过 Canonical Validation 的旁路；Receipt 能无歧义说明本次修改采用 Full Reload 还是
+Incremental Hot Apply，以及哪些 Runtime 状态被保留、重置或替换。
 
 ### P2：完成 LEGO 关系与复杂主体
 
@@ -290,6 +398,28 @@ P0.1 整体仍以上述三项开放能力及生产范围扩展为完成标准。
 - [ ] Browser/CLI 支持观察、控制、截图权限分离。
 - [ ] 为上游 Agent 提供 Registry Search、Dry Run、Explain、Diff 和结构化修复工具，不提供底层引擎对象。
 
+#### P2.5 Surface Semantics 与 Traversal Capability
+
+目标：让“到水边游泳、到可攀爬墙面攀爬、到矮障碍翻越”由稳定 Surface/Volume 语义、
+Sensor 和 Capability 组合触发，而不是按 Mesh 名称、颜色、材质或场景脚本猜测。该能力
+已有产品方向，但尚未冻结专项 Schema；实施前必须先写独立设计和首个窄纵向计划。
+
+- [ ] 冻结 Surface/Volume 语义与 Terrain/Obstacle 权威数据的引用边界；可行走、可游泳、
+  可攀爬、可翻越等能力不得复制 Heightfield、Collider 或 Region 真相。
+- [ ] 定义 Surface/Volume Query、Contact/Sensor Event、进入/退出迟滞、稳定 ID 与固定
+  Tick 顺序；视觉材质和动画不能成为 Gameplay 判定来源。
+- [ ] 定义 Traversal Capability/Profile 的适用主体、坡度/高度/净空/朝向约束、冲突、
+  优先级和失败回退；普通 Agent 只选择已注册能力和 Profile。
+- [ ] State Resolver 原子切换 Locomotion、Action、Collider、Control Feel、Physics Medium、
+  Camera Context 和 Render Binding；任一准备步骤失败时全部保持上一稳定状态。
+- [ ] 攀爬/翻越至少覆盖进入、循环、顶部退出、中止、无安全落点和控制权切换；不能用
+  RenderNode 父子关系、瞬移或禁用碰撞掩盖逻辑缺口。
+- [ ] CLI/Browser/E2E 使用同一人物完成地面→水中→地面以及地面→攀爬→顶部落地，验证
+  无边界抖动、穿插、悬空、状态残留和 Replay 偏差。
+
+完成标准：场景只声明权威 Surface/Volume 语义和主体 Profile，Runtime 就能在固定 Tick
+下自动选择正确运动/动作模式；删除或修改视觉材质不会改变 Gameplay 结果。
+
 ### P3：生产收敛与默认切换
 
 #### P3.1 Production Gates
@@ -324,6 +454,13 @@ P0.1 整体仍以上述三项开放能力及生产范围扩展为完成标准。
 它们只有在目标、Owner、依赖和验收 Fixture 被明确后才拆成正式实施计划，不能
 为了提高总进度数字提前计为已开始。
 
+> **未来探索议题，不属于上述 Backlog：** 是否需要让 AI 超越现有 Preset 自定义静态
+> 场景几何。目前只有一份
+> [候选技术草案](superpowers/specs/2026-08-20-ai-authored-geometry-extension-design.md)，
+> 不表示确定会做、没有优先级和里程碑，也没有选定 Recipe、MeshDraft、GLB、Sandbox、
+> Three Bridge 或其他技术路线。只有未来出现明确产品需求、Owner、实验依据和立项决定后，
+> 才重新调研、选择方案并建立正式 Backlog/实施计划；当前不计入任何完成度。
+
 ## 5. 推荐实施顺序与依赖
 
 ```text
@@ -338,12 +475,15 @@ P0.2 Simulation Take / Control Capture Bundle
 P0.1 + P0.2 + P0.3
   └── P0.4 白模到生成式视频纵向切片
 
-P1.2 Asset Subject + P1.3 Semantic Action
+P1.2 Asset Subject + P1.3 Semantic Action + P1.5 Control Feel / Physics Medium
   └── P2.1 Typed Relationship
         └── P2.2 Mount / Tow
               └── P2.3 Equipment / Flight
 
-P1.4 WorldPackage + P2.4 Controller/Camera/Driver
+P1.1 Terrain / Region / Mask + P1.5 State Resolver
+  └── P2.5 Surface Semantics / Traversal
+
+P1.4 WorldPackage + P1.6 AI Schema / WorldChangeSet + P2.4 Controller/Camera/Driver
   └── P3.1 Production Gates（复用 P0.3 协议并扩展生产 Profile）
         └── P3.2 默认切换
 ```
@@ -354,14 +494,18 @@ Placement S1 已形成首个回归纵向切片；Capture 与 Validation 两条 P
 
 ## 6. 下一里程碑
 
-当前没有代码阻塞项。S1b Golden Asset 与 Placement Solver S1 都已进入回归，下一步：
+当前没有代码阻塞项。S1b Golden、首个产品 G Bot 与 Placement Solver S1 都已进入回归，下一步：
 
-1. **M1：让产品资产团队按 Rig/Animation/Collider/Socket 合同交付第一个真实人物包，并走现有 S1b 验收**；
+1. **M1：把 G Bot 的交付 Manifest/Registry 映射/Gate 固化为后续产品资产接入模板**；
 2. **M2：评审冻结 Take/Capture 与 Validation 两份协议的首条实施范围**；
 3. **M3：为 P0.2 编写五 Pass Capture 的窄纵向切片计划，并复用 Placement WorldPackage/Hash**；
 4. **M4：扩展 P0.1 的 Terrain Mask/Route Graph，而不是新增第二套 Region/Route 语义**；
 5. **M5：在 Placement + Take + Validation 闭环上接入实验 Video Model Adapter**；
-6. **M6：按产品优先级选择 Semantic Action 后续或 Typed Relationship 窄可视切片**。
+6. **M6：评审冻结 P1.5 的 Control Feel/Physics Medium/State Resolver 首条纵向范围，清除
+   Canonical Babylon 路径中的对应硬编码**；
+7. **M7：按产品优先级选择 Semantic Action 后续或 Typed Relationship 窄可视切片**；
+8. **M8：在实现游泳、攀爬或增量 Agent 修复前，分别冻结 P2.5 Surface/Traversal 与
+   P1.6 AI Schema/WorldChangeSet 的专项设计，禁止临时增加公共字段或场景脚本旁路**。
 
 Take/Capture 与 Validation 字段冻结前不得实现公共协议字段；技术探针可以验证 Capture
 Encoding 或 Runtime Query 可行性，但其实现不得泄漏到 Canonical Schema。
@@ -386,5 +530,5 @@ Encoding 或 Runtime Query 可行性，但其实现不得泄漏到 Canonical Sch
 | 图片生成结果被误当作权威地形 | P1.1 固化为 Height/Mask，重新执行确定性 Compiler 和 Gate |
 | 任意 Blender/Python 代码进入生产世界 | 只允许隔离制作 Provider；Runtime 只消费锁定制品 |
 | 机器人研究仓库的格式污染 Web SDK | 只借鉴 Solver、Gate、Registry 和 Capture 思想，通过 Adapter 映射 |
-| S0/S1a/Golden S1b 切片完成被误读为整个 Subject 系统完成 | 本文分别追踪 S1b 未完成项、S2、S3 和 S4 |
+| S0/S1a/Golden/G Bot S1b 切片完成被误读为整个 Subject 系统完成 | 本文分别追踪 S1b 未完成项、S2、S3 和 S4 |
 | 旧 Three/Rapier 与新 Babylon/Havok 长期双轨 | P3.2 设定明确默认切换和退出 Gate |

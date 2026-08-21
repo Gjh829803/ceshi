@@ -17,6 +17,43 @@ const COLLIDER_PROFILE_REF =
   "worldkit://collider-profile/humanoid.medium-capsule@1";
 const RIGGED_SUBJECT_DEFINITION_REF =
   "worldkit://subject-definition/humanoid.rigged-golden@1";
+const G_BOT_SUBJECT_ASSET_REF =
+  "worldkit://subject-asset/actor.humanoid.g-bot@1";
+const G_BOT_RIG_PROFILE_REF =
+  "worldkit://rig-profile/biped.mixamo-g-bot@1";
+const G_BOT_ANIMATION_SET_REF =
+  "worldkit://animation-set/humanoid.ground.g-bot@1";
+const G_BOT_COLLIDER_PROFILE_REF =
+  "worldkit://collider-profile/humanoid.g-bot-capsule@1";
+const G_BOT_SUBJECT_DEFINITION_REF =
+  "worldkit://subject-definition/humanoid.g-bot@1";
+const G_BOT_ACTION_IDS = [
+  "dance.rumba",
+  "emote.angry",
+  "emote.salute",
+  "fall",
+  "fight.enter",
+  "float",
+  "fly",
+  "idle",
+  "idle.gaming",
+  "jump",
+  "land.hard",
+  "land.hard.alt",
+  "lay.idle",
+  "roll.toRun",
+  "run",
+  "sit",
+  "sit.ground.idle",
+  "sit.idle",
+  "sit.toStand",
+  "stand",
+  "swim.exit",
+  "swim.surface",
+  "swim.tread",
+  "walk",
+  "walk.step",
+] as const;
 
 const BIPED_BONE_IDS = [
   "chest",
@@ -31,7 +68,6 @@ const BIPED_BONE_IDS = [
   "lower-leg.left",
   "lower-leg.right",
   "neck",
-  "root",
   "spine",
   "upper-arm.left",
   "upper-arm.right",
@@ -167,6 +203,7 @@ describe("subject resource registry", () => {
         .listSubjectDefinitions()
         .map((definition) => definition.resourceRef),
     ).toEqual([
+      G_BOT_SUBJECT_DEFINITION_REF,
       RIGGED_SUBJECT_DEFINITION_REF,
       "worldkit://subject-definition/humanoid.third-person@1",
       "worldkit://subject-definition/quadruped.ground-proxy@1",
@@ -174,8 +211,20 @@ describe("subject resource registry", () => {
   });
 
   it("shares the exact closed Subject unions across built-in definitions", () => {
-    const [rigged, staticHumanoid, staticQuadruped] =
-      builtInSubjectResourceRegistry.listSubjectDefinitions();
+    const definitions = builtInSubjectResourceRegistry.listSubjectDefinitions();
+    const rigged = definitions.find(
+      (definition) => definition.resourceRef === RIGGED_SUBJECT_DEFINITION_REF,
+    )!;
+    const staticHumanoid = definitions.find(
+      (definition) =>
+        definition.resourceRef ===
+        "worldkit://subject-definition/humanoid.third-person@1",
+    )!;
+    const staticQuadruped = definitions.find(
+      (definition) =>
+        definition.resourceRef ===
+        "worldkit://subject-definition/quadruped.ground-proxy@1",
+    )!;
 
     expect(rigged).toMatchObject({
       resourceRef: RIGGED_SUBJECT_DEFINITION_REF,
@@ -373,9 +422,14 @@ describe("subject resource registry", () => {
       resourceRef: RIG_PROFILE_REF,
       bodyTopology: "biped",
       compatibleSubjectAssetRefs: [SUBJECT_ASSET_REF],
-      skeletonRootNodeName: "root",
+      skeletonRootBoneName: "root",
       requiredBoneIds: BIPED_BONE_IDS,
       sourceNodeNameByBoneId: Object.fromEntries(BIPED_BONE_IDS.map((id) => [id, id])),
+      aiMetadata: {
+        displayName: "Golden biped rig",
+        description:
+          "Canonical 17-bone anatomical mapping with an independent Skeleton root for the project-owned Golden humanoid fixture.",
+      },
     });
 
     expect(
@@ -440,6 +494,232 @@ describe("subject resource registry", () => {
         centerOffsetFromSubjectOriginMetersXYZ: [0, 0.96, 0],
       },
     });
+  });
+
+  it("resolves the exact G Bot product asset binding graph", () => {
+    expect(
+      builtInSubjectResourceRegistry.resolveSubjectAsset(G_BOT_SUBJECT_ASSET_REF),
+    ).toMatchObject({
+      kind: "subject-asset",
+      id: "actor.humanoid.g-bot",
+      version: 1,
+      resourceRef: G_BOT_SUBJECT_ASSET_REF,
+      artifact: {
+        mediaType: "model/gltf-binary",
+        byteLength: 5_302_160,
+        contentHash:
+          "sha256:41833210e735788da0777fc37badcec03f90ccf17ab5a7d89103f0727abeeb1b",
+      },
+      bounds: {
+        minimumMetersXYZ: [-0.9025661945343018, -0.0003511549439281225, -0.14895710349082947],
+        maximumMetersXYZ: [0.9025658369064331, 1.8088831901550293, 0.17174167931079865],
+      },
+      inventory: {
+        meshCount: 2,
+        vertexCount: 28_374,
+        triangleCount: 49_112,
+        skeletonCount: 1,
+        boneCount: 65,
+        animationClipNames: [
+          "dance.rumba",
+          "emote.angry",
+          "emote.salute",
+          "fall",
+          "fight.enter",
+          "float",
+          "fly",
+          "idle",
+          "idle.gaming",
+          "jump",
+          "land.hard",
+          "land.hard.alt",
+          "lay.idle",
+          "roll.toRun",
+          "run",
+          "sit",
+          "sit.ground.idle",
+          "sit.idle",
+          "sit.toStand",
+          "stand",
+          "swim.exit",
+          "swim.surface",
+          "swim.tread",
+          "walk",
+          "walk.step",
+        ],
+      },
+      provenance: {
+        licenseSpdxId: "LicenseRef-Loopit-Company-Private",
+        redistributionPolicy: "internal-only",
+        author: "Loopit asset team",
+      },
+    });
+
+    expect(
+      builtInSubjectResourceRegistry.resolveRigProfile(G_BOT_RIG_PROFILE_REF),
+    ).toMatchObject({
+      kind: "rig-profile",
+      id: "biped.mixamo-g-bot",
+      compatibleSubjectAssetRefs: [G_BOT_SUBJECT_ASSET_REF],
+      skeletonRootBoneName: "mixamorig:Hips",
+      requiredBoneIds: BIPED_BONE_IDS,
+      sourceNodeNameByBoneId: {
+        hips: "mixamorig:Hips",
+        spine: "mixamorig:Spine",
+        chest: "mixamorig:Spine2",
+        neck: "mixamorig:Neck",
+        head: "mixamorig:Head",
+        "upper-arm.left": "mixamorig:LeftArm",
+        "lower-arm.left": "mixamorig:LeftForeArm",
+        "hand.left": "mixamorig:LeftHand",
+        "upper-arm.right": "mixamorig:RightArm",
+        "lower-arm.right": "mixamorig:RightForeArm",
+        "hand.right": "mixamorig:RightHand",
+        "upper-leg.left": "mixamorig:LeftUpLeg",
+        "lower-leg.left": "mixamorig:LeftLeg",
+        "foot.left": "mixamorig:LeftFoot",
+        "upper-leg.right": "mixamorig:RightUpLeg",
+        "lower-leg.right": "mixamorig:RightLeg",
+        "foot.right": "mixamorig:RightFoot",
+      },
+    });
+
+    expect(
+      builtInSubjectResourceRegistry.resolveAnimationSet(G_BOT_ANIMATION_SET_REF),
+    ).toMatchObject({
+      subjectAssetRef: G_BOT_SUBJECT_ASSET_REF,
+      rigProfileRef: G_BOT_RIG_PROFILE_REF,
+      defaultActionId: "idle",
+      requiredActionIds: G_BOT_ACTION_IDS,
+    });
+    expect(
+      builtInSubjectResourceRegistry
+        .resolveAnimationSet(G_BOT_ANIMATION_SET_REF)
+        ?.animationBindings.map((binding) => binding.actionId),
+    ).toEqual(G_BOT_ACTION_IDS);
+
+    expect(
+      builtInSubjectResourceRegistry.resolveColliderProfile(
+        G_BOT_COLLIDER_PROFILE_REF,
+      ),
+    ).toMatchObject({
+      collider: {
+        kind: "capsule",
+        radiusMeters: 0.35,
+        heightMeters: 1.8,
+        centerOffsetFromSubjectOriginMetersXYZ: [0, 0.9, 0],
+      },
+    });
+
+    expect(
+      builtInSubjectResourceRegistry.resolveSubjectDefinition(
+        G_BOT_SUBJECT_DEFINITION_REF,
+      ),
+    ).toMatchObject({
+      visualParts: [
+        expect.objectContaining({
+          kind: "asset",
+          subjectAssetRef: G_BOT_SUBJECT_ASSET_REF,
+        }),
+      ],
+      visualBinding: {
+        mode: "rigged",
+        rigProfileRef: G_BOT_RIG_PROFILE_REF,
+        animationSetRef: G_BOT_ANIMATION_SET_REF,
+      },
+      colliderPolicy: {
+        kind: "profile",
+        colliderProfileRef: G_BOT_COLLIDER_PROFILE_REF,
+      },
+    });
+  });
+
+  it("discovers one canonical V3 G Bot definition with the complete socket contract", () => {
+    const cliDefinitions = builtInSubjectResourceRegistry
+      .listSubjectDefinitions()
+      .filter((definition) => definition.resourceRef.includes("humanoid.g-bot"));
+    const browserDefinitions = builtInSubjectResourceRegistry
+      .listCapabilitySubjectDefinitions()
+      .filter((definition) => definition.resourceRef.includes("humanoid.g-bot"));
+    const resolvedDefinition = builtInSubjectResourceRegistry.resolveSubjectDefinition(
+      G_BOT_SUBJECT_DEFINITION_REF,
+    );
+
+    expect(cliDefinitions.map((definition) => definition.resourceRef)).toEqual([
+      G_BOT_SUBJECT_DEFINITION_REF,
+    ]);
+    expect(browserDefinitions.map((definition) => definition.resourceRef)).toEqual([
+      G_BOT_SUBJECT_DEFINITION_REF,
+    ]);
+    expect(
+      builtInSubjectResourceRegistry
+        .listResources()
+        .filter((resource) => resource.resourceRef === G_BOT_SUBJECT_DEFINITION_REF),
+    ).toEqual([]);
+    expect(cliDefinitions[0]?.contentHash).toBe(resolvedDefinition?.contentHash);
+    expect(browserDefinitions[0]?.contentHash).toBe(resolvedDefinition?.contentHash);
+    expect(resolvedDefinition).toMatchObject({
+      schemaVersion: 3,
+      resourceRef: G_BOT_SUBJECT_DEFINITION_REF,
+    });
+
+    const socketIds = resolvedDefinition?.sockets.map((socket) => socket.id).sort();
+    expect(socketIds).toEqual([
+      "CameraTarget3D",
+      "FirstPersonView",
+      "LookAhead",
+      "SeatAlignment",
+      "ThirdPersonTarget",
+      "hand.right",
+    ]);
+    expect(new Set(socketIds).size).toBe(6);
+  });
+
+  it("locks the exact canonical hashes for every G Bot binding resource", () => {
+    const resources = [
+      builtInSubjectResourceRegistry.resolveSubjectAsset(G_BOT_SUBJECT_ASSET_REF),
+      builtInSubjectResourceRegistry.resolveRigProfile(G_BOT_RIG_PROFILE_REF),
+      builtInSubjectResourceRegistry.resolveAnimationSet(G_BOT_ANIMATION_SET_REF),
+      builtInSubjectResourceRegistry.resolveColliderProfile(
+        G_BOT_COLLIDER_PROFILE_REF,
+      ),
+      builtInSubjectResourceRegistry.resolveSubjectDefinition(
+        G_BOT_SUBJECT_DEFINITION_REF,
+      ),
+    ];
+
+    expect(
+      resources.map((resource) => ({
+        resourceRef: resource?.resourceRef,
+        contentHash: resource?.contentHash,
+      })),
+    ).toEqual([
+      {
+        resourceRef: G_BOT_SUBJECT_ASSET_REF,
+        contentHash:
+          "sha256:fec417067c0ff5fb6f45adcc3ad6185bd6f692a58e6e5617d064de4e11448831",
+      },
+      {
+        resourceRef: G_BOT_RIG_PROFILE_REF,
+        contentHash:
+          "sha256:463eda61823207629b87b50938f42f4b55bb246944d16b51214ebeb3eaa343bc",
+      },
+      {
+        resourceRef: G_BOT_ANIMATION_SET_REF,
+        contentHash:
+          "sha256:e624c0f621e1a74ec034a7746a7b0a4536c9af7113b481f25a737ec5992629c4",
+      },
+      {
+        resourceRef: G_BOT_COLLIDER_PROFILE_REF,
+        contentHash:
+          "sha256:229d120df97e2ffeb41f6884c47e83742a1848f5fcc056068e5c0d88fb228140",
+      },
+      {
+        resourceRef: G_BOT_SUBJECT_DEFINITION_REF,
+        contentHash:
+          "sha256:0a8f32a97d3e0b764ee30fbc90d5edd1059fcc61e645699b21b2e9dae71ea3ee",
+      },
+    ]);
   });
 
   it("rejects non-exact Golden refs", () => {

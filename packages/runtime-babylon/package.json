@@ -13,6 +13,7 @@
     "@whitebox-world/protocol": "workspace:*",
     "@whitebox-world/runtime-contracts": "workspace:*",
     "@whitebox-world/subject-actions": "workspace:*",
+    "@whitebox-world/terrain-surface": "workspace:*",
     "lodash-es": "^4.18.1"
   },
   "devDependencies": {

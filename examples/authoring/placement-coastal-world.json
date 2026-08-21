@@ -63,7 +63,7 @@
       {
         "id": "spawn-overlook-region",
         "kind": "polygon-xz",
-        "pointsMetersXZ": [[-4, 26], [4, 26], [4, 34], [-4, 34]],
+        "pointsMetersXZ": [[-4, 26], [-0.5, 26], [-0.5, 34], [-4, 34]],
         "semanticClassId": "region.spawn-overlook"
       },
       {
@@ -118,7 +118,7 @@
           "source": {
             "kind": "procedural",
             "relief": "flat",
-            "baseHeightMeters": 0
+            "baseHeightMeters": 2
           },
           "grid": {
             "centerMetersXZ": [0, 0],
@@ -201,6 +201,10 @@
       "semantic": { "classId": "spawn.player" },
       "placement": {
         "kind": "solved",
+        "initialTransform": {
+          "positionMetersXYZ": [-2, 2, 28],
+          "rotationEulerRadiansXYZ": [0, -0.043451, 0]
+        },
         "placementConstraintIds": [
           "spawn-inside",
           "spawn-faces-focus",
@@ -214,7 +218,7 @@
       "semantic": { "classId": "anchor.composition-focus" },
       "placement": {
         "kind": "fixed",
-        "transform": { "positionMetersXYZ": [0, 0, -18] }
+        "transform": { "positionMetersXYZ": [0, 2, -18] }
       }
     },
     {
@@ -360,7 +364,7 @@
         "requirement": "required",
         "facingEntityId": "spawn-main",
         "targetEntityId": "composition-focus",
-        "maximumAngularDeviationDegrees": 15
+        "maximumAngularDeviationDegrees": 0.25
       },
       {
         "id": "lighthouse-supported",

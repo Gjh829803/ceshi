@@ -97,7 +97,7 @@ export function parseCanonicalJson(sourceText: string): AuthoringResult<unknown>
   if (duplicateDiagnostics.length > 0) {
     return { ok: false, diagnostics: duplicateDiagnostics };
   }
-  return { ok: true, value: getNodeValue(root), diagnostics: [] };
+  return { ok: true, value: JSON.parse(sourceText) as unknown, diagnostics: [] };
 }
 
 export function parseAuthoringSpecJson(sourceText: string): AuthoringResult<AuthoringSpecV3> {

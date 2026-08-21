@@ -147,10 +147,11 @@ export interface WorldRuntimeSessionV3 {
 
 export interface SubjectDefinitionSummaryV1 {
   resourceRef: string;
+  contentHash: string;
   displayName: string;
   semanticClassId: string;
   bodyTopology: string;
-  agentAccessLevel: "T0" | "T1" | "T2";
+  authoringAvailability: "recommended" | "advanced" | "experimental";
   defaultMotionProfileRef: string;
   controlProfileRef: string;
   cameraContextProfileRef: string;
@@ -162,7 +163,12 @@ export interface MotionKernelSummaryV1 {
   implementationId: string;
   commandKind: string;
   runtimeStatus: "implemented" | "reserved";
-  agentAccessLevel: "internal" | "T0" | "T1" | "T2";
+  authoringAvailability: "internal" | "recommended" | "advanced" | "experimental";
+}
+
+export interface CapabilityDiscoveryOptionsV1 {
+  includeExperimental?: boolean;
+  includeInternal?: boolean;
 }
 
 export interface CompatibleProfileSummaryV1 {
@@ -219,8 +225,12 @@ export interface WorldkitBrowserApiV3 {
   captureScreenshot(): string;
   reset(): WorldRuntimeSnapshotV3;
   setPaused(paused: boolean): WorldRuntimeSnapshotV3;
-  listSubjectDefinitions?(): readonly SubjectDefinitionSummaryV1[];
-  listMotionKernels?(): readonly MotionKernelSummaryV1[];
+  listSubjectDefinitions?(
+    options?: CapabilityDiscoveryOptionsV1,
+  ): readonly SubjectDefinitionSummaryV1[];
+  listMotionKernels?(
+    options?: CapabilityDiscoveryOptionsV1,
+  ): readonly MotionKernelSummaryV1[];
   listCompatibleProfiles?(
     subjectDefinitionRef: string,
   ): readonly CompatibleProfileSummaryV1[];

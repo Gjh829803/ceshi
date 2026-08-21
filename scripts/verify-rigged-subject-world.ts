@@ -548,7 +548,11 @@ async function verifyBrowser(
       }
     }
 
-    const isolationBefore = await page.evaluate(() => window.__WORLDKIT__!.reset());
+    const isolationBefore = await page.evaluate(async () => {
+      const api = window.__WORLDKIT__!;
+      api.reset();
+      return api.runFixedInput([{ actions: [], ticks: 1 }]);
+    });
     const receipt = await page.evaluate(
       ({ controllerId, expectedControlledEntityId, controlledEntityId }) =>
         window.__WORLDKIT__!.bindControl({
@@ -621,8 +625,16 @@ async function verifyBrowser(
     let routeHits = 0;
     let responseStatus = 0;
     let responseContentType = "";
-    const exactAssetUrl = new URL(ASSET_ROUTE_PATH, server.url).href;
-    await tamperPage.route(exactAssetUrl, async (route) => {
+    const compiledAsset = artifact.executionPlan.subjectAssets.find(
+      (asset) => asset.subjectAssetRef === SUBJECT_ASSET_REF,
+    );
+    assert.ok(compiledAsset !== undefined);
+    const exactAssetUrl = new URL(ASSET_ROUTE_PATH, server.url);
+    exactAssetUrl.searchParams.set(
+      "worldkit-content-hash",
+      compiledAsset.artifactContentHash,
+    );
+    await tamperPage.route(exactAssetUrl.href, async (route) => {
       routeHits += 1;
       assert.equal(routeHits, 1, "Tamper fixture requested the GLB more than once.");
       const response = await route.fetch();

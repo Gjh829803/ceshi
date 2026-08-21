@@ -13,6 +13,12 @@ import type {
   Vec2,
 } from "@whitebox-world/authoring";
 import { sha256CanonicalJson } from "@whitebox-world/protocol";
+import {
+  validateSpawnSafety,
+  type SpawnFootprintBoundary,
+  type SpawnStaticBlockingObject,
+} from "@whitebox-world/testkit";
+import { sampleTriangleHeightfieldSurface } from "@whitebox-world/terrain-surface";
 import type {
   CompileDiagnostic,
   CompileWorldResultV4,
@@ -49,7 +55,6 @@ const EXECUTION_BIPED_BONE_IDS = [
   "lower-leg.left",
   "lower-leg.right",
   "neck",
-  "root",
   "spine",
   "upper-arm.left",
   "upper-arm.right",
@@ -87,31 +92,20 @@ export function sampleTerrainHeight(
   const [columns, rows] = terrain.resolutionCellsXZ;
   const minimumX = terrain.centerMetersXZ[0] - terrain.sizeMetersXZ[0] / 2;
   const minimumZ = terrain.centerMetersXZ[1] - terrain.sizeMetersXZ[1] / 2;
-  const x = Math.max(
-    0,
-    Math.min(
-      columns - 1,
-      ((pointMetersXZ[0] - minimumX) / terrain.sizeMetersXZ[0]) * (columns - 1),
-    ),
-  );
-  const z = Math.max(
-    0,
-    Math.min(
-      rows - 1,
-      ((pointMetersXZ[1] - minimumZ) / terrain.sizeMetersXZ[1]) * (rows - 1),
-    ),
-  );
-  const x0 = Math.floor(x);
-  const z0 = Math.floor(z);
-  const x1 = Math.min(columns - 1, x0 + 1);
-  const z1 = Math.min(rows - 1, z0 + 1);
-  const tx = x - x0;
-  const tz = z - z0;
-  const at = (column: number, row: number): number =>
-    terrain.heightSamplesMeters[row * columns + column] ?? 0;
-  const top = at(x0, z0) + (at(x1, z0) - at(x0, z0)) * tx;
-  const bottom = at(x0, z1) + (at(x1, z1) - at(x0, z1)) * tx;
-  return top + (bottom - top) * tz;
+  const maximumX = minimumX + terrain.sizeMetersXZ[0];
+  const maximumZ = minimumZ + terrain.sizeMetersXZ[1];
+  return sampleTriangleHeightfieldSurface(
+    {
+      centerMetersXZ: terrain.centerMetersXZ,
+      sizeMetersXZ: terrain.sizeMetersXZ,
+      resolutionVerticesXZ: terrain.resolutionCellsXZ,
+      heightSamplesMeters: terrain.heightSamplesMeters,
+    },
+    [
+      Math.max(minimumX, Math.min(maximumX, pointMetersXZ[0])),
+      Math.max(minimumZ, Math.min(maximumZ, pointMetersXZ[1])),
+    ],
+  )!.heightMeters;
 }
 
 function findOnlyNodeV3<K extends NormalizedWorldNodeV3["kind"]>(
@@ -269,6 +263,133 @@ function compileObjectsV3(world: NormalizedWorldIRV3): ExecutionObjectV3[] {
     .sort((left, right) => left.entityId.localeCompare(right.entityId));
 }
 
+function staticObjectFootprintV3(
+  object: ExecutionObjectV3,
+): SpawnStaticBlockingObject | undefined {
+  const [rotationX, rotationY, rotationZ] = object.transform.rotationEulerRadiansXYZ;
+  if (Math.abs(rotationX) > 1e-8 || Math.abs(rotationZ) > 1e-8) return undefined;
+  const [scaleX, scaleY, scaleZ] = object.transform.scaleXYZ.map(Math.abs) as [
+    number,
+    number,
+    number,
+  ];
+  const [centerX, centerY, centerZ] = object.transform.positionMetersXYZ;
+  let footprint: SpawnFootprintBoundary;
+  let halfHeightMeters: number;
+  if (object.primitive.kind === "box") {
+    const halfX = object.primitive.sizeMetersXYZ[0] * scaleX / 2;
+    const halfZ = object.primitive.sizeMetersXYZ[2] * scaleZ / 2;
+    const cosine = Math.cos(rotationY);
+    const sine = Math.sin(rotationY);
+    footprint = {
+      kind: "polygon",
+      pointsMetersXZ: [
+        [-halfX, -halfZ],
+        [halfX, -halfZ],
+        [halfX, halfZ],
+        [-halfX, halfZ],
+      ].map(([x, z]) => [
+        centerX + x! * cosine - z! * sine,
+        centerZ + x! * sine + z! * cosine,
+      ] as const),
+    };
+    halfHeightMeters = object.primitive.sizeMetersXYZ[1] * scaleY / 2;
+  } else {
+    const radiusMeters = object.primitive.radiusMeters * Math.max(scaleX, scaleZ);
+    footprint = {
+      kind: "circle",
+      centerMetersXZ: [centerX, centerZ],
+      radiusMeters,
+    };
+    halfHeightMeters = object.primitive.kind === "sphere"
+      ? object.primitive.radiusMeters * scaleY
+      : object.primitive.heightMeters * scaleY / 2;
+  }
+  return {
+    entityId: object.entityId,
+    footprint,
+    heightRangeMeters: [centerY - halfHeightMeters, centerY + halfHeightMeters],
+  };
+}
+
+function validateCompiledSpawnFootprintsV3(
+  subjects: readonly ExecutionSubjectV3[],
+  waters: readonly ExecutionWaterV3[],
+  objects: readonly ExecutionObjectV3[],
+): CompileDiagnostic[] {
+  const diagnostics: CompileDiagnostic[] = [];
+  const blockers = objects
+    .filter((object) => object.collisionEnabled)
+    .flatMap((object) => {
+      const blocker = staticObjectFootprintV3(object);
+      return blocker === undefined ? [] : [blocker];
+    });
+  for (const subject of subjects) {
+    const spawnCapsuleFeetPositionMetersXYZ = [
+      subject.spawnSubjectOriginPositionMetersXYZ[0] +
+        subject.collider.centerOffsetFromSubjectOriginMetersXYZ[0],
+      subject.spawnSubjectOriginPositionMetersXYZ[1] +
+        subject.collider.centerOffsetFromSubjectOriginMetersXYZ[1] -
+        subject.collider.heightMeters / 2,
+      subject.spawnSubjectOriginPositionMetersXYZ[2] +
+        subject.collider.centerOffsetFromSubjectOriginMetersXYZ[2],
+    ] as const;
+    for (const water of waters) {
+      const result = validateSpawnSafety({
+        entityId: subject.entityId,
+        position: spawnCapsuleFeetPositionMetersXYZ,
+        capsule: {
+          radius: subject.collider.radiusMeters,
+          height: subject.collider.heightMeters,
+        },
+        waterSurfaces: [{
+          entityId: water.entityId,
+          boundary: water.boundary,
+          waterLevelMeters: water.waterLevelMeters,
+          depthMeters: water.depthMeters,
+          traversalMode: water.traversalMode,
+        }],
+      });
+      if (result.some((diagnostic) => diagnostic.code === "SPAWN_IN_BLOCKED_WATER")) {
+        diagnostics.push({
+          severity: "error",
+          code: "COMPILER_SPAWN_IN_BLOCKED_WATER",
+          instancePath: `/nodes/${subject.entityId}/spawnAnchorEntityId`,
+          message: `Subject '${subject.entityId}' spawn is inside blocked water '${water.entityId}'.`,
+          details: {
+            subjectEntityId: subject.entityId,
+            waterEntityId: water.entityId,
+          },
+        });
+      }
+    }
+    for (const blocker of blockers) {
+      const result = validateSpawnSafety({
+        entityId: subject.entityId,
+        position: spawnCapsuleFeetPositionMetersXYZ,
+        capsule: {
+          radius: subject.collider.radiusMeters,
+          height: subject.collider.heightMeters,
+        },
+        staticBlockingObjects: [blocker],
+      });
+      if (result.some((diagnostic) => diagnostic.code === "SPAWN_INSIDE_STATIC_BLOCKER")) {
+        diagnostics.push({
+          severity: "error",
+          code: "COMPILER_SPAWN_INSIDE_STATIC_BLOCKER",
+          instancePath: `/nodes/${subject.entityId}/spawnAnchorEntityId`,
+          message: `Subject '${subject.entityId}' spawn is inside static blocking object '${blocker.entityId}'.`,
+          details: {
+            subjectEntityId: subject.entityId,
+            objectEntityId: blocker.entityId,
+          },
+        });
+      }
+    }
+  }
+  return diagnostics;
+}
+
 interface CompiledSubjectsV3 {
   subjects: ExecutionSubjectV3[];
   subjectAssets: ExecutionSubjectAssetV1[];
@@ -354,7 +475,7 @@ function compileRigProfileV1(
   return {
     rigProfileRef: resource.rigProfileRef,
     bodyTopology: resource.bodyTopology,
-    skeletonRootNodeName: resource.skeletonRootNodeName,
+    skeletonRootBoneName: resource.skeletonRootBoneName,
     requiredBoneIds: [...resource.requiredBoneIds],
     sourceNodeNameByBoneId: {
       chest: resource.sourceNodeNameByBoneId.chest,
@@ -369,7 +490,6 @@ function compileRigProfileV1(
       "lower-leg.left": resource.sourceNodeNameByBoneId["lower-leg.left"],
       "lower-leg.right": resource.sourceNodeNameByBoneId["lower-leg.right"],
       neck: resource.sourceNodeNameByBoneId.neck,
-      root: resource.sourceNodeNameByBoneId.root,
       spine: resource.sourceNodeNameByBoneId.spine,
       "upper-arm.left": resource.sourceNodeNameByBoneId["upper-arm.left"],
       "upper-arm.right": resource.sourceNodeNameByBoneId["upper-arm.right"],
@@ -509,23 +629,36 @@ function compileCapabilityAssemblyV1(
     authoringRanges: structuredClone(profile.authoringRanges ?? {}),
     motionTags: [...profile.motionTags],
   });
-  const implementationId = assembly.motionKernel.implementationId;
-  if (
-    implementationId !== "free-ground" &&
-    implementationId !== "forward-steer" &&
-    implementationId !== "wheeled-arcade" &&
-    implementationId !== "surface-slide" &&
-    implementationId !== "water-surface" &&
-    implementationId !== "unpowered-glide"
-  ) {
-    throw new Error(
-      `NormalizedWorldIRV3 invariant violated: reserved Motion Kernel '${assembly.motionKernel.resourceRef}' cannot enter an Execution Plan.`,
-    );
-  }
-  const relationshipProfiles = assembly.relationshipProfiles.map((profile) => {
-    if (profile.relationshipType === "mount") {
+  const compileMotionKernel = (
+    motionKernel: typeof assembly.motionKernels[number],
+  ): NonNullable<ExecutionSubjectV3["capabilityAssembly"]>["motionKernels"][number] => {
+    const implementationId = motionKernel.implementationId;
+    if (
+      implementationId !== "free-ground" &&
+      implementationId !== "forward-steer" &&
+      implementationId !== "wheeled-arcade" &&
+      implementationId !== "surface-slide" &&
+      implementationId !== "water-surface" &&
+      implementationId !== "unpowered-glide"
+    ) {
       throw new Error(
-        `NormalizedWorldIRV3 invariant violated: reserved Mount Profile '${profile.resourceRef}' cannot enter an Execution Plan.`,
+        `NormalizedWorldIRV3 invariant violated: reserved Motion Kernel '${motionKernel.resourceRef}' cannot enter an Execution Plan.`,
+      );
+    }
+    return {
+      resourceRef: motionKernel.resourceRef,
+      implementationId,
+      commandKind: motionKernel.commandKind,
+      supportedMediums: [...motionKernel.supportedMediums],
+      runtimeParameterNames: [...motionKernel.runtimeParameterNames],
+      fallbackMotionProfileRef: motionKernel.fallbackMotionProfileRef,
+      deterministic: true,
+    };
+  };
+  const relationshipProfiles = assembly.relationshipProfiles.map((profile) => {
+    if (profile.runtimeStatus !== "implemented" || profile.relationshipType === "mount") {
+      throw new Error(
+        `NormalizedWorldIRV3 invariant violated: reserved Relationship Profile '${profile.resourceRef}' cannot enter an Execution Plan.`,
       );
     }
     return {
@@ -541,19 +674,11 @@ function compileCapabilityAssemblyV1(
     };
   });
   return {
-    agentAccessLevel: assembly.agentAccessLevel,
+    authoringAvailability: assembly.authoringAvailability,
     defaultMotionProfile: compileMotionProfile(assembly.defaultMotionProfile),
     optionalMotionProfiles: assembly.optionalMotionProfiles.map(compileMotionProfile),
     fallbackMotionProfile: compileMotionProfile(assembly.fallbackMotionProfile),
-    motionKernel: {
-      resourceRef: assembly.motionKernel.resourceRef,
-      implementationId,
-      commandKind: assembly.motionKernel.commandKind,
-      supportedMediums: [...assembly.motionKernel.supportedMediums],
-      runtimeParameterNames: [...assembly.motionKernel.runtimeParameterNames],
-      fallbackMotionProfileRef: assembly.motionKernel.fallbackMotionProfileRef,
-      deterministic: true,
-    },
+    motionKernels: assembly.motionKernels.map(compileMotionKernel),
     controlProfile: {
       resourceRef: assembly.controlProfile.resourceRef,
       commandKind: assembly.controlProfile.commandKind,
@@ -616,7 +741,6 @@ function colliderProfileMatchesDefinitionV3(
 
 function compileSubjectsV3(
   world: NormalizedWorldIRV3,
-  terrain: ExecutionTerrainV3,
 ): CompiledSubjectsV3 {
   const definitionsByRef = new Map(
     world.resources.subjectDefinitions.map((definition) => [
@@ -768,9 +892,6 @@ function compileSubjectsV3(
         );
       }
 
-      const [spawnX, spawnYOffset, spawnZ] =
-        spawnAnchor.transform.positionMetersXYZ;
-      const groundHeightMeters = sampleTerrainHeight(terrain, [spawnX, spawnZ]);
       return {
         entityId: node.id,
         subjectDefinitionRef: definition.subjectDefinitionRef,
@@ -779,10 +900,10 @@ function compileSubjectsV3(
         semanticClassId: definition.semanticClassId,
         spawnAnchorEntityId: spawnAnchor.id,
         spawnSubjectOriginPositionMetersXYZ: [
-          spawnX,
-          groundHeightMeters + spawnYOffset,
-          spawnZ,
+          ...spawnAnchor.transform.positionMetersXYZ,
         ],
+        spawnSubjectFacingRadians:
+          spawnAnchor.transform.rotationEulerRadiansXYZ[1],
         forwardDirection: "-z",
         visualParts: definition.visualParts.map(compileSubjectVisualPartV3),
         visualBinding: definition.visualBinding.mode === "static"
@@ -924,7 +1045,15 @@ function compileWorldCore(input: CompileWorldCoreInput): CompileWorldCoreResult 
       animationSets,
       colliderProfiles,
       resourceCost: subjectResourceCost,
-    } = compileSubjectsV3(world, terrain);
+    } = compileSubjectsV3(world);
+    const spawnDiagnostics = validateCompiledSpawnFootprintsV3(
+      subjects,
+      waters,
+      objects,
+    );
+    if (spawnDiagnostics.length > 0) {
+      return { ok: false, diagnostics: spawnDiagnostics };
+    }
     const cameraNode = findOnlyNodeV3(world.nodes, "camera");
     const terrainVertices =
       terrain.resolutionCellsXZ[0] * terrain.resolutionCellsXZ[1];

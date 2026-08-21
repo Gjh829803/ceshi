@@ -6,7 +6,7 @@ import type { RegistrySubjectDefinitionV3 } from "./types-v3";
 const SUBJECT_DEFINITION_REFS = [
   "worldkit://subject-definition/animal.quadruped.forward-steer@1",
   "worldkit://subject-definition/glider.paraglider.unpowered@1",
-  "worldkit://subject-definition/humanoid.g-bot.ground@1",
+  "worldkit://subject-definition/humanoid.g-bot@1",
   "worldkit://subject-definition/surface-craft.ice-skimmer@1",
   "worldkit://subject-definition/vehicle.four-wheel.arcade@1",
   "worldkit://subject-definition/watercraft.kayak.surface@1",
@@ -42,7 +42,7 @@ const G_BOT_CLIPS = [
 
 function capabilityDefinitions(): readonly RegistrySubjectDefinitionV3[] {
   return builtInSubjectResourceRegistry
-    .listAllSubjectDefinitions()
+    .listCapabilitySubjectDefinitions()
     .filter(
       (definition): definition is RegistrySubjectDefinitionV3 =>
         "schemaVersion" in definition && definition.schemaVersion === 3,
@@ -50,16 +50,16 @@ function capabilityDefinitions(): readonly RegistrySubjectDefinitionV3[] {
 }
 
 describe("capability-driven subject registry", () => {
-  it("registers the six phase-one subject packages without changing the legacy view", () => {
+  it("registers the six phase-one subject packages while keeping four CLI definitions", () => {
     expect(capabilityDefinitions().map((definition) => definition.resourceRef)).toEqual(
       SUBJECT_DEFINITION_REFS,
     );
-    expect(builtInSubjectResourceRegistry.listSubjectDefinitions()).toHaveLength(3);
+    expect(builtInSubjectResourceRegistry.listSubjectDefinitions()).toHaveLength(4);
   });
 
   it("freezes ten kernel IDs and exposes only K01, K02, K03, K04, K06 and K08 as runtime implementations", () => {
     const kernels = builtInSubjectResourceRegistry
-      .listAllResources()
+      .listCapabilityResources()
       .filter((resource) => resource.kind === "motion-kernel");
 
     expect(kernels).toHaveLength(10);
@@ -140,12 +140,22 @@ describe("capability-driven subject registry", () => {
     }
   });
 
+  it("publishes relationship profiles as reserved until their runtime behavior exists", () => {
+    expect([
+      "worldkit://relationship-profile/mount.reserved@1",
+      "worldkit://relationship-profile/seat.driver@1",
+      "worldkit://relationship-profile/tether.standard@1",
+    ].map((resourceRef) =>
+      builtInSubjectResourceRegistry.resolveRelationshipProfile(resourceRef)?.runtimeStatus
+    )).toEqual(["reserved", "reserved", "reserved"]);
+  });
+
   it("locks the current 25-clip G Bot artifact and keeps runtime state binding explicitly unready", () => {
     const asset = builtInSubjectResourceRegistry.resolveSubjectAsset(
       "worldkit://subject-asset/actor.humanoid.g-bot@1",
     );
     const actionSet = builtInSubjectResourceRegistry.resolveAnimationSet(
-      "worldkit://animation-set/humanoid.g-bot.all@1",
+      "worldkit://animation-set/humanoid.ground.g-bot@1",
     );
 
     expect(asset).toMatchObject({

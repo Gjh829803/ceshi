@@ -4,9 +4,9 @@
     "id": "R01.seat.driver",
     "version": 1,
     "resourceRef": "worldkit://relationship-profile/seat.driver@1",
-    "agentAccessLevel": "T2",
+    "authoringAvailability": "experimental",
     "relationshipType": "seat",
-    "runtimeStatus": "implemented",
+    "runtimeStatus": "reserved",
     "requiredSourceSocketIds": ["SeatAlignment"],
     "requiredTargetSocketIds": ["DriverSeat"],
     "controlTransferPolicy": "transfer-to-target",
@@ -14,7 +14,7 @@
     "maximumDistanceMeters": 3,
     "aiMetadata": {
       "displayName": "R01 Driver Seat",
-      "description": "Direct seat alignment and control transfer for whitebox PoCs.",
+      "description": "Frozen seat alignment and control-transfer vocabulary; runtime behavior is reserved in this phase.",
       "semanticTags": ["driver", "seat"]
     }
   },
@@ -23,9 +23,9 @@
     "id": "R03.tether.standard",
     "version": 1,
     "resourceRef": "worldkit://relationship-profile/tether.standard@1",
-    "agentAccessLevel": "T2",
+    "authoringAvailability": "experimental",
     "relationshipType": "tether",
-    "runtimeStatus": "implemented",
+    "runtimeStatus": "reserved",
     "requiredSourceSocketIds": ["TetherSource"],
     "requiredTargetSocketIds": ["TetherTarget"],
     "controlTransferPolicy": "keep-source",
@@ -33,7 +33,7 @@
     "maximumDistanceMeters": 4,
     "aiMetadata": {
       "displayName": "R03 Standard Tether",
-      "description": "Bounded anchor-to-anchor relationship for the paraglider PoC.",
+      "description": "Frozen bounded tether vocabulary for composite subjects; runtime behavior is reserved in this phase.",
       "semanticTags": ["constraint", "tether"]
     }
   },
@@ -42,7 +42,7 @@
     "id": "R02.mount.reserved",
     "version": 1,
     "resourceRef": "worldkit://relationship-profile/mount.reserved@1",
-    "agentAccessLevel": "internal",
+    "authoringAvailability": "internal",
     "relationshipType": "mount",
     "runtimeStatus": "reserved",
     "requiredSourceSocketIds": ["SeatAlignment"],

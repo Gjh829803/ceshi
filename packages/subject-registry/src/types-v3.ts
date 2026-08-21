@@ -33,7 +33,7 @@ interface CapabilityResourceBaseInputV1 {
   id: string;
   version: number;
   resourceRef: string;
-  agentAccessLevel: "internal" | "T0" | "T1" | "T2";
+  authoringAvailability: "internal" | "recommended" | "advanced" | "experimental";
   aiMetadata: SubjectResourceAiMetadataV1;
 }
 
@@ -229,7 +229,7 @@ export interface RegistrySubjectDefinitionInputV3
     "category" | "bodyTopology" | "profiles"
   > {
   schemaVersion: 3;
-  agentAccessLevel: "T0" | "T1" | "T2";
+  authoringAvailability: "recommended" | "advanced" | "experimental";
   category: "human" | "animal" | "vehicle" | "composite" | "custom";
   bodyTopology:
     | "biped"
@@ -328,15 +328,15 @@ export interface SubjectResourceRegistryV3 extends SubjectResourceRegistryV2 {
   resolveHarnessProfile(resourceRef: string): HarnessProfileV1 | undefined;
   resolvePoseSetProfile(resourceRef: string): PoseSetProfileV1 | undefined;
   resolveRenderBindingProfile(resourceRef: string): RenderBindingProfileV1 | undefined;
-  /** Backward-compatible Authoring V2 definition view. */
-  listSubjectDefinitions(): readonly RegistrySubjectDefinitionV2[];
-  /** Full capability-driven definition view. */
-  listAllSubjectDefinitions(): readonly (
+  /** CLI discovery view, including canonical V3 products that extend the V2 fields. */
+  listSubjectDefinitions(): readonly (
     | RegistrySubjectDefinitionV2
     | RegistrySubjectDefinitionV3
   )[];
-  /** Backward-compatible V1 resource view. */
+  /** Capability-driven Authoring V3 definitions only. */
+  listCapabilitySubjectDefinitions(): readonly RegistrySubjectDefinitionV3[];
+  /** Canonical V1 resource view. */
   listResources(): readonly SubjectRegistryResourceV1[];
-  /** Full capability-driven registry view. */
-  listAllResources(): readonly SubjectRegistryResourceV3[];
+  /** Capability resources only, without legacy resources or Subject Definitions. */
+  listCapabilityResources(): readonly SubjectCapabilityResourceV1[];
 }

@@ -429,6 +429,7 @@ pnpm test
 pnpm build
 pnpm verify:canonical
 pnpm verify:rigged-subject
+pnpm verify:g-bot-subject
 pnpm verify:placement-layout
 ```
 
@@ -438,7 +439,12 @@ Package Definition Hash/Lock、三个独立 Subject、Havok 初始化、墙体�
 
 `verify:rigged-subject` 在真实 Chromium 中额外验证 Golden GLB 原始字节 Hash、
 Rig/Clip/Collider 绑定、四种固定 Tick 动作、双实例隔离、Havok 墙体停止、
-五张 936×596 截图和篡改后的稳定失败；它不是产品资产验收的替代品。
+五张 936×596 截图和篡改后的稳定失败；它是通用底座回归，不替代具体产品资产验收。
+
+`verify:g-bot-subject` 对首个产品 G Bot 独立验证 GLB/Manifest/Registry 映射、
+65 根源 Bone、25 个源 Clip、当前四个 Semantic Action、双实例隔离、墙体碰撞和
+五张 936×596 截图。普通 JSON 示例只写
+`worldkit://subject-definition/humanoid.g-bot@1`，不写模型 URL、Mixamo Bone 或 Clip 名。
 
 `verify:placement-layout` 在真实 Chromium/Havok 中验证海湾 Fixture 的 19 条约束、
 八种 S1 Kind、Report → IR → Plan → Snapshot 一致性、Required Assertion、连续和并发

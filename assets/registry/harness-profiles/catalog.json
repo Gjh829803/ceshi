@@ -4,7 +4,7 @@
     "id": "subject.standard",
     "version": 1,
     "resourceRef": "worldkit://harness-profile/subject.standard@1",
-    "agentAccessLevel": "T0",
+    "authoringAvailability": "recommended",
     "requiredCheckIds": ["H01", "H02", "H03", "H04", "H05", "H06", "H07", "H08", "H09"],
     "aiMetadata": {
       "displayName": "Standard Subject Harness",

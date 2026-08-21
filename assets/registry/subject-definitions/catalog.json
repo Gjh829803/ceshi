@@ -2,67 +2,10 @@
   {
     "kind": "subject-definition",
     "schemaVersion": 3,
-    "id": "humanoid.g-bot.ground",
-    "version": 1,
-    "resourceRef": "worldkit://subject-definition/humanoid.g-bot.ground@1",
-    "agentAccessLevel": "T0",
-    "category": "human",
-    "bodyTopology": "biped",
-    "semanticClassId": "subject.humanoid.g-bot",
-    "coordinateConvention": { "forwardAxis": "-Z", "upAxis": "+Y", "metersPerUnit": 1, "pivot": "support-center" },
-    "visualParts": [
-      {
-        "id": "body.asset",
-        "kind": "asset",
-        "subjectAssetRef": "worldkit://subject-asset/actor.humanoid.g-bot@1",
-        "localTransform": { "positionMetersXYZ": [0, 0, 0], "rotationEulerRadiansXYZ": [0, 3.141592653589793, 0], "scaleXYZ": [1, 1, 1] },
-        "appearance": { "mode": "whitebox-neutral" },
-        "semanticTags": ["body", "g-bot", "rigged"]
-      }
-    ],
-    "visualBinding": {
-      "mode": "rigged",
-      "rigProfileRef": "worldkit://rig-profile/mixamo-humanoid.g-bot@1",
-      "animationSetRef": "worldkit://animation-set/humanoid.g-bot.all@1"
-    },
-    "sockets": [
-      { "id": "FirstPersonView", "kind": "bone", "boneId": "head", "offsetTransform": { "positionMetersXYZ": [0, 0.09, -0.08], "rotationEulerRadiansXYZ": [0, 0, 0] }, "semanticTags": ["camera", "first-person"] },
-      { "id": "ThirdPersonTarget", "kind": "local", "localTransform": { "positionMetersXYZ": [0, 1.25, 0], "rotationEulerRadiansXYZ": [0, 0, 0] }, "semanticTags": ["camera", "third-person"] },
-      { "id": "CameraTarget3D", "kind": "local", "localTransform": { "positionMetersXYZ": [0, 1.2, 0], "rotationEulerRadiansXYZ": [0, 0, 0] }, "semanticTags": ["camera", "target"] },
-      { "id": "LookAhead", "kind": "local", "localTransform": { "positionMetersXYZ": [0, 1.1, -1], "rotationEulerRadiansXYZ": [0, 0, 0] }, "semanticTags": ["camera", "look-ahead"] },
-      { "id": "SeatAlignment", "kind": "local", "localTransform": { "positionMetersXYZ": [0, 0.9, 0], "rotationEulerRadiansXYZ": [0, 0, 0] }, "semanticTags": ["relationship", "seat"] }
-    ],
-    "colliderPolicy": { "kind": "profile", "colliderProfileRef": "worldkit://collider-profile/humanoid.medium-capsule@1" },
-    "capabilityRefs": ["worldkit://capability/locomotion.ground@1"],
-    "profiles": {
-      "physicsBodyProfileRef": "worldkit://physics-body-profile/character.capability-medium@1",
-      "locomotionProfileRef": "worldkit://locomotion-profile/ground.standard@1",
-      "motion": {
-        "defaultMotionProfileRef": "worldkit://motion-profile/free-ground.humanoid-medium@1",
-        "optionalMotionProfileRefs": ["worldkit://motion-profile/safe-ground@1"],
-        "fallbackMotionProfileRef": "worldkit://motion-profile/safe-ground@1"
-      },
-      "controlProfileRef": "worldkit://control-profile/planar.camera-relative@1",
-      "cameraContextProfileRef": "worldkit://camera-context/capability-driven.default@1",
-      "mediumProfileRef": "worldkit://medium-profile/ground-water-air.standard@1",
-      "harnessProfileRef": "worldkit://harness-profile/subject.standard@1"
-    },
-    "relationshipCapabilityRefs": [],
-    "actionOrPoseSetRef": "worldkit://animation-set/humanoid.g-bot.all@1",
-    "renderBindingProfileRef": "worldkit://render-binding/subject.standard@1",
-    "aiMetadata": {
-      "displayName": "G Bot Ground Package",
-      "description": "Rigged G Bot package using K01 free-ground movement and capability-driven cameras.",
-      "semanticTags": ["g-bot", "golden-preset", "ground", "humanoid", "rigged"]
-    }
-  },
-  {
-    "kind": "subject-definition",
-    "schemaVersion": 3,
     "id": "animal.quadruped.forward-steer",
     "version": 1,
     "resourceRef": "worldkit://subject-definition/animal.quadruped.forward-steer@1",
-    "agentAccessLevel": "T1",
+    "authoringAvailability": "advanced",
     "category": "animal",
     "bodyTopology": "quadruped",
     "semanticClassId": "subject.animal.quadruped",
@@ -100,7 +43,7 @@
     "id": "vehicle.four-wheel.arcade",
     "version": 1,
     "resourceRef": "worldkit://subject-definition/vehicle.four-wheel.arcade@1",
-    "agentAccessLevel": "T1",
+    "authoringAvailability": "experimental",
     "category": "vehicle",
     "bodyTopology": "four-wheel",
     "semanticClassId": "subject.vehicle.four-wheel",
@@ -137,7 +80,7 @@
     "id": "surface-craft.ice-skimmer",
     "version": 1,
     "resourceRef": "worldkit://subject-definition/surface-craft.ice-skimmer@1",
-    "agentAccessLevel": "T2",
+    "authoringAvailability": "experimental",
     "category": "vehicle",
     "bodyTopology": "surface-craft",
     "semanticClassId": "subject.surface-craft.skimmer",
@@ -174,7 +117,7 @@
     "id": "watercraft.kayak.surface",
     "version": 1,
     "resourceRef": "worldkit://subject-definition/watercraft.kayak.surface@1",
-    "agentAccessLevel": "T2",
+    "authoringAvailability": "experimental",
     "category": "composite",
     "bodyTopology": "watercraft",
     "semanticClassId": "subject.watercraft.kayak",
@@ -211,7 +154,7 @@
     "id": "glider.paraglider.unpowered",
     "version": 1,
     "resourceRef": "worldkit://subject-definition/glider.paraglider.unpowered@1",
-    "agentAccessLevel": "T2",
+    "authoringAvailability": "experimental",
     "category": "composite",
     "bodyTopology": "glider",
     "semanticClassId": "subject.glider.paraglider",

@@ -9,7 +9,11 @@ import { Mesh } from "@babylonjs/core/Meshes/mesh.js";
 import { MeshBuilder } from "@babylonjs/core/Meshes/meshBuilder.js";
 import { VertexData } from "@babylonjs/core/Meshes/mesh.vertexData.js";
 import { PhysicsAggregate } from "@babylonjs/core/Physics/v2/physicsAggregate.js";
-import { PhysicsShapeHeightField } from "@babylonjs/core/Physics/v2/physicsShape.js";
+import {
+  PhysicsShapeHeightField,
+  PhysicsShapeMesh,
+  type PhysicsShape,
+} from "@babylonjs/core/Physics/v2/physicsShape.js";
 import { PhysicsShapeType } from "@babylonjs/core/Physics/v2/IPhysicsEnginePlugin.js";
 import type { PhysicsEngine } from "@babylonjs/core/Physics/v2/physicsEngine.js";
 import { Scene } from "@babylonjs/core/scene.pure.js";
@@ -37,6 +41,7 @@ import type {
 import { TRUSTED_DEFAULT_CONTROLLER_ID } from "@whitebox-world/runtime-contracts";
 import { resolveGroundHumanoidAction } from "@whitebox-world/subject-actions";
 
+import "./babylon-shader-bootstrap";
 import { createWhiteboxMaterials, type WhiteboxMaterials } from "./materials";
 import { enableHavokPhysics, FIXED_TIME_STEP_SECONDS } from "./physics";
 import { SubjectController } from "./subject-controller";
@@ -76,6 +81,8 @@ export interface BabylonWorldRuntimeOptions {
 }
 
 type OwnedDisposer = () => void | Promise<void>;
+
+const WATER_SURFACE_CLASSIFICATION_EPSILON_METERS = 0.1;
 
 class WorldRuntimeDisposeErrorV1 extends Error {
   readonly name = "WorldRuntimeDisposeErrorV1";
@@ -129,10 +136,11 @@ function runtimeLayoutBounds(
   const sy = Math.sin(y);
   const cz = Math.cos(z);
   const sz = Math.sin(z);
+  // Matches Babylon Quaternion.FromEulerAngles(x, y, z): yaw(Y) * pitch(X) * roll(Z).
   const rotation = [
-    [cz * cy, cz * sy * sx - sz * cx, cz * sy * cx + sz * sx],
-    [sz * cy, sz * sy * sx + cz * cx, sz * sy * cx - cz * sx],
-    [-sy, cy * sx, cy * cx],
+    [cy * cz + sy * sx * sz, -cy * sz + sy * sx * cz, sy * cx],
+    [cx * sz, cx * cz, -sx],
+    [-sy * cz + cy * sx * sz, sy * sz + cy * sx * cz, cy * cx],
   ] as const;
   const rotated = rotation.map((row) => row.reduce(
     (sum, coefficient, axis) => sum + Math.abs(coefficient) * scaled[axis]!,
@@ -368,36 +376,16 @@ function containsPoint(boundary: ExecutionWaterBoundaryV3, x: number, z: number)
   return inside;
 }
 
-function movementMediumAtSubjectOrigin(
-  executionPlan: ExecutionPlanV4,
-  subjectOrigin: Vector3,
-): "ground" | "air" | "water" {
-  for (const water of executionPlan.waters) {
-    if (
-      water.traversalMode === "swimmable" &&
-      containsPoint(water.boundary, subjectOrigin.x, subjectOrigin.z) &&
-      subjectOrigin.y <= water.waterLevelMeters + 0.6 &&
-      subjectOrigin.y >= water.waterLevelMeters - water.depthMeters - 0.6
-    ) {
-      return "water";
-    }
-  }
-  const groundHeight = sampleExecutionTerrainHeight(
-    executionPlan.terrain,
-    subjectOrigin.x,
-    subjectOrigin.z,
-  );
-  return subjectOrigin.y <= groundHeight + 0.16 ? "ground" : "air";
-}
-
 function waterSurfaceHeightAtSubjectOrigin(
   executionPlan: ExecutionPlanV4,
   subjectOrigin: Vector3,
 ): number | undefined {
   return executionPlan.waters.find((water) =>
+    water.traversalMode === "swimmable" &&
     containsPoint(water.boundary, subjectOrigin.x, subjectOrigin.z) &&
     subjectOrigin.y >= water.waterLevelMeters - water.depthMeters - 1 &&
-    subjectOrigin.y <= water.waterLevelMeters + 2
+    subjectOrigin.y <=
+      water.waterLevelMeters + WATER_SURFACE_CLASSIFICATION_EPSILON_METERS
   )?.waterLevelMeters;
 }
 
@@ -441,7 +429,7 @@ export class BabylonWorldRuntime implements WorldRuntimeSessionV3 {
   private disposed = false;
   private controlledEntityId: string;
   private readonly aggregates: PhysicsAggregate[] = [];
-  private readonly ownedHeightfieldShape: PhysicsShapeHeightField;
+  private readonly ownedTerrainShape: PhysicsShape;
   private readonly subjectControllersByEntityId: ReadonlyMap<string, SubjectController>;
   private readonly subjectVisuals: readonly SubjectVisual[];
   private readonly subjectVisualsByEntityId: ReadonlyMap<string, SubjectVisual>;
@@ -457,7 +445,7 @@ export class BabylonWorldRuntime implements WorldRuntimeSessionV3 {
     subjectControllersByEntityId: ReadonlyMap<string, SubjectController>,
     subjectVisuals: readonly SubjectVisual[],
     camera: FreeCamera,
-    ownedHeightfieldShape: PhysicsShapeHeightField,
+    ownedTerrainShape: PhysicsShape,
     aggregates: PhysicsAggregate[],
     ownedDisposers: readonly OwnedDisposer[],
     autoStartRenderLoop: boolean,
@@ -473,7 +461,7 @@ export class BabylonWorldRuntime implements WorldRuntimeSessionV3 {
     );
     this.camera = camera;
     this.cameraDirector = new CameraDirectorV1(executionPlan, camera, scene);
-    this.ownedHeightfieldShape = ownedHeightfieldShape;
+    this.ownedTerrainShape = ownedTerrainShape;
     this.aggregates.push(...aggregates);
     this.ownedDisposers = ownedDisposers;
     this.renderLoop = () => this.renderFrame();
@@ -524,19 +512,22 @@ export class BabylonWorldRuntime implements WorldRuntimeSessionV3 {
 
       const terrainMesh = createTerrainMesh(options.executionPlan.terrain, materials.terrain, scene);
       const terrain = options.executionPlan.terrain;
-      const heightfieldShape = new PhysicsShapeHeightField(
-        terrain.sizeMetersXZ[0],
-        terrain.sizeMetersXZ[1],
-        terrain.resolutionCellsXZ[0],
-        terrain.resolutionCellsXZ[1],
-        toBabylonHeightfieldData(terrain),
-        scene,
-      );
+      const [terrainColumns, terrainRows] = terrain.resolutionCellsXZ;
+      const terrainShape: PhysicsShape = terrainColumns === terrainRows
+        ? new PhysicsShapeHeightField(
+            terrain.sizeMetersXZ[0],
+            terrain.sizeMetersXZ[1],
+            terrainColumns,
+            terrainRows,
+            toBabylonHeightfieldData(terrain),
+            scene,
+          )
+        : new PhysicsShapeMesh(terrainMesh, scene);
       const aggregates: PhysicsAggregate[] = [];
-      ownedDisposers.push(() => heightfieldShape.dispose());
+      ownedDisposers.push(() => terrainShape.dispose());
       const terrainAggregate = new PhysicsAggregate(
         terrainMesh,
-        heightfieldShape,
+        terrainShape,
         { mass: 0, friction: 0.9, restitution: 0 },
         scene,
       );
@@ -593,8 +584,6 @@ export class BabylonWorldRuntime implements WorldRuntimeSessionV3 {
           visual.root,
           scene,
           (subjectOrigin) =>
-            movementMediumAtSubjectOrigin(options.executionPlan, subjectOrigin),
-          (subjectOrigin) =>
             waterSurfaceHeightAtSubjectOrigin(options.executionPlan, subjectOrigin),
         );
         subjectControllersByEntityId.set(subject.entityId, controller);
@@ -616,7 +605,7 @@ export class BabylonWorldRuntime implements WorldRuntimeSessionV3 {
         subjectControllersByEntityId,
         subjectVisuals,
         camera,
-        heightfieldShape,
+        terrainShape,
         aggregates,
         ownedDisposers,
         options.engineFactory === undefined && options.autoStartRenderLoop !== false,
@@ -713,11 +702,13 @@ export class BabylonWorldRuntime implements WorldRuntimeSessionV3 {
       for (const subject of this.executionPlan.subjects) {
         const controller = this.controllerFor(subject.entityId);
         const controlled = subject.entityId === this.controlledEntityId;
-        controller.step(
-          controlled ? input.actions : [],
-          this.detectMovementMedium(controller),
-          viewControlFrame,
-        );
+        if (
+          controlled ||
+          controller.movementMedium !== "ground" ||
+          controller.hasPendingInitialGroundSupport
+        ) {
+          controller.step(controlled ? input.actions : [], viewControlFrame);
+        }
       }
       physicsEngine._step(FIXED_TIME_STEP_SECONDS);
       this.tick += 1;
@@ -725,6 +716,7 @@ export class BabylonWorldRuntime implements WorldRuntimeSessionV3 {
         const controller = this.controllerFor(subject.entityId);
         const visual = this.visualFor(subject.entityId);
         controller.synchronizeVisual();
+        controller.refreshMovementMedium();
         if (subject.entityId !== this.controlledEntityId) {
           visual.stepAnimation(this.tick, "idle");
           continue;
@@ -748,25 +740,30 @@ export class BabylonWorldRuntime implements WorldRuntimeSessionV3 {
       const subjectOrigin = controller.subjectOrigin;
       const velocity = controller.velocity;
       const motion = controller.motionSnapshot();
+      const capabilityState = subject.capabilityAssembly === undefined
+        ? {}
+        : {
+            activeMotionProfileRef: motion.activeMotionProfileRef,
+            activeMotionKernelRef: motion.activeMotionKernelRef,
+            motionTags: motion.motionTags,
+            relationshipRole: "none" as const,
+            safeFallbackActive: motion.fallbackActive,
+            motionParameterTuning: motion.parameterTuning,
+            ...(motion.lastFailureCode === undefined
+              ? {}
+              : { motionFailureCode: motion.lastFailureCode }),
+          };
       subjectStatesByEntityId[subject.entityId] = {
         entityId: subject.entityId,
         subjectDefinitionRef: subject.subjectDefinitionRef,
         subjectDefinitionHash: subject.subjectDefinitionHash,
         positionMetersXYZ: [subjectOrigin.x, subjectOrigin.y, subjectOrigin.z],
         velocityMetersPerSecondXYZ: [velocity.x, velocity.y, velocity.z],
-        movementMedium: this.detectMovementMedium(controller),
+        movementMedium: controller.movementMedium,
         activeActionId: this.visualFor(subject.entityId).activeActionId,
         forwardXYZ: motion.forwardXYZ,
         speedMetersPerSecond: motion.speedMetersPerSecond,
-        activeMotionProfileRef: motion.activeMotionProfileRef,
-        activeMotionKernelRef: motion.activeMotionKernelRef,
-        motionTags: motion.motionTags,
-        relationshipRole: "none",
-        safeFallbackActive: motion.fallbackActive,
-        motionParameterTuning: motion.parameterTuning,
-        ...(motion.lastFailureCode === undefined
-          ? {}
-          : { motionFailureCode: motion.lastFailureCode }),
+        ...capabilityState,
       };
     }
     const cameraDirectorSnapshot = this.cameraDirector.snapshot();
@@ -823,7 +820,7 @@ export class BabylonWorldRuntime implements WorldRuntimeSessionV3 {
 
   renderFrame(): void {
     this.assertUsable();
-    this.updateCamera();
+    for (const visual of this.subjectVisuals) visual.applyAnimationPose();
     this.scene.render();
   }
 
@@ -853,7 +850,7 @@ export class BabylonWorldRuntime implements WorldRuntimeSessionV3 {
   private detectMovementMedium(
     controller: SubjectController,
   ): "ground" | "air" | "water" {
-    return movementMediumAtSubjectOrigin(this.executionPlan, controller.subjectOrigin);
+    return controller.movementMedium;
   }
 
   private updateCamera(): void {
@@ -953,6 +950,9 @@ export class BabylonWorldRuntime implements WorldRuntimeSessionV3 {
     const motion = controller.motionSnapshot();
     const state = this.snapshot().subjectStatesByEntityId[subjectEntityId]!;
     const assembly = subject.capabilityAssembly;
+    const activeMotionKernel = assembly?.motionKernels.find(
+      (candidate) => candidate.resourceRef === motion.activeMotionKernelRef,
+    );
     const finiteState = [
       ...state.positionMetersXYZ,
       ...state.velocityMetersPerSecondXYZ,
@@ -960,7 +960,7 @@ export class BabylonWorldRuntime implements WorldRuntimeSessionV3 {
     ].every(Number.isFinite);
     const mediumCompatible =
       assembly === undefined ||
-      assembly.motionKernel.supportedMediums.includes(state.movementMedium);
+      activeMotionKernel?.supportedMediums.includes(state.movementMedium) === true;
     const cameraState = this.snapshot().camera;
     const cameraFinite = cameraState.positionMetersXYZ.every(Number.isFinite);
     const availableSocketIds = new Set(subject.sockets.map((socket) => socket.id));
@@ -980,7 +980,7 @@ export class BabylonWorldRuntime implements WorldRuntimeSessionV3 {
         checkId: "H01",
         status:
           assembly === undefined ||
-          assembly.motionKernel.commandKind === assembly.controlProfile.commandKind
+          activeMotionKernel?.commandKind === assembly.controlProfile.commandKind
             ? "passed"
             : "failed",
         message: "Control Profile and Motion Kernel command semantics agree.",

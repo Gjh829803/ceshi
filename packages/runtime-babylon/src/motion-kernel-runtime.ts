@@ -41,21 +41,6 @@ function numberParameter(
   return typeof value === "number" && Number.isFinite(value) ? value : fallback;
 }
 
-function kernelImplementationId(resourceRef: string):
-  | "free-ground"
-  | "forward-steer"
-  | "wheeled-arcade"
-  | "surface-slide"
-  | "water-surface"
-  | "unpowered-glide" {
-  if (resourceRef.includes("/forward-steer@")) return "forward-steer";
-  if (resourceRef.includes("/wheeled-arcade@")) return "wheeled-arcade";
-  if (resourceRef.includes("/surface-slide@")) return "surface-slide";
-  if (resourceRef.includes("/water-surface@")) return "water-surface";
-  if (resourceRef.includes("/unpowered-glide@")) return "unpowered-glide";
-  return "free-ground";
-}
-
 function profileIsValid(profile: ExecutionMotionProfileV1): boolean {
   for (const [name, value] of Object.entries(profile.parameters)) {
     if (typeof value !== "number") continue;
@@ -98,74 +83,13 @@ function smoothstep01(value: number): number {
   return clamped * clamped * (3 - 2 * clamped);
 }
 
-function runtimeParameterNamesForKernel(resourceRef: string): ReadonlySet<string> {
-  const implementationId = kernelImplementationId(resourceRef);
-  const names: Readonly<Record<ReturnType<typeof kernelImplementationId>, readonly string[]>> = {
-    "free-ground": [
-      "walkSpeedMetersPerSecond",
-      "runSpeedMetersPerSecond",
-      "jumpSpeedMetersPerSecond",
-      "accelerationMetersPerSecondSquared",
-      "decelerationMetersPerSecondSquared",
-      "turnRateRadiansPerSecond",
-      "airControlRatio",
-    ],
-    "forward-steer": [
-      "forwardSpeedMetersPerSecond",
-      "reverseSpeedMetersPerSecond",
-      "accelerationMetersPerSecondSquared",
-      "decelerationMetersPerSecondSquared",
-      "turnRateRadiansPerSecond",
-      "jumpSpeedMetersPerSecond",
-      "boostMultiplier",
-    ],
-    "wheeled-arcade": [
-      "forwardSpeedMetersPerSecond",
-      "reverseSpeedMetersPerSecond",
-      "accelerationMetersPerSecondSquared",
-      "brakeMetersPerSecondSquared",
-      "dragPerSecond",
-      "lowSpeedTurnRateRadiansPerSecond",
-      "highSpeedTurnRateRadiansPerSecond",
-      "steeringResponsePerSecond",
-      "steeringReturnPerSecond",
-      "fullSteeringAuthoritySpeedMetersPerSecond",
-      "turnRateSpeedCurveExponent",
-      "boostMultiplier",
-    ],
-    "surface-slide": [
-      "maximumSpeedMetersPerSecond",
-      "driveAccelerationMetersPerSecondSquared",
-      "surfaceFrictionPerSecond",
-      "turnRateRadiansPerSecond",
-      "boostMultiplier",
-    ],
-    "water-surface": [
-      "forwardSpeedMetersPerSecond",
-      "reverseSpeedMetersPerSecond",
-      "accelerationMetersPerSecondSquared",
-      "dragPerSecond",
-      "turnRateRadiansPerSecond",
-      "surfaceHoldStrengthPerSecond",
-      "boostMultiplier",
-    ],
-    "unpowered-glide": [
-      "minimumForwardSpeedMetersPerSecond",
-      "maximumForwardSpeedMetersPerSecond",
-      "glideAccelerationMetersPerSecondSquared",
-      "gravityScale",
-      "liftRatio",
-      "yawRateRadiansPerSecond",
-      "stallSpeedMetersPerSecond",
-    ],
-  };
-  return new Set(names[implementationId]);
-}
-
 function kernelParameterRelationshipsAreValid(profile: ExecutionMotionProfileV1): boolean {
-  if (kernelImplementationId(profile.motionKernelRef) !== "wheeled-arcade") return true;
-  return numberParameter(profile, "highSpeedTurnRateRadiansPerSecond", 0.42) <=
-    numberParameter(profile, "lowSpeedTurnRateRadiansPerSecond", 1.15);
+  const lowSpeedTurnRate = profile.parameters.lowSpeedTurnRateRadiansPerSecond;
+  const highSpeedTurnRate = profile.parameters.highSpeedTurnRateRadiansPerSecond;
+  if (typeof lowSpeedTurnRate !== "number" || typeof highSpeedTurnRate !== "number") {
+    return true;
+  }
+  return highSpeedTurnRate <= lowSpeedTurnRate;
 }
 
 export class MotionKernelRuntimeV1 {
@@ -174,12 +98,15 @@ export class MotionKernelRuntimeV1 {
   private readonly up = Vector3.Up();
   private readonly colliderCenterOffset: Vector3;
   private readonly motionModeResolver: MotionModeResolverV1;
-  private yawRadians = 0;
+  private yawRadians: number;
   private forwardSpeedMetersPerSecond = 0;
   private planarVelocity = Vector3.Zero();
   private steeringInput = 0;
   private slideVelocity = Vector3.Zero();
   private jumpInProgress = false;
+  private jumpActionWasActive = false;
+  private currentMovementMedium: ExecutionMovementMediumV1 = "air";
+  private initialGroundSupportPending: boolean;
   private parameterTuning: MotionParameterTuningV1 = {};
   private parameterTuningRevision = 0;
   private effectiveProfileCache: {
@@ -192,12 +119,13 @@ export class MotionKernelRuntimeV1 {
     private readonly subject: ExecutionSubjectV3,
     gravityMetersPerSecondSquaredXYZ: Vec3,
     private readonly visualRoot: TransformNode,
-    scene: Scene,
+    private readonly scene: Scene,
     private readonly waterSurfaceHeightAtSubjectOrigin: (
       subjectOrigin: Vector3,
     ) => number | undefined,
   ) {
     this.gravity = new Vector3(...gravityMetersPerSecondSquaredXYZ);
+    this.yawRadians = subject.spawnSubjectFacingRadians;
     this.colliderCenterOffset = new Vector3(
       ...subject.collider.centerOffsetFromSubjectOriginMetersXYZ,
     );
@@ -255,6 +183,12 @@ export class MotionKernelRuntimeV1 {
     this.physicsController.characterMass = subject.collider.massKilograms;
     this.physicsController.acceleration = 1;
     this.syncVisual(spawnSubjectOrigin);
+    this.initialGroundSupportPending = this.hasWalkablePhysicalGroundAt(
+      spawnSubjectOrigin,
+    );
+    this.currentMovementMedium = this.movementMediumForSupport(
+      CharacterSupportedState.UNSUPPORTED,
+    );
   }
 
   requestMotionProfile(resourceRef: string): boolean {
@@ -263,10 +197,11 @@ export class MotionKernelRuntimeV1 {
 
   setParameterTuning(tuning: MotionParameterTuningV1): boolean {
     const profile = this.motionModeResolver.currentProfile;
-    const declaredKernel = this.subject.capabilityAssembly?.motionKernel;
-    const supportedParameters = declaredKernel?.resourceRef === profile.motionKernelRef
-      ? new Set(declaredKernel.runtimeParameterNames)
-      : runtimeParameterNamesForKernel(profile.motionKernelRef);
+    const declaredKernel = this.subject.capabilityAssembly?.motionKernels.find(
+      (candidate) => candidate.resourceRef === profile.motionKernelRef,
+    );
+    if (declaredKernel === undefined) return false;
+    const supportedParameters = new Set(declaredKernel.runtimeParameterNames);
     for (const [name, value] of Object.entries(tuning)) {
       const limit = profile.safetyLimits[name];
       if (
@@ -290,10 +225,10 @@ export class MotionKernelRuntimeV1 {
     return true;
   }
 
-  step(command: MotionCommandV1, movementMedium: ExecutionMovementMediumV1): void {
+  step(command: MotionCommandV1): void {
     this.commitPendingProfile();
     try {
-      this.stepActiveKernel(command, movementMedium);
+      this.stepActiveKernel(command);
       const velocity = this.physicsController.getVelocity();
       if (![velocity.x, velocity.y, velocity.z].every(Number.isFinite)) {
         this.activateFallback("MOTION_NON_FINITE_STATE");
@@ -307,6 +242,16 @@ export class MotionKernelRuntimeV1 {
 
   synchronizeVisual(): void {
     this.syncVisual();
+  }
+
+  refreshMovementMedium(): void {
+    const support = this.physicsController.checkSupport(
+      FIXED_TIME_STEP_SECONDS,
+      this.gravity,
+    );
+    this.currentMovementMedium = this.movementMediumForSupport(
+      support.supportedState,
+    );
   }
 
   snapshot(): MotionKernelSnapshotV1 {
@@ -335,6 +280,22 @@ export class MotionKernelRuntimeV1 {
     return this.physicsController.getVelocity();
   }
 
+  get controllerCenter(): Vector3 {
+    return this.physicsController.getPosition();
+  }
+
+  get movementMedium(): ExecutionMovementMediumV1 {
+    return this.currentMovementMedium;
+  }
+
+  get hasPendingInitialGroundSupport(): boolean {
+    return this.initialGroundSupportPending;
+  }
+
+  get facingYawRadians(): number {
+    return this.yawRadians;
+  }
+
   get forward(): Vector3 {
     return new Vector3(-Math.sin(this.yawRadians), 0, -Math.cos(this.yawRadians));
   }
@@ -345,13 +306,18 @@ export class MotionKernelRuntimeV1 {
     this.physicsController.setVelocity(Vector3.Zero());
     this.motionModeResolver.reset();
     this.clearParameterTuning();
-    this.yawRadians = 0;
+    this.yawRadians = this.subject.spawnSubjectFacingRadians;
     this.forwardSpeedMetersPerSecond = 0;
     this.planarVelocity.setAll(0);
     this.steeringInput = 0;
     this.slideVelocity.setAll(0);
     this.jumpInProgress = false;
+    this.jumpActionWasActive = false;
     this.syncVisual(spawn);
+    this.initialGroundSupportPending = this.hasWalkablePhysicalGroundAt(spawn);
+    this.currentMovementMedium = this.movementMediumForSupport(
+      CharacterSupportedState.UNSUPPORTED,
+    );
   }
 
   stop(): void {
@@ -368,11 +334,10 @@ export class MotionKernelRuntimeV1 {
 
   private stepActiveKernel(
     command: MotionCommandV1,
-    movementMedium: ExecutionMovementMediumV1,
   ): void {
-    const implementationId = kernelImplementationId(this.activeProfile.motionKernelRef);
+    const implementationId = this.activeKernelImplementationId();
     if (implementationId === "unpowered-glide") {
-      this.stepGlide(command, movementMedium);
+      this.stepGlide(command);
       return;
     }
     const support = this.physicsController.checkSupport(
@@ -381,8 +346,18 @@ export class MotionKernelRuntimeV1 {
     );
     const unsupported =
       support.supportedState === CharacterSupportedState.UNSUPPORTED;
+    const movementMedium = this.movementMediumForSupport(support.supportedState);
+    this.currentMovementMedium = movementMedium;
+    const jumpActionActive =
+      (command.kind === "planar-vector" || command.kind === "throttle-steer") &&
+      command.jumpRequested;
+    const jumpRequestedThisTick =
+      jumpActionActive &&
+      !this.jumpActionWasActive &&
+      movementMedium === "ground" &&
+      !this.jumpInProgress;
+    this.jumpActionWasActive = jumpActionActive;
     let desired = Vector3.Zero();
-    let jumpRequestedThisTick = false;
 
     if (implementationId === "free-ground") {
       const planar = command.kind === "planar-vector" ? command : undefined;
@@ -439,10 +414,6 @@ export class MotionKernelRuntimeV1 {
           targetYaw,
           turnRate * airControl * FIXED_TIME_STEP_SECONDS,
         );
-      }
-      if (planar?.jumpRequested === true && movementMedium === "ground") {
-        this.jumpInProgress = true;
-        jumpRequestedThisTick = true;
       }
     } else {
       const throttleCommand = command.kind === "throttle-steer" ? command : undefined;
@@ -584,15 +555,6 @@ export class MotionKernelRuntimeV1 {
         drivingDirection * FIXED_TIME_STEP_SECONDS;
       desired = this.forward.scale(this.forwardSpeedMetersPerSecond);
 
-      if (
-        implementationId === "forward-steer" &&
-        throttleCommand?.jumpRequested === true &&
-        movementMedium === "ground"
-      ) {
-        this.jumpInProgress = true;
-        jumpRequestedThisTick = true;
-      }
-
       if (implementationId === "surface-slide") {
         const drive = desired.scale(
           numberParameter(this.activeProfile, "driveResponsePerSecond", 1.8) *
@@ -639,12 +601,19 @@ export class MotionKernelRuntimeV1 {
       desired,
       this.up,
     );
+    const isPhysicallySupported = !unsupported || this.initialGroundSupportPending;
     if (jumpRequestedThisTick) {
+      this.jumpInProgress = true;
       calculated.y = numberParameter(this.activeProfile, "jumpSpeedMetersPerSecond", 5);
-    } else if (unsupported && this.jumpInProgress) {
+    } else if (!isPhysicallySupported || (this.jumpInProgress && current.y > 0)) {
       calculated.y = current.y;
-      calculated.addInPlace(this.gravity.scale(FIXED_TIME_STEP_SECONDS));
-    } else if (movementMedium === "ground") {
+      calculated.addInPlace(
+        (movementMedium === "water" ? this.gravity.scale(0.15) : this.gravity).scale(
+          FIXED_TIME_STEP_SECONDS,
+        ),
+      );
+    } else {
+      calculated.y = support.averageSurfaceVelocity.y;
       this.jumpInProgress = false;
     }
 
@@ -673,6 +642,7 @@ export class MotionKernelRuntimeV1 {
         ? this.gravity.scale(0.15)
         : this.gravity;
     this.physicsController.integrate(FIXED_TIME_STEP_SECONDS, support, appliedGravity);
+    this.initialGroundSupportPending = false;
   }
 
   private get activeProfile(): ExecutionMotionProfileV1 {
@@ -696,10 +666,30 @@ export class MotionKernelRuntimeV1 {
     return profile;
   }
 
+  private activeKernelImplementationId():
+    | "free-ground"
+    | "forward-steer"
+    | "wheeled-arcade"
+    | "surface-slide"
+    | "water-surface"
+    | "unpowered-glide" {
+    const assembly = this.subject.capabilityAssembly;
+    if (assembly === undefined) return "free-ground";
+    const activeMotionKernelRef = this.activeProfile.motionKernelRef;
+    const motionKernel = assembly.motionKernels.find(
+      (candidate) => candidate.resourceRef === activeMotionKernelRef,
+    );
+    if (motionKernel === undefined) {
+      throw new Error("MOTION_KERNEL_NOT_LOCKED");
+    }
+    return motionKernel.implementationId;
+  }
+
   private stepGlide(
     command: MotionCommandV1,
-    _movementMedium: ExecutionMovementMediumV1,
   ): void {
+    this.jumpActionWasActive = false;
+    this.currentMovementMedium = "air";
     const flight = command.kind === "flight-attitude" ? command : undefined;
     this.yawRadians -=
       (flight?.yaw ?? 0) *
@@ -752,6 +742,7 @@ export class MotionKernelRuntimeV1 {
       support,
       Vector3.Zero(),
     );
+    this.initialGroundSupportPending = false;
   }
 
   private commitPendingProfile(): void {
@@ -773,6 +764,35 @@ export class MotionKernelRuntimeV1 {
     this.parameterTuning = {};
     this.parameterTuningRevision += 1;
     this.effectiveProfileCache = undefined;
+  }
+
+  private movementMediumForSupport(
+    supportedState: CharacterSupportedState,
+  ): ExecutionMovementMediumV1 {
+    if (this.waterSurfaceHeightAtSubjectOrigin(this.subjectOrigin) !== undefined) {
+      return "water";
+    }
+    if (this.jumpInProgress && this.physicsController.getVelocity().y > 0) {
+      return "air";
+    }
+    if (this.initialGroundSupportPending) return "ground";
+    return supportedState === CharacterSupportedState.UNSUPPORTED ? "air" : "ground";
+  }
+
+  private hasWalkablePhysicalGroundAt(subjectOrigin: Vector3): boolean {
+    const physicsEngine = this.scene.getPhysicsEngine();
+    if (physicsEngine === null) return false;
+    const castHeightMeters = 0.25;
+    const castDepthMeters = Math.max(
+      0.5,
+      this.subject.collider.maxStepHeightMeters + castHeightMeters,
+    );
+    const result = physicsEngine.raycast(
+      subjectOrigin.add(this.up.scale(castHeightMeters)),
+      subjectOrigin.subtract(this.up.scale(castDepthMeters)),
+    );
+    return result.hasHit &&
+      result.hitNormalWorld.dot(this.up) >= this.physicsController.maxSlopeCosine;
   }
 
   private syncVisual(subjectOriginOverride?: Vector3): void {

@@ -79,7 +79,9 @@ describe("startWorldkitServer", () => {
       | { kind: "exit"; code: number | null }
       | { kind: "timeout" }
     >((resolve) => {
-      const timer = setTimeout(() => resolve({ kind: "timeout" }), 3_000);
+      // The assertion distinguishes prompt cleanup from the historical 30-second
+      // leaked timer; it is not a cold-start benchmark for Vite under suite load.
+      const timer = setTimeout(() => resolve({ kind: "timeout" }), 8_000);
       child.once("exit", (code) => {
         clearTimeout(timer);
         resolve({ kind: "exit", code });
@@ -90,7 +92,7 @@ describe("startWorldkitServer", () => {
       await new Promise<void>((resolve) => child.once("exit", () => resolve()));
     }
     expect(outcome).toEqual({ kind: "exit", code: 0 });
-  }, 10_000);
+  }, 15_000);
 
   it("settles cleanup when spawning the owned process emits error without exit", async () => {
     const realExecutablePath = process.execPath;

@@ -178,11 +178,11 @@ WorldPackage、通用 Terrain/Route 和视频模型 Adapter 仍在后续 Backlog
 |---|---|---|
 | Subject Definition | 可复用主体定义，组合 Geometry/Asset、Socket、Collider Policy、Profile 和 Capability | Primitive Package/Registry Definition 已交付 |
 | Subject Instance | 世界中的具体主体，具有独立 Entity ID、Transform、状态和控制权 | 已交付 |
-| Visual Part | Definition 内部的可渲染组成部分，不自动成为独立 Entity | Primitive Part 与首个 Golden GLB Asset Part 已交付；产品资产验收和更多拓扑仍未完成 |
+| Visual Part | Definition 内部的可渲染组成部分，不自动成为独立 Entity | Primitive Part、Golden GLB 与首个产品 G Bot Asset Part 已交付；更多拓扑仍未完成 |
 | Subject Socket | 主体局部空间中的稳定连接点，例如手、座位或拖车钩 | 声明与编译已交付，关系绑定未交付 |
 | Capability/Profile | 运动、控制、物理、动作等可组合能力及其锁定配置 | 首个 Ground Locomotion/Collider Profile 已交付 |
 | Relationship | `mountedOn`、装备、拖拽等实例之间的类型化 Gameplay 关系 | S2 规划中，当前 Authoring V3 不支持 |
-| Semantic Action | 与具体动画 Clip 解耦的移动、攻击、交互等动作 | Golden `idle/walk/run/jump` 固定 Tick 地面切片已交付；通用 Action 协议仍未完成 |
+| Semantic Action | 与具体动画 Clip 解耦的移动、攻击、交互等动作 | Golden 与 G Bot 的 `idle/walk/run/jump` 固定 Tick 地面切片已交付；通用 Action 协议仍未完成 |
 
 主体类别不决定能力。人、马、滑板、汽车、拖车或飞龙都使用同一套
 Definition/Instance/Capability/Relationship 原则；差异由已注册能力、Profile、
@@ -194,13 +194,13 @@ Socket 和类型化关系表达。
 |---|---|---|
 | 世界输入 | Canonical Authoring V3、严格 Schema、Registry/Package Definition、八种 Placement Constraint 与确定性 Solver S1 | 通用 Terrain Mask/Route Graph、更多 Constraint、完整 WorldPackage |
 | 地形 | 室外 Heightfield、基础 Relief、静态障碍、水域和物理查询 | Canonical Raster/Mask/Region Pipeline、洞穴、Overhang、完整室内 |
-| 主体 | Primitive 人形/四足代理；Golden GLB、Rig/Animation/Collider Profile、多实例与独立控制 | 产品资产验收、Compound Collider、LOD、更多拓扑和独立动画资产 |
+| 主体 | Primitive 人形/四足代理；Golden 与首个产品 G Bot 的 GLB、Rig/Animation/Collider Profile、多实例与独立控制 | 更多产品资产、Compound Collider、LOD、更多拓扑和独立动画资产 |
 | 关系 | Socket 数据可以声明和查询 | 动态 Bind、骑乘、装备、拖拽、Joint、事务与回滚 |
 | 运动与相机 | 地面移动、跳跃、水域状态、第三人称跟随 | 第一人称、飞行、车辆、Camera Director 和多 Rig 切换 |
 | 自动化 | validate/build/run/capture、Registry Discovery、Definition Validate、Subject Explain、Browser V3 | 持久 Runtime Session、完整 Playwright Driver、多人同时控制 |
 | Capture | 单帧截图、Runtime Snapshot | Simulation Take、Neutral/Depth/Semantic/Instance/Normal 多 Pass 与视频序列（专项设计已成稿） |
 | Validation | Canonical Browser Gate、现有物理/构图检查 | 统一 Validation Profile/Report、量化 Metric/Evidence 与生产 Policy（专项设计已成稿） |
-| Gameplay | 基础固定输入、控制绑定与 Golden `idle/walk/run/jump` 动作状态 | 完整 Semantic Action、姿态、游泳、装备、NPC、导航、任务、战斗、联网 |
+| Gameplay | 基础固定输入、控制绑定与 Golden/G Bot `idle/walk/run/jump` 动作状态 | 完整 Semantic Action、姿态、游泳、装备、NPC、导航、任务、战斗、联网 |
 | 最终视觉 | 本地白模渲染 | Render Bridge、实时世界模型和生产 Video Model Adapter |
 
 当前阶段只承诺室外 Heightfield 白模世界。不要把 NPC、车辆、坐骑、飞行、室内、
@@ -270,6 +270,19 @@ pnpm verify:rigged-subject
 前两条分别演示校验与捕获；只有 `pnpm verify:rigged-subject` 是覆盖 CLI、Browser、
 Havok、四动作、实例隔离、墙体碰撞、截图与 Hash 篡改失败的单命令 Gate。
 
+验证首个产品人物 G Bot；Agent 仍只需要选择稳定 Subject Definition：
+
+```bash
+pnpm worldkit validate examples/authoring/g-bot-subject-world.json --json
+pnpm worldkit subject explain examples/authoring/g-bot-subject-world.json \
+  --entity-id g-bot-primary --json
+pnpm verify:g-bot-subject
+```
+
+产品侧的 `asset.manifest.json` / `action-manifest.json` 记录原始模型、骨骼与 Clip
+事实；SDK Registry 的 Rig Profile / Animation Set 把它们映射为稳定 Bone ID 和
+Semantic Action。普通 World Agent 不读取模型路径、Mixamo Bone 名或源 Clip 名。
+
 ## 验证
 
 ```bash
@@ -279,6 +292,7 @@ pnpm test:scenes
 pnpm build
 pnpm verify:canonical
 pnpm verify:rigged-subject
+pnpm verify:g-bot-subject
 pnpm verify:placement-layout
 ```
 
@@ -288,7 +302,13 @@ Snapshot 和确定性 Reset。
 
 `verify:rigged-subject` 会验证项目自有 Golden GLB 的内容 Hash、Rig、
 `idle/walk/run/jump` 固定 Tick 动画、两个实例状态隔离、Havok 墙体停止和篡改失败；
-它不代表任意产品资产、Compound Collider、LOD 或全部 Semantic Actions 已可用。
+它是底座回归，不代表任意产品资产、Compound Collider、LOD 或全部 Semantic Actions
+已可用。
+
+`verify:g-bot-subject` 会验证首个产品 G Bot GLB、产品交付 Manifest、65 根源 Bone、
+25 个源 Clip、17 个语义 Bone 映射、当前开放的四个 Semantic Action、双实例隔离、
+Havok 墙体停止和五张 936×596 截图。它证明这一版本 G Bot 已接入，不把其余 21 个
+Clip、游泳、装备、坐骑、LOD 或任意后续产品包标记为可用。
 
 `verify:placement-layout` 会验证海湾 Fixture 的 19 条约束、八种 S1 Constraint、
 Report → IR → Plan → Snapshot 一致性、Required Runtime Assertion、接地/净空/路线
@@ -334,6 +354,7 @@ Compiler 和 Runtime 不能反向读取 Agent Prompt；Runtime Adapter 不能把
 - [Placement Constraint 与确定性 Layout Solver 设计](docs/superpowers/specs/2026-08-19-placement-constraint-layout-solver-design.md)
 - [Simulation Take 与 Control Capture Bundle 设计](docs/superpowers/specs/2026-08-19-simulation-take-control-capture-design.md)
 - [World Validation Report 与质量门禁设计](docs/superpowers/specs/2026-08-19-world-validation-report-and-quality-gates-design.md)
+- [AI 自定义场景几何扩展候选方案（未来探索）](docs/superpowers/specs/2026-08-20-ai-authored-geometry-extension-design.md)
 - [Package 局部 Subject Definition（S1a）设计](docs/superpowers/specs/2026-08-19-package-subject-definition-design.md)
 - [主体资产与 3C 配置接入契约](docs/16-subject-assets-3c-integration.md)
 - [世界模型团队接入说明](docs/11-world-model-team-handoff.md)
@@ -344,6 +365,12 @@ Compiler 和 Runtime 不能反向读取 Agent Prompt；Runtime Adapter 不能把
 - [业界对照与可落地性核查报告](docs/superpowers/specs/2026-08-18-industry-alignment-and-feasibility-review.md)
 - [Agentic 白模世界到可控视频：开源方案调研与架构启示](docs/superpowers/specs/2026-08-19-agentic-whitebox-to-video-open-source-research.md)
 - [阶段 0 技术探针计划与外部资料核查](docs/superpowers/specs/2026-08-18-phase0-probe-plan-and-external-research.md)
+
+### 未来探索（非 Roadmap）
+
+- [AI 自定义场景几何扩展候选方案](docs/superpowers/specs/2026-08-20-ai-authored-geometry-extension-design.md)：
+  只记录未来可能需要解决的能力缺口和候选技术，不表示确定会做、没有排期，也没有
+  选定 Recipe、MeshDraft、GLB、Sandbox 或 Three Authoring Bridge 等技术路线。
 
 ### 已完成实施切片
 

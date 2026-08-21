@@ -4,7 +4,7 @@
     "id": "safe-ground",
     "version": 1,
     "resourceRef": "worldkit://motion-profile/safe-ground@1",
-    "agentAccessLevel": "internal",
+    "authoringAvailability": "internal",
     "motionKernelRef": "worldkit://motion-kernel/free-ground@1",
     "parameters": {
       "walkSpeedMetersPerSecond": 0,
@@ -36,7 +36,7 @@
     "id": "free-ground.humanoid-medium",
     "version": 1,
     "resourceRef": "worldkit://motion-profile/free-ground.humanoid-medium@1",
-    "agentAccessLevel": "T0",
+    "authoringAvailability": "recommended",
     "motionKernelRef": "worldkit://motion-kernel/free-ground@1",
     "parameters": {
       "walkSpeedMetersPerSecond": 2.4,
@@ -77,7 +77,7 @@
     "id": "forward-steer.medium",
     "version": 1,
     "resourceRef": "worldkit://motion-profile/forward-steer.medium@1",
-    "agentAccessLevel": "T1",
+    "authoringAvailability": "advanced",
     "motionKernelRef": "worldkit://motion-kernel/forward-steer@1",
     "parameters": {
       "forwardSpeedMetersPerSecond": 4.2,
@@ -118,7 +118,7 @@
     "id": "wheeled-arcade.medium",
     "version": 1,
     "resourceRef": "worldkit://motion-profile/wheeled-arcade.medium@1",
-    "agentAccessLevel": "T1",
+    "authoringAvailability": "advanced",
     "motionKernelRef": "worldkit://motion-kernel/wheeled-arcade@1",
     "parameters": {
       "forwardSpeedMetersPerSecond": 12,
@@ -174,7 +174,7 @@
     "id": "surface-slide.skimmer",
     "version": 1,
     "resourceRef": "worldkit://motion-profile/surface-slide.skimmer@1",
-    "agentAccessLevel": "T2",
+    "authoringAvailability": "experimental",
     "motionKernelRef": "worldkit://motion-kernel/surface-slide@1",
     "parameters": {
       "maximumSpeedMetersPerSecond": 14,
@@ -212,7 +212,7 @@
     "id": "water-surface.safe",
     "version": 1,
     "resourceRef": "worldkit://motion-profile/water-surface.safe@1",
-    "agentAccessLevel": "internal",
+    "authoringAvailability": "internal",
     "motionKernelRef": "worldkit://motion-kernel/water-surface@1",
     "parameters": {
       "forwardSpeedMetersPerSecond": 0,
@@ -242,7 +242,7 @@
     "id": "water-surface.kayak",
     "version": 1,
     "resourceRef": "worldkit://motion-profile/water-surface.kayak@1",
-    "agentAccessLevel": "T2",
+    "authoringAvailability": "experimental",
     "motionKernelRef": "worldkit://motion-kernel/water-surface@1",
     "parameters": {
       "forwardSpeedMetersPerSecond": 5,
@@ -283,7 +283,7 @@
     "id": "airborne.fall",
     "version": 1,
     "resourceRef": "worldkit://motion-profile/airborne.fall@1",
-    "agentAccessLevel": "internal",
+    "authoringAvailability": "internal",
     "motionKernelRef": "worldkit://motion-kernel/unpowered-glide@1",
     "parameters": {
       "minimumForwardSpeedMetersPerSecond": 0,
@@ -319,7 +319,7 @@
     "id": "unpowered-glide.paraglider",
     "version": 1,
     "resourceRef": "worldkit://motion-profile/unpowered-glide.paraglider@1",
-    "agentAccessLevel": "T2",
+    "authoringAvailability": "experimental",
     "motionKernelRef": "worldkit://motion-kernel/unpowered-glide@1",
     "parameters": {
       "minimumForwardSpeedMetersPerSecond": 4,

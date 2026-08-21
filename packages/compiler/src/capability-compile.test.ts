@@ -1,57 +1,44 @@
 import { describe, expect, it } from "vitest";
 
 import { normalizeAuthoringSpec } from "@whitebox-world/authoring";
+import { sha256CanonicalJson } from "@whitebox-world/protocol";
 import type { ExecutionSubjectCapabilityAssemblyV1 } from "@whitebox-world/runtime-contracts";
+import { builtInSubjectResourceRegistry } from "@whitebox-world/subject-registry";
 
 import { createValidAuthoringSpec } from "../../authoring/src/test-fixture";
 import { compileWorld } from "./index";
 
-const PACKAGES = [
+const IMPLEMENTED_PACKAGES = [
   {
     subjectDefinitionRef:
-      "worldkit://subject-definition/humanoid.g-bot.ground@1",
-    motionKernelRef: "worldkit://motion-kernel/free-ground@1",
+      "worldkit://subject-definition/humanoid.g-bot@1",
+    defaultMotionKernelRef: "worldkit://motion-kernel/free-ground@1",
+    motionKernelRefs: ["worldkit://motion-kernel/free-ground@1"],
     controlProfileRef: "worldkit://control-profile/planar.camera-relative@1",
   },
-  {
-    subjectDefinitionRef:
-      "worldkit://subject-definition/animal.quadruped.forward-steer@1",
-    motionKernelRef: "worldkit://motion-kernel/forward-steer@1",
-    controlProfileRef:
-      "worldkit://control-profile/throttle-steer.subject-local@1",
-  },
-  {
-    subjectDefinitionRef:
-      "worldkit://subject-definition/vehicle.four-wheel.arcade@1",
-    motionKernelRef: "worldkit://motion-kernel/wheeled-arcade@1",
-    controlProfileRef:
-      "worldkit://control-profile/throttle-steer.subject-local@1",
-  },
-  {
-    subjectDefinitionRef:
-      "worldkit://subject-definition/surface-craft.ice-skimmer@1",
-    motionKernelRef: "worldkit://motion-kernel/surface-slide@1",
-    controlProfileRef:
-      "worldkit://control-profile/throttle-steer.subject-local@1",
-  },
-  {
-    subjectDefinitionRef:
-      "worldkit://subject-definition/watercraft.kayak.surface@1",
-    motionKernelRef: "worldkit://motion-kernel/water-surface@1",
-    controlProfileRef:
-      "worldkit://control-profile/throttle-steer.subject-local@1",
-  },
-  {
-    subjectDefinitionRef:
-      "worldkit://subject-definition/glider.paraglider.unpowered@1",
-    motionKernelRef: "worldkit://motion-kernel/unpowered-glide@1",
-    controlProfileRef: "worldkit://control-profile/flight-attitude@1",
-  },
+] as const;
+
+const UNAVAILABLE_RELATIONSHIP_PACKAGES = [
+  [
+    "worldkit://subject-definition/animal.quadruped.forward-steer@1",
+    "mount",
+  ],
+  [
+    "worldkit://subject-definition/vehicle.four-wheel.arcade@1",
+    "seat",
+  ],
+  [
+    "worldkit://subject-definition/glider.paraglider.unpowered@1",
+    "tether",
+  ],
 ] as const;
 
 function compilePackage(
   subjectDefinitionRef: string,
-): ExecutionSubjectCapabilityAssemblyV1 {
+): {
+  assembly: ExecutionSubjectCapabilityAssemblyV1;
+  lockedResourceRefs: readonly string[];
+} {
   const spec = createValidAuthoringSpec();
   const subject = spec.nodes.find((node) => node.kind === "subject");
   if (subject === undefined || subject.kind !== "subject") {
@@ -78,21 +65,34 @@ function compilePackage(
   if (assembly === undefined) {
     throw new Error("Capability assembly was not projected into the Execution Plan.");
   }
-  return assembly;
+  return {
+    assembly,
+    lockedResourceRefs: normalized.value.resources.resourceLock.map(
+      (resource) => resource.resourceRef,
+    ),
+  };
 }
 
 describe("capability-driven Subject compilation", () => {
-  it.each(PACKAGES)(
+  it.each(IMPLEMENTED_PACKAGES)(
     "atomically compiles $subjectDefinitionRef into replaceable runtime resources",
-    ({ subjectDefinitionRef, motionKernelRef, controlProfileRef }) => {
-      const assembly = compilePackage(subjectDefinitionRef);
+    ({ subjectDefinitionRef, defaultMotionKernelRef, motionKernelRefs, controlProfileRef }) => {
+      const { assembly, lockedResourceRefs } = compilePackage(subjectDefinitionRef);
+      const projectedKernels = assembly.motionKernels;
 
-      expect(assembly.motionKernel.resourceRef).toBe(motionKernelRef);
-      expect(assembly.motionKernel.deterministic).toBe(true);
-      expect(assembly.controlProfile.resourceRef).toBe(controlProfileRef);
-      expect(assembly.motionKernel.commandKind).toBe(
-        assembly.controlProfile.commandKind,
+      expect(projectedKernels.map((kernel) => kernel.resourceRef).sort()).toEqual(
+        [...motionKernelRefs].sort(),
       );
+      expect(
+        motionKernelRefs.every((resourceRef) => lockedResourceRefs.includes(resourceRef)),
+      ).toBe(true);
+      expect(projectedKernels.every((kernel) => kernel.deterministic)).toBe(true);
+      expect(assembly.controlProfile.resourceRef).toBe(controlProfileRef);
+      expect(
+        projectedKernels.find(
+          (kernel) => kernel.resourceRef === defaultMotionKernelRef,
+        )?.commandKind,
+      ).toBe(assembly.controlProfile.commandKind);
       expect(assembly.cameraContext.cameraRigProfiles).toHaveLength(7);
       expect(
         new Set(
@@ -117,4 +117,60 @@ describe("capability-driven Subject compilation", () => {
       );
     },
   );
+
+  it.each(UNAVAILABLE_RELATIONSHIP_PACKAGES)(
+    "rejects $0 because its $1 relationship behavior is unavailable",
+    (subjectDefinitionRef) => {
+      const spec = createValidAuthoringSpec();
+      const subject = spec.nodes.find((node) => node.kind === "subject");
+      if (subject === undefined || subject.kind !== "subject") {
+        throw new Error("Expected the valid fixture to contain a Subject node.");
+      }
+      subject.subjectDefinitionRef = subjectDefinitionRef;
+
+      const normalized = normalizeAuthoringSpec(spec);
+
+      expect(normalized.ok).toBe(false);
+      expect(normalized.diagnostics).toEqual(expect.arrayContaining([
+        expect.objectContaining({ code: "SUBJECT_CAPABILITY_UNSATISFIED" }),
+      ]));
+    },
+  );
+
+  it("defensively rejects a reserved relationship Profile at the normalized-to-compiled boundary", () => {
+    const spec = createValidAuthoringSpec();
+    const subject = spec.nodes.find((node) => node.kind === "subject");
+    if (subject === undefined || subject.kind !== "subject") {
+      throw new Error("Expected the valid fixture to contain a Subject node.");
+    }
+    subject.subjectDefinitionRef = "worldkit://subject-definition/humanoid.g-bot@1";
+    const normalized = normalizeAuthoringSpec(spec);
+    if (!normalized.ok || normalized.value === undefined) {
+      throw new Error(`G Bot fixture did not normalize: ${JSON.stringify(normalized.diagnostics)}`);
+    }
+    const forged = structuredClone(normalized.value);
+    const definition = forged.resources.subjectDefinitions[0] as typeof forged.resources.subjectDefinitions[number] & {
+      capabilityAssembly: {
+        relationshipProfiles: unknown[];
+      };
+    };
+    const reservedSeat = builtInSubjectResourceRegistry.resolveRelationshipProfile(
+      "worldkit://relationship-profile/seat.driver@1",
+    );
+    if (definition?.capabilityAssembly === undefined || reservedSeat === undefined) {
+      throw new Error("Reserved relationship defense fixture is incomplete.");
+    }
+    definition.capabilityAssembly.relationshipProfiles = [reservedSeat];
+
+    expect(compileWorld({
+      normalizedWorldIr: forged,
+      normalizedWorldIrHash: sha256CanonicalJson(forged),
+    })).toMatchObject({
+      ok: false,
+      diagnostics: [{
+        code: "COMPILER_NORMALIZED_IR_INVALID",
+        message: expect.stringContaining("reserved Relationship Profile"),
+      }],
+    });
+  });
 });

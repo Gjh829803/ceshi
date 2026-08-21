@@ -83,7 +83,6 @@ export interface ExecutionSubjectAssetV1 {
 }
 
 export type ExecutionBipedBoneIdV1 =
-  | "root"
   | "hips"
   | "spine"
   | "chest"
@@ -132,7 +131,7 @@ export type ExecutionGroundHumanoidActionIdV1 =
 export interface ExecutionRigProfileV1 {
   rigProfileRef: string;
   bodyTopology: "biped";
-  skeletonRootNodeName: string;
+  skeletonRootBoneName: string;
   requiredBoneIds: readonly ExecutionBipedBoneIdV1[];
   sourceNodeNameByBoneId: Readonly<Record<ExecutionBipedBoneIdV1, string>>;
 }
@@ -323,11 +322,11 @@ export interface ExecutionCameraContextRuleV1 {
 }
 
 export interface ExecutionSubjectCapabilityAssemblyV1 {
-  agentAccessLevel: "T0" | "T1" | "T2";
+  authoringAvailability: "recommended" | "advanced" | "experimental";
   defaultMotionProfile: ExecutionMotionProfileV1;
   optionalMotionProfiles: readonly ExecutionMotionProfileV1[];
   fallbackMotionProfile: ExecutionMotionProfileV1;
-  motionKernel: ExecutionMotionKernelDefinitionV1;
+  motionKernels: readonly ExecutionMotionKernelDefinitionV1[];
   controlProfile: ExecutionControlProfileV1;
   cameraContext: {
     resourceRef: string;
@@ -366,6 +365,7 @@ export interface ExecutionSubjectV3 {
   semanticClassId: string;
   spawnAnchorEntityId: string;
   spawnSubjectOriginPositionMetersXYZ: Vec3;
+  spawnSubjectFacingRadians: number;
   forwardDirection: "-z";
   visualParts: readonly SubjectVisualPartV3[];
   visualBinding: ExecutionSubjectVisualBindingV1;

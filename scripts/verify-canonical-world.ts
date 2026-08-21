@@ -426,7 +426,11 @@ async function verifyBrowserProtocolAndPhysics(): Promise<{
     );
     assert.equal(waterEntryPlayer.activeActionId, "walk");
 
-    const firstStart = await page.evaluate(() => window.__WORLDKIT__!.reset());
+    const firstStart = await page.evaluate(async () => {
+      const api = window.__WORLDKIT__!;
+      api.reset();
+      return api.runFixedInput([{ actions: [], ticks: 1 }]);
+    });
     const firstReceipt = await page.evaluate(
       ({ controlledEntityId }) =>
         window.__WORLDKIT__!.bindControl({
@@ -470,7 +474,11 @@ async function verifyBrowserProtocolAndPhysics(): Promise<{
       "The uncontrolled player moved during first-instance input.",
     );
 
-    const secondStart = await page.evaluate(() => window.__WORLDKIT__!.reset());
+    const secondStart = await page.evaluate(async () => {
+      const api = window.__WORLDKIT__!;
+      api.reset();
+      return api.runFixedInput([{ actions: [], ticks: 1 }]);
+    });
     const secondReceipt = await page.evaluate(
       ({ controlledEntityId }) =>
         window.__WORLDKIT__!.bindControl({

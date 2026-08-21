@@ -57,7 +57,7 @@ function normalizeRigProfile(
   return {
     rigProfileRef: resource.resourceRef,
     bodyTopology: resource.bodyTopology,
-    skeletonRootNodeName: resource.skeletonRootNodeName,
+    skeletonRootBoneName: resource.skeletonRootBoneName,
     requiredBoneIds: [...resource.requiredBoneIds],
     sourceNodeNameByBoneId: {
       chest: resource.sourceNodeNameByBoneId.chest,
@@ -72,7 +72,6 @@ function normalizeRigProfile(
       "lower-leg.left": resource.sourceNodeNameByBoneId["lower-leg.left"],
       "lower-leg.right": resource.sourceNodeNameByBoneId["lower-leg.right"],
       neck: resource.sourceNodeNameByBoneId.neck,
-      root: resource.sourceNodeNameByBoneId.root,
       spine: resource.sourceNodeNameByBoneId.spine,
       "upper-arm.left": resource.sourceNodeNameByBoneId["upper-arm.left"],
       "upper-arm.right": resource.sourceNodeNameByBoneId["upper-arm.right"],

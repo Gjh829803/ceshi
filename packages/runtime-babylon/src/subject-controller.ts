@@ -44,9 +44,6 @@ export class SubjectController {
     gravityMetersPerSecondSquaredXYZ: Vec3,
     readonly visualRoot: TransformNode,
     scene: Scene,
-    private readonly movementMediumAtSubjectOrigin: (
-      subjectOrigin: Vector3,
-    ) => ExecutionMovementMediumV1,
     waterSurfaceHeightAtSubjectOrigin: (
       subjectOrigin: Vector3,
     ) => number | undefined,
@@ -63,7 +60,6 @@ export class SubjectController {
 
   step(
     actions: readonly SemanticInputActionV1[],
-    movementMedium: ExecutionMovementMediumV1,
     viewControlFrame: ViewControlFrameV1 = {
       forwardXYZ: [0, 0, -1],
       rightXYZ: [1, 0, 0],
@@ -75,14 +71,16 @@ export class SubjectController {
       actions,
       viewControlFrame,
     );
-    this.motionKernel.step(command, movementMedium);
+    this.motionKernel.step(command);
   }
 
   requestMotionProfile(resourceRef: string): boolean {
+    if (this.subject.capabilityAssembly === undefined) return false;
     return this.motionKernel.requestMotionProfile(resourceRef);
   }
 
   setMotionTuning(tuning: MotionParameterTuningV1): boolean {
+    if (this.subject.capabilityAssembly === undefined) return false;
     return this.motionKernel.setParameterTuning(tuning);
   }
 
@@ -90,12 +88,16 @@ export class SubjectController {
     this.motionKernel.synchronizeVisual();
   }
 
+  refreshMovementMedium(): void {
+    this.motionKernel.refreshMovementMedium();
+  }
+
   sampleMotion(runRequested: boolean): SubjectMotionSampleV1 {
     const velocity = this.motionKernel.velocity;
     return {
       horizontalSpeedMetersPerSecond: Math.hypot(velocity.x, velocity.z),
       runRequested,
-      movementMedium: this.movementMediumAtSubjectOrigin(this.subjectOrigin),
+      movementMedium: this.motionKernel.movementMedium,
     };
   }
 
@@ -109,6 +111,22 @@ export class SubjectController {
 
   get velocity(): Vector3 {
     return this.motionKernel.velocity;
+  }
+
+  get controllerCenter(): Vector3 {
+    return this.motionKernel.controllerCenter;
+  }
+
+  get movementMedium(): ExecutionMovementMediumV1 {
+    return this.motionKernel.movementMedium;
+  }
+
+  get hasPendingInitialGroundSupport(): boolean {
+    return this.motionKernel.hasPendingInitialGroundSupport;
+  }
+
+  get facingYawRadians(): number {
+    return this.motionKernel.facingYawRadians;
   }
 
   get forward(): Vector3 {

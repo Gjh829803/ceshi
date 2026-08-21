@@ -90,6 +90,9 @@ importers:
       '@whitebox-world/runtime-contracts':
         specifier: workspace:*
         version: link:../../packages/runtime-contracts
+      '@whitebox-world/subject-registry':
+        specifier: workspace:*
+        version: link:../../packages/subject-registry
       '@whitebox-world/subjects':
         specifier: workspace:*
         version: link:../../packages/subjects
@@ -171,6 +174,12 @@ importers:
       '@whitebox-world/runtime-contracts':
         specifier: workspace:*
         version: link:../runtime-contracts
+      '@whitebox-world/terrain-surface':
+        specifier: workspace:*
+        version: link:../terrain-surface
+      '@whitebox-world/testkit':
+        specifier: workspace:*
+        version: link:../testkit
 
   packages/contracts: {}
 
@@ -188,6 +197,9 @@ importers:
       '@whitebox-world/protocol':
         specifier: workspace:*
         version: link:../protocol
+      '@whitebox-world/terrain-surface':
+        specifier: workspace:*
+        version: link:../terrain-surface
 
   packages/physics:
     dependencies:
@@ -230,6 +242,9 @@ importers:
       '@whitebox-world/subject-actions':
         specifier: workspace:*
         version: link:../subject-actions
+      '@whitebox-world/terrain-surface':
+        specifier: workspace:*
+        version: link:../terrain-surface
       lodash-es:
         specifier: ^4.18.1
         version: 4.18.1
@@ -274,6 +289,8 @@ importers:
         specifier: ^0.180.0
         version: 0.180.0
 
+  packages/terrain-surface: {}
+
   packages/testkit:
     dependencies:
       '@whitebox-world/contracts':
@@ -285,6 +302,12 @@ importers:
       '@whitebox-world/contracts':
         specifier: workspace:*
         version: link:../contracts
+      '@whitebox-world/terrain-surface':
+        specifier: workspace:*
+        version: link:../terrain-surface
+      '@whitebox-world/testkit':
+        specifier: workspace:*
+        version: link:../testkit
       three:
         specifier: ^0.180.0
         version: 0.180.0

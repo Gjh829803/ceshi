@@ -503,11 +503,25 @@ export class CameraDirectorV1 {
     const origin = new Vector3(...sample.targetPositionMetersXYZ);
     const plan = this.executionPlan.camera;
     const target = new Vector3(origin.x, origin.y + plan.targetHeightMeters, origin.z);
-    const horizontalDistance = Math.cos(plan.pitchRadians) * plan.distanceMeters;
+    this.viewYawOffsetRadians = this.targetYawOffsetRadians;
+    this.viewPitchOffsetRadians = this.targetPitchOffsetRadians;
+    this.viewDistanceOffsetMeters = this.targetDistanceOffsetMeters;
+    const yawRadians = this.viewYawOffsetRadians;
+    const pitchRadians = clamp(
+      plan.pitchRadians + this.viewPitchOffsetRadians,
+      -0.95,
+      0.65,
+    );
+    const distanceMeters = clamp(
+      plan.distanceMeters + this.viewDistanceOffsetMeters,
+      1.8,
+      8,
+    );
+    const horizontalDistance = Math.cos(pitchRadians) * distanceMeters;
     this.camera.position.set(
-      target.x,
-      target.y + Math.sin(plan.pitchRadians) * plan.distanceMeters,
-      target.z + horizontalDistance,
+      target.x + Math.sin(yawRadians) * horizontalDistance,
+      target.y + Math.sin(pitchRadians) * distanceMeters,
+      target.z + Math.cos(yawRadians) * horizontalDistance,
     );
     this.camera.setTarget(target);
     this.smoothedTarget.copyFrom(target);

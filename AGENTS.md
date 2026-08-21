@@ -29,6 +29,17 @@ Apply these rules whenever adding or changing public Authoring Schema, Registry 
 - Every workspace package must declare the libraries it imports as direct dependencies. Do not rely on undeclared dependencies being available from the workspace root.
 - Keep domain-specific algorithms local, deterministic, and covered by focused tests. Reuse libraries for generic mechanics; keep SDK semantics in SDK-owned code.
 
+## Deep runtime review discipline
+
+Apply `docs/reviews/runtime-deep-review-checklist.md` whenever changing or reviewing physics, movement, input, animation, camera, render scheduling, resource ownership, or Browser/CLI runtime behavior.
+
+- Identify one authoritative owner for every piece of state. In particular, ground support, movement medium, subject facing, camera orbit, active action, and fixed-step time must not be independently inferred by multiple layers.
+- Verify engine-dependent assumptions against the installed dependency version and source. Do not rely on remembered Babylon or Havok behavior for coordinate order, controller gravity, collision data layout, animation timing, or disposal semantics.
+- Require adversarial regression coverage in addition to happy paths: asymmetric geometry/data, unsupported spawn and ledge departure, held-versus-pressed input, reset and rebind transitions, 30/60/120 Hz-like render timing, multi-instance isolation, partial construction, and throwing cleanup.
+- Review integrations as a semantic three-way merge. Compare the base, incoming branch, and target behavior for each authority; resolving textual conflicts is not sufficient evidence that behavior was preserved.
+- Separate automated contract evidence, rendered visual evidence, and manual interaction evidence. State exactly which was run, and do not claim production support for an experimental capability from a smoke test alone.
+- Every confirmed runtime bug fix needs a failing reproducer before the fix, a focused regression after it, and the repository's full relevant verification gates before completion.
+
 ## Agent roles and frozen boundary
 
 - **World Planner Agent** may create only `apps/playground/src/scenes/plans/<catalog-id>.ts` and its `world-plan.png` / `opening-shot.png`. It must define the complete WorldPrompt and Entity Catalog before geometry.

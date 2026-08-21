@@ -372,7 +372,7 @@ function installTuningWorkbench(
   const subjectSelect = requiredElement<HTMLSelectElement>("#tuning-subject-select");
   subjectSelect.replaceChildren(...workbenchContext.definitions.map((definition) =>
     new Option(
-      `${subjectFriendlyName(definition)} · ${definition.agentAccessLevel}`,
+      `${subjectFriendlyName(definition)} · ${definition.authoringAvailability}`,
       definition.resourceRef,
       false,
       definition.resourceRef === workbenchContext.definition.resourceRef,
@@ -385,7 +385,7 @@ function installTuningWorkbench(
     <div><span>现在调的是</span><strong>${escapeHtml(subjectFriendlyName(workbenchContext.definition))}</strong></div>
     <div><span>移动方式</span><strong>${escapeHtml(kernelFriendlyName(workbenchContext.activeKernel))}</strong></div>
     <div><span>所在环境</span><strong>${currentSubject?.movementMedium === "water" ? "水面" : currentSubject?.movementMedium === "air" ? "空中" : "地面"}</strong></div>
-    <div><span>配置权限</span><strong>${workbenchContext.definition.agentAccessLevel}</strong></div>
+    <div><span>配置权限</span><strong>${workbenchContext.definition.authoringAvailability}</strong></div>
   `;
 
   const inputGrid = requiredElement<HTMLDivElement>("#tuning-input-capabilities");
@@ -651,7 +651,7 @@ function installTuningWorkbench(
 }
 
 function installAuthoringRecoveryPanel(api: WorldkitBrowserApiV3): void {
-  const definitions = api.listSubjectDefinitions?.() ?? [];
+  const definitions = api.listSubjectDefinitions?.({ includeExperimental: true }) ?? [];
   if (definitions.length === 0) return;
   const panel = requiredElement<HTMLDivElement>("#capability-card");
   const packageSelect = requiredElement<HTMLSelectElement>("#subject-package-select");
@@ -664,7 +664,7 @@ function installAuthoringRecoveryPanel(api: WorldkitBrowserApiV3): void {
   packageSelect.replaceChildren(...definitions.map((definition) => {
     const option = document.createElement("option");
     option.value = definition.resourceRef;
-    option.textContent = `${definition.displayName} · ${definition.agentAccessLevel}`;
+    option.textContent = `${definition.displayName} · ${definition.authoringAvailability}`;
     option.selected = definition.resourceRef === requestedDefinitionRef;
     return option;
   }));
@@ -702,7 +702,7 @@ function installAuthoringRecoveryPanel(api: WorldkitBrowserApiV3): void {
 }
 
 function installCapabilityAuthoringPanel(api: WorldkitBrowserApiV3): void {
-  const definitions = api.listSubjectDefinitions?.() ?? [];
+  const definitions = api.listSubjectDefinitions?.({ includeExperimental: true }) ?? [];
   if (definitions.length === 0) return;
   const panel = requiredElement<HTMLDivElement>("#capability-card");
   panel.hidden = false;
@@ -719,14 +719,17 @@ function installCapabilityAuthoringPanel(api: WorldkitBrowserApiV3): void {
   packageSelect.replaceChildren(...definitions.map((definition) => {
     const option = document.createElement("option");
     option.value = definition.resourceRef;
-    option.textContent = `${definition.displayName} · ${definition.agentAccessLevel}`;
+    option.textContent = `${definition.displayName} · ${definition.authoringAvailability}`;
     option.selected = definition.resourceRef === activeDefinitionRef;
     return option;
   }));
 
   const definition = definitions.find((row) => row.resourceRef === packageSelect.value) ??
     definitions[0]!;
-  const activeKernel = api.listMotionKernels?.().find(
+  const activeKernel = api.listMotionKernels?.({
+    includeExperimental: true,
+    includeInternal: true,
+  }).find(
     (kernel) => kernel.resourceRef === activeSubject?.activeMotionKernelRef,
   );
   const controls = requiredElement<HTMLDivElement>("#controls-card");

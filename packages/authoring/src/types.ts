@@ -403,7 +403,7 @@ export interface NormalizedSubjectAssetV1 {
 export interface NormalizedRigProfileV1 {
   rigProfileRef: string;
   bodyTopology: "biped";
-  skeletonRootNodeName: string;
+  skeletonRootBoneName: string;
   requiredBoneIds: readonly BipedBoneIdV1[];
   sourceNodeNameByBoneId: Readonly<Record<BipedBoneIdV1, string>>;
 }
@@ -455,11 +455,11 @@ export interface NormalizedSubjectDefinitionV2 {
     locomotionProfileRef: string;
   };
   capabilityAssembly?: {
-    agentAccessLevel: "T0" | "T1" | "T2";
+    authoringAvailability: "recommended" | "advanced" | "experimental";
     defaultMotionProfile: MotionProfileV1;
     optionalMotionProfiles: readonly MotionProfileV1[];
     fallbackMotionProfile: MotionProfileV1;
-    motionKernel: MotionKernelDefinitionV1;
+    motionKernels: readonly MotionKernelDefinitionV1[];
     controlProfile: ControlProfileV1;
     cameraContextProfile: CameraContextProfileV1;
     cameraRigProfiles: readonly CameraRigProfileV1[];

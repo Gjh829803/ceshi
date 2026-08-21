@@ -1,5 +1,13 @@
+import { createHash } from "node:crypto";
 import { mkdir, readFile, stat, writeFile } from "node:fs/promises";
 import path from "node:path";
+
+import {
+  promotePlanningManifest,
+  validateSubmittedCompositionReport,
+} from "../../scripts/lib/composition-gate.ts";
+import { promoteArtifactsTransactionally } from
+  "../../scripts/lib/transactional-artifact-promotion.ts";
 
 const MAX_AUTHORING_BYTES = 8 * 1024 * 1024;
 const SERVER_NONCE_HEADER = "x-worldkit-server-nonce";
@@ -170,12 +178,52 @@ function whiteboxArtifactWriter() {
             if (png.length < 8 || png.subarray(0, 8).toString("hex") !== "89504e470d0a1a0a") {
               throw new Error("Opening-frame payload is not a PNG.");
             }
+            const projectRoot = path.resolve(process.cwd(), "../..");
+            const artifactDirectory = path.join(
+              projectRoot,
+              "artifacts",
+              "scenes",
+              payload.sceneId,
+            );
+            const planLockPath = path.join(artifactDirectory, "plan-lock.json");
+            const manifestPath = path.join(artifactDirectory, "manifest.json");
+            const worldSpecPath = path.join(artifactDirectory, "world-spec.json");
+            const [planLockContents, manifestContents, worldSpecContents] = await Promise.all([
+              readFile(planLockPath, "utf8"),
+              readFile(manifestPath, "utf8"),
+              readFile(worldSpecPath, "utf8"),
+            ]);
+            const planningManifest = JSON.parse(manifestContents);
+            const gate = validateSubmittedCompositionReport({
+              sceneId: payload.sceneId,
+              worldSpec: JSON.parse(worldSpecContents),
+              frozenPlan: JSON.parse(planLockContents),
+              planLockSha256: createHash("sha256")
+                .update(planLockContents)
+                .digest("hex"),
+              planningManifest,
+              report: payload.report,
+            });
+            if (!gate.ok) throw new Error(`${gate.code}: ${gate.message}`);
+            const promotedManifest = promotePlanningManifest(
+              planningManifest,
+              gate.trustedReport,
+            );
             const directory = path.resolve(process.cwd(), "public", "scene-plans", payload.sceneId);
             await mkdir(directory, { recursive: true });
             const outputPath = path.join(directory, "whitebox-opening-frame.png");
-            await writeFile(outputPath, png);
             const reportPath = path.join(directory, "opening-composition-report.json");
-            await writeFile(reportPath, `${JSON.stringify(payload.report, null, 2)}\n`, "utf8");
+            await promoteArtifactsTransactionally({
+              writes: [{ role: "frame", targetPath: outputPath, contents: png }, {
+                role: "report",
+                targetPath: reportPath,
+                contents: `${JSON.stringify(gate.trustedReport, null, 2)}\n`,
+              }, {
+                role: "manifest",
+                targetPath: manifestPath,
+                contents: `${JSON.stringify(promotedManifest, null, 2)}\n`,
+              }],
+            });
             response.setHeader("content-type", "application/json");
             response.end(JSON.stringify({ path: outputPath, reportPath }));
           })().catch((error) => {

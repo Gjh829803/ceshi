@@ -1,5 +1,8 @@
 import type { SubjectAssetRuntimeErrorCodeV1 } from "@whitebox-world/runtime-babylon";
-import { builtInSubjectResourceRegistry } from "@whitebox-world/subject-registry";
+import {
+  builtInSubjectResourceRegistry,
+  type SubjectResourceRegistryV3,
+} from "@whitebox-world/subject-registry";
 import {
   WORLDKIT_BROWSER_PROTOCOL_VERSION,
   type BindControlRequestV2,
@@ -144,6 +147,146 @@ function deepFreeze<T>(value: T): T {
   return Object.freeze(value);
 }
 
+export function validateSubjectPackageAgainstRegistry(
+  registry: SubjectResourceRegistryV3,
+  subjectDefinitionRef: string,
+): {
+  valid: boolean;
+  subjectDefinitionRef: string;
+  diagnostics: readonly { code: string; message: string }[];
+} {
+  const definition = registry.resolveSubjectDefinition(subjectDefinitionRef);
+  const diagnostics: { code: string; message: string }[] = [];
+  const missing = (resourceRef: string, kind: string): void => {
+    diagnostics.push({
+      code: "SUBJECT_RESOURCE_NOT_FOUND",
+      message: `${kind} '${resourceRef}' is not registered at the exact requested version.`,
+    });
+  };
+  if (definition === undefined || !("schemaVersion" in definition)) {
+    diagnostics.push({
+      code: "SUBJECT_PACKAGE_NOT_FOUND",
+      message: "The exact capability-driven Subject Definition is not registered.",
+    });
+    return { valid: false, subjectDefinitionRef, diagnostics };
+  }
+
+  const motionProfileRefs = [...new Set([
+    definition.profiles.motion.defaultMotionProfileRef,
+    ...definition.profiles.motion.optionalMotionProfileRefs,
+    definition.profiles.motion.fallbackMotionProfileRef,
+  ])].sort((left, right) => left.localeCompare(right));
+  const motionProfiles = motionProfileRefs.flatMap((resourceRef) => {
+    const resource = registry.resolveMotionProfile(resourceRef);
+    if (resource === undefined) missing(resourceRef, "Motion Profile");
+    return resource === undefined ? [] : [resource];
+  });
+  const motionKernels = [...new Set(motionProfiles.map((profile) => profile.motionKernelRef))]
+    .sort((left, right) => left.localeCompare(right))
+    .flatMap((resourceRef) => {
+      const resource = registry.resolveMotionKernel(resourceRef);
+      if (resource === undefined) missing(resourceRef, "Motion Kernel");
+      return resource === undefined ? [] : [resource];
+    });
+  const control = registry.resolveControlProfile(definition.profiles.controlProfileRef);
+  if (control === undefined) missing(definition.profiles.controlProfileRef, "Control Profile");
+  for (const kernel of motionKernels) {
+    if (kernel.runtimeStatus === "implemented") continue;
+    diagnostics.push({
+      code: "SUBJECT_KERNEL_NOT_IMPLEMENTED",
+      message: `Motion Kernel '${kernel.resourceRef}' is not installed in the canonical runtime.`,
+    });
+  }
+  const defaultMotion = registry.resolveMotionProfile(
+    definition.profiles.motion.defaultMotionProfileRef,
+  );
+  const defaultKernel = defaultMotion === undefined
+    ? undefined
+    : registry.resolveMotionKernel(defaultMotion.motionKernelRef);
+  if (
+    defaultKernel !== undefined &&
+    control !== undefined &&
+    defaultKernel.commandKind !== control.commandKind
+  ) {
+    diagnostics.push({
+      code: "SUBJECT_COMMAND_KIND_MISMATCH",
+      message: "Control Profile and Motion Kernel command kinds do not match.",
+    });
+  }
+
+  const cameraContext = registry.resolveCameraContextProfile(
+    definition.profiles.cameraContextProfileRef,
+  );
+  if (cameraContext === undefined) {
+    missing(definition.profiles.cameraContextProfileRef, "Camera Context Profile");
+  } else {
+    const cameraRigProfileRefs = [...new Set([
+      cameraContext.defaultCameraRigProfileRef,
+      ...(cameraContext.firstPersonCameraRigProfileRef === undefined
+        ? []
+        : [cameraContext.firstPersonCameraRigProfileRef]),
+      ...cameraContext.rules.map((rule) => rule.cameraRigProfileRef),
+    ])].sort((left, right) => left.localeCompare(right));
+    const cameraRigProfiles = cameraRigProfileRefs.flatMap((resourceRef) => {
+      const resource = registry.resolveCameraRigProfile(resourceRef);
+      if (resource === undefined) missing(resourceRef, "Camera Rig Profile");
+      return resource === undefined ? [] : [resource];
+    });
+    for (const algorithmRef of [...new Set(
+      cameraRigProfiles.map((profile) => profile.algorithmRef),
+    )].sort((left, right) => left.localeCompare(right))) {
+      const algorithm = registry.resolveCameraRigAlgorithm(algorithmRef);
+      if (algorithm === undefined) missing(algorithmRef, "Camera Rig Algorithm");
+      else if (algorithm.runtimeStatus !== "implemented") {
+        diagnostics.push({
+          code: "SUBJECT_CAMERA_RUNTIME_NOT_IMPLEMENTED",
+          message: `Camera Rig Algorithm '${algorithmRef}' is not installed in the canonical runtime.`,
+        });
+      }
+    }
+  }
+
+  if (registry.resolveMediumProfile(definition.profiles.mediumProfileRef) === undefined) {
+    missing(definition.profiles.mediumProfileRef, "Medium Profile");
+  }
+  if (registry.resolveHarnessProfile(definition.profiles.harnessProfileRef) === undefined) {
+    missing(definition.profiles.harnessProfileRef, "Harness Profile");
+  }
+  if (
+    registry.resolvePoseSetProfile(definition.actionOrPoseSetRef) === undefined &&
+    registry.resolveAnimationSet(definition.actionOrPoseSetRef) === undefined
+  ) {
+    missing(definition.actionOrPoseSetRef, "Action or Pose Set");
+  }
+  if (registry.resolveRenderBindingProfile(definition.renderBindingProfileRef) === undefined) {
+    missing(definition.renderBindingProfileRef, "Render Binding Profile");
+  }
+
+  const relationshipProfileRefByCapabilityRef: Readonly<Record<string, string>> = {
+    "worldkit://capability/relationship.mount@1":
+      "worldkit://relationship-profile/mount.reserved@1",
+    "worldkit://capability/relationship.seat@1":
+      "worldkit://relationship-profile/seat.driver@1",
+    "worldkit://capability/relationship.tether@1":
+      "worldkit://relationship-profile/tether.standard@1",
+  };
+  for (const capabilityRef of definition.relationshipCapabilityRefs) {
+    const relationshipProfileRef = relationshipProfileRefByCapabilityRef[capabilityRef];
+    const relationshipProfile = relationshipProfileRef === undefined
+      ? undefined
+      : registry.resolveRelationshipProfile(relationshipProfileRef);
+    if (relationshipProfileRef === undefined || relationshipProfile === undefined) {
+      missing(relationshipProfileRef ?? capabilityRef, "Relationship Profile");
+      continue;
+    }
+    diagnostics.push({
+      code: "SUBJECT_RELATIONSHIP_NOT_IMPLEMENTED",
+      message: `Relationship behavior '${relationshipProfile.relationshipType}' is unavailable in the canonical runtime.`,
+    });
+  }
+  return { valid: diagnostics.length === 0, subjectDefinitionRef, diagnostics };
+}
+
 export function installDeferredWorldkitBrowserApi(options: {
   target: WorldkitBrowserApiTargetV1;
   statusElement: WorldkitBrowserStatusTargetV1;
@@ -188,20 +331,21 @@ export function installDeferredWorldkitBrowserApi(options: {
       adapter.setPaused(paused);
       return adapter.runtimeSnapshot();
     },
-    listSubjectDefinitions: () =>
-      builtInSubjectResourceRegistry.listAllSubjectDefinitions()
-        .filter((definition) => "schemaVersion" in definition)
-        .map((definition) => {
-          const capabilityDriven = definition as Extract<
-            ReturnType<typeof builtInSubjectResourceRegistry.listAllSubjectDefinitions>[number],
-            { schemaVersion: 3 }
-          >;
+    listSubjectDefinitions: (options = {}) =>
+      builtInSubjectResourceRegistry.listCapabilitySubjectDefinitions()
+        .filter(
+          (definition) =>
+            options.includeExperimental === true ||
+            definition.authoringAvailability !== "experimental",
+        )
+        .map((capabilityDriven) => {
           return {
             resourceRef: capabilityDriven.resourceRef,
+            contentHash: capabilityDriven.contentHash,
             displayName: capabilityDriven.aiMetadata.displayName,
             semanticClassId: capabilityDriven.semanticClassId,
             bodyTopology: capabilityDriven.bodyTopology,
-            agentAccessLevel: capabilityDriven.agentAccessLevel,
+            authoringAvailability: capabilityDriven.authoringAvailability,
             defaultMotionProfileRef:
               capabilityDriven.profiles.motion.defaultMotionProfileRef,
             controlProfileRef: capabilityDriven.profiles.controlProfileRef,
@@ -209,16 +353,23 @@ export function installDeferredWorldkitBrowserApi(options: {
               capabilityDriven.profiles.cameraContextProfileRef,
           };
         }),
-    listMotionKernels: () =>
-      builtInSubjectResourceRegistry.listAllResources()
+    listMotionKernels: (options = {}) =>
+      builtInSubjectResourceRegistry.listCapabilityResources()
         .filter((resource) => resource.kind === "motion-kernel")
+        .filter(
+          (resource) =>
+            (options.includeExperimental === true ||
+              resource.authoringAvailability !== "experimental") &&
+            (options.includeInternal === true ||
+              resource.authoringAvailability !== "internal"),
+        )
         .map((resource) => ({
           resourceRef: resource.resourceRef,
           displayName: resource.aiMetadata.displayName,
           implementationId: resource.implementationId,
           commandKind: resource.commandKind,
           runtimeStatus: resource.runtimeStatus,
-          agentAccessLevel: resource.agentAccessLevel,
+          authoringAvailability: resource.authoringAvailability,
         })),
     listCompatibleProfiles: (subjectDefinitionRef) => {
       const definition = builtInSubjectResourceRegistry.resolveSubjectDefinition(
@@ -288,41 +439,11 @@ export function installDeferredWorldkitBrowserApi(options: {
         }),
       ].sort((left, right) => left.resourceRef.localeCompare(right.resourceRef));
     },
-    validateSubjectPackage: (subjectDefinitionRef) => {
-      const definition = builtInSubjectResourceRegistry.resolveSubjectDefinition(
+    validateSubjectPackage: (subjectDefinitionRef) =>
+      validateSubjectPackageAgainstRegistry(
+        builtInSubjectResourceRegistry,
         subjectDefinitionRef,
-      );
-      const diagnostics: { code: string; message: string }[] = [];
-      if (definition === undefined || !("schemaVersion" in definition)) {
-        diagnostics.push({
-          code: "SUBJECT_PACKAGE_NOT_FOUND",
-          message: "The exact capability-driven Subject Definition is not registered.",
-        });
-      } else {
-        const motion = builtInSubjectResourceRegistry.resolveMotionProfile(
-          definition.profiles.motion.defaultMotionProfileRef,
-        );
-        const kernel = motion === undefined
-          ? undefined
-          : builtInSubjectResourceRegistry.resolveMotionKernel(motion.motionKernelRef);
-        const control = builtInSubjectResourceRegistry.resolveControlProfile(
-          definition.profiles.controlProfileRef,
-        );
-        if (kernel?.runtimeStatus !== "implemented") {
-          diagnostics.push({
-            code: "SUBJECT_KERNEL_NOT_IMPLEMENTED",
-            message: "The selected Motion Kernel is not installed in the canonical runtime.",
-          });
-        }
-        if (kernel !== undefined && control !== undefined && kernel.commandKind !== control.commandKind) {
-          diagnostics.push({
-            code: "SUBJECT_COMMAND_KIND_MISMATCH",
-            message: "Control Profile and Motion Kernel command kinds do not match.",
-          });
-        }
-      }
-      return { valid: diagnostics.length === 0, subjectDefinitionRef, diagnostics };
-    },
+      ),
     setIntent: async (input) => {
       await startupPromise;
       return requireReadyAdapter().runWorldkitFixedInput([input]);

@@ -9,6 +9,10 @@ import {
   stableJson,
   verifyFrozenWorldPlan,
 } from "./lib/plan-lock.js";
+import {
+  validateVisualCompositionEvidence,
+  type PlanningManifest,
+} from "./lib/composition-gate.js";
 
 type Mode = "inputs" | "complete";
 
@@ -54,12 +58,30 @@ const frozenPlan = await verifyFrozenWorldPlan(projectRoot, options.sceneId);
 const planLockSha256 = sha256(stableJson(frozenPlan));
 const verifiedManifestPath = path.join(projectRoot, "artifacts", "scenes", options.sceneId, "manifest.json");
 const verifiedManifestContents = await readFile(verifiedManifestPath, "utf8");
-const verifiedManifest = JSON.parse(verifiedManifestContents) as {
-  workflowStage?: string;
-  sceneId?: string;
-  frozenPlanSpecSha256?: string;
-  planLockSha256?: string;
-};
+const verifiedManifest = JSON.parse(verifiedManifestContents) as PlanningManifest;
+const spec = await loadWorldSpec(projectRoot, options.sceneId);
+let report: unknown;
+try {
+  report = JSON.parse(await readFile(path.join(
+    projectRoot,
+    "apps/playground/public/scene-plans",
+    options.sceneId,
+    "opening-composition-report.json",
+  ), "utf8"));
+} catch {
+  report = undefined;
+}
+const composition = validateVisualCompositionEvidence({
+  sceneId: options.sceneId,
+  worldSpec: spec,
+  frozenPlan,
+  planLockSha256,
+  planningManifest: verifiedManifest,
+  report,
+});
+if (!composition.ok) {
+  throw new Error(`${composition.code}: ${composition.message}`);
+}
 if (
   verifiedManifest.workflowStage !== "verified" ||
   verifiedManifest.sceneId !== options.sceneId ||
@@ -68,7 +90,6 @@ if (
 ) {
   throw new Error(`Scene ${options.sceneId} must have a verified implementation before Visual Bible.`);
 }
-const spec = await loadWorldSpec(projectRoot, options.sceneId);
 const prototypes = [];
 for (const prototype of spec.entityCatalog.prototypes) {
   const whiteboxSha256 = await hashRegularFile(projectRoot, prototype.views.whiteboxUri);

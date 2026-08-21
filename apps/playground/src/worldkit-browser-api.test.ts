@@ -12,9 +12,14 @@ import type {
   WorldkitBrowserApiV3,
   WorldkitBrowserDiagnosticV1,
 } from "@whitebox-world/runtime-contracts";
+import {
+  builtInSubjectResourceRegistry,
+  type SubjectResourceRegistryV3,
+} from "@whitebox-world/subject-registry";
 
 import {
   installDeferredWorldkitBrowserApi,
+  validateSubjectPackageAgainstRegistry,
   type DeferredWorldkitBrowserRuntimeAdapterV1,
 } from "./worldkit-browser-api";
 
@@ -126,6 +131,137 @@ describe("installDeferredWorldkitBrowserApi", () => {
     await expect(api.ready()).resolves.toEqual(snapshotFixture());
     await expect(pendingRun).resolves.toEqual(snapshotFixture("run"));
     expect(statusElement.dataset.worldkitStatus).toBe("ready");
+  });
+
+  it("keeps experimental packages out of default AI discovery and uses descriptive availability", async () => {
+    const adapter = adapterFixture();
+    const installation = installDeferredWorldkitBrowserApi({
+      target: {},
+      statusElement: { dataset: {} },
+      initialize: async ({ trackAdapter }) => {
+        trackAdapter(adapter);
+        return adapter;
+      },
+    });
+    await installation.initialization;
+
+    const productionDefinitions = installation.api.listSubjectDefinitions?.() ?? [];
+    const allDefinitions = installation.api.listSubjectDefinitions?.({
+      includeExperimental: true,
+    }) ?? [];
+    expect(productionDefinitions.map((definition) => definition.resourceRef)).toEqual([
+      "worldkit://subject-definition/animal.quadruped.forward-steer@1",
+      "worldkit://subject-definition/humanoid.g-bot@1",
+    ]);
+    const gBotSummary = productionDefinitions.find(
+      (definition) =>
+        definition.resourceRef ===
+        "worldkit://subject-definition/humanoid.g-bot@1",
+    );
+    expect(gBotSummary?.contentHash).toBe(
+      builtInSubjectResourceRegistry.resolveSubjectDefinition(
+        "worldkit://subject-definition/humanoid.g-bot@1",
+      )?.contentHash,
+    );
+    expect(gBotSummary?.contentHash).toMatch(/^sha256:[a-f0-9]{64}$/);
+    expect(allDefinitions).toHaveLength(6);
+    expect(
+      allDefinitions.filter(
+        (definition) => definition.authoringAvailability === "experimental",
+      ),
+    ).toHaveLength(4);
+    expect(JSON.stringify(allDefinitions)).not.toMatch(/agentAccessLevel|"T[0-2]"/);
+
+    const productionKernels = installation.api.listMotionKernels?.() ?? [];
+    const allKernels = installation.api.listMotionKernels?.({
+      includeExperimental: true,
+      includeInternal: true,
+    }) ?? [];
+    expect(
+      productionKernels.every(
+        (kernel) =>
+          kernel.authoringAvailability !== "experimental" &&
+          kernel.authoringAvailability !== "internal",
+      ),
+    ).toBe(true);
+    expect(allKernels).toHaveLength(10);
+  });
+
+  it.each([
+    [
+      "worldkit://subject-definition/animal.quadruped.forward-steer@1",
+      "mount",
+    ],
+    [
+      "worldkit://subject-definition/vehicle.four-wheel.arcade@1",
+      "seat",
+    ],
+    [
+      "worldkit://subject-definition/glider.paraglider.unpowered@1",
+      "tether",
+    ],
+  ])("rejects %s when its %s relationship runtime is unavailable", async (
+    subjectDefinitionRef,
+  ) => {
+    const adapter = adapterFixture();
+    const installation = installDeferredWorldkitBrowserApi({
+      target: {},
+      statusElement: { dataset: {} },
+      initialize: async ({ trackAdapter }) => {
+        trackAdapter(adapter);
+        return adapter;
+      },
+    });
+    await installation.initialization;
+
+    expect(installation.api.validateSubjectPackage?.(subjectDefinitionRef)).toMatchObject({
+      valid: false,
+      diagnostics: [{ code: "SUBJECT_RELATIONSHIP_NOT_IMPLEMENTED" }],
+    });
+  });
+
+  it("keeps the canonical G Bot package valid", async () => {
+    const adapter = adapterFixture();
+    const installation = installDeferredWorldkitBrowserApi({
+      target: {},
+      statusElement: { dataset: {} },
+      initialize: async ({ trackAdapter }) => {
+        trackAdapter(adapter);
+        return adapter;
+      },
+    });
+    await installation.initialization;
+
+    expect(installation.api.validateSubjectPackage?.(
+      "worldkit://subject-definition/humanoid.g-bot@1",
+    )).toEqual({
+      valid: true,
+      subjectDefinitionRef: "worldkit://subject-definition/humanoid.g-bot@1",
+      diagnostics: [],
+    });
+  });
+
+  it("rejects a package when an otherwise resolvable Motion Kernel is reserved", () => {
+    const registry: SubjectResourceRegistryV3 = {
+      ...builtInSubjectResourceRegistry,
+      resolveMotionKernel(resourceRef) {
+        const kernel = builtInSubjectResourceRegistry.resolveMotionKernel(resourceRef);
+        return kernel === undefined ? undefined : {
+          ...kernel,
+          runtimeStatus: "reserved",
+        };
+      },
+    };
+
+    expect(validateSubjectPackageAgainstRegistry(
+      registry,
+      "worldkit://subject-definition/humanoid.g-bot@1",
+    )).toMatchObject({
+      valid: false,
+      diagnostics: expect.arrayContaining([
+        expect.objectContaining({ code: "SUBJECT_KERNEL_NOT_IMPLEMENTED" }),
+      ]),
+    });
   });
 
   it("publishes stable read-only runtime layout evidence without exposing solver handles", async () => {

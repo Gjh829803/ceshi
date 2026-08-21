@@ -1,6 +1,6 @@
 # 主体资产与 3C 配置接入 World SDK 技术契约
 
-- 状态：设计评审稿；S1a 与 Golden Humanoid S1b 首个可视切片已实现
+- 状态：设计评审稿；S1a、Golden Humanoid 与首个产品 G Bot S1b 可视切片已实现
 - 版本：v0.2
 - 日期：2026-08-19
 - 产品输入：《世界模型底层引擎主体资产与 3C 配置体系》v0.1
@@ -9,9 +9,9 @@
 > 实现状态（2026-08-20）：S1a 已交付 Canonical Authoring V2、Registry/Package
 > Primitive Subject Definition、Socket、自动 Capsule、Definition Hash、Resource
 > Lock、复数实例、单 Controller 原子切换和 Subject Explain。项目自有 Golden GLB
-> 还打通了 Asset/Rig/Animation/Collider、`idle/walk/run/jump`、Bone Socket 与
-> CLI/Browser/Havok Gate。产品资产验收、Medium State Resolver、Relationship、
-> 坐骑、装备、多 Controller 与飞行仍是后续契约，不是当前运行能力。
+> 与首个产品 G Bot 已打通 Asset/Rig/Animation/Collider、`idle/walk/run/jump`、
+> Bone Socket 与 CLI/Browser/Havok Gate。更多产品资产、Medium State Resolver、
+> Relationship、坐骑、装备、多 Controller 与飞行仍是后续契约，不是当前运行能力。
 
 > Golden Humanoid S1b 首个可视纵向切片已完成并进入回归；S1b 整体与 Semantic Actions 整体仍未完成.
 
@@ -198,15 +198,15 @@ Bundle 只提供资产事实和参考；最终 Collider、控制、物理和 Cam
 可生成下列 Registry 资源的确定性事实。字段缺失时 SDK 应阻断接入，不能在 Scene
 或 Loader 中猜测。
 
-| 必需输入 | 当前 S1b 契约 | Golden 参考值 |
+| 必需输入 | 当前 S1b 契约 | Golden / G Bot 已验收参考值 |
 |---|---|---|
-| GLB bytes | 单文件、自包含 GLB 2.0；不允许外部 Buffer/Image URI | `golden-humanoid.glb`，43,656 bytes |
+| GLB bytes | 单文件、自包含 GLB 2.0；不允许外部 Buffer/Image URI | Golden 43,656 bytes；G Bot 5,302,160 bytes |
 | Coordinate convention | `-Z` Forward、`+Y` Up、1 meter/unit | 同契约 |
 | Pivot | `support-center`，主体 Origin 与 Collider/Camera/Snapshot 共用 | 同契约 |
-| Asset Hash | 对原始 GLB bytes 计算 `sha256:`，并记录精确 `byteLength` | `sha256:1095fd65c754d53e6db3757ab5e1c9e5e9dcea2581f85d40f37ea4890ee8c2c2` |
+| Asset Hash | 对原始 GLB bytes 计算 `sha256:`，并记录精确 `byteLength` | Golden `sha256:1095fd…8c2c2`；G Bot `sha256:418332…eeb1b` |
 | License/Provenance | SPDX 或内部 License ID、再分发策略、作者；可选来源/许可证 URI 只留在 Registry Manifest | `LicenseRef-Project-Owned`、`allowed`、`Agent Whitebox World SDK` |
-| Bone mapping | 版本化 Rig Profile：唯一 Skeleton Root、必需语义 Bone ID → 源节点名 | `worldkit://rig-profile/biped.golden@1`，18 个 Biped Bone |
-| Clip mappings (4) | 版本化 Animation Set：每个语义 Action 显式映射源 Clip、Loop、速度、Blend、Root Motion | `idle→idle`、`walk→walk`、`run→run`、`jump→jump`，全部 in-place |
+| Bone mapping | 版本化 Rig Profile：唯一 Skeleton Root 独立声明，17 个解剖语义 Bone ID → 源节点名 | Golden `biped.golden@1`；G Bot `biped.mixamo-g-bot@1` |
+| Clip mappings (4) | 版本化 Animation Set：每个语义 Action 显式映射源 Clip、Loop、速度、Blend、Root Motion | Golden 与 G Bot 均显式映射 `idle/walk/run/jump`，全部 in-place |
 | Collider ref | 引用经过验收的 Collider Profile；不在运行时从 Mesh Bounds 猜测 | `worldkit://collider-profile/humanoid.medium-capsule@1`，0.32m radius / 1.92m height |
 | Bone Sockets (optional) | 可选；使用稳定 Socket ID、语义 `boneId` 与局部 Offset，不暴露 Babylon Node Path | Golden 提供 `hand.right` → `boneId: "hand.right"` |
 
@@ -229,6 +229,20 @@ pnpm verify:rigged-subject
 Gate。产品资产通过前还需要把同一 Gate 扩展为该资产的 Hash/Inventory、Rig、Clip、
 Collider、动作截图、实例隔离、碰撞和许可证证据，不能把 Golden 的通过结果直接继承
 给产品资产。
+
+首个产品资产 G Bot 已按上述流程完成独立 Gate：
+
+```bash
+pnpm worldkit validate examples/authoring/g-bot-subject-world.json --json
+pnpm worldkit subject explain examples/authoring/g-bot-subject-world.json \
+  --entity-id g-bot-primary --json
+pnpm verify:g-bot-subject
+```
+
+这里存在两层映射文件，职责不可混合：产品交付的 `asset.manifest.json` 和
+`action-manifest.json` 记录源文件、源 Bone、源 Clip 与制作事实；SDK 注册的
+`RigProfile` 和 `AnimationSet` 把这些源 Key 转成 `hand.right`、`walk` 等稳定语义
+Key。AI-facing World JSON 只引用 `worldkit://subject-definition/humanoid.g-bot@1`。
 
 ## 6. Character：分层状态而不是复制主体
 
@@ -630,8 +644,9 @@ Schema 和边界一次设计完整，运行能力分阶段交付。
 - ControllerEntity、possessedBy、单/多 Controller Tick Intent 和复数 Snapshot。
 - Asset Fixture、Schema/Compiler/Runtime Conformance。
 
-当前只完成了 Phase 0 中项目自有 Golden Humanoid 的首个可视纵向切片；产品资产
-验收、更多人形比例/拓扑、独立动画资产、完整姿态与 Action Request/Receipt 尚未完成。
+当前已完成 Phase 0 中项目自有 Golden Humanoid 与首个产品 G Bot 的可视纵向切片；
+更多产品资产、人形比例/拓扑、独立动画资产、完整姿态与 Action Request/Receipt
+尚未完成。
 
 ### Phase 1：水中、骑乘、代表性动物与载具
 

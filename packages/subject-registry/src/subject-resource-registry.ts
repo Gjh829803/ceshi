@@ -41,6 +41,7 @@ import type {
   RenderBindingProfileV1,
   SubjectRegistryResourceInputV3,
   SubjectRegistryResourceV3,
+  SubjectCapabilityResourceV1,
   SubjectResourceRegistryV3,
 } from "./types-v3";
 
@@ -399,10 +400,27 @@ export function createSubjectResourceRegistry(
         resource.kind === "subject-definition",
     ),
   );
-  const stableLegacySubjectDefinitions = deepFreeze(
+  const stableCliSubjectDefinitions = deepFreeze(
     stableSubjectDefinitions.filter(
-      (resource): resource is RegistrySubjectDefinitionV2 =>
-        !("schemaVersion" in resource),
+      (
+        resource,
+      ): resource is RegistrySubjectDefinitionV2 | RegistrySubjectDefinitionV3 =>
+        !("schemaVersion" in resource) ||
+        resource.resourceRef ===
+          "worldkit://subject-definition/humanoid.g-bot@1",
+    ),
+  );
+  const stableCapabilitySubjectDefinitions = deepFreeze(
+    stableSubjectDefinitions.filter(
+      (resource): resource is RegistrySubjectDefinitionV3 =>
+        "schemaVersion" in resource && resource.schemaVersion === 3,
+    ),
+  );
+  const stableCapabilityResources = deepFreeze(
+    stableResources.filter(
+      (resource): resource is SubjectCapabilityResourceV1 =>
+        resource.kind !== "subject-definition" &&
+        "authoringAvailability" in resource,
     ),
   );
   const capabilityDrivenRegistry = stableResources.some(
@@ -410,9 +428,13 @@ export function createSubjectResourceRegistry(
   );
   const builtInLegacyResourceRefs = new Set([
     "worldkit://subject-asset/humanoid.golden@1",
+    "worldkit://subject-asset/actor.humanoid.g-bot@1",
     "worldkit://rig-profile/biped.golden@1",
+    "worldkit://rig-profile/biped.mixamo-g-bot@1",
     "worldkit://animation-set/humanoid.ground.golden@1",
+    "worldkit://animation-set/humanoid.ground.g-bot@1",
     "worldkit://collider-profile/humanoid.medium-capsule@1",
+    "worldkit://collider-profile/humanoid.g-bot-capsule@1",
     "worldkit://subject-definition/humanoid.rigged-golden@1",
     "worldkit://subject-definition/humanoid.third-person@1",
     "worldkit://subject-definition/quadruped.ground-proxy@1",
@@ -529,20 +551,20 @@ export function createSubjectResourceRegistry(
       const resource = resourcesByRef.get(resourceRef);
       return resource?.kind === "render-binding-profile" ? resource : undefined;
     },
-    listSubjectDefinitions(): readonly RegistrySubjectDefinitionV2[] {
-      return stableLegacySubjectDefinitions;
-    },
-    listAllSubjectDefinitions(): readonly (
+    listSubjectDefinitions(): readonly (
       | RegistrySubjectDefinitionV2
       | RegistrySubjectDefinitionV3
     )[] {
-      return stableSubjectDefinitions;
+      return stableCliSubjectDefinitions;
+    },
+    listCapabilitySubjectDefinitions(): readonly RegistrySubjectDefinitionV3[] {
+      return stableCapabilitySubjectDefinitions;
     },
     listResources(): readonly SubjectRegistryResourceV1[] {
       return stableLegacyResources;
     },
-    listAllResources(): readonly SubjectRegistryResourceV3[] {
-      return stableResources;
+    listCapabilityResources(): readonly SubjectCapabilityResourceV1[] {
+      return stableCapabilityResources;
     },
   });
 }

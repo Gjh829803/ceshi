@@ -1,4 +1,5 @@
 import type { RegistrySubjectDefinitionInputV2 } from "./types-v2";
+import type { RegistrySubjectDefinitionInputV3 } from "./types-v3";
 
 const SHARED_COORDINATE_CONVENTION = {
   forwardAxis: "-Z",
@@ -228,8 +229,133 @@ const RIGGED_GOLDEN_HUMANOID_DEFINITION: RegistrySubjectDefinitionInputV2 = {
   },
 };
 
+const G_BOT_HUMANOID_DEFINITION: RegistrySubjectDefinitionInputV3 = {
+  kind: "subject-definition",
+  schemaVersion: 3,
+  id: "humanoid.g-bot",
+  version: 1,
+  resourceRef: "worldkit://subject-definition/humanoid.g-bot@1",
+  authoringAvailability: "recommended",
+  category: "human",
+  bodyTopology: "biped",
+  semanticClassId: "subject.humanoid.robot",
+  coordinateConvention: SHARED_COORDINATE_CONVENTION,
+  visualParts: [
+    {
+      id: "body.asset",
+      kind: "asset",
+      subjectAssetRef: "worldkit://subject-asset/actor.humanoid.g-bot@1",
+      localTransform: {
+        positionMetersXYZ: [0, 0, 0],
+        rotationEulerRadiansXYZ: [0, Math.PI, 0],
+        scaleXYZ: [1, 1, 1],
+      },
+      appearance: { mode: "whitebox-neutral" },
+      semanticTags: ["body", "g-bot", "rigged", "robot"],
+    },
+  ],
+  visualBinding: {
+    mode: "rigged",
+    rigProfileRef: "worldkit://rig-profile/biped.mixamo-g-bot@1",
+    animationSetRef: "worldkit://animation-set/humanoid.ground.g-bot@1",
+  },
+  sockets: [
+    {
+      id: "FirstPersonView",
+      kind: "bone",
+      boneId: "head",
+      offsetTransform: {
+        positionMetersXYZ: [0, 0.09, -0.08],
+        rotationEulerRadiansXYZ: [0, 0, 0],
+      },
+      semanticTags: ["camera", "first-person"],
+    },
+    {
+      id: "ThirdPersonTarget",
+      kind: "local",
+      localTransform: {
+        positionMetersXYZ: [0, 1.25, 0],
+        rotationEulerRadiansXYZ: [0, 0, 0],
+      },
+      semanticTags: ["camera", "third-person"],
+    },
+    {
+      id: "CameraTarget3D",
+      kind: "local",
+      localTransform: {
+        positionMetersXYZ: [0, 1.2, 0],
+        rotationEulerRadiansXYZ: [0, 0, 0],
+      },
+      semanticTags: ["camera", "target"],
+    },
+    {
+      id: "LookAhead",
+      kind: "local",
+      localTransform: {
+        positionMetersXYZ: [0, 1.1, -1],
+        rotationEulerRadiansXYZ: [0, 0, 0],
+      },
+      semanticTags: ["camera", "look-ahead"],
+    },
+    {
+      id: "SeatAlignment",
+      kind: "local",
+      localTransform: {
+        positionMetersXYZ: [0, 0.9, 0],
+        rotationEulerRadiansXYZ: [0, 0, 0],
+      },
+      semanticTags: ["relationship", "seat"],
+    },
+    {
+      id: "hand.right",
+      kind: "bone",
+      boneId: "hand.right",
+      offsetTransform: {
+        positionMetersXYZ: [0, 0, 0],
+        rotationEulerRadiansXYZ: [0, 0, 0],
+      },
+      semanticTags: ["equipment-grip", "hand"],
+    },
+  ],
+  colliderPolicy: {
+    kind: "profile",
+    colliderProfileRef:
+      "worldkit://collider-profile/humanoid.g-bot-capsule@1",
+  },
+  capabilityRefs: SHARED_CAPABILITY_REFS,
+  profiles: {
+    physicsBodyProfileRef:
+      "worldkit://physics-body-profile/character.capability-medium@1",
+    locomotionProfileRef: SHARED_PROFILES.locomotionProfileRef,
+    motion: {
+      defaultMotionProfileRef:
+        "worldkit://motion-profile/free-ground.humanoid-medium@1",
+      optionalMotionProfileRefs: ["worldkit://motion-profile/safe-ground@1"],
+      fallbackMotionProfileRef: "worldkit://motion-profile/safe-ground@1",
+    },
+    controlProfileRef: "worldkit://control-profile/planar.camera-relative@1",
+    cameraContextProfileRef:
+      "worldkit://camera-context/capability-driven.default@1",
+    mediumProfileRef: "worldkit://medium-profile/ground-water-air.standard@1",
+    harnessProfileRef: "worldkit://harness-profile/subject.standard@1",
+  },
+  relationshipCapabilityRefs: [],
+  actionOrPoseSetRef: "worldkit://animation-set/humanoid.ground.g-bot@1",
+  renderBindingProfileRef: "worldkit://render-binding/subject.standard@1",
+  aiMetadata: {
+    displayName: "G Bot humanoid",
+    description:
+      "Product-authored rigged G Bot assembled with canonical ground control and physics profiles.",
+    semanticTags: ["biped", "g-bot", "human", "product", "rigged", "robot"],
+  },
+};
+
 export const BUILT_IN_SUBJECT_DEFINITIONS = [
+  G_BOT_HUMANOID_DEFINITION,
   RIGGED_GOLDEN_HUMANOID_DEFINITION,
   HUMANOID_THIRD_PERSON_DEFINITION,
   QUADRUPED_GROUND_PROXY_DEFINITION,
-] as const satisfies readonly RegistrySubjectDefinitionInputV2[];
+] as const satisfies readonly (
+  | RegistrySubjectDefinitionInputV2
+  | RegistrySubjectDefinitionInputV3
+)[];

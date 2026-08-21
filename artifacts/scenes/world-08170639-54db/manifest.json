@@ -1,6 +1,6 @@
 {
   "artifactVersion": 1,
-  "workflowStage": "verified",
+  "workflowStage": "whitebox-built",
   "sceneId": "world-08170639-54db",
   "specHash": "968b356e",
   "frozenPlanSpecSha256": "380a59629d8fbf1a2a488c4f897ac97455d3fdec74ef15d943792429364dd0d8",

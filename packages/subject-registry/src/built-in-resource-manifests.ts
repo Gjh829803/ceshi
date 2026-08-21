@@ -54,7 +54,6 @@ const GOLDEN_HUMANOID_SUBJECT_ASSET: SubjectAssetManifestInputV1 = {
 };
 
 const GOLDEN_BIPED_BONE_IDS = [
-  "root",
   "hips",
   "spine",
   "chest",
@@ -81,10 +80,9 @@ const GOLDEN_BIPED_RIG_PROFILE: RigProfileManifestInputV1 = {
   resourceRef: "worldkit://rig-profile/biped.golden@1",
   bodyTopology: "biped",
   compatibleSubjectAssetRefs: [GOLDEN_HUMANOID_SUBJECT_ASSET.resourceRef],
-  skeletonRootNodeName: "root",
+  skeletonRootBoneName: "root",
   requiredBoneIds: GOLDEN_BIPED_BONE_IDS,
   sourceNodeNameByBoneId: {
-    root: "root",
     hips: "hips",
     spine: "spine",
     chest: "chest",
@@ -105,7 +103,8 @@ const GOLDEN_BIPED_RIG_PROFILE: RigProfileManifestInputV1 = {
   },
   aiMetadata: {
     displayName: "Golden biped rig",
-    description: "Canonical 18-bone mapping for the project-owned Golden humanoid fixture.",
+    description:
+      "Canonical 17-bone anatomical mapping with an independent Skeleton root for the project-owned Golden humanoid fixture.",
     semanticTags: ["biped", "golden", "humanoid", "rig"],
   },
 };
@@ -233,17 +232,16 @@ const G_BOT_SUBJECT_ASSET: SubjectAssetManifestInputV1 = {
   },
 };
 
-const G_BOT_RIG_PROFILE: RigProfileManifestInputV1 = {
+const G_BOT_MIXAMO_RIG_PROFILE: RigProfileManifestInputV1 = {
   kind: "rig-profile",
-  id: "mixamo-humanoid.g-bot",
+  id: "biped.mixamo-g-bot",
   version: 1,
-  resourceRef: "worldkit://rig-profile/mixamo-humanoid.g-bot@1",
+  resourceRef: "worldkit://rig-profile/biped.mixamo-g-bot@1",
   bodyTopology: "biped",
   compatibleSubjectAssetRefs: [G_BOT_SUBJECT_ASSET.resourceRef],
-  skeletonRootNodeName: "mixamorig:Hips",
-  requiredBoneIds: GOLDEN_BIPED_BONE_IDS.filter((boneId) => boneId !== "root"),
+  skeletonRootBoneName: "mixamorig:Hips",
+  requiredBoneIds: GOLDEN_BIPED_BONE_IDS,
   sourceNodeNameByBoneId: {
-    root: "mixamorig:Hips",
     hips: "mixamorig:Hips",
     spine: "mixamorig:Spine",
     chest: "mixamorig:Spine2",
@@ -301,13 +299,13 @@ const G_BOT_ACTION_BINDINGS = [
   number,
 ][];
 
-const G_BOT_ALL_ACTIONS: AnimationSetManifestInputV1 = {
+const G_BOT_GROUND_ANIMATION_SET: AnimationSetManifestInputV1 = {
   kind: "animation-set",
-  id: "humanoid.g-bot.all",
+  id: "humanoid.ground.g-bot",
   version: 1,
-  resourceRef: "worldkit://animation-set/humanoid.g-bot.all@1",
+  resourceRef: "worldkit://animation-set/humanoid.ground.g-bot@1",
   subjectAssetRef: G_BOT_SUBJECT_ASSET.resourceRef,
-  rigProfileRef: G_BOT_RIG_PROFILE.resourceRef,
+  rigProfileRef: G_BOT_MIXAMO_RIG_PROFILE.resourceRef,
   defaultActionId: "idle",
   requiredActionIds: G_BOT_ACTION_BINDINGS.map(([actionId]) => actionId),
   animationBindings: G_BOT_ACTION_BINDINGS.map(
@@ -321,9 +319,10 @@ const G_BOT_ALL_ACTIONS: AnimationSetManifestInputV1 = {
     }),
   ),
   aiMetadata: {
-    displayName: "G Bot Complete Action Set",
-    description: "Twenty-five explicit in-place art-ready semantic mappings for G Bot; runtime state binding remains separate.",
-    semanticTags: ["animation", "g-bot", "humanoid"]
+    displayName: "G Bot ground and contextual animations",
+    description:
+      "Twenty-five explicit in-place semantic mappings for the canonical G Bot asset; automatic runtime state selection remains separate.",
+    semanticTags: ["animation", "g-bot", "ground", "humanoid"],
   },
 };
 
@@ -343,6 +342,25 @@ const MEDIUM_HUMANOID_CAPSULE_PROFILE: ColliderProfileManifestInputV1 = {
     displayName: "Medium humanoid capsule",
     description: "Explicit support-centered capsule for a medium biped character.",
     semanticTags: ["biped", "capsule", "character", "collider", "medium"],
+  },
+};
+
+const G_BOT_CAPSULE_PROFILE: ColliderProfileManifestInputV1 = {
+  kind: "collider-profile",
+  id: "humanoid.g-bot-capsule",
+  version: 1,
+  resourceRef: "worldkit://collider-profile/humanoid.g-bot-capsule@1",
+  supportedBodyTopologies: ["biped"],
+  collider: {
+    kind: "capsule",
+    radiusMeters: 0.35,
+    heightMeters: 1.8,
+    centerOffsetFromSubjectOriginMetersXYZ: [0, 0.9, 0],
+  },
+  aiMetadata: {
+    displayName: "G Bot capsule",
+    description: "Product-approved support-centered Capsule for the G Bot humanoid.",
+    semanticTags: ["biped", "capsule", "character", "g-bot"],
   },
 };
 
@@ -482,9 +500,10 @@ export const BUILT_IN_SUBJECT_RESOURCE_MANIFESTS = [
   GOLDEN_BIPED_RIG_PROFILE,
   GOLDEN_GROUND_ANIMATION_SET,
   G_BOT_SUBJECT_ASSET,
-  G_BOT_RIG_PROFILE,
-  G_BOT_ALL_ACTIONS,
+  G_BOT_MIXAMO_RIG_PROFILE,
+  G_BOT_GROUND_ANIMATION_SET,
   MEDIUM_HUMANOID_CAPSULE_PROFILE,
+  G_BOT_CAPSULE_PROFILE,
   GROUND_LOCOMOTION_CAPABILITY,
   MEDIUM_CHARACTER_PHYSICS_BODY_PROFILE,
   CAPABILITY_CHARACTER_PHYSICS_BODY_PROFILE,

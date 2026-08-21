@@ -1,3 +1,5 @@
+import { readFile } from "node:fs/promises";
+
 import { describe, expect, it } from "vitest";
 
 import {
@@ -38,7 +40,6 @@ const BIPED_BONE_IDS = [
   "lower-leg.left",
   "lower-leg.right",
   "neck",
-  "root",
   "spine",
   "upper-arm.left",
   "upper-arm.right",
@@ -175,6 +176,45 @@ function normalizeSolvedLayoutWorldV3() {
   return result;
 }
 
+const PRODUCT_FIXED_SPAWN_CASES = [
+  {
+    label: "G Bot",
+    path: "../../../examples/authoring/g-bot-subject-world.json",
+    spawns: [
+      {
+        anchorEntityId: "spawn-g-bot-primary",
+        subjectEntityId: "g-bot-primary",
+        authoredPositionMetersXYZ: [-2, 0.4327890520288841, 18],
+        normalizedPositionMetersXYZ: [-2, 0.433, 18],
+      },
+      {
+        anchorEntityId: "spawn-g-bot-secondary",
+        subjectEntityId: "g-bot-secondary",
+        authoredPositionMetersXYZ: [2, 0.4328405709186983, 18],
+        normalizedPositionMetersXYZ: [2, 0.433, 18],
+      },
+    ],
+  },
+  {
+    label: "rigged Subject",
+    path: "../../../examples/authoring/rigged-subject-world.json",
+    spawns: [
+      {
+        anchorEntityId: "spawn-rigged-primary",
+        subjectEntityId: "rigged-primary",
+        authoredPositionMetersXYZ: [-3, -0.976004939803828, 30],
+        normalizedPositionMetersXYZ: [-3, -0.976, 30],
+      },
+      {
+        anchorEntityId: "spawn-rigged-secondary",
+        subjectEntityId: "rigged-secondary",
+        authoredPositionMetersXYZ: [3, -0.9764188420353316, 30],
+        normalizedPositionMetersXYZ: [3, -0.976, 30],
+      },
+    ],
+  },
+] as const;
+
 describe("compileWorld", () => {
   it("compiles one rigged Subject into ref-only parts and minimal resource tables", () => {
     const normalized = normalizeRiggedWorld(undefined, true);
@@ -233,7 +273,7 @@ describe("compileWorld", () => {
       "bodyTopology",
       "requiredBoneIds",
       "rigProfileRef",
-      "skeletonRootNodeName",
+      "skeletonRootBoneName",
       "sourceNodeNameByBoneId",
     ]);
     expect(Object.keys(plan.animationSets[0]!).sort()).toEqual([
@@ -262,8 +302,10 @@ describe("compileWorld", () => {
       JSON.stringify(plan.rigProfiles[0]),
     ) as {
       requiredBoneIds: readonly string[];
+      skeletonRootBoneName: string;
       sourceNodeNameByBoneId: Readonly<Record<string, unknown>>;
     };
+    expect(serializedRigProfile.skeletonRootBoneName).toBe("root");
     expect(serializedRigProfile.requiredBoneIds).toEqual(BIPED_BONE_IDS);
     expectExactKeys(serializedRigProfile.sourceNodeNameByBoneId, BIPED_BONE_IDS);
     for (const boneId of BIPED_BONE_IDS) {
@@ -304,7 +346,7 @@ describe("compileWorld", () => {
         normalizedWorldIrHash: rigged.normalizedWorldIrHash!,
       }).executionPlanHash,
     ).toBe(
-      "sha256:1f8a285f2ada5394ce27abbe4274394adf0d8c6ccc0dcdaf6c9b49184e590515",
+      "sha256:3dd15d8544b3114a7f86c768c388f43fc8685540c16956745d513736e836f9e2",
     );
   });
 
@@ -385,18 +427,12 @@ describe("compileWorld", () => {
       "normalized-rig-provider-handle",
       "normalized-animation-source-uri",
       "normalized-collider-provider-handle",
-      "normalized-collider-center-source-uri",
       "normalized-binding-provider-handle",
       "normalized-asset-transform-provider-handle",
-      "normalized-asset-position-source-uri",
-      "normalized-asset-scale-provider-handle",
       "normalized-appearance-source-uri",
       "normalized-bone-transform-provider-handle",
-      "normalized-bone-position-source-uri",
       "normalized-local-transform-provider-handle",
-      "normalized-local-position-source-uri",
       "normalized-subject-collider-provider-handle",
-      "normalized-subject-collider-center-source-uri",
       "normalized-locomotion-provider-handle",
     ] as const;
     const normalized = normalizeRiggedWorld();
@@ -411,45 +447,28 @@ describe("compileWorld", () => {
       Object.assign(binding, { sourceUri: forbiddenValues[2] });
     }
     Object.assign(colliderProfile.collider, { providerHandle: forbiddenValues[3] });
-    Object.assign(colliderProfile.collider.centerOffsetFromSubjectOriginMetersXYZ, {
-      sourceUri: forbiddenValues[4],
-    });
     const definition = world.resources.subjectDefinitions[0]!;
-    Object.assign(definition.visualBinding, { providerHandle: forbiddenValues[5] });
+    Object.assign(definition.visualBinding, { providerHandle: forbiddenValues[4] });
     const assetPart = definition.visualParts.find((part) => part.kind === "asset")!;
-    Object.assign(assetPart.localTransform, { providerHandle: forbiddenValues[6] });
-    Object.assign(assetPart.localTransform.positionMetersXYZ, {
-      sourceUri: forbiddenValues[7],
-    });
-    Object.assign(assetPart.localTransform.scaleXYZ, {
-      providerHandle: forbiddenValues[8],
-    });
-    Object.assign(assetPart.appearance, { sourceUri: forbiddenValues[9] });
+    Object.assign(assetPart.localTransform, { providerHandle: forbiddenValues[5] });
+    Object.assign(assetPart.appearance, { sourceUri: forbiddenValues[6] });
     const boneSocket = definition.sockets.find((socket) => socket.kind === "bone")!;
-    Object.assign(boneSocket.offsetTransform, { providerHandle: forbiddenValues[10] });
-    Object.assign(boneSocket.offsetTransform.positionMetersXYZ, {
-      sourceUri: forbiddenValues[11],
-    });
+    Object.assign(boneSocket.offsetTransform, { providerHandle: forbiddenValues[7] });
     definition.sockets = [
       ...definition.sockets,
       {
         id: "test.local",
         kind: "local",
         localTransform: {
-          positionMetersXYZ: Object.assign([0, 0, 0] as [number, number, number], {
-            sourceUri: forbiddenValues[13],
-          }),
+          positionMetersXYZ: [0, 0, 0],
           rotationEulerRadiansXYZ: [0, 0, 0],
-          providerHandle: forbiddenValues[12],
+          providerHandle: forbiddenValues[8],
         },
         semanticTags: ["test"],
       } as unknown as (typeof definition.sockets)[number],
     ];
-    Object.assign(definition.collider, { providerHandle: forbiddenValues[14] });
-    Object.assign(definition.collider.centerOffsetFromSubjectOriginMetersXYZ, {
-      sourceUri: forbiddenValues[15],
-    });
-    Object.assign(definition.locomotion, { providerHandle: forbiddenValues[16] });
+    Object.assign(definition.collider, { providerHandle: forbiddenValues[9] });
+    Object.assign(definition.locomotion, { providerHandle: forbiddenValues[10] });
     const beforeCompile = structuredClone(world);
 
     const result = compileNormalizedWorld(world);
@@ -694,25 +713,32 @@ describe("compileWorld", () => {
     );
   });
 
-  it("places Subject Origin on sampled Terrain without adding Collider height", () => {
+  it("copies fixed Anchor position without adding Terrain or Collider height", () => {
     const result = compilePackageWorld();
     const executionPlan = result.executionPlan!;
     const subject = executionPlan.subjects.find(
       (candidate) => candidate.entityId === "pack-animal-a",
     )!;
 
-    expect(subject.spawnSubjectOriginPositionMetersXYZ[1]).toBeCloseTo(
-      sampleTerrainHeight(executionPlan.terrain, [-4, 5]),
-    );
+    expect(sampleTerrainHeight(executionPlan.terrain, [-4, 5])).not.toBe(0);
+    expect(subject.spawnSubjectOriginPositionMetersXYZ).toEqual([-4, 0, 5]);
     expect(subject.collider).toMatchObject({
       radiusMeters: 0.7,
       heightMeters: 1.4,
       centerOffsetFromSubjectOriginMetersXYZ: [0, 0.7, 0],
     });
-    expect(subject.spawnSubjectOriginPositionMetersXYZ[1]).not.toBeCloseTo(
-      sampleTerrainHeight(executionPlan.terrain, [-4, 5]) +
-        subject.collider.heightMeters / 2,
-    );
+  });
+
+  it("samples the exact rendered Terrain triangles rather than a bilinear surface", () => {
+    const terrain = {
+      ...compilePackageWorld().executionPlan!.terrain,
+      centerMetersXZ: [0, 0] as const,
+      sizeMetersXZ: [2, 2] as const,
+      resolutionCellsXZ: [2, 2] as const,
+      heightSamplesMeters: [0, 2, 4, 0],
+    };
+
+    expect(sampleTerrainHeight(terrain, [0, 0])).toBe(3);
   });
 
   it("propagates stable Sockets and normalized visual composition", () => {
@@ -843,9 +869,291 @@ describe("compileWorld", () => {
     expect(serialized).not.toContain('"constraints"');
     expect(serialized).not.toMatch(/candidateRegionIds|sourceUri|licenseUri|providerHandle/);
     expect(result.executionPlanHash).toBe(
-      "sha256:dbc3590c465f4e7b3410190dba503170b0a198f1bae22efdfcc5a28c80a42f89",
+      "sha256:c0400052aea7146cb0b7530e02c7d6ad3c28508b008123162e1e67d757b85f87",
     );
   });
+
+  it("copies the solved spawn position and Y rotation without terrain resampling", () => {
+    const normalized = normalizeSolvedLayoutWorldV3();
+    const world = structuredClone(normalized.value!) as unknown as {
+      nodes: Array<NormalizedWorldIRV3["nodes"][number]>;
+    } & NormalizedWorldIRV3;
+    const spawnAnchor = world.nodes.find(
+      (node) => node.kind === "anchor" && node.id === "spawn-main",
+    );
+    if (spawnAnchor === undefined || spawnAnchor.kind !== "anchor") {
+      throw new Error("Solved spawn Anchor fixture is missing.");
+    }
+    Object.assign(spawnAnchor, {
+      transform: {
+        ...spawnAnchor.transform,
+        positionMetersXYZ: [0, 7.25, 0],
+        rotationEulerRadiansXYZ: [0, Math.PI / 2, 0],
+      },
+    });
+
+    const result = compileNormalizedWorld(world);
+    const terrain = result.executionPlan!.terrain;
+    const subject = result.executionPlan?.subjects.find(
+      (candidate) => candidate.entityId === "player",
+    );
+
+    expect(new Set(terrain.heightSamplesMeters).size).toBeGreaterThan(1);
+    expect(sampleTerrainHeight(terrain, [0, 0])).not.toBe(0);
+    expect(subject?.spawnSubjectOriginPositionMetersXYZ).toEqual([0, 7.25, 0]);
+    expect(subject?.spawnSubjectFacingRadians).toBe(Math.PI / 2);
+  });
+
+  it("rejects a Subject spawn inside blocked water", () => {
+    const spec = createValidAuthoringSpec();
+    const water = spec.nodes.find((node) => node.kind === "water");
+    const spawn = spec.nodes.find((node) => node.kind === "anchor" && node.id === "spawn-main");
+    if (water?.kind !== "water" || spawn?.kind !== "anchor" || spawn.placement.kind !== "fixed") {
+      throw new Error("Canonical blocked-water fixture is incomplete.");
+    }
+    water.components.water.traversalMode = "blocked";
+    spawn.placement.transform.positionMetersXYZ = [25, 0, 0];
+
+    const normalized = normalizeAuthoringSpec(spec);
+    if (!normalized.ok || normalized.value === undefined || normalized.normalizedWorldIrHash === undefined) {
+      throw new Error(`Blocked-water fixture did not normalize: ${JSON.stringify(normalized.diagnostics)}`);
+    }
+    const result = compileWorld({
+      normalizedWorldIr: normalized.value,
+      normalizedWorldIrHash: normalized.normalizedWorldIrHash,
+    });
+
+    expect(result.ok).toBe(false);
+    expect(result.executionPlan).toBeUndefined();
+    expect(result.diagnostics).toContainEqual(expect.objectContaining({
+      code: "COMPILER_SPAWN_IN_BLOCKED_WATER",
+      instancePath: "/nodes/player/spawnAnchorEntityId",
+      details: { subjectEntityId: "player", waterEntityId: "lake-main" },
+    }));
+  });
+
+  it("rejects capsule-disc overlap with blocked water when the spawn center is outside", () => {
+    const spec = createValidAuthoringSpec();
+    const water = spec.nodes.find((node) => node.kind === "water");
+    const spawn = spec.nodes.find((node) => node.kind === "anchor" && node.id === "spawn-main");
+    if (water?.kind !== "water" || spawn?.kind !== "anchor" || spawn.placement.kind !== "fixed") {
+      throw new Error("Canonical blocked-water edge fixture is incomplete.");
+    }
+    water.components.water.traversalMode = "blocked";
+    water.components.water.waterLevelMeters = 1;
+    water.components.water.depthMeters = 2;
+    spawn.placement.transform.positionMetersXYZ = [37.2, 0, 0];
+
+    const normalized = normalizeAuthoringSpec(spec);
+    if (!normalized.ok || normalized.value === undefined || normalized.normalizedWorldIrHash === undefined) {
+      throw new Error(`Blocked-water edge fixture did not normalize: ${JSON.stringify(normalized.diagnostics)}`);
+    }
+
+    expect(compileWorld({
+      normalizedWorldIr: normalized.value,
+      normalizedWorldIrHash: normalized.normalizedWorldIrHash,
+    }).diagnostics).toContainEqual(expect.objectContaining({
+      code: "COMPILER_SPAWN_IN_BLOCKED_WATER",
+    }));
+  });
+
+  it.each([
+    { label: "outside blocked water", traversalMode: "blocked" as const, spawn: [0, 0, 30] as const },
+    { label: "inside explicitly walkable water", traversalMode: "walkable" as const, spawn: [25, 0, 0] as const },
+  ])("allows a Subject spawn $label", ({ traversalMode, spawn: spawnPosition }) => {
+    const spec = createValidAuthoringSpec();
+    const water = spec.nodes.find((node) => node.kind === "water");
+    const spawn = spec.nodes.find((node) => node.kind === "anchor" && node.id === "spawn-main");
+    if (water?.kind !== "water" || spawn?.kind !== "anchor" || spawn.placement.kind !== "fixed") {
+      throw new Error("Canonical allowed-water fixture is incomplete.");
+    }
+    water.components.water.traversalMode = traversalMode;
+    spawn.placement.transform.positionMetersXYZ = spawnPosition;
+
+    const normalized = normalizeAuthoringSpec(spec);
+    if (!normalized.ok || normalized.value === undefined || normalized.normalizedWorldIrHash === undefined) {
+      throw new Error(`Allowed-water fixture did not normalize: ${JSON.stringify(normalized.diagnostics)}`);
+    }
+    expect(compileWorld({
+      normalizedWorldIr: normalized.value,
+      normalizedWorldIrHash: normalized.normalizedWorldIrHash,
+    }).ok).toBe(true);
+  });
+
+  it("allows a Subject spawn below an elevated blocked-water volume", () => {
+    const spec = createValidAuthoringSpec();
+    const water = spec.nodes.find((node) => node.kind === "water");
+    const spawn = spec.nodes.find((node) => node.kind === "anchor" && node.id === "spawn-main");
+    if (water?.kind !== "water" || spawn?.kind !== "anchor" || spawn.placement.kind !== "fixed") {
+      throw new Error("Canonical elevated-water fixture is incomplete.");
+    }
+    water.components.water.traversalMode = "blocked";
+    water.components.water.waterLevelMeters = 5;
+    water.components.water.depthMeters = 2;
+    spawn.placement.transform.positionMetersXYZ = [25, 0, 0];
+
+    const normalized = normalizeAuthoringSpec(spec);
+    if (!normalized.ok || normalized.value === undefined || normalized.normalizedWorldIrHash === undefined) {
+      throw new Error(`Elevated-water fixture did not normalize: ${JSON.stringify(normalized.diagnostics)}`);
+    }
+
+    expect(compileWorld({
+      normalizedWorldIr: normalized.value,
+      normalizedWorldIrHash: normalized.normalizedWorldIrHash,
+    }).diagnostics).not.toContainEqual(
+      expect.objectContaining({ code: "COMPILER_SPAWN_IN_BLOCKED_WATER" }),
+    );
+  });
+
+  it("rejects a Subject spawn inside a static collision object's footprint", () => {
+    const spec = createValidAuthoringSpec();
+    const object = spec.nodes.find((node) => node.kind === "object");
+    const spawn = spec.nodes.find((node) => node.kind === "anchor" && node.id === "spawn-main");
+    if (object?.kind !== "object" || object.placement.kind !== "fixed" ||
+        spawn?.kind !== "anchor" || spawn.placement.kind !== "fixed") {
+      throw new Error("Canonical static-blocker fixture is incomplete.");
+    }
+    object.placement.transform.positionMetersXYZ = [0, 2, 30];
+    spawn.placement.transform.positionMetersXYZ = [0, 0, 30];
+
+    const normalized = normalizeAuthoringSpec(spec);
+    if (!normalized.ok || normalized.value === undefined || normalized.normalizedWorldIrHash === undefined) {
+      throw new Error(`Static-blocker fixture did not normalize: ${JSON.stringify(normalized.diagnostics)}`);
+    }
+    const result = compileWorld({
+      normalizedWorldIr: normalized.value,
+      normalizedWorldIrHash: normalized.normalizedWorldIrHash,
+    });
+
+    expect(result.ok).toBe(false);
+    expect(result.diagnostics).toContainEqual(expect.objectContaining({
+      code: "COMPILER_SPAWN_INSIDE_STATIC_BLOCKER",
+      instancePath: "/nodes/player/spawnAnchorEntityId",
+      details: { subjectEntityId: "player", objectEntityId: "wall-east" },
+    }));
+  });
+
+  it("conservatively rejects overlap along a non-uniform sphere blocker's long axis", () => {
+    const spec = createValidAuthoringSpec();
+    const prototypes = spec.resources.prototypes as unknown as Array<
+      (typeof spec.resources.prototypes)[number]
+    >;
+    prototypes[0] = {
+      id: "wall",
+      version: 1,
+      kind: "primitive",
+      primitive: "sphere",
+      radiusMeters: 1,
+      collisionEnabled: true,
+      semantic: { classId: "obstacle.sphere" },
+    };
+    const object = spec.nodes.find((node) => node.kind === "object");
+    const spawn = spec.nodes.find((node) => node.kind === "anchor" && node.id === "spawn-main");
+    if (object?.kind !== "object" || object.placement.kind !== "fixed" ||
+        spawn?.kind !== "anchor" || spawn.placement.kind !== "fixed") {
+      throw new Error("Canonical non-uniform blocker fixture is incomplete.");
+    }
+    object.placement.transform.positionMetersXYZ = [0, 1, 30];
+    object.placement.transform.scaleXYZ = [4, 1, 1];
+    spawn.placement.transform.positionMetersXYZ = [4.2, 0, 30];
+
+    const normalized = normalizeAuthoringSpec(spec);
+    if (!normalized.ok || normalized.value === undefined || normalized.normalizedWorldIrHash === undefined) {
+      throw new Error(`Non-uniform blocker fixture did not normalize: ${JSON.stringify(normalized.diagnostics)}`);
+    }
+
+    expect(compileWorld({
+      normalizedWorldIr: normalized.value,
+      normalizedWorldIrHash: normalized.normalizedWorldIrHash,
+    }).diagnostics).toContainEqual(expect.objectContaining({
+      code: "COMPILER_SPAWN_INSIDE_STATIC_BLOCKER",
+    }));
+  });
+
+  it("allows exact capsule-foot contact with a static collision object's top", () => {
+    const spec = createValidAuthoringSpec();
+    const object = spec.nodes.find((node) => node.kind === "object");
+    const spawn = spec.nodes.find((node) => node.kind === "anchor" && node.id === "spawn-main");
+    if (object?.kind !== "object" || object.placement.kind !== "fixed" ||
+        spawn?.kind !== "anchor" || spawn.placement.kind !== "fixed") {
+      throw new Error("Canonical static-blocker contact fixture is incomplete.");
+    }
+    object.placement.transform.positionMetersXYZ = [0, -2, 30];
+    spawn.placement.transform.positionMetersXYZ = [0, 0, 30];
+
+    const normalized = normalizeAuthoringSpec(spec);
+    if (!normalized.ok || normalized.value === undefined || normalized.normalizedWorldIrHash === undefined) {
+      throw new Error(`Static-blocker contact fixture did not normalize: ${JSON.stringify(normalized.diagnostics)}`);
+    }
+
+    expect(compileWorld({
+      normalizedWorldIr: normalized.value,
+      normalizedWorldIrHash: normalized.normalizedWorldIrHash,
+    }).diagnostics).not.toContainEqual(
+      expect.objectContaining({ code: "COMPILER_SPAWN_INSIDE_STATIC_BLOCKER" }),
+    );
+  });
+
+  it.each(PRODUCT_FIXED_SPAWN_CASES)(
+    "keeps $label fixed spawn Anchors at their absolute terrain-surface positions",
+    async ({ path, spawns }) => {
+      const spec = JSON.parse(
+        await readFile(new URL(path, import.meta.url), "utf8"),
+      ) as AuthoringSpecV3;
+      const normalized = normalizeAuthoringSpec(spec);
+      if (
+        !normalized.ok ||
+        normalized.value === undefined ||
+        normalized.normalizedWorldIrHash === undefined
+      ) {
+        throw new Error(
+          `Product fixture did not normalize: ${JSON.stringify(normalized.diagnostics)}`,
+        );
+      }
+      const compiled = compileWorld({
+        normalizedWorldIr: normalized.value,
+        normalizedWorldIrHash: normalized.normalizedWorldIrHash,
+      });
+      const executionPlan = compiled.executionPlan!;
+
+      for (const expected of spawns) {
+        const authoredAnchor = spec.nodes.find(
+          (node) => node.kind === "anchor" && node.id === expected.anchorEntityId,
+        );
+        const anchor = normalized.value.nodes.find(
+          (node) => node.kind === "anchor" && node.id === expected.anchorEntityId,
+        );
+        const subject = executionPlan.subjects.find(
+          (candidate) => candidate.entityId === expected.subjectEntityId,
+        );
+        expect(authoredAnchor?.kind).toBe("anchor");
+        if (
+          authoredAnchor?.kind !== "anchor" ||
+          authoredAnchor.placement.kind !== "fixed"
+        ) {
+          continue;
+        }
+        expect(authoredAnchor.placement.transform.positionMetersXYZ).toEqual(
+          expected.authoredPositionMetersXYZ,
+        );
+        expect(anchor?.kind).toBe("anchor");
+        if (anchor?.kind !== "anchor") continue;
+        expect(anchor.transform.positionMetersXYZ).toEqual(
+          expected.normalizedPositionMetersXYZ,
+        );
+        expect(
+          sampleTerrainHeight(executionPlan.terrain, [
+            expected.authoredPositionMetersXYZ[0],
+            expected.authoredPositionMetersXYZ[2],
+          ]),
+        ).toBeCloseTo(expected.authoredPositionMetersXYZ[1], 12);
+        expect(subject?.spawnSubjectOriginPositionMetersXYZ).toEqual(
+          expected.normalizedPositionMetersXYZ,
+        );
+        expect(subject?.spawnSubjectFacingRadians).toBe(0);
+      }
+    },
+  );
 
   it("projects forged nested IR objects explicitly and rejects a V3 IR hash mismatch", () => {
     const normalized = normalizeSolvedLayoutWorldV3();

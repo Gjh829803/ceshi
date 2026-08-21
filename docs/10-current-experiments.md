@@ -80,37 +80,40 @@ Subject Node 中引用 `worldkit://subject-definition/humanoid.rigged-golden@1`�
 - 自包含 GLB 为 43,656 bytes，原始字节 Hash 为
   `sha256:1095fd65c754d53e6db3757ab5e1c9e5e9dcea2581f85d40f37ea4890ee8c2c2`；
 - Normalized IR Hash 为
-  `sha256:e746bd738e13ec8603779afba4d62d2d4610d0b03d428a6a1f8cc4f468ce1984`，
+  `sha256:ffe2240f2fa90931d7d7cb3863c0d1068b0984dd2b4897f2ffbc9473ca76a1f9`，
   ExecutionPlan Hash 为
-  `sha256:22e38f9dc474b33a2adbe8442dba411e70f62731ac1e9a54fe1ac90f9f73249f`；
+  `sha256:df3a35b3ff935c0ddc1f9c68a8dfca6395193b02c92b1db6e63b20429f55f994`；
 - `world.png` 与 `idle/walk/run/jump.png` 均为 936×596；CLI `world.png` 在暂停并
   Reset 后以 Tick 0 同步记录 Snapshot 和截图，Hash 为
   `sha256:b9ff828333641e548ea7ef3d2f8dbc6c8ae96c120659db3a6f6c17df19a09d9b`；
 - Browser 固定 Tick 动作截图 Hash 分别为 Idle
-  `sha256:af60b01ae2bf9db87c5ea5a5e01a08539e1ca35186e7b88b60125cc049a641aa`、
-  Walk `sha256:63e1f332c7dcbb446f093d0d32db0e151288ab94a92aeb2d666b52bd8fd1f513`、
-  Run `sha256:d8957ad8b2bc115a9a493dd5404ef38e10cd2373a40b2743b2af83851400e3c7`、
-  Jump `sha256:992383d2cc70d49b827af24815dff7a41bbed8e5da7e0f8bf527294b00f61552`；
+  `sha256:4301d77f6d7eaab46c589abf6376b2e90aee94e2b43c7424bdde713ecd190cf2`、
+  Walk `sha256:5e85136862609606ffe1986a96fb684c180beb2bc8bc3c6735ff6385a447e86e`、
+  Run `sha256:86cbb3f4b375b3c7e50d1d7368077a1389d4db0d397c59aaf744be178984e199`、
+  Jump `sha256:d70e74ced33ce3e3868f77085a6895585c1b885f92d511b60623b0bc4f567ffb`；
   Walk 按 1s/30 FPS Clip、1× Playback、0.2s Blend 与 60Hz Runtime 推导，在
   Action Start Tick 1 后的首个 Post-blend Quarter-cycle Tick 16 捕获，z 为
-  29.398333333333344；Jump 在 Tick 12 报告 `movementMedium: air`；
+  29.398516476888297；Jump 在 Tick 12 报告 `movementMedium: air`；
 - 四张动作图在 `[374,166,188,287]` Crop 内使用 Foreground-origin 归一化 Subject
-  Silhouette 比较；六组差异率为 0.500432、0.531802、0.398077、0.657316、
-  0.298178、0.602627，均高于 0.15 门禁，不再只以 PNG Hash 不同代替姿态证据；
+  Silhouette 比较；六组差异率为 0.500432、0.531802、0.442699、0.657316、
+  0.281609、0.626496，均高于 0.15 门禁，不再只以 PNG Hash 不同代替姿态证据；
 - 未受控的 `rigged-primary` 保持位置与 `idle`，受控的 `rigged-secondary` 从 x=3
-  移到 x=5.361666666666668 并报告 `walk`；
-- `rigged-secondary` 在墙前停于 x=5.561666666666668，低于 6.2m 门禁；
+  移到 x=5.361550803956806 并报告 `walk`；
+- `rigged-secondary` 在墙前停于 x=5.641541341197738，低于 6.2m 门禁；
 - 内存篡改 GLB 只命中一次请求并得到 `SUBJECT_ASSET_HASH_MISMATCH`，磁盘资产
   前后 Hash 不变。
 
-这些事实证明项目自有 Golden Fixture 的完整管线，不证明任意产品资产、动作观感、
-Compound Collider、LOD、更多拓扑或完整 Semantic Actions 已经通过验收。
+这些事实证明项目自有 Golden Fixture 的完整管线。首个产品 G Bot 另由
+`pnpm verify:g-bot-subject` 独立验收：5,302,160-byte GLB、65 Bone、25 源 Clip、
+`idle/walk/run/jump` 显式映射、双实例隔离、墙体停止和五张 936×596 截图均通过。
+这仍不证明任意后续产品资产、Compound Collider、LOD、更多拓扑或完整 Semantic
+Actions 已经通过验收。
 
 ## 3. 针对近期反馈做过的实验
 
 | 反馈 | 当前处理 | 验证状态 |
 |---|---|---|
-| W 前进方向与人物朝向相反 | Canonical Golden 资产与运行时统一为 `-Z`；Legacy Mixamo `+Z` 资产仍在旧加载层校正 | Golden E2E 覆盖 `-Z` 朝向；每个产品资产仍需独立视觉 QA |
+| W 前进方向与人物朝向相反 | Canonical Golden/G Bot 资产与运行时统一为 `-Z`；Legacy Mixamo `+Z` 资产仍在旧加载层校正 | Golden 与 G Bot E2E 覆盖 `-Z` 朝向；每个后续产品资产仍需独立视觉 QA |
 | 镜头离人物过远 | 第三人称默认距离下调，并允许场景在 `1.8..8m` 内设置初始距离 | 参数校验和镜头单测已覆盖 |
 | 地图太小 | 默认草地扩展为 4 × 4 个 160m tile，即 640m × 640m | 场景编译测试已覆盖 |
 | 水体奇怪 | 增加专用 WaterBody/Lake：湖盆、岸带、水位、浅深色、菲涅尔和轻微波纹 | 功能已运行；最终水质仍由世界模型负责 |
@@ -193,8 +196,8 @@ pnpm visual:check -- --scene sunlit-flower-bay passed
 - 生成 World Plan/Opening Shot 与真实白膜的通用视觉嵌入评分；当前门禁依赖 Planner 先给出可解释的区域/锚点 Guide。
 - 白膜三视图与样式三视图的自动轮廓/姿态一致性评分；Sunlit Flower Bay 已有完整配对，但当前仍只自动检查文件、路径和哈希。
 - 水岸在各种视角和地形高度下的观感。
-- 产品资产的动作混合观感、脚滑、独立动画资产、姿态和更多 Semantic Action；
-  Golden `idle/walk/run/jump` 只作为确定性管线 Fixture。
+- 后续产品资产的动作混合观感、脚滑、独立动画资产、姿态和更多 Semantic Action；
+  Golden 是确定性管线 Fixture，G Bot 当前只验收 `idle/walk/run/jump`。
 - 世界模型条件帧与最终生成画面的一致性；当前已产出条件包和目标首帧，但实时世界模型链路尚未接入。
 
 其他实现层已知问题：

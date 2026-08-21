@@ -4,7 +4,7 @@
     "id": "ground-water-air.standard",
     "version": 1,
     "resourceRef": "worldkit://medium-profile/ground-water-air.standard@1",
-    "agentAccessLevel": "T0",
+    "authoringAvailability": "recommended",
     "supportedMediums": ["ground", "water", "air"],
     "ground": { "groundingToleranceMeters": 0.08 },
     "water": { "surfaceHoldStrength": 8, "linearDragPerSecond": 0.8 },
