@@ -600,13 +600,13 @@ git commit -m "test: add route r0 conformance gate"
 
 ## Completion Review
 
-- [ ] Authoring V3 is unchanged and still rejects connectivity fields.
-- [ ] Authoring V4 exposes exactly one connectivity constraint kind.
-- [ ] Planner Route uses canonical unit-bearing names and projects deterministically.
-- [ ] No public corridor mode, provider handle, generic endpoint, or numeric parameter bag exists.
-- [ ] Driver validation rejects every movement/physics authority field.
-- [ ] Graph and Probe lock mismatch has one stable code and cannot proceed to Query.
-- [ ] Surface identities remain stable across Tile/LOD ordering changes.
-- [ ] Route thresholds, metrics, diagnostics, and report policy have one owner in `@whitebox-world/validation` V2; Capture V1 is unchanged and Traversal exports no competing report vocabulary.
-- [ ] The verifier states that R1/R1b and Runtime Gates are not implemented.
-- [ ] P1.5 implementation remains an explicit prerequisite for R1/R1b.
+- [x] Authoring V3 is unchanged and still rejects connectivity fields.
+- [x] Authoring V4 exposes exactly one connectivity constraint kind.
+- [x] Planner Route uses canonical unit-bearing names and projects deterministically.
+- [x] No public corridor mode, provider handle, generic endpoint, or numeric parameter bag exists.
+- [x] Driver validation rejects every movement/physics authority field.
+- [x] Graph and Probe lock mismatch has one stable code and cannot proceed to Query.
+- [x] Surface identities remain stable across Tile/LOD ordering changes.
+- [x] Route thresholds, metrics, diagnostics, and report policy have one owner in `@whitebox-world/validation` V2; Capture V1 is unchanged and Traversal exports no competing report vocabulary.
+- [x] The verifier states that R1/R1b and Runtime Gates are not implemented.
+- [x] P1.5 Ground/Air authority has landed; R1/R1b Graph Builder and Runtime Probe remain unimplemented.

@@ -1,4 +1,5 @@
 export {
+  assertTraversalSurfaceIdentityV1,
   canonicalTraversalGraphV1,
   hashTraversalGraphV1,
 } from "./graph-contract.js";

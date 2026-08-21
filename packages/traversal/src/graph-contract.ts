@@ -1,6 +1,9 @@
 import { sha256CanonicalJson } from "@whitebox-world/protocol";
 import { isEmpty, isNil, isPlainObject } from "lodash-es";
 
+import { resolveTraversalGraphBuilderProfileV1 } from "./profile-registry.js";
+import type { TraversalSurfaceIdentityV1 } from "./types.js";
+
 export interface TraversalNodeV1 {
   readonly id: string;
   readonly traversalSurfaceId: string;
@@ -115,6 +118,79 @@ function failGraph(message: string): never {
   throw new Error(`TRAVERSAL_GRAPH_INVALID: ${message}`);
 }
 
+function failSurface(message: string): never {
+  throw new Error(`TRAVERSAL_SURFACE_IDENTITY_INVALID: ${message}`);
+}
+
+const SURFACE_IDENTITY_FIELDS = [
+  "traversalSurfaceId",
+  "surfaceEntityId",
+  "colliderSubshapeId",
+  "resourceRef",
+  "resolvedVersion",
+  "resourceHash",
+] as const;
+
+export function assertTraversalSurfaceIdentityV1(
+  value: unknown,
+): TraversalSurfaceIdentityV1 {
+  if (isNil(value) || !isPlainObject(value)) {
+    failSurface("expected an object.");
+  }
+  const record = value as Record<string, unknown>;
+  rejectUnknownFields(record, SURFACE_IDENTITY_FIELDS, "");
+  for (const field of SURFACE_IDENTITY_FIELDS) {
+    if (isNil(record[field])) {
+      failSurface(`missing field '${field}'.`);
+    }
+  }
+  const traversalSurfaceId = requireNonEmptyString(
+    record.traversalSurfaceId,
+    "traversalSurfaceId",
+  );
+  const surfaceEntityId = requireNonEmptyString(
+    record.surfaceEntityId,
+    "surfaceEntityId",
+  );
+  const colliderSubshapeId = requireNonEmptyString(
+    record.colliderSubshapeId,
+    "colliderSubshapeId",
+  );
+  if (
+    traversalSurfaceId === surfaceEntityId ||
+    traversalSurfaceId === colliderSubshapeId ||
+    surfaceEntityId === colliderSubshapeId
+  ) {
+    failSurface(
+      "traversalSurfaceId, surfaceEntityId, and colliderSubshapeId must be distinct.",
+    );
+  }
+  return {
+    traversalSurfaceId,
+    surfaceEntityId,
+    colliderSubshapeId,
+    resourceRef: requireNonEmptyString(record.resourceRef, "resourceRef"),
+    resolvedVersion: requireNonEmptyString(record.resolvedVersion, "resolvedVersion"),
+    resourceHash: requireHash(record.resourceHash, "resourceHash"),
+  };
+}
+
+function assertResolvedGraphBuilderIdentity(
+  resourceRef: string,
+  resolvedVersion: string,
+  resourceHash: `sha256:${string}`,
+): void {
+  const resolved = resolveTraversalGraphBuilderProfileV1(resourceRef);
+  if (
+    resolved.resolvedVersion !== resolvedVersion ||
+    resolved.contentHash !== resourceHash
+  ) {
+    failGraph(
+      "graphBuilderProfileRef, graphBuilderResolvedVersion, and graphBuilderProfileHash must match the Registry Profile.",
+    );
+  }
+}
+
 function rejectUnknownFields(
   record: Record<string, unknown>,
   allowedFields: readonly string[],
@@ -146,6 +222,30 @@ function requireFiniteNumber(value: unknown, path: string): number {
     failGraph(`'${path}' must be a finite number.`);
   }
   return value;
+}
+
+function requireNonNegativeMeters(value: unknown, path: string): number {
+  const meters = requireFiniteNumber(value, path);
+  if (meters < 0) {
+    failGraph(`'${path}' must be >= 0.`);
+  }
+  return meters;
+}
+
+function requirePositiveMeters(value: unknown, path: string): number {
+  const meters = requireFiniteNumber(value, path);
+  if (!(meters > 0)) {
+    failGraph(`'${path}' must be > 0.`);
+  }
+  return meters;
+}
+
+function requireSlopeDegrees(value: unknown, path: string): number {
+  const degrees = requireFiniteNumber(value, path);
+  if (degrees < 0 || degrees > 90) {
+    failGraph(`'${path}' must be in [0, 90].`);
+  }
+  return degrees;
 }
 
 function requireMetersTuple(
@@ -207,11 +307,11 @@ function validateNode(
       `${path}/positionMetersXYZ`,
     ),
     tileId: requireNonEmptyString(record.tileId, `${path}/tileId`),
-    clearanceWidthMeters: requireFiniteNumber(
+    clearanceWidthMeters: requirePositiveMeters(
       record.clearanceWidthMeters,
       `${path}/clearanceWidthMeters`,
     ),
-    clearanceHeightMeters: requireFiniteNumber(
+    clearanceHeightMeters: requirePositiveMeters(
       record.clearanceHeightMeters,
       `${path}/clearanceHeightMeters`,
     ),
@@ -259,17 +359,20 @@ function validateEdge(
     type: record.type as TraversalEdgeV1["type"],
     fromTraversalNodeId,
     toTraversalNodeId,
-    distanceMeters: requireFiniteNumber(record.distanceMeters, `${path}/distanceMeters`),
+    distanceMeters: requireNonNegativeMeters(
+      record.distanceMeters,
+      `${path}/distanceMeters`,
+    ),
     heightDeltaMeters: requireFiniteNumber(
       record.heightDeltaMeters,
       `${path}/heightDeltaMeters`,
     ),
-    slopeDegrees: requireFiniteNumber(record.slopeDegrees, `${path}/slopeDegrees`),
-    minimumClearanceWidthMeters: requireFiniteNumber(
+    slopeDegrees: requireSlopeDegrees(record.slopeDegrees, `${path}/slopeDegrees`),
+    minimumClearanceWidthMeters: requirePositiveMeters(
       record.minimumClearanceWidthMeters,
       `${path}/minimumClearanceWidthMeters`,
     ),
-    minimumClearanceHeightMeters: requireFiniteNumber(
+    minimumClearanceHeightMeters: requirePositiveMeters(
       record.minimumClearanceHeightMeters,
       `${path}/minimumClearanceHeightMeters`,
     ),
@@ -304,6 +407,11 @@ export function canonicalTraversalGraphV1(value: unknown): TraversalGraphV1 {
       requireNonEmptyString(record[field], field),
     ]),
   ) as Pick<TraversalGraphV1, (typeof GRAPH_STRING_FIELDS)[number]>;
+  assertResolvedGraphBuilderIdentity(
+    strings.graphBuilderProfileRef,
+    strings.graphBuilderResolvedVersion,
+    hashes.graphBuilderProfileHash,
+  );
 
   if (!isPlainObject(record.traversalNodesById)) {
     failGraph("'traversalNodesById' must be an object.");

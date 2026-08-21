@@ -387,7 +387,8 @@ Fixture。Blocking Failure 不能被其他 Gate 抵消，Required Metric 缺失�
 `verify:route-r0-contract` 只验证 Route Graph R0 的 Authoring V4 连通约束、Planner
 投影、Traversal Surface 身份、Lock Hash、Driver 白名单、Canonical Graph Bytes 和
 Validation 词汇。它不构建 Traversal Graph，不跑 Character Controller，也不表示
-`route-connectivity` 或 `route-runtime-conformance` 已经通过。
+`route-connectivity` 或 `route-runtime-conformance` 已经通过。已评 Runtime Metric
+必须引用 `route-runtime-probe-receipt`；一份 Traversal Graph 不能让 Runtime Gate 通过。
 
 ## 代码边界
 

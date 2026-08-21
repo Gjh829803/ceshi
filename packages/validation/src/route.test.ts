@@ -49,6 +49,36 @@ describe("Route validation vocabulary", () => {
     )).toMatchObject({ ok: true });
   });
 
+  it("keeps physical step, slope, clearance, and gap bounds off the Validation Profile", () => {
+    const connectivity =
+      OUTDOOR_WORLD_PACKAGE_DEV_VALIDATION_PROFILE_V2.gateDefinitionsById[
+        "route-connectivity"
+      ]!.metricDefinitionsById;
+    expect(connectivity["maximum-observed-step-height-meters"]).not.toHaveProperty(
+      "maximumAllowedMeters",
+    );
+    expect(connectivity["maximum-observed-slope-degrees"]).not.toHaveProperty(
+      "maximumAllowedDegrees",
+    );
+    expect(connectivity["minimum-observed-clearance-width-meters"]).not.toHaveProperty(
+      "minimumAllowedMeters",
+    );
+    expect(connectivity["minimum-observed-clearance-height-meters"]).not.toHaveProperty(
+      "minimumAllowedMeters",
+    );
+    expect(connectivity["maximum-observed-surface-gap-meters"]).not.toHaveProperty(
+      "maximumAllowedMeters",
+    );
+    expect(
+      OUTDOOR_WORLD_PACKAGE_DEV_VALIDATION_PROFILE_V2.routeRuntimeGateThresholds,
+    ).toMatchObject({
+      destinationToleranceMeters: 0.5,
+      maximumRouteDeviationMeters: 1,
+      stalledWindowTicks: 30,
+      maximumProbeTicks: 1200,
+    });
+  });
+
   it("rejects cross-unit threshold fields and generic numeric bags", () => {
     const crossedUnits = structuredClone(
       OUTDOOR_WORLD_PACKAGE_DEV_VALIDATION_PROFILE_V2,

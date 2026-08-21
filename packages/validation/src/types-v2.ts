@@ -146,7 +146,7 @@ export type EvidenceArtifactKindV2 =
   | "route-runtime-probe-receipt"
   | "route-overlay";
 
-export interface EvidenceArtifactV2 {
+interface EvidenceArtifactBaseV2 {
   readonly id: string;
   readonly kind: EvidenceArtifactKindV2;
   readonly artifactRef: string;
@@ -154,6 +154,46 @@ export interface EvidenceArtifactV2 {
   readonly sizeBytes: number;
   readonly contentHash: Sha256HashV1;
 }
+
+export interface TraversalGraphEvidenceArtifactV2 extends EvidenceArtifactBaseV2 {
+  readonly kind: "traversal-graph";
+  readonly resolvedTraversalLockHash: Sha256HashV1;
+  readonly graphBuilderProfileRef: string;
+  readonly graphBuilderResolvedVersion: string;
+  readonly graphBuilderProfileHash: Sha256HashV1;
+}
+
+export interface RoutePathReceiptEvidenceArtifactV2 extends EvidenceArtifactBaseV2 {
+  readonly kind: "route-path-receipt";
+  readonly resolvedTraversalLockHash: Sha256HashV1;
+  readonly graphBuilderProfileRef: string;
+  readonly graphBuilderResolvedVersion: string;
+  readonly graphBuilderProfileHash: Sha256HashV1;
+}
+
+export interface RouteRuntimeProbeReceiptEvidenceArtifactV2 extends EvidenceArtifactBaseV2 {
+  readonly kind: "route-runtime-probe-receipt";
+  readonly resolvedTraversalLockHash: Sha256HashV1;
+  readonly driverProfileRef: string;
+  readonly driverResolvedVersion: string;
+  readonly driverProfileHash: Sha256HashV1;
+  readonly runtimeBackendRef: string;
+  readonly runtimeBackendResolvedVersion: string;
+  readonly runtimeBackendHash: Sha256HashV1;
+  readonly runtimeAdapterRef: string;
+  readonly runtimeAdapterResolvedVersion: string;
+  readonly runtimeAdapterHash: Sha256HashV1;
+}
+
+export interface RouteOverlayEvidenceArtifactV2 extends EvidenceArtifactBaseV2 {
+  readonly kind: "route-overlay";
+}
+
+export type EvidenceArtifactV2 =
+  | TraversalGraphEvidenceArtifactV2
+  | RoutePathReceiptEvidenceArtifactV2
+  | RouteRuntimeProbeReceiptEvidenceArtifactV2
+  | RouteOverlayEvidenceArtifactV2;
 
 export type RouteDiagnosticDetailsV1 =
   | Readonly<{

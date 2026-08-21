@@ -6,6 +6,7 @@ import {
   resolveTraversalGraphBuilderProfileV1,
 } from "./index.js";
 import {
+  assertTraversalSurfaceIdentityV1,
   canonicalTraversalGraphV1,
   hashTraversalGraphV1,
   type TraversalGraphV1,
@@ -133,6 +134,85 @@ describe("canonicalTraversalGraphV1", () => {
     expect(hashTraversalGraphV1(identityMutated)).not.toBe(
       hashTraversalGraphV1(graph),
     );
+  });
+
+  it("rejects a forged Graph Builder identity and incomplete Surface identity", () => {
+    expect(() =>
+      canonicalTraversalGraphV1(validGraph({
+        graphBuilderProfileHash:
+          "sha256:ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff",
+      })),
+    ).toThrow("TRAVERSAL_GRAPH_INVALID");
+
+    expect(() =>
+      canonicalTraversalGraphV1(validGraph({
+        graphBuilderProfileRef: "worldkit://traversal-graph-builder-profile/forged@1",
+      })),
+    ).toThrow("TRAVERSAL_GRAPH_BUILDER_PROFILE_NOT_FOUND");
+
+    expect(() =>
+      assertTraversalSurfaceIdentityV1({
+        traversalSurfaceId: "spawn-apron-surface",
+        surfaceEntityId: "spawn-apron",
+        colliderSubshapeId: "spawn-apron-top",
+      }),
+    ).toThrow("TRAVERSAL_SURFACE_IDENTITY_INVALID");
+
+    expect(() =>
+      assertTraversalSurfaceIdentityV1({
+        traversalSurfaceId: "same",
+        surfaceEntityId: "same",
+        colliderSubshapeId: "same",
+        resourceRef: "worldkit://traversal-surface/same@1",
+        resolvedVersion: "1",
+        resourceHash:
+          "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      }),
+    ).toThrow("TRAVERSAL_SURFACE_IDENTITY_INVALID");
+  });
+
+  it("rejects negative distance, non-positive clearance, and out-of-range slope", () => {
+    const graph = validGraph();
+    const walk = graph.traversalEdgesById["spawn-to-watchtower-walk"]!;
+
+    expect(() =>
+      canonicalTraversalGraphV1(validGraph({
+        traversalEdgesById: {
+          "spawn-to-watchtower-walk": { ...walk, distanceMeters: -1 },
+        },
+      })),
+    ).toThrow("TRAVERSAL_GRAPH_INVALID");
+
+    expect(() =>
+      canonicalTraversalGraphV1(validGraph({
+        traversalEdgesById: {
+          "spawn-to-watchtower-walk": { ...walk, slopeDegrees: 181 },
+        },
+      })),
+    ).toThrow("TRAVERSAL_GRAPH_INVALID");
+
+    expect(() =>
+      canonicalTraversalGraphV1(validGraph({
+        traversalEdgesById: {
+          "spawn-to-watchtower-walk": {
+            ...walk,
+            minimumClearanceWidthMeters: -1,
+          },
+        },
+      })),
+    ).toThrow("TRAVERSAL_GRAPH_INVALID");
+
+    expect(() =>
+      canonicalTraversalGraphV1(validGraph({
+        traversalNodesById: {
+          ...graph.traversalNodesById,
+          "spawn-node": node({
+            id: "spawn-node",
+            clearanceHeightMeters: 0,
+          }),
+        },
+      })),
+    ).toThrow("TRAVERSAL_GRAPH_INVALID");
   });
 
   it("rejects a self hash field, collapsed surface ids, and duration costs", () => {

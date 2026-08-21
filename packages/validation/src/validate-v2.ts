@@ -1,4 +1,8 @@
 import { groupBy, isEqual, isNil, isPlainObject } from "lodash-es";
+import {
+  resolveTraversalDriverProfileV1,
+  resolveTraversalGraphBuilderProfileV1,
+} from "@whitebox-world/traversal";
 
 import {
   deriveValidationGateStatusV2,
@@ -59,6 +63,59 @@ const EVIDENCE_KINDS_V2 = [
   "route-runtime-probe-receipt",
   "route-overlay",
 ] as const;
+
+const LOCK_DERIVED_THRESHOLD_METRIC_IDS = new Set([
+  "maximum-observed-step-height-meters",
+  "maximum-observed-slope-degrees",
+  "minimum-observed-clearance-width-meters",
+  "minimum-observed-clearance-height-meters",
+  "maximum-observed-surface-gap-meters",
+]);
+
+const EVIDENCE_BASE_FIELDS = [
+  "id",
+  "kind",
+  "artifactRef",
+  "mediaType",
+  "sizeBytes",
+  "contentHash",
+] as const;
+
+const EVIDENCE_FIELDS_BY_KIND: Readonly<Record<string, readonly string[]>> = {
+  "traversal-graph": [
+    ...EVIDENCE_BASE_FIELDS,
+    "resolvedTraversalLockHash",
+    "graphBuilderProfileRef",
+    "graphBuilderResolvedVersion",
+    "graphBuilderProfileHash",
+  ],
+  "route-path-receipt": [
+    ...EVIDENCE_BASE_FIELDS,
+    "resolvedTraversalLockHash",
+    "graphBuilderProfileRef",
+    "graphBuilderResolvedVersion",
+    "graphBuilderProfileHash",
+  ],
+  "route-runtime-probe-receipt": [
+    ...EVIDENCE_BASE_FIELDS,
+    "resolvedTraversalLockHash",
+    "driverProfileRef",
+    "driverResolvedVersion",
+    "driverProfileHash",
+    "runtimeBackendRef",
+    "runtimeBackendResolvedVersion",
+    "runtimeBackendHash",
+    "runtimeAdapterRef",
+    "runtimeAdapterResolvedVersion",
+    "runtimeAdapterHash",
+  ],
+  "route-overlay": EVIDENCE_BASE_FIELDS,
+};
+
+const REQUIRED_EVIDENCE_KINDS_BY_GATE: Readonly<Record<string, ReadonlySet<string>>> = {
+  "route-connectivity": new Set(["traversal-graph", "route-path-receipt"]),
+  "route-runtime-conformance": new Set(["route-runtime-probe-receipt"]),
+};
 
 const METRIC_DEFINITION_FIELDS_BY_KIND: Readonly<Record<string, readonly string[]>> = {
   "boolean-assertion": ["id", "kind", "isRequired", "evaluatorProfileRef", "expectedValue"],
@@ -453,23 +510,39 @@ function validateMetricDefinition(
   } else if (kind === "hash-equality") {
     requireHash(record.expectedHash, `${path}/expectedHash`, diagnostics);
   } else if (kind === "meters-threshold") {
-    requireThresholdPair(
-      record,
-      "minimumAllowedMeters",
-      "maximumAllowedMeters",
-      path,
-      diagnostics,
-      false,
-    );
+    if (
+      !(
+        LOCK_DERIVED_THRESHOLD_METRIC_IDS.has(mapId) &&
+        isNil(record.minimumAllowedMeters) &&
+        isNil(record.maximumAllowedMeters)
+      )
+    ) {
+      requireThresholdPair(
+        record,
+        "minimumAllowedMeters",
+        "maximumAllowedMeters",
+        path,
+        diagnostics,
+        false,
+      );
+    }
   } else if (kind === "degrees-threshold") {
-    requireThresholdPair(
-      record,
-      "minimumAllowedDegrees",
-      "maximumAllowedDegrees",
-      path,
-      diagnostics,
-      false,
-    );
+    if (
+      !(
+        LOCK_DERIVED_THRESHOLD_METRIC_IDS.has(mapId) &&
+        isNil(record.minimumAllowedDegrees) &&
+        isNil(record.maximumAllowedDegrees)
+      )
+    ) {
+      requireThresholdPair(
+        record,
+        "minimumAllowedDegrees",
+        "maximumAllowedDegrees",
+        path,
+        diagnostics,
+        false,
+      );
+    }
   } else if (kind === "ticks-threshold") {
     requireThresholdPair(
       record,
@@ -890,12 +963,16 @@ function validateEvidenceArtifact(
 ): void {
   const record = asRecord(value, path, diagnostics);
   if (record === undefined) return;
-  rejectUnknownFields(
-    record,
-    ["id", "kind", "artifactRef", "mediaType", "sizeBytes", "contentHash"],
-    path,
-    diagnostics,
-  );
+  if (typeof record.kind !== "string" || EVIDENCE_FIELDS_BY_KIND[record.kind] === undefined) {
+    addDiagnostic(
+      diagnostics,
+      "VALIDATION_ENUM_INVALID",
+      `${path}/kind`,
+      "Evidence kind is not supported by V2.",
+    );
+    return;
+  }
+  rejectUnknownFields(record, EVIDENCE_FIELDS_BY_KIND[record.kind]!, path, diagnostics);
   if (requireString(record.id, `${path}/id`, diagnostics) && record.id !== mapId) {
     addDiagnostic(
       diagnostics,
@@ -909,6 +986,36 @@ function validateEvidenceArtifact(
   requireString(record.mediaType, `${path}/mediaType`, diagnostics);
   requireNonNegativeInteger(record.sizeBytes, `${path}/sizeBytes`, diagnostics);
   requireHash(record.contentHash, `${path}/contentHash`, diagnostics);
+  if (record.kind === "traversal-graph" || record.kind === "route-path-receipt") {
+    requireHash(record.resolvedTraversalLockHash, `${path}/resolvedTraversalLockHash`, diagnostics);
+    requireString(record.graphBuilderProfileRef, `${path}/graphBuilderProfileRef`, diagnostics);
+    requireString(
+      record.graphBuilderResolvedVersion,
+      `${path}/graphBuilderResolvedVersion`,
+      diagnostics,
+    );
+    requireHash(record.graphBuilderProfileHash, `${path}/graphBuilderProfileHash`, diagnostics);
+  }
+  if (record.kind === "route-runtime-probe-receipt") {
+    requireHash(record.resolvedTraversalLockHash, `${path}/resolvedTraversalLockHash`, diagnostics);
+    requireString(record.driverProfileRef, `${path}/driverProfileRef`, diagnostics);
+    requireString(record.driverResolvedVersion, `${path}/driverResolvedVersion`, diagnostics);
+    requireHash(record.driverProfileHash, `${path}/driverProfileHash`, diagnostics);
+    requireString(record.runtimeBackendRef, `${path}/runtimeBackendRef`, diagnostics);
+    requireString(
+      record.runtimeBackendResolvedVersion,
+      `${path}/runtimeBackendResolvedVersion`,
+      diagnostics,
+    );
+    requireHash(record.runtimeBackendHash, `${path}/runtimeBackendHash`, diagnostics);
+    requireString(record.runtimeAdapterRef, `${path}/runtimeAdapterRef`, diagnostics);
+    requireString(
+      record.runtimeAdapterResolvedVersion,
+      `${path}/runtimeAdapterResolvedVersion`,
+      diagnostics,
+    );
+    requireHash(record.runtimeAdapterHash, `${path}/runtimeAdapterHash`, diagnostics);
+  }
 }
 
 function validateDiagnosticDetails(
@@ -1101,15 +1208,121 @@ function metricResultMatchesDefinition(
   return false;
 }
 
+function artifactsByRef(
+  report: ValidationReportV2,
+): ReadonlyMap<string, EvidenceArtifactV2> {
+  return new Map(
+    Object.values(report.evidenceArtifactsById).map((artifact) => [
+      artifact.artifactRef,
+      artifact,
+    ]),
+  );
+}
+
+function addReferenceInvalid(
+  diagnostics: ValidationContractDiagnosticV1[],
+  path: string,
+  message: string,
+): void {
+  addDiagnostic(diagnostics, "VALIDATION_REFERENCE_INVALID", path, message);
+}
+
+function assertEvaluatedMetricEvidenceKinds(
+  gateId: string,
+  metricResult: MetricResultV2,
+  artifacts: ReadonlyMap<string, EvidenceArtifactV2>,
+  diagnostics: ValidationContractDiagnosticV1[],
+): void {
+  const requiredKinds = REQUIRED_EVIDENCE_KINDS_BY_GATE[gateId];
+  if (isNil(requiredKinds)) {
+    return;
+  }
+  const referencedKinds = new Set(
+    metricResult.evidenceArtifactRefs.flatMap((artifactRef) => {
+      const artifact = artifacts.get(artifactRef);
+      return isNil(artifact) ? [] : [artifact.kind];
+    }),
+  );
+  const hasRequiredKind = [...requiredKinds].some((kind) => referencedKinds.has(kind));
+  if (!hasRequiredKind) {
+    addReferenceInvalid(
+      diagnostics,
+      `/gateResultsById/${gateId}/metricResultsById/${metricResult.id}/evidenceArtifactRefs`,
+      `Evaluated ${gateId} metrics must cite ${[...requiredKinds].join(" or ")} evidence.`,
+    );
+  }
+}
+
+function assertRegistryIdentity(
+  path: string,
+  resolve: () => { readonly resolvedVersion: string; readonly contentHash: string },
+  resolvedVersion: string,
+  contentHash: string,
+  label: string,
+  diagnostics: ValidationContractDiagnosticV1[],
+): void {
+  try {
+    const resolved = resolve();
+    if (
+      resolved.resolvedVersion !== resolvedVersion ||
+      resolved.contentHash !== contentHash
+    ) {
+      addReferenceInvalid(
+        diagnostics,
+        path,
+        `${label} must match the Registry Profile.`,
+      );
+    }
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    addReferenceInvalid(diagnostics, path, message);
+  }
+}
+
+function assertEvidenceArtifactIdentities(
+  report: ValidationReportV2,
+  diagnostics: ValidationContractDiagnosticV1[],
+): void {
+  const lockHashes = new Set<string>();
+  for (const [artifactId, artifact] of Object.entries(report.evidenceArtifactsById)) {
+    const path = `/evidenceArtifactsById/${artifactId}`;
+    if (artifact.kind === "traversal-graph" || artifact.kind === "route-path-receipt") {
+      lockHashes.add(artifact.resolvedTraversalLockHash);
+      assertRegistryIdentity(
+        path,
+        () => resolveTraversalGraphBuilderProfileV1(artifact.graphBuilderProfileRef),
+        artifact.graphBuilderResolvedVersion,
+        artifact.graphBuilderProfileHash,
+        "Graph Builder identity",
+        diagnostics,
+      );
+    } else if (artifact.kind === "route-runtime-probe-receipt") {
+      lockHashes.add(artifact.resolvedTraversalLockHash);
+      assertRegistryIdentity(
+        path,
+        () => resolveTraversalDriverProfileV1(artifact.driverProfileRef),
+        artifact.driverResolvedVersion,
+        artifact.driverProfileHash,
+        "Traversal Driver identity",
+        diagnostics,
+      );
+    }
+  }
+  if (lockHashes.size > 1) {
+    addReferenceInvalid(
+      diagnostics,
+      "/evidenceArtifactsById",
+      "Evidence artifacts in one Report must share a single resolvedTraversalLockHash.",
+    );
+  }
+}
+
 function validateReportReferences(
   report: ValidationReportV2,
   diagnostics: ValidationContractDiagnosticV1[],
 ): void {
-  const evidenceRefs = new Set(
-    Object.values(report.evidenceArtifactsById).map(
-      (artifact: EvidenceArtifactV2) => artifact.artifactRef,
-    ),
-  );
+  const evidenceByRef = artifactsByRef(report);
+  const evidenceRefs = new Set(evidenceByRef.keys());
   const diagnosticIds = new Set(
     report.diagnostics.map((diagnostic: ValidationDiagnosticV2) => diagnostic.id),
   );
@@ -1150,13 +1363,23 @@ function validateReportReferences(
       }
       for (const artifactRef of metricResult.evidenceArtifactRefs) {
         if (!evidenceRefs.has(artifactRef)) {
-          addDiagnostic(
+          addReferenceInvalid(
             diagnostics,
-            "VALIDATION_REFERENCE_INVALID",
             `/gateResultsById/${gateId}/metricResultsById/${metricResult.id}/evidenceArtifactRefs`,
             `Unknown Evidence Artifact Ref '${artifactRef}'.`,
           );
         }
+      }
+      if (
+        metricResult.status === "passed" ||
+        metricResult.status === "failed"
+      ) {
+        assertEvaluatedMetricEvidenceKinds(
+          gateId,
+          metricResult,
+          evidenceByRef,
+          diagnostics,
+        );
       }
       for (const diagnosticId of metricResult.diagnosticIds) {
         metricDiagnosticOwners.push({
@@ -1221,6 +1444,7 @@ function validateReportReferences(
       );
     }
   }
+  assertEvidenceArtifactIdentities(report, diagnostics);
 }
 
 export function validateValidationReportV2(

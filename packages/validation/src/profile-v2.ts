@@ -125,23 +125,23 @@ export const OUTDOOR_WORLD_PACKAGE_DEV_VALIDATION_PROFILE_V2 = {
         ),
         "maximum-observed-step-height-meters": metersMetric(
           "maximum-observed-step-height-meters",
-          { maximumAllowedMeters: 0.3 },
+          {},
         ),
         "maximum-observed-slope-degrees": degreesMetric(
           "maximum-observed-slope-degrees",
-          { maximumAllowedDegrees: 42 },
+          {},
         ),
         "minimum-observed-clearance-width-meters": metersMetric(
           "minimum-observed-clearance-width-meters",
-          { minimumAllowedMeters: 0.7 },
+          {},
         ),
         "minimum-observed-clearance-height-meters": metersMetric(
           "minimum-observed-clearance-height-meters",
-          { minimumAllowedMeters: 1.8 },
+          {},
         ),
         "maximum-observed-surface-gap-meters": metersMetric(
           "maximum-observed-surface-gap-meters",
-          { maximumAllowedMeters: 0.3 },
+          {},
         ),
         "route-path-distance-meters": metersMetric("route-path-distance-meters", {
           minimumAllowedMeters: 0,

@@ -187,7 +187,9 @@ P1.5、P1.6、P2.5 与 P2.6 是把既有总体设计和产品对接契约显式�
 - [x] R0 实施并冻结 `connected-by-route`、Traversal Graph、`resolvedTraversalLockHash`、
   Driver 关闭白名单、Surface 身份、Evidence 与 Diagnostic 字段；通过下一 Canonical Major
   干净升级，不向已实现 V3 偷加空枚举。证据：`pnpm verify:route-r0-contract`。该命令只冻结
-  合同，不表示 `route-connectivity` / `route-runtime-conformance` 已实现。
+  合同，不表示 `route-connectivity` / `route-runtime-conformance` 已实现。已评 Runtime
+  Metric 必须引用 `route-runtime-probe-receipt`；主体步高/坡度/净空/缝隙阈值来自 Lock，
+  不写进 Validation Profile。
 - [ ] R1 实现普通人形 Heightfield Route：坡度、静态阻挡、胶囊宽高净空、缝隙、确定性
   Path Query 与真实固定 Tick Character Controller Gate；P1.5 Ground/Air Runtime 已删除
   步高/坡度 Motion fallback、spawn ray 和 AABB Support 旁路，原前置阻塞已解除。

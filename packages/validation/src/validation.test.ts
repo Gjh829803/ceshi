@@ -1,5 +1,11 @@
 import { isNil } from "lodash-es";
 import { describe, expect, it } from "vitest";
+import {
+  BUILT_IN_TRAVERSAL_DRIVER_PROFILE_REF,
+  BUILT_IN_TRAVERSAL_GRAPH_BUILDER_PROFILE_REF,
+  resolveTraversalDriverProfileV1,
+  resolveTraversalGraphBuilderProfileV1,
+} from "@whitebox-world/traversal";
 
 import {
   OUTDOOR_CONTROL_VIDEO_DEV_VALIDATION_PROFILE_HASH_V1,
@@ -16,6 +22,7 @@ import {
   validateValidationProfileV2,
   validateValidationReportV1,
   validateValidationReportV2,
+  type EvidenceArtifactV2,
   type GateResultV1,
   type GateResultV2,
   type MetricDefinitionV2,
@@ -726,7 +733,7 @@ function passedWorldPackageGateResults(): Record<string, GateResultV2> {
           Object.values(gateDefinition.metricDefinitionsById).map(
             (metricDefinition) => [
               metricDefinition.id,
-              passedWorldPackageMetricResult(metricDefinition),
+              passedWorldPackageMetricResult(metricDefinition, gateDefinition.id),
             ],
           ),
         ),
@@ -743,14 +750,21 @@ function includeBound<K extends string>(
   return isNil(value) ? {} : { [field]: value } as Record<K, number>;
 }
 
+function evidenceArtifactRefForGate(gateId: string): string {
+  return gateId === "route-runtime-conformance"
+    ? "artifact://route-runtime-probe-receipt"
+    : "artifact://traversal-graph";
+}
+
 function passedWorldPackageMetricResult(
   metricDefinition: MetricDefinitionV2,
+  gateId: string,
 ): MetricResultV2 {
   const shared = {
     id: metricDefinition.id,
     status: "passed" as const,
     evaluatorProfileRef: metricDefinition.evaluatorProfileRef,
-    evidenceArtifactRefs: ["artifact://traversal-graph"],
+    evidenceArtifactRefs: [evidenceArtifactRefForGate(gateId)],
     diagnosticIds: [],
   };
   if (metricDefinition.kind === "boolean-assertion") {
@@ -811,6 +825,75 @@ function passedWorldPackageMetricResult(
   throw new Error(`Unsupported metric kind '${metricDefinition.kind}'.`);
 }
 
+function typedWorldPackageEvidenceArtifacts(): Record<string, EvidenceArtifactV2> {
+  const graphBuilder = resolveTraversalGraphBuilderProfileV1(
+    BUILT_IN_TRAVERSAL_GRAPH_BUILDER_PROFILE_REF,
+  );
+  const driver = resolveTraversalDriverProfileV1(
+    BUILT_IN_TRAVERSAL_DRIVER_PROFILE_REF,
+  );
+  return {
+    "traversal-graph": {
+      id: "traversal-graph",
+      kind: "traversal-graph",
+      artifactRef: "artifact://traversal-graph",
+      mediaType: "application/vnd.worldkit.traversal-graph.v1+json",
+      sizeBytes: 128,
+      contentHash: HASH_A,
+      resolvedTraversalLockHash: HASH_A,
+      graphBuilderProfileRef: graphBuilder.resourceRef,
+      graphBuilderResolvedVersion: graphBuilder.resolvedVersion,
+      graphBuilderProfileHash: graphBuilder.contentHash,
+    },
+    "route-runtime-probe-receipt": {
+      id: "route-runtime-probe-receipt",
+      kind: "route-runtime-probe-receipt",
+      artifactRef: "artifact://route-runtime-probe-receipt",
+      mediaType: "application/vnd.worldkit.route-runtime-probe-receipt.v1+json",
+      sizeBytes: 256,
+      contentHash: HASH_B,
+      resolvedTraversalLockHash: HASH_A,
+      driverProfileRef: driver.resourceRef,
+      driverResolvedVersion: driver.resolvedVersion,
+      driverProfileHash: driver.contentHash,
+      runtimeBackendRef: "worldkit://runtime-backend/babylon-havok@1",
+      runtimeBackendResolvedVersion: "1",
+      runtimeBackendHash: HASH_C,
+      runtimeAdapterRef: "worldkit://runtime-adapter/character-controller@1",
+      runtimeAdapterResolvedVersion: "1",
+      runtimeAdapterHash: HASH_C,
+    },
+  };
+}
+
+function withUniformEvidence(
+  report: ValidationReportV2,
+  artifactRef: string,
+  evidenceArtifactsById: Record<string, EvidenceArtifactV2>,
+): ValidationReportV2 {
+  return {
+    ...report,
+    evidenceArtifactsById,
+    gateResultsById: Object.fromEntries(
+      Object.entries(report.gateResultsById).map(([gateId, gateResult]) => [
+        gateId,
+        {
+          ...gateResult,
+          metricResultsById: Object.fromEntries(
+            Object.entries(gateResult.metricResultsById).map(([metricId, metricResult]) => [
+              metricId,
+              {
+                ...metricResult,
+                evidenceArtifactRefs: [artifactRef],
+              },
+            ]),
+          ),
+        },
+      ]),
+    ),
+  };
+}
+
 function validWorldPackageReport(): ValidationReportV2 {
   const gateResultsById = passedWorldPackageGateResults();
   return {
@@ -836,18 +919,32 @@ function validWorldPackageReport(): ValidationReportV2 {
       gateResultsById,
     ),
     gateResultsById,
-    evidenceArtifactsById: {
-      "traversal-graph": {
-        id: "traversal-graph",
-        kind: "traversal-graph",
-        artifactRef: "artifact://traversal-graph",
-        mediaType: "application/vnd.worldkit.traversal-graph.v1+json",
-        sizeBytes: 128,
-        contentHash: HASH_A,
-      },
-    },
+    evidenceArtifactsById: typedWorldPackageEvidenceArtifacts(),
     diagnostics: [],
   };
+}
+
+function graphOnlyPassedWorldPackageReport(): ValidationReportV2 {
+  const report = validWorldPackageReport();
+  return withUniformEvidence(
+    report,
+    "artifact://traversal-graph",
+    {
+      "traversal-graph": report.evidenceArtifactsById["traversal-graph"]!,
+    },
+  );
+}
+
+function probeOnlyPassedWorldPackageReport(): ValidationReportV2 {
+  const report = validWorldPackageReport();
+  return withUniformEvidence(
+    report,
+    "artifact://route-runtime-probe-receipt",
+    {
+      "route-runtime-probe-receipt":
+        report.evidenceArtifactsById["route-runtime-probe-receipt"]!,
+    },
+  );
 }
 
 describe("Validation Profile/Report V2", () => {
@@ -887,6 +984,106 @@ describe("Validation Profile/Report V2", () => {
       ok: false,
       diagnostics: expect.arrayContaining([
         expect.objectContaining({ code: "VALIDATION_ENUM_INVALID" }),
+      ]),
+    });
+  });
+
+  it("rejects a passed runtime gate backed only by traversal-graph evidence", () => {
+    expect(validateValidationReportV2(graphOnlyPassedWorldPackageReport())).toMatchObject({
+      ok: false,
+      diagnostics: expect.arrayContaining([
+        expect.objectContaining({
+          code: "VALIDATION_REFERENCE_INVALID",
+          path: expect.stringMatching(/route-runtime-conformance/),
+        }),
+      ]),
+    });
+  });
+
+  it("rejects a passed connectivity gate backed only by probe evidence", () => {
+    expect(validateValidationReportV2(probeOnlyPassedWorldPackageReport())).toMatchObject({
+      ok: false,
+      diagnostics: expect.arrayContaining([
+        expect.objectContaining({
+          code: "VALIDATION_REFERENCE_INVALID",
+          path: expect.stringMatching(/route-connectivity/),
+        }),
+      ]),
+    });
+  });
+
+  it("rejects evidence artifacts that do not share one resolvedTraversalLockHash", () => {
+    const report = validWorldPackageReport();
+    const probe = report.evidenceArtifactsById["route-runtime-probe-receipt"];
+    if (isNil(probe) || probe.kind !== "route-runtime-probe-receipt") {
+      throw new Error("Expected a typed runtime probe receipt in the fixture.");
+    }
+    expect(validateValidationReportV2({
+      ...report,
+      evidenceArtifactsById: {
+        ...report.evidenceArtifactsById,
+        "route-runtime-probe-receipt": {
+          ...probe,
+          resolvedTraversalLockHash: HASH_B,
+        },
+      },
+    })).toMatchObject({
+      ok: false,
+      diagnostics: expect.arrayContaining([
+        expect.objectContaining({
+          code: "VALIDATION_REFERENCE_INVALID",
+          path: "/evidenceArtifactsById",
+        }),
+      ]),
+    });
+  });
+
+  it("rejects graph builder and driver identities that do not match the Registry", () => {
+    const report = validWorldPackageReport();
+    const graph = report.evidenceArtifactsById["traversal-graph"];
+    const probe = report.evidenceArtifactsById["route-runtime-probe-receipt"];
+    if (isNil(graph) || graph.kind !== "traversal-graph") {
+      throw new Error("Expected a typed traversal-graph artifact in the fixture.");
+    }
+    if (isNil(probe) || probe.kind !== "route-runtime-probe-receipt") {
+      throw new Error("Expected a typed runtime probe receipt in the fixture.");
+    }
+
+    expect(validateValidationReportV2({
+      ...report,
+      evidenceArtifactsById: {
+        ...report.evidenceArtifactsById,
+        "traversal-graph": {
+          ...graph,
+          graphBuilderProfileHash: HASH_B,
+        },
+      },
+    })).toMatchObject({
+      ok: false,
+      diagnostics: expect.arrayContaining([
+        expect.objectContaining({
+          code: "VALIDATION_REFERENCE_INVALID",
+          path: "/evidenceArtifactsById/traversal-graph",
+        }),
+      ]),
+    });
+
+    expect(validateValidationReportV2({
+      ...report,
+      evidenceArtifactsById: {
+        ...report.evidenceArtifactsById,
+        "route-runtime-probe-receipt": {
+          ...probe,
+          driverProfileRef: "worldkit://traversal-driver-profile/unknown@1",
+        },
+      },
+    })).toMatchObject({
+      ok: false,
+      diagnostics: expect.arrayContaining([
+        expect.objectContaining({
+          code: "VALIDATION_REFERENCE_INVALID",
+          path: "/evidenceArtifactsById/route-runtime-probe-receipt",
+        }),
       ]),
     });
   });

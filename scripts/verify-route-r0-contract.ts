@@ -13,6 +13,7 @@ import {
 import { isEqual, isNil, isPlainObject } from "lodash-es";
 import {
   assertMatchingTraversalLocksV1,
+  assertTraversalSurfaceIdentityV1,
   BUILT_IN_TRAVERSAL_DRIVER_PROFILE_REF,
   canonicalTraversalGraphV1,
   hashTraversalGraphV1,
@@ -151,12 +152,7 @@ function checkPlannerRouteProjection(
 function checkTraversalSurfaceIdentity(
   identity: TraversalSurfaceIdentityV1,
 ): void {
-  assert.equal(typeof identity.traversalSurfaceId, "string");
-  assert.equal(typeof identity.surfaceEntityId, "string");
-  assert.equal(typeof identity.colliderSubshapeId, "string");
-  assert.notEqual(identity.traversalSurfaceId, identity.surfaceEntityId);
-  assert.notEqual(identity.surfaceEntityId, identity.colliderSubshapeId);
-  assert.notEqual(identity.traversalSurfaceId, identity.colliderSubshapeId);
+  assertTraversalSurfaceIdentityV1(identity);
 }
 
 function checkResolvedTraversalLock(lock: unknown): `sha256:${string}` {
@@ -244,6 +240,25 @@ function checkRouteValidationVocabulary(): void {
     ),
     false,
   );
+  const connectivity =
+    OUTDOOR_WORLD_PACKAGE_DEV_VALIDATION_PROFILE_V2.gateDefinitionsById[
+      "route-connectivity"
+    ];
+  assert.ok(!isNil(connectivity));
+  for (const metricId of [
+    "maximum-observed-step-height-meters",
+    "maximum-observed-slope-degrees",
+    "minimum-observed-clearance-width-meters",
+    "minimum-observed-clearance-height-meters",
+    "maximum-observed-surface-gap-meters",
+  ] as const) {
+    const metric = connectivity.metricDefinitionsById[metricId];
+    assert.ok(!isNil(metric));
+    assert.equal(Object.hasOwn(metric, "minimumAllowedMeters"), false);
+    assert.equal(Object.hasOwn(metric, "maximumAllowedMeters"), false);
+    assert.equal(Object.hasOwn(metric, "minimumAllowedDegrees"), false);
+    assert.equal(Object.hasOwn(metric, "maximumAllowedDegrees"), false);
+  }
 }
 
 function checkLockMismatchDiagnostic(mismatch: RouteR0LockMismatchFixture): void {
