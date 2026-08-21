@@ -289,6 +289,9 @@ importers:
       '@whitebox-world/protocol':
         specifier: workspace:*
         version: link:../protocol
+      '@whitebox-world/runtime-contracts':
+        specifier: workspace:*
+        version: link:../runtime-contracts
       '@whitebox-world/subject-composition':
         specifier: workspace:*
         version: link:../subject-composition

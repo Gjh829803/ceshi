@@ -131,6 +131,7 @@ export const BUILT_IN_CAPABILITY_RESOURCES = [
   ...controlProfiles,
   ...cameraCatalog.algorithms,
   ...cameraCatalog.profiles,
+  ...cameraCatalog.modifiers,
   ...cameraCatalog.contexts,
   ...mediumProfiles,
   ...relationshipProfiles,

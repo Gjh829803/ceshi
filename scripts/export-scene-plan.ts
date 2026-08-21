@@ -6,8 +6,9 @@ import { compileOutdoorScene, deriveWorldPlanArtifacts } from "../packages/world
 
 import { sceneCatalog } from "../apps/playground/src/scenes/index.js";
 import {
+  normalizeTextLineEndings,
   planLockPath,
-  sha256,
+  sha256NormalizedText,
   verifyFrozenWorldPlan,
 } from "./lib/plan-lock.js";
 import {
@@ -51,7 +52,9 @@ async function main() {
   const options = parseOptions(process.argv.slice(2));
   const projectRoot = path.resolve(".");
   const planLock = await verifyFrozenWorldPlan(projectRoot, options.sceneId);
-  const planLockSha256 = sha256(await readFile(planLockPath(projectRoot, options.sceneId)));
+  const planLockSha256 = sha256NormalizedText(
+    await readFile(planLockPath(projectRoot, options.sceneId)),
+  );
   const definition = sceneCatalog[options.sceneId];
   if (definition === undefined) throw new Error(`Unknown scene catalog id: ${options.sceneId}`);
   const scene = compileOutdoorScene(definition);
@@ -132,7 +135,7 @@ async function main() {
   if (options.check) {
     for (const [name, expected] of files) {
       const actual = await readFile(path.join(outputDirectory, name), "utf8");
-      if (actual === expected) continue;
+      if (normalizeTextLineEndings(actual) === normalizeTextLineEndings(expected)) continue;
       if (name !== "manifest.json") throw new Error(`Stale planning artifact: ${name}`);
 
       const actualManifest = JSON.parse(actual) as PlanningManifest;

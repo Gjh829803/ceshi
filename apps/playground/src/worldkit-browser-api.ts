@@ -230,11 +230,10 @@ export function validateSubjectPackageAgainstRegistry(
   } else {
     const cameraRigProfileRefs = [...new Set([
       cameraContext.defaultCameraRigProfileRef,
-      ...(cameraContext.firstPersonCameraRigProfileRef === undefined
-        ? []
-        : [cameraContext.firstPersonCameraRigProfileRef]),
+      cameraContext.firstPersonCameraRigProfileRef,
       ...cameraContext.rules.map((rule) => rule.cameraRigProfileRef),
-    ])].sort((left, right) => left.localeCompare(right));
+    ].filter((resourceRef): resourceRef is string => resourceRef !== undefined))]
+      .sort((left, right) => left.localeCompare(right));
     const cameraRigProfiles = cameraRigProfileRefs.flatMap((resourceRef) => {
       const resource = registry.resolveCameraRigProfile(resourceRef);
       if (resource === undefined) missing(resourceRef, "Camera Rig Profile");
@@ -412,15 +411,23 @@ export function installDeferredWorldkitBrowserApi(options: {
         if (cameraContext.firstPersonCameraRigProfileRef !== undefined) {
           cameraRefs.add(cameraContext.firstPersonCameraRigProfileRef);
         }
-        cameraContext.rules.forEach((rule) => cameraRefs.add(rule.cameraRigProfileRef));
+        cameraContext.rules.forEach((rule) => {
+          if (rule.cameraRigProfileRef !== undefined) {
+            cameraRefs.add(rule.cameraRigProfileRef);
+          }
+        });
       }
       return [
         ...[...motionRefs].flatMap((resourceRef) => {
           const resource = builtInSubjectResourceRegistry.resolveMotionProfile(resourceRef);
+          const kernel = resource === undefined
+            ? undefined
+            : builtInSubjectResourceRegistry.resolveMotionKernel(resource.motionKernelRef);
           return resource === undefined
             ? []
             : [{
                 resourceRef,
+                contentHash: resource.contentHash,
                 kind: "motion-profile" as const,
                 displayName: resource.aiMetadata.displayName,
                 role: resourceRef === definition.profiles.motion.defaultMotionProfileRef
@@ -430,6 +437,13 @@ export function installDeferredWorldkitBrowserApi(options: {
                     : "optional" as const,
                 parameters: resource.parameters,
                 safetyLimits: resource.safetyLimits,
+                ...(resource.authoringRanges === undefined
+                  ? {}
+                  : { authoringRanges: resource.authoringRanges }),
+                runtimeParameterNames: kernel?.runtimeParameterNames ?? [],
+                draftOnlyParameterNames: Object.keys(resource.parameters).filter(
+                  (name) => !(kernel?.runtimeParameterNames ?? []).includes(name),
+                ),
               }];
         }),
         ...[...cameraRefs].flatMap((resourceRef) => {
@@ -438,10 +452,17 @@ export function installDeferredWorldkitBrowserApi(options: {
             ? []
             : [{
                 resourceRef,
+                contentHash: resource.contentHash,
                 kind: "camera-rig-profile" as const,
                 displayName: resource.aiMetadata.displayName,
                 role: "camera" as const,
+                baseMode: resource.baseMode,
+                headingSource: resource.headingSource,
+                recenterMode: resource.recenterMode,
                 parameters: resource.parameters,
+                ...(resource.authoringRanges === undefined
+                  ? {}
+                  : { authoringRanges: resource.authoringRanges }),
               }];
         }),
       ].sort((left, right) => left.resourceRef.localeCompare(right.resourceRef));

@@ -37,14 +37,21 @@ const INPUT_ACTION_MAP: Readonly<Partial<Record<InputAction, SemanticInputAction
   jump: "jump",
 };
 
-const KEY_ACTION_MAP: Readonly<Record<string, SemanticInputActionV1>> = {
-  KeyW: "move-forward",
-  KeyS: "move-backward",
-  KeyA: "move-left",
-  KeyD: "move-right",
-  ShiftLeft: "run",
-  ShiftRight: "run",
-  Space: "jump",
+const KEY_ACTION_MAP: Readonly<Record<string, readonly SemanticInputActionV1[]>> = {
+  KeyW: ["move-forward"],
+  KeyS: ["move-backward"],
+  KeyA: ["move-left"],
+  KeyD: ["move-right"],
+  ControlLeft: ["brake"],
+  ControlRight: ["brake"],
+  AltLeft: ["handbrake"],
+  AltRight: ["handbrake"],
+  KeyE: ["primary-action"],
+  KeyQ: ["secondary-action"],
+  KeyF: ["aim"],
+  KeyR: ["camera-recenter"],
+  KeyC: ["camera-look-back"],
+  KeyV: ["camera-shoulder-swap"],
 };
 
 type CameraInputAction = Extract<
@@ -62,6 +69,7 @@ const CAMERA_KEY_ACTION_MAP: Readonly<Partial<Record<string, CameraInputAction>>
 const CAMERA_YAW_RADIANS_PER_TICK = 0.025;
 const CAMERA_PITCH_RADIANS_PER_TICK = 0.015;
 const MAXIMUM_FIXED_TICKS_PER_DISPLAY_FRAME = 5;
+const CONTEXTUAL_KEY_CODES = new Set(["ShiftLeft", "ShiftRight", "Space"]);
 
 const SEMANTIC_INPUT_ACTION_ORDER: readonly SemanticInputActionV1[] = [
   "move-forward",
@@ -70,6 +78,15 @@ const SEMANTIC_INPUT_ACTION_ORDER: readonly SemanticInputActionV1[] = [
   "move-right",
   "jump",
   "run",
+  "boost",
+  "brake",
+  "handbrake",
+  "primary-action",
+  "secondary-action",
+  "aim",
+  "camera-recenter",
+  "camera-look-back",
+  "camera-shoulder-swap",
 ];
 
 export function mapPlaygroundInputActions(
@@ -87,13 +104,13 @@ export class PhysicalKeyboardActionTracker {
   readonly #pressedCodes = new Set<string>();
 
   press(code: string): boolean {
-    if (KEY_ACTION_MAP[code] === undefined) return false;
+    if (KEY_ACTION_MAP[code] === undefined && !CONTEXTUAL_KEY_CODES.has(code)) return false;
     this.#pressedCodes.add(code);
     return true;
   }
 
   release(code: string): boolean {
-    if (KEY_ACTION_MAP[code] === undefined) return false;
+    if (KEY_ACTION_MAP[code] === undefined && !CONTEXTUAL_KEY_CODES.has(code)) return false;
     this.#pressedCodes.delete(code);
     return true;
   }
@@ -102,11 +119,28 @@ export class PhysicalKeyboardActionTracker {
     this.#pressedCodes.clear();
   }
 
-  actions(): readonly SemanticInputActionV1[] {
+  actions(activeMotionKernelRef = "worldkit://motion-kernel/free-ground@1"):
+    readonly SemanticInputActionV1[] {
     const active = new Set<SemanticInputActionV1>();
     for (const code of this.#pressedCodes) {
-      const action = KEY_ACTION_MAP[code];
-      if (action !== undefined) active.add(action);
+      for (const action of KEY_ACTION_MAP[code] ?? []) active.add(action);
+      if (code === "ShiftLeft" || code === "ShiftRight") {
+        active.add(
+          activeMotionKernelRef.endsWith("/free-ground@1") ||
+              activeMotionKernelRef.endsWith("/forward-steer@1")
+            ? "run"
+            : "boost",
+        );
+      }
+      if (code === "Space") {
+        if (
+          activeMotionKernelRef.endsWith("/free-ground@1") ||
+          activeMotionKernelRef.endsWith("/forward-steer@1")
+        ) active.add("jump");
+        else if (activeMotionKernelRef.endsWith("/unpowered-glide@1")) {
+          active.add("primary-action");
+        } else active.add("brake");
+      }
     }
     return SEMANTIC_INPUT_ACTION_ORDER.filter((action) => active.has(action));
   }
@@ -692,7 +726,11 @@ export class BabylonWorldAdapter implements PlaygroundWorldAdapter {
       try {
         this.applyCameraActions([...this.cameraInput], ticks);
         await this.runtime.runFixedInput({
-          actions: this.keyboardInput.actions(),
+          actions: this.keyboardInput.actions(
+            this.runtime.snapshot().subjectStatesByEntityId[
+              this.runtime.snapshot().controlledEntityId
+            ]?.activeMotionKernelRef,
+          ),
           ticks,
         });
       } catch {

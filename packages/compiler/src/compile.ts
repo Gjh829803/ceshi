@@ -626,6 +626,7 @@ function compileCapabilityAssemblyV1(
     motionKernelRef: profile.motionKernelRef,
     parameters: structuredClone(profile.parameters),
     safetyLimits: structuredClone(profile.safetyLimits),
+    authoringRanges: structuredClone(profile.authoringRanges ?? {}),
     motionTags: [...profile.motionTags],
   });
   const compileMotionKernel = (
@@ -649,6 +650,7 @@ function compileCapabilityAssemblyV1(
       implementationId,
       commandKind: motionKernel.commandKind,
       supportedMediums: [...motionKernel.supportedMediums],
+      runtimeParameterNames: [...motionKernel.runtimeParameterNames],
       fallbackMotionProfileRef: motionKernel.fallbackMotionProfileRef,
       deterministic: true,
     };
@@ -683,6 +685,7 @@ function compileCapabilityAssemblyV1(
       inputSpace: assembly.controlProfile.inputSpace,
       facingPolicy: assembly.controlProfile.facingPolicy,
       lateralMovementPolicy: assembly.controlProfile.lateralMovementPolicy,
+      inputTuning: structuredClone(assembly.controlProfile.inputTuning),
     },
     cameraContext: {
       resourceRef: assembly.cameraContextProfile.resourceRef,
@@ -697,9 +700,27 @@ function compileCapabilityAssemblyV1(
       rules: structuredClone(assembly.cameraContextProfile.rules),
       cameraRigProfiles: assembly.cameraRigProfiles.map((profile) => ({
         resourceRef: profile.resourceRef,
+        baseMode: profile.baseMode,
         algorithmRef: profile.algorithmRef,
+        headingSource: profile.headingSource,
+        reverseHeadingPolicy: profile.reverseHeadingPolicy,
+        recenterMode: profile.recenterMode,
         preferredSocketIds: [...profile.preferredSocketIds],
         parameters: structuredClone(profile.parameters),
+        authoringRanges: structuredClone(profile.authoringRanges ?? {}),
+      })),
+      cameraModifierProfiles: assembly.cameraModifierProfiles.map((modifier) => ({
+        resourceRef: modifier.resourceRef,
+        parameterOverrides: structuredClone(modifier.parameterOverrides),
+        ...(modifier.headingSourceOverride === undefined
+          ? {}
+          : { headingSourceOverride: modifier.headingSourceOverride }),
+        ...(modifier.reverseHeadingPolicyOverride === undefined
+          ? {}
+          : { reverseHeadingPolicyOverride: modifier.reverseHeadingPolicyOverride }),
+        ...(modifier.recenterModeOverride === undefined
+          ? {}
+          : { recenterModeOverride: modifier.recenterModeOverride }),
       })),
     },
     mediumProfile: {

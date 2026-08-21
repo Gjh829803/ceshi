@@ -2168,7 +2168,7 @@ describe("BabylonWorldRuntime", () => {
     await runtime.dispose();
   });
 
-  it("aligns the canonical minus-Z Subject front with each movement direction", async () => {
+  it("gradually aligns the canonical minus-Z Subject front with each movement direction", async () => {
     const { runtime, debug } = await createRuntimeWithPackageSubject();
     const expectedYawByAction = [
       ["move-forward", 0],
@@ -2179,7 +2179,7 @@ describe("BabylonWorldRuntime", () => {
 
     for (const [action, expectedYawRadians] of expectedYawByAction) {
       runtime.reset();
-      await runtime.runFixedInput({ actions: [action], ticks: 1 });
+      await runtime.runFixedInput({ actions: [action], ticks: 60 });
       const angularDelta = Math.atan2(
         Math.sin(debug.visualRootYawRadians("player") - expectedYawRadians),
         Math.cos(debug.visualRootYawRadians("player") - expectedYawRadians),
