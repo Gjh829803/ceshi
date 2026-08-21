@@ -93,7 +93,8 @@ describe("capability-driven Subject compilation", () => {
           (kernel) => kernel.resourceRef === defaultMotionKernelRef,
         )?.commandKind,
       ).toBe(assembly.controlProfile.commandKind);
-      expect(assembly.cameraContext.cameraRigProfiles).toHaveLength(7);
+      expect(assembly.cameraContext.cameraRigProfiles).toHaveLength(5);
+      expect(assembly.cameraContext.cameraModifierProfiles).toHaveLength(5);
       expect(
         new Set(
           assembly.cameraContext.cameraRigProfiles.map(

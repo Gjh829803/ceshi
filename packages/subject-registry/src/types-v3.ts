@@ -1,4 +1,9 @@
 import type {
+  CameraRigParameterNameV1,
+  CameraRigParametersV1,
+} from "@whitebox-world/runtime-contracts";
+
+import type {
   RegistrySubjectDefinitionInputV2,
   RegistrySubjectDefinitionV2,
   SubjectRegistryResourceInputV1,
@@ -46,6 +51,7 @@ export interface MotionKernelDefinitionInputV1
   supportedBodyKinds: readonly PhysicsBodyKindV1[];
   requiredCapabilityRefs: readonly string[];
   parameterSchemaRef: string;
+  runtimeParameterNames: readonly string[];
   fallbackMotionProfileRef: string;
   deterministic: true;
   runtimeStatus: "implemented" | "reserved";
@@ -58,11 +64,16 @@ export interface MotionParameterLimitV1 {
   maximum: number;
 }
 
+export interface ParameterAuthoringRangeV1 extends MotionParameterLimitV1 {
+  step: number;
+}
+
 export interface MotionProfileInputV1 extends CapabilityResourceBaseInputV1 {
   kind: "motion-profile";
   motionKernelRef: string;
   parameters: Readonly<Record<string, MotionParameterValueV1>>;
   safetyLimits: Readonly<Record<string, MotionParameterLimitV1>>;
+  authoringRanges?: Readonly<Record<string, ParameterAuthoringRangeV1>>;
   motionTags: readonly string[];
 }
 
@@ -72,10 +83,15 @@ export interface ControlProfileInputV1 extends CapabilityResourceBaseInputV1 {
   inputSpace: "camera-relative" | "subject-local" | "flight-frame" | "none";
   facingPolicy:
     | "align-to-move"
+    | "align-to-view"
     | "steering-derived"
     | "flight-derived"
     | "fixed";
   lateralMovementPolicy: "allowed" | "forbidden";
+  inputTuning: {
+    moveDeadzoneRatio: number;
+    responseExponent: number;
+  };
 }
 
 export type CameraRigAlgorithmRefV1 =
@@ -98,26 +114,30 @@ export interface CameraRigAlgorithmDefinitionInputV1
 export interface CameraRigProfileInputV1
   extends CapabilityResourceBaseInputV1 {
   kind: "camera-rig-profile";
+  baseMode:
+    | "first-person"
+    | "free-orbit"
+    | "stable-follow"
+    | "speed-chase"
+    | "flight-horizon";
   algorithmRef: CameraRigAlgorithmRefV1;
+  headingSource: "view" | "target-forward" | "target-velocity";
+  reverseHeadingPolicy: "follow-velocity" | "preserve-target-forward";
+  recenterMode: "off" | "forward-motion" | "always";
   preferredSocketIds: readonly string[];
-  parameters: {
-    distanceMeters: number;
-    minimumDistanceMeters: number;
-    maximumDistanceMeters: number;
-    targetHeightMeters: number;
-    shoulderOffsetMeters: number;
-    pitchRadians: number;
-    minimumPitchRadians: number;
-    maximumPitchRadians: number;
-    positionDampingPerSecond: number;
-    rotationDampingPerSecond: number;
-    collisionRadiusMeters: number;
-    baseFovDegrees: number;
-    speedFovDegreesPerMeterPerSecond: number;
-    maximumSpeedFovDegrees: number;
-    lookAheadSeconds: number;
-    transitionSeconds: number;
-  };
+  parameters: CameraRigParametersV1;
+  authoringRanges?: Readonly<Partial<
+    Record<CameraRigParameterNameV1, ParameterAuthoringRangeV1>
+  >>;
+}
+
+export interface CameraModifierProfileInputV1
+  extends CapabilityResourceBaseInputV1 {
+  kind: "camera-modifier-profile";
+  parameterOverrides: Readonly<Partial<CameraRigProfileInputV1["parameters"]>>;
+  headingSourceOverride?: CameraRigProfileInputV1["headingSource"];
+  reverseHeadingPolicyOverride?: CameraRigProfileInputV1["reverseHeadingPolicy"];
+  recenterModeOverride?: CameraRigProfileInputV1["recenterMode"];
 }
 
 export type RelationshipRoleV1 =
@@ -138,8 +158,10 @@ export interface CameraContextRuleV1 {
     minimumSpeedMetersPerSecond?: number;
     maximumSpeedMetersPerSecond?: number;
     requiredSocketIds?: readonly string[];
+    requiredCameraContextTags?: readonly string[];
   };
-  cameraRigProfileRef: string;
+  cameraRigProfileRef?: string;
+  cameraModifierRefs?: readonly string[];
 }
 
 export interface CameraContextProfileInputV1
@@ -256,6 +278,7 @@ export type MotionKernelDefinitionV1 = WithContentHash<MotionKernelDefinitionInp
 export type MotionProfileV1 = WithContentHash<MotionProfileInputV1>;
 export type ControlProfileV1 = WithContentHash<ControlProfileInputV1>;
 export type CameraRigProfileV1 = WithContentHash<CameraRigProfileInputV1>;
+export type CameraModifierProfileV1 = WithContentHash<CameraModifierProfileInputV1>;
 export type CameraRigAlgorithmDefinitionV1 =
   WithContentHash<CameraRigAlgorithmDefinitionInputV1>;
 export type CameraContextProfileV1 = WithContentHash<CameraContextProfileInputV1>;
@@ -272,6 +295,7 @@ export type SubjectCapabilityResourceInputV1 =
   | ControlProfileInputV1
   | CameraRigAlgorithmDefinitionInputV1
   | CameraRigProfileInputV1
+  | CameraModifierProfileInputV1
   | CameraContextProfileInputV1
   | MediumProfileInputV1
   | RelationshipProfileInputV1
@@ -285,6 +309,7 @@ export type SubjectCapabilityResourceV1 =
   | ControlProfileV1
   | CameraRigAlgorithmDefinitionV1
   | CameraRigProfileV1
+  | CameraModifierProfileV1
   | CameraContextProfileV1
   | MediumProfileV1
   | RelationshipProfileV1
@@ -313,6 +338,7 @@ export interface SubjectResourceRegistryV3 extends SubjectResourceRegistryV2 {
     resourceRef: string,
   ): CameraRigAlgorithmDefinitionV1 | undefined;
   resolveCameraRigProfile(resourceRef: string): CameraRigProfileV1 | undefined;
+  resolveCameraModifierProfile(resourceRef: string): CameraModifierProfileV1 | undefined;
   resolveCameraContextProfile(resourceRef: string): CameraContextProfileV1 | undefined;
   resolveMediumProfile(resourceRef: string): MediumProfileV1 | undefined;
   resolveRelationshipProfile(resourceRef: string): RelationshipProfileV1 | undefined;
