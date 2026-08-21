@@ -5,14 +5,18 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 
 import { stringifyCanonicalJson } from "@whitebox-world/protocol";
-import type { Sha256HashV1 } from "@whitebox-world/validation";
+import {
+  hashValidationReportV1,
+  validateValidationReportV1,
+  type Sha256HashV1,
+} from "@whitebox-world/validation";
 
-import { createControlCaptureValidationReportV1 } from "./lib/control-capture-validation";
 import {
   createControlCaptureValidationFixtureV1,
   rewriteControlCaptureFrameAndManifestHashesV1,
   rewriteControlCaptureTakeHashV1,
 } from "./lib/control-capture-validation-fixture";
+import { verifyControlCaptureFileV1 } from "./lib/validation-cli";
 
 type ExpectedGateIdV1 =
   | "capture-bundle-integrity"
@@ -38,10 +42,34 @@ async function runCaseV1(
   },
 ): Promise<VerificationCaseResultV1> {
   const bundleDirectory = path.join(parentDirectory, id);
+  const reportPath = path.join(parentDirectory, `${id}.validation-report.json`);
   await createControlCaptureValidationFixtureV1(bundleDirectory);
   await mutate(bundleDirectory);
-  const { report, reportHash } =
-    await createControlCaptureValidationReportV1(bundleDirectory);
+  const commandResult = await verifyControlCaptureFileV1(
+    bundleDirectory,
+    reportPath,
+  );
+  assert.ok(
+    "validationStatus" in commandResult,
+    `${id}: Validation CLI failed before producing a Report`,
+  );
+  const parsedReport: unknown = JSON.parse(await readFile(reportPath, "utf8"));
+  const reportValidation = validateValidationReportV1(parsedReport);
+  assert.equal(
+    reportValidation.ok,
+    true,
+    `${id}: emitted Report failed strict canonical round-trip validation`,
+  );
+  if (!reportValidation.ok) {
+    throw new Error(`${id}: unreachable invalid Validation Report`);
+  }
+  const report = reportValidation.value;
+  const reportHash = hashValidationReportV1(report);
+  assert.equal(
+    commandResult.validationReportHash,
+    reportHash,
+    `${id}: CLI Report Hash differs from canonical round-trip Hash`,
+  );
   assert.equal(report.status, expected.status, `${id}: unexpected Report status`);
   if (expected.gateId !== undefined) {
     assert.equal(

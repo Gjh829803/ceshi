@@ -121,6 +121,9 @@ Composition、Replay、Performance 或 Generated Video 已进入统一报告。
 - V1 `subject` 关闭为 `kind: control-capture-bundle`，并绑定
   `worldPackageRootHash`、`takeHash` 与按当前目录实际字节重算的 `bundleRootHash`。
   无法可靠读取这三个身份字段时，CLI 返回 infrastructure error，不伪造 Subject Hash。
+- Adapter 在 Evaluator 前后复算包含 `integrity.json` 的完整目录字节 Hash；两次不一致时
+  拒绝生成 Report。CLI 对输入目录和输出父目录解析真实文件系统路径，软链接不能绕过
+  “权威 Report 不得写回不可变 Bundle”的边界。
 - `GateResultV1.status` 关闭为 `passed | failed | incomplete | not-applicable`；
   `MetricResultV1.status` 关闭为
   `passed | failed | not-evaluated | not-applicable`。V1 内置 Profile 不使用
@@ -129,6 +132,8 @@ Composition、Replay、Performance 或 Generated Video 已进入统一报告。
   `count-threshold`、`set-equality`、`hash-equality`。所有分支都必须记录
   `evaluatorProfileRef`、`evidenceArtifactRefs` 和 `diagnosticIds`；Capture/Integrity
   首条切片只实例化 `boolean-assertion`，不以未使用的通用性扩大实现范围。
+- `MetricDefinitionV1` 使用布尔字段 `isRequired`，不保留 `required` alias；Report 中的
+  Metric `kind`、Evaluator Ref 与期望参数必须和解析后的 Profile 精确一致。
 - `EvidenceArtifactV1` 必须记录稳定 `id`、关闭的 `kind`、`artifactRef`、
   `mediaType`、`sizeBytes` 与 `contentHash`。本机绝对路径、时间戳、机器名和日志位置
   不进入 Canonical Report。
@@ -157,6 +162,11 @@ Policy 的确定优先级冻结为：
 3. 否则全部 Blocking Gate 为 `passed` 时 Report 为 `passed`；
 4. Advisory Failure 必须保留，但不能改变 Blocking 结果，也不存在可抵消失败的总分。
 
+V1 没有 Applicability 条件，因此任何 Required Metric 或 Blocking Gate 的
+`not-applicable` 都是非法报告，并按 `incomplete` 处理，不能成为 `passed`。每个已评估
+Metric 必须引用 Evidence；`failed` / `not-evaluated` Metric 必须引用可执行 Diagnostic；
+每条 Diagnostic 只能被其声明的一个 Gate 和一个 Metric 引用。
+
 V1 CLI 冻结为：
 
 ```text
@@ -172,19 +182,93 @@ CI 发布和其他 Subject Kind 均不属于本切片。
 {
   "kind": "worldkit-validation-report",
   "schemaVersion": 1,
-  "id": "coastal-world-production-validation",
+  "id": "coastal-capture-validation",
   "subject": {
-    "kind": "world-package",
-    "worldPackageRootHash": "sha256:...",
-    "normalizedWorldIrHash": "sha256:...",
-    "executionPlanHash": "sha256:...",
-    "registryLockHash": "sha256:..."
+    "kind": "control-capture-bundle",
+    "worldPackageRootHash": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    "takeHash": "sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+    "bundleRootHash": "sha256:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc"
   },
-  "validationProfileRef": "worldkit://validation-profile/outdoor-production@1",
+  "validationProfileRef": "worldkit://validation-profile/outdoor-control-video-dev@1",
   "resolvedVersion": "1.0.0",
-  "validationProfileHash": "sha256:...",
+  "validationProfileHash": "sha256:67edf5d593e17f4fdc7d1036b2e5129586d3b14930931607e55642bb9d0c4318",
   "status": "passed",
-  "gateResultsById": {},
+  "gateResultsById": {
+    "capture-bundle-integrity": {
+      "id": "capture-bundle-integrity",
+      "requirement": "blocking",
+      "status": "passed",
+      "metricResultsById": {
+        "capture-bundle-integrity-valid": {
+          "id": "capture-bundle-integrity-valid",
+          "kind": "boolean-assertion",
+          "status": "passed",
+          "value": true,
+          "expectedValue": true,
+          "evaluatorProfileRef": "worldkit://validation-evaluator/control-capture-bundle-integrity@1",
+          "evidenceArtifactRefs": ["artifact://control-capture-bundle/cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc"],
+          "diagnosticIds": []
+        }
+      },
+      "diagnosticIds": []
+    },
+    "capture-completeness": {
+      "id": "capture-completeness",
+      "requirement": "blocking",
+      "status": "passed",
+      "metricResultsById": {
+        "capture-required-passes-valid": {
+          "id": "capture-required-passes-valid",
+          "kind": "boolean-assertion",
+          "status": "passed",
+          "value": true,
+          "expectedValue": true,
+          "evaluatorProfileRef": "worldkit://validation-evaluator/control-capture-required-passes@1",
+          "evidenceArtifactRefs": ["artifact://control-capture-bundle/cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc"],
+          "diagnosticIds": []
+        },
+        "capture-linear-depth-valid": {
+          "id": "capture-linear-depth-valid",
+          "kind": "boolean-assertion",
+          "status": "passed",
+          "value": true,
+          "expectedValue": true,
+          "evaluatorProfileRef": "worldkit://validation-evaluator/control-capture-linear-depth@1",
+          "evidenceArtifactRefs": ["artifact://control-capture-bundle/cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc"],
+          "diagnosticIds": []
+        }
+      },
+      "diagnosticIds": []
+    },
+    "capture-ownership": {
+      "id": "capture-ownership",
+      "requirement": "blocking",
+      "status": "passed",
+      "metricResultsById": {
+        "capture-ownership-valid": {
+          "id": "capture-ownership-valid",
+          "kind": "boolean-assertion",
+          "status": "passed",
+          "value": true,
+          "expectedValue": true,
+          "evaluatorProfileRef": "worldkit://validation-evaluator/control-capture-ownership@1",
+          "evidenceArtifactRefs": ["artifact://control-capture-bundle/cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc"],
+          "diagnosticIds": []
+        }
+      },
+      "diagnosticIds": []
+    }
+  },
+  "evidenceArtifactsById": {
+    "capture-bundle": {
+      "id": "capture-bundle",
+      "kind": "control-capture-bundle",
+      "artifactRef": "artifact://control-capture-bundle/cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+      "mediaType": "application/vnd.worldkit.control-capture-bundle.v1+directory",
+      "sizeBytes": 1024,
+      "contentHash": "sha256:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc"
+    }
+  },
   "diagnostics": []
 }
 ```

@@ -102,7 +102,7 @@ function withAdvisoryGate(
           "preview-readable": {
             id: "preview-readable",
             kind: "boolean-assertion",
-            required: true,
+            isRequired: true,
             expectedValue: true,
             evaluatorProfileRef:
               "worldkit://validation-evaluator/preview-readability@1",
@@ -204,7 +204,7 @@ describe("Validation Profile/Report V1", () => {
     const optionalOnlyMetrics = optionalOnlyGates["capture-completeness"]!
       .metricDefinitionsById as Record<string, Record<string, unknown>>;
     for (const metric of Object.values(optionalOnlyMetrics)) {
-      metric.required = false;
+      metric.isRequired = false;
     }
     expect(validateValidationProfileV1(optionalOnlyProfile)).toMatchObject({
       ok: false,
@@ -227,7 +227,7 @@ describe("Validation Profile/Report V1", () => {
     metrics["capture-linear-depth-valid"] = {
       id: "capture-linear-depth-valid",
       kind: "count-threshold",
-      required: true,
+      isRequired: true,
       evaluatorProfileRef:
         "worldkit://validation-evaluator/capture-linear-depth@1",
       minimumAllowedCount: 2,
@@ -419,6 +419,103 @@ describe("Validation Profile/Report V1", () => {
     });
   });
 
+  it("rejects evaluated Metrics without Evidence and failures without Diagnostics", () => {
+    const evidenceFree = structuredClone(validReport()) as unknown as Record<
+      string,
+      unknown
+    >;
+    const evidenceFreeGates = evidenceFree.gateResultsById as Record<
+      string,
+      Record<string, unknown>
+    >;
+    const evidenceFreeMetrics = evidenceFreeGates[
+      "capture-bundle-integrity"
+    ]!.metricResultsById as Record<string, Record<string, unknown>>;
+    evidenceFreeMetrics["capture-bundle-integrity-valid"]!
+      .evidenceArtifactRefs = [];
+    expect(validateValidationReportV1(evidenceFree)).toMatchObject({
+      ok: false,
+      diagnostics: expect.arrayContaining([
+        expect.objectContaining({ code: "VALIDATION_REFERENCE_INVALID" }),
+      ]),
+    });
+
+    const diagnosticFreeFailure = structuredClone(validReport()) as unknown as Record<
+      string,
+      unknown
+    >;
+    const failureGates = diagnosticFreeFailure.gateResultsById as Record<
+      string,
+      Record<string, unknown>
+    >;
+    const integrityGate = failureGates["capture-bundle-integrity"]!;
+    const integrityMetrics = integrityGate.metricResultsById as Record<
+      string,
+      Record<string, unknown>
+    >;
+    integrityMetrics["capture-bundle-integrity-valid"]!.value = false;
+    integrityMetrics["capture-bundle-integrity-valid"]!.status = "failed";
+    integrityGate.status = "failed";
+    diagnosticFreeFailure.status = "failed";
+    expect(validateValidationReportV1(diagnosticFreeFailure)).toMatchObject({
+      ok: false,
+      diagnostics: expect.arrayContaining([
+        expect.objectContaining({ code: "VALIDATION_REFERENCE_INVALID" }),
+      ]),
+    });
+  });
+
+  it("rejects a Diagnostic referenced by any owner besides its declared owner", () => {
+    const report = structuredClone(validReport()) as unknown as Record<
+      string,
+      unknown
+    >;
+    const gates = report.gateResultsById as Record<
+      string,
+      Record<string, unknown>
+    >;
+    const integrityGate = gates["capture-bundle-integrity"]!;
+    const integrityMetrics = integrityGate.metricResultsById as Record<
+      string,
+      Record<string, unknown>
+    >;
+    const integrityMetric = integrityMetrics["capture-bundle-integrity-valid"]!;
+    integrityMetric.value = false;
+    integrityMetric.status = "failed";
+    integrityMetric.diagnosticIds = ["integrity-failure"];
+    integrityGate.status = "failed";
+    integrityGate.diagnosticIds = ["integrity-failure"];
+    report.status = "failed";
+    report.diagnostics = [{
+      id: "integrity-failure",
+      code: "CAPTURE_FILE_HASH_MISMATCH",
+      severity: "error",
+      gateId: "capture-bundle-integrity",
+      metricId: "capture-bundle-integrity-valid",
+      artifactPath: "bundle.json",
+      expectedValue: "valid",
+      actualValue: "invalid",
+      message: "Integrity failed.",
+      suggestedFix: "Regenerate the Bundle.",
+    }];
+    const completenessGate = gates["capture-completeness"]!;
+    const completenessMetrics = completenessGate.metricResultsById as Record<
+      string,
+      Record<string, unknown>
+    >;
+    completenessGate.diagnosticIds = ["integrity-failure"];
+    completenessMetrics["capture-linear-depth-valid"]!.diagnosticIds = [
+      "integrity-failure",
+    ];
+
+    expect(validateValidationReportV1(report)).toMatchObject({
+      ok: false,
+      diagnostics: expect.arrayContaining([
+        expect.objectContaining({ code: "VALIDATION_REFERENCE_INVALID" }),
+      ]),
+    });
+  });
+
   it("gives explicit Blocking Failure priority over incomplete evidence", () => {
     const gateResultsById = passedGateResults();
     const integrityMetric = gateResultsById["capture-bundle-integrity"]!
@@ -487,6 +584,65 @@ describe("Validation Profile/Report V1", () => {
     expect(deriveValidationReportStatusV1(
       OUTDOOR_CONTROL_VIDEO_DEV_VALIDATION_PROFILE_V1,
       notEvaluated,
+    )).toBe("incomplete");
+  });
+
+  it("never lets full or partial not-applicable Blocking evidence pass", () => {
+    const fullyNotApplicable = passedGateResults();
+    const integrityGate = fullyNotApplicable["capture-bundle-integrity"]!;
+    const integrityMetric = integrityGate.metricResultsById[
+      "capture-bundle-integrity-valid"
+    ]!;
+    fullyNotApplicable["capture-bundle-integrity"] = {
+      ...integrityGate,
+      status: "not-applicable",
+      metricResultsById: {
+        "capture-bundle-integrity-valid": {
+          ...integrityMetric,
+          status: "not-applicable",
+        },
+      },
+    };
+    expect(deriveValidationReportStatusV1(
+      OUTDOOR_CONTROL_VIDEO_DEV_VALIDATION_PROFILE_V1,
+      fullyNotApplicable,
+    )).toBe("incomplete");
+
+    const fullReport = validReport();
+    expect(validateValidationReportV1({
+      ...fullReport,
+      status: "incomplete",
+      gateResultsById: {
+        ...fullReport.gateResultsById,
+        "capture-bundle-integrity":
+          fullyNotApplicable["capture-bundle-integrity"]!,
+      },
+    })).toMatchObject({
+      ok: false,
+      diagnostics: expect.arrayContaining([
+        expect.objectContaining({ code: "VALIDATION_STATUS_INCONSISTENT" }),
+      ]),
+    });
+
+    const partiallyNotApplicable = passedGateResults();
+    const completenessGate = partiallyNotApplicable["capture-completeness"]!;
+    const depthMetric = completenessGate.metricResultsById[
+      "capture-linear-depth-valid"
+    ]!;
+    partiallyNotApplicable["capture-completeness"] = {
+      ...completenessGate,
+      status: "incomplete",
+      metricResultsById: {
+        ...completenessGate.metricResultsById,
+        "capture-linear-depth-valid": {
+          ...depthMetric,
+          status: "not-applicable",
+        },
+      },
+    };
+    expect(deriveValidationReportStatusV1(
+      OUTDOOR_CONTROL_VIDEO_DEV_VALIDATION_PROFILE_V1,
+      partiallyNotApplicable,
     )).toBe("incomplete");
   });
 

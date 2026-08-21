@@ -1,4 +1,4 @@
-import { isEqual, isNil, isPlainObject } from "lodash-es";
+import { groupBy, isEqual, isNil, isPlainObject } from "lodash-es";
 
 import {
   OUTDOOR_CONTROL_VIDEO_DEV_VALIDATION_PROFILE_HASH_V1,
@@ -205,7 +205,7 @@ function validateMetricDefinition(
   const record = asRecord(value, path, diagnostics);
   if (record === undefined) return;
   const kind = record.kind;
-  const sharedFields = ["id", "kind", "required", "evaluatorProfileRef"];
+  const sharedFields = ["id", "kind", "isRequired", "evaluatorProfileRef"];
   const fieldsByKind: Readonly<Record<string, readonly string[]>> = {
     "boolean-assertion": [...sharedFields, "expectedValue"],
     "count-threshold": [
@@ -234,7 +234,7 @@ function validateMetricDefinition(
       "Metric map key and inner id must match.",
     );
   }
-  requireBoolean(record.required, `${path}/required`, diagnostics);
+  requireBoolean(record.isRequired, `${path}/isRequired`, diagnostics);
   requireString(
     record.evaluatorProfileRef,
     `${path}/evaluatorProfileRef`,
@@ -331,7 +331,7 @@ function validateGateDefinition(
     );
   } else if (!metricDefinitionValues.some((metricDefinition) =>
     isPlainObject(metricDefinition) &&
-    (metricDefinition as Record<string, unknown>).required === true
+    (metricDefinition as Record<string, unknown>).isRequired === true
   )) {
     addDiagnostic(
       diagnostics,
@@ -713,6 +713,14 @@ function validateReportReferences(
   const diagnosticIds = new Set(
     report.diagnostics.map((diagnostic: ValidationDiagnosticV1) => diagnostic.id),
   );
+  const gateDiagnosticOwners: Array<{
+    readonly diagnosticId: string;
+    readonly ownerId: string;
+  }> = [];
+  const metricDiagnosticOwners: Array<{
+    readonly diagnosticId: string;
+    readonly ownerId: string;
+  }> = [];
   if (diagnosticIds.size !== report.diagnostics.length) {
     addDiagnostic(
       diagnostics,
@@ -735,6 +743,32 @@ function validateReportReferences(
   }
   for (const [gateId, gateResult] of Object.entries(report.gateResultsById)) {
     for (const metricResult of Object.values(gateResult.metricResultsById)) {
+      if (
+        metricResult.status !== "not-evaluated" &&
+        metricResult.status !== "not-applicable" &&
+        metricResult.evidenceArtifactRefs.length === 0
+      ) {
+        addDiagnostic(
+          diagnostics,
+          "VALIDATION_REFERENCE_INVALID",
+          `/gateResultsById/${gateId}/metricResultsById/${metricResult.id}/evidenceArtifactRefs`,
+          "Every evaluated Metric must reference at least one Evidence Artifact.",
+        );
+      }
+      if (
+        (
+          metricResult.status === "failed" ||
+          metricResult.status === "not-evaluated"
+        ) &&
+        metricResult.diagnosticIds.length === 0
+      ) {
+        addDiagnostic(
+          diagnostics,
+          "VALIDATION_REFERENCE_INVALID",
+          `/gateResultsById/${gateId}/metricResultsById/${metricResult.id}/diagnosticIds`,
+          "A failed or not-evaluated Metric must reference an actionable Diagnostic.",
+        );
+      }
       for (const artifactRef of metricResult.evidenceArtifactRefs) {
         if (!evidenceRefs.has(artifactRef)) {
           addDiagnostic(
@@ -746,6 +780,10 @@ function validateReportReferences(
         }
       }
       for (const diagnosticId of metricResult.diagnosticIds) {
+        metricDiagnosticOwners.push({
+          diagnosticId,
+          ownerId: `${gateId}/${metricResult.id}`,
+        });
         if (!diagnosticIds.has(diagnosticId)) {
           addDiagnostic(
             diagnostics,
@@ -757,6 +795,7 @@ function validateReportReferences(
       }
     }
     for (const diagnosticId of gateResult.diagnosticIds) {
+      gateDiagnosticOwners.push({ diagnosticId, ownerId: gateId });
       if (!diagnosticIds.has(diagnosticId)) {
         addDiagnostic(
           diagnostics,
@@ -767,6 +806,14 @@ function validateReportReferences(
       }
     }
   }
+  const gateOwnersByDiagnosticId = groupBy(
+    gateDiagnosticOwners,
+    "diagnosticId",
+  );
+  const metricOwnersByDiagnosticId = groupBy(
+    metricDiagnosticOwners,
+    "diagnosticId",
+  );
   for (const [index, diagnostic] of report.diagnostics.entries()) {
     const gateResult = report.gateResultsById[diagnostic.gateId];
     const metricResult = gateResult?.metricResultsById[diagnostic.metricId];
@@ -781,6 +828,25 @@ function validateReportReferences(
         "VALIDATION_REFERENCE_INVALID",
         `/diagnostics/${index}`,
         "Diagnostic ownership must resolve to one Gate and Metric that both reference its ID.",
+      );
+    }
+    const gateOwners = (gateOwnersByDiagnosticId[diagnostic.id] ?? [])
+      .map(({ ownerId }) => ownerId)
+      .sort();
+    const metricOwners = (metricOwnersByDiagnosticId[diagnostic.id] ?? [])
+      .map(({ ownerId }) => ownerId)
+      .sort();
+    if (
+      !isEqual(gateOwners, [diagnostic.gateId]) ||
+      !isEqual(metricOwners, [
+        `${diagnostic.gateId}/${diagnostic.metricId}`,
+      ])
+    ) {
+      addDiagnostic(
+        diagnostics,
+        "VALIDATION_REFERENCE_INVALID",
+        `/diagnostics/${index}`,
+        "A Diagnostic must be referenced by exactly its one declared Gate and Metric owner.",
       );
     }
   }
@@ -989,6 +1055,14 @@ export function validateValidationReportV1(
           "Gate requirement differs from the resolved Profile.",
         );
       }
+      if (gateResult.status === "not-applicable") {
+        addDiagnostic(
+          diagnostics,
+          "VALIDATION_STATUS_INCONSISTENT",
+          `/gateResultsById/${gateId}/status`,
+          "The built-in V1 Profile does not define applicability conditions.",
+        );
+      }
       const expectedGateStatus = deriveValidationGateStatusV1(
         gateDefinition as GateDefinitionV1,
         gateResult,
@@ -1005,7 +1079,7 @@ export function validateValidationReportV1(
         gateDefinition.metricDefinitionsById,
       )) {
         const metricResult = gateResult.metricResultsById[metricId];
-        if (isNil(metricResult) && metricDefinition.required === true) {
+        if (isNil(metricResult) && metricDefinition.isRequired === true) {
           addDiagnostic(
             diagnostics,
             "VALIDATION_REFERENCE_INVALID",
@@ -1021,6 +1095,14 @@ export function validateValidationReportV1(
             "VALIDATION_REFERENCE_INVALID",
             `/gateResultsById/${gateId}/metricResultsById/${metricId}`,
             "Metric result kind, evaluator, or expected value differs from the resolved Profile definition.",
+          );
+        }
+        if (!isNil(metricResult) && metricResult.status === "not-applicable") {
+          addDiagnostic(
+            diagnostics,
+            "VALIDATION_STATUS_INCONSISTENT",
+            `/gateResultsById/${gateId}/metricResultsById/${metricId}/status`,
+            "The built-in V1 Profile does not define applicability conditions.",
           );
         }
       }

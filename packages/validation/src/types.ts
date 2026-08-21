@@ -15,7 +15,7 @@ export type ValidationMetricStatusV1 =
 
 interface MetricDefinitionBaseV1 {
   readonly id: string;
-  readonly required: boolean;
+  readonly isRequired: boolean;
   readonly evaluatorProfileRef: string;
 }
 

@@ -13,14 +13,20 @@ import { afterEach, describe, expect, it } from "vitest";
 import {
   validateValidationReportV1,
 } from "@whitebox-world/validation";
-import { validateControlCaptureBundleV1 } from "./control-capture-bundle";
+import {
+  collectControlCaptureBundleByteEvidenceV1,
+  validateControlCaptureBundleV1,
+} from "./control-capture-bundle";
 import {
   createControlCaptureValidationFixtureV1,
   rewriteControlCaptureFrameAndManifestHashesV1,
   rewriteControlCaptureTakeHashV1,
   snapshotControlCaptureFileHashesV1,
 } from "./control-capture-validation-fixture";
-import { createControlCaptureValidationReportV1 } from "./control-capture-validation";
+import {
+  assertControlCaptureBundleEvidenceStableV1,
+  createControlCaptureValidationReportV1,
+} from "./control-capture-validation";
 
 const temporaryDirectories: string[] = [];
 
@@ -55,6 +61,23 @@ describe("Control Capture Validation adapter", () => {
     expect(await snapshotControlCaptureFileHashesV1(bundleDirectory)).toEqual(
       beforeHashes,
     );
+  });
+
+  it("rejects byte evidence that changes between evaluator phases", async () => {
+    const bundleDirectory = await createBundle();
+    const before = await collectControlCaptureBundleByteEvidenceV1(
+      bundleDirectory,
+    );
+    const integrityPath = path.join(bundleDirectory, "integrity.json");
+    const integrityBytes = new Uint8Array(await readFile(integrityPath));
+    integrityBytes[integrityBytes.byteLength - 1] = 0x20;
+    await writeFile(integrityPath, integrityBytes);
+    const after = await collectControlCaptureBundleByteEvidenceV1(
+      bundleDirectory,
+    );
+
+    expect(() => assertControlCaptureBundleEvidenceStableV1(before, after))
+      .toThrow("changed while it was being validated");
   });
 
   it("maps a missing Required Pass only to Capture Completeness", async () => {

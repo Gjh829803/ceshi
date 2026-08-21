@@ -22,6 +22,7 @@ import { isPlainObject, orderBy } from "lodash-es";
 import {
   collectControlCaptureBundleByteEvidenceV1,
   validateControlCaptureBundleV1,
+  type ControlCaptureBundleByteEvidenceV1,
   type ControlCaptureBundleDiagnosticV1,
 } from "./control-capture-bundle";
 
@@ -66,6 +67,7 @@ interface CaptureBundleIdentityV1 {
 
 interface CaptureBundleEvidenceV1 {
   readonly bundleRootHash: Sha256HashV1;
+  readonly bundleDirectoryHash: Sha256HashV1;
   readonly sizeBytes: number;
   readonly artifactRef: string;
 }
@@ -122,10 +124,11 @@ async function collectCaptureBundleEvidenceV1(
   bundleDirectory: string,
 ): Promise<CaptureBundleEvidenceV1> {
   try {
-    const { bundleRootHash, sizeBytes } =
+    const { bundleDirectoryHash, bundleRootHash, sizeBytes } =
       await collectControlCaptureBundleByteEvidenceV1(bundleDirectory);
     return {
       bundleRootHash,
+      bundleDirectoryHash,
       sizeBytes,
       artifactRef: `artifact://control-capture-bundle/${bundleRootHash.slice("sha256:".length)}`,
     };
@@ -133,6 +136,26 @@ async function collectCaptureBundleEvidenceV1(
     throw new ControlCaptureValidationInfrastructureErrorV1(
       "Control Capture Bundle bytes are unavailable; no Validation Report was created.",
       { cause: error },
+    );
+  }
+}
+
+export function assertControlCaptureBundleEvidenceStableV1(
+  before: Pick<
+    ControlCaptureBundleByteEvidenceV1,
+    "bundleDirectoryHash" | "sizeBytes"
+  >,
+  after: Pick<
+    ControlCaptureBundleByteEvidenceV1,
+    "bundleDirectoryHash" | "sizeBytes"
+  >,
+): void {
+  if (
+    before.bundleDirectoryHash !== after.bundleDirectoryHash ||
+    before.sizeBytes !== after.sizeBytes
+  ) {
+    throw new ControlCaptureValidationInfrastructureErrorV1(
+      "Control Capture Bundle changed while it was being validated; no Validation Report was created.",
     );
   }
 }
@@ -384,13 +407,16 @@ export async function createControlCaptureValidationReportV1(
   inputDirectory: string,
 ): Promise<ControlCaptureValidationReportResultV1> {
   const bundleDirectory = path.resolve(inputDirectory);
-  const [identity, evidence, bundleValidation, depthEvaluation] =
-    await Promise.all([
-      readCaptureBundleIdentityV1(bundleDirectory),
-      collectCaptureBundleEvidenceV1(bundleDirectory),
-      validateControlCaptureBundleV1(bundleDirectory),
-      evaluateLinearDepthV1(bundleDirectory),
-    ]);
+  const evidence = await collectCaptureBundleEvidenceV1(bundleDirectory);
+  const [identity, bundleValidation, depthEvaluation] = await Promise.all([
+    readCaptureBundleIdentityV1(bundleDirectory),
+    validateControlCaptureBundleV1(bundleDirectory),
+    evaluateLinearDepthV1(bundleDirectory),
+  ]);
+  const finalEvidence = await collectCaptureBundleEvidenceV1(
+    bundleDirectory,
+  );
+  assertControlCaptureBundleEvidenceStableV1(evidence, finalEvidence);
   const rawDiagnostics = [
     ...bundleValidation.diagnostics.map(adaptBundleDiagnosticV1),
     ...depthEvaluation.diagnostics,

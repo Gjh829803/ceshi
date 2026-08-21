@@ -15,7 +15,7 @@ function requiredMetricResults(
   gateResult: GateResultV1,
 ): readonly (MetricResultV1 | undefined)[] {
   return Object.values(gateDefinition.metricDefinitionsById)
-    .filter((metricDefinition: MetricDefinitionV1) => metricDefinition.required)
+    .filter((metricDefinition: MetricDefinitionV1) => metricDefinition.isRequired)
     .map((metricDefinition) =>
       gateResult.metricResultsById[metricDefinition.id]
     );
@@ -37,13 +37,10 @@ export function deriveValidationGateStatusV1(
   ) {
     return "incomplete";
   }
-  if (
-    requiredResults.length > 0 &&
-    requiredResults.every(
-      (metricResult) => metricResult?.status === "not-applicable",
-    )
-  ) {
-    return "not-applicable";
+  if (requiredResults.some(
+    (metricResult) => metricResult?.status === "not-applicable",
+  )) {
+    return "incomplete";
   }
   return "passed";
 }
@@ -68,6 +65,14 @@ export function deriveValidationReportStatusV1(
     )
   ) {
     return "failed";
+  }
+  if (
+    gateEvaluations.some(
+      ({ gateDefinition, status }) =>
+        gateDefinition.requirement === "blocking" && status !== "passed",
+    )
+  ) {
+    return "incomplete";
   }
   if (
     gateEvaluations.some(({ status }) => status === "incomplete")

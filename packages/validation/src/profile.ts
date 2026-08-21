@@ -18,7 +18,7 @@ export const OUTDOOR_CONTROL_VIDEO_DEV_VALIDATION_PROFILE_V1 = {
         "capture-bundle-integrity-valid": {
           id: "capture-bundle-integrity-valid",
           kind: "boolean-assertion",
-          required: true,
+          isRequired: true,
           expectedValue: true,
           evaluatorProfileRef:
             "worldkit://validation-evaluator/control-capture-bundle-integrity@1",
@@ -32,7 +32,7 @@ export const OUTDOOR_CONTROL_VIDEO_DEV_VALIDATION_PROFILE_V1 = {
         "capture-required-passes-valid": {
           id: "capture-required-passes-valid",
           kind: "boolean-assertion",
-          required: true,
+          isRequired: true,
           expectedValue: true,
           evaluatorProfileRef:
             "worldkit://validation-evaluator/control-capture-required-passes@1",
@@ -40,7 +40,7 @@ export const OUTDOOR_CONTROL_VIDEO_DEV_VALIDATION_PROFILE_V1 = {
         "capture-linear-depth-valid": {
           id: "capture-linear-depth-valid",
           kind: "boolean-assertion",
-          required: true,
+          isRequired: true,
           expectedValue: true,
           evaluatorProfileRef:
             "worldkit://validation-evaluator/control-capture-linear-depth@1",
@@ -54,7 +54,7 @@ export const OUTDOOR_CONTROL_VIDEO_DEV_VALIDATION_PROFILE_V1 = {
         "capture-ownership-valid": {
           id: "capture-ownership-valid",
           kind: "boolean-assertion",
-          required: true,
+          isRequired: true,
           expectedValue: true,
           evaluatorProfileRef:
             "worldkit://validation-evaluator/control-capture-ownership@1",

@@ -228,6 +228,19 @@ describe("Control Capture Bundle V1", () => {
     expect(Object.keys(byteEvidence.fileHashesByPath)).toEqual(
       Object.keys(byteEvidence.fileHashesByPath).sort(),
     );
+    const integrityPath = path.join(outputDirectory, "integrity.json");
+    const integrityBytes = new Uint8Array(await readFile(integrityPath));
+    integrityBytes[integrityBytes.byteLength - 1] = 0x20;
+    await writeFile(integrityPath, integrityBytes);
+    const changedDirectoryEvidence =
+      await collectControlCaptureBundleByteEvidenceV1(outputDirectory);
+    expect(changedDirectoryEvidence.bundleRootHash).toBe(
+      byteEvidence.bundleRootHash,
+    );
+    expect(changedDirectoryEvidence.sizeBytes).toBe(byteEvidence.sizeBytes);
+    expect(changedDirectoryEvidence.bundleDirectoryHash).not.toBe(
+      byteEvidence.bundleDirectoryHash,
+    );
     const inspection = await inspectControlCaptureBundleV1(outputDirectory);
     expect(inspection).toMatchObject({
       bundleId: "bundle-test",

@@ -3,6 +3,7 @@ import {
   readFile,
   readdir,
   rm,
+  symlink,
   unlink,
 } from "node:fs/promises";
 import { tmpdir } from "node:os";
@@ -134,6 +135,31 @@ describe("Validation CLI", () => {
       ],
     });
     await expect(readFile(outputPath)).rejects.toThrow();
+  });
+
+  it("resolves symlinked output parents before enforcing Bundle containment", async () => {
+    const { parentDirectory, bundleDirectory } = await createFixture();
+    const outputParentAlias = path.join(parentDirectory, "report-output");
+    await symlink(bundleDirectory, outputParentAlias, "dir");
+    const outputPath = path.join(outputParentAlias, "authoritative-output.json");
+
+    const result = await verifyControlCaptureFileV1(
+      bundleDirectory,
+      outputPath,
+    );
+
+    expect(result).toMatchObject({
+      ok: false,
+      exitCode: 1,
+      diagnostics: [
+        expect.objectContaining({
+          code: "VALIDATION_OUTPUT_INSIDE_SUBJECT",
+        }),
+      ],
+    });
+    await expect(readFile(
+      path.join(bundleDirectory, "authoritative-output.json"),
+    )).rejects.toThrow();
   });
 
   it("uses stable exit codes for all report statuses", () => {

@@ -130,6 +130,7 @@ export interface FinalizedControlCaptureBundleV1 {
 
 export interface ControlCaptureBundleByteEvidenceV1 {
   readonly bundleRootHash: Sha256HashV1;
+  readonly bundleDirectoryHash: Sha256HashV1;
   readonly sizeBytes: number;
   readonly fileHashesByPath: Readonly<Record<string, Sha256HashV1>>;
 }
@@ -292,8 +293,14 @@ export async function collectControlCaptureBundleByteEvidenceV1(
       .filter(({ filePath }) => filePath !== "integrity.json")
       .map(({ filePath, contentHash }) => [filePath, contentHash]),
   );
+  const allFileHashesByPath = Object.fromEntries(
+    fileRows.map(({ filePath, contentHash }) => [filePath, contentHash]),
+  );
   return {
     bundleRootHash: sha256CanonicalJson(fileHashesByPath) as Sha256HashV1,
+    bundleDirectoryHash: sha256CanonicalJson(
+      allFileHashesByPath,
+    ) as Sha256HashV1,
     sizeBytes: fileRows.reduce(
       (totalBytes, { sizeBytes }) => totalBytes + sizeBytes,
       0,

@@ -4,6 +4,7 @@ import {
   lstat,
   mkdir,
   readFile,
+  realpath,
   rm,
   writeFile,
 } from "node:fs/promises";
@@ -190,6 +191,30 @@ export async function verifyControlCaptureFileV1(
     );
   }
   try {
+    const canonicalBundleDirectory = await realpath(
+      absoluteBundleDirectory,
+    );
+    await mkdir(path.dirname(absoluteOutputPath), { recursive: true });
+    const canonicalOutputParent = await realpath(
+      path.dirname(absoluteOutputPath),
+    );
+    const canonicalOutputPath = path.join(
+      canonicalOutputParent,
+      path.basename(absoluteOutputPath),
+    );
+    if (outputIsInsideBundle(
+      canonicalBundleDirectory,
+      canonicalOutputPath,
+    )) {
+      return cliInfrastructureFailure(
+        "VALIDATION_OUTPUT_INSIDE_SUBJECT",
+        "Validation Report output must be outside the immutable Control Capture Bundle.",
+        {
+          inputDirectory: canonicalBundleDirectory,
+          outputPath: canonicalOutputPath,
+        },
+      );
+    }
     if (await pathExists(absoluteOutputPath)) {
       return cliInfrastructureFailure(
         "VALIDATION_OUTPUT_EXISTS",
@@ -198,7 +223,7 @@ export async function verifyControlCaptureFileV1(
       );
     }
     const { report, reportHash } =
-      await createControlCaptureValidationReportV1(absoluteBundleDirectory);
+      await createControlCaptureValidationReportV1(canonicalBundleDirectory);
     await writeValidationReportFileNoReplaceV1(absoluteOutputPath, report);
     const exitCode = validationStatusExitCodeV1(report.status);
     const diagnostics = report.diagnostics.map(adaptValidationDiagnosticV1);
