@@ -7,10 +7,13 @@ export {
 } from "./normalize-v3";
 export * from "./parse";
 export * from "./parse-v3";
+export * from "./parse-v4";
 export * from "./resource-lock";
 export * from "./subject-definition-normalizer";
 export * from "./subject-preset-candidate";
 export * from "./types";
 export * from "./types-v3";
+export * from "./types-v4";
 export * from "./validate";
 export * from "./validate-v3";
+export * from "./validate-v4";
