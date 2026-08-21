@@ -129,9 +129,9 @@ Compatibility 需要证明二者兼容，不能按 Ref 字符串猜测；不兼�
 
 ### 5.2 Planner Route 到 Canonical Route 的唯一归一化
 
-当前 Agent 白模入口 `OutdoorWorldSpec.PlannedRoute` 仍使用 `points`、`width` 和
-`maxSlopeDegrees`，而 Canonical Route 使用 `pointsMetersXZ`、`widthMeters` 和
-`locomotionProfileRef`。R0 采用未发布私有 Schema 的 Clean Break，不保留两套永久方言：
+当前 Agent 白模入口 `OutdoorWorldSpec.PlannedRoute` 与 Canonical Route 已在 R0 统一使用
+`pointsMetersXZ`、`widthMeters` 和 `locomotionProfileRef`。R0 对未发布私有 Schema 采用
+Clean Break，没有保留 `points`、`width`、`maxSlopeDegrees` 的第二套永久方言：
 
 - Planner Route 改用 `pointsMetersXZ` 与 `widthMeters`；
 - 新增必填 `locomotionProfileRef`，其兼容性最终由 Traversing Subject Lock 证明；
@@ -218,7 +218,11 @@ Overlay/Debug 文件，整个目录另算 `traversalArtifactRootHash`，不得�
 Heightfield 可使用 Tile/Raster 邻接作为构建输入，但 Graph 节点保存 3D 世界位置与稳定
 `traversalSurfaceId`。Heightfield 的最小稳定身份必须从 Terrain Entity ID、稳定逻辑
 Collider Subshape ID 和锁定资源版本派生；Tile 拆分、LOD、数组顺序和 Runtime Handle
-不得改变该身份。静态平台来自显式 Traversal Surface，因此同一 XZ 可以同时存在：
+不得改变该身份。来源显式声明的逻辑 Subshape ID 必须原样保留；R1 的单 Primitive
+兼容投影使用保留逻辑 ID `primary`。`colliderSubshapeId` 使用带字段名的 Canonical JSON
+`{ entityId, logicalSubshapeId }` 的 SHA-256 并加 `collider-subshape:` 前缀，禁止依赖分隔符解析、
+数组序号或几何内容；几何变化由独立 Collider Hash 表达。静态平台来自显式 Traversal Surface，
+因此同一 XZ 可以同时存在：
 
 ```text
 bridge-deck surface  y = 8m
@@ -244,10 +248,21 @@ Graph Builder 使用主体半径侵蚀可走区域，使用主体高度排除低
 `physics-body-profile` 编译，Collider 尺寸只从锁定 Collider 编译；Motion、Feel、Medium、
 Driver 和 Adapter fallback 均不得覆盖。
 
-Graph Provider Adapter 必须把同一锁编译为 Provider-neutral `TraversalCapabilityEnvelope`，
-并针对锁定 Babylon 版本覆盖胶囊半径、步高与坡度接触的耦合语义。Provider 公式不进入
-AI-facing Schema；等价探针和 Backend/Adapter 版本进入 Evidence。Graph 是保守预测，真实
-Controller 仍是最终真相，但 Builder 不得明知使用与锁定 Controller 不等价的独立公式。
+Canonical Traversal Contract 必须从同一 `ResolvedTraversalLock` Receipt 与已解析的 Graph
+Builder Profile 派生唯一的 Provider-neutral `TraversalCapabilityEnvelope`，其中携带胶囊、
+步高、坡度、保守净空和锁定的 Backend/Adapter 实现身份；不得为了 Envelope 修改已经冻结的
+R0 Lock 形状。Graph Provider Adapter 只能把这个 Envelope 映射为 Provider 参数，不得再次读取
+Subject/Profile 或维护第二份能力参数；映射必须针对锁定 Babylon 版本覆盖胶囊半径、步高与
+坡度接触的耦合语义。Provider 公式不进入 AI-facing Schema；等价探针和 Backend/Adapter
+版本进入 Evidence。Graph 是保守预测，真实 Controller 仍是最终真相，但 Builder 不得明知
+使用与锁定 Controller 不等价的独立公式。
+
+R1 的 Envelope 工厂由 `@whitebox-world/traversal` 唯一拥有，只接受不可变的
+`ResolvedTraversalLockReceiptV1` 与 `ResolvedTraversalGraphBuilderProfileV2`。前者提供已锁定的
+主体几何、步高、坡度、能力/Profile 身份和 Runtime 实现身份，后者只提供保守净空与构建策略；
+两者不得互相复制字段。R1 在锁编译阶段已经闭合验证唯一 Ground Locomotion Capability，Envelope
+因此记录规范化的 `traversalMode: "ground"`，不得由 Adapter 再读 Subject、再查 Registry 或从
+Resource Ref 字符串猜语义。Recast Adapter 只消费该 Envelope，不拥有第二个编译入口。
 
 R1b 的成功/失败高度从 Fixture 锁中的 `maxStepHeightMeters` 推导。当前 `0.3m` 人形锁下
 保留 `0.25m` 成功和 `0.35m` 失败 Fixture；若未来 Profile 版本变化，Fixture 必须显式锁
@@ -477,6 +492,8 @@ Fixture 仍属于 P2.6 H1/M10，不由普通静态平台 Fixture 冒充完成。
 | 视觉相接、Collider 留缝 | `ROUTE_SURFACE_GAP_EXCEEDED` |
 | 踏面比胶囊安全宽度更窄 | `ROUTE_CLEARANCE_WIDTH_INSUFFICIENT` |
 | 平台上方有低顶 | `ROUTE_OVERHEAD_CLEARANCE_INSUFFICIENT` |
+| Water 完全切断 Heightfield `hard-ribbon` | `ROUTE_REQUIRED_PATH_UNREACHABLE`，Diagnostic Evidence 指明 Water Entity |
+| 非 Water 沟槽/排除带使两段可走 Heightfield 区域的间隔超过锁定阈值 | `ROUTE_SURFACE_GAP_EXCEEDED` |
 | 同 XZ 的桥面和桥下地面 | Graph 合同可表达两层 Node；完整 Runtime Gate 由 P2.6 H1/M10 验收 |
 | 未声明 Traversal Surface 的装饰 Mesh | 不进入 Graph |
 | Graph 通过、Controller 在 Collider 接缝卡住 | Runtime Conformance 失败 |
@@ -502,9 +519,13 @@ worldkit verify explain <validation-report.json> --gate-id route-connectivity
 worldkit verify explain <validation-report.json> --gate-id route-runtime-conformance
 ```
 
-Browser Protocol 只读暴露 Route Summary、Path Evidence、Surface/Collider Overlay 和 Runtime
-Probe Receipt，不暴露任意 NavMesh Builder 执行、Babylon Scene、Havok Handle 或 Provider
-内部 ID。CLI JSON、Browser Protocol、Canonical Schema 和生成类型使用同一公开字段名。
+Browser Protocol V4 在保留 V3 全部 Control/Capture/Pause/Reset/Capability Discovery 行为的基础上，
+只读增加 Route Summary、Path Evidence、Surface/Collider Overlay 和 Runtime Probe Receipt；它不是
+getter-only 的替代接口。由于该协议尚未对外发布，本次允许原子化 clean break：全局版本、Host、
+CLI/Playwright 消费方、Canonical Gate、文档、示例和生成类型一次升级到 V4，且不在
+`window.__WORLDKIT__` 并存 V3 alias。V4 不暴露任意 NavMesh Builder 执行、Babylon Scene、Havok
+Handle 或 Provider 内部 ID。CLI JSON、Browser Protocol、Canonical Schema 和生成类型使用同一
+公开字段名；合同测试必须证明 V3 的方法集合和行为没有在版本升级中丢失。
 
 Agent 修复循环固定为：
 
