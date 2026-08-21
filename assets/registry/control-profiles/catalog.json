@@ -9,10 +9,34 @@
     "inputSpace": "camera-relative",
     "facingPolicy": "align-to-move",
     "lateralMovementPolicy": "allowed",
+    "inputTuning": {
+      "moveDeadzoneRatio": 0.1,
+      "responseExponent": 1.4
+    },
     "aiMetadata": {
       "displayName": "Camera-relative Planar Control",
       "description": "Maps semantic movement to a camera-relative planar direction.",
       "semanticTags": ["camera-relative", "planar"]
+    }
+  },
+  {
+    "kind": "control-profile",
+    "id": "planar.aim-relative",
+    "version": 1,
+    "resourceRef": "worldkit://control-profile/planar.aim-relative@1",
+    "authoringAvailability": "advanced",
+    "commandKind": "planar-vector",
+    "inputSpace": "camera-relative",
+    "facingPolicy": "align-to-view",
+    "lateralMovementPolicy": "allowed",
+    "inputTuning": {
+      "moveDeadzoneRatio": 0.1,
+      "responseExponent": 1.3
+    },
+    "aiMetadata": {
+      "displayName": "Aim-relative Planar Control",
+      "description": "Keeps the subject aligned to the view while allowing camera-relative strafing.",
+      "semanticTags": ["aim", "camera-relative", "planar", "strafe"]
     }
   },
   {
@@ -25,6 +49,10 @@
     "inputSpace": "subject-local",
     "facingPolicy": "steering-derived",
     "lateralMovementPolicy": "forbidden",
+    "inputTuning": {
+      "moveDeadzoneRatio": 0.08,
+      "responseExponent": 1.55
+    },
     "aiMetadata": {
       "displayName": "Subject-local Throttle and Steer",
       "description": "Maps forward input to throttle and lateral input to steering.",
@@ -41,9 +69,13 @@
     "inputSpace": "flight-frame",
     "facingPolicy": "flight-derived",
     "lateralMovementPolicy": "forbidden",
+    "inputTuning": {
+      "moveDeadzoneRatio": 0.08,
+      "responseExponent": 1.35
+    },
     "aiMetadata": {
       "displayName": "Flight Attitude Control",
-      "description": "Maps semantic movement and look input to pitch, yaw and bank commands.",
+      "description": "Maps semantic movement axes to pitch, yaw and bank commands.",
       "semanticTags": ["attitude", "flight"]
     }
   },
@@ -57,6 +89,10 @@
     "inputSpace": "none",
     "facingPolicy": "fixed",
     "lateralMovementPolicy": "forbidden",
+    "inputTuning": {
+      "moveDeadzoneRatio": 0,
+      "responseExponent": 1
+    },
     "aiMetadata": {
       "displayName": "Safe No Control",
       "description": "Internal control profile that emits no active movement command.",

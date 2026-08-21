@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import { createHash } from "node:crypto";
+import { readFileSync } from "node:fs";
 import { access, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { fileURLToPath } from "node:url";
 import path from "node:path";
@@ -10,6 +11,7 @@ import {
   stringifyCanonicalJson,
   type NormalizedWorldIRV3,
 } from "@whitebox-world/authoring";
+import { builtInSubjectResourceRegistry } from "@whitebox-world/subject-registry";
 import type {
   ExecutionPlanV4,
   SubjectRuntimeStateV3,
@@ -19,9 +21,13 @@ import type {
 
 import { promoteArtifactDirectory } from "./lib/artifact-directory-promotion";
 import {
-  inspectGBotProductAssetEvidence,
-  type GBotProductAssetEvidenceV1,
-} from "./lib/g-bot-evidence";
+  inspectProductAssetEvidence,
+  type ProductAssetEvidenceV1,
+} from "./lib/product-asset-evidence";
+import {
+  assertProductAssetIntakeBindingsV1,
+  parseProductAssetIntakeFixtureV1,
+} from "./lib/product-asset-intake";
 import {
   analyzeSubjectPoseCrop,
   compareSubjectPoseSilhouettes,
@@ -35,34 +41,42 @@ import {
 } from "./lib/subject-explain";
 import { startWorldkitServer, type WorldkitServerHandle } from "./lib/worldkit-server";
 import { main as worldkitMain } from "./worldkit";
+import { PLAYGROUND_SUBJECT_ASSET_URI_BY_REF_V1 } from "../apps/playground/src/worldkit-asset-resolver";
 
 const REPOSITORY_ROOT = fileURLToPath(new URL("../", import.meta.url));
-const INPUT_PATH = path.join(
-  REPOSITORY_ROOT,
-  "examples/authoring/g-bot-subject-world.json",
+const INTAKE_FIXTURE = parseProductAssetIntakeFixtureV1(
+  JSON.parse(
+    readFileSync(
+      path.join(REPOSITORY_ROOT, "examples/product-asset-intakes/humanoid.g-bot@1.json"),
+      "utf8",
+    ),
+  ) as unknown,
 );
-const ASSET_PATH = path.join(
-  REPOSITORY_ROOT,
-  "apps/playground/public/subject-assets/humanoid/g-bot/v1/g-bot.glb",
-);
+assertProductAssetIntakeBindingsV1(INTAKE_FIXTURE, {
+  registry: builtInSubjectResourceRegistry,
+  hostPublicUriBySubjectAssetRef: PLAYGROUND_SUBJECT_ASSET_URI_BY_REF_V1,
+});
+const INPUT_PATH = path.join(REPOSITORY_ROOT, INTAKE_FIXTURE.authoringWorldPath);
+const ASSET_PATH = path.join(REPOSITORY_ROOT, INTAKE_FIXTURE.glbRepositoryPath);
 const ASSET_MANIFEST_PATH = path.join(
   REPOSITORY_ROOT,
-  "assets/subjects/humanoid/g-bot/asset.manifest.json",
+  INTAKE_FIXTURE.productAssetManifestPath,
 );
 const ACTION_MANIFEST_PATH = path.join(
   REPOSITORY_ROOT,
-  "assets/subjects/humanoid/g-bot/action-manifest.json",
+  INTAKE_FIXTURE.productActionManifestPath,
 );
 const TARGET_ARTIFACT_DIRECTORY = path.join(
   REPOSITORY_ROOT,
-  "artifacts/examples/g-bot-subject-world",
+  INTAKE_FIXTURE.artifactDirectoryPath,
 );
-const PRIMARY_ENTITY_ID = "g-bot-primary";
-const SECONDARY_ENTITY_ID = "g-bot-secondary";
-const CONTROLLER_ID = "controller-primary";
-const SUBJECT_ASSET_REF = "worldkit://subject-asset/actor.humanoid.g-bot@1";
-const SUBJECT_DEFINITION_REF = "worldkit://subject-definition/humanoid.g-bot@1";
-const MINIMUM_SUBJECT_POSE_DIFFERENCE_RATIO = 0.12;
+const PRIMARY_ENTITY_ID = INTAKE_FIXTURE.primaryEntityId;
+const SECONDARY_ENTITY_ID = INTAKE_FIXTURE.secondaryEntityId;
+const CONTROLLER_ID = INTAKE_FIXTURE.controllerId;
+const SUBJECT_ASSET_REF = INTAKE_FIXTURE.subjectAssetRef;
+const SUBJECT_DEFINITION_REF = INTAKE_FIXTURE.subjectDefinitionRef;
+const MINIMUM_SUBJECT_POSE_DIFFERENCE_RATIO =
+  INTAKE_FIXTURE.minimumSubjectPoseDifferenceRatio;
 const ARTIFACT_FILES = [
   "explain.json",
   "idle.png",
@@ -220,13 +234,15 @@ function assertPositionUnchanged(actual: Vec3, expected: Vec3, message: string):
   assert.ok(maximumDriftMeters <= 1e-9, `${message} Drift=${maximumDriftMeters}m.`);
 }
 
-async function inspectProductAsset(): Promise<GBotProductAssetEvidenceV1> {
+async function inspectProductAsset(): Promise<ProductAssetEvidenceV1> {
   const [glbBytes, assetManifestText, actionManifestText] = await Promise.all([
     readFile(ASSET_PATH),
     readFile(ASSET_MANIFEST_PATH, "utf8"),
     readFile(ACTION_MANIFEST_PATH, "utf8"),
   ]);
-  return inspectGBotProductAssetEvidence({
+  return inspectProductAssetEvidence({
+    requiredRuntimeActionIds: INTAKE_FIXTURE.requiredRuntimeActionIds,
+    expectedSubjectAssetRef: INTAKE_FIXTURE.subjectAssetRef,
     glbBytes,
     assetManifest: parseJson<unknown>(assetManifestText, "G Bot asset manifest"),
     actionManifest: parseJson<unknown>(actionManifestText, "G Bot action manifest"),
@@ -353,7 +369,7 @@ async function captureAction(
     canvas.width = boundsPixelsXYWH[2];
     canvas.height = boundsPixelsXYWH[3];
     const context = canvas.getContext("2d", { willReadFrequently: true });
-    if (context === null) throw new Error("G_BOT_POSE_CROP_UNAVAILABLE");
+    if (context === null) throw new Error("PRODUCT_ASSET_POSE_CROP_UNAVAILABLE");
     context.drawImage(
       image,
       boundsPixelsXYWH[0],
@@ -398,7 +414,7 @@ async function captureAction(
 async function verifyBrowser(
   paths: ArtifactPaths,
   artifact: WorldBuildArtifactV3,
-  productAsset: GBotProductAssetEvidenceV1,
+  productAsset: ProductAssetEvidenceV1,
 ): Promise<BrowserEvidence> {
   const animationSet = artifact.executionPlan.animationSets.find(
     (candidate) => candidate.subjectAssetRef === SUBJECT_ASSET_REF,
@@ -605,7 +621,7 @@ async function verifyBrowser(
 async function writeVerification(
   paths: ArtifactPaths,
   artifact: WorldBuildArtifactV3,
-  productAsset: GBotProductAssetEvidenceV1,
+  productAsset: ProductAssetEvidenceV1,
   browser: BrowserEvidence,
 ): Promise<void> {
   const cliSnapshot = parseJson<WorldRuntimeSnapshotV3>(

@@ -112,6 +112,6 @@ describe("G Bot product asset evidence", () => {
         assetManifest,
         actionManifest: JSON.parse(actionManifestText) as unknown,
       }),
-    ).toThrowError("G_BOT_ASSET_CONTENT_HASH_MISMATCH");
+    ).toThrowError("PRODUCT_ASSET_CONTENT_HASH_MISMATCH");
   });
 });

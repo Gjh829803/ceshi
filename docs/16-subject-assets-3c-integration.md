@@ -597,6 +597,11 @@ interface RuntimeSnapshot {
 
 ## 13. 资产接入流水线
 
+每个产品资产包按固定流程接入。当前可执行模板见
+[`product-asset-intake`](superpowers/skills/product-asset-intake.md) 与
+[`Product Asset Intake Template`](superpowers/specs/2026-08-21-product-asset-intake-template-design.md)。
+G Bot 是第一条 Fixture，不是第二个产品人物的完成证据。
+
 每个产品资产包按固定流程接入：
 
 ```text

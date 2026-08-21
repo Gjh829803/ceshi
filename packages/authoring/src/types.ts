@@ -2,6 +2,7 @@ import type {
   BipedBoneIdV1,
   GroundHumanoidActionIdV1,
   CameraContextProfileV1,
+  CameraModifierProfileV1,
   CameraRigAlgorithmDefinitionV1,
   CameraRigProfileV1,
   ControlProfileV1,
@@ -463,6 +464,7 @@ export interface NormalizedSubjectDefinitionV2 {
     controlProfile: ControlProfileV1;
     cameraContextProfile: CameraContextProfileV1;
     cameraRigProfiles: readonly CameraRigProfileV1[];
+    cameraModifierProfiles: readonly CameraModifierProfileV1[];
     cameraRigAlgorithms: readonly CameraRigAlgorithmDefinitionV1[];
     mediumProfile: MediumProfileV1;
     relationshipProfiles: readonly RelationshipProfileV1[];
@@ -505,6 +507,7 @@ export type ResolvedResourceKindV1 =
   | "control-profile"
   | "camera-rig-algorithm"
   | "camera-rig-profile"
+  | "camera-modifier-profile"
   | "camera-context-profile"
   | "medium-profile"
   | "relationship-profile"

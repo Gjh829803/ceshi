@@ -26,6 +26,17 @@ export function sha256(contents: string | Uint8Array): string {
   return createHash("sha256").update(contents).digest("hex");
 }
 
+export function normalizeTextLineEndings(contents: string): string {
+  return contents.replace(/\r\n?/g, "\n");
+}
+
+export function sha256NormalizedText(contents: string | Uint8Array): string {
+  const text = typeof contents === "string"
+    ? contents
+    : Buffer.from(contents).toString("utf8");
+  return sha256(normalizeTextLineEndings(text));
+}
+
 export function stableJson(value: unknown): string {
   return `${JSON.stringify(value, null, 2)}\n`;
 }
@@ -88,7 +99,7 @@ export async function buildFrozenPlanLock(
     {
       kind: "world-spec-source",
       path: sourceRelative,
-      sha256: sha256(sourceContents),
+      sha256: sha256NormalizedText(sourceContents),
     },
   ];
   for (const referenceUri of spec.source.referenceImages ?? []) {
@@ -133,7 +144,7 @@ export async function verifyFrozenWorldPlan(
   } catch {
     throw new Error(`Frozen plan lock is missing: ${actualPath}`);
   }
-  if (actual !== stableJson(expected)) {
+  if (normalizeTextLineEndings(actual) !== stableJson(expected)) {
     throw new Error(
       `Frozen plan ${sceneId} drifted. Run Planner and freeze a reviewed revision before Builder.`,
     );

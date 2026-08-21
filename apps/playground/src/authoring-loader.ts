@@ -1,11 +1,16 @@
 import {
   normalizeAuthoringSpec,
   parseAuthoringSpecJson,
+  sha256CanonicalJson,
   type AuthoringDiagnostic,
   type AuthoringSpecV3,
 } from "@whitebox-world/authoring";
 import { compileWorld } from "@whitebox-world/compiler";
-import { builtInSubjectResourceRegistry } from "@whitebox-world/subject-registry";
+import {
+  builtInSubjectResourceRegistry,
+  type RegistrySubjectDefinitionV3,
+  type SubjectResourceRegistryV3,
+} from "@whitebox-world/subject-registry";
 import type {
   CompileDiagnostic,
   ExecutionPlanV4,
@@ -34,6 +39,12 @@ export type CapabilityDemoHostOverlayChangeV1 =
       spawnAnchorEntityId: string;
       beforePositionMetersXYZ: CapabilityDemoPositionMetersXYZV1;
       afterPositionMetersXYZ: CapabilityDemoPositionMetersXYZV1;
+    }>
+  | Readonly<{
+      type: "relationship-capabilities-deferred";
+      sourceSubjectDefinitionRef: string;
+      runtimeSubjectDefinitionRef: string;
+      deferredCapabilityRefs: readonly string[];
     }>;
 
 export interface CapabilityDemoHostOverlayV1 {
@@ -79,6 +90,76 @@ function frozenPositionMetersXYZ(
   ]) as CapabilityDemoPositionMetersXYZV1;
 }
 
+function deepFreeze<T>(value: T): T {
+  if (value === null || typeof value !== "object" || Object.isFrozen(value)) {
+    return value;
+  }
+  for (const child of Object.values(value)) deepFreeze(child);
+  return Object.freeze(value);
+}
+
+function createRelationshipDeferredPreview(
+  sourceSubjectDefinitionRef: string,
+): Readonly<{
+  definition: RegistrySubjectDefinitionV3;
+  registry: SubjectResourceRegistryV3;
+  deferredCapabilityRefs: readonly string[];
+}> | undefined {
+  const source = builtInSubjectResourceRegistry.resolveSubjectDefinition(
+    sourceSubjectDefinitionRef,
+  );
+  if (
+    source === undefined ||
+    !("schemaVersion" in source) ||
+    source.schemaVersion !== 3 ||
+    source.relationshipCapabilityRefs.length === 0
+  ) {
+    return undefined;
+  }
+
+  const deferredCapabilityRefs = Object.freeze(
+    [...source.relationshipCapabilityRefs].sort((left, right) =>
+      left.localeCompare(right)),
+  );
+  const deferredCapabilityRefSet = new Set(deferredCapabilityRefs);
+  const { contentHash: _contentHash, ...sourceInput } = structuredClone(source);
+  const previewInput = {
+    ...sourceInput,
+    id: `playground-preview.${source.id}`,
+    resourceRef:
+      `worldkit://subject-definition/playground-preview.${source.id}@${source.version}`,
+    capabilityRefs: source.capabilityRefs.filter(
+      (capabilityRef) => !deferredCapabilityRefSet.has(capabilityRef),
+    ),
+    relationshipCapabilityRefs: [],
+  };
+  const definition = deepFreeze({
+    ...previewInput,
+    contentHash: sha256CanonicalJson(previewInput),
+  }) as RegistrySubjectDefinitionV3;
+  const registry: SubjectResourceRegistryV3 = Object.freeze({
+    ...builtInSubjectResourceRegistry,
+    resolveSubjectDefinition(resourceRef: string) {
+      return resourceRef === definition.resourceRef
+        ? definition
+        : builtInSubjectResourceRegistry.resolveSubjectDefinition(resourceRef);
+    },
+    listSubjectDefinitions() {
+      return [
+        ...builtInSubjectResourceRegistry.listSubjectDefinitions(),
+        definition,
+      ].sort((left, right) => left.resourceRef.localeCompare(right.resourceRef));
+    },
+    listCapabilitySubjectDefinitions() {
+      return [
+        ...builtInSubjectResourceRegistry.listCapabilitySubjectDefinitions(),
+        definition,
+      ].sort((left, right) => left.resourceRef.localeCompare(right.resourceRef));
+    },
+  });
+  return Object.freeze({ definition, registry, deferredCapabilityRefs });
+}
+
 function sourceDiagnostic(message: string, details?: Readonly<Record<string, unknown>>): AuthoringSceneLoadResult {
   return {
     ok: false,
@@ -100,6 +181,7 @@ function applyCapabilityDemoContext(
 ): Readonly<{
   source: AuthoringSpecV3;
   hostOverlay?: CapabilityDemoHostOverlayV1;
+  subjectResourceRegistry?: SubjectResourceRegistryV3;
 }> {
   const controlledEntityId = source.startup.controlledEntityId;
   const controlledSubject = source.nodes.find(
@@ -111,6 +193,11 @@ function applyCapabilityDemoContext(
   const definition = builtInSubjectResourceRegistry.resolveSubjectDefinition(
     subjectDefinitionRef,
   );
+  const relationshipDeferredPreview = createRelationshipDeferredPreview(
+    subjectDefinitionRef,
+  );
+  const runtimeSubjectDefinitionRef =
+    relationshipDeferredPreview?.definition.resourceRef ?? subjectDefinitionRef;
   const motionProfile =
     definition !== undefined && "schemaVersion" in definition
       ? builtInSubjectResourceRegistry.resolveMotionProfile(
@@ -168,9 +255,20 @@ function applyCapabilityDemoContext(
       type: "subject-definition-replaced",
       subjectEntityId: controlledEntityId,
       beforeSubjectDefinitionRef: controlledSubject.subjectDefinitionRef,
-      afterSubjectDefinitionRef: subjectDefinitionRef,
+      afterSubjectDefinitionRef: runtimeSubjectDefinitionRef,
     }),
   ];
+  if (relationshipDeferredPreview !== undefined) {
+    changes.push(
+      Object.freeze({
+        type: "relationship-capabilities-deferred",
+        sourceSubjectDefinitionRef: subjectDefinitionRef,
+        runtimeSubjectDefinitionRef,
+        deferredCapabilityRefs:
+          relationshipDeferredPreview.deferredCapabilityRefs,
+      }),
+    );
+  }
   if (
     beforeResourceBudget.maxVertices !== afterResourceBudget.maxVertices ||
     beforeResourceBudget.maxTriangles !== afterResourceBudget.maxTriangles ||
@@ -216,6 +314,9 @@ function applyCapabilityDemoContext(
 
   return {
     hostOverlay,
+    ...(relationshipDeferredPreview === undefined
+      ? {}
+      : { subjectResourceRegistry: relationshipDeferredPreview.registry }),
     source: {
       ...source,
       // Subject Package selection is an explicit Playground demo overlay. Its
@@ -228,7 +329,7 @@ function applyCapabilityDemoContext(
       },
       nodes: source.nodes.map((node) => {
         if (node.kind === "subject" && node.id === controlledEntityId) {
-          return { ...node, subjectDefinitionRef };
+          return { ...node, subjectDefinitionRef: runtimeSubjectDefinitionRef };
         }
         if (
           node.kind !== "anchor" ||
@@ -289,8 +390,11 @@ export async function loadAuthoringScene(
         parsed.value as AuthoringSpecV3,
         options.subjectDefinitionRef,
       );
-  const { source, hostOverlay } = overlayResult;
-  const normalized = normalizeAuthoringSpec(source);
+  const { source, hostOverlay, subjectResourceRegistry } = overlayResult;
+  const normalized = normalizeAuthoringSpec(
+    source,
+    subjectResourceRegistry === undefined ? {} : { subjectResourceRegistry },
+  );
   if (!normalized.ok || normalized.value === undefined || normalized.normalizedWorldIrHash === undefined) {
     return {
       ok: false,
