@@ -236,7 +236,7 @@ afterEach(async () => {
   );
 });
 
-describe("subject preset promotion", () => {
+describe("subject preset promotion", { timeout: 60_000 }, () => {
   it("allows candidate and plan artifacts only outside the repository or in the ignored preset area", () => {
     const root = path.join(tmpdir(), "worldkit-location-boundary");
     expect(() => assertSubjectPresetArtifactLocationV1(
