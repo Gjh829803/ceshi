@@ -135,9 +135,9 @@ RenderTarget、Bundle Writer 和 Validator 全链路。
 | 命令 | 结果 |
 |---|---|
 | `pnpm typecheck` | 通过 |
-| `pnpm test` | 65 Files、593 Tests 全部通过 |
+| `pnpm test` | 68 Files、619 Tests 全部通过 |
 | `pnpm test:scenes` | 2 Files、26 Tests 全部通过 |
-| `pnpm build` | 通过；2127 Modules；保留既有大 Chunk 警告 |
+| `pnpm build` | 通过；2129 Modules；保留既有大 Chunk 警告 |
 | `pnpm verify:canonical` | 通过；Browser/Havok/水域/墙体/双实例/Reset Gate 全部成立 |
 | `pnpm verify:placement-layout` | 通过；19 Constraints、真实 Browser/Havok、确定性与负向 Gate 成立 |
 | `pnpm verify:rigged-subject` | 通过；四动作、Pose Difference、双实例、墙体、资产篡改成立 |
@@ -149,6 +149,23 @@ RenderTarget、Bundle Writer 和 Validator 全链路。
 新增 Capture 方法之前。Disposition：更新 Gate 和持久化 Verification Artifact，使其同时
 要求四个新增方法并继续禁止 `solve/search/repair/mutate` 旁路；随后重新运行通过。该失败
 不是忽略的 Flake，也没有通过放宽断言处理。
+
+### 7.1 `origin/main` 集成处置
+
+最终合入前发现 `origin/main` 已推进到能力驱动 Motion/Camera 框架。该变更与本切片在
+Runtime Session、Babylon Runtime、Browser API 和 Playground Adapter 存在语义交叉，
+因此以三方合并提交 `3f546da` 集成，而不是覆盖任一侧：
+
+- Runtime Session 同时保留新的 Camera Tuning / Input Axes 契约与 Control Capture
+  Receipt / Frame 契约；
+- Fixed Tick 同时更新能力驱动 Input 状态并使旧 Render-ready Receipt 失效；Render Frame
+  仍不推进 Simulation Tick；
+- Reset 同时清空新的输入状态、重置 Camera Director 并使 Capture Receipt 失效；
+- 定向运行 6 个交叉区测试文件、136 Tests 全部通过；随后在合并提交上重新运行第 7 节
+  完整矩阵，68 Files / 619 Tests、26 Scene Tests、五项真实 Browser Gate 全部通过；
+- 新 Motion Profile 改变了 Rigged/G Bot 的预期位移、姿态和派生 Hash。重新生成并提交
+  受影响的 Screenshot、Snapshot、Build 与 Verification Artifact；Pose Difference、双实例
+  隔离、墙体阻挡、资产篡改和 Capture Pass Hash 门禁仍成立。
 
 ## 8. 最终结论
 
