@@ -1,0 +1,16 @@
+---
+description: Subagent model routing for heavy vs light work
+alwaysApply: true
+---
+
+# Subagent model routing
+
+Overrides all earlier per-task model locks.
+
+- Heavy work: dispatch with `claude-fable-5-thinking-high`.
+- Everything else: dispatch with `inherit` (session grok 4.6 extra high).
+- Do not use composer-2.5. Do not auto-upgrade to fable xhigh.
+
+Heavy work means: runtime adapter, physics, movement, camera, support-query integration; Task 6 (implement, review, re-review, fix); Task 7 when wiring Runtime `supported-by`; Task 8 adversarial/full gates; whole-branch review; M5 R1/R1b implement and review; any design/field freeze that binds runtime authority.
+
+Light work means: isolated types, catalogs, admission tests, pure resolvers, small mechanical fixes, and small non-runtime task reviews.
