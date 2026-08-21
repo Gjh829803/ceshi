@@ -29,6 +29,9 @@ importers:
       '@whitebox-world/subject-registry':
         specifier: workspace:*
         version: link:packages/subject-registry
+      '@whitebox-world/validation':
+        specifier: workspace:*
+        version: link:packages/validation
       lodash-es:
         specifier: ^4.18.1
         version: 4.18.1
@@ -321,6 +324,15 @@ importers:
       '@whitebox-world/contracts':
         specifier: workspace:*
         version: link:../contracts
+
+  packages/validation:
+    dependencies:
+      '@whitebox-world/protocol':
+        specifier: workspace:*
+        version: link:../protocol
+      lodash-es:
+        specifier: ^4.18.1
+        version: 4.18.1
 
   packages/world:
     dependencies:
