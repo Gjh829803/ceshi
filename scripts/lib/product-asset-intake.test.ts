@@ -2,8 +2,12 @@ import { readFile } from "node:fs/promises";
 import { fileURLToPath } from "node:url";
 
 import { describe, expect, it } from "vitest";
+import { builtInSubjectResourceRegistry } from "@whitebox-world/subject-registry";
+
+import { PLAYGROUND_SUBJECT_ASSET_URI_BY_REF_V1 } from "../../apps/playground/src/worldkit-asset-resolver";
 
 import {
+  assertProductAssetIntakeBindingsV1,
   parseProductAssetIntakeFixtureV1,
   type ProductAssetIntakeFixtureV1,
 } from "./product-asset-intake";
@@ -82,5 +86,37 @@ describe("product asset intake fixture", () => {
     expect(() => parseProductAssetIntakeFixtureV1(fixture)).toThrowError(
       "PRODUCT_ASSET_INTAKE_HOST_URI_INVALID",
     );
+  });
+
+  it("rejects unknown fields and a Registry Ref used in the wrong role", () => {
+    expect(() => parseProductAssetIntakeFixtureV1({
+      ...validFixture(),
+      providerHint: "babylon",
+    })).toThrowError("PRODUCT_ASSET_INTAKE_FIELD_UNKNOWN");
+    expect(() => parseProductAssetIntakeFixtureV1({
+      ...validFixture(),
+      rigProfileRef: "worldkit://subject-asset/actor.humanoid.g-bot@1",
+    })).toThrowError("PRODUCT_ASSET_INTAKE_REF_INVALID");
+  });
+
+  it("rejects Fixture bindings that drift from Registry or Host ownership", () => {
+    expect(() => assertProductAssetIntakeBindingsV1(validFixture(), {
+      registry: builtInSubjectResourceRegistry,
+      hostPublicUriBySubjectAssetRef: PLAYGROUND_SUBJECT_ASSET_URI_BY_REF_V1,
+    })).not.toThrow();
+    expect(() => assertProductAssetIntakeBindingsV1({
+      ...validFixture(),
+      rigProfileRef: "worldkit://rig-profile/biped.golden@1",
+    }, {
+      registry: builtInSubjectResourceRegistry,
+      hostPublicUriBySubjectAssetRef: PLAYGROUND_SUBJECT_ASSET_URI_BY_REF_V1,
+    })).toThrowError("PRODUCT_ASSET_INTAKE_REGISTRY_BINDING_MISMATCH");
+    expect(() => assertProductAssetIntakeBindingsV1({
+      ...validFixture(),
+      hostPublicUri: "/subject-assets/humanoid/g-bot/v2/wrong.glb",
+    }, {
+      registry: builtInSubjectResourceRegistry,
+      hostPublicUriBySubjectAssetRef: PLAYGROUND_SUBJECT_ASSET_URI_BY_REF_V1,
+    })).toThrowError("PRODUCT_ASSET_INTAKE_HOST_BINDING_MISMATCH");
   });
 });

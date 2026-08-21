@@ -17,5 +17,6 @@ export function inspectGBotProductAssetEvidence(options: {
   return inspectProductAssetEvidence({
     ...options,
     requiredRuntimeActionIds: ["idle", "walk", "run", "jump"],
+    expectedSubjectAssetRef: "worldkit://subject-asset/actor.humanoid.g-bot@1",
   });
 }

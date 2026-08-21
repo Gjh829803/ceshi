@@ -28,6 +28,7 @@ describe("product asset evidence", () => {
       assetManifest: JSON.parse(assetManifestText) as unknown,
       actionManifest: JSON.parse(actionManifestText) as unknown,
       requiredRuntimeActionIds: fixture.requiredRuntimeActionIds,
+      expectedSubjectAssetRef: fixture.subjectAssetRef,
     });
 
     expect(evidence).toMatchObject({
@@ -75,7 +76,41 @@ describe("product asset evidence", () => {
         assetManifest,
         actionManifest: JSON.parse(actionManifestText) as unknown,
         requiredRuntimeActionIds: fixture.requiredRuntimeActionIds,
+        expectedSubjectAssetRef: fixture.subjectAssetRef,
       }),
     ).toThrowError("PRODUCT_ASSET_CONTENT_HASH_MISMATCH");
+  });
+
+  it("rejects a Manifest identity or required Action set that drifts from the Fixture", async () => {
+    const fixture = parseProductAssetIntakeFixtureV1(
+      JSON.parse(await readFile(G_BOT_FIXTURE_PATH, "utf8")) as unknown,
+    );
+    const [glbBytes, assetManifestText, actionManifestText] = await Promise.all([
+      readFile(path.join(REPOSITORY_ROOT, fixture.glbRepositoryPath)),
+      readFile(path.join(REPOSITORY_ROOT, fixture.productAssetManifestPath), "utf8"),
+      readFile(path.join(REPOSITORY_ROOT, fixture.productActionManifestPath), "utf8"),
+    ]);
+    const assetManifest = JSON.parse(assetManifestText) as {
+      resourceRef: string;
+      rig: { requiredActions: string[] };
+    };
+    assetManifest.resourceRef = "worldkit://subject-asset/actor.other@1";
+    expect(() => inspectProductAssetEvidence({
+      glbBytes,
+      assetManifest,
+      actionManifest: JSON.parse(actionManifestText) as unknown,
+      requiredRuntimeActionIds: fixture.requiredRuntimeActionIds,
+      expectedSubjectAssetRef: fixture.subjectAssetRef,
+    })).toThrowError("PRODUCT_ASSET_REF_MISMATCH");
+
+    assetManifest.resourceRef = fixture.subjectAssetRef;
+    assetManifest.rig.requiredActions = ["idle", "walk", "run", "jump", "jump"];
+    expect(() => inspectProductAssetEvidence({
+      glbBytes,
+      assetManifest,
+      actionManifest: JSON.parse(actionManifestText) as unknown,
+      requiredRuntimeActionIds: fixture.requiredRuntimeActionIds,
+      expectedSubjectAssetRef: fixture.subjectAssetRef,
+    })).toThrowError("PRODUCT_ASSET_REQUIRED_ACTION_DUPLICATE");
   });
 });

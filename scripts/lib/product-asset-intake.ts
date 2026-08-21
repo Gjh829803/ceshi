@@ -1,8 +1,30 @@
 import { isEmpty, isNil, isPlainObject } from "lodash-es";
 
+import type { SubjectResourceRegistryV3 } from "@whitebox-world/subject-registry";
+
 const REQUIRED_RUNTIME_ACTION_IDS = ["idle", "walk", "run", "jump"] as const;
-const WORLDKIT_REF_PREFIX = "worldkit://";
 const HOST_PUBLIC_URI_PREFIX = "/subject-assets/";
+const FIXTURE_FIELD_NAMES = new Set([
+  "schemaVersion",
+  "kind",
+  "id",
+  "subjectDefinitionRef",
+  "subjectAssetRef",
+  "rigProfileRef",
+  "animationSetRef",
+  "colliderProfileRef",
+  "hostPublicUri",
+  "glbRepositoryPath",
+  "productAssetManifestPath",
+  "productActionManifestPath",
+  "authoringWorldPath",
+  "artifactDirectoryPath",
+  "primaryEntityId",
+  "secondaryEntityId",
+  "controllerId",
+  "requiredRuntimeActionIds",
+  "minimumSubjectPoseDifferenceRatio",
+]);
 
 export type ProductAssetRuntimeActionIdV1 = (typeof REQUIRED_RUNTIME_ACTION_IDS)[number];
 
@@ -44,9 +66,9 @@ function requiredString(value: unknown, code: string): string {
   return value;
 }
 
-function requiredWorldkitRef(value: unknown): string {
+function requiredWorldkitRef(value: unknown, expectedPrefix: string): string {
   const ref = requiredString(value, "PRODUCT_ASSET_INTAKE_REF_INVALID");
-  if (!ref.startsWith(WORLDKIT_REF_PREFIX) || ref.includes("..")) {
+  if (!ref.startsWith(expectedPrefix) || ref.includes("..")) {
     return fail("PRODUCT_ASSET_INTAKE_REF_INVALID");
   }
   return ref;
@@ -82,6 +104,9 @@ export function parseProductAssetIntakeFixtureV1(
     return fail("PRODUCT_ASSET_INTAKE_FIXTURE_INVALID");
   }
   const record = value as Record<string, unknown>;
+  if (Object.keys(record).some((fieldName) => !FIXTURE_FIELD_NAMES.has(fieldName))) {
+    return fail("PRODUCT_ASSET_INTAKE_FIELD_UNKNOWN");
+  }
   if (record.schemaVersion !== 1 || record.kind !== "product-asset-intake-fixture") {
     return fail("PRODUCT_ASSET_INTAKE_FIXTURE_INVALID");
   }
@@ -131,11 +156,26 @@ export function parseProductAssetIntakeFixtureV1(
     schemaVersion: 1,
     kind: "product-asset-intake-fixture",
     id: requiredString(record.id, "PRODUCT_ASSET_INTAKE_FIXTURE_INVALID"),
-    subjectDefinitionRef: requiredWorldkitRef(record.subjectDefinitionRef),
-    subjectAssetRef: requiredWorldkitRef(record.subjectAssetRef),
-    rigProfileRef: requiredWorldkitRef(record.rigProfileRef),
-    animationSetRef: requiredWorldkitRef(record.animationSetRef),
-    colliderProfileRef: requiredWorldkitRef(record.colliderProfileRef),
+    subjectDefinitionRef: requiredWorldkitRef(
+      record.subjectDefinitionRef,
+      "worldkit://subject-definition/",
+    ),
+    subjectAssetRef: requiredWorldkitRef(
+      record.subjectAssetRef,
+      "worldkit://subject-asset/",
+    ),
+    rigProfileRef: requiredWorldkitRef(
+      record.rigProfileRef,
+      "worldkit://rig-profile/",
+    ),
+    animationSetRef: requiredWorldkitRef(
+      record.animationSetRef,
+      "worldkit://animation-set/",
+    ),
+    colliderProfileRef: requiredWorldkitRef(
+      record.colliderProfileRef,
+      "worldkit://collider-profile/",
+    ),
     hostPublicUri: requiredHostPublicUri(record.hostPublicUri),
     glbRepositoryPath: requiredRepositoryPath(record.glbRepositoryPath),
     productAssetManifestPath: requiredRepositoryPath(record.productAssetManifestPath),
@@ -148,4 +188,60 @@ export function parseProductAssetIntakeFixtureV1(
     requiredRuntimeActionIds: [...REQUIRED_RUNTIME_ACTION_IDS],
     minimumSubjectPoseDifferenceRatio,
   };
+}
+
+export function assertProductAssetIntakeBindingsV1(
+  fixture: ProductAssetIntakeFixtureV1,
+  options: {
+    readonly registry: SubjectResourceRegistryV3;
+    readonly hostPublicUriBySubjectAssetRef: Readonly<Record<string, string>>;
+  },
+): void {
+  const subjectAsset = options.registry.resolveSubjectAsset(fixture.subjectAssetRef);
+  const rigProfile = options.registry.resolveRigProfile(fixture.rigProfileRef);
+  const animationSet = options.registry.resolveAnimationSet(fixture.animationSetRef);
+  const colliderProfile = options.registry.resolveColliderProfile(fixture.colliderProfileRef);
+  const subjectDefinition = options.registry.resolveSubjectDefinition(
+    fixture.subjectDefinitionRef,
+  );
+  if (
+    isNil(subjectAsset) ||
+    isNil(rigProfile) ||
+    isNil(animationSet) ||
+    isNil(colliderProfile) ||
+    isNil(subjectDefinition)
+  ) {
+    return fail("PRODUCT_ASSET_INTAKE_REGISTRY_RESOURCE_MISSING");
+  }
+
+  const hasSubjectAssetPart = subjectDefinition.visualParts.some(
+    (part) => part.kind === "asset" && part.subjectAssetRef === fixture.subjectAssetRef,
+  );
+  const hasRequiredActionBindings = fixture.requiredRuntimeActionIds.every(
+    (actionId) =>
+      animationSet.requiredActionIds.includes(actionId) &&
+      animationSet.animationBindings.some((binding) => binding.actionId === actionId),
+  );
+  if (
+    !hasSubjectAssetPart ||
+    subjectDefinition.visualBinding.mode !== "rigged" ||
+    subjectDefinition.visualBinding.rigProfileRef !== fixture.rigProfileRef ||
+    subjectDefinition.visualBinding.animationSetRef !== fixture.animationSetRef ||
+    subjectDefinition.colliderPolicy.kind !== "profile" ||
+    subjectDefinition.colliderPolicy.colliderProfileRef !== fixture.colliderProfileRef ||
+    !rigProfile.compatibleSubjectAssetRefs.includes(fixture.subjectAssetRef) ||
+    animationSet.subjectAssetRef !== fixture.subjectAssetRef ||
+    animationSet.rigProfileRef !== fixture.rigProfileRef ||
+    !hasRequiredActionBindings ||
+    !colliderProfile.supportedBodyTopologies.includes(subjectDefinition.bodyTopology)
+  ) {
+    return fail("PRODUCT_ASSET_INTAKE_REGISTRY_BINDING_MISMATCH");
+  }
+
+  if (
+    !Object.hasOwn(options.hostPublicUriBySubjectAssetRef, fixture.subjectAssetRef) ||
+    options.hostPublicUriBySubjectAssetRef[fixture.subjectAssetRef] !== fixture.hostPublicUri
+  ) {
+    return fail("PRODUCT_ASSET_INTAKE_HOST_BINDING_MISMATCH");
+  }
 }

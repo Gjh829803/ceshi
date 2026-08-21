@@ -224,9 +224,19 @@ export function inspectProductAssetEvidence(options: {
   readonly assetManifest: unknown;
   readonly actionManifest: unknown;
   readonly requiredRuntimeActionIds: readonly string[];
+  readonly expectedSubjectAssetRef: string;
 }): ProductAssetEvidenceV1 {
   const assetManifest = parseAssetManifest(options.assetManifest);
   const actionManifest = parseActionManifest(options.actionManifest);
+  if (assetManifest.resourceRef !== options.expectedSubjectAssetRef) {
+    return fail("PRODUCT_ASSET_REF_MISMATCH");
+  }
+  if (
+    new Set(assetManifest.rig.requiredActions).size !==
+    assetManifest.rig.requiredActions.length
+  ) {
+    return fail("PRODUCT_ASSET_REQUIRED_ACTION_DUPLICATE");
+  }
   const artifactContentHash = `sha256:${createHash("sha256")
     .update(options.glbBytes)
     .digest("hex")}`;

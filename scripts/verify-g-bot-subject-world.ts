@@ -11,6 +11,7 @@ import {
   stringifyCanonicalJson,
   type NormalizedWorldIRV3,
 } from "@whitebox-world/authoring";
+import { builtInSubjectResourceRegistry } from "@whitebox-world/subject-registry";
 import type {
   ExecutionPlanV4,
   SubjectRuntimeStateV3,
@@ -23,7 +24,10 @@ import {
   inspectProductAssetEvidence,
   type ProductAssetEvidenceV1,
 } from "./lib/product-asset-evidence";
-import { parseProductAssetIntakeFixtureV1 } from "./lib/product-asset-intake";
+import {
+  assertProductAssetIntakeBindingsV1,
+  parseProductAssetIntakeFixtureV1,
+} from "./lib/product-asset-intake";
 import {
   analyzeSubjectPoseCrop,
   compareSubjectPoseSilhouettes,
@@ -37,6 +41,7 @@ import {
 } from "./lib/subject-explain";
 import { startWorldkitServer, type WorldkitServerHandle } from "./lib/worldkit-server";
 import { main as worldkitMain } from "./worldkit";
+import { PLAYGROUND_SUBJECT_ASSET_URI_BY_REF_V1 } from "../apps/playground/src/worldkit-asset-resolver";
 
 const REPOSITORY_ROOT = fileURLToPath(new URL("../", import.meta.url));
 const INTAKE_FIXTURE = parseProductAssetIntakeFixtureV1(
@@ -47,6 +52,10 @@ const INTAKE_FIXTURE = parseProductAssetIntakeFixtureV1(
     ),
   ) as unknown,
 );
+assertProductAssetIntakeBindingsV1(INTAKE_FIXTURE, {
+  registry: builtInSubjectResourceRegistry,
+  hostPublicUriBySubjectAssetRef: PLAYGROUND_SUBJECT_ASSET_URI_BY_REF_V1,
+});
 const INPUT_PATH = path.join(REPOSITORY_ROOT, INTAKE_FIXTURE.authoringWorldPath);
 const ASSET_PATH = path.join(REPOSITORY_ROOT, INTAKE_FIXTURE.glbRepositoryPath);
 const ASSET_MANIFEST_PATH = path.join(
@@ -233,6 +242,7 @@ async function inspectProductAsset(): Promise<ProductAssetEvidenceV1> {
   ]);
   return inspectProductAssetEvidence({
     requiredRuntimeActionIds: INTAKE_FIXTURE.requiredRuntimeActionIds,
+    expectedSubjectAssetRef: INTAKE_FIXTURE.subjectAssetRef,
     glbBytes,
     assetManifest: parseJson<unknown>(assetManifestText, "G Bot asset manifest"),
     actionManifest: parseJson<unknown>(actionManifestText, "G Bot action manifest"),
