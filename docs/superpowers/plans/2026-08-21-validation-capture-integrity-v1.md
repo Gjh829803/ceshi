@@ -94,6 +94,6 @@
 
 - [x] Mark only the Capture/Integrity M4 subset complete; keep Placement, runtime physics/composition, compare, Browser/CI, and production Profile work open.
 - [x] Document the public CLI/Profile/Report entry points and the legacy Bundle placeholder distinction.
-- [ ] Review the exact base-to-head diff in mode B using `docs/reviews/full-dimension-review-protocol.md`; cover required D2/D3/D4/D5/D6 and mark D1 applicability explicitly.
-- [ ] Run the final matrix: `pnpm typecheck`, `pnpm test`, `pnpm test:scenes`, `pnpm build`, `pnpm verify:canonical`, `pnpm verify:placement-layout`, `pnpm verify:rigged-subject`, `pnpm verify:g-bot-subject`, `pnpm verify:control-capture`, `pnpm verify:validation-capture`, and `git diff --check`.
+- [x] Review the exact base-to-head diff in mode B using `docs/reviews/full-dimension-review-protocol.md`; cover required D2/D3/D4/D5/D6 and mark D1 applicability explicitly.
+- [x] Run the final matrix: `pnpm typecheck`, `pnpm test`, `pnpm test:scenes`, `pnpm build`, `pnpm verify:canonical`, `pnpm verify:placement-layout`, `pnpm verify:rigged-subject`, `pnpm verify:g-bot-subject`, `pnpm verify:control-capture`, `pnpm verify:validation-capture`, and `git diff --check`.
 - [ ] Commit, merge into current `main`, rerun the relevant merged-tree gates, push `main`, and remove only this clean merged worktree.
