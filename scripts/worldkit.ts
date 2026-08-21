@@ -41,6 +41,10 @@ import {
   validateControlCaptureBundleFileV1,
   validateSimulationTakeFileV1,
 } from "./lib/simulation-take-cli";
+import {
+  explainValidationReportFileV1,
+  verifyControlCaptureFileV1,
+} from "./lib/validation-cli";
 
 const HELP = `worldkit - Canonical JSON whitebox world SDK
 
@@ -62,6 +66,8 @@ Usage:
   worldkit take run <take.json> --world <world.json> --output <directory> --width-pixels <integer> --height-pixels <integer> [--port <port>] [--json]
   worldkit capture validate <bundle-directory> [--json]
   worldkit capture inspect <bundle-directory> [--json]
+  worldkit verify capture <bundle-directory> --output <validation-report.json> [--json]
+  worldkit verify explain <validation-report.json> --gate-id <id> [--json]
 `;
 
 export type { CliDiagnostic } from "./lib/worldkit-pipeline";
@@ -111,6 +117,18 @@ export type WorldkitArgs =
     }
   | { command: "capture-validate"; inputPath: string; json: boolean }
   | { command: "capture-inspect"; inputPath: string; json: boolean }
+  | {
+      command: "verify-capture";
+      inputPath: string;
+      outputPath: string;
+      json: boolean;
+    }
+  | {
+      command: "verify-explain";
+      inputPath: string;
+      gateId: string;
+      json: boolean;
+    }
   | {
       command: "layout-solve";
       inputPath: string;
@@ -213,6 +231,37 @@ export function parseWorldkitArgs(arguments_: readonly string[]): WorldkitArgs {
 
   const command = tokens.shift();
   const json = takeJsonFlag(tokens);
+
+  if (command === "verify") {
+    const operation = takeRequiredPositional(tokens, "verify operation");
+    const inputPath = takeRequiredPositional(tokens, "Validation input");
+    if (operation === "capture") {
+      const outputPath = takeOption(tokens, "--output");
+      if (outputPath === undefined) {
+        throw new WorldkitUsageError(
+          "verify capture requires --output <validation-report.json>.",
+        );
+      }
+      rejectRemaining(tokens, "verify capture");
+      return {
+        command: "verify-capture",
+        inputPath,
+        outputPath,
+        json,
+      };
+    }
+    if (operation === "explain") {
+      const gateId = takeOption(tokens, "--gate-id");
+      if (gateId === undefined) {
+        throw new WorldkitUsageError(
+          "verify explain requires --gate-id <id>.",
+        );
+      }
+      rejectRemaining(tokens, "verify explain");
+      return { command: "verify-explain", inputPath, gateId, json };
+    }
+    throw new WorldkitUsageError(`Unknown verify operation '${operation}'.`);
+  }
 
   if (command === "take") {
     const operation = takeRequiredPositional(tokens, "take operation");
@@ -799,14 +848,20 @@ type PrintableResult = {
   executionPlanHash?: string;
   outputPath?: string;
   snapshotPath?: string;
+  humanReadableText?: string;
 };
 
 function printResult(result: PrintableResult, json: boolean): void {
   if (json) {
-    process.stdout.write(`${stringifyCanonicalJson(result)}\n`);
+    const { humanReadableText: _humanReadableText, ...machineResult } = result;
+    process.stdout.write(`${stringifyCanonicalJson(machineResult)}\n`);
     return;
   }
   if (result.ok) {
+    if (result.humanReadableText !== undefined) {
+      process.stdout.write(`${result.humanReadableText}\n`);
+      return;
+    }
     const details = [
       result.outputPath,
       result.snapshotPath,
@@ -919,6 +974,22 @@ export async function main(
   }
   if (parsed.command === "capture-inspect") {
     const result = await inspectControlCaptureBundleFileV1(parsed.inputPath);
+    printResult(result, parsed.json);
+    return result.exitCode;
+  }
+  if (parsed.command === "verify-capture") {
+    const result = await verifyControlCaptureFileV1(
+      parsed.inputPath,
+      parsed.outputPath,
+    );
+    printResult(result, parsed.json);
+    return result.exitCode;
+  }
+  if (parsed.command === "verify-explain") {
+    const result = await explainValidationReportFileV1(
+      parsed.inputPath,
+      parsed.gateId,
+    );
     printResult(result, parsed.json);
     return result.exitCode;
   }

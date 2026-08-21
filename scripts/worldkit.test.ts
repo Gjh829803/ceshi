@@ -141,6 +141,36 @@ describe("worldkit CLI", () => {
     ).toEqual({ command: "capture-inspect", inputPath: "capture-bundle", json: true });
     expect(
       parseWorldkitArgs([
+        "verify",
+        "capture",
+        "capture-bundle",
+        "--output",
+        "validation-report.json",
+        "--json",
+      ]),
+    ).toEqual({
+      command: "verify-capture",
+      inputPath: "capture-bundle",
+      outputPath: "validation-report.json",
+      json: true,
+    });
+    expect(
+      parseWorldkitArgs([
+        "verify",
+        "explain",
+        "validation-report.json",
+        "--gate-id",
+        "capture-completeness",
+        "--json",
+      ]),
+    ).toEqual({
+      command: "verify-explain",
+      inputPath: "validation-report.json",
+      gateId: "capture-completeness",
+      json: true,
+    });
+    expect(
+      parseWorldkitArgs([
         "registry",
         "list",
         "--kind",
@@ -247,6 +277,20 @@ describe("worldkit CLI", () => {
     ).toThrow(WorldkitUsageError);
     expect(() =>
       parseWorldkitArgs(["subject", "explain", "world.json"]),
+    ).toThrow(WorldkitUsageError);
+    expect(() =>
+      parseWorldkitArgs(["verify", "capture", "capture-bundle"]),
+    ).toThrow(WorldkitUsageError);
+    expect(() =>
+      parseWorldkitArgs([
+        "verify",
+        "explain",
+        "validation-report.json",
+        "--gate-id",
+        "capture-completeness",
+        "--gate-id",
+        "capture-ownership",
+      ]),
     ).toThrow(WorldkitUsageError);
     expect(() =>
       parseWorldkitArgs([
