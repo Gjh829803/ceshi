@@ -128,6 +128,12 @@ export interface FinalizedControlCaptureBundleV1 {
   readonly frameCount: number;
 }
 
+export interface ControlCaptureBundleByteEvidenceV1 {
+  readonly bundleRootHash: Sha256HashV1;
+  readonly sizeBytes: number;
+  readonly fileHashesByPath: Readonly<Record<string, Sha256HashV1>>;
+}
+
 export interface ControlCaptureBundleWriterV1 {
   appendFrame(frame: ControlCaptureFrameInputV1): Promise<void>;
   finalize(): Promise<FinalizedControlCaptureBundleV1>;
@@ -266,15 +272,34 @@ async function listFilesRecursively(directory: string, relative = ""): Promise<r
   return rows;
 }
 
-async function hashFiles(
+export async function collectControlCaptureBundleByteEvidenceV1(
   directory: string,
-  filePaths: readonly string[],
-): Promise<Readonly<Record<string, Sha256HashV1>>> {
-  const entries = await Promise.all(filePaths.map(async (filePath) => [
-    filePath,
-    sha256Bytes(new Uint8Array(await readFile(path.join(directory, filePath)))) as Sha256HashV1,
-  ] as const));
-  return Object.fromEntries(entries);
+): Promise<ControlCaptureBundleByteEvidenceV1> {
+  const resolvedDirectory = path.resolve(directory);
+  const filePaths = await listFilesRecursively(resolvedDirectory);
+  const fileRows = await Promise.all(filePaths.map(async (filePath) => {
+    const bytes = new Uint8Array(
+      await readFile(path.join(resolvedDirectory, filePath)),
+    );
+    return {
+      filePath,
+      sizeBytes: bytes.byteLength,
+      contentHash: sha256Bytes(bytes) as Sha256HashV1,
+    };
+  }));
+  const fileHashesByPath = Object.fromEntries(
+    fileRows
+      .filter(({ filePath }) => filePath !== "integrity.json")
+      .map(({ filePath, contentHash }) => [filePath, contentHash]),
+  );
+  return {
+    bundleRootHash: sha256CanonicalJson(fileHashesByPath) as Sha256HashV1,
+    sizeBytes: fileRows.reduce(
+      (totalBytes, { sizeBytes }) => totalBytes + sizeBytes,
+      0,
+    ),
+    fileHashesByPath,
+  };
 }
 
 async function pathExists(filePath: string): Promise<boolean> {
@@ -443,11 +468,8 @@ export async function createControlCaptureBundleWriterV1(
           ...manifestBody,
           bundleManifestHash: sha256CanonicalJson(manifestBody),
         });
-        const filePaths = (await listFilesRecursively(stagingDirectory)).filter(
-          (filePath) => filePath !== "integrity.json",
-        );
-        const fileHashesByPath = await hashFiles(stagingDirectory, filePaths);
-        const bundleRootHash = sha256CanonicalJson(fileHashesByPath) as Sha256HashV1;
+        const { bundleRootHash, fileHashesByPath } =
+          await collectControlCaptureBundleByteEvidenceV1(stagingDirectory);
         await writeCanonicalJson(path.join(stagingDirectory, "integrity.json"), {
           kind: "worldkit-control-capture-integrity",
           schemaVersion: 1,
@@ -613,9 +635,10 @@ export async function validateControlCaptureBundleV1(
     ? integrity.fileHashesByPath as Record<string, unknown>
     : {};
   const declaredFilePaths = Object.keys(declaredHashes).sort();
-  const actualFilePaths = (await listFilesRecursively(resolvedDirectory)).filter(
-    (filePath) => filePath !== "integrity.json",
-  ).sort();
+  const byteEvidence = await collectControlCaptureBundleByteEvidenceV1(
+    resolvedDirectory,
+  );
+  const actualFilePaths = Object.keys(byteEvidence.fileHashesByPath).sort();
   for (const filePath of REQUIRED_BUNDLE_FILE_PATHS) {
     if (!actualFilePaths.includes(filePath)) {
       addValidationDiagnostic(
@@ -631,7 +654,7 @@ export async function validateControlCaptureBundleV1(
       addValidationDiagnostic(diagnostics, "CAPTURE_FILE_MISSING", filePath, "Declared file is missing.");
       continue;
     }
-    const actualHash = sha256Bytes(new Uint8Array(await readFile(path.join(resolvedDirectory, filePath))));
+    const actualHash = byteEvidence.fileHashesByPath[filePath];
     if (declaredHashes[filePath] !== actualHash) {
       addValidationDiagnostic(diagnostics, "CAPTURE_FILE_HASH_MISMATCH", filePath, "File bytes do not match the declared hash.");
     }

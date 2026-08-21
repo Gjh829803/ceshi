@@ -12,11 +12,13 @@ import { afterEach, describe, expect, it } from "vitest";
 
 import { validateValidationReportV1 } from "@whitebox-world/validation";
 
+import { createControlCaptureValidationReportV1 } from "./control-capture-validation";
 import { createControlCaptureValidationFixtureV1 } from "./control-capture-validation-fixture";
 import {
   explainValidationReportFileV1,
   validationStatusExitCodeV1,
   verifyControlCaptureFileV1,
+  writeValidationReportFileNoReplaceV1,
 } from "./validation-cli";
 import { main } from "../worldkit";
 
@@ -63,6 +65,26 @@ describe("Validation CLI", () => {
     });
     const report: unknown = JSON.parse(await readFile(outputPath, "utf8"));
     expect(validateValidationReportV1(report)).toMatchObject({ ok: true });
+    expect(await readdir(path.dirname(outputPath))).toEqual(["capture.json"]);
+  });
+
+  it("allows only one concurrent publisher to claim a Report path", async () => {
+    const { parentDirectory, bundleDirectory } = await createFixture();
+    const outputPath = path.join(parentDirectory, "reports", "capture.json");
+    const { report } = await createControlCaptureValidationReportV1(
+      bundleDirectory,
+    );
+
+    const results = await Promise.allSettled([
+      writeValidationReportFileNoReplaceV1(outputPath, report),
+      writeValidationReportFileNoReplaceV1(outputPath, report),
+    ]);
+
+    expect(results.filter(({ status }) => status === "fulfilled")).toHaveLength(1);
+    expect(results.filter(({ status }) => status === "rejected")).toHaveLength(1);
+    expect(validateValidationReportV1(
+      JSON.parse(await readFile(outputPath, "utf8")) as unknown,
+    )).toMatchObject({ ok: true });
     expect(await readdir(path.dirname(outputPath))).toEqual(["capture.json"]);
   });
 

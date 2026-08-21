@@ -18,6 +18,7 @@ import {
 } from "@whitebox-world/protocol";
 
 import {
+  collectControlCaptureBundleByteEvidenceV1,
   createControlCaptureBundleWriterV1,
   inspectControlCaptureBundleV1,
   type ControlCaptureFrameInputV1,
@@ -215,6 +216,18 @@ describe("Control Capture Bundle V1", () => {
 
     const validation = await validateControlCaptureBundleV1(outputDirectory);
     expect(validation).toMatchObject({ ok: true, bundleRootHash: finalized.bundleRootHash });
+    const byteEvidence = await collectControlCaptureBundleByteEvidenceV1(
+      outputDirectory,
+    );
+    expect(byteEvidence).toMatchObject({
+      bundleRootHash: finalized.bundleRootHash,
+      sizeBytes: expect.any(Number),
+    });
+    expect(byteEvidence.sizeBytes).toBeGreaterThan(0);
+    expect(byteEvidence.fileHashesByPath).not.toHaveProperty("integrity.json");
+    expect(Object.keys(byteEvidence.fileHashesByPath)).toEqual(
+      Object.keys(byteEvidence.fileHashesByPath).sort(),
+    );
     const inspection = await inspectControlCaptureBundleV1(outputDirectory);
     expect(inspection).toMatchObject({
       bundleId: "bundle-test",

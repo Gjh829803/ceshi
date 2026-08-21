@@ -178,6 +178,69 @@ describe("Validation Profile/Report V1", () => {
     });
   });
 
+  it("rejects Profiles with empty Gates or no Required Metric", () => {
+    const emptyGateProfile = structuredClone(
+      OUTDOOR_CONTROL_VIDEO_DEV_VALIDATION_PROFILE_V1,
+    ) as unknown as Record<string, unknown>;
+    const emptyGateDefinitions = emptyGateProfile.gateDefinitionsById as Record<
+      string,
+      Record<string, unknown>
+    >;
+    emptyGateDefinitions["capture-completeness"]!.metricDefinitionsById = {};
+    expect(validateValidationProfileV1(emptyGateProfile)).toMatchObject({
+      ok: false,
+      diagnostics: expect.arrayContaining([
+        expect.objectContaining({ code: "VALIDATION_REFERENCE_INVALID" }),
+      ]),
+    });
+
+    const optionalOnlyProfile = structuredClone(
+      OUTDOOR_CONTROL_VIDEO_DEV_VALIDATION_PROFILE_V1,
+    ) as unknown as Record<string, unknown>;
+    const optionalOnlyGates = optionalOnlyProfile.gateDefinitionsById as Record<
+      string,
+      Record<string, unknown>
+    >;
+    const optionalOnlyMetrics = optionalOnlyGates["capture-completeness"]!
+      .metricDefinitionsById as Record<string, Record<string, unknown>>;
+    for (const metric of Object.values(optionalOnlyMetrics)) {
+      metric.required = false;
+    }
+    expect(validateValidationProfileV1(optionalOnlyProfile)).toMatchObject({
+      ok: false,
+      diagnostics: expect.arrayContaining([
+        expect.objectContaining({ code: "VALIDATION_REFERENCE_INVALID" }),
+      ]),
+    });
+  });
+
+  it("rejects an inverted Count Threshold", () => {
+    const profile = structuredClone(
+      OUTDOOR_CONTROL_VIDEO_DEV_VALIDATION_PROFILE_V1,
+    ) as unknown as Record<string, unknown>;
+    const gates = profile.gateDefinitionsById as Record<
+      string,
+      Record<string, unknown>
+    >;
+    const metrics = gates["capture-completeness"]!
+      .metricDefinitionsById as Record<string, Record<string, unknown>>;
+    metrics["capture-linear-depth-valid"] = {
+      id: "capture-linear-depth-valid",
+      kind: "count-threshold",
+      required: true,
+      evaluatorProfileRef:
+        "worldkit://validation-evaluator/capture-linear-depth@1",
+      minimumAllowedCount: 2,
+      maximumAllowedCount: 1,
+    };
+    expect(validateValidationProfileV1(profile)).toMatchObject({
+      ok: false,
+      diagnostics: expect.arrayContaining([
+        expect.objectContaining({ code: "VALIDATION_NUMBER_INVALID" }),
+      ]),
+    });
+  });
+
   it("rejects malformed hashes and an inconsistent derived status", () => {
     const malformedHash = structuredClone(validReport()) as unknown as Record<
       string,
@@ -244,6 +307,48 @@ describe("Validation Profile/Report V1", () => {
       ok: false,
       diagnostics: expect.arrayContaining([
         expect.objectContaining({ code: "VALIDATION_STATUS_INCONSISTENT" }),
+      ]),
+    });
+  });
+
+  it("rejects Reports that omit a Profile-required Gate or Metric", () => {
+    const missingGate = structuredClone(validReport()) as unknown as Record<
+      string,
+      unknown
+    >;
+    const missingGateResults = missingGate.gateResultsById as Record<
+      string,
+      unknown
+    >;
+    delete missingGateResults["capture-ownership"];
+    missingGate.status = "incomplete";
+    expect(validateValidationReportV1(missingGate)).toMatchObject({
+      ok: false,
+      diagnostics: expect.arrayContaining([
+        expect.objectContaining({ code: "VALIDATION_REFERENCE_INVALID" }),
+      ]),
+    });
+
+    const missingMetric = structuredClone(validReport()) as unknown as Record<
+      string,
+      unknown
+    >;
+    const missingMetricGates = missingMetric.gateResultsById as Record<
+      string,
+      Record<string, unknown>
+    >;
+    const completenessGate = missingMetricGates["capture-completeness"]!;
+    const completenessMetrics = completenessGate.metricResultsById as Record<
+      string,
+      unknown
+    >;
+    delete completenessMetrics["capture-linear-depth-valid"];
+    completenessGate.status = "incomplete";
+    missingMetric.status = "incomplete";
+    expect(validateValidationReportV1(missingMetric)).toMatchObject({
+      ok: false,
+      diagnostics: expect.arrayContaining([
+        expect.objectContaining({ code: "VALIDATION_REFERENCE_INVALID" }),
       ]),
     });
   });

@@ -1,4 +1,4 @@
-import { lstat, readFile, readdir } from "node:fs/promises";
+import { readFile } from "node:fs/promises";
 import path from "node:path";
 
 import {
@@ -17,13 +17,10 @@ import {
   type ValidationMetricStatusV1,
   type ValidationReportV1,
 } from "@whitebox-world/validation";
-import {
-  sha256Bytes,
-  sha256CanonicalJson,
-} from "@whitebox-world/protocol";
 import { isPlainObject, orderBy } from "lodash-es";
 
 import {
+  collectControlCaptureBundleByteEvidenceV1,
   validateControlCaptureBundleV1,
   type ControlCaptureBundleDiagnosticV1,
 } from "./control-capture-bundle";
@@ -121,58 +118,15 @@ async function readCaptureBundleIdentityV1(
   }
 }
 
-async function listBundleFilesV1(
-  directory: string,
-  relativeDirectory = "",
-): Promise<readonly string[]> {
-  const absoluteDirectory = path.join(directory, relativeDirectory);
-  const entries = (await readdir(absoluteDirectory, { withFileTypes: true }))
-    .sort((left, right) => left.name.localeCompare(right.name));
-  const files: string[] = [];
-  for (const entry of entries) {
-    const relativePath = relativeDirectory === ""
-      ? entry.name
-      : `${relativeDirectory}/${entry.name}`;
-    if (entry.isDirectory()) {
-      files.push(...await listBundleFilesV1(directory, relativePath));
-    } else if (entry.isFile()) {
-      files.push(relativePath);
-    }
-  }
-  return files;
-}
-
 async function collectCaptureBundleEvidenceV1(
   bundleDirectory: string,
 ): Promise<CaptureBundleEvidenceV1> {
   try {
-    const filePaths = await listBundleFilesV1(bundleDirectory);
-    const fileRows = await Promise.all(filePaths.map(async (filePath) => {
-      const absolutePath = path.join(bundleDirectory, filePath);
-      const [bytes, stats] = await Promise.all([
-        readFile(absolutePath),
-        lstat(absolutePath),
-      ]);
-      return {
-        filePath,
-        sizeBytes: stats.size,
-        contentHash: sha256Bytes(new Uint8Array(bytes)) as Sha256HashV1,
-      };
-    }));
-    const fileHashesByPath = Object.fromEntries(
-      fileRows
-        .filter(({ filePath }) => filePath !== "integrity.json")
-        .map(({ filePath, contentHash }) => [filePath, contentHash]),
-    );
-    const bundleRootHash = sha256CanonicalJson(
-      fileHashesByPath,
-    ) as Sha256HashV1;
+    const { bundleRootHash, sizeBytes } =
+      await collectControlCaptureBundleByteEvidenceV1(bundleDirectory);
     return {
       bundleRootHash,
-      sizeBytes: fileRows.reduce(
-        (totalBytes, { sizeBytes }) => totalBytes + sizeBytes,
-        0,
-      ),
+      sizeBytes,
       artifactRef: `artifact://control-capture-bundle/${bundleRootHash.slice("sha256:".length)}`,
     };
   } catch (error) {

@@ -1,9 +1,9 @@
 import { randomUUID } from "node:crypto";
 import {
+  link,
   lstat,
   mkdir,
   readFile,
-  rename,
   rm,
   writeFile,
 } from "node:fs/promises";
@@ -153,7 +153,7 @@ async function pathExists(filePath: string): Promise<boolean> {
   }
 }
 
-async function writeReportAtomicV1(
+export async function writeValidationReportFileNoReplaceV1(
   outputPath: string,
   report: ValidationReportV1,
 ): Promise<void> {
@@ -168,7 +168,8 @@ async function writeReportAtomicV1(
       `${stringifyCanonicalJson(report)}\n`,
       "utf8",
     );
-    await rename(temporaryPath, outputPath);
+    await link(temporaryPath, outputPath);
+    await rm(temporaryPath, { force: true });
   } catch (error) {
     await rm(temporaryPath, { force: true });
     throw error;
@@ -198,7 +199,7 @@ export async function verifyControlCaptureFileV1(
     }
     const { report, reportHash } =
       await createControlCaptureValidationReportV1(absoluteBundleDirectory);
-    await writeReportAtomicV1(absoluteOutputPath, report);
+    await writeValidationReportFileNoReplaceV1(absoluteOutputPath, report);
     const exitCode = validationStatusExitCodeV1(report.status);
     const diagnostics = report.diagnostics.map(adaptValidationDiagnosticV1);
     const base = {

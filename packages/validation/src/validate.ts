@@ -268,6 +268,18 @@ function validateMetricDefinition(
         diagnostics,
       );
     }
+    if (
+      typeof record.minimumAllowedCount === "number" &&
+      typeof record.maximumAllowedCount === "number" &&
+      record.minimumAllowedCount > record.maximumAllowedCount
+    ) {
+      addDiagnostic(
+        diagnostics,
+        "VALIDATION_NUMBER_INVALID",
+        path,
+        "Count threshold minimum must not exceed its maximum.",
+      );
+    }
   } else if (kind === "set-equality") {
     requireStringArray(record.expectedValues, `${path}/expectedValues`, diagnostics);
   } else {
@@ -309,6 +321,25 @@ function validateGateDefinition(
     diagnostics,
   );
   if (metricDefinitions === undefined) return;
+  const metricDefinitionValues = Object.values(metricDefinitions);
+  if (metricDefinitionValues.length === 0) {
+    addDiagnostic(
+      diagnostics,
+      "VALIDATION_REFERENCE_INVALID",
+      `${path}/metricDefinitionsById`,
+      "A Validation Gate must define at least one Metric.",
+    );
+  } else if (!metricDefinitionValues.some((metricDefinition) =>
+    isPlainObject(metricDefinition) &&
+    (metricDefinition as Record<string, unknown>).required === true
+  )) {
+    addDiagnostic(
+      diagnostics,
+      "VALIDATION_REFERENCE_INVALID",
+      `${path}/metricDefinitionsById`,
+      "A Validation Gate must define at least one Required Metric.",
+    );
+  }
   for (const [metricId, metricDefinition] of Object.entries(metricDefinitions)) {
     validateMetricDefinition(
       metricDefinition,
@@ -368,6 +399,14 @@ export function validateValidationProfileV1(
       diagnostics,
     );
     if (gates !== undefined) {
+      if (Object.keys(gates).length === 0) {
+        addDiagnostic(
+          diagnostics,
+          "VALIDATION_REFERENCE_INVALID",
+          "/gateDefinitionsById",
+          "A Validation Profile must define at least one Gate.",
+        );
+      }
       for (const [gateId, gateDefinition] of Object.entries(gates)) {
         validateGateDefinition(
           gateDefinition,
@@ -891,7 +930,14 @@ export function validateValidationReportV1(
     OUTDOOR_CONTROL_VIDEO_DEV_VALIDATION_PROFILE_V1.gateDefinitionsById,
   )) {
     const gateResult = report.gateResultsById[gateId];
-    if (!isNil(gateResult)) {
+    if (isNil(gateResult)) {
+      addDiagnostic(
+        diagnostics,
+        "VALIDATION_REFERENCE_INVALID",
+        `/gateResultsById/${gateId}`,
+        "Report must materialize every Gate declared by the resolved Profile.",
+      );
+    } else {
       if (gateResult.requirement !== gateDefinition.requirement) {
         addDiagnostic(
           diagnostics,
@@ -916,7 +962,14 @@ export function validateValidationReportV1(
         gateDefinition.metricDefinitionsById,
       )) {
         const metricResult = gateResult.metricResultsById[metricId];
-        if (
+        if (isNil(metricResult) && metricDefinition.required === true) {
+          addDiagnostic(
+            diagnostics,
+            "VALIDATION_REFERENCE_INVALID",
+            `/gateResultsById/${gateId}/metricResultsById/${metricId}`,
+            "Report must materialize every Required Metric declared by the resolved Profile.",
+          );
+        } else if (
           !isNil(metricResult) &&
           (
             metricResult.kind !== metricDefinition.kind ||
