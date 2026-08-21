@@ -19,6 +19,7 @@ import type {
   ValidationContractResultV1,
 } from "./types";
 import type {
+  EvidenceArtifactKindV2,
   EvidenceArtifactV2,
   GateDefinitionV2,
   GateResultV2,
@@ -112,7 +113,9 @@ const EVIDENCE_FIELDS_BY_KIND: Readonly<Record<string, readonly string[]>> = {
   "route-overlay": EVIDENCE_BASE_FIELDS,
 };
 
-const REQUIRED_EVIDENCE_KINDS_BY_GATE: Readonly<Record<string, ReadonlySet<string>>> = {
+const REQUIRED_EVIDENCE_KINDS_BY_GATE: Readonly<
+  Record<string, ReadonlySet<EvidenceArtifactKindV2>>
+> = {
   "route-connectivity": new Set(["traversal-graph", "route-path-receipt"]),
   "route-runtime-conformance": new Set(["route-runtime-probe-receipt"]),
 };
@@ -1237,7 +1240,7 @@ function assertEvaluatedMetricEvidenceKinds(
   if (isNil(requiredKinds)) {
     return;
   }
-  const referencedKinds = new Set(
+  const referencedKinds = new Set<EvidenceArtifactKindV2>(
     metricResult.evidenceArtifactRefs.flatMap((artifactRef) => {
       const artifact = artifacts.get(artifactRef);
       return isNil(artifact) ? [] : [artifact.kind];
