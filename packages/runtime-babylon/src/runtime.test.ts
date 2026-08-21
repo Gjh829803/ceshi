@@ -1907,17 +1907,18 @@ describe("BabylonWorldRuntime", () => {
         centerMetersXZ: [0, 0],
         sizeMetersXZ: [10, 10],
         resolutionCellsXZ: [2, 2],
-        // At (-2.5, -2.5), the Havok triangle is y=0.2 while bilinear sampling
-        // is y=0.15. The physical slope is about 3.2 degrees, which Havok
-        // checkSupport classifies as SUPPORTED, so jump must be allowed.
-        heightSamplesMeters: [0, 0.4, 0.4, 0],
+        // At (-2.5, -2.5), the Havok triangle is y=0.75 while bilinear sampling
+        // is y=0.5625. The physical slope is about 12 degrees, far below the
+        // collider maxSlopeDegrees of 42, so Havok checkSupport must classify
+        // it as SUPPORTED and jump must be allowed.
+        heightSamplesMeters: [0, 1.5, 1.5, 0],
       },
       waters: [],
       objects: [],
       subjects: [
         {
           ...player,
-          spawnSubjectOriginPositionMetersXYZ: [-2.5, 0.2, -2.5],
+          spawnSubjectOriginPositionMetersXYZ: [-2.5, 0.75, -2.5],
         },
       ],
       layout: { ...base.layout, layoutAssertions: [] },
@@ -1929,8 +1930,8 @@ describe("BabylonWorldRuntime", () => {
         "ground",
       );
       const grounded = runtime.snapshot().subjectStatesByEntityId.player!;
-      expect(grounded.positionMetersXYZ[1]).toBeGreaterThan(0.175);
-      expect(grounded.positionMetersXYZ[1]).toBeLessThan(0.28);
+      expect(grounded.positionMetersXYZ[1]).toBeGreaterThan(0.65);
+      expect(grounded.positionMetersXYZ[1]).toBeLessThan(1.1);
       const jumped = await runtime.runFixedInput({ actions: ["jump"], ticks: 1 });
       expect(
         jumped.subjectStatesByEntityId.player!.velocityMetersPerSecondXYZ[1],

@@ -155,6 +155,13 @@ function requestedFromCommand(command: MotionCommandV1): {
 export class MotionKernelRuntimeV1 {
   readonly physicsController: PhysicsCharacterController;
   private readonly gravity: Vector3;
+  /**
+   * Unit-length gravity direction for Havok `checkSupport` queries. The
+   * installed controller dots this vector against unit contact normals and
+   * derives `cosSqr = 1 - angleSin^2`, so passing the full-magnitude world
+   * gravity misclassifies every incline above ~6 degrees as SLIDING.
+   */
+  private readonly gravityDirection: Vector3;
   private readonly up = Vector3.Up();
   private readonly colliderCenterOffset: Vector3;
   private readonly motionModeResolver: MotionModeResolverV1;
@@ -197,6 +204,7 @@ export class MotionKernelRuntimeV1 {
       }
     }
     this.gravity = new Vector3(...gravityMetersPerSecondSquaredXYZ);
+    this.gravityDirection = this.gravity.normalizeToNew();
     this.yawRadians = subject.spawnSubjectFacingRadians;
     this.colliderCenterOffset = new Vector3(
       ...subject.collider.centerOffsetFromSubjectOriginMetersXYZ,
@@ -239,7 +247,7 @@ export class MotionKernelRuntimeV1 {
     this.physicsController.setVelocity(Vector3.Zero());
     this.bootstrapContactManifold();
     this.publishResolvedState(
-      this.physicsController.checkSupport(FIXED_TIME_STEP_SECONDS, this.gravity),
+      this.physicsController.checkSupport(FIXED_TIME_STEP_SECONDS, this.gravityDirection),
       { moveRequested: false, runRequested: false },
     );
   }
@@ -276,7 +284,7 @@ export class MotionKernelRuntimeV1 {
    */
   publishSupport(): void {
     this.publishResolvedState(
-      this.physicsController.checkSupport(FIXED_TIME_STEP_SECONDS, this.gravity),
+      this.physicsController.checkSupport(FIXED_TIME_STEP_SECONDS, this.gravityDirection),
       { moveRequested: false, runRequested: false },
     );
   }
@@ -286,7 +294,7 @@ export class MotionKernelRuntimeV1 {
     try {
       const support = this.physicsController.checkSupport(
         FIXED_TIME_STEP_SECONDS,
-        this.gravity,
+        this.gravityDirection,
       );
       const resolved = this.publishResolvedState(support, requestedFromCommand(command));
       if (this.activeKernelImplementationId() === "unpowered-glide") {
@@ -383,7 +391,7 @@ export class MotionKernelRuntimeV1 {
     this.syncVisual(spawn);
     this.bootstrapContactManifold();
     this.publishResolvedState(
-      this.physicsController.checkSupport(FIXED_TIME_STEP_SECONDS, this.gravity),
+      this.physicsController.checkSupport(FIXED_TIME_STEP_SECONDS, this.gravityDirection),
       { moveRequested: false, runRequested: false },
     );
   }
