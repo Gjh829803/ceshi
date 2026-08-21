@@ -90,6 +90,9 @@ importers:
       '@whitebox-world/physics':
         specifier: workspace:*
         version: link:../../packages/physics
+      '@whitebox-world/protocol':
+        specifier: workspace:*
+        version: link:../../packages/protocol
       '@whitebox-world/runtime-babylon':
         specifier: workspace:*
         version: link:../../packages/runtime-babylon
@@ -144,6 +147,9 @@ importers:
       '@whitebox-world/protocol':
         specifier: workspace:*
         version: link:../protocol
+      '@whitebox-world/runtime-contracts':
+        specifier: workspace:*
+        version: link:../runtime-contracts
       '@whitebox-world/subject-composition':
         specifier: workspace:*
         version: link:../subject-composition

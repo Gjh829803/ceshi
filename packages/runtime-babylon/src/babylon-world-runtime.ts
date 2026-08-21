@@ -20,10 +20,12 @@ import { Scene } from "@babylonjs/core/scene.pure.js";
 import { CONTROL_CAPTURE_PASS_IDS_V1 } from "@whitebox-world/control-capture";
 
 import type {
+  ApplySubjectPresetTuningRequestV1,
   BindControlRequestV2,
   CameraTuningV1,
   CameraViewInputV1,
   ControlCaptureCapabilitiesV1,
+  ControlTuningV1,
   ControlCaptureRequestV1,
   ControlInputAxesV2,
   ControlBindingReceiptV2,
@@ -40,6 +42,7 @@ import type {
   RuntimeControlCaptureFrameV1,
   SemanticInputActionV1,
   SubjectHarnessReportV1,
+  SubjectPresetTuningReceiptV1,
   Vec2,
   Vec3,
   ViewTargetSampleV1,
@@ -96,11 +99,21 @@ type OwnedDisposer = () => void | Promise<void>;
 const WATER_SURFACE_CLASSIFICATION_EPSILON_METERS = 0.1;
 const LEGACY_CAMERA_RELATIVE_CONTROL_PROFILE: ExecutionControlProfileV1 = {
   resourceRef: "worldkit://control-profile/legacy.camera-relative@1",
+  contentHash: "sha256:legacy-control-profile",
   commandKind: "planar-vector",
   inputSpace: "camera-relative",
   facingPolicy: "align-to-move",
   lateralMovementPolicy: "allowed",
   inputTuning: { moveDeadzoneRatio: 0, responseExponent: 1 },
+  safetyLimits: {
+    moveDeadzoneRatio: { minimum: 0, maximum: 0.95 },
+    responseExponent: { minimum: 0.25, maximum: 4 },
+  },
+  authoringRanges: {
+    moveDeadzoneRatio: { minimum: 0, maximum: 0.5, step: 0.01 },
+    responseExponent: { minimum: 0.25, maximum: 3, step: 0.05 },
+  },
+  runtimeParameterNames: ["moveDeadzoneRatio", "responseExponent"],
 };
 
 class WorldRuntimeDisposeErrorV1 extends Error {
@@ -787,6 +800,7 @@ export class BabylonWorldRuntime implements WorldRuntimeSessionV3 {
             relationshipRole: "none" as const,
             safeFallbackActive: motion.fallbackActive,
             motionParameterTuning: motion.parameterTuning,
+            controlParameterTuning: controller.getControlTuning(),
             ...(motion.lastFailureCode === undefined
               ? {}
               : { motionFailureCode: motion.lastFailureCode }),
@@ -1125,6 +1139,144 @@ export class BabylonWorldRuntime implements WorldRuntimeSessionV3 {
     }
     this.latestRenderReadyReceipt = undefined;
     return this.snapshot();
+  }
+
+  setControlTuning(
+    subjectEntityId: string,
+    tuning: ControlTuningV1,
+  ): WorldRuntimeSnapshotV3 {
+    this.assertUsable();
+    if (!this.controllerFor(subjectEntityId).setControlTuning(tuning)) {
+      throw new RangeError(
+        "Control tuning must use registered parameters inside safety limits.",
+      );
+    }
+    this.latestRenderReadyReceipt = undefined;
+    return this.snapshot();
+  }
+
+  applySubjectPresetTuning(
+    request: ApplySubjectPresetTuningRequestV1,
+  ): SubjectPresetTuningReceiptV1 {
+    this.assertUsable();
+    const reject = (code: string, message: string): SubjectPresetTuningReceiptV1 => ({
+      status: "rejected",
+      diagnostic: { code, message },
+      snapshot: this.snapshot(),
+    });
+    const subject = this.executionPlan.subjects.find(
+      (candidate) => candidate.entityId === request.subjectEntityId,
+    );
+    if (subject === undefined) {
+      return reject(
+        "SUBJECT_PRESET_SUBJECT_NOT_FOUND",
+        `Subject '${request.subjectEntityId}' was not found.`,
+      );
+    }
+    if (
+      subject.subjectDefinitionRef !== request.expectedSubjectDefinitionRef ||
+      subject.subjectDefinitionHash !== request.expectedSubjectDefinitionContentHash
+    ) {
+      return reject(
+        "SUBJECT_PRESET_BASE_MISMATCH",
+        "The active Subject Definition does not match the locked preset base.",
+      );
+    }
+    const assembly = subject.capabilityAssembly;
+    if (assembly === undefined) {
+      return reject(
+        "SUBJECT_PRESET_CAPABILITY_ASSEMBLY_REQUIRED",
+        "Legacy subjects cannot receive capability preset tuning.",
+      );
+    }
+    const controller = this.controllerFor(subject.entityId);
+    const motionProfiles = [
+      assembly.defaultMotionProfile,
+      ...assembly.optionalMotionProfiles,
+      assembly.fallbackMotionProfile,
+    ];
+    const motionOverrides = Object.entries(request.motionOverridesByProfileRef);
+    const activeMotionProfileRef = controller.motionSnapshot().activeMotionProfileRef;
+    if (motionOverrides.some(([profileRef, override]) => {
+      const profile = motionProfiles.find((candidate) => candidate.resourceRef === profileRef);
+      return profile === undefined ||
+        override.baseResourceRef !== profileRef ||
+        override.baseContentHash !== profile.contentHash ||
+        profileRef !== activeMotionProfileRef;
+    })) {
+      return reject(
+        "SUBJECT_PRESET_MOTION_PROFILE_MISMATCH",
+        "Motion overrides must target the active exact locked Motion Profile.",
+      );
+    }
+    const motionTuning = motionOverrides[0]?.[1].values ?? {};
+    if (motionOverrides.length > 1 || !controller.canSetMotionTuning(motionTuning)) {
+      return reject(
+        "SUBJECT_PRESET_INVALID_MOTION_TUNING",
+        "Motion tuning is unsupported or outside its safety limits.",
+      );
+    }
+
+    const controlOverrides = Object.entries(request.controlOverridesByProfileRef);
+    if (controlOverrides.some(([profileRef, override]) =>
+      profileRef !== assembly.controlProfile.resourceRef ||
+      override.baseResourceRef !== profileRef ||
+      override.baseContentHash !== assembly.controlProfile.contentHash
+    )) {
+      return reject(
+        "SUBJECT_PRESET_CONTROL_PROFILE_MISMATCH",
+        "Control overrides must target the exact locked Control Profile.",
+      );
+    }
+    const controlTuning = controlOverrides[0]?.[1].values ?? {};
+    if (controlOverrides.length > 1 || !controller.canSetControlTuning(controlTuning)) {
+      return reject(
+        "SUBJECT_PRESET_INVALID_CONTROL_TUNING",
+        "Control tuning is unsupported or outside its safety limits.",
+      );
+    }
+
+    const cameraProfiles = assembly.cameraContext.cameraRigProfiles;
+    const cameraTuningByProfileRef: Record<string, CameraTuningV1> = {};
+    for (const [profileRef, override] of Object.entries(
+      request.cameraOverridesByProfileRef,
+    )) {
+      const profile = cameraProfiles.find(
+        (candidate) => candidate.resourceRef === profileRef,
+      );
+      if (
+        profile === undefined ||
+        override.baseResourceRef !== profileRef ||
+        override.baseContentHash !== profile.contentHash
+      ) {
+        return reject(
+          "SUBJECT_PRESET_CAMERA_PROFILE_MISMATCH",
+          "Camera overrides must target exact Camera Profiles reachable from the Context.",
+        );
+      }
+      cameraTuningByProfileRef[profileRef] = { ...override.values };
+    }
+    if (!this.cameraDirector.replacePresetTunings(
+      cameraTuningByProfileRef,
+      cameraProfiles,
+      request.cameraPreference,
+    )) {
+      return reject(
+        "SUBJECT_PRESET_INVALID_CAMERA_TUNING",
+        "Camera tuning or preference is unsupported by the selected Camera Profile.",
+      );
+    }
+    if (
+      !controller.setMotionTuning(motionTuning) ||
+      !controller.setControlTuning(controlTuning)
+    ) {
+      throw new Error(
+        "Preset tuning validation diverged from fixed-tick Runtime application.",
+      );
+    }
+    this.latestRenderReadyReceipt = undefined;
+    this.updateCamera();
+    return { status: "committed", snapshot: this.snapshot() };
   }
 
   async runHarness(subjectEntityId: string): Promise<SubjectHarnessReportV1> {

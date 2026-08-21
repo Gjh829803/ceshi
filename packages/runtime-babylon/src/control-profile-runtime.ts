@@ -1,9 +1,23 @@
 import type {
   ControlInputAxesV2,
+  ControlTuningV1,
   ExecutionControlProfileV1,
   SemanticInputActionV1,
   ViewControlFrameV1,
 } from "@whitebox-world/runtime-contracts";
+
+export function withControlTuningV1(
+  profile: ExecutionControlProfileV1,
+  tuning: ControlTuningV1,
+): ExecutionControlProfileV1 {
+  return {
+    ...profile,
+    inputTuning: {
+      ...profile.inputTuning,
+      ...tuning,
+    },
+  };
+}
 
 export type MotionCommandV1 =
   | {

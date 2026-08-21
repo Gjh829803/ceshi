@@ -7,6 +7,7 @@ import { MotionModeResolverV1 } from "./motion-mode-resolver";
 function profile(id: string, speed: number): ExecutionMotionProfileV1 {
   return {
     resourceRef: `worldkit://motion-profile/${id}@1`,
+    contentHash: `sha256:test-motion-profile-${id}`,
     motionKernelRef: `worldkit://motion-kernel/${id}@1`,
     parameters: { speed },
     safetyLimits: { speed: { minimum: 0, maximum: 10 } },

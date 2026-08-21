@@ -259,6 +259,10 @@ function validateMotionProfile(source: MotionProfileInputV1): void {
 
 function validateControlProfile(source: ControlProfileInputV1): void {
   const { moveDeadzoneRatio, responseExponent } = source.inputTuning;
+  const expectedRuntimeParameterNames = [
+    "moveDeadzoneRatio",
+    "responseExponent",
+  ] as const;
   if (
     !Number.isFinite(moveDeadzoneRatio) ||
     moveDeadzoneRatio < 0 ||
@@ -269,6 +273,40 @@ function validateControlProfile(source: ControlProfileInputV1): void {
     throw new Error(
       `SUBJECT_REGISTRY_INVALID_CONTROL_INPUT_TUNING: '${source.resourceRef}'.`,
     );
+  }
+  if (
+    source.runtimeParameterNames.length !== expectedRuntimeParameterNames.length ||
+    expectedRuntimeParameterNames.some((name, index) =>
+      source.runtimeParameterNames[index] !== name
+    )
+  ) {
+    throw new Error(
+      `SUBJECT_REGISTRY_INVALID_CONTROL_RUNTIME_PARAMETERS: '${source.resourceRef}'.`,
+    );
+  }
+  for (const parameterName of expectedRuntimeParameterNames) {
+    const value = source.inputTuning[parameterName];
+    const limit = source.safetyLimits[parameterName];
+    const range = source.authoringRanges[parameterName];
+    if (
+      limit === undefined ||
+      range === undefined ||
+      ![limit.minimum, limit.maximum, range.minimum, range.maximum, range.step]
+        .every(Number.isFinite) ||
+      limit.minimum > limit.maximum ||
+      range.minimum > range.maximum ||
+      range.step <= 0 ||
+      range.minimum < limit.minimum ||
+      range.maximum > limit.maximum ||
+      value < limit.minimum ||
+      value > limit.maximum ||
+      value < range.minimum ||
+      value > range.maximum
+    ) {
+      throw new Error(
+        `SUBJECT_REGISTRY_INVALID_CONTROL_PARAMETER_RANGE: '${parameterName}' in '${source.resourceRef}'.`,
+      );
+    }
   }
 
   const hasExecutablePolicyCombination = (() => {

@@ -4,6 +4,8 @@ import type {
 } from "@whitebox-world/control-capture";
 import type { CameraTuningV1 } from "./camera-parameter-contract";
 import type { Vec3 } from "./execution-plan";
+import type { NumericProfileOverrideV1 } from "./subject-preset";
+import type { SubjectPresetBaselineV1 } from "./subject-preset";
 
 export type SemanticInputActionV1 =
   | "move-forward"
@@ -46,6 +48,18 @@ export interface CameraViewInputV1 {
 }
 
 export type MotionParameterTuningV1 = Readonly<Record<string, number>>;
+
+export type ControlTuningParameterNameV1 =
+  | "moveDeadzoneRatio"
+  | "responseExponent";
+
+/**
+ * Session-local overrides for the two numeric input-curve values consumed by
+ * ControlProfileRuntime. These values never mutate the locked Registry profile.
+ */
+export type ControlTuningV1 = Readonly<
+  Partial<Record<ControlTuningParameterNameV1, number>>
+>;
 
 export interface ViewControlFrameV1 {
   forwardXYZ: Vec3;
@@ -114,6 +128,29 @@ export interface SubjectRuntimeStateV3 {
   safeFallbackActive?: boolean;
   motionFailureCode?: string;
   motionParameterTuning?: MotionParameterTuningV1;
+  controlParameterTuning?: ControlTuningV1;
+}
+
+export interface ApplySubjectPresetTuningRequestV1 {
+  subjectEntityId: string;
+  expectedSubjectDefinitionRef: string;
+  expectedSubjectDefinitionContentHash: string;
+  motionOverridesByProfileRef: Readonly<
+    Record<string, NumericProfileOverrideV1>
+  >;
+  controlOverridesByProfileRef: Readonly<
+    Record<string, NumericProfileOverrideV1>
+  >;
+  cameraOverridesByProfileRef: Readonly<
+    Record<string, NumericProfileOverrideV1>
+  >;
+  cameraPreference: string;
+}
+
+export interface SubjectPresetTuningReceiptV1 {
+  status: "committed" | "rejected";
+  diagnostic?: { code: string; message: string };
+  snapshot: WorldRuntimeSnapshotV3;
 }
 
 export interface WorldRuntimeSnapshotV3 {
@@ -236,6 +273,9 @@ export interface WorldRuntimeSessionV3 {
   runFixedInput(input: FixedInputV1): Promise<WorldRuntimeSnapshotV3>;
   snapshot(): WorldRuntimeSnapshotV3;
   reset(): WorldRuntimeSnapshotV3;
+  applySubjectPresetTuning?(
+    request: ApplySubjectPresetTuningRequestV1,
+  ): SubjectPresetTuningReceiptV1;
   getControlCaptureCapabilities(): ControlCaptureCapabilitiesV1;
   waitForRenderReady(expectedSimulationTick: number): RenderReadyReceiptV1;
   captureControlFrame(request: ControlCaptureRequestV1): Promise<RuntimeControlCaptureFrameV1>;
@@ -272,7 +312,7 @@ export interface CapabilityDiscoveryOptionsV1 {
 export interface CompatibleProfileSummaryV1 {
   resourceRef: string;
   contentHash: string;
-  kind: "motion-profile" | "camera-rig-profile";
+  kind: "motion-profile" | "control-profile" | "camera-rig-profile";
   displayName: string;
   role?: "default" | "optional" | "fallback" | "camera";
   baseMode?: "first-person" | "free-orbit" | "stable-follow" | "speed-chase" | "flight-horizon";
@@ -339,6 +379,9 @@ export interface WorldkitBrowserApiV3 {
   listCompatibleProfiles?(
     subjectDefinitionRef: string,
   ): readonly CompatibleProfileSummaryV1[];
+  getSubjectPresetBaseline?(
+    subjectDefinitionRef: string,
+  ): SubjectPresetBaselineV1;
   validateSubjectPackage?(
     subjectDefinitionRef: string,
   ): SubjectPackageValidationResultV1;
@@ -351,6 +394,14 @@ export interface WorldkitBrowserApiV3 {
     subjectEntityId: string,
     tuning: MotionParameterTuningV1,
   ): WorldRuntimeSnapshotV3;
+  setControlTuning?(
+    subjectEntityId: string,
+    tuning: ControlTuningV1,
+  ): WorldRuntimeSnapshotV3;
+  getControlTuning?(subjectEntityId: string): ControlTuningV1;
+  applySubjectPresetTuning?(
+    request: ApplySubjectPresetTuningRequestV1,
+  ): SubjectPresetTuningReceiptV1;
   setMotionProfile?(
     subjectEntityId: string,
     motionProfileRef: string,

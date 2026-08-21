@@ -6,13 +6,17 @@ import type {
   ExecutionMovementMediumV1,
   ExecutionSubjectV3,
   ControlInputAxesV2,
+  ControlTuningV1,
   MotionParameterTuningV1,
   SemanticInputActionV1,
   Vec3,
   ViewControlFrameV1,
 } from "@whitebox-world/runtime-contracts";
 
-import { compileMotionCommandV1 } from "./control-profile-runtime";
+import {
+  compileMotionCommandV1,
+  withControlTuningV1,
+} from "./control-profile-runtime";
 import {
   MotionKernelRuntimeV1,
   type MotionKernelSnapshotV1,
@@ -26,6 +30,7 @@ export interface SubjectMotionSampleV1 {
 
 const LEGACY_CONTROL_PROFILE = {
   resourceRef: "worldkit://control-profile/legacy-planar.camera-relative@1",
+  contentHash: "sha256:legacy-control-profile",
   commandKind: "planar-vector",
   inputSpace: "camera-relative",
   facingPolicy: "align-to-move",
@@ -34,6 +39,15 @@ const LEGACY_CONTROL_PROFILE = {
     moveDeadzoneRatio: 0.1,
     responseExponent: 1.4,
   },
+  safetyLimits: {
+    moveDeadzoneRatio: { minimum: 0, maximum: 0.95 },
+    responseExponent: { minimum: 0.25, maximum: 4 },
+  },
+  authoringRanges: {
+    moveDeadzoneRatio: { minimum: 0, maximum: 0.5, step: 0.01 },
+    responseExponent: { minimum: 0.25, maximum: 3, step: 0.05 },
+  },
+  runtimeParameterNames: ["moveDeadzoneRatio", "responseExponent"],
 } as const;
 
 /**
@@ -42,6 +56,7 @@ const LEGACY_CONTROL_PROFILE = {
  */
 export class SubjectController {
   private readonly motionKernel: MotionKernelRuntimeV1;
+  private controlTuning: ControlTuningV1 = {};
   readonly physicsController: MotionKernelRuntimeV1["physicsController"];
 
   constructor(
@@ -73,7 +88,10 @@ export class SubjectController {
     axes: Readonly<ControlInputAxesV2> = {},
   ): void {
     const command = compileMotionCommandV1(
-      this.subject.capabilityAssembly?.controlProfile ?? LEGACY_CONTROL_PROFILE,
+      withControlTuningV1(
+        this.subject.capabilityAssembly?.controlProfile ?? LEGACY_CONTROL_PROFILE,
+        this.controlTuning,
+      ),
       actions,
       viewControlFrame,
       axes,
@@ -89,6 +107,41 @@ export class SubjectController {
   setMotionTuning(tuning: MotionParameterTuningV1): boolean {
     if (this.subject.capabilityAssembly === undefined) return false;
     return this.motionKernel.setParameterTuning(tuning);
+  }
+
+  canSetMotionTuning(tuning: MotionParameterTuningV1): boolean {
+    if (this.subject.capabilityAssembly === undefined) return false;
+    return this.motionKernel.canSetParameterTuning(tuning);
+  }
+
+  setControlTuning(tuning: ControlTuningV1): boolean {
+    const profile = this.subject.capabilityAssembly?.controlProfile;
+    if (profile === undefined || !this.canSetControlTuning(tuning)) return false;
+    this.controlTuning = { ...tuning };
+    return true;
+  }
+
+  canSetControlTuning(tuning: ControlTuningV1): boolean {
+    const profile = this.subject.capabilityAssembly?.controlProfile;
+    if (profile === undefined) return false;
+    const entries = Object.entries(tuning);
+    return entries.every(([name, value]) => {
+      if (
+        !profile.runtimeParameterNames.includes(
+          name as (typeof profile.runtimeParameterNames)[number],
+        ) ||
+        typeof value !== "number" ||
+        !Number.isFinite(value)
+      ) return false;
+      const limit = profile.safetyLimits[
+        name as keyof typeof profile.safetyLimits
+      ];
+      return limit !== undefined && value >= limit.minimum && value <= limit.maximum;
+    });
+  }
+
+  getControlTuning(): ControlTuningV1 {
+    return { ...this.controlTuning };
   }
 
   synchronizeVisual(): void {
@@ -141,6 +194,7 @@ export class SubjectController {
   }
 
   reset(): void {
+    this.controlTuning = {};
     this.motionKernel.reset();
   }
 

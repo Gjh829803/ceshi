@@ -9,6 +9,7 @@ export * from "./parse";
 export * from "./parse-v3";
 export * from "./resource-lock";
 export * from "./subject-definition-normalizer";
+export * from "./subject-preset-candidate";
 export * from "./types";
 export * from "./types-v3";
 export * from "./validate";

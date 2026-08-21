@@ -249,6 +249,7 @@ export type ExecutionMotionCommandKindV1 =
 
 export interface ExecutionMotionProfileV1 {
   resourceRef: string;
+  contentHash: string;
   motionKernelRef: string;
   parameters: Readonly<Record<string, number | boolean>>;
   safetyLimits: Readonly<Record<string, { minimum: number; maximum: number }>>;
@@ -276,6 +277,7 @@ export interface ExecutionMotionKernelDefinitionV1 {
 
 export interface ExecutionControlProfileV1 {
   resourceRef: string;
+  contentHash: string;
   commandKind: ExecutionMotionCommandKindV1;
   inputSpace: "camera-relative" | "subject-local" | "flight-frame" | "none";
   facingPolicy:
@@ -289,10 +291,25 @@ export interface ExecutionControlProfileV1 {
     moveDeadzoneRatio: number;
     responseExponent: number;
   };
+  safetyLimits: Readonly<
+    Record<"moveDeadzoneRatio" | "responseExponent", {
+      minimum: number;
+      maximum: number;
+    }>
+  >;
+  authoringRanges: Readonly<
+    Record<"moveDeadzoneRatio" | "responseExponent", {
+      minimum: number;
+      maximum: number;
+      step: number;
+    }>
+  >;
+  runtimeParameterNames: readonly ("moveDeadzoneRatio" | "responseExponent")[];
 }
 
 export interface ExecutionCameraRigProfileV1 {
   resourceRef: string;
+  contentHash: string;
   baseMode:
     | "first-person"
     | "free-orbit"

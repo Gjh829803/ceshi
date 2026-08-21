@@ -5,6 +5,7 @@ import type { ExecutionControlProfileV1 } from "@whitebox-world/runtime-contract
 import {
   compileMotionCommandV1,
   hasForwardControlIntentV1,
+  withControlTuningV1,
 } from "./control-profile-runtime";
 
 const DEFAULT_VIEW_FRAME = {
@@ -19,6 +20,7 @@ function profile(
 ): ExecutionControlProfileV1 {
   return {
     resourceRef: `worldkit://control-profile/test.${commandKind}@1`,
+    contentHash: "sha256:test-control-profile",
     commandKind,
     inputSpace,
     facingPolicy:
@@ -34,10 +36,51 @@ function profile(
       moveDeadzoneRatio: 0,
       responseExponent: 1,
     },
+    safetyLimits: {
+      moveDeadzoneRatio: { minimum: 0, maximum: 0.95 },
+      responseExponent: { minimum: 0.25, maximum: 4 },
+    },
+    authoringRanges: {
+      moveDeadzoneRatio: { minimum: 0, maximum: 0.5, step: 0.01 },
+      responseExponent: { minimum: 0.25, maximum: 3, step: 0.05 },
+    },
+    runtimeParameterNames: ["moveDeadzoneRatio", "responseExponent"],
   };
 }
 
 describe("compileMotionCommandV1", () => {
+  it("uses the same transient control tuning for motion commands and camera forward intent", () => {
+    const tuned = withControlTuningV1(
+      profile("planar-vector", "camera-relative"),
+      { moveDeadzoneRatio: 0.4, responseExponent: 2 },
+    );
+
+    expect(compileMotionCommandV1(
+      tuned,
+      [],
+      DEFAULT_VIEW_FRAME,
+      { moveYRatio: 0.3 },
+    )).toMatchObject({
+      kind: "planar-vector",
+      directionMetersXZ: [0, 0],
+    });
+    expect(hasForwardControlIntentV1(tuned, [], { moveYRatio: 0.3 }))
+      .toBe(false);
+
+    const aboveDeadzone = compileMotionCommandV1(
+      tuned,
+      [],
+      DEFAULT_VIEW_FRAME,
+      { moveYRatio: 0.7 },
+    );
+    expect(aboveDeadzone.kind).toBe("planar-vector");
+    if (aboveDeadzone.kind === "planar-vector") {
+      expect(aboveDeadzone.directionMetersXZ[1]).toBeCloseTo(-0.25, 12);
+    }
+    expect(hasForwardControlIntentV1(tuned, [], { moveYRatio: 0.7 }))
+      .toBe(true);
+  });
+
   it("turns camera-relative planar intent into a normalized world-space direction", () => {
     const command = compileMotionCommandV1(
         profile("planar-vector", "camera-relative"),

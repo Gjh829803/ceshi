@@ -623,6 +623,7 @@ function compileCapabilityAssemblyV1(
     profile: typeof assembly.defaultMotionProfile,
   ): NonNullable<ExecutionSubjectV3["capabilityAssembly"]>["defaultMotionProfile"] => ({
     resourceRef: profile.resourceRef,
+    contentHash: profile.contentHash,
     motionKernelRef: profile.motionKernelRef,
     parameters: structuredClone(profile.parameters),
     safetyLimits: structuredClone(profile.safetyLimits),
@@ -681,11 +682,15 @@ function compileCapabilityAssemblyV1(
     motionKernels: assembly.motionKernels.map(compileMotionKernel),
     controlProfile: {
       resourceRef: assembly.controlProfile.resourceRef,
+      contentHash: assembly.controlProfile.contentHash,
       commandKind: assembly.controlProfile.commandKind,
       inputSpace: assembly.controlProfile.inputSpace,
       facingPolicy: assembly.controlProfile.facingPolicy,
       lateralMovementPolicy: assembly.controlProfile.lateralMovementPolicy,
       inputTuning: structuredClone(assembly.controlProfile.inputTuning),
+      safetyLimits: structuredClone(assembly.controlProfile.safetyLimits),
+      authoringRanges: structuredClone(assembly.controlProfile.authoringRanges),
+      runtimeParameterNames: [...assembly.controlProfile.runtimeParameterNames],
     },
     cameraContext: {
       resourceRef: assembly.cameraContextProfile.resourceRef,
@@ -700,6 +705,7 @@ function compileCapabilityAssemblyV1(
       rules: structuredClone(assembly.cameraContextProfile.rules),
       cameraRigProfiles: assembly.cameraRigProfiles.map((profile) => ({
         resourceRef: profile.resourceRef,
+        contentHash: profile.contentHash,
         baseMode: profile.baseMode,
         algorithmRef: profile.algorithmRef,
         headingSource: profile.headingSource,

@@ -185,5 +185,43 @@
     "actionOrPoseSetRef": "worldkit://pose-set/static.whitebox@1",
     "renderBindingProfileRef": "worldkit://render-binding/subject.standard@1",
     "aiMetadata": { "displayName": "Unpowered Paraglider", "description": "Whitebox pilot and canopy package using K08 unpowered glide and R03 tether facts.", "semanticTags": ["air", "glide", "paraglider", "whitebox"] }
+  },
+  {
+    "kind": "subject-definition",
+    "schemaVersion": 3,
+    "id": "animal.quadruped.forward-steer",
+    "version": 2,
+    "resourceRef": "worldkit://subject-definition/animal.quadruped.forward-steer@2",
+    "authoringAvailability": "advanced",
+    "category": "animal",
+    "bodyTopology": "quadruped",
+    "semanticClassId": "subject.animal.quadruped",
+    "coordinateConvention": { "forwardAxis": "-Z", "upAxis": "+Y", "metersPerUnit": 1, "pivot": "support-center" },
+    "visualParts": [
+      { "id": "body", "kind": "primitive", "shape": { "kind": "box", "sizeMetersXYZ": [0.8, 0.7, 1.5] }, "localTransform": { "positionMetersXYZ": [0, 0.8, 0], "rotationEulerRadiansXYZ": [0, 0, 0] }, "colliderContribution": "include", "semanticTags": ["body"] },
+      { "id": "head", "kind": "primitive", "shape": { "kind": "box", "sizeMetersXYZ": [0.55, 0.55, 0.6] }, "localTransform": { "positionMetersXYZ": [0, 0.95, -0.95], "rotationEulerRadiansXYZ": [0, 0, 0] }, "colliderContribution": "include", "semanticTags": ["head"] },
+      { "id": "legs", "kind": "primitive", "shape": { "kind": "box", "sizeMetersXYZ": [0.65, 0.65, 1.1] }, "localTransform": { "positionMetersXYZ": [0, 0.33, 0], "rotationEulerRadiansXYZ": [0, 0, 0] }, "colliderContribution": "include", "semanticTags": ["legs"] }
+    ],
+    "visualBinding": { "mode": "static" },
+    "sockets": [
+      { "id": "CameraTarget3D", "kind": "local", "localTransform": { "positionMetersXYZ": [0, 1, 0], "rotationEulerRadiansXYZ": [0, 0, 0] }, "semanticTags": ["camera", "target"] },
+      { "id": "LookAhead", "kind": "local", "localTransform": { "positionMetersXYZ": [0, 0.9, -1.2], "rotationEulerRadiansXYZ": [0, 0, 0] }, "semanticTags": ["camera", "look-ahead"] },
+      { "id": "MountSeat", "kind": "local", "localTransform": { "positionMetersXYZ": [0, 1.25, 0], "rotationEulerRadiansXYZ": [0, 0, 0] }, "semanticTags": ["mount", "relationship"] }
+    ],
+    "colliderPolicy": { "kind": "derive", "colliderDerivationProfileRef": "worldkit://collider-derivation-profile/vertical-capability-capsule@1" },
+    "capabilityRefs": ["worldkit://capability/locomotion.forward-steer@1"],
+    "profiles": {
+      "physicsBodyProfileRef": "worldkit://physics-body-profile/character.capability-medium@1",
+      "locomotionProfileRef": "worldkit://locomotion-profile/ground.standard@1",
+      "motion": { "defaultMotionProfileRef": "worldkit://motion-profile/forward-steer.quadruped-official@1", "optionalMotionProfileRefs": ["worldkit://motion-profile/safe-ground@1"], "fallbackMotionProfileRef": "worldkit://motion-profile/safe-ground@1" },
+      "controlProfileRef": "worldkit://control-profile/throttle-steer.subject-local@1",
+      "cameraContextProfileRef": "worldkit://camera-context/capability-driven.quadruped-official@1",
+      "mediumProfileRef": "worldkit://medium-profile/ground-water-air.standard@1",
+      "harnessProfileRef": "worldkit://harness-profile/subject.standard@1"
+    },
+    "relationshipCapabilityRefs": ["worldkit://capability/relationship.mount@1"],
+    "actionOrPoseSetRef": "worldkit://pose-set/static.whitebox@1",
+    "renderBindingProfileRef": "worldkit://render-binding/subject.standard@1",
+    "aiMetadata": { "displayName": "Quadruped Forward Steer Official v2", "description": "Reviewed quadruped public default with versioned movement and camera profiles.", "semanticTags": ["animal", "forward-steer", "official", "quadruped", "whitebox"] }
   }
 ]

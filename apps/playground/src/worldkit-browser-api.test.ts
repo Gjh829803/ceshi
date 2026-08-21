@@ -240,7 +240,7 @@ describe("installDeferredWorldkitBrowserApi", () => {
       includeExperimental: true,
     }) ?? [];
     expect(productionDefinitions.map((definition) => definition.resourceRef)).toEqual([
-      "worldkit://subject-definition/animal.quadruped.forward-steer@1",
+      "worldkit://subject-definition/animal.quadruped.forward-steer@2",
       "worldkit://subject-definition/humanoid.g-bot@1",
     ]);
     const gBotSummary = productionDefinitions.find(
@@ -261,6 +261,15 @@ describe("installDeferredWorldkitBrowserApi", () => {
       ),
     ).toHaveLength(4);
     expect(JSON.stringify(allDefinitions)).not.toMatch(/agentAccessLevel|"T[0-2]"/);
+
+    expect(installation.api.getSubjectPresetBaseline?.(
+      "worldkit://subject-definition/animal.quadruped.forward-steer@2",
+    )).toMatchObject({
+      defaultCameraRigProfileRef:
+        "worldkit://camera-profile/orbit.quadruped-official@1",
+      firstPersonCameraRigProfileRef:
+        "worldkit://camera-profile/first-person.standard@1",
+    });
 
     const productionKernels = installation.api.listMotionKernels?.() ?? [];
     const allKernels = installation.api.listMotionKernels?.({

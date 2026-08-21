@@ -33,6 +33,7 @@
     "test:scenes": "vitest run packages/world/src/scene.test.ts apps/playground/src/scenes/scenes.test.ts",
     "test:watch": "vitest",
     "worldkit": "tsx scripts/worldkit.ts",
+    "subject-preset": "tsx scripts/worldkit.ts subject-preset",
     "verify:canonical": "tsx scripts/verify-canonical-world.ts",
     "verify:placement-layout": "tsx scripts/verify-placement-layout.ts",
     "verify:rigged-subject": "tsx scripts/verify-rigged-subject-world.ts",

@@ -1,6 +1,7 @@
 import type {
   CameraRigParameterNameV1,
   CameraRigParametersV1,
+  ControlTuningParameterNameV1,
 } from "@whitebox-world/runtime-contracts";
 
 import type {
@@ -92,6 +93,13 @@ export interface ControlProfileInputV1 extends CapabilityResourceBaseInputV1 {
     moveDeadzoneRatio: number;
     responseExponent: number;
   };
+  safetyLimits: Readonly<
+    Record<ControlTuningParameterNameV1, MotionParameterLimitV1>
+  >;
+  authoringRanges: Readonly<
+    Record<ControlTuningParameterNameV1, ParameterAuthoringRangeV1>
+  >;
+  runtimeParameterNames: readonly ControlTuningParameterNameV1[];
 }
 
 export type CameraRigAlgorithmRefV1 =

@@ -1,0 +1,134 @@
+[
+  {
+    "sourceId": "aerial-cockpit",
+    "originalRelativePath": "飞行载具/飞行载具坐里面驾驶.fbx",
+    "repositoryRelativePath": "assets/subjects/source-fbx/vehicles/aerial-cockpit/source.fbx",
+    "byteLength": 3702044,
+    "contentHash": "sha256:fcc92857a1c4150099175a4bc85bec626453e554a9a09ab3e9cb2b7b38695db9",
+    "coarseClass": "aerial-vehicle",
+    "format": "fbx",
+    "runtimeStatus": "source-only",
+    "conversionRequired": true
+  },
+  {
+    "sourceId": "aerial-cockpit-variant",
+    "originalRelativePath": "飞行载具/飞行载具坐里面驾驶1.fbx",
+    "repositoryRelativePath": "assets/subjects/source-fbx/vehicles/aerial-cockpit-variant/source.fbx",
+    "byteLength": 3694796,
+    "contentHash": "sha256:004f950ceef2fd9dc90ea1e91c163765d1d86f9ccab7d9caf0378f2442710246",
+    "coarseClass": "aerial-vehicle",
+    "format": "fbx",
+    "runtimeStatus": "source-only",
+    "conversionRequired": true
+  },
+  {
+    "sourceId": "aerial-hanging",
+    "originalRelativePath": "飞行载具/飞行挂下面1.fbx",
+    "repositoryRelativePath": "assets/subjects/source-fbx/vehicles/aerial-hanging/source.fbx",
+    "byteLength": 3078412,
+    "contentHash": "sha256:0aade16e02a0024ea79746412011193cc92950891a215e6f0692bc10d1c85cdf",
+    "coarseClass": "aerial-vehicle",
+    "format": "fbx",
+    "runtimeStatus": "source-only",
+    "conversionRequired": true
+  },
+  {
+    "sourceId": "aerial-seated",
+    "originalRelativePath": "飞行载具/飞行坐上面.fbx",
+    "repositoryRelativePath": "assets/subjects/source-fbx/vehicles/aerial-seated/source.fbx",
+    "byteLength": 3948556,
+    "contentHash": "sha256:ec2d874ffc65de020ceba5915ca2088b95c9c87db46275f030e11971e64a0652",
+    "coarseClass": "aerial-vehicle",
+    "format": "fbx",
+    "runtimeStatus": "source-only",
+    "conversionRequired": true
+  },
+  {
+    "sourceId": "aerial-seated-variant",
+    "originalRelativePath": "飞行载具/飞行坐上面1.fbx",
+    "repositoryRelativePath": "assets/subjects/source-fbx/vehicles/aerial-seated-variant/source.fbx",
+    "byteLength": 6119644,
+    "contentHash": "sha256:6070902abfc02ed88e1545c2c90eb7388cb7735f895a16479e50499b987b10f3",
+    "coarseClass": "aerial-vehicle",
+    "format": "fbx",
+    "runtimeStatus": "source-only",
+    "conversionRequired": true
+  },
+  {
+    "sourceId": "aerial-standing",
+    "originalRelativePath": "飞行载具/飞行站上面.fbx",
+    "repositoryRelativePath": "assets/subjects/source-fbx/vehicles/aerial-standing/source.fbx",
+    "byteLength": 1923628,
+    "contentHash": "sha256:1f8d398c3f765e8f3be4ae5bb7f0cce9e4f519f6463b074202e9e1794a7ea56a",
+    "coarseClass": "aerial-vehicle",
+    "format": "fbx",
+    "runtimeStatus": "source-only",
+    "conversionRequired": true
+  },
+  {
+    "sourceId": "flat-seated-glider",
+    "originalRelativePath": "飞行载具/平面飞行坐上面1.fbx",
+    "repositoryRelativePath": "assets/subjects/source-fbx/vehicles/flat-seated-glider/source.fbx",
+    "byteLength": 2126460,
+    "contentHash": "sha256:814cf53eeb2d97abbd13dc16d73cd2951657cd9e4d5d7b774b8a4cf52270efdb",
+    "coarseClass": "aerial-vehicle",
+    "format": "fbx",
+    "runtimeStatus": "source-only",
+    "conversionRequired": true
+  },
+  {
+    "sourceId": "four-wheel",
+    "originalRelativePath": "四轮载具/四轮载具.fbx",
+    "repositoryRelativePath": "assets/subjects/source-fbx/vehicles/four-wheel/source.fbx",
+    "byteLength": 2080716,
+    "contentHash": "sha256:23b5340a15abd2197b1a1ce542417cf8d2a75892b5af65514d05af12658fc6c1",
+    "coarseClass": "four-wheel-vehicle",
+    "format": "fbx",
+    "runtimeStatus": "source-only",
+    "conversionRequired": true
+  },
+  {
+    "sourceId": "hoverboard-standing",
+    "originalRelativePath": "飞行载具/滑板类上面.fbx",
+    "repositoryRelativePath": "assets/subjects/source-fbx/vehicles/hoverboard-standing/source.fbx",
+    "byteLength": 2065420,
+    "contentHash": "sha256:b3e4021d51f294c79ab6ee45be1c10ff4014479bc8137f3e7554f5b010b9298d",
+    "coarseClass": "board-vehicle",
+    "format": "fbx",
+    "runtimeStatus": "source-only",
+    "conversionRequired": true
+  },
+  {
+    "sourceId": "prone-glider",
+    "originalRelativePath": "飞行载具/平面飞行趴.fbx",
+    "repositoryRelativePath": "assets/subjects/source-fbx/vehicles/prone-glider/source.fbx",
+    "byteLength": 1815276,
+    "contentHash": "sha256:1ac5f89be95e199177a475d5f94766373264b037f352bd75d22843d4d18895a2",
+    "coarseClass": "aerial-vehicle",
+    "format": "fbx",
+    "runtimeStatus": "source-only",
+    "conversionRequired": true
+  },
+  {
+    "sourceId": "quadruped-ridable",
+    "originalRelativePath": "四足动物/四足骑行1.fbx",
+    "repositoryRelativePath": "assets/subjects/source-fbx/vehicles/quadruped-ridable/source.fbx",
+    "byteLength": 5691164,
+    "contentHash": "sha256:b3aec424ca5eeb4286a5909703fac502f6a3175882632fac8fec26238572674b",
+    "coarseClass": "quadruped-ridable",
+    "format": "fbx",
+    "runtimeStatus": "source-only",
+    "conversionRequired": true
+  },
+  {
+    "sourceId": "two-wheel",
+    "originalRelativePath": "二轮载具/二轮载具.fbx",
+    "repositoryRelativePath": "assets/subjects/source-fbx/vehicles/two-wheel/source.fbx",
+    "byteLength": 2073132,
+    "contentHash": "sha256:629daebbb9ccf0e0ba3fba82ad6295e84dd10005d0c242ce5bf52daa73d2df31",
+    "coarseClass": "two-wheel-vehicle",
+    "format": "fbx",
+    "runtimeStatus": "source-only",
+    "conversionRequired": true
+  }
+]

@@ -329,6 +329,59 @@ describe("loadAuthoringScene", () => {
     ).toBe(true);
   });
 
+  it("loads the exact quadruped public-default version with its tuned motion and camera profiles", async () => {
+    const loaded = await loadAuthoringScene(
+      async () => new Response(JSON.stringify(createValidAuthoringSpec())),
+      {
+        subjectDefinitionRef:
+          "worldkit://subject-definition/animal.quadruped.forward-steer@2",
+      },
+    );
+
+    expect(loaded).toMatchObject({
+      ok: true,
+      diagnostics: [],
+      executionPlan: {
+        subjects: [expect.objectContaining({
+          subjectDefinitionRef:
+            "worldkit://subject-definition/playground-preview.animal.quadruped.forward-steer@2",
+          capabilityAssembly: expect.objectContaining({
+            defaultMotionProfile: expect.objectContaining({
+              resourceRef:
+                "worldkit://motion-profile/forward-steer.quadruped-official@1",
+              parameters: expect.objectContaining({
+                turnRateRadiansPerSecond: 2.4,
+                jumpSpeedMetersPerSecond: 3.1,
+                bodyLeanMaximumRadians: 0.09,
+              }),
+            }),
+            cameraContext: expect.objectContaining({
+              resourceRef:
+                "worldkit://camera-context/capability-driven.quadruped-official@1",
+              defaultCameraRigProfileRef:
+                "worldkit://camera-profile/orbit.quadruped-official@1",
+              cameraRigProfiles: expect.arrayContaining([
+                expect.objectContaining({
+                  resourceRef:
+                    "worldkit://camera-profile/orbit.quadruped-official@1",
+                  parameters: expect.objectContaining({
+                    targetHeightMeters: 1.35,
+                    collisionRetractionMetersPerSecond: 4.5,
+                    collisionRecoveryMetersPerSecond: 3.25,
+                  }),
+                }),
+              ]),
+            }),
+          }),
+        })],
+      },
+      hostOverlay: expect.objectContaining({
+        subjectDefinitionRef:
+          "worldkit://subject-definition/animal.quadruped.forward-steer@2",
+      }),
+    });
+  });
+
   it("gives the capability Playground enough explicit budget for the locked G Bot asset", async () => {
     const source = createValidAuthoringSpec();
     source.world.resourceBudget = {

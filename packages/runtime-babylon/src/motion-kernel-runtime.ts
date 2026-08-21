@@ -169,6 +169,7 @@ export class MotionKernelRuntimeV1 {
     );
     const compatibilityProfile: ExecutionMotionProfileV1 = {
       resourceRef: "worldkit://motion-profile/legacy-ground.compatibility@1",
+      contentHash: "sha256:legacy-motion-profile",
       motionKernelRef: "worldkit://motion-kernel/free-ground@1",
       parameters: {
         walkSpeedMetersPerSecond: subject.locomotion.walkSpeedMetersPerSecond,
@@ -234,6 +235,14 @@ export class MotionKernelRuntimeV1 {
   }
 
   setParameterTuning(tuning: MotionParameterTuningV1): boolean {
+    if (!this.canSetParameterTuning(tuning)) return false;
+    this.parameterTuning = { ...tuning };
+    this.parameterTuningRevision += 1;
+    this.effectiveProfileCache = undefined;
+    return true;
+  }
+
+  canSetParameterTuning(tuning: MotionParameterTuningV1): boolean {
     const profile = this.motionModeResolver.currentProfile;
     const declaredKernel = this.subject.capabilityAssembly?.motionKernels.find(
       (candidate) => candidate.resourceRef === profile.motionKernelRef,
@@ -256,11 +265,7 @@ export class MotionKernelRuntimeV1 {
       ...profile,
       parameters: { ...profile.parameters, ...tuning },
     };
-    if (!kernelParameterRelationshipsAreValid(candidate)) return false;
-    this.parameterTuning = { ...tuning };
-    this.parameterTuningRevision += 1;
-    this.effectiveProfileCache = undefined;
-    return true;
+    return kernelParameterRelationshipsAreValid(candidate);
   }
 
   step(command: MotionCommandV1): void {

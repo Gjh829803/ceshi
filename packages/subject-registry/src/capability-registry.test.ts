@@ -1,10 +1,23 @@
 import { describe, expect, it } from "vitest";
 
-import { builtInSubjectResourceRegistry } from "./index";
+import {
+  builtInSubjectDefaultRegistry,
+  builtInSubjectResourceRegistry,
+} from "./index";
 import type { RegistrySubjectDefinitionV3 } from "./types-v3";
 
 const SUBJECT_DEFINITION_REFS = [
   "worldkit://subject-definition/animal.quadruped.forward-steer@1",
+  "worldkit://subject-definition/animal.quadruped.forward-steer@2",
+  "worldkit://subject-definition/glider.paraglider.unpowered@1",
+  "worldkit://subject-definition/humanoid.g-bot@1",
+  "worldkit://subject-definition/surface-craft.ice-skimmer@1",
+  "worldkit://subject-definition/vehicle.four-wheel.arcade@1",
+  "worldkit://subject-definition/watercraft.kayak.surface@1",
+] as const;
+
+const PUBLIC_DEFAULT_REFS = [
+  "worldkit://subject-definition/animal.quadruped.forward-steer@2",
   "worldkit://subject-definition/glider.paraglider.unpowered@1",
   "worldkit://subject-definition/humanoid.g-bot@1",
   "worldkit://subject-definition/surface-craft.ice-skimmer@1",
@@ -50,10 +63,14 @@ function capabilityDefinitions(): readonly RegistrySubjectDefinitionV3[] {
 }
 
 describe("capability-driven subject registry", () => {
-  it("registers the six phase-one subject packages while keeping four CLI definitions", () => {
+  it("keeps immutable Subject versions while publishing exactly six phase-one defaults", () => {
     expect(capabilityDefinitions().map((definition) => definition.resourceRef)).toEqual(
       SUBJECT_DEFINITION_REFS,
     );
+    expect(
+      builtInSubjectDefaultRegistry.listPublicDefaults()
+        .map((entry) => entry.subjectDefinitionRef),
+    ).toEqual(PUBLIC_DEFAULT_REFS);
     expect(builtInSubjectResourceRegistry.listSubjectDefinitions()).toHaveLength(4);
   });
 
@@ -158,6 +175,18 @@ describe("capability-driven subject registry", () => {
         "moveDeadzoneRatio",
         "responseExponent",
       ]);
+      expect(control.runtimeParameterNames).toEqual([
+        "moveDeadzoneRatio",
+        "responseExponent",
+      ]);
+      expect(control.safetyLimits).toEqual({
+        moveDeadzoneRatio: { minimum: 0, maximum: 0.95 },
+        responseExponent: { minimum: 0.25, maximum: 4 },
+      });
+      expect(control.authoringRanges).toEqual({
+        moveDeadzoneRatio: { minimum: 0, maximum: 0.5, step: 0.01 },
+        responseExponent: { minimum: 0.25, maximum: 3, step: 0.05 },
+      });
     }
   });
 

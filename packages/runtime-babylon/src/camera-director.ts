@@ -17,6 +17,7 @@ import type {
 import {
   applyCameraRigParameterOverridesV1,
   isCameraRigParameterOverrideSupportedV1,
+  isCameraTuningWithinSafetyLimitsV1,
   isCameraTuningParameterNameV1,
 } from "@whitebox-world/runtime-contracts";
 
@@ -397,6 +398,51 @@ export class CameraDirectorV1 {
         ? {}
         : { lookSensitivityYRatio: clamp(tuning.lookSensitivityYRatio, 0.1, 3) }),
     });
+    return true;
+  }
+
+  replacePresetTunings(
+    tuningByProfileRef: Readonly<Record<string, CameraTuningV1>>,
+    profiles: readonly ExecutionCameraRigProfileV1[],
+    preference: CameraPreferenceV1,
+  ): boolean {
+    const profilesByRef = new Map(
+      profiles.map((profile) => [profile.resourceRef, profile] as const),
+    );
+    if (
+      preference.trim().length === 0 ||
+      (preference !== "auto" &&
+        preference !== "first-person" &&
+        !profilesByRef.has(preference))
+    ) return false;
+    for (const [profileRef, tuning] of Object.entries(tuningByProfileRef)) {
+      const profile = profilesByRef.get(profileRef);
+      if (profile === undefined || !isCameraTuningWithinSafetyLimitsV1(tuning)) return false;
+      const entries = Object.entries(tuning).filter((entry) => entry[1] !== undefined);
+      if (!entries.every(([name, value]) =>
+        isCameraTuningParameterNameV1(name) &&
+        isCameraRigParameterOverrideSupportedV1(profile.algorithmRef, name) &&
+        typeof value === "number" &&
+        Number.isFinite(value)
+      )) return false;
+    }
+
+    const previousProfileRef = this.activeProfileRef;
+    const previousRigRef = this.activeRigRef;
+    this.tuningByProfileRef.clear();
+    for (const [profileRef, tuning] of Object.entries(tuningByProfileRef)) {
+      const profile = profilesByRef.get(profileRef)!;
+      this.activeProfileRef = profile.resourceRef;
+      this.activeRigRef = profile.algorithmRef;
+      if (!this.setTuning(tuning)) {
+        throw new Error(
+          "Camera preset validation diverged from Camera tuning application.",
+        );
+      }
+    }
+    this.activeProfileRef = previousProfileRef;
+    this.activeRigRef = previousRigRef;
+    this.preference = preference;
     return true;
   }
 

@@ -16,6 +16,7 @@ import {
 import type {
   CameraTuningV1,
   CompatibleProfileSummaryV1,
+  ControlTuningV1,
   MotionKernelSummaryV1,
   SemanticInputActionV1,
   SubjectDefinitionSummaryV1,
@@ -23,6 +24,16 @@ import type {
 } from "@whitebox-world/runtime-contracts";
 import { createFetchSubjectAssetResolver, PLAYGROUND_CAPABILITY_SUBJECT_ASSET_URI_BY_REF_V1 } from "./worldkit-asset-resolver.js";
 import { installDeferredWorldkitBrowserApi } from "./worldkit-browser-api.js";
+import {
+  createSubjectPresetLocalRepository,
+  type SubjectPresetLocalBaselineV1,
+  type SubjectPresetWorkingDraftV1,
+} from "./subject-preset-local.js";
+import {
+  createSubjectPresetWorkbenchDraftV1,
+  normalizeSubjectPresetCameraPreferenceV1,
+  subjectPresetTuningRequestFromDraftV1,
+} from "./subject-preset-workbench.js";
 
 const app = document.querySelector<HTMLDivElement>("#app");
 if (app === null) throw new Error("Missing #app container");
@@ -143,7 +154,9 @@ app.innerHTML = `
           <a href="#tuning-subject">选择主体</a>
           <a href="#tuning-input">操作测试</a>
           <a href="#tuning-motion">运动手感</a>
+          <a href="#tuning-control">输入手感</a>
           <a href="#tuning-camera">相机</a>
+          <a href="#tuning-versions">本地版本</a>
           <a href="#tuning-delivery">检查与导出</a>
         </nav>
         <div class="tuning-content">
@@ -161,14 +174,28 @@ app.innerHTML = `
             <div class="tuning-section-heading"><span>03</span><div><h3>调整运动手感</h3><p>滑杆使用策划推荐范围，并明确标出“即时生效”或“仅草稿、待接入”。</p></div></div>
             <div class="friendly-slider-grid" id="tuning-motion-sliders"></div>
           </section>
+          <section class="tuning-section" id="tuning-control">
+            <div class="tuning-section-heading"><span>04</span><div><h3>调整输入手感</h3><p>这两项只改变“按键或摇杆怎样变成操作意图”，不会改动主体速度和相机。</p></div></div>
+            <div class="friendly-slider-grid" id="tuning-control-sliders"></div>
+          </section>
           <section class="tuning-section" id="tuning-camera">
-            <div class="tuning-section-heading"><span>04</span><div><h3>选择并微调相机</h3><p>5 类基础镜头跨主体复用；水面、乘坐、倒车、冲刺和瞄准作为自动叠加的行为修饰，不再重复造镜头。</p></div></div>
+            <div class="tuning-section-heading"><span>05</span><div><h3>选择并微调相机</h3><p>5 类基础镜头跨主体复用；每套镜头的调整独立保存，切换后不会互相覆盖。</p></div></div>
             <div class="camera-instructions"><span>鼠标左键拖动</span>旋转 <span>滚轮</span>缩放 <span>R</span>回正 <span>C</span>回头看 <span>V</span>换肩 <button id="reset-camera-view-button" type="button">镜头回正</button></div>
             <div class="camera-card-grid" id="tuning-camera-cards"></div>
             <div class="friendly-slider-grid camera-tuning-grid" id="tuning-camera-sliders"></div>
           </section>
+          <section class="tuning-section" id="tuning-versions">
+            <div class="tuning-section-heading"><span>06</span><div><h3>保存为本地版本</h3><p>先把满意的手感保存成一个有名字的版本。它只保存在当前浏览器；设为本机默认后，下次打开这个主体会自动使用。</p></div></div>
+            <div class="local-version-editor">
+              <label>版本名称<input id="tuning-version-name" type="text" maxlength="80" placeholder="例如：四轮载具 · 稳健转向 01"></label>
+              <label>调参备注（可选）<textarea id="tuning-version-notes" rows="2" maxlength="500" placeholder="记录这版解决了什么手感问题"></textarea></label>
+              <button class="primary" id="tuning-save-version-button" type="button">保存当前版本</button>
+            </div>
+            <p class="local-version-explanation">本机默认不会修改 GitHub。要成为所有人的公共默认值，仍需导出并通过代码审核更新 main 分支。</p>
+            <div class="local-version-list" id="tuning-version-list"></div>
+          </section>
           <section class="tuning-section" id="tuning-delivery">
-            <div class="tuning-section-heading"><span>05</span><div><h3>检查并导出</h3><p>先跑一次自动检查，再把主体、运动草稿、输入说明和相机配置一起导出。</p></div></div>
+            <div class="tuning-section-heading"><span>07</span><div><h3>检查并导出</h3><p>先跑一次自动检查，再把主体、运动、输入和所有镜头配置一起导出。</p></div></div>
             <div class="delivery-actions">
               <button id="tuning-harness-button" type="button">运行自动检查</button>
               <button class="primary" id="tuning-export-button" type="button">导出配置 JSON</button>
@@ -389,6 +416,7 @@ interface TuningWorkbenchContextV1 {
   definition: SubjectDefinitionSummaryV1;
   activeKernel: MotionKernelSummaryV1 | undefined;
   motionProfiles: readonly CompatibleProfileSummaryV1[];
+  controlProfile: CompatibleProfileSummaryV1 | undefined;
   cameraProfiles: readonly CompatibleProfileSummaryV1[];
   parameterDraft: Record<string, number | boolean>;
   motionDraftStorageKey: string;
@@ -397,10 +425,14 @@ interface TuningWorkbenchContextV1 {
   hostOverlay?: CapabilityDemoHostOverlayV1;
 }
 
+interface TuningWorkbenchControllerV1 {
+  setCameraPreferenceFromCompact(preference: string): void;
+}
+
 function installTuningWorkbench(
   api: WorldkitBrowserApiV3,
   workbenchContext: TuningWorkbenchContextV1,
-): void {
+): TuningWorkbenchControllerV1 {
   const layer = requiredElement<HTMLDivElement>("#tuning-layer");
   const openButtons = [
     requiredElement<HTMLButtonElement>("#open-tuning-button"),
@@ -502,8 +534,213 @@ function installTuningWorkbench(
   }));
 
   const motionSliderGrid = requiredElement<HTMLDivElement>("#tuning-motion-sliders");
+  const controlSliderGrid = requiredElement<HTMLDivElement>("#tuning-control-sliders");
+  const cameraCards = requiredElement<HTMLDivElement>("#tuning-camera-cards");
+  const cameraSliders = requiredElement<HTMLDivElement>("#tuning-camera-sliders");
   const defaultMotion = workbenchContext.motionProfiles.find((row) => row.role === "default");
+  const controlProfile = workbenchContext.controlProfile;
+  const cameraRows = workbenchContext.cameraProfiles;
   const liveMotionParameterNames = new Set(defaultMotion?.runtimeParameterNames ?? []);
+
+  const numericParameters = (
+    parameters: Readonly<Record<string, number | boolean>> | undefined,
+  ): Record<string, number> => Object.fromEntries(
+    Object.entries(parameters ?? {}).filter(
+      (entry): entry is [string, number] => typeof entry[1] === "number" && Number.isFinite(entry[1]),
+    ),
+  );
+  const motionBaseParameters = numericParameters(defaultMotion?.parameters);
+  const controlBaseParameters = numericParameters(controlProfile?.parameters);
+  let controlTuning: ControlTuningV1 = { ...controlBaseParameters };
+  const cameraTuningByProfileRef: Record<string, Record<string, number>> = Object.fromEntries(
+    cameraRows.map((profile) => [profile.resourceRef, {}]),
+  );
+  let cameraPreference = workbenchContext.initialCameraPreference === "first-person"
+    ? cameraRows.find((row) => row.baseMode === "first-person")?.resourceRef ?? "auto"
+    : workbenchContext.initialCameraPreference;
+  if (cameraPreference !== "auto" && !cameraRows.some((row) => row.resourceRef === cameraPreference)) {
+    cameraPreference = "auto";
+  }
+  let cameraTuning: CameraTuningV1 = {};
+
+  const exactBaseline = api.getSubjectPresetBaseline?.(workbenchContext.definition.resourceRef);
+  const defaultCameraProfileRef = exactBaseline?.defaultCameraRigProfileRef;
+  const localBaseline: SubjectPresetLocalBaselineV1 | undefined =
+    exactBaseline !== undefined &&
+      defaultMotion !== undefined &&
+      controlProfile !== undefined &&
+      defaultCameraProfileRef !== undefined
+      ? {
+          subjectDefinitionId: exactBaseline.closure.subjectDefinitionId,
+          subjectDefinitionRef: exactBaseline.closure.subjectDefinitionRef,
+          subjectDefinitionContentHash: exactBaseline.closure.subjectDefinitionContentHash,
+          defaultMotionProfile: {
+            resourceRef: defaultMotion.resourceRef,
+            contentHash: defaultMotion.contentHash,
+          },
+          controlProfile: {
+            resourceRef: controlProfile.resourceRef,
+            contentHash: controlProfile.contentHash,
+          },
+          cameraProfiles: cameraRows.map((profile) => ({
+            resourceRef: profile.resourceRef,
+            contentHash: profile.contentHash,
+          })),
+          defaultCameraProfileRef,
+          firstPersonCameraProfileRef:
+            exactBaseline.firstPersonCameraRigProfileRef ?? null,
+        }
+      : undefined;
+  const localRepository = localBaseline === undefined
+    ? undefined
+    : createSubjectPresetLocalRepository(localStorage);
+  const normalizeCameraPreference = (preference: string): string =>
+    localBaseline === undefined
+      ? preference === "auto"
+        ? "auto"
+        : preference === "first-person"
+          ? exactBaseline?.firstPersonCameraRigProfileRef ?? "auto"
+          : cameraRows.some((profile) => profile.resourceRef === preference)
+            ? preference
+            : "auto"
+      : normalizeSubjectPresetCameraPreferenceV1(preference, localBaseline);
+  const syncCompactCameraSelect = (): void => {
+    const compactCameraSelect = document.querySelector<HTMLSelectElement>(
+      "#camera-preference-select",
+    );
+    if (compactCameraSelect !== null && [...compactCameraSelect.options].some(
+      (option) => option.value === cameraPreference,
+    )) {
+      compactCameraSelect.value = cameraPreference;
+    }
+  };
+  const draftCreatedAtIso = new Date().toISOString();
+  let draftIdentity = {
+    draftId: `draft-workbench-${globalThis.crypto.randomUUID()}`,
+    createdAtIso: draftCreatedAtIso,
+    updatedAtIso: draftCreatedAtIso,
+  };
+
+  const resetTuningStateToRegistry = (): void => {
+    for (const name of Object.keys(workbenchContext.parameterDraft)) {
+      delete workbenchContext.parameterDraft[name];
+    }
+    Object.assign(workbenchContext.parameterDraft, defaultMotion?.parameters ?? {});
+    controlTuning = { ...controlBaseParameters };
+    for (const profile of cameraRows) {
+      cameraTuningByProfileRef[profile.resourceRef] = {};
+    }
+    cameraPreference = "auto";
+  };
+
+  const loadDraftIntoTuningState = (draft: SubjectPresetWorkingDraftV1): void => {
+    resetTuningStateToRegistry();
+    draftIdentity = {
+      draftId: draft.draftId,
+      createdAtIso: draft.createdAtIso,
+      updatedAtIso: draft.updatedAtIso,
+    };
+    const motionValues = draft.motionOverridesByProfileRef[defaultMotion?.resourceRef ?? ""]?.values ?? {};
+    Object.assign(workbenchContext.parameterDraft, motionValues);
+    const controlValues = draft.controlOverridesByProfileRef[controlProfile?.resourceRef ?? ""]?.values ?? {};
+    controlTuning = { ...controlBaseParameters, ...controlValues };
+    for (const profile of cameraRows) {
+      const values = draft.cameraOverridesByProfileRef[profile.resourceRef]?.values ?? {};
+      cameraTuningByProfileRef[profile.resourceRef] = Object.fromEntries(
+        Object.entries(values).filter(([name]) =>
+          typeof profile.parameters?.[name] === "number"
+        ),
+      );
+    }
+    cameraPreference = draft.selectedCameraPreferenceRef === null
+      ? "auto"
+      : cameraRows.some((profile) => profile.resourceRef === draft.selectedCameraPreferenceRef)
+        ? draft.selectedCameraPreferenceRef
+        : "auto";
+  };
+
+  const createCurrentWorkingDraft = (): SubjectPresetWorkingDraftV1 | undefined => {
+    if (localBaseline === undefined) return undefined;
+    const updatedAtIso = new Date().toISOString();
+    return createSubjectPresetWorkbenchDraftV1({
+      baseline: localBaseline,
+      draftIdentity: { ...draftIdentity, updatedAtIso },
+      selectedCameraPreferenceRef: cameraPreference === "auto" ? null : cameraPreference,
+      motion: {
+        baseParameters: defaultMotion?.parameters ?? {},
+        currentValues: numericParameters(workbenchContext.parameterDraft),
+        ...(defaultMotion?.runtimeParameterNames === undefined
+          ? {}
+          : { runtimeParameterNames: defaultMotion.runtimeParameterNames }),
+      },
+      control: {
+        baseParameters: controlProfile?.parameters ?? {},
+        currentValues: numericParameters(controlTuning),
+        ...(controlProfile?.runtimeParameterNames === undefined
+          ? {}
+          : { runtimeParameterNames: controlProfile.runtimeParameterNames }),
+      },
+      cameraByProfileRef: Object.fromEntries(cameraRows.map((profile) => [
+        profile.resourceRef,
+        {
+          baseParameters: profile.parameters ?? {},
+          currentValues: cameraTuningByProfileRef[profile.resourceRef] ?? {},
+        },
+      ])),
+    });
+  };
+
+  const persistWorkingDraft = (): SubjectPresetWorkingDraftV1 | undefined => {
+    const draft = createCurrentWorkingDraft();
+    if (draft === undefined || localRepository === undefined) return undefined;
+    const receipt = localRepository.saveWorkingDraft(draft);
+    draftIdentity = {
+      draftId: receipt.value.draftId,
+      createdAtIso: receipt.value.createdAtIso,
+      updatedAtIso: receipt.value.updatedAtIso,
+    };
+    if (receipt.status === "memory-only") {
+      saveStatus.textContent = "浏览器暂时不能写入磁盘；本次调参只保留到页面关闭前";
+    }
+    return receipt.value;
+  };
+
+  const applyWorkingDraftAtomically = (draft: SubjectPresetWorkingDraftV1): boolean => {
+    if (api.applySubjectPresetTuning === undefined) return false;
+    try {
+      const receipt = api.applySubjectPresetTuning(
+        subjectPresetTuningRequestFromDraftV1(draft, workbenchContext.controlledEntityId),
+      );
+      if (receipt.status === "rejected") {
+        saveStatus.textContent = `版本没有应用：${receipt.diagnostic?.message ?? "配置与当前主体不匹配"}`;
+        return false;
+      }
+      const compactCameraSelect = document.querySelector<HTMLSelectElement>("#camera-preference-select");
+      if (compactCameraSelect !== null) {
+        compactCameraSelect.value = cameraPreference;
+      }
+      return true;
+    } catch {
+      saveStatus.textContent = "整套配置未能应用，当前主体仍使用上一组稳定配置";
+      return false;
+    }
+  };
+
+  if (localRepository !== undefined && localBaseline !== undefined) {
+    localRepository.migrateV4(localBaseline);
+    const localDefault = localRepository.resolveLocalDefault(localBaseline);
+    const initialDraft = localDefault.status === "applicable"
+      ? localRepository.restoreVersion(localDefault.pointer.localVersionId).value
+      : localRepository.getWorkingDraft(localBaseline);
+    if (initialDraft !== undefined) {
+      loadDraftIntoTuningState(initialDraft);
+      const normalizedDraft = persistWorkingDraft();
+      if (normalizedDraft !== undefined && !applyWorkingDraftAtomically(normalizedDraft)) {
+        resetTuningStateToRegistry();
+      }
+    }
+  }
+
   const applyMotionTuning = (): void => {
     const numericTuning = Object.fromEntries(
       Object.entries(workbenchContext.parameterDraft).filter(
@@ -513,14 +750,16 @@ function installTuningWorkbench(
     );
     try {
       api.setMotionTuning?.(workbenchContext.controlledEntityId, numericTuning);
-      saveStatus.textContent = "运动手感已应用到当前主体，并保存到本机草稿";
     } catch {
       saveStatus.textContent = "运动参数未能应用，当前主体仍使用上一组稳定配置";
     }
   };
-  if (defaultMotion?.safetyLimits === undefined) {
-    motionSliderGrid.innerHTML = '<p class="friendly-empty">当前主体没有开放可调的运动参数。</p>';
-  } else {
+
+  const renderMotionSliders = (): void => {
+    if (defaultMotion?.safetyLimits === undefined) {
+      motionSliderGrid.innerHTML = '<p class="friendly-empty">当前主体没有开放可调的运动参数。</p>';
+      return;
+    }
     motionSliderGrid.replaceChildren(...Object.entries(defaultMotion.safetyLimits).flatMap(([name, safetyLimit]) => {
       const value = workbenchContext.parameterDraft[name];
       const range = defaultMotion.authoringRanges?.[name] ?? {
@@ -546,15 +785,13 @@ function installTuningWorkbench(
         const nextValue = Number(input.value);
         workbenchContext.parameterDraft[name] = nextValue;
         output.textContent = nextValue.toFixed(2);
-        writeLocalDraft(
-          workbenchContext.motionDraftStorageKey,
-          JSON.stringify(workbenchContext.parameterDraft),
-        );
+        writeLocalDraft(workbenchContext.motionDraftStorageKey, JSON.stringify(workbenchContext.parameterDraft));
+        persistWorkingDraft();
         if (runtimeSupported) {
           applyMotionTuning();
-          saveStatus.textContent = `“${labelText}”已应用到当前主体，并保存到本机草稿`;
+          saveStatus.textContent = `“${labelText}”已应用，并保存到本机草稿`;
         } else {
-          saveStatus.textContent = `“${labelText}”只保存为草稿，当前 Runtime 尚未接入`;
+          saveStatus.textContent = `“${labelText}”只保存为草稿，当前还不能影响预览`;
         }
       });
       control.append(input, output);
@@ -562,38 +799,87 @@ function installTuningWorkbench(
       return [label];
     }));
     applyMotionTuning();
-  }
+  };
 
-  const cameraCards = requiredElement<HTMLDivElement>("#tuning-camera-cards");
-  const cameraSliders = requiredElement<HTMLDivElement>("#tuning-camera-sliders");
-  const cameraRows = workbenchContext.cameraProfiles;
-  let cameraPreference = workbenchContext.initialCameraPreference === "first-person"
-    ? cameraRows.find((row) => row.resourceRef.includes("first-person"))?.resourceRef ?? "auto"
-    : workbenchContext.initialCameraPreference;
-  let cameraTuning: CameraTuningV1 = {};
+  const renderControlSliders = (): void => {
+    if (controlProfile?.safetyLimits === undefined) {
+      controlSliderGrid.innerHTML = '<p class="friendly-empty">当前主体没有开放可调的输入手感参数。</p>';
+      return;
+    }
+    const copy: Readonly<Record<string, readonly [string, string]>> = {
+      moveDeadzoneRatio: ["移动输入死区", "忽略很小的摇杆偏移；键盘操作通常感觉不明显，手柄可防止角色自己慢慢移动"],
+      responseExponent: ["输入响应曲线", "数值越大，小幅输入越细腻；数值越小，方向和油门越快接近满幅"],
+    };
+    controlSliderGrid.replaceChildren(...["moveDeadzoneRatio", "responseExponent"].flatMap((name) => {
+      const value = controlTuning[name as keyof ControlTuningV1];
+      const safetyLimit = controlProfile.safetyLimits?.[name];
+      const range = controlProfile.authoringRanges?.[name] ?? (safetyLimit === undefined ? undefined : {
+        ...safetyLimit,
+        step: Math.max(0.01, (safetyLimit.maximum - safetyLimit.minimum) / 100),
+      });
+      if (typeof value !== "number" || range === undefined) return [];
+      const [labelText, helpText] = copy[name] ?? [name, "输入曲线参数"];
+      const label = document.createElement("label");
+      label.className = "friendly-slider";
+      label.innerHTML = `<span><strong>${escapeHtml(labelText)} · 即时生效</strong><small>${escapeHtml(helpText)}</small></span>`;
+      const control = document.createElement("div");
+      const input = document.createElement("input");
+      input.type = "range";
+      input.min = String(range.minimum);
+      input.max = String(range.maximum);
+      input.step = String(range.step);
+      input.value = String(value);
+      const output = document.createElement("output");
+      output.textContent = value.toFixed(2);
+      input.addEventListener("input", () => {
+        const nextValue = Number(input.value);
+        controlTuning = { ...controlTuning, [name]: nextValue };
+        output.textContent = nextValue.toFixed(2);
+        try {
+          api.setControlTuning?.(workbenchContext.controlledEntityId, controlTuning);
+          persistWorkingDraft();
+          saveStatus.textContent = `“${labelText}”已应用，并保存到本机草稿`;
+        } catch {
+          saveStatus.textContent = `“${labelText}”未能应用，上一组输入设置已保留`;
+        }
+      });
+      control.append(input, output);
+      label.append(control);
+      return [label];
+    }));
+    try {
+      api.setControlTuning?.(workbenchContext.controlledEntityId, controlTuning);
+    } catch {
+      saveStatus.textContent = "输入手感参数未能应用，当前主体仍使用 Registry 默认值";
+    }
+  };
+
+  const activeTunableCameraProfile = (): CompatibleProfileSummaryV1 | undefined => {
+    const profileRef = cameraPreference === "auto"
+      ? api.getCameraSnapshot?.().activeCameraProfileRef
+      : cameraPreference;
+    return cameraRows.find((row) => row.resourceRef === profileRef) ?? cameraRows[0];
+  };
 
   const applyCameraTuning = (): void => {
+    const profile = activeTunableCameraProfile();
+    cameraTuning = profile === undefined
+      ? {}
+      : { ...(cameraTuningByProfileRef[profile.resourceRef] ?? {}) } as CameraTuningV1;
     try {
       api.setCameraTuning?.(cameraTuning);
-      saveStatus.textContent = "相机微调已应用到当前预览，并自动保存";
     } catch {
       saveStatus.textContent = "相机微调未能应用，原镜头设置已保留";
     }
   };
 
   const renderCameraSliders = (): void => {
-    const activeProfileRef = cameraPreference === "auto"
-      ? api.getCameraSnapshot?.().activeCameraProfileRef
-      : cameraPreference;
-    const profile = cameraRows.find((row) => row.resourceRef === activeProfileRef) ?? cameraRows[0];
+    const profile = activeTunableCameraProfile();
     const base = profile?.parameters ?? {};
+    cameraTuning = profile === undefined
+      ? {}
+      : { ...(cameraTuningByProfileRef[profile.resourceRef] ?? {}) } as CameraTuningV1;
     const storageKey = `worldkit.camera-tuning.v4.${workbenchContext.definition.resourceRef}.${profile?.resourceRef ?? "auto"}.${profile?.contentHash ?? "unlocked"}`;
-    try {
-      const stored = readLocalDraft(storageKey);
-      cameraTuning = stored === null ? {} : JSON.parse(stored) as CameraTuningV1;
-    } catch {
-      cameraTuning = {};
-    }
     const settings: Array<{
       key: keyof CameraTuningV1;
       label: string;
@@ -653,9 +939,14 @@ function installTuningWorkbench(
       input.addEventListener("input", () => {
         const nextValue = Number(input.value);
         cameraTuning[setting.key] = nextValue;
+        if (profile !== undefined) {
+          cameraTuningByProfileRef[profile.resourceRef] = { ...cameraTuning } as Record<string, number>;
+        }
         output.textContent = nextValue.toFixed(2);
         writeLocalDraft(storageKey, JSON.stringify(cameraTuning));
         applyCameraTuning();
+        persistWorkingDraft();
+        saveStatus.textContent = `“${setting.label}”已应用；这组数值只属于当前镜头`;
       });
       control.append(input, output);
       label.append(control);
@@ -682,9 +973,11 @@ function installTuningWorkbench(
         try {
           api.setCameraPreference?.(row.resourceRef);
           cameraPreference = row.resourceRef;
+          syncCompactCameraSelect();
           writeLocalDraft("worldkit.camera-preference", row.resourceRef);
           refreshCameraCards();
           renderCameraSliders();
+          persistWorkingDraft();
           saveStatus.textContent = `已应用“${row.displayName}”，现在可以在左侧拖动体验`;
         } catch {
           saveStatus.textContent = `“${row.displayName}”未能应用，原镜头已保留`;
@@ -703,6 +996,160 @@ function installTuningWorkbench(
       saveStatus.textContent = "镜头暂时无法回正，当前状态已保留";
     }
   });
+  renderMotionSliders();
+  renderControlSliders();
+
+  const versionNameInput = requiredElement<HTMLInputElement>("#tuning-version-name");
+  const versionNotesInput = requiredElement<HTMLTextAreaElement>("#tuning-version-notes");
+  const versionList = requiredElement<HTMLDivElement>("#tuning-version-list");
+  const saveVersionButton = requiredElement<HTMLButtonElement>("#tuning-save-version-button");
+
+  const refreshWorkbenchAfterRestore = (): void => {
+    applyMotionTuning();
+    try {
+      api.setControlTuning?.(workbenchContext.controlledEntityId, controlTuning);
+    } catch {
+      // The atomic apply already protects the committed Runtime state.
+    }
+    refreshCameraCards();
+    renderCameraSliders();
+    renderMotionSliders();
+    renderControlSliders();
+    const compactCameraSelect = document.querySelector<HTMLSelectElement>("#camera-preference-select");
+    if (compactCameraSelect !== null && [...compactCameraSelect.options].some(
+      (option) => option.value === cameraPreference,
+    )) {
+      compactCameraSelect.value = cameraPreference;
+    }
+  };
+
+  const renderLocalVersions = (): void => {
+    if (localRepository === undefined || localBaseline === undefined) {
+      versionList.innerHTML = '<p class="friendly-empty">当前 Runtime 没有提供精确资源锁，暂时不能保存可恢复版本。</p>';
+      saveVersionButton.disabled = true;
+      return;
+    }
+    const versions = [...localRepository.listVersions(localBaseline.subjectDefinitionId)].reverse();
+    const localDefault = localRepository.getLocalDefault(localBaseline.subjectDefinitionId);
+    if (versions.length === 0) {
+      versionList.innerHTML = '<p class="friendly-empty">还没有保存版本。先完成调参，再给这一版起个容易辨认的名字。</p>';
+      return;
+    }
+    versionList.replaceChildren(...versions.map((version) => {
+      const card = document.createElement("article");
+      if (localDefault?.localVersionId === version.localVersionId) card.classList.add("is-default");
+      const heading = document.createElement("div");
+      heading.className = "local-version-heading";
+      heading.innerHTML = `
+        <div><strong>${escapeHtml(version.displayName)}</strong><small>${new Date(version.createdAtIso).toLocaleString("zh-CN", { hour12: false })}</small></div>
+        ${localDefault?.localVersionId === version.localVersionId ? '<span>本机默认</span>' : ""}
+      `;
+      const notes = document.createElement("p");
+      notes.textContent = version.notes || "没有备注";
+      const actions = document.createElement("div");
+      actions.className = "local-version-actions";
+      const restoreButton = document.createElement("button");
+      restoreButton.type = "button";
+      restoreButton.textContent = "恢复并应用";
+      restoreButton.addEventListener("click", () => {
+        const previousDraft = createCurrentWorkingDraft();
+        try {
+          const restored = localRepository.restoreVersion(version.localVersionId).value;
+          loadDraftIntoTuningState(restored);
+          const normalized = persistWorkingDraft();
+          if (normalized === undefined || !applyWorkingDraftAtomically(normalized)) {
+            if (previousDraft !== undefined) {
+              loadDraftIntoTuningState(previousDraft);
+              localRepository.saveWorkingDraft(previousDraft);
+            } else {
+              resetTuningStateToRegistry();
+            }
+            refreshWorkbenchAfterRestore();
+            return;
+          }
+          refreshWorkbenchAfterRestore();
+          writeLocalDraft("worldkit.camera-preference", cameraPreference);
+          saveStatus.textContent = `已恢复“${version.displayName}”，运动、输入和相机已一起应用`;
+        } catch {
+          if (previousDraft !== undefined) loadDraftIntoTuningState(previousDraft);
+          refreshWorkbenchAfterRestore();
+          saveStatus.textContent = `“${version.displayName}”无法恢复，当前配置没有改变`;
+        }
+      });
+      const defaultButton = document.createElement("button");
+      defaultButton.type = "button";
+      defaultButton.textContent = localDefault?.localVersionId === version.localVersionId
+        ? "已是本机默认"
+        : "设为本机默认";
+      defaultButton.disabled = localDefault?.localVersionId === version.localVersionId;
+      defaultButton.addEventListener("click", () => {
+        try {
+          const receipt = localRepository.setLocalDefault({
+            schemaVersion: 1,
+            subjectDefinitionId: localBaseline.subjectDefinitionId,
+            baseSubjectDefinitionRef: localBaseline.subjectDefinitionRef,
+            baseSubjectDefinitionContentHash: localBaseline.subjectDefinitionContentHash,
+            localVersionId: version.localVersionId,
+          });
+          renderLocalVersions();
+          saveStatus.textContent = receipt.status === "persisted"
+            ? `“${version.displayName}”已设为本机默认；下次打开会自动使用`
+            : "浏览器不能写入磁盘，本机默认只在本次页面中有效";
+        } catch {
+          saveStatus.textContent = "本机默认没有设置成功；版本与当前主体可能已经不一致";
+        }
+      });
+      const deleteButton = document.createElement("button");
+      deleteButton.type = "button";
+      deleteButton.className = "danger";
+      deleteButton.textContent = "删除";
+      deleteButton.addEventListener("click", () => {
+        if (!window.confirm(`确定删除本地版本“${version.displayName}”吗？这个操作无法撤销。`)) return;
+        try {
+          const receipt = localRepository.deleteVersion(version.localVersionId);
+          renderLocalVersions();
+          saveStatus.textContent = receipt.value.clearedLocalDefault
+            ? "版本已删除；它原本是本机默认，因此默认标记也已清除"
+            : "本地版本已删除";
+        } catch {
+          saveStatus.textContent = "这个版本没有删除成功，其他版本未受影响";
+        }
+      });
+      actions.append(restoreButton, defaultButton, deleteButton);
+      card.append(heading, notes, actions);
+      return card;
+    }));
+  };
+
+  saveVersionButton.addEventListener("click", () => {
+    const displayName = versionNameInput.value.trim();
+    if (displayName.length === 0) {
+      versionNameInput.focus();
+      saveStatus.textContent = "请先填写版本名称，方便以后辨认和恢复";
+      return;
+    }
+    if (localRepository === undefined) {
+      saveStatus.textContent = "当前页面还不能创建本地版本";
+      return;
+    }
+    try {
+      const draft = persistWorkingDraft();
+      if (draft === undefined) throw new Error("Missing exact preset baseline");
+      const receipt = localRepository.saveVersion(draft, {
+        displayName,
+        notes: versionNotesInput.value.trim(),
+      });
+      versionNameInput.value = "";
+      versionNotesInput.value = "";
+      renderLocalVersions();
+      saveStatus.textContent = receipt.status === "persisted"
+        ? `“${receipt.value.displayName}”已保存为本地版本`
+        : "版本已暂存在内存，但浏览器没有写入磁盘";
+    } catch {
+      saveStatus.textContent = "版本没有保存成功；当前 Runtime 配置未被修改";
+    }
+  });
+  renderLocalVersions();
 
   const result = requiredElement<HTMLPreElement>("#tuning-result");
   const relationshipPreviewOnly = workbenchContext.hostOverlay?.changes.some(
@@ -736,6 +1183,8 @@ function installTuningWorkbench(
         displayName: FRIENDLY_CAMERA_MODIFIERS[resourceRef] ?? resourceRef,
       })),
       cameraTuning,
+      cameraTuningByProfileRef,
+      controlTuning,
       motionParameterDraft: workbenchContext.parameterDraft,
       motionParameterSupport: {
         runtimeParameterNames: defaultMotion?.runtimeParameterNames ?? [],
@@ -743,7 +1192,11 @@ function installTuningWorkbench(
         authoringRanges: defaultMotion?.authoringRanges ?? {},
       },
       inputGuide: inputItems.map((item) => ({ key: item.keyLabel, action: item.title, meaning: item.explanation })),
-      compatibleProfiles: [...workbenchContext.motionProfiles, ...workbenchContext.cameraProfiles],
+      compatibleProfiles: [
+        ...workbenchContext.motionProfiles,
+        ...(workbenchContext.controlProfile === undefined ? [] : [workbenchContext.controlProfile]),
+        ...workbenchContext.cameraProfiles,
+      ],
       resourceLockRequired: true,
       note: "标记为即时生效的参数已在当前会话预览；仅草稿参数需接入 Runtime 后才能成为正式预制。",
     }, workbenchContext.hostOverlay);
@@ -756,6 +1209,15 @@ function installTuningWorkbench(
   for (const selector of ["#tuning-export-button", "#tuning-export-footer-button"]) {
     requiredElement<HTMLButtonElement>(selector).addEventListener("click", exportCurrent);
   }
+  return {
+    setCameraPreferenceFromCompact(preference: string): void {
+      cameraPreference = normalizeCameraPreference(preference);
+      syncCompactCameraSelect();
+      refreshCameraCards();
+      renderCameraSliders();
+      persistWorkingDraft();
+    },
+  };
 }
 
 function installAuthoringRecoveryPanel(api: WorldkitBrowserApiV3): void {
@@ -872,6 +1334,7 @@ function installCapabilityAuthoringPanel(
         `;
   const profiles = api.listCompatibleProfiles?.(definition.resourceRef) ?? [];
   const motionProfiles = profiles.filter((row) => row.kind === "motion-profile");
+  const controlProfile = profiles.find((row) => row.kind === "control-profile");
   const cameraProfiles = profiles.filter((row) => row.kind === "camera-rig-profile");
   cameraSelect.replaceChildren(
     ...[
@@ -962,11 +1425,12 @@ function installCapabilityAuthoringPanel(
   }
   drafts.innerHTML = "<p>完整的运动手感滑杆、操作说明、5 类基础镜头和自动行为修饰器都已移到大尺寸调控台。</p>";
 
-  installTuningWorkbench(api, {
+  const tuningWorkbench = installTuningWorkbench(api, {
     definitions,
     definition,
     activeKernel,
     motionProfiles,
+    controlProfile,
     cameraProfiles,
     parameterDraft,
     motionDraftStorageKey,
@@ -982,6 +1446,7 @@ function installCapabilityAuthoringPanel(
     try {
       api.setCameraPreference?.(cameraSelect.value);
       writeLocalDraft("worldkit.camera-preference", cameraSelect.value);
+      tuningWorkbench.setCameraPreferenceFromCompact(cameraSelect.value);
     } catch {
       harnessOutput.textContent = authoringActionFailure();
     }

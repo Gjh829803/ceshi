@@ -20,7 +20,8 @@ Gameplay 真相。
 1. [项目总览](docs/00-project-overview.md)：产品范围、当前能力和明确不支持的部分；
 2. [SDK 分层架构](docs/02-sdk-architecture.md)：系统边界、八层架构、代码包归属和运行时序列；
 3. [Canonical JSON V3 快速接入](docs/17-canonical-json-quickstart.md)：当前唯一 JSON 协议和命令；
-4. [重构总进度与 Backlog](docs/18-refactor-progress-and-backlog.md)：完成度、优先级、依赖和验收标准。
+4. [主体手感配表与版本工作区](docs/19-subject-preset-workspace.md)：本地版本、公共默认、发布与回滚；
+5. [重构总进度与 Backlog](docs/18-refactor-progress-and-backlog.md)：完成度、优先级、依赖和验收标准。
 
 ## 核心链路
 
@@ -300,6 +301,19 @@ pnpm verify:g-bot-subject
 事实；SDK Registry 的 Rig Profile / Animation Set 把它们映射为稳定 Bone ID 和
 Semantic Action。普通 World Agent 不读取模型路径、Mixamo Bone 名或源 Clip 名。
 
+### Source-only FBX 资产清单
+
+`assets/subjects/source-fbx/vehicles/` 保存 12 个载具与可骑乘主体的原始 FBX，
+`catalog.json` 记录稳定英文 `sourceId`、原始中文相对路径、仓库路径、字节数与
+SHA-256，便于团队拉取、审计和后续转换。它们当前统一标记为
+`runtimeStatus: "source-only"`：尚未转换为 Runtime 使用的 GLB，也没有注册到
+Subject Asset Resolver，因此不能直接在页面中运行。
+
+当前 Playground 中除 G Bot 外的主体仍由 Registry `visualParts` 生成程序化白模；
+把 FBX 放入仓库只建立了可追溯的美术源文件基线，不会替换这些白模或伪装成已完成
+的 Runtime 接入。后续必须经过格式转换、坐标/尺寸检查、Collider、Socket、动作或
+Pose 配置及 Registry 锁定，才能成为可运行的主体资产。
+
 ## 验证
 
 ```bash
@@ -363,6 +377,7 @@ Compiler 和 Runtime 不能反向读取 Agent Prompt；Runtime Adapter 不能把
 
 - [项目总览：范围、状态与阅读顺序](docs/00-project-overview.md)
 - [Canonical JSON V3：AI/CLI 接入与运行指南](docs/17-canonical-json-quickstart.md)
+- [主体手感配表与版本工作区](docs/19-subject-preset-workspace.md)
 - [SDK 重构总进度与 Backlog](docs/18-refactor-progress-and-backlog.md)
 - [当前实验与验证记录](docs/10-current-experiments.md)
 - [第一期 Alpha 实现与运行指南](docs/07-alpha-implementation.md)
