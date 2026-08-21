@@ -7,7 +7,7 @@
 后续视频模型只消费 SDK 输出的白模与控制通道，不负责决定碰撞、位置、导航或
 Gameplay 真相。
 
-> 当前长期重构总进度约 **60%**；“JSON → IR → Babylon/Havok → 多主体控制、
+> 当前长期重构总进度约 **62%**；“JSON → IR → Babylon/Havok → 多主体控制、
 > 确定性落位与截图”的第一条 Canonical 纵向切片约 **90%**。详细口径和全部待办见
 > [SDK 重构总进度与 Backlog](docs/18-refactor-progress-and-backlog.md)。
 
@@ -37,7 +37,7 @@ flowchart TB
         TAKE["Simulation Take V1<br/>60 Hz Fixed Tick · Exact Schedule"]
         RUNTIME["Babylon.js Runtime + Havok Physics<br/>唯一白模世界真相"]
         CAPTURE["Control Capture Bundle<br/>Neutral Color · Linear Depth · Semantic · Instance · Normal"]
-        REPORT["Validation Report<br/>Blocking Gate 一票否决"]
+        REPORT["Validation Report<br/>Capture/Integrity V1 · Blocking Gate 一票否决"]
 
         AUTHOR --> VALIDATE --> COMPILE --> IR --> PACKAGE --> TAKE --> RUNTIME --> CAPTURE --> REPORT
     end
@@ -78,7 +78,7 @@ flowchart TB
 | **Simulation Take** | 一段可复现的表演时间线，例如“人物走 3 秒、跳跃、相机持续跟随” | 世界计划 + 控制序列 → 固定时间线 |
 | **Babylon.js Runtime + Havok Physics** | 真正运行白模世界的地方。Babylon.js 负责模型、场景、相机、骨骼动画和画面；Havok 负责重力、地面支撑、墙体碰撞和物理运动 | ExecutionPlan → 可交互白模世界 |
 | **Control Capture Bundle** | 从同一个 Runtime、同一时刻导出白模画面和结构通道，让下游模型同时知道“看到了什么、在哪里、属于谁、表面朝向哪里” | 运行中的世界 → 多通道结构捕获 |
-| **Validation Report / Blocking Gate** | 最终质检。位置、碰撞、遮挡、构图、资源或确定性只要有必需项不合格，就拒绝继续，不允许视频模型掩盖结构错误 | 世界和捕获证据 → 通过或拒绝 |
+| **Validation Report / Blocking Gate** | 统一质检协议。当前 V1 已验收 Capture Bundle 的 Pass、Depth、Hash 与归属；后续位置、碰撞、构图等继续接入同一协议。任一已声明 Blocking Gate 失败都拒绝继续 | 世界和捕获证据 → 可哈希报告与通过/拒绝 |
 | **Video Model Adapter** | 把 SDK 的白模和结构通道转换成外部视频模型需要的输入格式，但不能修改世界中的主体数量、位置、碰撞和动作结果 | 白模证据 → 视频模型输入 |
 | **Final Generated Video** | 视频模型在结构正确的白模基础上增加材质、光影、人物细节和视觉风格后的最终结果 | 经过验证的结构 → 最终视频 |
 
@@ -121,17 +121,21 @@ Control Capture Bundle 中的通道分别表示：
 人物、灯塔、道路和空间约束；Validator 检查资源；Terrain Compiler 和 Layout
 Solver 生成高度并计算位置；IR 固化结果；ExecutionPlan 创建可运行任务；Babylon
 加载场景和动画；Havok 处理坡面、重力和墙体；Simulation Take 控制人物移动；
-Capture 导出白模及结构通道；Validation Report 检查人物是否掉入水中、穿墙或偏离
-要求。全部通过后，视频模型才负责把白模变成最终画面。
+Capture 导出白模及结构通道；当前 Validation Capture/Integrity V1 检查五 Pass、
+Linear Depth、Bundle Hash 和 Package/Take/Session 归属。人物是否掉入水中、穿墙或
+偏离构图仍由现有专项 Gate 检查，后续再接入统一 Report。全部已声明 Gate 通过后，
+视频模型才负责把白模变成最终画面。
 
 因此，这个 SDK 不只是对 Babylon.js 做一层简单封装，而是在 AI 与 3D 游戏引擎
 之间提供一套**稳定、确定、可验证、可复现的世界编译系统**。
 
 当前已经交付到 AuthoringSpec V3、NormalizedWorldIR V3、ExecutionPlan V4、
-Placement Solver S1、Babylon/Havok Runtime，以及 Simulation Take / Control Capture V1：
-精确 Tick/Frame Schedule、五 Pass、Render Ready Receipt、原子 Bundle、CLI/Browser/
-Playwright 和真实浏览器 Gate。统一 Validation Report、完整 WorldPackage、通用
-Terrain/Route、恢复续拍和视频模型 Adapter 仍在后续 Backlog 中。
+Placement Solver S1、Babylon/Havok Runtime、Simulation Take / Control Capture V1，
+以及统一 Validation 的 Capture/Integrity V1 窄切片：精确 Tick/Frame Schedule、五
+Pass、Render Ready Receipt、原子 Bundle、版本化 Profile、Canonical Report、
+`verify capture|explain` 和正负向门禁。Placement/Physics/Composition 等统一
+Validation 扩展、完整 WorldPackage、通用 Terrain/Route、恢复续拍和视频模型
+Adapter 仍在后续 Backlog 中。
 
 ## 职责边界
 
@@ -200,7 +204,7 @@ Socket 和类型化关系表达。
 | 运动与相机 | 地面移动、跳跃、水域状态、第三人称跟随 | 第一人称、飞行、车辆、Camera Director 和多 Rig 切换 |
 | 自动化 | validate/build/run/capture、Registry Discovery、Definition Validate、Subject Explain、Browser V3、Take Driver 与 Control Capture Gate | 持久 Runtime Session、恢复续拍、多人同时控制 |
 | Capture | 单帧截图、Runtime Snapshot、Simulation Take V1、Neutral/Depth/Semantic/Instance/Normal 五 Pass、原子 Bundle | Event/Action/Relationship Receipt、Motion Vector、完整 Replay/Resume 与视频 Adapter |
-| Validation | Canonical Browser Gate、现有物理/构图检查 | 统一 Validation Profile/Report、量化 Metric/Evidence 与生产 Policy（专项设计已成稿） |
+| Validation | Canonical Browser Gate、现有物理/构图检查；Capture/Integrity V1 的版本化 Profile、严格 Report、Blocking Policy、Evidence/Diagnostic、verify/explain | Placement/Physics/Route/Composition/Replay/Performance 接入统一 Report、Profile 组合、compare、Browser/CI Evidence 发布与完整生产 Policy |
 | Gameplay | 基础固定输入、控制绑定与 Golden/G Bot `idle/walk/run/jump` 动作状态 | 完整 Semantic Action、姿态、游泳、装备、NPC、导航、任务、战斗、联网 |
 | 最终视觉 | 本地白模渲染 | Render Bridge、实时世界模型和生产 Video Model Adapter |
 
@@ -251,6 +255,10 @@ pnpm worldkit take run examples/takes/coastal-walk-opening.take.json \
   --width-pixels 160 --height-pixels 90 --json
 pnpm worldkit capture validate /tmp/coastal-walk-opening.bundle --json
 pnpm worldkit capture inspect /tmp/coastal-walk-opening.bundle --json
+pnpm worldkit verify capture /tmp/coastal-walk-opening.bundle \
+  --output /tmp/coastal-walk-opening.validation-report.json --json
+pnpm worldkit verify explain /tmp/coastal-walk-opening.validation-report.json \
+  --gate-id capture-completeness --json
 ```
 
 `take run` 由 Node/Playwright 驱动固定 Tick Runtime，并在精确 Capture Schedule 上等待
@@ -312,6 +320,7 @@ pnpm verify:rigged-subject
 pnpm verify:g-bot-subject
 pnpm verify:placement-layout
 pnpm verify:control-capture
+pnpm verify:validation-capture
 ```
 
 `verify:canonical` 会在真实 Chromium 中验证 Canonical Build Artifact、
@@ -337,6 +346,11 @@ Report → IR → Plan → Snapshot 一致性、Required Runtime Assertion、接
 Chromium 中验证 Neutral/Depth/Semantic/Instance/Normal、Camera/Snapshot/三种计数器、
 稳定 ID Table、同 World Identity/不同 Take Hash，以及 Bundle 的原子完整性校验。
 
+`verify:validation-capture` 不重跑 Babylon；它验证已经生成的 Bundle 能稳定产出
+Canonical Validation Report，并覆盖正常、缺 Pass、坏 Depth、混 Take 和坏 Hash 五类
+Fixture。Blocking Failure 不能被其他 Gate 抵消，Required Metric 缺失会得到
+`incomplete` 而不是静默跳过。
+
 ## 代码边界
 
 | 路径 | 职责 |
@@ -348,6 +362,7 @@ Chromium 中验证 Neutral/Depth/Semantic/Instance/Normal、Camera/Snapshot/三�
 | `packages/layout-solver/` | 引擎无关的候选、八种 Constraint Evaluator、确定性搜索、冲突与 Report |
 | `packages/compiler/` | NormalizedWorldIR → ExecutionPlan 的确定性编译 |
 | `packages/control-capture/` | 引擎无关的 Simulation Take、Schedule、Profile、严格校验与 Hash |
+| `packages/validation/` | 引擎无关的 Validation Profile/Report/Gate/Metric/Evidence、严格解析、Policy 与 Hash |
 | `packages/runtime-contracts/` | ExecutionPlan、Snapshot 与 Browser Protocol 数据协议 |
 | `packages/runtime-babylon/` | Babylon/Havok Runtime Adapter |
 | `apps/playground/` | Canonical Runtime 页面、旧 Alpha 场景和浏览器验证入口 |
@@ -405,6 +420,7 @@ Compiler 和 Runtime 不能反向读取 Agent Prompt；Runtime Adapter 不能把
 - [Canonical JSON Babylon 历史实施计划](docs/superpowers/plans/2026-08-18-canonical-json-babylon-v1.md)：已被 Authoring V3 取代，仅保留历史上下文。
 - [Placement Solver S1 海湾纵向切片](docs/superpowers/plans/2026-08-20-placement-layout-solver-s1.md)：Authoring/IR/Plan V3/V3/V4、八种 Constraint、CLI、Browser/Havok 与事务证据已完成。
 - [Simulation Take / Control Capture V1](docs/superpowers/plans/2026-08-21-simulation-take-control-capture-v1.md)：精确 Schedule、五 Pass Babylon Capture、Render Ready、原子 Bundle、CLI/Browser/Playwright 与真实浏览器 Gate 已完成。
+- [Validation Capture/Integrity V1](docs/superpowers/plans/2026-08-21-validation-capture-integrity-v1.md)：版本化 Profile、Canonical Report、Blocking/Incomplete Policy、Capture Adapter、verify/explain 与五类 Conformance Fixture 已完成。
 
 ### 已完成首个切片、继续回归
 

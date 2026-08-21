@@ -1,6 +1,6 @@
 # World Validation Report 与质量门禁设计
 
-- 状态：**V1 Capture/Integrity contract accepted; broader profiles remain proposed**。
+- 状态：**V1 Capture/Integrity implemented; broader subject profiles remain proposed**。
 - Canonical 公共术语：`ValidationProfile`、`ValidationReport`、`GateResult`、`MetricResult`、`EvidenceArtifact`。
 - 适用范围：Authoring、Layout、WorldPackage、Runtime、Simulation Take、Control Capture Bundle、Replay、性能与完整性。
 - 设计目标：用可解释、可量化、可复现的报告决定世界或捕获制品能否进入下一阶段。
@@ -504,14 +504,14 @@ Diagnostic 至少包含 Code、Gate/Metric ID、JSON Pointer/Entity ID、Expecte
 
 ## 11. CLI、Browser 与 CI
 
-候选命令面：
+长期候选命令面；已实现 V1 的精确命令以 §4.0 为准：
 
 ```text
 worldkit verify authoring <authoring.json> --profile <ref>
 worldkit verify layout <layout-report.json> --profile <ref>
 worldkit verify package <world-package> --profile <ref>
 worldkit verify take <take.json> --profile <ref>
-worldkit verify capture <control-capture-bundle> --profile <ref>
+worldkit verify capture <control-capture-bundle> --output <validation-report.json>
 worldkit verify explain <validation-report.json> --gate-id <id>
 worldkit verify compare <report-a.json> <report-b.json>
 ```
@@ -567,21 +567,26 @@ Audit 时间、机器临时路径和日志顺序不进入确定性结果选择�
 
 ## 14. 第一条实施切片
 
-对 Placement 与 Capture 两条 P0 共同使用一个 `outdoor-control-video-dev@1` Validation Profile，首批 Gate：
+已实现的 V1 是 Capture/Integrity 窄纵向切片，只包含 §4.0 的三个 Gate：Bundle
+Integrity、Capture Completeness 和 Capture Ownership。它复用现有 Bundle Validator，
+补齐 Linear Depth 数值语义，并通过独立 Canonical Report、CLI 与 Conformance Gate
+验证正常 Bundle、缺失 Pass、错误 Depth、混入其他 Take 和损坏 Hash。
 
-1. Schema/Reference；
-2. Layout Required Constraint；
-3. Physics Support/Interpenetration/Settle；
-4. Spawn/Route Reachability；
-5. Opening Shot Region/Anchor；
-6. Five-pass Capture Completeness/ID/Depth/Camera；
-7. Replay Snapshot；
-8. Package/Bundle Integrity；
-9. 基础资源预算。
-
-Fixture 包含故意失败版本：浮空 Landmark、穿插墙体、不可达 Spawn、丢失 Anchor、错误 Depth 单位、混入其他 Take 的帧和损坏 Hash。每种失败必须落到唯一 Gate/Metric/Diagnostic，不只显示“质量不够”。
+Placement 与 Capture 最终仍应共同使用 `outdoor-control-video-dev@1` 的统一协议；后续
+Profile 扩展目标包括 Schema/Reference、Layout Required Constraint、Physics、Route、
+Opening Shot、Replay 和资源预算。浮空 Landmark、穿插墙体、不可达 Spawn 与缺失 Anchor
+仍是待接入的 Placement/Runtime/Composition Fixture，不能因为 Capture V1 已完成而勾销。
 
 ## 15. 实施分解
+
+Capture/Integrity V1 disposition（2026-08-21）：
+
+- [x] 冻结 V1 Profile/Report/Gate/Metric/Evidence、Canonical Hash 与 Policy；
+- [x] 通过 Adapter 复用 Control Capture Bundle Validator，并补 Linear Depth 语义；
+- [x] 实现 `verify capture`、`verify explain` 与 `verify:validation-capture`；
+- [x] 建立正常、缺 Pass、坏 Depth、混 Take、坏 Hash 的确定性 Fixture；
+- [ ] Placement/Physics/Composition/Replay/Performance Evaluator、Profile 组合、
+  `verify compare`、Browser/CI Evidence 发布与 Video Artifact 仍待后续切片。
 
 1. 冻结 ValidationProfile/Report/Gate/Metric/Evidence Schema 和 Canonical Hash。
 2. 实现 Profile Registry Resolution、组合、Override Audit 和锁。
@@ -594,21 +599,23 @@ Fixture 包含故意失败版本：浮空 Landmark、穿插墙体、不可达 Sp
 
 编码前必须新增独立实施计划并定位现有 Gate 实现，优先抽取共同协议和 Adapter，不对现有测试做一次性大重写。
 
-## 16. 已冻结与待评审
+## 16. 已实现、已冻结与待评审
 
-已冻结的架构方向：
+Capture/Integrity V1 已实现并冻结：
 
 - Profile、Report、Gate、Metric、Evidence 五层；
 - Blocking Failure/Required Missing 一票否决；
 - 数值单位、阈值、实测值和证据必须结构化；
-- Solver/Replay/Capture 报告分责并通过 Ref 关联；
+- Capture Bundle 与独立 Validation Report 分责并通过 Hash/Ref 关联；
+- 一个内置 `outdoor-control-video-dev@1` Profile、三个 Blocking Gate、严格解析、
+  Canonical Report Hash、`verify capture|explain` 与五类 Conformance Fixture；
 - VLM/LLM 第一阶段只能提供 Advisory Evidence。
 
 待评审的字段级细节：
 
 - Profile 组合与 Override Record 的最终 Schema；
 - 首批 Physics/Composition 阈值；
-- Report 是否为每个阶段独立文件或由 Artifact Index 聚合；
+- Placement/Runtime 等后续阶段的独立 Report 与 Artifact Index 聚合方式；
 - Cross-platform Capture 使用 Hash 还是 Perceptual/Geometry Metric；
 - Generated Video 的结构一致性 Gate 何时从 Advisory 升级。任何升级都不能覆盖 SDK 结构真相。
 

@@ -2,9 +2,9 @@
 
 - 状态：Active，重构执行进度与剩余工作的唯一跟踪入口。
 - 基准日期：2026-08-21。
-- 长期目标总进度：约 **60%**，合理误差范围为 ±5%。
+- 长期目标总进度：约 **62%**，合理误差范围为 ±5%。
 - 第一条 Canonical 纵向切片：约 **90%**。
-- 当前代码入口：Canonical Authoring V3 → Placement Solver S1 → NormalizedWorldIR V3 → ExecutionPlan V4 → Babylon.js/Havok Runtime。
+- 当前代码入口：Canonical Authoring V3 → Placement Solver S1 → NormalizedWorldIR V3 → ExecutionPlan V4 → Babylon.js/Havok Runtime → Control Capture Bundle V1 → Validation Capture/Integrity V1。
 
 > Golden Humanoid S1b 首个可视纵向切片已完成并进入回归；S1b 整体与 Semantic Actions 整体仍未完成.
 
@@ -15,7 +15,8 @@
 
 > Simulation Take / Control Capture V1 已完成 60 Hz → 24 fps 精确时间映射、五 Pass
 > Babylon 捕获、Render Ready Receipt、原子 Bundle、CLI/Browser/Playwright 和真实 Chromium
-> Gate；完整 WorldPackage、统一 Validation Report、恢复续拍与 Video Adapter 仍未完成。
+> Gate；统一 Validation 的 Capture/Integrity V1 也已进入回归。完整 WorldPackage、
+> Placement/Physics/Composition 等统一 Gate、恢复续拍与 Video Adapter 仍未完成。
 
 ## 1. 文档职责
 
@@ -55,16 +56,16 @@ Normalizer/Compiler、Runtime、CLI/Browser 和对应 Conformance Gate 的纵向
 
 | 工作流 | 权重 | 当前完成度 | 加权贡献 | 判断依据 |
 |---|---:|---:|---:|---|
-| 架构、边界与命名 | 8% | 94% | 7.5% | 总规格、ADR、主体/地形/3C 和 Placement/Take/Validation 专项已成稿；Placement S1 与 Take/Capture V1 已冻结，统一 Validation 仍待实现 |
+| 架构、边界与命名 | 8% | 96% | 7.7% | 总规格、ADR、主体/地形/3C 和 Placement/Take/Validation 专项已成稿；Validation Capture/Integrity V1 的字段与 Policy 已冻结并实现 |
 | Canonical Schema、IR、Registry 与 Compiler | 15% | 82% | 12.3% | V3/V3/V4、Hash、Lock、严格校验、Placement、Primitive 与首个 Asset Subject 资源表已交付；WorldChangeSet、完整 Capability 和 WorldPackage 尚未交付 |
 | Babylon/Havok Runtime、物理与相机 | 15% | 75% | 11.25% | Heightfield、障碍、水域、多主体、第三人称、碰撞、资产主体、Placement Assertion 与五 Pass Capture 已交付；多视角与完整生产预算尚未完成 |
 | Subject LEGO 组装体系 | 15% | 45% | 6.75% | S0、S1a、Golden 与首个产品 G Bot 可视切片已完成；S1b 后续、S2、S3、S4 尚未完成 |
 | Terrain、Region 与 Placement | 12% | 60% | 7.2% | Alpha 地形和 Placement Solver S1 海湾纵向切片已运行；通用 Terrain Mask/Route Graph、更多 Constraint 与完整 P0.1 未完成 |
-| CLI、Browser Protocol 与自动化 | 10% | 80% | 8.0% | 既有命令外已交付 Take validate/inspect/run、Capture validate/inspect、Render Ready Browser API、Playwright Take Driver 与五 Pass Gate；持久 Session 和 Package 工具未完成 |
+| CLI、Browser Protocol 与自动化 | 10% | 84% | 8.4% | 已交付 Take/Capture 命令、`verify capture|explain`、Render Ready Browser API、Playwright Driver 与五 Pass/Validation Gate；compare、持久 Session 和 Package 工具未完成 |
 | Semantic Action、动画与 Gameplay | 8% | 33% | 2.64% | Golden 与 G Bot `idle/walk/run/jump` 固定 Tick Animation Binding 已交付；通用 Action Request/Receipt、姿态、装备与规则未交付 |
-| Simulation Take、控制通道与视频接入 | 10% | 65% | 6.5% | V1 Take Schema/Compiler、五 Pass、Bundle、CLI/Browser 和真实浏览器 Gate 已交付；完整 Replay/Resume、统一 Validation 与模型 Adapter 未交付 |
-| 生产 Gate、默认切换与旧实现退出 | 7% | 35% | 2.45% | Canonical/资产/Placement/Capture 独立 Gate 可运行，Capture 已有严格 Integrity Validator；统一 Profile/Report、默认切换和旧路径退出未交付 |
-| **合计** | **100%** |  | **约 65%** | 对外按通用 Terrain/Route、统一生产 Gate、完整 WorldPackage 与视频闭环的不确定性保守报告 **约 60%** |
+| Simulation Take、控制通道与视频接入 | 10% | 70% | 7.0% | V1 Take、五 Pass、Bundle 和真实浏览器 Gate 已交付，Capture/Integrity 已进入统一 Report；完整 Replay/Resume 与模型 Adapter 未交付 |
+| 生产 Gate、默认切换与旧实现退出 | 7% | 48% | 3.36% | Canonical/资产/Placement/Capture Gate 可运行；Capture/Integrity 已有版本化 Profile、严格 Report、Policy、Explain 和 Conformance；其他统一 Gate、默认切换和旧路径退出未交付 |
+| **合计** | **100%** |  | **约 67%** | 对外按通用 Terrain/Route、完整统一生产 Gate、WorldPackage 与视频闭环的不确定性保守报告 **约 62%** |
 
 “第一条 Canonical 纵向切片约 90%”只指以下较窄范围：AI 提交 JSON，SDK
 完成严格校验、确定性编译、Babylon/Havok 运行、多主体控制、首个 Golden Asset
@@ -223,13 +224,19 @@ WorldPackage、Resume 与完整 Replay Gate 为完成标准。
 阶段，避免不同脚本各用一套阈值或以总体分数掩盖关键失败。
 
 - [x] 编写 [World Validation Report 与质量门禁专项设计](superpowers/specs/2026-08-19-world-validation-report-and-quality-gates-design.md)。
-- [ ] 评审并冻结 ValidationProfile、ValidationReport、Gate、Metric 与 Evidence Schema。
-- [ ] 冻结 Blocking/Advisory、Required Missing、Incomplete 和 Policy Decision 语义。
-- [ ] 定义 Schema/Layout/Physics/Route/Composition/Capture/Replay/Performance/Integrity 首批 Gate。
-- [ ] 把单位、阈值、容差、Evaluator、Platform Profile 与 Evidence 归属写入版本化 Profile。
-- [ ] CLI 支持 verify/explain/compare，CI 持久化 Report 和 Evidence Manifest。
-- [ ] Golden Fixture 覆盖浮空、穿插、不可达、Anchor 缺失、Depth 单位错误、帧归属错误和 Hash 损坏。
-- [ ] 证明 Blocking Failure 或 Required Metric 缺失不能被 Advisory/总体分数抵消。
+- [x] 冻结 Capture/Integrity V1 的 ValidationProfile、ValidationReport、Gate、Metric、Evidence 与 Canonical Hash；其他 Subject Union 后续按版本扩展。
+- [x] 冻结并测试 Blocking/Advisory、Required Missing、Incomplete 和 Policy Decision 语义。
+- [x] 定义并实现 Capture Completeness、Capture Ownership 与 Bundle Integrity 三个首批 Gate；Schema/Layout/Physics/Route/Composition/Replay/Performance 仍待接入。
+- [x] 把 Capture V1 的 Evaluator Ref、Evidence 归属与 Depth 单位语义写入版本化 Profile；Platform-measured 阈值仍待后续 Profile。
+- [ ] CLI 的 `verify capture`、`verify explain` 已完成；`verify compare`、Browser/CI Evidence 发布仍未完成。
+- [ ] Capture Fixture 已覆盖 Depth、帧归属和 Hash 损坏；浮空、穿插、不可达、Anchor 缺失仍待 Placement/Runtime/Composition 接入。
+- [x] 纯 Policy 测试证明 Blocking Failure 优先于 Incomplete，Advisory 不能抵消，Required Metric 缺失为 Incomplete。
+
+已完成切片证据：
+
+- [Validation Capture/Integrity V1 实施计划](superpowers/plans/2026-08-21-validation-capture-integrity-v1.md)；
+- `pnpm verify:validation-capture`：正常、缺 Pass、坏 Depth、混 Take、坏 Hash 五类确定性 Fixture；
+- `packages/validation` 与 `worldkit verify capture|explain`。
 
 完成标准：Placement 和 Capture 首条纵向切片都通过同一版本化 Validation 协议，
 每个失败能落到唯一 Gate/Metric/Diagnostic，并产生可审阅修复建议。
@@ -586,8 +593,8 @@ P1.4 WorldPackage + P1.6 AI Schema / WorldChangeSet + P2.4 Controller/Camera/Dri
         └── P3.2 默认切换
 ```
 
-Placement S1 与 Simulation Take / Control Capture V1 已形成回归纵向切片；Validation
-专项已形成可评审设计，后续实现仍应保持窄纵向切片；
+Placement S1、Simulation Take / Control Capture V1 与 Validation Capture/Integrity V1
+已形成回归纵向切片；后续 Validation 扩展仍应保持窄纵向切片；
 不要同时启动坐骑、装备、飞行、NPC 和室内，避免再次形成无法验收的大重构。
 
 ## 6. 下一里程碑
@@ -601,7 +608,7 @@ Capture V1 都已进入回归，下一步：
    `examples/product-asset-intakes/humanoid.g-bot@1.json`）；
 2. **M2（已完成）：冻结 Take/Capture V1 首条实施范围**；
 3. **M3（已完成）：实现五 Pass Capture 窄纵向切片并复用 Placement World Identity/Hash**；
-4. **M4：实现 P0.3 统一 Validation Profile/Report 的 Capture/Integrity 窄切片，把现有独立 Gate 纳入同一报告协议**；
+4. **M4（已完成）：实现 P0.3 统一 Validation Profile/Report 的 Capture/Integrity 窄切片，把现有 Bundle Gate 纳入同一报告协议**；
 5. **M5：完成 Route Graph 与主体可通行性 R0/R1/R1b**：复用既有 Route/Region，按主体
    Profile 从 Heightfield 与显式 Traversal Surface 构建分层 3D Graph，并用真实
    Babylon/Havok 人物控制器证明地形→台阶/坡道→静态平台路线；只有 Required Route
@@ -615,8 +622,9 @@ Capture V1 都已进入回归，下一步：
 10. **M10：P1.1 与 P2.5 边界稳定后评审 P2.6 H1 Bridge Fixture；先验证同 XZ 双层支撑、
    Static Collider 和唯一 Ground Support，不直接并行启动完整洞穴/室内**。
 
-Validation 字段冻结前不得实现新的统一报告公共协议；Capture V1 后续扩展必须增加
-Profile/Schema 版本，不能把 Babylon、Playwright 或 Provider 字段泄漏到 Canonical Schema。
+Validation Capture/Integrity V1 字段已经冻结；后续 Subject、Gate 或 Profile 组合扩展
+必须增加明确版本，不能静默改 V1，也不能把 Babylon、Playwright 或 Provider 字段泄漏
+到 Canonical Schema。
 
 ## 7. 更新规则
 
