@@ -1,6 +1,6 @@
 # World Validation Report 与质量门禁设计
 
-- 状态：**Proposed / Design Review Ready**。
+- 状态：**V1 Capture/Integrity contract accepted; broader profiles remain proposed**。
 - Canonical 公共术语：`ValidationProfile`、`ValidationReport`、`GateResult`、`MetricResult`、`EvidenceArtifact`。
 - 适用范围：Authoring、Layout、WorldPackage、Runtime、Simulation Take、Control Capture Bundle、Replay、性能与完整性。
 - 设计目标：用可解释、可量化、可复现的报告决定世界或捕获制品能否进入下一阶段。
@@ -100,6 +100,74 @@ Preview 是方便人类阅读的派生物，不替代原始数值或 Hash。
 
 ## 4. ValidationReport Schema
 
+### 4.0 已冻结的 Capture/Integrity V1 边界
+
+本节是首条实施切片的字段级权威合同；本节与后文较宽的候选设计冲突时，V1 实现以
+本节为准。V1 只验证 `control-capture-bundle`，不提前声明 Layout、Physics、Route、
+Composition、Replay、Performance 或 Generated Video 已进入统一报告。
+
+- 唯一内置 Profile Ref 是
+  `worldkit://validation-profile/outdoor-control-video-dev@1`。V1 不提供 Profile
+  组合、隐式继承、Override 或 Host 放宽；这些能力必须通过后续 Schema 版本进入。
+- `ValidationProfileV1` 是 `kind: worldkit-validation-profile`、
+  `schemaVersion: 1` 的不可变 Registry 资源。Profile 本体包含 `id`、`resourceRef`、
+  `version`、`subjectKind`、`gateDefinitionsById`；解析结果单独保存 `resolvedVersion`
+  与 `validationProfileHash`，避免自引用 Hash。
+- `ValidationReportV1` 是 `kind: worldkit-validation-report`、
+  `schemaVersion: 1` 的独立 Canonical JSON 文件。它不得写回被验证的 Capture Bundle，
+  否则会造成 Bundle Root 自引用；`worldkit verify capture` 必须把报告写到显式
+  `--output` 路径。Capture Bundle 中现有的 `validation-report.json` 只属于早期 Bundle
+  自检占位文件，不是本协议的权威 `ValidationReportV1`。
+- V1 `subject` 关闭为 `kind: control-capture-bundle`，并绑定
+  `worldPackageRootHash`、`takeHash` 与按当前目录实际字节重算的 `bundleRootHash`。
+  无法可靠读取这三个身份字段时，CLI 返回 infrastructure error，不伪造 Subject Hash。
+- `GateResultV1.status` 关闭为 `passed | failed | incomplete | not-applicable`；
+  `MetricResultV1.status` 关闭为
+  `passed | failed | not-evaluated | not-applicable`。V1 内置 Profile 不使用
+  `not-applicable`，它只为后续显式 Profile 条件保留。
+- V1 `MetricResultV1` 冻结四个判别分支：`boolean-assertion`、
+  `count-threshold`、`set-equality`、`hash-equality`。所有分支都必须记录
+  `evaluatorProfileRef`、`evidenceArtifactRefs` 和 `diagnosticIds`；Capture/Integrity
+  首条切片只实例化 `boolean-assertion`，不以未使用的通用性扩大实现范围。
+- `EvidenceArtifactV1` 必须记录稳定 `id`、关闭的 `kind`、`artifactRef`、
+  `mediaType`、`sizeBytes` 与 `contentHash`。本机绝对路径、时间戳、机器名和日志位置
+  不进入 Canonical Report。
+- `ValidationDiagnosticV1` 必须绑定唯一 `gateId` 与 `metricId`，并提供稳定 `code`、
+  Bundle 内相对 `artifactPath`、`expectedValue`、`actualValue`、`message` 和
+  `suggestedFix`。同一底层错误不得同时归属多个 Gate。
+
+V1 内置 Profile 只有三个 Blocking Gate：
+
+| Gate ID | Required Metric | 权威事实 |
+| --- | --- | --- |
+| `capture-bundle-integrity` | `capture-bundle-integrity-valid` | Bundle 文件清单、字节 Hash、Manifest/Frame/Root Hash 与结构完整性 |
+| `capture-completeness` | `capture-required-passes-valid`、`capture-linear-depth-valid` | 五个 Required Pass 完整，Linear Depth 长度、有限性、正值/零无命中语义合法 |
+| `capture-ownership` | `capture-ownership-valid` | Package、Take、Runtime Session 与 Frame 归属一致 |
+
+现有 `validateControlCaptureBundleV1` 继续是 Bundle 结构、Hash、Pass 和归属的唯一算法
+权威。Validation Adapter 只把其稳定 Diagnostic 映射到上述 Gate/Metric，并补充旧校验器
+尚未覆盖的 Linear Depth 数值语义；不得复制现有 Bundle 校验流程或产生第二套 Hash
+判定。
+
+Policy 的确定优先级冻结为：
+
+1. 任一 Blocking Gate 明确 `failed`，Report 为 `failed`；
+2. 否则，任一 Required Metric 缺失、`not-evaluated`，或 Gate 为 `incomplete`，Report 为
+   `incomplete`；
+3. 否则全部 Blocking Gate 为 `passed` 时 Report 为 `passed`；
+4. Advisory Failure 必须保留，但不能改变 Blocking 结果，也不存在可抵消失败的总分。
+
+V1 CLI 冻结为：
+
+```text
+worldkit verify capture <bundle-directory> --output <validation-report.json> [--json]
+worldkit verify explain <validation-report.json> --gate-id <id> [--json]
+```
+
+Exit Code 固定为 `0 = passed`、`2 = failed`、`3 = incomplete`、
+`1 = usage/infrastructure error`。`verify compare`、Browser Evidence 查询、Profile 组合、
+CI 发布和其他 Subject Kind 均不属于本切片。
+
 ```json
 {
   "kind": "worldkit-validation-report",
@@ -112,7 +180,7 @@ Preview 是方便人类阅读的派生物，不替代原始数值或 Hash。
     "executionPlanHash": "sha256:...",
     "registryLockHash": "sha256:..."
   },
-  "validationProfileRef": "worldkit://validation/outdoor-production@1",
+  "validationProfileRef": "worldkit://validation-profile/outdoor-production@1",
   "resolvedVersion": "1.0.0",
   "validationProfileHash": "sha256:...",
   "status": "passed",
@@ -167,10 +235,11 @@ Report `status` 关闭为：
 }
 ```
 
-Gate `requirement` 关闭为 `blocking | advisory`。Gate `status` 关闭为：
+Gate `requirement` 关闭为 `blocking | advisory`。V1 Gate `status` 关闭为：
 
 - `passed`；
 - `failed`；
+- `incomplete`；
 - `not-applicable`。
 
 `not-applicable` 只有 Profile 明确列出条件且条件证据可验证时合法；没有运行不能标为 `not-applicable`。
