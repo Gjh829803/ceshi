@@ -427,6 +427,7 @@ Compiler 和 Runtime 不能反向读取 Agent Prompt；Runtime Adapter 不能把
 
 - [AI-first 白模游戏 SDK 设计评审简版](docs/reviews/2026-08-18-ai-first-sdk-design-review-brief.md)
 - [AI-first LEGO 游戏 SDK 总体设计](docs/superpowers/specs/2026-08-17-ai-first-lego-game-sdk-design.md)
+- [Canonical Runtime State 与 Semantic Projection 设计](docs/superpowers/specs/2026-08-22-canonical-runtime-state-and-semantic-projection-design.md)
 - [AI-first Terrain Authoring Pipeline 设计](docs/superpowers/specs/2026-08-17-terrain-authoring-pipeline-design.md)
 - [Hybrid Terrain 与非 Heightfield 特殊地形设计](docs/superpowers/specs/2026-08-21-hybrid-terrain-and-non-heightfield-topology-design.md)
 - [可扩展主体组装 Authoring 专项设计](docs/superpowers/specs/2026-08-19-extensible-subject-authoring-design.md)

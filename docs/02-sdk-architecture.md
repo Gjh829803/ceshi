@@ -440,6 +440,7 @@ Authoring、IR、ExecutionPlan 或 Browser Protocol。
 ## 10. 相关设计文档
 
 - [AI-first LEGO 游戏 SDK 总体设计](superpowers/specs/2026-08-17-ai-first-lego-game-sdk-design.md)
+- [Canonical Runtime State 与 Semantic Projection 设计](superpowers/specs/2026-08-22-canonical-runtime-state-and-semantic-projection-design.md)
 - [可扩展 Subject Authoring 设计](superpowers/specs/2026-08-19-extensible-subject-authoring-design.md)
 - [Placement Constraint 与 Layout Solver 设计](superpowers/specs/2026-08-19-placement-constraint-layout-solver-design.md)
 - [Simulation Take 与 Control Capture 设计](superpowers/specs/2026-08-19-simulation-take-control-capture-design.md)

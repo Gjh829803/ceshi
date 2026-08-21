@@ -40,6 +40,7 @@
 - [`2026-08-21-product-asset-intake-template-design.md`](superpowers/specs/2026-08-21-product-asset-intake-template-design.md)：把 G Bot Gate 固化为后续产品资产接入模板；执行步骤见 [`product-asset-intake`](superpowers/skills/product-asset-intake.md)；
 - [`2026-08-19-placement-constraint-layout-solver-design.md`](superpowers/specs/2026-08-19-placement-constraint-layout-solver-design.md)：AI 空间意图、最终 Transform 求解与冲突报告专项规格；
 - [`2026-08-19-simulation-take-control-capture-design.md`](superpowers/specs/2026-08-19-simulation-take-control-capture-design.md)：WorldPackage、Take、Session、多 Pass Capture 与视频 Adapter 边界；
+- [`2026-08-22-canonical-runtime-state-and-semantic-projection-design.md`](superpowers/specs/2026-08-22-canonical-runtime-state-and-semantic-projection-design.md)：Canonical World/View/Runtime Status、Typed Relationship、Semantic Fact、Action/Event Receipt 与世界模型轨迹边界；
 - [`2026-08-19-world-validation-report-and-quality-gates-design.md`](superpowers/specs/2026-08-19-world-validation-report-and-quality-gates-design.md)：量化 Gate、Metric、Evidence 和生产阻断协议；
 - [`2026-08-20-ai-authored-geometry-extension-design.md`](superpowers/specs/2026-08-20-ai-authored-geometry-extension-design.md)：未来可能需要的 AI 自定义几何能力及候选技术，仅供调研评审，不属于当前 Roadmap；
 - `docs/superpowers/plans/`：已经进入实施阶段的单个纵向切片计划与证据。
@@ -445,12 +446,15 @@ Incremental Hot Apply，以及哪些 Runtime 状态被保留、重置或替换�
 
 #### P2.1 Subject S2：类型化 Relationship Framework
 
+- [ ] 按 [Canonical Runtime State 与 Semantic Projection 设计](superpowers/specs/2026-08-22-canonical-runtime-state-and-semantic-projection-design.md) 冻结 World State、View State、Runtime Status 与 Transition Log 四个公共投影；不扩充现有 `SubjectRuntimeStateV3` 大对象。
+- [ ] 增加由 ExecutionPlan Resource Lock 约束的 `capabilityStatesById`，用闭合 Capability State Schema 扩展门、载具、飞行等状态，禁止自由 `state: Record<string, unknown>` 袋。
 - [ ] Relationship Manifest Registry 和角色化端点。
 - [ ] 初始 Relationship 编译与动态事务边界。
 - [ ] Socket/Slot 兼容、基数、冲突、删除策略和权限校验。
 - [ ] 固定 Tick 原子提交，失败时逻辑、渲染、物理、控制和相机全部回滚。
-- [ ] Request ID 幂等、Receipt、Event、Snapshot 和 Replay。
-- [ ] 第一个人—滑板 attach/stand Fixture 完成绑定、移动、解绑和 Reset E2E。
+- [ ] 单一 Semantic Fact Projector 输出 `supportedBy/touching/insideVolume`，不导出 Babylon/Havok Handle 或另建 Ground Support 推断路径。
+- [ ] Request ID 幂等、Receipt、关闭 Event Union、Snapshot/Transition Hash 和 Capture 关联。
+- [ ] 第一个人—滑板 Fixture 完成绑定、移动、解绑、Reset 和 State/Event/Capture 对齐 E2E。
 
 #### P2.2 Subject S3：骑乘、拖拽与控制上下文
 
@@ -671,7 +675,11 @@ Ground/Air Runtime 前置依赖已随 PR #10 合入，后续仍需实现 Graph B
    通过全部生产 Gate，并由 PR #10 合入 `main`；水介质、`ControlMethodProfile`、
    CLI/Browser E2E 覆盖，以及相机 overlay / 整支对抗审查仍未交付。作者面板 Feel
    范围与 session 数字袋类型已在 Preset 语义合同修复中收口，M7 不标记完成；
-8. **M8：按产品优先级选择 Semantic Action 后续或 Typed Relationship 窄可视切片**；
+8. **M8：完成 Canonical World State + Typed Relationship 人—滑板窄可视切片**：先按
+   [专项设计](superpowers/specs/2026-08-22-canonical-runtime-state-and-semantic-projection-design.md)
+   冻结 World/View/Runtime Status/Transition 四类投影，再实现 `mountedOn` 权威关系、
+   `supportedBy` 派生事实、Mount/Dismount Action、Receipt/Event 与 Capture 对齐；在这条
+   纵向切片稳定前，不继续向 `SubjectRuntimeStateV3` 追加字段，也不先铺开更多人物动作；
 9. **M9：在实现游泳、攀爬或增量 Agent 修复前，分别冻结 P2.5 Surface/Traversal 与
    P1.6 AI Schema/WorldChangeSet 的专项设计，禁止临时增加公共字段或场景脚本旁路**。
 10. **M10：P1.1 与 P2.5 边界稳定后评审 P2.6 H1 Bridge Fixture；先验证同 XZ 双层支撑、
