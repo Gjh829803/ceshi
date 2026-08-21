@@ -28,7 +28,7 @@ import {
   createValidRiggedPackageSubjectWorld,
 } from "../../authoring/src/test-fixture";
 
-import { compileWorld, compileWorldV4, sampleTerrainHeight, assertPublishedMovementMediumSupported } from "./index";
+import { compileWorld, compileWorldV4, sampleTerrainHeight } from "./index";
 
 const SUBJECT_ASSET_REF = "worldkit://subject-asset/humanoid.golden@1";
 const RIG_PROFILE_REF = "worldkit://rig-profile/biped.golden@1";
@@ -290,13 +290,7 @@ describe("compileWorld", () => {
     });
   });
 
-  it("refuses to compile a published water movementMedium", () => {
-    expect(() => assertPublishedMovementMediumSupported("water")).toThrow(
-      /SUBJECT_MOVEMENT_MEDIUM_UNSUPPORTED/,
-    );
-  });
-
-  it("rejects forged normalized medium profiles that publish water", () => {
+  it("refuses to compile a published water movementMedium via water bag", () => {
     const spec = createValidAuthoringSpec();
     const subject = spec.nodes.find((node) => node.kind === "subject");
     if (subject === undefined || subject.kind !== "subject") {
@@ -324,7 +318,40 @@ describe("compileWorld", () => {
       ok: false,
       diagnostics: [{
         code: "COMPILER_NORMALIZED_IR_INVALID",
-        message: expect.stringMatching(/SUBJECT_MOVEMENT_MEDIUM_UNSUPPORTED/),
+        message: expect.stringMatching(/^SUBJECT_MOVEMENT_MEDIUM_UNSUPPORTED:/),
+      }],
+    });
+  });
+
+  it("refuses to compile a published water movementMedium via supportedMediums", () => {
+    const spec = createValidAuthoringSpec();
+    const subject = spec.nodes.find((node) => node.kind === "subject");
+    if (subject === undefined || subject.kind !== "subject") {
+      throw new Error("Expected the valid fixture to contain a Subject node.");
+    }
+    subject.subjectDefinitionRef = "worldkit://subject-definition/humanoid.g-bot@1";
+    const normalized = normalizeAuthoringSpec(spec);
+    if (!normalized.ok || normalized.value === undefined) {
+      throw new Error(`G Bot fixture did not normalize: ${JSON.stringify(normalized.diagnostics)}`);
+    }
+    const forged = structuredClone(normalized.value);
+    const definition = forged.resources.subjectDefinitions[0];
+    if (definition?.capabilityAssembly === undefined) {
+      throw new Error("Expected capability assembly on forged G Bot definition.");
+    }
+    definition.capabilityAssembly.mediumProfile = {
+      ...definition.capabilityAssembly.mediumProfile,
+      supportedMediums: ["ground", "air", "water"],
+    } as typeof definition.capabilityAssembly.mediumProfile;
+
+    expect(compileWorld({
+      normalizedWorldIr: forged,
+      normalizedWorldIrHash: sha256CanonicalJson(forged),
+    })).toMatchObject({
+      ok: false,
+      diagnostics: [{
+        code: "COMPILER_NORMALIZED_IR_INVALID",
+        message: expect.stringMatching(/^SUBJECT_MOVEMENT_MEDIUM_UNSUPPORTED:/),
       }],
     });
   });

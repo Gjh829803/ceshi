@@ -118,3 +118,41 @@ Tests       124 passed (124)
 | V3 solved normalized IR | `sha256:8c8184c76a0b09b74556bccdb7b80d6b100813a2c1aa6b2b2c2380ba0c089548` |
 | V3 solved execution plan | `sha256:2538583a1319b564a5f8af747e2d8f5c8c6b0b1278db3dc95c9757c0e2875be0` |
 | V3 all-fixed normalized IR | `sha256:6332b1d6e550abf6d5e029875d85023ef1889514cf72f2824383a1efc37dec1f` |
+
+---
+
+## Review findings fix — Task 4 re-review (2026-08-21)
+
+### Changes
+
+1. **`subject-definition-normalizer.test.ts`** — added `rejects a missing controlFeelProfileRef` calling `normalizeSubjectDefinitionV2` with a cloned Package Definition from `createValidPackageSubjectWorld()` after `delete profiles.controlFeelProfileRef`. Package schema requires the field before `normalizeAuthoringSpec` runs, so the normalizer path is exercised directly (same pattern as `rejects non-positive Asset scale during semantic normalization`).
+2. **`compile.ts`** — `rejectPublishedWaterMediumProfile` now delegates to `assertPublishedMovementMediumSupported("water")` on a single throw path; diagnostic message prefix is `SUBJECT_MOVEMENT_MEDIUM_UNSUPPORTED:` (colon required).
+3. **`compile.test.ts`** — replaced helper-only water test with two `compileWorld` tests (forged `water` bag and forged `supportedMediums: ["water"]`).
+
+### Verification
+
+```bash
+pnpm vitest run packages/authoring/src packages/compiler/src packages/runtime-contracts/src
+```
+
+**RED (new missing-ref test, first attempt via `normalizeAuthoringSpec` + delete):**
+
+```
+FAIL rejects a missing controlFeelProfileRef
+  Received diagnostic code: AUTHORING_SCHEMA_INVALID
+  message: must have required property 'controlFeelProfileRef'
+```
+
+**RED (compile helper-only test before wiring `rejectPublishedWaterMediumProfile` → `assertPublishedMovementMediumSupported`):** N/A — compile tests already exercised `compileWorld`; helper test did not cover compile path (finding #2).
+
+**GREEN:**
+
+```
+Test Files  11 passed (11)
+Tests       125 passed (125)
+```
+
+### Notes
+
+- No silent Feel defaults reintroduced; existing `SUBJECT_CONTROL_FEEL_PROFILE_REQUIRED` production diagnostic unchanged.
+- Scope limited to findings #1 and #2; Task 5+ and minor review items not touched.

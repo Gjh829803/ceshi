@@ -1051,6 +1051,38 @@ describe("Package Subject Definition normalization", () => {
     );
   });
 
+  it("rejects a missing controlFeelProfileRef", () => {
+    const spec = createValidPackageSubjectWorld();
+    const definition = structuredClone(spec.resources.subjectDefinitions[0]!);
+    const profiles = { ...definition.profiles };
+    delete profiles.controlFeelProfileRef;
+    const diagnostics: Array<{
+      code: string;
+      instancePath: string;
+      message?: string;
+    }> = [];
+
+    const result = normalizeSubjectDefinitionV2({
+      definition: { ...definition, profiles: profiles as typeof definition.profiles },
+      subjectDefinitionRef: "package://subject-definition/coastal-pack-animal@1",
+      source: "package",
+      instancePath: "/resources/subjectDefinitions/0",
+      subjectResourceRegistry: builtInSubjectResourceRegistry,
+      resourceLockBuilder: new ResourceLockBuilderV1(),
+      diagnostics: diagnostics as never,
+    });
+
+    expect(result).toBeUndefined();
+    expect(diagnostics).toContainEqual(
+      expect.objectContaining({
+        code: "SUBJECT_CONTROL_FEEL_PROFILE_REQUIRED",
+        message: expect.stringMatching(/^SUBJECT_CONTROL_FEEL_PROFILE_REQUIRED:/),
+        instancePath:
+          "/resources/subjectDefinitions/0/profiles/controlFeelProfileRef",
+      }),
+    );
+  });
+
   it("maps support-center failures to the Package Definition path", () => {
     const spec = createValidPackageSubjectWorld();
     const definition = spec.resources.subjectDefinitions[0]!;

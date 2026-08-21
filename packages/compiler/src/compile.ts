@@ -46,7 +46,7 @@ export function assertPublishedMovementMediumSupported(
   movementMedium: string,
 ): void {
   if (movementMedium === "water") {
-    throw new Error("SUBJECT_MOVEMENT_MEDIUM_UNSUPPORTED");
+    throw new Error("SUBJECT_MOVEMENT_MEDIUM_UNSUPPORTED:");
   }
 }
 
@@ -60,7 +60,7 @@ function rejectPublishedWaterMediumProfile(
     mediumProfile.water !== undefined ||
     mediumProfile.supportedMediums?.includes("water")
   ) {
-    throw new Error("SUBJECT_MOVEMENT_MEDIUM_UNSUPPORTED");
+    assertPublishedMovementMediumSupported("water");
   }
 }
 
