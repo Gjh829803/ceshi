@@ -478,11 +478,25 @@ export interface NormalizedSubjectDefinitionV2 {
     maxStepHeightMeters: number;
   };
   locomotion: {
-    mode: "ground";
+    allowWalk: boolean;
+    allowRun: boolean;
+    allowJump: boolean;
+  };
+  controlFeel: {
+    resourceRef: string;
     walkSpeedMetersPerSecond: number;
     runSpeedMetersPerSecond: number;
-    waterSpeedMetersPerSecond: number;
     jumpSpeedMetersPerSecond: number;
+    accelerationMetersPerSecondSquared: number;
+    decelerationMetersPerSecondSquared: number;
+    turnRateRadiansPerSecond: number;
+    moveResponseExponent: number;
+    airControlRatio: number;
+    coyoteTimeSeconds: number;
+    jumpBufferSeconds: number;
+    variableJumpHoldSeconds: number;
+    jumpHoldGravityRatio: number;
+    jumpReleaseGravityRatio: number;
   };
   resourceCost: {
     vertices: number;
@@ -501,6 +515,7 @@ export type ResolvedResourceKindV1 =
   | "capability"
   | "physics-body-profile"
   | "locomotion-profile"
+  | "control-feel-profile"
   | "collider-derivation-profile"
   | "motion-kernel"
   | "motion-profile"

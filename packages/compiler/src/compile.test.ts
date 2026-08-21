@@ -13,6 +13,14 @@ import {
   builtInSubjectResourceRegistry,
   createSubjectResourceRegistry,
 } from "@whitebox-world/subject-registry";
+import subjectDefinitionsV3 from "../../../assets/registry/subject-definitions/catalog.json";
+import {
+  BUILT_IN_CAPABILITY_MANIFESTS,
+  BUILT_IN_CAPABILITY_RESOURCES,
+} from "../../subject-registry/src/built-in-capability-resources";
+import { BUILT_IN_SUBJECT_DEFINITIONS } from "../../subject-registry/src/built-in-subject-definitions";
+import { BUILT_IN_SUBJECT_RESOURCE_MANIFESTS } from "../../subject-registry/src/built-in-resource-manifests";
+import type { RegistrySubjectDefinitionInputV3 } from "../../subject-registry/src/types-v3";
 import {
   createValidPackageSubjectWorld,
   createValidAuthoringSpec,
@@ -20,7 +28,7 @@ import {
   createValidRiggedPackageSubjectWorld,
 } from "../../authoring/src/test-fixture";
 
-import { compileWorld, compileWorldV4, sampleTerrainHeight } from "./index";
+import { compileWorld, compileWorldV4, sampleTerrainHeight, assertPublishedMovementMediumSupported } from "./index";
 
 const SUBJECT_ASSET_REF = "worldkit://subject-asset/humanoid.golden@1";
 const RIG_PROFILE_REF = "worldkit://rig-profile/biped.golden@1";
@@ -50,13 +58,50 @@ const INJECTED_SOURCE_URI = "https://registry.invalid/private/golden-humanoid.gl
 const INJECTED_LICENSE_URI = "https://registry.invalid/private/license";
 const INJECTED_AI_TAG = "registry-private-discovery-tag";
 
+const ALL_BUILT_IN_REGISTRY_INPUTS = [
+  ...BUILT_IN_SUBJECT_DEFINITIONS,
+  ...(subjectDefinitionsV3 as unknown as readonly RegistrySubjectDefinitionInputV3[]),
+  ...BUILT_IN_SUBJECT_RESOURCE_MANIFESTS,
+  ...BUILT_IN_CAPABILITY_MANIFESTS,
+  ...BUILT_IN_CAPABILITY_RESOURCES,
+] as const;
+
+function compileAuthoringSpec(options: {
+  subjectDefinitionRef?: string;
+} = {}) {
+  const spec = createValidAuthoringSpec();
+  const subject = spec.nodes.find((node) => node.kind === "subject");
+  if (subject === undefined || subject.kind !== "subject") {
+    throw new Error("Expected the valid fixture to contain a Subject node.");
+  }
+  if (options.subjectDefinitionRef !== undefined) {
+    subject.subjectDefinitionRef = options.subjectDefinitionRef;
+  }
+  const normalized = normalizeAuthoringSpec(spec);
+  if (
+    !normalized.ok ||
+    normalized.value === undefined ||
+    normalized.normalizedWorldIrHash === undefined
+  ) {
+    throw new Error(`Authoring spec did not normalize: ${JSON.stringify(normalized.diagnostics)}`);
+  }
+  const compiled = compileWorld({
+    normalizedWorldIr: normalized.value,
+    normalizedWorldIrHash: normalized.normalizedWorldIrHash,
+  });
+  if (!compiled.ok || compiled.executionPlan === undefined) {
+    throw new Error(`Authoring spec did not compile: ${JSON.stringify(compiled.diagnostics)}`);
+  }
+  return compiled.executionPlan;
+}
+
 function expectExactKeys(value: object, expectedKeys: readonly string[]): void {
   expect(Object.keys(value).sort()).toEqual([...expectedKeys].sort());
 }
 
 function registryWithPrivateAssetMetadata() {
   return createSubjectResourceRegistry(
-    builtInSubjectResourceRegistry.listResources().map((resource) =>
+    ALL_BUILT_IN_REGISTRY_INPUTS.map((resource) =>
       resource.kind === "subject-asset"
         ? {
             ...resource,
@@ -216,6 +261,74 @@ const PRODUCT_FIXED_SPAWN_CASES = [
 ] as const;
 
 describe("compileWorld", () => {
+  it("projects feel and body traversal, not locomotion speeds", () => {
+    const plan = compileAuthoringSpec({
+      subjectDefinitionRef: "worldkit://subject-definition/humanoid.g-bot@1",
+    });
+    const player = plan.subjects.find((subject) => subject.entityId === "player");
+    if (player === undefined) {
+      throw new Error("Expected player subject in compiled plan.");
+    }
+    expect(player.locomotion).toEqual({
+      allowWalk: true,
+      allowRun: true,
+      allowJump: true,
+    });
+    expect(player.controlFeel).toEqual(
+      expect.objectContaining({
+        resourceRef: "worldkit://control-feel-profile/humanoid.medium-ground@1",
+        walkSpeedMetersPerSecond: 2.4,
+        accelerationMetersPerSecondSquared: 16,
+      }),
+    );
+    expect(player.collider.maxStepHeightMeters).toBe(0.3);
+    expect(player.collider.maxSlopeDegrees).toBe(42);
+    expect(player.capabilityAssembly?.defaultMotionProfile.parameters).toBeUndefined();
+    expect(player.capabilityAssembly?.mediumProfile).toEqual({
+      resourceRef: "worldkit://medium-profile/ground-air.standard@1",
+      air: { gravityRatio: 1, linearDragPerSecond: 0.05 },
+    });
+  });
+
+  it("refuses to compile a published water movementMedium", () => {
+    expect(() => assertPublishedMovementMediumSupported("water")).toThrow(
+      /SUBJECT_MOVEMENT_MEDIUM_UNSUPPORTED/,
+    );
+  });
+
+  it("rejects forged normalized medium profiles that publish water", () => {
+    const spec = createValidAuthoringSpec();
+    const subject = spec.nodes.find((node) => node.kind === "subject");
+    if (subject === undefined || subject.kind !== "subject") {
+      throw new Error("Expected the valid fixture to contain a Subject node.");
+    }
+    subject.subjectDefinitionRef = "worldkit://subject-definition/humanoid.g-bot@1";
+    const normalized = normalizeAuthoringSpec(spec);
+    if (!normalized.ok || normalized.value === undefined) {
+      throw new Error(`G Bot fixture did not normalize: ${JSON.stringify(normalized.diagnostics)}`);
+    }
+    const forged = structuredClone(normalized.value);
+    const definition = forged.resources.subjectDefinitions[0];
+    if (definition?.capabilityAssembly === undefined) {
+      throw new Error("Expected capability assembly on forged G Bot definition.");
+    }
+    definition.capabilityAssembly.mediumProfile = {
+      ...definition.capabilityAssembly.mediumProfile,
+      water: { surfaceHoldStrength: 1, linearDragPerSecond: 0.1 },
+    } as typeof definition.capabilityAssembly.mediumProfile;
+
+    expect(compileWorld({
+      normalizedWorldIr: forged,
+      normalizedWorldIrHash: sha256CanonicalJson(forged),
+    })).toMatchObject({
+      ok: false,
+      diagnostics: [{
+        code: "COMPILER_NORMALIZED_IR_INVALID",
+        message: expect.stringMatching(/SUBJECT_MOVEMENT_MEDIUM_UNSUPPORTED/),
+      }],
+    });
+  });
+
   it("compiles one rigged Subject into ref-only parts and minimal resource tables", () => {
     const normalized = normalizeRiggedWorld(undefined, true);
     const result = compileWorld({
@@ -346,7 +459,7 @@ describe("compileWorld", () => {
         normalizedWorldIrHash: rigged.normalizedWorldIrHash!,
       }).executionPlanHash,
     ).toBe(
-      "sha256:3dd15d8544b3114a7f86c768c388f43fc8685540c16956745d513736e836f9e2",
+      "sha256:c4801ed2b0a3a5c284971a0f88d6e793f1eea91f38c506fa7972466dfadca9f0",
     );
   });
 
@@ -468,7 +581,7 @@ describe("compileWorld", () => {
       } as unknown as (typeof definition.sockets)[number],
     ];
     Object.assign(definition.collider, { providerHandle: forbiddenValues[9] });
-    Object.assign(definition.locomotion, { providerHandle: forbiddenValues[10] });
+    Object.assign(definition.controlFeel, { providerHandle: forbiddenValues[10] });
     const beforeCompile = structuredClone(world);
 
     const result = compileNormalizedWorld(world);
@@ -549,12 +662,22 @@ describe("compileWorld", () => {
       "radiusMeters",
     ]);
     expectExactKeys(subject.collider.centerOffsetFromSubjectOriginMetersXYZ, ["0", "1", "2"]);
-    expectExactKeys(subject.locomotion, [
+    expectExactKeys(subject.locomotion, ["allowJump", "allowRun", "allowWalk"]);
+    expectExactKeys(subject.controlFeel, [
+      "accelerationMetersPerSecondSquared",
+      "airControlRatio",
+      "coyoteTimeSeconds",
+      "decelerationMetersPerSecondSquared",
+      "jumpBufferSeconds",
+      "jumpHoldGravityRatio",
+      "jumpReleaseGravityRatio",
       "jumpSpeedMetersPerSecond",
-      "mode",
+      "moveResponseExponent",
+      "resourceRef",
       "runSpeedMetersPerSecond",
+      "turnRateRadiansPerSecond",
+      "variableJumpHoldSeconds",
       "walkSpeedMetersPerSecond",
-      "waterSpeedMetersPerSecond",
     ]);
     const serializedPlan = JSON.stringify(plan);
     for (const forbiddenValue of forbiddenValues) {
@@ -869,7 +992,7 @@ describe("compileWorld", () => {
     expect(serialized).not.toContain('"constraints"');
     expect(serialized).not.toMatch(/candidateRegionIds|sourceUri|licenseUri|providerHandle/);
     expect(result.executionPlanHash).toBe(
-      "sha256:c0400052aea7146cb0b7530e02c7d6ad3c28508b008123162e1e67d757b85f87",
+      "sha256:3d7a0bf1a5479e8f9925543e7acfdb30d044f389aac739dafcefb935a77e468f",
     );
   });
 

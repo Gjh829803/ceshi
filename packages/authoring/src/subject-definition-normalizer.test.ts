@@ -6,6 +6,14 @@ import {
   type SubjectRegistryResourceInputV1,
   type SubjectResourceRegistryV2,
 } from "@whitebox-world/subject-registry";
+import subjectDefinitionsV3 from "../../../assets/registry/subject-definitions/catalog.json";
+import {
+  BUILT_IN_CAPABILITY_MANIFESTS,
+  BUILT_IN_CAPABILITY_RESOURCES,
+} from "../../subject-registry/src/built-in-capability-resources";
+import { BUILT_IN_SUBJECT_DEFINITIONS } from "../../subject-registry/src/built-in-subject-definitions";
+import { BUILT_IN_SUBJECT_RESOURCE_MANIFESTS } from "../../subject-registry/src/built-in-resource-manifests";
+import type { RegistrySubjectDefinitionInputV3 } from "../../subject-registry/src/types-v3";
 
 import {
   normalizeAuthoringSpec,
@@ -45,6 +53,14 @@ const BIPED_BONE_IDS = [
   "upper-leg.right",
 ] as const;
 
+const ALL_BUILT_IN_REGISTRY_INPUTS = [
+  ...BUILT_IN_SUBJECT_DEFINITIONS,
+  ...(subjectDefinitionsV3 as unknown as readonly RegistrySubjectDefinitionInputV3[]),
+  ...BUILT_IN_SUBJECT_RESOURCE_MANIFESTS,
+  ...BUILT_IN_CAPABILITY_MANIFESTS,
+  ...BUILT_IN_CAPABILITY_RESOURCES,
+] as const;
+
 function expectExactKeys(value: object, expectedKeys: readonly string[]): void {
   expect(Object.keys(value).sort()).toEqual([...expectedKeys].sort());
 }
@@ -55,12 +71,10 @@ function registryFrom(
   ) => SubjectRegistryResourceInputV1 | undefined,
 ): SubjectResourceRegistryV2 {
   return createSubjectResourceRegistry(
-    builtInSubjectResourceRegistry
-      .listResources()
-      .flatMap((resource) => {
-        const transformed = transform(structuredClone(resource));
-        return transformed === undefined ? [] : [transformed];
-      }),
+    ALL_BUILT_IN_REGISTRY_INPUTS.flatMap((resource) => {
+      const transformed = transform(structuredClone(resource));
+      return transformed === undefined ? [] : [transformed];
+    }),
   );
 }
 
@@ -71,7 +85,7 @@ function registryWithPermutedNewResourceCollections(
     isReversed ? [...values].reverse() : [...values];
 
   return createSubjectResourceRegistry(
-    builtInSubjectResourceRegistry.listResources().map((resource) => {
+    ALL_BUILT_IN_REGISTRY_INPUTS.map((resource) => {
       const input = structuredClone(resource);
       switch (input.kind) {
         case "subject-asset":
@@ -216,6 +230,7 @@ describe("Package Subject Definition normalization", () => {
       ANIMATION_SET_REF,
       "worldkit://capability/locomotion.ground@1",
       COLLIDER_PROFILE_REF,
+      "worldkit://control-feel-profile/humanoid.medium-ground@1",
       "worldkit://locomotion-profile/ground.standard@1",
       "worldkit://physics-body-profile/character.medium@1",
       RIG_PROFILE_REF,
@@ -232,13 +247,13 @@ describe("Package Subject Definition normalization", () => {
 
     expect(result.ok).toBe(true);
     expect(packageDefinitionHash(result)).toBe(
-      "sha256:2949c4c8f7ebbb321a3a40ea10890f4dd608178c26424c530e771c1b529d0a1b",
+      "sha256:7e4d654a765ca1334df2dc8b33d86ce23d5914e62b8604730c5c23ba88518c2b",
     );
     expect(result.value?.resources.resourceLockHash).toBe(
-      "sha256:2e685dbfad9f563ae9b5ec3ca966bc8a6e3c85b6daa3b12280b4ca3dd989c3b0",
+      "sha256:f0ea64e8683520b4718ba479fecdd884d8cd4a7bfe9ce0c2780b4f54c2d54373",
     );
     expect(result.normalizedWorldIrHash).toBe(
-      "sha256:4f754cbe820da4519478dff3f3ed5b4c96240fb36397ca97b2bbe2f3ec58aae9",
+      "sha256:63b3f3e6e253d7997f5ae8e0fe5a4d633813ad62ef2e465d50ae7d91d792a8a4",
     );
   });
 
@@ -423,14 +438,11 @@ describe("Package Subject Definition normalization", () => {
               providerHandle: forbiddenValues[3],
             },
           } as unknown as SubjectRegistryResourceInputV1;
-        case "locomotion-profile":
+        case "control-feel-profile":
           return {
             ...resource,
-            locomotion: {
-              ...resource.locomotion,
-              providerHandle: forbiddenValues[4],
-            },
-          } as SubjectRegistryResourceInputV1;
+            providerHandle: forbiddenValues[4],
+          } as unknown as SubjectRegistryResourceInputV1;
         default:
           return resource;
       }
@@ -510,12 +522,22 @@ describe("Package Subject Definition normalization", () => {
       normalizedDefinition.collider.centerOffsetFromSubjectOriginMetersXYZ,
       ["0", "1", "2"],
     );
-    expectExactKeys(normalizedDefinition.locomotion, [
+    expectExactKeys(normalizedDefinition.locomotion, ["allowJump", "allowRun", "allowWalk"]);
+    expectExactKeys(normalizedDefinition.controlFeel, [
+      "accelerationMetersPerSecondSquared",
+      "airControlRatio",
+      "coyoteTimeSeconds",
+      "decelerationMetersPerSecondSquared",
+      "jumpBufferSeconds",
+      "jumpHoldGravityRatio",
+      "jumpReleaseGravityRatio",
       "jumpSpeedMetersPerSecond",
-      "mode",
+      "moveResponseExponent",
+      "resourceRef",
       "runSpeedMetersPerSecond",
+      "turnRateRadiansPerSecond",
+      "variableJumpHoldSeconds",
       "walkSpeedMetersPerSecond",
-      "waterSpeedMetersPerSecond",
     ]);
     const normalizedAssetPart = normalizedDefinition.visualParts.find(
       (part) => part.kind === "asset",
@@ -954,6 +976,7 @@ describe("Package Subject Definition normalization", () => {
       "package://subject-definition/coastal-pack-animal@1",
       "worldkit://capability/locomotion.ground@1",
       "worldkit://collider-derivation-profile/vertical-character-capsule@1",
+      "worldkit://control-feel-profile/humanoid.medium-ground@1",
       "worldkit://locomotion-profile/ground.standard@1",
       "worldkit://physics-body-profile/character.medium@1",
       "worldkit://subject-definition/humanoid.third-person@1",

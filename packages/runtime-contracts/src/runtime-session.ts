@@ -47,6 +47,9 @@ export interface CameraViewInputV1 {
 
 export type MotionParameterTuningV1 = Readonly<Record<string, number>>;
 
+export type PublishedMovementMediumV1 = "ground" | "air";
+export type LocomotionModeV1 = "idle" | "walk" | "run" | "airborne";
+
 export interface ViewControlFrameV1 {
   forwardXYZ: Vec3;
   rightXYZ: Vec3;
@@ -63,7 +66,7 @@ export interface ViewTargetSampleV1 {
   socketPositionsMetersXYZById: Readonly<Record<string, Vec3>>;
   activeMotionKernelRef: string;
   motionTags: readonly string[];
-  movementMedium: "ground" | "water" | "air";
+  movementMedium: PublishedMovementMediumV1;
   relationshipRole: "none" | "rider" | "driver" | "passenger" | "tethered";
   cameraContextTags: readonly string[];
 }
@@ -103,17 +106,18 @@ export interface SubjectRuntimeStateV3 {
   subjectDefinitionHash: string;
   positionMetersXYZ: Vec3;
   velocityMetersPerSecondXYZ: Vec3;
-  movementMedium: "ground" | "air" | "water";
+  movementMedium: PublishedMovementMediumV1;
   activeActionId: string;
   forwardXYZ?: Vec3;
   speedMetersPerSecond?: number;
+  activeControlFeelProfileRef?: string;
+  locomotionMode?: LocomotionModeV1;
   activeMotionProfileRef?: string;
   activeMotionKernelRef?: string;
   motionTags?: readonly string[];
   relationshipRole?: "none" | "rider" | "driver" | "passenger" | "tethered";
   safeFallbackActive?: boolean;
   motionFailureCode?: string;
-  motionParameterTuning?: MotionParameterTuningV1;
 }
 
 export interface WorldRuntimeSnapshotV3 {
@@ -347,10 +351,6 @@ export interface WorldkitBrowserApiV3 {
   adjustCameraView?(input: CameraViewInputV1): WorldRuntimeSnapshotV3;
   resetCameraView?(): WorldRuntimeSnapshotV3;
   setCameraTuning?(tuning: CameraTuningV1): WorldRuntimeSnapshotV3;
-  setMotionTuning?(
-    subjectEntityId: string,
-    tuning: MotionParameterTuningV1,
-  ): WorldRuntimeSnapshotV3;
   setMotionProfile?(
     subjectEntityId: string,
     motionProfileRef: string,

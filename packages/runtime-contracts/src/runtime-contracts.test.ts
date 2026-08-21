@@ -84,11 +84,25 @@ describe("runtime contracts V3", () => {
         maxStepHeightMeters: 0.3,
       },
       locomotion: {
-        mode: "ground",
+        allowWalk: true,
+        allowRun: true,
+        allowJump: true,
+      },
+      controlFeel: {
+        resourceRef: "worldkit://control-feel-profile/humanoid.medium-ground@1",
         walkSpeedMetersPerSecond: 2.4,
         runSpeedMetersPerSecond: 4,
-        waterSpeedMetersPerSecond: 2.2,
         jumpSpeedMetersPerSecond: 5.5,
+        accelerationMetersPerSecondSquared: 16,
+        decelerationMetersPerSecondSquared: 22,
+        turnRateRadiansPerSecond: 9,
+        moveResponseExponent: 1.4,
+        airControlRatio: 0.3,
+        coyoteTimeSeconds: 0.1,
+        jumpBufferSeconds: 0.12,
+        variableJumpHoldSeconds: 0.18,
+        jumpHoldGravityRatio: 0.45,
+        jumpReleaseGravityRatio: 2,
       },
     } satisfies ExecutionSubjectV3;
 
@@ -104,6 +118,15 @@ describe("runtime contracts V3", () => {
     });
     expect(subject).not.toHaveProperty(["kit", "Ref"].join(""));
     expect(subject).not.toHaveProperty("spawnPositionMeters");
+  });
+
+  it("publishes first-slice movement medium and feel refs on SnapshotV3", () => {
+    const snapshot = createSnapshotFixtureV3();
+    const player = snapshot.subjectStatesByEntityId.player!;
+
+    expect(player.movementMedium).toBe("ground");
+    expect(player).not.toHaveProperty("motionParameterTuning");
+    expect(["ground", "air"]).toContain(player.movementMedium);
   });
 
   it("defines minimal engine-neutral execution resource descriptors", () => {
