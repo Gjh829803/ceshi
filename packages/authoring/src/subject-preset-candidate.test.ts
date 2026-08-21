@@ -7,6 +7,7 @@ import {
 } from "@whitebox-world/subject-registry";
 
 import {
+  createSubjectPresetCandidateFromSelectionsV1,
   createSubjectPresetCandidateV1,
   importLegacyAuthoringSnapshotV4,
   parseSubjectPresetCandidateV1,
@@ -92,6 +93,8 @@ function validInput(): SubjectPresetCandidateInputV1 {
           contentHash: lockedHash(CONTROL_FEEL_REF),
           disposition: "derive",
         },
+        selectedMotionProfileRef: MOTION_REF,
+        selectedMotionContentHash: lockedHash(MOTION_REF),
         control: {
           profileRef: CONTROL_REF,
           contentHash: lockedHash(CONTROL_REF),
@@ -377,6 +380,82 @@ describe("subject preset candidate V1", () => {
     expect(() => parseSubjectPresetCandidateV1(invalidCalendarDate)).toThrow(
       "SUBJECT_PRESET_CANDIDATE_INVALID_TIMESTAMP",
     );
+  });
+
+  it("accepts a non-default allowed Control Feel when the hash matches exactly", () => {
+    const heavyRef = "worldkit://control-feel-profile/humanoid.heavy-ground@1";
+    const input = validInput();
+    input.semanticContent.selections.controlFeel = {
+      profileRef: heavyRef,
+      contentHash: lockedHash(heavyRef),
+      disposition: "preserve",
+    };
+    input.semanticContent.overrides.controlFeelByProfileRef = {};
+    expect(createSubjectPresetCandidateV1(input).semanticContent.selections.controlFeel.profileRef)
+      .toBe(heavyRef);
+  });
+
+  it("rejects a G Bot candidate that selects a quadruped-specific Control Feel", () => {
+    const gBotRef = "worldkit://subject-definition/humanoid.g-bot@1";
+    const quadrupedFeelRef =
+      "worldkit://control-feel-profile/subject.animal.quadruped.forward-steer.default@1";
+    const gBotClosure = resolveSubjectPresetClosureV1(
+      builtInSubjectResourceRegistry,
+      gBotRef,
+    );
+    const input = validInput();
+    input.semanticContent.subjectDefinitionId = "humanoid.g-bot";
+    input.semanticContent.base = {
+      subjectDefinitionRef: gBotRef,
+      subjectDefinitionContentHash: gBotClosure.subjectDefinitionContentHash,
+      registryLock: gBotClosure.entries,
+      registryLockHash: gBotClosure.contentHash,
+    };
+    input.semanticContent.selections.controlFeel = {
+      profileRef: quadrupedFeelRef,
+      contentHash: lockedHash(CONTROL_FEEL_REF),
+      disposition: "preserve",
+    };
+    input.semanticContent.overrides.controlFeelByProfileRef = {};
+    expect(() => createSubjectPresetCandidateV1(input)).toThrow(
+      "SUBJECT_PRESET_CANDIDATE_CONTROL_FEEL_UNREACHABLE",
+    );
+  });
+
+  it("rejects Camera pitch that exceeds the Profile maximum even when safety would allow it", () => {
+    const input = validInput();
+    input.semanticContent.overrides.cameraByProfileRef[ORBIT_CAMERA_REF]!.values = {
+      pitchRadians: 1.3,
+    };
+    expect(() => createSubjectPresetCandidateV1(input)).toThrow(
+      "SUBJECT_PRESET_CANDIDATE_PARAMETER_OUT_OF_RANGE",
+    );
+  });
+
+  it("materializes a Candidate from Workbench selections including a fallback Motion", () => {
+    const candidate = createSubjectPresetCandidateFromSelectionsV1({
+      candidateId: "quadruped-fallback-motion",
+      subjectDefinitionRef: SUBJECT_REF,
+      selectedMotionProfileRef: FALLBACK_MOTION_REF,
+      selectedControlFeelProfileRef: CONTROL_FEEL_REF,
+      selectedControlProfileRef: CONTROL_REF,
+      defaultCameraRigProfileRef: ORBIT_CAMERA_REF,
+      controlFeelOverridesByProfileRef: {},
+      controlOverridesByProfileRef: {},
+      cameraOverridesByProfileRef: {},
+      provenance: validInput().provenance,
+      evidence: validInput().evidence,
+    });
+
+    expect(candidate.kind).toBe("worldkit-subject-preset-candidate");
+    expect(candidate.schemaVersion).toBe(1);
+    expect(candidate.semanticContent.selections.selectedMotionProfileRef)
+      .toBe(FALLBACK_MOTION_REF);
+    expect(candidate.semanticContent.selections.selectedMotionContentHash)
+      .toBe(lockedHash(FALLBACK_MOTION_REF));
+    expect(candidate.semanticContent.selections.motionRoles.default.sourceProfileRef)
+      .toBe(MOTION_REF);
+    expect(parseSubjectPresetCandidateV1(clone(candidate))).toEqual(candidate);
   });
 });
 

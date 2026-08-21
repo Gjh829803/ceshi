@@ -1,164 +1,88 @@
 import { describe, expect, it } from "vitest";
 
 import {
-  applyCameraRigParameterOverridesV1,
-  CAMERA_RIG_PARAMETER_NAMES_V1,
-  CAMERA_TUNING_PARAMETER_NAMES_V1,
-  isCameraRigParameterNameV1,
-  isCameraTuningParameterNameV1,
+  CAMERA_TUNING_SAFETY_LIMITS_V1,
+  resolveCameraTuningV1,
+  validateCameraTuningV1,
   type CameraRigParametersV1,
 } from "./camera-parameter-contract";
 
-const PARAMETERS = Object.fromEntries(
-  CAMERA_RIG_PARAMETER_NAMES_V1.map((name) => [name, 1]),
-) as CameraRigParametersV1;
+const ORBIT_ALGORITHM_REF = "worldkit://camera-rig/orbit-follow@1";
 
-describe("camera parameter contract", () => {
-  it("recognizes the complete public parameter vocabulary and rejects invented names", () => {
-    expect(CAMERA_RIG_PARAMETER_NAMES_V1).toEqual([
-      "distanceMeters",
-      "minimumDistanceMeters",
-      "maximumDistanceMeters",
-      "targetHeightMeters",
-      "shoulderOffsetMeters",
-      "pitchRadians",
-      "minimumPitchRadians",
-      "maximumPitchRadians",
-      "positionDampingPerSecond",
-      "horizontalPositionDampingPerSecond",
-      "verticalPositionDampingPerSecond",
-      "maximumPositionLagMeters",
-      "rotationDampingPerSecond",
-      "yawDampingPerSecond",
-      "pitchDampingPerSecond",
-      "collisionRadiusMeters",
-      "collisionRetractionMetersPerSecond",
-      "collisionRecoveryMetersPerSecond",
-      "baseFovDegrees",
-      "speedFovDegreesPerMeterPerSecond",
-      "maximumSpeedFovDegrees",
-      "lookAheadSeconds",
-      "accelerationLookAheadSecondsSquared",
-      "transitionSeconds",
-      "minimumHeadingSpeedMetersPerSecond",
-      "velocityHeadingDampingPerSecond",
-      "fovDampingPerSecond",
-      "horizontalDeadZoneRatio",
-      "verticalDeadZoneRatio",
-      "recenterDelaySeconds",
-      "recenterDurationSeconds",
-      "recenterMinimumSpeedMetersPerSecond",
-      "teleportSnapDistanceMeters",
-      "lookSensitivityXRatio",
-      "lookSensitivityYRatio",
-    ]);
-    expect(isCameraRigParameterNameV1("yawDampingPerSecond")).toBe(true);
-    expect(isCameraRigParameterNameV1("inventedCameraKnob")).toBe(false);
-    expect(CAMERA_TUNING_PARAMETER_NAMES_V1).toEqual([
-      "distanceMeters",
-      "targetHeightMeters",
-      "shoulderOffsetMeters",
-      "pitchRadians",
-      "positionDampingPerSecond",
-      "horizontalPositionDampingPerSecond",
-      "verticalPositionDampingPerSecond",
-      "maximumPositionLagMeters",
-      "rotationDampingPerSecond",
-      "yawDampingPerSecond",
-      "pitchDampingPerSecond",
-      "collisionRadiusMeters",
-      "collisionRetractionMetersPerSecond",
-      "collisionRecoveryMetersPerSecond",
-      "baseFovDegrees",
-      "speedFovDegreesPerMeterPerSecond",
-      "maximumSpeedFovDegrees",
-      "lookAheadSeconds",
-      "accelerationLookAheadSecondsSquared",
-      "transitionSeconds",
-      "minimumHeadingSpeedMetersPerSecond",
-      "velocityHeadingDampingPerSecond",
-      "fovDampingPerSecond",
-      "horizontalDeadZoneRatio",
-      "verticalDeadZoneRatio",
-      "recenterDelaySeconds",
-      "recenterDurationSeconds",
-      "recenterMinimumSpeedMetersPerSecond",
-      "teleportSnapDistanceMeters",
-      "lookSensitivityXRatio",
-      "lookSensitivityYRatio",
-    ]);
-    expect(isCameraTuningParameterNameV1("minimumDistanceMeters")).toBe(false);
-    expect(isCameraTuningParameterNameV1("distanceMeters")).toBe(true);
+function orbitParameters(): CameraRigParametersV1 {
+  return {
+    distanceMeters: 5,
+    minimumDistanceMeters: 0.5,
+    maximumDistanceMeters: 20,
+    targetHeightMeters: 1.25,
+    shoulderOffsetMeters: 0,
+    pitchRadians: 0.22,
+    minimumPitchRadians: -1.2,
+    maximumPitchRadians: 1.2,
+    positionDampingPerSecond: 18,
+    horizontalPositionDampingPerSecond: 18,
+    verticalPositionDampingPerSecond: 20,
+    maximumPositionLagMeters: 2.5,
+    rotationDampingPerSecond: 20,
+    yawDampingPerSecond: 16,
+    pitchDampingPerSecond: 14,
+    collisionRadiusMeters: 0.2,
+    collisionRetractionMetersPerSecond: 30,
+    collisionRecoveryMetersPerSecond: 6,
+    baseFovDegrees: 58,
+    speedFovDegreesPerMeterPerSecond: 0.4,
+    maximumSpeedFovDegrees: 4,
+    lookAheadSeconds: 0,
+    accelerationLookAheadSecondsSquared: 0,
+    transitionSeconds: 0.35,
+    minimumHeadingSpeedMetersPerSecond: 0,
+    velocityHeadingDampingPerSecond: 16,
+    fovDampingPerSecond: 8,
+    horizontalDeadZoneRatio: 0.08,
+    verticalDeadZoneRatio: 0.05,
+    recenterDelaySeconds: 1,
+    recenterDurationSeconds: 1.2,
+    recenterMinimumSpeedMetersPerSecond: 1.2,
+    teleportSnapDistanceMeters: 12,
+    lookSensitivityXRatio: 1,
+    lookSensitivityYRatio: 0.8,
+  };
+}
+
+describe("shared Camera tuning validation", () => {
+  it("accepts a value inside safety and Camera Profile pitch limits", () => {
+    expect(resolveCameraTuningV1(
+      { algorithmRef: ORBIT_ALGORITHM_REF, parameters: orbitParameters() },
+      { targetHeightMeters: 8, pitchRadians: 1.2 },
+    )).toEqual({ targetHeightMeters: 8, pitchRadians: 1.2 });
   });
 
-  it("does not apply third-person-only modifier fields to socket first-person", () => {
-    const ignoredOverrides = {
-      distanceMeters: 2,
-      minimumDistanceMeters: 2,
-      maximumDistanceMeters: 2,
-      shoulderOffsetMeters: 2,
-      collisionRadiusMeters: 2,
-      collisionRetractionMetersPerSecond: 2,
-      collisionRecoveryMetersPerSecond: 2,
-      lookAheadSeconds: 2,
-      accelerationLookAheadSecondsSquared: 2,
-      horizontalDeadZoneRatio: 2,
-      verticalDeadZoneRatio: 2,
-    } as const;
-    const result = applyCameraRigParameterOverridesV1(
-      "worldkit://camera-rig/socket-first-person@1",
-      PARAMETERS,
-      {
-        ...ignoredOverrides,
-        baseFovDegrees: 55,
-        targetHeightMeters: 1.6,
-      },
+  it("rejects targetHeightMeters=999 instead of clamping to the safety maximum", () => {
+    expect(CAMERA_TUNING_SAFETY_LIMITS_V1.targetHeightMeters.maximum).toBe(10);
+    const result = validateCameraTuningV1(
+      { algorithmRef: ORBIT_ALGORITHM_REF, parameters: orbitParameters() },
+      { targetHeightMeters: 999 },
     );
-
-    for (const parameterName of Object.keys(ignoredOverrides)) {
-      expect(result[parameterName as keyof CameraRigParametersV1]).toBe(1);
-    }
-    expect(result).toMatchObject({
-      baseFovDegrees: 55,
-      targetHeightMeters: 1.6,
-    });
+    expect(result).toMatchObject({ ok: false, code: "CAMERA_TUNING_OUT_OF_RANGE" });
+    expect(resolveCameraTuningV1(
+      { algorithmRef: ORBIT_ALGORITHM_REF, parameters: orbitParameters() },
+      { targetHeightMeters: 999 },
+    )).toBeUndefined();
   });
 
-  it("applies distance modifiers to follow rigs and expands aggregate damping aliases", () => {
-    const result = applyCameraRigParameterOverridesV1(
-      "worldkit://camera-rig/orbit-follow@1",
-      PARAMETERS,
-      {
-        distanceMeters: 7,
-        positionDampingPerSecond: 8,
-        rotationDampingPerSecond: 9,
-      },
+  it("rejects pitchRadians=1.3 when the Camera Profile maximum is 1.2 even though safety allows 1.4", () => {
+    expect(CAMERA_TUNING_SAFETY_LIMITS_V1.pitchRadians.maximum).toBe(1.4);
+    const result = validateCameraTuningV1(
+      { algorithmRef: ORBIT_ALGORITHM_REF, parameters: orbitParameters() },
+      { pitchRadians: 1.3 },
     );
+    expect(result).toMatchObject({ ok: false, code: "CAMERA_TUNING_OUT_OF_RANGE" });
+  });
 
-    expect(result).toMatchObject({
-      distanceMeters: 7,
-      positionDampingPerSecond: 8,
-      horizontalPositionDampingPerSecond: 8,
-      verticalPositionDampingPerSecond: 8,
-      rotationDampingPerSecond: 9,
-      yawDampingPerSecond: 9,
-      pitchDampingPerSecond: 9,
-      velocityHeadingDampingPerSecond: 9,
-    });
-
-    expect(applyCameraRigParameterOverridesV1(
-      "worldkit://camera-rig/velocity-chase@1",
-      PARAMETERS,
-      {
-        rotationDampingPerSecond: 9,
-        yawDampingPerSecond: 7,
-        velocityHeadingDampingPerSecond: 11,
-      },
-    )).toMatchObject({
-      rotationDampingPerSecond: 9,
-      yawDampingPerSecond: 7,
-      pitchDampingPerSecond: 9,
-      velocityHeadingDampingPerSecond: 11,
-    });
+  it("does not treat authoring slider ranges as a hidden clamp", () => {
+    expect(resolveCameraTuningV1(
+      { algorithmRef: ORBIT_ALGORITHM_REF, parameters: orbitParameters() },
+      { targetHeightMeters: 8 },
+    )).toEqual({ targetHeightMeters: 8 });
   });
 });

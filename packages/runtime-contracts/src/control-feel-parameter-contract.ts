@@ -1,8 +1,3 @@
-import type {
-  ControlFeelTuningParameterNameV1,
-  ControlFeelTuningV1,
-} from "./runtime-session";
-
 export interface ControlFeelParametersV1 {
   walkSpeedMetersPerSecond: number;
   runSpeedMetersPerSecond: number;
@@ -33,7 +28,17 @@ export const CONTROL_FEEL_PARAMETER_NAMES_V1 = [
   "variableJumpHoldSeconds",
   "jumpHoldGravityRatio",
   "jumpReleaseGravityRatio",
-] as const satisfies readonly ControlFeelTuningParameterNameV1[];
+] as const;
+
+export type ControlFeelTuningParameterNameV1 =
+  typeof CONTROL_FEEL_PARAMETER_NAMES_V1[number];
+export type ControlFeelTuningV1 = Readonly<
+  Partial<Record<ControlFeelTuningParameterNameV1, number>>
+>;
+export type ControlTuningParameterNameV1 = "moveDeadzoneRatio";
+export type ControlTuningV1 = Readonly<
+  Partial<Record<ControlTuningParameterNameV1, number>>
+>;
 
 export const CONTROL_FEEL_PARAMETER_BOUNDS_V1: Readonly<
   Record<ControlFeelTuningParameterNameV1, Readonly<{

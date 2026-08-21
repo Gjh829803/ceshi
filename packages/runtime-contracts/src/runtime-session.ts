@@ -50,35 +50,6 @@ export interface CameraViewInputV1 {
 export type PublishedMovementMediumV1 = "ground" | "air";
 export type LocomotionModeV1 = "idle" | "walk" | "run" | "airborne";
 
-export type ControlFeelTuningParameterNameV1 =
-  | "walkSpeedMetersPerSecond"
-  | "runSpeedMetersPerSecond"
-  | "jumpSpeedMetersPerSecond"
-  | "accelerationMetersPerSecondSquared"
-  | "decelerationMetersPerSecondSquared"
-  | "turnRateRadiansPerSecond"
-  | "moveResponseExponent"
-  | "airControlRatio"
-  | "coyoteTimeSeconds"
-  | "jumpBufferSeconds"
-  | "variableJumpHoldSeconds"
-  | "jumpHoldGravityRatio"
-  | "jumpReleaseGravityRatio";
-
-export type ControlFeelTuningV1 = Readonly<
-  Partial<Record<ControlFeelTuningParameterNameV1, number>>
->;
-
-export type ControlTuningParameterNameV1 = "moveDeadzoneRatio";
-
-/**
- * Session-local override for the input deadzone owned by Control Profile.
- * Response shaping remains owned by Control Feel.
- */
-export type ControlTuningV1 = Readonly<
-  Partial<Record<ControlTuningParameterNameV1, number>>
->;
-
 export interface ViewControlFrameV1 {
   forwardXYZ: Vec3;
   rightXYZ: Vec3;
@@ -140,6 +111,8 @@ export interface SubjectRuntimeStateV3 {
   forwardXYZ?: Vec3;
   speedMetersPerSecond?: number;
   activeControlFeelProfileRef?: string;
+  activePhysicsBodyProfileRef?: string;
+  activeLocomotionProfileRef?: string;
   locomotionMode?: LocomotionModeV1;
   activeMotionProfileRef?: string;
   activeMotionKernelRef?: string;
@@ -153,6 +126,7 @@ export interface ApplySubjectPresetTuningRequestV1 {
   subjectEntityId: string;
   expectedSubjectDefinitionRef: string;
   expectedSubjectDefinitionContentHash: string;
+  selectedMotionProfileRef: string;
   selectedControlFeelProfileRef: string;
   selectedControlProfileRef: string;
   cameraOverridesByProfileRef: Readonly<

@@ -13,6 +13,8 @@ import type {
   SubjectResourceRegistryV2,
   SubjectResourceRegistryV3,
 } from "@whitebox-world/subject-registry";
+import { selectableControlFeelProfileRefsV1 } from "@whitebox-world/subject-registry";
+import { isNil } from "lodash-es";
 
 import { sha256CanonicalJson } from "./canonical-json";
 import { ResourceLockBuilderV1 } from "./resource-lock";
@@ -55,14 +57,22 @@ function controlFeelProfileRefForDefinition(
   definition: SubjectDefinitionSourceV2,
 ): string | undefined {
   const controlFeelProfileRef = definition.profiles.controlFeelProfileRef;
-  if (
-    controlFeelProfileRef === undefined ||
-    controlFeelProfileRef === null ||
-    controlFeelProfileRef === ""
-  ) {
+  if (isNil(controlFeelProfileRef) || controlFeelProfileRef === "") {
     return undefined;
   }
   return controlFeelProfileRef;
+}
+
+function selectableControlFeelRefsForDefinition(
+  definition: SubjectDefinitionSourceV2,
+): readonly string[] {
+  if ("schemaVersion" in definition && definition.schemaVersion === 3) {
+    return selectableControlFeelProfileRefsV1(
+      (definition as RegistrySubjectDefinitionV3).profiles,
+    );
+  }
+  const defaultRef = controlFeelProfileRefForDefinition(definition);
+  return defaultRef === undefined ? [] : [defaultRef];
 }
 
 function projectControlFeelProfile(
@@ -132,19 +142,20 @@ function resolveControlFeelProfileV1(
   return controlFeelProfile;
 }
 
-const FIRST_SLICE_AVAILABLE_CONTROL_FEEL_PROFILE_REFS = [
-  "worldkit://control-feel-profile/humanoid.medium-ground@1",
-  "worldkit://control-feel-profile/humanoid.heavy-ground@1",
-] as const;
-
 function resolveAvailableControlFeelsV1(
   request: NormalizeSubjectDefinitionRequestV2,
 ): readonly NormalizedControlFeelV1[] {
   const registry = request.subjectResourceRegistry as Partial<SubjectResourceRegistryV3>;
   if (typeof registry.resolveControlFeelProfile !== "function") return [];
-  return FIRST_SLICE_AVAILABLE_CONTROL_FEEL_PROFILE_REFS.flatMap((resourceRef) => {
+  return selectableControlFeelRefsForDefinition(request.definition).flatMap((resourceRef) => {
     const profile = registry.resolveControlFeelProfile!(resourceRef);
-    return profile === undefined ? [] : [projectControlFeelProfile(profile)];
+    if (profile === undefined) return [];
+    request.resourceLockBuilder.addRegistryResource(
+      profile,
+      `${request.instancePath}/profiles/allowedControlFeelProfileRefs`,
+      request.diagnostics,
+    );
+    return [projectControlFeelProfile(profile)];
   });
 }
 
@@ -409,6 +420,8 @@ function normalizeCapabilityAssemblyV1(
 
   return {
     authoringAvailability: subject.authoringAvailability,
+    physicsBodyProfileRef: subject.profiles.physicsBodyProfileRef,
+    locomotionProfileRef: subject.profiles.locomotionProfileRef,
     defaultMotionProfile,
     optionalMotionProfiles,
     fallbackMotionProfile,

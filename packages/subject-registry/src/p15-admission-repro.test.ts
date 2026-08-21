@@ -70,6 +70,21 @@ describe("P1.5 admission clean-break", () => {
     );
   });
 
+  it("rejects a subject definition without allowedControlFeelProfileRefs", async () => {
+    const { G_BOT_HUMANOID_DEFINITION } = await import(
+      "./built-in-subject-definitions.js"
+    );
+    const withoutAllowed = {
+      ...G_BOT_HUMANOID_DEFINITION,
+      profiles: { ...G_BOT_HUMANOID_DEFINITION.profiles },
+    };
+    delete (withoutAllowed.profiles as { allowedControlFeelProfileRefs?: readonly string[] })
+      .allowedControlFeelProfileRefs;
+    expect(() => createSubjectResourceRegistry([withoutAllowed as never])).toThrow(
+      /SUBJECT_CONTROL_FEEL_ALLOWED_REQUIRED/,
+    );
+  });
+
   it("rejects feel profile when walk speed exceeds run speed", () => {
     expect(() =>
       createSubjectResourceRegistry([

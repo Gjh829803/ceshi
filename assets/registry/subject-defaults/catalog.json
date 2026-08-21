@@ -4,32 +4,32 @@
     {
       "subjectDefinitionId": "animal.quadruped.forward-steer",
       "subjectDefinitionRef": "worldkit://subject-definition/animal.quadruped.forward-steer@2",
-      "subjectDefinitionContentHash": "sha256:11effca74b0af1617cb56132e13b96d838f068108c8ed47f92e21509cfd965a8"
+      "subjectDefinitionContentHash": "sha256:33201a745e15c386c45147dbdb30bf8aeae9af9bf4f52ad56502279572bf7759"
     },
     {
       "subjectDefinitionId": "glider.paraglider.unpowered",
       "subjectDefinitionRef": "worldkit://subject-definition/glider.paraglider.unpowered@1",
-      "subjectDefinitionContentHash": "sha256:3ee97c70da807e0d601d83a701de4993df684cfefb2d0f278ca0228dff868139"
+      "subjectDefinitionContentHash": "sha256:8d0d7e0dd662703e613f7c143c350d7ab7cd8424e92e37aa8bb914006a5cf06f"
     },
     {
       "subjectDefinitionId": "humanoid.g-bot",
       "subjectDefinitionRef": "worldkit://subject-definition/humanoid.g-bot@1",
-      "subjectDefinitionContentHash": "sha256:21a8265f0ec54b540f8ef7bb536dc5b4ac40a300c2d42906d52c5fc53519e506"
+      "subjectDefinitionContentHash": "sha256:b6b9cc919ee4ddf5f1d0c63d093a7c26e04271e4b49cc5c6a3869e9e82f2879c"
     },
     {
       "subjectDefinitionId": "surface-craft.ice-skimmer",
       "subjectDefinitionRef": "worldkit://subject-definition/surface-craft.ice-skimmer@1",
-      "subjectDefinitionContentHash": "sha256:ef3fa0fe7d6487216e9d088a4612ec6b04936e5d7dda4187be3123a009e0efb6"
+      "subjectDefinitionContentHash": "sha256:4dfaed753c6417e89ad386473f0c833cc3f75ed6cfdb154aa90e6436fdd2b92b"
     },
     {
       "subjectDefinitionId": "vehicle.four-wheel.arcade",
       "subjectDefinitionRef": "worldkit://subject-definition/vehicle.four-wheel.arcade@1",
-      "subjectDefinitionContentHash": "sha256:b03a0eff830ed9eea84f0c717b363c91125a21719b7e391aac151c6b7b63875c"
+      "subjectDefinitionContentHash": "sha256:d9860837867a5125a7b5cdb5570ee9babdd8a93c40dac8b31b349863a2ed1f81"
     },
     {
       "subjectDefinitionId": "watercraft.kayak.surface",
       "subjectDefinitionRef": "worldkit://subject-definition/watercraft.kayak.surface@1",
-      "subjectDefinitionContentHash": "sha256:da3bcb59903a030f533392e47fffe30f27996c3e9f47e0a6ac4a429e8fb2ede9"
+      "subjectDefinitionContentHash": "sha256:2a02e0520efa69b4d6a4c74481866329418f3dc5c14bb967ba502ee51f6e0d8a"
     }
   ]
 }

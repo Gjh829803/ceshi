@@ -90,6 +90,8 @@ describe("runtime contracts V3", () => {
         allowRun: true,
         allowJump: true,
       },
+      physicsBodyProfileRef: "worldkit://physics-body-profile/character.medium@1",
+      locomotionProfileRef: "worldkit://locomotion-profile/ground.standard@1",
       controlFeel: {
         resourceRef: "worldkit://control-feel-profile/humanoid.medium-ground@1",
         contentHash: `sha256:${"1".repeat(64)}`,

@@ -1,18 +1,6 @@
 import "./style.css";
 
-import { CanvasRecorder } from "./canvas-recorder.js";
-import type {
-  FeatureInspection,
-  PlaygroundAutomationApi,
-  PlaygroundWorldAdapter,
-  WorldSnapshot,
-} from "./playground-world.js";
-import type { BabylonWorldAdapter } from "./babylon-world-adapter.js";
-import type { CapabilityDemoHostOverlayV1 } from "./authoring-loader.js";
-import {
-  withCapabilityDemoHarnessScope,
-  withCapabilityDemoHostOverlay,
-} from "./authoring-export.js";
+import { createSubjectPresetCandidateFromSelectionsV1 } from "@whitebox-world/authoring";
 import type {
   CameraTuningV1,
   CompatibleProfileSummaryV1,
@@ -22,6 +10,17 @@ import type {
   SubjectDefinitionSummaryV1,
   WorldkitBrowserApiV3,
 } from "@whitebox-world/runtime-contracts";
+
+import { CanvasRecorder } from "./canvas-recorder.js";
+import type {
+  FeatureInspection,
+  PlaygroundAutomationApi,
+  PlaygroundWorldAdapter,
+  WorldSnapshot,
+} from "./playground-world.js";
+import type { BabylonWorldAdapter } from "./babylon-world-adapter.js";
+import type { CapabilityDemoHostOverlayV1 } from "./authoring-loader.js";
+import { withCapabilityDemoHarnessScope } from "./authoring-export.js";
 import { createFetchSubjectAssetResolver, PLAYGROUND_CAPABILITY_SUBJECT_ASSET_URI_BY_REF_V1 } from "./worldkit-asset-resolver.js";
 import {
   installDeferredWorldkitBrowserApi,
@@ -135,7 +134,7 @@ app.innerHTML = `
             <button class="capability-open-button" id="open-tuning-panel-button" type="button">打开大尺寸调控台</button>
             <button id="fallback-button" type="button">注入 Safe Fallback</button>
             <button id="harness-button" type="button">运行 H01–H09</button>
-            <button id="export-package-button" type="button">导出配置 JSON</button>
+            <button id="export-package-button" type="button">导出 Candidate JSON</button>
           </div>
           <pre id="harness-output">ready</pre>
         </div>
@@ -174,7 +173,8 @@ app.innerHTML = `
             <div class="tuning-inline-status" id="tuning-input-status">等待试跑</div>
           </section>
           <section class="tuning-section" id="tuning-motion">
-            <div class="tuning-section-heading"><span>03</span><div><h3>调整运动手感草稿</h3><p>滑杆只编辑本地候选值；运行时继续使用已锁定的 Control Feel Ref，发布前需 promote。</p></div></div>
+            <div class="tuning-section-heading"><span>03</span><div><h3>选择运动算法并调整手感草稿</h3><p>运动算法只切换锁定的 Motion Profile；滑杆只编辑本地 Feel 候选值，运行时继续使用已锁定的 Control Feel Ref，发布前需 promote。</p></div></div>
+            <label class="friendly-field">运动算法<select id="tuning-motion-select"></select></label>
             <div class="friendly-slider-grid" id="tuning-motion-sliders"></div>
           </section>
           <section class="tuning-section" id="tuning-control">
@@ -201,12 +201,12 @@ app.innerHTML = `
             <div class="tuning-section-heading"><span>07</span><div><h3>检查并导出</h3><p>先跑一次自动检查，再把主体、运动、输入和所有镜头配置一起导出。</p></div></div>
             <div class="delivery-actions">
               <button id="tuning-harness-button" type="button">运行自动检查</button>
-              <button class="primary" id="tuning-export-button" type="button">导出配置 JSON</button>
+              <button class="primary" id="tuning-export-button" type="button">导出 Candidate JSON</button>
             </div>
             <pre class="friendly-result" id="tuning-result">尚未运行检查</pre>
           </section>
         </div>
-        <footer class="tuning-footer"><span id="tuning-save-status">更改会自动保存在本机草稿中</span><button id="tuning-export-footer-button" type="button">导出当前配置</button></footer>
+        <footer class="tuning-footer"><span id="tuning-save-status">更改会自动保存在本机草稿中</span><button id="tuning-export-footer-button" type="button">导出 Candidate JSON</button></footer>
       </aside>
     </div>
   ` : ''}
@@ -432,6 +432,9 @@ interface TuningWorkbenchContextV1 {
 
 interface TuningWorkbenchControllerV1 {
   setCameraPreferenceFromCompact(preference: string): void;
+  setSelectedMotionProfileFromCompact(motionProfileRef: string): boolean;
+  reapplyWorkingDraftAfterSimulationReset(): void;
+  exportPublicationCandidate(): boolean;
 }
 
 function installTuningWorkbench(
@@ -568,6 +571,7 @@ function installTuningWorkbench(
   }
   let cameraTuning: CameraTuningV1 = {};
   let selectedControlFeelProfileRef = controlFeelProfile?.resourceRef ?? "";
+  let selectedMotionProfileRef = defaultMotion?.resourceRef ?? "";
   const selectedControlFeelProfile = (): CompatibleProfileSummaryV1 | undefined =>
     controlFeelProfiles.find(
       (profile) => profile.resourceRef === selectedControlFeelProfileRef,
@@ -589,6 +593,15 @@ function installTuningWorkbench(
             resourceRef: defaultMotion.resourceRef,
             contentHash: defaultMotion.contentHash,
           },
+          availableMotionProfiles: [...new Map(
+            workbenchContext.motionProfiles.map((profile) => [
+              profile.resourceRef,
+              {
+                resourceRef: profile.resourceRef,
+                contentHash: profile.contentHash,
+              },
+            ]),
+          ).values()],
           controlFeelProfile: {
             resourceRef: controlFeelProfile.resourceRef,
             contentHash: controlFeelProfile.contentHash,
@@ -642,6 +655,7 @@ function installTuningWorkbench(
 
   const resetTuningStateToRegistry = (): void => {
     selectedControlFeelProfileRef = controlFeelProfile?.resourceRef ?? "";
+    selectedMotionProfileRef = defaultMotion?.resourceRef ?? "";
     for (const name of Object.keys(workbenchContext.parameterDraft)) {
       delete workbenchContext.parameterDraft[name];
     }
@@ -666,6 +680,11 @@ function installTuningWorkbench(
         workbenchContext.parameterDraft,
         selectedControlFeelProfile()?.parameters ?? {},
       );
+    }
+    if (workbenchContext.motionProfiles.some(
+      (profile) => profile.resourceRef === draft.selectedMotionProfileRef,
+    )) {
+      selectedMotionProfileRef = draft.selectedMotionProfileRef;
     }
     draftIdentity = {
       draftId: draft.draftId,
@@ -701,6 +720,7 @@ function installTuningWorkbench(
     return createSubjectPresetWorkbenchDraftV1({
       baseline: localBaseline,
       draftIdentity: { ...draftIdentity, updatedAtIso },
+      selectedMotionProfileRef,
       selectedControlFeelProfileRef: activeControlFeelProfile.resourceRef,
       selectedCameraPreferenceRef: cameraPreference === "auto" ? null : cameraPreference,
       controlFeel: {
@@ -992,6 +1012,51 @@ function installTuningWorkbench(
       return card;
     }));
   };
+  const uniqueMotionProfiles = [...new Map(
+    workbenchContext.motionProfiles.map((profile) => [profile.resourceRef, profile]),
+  ).values()];
+  const motionSelect = requiredElement<HTMLSelectElement>("#tuning-motion-select");
+  const syncMotionSelect = (): void => {
+    if ([...motionSelect.options].some((option) => option.value === selectedMotionProfileRef)) {
+      motionSelect.value = selectedMotionProfileRef;
+    }
+  };
+  const renderMotionSelect = (): void => {
+    motionSelect.replaceChildren(...uniqueMotionProfiles.map((profile) => {
+      const roleLabel = profile.role === "default"
+        ? "默认"
+        : profile.role === "fallback"
+          ? "安全回退"
+          : "可选";
+      return new Option(
+        `${profile.displayName} · ${roleLabel}`,
+        profile.resourceRef,
+        false,
+        profile.resourceRef === selectedMotionProfileRef,
+      );
+    }));
+    motionSelect.disabled = uniqueMotionProfiles.length === 0;
+    syncMotionSelect();
+  };
+  const applySelectedMotion = (motionProfileRef: string): boolean => {
+    if (!uniqueMotionProfiles.some((profile) => profile.resourceRef === motionProfileRef)) {
+      return false;
+    }
+    selectedMotionProfileRef = motionProfileRef;
+    syncMotionSelect();
+    const draft = persistWorkingDraft();
+    if (draft === undefined) return false;
+    return applyWorkingDraftAtomically(draft);
+  };
+  motionSelect.addEventListener("change", () => {
+    if (!applySelectedMotion(motionSelect.value)) {
+      syncMotionSelect();
+      saveStatus.textContent = "运动算法未能切换，已保留上一组锁定配置";
+      return;
+    }
+    saveStatus.textContent = "已选择运动算法；运行时将在下一个固定 tick 提交";
+  });
+
   refreshCameraCards();
   renderCameraSliders();
   requiredElement<HTMLButtonElement>("#reset-camera-view-button").addEventListener("click", () => {
@@ -1002,6 +1067,7 @@ function installTuningWorkbench(
       saveStatus.textContent = "镜头暂时无法回正，当前状态已保留";
     }
   });
+  renderMotionSelect();
   renderMotionSliders();
   renderControlSliders();
 
@@ -1013,6 +1079,7 @@ function installTuningWorkbench(
   const refreshWorkbenchAfterRestore = (): void => {
     refreshCameraCards();
     renderCameraSliders();
+    renderMotionSelect();
     renderMotionSliders();
     renderControlSliders();
     const compactCameraSelect = document.querySelector<HTMLSelectElement>("#camera-preference-select");
@@ -1173,45 +1240,64 @@ function installTuningWorkbench(
   };
   requiredElement<HTMLButtonElement>("#tuning-harness-button").addEventListener("click", () => void runHarness());
 
-  const exportCurrent = (): void => {
-    const payload = withCapabilityDemoHostOverlay({
-      schemaVersion: 4,
-      subjectDefinition: workbenchContext.definition,
-      selectedCameraPreference: cameraPreference,
-      activeCameraModifiers: (api.getCameraSnapshot?.().activeCameraModifierRefs ?? []).map((resourceRef) => ({
-        resourceRef,
-        displayName: FRIENDLY_CAMERA_MODIFIERS[resourceRef] ?? resourceRef,
-      })),
-      cameraTuning,
-      cameraTuningByProfileRef,
-      controlTuning,
-      // Schema V4 keeps this historical export key; its values now come only
-      // from the selected Control Feel profile and the legacy importer maps it
-      // into the P1.5 Control Feel lane.
-      motionParameterDraft: workbenchContext.parameterDraft,
-      motionParameterSupport: {
-        runtimeParameterNames: selectedControlFeelProfile()?.runtimeParameterNames ?? [],
-        draftOnlyParameterNames: selectedControlFeelProfile()?.draftOnlyParameterNames ?? [],
-        authoringRanges: selectedControlFeelProfile()?.authoringRanges ?? {},
-      },
-      inputGuide: inputItems.map((item) => ({ key: item.keyLabel, action: item.title, meaning: item.explanation })),
-      compatibleProfiles: [
-        ...workbenchContext.motionProfiles,
-        ...workbenchContext.controlFeelProfiles,
-        ...(workbenchContext.controlProfile === undefined ? [] : [workbenchContext.controlProfile]),
-        ...workbenchContext.cameraProfiles,
-      ],
-      resourceLockRequired: true,
-      note: "Control Feel 与 Control 数值只保存在草稿中；运行时只预览锁定 Ref，相机数值可作为会话预览。",
-    }, workbenchContext.hostOverlay);
-    downloadJson(
-      `${workbenchContext.definition.semanticClassId.replaceAll(".", "-")}.worldkit-authoring.json`,
-      payload,
+  const exportCurrent = (): boolean => {
+    const draft = persistWorkingDraft() ?? createCurrentWorkingDraft();
+    if (draft === undefined || localBaseline === undefined || exactBaseline === undefined) {
+      saveStatus.textContent = "当前主体没有完整的 Registry 基线，无法导出 Candidate";
+      return false;
+    }
+    const harness = exactBaseline.closure.entries.find(
+      (entry) => entry.resourceKind === "harness-profile",
     );
-    saveStatus.textContent = "配置 JSON 已导出";
+    if (harness === undefined) {
+      saveStatus.textContent = "基线缺少 Harness Profile，无法导出 Candidate";
+      return false;
+    }
+    const defaultCameraRigProfileRef =
+      cameraPreference !== "auto" &&
+        cameraRows.some((profile) => profile.resourceRef === cameraPreference)
+        ? cameraPreference
+        : localBaseline.defaultCameraProfileRef;
+    try {
+      const candidate = createSubjectPresetCandidateFromSelectionsV1({
+        candidateId: `playground-export-${Date.now()}`,
+        subjectDefinitionRef: draft.baseSubjectDefinitionRef,
+        selectedMotionProfileRef: draft.selectedMotionProfileRef,
+        selectedControlFeelProfileRef: draft.selectedControlFeelProfileRef,
+        selectedControlProfileRef: draft.selectedControlProfileRef,
+        defaultCameraRigProfileRef,
+        controlFeelOverridesByProfileRef: draft.controlFeelOverridesByProfileRef,
+        controlOverridesByProfileRef: draft.controlOverridesByProfileRef,
+        cameraOverridesByProfileRef: draft.cameraOverridesByProfileRef,
+        provenance: {
+          displayName: `${subjectFriendlyName(workbenchContext.definition)} playground candidate`,
+          notes: "Exported from the Playground authoring workbench.",
+          createdAtIso: new Date().toISOString(),
+          sourceCommit: "0".repeat(40),
+        },
+        evidence: {
+          harnessProfileRef: harness.resourceRef,
+          passedCheckIds: [],
+          runtimeBuild: "playground-local",
+        },
+      });
+      downloadJson(
+        `${workbenchContext.definition.semanticClassId.replaceAll(".", "-")}.worldkit-subject-preset-candidate.json`,
+        candidate,
+      );
+      saveStatus.textContent = "Publication Candidate 已导出";
+      return true;
+    } catch (error) {
+      saveStatus.textContent = error instanceof Error
+        ? `Candidate 未能导出：${error.message}`
+        : "Candidate 未能导出";
+      return false;
+    }
   };
   for (const selector of ["#tuning-export-button", "#tuning-export-footer-button"]) {
-    requiredElement<HTMLButtonElement>(selector).addEventListener("click", exportCurrent);
+    requiredElement<HTMLButtonElement>(selector).addEventListener("click", () => {
+      exportCurrent();
+    });
   }
   return {
     setCameraPreferenceFromCompact(preference: string): void {
@@ -1220,6 +1306,17 @@ function installTuningWorkbench(
       refreshCameraCards();
       renderCameraSliders();
       persistWorkingDraft();
+    },
+    setSelectedMotionProfileFromCompact(motionProfileRef: string): boolean {
+      return applySelectedMotion(motionProfileRef);
+    },
+    reapplyWorkingDraftAfterSimulationReset(): void {
+      const draft = createCurrentWorkingDraft();
+      if (draft === undefined) return;
+      applyWorkingDraftAtomically(draft);
+    },
+    exportPublicationCandidate(): boolean {
+      return exportCurrent();
     },
   };
 }
@@ -1278,7 +1375,7 @@ function installAuthoringRecoveryPanel(api: WorldkitBrowserApiV3): void {
 function installCapabilityAuthoringPanel(
   api: WorldkitBrowserApiV3,
   hostOverlay?: CapabilityDemoHostOverlayV1,
-): void {
+): TuningWorkbenchControllerV1 | undefined {
   const definitions = api.listSubjectDefinitions?.({ includeExperimental: true }) ?? [];
   if (definitions.length === 0) return;
   const panel = requiredElement<HTMLDivElement>("#capability-card");
@@ -1463,19 +1560,19 @@ function installCapabilityAuthoringPanel(
       harnessOutput.textContent = authoringActionFailure();
     }
   });
-  requiredElement<HTMLButtonElement>("#fallback-button").addEventListener("click", async () => {
+  requiredElement<HTMLButtonElement>("#fallback-button").addEventListener("click", () => {
     const fallback = motionProfiles.find((row) => row.role === "fallback");
-    if (fallback === undefined || api.setMotionProfile === undefined) return;
-    try {
-      const after = await api.setMotionProfile(snapshot.controlledEntityId, fallback.resourceRef);
-      harnessOutput.textContent = JSON.stringify(
-        after.subjectStatesByEntityId[snapshot.controlledEntityId],
-        null,
-        2,
-      );
-    } catch {
+    if (fallback === undefined) return;
+    if (!tuningWorkbench.setSelectedMotionProfileFromCompact(fallback.resourceRef)) {
       harnessOutput.textContent = authoringActionFailure();
+      return;
     }
+    harnessOutput.textContent = JSON.stringify(
+      api.getSubjectSnapshot?.(snapshot.controlledEntityId) ??
+        api.getSnapshot().subjectStatesByEntityId[snapshot.controlledEntityId],
+      null,
+      2,
+    );
   });
   requiredElement<HTMLButtonElement>("#harness-button").addEventListener("click", async () => {
     if (api.runHarness === undefined) return;
@@ -1492,23 +1589,11 @@ function installCapabilityAuthoringPanel(
     }
   });
   requiredElement<HTMLButtonElement>("#export-package-button").addEventListener("click", () => {
-    const payload = withCapabilityDemoHostOverlay({
-      schemaVersion: 4,
-      subjectDefinition: definition,
-      compatibleProfiles: profiles,
-      // Schema V4 compatibility key; parameterDraft is Control Feel tuning.
-      motionParameterDraft: parameterDraft,
-      resourceLockRequired: true,
-    }, hostOverlay);
-    const blob = new Blob([`${JSON.stringify(payload, null, 2)}\n`], {
-      type: "application/json",
-    });
-    const link = document.createElement("a");
-    link.href = URL.createObjectURL(blob);
-    link.download = `${definition.semanticClassId.replaceAll(".", "-")}.worldkit-package.json`;
-    link.click();
-    window.setTimeout(() => URL.revokeObjectURL(link.href), 0);
+    if (!tuningWorkbench.exportPublicationCandidate()) {
+      harnessOutput.textContent = authoringActionFailure();
+    }
   });
+  return tuningWorkbench;
 }
 
 if (authoringMode) {
@@ -1561,8 +1646,13 @@ if (authoringMode) {
   });
   const initialized = await browserInstallation.initialization;
   if (initialized !== undefined && createdAdapter !== null) {
-    installCapabilityAuthoringPanel(browserInstallation.api, createdHostOverlay);
-    startPlayground(createdAdapter, () => browserInstallation.dispose());
+    const workbench = installCapabilityAuthoringPanel(
+      browserInstallation.api,
+      createdHostOverlay,
+    );
+    startPlayground(createdAdapter, () => browserInstallation.dispose(), {
+      afterSimulationReset: () => workbench?.reapplyWorkingDraftAfterSimulationReset(),
+    });
   } else {
     inspection.innerHTML = `<pre>${escapeHtml(JSON.stringify(authoringStartupEvidence(browserInstallation.api), null, 2))}</pre>`;
     installAuthoringRecoveryPanel(browserInstallation.api);
@@ -1580,6 +1670,7 @@ if (authoringMode) {
 function startPlayground(
   adapter: PlaygroundWorldAdapter,
   disposeBrowserRuntime?: () => Promise<void>,
+  options: { afterSimulationReset?: () => void } = {},
 ): void {
 requiredElement("#adapter-name").textContent = adapter.name;
 const canvasRecorder = new CanvasRecorder(adapter.canvas);
@@ -1683,6 +1774,7 @@ const automationApi: PlaygroundAutomationApi = {
   exportWhiteboxTriviews: () => adapter.exportWhiteboxTriviews(),
   reset: () => {
     adapter.reset();
+    options.afterSimulationReset?.();
     return adapter.snapshot();
   },
   setPaused: (paused) => {
@@ -1702,6 +1794,7 @@ requiredElement<HTMLButtonElement>("#pause-button").addEventListener("click", ()
 
 requiredElement<HTMLButtonElement>("#reset-button").addEventListener("click", () => {
   adapter.reset();
+  options.afterSimulationReset?.();
 });
 
 requiredElement<HTMLButtonElement>("#capture-button").addEventListener("click", () => {

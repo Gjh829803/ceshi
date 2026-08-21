@@ -458,6 +458,8 @@ export interface NormalizedSubjectDefinitionV2 {
   };
   capabilityAssembly?: {
     authoringAvailability: "recommended" | "advanced" | "experimental";
+    physicsBodyProfileRef: string;
+    locomotionProfileRef: string;
     defaultMotionProfile: MotionProfileV1;
     optionalMotionProfiles: readonly MotionProfileV1[];
     fallbackMotionProfile: MotionProfileV1;

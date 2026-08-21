@@ -697,6 +697,8 @@ function compileCapabilityAssemblyV1(
   rejectPublishedWaterMediumProfile(assembly.mediumProfile);
   return {
     authoringAvailability: assembly.authoringAvailability,
+    physicsBodyProfileRef: assembly.physicsBodyProfileRef,
+    locomotionProfileRef: assembly.locomotionProfileRef,
     defaultMotionProfile: compileMotionProfile(assembly.defaultMotionProfile),
     optionalMotionProfiles: assembly.optionalMotionProfiles.map(compileMotionProfile),
     fallbackMotionProfile: compileMotionProfile(assembly.fallbackMotionProfile),
@@ -969,6 +971,8 @@ function compileSubjectsV3(
           allowRun: definition.locomotion.allowRun,
           allowJump: definition.locomotion.allowJump,
         },
+        physicsBodyProfileRef: definition.profiles.physicsBodyProfileRef,
+        locomotionProfileRef: definition.profiles.locomotionProfileRef,
         controlFeel: {
           resourceRef: definition.controlFeel.resourceRef,
           contentHash: definition.controlFeel.contentHash,

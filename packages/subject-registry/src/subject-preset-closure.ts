@@ -1,5 +1,6 @@
 import { sha256CanonicalJson } from "@whitebox-world/protocol";
 
+import { selectableControlFeelProfileRefsV1 } from "./selectable-control-feel";
 import type {
   RegistrySubjectDefinitionV3,
   SubjectRegistryResourceV3,
@@ -210,7 +211,11 @@ export function resolveSubjectPresetClosureV1(
         }
         visit(resource.profiles.physicsBodyProfileRef, "physics-body-profile");
         visit(resource.profiles.locomotionProfileRef, "locomotion-profile");
-        visit(resource.profiles.controlFeelProfileRef, "control-feel-profile");
+        for (const controlFeelProfileRef of selectableControlFeelProfileRefsV1(
+          resource.profiles,
+        )) {
+          visit(controlFeelProfileRef, "control-feel-profile");
+        }
         for (const motionProfileRef of [
           resource.profiles.motion.defaultMotionProfileRef,
           ...resource.profiles.motion.optionalMotionProfileRefs,

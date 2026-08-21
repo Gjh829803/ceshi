@@ -695,7 +695,7 @@ async function materializePromotion(
       ...structuredClone(baseDefinition.profiles),
       motion: {
         defaultMotionProfileRef:
-          candidate.semanticContent.selections.motionRoles.default.sourceProfileRef,
+          candidate.semanticContent.selections.selectedMotionProfileRef,
         optionalMotionProfileRefs:
           candidate.semanticContent.selections.motionRoles.optional.map(
             (role) => role.sourceProfileRef,
@@ -704,6 +704,15 @@ async function materializePromotion(
           candidate.semanticContent.selections.motionRoles.fallback.sourceProfileRef,
       },
       controlFeelProfileRef,
+      allowedControlFeelProfileRefs: (() => {
+        const sourceFeelRef = candidate.semanticContent.selections.controlFeel.profileRef;
+        const rewritten = baseDefinition.profiles.allowedControlFeelProfileRefs.map(
+          (resourceRef) => resourceRef === sourceFeelRef ? controlFeelProfileRef : resourceRef,
+        );
+        return rewritten.includes(controlFeelProfileRef)
+          ? rewritten
+          : [...rewritten, controlFeelProfileRef];
+      })(),
       controlProfileRef,
       cameraContextProfileRef: cameraContext.resourceRef,
     },

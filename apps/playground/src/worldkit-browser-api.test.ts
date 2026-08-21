@@ -21,6 +21,7 @@ import {
 
 import {
   installDeferredWorldkitBrowserApi,
+  listSubjectPresetAuthoringProfilesV1,
   validateSubjectPackageAgainstRegistry,
   type DeferredWorldkitBrowserRuntimeAdapterV1,
 } from "./worldkit-browser-api";
@@ -302,6 +303,28 @@ describe("installDeferredWorldkitBrowserApi", () => {
       expect(profile).not.toHaveProperty("runtimeParameterNames");
       expect(profile).not.toHaveProperty("draftOnlyParameterNames");
     }
+  });
+
+  it("lists only G Bot's allowed Control Feels, not the whole catalog", () => {
+    const listed = listSubjectPresetAuthoringProfilesV1(
+      "worldkit://subject-definition/humanoid.g-bot@1",
+    );
+    const feelRefs = listed
+      .filter((profile) => profile.kind === "control-feel-profile")
+      .map((profile) => profile.resourceRef)
+      .sort();
+    expect(feelRefs).toEqual([
+      "worldkit://control-feel-profile/humanoid.heavy-ground@1",
+      "worldkit://control-feel-profile/humanoid.medium-ground@1",
+    ].sort());
+    expect(feelRefs).not.toContain(
+      "worldkit://control-feel-profile/subject.animal.quadruped.forward-steer.default@1",
+    );
+    const catalogFeelCount = builtInSubjectResourceRegistry
+      .listCapabilityResources()
+      .filter((resource) => resource.kind === "control-feel-profile")
+      .length;
+    expect(catalogFeelCount).toBeGreaterThan(feelRefs.length);
   });
 
   it.each([

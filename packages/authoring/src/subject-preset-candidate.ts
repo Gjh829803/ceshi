@@ -1,16 +1,15 @@
 import {
-  applyCameraRigParameterOverridesV1,
-  CAMERA_TUNING_SAFETY_LIMITS_V1,
   CONTROL_FEEL_PARAMETER_NAMES_V1,
   isCameraRigParameterOverrideSupportedV1,
   isCameraTuningParameterNameV1,
   resolveControlFeelParametersV1,
-  type CameraRigParametersV1,
+  validateCameraTuningV1,
   type NumericProfileOverrideV1,
 } from "@whitebox-world/runtime-contracts";
 import {
   builtInSubjectResourceRegistry,
   resolveSubjectPresetClosureV1,
+  selectableControlFeelProfileRefsV1,
   type CameraRigProfileV1,
   type ControlFeelProfileV1,
   type ControlProfileV1,
@@ -20,6 +19,7 @@ import {
   type SubjectPresetResourceLockEntryV1,
   type SubjectResourceRegistryV3,
 } from "@whitebox-world/subject-registry";
+import { isNil } from "lodash-es";
 
 import { sha256CanonicalJson } from "./canonical-json";
 
@@ -59,6 +59,8 @@ export interface SubjectPresetSemanticContentV1 {
       optional: MotionPublicationRoleV1[];
       fallback: MotionPublicationRoleV1;
     };
+    selectedMotionProfileRef: string;
+    selectedMotionContentHash: string;
     controlFeel: {
       profileRef: string;
       contentHash: string;
@@ -397,7 +399,7 @@ function parseSemanticContent(value: unknown): SubjectPresetSemanticContentV1 {
   const selectionsSource = record(source.selections, "semanticContent.selections");
   exactKeys(
     selectionsSource,
-    ["motionRoles", "controlFeel", "control", "cameraContextProfileRef", "defaultCameraRigProfileRef"],
+    ["motionRoles", "selectedMotionProfileRef", "selectedMotionContentHash", "controlFeel", "control", "cameraContextProfileRef", "defaultCameraRigProfileRef"],
     "semanticContent.selections",
   );
   const motionRolesSource = record(
@@ -463,6 +465,14 @@ function parseSemanticContent(value: unknown): SubjectPresetSemanticContentV1 {
         ),
         fallback: parseRole(motionRolesSource.fallback, "motionRoles.fallback"),
       },
+      selectedMotionProfileRef: stringValue(
+        selectionsSource.selectedMotionProfileRef,
+        "selections.selectedMotionProfileRef",
+      ),
+      selectedMotionContentHash: exactHash(
+        selectionsSource.selectedMotionContentHash,
+        "selections.selectedMotionContentHash",
+      ),
       controlFeel: {
         profileRef: stringValue(
           controlFeelSource.profileRef,
@@ -662,65 +672,34 @@ function assertControlOverride(
   }
 }
 
-function invalidCameraParameters(parameters: Readonly<Partial<CameraRigParametersV1>>): boolean {
-  const negativeAllowed = new Set<keyof CameraRigParametersV1>([
-    "shoulderOffsetMeters",
-    "pitchRadians",
-    "minimumPitchRadians",
-    "maximumPitchRadians",
-  ]);
-  return Object.entries(parameters).some(([name, value]) =>
-    !Number.isFinite(value) ||
-    (!negativeAllowed.has(name as keyof CameraRigParametersV1) && value < 0)
-  ) ||
-    parameters.minimumDistanceMeters! > parameters.maximumDistanceMeters! ||
-    parameters.distanceMeters! < parameters.minimumDistanceMeters! ||
-    parameters.distanceMeters! > parameters.maximumDistanceMeters! ||
-    parameters.minimumPitchRadians! > parameters.maximumPitchRadians! ||
-    parameters.pitchRadians! < parameters.minimumPitchRadians! ||
-    parameters.pitchRadians! > parameters.maximumPitchRadians! ||
-    parameters.horizontalDeadZoneRatio! > 1 ||
-    parameters.verticalDeadZoneRatio! > 1 ||
-    parameters.baseFovDegrees! <= 0 ||
-    parameters.baseFovDegrees! + parameters.maximumSpeedFovDegrees! >= 180 ||
-    parameters.lookSensitivityXRatio! <= 0 ||
-    parameters.lookSensitivityYRatio! <= 0;
-}
-
 function assertCameraOverride(
   profile: CameraRigProfileV1,
   override: NumericProfileOverrideV1,
 ): void {
   assertOverrideHash(profile.resourceRef, override, profile.contentHash);
-  for (const [name, value] of Object.entries(override.values)) {
-    if (
-      !isCameraTuningParameterNameV1(name) ||
-      !Object.prototype.hasOwnProperty.call(profile.parameters, name) ||
-      !isCameraRigParameterOverrideSupportedV1(profile.algorithmRef, name)
-    ) {
+  for (const name of Object.keys(override.values)) {
+    if (!Object.prototype.hasOwnProperty.call(profile.parameters, name)) {
       fail(
         "SUBJECT_PRESET_CANDIDATE_UNKNOWN_PARAMETER",
         `'${name}' is not supported by Camera Profile '${profile.resourceRef}'.`,
       );
     }
-    const safetyLimit = CAMERA_TUNING_SAFETY_LIMITS_V1[name];
-    if (value < safetyLimit.minimum || value > safetyLimit.maximum) {
-      fail(
-        "SUBJECT_PRESET_CANDIDATE_PARAMETER_OUT_OF_RANGE",
-        `'${name}' is outside Runtime safety limits for '${profile.resourceRef}'.`,
-      );
-    }
   }
-  const merged = applyCameraRigParameterOverridesV1(
-    profile.algorithmRef,
-    profile.parameters,
+  const result = validateCameraTuningV1(
+    {
+      algorithmRef: profile.algorithmRef,
+      parameters: profile.parameters,
+    },
     override.values,
   );
-  if (invalidCameraParameters(merged)) {
-    fail(
-      "SUBJECT_PRESET_CANDIDATE_CAMERA_INVARIANT",
-      `Camera override '${profile.resourceRef}' violates a parameter invariant.`,
-    );
+  if (!result.ok) {
+    const code = result.code === "CAMERA_TUNING_UNKNOWN_PARAMETER" ||
+        result.code === "CAMERA_TUNING_UNSUPPORTED_PARAMETER"
+      ? "SUBJECT_PRESET_CANDIDATE_UNKNOWN_PARAMETER"
+      : result.code === "CAMERA_TUNING_OUT_OF_RANGE"
+        ? "SUBJECT_PRESET_CANDIDATE_PARAMETER_OUT_OF_RANGE"
+        : "SUBJECT_PRESET_CANDIDATE_CAMERA_INVARIANT";
+    fail(code, `Camera override '${profile.resourceRef}': ${result.message}`);
   }
 }
 
@@ -795,17 +774,37 @@ function validateCandidateAgainstRegistry(
     );
   }
 
-  const controlFeel = registry.resolveControlFeelProfile(
-    definition.profiles.controlFeelProfileRef,
+  const selectableMotionRefs = [
+    expectedMotionRefs.default,
+    ...expectedMotionRefs.optional,
+    expectedMotionRefs.fallback,
+  ];
+  const selectedMotionProfile = registry.resolveMotionProfile(
+    semantic.selections.selectedMotionProfileRef,
   );
   if (
+    isNil(selectedMotionProfile) ||
+    !selectableMotionRefs.includes(semantic.selections.selectedMotionProfileRef) ||
+    semantic.selections.selectedMotionContentHash !== selectedMotionProfile.contentHash
+  ) {
+    fail(
+      "SUBJECT_PRESET_CANDIDATE_MOTION_SELECTION_UNREACHABLE",
+      "The selected Motion Profile must be a locked default, optional, or fallback with an exact hash.",
+    );
+  }
+
+  const controlFeel = registry.resolveControlFeelProfile(
+    semantic.selections.controlFeel.profileRef,
+  );
+  const selectableControlFeelRefs = selectableControlFeelProfileRefsV1(definition.profiles);
+  if (
     controlFeel === undefined ||
-    semantic.selections.controlFeel.profileRef !== controlFeel.resourceRef ||
+    !selectableControlFeelRefs.includes(controlFeel.resourceRef) ||
     semantic.selections.controlFeel.contentHash !== controlFeel.contentHash
   ) {
     fail(
-      "SUBJECT_PRESET_CANDIDATE_SOURCE_DRIFT",
-      "The selected Control Feel Profile is not the exact locked profile.",
+      "SUBJECT_PRESET_CANDIDATE_CONTROL_FEEL_UNREACHABLE",
+      "The selected Control Feel Profile must be in the Definition allowed set with an exact hash.",
     );
   }
   const expectedControlFeelOverrideRefs =
@@ -1007,6 +1006,153 @@ export function createSubjectPresetCandidateV1(
   registry: SubjectResourceRegistryV3 = builtInSubjectResourceRegistry,
 ): SubjectPresetCandidateV1 {
   return parseEnvelope(input, registry, false);
+}
+
+export interface CreateSubjectPresetCandidateFromSelectionsInputV1 {
+  candidateId: string;
+  subjectDefinitionRef: string;
+  selectedMotionProfileRef: string;
+  selectedControlFeelProfileRef: string;
+  selectedControlProfileRef: string;
+  defaultCameraRigProfileRef: string;
+  controlFeelOverridesByProfileRef: Readonly<Record<string, NumericProfileOverrideV1>>;
+  controlOverridesByProfileRef: Readonly<Record<string, NumericProfileOverrideV1>>;
+  cameraOverridesByProfileRef: Readonly<Record<string, NumericProfileOverrideV1>>;
+  provenance: SubjectPresetCandidateV1["provenance"];
+  evidence: SubjectPresetCandidateV1["evidence"];
+}
+
+function publicationRole(
+  sourceProfileRef: string,
+  contentHash: string,
+): MotionPublicationRoleV1 {
+  return {
+    sourceProfileRef,
+    sourceContentHash: contentHash,
+    disposition: "preserve",
+  };
+}
+
+function deriveOrPreserve(
+  hasOverride: boolean,
+): SubjectPresetPublicationDispositionV1 {
+  return hasOverride ? "derive" : "preserve";
+}
+
+export function createSubjectPresetCandidateFromSelectionsV1(
+  input: CreateSubjectPresetCandidateFromSelectionsInputV1,
+  registry: SubjectResourceRegistryV3 = builtInSubjectResourceRegistry,
+): SubjectPresetCandidateV1 {
+  const { definition, closure } = candidateSubject(registry, input.subjectDefinitionRef);
+  const motion = definition.profiles.motion;
+  const defaultMotion = registry.resolveMotionProfile(motion.defaultMotionProfileRef);
+  const fallbackMotion = registry.resolveMotionProfile(motion.fallbackMotionProfileRef);
+  const selectedMotion = registry.resolveMotionProfile(input.selectedMotionProfileRef);
+  const selectedFeel = registry.resolveControlFeelProfile(input.selectedControlFeelProfileRef);
+  const selectedControl = registry.resolveControlProfile(input.selectedControlProfileRef);
+  if (
+    isNil(defaultMotion) ||
+    isNil(fallbackMotion) ||
+    isNil(selectedMotion) ||
+    isNil(selectedFeel) ||
+    isNil(selectedControl)
+  ) {
+    fail(
+      "SUBJECT_PRESET_CANDIDATE_SOURCE_DRIFT",
+      "A selected Motion, Control Feel, or Control Profile is missing from Registry.",
+    );
+  }
+  const cameraRefs = reachableCameraProfileRefs(
+    registry,
+    definition.profiles.cameraContextProfileRef,
+  );
+  const controlFeelDisposition = deriveOrPreserve(
+    Object.prototype.hasOwnProperty.call(
+      input.controlFeelOverridesByProfileRef,
+      input.selectedControlFeelProfileRef,
+    ),
+  );
+  const controlDisposition = deriveOrPreserve(
+    Object.prototype.hasOwnProperty.call(
+      input.controlOverridesByProfileRef,
+      input.selectedControlProfileRef,
+    ),
+  );
+  return createSubjectPresetCandidateV1({
+    kind: "worldkit-subject-preset-candidate",
+    schemaVersion: 1,
+    semanticContent: {
+      candidateId: input.candidateId,
+      subjectDefinitionId: definition.id,
+      base: {
+        subjectDefinitionRef: input.subjectDefinitionRef,
+        subjectDefinitionContentHash: definition.contentHash,
+        registryLock: closure.entries,
+        registryLockHash: closure.contentHash,
+      },
+      selections: {
+        motionRoles: {
+          default: publicationRole(defaultMotion.resourceRef, defaultMotion.contentHash),
+          optional: motion.optionalMotionProfileRefs.map((resourceRef) => {
+            const profile = registry.resolveMotionProfile(resourceRef);
+            if (isNil(profile)) {
+              fail(
+                "SUBJECT_PRESET_CANDIDATE_SOURCE_DRIFT",
+                `Optional Motion Profile '${resourceRef}' is missing.`,
+              );
+            }
+            return publicationRole(profile.resourceRef, profile.contentHash);
+          }),
+          fallback: publicationRole(fallbackMotion.resourceRef, fallbackMotion.contentHash),
+        },
+        selectedMotionProfileRef: selectedMotion.resourceRef,
+        selectedMotionContentHash: selectedMotion.contentHash,
+        controlFeel: {
+          profileRef: selectedFeel.resourceRef,
+          contentHash: selectedFeel.contentHash,
+          disposition: controlFeelDisposition,
+        },
+        control: {
+          profileRef: selectedControl.resourceRef,
+          contentHash: selectedControl.contentHash,
+          disposition: controlDisposition,
+        },
+        cameraContextProfileRef: definition.profiles.cameraContextProfileRef,
+        defaultCameraRigProfileRef: input.defaultCameraRigProfileRef,
+      },
+      overrides: {
+        controlFeelByProfileRef: { ...input.controlFeelOverridesByProfileRef },
+        controlByProfileRef: { ...input.controlOverridesByProfileRef },
+        cameraByProfileRef: { ...input.cameraOverridesByProfileRef },
+        cameraPublicationBySourceProfileRef: Object.fromEntries(
+          cameraRefs.map((resourceRef) => {
+            const profile = registry.resolveCameraRigProfile(resourceRef);
+            if (isNil(profile)) {
+              fail(
+                "SUBJECT_PRESET_CANDIDATE_SOURCE_DRIFT",
+                `Camera Profile '${resourceRef}' is missing.`,
+              );
+            }
+            return [resourceRef, {
+              sourceContentHash: profile.contentHash,
+              disposition: deriveOrPreserve(
+                Object.prototype.hasOwnProperty.call(
+                  input.cameraOverridesByProfileRef,
+                  resourceRef,
+                ),
+              ),
+            }];
+          }),
+        ),
+      },
+      publication: {
+        mode: "subject-scoped-derivatives",
+        publicDefaultEnabled: true,
+      },
+    },
+    provenance: input.provenance,
+    evidence: input.evidence,
+  }, registry);
 }
 
 function legacyRoot(input: unknown): Record<string, unknown> {
@@ -1370,6 +1516,8 @@ export function importLegacyAuthoringSnapshotV4(
           ),
           fallback: role(definition.profiles.motion.fallbackMotionProfileRef, "preserve"),
         },
+        selectedMotionProfileRef: motionProfileRef,
+        selectedMotionContentHash: role(motionProfileRef, "preserve").sourceContentHash,
         controlFeel: {
           profileRef: controlFeel.resourceRef,
           contentHash: controlFeel.contentHash,

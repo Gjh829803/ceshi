@@ -291,6 +291,15 @@ describe("compileWorld", () => {
     }
     expect(player.collider.maxStepHeightMeters).toBe(0.3);
     expect(player.collider.maxSlopeDegrees).toBe(42);
+    expect(player.physicsBodyProfileRef).toBe(
+      "worldkit://physics-body-profile/character.capability-medium@1",
+    );
+    expect(player.locomotionProfileRef).toBe(
+      "worldkit://locomotion-profile/ground.standard@1",
+    );
+    expect(player.capabilityAssembly?.physicsBodyProfileRef).toBe(
+      "worldkit://physics-body-profile/character.capability-medium@1",
+    );
     expect(player.capabilityAssembly?.defaultMotionProfile).not.toHaveProperty(
       "parameters",
     );

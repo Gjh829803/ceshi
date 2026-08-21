@@ -2,6 +2,7 @@ import { readFile } from "node:fs/promises";
 import { createRequire } from "node:module";
 
 import { NullEngine } from "@babylonjs/core/Engines/nullEngine.pure.js";
+import type { ExecutionPlanV4 } from "@whitebox-world/runtime-contracts";
 import { isNil } from "lodash-es";
 import { describe, expect, it } from "vitest";
 
@@ -90,6 +91,32 @@ const CAMERA_PROFILES = [
     "worldkit://camera-rig/flight-horizon@1",
   ],
 ] as const;
+
+const MEDIUM_FEEL_REF = "worldkit://control-feel-profile/humanoid.medium-ground@1";
+const HEAVY_FEEL_REF = "worldkit://control-feel-profile/humanoid.heavy-ground@1";
+
+function withExtraCapabilitySubject(executionPlan: ExecutionPlanV4): ExecutionPlanV4 {
+  const player = executionPlan.subjects[0];
+  if (player === undefined) {
+    throw new Error("Expected a compiled capability Subject.");
+  }
+  return {
+    ...executionPlan,
+    subjects: [
+      player,
+      {
+        ...player,
+        entityId: "extra",
+        spawnAnchorEntityId: "spawn-extra",
+        spawnSubjectOriginPositionMetersXYZ: [
+          player.spawnSubjectOriginPositionMetersXYZ[0] + 4,
+          player.spawnSubjectOriginPositionMetersXYZ[1],
+          player.spawnSubjectOriginPositionMetersXYZ[2],
+        ],
+      },
+    ],
+  };
+}
 
 function createFlatTerrainCapabilitySpec() {
   const spec = createValidAuthoringSpec();
@@ -213,6 +240,10 @@ describe("capability package runtime smoke tests", () => {
       expect(() => runtime.setCameraTuning({
         inventedCameraKnob: 1,
       } as never)).toThrow(/supported registered finite parameters/);
+      expect(() => runtime.setCameraTuning({ targetHeightMeters: 999 }))
+        .toThrow(/supported registered finite parameters/);
+      expect(() => runtime.setCameraTuning({ pitchRadians: 1.3 }))
+        .toThrow(/supported registered finite parameters/);
       runtime.resetCameraView();
       expect(runtime.setCameraPreference("auto").camera.preference).toBe("auto");
       runtime.reset();
@@ -350,6 +381,7 @@ describe("capability package runtime smoke tests", () => {
         .not.toHaveProperty("controlParameterTuning");
 
       const capabilityAssembly = loaded.executionPlan.subjects[0]!.capabilityAssembly!;
+      const defaultMotionProfileRef = capabilityAssembly.defaultMotionProfile.resourceRef;
       const orbitProfile = capabilityAssembly.cameraContext.cameraRigProfiles.find(
         (profile) =>
           profile.resourceRef === "worldkit://camera-profile/orbit.medium@1",
@@ -362,6 +394,7 @@ describe("capability package runtime smoke tests", () => {
         subjectEntityId: "player",
         expectedSubjectDefinitionRef: subjectDefinitionRef,
         expectedSubjectDefinitionContentHash: "sha256:" + "0".repeat(64),
+        selectedMotionProfileRef: defaultMotionProfileRef,
         selectedControlFeelProfileRef,
         selectedControlProfileRef,
         cameraOverridesByProfileRef: {},
@@ -375,6 +408,7 @@ describe("capability package runtime smoke tests", () => {
         expectedSubjectDefinitionRef: subjectDefinitionRef,
         expectedSubjectDefinitionContentHash:
           loaded.executionPlan.subjects[0]!.subjectDefinitionHash,
+        selectedMotionProfileRef: defaultMotionProfileRef,
         selectedControlFeelProfileRef:
           "worldkit://control-feel-profile/unknown.unlisted@1",
         selectedControlProfileRef,
@@ -389,6 +423,7 @@ describe("capability package runtime smoke tests", () => {
         expectedSubjectDefinitionRef: subjectDefinitionRef,
         expectedSubjectDefinitionContentHash:
           loaded.executionPlan.subjects[0]!.subjectDefinitionHash,
+        selectedMotionProfileRef: defaultMotionProfileRef,
         selectedControlFeelProfileRef,
         selectedControlProfileRef:
           "worldkit://control-profile/unknown.unlisted@1",
@@ -404,6 +439,7 @@ describe("capability package runtime smoke tests", () => {
         expectedSubjectDefinitionRef: subjectDefinitionRef,
         expectedSubjectDefinitionContentHash:
           loaded.executionPlan.subjects[0]!.subjectDefinitionHash,
+        selectedMotionProfileRef: defaultMotionProfileRef,
         selectedControlFeelProfileRef,
         selectedControlProfileRef,
         cameraOverridesByProfileRef: {
@@ -424,6 +460,7 @@ describe("capability package runtime smoke tests", () => {
         expectedSubjectDefinitionRef: subjectDefinitionRef,
         expectedSubjectDefinitionContentHash:
           loaded.executionPlan.subjects[0]!.subjectDefinitionHash,
+        selectedMotionProfileRef: defaultMotionProfileRef,
         selectedControlFeelProfileRef:
           "worldkit://control-feel-profile/humanoid.heavy-ground@1",
         selectedControlProfileRef: controlProfile.resourceRef,
@@ -444,7 +481,17 @@ describe("capability package runtime smoke tests", () => {
       expect(committedPreset.snapshot.subjectStatesByEntityId.player)
         .toMatchObject({
           activeControlFeelProfileRef:
+            "worldkit://control-feel-profile/humanoid.medium-ground@1",
+          activePhysicsBodyProfileRef:
+            "worldkit://physics-body-profile/character.capability-medium@1",
+        });
+      const afterFeelTick = await runtime.runFixedInput({ actions: [], ticks: 1 });
+      expect(afterFeelTick.subjectStatesByEntityId.player)
+        .toMatchObject({
+          activeControlFeelProfileRef:
             "worldkit://control-feel-profile/humanoid.heavy-ground@1",
+          activePhysicsBodyProfileRef:
+            "worldkit://physics-body-profile/character.capability-medium@1",
         });
       expect(committedPreset.snapshot.subjectStatesByEntityId.player)
         .not.toHaveProperty("controlFeelParameterTuning");
@@ -914,4 +961,113 @@ describe("capability package runtime smoke tests", () => {
       await runtime.dispose();
     }
   });
+
+  it("commits Control Feel on the next tick, keeps authoring selection across reset, and forbids extra-subject Camera overrides", async () => {
+    const loaded = await loadAuthoringScene(
+      async () => new Response(JSON.stringify(createFlatTerrainCapabilitySpec())),
+      { subjectDefinitionRef: "worldkit://subject-definition/humanoid.g-bot@1" },
+    );
+    if (!loaded.ok || loaded.executionPlan === undefined) {
+      throw new Error(
+        `G Bot package failed to load: ${JSON.stringify(loaded.diagnostics)}`,
+      );
+    }
+    const executionPlan = withExtraCapabilitySubject(loaded.executionPlan);
+    const playerSubject = executionPlan.subjects[0]!;
+    const extraSubject = executionPlan.subjects[1]!;
+    const capabilityAssembly = playerSubject.capabilityAssembly!;
+    const orbitProfile = capabilityAssembly.cameraContext.cameraRigProfiles.find(
+      (profile) => profile.resourceRef === "worldkit://camera-profile/orbit.medium@1",
+    )!;
+    const runtime = await BabylonWorldRuntime.create({
+      executionPlan,
+      havokWasmBinary,
+      subjectAssetResolver: {
+        async resolveSubjectAsset() {
+          return { bytes: gBotAssetBytes, sourceLabel: "g-bot-test" };
+        },
+      },
+      engineFactory: () =>
+        new NullEngine({
+          renderWidth: 640,
+          renderHeight: 360,
+          textureSize: 512,
+          deterministicLockstep: true,
+          lockstepMaxSteps: 4,
+        }),
+    });
+    try {
+      await runtime.runFixedInput({ actions: [], ticks: 8 });
+      const beforeRequest = runtime.snapshot();
+      const beforePlayer = beforeRequest.subjectStatesByEntityId.player!;
+      expect(beforePlayer.activeControlFeelProfileRef).toBe(MEDIUM_FEEL_REF);
+
+      expect(runtime.requestControlFeelProfile("player", HEAVY_FEEL_REF)).toBe(true);
+      const queued = runtime.snapshot();
+      expect(queued.tick).toBe(beforeRequest.tick);
+      expect(queued.subjectStatesByEntityId.player).toMatchObject({
+        activeControlFeelProfileRef: MEDIUM_FEEL_REF,
+        locomotionMode: beforePlayer.locomotionMode,
+        positionMetersXYZ: beforePlayer.positionMetersXYZ,
+      });
+
+      expect(runtime.requestControlFeelProfile("player", MEDIUM_FEEL_REF)).toBe(true);
+      expect(runtime.requestControlFeelProfile("player", HEAVY_FEEL_REF)).toBe(true);
+      const afterTick = await runtime.runFixedInput({ actions: [], ticks: 1 });
+      expect(afterTick.subjectStatesByEntityId.player!.activeControlFeelProfileRef)
+        .toBe(HEAVY_FEEL_REF);
+
+      runtime.setCameraPreference(orbitProfile.resourceRef);
+      expect(runtime.setCameraTuning({ targetHeightMeters: 1.4 }).camera.tuning)
+        .toEqual({ targetHeightMeters: 1.4 });
+      runtime.reset();
+      const afterReset = runtime.snapshot();
+      expect(afterReset.subjectStatesByEntityId.player!.activeControlFeelProfileRef)
+        .toBe(HEAVY_FEEL_REF);
+      expect(afterReset.camera.tuning).toEqual({ targetHeightMeters: 1.4 });
+
+      const extraCamera = runtime.applySubjectPresetTuning({
+        subjectEntityId: extraSubject.entityId,
+        expectedSubjectDefinitionRef: extraSubject.subjectDefinitionRef,
+        expectedSubjectDefinitionContentHash: extraSubject.subjectDefinitionHash,
+        selectedMotionProfileRef: capabilityAssembly.defaultMotionProfile.resourceRef,
+        selectedControlFeelProfileRef: HEAVY_FEEL_REF,
+        selectedControlProfileRef: capabilityAssembly.controlProfile.resourceRef,
+        cameraOverridesByProfileRef: {
+          [orbitProfile.resourceRef]: {
+            baseResourceRef: orbitProfile.resourceRef,
+            baseContentHash: orbitProfile.contentHash,
+            values: { targetHeightMeters: 1.6 },
+          },
+        },
+        cameraPreference: orbitProfile.resourceRef,
+      });
+      expect(extraCamera.status).toBe("rejected");
+      expect(extraCamera.diagnostic?.code).toBe(
+        "SUBJECT_PRESET_CAMERA_OWNERSHIP_FORBIDDEN",
+      );
+      expect(runtime.snapshot().camera.tuning).toEqual({ targetHeightMeters: 1.4 });
+
+      const extraFeelOnly = runtime.applySubjectPresetTuning({
+        subjectEntityId: extraSubject.entityId,
+        expectedSubjectDefinitionRef: extraSubject.subjectDefinitionRef,
+        expectedSubjectDefinitionContentHash: extraSubject.subjectDefinitionHash,
+        selectedMotionProfileRef: capabilityAssembly.defaultMotionProfile.resourceRef,
+        selectedControlFeelProfileRef: HEAVY_FEEL_REF,
+        selectedControlProfileRef: capabilityAssembly.controlProfile.resourceRef,
+        cameraOverridesByProfileRef: {},
+        cameraPreference: "auto",
+      });
+      expect(extraFeelOnly.status).toBe("committed");
+      expect(extraFeelOnly.snapshot.subjectStatesByEntityId.extra)
+        .toMatchObject({ activeControlFeelProfileRef: MEDIUM_FEEL_REF });
+      expect(runtime.snapshot().camera.tuning).toEqual({ targetHeightMeters: 1.4 });
+      const extraAfterTick = await runtime.runFixedInput({ actions: [], ticks: 1 });
+      expect(extraAfterTick.subjectStatesByEntityId.extra!.activeControlFeelProfileRef)
+        .toBe(HEAVY_FEEL_REF);
+      expect(extraAfterTick.camera.tuning).toEqual({ targetHeightMeters: 1.4 });
+    } finally {
+      await runtime.dispose();
+    }
+  }, 15_000);
 });

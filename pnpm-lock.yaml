@@ -304,6 +304,9 @@ importers:
       '@whitebox-world/subject-composition':
         specifier: workspace:*
         version: link:../subject-composition
+      lodash-es:
+        specifier: ^4.18.1
+        version: 4.18.1
 
   packages/subjects:
     dependencies:

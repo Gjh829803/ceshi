@@ -35,14 +35,12 @@ export interface MotionKernelSnapshotV1 {
   speedMetersPerSecond: number;
   fallbackActive: boolean;
   activeControlFeelProfileRef: string;
+  activePhysicsBodyProfileRef: string;
+  activeLocomotionProfileRef: string;
   locomotionMode: LocomotionModeV1;
   lastFailureCode?: "MOTION_PARAMETER_INVALID" | "MOTION_NON_FINITE_STATE";
 }
 
-const FIRST_SLICE_PHYSICS_BODY_PROFILE_REF =
-  "worldkit://physics-body-profile/character.medium@1";
-const FIRST_SLICE_LOCOMOTION_PROFILE_REF =
-  "worldkit://locomotion-profile/ground.standard@1";
 const LEGACY_CONTROL_PROFILE_REF =
   "worldkit://control-profile/legacy-planar.camera-relative@1";
 const FIRST_SLICE_MEDIUM_PROFILE_REF =
@@ -167,6 +165,9 @@ export class MotionKernelRuntimeV1 {
   private readonly colliderCenterOffset: Vector3;
   private readonly motionModeResolver: MotionModeResolverV1;
   private controlFeel: ControlFeelSurfaceV1;
+  private pendingControlFeel: ControlFeelSurfaceV1 | undefined;
+  private lastRequestedControlFeelRef: string;
+  private lastRequestedMotionProfileRef: string;
   private resolvedState: SubjectResolvedStateV1 | undefined;
   private yawRadians: number;
   private forwardSpeedMetersPerSecond = 0;
@@ -230,6 +231,8 @@ export class MotionKernelRuntimeV1 {
       profiles,
       () => true,
     );
+    this.lastRequestedControlFeelRef = this.controlFeel.resourceRef;
+    this.lastRequestedMotionProfileRef = this.motionModeResolver.currentProfile.resourceRef;
 
     const spawnSubjectOrigin = new Vector3(...subject.spawnSubjectOriginPositionMetersXYZ);
     this.physicsController = new PhysicsCharacterController(
@@ -255,7 +258,9 @@ export class MotionKernelRuntimeV1 {
   }
 
   requestMotionProfile(resourceRef: string): boolean {
-    return this.motionModeResolver.request(resourceRef);
+    const accepted = this.motionModeResolver.request(resourceRef);
+    if (accepted) this.lastRequestedMotionProfileRef = resourceRef;
+    return accepted;
   }
 
   requestControlFeelProfile(resourceRef: string): boolean {
@@ -272,11 +277,8 @@ export class MotionKernelRuntimeV1 {
         `SUBJECT_OVERRIDE_FORBIDDEN: control-feel profile '${resourceRef}' is not locked on this subject.`,
       );
     }
-    this.controlFeel = copyControlFeelSurface(nextFeel);
-    this.publishResolvedState(
-      this.physicsController.checkSupport(FIXED_TIME_STEP_SECONDS, this.gravityDirection),
-      { moveRequested: false, runRequested: false },
-    );
+    this.pendingControlFeel = copyControlFeelSurface(nextFeel);
+    this.lastRequestedControlFeelRef = nextFeel.resourceRef;
     return true;
   }
 
@@ -289,6 +291,8 @@ export class MotionKernelRuntimeV1 {
    * a resolver publish, without input interpretation or motion integration.
    */
   publishSupport(): void {
+    this.commitPendingProfile();
+    this.commitPendingFeel();
     this.publishResolvedState(
       this.physicsController.checkSupport(FIXED_TIME_STEP_SECONDS, this.gravityDirection),
       { moveRequested: false, runRequested: false },
@@ -297,6 +301,7 @@ export class MotionKernelRuntimeV1 {
 
   step(command: MotionCommandV1): void {
     this.commitPendingProfile();
+    this.commitPendingFeel();
     try {
       const support = this.physicsController.checkSupport(
         FIXED_TIME_STEP_SECONDS,
@@ -335,7 +340,9 @@ export class MotionKernelRuntimeV1 {
       forwardXYZ: [forward.x, forward.y, forward.z],
       speedMetersPerSecond: velocity.length(),
       fallbackActive: mode.fallbackActive,
-      activeControlFeelProfileRef: resolved.activeControlFeelProfileRef,
+      activeControlFeelProfileRef: this.controlFeel.resourceRef,
+      activePhysicsBodyProfileRef: this.subject.physicsBodyProfileRef,
+      activeLocomotionProfileRef: this.subject.locomotionProfileRef,
       locomotionMode: resolved.locomotionMode,
       ...(mode.lastFailureCode === undefined
         ? {}
@@ -376,7 +383,11 @@ export class MotionKernelRuntimeV1 {
     this.physicsController.setPosition(spawn.add(this.colliderCenterOffset));
     this.physicsController.setVelocity(Vector3.Zero());
     this.motionModeResolver.reset();
-    this.controlFeel = requireControlFeel(this.subject);
+    this.motionModeResolver.request(this.lastRequestedMotionProfileRef);
+    this.motionModeResolver.commitTickBoundary();
+    this.pendingControlFeel = undefined;
+    const restoredFeel = this.lockedFeelSurface(this.lastRequestedControlFeelRef);
+    this.controlFeel = restoredFeel ?? requireControlFeel(this.subject);
     this.yawRadians = this.subject.spawnSubjectFacingRadians;
     this.forwardSpeedMetersPerSecond = 0;
     this.planarVelocity.setAll(0);
@@ -447,8 +458,8 @@ export class MotionKernelRuntimeV1 {
     const assembly = this.subject.capabilityAssembly;
     const motionProfile = this.motionModeResolver.currentProfile;
     return {
-      physicsBodyProfileRef: FIRST_SLICE_PHYSICS_BODY_PROFILE_REF,
-      locomotionProfileRef: FIRST_SLICE_LOCOMOTION_PROFILE_REF,
+      physicsBodyProfileRef: this.subject.physicsBodyProfileRef,
+      locomotionProfileRef: this.subject.locomotionProfileRef,
       motionProfileRef: motionProfile.resourceRef,
       motionKernelRef: motionProfile.motionKernelRef,
       controlFeelProfileRef: this.controlFeel.resourceRef,
@@ -1088,6 +1099,22 @@ export class MotionKernelRuntimeV1 {
       this.jumpBufferRemainingSeconds = 0;
       this.jumpHoldElapsedSeconds = 0;
     }
+  }
+
+  private commitPendingFeel(): void {
+    if (this.pendingControlFeel === undefined) return;
+    this.controlFeel = this.pendingControlFeel;
+    this.pendingControlFeel = undefined;
+  }
+
+  private lockedFeelSurface(resourceRef: string): ControlFeelSurfaceV1 | undefined {
+    const lockedCandidates = this.subject.availableControlFeels.some(
+      (feel) => feel.resourceRef === this.subject.controlFeel.resourceRef,
+    )
+      ? this.subject.availableControlFeels
+      : [...this.subject.availableControlFeels, this.subject.controlFeel];
+    const nextFeel = lockedCandidates.find((feel) => feel.resourceRef === resourceRef);
+    return nextFeel === undefined ? undefined : copyControlFeelSurface(nextFeel);
   }
 
   private activateFallback(code: MotionModeFailureCodeV1): void {
