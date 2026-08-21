@@ -17,6 +17,7 @@ export interface StartWorldkitServerOptions {
   inputPath: string;
   port?: number;
   forwardOutput?: boolean;
+  refreshDependencies?: boolean;
   startupTimeoutMilliseconds?: number;
   stopTimeoutMilliseconds?: number;
 }
@@ -230,6 +231,7 @@ async function startOne(options: StartWorldkitServerOptions, port: number): Prom
       "--port",
       String(port),
       "--strictPort",
+      ...(options.refreshDependencies === true ? ["--force"] : []),
     ],
     {
       cwd: PLAYGROUND_ROOT,

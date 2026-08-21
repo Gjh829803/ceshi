@@ -581,4 +581,35 @@ describe("loadAuthoringScene", () => {
       diagnostics: [{ code: "AUTHORING_SOURCE_UNAVAILABLE", instancePath: "" }],
     });
   });
+
+  it("returns the canonical startup command when Authoring mode has no configured source", async () => {
+    const loaded = await loadAuthoringScene(async () =>
+      new Response(JSON.stringify({
+        diagnostics: [{
+          severity: "error",
+          code: "AUTHORING_SOURCE_NOT_CONFIGURED",
+          instancePath: "",
+          message: "WORLDKIT_AUTHORING_SPEC_PATH is not configured for this server.",
+        }],
+      }), {
+        status: 404,
+        headers: { "content-type": "application/json" },
+      }),
+    );
+
+    expect(loaded).toMatchObject({
+      ok: false,
+      diagnostics: [{
+        code: "AUTHORING_SOURCE_UNAVAILABLE",
+        instancePath: "",
+        message: expect.stringContaining(
+          "pnpm worldkit run <world.json>",
+        ),
+        details: {
+          status: 404,
+          sourceDiagnosticCode: "AUTHORING_SOURCE_NOT_CONFIGURED",
+        },
+      }],
+    });
+  });
 });

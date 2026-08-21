@@ -117,7 +117,7 @@ flowchart TB
     subgraph L8["L8 证据与输出层 · Evidence & Delivery"]
         SS["Snapshot + Single Screenshot<br/>已实现"]
         CCB["Control Capture Bundle + Five-pass<br/>V1 已实现"]
-        VR["Unified Validation Report<br/>设计；专项 Gate 已实现"]
+        VR["Unified Validation Report<br/>Capture/Integrity V1 已实现"]
         VMA["Video Model Adapter<br/>设计"]
     end
 
@@ -167,8 +167,8 @@ flowchart TB
     STATE --> SS
     STATE -.-> CCB
     TAKE -.-> CCB
-    SS --> VR
-    CCB -.-> VR
+    SS -.-> VR
+    CCB --> VR
     CCB -.-> VMA
 ```
 
@@ -191,7 +191,7 @@ flowchart TB
 | L5 领域层 | 定义世界、主体、Capability、Relationship、动作、控制、相机、物理和 Runtime Port 的引擎无关语义 | 不决定 Babylon API 的调用方式 | 当前分布在 `packages/authoring`、`subject-composition`、`subject-actions`、`subject-registry` 与 `runtime-contracts`；通用 Capability/Relationship/Port 仍未完成 |
 | L6 引擎适配层 | 把 ExecutionPlan 和资产字节翻译为 Babylon/Havok 对象 | 不补写 AI 意图、不修改 Schema | `packages/runtime-babylon` 内的 Asset Resolver、Cache、Visual、Physics Adapter |
 | L7 运行时层 | Session、固定 Tick、控制绑定、物理移动、动画状态、相机跟随和 Snapshot | 不重新求解 Placement，不读取 Registry URI | `packages/runtime-babylon`；正式持久 Session 尚在设计 |
-| L8 证据层 | 输出截图、状态、Hash、指标和下游模型输入 | 不用视觉结果掩盖结构错误 | snapshot/screenshot、五 Pass Control Capture Bundle V1 与 verifier；统一报告待实现 |
+| L8 证据层 | 输出截图、状态、Hash、指标和下游模型输入 | 不用视觉结果掩盖结构错误 | snapshot/screenshot、五 Pass Control Capture Bundle V1；统一 Validation 的 Capture/Integrity V1 已实现，其他 Subject/Gate 待接入 |
 
 `Registry` 是横跨 L2、L3 和 L5 的“乐高零件目录”：公共面提供可发现的 Ref 和
 Manifest，Authoring 负责解析并锁定版本，领域定义则描述 Subject、Rig、Animation、
@@ -327,8 +327,10 @@ sequenceDiagram
 
 当前序列除单截图和固定输入外，已经由 `Simulation Take V1` 把控制/相机时间线编译为
 精确 Tick Schedule，并由 `Control Capture Bundle V1` 把同一 Render Ready 状态的
-Neutral Color、Linear Depth、Semantic、Instance、Normal 绑定到原子证据包。完整
-WorldPackage、Receipt Track、Resume 和统一 Validation Report 仍是后续能力。
+Neutral Color、Linear Depth、Semantic、Instance、Normal 绑定到原子证据包。
+Capture/Integrity V1 再通过 Node Adapter 复用 Bundle Validator，输出独立 Canonical
+Validation Report；它不反向修改 Bundle，也不接触 Babylon。完整 WorldPackage、
+Receipt Track、Resume，以及 Placement/Physics/Composition 等统一报告扩展仍是后续能力。
 
 ### 6.1 运行中修改不是直接操作页面
 
@@ -371,6 +373,8 @@ Protocol V3。详细事务、状态保留和权限边界见总体设计 §16.4�
 | 包 | 架构位置 | 作用 |
 |---|---|---|
 | `@whitebox-world/protocol` | L2/L4 基础 | Canonical JSON、Hash 等无引擎协议基础 |
+| `@whitebox-world/validation` | L2/L8 | Validation Profile/Report/Gate/Metric/Evidence、严格解析、Policy 与 Canonical Hash |
+| `@whitebox-world/control-capture` | L4/L8 | Simulation Take、精确 Capture Schedule、Pass/Encoding Profile 与 Bundle 公共契约 |
 | `@whitebox-world/subject-composition` | L5 | Subject Definition、Visual Part、Socket 等组合语义 |
 | `@whitebox-world/subject-actions` | L5 | 引擎无关的语义 Action 契约 |
 | `@whitebox-world/subject-registry` | L2/L3/L5 | 版本化 Subject、Asset、Rig、Animation、Collider 和 Profile Registry |
@@ -415,6 +419,8 @@ Authoring、IR、ExecutionPlan 或 Browser Protocol。
 - Golden Humanoid GLB、17 根解剖语义骨骼、独立 Skeleton Root、Bone Socket 与 `idle/walk/run/jump`；
 - CLI/Browser V3 的校验、编译、运行、控制、Snapshot、单截图和 Take/Capture 操作；
 - Simulation Take V1、五 Pass Babylon Capture、Render Ready Receipt 与原子 Bundle；
+- Validation Capture/Integrity V1：版本化 Profile、严格 Report、Blocking/Incomplete
+  Policy、Bundle Adapter、`verify capture|explain` 与五类 Conformance Fixture；
 - Canonical、Rigged Subject、G Bot、Placement Layout 和 Control Capture 真实 Chromium Gate。
 
 以下能力不能从图中误读为已经完成：
@@ -424,7 +430,8 @@ Authoring、IR、ExecutionPlan 或 Browser Protocol。
 - 任意产品资产自动 Retarget、Compound Collider、LOD 和更多拓扑；
 - 完整 WorldPackage、WorldChangeSet、持久 Runtime Session；
 - 完整 Replay/Resume、Event/Action/Relationship Receipt、Motion Vector 和视频 Adapter；
-- 统一 Validation Profile/Report 与生产 Video Model Adapter；
+- Placement/Physics/Route/Composition/Replay/Performance 等统一 Validation 扩展与
+  生产 Video Model Adapter；
 - 室内、洞穴、Overhang、联网和完整 Gameplay。
 
 最新完成度、优先级和验收证据以

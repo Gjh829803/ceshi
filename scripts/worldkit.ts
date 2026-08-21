@@ -52,6 +52,10 @@ import {
   readSubjectPresetPromotionPlanFileV1,
   validateSubjectPresetCandidateFile,
 } from "./lib/subject-preset-promotion";
+import {
+  explainValidationReportFileV1,
+  verifyControlCaptureFileV1,
+} from "./lib/validation-cli";
 
 const execFile = promisify(execFileCallback);
 const REPOSITORY_ROOT = path.resolve(
@@ -63,7 +67,7 @@ const HELP = `worldkit - Canonical JSON whitebox world SDK
 Usage:
   worldkit validate <file> [--json]
   worldkit build <file> --output <file> [--json]
-  worldkit run <file> [--port <port>] [--json]
+  worldkit run <file> [--port <port>] [--refresh-dependencies] [--json]
   worldkit capture <file> --output <png> [--snapshot <json>] [--port <port>] [--json]
   worldkit registry list --kind subject-definition [--json]
   worldkit registry describe --resource-ref <ref> [--json]
@@ -81,6 +85,8 @@ Usage:
   worldkit subject-preset validate <candidate.json> [--legacy-v4] [--json]
   worldkit subject-preset plan <candidate.json> --output <plan.json> [--legacy-v4] [--json]
   worldkit subject-preset promote <candidate.json> --plan <plan.json> --write [--legacy-v4] [--json]
+  worldkit verify capture <bundle-directory> --output <validation-report.json> [--json]
+  worldkit verify explain <validation-report.json> --gate-id <id> [--json]
 `;
 
 export type { CliDiagnostic } from "./lib/worldkit-pipeline";
@@ -89,7 +95,13 @@ export type WorldkitArgs =
   | { command: "help"; json: false }
   | { command: "validate"; inputPath: string; json: boolean }
   | { command: "build"; inputPath: string; outputPath: string; json: boolean }
-  | { command: "run"; inputPath: string; port?: number; json: boolean }
+  | {
+      command: "run";
+      inputPath: string;
+      port?: number;
+      refreshDependencies?: boolean;
+      json: boolean;
+    }
   | {
       command: "capture";
       inputPath: string;
@@ -149,6 +161,18 @@ export type WorldkitArgs =
       planPath: string;
       write: true;
       legacyV4: boolean;
+      json: boolean;
+    }
+  | {
+      command: "verify-capture";
+      inputPath: string;
+      outputPath: string;
+      json: boolean;
+    }
+  | {
+      command: "verify-explain";
+      inputPath: string;
+      gateId: string;
       json: boolean;
     }
   | {
@@ -221,17 +245,7 @@ function takeRequiredPositional(tokens: string[], label: string): string {
   return value;
 }
 
-function takeJsonFlag(tokens: string[]): boolean {
-  const index = tokens.indexOf("--json");
-  if (index === -1) return false;
-  if (tokens.lastIndexOf("--json") !== index) {
-    throw new WorldkitUsageError("--json may be provided only once.");
-  }
-  tokens.splice(index, 1);
-  return true;
-}
-
-function takeBooleanFlag(tokens: string[], option: string): boolean {
+function takeFlag(tokens: string[], option: string): boolean {
   const index = tokens.indexOf(option);
   if (index === -1) return false;
   if (tokens.lastIndexOf(option) !== index) {
@@ -239,6 +253,10 @@ function takeBooleanFlag(tokens: string[], option: string): boolean {
   }
   tokens.splice(index, 1);
   return true;
+}
+
+function takeJsonFlag(tokens: string[]): boolean {
+  return takeFlag(tokens, "--json");
 }
 
 function rejectRemaining(tokens: string[], command: string): void {
@@ -268,7 +286,7 @@ export function parseWorldkitArgs(arguments_: readonly string[]): WorldkitArgs {
     const operation = takeRequiredPositional(tokens, "subject-preset operation");
     const inputPath = takeRequiredPositional(tokens, "Subject Preset candidate file");
     if (operation === "validate") {
-      const legacyV4 = takeBooleanFlag(tokens, "--legacy-v4");
+      const legacyV4 = takeFlag(tokens, "--legacy-v4");
       rejectRemaining(tokens, "subject-preset validate");
       return {
         command: "subject-preset-validate",
@@ -279,7 +297,7 @@ export function parseWorldkitArgs(arguments_: readonly string[]): WorldkitArgs {
     }
     if (operation === "plan") {
       const outputPath = takeOption(tokens, "--output");
-      const legacyV4 = takeBooleanFlag(tokens, "--legacy-v4");
+      const legacyV4 = takeFlag(tokens, "--legacy-v4");
       if (outputPath === undefined) {
         throw new WorldkitUsageError(
           "subject-preset plan requires --output <plan.json>.",
@@ -296,8 +314,8 @@ export function parseWorldkitArgs(arguments_: readonly string[]): WorldkitArgs {
     }
     if (operation === "promote") {
       const planPath = takeOption(tokens, "--plan");
-      const write = takeBooleanFlag(tokens, "--write");
-      const legacyV4 = takeBooleanFlag(tokens, "--legacy-v4");
+      const write = takeFlag(tokens, "--write");
+      const legacyV4 = takeFlag(tokens, "--legacy-v4");
       if (planPath === undefined) {
         throw new WorldkitUsageError(
           "subject-preset promote requires --plan <plan.json>.",
@@ -321,6 +339,37 @@ export function parseWorldkitArgs(arguments_: readonly string[]): WorldkitArgs {
     throw new WorldkitUsageError(
       `Unknown subject-preset operation '${operation}'.`,
     );
+  }
+
+  if (command === "verify") {
+    const operation = takeRequiredPositional(tokens, "verify operation");
+    const inputPath = takeRequiredPositional(tokens, "Validation input");
+    if (operation === "capture") {
+      const outputPath = takeOption(tokens, "--output");
+      if (outputPath === undefined) {
+        throw new WorldkitUsageError(
+          "verify capture requires --output <validation-report.json>.",
+        );
+      }
+      rejectRemaining(tokens, "verify capture");
+      return {
+        command: "verify-capture",
+        inputPath,
+        outputPath,
+        json,
+      };
+    }
+    if (operation === "explain") {
+      const gateId = takeOption(tokens, "--gate-id");
+      if (gateId === undefined) {
+        throw new WorldkitUsageError(
+          "verify explain requires --gate-id <id>.",
+        );
+      }
+      rejectRemaining(tokens, "verify explain");
+      return { command: "verify-explain", inputPath, gateId, json };
+    }
+    throw new WorldkitUsageError(`Unknown verify operation '${operation}'.`);
   }
 
   if (command === "take") {
@@ -480,11 +529,13 @@ export function parseWorldkitArgs(arguments_: readonly string[]): WorldkitArgs {
   }
   if (command === "run") {
     const portValue = takeOption(tokens, "--port");
+    const refreshDependencies = takeFlag(tokens, "--refresh-dependencies");
     rejectRemaining(tokens, "run");
     return {
       command,
       inputPath,
       ...(portValue === undefined ? {} : { port: parsePort(portValue) }),
+      ...(refreshDependencies ? { refreshDependencies: true } : {}),
       json,
     };
   }
@@ -1040,14 +1091,20 @@ type PrintableResult = {
   proposedSubjectDefinitionRef?: string;
   planHash?: string;
   writtenLogicalPaths?: readonly string[];
+  humanReadableText?: string;
 };
 
 function printResult(result: PrintableResult, json: boolean): void {
   if (json) {
-    process.stdout.write(`${stringifyCanonicalJson(result)}\n`);
+    const { humanReadableText: _humanReadableText, ...machineResult } = result;
+    process.stdout.write(`${stringifyCanonicalJson(machineResult)}\n`);
     return;
   }
   if (result.ok) {
+    if (result.humanReadableText !== undefined) {
+      process.stdout.write(`${result.humanReadableText}\n`);
+      return;
+    }
     const details = [
       result.outputPath,
       result.snapshotPath,
@@ -1069,6 +1126,7 @@ function printResult(result: PrintableResult, json: boolean): void {
 async function runUntilSignal(
   inputPath: string,
   port: number | undefined,
+  refreshDependencies: boolean,
   json: boolean,
 ): Promise<number> {
   const validation = await validateFile(inputPath);
@@ -1081,6 +1139,7 @@ async function runUntilSignal(
     server = await startWorldkitServer({
       inputPath,
       ...(port === undefined ? { port: 5173 } : { port }),
+      ...(refreshDependencies ? { refreshDependencies: true } : {}),
       forwardOutput: !json,
     });
   } catch (error) {
@@ -1130,7 +1189,12 @@ export async function main(
     return 0;
   }
   if (parsed.command === "run") {
-    return runUntilSignal(parsed.inputPath, parsed.port, parsed.json);
+    return runUntilSignal(
+      parsed.inputPath,
+      parsed.port,
+      parsed.refreshDependencies === true,
+      parsed.json,
+    );
   }
   if (parsed.command === "take-validate") {
     const result = await validateSimulationTakeFileV1(parsed.inputPath);
@@ -1185,6 +1249,22 @@ export async function main(
       parsed.inputPath,
       parsed.planPath,
       parsed.legacyV4,
+    );
+    printResult(result, parsed.json);
+    return result.exitCode;
+  }
+  if (parsed.command === "verify-capture") {
+    const result = await verifyControlCaptureFileV1(
+      parsed.inputPath,
+      parsed.outputPath,
+    );
+    printResult(result, parsed.json);
+    return result.exitCode;
+  }
+  if (parsed.command === "verify-explain") {
+    const result = await explainValidationReportFileV1(
+      parsed.inputPath,
+      parsed.gateId,
     );
     printResult(result, parsed.json);
     return result.exitCode;

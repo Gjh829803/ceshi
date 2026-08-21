@@ -7,6 +7,8 @@
   "packageManager": "pnpm@10.14.0",
   "scripts": {
     "dev": "pnpm --filter @whitebox-world/playground dev",
+    "dev:g-bot": "pnpm worldkit run examples/authoring/g-bot-subject-world.json",
+    "dev:g-bot:refresh": "pnpm worldkit run examples/authoring/g-bot-subject-world.json --refresh-dependencies",
     "generate:golden-humanoid": "tsx scripts/fixtures/generate-golden-humanoid-glb.ts --write",
     "studio": "pnpm --filter @whitebox-world/studio dev",
     "studio:public": "WORLDKIT_PUBLIC_MODE=1 WORLDKIT_STUDIO_PORT=4175 WORLDKIT_PLAYGROUND_ORIGIN=/play WORLDKIT_PLAYGROUND_INTERNAL_ORIGIN=http://127.0.0.1:5173 WORLDKIT_DISABLE_PLAYGROUND_SPAWN=1 pnpm --filter @whitebox-world/studio dev",
@@ -38,7 +40,8 @@
     "verify:placement-layout": "tsx scripts/verify-placement-layout.ts",
     "verify:rigged-subject": "tsx scripts/verify-rigged-subject-world.ts",
     "verify:g-bot-subject": "tsx scripts/verify-g-bot-subject-world.ts",
-    "verify:control-capture": "tsx scripts/verify-control-capture.ts"
+    "verify:control-capture": "tsx scripts/verify-control-capture.ts",
+    "verify:validation-capture": "tsx scripts/verify-validation-capture.ts"
   },
   "dependencies": {
     "@dimforge/rapier3d-compat": "^0.19.3",
@@ -48,6 +51,7 @@
     "@whitebox-world/protocol": "workspace:*",
     "@whitebox-world/runtime-contracts": "workspace:*",
     "@whitebox-world/subject-registry": "workspace:*",
+    "@whitebox-world/validation": "workspace:*",
     "lodash-es": "^4.18.1",
     "three": "^0.180.0"
   },
