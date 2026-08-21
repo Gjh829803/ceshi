@@ -19,7 +19,7 @@ import {
   type SubjectPresetResourceLockEntryV1,
   type SubjectResourceRegistryV3,
 } from "@whitebox-world/subject-registry";
-import { isEmpty, isEqual, isNil } from "lodash-es";
+import { isNil } from "lodash-es";
 
 import { sha256CanonicalJson } from "./canonical-json";
 
@@ -955,14 +955,6 @@ function validateCandidateAgainstRegistry(
     fail(
       "SUBJECT_PRESET_CANDIDATE_INVALID_EVIDENCE",
       "Evidence contains a check not declared by the locked Harness Profile.",
-    );
-  }
-  const requiredCheckIds = [...harness.requiredCheckIds].sort();
-  const passedCheckIds = [...candidate.evidence.passedCheckIds].sort();
-  if (isEmpty(requiredCheckIds) || !isEqual(requiredCheckIds, passedCheckIds)) {
-    fail(
-      "SUBJECT_PRESET_CANDIDATE_INCOMPLETE_EVIDENCE",
-      "Evidence must include every check declared by the locked Harness Profile.",
     );
   }
 }

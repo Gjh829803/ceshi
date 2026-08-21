@@ -311,7 +311,7 @@ declared safe-stop fallbacks that intentionally emit no active command.
 ```text
 pnpm worldkit subject-preset validate <candidate.json> [--json]
 pnpm worldkit subject-preset plan <candidate.json> --output <plan.json> [--json]
-pnpm worldkit subject-preset promote <candidate.json> --plan <plan.json> --write [--json]
+pnpm worldkit subject-preset promote <candidate.json> --plan <plan.json> --harness-receipt <receipt.json> --write [--json]
 ```
 
 `validate` and `plan` are read-only. Browser-reported harness evidence is
@@ -322,8 +322,12 @@ merge. `promote` is the only Registry-mutating command and requires:
 - read-only Git inspection proves a symbolic branch exists and is not `main`;
 - detached HEAD, unknown repositories and unborn branches are rejected;
 - tracked worktree is clean before the transaction;
+- Candidate `sourceCommit` equals the exact clean feature-branch HEAD;
 - candidate base lock matches the current Registry;
 - the supplied plan hash matches a freshly recomputed plan;
+- a trusted Harness Receipt covers every required check in the locked Harness
+  Profile and exactly binds the Candidate semantic hash, plan hash,
+  `sourceCommit`, and `git:<sourceCommit>` Runtime build;
 - every target is a normalized repository-relative logical path with no
   absolute, drive, UNC, URI, `..` or symlink component and is in a static
   Registry/asset allowlist;
@@ -336,7 +340,7 @@ The command may invoke read-only Git queries (`rev-parse`, `symbolic-ref`
 and `status`) to enforce the repository boundary. It never stages, commits,
 switches branches, pushes, merges or uses network credentials. Branch and clean
 state are rechecked before creating the transaction and before final rename.
-Candidate and plan inputs must be outside the repository or inside ignored
+Candidate, plan and Harness Receipt inputs must be outside the repository or inside ignored
 `.codex-tmp/subject-presets/`.
 
 Files are generated in a same-volume temporary directory, validated there and

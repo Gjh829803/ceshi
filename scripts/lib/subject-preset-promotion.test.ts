@@ -69,7 +69,9 @@ function lockedHash(resourceRef: string): string {
   return entry.contentHash;
 }
 
-function createCandidate(): SubjectPresetCandidateV1 {
+function createCandidate(
+  sourceCommit = "0123456789abcdef0123456789abcdef01234567",
+): SubjectPresetCandidateV1 {
   const closure = resolveSubjectPresetClosureV1(
     builtInSubjectResourceRegistry,
     SUBJECT_REF,
@@ -182,7 +184,7 @@ function createCandidate(): SubjectPresetCandidateV1 {
       displayName: "Quadruped official feel",
       notes: "Six reviewed tuning differences.",
       createdAtIso: "2026-08-21T08:00:00.000Z",
-      sourceCommit: "0123456789abcdef0123456789abcdef01234567",
+      sourceCommit,
     },
     evidence: {
       harnessProfileRef: "worldkit://harness-profile/subject.standard@1",
@@ -200,6 +202,7 @@ async function git(root: string, ...arguments_: string[]): Promise<string> {
 async function createFixtureRepository(): Promise<{
   root: string;
   candidatePath: string;
+  candidate: SubjectPresetCandidateV1;
 }> {
   const fixtureRoot = await mkdtemp(path.join(tmpdir(), "worldkit-preset-promotion-"));
   temporaryRoots.push(fixtureRoot);
@@ -217,8 +220,25 @@ async function createFixtureRepository(): Promise<{
   await git(root, "commit", "-m", "fixture registry");
 
   const candidatePath = path.join(fixtureRoot, "candidate.json");
-  await writeFile(candidatePath, `${JSON.stringify(createCandidate())}\n`, "utf8");
-  return { root, candidatePath };
+  const candidate = createCandidate(await git(root, "rev-parse", "HEAD"));
+  await writeFile(candidatePath, `${JSON.stringify(candidate)}\n`, "utf8");
+  return { root, candidatePath, candidate };
+}
+
+function createHarnessReceipt(
+  candidate: SubjectPresetCandidateV1,
+  plan: SubjectPresetPromotionPlanV1,
+) {
+  return {
+    kind: "worldkit-subject-preset-harness-receipt" as const,
+    schemaVersion: 1 as const,
+    candidateSemanticContentHash: candidate.semanticContentHash,
+    planHash: plan.planHash,
+    harnessProfileRef: candidate.evidence.harnessProfileRef,
+    passedCheckIds: ["H01", "H02", "H03", "H04", "H05", "H06", "H07", "H08", "H09"],
+    sourceCommit: candidate.provenance.sourceCommit,
+    runtimeBuild: `git:${candidate.provenance.sourceCommit}`,
+  };
 }
 
 function decodeTarget(plan: SubjectPresetPromotionPlanV1, logicalPath: string): unknown {
@@ -291,6 +311,8 @@ describe("subject preset promotion", { timeout: 60_000 }, () => {
       "candidate.json",
       "--plan",
       "plan.json",
+      "--harness-receipt",
+      "receipt.json",
       "--write",
       "--legacy-v4",
       "--json",
@@ -298,6 +320,7 @@ describe("subject preset promotion", { timeout: 60_000 }, () => {
       command: "subject-preset-promote",
       inputPath: "candidate.json",
       planPath: "plan.json",
+      harnessReceiptPath: "receipt.json",
       write: true,
       legacyV4: true,
       json: true,
@@ -308,6 +331,8 @@ describe("subject preset promotion", { timeout: 60_000 }, () => {
       "candidate.json",
       "--plan",
       "plan.json",
+      "--harness-receipt",
+      "receipt.json",
     ])).toThrow(WorldkitUsageError);
   });
 
@@ -441,6 +466,41 @@ describe("subject preset promotion", { timeout: 60_000 }, () => {
     ))).rejects.toMatchObject({ code: "ENOENT" });
   }, 20_000);
 
+  it("rejects promotion without a candidate-bound trusted Harness receipt", async () => {
+    const fixture = await createFixtureRepository();
+    const plan = await planSubjectPresetPromotion(fixture.candidatePath, {
+      repositoryRoot: fixture.root,
+    });
+
+    await expect(promoteSubjectPresetTransactionally(fixture.candidatePath, {
+      repositoryRoot: fixture.root,
+      plan,
+      write: true,
+    })).rejects.toThrow("SUBJECT_PRESET_PROMOTION_HARNESS_RECEIPT_REQUIRED");
+    expect(await git(fixture.root, "status", "--porcelain")).toBe("");
+  });
+
+  it("rejects a Candidate exported from a different source commit", async () => {
+    const fixture = await createFixtureRepository();
+    const staleCandidate = createCandidate("f".repeat(40));
+    await writeFile(
+      fixture.candidatePath,
+      `${JSON.stringify(staleCandidate)}\n`,
+      "utf8",
+    );
+    const plan = await planSubjectPresetPromotion(fixture.candidatePath, {
+      repositoryRoot: fixture.root,
+    });
+
+    await expect(promoteSubjectPresetTransactionally(fixture.candidatePath, {
+      repositoryRoot: fixture.root,
+      plan,
+      harnessReceipt: createHarnessReceipt(staleCandidate, plan),
+      write: true,
+    })).rejects.toThrow("SUBJECT_PRESET_PROMOTION_SOURCE_COMMIT_MISMATCH");
+    expect(await git(fixture.root, "status", "--porcelain")).toBe("");
+  });
+
   it("requires --write and rejects main, detached HEAD, and tracked dirt", async () => {
     const missingWrite = await createFixtureRepository();
     const missingWritePlan = await planSubjectPresetPromotion(missingWrite.candidatePath, {
@@ -460,6 +520,7 @@ describe("subject preset promotion", { timeout: 60_000 }, () => {
     await expect(promoteSubjectPresetTransactionally(main.candidatePath, {
       repositoryRoot: main.root,
       plan: mainPlan,
+      harnessReceipt: createHarnessReceipt(main.candidate, mainPlan),
       write: true,
     })).rejects.toThrow("SUBJECT_PRESET_PROMOTION_MAIN_FORBIDDEN");
 
@@ -471,6 +532,7 @@ describe("subject preset promotion", { timeout: 60_000 }, () => {
     await expect(promoteSubjectPresetTransactionally(detached.candidatePath, {
       repositoryRoot: detached.root,
       plan: detachedPlan,
+      harnessReceipt: createHarnessReceipt(detached.candidate, detachedPlan),
       write: true,
     })).rejects.toThrow("SUBJECT_PRESET_PROMOTION_DETACHED_HEAD");
 
@@ -486,6 +548,7 @@ describe("subject preset promotion", { timeout: 60_000 }, () => {
     await expect(promoteSubjectPresetTransactionally(dirty.candidatePath, {
       repositoryRoot: dirty.root,
       plan: dirtyPlan,
+      harnessReceipt: createHarnessReceipt(dirty.candidate, dirtyPlan),
       write: true,
     })).rejects.toThrow("SUBJECT_PRESET_PROMOTION_DIRTY_WORKTREE");
   }, 20_000);
@@ -509,6 +572,7 @@ describe("subject preset promotion", { timeout: 60_000 }, () => {
     await expect(promoteSubjectPresetTransactionally(stale.candidatePath, {
       repositoryRoot: stale.root,
       plan: stalePlan,
+      harnessReceipt: createHarnessReceipt(stale.candidate, stalePlan),
       write: true,
     })).rejects.toThrow("SUBJECT_PRESET_PROMOTION_STALE_PREIMAGE");
 
@@ -521,6 +585,7 @@ describe("subject preset promotion", { timeout: 60_000 }, () => {
     await expect(promoteSubjectPresetTransactionally(tampered.candidatePath, {
       repositoryRoot: tampered.root,
       plan: tamperedPlan,
+      harnessReceipt: createHarnessReceipt(tampered.candidate, tamperedPlan),
       write: true,
     })).rejects.toThrow("SUBJECT_PRESET_PROMOTION_PLAN_HASH_MISMATCH");
   });
@@ -542,6 +607,7 @@ describe("subject preset promotion", { timeout: 60_000 }, () => {
     await expect(promoteSubjectPresetTransactionally(fixture.candidatePath, {
       repositoryRoot: fixture.root,
       plan: maliciousPlan,
+      harnessReceipt: createHarnessReceipt(fixture.candidate, maliciousPlan),
       write: true,
     })).rejects.toThrow("SUBJECT_PRESET_PROMOTION_UNSAFE_TARGET");
   });
@@ -565,6 +631,7 @@ describe("subject preset promotion", { timeout: 60_000 }, () => {
     await expect(promoteSubjectPresetTransactionally(fixture.candidatePath, {
       repositoryRoot: fixture.root,
       plan,
+      harnessReceipt: createHarnessReceipt(fixture.candidate, plan),
       write: true,
     })).rejects.toThrow("SUBJECT_PRESET_PROMOTION_SYMLINK_TARGET");
   });
@@ -589,6 +656,7 @@ describe("subject preset promotion", { timeout: 60_000 }, () => {
     await expect(promoteSubjectPresetTransactionally(fixture.candidatePath, {
       repositoryRoot: fixture.root,
       plan: maliciousPlan,
+      harnessReceipt: createHarnessReceipt(fixture.candidate, maliciousPlan),
       write: true,
     })).rejects.toThrow("SUBJECT_PRESET_PROMOTION_VERSION_COLLISION");
   });
@@ -613,6 +681,7 @@ describe("subject preset promotion", { timeout: 60_000 }, () => {
     await expect(promoteSubjectPresetTransactionally(fixture.candidatePath, {
       repositoryRoot: fixture.root,
       plan: maliciousPlan,
+      harnessReceipt: createHarnessReceipt(fixture.candidate, maliciousPlan),
       write: true,
     })).rejects.toThrow("SUBJECT_PRESET_PROMOTION_VERSION_COLLISION");
   });
@@ -634,6 +703,7 @@ describe("subject preset promotion", { timeout: 60_000 }, () => {
     await expect(promoteSubjectPresetTransactionally(fixture.candidatePath, {
       repositoryRoot: fixture.root,
       plan,
+      harnessReceipt: createHarnessReceipt(fixture.candidate, plan),
       write: true,
       injectFailure(point) {
         if (
@@ -665,6 +735,7 @@ describe("subject preset promotion", { timeout: 60_000 }, () => {
     const result = await promoteSubjectPresetTransactionally(fixture.candidatePath, {
       repositoryRoot: fixture.root,
       plan,
+      harnessReceipt: createHarnessReceipt(fixture.candidate, plan),
       write: true,
     });
 
@@ -738,7 +809,7 @@ describe("subject preset promotion", { timeout: 60_000 }, () => {
     const plan = await planSubjectPresetPromotion(fixture.candidatePath, {
       repositoryRoot: fixture.root,
     });
-    const candidate = createCandidate();
+    const candidate = fixture.candidate;
     const requiredPassedCheckIds = [
       "H01",
       "H02",
@@ -758,7 +829,7 @@ describe("subject preset promotion", { timeout: 60_000 }, () => {
       harnessProfileRef: "worldkit://harness-profile/subject.standard@1",
       passedCheckIds: requiredPassedCheckIds,
       sourceCommit: candidate.provenance.sourceCommit,
-      runtimeBuild: "ci-harness-2026.08.21",
+      runtimeBuild: `git:${candidate.provenance.sourceCommit}`,
     };
 
     expect(validateSubjectPresetHarnessReceiptV1(validReceipt, {
@@ -766,6 +837,8 @@ describe("subject preset promotion", { timeout: 60_000 }, () => {
       planHash: plan.planHash,
       harnessProfileRef: "worldkit://harness-profile/subject.standard@1",
       requiredPassedCheckIds,
+      sourceCommit: candidate.provenance.sourceCommit,
+      runtimeBuild: `git:${candidate.provenance.sourceCommit}`,
     })).toEqual(validReceipt);
 
     expect(() => validateSubjectPresetHarnessReceiptV1({
@@ -776,6 +849,8 @@ describe("subject preset promotion", { timeout: 60_000 }, () => {
       planHash: plan.planHash,
       harnessProfileRef: "worldkit://harness-profile/subject.standard@1",
       requiredPassedCheckIds,
+      sourceCommit: candidate.provenance.sourceCommit,
+      runtimeBuild: `git:${candidate.provenance.sourceCommit}`,
     })).toThrow("SUBJECT_PRESET_HARNESS_RECEIPT_INCOMPLETE");
 
     expect(() => validateSubjectPresetHarnessReceiptV1({
@@ -786,7 +861,21 @@ describe("subject preset promotion", { timeout: 60_000 }, () => {
       planHash: plan.planHash,
       harnessProfileRef: "worldkit://harness-profile/subject.standard@1",
       requiredPassedCheckIds,
+      sourceCommit: candidate.provenance.sourceCommit,
+      runtimeBuild: `git:${candidate.provenance.sourceCommit}`,
     })).toThrow("SUBJECT_PRESET_HARNESS_RECEIPT_PLAN_MISMATCH");
+
+    expect(() => validateSubjectPresetHarnessReceiptV1({
+      ...validReceipt,
+      sourceCommit: "f".repeat(40),
+    }, {
+      candidateSemanticContentHash: candidate.semanticContentHash,
+      planHash: plan.planHash,
+      harnessProfileRef: "worldkit://harness-profile/subject.standard@1",
+      requiredPassedCheckIds,
+      sourceCommit: candidate.provenance.sourceCommit,
+      runtimeBuild: `git:${candidate.provenance.sourceCommit}`,
+    })).toThrow("SUBJECT_PRESET_HARNESS_RECEIPT_SOURCE_COMMIT_MISMATCH");
   });
 
   it("rejects publishing the selected fallback Motion as the next Definition default", async () => {

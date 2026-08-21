@@ -374,18 +374,18 @@ describe("subject preset candidate V1", () => {
     );
   });
 
-  it("rejects harness evidence that is missing a required H01-H09 check", () => {
+  it("keeps partial browser harness evidence as informational provenance", () => {
     const incomplete = clone(validCandidate());
     incomplete.evidence.passedCheckIds = ["H01", "H02", "H03"];
-    expect(() => parseSubjectPresetCandidateV1(incomplete)).toThrow(
-      "SUBJECT_PRESET_CANDIDATE_INCOMPLETE_EVIDENCE",
-    );
+    expect(parseSubjectPresetCandidateV1(incomplete).evidence.passedCheckIds).toEqual([
+      "H01",
+      "H02",
+      "H03",
+    ]);
 
     const emptyEvidence = clone(validCandidate());
     emptyEvidence.evidence.passedCheckIds = [];
-    expect(() => parseSubjectPresetCandidateV1(emptyEvidence)).toThrow(
-      "SUBJECT_PRESET_CANDIDATE_INCOMPLETE_EVIDENCE",
-    );
+    expect(parseSubjectPresetCandidateV1(emptyEvidence).evidence.passedCheckIds).toEqual([]);
   });
 
   it("rejects malformed Unicode and calendar-invalid ISO timestamps", () => {

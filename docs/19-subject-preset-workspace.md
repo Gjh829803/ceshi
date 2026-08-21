@@ -37,12 +37,14 @@
 ```bash
 pnpm worldkit subject-preset validate <candidate.json> --json
 pnpm worldkit subject-preset plan <candidate.json> --output <plan.json> --json
-pnpm worldkit subject-preset promote <candidate.json> --plan <plan.json> --write --json
+pnpm worldkit subject-preset promote <candidate.json> --plan <plan.json> --harness-receipt <receipt.json> --write --json
 ```
+
+Candidate 中的浏览器检查只作为可追溯的参考信息，可以是不完整集合；它不能替代发布门禁。正式 `promote` 必须额外提供受信任 Harness/CI 生成的 Receipt。Receipt 必须覆盖锁定 Harness Profile 的全部检查，并精确绑定 Candidate 语义哈希、Promotion Plan 哈希、Candidate 的 `sourceCommit` 与对应的 `git:<sourceCommit>` Runtime 构建。Candidate 的 `sourceCommit` 还必须等于当前干净功能分支的 HEAD，因此旧 Candidate、旧 Plan 或跨构建 Receipt 都不能混用。
 
 旧的 Authoring snapshot V4 只留给隔离迁移工具：加上 `--legacy-v4` 才会走 `importLegacyAuthoringSnapshotV4`。不要把它当成日常发布路径。
 
-`validate` 和 `plan` 不修改仓库。`promote --write` 只允许在干净的非 `main` 分支运行，不提交、不推送；最终仍通过代码评审、测试和 Git 合并成为公共默认。
+`validate` 和 `plan` 不修改仓库。`promote --write` 只允许在干净的非 `main` 分支运行，并要求 `--harness-receipt`；命令本身不提交、不推送，最终仍通过代码评审、测试和 Git 合并成为公共默认。
 
 ## 新主体资产接入
 

@@ -864,9 +864,16 @@ describe("capability package runtime smoke tests", () => {
     const assembly = subject.capabilityAssembly!;
     const originalKernelRef = "worldkit://motion-kernel/free-ground@1";
     const aliasedKernelRef = "worldkit://motion-kernel/custom-steering-implementation@1";
-    const optionalProfile = assembly.optionalMotionProfiles.find(
-      (profile) => profile.motionKernelRef === originalKernelRef,
-    )!;
+    const optionalProfile = {
+      ...structuredClone(assembly.defaultMotionProfile),
+      resourceRef: "worldkit://motion-profile/custom-steering-profile@1",
+      contentHash:
+        "sha256:1111111111111111111111111111111111111111111111111111111111111111",
+    };
+    assembly.optionalMotionProfiles = [
+      ...assembly.optionalMotionProfiles,
+      optionalProfile,
+    ];
     const optionalKernel = assembly.motionKernels.find(
       (kernel) => kernel.resourceRef === originalKernelRef,
     )!;

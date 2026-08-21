@@ -19,6 +19,7 @@ import {
   builtInSubjectResourceRegistry,
   type SubjectRegistryResourceV3,
 } from "@whitebox-world/subject-registry";
+import { isNil } from "lodash-es";
 
 import { explainSubjectFile } from "./lib/subject-explain";
 import {
@@ -49,6 +50,7 @@ import {
   importLegacySubjectPresetCandidateFileV4,
   planSubjectPresetPromotion,
   promoteSubjectPresetTransactionally,
+  readSubjectPresetHarnessReceiptFileV1,
   readSubjectPresetPromotionPlanFileV1,
   validateSubjectPresetCandidateFile,
 } from "./lib/subject-preset-promotion";
@@ -84,7 +86,7 @@ Usage:
   worldkit capture inspect <bundle-directory> [--json]
   worldkit subject-preset validate <candidate.json> [--legacy-v4] [--json]
   worldkit subject-preset plan <candidate.json> --output <plan.json> [--legacy-v4] [--json]
-  worldkit subject-preset promote <candidate.json> --plan <plan.json> --write [--legacy-v4] [--json]
+  worldkit subject-preset promote <candidate.json> --plan <plan.json> --harness-receipt <receipt.json> --write [--legacy-v4] [--json]
   worldkit verify capture <bundle-directory> --output <validation-report.json> [--json]
   worldkit verify explain <validation-report.json> --gate-id <id> [--json]
 `;
@@ -159,6 +161,7 @@ export type WorldkitArgs =
       command: "subject-preset-promote";
       inputPath: string;
       planPath: string;
+      harnessReceiptPath: string;
       write: true;
       legacyV4: boolean;
       json: boolean;
@@ -314,11 +317,17 @@ export function parseWorldkitArgs(arguments_: readonly string[]): WorldkitArgs {
     }
     if (operation === "promote") {
       const planPath = takeOption(tokens, "--plan");
+      const harnessReceiptPath = takeOption(tokens, "--harness-receipt");
       const write = takeFlag(tokens, "--write");
       const legacyV4 = takeFlag(tokens, "--legacy-v4");
       if (planPath === undefined) {
         throw new WorldkitUsageError(
           "subject-preset promote requires --plan <plan.json>.",
+        );
+      }
+      if (isNil(harnessReceiptPath)) {
+        throw new WorldkitUsageError(
+          "subject-preset promote requires --harness-receipt <receipt.json>.",
         );
       }
       if (!write) {
@@ -331,6 +340,7 @@ export function parseWorldkitArgs(arguments_: readonly string[]): WorldkitArgs {
         command: "subject-preset-promote",
         inputPath,
         planPath,
+        harnessReceiptPath,
         write: true,
         legacyV4,
         json,
@@ -1047,10 +1057,14 @@ async function planSubjectPresetForCli(
 async function promoteSubjectPresetForCli(
   inputPath: string,
   planPath: string,
+  harnessReceiptPath: string,
   legacyV4: boolean,
 ) {
   try {
     const plan = await readSubjectPresetPromotionPlanFileV1(planPath);
+    const harnessReceipt = await readSubjectPresetHarnessReceiptFileV1(
+      harnessReceiptPath,
+    );
     const candidate = legacyV4
       ? await importLegacySubjectPresetForCli(inputPath)
       : undefined;
@@ -1058,6 +1072,8 @@ async function promoteSubjectPresetForCli(
       repositoryRoot: REPOSITORY_ROOT,
       plan,
       planPath,
+      harnessReceipt,
+      harnessReceiptPath,
       write: true,
       ...(candidate === undefined ? {} : { candidate }),
     });
@@ -1248,6 +1264,7 @@ export async function main(
     const result = await promoteSubjectPresetForCli(
       parsed.inputPath,
       parsed.planPath,
+      parsed.harnessReceiptPath,
       parsed.legacyV4,
     );
     printResult(result, parsed.json);

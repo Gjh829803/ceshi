@@ -463,7 +463,10 @@ Run candidate validate and plan into `.codex-tmp/subject-presets/`; inspect that
 
 - [ ] **Step 3: Promote with explicit write on feature branch**
 
-Run the exact generated plan through `subject-preset promote --write`.
+Run the exact generated plan through
+`subject-preset promote --plan <plan.json> --harness-receipt <receipt.json> --write`.
+The Receipt must come from the trusted Harness/CI run for that exact Candidate,
+plan and source commit; browser-reported checks are informational only.
 
 - [ ] **Step 4: Add regression assertions**
 

@@ -1262,19 +1262,11 @@ function installTuningWorkbench(
     const harnessProfile = builtInSubjectResourceRegistry.resolveHarnessProfile(
       harness.resourceRef,
     );
-    const requiredCheckIds = harnessProfile === undefined
-      ? []
-      : [...harnessProfile.requiredCheckIds].sort();
     const passedCheckIds = lastHarnessPassedCheckIds === undefined
       ? []
       : [...lastHarnessPassedCheckIds].sort();
-    if (
-      harnessProfile === undefined ||
-      requiredCheckIds.length === 0 ||
-      requiredCheckIds.length !== passedCheckIds.length ||
-      requiredCheckIds.some((checkId, index) => checkId !== passedCheckIds[index])
-    ) {
-      saveStatus.textContent = "请先运行 H01–H09，完整通过后再导出 Candidate";
+    if (harnessProfile === undefined) {
+      saveStatus.textContent = "锁定的 Harness Profile 无法解析，不能导出 Candidate";
       return false;
     }
     const defaultCameraRigProfileRef =
@@ -1310,7 +1302,8 @@ function installTuningWorkbench(
         `${workbenchContext.definition.semanticClassId.replaceAll(".", "-")}.worldkit-subject-preset-candidate.json`,
         candidate,
       );
-      saveStatus.textContent = "Publication Candidate 已导出";
+      saveStatus.textContent =
+        "Publication Candidate 已导出；浏览器检查仅作参考，promote 仍需可信 Harness Receipt";
       return true;
     } catch (error) {
       saveStatus.textContent = error instanceof Error

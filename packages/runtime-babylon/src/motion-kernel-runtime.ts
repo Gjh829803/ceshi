@@ -256,9 +256,15 @@ export class MotionKernelRuntimeV1 {
       motionKernelRef: "worldkit://motion-kernel/free-ground@1",
       motionTags: ["free-ground", "ground", "legacy"],
     };
+    const compatibilityFallbackProfile: ExecutionMotionProfileV1 = {
+      resourceRef: "worldkit://motion-profile/legacy-ground.safe-stop@1",
+      contentHash: "sha256:legacy-safe-stop-motion-profile",
+      motionKernelRef: "worldkit://motion-kernel/free-ground@1",
+      motionTags: ["free-ground", "ground", "legacy", "safe", "stopped"],
+    };
     const assembly = subject.capabilityAssembly;
     const profiles = assembly === undefined
-      ? [compatibilityProfile]
+      ? [compatibilityProfile, compatibilityFallbackProfile]
       : [
           assembly.defaultMotionProfile,
           ...assembly.optionalMotionProfiles,
@@ -266,7 +272,7 @@ export class MotionKernelRuntimeV1 {
         ];
     this.motionModeResolver = new MotionModeResolverV1(
       assembly?.defaultMotionProfile ?? compatibilityProfile,
-      assembly?.fallbackMotionProfile ?? compatibilityProfile,
+      assembly?.fallbackMotionProfile ?? compatibilityFallbackProfile,
       profiles,
       () => true,
     );
