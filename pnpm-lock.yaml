@@ -46,6 +46,9 @@ importers:
       '@whitebox-world/world':
         specifier: workspace:*
         version: link:packages/world
+      '@whitebox-world/world-package':
+        specifier: workspace:*
+        version: link:packages/world-package
       lodash-es:
         specifier: ^4.18.1
         version: 4.18.1
