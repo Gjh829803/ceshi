@@ -14,6 +14,7 @@ import {
   type AuthoringDiagnostic,
   type SubjectPresetCandidateV1,
 } from "@whitebox-world/authoring";
+import { canonicalJsonBytes } from "@whitebox-world/protocol";
 import type { WorldRuntimeSnapshotV3 } from "@whitebox-world/runtime-contracts";
 import {
   builtInSubjectResourceRegistry,
@@ -30,6 +31,7 @@ import {
 import {
   cliFailure,
   loadWorldkitPipeline,
+  loadWorldkitRoutePipeline,
   readWorldkitInput,
   type CliDiagnostic,
   type WorldkitDiagnostic,
@@ -58,6 +60,7 @@ import {
   explainValidationReportFileV1,
   verifyControlCaptureFileV1,
 } from "./lib/validation-cli";
+import { verifyRouteFileV1 } from "./lib/route-validation-cli";
 
 const execFile = promisify(execFileCallback);
 const REPOSITORY_ROOT = path.resolve(
@@ -88,6 +91,7 @@ Usage:
   worldkit subject-preset plan <candidate.json> --output <plan.json> [--legacy-v4] [--json]
   worldkit subject-preset promote <candidate.json> --plan <plan.json> --harness-receipt <receipt.json> --write [--legacy-v4] [--json]
   worldkit verify capture <bundle-directory> --output <validation-report.json> [--json]
+  worldkit verify route <world.json> --profile <validation-profile-ref> --output <validation-report.json> [--json]
   worldkit verify explain <validation-report.json> --gate-id <id> [--json]
 `;
 
@@ -173,6 +177,13 @@ export type WorldkitArgs =
       json: boolean;
     }
   | {
+      command: "verify-route";
+      inputPath: string;
+      validationProfileRef: string;
+      outputPath: string;
+      json: boolean;
+    }
+  | {
       command: "verify-explain";
       inputPath: string;
       gateId: string;
@@ -196,7 +207,10 @@ export interface WorldkitCommandResult {
   diagnostics: readonly WorldkitDiagnostic[];
   normalizedWorldIrHash?: string;
   executionPlanHash?: string;
+  validationReportHash?: string;
+  validationStatus?: string;
   outputPath?: string;
+  evidenceDirectory?: string;
   snapshotPath?: string;
   url?: string;
 }
@@ -354,6 +368,28 @@ export function parseWorldkitArgs(arguments_: readonly string[]): WorldkitArgs {
   if (command === "verify") {
     const operation = takeRequiredPositional(tokens, "verify operation");
     const inputPath = takeRequiredPositional(tokens, "Validation input");
+    if (operation === "route") {
+      const validationProfileRef = takeOption(tokens, "--profile");
+      const outputPath = takeOption(tokens, "--output");
+      if (validationProfileRef === undefined) {
+        throw new WorldkitUsageError(
+          "verify route requires --profile <validation-profile-ref>.",
+        );
+      }
+      if (outputPath === undefined) {
+        throw new WorldkitUsageError(
+          "verify route requires --output <validation-report.json>.",
+        );
+      }
+      rejectRemaining(tokens, "verify route");
+      return {
+        command: "verify-route",
+        inputPath,
+        validationProfileRef,
+        outputPath,
+        json,
+      };
+    }
     if (operation === "capture") {
       const outputPath = takeOption(tokens, "--output");
       if (outputPath === undefined) {
@@ -1097,7 +1133,10 @@ type PrintableResult = {
   diagnostics: readonly WorldkitDiagnostic[];
   normalizedWorldIrHash?: string;
   executionPlanHash?: string;
+  validationReportHash?: string;
+  validationStatus?: string;
   outputPath?: string;
+  evidenceDirectory?: string;
   snapshotPath?: string;
   kind?: string;
   schemaVersion?: number;
@@ -1123,6 +1162,8 @@ function printResult(result: PrintableResult, json: boolean): void {
     }
     const details = [
       result.outputPath,
+      result.evidenceDirectory,
+      result.validationReportHash,
       result.snapshotPath,
       result.normalizedWorldIrHash,
       result.executionPlanHash,
@@ -1145,10 +1186,81 @@ async function runUntilSignal(
   refreshDependencies: boolean,
   json: boolean,
 ): Promise<number> {
-  const validation = await validateFile(inputPath);
-  if (!validation.ok) {
-    printResult(validation, json);
-    return validation.exitCode;
+  const input = await readWorldkitInput(inputPath);
+  if (!input.ok) {
+    printResult(input, json);
+    return input.exitCode;
+  }
+  const parsedInput = parseCanonicalJson(input.sourceText);
+  if (!parsedInput.ok) {
+    const result = {
+      ok: false as const,
+      exitCode: 2 as const,
+      diagnostics: parsedInput.diagnostics,
+    };
+    printResult(result, json);
+    return result.exitCode;
+  }
+  const parsedRecord = !isNil(parsedInput.value) &&
+      typeof parsedInput.value === "object" &&
+      !Array.isArray(parsedInput.value)
+    ? parsedInput.value as Readonly<Record<string, unknown>>
+    : undefined;
+  let routeEvidence: Parameters<typeof startWorldkitServer>[0]["routeEvidence"];
+  if (parsedRecord?.schemaVersion === 4) {
+    const pipeline = await loadWorldkitRoutePipeline(inputPath);
+    if (!pipeline.ok) {
+      printResult(pipeline, json);
+      return pipeline.exitCode;
+    }
+    let runnerModule: typeof import("./lib/route-validation-runner") | undefined;
+    try {
+      runnerModule = await import("./lib/route-validation-runner");
+      const trustedRouteValidation =
+        await runnerModule.runTrustedRouteValidationV1(inputPath);
+      routeEvidence = {
+        publication: trustedRouteValidation.routeEvidencePublication,
+        canonicalBytes: canonicalJsonBytes(
+          trustedRouteValidation.routeEvidencePublication,
+        ),
+      };
+    } catch (error) {
+      const runnerInfrastructureError = !isNil(runnerModule) &&
+          error instanceof
+            runnerModule.RouteValidationRunnerInfrastructureErrorV1
+        ? error
+        : undefined;
+      const result = {
+        ok: false as const,
+        exitCode: 1 as const,
+        diagnostics: [{
+          severity: "error" as const,
+          code: !isNil(runnerInfrastructureError)
+            ? runnerInfrastructureError.code
+            : "WORLDKIT_ROUTE_VALIDATION_RUNNER_FAILED",
+          instancePath: "",
+          message:
+            "Unable to prepare trusted Route evidence for the playground.",
+          details: {
+            cause: error instanceof Error ? error.message : String(error),
+            ...(!isNil(runnerInfrastructureError)
+              ? {
+                  reason: runnerInfrastructureError.reason,
+                  ...runnerInfrastructureError.details,
+                }
+              : {}),
+          },
+        }],
+      };
+      printResult(result, json);
+      return result.exitCode;
+    }
+  } else {
+    const validation = await validateFile(inputPath);
+    if (!validation.ok) {
+      printResult(validation, json);
+      return validation.exitCode;
+    }
   }
   let server: WorldkitServerHandle;
   try {
@@ -1157,6 +1269,7 @@ async function runUntilSignal(
       ...(port === undefined ? { port: 5173 } : { port }),
       ...(refreshDependencies ? { refreshDependencies: true } : {}),
       forwardOutput: !json,
+      ...(isNil(routeEvidence) ? {} : { routeEvidence }),
     });
   } catch (error) {
     const result = cliFailure(
@@ -1273,6 +1386,15 @@ export async function main(
   if (parsed.command === "verify-capture") {
     const result = await verifyControlCaptureFileV1(
       parsed.inputPath,
+      parsed.outputPath,
+    );
+    printResult(result, parsed.json);
+    return result.exitCode;
+  }
+  if (parsed.command === "verify-route") {
+    const result = await verifyRouteFileV1(
+      parsed.inputPath,
+      parsed.validationProfileRef,
       parsed.outputPath,
     );
     printResult(result, parsed.json);

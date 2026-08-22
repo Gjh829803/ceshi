@@ -1,10 +1,20 @@
 import { randomUUID } from "node:crypto";
 import { spawn, type ChildProcessWithoutNullStreams } from "node:child_process";
+import { chmod, mkdtemp, rm, writeFile } from "node:fs/promises";
+import { tmpdir } from "node:os";
 import { fileURLToPath } from "node:url";
 import net from "node:net";
 import path from "node:path";
 
+import { canonicalJsonBytes } from "@whitebox-world/protocol";
+import {
+  canonicalWorldkitBrowserRouteEvidencePublicationV1,
+  type WorldkitBrowserRouteEvidencePublicationV1,
+} from "@whitebox-world/runtime-contracts";
+
 import { resolveTrustedSourceCommit } from "./worldkit-source-commit";
+import { WORLDKIT_ROUTE_EVIDENCE_MAX_BYTES_V1 } from
+  "./worldkit-route-evidence-transport";
 
 const REPOSITORY_ROOT = fileURLToPath(new URL("../../", import.meta.url));
 const PLAYGROUND_ROOT = path.join(REPOSITORY_ROOT, "apps/playground");
@@ -15,6 +25,11 @@ const DEFAULT_STARTUP_TIMEOUT_MILLISECONDS = 30_000;
 const DEFAULT_STOP_TIMEOUT_MILLISECONDS = 3_000;
 const AUTOMATIC_PORT_ATTEMPTS = 5;
 
+export interface WorldkitServerRouteEvidenceV1 {
+  readonly publication: WorldkitBrowserRouteEvidencePublicationV1;
+  readonly canonicalBytes: Uint8Array;
+}
+
 export interface StartWorldkitServerOptions {
   inputPath: string;
   port?: number;
@@ -22,6 +37,7 @@ export interface StartWorldkitServerOptions {
   refreshDependencies?: boolean;
   startupTimeoutMilliseconds?: number;
   stopTimeoutMilliseconds?: number;
+  routeEvidence?: WorldkitServerRouteEvidenceV1;
 }
 
 export interface WorldkitServerHandle {
@@ -40,7 +56,8 @@ class WorldkitServerStartError extends Error {
       | "WORLDKIT_SERVER_PORT_UNAVAILABLE"
       | "WORLDKIT_SERVER_PROCESS_ERROR"
       | "WORLDKIT_SERVER_PROCESS_EXITED"
-      | "WORLDKIT_SERVER_START_TIMEOUT",
+      | "WORLDKIT_SERVER_START_TIMEOUT"
+      | "WORLDKIT_ROUTE_EVIDENCE_TOO_LARGE",
     message: string,
   ) {
     super(message);
@@ -57,6 +74,71 @@ function delay(milliseconds: number): Promise<void> {
 interface OwnedChildLifecycle {
   readonly exitPromise: Promise<number | null>;
   readonly processErrorPromise: Promise<never>;
+}
+
+interface OwnedRouteEvidenceFileV1 {
+  readonly path: string;
+  cleanup(): Promise<void>;
+}
+
+function equalBytes(left: Uint8Array, right: Uint8Array): boolean {
+  if (left.byteLength !== right.byteLength) return false;
+  for (let index = 0; index < left.byteLength; index += 1) {
+    if (left[index] !== right[index]) return false;
+  }
+  return true;
+}
+
+async function createOwnedRouteEvidenceFile(
+  input: WorldkitServerRouteEvidenceV1 | undefined,
+): Promise<OwnedRouteEvidenceFileV1 | undefined> {
+  if (input === undefined) return undefined;
+  if (!(input.canonicalBytes instanceof Uint8Array)) {
+    throw new Error("WORLDKIT_ROUTE_EVIDENCE_CANONICAL_BYTES_INVALID");
+  }
+  if (
+    input.canonicalBytes.byteLength >
+      WORLDKIT_ROUTE_EVIDENCE_MAX_BYTES_V1
+  ) {
+    throw new WorldkitServerStartError(
+      "WORLDKIT_ROUTE_EVIDENCE_TOO_LARGE",
+      `Route evidence exceeds the ${WORLDKIT_ROUTE_EVIDENCE_MAX_BYTES_V1} byte Host admission limit.`,
+    );
+  }
+  const publication = canonicalWorldkitBrowserRouteEvidencePublicationV1(
+    input.publication,
+  );
+  const canonicalBytes = canonicalJsonBytes(publication);
+  if (
+    canonicalBytes.byteLength > WORLDKIT_ROUTE_EVIDENCE_MAX_BYTES_V1
+  ) {
+    throw new WorldkitServerStartError(
+      "WORLDKIT_ROUTE_EVIDENCE_TOO_LARGE",
+      `Route evidence exceeds the ${WORLDKIT_ROUTE_EVIDENCE_MAX_BYTES_V1} byte Host admission limit.`,
+    );
+  }
+  if (!equalBytes(input.canonicalBytes, canonicalBytes)) {
+    throw new Error("WORLDKIT_ROUTE_EVIDENCE_CANONICAL_BYTES_MISMATCH");
+  }
+
+  const directoryPath = await mkdtemp(
+    path.join(tmpdir(), `worldkit-route-evidence-${process.pid}-`),
+  );
+  let cleaned = false;
+  const cleanup = async (): Promise<void> => {
+    if (cleaned) return;
+    cleaned = true;
+    await rm(directoryPath, { recursive: true, force: true });
+  };
+  try {
+    await chmod(directoryPath, 0o700);
+    const evidencePath = path.join(directoryPath, "route-evidence.json");
+    await writeFile(evidencePath, canonicalBytes, { flag: "wx", mode: 0o600 });
+    return { path: evidencePath, cleanup };
+  } catch (error) {
+    await cleanup();
+    throw error;
+  }
 }
 
 function observeOwnedChild(
@@ -139,14 +221,24 @@ function createHandle(options: {
   lifecycle: OwnedChildLifecycle;
   port: number;
   stopTimeoutMilliseconds: number;
+  cleanupOwnedState?: () => Promise<void>;
 }): WorldkitServerHandle {
-  const { child, lifecycle, port, stopTimeoutMilliseconds } = options;
+  const {
+    child,
+    lifecycle,
+    port,
+    stopTimeoutMilliseconds,
+    cleanupOwnedState = async () => undefined,
+  } = options;
   const { exitPromise } = lifecycle;
+  const cleanupPromise = exitPromise.then(cleanupOwnedState);
+  void cleanupPromise.catch(() => undefined);
   let stopPromise: Promise<void> | undefined;
   const stop = (): Promise<void> => {
     stopPromise ??= (async () => {
       if (child.exitCode !== null || child.signalCode !== null) {
         await exitPromise;
+        await cleanupPromise;
         return;
       }
       signalOwnedProcess(child, "SIGTERM");
@@ -158,6 +250,7 @@ function createHandle(options: {
         signalOwnedProcess(child, "SIGKILL");
         await exitPromise;
       }
+      await cleanupPromise;
     })();
     return stopPromise;
   };
@@ -222,35 +315,49 @@ async function waitUntilReady(options: {
 
 async function startOne(options: StartWorldkitServerOptions, port: number): Promise<WorldkitServerHandle> {
   const nonce = randomUUID();
+  const ownedRouteEvidence = await createOwnedRouteEvidenceFile(
+    options.routeEvidence,
+  );
   const sourceCommit = await resolveTrustedSourceCommit({
     envCommit: process.env.WORLDKIT_SOURCE_COMMIT,
     repositoryRoot: REPOSITORY_ROOT,
   }).catch(() => undefined);
-  const child = spawn(
-    process.execPath,
-    [
-      VITE_CLI_PATH,
-      "--config",
-      path.join(PLAYGROUND_ROOT, "vite.config.mjs"),
-      "--host",
-      "127.0.0.1",
-      "--port",
-      String(port),
-      "--strictPort",
-      ...(options.refreshDependencies === true ? ["--force"] : []),
-    ],
-    {
-      cwd: PLAYGROUND_ROOT,
-      detached: process.platform !== "win32",
-      env: {
-        ...process.env,
-        WORLDKIT_AUTHORING_SPEC_PATH: path.resolve(options.inputPath),
-        WORLDKIT_AUTHORING_SERVER_NONCE: nonce,
-        ...(sourceCommit === undefined ? {} : { WORLDKIT_SOURCE_COMMIT: sourceCommit }),
+  const childEnvironment = { ...process.env };
+  delete childEnvironment.WORLDKIT_ROUTE_EVIDENCE_PATH;
+  let child: ChildProcessWithoutNullStreams;
+  try {
+    child = spawn(
+      process.execPath,
+      [
+        VITE_CLI_PATH,
+        "--config",
+        path.join(PLAYGROUND_ROOT, "vite.config.mjs"),
+        "--host",
+        "127.0.0.1",
+        "--port",
+        String(port),
+        "--strictPort",
+        ...(options.refreshDependencies === true ? ["--force"] : []),
+      ],
+      {
+        cwd: PLAYGROUND_ROOT,
+        detached: process.platform !== "win32",
+        env: {
+          ...childEnvironment,
+          WORLDKIT_AUTHORING_SPEC_PATH: path.resolve(options.inputPath),
+          WORLDKIT_AUTHORING_SERVER_NONCE: nonce,
+          ...(ownedRouteEvidence === undefined
+            ? {}
+            : { WORLDKIT_ROUTE_EVIDENCE_PATH: ownedRouteEvidence.path }),
+          ...(sourceCommit === undefined ? {} : { WORLDKIT_SOURCE_COMMIT: sourceCommit }),
+        },
+        stdio: ["pipe", "pipe", "pipe"],
       },
-      stdio: ["pipe", "pipe", "pipe"],
-    },
-  );
+    );
+  } catch (error) {
+    await ownedRouteEvidence?.cleanup();
+    throw error;
+  }
   const lifecycle = observeOwnedChild(child);
   child.stdin.end();
   if (options.forwardOutput === true) {
@@ -266,6 +373,9 @@ async function startOne(options: StartWorldkitServerOptions, port: number): Prom
     port,
     stopTimeoutMilliseconds:
       options.stopTimeoutMilliseconds ?? DEFAULT_STOP_TIMEOUT_MILLISECONDS,
+    ...(ownedRouteEvidence === undefined
+      ? {}
+      : { cleanupOwnedState: ownedRouteEvidence.cleanup }),
   });
   try {
     await waitUntilReady({

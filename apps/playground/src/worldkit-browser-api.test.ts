@@ -1249,6 +1249,48 @@ describe("installDeferredWorldkitBrowserApi", () => {
     expect(diagnosticsJson).not.toContain("private cause");
   });
 
+  it.each([
+    "WORLDKIT_ROUTE_EVIDENCE_INVALID",
+    "WORLDKIT_ROUTE_EVIDENCE_SOURCE_UNAVAILABLE",
+    "WORLDKIT_ROUTE_EVIDENCE_WORLD_MISMATCH",
+    "WORLDKIT_ROUTE_EVIDENCE_REQUIRES_AUTHORING_V4",
+  ])("preserves the trusted Host preflight diagnostic %s", async (code) => {
+    const startupFailureDiagnostics: readonly WorldkitBrowserDiagnosticV1[] = [{
+      severity: "error",
+      code,
+      instancePath: "/routeEvidence",
+      message: "Trusted Host preflight rejected Route evidence.",
+      details: { stage: "authoring-load" },
+    }];
+    const installation = installDeferredWorldkitBrowserApi({
+      target: {},
+      statusElement: { dataset: {} },
+      startupFailureDiagnostics,
+      initialize: async () => {
+        throw new Error("WORLDKIT_AUTHORING_LOAD_FAILED");
+      },
+    });
+
+    await installation.initialization;
+    const readyError = await installation.api.ready().catch(
+      (error: unknown) => error,
+    ) as { code: string; diagnostic: WorldkitBrowserDiagnosticV1 };
+    expect(readyError.code).toBe(code);
+    expect(installation.api.getDiagnostics()).toEqual(
+      startupFailureDiagnostics,
+    );
+    expect(readyError.diagnostic).toBe(
+      installation.api.getDiagnostics()[0],
+    );
+    expect(Object.isFrozen(installation.api.getDiagnostics())).toBe(true);
+    expect(Object.isFrozen(installation.api.getDiagnostics()[0]?.details)).toBe(
+      true,
+    );
+    expect(JSON.stringify(installation.api.getDiagnostics())).not.toContain(
+      "WORLDKIT_RUNTIME_INITIALIZATION_FAILED",
+    );
+  });
+
   it("cleans a tracked Adapter when startup fails after Runtime creation", async () => {
     const adapter = adapterFixture();
     const installation = installDeferredWorldkitBrowserApi({

@@ -84,17 +84,11 @@ export interface DeferredWorldkitBrowserApiInstallationV1 {
   dispose(): Promise<void>;
 }
 
-type BrowserStartupErrorCodeV1 =
-  | SubjectAssetRuntimeErrorCodeV1
-  | "WORLDKIT_LAYOUT_ASSERTION_FAILED"
-  | "WORLDKIT_RUNTIME_INITIALIZATION_FAILED"
-  | "WORLDKIT_RUNTIME_NOT_READY";
-
 class WorldkitBrowserStartupErrorV1 extends Error {
   readonly name = "WorldkitBrowserStartupErrorV1";
 
   constructor(
-    readonly code: BrowserStartupErrorCodeV1,
+    readonly code: string,
     readonly diagnostic: WorldkitBrowserDiagnosticV1,
   ) {
     super(diagnostic.message);
@@ -485,6 +479,7 @@ export function installDeferredWorldkitBrowserApi(options: {
   target: WorldkitBrowserApiTargetV1;
   statusElement: WorldkitBrowserStatusTargetV1;
   routeEvidencePublication?: WorldkitBrowserRouteEvidencePublicationV1;
+  startupFailureDiagnostics?: readonly WorldkitBrowserDiagnosticV1[];
   initialize(
     context: DeferredWorldkitBrowserInitializationContextV1,
   ): Promise<DeferredWorldkitBrowserRuntimeAdapterV1>;
@@ -492,6 +487,16 @@ export function installDeferredWorldkitBrowserApi(options: {
   const routeEvidenceByKey = createRouteEvidenceByKey(
     options.routeEvidencePublication,
   );
+  const startupFailureDiagnostics = options.startupFailureDiagnostics === undefined
+    ? undefined
+    : Object.freeze(
+        options.startupFailureDiagnostics.map((diagnostic) =>
+          deepFreeze(structuredClone(diagnostic)),
+        ),
+      );
+  if (startupFailureDiagnostics?.length === 0) {
+    throw new Error("WORLDKIT_STARTUP_FAILURE_DIAGNOSTICS_EMPTY");
+  }
   let state: "loading" | "ready" | "error" = "loading";
   let trackedAdapter: DeferredWorldkitBrowserRuntimeAdapterV1 | undefined;
   let adapterDisposed = false;
@@ -834,8 +839,20 @@ export function installDeferredWorldkitBrowserApi(options: {
       } catch {
         // Preserve the primary startup diagnostic after best-effort cleanup.
       }
-      startupError = await sanitizeStartupError(error);
-      diagnostics = Object.freeze([startupError.diagnostic]);
+      if (startupFailureDiagnostics !== undefined) {
+        diagnostics = startupFailureDiagnostics;
+        const primaryDiagnostic = startupFailureDiagnostics[0];
+        if (primaryDiagnostic === undefined) {
+          throw new Error("WORLDKIT_STARTUP_FAILURE_DIAGNOSTICS_EMPTY");
+        }
+        startupError = new WorldkitBrowserStartupErrorV1(
+          primaryDiagnostic.code,
+          primaryDiagnostic,
+        );
+      } else {
+        startupError = await sanitizeStartupError(error);
+        diagnostics = Object.freeze([startupError.diagnostic]);
+      }
       state = "error";
       options.statusElement.dataset.worldkitStatus = "error";
       rejectReady(startupError);

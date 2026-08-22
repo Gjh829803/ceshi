@@ -12,6 +12,8 @@ import {
   SOURCE_COMMIT_ENDPOINT,
   resolveTrustedSourceCommit,
 } from "../../scripts/lib/worldkit-source-commit.ts";
+import { WORLDKIT_ROUTE_EVIDENCE_MAX_BYTES_V1 } from
+  "../../scripts/lib/worldkit-route-evidence-transport.ts";
 
 const MAX_AUTHORING_BYTES = 8 * 1024 * 1024;
 const SERVER_NONCE_HEADER = "x-worldkit-server-nonce";
@@ -90,6 +92,69 @@ export function worldkitAuthoringSource() {
             diagnostics: [{
               severity: "error",
               code: "AUTHORING_SOURCE_UNAVAILABLE",
+              instancePath: "",
+              message: error instanceof Error ? error.message : String(error),
+            }],
+          });
+        });
+      });
+      server.middlewares.use("/__worldkit/route-evidence", (request, response) => {
+        if (request.method !== "GET" && request.method !== "HEAD") {
+          writeJsonResponse(response, 405, {
+            diagnostics: [{
+              severity: "error",
+              code: "WORLDKIT_ROUTE_EVIDENCE_METHOD_NOT_ALLOWED",
+              instancePath: "",
+              message: "The Route evidence endpoint accepts only GET and HEAD.",
+            }],
+          });
+          return;
+        }
+        void (async () => {
+          const configuredPath = process.env.WORLDKIT_ROUTE_EVIDENCE_PATH;
+          if (configuredPath === undefined || configuredPath.length === 0) {
+            writeJsonResponse(response, 404, {
+              diagnostics: [{
+                severity: "error",
+                code: "WORLDKIT_ROUTE_EVIDENCE_NOT_CONFIGURED",
+                instancePath: "",
+                message: "Route evidence is not configured for this server.",
+              }],
+            });
+            return;
+          }
+          const exactPath = path.resolve(configuredPath);
+          const sourceStat = await stat(exactPath);
+          if (!sourceStat.isFile()) {
+            throw new Error("Configured Route evidence path is not a regular file.");
+          }
+          if (sourceStat.size > WORLDKIT_ROUTE_EVIDENCE_MAX_BYTES_V1) {
+            writeJsonResponse(response, 413, {
+              diagnostics: [{
+                severity: "error",
+                code: "WORLDKIT_ROUTE_EVIDENCE_TOO_LARGE",
+                instancePath: "",
+                message:
+                  `Route evidence exceeds the ${WORLDKIT_ROUTE_EVIDENCE_MAX_BYTES_V1} byte server limit.`,
+              }],
+            });
+            return;
+          }
+          response.statusCode = 200;
+          setServerNonceHeader(response);
+          response.setHeader("content-type", "application/json; charset=utf-8");
+          response.setHeader("cache-control", "no-store");
+          response.setHeader("content-length", String(sourceStat.size));
+          if (request.method === "HEAD") {
+            response.end();
+            return;
+          }
+          response.end(await readFile(exactPath));
+        })().catch((error) => {
+          writeJsonResponse(response, 404, {
+            diagnostics: [{
+              severity: "error",
+              code: "WORLDKIT_ROUTE_EVIDENCE_UNAVAILABLE",
               instancePath: "",
               message: error instanceof Error ? error.message : String(error),
             }],

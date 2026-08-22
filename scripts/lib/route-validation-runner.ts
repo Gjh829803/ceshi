@@ -4,12 +4,9 @@ import { createRequire } from "node:module";
 import { NullEngine } from "@babylonjs/core/Engines/nullEngine.pure.js";
 import { compileResolvedTraversalLockV1 } from "@whitebox-world/compiler";
 import { sha256Bytes } from "@whitebox-world/protocol";
-import {
-  BABYLON_TRAVERSAL_RUNTIME_IMPLEMENTATION_IDENTITY_V1,
-  BabylonWorldRuntime,
-  createBabylonTraversalRuntimePortV1,
-  type SubjectAssetResolveRequestV1,
-  type SubjectAssetResolverV1,
+import type {
+  SubjectAssetResolveRequestV1,
+  SubjectAssetResolverV1,
 } from "@whitebox-world/runtime-babylon";
 import type {
   WorldkitBrowserRouteEvidencePublicationV1,
@@ -215,6 +212,7 @@ export async function runTrustedRouteValidationV1(
     havokWasmBytesPromise ??= loadHavokWasmBytesV1();
     return havokWasmBytesPromise;
   };
+  const runtimeBabylon = await import("@whitebox-world/runtime-babylon");
 
   const orchestration = await orchestrateRouteValidationV1({
     executionPlan: pipeline.executionPlan,
@@ -228,7 +226,7 @@ export async function runTrustedRouteValidationV1(
         executionPlan,
         traversingEntityId,
         runtimeImplementationIdentity:
-          BABYLON_TRAVERSAL_RUNTIME_IMPLEMENTATION_IDENTITY_V1,
+          runtimeBabylon.BABYLON_TRAVERSAL_RUNTIME_IMPLEMENTATION_IDENTITY_V1,
       }),
     resolveGraphBuilderProfile: () =>
       resolveTraversalGraphBuilderProfileV2(
@@ -241,7 +239,7 @@ export async function runTrustedRouteValidationV1(
     createRuntimeLease: async (input) => {
       const havokWasmBytes = input.havokWasmBytes ??
         await loadHavokWasmBytesOnce();
-      const runtime = await BabylonWorldRuntime.create({
+      const runtime = await runtimeBabylon.BabylonWorldRuntime.create({
         executionPlan: input.executionPlan,
         runtimeSessionId: input.runtimeSessionId,
         havokWasmBinary: copyArrayBuffer(
@@ -259,7 +257,7 @@ export async function runTrustedRouteValidationV1(
         }),
       });
       try {
-        const runtimePort = createBabylonTraversalRuntimePortV1({
+        const runtimePort = runtimeBabylon.createBabylonTraversalRuntimePortV1({
           runtime,
           traversalLockReceipt: input.traversalLockReceipt,
         });

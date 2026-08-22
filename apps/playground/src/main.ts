@@ -9,7 +9,7 @@ import type {
   MotionKernelSummaryV1,
   SemanticInputActionV1,
   SubjectDefinitionSummaryV1,
-  WorldkitBrowserApiV3,
+  WorldkitBrowserApiV4,
 } from "@whitebox-world/runtime-contracts";
 
 import { CanvasRecorder } from "./canvas-recorder.js";
@@ -265,8 +265,8 @@ function captureAuthoringStartupFailure(stage: string, error: unknown): void {
 }
 
 function authoringStartupEvidence(
-  api: WorldkitBrowserApiV3,
-): { diagnostics: ReturnType<WorldkitBrowserApiV3["getDiagnostics"]>; developer: AuthoringStartupDebugV1 | null } {
+  api: WorldkitBrowserApiV4,
+): { diagnostics: ReturnType<WorldkitBrowserApiV4["getDiagnostics"]>; developer: AuthoringStartupDebugV1 | null } {
   return {
     diagnostics: api.getDiagnostics(),
     developer: authoringStartupDebug ?? null,
@@ -439,7 +439,7 @@ interface TuningWorkbenchControllerV1 {
 }
 
 function installTuningWorkbench(
-  api: WorldkitBrowserApiV3,
+  api: WorldkitBrowserApiV4,
   workbenchContext: TuningWorkbenchContextV1,
 ): TuningWorkbenchControllerV1 {
   const layer = requiredElement<HTMLDivElement>("#tuning-layer");
@@ -1339,7 +1339,7 @@ function installTuningWorkbench(
   };
 }
 
-function installAuthoringRecoveryPanel(api: WorldkitBrowserApiV3): void {
+function installAuthoringRecoveryPanel(api: WorldkitBrowserApiV4): void {
   const definitions = api.listSubjectDefinitions?.({ includeExperimental: true }) ?? [];
   if (definitions.length === 0) return;
   const panel = requiredElement<HTMLDivElement>("#capability-card");
@@ -1391,7 +1391,7 @@ function installAuthoringRecoveryPanel(api: WorldkitBrowserApiV3): void {
 }
 
 function installCapabilityAuthoringPanel(
-  api: WorldkitBrowserApiV3,
+  api: WorldkitBrowserApiV4,
   hostOverlay?: CapabilityDemoHostOverlayV1,
 ): TuningWorkbenchControllerV1 | undefined {
   const definitions = api.listSubjectDefinitions?.({ includeExperimental: true }) ?? [];
@@ -1619,30 +1619,53 @@ function installCapabilityAuthoringPanel(
 if (authoringMode) {
   let createdAdapter: BabylonWorldAdapter | null = null;
   let createdHostOverlay: CapabilityDemoHostOverlayV1 | undefined;
+  let startupStage = "host-resolver";
+  let preparationError: unknown;
+  let prepared: Readonly<{
+    loaded: Awaited<ReturnType<typeof import("./authoring-loader.js")["loadAuthoringScene"]>>;
+    BabylonWorldAdapter: typeof import("./babylon-world-adapter.js")["BabylonWorldAdapter"];
+  }> | undefined;
+  try {
+    startupStage = "module-import";
+    const [{ loadAuthoringScene }, { BabylonWorldAdapter }] = await Promise.all([
+      import("./authoring-loader.js"),
+      import("./babylon-world-adapter.js"),
+    ]);
+    startupStage = "authoring-load";
+    const loaded = await loadAuthoringScene(undefined, {
+      ...(urlParameters.get("subjectDefinitionRef") === null
+        ? {}
+        : { subjectDefinitionRef: urlParameters.get("subjectDefinitionRef")! }),
+    });
+    prepared = { loaded, BabylonWorldAdapter };
+  } catch (error) {
+    preparationError = error;
+  }
   const browserInstallation = installDeferredWorldkitBrowserApi({
     target: window,
     statusElement: document.documentElement,
+    ...(prepared?.loaded.ok === true &&
+        prepared.loaded.routeEvidencePublication !== undefined
+      ? { routeEvidencePublication: prepared.loaded.routeEvidencePublication }
+      : {}),
+    ...(prepared?.loaded.ok === false &&
+        prepared.loaded.diagnostics.length > 0
+      ? { startupFailureDiagnostics: prepared.loaded.diagnostics }
+      : {}),
     initialize: async ({ trackAdapter }) => {
-      let startupStage = "host-resolver";
       try {
-        const subjectAssetResolver = createFetchSubjectAssetResolver(
-          PLAYGROUND_CAPABILITY_SUBJECT_ASSET_URI_BY_REF_V1,
-        );
-        startupStage = "module-import";
-        const [{ loadAuthoringScene }, { BabylonWorldAdapter }] = await Promise.all([
-          import("./authoring-loader.js"),
-          import("./babylon-world-adapter.js"),
-        ]);
-        startupStage = "authoring-load";
-        const loaded = await loadAuthoringScene(undefined, {
-          ...(urlParameters.get("subjectDefinitionRef") === null
-            ? {}
-            : { subjectDefinitionRef: urlParameters.get("subjectDefinitionRef")! }),
-        });
+        if (preparationError !== undefined) throw preparationError;
+        if (prepared === undefined) {
+          throw new Error("WORLDKIT_AUTHORING_PREPARATION_MISSING");
+        }
+        const { loaded, BabylonWorldAdapter } = prepared;
         if (!loaded.ok || loaded.executionPlan === undefined) {
           inspection.innerHTML = `<pre>${escapeHtml(JSON.stringify(loaded.diagnostics, null, 2))}</pre>`;
           throw new Error("WORLDKIT_AUTHORING_LOAD_FAILED");
         }
+        const subjectAssetResolver = createFetchSubjectAssetResolver(
+          PLAYGROUND_CAPABILITY_SUBJECT_ASSET_URI_BY_REF_V1,
+        );
         startupStage = "runtime-create";
         const adapter = await BabylonWorldAdapter.create(loaded.executionPlan, {
           subjectAssetResolver,
