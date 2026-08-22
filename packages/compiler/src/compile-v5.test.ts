@@ -125,7 +125,9 @@ describe("compileWorldV5", () => {
     expect(plan).toMatchObject({
       kind: "worldkit-execution-plan",
       schemaVersion: 5,
+      authoringSpecHash: expect.stringMatching(/^sha256:[a-f0-9]{64}$/),
       traversal: {
+        anchorEntityIds: ["goal", "spawn-main"],
         connectivityRequirements: [{
           constraintId: "hero-to-goal",
           kind: "connected-by-route",
@@ -156,7 +158,12 @@ describe("compileWorldV5", () => {
       .toEqual([...plan.staticColliders]
         .sort((left, right) => left.colliderSubshapeId.localeCompare(right.colliderSubshapeId))
         .map((row) => row.colliderSubshapeId));
+    expect(new Set(plan.traversal.anchorEntityIds).size).toBe(
+      plan.traversal.anchorEntityIds.length,
+    );
     expect(compiled.executionPlanHash).toBeDefined();
+    const normalized = normalizeAuthoringSpecV4(routeWorld());
+    expect(plan.authoringSpecHash).toBe(normalized.value?.authoringSpecHash);
     expect(JSON.stringify(plan)).not.toMatch(/recast|detour|polyRef|provider/i);
   });
 
@@ -197,6 +204,23 @@ describe("compileWorldV5", () => {
       sha256CanonicalJson(baseline.executionPlan),
     );
     expect(changedConnectivity.executionPlanHash).not.toBe(baseline.executionPlanHash);
+    expect(changedConnectivity.executionPlan!.authoringSpecHash).not.toBe(
+      baseline.executionPlan!.authoringSpecHash,
+    );
+    const v4Payload = (plan: NonNullable<typeof baseline.executionPlan>) => {
+      const {
+        schemaVersion: _schemaVersion,
+        authoringSpecHash: _authoringSpecHash,
+        normalizedWorldIrHash: _normalizedWorldIrHash,
+        traversal: _traversal,
+        staticColliders: _staticColliders,
+        ...payload
+      } = plan;
+      return payload;
+    };
+    expect(v4Payload(changedConnectivity.executionPlan!)).toEqual(
+      v4Payload(baseline.executionPlan!),
+    );
     expect(changedSurface.executionPlan!.traversal.surfaces[0]!.traversalSurfaceId)
       .not.toBe(baseline.executionPlan!.traversal.surfaces[0]!.traversalSurfaceId);
     expect(changedSurface.executionPlanHash).not.toBe(baseline.executionPlanHash);

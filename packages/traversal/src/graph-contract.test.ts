@@ -48,6 +48,7 @@ function validGraph(
     terrainArtifactHash: HASH_A,
     colliderArtifactHash: HASH_A,
     surfaceArtifactHash: HASH_A,
+    routeBuildInputHash: HASH_A,
     resolvedTraversalLockHash: HASH_A,
     graphBuilderProfileRef: builder.resourceRef,
     graphBuilderResolvedVersion: builder.resolvedVersion,
@@ -115,7 +116,7 @@ describe("canonicalTraversalGraphV1", () => {
     expect(hashTraversalGraphV1(reordered)).toBe(hashTraversalGraphV1(graph));
   });
 
-  it("changes the graph hash when the lock or surface identity changes", () => {
+  it("changes the graph hash when the lock, source input, or surface identity changes", () => {
     const graph = validGraph();
     const lockMutated = validGraph({
       resolvedTraversalLockHash:
@@ -131,8 +132,15 @@ describe("canonicalTraversalGraphV1", () => {
         }),
       },
     });
+    const sourceMutated = validGraph({
+      routeBuildInputHash:
+        "sha256:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+    });
 
     expect(hashTraversalGraphV1(lockMutated)).not.toBe(hashTraversalGraphV1(graph));
+    expect(hashTraversalGraphV1(sourceMutated)).not.toBe(
+      hashTraversalGraphV1(graph),
+    );
     expect(hashTraversalGraphV1(identityMutated)).not.toBe(
       hashTraversalGraphV1(graph),
     );
@@ -272,5 +280,24 @@ describe("canonicalTraversalGraphV1", () => {
         routeTraversalCostSeconds: 3.2,
       } as TraversalGraphV1),
     ).toThrow("TRAVERSAL_GRAPH_INVALID");
+  });
+
+  it("requires exactly one canonical routeBuildInputHash", () => {
+    const {
+      routeBuildInputHash: _routeBuildInputHash,
+      ...missing
+    } = validGraph();
+    expect(() =>
+      canonicalTraversalGraphV1(missing as TraversalGraphV1),
+    ).toThrow("TRAVERSAL_GRAPH_INVALID");
+
+    expect(() => canonicalTraversalGraphV1(validGraph({
+      routeBuildInputHash: "sha256:not-a-hash",
+    }))).toThrow("TRAVERSAL_GRAPH_INVALID");
+
+    expect(() => canonicalTraversalGraphV1({
+      ...validGraph(),
+      routeBuildInputHashAlias: HASH_A,
+    } as TraversalGraphV1)).toThrow("TRAVERSAL_GRAPH_INVALID");
   });
 });

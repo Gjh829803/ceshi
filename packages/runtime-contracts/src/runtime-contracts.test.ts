@@ -10,6 +10,7 @@ import {
   type ExecutionSubjectV3,
   type ExecutionLayoutAssertionV1,
   type ExecutionStaticColliderV1,
+  type ExecutionPlanV5,
   type ExecutionTraversalSurfaceV1,
   type FixedInputV1,
   type WorldRuntimeSnapshotV3,
@@ -63,6 +64,32 @@ function createSnapshotFixtureV3(): WorldRuntimeSnapshotV3 {
 }
 
 describe("runtime contracts V3", () => {
+  it("requires V5 Authoring provenance and explicit sorted Anchor identities", () => {
+    const traversal = {
+      surfaces: [],
+      connectivityRequirements: [],
+      anchorEntityIds: ["goal", "spawn-main"],
+    } satisfies ExecutionPlanV5["traversal"];
+    const provenance = {
+      schemaVersion: 5,
+      authoringSpecHash: `sha256:${"6".repeat(64)}`,
+      traversal,
+    } satisfies Pick<
+      ExecutionPlanV5,
+      "schemaVersion" | "authoringSpecHash" | "traversal"
+    >;
+
+    expect(provenance).toEqual({
+      schemaVersion: 5,
+      authoringSpecHash: `sha256:${"6".repeat(64)}`,
+      traversal: {
+        surfaces: [],
+        connectivityRequirements: [],
+        anchorEntityIds: ["goal", "spawn-main"],
+      },
+    });
+  });
+
   it("keeps V5 traversal surfaces closed and static Collider Subshape identity explicit", () => {
     const surface = {
       kind: "heightfield",

@@ -290,6 +290,7 @@ Expected: PASS. Also run dependency/grep guards proving `packages/traversal` doe
 - Create: `packages/authoring/src/canonical-authoring-identity.ts`
 - Modify: `packages/authoring/src/layout-input.ts`
 - Modify: `packages/authoring/src/normalize-v4.ts`
+- Modify: `packages/authoring/src/normalize-v4.test.ts`
 - Modify: `packages/authoring/src/types-v4.ts`
 - Modify: `packages/authoring/src/authoring-v4.test.ts`
 - Modify: `packages/runtime-contracts/src/execution-plan.ts`
@@ -324,7 +325,7 @@ Expected: PASS. Also run dependency/grep guards proving `packages/traversal` doe
 - `@whitebox-world/terrain-surface` exports one deterministic canonical local vertex/index emitter plus sampling over those exact indexed triangles. Task 3 also switches the existing render mesh payload to that emitter without changing mesh world placement or the V4 square HeightField/rectangular Mesh physics compatibility path. Task 5 later consumes the same emitter for V5 `PhysicsShapeMesh`; matching diagonals implemented by duplicated loops are not accepted as common topology.
 - Task 3 source assembly is pure and imports no Recast/provider lifecycle code. Task 4 must create, use, query, and clean its Recast Result/Query inside one `runRecastProviderOperationV1()` operation.
 
-- [ ] **Step 1: Write RED provenance and Graph-binding tests (Task 3A)**
+- [x] **Step 1: Write RED provenance and Graph-binding tests (Task 3A)**
 
 Cover:
 
@@ -337,16 +338,16 @@ Cover:
 
 The R0 value is a contract placeholder because R0 predates Task 3C source assembly. Do not fabricate a real Build Input for it and do not rewrite it again after 3A; real source-hash goldens belong to the 3C fixtures.
 
-- [ ] **Step 2: Implement the provenance prerequisites**
+- [x] **Step 2: Implement the provenance prerequisites**
 
 Move V3 canonical Authoring identity construction into one package-internal helper and derive V4 identity from the complete V3 identity plus sorted Connectivity. Do not export a second public Authoring hash dialect. Add the V4 IR/V5 Plan field and explicit Anchor IDs, update V5 compilation/projection, and clean-break the unreleased Graph contract with `routeBuildInputHash`.
 
-- [ ] **Step 3: Run Task 3A gates**
+- [x] **Step 3: Run Task 3A gates**
 
 Run:
 
 ```bash
-pnpm vitest run packages/authoring/src/authoring-v4.test.ts packages/runtime-contracts/src/runtime-contracts.test.ts packages/compiler/src/compile-v5.test.ts packages/traversal/src/graph-contract.test.ts
+pnpm vitest run packages/authoring/src/authoring-v4.test.ts packages/authoring/src/normalize-v4.test.ts packages/runtime-contracts/src/runtime-contracts.test.ts packages/compiler/src/compile-v5.test.ts packages/traversal/src/graph-contract.test.ts
 pnpm typecheck
 pnpm verify:route-r0-contract
 ```
@@ -419,7 +420,7 @@ Reject non-finite values and call the Task 2 `assertTraversalGraphBuildBudgetV1(
 Run:
 
 ```bash
-pnpm vitest run packages/authoring/src/authoring-v4.test.ts packages/runtime-contracts/src/runtime-contracts.test.ts packages/compiler/src/compile-v5.test.ts packages/terrain-surface/src/triangle-heightfield.test.ts packages/runtime-babylon/src/terrain-topology.test.ts packages/traversal/src/graph-contract.test.ts packages/traversal/src/build-budget.test.ts packages/traversal/src/build-input.test.ts packages/traversal-recast/src/heightfield-source.test.ts packages/validation/src/route.test.ts
+pnpm vitest run packages/authoring/src/authoring-v4.test.ts packages/authoring/src/normalize-v4.test.ts packages/runtime-contracts/src/runtime-contracts.test.ts packages/compiler/src/compile-v5.test.ts packages/terrain-surface/src/triangle-heightfield.test.ts packages/runtime-babylon/src/terrain-topology.test.ts packages/traversal/src/graph-contract.test.ts packages/traversal/src/build-budget.test.ts packages/traversal/src/build-input.test.ts packages/traversal-recast/src/heightfield-source.test.ts packages/validation/src/route.test.ts
 pnpm typecheck
 ```
 

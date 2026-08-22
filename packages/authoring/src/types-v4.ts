@@ -40,6 +40,7 @@ export type NormalizedConnectivityRequirementV1 = Readonly<{
 export interface NormalizedWorldIRV4
   extends Omit<NormalizedWorldIRV3, "schemaVersion" | "layout"> {
   readonly schemaVersion: 4;
+  readonly authoringSpecHash: `sha256:${string}`;
   readonly layout: NormalizedWorldIRV3["layout"] & Readonly<{
     connectivityRequirements: readonly NormalizedConnectivityRequirementV1[];
   }>;

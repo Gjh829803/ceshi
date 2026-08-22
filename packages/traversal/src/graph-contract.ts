@@ -37,6 +37,7 @@ export interface TraversalGraphV1 {
   readonly terrainArtifactHash: `sha256:${string}`;
   readonly colliderArtifactHash: `sha256:${string}`;
   readonly surfaceArtifactHash: `sha256:${string}`;
+  readonly routeBuildInputHash: `sha256:${string}`;
   readonly resolvedTraversalLockHash: `sha256:${string}`;
   readonly graphBuilderProfileRef: string;
   readonly graphBuilderResolvedVersion: string;
@@ -60,6 +61,7 @@ const GRAPH_FIELDS = [
   "terrainArtifactHash",
   "colliderArtifactHash",
   "surfaceArtifactHash",
+  "routeBuildInputHash",
   "resolvedTraversalLockHash",
   "graphBuilderProfileRef",
   "graphBuilderResolvedVersion",
@@ -102,6 +104,7 @@ const GRAPH_HASH_FIELDS = [
   "terrainArtifactHash",
   "colliderArtifactHash",
   "surfaceArtifactHash",
+  "routeBuildInputHash",
   "resolvedTraversalLockHash",
   "graphBuilderProfileHash",
 ] as const;

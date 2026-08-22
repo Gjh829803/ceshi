@@ -58,6 +58,7 @@ describe("normalizeAuthoringSpecV4", () => {
     expect(result.value).toMatchObject({
       kind: "worldkit-normalized-world",
       schemaVersion: 4,
+      authoringSpecHash: expect.stringMatching(/^sha256:[a-f0-9]{64}$/),
       layout: {
         connectivityRequirements: [{
           constraintId: "hero-to-goal",
@@ -80,6 +81,41 @@ describe("normalizeAuthoringSpecV4", () => {
     expect(result.normalizedWorldIrHash).toMatch(/^sha256:[a-f0-9]{64}$/);
     expect(result.normalizedWorldIrHash).toBe(sha256CanonicalJson(result.value));
     expect(result.normalizedWorldIrHash).not.toBe(result.layoutSolveReportHash);
+  });
+
+  it("hashes the complete V4 Authoring identity without aliasing the V3 layout identity", () => {
+    const baseline = normalizeAuthoringSpecV4(routeWorld());
+    const repeated = normalizeAuthoringSpecV4(routeWorld());
+    const changedSource = routeWorld();
+    const changedConnectivity = normalizeAuthoringSpecV4({
+      ...changedSource,
+      constraints: {
+        ...changedSource.constraints,
+        connectivity: changedSource.constraints.connectivity.map((row) => ({
+          ...row,
+          id: `${row.id}-changed`,
+        })),
+      },
+    });
+
+    expect(baseline.value?.authoringSpecHash).toMatch(
+      /^sha256:[a-f0-9]{64}$/,
+    );
+    expect(repeated.value?.authoringSpecHash).toBe(
+      baseline.value?.authoringSpecHash,
+    );
+    expect(changedConnectivity.value?.authoringSpecHash).not.toBe(
+      baseline.value?.authoringSpecHash,
+    );
+    expect(changedConnectivity.layoutSolveReport?.authoringSpecHash).toBe(
+      baseline.layoutSolveReport?.authoringSpecHash,
+    );
+    expect(baseline.value?.authoringSpecHash).not.toBe(
+      baseline.normalizedWorldIrHash,
+    );
+    expect(baseline.value?.authoringSpecHash).not.toBe(
+      baseline.layoutSolveReport?.authoringSpecHash,
+    );
   });
 
   it("canonicalizes connectivity ordering and hashes route changes", () => {
@@ -118,6 +154,9 @@ describe("normalizeAuthoringSpecV4", () => {
     const firstResult = normalizeAuthoringSpecV4(firstWithBoth);
     const reorderedResult = normalizeAuthoringSpecV4(reordered);
     expect(firstResult.normalizedWorldIrHash).toBe(reorderedResult.normalizedWorldIrHash);
+    expect(firstResult.value?.authoringSpecHash).toBe(
+      reorderedResult.value?.authoringSpecHash,
+    );
     expect(firstResult.value?.layout.connectivityRequirements.map((row) => row.constraintId))
       .toEqual(["hero-to-goal", "z-route"]);
 

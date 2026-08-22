@@ -1,4 +1,5 @@
 import { sha256CanonicalJson } from "./canonical-json.js";
+import { canonicalAuthoringIdentityV4 } from "./canonical-authoring-identity.js";
 import { normalizeAuthoringSpecV3 } from "./normalize-v3.js";
 import type { AuthoringSpecV3 } from "./types-v3.js";
 import type {
@@ -60,6 +61,9 @@ export function normalizeAuthoringSpecV4(
   const normalized: NormalizedWorldIRV4 = {
     ...structuredClone(v3.value),
     schemaVersion: 4,
+    authoringSpecHash: sha256CanonicalJson(
+      canonicalAuthoringIdentityV4(spec, v3.value),
+    ) as `sha256:${string}`,
     layout: {
       ...structuredClone(v3.value.layout),
       connectivityRequirements: spec.constraints.connectivity

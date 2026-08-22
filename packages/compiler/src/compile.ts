@@ -1525,11 +1525,16 @@ export function compileWorldV4(input: CompileWorldInputV4): CompileWorldResultV4
 function projectNormalizedWorldV4ToV3(world: NormalizedWorldIRV4): NormalizedWorldIRV3 {
   const clone = structuredClone(world);
   const {
+    authoringSpecHash: _authoringSpecHash,
+    layout: layoutV4,
+    ...worldV3
+  } = clone;
+  const {
     connectivityRequirements: _connectivityRequirements,
     ...layout
-  } = clone.layout;
+  } = layoutV4;
   return {
-    ...clone,
+    ...worldV3,
     schemaVersion: 3,
     layout,
   };
@@ -1640,6 +1645,7 @@ export function compileWorldV5(input: CompileWorldInputV5): CompileWorldResultV5
     const plan: ExecutionPlanV5 = {
       ...planV4,
       schemaVersion: 5,
+      authoringSpecHash: input.normalizedWorldIr.authoringSpecHash,
       normalizedWorldIrHash: input.normalizedWorldIrHash,
       traversal: {
         surfaces: [compileHeightfieldTraversalSurfaceV1(planV4)],
@@ -1647,6 +1653,10 @@ export function compileWorldV5(input: CompileWorldInputV5): CompileWorldResultV5
           .connectivityRequirements
           .map(compileConnectivityRequirementV1)
           .sort((left, right) => left.constraintId.localeCompare(right.constraintId)),
+        anchorEntityIds: input.normalizedWorldIr.nodes
+          .filter((node) => node.kind === "anchor")
+          .map((node) => node.id)
+          .sort((left, right) => left.localeCompare(right)),
       },
       staticColliders: planV4.objects
         .filter((object) => object.collisionEnabled)

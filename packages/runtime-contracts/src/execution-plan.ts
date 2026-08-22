@@ -576,9 +576,11 @@ export interface ExecutionConnectivityRequirementV1 {
 export interface ExecutionPlanV5
   extends Omit<ExecutionPlanV4, "schemaVersion"> {
   readonly schemaVersion: 5;
+  readonly authoringSpecHash: `sha256:${string}`;
   readonly traversal: Readonly<{
     surfaces: readonly ExecutionTraversalSurfaceV1[];
     connectivityRequirements: readonly ExecutionConnectivityRequirementV1[];
+    anchorEntityIds: readonly string[];
   }>;
   readonly staticColliders: readonly ExecutionStaticColliderV1[];
 }
