@@ -189,8 +189,11 @@ Provider。
 
 `TraversalGraphV1` 是内容寻址的派生制品，至少绑定：
 
-> 当前 V1 仍未外部发布。Task 3A 为补齐 `routeBuildInputHash` 执行一次 Clean Break，原子更新
-> R0 Golden 与 Hash；此后 Tasks 4–10 不再通过继续改 Golden 规避合同失败。
+> 当前 V1 仍未外部发布。Task 3A 为补齐 `routeBuildInputHash` 执行过一次 Clean Break。Task 4
+> 对拍该 Golden 后又确认 `heightDeltaMeters` 已表示有符号节点高差，不能同时充当非负 Portal
+> 跨阶高度，因此 Task 4 主审拟定最后一次窄修正：新增 `stepHeightMeters` 并原子更新 R0
+> Golden 与 Hash；只有独立设计审查通过后才进入实现。该合同提交后，Tasks 4–10 不得再通过
+> 继续改 Golden 规避合同失败。
 
 - `authoringSpecHash`、`layoutSolveReportHash` 和 `resourceLockHash`。其中 R1 的
   `authoringSpecHash` 来自包含排序后 Connectivity 约束的 V4 Canonical Authoring Identity，
@@ -213,7 +216,8 @@ Graph 节点至少保存稳定 `id`、`traversalSurfaceId`、`surfaceEntityId`�
 Subshape 是几何命中；不得把它们缩成同义的 `surfaceId`。Graph Edge 使用角色化
 `fromTraversalNodeId` 与
 `toTraversalNodeId`，并以关闭 `type` 表达 `walk`、`slope` 或 `step`。边保存米制距离、
-高度差、坡度、最小宽度/高度净空和确定性通行成本。
+有符号节点高度差、非负 Portal 跨阶高度、坡度、最小宽度/高度净空和确定性通行成本；
+`heightDeltaMeters` 与 `stepHeightMeters` 不得互相代用。
 
 Runtime Handle、Mesh 数组序号、Recast Poly Ref、Havok Shape 指针和加载顺序不能进入
 Canonical ID。内部 Provider ID 只能存在于可丢弃的 Adapter Audit 中。
@@ -221,6 +225,9 @@ Canonical ID。内部 Provider ID 只能存在于可丢弃的 Adapter Audit 中�
 `traversalGraphHash` 对完整 Canonical Graph Bytes 计算，由 Compiler/Artifact Index 返回并
 供 Validation Evidence 引用；Graph 正文不保存该 Hash，避免自引用。若图制品包含额外
 Overlay/Debug 文件，整个目录另算 `traversalArtifactRootHash`，不得与 Graph Hash 混用。
+Canonical Graph 输出按 Node/Edge ID 排序并深冻结；R1 的单 Heightfield Surface 一致性由
+携带 Build Input 的上下文校验器证明，通用 Graph 校验器不得为未来分层 Graph 伪造单 Surface
+根字段。
 
 ### 6.2 分层 3D 图
 
@@ -291,6 +298,13 @@ R1 的 `routePathCost` 是无量纲、仅用于稳定排序的关闭公式结果
 步数等确定性语义预算时返回 `incomplete`，不能随机选择或假装不连通。Host 墙钟 Deadline
 只能取消执行并形成 Infrastructure `incomplete` Evidence，不能进入 Canonical Graph/Path
 选择、Hash 或把同一输入变成 `unreachable`。
+
+Graph Builder 在发布 Graph 之外保留一次操作内的 Provider-neutral Rejection Proof Graph，
+从同一 Heightfield Triangle、Collider Soup、Hard Ribbon、量化与 Lock 判断 slope、step、width、
+overhead、gap 候选拒绝。它不改变 Graph/Path 结论；仅当放宽一个且仅一个关闭原因就能恢复
+起终点连通时，Failure 才可发布对应的 `ROUTE_*_EXCEEDED/INSUFFICIENT` 专用码。混合原因、
+多个可恢复原因、证明预算耗尽或 Provider/Source 不一致必须退回
+`ROUTE_REQUIRED_PATH_UNREACHABLE`，Validation 禁止从通用失败反向猜专用码。
 
 ## 7. 从几何到 Graph 的工程链路
 
@@ -376,9 +390,16 @@ Blocking Gate，不创建 Route 专用报告格式，也不修改 Capture-only `
 - `routePathCost`；
 - `traversalGraphNodeCount`、`traversalGraphEdgeCount` 和 `traversalGraphHash`。
 
-已评（`passed` / `failed`）Metric 必须至少引用 `traversal-graph` 或 `route-path-receipt`。
-该类 Evidence 必须携带同一 `resolvedTraversalLockHash` 以及与 Registry 一致的 Graph
-Builder `resourceRef` / `resolvedVersion` / `contentHash`。步高、坡度、净空和缝隙阈值不写入
+`passed` Metric 必须至少引用 `traversal-graph` 或 `route-path-receipt`；`failed` Metric
+可以引用这些制品，也可以引用内容寻址的 `route-connectivity-failure`。后者用于空
+Heightfield、零可查询 Ground 或 Node/Edge 容量耗尽等故意不发布部分 Graph 的结果，携带
+`routeBuildInputHash`。这些 Evidence 都必须携带同一 `resolvedTraversalLockHash` 以及与 Registry
+一致的 Graph Builder `resourceRef` / `resolvedVersion` / `contentHash`，并通过版本分发解析器同时
+支持锁定 V1/V2 Profile，禁止把 Heightfield V2 误按 V1 拒绝。`incomplete` 导致的
+`not-evaluated` 应在存在确定性 Failure 时引用它；基础设施失败不能伪造 Canonical Failure。
+
+容量诊断使用 `capacity-exceeded`，分别保存 `maximumAllowedCount` 与已证明的
+`minimumRequiredCount`；不得把下界写成 `actualCount`。步高、坡度、净空和缝隙阈值不写入
 Validation Profile；观测 Metric 在评测时对照 Lock。Profile 只冻结到达容差、卡住窗口和
 最大 Probe Ticks。Canonical Graph 的 `distanceMeters >= 0`，节点/边净空 `> 0`，
 `slopeDegrees` 落在 `[0, 90]`。
@@ -434,6 +455,10 @@ Graph 通过而 Runtime 失败时，以 Runtime Gate 失败为最终结论，同
 Diagnostic 必须包含 Route、Traversing Entity、起终点 Anchor、Surface/Collider、世界坐标、
 阈值、实测值、单位、Evidence Ref 和结构化修复方向。例如台阶失败建议降低台阶高度、
 增加中间踏步或改成满足坡度/净空的坡道，而不是笼统返回“走不过去”。
+Canonical Connectivity Failure 必须直接保存量化后的起终点世界坐标；若坡度、台阶、宽度、
+顶部净空或缝隙由唯一保守证据归因，还必须在销毁构建期证据前保存一个确定性的
+`failurePositionMetersXYZ`。Validation 只能复制这些 Canonical 坐标，不能回查 Runtime/
+Provider 或从 Entity Bounds 猜测位置。
 
 ## 10. M5 分阶段交付
 

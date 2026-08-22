@@ -43,7 +43,9 @@ The generator patch may only add ownership state, `destroy`/`free`/`isView` oper
 | Resource | Allocation point | Owner after an ordinary returned result | Owner when the call throws before returning | Required release primitive |
 | --- | --- | --- | --- | --- |
 | process-global WASM module | `init()` | process after fulfilled initialization | no Module owner after rejected initialization | never shut down; cache a fulfilled initialization Promise, but clear the same rejected Promise so a later serialized operation may retry |
-| NavMeshQuery | SDK after successful query construction | SDK | SDK if constructed | `query.destroy()` before NavMesh |
+| raw NavMeshQuery native allocation | SDK after successful checked `rawQuery.init(...)` | SDK | SDK if allocated | `rawQuery.destroy()` before the Embind wrapper, Filter, and NavMesh |
+| raw NavMeshQuery Embind wrapper | SDK when `new Raw.Module.NavMeshQuery()` returns | SDK | SDK if allocated | `Raw.destroy(rawQuery)` after the native release attempt and before Filter/NavMesh |
+| explicit QueryFilter raw object | SDK when `new QueryFilter()` returns | SDK | SDK if allocated | `Raw.destroy(filter.raw)` after both Query release attempts and before NavMesh |
 | NavMesh | tiled generator | SDK on successful return; generator already destroys it on returned top-level failure | generator | `navMesh.destroy()`; never raw-only destroy |
 | `RecastBuildContext.raw` + `RecastBuildContextJsImpl` | core wrapper constructor | SDK | generator | idempotence-guarded `buildContext.destroy()` attempts context first and impl second, continues after either error, then throws one/aggregate error |
 | input `VerticesArray` / `TrianglesArray` | tiled generator | generator after the complete tile loop; vertices remain live for every tile rasterization and chunky owns only copied triangle/index storage | generator on unwind after tile cleanup | wrapper `.destroy()` exactly once; never destroy immediately after chunky initialization |
@@ -76,7 +78,25 @@ Additional invariants:
 
 ## Semantic boundary
 
-The patches must not change:
+> Route R1 Task 4 addendum, 2026-08-22: the generator/retained-Result ownership conclusions in this
+> ADR remain authoritative, while the Query rows above supersede the original high-level
+> `NavMeshQuery/query.destroy()` row. Task 4 never constructs that high-level wrapper; its one
+> cleanup receipt owns the raw Query native allocation, raw Query Embind wrapper, and explicit
+> Filter separately and attempts all three before retained Result cleanup. The generators patch
+> also gains one explicitly reviewed optional semantic scope under
+> [`2026-08-22-recast-r1-source-area-adr.md`](2026-08-22-recast-r1-source-area-adr.md). When
+> `sourceAreaMode` is absent, every semantic prohibition and the existing packed NavMesh golden
+> below remain unchanged. Zero-blocker Heightfield production input must take that absent-option
+> path; only a positive blocker triangle count activates the mode. When it is present, only terrain/blocker triangle-area
+> classification and the reserved-area-to-null conversion defined by that ADR may differ. Bounds
+> are supplied through the upstream option; configuration mapping, Tile order, geometry winding,
+> generator ownership transfer, retained Result cleanup, and every other item below remain frozen.
+> The Adapter version,
+> per-patch revisions, patch bytes, installed JavaScript/declaration bytes, and mapping manifest
+> must change atomically before that path is accepted.
+
+Except for the exact optional source-area differences named in the Task 4 addendum, the patches
+must not change:
 
 - input geometry, triangle winding, bounds, or tile selection;
 - canonical-to-Recast parameter conversion;
@@ -93,13 +113,21 @@ The patches must not change:
 
 - exact versions and lockfile integrity values for `recast-navigation`, `@recast-navigation/core`, `@recast-navigation/generators`, and `@recast-navigation/wasm`;
 - the exact two version-qualified root `pnpm-workspace.yaml#patchedDependencies` keys and repository-relative patch paths;
-- patch revision `lifecycle.1` and SHA-256 of both checked-in patch files;
-- SHA-256 of the installed patched file bytes for exactly `@recast-navigation/core/dist/index.mjs` and `@recast-navigation/generators/dist/index.mjs`;
-- existing tiled-generator, mapping, rounding, and provider-constant fields.
+- explicit per-patch revisions: Core `lifecycle.1` and Generators
+  `lifecycle.1+source-areas.1`, plus SHA-256 of both checked-in patch files;
+- one lexicographically sorted `installedFiles` list binding SHA-256 for Core `dist/index.mjs`,
+  Generators `dist/index.mjs`, and the actually changed Generators
+  `dist/generators/generate-tiled-nav-mesh.d.ts`; the umbrella `dist/index.d.ts` is only a
+  re-export and is not identity evidence;
+- existing tiled-generator, rounding, and provider-constant fields plus `mapping.2` source merge
+  order, terrain vertex boundary, exact `blocking triangle count > 0` activation predicate,
+  reserved/null Area mapping, terrain Flag, explicit bounds,
+  endpoint/query Filter, canonical polygon/portal/step/slope/clearance/cost formulas, and
+  no-option compatibility.
 
-Every hashed identity value is a portable literal. Absolute paths, `node_modules/.pnpm` layout, `require.resolve()` output, file URLs, registry responses, current working directory, timestamps, and the manifest's own final hash are forbidden from the manifest. The Adapter `resolvedVersion` must include `lifecycle.1`; `RECAST_GRAPH_PROVIDER_ADAPTER_HASH_V1` remains outside the manifest and equals `sha256CanonicalJson(manifest)`.
+Every hashed identity value is a portable literal. Absolute paths, `node_modules/.pnpm` layout, `require.resolve()` output, file URLs, registry responses, current working directory, timestamps, and the manifest's own final hash are forbidden from the manifest. The Adapter `resolvedVersion` is exactly `0.43.1+lifecycle.1+source-areas.1+mapping.2`; `RECAST_GRAPH_PROVIDER_ADAPTER_HASH_V1` remains outside the manifest and equals `sha256CanonicalJson(manifest)`.
 
-Tests read the root `pnpm-workspace.yaml#patchedDependencies` declarations used by pnpm 10, lockfile package/integrity/patch entries, checked-in patch bytes, installed package versions, and the two installed patched file contents. Installation lookup starts from the declared `recast-navigation` entry and uses a chained `createRequire()` so pnpm strict dependency isolation is preserved; only content hashes are compared with the manifest. Removing a patch, failing to apply it, changing a transitive package tarball, or editing installed provider code cannot retain the old Adapter hash. The pnpm-generated lockfile patch hash is asserted present and stable but is not assumed to equal the SDK's SHA-256 of patch bytes.
+Tests read the root `pnpm-workspace.yaml#patchedDependencies` declarations used by pnpm 10, lockfile package/integrity/patch entries, checked-in patch bytes, installed package versions, and every sorted installed file above. Installation lookup starts from the declared `recast-navigation` entry and uses a chained `createRequire()` so pnpm strict dependency isolation is preserved; only content hashes are compared with the manifest. Editing the declaration leaf alone must fail the drift gate. Removing a patch, failing to apply it, changing a transitive package tarball, or editing installed provider code cannot retain the old Adapter hash. The pnpm-generated lockfile patch hash is asserted present and stable but is not assumed to equal the SDK's SHA-256 of patch bytes.
 
 ## Rejected alternatives
 
@@ -117,7 +145,10 @@ Rejected after source review. The core wrapper hides `CreateNavMeshDataResult`, 
 
 ### Copy or reimplement the generator in SDK source
 
-Rejected. That would create a second algorithm implementation and enlarge the semantic audit surface. Exact lifecycle-only dependency patches remain visibly based on pinned upstream code.
+Rejected. That would create a second algorithm implementation and enlarge the semantic audit surface.
+Exact dependency patches remain visibly based on pinned upstream code. Core is ownership-only;
+Generators may additionally carry only the optional source-area extension frozen by the Task 4
+addendum and source-area ADR.
 
 ### Replace Recast or write a custom graph builder
 
@@ -165,7 +196,9 @@ An upgrade of any of the four pinned Recast packages must audit whether upstream
 - Follow-up P2 build-context cleanup continuation: accepted; both raw objects are attempted once and errors are reported only after both attempts.
 - Identity-review P1 unavailable `gitHead`: accepted; source commit is forensic metadata only and is removed from executable identity.
 - Identity-review P1 machine-path risk: accepted; only repository-relative paths and content hashes enter the manifest, and lookup paths are test-only.
-- Identity-review P1 patched-file scope: accepted; installed-byte hashes cover only the two actually patched `dist/index.mjs` files.
+- Identity-review P1 patched-file scope: accepted for the Task 2 lifecycle implementation; the
+  Task 4 source-area addendum supersedes that two-file set with the sorted three-file identity set
+  in the current Identity section, including the changed declaration leaf.
 - Evidence-review P1 unpatched RED/golden ambiguity: accepted; the unpatched packed-output golden is recorded before patch application, while leak-point evidence remains in exact patch hunks over SRI-pinned inputs.
 - Evidence-review P1 missing empty/failure/throw fixtures: accepted; separated quads and mutable raw/prototype injection points are now frozen, with per-operation pointer ledgers.
 - Identity-review P2 pnpm hash ambiguity: accepted; pnpm's patch hash and SDK patch-byte SHA-256 are separate evidence and are never equated without source proof.

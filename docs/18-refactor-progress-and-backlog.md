@@ -198,6 +198,15 @@ P1.5、P1.6、P2.5 与 P2.6 是把既有总体设计和产品对接契约显式�
 - [ ] R1 实现普通人形 Heightfield Route：坡度、静态阻挡、胶囊宽高净空、缝隙、确定性
   Path Query 与真实固定 Tick Character Controller Gate；P1.5 Ground/Air Runtime 已删除
   步高/坡度 Motion fallback、spawn ray 和 AABB Support 旁路，原前置阻塞已解除。
+  当前实施分支已完成 Task 1、Task 2、Task 3A/3B，并在 commit `d38e954` 完成
+  Task 3C 的锁定 Build Input、Hard Ribbon 地形裁剪、保守静态 Collider、水域排除、
+  内容 Hash 与单一 Tile Budget 证据；commit `2d2480c` 又收紧了重复 Locomotion Ref、
+  Collider Artifact Hash 和缺失 Envelope 的失败合同。11 个聚焦测试文件共 68 项测试、
+  全仓 948 项测试、Typecheck、Build 和 R0 Contract Gate 已通过。Task 3 独立最终审查、
+  Task 4 Recast Graph/Query 实现、真实 Runtime Probe 与双 Blocking Gate 尚未完成，因此
+  本项仍保持未完成。Task 4 的 Graph/Query、source-area、失败证据与生命周期设计已在
+  `m5-task4-design-2d2480c-r3` 完成主审和 Cursor Grok 4.6 Extra High 独立审查，最终
+  `DESIGN GO`、零未关闭 P0–P2；这只表示实施合同已冻结，不提高 Runtime 能力完成度。
 - [ ] R1b 与 P2.6 H1 共享最小 Traversal Surface → Collider Subshape 合同，覆盖地形、
   台阶、坡道和普通静态平台；阈值从同一 `resolvedTraversalLockHash` 推导，当前锁定
   `0.3m` 人形 Profile 的 Golden 要求 `0.25m` 通过、`0.35m` 失败。
