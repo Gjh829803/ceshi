@@ -7,6 +7,8 @@ import {
   parseAuthoringSpecJson,
   parseAuthoringSpecV4,
   type AuthoringDiagnostic,
+  type AuthoringSpecV4,
+  type NormalizeAuthoringResultV4,
   type NormalizedWorldIRV3,
   type NormalizedWorldIRV4,
 } from "@whitebox-world/authoring";
@@ -52,8 +54,11 @@ export interface WorldkitRoutePipelineSuccess {
   exitCode: 0;
   diagnostics: readonly [];
   absoluteInputPath: string;
+  authoringSpec: AuthoringSpecV4;
   normalizedWorldIr: NormalizedWorldIRV4;
   normalizedWorldIrHash: string;
+  layoutSolveReport: NonNullable<NormalizeAuthoringResultV4["layoutSolveReport"]>;
+  layoutSolveReportHash: `sha256:${string}`;
   executionPlan: ExecutionPlanV5;
   executionPlanHash: string;
 }
@@ -153,7 +158,9 @@ export async function loadWorldkitRoutePipeline(
   }
   const normalized = normalizeAuthoringSpecV4(parsed.value);
   if (!normalized.ok || normalized.value === undefined ||
-    normalized.normalizedWorldIrHash === undefined) {
+    normalized.normalizedWorldIrHash === undefined ||
+    normalized.layoutSolveReport === undefined ||
+    normalized.layoutSolveReportHash === undefined) {
     return { ok: false, exitCode: 2, diagnostics: normalized.diagnostics };
   }
   const compiled = compileWorldV5({
@@ -169,8 +176,11 @@ export async function loadWorldkitRoutePipeline(
     exitCode: 0,
     diagnostics: [],
     absoluteInputPath: input.absoluteInputPath,
+    authoringSpec: parsed.value,
     normalizedWorldIr: normalized.value,
     normalizedWorldIrHash: normalized.normalizedWorldIrHash,
+    layoutSolveReport: normalized.layoutSolveReport,
+    layoutSolveReportHash: normalized.layoutSolveReportHash,
     executionPlan: compiled.executionPlan,
     executionPlanHash: compiled.executionPlanHash,
   };

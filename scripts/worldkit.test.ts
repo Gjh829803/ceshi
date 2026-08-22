@@ -118,7 +118,17 @@ describe("worldkit CLI", () => {
 
     expect(route).toMatchObject({
       ok: true,
+      authoringSpec: {
+        schemaVersion: 4,
+        id: expect.any(String),
+      },
       normalizedWorldIr: { schemaVersion: 4 },
+      layoutSolveReport: {
+        kind: "worldkit-layout-solve-report",
+        schemaVersion: 1,
+        status: "solved",
+      },
+      layoutSolveReportHash: expect.stringMatching(/^sha256:[0-9a-f]{64}$/),
       executionPlan: { schemaVersion: 5 },
     });
     expect(legacy).toMatchObject({ ok: false, exitCode: 2 });
