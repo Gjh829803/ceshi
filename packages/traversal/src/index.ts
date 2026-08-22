@@ -46,6 +46,14 @@ export {
 } from "./path-receipt.js";
 export type { RoutePathReceiptV1 } from "./path-receipt.js";
 export {
+  canonicalRouteOverlayV1,
+  hashRouteOverlayV1,
+} from "./route-overlay.js";
+export type {
+  RouteOverlayColliderIdentityV1,
+  RouteOverlayV1,
+} from "./route-overlay.js";
+export {
   assertRouteRuntimeProbeReceiptContextV1,
   canonicalRouteRuntimeProbeReceiptV1,
   canonicalRouteRuntimeProbeRequestV1,
