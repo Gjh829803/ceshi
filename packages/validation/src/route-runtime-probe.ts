@@ -119,6 +119,7 @@ function canonicalValidationProfile(
   thresholds: RouteRuntimeGateThresholdsV1;
 }> {
   try {
+    assertAccessorFreeDataGraph(value);
     const result = validateValidationProfileV2(value);
     const contentHash = hashValidationProfileV2(value);
     if (
@@ -145,18 +146,37 @@ function canonicalValidationProfile(
   }
 }
 
+function assertAccessorFreeDataGraph(
+  value: unknown,
+  visited: WeakSet<object> = new WeakSet<object>(),
+): void {
+  if (isNil(value) || typeof value !== "object") return;
+  if (visited.has(value)) return;
+  visited.add(value);
+  const descriptors = Object.getOwnPropertyDescriptors(value);
+  for (const descriptor of Object.values(descriptors)) {
+    if (!isNil(descriptor.get) || !isNil(descriptor.set)) {
+      fail("ROUTE_RUNTIME_PROBE_INPUT_INVALID");
+    }
+    if (Object.prototype.hasOwnProperty.call(descriptor, "value")) {
+      assertAccessorFreeDataGraph(descriptor.value, visited);
+    }
+  }
+}
+
 function xz(position: Vec3): XzPoint {
   return { x: position[0], z: position[2] };
 }
 
-function squaredDistanceXZ(a: XzPoint, b: XzPoint): number {
-  const dx = a.x - b.x;
-  const dz = a.z - b.z;
-  return dx * dx + dz * dz;
-}
-
 function distanceXZ(a: XzPoint, b: XzPoint): number {
   return Math.hypot(a.x - b.x, a.z - b.z);
+}
+
+function requireFiniteRuntimeDerived(value: number): number {
+  if (!Number.isFinite(value)) {
+    fail("ROUTE_RUNTIME_PROBE_RUNTIME_INVALID");
+  }
+  return value === 0 ? 0 : value;
 }
 
 function ceilToQuantum(value: number, quantum: number): number {
@@ -246,7 +266,7 @@ function createPathGeometry(path: RoutePathReceiptV1): PathGeometry {
 
   for (let left = 0; left < points.length; left += 1) {
     for (let right = left + 2; right < points.length; right += 1) {
-      if (squaredDistanceXZ(points[left]!, points[right]!) <= GEOMETRY_EPSILON ** 2) {
+      if (distanceXZ(points[left]!, points[right]!) <= GEOMETRY_EPSILON) {
         fail("ROUTE_RUNTIME_PROBE_PATH_INVALID");
       }
     }
@@ -297,7 +317,7 @@ function projectForwardProgress(
     previousProgressMetersXZ + lookaheadMetersXZ,
   );
   let selectedProgressMetersXZ = previousProgressMetersXZ;
-  let selectedSquaredDistance = Number.POSITIVE_INFINITY;
+  let selectedDistance = Number.POSITIVE_INFINITY;
   for (const segment of geometry.segments) {
     const eligibleStart = Math.max(
       segment.startProgressMetersXZ,
@@ -321,13 +341,15 @@ function projectForwardProgress(
       Math.min(eligibleEnd, rawProgress),
     );
     const candidatePoint = pointAtProgress(geometry, candidateProgress);
-    const candidateSquaredDistance = squaredDistanceXZ(subject, candidatePoint);
-    if (candidateSquaredDistance < selectedSquaredDistance) {
-      selectedSquaredDistance = candidateSquaredDistance;
+    const candidateDistance = requireFiniteRuntimeDerived(
+      distanceXZ(subject, candidatePoint),
+    );
+    if (candidateDistance < selectedDistance) {
+      selectedDistance = candidateDistance;
       selectedProgressMetersXZ = candidateProgress;
     }
   }
-  return selectedProgressMetersXZ === 0 ? 0 : selectedProgressMetersXZ;
+  return requireFiniteRuntimeDerived(selectedProgressMetersXZ);
 }
 
 function deviationFromCompletePath(
@@ -335,9 +357,11 @@ function deviationFromCompletePath(
   subject: XzPoint,
 ): number {
   if (geometry.segments.length === 0) {
-    return distanceXZ(subject, geometry.points[0]!);
+    return requireFiniteRuntimeDerived(
+      distanceXZ(subject, geometry.points[0]!),
+    );
   }
-  let minimumSquaredDistance = Number.POSITIVE_INFINITY;
+  let minimumDistance = Number.POSITIVE_INFINITY;
   for (const segment of geometry.segments) {
     const dx = segment.end.x - segment.start.x;
     const dz = segment.end.z - segment.start.z;
@@ -350,12 +374,12 @@ function deviationFromCompletePath(
       x: segment.start.x + dx * parameter,
       z: segment.start.z + dz * parameter,
     };
-    minimumSquaredDistance = Math.min(
-      minimumSquaredDistance,
-      squaredDistanceXZ(subject, projected),
+    minimumDistance = Math.min(
+      minimumDistance,
+      requireFiniteRuntimeDerived(distanceXZ(subject, projected)),
     );
   }
-  return Math.sqrt(minimumSquaredDistance);
+  return requireFiniteRuntimeDerived(minimumDistance);
 }
 
 function roundHalfAwayFromZero(value: number): number {
@@ -370,14 +394,16 @@ function quantizedDirection(
 ): Vec2 {
   const dx = target.x - from.x;
   const dz = target.z - from.z;
-  const length = Math.hypot(dx, dz);
+  const length = requireFiniteRuntimeDerived(Math.hypot(dx, dz));
   if (!(length > 0)) return [0, 0];
   const quantizedX = roundHalfAwayFromZero(dx / length / ratio) * ratio;
   const quantizedZ = roundHalfAwayFromZero(dz / length / ratio) * ratio;
-  const quantizedLength = Math.hypot(quantizedX, quantizedZ);
+  const quantizedLength = requireFiniteRuntimeDerived(
+    Math.hypot(quantizedX, quantizedZ),
+  );
   if (!(quantizedLength > 0)) return [0, 0];
-  const x = quantizedX / quantizedLength;
-  const z = quantizedZ / quantizedLength;
+  const x = requireFiniteRuntimeDerived(quantizedX / quantizedLength);
+  const z = requireFiniteRuntimeDerived(quantizedZ / quantizedLength);
   return [x === 0 ? 0 : x, z === 0 ? 0 : z];
 }
 
@@ -447,16 +473,20 @@ function failedReceipt(
   metrics: RouteRuntimeProbeMetricsV1,
   failure: RouteRuntimeProbeFailureV1,
 ): RouteRuntimeProbeReceiptV1 {
-  return canonicalRouteRuntimeProbeReceiptV1({
-    kind: "route-runtime-probe-receipt",
-    schemaVersion: 1,
-    status: "failed",
-    request,
-    initialRuntimeEvidence,
-    ticks,
-    metrics,
-    failure,
-  });
+  try {
+    return canonicalRouteRuntimeProbeReceiptV1({
+      kind: "route-runtime-probe-receipt",
+      schemaVersion: 1,
+      status: "failed",
+      request,
+      initialRuntimeEvidence,
+      ticks,
+      metrics,
+      failure,
+    });
+  } catch {
+    return fail("ROUTE_RUNTIME_PROBE_RUNTIME_INVALID");
+  }
 }
 
 function completeReceipt(
@@ -465,16 +495,20 @@ function completeReceipt(
   ticks: readonly RouteRuntimeProbeTickV1[],
   metrics: RouteRuntimeProbeMetricsV1,
 ): RouteRuntimeProbeReceiptV1 {
-  return canonicalRouteRuntimeProbeReceiptV1({
-    kind: "route-runtime-probe-receipt",
-    schemaVersion: 1,
-    status: "complete",
-    request,
-    initialRuntimeEvidence,
-    ticks,
-    metrics,
-    completionDurationTicks: ticks.length,
-  });
+  try {
+    return canonicalRouteRuntimeProbeReceiptV1({
+      kind: "route-runtime-probe-receipt",
+      schemaVersion: 1,
+      status: "complete",
+      request,
+      initialRuntimeEvidence,
+      ticks,
+      metrics,
+      completionDurationTicks: ticks.length,
+    });
+  } catch {
+    return fail("ROUTE_RUNTIME_PROBE_RUNTIME_INVALID");
+  }
 }
 
 function mismatchMode(
@@ -543,7 +577,9 @@ export async function runRouteRuntimeProbeV1(
 
   const destination = geometry.points.at(-1)!;
   if (
-    distanceXZ(xz(initial.subjectPositionMetersXYZ), destination) <=
+    requireFiniteRuntimeDerived(
+      distanceXZ(xz(initial.subjectPositionMetersXYZ), destination),
+    ) <=
       thresholds.destinationToleranceMetersXZ
   ) {
     return completeReceipt(request, initial, [], initialMetrics);
@@ -613,7 +649,7 @@ export async function runRouteRuntimeProbeV1(
     const hasExpectedSurface = !isUnsupported &&
       !surfaceMismatch(evidence, path.traversalSurfaceIdentity);
     const hasArrived = hasExpectedSurface &&
-      distanceXZ(subjectAfterTick, destination) <=
+      requireFiniteRuntimeDerived(distanceXZ(subjectAfterTick, destination)) <=
         thresholds.destinationToleranceMetersXZ;
     if (hasArrived) routeProgressMetersXZ = geometry.totalDistanceMetersXZ;
 
@@ -663,7 +699,12 @@ export async function runRouteRuntimeProbeV1(
       routeProgressMetersXZ,
       remainingRouteDistanceMetersXZ: hasArrived
         ? 0
-        : Math.max(0, geometry.totalDistanceMetersXZ - routeProgressMetersXZ),
+        : requireFiniteRuntimeDerived(
+            Math.max(
+              0,
+              geometry.totalDistanceMetersXZ - routeProgressMetersXZ,
+            ),
+          ),
       routeDeviationMetersXZ,
       stalledDurationTicks,
       consecutiveUnexpectedUnsupportedTicks,

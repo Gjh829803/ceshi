@@ -657,6 +657,63 @@ describe.runIf(hasRunner)("runRouteRuntimeProbeV1", () => {
     });
   });
 
+  it("rejects stateful Validation Profile accessors before Runtime reset", async () => {
+    const path = pathReceipt();
+    const port = new ScriptedRuntimePort(
+      path,
+      { positionMetersXYZ: [0, 0, 0] },
+      [{ positionMetersXYZ: [0, 0, 0] }],
+    );
+    const statefulProfile = structuredClone(VALIDATION_PROFILE) as ValidationProfileV2;
+    const validThresholds = structuredClone(
+      VALIDATION_PROFILE.routeRuntimeGateThresholds,
+    );
+    let readCount = 0;
+    Object.defineProperty(statefulProfile, "routeRuntimeGateThresholds", {
+      configurable: true,
+      enumerable: true,
+      get() {
+        readCount += 1;
+        return readCount <= 10
+          ? validThresholds
+          : { ...validThresholds, stalledWindowTicks: 0 };
+      },
+    });
+    if (runRouteRuntimeProbeV1 === undefined) throw new Error("runner missing");
+
+    await expect(runRouteRuntimeProbeV1({
+      routePathReceipt: path,
+      traversalDriverProfile: DRIVER,
+      runtimePort: port,
+      validationProfile: statefulProfile,
+    })).rejects.toMatchObject({
+      name: "RouteRuntimeProbeErrorV1",
+      code: "ROUTE_RUNTIME_PROBE_INPUT_INVALID",
+      message: "ROUTE_RUNTIME_PROBE_INPUT_INVALID",
+    });
+    expect(port.resetCallCount).toBe(0);
+    expect(port.fixedTickCallCount).toBe(0);
+  });
+
+  it("closes overflow from finite Runtime coordinates without publishing a receipt", async () => {
+    const path = pathReceipt();
+    const port = new ScriptedRuntimePort(
+      path,
+      { positionMetersXYZ: [0, 0, 0] },
+      [{
+        positionMetersXYZ: [Number.MAX_VALUE, 0, Number.MAX_VALUE],
+      }],
+    );
+
+    await expect(run(path, port)).rejects.toMatchObject({
+      name: "RouteRuntimeProbeErrorV1",
+      code: "ROUTE_RUNTIME_PROBE_RUNTIME_INVALID",
+      message: "ROUTE_RUNTIME_PROBE_RUNTIME_INVALID",
+    });
+    expect(port.resetCallCount).toBe(1);
+    expect(port.fixedTickCallCount).toBe(1);
+  });
+
   it("accepts a non-crossing hairpin and handles a zero direction away from destination", async () => {
     const hairpin = pathReceipt([
       [0, 0, 0],

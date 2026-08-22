@@ -411,7 +411,7 @@ Validation Profile；观测 Metric 在评测时对照 Lock。Profile 只冻结�
 - `completedRequiredRouteCount`；
 - `failedRequiredRouteCount`；
 - `maximumStalledDurationTicks`；
-- `maximumRouteDeviationMeters`；
+- `maximumRouteDeviationMetersXZ`（Metric id：`maximum-route-deviation-meters-xz`）；
 - `maximumConsecutiveUnexpectedUnsupportedTicks`；
 - `slidingDurationTicks`；
 - `unexpectedSupportLossCount`；
