@@ -1019,7 +1019,10 @@ function deriveMetrics(
 function canonicalFailure(value: unknown): RouteRuntimeProbeFailureV1 {
   const prefix = "ROUTE_RUNTIME_PROBE_RECEIPT_INVALID";
   const base = requireRecord(value, "failure", prefix);
-  if (typeof base.kind !== "string" || !(base.kind in FAILURE_FIELDS_BY_KIND)) {
+  if (
+    typeof base.kind !== "string" ||
+    !Object.hasOwn(FAILURE_FIELDS_BY_KIND, base.kind)
+  ) {
     fail(prefix, "failure/kind", "must be a supported closed failure kind");
   }
   const kind = base.kind as keyof typeof FAILURE_FIELDS_BY_KIND;
@@ -1279,10 +1282,12 @@ export function canonicalRouteRuntimeProbeReceiptV1(
   }
 
   if (record.status === "complete") {
+    const finalTick = ticks.at(-1);
     if (
       initialRuntimeEvidence.characterSupport.supportState === "unsupported" ||
       isSurfaceMismatch(initialRuntimeEvidence, request.traversalSurfaceIdentity) ||
-      firstMismatchIndex >= 0
+      firstMismatchIndex >= 0 ||
+      finalTick?.runtimeEvidence.characterSupport.supportState === "unsupported"
     ) {
       fail(prefix, "status", "complete cannot contain invalid initial or surface evidence");
     }
@@ -1294,7 +1299,6 @@ export function canonicalRouteRuntimeProbeReceiptV1(
     if (completionDurationTicks !== metrics.processedTickCount) {
       fail(prefix, "completionDurationTicks", "must equal processedTickCount");
     }
-    const finalTick = ticks.at(-1);
     if (
       !isNil(finalTick) &&
       finalTick.remainingRouteDistanceMetersXZ !== 0

@@ -645,6 +645,44 @@ describe.skipIf(!hasRuntimeProbeApi)("RouteRuntimeProbeReceiptV1", () => {
     })).toThrow("ROUTE_RUNTIME_PROBE_RECEIPT_INVALID");
   });
 
+  it("rejects prototype-key failure discriminators with the stable receipt prefix", () => {
+    const base = oneTickFailure({
+      kind: "runtime-stalled",
+      failureProbeTick: 1,
+      failurePositionMetersXYZ: runtimeEvidence(1).subjectPositionMetersXYZ,
+      stalledDurationTicks: 4,
+    }, { stalledDurationTicks: 4 });
+
+    for (const kind of ["toString", "constructor"]) {
+      expect(() => canonicalRouteRuntimeProbeReceiptV1({
+        ...base,
+        failure: { kind },
+      })).toThrow(/^ROUTE_RUNTIME_PROBE_RECEIPT_INVALID:/);
+    }
+  });
+
+  it("rejects completion on an unsupported final Tick at the destination", () => {
+    const finalTick = tick(1, {
+      runtimeEvidence: unsupportedRuntimeEvidence(1),
+      routeProgressMetersXZ: 1,
+      remainingRouteDistanceMetersXZ: 0,
+      consecutiveUnexpectedUnsupportedTicks: 1,
+    });
+    expect(() => canonicalRouteRuntimeProbeReceiptV1({
+      ...completeReceipt(),
+      ticks: [finalTick],
+      metrics: metrics({
+        processedTickCount: 1,
+        maximumStalledDurationTicks: 0,
+        maximumRouteDeviationMetersXZ: 0.1,
+        maximumConsecutiveUnexpectedUnsupportedTicks: 1,
+        slidingDurationTicks: 0,
+        unexpectedSupportLossCount: 1,
+      }),
+      completionDurationTicks: 1,
+    })).toThrow("ROUTE_RUNTIME_PROBE_RECEIPT_INVALID");
+  });
+
   it("reduces initial surface mismatch separately and contextually proves Path/Profile bindings", () => {
     const initialRuntimeEvidence = runtimeEvidence(0, {
       characterSupport: {
