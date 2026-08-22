@@ -27,6 +27,7 @@ import {
 import type { RouteRuntimeGateThresholdsV1 } from "./route.js";
 import type { ValidationProfileV2 } from "./types-v2.js";
 import { validateValidationProfileV2 } from "./validate-v2.js";
+import { assertAccessorFreeDataGraph } from "./accessor-free-data.js";
 
 type Vec2 = readonly [number, number];
 type Vec3 = readonly [number, number, number];
@@ -119,7 +120,7 @@ function canonicalValidationProfile(
   thresholds: RouteRuntimeGateThresholdsV1;
 }> {
   try {
-    assertAccessorFreeDataGraph(value);
+    assertAccessorFreeDataGraph(value, "ROUTE_RUNTIME_PROBE_INPUT_INVALID");
     const result = validateValidationProfileV2(value);
     const contentHash = hashValidationProfileV2(value);
     if (
@@ -143,24 +144,6 @@ function canonicalValidationProfile(
   } catch (error) {
     if (error instanceof RouteRuntimeProbeErrorV1) throw error;
     return fail("ROUTE_RUNTIME_PROBE_INPUT_INVALID");
-  }
-}
-
-function assertAccessorFreeDataGraph(
-  value: unknown,
-  visited: WeakSet<object> = new WeakSet<object>(),
-): void {
-  if (isNil(value) || typeof value !== "object") return;
-  if (visited.has(value)) return;
-  visited.add(value);
-  const descriptors = Object.getOwnPropertyDescriptors(value);
-  for (const descriptor of Object.values(descriptors)) {
-    if (!isNil(descriptor.get) || !isNil(descriptor.set)) {
-      fail("ROUTE_RUNTIME_PROBE_INPUT_INVALID");
-    }
-    if (Object.prototype.hasOwnProperty.call(descriptor, "value")) {
-      assertAccessorFreeDataGraph(descriptor.value, visited);
-    }
   }
 }
 

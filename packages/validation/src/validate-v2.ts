@@ -74,6 +74,39 @@ const LOCK_DERIVED_THRESHOLD_METRIC_IDS = new Set([
   "maximum-observed-surface-gap-meters",
 ]);
 
+function hasClosedLockDerivedResultBounds(
+  metricId: string,
+  kind: string,
+  record: Readonly<Record<string, unknown>>,
+): boolean {
+  if (metricId === "maximum-observed-slope-degrees") {
+    return kind === "degrees-threshold" &&
+      isNil(record.minimumAllowedDegrees) &&
+      typeof record.maximumAllowedDegrees === "number";
+  }
+  if (
+    metricId === "maximum-observed-step-height-meters"
+  ) {
+    return kind === "meters-threshold" &&
+      isNil(record.minimumAllowedMeters) &&
+      typeof record.maximumAllowedMeters === "number";
+  }
+  if (metricId === "maximum-observed-surface-gap-meters") {
+    return kind === "meters-threshold" &&
+      isNil(record.minimumAllowedMeters) &&
+      record.maximumAllowedMeters === 0;
+  }
+  if (
+    metricId === "minimum-observed-clearance-width-meters" ||
+    metricId === "minimum-observed-clearance-height-meters"
+  ) {
+    return kind === "meters-threshold" &&
+      typeof record.minimumAllowedMeters === "number" &&
+      isNil(record.maximumAllowedMeters);
+  }
+  return false;
+}
+
 const EVIDENCE_BASE_FIELDS = [
   "id",
   "kind",
@@ -819,6 +852,17 @@ function validateMetricResult(
   requireString(record.evaluatorProfileRef, `${path}/evaluatorProfileRef`, diagnostics);
   requireStringArray(record.evidenceArtifactRefs, `${path}/evidenceArtifactRefs`, diagnostics);
   requireStringArray(record.diagnosticIds, `${path}/diagnosticIds`, diagnostics);
+  if (
+    LOCK_DERIVED_THRESHOLD_METRIC_IDS.has(mapId) &&
+    !hasClosedLockDerivedResultBounds(mapId, kind, record)
+  ) {
+    addDiagnostic(
+      diagnostics,
+      "VALIDATION_REFERENCE_INVALID",
+      path,
+      "Lock-derived Route Metric must materialize exactly its closed directional Result bound.",
+    );
+  }
   const isNotEvaluated = record.status === "not-evaluated";
   let assertionPassed = false;
   let canEvaluateAssertion = false;
@@ -1200,6 +1244,13 @@ function metricResultMatchesDefinition(
     metricResult.evaluatorProfileRef !== metricDefinition.evaluatorProfileRef
   ) {
     return false;
+  }
+  if (LOCK_DERIVED_THRESHOLD_METRIC_IDS.has(metricDefinition.id)) {
+    return hasClosedLockDerivedResultBounds(
+      metricDefinition.id,
+      metricResult.kind,
+      metricResult as unknown as Readonly<Record<string, unknown>>,
+    );
   }
   if (
     metricDefinition.kind === "boolean-assertion" &&

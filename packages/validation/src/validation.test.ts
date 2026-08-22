@@ -787,23 +787,41 @@ function passedWorldPackageMetricResult(
     };
   }
   if (metricDefinition.kind === "meters-threshold") {
+    const lockDerivedBounds =
+      metricDefinition.id === "maximum-observed-step-height-meters"
+        ? { maximumAllowedMeters: 0.3 }
+        : metricDefinition.id === "maximum-observed-surface-gap-meters"
+          ? { maximumAllowedMeters: 0 }
+          : metricDefinition.id === "minimum-observed-clearance-width-meters"
+            ? { minimumAllowedMeters: 0.7 }
+            : metricDefinition.id === "minimum-observed-clearance-height-meters"
+              ? { minimumAllowedMeters: 1.8 }
+              : {};
     return {
       ...shared,
       kind: "meters-threshold",
-      valueMeters: metricDefinition.minimumAllowedMeters ??
+      valueMeters: ("minimumAllowedMeters" in lockDerivedBounds
+        ? lockDerivedBounds.minimumAllowedMeters
+        : undefined) ?? metricDefinition.minimumAllowedMeters ??
         metricDefinition.maximumAllowedMeters ??
         0,
       ...includeBound("minimumAllowedMeters", metricDefinition.minimumAllowedMeters),
       ...includeBound("maximumAllowedMeters", metricDefinition.maximumAllowedMeters),
+      ...lockDerivedBounds,
     };
   }
   if (metricDefinition.kind === "degrees-threshold") {
+    const lockDerivedBounds =
+      metricDefinition.id === "maximum-observed-slope-degrees"
+        ? { maximumAllowedDegrees: 42 }
+        : {};
     return {
       ...shared,
       kind: "degrees-threshold",
       valueDegrees: metricDefinition.maximumAllowedDegrees ?? 0,
       ...includeBound("minimumAllowedDegrees", metricDefinition.minimumAllowedDegrees),
       ...includeBound("maximumAllowedDegrees", metricDefinition.maximumAllowedDegrees),
+      ...lockDerivedBounds,
     };
   }
   if (metricDefinition.kind === "ticks-threshold") {
@@ -1206,6 +1224,74 @@ describe("Validation Profile/Report V2", () => {
       ok: false,
       diagnostics: expect.arrayContaining([
         expect.objectContaining({ code: "VALIDATION_ENUM_INVALID" }),
+      ]),
+    });
+  });
+
+  it("accepts only the closed directional bounds materialized from the Traversal Lock", () => {
+    const missingMaximum = structuredClone(
+      validWorldPackageReport(),
+    ) as unknown as Record<string, unknown>;
+    const missingMaximumGates = missingMaximum.gateResultsById as Record<
+      string,
+      Record<string, unknown>
+    >;
+    const missingMaximumMetrics = missingMaximumGates["route-connectivity"]!
+      .metricResultsById as Record<string, Record<string, unknown>>;
+    delete missingMaximumMetrics["maximum-observed-step-height-meters"]!
+      .maximumAllowedMeters;
+
+    expect(validateValidationReportV2(missingMaximum)).toMatchObject({
+      ok: false,
+      diagnostics: expect.arrayContaining([
+        expect.objectContaining({
+          code: "VALIDATION_REFERENCE_INVALID",
+          path: expect.stringMatching(/maximum-observed-step-height-meters/),
+        }),
+      ]),
+    });
+
+    const conflictingDirection = structuredClone(
+      validWorldPackageReport(),
+    ) as unknown as Record<string, unknown>;
+    const conflictingDirectionGates = conflictingDirection.gateResultsById as Record<
+      string,
+      Record<string, unknown>
+    >;
+    const conflictingDirectionMetrics = conflictingDirectionGates["route-connectivity"]!
+      .metricResultsById as Record<string, Record<string, unknown>>;
+    conflictingDirectionMetrics["minimum-observed-clearance-width-meters"]!
+      .maximumAllowedMeters = 2;
+
+    expect(validateValidationReportV2(conflictingDirection)).toMatchObject({
+      ok: false,
+      diagnostics: expect.arrayContaining([
+        expect.objectContaining({
+          code: "VALIDATION_REFERENCE_INVALID",
+          path: expect.stringMatching(/minimum-observed-clearance-width-meters/),
+        }),
+      ]),
+    });
+
+    const nonZeroSurfaceGap = structuredClone(
+      validWorldPackageReport(),
+    ) as unknown as Record<string, unknown>;
+    const nonZeroSurfaceGapGates = nonZeroSurfaceGap.gateResultsById as Record<
+      string,
+      Record<string, unknown>
+    >;
+    const nonZeroSurfaceGapMetrics = nonZeroSurfaceGapGates["route-connectivity"]!
+      .metricResultsById as Record<string, Record<string, unknown>>;
+    nonZeroSurfaceGapMetrics["maximum-observed-surface-gap-meters"]!
+      .maximumAllowedMeters = 0.1;
+
+    expect(validateValidationReportV2(nonZeroSurfaceGap)).toMatchObject({
+      ok: false,
+      diagnostics: expect.arrayContaining([
+        expect.objectContaining({
+          code: "VALIDATION_REFERENCE_INVALID",
+          path: expect.stringMatching(/maximum-observed-surface-gap-meters/),
+        }),
       ]),
     });
   });

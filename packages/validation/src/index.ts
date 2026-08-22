@@ -11,6 +11,7 @@ export * from "./policy";
 export * from "./validate";
 export * from "./validate-v2";
 export * from "./route";
+export * from "./route-evaluator";
 export * from "./route-runtime-probe";
 
 export function hashValidationReportV1(
