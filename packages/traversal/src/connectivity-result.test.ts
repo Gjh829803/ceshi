@@ -217,9 +217,13 @@ function pathReceipt(
     traversingEntityId: input.connectivityRequirement.traversingEntityId,
     startAnchorEntityId: input.startAnchor.entityId,
     destinationAnchorEntityId: input.destinationAnchor.entityId,
+    authoringSpecHash: traversalGraph.authoringSpecHash,
+    layoutSolveReportHash: traversalGraph.layoutSolveReportHash,
+    resourceLockHash: traversalGraph.resourceLockHash,
     traversalGraphHash: hashTraversalGraphV1(traversalGraph),
     routeBuildInputHash: receipt.routeBuildInputHash,
     resolvedTraversalLockHash: input.capabilityEnvelope.resolvedTraversalLockHash,
+    traversalSurfaceIdentity: input.traversalSurface,
     graphBuilderProfileRef: input.capabilityEnvelope.graphBuilderProfileRef,
     graphBuilderResolvedVersion: input.capabilityEnvelope.graphBuilderResolvedVersion,
     graphBuilderProfileHash: input.capabilityEnvelope.graphBuilderProfileHash,
@@ -227,6 +231,7 @@ function pathReceipt(
     orderedTraversalEdgeIds: ["edge-a-b"],
     orderedPathPositionsMetersXYZ: [[0, 0, 0], [1, 0, 0]],
     routePathDistanceMeters: 1,
+    routePathDistanceMetersXZ: 1,
     routePathCost: 0.5,
     maximumObservedSlopeDegrees: 0,
     maximumObservedStepHeightMeters: 0,
@@ -290,6 +295,53 @@ describe("HeightfieldRouteConnectivityResultV1", () => {
         routePathCost: 99,
       }),
     })).toThrow("HEIGHTFIELD_ROUTE_CONNECTIVITY_RESULT_INVALID");
+    expect(() => canonicalHeightfieldRouteConnectivityResultV1({
+      ...result,
+      routePathReceipt: {
+        ...routePathReceipt,
+        authoringSpecHash: HASH_B,
+      },
+      routePathReceiptHash: hashRoutePathReceiptV1({
+        ...routePathReceipt,
+        authoringSpecHash: HASH_B,
+      }),
+    })).toThrow("HEIGHTFIELD_ROUTE_CONNECTIVITY_RESULT_INVALID");
+    expect(() => canonicalHeightfieldRouteConnectivityResultV1({
+      ...result,
+      routePathReceipt: {
+        ...routePathReceipt,
+        traversalSurfaceIdentity: {
+          ...routePathReceipt.traversalSurfaceIdentity,
+          traversalSurfaceId: "surface-other",
+        },
+      },
+      routePathReceiptHash: hashRoutePathReceiptV1({
+        ...routePathReceipt,
+        traversalSurfaceIdentity: {
+          ...routePathReceipt.traversalSurfaceIdentity,
+          traversalSurfaceId: "surface-other",
+        },
+      }),
+    })).toThrow("HEIGHTFIELD_ROUTE_CONNECTIVITY_RESULT_INVALID");
+
+    const slopedPath = canonicalRoutePathReceiptV1({
+      ...routePathReceipt,
+      orderedPathPositionsMetersXYZ: [[0, 0, 0], [3, 4, 0]],
+      routePathDistanceMeters: 5,
+      routePathDistanceMetersXZ: 3,
+      maximumObservedSlopeDegrees: 53.130103,
+    });
+    const slopedResult = canonicalHeightfieldRouteConnectivityResultV1({
+      ...result,
+      routePathReceipt: slopedPath,
+      routePathReceiptHash: hashRoutePathReceiptV1(slopedPath),
+    });
+    expect(slopedResult.status).toBe("complete");
+    if (slopedResult.status !== "complete") return;
+    expect(slopedResult.routePathReceipt).toMatchObject({
+      routePathDistanceMeters: 5,
+      routePathDistanceMetersXZ: 3,
+    });
   });
 
   it("accepts exactly four correlated failure variants and rejects cross-pairing", () => {

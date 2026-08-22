@@ -167,8 +167,9 @@ function emptyReceipt(): HeightfieldRouteBuildInputReceiptV1 {
 
 describe("evaluateRequiredHeightfieldRouteV1", () => {
   it("builds one real Recast Graph and returns a canonical complete path", async () => {
+    const receipt = flatReceipt();
     const result = await evaluateRequiredHeightfieldRouteV1({
-      buildInputReceipt: flatReceipt(),
+      buildInputReceipt: receipt,
     });
     expect(result.status).toBe("complete");
     if (result.status !== "complete") return;
@@ -176,6 +177,13 @@ describe("evaluateRequiredHeightfieldRouteV1", () => {
     expect(result.routePathReceipt.orderedTraversalNodeIds.length).toBeGreaterThan(0);
     expect(result.routePathReceipt.orderedPathPositionsMetersXYZ.at(0)).toEqual([1, 0.1, 2]);
     expect(result.routePathReceipt.orderedPathPositionsMetersXYZ.at(-1)).toEqual([7, 0.1, 2]);
+    expect(result.routePathReceipt.routePathDistanceMetersXZ).toBe(6);
+    expect(result.routePathReceipt).toMatchObject({
+      authoringSpecHash: receipt.input.authoringSpecHash,
+      layoutSolveReportHash: receipt.input.layoutSolveReportHash,
+      resourceLockHash: receipt.input.resourceLockHash,
+      traversalSurfaceIdentity: receipt.input.traversalSurface,
+    });
     expect(JSON.stringify(result)).not.toMatch(/providerPolygonRef|recast|navMesh/i);
   });
 

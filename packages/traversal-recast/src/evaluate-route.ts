@@ -359,6 +359,7 @@ function createPathReceipt(
 ): RoutePathReceiptV1 {
   const envelope = receipt.input.capabilityEnvelope;
   let routePathDistanceMeters = 0;
+  let routePathDistanceMetersXZ = 0;
   let segmentSlopeDegrees = 0;
   for (let index = 1; index < orderedPathPositionsMetersXYZ.length; index += 1) {
     const previous = orderedPathPositionsMetersXYZ[index - 1]!;
@@ -371,6 +372,10 @@ function createPathReceipt(
       envelope.positionQuantizationMeters,
     );
     const horizontal = Math.hypot(dx, dz);
+    routePathDistanceMetersXZ += ceilToQuantum(
+      horizontal,
+      envelope.positionQuantizationMeters,
+    );
     segmentSlopeDegrees = Math.max(
       segmentSlopeDegrees,
       ceilToQuantum(
@@ -405,9 +410,13 @@ function createPathReceipt(
     traversingEntityId: receipt.input.connectivityRequirement.traversingEntityId,
     startAnchorEntityId: receipt.input.startAnchor.entityId,
     destinationAnchorEntityId: receipt.input.destinationAnchor.entityId,
+    authoringSpecHash: graph.authoringSpecHash,
+    layoutSolveReportHash: graph.layoutSolveReportHash,
+    resourceLockHash: graph.resourceLockHash,
     traversalGraphHash: hashTraversalGraphV1(graph),
     routeBuildInputHash: receipt.routeBuildInputHash,
     resolvedTraversalLockHash: envelope.resolvedTraversalLockHash,
+    traversalSurfaceIdentity: receipt.input.traversalSurface,
     graphBuilderProfileRef: envelope.graphBuilderProfileRef,
     graphBuilderResolvedVersion: envelope.graphBuilderResolvedVersion,
     graphBuilderProfileHash: envelope.graphBuilderProfileHash,
@@ -415,6 +424,7 @@ function createPathReceipt(
     orderedTraversalEdgeIds,
     orderedPathPositionsMetersXYZ,
     routePathDistanceMeters,
+    routePathDistanceMetersXZ,
     routePathCost: costUnits * 0.000001,
     maximumObservedSlopeDegrees: Math.max(
       segmentSlopeDegrees,

@@ -46,6 +46,26 @@ export {
 } from "./path-receipt.js";
 export type { RoutePathReceiptV1 } from "./path-receipt.js";
 export {
+  assertRouteRuntimeProbeReceiptContextV1,
+  canonicalRouteRuntimeProbeReceiptV1,
+  canonicalRouteRuntimeProbeRequestV1,
+  canonicalRouteRuntimeProbeTickV1,
+  createRouteRuntimeProbeRequestV1,
+  hashRouteRuntimeProbeReceiptV1,
+  hashRouteRuntimeProbeRequestV1,
+  hashRouteRuntimeProbeTickV1,
+} from "./runtime-probe-contract.js";
+export type {
+  AssertRouteRuntimeProbeReceiptContextInputV1,
+  CreateRouteRuntimeProbeRequestInputV1,
+  RouteRuntimeProbeFailureV1,
+  RouteRuntimeProbeMetricsV1,
+  RouteRuntimeProbeReceiptV1,
+  RouteRuntimeProbeRequestV1,
+  RouteRuntimeProbeTickV1,
+  RouteRuntimeProbeValidationProfileIdentityV1,
+} from "./runtime-probe-contract.js";
+export {
   assertTraversalRuntimeWorldIdentityMatchesGraphV1,
   canonicalCharacterSupportEvidenceV1,
   canonicalTraversalRuntimeTickEvidenceV1,

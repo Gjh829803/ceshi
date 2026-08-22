@@ -1,7 +1,9 @@
 import { sha256CanonicalJson } from "@whitebox-world/protocol";
 import { isNil, isPlainObject } from "lodash-es";
 
+import { assertTraversalSurfaceIdentityV1 } from "./graph-contract.js";
 import { resolveTraversalGraphBuilderProfile } from "./profile-registry.js";
+import type { TraversalSurfaceIdentityV1 } from "./types.js";
 
 type Sha256Hash = `sha256:${string}`;
 type Vec3 = readonly [number, number, number];
@@ -16,9 +18,13 @@ export interface RoutePathReceiptV1 {
   readonly traversingEntityId: string;
   readonly startAnchorEntityId: string;
   readonly destinationAnchorEntityId: string;
+  readonly authoringSpecHash: Sha256Hash;
+  readonly layoutSolveReportHash: Sha256Hash;
+  readonly resourceLockHash: Sha256Hash;
   readonly traversalGraphHash: Sha256Hash;
   readonly routeBuildInputHash: Sha256Hash;
   readonly resolvedTraversalLockHash: Sha256Hash;
+  readonly traversalSurfaceIdentity: TraversalSurfaceIdentityV1;
   readonly graphBuilderProfileRef: string;
   readonly graphBuilderResolvedVersion: string;
   readonly graphBuilderProfileHash: Sha256Hash;
@@ -26,6 +32,7 @@ export interface RoutePathReceiptV1 {
   readonly orderedTraversalEdgeIds: readonly string[];
   readonly orderedPathPositionsMetersXYZ: readonly Vec3[];
   readonly routePathDistanceMeters: number;
+  readonly routePathDistanceMetersXZ: number;
   readonly routePathCost: number;
   readonly maximumObservedSlopeDegrees: number;
   readonly maximumObservedStepHeightMeters: number;
@@ -44,9 +51,13 @@ const RECEIPT_FIELDS = [
   "traversingEntityId",
   "startAnchorEntityId",
   "destinationAnchorEntityId",
+  "authoringSpecHash",
+  "layoutSolveReportHash",
+  "resourceLockHash",
   "traversalGraphHash",
   "routeBuildInputHash",
   "resolvedTraversalLockHash",
+  "traversalSurfaceIdentity",
   "graphBuilderProfileRef",
   "graphBuilderResolvedVersion",
   "graphBuilderProfileHash",
@@ -54,6 +65,7 @@ const RECEIPT_FIELDS = [
   "orderedTraversalEdgeIds",
   "orderedPathPositionsMetersXYZ",
   "routePathDistanceMeters",
+  "routePathDistanceMetersXZ",
   "routePathCost",
   "maximumObservedSlopeDegrees",
   "maximumObservedStepHeightMeters",
@@ -108,7 +120,7 @@ function requireFinite(value: unknown, path: string): number {
   if (typeof value !== "number" || !Number.isFinite(value)) {
     fail(path, "must be finite");
   }
-  return Object.is(value, -0) ? 0 : value;
+  return value === 0 ? 0 : value;
 }
 
 function requireNonNegative(value: unknown, path: string): number {
@@ -199,6 +211,12 @@ export function canonicalRoutePathReceiptV1(
     fail("startAnchorEntityId", "must differ from destinationAnchorEntityId");
   }
   const hashes = {
+    authoringSpecHash: requireHash(record.authoringSpecHash, "authoringSpecHash"),
+    layoutSolveReportHash: requireHash(
+      record.layoutSolveReportHash,
+      "layoutSolveReportHash",
+    ),
+    resourceLockHash: requireHash(record.resourceLockHash, "resourceLockHash"),
     traversalGraphHash: requireHash(record.traversalGraphHash, "traversalGraphHash"),
     routeBuildInputHash: requireHash(record.routeBuildInputHash, "routeBuildInputHash"),
     resolvedTraversalLockHash: requireHash(
@@ -210,6 +228,14 @@ export function canonicalRoutePathReceiptV1(
       "graphBuilderProfileHash",
     ),
   } as const;
+  let traversalSurfaceIdentity: TraversalSurfaceIdentityV1;
+  try {
+    traversalSurfaceIdentity = assertTraversalSurfaceIdentityV1(
+      record.traversalSurfaceIdentity,
+    );
+  } catch {
+    fail("traversalSurfaceIdentity", "must be a canonical Traversal Surface identity");
+  }
   let resolved;
   try {
     resolved = resolveTraversalGraphBuilderProfile(strings.graphBuilderProfileRef);
@@ -271,12 +297,17 @@ export function canonicalRoutePathReceiptV1(
     status: "complete",
     ...strings,
     ...hashes,
+    traversalSurfaceIdentity,
     orderedTraversalNodeIds,
     orderedTraversalEdgeIds,
     orderedPathPositionsMetersXYZ,
     routePathDistanceMeters: requireNonNegative(
       record.routePathDistanceMeters,
       "routePathDistanceMeters",
+    ),
+    routePathDistanceMetersXZ: requireNonNegative(
+      record.routePathDistanceMetersXZ,
+      "routePathDistanceMetersXZ",
     ),
     routePathCost: requireNonNegative(record.routePathCost, "routePathCost"),
     maximumObservedSlopeDegrees: requireSlope(

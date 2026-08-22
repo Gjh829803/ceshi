@@ -867,6 +867,9 @@ function validatePathAgainstGraph(
   graph: TraversalGraphV1,
 ): void {
   const bindingFields = [
+    "authoringSpecHash",
+    "layoutSolveReportHash",
+    "resourceLockHash",
     "routeId",
     "startAnchorEntityId",
     "destinationAnchorEntityId",
@@ -881,8 +884,28 @@ function validatePathAgainstGraph(
   const selectedNodes = path.orderedTraversalNodeIds.map((id) => {
     const node = graph.traversalNodesById[id];
     if (isNil(node)) failResult("routePathReceipt/orderedTraversalNodeIds", `unknown Node '${id}'`);
+    requireEqual(
+      node.traversalSurfaceId,
+      path.traversalSurfaceIdentity.traversalSurfaceId,
+      `routePathReceipt/orderedTraversalNodeIds/${id}/traversalSurfaceId`,
+    );
+    requireEqual(
+      node.surfaceEntityId,
+      path.traversalSurfaceIdentity.surfaceEntityId,
+      `routePathReceipt/orderedTraversalNodeIds/${id}/surfaceEntityId`,
+    );
+    requireEqual(
+      node.colliderSubshapeId,
+      path.traversalSurfaceIdentity.colliderSubshapeId,
+      `routePathReceipt/orderedTraversalNodeIds/${id}/colliderSubshapeId`,
+    );
     return node;
   });
+  requireEqual(
+    path.traversalSurfaceIdentity.resourceHash,
+    graph.surfaceArtifactHash,
+    "routePathReceipt/traversalSurfaceIdentity/resourceHash",
+  );
   const selectedEdges = path.orderedTraversalEdgeIds.map((id, index) => {
     const edge = graph.traversalEdgesById[id];
     if (isNil(edge)) failResult("routePathReceipt/orderedTraversalEdgeIds", `unknown Edge '${id}'`);
@@ -896,6 +919,7 @@ function validatePathAgainstGraph(
   });
   const profile = resolveTraversalGraphBuilderProfile(path.graphBuilderProfileRef).profile;
   let distanceMeters = 0;
+  let distanceMetersXZ = 0;
   let segmentSlopeDegrees = 0;
   for (let index = 1; index < path.orderedPathPositionsMetersXYZ.length; index += 1) {
     const previous = path.orderedPathPositionsMetersXYZ[index - 1]!;
@@ -908,6 +932,10 @@ function validatePathAgainstGraph(
       profile.positionQuantizationMeters,
     );
     const horizontal = Math.hypot(dx, dz);
+    distanceMetersXZ += ceilToQuantum(
+      horizontal,
+      profile.positionQuantizationMeters,
+    );
     const rawSlope = horizontal === 0 ? 90 : Math.atan2(Math.abs(dy), horizontal) * 180 / Math.PI;
     segmentSlopeDegrees = Math.max(segmentSlopeDegrees, ceilToQuantum(rawSlope, 0.000001));
   }
@@ -925,6 +953,7 @@ function validatePathAgainstGraph(
   const edgeSlopes = selectedEdges.map((edge) => edge.slopeDegrees);
   const edgeSteps = selectedEdges.map((edge) => edge.stepHeightMeters);
   requireEqual(path.routePathDistanceMeters, distanceMeters, "routePathReceipt/routePathDistanceMeters");
+  requireEqual(path.routePathDistanceMetersXZ, distanceMetersXZ, "routePathReceipt/routePathDistanceMetersXZ");
   requireEqual(path.routePathCost, costUnits * 0.000001, "routePathReceipt/routePathCost");
   requireEqual(
     path.maximumObservedSlopeDegrees,
@@ -1166,6 +1195,14 @@ export function assertHeightfieldRouteConnectivityResultForBuildInputV1(
     const input = receipt.input;
     requireEqual(result.routePathReceipt.constraintId, input.connectivityRequirement.constraintId, "routePathReceipt/constraintId");
     requireEqual(result.routePathReceipt.traversingEntityId, input.connectivityRequirement.traversingEntityId, "routePathReceipt/traversingEntityId");
+    const pathSurface = result.routePathReceipt.traversalSurfaceIdentity;
+    const inputSurface = input.traversalSurface;
+    requireEqual(pathSurface.traversalSurfaceId, inputSurface.traversalSurfaceId, "routePathReceipt/traversalSurfaceIdentity/traversalSurfaceId");
+    requireEqual(pathSurface.surfaceEntityId, inputSurface.surfaceEntityId, "routePathReceipt/traversalSurfaceIdentity/surfaceEntityId");
+    requireEqual(pathSurface.colliderSubshapeId, inputSurface.colliderSubshapeId, "routePathReceipt/traversalSurfaceIdentity/colliderSubshapeId");
+    requireEqual(pathSurface.resourceRef, inputSurface.resourceRef, "routePathReceipt/traversalSurfaceIdentity/resourceRef");
+    requireEqual(pathSurface.resolvedVersion, inputSurface.resolvedVersion, "routePathReceipt/traversalSurfaceIdentity/resolvedVersion");
+    requireEqual(pathSurface.resourceHash, inputSurface.resourceHash, "routePathReceipt/traversalSurfaceIdentity/resourceHash");
   } else {
     assertContextualFailure(result.connectivityFailure, receipt);
     if (result.graphStatus === "complete") assertContextualGraph(result.traversalGraph, receipt);
