@@ -449,6 +449,27 @@ importers:
         specifier: ^0.180.0
         version: 0.180.0
 
+  packages/world-package:
+    dependencies:
+      '@whitebox-world/authoring':
+        specifier: workspace:*
+        version: link:../authoring
+      '@whitebox-world/compiler':
+        specifier: workspace:*
+        version: link:../compiler
+      '@whitebox-world/layout-solver':
+        specifier: workspace:*
+        version: link:../layout-solver
+      '@whitebox-world/protocol':
+        specifier: workspace:*
+        version: link:../protocol
+      '@whitebox-world/runtime-contracts':
+        specifier: workspace:*
+        version: link:../runtime-contracts
+      lodash-es:
+        specifier: ^4.18.1
+        version: 4.18.1
+
 packages:
 
   '@ampproject/remapping@2.3.0':

@@ -1,0 +1,484 @@
+import {
+  canonicalAuthoringIdentityV3,
+  canonicalAuthoringIdentityV4,
+  validateAuthoringSpecV4,
+} from "@whitebox-world/authoring";
+import { compileWorldV5 } from "@whitebox-world/compiler";
+import { hashLayoutSolveReportV1 } from "@whitebox-world/layout-solver";
+import {
+  canonicalJsonBytes,
+  sha256Bytes,
+  sha256CanonicalJson,
+} from "@whitebox-world/protocol";
+import { canonicalExecutionResourceLockEntriesV1 } from "@whitebox-world/runtime-contracts";
+import { isEqual, isNil, isPlainObject } from "lodash-es";
+
+import {
+  assertSafeWorldPackagePathV1,
+  assertWorldPackageAccessorFreeDataGraphV1,
+  canonicalWorldPackageFileIntegrityEntriesV1,
+  canonicalWorldPackageManifestV1,
+  deepFreeze,
+  hashWorldPackageManifestV1,
+  hashWorldPackageRootV1,
+} from "./manifest.js";
+import type {
+  CreateWorldPackageBuildReceiptInputV1,
+  ResolvedWorldPackageResourceArtifactV1,
+  WorldPackageBuildReceiptV1,
+  WorldPackageFileIntegrityEntryV1,
+  WorldPackageManifestV1,
+  WorldPackageResourceArtifactV1,
+  WorldPackageSha256HashV1,
+} from "./types.js";
+
+type UnknownRecord = Record<string, unknown>;
+const HASH_PATTERN = /^sha256:[a-f0-9]{64}$/;
+const ZERO_HASH = `sha256:${"0".repeat(64)}`;
+const RECEIPT_FIELDS = [
+  "kind",
+  "schemaVersion",
+  "manifest",
+  "manifestHash",
+  "fileIntegrityEntries",
+  "worldPackageRootHash",
+] as const;
+const INPUT_REQUIRED_FIELDS = [
+  "packageId",
+  "authoringSpec",
+  "normalizedWorldIr",
+  "layoutSolveResult",
+  "executionPlan",
+  "resourceArtifacts",
+] as const;
+const INPUT_ALLOWED_FIELDS = [...INPUT_REQUIRED_FIELDS, "includeAuthoringSpec"] as const;
+const RESOURCE_INPUT_FIELDS = ["resourceRef", "packagePath", "mediaType", "bytes"] as const;
+
+function fail(code: string, path: string, message: string): never {
+  throw new Error(`${code}: ${path.length === 0 ? message : `${path}: ${message}`}`);
+}
+
+function exactRecord(
+  value: unknown,
+  requiredFields: readonly string[],
+  allowedFields: readonly string[],
+  path: string,
+  code: string,
+): UnknownRecord {
+  if (isNil(value) || !isPlainObject(value)) fail(code, path, "expected a plain object");
+  const record = value as UnknownRecord;
+  const allowed = new Set(allowedFields);
+  const unknown = Object.keys(record).find((field) => !allowed.has(field));
+  if (!isNil(unknown)) fail(code, path, `unknown field '${unknown}'`);
+  for (const field of requiredFields) {
+    if (!Object.hasOwn(record, field) || isNil(record[field])) {
+      fail(code, path, `missing field '${field}'`);
+    }
+  }
+  return record;
+}
+
+function requireString(value: unknown, path: string, code: string): string {
+  if (typeof value !== "string" || value.length === 0 || value.trim() !== value) {
+    fail(code, path, "must be a non-empty canonical string");
+  }
+  return value;
+}
+
+function requireHash(value: unknown, path: string, code: string): WorldPackageSha256HashV1 {
+  if (typeof value !== "string" || !HASH_PATTERN.test(value) || value === ZERO_HASH) {
+    fail(code, path, "must be a non-zero lowercase sha256 hash");
+  }
+  return value as WorldPackageSha256HashV1;
+}
+
+function assertNoAllZeroHashValues(
+  value: unknown,
+  path = "",
+  visited: WeakSet<object> = new WeakSet<object>(),
+): void {
+  if (isNil(value) || typeof value !== "object" || value instanceof Uint8Array) return;
+  if (visited.has(value)) return;
+  visited.add(value);
+  for (const [key, child] of Object.entries(value)) {
+    const childPath = path.length === 0 ? key : `${path}/${key}`;
+    if (key.toLowerCase().endsWith("hash") && child === ZERO_HASH) {
+      fail("WORLD_PACKAGE_BUILD_INPUT_INVALID", childPath, "all-zero hashes are forbidden");
+    }
+    assertNoAllZeroHashValues(child, childPath, visited);
+  }
+}
+
+function compareCanonicalStrings(left: string, right: string): number {
+  return left < right ? -1 : left > right ? 1 : 0;
+}
+
+function jsonIntegrityEntry(path: string, value: unknown): WorldPackageFileIntegrityEntryV1 {
+  const bytes = canonicalJsonBytes(value);
+  return {
+    path,
+    mediaType: "application/json",
+    sizeBytes: bytes.byteLength,
+    sha256: sha256Bytes(bytes) as WorldPackageSha256HashV1,
+  };
+}
+
+function canonicalResolvedResources(
+  value: unknown,
+  expectedAssets: CreateWorldPackageBuildReceiptInputV1["normalizedWorldIr"]["resources"]["subjectAssets"],
+): {
+  readonly manifestRows: readonly WorldPackageResourceArtifactV1[];
+  readonly integrityRows: readonly WorldPackageFileIntegrityEntryV1[];
+} {
+  const code = "WORLD_PACKAGE_BUILD_INPUT_INVALID";
+  if (!Array.isArray(value)) fail(code, "resourceArtifacts", "must be an array");
+  const rows = value.map((candidate, index): ResolvedWorldPackageResourceArtifactV1 => {
+    const path = `resourceArtifacts/${index}`;
+    const row = exactRecord(
+      candidate,
+      RESOURCE_INPUT_FIELDS,
+      RESOURCE_INPUT_FIELDS,
+      path,
+      code,
+    );
+    if (!(row.bytes instanceof Uint8Array)) fail(code, `${path}/bytes`, "must be Uint8Array");
+    return {
+      resourceRef: requireString(row.resourceRef, `${path}/resourceRef`, code),
+      packagePath: assertSafeWorldPackagePathV1(
+        row.packagePath,
+        `${path}/packagePath`,
+        code,
+      ),
+      mediaType: requireString(row.mediaType, `${path}/mediaType`, code),
+      bytes: new Uint8Array(row.bytes),
+    };
+  }).sort((left, right) =>
+    compareCanonicalStrings(left.resourceRef, right.resourceRef) ||
+    compareCanonicalStrings(left.packagePath, right.packagePath)
+  );
+  if (new Set(rows.map((row) => row.resourceRef)).size !== rows.length) {
+    fail(code, "resourceArtifacts", "resourceRef values must be unique");
+  }
+  if (new Set(rows.map((row) => row.packagePath)).size !== rows.length) {
+    fail(code, "resourceArtifacts", "packagePath values must be unique");
+  }
+  const expectedByRef = new Map(expectedAssets.map((asset) => [asset.subjectAssetRef, asset]));
+  if (rows.length !== expectedByRef.size) {
+    fail(code, "resourceArtifacts", "must resolve every and only referenced subject asset");
+  }
+  const manifestRows = rows.map((row): WorldPackageResourceArtifactV1 => {
+    const expected = expectedByRef.get(row.resourceRef);
+    if (isNil(expected)) fail(code, "resourceArtifacts", `unexpected resource '${row.resourceRef}'`);
+    const contentHash = sha256Bytes(row.bytes) as WorldPackageSha256HashV1;
+    if (
+      row.mediaType !== expected.mediaType ||
+      row.bytes.byteLength !== expected.byteLength ||
+      contentHash !== expected.artifactContentHash
+    ) {
+      fail(code, "resourceArtifacts", `resource '${row.resourceRef}' bytes do not match locked metadata`);
+    }
+    return {
+      resourceRef: row.resourceRef,
+      packagePath: row.packagePath,
+      mediaType: row.mediaType,
+      sizeBytes: row.bytes.byteLength,
+      contentHash,
+    };
+  });
+  return {
+    manifestRows,
+    integrityRows: manifestRows.map((row) => ({
+      path: row.packagePath,
+      mediaType: row.mediaType,
+      sizeBytes: row.sizeBytes,
+      sha256: row.contentHash,
+    })),
+  };
+}
+
+export function createWorldPackageBuildReceiptV1(
+  input: CreateWorldPackageBuildReceiptInputV1,
+): WorldPackageBuildReceiptV1 {
+  const code = "WORLD_PACKAGE_BUILD_INPUT_INVALID";
+  assertWorldPackageAccessorFreeDataGraphV1(
+    input,
+    "WORLD_PACKAGE_BUILD_INPUT_ACCESSOR_FORBIDDEN",
+  );
+  const record = exactRecord(input, INPUT_REQUIRED_FIELDS, INPUT_ALLOWED_FIELDS, "", code);
+  if (!isNil(record.includeAuthoringSpec) && typeof record.includeAuthoringSpec !== "boolean") {
+    fail(code, "includeAuthoringSpec", "must be boolean");
+  }
+  const snapshot = structuredClone(input);
+  assertNoAllZeroHashValues(snapshot);
+  const validated = validateAuthoringSpecV4(snapshot.authoringSpec);
+  if (!validated.ok || validated.value === undefined) {
+    fail(code, "authoringSpec", "must be a valid AuthoringSpecV4");
+  }
+  const spec = validated.value;
+  const world = snapshot.normalizedWorldIr;
+  const layout = snapshot.layoutSolveResult;
+  const plan = snapshot.executionPlan;
+  if (world.kind !== "worldkit-normalized-world" || world.schemaVersion !== 4) {
+    fail(code, "normalizedWorldIr", "must be NormalizedWorldIRV4");
+  }
+  if (plan.kind !== "worldkit-execution-plan" || plan.schemaVersion !== 5) {
+    fail(code, "executionPlan", "must be ExecutionPlanV5");
+  }
+  if (
+    layout.status !== "solved" ||
+    layout.report.kind !== "worldkit-layout-solve-report" ||
+    layout.report.schemaVersion !== 1 ||
+    layout.report.status !== "solved"
+  ) {
+    fail(code, "layoutSolveResult", "must be a solved LayoutSolveResultV1");
+  }
+
+  const authoringSpecHash = sha256CanonicalJson(
+    canonicalAuthoringIdentityV4(spec, world),
+  ) as WorldPackageSha256HashV1;
+  const normalizedWorldIrHash = sha256CanonicalJson(world) as WorldPackageSha256HashV1;
+  const executionPlanHash = sha256CanonicalJson(plan) as WorldPackageSha256HashV1;
+  const layoutSolveReportHash = hashLayoutSolveReportV1(layout.report);
+  const resourceLock = canonicalExecutionResourceLockEntriesV1(
+    world.resources.resourceLock,
+  );
+  const planResourceLock = canonicalExecutionResourceLockEntriesV1(plan.resourceLockEntries);
+  const resourceLockHash = sha256CanonicalJson(resourceLock) as WorldPackageSha256HashV1;
+  const projectedV3 = {
+    ...structuredClone(spec),
+    schemaVersion: 3 as const,
+    constraints: {
+      placements: structuredClone([...spec.constraints.placements]),
+    },
+  };
+  const layoutAuthoringSpecHash = sha256CanonicalJson(
+    canonicalAuthoringIdentityV3(projectedV3, world),
+  );
+  const requireBinding = (
+    actual: unknown,
+    expected: unknown,
+    path: string,
+  ): void => {
+    if (!isEqual(actual, expected)) fail(code, path, "canonical binding mismatch");
+  };
+  requireBinding(world.resources.resourceLock, resourceLock, "normalizedWorldIr/resources/resourceLock");
+  requireBinding(plan.resourceLockEntries, planResourceLock, "executionPlan/resourceLockEntries");
+  requireBinding(resourceLock, planResourceLock, "executionPlan/resourceLockEntries");
+  requireBinding(world.resources.resourceLockHash, resourceLockHash, "normalizedWorldIr/resources/resourceLockHash");
+  requireBinding(plan.resourceLockHash, resourceLockHash, "executionPlan/resourceLockHash");
+  requireBinding(world.authoringSpecHash, authoringSpecHash, "normalizedWorldIr/authoringSpecHash");
+  requireBinding(plan.authoringSpecHash, authoringSpecHash, "executionPlan/authoringSpecHash");
+  requireBinding(plan.normalizedWorldIrHash, normalizedWorldIrHash, "executionPlan/normalizedWorldIrHash");
+  requireBinding(layout.layoutSolveReportHash, layoutSolveReportHash, "layoutSolveResult/layoutSolveReportHash");
+  requireBinding(world.layout.layoutSolveReportHash, layoutSolveReportHash, "normalizedWorldIr/layout/layoutSolveReportHash");
+  requireBinding(plan.layout.layoutSolveReportHash, layoutSolveReportHash, "executionPlan/layout/layoutSolveReportHash");
+  // Layout V1 currently solves the canonical V3 placement projection. The V4
+  // identity remains authoritative for the WorldPackage while this explicit
+  // projection binding prevents an unrelated layout report from entering it.
+  requireBinding(layout.report.authoringSpecHash, layoutAuthoringSpecHash, "layoutSolveResult/report/authoringSpecHash");
+  requireBinding(layout.report.registryLockHash, resourceLockHash, "layoutSolveResult/report/registryLockHash");
+  requireBinding(layout.report.solverProfileRef, world.layout.solverProfileRef, "normalizedWorldIr/layout/solverProfileRef");
+  requireBinding(layout.report.resolvedVersion, world.layout.resolvedVersion, "normalizedWorldIr/layout/resolvedVersion");
+  requireBinding(layout.report.solverProfileHash, world.layout.solverProfileHash, "normalizedWorldIr/layout/solverProfileHash");
+  requireBinding(layout.report.solverProfileRef, plan.layout.solverProfileRef, "executionPlan/layout/solverProfileRef");
+  requireBinding(layout.report.resolvedVersion, plan.layout.resolvedVersion, "executionPlan/layout/resolvedVersion");
+  requireBinding(layout.report.solverProfileHash, plan.layout.solverProfileHash, "executionPlan/layout/solverProfileHash");
+  requireBinding(spec.id, world.id, "normalizedWorldIr/id");
+  requireBinding(spec.id, plan.id, "executionPlan/id");
+  requireBinding(spec.seed, world.seed, "normalizedWorldIr/seed");
+  requireBinding(spec.seed, plan.seed, "executionPlan/seed");
+  requireBinding(spec.seed, layout.report.seed, "layoutSolveResult/report/seed");
+  requireBinding(spec.startup.controlledEntityId, plan.controlledEntityId, "executionPlan/controlledEntityId");
+  const normalizedSubjectAssetsByRef = new Map(
+    world.resources.subjectAssets.map((asset) => [asset.subjectAssetRef, asset]),
+  );
+  if (
+    normalizedSubjectAssetsByRef.size !== world.resources.subjectAssets.length ||
+    new Set(plan.subjectAssets.map((asset) => asset.subjectAssetRef)).size !==
+      plan.subjectAssets.length
+  ) {
+    fail(code, "executionPlan/subjectAssets", "subject asset Refs must be unique");
+  }
+  for (const asset of plan.subjectAssets) {
+    requireBinding(
+      asset,
+      normalizedSubjectAssetsByRef.get(asset.subjectAssetRef),
+      `executionPlan/subjectAssets/${asset.subjectAssetRef}`,
+    );
+  }
+  requireBinding(world.world.coordinateSystem, plan.coordinateSystem, "executionPlan/coordinateSystem");
+  requireBinding(
+    world.world.gravityMetersPerSecondSquaredXYZ,
+    plan.gravityMetersPerSecondSquaredXYZ,
+    "executionPlan/gravityMetersPerSecondSquaredXYZ",
+  );
+  requireBinding(world.world.environment.preset, plan.atmospherePreset, "executionPlan/atmospherePreset");
+  requireBinding(plan.runtimeBackend, "babylon-havok", "executionPlan/runtimeBackend");
+
+  const compiled = compileWorldV5({
+    normalizedWorldIr: world,
+    normalizedWorldIrHash,
+  });
+  if (
+    !compiled.ok ||
+    compiled.executionPlan === undefined ||
+    compiled.executionPlanHash === undefined
+  ) {
+    fail(code, "executionPlan", "could not be regenerated from NormalizedWorldIRV4");
+  }
+  requireBinding(
+    plan,
+    compiled.executionPlan,
+    "executionPlan",
+  );
+  requireBinding(
+    executionPlanHash,
+    compiled.executionPlanHash,
+    "executionPlanHash",
+  );
+
+  const resources = canonicalResolvedResources(
+    snapshot.resourceArtifacts,
+    world.resources.subjectAssets,
+  );
+  const manifest = canonicalWorldPackageManifestV1({
+    kind: "worldkit-world-package-manifest",
+    schemaVersion: 1,
+    id: requireString(snapshot.packageId, "packageId", code),
+    packageFormatVersion: 1,
+    worldId: spec.id,
+    seed: spec.seed,
+    runtimeTarget: "babylon-web",
+    canonicalizationProfile: "canonical-json-jcs@1",
+    hashAlgorithm: "sha256",
+    authoringSchemaVersion: 4,
+    normalizedWorldIrSchemaVersion: 4,
+    executionPlanSchemaVersion: 5,
+    authoringSpecHash,
+    normalizedWorldIrHash,
+    executionPlanHash,
+    resourceLockHash,
+    layoutSolveReportHash,
+    controlledEntityId: plan.controlledEntityId,
+    entryPoint: {
+      executionPlanPath: "targets/babylon-web/execution-plan.json",
+    },
+    resources: resources.manifestRows,
+  });
+  const manifestHash = hashWorldPackageManifestV1(manifest);
+  const fileIntegrityEntries = canonicalWorldPackageFileIntegrityEntriesV1([
+    jsonIntegrityEntry("manifest.json", manifest),
+    ...(snapshot.includeAuthoringSpec === false
+      ? []
+      : [jsonIntegrityEntry("authoring-spec.json", spec)]),
+    jsonIntegrityEntry("world.normalized.json", world),
+    jsonIntegrityEntry("registry-lock.json", resourceLock),
+    jsonIntegrityEntry("layout-solve-report.json", layout.report),
+    jsonIntegrityEntry("targets/babylon-web/execution-plan.json", plan),
+    ...resources.integrityRows,
+  ]);
+  return assertWorldPackageBuildReceiptV1({
+    kind: "worldkit-world-package-build-receipt",
+    schemaVersion: 1,
+    manifest,
+    manifestHash,
+    fileIntegrityEntries,
+    worldPackageRootHash: hashWorldPackageRootV1(fileIntegrityEntries),
+  });
+}
+
+export function assertWorldPackageBuildReceiptV1(
+  value: unknown,
+): WorldPackageBuildReceiptV1 {
+  const code = "WORLD_PACKAGE_BUILD_RECEIPT_INVALID";
+  assertWorldPackageAccessorFreeDataGraphV1(
+    value,
+    "WORLD_PACKAGE_BUILD_RECEIPT_ACCESSOR_FORBIDDEN",
+  );
+  const record = exactRecord(value, RECEIPT_FIELDS, RECEIPT_FIELDS, "", code);
+  if (record.kind !== "worldkit-world-package-build-receipt") fail(code, "kind", "invalid kind");
+  if (record.schemaVersion !== 1) fail(code, "schemaVersion", "must be 1");
+  let manifest: WorldPackageManifestV1;
+  let entries: readonly WorldPackageFileIntegrityEntryV1[];
+  try {
+    manifest = canonicalWorldPackageManifestV1(record.manifest);
+    entries = canonicalWorldPackageFileIntegrityEntriesV1(record.fileIntegrityEntries);
+  } catch {
+    fail(code, "", "Manifest or file integrity entries are invalid");
+  }
+  if (!isEqual(record.manifest, manifest)) {
+    fail(code, "manifest", "must use canonical resource order");
+  }
+  if (!isEqual(record.fileIntegrityEntries, entries)) {
+    fail(code, "fileIntegrityEntries", "must be in canonical path order");
+  }
+  const manifestHash = requireHash(record.manifestHash, "manifestHash", code);
+  const worldPackageRootHash = requireHash(
+    record.worldPackageRootHash,
+    "worldPackageRootHash",
+    code,
+  );
+  if (manifestHash !== hashWorldPackageManifestV1(manifest)) {
+    fail(code, "manifestHash", "does not match Manifest canonical bytes");
+  }
+  const expectedPaths = new Set([
+    "manifest.json",
+    "world.normalized.json",
+    "registry-lock.json",
+    "layout-solve-report.json",
+    manifest.entryPoint.executionPlanPath,
+    ...manifest.resources.map((row) => row.packagePath),
+  ]);
+  const actualPaths = new Set(entries.map((row) => row.path));
+  const hasAuthoringSpec = actualPaths.has("authoring-spec.json");
+  if (hasAuthoringSpec) expectedPaths.add("authoring-spec.json");
+  if (
+    expectedPaths.size !== actualPaths.size ||
+    [...expectedPaths].some((path) => !actualPaths.has(path))
+  ) {
+    fail(code, "fileIntegrityEntries", "must contain exactly the canonical package inventory");
+  }
+  const entryByPath = new Map(entries.map((row) => [row.path, row]));
+  const manifestEntry = entryByPath.get("manifest.json")!;
+  const requiredJsonPaths = [
+    "manifest.json",
+    "world.normalized.json",
+    "registry-lock.json",
+    "layout-solve-report.json",
+    manifest.entryPoint.executionPlanPath,
+    ...(hasAuthoringSpec ? ["authoring-spec.json"] : []),
+  ];
+  if (
+    requiredJsonPaths.some((path) => entryByPath.get(path)?.mediaType !== "application/json") ||
+    manifestEntry.sha256 !== manifestHash ||
+    manifestEntry.sizeBytes !== canonicalJsonBytes(manifest).byteLength ||
+    entryByPath.get("world.normalized.json")?.sha256 !== manifest.normalizedWorldIrHash ||
+    entryByPath.get("registry-lock.json")?.sha256 !== manifest.resourceLockHash ||
+    entryByPath.get("layout-solve-report.json")?.sha256 !== manifest.layoutSolveReportHash ||
+    entryByPath.get(manifest.entryPoint.executionPlanPath)?.sha256 !== manifest.executionPlanHash
+  ) {
+    fail(code, "fileIntegrityEntries", "core file rows do not match Manifest identities");
+  }
+  for (const resource of manifest.resources) {
+    const entry = entryByPath.get(resource.packagePath);
+    if (
+      isNil(entry) ||
+      entry.mediaType !== resource.mediaType ||
+      entry.sizeBytes !== resource.sizeBytes ||
+      entry.sha256 !== resource.contentHash
+    ) {
+      fail(code, "fileIntegrityEntries", `resource '${resource.resourceRef}' is not bound`);
+    }
+  }
+  if (worldPackageRootHash !== hashWorldPackageRootV1(entries)) {
+    fail(code, "worldPackageRootHash", "does not match canonical file inventory");
+  }
+  return deepFreeze({
+    kind: "worldkit-world-package-build-receipt",
+    schemaVersion: 1,
+    manifest,
+    manifestHash,
+    fileIntegrityEntries: entries,
+    worldPackageRootHash,
+  });
+}
