@@ -643,7 +643,7 @@ const THRESHOLD_FAILURE_REASONS = [
     terrainEntityId: SURFACE.surfaceEntityId,
     relevantColliderSubshapeIds: ["wall-narrow"],
     minimumObservedClearanceWidthMeters: 0.6,
-    minimumRequiredClearanceWidthMeters: 0.7,
+    minimumRequiredClearanceWidthMeters: (0.35 + 0.05) * 2,
     proofKind: "unique-single-reason-cut",
     proofCandidateIds: ["wall-narrow"],
     failurePositionMetersXYZ: [0.5, 0, 0],

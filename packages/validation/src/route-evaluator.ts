@@ -870,19 +870,24 @@ function evaluatedGate(
   };
 }
 
-function assertFailureLockThresholds(
+function assertFailureCapabilityThresholds(
   failure: RouteConnectivityFailureV1,
-  lock: ResolvedTraversalLockReceiptV1["lock"],
+  capabilityEnvelope:
+    HeightfieldRouteBuildInputReceiptV1["input"]["capabilityEnvelope"],
 ): void {
   const reason = failure.reason;
   const valid = reason.kind === "slope-threshold-exceeded"
-    ? reason.maximumAllowedSlopeDegrees === lock.maxSlopeDegrees
+    ? reason.maximumAllowedSlopeDegrees === capabilityEnvelope.maxSlopeDegrees
     : reason.kind === "step-height-threshold-exceeded"
-      ? reason.maximumAllowedStepHeightMeters === lock.maxStepHeightMeters
+      ? reason.maximumAllowedStepHeightMeters ===
+        capabilityEnvelope.maxStepHeightMeters
       : reason.kind === "clearance-width-insufficient"
-        ? reason.minimumRequiredClearanceWidthMeters === lock.capsuleRadiusMeters * 2
+        ? reason.minimumRequiredClearanceWidthMeters ===
+          (capabilityEnvelope.capsuleRadiusMeters +
+            capabilityEnvelope.clearanceMarginMeters) * 2
         : reason.kind === "overhead-clearance-insufficient"
-          ? reason.minimumRequiredClearanceHeightMeters === lock.capsuleHeightMeters
+          ? reason.minimumRequiredClearanceHeightMeters ===
+            capabilityEnvelope.capsuleHeightMeters
           : reason.kind === "surface-gap-exceeded"
             ? reason.maximumAllowedSurfaceGapMeters === 0
             : true;
@@ -1106,7 +1111,10 @@ function createFailedConnectivityReport(
   ) {
     fail("ROUTE_VALIDATION_WORLD_IDENTITY_MISMATCH");
   }
-  assertFailureLockThresholds(failure, lockReceipt.lock);
+  assertFailureCapabilityThresholds(
+    failure,
+    input.routeBuildInputReceipt.input.capabilityEnvelope,
+  );
   if (isNil(input.evidenceBytes.routeConnectivityFailure)) {
     fail("ROUTE_VALIDATION_CONNECTIVITY_FAILURE_BYTES_MISSING");
   }
