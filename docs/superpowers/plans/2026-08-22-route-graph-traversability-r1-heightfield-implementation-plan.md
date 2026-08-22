@@ -730,7 +730,8 @@ reset/disposal, sequential reuse, concurrent isolation, and a wide-corridor path
 verdict; it is recorded as a timeout, not presented as `GO`. Host review and a fresh independent review
 returned `GO` with no P0/P1 finding. Its only P2—Runtime cleanup when a test harness fails during
 acquisition—was closed in `5319262` with a failing acquisition regression and focused 10/10 GREEN.
-Task 6 is review-closed; Task 7, R1, M5, and R1b remain open.
+Task 6 is review-closed. At this checkpoint Task 7 was still open; its completed
+disposition is recorded in the next section. R1, M5, and R1b remain open.
 
 ---
 
@@ -747,7 +748,7 @@ Task 6 is review-closed; Task 7, R1, M5, and R1b remain open.
 - Produces `createRouteValidationReportV2()` from V5 world identity, Graph, Path, Probe, Lock, Profile, and evidence bytes.
 - Produces only the existing `route-connectivity` and `route-runtime-conformance` gates inside `ValidationReportV2`; no Route-only report is introduced.
 
-- [ ] **Step 1: Write RED report tests**
+- [x] **Step 1: Write RED report tests**
 
 Prove:
 
@@ -760,17 +761,17 @@ Prove:
 - stable diagnostics include Route, Subject, Anchors, surface/collider IDs where known, position, unit, expected/actual values, evidence ref, and suggested fix;
 - report hash is stable under input-map reorder.
 
-- [ ] **Step 2: Run the RED report test**
+- [x] **Step 2: Run the RED report test**
 
 Run: `pnpm vitest run packages/validation/src/route-evaluator.test.ts packages/validation/src/validation.test.ts`
 
 Expected: FAIL because the evaluator is absent.
 
-- [ ] **Step 3: Implement evidence assembly and gate evaluation**
+- [x] **Step 3: Implement evidence assembly and gate evaluation**
 
 Use canonical `artifact://route/<routeId>/...` refs. Hash and size the actual canonical Graph/Path/Probe/Overlay bytes before constructing Evidence rows. Do not infer a passed metric when its evidence is absent or malformed. Update V2 evidence validation to use the exact version-dispatching Graph Builder Profile resolver created in Task 2; a V2 profile must not bypass Registry ref/version/hash checks.
 
-- [ ] **Step 4: Run focused gates**
+- [x] **Step 4: Run focused gates**
 
 Run:
 
@@ -781,6 +782,38 @@ pnpm typecheck
 ```
 
 Expected: PASS.
+
+**Task 7 disposition (2026-08-23):** commit `67bfb17` adds the single
+`createRouteValidationReportV2()` evaluation path and keeps both required
+`route-connectivity` and `route-runtime-conformance` results inside the existing
+`ValidationReportV2`; no Route-only report or second policy owner was introduced.
+The evaluator consumes the canonical Heightfield Route connectivity result as a
+closed `complete | unreachable | incomplete` union: deterministic unreachability
+fails the connectivity Blocking Gate, incomplete Graph/Query evidence keeps it
+incomplete, and absent Probe evidence keeps the Runtime Blocking Gate and overall
+Report incomplete rather than manufacturing a pass. A complete Graph/Path can
+pass connectivity independently while a failing fixed-tick Probe still blocks the
+Report through `route-runtime-conformance`.
+
+The final review also closed a contextual P1 in the failed-connectivity path:
+`HeightfieldRouteBuildInputReceiptV1` is now a required evaluator input even when
+no Graph/Path exists, and its Authoring, Layout, Resource Lock, Capability
+Envelope, Subject, Surface, Route, Anchor, Profile, and Traversal Lock bindings
+are validated before failure evidence is accepted. This prevents an
+`unreachable` or `incomplete` result from being replayed against a different
+World/Build Input merely because no success Graph was available to carry that
+context.
+
+Focused Task 7 evidence passed 77 tests; the host's combined Task 7 review set
+passed 82 tests. `pnpm typecheck` and `pnpm verify:route-r0-contract` also passed.
+Host review and a fresh independent narrow review returned `GO`, with the
+BuildInput contextual P1 closed before the final verdict. The single
+stage-boundary Cursor review reached the 8-minute timeout without a verdict; it
+is recorded as `TIMEOUT`, never as `GO`. Task 7 is review-closed. R1 and M5 remain
+open: Task 8 must still deliver the shared overlay/Validation-subject contracts,
+CLI and read-only Browser evidence, followed by Task 9's R1 gate/fixtures and the
+separately planned R1b surface/platform slice. Task 8 overlay work may proceed in
+parallel, but is not complete, reviewed, or committed at this checkpoint.
 
 ---
 
@@ -834,7 +867,7 @@ worldkit verify route <world.json> \
 - Browser introduces `WORLDKIT_BROWSER_PROTOCOL_VERSION = 4` and a complete `WorldkitBrowserApiV4` successor containing every V3 method, with unchanged control/capture/reset semantics, plus read-only getters for Route summary, Path receipt, Probe receipt, and overlay data. Route evidence is additive to the complete protocol, not a route-only replacement interface. Because the protocol is unreleased, update host wiring, CLI/Playwright consumers, canonical verification, docs, examples, and generated/public types in the same clean-break slice; do not retain a parallel V3 alias on `window.__WORLDKIT__`. A contract test enumerates the V3 method set and proves that V4 loses none of it before checking the new getters. It does not expose graph building, arbitrary queries, provider handles, or mutable validation thresholds.
 
 **Prerequisite contracts and parallel boundary:**
-- Task 7 remains the sole owner of the unified Route Validation result/report semantics. Its in-progress repair must freeze a single exported input/result path for complete, deterministic connectivity failure, and incomplete evidence before Task 8 orchestration is implemented. Task 8 consumes that contract and must not create a happy-path-only adapter, reinterpret infrastructure exceptions as failed Routes, or modify Task 7's gate policy.
+- Task 7 remains the sole owner of the unified Route Validation result/report semantics. Commit `67bfb17` froze the single exported `complete | unreachable | incomplete` input/result path and both Blocking Gate policies. Task 8 consumes that reviewed contract and must not create a happy-path-only adapter, reinterpret infrastructure exceptions as failed Routes, or modify Task 7's gate policy.
 - Route overlay evidence must have one canonical, provider-neutral, typed payload with canonical bytes and its own content hash. The payload references canonical Route/Surface/Collider identities, contains no Babylon/Havok/Recast handles, and stays outside the Traversal Graph hash domain. Opaque `Uint8Array`/`application/octet-stream` evidence may be persisted as an implementation detail only after it has been validated against that canonical payload; it must not be exposed directly through Browser V4.
 - Add one authoritative `WorldPackageValidationSubjectV1` assembly seam in `@whitebox-world/validation`. It accepts the real V4/V5 WorldPackage, Authoring, Normalized IR, Execution Plan, Resource Lock, and Layout Solve identities, validates their agreement, and returns the immutable canonical subject. CLI verification and trusted Host evidence preparation both call this seam; neither may assemble equivalent-looking subject objects or placeholder hashes independently.
 - After those contracts are frozen, **Task 8A (CLI/evidence publication)** and **Task 8B (Browser V4/projection)** may proceed in parallel. Task 8B's protocol/type and direct-injection tests do not wait for the CLI implementation, but real Browser injection depends on the trusted Host evidence seam and transport described below. Page code never becomes a fallback evidence producer.

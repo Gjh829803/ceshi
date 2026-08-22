@@ -61,7 +61,7 @@ Normalizer/Compiler、Runtime、CLI/Browser 和对应 Conformance Gate 的纵向
 | Canonical Schema、IR、Registry 与 Compiler | 15% | 82% | 12.3% | V3/V3/V4、Hash、Lock、严格校验、Placement、Primitive 与首个 Asset Subject 资源表已交付；WorldChangeSet、完整 Capability 和 WorldPackage 尚未交付 |
 | Babylon/Havok Runtime、物理与相机 | 15% | 75% | 11.25% | Heightfield、障碍、水域、多主体、第三人称、碰撞、资产主体、Placement Assertion 与五 Pass Capture 已交付；多视角与完整生产预算尚未完成 |
 | Subject LEGO 组装体系 | 15% | 45% | 6.75% | S0、S1a、Golden 与首个产品 G Bot 可视切片已完成；S1b 后续、S2、S3、S4 尚未完成 |
-| Terrain、Region 与 Placement | 12% | 60% | 7.2% | Alpha 地形和 Placement Solver S1 海湾纵向切片已运行；Route R1 Task 4 Graph/Query 与 Task 5 Runtime Support 均已通过全量门禁和新鲜终审；通用 Terrain Mask、Route Driver/Gate、更多 Constraint 与完整 P0.1 未完成 |
+| Terrain、Region 与 Placement | 12% | 60% | 7.2% | Alpha 地形和 Placement Solver S1 海湾纵向切片已运行；Route R1 Task 4 Graph/Query、Task 5 Runtime Support、Task 6 fixed-tick Probe 与 Task 7 双 Blocking Gate 均已实现并审查关闭；Task 8/9、通用 Terrain Mask、更多 Constraint 与完整 P0.1 未完成 |
 | CLI、Browser Protocol 与自动化 | 10% | 84% | 8.4% | 已交付 Take/Capture 命令、`verify capture|explain`、Render Ready Browser API、Playwright Driver 与五 Pass/Validation Gate；compare、持久 Session 和 Package 工具未完成 |
 | Semantic Action、动画与 Gameplay | 8% | 33% | 2.64% | Golden 与 G Bot `idle/walk/run/jump` 固定 Tick Animation Binding 已交付；通用 Action Request/Receipt、姿态、装备与规则未交付 |
 | Simulation Take、控制通道与视频接入 | 10% | 70% | 7.0% | V1 Take、五 Pass、Bundle 和真实浏览器 Gate 已交付，Capture/Integrity 已进入统一 Report；完整 Replay/Resume 与模型 Adapter 未交付 |
@@ -225,9 +225,17 @@ P1.5、P1.6、P2.5 与 P2.6 是把既有总体设计和产品对接契约显式�
   211 tests 深 Runtime 集、127 files / 1148 tests 全仓、Typecheck 与 Build 均已通过。该阶段
   唯一 Cursor review 在 8 分钟时超时且未给出 verdict，因此不得记为 `GO`；宿主与新鲜独立
   review 已给出 `GO`，且唯一测试资源获取失败清理 P2 已在 `5319262` 以回归关闭。Task 6
-  已审查关闭。下一步是 Task 7 把 `route-connectivity` 与
-  `route-runtime-conformance` 两条 Blocking Gate 接入统一 Validation Report V2，随后完成
-  Task 8/9 和 R1b；Task 7、R1、M5 与 R1b 均未标记完成。
+  已审查关闭。Task 7 也已在 commit `67bfb17` 完成：统一
+  `createRouteValidationReportV2()` 以 `complete | unreachable | incomplete` 闭集结果评估
+  `route-connectivity` 与 `route-runtime-conformance` 两条 Blocking Gate；确定性不可达为
+  Failed、证据或预算不完整为 Incomplete，缺失 Probe 绝不伪装为 Passed。独立窄复核提出的
+  BuildInput 上下文 P1 已关闭：即使失败路径没有 Graph/Path，也必须携带并校验锁定
+  `HeightfieldRouteBuildInputReceiptV1`，不能把失败证据套用到另一个 World/Build Input。
+  Task 7 聚焦门禁为 77 tests，宿主组合复核为 82 tests，Typecheck 与 R0 Contract Gate
+  均通过；宿主与独立窄复核为 `GO`。该阶段唯一 Cursor review 在 8 分钟时超时且没有
+  verdict，只记录为 `TIMEOUT`，不得记为 `GO`。Task 7 已审查关闭。下一步是 Task 8 的
+  shared contracts / CLI / read-only Browser evidence，再完成 Task 9 与 R1b；当前并行中的
+  Task 8 overlay 尚未审查、提交或标记完成，R1、M5 与 R1b 也均未标记完成。
   Task 4 的
   Graph/Query、source-area、失败证据与生命周期设计已在
   `m5-task4-design-2d2480c-r3` 完成主审和 Cursor Grok 4.6 Extra High 独立审查，最终
@@ -235,7 +243,7 @@ P1.5、P1.6、P2.5 与 P2.6 是把既有总体设计和产品对接契约显式�
 - [ ] R1b 与 P2.6 H1 共享最小 Traversal Surface → Collider Subshape 合同，覆盖地形、
   台阶、坡道和普通静态平台；阈值从同一 `resolvedTraversalLockHash` 推导，当前锁定
   `0.3m` 人形 Profile 的 Golden 要求 `0.25m` 通过、`0.35m` 失败。
-- [ ] Required 路线接入统一 Validation Report；Graph 通过但真实 Controller 卡住仍为
+- [x] Required 路线接入统一 Validation Report；Graph 通过但真实 Controller 卡住仍为
   Blocking Failure，并输出台阶、坡度、宽高净空、缝隙、Surface 身份和卡住坐标。
 - [ ] 增加 S1 之外的 Constraint、增量求解等价证明和通用 ValidationReport。
 
@@ -692,8 +700,12 @@ Ground/Air Runtime 前置依赖已随 PR #10 合入。Graph Builder/Query 已通
 终审为 `GO`，Cursor 新鲜终审为 `FINAL GO`。Task 6 的 provider-neutral 合同、固定 Tick
 Driver 与真实 Babylon/Havok 10-case 集成已完成并通过聚焦、深 Runtime、全仓、Typecheck
 和 Build 门禁；其 Cursor 阶段审查在 8 分钟时超时，未伪装成 `GO`。宿主与新鲜独立 review
-已给出 `GO`，唯一测试清理 P2 已在 `5319262` 关闭。后续继续 Task 7 两条生产 Route
-Blocking Gate，随后 Task 8/9 与 R1b。S1b Golden、
+已给出 `GO`，唯一测试清理 P2 已在 `5319262` 关闭。Task 7 已在 `67bfb17` 将
+`complete | unreachable | incomplete` 统一 evaluator 与两条 Route Blocking Gate 接入
+`ValidationReportV2`；BuildInput 上下文 P1 已关闭，77 focused / 82 host-combined tests、
+Typecheck 与 R0 Contract Gate 均通过，宿主与独立窄复核为 `GO`。Task 7 唯一 Cursor
+阶段审查在 8 分钟时超时，只记录 `TIMEOUT`。后续继续 Task 8 shared contracts / CLI /
+Browser 与 Task 9，再进入 R1b；Task 8 当前并行 overlay 尚未审查或提交。S1b Golden、
 首个产品 G Bot、Placement Solver S1、Control Capture V1 与 Validation Capture/Integrity V1
 都已进入回归，下一步：
 
@@ -711,8 +723,13 @@ Blocking Gate，随后 Task 8/9 与 R1b。S1b Golden、
    合同、固定 Tick Driver 与真实 Babylon/Havok 10-case 集成已完成，相关聚焦、深 Runtime、全仓、
    Typecheck 和 Build 门禁均通过。Task 6 阶段 Cursor review 在 8 分钟时超时且没有 verdict，
    不能记为 `GO`；宿主与新鲜独立 review 已给出 `GO`，唯一测试资源获取失败清理 P2 已在
-   `5319262` 关闭，Task 6 已审查关闭。Task 7 两条生产 Route Blocking Gate、Task 8/9、
-   R1 与 R1b 仍未完成。P1.5 Ground/Air Runtime 前置依赖已经满足。之后复用既有
+   `5319262` 关闭，Task 6 已审查关闭。Task 7 已在 `67bfb17` 以统一
+   `complete | unreachable | incomplete` evaluator 接通 `route-connectivity` 与
+   `route-runtime-conformance` 两条生产 Blocking Gate；BuildInput 上下文 P1 已关闭，
+   77 focused / 82 host-combined tests、Typecheck 与 R0 Contract Gate 通过，宿主与独立窄复核
+   为 `GO`。唯一 Cursor 阶段审查在 8 分钟时超时，只记录 `TIMEOUT`。Task 7 已审查关闭；
+   Task 8 shared contracts / CLI / Browser、Task 9、R1 与 R1b 仍未完成，当前并行 Task 8
+   overlay 尚未审查、提交或标记完成。P1.5 Ground/Air Runtime 前置依赖已经满足。之后复用既有
    Route/Region，按主体 Lock 从 Heightfield 与显式 Traversal Surface 构建分层 3D Graph，
    并用真实 Babylon/Havok 人物控制器证明地形→台阶/坡道→静态平台路线；只有 Required
    Route 接入 Blocking Validation、成功 Fixture 走通且失败 Fixture 给出结构化 Diagnostic
