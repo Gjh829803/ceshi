@@ -525,6 +525,11 @@ describe("Heightfield Route R1 locked source assembly", () => {
       constraintId: "hero-to-goal",
       providerConfig: {},
     } as never)).toThrow("input-invalid");
+
+    expect(() => createHeightfieldRouteBuildInputV1({
+      executionPlan: basePlan() as unknown as ExecutionPlanV5,
+      constraintId: "hero-to-goal",
+    } as never)).toThrow("input-invalid");
   });
 
   it("skips the tile guard for an empty retained source and reports structured budget failure otherwise", () => {

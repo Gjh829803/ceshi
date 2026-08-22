@@ -691,7 +691,10 @@ export function assertHeightfieldRouteBuildInputV1(
   requireHash(record.authoringSpecHash, "authoringSpecHash");
   requireHash(record.layoutSolveReportHash, "layoutSolveReportHash");
   requireHash(record.resourceLockHash, "resourceLockHash");
-  requireHash(record.colliderArtifactHash, "colliderArtifactHash");
+  const colliderArtifactHash = requireHash(
+    record.colliderArtifactHash,
+    "colliderArtifactHash",
+  );
 
   const connectivity = requireExactFields(
     record.connectivityRequirement,
@@ -720,7 +723,7 @@ export function assertHeightfieldRouteBuildInputV1(
   }
   const capabilityEnvelope = validateCapabilityEnvelope(record.capabilityEnvelope);
   const terrainSource = validateTerrainSource(record.terrainSource);
-  validateBlockingColliders(record.blockingColliders);
+  const blockingColliders = validateBlockingColliders(record.blockingColliders);
   validateWaterExclusions(record.blockedWaterExclusions);
 
   if (connectivity.startAnchorEntityId !== startAnchor.entityId) {
@@ -732,11 +735,23 @@ export function assertHeightfieldRouteBuildInputV1(
   if (connectivity.routeId !== hardRibbon.routeId) {
     fail("hardRibbon/routeId", "must match connectivityRequirement.routeId");
   }
+  if (hardRibbon.locomotionProfileRef !== capabilityEnvelope.locomotionProfileRef) {
+    fail(
+      "hardRibbon/locomotionProfileRef",
+      "must match capabilityEnvelope.locomotionProfileRef",
+    );
+  }
   if (connectivity.traversingEntityId !== capabilityEnvelope.subjectEntityId) {
     fail("connectivityRequirement/traversingEntityId", "must match capabilityEnvelope.subjectEntityId");
   }
   if (terrainSource.terrainEntityId !== traversalSurface.surfaceEntityId) {
     fail("terrainSource/terrainEntityId", "must match traversalSurface.surfaceEntityId");
+  }
+  if (colliderArtifactHash !== sha256CanonicalJson(blockingColliders)) {
+    fail(
+      "colliderArtifactHash",
+      "must hash the canonical blockingColliders rows",
+    );
   }
 
   return value as HeightfieldRouteBuildInputV1;

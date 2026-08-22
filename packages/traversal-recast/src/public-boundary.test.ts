@@ -6,7 +6,10 @@ import * as publicApi from "./index.js";
 
 describe("traversal-recast provider boundary", () => {
   it("does not expose provider handles, configs, or identities at the package root", () => {
-    expect(Object.keys(publicApi)).toEqual([]);
+    expect(Object.keys(publicApi).sort()).toEqual([
+      "HeightfieldRouteBuildInputInvalidErrorV1",
+      "createHeightfieldRouteBuildInputV1",
+    ]);
 
     const publicSource = readFileSync(
       new URL("./index.ts", import.meta.url),

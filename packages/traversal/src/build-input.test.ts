@@ -6,6 +6,8 @@ const HASH_A =
   "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa" as const;
 const HASH_B =
   "sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb" as const;
+const EMPTY_COLLIDER_ARTIFACT_HASH =
+  "sha256:4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945" as const;
 
 function deepFreeze<T>(value: T): T {
   if (value === null || typeof value !== "object" || Object.isFrozen(value)) {
@@ -111,7 +113,7 @@ function validBuildInput() {
       maximumMetersXZ: [1, 1],
     },
     blockingColliders: [],
-    colliderArtifactHash: HASH_A,
+    colliderArtifactHash: EMPTY_COLLIDER_ARTIFACT_HASH,
     blockedWaterExclusions: [],
   };
 }
@@ -184,6 +186,28 @@ describe("Heightfield route build input contract", () => {
     expect(() => assertBuildInput({
       ...input,
       hardRibbon: { ...input.hardRibbon, providerRef: "recast" },
+    })).toThrow("HEIGHTFIELD_ROUTE_BUILD_INPUT_INVALID");
+  });
+
+  it("rejects a hard-ribbon locomotion Ref that diverges from the locked Envelope", () => {
+    const input = validBuildInput();
+
+    expect(() => assertBuildInput({
+      ...input,
+      hardRibbon: {
+        ...input.hardRibbon,
+        locomotionProfileRef:
+          "worldkit://locomotion-profile/ground.other@1",
+      },
+    })).toThrow("HEIGHTFIELD_ROUTE_BUILD_INPUT_INVALID");
+  });
+
+  it("rejects a Collider artifact hash that does not bind the canonical rows", () => {
+    const input = validBuildInput();
+
+    expect(() => assertBuildInput({
+      ...input,
+      colliderArtifactHash: HASH_A,
     })).toThrow("HEIGHTFIELD_ROUTE_BUILD_INPUT_INVALID");
   });
 

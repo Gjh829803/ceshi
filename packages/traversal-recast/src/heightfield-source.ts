@@ -919,6 +919,14 @@ function requirePlanAndEnvelope(input: CreateHeightfieldRouteBuildInputInputV1):
   if (typeof input.constraintId !== "string" || input.constraintId.length === 0) {
     failStructural("input-invalid", "constraintId must be a non-empty string.");
   }
+  if (
+    input.capabilityEnvelope === undefined ||
+    input.capabilityEnvelope === null ||
+    typeof input.capabilityEnvelope !== "object" ||
+    Array.isArray(input.capabilityEnvelope)
+  ) {
+    failStructural("input-invalid", "capabilityEnvelope must be an object.");
+  }
   if (!isDeeplyFrozen(input.capabilityEnvelope)) {
     failStructural("envelope-mutable", "Capability Envelope must be deeply frozen.");
   }
