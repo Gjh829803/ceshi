@@ -126,6 +126,13 @@ describe("compileWorldV5", () => {
       kind: "worldkit-execution-plan",
       schemaVersion: 5,
       authoringSpecHash: expect.stringMatching(/^sha256:[a-f0-9]{64}$/),
+      resourceLockEntries: expect.arrayContaining([
+        expect.objectContaining({
+          resourceKind: "subject-definition",
+          resourceRef: "worldkit://subject-definition/humanoid.third-person@1",
+          contentHash: expect.stringMatching(/^sha256:[a-f0-9]{64}$/),
+        }),
+      ]),
       traversal: {
         anchorEntityIds: ["goal", "spawn-main"],
         connectivityRequirements: [{
@@ -160,6 +167,11 @@ describe("compileWorldV5", () => {
         .map((row) => row.colliderSubshapeId));
     expect(new Set(plan.traversal.anchorEntityIds).size).toBe(
       plan.traversal.anchorEntityIds.length,
+    );
+    expect(plan.resourceLockEntries).toEqual(
+      [...plan.resourceLockEntries].sort((left, right) =>
+        left.resourceRef.localeCompare(right.resourceRef) ||
+        left.resourceKind.localeCompare(right.resourceKind)),
     );
     expect(compiled.executionPlanHash).toBeDefined();
     const normalized = normalizeAuthoringSpecV4(routeWorld());

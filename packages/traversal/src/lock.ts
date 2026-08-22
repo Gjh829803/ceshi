@@ -12,6 +12,7 @@ const TRAVERSAL_LOCK_FIELDS = [
   "kind",
   "schemaVersion",
   "subjectEntityId",
+  "resourceLockHash",
   "subjectDefinitionRef",
   "subjectDefinitionHash",
   "colliderProfileRef",
@@ -46,6 +47,7 @@ const TRAVERSAL_LOCK_FIELDS = [
 ] as const;
 
 const TRAVERSAL_LOCK_HASH_FIELDS = [
+  "resourceLockHash",
   "subjectDefinitionHash",
   "colliderProfileHash",
   "physicsBodyProfileHash",
@@ -184,6 +186,7 @@ export function resolveTraversalLockV1(
       kind: "resolved-traversal-lock",
       schemaVersion: 1,
       subjectEntityId: record.subjectEntityId,
+      resourceLockHash: record.resourceLockHash,
       subjectDefinitionRef: record.subjectDefinitionRef,
       subjectDefinitionHash: record.subjectDefinitionHash,
       colliderProfileRef: record.colliderProfileRef,

@@ -5,6 +5,7 @@ import type {
   SubjectAssetManifestV1,
   SubjectRegistryResourceV3,
 } from "@whitebox-world/subject-registry";
+import { canonicalExecutionResourceLockEntriesV1 } from "@whitebox-world/runtime-contracts";
 
 import { sha256CanonicalJson } from "./canonical-json";
 import type {
@@ -209,8 +210,8 @@ export class ResourceLockBuilderV1 {
     resourceLock: readonly ResolvedResourceLockEntryV1[];
     resourceLockHash: string;
   } {
-    const resourceLock = [...this.#entriesByRef.values()].sort((left, right) =>
-      left.resourceRef.localeCompare(right.resourceRef),
+    const resourceLock = canonicalExecutionResourceLockEntriesV1(
+      [...this.#entriesByRef.values()],
     );
     return {
       subjectAssets: this.#sortedResources(
@@ -239,7 +240,13 @@ export class ResourceLockBuilderV1 {
     normalize: (resource: T) => U,
   ): readonly U[] {
     return [...resourcesByRef.values()]
-      .sort((left, right) => left.resourceRef.localeCompare(right.resourceRef))
+      .sort((left, right) =>
+        left.resourceRef < right.resourceRef
+          ? -1
+          : left.resourceRef > right.resourceRef
+            ? 1
+            : 0
+      )
       .map(normalize);
   }
 

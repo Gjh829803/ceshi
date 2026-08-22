@@ -27,6 +27,7 @@ function capabilityEnvelope() {
     schemaVersion: 1,
     traversalMode: "ground",
     subjectEntityId: "player",
+    resourceLockHash: HASH_A,
     colliderProfileRef: "worldkit://collider-profile/humanoid.medium-capsule@1",
     colliderProfileHash: HASH_A,
     physicsBodyProfileRef: "worldkit://physics-body-profile/character.medium@1",

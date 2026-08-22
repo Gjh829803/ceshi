@@ -9,6 +9,7 @@ import type {
   ExecutionCameraModifierProfileV1,
   ExecutionCameraRigProfileV1,
   ExecutionPlanV4,
+  ExecutionPlanV5,
   ExecutionSubjectCapabilityAssemblyV1,
   SemanticInputActionV1,
   ViewControlFrameV1,
@@ -170,7 +171,7 @@ export class CameraDirectorV1 {
   private controlForward = new Vector3(0, 0, -1);
 
   constructor(
-    private readonly executionPlan: ExecutionPlanV4,
+    private readonly executionPlan: ExecutionPlanV4 | ExecutionPlanV5,
     private readonly camera: FreeCamera,
     private readonly scene: Scene,
   ) {

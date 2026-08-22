@@ -5,5 +5,6 @@ export {
   BABYLON_TRAVERSAL_RUNTIME_IMPLEMENTATION_IDENTITY_V1,
 } from "./traversal-implementation-identity.js";
 export { FIXED_TIME_STEP_SECONDS } from "./physics";
+export { createBabylonTraversalRuntimePortV1 } from "./traversal-runtime-port";
 export * from "./subject-asset-cache";
 export * from "./subject-visual";

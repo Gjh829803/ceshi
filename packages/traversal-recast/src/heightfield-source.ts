@@ -1,12 +1,16 @@
 import { sha256CanonicalJson } from "@whitebox-world/protocol";
-import type {
-  ExecutionPlanV5,
-  ExecutionStaticColliderV1,
-  ExecutionTransformV3,
-  ExecutionWaterBoundaryV3,
-  ExecutionWaterV3,
+import {
+  canonicalExecutionResourceLockEntriesV1,
+  type ExecutionPlanV5,
+  type ExecutionStaticColliderV1,
+  type ExecutionTransformV3,
+  type ExecutionWaterBoundaryV3,
+  type ExecutionWaterV3,
 } from "@whitebox-world/runtime-contracts";
-import { emitTriangleHeightfieldSurfaceV1 } from "@whitebox-world/terrain-surface";
+import {
+  emitStaticColliderTriangleMeshV1,
+  emitTriangleHeightfieldSurfaceV1,
+} from "@whitebox-world/terrain-surface";
 import {
   assertHeightfieldRouteBuildInputV1,
   assertTraversalGraphBuildBudgetV1,
@@ -21,7 +25,7 @@ import {
   type StaticBlockingColliderV1,
   type TraversalCapabilityEnvelopeV1,
 } from "@whitebox-world/traversal";
-import { isNil } from "lodash-es";
+import { isEqual, isNil } from "lodash-es";
 
 type Vec2 = readonly [number, number];
 type Vec3 = readonly [number, number, number];
@@ -30,8 +34,6 @@ type Triangle = readonly [Vec3, Vec3, Vec3];
 
 const SHA256_PATTERN = /^sha256:[a-f0-9]{64}$/;
 const STADIUM_HALF_CAP_CHORDS = 16;
-const CYLINDER_SIDE_COUNT = 24;
-const ICOSPHERE_SUBDIVISION_LEVEL = 2;
 const GEOMETRY_EPSILON = 1e-10;
 
 export type HeightfieldRouteBuildInputInvalidReasonV1 =
@@ -594,145 +596,6 @@ function applyWaterSemantics(
   return { triangles, exclusions };
 }
 
-function boxSoup(size: Vec3): CanonicalTriangleSoupV1 {
-  size.forEach((value, index) => {
-    if (!(requireFinite(value, `box.sizeMetersXYZ[${index}]`) > 0)) {
-      failStructural("contract-invalid", "box dimensions must be > 0.");
-    }
-  });
-  const [x, y, z] = size.map((value) => value / 2) as MutableVec3;
-  return {
-    positionsMetersXYZ: [
-      -x, -y, -z, x, -y, -z, x, y, -z, -x, y, -z,
-      -x, -y, z, x, -y, z, x, y, z, -x, y, z,
-    ],
-    triangleIndices: [
-      0, 3, 2, 0, 2, 1,
-      4, 5, 6, 4, 6, 7,
-      0, 1, 5, 0, 5, 4,
-      3, 7, 6, 3, 6, 2,
-      0, 4, 7, 0, 7, 3,
-      1, 2, 6, 1, 6, 5,
-    ],
-  };
-}
-
-function cylinderSoup(radiusMeters: number, heightMeters: number): CanonicalTriangleSoupV1 {
-  if (!(requireFinite(radiusMeters, "cylinder.radiusMeters") > 0) ||
-      !(requireFinite(heightMeters, "cylinder.heightMeters") > 0)) {
-    failStructural("contract-invalid", "cylinder radius and height must be > 0.");
-  }
-  const radius = radiusMeters / Math.cos(Math.PI / CYLINDER_SIDE_COUNT);
-  const halfHeight = heightMeters / 2;
-  const positions: number[] = [];
-  for (let index = 0; index < CYLINDER_SIDE_COUNT; index += 1) {
-    const angle = index * Math.PI * 2 / CYLINDER_SIDE_COUNT;
-    positions.push(Math.cos(angle) * radius, -halfHeight, Math.sin(angle) * radius);
-  }
-  for (let index = 0; index < CYLINDER_SIDE_COUNT; index += 1) {
-    const angle = index * Math.PI * 2 / CYLINDER_SIDE_COUNT;
-    positions.push(Math.cos(angle) * radius, halfHeight, Math.sin(angle) * radius);
-  }
-  const bottomCenter = positions.length / 3;
-  positions.push(0, -halfHeight, 0);
-  const topCenter = positions.length / 3;
-  positions.push(0, halfHeight, 0);
-  const indices: number[] = [];
-  for (let index = 0; index < CYLINDER_SIDE_COUNT; index += 1) {
-    const next = (index + 1) % CYLINDER_SIDE_COUNT;
-    const top = index + CYLINDER_SIDE_COUNT;
-    const topNext = next + CYLINDER_SIDE_COUNT;
-    indices.push(index, top, topNext, index, topNext, next);
-    indices.push(bottomCenter, index, next);
-    indices.push(topCenter, topNext, top);
-  }
-  return { positionsMetersXYZ: positions, triangleIndices: indices };
-}
-
-function icosphereSoup(radiusMeters: number): CanonicalTriangleSoupV1 {
-  if (!(requireFinite(radiusMeters, "sphere.radiusMeters") > 0)) {
-    failStructural("contract-invalid", "sphere radius must be > 0.");
-  }
-  const golden = (1 + Math.sqrt(5)) / 2;
-  const baseVertices: MutableVec3[] = [
-    [-1, golden, 0], [1, golden, 0], [-1, -golden, 0], [1, -golden, 0],
-    [0, -1, golden], [0, 1, golden], [0, -1, -golden], [0, 1, -golden],
-    [golden, 0, -1], [golden, 0, 1], [-golden, 0, -1], [-golden, 0, 1],
-  ];
-  let vertices: MutableVec3[] = baseVertices.map((point) => {
-    const length = Math.hypot(...point);
-    return [point[0] / length, point[1] / length, point[2] / length];
-  });
-  let faces: Array<[number, number, number]> = [
-    [0,11,5],[0,5,1],[0,1,7],[0,7,10],[0,10,11],
-    [1,5,9],[5,11,4],[11,10,2],[10,7,6],[7,1,8],
-    [3,9,4],[3,4,2],[3,2,6],[3,6,8],[3,8,9],
-    [4,9,5],[2,4,11],[6,2,10],[8,6,7],[9,8,1],
-  ];
-  for (let level = 0; level < ICOSPHERE_SUBDIVISION_LEVEL; level += 1) {
-    const midpointByEdge = new Map<string, number>();
-    const midpoint = (left: number, right: number): number => {
-      const key = left < right ? `${left}:${right}` : `${right}:${left}`;
-      const existing = midpointByEdge.get(key);
-      if (!isNil(existing)) return existing;
-      const a = vertices[left]!;
-      const b = vertices[right]!;
-      const raw: MutableVec3 = [a[0] + b[0], a[1] + b[1], a[2] + b[2]];
-      const length = Math.hypot(...raw);
-      const created = vertices.length;
-      vertices.push([raw[0] / length, raw[1] / length, raw[2] / length]);
-      midpointByEdge.set(key, created);
-      return created;
-    };
-    const nextFaces: Array<[number, number, number]> = [];
-    for (const [a, b, c] of faces) {
-      const ab = midpoint(a, b);
-      const bc = midpoint(b, c);
-      const ca = midpoint(c, a);
-      nextFaces.push([a, ab, ca], [b, bc, ab], [c, ca, bc], [ab, bc, ca]);
-    }
-    faces = nextFaces;
-  }
-  faces = faces.map((face) => {
-    const [a, b, c] = face.map((index) => vertices[index]!) as unknown as [
-      Vec3,
-      Vec3,
-      Vec3,
-    ];
-    const ab: Vec3 = [b[0] - a[0], b[1] - a[1], b[2] - a[2]];
-    const ac: Vec3 = [c[0] - a[0], c[1] - a[1], c[2] - a[2]];
-    const normal: Vec3 = [
-      ab[1] * ac[2] - ab[2] * ac[1],
-      ab[2] * ac[0] - ab[0] * ac[2],
-      ab[0] * ac[1] - ab[1] * ac[0],
-    ];
-    const centroid: Vec3 = [(a[0] + b[0] + c[0]) / 3, (a[1] + b[1] + c[1]) / 3, (a[2] + b[2] + c[2]) / 3];
-    return normal[0] * centroid[0] + normal[1] * centroid[1] + normal[2] * centroid[2] > 0
-      ? face
-      : [face[0], face[2], face[1]] as [number, number, number];
-  });
-  const minimumPlaneDistance = Math.min(...faces.map(([ia, ib, ic]) => {
-    const a = vertices[ia]!;
-    const b = vertices[ib]!;
-    const c = vertices[ic]!;
-    const ab: Vec3 = [b[0] - a[0], b[1] - a[1], b[2] - a[2]];
-    const ac: Vec3 = [c[0] - a[0], c[1] - a[1], c[2] - a[2]];
-    const normal: Vec3 = [
-      ab[1] * ac[2] - ab[2] * ac[1],
-      ab[2] * ac[0] - ab[0] * ac[2],
-      ab[0] * ac[1] - ab[1] * ac[0],
-    ];
-    const length = Math.hypot(...normal);
-    return Math.abs(normal[0] * a[0] + normal[1] * a[1] + normal[2] * a[2]) / length;
-  }));
-  const scale = radiusMeters / minimumPlaneDistance;
-  vertices = vertices.map((point) => point.map((value) => value * scale) as MutableVec3);
-  return {
-    positionsMetersXYZ: vertices.flat(),
-    triangleIndices: faces.flat(),
-  };
-}
-
 function transformPoint(point: Vec3, transform: ExecutionTransformV3): MutableVec3 {
   requireVec3(transform.positionMetersXYZ, "collider transform position");
   requireVec3(transform.rotationEulerRadiansXYZ, "collider transform rotation");
@@ -835,21 +698,11 @@ function colliderIntersectsRibbon(
 }
 
 function colliderSoup(collider: ExecutionStaticColliderV1): CanonicalTriangleSoupV1 {
-  let local: CanonicalTriangleSoupV1;
-  switch (collider.shape.kind) {
-    case "box":
-      local = boxSoup(collider.shape.sizeMetersXYZ);
-      break;
-    case "cylinder":
-      local = cylinderSoup(collider.shape.radiusMeters, collider.shape.heightMeters);
-      break;
-    case "sphere":
-      local = icosphereSoup(collider.shape.radiusMeters);
-      break;
-    default:
-      failStructural("contract-invalid", "static collider shape kind is unsupported.");
-  }
-  return transformSoup(local, collider.transform);
+  const local = emitStaticColliderTriangleMeshV1(collider.shape);
+  return transformSoup({
+    positionsMetersXYZ: local.localPositionsMetersXYZ,
+    triangleIndices: local.triangleIndices,
+  }, collider.transform);
 }
 
 function relevantBlockingColliders(
@@ -927,6 +780,26 @@ function requirePlanAndEnvelope(input: CreateHeightfieldRouteBuildInputInputV1):
       failStructural("hash-invalid", `${name} must be a lowercase sha256 hash.`);
     }
   }
+  let canonicalResourceLock: ReturnType<
+    typeof canonicalExecutionResourceLockEntriesV1
+  >;
+  try {
+    canonicalResourceLock = canonicalExecutionResourceLockEntriesV1(
+      input.executionPlan.resourceLockEntries,
+    );
+  } catch {
+    failStructural("contract-invalid", "Execution Resource Lock entries are malformed.");
+  }
+  if (
+    !isEqual(input.executionPlan.resourceLockEntries, canonicalResourceLock) ||
+    sha256CanonicalJson(canonicalResourceLock) !==
+      input.executionPlan.resourceLockHash
+  ) {
+    failStructural(
+      "hash-invalid",
+      "Execution Resource Lock entries do not match resourceLockHash.",
+    );
+  }
   if (typeof input.constraintId !== "string" || input.constraintId.length === 0) {
     failStructural("input-invalid", "constraintId must be a non-empty string.");
   }
@@ -965,6 +838,12 @@ export function createHeightfieldRouteBuildInputV1(
   requirePlanAndEnvelope(input);
   const plan = input.executionPlan;
   const envelope = input.capabilityEnvelope;
+  if (plan.resourceLockHash !== envelope.resourceLockHash) {
+    failSemantic(
+      "ROUTE_TRAVERSAL_LOCK_MISMATCH",
+      "Execution Plan and Capability Envelope use different Resource Locks.",
+    );
+  }
   const requirements = plan.traversal.connectivityRequirements.filter(
     (candidate) => {
       if (isNil(candidate) || typeof candidate !== "object") {

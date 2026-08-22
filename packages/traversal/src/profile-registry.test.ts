@@ -396,6 +396,7 @@ describe("traversal contract type exports", () => {
       kind: "resolved-traversal-lock",
       schemaVersion: 1,
       subjectEntityId: "player",
+      resourceLockHash: identity.resourceHash,
       subjectDefinitionRef: "worldkit://subject-definition/player@1",
       subjectDefinitionHash: identity.resourceHash,
       colliderProfileRef: "worldkit://collider-profile/humanoid@1",

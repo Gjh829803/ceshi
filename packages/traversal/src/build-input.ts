@@ -212,6 +212,7 @@ const CAPABILITY_FIELDS = [
   "schemaVersion",
   "traversalMode",
   "subjectEntityId",
+  "resourceLockHash",
   "colliderProfileRef",
   "colliderProfileHash",
   "physicsBodyProfileRef",
@@ -383,6 +384,7 @@ function validateCapabilityEnvelope(
     requireString(record[field], `${path}/${field}`);
   }
   for (const field of [
+    "resourceLockHash",
     "colliderProfileHash",
     "physicsBodyProfileHash",
     "locomotionProfileHash",
@@ -772,6 +774,12 @@ export function assertHeightfieldRouteBuildInputV1(
   }
   if (connectivity.traversingEntityId !== capabilityEnvelope.subjectEntityId) {
     fail("connectivityRequirement/traversingEntityId", "must match capabilityEnvelope.subjectEntityId");
+  }
+  if (record.resourceLockHash !== capabilityEnvelope.resourceLockHash) {
+    fail(
+      "resourceLockHash",
+      "must match capabilityEnvelope.resourceLockHash",
+    );
   }
   if (terrainSource.terrainEntityId !== traversalSurface.surfaceEntityId) {
     fail("terrainSource/terrainEntityId", "must match traversalSurface.surfaceEntityId");

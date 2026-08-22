@@ -36,13 +36,14 @@ function boundedReceipt(
   startX: number,
   destinationX: number,
 ): HeightfieldRouteBuildInputReceiptV1 {
-  const capabilityEnvelope = createRecastTestEnvelopeV1();
+  const resourceLockHash = HASH_C;
+  const capabilityEnvelope = createRecastTestEnvelopeV1({ resourceLockHash });
   const input = deepFreeze({
     kind: "heightfield-route-build-input",
     schemaVersion: 1,
     authoringSpecHash: HASH_A,
     layoutSolveReportHash: HASH_B,
-    resourceLockHash: HASH_C,
+    resourceLockHash,
     connectivityRequirement: {
       constraintId: "constraint-route",
       traversingEntityId: "player",

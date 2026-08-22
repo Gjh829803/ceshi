@@ -316,6 +316,7 @@
     "kind": "resolved-traversal-lock",
     "schemaVersion": 1,
     "subjectEntityId": "player",
+    "resourceLockHash": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
     "subjectDefinitionRef": "worldkit://subject-definition/player@1",
     "subjectDefinitionHash": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
     "colliderProfileRef": "worldkit://collider-profile/humanoid@1",
@@ -362,7 +363,7 @@
     "colliderArtifactHash": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
     "surfaceArtifactHash": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
     "routeBuildInputHash": "sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
-    "resolvedTraversalLockHash": "sha256:3f619d6477b5ee857230b5b042e4572507083fb855df83f71b3daa874e4b01a9",
+    "resolvedTraversalLockHash": "sha256:8bb93add235d04fa2e2c31b25c42456da450a09f3c2b09e0dffb90a69dc98d5f",
     "graphBuilderProfileHash": "sha256:0c716c3d733d679d8518018ec2e54d678bc26715beac98c9928218862778d4a1",
     "graphBuilderProfileRef": "worldkit://traversal-graph-builder-profile/outdoor-humanoid.r1@1",
     "graphBuilderResolvedVersion": "1",
@@ -415,5 +416,5 @@
       }
     }
   },
-  "traversalGraphHash": "sha256:2e6df820bf5eca2eb7c35407c9cd8b6d25ac0f7173e9de637879b63b431eca0f"
+  "traversalGraphHash": "sha256:d3d60291bfa87f6fc461409d34450d61e761c08b91900e313ceb3b43d34734f5"
 }

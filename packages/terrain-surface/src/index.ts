@@ -2,6 +2,15 @@ export {
   queryLockedColliderSupportHeightMeters,
   type LockedSupportColliderV1,
 } from "./collider-support.js";
+export {
+  emitStaticColliderTriangleMeshV1,
+  emitTransformedStaticColliderTriangleMeshV1,
+  queryStaticColliderTriangleMeshSupportHeightMetersV1,
+  type StaticColliderTriangleMeshV1,
+  type StaticColliderTriangleShapeV1,
+  type StaticColliderTransformV1,
+  type StaticColliderWorldTriangleMeshV1,
+} from "./static-collider-triangle-mesh.js";
 
 export type TerrainSurfaceVec2 = readonly [x: number, z: number];
 export type TerrainSurfaceVec3 = readonly [x: number, y: number, z: number];

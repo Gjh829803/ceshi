@@ -1,4 +1,9 @@
 import type { ExecutionPlanV5 } from "@whitebox-world/runtime-contracts";
+import { sha256CanonicalJson } from "@whitebox-world/protocol";
+import {
+  emitStaticColliderTriangleMeshV1,
+  emitTransformedStaticColliderTriangleMeshV1,
+} from "@whitebox-world/terrain-surface";
 import { describe, expect, it } from "vitest";
 
 import { createHeightfieldRouteBuildInputV1 } from "./index.js";
@@ -16,6 +21,7 @@ interface HeightfieldSourcePlanFixture {
   kind: ExecutionPlanV5["kind"];
   schemaVersion: 5;
   authoringSpecHash: ExecutionPlanV5["authoringSpecHash"];
+  resourceLockEntries: DeepMutable<ExecutionPlanV5["resourceLockEntries"]>;
   resourceLockHash: string;
   coordinateSystem: ExecutionPlanV5["coordinateSystem"];
   terrain: DeepMutable<ExecutionPlanV5["terrain"]>;
@@ -67,11 +73,23 @@ function flatSamples(columns: number, rows: number, heightMeters = 0): number[] 
 }
 
 function basePlan(): HeightfieldSourcePlanFixture {
+  const resourceLockEntries = [{
+    resourceRef: "worldkit://capability/locomotion.ground@1",
+    resourceKind: "capability" as const,
+    resolvedVersion: "1",
+    contentHash: HASH_A,
+  }, {
+    resourceRef: "worldkit://subject-definition/player@1",
+    resourceKind: "subject-definition" as const,
+    resolvedVersion: "1",
+    contentHash: HASH_A,
+  }];
   return {
     kind: "worldkit-execution-plan",
     schemaVersion: 5,
     authoringSpecHash: HASH_A,
-    resourceLockHash: HASH_A,
+    resourceLockEntries,
+    resourceLockHash: sha256CanonicalJson(resourceLockEntries),
     coordinateSystem: "right-handed-y-up-minus-z-forward",
     terrain: {
       entityId: "terrain-main",
@@ -127,7 +145,9 @@ function basePlan(): HeightfieldSourcePlanFixture {
 function build(plan: HeightfieldSourcePlanFixture = basePlan()) {
   return createHeightfieldRouteBuildInputV1({
     executionPlan: plan as unknown as ExecutionPlanV5,
-    capabilityEnvelope: createRecastTestEnvelopeV1(),
+    capabilityEnvelope: createRecastTestEnvelopeV1({
+      resourceLockHash: plan.resourceLockHash as `sha256:${string}`,
+    }),
     constraintId: "hero-to-goal",
   });
 }
@@ -351,6 +371,56 @@ describe("Heightfield Route R1 locked source assembly", () => {
     ))).toBe(true);
   });
 
+  it("keeps Graph Builder blocker soup aligned with canonical full-TRS world vertices", () => {
+    const shape = {
+      kind: "box" as const,
+      sizeMetersXYZ: [2, 2, 2] as [number, number, number],
+    };
+    const transform = {
+      positionMetersXYZ: [1, 2, 0.5] as [number, number, number],
+      rotationEulerRadiansXYZ: [
+        Math.PI / 2,
+        Math.PI / 2,
+        Math.PI / 2,
+      ] as [number, number, number],
+      scaleXYZ: [2, 3, 4] as [number, number, number],
+    };
+    const expectedWorldPositionsMetersXYZ = [
+      -1, 6, -2.5, 3, 6, -2.5, 3, 6, 3.5, -1, 6, 3.5,
+      -1, -2, -2.5, 3, -2, -2.5, 3, -2, 3.5, -1, -2, 3.5,
+    ];
+    const plan = basePlan();
+    plan.staticColliders = [{
+      entityId: "geometry-conformance-box",
+      logicalSubshapeId: "primary",
+      colliderSubshapeId: "collider:geometry-conformance-box:primary",
+      colliderHash: HASH_A,
+      transform,
+      shape,
+    }];
+
+    const blocker = build(plan).input.blockingColliders[0]!;
+    const canonicalWorldMesh =
+      emitTransformedStaticColliderTriangleMeshV1(shape, transform);
+    const graphBuilderWorldPositions = blocker.triangleSoup.positionsMetersXYZ;
+    const canonicalWorldPositions =
+      canonicalWorldMesh.worldPositionsMetersXYZ;
+
+    expect(blocker.colliderSubshapeId).toBe(
+      "collider:geometry-conformance-box:primary",
+    );
+    expect(blocker.triangleSoup.triangleIndices).toEqual(
+      canonicalWorldMesh.triangleIndices,
+    );
+    expect(graphBuilderWorldPositions).toHaveLength(
+      expectedWorldPositionsMetersXYZ.length,
+    );
+    graphBuilderWorldPositions.forEach((value, index) => {
+      expect(value).toBeCloseTo(canonicalWorldPositions[index]!, 12);
+      expect(value).toBeCloseTo(expectedWorldPositionsMetersXYZ[index]!, 12);
+    });
+  });
+
   it("orders source collider identities without locale-dependent collation", () => {
     const plan = basePlan();
     plan.staticColliders = [
@@ -430,6 +500,19 @@ describe("Heightfield Route R1 locked source assembly", () => {
       blockers[1]!.triangleSoup.triangleIndices,
       [2, 1, 0],
     )).toBeGreaterThanOrEqual(1 - 1e-9);
+    expect(blockers[0]!.triangleSoup.triangleIndices).toEqual(
+      emitStaticColliderTriangleMeshV1({
+        kind: "cylinder",
+        radiusMeters: 1,
+        heightMeters: 2,
+      }).triangleIndices,
+    );
+    expect(blockers[1]!.triangleSoup.triangleIndices).toEqual(
+      emitStaticColliderTriangleMeshV1({
+        kind: "sphere",
+        radiusMeters: 1,
+      }).triangleIndices,
+    );
   });
 
   it("excludes remote blockers and rejects forged non-positive collider scales", () => {
@@ -583,15 +666,51 @@ describe("Heightfield Route R1 locked source assembly", () => {
     }];
     hashes.add(build(water).routeBuildInputHash);
 
+    const envelopePlan = basePlan();
     const envelopeHash = createHeightfieldRouteBuildInputV1({
-      executionPlan: basePlan() as unknown as ExecutionPlanV5,
-      capabilityEnvelope: createRecastTestEnvelopeV1({ maxSlopeDegrees: 35 }),
+      executionPlan: envelopePlan as unknown as ExecutionPlanV5,
+      capabilityEnvelope: createRecastTestEnvelopeV1({
+        maxSlopeDegrees: 35,
+        resourceLockHash: envelopePlan.resourceLockHash as `sha256:${string}`,
+      }),
       constraintId: "hero-to-goal",
     }).routeBuildInputHash;
     hashes.add(envelopeHash);
 
     expect(hashes.size).toBe(7);
     expect(hashes.has(baseline)).toBe(false);
+  });
+
+  it("rejects deleted, changed, or reordered Execution Resource Lock rows", () => {
+    const baseline = basePlan();
+    const capabilityEnvelope = createRecastTestEnvelopeV1({
+      resourceLockHash: baseline.resourceLockHash as `sha256:${string}`,
+    });
+    const buildTampered = (plan: HeightfieldSourcePlanFixture) =>
+      createHeightfieldRouteBuildInputV1({
+        executionPlan: plan as unknown as ExecutionPlanV5,
+        capabilityEnvelope,
+        constraintId: "hero-to-goal",
+      });
+
+    const deleted = basePlan();
+    deleted.resourceLockEntries.splice(0, 1);
+    deleted.resourceLockHash = sha256CanonicalJson(deleted.resourceLockEntries);
+    expect(() => buildTampered(deleted)).toThrow(
+      "ROUTE_TRAVERSAL_LOCK_MISMATCH",
+    );
+
+    const changed = basePlan();
+    changed.resourceLockEntries[0]!.contentHash =
+      "sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb";
+    changed.resourceLockHash = sha256CanonicalJson(changed.resourceLockEntries);
+    expect(() => buildTampered(changed)).toThrow(
+      "ROUTE_TRAVERSAL_LOCK_MISMATCH",
+    );
+
+    const reordered = basePlan();
+    reordered.resourceLockEntries.reverse();
+    expect(() => buildTampered(reordered)).toThrow("hash-invalid");
   });
 
   it("fails closed with stable structural and semantic codes", () => {

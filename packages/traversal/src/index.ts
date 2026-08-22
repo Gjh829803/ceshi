@@ -46,6 +46,21 @@ export {
 } from "./path-receipt.js";
 export type { RoutePathReceiptV1 } from "./path-receipt.js";
 export {
+  assertTraversalRuntimeWorldIdentityMatchesGraphV1,
+  canonicalCharacterSupportEvidenceV1,
+  canonicalTraversalRuntimeTickEvidenceV1,
+  TraversalRuntimeErrorV1,
+} from "./runtime-evidence.js";
+export type {
+  CharacterSupportEvidenceV1,
+  CharacterSupportStateV1,
+  CharacterSupportSurfaceResolutionV1,
+  TraversalRuntimeErrorCodeV1,
+  TraversalRuntimePortV1,
+  TraversalRuntimeTickEvidenceV1,
+  TraversalRuntimeWorldIdentityV1,
+} from "./runtime-evidence.js";
+export {
   assertHeightfieldRouteConnectivityResultForBuildInputV1,
   canonicalHeightfieldRouteConnectivityResultV1,
   canonicalRouteConnectivityFailureV1,

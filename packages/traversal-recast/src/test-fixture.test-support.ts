@@ -21,6 +21,7 @@ export function createRecastTestEnvelopeV1(
     kind: "resolved-traversal-lock",
     schemaVersion: 1,
     subjectEntityId: "player",
+    resourceLockHash: HASH_A,
     subjectDefinitionRef: "worldkit://subject-definition/humanoid.third-person@1",
     subjectDefinitionHash: HASH_A,
     colliderProfileRef: "worldkit://collider-profile/humanoid.medium-capsule@1",

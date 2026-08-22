@@ -154,7 +154,8 @@ function receipt(input: Readonly<{
   routePointsMetersXZ?: readonly (readonly [number, number])[];
   routeWidthMeters?: number;
 }>): HeightfieldRouteBuildInputReceiptV1 {
-  const capabilityEnvelope = createRecastTestEnvelopeV1();
+  const resourceLockHash = HASH_C;
+  const capabilityEnvelope = createRecastTestEnvelopeV1({ resourceLockHash });
   const blockingColliders = [...(input.blockingColliders ?? [])]
     .sort((left, right) => left.colliderSubshapeId < right.colliderSubshapeId ? -1 : 1);
   const xs: number[] = [];
@@ -170,7 +171,7 @@ function receipt(input: Readonly<{
     schemaVersion: 1,
     authoringSpecHash: HASH_A,
     layoutSolveReportHash: HASH_B,
-    resourceLockHash: HASH_C,
+    resourceLockHash,
     connectivityRequirement: {
       constraintId: "constraint-route",
       traversingEntityId: "player",

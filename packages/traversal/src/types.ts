@@ -20,6 +20,7 @@ export interface ResolvedTraversalLockV1 {
   readonly kind: "resolved-traversal-lock";
   readonly schemaVersion: 1;
   readonly subjectEntityId: string;
+  readonly resourceLockHash: `sha256:${string}`;
   readonly subjectDefinitionRef: string;
   readonly subjectDefinitionHash: `sha256:${string}`;
   readonly colliderProfileRef: string;
@@ -128,6 +129,7 @@ export interface TraversalCapabilityEnvelopeV1 {
   readonly schemaVersion: 1;
   readonly traversalMode: "ground";
   readonly subjectEntityId: string;
+  readonly resourceLockHash: `sha256:${string}`;
   readonly colliderProfileRef: string;
   readonly colliderProfileHash: `sha256:${string}`;
   readonly physicsBodyProfileRef: string;

@@ -19,6 +19,7 @@ import {
   type CharacterSupportStateV1,
   type SubjectResolvedStateV1,
 } from "@whitebox-world/subject-actions";
+import { isNil } from "lodash-es";
 
 import type { MotionCommandV1 } from "./control-profile-runtime";
 import {
@@ -39,6 +40,37 @@ export interface MotionKernelSnapshotV1 {
   activeLocomotionProfileRef: string;
   locomotionMode: LocomotionModeV1;
   lastFailureCode?: "MOTION_PARAMETER_INVALID" | "MOTION_NON_FINITE_STATE";
+}
+
+export interface RetainedCharacterSupportSampleV1 {
+  readonly supportState: CharacterSupportStateV1;
+  readonly supportNormalWorldXYZ: Vec3;
+  readonly sampledControllerCenterMetersXYZ: Vec3;
+  readonly sampledFootPositionMetersXYZ: Vec3;
+  readonly isSupportSurfaceDynamic: boolean;
+}
+
+export interface MotionKernelLiveLockStateV1 {
+  readonly capsuleRadiusMeters: number;
+  readonly capsuleHeightMeters: number;
+  readonly footOffsetMeters: number;
+  readonly keepDistanceMeters: number;
+  readonly keepContactToleranceMeters: number;
+  readonly maxSlopeCosine: number;
+  readonly maxStepHeightMeters: number;
+  readonly colliderCenterOffsetMetersXYZ: Vec3;
+  readonly activeControlFeelProfileRef: string;
+  readonly activeControlFeelProfileHash: string;
+  readonly requestedControlFeelProfileRef: string;
+  readonly activeMotionProfileRef: string;
+  readonly activeMotionProfileHash: string;
+  readonly requestedMotionProfileRef: string;
+  readonly activeMotionKernelRef: string;
+  readonly physicsBodyProfileRef: string;
+  readonly locomotionProfileRef: string;
+  readonly controlProfileRef: string;
+  readonly controlProfileHash: string;
+  readonly mediumProfileRef: string;
 }
 
 const LEGACY_CONTROL_PROFILE_REF =
@@ -208,6 +240,7 @@ export class MotionKernelRuntimeV1 {
   private lastRequestedControlFeelRef: string;
   private lastRequestedMotionProfileRef: string;
   private resolvedState: SubjectResolvedStateV1 | undefined;
+  private retainedSupportSample: RetainedCharacterSupportSampleV1 | undefined;
   private yawRadians: number;
   private forwardSpeedMetersPerSecond = 0;
   private planarVelocity = Vector3.Zero();
@@ -331,6 +364,62 @@ export class MotionKernelRuntimeV1 {
     return this.controlFeel;
   }
 
+  retainedCharacterSupportSample(): RetainedCharacterSupportSampleV1 | undefined {
+    const sample = this.retainedSupportSample;
+    if (isNil(sample)) return undefined;
+    return Object.freeze({
+      ...sample,
+      supportNormalWorldXYZ: Object.freeze([...sample.supportNormalWorldXYZ]) as Vec3,
+      sampledControllerCenterMetersXYZ: Object.freeze([
+        ...sample.sampledControllerCenterMetersXYZ,
+      ]) as Vec3,
+      sampledFootPositionMetersXYZ: Object.freeze([
+        ...sample.sampledFootPositionMetersXYZ,
+      ]) as Vec3,
+    });
+  }
+
+  clearRetainedCharacterSupportSample(): void {
+    this.retainedSupportSample = undefined;
+  }
+
+  liveLockState(): MotionKernelLiveLockStateV1 {
+    const shape = this.physicsController.shapeOptions;
+    const activeMotionProfile = this.motionModeResolver.currentProfile;
+    const assembly = this.subject.capabilityAssembly;
+    return Object.freeze({
+      capsuleRadiusMeters: shape.capsuleRadius ?? Number.NaN,
+      capsuleHeightMeters: shape.capsuleHeight ?? Number.NaN,
+      footOffsetMeters: this.physicsController.footOffset,
+      keepDistanceMeters: this.physicsController.keepDistance,
+      keepContactToleranceMeters:
+        this.physicsController.keepContactTolerance,
+      maxSlopeCosine: this.physicsController.maxSlopeCosine,
+      maxStepHeightMeters: this.physicsController.maxStepHeight,
+      colliderCenterOffsetMetersXYZ: Object.freeze([
+        this.colliderCenterOffset.x,
+        this.colliderCenterOffset.y,
+        this.colliderCenterOffset.z,
+      ]) as Vec3,
+      activeControlFeelProfileRef: this.controlFeel.resourceRef,
+      activeControlFeelProfileHash: this.controlFeel.contentHash,
+      requestedControlFeelProfileRef:
+        this.pendingControlFeel?.resourceRef ?? this.lastRequestedControlFeelRef,
+      activeMotionProfileRef: activeMotionProfile.resourceRef,
+      activeMotionProfileHash: activeMotionProfile.contentHash,
+      requestedMotionProfileRef: this.motionModeResolver.requestedProfileRef,
+      activeMotionKernelRef: activeMotionProfile.motionKernelRef,
+      physicsBodyProfileRef: this.subject.physicsBodyProfileRef,
+      locomotionProfileRef: this.subject.locomotionProfileRef,
+      controlProfileRef:
+        assembly?.controlProfile.resourceRef ?? LEGACY_CONTROL_PROFILE_REF,
+      controlProfileHash:
+        assembly?.controlProfile.contentHash ?? "sha256:legacy-control-profile",
+      mediumProfileRef:
+        assembly?.mediumProfile.resourceRef ?? FIRST_SLICE_MEDIUM_PROFILE_REF,
+    });
+  }
+
   /**
    * Support-only tick for uncontrolled grounded subjects: one checkSupport plus
    * a resolver publish, without input interpretation or motion integration.
@@ -429,9 +518,8 @@ export class MotionKernelRuntimeV1 {
     return new Vector3(-Math.sin(this.yawRadians), 0, -Math.cos(this.yawRadians));
   }
 
-  reset(): void {
-    const spawn = new Vector3(...this.subject.spawnSubjectOriginPositionMetersXYZ);
-    this.physicsController.setPosition(spawn.add(this.colliderCenterOffset));
+  resetAt(subjectOrigin: Vector3, facingYawRadians: number): void {
+    this.physicsController.setPosition(subjectOrigin.add(this.colliderCenterOffset));
     this.physicsController.setVelocity(Vector3.Zero());
     this.motionModeResolver.reset();
     this.motionModeResolver.request(this.lastRequestedMotionProfileRef);
@@ -439,7 +527,7 @@ export class MotionKernelRuntimeV1 {
     this.pendingControlFeel = undefined;
     const restoredFeel = this.lockedFeelSurface(this.lastRequestedControlFeelRef);
     this.controlFeel = restoredFeel ?? requireControlFeel(this.subject);
-    this.yawRadians = this.subject.spawnSubjectFacingRadians;
+    this.yawRadians = facingYawRadians;
     this.forwardSpeedMetersPerSecond = 0;
     this.planarVelocity.setAll(0);
     this.steeringInput = 0;
@@ -457,11 +545,19 @@ export class MotionKernelRuntimeV1 {
     this.jumpHoldActive = false;
     this.jumpReleasedThisApex = false;
     this.resolvedState = undefined;
-    this.syncVisual(spawn);
+    this.retainedSupportSample = undefined;
+    this.syncVisual(subjectOrigin);
     this.bootstrapContactManifold();
     this.publishResolvedState(
       this.physicsController.checkSupport(FIXED_TIME_STEP_SECONDS, this.gravityDirection),
       { moveRequested: false, runRequested: false },
+    );
+  }
+
+  reset(): void {
+    this.resetAt(
+      new Vector3(...this.subject.spawnSubjectOriginPositionMetersXYZ),
+      this.subject.spawnSubjectFacingRadians,
     );
   }
 
@@ -528,6 +624,29 @@ export class MotionKernelRuntimeV1 {
     requested: { moveRequested: boolean; runRequested: boolean },
   ): SubjectResolvedStateV1 {
     const supportState = projectSupportState(support.supportedState);
+    const sampledControllerCenter = this.physicsController.getPosition();
+    const sampledFoot = sampledControllerCenter.subtract(
+      this.up.scale(this.physicsController.footOffset),
+    );
+    this.retainedSupportSample = Object.freeze({
+      supportState,
+      supportNormalWorldXYZ: Object.freeze([
+        support.averageSurfaceNormal.x,
+        support.averageSurfaceNormal.y,
+        support.averageSurfaceNormal.z,
+      ]) as Vec3,
+      sampledControllerCenterMetersXYZ: Object.freeze([
+        sampledControllerCenter.x,
+        sampledControllerCenter.y,
+        sampledControllerCenter.z,
+      ]) as Vec3,
+      sampledFootPositionMetersXYZ: Object.freeze([
+        sampledFoot.x,
+        sampledFoot.y,
+        sampledFoot.z,
+      ]) as Vec3,
+      isSupportSurfaceDynamic: support.isSurfaceDynamic,
+    });
     if (supportState === "supported") {
       this.coyoteRemainingSeconds = this.controlFeel.coyoteTimeSeconds;
     } else if (supportState === "sliding") {

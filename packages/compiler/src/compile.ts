@@ -20,25 +20,26 @@ import {
   type SpawnStaticBlockingObject,
 } from "@whitebox-world/testkit";
 import { sampleTriangleHeightfieldSurface } from "@whitebox-world/terrain-surface";
-import type {
-  CompileDiagnostic,
-  CompileWorldResultV4,
-  ExecutionAnimationSetV1,
-  ExecutionBipedBoneIdV1,
-  ExecutionColliderProfileV1,
-  ExecutionObjectPrimitiveV3,
-  ExecutionObjectV3,
-  ExecutionPlanV4,
-  ExecutionLayoutAssertionV1,
-  ExecutionLayoutPlacementV1,
-  ExecutionRigProfileV1,
-  ExecutionSubjectAssetV1,
-  ExecutionSubjectV3,
-  ExecutionTerrainV3,
-  ExecutionWaterBoundaryV3,
-  ExecutionWaterV3,
-  SubjectSocketV3,
-  SubjectVisualPartV3,
+import {
+  canonicalExecutionResourceLockEntriesV1,
+  type CompileDiagnostic,
+  type CompileWorldResultV4,
+  type ExecutionAnimationSetV1,
+  type ExecutionBipedBoneIdV1,
+  type ExecutionColliderProfileV1,
+  type ExecutionObjectPrimitiveV3,
+  type ExecutionObjectV3,
+  type ExecutionPlanV4,
+  type ExecutionLayoutAssertionV1,
+  type ExecutionLayoutPlacementV1,
+  type ExecutionRigProfileV1,
+  type ExecutionSubjectAssetV1,
+  type ExecutionSubjectV3,
+  type ExecutionTerrainV3,
+  type ExecutionWaterBoundaryV3,
+  type ExecutionWaterV3,
+  type SubjectSocketV3,
+  type SubjectVisualPartV3,
 } from "@whitebox-world/runtime-contracts";
 import type {
   CompileWorldResultV5,
@@ -1647,6 +1648,9 @@ export function compileWorldV5(input: CompileWorldInputV5): CompileWorldResultV5
       schemaVersion: 5,
       authoringSpecHash: input.normalizedWorldIr.authoringSpecHash,
       normalizedWorldIrHash: input.normalizedWorldIrHash,
+      resourceLockEntries: canonicalExecutionResourceLockEntriesV1(
+        input.normalizedWorldIr.resources.resourceLock,
+      ),
       traversal: {
         surfaces: [compileHeightfieldTraversalSurfaceV1(planV4)],
         connectivityRequirements: input.normalizedWorldIr.layout

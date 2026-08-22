@@ -3,7 +3,10 @@ import type {
   ResolvedResourceKindV1,
   ResolvedResourceLockEntryV1,
 } from "@whitebox-world/authoring";
-import type { ExecutionPlanV5 } from "@whitebox-world/runtime-contracts";
+import {
+  canonicalExecutionResourceLockEntriesV1,
+  type ExecutionPlanV5,
+} from "@whitebox-world/runtime-contracts";
 import { sha256CanonicalJson } from "@whitebox-world/protocol";
 import {
   resolveTraversalLockV1,
@@ -185,13 +188,28 @@ export function compileResolvedTraversalLockV1(
     !isEqual(assembly.mediumProfile.air, definitionAssembly.mediumProfile.air)) {
     fail(`Medium Profile '${assembly.mediumProfile.resourceRef}' does not match the plan.`);
   }
-  const canonicalResourceLock = [
-    ...input.normalizedWorldIr.resources.resourceLock,
-  ].sort((left, right) => left.resourceRef.localeCompare(right.resourceRef));
+  let canonicalResourceLock: ReturnType<
+    typeof canonicalExecutionResourceLockEntriesV1
+  >;
+  let canonicalPlanResourceLock: ReturnType<
+    typeof canonicalExecutionResourceLockEntriesV1
+  >;
+  try {
+    canonicalResourceLock = canonicalExecutionResourceLockEntriesV1(
+      input.normalizedWorldIr.resources.resourceLock,
+    );
+    canonicalPlanResourceLock = canonicalExecutionResourceLockEntriesV1(
+      input.executionPlan.resourceLockEntries,
+    );
+  } catch {
+    fail("Resource Lock entries are invalid.");
+  }
   const actualResourceLockHash = sha256CanonicalJson(canonicalResourceLock);
   if (input.normalizedWorldIr.resources.resourceLockHash !==
       actualResourceLockHash ||
-    input.executionPlan.resourceLockHash !== actualResourceLockHash) {
+    input.executionPlan.resourceLockHash !== actualResourceLockHash ||
+    !isEqual(input.executionPlan.resourceLockEntries, canonicalPlanResourceLock) ||
+    !isEqual(canonicalPlanResourceLock, canonicalResourceLock)) {
     fail("Resource Lock hash does not match the Normalized World and Execution Plan.");
   }
 
@@ -199,6 +217,7 @@ export function compileResolvedTraversalLockV1(
     kind: "resolved-traversal-lock",
     schemaVersion: 1,
     subjectEntityId: subject.entityId,
+    resourceLockHash: actualResourceLockHash as `sha256:${string}`,
     subjectDefinitionRef: subject.subjectDefinitionRef,
     subjectDefinitionHash: subject.subjectDefinitionHash,
     colliderProfileRef: colliderProfile.resourceRef,

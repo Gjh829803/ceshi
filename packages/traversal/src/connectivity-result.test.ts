@@ -75,6 +75,7 @@ function buildInputReceipt(): HeightfieldRouteBuildInputReceiptV1 {
       schemaVersion: 1,
       traversalMode: "ground",
       subjectEntityId: "player",
+      resourceLockHash: HASH_A,
       colliderProfileRef: "worldkit://collider-profile/humanoid@1",
       colliderProfileHash: HASH_A,
       physicsBodyProfileRef: "worldkit://physics-body-profile/humanoid@1",

@@ -61,7 +61,7 @@ Normalizer/Compiler、Runtime、CLI/Browser 和对应 Conformance Gate 的纵向
 | Canonical Schema、IR、Registry 与 Compiler | 15% | 82% | 12.3% | V3/V3/V4、Hash、Lock、严格校验、Placement、Primitive 与首个 Asset Subject 资源表已交付；WorldChangeSet、完整 Capability 和 WorldPackage 尚未交付 |
 | Babylon/Havok Runtime、物理与相机 | 15% | 75% | 11.25% | Heightfield、障碍、水域、多主体、第三人称、碰撞、资产主体、Placement Assertion 与五 Pass Capture 已交付；多视角与完整生产预算尚未完成 |
 | Subject LEGO 组装体系 | 15% | 45% | 6.75% | S0、S1a、Golden 与首个产品 G Bot 可视切片已完成；S1b 后续、S2、S3、S4 尚未完成 |
-| Terrain、Region 与 Placement | 12% | 60% | 7.2% | Alpha 地形和 Placement Solver S1 海湾纵向切片已运行；Route R1 Task 4 Graph/Query 已过全量门禁和新鲜终审，通用 Terrain Mask、Runtime Probe、更多 Constraint 与完整 P0.1 未完成 |
+| Terrain、Region 与 Placement | 12% | 60% | 7.2% | Alpha 地形和 Placement Solver S1 海湾纵向切片已运行；Route R1 Task 4 Graph/Query 与 Task 5 Runtime Support 均已通过全量门禁和新鲜终审；通用 Terrain Mask、Route Driver/Gate、更多 Constraint 与完整 P0.1 未完成 |
 | CLI、Browser Protocol 与自动化 | 10% | 84% | 8.4% | 已交付 Take/Capture 命令、`verify capture|explain`、Render Ready Browser API、Playwright Driver 与五 Pass/Validation Gate；compare、持久 Session 和 Package 工具未完成 |
 | Semantic Action、动画与 Gameplay | 8% | 33% | 2.64% | Golden 与 G Bot `idle/walk/run/jump` 固定 Tick Animation Binding 已交付；通用 Action Request/Receipt、姿态、装备与规则未交付 |
 | Simulation Take、控制通道与视频接入 | 10% | 70% | 7.0% | V1 Take、五 Pass、Bundle 和真实浏览器 Gate 已交付，Capture/Integrity 已进入统一 Report；完整 Replay/Resume 与模型 Adapter 未交付 |
@@ -207,8 +207,20 @@ P1.5、P1.6、P2.5 与 P2.6 是把既有总体设计和产品对接契约显式�
   全仓为 120 files / 1043 tests，Typecheck、Build、R0 Contract Gate、冻结安装与 diff
   检查均已通过。Cursor 初审确认并关闭一条临界宽度量化 P1，同会话复审为 `CODE GO`；
   宿主另以 RED/GREEN 关闭复合碰撞体垂直分层与实心截面赋因缺口；新鲜终审为 `FINAL GO`，
-  唯一非阻断 P3 端点投影测试缺口也已补齐。真实 Runtime Probe 与双 Blocking Gate 仍未完成，
-  因此 M5 本项保持未完成。Task 4 的
+  唯一非阻断 P3 端点投影测试缺口也已补齐。Task 5 Runtime Support 已完成：
+  V5 Runtime 已以 Heightfield 与 `staticColliders` 为物理权威，Traversal Port 与不可变
+  Support Evidence 已接通；完整 Execution Resource Lock 已写入 V5、绑定进 Traversal Lock，
+  并在 Compiler/Runtime 对完整资源权威做严格一致性检查；单次 `checkSupport()` 失败会封闭为
+  Runtime 不可用且不能发布陈旧成功证据；V5 `supported-by` 使用变换后的精确静态 Collider
+  三角网格，不回退到 Visual 或 AABB。Runtime 与 Graph 现共享 Authoring/Layout/Resource
+  World Identity，并以 Runtime 创建时捕获的完整 `executionPlanHash` 封闭 Port 创建前后的
+  同一 Plan 原地漂移；ordinary reset 与
+  成功 unsupported tick 也已有每 Subject 单次 `checkSupport()` 的 mutation 证据。Task 5
+  全量门禁为 124 files / 1102 tests，Typecheck、Build 和 5 个发布/能力 verifier 均通过。
+  宿主终审 finding 已修复且最终窄复核为 `GO`；当前完成 diff 的 Cursor review
+  `m5-task5-final-85ac842-571d7395` 以 `FINAL GO`、零 P0-P3 findings 关闭 Task 5。Task 6
+  真实 Route Driver/Probe 与 Task 7 双 Blocking Gate 也仍未完成，M5 本项继续保持未完成。
+  Task 4 的
   Graph/Query、source-area、失败证据与生命周期设计已在
   `m5-task4-design-2d2480c-r3` 完成主审和 Cursor Grok 4.6 Extra High 独立审查，最终
   `DESIGN GO`、零未关闭 P0–P2；这只表示实施合同已冻结，不提高 Runtime 能力完成度。
@@ -668,7 +680,9 @@ Placement S1、Simulation Take / Control Capture V1 与 Validation Capture/Integ
 
 M5 R0 字段冻结已由 `pnpm verify:route-r0-contract` 完成；M5 R1/R1b 所需的 M7 P1.5
 Ground/Air Runtime 前置依赖已随 PR #10 合入。Graph Builder/Query 已通过 Task 4
-全量门禁和独立新鲜终审；后续实现 Runtime Probe 与两条生产 Route Gate。S1b Golden、
+全量门禁和独立新鲜终审；Task 5 Runtime Support 已完成实现并通过全量相关门禁，宿主
+终审为 `GO`，Cursor 新鲜终审为 `FINAL GO`。后续继续 Task 6
+真实 Route Driver/Probe 与 Task 7 两条生产 Route Gate。S1b Golden、
 首个产品 G Bot、Placement Solver S1、Control Capture V1 与 Validation Capture/Integrity V1
 都已进入回归，下一步：
 
@@ -681,7 +695,9 @@ Ground/Air Runtime 前置依赖已随 PR #10 合入。Graph Builder/Query 已通
 4. **M4（已完成）：实现 P0.3 统一 Validation Profile/Report 的 Capture/Integrity 窄切片，把现有 Bundle Gate 纳入同一报告协议**；
 5. **M5：完成 Route Graph 与主体可通行性 R0/R1/R1b**：R0 字段冻结已由
    `pnpm verify:route-r0-contract` 证明；R1 Task 4 Graph Builder/Query 已过全量门禁和新鲜终审，
-   R1/R1b 仍未完成真实 Runtime Probe 或两条生产 Route Gate。P1.5 Ground/Air Runtime 前置依赖已经满足。之后复用既有
+   R1 Task 5 Runtime Support 已完成实现并通过全量门禁，宿主终审 finding 已修复且最终窄复核为 `GO`，
+   当前完成 diff 的 Cursor 新鲜终审为 `FINAL GO`、零 P0-P3 findings；Task 6 真实 Route Driver/Probe、
+   Task 7 两条生产 Route Gate 与 R1b 仍未完成。P1.5 Ground/Air Runtime 前置依赖已经满足。之后复用既有
    Route/Region，按主体 Lock 从 Heightfield 与显式 Traversal Surface 构建分层 3D Graph，
    并用真实 Babylon/Havok 人物控制器证明地形→台阶/坡道→静态平台路线；只有 Required
    Route 接入 Blocking Validation、成功 Fixture 走通且失败 Fixture 给出结构化 Diagnostic

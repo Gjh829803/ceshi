@@ -7,6 +7,7 @@ import {
 } from "@whitebox-world/authoring";
 import type { ExecutionPlanV5 } from "@whitebox-world/runtime-contracts";
 import type { TraversalRuntimeImplementationIdentityV1 } from "@whitebox-world/traversal";
+import { sha256CanonicalJson } from "@whitebox-world/protocol";
 import { createValidAuthoringSpec } from "../../authoring/src/test-fixture";
 
 import { compileResolvedTraversalLockV1, compileWorldV5 } from "./index";
@@ -216,6 +217,50 @@ describe("compileResolvedTraversalLockV1", () => {
       traversingEntityId: "player",
       runtimeImplementationIdentity: RUNTIME_IDENTITY,
     })).toThrowError(/TRAVERSAL_LOCK_COMPILE_FAILED.*Resource Lock hash/);
+  });
+
+  it("rejects deleted, changed, or reordered Execution Resource Lock rows", () => {
+    const fixture = compileFixture();
+    const compileTampered = (executionPlan: ExecutionPlanV5) =>
+      compileResolvedTraversalLockV1({
+        normalizedWorldIr: fixture.normalizedWorldIr,
+        executionPlan,
+        traversingEntityId: "player",
+        runtimeImplementationIdentity: RUNTIME_IDENTITY,
+      });
+
+    const deletedEntries = fixture.executionPlan.resourceLockEntries.slice(1);
+    const deleted: ExecutionPlanV5 = {
+      ...structuredClone(fixture.executionPlan),
+      resourceLockEntries: deletedEntries,
+      resourceLockHash: sha256CanonicalJson(deletedEntries),
+    };
+    expect(() => compileTampered(deleted)).toThrowError(
+      /TRAVERSAL_LOCK_COMPILE_FAILED.*Resource Lock/,
+    );
+
+    const changedEntries = fixture.executionPlan.resourceLockEntries.map(
+      (entry, index) => index === 0
+        ? { ...entry, resolvedVersion: "forged" }
+        : entry,
+    );
+    const changed: ExecutionPlanV5 = {
+      ...structuredClone(fixture.executionPlan),
+      resourceLockEntries: changedEntries,
+      resourceLockHash: sha256CanonicalJson(changedEntries),
+    };
+    expect(() => compileTampered(changed)).toThrowError(
+      /TRAVERSAL_LOCK_COMPILE_FAILED.*Resource Lock/,
+    );
+
+    const reordered: ExecutionPlanV5 = {
+      ...structuredClone(fixture.executionPlan),
+      resourceLockEntries: [...fixture.executionPlan.resourceLockEntries]
+        .reverse(),
+    };
+    expect(() => compileTampered(reordered)).toThrowError(
+      /TRAVERSAL_LOCK_COMPILE_FAILED.*Resource Lock/,
+    );
   });
 
   it("rejects either side of a Plan-to-normalized-Definition hash mismatch", () => {

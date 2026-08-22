@@ -120,6 +120,7 @@ export function createTraversalCapabilityEnvelopeV1(
     schemaVersion: 1,
     traversalMode: "ground",
     subjectEntityId: lock.subjectEntityId,
+    resourceLockHash: lock.resourceLockHash,
     colliderProfileRef: lock.colliderProfileRef,
     colliderProfileHash: lock.colliderProfileHash,
     physicsBodyProfileRef: lock.physicsBodyProfileRef,

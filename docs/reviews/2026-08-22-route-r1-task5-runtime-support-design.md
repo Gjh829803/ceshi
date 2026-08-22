@@ -1,6 +1,7 @@
 # Route R1 Task 5: single-source runtime support design
 
-Status: implementation-ready; same-session Cursor design re-review returned `DESIGN GO`
+Status: complete; implementation and full relevant gates are green, the fresh
+host final is `GO`, and the stage-boundary Cursor completion review is `FINAL GO`
 Branch: `codex/m5-route-r1-heightfield`
 Stage base: `be7be391ed5c1eb19c904d6c3e0135de562078a5`
 Authoritative plan: `docs/superpowers/plans/2026-08-22-route-graph-traversability-r1-heightfield-implementation-plan.md`, Task 5
@@ -68,7 +69,15 @@ export interface CharacterSupportEvidenceV1 {
   readonly surfaceResolution: CharacterSupportSurfaceResolutionV1;
 }
 
-export interface TraversalRuntimeTickEvidenceV1 {
+export interface TraversalRuntimeWorldIdentityV1 {
+  readonly authoringSpecHash: `sha256:${string}`;
+  readonly layoutSolveReportHash: `sha256:${string}`;
+  readonly resourceLockHash: `sha256:${string}`;
+  readonly executionPlanHash: `sha256:${string}`;
+}
+
+export interface TraversalRuntimeTickEvidenceV1
+  extends TraversalRuntimeWorldIdentityV1 {
   readonly kind: "traversal-runtime-tick-evidence";
   readonly schemaVersion: 1;
   readonly tick: number;
@@ -83,7 +92,7 @@ export interface TraversalRuntimeTickEvidenceV1 {
   readonly characterSupport: CharacterSupportEvidenceV1;
 }
 
-export interface TraversalRuntimePortV1 {
+export interface TraversalRuntimePortV1 extends TraversalRuntimeWorldIdentityV1 {
   readonly kind: "traversal-runtime-port";
   readonly schemaVersion: 1;
   readonly traversingEntityId: string;
@@ -102,6 +111,7 @@ export type TraversalRuntimeErrorCodeV1 =
   | "TRAVERSAL_RUNTIME_EVIDENCE_INVALID"
   | "TRAVERSAL_RUNTIME_PLAN_NOT_V5"
   | "TRAVERSAL_RUNTIME_LOCK_MISMATCH"
+  | "TRAVERSAL_RUNTIME_WORLD_IDENTITY_MISMATCH"
   | "TRAVERSAL_RUNTIME_LIVE_LOCK_MISMATCH"
   | "TRAVERSAL_RUNTIME_NOT_CONTROLLED"
   | "TRAVERSAL_RUNTIME_START_ANCHOR_INVALID"
@@ -121,6 +131,7 @@ Failure precedence and ownership are deterministic:
 | evidence canonicalizer rejects a closed field/invariant | `TRAVERSAL_RUNTIME_EVIDENCE_INVALID` |
 | factory receives a non-V5 Runtime | `TRAVERSAL_RUNTIME_PLAN_NOT_V5` |
 | receipt/hash/compiled Plan/immutable implementation identity mismatch | `TRAVERSAL_RUNTIME_LOCK_MISMATCH` |
+| Graph and Runtime identify different legal worlds, or the Runtime's V5 Plan bytes drift after port creation | `TRAVERSAL_RUNTIME_WORLD_IDENTITY_MISMATCH` |
 | live capsule/offset/slope/step or active/requested Feel/Motion/Profile identity differs from the lock | `TRAVERSAL_RUNTIME_LIVE_LOCK_MISMATCH` |
 | Runtime currently controls another Subject | `TRAVERSAL_RUNTIME_NOT_CONTROLLED` |
 | Anchor ID/list/placement is absent or inconsistent | `TRAVERSAL_RUNTIME_START_ANCHOR_INVALID` |
@@ -131,6 +142,26 @@ Failure precedence and ownership are deterministic:
 Checks run in this order: Runtime availability; creation-time Plan/receipt lock;
 current control owner; live lock; port initialization/epoch; request-specific
 Anchor/direction. Public messages never include provider text or native causes.
+
+The Resource Lock and Traversal Lock are integrity bindings over output from the
+trusted Normalizer/Compiler/Host boundary; they are not signatures and do not
+claim authenticity when an untrusted caller is allowed to synthesize a new Plan
+and a matching receipt together. `resolvedVersion` and every complete Resource
+Lock row remain covered by `resourceLockHash`, while Runtime behavior is closed
+against the selected content hashes and compiled Subject values. Authenticating
+the producer itself belongs to WorldPackage signing/admission, outside Task 5.
+
+Subject capability identity is not world identity. Two legal worlds may reuse
+the same Subject and therefore the same `resolvedTraversalLockHash`. Runtime
+Port and Tick Evidence consequently carry the same `authoringSpecHash`,
+`layoutSolveReportHash`, and `resourceLockHash` fields as `TraversalGraphV1`;
+`assertTraversalRuntimeWorldIdentityMatchesGraphV1()` compares them before a
+Route Probe may reset or tick. `executionPlanHash` additionally freezes the
+complete V5 Plan bytes at Runtime creation, before asynchronous or physics
+initialization. Port creation and every later operation recompute and compare
+that baseline, including closed handling of canonical-hash failures. It detects
+drift before or after Port construction; it is not a signature and is not
+substituted for the three Graph-to-Runtime world bindings.
 
 `walkDirectionWorldXZ` accepts exactly zero length (stop) or unit length within
 `1e-9`. Task 6 quantizes the direction components and then re-normalizes before
@@ -379,6 +410,9 @@ Tests must first fail because the evidence seam/port is absent, then prove:
   fails before any mutation or support query;
 - create-before-reset, ordinary reset, rebind-away/back, Profile mutation, and
   live slope/step mutation cannot expose or simulate with stale evidence;
+- Graph A cannot drive Runtime B merely because both worlds reuse one Subject
+  Traversal Lock, and an in-place V5 Plan mutation cannot retain a stale
+  `executionPlanHash` or leak raw canonical-serialization errors;
 - terrain-outside XZ returns unmatched through unclamped
   `sampleTriangleHeightfieldSurface()`;
 - identical world-XZ commands and fixed ticks produce identical evidence under
@@ -399,7 +433,10 @@ confirmed-finding follow-up only, and one fresh Cursor completion review.
 - static platforms as publishable R1 Traversal Surfaces;
 - raw Havok/Babylon handles or provider diagnostics;
 - changes to frozen runtime implementation identity;
-- authoring/schema changes beyond the Task 5 evidence/port types.
+- AI-facing Authoring Schema changes. The unreleased `ExecutionPlanV5` adds the
+  complete canonical `resourceLockEntries` required to bind Compiler, Graph,
+  and Runtime to one Resource Lock; no Authoring field or compatibility alias
+  is introduced.
 
 ## 11. First Cursor design-review dispositions
 
@@ -434,3 +471,52 @@ clarifying P2s. Host dispositions:
 The final same-session review closed both new P1s and all clarifying P2s and
 returned `DESIGN GO` with no new reproducible P0-P3. Design chat:
 `2bb513dc-1e18-4764-9ebc-db36a9044d4d`.
+
+## 12. Current implementation and review disposition
+
+As of 2026-08-23, the Task 5 implementation in this branch is complete, with the
+following boundaries present in the current diff:
+
+- V5 Runtime support consumes `ExecutionPlanV5` Heightfield geometry and
+  `staticColliders` as the physics authority while retaining the explicit V4
+  compatibility path. The provider-neutral traversal port, immutable runtime
+  evidence, merged Anchor reset, fixed world-XZ tick path, and evidence-only
+  Heightfield/static-collider correlation are implemented.
+- The complete Execution Resource Lock is carried into V5, canonically hashed,
+  bound into the Traversal Lock, and checked against the compiled Subject and
+  every required Resource authority before port creation and each operation.
+  Missing, reordered, forged, or internally self-consistent but unrelated lock
+  rows fail closed rather than being accepted from matching selected fields.
+- Runtime Port and every Tick Evidence publish the provider-neutral World
+  Identity shared with the Traversal Graph. A Graph and Runtime from different
+  legal worlds are rejected even when they reuse one Subject Traversal Lock;
+  the complete Runtime-creation `executionPlanHash` additionally detects
+  in-place Plan drift both before and after Port creation, and closes canonical-
+  hash failures without leaking provider or serialization errors.
+- The retained Character Controller support sample remains the only support
+  authority. Each fixed tick performs its single support query before evidence
+  publication; if that query or the post-query Runtime step fails, the port
+  returns the closed `TRAVERSAL_RUNTIME_UNAVAILABLE` failure and cannot publish
+  stale success evidence. Constructor, ordinary reset, Anchor reset, supported,
+  sliding, unsupported, and uncontrolled paths all have exact call-count
+  regression evidence.
+- V5 `supported-by` revalidation uses the exact transformed canonical static
+  collider triangle mesh. It does not infer support from a visual primitive or
+  its AABB, including the cone-visual-to-cylinder-collider case.
+
+The Task 5-focused and full repository gates pass for this implementation
+state: 124 files / 1102 tests, Typecheck, Build, canonical, placement-layout,
+rigged-subject, G Bot, Route R0 Contract, and diff checks are green. The fresh
+host deep-runtime review found one cross-world identity P1 and one support-call
+coverage P2, then one pre-Port Plan-drift timing P1 during narrow follow-up; all
+are closed in the current tree, and the final narrow host review returned `GO`
+with no remaining P0-P2. The required fresh Cursor completion review then
+returned `FINAL GO` with no P0-P3 findings against diff fingerprint
+`sha256:571d7395551e14c82039832cdce0ae23cf9e3711c81c851b6e4ccd3d3d1a432e`.
+Review ID: `m5-task5-final-85ac842-571d7395`; chat ID:
+`1819c74f-4030-476d-b6e3-f16f325b0c2c`. Cursor ran read-only in `ask` mode and
+performed static reconciliation against the current implementation, tests, and
+installed Babylon 9.21.2 / Havok 1.3.14 sources; it did not rerun host gates.
+This closes Task 5 only. It does not declare the broader M5 Route R1/R1b
+milestone complete; Task 6 route driving and Task 7 blocking validation gates
+remain outside this implementation.

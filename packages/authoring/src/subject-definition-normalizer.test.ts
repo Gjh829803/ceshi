@@ -165,6 +165,44 @@ function packageDefinitionHash(result: NormalizeAuthoringResultV3): string {
   )!.subjectDefinitionHash;
 }
 
+describe("ResourceLockBuilderV1 canonical ordering", () => {
+  it("uses locale-independent byte order for punctuation-bearing refs", () => {
+    const refs = [
+      "package://subject-definition/a_a@1",
+      "package://subject-definition/a.a@1",
+      "package://subject-definition/a-a@1",
+    ];
+    const build = (orderedRefs: readonly string[]) => {
+      const builder = new ResourceLockBuilderV1();
+      const diagnostics: Array<
+        NormalizeAuthoringResultV3["diagnostics"][number]
+      > = [];
+      for (const resourceRef of orderedRefs) {
+        builder.addPackageSubjectDefinition(
+          resourceRef,
+          1,
+          sha256CanonicalJson({ resourceRef }),
+          "/resources",
+          diagnostics,
+        );
+      }
+      expect(diagnostics).toEqual([]);
+      return builder.finish();
+    };
+
+    const forward = build(refs);
+    const reversed = build([...refs].reverse());
+    expect(forward.resourceLock.map((entry) => entry.resourceRef)).toEqual(
+      [...refs].sort((left, right) => left < right ? -1 : left > right ? 1 : 0),
+    );
+    expect(reversed.resourceLock).toEqual(forward.resourceLock);
+    expect(forward.resourceLockHash).toBe(
+      sha256CanonicalJson(forward.resourceLock),
+    );
+    expect(reversed.resourceLockHash).toBe(forward.resourceLockHash);
+  });
+});
+
 describe("Package Subject Definition normalization", () => {
   it("normalizes and locks the complete Golden rigged graph without asset bytes", () => {
     const result = normalizeAuthoringSpec(createValidRiggedPackageSubjectWorld());

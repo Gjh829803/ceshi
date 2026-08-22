@@ -33,16 +33,18 @@ function deepFreeze<T>(value: T): T {
 function receipt(
   overrides: Partial<HeightfieldRouteBuildInputV1["capabilityEnvelope"]> = {},
 ): HeightfieldRouteBuildInputReceiptV1 {
+  const resourceLockHash = HASH_C;
   const capabilityEnvelope = {
-    ...createRecastTestEnvelopeV1(),
+    ...createRecastTestEnvelopeV1({ resourceLockHash }),
     ...overrides,
+    resourceLockHash,
   };
   const input: HeightfieldRouteBuildInputV1 = {
     kind: "heightfield-route-build-input",
     schemaVersion: 1,
     authoringSpecHash: HASH_A,
     layoutSolveReportHash: HASH_B,
-    resourceLockHash: HASH_C,
+    resourceLockHash,
     connectivityRequirement: {
       constraintId: "constraint-route",
       traversingEntityId: "player",

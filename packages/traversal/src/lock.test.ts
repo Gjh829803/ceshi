@@ -19,6 +19,7 @@ function validLockInput(
     kind: "resolved-traversal-lock",
     schemaVersion: 1,
     subjectEntityId: "player",
+    resourceLockHash: HASH_A,
     subjectDefinitionRef: "worldkit://subject-definition/player@1",
     subjectDefinitionHash: HASH_A,
     colliderProfileRef: "worldkit://collider-profile/humanoid@1",
