@@ -233,9 +233,17 @@ P1.5、P1.6、P2.5 与 P2.6 是把既有总体设计和产品对接契约显式�
   `HeightfieldRouteBuildInputReceiptV1`，不能把失败证据套用到另一个 World/Build Input。
   Task 7 聚焦门禁为 77 tests，宿主组合复核为 82 tests，Typecheck 与 R0 Contract Gate
   均通过；宿主与独立窄复核为 `GO`。该阶段唯一 Cursor review 在 8 分钟时超时且没有
-  verdict，只记录为 `TIMEOUT`，不得记为 `GO`。Task 7 已审查关闭。下一步是 Task 8 的
-  shared contracts / CLI / read-only Browser evidence，再完成 Task 9 与 R1b；当前并行中的
-  Task 8 overlay 尚未审查、提交或标记完成，R1、M5 与 R1b 也均未标记完成。
+  verdict，只记录为 `TIMEOUT`，不得记为 `GO`。Task 7 已审查关闭。Task 8 的 canonical
+  Route Overlay shared-contract 前置已在 `32a97e9` 完成；独立审查为 `GO`，P1
+  duplicate-`hardRibbon` 语义源与 P2 Collider 派生身份 finding 均已关闭，94 Traversal tests
+  与 Typecheck 通过。该结果只完成 Step 1 的一个前置部分，不勾选任何 Task 8 主 Step，也
+  不表示正式 Package Root、Validation-subject seam、CLI 或 Browser V4 已完成。Subject
+  seam 的真实阻塞是先冻结并实现最小正式 `WorldPackageManifestV1` +
+  `WorldPackageBuildReceiptV1` Root Hash 权威；已有 `deriveTransitionalWorldPackageIdentityV1()`
+  和 `WorldBuildArtifactV3` 均不能冒充 Package Root，其余五个 Subject Hash 已有权威来源。
+  下一步并行推进 Package Root 合同与 Browser V4 协议/直接投影；Package Root 就绪后再实现
+  Validation-subject seam，之后完成 CLI、Task 9 与 R1b。该依赖尚未解除，R1、M5 与 R1b
+  仍未标记完成。
   Task 4 的
   Graph/Query、source-area、失败证据与生命周期设计已在
   `m5-task4-design-2d2480c-r3` 完成主审和 Cursor Grok 4.6 Extra High 独立审查，最终
@@ -358,6 +366,12 @@ WorldPackage、Resume 与完整 Replay Gate 为完成标准。
 
 #### P1.4 WorldPackage 与持久 Runtime Session
 
+- [ ] 为 Task 8 冻结并实现最小正式 `WorldPackageManifestV1` 与
+  `WorldPackageBuildReceiptV1`，让其成为 Package Root Hash 的唯一权威；复用并交叉校验
+  已有权威来源的 `authoringSpecHash`、`normalizedWorldIrHash`、`executionPlanHash`、
+  `resourceLockHash`、`layoutSolveReportHash`。过渡期
+  `deriveTransitionalWorldPackageIdentityV1()` 与 `WorldBuildArtifactV3` 不得冒充正式 Package
+  Root。该窄合同是 Task 8 Validation-subject seam 的阻塞前置，不表示 P1.4 整体完成。
 - [ ] 冻结可独立校验、加载和运行的 WorldPackage 目录与 Manifest。
 - [ ] 实现 Package Root Hash、完整性、签名输入、License/NOTICE 和 Host Compatibility Gate。
 - [ ] CLI 支持 package、inspect、load 和 run-session。
@@ -704,8 +718,14 @@ Driver 与真实 Babylon/Havok 10-case 集成已完成并通过聚焦、深 Runt
 `complete | unreachable | incomplete` 统一 evaluator 与两条 Route Blocking Gate 接入
 `ValidationReportV2`；BuildInput 上下文 P1 已关闭，77 focused / 82 host-combined tests、
 Typecheck 与 R0 Contract Gate 均通过，宿主与独立窄复核为 `GO`。Task 7 唯一 Cursor
-阶段审查在 8 分钟时超时，只记录 `TIMEOUT`。后续继续 Task 8 shared contracts / CLI /
-Browser 与 Task 9，再进入 R1b；Task 8 当前并行 overlay 尚未审查或提交。S1b Golden、
+阶段审查在 8 分钟时超时，只记录 `TIMEOUT`。Task 8 canonical Route Overlay shared
+contract 已在 `32a97e9` 完成并经独立审查 `GO`；P1 duplicate-`hardRibbon` 与 P2 Collider
+派生身份 finding 已关闭，94 Traversal tests 与 Typecheck 通过。它只完成 Step 1 的一个
+前置部分，Task 8 主 Step、正式 Package Root、Validation-subject seam、CLI 与 Browser V4
+仍未完成。下一步并行推进最小正式 `WorldPackageManifestV1` +
+`WorldPackageBuildReceiptV1` Root Hash 权威与 Browser V4 协议/直接投影；Package Root
+就绪后再实现 seam。已有 transitional identity 与 V3 build artifact 不得冒充 Package Root，
+该 P1.4 阻塞尚未解除。之后完成 CLI、Task 9 并进入 R1b。S1b Golden、
 首个产品 G Bot、Placement Solver S1、Control Capture V1 与 Validation Capture/Integrity V1
 都已进入回归，下一步：
 
@@ -728,8 +748,15 @@ Browser 与 Task 9，再进入 R1b；Task 8 当前并行 overlay 尚未审查或
    `route-runtime-conformance` 两条生产 Blocking Gate；BuildInput 上下文 P1 已关闭，
    77 focused / 82 host-combined tests、Typecheck 与 R0 Contract Gate 通过，宿主与独立窄复核
    为 `GO`。唯一 Cursor 阶段审查在 8 分钟时超时，只记录 `TIMEOUT`。Task 7 已审查关闭；
-   Task 8 shared contracts / CLI / Browser、Task 9、R1 与 R1b 仍未完成，当前并行 Task 8
-   overlay 尚未审查、提交或标记完成。P1.5 Ground/Air Runtime 前置依赖已经满足。之后复用既有
+   Task 8 canonical Route Overlay shared-contract 前置已在 `32a97e9` 完成并经独立审查
+   `GO`；P1 duplicate-`hardRibbon` 与 P2 Collider 派生身份 finding 已关闭，94 Traversal
+   tests 与 Typecheck 通过。该结果不勾选 Task 8 主 Step，也不表示正式 Package Root、
+   Validation-subject seam、CLI 或 Browser V4 已完成。下一步先冻结并实现最小正式
+   `WorldPackageManifestV1` + `WorldPackageBuildReceiptV1` Root Hash 权威，同时并行推进
+   Browser V4 协议/直接投影；Package Root 就绪后再实现 seam。现有
+   `deriveTransitionalWorldPackageIdentityV1()` 与 `WorldBuildArtifactV3` 不得冒充 Package
+   Root，其余五个 Subject Hash 已有权威来源；该 P1.4 阻塞尚未解除。Task 9、R1 与 R1b
+   仍未完成。P1.5 Ground/Air Runtime 前置依赖已经满足。之后复用既有
    Route/Region，按主体 Lock 从 Heightfield 与显式 Traversal Surface 构建分层 3D Graph，
    并用真实 Babylon/Havok 人物控制器证明地形→台阶/坡道→静态平台路线；只有 Required
    Route 接入 Blocking Validation、成功 Fixture 走通且失败 Fixture 给出结构化 Diagnostic

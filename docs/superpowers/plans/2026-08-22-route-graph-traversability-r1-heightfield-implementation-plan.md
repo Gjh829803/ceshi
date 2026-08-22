@@ -810,10 +810,16 @@ Host review and a fresh independent narrow review returned `GO`, with the
 BuildInput contextual P1 closed before the final verdict. The single
 stage-boundary Cursor review reached the 8-minute timeout without a verdict; it
 is recorded as `TIMEOUT`, never as `GO`. Task 7 is review-closed. R1 and M5 remain
-open: Task 8 must still deliver the shared overlay/Validation-subject contracts,
-CLI and read-only Browser evidence, followed by Task 9's R1 gate/fixtures and the
-separately planned R1b surface/platform slice. Task 8 overlay work may proceed in
-parallel, but is not complete, reviewed, or committed at this checkpoint.
+open: Task 8 must still freeze and implement the minimum formal WorldPackage Root
+authority, then deliver the Validation-subject assembly seam, CLI and read-only
+Browser evidence, followed by Task 9's R1 gate/fixtures and the separately planned
+R1b surface/platform slice. The canonical Route Overlay shared-contract
+prerequisite was completed in `32a97e9`; its independent review returned `GO` after
+closing the P1 duplicate-`hardRibbon` semantic source and P2 derived Collider
+identity findings, and 94 Traversal tests plus `pnpm typecheck` passed. This closes
+only the overlay portion of the prerequisite contracts: no Task 8 main Step, CLI,
+Browser V4, formal Package Root authority, or Validation-subject assembly seam is
+complete yet.
 
 ---
 
@@ -823,6 +829,9 @@ parallel, but is not complete, reviewed, or committed at this checkpoint.
 - Create: `packages/traversal/src/route-overlay.ts`
 - Create: `packages/traversal/src/route-overlay.test.ts`
 - Modify: `packages/traversal/src/index.ts`
+- Create: `packages/protocol/src/world-package.ts`
+- Create: `packages/protocol/src/world-package.test.ts`
+- Modify: `packages/protocol/src/index.ts`
 - Create: `packages/validation/src/world-package-validation-subject.ts`
 - Create: `packages/validation/src/world-package-validation-subject.test.ts`
 - Modify: `packages/validation/src/index.ts`
@@ -868,23 +877,24 @@ worldkit verify route <world.json> \
 
 **Prerequisite contracts and parallel boundary:**
 - Task 7 remains the sole owner of the unified Route Validation result/report semantics. Commit `67bfb17` froze the single exported `complete | unreachable | incomplete` input/result path and both Blocking Gate policies. Task 8 consumes that reviewed contract and must not create a happy-path-only adapter, reinterpret infrastructure exceptions as failed Routes, or modify Task 7's gate policy.
-- Route overlay evidence must have one canonical, provider-neutral, typed payload with canonical bytes and its own content hash. The payload references canonical Route/Surface/Collider identities, contains no Babylon/Havok/Recast handles, and stays outside the Traversal Graph hash domain. Opaque `Uint8Array`/`application/octet-stream` evidence may be persisted as an implementation detail only after it has been validated against that canonical payload; it must not be exposed directly through Browser V4.
-- Add one authoritative `WorldPackageValidationSubjectV1` assembly seam in `@whitebox-world/validation`. It accepts the real V4/V5 WorldPackage, Authoring, Normalized IR, Execution Plan, Resource Lock, and Layout Solve identities, validates their agreement, and returns the immutable canonical subject. CLI verification and trusted Host evidence preparation both call this seam; neither may assemble equivalent-looking subject objects or placeholder hashes independently.
-- After those contracts are frozen, **Task 8A (CLI/evidence publication)** and **Task 8B (Browser V4/projection)** may proceed in parallel. Task 8B's protocol/type and direct-injection tests do not wait for the CLI implementation, but real Browser injection depends on the trusted Host evidence seam and transport described below. Page code never becomes a fallback evidence producer.
+- The canonical Route Overlay shared contract was completed in `32a97e9` with one provider-neutral typed payload, canonical bytes, its own content hash, canonical Route/Surface/Collider identities, no Babylon/Havok/Recast handles, and a hash domain separate from the Traversal Graph. Its independent review returned `GO` after the P1 duplicate-`hardRibbon` semantic source and P2 derived Collider identity findings were closed; 94 Traversal tests and `pnpm typecheck` passed. Opaque `Uint8Array`/`application/octet-stream` evidence may be persisted as an implementation detail only after it has been validated against that canonical payload; it must not be exposed directly through Browser V4. This is only one prerequisite portion of Step 1, so Step 1 and every other Task 8 main Step remain unchecked.
+- Before implementing the Validation-subject seam, freeze and implement the minimum formal `WorldPackageManifestV1` plus `WorldPackageBuildReceiptV1` contract in `@whitebox-world/protocol`. That contract is the sole owner of canonical Package Root derivation and must bind the authoritative `authoringSpecHash`, `normalizedWorldIrHash`, `executionPlanHash`, `resourceLockHash`, and `layoutSolveReportHash`; those five hashes already have authoritative producers and must be consumed and cross-checked, not recomputed under a new dialect. The existing `deriveTransitionalWorldPackageIdentityV1()` is a Take/Capture compatibility identity, and `WorldBuildArtifactV3` is a compiler output artifact; neither may be accepted, relabeled, or rehashed as the formal WorldPackage Root. This minimum contract is a Task 8 shared prerequisite and an explicit P1.4 dependency; it does not claim the complete P1.4 directory, integrity, signature, licensing, or Host Compatibility scope.
+- After that Package Root authority exists, add one authoritative `WorldPackageValidationSubjectV1` assembly seam in `@whitebox-world/validation`. It accepts a validated `WorldPackageBuildReceiptV1` plus the authoritative V4/V5 Authoring, Normalized IR, Execution Plan, Resource Lock, and Layout Solve identities, verifies that the receipt binds the same five hashes, and returns the immutable canonical subject. CLI verification and trusted Host evidence preparation both call this seam; neither may assemble equivalent-looking subject objects, placeholder hashes, or a synthetic Package Root independently.
+- Next, Package Root contract work and **Task 8B (Browser V4/projection)** protocol/direct-injection work may proceed in parallel. The Validation-subject seam starts only after the formal Package Root contract is frozen and implemented. Task 8B does not wait for CLI implementation, but real Browser injection still depends on the unfinished trusted Host evidence seam and transport described below. Page code never becomes a fallback evidence producer. **Task 8A (CLI/evidence publication)** consumes the completed overlay contract, the formal Package Root receipt, and the still-pending Validation-subject seam.
 
 - [ ] **Step 1 (shared contracts + Task 8A): Write RED contract, CLI parser, and failure tests**
 
-First prove that the canonical Route overlay is typed, provider-neutral, separately hashed from the Traversal Graph, and rejects provider handles/opaque payload substitution. Prove that the single Validation-subject assembly seam derives every field from authoritative matching V4/V5 identities and rejects mismatches or placeholders. Then cover missing/duplicate CLI options, unsupported profile, V3 input, existing output, partial evidence-write cleanup, exit codes (`0 passed`, `2 failed`, `3 incomplete`, `1 infrastructure`), and JSON/non-JSON diagnostics.
+The canonical Route Overlay proof is already complete in `32a97e9`. First write RED tests for the minimum formal `WorldPackageManifestV1` / `WorldPackageBuildReceiptV1` root-hash authority, including mismatched five-hash inputs and explicit rejection of transitional identity or V3 build-artifact substitution. After that contract is green, prove that the single Validation-subject assembly seam consumes its receipt, derives every field from authoritative matching V4/V5 identities, and rejects mismatches or placeholders. Then cover missing/duplicate CLI options, unsupported profile, V3 input, existing output, partial evidence-write cleanup, exit codes (`0 passed`, `2 failed`, `3 incomplete`, `1 infrastructure`), and JSON/non-JSON diagnostics.
 
 - [ ] **Step 2: Run the RED CLI tests**
 
-Run: `pnpm vitest run packages/traversal/src/route-overlay.test.ts packages/validation/src/world-package-validation-subject.test.ts scripts/lib/route-validation-cli.test.ts`
+Run: `pnpm vitest run packages/traversal/src/route-overlay.test.ts packages/protocol/src/world-package.test.ts packages/validation/src/world-package-validation-subject.test.ts scripts/lib/route-validation-cli.test.ts`
 
-Expected: FAIL because the canonical overlay, Validation-subject seam, and command are absent.
+Expected: the canonical Overlay suite remains green; the new Package Root authority, Validation-subject seam, and command tests fail because those contracts are absent.
 
 - [ ] **Step 3 (Task 8A): Implement the CLI orchestration**
 
-The command must run the V4/V5 pipeline, create its Validation subject through the single `WorldPackageValidationSubjectV1` assembly seam, obtain the trusted implementation identity exported by `@whitebox-world/runtime-babylon`, and compile exactly one lock receipt per required connectivity row. It then resolves the locked Graph Builder Profile, joins that profile with the receipt exactly once through `createTraversalCapabilityEnvelopeV1()`, and passes the resulting Envelope to `createHeightfieldRouteBuildInputV1()`. Graph/query, Runtime probe, and Validation receive the same unchanged lock receipt; none may reconstruct the lock or reread capability geometry from Registry resources. Complete, deterministic failure, and incomplete connectivity outcomes flow into Task 7's unified result contract; only a complete Path may start a Runtime probe. The command creates a real Babylon/Havok runtime using the same `BabylonWorldRuntime.create()` path with `NullEngine`, runs the probe, disposes all resources, validates and persists the canonical typed overlay/evidence bytes, and finally builds the unified report. Infrastructure exceptions never become gameplay diagnostics. Because root scripts import `@whitebox-world/traversal-recast` and `@whitebox-world/runtime-babylon`, declare both as direct root workspace dependencies.
+The command must run the V4/V5 pipeline, obtain a validated `WorldPackageBuildReceiptV1` from the formal Package Root authority, and create its Validation subject through the single `WorldPackageValidationSubjectV1` assembly seam. It must never call `deriveTransitionalWorldPackageIdentityV1()` or reinterpret `WorldBuildArtifactV3` as Package Root evidence. It then obtains the trusted implementation identity exported by `@whitebox-world/runtime-babylon` and compiles exactly one lock receipt per required connectivity row. It resolves the locked Graph Builder Profile, joins that profile with the receipt exactly once through `createTraversalCapabilityEnvelopeV1()`, and passes the resulting Envelope to `createHeightfieldRouteBuildInputV1()`. Graph/query, Runtime probe, and Validation receive the same unchanged lock receipt; none may reconstruct the lock or reread capability geometry from Registry resources. Complete, deterministic failure, and incomplete connectivity outcomes flow into Task 7's unified result contract; only a complete Path may start a Runtime probe. The command creates a real Babylon/Havok runtime using the same `BabylonWorldRuntime.create()` path with `NullEngine`, runs the probe, disposes all resources, validates and persists the canonical typed overlay/evidence bytes, and finally builds the unified report. Infrastructure exceptions never become gameplay diagnostics. Because root scripts import `@whitebox-world/traversal-recast` and `@whitebox-world/runtime-babylon`, declare both as direct root workspace dependencies.
 
 - [ ] **Step 4 (Task 8B): Write RED Browser Protocol and Host-injection tests**
 
@@ -899,7 +909,7 @@ Implement the complete `WorldkitBrowserApiV4` and update host wiring, CLI/Playwr
 Run:
 
 ```bash
-pnpm vitest run packages/traversal/src/route-overlay.test.ts packages/validation/src/world-package-validation-subject.test.ts scripts/lib/route-validation-cli.test.ts scripts/lib/validation-cli.test.ts scripts/worldkit.test.ts scripts/lib/worldkit-server.test.ts packages/runtime-contracts/src/runtime-contracts.test.ts apps/playground/src/authoring-loader.test.ts apps/playground/src/worldkit-browser-api.test.ts
+pnpm vitest run packages/traversal/src/route-overlay.test.ts packages/protocol/src/world-package.test.ts packages/validation/src/world-package-validation-subject.test.ts scripts/lib/route-validation-cli.test.ts scripts/lib/validation-cli.test.ts scripts/worldkit.test.ts scripts/lib/worldkit-server.test.ts packages/runtime-contracts/src/runtime-contracts.test.ts apps/playground/src/authoring-loader.test.ts apps/playground/src/worldkit-browser-api.test.ts
 pnpm typecheck
 pnpm verify:canonical
 pnpm verify:placement-layout
