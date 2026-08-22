@@ -352,15 +352,15 @@ pnpm typecheck
 pnpm verify:route-r0-contract
 ```
 
-- [ ] **Step 4: Write RED topology tests (Task 3B)**
+- [x] **Step 4: Write RED topology tests (Task 3B)**
 
 Cover asymmetric 2x2 saddle orientation; a non-square grid; strict finite/dimension/sample validation; shared canonical local positions and index bytes across emitter, terrain sampling, and Runtime render payload; positive-Y triangle normals plus negative XZ signed area without ambiguous 2D "CCW" wording; and unchanged terrain mesh world placement.
 
-- [ ] **Step 5: Implement the single Heightfield topology authority**
+- [x] **Step 5: Implement the single Heightfield topology authority**
 
 `emitTriangleHeightfieldSurfaceV1()` emits the exact existing Runtime local vertex order and `[topLeft, bottomLeft, topRight, topRight, bottomLeft, bottomRight]` diagonal with `originMetersXYZ`. Sampling uses barycentric interpolation over those emitted triangles rather than a parallel diagonal formula. `createTerrainMesh()` consumes the emitter but retains current world transform and physics shape selection. Do not resample terrain.
 
-- [ ] **Step 6: Run Task 3B gates**
+- [x] **Step 6: Run Task 3B gates**
 
 Run:
 
