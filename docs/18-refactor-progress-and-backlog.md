@@ -219,7 +219,15 @@ P1.5、P1.6、P2.5 与 P2.6 是把既有总体设计和产品对接契约显式�
   全量门禁为 124 files / 1102 tests，Typecheck、Build 和 5 个发布/能力 verifier 均通过。
   宿主终审 finding 已修复且最终窄复核为 `GO`；当前完成 diff 的 Cursor review
   `m5-task5-final-85ac842-571d7395` 以 `FINAL GO`、零 P0-P3 findings 关闭 Task 5。Task 6
-  真实 Route Driver/Probe 与 Task 7 双 Blocking Gate 也仍未完成，M5 本项继续保持未完成。
+  的 provider-neutral Request/Tick/Receipt/Runtime Port 合同已在 `b1835a0` / `b3035bb`
+  完成，Validation-owned fixed-tick Driver 已在 `3ef2608` / `af76249` 完成；`7c2f6e3`
+  又以真实 Babylon `NullEngine` + Havok + Recast 补齐 10 个集成场景。聚焦门禁、11 files /
+  211 tests 深 Runtime 集、127 files / 1148 tests 全仓、Typecheck 与 Build 均已通过。该阶段
+  唯一 Cursor review 在 8 分钟时超时且未给出 verdict，因此不得记为 `GO`；宿主与新鲜独立
+  review 已给出 `GO`，且唯一测试资源获取失败清理 P2 已在 `5319262` 以回归关闭。Task 6
+  已审查关闭。下一步是 Task 7 把 `route-connectivity` 与
+  `route-runtime-conformance` 两条 Blocking Gate 接入统一 Validation Report V2，随后完成
+  Task 8/9 和 R1b；Task 7、R1、M5 与 R1b 均未标记完成。
   Task 4 的
   Graph/Query、source-area、失败证据与生命周期设计已在
   `m5-task4-design-2d2480c-r3` 完成主审和 Cursor Grok 4.6 Extra High 独立审查，最终
@@ -681,8 +689,11 @@ Placement S1、Simulation Take / Control Capture V1 与 Validation Capture/Integ
 M5 R0 字段冻结已由 `pnpm verify:route-r0-contract` 完成；M5 R1/R1b 所需的 M7 P1.5
 Ground/Air Runtime 前置依赖已随 PR #10 合入。Graph Builder/Query 已通过 Task 4
 全量门禁和独立新鲜终审；Task 5 Runtime Support 已完成实现并通过全量相关门禁，宿主
-终审为 `GO`，Cursor 新鲜终审为 `FINAL GO`。后续继续 Task 6
-真实 Route Driver/Probe 与 Task 7 两条生产 Route Gate。S1b Golden、
+终审为 `GO`，Cursor 新鲜终审为 `FINAL GO`。Task 6 的 provider-neutral 合同、固定 Tick
+Driver 与真实 Babylon/Havok 10-case 集成已完成并通过聚焦、深 Runtime、全仓、Typecheck
+和 Build 门禁；其 Cursor 阶段审查在 8 分钟时超时，未伪装成 `GO`。宿主与新鲜独立 review
+已给出 `GO`，唯一测试清理 P2 已在 `5319262` 关闭。后续继续 Task 7 两条生产 Route
+Blocking Gate，随后 Task 8/9 与 R1b。S1b Golden、
 首个产品 G Bot、Placement Solver S1、Control Capture V1 与 Validation Capture/Integrity V1
 都已进入回归，下一步：
 
@@ -696,8 +707,12 @@ Ground/Air Runtime 前置依赖已随 PR #10 合入。Graph Builder/Query 已通
 5. **M5：完成 Route Graph 与主体可通行性 R0/R1/R1b**：R0 字段冻结已由
    `pnpm verify:route-r0-contract` 证明；R1 Task 4 Graph Builder/Query 已过全量门禁和新鲜终审，
    R1 Task 5 Runtime Support 已完成实现并通过全量门禁，宿主终审 finding 已修复且最终窄复核为 `GO`，
-   当前完成 diff 的 Cursor 新鲜终审为 `FINAL GO`、零 P0-P3 findings；Task 6 真实 Route Driver/Probe、
-   Task 7 两条生产 Route Gate 与 R1b 仍未完成。P1.5 Ground/Air Runtime 前置依赖已经满足。之后复用既有
+   当前完成 diff 的 Cursor 新鲜终审为 `FINAL GO`、零 P0-P3 findings；Task 6 的 provider-neutral
+   合同、固定 Tick Driver 与真实 Babylon/Havok 10-case 集成已完成，相关聚焦、深 Runtime、全仓、
+   Typecheck 和 Build 门禁均通过。Task 6 阶段 Cursor review 在 8 分钟时超时且没有 verdict，
+   不能记为 `GO`；宿主与新鲜独立 review 已给出 `GO`，唯一测试资源获取失败清理 P2 已在
+   `5319262` 关闭，Task 6 已审查关闭。Task 7 两条生产 Route Blocking Gate、Task 8/9、
+   R1 与 R1b 仍未完成。P1.5 Ground/Air Runtime 前置依赖已经满足。之后复用既有
    Route/Region，按主体 Lock 从 Heightfield 与显式 Traversal Surface 构建分层 3D Graph，
    并用真实 Babylon/Havok 人物控制器证明地形→台阶/坡道→静态平台路线；只有 Required
    Route 接入 Blocking Validation、成功 Fixture 走通且失败 Fixture 给出结构化 Diagnostic

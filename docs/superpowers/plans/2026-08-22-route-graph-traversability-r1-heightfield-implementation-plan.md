@@ -680,23 +680,23 @@ Expected: PASS. Review against `docs/reviews/runtime-deep-review-checklist.md` b
 - Receipt/request contracts stay provider-neutral in `@whitebox-world/traversal`. The runner lives in `@whitebox-world/validation`, which already owns `RouteRuntimeGateThresholdsV1`; this avoids a Traversal → Validation dependency cycle and prevents threshold copies.
 - `@whitebox-world/traversal` declares only the closed provider-neutral request/receipt/tick and Runtime Port shapes. `@whitebox-world/validation` owns the executable driver, all progress/counter state, and every arrival/deviation/stall/support-loss/timeout threshold. The driver consumes only Path receipt, resolved Driver Profile, the Runtime Port, and the Validation Profile; it cannot declare or override thresholds.
 
-- [ ] **Step 1: Write RED provider-neutral receipt/port contract tests**
+- [x] **Step 1: Write RED provider-neutral receipt/port contract tests**
 
 In `packages/traversal/src/runtime-probe-contract.test.ts`, cover only closed request/receipt/tick/Runtime Port shape, immutable canonicalization, lock mismatch before any reset/tick 0, invalid numeric rejection, provider-ID rejection, and the absence of Validation thresholds/counters. Do not put lookahead, progress, stall, deviation, unsupported-duration, arrival, or timeout constants in this package or test.
 
 In `packages/validation/src/route-runtime-probe.test.ts`, use a fake Runtime Port to cover lookahead/corner choice, intent quantization, no run/jump requests, destination completion, stall/deviation timeout, consecutive unsupported counting, `SLIDING` handling, and invalid runtime evidence. Every threshold/counter assertion comes from `ValidationProfileV2.routeRuntimeGateThresholds`.
 
-- [ ] **Step 2: Run the RED driver test**
+- [x] **Step 2: Run the RED driver test**
 
 Run: `pnpm vitest run packages/traversal/src/runtime-probe-contract.test.ts packages/validation/src/route-runtime-probe.test.ts`
 
 Expected: FAIL because the runner/receipt is absent.
 
-- [ ] **Step 3: Implement the engine-neutral fixed-tick driver**
+- [x] **Step 3: Implement the engine-neutral fixed-tick driver**
 
 For each tick, choose the next visible path segment using the locked Driver Profile, quantize only the unit intent direction, call one Runtime Port tick, then compute progress/deviation/stall counters using `ValidationProfileV2.routeRuntimeGateThresholds`. Record the original runtime evidence and derived progress separately. A package dependency/grep test must prove `@whitebox-world/traversal` neither imports Validation nor declares those thresholds/counters.
 
-- [ ] **Step 4: Write RED real Babylon/Havok tests**
+- [x] **Step 4: Write RED real Babylon/Havok tests**
 
 Required cases:
 
@@ -708,7 +708,7 @@ Required cases:
 - reset after pass/fail restores subject/listener/body/resource counts;
 - two consecutive and two concurrent runtimes remain isolated.
 
-- [ ] **Step 5: Run real Runtime tests**
+- [x] **Step 5: Run real Runtime tests**
 
 Run:
 
@@ -718,6 +718,19 @@ pnpm typecheck
 ```
 
 Expected: PASS.
+
+**Task 6 disposition (2026-08-23):** provider-neutral Request/Tick/Receipt/Runtime Port contracts
+landed in commits `b1835a0` and `b3035bb`; the Validation-owned deterministic fixed-tick Driver landed in
+`3ef2608` and its support/profile/numeric semantic boundaries were closed in `af76249`. Commit `7c2f6e3`
+adds a real Babylon `NullEngine` + Havok + Recast integration matrix with 10 cases covering completion,
+stall, support loss, wrong support surface, fixed-tick render-cadence equivalence, camera-orbit independence,
+reset/disposal, sequential reuse, concurrent isolation, and a wide-corridor path. Focused Task 6 tests,
+11-file / 211-test deep Runtime coverage, the full 127-file / 1148-test suite, `pnpm typecheck`, and
+`pnpm build` passed. The single stage-boundary Cursor review reached the 8-minute timeout without a
+verdict; it is recorded as a timeout, not presented as `GO`. Host review and a fresh independent review
+returned `GO` with no P0/P1 finding. Its only P2—Runtime cleanup when a test harness fails during
+acquisition—was closed in `5319262` with a failing acquisition regression and focused 10/10 GREEN.
+Task 6 is review-closed; Task 7, R1, M5, and R1b remain open.
 
 ---
 
