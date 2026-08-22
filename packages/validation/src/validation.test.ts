@@ -1,5 +1,6 @@
 import { isNil } from "lodash-es";
 import { describe, expect, it } from "vitest";
+import { canonicalJsonBytes, sha256Bytes } from "@whitebox-world/protocol";
 import {
   BUILT_IN_TRAVERSAL_DRIVER_PROFILE_REF,
   BUILT_IN_HEIGHTFIELD_R1_TRAVERSAL_GRAPH_BUILDER_PROFILE_REF,
@@ -32,11 +33,30 @@ import {
   type ValidationProfileV1,
   type ValidationReportV1,
   type ValidationReportV2,
+  type RouteValidationSetReceiptV1,
 } from "./index";
 
 const HASH_A = `sha256:${"a".repeat(64)}` as const;
 const HASH_B = `sha256:${"b".repeat(64)}` as const;
 const HASH_C = `sha256:${"c".repeat(64)}` as const;
+const ROUTE_CONSTRAINT_ID = "player-to-goal";
+const ROUTE_ID = "main-route";
+const ROUTE_SET_ARTIFACT_REF =
+  "artifact://world/route-validation-set-receipt.json";
+const GRAPH_ARTIFACT_ID = `route:${ROUTE_CONSTRAINT_ID}:traversal-graph`;
+const GRAPH_ARTIFACT_REF =
+  `artifact://route/${ROUTE_ID}/constraint/${ROUTE_CONSTRAINT_ID}/traversal-graph.json`;
+const PATH_ARTIFACT_ID = `route:${ROUTE_CONSTRAINT_ID}:route-path-receipt`;
+const PATH_ARTIFACT_REF =
+  `artifact://route/${ROUTE_ID}/constraint/${ROUTE_CONSTRAINT_ID}/route-path-receipt.json`;
+const PROBE_ARTIFACT_ID =
+  `route:${ROUTE_CONSTRAINT_ID}:route-runtime-probe-receipt`;
+const PROBE_ARTIFACT_REF =
+  `artifact://route/${ROUTE_ID}/constraint/${ROUTE_CONSTRAINT_ID}/route-runtime-probe-receipt.json`;
+const FAILURE_ARTIFACT_ID =
+  `route:${ROUTE_CONSTRAINT_ID}:route-connectivity-failure`;
+const FAILURE_ARTIFACT_REF =
+  `artifact://route/${ROUTE_ID}/constraint/${ROUTE_CONSTRAINT_ID}/route-connectivity-failure.json`;
 
 function passedGateResults(): Record<string, GateResultV1> {
   return Object.fromEntries(
@@ -754,8 +774,8 @@ function includeBound<K extends string>(
 
 function evidenceArtifactRefForGate(gateId: string): string {
   return gateId === "route-runtime-conformance"
-    ? "artifact://route-runtime-probe-receipt"
-    : "artifact://traversal-graph";
+    ? PROBE_ARTIFACT_REF
+    : GRAPH_ARTIFACT_REF;
 }
 
 function passedWorldPackageMetricResult(
@@ -787,41 +807,23 @@ function passedWorldPackageMetricResult(
     };
   }
   if (metricDefinition.kind === "meters-threshold") {
-    const lockDerivedBounds =
-      metricDefinition.id === "maximum-observed-step-height-meters"
-        ? { maximumAllowedMeters: 0.3 }
-        : metricDefinition.id === "maximum-observed-surface-gap-meters"
-          ? { maximumAllowedMeters: 0 }
-          : metricDefinition.id === "minimum-observed-clearance-width-meters"
-            ? { minimumAllowedMeters: 0.7 }
-            : metricDefinition.id === "minimum-observed-clearance-height-meters"
-              ? { minimumAllowedMeters: 1.8 }
-              : {};
     return {
       ...shared,
       kind: "meters-threshold",
-      valueMeters: ("minimumAllowedMeters" in lockDerivedBounds
-        ? lockDerivedBounds.minimumAllowedMeters
-        : undefined) ?? metricDefinition.minimumAllowedMeters ??
+      valueMeters: metricDefinition.minimumAllowedMeters ??
         metricDefinition.maximumAllowedMeters ??
         0,
       ...includeBound("minimumAllowedMeters", metricDefinition.minimumAllowedMeters),
       ...includeBound("maximumAllowedMeters", metricDefinition.maximumAllowedMeters),
-      ...lockDerivedBounds,
     };
   }
   if (metricDefinition.kind === "degrees-threshold") {
-    const lockDerivedBounds =
-      metricDefinition.id === "maximum-observed-slope-degrees"
-        ? { maximumAllowedDegrees: 42 }
-        : {};
     return {
       ...shared,
       kind: "degrees-threshold",
       valueDegrees: metricDefinition.maximumAllowedDegrees ?? 0,
       ...includeBound("minimumAllowedDegrees", metricDefinition.minimumAllowedDegrees),
       ...includeBound("maximumAllowedDegrees", metricDefinition.maximumAllowedDegrees),
-      ...lockDerivedBounds,
     };
   }
   if (metricDefinition.kind === "ticks-threshold") {
@@ -853,10 +855,12 @@ function typedWorldPackageEvidenceArtifacts(): Record<string, EvidenceArtifactV2
     BUILT_IN_TRAVERSAL_DRIVER_PROFILE_REF,
   );
   return {
-    "traversal-graph": {
-      id: "traversal-graph",
+    [GRAPH_ARTIFACT_ID]: {
+      id: GRAPH_ARTIFACT_ID,
       kind: "traversal-graph",
-      artifactRef: "artifact://traversal-graph",
+      constraintId: ROUTE_CONSTRAINT_ID,
+      routeId: ROUTE_ID,
+      artifactRef: GRAPH_ARTIFACT_REF,
       mediaType: "application/vnd.worldkit.traversal-graph.v1+json",
       sizeBytes: 128,
       contentHash: HASH_A,
@@ -865,10 +869,26 @@ function typedWorldPackageEvidenceArtifacts(): Record<string, EvidenceArtifactV2
       graphBuilderResolvedVersion: graphBuilder.resolvedVersion,
       graphBuilderProfileHash: graphBuilder.contentHash,
     },
-    "route-runtime-probe-receipt": {
-      id: "route-runtime-probe-receipt",
+    [PATH_ARTIFACT_ID]: {
+      id: PATH_ARTIFACT_ID,
+      kind: "route-path-receipt",
+      constraintId: ROUTE_CONSTRAINT_ID,
+      routeId: ROUTE_ID,
+      artifactRef: PATH_ARTIFACT_REF,
+      mediaType: "application/vnd.worldkit.route-path-receipt.v1+json",
+      sizeBytes: 192,
+      contentHash: HASH_C,
+      resolvedTraversalLockHash: HASH_A,
+      graphBuilderProfileRef: graphBuilder.resourceRef,
+      graphBuilderResolvedVersion: graphBuilder.resolvedVersion,
+      graphBuilderProfileHash: graphBuilder.contentHash,
+    },
+    [PROBE_ARTIFACT_ID]: {
+      id: PROBE_ARTIFACT_ID,
       kind: "route-runtime-probe-receipt",
-      artifactRef: "artifact://route-runtime-probe-receipt",
+      constraintId: ROUTE_CONSTRAINT_ID,
+      routeId: ROUTE_ID,
+      artifactRef: PROBE_ARTIFACT_REF,
       mediaType: "application/vnd.worldkit.route-runtime-probe-receipt.v1+json",
       sizeBytes: 256,
       contentHash: HASH_B,
@@ -891,9 +911,11 @@ function routeConnectivityFailureEvidence(): EvidenceArtifactV2 {
     BUILT_IN_HEIGHTFIELD_R1_TRAVERSAL_GRAPH_BUILDER_PROFILE_REF,
   );
   return {
-    id: "route-connectivity-failure",
+    id: FAILURE_ARTIFACT_ID,
     kind: "route-connectivity-failure",
-    artifactRef: "artifact://route-connectivity-failure",
+    constraintId: ROUTE_CONSTRAINT_ID,
+    routeId: ROUTE_ID,
+    artifactRef: FAILURE_ARTIFACT_REF,
     mediaType: "application/vnd.worldkit.route-connectivity-failure.v1+json",
     sizeBytes: 256,
     contentHash: HASH_C,
@@ -905,14 +927,75 @@ function routeConnectivityFailureEvidence(): EvidenceArtifactV2 {
   };
 }
 
+function routeValidationSetReceipt(
+  evidenceArtifactRefs: readonly string[],
+  statuses: Readonly<{
+    connectivityStatus?: "complete" | "unreachable" | "incomplete";
+    runtimeStatus?: "complete" | "failed" | "not-run";
+  }> = {},
+): RouteValidationSetReceiptV1 {
+  return {
+    kind: "route-validation-set-receipt",
+    schemaVersion: 1,
+    authoringSpecHash: HASH_B,
+    normalizedWorldIrHash: HASH_C,
+    executionPlanHash: HASH_A,
+    resourceLockHash: HASH_B,
+    layoutSolveReportHash: HASH_C,
+    rows: [{
+      constraintId: ROUTE_CONSTRAINT_ID,
+      routeId: ROUTE_ID,
+      traversingEntityId: "player",
+      startAnchorEntityId: "spawn",
+      destinationAnchorEntityId: "goal",
+      resolvedTraversalLockHash: HASH_A,
+      connectivityStatus: statuses.connectivityStatus ?? "complete",
+      runtimeStatus: statuses.runtimeStatus ?? "complete",
+      evidenceArtifactRefs: [...evidenceArtifactRefs].sort(),
+    }],
+  };
+}
+
+function withRouteSetArtifact(
+  artifacts: Record<string, EvidenceArtifactV2>,
+  statuses: Parameters<typeof routeValidationSetReceipt>[1] = {},
+): Readonly<{
+  receipt: RouteValidationSetReceiptV1;
+  artifacts: Record<string, EvidenceArtifactV2>;
+}> {
+  const receipt = routeValidationSetReceipt(
+    Object.values(artifacts).map(({ artifactRef }) => artifactRef),
+    statuses,
+  );
+  const bytes = canonicalJsonBytes(receipt);
+  return {
+    receipt,
+    artifacts: {
+      ...artifacts,
+      "route-validation-set-receipt": {
+        id: "route-validation-set-receipt",
+        kind: "route-validation-set-receipt",
+        artifactRef: ROUTE_SET_ARTIFACT_REF,
+        mediaType:
+          "application/vnd.worldkit.route-validation-set-receipt.v1+json",
+        sizeBytes: bytes.byteLength,
+        contentHash: sha256Bytes(bytes) as typeof HASH_A,
+        receipt,
+      },
+    },
+  };
+}
+
 function withUniformEvidence(
   report: ValidationReportV2,
   artifactRef: string,
   evidenceArtifactsById: Record<string, EvidenceArtifactV2>,
 ): ValidationReportV2 {
+  const routeSet = withRouteSetArtifact(evidenceArtifactsById);
   return {
     ...report,
-    evidenceArtifactsById,
+    routeValidationSetReceipt: routeSet.receipt,
+    evidenceArtifactsById: routeSet.artifacts,
     gateResultsById: Object.fromEntries(
       Object.entries(report.gateResultsById).map(([gateId, gateResult]) => [
         gateId,
@@ -935,6 +1018,7 @@ function withUniformEvidence(
 
 function validWorldPackageReport(): ValidationReportV2 {
   const gateResultsById = passedWorldPackageGateResults();
+  const routeSet = withRouteSetArtifact(typedWorldPackageEvidenceArtifacts());
   return {
     kind: "worldkit-validation-report",
     schemaVersion: 2,
@@ -953,12 +1037,13 @@ function validWorldPackageReport(): ValidationReportV2 {
       OUTDOOR_WORLD_PACKAGE_DEV_VALIDATION_PROFILE_V2.resourceRef,
     resolvedVersion: OUTDOOR_WORLD_PACKAGE_DEV_VALIDATION_PROFILE_V2.version,
     validationProfileHash: OUTDOOR_WORLD_PACKAGE_DEV_VALIDATION_PROFILE_HASH_V2,
+    routeValidationSetReceipt: routeSet.receipt,
     status: deriveValidationReportStatusV2(
       OUTDOOR_WORLD_PACKAGE_DEV_VALIDATION_PROFILE_V2,
       gateResultsById,
     ),
     gateResultsById,
-    evidenceArtifactsById: typedWorldPackageEvidenceArtifacts(),
+    evidenceArtifactsById: routeSet.artifacts,
     diagnostics: [],
   };
 }
@@ -967,9 +1052,9 @@ function graphOnlyPassedWorldPackageReport(): ValidationReportV2 {
   const report = validWorldPackageReport();
   return withUniformEvidence(
     report,
-    "artifact://traversal-graph",
+    GRAPH_ARTIFACT_REF,
     {
-      "traversal-graph": report.evidenceArtifactsById["traversal-graph"]!,
+      [GRAPH_ARTIFACT_ID]: report.evidenceArtifactsById[GRAPH_ARTIFACT_ID]!,
     },
   );
 }
@@ -978,10 +1063,10 @@ function probeOnlyPassedWorldPackageReport(): ValidationReportV2 {
   const report = validWorldPackageReport();
   return withUniformEvidence(
     report,
-    "artifact://route-runtime-probe-receipt",
+    PROBE_ARTIFACT_REF,
     {
-      "route-runtime-probe-receipt":
-        report.evidenceArtifactsById["route-runtime-probe-receipt"]!,
+      [PROBE_ARTIFACT_ID]:
+        report.evidenceArtifactsById[PROBE_ARTIFACT_ID]!,
     },
   );
 }
@@ -1008,6 +1093,23 @@ describe("Validation Profile/Report V2", () => {
   it("accepts a world-package Report and rejects Capture subjects", () => {
     expect(validateValidationReportV2(validWorldPackageReport())).toMatchObject({
       ok: true,
+    });
+
+    const allZeroRoot = {
+      ...validWorldPackageReport(),
+      subject: {
+        ...validWorldPackageReport().subject,
+        worldPackageRootHash: `sha256:${"0".repeat(64)}`,
+      },
+    };
+    expect(validateValidationReportV2(allZeroRoot)).toMatchObject({
+      ok: false,
+      diagnostics: expect.arrayContaining([
+        expect.objectContaining({
+          code: "VALIDATION_HASH_INVALID",
+          path: "/subject/worldPackageRootHash",
+        }),
+      ]),
     });
 
     const captureSubject = {
@@ -1051,65 +1153,6 @@ describe("Validation Profile/Report V2", () => {
     });
   });
 
-  it("accepts exact V2 Graph Builder and canonical failure evidence for a failed connectivity Metric", () => {
-    const report = validWorldPackageReport();
-    const gate = report.gateResultsById["route-connectivity"]!;
-    const metric = gate.metricResultsById["unreachable-required-route-count"]!;
-    const diagnosticId = "route-unreachable";
-    const failedMetric = {
-      ...metric,
-      status: "failed" as const,
-      valueCount: 1,
-      evidenceArtifactRefs: ["artifact://route-connectivity-failure"],
-      diagnosticIds: [diagnosticId],
-    };
-    const failedGate = {
-      ...gate,
-      status: "failed" as const,
-      metricResultsById: {
-        ...gate.metricResultsById,
-        "unreachable-required-route-count": failedMetric,
-      },
-      diagnosticIds: [diagnosticId],
-    };
-    const failedReport: ValidationReportV2 = {
-      ...report,
-      status: "failed",
-      gateResultsById: {
-        ...report.gateResultsById,
-        "route-connectivity": failedGate,
-      },
-      evidenceArtifactsById: {
-        ...report.evidenceArtifactsById,
-        "route-connectivity-failure": routeConnectivityFailureEvidence(),
-      },
-      diagnostics: [{
-        id: diagnosticId,
-        code: "ROUTE_REQUIRED_PATH_UNREACHABLE",
-        severity: "error",
-        gateId: "route-connectivity",
-        metricId: "unreachable-required-route-count",
-        routeId: "main-route",
-        traversingEntityId: "player",
-        startAnchorEntityId: "spawn",
-        destinationAnchorEntityId: "goal",
-        traversalSurfaceId: "surface-main",
-        colliderSubshapeId: "terrain-heightfield",
-        positionMetersXYZ: [0, 0, 0],
-        evidenceArtifactRefs: ["artifact://route-connectivity-failure"],
-        details: {
-          kind: "state-mismatch",
-          expectedState: "reachable",
-          actualState: "unreachable",
-        },
-        message: "The required route is unreachable.",
-        suggestedFix: "Repair the route geometry and rebuild traversal evidence.",
-      }],
-    };
-
-    expect(validateValidationReportV2(failedReport)).toMatchObject({ ok: true });
-  });
-
   it("rejects a passed connectivity Metric backed only by failure evidence", () => {
     const report = validWorldPackageReport();
     const failure = routeConnectivityFailureEvidence();
@@ -1130,9 +1173,9 @@ describe("Validation Profile/Report V2", () => {
     });
   });
 
-  it("rejects evidence artifacts that do not share one resolvedTraversalLockHash", () => {
+  it("rejects an artifact whose lock differs from its indexed Route row", () => {
     const report = validWorldPackageReport();
-    const probe = report.evidenceArtifactsById["route-runtime-probe-receipt"];
+    const probe = report.evidenceArtifactsById[PROBE_ARTIFACT_ID];
     if (isNil(probe) || probe.kind !== "route-runtime-probe-receipt") {
       throw new Error("Expected a typed runtime probe receipt in the fixture.");
     }
@@ -1140,7 +1183,7 @@ describe("Validation Profile/Report V2", () => {
       ...report,
       evidenceArtifactsById: {
         ...report.evidenceArtifactsById,
-        "route-runtime-probe-receipt": {
+        [PROBE_ARTIFACT_ID]: {
           ...probe,
           resolvedTraversalLockHash: HASH_B,
         },
@@ -1150,7 +1193,9 @@ describe("Validation Profile/Report V2", () => {
       diagnostics: expect.arrayContaining([
         expect.objectContaining({
           code: "VALIDATION_REFERENCE_INVALID",
-          path: "/evidenceArtifactsById",
+          path: expect.stringMatching(
+            /route-runtime-probe-receipt\/resolvedTraversalLockHash/,
+          ),
         }),
       ]),
     });
@@ -1158,8 +1203,8 @@ describe("Validation Profile/Report V2", () => {
 
   it("rejects graph builder and driver identities that do not match the Registry", () => {
     const report = validWorldPackageReport();
-    const graph = report.evidenceArtifactsById["traversal-graph"];
-    const probe = report.evidenceArtifactsById["route-runtime-probe-receipt"];
+    const graph = report.evidenceArtifactsById[GRAPH_ARTIFACT_ID];
+    const probe = report.evidenceArtifactsById[PROBE_ARTIFACT_ID];
     if (isNil(graph) || graph.kind !== "traversal-graph") {
       throw new Error("Expected a typed traversal-graph artifact in the fixture.");
     }
@@ -1171,7 +1216,7 @@ describe("Validation Profile/Report V2", () => {
       ...report,
       evidenceArtifactsById: {
         ...report.evidenceArtifactsById,
-        "traversal-graph": {
+        [GRAPH_ARTIFACT_ID]: {
           ...graph,
           graphBuilderProfileHash: HASH_B,
         },
@@ -1181,7 +1226,7 @@ describe("Validation Profile/Report V2", () => {
       diagnostics: expect.arrayContaining([
         expect.objectContaining({
           code: "VALIDATION_REFERENCE_INVALID",
-          path: "/evidenceArtifactsById/traversal-graph",
+          path: `/evidenceArtifactsById/${GRAPH_ARTIFACT_ID}`,
         }),
       ]),
     });
@@ -1190,7 +1235,7 @@ describe("Validation Profile/Report V2", () => {
       ...report,
       evidenceArtifactsById: {
         ...report.evidenceArtifactsById,
-        "route-runtime-probe-receipt": {
+        [PROBE_ARTIFACT_ID]: {
           ...probe,
           driverProfileRef: "worldkit://traversal-driver-profile/unknown@1",
         },
@@ -1200,7 +1245,7 @@ describe("Validation Profile/Report V2", () => {
       diagnostics: expect.arrayContaining([
         expect.objectContaining({
           code: "VALIDATION_REFERENCE_INVALID",
-          path: "/evidenceArtifactsById/route-runtime-probe-receipt",
+          path: `/evidenceArtifactsById/${PROBE_ARTIFACT_ID}`,
         }),
       ]),
     });
@@ -1228,29 +1273,7 @@ describe("Validation Profile/Report V2", () => {
     });
   });
 
-  it("accepts only the closed directional bounds materialized from the Traversal Lock", () => {
-    const missingMaximum = structuredClone(
-      validWorldPackageReport(),
-    ) as unknown as Record<string, unknown>;
-    const missingMaximumGates = missingMaximum.gateResultsById as Record<
-      string,
-      Record<string, unknown>
-    >;
-    const missingMaximumMetrics = missingMaximumGates["route-connectivity"]!
-      .metricResultsById as Record<string, Record<string, unknown>>;
-    delete missingMaximumMetrics["maximum-observed-step-height-meters"]!
-      .maximumAllowedMeters;
-
-    expect(validateValidationReportV2(missingMaximum)).toMatchObject({
-      ok: false,
-      diagnostics: expect.arrayContaining([
-        expect.objectContaining({
-          code: "VALIDATION_REFERENCE_INVALID",
-          path: expect.stringMatching(/maximum-observed-step-height-meters/),
-        }),
-      ]),
-    });
-
+  it("rejects a false world-level capability bound on per-row geometry metrics", () => {
     const conflictingDirection = structuredClone(
       validWorldPackageReport(),
     ) as unknown as Record<string, unknown>;
@@ -1273,27 +1296,6 @@ describe("Validation Profile/Report V2", () => {
       ]),
     });
 
-    const nonZeroSurfaceGap = structuredClone(
-      validWorldPackageReport(),
-    ) as unknown as Record<string, unknown>;
-    const nonZeroSurfaceGapGates = nonZeroSurfaceGap.gateResultsById as Record<
-      string,
-      Record<string, unknown>
-    >;
-    const nonZeroSurfaceGapMetrics = nonZeroSurfaceGapGates["route-connectivity"]!
-      .metricResultsById as Record<string, Record<string, unknown>>;
-    nonZeroSurfaceGapMetrics["maximum-observed-surface-gap-meters"]!
-      .maximumAllowedMeters = 0.1;
-
-    expect(validateValidationReportV2(nonZeroSurfaceGap)).toMatchObject({
-      ok: false,
-      diagnostics: expect.arrayContaining([
-        expect.objectContaining({
-          code: "VALIDATION_REFERENCE_INVALID",
-          path: expect.stringMatching(/maximum-observed-surface-gap-meters/),
-        }),
-      ]),
-    });
   });
 
   it("hashes V2 reports independently of insertion order", () => {
@@ -1304,6 +1306,7 @@ describe("Validation Profile/Report V2", () => {
       gateResultsById: report.gateResultsById,
       status: report.status,
       validationProfileHash: report.validationProfileHash,
+      routeValidationSetReceipt: report.routeValidationSetReceipt,
       resolvedVersion: report.resolvedVersion,
       validationProfileRef: report.validationProfileRef,
       dependencyReportRefs: report.dependencyReportRefs,

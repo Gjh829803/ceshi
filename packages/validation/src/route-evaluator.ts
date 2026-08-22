@@ -32,6 +32,7 @@ import {
   hashValidationProfileV2,
 } from "./profile-v2.js";
 import { createRouteConnectivityValidationDiagnosticV2 } from "./route.js";
+import { canonicalRouteValidationSetReceiptV1 } from "./route-validation-set.js";
 import type {
   EvidenceArtifactV2,
   GateDefinitionV2,
@@ -42,6 +43,7 @@ import type {
   ValidationProfileV2,
   ValidationReportV2,
   WorldPackageValidationSubjectV1,
+  RouteValidationSetReceiptV1,
 } from "./types-v2.js";
 import { validateValidationProfileV2, validateValidationReportV2 } from "./validate-v2.js";
 import { assertAccessorFreeDataGraph } from "./accessor-free-data.js";
@@ -56,25 +58,60 @@ export interface RouteValidationEvidenceBytesV2 {
   readonly routeOverlay?: Uint8Array;
 }
 
-export interface CreateRouteValidationReportInputV2 {
-  readonly reportId: string;
-  readonly subject: WorldPackageValidationSubjectV1;
-  readonly dependencyReportRefs?: readonly string[];
+export interface RouteValidationRowInputV2 {
   readonly routeBuildInputReceipt: HeightfieldRouteBuildInputReceiptV1;
   readonly routeConnectivityResult: HeightfieldRouteConnectivityResultV1;
   readonly routeRuntimeProbeReceipt?: RouteRuntimeProbeReceiptV1;
   readonly resolvedTraversalLockReceipt: ResolvedTraversalLockReceiptV1;
-  readonly validationProfile: ValidationProfileV2;
   readonly evidenceBytes: RouteValidationEvidenceBytesV2;
 }
+
+export interface CreateRouteValidationReportInputV2 {
+  readonly reportId: string;
+  readonly subject: WorldPackageValidationSubjectV1;
+  readonly dependencyReportRefs?: readonly string[];
+  readonly validationProfile: ValidationProfileV2;
+  readonly rows: readonly RouteValidationRowInputV2[];
+}
+
+interface EvaluateRouteValidationRowInternalInputV2 extends RouteValidationRowInputV2 {
+  readonly reportId: string;
+  readonly subject: WorldPackageValidationSubjectV1;
+  readonly dependencyReportRefs: readonly string[];
+  readonly validationProfile: ValidationProfileV2;
+}
+
+export type RouteValidationRowEvaluationV2 = Omit<
+  ValidationReportV2,
+  "routeValidationSetReceipt"
+>;
 
 const CONNECTIVITY_GATE_ID = "route-connectivity";
 const RUNTIME_GATE_ID = "route-runtime-conformance";
 
-const GRAPH_ARTIFACT_ID = "traversal-graph";
-const PATH_ARTIFACT_ID = "route-path-receipt";
-const PROBE_ARTIFACT_ID = "route-runtime-probe-receipt";
-const OVERLAY_ARTIFACT_ID = "route-overlay";
+const ROUTE_SET_ARTIFACT_ID = "route-validation-set-receipt";
+const ROUTE_SET_ARTIFACT_REF =
+  "artifact://world/route-validation-set-receipt.json";
+
+function compareCanonicalString(left: string, right: string): number {
+  return left < right ? -1 : left > right ? 1 : 0;
+}
+
+function deepFreezeDataGraph<T>(
+  value: T,
+  visited: WeakSet<object> = new WeakSet<object>(),
+): T {
+  if (value === null || value === undefined || typeof value !== "object") {
+    return value;
+  }
+  const objectValue = value as object;
+  if (visited.has(objectValue)) return value;
+  visited.add(objectValue);
+  for (const child of Object.values(value as Record<string, unknown>)) {
+    deepFreezeDataGraph(child, visited);
+  }
+  return Object.freeze(objectValue) as T;
+}
 
 function fail(code: string): never {
   throw new Error(code);
@@ -100,14 +137,23 @@ function assertCanonicalEvidenceBytes(
   }
 }
 
-function artifactRef(routeId: string, filename: string): string {
-  return `artifact://route/${encodeURIComponent(routeId)}/${filename}`;
+function routeArtifactId(constraintId: string, kind: string): string {
+  return `route:${constraintId}:${kind}`;
+}
+
+function artifactRef(
+  routeId: string,
+  constraintId: string,
+  filename: string,
+): string {
+  return `artifact://route/${encodeURIComponent(routeId)}/constraint/${encodeURIComponent(constraintId)}/${filename}`;
 }
 
 function evidenceBase(
   id: string,
   kind: EvidenceArtifactV2["kind"],
   routeId: string,
+  constraintId: string,
   filename: string,
   mediaType: string,
   bytes: Uint8Array,
@@ -118,14 +164,18 @@ function evidenceBase(
   mediaType: string;
   sizeBytes: number;
   contentHash: Sha256Hash;
+  constraintId: string;
+  routeId: string;
 }> {
   return {
     id,
     kind,
-    artifactRef: artifactRef(routeId, filename),
+    artifactRef: artifactRef(routeId, constraintId, filename),
     mediaType,
     sizeBytes: bytes.byteLength,
     contentHash: sha256Bytes(bytes) as Sha256Hash,
+    constraintId,
+    routeId,
   };
 }
 
@@ -149,8 +199,8 @@ function copyBytes(value: Uint8Array | undefined): Uint8Array | undefined {
 }
 
 function snapshotEvaluatorInput(
-  input: CreateRouteValidationReportInputV2,
-): CreateRouteValidationReportInputV2 {
+  input: EvaluateRouteValidationRowInternalInputV2,
+): EvaluateRouteValidationRowInternalInputV2 {
   try {
     assertAccessorFreeDataGraph(input, "ROUTE_VALIDATION_INPUT_ACCESSOR_FORBIDDEN");
   } catch {
@@ -548,23 +598,23 @@ function connectivityMeasurements(
       maximum: 0,
       evidenceArtifactRef: pathArtifactRef,
     },
-    "route-path-distance-meters": {
+    "total-route-path-distance-meters": {
       value: path.routePathDistanceMeters,
       evidenceArtifactRef: pathArtifactRef,
     },
-    "route-path-cost": {
+    "total-route-path-cost": {
       value: path.routePathCost,
       evidenceArtifactRef: pathArtifactRef,
     },
-    "traversal-graph-node-count": {
+    "total-traversal-graph-node-count": {
       value: Object.keys(graph.traversalNodesById).length,
       evidenceArtifactRef: graphArtifactRef,
     },
-    "traversal-graph-edge-count": {
+    "total-traversal-graph-edge-count": {
       value: Object.keys(graph.traversalEdgesById).length,
       evidenceArtifactRef: graphArtifactRef,
     },
-    "traversal-lock-match": {
+    "all-traversal-locks-match": {
       value: true,
       evidenceArtifactRef: graphArtifactRef,
     },
@@ -597,7 +647,7 @@ function runtimeMeasurements(
       value: probe.metrics.maximumConsecutiveUnexpectedUnsupportedTicks,
       evidenceArtifactRef: probeArtifactRef,
     },
-    "sliding-duration-ticks": {
+    "total-sliding-duration-ticks": {
       value: probe.metrics.slidingDurationTicks,
       evidenceArtifactRef: probeArtifactRef,
     },
@@ -613,13 +663,13 @@ function runtimeMeasurements(
       value: probe.metrics.invalidPhysicsValueCount,
       evidenceArtifactRef: probeArtifactRef,
     },
-    "completion-duration-ticks": {
+    "maximum-completion-duration-ticks": {
       value: probe.status === "complete"
         ? probe.completionDurationTicks
         : probe.metrics.processedTickCount,
       evidenceArtifactRef: probeArtifactRef,
     },
-    "traversal-lock-match": {
+    "all-traversal-locks-match": {
       value: true,
       evidenceArtifactRef: probeArtifactRef,
     },
@@ -627,6 +677,7 @@ function runtimeMeasurements(
 }
 
 interface RouteDiagnosticContextV2 {
+  readonly constraintId: string;
   readonly routeId: string;
   readonly traversingEntityId: string;
   readonly startAnchorEntityId: string;
@@ -642,6 +693,7 @@ type MissingRuntimeEvidenceReasonV2 =
 
 function pathDiagnosticContext(path: RoutePathReceiptV1): RouteDiagnosticContextV2 {
   return {
+    constraintId: path.constraintId,
     routeId: path.routeId,
     traversingEntityId: path.traversingEntityId,
     startAnchorEntityId: path.startAnchorEntityId,
@@ -656,6 +708,7 @@ function failureDiagnosticContext(
   failure: RouteConnectivityFailureV1,
 ): RouteDiagnosticContextV2 {
   return {
+    constraintId: failure.constraintId,
     routeId: failure.routeId,
     traversingEntityId: failure.traversingEntityId,
     startAnchorEntityId: failure.startAnchorEntityId,
@@ -674,11 +727,13 @@ function missingRuntimeDiagnostic(
 ): ValidationDiagnosticV2 {
   const isPathUnavailable = reason === "route-path-unavailable";
   return {
-    id: `route-runtime-missing-${definition.id}`,
+    id: `route:${context.constraintId}:runtime-missing:${definition.id}`,
+    scope: "route-row",
     code: "VALIDATION_REQUIRED_METRIC_MISSING",
     severity: "error",
     gateId: RUNTIME_GATE_ID,
     metricId: definition.id,
+    constraintId: context.constraintId,
     routeId: context.routeId,
     traversingEntityId: context.traversingEntityId,
     startAnchorEntityId: context.startAnchorEntityId,
@@ -768,11 +823,13 @@ function runtimeFailureDiagnostic(
   probeArtifactRef: string,
 ): ValidationDiagnosticV2 {
   return {
-    id: `route-runtime-failed-${metric.id}`,
+    id: `route:${path.constraintId}:runtime-failed:${metric.id}`,
+    scope: "route-row",
     code: runtimeFailureCode(probe.failure),
     severity: "error",
     gateId: RUNTIME_GATE_ID,
     metricId: metric.id,
+    constraintId: path.constraintId,
     routeId: path.routeId,
     traversingEntityId: path.traversingEntityId,
     startAnchorEntityId: path.startAnchorEntityId,
@@ -849,18 +906,18 @@ function failureMetricMeasurement(
       ? { value: 1, evidenceArtifactRef: failureArtifactRef }
       : undefined;
   }
-  if (definition.id === "traversal-lock-match") {
+  if (definition.id === "all-traversal-locks-match") {
     return isNil(graphArtifactRef)
       ? undefined
       : { value: true, evidenceArtifactRef: graphArtifactRef };
   }
-  if (!isNil(graph) && definition.id === "traversal-graph-node-count") {
+  if (!isNil(graph) && definition.id === "total-traversal-graph-node-count") {
     return {
       value: Object.keys(graph.traversalNodesById).length,
       evidenceArtifactRef: graphArtifactRef!,
     };
   }
-  if (!isNil(graph) && definition.id === "traversal-graph-edge-count") {
+  if (!isNil(graph) && definition.id === "total-traversal-graph-edge-count") {
     return {
       value: Object.keys(graph.traversalEdgesById).length,
       evidenceArtifactRef: graphArtifactRef!,
@@ -941,7 +998,8 @@ function createFailureConnectivityGate(
         failureArtifactRef,
         graphArtifactRef,
       );
-      const diagnosticId = `route-connectivity-${failure.status}-${metricDefinition.id}`;
+      const diagnosticId =
+        `route:${failure.constraintId}:connectivity-${failure.status}:${metricDefinition.id}`;
       let metric = isNil(measurement)
         ? {
             ...withLockDerivedResultBound(
@@ -992,7 +1050,9 @@ function createUnavailableRuntimeGate(
   const diagnostics: ValidationDiagnosticV2[] = [];
   const metricResultsById = Object.fromEntries(
     Object.values(definition.metricDefinitionsById).map((metricDefinition) => {
-      const metric = notEvaluatedMetric(metricDefinition);
+      const diagnosticId =
+        `route:${context.constraintId}:runtime-missing:${metricDefinition.id}`;
+      const metric = notEvaluatedMetric(metricDefinition, diagnosticId);
       diagnostics.push(
         missingRuntimeDiagnostic(metricDefinition, context, missingRef, reason),
       );
@@ -1026,13 +1086,13 @@ function validateCompletedReport(report: ValidationReportV2): ValidationReportV2
 }
 
 function createFailedConnectivityReport(
-  input: CreateRouteValidationReportInputV2,
+  input: EvaluateRouteValidationRowInternalInputV2,
   connectivityResult: Exclude<
     HeightfieldRouteConnectivityResultV1,
     { readonly status: "complete" }
   >,
   lockReceipt: ResolvedTraversalLockReceiptV1,
-): ValidationReportV2 {
+): RouteValidationRowEvaluationV2 {
   const failure = canonicalRouteConnectivityFailureV1(
     connectivityResult.connectivityFailure,
   );
@@ -1057,7 +1117,8 @@ function createFailedConnectivityReport(
   if (
     !isNil(input.routeRuntimeProbeReceipt) ||
     !isNil(input.evidenceBytes.routeRuntimeProbeReceipt) ||
-    !isNil(input.evidenceBytes.routePathReceipt)
+    !isNil(input.evidenceBytes.routePathReceipt) ||
+    !isNil(input.evidenceBytes.routeOverlay)
   ) {
     fail("ROUTE_VALIDATION_FAILED_CONNECTIVITY_EVIDENCE_CONFLICT");
   }
@@ -1069,15 +1130,16 @@ function createFailedConnectivityReport(
     fail("ROUTE_VALIDATION_PROFILE_GATES_MISSING");
   }
   const failureBase = evidenceBase(
-    "route-connectivity-failure",
+    routeArtifactId(failure.constraintId, "route-connectivity-failure"),
     "route-connectivity-failure",
     failure.routeId,
+    failure.constraintId,
     "route-connectivity-failure.json",
     "application/vnd.worldkit.route-connectivity-failure.v1+json",
     input.evidenceBytes.routeConnectivityFailure,
   );
   const evidenceArtifactsById: Record<string, EvidenceArtifactV2> = {
-    "route-connectivity-failure": {
+    [failureBase.id]: {
       ...failureBase,
       kind: "route-connectivity-failure",
       routeBuildInputHash: failure.routeBuildInputHash,
@@ -1104,15 +1166,16 @@ function createFailedConnectivityReport(
       fail("ROUTE_VALIDATION_WORLD_IDENTITY_MISMATCH");
     }
     const graphBase = evidenceBase(
-      GRAPH_ARTIFACT_ID,
+      routeArtifactId(failure.constraintId, "traversal-graph"),
       "traversal-graph",
       failure.routeId,
+      failure.constraintId,
       "traversal-graph.json",
       "application/vnd.worldkit.traversal-graph.v1+json",
       input.evidenceBytes.traversalGraph,
     );
     graphArtifactRef = graphBase.artifactRef;
-    evidenceArtifactsById[GRAPH_ARTIFACT_ID] = {
+    evidenceArtifactsById[graphBase.id] = {
       ...graphBase,
       kind: "traversal-graph",
       resolvedTraversalLockHash: traversalGraph.resolvedTraversalLockHash,
@@ -1124,19 +1187,6 @@ function createFailedConnectivityReport(
     fail("ROUTE_VALIDATION_GRAPH_EVIDENCE_ORPHANED");
   }
 
-  if (!isNil(input.evidenceBytes.routeOverlay)) {
-    evidenceArtifactsById[OVERLAY_ARTIFACT_ID] = {
-      ...evidenceBase(
-        OVERLAY_ARTIFACT_ID,
-        "route-overlay",
-        failure.routeId,
-        "route-overlay.bin",
-        "application/octet-stream",
-        input.evidenceBytes.routeOverlay,
-      ),
-      kind: "route-overlay",
-    };
-  }
   const connectivity = createFailureConnectivityGate(
     connectivityDefinition,
     failure,
@@ -1148,7 +1198,11 @@ function createFailedConnectivityReport(
   const runtime = createUnavailableRuntimeGate(
     runtimeDefinition,
     failureDiagnosticContext(failure),
-    artifactRef(failure.routeId, "route-path-receipt.json"),
+    artifactRef(
+      failure.routeId,
+      failure.constraintId,
+      "route-path-receipt.json",
+    ),
     "route-path-unavailable",
   );
   const diagnostics = [...connectivity.diagnostics, ...runtime.diagnostics];
@@ -1156,7 +1210,7 @@ function createFailedConnectivityReport(
     [CONNECTIVITY_GATE_ID]: connectivity.gate,
     [RUNTIME_GATE_ID]: runtime.gate,
   };
-  return validateCompletedReport({
+  return {
     kind: "worldkit-validation-report",
     schemaVersion: 2,
     id: input.reportId,
@@ -1169,12 +1223,12 @@ function createFailedConnectivityReport(
     gateResultsById,
     evidenceArtifactsById,
     diagnostics,
-  });
+  };
 }
 
-export function createRouteValidationReportV2(
-  input: CreateRouteValidationReportInputV2,
-): ValidationReportV2 {
+function evaluateRouteValidationRowAsReportV2(
+  input: EvaluateRouteValidationRowInternalInputV2,
+): RouteValidationRowEvaluationV2 {
   input = snapshotEvaluatorInput(input);
   const lockReceipt = input.resolvedTraversalLockReceipt;
   assertBuildInputWorldBindings(
@@ -1210,23 +1264,25 @@ export function createRouteValidationReportV2(
   assertCanonicalEvidenceBytes(input.evidenceBytes.routePathReceipt, routePathReceipt);
 
   const graphBase = evidenceBase(
-    GRAPH_ARTIFACT_ID,
+    routeArtifactId(routePathReceipt.constraintId, "traversal-graph"),
     "traversal-graph",
     routePathReceipt.routeId,
+    routePathReceipt.constraintId,
     "traversal-graph.json",
     "application/vnd.worldkit.traversal-graph.v1+json",
     input.evidenceBytes.traversalGraph,
   );
   const pathBase = evidenceBase(
-    PATH_ARTIFACT_ID,
+    routeArtifactId(routePathReceipt.constraintId, "route-path-receipt"),
     "route-path-receipt",
     routePathReceipt.routeId,
+    routePathReceipt.constraintId,
     "route-path-receipt.json",
     "application/vnd.worldkit.route-path-receipt.v1+json",
     input.evidenceBytes.routePathReceipt,
   );
   const evidenceArtifactsById: Record<string, EvidenceArtifactV2> = {
-    [GRAPH_ARTIFACT_ID]: {
+    [graphBase.id]: {
       ...graphBase,
       kind: "traversal-graph",
       resolvedTraversalLockHash: traversalGraph.resolvedTraversalLockHash,
@@ -1234,7 +1290,7 @@ export function createRouteValidationReportV2(
       graphBuilderResolvedVersion: traversalGraph.graphBuilderResolvedVersion,
       graphBuilderProfileHash: traversalGraph.graphBuilderProfileHash,
     },
-    [PATH_ARTIFACT_ID]: {
+    [pathBase.id]: {
       ...pathBase,
       kind: "route-path-receipt",
       resolvedTraversalLockHash: routePathReceipt.resolvedTraversalLockHash,
@@ -1245,16 +1301,22 @@ export function createRouteValidationReportV2(
   };
 
   if (!isNil(input.evidenceBytes.routeOverlay)) {
-    evidenceArtifactsById[OVERLAY_ARTIFACT_ID] = {
+    const overlayId = routeArtifactId(
+      routePathReceipt.constraintId,
+      "route-overlay",
+    );
+    evidenceArtifactsById[overlayId] = {
       ...evidenceBase(
-        OVERLAY_ARTIFACT_ID,
+        overlayId,
         "route-overlay",
         routePathReceipt.routeId,
+        routePathReceipt.constraintId,
         "route-overlay.bin",
         "application/octet-stream",
         input.evidenceBytes.routeOverlay,
       ),
       kind: "route-overlay",
+      resolvedTraversalLockHash: routePathReceipt.resolvedTraversalLockHash,
     };
   }
 
@@ -1283,12 +1345,15 @@ export function createRouteValidationReportV2(
     }
     const metricResultsById = Object.fromEntries(
       Object.values(runtimeDefinition.metricDefinitionsById).map((definition) => {
-        const metric = notEvaluatedMetric(definition);
+        const diagnosticId =
+          `route:${routePathReceipt.constraintId}:runtime-missing:${definition.id}`;
+        const metric = notEvaluatedMetric(definition, diagnosticId);
         diagnostics.push(missingRuntimeDiagnostic(
           definition,
           pathDiagnosticContext(routePathReceipt),
           artifactRef(
             routePathReceipt.routeId,
+            routePathReceipt.constraintId,
             "route-runtime-probe-receipt.json",
           ),
           "runtime-probe-missing",
@@ -1355,14 +1420,18 @@ export function createRouteValidationReportV2(
       routeRuntimeProbeReceipt,
     );
     const probeBase = evidenceBase(
-      PROBE_ARTIFACT_ID,
+      routeArtifactId(
+        routePathReceipt.constraintId,
+        "route-runtime-probe-receipt",
+      ),
       "route-runtime-probe-receipt",
       routePathReceipt.routeId,
+      routePathReceipt.constraintId,
       "route-runtime-probe-receipt.json",
       "application/vnd.worldkit.route-runtime-probe-receipt.v1+json",
       input.evidenceBytes.routeRuntimeProbeReceipt,
     );
-    evidenceArtifactsById[PROBE_ARTIFACT_ID] = {
+    evidenceArtifactsById[probeBase.id] = {
       ...probeBase,
       kind: "route-runtime-probe-receipt",
       resolvedTraversalLockHash:
@@ -1421,7 +1490,7 @@ export function createRouteValidationReportV2(
     [CONNECTIVITY_GATE_ID]: connectivityGate,
     [RUNTIME_GATE_ID]: runtimeGate,
   };
-  const report: ValidationReportV2 = {
+  const report: RouteValidationRowEvaluationV2 = {
     kind: "worldkit-validation-report",
     schemaVersion: 2,
     id: input.reportId,
@@ -1435,5 +1504,399 @@ export function createRouteValidationReportV2(
     evidenceArtifactsById,
     diagnostics,
   };
-  return validateCompletedReport(report);
+  return report;
+}
+
+export interface EvaluateRouteValidationRowInputV2 {
+  readonly subject: WorldPackageValidationSubjectV1;
+  readonly validationProfile: ValidationProfileV2;
+  readonly row: RouteValidationRowInputV2;
+}
+
+export function evaluateRouteValidationRowV2(
+  input: EvaluateRouteValidationRowInputV2,
+): RouteValidationRowEvaluationV2 {
+  try {
+    assertAccessorFreeDataGraph(input, "ROUTE_VALIDATION_INPUT_ACCESSOR_FORBIDDEN");
+  } catch {
+    fail("ROUTE_VALIDATION_INPUT_ACCESSOR_FORBIDDEN");
+  }
+  const constraintId = input.row.routeBuildInputReceipt.input
+    .connectivityRequirement.constraintId;
+  return deepFreezeDataGraph(evaluateRouteValidationRowAsReportV2({
+    reportId: `route:${constraintId}:row-evaluation`,
+    subject: input.subject,
+    dependencyReportRefs: [],
+    validationProfile: input.validationProfile,
+    ...input.row,
+  }));
+}
+
+function metricValue(metric: MetricResultV2): number | boolean | undefined {
+  if (metric.kind === "boolean-assertion") return metric.value;
+  if (metric.kind === "count-threshold") return metric.valueCount;
+  if (metric.kind === "meters-threshold") return metric.valueMeters;
+  if (metric.kind === "degrees-threshold") return metric.valueDegrees;
+  if (metric.kind === "ticks-threshold") return metric.valueTicks;
+  if (metric.kind === "cost-threshold") return metric.valueCost;
+  return undefined;
+}
+
+const TOTAL_METRIC_IDS = new Set([
+  "total-route-path-distance-meters",
+  "total-route-path-cost",
+  "total-traversal-graph-node-count",
+  "total-traversal-graph-edge-count",
+  "total-sliding-duration-ticks",
+  "unexpected-support-loss-count",
+  "wrong-support-surface-count",
+  "invalid-physics-value-count",
+]);
+
+const MINIMUM_METRIC_IDS = new Set([
+  "minimum-observed-clearance-width-meters",
+  "minimum-observed-clearance-height-meters",
+]);
+
+const PER_ROW_BOUND_METRIC_IDS = new Set([
+  "maximum-observed-step-height-meters",
+  "maximum-observed-slope-degrees",
+  "minimum-observed-clearance-width-meters",
+  "minimum-observed-clearance-height-meters",
+  "maximum-observed-surface-gap-meters",
+]);
+
+function aggregateNumber(metricId: string, values: readonly number[]): number {
+  if (values.length === 0) return 0;
+  if (TOTAL_METRIC_IDS.has(metricId)) {
+    return values.reduce((total, value) => total + value, 0);
+  }
+  if (MINIMUM_METRIC_IDS.has(metricId)) return Math.min(...values);
+  return Math.max(...values);
+}
+
+function aggregateMetric(
+  definition: MetricDefinitionV2,
+  rowMetrics: readonly MetricResultV2[],
+  routeSetArtifactRef: string,
+  directValue?: number | boolean,
+  forcedStatus?: "passed" | "failed" | "not-evaluated",
+  forcedDiagnosticIds: readonly string[] = [],
+): MetricResultV2 {
+  const values = rowMetrics.flatMap((metric) => {
+    const value = metricValue(metric);
+    return isNil(value) ? [] : [value];
+  });
+  const value = directValue ?? (
+    definition.kind === "boolean-assertion"
+      ? values.every((entry) => entry === true)
+      : aggregateNumber(definition.id, values as readonly number[])
+  );
+  let result = evaluatedMetric(definition, {
+    value,
+    evidenceArtifactRef: routeSetArtifactRef,
+  });
+  if (PER_ROW_BOUND_METRIC_IDS.has(definition.id)) {
+    if (result.kind === "meters-threshold") {
+      const {
+        minimumAllowedMeters: _minimumAllowedMeters,
+        maximumAllowedMeters: _maximumAllowedMeters,
+        ...withoutWorldBounds
+      } = result;
+      result = withoutWorldBounds;
+    } else if (result.kind === "degrees-threshold") {
+      const {
+        minimumAllowedDegrees: _minimumAllowedDegrees,
+        maximumAllowedDegrees: _maximumAllowedDegrees,
+        ...withoutWorldBounds
+      } = result;
+      result = withoutWorldBounds;
+    }
+  }
+  const rowStatuses = rowMetrics.map(({ status }) => status);
+  const status = forcedStatus ?? (
+    rowStatuses.includes("failed")
+      ? "failed"
+      : rowStatuses.includes("not-evaluated")
+        ? "not-evaluated"
+        : result.status
+  );
+  const evidenceArtifactRefs = [...new Set([
+    routeSetArtifactRef,
+    ...rowMetrics.flatMap(({ evidenceArtifactRefs }) => evidenceArtifactRefs),
+  ])].sort();
+  const diagnosticIds = [...new Set([
+    ...forcedDiagnosticIds,
+    ...rowMetrics.flatMap((metric) => metric.diagnosticIds),
+  ])].sort();
+  return Object.freeze({
+    ...result,
+    status,
+    evidenceArtifactRefs: Object.freeze(evidenceArtifactRefs),
+    diagnosticIds: Object.freeze(diagnosticIds),
+  });
+}
+
+function passingDefaultValue(definition: MetricDefinitionV2): number | boolean {
+  if (definition.kind === "boolean-assertion") return definition.expectedValue;
+  if (definition.kind === "count-threshold") {
+    return definition.minimumAllowedCount ?? definition.maximumAllowedCount ?? 0;
+  }
+  if (definition.kind === "meters-threshold") {
+    return definition.minimumAllowedMeters ?? definition.maximumAllowedMeters ?? 0;
+  }
+  if (definition.kind === "degrees-threshold") {
+    return definition.minimumAllowedDegrees ?? definition.maximumAllowedDegrees ?? 0;
+  }
+  if (definition.kind === "ticks-threshold") {
+    return definition.minimumAllowedTicks ?? definition.maximumAllowedTicks ?? 0;
+  }
+  if (definition.kind === "cost-threshold") {
+    return definition.minimumAllowedCost ?? definition.maximumAllowedCost ?? 0;
+  }
+  return 0;
+}
+
+function worldDiagnostic(
+  gateId: string,
+  metricId: string,
+  reason: "required-routes-missing" | "runtime-routes-unavailable",
+): ValidationDiagnosticV2 {
+  const isConnectivity = reason === "required-routes-missing";
+  return Object.freeze({
+    id: `world:${reason}:${metricId}`,
+    scope: "world",
+    code: isConnectivity
+      ? "ROUTE_REQUIRED_ROWS_MISSING"
+      : "VALIDATION_REQUIRED_METRIC_MISSING",
+    severity: "error",
+    gateId,
+    metricId,
+    evidenceArtifactRefs: [ROUTE_SET_ARTIFACT_REF],
+    details: {
+      kind: "state-mismatch" as const,
+      expectedState: isConnectivity
+        ? "at least one required Route row"
+        : "at least one probeable Route row",
+      actualState: "zero required Route rows",
+    },
+    message: isConnectivity
+      ? "The World contains no required Route connectivity rows."
+      : "Runtime Route conformance cannot be evaluated because the World has no required Route rows.",
+    suggestedFix: "Declare at least one required connected-by-route constraint and rebuild the World Package.",
+  });
+}
+
+function rowReceipt(
+  input: RouteValidationRowInputV2,
+  evaluation: RouteValidationRowEvaluationV2,
+): RouteValidationSetReceiptV1["rows"][number] {
+  const requirement = input.routeBuildInputReceipt.input.connectivityRequirement;
+  const connectivityStatus = input.routeConnectivityResult.status;
+  const runtimeStatus = isNil(input.routeRuntimeProbeReceipt)
+    ? "not-run"
+    : input.routeRuntimeProbeReceipt.status;
+  return Object.freeze({
+    constraintId: requirement.constraintId,
+    routeId: requirement.routeId,
+    traversingEntityId: requirement.traversingEntityId,
+    startAnchorEntityId: requirement.startAnchorEntityId,
+    destinationAnchorEntityId: requirement.destinationAnchorEntityId,
+    resolvedTraversalLockHash:
+      input.resolvedTraversalLockReceipt.resolvedTraversalLockHash,
+    connectivityStatus,
+    runtimeStatus,
+    evidenceArtifactRefs: Object.freeze(
+      Object.values(evaluation.evidenceArtifactsById)
+        .map(({ artifactRef }) => artifactRef)
+        .sort(),
+    ),
+  });
+}
+
+function aggregateGate(
+  definition: GateDefinitionV2,
+  evaluations: readonly RouteValidationRowEvaluationV2[],
+  receipt: RouteValidationSetReceiptV1,
+  zeroRowDiagnostic: ValidationDiagnosticV2 | undefined,
+): GateResultV2 {
+  const isConnectivity = definition.id === CONNECTIVITY_GATE_ID;
+  const metricResultsById = Object.fromEntries(
+    Object.values(definition.metricDefinitionsById).map((metricDefinition) => {
+      const rowMetrics = evaluations.flatMap((evaluation) => {
+        const metric = evaluation.gateResultsById[definition.id]
+          ?.metricResultsById[metricDefinition.id];
+        return isNil(metric) ? [] : [metric];
+      });
+      let directValue: number | boolean | undefined;
+      let forcedStatus: "passed" | "failed" | "not-evaluated" | undefined;
+      let diagnosticIds: readonly string[] = [];
+      if (metricDefinition.id === "required-route-count") {
+        directValue = receipt.rows.length;
+      } else if (metricDefinition.id === "unreachable-required-route-count") {
+        directValue = receipt.rows.filter(
+          ({ connectivityStatus }) => connectivityStatus === "unreachable",
+        ).length;
+      } else if (metricDefinition.id === "completed-required-route-count") {
+        directValue = receipt.rows.filter(
+          ({ runtimeStatus }) => runtimeStatus === "complete",
+        ).length;
+      } else if (metricDefinition.id === "failed-required-route-count") {
+        directValue = receipt.rows.filter(
+          ({ runtimeStatus }) => runtimeStatus === "failed",
+        ).length;
+      }
+      if (receipt.rows.length === 0) {
+        if (isConnectivity && metricDefinition.id === "required-route-count") {
+          forcedStatus = "failed";
+          diagnosticIds = isNil(zeroRowDiagnostic) ? [] : [zeroRowDiagnostic.id];
+        } else if (!isConnectivity && metricDefinition.id === "completed-required-route-count") {
+          forcedStatus = "not-evaluated";
+          diagnosticIds = isNil(zeroRowDiagnostic) ? [] : [zeroRowDiagnostic.id];
+        } else {
+          directValue = passingDefaultValue(metricDefinition);
+          forcedStatus = "passed";
+        }
+      }
+      return [
+        metricDefinition.id,
+        aggregateMetric(
+          metricDefinition,
+          rowMetrics,
+          ROUTE_SET_ARTIFACT_REF,
+          directValue,
+          forcedStatus,
+          diagnosticIds,
+        ),
+      ];
+    }),
+  );
+  const diagnosticIds = [...new Set(
+    Object.values(metricResultsById).flatMap((metric) => metric.diagnosticIds),
+  )].sort();
+  const gate = {
+    id: definition.id,
+    requirement: definition.requirement,
+    status: "incomplete" as const,
+    metricResultsById,
+    diagnosticIds,
+  };
+  return Object.freeze({
+    ...gate,
+    status: deriveValidationGateStatusV2(definition, gate),
+  });
+}
+
+export function createRouteValidationReportV2(
+  input: CreateRouteValidationReportInputV2,
+): ValidationReportV2 {
+  try {
+    assertAccessorFreeDataGraph(input, "ROUTE_VALIDATION_INPUT_ACCESSOR_FORBIDDEN");
+  } catch {
+    fail("ROUTE_VALIDATION_INPUT_ACCESSOR_FORBIDDEN");
+  }
+  const profile = canonicalProfileIdentity(input.validationProfile);
+  const evaluationsWithRows = input.rows.map((row) => ({
+    row,
+    evaluation: evaluateRouteValidationRowV2({
+      subject: input.subject,
+      validationProfile: profile,
+      row,
+    }),
+  })).sort((left, right) => {
+    const leftRequirement = left.row.routeBuildInputReceipt.input
+      .connectivityRequirement;
+    const rightRequirement = right.row.routeBuildInputReceipt.input
+      .connectivityRequirement;
+    return compareCanonicalString(
+      leftRequirement.constraintId,
+      rightRequirement.constraintId,
+    ) || compareCanonicalString(leftRequirement.routeId, rightRequirement.routeId);
+  });
+  const receipt = canonicalRouteValidationSetReceiptV1({
+    kind: "route-validation-set-receipt",
+    schemaVersion: 1,
+    authoringSpecHash: input.subject.authoringSpecHash,
+    normalizedWorldIrHash: input.subject.normalizedWorldIrHash,
+    executionPlanHash: input.subject.executionPlanHash,
+    resourceLockHash: input.subject.resourceLockHash,
+    layoutSolveReportHash: input.subject.layoutSolveReportHash,
+    rows: evaluationsWithRows.map(({ row, evaluation }) =>
+      rowReceipt(row, evaluation)
+    ),
+  });
+  const receiptBytes = canonicalJsonBytes(receipt);
+  const evidenceArtifactsById: Record<string, EvidenceArtifactV2> = {
+    [ROUTE_SET_ARTIFACT_ID]: {
+      id: ROUTE_SET_ARTIFACT_ID,
+      kind: "route-validation-set-receipt",
+      artifactRef: ROUTE_SET_ARTIFACT_REF,
+      mediaType: "application/vnd.worldkit.route-validation-set-receipt.v1+json",
+      sizeBytes: receiptBytes.byteLength,
+      contentHash: sha256Bytes(receiptBytes) as Sha256Hash,
+      receipt,
+    },
+  };
+  for (const { evaluation } of evaluationsWithRows) {
+    for (const [artifactId, artifact] of Object.entries(
+      evaluation.evidenceArtifactsById,
+    )) {
+      if (!isNil(evidenceArtifactsById[artifactId])) {
+        fail(`ROUTE_VALIDATION_ARTIFACT_ID_DUPLICATE:${artifactId}`);
+      }
+      evidenceArtifactsById[artifactId] = artifact;
+    }
+  }
+  const rowEvaluations = evaluationsWithRows.map(({ evaluation }) => evaluation);
+  const diagnostics = rowEvaluations.flatMap(({ diagnostics }) => diagnostics);
+  if (receipt.rows.length === 0) {
+    diagnostics.push(
+      worldDiagnostic(
+        CONNECTIVITY_GATE_ID,
+        "required-route-count",
+        "required-routes-missing",
+      ),
+      worldDiagnostic(
+        RUNTIME_GATE_ID,
+        "completed-required-route-count",
+        "runtime-routes-unavailable",
+      ),
+    );
+  }
+  const connectivityDefinition = profile.gateDefinitionsById[CONNECTIVITY_GATE_ID];
+  const runtimeDefinition = profile.gateDefinitionsById[RUNTIME_GATE_ID];
+  if (isNil(connectivityDefinition) || isNil(runtimeDefinition)) {
+    fail("ROUTE_VALIDATION_PROFILE_GATES_MISSING");
+  }
+  const gateResultsById = {
+    [CONNECTIVITY_GATE_ID]: aggregateGate(
+      connectivityDefinition,
+      rowEvaluations,
+      receipt,
+      diagnostics.find(({ id }) => id.startsWith("world:required-routes-missing")),
+    ),
+    [RUNTIME_GATE_ID]: aggregateGate(
+      runtimeDefinition,
+      rowEvaluations,
+      receipt,
+      diagnostics.find(({ id }) => id.startsWith("world:runtime-routes-unavailable")),
+    ),
+  };
+  return deepFreezeDataGraph(validateCompletedReport({
+    kind: "worldkit-validation-report",
+    schemaVersion: 2,
+    id: input.reportId,
+    subject: input.subject,
+    dependencyReportRefs: [...(input.dependencyReportRefs ?? [])].sort(),
+    validationProfileRef: profile.resourceRef,
+    resolvedVersion: profile.version,
+    validationProfileHash: OUTDOOR_WORLD_PACKAGE_DEV_VALIDATION_PROFILE_HASH_V2,
+    routeValidationSetReceipt: receipt,
+    status: deriveValidationReportStatusV2(profile, gateResultsById),
+    gateResultsById,
+    evidenceArtifactsById,
+    diagnostics: diagnostics.sort((left, right) =>
+      compareCanonicalString(left.id, right.id)
+    ),
+  }));
 }

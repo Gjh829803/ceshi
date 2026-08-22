@@ -155,8 +155,8 @@ describe("Route validation vocabulary", () => {
     >;
     const genericMetrics = genericGates["route-connectivity"]!
       .metricDefinitionsById as Record<string, Record<string, unknown>>;
-    genericMetrics["route-path-cost"] = {
-      ...genericMetrics["route-path-cost"],
+    genericMetrics["total-route-path-cost"] = {
+      ...genericMetrics["total-route-path-cost"],
       value: 12,
       minimum: 0,
       maximum: 99,
@@ -234,7 +234,7 @@ describe("Route validation vocabulary", () => {
 
     const diagnostic = createRouteConnectivityValidationDiagnosticV2({
       id: "route-capacity",
-      metricId: "traversal-graph-node-count",
+      metricId: "total-traversal-graph-node-count",
       evidenceArtifactRef: "artifact://route-connectivity-failure",
       failure,
     });

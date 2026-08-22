@@ -141,6 +141,7 @@ export interface WorldPackageValidationSubjectV1 {
 }
 
 export type EvidenceArtifactKindV2 =
+  | "route-validation-set-receipt"
   | "traversal-graph"
   | "route-path-receipt"
   | "route-connectivity-failure"
@@ -156,7 +157,41 @@ interface EvidenceArtifactBaseV2 {
   readonly contentHash: Sha256HashV1;
 }
 
-export interface TraversalGraphEvidenceArtifactV2 extends EvidenceArtifactBaseV2 {
+export interface RouteValidationSetRowV1 {
+  readonly constraintId: string;
+  readonly routeId: string;
+  readonly traversingEntityId: string;
+  readonly startAnchorEntityId: string;
+  readonly destinationAnchorEntityId: string;
+  readonly resolvedTraversalLockHash: Sha256HashV1;
+  readonly connectivityStatus: "complete" | "unreachable" | "incomplete";
+  readonly runtimeStatus: "complete" | "failed" | "not-run";
+  readonly evidenceArtifactRefs: readonly string[];
+}
+
+export interface RouteValidationSetReceiptV1 {
+  readonly kind: "route-validation-set-receipt";
+  readonly schemaVersion: 1;
+  readonly authoringSpecHash: Sha256HashV1;
+  readonly normalizedWorldIrHash: Sha256HashV1;
+  readonly executionPlanHash: Sha256HashV1;
+  readonly resourceLockHash: Sha256HashV1;
+  readonly layoutSolveReportHash: Sha256HashV1;
+  readonly rows: readonly RouteValidationSetRowV1[];
+}
+
+export interface RouteValidationSetReceiptEvidenceArtifactV2
+  extends EvidenceArtifactBaseV2 {
+  readonly kind: "route-validation-set-receipt";
+  readonly receipt: RouteValidationSetReceiptV1;
+}
+
+interface RouteEvidenceArtifactBaseV2 extends EvidenceArtifactBaseV2 {
+  readonly constraintId: string;
+  readonly routeId: string;
+}
+
+export interface TraversalGraphEvidenceArtifactV2 extends RouteEvidenceArtifactBaseV2 {
   readonly kind: "traversal-graph";
   readonly resolvedTraversalLockHash: Sha256HashV1;
   readonly graphBuilderProfileRef: string;
@@ -164,7 +199,7 @@ export interface TraversalGraphEvidenceArtifactV2 extends EvidenceArtifactBaseV2
   readonly graphBuilderProfileHash: Sha256HashV1;
 }
 
-export interface RoutePathReceiptEvidenceArtifactV2 extends EvidenceArtifactBaseV2 {
+export interface RoutePathReceiptEvidenceArtifactV2 extends RouteEvidenceArtifactBaseV2 {
   readonly kind: "route-path-receipt";
   readonly resolvedTraversalLockHash: Sha256HashV1;
   readonly graphBuilderProfileRef: string;
@@ -173,7 +208,7 @@ export interface RoutePathReceiptEvidenceArtifactV2 extends EvidenceArtifactBase
 }
 
 export interface RouteConnectivityFailureEvidenceArtifactV2
-  extends EvidenceArtifactBaseV2 {
+  extends RouteEvidenceArtifactBaseV2 {
   readonly kind: "route-connectivity-failure";
   readonly routeBuildInputHash: Sha256HashV1;
   readonly resolvedTraversalLockHash: Sha256HashV1;
@@ -182,7 +217,7 @@ export interface RouteConnectivityFailureEvidenceArtifactV2
   readonly graphBuilderProfileHash: Sha256HashV1;
 }
 
-export interface RouteRuntimeProbeReceiptEvidenceArtifactV2 extends EvidenceArtifactBaseV2 {
+export interface RouteRuntimeProbeReceiptEvidenceArtifactV2 extends RouteEvidenceArtifactBaseV2 {
   readonly kind: "route-runtime-probe-receipt";
   readonly resolvedTraversalLockHash: Sha256HashV1;
   readonly driverProfileRef: string;
@@ -196,11 +231,13 @@ export interface RouteRuntimeProbeReceiptEvidenceArtifactV2 extends EvidenceArti
   readonly runtimeAdapterHash: Sha256HashV1;
 }
 
-export interface RouteOverlayEvidenceArtifactV2 extends EvidenceArtifactBaseV2 {
+export interface RouteOverlayEvidenceArtifactV2 extends RouteEvidenceArtifactBaseV2 {
   readonly kind: "route-overlay";
+  readonly resolvedTraversalLockHash: Sha256HashV1;
 }
 
 export type EvidenceArtifactV2 =
+  | RouteValidationSetReceiptEvidenceArtifactV2
   | TraversalGraphEvidenceArtifactV2
   | RoutePathReceiptEvidenceArtifactV2
   | RouteConnectivityFailureEvidenceArtifactV2
@@ -257,12 +294,25 @@ export type ValidationDiagnosticCodeV2 =
   | ValidationDiagnosticCodeV1
   | RouteValidationDiagnosticCodeV2;
 
-export interface ValidationDiagnosticV2 {
+interface ValidationDiagnosticBaseV2 {
   readonly id: string;
   readonly code: ValidationDiagnosticCodeV2;
   readonly severity: "error" | "warning";
   readonly gateId: string;
   readonly metricId: string;
+  readonly evidenceArtifactRefs: readonly string[];
+  readonly details: RouteDiagnosticDetailsV1;
+  readonly message: string;
+  readonly suggestedFix: string;
+}
+
+export interface WorldValidationDiagnosticV2 extends ValidationDiagnosticBaseV2 {
+  readonly scope: "world";
+}
+
+export interface RouteRowValidationDiagnosticV2 extends ValidationDiagnosticBaseV2 {
+  readonly scope: "route-row";
+  readonly constraintId: string;
   readonly routeId: string;
   readonly traversingEntityId: string;
   readonly startAnchorEntityId: string;
@@ -270,11 +320,11 @@ export interface ValidationDiagnosticV2 {
   readonly traversalSurfaceId?: string;
   readonly colliderSubshapeId?: string;
   readonly positionMetersXYZ?: readonly [number, number, number];
-  readonly evidenceArtifactRefs: readonly string[];
-  readonly details: RouteDiagnosticDetailsV1;
-  readonly message: string;
-  readonly suggestedFix: string;
 }
+
+export type ValidationDiagnosticV2 =
+  | WorldValidationDiagnosticV2
+  | RouteRowValidationDiagnosticV2;
 
 export interface ValidationReportV2 {
   readonly kind: "worldkit-validation-report";
@@ -285,6 +335,7 @@ export interface ValidationReportV2 {
   readonly validationProfileRef: string;
   readonly resolvedVersion: string;
   readonly validationProfileHash: Sha256HashV1;
+  readonly routeValidationSetReceipt: RouteValidationSetReceiptV1;
   readonly status: ValidationReportStatusV1;
   readonly gateResultsById: Readonly<Record<string, GateResultV2>>;
   readonly evidenceArtifactsById: Readonly<Record<string, EvidenceArtifactV2>>;

@@ -6,7 +6,7 @@ import {
 import type { Sha256HashV1 } from "./types";
 import type {
   RouteDiagnosticDetailsV1,
-  ValidationDiagnosticV2,
+  RouteRowValidationDiagnosticV2,
 } from "./types-v2";
 
 export const ROUTE_VALIDATION_DIAGNOSTIC_CODES_V2 = [
@@ -22,6 +22,7 @@ export const ROUTE_VALIDATION_DIAGNOSTIC_CODES_V2 = [
   "ROUTE_RUNTIME_DEVIATED",
   "ROUTE_RUNTIME_SUPPORT_LOST",
   "ROUTE_RUNTIME_TIMEOUT",
+  "ROUTE_REQUIRED_ROWS_MISSING",
 ] as const;
 
 export type RouteValidationDiagnosticCodeV2 =
@@ -196,14 +197,16 @@ function remediationForFailure(failure: RouteConnectivityFailureV1): string {
 
 export function createRouteConnectivityValidationDiagnosticV2(
   input: CreateRouteConnectivityValidationDiagnosticInputV2,
-): ValidationDiagnosticV2 {
+): RouteRowValidationDiagnosticV2 {
   const { failure } = input;
   return {
     id: input.id,
+    scope: "route-row",
     code: failure.reason.code,
     severity: "error",
     gateId: "route-connectivity",
     metricId: input.metricId,
+    constraintId: failure.constraintId,
     routeId: failure.routeId,
     traversingEntityId: failure.traversingEntityId,
     startAnchorEntityId: failure.startAnchorEntityId,
