@@ -37,7 +37,7 @@ This plan delivers **R1 Heightfield Route only**. It does not close M5 by itself
 - Runtime simulation uses the existing fixed timestep. Rendering never advances the probe.
 - Every simulated tick performs exactly one Character Controller `checkSupport()` call. The returned raw support state/normal is retained as evidence from that same call. Do not add a ray, AABB, terrain-height, NavMesh-height, or extra `checkSupport()` grounding path.
 - Heightfield sampling may map an already-supported tick to a canonical R1 surface identity for evidence. It must not decide Ground/Air, jump eligibility, gravity, or Character Controller support.
-- Support-to-surface classification consumes the already-sampled Character Controller support result, controller pose, and a compiled surface/collider index. Only raw `SUPPORTED` or `SLIDING` enters correlation. Candidate surfaces must lie within the locked conservative contact band around the controller bottom/contact normal: zero candidates is `unmatched`, one is `resolved`, and more than one is `ambiguous`. Heightfield sampling is corroborating evidence only after raw support exists; an unsupported tick cannot resolve a surface, and neither `unmatched` nor `ambiguous` may satisfy the runtime gate.
+- Support-to-surface classification consumes the already-sampled Character Controller support result, the controller center/foot pose frozen at that same pre-integration instant, and a compiled surface/collider index. It must not reread the post-integration live controller pose. Only raw `SUPPORTED` or `SLIDING` enters correlation. Heightfield correlation uses the unclamped shared triangle sampler. Collider correlation uses one vertical exact-collision-mesh query through the frozen foot XZ plus the same contact-band/normal check; no AABB, horizontal-nearness, visual, or provider-handle fallback is allowed. Zero candidate surfaces is `unmatched`, one Heightfield with no collider candidate is `resolved`, and multiple/overlapping candidates are `ambiguous`. Heightfield sampling is corroborating evidence only after raw support exists; an unsupported tick cannot resolve a surface, and neither `unmatched` nor `ambiguous` may satisfy the runtime gate.
 - `@whitebox-world/terrain-surface` owns one canonical Heightfield triangle emitter. V5 render mesh, `PhysicsShapeMesh`, sampling, Graph build, and evidence consume that topology rather than duplicating triangle loops. Babylon 9.21.2's HeightField adapter exposes sample reordering but does not freeze Havok's cell diagonal; V4 keeps its existing compatibility path.
 - `SLIDING` is recorded as raw support and is not Support Loss. `UNSUPPORTED` is recorded from the first tick; only Validation Profile thresholds decide whether the run fails.
 - Runtime probe setup may reset the subject to the explicit start Anchor. After tick 0, the probe must not teleport, disable collision, change step/slope, or skip graph corners.
@@ -558,6 +558,11 @@ non-blocking P3 evaluator-test gap. This completes Task 4 only; Task 5–10 and 
 ### Task 5: Expose Single-Source Character Support Evidence
 
 **Files:**
+- Create: `packages/terrain-surface/src/static-collider-triangle-mesh.ts`
+- Create: `packages/terrain-surface/src/static-collider-triangle-mesh.test.ts`
+- Modify: `packages/terrain-surface/src/index.ts`
+- Modify: `packages/traversal-recast/src/heightfield-source.ts`
+- Modify: `packages/traversal-recast/src/heightfield-source.test.ts`
 - Create: `packages/traversal/src/runtime-evidence.ts`
 - Create: `packages/traversal/src/runtime-evidence.test.ts`
 - Modify: `packages/traversal/src/index.ts`
@@ -575,8 +580,14 @@ non-blocking P3 evaluator-test gap. This completes Task 4 only; Task 5–10 and 
 
 **Interfaces:**
 - Produces `CharacterSupportEvidenceV1`, `TraversalRuntimeTickEvidenceV1`, `TraversalRuntimePortV1`, and `createBabylonTraversalRuntimePortV1()`.
-- Raw support is exactly `supported | sliding | unsupported` plus normal and dynamic-surface flag from the single Character Controller sample.
+- Raw support is exactly `supported | sliding | unsupported` plus normal,
+  dynamic-surface flag, and the controller foot pose frozen at the single
+  Character Controller sample. Post-integration live position must not be used
+  to classify that pre-integration sample.
 - The R1 surface classifier is evidence-only and returns `resolved | unsupported | unmatched | ambiguous`; surface IDs are absent when no surface is resolved.
+- Traversal Runtime failures use a closed provider-neutral
+  `TRAVERSAL_RUNTIME_*` code vocabulary; Babylon/Havok/native messages do not
+  cross the port.
 - Babylon Runtime accepts `ExecutionPlanV4 | ExecutionPlanV5`; V5 static bodies are created only from `ExecutionPlanV5.staticColliders`, while existing V4 fixtures retain their current compatibility projection.
 - The V5 terrain body uses `PhysicsShapeMesh` over the exact compiled Heightfield triangle topology. V4 retains its current square-HeightField/rectangular-Mesh compatibility path and is covered by unchanged fixtures.
 - Camera and Subject Visual consumers are widened only to the explicit `ExecutionPlanV4 | ExecutionPlanV5` union (or a named common read-only projection); they must not accept arbitrary plan-shaped objects or fork behavior by duplicating camera/visual logic.
@@ -591,21 +602,26 @@ Spy on `PhysicsCharacterController.checkSupport()` for constructor/reset and eve
 Prove:
 
 - `MotionKernelRuntimeV1.publishResolvedState()` retains a read-only copy of the same support sample it resolves;
+- that retained sample freezes controller center/foot at the same pre-integration instant, and a seam-crossing tick cannot pair it with the post-integration foot;
 - reading evidence does not call physics;
 - evidence classification cannot mutate `movementMedium`;
 - supported terrain resolves the compiled Heightfield surface identity;
 - support classification starts from the retained Character Controller sample and then correlates controller bottom/contact normal to the compiled surface/collider index within a conservative contact band; terrain sampling alone can never produce `resolved`;
-- zero candidate surfaces returns `unmatched`, more than one returns `ambiguous`, and neither status satisfies expected-surface validation;
+- zero candidate surfaces returns `unmatched`, more than one returns `ambiguous`, and neither mode satisfies expected-surface validation;
 - supported contact that does not match the R1 surface reports `unmatched`, not fake terrain support;
+- collider candidates use one vertical exact-collision-mesh query through the frozen foot XZ and the same conservative normal/contact band; no AABB, horizontal-nearness, visual, or provider-handle fallback is allowed;
 - V5 Runtime and Graph input consume byte-identical static collider rows, including the current cone-visual-to-cylinder-collider mapping;
 - V5 creates exactly one physics body for each `staticColliders` row and never creates a second body from `objects[].collisionEnabled`; V4 continues to derive its compatibility bodies from objects;
 - unsupported ticks publish no surface IDs;
 - `SLIDING` remains distinct;
 - reset/rebind clears old evidence.
+- create-before-port-reset, ordinary Runtime reset, rebind-away/back, accepted
+  Feel/Motion changes, and live capsule/slope/step drift all make port evidence
+  unavailable or fail with the exact frozen error code before simulation.
 
 - [ ] **Step 3: Run the RED runtime evidence tests**
 
-Run: `pnpm vitest run packages/runtime-babylon/src/traversal-runtime-port.test.ts packages/runtime-babylon/src/p15-conformance.test.ts`
+Run: `pnpm vitest run packages/terrain-surface/src/static-collider-triangle-mesh.test.ts packages/traversal/src/runtime-evidence.test.ts packages/traversal-recast/src/heightfield-source.test.ts packages/runtime-babylon/src/traversal-runtime-port.test.ts packages/runtime-babylon/src/p15-conformance.test.ts`
 
 Expected: FAIL because the port/evidence seam is absent.
 
@@ -613,20 +629,34 @@ Expected: FAIL because the port/evidence seam is absent.
 
 Add an internal immutable support evidence field at the point where `publishResolvedState()` consumes `CharacterSurfaceInfo`. Expose it through `SubjectController` and the dedicated traversal runtime port only. Do not add raw Havok data to `WorldRuntimeSnapshotV3` and do not add a second public ground owner.
 
-Branch physics construction explicitly by execution-plan `schemaVersion`. V4 continues deriving compatibility bodies from `objects`; V5 still uses `objects` for visuals but creates static physics bodies only from `staticColliders`, never both. Create both the V5 rendered terrain mesh and its collision body from the canonical triangle emitter in `@whitebox-world/terrain-surface`. Add an asymmetric saddle regression that distinguishes the two possible cell diagonals across rendered mesh, `PhysicsShapeMesh`, sampling, and Graph input, plus a body-count regression that detects duplicate V5 collision. Keep V4 behavior isolated and tested; do not let the Graph Builder reverse-engineer V4 visual objects.
+Branch physics construction explicitly by execution-plan `schemaVersion`. V4 continues deriving compatibility bodies from `objects`; V5 still uses `objects` for visuals but creates static physics bodies only from `staticColliders`, never both. Create both the V5 rendered terrain mesh and its collision body from the canonical triangle emitter in `@whitebox-world/terrain-surface`. Extract the existing Task 4 box/circumscribed-cylinder/icosphere blocker soup into one provider-neutral static-collider triangle emitter and consume its exact local vertices from both Graph and Runtime. Graph retains its existing full world `transformSoup`; Runtime applies the complete row position/rotation/scale to one unparented collision mesh before forcing its world matrix and constructing `PhysicsShapeMesh` plus the static body. Do not mutate TRS afterward, include children, or attach a body to the cone visual. Add an asymmetric saddle regression that distinguishes the two possible cell diagonals across rendered mesh, `PhysicsShapeMesh`, sampling, and Graph input; a non-origin/yawed/non-uniform collider regression; and a body-count regression that detects duplicate V5 collision. Keep V4 behavior isolated and tested; do not let the Graph Builder reverse-engineer V4 visual objects.
 
 - [ ] **Step 5: Add trusted reset-to-start and canonical walk intent**
 
 The runtime port may reset the controlled subject to the explicit start Anchor before tick 0 and may submit a unit world-XZ walk direction per fixed tick. That intent is a canonical planar-vector Motion Kernel command and must not pass through camera-relative browser input compilation. It must reuse the existing Motion Kernel, Control Feel speed, Physics Body step/slope, animation, physics step, and cleanup paths. It must not accept speed, jump, gravity, step, slope, or capsule overrides.
 
-Refactor the fixed-tick loop once so Browser input and traversal intent share the same post-command physics/visual/camera commit path; do not duplicate a second simulation loop. Add a regression proving identical world-XZ intent and fixed ticks produce identical Probe evidence under different camera yaw values.
+`createBabylonTraversalRuntimePortV1()` starts unavailable until its own
+`resetToStartAnchor()` succeeds. It performs one merged reset rather than an
+ordinary spawn reset followed by teleport: the traversing Subject bootstraps
+directly at
+`layout.placementsByEntityId[startAnchorEntityId].transform.positionMetersXYZ`
+plus collider-center offset with placement yaw only, while every other Subject
+resets once to spawn. Each Subject calls `checkSupport()` exactly once. Before
+any reset mutation/query, and before every read/tick, the port verifies the paper
+lock against live controller shape options, foot-offset, slope, step, active and
+requested/pending Feel/Motion, and all other locked Profile identities. A Runtime
+configuration epoch invalidates ordinary reset/rebind/Profile changes. Refactor the fixed-tick
+loop once so Browser input and traversal intent share the same post-command
+physics/visual/camera commit path; do not duplicate a second simulation loop.
+Add a regression proving identical world-XZ intent and fixed ticks produce
+identical Probe evidence under different camera yaw values.
 
 - [ ] **Step 6: Run the deep runtime regression set**
 
 Run:
 
 ```bash
-pnpm vitest run packages/runtime-babylon/src/traversal-implementation-identity.test.ts packages/runtime-babylon/src/traversal-runtime-port.test.ts packages/runtime-babylon/src/p15-conformance.test.ts packages/runtime-babylon/src/p15-runtime-debt-repro.test.ts packages/runtime-babylon/src/runtime.test.ts
+pnpm vitest run packages/terrain-surface/src/static-collider-triangle-mesh.test.ts packages/traversal/src/runtime-evidence.test.ts packages/traversal-recast/src/heightfield-source.test.ts packages/runtime-babylon/src/traversal-implementation-identity.test.ts packages/runtime-babylon/src/traversal-runtime-port.test.ts packages/runtime-babylon/src/p15-conformance.test.ts packages/runtime-babylon/src/p15-runtime-debt-repro.test.ts packages/runtime-babylon/src/runtime.test.ts
 pnpm typecheck
 ```
 
