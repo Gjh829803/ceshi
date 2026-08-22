@@ -230,12 +230,40 @@ async function createRuntimeHarness(
       return engine;
     },
   });
-  if (isNil(engine)) throw new Error("NullEngine was not created.");
-  const port = createBabylonTraversalRuntimePortV1({
-    runtime,
-    traversalLockReceipt: fixture.traversalLockReceipt,
-  });
-  return { engine, runtime, port };
+  try {
+    if (isNil(engine)) throw new Error("NullEngine was not created.");
+    const port = createBabylonTraversalRuntimePortV1({
+      runtime,
+      traversalLockReceipt: fixture.traversalLockReceipt,
+    });
+    return { engine, runtime, port };
+  } catch (error) {
+    try {
+      await runtime.dispose();
+    } catch {
+      // Preserve the acquisition failure; Runtime owns best-effort cleanup.
+    }
+    throw error;
+  }
+}
+
+async function acquireRuntimeHarnessPair<T>(
+  acquireFirst: () => Promise<T>,
+  acquireSecond: () => Promise<T>,
+  release: (resource: T) => Promise<void>,
+): Promise<readonly [T, T]> {
+  const first = await acquireFirst();
+  try {
+    const second = await acquireSecond();
+    return [first, second];
+  } catch (error) {
+    try {
+      await release(first);
+    } catch {
+      // Preserve the second acquisition failure after best-effort unwind.
+    }
+    throw error;
+  }
 }
 
 function staticBoxCollider(input: Readonly<{
@@ -512,31 +540,31 @@ describe("Route R1 fixed-tick probe with real Recast and Babylon/Havok", () => {
 
   it("records real support loss after test-owned terrain support is withdrawn", async () => {
     const harness = await createRuntimeHarness(fixture, "route-probe-fall");
-    const internals = harness.runtime as unknown as {
-      aggregates: Array<{
-        transformNode: {
-          metadata?: { worldkitEntityId?: unknown } | null;
-        };
-        dispose(): void;
-      }>;
-    };
-    const terrainAggregate = internals.aggregates.find(
-      (aggregate) =>
-        aggregate.transformNode.metadata?.worldkitEntityId ===
-          fixture.executionPlan.terrain.entityId,
-    );
-    if (isNil(terrainAggregate)) {
-      throw new Error("Runtime did not create the terrain PhysicsAggregate.");
-    }
-    const bodyCountBeforeWithdrawal = harness.runtime.snapshot().resources.bodies;
-    const controller = (harness.runtime as unknown as {
-      subjectControllersByEntityId: ReadonlyMap<string, {
-        physicsController: { checkSupport: (...args: unknown[]) => unknown };
-      }>;
-    }).subjectControllersByEntityId.get("player");
-    if (isNil(controller)) throw new Error("Player controller was not created.");
-    const checkSupport = vi.spyOn(controller.physicsController, "checkSupport");
     try {
+      const internals = harness.runtime as unknown as {
+        aggregates: Array<{
+          transformNode: {
+            metadata?: { worldkitEntityId?: unknown } | null;
+          };
+          dispose(): void;
+        }>;
+      };
+      const terrainAggregate = internals.aggregates.find(
+        (aggregate) =>
+          aggregate.transformNode.metadata?.worldkitEntityId ===
+            fixture.executionPlan.terrain.entityId,
+      );
+      if (isNil(terrainAggregate)) {
+        throw new Error("Runtime did not create the terrain PhysicsAggregate.");
+      }
+      const bodyCountBeforeWithdrawal = harness.runtime.snapshot().resources.bodies;
+      const controller = (harness.runtime as unknown as {
+        subjectControllersByEntityId: ReadonlyMap<string, {
+          physicsController: { checkSupport: (...args: unknown[]) => unknown };
+        }>;
+      }).subjectControllersByEntityId.get("player");
+      if (isNil(controller)) throw new Error("Player controller was not created.");
+      const checkSupport = vi.spyOn(controller.physicsController, "checkSupport");
       const port = wrapTraversalPort(harness.port, {
         afterReset: (evidence) => {
           expect(evidence.characterSupport.supportState).toBe("supported");
@@ -580,14 +608,17 @@ describe("Route R1 fixed-tick probe with real Recast and Babylon/Havok", () => {
   }, 60_000);
 
   it("rejects real unmatched static support and a wrong resolved path surface at tick zero", async () => {
-    const pedestalHarness = await createRuntimeHarness(
-      fixture,
-      "route-probe-unmatched",
-      withStaticSupportAtStart(fixture, 1),
-    );
-    const wrongSurfaceHarness = await createRuntimeHarness(
-      fixture,
-      "route-probe-wrong-surface",
+    const [pedestalHarness, wrongSurfaceHarness] = await acquireRuntimeHarnessPair(
+      () => createRuntimeHarness(
+        fixture,
+        "route-probe-unmatched",
+        withStaticSupportAtStart(fixture, 1),
+      ),
+      () => createRuntimeHarness(
+        fixture,
+        "route-probe-wrong-surface",
+      ),
+      async (harness) => harness.runtime.dispose(),
     );
     try {
       const [unmatched, wrongResolved] = await Promise.all([
@@ -692,8 +723,11 @@ describe("Route R1 fixed-tick probe with real Recast and Babylon/Havok", () => {
   }, 60_000);
 
   it("keeps world-XZ intent and runtime evidence independent from camera yaw", async () => {
-    const noYawHarness = await createRuntimeHarness(fixture, "route-probe-yaw-0");
-    const yawHarness = await createRuntimeHarness(fixture, "route-probe-yaw-90");
+    const [noYawHarness, yawHarness] = await acquireRuntimeHarnessPair(
+      () => createRuntimeHarness(fixture, "route-probe-yaw-0"),
+      () => createRuntimeHarness(fixture, "route-probe-yaw-90"),
+      async (harness) => harness.runtime.dispose(),
+    );
     try {
       const noYawPort = wrapTraversalPort(noYawHarness.port, {
         afterReset: () => {
@@ -731,6 +765,15 @@ describe("Route R1 fixed-tick probe with real Recast and Babylon/Havok", () => {
   }, 60_000);
 
   it("restores pass and fail runtimes on reset and disposes every runtime owner once", async () => {
+    const acquisitionError = new Error("second harness acquisition failed");
+    const firstOwner = { dispose: vi.fn(async () => undefined) };
+    await expect(acquireRuntimeHarnessPair(
+      async () => firstOwner,
+      async () => { throw acquisitionError; },
+      async (owner) => owner.dispose(),
+    )).rejects.toBe(acquisitionError);
+    expect(firstOwner.dispose).toHaveBeenCalledTimes(1);
+
     for (const scenario of ["pass", "fail"] as const) {
       const executionPlan = scenario === "pass"
         ? fixture.executionPlan
@@ -789,11 +832,14 @@ describe("Route R1 fixed-tick probe with real Recast and Babylon/Havok", () => {
   }, 60_000);
 
   it("isolates two concurrent runtimes with independent pass/fail outcomes", async () => {
-    const passHarness = await createRuntimeHarness(fixture, "route-probe-concurrent-pass");
-    const failHarness = await createRuntimeHarness(
-      fixture,
-      "route-probe-concurrent-fail",
-      withBlockingWall(fixture),
+    const [passHarness, failHarness] = await acquireRuntimeHarnessPair(
+      () => createRuntimeHarness(fixture, "route-probe-concurrent-pass"),
+      () => createRuntimeHarness(
+        fixture,
+        "route-probe-concurrent-fail",
+        withBlockingWall(fixture),
+      ),
+      async (harness) => harness.runtime.dispose(),
     );
     try {
       const [passed, failed] = await Promise.all([
