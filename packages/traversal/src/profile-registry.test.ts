@@ -25,7 +25,7 @@ import type {
 const CLOSED_DRIVER_PROFILE: TraversalDriverProfileV1 = {
   kind: "traversal-driver-profile",
   schemaVersion: 1,
-  pathLookaheadMeters: 2.4,
+  pathLookaheadMetersXZ: 2.4,
   cornerSelectionMode: "next-visible-segment",
   intentDirectionQuantizationRatio: 0.001,
   locomotionIntentMode: "walk",
@@ -81,6 +81,7 @@ const FORBIDDEN_GRAPH_BUILDER_V2_FIELDS: Readonly<Record<string, unknown>> = {
 };
 
 const FORBIDDEN_DRIVER_FIELDS: Readonly<Record<string, unknown>> = {
+  pathLookaheadMeters: 2.4,
   walkSpeedMetersPerSecond: 3,
   runSpeedMetersPerSecond: 5,
   accelerationMetersPerSecondSquared: 10,
@@ -111,7 +112,7 @@ describe("traversal driver profile registry", () => {
       profile: {
         kind: "traversal-driver-profile",
         schemaVersion: 1,
-        pathLookaheadMeters: expect.any(Number),
+        pathLookaheadMetersXZ: expect.any(Number),
         cornerSelectionMode: "next-visible-segment",
         intentDirectionQuantizationRatio: expect.any(Number),
         locomotionIntentMode: "walk",
@@ -151,9 +152,9 @@ describe("traversal driver profile registry", () => {
     expect(Object.isFrozen(first)).toBe(true);
     expect(Object.isFrozen(first.profile)).toBe(true);
     expect(() => {
-      (first.profile as { pathLookaheadMeters: number }).pathLookaheadMeters = 1;
+      (first.profile as { pathLookaheadMetersXZ: number }).pathLookaheadMetersXZ = 1;
     }).toThrow(TypeError);
-    expect(second.profile.pathLookaheadMeters).toBe(2.4);
+    expect(second.profile.pathLookaheadMetersXZ).toBe(2.4);
   });
 
   it("rejects unknown driver fields including movement, physics, and medium authorities", () => {
@@ -195,11 +196,11 @@ describe("traversal driver profile registry", () => {
     })).toThrow("TRAVERSAL_DRIVER_SCHEMA_VERSION_MISMATCH");
     expect(() => validateTraversalDriverProfileV1({
       ...CLOSED_DRIVER_PROFILE,
-      pathLookaheadMeters: -1,
+      pathLookaheadMetersXZ: -1,
     })).toThrow("TRAVERSAL_DRIVER_NUMBER_INVALID");
     expect(() => validateTraversalDriverProfileV1({
       ...CLOSED_DRIVER_PROFILE,
-      pathLookaheadMeters: Number.NaN,
+      pathLookaheadMetersXZ: Number.NaN,
     })).toThrow("TRAVERSAL_DRIVER_NUMBER_INVALID");
     expect(() => validateTraversalDriverProfileV1({
       ...CLOSED_DRIVER_PROFILE,
@@ -208,7 +209,7 @@ describe("traversal driver profile registry", () => {
     expect(() => validateTraversalDriverProfileV1({
       kind: "traversal-driver-profile",
       schemaVersion: 1,
-      pathLookaheadMeters: 2.4,
+      pathLookaheadMetersXZ: 2.4,
     })).toThrow("TRAVERSAL_DRIVER_FIELD_MISSING");
   });
 });

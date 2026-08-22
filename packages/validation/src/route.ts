@@ -26,18 +26,18 @@ export type RouteValidationDiagnosticCodeV2 =
   (typeof ROUTE_VALIDATION_DIAGNOSTIC_CODES_V2)[number];
 
 export interface RouteRuntimeGateThresholdsV1 {
-  readonly destinationToleranceMeters: number;
-  readonly maximumRouteDeviationMeters: number;
-  readonly minimumProgressMeters: number;
+  readonly destinationToleranceMetersXZ: number;
+  readonly maximumRouteDeviationMetersXZ: number;
+  readonly minimumProgressMetersXZ: number;
   readonly stalledWindowTicks: number;
   readonly maximumConsecutiveUnsupportedTicks: number;
   readonly maximumProbeTicks: number;
 }
 
 export const OUTDOOR_WORLD_PACKAGE_DEV_ROUTE_RUNTIME_GATE_THRESHOLDS_V1 = {
-  destinationToleranceMeters: 0.5,
-  maximumRouteDeviationMeters: 1,
-  minimumProgressMeters: 0.05,
+  destinationToleranceMetersXZ: 0.5,
+  maximumRouteDeviationMetersXZ: 1,
+  minimumProgressMetersXZ: 0.05,
   stalledWindowTicks: 30,
   maximumConsecutiveUnsupportedTicks: 6,
   maximumProbeTicks: 1200,
@@ -62,7 +62,7 @@ export interface RouteRuntimeConformanceMetricsV1 {
   readonly completedRequiredRouteCount: number;
   readonly failedRequiredRouteCount: number;
   readonly maximumStalledDurationTicks: number;
-  readonly maximumRouteDeviationMeters: number;
+  readonly maximumRouteDeviationMetersXZ: number;
   readonly maximumConsecutiveUnexpectedUnsupportedTicks: number;
   readonly slidingDurationTicks: number;
   readonly unexpectedSupportLossCount: number;

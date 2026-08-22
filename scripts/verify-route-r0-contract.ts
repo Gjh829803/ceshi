@@ -182,7 +182,7 @@ function checkDriverProfileWhitelist(): void {
     () =>
       validateTraversalDriverProfileV1({
         ...resolved.profile,
-        destinationToleranceMeters: 0.5,
+        destinationToleranceMetersXZ: 0.5,
       }),
     (error: unknown) =>
       error instanceof Error && error.message.includes("TRAVERSAL_DRIVER_FIELD_FORBIDDEN"),

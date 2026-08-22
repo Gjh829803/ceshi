@@ -107,11 +107,21 @@ describe("Route validation vocabulary", () => {
     expect(
       OUTDOOR_WORLD_PACKAGE_DEV_VALIDATION_PROFILE_V2.routeRuntimeGateThresholds,
     ).toMatchObject({
-      destinationToleranceMeters: 0.5,
-      maximumRouteDeviationMeters: 1,
+      destinationToleranceMetersXZ: 0.5,
+      maximumRouteDeviationMetersXZ: 1,
+      minimumProgressMetersXZ: 0.05,
       stalledWindowTicks: 30,
       maximumProbeTicks: 1200,
     });
+    expect(
+      OUTDOOR_WORLD_PACKAGE_DEV_VALIDATION_PROFILE_V2.routeRuntimeGateThresholds,
+    ).not.toHaveProperty("destinationToleranceMeters");
+    const runtimeMetrics =
+      OUTDOOR_WORLD_PACKAGE_DEV_VALIDATION_PROFILE_V2.gateDefinitionsById[
+        "route-runtime-conformance"
+      ]!.metricDefinitionsById;
+    expect(runtimeMetrics).toHaveProperty("maximum-route-deviation-meters-xz");
+    expect(runtimeMetrics).not.toHaveProperty("maximum-route-deviation-meters");
   });
 
   it("rejects cross-unit threshold fields and generic numeric bags", () => {

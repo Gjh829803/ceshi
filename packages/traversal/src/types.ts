@@ -62,7 +62,7 @@ export interface ResolvedTraversalLockReceiptV1 {
 export interface TraversalDriverProfileV1 {
   readonly kind: "traversal-driver-profile";
   readonly schemaVersion: 1;
-  readonly pathLookaheadMeters: number;
+  readonly pathLookaheadMetersXZ: number;
   readonly cornerSelectionMode: "next-visible-segment";
   readonly intentDirectionQuantizationRatio: number;
   readonly locomotionIntentMode: "walk";

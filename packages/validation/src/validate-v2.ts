@@ -651,9 +651,9 @@ function validateRouteRuntimeGateThresholds(
   rejectUnknownFields(
     record,
     [
-      "destinationToleranceMeters",
-      "maximumRouteDeviationMeters",
-      "minimumProgressMeters",
+      "destinationToleranceMetersXZ",
+      "maximumRouteDeviationMetersXZ",
+      "minimumProgressMetersXZ",
       "stalledWindowTicks",
       "maximumConsecutiveUnsupportedTicks",
       "maximumProbeTicks",
@@ -662,9 +662,9 @@ function validateRouteRuntimeGateThresholds(
     diagnostics,
   );
   for (const field of [
-    "destinationToleranceMeters",
-    "maximumRouteDeviationMeters",
-    "minimumProgressMeters",
+    "destinationToleranceMetersXZ",
+    "maximumRouteDeviationMetersXZ",
+    "minimumProgressMetersXZ",
   ]) {
     if (requireFiniteNumber(record[field], `${path}/${field}`, diagnostics)) {
       if ((record[field] as number) <= 0) {

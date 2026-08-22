@@ -87,7 +87,7 @@ const HASH_A = `sha256:${"a".repeat(64)}` as const;
 const HASH_B = `sha256:${"b".repeat(64)}` as const;
 const HASH_C = `sha256:${"c".repeat(64)}` as const;
 const DRIVER_HASH =
-  "sha256:2522b0dd2b4df3165cb5a7a44de3f1a56777afc660194ef4eb9c87a56dda83d9" as const;
+  "sha256:a3312d306ad499dabb29a50c868a98d8bb3b65592e050cd277ae3571d5347405" as const;
 
 const SURFACE = {
   traversalSurfaceId: "surface-main",
@@ -115,7 +115,7 @@ const RESOLVED_DRIVER_PROFILE: ResolvedTraversalDriverProfileV1 = {
   profile: {
     kind: "traversal-driver-profile",
     schemaVersion: 1,
-    pathLookaheadMeters: 2.4,
+    pathLookaheadMetersXZ: 2.4,
     cornerSelectionMode: "next-visible-segment",
     intentDirectionQuantizationRatio: 0.001,
     locomotionIntentMode: "walk",

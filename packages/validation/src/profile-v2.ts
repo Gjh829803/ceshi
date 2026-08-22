@@ -173,9 +173,9 @@ export const OUTDOOR_WORLD_PACKAGE_DEV_VALIDATION_PROFILE_V2 = {
           "maximum-stalled-duration-ticks",
           { maximumAllowedTicks: THRESHOLDS.stalledWindowTicks },
         ),
-        "maximum-route-deviation-meters": metersMetric(
-          "maximum-route-deviation-meters",
-          { maximumAllowedMeters: THRESHOLDS.maximumRouteDeviationMeters },
+        "maximum-route-deviation-meters-xz": metersMetric(
+          "maximum-route-deviation-meters-xz",
+          { maximumAllowedMeters: THRESHOLDS.maximumRouteDeviationMetersXZ },
         ),
         "maximum-consecutive-unexpected-unsupported-ticks": ticksMetric(
           "maximum-consecutive-unexpected-unsupported-ticks",

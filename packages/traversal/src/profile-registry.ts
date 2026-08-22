@@ -23,7 +23,7 @@ export const BUILT_IN_HEIGHTFIELD_R1_TRAVERSAL_GRAPH_BUILDER_PROFILE_REF =
 const TRAVERSAL_DRIVER_PROFILE_REQUIRED_KEYS = [
   "kind",
   "schemaVersion",
-  "pathLookaheadMeters",
+  "pathLookaheadMetersXZ",
   "cornerSelectionMode",
   "intentDirectionQuantizationRatio",
   "locomotionIntentMode",
@@ -75,7 +75,7 @@ const TRAVERSAL_GRAPH_BUILDER_PROFILE_V2_ALLOWED_KEYS = new Set(
 const BUILT_IN_WALK_HARD_RIBBON_DRIVER_PROFILE: TraversalDriverProfileV1 = {
   kind: "traversal-driver-profile",
   schemaVersion: 1,
-  pathLookaheadMeters: 2.4,
+  pathLookaheadMetersXZ: 2.4,
   cornerSelectionMode: "next-visible-segment",
   intentDirectionQuantizationRatio: 0.001,
   locomotionIntentMode: "walk",
@@ -251,9 +251,9 @@ export function validateTraversalDriverProfileV1(value: unknown): void {
     throw new Error("TRAVERSAL_DRIVER_SCHEMA_VERSION_MISMATCH: schemaVersion must be 1.");
   }
   requirePositiveNumber(
-    source.pathLookaheadMeters,
+    source.pathLookaheadMetersXZ,
     "TRAVERSAL_DRIVER_NUMBER_INVALID",
-    "pathLookaheadMeters",
+    "pathLookaheadMetersXZ",
     32,
   );
   requirePositiveNumber(
