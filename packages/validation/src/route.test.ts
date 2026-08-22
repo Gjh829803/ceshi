@@ -19,6 +19,7 @@ describe("Route validation vocabulary", () => {
         "ROUTE_CORRIDOR_LAYER_AMBIGUOUS",
         "ROUTE_START_SUPPORT_INVALID",
         "ROUTE_REQUIRED_PATH_UNREACHABLE",
+        "ROUTE_WATER_TRAVERSAL_UNSUPPORTED",
         "ROUTE_RUNTIME_SUPPORT_LOST",
       ]),
     );

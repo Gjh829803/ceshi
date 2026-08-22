@@ -1,3 +1,8 @@
-// Provider-specific contracts remain internal until the provider-neutral
-// Heightfield build/query facade is introduced in later Route R1 tasks.
-export {};
+export {
+  createHeightfieldRouteBuildInputV1,
+  HeightfieldRouteBuildInputInvalidErrorV1,
+} from "./heightfield-source.js";
+export type {
+  CreateHeightfieldRouteBuildInputInputV1,
+  HeightfieldRouteBuildInputInvalidReasonV1,
+} from "./heightfield-source.js";

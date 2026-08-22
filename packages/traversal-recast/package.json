@@ -8,6 +8,8 @@
   },
   "dependencies": {
     "@whitebox-world/protocol": "workspace:*",
+    "@whitebox-world/runtime-contracts": "workspace:*",
+    "@whitebox-world/terrain-surface": "workspace:*",
     "@whitebox-world/traversal": "workspace:*",
     "recast-navigation": "0.43.1"
   },

@@ -4,6 +4,7 @@ import {
   assertTraversalGraphBuildBudgetV1,
   estimateHeightfieldTileCountV1,
   quantizeTraversalMetersToMicrometersV1,
+  TraversalGraphBuildBudgetExceededErrorV1,
 } from "./index.js";
 
 describe("Heightfield traversal tile budget", () => {
@@ -33,8 +34,8 @@ describe("Heightfield traversal tile budget", () => {
 
     expect(() => {
       assertTraversalGraphBuildBudgetV1({
-        widthMeters: 19.201,
-        depthMeters: 9.601,
+        minimumMetersXZ: [-10, -5],
+        maximumMetersXZ: [9.201, 4.601],
         tileSizeCells: 64,
         voxelCellSizeMeters: 0.15,
         maximumTiles: 5,
@@ -42,6 +43,65 @@ describe("Heightfield traversal tile budget", () => {
       provider();
     }).toThrow("ROUTE_GRAPH_BUDGET_EXCEEDED");
     expect(provider).not.toHaveBeenCalled();
+  });
+
+  it("carries stable caller bounds and the exact tile estimate on budget failure", () => {
+    let captured: unknown;
+    try {
+      assertTraversalGraphBuildBudgetV1({
+        minimumMetersXZ: [-10, -5],
+        maximumMetersXZ: [9.201, 4.601],
+        tileSizeCells: 64,
+        voxelCellSizeMeters: 0.15,
+        maximumTiles: 5,
+      });
+    } catch (error) {
+      captured = error;
+    }
+
+    expect(captured).toBeInstanceOf(TraversalGraphBuildBudgetExceededErrorV1);
+    expect(captured).toMatchObject({
+      name: "TraversalGraphBuildBudgetExceededErrorV1",
+      code: "ROUTE_GRAPH_BUDGET_EXCEEDED",
+      tilesX: 3,
+      tilesZ: 2,
+      estimatedTiles: 6,
+      maximumTiles: 5,
+      minimumMetersXZ: [-10, -5],
+      maximumMetersXZ: [9.201, 4.601],
+    });
+    expect(Object.isFrozen((captured as TraversalGraphBuildBudgetExceededErrorV1).minimumMetersXZ)).toBe(true);
+    expect(Object.isFrozen((captured as TraversalGraphBuildBudgetExceededErrorV1).maximumMetersXZ)).toBe(true);
+  });
+
+  it("derives dimensions from one authoritative bounded extent", () => {
+    expect(assertTraversalGraphBuildBudgetV1({
+      minimumMetersXZ: [-9.6, -4.8],
+      maximumMetersXZ: [9.6, 4.8],
+      tileSizeCells: 64,
+      voxelCellSizeMeters: 0.15,
+      maximumTiles: 2,
+    })).toEqual({ tilesX: 2, tilesZ: 1, estimatedTiles: 2 });
+
+    for (const bounds of [
+      { minimumMetersXZ: [0, 0], maximumMetersXZ: [0, 1] },
+      { minimumMetersXZ: [1, 0], maximumMetersXZ: [0, 1] },
+      { minimumMetersXZ: [0, Number.NaN], maximumMetersXZ: [1, 1] },
+    ] as const) {
+      expect(() => assertTraversalGraphBuildBudgetV1({
+        ...bounds,
+        tileSizeCells: 64,
+        voxelCellSizeMeters: 0.15,
+        maximumTiles: 2,
+      })).toThrow("TRAVERSAL_GRAPH_BUILD_BUDGET_INVALID");
+    }
+    expect(() => assertTraversalGraphBuildBudgetV1({
+      minimumMetersXZ: undefined,
+      maximumMetersXZ: [1, 1],
+      tileSizeCells: 64,
+      voxelCellSizeMeters: 0.15,
+      maximumTiles: 2,
+    } as never)).toThrow("TRAVERSAL_GRAPH_BUILD_BUDGET_INVALID");
   });
 
   it("rejects non-finite, non-positive, and overflowing estimates", () => {

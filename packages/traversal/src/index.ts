@@ -11,7 +11,24 @@ export {
   assertTraversalGraphBuildBudgetV1,
   estimateHeightfieldTileCountV1,
   quantizeTraversalMetersToMicrometersV1,
+  TraversalGraphBuildBudgetExceededErrorV1,
 } from "./build-budget.js";
+export {
+  assertHeightfieldRouteBuildInputV1,
+  hashHeightfieldRouteBuildInputV1,
+} from "./build-input.js";
+export type {
+  BlockedWaterBoundaryV1,
+  BlockedWaterExclusionV1,
+  CanonicalTriangleSoupV1,
+  HeightfieldRouteBuildBudgetEvidenceV1,
+  HeightfieldRouteBuildInputReceiptV1,
+  HeightfieldRouteBuildInputV1,
+  HeightfieldRouteTerrainSourceV1,
+  RouteBuildAnchorV1,
+  RouteHardRibbonV1,
+  StaticBlockingColliderV1,
+} from "./build-input.js";
 export type {
   HeightfieldTileBudgetInputV1,
   HeightfieldTileEstimateInputV1,

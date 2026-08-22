@@ -369,7 +369,7 @@ pnpm vitest run packages/terrain-surface/src/triangle-heightfield.test.ts packag
 pnpm typecheck
 ```
 
-- [ ] **Step 7: Write RED source-assembly tests (Task 3C)**
+- [x] **Step 7: Write RED source-assembly tests (Task 3C)**
 
 Cover:
 
@@ -393,7 +393,7 @@ Cover:
 
 Geometry tests assert mathematical properties—analytic containment, filled-region intersection, positive-Y terrain winding, and absence of outside ribbon points. They must not freeze arbitrary stadium/icosphere start-vertex numbering as a second public hash contract.
 
-- [ ] **Step 8: Run the RED source tests**
+- [x] **Step 8: Run the RED source tests**
 
 Run:
 
@@ -403,7 +403,7 @@ pnpm vitest run packages/traversal/src/build-input.test.ts packages/traversal-re
 
 Expected: FAIL because the build source does not exist.
 
-- [ ] **Step 9: Implement deterministic locked input assembly**
+- [x] **Step 9: Implement deterministic locked input assembly**
 
 Use ExecutionPlan V5 only. Generate collision triangle soup from `ExecutionStaticColliderV1`, not rendered meshes, visual primitives, or AABBs. Primitive tessellation must contain the analytic Runtime collider after the same Babylon `T * R * S`; Graph construction may reject marginal clearance, but it may not approve a path that physics blocks. Reject forged non-positive scale rather than adding mirrored behavior outside the Authoring contract.
 
@@ -411,7 +411,7 @@ The semantic hard ribbon is exact point-to-polyline distance `<= widthMeters / 2
 
 Water surface visuals never become ground. Blocked water drops conservatively intersecting terrain triangles and records evidence, intersecting swimmable water fails with `ROUTE_WATER_TRAVERSAL_UNSUPPORTED`, and walkable water leaves the Heightfield unchanged. Add the new stable code once to the Route diagnostic vocabulary; blocked water that cuts the route still becomes `ROUTE_REQUIRED_PATH_UNREACHABLE` in Task 4/Task 7.
 
-- [ ] **Step 10: Add input budget evidence**
+- [x] **Step 10: Add input budget evidence**
 
 Reject non-finite values and call the Task 2 `assertTraversalGraphBuildBudgetV1()` guard exactly once for the final non-empty retained-terrain AABB; do not duplicate its integer-micrometer tile estimate and do not invent a triangle budget absent from Graph Builder Profile V2. Upgrade the guard error to carry its exact estimate and caller-supplied bounds as stable structured `ROUTE_GRAPH_BUDGET_EXCEEDED` evidence. Empty source is not a budget failure.
 
