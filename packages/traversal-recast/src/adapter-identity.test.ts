@@ -46,7 +46,7 @@ describe("Recast Graph Provider Adapter identity", () => {
       schemaVersion: 1,
       graphProviderAdapterRef:
         "worldkit://graph-provider-adapter/recast-navigation.tiled@1",
-      graphProviderAdapterResolvedVersion: "0.43.1+mapping.1",
+      graphProviderAdapterResolvedVersion: "0.43.1+lifecycle.1+mapping.1",
       providerPackageName: "recast-navigation",
       providerPackageVersion: "0.43.1",
       generatorMode: "tiled",
@@ -66,7 +66,7 @@ describe("Recast Graph Provider Adapter identity", () => {
       sha256CanonicalJson(RECAST_GRAPH_PROVIDER_ADAPTER_MANIFEST_V1),
     );
     expect(RECAST_GRAPH_PROVIDER_ADAPTER_HASH_V1).toBe(
-      "sha256:8bad5969f462081a73431045992b82da5dfad83d2c6fdf086313657dcdd8a93b",
+      "sha256:6c06d9eb2a90fe58edcc9504d74c9c9bfecaeb67b10bd0b1c99f31d0f40fdf91",
     );
     expect(Object.isFrozen(RECAST_GRAPH_PROVIDER_ADAPTER_MANIFEST_V1)).toBe(true);
     expect(Object.isFrozen(RECAST_GRAPH_PROVIDER_ADAPTER_MANIFEST_V1.constants))

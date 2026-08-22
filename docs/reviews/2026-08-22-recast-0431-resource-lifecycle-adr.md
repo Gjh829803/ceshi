@@ -42,7 +42,7 @@ The generator patch may only add ownership state, `destroy`/`free`/`isView` oper
 
 | Resource | Allocation point | Owner after an ordinary returned result | Owner when the call throws before returning | Required release primitive |
 | --- | --- | --- | --- | --- |
-| process-global WASM module | `init()` | process | process | never shut down |
+| process-global WASM module | `init()` | process after fulfilled initialization | no Module owner after rejected initialization | never shut down; cache a fulfilled initialization Promise, but clear the same rejected Promise so a later serialized operation may retry |
 | NavMeshQuery | SDK after successful query construction | SDK | SDK if constructed | `query.destroy()` before NavMesh |
 | NavMesh | tiled generator | SDK on successful return; generator already destroys it on returned top-level failure | generator | `navMesh.destroy()`; never raw-only destroy |
 | `RecastBuildContext.raw` + `RecastBuildContextJsImpl` | core wrapper constructor | SDK | generator | idempotence-guarded `buildContext.destroy()` attempts context first and impl second, continues after either error, then throws one/aggregate error |
@@ -66,6 +66,7 @@ Additional invariants:
 
 - returned JavaScript result containers do not own WASM memory;
 - a normal returned retained result transfers only NavMesh, build context, chunky mesh, and tile intermediates to the SDK cleanup function;
+- the SDK cleanup function treats each returned `GenerateTiledNavMeshResult` object as one consumable operation receipt. It marks that receipt consumed before the first native release attempt, continues every release in the same pass, aggregates errors afterward, and makes every later cleanup call for the same receipt a no-op. A thrown native release has ambiguous completion state and must never be retried;
 - an exception returns no ownership receipt, so the generator must release NavMesh, build context, chunky mesh, every previously retained tile intermediate, current tile temporaries, configs, and inputs before rethrowing;
 - nav-data ownership is an explicit per-tile state machine: `uncreated -> generator-owned -> navmesh-owned-and-wrapper-consumed` on successful add, or `uncreated -> generator-owned -> destroyed` on failure; cleanup checks only the still-generator-owned state;
 - the core data-result helper reads `success` and the raw pointer before destroying the holder, checks `Raw.isNull`, and never calls `fromRaw(null)`; no code reads the holder after destroy;
@@ -91,14 +92,14 @@ The patches must not change:
 `RECAST_GRAPH_PROVIDER_ADAPTER_MANIFEST_V1` must include and hash:
 
 - exact versions and lockfile integrity values for `recast-navigation`, `@recast-navigation/core`, `@recast-navigation/generators`, and `@recast-navigation/wasm`;
-- the exact two version-qualified `pnpm.patchedDependencies` keys and repository-relative patch paths;
+- the exact two version-qualified root `pnpm-workspace.yaml#patchedDependencies` keys and repository-relative patch paths;
 - patch revision `lifecycle.1` and SHA-256 of both checked-in patch files;
 - SHA-256 of the installed patched file bytes for exactly `@recast-navigation/core/dist/index.mjs` and `@recast-navigation/generators/dist/index.mjs`;
 - existing tiled-generator, mapping, rounding, and provider-constant fields.
 
 Every hashed identity value is a portable literal. Absolute paths, `node_modules/.pnpm` layout, `require.resolve()` output, file URLs, registry responses, current working directory, timestamps, and the manifest's own final hash are forbidden from the manifest. The Adapter `resolvedVersion` must include `lifecycle.1`; `RECAST_GRAPH_PROVIDER_ADAPTER_HASH_V1` remains outside the manifest and equals `sha256CanonicalJson(manifest)`.
 
-Tests read the root `pnpm.patchedDependencies`, lockfile package/integrity/patch entries, checked-in patch bytes, installed package versions, and the two installed patched file contents. Installation lookup starts from the declared `recast-navigation` entry and uses a chained `createRequire()` so pnpm strict dependency isolation is preserved; only content hashes are compared with the manifest. Removing a patch, failing to apply it, changing a transitive package tarball, or editing installed provider code cannot retain the old Adapter hash. The pnpm-generated lockfile patch hash is asserted present and stable but is not assumed to equal the SDK's SHA-256 of patch bytes.
+Tests read the root `pnpm-workspace.yaml#patchedDependencies` declarations used by pnpm 10, lockfile package/integrity/patch entries, checked-in patch bytes, installed package versions, and the two installed patched file contents. Installation lookup starts from the declared `recast-navigation` entry and uses a chained `createRequire()` so pnpm strict dependency isolation is preserved; only content hashes are compared with the manifest. Removing a patch, failing to apply it, changing a transitive package tarball, or editing installed provider code cannot retain the old Adapter hash. The pnpm-generated lockfile patch hash is asserted present and stable but is not assumed to equal the SDK's SHA-256 of patch bytes.
 
 ## Rejected alternatives
 
@@ -148,7 +149,7 @@ An upgrade of any of the four pinned Recast packages must audit whether upstream
 - Initial full review: NO-GO; incomplete ownership, drift identity, and evidence were revised.
 - Ownership review: GO with no remaining P0-P3 after explicit result, tile-byte, input, build-context, returned-failure, and throw ownership were frozen.
 - Identity/evidence review: GO after removing non-reproducible metadata and paths, binding portable package/patch/installed-byte evidence, instrumenting all Recast release primitives, and freezing a deterministic ChunkyTriMesh empty-tile fixture.
-- Implementation remains unapproved until RED evidence, both patches, full verification, self-review, and Cursor code review are complete.
+- At design freeze, implementation remained unapproved until RED evidence, both patches, full verification, self-review, and Cursor code review were complete.
 
 ## Initial Cursor review disposition
 
@@ -172,3 +173,18 @@ An upgrade of any of the four pinned Recast packages must audit whether upstream
 - Evidence re-review P2 empty-tile border expansion: accepted; quads stay beyond the expanded query rectangle and the test proves the gap tile took the no-data path.
 - Final evidence-review P2 chunky leaf overlap: accepted; the fixture now exceeds the 128-triangle leaf limit symmetrically, freezes two separated leaf AABBs, directly proves zero chunk overlap, and only then asserts the empty early-return shape.
 - Final evidence-review P3 instrumentation traps: accepted; arrays are observed only through the inner `Raw.destroy`, returned-object double-free uses stable pointers, and temporary address reuse is handled as separate lifetimes.
+
+## Implementation disposition
+
+**Accepted for Route R1 Task 2 on 2026-08-22 after final design corrections.** The lifecycle patch is an internal, version-pinned provider repair; it does not change the Canonical Authoring, Lock, Envelope, Graph, CLI, Browser, Babylon, or Havok contracts. The production retained-intermediate path transfers exactly the NavMesh, build context, chunky-triangle mesh, and per-Tile Recast intermediates to the SDK cleanup boundary. Generator-local wrappers, failure-only owners, and transferred Tile-data shells are released by the patched provider according to the ownership table above.
+
+Implementation review closed as follows:
+
+- The first aggregate Codex self-review did not detect that the SDK cleanup receipt remained reusable after release or that a rejected initialization Promise remained cached. Cursor's skill-managed final design review reproduced both as blocking D4 findings. Both were accepted, written as RED regressions, and fixed before Task 2 closure.
+- The cleanup boundary now consumes the complete operation receipt before its first release attempt. Real-WASM regressions prove that a second cleanup is a no-op both after ordinary success and after the first cleanup continues through a post-destroy Query error and throws an aggregate. Initialization retains a fulfilled Promise but clears the same rejected Promise so the next serialized operation may retry.
+- Cursor Grok 4.6 Extra High also rejected earlier core result cleanup, identity lockfile assertions, and acceptance instrumentation. Those findings were reproduced and fixed. Focused re-reviews returned `DESIGN GO` for the core/generator lifecycle and final receipt/init design, plus `CODE GO` for the core patch, generator patch, patch identity, and provider acceptance suites, with no unresolved P0-P2 at those review points.
+- The semantic golden remained `sha256:97459be30f32a7a37bcdb92bc655d5b70a0378cd43d930c07cb4c0eae076b374` before and after the lifecycle-only patches.
+- `pnpm install --frozen-lockfile` passed, proving the checked-in pnpm 10 patch declarations and lockfile reproduce the installed provider bytes.
+- The Task 2 focused suite passed with 10 files and 65 tests. Full `pnpm test` passed with 107 files and 920 tests. `pnpm typecheck`, `pnpm build`, `pnpm verify:route-r0-contract`, `pnpm verify:canonical`, `pnpm verify:placement-layout`, `pnpm verify:rigged-subject`, and `pnpm verify:g-bot-subject` all passed.
+
+The existing Vite large-chunk warning is outside this provider lifecycle slice and does not alter its acceptance. Any Recast package upgrade must still follow the upgrade rule above; this disposition does not approve floating either patch to another provider version.

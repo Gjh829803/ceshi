@@ -46,4 +46,20 @@ describe("RecastProviderLifecycleV1", () => {
     );
     expect(operation).not.toHaveBeenCalled();
   });
+
+  it("retries initialization after a rejected attempt", async () => {
+    let initializationAttempts = 0;
+    const lifecycle = new RecastProviderLifecycleV1(async () => {
+      initializationAttempts += 1;
+      if (initializationAttempts === 1) {
+        throw new Error("expected-transient-init-failure");
+      }
+    });
+
+    await expect(lifecycle.runExclusive(async () => "unreachable")).rejects
+      .toThrow("expected-transient-init-failure");
+    await expect(lifecycle.runExclusive(async () => "after-retry")).resolves
+      .toBe("after-retry");
+    expect(initializationAttempts).toBe(2);
+  });
 });

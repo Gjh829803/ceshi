@@ -25,9 +25,17 @@ export class RecastProviderLifecycleV1 {
   ) {}
 
   private initializeOnce(): Promise<void> {
-    this.initializationPromise ??= Promise.resolve().then(
-      this.initializeProvider,
-    );
+    if (this.initializationPromise === undefined) {
+      const initializationPromise = Promise.resolve().then(
+        this.initializeProvider,
+      );
+      this.initializationPromise = initializationPromise;
+      void initializationPromise.catch(() => {
+        if (this.initializationPromise === initializationPromise) {
+          this.initializationPromise = undefined;
+        }
+      });
+    }
     return this.initializationPromise;
   }
 
@@ -48,6 +56,7 @@ export class RecastProviderLifecycleV1 {
 }
 
 const PROCESS_RECAST_PROVIDER_LIFECYCLE_V1 = new RecastProviderLifecycleV1(init);
+const CONSUMED_RECAST_TILED_OPERATION_RECEIPTS_V1 = new WeakSet<object>();
 
 export function runRecastProviderOperationV1<T>(
   operation: () => Promise<T> | T,
@@ -67,6 +76,12 @@ export function destroyRecastTiledOperationResourcesV1(
   query: NavMeshQuery | undefined,
   result: GenerateTiledNavMeshResult,
 ): void {
+  if (CONSUMED_RECAST_TILED_OPERATION_RECEIPTS_V1.has(result)) return;
+  // Consume before the first release attempt. A native release may throw before
+  // JavaScript can prove whether ownership was freed, so retrying is less safe
+  // than preserving exactly-once release semantics while continuing this pass.
+  CONSUMED_RECAST_TILED_OPERATION_RECEIPTS_V1.add(result);
+
   const errors: unknown[] = [];
   const destroy = (operation: () => void) => {
     try {
@@ -111,7 +126,7 @@ export function destroyRecastTiledOperationResourcesV1(
   if (result.success) {
     destroy(() => result.navMesh.destroy());
   }
-  destroy(() => Raw.destroy(intermediates.buildContext.raw));
+  destroy(() => intermediates.buildContext.destroy());
 
   if (errors.length > 0) {
     throw new AggregateError(errors, "TRAVERSAL_RECAST_RESOURCE_CLEANUP_FAILED");

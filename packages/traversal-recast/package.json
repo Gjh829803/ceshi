@@ -12,6 +12,7 @@
     "recast-navigation": "0.43.1"
   },
   "devDependencies": {
-    "@whitebox-world/runtime-babylon": "workspace:*"
+    "@whitebox-world/runtime-babylon": "workspace:*",
+    "yaml": "^2.9.0"
   }
 }
