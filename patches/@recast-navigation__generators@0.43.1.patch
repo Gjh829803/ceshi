@@ -1,11 +1,48 @@
 diff --git a/dist/index.mjs b/dist/index.mjs
-index adc727017665f1db5b3b71ee0fdc158a99fb7762..5f4d0f8896ffcca958167eeeacce7ebf6a1314e0 100644
+index adc7270..0a1f73b 100644
 --- a/dist/index.mjs
 +++ b/dist/index.mjs
-@@ -687,33 +687,35 @@ const tiledNavMeshGeneratorConfigDefaults = {
+@@ -687,33 +687,74 @@ const tiledNavMeshGeneratorConfigDefaults = {
    chunkyTriMeshTrisPerChunk: 256,
    buildBvTree: true
  };
+-const generateTileNavMeshData = (positions, indices, rcConfig, chunkyTriMesh, tile, options = {}, keepIntermediates = false, buildContext = new RecastBuildContext()) => {
++const validateSourceAreaMode = (positionsLength, indicesLength, getIndex, sourceAreaMode) => {
++  if (sourceAreaMode === undefined) return undefined;
++  if (sourceAreaMode === null || typeof sourceAreaMode !== 'object' || Array.isArray(sourceAreaMode)) {
++    throw new Error('RECAST_SOURCE_AREA_MODE_INVALID: sourceAreaMode must be an object');
++  }
++  const keys = Object.keys(sourceAreaMode).sort();
++  if (keys.length !== 3 || keys[0] !== 'blockerAreaId' || keys[1] !== 'kind' || keys[2] !== 'terrainVertexCount') {
++    throw new Error('RECAST_SOURCE_AREA_MODE_INVALID: sourceAreaMode fields must be closed');
++  }
++  if (sourceAreaMode.kind !== 'terrain-with-static-blockers-r1') {
++    throw new Error('RECAST_SOURCE_AREA_MODE_INVALID: sourceAreaMode kind is unsupported');
++  }
++  if (sourceAreaMode.blockerAreaId !== 1) {
++    throw new Error('RECAST_SOURCE_AREA_MODE_INVALID: blockerAreaId must equal 1');
++  }
++  if (!Number.isSafeInteger(positionsLength) || positionsLength % 3 !== 0 || !Number.isSafeInteger(indicesLength) || indicesLength % 3 !== 0) {
++    throw new Error('RECAST_SOURCE_AREA_MODE_INVALID: position and index counts must be safe triples');
++  }
++  const mergedVertexCount = positionsLength / 3;
++  if (!Number.isSafeInteger(sourceAreaMode.terrainVertexCount) || !(sourceAreaMode.terrainVertexCount > 0) || !(sourceAreaMode.terrainVertexCount < mergedVertexCount)) {
++    throw new Error('RECAST_SOURCE_AREA_MODE_INVALID: terrainVertexCount must be strictly inside merged vertices');
++  }
++  for (let offset = 0; offset < indicesLength; offset += 3) {
++    const first = getIndex(offset);
++    const second = getIndex(offset + 1);
++    const third = getIndex(offset + 2);
++    if (![first, second, third].every(index => Number.isSafeInteger(index) && index >= 0 && index < mergedVertexCount)) {
++      throw new Error('RECAST_SOURCE_AREA_MODE_INVALID: triangle index is out of range');
++    }
++    const firstIsTerrain = first < sourceAreaMode.terrainVertexCount;
++    if ((second < sourceAreaMode.terrainVertexCount) !== firstIsTerrain || (third < sourceAreaMode.terrainVertexCount) !== firstIsTerrain) {
++      throw new Error('RECAST_SOURCE_AREA_MODE_INVALID: triangle crosses the terrain vertex boundary');
++    }
++  }
++  return sourceAreaMode;
++};
 +const releaseTileIntermediates = tileIntermediate => {
 +  const errors = [];
 +  const release = (key, free) => {
@@ -27,7 +64,10 @@ index adc727017665f1db5b3b71ee0fdc158a99fb7762..5f4d0f8896ffcca958167eeeacce7ebf
 +    throw new AggregateError(errors, 'RECAST_TILE_INTERMEDIATE_RESOURCE_CLEANUP_FAILED');
 +  }
 +};
- const generateTileNavMeshData = (positions, indices, rcConfig, chunkyTriMesh, tile, options = {}, keepIntermediates = false, buildContext = new RecastBuildContext()) => {
++const generateTileNavMeshData = (positions, indices, rcConfig, chunkyTriMesh, tile, options = {}, keepIntermediates = false, buildContext) => {
++  const sourceAreaMode = validateSourceAreaMode(positions.size, indices.size, index => indices.get(index), options.sourceAreaMode);
++  const ownsBuildContext = buildContext === undefined;
++  if (buildContext === undefined) buildContext = new RecastBuildContext();
    const tileIntermediate = {
      x: tile.x,
      y: tile.y
@@ -60,7 +100,7 @@ index adc727017665f1db5b3b71ee0fdc158a99fb7762..5f4d0f8896ffcca958167eeeacce7ebf
    };
    const failTileMesh = error => {
      buildContext.log(Recast.RC_LOG_ERROR, error);
-@@ -724,7 +726,15 @@ const generateTileNavMeshData = (positions, indices, rcConfig, chunkyTriMesh, ti
+@@ -724,7 +765,15 @@ const generateTileNavMeshData = (positions, indices, rcConfig, chunkyTriMesh, ti
        intermediates: tileIntermediate
      };
    };
@@ -77,7 +117,7 @@ index adc727017665f1db5b3b71ee0fdc158a99fb7762..5f4d0f8896ffcca958167eeeacce7ebf
    // Expand the heightfield bounding box by border size to find the extents of geometry we need to build this tile.
    //
    // This is done in order to make sure that the navmesh tiles connect correctly at the borders,
-@@ -774,13 +784,13 @@ const generateTileNavMeshData = (positions, indices, rcConfig, chunkyTriMesh, ti
+@@ -774,13 +823,13 @@ const generateTileNavMeshData = (positions, indices, rcConfig, chunkyTriMesh, ti
    // Allocate array that can hold triangle flags.
    // If you have multiple meshes you need to process, allocate
    // and array which can hold the max number of triangles you need to process.
@@ -93,7 +133,7 @@ index adc727017665f1db5b3b71ee0fdc158a99fb7762..5f4d0f8896ffcca958167eeeacce7ebf
    chunkIdsArray.resize(maxChunkIds);
    const nChunksOverlapping = chunkyTriMesh.getChunksOverlappingRect(tbmin, tbmax, chunkIdsArray, maxChunkIds);
    if (nChunksOverlapping === 0) {
-@@ -793,15 +803,38 @@ const generateTileNavMeshData = (positions, indices, rcConfig, chunkyTriMesh, ti
+@@ -793,15 +842,50 @@ const generateTileNavMeshData = (positions, indices, rcConfig, chunkyTriMesh, ti
      const nodeId = chunkIdsArray.get(i);
      const node = chunkyTriMesh.nodes(nodeId);
      const nNodeTris = node.n;
@@ -118,6 +158,18 @@ index adc727017665f1db5b3b71ee0fdc158a99fb7762..5f4d0f8896ffcca958167eeeacce7ebf
 +      // If your input data is multiple meshes, you can transform them here, calculate
 +      // the are type for each of the meshes and rasterize them.
 +      markWalkableTriangles(buildContext, tileConfig.walkableSlopeAngle, positions, indices.size, nodeTrianglesArray, nNodeTris, triangleAreasArray);
++      if (sourceAreaMode !== undefined) {
++        for (let triangleIndex = 0; triangleIndex < nNodeTris; triangleIndex++) {
++          const firstVertexIndex = nodeTrianglesArray.get(triangleIndex * 3);
++          const secondVertexIndex = nodeTrianglesArray.get(triangleIndex * 3 + 1);
++          const thirdVertexIndex = nodeTrianglesArray.get(triangleIndex * 3 + 2);
++          const firstIsTerrain = firstVertexIndex < sourceAreaMode.terrainVertexCount;
++          if ((secondVertexIndex < sourceAreaMode.terrainVertexCount) !== firstIsTerrain || (thirdVertexIndex < sourceAreaMode.terrainVertexCount) !== firstIsTerrain) {
++            throw new Error('RECAST_SOURCE_AREA_MODE_INVALID: local triangle crosses the terrain vertex boundary');
++          }
++          if (!firstIsTerrain) triangleAreasArray.set(triangleIndex, sourceAreaMode.blockerAreaId);
++        }
++      }
 +      success = rasterizeTriangles(buildContext, positions, indices.size, nodeTrianglesArray, triangleAreasArray, nNodeTris, heightfield, tileConfig.walkableClimb);
 +    } catch (error) {
 +      chunkError = error;
@@ -141,7 +193,21 @@ index adc727017665f1db5b3b71ee0fdc158a99fb7762..5f4d0f8896ffcca958167eeeacce7ebf
      if (!success) {
        return failTileMesh('Could not rasterize triangles');
      }
-@@ -877,7 +910,7 @@ const generateTileNavMeshData = (positions, indices, rcConfig, chunkyTriMesh, ti
+@@ -820,6 +904,13 @@ const generateTileNavMeshData = (positions, indices, rcConfig, chunkyTriMesh, ti
+   if (!buildCompactHeightfield(buildContext, tileConfig.walkableHeight, tileConfig.walkableClimb, heightfield, compactHeightfield)) {
+     return failTileMesh('Could not build compact heightfield');
+   }
++  if (sourceAreaMode !== undefined) {
++    for (let spanIndex = 0; spanIndex < compactHeightfield.spanCount(); spanIndex++) {
++      if (compactHeightfield.areas(spanIndex) === sourceAreaMode.blockerAreaId) {
++        compactHeightfield.raw.set_areas(spanIndex, Recast.RC_NULL_AREA);
++      }
++    }
++  }
+   if (!keepIntermediates) {
+     freeHeightfield(tileIntermediate.heightfield);
+     tileIntermediate.heightfield = undefined;
+@@ -877,7 +968,7 @@ const generateTileNavMeshData = (positions, indices, rcConfig, chunkyTriMesh, ti
        polyMesh.setFlags(i, 1);
      }
    }
@@ -150,7 +216,7 @@ index adc727017665f1db5b3b71ee0fdc158a99fb7762..5f4d0f8896ffcca958167eeeacce7ebf
    navMeshCreateParams.setPolyMeshCreateParams(polyMesh);
    navMeshCreateParams.setPolyMeshDetailCreateParams(polyMeshDetail);
    navMeshCreateParams.setWalkableHeight(tileConfig.walkableHeight * tileConfig.ch);
-@@ -895,12 +928,53 @@ const generateTileNavMeshData = (positions, indices, rcConfig, chunkyTriMesh, ti
+@@ -895,12 +986,54 @@ const generateTileNavMeshData = (positions, indices, rcConfig, chunkyTriMesh, ti
    if (!createNavMeshDataResult.success) {
      return failTileMesh('Failed to create Detour navmesh data');
    }
@@ -193,6 +259,7 @@ index adc727017665f1db5b3b71ee0fdc158a99fb7762..5f4d0f8896ffcca958167eeeacce7ebf
 +    if (chunkIdsArray) release(() => chunkIdsArray.destroy());
 +    if (triAreas) release(() => triAreas.destroy());
 +    if (tileConfig) release(() => Raw.destroy(tileConfig));
++    if (ownsBuildContext) release(() => buildContext.destroy());
 +    if (cleanupErrors.length > 0) {
 +      const navMeshData = pendingNavMeshData;
 +      pendingNavMeshData = undefined;
@@ -205,11 +272,12 @@ index adc727017665f1db5b3b71ee0fdc158a99fb7762..5f4d0f8896ffcca958167eeeacce7ebf
  };
  /**
   * Builds a Tiled NavMesh
-@@ -913,33 +987,65 @@ const generateTiledNavMesh = (positions, indices, navMeshGeneratorConfig = {}, k
+@@ -913,33 +1046,66 @@ const generateTiledNavMesh = (positions, indices, navMeshGeneratorConfig = {}, k
    if (!Raw.Module) {
      throw new Error('"init" must be called before using any recast-navigation-js APIs. See: https://github.com/isaac-mason/recast-navigation-js?tab=readme-ov-file#initialization');
    }
 -  const buildContext = new RecastBuildContext();
++  const sourceAreaMode = validateSourceAreaMode(positions.length, indices.length, index => indices[index], navMeshGeneratorConfig.sourceAreaMode);
 +  let buildContext;
    const intermediates = {
      type: 'tiled',
@@ -257,13 +325,13 @@ index adc727017665f1db5b3b71ee0fdc158a99fb7762..5f4d0f8896ffcca958167eeeacce7ebf
 +      const chunkyTriMesh = intermediates.chunkyTriMesh;
        intermediates.chunkyTriMesh = undefined;
 +      collectCleanupError(errors, () => Raw.destroy(chunkyTriMesh.raw));
-     }
-   };
++    }
++  };
 +  const releaseTileResources = errors => {
 +    for (let index = intermediates.tileIntermediates.length - 1; index >= 0; index--) {
 +      collectCleanupError(errors, () => releaseTileIntermediates(intermediates.tileIntermediates[index]));
-+    }
-+  };
+     }
+   };
 +  const throwCleanupErrors = (errors, message) => {
 +    if (errors.length > 0) throw new AggregateError(errors, message);
 +  };
@@ -286,7 +354,7 @@ index adc727017665f1db5b3b71ee0fdc158a99fb7762..5f4d0f8896ffcca958167eeeacce7ebf
      return {
        success: false,
        navMesh: undefined,
-@@ -954,6 +1060,16 @@ const generateTiledNavMesh = (positions, indices, navMeshGeneratorConfig = {}, k
+@@ -954,6 +1120,16 @@ const generateTiledNavMesh = (positions, indices, navMeshGeneratorConfig = {}, k
      ...tiledNavMeshGeneratorConfigDefaults,
      ...navMeshGeneratorConfig
    };
@@ -303,7 +371,7 @@ index adc727017665f1db5b3b71ee0fdc158a99fb7762..5f4d0f8896ffcca958167eeeacce7ebf
    let bbMin;
    let bbMax;
    if (navMeshGeneratorConfig.bounds) {
-@@ -964,26 +1080,44 @@ const generateTiledNavMesh = (positions, indices, navMeshGeneratorConfig = {}, k
+@@ -964,26 +1140,44 @@ const generateTiledNavMesh = (positions, indices, navMeshGeneratorConfig = {}, k
      bbMin = boundingBox.bbMin;
      bbMax = boundingBox.bbMax;
    }
@@ -361,7 +429,14 @@ index adc727017665f1db5b3b71ee0fdc158a99fb7762..5f4d0f8896ffcca958167eeeacce7ebf
      return fail('Could not init nav mesh for tiled use');
    }
    /* create chunky tri mesh */
-@@ -1016,24 +1150,62 @@ const generateTiledNavMesh = (positions, indices, navMeshGeneratorConfig = {}, k
+@@ -1011,27 +1205,66 @@ const generateTiledNavMesh = (positions, indices, navMeshGeneratorConfig = {}, k
+       };
+       const generatorOptions = {
+         offMeshConnections: generatorConfig.offMeshConnections,
+-        buildBvTree: generatorConfig.buildBvTree
++        buildBvTree: generatorConfig.buildBvTree,
++        sourceAreaMode
+       };
        const result = generateTileNavMeshData(verticesArray, trianglesArray, rcConfig, chunkyTriMesh, tile, generatorOptions, keepIntermediates, buildContext);
        intermediates.tileIntermediates.push(result.intermediates);
        if (result.success && result.data) {
@@ -430,6 +505,31 @@ index adc727017665f1db5b3b71ee0fdc158a99fb7762..5f4d0f8896ffcca958167eeeacce7ebf
 +    throw error;
 +  }
  };
--
-+
- const mergePositionsAndIndices = meshes => {
+diff --git a/dist/generators/generate-tiled-nav-mesh.d.ts b/dist/generators/generate-tiled-nav-mesh.d.ts
+index f6d291f..396af72 100644
+--- a/dist/generators/generate-tiled-nav-mesh.d.ts
++++ b/dist/generators/generate-tiled-nav-mesh.d.ts
+@@ -20,6 +20,11 @@ export declare const buildTiledNavMeshRcConfig: ({ recastConfig, navMeshBounds:
+     maxPolysPerTile: number;
+ };
+ export type TiledNavMeshGeneratorConfig = Pretty<RecastConfig & OffMeshConnectionGeneratorParams & {
++    readonly sourceAreaMode?: Readonly<{
++        kind: 'terrain-with-static-blockers-r1';
++        terrainVertexCount: number;
++        blockerAreaId: 1;
++    }>;
+     /**
+      * The minimum and maximum bounds of the heightfield's AABB in world units.
+      * If not provided, the bounding box will be calculated from the input positions and indices
+@@ -81,6 +86,11 @@ export declare const generateTileNavMeshData: (positions: FloatArray, indices: I
+ }, options?: {
+     offMeshConnections?: OffMeshConnectionParams[];
+     buildBvTree?: boolean;
++    readonly sourceAreaMode?: Readonly<{
++        kind: 'terrain-with-static-blockers-r1';
++        terrainVertexCount: number;
++        blockerAreaId: 1;
++    }>;
+ }, keepIntermediates?: boolean, buildContext?: RecastBuildContext) => GenerateTileNavMeshDataResult;
+ export type TiledNavMeshGeneratorIntermediates = {
+     type: 'tiled';

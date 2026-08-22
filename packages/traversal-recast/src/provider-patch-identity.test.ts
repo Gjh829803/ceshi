@@ -50,25 +50,30 @@ const EXPECTED_PNPM_PATCH_HASHES = Object.freeze({
   "@recast-navigation/core@0.43.1":
     "7a330d1418a92699943cf161cdcb47c6e144a6858bb0cfbcb33aa91dd1de33dd",
   "@recast-navigation/generators@0.43.1":
-    "7077fea9c1f42a4df273c3c2a7e3e786eefd22472bb1291014745574db87597e",
+    "473d1656cf37232187c24a5f81289d1a5a854732d54fd54b667f3402faa18a06",
 });
 
 interface LifecyclePatchIdentity {
+  readonly revision: string;
   readonly patchedDependencyKey: string;
   readonly repositoryRelativePatchPath: string;
   readonly patchBytesSha256: string;
-  readonly installedPackageRelativeFilePath: "dist/index.mjs";
-  readonly installedFileBytesSha256: string;
+}
+
+interface InstalledFileIdentity {
+  readonly packageRole: "core" | "generators";
+  readonly packageRelativeFilePath: string;
+  readonly fileBytesSha256: string;
 }
 
 interface PatchedAdapterManifest {
   readonly graphProviderAdapterResolvedVersion: string;
   readonly providerPackages: typeof EXPECTED_PROVIDER_PACKAGES;
   readonly lifecyclePatches: {
-    readonly revision: "lifecycle.1";
     readonly core: LifecyclePatchIdentity;
     readonly generators: LifecyclePatchIdentity;
   };
+  readonly installedFiles: readonly InstalledFileIdentity[];
 }
 
 interface PnpmPatchEntry {
@@ -118,26 +123,32 @@ describe("Recast provider lifecycle patch identity", () => {
 
   it("uses portable, version-qualified lifecycle patch identity", () => {
     expect(manifest.graphProviderAdapterResolvedVersion).toBe(
-      "0.43.1+lifecycle.1+mapping.1",
+      "0.43.1+lifecycle.1+source-areas.1+mapping.3",
     );
     expect(manifest.providerPackages).toEqual(EXPECTED_PROVIDER_PACKAGES);
     expect(manifest.lifecyclePatches).toMatchObject({
-      revision: "lifecycle.1",
       core: {
+        revision: "lifecycle.1",
         patchedDependencyKey: "@recast-navigation/core@0.43.1",
         repositoryRelativePatchPath:
           EXPECTED_PATCH_DECLARATIONS["@recast-navigation/core@0.43.1"],
-        installedPackageRelativeFilePath: "dist/index.mjs",
       },
       generators: {
+        revision: "lifecycle.1+source-areas.1",
         patchedDependencyKey: "@recast-navigation/generators@0.43.1",
         repositoryRelativePatchPath:
           EXPECTED_PATCH_DECLARATIONS[
             "@recast-navigation/generators@0.43.1"
           ],
-        installedPackageRelativeFilePath: "dist/index.mjs",
       },
     });
+    expect(manifest.installedFiles.map((file) =>
+      `${file.packageRole}/${file.packageRelativeFilePath}`,
+    )).toEqual([
+      "core/dist/index.mjs",
+      "generators/dist/generators/generate-tiled-nav-mesh.d.ts",
+      "generators/dist/index.mjs",
+    ]);
     for (const value of collectStringValues(manifest)) {
       expect(posix.isAbsolute(value)).toBe(false);
       expect(win32.isAbsolute(value)).toBe(false);
@@ -233,18 +244,17 @@ describe("Recast provider lifecycle patch identity", () => {
       );
     }
 
-    for (const [role, patch] of [
-      ["core", manifest.lifecyclePatches.core],
-      ["generators", manifest.lifecyclePatches.generators],
-    ] as const) {
-      const installedEntryPath = installedEntries[role];
-      const installedPackageRoot = dirname(
-        findPackageJsonPath(installedEntryPath),
+    for (const installedFile of manifest.installedFiles) {
+      const installedEntryPath = installedEntries[installedFile.packageRole];
+      const installedPackageRoot = dirname(findPackageJsonPath(installedEntryPath));
+      const installedFilePath = join(
+        installedPackageRoot,
+        installedFile.packageRelativeFilePath,
       );
-      expect(relative(installedPackageRoot, installedEntryPath).split(sep).join("/"))
-        .toBe(patch.installedPackageRelativeFilePath);
-      expect(sha256Bytes(readFileSync(installedEntryPath))).toBe(
-        patch.installedFileBytesSha256,
+      expect(relative(installedPackageRoot, installedFilePath).split(sep).join("/"))
+        .toBe(installedFile.packageRelativeFilePath);
+      expect(sha256Bytes(readFileSync(installedFilePath))).toBe(
+        installedFile.fileBytesSha256,
       );
     }
   });

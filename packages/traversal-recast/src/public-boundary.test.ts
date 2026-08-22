@@ -8,7 +8,9 @@ describe("traversal-recast provider boundary", () => {
   it("does not expose provider handles, configs, or identities at the package root", () => {
     expect(Object.keys(publicApi).sort()).toEqual([
       "HeightfieldRouteBuildInputInvalidErrorV1",
+      "RouteConnectivityOperationAbortedErrorV1",
       "createHeightfieldRouteBuildInputV1",
+      "evaluateRequiredHeightfieldRouteV1",
     ]);
 
     const publicSource = readFileSync(

@@ -254,7 +254,7 @@ Implement and export the strict Envelope factory plus the pure Heightfield tile 
 
 - [x] **Step 6: Add the isolated Recast package**
 
-Declare `recast-navigation` `0.43.1` as a direct dependency of `@whitebox-world/traversal-recast`. Do not add it to the root or `runtime-babylon` package. Pin exact `@recast-navigation/core@0.43.1` and `@recast-navigation/generators@0.43.1` patches through the root `pnpm-workspace.yaml#patchedDependencies` map used by pnpm 10; no workspace package imports a transitive provider module as an undeclared dependency. Core remains ownership-only at revision `lifecycle.1`. Generators advances to `lifecycle.1+source-areas.1`, combining the approved ownership repairs with the closed optional source-area extension from the source-area ADR. Define a separate internal Graph Provider Adapter identity/hash over all four exact provider package versions/lockfile integrities, both version-qualified patch keys, repository-relative patch paths, explicit per-patch revisions and patch-byte hashes, the sorted three-entry installed-file evidence set, tiled-generator choice, closed mapping/rounding/source-area formulas, and every remaining explicit provider constant. The final Adapter version is `0.43.1+lifecycle.1+source-areas.1+mapping.2`. The manifest contains portable literals only; test-only resolution paths never enter it, and its final hash remains outside the hash input. `provider-patch-identity.test.ts` must start from the declared umbrella entry and use chained `createRequire()` lookup to validate root patch declarations, lockfile SRI/patch entries, patch bytes, installed versions, Core and Generators JavaScript bytes, and the actual changed Generators declaration-leaf bytes under pnpm strict isolation. Do not equate pnpm's generated patch hash with the SDK patch-byte SHA-256. The Adapter identity is not resolved by the Graph Builder Profile and is never serialized into Profile, Envelope, Lock, or `TraversalGraphV1`.
+Declare `recast-navigation` `0.43.1` as a direct dependency of `@whitebox-world/traversal-recast`. Do not add it to the root or `runtime-babylon` package. Pin exact `@recast-navigation/core@0.43.1` and `@recast-navigation/generators@0.43.1` patches through the root `pnpm-workspace.yaml#patchedDependencies` map used by pnpm 10; no workspace package imports a transitive provider module as an undeclared dependency. Core remains ownership-only at revision `lifecycle.1`. Generators advances to `lifecycle.1+source-areas.1`, combining the approved ownership repairs with the closed optional source-area extension from the source-area ADR. Define a separate internal Graph Provider Adapter identity/hash over all four exact provider package versions/lockfile integrities, both version-qualified patch keys, repository-relative patch paths, explicit per-patch revisions and patch-byte hashes, the sorted three-entry installed-file evidence set, tiled-generator choice, closed mapping/rounding/source-area formulas, raw Query capacity, unsigned Provider Ref ABI, and every remaining explicit provider constant. The final Adapter version is `0.43.1+lifecycle.1+source-areas.1+mapping.3`. The manifest contains portable literals only; test-only resolution paths never enter it, and its final hash remains outside the hash input. `provider-patch-identity.test.ts` must start from the declared umbrella entry and use chained `createRequire()` lookup to validate root patch declarations, lockfile SRI/patch entries, patch bytes, installed versions, Core and Generators JavaScript bytes, and the actual changed Generators declaration-leaf bytes under pnpm strict isolation. Do not equate pnpm's generated patch hash with the SDK patch-byte SHA-256. The Adapter identity is not resolved by the Graph Builder Profile and is never serialized into Profile, Envelope, Lock, or `TraversalGraphV1`.
 
 The Recast adapter accepts only the already-derived Envelope and maps it to provider build parameters; Recast radius, height, climb, slope, and erosion inputs must come only from that mapping. The adapter may conservatively transform canonical values but may not accept or reread Subject, Physics Body, Locomotion, raw Lock, or Graph Builder Profile records.
 
@@ -451,6 +451,8 @@ Expected: PASS. Then run self-review plus skill-managed Cursor code and fresh fi
 - Create: `packages/traversal-recast/src/build-graph.test.ts`
 - Create: `packages/traversal-recast/src/route-rejection-proof.ts`
 - Create: `packages/traversal-recast/src/route-rejection-proof.test.ts`
+- Create: `packages/traversal-recast/src/build-rejection-graph.ts`
+- Create: `packages/traversal-recast/src/build-rejection-graph.test.ts`
 - Create: `packages/traversal-recast/src/query-route.ts`
 - Create: `packages/traversal-recast/src/query-route.test.ts`
 - Create: `packages/traversal-recast/src/query-provider.ts`
@@ -463,6 +465,9 @@ Expected: PASS. Then run self-review plus skill-managed Cursor code and fresh fi
 - Modify: `packages/traversal-recast/src/adapter-identity.test.ts`
 - Modify: `packages/traversal-recast/src/provider-patch-identity.test.ts`
 - Modify: `packages/traversal-recast/src/index.ts`
+- Create: `packages/traversal-recast/src/evaluate-route.ts`
+- Create: `packages/traversal-recast/src/evaluate-route.test.ts`
+- Modify: `packages/traversal-recast/package.json`
 - Modify: `patches/@recast-navigation__generators@0.43.1.patch`
 - Modify: `pnpm-lock.yaml`
 - Modify: `docs/reviews/2026-08-22-recast-0431-resource-lifecycle-adr.md`
@@ -476,15 +481,16 @@ Expected: PASS. Then run self-review plus skill-managed Cursor code and fresh fi
 - `RoutePathReceiptV1` includes Route/Subject/Anchor IDs, graph hash, lock hash, ordered canonical Node IDs, ordered canonical Edge IDs, straight-path positions, distance, dimensionless cost, observed slope/step/clearance/gap metrics, and completion status. Every failure binds quantized start/destination Anchor positions and the locked Surface identity; each uniquely attributed threshold failure also binds one deterministic canonical `failurePositionMetersXYZ` copied from the proof before disposal.
 - `evaluateRequiredHeightfieldRouteV1()` accepts the immutable `HeightfieldRouteBuildInputReceiptV1`, recomputes `routeBuildInputHash`, budget evidence, and every copied Registry V2 Graph policy before provider allocation, and copies the source Hash into `TraversalGraphV1`. It never accepts a naked, unhashed triangle soup.
 - One provider operation owns build, Graph projection, endpoint query, SDK-owned weighted A*, Detour straight-path projection, and cleanup. It uses checked raw Query initialization, two-stage raw Query native/Embind release, one explicitly owned QueryFilter, and SDK-owned total-unwind nearest/straight call seams because the pinned high-level wrappers leak on raw throws. It never constructs the high-level Query wrapper. Provider Refs remain operation-local.
-- The existing high-level generator cannot infer terrain versus blocker source. The pinned generator patch adds the exact optional `source-areas.1` mode: the Adapter activates it only when the Build Input has at least one blocker triangle and blocker vertex, terrain is slope-classified, and blockers use a reserved area until compact build before becoming null prior to erosion. A zero-blocker Heightfield omits the option and remains on the Task 2 byte-identical path. Bump Adapter identity to `mapping.2`, including that activation predicate; the no-option provider golden must remain unchanged.
+- The existing high-level generator cannot infer terrain versus blocker source. The pinned generator patch adds the exact optional `source-areas.1` mode: the Adapter activates it only when the Build Input has at least one blocker triangle and blocker vertex, terrain is slope-classified, and blockers use a reserved area until compact build before becoming null prior to erosion. A zero-blocker Heightfield omits the option and remains on the Task 2 byte-identical path. The source decision entered `mapping.2`; the completed raw-query audit advances the combined identity to `mapping.3` while retaining the activation predicate and no-option golden unchanged.
 - Task 4 host review proved the existing signed `heightDeltaMeters` is Node-height delta and cannot also carry non-negative Portal step evidence. The unreleased Graph V1 receives one final narrow clean break adding `stepHeightMeters`; update the R0 fixture/hash exactly once with the review disposition, including changing its non-zero-slope Edge from inconsistent `walk` to `slope`, then freeze it. Keep `heightDeltaMeters` signed, enforce same-surface identity against the locked Build Input, and make canonical map emission sorted and deeply frozen.
 - Path selection runs bounded canonical A* over positive safe-integer Edge costs, closes the equal-cost frontier, then derives the lexicographically smallest shortest Edge sequence through the shortest-path DAG without per-heap path arrays. Exact maximum-th search-budget outcomes are frozen. `NavMeshQuery.computePath()` and provider `findPath()` are not path-selection authorities; Detour only clamps endpoints and string-pulls the selected provider-ref corridor through a private one-slot capacity sentinel.
 - `canonicalHeightfieldRouteConnectivityResultV1(value)` owns strict standalone structure/hash/metric validation. `assertHeightfieldRouteConnectivityResultForBuildInputV1(value, receipt)` separately proves every Build Input binding, and the evaluator calls it before returning.
 - `assertHeightfieldRouteBuildInputReceiptV1(receipt)` is the single exact deep-freeze/input-Hash/Tile-evidence admission implementation used by both evaluator and contextual Result validator.
 - Validation V2 adds `route-connectivity-failure` evidence for canonical failures without Graph/Path, resolves V1/V2 Graph Builder identities through the version dispatcher, and represents lower-bound budget proof as `capacity-exceeded { maximumAllowedCount, minimumRequiredCount }` rather than a false `actualCount`.
 - Task 4 retains an operation-local provider-neutral rejection proof graph derived from canonical Heightfield/collider/ribbon evidence. It emits a frozen slope/step/width/overhead/gap diagnostic only when exactly one singleton relaxation restores connectivity; ambiguous, mixed, over-budget, or inconsistent explanations remain generic unreachable. This proof never changes Graph/path pass/fail authority.
+- Task 4 width attribution uses the filled solid intersection with the terrain/step vertical slab, not a whole-collider XZ shadow and not a hollow surface ring. High disconnected components cannot become ground-width blockers, while a tall solid containing a source region cannot disappear and leave a false unique slope reason. Canonicalized threshold evidence is rechecked after rounding before publication.
 
-- [ ] **Step 1: Write RED graph/query tests**
+- [x] **Step 1: Write RED graph/query tests**
 
 Required fixtures:
 
@@ -511,35 +517,41 @@ Required fixtures:
 - zero blockers omit `sourceAreaMode` and reproduce the Task 2 packed golden; adding a Box activates the mode with a strictly interior terrain boundary.
 - every failure has finite quantized start/destination Anchor positions; specialized threshold failures have a deterministic finite failure position, and Validation only copies those coordinates.
 
-- [ ] **Step 2: Run the RED graph/query tests**
+- [x] **Step 2: Run the RED graph/query tests**
 
 Run: `pnpm vitest run packages/traversal/src/build-input.test.ts packages/traversal/src/graph-contract.test.ts packages/traversal/src/path-receipt.test.ts packages/traversal/src/connectivity-result.test.ts packages/traversal-recast/src/provider-acceptance.test.ts packages/traversal-recast/src/query-provider.test.ts packages/traversal-recast/src/build-graph.test.ts packages/traversal-recast/src/route-rejection-proof.test.ts packages/traversal-recast/src/query-route.test.ts packages/validation/src/route.test.ts packages/validation/src/validation.test.ts`
 
 Expected: FAIL because builder/query/receipt/source-area code is absent.
 
-- [ ] **Step 3: Implement and identity-bind source-area rasterization**
+- [x] **Step 3: Implement and identity-bind source-area rasterization**
 
-Add the optional exact-version generator source-area mode from its ADR. Merge terrain first, activate the option only when at least one blocker triangle and blocker vertex exists, globally validate every source triangle before the first provider allocation when active (including triangles outside explicit bounds), rasterize blockers under the reserved area, convert that area to null after compact build and before erosion, and pass exact terrain XZ bounds. Update patch/declaration/install-byte drift evidence and Adapter `mapping.2` identity, including the exact activation predicate. Prove a zero-blocker build omits the option and reproduces the old no-option semantic golden before accepting the new low-Box golden, and probe sub-voxel blockers before claiming the mapping covers arbitrary low blockers.
+Add the optional exact-version generator source-area mode from its ADR. Merge terrain first, activate the option only when at least one blocker triangle and blocker vertex exists, globally validate every source triangle before the first provider allocation when active (including triangles outside explicit bounds), rasterize blockers under the reserved area, convert that area to null after compact build and before erosion, and pass exact terrain XZ bounds. Update patch/declaration/install-byte drift evidence and the final Adapter `mapping.3` identity, including the exact activation predicate, raw Query capacity, and unsigned Provider Ref ABI. Prove a zero-blocker build omits the option and reproduces the old no-option semantic golden before accepting the new low-Box golden, and probe sub-voxel blockers before claiming the mapping covers arbitrary low blockers.
 
-- [ ] **Step 4: Implement canonical Graph projection and contracts**
+- [x] **Step 4: Implement canonical Graph projection and contracts**
 
 Implement the reviewed final Graph clean break and update its R0 fixture/hash once. Then implement the shared Build Input Receipt assertion, exact source/profile/budget admission, detail-mesh slope, Link-aware portal recovery, signed centroid `heightDeltaMeters`, non-negative Portal `stepHeightMeters`, lower-bound clearance, fixed unit-correct quantization, canonical IDs, deeply frozen sorted maps, and strict capacity handling. Build the bounded source-derived rejection proof graph beside the publishable Graph and use it only for conservative unique-cause diagnostics. One `runRecastProviderOperationV1()` callback owns the retained result, checked raw Query native allocation plus Embind wrapper, and explicit QueryFilter and invokes the one aggregate cleanup path in `finally`; no provider owner escapes.
 
-- [ ] **Step 5: Implement deterministic route query and Receipts**
+- [x] **Step 5: Implement deterministic route query and Receipts**
 
 Run bounded SDK-owned A* over positive safe-integer canonical Edge costs, close the complete equal-cost frontier, and reconstruct the lexicographically smallest shortest Edge sequence through a shortest-path DAG. Freeze stale-entry and inclusive budget behavior. Invoke raw Detour string-pulling only through the total-unwind query-provider seam with a private one-slot sentinel so exact-fit output succeeds and true overflow is incomplete. Validate every returned point and complete segment against the shared hard-ribbon proof. Implement same-polygon zero-Edge metrics, per-segment distance ceiling, strict Path/failure/result canonicalizers, contextual Build Input validation, external hashes, cross-object equality, and a narrow connectivity failure vocabulary owned by Traversal. Validation composes and maps that vocabulary, adds canonical failure Evidence and truthful capacity details, and dispatches Graph Builder version resolution; Traversal never imports Validation. Invalid input, abort, provider failure, projection invariant, and cleanup failure remain typed non-gameplay errors.
 
-- [ ] **Step 6: Run focused, identity, and leak-adversarial gates**
+- [x] **Step 6: Run focused, identity, and leak-adversarial gates**
 
 Run:
 
 ```bash
-pnpm vitest run packages/traversal/src/build-input.test.ts packages/traversal/src/graph-contract.test.ts packages/traversal/src/path-receipt.test.ts packages/traversal/src/connectivity-result.test.ts packages/traversal-recast/src/adapter-identity.test.ts packages/traversal-recast/src/provider-patch-identity.test.ts packages/traversal-recast/src/provider-lifecycle.test.ts packages/traversal-recast/src/provider-acceptance.test.ts packages/traversal-recast/src/public-boundary.test.ts packages/traversal-recast/src/query-provider.test.ts packages/traversal-recast/src/build-graph.test.ts packages/traversal-recast/src/route-rejection-proof.test.ts packages/traversal-recast/src/query-route.test.ts packages/validation/src/route.test.ts packages/validation/src/validation.test.ts
+pnpm vitest run packages/traversal/src/build-input.test.ts packages/traversal/src/graph-contract.test.ts packages/traversal/src/path-receipt.test.ts packages/traversal/src/connectivity-result.test.ts packages/traversal-recast/src/adapter-identity.test.ts packages/traversal-recast/src/provider-patch-identity.test.ts packages/traversal-recast/src/provider-lifecycle.test.ts packages/traversal-recast/src/provider-acceptance.test.ts packages/traversal-recast/src/public-boundary.test.ts packages/traversal-recast/src/heightfield-source.test.ts packages/traversal-recast/src/query-provider.test.ts packages/traversal-recast/src/build-graph.test.ts packages/traversal-recast/src/build-rejection-graph.test.ts packages/traversal-recast/src/hard-ribbon-proof.test.ts packages/traversal-recast/src/route-rejection-proof.test.ts packages/traversal-recast/src/query-route.test.ts packages/traversal-recast/src/evaluate-route.test.ts packages/validation/src/route.test.ts packages/validation/src/validation.test.ts
 pnpm typecheck
 pnpm verify:route-r0-contract
 ```
 
 Expected: PASS, including the unchanged legacy provider golden, new source-area golden, repeated construction/disposal, abort, and throwing cleanup. Then run host self-review plus one skill-managed Cursor Grok 4.6 Extra High code/final review for the complete Task 4 range; do not micro-review each helper.
+
+Completed evidence: focused 19 files / 176 tests, full 120 files / 1043 tests, Typecheck,
+`verify:route-r0-contract`, frozen-lockfile install, Build, and diff check all pass. Cursor review
+`task4-candidate-616a75c-wt1` progressed from one confirmed P1 to same-session `CODE GO`; fresh
+review `task4-final-616a75c-wt2` returned `FINAL GO`. The host closed every P1/P2 and the sole
+non-blocking P3 evaluator-test gap. This completes Task 4 only; Task 5–10 and M5 remain open.
 
 ---
 

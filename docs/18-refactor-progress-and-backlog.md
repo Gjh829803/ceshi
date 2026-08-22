@@ -61,7 +61,7 @@ Normalizer/Compiler、Runtime、CLI/Browser 和对应 Conformance Gate 的纵向
 | Canonical Schema、IR、Registry 与 Compiler | 15% | 82% | 12.3% | V3/V3/V4、Hash、Lock、严格校验、Placement、Primitive 与首个 Asset Subject 资源表已交付；WorldChangeSet、完整 Capability 和 WorldPackage 尚未交付 |
 | Babylon/Havok Runtime、物理与相机 | 15% | 75% | 11.25% | Heightfield、障碍、水域、多主体、第三人称、碰撞、资产主体、Placement Assertion 与五 Pass Capture 已交付；多视角与完整生产预算尚未完成 |
 | Subject LEGO 组装体系 | 15% | 45% | 6.75% | S0、S1a、Golden 与首个产品 G Bot 可视切片已完成；S1b 后续、S2、S3、S4 尚未完成 |
-| Terrain、Region 与 Placement | 12% | 60% | 7.2% | Alpha 地形和 Placement Solver S1 海湾纵向切片已运行；通用 Terrain Mask/Route Graph、更多 Constraint 与完整 P0.1 未完成 |
+| Terrain、Region 与 Placement | 12% | 60% | 7.2% | Alpha 地形和 Placement Solver S1 海湾纵向切片已运行；Route R1 Task 4 Graph/Query 已过全量门禁和新鲜终审，通用 Terrain Mask、Runtime Probe、更多 Constraint 与完整 P0.1 未完成 |
 | CLI、Browser Protocol 与自动化 | 10% | 84% | 8.4% | 已交付 Take/Capture 命令、`verify capture|explain`、Render Ready Browser API、Playwright Driver 与五 Pass/Validation Gate；compare、持久 Session 和 Package 工具未完成 |
 | Semantic Action、动画与 Gameplay | 8% | 33% | 2.64% | Golden 与 G Bot `idle/walk/run/jump` 固定 Tick Animation Binding 已交付；通用 Action Request/Receipt、姿态、装备与规则未交付 |
 | Simulation Take、控制通道与视频接入 | 10% | 70% | 7.0% | V1 Take、五 Pass、Bundle 和真实浏览器 Gate 已交付，Capture/Integrity 已进入统一 Report；完整 Replay/Resume 与模型 Adapter 未交付 |
@@ -201,10 +201,15 @@ P1.5、P1.6、P2.5 与 P2.6 是把既有总体设计和产品对接契约显式�
   当前实施分支已完成 Task 1、Task 2、Task 3A/3B，并在 commit `d38e954` 完成
   Task 3C 的锁定 Build Input、Hard Ribbon 地形裁剪、保守静态 Collider、水域排除、
   内容 Hash 与单一 Tile Budget 证据；commit `2d2480c` 又收紧了重复 Locomotion Ref、
-  Collider Artifact Hash 和缺失 Envelope 的失败合同。11 个聚焦测试文件共 68 项测试、
-  全仓 948 项测试、Typecheck、Build 和 R0 Contract Gate 已通过。Task 3 独立最终审查、
-  Task 4 Recast Graph/Query 实现、真实 Runtime Probe 与双 Blocking Gate 尚未完成，因此
-  本项仍保持未完成。Task 4 的 Graph/Query、source-area、失败证据与生命周期设计已在
+  Collider Artifact Hash 和缺失 Envelope 的失败合同。Task 4 已完成：
+  Provider source-area、Canonical Graph/Path/Failure Receipt、SDK-owned A*、raw Query
+  生命周期、五类保守拒绝证明和 Validation 投影已接通；主审聚焦门禁为 19 files / 176 tests，
+  全仓为 120 files / 1043 tests，Typecheck、Build、R0 Contract Gate、冻结安装与 diff
+  检查均已通过。Cursor 初审确认并关闭一条临界宽度量化 P1，同会话复审为 `CODE GO`；
+  宿主另以 RED/GREEN 关闭复合碰撞体垂直分层与实心截面赋因缺口；新鲜终审为 `FINAL GO`，
+  唯一非阻断 P3 端点投影测试缺口也已补齐。真实 Runtime Probe 与双 Blocking Gate 仍未完成，
+  因此 M5 本项保持未完成。Task 4 的
+  Graph/Query、source-area、失败证据与生命周期设计已在
   `m5-task4-design-2d2480c-r3` 完成主审和 Cursor Grok 4.6 Extra High 独立审查，最终
   `DESIGN GO`、零未关闭 P0–P2；这只表示实施合同已冻结，不提高 Runtime 能力完成度。
 - [ ] R1b 与 P2.6 H1 共享最小 Traversal Surface → Collider Subshape 合同，覆盖地形、
@@ -662,8 +667,8 @@ Placement S1、Simulation Take / Control Capture V1 与 Validation Capture/Integ
 ## 6. 下一里程碑
 
 M5 R0 字段冻结已由 `pnpm verify:route-r0-contract` 完成；M5 R1/R1b 所需的 M7 P1.5
-Ground/Air Runtime 前置依赖已随 PR #10 合入，后续仍需实现 Graph Builder、Runtime Probe
-与两条生产 Route Gate。S1b Golden、
+Ground/Air Runtime 前置依赖已随 PR #10 合入。Graph Builder/Query 已通过 Task 4
+全量门禁和独立新鲜终审；后续实现 Runtime Probe 与两条生产 Route Gate。S1b Golden、
 首个产品 G Bot、Placement Solver S1、Control Capture V1 与 Validation Capture/Integrity V1
 都已进入回归，下一步：
 
@@ -675,8 +680,8 @@ Ground/Air Runtime 前置依赖已随 PR #10 合入，后续仍需实现 Graph B
 3. **M3（已完成）：实现五 Pass Capture 窄纵向切片并复用 Placement World Identity/Hash**；
 4. **M4（已完成）：实现 P0.3 统一 Validation Profile/Report 的 Capture/Integrity 窄切片，把现有 Bundle Gate 纳入同一报告协议**；
 5. **M5：完成 Route Graph 与主体可通行性 R0/R1/R1b**：R0 字段冻结已由
-   `pnpm verify:route-r0-contract` 证明；R1/R1b 仍未实现 Graph Builder、Runtime Probe
-   或两条生产 Route Gate。P1.5 Ground/Air Runtime 前置依赖已经满足。之后复用既有
+   `pnpm verify:route-r0-contract` 证明；R1 Task 4 Graph Builder/Query 已过全量门禁和新鲜终审，
+   R1/R1b 仍未完成真实 Runtime Probe 或两条生产 Route Gate。P1.5 Ground/Air Runtime 前置依赖已经满足。之后复用既有
    Route/Region，按主体 Lock 从 Heightfield 与显式 Traversal Surface 构建分层 3D Graph，
    并用真实 Babylon/Havok 人物控制器证明地形→台阶/坡道→静态平台路线；只有 Required
    Route 接入 Blocking Validation、成功 Fixture 走通且失败 Fixture 给出结构化 Diagnostic

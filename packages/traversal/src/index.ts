@@ -14,6 +14,7 @@ export {
   TraversalGraphBuildBudgetExceededErrorV1,
 } from "./build-budget.js";
 export {
+  assertHeightfieldRouteBuildInputReceiptV1,
   assertHeightfieldRouteBuildInputV1,
   hashHeightfieldRouteBuildInputV1,
 } from "./build-input.js";
@@ -39,6 +40,34 @@ export type {
   TraversalGraphV1,
   TraversalNodeV1,
 } from "./graph-contract.js";
+export {
+  canonicalRoutePathReceiptV1,
+  hashRoutePathReceiptV1,
+} from "./path-receipt.js";
+export type { RoutePathReceiptV1 } from "./path-receipt.js";
+export {
+  assertHeightfieldRouteConnectivityResultForBuildInputV1,
+  canonicalHeightfieldRouteConnectivityResultV1,
+  canonicalRouteConnectivityFailureV1,
+  hashRouteConnectivityFailureV1,
+  ROUTE_CONNECTIVITY_FAILURE_CODES_V1,
+} from "./connectivity-result.js";
+export type {
+  HeightfieldRouteConnectivityResultV1,
+  RouteConnectivityCompleteIncompleteReasonV1,
+  RouteConnectivityCompleteUnreachableReasonV1,
+  RouteConnectivityFailureCodeV1,
+  RouteConnectivityFailureCompleteIncompleteV1,
+  RouteConnectivityFailureCompleteUnreachableV1,
+  RouteConnectivityFailureReasonV1,
+  RouteConnectivityFailureUnavailableIncompleteV1,
+  RouteConnectivityFailureUnavailableUnreachableV1,
+  RouteConnectivityFailureV1,
+  RouteConnectivityUnavailableIncompleteReasonV1,
+  RouteConnectivityUnavailableUnreachableReasonV1,
+  RouteThresholdRejectionProofV1,
+  RouteThresholdRejectionReasonV1,
+} from "./connectivity-result.js";
 export { deriveColliderSubshapeIdV1 } from "./collider-subshape-id.js";
 export {
   assertMatchingTraversalLocksV1,

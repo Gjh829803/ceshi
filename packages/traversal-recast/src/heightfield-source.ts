@@ -21,6 +21,7 @@ import {
   type StaticBlockingColliderV1,
   type TraversalCapabilityEnvelopeV1,
 } from "@whitebox-world/traversal";
+import { isNil } from "lodash-es";
 
 type Vec2 = readonly [number, number];
 type Vec3 = readonly [number, number, number];
@@ -83,15 +84,15 @@ function failSemantic(code: string, message: string): never {
 }
 
 function deepFreeze<T>(value: T): T {
-  if (value === null || typeof value !== "object" || Object.isFrozen(value)) {
+  if (isNil(value) || typeof value !== "object" || Object.isFrozen(value)) {
     return value;
   }
-  for (const child of Object.values(value)) deepFreeze(child);
+  for (const child of Object.values(value as Record<string, unknown>)) deepFreeze(child);
   return Object.freeze(value);
 }
 
 function isDeeplyFrozen(value: unknown, seen = new Set<object>()): boolean {
-  if (value === null || typeof value !== "object") return true;
+  if (isNil(value) || typeof value !== "object") return true;
   if (seen.has(value)) return true;
   seen.add(value);
   if (!Object.isFrozen(value)) return false;
@@ -124,6 +125,10 @@ function requireVec3(value: Vec3, label: string): void {
 
 function normalizeZero(value: number): number {
   return Object.is(value, -0) || Math.abs(value) < Number.EPSILON ? 0 : value;
+}
+
+function compareCanonicalId(left: string, right: string): number {
+  return left < right ? -1 : left > right ? 1 : 0;
 }
 
 function normalizedPoint(point: Vec3): MutableVec3 {
@@ -295,7 +300,7 @@ function canonicalSoup(triangles: readonly Triangle[]): CanonicalTriangleSoupV1 
     for (const point of triangle) {
       const keyForPoint = pointKey(point);
       let vertexIndex = vertexIndexByKey.get(keyForPoint);
-      if (vertexIndex === undefined) {
+      if (isNil(vertexIndex)) {
         vertexIndex = positionsMetersXYZ.length / 3;
         vertexIndexByKey.set(keyForPoint, vertexIndex);
         positionsMetersXYZ.push(...normalizedPoint(point));
@@ -552,7 +557,10 @@ function applyWaterSemantics(
       }
       return { water, boundary: normalizedWaterBoundary(water.boundary) };
     })
-    .sort((left, right) => left.water.entityId.localeCompare(right.water.entityId));
+    .sort((left, right) => compareCanonicalId(
+      left.water.entityId,
+      right.water.entityId,
+    ));
 
   for (const { water, boundary } of relevant) {
     if (
@@ -666,7 +674,7 @@ function icosphereSoup(radiusMeters: number): CanonicalTriangleSoupV1 {
     const midpoint = (left: number, right: number): number => {
       const key = left < right ? `${left}:${right}` : `${right}:${left}`;
       const existing = midpointByEdge.get(key);
-      if (existing !== undefined) return existing;
+      if (!isNil(existing)) return existing;
       const a = vertices[left]!;
       const b = vertices[right]!;
       const raw: MutableVec3 = [a[0] + b[0], a[1] + b[1], a[2] + b[2]];
@@ -859,7 +867,10 @@ function relevantBlockingColliders(
       colliderHash: collider.colliderHash,
       triangleSoup: soup,
     }))
-    .sort((left, right) => left.colliderSubshapeId.localeCompare(right.colliderSubshapeId));
+    .sort((left, right) => compareCanonicalId(
+      left.colliderSubshapeId,
+      right.colliderSubshapeId,
+    ));
 }
 
 function exactBounds(soup: CanonicalTriangleSoupV1): {
@@ -885,13 +896,13 @@ function exactBounds(soup: CanonicalTriangleSoupV1): {
 }
 
 function requirePlanAndEnvelope(input: CreateHeightfieldRouteBuildInputInputV1): void {
-  if (input === null || typeof input !== "object" || Array.isArray(input)) {
+  if (isNil(input) || typeof input !== "object" || Array.isArray(input)) {
     failStructural("input-invalid", "factory input must be an object.");
   }
   const unknownField = Object.keys(input).find((field) =>
     !["executionPlan", "capabilityEnvelope", "constraintId"].includes(field),
   );
-  if (unknownField !== undefined) {
+  if (!isNil(unknownField)) {
     failStructural("input-invalid", `unknown factory field '${unknownField}'.`);
   }
   if (input.executionPlan?.schemaVersion !== 5) {
@@ -920,8 +931,7 @@ function requirePlanAndEnvelope(input: CreateHeightfieldRouteBuildInputInputV1):
     failStructural("input-invalid", "constraintId must be a non-empty string.");
   }
   if (
-    input.capabilityEnvelope === undefined ||
-    input.capabilityEnvelope === null ||
+    isNil(input.capabilityEnvelope) ||
     typeof input.capabilityEnvelope !== "object" ||
     Array.isArray(input.capabilityEnvelope)
   ) {
@@ -931,13 +941,13 @@ function requirePlanAndEnvelope(input: CreateHeightfieldRouteBuildInputInputV1):
     failStructural("envelope-mutable", "Capability Envelope must be deeply frozen.");
   }
   if (
-    input.executionPlan.traversal === undefined ||
+    isNil(input.executionPlan.traversal) ||
     !Array.isArray(input.executionPlan.traversal.connectivityRequirements) ||
     !Array.isArray(input.executionPlan.traversal.anchorEntityIds) ||
     !Array.isArray(input.executionPlan.traversal.surfaces) ||
-    input.executionPlan.layout === undefined ||
+    isNil(input.executionPlan.layout) ||
     !Array.isArray(input.executionPlan.layout.routes) ||
-    input.executionPlan.layout.placementsByEntityId === undefined ||
+    isNil(input.executionPlan.layout.placementsByEntityId) ||
     !Array.isArray(input.executionPlan.subjects) ||
     !Array.isArray(input.executionPlan.staticColliders) ||
     !Array.isArray(input.executionPlan.waters)
@@ -957,7 +967,7 @@ export function createHeightfieldRouteBuildInputV1(
   const envelope = input.capabilityEnvelope;
   const requirements = plan.traversal.connectivityRequirements.filter(
     (candidate) => {
-      if (candidate === null || typeof candidate !== "object") {
+      if (isNil(candidate) || typeof candidate !== "object") {
         failStructural("contract-invalid", "connectivity rows must be objects.");
       }
       return candidate.constraintId === input.constraintId;
@@ -986,7 +996,7 @@ export function createHeightfieldRouteBuildInputV1(
   }
   const startPlacement = plan.layout.placementsByEntityId[requirement.startAnchorEntityId];
   const destinationPlacement = plan.layout.placementsByEntityId[requirement.destinationAnchorEntityId];
-  if (startPlacement === undefined || destinationPlacement === undefined) {
+  if (isNil(startPlacement) || isNil(destinationPlacement)) {
     failStructural("anchor-placement-missing", "a required Anchor has no absolute placement.");
   }
   requireVec3(startPlacement.transform.positionMetersXYZ, "start Anchor position");
@@ -1015,7 +1025,7 @@ export function createHeightfieldRouteBuildInputV1(
   }
 
   const surfaces = plan.traversal.surfaces.filter((candidate) => {
-    if (candidate === null || typeof candidate !== "object") {
+    if (isNil(candidate) || typeof candidate !== "object") {
       failStructural("contract-invalid", "Traversal Surface rows must be objects.");
     }
     return candidate.kind === "heightfield";
@@ -1078,7 +1088,7 @@ export function createHeightfieldRouteBuildInputV1(
   const clipped = clipTerrainToRibbon(emitted.triangles, route.pointsMetersXZ, route.widthMeters);
   const waterResult = applyWaterSemantics(clipped, plan.waters, plan.terrain.entityId);
   const terrainSoup = canonicalSoup(waterResult.triangles);
-  if (terrainSoup !== undefined) {
+  if (!isNil(terrainSoup)) {
     for (let offset = 0; offset < terrainSoup.positionsMetersXYZ.length; offset += 3) {
       if (!inHardRibbon(
         [terrainSoup.positionsMetersXYZ[offset]!, terrainSoup.positionsMetersXYZ[offset + 2]!],
@@ -1089,7 +1099,7 @@ export function createHeightfieldRouteBuildInputV1(
       }
     }
   }
-  const terrainSource: HeightfieldRouteTerrainSourceV1 = terrainSoup === undefined
+  const terrainSource: HeightfieldRouteTerrainSourceV1 = isNil(terrainSoup)
     ? {
         kind: "empty",
         terrainEntityId: plan.terrain.entityId,
@@ -1186,5 +1196,91 @@ export function createHeightfieldRouteBuildInputV1(
     input: buildInput,
     routeBuildInputHash,
     budgetEvidence,
+  });
+}
+
+export interface RecastHeightfieldSourceAreaModeV1 {
+  readonly kind: "terrain-with-static-blockers-r1";
+  readonly terrainVertexCount: number;
+  readonly blockerAreaId: 1;
+}
+
+export interface RecastHeightfieldSourceV1 {
+  readonly positions: readonly number[];
+  readonly indices: readonly number[];
+  readonly bounds: readonly [Vec3, Vec3];
+  readonly sourceAreaMode?: RecastHeightfieldSourceAreaModeV1;
+}
+
+export function mapHeightfieldRouteBuildInputToRecastSourceV1(
+  input: HeightfieldRouteBuildInputV1,
+): RecastHeightfieldSourceV1 {
+  assertHeightfieldRouteBuildInputV1(input);
+  if (input.terrainSource.kind !== "bounded") {
+    failStructural(
+      "contract-invalid",
+      "a bounded terrain source is required before provider mapping.",
+    );
+  }
+  const terrainPositions = input.terrainSource.triangleSoup.positionsMetersXYZ;
+  const terrainIndices = input.terrainSource.triangleSoup.triangleIndices;
+  const positions = [...terrainPositions];
+  const indices = [...terrainIndices];
+  const terrainVertexCount = terrainPositions.length / 3;
+  let blockerTriangleCount = 0;
+
+  for (const blocker of input.blockingColliders) {
+    const blockerPositions = blocker.triangleSoup.positionsMetersXYZ;
+    const blockerIndices = blocker.triangleSoup.triangleIndices;
+    const blockerVertexOffset = positions.length / 3;
+    positions.push(...blockerPositions);
+    for (const blockerIndex of blockerIndices) {
+      indices.push(blockerVertexOffset + blockerIndex);
+    }
+    blockerTriangleCount += blockerIndices.length / 3;
+  }
+
+  let minimumY = Number.POSITIVE_INFINITY;
+  let maximumY = Number.NEGATIVE_INFINITY;
+  for (let offset = 1; offset < positions.length; offset += 3) {
+    minimumY = Math.min(minimumY, positions[offset]!);
+    maximumY = Math.max(maximumY, positions[offset]!);
+  }
+  const bounds = [
+    [
+      input.terrainSource.minimumMetersXZ[0],
+      minimumY,
+      input.terrainSource.minimumMetersXZ[1],
+    ],
+    [
+      input.terrainSource.maximumMetersXZ[0],
+      maximumY,
+      input.terrainSource.maximumMetersXZ[1],
+    ],
+  ] as const;
+  const base = {
+    positions: Object.freeze(positions),
+    indices: Object.freeze(indices),
+    bounds: deepFreeze(bounds),
+  };
+  if (blockerTriangleCount === 0) {
+    return Object.freeze(base);
+  }
+  if (
+    !(terrainVertexCount > 0) ||
+    !(terrainVertexCount < positions.length / 3)
+  ) {
+    failStructural(
+      "contract-invalid",
+      "positive blocker triangles require a strictly interior terrain vertex boundary.",
+    );
+  }
+  return deepFreeze({
+    ...base,
+    sourceAreaMode: {
+      kind: "terrain-with-static-blockers-r1",
+      terrainVertexCount,
+      blockerAreaId: 1,
+    },
   });
 }

@@ -143,6 +143,7 @@ export interface WorldPackageValidationSubjectV1 {
 export type EvidenceArtifactKindV2 =
   | "traversal-graph"
   | "route-path-receipt"
+  | "route-connectivity-failure"
   | "route-runtime-probe-receipt"
   | "route-overlay";
 
@@ -171,6 +172,16 @@ export interface RoutePathReceiptEvidenceArtifactV2 extends EvidenceArtifactBase
   readonly graphBuilderProfileHash: Sha256HashV1;
 }
 
+export interface RouteConnectivityFailureEvidenceArtifactV2
+  extends EvidenceArtifactBaseV2 {
+  readonly kind: "route-connectivity-failure";
+  readonly routeBuildInputHash: Sha256HashV1;
+  readonly resolvedTraversalLockHash: Sha256HashV1;
+  readonly graphBuilderProfileRef: string;
+  readonly graphBuilderResolvedVersion: string;
+  readonly graphBuilderProfileHash: Sha256HashV1;
+}
+
 export interface RouteRuntimeProbeReceiptEvidenceArtifactV2 extends EvidenceArtifactBaseV2 {
   readonly kind: "route-runtime-probe-receipt";
   readonly resolvedTraversalLockHash: Sha256HashV1;
@@ -192,6 +203,7 @@ export interface RouteOverlayEvidenceArtifactV2 extends EvidenceArtifactBaseV2 {
 export type EvidenceArtifactV2 =
   | TraversalGraphEvidenceArtifactV2
   | RoutePathReceiptEvidenceArtifactV2
+  | RouteConnectivityFailureEvidenceArtifactV2
   | RouteRuntimeProbeReceiptEvidenceArtifactV2
   | RouteOverlayEvidenceArtifactV2;
 
@@ -215,6 +227,11 @@ export type RouteDiagnosticDetailsV1 =
       kind: "count-threshold";
       maximumAllowedCount: number;
       actualCount: number;
+    }>
+  | Readonly<{
+      kind: "capacity-exceeded";
+      maximumAllowedCount: number;
+      minimumRequiredCount: number;
     }>
   | Readonly<{
       kind: "hash-mismatch";

@@ -1,6 +1,6 @@
 # Route R1 Task 4 Canonical Graph and Query Design
 
-Status: DESIGN GO; implementation and code review pending
+Status: DESIGN GO; Task 4 implementation passed full gates and fresh final review
 
 ## Decision
 
@@ -168,7 +168,10 @@ Detour polygon or Flag. The reserved value is not an Agent-facing Surface type.
 The extension changes source-area semantics, so it cannot hide inside the existing
 `lifecycle.1+mapping.1` identity. Before implementation, update the provider ADR and patch
 identity evidence, include the TypeScript declaration bytes and installed semantic-patch bytes,
-and bump the Adapter resolved version to include `source-areas.1+mapping.2`. `mapping.2` binds:
+and bump the Adapter resolved version to include `source-areas.1+mapping.2`. The completed Task 4
+query audit subsequently advances the combined identity to `source-areas.1+mapping.3`; it retains
+all `mapping.2` source semantics and additionally binds the raw Query capacity and unsigned
+provider-Ref ABI. The source portion binds:
 
 - terrain-first merge and terrain vertex boundary;
 - exact source-area activation predicate `blocking triangle count > 0`;
@@ -215,7 +218,7 @@ validate receipt
   -> runRecastProviderOperationV1(async () => {
        generate one retained, source-area-aware tiled NavMesh
        -> create one explicitly owned QueryFilter
-       -> initialize one raw NavMeshQuery(maxNodes = maximumSearchSteps) and check status
+       -> initialize one raw NavMeshQuery(maxNodes = 64) and check status
        -> apply the terrain-only owned QueryFilter directly to raw calls
        -> project and canonicalize the complete bounded Graph
        -> find and clamp start/destination ground polygons
@@ -228,6 +231,14 @@ validate receipt
           Raw.destroy(QueryFilter.raw), then destroy the retained generator Result in finally
      })
 ```
+
+The raw Detour Query capacity is Adapter-owned and fixed at `64`: this Query is used only for
+endpoint projection and corridor string-pulling, not SDK path search. The distinct
+`maximumSearchSteps` Envelope field remains the bounded canonical A* and rejection-proof search
+budget. Locked WASM polygon Refs cross an unsigned 32-bit ABI and are rejected before copying if
+they are outside `1..0xffffffff`; this bound, the raw Query capacity, and their tests are included
+in Adapter `mapping.3` and hash
+`sha256:32b3f30e117a5d6a9515015f5e8568c149b8f23d4345f2318ed632a488865bae`.
 
 Task 4 must not call `NavMeshQuery.computePath()`: locked 0.43.1 converts a partial corridor into
 a successful closest-point path and has early-return array leaks. Task 4 also must not use
@@ -1020,13 +1031,26 @@ third review and its same-chat follow-up produced the actionable NO-GO findings 
 same-chat disposition closed them. All RED/implementation gates and final code review remain
 mandatory.
 
+## Implementation review pointer
+
+The Task 4 implementation, host dispositions, gate evidence, and skill-managed Cursor code-review
+record live in
+[`2026-08-22-route-r1-task4-implementation-review.md`](2026-08-22-route-r1-task4-implementation-review.md).
+The implementation passes the focused 19-file / 176-test gate, full 120-file / 1043-test suite,
+TypeScript check, R0 contract gate, frozen-lockfile install, build, and diff check. The code review
+progressed from one confirmed P1 `CODE NO-GO` to same-session `CODE GO`; the host additionally
+closed compound-collider and filled-solid width-attribution gaps with RED/GREEN regressions. A
+fresh independent review returned `FINAL GO`; its only non-blocking P3 endpoint-projection test
+gap was then closed at the evaluator boundary. This is still Graph evidence only and does not
+claim the Task 5–10 Runtime Probe or production Route gates.
+
 ### Dimension coverage
 
 | Dimension | Coverage |
 | --- | --- |
 | D1 positioning/scope | checked: Heightfield R1 only; no platform, water movement, Runtime, or Browser scope leak |
 | D2 Schema/AI-friendly | checked: canonical role IDs, units, refs, closed result/failure unions, no provider handles |
-| D3 promise/fact | checked: design-only status and pending gates remain explicit |
+| D3 promise/fact | checked: Task 4 completion is separated from pending Runtime and production gates |
 | D4 single authority | checked: Build Input/Envelope/Graph/A*/Detour/Runtime ownership boundaries are singular |
 | D5 engineering quality | checked: deterministic ordering, safe integer costs, strict admission, total cleanup, direct dependencies |
 | D6 evidence/gates | checked: static design evidence is separated from pending real-WASM, contract, and Runtime evidence |

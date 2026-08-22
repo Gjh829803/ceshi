@@ -4,10 +4,17 @@ import {
   init,
   NavMesh,
   NavMeshQuery,
+  RecastChunkyTriMesh,
   Raw,
+  TrianglesArray,
+  VerticesArray,
 } from "recast-navigation";
 import { sha256Bytes } from "@whitebox-world/protocol";
-import { generateTiledNavMesh } from "recast-navigation/generators";
+import {
+  buildTiledNavMeshRcConfig,
+  generateTiledNavMesh,
+  generateTileNavMeshData,
+} from "recast-navigation/generators";
 import { describe, expect, it } from "vitest";
 
 import {
@@ -15,6 +22,13 @@ import {
   generateRetainedTiledNavMeshV1,
   runRecastProviderOperationV1,
 } from "./provider-lifecycle.js";
+import * as providerLifecycleModule from "./provider-lifecycle.js";
+import {
+  createRecastQueryProviderV1,
+  destroyRecastQueryProviderV1,
+  findNearestRecastPolygonV1,
+  type RecastQueryProviderReceiptV1,
+} from "./query-provider.js";
 import { mapTraversalCapabilityEnvelopeToRecastTiledConfigV1 } from "./recast-config.js";
 import { createRecastTestEnvelopeV1 } from "./test-fixture.test-support.js";
 
@@ -28,6 +42,51 @@ const COUNTER_CLOCKWISE_INDICES = [0, 1, 2, 2, 1, 3] as const;
 const REVERSED_INDICES = [0, 2, 1, 2, 3, 1] as const;
 const UNPATCHED_RECAST_0431_PLANE_OUTPUT_HASH =
   "sha256:97459be30f32a7a37bcdb92bc655d5b70a0378cd43d930c07cb4c0eae076b374";
+
+function planeWithBox(blockerHeightMeters: number, bottomMeters = 0) {
+  const topMeters = bottomMeters + blockerHeightMeters;
+  const positions = [
+    ...PLANE_POSITIONS,
+    1.5, bottomMeters, 1.5,
+    1.5, bottomMeters, 2.5,
+    2.5, bottomMeters, 1.5,
+    2.5, bottomMeters, 2.5,
+    1.5, topMeters, 1.5,
+    1.5, topMeters, 2.5,
+    2.5, topMeters, 1.5,
+    2.5, topMeters, 2.5,
+  ];
+  const indices = [
+    ...COUNTER_CLOCKWISE_INDICES,
+    4, 6, 5, 6, 7, 5,
+    8, 9, 10, 10, 9, 11,
+    4, 5, 8, 8, 5, 9,
+    6, 10, 7, 10, 11, 7,
+    4, 8, 6, 6, 8, 10,
+    5, 7, 9, 9, 7, 11,
+  ];
+  return { positions, indices };
+}
+
+function hasInteriorBoxTopTriangle(
+  positions: readonly number[],
+  indices: readonly number[],
+  minimumHeightMeters: number,
+): boolean {
+  for (let offset = 0; offset < indices.length; offset += 3) {
+    const vertexIndices = [indices[offset]!, indices[offset + 1]!, indices[offset + 2]!];
+    const centroid = [0, 1, 2].map((axis) => vertexIndices.reduce(
+      (sum, vertexIndex) => sum + positions[vertexIndex * 3 + axis]!,
+      0,
+    ) / 3);
+    if (
+      centroid[0]! > 1.55 && centroid[0]! < 2.45 &&
+      centroid[2]! > 1.55 && centroid[2]! < 2.45 &&
+      centroid[1]! > minimumHeightMeters
+    ) return true;
+  }
+  return false;
+}
 
 function packNavMeshOutputV1(
   positions: readonly number[],
@@ -144,6 +203,354 @@ async function generatePlane(indices: readonly number[]) {
 }
 
 describe("recast-navigation 0.43.1 provider acceptance", () => {
+  it("aggregates Query cleanup failure after attempting Filter and retained Result", async () => {
+    await runRecastProviderOperationV1(async () => {
+      if (Raw.Module === undefined) throw new Error("expected initialized Raw module");
+      const result = generateRetainedTiledNavMeshV1(
+        PLANE_POSITIONS,
+        COUNTER_CLOCKWISE_INDICES,
+        mapTraversalCapabilityEnvelopeToRecastTiledConfigV1(
+          createRecastTestEnvelopeV1(),
+        ),
+      );
+      expect(result.success).toBe(true);
+      if (!result.success) {
+        destroyRecastTiledOperationResourcesV1(undefined, result);
+        return;
+      }
+      const queryProviderReceipt = createRecastQueryProviderV1(result.navMesh);
+      const destroyProviderResources = (providerLifecycleModule as {
+        destroyRecastProviderOperationResourcesV1?: (receipt: {
+          queryProviderReceipt: typeof queryProviderReceipt;
+          tiledResult: typeof result;
+        }) => void;
+      }).destroyRecastProviderOperationResourcesV1;
+      expect(typeof destroyProviderResources).toBe("function");
+      if (destroyProviderResources === undefined) {
+        destroyRecastTiledOperationResourcesV1(undefined, result);
+        return;
+      }
+      const order: string[] = [];
+      const queryPrototype = Raw.Module.NavMeshQuery.prototype;
+      const originalNativeQueryDestroy = queryPrototype.destroy;
+      const originalRawDestroy = Raw.destroy;
+      const originalNavMeshDestroy = result.navMesh.destroy.bind(result.navMesh);
+      queryPrototype.destroy = function destroyAndThrow() {
+        order.push("raw-query-native");
+        originalNativeQueryDestroy.call(this);
+        throw new Error("expected-native-query-cleanup-failure");
+      };
+      Raw.destroy = ((resource: unknown) => {
+        if (resource instanceof Raw.Module!.NavMeshQuery) {
+          order.push("raw-query-wrapper");
+        } else if (resource instanceof Raw.Module!.dtQueryFilter) {
+          order.push("query-filter");
+        }
+        originalRawDestroy(resource as never);
+      }) as typeof Raw.destroy;
+      result.navMesh.destroy = () => {
+        order.push("navmesh");
+        originalNavMeshDestroy();
+      };
+      const receipt = { queryProviderReceipt, tiledResult: result };
+      try {
+        expect(() => destroyProviderResources(receipt)).toThrow(
+          "TRAVERSAL_RECAST_PROVIDER_OPERATION_CLEANUP_FAILED",
+        );
+        const afterFirstCleanup = [...order];
+        expect(() => destroyProviderResources(receipt)).not.toThrow();
+        expect(order).toEqual(afterFirstCleanup);
+      } finally {
+        Raw.destroy = originalRawDestroy;
+        queryPrototype.destroy = originalNativeQueryDestroy;
+      }
+      expect(order).toEqual([
+        "raw-query-native",
+        "raw-query-wrapper",
+        "query-filter",
+        "navmesh",
+      ]);
+    });
+  });
+
+  it("keeps the unlabelled low Box top queryable as the real pre-patch RED", async () => {
+    await runRecastProviderOperationV1(async () => {
+      const source = planeWithBox(0.2);
+      const result = generateRetainedTiledNavMeshV1(
+        source.positions,
+        source.indices,
+        mapTraversalCapabilityEnvelopeToRecastTiledConfigV1(
+          createRecastTestEnvelopeV1(),
+        ),
+      );
+      try {
+        expect(result.success).toBe(true);
+        if (!result.success) return;
+        const [positions, indices] = getNavMeshPositionsAndIndices(result.navMesh);
+        expect(hasInteriorBoxTopTriangle(positions, indices, 0.05)).toBe(true);
+      } finally {
+        destroyRecastTiledOperationResourcesV1(undefined, result);
+      }
+    });
+  });
+
+  it("removes a low Box top when terrain/blocker source areas are enabled", async () => {
+    await runRecastProviderOperationV1(async () => {
+      const source = planeWithBox(0.2);
+      const sourceOptions = {
+        bounds: [[0, 0, 0], [4, 0.2, 4]],
+        sourceAreaMode: {
+          kind: "terrain-with-static-blockers-r1",
+          terrainVertexCount: PLANE_POSITIONS.length / 3,
+          blockerAreaId: 1,
+        },
+      } as const;
+      const result = generateRetainedTiledNavMeshV1(
+        source.positions,
+        source.indices,
+        mapTraversalCapabilityEnvelopeToRecastTiledConfigV1(
+          createRecastTestEnvelopeV1(),
+        ),
+        sourceOptions,
+      );
+      try {
+        expect(result.success).toBe(true);
+        if (!result.success) return;
+        const [positions, indices] = getNavMeshPositionsAndIndices(result.navMesh);
+        expect(hasInteriorBoxTopTriangle(positions, indices, 0.05)).toBe(false);
+        expect(positions.length).toBeGreaterThan(0);
+      } finally {
+        destroyRecastTiledOperationResourcesV1(undefined, result);
+      }
+    });
+  });
+
+  it("does not leak a sub-voxel blocker into queryable polygons", async () => {
+    await runRecastProviderOperationV1(async () => {
+      const source = planeWithBox(0.05);
+      const result = generateTiledNavMesh(
+        source.positions,
+        source.indices,
+        {
+          ...mapTraversalCapabilityEnvelopeToRecastTiledConfigV1(
+            createRecastTestEnvelopeV1(),
+          ),
+          bounds: [[0, 0, 0], [4, 0.05, 4]],
+          sourceAreaMode: {
+            kind: "terrain-with-static-blockers-r1",
+            terrainVertexCount: PLANE_POSITIONS.length / 3,
+            blockerAreaId: 1,
+          },
+        } as const,
+        true,
+      );
+      try {
+        expect(result.success).toBe(true);
+        if (!result.success) return;
+        const [positions, indices] = getNavMeshPositionsAndIndices(result.navMesh);
+        expect(hasInteriorBoxTopTriangle(positions, indices, 0.01)).toBe(false);
+        expect(positions.length).toBeGreaterThan(0);
+      } finally {
+        destroyRecastTiledOperationResourcesV1(undefined, result);
+      }
+    });
+  });
+
+  it("preserves sufficient overhead clearance and removes insufficient terrain", async () => {
+    await runRecastProviderOperationV1(async () => {
+      const config = mapTraversalCapabilityEnvelopeToRecastTiledConfigV1(
+        createRecastTestEnvelopeV1(),
+      );
+      const terrainVertexCount = PLANE_POSITIONS.length / 3;
+      const build = (bottomMeters: number) => {
+        const source = planeWithBox(0.2, bottomMeters);
+        const result = generateRetainedTiledNavMeshV1(
+          source.positions,
+          source.indices,
+          config,
+          {
+            bounds: [[0, 0, 0], [4, bottomMeters + 0.2, 4]],
+            sourceAreaMode: {
+              kind: "terrain-with-static-blockers-r1",
+              terrainVertexCount,
+              blockerAreaId: 1,
+            },
+          },
+        );
+        let queryProviderReceipt: RecastQueryProviderReceiptV1 | undefined;
+        try {
+          expect(result.success).toBe(true);
+          if (!result.success) return false;
+          queryProviderReceipt = createRecastQueryProviderV1(result.navMesh);
+          return findNearestRecastPolygonV1(queryProviderReceipt, {
+            positionMetersXYZ: [2, 0.2, 2],
+            halfExtentsMetersXYZ: [0.1, 3, 0.1],
+          }).kind === "complete";
+        } finally {
+          if (queryProviderReceipt !== undefined) {
+            destroyRecastQueryProviderV1(queryProviderReceipt);
+          }
+          destroyRecastTiledOperationResourcesV1(undefined, result);
+        }
+      };
+      expect(build(2.5)).toBe(true);
+      expect(build(1)).toBe(false);
+    });
+  });
+
+
+  it("globally rejects a mixed-source triangle outside explicit bounds before allocation", async () => {
+    await runRecastProviderOperationV1(async () => {
+      if (Raw.Module === undefined) throw new Error("expected initialized Raw module");
+      const rawModule = Raw.Module as unknown as Record<string, unknown>;
+      const originalBuildContextImplementation = rawModule.RecastBuildContextJsImpl as
+        new (...args: never[]) => object;
+      let allocationCount = 0;
+      rawModule.RecastBuildContextJsImpl = new Proxy(
+        originalBuildContextImplementation,
+        {
+          construct(target, argumentsList, newTarget) {
+            allocationCount += 1;
+            return Reflect.construct(target, argumentsList, newTarget);
+          },
+        },
+      );
+      try {
+        expect(() => generateTiledNavMesh(
+          [
+            ...PLANE_POSITIONS,
+            100, 0, 100,
+            101, 0, 100,
+            100, 0, 101,
+          ],
+          [
+            ...COUNTER_CLOCKWISE_INDICES,
+            0, 4, 5,
+          ],
+          {
+            ...mapTraversalCapabilityEnvelopeToRecastTiledConfigV1(
+              createRecastTestEnvelopeV1(),
+            ),
+            bounds: [[0, 0, 0], [4, 1, 4]],
+            sourceAreaMode: {
+              kind: "terrain-with-static-blockers-r1",
+              terrainVertexCount: PLANE_POSITIONS.length / 3,
+              blockerAreaId: 1,
+            },
+          },
+          true,
+        )).toThrow("triangle crosses the terrain vertex boundary");
+        expect(allocationCount).toBe(0);
+      } finally {
+        rawModule.RecastBuildContextJsImpl = originalBuildContextImplementation;
+      }
+    });
+  });
+
+  it("rejects a terrain-only source-area boundary and unknown mode fields", async () => {
+    await runRecastProviderOperationV1(async () => {
+      const config = mapTraversalCapabilityEnvelopeToRecastTiledConfigV1(
+        createRecastTestEnvelopeV1(),
+      );
+      expect(() => generateTiledNavMesh(
+        PLANE_POSITIONS,
+        COUNTER_CLOCKWISE_INDICES,
+        {
+          ...config,
+          sourceAreaMode: {
+            kind: "terrain-with-static-blockers-r1",
+            terrainVertexCount: PLANE_POSITIONS.length / 3,
+            blockerAreaId: 1,
+          },
+        },
+        true,
+      )).toThrow("terrainVertexCount must be strictly inside merged vertices");
+      expect(() => generateTiledNavMesh(
+        [...PLANE_POSITIONS, 5, 0, 5],
+        COUNTER_CLOCKWISE_INDICES,
+        {
+          ...config,
+          sourceAreaMode: {
+            kind: "terrain-with-static-blockers-r1",
+            terrainVertexCount: PLANE_POSITIONS.length / 3,
+            blockerAreaId: 1,
+            unsupported: true,
+          },
+        } as never,
+        true,
+      )).toThrow("sourceAreaMode fields must be closed");
+    });
+  });
+
+  it("direct Tile validation precedes its default build-context allocation", async () => {
+    await runRecastProviderOperationV1(async () => {
+      if (Raw.Module === undefined) throw new Error("expected initialized Raw module");
+      const positions = new VerticesArray();
+      const indices = new TrianglesArray();
+      const chunkyTriMesh = new RecastChunkyTriMesh();
+      const mergedPositions = [
+        ...PLANE_POSITIONS,
+        100, 0, 100,
+        101, 0, 100,
+        100, 0, 101,
+      ];
+      const mixedIndices = [...COUNTER_CLOCKWISE_INDICES, 0, 4, 5];
+      positions.copy(mergedPositions);
+      indices.copy(mixedIndices);
+      expect(chunkyTriMesh.init(
+        positions,
+        indices,
+        mixedIndices.length / 3,
+        128,
+      )).toBe(true);
+      const tiledConfig = buildTiledNavMeshRcConfig({
+        recastConfig: mapTraversalCapabilityEnvelopeToRecastTiledConfigV1(
+          createRecastTestEnvelopeV1(),
+        ),
+        navMeshBounds: [[0, 0, 0], [4, 1, 4]],
+      });
+      const rawModule = Raw.Module as unknown as Record<string, unknown>;
+      const originalBuildContextImplementation = rawModule.RecastBuildContextJsImpl as
+        new (...args: never[]) => object;
+      let allocationCount = 0;
+      rawModule.RecastBuildContextJsImpl = new Proxy(
+        originalBuildContextImplementation,
+        {
+          construct(target, argumentsList, newTarget) {
+            allocationCount += 1;
+            return Reflect.construct(target, argumentsList, newTarget);
+          },
+        },
+      );
+      try {
+        expect(() => generateTileNavMeshData(
+          positions,
+          indices,
+          tiledConfig.config,
+          chunkyTriMesh,
+          { x: 0, y: 0, bmin: [0, 0, 0], bmax: [4, 1, 4] },
+          {
+            sourceAreaMode: {
+              kind: "terrain-with-static-blockers-r1",
+              terrainVertexCount: PLANE_POSITIONS.length / 3,
+              blockerAreaId: 1,
+            },
+          },
+          true,
+        )).toThrow("triangle crosses the terrain vertex boundary");
+        expect(allocationCount).toBe(0);
+      } finally {
+        rawModule.RecastBuildContextJsImpl = originalBuildContextImplementation;
+        Raw.destroy(tiledConfig.config);
+        Raw.destroy(chunkyTriMesh.raw);
+        indices.destroy();
+        positions.destroy();
+      }
+    });
+  });
+
+
+
   it("keeps repeated real provider initialization idempotent", async () => {
     await expect(init()).resolves.toBeUndefined();
     await expect(init()).resolves.toBeUndefined();

@@ -1,7 +1,7 @@
 import { groupBy, isEqual, isNil, isPlainObject } from "lodash-es";
 import {
   resolveTraversalDriverProfileV1,
-  resolveTraversalGraphBuilderProfileV1,
+  resolveTraversalGraphBuilderProfile,
 } from "@whitebox-world/traversal";
 
 import {
@@ -61,6 +61,7 @@ const VALIDATION_DIAGNOSTIC_CODES_V2 = [
 const EVIDENCE_KINDS_V2 = [
   "traversal-graph",
   "route-path-receipt",
+  "route-connectivity-failure",
   "route-runtime-probe-receipt",
   "route-overlay",
 ] as const;
@@ -92,6 +93,14 @@ const EVIDENCE_FIELDS_BY_KIND: Readonly<Record<string, readonly string[]>> = {
   ],
   "route-path-receipt": [
     ...EVIDENCE_BASE_FIELDS,
+    "resolvedTraversalLockHash",
+    "graphBuilderProfileRef",
+    "graphBuilderResolvedVersion",
+    "graphBuilderProfileHash",
+  ],
+  "route-connectivity-failure": [
+    ...EVIDENCE_BASE_FIELDS,
+    "routeBuildInputHash",
     "resolvedTraversalLockHash",
     "graphBuilderProfileRef",
     "graphBuilderResolvedVersion",
@@ -259,6 +268,11 @@ const DETAILS_FIELDS_BY_KIND: Readonly<Record<string, readonly string[]>> = {
   "degrees-threshold": ["kind", "expectedDegrees", "actualDegrees"],
   "ticks-threshold": ["kind", "expectedTicks", "actualTicks"],
   "count-threshold": ["kind", "maximumAllowedCount", "actualCount"],
+  "capacity-exceeded": [
+    "kind",
+    "maximumAllowedCount",
+    "minimumRequiredCount",
+  ],
   "hash-mismatch": ["kind", "expectedHash", "actualHash"],
   "identity-mismatch": ["kind", "expectedId", "actualId"],
   "missing-reference": ["kind", "missingRef"],
@@ -989,7 +1003,18 @@ function validateEvidenceArtifact(
   requireString(record.mediaType, `${path}/mediaType`, diagnostics);
   requireNonNegativeInteger(record.sizeBytes, `${path}/sizeBytes`, diagnostics);
   requireHash(record.contentHash, `${path}/contentHash`, diagnostics);
-  if (record.kind === "traversal-graph" || record.kind === "route-path-receipt") {
+  if (
+    record.kind === "traversal-graph" ||
+    record.kind === "route-path-receipt" ||
+    record.kind === "route-connectivity-failure"
+  ) {
+    if (record.kind === "route-connectivity-failure") {
+      requireHash(
+        record.routeBuildInputHash,
+        `${path}/routeBuildInputHash`,
+        diagnostics,
+      );
+    }
     requireHash(record.resolvedTraversalLockHash, `${path}/resolvedTraversalLockHash`, diagnostics);
     requireString(record.graphBuilderProfileRef, `${path}/graphBuilderProfileRef`, diagnostics);
     requireString(
@@ -1055,6 +1080,30 @@ function validateDiagnosticDetails(
       diagnostics,
     );
     requireNonNegativeInteger(record.actualCount, `${path}/actualCount`, diagnostics);
+  } else if (kind === "capacity-exceeded") {
+    const maximumValid = requireNonNegativeInteger(
+      record.maximumAllowedCount,
+      `${path}/maximumAllowedCount`,
+      diagnostics,
+    );
+    const minimumValid = requireNonNegativeInteger(
+      record.minimumRequiredCount,
+      `${path}/minimumRequiredCount`,
+      diagnostics,
+    );
+    if (
+      maximumValid &&
+      minimumValid &&
+      (record.minimumRequiredCount as number) <=
+        (record.maximumAllowedCount as number)
+    ) {
+      addDiagnostic(
+        diagnostics,
+        "VALIDATION_NUMBER_INVALID",
+        `${path}/minimumRequiredCount`,
+        "minimumRequiredCount must be greater than maximumAllowedCount.",
+      );
+    }
   } else if (kind === "hash-mismatch") {
     requireHash(record.expectedHash, `${path}/expectedHash`, diagnostics);
     requireHash(record.actualHash, `${path}/actualHash`, diagnostics);
@@ -1236,7 +1285,14 @@ function assertEvaluatedMetricEvidenceKinds(
   artifacts: ReadonlyMap<string, EvidenceArtifactV2>,
   diagnostics: ValidationContractDiagnosticV1[],
 ): void {
-  const requiredKinds = REQUIRED_EVIDENCE_KINDS_BY_GATE[gateId];
+  const requiredKinds =
+    gateId === "route-connectivity" && metricResult.status === "failed"
+      ? new Set<EvidenceArtifactKindV2>([
+          "traversal-graph",
+          "route-path-receipt",
+          "route-connectivity-failure",
+        ])
+      : REQUIRED_EVIDENCE_KINDS_BY_GATE[gateId];
   if (isNil(requiredKinds)) {
     return;
   }
@@ -1289,11 +1345,15 @@ function assertEvidenceArtifactIdentities(
   const lockHashes = new Set<string>();
   for (const [artifactId, artifact] of Object.entries(report.evidenceArtifactsById)) {
     const path = `/evidenceArtifactsById/${artifactId}`;
-    if (artifact.kind === "traversal-graph" || artifact.kind === "route-path-receipt") {
+    if (
+      artifact.kind === "traversal-graph" ||
+      artifact.kind === "route-path-receipt" ||
+      artifact.kind === "route-connectivity-failure"
+    ) {
       lockHashes.add(artifact.resolvedTraversalLockHash);
       assertRegistryIdentity(
         path,
-        () => resolveTraversalGraphBuilderProfileV1(artifact.graphBuilderProfileRef),
+        () => resolveTraversalGraphBuilderProfile(artifact.graphBuilderProfileRef),
         artifact.graphBuilderResolvedVersion,
         artifact.graphBuilderProfileHash,
         "Graph Builder identity",

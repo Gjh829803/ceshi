@@ -1,6 +1,10 @@
 import { describe, expect, it } from "vitest";
 
 import * as traversal from "./index.js";
+import {
+  assertHeightfieldRouteBuildInputReceiptV1,
+  hashHeightfieldRouteBuildInputV1,
+} from "./build-input.js";
 
 const HASH_A =
   "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa" as const;
@@ -44,9 +48,10 @@ function capabilityEnvelope() {
     maxStepHeightMeters: 0.3,
     resolvedTraversalLockHash: HASH_A,
     graphBuilderProfileRef:
-      "worldkit://traversal-graph-builder-profile/outdoor-humanoid.r1@1",
+      "worldkit://traversal-graph-builder-profile/outdoor-humanoid.heightfield-r1@1",
     graphBuilderResolvedVersion: "1",
-    graphBuilderProfileHash: HASH_A,
+    graphBuilderProfileHash:
+      "sha256:9720639dac7de3da1d140c7afd1ea7df4258cef202468e39fa222158caaad231",
     clearanceMarginMeters: 0.05,
     voxelCellSizeMeters: 0.15,
     voxelCellHeightMeters: 0.1,
@@ -257,5 +262,96 @@ describe("Heightfield route build input contract", () => {
         resourceHash: "SHA256:not-canonical",
       },
     })).toThrow("HEIGHTFIELD_ROUTE_BUILD_INPUT_INVALID");
+  });
+
+  it("admits one exact deeply frozen Receipt and recomputes bounded budget evidence", () => {
+    const input = deepFreeze(validBuildInput());
+    const receipt = deepFreeze({
+      input,
+      routeBuildInputHash: hashHeightfieldRouteBuildInputV1(input),
+      budgetEvidence: {
+        kind: "heightfield-tile-estimate",
+        tilesX: 1,
+        tilesZ: 1,
+        estimatedTiles: 1,
+        maximumTiles: 1_024,
+        minimumMetersXZ: [0, 0],
+        maximumMetersXZ: [1, 1],
+      },
+    });
+
+    expect(assertHeightfieldRouteBuildInputReceiptV1(receipt)).toBe(receipt);
+    expect(Object.isFrozen(receipt.input.terrainSource)).toBe(true);
+  });
+
+  it("rejects mutable, stale-hash, forged-policy, and stale-budget Receipts", () => {
+    const input = deepFreeze(validBuildInput());
+    const receipt = deepFreeze({
+      input,
+      routeBuildInputHash: hashHeightfieldRouteBuildInputV1(input),
+      budgetEvidence: {
+        kind: "heightfield-tile-estimate",
+        tilesX: 1,
+        tilesZ: 1,
+        estimatedTiles: 1,
+        maximumTiles: 1_024,
+        minimumMetersXZ: [0, 0],
+        maximumMetersXZ: [1, 1],
+      },
+    });
+
+    expect(() => assertHeightfieldRouteBuildInputReceiptV1({ ...receipt }))
+      .toThrow("HEIGHTFIELD_ROUTE_BUILD_INPUT_RECEIPT_INVALID");
+    expect(() => assertHeightfieldRouteBuildInputReceiptV1(deepFreeze({
+      ...receipt,
+      routeBuildInputHash: HASH_B,
+    }))).toThrow("HEIGHTFIELD_ROUTE_BUILD_INPUT_RECEIPT_INVALID");
+    const forgedPolicyInput = deepFreeze({
+      ...input,
+      capabilityEnvelope: {
+        ...input.capabilityEnvelope,
+        maximumSearchSteps: input.capabilityEnvelope.maximumSearchSteps - 1,
+      },
+    });
+    expect(() => assertHeightfieldRouteBuildInputReceiptV1(deepFreeze({
+      ...receipt,
+      input: forgedPolicyInput,
+      routeBuildInputHash: hashHeightfieldRouteBuildInputV1(forgedPolicyInput),
+    }))).toThrow("HEIGHTFIELD_ROUTE_BUILD_INPUT_RECEIPT_INVALID");
+    expect(() => assertHeightfieldRouteBuildInputReceiptV1(deepFreeze({
+      ...receipt,
+      budgetEvidence: { ...receipt.budgetEvidence, estimatedTiles: 2 },
+    }))).toThrow("HEIGHTFIELD_ROUTE_BUILD_INPUT_RECEIPT_INVALID");
+  });
+
+  it("requires the exact empty-source budget evidence variant", () => {
+    const bounded = validBuildInput();
+    const input = deepFreeze({
+      ...bounded,
+      terrainSource: {
+        kind: "empty",
+        terrainEntityId: "terrain-main",
+        terrainArtifactHash: HASH_A,
+      },
+    });
+    const receipt = deepFreeze({
+      input,
+      routeBuildInputHash: hashHeightfieldRouteBuildInputV1(input),
+      budgetEvidence: { kind: "not-required-empty-source" },
+    });
+
+    expect(assertHeightfieldRouteBuildInputReceiptV1(receipt)).toBe(receipt);
+    expect(() => assertHeightfieldRouteBuildInputReceiptV1(deepFreeze({
+      ...receipt,
+      budgetEvidence: {
+        kind: "heightfield-tile-estimate",
+        tilesX: 1,
+        tilesZ: 1,
+        estimatedTiles: 1,
+        maximumTiles: 1_024,
+        minimumMetersXZ: [0, 0],
+        maximumMetersXZ: [1, 1],
+      },
+    }))).toThrow("HEIGHTFIELD_ROUTE_BUILD_INPUT_RECEIPT_INVALID");
   });
 });

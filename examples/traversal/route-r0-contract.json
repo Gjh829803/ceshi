@@ -402,11 +402,12 @@
     "traversalEdgesById": {
       "spawn-to-watchtower-walk": {
         "id": "spawn-to-watchtower-walk",
-        "type": "walk",
+        "type": "slope",
         "fromTraversalNodeId": "spawn-node",
         "toTraversalNodeId": "watchtower-node",
         "distanceMeters": 42,
         "heightDeltaMeters": 1.05,
+        "stepHeightMeters": 0,
         "slopeDegrees": 1.4,
         "minimumClearanceWidthMeters": 1.2,
         "minimumClearanceHeightMeters": 2,
@@ -414,5 +415,5 @@
       }
     }
   },
-  "traversalGraphHash": "sha256:41ad011f91915510789f6065e965cb84360894e924062715e54621cbd4356edf"
+  "traversalGraphHash": "sha256:2e6df820bf5eca2eb7c35407c9cd8b6d25ac0f7173e9de637879b63b431eca0f"
 }

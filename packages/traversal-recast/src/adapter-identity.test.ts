@@ -9,6 +9,7 @@ import {
   assertAuditedTraversalRuntimeIdentityV1,
   RECAST_GRAPH_PROVIDER_ADAPTER_HASH_V1,
   RECAST_GRAPH_PROVIDER_ADAPTER_MANIFEST_V1,
+  RECAST_QUERY_PROVIDER_CONSTANTS_V1,
 } from "./adapter-identity.js";
 
 describe("Recast Graph Provider Adapter identity", () => {
@@ -46,11 +47,58 @@ describe("Recast Graph Provider Adapter identity", () => {
       schemaVersion: 1,
       graphProviderAdapterRef:
         "worldkit://graph-provider-adapter/recast-navigation.tiled@1",
-      graphProviderAdapterResolvedVersion: "0.43.1+lifecycle.1+mapping.1",
+      graphProviderAdapterResolvedVersion:
+        "0.43.1+lifecycle.1+source-areas.1+mapping.3",
       providerPackageName: "recast-navigation",
       providerPackageVersion: "0.43.1",
       generatorMode: "tiled",
       meterQuantization: "nearest-integer-micrometer",
+      sourceMapping: {
+        mergeOrder: "terrain-first-then-blockers-sorted-by-colliderSubshapeId",
+        terrainVertexBoundary: "terrain-position-count-divided-by-three",
+        sourceAreaActivationPredicate: "blocking-triangle-count-greater-than-zero",
+        blockerReservedAreaId: 1,
+        blockerFinalAreaId: 0,
+        compactAreaConversionPoint: "after-buildCompactHeightfield-before-erodeWalkableArea",
+        terrainPolygonFlag: 1,
+        noOptionCompatibility: "task-2-packed-golden-sha256:97459be30f32a7a37bcdb92bc655d5b70a0378cd43d930c07cb4c0eae076b374",
+      },
+      boundsMapping: {
+        xz: "certified-retained-terrain-minimum-maximum",
+        y: "merged-terrain-and-relevant-blocker-minimum-maximum",
+      },
+      queryMapping: {
+        includeFlags: 1,
+        excludeFlags: 0,
+        endpointHalfExtentsXZ: "capsuleRadiusMeters+clearanceMarginMeters+voxelCellSizeMeters",
+        endpointHalfExtentY: "capsuleHeightMeters/2+maxStepHeightMeters+voxelCellHeightMeters",
+        rawMaximumNodes:
+          "adapter-owned-query-capacity-for-nearest-and-straight-path-only",
+        straightPathRawCapacity: "stableMaximumPointCount+1-sentinel",
+      },
+      queryConstants: {
+        rawMaximumNodes: 64,
+      },
+      canonicalProjectionMapping: {
+        polygonIdentity:
+          "quantized-canonical-closed-vertex-cycle-plus-surface-identity",
+        portalRecovery: "detour-link-edge-side-bmin-bmax-overlap",
+        nodeSlope: "maximum-detail-triangle-slope-degrees-rounded-up",
+        heightDelta:
+          "signed-destination-centroid-y-minus-source-centroid-y",
+        stepHeight:
+          "maximum-absolute-portal-endpoint-height-discontinuity",
+        clearanceWidth:
+          "two-times-walkableRadiusCells-times-voxelCellSizeMeters-rounded-down",
+        clearanceHeight:
+          "walkableHeightCells-times-voxelCellHeightMeters-rounded-down",
+        edgeCost:
+          "positive-safe-integer-distance-plus-slope-and-step-profile-cost",
+        angleQuantization: "fixed-angle-grid-round-up",
+        costQuantization: "fixed-cost-grid-round-up-minimum-one",
+        capacityStatus:
+          "deterministic-minimum-required-count-without-provider-status",
+      },
       constants: {
         borderSize: 0,
         minRegionArea: 8,
@@ -66,11 +114,22 @@ describe("Recast Graph Provider Adapter identity", () => {
       sha256CanonicalJson(RECAST_GRAPH_PROVIDER_ADAPTER_MANIFEST_V1),
     );
     expect(RECAST_GRAPH_PROVIDER_ADAPTER_HASH_V1).toBe(
-      "sha256:6c06d9eb2a90fe58edcc9504d74c9c9bfecaeb67b10bd0b1c99f31d0f40fdf91",
+      "sha256:32b3f30e117a5d6a9515015f5e8568c149b8f23d4345f2318ed632a488865bae",
     );
     expect(Object.isFrozen(RECAST_GRAPH_PROVIDER_ADAPTER_MANIFEST_V1)).toBe(true);
     expect(Object.isFrozen(RECAST_GRAPH_PROVIDER_ADAPTER_MANIFEST_V1.constants))
       .toBe(true);
+    expect(Object.isFrozen(RECAST_GRAPH_PROVIDER_ADAPTER_MANIFEST_V1.installedFiles))
+      .toBe(true);
+    expect(Object.isFrozen(RECAST_GRAPH_PROVIDER_ADAPTER_MANIFEST_V1.sourceMapping))
+      .toBe(true);
+    expect(Object.isFrozen(RECAST_GRAPH_PROVIDER_ADAPTER_MANIFEST_V1.queryMapping))
+      .toBe(true);
+    expect(Object.isFrozen(RECAST_GRAPH_PROVIDER_ADAPTER_MANIFEST_V1.queryConstants))
+      .toBe(true);
+    expect(RECAST_QUERY_PROVIDER_CONSTANTS_V1.rawMaximumNodes).toBe(64);
+    expect(RECAST_QUERY_PROVIDER_CONSTANTS_V1.maximumProviderPolygonRef)
+      .toBe(0xffff_ffff);
   });
 
   it("pins both the declared and installed provider version to the manifest", () => {

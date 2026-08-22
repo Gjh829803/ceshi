@@ -13,8 +13,25 @@ import {
   type GenerateTiledNavMeshResult,
   type TiledNavMeshGeneratorIntermediates,
 } from "recast-navigation/generators";
+import { isNil } from "lodash-es";
 
 import type { RecastTiledConfigV1 } from "./recast-config.js";
+import {
+  destroyRecastQueryProviderV1,
+  type RecastQueryProviderReceiptV1,
+} from "./query-provider.js";
+
+export interface RecastTiledGenerationOptionsV1 {
+  readonly bounds?: readonly [
+    readonly [number, number, number],
+    readonly [number, number, number],
+  ];
+  readonly sourceAreaMode?: Readonly<{
+    kind: "terrain-with-static-blockers-r1";
+    terrainVertexCount: number;
+    blockerAreaId: 1;
+  }>;
+}
 
 export class RecastProviderLifecycleV1 {
   private initializationPromise: Promise<void> | undefined;
@@ -25,7 +42,7 @@ export class RecastProviderLifecycleV1 {
   ) {}
 
   private initializeOnce(): Promise<void> {
-    if (this.initializationPromise === undefined) {
+    if (isNil(this.initializationPromise)) {
       const initializationPromise = Promise.resolve().then(
         this.initializeProvider,
       );
@@ -57,6 +74,12 @@ export class RecastProviderLifecycleV1 {
 
 const PROCESS_RECAST_PROVIDER_LIFECYCLE_V1 = new RecastProviderLifecycleV1(init);
 const CONSUMED_RECAST_TILED_OPERATION_RECEIPTS_V1 = new WeakSet<object>();
+const CONSUMED_RECAST_PROVIDER_OPERATION_RECEIPTS_V1 = new WeakSet<object>();
+
+export interface RecastProviderOperationResourceReceiptV1 {
+  readonly queryProviderReceipt: RecastQueryProviderReceiptV1;
+  readonly tiledResult: GenerateTiledNavMeshResult;
+}
 
 export function runRecastProviderOperationV1<T>(
   operation: () => Promise<T> | T,
@@ -68,8 +91,28 @@ export function generateRetainedTiledNavMeshV1(
   positions: ArrayLike<number>,
   indices: ArrayLike<number>,
   config: RecastTiledConfigV1,
+  sourceOptions: RecastTiledGenerationOptionsV1 = {},
 ): GenerateTiledNavMeshResult {
-  return generateTiledNavMesh(positions, indices, config, true);
+  const generatorOptions = {
+    ...(isNil(sourceOptions.sourceAreaMode)
+      ? {}
+      : { sourceAreaMode: sourceOptions.sourceAreaMode }),
+    ...(isNil(sourceOptions.bounds)
+      ? {}
+      : {
+          bounds: [
+            [...sourceOptions.bounds[0]],
+            [...sourceOptions.bounds[1]],
+          ] as [
+            [number, number, number],
+            [number, number, number],
+          ],
+        }),
+  };
+  return generateTiledNavMesh(positions, indices, {
+    ...config,
+    ...generatorOptions,
+  }, true);
 }
 
 export function destroyRecastTiledOperationResourcesV1(
@@ -91,7 +134,7 @@ export function destroyRecastTiledOperationResourcesV1(
     }
   };
 
-  if (query !== undefined) {
+  if (!isNil(query)) {
     destroy(() => query.destroy());
   }
 
@@ -99,28 +142,28 @@ export function destroyRecastTiledOperationResourcesV1(
     result.intermediates;
   for (const tile of [...intermediates.tileIntermediates].reverse()) {
     const polyMeshDetail = tile.polyMeshDetail;
-    if (polyMeshDetail !== undefined) {
+    if (!isNil(polyMeshDetail)) {
       destroy(() => freePolyMeshDetail(polyMeshDetail));
     }
     const polyMesh = tile.polyMesh;
-    if (polyMesh !== undefined) {
+    if (!isNil(polyMesh)) {
       destroy(() => freePolyMesh(polyMesh));
     }
     const contourSet = tile.contourSet;
-    if (contourSet !== undefined) {
+    if (!isNil(contourSet)) {
       destroy(() => freeContourSet(contourSet));
     }
     const compactHeightfield = tile.compactHeightfield;
-    if (compactHeightfield !== undefined) {
+    if (!isNil(compactHeightfield)) {
       destroy(() => freeCompactHeightfield(compactHeightfield));
     }
     const heightfield = tile.heightfield;
-    if (heightfield !== undefined) {
+    if (!isNil(heightfield)) {
       destroy(() => freeHeightfield(heightfield));
     }
   }
   const chunkyTriMesh = intermediates.chunkyTriMesh;
-  if (chunkyTriMesh !== undefined) {
+  if (!isNil(chunkyTriMesh)) {
     destroy(() => Raw.destroy(chunkyTriMesh.raw));
   }
   if (result.success) {
@@ -130,5 +173,29 @@ export function destroyRecastTiledOperationResourcesV1(
 
   if (errors.length > 0) {
     throw new AggregateError(errors, "TRAVERSAL_RECAST_RESOURCE_CLEANUP_FAILED");
+  }
+}
+
+export function destroyRecastProviderOperationResourcesV1(
+  receipt: RecastProviderOperationResourceReceiptV1,
+): void {
+  if (CONSUMED_RECAST_PROVIDER_OPERATION_RECEIPTS_V1.has(receipt)) return;
+  CONSUMED_RECAST_PROVIDER_OPERATION_RECEIPTS_V1.add(receipt);
+  const errors: unknown[] = [];
+  try {
+    destroyRecastQueryProviderV1(receipt.queryProviderReceipt);
+  } catch (error) {
+    errors.push(error);
+  }
+  try {
+    destroyRecastTiledOperationResourcesV1(undefined, receipt.tiledResult);
+  } catch (error) {
+    errors.push(error);
+  }
+  if (errors.length > 0) {
+    throw new AggregateError(
+      errors,
+      "TRAVERSAL_RECAST_PROVIDER_OPERATION_CLEANUP_FAILED",
+    );
   }
 }

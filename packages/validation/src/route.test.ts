@@ -1,12 +1,40 @@
 import { describe, expect, it } from "vitest";
 
 import {
+  createRouteConnectivityValidationDiagnosticV2,
   OUTDOOR_CONTROL_VIDEO_DEV_VALIDATION_PROFILE_V1,
   OUTDOOR_WORLD_PACKAGE_DEV_VALIDATION_PROFILE_V2,
   ROUTE_VALIDATION_DIAGNOSTIC_CODES_V2,
   validateValidationProfileV1,
   validateValidationProfileV2,
 } from "./index";
+import type { RouteConnectivityFailureV1 } from "@whitebox-world/traversal";
+import { ROUTE_CONNECTIVITY_FAILURE_CODES_V1 } from "@whitebox-world/traversal";
+
+const HASH = `sha256:${"a".repeat(64)}` as const;
+
+function failureCommon() {
+  return {
+    kind: "route-connectivity-failure" as const,
+    schemaVersion: 1 as const,
+    constraintId: "player-to-goal",
+    routeId: "main-route",
+    traversingEntityId: "player",
+    startAnchorEntityId: "spawn",
+    destinationAnchorEntityId: "goal",
+    startAnchorPositionMetersXYZ: [0, 0, 0] as const,
+    destinationAnchorPositionMetersXYZ: [10, 0, 0] as const,
+    traversalSurfaceId: "surface-main",
+    surfaceEntityId: "terrain-main",
+    colliderSubshapeId: "terrain-heightfield",
+    routeBuildInputHash: HASH,
+    resolvedTraversalLockHash: HASH,
+    graphBuilderProfileRef:
+      "worldkit://traversal-graph-builder-profile/outdoor-humanoid.heightfield-r1@1",
+    graphBuilderResolvedVersion: "1",
+    graphBuilderProfileHash: HASH,
+  };
+}
 
 describe("Route validation vocabulary", () => {
   it("freezes unique Route diagnostic codes including lock mismatch", () => {
@@ -22,6 +50,12 @@ describe("Route validation vocabulary", () => {
         "ROUTE_WATER_TRAVERSAL_UNSUPPORTED",
         "ROUTE_RUNTIME_SUPPORT_LOST",
       ]),
+    );
+    expect(ROUTE_VALIDATION_DIAGNOSTIC_CODES_V2).toEqual(
+      expect.arrayContaining([...ROUTE_CONNECTIVITY_FAILURE_CODES_V1]),
+    );
+    expect(ROUTE_CONNECTIVITY_FAILURE_CODES_V1).not.toContain(
+      "ROUTE_RUNTIME_STALLED",
     );
   });
 
@@ -124,5 +158,81 @@ describe("Route validation vocabulary", () => {
         expect.objectContaining({ code: "VALIDATION_FIELD_UNKNOWN" }),
       ]),
     });
+  });
+
+  it("copies canonical threshold and Anchor positions without geometry inference", () => {
+    const failure = {
+      ...failureCommon(),
+      status: "unreachable",
+      graphStatus: "unavailable",
+      reason: {
+        kind: "step-height-threshold-exceeded",
+        code: "ROUTE_STEP_HEIGHT_EXCEEDED",
+        proofKind: "unique-single-reason-cut",
+        proofCandidateIds: ["candidate-a"],
+        failurePositionMetersXYZ: [4.25, 0.35, 0],
+        terrainEntityId: "terrain-main",
+        maximumObservedStepHeightMeters: 0.35,
+        maximumAllowedStepHeightMeters: 0.3,
+      },
+    } as const satisfies RouteConnectivityFailureV1;
+
+    const diagnostic = createRouteConnectivityValidationDiagnosticV2({
+      id: "route-step-failed",
+      metricId: "maximum-observed-step-height-meters",
+      evidenceArtifactRef: "artifact://route-connectivity-failure",
+      failure,
+    });
+    expect(diagnostic.positionMetersXYZ).toEqual([4.25, 0.35, 0]);
+    expect(diagnostic.positionMetersXYZ).toBe(failure.reason.failurePositionMetersXYZ);
+    expect(diagnostic.details).toEqual({
+      kind: "meters-threshold",
+      expectedMeters: 0.3,
+      actualMeters: 0.35,
+    });
+
+    const generic = {
+      ...failureCommon(),
+      status: "unreachable",
+      graphStatus: "unavailable",
+      reason: {
+        kind: "empty-heightfield-source",
+        code: "ROUTE_REQUIRED_PATH_UNREACHABLE",
+        terrainEntityId: "terrain-main",
+      },
+    } as const satisfies RouteConnectivityFailureV1;
+    expect(createRouteConnectivityValidationDiagnosticV2({
+      id: "route-unreachable",
+      metricId: "unreachable-required-route-count",
+      evidenceArtifactRef: "artifact://route-connectivity-failure",
+      failure: generic,
+    }).positionMetersXYZ).toBe(generic.startAnchorPositionMetersXYZ);
+  });
+
+  it("maps lower-bound budget proof to capacity-exceeded without fabricating actualCount", () => {
+    const failure = {
+      ...failureCommon(),
+      status: "incomplete",
+      graphStatus: "unavailable",
+      reason: {
+        kind: "node-budget-exceeded",
+        code: "ROUTE_GRAPH_BUDGET_EXCEEDED",
+        maximumAllowedCount: 100,
+        minimumRequiredCount: 101,
+      },
+    } as const satisfies RouteConnectivityFailureV1;
+
+    const diagnostic = createRouteConnectivityValidationDiagnosticV2({
+      id: "route-capacity",
+      metricId: "traversal-graph-node-count",
+      evidenceArtifactRef: "artifact://route-connectivity-failure",
+      failure,
+    });
+    expect(diagnostic.details).toEqual({
+      kind: "capacity-exceeded",
+      maximumAllowedCount: 100,
+      minimumRequiredCount: 101,
+    });
+    expect(diagnostic.details).not.toHaveProperty("actualCount");
   });
 });

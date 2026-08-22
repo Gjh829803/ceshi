@@ -2,9 +2,11 @@ import { isNil } from "lodash-es";
 import { describe, expect, it } from "vitest";
 import {
   BUILT_IN_TRAVERSAL_DRIVER_PROFILE_REF,
+  BUILT_IN_HEIGHTFIELD_R1_TRAVERSAL_GRAPH_BUILDER_PROFILE_REF,
   BUILT_IN_TRAVERSAL_GRAPH_BUILDER_PROFILE_REF,
   resolveTraversalDriverProfileV1,
   resolveTraversalGraphBuilderProfileV1,
+  resolveTraversalGraphBuilderProfile,
 } from "@whitebox-world/traversal";
 
 import {
@@ -826,8 +828,8 @@ function passedWorldPackageMetricResult(
 }
 
 function typedWorldPackageEvidenceArtifacts(): Record<string, EvidenceArtifactV2> {
-  const graphBuilder = resolveTraversalGraphBuilderProfileV1(
-    BUILT_IN_TRAVERSAL_GRAPH_BUILDER_PROFILE_REF,
+  const graphBuilder = resolveTraversalGraphBuilderProfile(
+    BUILT_IN_HEIGHTFIELD_R1_TRAVERSAL_GRAPH_BUILDER_PROFILE_REF,
   );
   const driver = resolveTraversalDriverProfileV1(
     BUILT_IN_TRAVERSAL_DRIVER_PROFILE_REF,
@@ -863,6 +865,25 @@ function typedWorldPackageEvidenceArtifacts(): Record<string, EvidenceArtifactV2
       runtimeAdapterResolvedVersion: "1",
       runtimeAdapterHash: HASH_C,
     },
+  };
+}
+
+function routeConnectivityFailureEvidence(): EvidenceArtifactV2 {
+  const graphBuilder = resolveTraversalGraphBuilderProfile(
+    BUILT_IN_HEIGHTFIELD_R1_TRAVERSAL_GRAPH_BUILDER_PROFILE_REF,
+  );
+  return {
+    id: "route-connectivity-failure",
+    kind: "route-connectivity-failure",
+    artifactRef: "artifact://route-connectivity-failure",
+    mediaType: "application/vnd.worldkit.route-connectivity-failure.v1+json",
+    sizeBytes: 256,
+    contentHash: HASH_C,
+    routeBuildInputHash: HASH_B,
+    resolvedTraversalLockHash: HASH_A,
+    graphBuilderProfileRef: graphBuilder.resourceRef,
+    graphBuilderResolvedVersion: graphBuilder.resolvedVersion,
+    graphBuilderProfileHash: graphBuilder.contentHash,
   };
 }
 
@@ -1002,6 +1023,85 @@ describe("Validation Profile/Report V2", () => {
 
   it("rejects a passed connectivity gate backed only by probe evidence", () => {
     expect(validateValidationReportV2(probeOnlyPassedWorldPackageReport())).toMatchObject({
+      ok: false,
+      diagnostics: expect.arrayContaining([
+        expect.objectContaining({
+          code: "VALIDATION_REFERENCE_INVALID",
+          path: expect.stringMatching(/route-connectivity/),
+        }),
+      ]),
+    });
+  });
+
+  it("accepts exact V2 Graph Builder and canonical failure evidence for a failed connectivity Metric", () => {
+    const report = validWorldPackageReport();
+    const gate = report.gateResultsById["route-connectivity"]!;
+    const metric = gate.metricResultsById["unreachable-required-route-count"]!;
+    const diagnosticId = "route-unreachable";
+    const failedMetric = {
+      ...metric,
+      status: "failed" as const,
+      valueCount: 1,
+      evidenceArtifactRefs: ["artifact://route-connectivity-failure"],
+      diagnosticIds: [diagnosticId],
+    };
+    const failedGate = {
+      ...gate,
+      status: "failed" as const,
+      metricResultsById: {
+        ...gate.metricResultsById,
+        "unreachable-required-route-count": failedMetric,
+      },
+      diagnosticIds: [diagnosticId],
+    };
+    const failedReport: ValidationReportV2 = {
+      ...report,
+      status: "failed",
+      gateResultsById: {
+        ...report.gateResultsById,
+        "route-connectivity": failedGate,
+      },
+      evidenceArtifactsById: {
+        ...report.evidenceArtifactsById,
+        "route-connectivity-failure": routeConnectivityFailureEvidence(),
+      },
+      diagnostics: [{
+        id: diagnosticId,
+        code: "ROUTE_REQUIRED_PATH_UNREACHABLE",
+        severity: "error",
+        gateId: "route-connectivity",
+        metricId: "unreachable-required-route-count",
+        routeId: "main-route",
+        traversingEntityId: "player",
+        startAnchorEntityId: "spawn",
+        destinationAnchorEntityId: "goal",
+        traversalSurfaceId: "surface-main",
+        colliderSubshapeId: "terrain-heightfield",
+        positionMetersXYZ: [0, 0, 0],
+        evidenceArtifactRefs: ["artifact://route-connectivity-failure"],
+        details: {
+          kind: "state-mismatch",
+          expectedState: "reachable",
+          actualState: "unreachable",
+        },
+        message: "The required route is unreachable.",
+        suggestedFix: "Repair the route geometry and rebuild traversal evidence.",
+      }],
+    };
+
+    expect(validateValidationReportV2(failedReport)).toMatchObject({ ok: true });
+  });
+
+  it("rejects a passed connectivity Metric backed only by failure evidence", () => {
+    const report = validWorldPackageReport();
+    const failure = routeConnectivityFailureEvidence();
+    const rewritten = withUniformEvidence(
+      report,
+      failure.artifactRef,
+      { [failure.id]: failure },
+    );
+
+    expect(validateValidationReportV2(rewritten)).toMatchObject({
       ok: false,
       diagnostics: expect.arrayContaining([
         expect.objectContaining({

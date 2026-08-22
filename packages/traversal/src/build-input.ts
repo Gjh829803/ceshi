@@ -1,7 +1,9 @@
 import { sha256CanonicalJson } from "@whitebox-world/protocol";
 import { isNil, isPlainObject } from "lodash-es";
 
+import { assertTraversalGraphBuildBudgetV1 } from "./build-budget.js";
 import { assertTraversalSurfaceIdentityV1 } from "./graph-contract.js";
+import { resolveTraversalGraphBuilderProfile } from "./profile-registry.js";
 import type {
   TraversalCapabilityEnvelopeV1,
   TraversalSurfaceIdentityV1,
@@ -118,6 +120,33 @@ export interface HeightfieldRouteBuildInputReceiptV1 {
 }
 
 const SHA256_PATTERN = /^sha256:[a-f0-9]{64}$/;
+
+const RECEIPT_FIELDS = ["input", "routeBuildInputHash", "budgetEvidence"] as const;
+const EMPTY_BUDGET_FIELDS = ["kind"] as const;
+const BOUNDED_BUDGET_FIELDS = [
+  "kind",
+  "tilesX",
+  "tilesZ",
+  "estimatedTiles",
+  "maximumTiles",
+  "minimumMetersXZ",
+  "maximumMetersXZ",
+] as const;
+const GRAPH_POLICY_FIELDS = [
+  "clearanceMarginMeters",
+  "voxelCellSizeMeters",
+  "voxelCellHeightMeters",
+  "tileSizeCells",
+  "maximumEdgeLengthMeters",
+  "maximumSimplificationErrorMeters",
+  "positionQuantizationMeters",
+  "slopeCostWeight",
+  "stepCostWeight",
+  "maximumNodes",
+  "maximumEdges",
+  "maximumTiles",
+  "maximumSearchSteps",
+] as const;
 
 const BUILD_INPUT_FIELDS = [
   "kind",
@@ -317,7 +346,7 @@ function requireVec3(value: unknown, path: string): Vec3 {
 }
 
 function isDeeplyFrozen(value: unknown, seen = new Set<object>()): boolean {
-  if (value === null || typeof value !== "object") return true;
+  if (isNil(value) || typeof value !== "object") return true;
   if (seen.has(value)) return true;
   seen.add(value);
   if (!Object.isFrozen(value)) return false;
@@ -763,4 +792,179 @@ export function hashHeightfieldRouteBuildInputV1(
   return sha256CanonicalJson(
     assertHeightfieldRouteBuildInputV1(value),
   ) as Sha256Hash;
+}
+
+function failReceipt(path: string, message: string): never {
+  throw new Error(
+    `HEIGHTFIELD_ROUTE_BUILD_INPUT_RECEIPT_INVALID: ${path.length > 0 ? `${path}: ` : ""}${message}`,
+  );
+}
+
+function requireReceiptSafeInteger(value: unknown, path: string): number {
+  if (!Number.isSafeInteger(value) || (value as number) <= 0) {
+    failReceipt(path, "must be a positive safe integer");
+  }
+  return value as number;
+}
+
+function requireReceiptHash(value: unknown, path: string): Sha256Hash {
+  if (typeof value !== "string" || !SHA256_PATTERN.test(value)) {
+    failReceipt(path, "must be a lowercase sha256 hash");
+  }
+  return value as Sha256Hash;
+}
+
+function assertExactVec2(
+  value: unknown,
+  expected: Vec2,
+  path: string,
+): void {
+  if (
+    !Array.isArray(value) ||
+    value.length !== 2 ||
+    value[0] !== expected[0] ||
+    value[1] !== expected[1]
+  ) {
+    failReceipt(path, "does not match the admitted Build Input bounds");
+  }
+}
+
+export function assertHeightfieldRouteBuildInputReceiptV1(
+  value: unknown,
+): HeightfieldRouteBuildInputReceiptV1 {
+  let record: UnknownRecord;
+  try {
+    record = requireExactFields(value, RECEIPT_FIELDS, "");
+  } catch (cause) {
+    failReceipt("", cause instanceof Error ? cause.message : "expected an exact receipt");
+  }
+  if (!isDeeplyFrozen(value)) {
+    failReceipt("", "receipt must be deeply frozen");
+  }
+
+  let input: HeightfieldRouteBuildInputV1;
+  try {
+    input = assertHeightfieldRouteBuildInputV1(record.input);
+  } catch (cause) {
+    failReceipt(
+      "input",
+      cause instanceof Error ? cause.message : "Build Input validation failed",
+    );
+  }
+  const routeBuildInputHash = requireReceiptHash(
+    record.routeBuildInputHash,
+    "routeBuildInputHash",
+  );
+  if (routeBuildInputHash !== hashHeightfieldRouteBuildInputV1(input)) {
+    failReceipt("routeBuildInputHash", "does not match canonical input bytes");
+  }
+
+  let resolved;
+  try {
+    resolved = resolveTraversalGraphBuilderProfile(
+      input.capabilityEnvelope.graphBuilderProfileRef,
+    );
+  } catch (cause) {
+    failReceipt(
+      "input/capabilityEnvelope/graphBuilderProfileRef",
+      cause instanceof Error ? cause.message : "Profile resolution failed",
+    );
+  }
+  if (
+    resolved.profile.schemaVersion !== 2 ||
+    resolved.resolvedVersion !== input.capabilityEnvelope.graphBuilderResolvedVersion ||
+    resolved.contentHash !== input.capabilityEnvelope.graphBuilderProfileHash
+  ) {
+    failReceipt(
+      "input/capabilityEnvelope",
+      "Graph Builder identity must resolve to the exact Registry V2 Profile",
+    );
+  }
+  for (const field of GRAPH_POLICY_FIELDS) {
+    if (input.capabilityEnvelope[field] !== resolved.profile[field]) {
+      failReceipt(
+        `input/capabilityEnvelope/${field}`,
+        "must match the resolved Registry V2 Profile",
+      );
+    }
+  }
+
+  let budget: UnknownRecord;
+  try {
+    budget = requireRecord(record.budgetEvidence, "budgetEvidence");
+  } catch (cause) {
+    failReceipt(
+      "budgetEvidence",
+      cause instanceof Error ? cause.message : "expected a plain object",
+    );
+  }
+  if (input.terrainSource.kind === "empty") {
+    try {
+      requireExactFields(budget, EMPTY_BUDGET_FIELDS, "budgetEvidence");
+    } catch (cause) {
+      failReceipt(
+        "budgetEvidence",
+        cause instanceof Error ? cause.message : "invalid empty-source evidence",
+      );
+    }
+    if (budget.kind !== "not-required-empty-source") {
+      failReceipt(
+        "budgetEvidence/kind",
+        "must be 'not-required-empty-source' for an empty source",
+      );
+    }
+  } else {
+    try {
+      requireExactFields(budget, BOUNDED_BUDGET_FIELDS, "budgetEvidence");
+    } catch (cause) {
+      failReceipt(
+        "budgetEvidence",
+        cause instanceof Error ? cause.message : "invalid bounded evidence",
+      );
+    }
+    if (budget.kind !== "heightfield-tile-estimate") {
+      failReceipt(
+        "budgetEvidence/kind",
+        "must be 'heightfield-tile-estimate' for a bounded source",
+      );
+    }
+    let estimate;
+    try {
+      estimate = assertTraversalGraphBuildBudgetV1({
+        minimumMetersXZ: input.terrainSource.minimumMetersXZ,
+        maximumMetersXZ: input.terrainSource.maximumMetersXZ,
+        tileSizeCells: input.capabilityEnvelope.tileSizeCells,
+        voxelCellSizeMeters: input.capabilityEnvelope.voxelCellSizeMeters,
+        maximumTiles: input.capabilityEnvelope.maximumTiles,
+      });
+    } catch (cause) {
+      failReceipt(
+        "budgetEvidence",
+        cause instanceof Error ? cause.message : "budget recomputation failed",
+      );
+    }
+    const expectedNumbers = {
+      tilesX: estimate.tilesX,
+      tilesZ: estimate.tilesZ,
+      estimatedTiles: estimate.estimatedTiles,
+      maximumTiles: input.capabilityEnvelope.maximumTiles,
+    } as const;
+    for (const [field, expected] of Object.entries(expectedNumbers)) {
+      if (requireReceiptSafeInteger(budget[field], `budgetEvidence/${field}`) !== expected) {
+        failReceipt(`budgetEvidence/${field}`, `must equal ${expected}`);
+      }
+    }
+    assertExactVec2(
+      budget.minimumMetersXZ,
+      input.terrainSource.minimumMetersXZ,
+      "budgetEvidence/minimumMetersXZ",
+    );
+    assertExactVec2(
+      budget.maximumMetersXZ,
+      input.terrainSource.maximumMetersXZ,
+      "budgetEvidence/maximumMetersXZ",
+    );
+  }
+
+  return value as HeightfieldRouteBuildInputReceiptV1;
 }

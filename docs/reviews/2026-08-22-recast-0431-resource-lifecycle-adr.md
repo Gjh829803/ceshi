@@ -1,6 +1,6 @@
 # Recast 0.43.1 Resource Lifecycle ADR
 
-Status: approved for test-first implementation after focused Cursor design reviews
+Status: ACCEPTED AND IMPLEMENTED; Task 4 full gates and fresh final review passed
 
 ## Decision context
 
@@ -119,13 +119,14 @@ must not change:
   Generators `dist/index.mjs`, and the actually changed Generators
   `dist/generators/generate-tiled-nav-mesh.d.ts`; the umbrella `dist/index.d.ts` is only a
   re-export and is not identity evidence;
-- existing tiled-generator, rounding, and provider-constant fields plus `mapping.2` source merge
+- existing tiled-generator, rounding, and provider-constant fields plus the `mapping.2` source merge
   order, terrain vertex boundary, exact `blocking triangle count > 0` activation predicate,
   reserved/null Area mapping, terrain Flag, explicit bounds,
   endpoint/query Filter, canonical polygon/portal/step/slope/clearance/cost formulas, and
-  no-option compatibility.
+  no-option compatibility; the combined `mapping.3` identity additionally binds the fixed raw
+  Query capacity and unsigned 32-bit Provider Polygon Ref maximum.
 
-Every hashed identity value is a portable literal. Absolute paths, `node_modules/.pnpm` layout, `require.resolve()` output, file URLs, registry responses, current working directory, timestamps, and the manifest's own final hash are forbidden from the manifest. The Adapter `resolvedVersion` is exactly `0.43.1+lifecycle.1+source-areas.1+mapping.2`; `RECAST_GRAPH_PROVIDER_ADAPTER_HASH_V1` remains outside the manifest and equals `sha256CanonicalJson(manifest)`.
+Every hashed identity value is a portable literal. Absolute paths, `node_modules/.pnpm` layout, `require.resolve()` output, file URLs, registry responses, current working directory, timestamps, and the manifest's own final hash are forbidden from the manifest. The Adapter `resolvedVersion` is exactly `0.43.1+lifecycle.1+source-areas.1+mapping.3`; `RECAST_GRAPH_PROVIDER_ADAPTER_HASH_V1` remains outside the manifest and equals `sha256CanonicalJson(manifest)`.
 
 Tests read the root `pnpm-workspace.yaml#patchedDependencies` declarations used by pnpm 10, lockfile package/integrity/patch entries, checked-in patch bytes, installed package versions, and every sorted installed file above. Installation lookup starts from the declared `recast-navigation` entry and uses a chained `createRequire()` so pnpm strict dependency isolation is preserved; only content hashes are compared with the manifest. Editing the declaration leaf alone must fail the drift gate. Removing a patch, failing to apply it, changing a transitive package tarball, or editing installed provider code cannot retain the old Adapter hash. The pnpm-generated lockfile patch hash is asserted present and stable but is not assumed to equal the SDK's SHA-256 of patch bytes.
 

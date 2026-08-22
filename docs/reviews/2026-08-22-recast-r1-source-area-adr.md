@@ -1,6 +1,6 @@
 # Recast R1 Terrain and Blocker Source-Area ADR
 
-Status: DESIGN GO as part of Task 4 review; implementation and code review pending
+Status: ACCEPTED AND IMPLEMENTED; Task 4 full gates and fresh final review passed
 
 ## Context
 
@@ -88,7 +88,8 @@ region/contour/detail settings, NavMesh ownership, query behavior, or cleanup or
 R1 passes the upstream-supported `bounds` option explicitly. X/Z come from the exact retained
 terrain bounds certified in `HeightfieldRouteBuildInputReceiptV1`; Y extrema come from the merged
 terrain and relevant blocker positions. This uses an existing generator feature and requires no
-provider patch, but the derivation is part of Adapter `mapping.2` identity.
+provider patch, but the derivation entered Adapter `mapping.2` identity. The later Task 4 raw-query
+audit retains this decision unchanged inside the combined `mapping.3` identity.
 
 Complete relevant blocker soups remain in the ChunkyTriMesh so expanded Tile borders can
 rasterize correct nearby geometry. Their extents do not enlarge the certified XZ Tile grid.
@@ -116,7 +117,8 @@ Before source implementation is accepted:
 
 - bump the Graph Provider Adapter resolved version from
   `0.43.1+lifecycle.1+mapping.1` to
-  `0.43.1+lifecycle.1+source-areas.1+mapping.2`;
+  `0.43.1+lifecycle.1+source-areas.1+mapping.3` (the source-area portion was introduced by
+  `mapping.2`; `mapping.3` adds only the reviewed raw-query capacity and unsigned Ref ABI);
 - update the generators patch byte hash;
 - replace the ambiguous single `lifecyclePatches.revision` manifest field with explicit per-patch
   revisions: Core `lifecycle.1`, Generators `lifecycle.1+source-areas.1`;
