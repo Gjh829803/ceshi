@@ -10,6 +10,8 @@ import {
   CONTROL_FEEL_PARAMETER_BOUNDS_V1,
   CONTROL_FEEL_PARAMETER_NAMES_V1,
   WORLDKIT_BROWSER_PROTOCOL_VERSION,
+  canonicalWorldkitBrowserRouteEvidencePublicationV1,
+  canonicalRouteEvidenceSelectorV1,
   type ApplySubjectPresetTuningRequestV1,
   type BindControlRequestV2,
   type CameraTuningV1,
@@ -20,11 +22,16 @@ import {
   type ControlBindingReceiptV2,
   type FixedInputV1,
   type RenderReadyReceiptV1,
+  type RouteEvidenceSelectorV1,
+  type RouteEvidenceUnavailableResultV1,
+  type RouteEvidenceUnavailableReasonV1,
+  type WorldkitBrowserRouteEvidenceProjectionV1,
+  type WorldkitBrowserRouteEvidencePublicationV1,
   type RuntimeControlCaptureFrameV1,
   type WorldRuntimeSnapshotV3,
   type SubjectHarnessReportV1,
   type SubjectPresetTuningReceiptV1,
-  type WorldkitBrowserApiV3,
+  type WorldkitBrowserApiV4,
   type WorldkitBrowserDiagnosticV1,
 } from "@whitebox-world/runtime-contracts";
 
@@ -58,7 +65,7 @@ export interface DeferredWorldkitBrowserRuntimeAdapterV1 {
 }
 
 interface WorldkitBrowserApiTargetV1 {
-  __WORLDKIT__?: WorldkitBrowserApiV3;
+  __WORLDKIT__?: WorldkitBrowserApiV4;
 }
 
 interface WorldkitBrowserStatusTargetV1 {
@@ -70,7 +77,7 @@ export interface DeferredWorldkitBrowserInitializationContextV1 {
 }
 
 export interface DeferredWorldkitBrowserApiInstallationV1 {
-  readonly api: WorldkitBrowserApiV3;
+  readonly api: WorldkitBrowserApiV4;
   readonly initialization: Promise<
     DeferredWorldkitBrowserRuntimeAdapterV1 | undefined
   >;
@@ -159,6 +166,42 @@ function deepFreeze<T>(value: T): T {
   }
   for (const child of Object.values(value)) deepFreeze(child);
   return Object.freeze(value);
+}
+
+function unavailableRouteEvidenceResult(
+  selector: RouteEvidenceSelectorV1,
+  reason: RouteEvidenceUnavailableReasonV1,
+): RouteEvidenceUnavailableResultV1 {
+  return deepFreeze({
+    kind: "worldkit-route-evidence-query-result",
+    schemaVersion: 1,
+    availability: "unavailable",
+    selector: structuredClone(selector),
+    reason,
+  });
+}
+
+function routeEvidenceKey(selector: RouteEvidenceSelectorV1): string {
+  return `${selector.constraintId.length}:${selector.constraintId}${selector.routeId}`;
+}
+
+function createRouteEvidenceByKey(
+  publication: WorldkitBrowserRouteEvidencePublicationV1 | undefined,
+): ReadonlyMap<string, WorldkitBrowserRouteEvidenceProjectionV1> | undefined {
+  if (publication === undefined) return undefined;
+  const canonical = canonicalWorldkitBrowserRouteEvidencePublicationV1(
+    publication,
+  );
+  const byKey = new Map<string, WorldkitBrowserRouteEvidenceProjectionV1>();
+  for (const projection of canonical.routes) {
+    const key = routeEvidenceKey(projection.selector);
+    byKey.set(key, projection);
+  }
+  return byKey;
+}
+
+function immutableBrowserCopy<T>(value: T): T {
+  return deepFreeze(structuredClone(value));
 }
 
 export function validateSubjectPackageAgainstRegistry(
@@ -441,10 +484,14 @@ function runtimeProfileDiscoverySummaryV1(
 export function installDeferredWorldkitBrowserApi(options: {
   target: WorldkitBrowserApiTargetV1;
   statusElement: WorldkitBrowserStatusTargetV1;
+  routeEvidencePublication?: WorldkitBrowserRouteEvidencePublicationV1;
   initialize(
     context: DeferredWorldkitBrowserInitializationContextV1,
   ): Promise<DeferredWorldkitBrowserRuntimeAdapterV1>;
 }): DeferredWorldkitBrowserApiInstallationV1 {
+  const routeEvidenceByKey = createRouteEvidenceByKey(
+    options.routeEvidencePublication,
+  );
   let state: "loading" | "ready" | "error" = "loading";
   let trackedAdapter: DeferredWorldkitBrowserRuntimeAdapterV1 | undefined;
   let adapterDisposed = false;
@@ -465,7 +512,32 @@ export function installDeferredWorldkitBrowserApi(options: {
     return trackedAdapter;
   };
 
-  const api: WorldkitBrowserApiV3 = {
+  const findRouteEvidence = (
+    value: RouteEvidenceSelectorV1,
+  ): Readonly<{
+    selector: RouteEvidenceSelectorV1;
+    projection?: WorldkitBrowserRouteEvidenceProjectionV1;
+    unavailableReason?: RouteEvidenceUnavailableReasonV1;
+  }> => {
+    const selector = canonicalRouteEvidenceSelectorV1(value);
+    if (routeEvidenceByKey === undefined) {
+      return { selector, unavailableReason: "route-evidence-not-loaded" };
+    }
+    const projection = routeEvidenceByKey.get(routeEvidenceKey(selector));
+    return projection === undefined
+      ? { selector, unavailableReason: "route-not-found" }
+      : { selector, projection };
+  };
+
+  const unavailableFromLookup = (
+    lookup: ReturnType<typeof findRouteEvidence>,
+    reason: RouteEvidenceUnavailableReasonV1 = "evidence-not-published",
+  ): RouteEvidenceUnavailableResultV1 => unavailableRouteEvidenceResult(
+    lookup.selector,
+    lookup.unavailableReason ?? reason,
+  );
+
+  const api: WorldkitBrowserApiV4 = {
     version: WORLDKIT_BROWSER_PROTOCOL_VERSION,
     ready: () => startupPromise,
     getSnapshot: () => requireReadyAdapter().runtimeSnapshot(),
@@ -641,14 +713,66 @@ export function installDeferredWorldkitBrowserApi(options: {
     getSubjectSnapshot: (subjectEntityId) =>
       requireReadyAdapter().runtimeSnapshot().subjectStatesByEntityId[subjectEntityId],
     getCameraSnapshot: () => requireReadyAdapter().runtimeSnapshot().camera,
+    getRouteSummary: (selector) => {
+      const lookup = findRouteEvidence(selector);
+      if (lookup.projection === undefined) return unavailableFromLookup(lookup);
+      return immutableBrowserCopy({
+        kind: "worldkit-route-evidence-query-result",
+        schemaVersion: 1,
+        availability: "available",
+        selector: lookup.selector,
+        summary: lookup.projection.summary,
+      });
+    },
+    getRoutePathReceipt: (selector) => {
+      const lookup = findRouteEvidence(selector);
+      const receipt = lookup.projection?.routePathReceipt;
+      if (receipt === undefined) return unavailableFromLookup(lookup);
+      return immutableBrowserCopy({
+        kind: "worldkit-route-evidence-query-result",
+        schemaVersion: 1,
+        availability: "available",
+        selector: lookup.selector,
+        routePathReceipt: receipt,
+      });
+    },
+    getRouteRuntimeProbeReceipt: (selector) => {
+      const lookup = findRouteEvidence(selector);
+      const receipt = lookup.projection?.routeRuntimeProbeReceipt;
+      if (receipt === undefined) return unavailableFromLookup(lookup);
+      return immutableBrowserCopy({
+        kind: "worldkit-route-evidence-query-result",
+        schemaVersion: 1,
+        availability: "available",
+        selector: lookup.selector,
+        routeRuntimeProbeReceipt: receipt,
+      });
+    },
+    getRouteOverlay: (selector) => {
+      const lookup = findRouteEvidence(selector);
+      const overlay = lookup.projection?.routeOverlay;
+      if (overlay === undefined) return unavailableFromLookup(lookup);
+      return immutableBrowserCopy({
+        kind: "worldkit-route-evidence-query-result",
+        schemaVersion: 1,
+        availability: "available",
+        selector: lookup.selector,
+        routeOverlay: overlay,
+      });
+    },
   };
 
-  // Protocol V3 keys remain enumerable for exact backward compatibility. The
-  // capability-authoring extension is callable but does not mutate that key set.
+  // The original protocol method keys remain enumerable for exact behavior
+  // compatibility. Capability and Route Evidence extensions are callable but
+  // do not mutate that key set.
   for (const extensionName of [
     "adjustCameraView",
     "applySubjectPresetTuning",
     "getCameraSnapshot",
+    "getRouteOverlay",
+    "getRoutePathReceipt",
+    "getRouteRuntimeProbeReceipt",
+    "getRouteSummary",
     "getSubjectPresetBaseline",
     "getSubjectSnapshot",
     "listCompatibleProfiles",

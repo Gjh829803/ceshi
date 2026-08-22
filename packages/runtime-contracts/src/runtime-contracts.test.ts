@@ -3,6 +3,7 @@ import { describe, expect, it } from "vitest";
 import {
   TRUSTED_DEFAULT_CONTROLLER_ID,
   WORLDKIT_BROWSER_PROTOCOL_VERSION,
+  canonicalWorldkitBrowserRouteEvidencePublicationV1,
   type ExecutionAnimationSetV1,
   type ExecutionColliderProfileV1,
   type ExecutionRigProfileV1,
@@ -14,9 +15,32 @@ import {
   type ExecutionTraversalSurfaceV1,
   type FixedInputV1,
   type WorldRuntimeSnapshotV3,
-  type WorldkitBrowserApiV3,
+  type WorldkitBrowserApiV4,
+  type WorldkitBrowserRouteEvidencePublicationV1,
   type WorldkitBrowserDiagnosticV1,
 } from "./index";
+
+const ROUTE_PUBLICATION_HASH = `sha256:${"a".repeat(64)}` as const;
+
+function emptyRouteEvidencePublicationFixture(): WorldkitBrowserRouteEvidencePublicationV1 {
+  return {
+    kind: "worldkit-browser-route-evidence-publication",
+    schemaVersion: 1,
+    worldPackageRootHash: ROUTE_PUBLICATION_HASH,
+    authoringSpecHash: ROUTE_PUBLICATION_HASH,
+    normalizedWorldIrHash: ROUTE_PUBLICATION_HASH,
+    executionPlanHash: ROUTE_PUBLICATION_HASH,
+    resourceLockHash: ROUTE_PUBLICATION_HASH,
+    layoutSolveReportHash: ROUTE_PUBLICATION_HASH,
+    validationReportHash: ROUTE_PUBLICATION_HASH,
+    routeValidationSetReceiptHash: ROUTE_PUBLICATION_HASH,
+    validationProfileRef:
+      "worldkit://validation-profile/outdoor-world-package-dev@1",
+    validationProfileResolvedVersion: "1.0.0",
+    validationProfileHash: ROUTE_PUBLICATION_HASH,
+    routes: [],
+  };
+}
 
 function createSnapshotFixtureV3(): WorldRuntimeSnapshotV3 {
   return {
@@ -358,7 +382,7 @@ describe("runtime contracts V3", () => {
     expect(TRUSTED_DEFAULT_CONTROLLER_ID).toBe("controller-primary");
   });
 
-  it("defines Browser Protocol V3 directly over SnapshotV3", async () => {
+  it("defines Browser Protocol V4 directly over SnapshotV3", async () => {
     const snapshot = createSnapshotFixtureV3();
     const diagnostic = {
       severity: "error",
@@ -406,11 +430,84 @@ describe("runtime contracts V3", () => {
       captureScreenshot: () => "data:image/png;base64,",
       reset: () => snapshot,
       setPaused: () => snapshot,
-    } satisfies WorldkitBrowserApiV3;
+      getRouteSummary: () => ({
+        kind: "worldkit-route-evidence-query-result",
+        schemaVersion: 1,
+        availability: "unavailable",
+        selector: { constraintId: "player-to-goal", routeId: "main-route" },
+        reason: "route-evidence-not-loaded",
+      }),
+      getRoutePathReceipt: () => ({
+        kind: "worldkit-route-evidence-query-result",
+        schemaVersion: 1,
+        availability: "unavailable",
+        selector: { constraintId: "player-to-goal", routeId: "main-route" },
+        reason: "route-evidence-not-loaded",
+      }),
+      getRouteRuntimeProbeReceipt: () => ({
+        kind: "worldkit-route-evidence-query-result",
+        schemaVersion: 1,
+        availability: "unavailable",
+        selector: { constraintId: "player-to-goal", routeId: "main-route" },
+        reason: "route-evidence-not-loaded",
+      }),
+      getRouteOverlay: () => ({
+        kind: "worldkit-route-evidence-query-result",
+        schemaVersion: 1,
+        availability: "unavailable",
+        selector: { constraintId: "player-to-goal", routeId: "main-route" },
+        reason: "route-evidence-not-loaded",
+      }),
+    } satisfies WorldkitBrowserApiV4;
 
-    expect(api.version).toBe(3);
+    expect(api.version).toBe(4);
     await expect(api.ready()).resolves.toBe(snapshot);
     expect(api.getDiagnostics()).toEqual([diagnostic]);
+  });
+
+  it("canonicalizes the closed Browser Route publication as a detached deep-frozen DTO", () => {
+    const input = emptyRouteEvidencePublicationFixture();
+    const canonical = canonicalWorldkitBrowserRouteEvidencePublicationV1(input);
+
+    expect(canonical).toEqual(input);
+    expect(canonical).not.toBe(input);
+    expect(canonical.routes).not.toBe(input.routes);
+    expect(Object.isFrozen(canonical)).toBe(true);
+    expect(Object.isFrozen(canonical.routes)).toBe(true);
+  });
+
+  it("rejects zero hashes, unknown fields, accessors, symbols, and opaque buffers", () => {
+    const valid = emptyRouteEvidencePublicationFixture();
+    const invalidInputs: unknown[] = [
+      { ...valid, worldPackageRootHash: `sha256:${"0".repeat(64)}` },
+      { ...valid, providerHandle: "opaque" },
+      { ...valid, [Symbol("providerHandle")]: "opaque" },
+      { ...valid, validationReportHash: new ArrayBuffer(8) },
+    ];
+    if (typeof SharedArrayBuffer !== "undefined") {
+      invalidInputs.push({
+        ...valid,
+        validationReportHash: new SharedArrayBuffer(8),
+      });
+    }
+    const detached = new ArrayBuffer(8);
+    structuredClone(detached, { transfer: [detached] });
+    invalidInputs.push({ ...valid, validationReportHash: detached });
+
+    let getterCalls = 0;
+    invalidInputs.push(Object.defineProperty({ ...valid }, "routes", {
+      enumerable: true,
+      get: () => {
+        getterCalls += 1;
+        return [];
+      },
+    }));
+
+    for (const input of invalidInputs) {
+      expect(() => canonicalWorldkitBrowserRouteEvidencePublicationV1(input))
+        .toThrow("WORLDKIT_BROWSER_ROUTE_EVIDENCE_PUBLICATION_INVALID");
+    }
+    expect(getterCalls).toBe(0);
   });
 
   it("defines closed V4 layout assertions with role-qualified endpoints and units", () => {
