@@ -1,0 +1,839 @@
+import { canonicalJsonBytes, sha256CanonicalJson } from "@whitebox-world/protocol";
+import {
+  BUILT_IN_HEIGHTFIELD_R1_TRAVERSAL_GRAPH_BUILDER_PROFILE_REF,
+  BUILT_IN_TRAVERSAL_DRIVER_PROFILE_REF,
+  assertHeightfieldRouteBuildInputReceiptV1,
+  canonicalHeightfieldRouteConnectivityResultV1,
+  canonicalRouteConnectivityFailureV1,
+  canonicalRouteOverlayV1,
+  canonicalRoutePathReceiptV1,
+  canonicalRouteRuntimeProbeReceiptV1,
+  createTraversalCapabilityEnvelopeV1,
+  hashHeightfieldRouteBuildInputV1,
+  hashRouteConnectivityFailureV1,
+  hashRouteOverlayV1,
+  hashRoutePathReceiptV1,
+  hashTraversalGraphV1,
+  resolveTraversalDriverProfileV1,
+  resolveTraversalGraphBuilderProfileV2,
+  resolveTraversalLockV1,
+  type ResolvedTraversalLockV1,
+  type RouteOverlayV1,
+  type RoutePathReceiptV1,
+  type RouteRuntimeProbeReceiptV1,
+  type TraversalGraphV1,
+} from "@whitebox-world/traversal";
+import { describe, expect, it } from "vitest";
+
+import {
+  OUTDOOR_WORLD_PACKAGE_DEV_VALIDATION_PROFILE_V2,
+  createRouteValidationReportV2,
+  createWorldkitBrowserRouteEvidencePublicationV1,
+  hashRouteValidationSetReceiptV1,
+  hashValidationReportV2,
+  type CreateWorldkitBrowserRouteEvidencePublicationInputV1,
+  type RouteEvidencePublicationRowInputV1,
+  type RouteValidationRowInputV2,
+  type WorldPackageValidationSubjectV1,
+} from "./index.js";
+
+const HASH_A = `sha256:${"a".repeat(64)}` as const;
+const HASH_B = `sha256:${"b".repeat(64)}` as const;
+const HASH_C = `sha256:${"c".repeat(64)}` as const;
+const EMPTY_COLLIDER_HASH =
+  "sha256:4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945" as const;
+
+const SUBJECT: WorldPackageValidationSubjectV1 = {
+  kind: "world-package",
+  worldPackageRootHash: HASH_A,
+  authoringSpecHash: HASH_A,
+  normalizedWorldIrHash: HASH_B,
+  executionPlanHash: HASH_C,
+  resourceLockHash: HASH_B,
+  layoutSolveReportHash: HASH_C,
+};
+
+const SURFACE = {
+  traversalSurfaceId: "surface-main",
+  surfaceEntityId: "terrain-main",
+  colliderSubshapeId: "terrain-heightfield",
+  resourceRef: "package://traversal-surface/terrain-main.heightfield@1",
+  resolvedVersion: "1",
+  resourceHash: HASH_B,
+} as const;
+
+function deepFreeze<T>(value: T): T {
+  if (value === null || value === undefined || typeof value !== "object") {
+    return value;
+  }
+  for (const child of Object.values(value as Record<string, unknown>)) {
+    deepFreeze(child);
+  }
+  return Object.freeze(value);
+}
+
+function deepFreezeExceptBytes<T>(value: T): T {
+  if (
+    value === null ||
+    value === undefined ||
+    typeof value !== "object" ||
+    value instanceof Uint8Array
+  ) {
+    return value;
+  }
+  for (const child of Object.values(value as Record<string, unknown>)) {
+    deepFreezeExceptBytes(child);
+  }
+  return Object.freeze(value);
+}
+
+function lockInput(
+  subjectEntityId: string,
+  maxSlopeDegrees = 42,
+): ResolvedTraversalLockV1 {
+  return {
+    kind: "resolved-traversal-lock",
+    schemaVersion: 1,
+    subjectEntityId,
+    resourceLockHash: SUBJECT.resourceLockHash,
+    subjectDefinitionRef: `worldkit://subject-definition/${subjectEntityId}@1`,
+    subjectDefinitionHash: HASH_A,
+    colliderProfileRef: "worldkit://collider-profile/humanoid@1",
+    colliderProfileHash: HASH_A,
+    physicsBodyProfileRef: "worldkit://physics-body-profile/humanoid@1",
+    physicsBodyProfileHash: HASH_A,
+    locomotionProfileRef: "worldkit://locomotion-profile/ground.standard@1",
+    locomotionProfileHash: HASH_A,
+    locomotionCapabilityRef: "worldkit://capability/locomotion.ground@1",
+    locomotionCapabilityHash: HASH_A,
+    controlFeelProfileRef: "worldkit://control-feel-profile/ground@1",
+    controlFeelProfileHash: HASH_A,
+    controlProfileRef: "worldkit://control-profile/ground@1",
+    controlProfileHash: HASH_A,
+    motionProfileRef: "worldkit://motion-profile/ground@1",
+    motionProfileHash: HASH_A,
+    motionKernelRef: "worldkit://motion-kernel/ground@1",
+    motionKernelHash: HASH_A,
+    mediumProfileRef: "worldkit://medium-profile/ground@1",
+    mediumProfileHash: HASH_A,
+    runtimeBackendRef: "worldkit://runtime-backend/babylon-havok@1",
+    runtimeBackendResolvedVersion: "1",
+    runtimeBackendHash: HASH_A,
+    runtimeAdapterRef: "worldkit://runtime-adapter/babylon-world-runtime@1",
+    runtimeAdapterResolvedVersion: "1",
+    runtimeAdapterHash: HASH_A,
+    capsuleRadiusMeters: 0.35,
+    capsuleHeightMeters: 1.8,
+    colliderCenterOffsetMetersXYZ: [0, 0.9, 0],
+    maxSlopeDegrees,
+    maxStepHeightMeters: 0.3,
+  };
+}
+
+function buildInputReceipt(
+  lockReceipt: ReturnType<typeof resolveTraversalLockV1>,
+  constraintId: string,
+  routeId: string,
+) {
+  const graphBuilderProfile = resolveTraversalGraphBuilderProfileV2(
+    BUILT_IN_HEIGHTFIELD_R1_TRAVERSAL_GRAPH_BUILDER_PROFILE_REF,
+  );
+  const capabilityEnvelope = createTraversalCapabilityEnvelopeV1({
+    traversalLockReceipt: lockReceipt,
+    graphBuilderProfile,
+  }).envelope;
+  const buildInput = deepFreeze({
+    kind: "heightfield-route-build-input" as const,
+    schemaVersion: 1 as const,
+    authoringSpecHash: SUBJECT.authoringSpecHash,
+    layoutSolveReportHash: SUBJECT.layoutSolveReportHash,
+    resourceLockHash: SUBJECT.resourceLockHash,
+    connectivityRequirement: {
+      constraintId,
+      traversingEntityId: lockReceipt.lock.subjectEntityId,
+      startAnchorEntityId: `${routeId}-start`,
+      destinationAnchorEntityId: `${routeId}-goal`,
+      routeId,
+    },
+    startAnchor: {
+      entityId: `${routeId}-start`,
+      positionMetersXYZ: [0, 0, 0] as const,
+    },
+    destinationAnchor: {
+      entityId: `${routeId}-goal`,
+      positionMetersXYZ: [1, 0, 0] as const,
+    },
+    hardRibbon: {
+      routeId,
+      pointsMetersXZ: [[0, 0], [1, 0]] as const,
+      widthMeters: 2,
+      locomotionProfileRef: lockReceipt.lock.locomotionProfileRef,
+    },
+    traversalSurface: SURFACE,
+    capabilityEnvelope,
+    terrainSource: {
+      kind: "bounded" as const,
+      terrainEntityId: SURFACE.surfaceEntityId,
+      terrainArtifactHash: HASH_A,
+      triangleSoup: {
+        positionsMetersXYZ: [0, 0, 0, 0, 0, 1, 1, 0, 0],
+        triangleIndices: [0, 1, 2],
+      },
+      minimumMetersXZ: [0, 0] as const,
+      maximumMetersXZ: [1, 1] as const,
+    },
+    blockingColliders: [],
+    colliderArtifactHash: EMPTY_COLLIDER_HASH,
+    blockedWaterExclusions: [],
+  });
+  return assertHeightfieldRouteBuildInputReceiptV1(deepFreeze({
+    input: buildInput,
+    routeBuildInputHash: hashHeightfieldRouteBuildInputV1(buildInput),
+    budgetEvidence: {
+      kind: "heightfield-tile-estimate" as const,
+      tilesX: 1,
+      tilesZ: 1,
+      estimatedTiles: 1,
+      maximumTiles: capabilityEnvelope.maximumTiles,
+      minimumMetersXZ: [0, 0] as const,
+      maximumMetersXZ: [1, 1] as const,
+    },
+  }));
+}
+
+function graph(
+  buildReceipt: ReturnType<typeof buildInputReceipt>,
+): TraversalGraphV1 {
+  const buildInput = buildReceipt.input;
+  const start = {
+    id: `${buildInput.connectivityRequirement.routeId}-node-start`,
+    traversalSurfaceId: SURFACE.traversalSurfaceId,
+    surfaceEntityId: SURFACE.surfaceEntityId,
+    colliderSubshapeId: SURFACE.colliderSubshapeId,
+    positionMetersXYZ: [0, 0, 0] as const,
+    tileId: "tile-0",
+    clearanceWidthMeters: 0.9,
+    clearanceHeightMeters: 2,
+  };
+  const goal = {
+    ...start,
+    id: `${buildInput.connectivityRequirement.routeId}-node-goal`,
+    positionMetersXYZ: [1, 0, 0] as const,
+  };
+  const edge = {
+    id: `${buildInput.connectivityRequirement.routeId}-edge`,
+    type: "walk" as const,
+    fromTraversalNodeId: start.id,
+    toTraversalNodeId: goal.id,
+    distanceMeters: 1,
+    heightDeltaMeters: 0,
+    stepHeightMeters: 0,
+    slopeDegrees: 0,
+    minimumClearanceWidthMeters: 0.9,
+    minimumClearanceHeightMeters: 2,
+    routePathCost: 1,
+  };
+  return {
+    kind: "traversal-graph",
+    schemaVersion: 1,
+    authoringSpecHash: buildInput.authoringSpecHash,
+    layoutSolveReportHash: buildInput.layoutSolveReportHash,
+    resourceLockHash: buildInput.resourceLockHash,
+    terrainArtifactHash: buildInput.terrainSource.terrainArtifactHash,
+    colliderArtifactHash: buildInput.colliderArtifactHash,
+    surfaceArtifactHash: buildInput.traversalSurface.resourceHash,
+    routeBuildInputHash: buildReceipt.routeBuildInputHash,
+    resolvedTraversalLockHash:
+      buildInput.capabilityEnvelope.resolvedTraversalLockHash,
+    graphBuilderProfileRef: buildInput.capabilityEnvelope.graphBuilderProfileRef,
+    graphBuilderResolvedVersion:
+      buildInput.capabilityEnvelope.graphBuilderResolvedVersion,
+    graphBuilderProfileHash:
+      buildInput.capabilityEnvelope.graphBuilderProfileHash,
+    routeId: buildInput.connectivityRequirement.routeId,
+    startAnchorEntityId: buildInput.startAnchor.entityId,
+    destinationAnchorEntityId: buildInput.destinationAnchor.entityId,
+    traversalNodesById: { [goal.id]: goal, [start.id]: start },
+    traversalEdgesById: { [edge.id]: edge },
+  };
+}
+
+function path(
+  traversalGraph: TraversalGraphV1,
+  constraintId: string,
+  traversingEntityId: string,
+): RoutePathReceiptV1 {
+  return canonicalRoutePathReceiptV1({
+    kind: "route-path-receipt",
+    schemaVersion: 1,
+    status: "complete",
+    constraintId,
+    routeId: traversalGraph.routeId,
+    traversingEntityId,
+    startAnchorEntityId: traversalGraph.startAnchorEntityId,
+    destinationAnchorEntityId: traversalGraph.destinationAnchorEntityId,
+    authoringSpecHash: traversalGraph.authoringSpecHash,
+    layoutSolveReportHash: traversalGraph.layoutSolveReportHash,
+    resourceLockHash: traversalGraph.resourceLockHash,
+    traversalGraphHash: hashTraversalGraphV1(traversalGraph),
+    routeBuildInputHash: traversalGraph.routeBuildInputHash,
+    resolvedTraversalLockHash: traversalGraph.resolvedTraversalLockHash,
+    traversalSurfaceIdentity: SURFACE,
+    graphBuilderProfileRef: traversalGraph.graphBuilderProfileRef,
+    graphBuilderResolvedVersion: traversalGraph.graphBuilderResolvedVersion,
+    graphBuilderProfileHash: traversalGraph.graphBuilderProfileHash,
+    orderedTraversalNodeIds: [
+      `${traversalGraph.routeId}-node-start`,
+      `${traversalGraph.routeId}-node-goal`,
+    ],
+    orderedTraversalEdgeIds: [`${traversalGraph.routeId}-edge`],
+    orderedPathPositionsMetersXYZ: [[0, 0, 0], [1, 0, 0]],
+    routePathDistanceMeters: 1,
+    routePathDistanceMetersXZ: 1,
+    routePathCost: 1,
+    maximumObservedSlopeDegrees: 0,
+    maximumObservedStepHeightMeters: 0,
+    minimumObservedClearanceWidthMeters: 0.9,
+    minimumObservedClearanceHeightMeters: 2,
+    maximumObservedSurfaceGapMeters: 0,
+  });
+}
+
+function probe(
+  routePath: RoutePathReceiptV1,
+  lockReceipt: ReturnType<typeof resolveTraversalLockV1>,
+): RouteRuntimeProbeReceiptV1 {
+  const driver = resolveTraversalDriverProfileV1(
+    BUILT_IN_TRAVERSAL_DRIVER_PROFILE_REF,
+  );
+  const runtimeImplementationIdentity = {
+    runtimeBackendRef: lockReceipt.lock.runtimeBackendRef,
+    runtimeBackendResolvedVersion: lockReceipt.lock.runtimeBackendResolvedVersion,
+    runtimeBackendHash: lockReceipt.lock.runtimeBackendHash,
+    runtimeAdapterRef: lockReceipt.lock.runtimeAdapterRef,
+    runtimeAdapterResolvedVersion: lockReceipt.lock.runtimeAdapterResolvedVersion,
+    runtimeAdapterHash: lockReceipt.lock.runtimeAdapterHash,
+  } as const;
+  const initialRuntimeEvidence = {
+    kind: "traversal-runtime-tick-evidence" as const,
+    schemaVersion: 1 as const,
+    tick: 0,
+    traversingEntityId: routePath.traversingEntityId,
+    authoringSpecHash: SUBJECT.authoringSpecHash,
+    layoutSolveReportHash: SUBJECT.layoutSolveReportHash,
+    resourceLockHash: SUBJECT.resourceLockHash,
+    executionPlanHash: SUBJECT.executionPlanHash,
+    resolvedTraversalLockHash: lockReceipt.resolvedTraversalLockHash,
+    runtimeImplementationIdentity,
+    fixedTimeStepSeconds: 1 / 60,
+    subjectPositionMetersXYZ: [1, 0, 0] as const,
+    velocityMetersPerSecondXYZ: [0, 0, 0] as const,
+    movementMedium: "ground" as const,
+    locomotionMode: "idle" as const,
+    characterSupport: {
+      kind: "character-support-evidence" as const,
+      schemaVersion: 1 as const,
+      supportState: "supported" as const,
+      supportNormalWorldXYZ: [0, 1, 0] as const,
+      sampledFootPositionMetersXYZ: [1, 0, 0] as const,
+      isSupportSurfaceDynamic: false,
+      surfaceResolution: { mode: "resolved" as const, ...SURFACE },
+    },
+  };
+  return canonicalRouteRuntimeProbeReceiptV1({
+    kind: "route-runtime-probe-receipt",
+    schemaVersion: 1,
+    status: "complete",
+    request: {
+      kind: "route-runtime-probe-request",
+      schemaVersion: 1,
+      routePathReceiptHash: hashRoutePathReceiptV1(routePath),
+      constraintId: routePath.constraintId,
+      routeId: routePath.routeId,
+      traversingEntityId: routePath.traversingEntityId,
+      startAnchorEntityId: routePath.startAnchorEntityId,
+      destinationAnchorEntityId: routePath.destinationAnchorEntityId,
+      authoringSpecHash: routePath.authoringSpecHash,
+      layoutSolveReportHash: routePath.layoutSolveReportHash,
+      resourceLockHash: routePath.resourceLockHash,
+      executionPlanHash: SUBJECT.executionPlanHash,
+      routeBuildInputHash: routePath.routeBuildInputHash,
+      traversalGraphHash: routePath.traversalGraphHash,
+      resolvedTraversalLockHash: routePath.resolvedTraversalLockHash,
+      traversalSurfaceIdentity: routePath.traversalSurfaceIdentity,
+      driverProfileRef: driver.resourceRef,
+      driverResolvedVersion: driver.resolvedVersion,
+      driverProfileHash: driver.contentHash,
+      validationProfileRef:
+        OUTDOOR_WORLD_PACKAGE_DEV_VALIDATION_PROFILE_V2.resourceRef,
+      validationProfileVersion:
+        OUTDOOR_WORLD_PACKAGE_DEV_VALIDATION_PROFILE_V2.version,
+      validationProfileHash: sha256CanonicalJson(
+        OUTDOOR_WORLD_PACKAGE_DEV_VALIDATION_PROFILE_V2,
+      ),
+      runtimeImplementationIdentity,
+    },
+    initialRuntimeEvidence,
+    ticks: [],
+    metrics: {
+      processedTickCount: 0,
+      maximumStalledDurationTicks: 0,
+      maximumRouteDeviationMetersXZ: 0,
+      maximumConsecutiveUnexpectedUnsupportedTicks: 0,
+      slidingDurationTicks: 0,
+      unexpectedSupportLossCount: 0,
+      wrongSupportSurfaceCount: 0,
+      invalidPhysicsValueCount: 0,
+    },
+    completionDurationTicks: 0,
+  });
+}
+
+function completeRow(
+  constraintId: string,
+  routeId: string,
+  subjectEntityId: string,
+  maxSlopeDegrees = 42,
+): RouteEvidencePublicationRowInputV1 {
+  const resolvedTraversalLockReceipt = resolveTraversalLockV1(
+    lockInput(subjectEntityId, maxSlopeDegrees),
+  );
+  const routeBuildInputReceipt = buildInputReceipt(
+    resolvedTraversalLockReceipt,
+    constraintId,
+    routeId,
+  );
+  const traversalGraph = graph(routeBuildInputReceipt);
+  const routePathReceipt = path(
+    traversalGraph,
+    constraintId,
+    subjectEntityId,
+  );
+  const routeRuntimeProbeReceipt = probe(
+    routePathReceipt,
+    resolvedTraversalLockReceipt,
+  );
+  const routeOverlay = canonicalRouteOverlayV1({
+    kind: "route-overlay",
+    schemaVersion: 1,
+    constraintId,
+    routeId,
+    traversingEntityId: subjectEntityId,
+    startAnchor: routeBuildInputReceipt.input.startAnchor,
+    destinationAnchor: routeBuildInputReceipt.input.destinationAnchor,
+    traversalSurfaceIdentity: routePathReceipt.traversalSurfaceIdentity,
+    resolvedTraversalLockHash: routePathReceipt.resolvedTraversalLockHash,
+    traversalGraphHash: hashTraversalGraphV1(traversalGraph),
+    routePathReceiptHash: hashRoutePathReceiptV1(routePathReceipt),
+    orderedTraversalNodeIds: routePathReceipt.orderedTraversalNodeIds,
+    orderedTraversalEdgeIds: routePathReceipt.orderedTraversalEdgeIds,
+    orderedPathPositionsMetersXYZ:
+      routePathReceipt.orderedPathPositionsMetersXYZ,
+    hardRibbon: routeBuildInputReceipt.input.hardRibbon,
+    blockingColliderIdentities: [],
+  });
+  return {
+    validationRow: {
+      routeBuildInputReceipt,
+      routeConnectivityResult: canonicalHeightfieldRouteConnectivityResultV1({
+        kind: "heightfield-route-connectivity-result",
+        schemaVersion: 1,
+        status: "complete",
+        traversalGraph,
+        traversalGraphHash: hashTraversalGraphV1(traversalGraph),
+        routePathReceipt,
+        routePathReceiptHash: hashRoutePathReceiptV1(routePathReceipt),
+      }),
+      routeRuntimeProbeReceipt,
+      resolvedTraversalLockReceipt,
+      evidenceBytes: {
+        traversalGraph: canonicalJsonBytes(traversalGraph),
+        routePathReceipt: canonicalJsonBytes(routePathReceipt),
+        routeRuntimeProbeReceipt: canonicalJsonBytes(routeRuntimeProbeReceipt),
+        routeOverlay: canonicalJsonBytes(routeOverlay),
+      },
+    },
+    routeOverlay,
+  };
+}
+
+function unavailableRow(
+  status: "unreachable" | "incomplete",
+  constraintId: string,
+  routeId: string,
+): RouteEvidencePublicationRowInputV1 {
+  const resolvedTraversalLockReceipt = resolveTraversalLockV1(
+    lockInput("player-unavailable"),
+  );
+  const routeBuildInputReceipt = buildInputReceipt(
+    resolvedTraversalLockReceipt,
+    constraintId,
+    routeId,
+  );
+  const requirement = routeBuildInputReceipt.input.connectivityRequirement;
+  const envelope = routeBuildInputReceipt.input.capabilityEnvelope;
+  const connectivityFailure = canonicalRouteConnectivityFailureV1({
+    kind: "route-connectivity-failure",
+    schemaVersion: 1,
+    constraintId,
+    routeId,
+    traversingEntityId: requirement.traversingEntityId,
+    startAnchorEntityId: requirement.startAnchorEntityId,
+    destinationAnchorEntityId: requirement.destinationAnchorEntityId,
+    startAnchorPositionMetersXYZ:
+      routeBuildInputReceipt.input.startAnchor.positionMetersXYZ,
+    destinationAnchorPositionMetersXYZ:
+      routeBuildInputReceipt.input.destinationAnchor.positionMetersXYZ,
+    traversalSurfaceId: SURFACE.traversalSurfaceId,
+    surfaceEntityId: SURFACE.surfaceEntityId,
+    colliderSubshapeId: SURFACE.colliderSubshapeId,
+    routeBuildInputHash: routeBuildInputReceipt.routeBuildInputHash,
+    resolvedTraversalLockHash:
+      resolvedTraversalLockReceipt.resolvedTraversalLockHash,
+    graphBuilderProfileRef: envelope.graphBuilderProfileRef,
+    graphBuilderResolvedVersion: envelope.graphBuilderResolvedVersion,
+    graphBuilderProfileHash: envelope.graphBuilderProfileHash,
+    status,
+    graphStatus: "unavailable",
+    reason: status === "unreachable"
+      ? {
+          kind: "slope-threshold-exceeded",
+          code: "ROUTE_SLOPE_EXCEEDED",
+          terrainEntityId: SURFACE.surfaceEntityId,
+          maximumObservedSlopeDegrees: 48,
+          maximumAllowedSlopeDegrees: 42,
+          proofKind: "unique-single-reason-cut",
+          proofCandidateIds: ["triangle-steep"],
+          failurePositionMetersXYZ: [0.5, 0.4, 0],
+        }
+      : {
+          kind: "node-budget-exceeded",
+          code: "ROUTE_GRAPH_BUDGET_EXCEEDED",
+          maximumAllowedCount: 100,
+          minimumRequiredCount: 101,
+        },
+  });
+  return {
+    validationRow: {
+      routeBuildInputReceipt,
+      routeConnectivityResult: canonicalHeightfieldRouteConnectivityResultV1({
+        kind: "heightfield-route-connectivity-result",
+        schemaVersion: 1,
+        status,
+        graphStatus: "unavailable",
+        connectivityFailure,
+        connectivityFailureHash:
+          hashRouteConnectivityFailureV1(connectivityFailure),
+      }),
+      resolvedTraversalLockReceipt,
+      evidenceBytes: {
+        routeConnectivityFailure: canonicalJsonBytes(connectivityFailure),
+      },
+    },
+  };
+}
+
+function publicationInput(
+  rows: readonly RouteEvidencePublicationRowInputV1[] = [
+    completeRow("route-a", "alpha", "player-a", 35),
+    completeRow("route-b", "beta", "player-b", 42),
+  ],
+): CreateWorldkitBrowserRouteEvidencePublicationInputV1 {
+  const validationRows = rows.map(({ validationRow }) => validationRow);
+  return {
+    subject: SUBJECT,
+    validationReport: createRouteValidationReportV2({
+      reportId: "route-validation",
+      subject: SUBJECT,
+      dependencyReportRefs: ["report://layout@1"],
+      validationProfile: OUTDOOR_WORLD_PACKAGE_DEV_VALIDATION_PROFILE_V2,
+      rows: validationRows,
+    }),
+    rows,
+  };
+}
+
+describe("createWorldkitBrowserRouteEvidencePublicationV1", () => {
+  it("rebuilds and publishes a stable multi-route trusted projection", () => {
+    const input = publicationInput();
+    const publication = createWorldkitBrowserRouteEvidencePublicationV1(input);
+
+    expect(publication.routes.map(({ selector }) => selector)).toEqual([
+      { constraintId: "route-a", routeId: "alpha" },
+      { constraintId: "route-b", routeId: "beta" },
+    ]);
+    expect(publication.routes[0]).toMatchObject({
+      summary: {
+        connectivityStatus: "complete",
+        routePathStatus: "complete",
+        routeRuntimeProbeStatus: "complete",
+        routeOverlayStatus: "available",
+      },
+      routeOverlayHash: hashRouteOverlayV1(input.rows[0]!.routeOverlay),
+    });
+    expect(publication).toMatchObject({
+      worldPackageRootHash: SUBJECT.worldPackageRootHash,
+      authoringSpecHash: SUBJECT.authoringSpecHash,
+      normalizedWorldIrHash: SUBJECT.normalizedWorldIrHash,
+      executionPlanHash: SUBJECT.executionPlanHash,
+      resourceLockHash: SUBJECT.resourceLockHash,
+      layoutSolveReportHash: SUBJECT.layoutSolveReportHash,
+      validationReportHash: hashValidationReportV2(input.validationReport),
+      routeValidationSetReceiptHash: hashRouteValidationSetReceiptV1(
+        input.validationReport.routeValidationSetReceipt,
+      ),
+    });
+  });
+
+  it("rejects another World subject and mixed Route evidence", () => {
+    const otherSubject = structuredClone(publicationInput()) as unknown as {
+      subject: WorldPackageValidationSubjectV1;
+    };
+    otherSubject.subject = { ...SUBJECT, worldPackageRootHash: HASH_C };
+    expect(() => createWorldkitBrowserRouteEvidencePublicationV1(
+      otherSubject as CreateWorldkitBrowserRouteEvidencePublicationInputV1,
+    )).toThrow("WORLDKIT_ROUTE_EVIDENCE_PUBLICATION_INPUT_INVALID");
+
+    const mixedConnectivity = structuredClone(publicationInput());
+    const first = mixedConnectivity.rows[0]!.validationRow;
+    const second = mixedConnectivity.rows[1]!.validationRow;
+    (first as { routeConnectivityResult: unknown }).routeConnectivityResult =
+      second.routeConnectivityResult;
+    expect(() => createWorldkitBrowserRouteEvidencePublicationV1(
+      mixedConnectivity,
+    )).toThrow("WORLDKIT_ROUTE_EVIDENCE_PUBLICATION_INPUT_INVALID");
+
+    const mixedProbe = structuredClone(publicationInput());
+    (mixedProbe.rows[0]!.validationRow as {
+      routeRuntimeProbeReceipt: RouteRuntimeProbeReceiptV1;
+    }).routeRuntimeProbeReceipt = mixedProbe.rows[1]!.validationRow
+      .routeRuntimeProbeReceipt!;
+    expect(() => createWorldkitBrowserRouteEvidencePublicationV1(mixedProbe))
+      .toThrow("WORLDKIT_ROUTE_EVIDENCE_PUBLICATION_INPUT_INVALID");
+  });
+
+  it("rejects missing, extra, duplicate, and reordered selector rows", () => {
+    const missing = publicationInput();
+    expect(() => createWorldkitBrowserRouteEvidencePublicationV1({
+      ...missing,
+      rows: [missing.rows[0]!],
+    })).toThrow("WORLDKIT_ROUTE_EVIDENCE_PUBLICATION_INPUT_INVALID");
+
+    const duplicate = publicationInput();
+    expect(() => createWorldkitBrowserRouteEvidencePublicationV1({
+      ...duplicate,
+      rows: [duplicate.rows[0]!, duplicate.rows[0]!],
+    })).toThrow("WORLDKIT_ROUTE_EVIDENCE_PUBLICATION_INPUT_INVALID");
+
+    const reordered = publicationInput();
+    expect(() => createWorldkitBrowserRouteEvidencePublicationV1({
+      ...reordered,
+      rows: [...reordered.rows].reverse(),
+    })).toThrow("WORLDKIT_ROUTE_EVIDENCE_PUBLICATION_INPUT_INVALID");
+
+    const extra = publicationInput();
+    expect(() => createWorldkitBrowserRouteEvidencePublicationV1({
+      ...extra,
+      rows: [
+        ...extra.rows,
+        completeRow("route-c", "gamma", "player-c"),
+      ],
+    })).toThrow("WORLDKIT_ROUTE_EVIDENCE_PUBLICATION_INPUT_INVALID");
+  });
+
+  it("rejects a Probe that self-reports a different Validation Profile", () => {
+    const forged = structuredClone(publicationInput());
+    const row = forged.rows[0]!.validationRow;
+    const original = row.routeRuntimeProbeReceipt!;
+    const forgedProbe = canonicalRouteRuntimeProbeReceiptV1({
+      ...original,
+      request: {
+        ...original.request,
+        validationProfileHash: HASH_C,
+      },
+    });
+    (row as { routeRuntimeProbeReceipt: RouteRuntimeProbeReceiptV1 })
+      .routeRuntimeProbeReceipt = forgedProbe;
+    (row.evidenceBytes as { routeRuntimeProbeReceipt: Uint8Array })
+      .routeRuntimeProbeReceipt = canonicalJsonBytes(forgedProbe);
+
+    expect(() => createWorldkitBrowserRouteEvidencePublicationV1(forged))
+      .toThrow("WORLDKIT_ROUTE_EVIDENCE_PUBLICATION_INPUT_INVALID");
+  });
+
+  it("rejects report artifact metadata and canonical evidence byte drift", () => {
+    const artifactDrift = structuredClone(publicationInput());
+    const artifact = Object.values(
+      artifactDrift.validationReport.evidenceArtifactsById,
+    ).find(({ kind }) => kind === "route-path-receipt")!;
+    (artifact as { contentHash: string }).contentHash = HASH_C;
+    expect(() => createWorldkitBrowserRouteEvidencePublicationV1(artifactDrift))
+      .toThrow("WORLDKIT_ROUTE_EVIDENCE_PUBLICATION_INPUT_INVALID");
+
+    const artifactRefDrift = structuredClone(publicationInput());
+    const refArtifact = Object.values(
+      artifactRefDrift.validationReport.evidenceArtifactsById,
+    ).find(({ kind }) => kind === "route-runtime-probe-receipt")!;
+    (refArtifact as { artifactRef: string }).artifactRef =
+      "artifact://route/forged/probe.json";
+    expect(() => createWorldkitBrowserRouteEvidencePublicationV1(
+      artifactRefDrift,
+    )).toThrow("WORLDKIT_ROUTE_EVIDENCE_PUBLICATION_INPUT_INVALID");
+
+    const bytesDrift = structuredClone(publicationInput());
+    const pathBytes = bytesDrift.rows[0]!.validationRow.evidenceBytes
+      .routePathReceipt!;
+    pathBytes[0] = pathBytes[0]! ^ 1;
+    expect(() => createWorldkitBrowserRouteEvidencePublicationV1(bytesDrift))
+      .toThrow("WORLDKIT_ROUTE_EVIDENCE_PUBLICATION_INPUT_INVALID");
+  });
+
+  it("requires an Overlay value exactly when canonical Overlay bytes exist", () => {
+    const missingOverlay = publicationInput();
+    delete (missingOverlay.rows[0] as { routeOverlay?: RouteOverlayV1 })
+      .routeOverlay;
+    expect(() => createWorldkitBrowserRouteEvidencePublicationV1(
+      missingOverlay,
+    )).toThrow("WORLDKIT_ROUTE_EVIDENCE_PUBLICATION_INPUT_INVALID");
+
+    const rows = publicationInput().rows;
+    const noOverlay = structuredClone(rows[0]!);
+    delete (noOverlay as { routeOverlay?: RouteOverlayV1 }).routeOverlay;
+    delete (noOverlay.validationRow.evidenceBytes as {
+      routeOverlay?: Uint8Array;
+    }).routeOverlay;
+    const validWithoutOverlay = publicationInput([
+      deepFreezeExceptBytes(noOverlay),
+      rows[1]!,
+    ]);
+    const publication = createWorldkitBrowserRouteEvidencePublicationV1(
+      validWithoutOverlay,
+    );
+    expect(publication.routes[0]!.summary.routeOverlayStatus).toBe(
+      "unavailable",
+    );
+    expect(publication.routes[0]).not.toHaveProperty("routeOverlay");
+
+    const orphanedOverlay = structuredClone(validWithoutOverlay);
+    (orphanedOverlay.rows[0] as { routeOverlay?: RouteOverlayV1 })
+      .routeOverlay = rows[0]!.routeOverlay!;
+    expect(() => createWorldkitBrowserRouteEvidencePublicationV1(
+      orphanedOverlay,
+    )).toThrow("WORLDKIT_ROUTE_EVIDENCE_PUBLICATION_INPUT_INVALID");
+  });
+
+  it("rejects an Overlay that is canonical but does not match BuildInput", () => {
+    const base = publicationInput().rows;
+    const changedRow = structuredClone(base[0]!);
+    const changedOverlay = canonicalRouteOverlayV1({
+      ...changedRow.routeOverlay!,
+      hardRibbon: {
+        ...changedRow.routeOverlay!.hardRibbon,
+        widthMeters: 3,
+      },
+    });
+    (changedRow as { routeOverlay: RouteOverlayV1 }).routeOverlay =
+      changedOverlay;
+    (changedRow.validationRow.evidenceBytes as { routeOverlay: Uint8Array })
+      .routeOverlay = canonicalJsonBytes(changedOverlay);
+    const input = publicationInput([
+      deepFreezeExceptBytes(changedRow),
+      base[1]!,
+    ]);
+
+    expect(() => createWorldkitBrowserRouteEvidencePublicationV1(input))
+      .toThrow("WORLDKIT_ROUTE_EVIDENCE_PUBLICATION_INPUT_INVALID");
+  });
+
+  it("publishes only summary for unreachable and incomplete connectivity", () => {
+    const rows = [
+      unavailableRow("incomplete", "route-a", "alpha"),
+      unavailableRow("unreachable", "route-b", "beta"),
+    ];
+    const publication = createWorldkitBrowserRouteEvidencePublicationV1(
+      publicationInput(rows),
+    );
+
+    expect(publication.routes).toHaveLength(2);
+    for (const route of publication.routes) {
+      expect(route).toEqual({
+        selector: {
+          constraintId: route.summary.constraintId,
+          routeId: route.summary.routeId,
+        },
+        summary: {
+          ...route.summary,
+          routePathStatus: "unavailable",
+          routeRuntimeProbeStatus: "unavailable",
+          routeOverlayStatus: "unavailable",
+        },
+      });
+    }
+  });
+
+  it("snapshots and deep-freezes output and rejects impure input graphs", () => {
+    const input = structuredClone(publicationInput());
+    const publication = createWorldkitBrowserRouteEvidencePublicationV1(input);
+    const originalConstraintId = publication.routes[0]!.selector.constraintId;
+    (input.rows[0]!.validationRow.routeBuildInputReceipt.input
+      .connectivityRequirement as { constraintId: string }).constraintId =
+      "mutated";
+    expect(publication.routes[0]!.selector.constraintId).toBe(
+      originalConstraintId,
+    );
+    expect(Object.isFrozen(publication)).toBe(true);
+    expect(Object.isFrozen(publication.routes)).toBe(true);
+    expect(Object.isFrozen(publication.routes[0]!.routeOverlay)).toBe(true);
+
+    const unknown = publicationInput() as CreateWorldkitBrowserRouteEvidencePublicationInputV1 & {
+      extra?: boolean;
+    };
+    unknown.extra = true;
+    expect(() => createWorldkitBrowserRouteEvidencePublicationV1(unknown))
+      .toThrow("WORLDKIT_ROUTE_EVIDENCE_PUBLICATION_INPUT_INVALID");
+
+    const hiddenFieldInput = publicationInput();
+    Object.defineProperty(hiddenFieldInput.rows[0], "hiddenField", {
+      value: 1,
+    });
+    expect(() => createWorldkitBrowserRouteEvidencePublicationV1(hiddenFieldInput))
+      .toThrow("WORLDKIT_ROUTE_EVIDENCE_PUBLICATION_INPUT_INVALID");
+
+    const hiddenArrayFieldInput = publicationInput();
+    Object.defineProperty(hiddenArrayFieldInput.rows, "hiddenField", {
+      value: 1,
+    });
+    expect(() => createWorldkitBrowserRouteEvidencePublicationV1(hiddenArrayFieldInput))
+      .toThrow("WORLDKIT_ROUTE_EVIDENCE_PUBLICATION_INPUT_INVALID");
+
+    const symbolInput = publicationInput();
+    Object.defineProperty(symbolInput.rows[0], Symbol("hidden"), { value: 1 });
+    expect(() => createWorldkitBrowserRouteEvidencePublicationV1(symbolInput))
+      .toThrow("WORLDKIT_ROUTE_EVIDENCE_PUBLICATION_INPUT_INVALID");
+
+    const accessorInput = publicationInput();
+    Object.defineProperty(accessorInput.rows[0], "routeOverlay", {
+      configurable: true,
+      enumerable: true,
+      get: () => completeRow("route-a", "alpha", "player-a").routeOverlay,
+    });
+    expect(() => createWorldkitBrowserRouteEvidencePublicationV1(accessorInput))
+      .toThrow("WORLDKIT_ROUTE_EVIDENCE_PUBLICATION_INPUT_INVALID");
+
+    if (typeof SharedArrayBuffer !== "undefined") {
+      const shared = publicationInput();
+      (shared.rows[0]!.validationRow.evidenceBytes as {
+        routePathReceipt: Uint8Array;
+      }).routePathReceipt = new Uint8Array(new SharedArrayBuffer(8));
+      expect(() => createWorldkitBrowserRouteEvidencePublicationV1(shared))
+        .toThrow("WORLDKIT_ROUTE_EVIDENCE_PUBLICATION_INPUT_INVALID");
+    }
+
+    const detached = publicationInput();
+    const detachedBytes = detached.rows[0]!.validationRow.evidenceBytes
+      .routePathReceipt!;
+    structuredClone(detachedBytes.buffer, { transfer: [detachedBytes.buffer] });
+    expect(() => createWorldkitBrowserRouteEvidencePublicationV1(detached))
+      .toThrow("WORLDKIT_ROUTE_EVIDENCE_PUBLICATION_INPUT_INVALID");
+  });
+});

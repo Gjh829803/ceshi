@@ -15,6 +15,7 @@ export * from "./route-evaluator";
 export * from "./route-validation-set";
 export * from "./route-runtime-probe";
 export * from "./world-package-validation-subject";
+export * from "./route-evidence-publication";
 
 export function hashValidationReportV1(
   report: ValidationReportV1,
