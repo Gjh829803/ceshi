@@ -80,6 +80,24 @@ export interface TraversalGraphBuilderProfileV1 {
   readonly maximumSearchSteps: number;
 }
 
+export interface TraversalGraphBuilderProfileV2 {
+  readonly kind: "traversal-graph-builder-profile";
+  readonly schemaVersion: 2;
+  readonly clearanceMarginMeters: number;
+  readonly voxelCellSizeMeters: number;
+  readonly voxelCellHeightMeters: number;
+  readonly tileSizeCells: number;
+  readonly maximumEdgeLengthMeters: number;
+  readonly maximumSimplificationErrorMeters: number;
+  readonly positionQuantizationMeters: number;
+  readonly slopeCostWeight: number;
+  readonly stepCostWeight: number;
+  readonly maximumNodes: number;
+  readonly maximumEdges: number;
+  readonly maximumTiles: number;
+  readonly maximumSearchSteps: number;
+}
+
 export interface ResolvedTraversalDriverProfileV1 {
   readonly resourceRef: string;
   readonly resolvedVersion: "1";
@@ -92,4 +110,63 @@ export interface ResolvedTraversalGraphBuilderProfileV1 {
   readonly resolvedVersion: "1";
   readonly contentHash: `sha256:${string}`;
   readonly profile: TraversalGraphBuilderProfileV1;
+}
+
+export interface ResolvedTraversalGraphBuilderProfileV2 {
+  readonly resourceRef: string;
+  readonly resolvedVersion: "1";
+  readonly contentHash: `sha256:${string}`;
+  readonly profile: TraversalGraphBuilderProfileV2;
+}
+
+export type ResolvedTraversalGraphBuilderProfile =
+  | ResolvedTraversalGraphBuilderProfileV1
+  | ResolvedTraversalGraphBuilderProfileV2;
+
+export interface TraversalCapabilityEnvelopeV1 {
+  readonly kind: "traversal-capability-envelope";
+  readonly schemaVersion: 1;
+  readonly traversalMode: "ground";
+  readonly subjectEntityId: string;
+  readonly colliderProfileRef: string;
+  readonly colliderProfileHash: `sha256:${string}`;
+  readonly physicsBodyProfileRef: string;
+  readonly physicsBodyProfileHash: `sha256:${string}`;
+  readonly locomotionProfileRef: string;
+  readonly locomotionProfileHash: `sha256:${string}`;
+  readonly locomotionCapabilityRef: string;
+  readonly locomotionCapabilityHash: `sha256:${string}`;
+  readonly runtimeBackendRef: string;
+  readonly runtimeBackendResolvedVersion: string;
+  readonly runtimeBackendHash: `sha256:${string}`;
+  readonly runtimeAdapterRef: string;
+  readonly runtimeAdapterResolvedVersion: string;
+  readonly runtimeAdapterHash: `sha256:${string}`;
+  readonly capsuleRadiusMeters: number;
+  readonly capsuleHeightMeters: number;
+  readonly colliderCenterOffsetMetersXYZ: readonly [number, number, number];
+  readonly maxSlopeDegrees: number;
+  readonly maxStepHeightMeters: number;
+  readonly resolvedTraversalLockHash: `sha256:${string}`;
+  readonly graphBuilderProfileRef: string;
+  readonly graphBuilderResolvedVersion: string;
+  readonly graphBuilderProfileHash: `sha256:${string}`;
+  readonly clearanceMarginMeters: number;
+  readonly voxelCellSizeMeters: number;
+  readonly voxelCellHeightMeters: number;
+  readonly tileSizeCells: number;
+  readonly maximumEdgeLengthMeters: number;
+  readonly maximumSimplificationErrorMeters: number;
+  readonly positionQuantizationMeters: number;
+  readonly slopeCostWeight: number;
+  readonly stepCostWeight: number;
+  readonly maximumNodes: number;
+  readonly maximumEdges: number;
+  readonly maximumTiles: number;
+  readonly maximumSearchSteps: number;
+}
+
+export interface TraversalCapabilityEnvelopeReceiptV1 {
+  readonly envelope: TraversalCapabilityEnvelopeV1;
+  readonly traversalCapabilityEnvelopeHash: `sha256:${string}`;
 }

@@ -2,7 +2,9 @@ import { sha256CanonicalJson } from "@whitebox-world/protocol";
 import { describe, expect, it } from "vitest";
 
 import {
+  BUILT_IN_HEIGHTFIELD_R1_TRAVERSAL_GRAPH_BUILDER_PROFILE_REF,
   BUILT_IN_TRAVERSAL_GRAPH_BUILDER_PROFILE_REF,
+  resolveTraversalGraphBuilderProfile,
   resolveTraversalGraphBuilderProfileV1,
 } from "./index.js";
 import {
@@ -169,6 +171,32 @@ describe("canonicalTraversalGraphV1", () => {
           "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
       }),
     ).toThrow("TRAVERSAL_SURFACE_IDENTITY_INVALID");
+  });
+
+  it("accepts exact V1/V2 builder identities and rejects cross-paired hashes", () => {
+    const v1 = resolveTraversalGraphBuilderProfile(
+      BUILT_IN_TRAVERSAL_GRAPH_BUILDER_PROFILE_REF,
+    );
+    const v2 = resolveTraversalGraphBuilderProfile(
+      BUILT_IN_HEIGHTFIELD_R1_TRAVERSAL_GRAPH_BUILDER_PROFILE_REF,
+    );
+    const v2Graph = validGraph({
+      graphBuilderProfileRef: v2.resourceRef,
+      graphBuilderResolvedVersion: v2.resolvedVersion,
+      graphBuilderProfileHash: v2.contentHash,
+    });
+
+    expect(canonicalTraversalGraphV1(v2Graph).graphBuilderProfileRef).toBe(
+      BUILT_IN_HEIGHTFIELD_R1_TRAVERSAL_GRAPH_BUILDER_PROFILE_REF,
+    );
+    expect(() => canonicalTraversalGraphV1({
+      ...v2Graph,
+      graphBuilderProfileHash: v1.contentHash,
+    })).toThrow("TRAVERSAL_GRAPH_INVALID");
+    expect(() => canonicalTraversalGraphV1(validGraph({
+      graphBuilderProfileRef: v1.resourceRef,
+      graphBuilderProfileHash: v2.contentHash,
+    }))).toThrow("TRAVERSAL_GRAPH_INVALID");
   });
 
   it("rejects negative distance, non-positive clearance, and out-of-range slope", () => {

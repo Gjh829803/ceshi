@@ -1,7 +1,7 @@
 import { sha256CanonicalJson } from "@whitebox-world/protocol";
 import { isEmpty, isNil, isPlainObject } from "lodash-es";
 
-import { resolveTraversalGraphBuilderProfileV1 } from "./profile-registry.js";
+import { resolveTraversalGraphBuilderProfile } from "./profile-registry.js";
 import type { TraversalSurfaceIdentityV1 } from "./types.js";
 
 export interface TraversalNodeV1 {
@@ -180,7 +180,7 @@ function assertResolvedGraphBuilderIdentity(
   resolvedVersion: string,
   resourceHash: `sha256:${string}`,
 ): void {
-  const resolved = resolveTraversalGraphBuilderProfileV1(resourceRef);
+  const resolved = resolveTraversalGraphBuilderProfile(resourceRef);
   if (
     resolved.resolvedVersion !== resolvedVersion ||
     resolved.contentHash !== resourceHash

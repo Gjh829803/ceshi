@@ -13,6 +13,8 @@
 
 Task 2 is approved for implementation. The final independent review reported no P0, P1, or P2 findings. One P3 handoff ambiguity was closed before this checkpoint by requiring Task 3 to call the exact Task 2 budget guard.
 
+> Lifecycle addendum, 2026-08-22: the provider-lifecycle portion of this approval is superseded by `docs/reviews/2026-08-22-recast-0431-resource-lifecycle-adr.md`. A later installed-source audit found operation-local wrapper leaks outside the original lifecycle model. All non-lifecycle Profile, Envelope, identity-separation, mapping, quantization, and budget conclusions remain in force. Task 2 may not close until the revised ADR receives a fresh GO and its implementation gates pass.
+
 ## Findings and disposition
 
 ### Closed P0: incomplete Capability Envelope authority
