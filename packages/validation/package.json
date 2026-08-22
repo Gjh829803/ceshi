@@ -7,8 +7,13 @@
     ".": "./src/index.ts"
   },
   "dependencies": {
+    "@whitebox-world/authoring": "workspace:*",
+    "@whitebox-world/compiler": "workspace:*",
+    "@whitebox-world/layout-solver": "workspace:*",
     "@whitebox-world/protocol": "workspace:*",
+    "@whitebox-world/runtime-contracts": "workspace:*",
     "@whitebox-world/traversal": "workspace:*",
+    "@whitebox-world/world-package": "workspace:*",
     "lodash-es": "^4.18.1"
   }
 }

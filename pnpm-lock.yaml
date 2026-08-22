@@ -421,12 +421,27 @@ importers:
 
   packages/validation:
     dependencies:
+      '@whitebox-world/authoring':
+        specifier: workspace:*
+        version: link:../authoring
+      '@whitebox-world/compiler':
+        specifier: workspace:*
+        version: link:../compiler
+      '@whitebox-world/layout-solver':
+        specifier: workspace:*
+        version: link:../layout-solver
       '@whitebox-world/protocol':
         specifier: workspace:*
         version: link:../protocol
+      '@whitebox-world/runtime-contracts':
+        specifier: workspace:*
+        version: link:../runtime-contracts
       '@whitebox-world/traversal':
         specifier: workspace:*
         version: link:../traversal
+      '@whitebox-world/world-package':
+        specifier: workspace:*
+        version: link:../world-package
       lodash-es:
         specifier: ^4.18.1
         version: 4.18.1
