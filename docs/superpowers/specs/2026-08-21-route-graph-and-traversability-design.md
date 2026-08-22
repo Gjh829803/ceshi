@@ -189,8 +189,17 @@ Provider。
 
 `TraversalGraphV1` 是内容寻址的派生制品，至少绑定：
 
-- `authoringSpecHash`、`layoutSolveReportHash` 和 `resourceLockHash`；
+> 当前 V1 仍未外部发布。Task 3A 为补齐 `routeBuildInputHash` 执行一次 Clean Break，原子更新
+> R0 Golden 与 Hash；此后 Tasks 4–10 不再通过继续改 Golden 规避合同失败。
+
+- `authoringSpecHash`、`layoutSolveReportHash` 和 `resourceLockHash`。其中 R1 的
+  `authoringSpecHash` 来自包含排序后 Connectivity 约束的 V4 Canonical Authoring Identity，
+  不是 `normalizedWorldIrHash` 的别名，也不是不含 Connectivity 的 V3 Layout Solve Report
+  Authoring Identity；
 - Terrain/Collider/Surface Artifact Hash；
+- `routeBuildInputHash`，绑定选中的 Connectivity 行、显式 Anchor、`hard-ribbon`、裁剪后的
+  Heightfield 三角形、静态阻挡物、水域排除和 Capability Envelope；即使这些输入变化后恰好
+  得到相同 Node/Edge，也不能沿用旧 Graph Hash；
 - `resolvedTraversalLockHash`，其 Canonical Bytes 锁定 traversing Subject Definition、Collider、
   Physics Body、Locomotion Capability、Control Feel、Control、Motion/Kernel、Medium 与实际
   Runtime Backend/Adapter 版本；
@@ -419,6 +428,7 @@ Graph 通过而 Runtime 失败时，以 Runtime Gate 失败为最终结论，同
 - `ROUTE_RUNTIME_STALLED`；
 - `ROUTE_RUNTIME_DEVIATED`；
 - `ROUTE_RUNTIME_SUPPORT_LOST`；
+- `ROUTE_WATER_TRAVERSAL_UNSUPPORTED`；
 - `ROUTE_GRAPH_BUDGET_EXCEEDED`。
 
 Diagnostic 必须包含 Route、Traversing Entity、起终点 Anchor、Surface/Collider、世界坐标、
@@ -493,6 +503,7 @@ Fixture 仍属于 P2.6 H1/M10，不由普通静态平台 Fixture 冒充完成。
 | 踏面比胶囊安全宽度更窄 | `ROUTE_CLEARANCE_WIDTH_INSUFFICIENT` |
 | 平台上方有低顶 | `ROUTE_OVERHEAD_CLEARANCE_INSUFFICIENT` |
 | Water 完全切断 Heightfield `hard-ribbon` | `ROUTE_REQUIRED_PATH_UNREACHABLE`，Diagnostic Evidence 指明 Water Entity |
+| Ground-only R1 Route 与 `swimmable` Water 体积相交 | `ROUTE_WATER_TRAVERSAL_UNSUPPORTED`；禁止把 Water Level 当地面或静默伪装成普通 Surface Gap |
 | 非 Water 沟槽/排除带使两段可走 Heightfield 区域的间隔超过锁定阈值 | `ROUTE_SURFACE_GAP_EXCEEDED` |
 | 同 XZ 的桥面和桥下地面 | Graph 合同可表达两层 Node；完整 Runtime Gate 由 P2.6 H1/M10 验收 |
 | 未声明 Traversal Surface 的装饰 Mesh | 不进入 Graph |
