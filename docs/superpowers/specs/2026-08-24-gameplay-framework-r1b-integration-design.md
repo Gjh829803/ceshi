@@ -317,7 +317,8 @@ Canonical State。
 端点、`startedSimulationTick` 和该 Profile Ref/Hash 派生，连续期间会变化的 support point/normal
 不进入身份。parser 必须重算并拒绝任意命名或不匹配的 Fact ID。`semantic-fact.started/ended`
 Event 都携带 exact `semanticFact` 快照以支持 standalone audit/begin-end 配对；physics-derived Fact
-Event 不伪造 `commandId`。
+Event 不伪造 `commandId`。started Event 的 `simulationTick` 必须等于 Fact
+`startedSimulationTick`；ended Event 的 Tick 必须大于等于 Fact started Tick。
 
 Canonical Snapshot 还必须拒绝以下矛盾：`air` 必须且只能对应 `airborne`；`ground` 只能对应
 `idle | walk | run`；实际速度非负；Relationship established Tick、Fact started Tick、Action

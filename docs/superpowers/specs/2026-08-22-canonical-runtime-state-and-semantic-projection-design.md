@@ -715,6 +715,8 @@ type WorldEventV1 =
 - `sequence` 在一个 WorldSession 内严格递增。
 - Command 直接提交关系时，Relationship Event 才携带该 `commandId`。
 - Physics Fact Event 可以引用相关 Action/Event，但不能仅因发生在下一 Tick 就声称由某 Command 直接造成。
+- `semantic-fact.started` 的 Event Tick 等于 Fact `startedSimulationTick`；
+  `semantic-fact.ended` 的 Event Tick 不早于 started Tick，避免事件声称未来才开始的 Fact。
 - 不创建 `gravityActivated` 这类不真实的引擎事件。释放物体应记录关系解除、Support 结束、Action 状态和后续 Contact 开始。
 - Event 不是 Snapshot 内数组；Snapshot 只保存 `lastEventSequence`，事件通过独立 Log/Ref 获取。
 
