@@ -6,7 +6,10 @@ import {
   canonicalizeGameplayCommandV1,
   canonicalizeGameplayEventV1,
   canonicalizeWorldStateSnapshotV1,
+  deriveGameplayCommandHashV1,
+  deriveGameplayCommandReceiptIdV1,
   deriveGameplaySemanticFactIdV1,
+  deriveWorldStateSnapshotIdV1,
   deriveWorldStateHashV1,
   deriveGameplayEventIdV1,
   hashWorldStateSnapshotV1,
@@ -23,6 +26,7 @@ import {
   type GameplayEventV1,
   type GameplayInspectionSnapshotV1,
   type GameplaySemanticFactV1,
+  type WorldStateSnapshotBuildInputV1,
   type WorldStateSnapshotV1,
 } from "./gameplay-contracts";
 import {
@@ -188,28 +192,33 @@ const HASH_E = `sha256:${"e".repeat(64)}` as const;
 const SEMANTIC_FACT_PROJECTOR_PROFILE_REF =
   "worldkit://semantic-fact-projector/default@1" as const;
 
-const committedReceipt = {
+const committedReceiptBody = {
   kind: "worldkit-gameplay-command-receipt",
   schemaVersion: 1,
-  id: "receipt-bind-primary",
   runtimeSessionId: "runtime-primary",
   worldSessionId: "world-primary",
   commandId: "command-bind-primary",
+  commandHash: deriveGameplayCommandHashV1(bindCommand),
   commandType: "control.bind",
   status: "committed",
   simulationTick: 12,
   eventIds: ["gameplay-event:world-primary:1"],
   worldStateAfterRef: "worldkit://world-state/world-primary/12",
   worldStateAfterHash: HASH_A,
+} as const;
+
+const committedReceipt = {
+  id: deriveGameplayCommandReceiptIdV1(committedReceiptBody),
+  ...committedReceiptBody,
 } as const satisfies GameplayCommandReceiptV1;
 
-const rejectedReceipt = {
+const rejectedReceiptBody = {
   kind: "worldkit-gameplay-command-receipt",
   schemaVersion: 1,
-  id: "receipt-rejected-primary",
   runtimeSessionId: "runtime-primary",
   worldSessionId: "world-primary",
   commandId: "command-bind-rejected",
+  commandHash: HASH_A,
   commandType: "control.bind",
   status: "rejected",
   simulationTick: 12,
@@ -218,15 +227,20 @@ const rejectedReceipt = {
     code: "CONTROL_ALREADY_OWNED",
     message: "The controlled entity is already possessed.",
   },
+} as const;
+
+const rejectedReceipt = {
+  id: deriveGameplayCommandReceiptIdV1(rejectedReceiptBody),
+  ...rejectedReceiptBody,
 } as const satisfies GameplayCommandReceiptV1;
 
-const failedReceipt = {
+const failedReceiptBody = {
   kind: "worldkit-gameplay-command-receipt",
   schemaVersion: 1,
-  id: "receipt-failed-primary",
   runtimeSessionId: "runtime-primary",
   worldSessionId: "world-primary",
   commandId: "command-action-primary",
+  commandHash: deriveGameplayCommandHashV1(activateCommand),
   commandType: "action.activate",
   status: "failed",
   simulationTick: 13,
@@ -235,7 +249,19 @@ const failedReceipt = {
     code: "ADAPTER_ROLLBACK_FAILED",
     message: "The prepared transition could not be rolled back.",
   },
+} as const;
+
+const failedReceipt = {
+  id: deriveGameplayCommandReceiptIdV1(failedReceiptBody),
+  ...failedReceiptBody,
 } as const satisfies GameplayCommandReceiptV1;
+
+function withDerivedReceiptId(
+  input: Readonly<Record<string, unknown>>,
+): Record<string, unknown> {
+  const body = withoutKey(input, "id");
+  return { id: deriveGameplayCommandReceiptIdV1(body), ...body };
+}
 
 describe("GameplayCommandReceiptV1", () => {
   it.each([
@@ -286,22 +312,24 @@ describe("GameplayCommandReceiptV1", () => {
     "INPUT_INVALID",
     "FEATURE_NOT_LOCKED",
     "ACTION_CATALOG_INVALID",
+    "WORLD_REPLACEMENT_CAPACITY_EXCEEDED",
+    "RUNTIME_HOST_CAPACITY_EXCEEDED",
   ] as const)("accepts downstream admission diagnostic %s", (code) => {
-    expect(parseGameplayCommandReceiptV1({
+    expect(parseGameplayCommandReceiptV1(withDerivedReceiptId({
       ...rejectedReceipt,
       diagnostic: { code, message: `Stable ${code} diagnostic.` },
-    })).toMatchObject({ status: "rejected", diagnostic: { code } });
+    }))).toMatchObject({ status: "rejected", diagnostic: { code } });
   });
 
   it("accepts exact same-session event IDs in increasing sequence order", () => {
-    const parsed = parseGameplayCommandReceiptV1({
+    const parsed = parseGameplayCommandReceiptV1(withDerivedReceiptId({
       ...committedReceipt,
       eventIds: [
         "gameplay-event:world-primary:0",
         "gameplay-event:world-primary:2",
         "gameplay-event:world-primary:10",
       ],
-    });
+    }));
 
     expect(parsed.eventIds).toEqual([
       "gameplay-event:world-primary:0",
@@ -330,6 +358,50 @@ describe("GameplayCommandReceiptV1", () => {
       ...committedReceipt,
       eventIds,
     })).toThrow("closed GameplayCommandReceiptV1 schema");
+  });
+
+  it("rejects a mismatched derived receipt ID or command hash", () => {
+    expect(() => parseGameplayCommandReceiptV1({
+      ...committedReceipt,
+      id: `gameplay-receipt:${"0".repeat(64)}`,
+    })).toThrow("closed GameplayCommandReceiptV1 schema");
+    expect(() => parseGameplayCommandReceiptV1({
+      ...committedReceipt,
+      commandHash: HASH_E,
+    })).toThrow("closed GameplayCommandReceiptV1 schema");
+  });
+
+  it("changes receipt identity for changed command payload evidence", () => {
+    const changedCommand = {
+      ...bindCommand,
+      controlledEntityId: "g-bot-secondary",
+    };
+    const changedBody = {
+      ...committedReceiptBody,
+      commandHash: deriveGameplayCommandHashV1(changedCommand),
+    };
+
+    expect(changedBody.commandHash).not.toBe(committedReceipt.commandHash);
+    expect(deriveGameplayCommandReceiptIdV1(changedBody)).not.toBe(
+      committedReceipt.id,
+    );
+  });
+
+  it("rejects hostile receipt identity input without invoking accessors", () => {
+    let reads = 0;
+    const hostile = { ...committedReceiptBody } as Record<string, unknown>;
+    Object.defineProperty(hostile, "commandId", {
+      enumerable: true,
+      get: () => {
+        reads += 1;
+        return "command-bind-primary";
+      },
+    });
+
+    expect(() => deriveGameplayCommandReceiptIdV1(hostile)).toThrow(
+      "closed GameplayCommandReceiptV1 schema",
+    );
+    expect(reads).toBe(0);
   });
 });
 
@@ -627,13 +699,9 @@ const supportedByFact = {
   semanticFactProjectorProfileHash: HASH_E,
 } as const satisfies GameplaySemanticFactV1;
 
-const WORLD_STATE_GOLDEN_HASH =
-  "sha256:d0f0bf97d9f66711738ead0a2f29ae76229be6afeb5de7b09dc0e33a56089934" as const;
-
-const worldStateSnapshot = {
+const worldStateSnapshotInput = {
   kind: "worldkit-world-state-snapshot",
   schemaVersion: 1,
-  id: "world-state-world-primary-12",
   runtimeSessionId: "runtime-primary",
   worldSessionId: "world-primary",
   simulationTick: 12,
@@ -657,8 +725,38 @@ const worldStateSnapshot = {
     "action-execution-primary": actionState,
   },
   lastEventSequence: 2,
-  worldStateHash: WORLD_STATE_GOLDEN_HASH,
-} as const satisfies WorldStateSnapshotV1;
+} as const satisfies WorldStateSnapshotBuildInputV1;
+
+const worldStateSnapshot = buildWorldStateSnapshotV1(
+  worldStateSnapshotInput,
+);
+
+const WORLD_STATE_GOLDEN_HASH =
+  "sha256:d0f0bf97d9f66711738ead0a2f29ae76229be6afeb5de7b09dc0e33a56089934" as const;
+const WORLD_STATE_GOLDEN_ID =
+  "world-state:c7a7bef7c5673759c65118f7203706778a633a002ae0ba318c410d5fd0ae12b8" as const;
+
+function worldStateBuildInputOf(
+  input: object,
+): Record<string, unknown> {
+  return Object.fromEntries(
+    Object.entries(input).filter(([key]) =>
+      key !== "id" && key !== "worldStateHash"
+    ),
+  );
+}
+
+function rebuildWorldStateSnapshotV1(
+  input: object,
+): WorldStateSnapshotV1 {
+  return buildWorldStateSnapshotV1(worldStateBuildInputOf(input));
+}
+
+function deriveRebuiltWorldStateHashV1(
+  input: object,
+): string {
+  return deriveWorldStateHashV1(worldStateBuildInputOf(input));
+}
 
 describe("WorldStateSnapshotV1", () => {
   it("parses canonical entity, relationship, capability, and active Action maps", () => {
@@ -677,7 +775,7 @@ describe("WorldStateSnapshotV1", () => {
       actionRequestRef: "worldkit://action-request/request-backed@1",
       actionRequestHash: HASH_C,
     } as const;
-    const parsed = buildWorldStateSnapshotV1({
+    const parsed = rebuildWorldStateSnapshotV1({
       ...worldStateSnapshot,
       activeActionStatesById: {
         [actionState.id]: actionState,
@@ -689,7 +787,7 @@ describe("WorldStateSnapshotV1", () => {
     expect(parsed.activeActionStatesById[requestBackedActionState.id]).toEqual(
       requestBackedActionState,
     );
-    expect(() => buildWorldStateSnapshotV1({
+    expect(() => rebuildWorldStateSnapshotV1({
       ...worldStateSnapshot,
       activeActionStatesById: {
         [actionState.id]: {
@@ -701,12 +799,13 @@ describe("WorldStateSnapshotV1", () => {
   });
 
   it("has a golden semantic hash over the canonical authority domain", () => {
-    expect(deriveWorldStateHashV1(worldStateSnapshot)).toBe(
+    expect(deriveRebuiltWorldStateHashV1(worldStateSnapshot)).toBe(
       WORLD_STATE_GOLDEN_HASH,
     );
     expect(hashWorldStateSnapshotV1(worldStateSnapshot)).toBe(
       WORLD_STATE_GOLDEN_HASH,
     );
+    expect(worldStateSnapshot.id).toBe(WORLD_STATE_GOLDEN_ID);
   });
 
   it("excludes artifact identity, location, and the self hash", () => {
@@ -719,10 +818,10 @@ describe("WorldStateSnapshotV1", () => {
       worldStateHash: HASH_C,
     };
 
-    expect(deriveWorldStateHashV1(changedIdentity)).toBe(
+    expect(deriveRebuiltWorldStateHashV1(changedIdentity)).toBe(
       WORLD_STATE_GOLDEN_HASH,
     );
-    const rebuilt = buildWorldStateSnapshotV1(changedIdentity);
+    const rebuilt = rebuildWorldStateSnapshotV1(changedIdentity);
     expect(rebuilt.worldStateHash).toBe(WORLD_STATE_GOLDEN_HASH);
     expect(canonicalizeWorldStateSnapshotV1(rebuilt)).not.toBe(
       canonicalizeWorldStateSnapshotV1(worldStateSnapshot),
@@ -757,7 +856,7 @@ describe("WorldStateSnapshotV1", () => {
     ];
 
     for (const tampered of tamperedInputs) {
-      expect(deriveWorldStateHashV1(tampered)).not.toBe(
+      expect(deriveRebuiltWorldStateHashV1(tampered)).not.toBe(
         WORLD_STATE_GOLDEN_HASH,
       );
       expect(() => parseWorldStateSnapshotV1(tampered)).toThrow(
@@ -766,7 +865,7 @@ describe("WorldStateSnapshotV1", () => {
     }
 
     const selfHashTampered = { ...worldStateSnapshot, worldStateHash: HASH_C };
-    expect(deriveWorldStateHashV1(selfHashTampered)).toBe(
+    expect(deriveRebuiltWorldStateHashV1(selfHashTampered)).toBe(
       WORLD_STATE_GOLDEN_HASH,
     );
     expect(() => parseWorldStateSnapshotV1(selfHashTampered)).toThrow(
@@ -775,11 +874,52 @@ describe("WorldStateSnapshotV1", () => {
   });
 
   it("builds a valid snapshot with a derived hash", () => {
-    const { worldStateHash: _ignored, ...input } = worldStateSnapshot;
-    const built = buildWorldStateSnapshotV1(input);
+    const built = buildWorldStateSnapshotV1(worldStateSnapshotInput);
 
     expect(built.worldStateHash).toBe(WORLD_STATE_GOLDEN_HASH);
     expect(parseWorldStateSnapshotV1(built)).toEqual(built);
+  });
+
+  it("requires builders to omit both derived identity fields", () => {
+    expect(() => buildWorldStateSnapshotV1(worldStateSnapshot)).toThrow(
+      "closed WorldStateSnapshotV1 schema",
+    );
+  });
+
+  it("rejects mismatched snapshot identity and changes ID across sessions", () => {
+    expect(() => parseWorldStateSnapshotV1({
+      ...worldStateSnapshot,
+      id: `world-state:${"0".repeat(64)}`,
+    })).toThrow("closed WorldStateSnapshotV1 schema");
+
+    const otherSession = buildWorldStateSnapshotV1({
+      ...worldStateSnapshotInput,
+      runtimeSessionId: "runtime-secondary",
+      worldSessionId: "world-secondary",
+    });
+    expect(otherSession.worldStateHash).toBe(worldStateSnapshot.worldStateHash);
+    expect(otherSession.id).not.toBe(worldStateSnapshot.id);
+  });
+
+  it("rejects hostile snapshot identity domains without invoking accessors", () => {
+    let reads = 0;
+    const hostile = {
+      runtimeSessionId: "runtime-primary",
+      worldSessionId: "world-primary",
+      worldStateHash: WORLD_STATE_GOLDEN_HASH,
+    } as Record<string, unknown>;
+    Object.defineProperty(hostile, "runtimeSessionId", {
+      enumerable: true,
+      get: () => {
+        reads += 1;
+        return "runtime-primary";
+      },
+    });
+
+    expect(() => deriveWorldStateSnapshotIdV1(hostile)).toThrow(
+      "closed WorldStateSnapshotIdentityV1 schema",
+    );
+    expect(reads).toBe(0);
   });
 
   it("safely preserves __proto__ where it remains a valid canonical ID", () => {
@@ -812,7 +952,7 @@ describe("WorldStateSnapshotV1", () => {
     ];
 
     for (const input of cases) {
-      const built = buildWorldStateSnapshotV1(input);
+      const built = rebuildWorldStateSnapshotV1(input);
       const map = [
         built.entityStatesById,
         built.capabilityStatesById,
@@ -830,7 +970,7 @@ describe("WorldStateSnapshotV1", () => {
   });
 
   it("stably rejects __proto__ as a forged derived Semantic Fact ID", () => {
-    expect(() => buildWorldStateSnapshotV1({
+    expect(() => rebuildWorldStateSnapshotV1({
       ...worldStateSnapshot,
       semanticFactsById: Object.fromEntries([
         ["__proto__", { ...supportedByFact, id: "__proto__" }],
@@ -913,7 +1053,7 @@ describe("WorldStateSnapshotV1", () => {
       },
     }],
   ])("rejects %s", (_label, input) => {
-    expect(() => buildWorldStateSnapshotV1(input)).toThrow(
+    expect(() => rebuildWorldStateSnapshotV1(input)).toThrow(
       "closed WorldStateSnapshotV1 schema",
     );
   });
@@ -934,7 +1074,7 @@ describe("WorldStateSnapshotV1", () => {
       speedMetersPerSecond: -0.01,
     }],
   ])("rejects invalid locomotion cross-field state: %s", (_label, capability) => {
-    expect(() => buildWorldStateSnapshotV1({
+    expect(() => rebuildWorldStateSnapshotV1({
       ...worldStateSnapshot,
       capabilityStatesById: { [capability.id]: capability },
     })).toThrow("closed WorldStateSnapshotV1 schema");
@@ -992,7 +1132,7 @@ describe("WorldStateSnapshotV1", () => {
       },
     }],
   ])("rejects invalid cross-snapshot timing: %s", (_label, input) => {
-    expect(() => buildWorldStateSnapshotV1(input)).toThrow(
+    expect(() => rebuildWorldStateSnapshotV1(input)).toThrow(
       "closed WorldStateSnapshotV1 schema",
     );
   });
@@ -1140,7 +1280,7 @@ describe("GameplaySemanticFactV1", () => {
     ["touching", touchingFact],
     ["insideVolume", insideVolumeFact],
   ])("parses and freezes the closed %s branch", (_label, fact) => {
-    const built = buildWorldStateSnapshotV1({
+    const built = rebuildWorldStateSnapshotV1({
       ...worldStateSnapshot,
       semanticFactsById: { [fact.id]: fact },
     });
@@ -1219,7 +1359,7 @@ describe("GameplaySemanticFactV1", () => {
     )],
   ])("rejects %s", (_label, fact) => {
     const factId = typeof fact.id === "string" ? fact.id : "invalid-fact";
-    expect(() => buildWorldStateSnapshotV1({
+    expect(() => rebuildWorldStateSnapshotV1({
       ...worldStateSnapshot,
       semanticFactsById: { [factId]: fact },
     })).toThrow("closed WorldStateSnapshotV1 schema");
@@ -1348,6 +1488,8 @@ describe("GameplayCapacityBudgetV1", () => {
       maximumActiveActionStateCount: 256,
       maximumGameplayFeatureCount: 16,
       maximumSemanticActionDefinitionCount: 256,
+      maximumSemanticFactCount: 4096,
+      maximumSemanticFactTransitionCountPerTick: 1024,
       maximumIdempotencyRecordCount: 4096,
       maximumRetiredActionExecutionIdCount: 4096,
       maximumRetainedReceiptCount: 4096,
@@ -1363,6 +1505,30 @@ describe("GameplayCapacityBudgetV1", () => {
       >,
       "maximumRetiredActionExecutionIdCount",
     ))).toThrow("closed GameplayCapacityBudgetV1 schema");
+  });
+
+  it.each([
+    "maximumSemanticFactCount",
+    "maximumSemanticFactTransitionCountPerTick",
+  ] as const)("requires the %s budget field", (field) => {
+    expect(() => parseGameplayCapacityBudgetV1(withoutKey(
+      DEFAULT_GAMEPLAY_CAPACITY_BUDGET_V1 as unknown as Readonly<
+        Record<string, unknown>
+      >,
+      field,
+    ))).toThrow("closed GameplayCapacityBudgetV1 schema");
+  });
+
+  it.each([
+    ["maximumSemanticFactCount", 4096],
+    ["maximumSemanticFactCount", 4097],
+    ["maximumSemanticFactTransitionCountPerTick", 1024],
+    ["maximumSemanticFactTransitionCountPerTick", 1025],
+  ] as const)("accepts exact safe-integer %s=%s", (field, value) => {
+    expect(parseGameplayCapacityBudgetV1({
+      ...DEFAULT_GAMEPLAY_CAPACITY_BUDGET_V1,
+      [field]: value,
+    })[field]).toBe(value);
   });
 
   it.each(capacityFields.flatMap((field) => [
@@ -1425,7 +1591,7 @@ describe("canonical numeric parsing", () => {
       ...zeroTickFact,
       startedSimulationTick: -0,
     })],
-    ["World State tick", () => buildWorldStateSnapshotV1({
+    ["World State tick", () => rebuildWorldStateSnapshotV1({
       ...worldStateSnapshot,
       simulationTick: -0,
       lastEventSequence: 0,
@@ -1433,11 +1599,11 @@ describe("canonical numeric parsing", () => {
       semanticFactsById: {},
       activeActionStatesById: {},
     })],
-    ["World State last Event sequence", () => buildWorldStateSnapshotV1({
+    ["World State last Event sequence", () => rebuildWorldStateSnapshotV1({
       ...worldStateSnapshot,
       lastEventSequence: -0,
     })],
-    ["World State finite tuple", () => buildWorldStateSnapshotV1({
+    ["World State finite tuple", () => rebuildWorldStateSnapshotV1({
       ...worldStateSnapshot,
       entityStatesById: {
         ...worldStateSnapshot.entityStatesById,
@@ -1447,7 +1613,7 @@ describe("canonical numeric parsing", () => {
         },
       },
     })],
-    ["World State locomotion number", () => buildWorldStateSnapshotV1({
+    ["World State locomotion number", () => rebuildWorldStateSnapshotV1({
       ...worldStateSnapshot,
       capabilityStatesById: {
         "locomotion-g-bot-primary": {
@@ -1456,7 +1622,7 @@ describe("canonical numeric parsing", () => {
         },
       },
     })],
-    ["World State relationship tick", () => buildWorldStateSnapshotV1({
+    ["World State relationship tick", () => rebuildWorldStateSnapshotV1({
       ...worldStateSnapshot,
       relationshipStatesById: {
         "possession-primary": {
@@ -1465,7 +1631,7 @@ describe("canonical numeric parsing", () => {
         },
       },
     })],
-    ["World State Action tick", () => buildWorldStateSnapshotV1({
+    ["World State Action tick", () => rebuildWorldStateSnapshotV1({
       ...worldStateSnapshot,
       activeActionStatesById: {
         "action-execution-primary": {
@@ -1488,5 +1654,55 @@ describe("canonical numeric parsing", () => {
     })],
   ])("rejects negative zero in the %s path", (_label, parse) => {
     expect(parse).toThrow();
+  });
+});
+
+describe("Task 2A artifact identity", () => {
+  it("derives the command hash from the exact canonical command payload", () => {
+    expect(deriveGameplayCommandHashV1(bindCommand)).toBe(
+      "sha256:2d27dab125c0f6d4828a126f67eb0bd548b55caa28a34023040fbec99fa2a564",
+    );
+    expect(deriveGameplayCommandHashV1({
+      ...bindCommand,
+      controlledEntityId: "g-bot-secondary",
+    })).not.toBe(deriveGameplayCommandHashV1(bindCommand));
+  });
+
+  it("derives a receipt ID from every field except id", () => {
+    const receiptBody = {
+      ...withoutKey(committedReceipt, "id"),
+      commandHash: deriveGameplayCommandHashV1(bindCommand),
+    };
+    const receiptId = deriveGameplayCommandReceiptIdV1(receiptBody);
+
+    expect(receiptId).toBe(
+      "gameplay-receipt:bebfed088d68d17fce1cbcd256c6f8cb3b2df4b077bbb9ca8cbb3a8a4db58abe",
+    );
+    expect(deriveGameplayCommandReceiptIdV1({
+      ...receiptBody,
+      simulationTick: 13,
+    })).not.toBe(receiptId);
+  });
+
+  it("derives a snapshot ID from exact session identity and semantic hash", () => {
+    const snapshotId = deriveWorldStateSnapshotIdV1({
+      runtimeSessionId: "runtime-primary",
+      worldSessionId: "world-primary",
+      worldStateHash: WORLD_STATE_GOLDEN_HASH,
+    });
+
+    expect(snapshotId).toMatch(/^world-state:[a-f0-9]{64}$/);
+    expect(deriveWorldStateSnapshotIdV1({
+      runtimeSessionId: "runtime-secondary",
+      worldSessionId: "world-primary",
+      worldStateHash: WORLD_STATE_GOLDEN_HASH,
+    })).not.toBe(snapshotId);
+  });
+
+  it("requires both semantic Fact capacity dimensions", () => {
+    expect(DEFAULT_GAMEPLAY_CAPACITY_BUDGET_V1).toMatchObject({
+      maximumSemanticFactCount: 4096,
+      maximumSemanticFactTransitionCountPerTick: 1024,
+    });
   });
 });

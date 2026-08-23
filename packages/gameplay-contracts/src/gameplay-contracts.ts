@@ -343,7 +343,7 @@ export function gameplayCommandCanonicalBytesV1(input: unknown): Uint8Array {
   return canonicalJsonBytes(parseGameplayCommandV1(input));
 }
 
-export function hashGameplayCommandV1(input: unknown): Sha256HashV1 {
+export function deriveGameplayCommandHashV1(input: unknown): Sha256HashV1 {
   return sha256CanonicalJson(parseGameplayCommandV1(input)) as Sha256HashV1;
 }
 
@@ -377,7 +377,9 @@ export type GameplayDiagnosticCodeV1 =
   | "ADAPTER_PREPARE_FAILED"
   | "ADAPTER_COMMIT_FAILED"
   | "ADAPTER_ROLLBACK_FAILED"
-  | "WORLD_REPLACEMENT_BLOCKED_BY_ACTIVE_RUN";
+  | "WORLD_REPLACEMENT_BLOCKED_BY_ACTIVE_RUN"
+  | "WORLD_REPLACEMENT_CAPACITY_EXCEEDED"
+  | "RUNTIME_HOST_CAPACITY_EXCEEDED";
 
 export interface GameplayDiagnosticV1 {
   readonly code: GameplayDiagnosticCodeV1;
@@ -415,6 +417,8 @@ const GAMEPLAY_DIAGNOSTIC_CODES = new Set<GameplayDiagnosticCodeV1>([
   "ADAPTER_COMMIT_FAILED",
   "ADAPTER_ROLLBACK_FAILED",
   "WORLD_REPLACEMENT_BLOCKED_BY_ACTIVE_RUN",
+  "WORLD_REPLACEMENT_CAPACITY_EXCEEDED",
+  "RUNTIME_HOST_CAPACITY_EXCEEDED",
 ]);
 
 function parseGameplayDiagnosticV1(
@@ -470,6 +474,7 @@ interface GameplayCommandReceiptBaseV1 {
   readonly runtimeSessionId: string;
   readonly worldSessionId: string;
   readonly commandId: string;
+  readonly commandHash: Sha256HashV1;
   readonly commandType: GameplayCommandV1["type"];
   readonly simulationTick: number;
 }
@@ -499,16 +504,27 @@ const COMMAND_TYPES = new Set<GameplayCommandV1["type"]>([
   "action.cancel",
 ]);
 
-function parseReceiptBase(record: Readonly<Record<string, unknown>>):
-  | GameplayCommandReceiptBaseV1
+type GameplayCommandReceiptBodyV1 = GameplayCommandReceiptV1 extends infer Receipt
+  ? Receipt extends GameplayCommandReceiptV1
+    ? Omit<Receipt, "id">
+    : never
+  : never;
+
+type GameplayCommandReceiptBaseBodyV1 = Omit<
+  GameplayCommandReceiptBaseV1,
+  "id"
+>;
+
+function parseReceiptBaseBody(record: Readonly<Record<string, unknown>>):
+  | GameplayCommandReceiptBaseBodyV1
   | undefined {
   if (
     record.kind !== "worldkit-gameplay-command-receipt" ||
     record.schemaVersion !== 1 ||
-    !isNonEmptyString(record.id) ||
     !isNonEmptyString(record.runtimeSessionId) ||
     !isNonEmptyString(record.worldSessionId) ||
     !isNonEmptyString(record.commandId) ||
+    !isSha256(record.commandHash) ||
     typeof record.commandType !== "string" ||
     !COMMAND_TYPES.has(record.commandType as GameplayCommandV1["type"]) ||
     !isSafeNonNegativeInteger(record.simulationTick)
@@ -516,28 +532,28 @@ function parseReceiptBase(record: Readonly<Record<string, unknown>>):
   return {
     kind: "worldkit-gameplay-command-receipt",
     schemaVersion: 1,
-    id: record.id,
     runtimeSessionId: record.runtimeSessionId,
     worldSessionId: record.worldSessionId,
     commandId: record.commandId,
+    commandHash: record.commandHash,
     commandType: record.commandType as GameplayCommandV1["type"],
     simulationTick: record.simulationTick,
   };
 }
 
-export function parseGameplayCommandReceiptV1(
+function parseGameplayCommandReceiptBodyV1(
   input: unknown,
-): GameplayCommandReceiptV1 {
+): GameplayCommandReceiptBodyV1 {
   const schemaName = "GameplayCommandReceiptV1";
   const record = snapshotDataRecord(input) ?? invalid(schemaName);
-  const base = parseReceiptBase(record) ?? invalid(schemaName);
+  const base = parseReceiptBaseBody(record) ?? invalid(schemaName);
   const commonKeys = [
     "kind",
     "schemaVersion",
-    "id",
     "runtimeSessionId",
     "worldSessionId",
     "commandId",
+    "commandHash",
     "commandType",
     "status",
     "simulationTick",
@@ -590,6 +606,26 @@ export function parseGameplayCommandReceiptV1(
   }
 
   return invalid(schemaName);
+}
+
+export function deriveGameplayCommandReceiptIdV1(input: unknown): string {
+  const body = parseGameplayCommandReceiptBodyV1(input);
+  const hash = sha256CanonicalJson(body);
+  return `gameplay-receipt:${hash.slice("sha256:".length)}`;
+}
+
+export function parseGameplayCommandReceiptV1(
+  input: unknown,
+): GameplayCommandReceiptV1 {
+  const schemaName = "GameplayCommandReceiptV1";
+  const record = snapshotDataRecord(input) ?? invalid(schemaName);
+  if (!isNonEmptyString(record.id)) invalid(schemaName);
+  const bodyInput = Object.fromEntries(
+    Object.entries(record).filter(([key]) => key !== "id"),
+  );
+  const body = parseGameplayCommandReceiptBodyV1(bodyInput);
+  if (record.id !== deriveGameplayCommandReceiptIdV1(body)) invalid(schemaName);
+  return deepFreeze({ id: record.id, ...body } as GameplayCommandReceiptV1);
 }
 
 export function canonicalizeGameplayCommandReceiptV1(input: unknown): string {
@@ -1525,7 +1561,10 @@ function parseIdMap<T extends Readonly<{ id: string }>>(
   return Object.fromEntries(entries);
 }
 
-type WorldStateSnapshotBodyV1 = Omit<WorldStateSnapshotV1, "worldStateHash">;
+export type WorldStateSnapshotBuildInputV1 = Omit<
+  WorldStateSnapshotV1,
+  "id" | "worldStateHash"
+>;
 
 function getOwnMapValue<T>(
   map: Readonly<Record<string, T>>,
@@ -1537,13 +1576,14 @@ function getOwnMapValue<T>(
     : undefined;
 }
 
-function parseWorldStateSnapshotBodyV1(input: unknown): WorldStateSnapshotBodyV1 {
+function parseWorldStateSnapshotBuildInputV1(
+  input: unknown,
+): WorldStateSnapshotBuildInputV1 {
   const schemaName = "WorldStateSnapshotV1";
   const record = snapshotDataRecord(input) ?? invalid(schemaName);
   const bodyKeys = [
     "kind",
     "schemaVersion",
-    "id",
     "runtimeSessionId",
     "worldSessionId",
     "simulationTick",
@@ -1557,11 +1597,9 @@ function parseWorldStateSnapshotBodyV1(input: unknown): WorldStateSnapshotBodyV1
     "activeActionStatesById",
     "lastEventSequence",
   ] as const;
-  if ((!hasExactKeys(record, bodyKeys) &&
-      !hasExactKeys(record, [...bodyKeys, "worldStateHash"])) ||
+  if (!hasExactKeys(record, bodyKeys) ||
     record.kind !== "worldkit-world-state-snapshot" ||
     record.schemaVersion !== 1 ||
-    !isNonEmptyString(record.id) ||
     !isNonEmptyString(record.runtimeSessionId) ||
     !isNonEmptyString(record.worldSessionId) ||
     !isSafeNonNegativeInteger(record.simulationTick) ||
@@ -1640,7 +1678,6 @@ function parseWorldStateSnapshotBodyV1(input: unknown): WorldStateSnapshotBodyV1
   return {
     kind: "worldkit-world-state-snapshot",
     schemaVersion: 1,
-    id: record.id as string,
     runtimeSessionId: record.runtimeSessionId as string,
     worldSessionId: record.worldSessionId as string,
     simulationTick,
@@ -1656,7 +1693,7 @@ function parseWorldStateSnapshotBodyV1(input: unknown): WorldStateSnapshotBodyV1
   };
 }
 
-function worldStateHashDomainV1(body: WorldStateSnapshotBodyV1): unknown {
+function worldStateHashDomainV1(body: WorldStateSnapshotBuildInputV1): unknown {
   return {
     simulationTick: body.simulationTick,
     worldPackageRootHash: body.worldPackageRootHash,
@@ -1671,28 +1708,94 @@ function worldStateHashDomainV1(body: WorldStateSnapshotBodyV1): unknown {
 }
 
 export function deriveWorldStateHashV1(input: unknown): Sha256HashV1 {
-  const body = parseWorldStateSnapshotBodyV1(input);
+  const body = parseWorldStateSnapshotBuildInputV1(input);
   return sha256CanonicalJson(worldStateHashDomainV1(body)) as Sha256HashV1;
 }
 
+function parseWorldStateSnapshotIdentityDomainV1(input: unknown): Readonly<{
+  runtimeSessionId: string;
+  worldSessionId: string;
+  worldStateHash: Sha256HashV1;
+}> {
+  const schemaName = "WorldStateSnapshotIdentityV1";
+  const record = snapshotDataRecord(input) ?? invalid(schemaName);
+  if (
+    !hasExactKeys(record, [
+      "runtimeSessionId",
+      "worldSessionId",
+      "worldStateHash",
+    ]) ||
+    !isNonEmptyString(record.runtimeSessionId) ||
+    !isNonEmptyString(record.worldSessionId) ||
+    !isSha256(record.worldStateHash)
+  ) invalid(schemaName);
+  return {
+    runtimeSessionId: record.runtimeSessionId,
+    worldSessionId: record.worldSessionId,
+    worldStateHash: record.worldStateHash,
+  };
+}
+
+export function deriveWorldStateSnapshotIdV1(input: unknown): string {
+  const hash = sha256CanonicalJson(
+    parseWorldStateSnapshotIdentityDomainV1(input),
+  );
+  return `world-state:${hash.slice("sha256:".length)}`;
+}
+
 export function buildWorldStateSnapshotV1(input: unknown): WorldStateSnapshotV1 {
-  const body = parseWorldStateSnapshotBodyV1(input);
+  const body = parseWorldStateSnapshotBuildInputV1(input);
+  const worldStateHash = sha256CanonicalJson(
+    worldStateHashDomainV1(body),
+  ) as Sha256HashV1;
   return deepFreeze({
     ...body,
-    worldStateHash: sha256CanonicalJson(
-      worldStateHashDomainV1(body),
-    ) as Sha256HashV1,
+    id: deriveWorldStateSnapshotIdV1({
+      runtimeSessionId: body.runtimeSessionId,
+      worldSessionId: body.worldSessionId,
+      worldStateHash,
+    }),
+    worldStateHash,
   });
 }
 
 export function parseWorldStateSnapshotV1(input: unknown): WorldStateSnapshotV1 {
   const schemaName = "WorldStateSnapshotV1";
   const record = snapshotDataRecord(input) ?? invalid(schemaName);
-  if (!Object.hasOwn(record, "worldStateHash") || !isSha256(record.worldStateHash)) {
+  if (
+    !hasExactKeys(record, [
+      "kind",
+      "schemaVersion",
+      "id",
+      "runtimeSessionId",
+      "worldSessionId",
+      "simulationTick",
+      "worldPackageRef",
+      "worldPackageRootHash",
+      "executionPlanHash",
+      "entityStatesById",
+      "capabilityStatesById",
+      "relationshipStatesById",
+      "semanticFactsById",
+      "activeActionStatesById",
+      "lastEventSequence",
+      "worldStateHash",
+    ]) ||
+    !isNonEmptyString(record.id) ||
+    !isSha256(record.worldStateHash)
+  ) {
     return invalid(schemaName);
   }
-  const snapshot = buildWorldStateSnapshotV1(record);
-  if (snapshot.worldStateHash !== record.worldStateHash) return invalid(schemaName);
+  const bodyInput = Object.fromEntries(
+    Object.entries(record).filter((entry) =>
+      entry[0] !== "id" && entry[0] !== "worldStateHash"
+    ),
+  );
+  const snapshot = buildWorldStateSnapshotV1(bodyInput);
+  if (
+    snapshot.id !== record.id ||
+    snapshot.worldStateHash !== record.worldStateHash
+  ) return invalid(schemaName);
   return snapshot;
 }
 
@@ -1886,6 +1989,8 @@ export interface GameplayCapacityBudgetV1 {
   readonly maximumActiveActionStateCount: number;
   readonly maximumGameplayFeatureCount: number;
   readonly maximumSemanticActionDefinitionCount: number;
+  readonly maximumSemanticFactCount: number;
+  readonly maximumSemanticFactTransitionCountPerTick: number;
   readonly maximumIdempotencyRecordCount: number;
   readonly maximumRetiredActionExecutionIdCount: number;
   readonly maximumRetainedReceiptCount: number;
@@ -1899,6 +2004,8 @@ const GAMEPLAY_CAPACITY_BUDGET_KEYS = [
   "maximumActiveActionStateCount",
   "maximumGameplayFeatureCount",
   "maximumSemanticActionDefinitionCount",
+  "maximumSemanticFactCount",
+  "maximumSemanticFactTransitionCountPerTick",
   "maximumIdempotencyRecordCount",
   "maximumRetiredActionExecutionIdCount",
   "maximumRetainedReceiptCount",
@@ -1928,6 +2035,8 @@ export const DEFAULT_GAMEPLAY_CAPACITY_BUDGET_V1: GameplayCapacityBudgetV1 =
     maximumActiveActionStateCount: 256,
     maximumGameplayFeatureCount: 16,
     maximumSemanticActionDefinitionCount: 256,
+    maximumSemanticFactCount: 4096,
+    maximumSemanticFactTransitionCountPerTick: 1024,
     maximumIdempotencyRecordCount: 4096,
     maximumRetiredActionExecutionIdCount: 4096,
     maximumRetainedReceiptCount: 4096,
