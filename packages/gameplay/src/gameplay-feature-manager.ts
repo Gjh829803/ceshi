@@ -302,7 +302,7 @@ async function cleanupReverse(
 ): Promise<readonly unknown[]> {
   const errors: unknown[] = [];
   for (const record of [...records].reverse()) {
-    if (!record.activationStarted || record.stateSlice === undefined) continue;
+    if (!record.activationStarted) continue;
     try {
       await record.feature.deactivate(context, record.stateSlice);
     } catch (error) {

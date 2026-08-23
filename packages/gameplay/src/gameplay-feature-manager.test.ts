@@ -249,6 +249,59 @@ describe("GameplayFeatureManager", () => {
     expect(log).toContain("dispose:feature:b");
   });
 
+  it("deactivates then disposes a successfully activated stateless Feature", async () => {
+    const log: string[] = [];
+    const base = factory("feature:stateless", log);
+    const stateless: GameplayFeatureFactoryV1 = {
+      ...base,
+      create: (context) => ({
+        ...base.create(context),
+        createStateSlice: () => {
+          log.push("slice:feature:stateless");
+          return undefined;
+        },
+      }),
+    };
+    const handle = await manager([stateless]).activate({ worldSessionId: "world-a" });
+    await handle.dispose();
+    expect(log).toEqual([
+      "slice:feature:stateless",
+      "prepare:feature:stateless",
+      "activate:feature:stateless",
+      "deactivate:feature:stateless",
+      "dispose:feature:stateless",
+    ]);
+  });
+
+  it("deactivates and disposes a stateless Feature whose activation throws", async () => {
+    const log: string[] = [];
+    const primary = new Error("stateless activation failed");
+    const base = factory("feature:stateless-failure", log);
+    const stateless: GameplayFeatureFactoryV1 = {
+      ...base,
+      create: (context) => ({
+        ...base.create(context),
+        createStateSlice: () => {
+          log.push("slice:feature:stateless-failure");
+          return undefined;
+        },
+        activate: () => {
+          log.push("activate:feature:stateless-failure");
+          throw primary;
+        },
+      }),
+    };
+    await expect(manager([stateless]).activate({ worldSessionId: "world-a" }))
+      .rejects.toBe(primary);
+    expect(log).toEqual([
+      "slice:feature:stateless-failure",
+      "prepare:feature:stateless-failure",
+      "activate:feature:stateless-failure",
+      "deactivate:feature:stateless-failure",
+      "dispose:feature:stateless-failure",
+    ]);
+  });
+
   it.each(["resource-ref", "handlers"] as const)(
     "disposes a returned instance after %s validation fails",
     async (failure) => {
