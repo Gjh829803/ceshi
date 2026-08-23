@@ -83,23 +83,37 @@ export type {
   RouteOverlayV2,
 } from "./route-overlay.js";
 export {
+  advanceRouteRuntimeProbeSupportStationV2,
   assertRouteRuntimeProbeReceiptContextV1,
+  assertRouteRuntimeProbeReceiptContextV2,
   canonicalRouteRuntimeProbeReceiptV1,
+  canonicalRouteRuntimeProbeReceiptV2,
   canonicalRouteRuntimeProbeRequestV1,
+  canonicalRouteRuntimeProbeRequestV2,
   canonicalRouteRuntimeProbeTickV1,
+  canonicalRouteRuntimeProbeTickV2,
   createRouteRuntimeProbeRequestV1,
+  createRouteRuntimeProbeRequestV2,
   hashRouteRuntimeProbeReceiptV1,
+  hashRouteRuntimeProbeReceiptV2,
   hashRouteRuntimeProbeRequestV1,
+  hashRouteRuntimeProbeRequestV2,
   hashRouteRuntimeProbeTickV1,
+  hashRouteRuntimeProbeTickV2,
 } from "./runtime-probe-contract.js";
 export type {
   AssertRouteRuntimeProbeReceiptContextInputV1,
+  AssertRouteRuntimeProbeReceiptContextInputV2,
   CreateRouteRuntimeProbeRequestInputV1,
+  CreateRouteRuntimeProbeRequestInputV2,
   RouteRuntimeProbeFailureV1,
   RouteRuntimeProbeMetricsV1,
   RouteRuntimeProbeReceiptV1,
+  RouteRuntimeProbeReceiptV2,
   RouteRuntimeProbeRequestV1,
+  RouteRuntimeProbeRequestV2,
   RouteRuntimeProbeTickV1,
+  RouteRuntimeProbeTickV2,
   RouteRuntimeProbeValidationProfileIdentityV1,
 } from "./runtime-probe-contract.js";
 export {

@@ -15,6 +15,7 @@ import type {
   WorldRuntimeSnapshotV3,
   WorldkitBrowserRouteEvidencePublicationV1,
   WorldkitBrowserApiV4,
+  WorldkitBrowserApiV5,
   WorldkitBrowserDiagnosticV1,
 } from "@whitebox-world/runtime-contracts";
 import {
@@ -28,6 +29,7 @@ import {
 
 import {
   installDeferredWorldkitBrowserApi,
+  createWorldkitBrowserApiV5,
   listSubjectPresetAuthoringProfilesV1,
   validateSubjectPackageAgainstRegistry,
   type DeferredWorldkitBrowserRuntimeAdapterV1,
@@ -1312,5 +1314,61 @@ describe("installDeferredWorldkitBrowserApi", () => {
     expect(adapter.disposeCount).toBe(1);
     await expect(installation.dispose()).resolves.toBeUndefined();
     expect(adapter.disposeCount).toBe(1);
+  });
+});
+
+describe("createWorldkitBrowserApiV5", () => {
+  const V4_REQUIRED_METHODS = [
+    "ready",
+    "getSnapshot",
+    "getDiagnostics",
+    "bindControl",
+    "runFixedInput",
+    "getControlCaptureCapabilities",
+    "waitForSimulationTick",
+    "waitForRenderReady",
+    "captureControlFrame",
+    "captureScreenshot",
+    "reset",
+    "setPaused",
+    "getRouteSummary",
+    "getRoutePathReceipt",
+    "getRouteRuntimeProbeReceipt",
+    "getRouteOverlay",
+  ] as const;
+
+  it("preserves V4 methods, stays off window.__WORLDKIT__, and deep-freezes Route Evidence", () => {
+    const api = createWorldkitBrowserApiV5({});
+    expect(api.version).toBe(5);
+    for (const methodName of V4_REQUIRED_METHODS) {
+      expect(typeof api[methodName]).toBe("function");
+    }
+    const target: { __WORLDKIT__?: WorldkitBrowserApiV4 } = {};
+    const installation = installDeferredWorldkitBrowserApi({
+      target,
+      statusElement: { dataset: {} },
+      initialize: async () => adapterFixture(),
+    });
+    expect(target.__WORLDKIT__).toBe(installation.api);
+    expect(target.__WORLDKIT__?.version).toBe(4);
+    expect(api).not.toBe(target.__WORLDKIT__);
+
+    const selector = { constraintId: "player-to-goal", routeId: "main-route" };
+    const summary = api.getRouteSummary(selector);
+    const path = api.getRoutePathReceipt(selector);
+    const overlay = api.getRouteOverlay(selector);
+    expect(summary.availability).toBe("unavailable");
+    expect(Object.isFrozen(summary)).toBe(true);
+    expect(Object.isFrozen(path)).toBe(true);
+    expect(Object.isFrozen(overlay)).toBe(true);
+    expect(JSON.stringify({ summary, path, overlay })).not.toMatch(
+      /recast|babylon|nativeHandle|providerHandle|providerPolygonRef/i,
+    );
+  });
+
+  it("rejects leftover V1 Path/Overlay fields on a V2 publication", () => {
+    expect(() => createWorldkitBrowserApiV5({
+      routeEvidencePublication: routeEvidencePublicationFixture() as never,
+    })).toThrow("WORLDKIT_BROWSER_ROUTE_EVIDENCE_PUBLICATION_INVALID");
   });
 });

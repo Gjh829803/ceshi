@@ -6,6 +6,7 @@ import {
   EXECUTION_RESOURCE_KINDS_V1,
   canonicalExecutionResourceLockEntriesV1,
   canonicalWorldkitBrowserRouteEvidencePublicationV1,
+  canonicalWorldkitBrowserRouteEvidencePublicationV2,
   type ExecutionAnimationSetV1,
   type ExecutionColliderProfileV1,
   type ExecutionRigProfileV1,
@@ -20,7 +21,9 @@ import {
   type FixedInputV1,
   type WorldRuntimeSnapshotV3,
   type WorldkitBrowserApiV4,
+  type WorldkitBrowserApiV5,
   type WorldkitBrowserRouteEvidencePublicationV1,
+  type WorldkitBrowserRouteEvidencePublicationV2,
   type WorldkitBrowserDiagnosticV1,
 } from "./index";
 
@@ -606,5 +609,124 @@ describe("runtime contracts V3", () => {
       supportingEntityId: "terrain-main",
     });
     expect(assertion).not.toHaveProperty("params");
+  });
+});
+
+describe("runtime contracts V5 Route Evidence", () => {
+  function emptyRouteEvidencePublicationFixtureV2(): WorldkitBrowserRouteEvidencePublicationV2 {
+    return {
+      ...emptyRouteEvidencePublicationFixture(),
+      schemaVersion: 2,
+      routes: [],
+    };
+  }
+
+  it("canonicalizes an empty V2 Browser Route publication beside V1", () => {
+    const input = emptyRouteEvidencePublicationFixtureV2();
+    const canonical = canonicalWorldkitBrowserRouteEvidencePublicationV2(input);
+    expect(canonical.schemaVersion).toBe(2);
+    expect(canonical.routes).toEqual([]);
+    expect(Object.isFrozen(canonical)).toBe(true);
+    expect(canonicalWorldkitBrowserRouteEvidencePublicationV1(
+      emptyRouteEvidencePublicationFixture(),
+    ).schemaVersion).toBe(1);
+  });
+
+  it("rejects leftover V1 Path/Overlay fields on a V2 publication", () => {
+    const valid = emptyRouteEvidencePublicationFixtureV2();
+    expect(() => canonicalWorldkitBrowserRouteEvidencePublicationV2({
+      ...valid,
+      routes: [{
+        selector: { constraintId: "player-to-goal", routeId: "main-route" },
+        summary: {
+          kind: "route-evidence-summary",
+          schemaVersion: 1,
+          constraintId: "player-to-goal",
+          routeId: "main-route",
+          traversingEntityId: "player",
+          startAnchorEntityId: "spawn",
+          destinationAnchorEntityId: "goal",
+          connectivityStatus: "complete",
+          routePathStatus: "complete",
+          routeRuntimeProbeStatus: "unavailable",
+          routeOverlayStatus: "unavailable",
+        },
+        routePathReceipt: {
+          traversalSurfaceIdentity: { traversalSurfaceId: "surface-main" },
+        },
+        routePathReceiptHash: ROUTE_PUBLICATION_HASH,
+      }],
+    })).toThrow("WORLDKIT_BROWSER_ROUTE_EVIDENCE_PUBLICATION_INVALID");
+    expect(() => canonicalWorldkitBrowserRouteEvidencePublicationV2({
+      ...valid,
+      routes: [{
+        selector: { constraintId: "player-to-goal", routeId: "main-route" },
+        summary: {
+          kind: "route-evidence-summary",
+          schemaVersion: 1,
+          constraintId: "player-to-goal",
+          routeId: "main-route",
+          traversingEntityId: "player",
+          startAnchorEntityId: "spawn",
+          destinationAnchorEntityId: "goal",
+          connectivityStatus: "complete",
+          routePathStatus: "complete",
+          routeRuntimeProbeStatus: "unavailable",
+          routeOverlayStatus: "available",
+        },
+        routeOverlay: {
+          blockingColliderIdentities: [],
+        },
+        routeOverlayHash: ROUTE_PUBLICATION_HASH,
+      }],
+    })).toThrow("WORLDKIT_BROWSER_ROUTE_EVIDENCE_PUBLICATION_INVALID");
+  });
+
+  it("defines WorldkitBrowserApiV5 beside V4 without switching the installed protocol version", () => {
+    expect(WORLDKIT_BROWSER_PROTOCOL_VERSION).toBe(4);
+    const api = {
+      version: 5 as const,
+      ready: async () => createSnapshotFixtureV3(),
+      getSnapshot: () => createSnapshotFixtureV3(),
+      getDiagnostics: () => [],
+      bindControl: () => ({}) as never,
+      runFixedInput: async () => createSnapshotFixtureV3(),
+      getControlCaptureCapabilities: () => ({}) as never,
+      waitForSimulationTick: async () => createSnapshotFixtureV3(),
+      waitForRenderReady: async () => ({}) as never,
+      captureControlFrame: async () => ({}) as never,
+      captureScreenshot: () => "",
+      reset: () => createSnapshotFixtureV3(),
+      setPaused: () => createSnapshotFixtureV3(),
+      getRouteSummary: () => ({
+        kind: "worldkit-route-evidence-query-result",
+        schemaVersion: 1,
+        availability: "unavailable",
+        selector: { constraintId: "player-to-goal", routeId: "main-route" },
+        reason: "route-evidence-not-loaded",
+      }),
+      getRoutePathReceipt: () => ({
+        kind: "worldkit-route-evidence-query-result",
+        schemaVersion: 1,
+        availability: "unavailable",
+        selector: { constraintId: "player-to-goal", routeId: "main-route" },
+        reason: "route-evidence-not-loaded",
+      }),
+      getRouteRuntimeProbeReceipt: () => ({
+        kind: "worldkit-route-evidence-query-result",
+        schemaVersion: 1,
+        availability: "unavailable",
+        selector: { constraintId: "player-to-goal", routeId: "main-route" },
+        reason: "route-evidence-not-loaded",
+      }),
+      getRouteOverlay: () => ({
+        kind: "worldkit-route-evidence-query-result",
+        schemaVersion: 1,
+        availability: "unavailable",
+        selector: { constraintId: "player-to-goal", routeId: "main-route" },
+        reason: "route-evidence-not-loaded",
+      }),
+    } satisfies WorldkitBrowserApiV5;
+    expect(api.version).toBe(5);
   });
 });

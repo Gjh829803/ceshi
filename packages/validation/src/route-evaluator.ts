@@ -5,20 +5,29 @@ import {
 import {
   assertMatchingTraversalLocksV1,
   assertRouteRuntimeProbeReceiptContextV1,
+  assertRouteRuntimeProbeReceiptContextV2,
   assertHeightfieldRouteBuildInputReceiptV1,
   assertHeightfieldRouteConnectivityResultForBuildInputV1,
+  assertRouteBuildInputReceiptV2,
+  assertRouteConnectivityResultForBuildInputV2,
   canonicalRouteConnectivityFailureV1,
   canonicalRouteRuntimeProbeReceiptV1,
+  canonicalRouteRuntimeProbeReceiptV2,
   resolveTraversalDriverProfileV1,
   resolveTraversalLockV1,
   type ResolvedTraversalLockReceiptV1,
   type HeightfieldRouteBuildInputReceiptV1,
   type HeightfieldRouteConnectivityResultV1,
+  type RouteBuildInputReceiptV2,
   type RouteConnectivityFailureV1,
+  type RouteConnectivityResultV2,
   type RoutePathReceiptV1,
+  type RoutePathReceiptV2,
   type RouteRuntimeProbeFailureV1,
   type RouteRuntimeProbeReceiptV1,
+  type RouteRuntimeProbeReceiptV2,
   type TraversalGraphV1,
+  type TraversalGraphV2,
 } from "@whitebox-world/traversal";
 import { isNil } from "lodash-es";
 
@@ -59,9 +68,15 @@ export interface RouteValidationEvidenceBytesV2 {
 }
 
 export interface RouteValidationRowInputV2 {
-  readonly routeBuildInputReceipt: HeightfieldRouteBuildInputReceiptV1;
-  readonly routeConnectivityResult: HeightfieldRouteConnectivityResultV1;
-  readonly routeRuntimeProbeReceipt?: RouteRuntimeProbeReceiptV1;
+  readonly routeBuildInputReceipt:
+    | HeightfieldRouteBuildInputReceiptV1
+    | RouteBuildInputReceiptV2;
+  readonly routeConnectivityResult:
+    | HeightfieldRouteConnectivityResultV1
+    | RouteConnectivityResultV2;
+  readonly routeRuntimeProbeReceipt?:
+    | RouteRuntimeProbeReceiptV1
+    | RouteRuntimeProbeReceiptV2;
   readonly resolvedTraversalLockReceipt: ResolvedTraversalLockReceiptV1;
   readonly evidenceBytes: RouteValidationEvidenceBytesV2;
 }
@@ -207,9 +222,15 @@ function snapshotEvaluatorInput(
     fail("ROUTE_VALIDATION_INPUT_ACCESSOR_FORBIDDEN");
   }
   const profile = canonicalProfileIdentity(input.validationProfile);
-  const routeBuildInputReceipt = assertHeightfieldRouteBuildInputReceiptV1(
-    input.routeBuildInputReceipt,
-  );
+  const isBuildInputV2 =
+    !isNil(input.routeBuildInputReceipt) &&
+    typeof input.routeBuildInputReceipt === "object" &&
+    "input" in input.routeBuildInputReceipt &&
+    (input.routeBuildInputReceipt as RouteBuildInputReceiptV2).input.kind ===
+      "route-build-input";
+  const routeBuildInputReceipt = isBuildInputV2
+    ? assertRouteBuildInputReceiptV2(input.routeBuildInputReceipt)
+    : assertHeightfieldRouteBuildInputReceiptV1(input.routeBuildInputReceipt);
   const subject = Object.freeze({
     kind: input.subject.kind,
     worldPackageRootHash: input.subject.worldPackageRootHash,
@@ -224,16 +245,27 @@ function snapshotEvaluatorInput(
     subject,
     dependencyReportRefs: Object.freeze([...(input.dependencyReportRefs ?? [])]),
     routeBuildInputReceipt,
-    routeConnectivityResult: assertHeightfieldRouteConnectivityResultForBuildInputV1(
-      input.routeConnectivityResult,
-      routeBuildInputReceipt,
-    ),
+    routeConnectivityResult: isBuildInputV2
+      ? assertRouteConnectivityResultForBuildInputV2(
+          input.routeConnectivityResult,
+          routeBuildInputReceipt as RouteBuildInputReceiptV2,
+        )
+      : assertHeightfieldRouteConnectivityResultForBuildInputV1(
+          input.routeConnectivityResult,
+          routeBuildInputReceipt as HeightfieldRouteBuildInputReceiptV1,
+        ),
     ...(isNil(input.routeRuntimeProbeReceipt)
       ? {}
       : {
-          routeRuntimeProbeReceipt: canonicalRouteRuntimeProbeReceiptV1(
-            input.routeRuntimeProbeReceipt,
-          ),
+          routeRuntimeProbeReceipt:
+            (input.routeRuntimeProbeReceipt as { schemaVersion?: number })
+              .schemaVersion === 2
+              ? canonicalRouteRuntimeProbeReceiptV2(
+                  input.routeRuntimeProbeReceipt,
+                )
+              : canonicalRouteRuntimeProbeReceiptV1(
+                  input.routeRuntimeProbeReceipt,
+                ),
         }),
     resolvedTraversalLockReceipt: canonicalLockReceipt(
       input.resolvedTraversalLockReceipt,
@@ -267,7 +299,7 @@ function snapshotEvaluatorInput(
 
 function assertBuildInputWorldBindings(
   subject: WorldPackageValidationSubjectV1,
-  buildInputReceipt: HeightfieldRouteBuildInputReceiptV1,
+  buildInputReceipt: HeightfieldRouteBuildInputReceiptV1 | RouteBuildInputReceiptV2,
   lockReceipt: ResolvedTraversalLockReceiptV1,
 ): void {
   const buildInput = buildInputReceipt.input;
@@ -286,8 +318,8 @@ function assertBuildInputWorldBindings(
 
 function assertWorldBindings(
   subject: WorldPackageValidationSubjectV1,
-  graph: TraversalGraphV1,
-  path: RoutePathReceiptV1,
+  graph: TraversalGraphV1 | TraversalGraphV2,
+  path: RoutePathReceiptV1 | RoutePathReceiptV2,
   lockReceipt: ResolvedTraversalLockReceiptV1,
 ): void {
   if (
@@ -561,8 +593,8 @@ function withLockDerivedResultBound(
 }
 
 function connectivityMeasurements(
-  graph: TraversalGraphV1,
-  path: RoutePathReceiptV1,
+  graph: TraversalGraphV1 | TraversalGraphV2,
+  path: RoutePathReceiptV1 | RoutePathReceiptV2,
   lock: ResolvedTraversalLockReceiptV1["lock"],
   graphArtifactRef: string,
   pathArtifactRef: string,
@@ -622,7 +654,7 @@ function connectivityMeasurements(
 }
 
 function runtimeMeasurements(
-  probe: RouteRuntimeProbeReceiptV1,
+  probe: RouteRuntimeProbeReceiptV1 | RouteRuntimeProbeReceiptV2,
   probeArtifactRef: string,
 ): Readonly<Record<string, MeasuredMetricV2>> {
   const isComplete = probe.status === "complete";
@@ -691,15 +723,20 @@ type MissingRuntimeEvidenceReasonV2 =
   | "route-path-unavailable"
   | "runtime-probe-missing";
 
-function pathDiagnosticContext(path: RoutePathReceiptV1): RouteDiagnosticContextV2 {
+function pathDiagnosticContext(
+  path: RoutePathReceiptV1 | RoutePathReceiptV2,
+): RouteDiagnosticContextV2 {
+  const surface = "orderedTraversalSurfaceIdentities" in path
+    ? path.orderedTraversalSurfaceIdentities[0]!
+    : path.traversalSurfaceIdentity;
   return {
     constraintId: path.constraintId,
     routeId: path.routeId,
     traversingEntityId: path.traversingEntityId,
     startAnchorEntityId: path.startAnchorEntityId,
     destinationAnchorEntityId: path.destinationAnchorEntityId,
-    traversalSurfaceId: path.traversalSurfaceIdentity.traversalSurfaceId,
-    colliderSubshapeId: path.traversalSurfaceIdentity.colliderSubshapeId,
+    traversalSurfaceId: surface.traversalSurfaceId,
+    colliderSubshapeId: surface.colliderSubshapeId,
     positionMetersXYZ: path.orderedPathPositionsMetersXYZ[0]!,
   };
 }
@@ -818,10 +855,14 @@ function runtimeFailureDetails(
 
 function runtimeFailureDiagnostic(
   metric: MetricResultV2,
-  path: RoutePathReceiptV1,
-  probe: Extract<RouteRuntimeProbeReceiptV1, { readonly status: "failed" }>,
+  path: RoutePathReceiptV1 | RoutePathReceiptV2,
+  probe: Extract<
+    RouteRuntimeProbeReceiptV1 | RouteRuntimeProbeReceiptV2,
+    { readonly status: "failed" }
+  >,
   probeArtifactRef: string,
 ): ValidationDiagnosticV2 {
+  const surface = pathDiagnosticContext(path);
   return {
     id: `route:${path.constraintId}:runtime-failed:${metric.id}`,
     scope: "route-row",
@@ -834,8 +875,8 @@ function runtimeFailureDiagnostic(
     traversingEntityId: path.traversingEntityId,
     startAnchorEntityId: path.startAnchorEntityId,
     destinationAnchorEntityId: path.destinationAnchorEntityId,
-    traversalSurfaceId: path.traversalSurfaceIdentity.traversalSurfaceId,
-    colliderSubshapeId: path.traversalSurfaceIdentity.colliderSubshapeId,
+    traversalSurfaceId: surface.traversalSurfaceId,
+    colliderSubshapeId: surface.colliderSubshapeId,
     positionMetersXYZ: probe.failure.failurePositionMetersXYZ,
     evidenceArtifactRefs: [probeArtifactRef],
     details: runtimeFailureDetails(probe.failure, metric),
@@ -1158,7 +1199,7 @@ function createFailedConnectivityReport(
     },
   };
 
-  let traversalGraph: TraversalGraphV1 | undefined;
+  let traversalGraph: TraversalGraphV1 | TraversalGraphV2 | undefined;
   let graphArtifactRef: string | undefined;
   if (connectivityResult.graphStatus === "complete") {
     traversalGraph = connectivityResult.traversalGraph;
@@ -1198,7 +1239,7 @@ function createFailedConnectivityReport(
   const connectivity = createFailureConnectivityGate(
     connectivityDefinition,
     failure,
-    traversalGraph,
+    traversalGraph as TraversalGraphV1 | undefined,
     failureBase.artifactRef,
     graphArtifactRef,
     lockReceipt.lock,
@@ -1246,7 +1287,20 @@ function evaluateRouteValidationRowAsReportV2(
   );
   const connectivityResult = input.routeConnectivityResult;
   if (connectivityResult.status !== "complete") {
-    return createFailedConnectivityReport(input, connectivityResult, lockReceipt);
+    if (
+      "schemaVersion" in connectivityResult &&
+      connectivityResult.schemaVersion === 2
+    ) {
+      fail("ROUTE_VALIDATION_CONNECTIVITY_RESULT_INVALID");
+    }
+    return createFailedConnectivityReport(
+      input,
+      connectivityResult as Exclude<
+        HeightfieldRouteConnectivityResultV1,
+        { readonly status: "complete" }
+      >,
+      lockReceipt,
+    );
   }
   if (!isNil(input.evidenceBytes.routeConnectivityFailure)) {
     fail("ROUTE_VALIDATION_CONNECTIVITY_FAILURE_EVIDENCE_ORPHANED");
@@ -1385,9 +1439,11 @@ function evaluateRouteValidationRowAsReportV2(
     if (isNil(input.evidenceBytes.routeRuntimeProbeReceipt)) {
       fail("ROUTE_VALIDATION_PROBE_EVIDENCE_BYTES_MISSING");
     }
-    const routeRuntimeProbeReceipt = canonicalRouteRuntimeProbeReceiptV1(
-      input.routeRuntimeProbeReceipt,
-    );
+    const routeRuntimeProbeReceipt =
+      (input.routeRuntimeProbeReceipt as { schemaVersion?: number }).schemaVersion ===
+        2
+        ? canonicalRouteRuntimeProbeReceiptV2(input.routeRuntimeProbeReceipt)
+        : canonicalRouteRuntimeProbeReceiptV1(input.routeRuntimeProbeReceipt);
     assertMatchingTraversalLocksV1(
       traversalGraph.resolvedTraversalLockHash,
       routeRuntimeProbeReceipt.request.resolvedTraversalLockHash,
@@ -1395,16 +1451,29 @@ function evaluateRouteValidationRowAsReportV2(
     const driver = resolveTraversalDriverProfileV1(
       routeRuntimeProbeReceipt.request.driverProfileRef,
     );
-    assertRouteRuntimeProbeReceiptContextV1({
-      receipt: routeRuntimeProbeReceipt,
-      routePathReceipt,
-      resolvedDriverProfile: driver,
-      validationProfileIdentity: {
-        resourceRef: profile.resourceRef,
-        version: profile.version,
-        contentHash: OUTDOOR_WORLD_PACKAGE_DEV_VALIDATION_PROFILE_HASH_V2,
-      },
-    });
+    if (routeRuntimeProbeReceipt.schemaVersion === 2) {
+      assertRouteRuntimeProbeReceiptContextV2({
+        receipt: routeRuntimeProbeReceipt,
+        routePathReceipt: routePathReceipt as RoutePathReceiptV2,
+        resolvedDriverProfile: driver,
+        validationProfileIdentity: {
+          resourceRef: profile.resourceRef,
+          version: profile.version,
+          contentHash: OUTDOOR_WORLD_PACKAGE_DEV_VALIDATION_PROFILE_HASH_V2,
+        },
+      });
+    } else {
+      assertRouteRuntimeProbeReceiptContextV1({
+        receipt: routeRuntimeProbeReceipt,
+        routePathReceipt: routePathReceipt as RoutePathReceiptV1,
+        resolvedDriverProfile: driver,
+        validationProfileIdentity: {
+          resourceRef: profile.resourceRef,
+          version: profile.version,
+          contentHash: OUTDOOR_WORLD_PACKAGE_DEV_VALIDATION_PROFILE_HASH_V2,
+        },
+      });
+    }
     if (
       routeRuntimeProbeReceipt.request.executionPlanHash !==
         input.subject.executionPlanHash ||

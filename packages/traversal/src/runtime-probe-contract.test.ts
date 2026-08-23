@@ -869,3 +869,154 @@ describe.skipIf(!hasRuntimeProbeApi)("RouteRuntimeProbeReceiptV1", () => {
     })).toThrow("ROUTE_RUNTIME_PROBE_RECEIPT_INVALID");
   });
 });
+
+
+const {
+  assertRouteRuntimeProbeReceiptContextV2,
+  canonicalRoutePathReceiptV2,
+  canonicalRouteRuntimeProbeReceiptV2,
+  canonicalRouteRuntimeProbeRequestV2,
+  canonicalRouteRuntimeProbeTickV2,
+  createRouteRuntimeProbeRequestV2,
+  hashRoutePathReceiptV2,
+  hashRouteRuntimeProbeReceiptV2,
+  hashRouteRuntimeProbeRequestV2,
+  hashRouteRuntimeProbeTickV2,
+} = traversal as unknown as {
+  readonly assertRouteRuntimeProbeReceiptContextV2?: typeof Function.prototype;
+  readonly canonicalRoutePathReceiptV2: typeof traversal.canonicalRoutePathReceiptV2;
+  readonly canonicalRouteRuntimeProbeReceiptV2?: (value: unknown) => unknown;
+  readonly canonicalRouteRuntimeProbeRequestV2?: (value: unknown) => unknown;
+  readonly canonicalRouteRuntimeProbeTickV2?: (value: unknown) => unknown;
+  readonly createRouteRuntimeProbeRequestV2?: (input: unknown) => unknown;
+  readonly hashRoutePathReceiptV2: typeof traversal.hashRoutePathReceiptV2;
+  readonly hashRouteRuntimeProbeReceiptV2?: (value: unknown) => `sha256:${string}`;
+  readonly hashRouteRuntimeProbeRequestV2?: (value: unknown) => `sha256:${string}`;
+  readonly hashRouteRuntimeProbeTickV2?: (value: unknown) => `sha256:${string}`;
+};
+
+const hasRuntimeProbeApiV2 = [
+  assertRouteRuntimeProbeReceiptContextV2,
+  canonicalRouteRuntimeProbeReceiptV2,
+  canonicalRouteRuntimeProbeRequestV2,
+  canonicalRouteRuntimeProbeTickV2,
+  createRouteRuntimeProbeRequestV2,
+  hashRouteRuntimeProbeReceiptV2,
+  hashRouteRuntimeProbeRequestV2,
+  hashRouteRuntimeProbeTickV2,
+].every((candidate) => typeof candidate === "function");
+
+function pathReceiptV2(
+  points: ReadonlyArray<readonly [number, number, number]> = [[0, 0, 0], [1, 0, 0]],
+  surfaceIds: readonly string[] = points.map(() => SURFACE.traversalSurfaceId),
+): traversal.RoutePathReceiptV2 {
+  const identities = surfaceIds.map((traversalSurfaceId, index) => ({
+    ...SURFACE,
+    traversalSurfaceId,
+    surfaceEntityId: `${SURFACE.surfaceEntityId}-${index}`,
+  }));
+  return canonicalRoutePathReceiptV2({
+    kind: "route-path-receipt",
+    schemaVersion: 2,
+    status: "complete",
+    constraintId: "player-to-goal",
+    routeId: "main-route",
+    traversingEntityId: "player",
+    startAnchorEntityId: "spawn",
+    destinationAnchorEntityId: "goal",
+    authoringSpecHash: HASH_A,
+    layoutSolveReportHash: HASH_B,
+    resourceLockHash: HASH_C,
+    traversalGraphHash: HASH_A,
+    routeBuildInputHash: HASH_B,
+    resolvedTraversalLockHash: HASH_C,
+    graphBuilderProfileRef: GRAPH_BUILDER_PROFILE.resourceRef,
+    graphBuilderResolvedVersion: GRAPH_BUILDER_PROFILE.resolvedVersion,
+    graphBuilderProfileHash: GRAPH_BUILDER_PROFILE.contentHash,
+    orderedTraversalNodeIds: points.map((_, index) => `node-${index}`),
+    orderedTraversalEdgeIds: points.slice(1).map((_, index) => `edge-${index}`),
+    orderedPathPositionsMetersXYZ: points,
+    orderedTraversalSurfaceIdentities: identities,
+    routePathDistanceMeters: 1,
+    routePathDistanceMetersXZ: 1,
+    routePathCost: 0.5,
+    maximumObservedSlopeDegrees: 0,
+    maximumObservedStepHeightMeters: 0,
+    minimumObservedClearanceWidthMeters: 0.9,
+    minimumObservedClearanceHeightMeters: 2,
+    maximumObservedSurfaceGapMeters: 0,
+  });
+}
+
+describe("runtime probe contract V2 public API", () => {
+  it("exports Probe V2 canonical, hash, create, and assert siblings beside V1", () => {
+    expect(hasRuntimeProbeApiV2).toBe(true);
+  });
+});
+
+describe.skipIf(!hasRuntimeProbeApiV2)("RouteRuntimeProbeRequestV2", () => {
+  it("binds a Path Receipt V2 hash and does not copy a path-global Surface identity", () => {
+    const path = pathReceiptV2();
+    const created = createRouteRuntimeProbeRequestV2!({
+      routePathReceipt: path,
+      resolvedDriverProfile: RESOLVED_DRIVER_PROFILE,
+      runtimePort: {
+        kind: "traversal-runtime-port",
+        schemaVersion: 1,
+        traversingEntityId: path.traversingEntityId,
+        authoringSpecHash: path.authoringSpecHash,
+        layoutSolveReportHash: path.layoutSolveReportHash,
+        resourceLockHash: path.resourceLockHash,
+        executionPlanHash: HASH_A,
+        resolvedTraversalLockHash: path.resolvedTraversalLockHash,
+        runtimeImplementationIdentity: RUNTIME_IDENTITY,
+        readLatestTickEvidence: () => runtimeEvidence(0),
+        resetToStartAnchor: () => runtimeEvidence(0),
+        runFixedTick: async () => runtimeEvidence(1),
+      },
+      validationProfileIdentity: VALIDATION_PROFILE_IDENTITY,
+      walkSpeedMetersPerSecond: 4,
+      positionQuantizationMeters: GRAPH_BUILDER_PROFILE.profile.positionQuantizationMeters,
+    }) as Record<string, unknown>;
+    expect(created.schemaVersion).toBe(2);
+    expect(created.routePathReceiptHash).toBe(hashRoutePathReceiptV2(path));
+    expect(created.walkSpeedMetersPerSecond).toBe(4);
+    expect(created.positionQuantizationMeters).toBe(
+      GRAPH_BUILDER_PROFILE.profile.positionQuantizationMeters,
+    );
+    expect(created).not.toHaveProperty("traversalSurfaceIdentity");
+    const canonical = canonicalRouteRuntimeProbeRequestV2!(created) as object;
+    expect(Object.isFrozen(canonical)).toBe(true);
+    expect(() => canonicalRouteRuntimeProbeRequestV2!({
+      ...created,
+      traversalSurfaceIdentity: SURFACE,
+    })).toThrow(/ROUTE_RUNTIME_PROBE_REQUEST_INVALID/);
+  });
+});
+
+describe.skipIf(!hasRuntimeProbeApiV2)("RouteRuntimeProbeTickV2", () => {
+  it("requires sorted unique expectedTraversalSurfaceIds and rejects V1-only Surface fields", () => {
+    const raw = {
+      kind: "route-runtime-probe-tick",
+      schemaVersion: 2,
+      probeTick: 1,
+      runtimeEvidence: runtimeEvidence(1),
+      walkDirectionWorldXZ: [1, 0],
+      routeProgressMetersXZ: 0.5,
+      remainingRouteDistanceMetersXZ: 0.5,
+      routeDeviationMetersXZ: 0,
+      stalledDurationTicks: 0,
+      consecutiveUnexpectedUnsupportedTicks: 0,
+      expectedTraversalSurfaceIds: ["surface-b", "surface-a"],
+    };
+    const canonical = canonicalRouteRuntimeProbeTickV2!(raw) as {
+      readonly expectedTraversalSurfaceIds: readonly string[];
+    };
+    expect(canonical.expectedTraversalSurfaceIds).toEqual(["surface-a", "surface-b"]);
+    expect(canonical).not.toHaveProperty("traversalSurfaceIdentity");
+    expect(() => canonicalRouteRuntimeProbeTickV2!({
+      ...raw,
+      expectedTraversalSurfaceIds: ["surface-a", "surface-a"],
+    })).toThrow(/ROUTE_RUNTIME_PROBE_TICK_INVALID/);
+  });
+});

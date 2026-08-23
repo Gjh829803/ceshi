@@ -3,15 +3,26 @@ import {
   BUILT_IN_HEIGHTFIELD_R1_TRAVERSAL_GRAPH_BUILDER_PROFILE_REF,
   BUILT_IN_TRAVERSAL_DRIVER_PROFILE_REF,
   canonicalRoutePathReceiptV1,
+  canonicalRoutePathReceiptV2,
   canonicalRouteConnectivityFailureV1,
   canonicalHeightfieldRouteConnectivityResultV1,
+  canonicalRouteConnectivityResultV2,
   canonicalRouteRuntimeProbeReceiptV1,
+  canonicalRouteRuntimeProbeReceiptV2,
   createTraversalCapabilityEnvelopeV1,
+  createRouteBuildInputReceiptV2,
+  hashRouteTerrainArtifactV2,
+  hashRouteColliderArtifactV2,
+  hashRouteGeometryArtifactV2,
+  hashRouteSurfaceArtifactV2,
   assertHeightfieldRouteBuildInputReceiptV1,
   hashHeightfieldRouteBuildInputV1,
   hashRouteConnectivityFailureV1,
   hashRoutePathReceiptV1,
+  hashRoutePathReceiptV2,
   hashTraversalGraphV1,
+  hashTraversalGraphV2,
+  canonicalTraversalGraphV2,
   resolveTraversalDriverProfileV1,
   resolveTraversalGraphBuilderProfileV2,
   resolveTraversalLockV1,
@@ -498,7 +509,10 @@ function onlyRow(
 
 function completeConnectivity(
   value: CreateRouteValidationReportInputV2,
-): Extract<HeightfieldRouteConnectivityResultV1, { readonly status: "complete" }> {
+): Extract<
+  RouteValidationRowInputV2["routeConnectivityResult"],
+  { readonly status: "complete" }
+> {
   const row = onlyRow(value);
   if (row.routeConnectivityResult.status !== "complete") {
     throw new Error("Expected complete Route connectivity fixture.");
@@ -1031,8 +1045,12 @@ describe("createRouteValidationReportV2", () => {
     if (runtimeBaseline.routeConnectivityResult.status !== "complete") {
       throw new Error("Expected a complete Runtime failure fixture.");
     }
+    const routePathReceipt = runtimeBaseline.routeConnectivityResult.routePathReceipt;
+    if (!("traversalSurfaceIdentity" in routePathReceipt)) {
+      throw new Error("Expected a V1 Path Receipt fixture.");
+    }
     const failedProbe = failedStartSupportProbe(
-      runtimeBaseline.routeConnectivityResult.routePathReceipt,
+      routePathReceipt,
       runtimeBaseline.resolvedTraversalLockReceipt,
     );
     const runtimeFailed = createRouteValidationReportV2({
@@ -1237,8 +1255,12 @@ describe("createRouteValidationReportV2", () => {
   it("fails the Report on Runtime failure while preserving Graph evidence and complete diagnostics", () => {
     const baseline = input();
     const baselineRow = onlyRow(baseline);
+    const completePath = completeConnectivity(baseline).routePathReceipt;
+    if (!("traversalSurfaceIdentity" in completePath)) {
+      throw new Error("Expected a V1 Path Receipt fixture.");
+    }
     const failedProbe = failedStartSupportProbe(
-      completeConnectivity(baseline).routePathReceipt,
+      completePath,
       baselineRow.resolvedTraversalLockReceipt,
     );
     const report = createRouteValidationReportV2({
@@ -1293,6 +1315,9 @@ describe("createRouteValidationReportV2", () => {
     const baseline = input();
     const baselineRow = onlyRow(baseline);
     const routeRuntimeProbeReceipt = baselineRow.routeRuntimeProbeReceipt!;
+    if (routeRuntimeProbeReceipt.schemaVersion !== 1) {
+      throw new Error("Expected a V1 Probe Receipt fixture.");
+    }
     const forged = {
       ...baseline,
       rows: [{
@@ -1489,5 +1514,308 @@ describe("createRouteValidationReportV2", () => {
     const second = createRouteValidationReportV2(input({ reverseMaps: true }));
 
     expect(hashValidationReportV2(second)).toBe(hashValidationReportV2(first));
+  });
+});
+
+
+function terrainSoupV2() {
+  return {
+    positionsMetersXYZ: [0, 0, 0, 0, 0, 1, 1, 0, 0],
+    triangleIndices: [0, 1, 2],
+  };
+}
+
+function v2BuildInputReceipt(
+  lockReceipt: ReturnType<typeof resolveTraversalLockV1>,
+) {
+  const graphBuilderProfile = resolveTraversalGraphBuilderProfileV2(
+    BUILT_IN_HEIGHTFIELD_R1_TRAVERSAL_GRAPH_BUILDER_PROFILE_REF,
+  );
+  const capabilityEnvelope = createTraversalCapabilityEnvelopeV1({
+    traversalLockReceipt: lockReceipt,
+    graphBuilderProfile,
+  }).envelope;
+  const draft = {
+    kind: "route-build-input" as const,
+    schemaVersion: 2 as const,
+    authoringSpecHash: SUBJECT.authoringSpecHash,
+    layoutSolveReportHash: SUBJECT.layoutSolveReportHash,
+    resourceLockHash: SUBJECT.resourceLockHash,
+    connectivityRequirement: {
+      constraintId: "player-to-goal",
+      traversingEntityId: "player",
+      startAnchorEntityId: "spawn",
+      destinationAnchorEntityId: "goal",
+      routeId: "main-route",
+    },
+    startAnchor: {
+      entityId: "spawn",
+      positionMetersXYZ: [0, 0, 0] as const,
+    },
+    destinationAnchor: {
+      entityId: "goal",
+      positionMetersXYZ: [1, 0, 0] as const,
+    },
+    hardRibbon: {
+      routeId: "main-route",
+      pointsMetersXZ: [[0, 0], [1, 0]] as const,
+      widthMeters: 2,
+      locomotionProfileRef: "worldkit://locomotion-profile/ground.standard@1",
+    },
+    traversalSurfaces: [SURFACE],
+    capabilityEnvelope,
+    terrainSource: {
+      kind: "bounded" as const,
+      terrainEntityId: "terrain-main",
+      triangleSoup: terrainSoupV2(),
+      minimumMetersXZ: [0, 0] as const,
+      maximumMetersXZ: [1, 1] as const,
+    },
+    staticColliders: [] as const,
+    blockedTraversalAreaExclusions: [] as const,
+    blockedWaterExclusions: [] as const,
+  };
+  const terrainArtifactHash = hashRouteTerrainArtifactV2(draft.terrainSource);
+  const colliderArtifactHash = hashRouteColliderArtifactV2(draft.staticColliders);
+  const geometryArtifactHash = hashRouteGeometryArtifactV2({
+    terrainArtifactHash,
+    colliderArtifactHash,
+  });
+  const surfaceArtifactHash = hashRouteSurfaceArtifactV2(draft.traversalSurfaces);
+  return createRouteBuildInputReceiptV2({
+    ...draft,
+    terrainArtifactHash,
+    colliderArtifactHash,
+    geometryArtifactHash,
+    surfaceArtifactHash,
+  });
+}
+
+function v2Graph(
+  buildReceipt: ReturnType<typeof v2BuildInputReceipt>,
+) {
+  const buildInput = buildReceipt.input;
+  const envelope = buildInput.capabilityEnvelope;
+  const start = {
+    id: "node-start",
+    traversalSurfaceId: SURFACE.traversalSurfaceId,
+    surfaceEntityId: SURFACE.surfaceEntityId,
+    colliderSubshapeId: SURFACE.colliderSubshapeId,
+    positionMetersXYZ: [0, 0, 0] as const,
+    tileId: "tile-0",
+    clearanceWidthMeters: 0.9,
+    clearanceHeightMeters: 2,
+  };
+  const goal = {
+    ...start,
+    id: "node-goal",
+    positionMetersXYZ: [1, 0, 0] as const,
+  };
+  const edge = {
+    id: "edge-start-goal",
+    type: "walk" as const,
+    fromTraversalNodeId: start.id,
+    toTraversalNodeId: goal.id,
+    distanceMeters: 1,
+    heightDeltaMeters: 0,
+    stepHeightMeters: 0,
+    slopeDegrees: 0,
+    minimumClearanceWidthMeters: 0.9,
+    minimumClearanceHeightMeters: 2,
+    routePathCost: 1,
+  };
+  return canonicalTraversalGraphV2({
+    kind: "traversal-graph",
+    schemaVersion: 2,
+    authoringSpecHash: buildInput.authoringSpecHash,
+    layoutSolveReportHash: buildInput.layoutSolveReportHash,
+    resourceLockHash: buildInput.resourceLockHash,
+    terrainArtifactHash: buildInput.terrainArtifactHash,
+    colliderArtifactHash: buildInput.colliderArtifactHash,
+    geometryArtifactHash: buildInput.geometryArtifactHash,
+    surfaceArtifactHash: buildInput.surfaceArtifactHash,
+    routeBuildInputHash: buildReceipt.routeBuildInputHash,
+    resolvedTraversalLockHash: envelope.resolvedTraversalLockHash,
+    graphBuilderProfileRef: envelope.graphBuilderProfileRef,
+    graphBuilderResolvedVersion: envelope.graphBuilderResolvedVersion,
+    graphBuilderProfileHash: envelope.graphBuilderProfileHash,
+    routeId: buildInput.connectivityRequirement.routeId,
+    startAnchorEntityId: "spawn",
+    destinationAnchorEntityId: "goal",
+    traversalSurfaceIdentitiesById: {
+      [SURFACE.traversalSurfaceId]: SURFACE,
+    },
+    traversalNodesById: { [start.id]: start, [goal.id]: goal },
+    traversalEdgesById: { [edge.id]: edge },
+  });
+}
+
+function v2Path(traversalGraph: ReturnType<typeof v2Graph>) {
+  return canonicalRoutePathReceiptV2({
+    kind: "route-path-receipt",
+    schemaVersion: 2,
+    status: "complete",
+    constraintId: "player-to-goal",
+    routeId: traversalGraph.routeId,
+    traversingEntityId: "player",
+    startAnchorEntityId: traversalGraph.startAnchorEntityId,
+    destinationAnchorEntityId: traversalGraph.destinationAnchorEntityId,
+    authoringSpecHash: traversalGraph.authoringSpecHash,
+    layoutSolveReportHash: traversalGraph.layoutSolveReportHash,
+    resourceLockHash: traversalGraph.resourceLockHash,
+    traversalGraphHash: hashTraversalGraphV2(traversalGraph),
+    routeBuildInputHash: traversalGraph.routeBuildInputHash,
+    resolvedTraversalLockHash: traversalGraph.resolvedTraversalLockHash,
+    graphBuilderProfileRef: traversalGraph.graphBuilderProfileRef,
+    graphBuilderResolvedVersion: traversalGraph.graphBuilderResolvedVersion,
+    graphBuilderProfileHash: traversalGraph.graphBuilderProfileHash,
+    orderedTraversalNodeIds: ["node-start", "node-goal"],
+    orderedTraversalEdgeIds: ["edge-start-goal"],
+    orderedPathPositionsMetersXYZ: [[0, 0, 0], [1, 0, 0]],
+    orderedTraversalSurfaceIdentities: [SURFACE, SURFACE],
+    routePathDistanceMeters: 1,
+    routePathDistanceMetersXZ: 1,
+    routePathCost: 1,
+    maximumObservedSlopeDegrees: 0,
+    maximumObservedStepHeightMeters: 0,
+    minimumObservedClearanceWidthMeters: 0.9,
+    minimumObservedClearanceHeightMeters: 2,
+    maximumObservedSurfaceGapMeters: 0,
+  });
+}
+
+function completeProbeV2(
+  routePath: ReturnType<typeof v2Path>,
+  lock: ReturnType<typeof resolveTraversalLockV1>,
+) {
+  const driver = resolveTraversalDriverProfileV1(
+    BUILT_IN_TRAVERSAL_DRIVER_PROFILE_REF,
+  );
+  const builder = resolveTraversalGraphBuilderProfileV2(
+    BUILT_IN_HEIGHTFIELD_R1_TRAVERSAL_GRAPH_BUILDER_PROFILE_REF,
+  );
+  const runtimeImplementationIdentity = {
+    runtimeBackendRef: lock.lock.runtimeBackendRef,
+    runtimeBackendResolvedVersion: lock.lock.runtimeBackendResolvedVersion,
+    runtimeBackendHash: lock.lock.runtimeBackendHash,
+    runtimeAdapterRef: lock.lock.runtimeAdapterRef,
+    runtimeAdapterResolvedVersion: lock.lock.runtimeAdapterResolvedVersion,
+    runtimeAdapterHash: lock.lock.runtimeAdapterHash,
+  } as const;
+  const initialRuntimeEvidence = {
+    kind: "traversal-runtime-tick-evidence" as const,
+    schemaVersion: 1 as const,
+    tick: 0,
+    traversingEntityId: routePath.traversingEntityId,
+    authoringSpecHash: SUBJECT.authoringSpecHash,
+    layoutSolveReportHash: SUBJECT.layoutSolveReportHash,
+    resourceLockHash: SUBJECT.resourceLockHash,
+    executionPlanHash: SUBJECT.executionPlanHash,
+    resolvedTraversalLockHash: lock.resolvedTraversalLockHash,
+    runtimeImplementationIdentity,
+    fixedTimeStepSeconds: 1 / 60,
+    subjectPositionMetersXYZ: [1, 0, 0] as const,
+    velocityMetersPerSecondXYZ: [0, 0, 0] as const,
+    movementMedium: "ground" as const,
+    locomotionMode: "idle" as const,
+    characterSupport: {
+      kind: "character-support-evidence" as const,
+      schemaVersion: 1 as const,
+      supportState: "supported" as const,
+      supportNormalWorldXYZ: [0, 1, 0] as const,
+      sampledFootPositionMetersXYZ: [1, 0, 0] as const,
+      isSupportSurfaceDynamic: false,
+      surfaceResolution: { mode: "resolved" as const, ...SURFACE },
+    },
+  };
+  return canonicalRouteRuntimeProbeReceiptV2({
+    kind: "route-runtime-probe-receipt",
+    schemaVersion: 2,
+    status: "complete",
+    request: {
+      kind: "route-runtime-probe-request",
+      schemaVersion: 2,
+      routePathReceiptHash: hashRoutePathReceiptV2(routePath),
+      constraintId: routePath.constraintId,
+      routeId: routePath.routeId,
+      traversingEntityId: routePath.traversingEntityId,
+      startAnchorEntityId: routePath.startAnchorEntityId,
+      destinationAnchorEntityId: routePath.destinationAnchorEntityId,
+      authoringSpecHash: routePath.authoringSpecHash,
+      layoutSolveReportHash: routePath.layoutSolveReportHash,
+      resourceLockHash: routePath.resourceLockHash,
+      executionPlanHash: SUBJECT.executionPlanHash,
+      routeBuildInputHash: routePath.routeBuildInputHash,
+      traversalGraphHash: routePath.traversalGraphHash,
+      resolvedTraversalLockHash: routePath.resolvedTraversalLockHash,
+      driverProfileRef: driver.resourceRef,
+      driverResolvedVersion: driver.resolvedVersion,
+      driverProfileHash: driver.contentHash,
+      validationProfileRef:
+        OUTDOOR_WORLD_PACKAGE_DEV_VALIDATION_PROFILE_V2.resourceRef,
+      validationProfileVersion:
+        OUTDOOR_WORLD_PACKAGE_DEV_VALIDATION_PROFILE_V2.version,
+      validationProfileHash:
+        OUTDOOR_WORLD_PACKAGE_DEV_VALIDATION_PROFILE_HASH_V2,
+      runtimeImplementationIdentity,
+      walkSpeedMetersPerSecond: 4,
+      positionQuantizationMeters: builder.profile.positionQuantizationMeters,
+    },
+    initialRuntimeEvidence,
+    ticks: [],
+    metrics: {
+      processedTickCount: 0,
+      maximumStalledDurationTicks: 0,
+      maximumRouteDeviationMetersXZ: 0,
+      maximumConsecutiveUnexpectedUnsupportedTicks: 0,
+      slidingDurationTicks: 0,
+      unexpectedSupportLossCount: 0,
+      wrongSupportSurfaceCount: 0,
+      invalidPhysicsValueCount: 0,
+    },
+    completionDurationTicks: 0,
+  });
+}
+
+function v2RowInput(): RouteValidationRowInputV2 {
+  const resolvedTraversalLockReceipt = resolveTraversalLockV1(lockInput());
+  const routeBuildInputReceipt = v2BuildInputReceipt(resolvedTraversalLockReceipt);
+  const traversalGraph = v2Graph(routeBuildInputReceipt);
+  const routePathReceipt = v2Path(traversalGraph);
+  const routeRuntimeProbeReceipt = completeProbeV2(
+    routePathReceipt,
+    resolvedTraversalLockReceipt,
+  );
+  return {
+    routeBuildInputReceipt,
+    routeConnectivityResult: canonicalRouteConnectivityResultV2({
+      kind: "route-connectivity-result",
+      schemaVersion: 2,
+      status: "complete",
+      traversalGraph,
+      traversalGraphHash: hashTraversalGraphV2(traversalGraph),
+      routePathReceipt,
+      routePathReceiptHash: hashRoutePathReceiptV2(routePathReceipt),
+    }),
+    routeRuntimeProbeReceipt,
+    resolvedTraversalLockReceipt,
+    evidenceBytes: {
+      traversalGraph: canonicalJsonBytes(traversalGraph),
+      routePathReceipt: canonicalJsonBytes(routePathReceipt),
+      routeRuntimeProbeReceipt: canonicalJsonBytes(routeRuntimeProbeReceipt),
+    },
+  };
+}
+
+describe("createRouteValidationReportV2 Path/Probe V2 rows", () => {
+  it("accepts a complete V2 Build Input, Path, and Probe row beside V1", () => {
+    const report = createRouteValidationReportV2({
+      reportId: "v2-route-validation",
+      subject: SUBJECT,
+      validationProfile: OUTDOOR_WORLD_PACKAGE_DEV_VALIDATION_PROFILE_V2,
+      rows: [v2RowInput()],
+    });
+    expect(report.status).toBe("passed");
+    expect(validateValidationReportV2(report).ok).toBe(true);
   });
 });
