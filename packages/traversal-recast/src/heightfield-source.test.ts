@@ -618,9 +618,9 @@ describe("Heightfield Route R1 locked source assembly", () => {
     expect(graphBuilderWorldPositions).toHaveLength(
       expectedWorldPositionsMetersXYZ.length,
     );
-    graphBuilderWorldPositions.forEach((value, index) => {
-      expect(value).toBeCloseTo(canonicalWorldPositions[index]!, 12);
-      expect(value).toBeCloseTo(expectedWorldPositionsMetersXYZ[index]!, 12);
+    expect(graphBuilderWorldPositions).toEqual(canonicalWorldPositions);
+    expectedWorldPositionsMetersXYZ.forEach((value, index) => {
+      expect(graphBuilderWorldPositions[index]).toBeCloseTo(value, 12);
     });
   });
 

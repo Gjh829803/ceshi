@@ -8,7 +8,7 @@ import {
   type ExecutionWaterV3,
 } from "@whitebox-world/runtime-contracts";
 import {
-  emitStaticColliderTriangleMeshV1,
+  emitTransformedStaticColliderTriangleMeshV1,
   emitTriangleHeightfieldSurfaceV1,
   TRAVERSAL_AREA_COMPLEXITY_LIMITS_V1,
   validateSimplePolygonXZV1,
@@ -703,46 +703,6 @@ function applyTraversalAreaSemantics(
   return { triangles, exclusions };
 }
 
-function transformPoint(point: Vec3, transform: ExecutionTransformV3): MutableVec3 {
-  requireVec3(transform.positionMetersXYZ, "collider transform position");
-  requireVec3(transform.rotationEulerRadiansXYZ, "collider transform rotation");
-  requireVec3(transform.scaleXYZ, "collider transform scale");
-  transform.scaleXYZ.forEach((value) => {
-    if (!(value > 0)) failStructural("non-positive-scale", "collider scale must be > 0.");
-  });
-  let [x, y, z] = point.map((value, index) => value * transform.scaleXYZ[index]!) as MutableVec3;
-  const [pitch, yaw, roll] = transform.rotationEulerRadiansXYZ;
-  const cosineRoll = Math.cos(roll);
-  const sineRoll = Math.sin(roll);
-  [x, y] = [x * cosineRoll - y * sineRoll, x * sineRoll + y * cosineRoll];
-  const cosinePitch = Math.cos(pitch);
-  const sinePitch = Math.sin(pitch);
-  [y, z] = [y * cosinePitch - z * sinePitch, y * sinePitch + z * cosinePitch];
-  const cosineYaw = Math.cos(yaw);
-  const sineYaw = Math.sin(yaw);
-  [x, z] = [x * cosineYaw + z * sineYaw, -x * sineYaw + z * cosineYaw];
-  return normalizedPoint([
-    x + transform.positionMetersXYZ[0],
-    y + transform.positionMetersXYZ[1],
-    z + transform.positionMetersXYZ[2],
-  ]);
-}
-
-function transformSoup(
-  soup: CanonicalTriangleSoupV1,
-  transform: ExecutionTransformV3,
-): CanonicalTriangleSoupV1 {
-  const positions: number[] = [];
-  for (let offset = 0; offset < soup.positionsMetersXYZ.length; offset += 3) {
-    positions.push(...transformPoint([
-      soup.positionsMetersXYZ[offset]!,
-      soup.positionsMetersXYZ[offset + 1]!,
-      soup.positionsMetersXYZ[offset + 2]!,
-    ], transform));
-  }
-  return { positionsMetersXYZ: positions, triangleIndices: [...soup.triangleIndices] };
-}
-
 function convexHull(points: readonly Vec2[]): Vec2[] {
   const unique = [...new Map(points.map((point) => [`${point[0]},${point[1]}`, point])).values()]
     .sort((left, right) => left[0] - right[0] || left[1] - right[1]);
@@ -805,11 +765,21 @@ function colliderIntersectsRibbon(
 }
 
 function colliderSoup(collider: ExecutionStaticColliderV1): CanonicalTriangleSoupV1 {
-  const local = emitStaticColliderTriangleMeshV1(collider.shape);
-  return transformSoup({
-    positionsMetersXYZ: local.localPositionsMetersXYZ,
-    triangleIndices: local.triangleIndices,
-  }, collider.transform);
+  const transform = collider.transform;
+  requireVec3(transform.positionMetersXYZ, "collider transform position");
+  requireVec3(transform.rotationEulerRadiansXYZ, "collider transform rotation");
+  requireVec3(transform.scaleXYZ, "collider transform scale");
+  transform.scaleXYZ.forEach((value) => {
+    if (!(value > 0)) failStructural("non-positive-scale", "collider scale must be > 0.");
+  });
+  const world = emitTransformedStaticColliderTriangleMeshV1(
+    collider.shape,
+    transform,
+  );
+  return {
+    positionsMetersXYZ: [...world.worldPositionsMetersXYZ],
+    triangleIndices: [...world.triangleIndices],
+  };
 }
 
 function relevantBlockingColliders(

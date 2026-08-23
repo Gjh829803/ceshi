@@ -1,5 +1,11 @@
 import { isNil } from "lodash-es";
 
+import {
+  describeWorldTriangleV1,
+  isBarycentricInsideFacadeV1,
+  samplePointOnWorldTriangleV1,
+} from "./triangle-world-geometry.js";
+
 export type StaticColliderTriangleShapeV1 =
   | Readonly<{
       kind: "box";
@@ -404,28 +410,20 @@ export function queryStaticColliderTriangleMeshSupportHeightMetersV1(
     const cx = worldMesh.worldPositionsMetersXYZ[thirdIndex]!;
     const cy = worldMesh.worldPositionsMetersXYZ[thirdIndex + 1]!;
     const cz = worldMesh.worldPositionsMetersXYZ[thirdIndex + 2]!;
-    const denominator =
-      (bz - cz) * (ax - cx) + (cx - bx) * (az - cz);
-    if (Math.abs(denominator) <= Number.EPSILON) continue;
-    const firstWeight = (
-      (bz - cz) * (pointX - cx) + (cx - bx) * (pointZ - cz)
-    ) / denominator;
-    const secondWeight = (
-      (cz - az) * (pointX - cx) + (ax - cx) * (pointZ - cz)
-    ) / denominator;
-    const thirdWeight = 1 - firstWeight - secondWeight;
-    const tolerance = 1e-12;
-    if (
-      firstWeight < -tolerance ||
-      secondWeight < -tolerance ||
-      thirdWeight < -tolerance
-    ) {
+    const geometry = describeWorldTriangleV1(
+      [ax, ay, az],
+      [bx, by, bz],
+      [cx, cy, cz],
+    );
+    if (isNil(geometry)) {
       continue;
     }
-    const heightMeters =
-      ay * firstWeight + by * secondWeight + cy * thirdWeight;
-    if (heightMeters > highestHitMeters) {
-      highestHitMeters = heightMeters;
+    const sample = samplePointOnWorldTriangleV1(geometry, [pointX, pointZ]);
+    if (isNil(sample) || !isBarycentricInsideFacadeV1(sample.barycentricUVW)) {
+      continue;
+    }
+    if (sample.heightMeters > highestHitMeters) {
+      highestHitMeters = sample.heightMeters;
     }
   }
   return Number.isFinite(highestHitMeters) ? highestHitMeters : undefined;
