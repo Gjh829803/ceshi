@@ -20,6 +20,9 @@ export const BUILT_IN_TRAVERSAL_GRAPH_BUILDER_PROFILE_REF =
 export const BUILT_IN_HEIGHTFIELD_R1_TRAVERSAL_GRAPH_BUILDER_PROFILE_REF =
   "worldkit://traversal-graph-builder-profile/outdoor-humanoid.heightfield-r1@1" as const;
 
+export const BUILT_IN_HEIGHTFIELD_R1_LOW_BUDGET_TRAVERSAL_GRAPH_BUILDER_PROFILE_REF =
+  "worldkit://traversal-graph-builder-profile/outdoor-humanoid.heightfield-r1-low-budget@1" as const;
+
 const TRAVERSAL_DRIVER_PROFILE_REQUIRED_KEYS = [
   "kind",
   "schemaVersion",
@@ -111,6 +114,15 @@ const BUILT_IN_HEIGHTFIELD_R1_GRAPH_BUILDER_PROFILE: TraversalGraphBuilderProfil
   maximumTiles: 1024,
   maximumSearchSteps: 100000,
 };
+
+const BUILT_IN_HEIGHTFIELD_R1_LOW_BUDGET_GRAPH_BUILDER_PROFILE:
+  TraversalGraphBuilderProfileV2 = {
+    ...BUILT_IN_HEIGHTFIELD_R1_GRAPH_BUILDER_PROFILE,
+    maximumNodes: 16,
+    maximumEdges: 32,
+    maximumTiles: 64,
+    maximumSearchSteps: 16,
+  };
 
 function deepFreeze<T>(value: T): T {
   if (value === null || typeof value !== "object" || Object.isFrozen(value)) return value;
@@ -499,14 +511,23 @@ export function resolveTraversalGraphBuilderProfileV1(
 export function resolveTraversalGraphBuilderProfileV2(
   resourceRef: string,
 ): ResolvedTraversalGraphBuilderProfileV2 {
-  if (resourceRef !== BUILT_IN_HEIGHTFIELD_R1_TRAVERSAL_GRAPH_BUILDER_PROFILE_REF) {
+  let profile: TraversalGraphBuilderProfileV2;
+  if (resourceRef === BUILT_IN_HEIGHTFIELD_R1_TRAVERSAL_GRAPH_BUILDER_PROFILE_REF) {
+    profile = structuredClone(BUILT_IN_HEIGHTFIELD_R1_GRAPH_BUILDER_PROFILE);
+  } else if (
+    resourceRef ===
+    BUILT_IN_HEIGHTFIELD_R1_LOW_BUDGET_TRAVERSAL_GRAPH_BUILDER_PROFILE_REF
+  ) {
+    profile = structuredClone(
+      BUILT_IN_HEIGHTFIELD_R1_LOW_BUDGET_GRAPH_BUILDER_PROFILE,
+    );
+  } else {
     throw new Error(`TRAVERSAL_GRAPH_BUILDER_PROFILE_NOT_FOUND: '${resourceRef}'.`);
   }
 
-  const profile = structuredClone(BUILT_IN_HEIGHTFIELD_R1_GRAPH_BUILDER_PROFILE);
   validateTraversalGraphBuilderProfileV2(profile);
   return deepFreeze({
-    resourceRef: BUILT_IN_HEIGHTFIELD_R1_TRAVERSAL_GRAPH_BUILDER_PROFILE_REF,
+    resourceRef,
     resolvedVersion: "1",
     contentHash: contentHashOf(profile),
     profile: deepFreeze(profile),
@@ -520,6 +541,12 @@ export function resolveTraversalGraphBuilderProfile(
     return resolveTraversalGraphBuilderProfileV1(resourceRef);
   }
   if (resourceRef === BUILT_IN_HEIGHTFIELD_R1_TRAVERSAL_GRAPH_BUILDER_PROFILE_REF) {
+    return resolveTraversalGraphBuilderProfileV2(resourceRef);
+  }
+  if (
+    resourceRef ===
+    BUILT_IN_HEIGHTFIELD_R1_LOW_BUDGET_TRAVERSAL_GRAPH_BUILDER_PROFILE_REF
+  ) {
     return resolveTraversalGraphBuilderProfileV2(resourceRef);
   }
   throw new Error(`TRAVERSAL_GRAPH_BUILDER_PROFILE_NOT_FOUND: '${resourceRef}'.`);

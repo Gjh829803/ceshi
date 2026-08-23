@@ -3,6 +3,7 @@ import { describe, expect, it } from "vitest";
 
 import {
   BUILT_IN_HEIGHTFIELD_R1_TRAVERSAL_GRAPH_BUILDER_PROFILE_REF,
+  BUILT_IN_HEIGHTFIELD_R1_LOW_BUDGET_TRAVERSAL_GRAPH_BUILDER_PROFILE_REF,
   BUILT_IN_TRAVERSAL_DRIVER_PROFILE_REF,
   BUILT_IN_TRAVERSAL_GRAPH_BUILDER_PROFILE_REF,
   resolveTraversalGraphBuilderProfile,
@@ -262,6 +263,44 @@ describe("traversal graph builder profile registry", () => {
     ).contentHash).toBe(
       "sha256:0c716c3d733d679d8518018ec2e54d678bc26715beac98c9928218862778d4a1",
     );
+  });
+
+  it("resolves an independently hashed locked low-budget Heightfield R1 profile", () => {
+    const standard = resolveTraversalGraphBuilderProfileV2(
+      BUILT_IN_HEIGHTFIELD_R1_TRAVERSAL_GRAPH_BUILDER_PROFILE_REF,
+    );
+    const lowBudget = resolveTraversalGraphBuilderProfileV2(
+      BUILT_IN_HEIGHTFIELD_R1_LOW_BUDGET_TRAVERSAL_GRAPH_BUILDER_PROFILE_REF,
+    );
+
+    expect(BUILT_IN_HEIGHTFIELD_R1_LOW_BUDGET_TRAVERSAL_GRAPH_BUILDER_PROFILE_REF)
+      .toBe(
+        "worldkit://traversal-graph-builder-profile/outdoor-humanoid.heightfield-r1-low-budget@1",
+      );
+    expect(lowBudget.resourceRef).not.toBe(standard.resourceRef);
+    expect(lowBudget.contentHash).not.toBe(standard.contentHash);
+    expect({
+      ...lowBudget.profile,
+      maximumNodes: standard.profile.maximumNodes,
+      maximumEdges: standard.profile.maximumEdges,
+      maximumTiles: standard.profile.maximumTiles,
+      maximumSearchSteps: standard.profile.maximumSearchSteps,
+    }).toEqual(standard.profile);
+    expect(lowBudget.profile).toMatchObject({
+      maximumNodes: 16,
+      maximumEdges: 32,
+      maximumTiles: 64,
+      maximumSearchSteps: 16,
+    });
+    expect(lowBudget.contentHash).toBe(sha256CanonicalJson(lowBudget.profile));
+    expect(lowBudget.contentHash).toBe(
+      "sha256:d2f3ebf7afe77f2a2323173f6dde6f5d27896279befc96b0aff23eb591f962e6",
+    );
+    expect(resolveTraversalGraphBuilderProfile(
+      BUILT_IN_HEIGHTFIELD_R1_LOW_BUDGET_TRAVERSAL_GRAPH_BUILDER_PROFILE_REF,
+    )).toEqual(lowBudget);
+    expect(Object.isFrozen(lowBudget)).toBe(true);
+    expect(Object.isFrozen(lowBudget.profile)).toBe(true);
   });
 
   it("keeps V2 closed against Subject, Validation, and Provider dialects", () => {
