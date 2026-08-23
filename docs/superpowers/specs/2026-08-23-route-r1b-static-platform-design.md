@@ -347,9 +347,27 @@ preimage 的唯一 owner；Compiler、Recast、Validation 和 Receipt factory �
 `@whitebox-world/traversal` 的 Build Input 模块内定义共享 canonical Terrain admission；
 `hashRouteTerrainArtifactV2()` 必须先调用该 admission，再对返回的 canonical source 计算
 preimage。`assertRouteBuildInputV2()` 与 `createRouteBuildInputReceiptV2()` 复用同一入口，不得各自
-重新实现 extrema 或 `-0` 规则。因此攻击者即使按伪造 bounds 重算
-`terrainArtifactHash` / `geometryArtifactHash` / `routeBuildInputHash`，仍必须在 Terrain admission
-阶段 fail closed。
+重新实现 extrema 或 `-0` 规则。
+
+Forged-bounds RED 必须模拟攻击者绕过 SDK producer：从 valid canonical input 复制 soup，单独扩大、
+缩小、平移或使用 asymmetric/`-0` bounds，再直接用 `sha256CanonicalJson` 构造其声称的
+Terrain/Geometry preimage 与 `routeBuildInputHash`，并组装 attacker-supplied Receipt。该 raw
+hashing 只允许出现在 adversarial fixture；
+不得把 `hashRouteTerrainArtifactV2()` 或 `hashRouteBuildInputV2()` 降级为不做 admission 的 preimage
+utility。对每个 forged case，以下所有 admission-aware public entrypoint 必须分别 fail closed：
+
+```ts
+hashRouteTerrainArtifactV2(forgedTerrainSource);
+assertRouteBuildInputV2(forgedInput);
+hashRouteBuildInputV2(forgedInput);
+createRouteBuildInputReceiptV2(forgedInput);
+assertRouteBuildInputReceiptV2(attackerSuppliedReceipt);
+```
+
+`hashRouteColliderArtifactV2()`、`hashRouteSurfaceArtifactV2()` 与
+`hashRouteGeometryArtifactV2()` 只负责各自已 canonical 的输入域，不能独立发现未传入的 forged
+Terrain。Compiler/Recast/Validation/Receipt production code 仍只调用公共 owner，不复制 raw
+preimage。
 
 `blockedTraversalAreaExclusions` 与 `blockedWaterExclusions` 不进入
 `terrainArtifactHash`：它们的几何效果已体现在 post-exclusion `triangleSoup`，而完整
@@ -400,7 +418,10 @@ blocker。`StaticColliderSourceV1` 沿用现有 `StaticBlockingColliderV1` 的�
 
 旧 V1 不保留永久 alias；R1 fixtures 同步迁移到 V2 并证明路径、诊断、Runtime outcome 与
 物理指标语义不变。Schema/hash 因 clean break 预期变化，不得伪称 V1/V2 canonical bytes
-相同。
+相同。`RouteThresholdRejectionProofV1` 与 `RouteThresholdRejectionReasonV1` 属于旧 Failure V1
+合同，Task 9 必须与 `RouteConnectivityFailureV1` 一并删除 declaration、export 与所有 consumer；
+它们不同于 V2 显式复用的 `TraversalNodeV1`、`TraversalEdgeV1`、
+`TraversalSurfaceIdentityV1` leaf，不得遗留为 orphan compatibility type。
 
 ### 7.1 Connectivity、Path、Overlay 与 Probe V2
 
@@ -415,10 +436,12 @@ Node 的三个稳定 ID 及其 Surface Resource identity 精确一致；它是 G
 不是第二个作者权威。`RouteOverlayV2` 必须使用完全相同的字段名
 `orderedTraversalSurfaceIdentities` 投影相同有序数组；该数组与 Overlay/Path 各自的
 `orderedTraversalNodeIds` 等长，并按 index 与同一 Graph inventory row 对齐，不得改名、排序或
-去重成集合。`assertRouteOverlayContextV2()` 必须证明 Overlay 数组与 Path 数组 byte-equal，且
-两者每一项都等于对应 Node 的 inventory identity；缺行、多行、顺序漂移或只改一侧均 fail
-closed。Overlay 不再声称整条 Path 属于一个 Surface。Probe Request 绑定 V2 Path Receipt Hash，
-不再复制 path-global Surface。
+去重成集合。`assertRouteOverlayContextV2()` 不接受 caller 独立提供的 Path/Path Hash；它先从可信
+Build Input Receipt 校验完整 `RouteConnectivityResultV2`，再从 canonical complete Result 内部派生
+Graph、Path 与两个 Hash，证明 Overlay 数组与 Path byte-equal 且每一项都等于对应 Node 的
+inventory identity。缺行、多行、顺序漂移、只改一侧或 Path/Overlay 同时伪造成另一合法 Surface
+均 fail closed。Overlay 不再声称整条 Path 属于一个 Surface。Probe Request 绑定 V2 Path Receipt
+Hash，不再复制 path-global Surface。
 
 Graph V2 不把 Ref/Version/Hash 重复嵌入每个 Node。Node 保留 R0 已冻结的
 `traversalSurfaceId` / `surfaceEntityId` / `colliderSubshapeId` 三个稳定 ID，
@@ -539,23 +562,49 @@ Surface-bound 与 blocker-only Collider。候选平台的顶面可通行，但�
 ```ts
 assertRouteOverlayContextV2({
   overlay,
-  routePathReceipt,
-  routePathReceiptHash,
+  routeConnectivityResult,
   buildInputReceipt,
 });
 ```
 
-该 validator 需要可信 `RouteBuildInputReceiptV2`，因此调用点冻结在
+精确 public input 是关闭的三字段形状：
+
+```ts
+interface AssertRouteOverlayContextInputV2 {
+  readonly overlay: unknown;
+  readonly routeConnectivityResult: unknown;
+  readonly buildInputReceipt: unknown;
+}
+```
+
+不得保留接受 `routePathReceipt` / `routePathReceiptHash` 的 overload、optional field 或 alias。
+validator 算法固定为：
+
+1. `assertRouteBuildInputReceiptV2(buildInputReceipt)`；
+2. `assertRouteConnectivityResultForBuildInputV2(routeConnectivityResult, canonicalBuildInputReceipt)`；
+3. 要求 canonical Result `status === "complete"`，只从其内部取得 Graph/Graph Hash/Path/Path Hash；
+4. canonicalize Overlay，并逐项核对 route/world/lock/anchor/ribbon、Graph/Path Hash、ordered Node/
+   Edge/position/Surface arrays；
+5. 对每个 index 从 canonical Graph Node 的 `traversalSurfaceId` 回查
+   `traversalSurfaceIdentitiesById`，再次要求 Overlay identity 等于完整 inventory row；即使 Result
+   admission 已证明 Graph↔Path，该直接 Overlay postcondition 也不能删除；
+6. `staticColliderIdentities` 必须精确等于 canonical Build Input 全部 `staticColliders` 的排序
+   identity-only projection；
+7. 返回 deeply frozen canonical Overlay。
+
+该 validator 需要可信完整 Result 与 `RouteBuildInputReceiptV2`，因此调用点冻结在
 `@whitebox-world/validation` 的 `createWorldkitBrowserRouteEvidencePublicationV2()`：每个
-publication row 已携带 Validation admission 使用的同一 Build Input Receipt；factory 必须在构建、
-哈希和发布 DTO 前调用上述入口。Validation/Trusted Host 是 raw publication provenance admission
-owner；从磁盘、CLI 或网络接收的 raw row 只有在 Host 同时持有并核验对应 Validation Receipt、
-Build Input Receipt 与 hash chain 后，才能进入该 factory。禁止把任意 raw JSON 直接标记为
-trusted publication。
+publication row 已携带 Validation admission 通过的同一 `routeConnectivityResult` 与
+`routeBuildInputReceipt`；factory 必须把这两个 exact row field 传入，并用 validator 返回的
+canonical Overlay 生成 evidence bytes、Overlay Hash 与 Browser DTO。Validation/Trusted Host 是
+raw publication provenance admission owner；从磁盘、CLI 或网络接收的 raw row 只有在 Host 同时
+持有并核验对应 Validation Receipt、Build Input Receipt 与 hash chain 后，才能进入该 factory。
+禁止把任意 raw JSON 直接标记为 trusted publication。
 
 Runtime Contracts 的 V2 canonicalizer 只负责无需 Build Input context 即可自证的 standalone
-closed-shape、child hash、Path/Overlay 内部对齐与 deep-freeze；它不接收虚构的 Build Input，
-也不重建 Collider inventory provenance。Browser V5 只安装 Trusted Host 提供的 canonical DTO，
+closed-shape、child hash、Path/Overlay 内部对齐、selector/publication consistency 与 deep-freeze；
+它不接收虚构的 Build Input，也不重建 Graph/Collider inventory provenance。Browser V5 只安装
+Trusted Host 提供的 canonical DTO，
 保持 read-only selector/getter；它不是 raw publication trust owner，也不声称仅凭
 `staticColliderIdentities` 和一个可重算 Overlay Hash 就能证明 Build Input provenance。
 
@@ -1081,9 +1130,11 @@ R1b 新增 `examples/traversal/r1b-static-platform/`，至少包含：
   rasterize/compact → blocker compact span null 的顺序执行；0.15m contour simplification 下相邻
   共面 Surface 仍不产生跨 source range polygon；
 - 改 Collider geometry、Binding、Profile 或 Placement，相关 child/root hash 必变；
-- bounded Terrain 的扩大/缩小/平移 forged bounds 即使重算全部 Hash 仍失败；只改 exclusion
-  declaration 时 `routeBuildInputHash` 必变而 geometry artifact Hash 不变，Receipt root 必须等于
-  唯一 `hashRouteBuildInputV2()`；
+- bounded Terrain 的扩大/缩小/平移/asymmetric/`-0` forged bounds 由 adversarial fixture 直接用
+  `sha256CanonicalJson` 构造攻击者 Terrain/Geometry preimage 与 Input root，并组装 forged Receipt；所有公共
+  Terrain/Build Input/root/Receipt admission-aware 入口仍分别失败。只改 exclusion declaration 时
+  `routeBuildInputHash` 必变而 geometry artifact Hash 不变，Receipt root 必须等于唯一
+  `hashRouteBuildInputV2()`；
 - empty Terrain + 非空平台/Static Collider 必须执行真实 budget/Provider build，不能发布
   `empty-heightfield-source` 或 `not-required-empty-geometry`；
 - forged Surface → Collider identity、stale lock、mixed-world evidence fail closed；
