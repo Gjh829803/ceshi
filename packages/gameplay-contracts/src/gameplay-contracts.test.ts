@@ -10,6 +10,7 @@ import {
   deriveGameplayCommandReceiptIdV1,
   deriveGameplaySemanticFactIdV1,
   deriveWorldStateSnapshotIdV1,
+  deriveWorldStateSnapshotRefV1,
   deriveWorldStateHashV1,
   deriveGameplayEventIdV1,
   hashWorldStateSnapshotV1,
@@ -29,6 +30,7 @@ import {
   type WorldStateSnapshotBuildInputV1,
   type WorldStateSnapshotV1,
 } from "./gameplay-contracts";
+import { sha256CanonicalJson } from "@whitebox-world/protocol";
 import {
   parseGameplaySemanticFactV1 as parseGameplaySemanticFactV1FromBarrel,
 } from "@whitebox-world/gameplay-contracts";
@@ -203,7 +205,11 @@ const committedReceiptBody = {
   status: "committed",
   simulationTick: 12,
   eventIds: ["gameplay-event:world-primary:1"],
-  worldStateAfterRef: "worldkit://world-state/world-primary/12",
+  worldStateAfterRef: deriveWorldStateSnapshotRefV1({
+    runtimeSessionId: "runtime-primary",
+    worldSessionId: "world-primary",
+    worldStateHash: HASH_A,
+  }),
   worldStateAfterHash: HASH_A,
 } as const;
 
@@ -371,6 +377,19 @@ describe("GameplayCommandReceiptV1", () => {
     })).toThrow("closed GameplayCommandReceiptV1 schema");
   });
 
+  it("rejects a committed Receipt whose recomputed ID blesses the wrong Snapshot Ref", () => {
+    const wrongBody = {
+      ...committedReceiptBody,
+      worldStateAfterRef: "worldkit://world-state/arbitrary",
+    };
+    const wrongHash = sha256CanonicalJson(wrongBody);
+
+    expect(() => parseGameplayCommandReceiptV1({
+      id: `gameplay-receipt:${wrongHash.slice("sha256:".length)}`,
+      ...wrongBody,
+    })).toThrow("closed GameplayCommandReceiptV1 schema");
+  });
+
   it("changes receipt identity for changed command payload evidence", () => {
     const changedCommand = {
       ...bindCommand,
@@ -402,6 +421,16 @@ describe("GameplayCommandReceiptV1", () => {
       "closed GameplayCommandReceiptV1 schema",
     );
     expect(reads).toBe(0);
+  });
+
+  it("does not expose the removed control-change blocking policy diagnostic", () => {
+    expect(() => deriveGameplayCommandReceiptIdV1({
+      ...rejectedReceiptBody,
+      diagnostic: {
+        code: "ACTION_BLOCKS_CONTROL_CHANGE",
+        message: "Obsolete policy.",
+      },
+    })).toThrow("closed GameplayCommandReceiptV1 schema");
   });
 });
 
@@ -1676,7 +1705,7 @@ describe("Task 2A artifact identity", () => {
     const receiptId = deriveGameplayCommandReceiptIdV1(receiptBody);
 
     expect(receiptId).toBe(
-      "gameplay-receipt:bebfed088d68d17fce1cbcd256c6f8cb3b2df4b077bbb9ca8cbb3a8a4db58abe",
+      "gameplay-receipt:2c4c1ff03c5a16b0819079a808d09f7dace0aa95fdab3a396c3f63239bcec719",
     );
     expect(deriveGameplayCommandReceiptIdV1({
       ...receiptBody,
@@ -1697,6 +1726,44 @@ describe("Task 2A artifact identity", () => {
       worldSessionId: "world-primary",
       worldStateHash: WORLD_STATE_GOLDEN_HASH,
     })).not.toBe(snapshotId);
+  });
+
+  it("derives a canonical Snapshot Ref from the exact artifact identity domain", () => {
+    const identity = {
+      runtimeSessionId: "runtime-primary",
+      worldSessionId: "world-primary",
+      worldStateHash: WORLD_STATE_GOLDEN_HASH,
+    } as const;
+
+    expect(deriveWorldStateSnapshotRefV1(identity)).toBe(
+      `worldkit://world-state/${deriveWorldStateSnapshotIdV1(identity)}`,
+    );
+    expect(deriveWorldStateSnapshotRefV1({
+      ...identity,
+      worldSessionId: "world-secondary",
+    })).not.toBe(deriveWorldStateSnapshotRefV1(identity));
+    expect(deriveWorldStateSnapshotRefV1({
+      ...identity,
+      worldStateHash: HASH_E,
+    })).not.toBe(deriveWorldStateSnapshotRefV1(identity));
+    expect(() => deriveWorldStateSnapshotRefV1({
+      ...identity,
+      id: "not-part-of-the-domain",
+    })).toThrow("closed WorldStateSnapshotIdentityV1 schema");
+
+    let reads = 0;
+    const hostile = { ...identity } as Record<string, unknown>;
+    Object.defineProperty(hostile, "worldSessionId", {
+      enumerable: true,
+      get: () => {
+        reads += 1;
+        return "world-primary";
+      },
+    });
+    expect(() => deriveWorldStateSnapshotRefV1(hostile)).toThrow(
+      "closed WorldStateSnapshotIdentityV1 schema",
+    );
+    expect(reads).toBe(0);
   });
 
   it("requires both semantic Fact capacity dimensions", () => {

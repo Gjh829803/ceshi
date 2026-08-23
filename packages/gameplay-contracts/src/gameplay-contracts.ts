@@ -371,7 +371,6 @@ export type GameplayDiagnosticCodeV1 =
   | "ACTION_EXECUTION_ID_CONFLICT"
   | "ACTION_EXECUTION_NOT_ACTIVE"
   | "ACTION_EXECUTION_OWNERSHIP_MISMATCH"
-  | "ACTION_BLOCKS_CONTROL_CHANGE"
   | "ACTION_REQUEST_INVALID"
   | "ADAPTER_FIXED_INPUT_FAILED"
   | "ADAPTER_PREPARE_FAILED"
@@ -410,7 +409,6 @@ const GAMEPLAY_DIAGNOSTIC_CODES = new Set<GameplayDiagnosticCodeV1>([
   "ACTION_EXECUTION_ID_CONFLICT",
   "ACTION_EXECUTION_NOT_ACTIVE",
   "ACTION_EXECUTION_OWNERSHIP_MISMATCH",
-  "ACTION_BLOCKS_CONTROL_CHANGE",
   "ACTION_REQUEST_INVALID",
   "ADAPTER_FIXED_INPUT_FAILED",
   "ADAPTER_PREPARE_FAILED",
@@ -570,7 +568,12 @@ function parseGameplayCommandReceiptBodyV1(
         "worldStateAfterHash",
       ]) ||
       !isNonEmptyString(record.worldStateAfterRef) ||
-      !isSha256(record.worldStateAfterHash)
+      !isSha256(record.worldStateAfterHash) ||
+      record.worldStateAfterRef !== deriveWorldStateSnapshotRefV1({
+        runtimeSessionId: base.runtimeSessionId,
+        worldSessionId: base.worldSessionId,
+        worldStateHash: record.worldStateAfterHash,
+      })
     ) invalid(schemaName);
     return deepFreeze({
       ...base,
@@ -1741,6 +1744,10 @@ export function deriveWorldStateSnapshotIdV1(input: unknown): string {
     parseWorldStateSnapshotIdentityDomainV1(input),
   );
   return `world-state:${hash.slice("sha256:".length)}`;
+}
+
+export function deriveWorldStateSnapshotRefV1(input: unknown): string {
+  return `worldkit://world-state/${deriveWorldStateSnapshotIdV1(input)}`;
 }
 
 export function buildWorldStateSnapshotV1(input: unknown): WorldStateSnapshotV1 {
