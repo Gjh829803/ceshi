@@ -1,42 +1,17 @@
-import type {
-  GameplayCapacityBudgetV1,
-  GameplayCommandV1,
-  Sha256HashV1,
+import {
+  parseGameplayFeatureManifestV1,
+  parseGameplayFeatureResourceLockV1,
+  type GameplayCapacityBudgetV1,
+  type GameplayCommandTypeV1,
+  type GameplayFeatureManifestV1,
+  type GameplayFeatureResourceLockV1,
 } from "@whitebox-world/gameplay-contracts";
-import { sha256CanonicalJson } from "@whitebox-world/protocol";
+import { isNil } from "lodash-es";
 
 import {
   GameplayCommandDispatcher,
   type GameplayCommandHandlerV1,
 } from "./gameplay-command-dispatcher";
-
-type GameplayCommandTypeV1 = GameplayCommandV1["type"];
-
-export interface GameplayFeatureResourceBudgetV1 {
-  readonly stateSliceCount: 1;
-  readonly commandHandlerCount: number;
-}
-
-export interface GameplayFeatureManifestBodyV1 {
-  readonly kind: "gameplay-feature";
-  readonly id: string;
-  readonly version: number;
-  readonly resourceRef: string;
-  readonly dependencyFeatureRefs: readonly string[];
-  readonly requiredCapabilityRefs: readonly string[];
-  readonly commandTypes: readonly GameplayCommandTypeV1[];
-  readonly resourceBudget: GameplayFeatureResourceBudgetV1;
-}
-
-export interface GameplayFeatureManifestV1
-  extends GameplayFeatureManifestBodyV1 {
-  readonly contentHash: Sha256HashV1;
-}
-
-export interface GameplayFeatureResourceLockV1 {
-  readonly resourceRef: string;
-  readonly contentHash: Sha256HashV1;
-}
 
 export interface GameplayFeatureFactoryContextV1 {
   readonly worldSessionId: string;
@@ -92,23 +67,21 @@ const COMMAND_TYPES = new Set<GameplayCommandTypeV1>([
   "action.activate",
   "action.cancel",
 ]);
-const SHA256_PATTERN = /^sha256:[0-9a-f]{64}$/;
-
 function featureError(message: string): never {
   throw new Error(`FEATURE_NOT_LOCKED: ${message}`);
 }
 
 function snapshotRecord(value: unknown): Record<string, unknown> | undefined {
-  if (typeof value !== "object" || value === null) return undefined;
+  if (typeof value !== "object" || isNil(value)) return undefined;
   try {
     const prototype = Reflect.getPrototypeOf(value);
-    if (prototype !== Object.prototype && prototype !== null) return undefined;
+    if (prototype !== Object.prototype && !isNil(prototype)) return undefined;
     const result = Object.create(null) as Record<string, unknown>;
     for (const key of Reflect.ownKeys(value)) {
       const descriptor = Reflect.getOwnPropertyDescriptor(value, key);
       if (
         typeof key !== "string" ||
-        descriptor === undefined ||
+        isNil(descriptor) ||
         !descriptor.enumerable ||
         !("value" in descriptor)
       ) return undefined;
@@ -141,7 +114,7 @@ function snapshotArray(input: unknown): readonly unknown[] | undefined {
     for (let index = 0; index < input.length; index += 1) {
       const descriptor = Reflect.getOwnPropertyDescriptor(input, String(index));
       if (
-        descriptor === undefined ||
+        isNil(descriptor) ||
         !descriptor.enumerable ||
         !("value" in descriptor)
       ) return undefined;
@@ -153,9 +126,13 @@ function snapshotArray(input: unknown): readonly unknown[] | undefined {
   }
 }
 
-function parseStringSet(input: unknown, name: string): readonly string[] {
+function compareCodeUnits(left: string, right: string): number {
+  return left < right ? -1 : left > right ? 1 : 0;
+}
+
+function parseCanonicalStringSet(input: unknown, name: string): readonly string[] {
   const snapshot = snapshotArray(input);
-  if (snapshot === undefined) {
+  if (isNil(snapshot)) {
     return featureError(`${name} must be an Array.`);
   }
   const values = [...snapshot];
@@ -165,100 +142,21 @@ function parseStringSet(input: unknown, name: string): readonly string[] {
     ) ||
     new Set(values).size !== values.length
   ) return featureError(`${name} must contain unique non-empty strings.`);
-  return Object.freeze(values.sort((left, right) => left.localeCompare(right)));
-}
-
-function deepFreeze<T>(input: T): Readonly<T> {
-  if (typeof input !== "object" || input === null || Object.isFrozen(input)) {
-    return input;
+  const sorted = [...values].sort(compareCodeUnits);
+  if (values.some((value, index) => value !== sorted[index])) {
+    return featureError(`${name} must use canonical code-unit order.`);
   }
-  for (const key of Reflect.ownKeys(input)) {
-    const descriptor = Reflect.getOwnPropertyDescriptor(input, key);
-    if (descriptor !== undefined && "value" in descriptor) deepFreeze(descriptor.value);
-  }
-  return Object.freeze(input);
-}
-
-function parseManifestBody(input: unknown): GameplayFeatureManifestBodyV1 {
-  const record = snapshotRecord(input) ?? featureError(
-    "Feature manifest must be a plain data object.",
-  );
-  if (!exactKeys(record, [
-    "kind", "id", "version", "resourceRef", "dependencyFeatureRefs",
-    "requiredCapabilityRefs", "commandTypes", "resourceBudget",
-  ]) ||
-    record.kind !== "gameplay-feature" ||
-    typeof record.id !== "string" || record.id.length === 0 ||
-    !Number.isSafeInteger(record.version) || (record.version as number) <= 0 ||
-    typeof record.resourceRef !== "string" || record.resourceRef.length === 0
-  ) featureError("Feature manifest identity is invalid.");
-  const commandTypes = parseStringSet(record.commandTypes, "commandTypes");
-  if (!commandTypes.every((type) => COMMAND_TYPES.has(type as GameplayCommandTypeV1))) {
-    featureError("Feature manifest contains an unknown command type.");
-  }
-  const budget = snapshotRecord(record.resourceBudget) ?? featureError(
-    "Feature resourceBudget must be a plain data object.",
-  );
-  if (!exactKeys(budget, ["stateSliceCount", "commandHandlerCount"]) ||
-    budget.stateSliceCount !== 1 ||
-    !Number.isSafeInteger(budget.commandHandlerCount) ||
-    Object.is(budget.commandHandlerCount, -0) ||
-    (budget.commandHandlerCount as number) < 0 ||
-    budget.commandHandlerCount !== commandTypes.length
-  ) featureError("Feature resourceBudget does not exactly match its declarations.");
-  return deepFreeze({
-    kind: "gameplay-feature",
-    id: record.id,
-    version: record.version as number,
-    resourceRef: record.resourceRef,
-    dependencyFeatureRefs: parseStringSet(
-      record.dependencyFeatureRefs,
-      "dependencyFeatureRefs",
-    ),
-    requiredCapabilityRefs: parseStringSet(
-      record.requiredCapabilityRefs,
-      "requiredCapabilityRefs",
-    ),
-    commandTypes: commandTypes as readonly GameplayCommandTypeV1[],
-    resourceBudget: {
-      stateSliceCount: 1,
-      commandHandlerCount: budget.commandHandlerCount as number,
-    },
-  });
-}
-
-export function deriveGameplayFeatureManifestContentHashV1(
-  input: unknown,
-): Sha256HashV1 {
-  return sha256CanonicalJson(parseManifestBody(input)) as Sha256HashV1;
-}
-
-export function createGameplayFeatureManifestV1(
-  input: GameplayFeatureManifestBodyV1,
-): GameplayFeatureManifestV1 {
-  const body = parseManifestBody(input);
-  return deepFreeze({
-    ...body,
-    contentHash: sha256CanonicalJson(body) as Sha256HashV1,
-  });
+  return Object.freeze(values);
 }
 
 function validateManifest(input: unknown): GameplayFeatureManifestV1 {
-  const record = snapshotRecord(input) ?? featureError("Feature manifest is invalid.");
-  if (!exactKeys(record, [
-    "kind", "id", "version", "resourceRef", "contentHash",
-    "dependencyFeatureRefs", "requiredCapabilityRefs", "commandTypes",
-    "resourceBudget",
-  ]) || typeof record.contentHash !== "string") {
-    featureError("Feature manifest has unknown or missing fields.");
+  try {
+    return parseGameplayFeatureManifestV1(input);
+  } catch {
+    return featureError(
+      "Feature manifest is not canonical or has a content hash mismatch.",
+    );
   }
-  const { contentHash: _contentHash, ...bodyInput } = record;
-  const body = parseManifestBody(bodyInput);
-  const expected = sha256CanonicalJson(body) as Sha256HashV1;
-  if (record.contentHash !== expected) {
-    featureError(`Feature '${body.resourceRef}' content hash does not match.`);
-  }
-  return deepFreeze({ ...body, contentHash: expected });
 }
 
 function stableTopologicalSort(
@@ -274,10 +172,10 @@ function stableTopologicalSort(
           (dependencyRef) => completed.has(dependencyRef),
         )
       )
-      .sort((left, right) => left.localeCompare(right));
+      .sort(compareCodeUnits);
     if (ready.length === 0) {
       featureError(
-        `Gameplay Feature dependency cycle: ${[...remaining].sort().join(", ")}.`,
+        `Gameplay Feature dependency cycle: ${[...remaining].sort(compareCodeUnits).join(", ")}.`,
       );
     }
     for (const resourceRef of ready) {
@@ -342,25 +240,18 @@ export class GameplayFeatureManager {
       "resourceLocks must be an Array.",
     );
     for (const lockInput of resourceLockInputs) {
-      const lock = snapshotRecord(lockInput) ?? featureError(
-        "Every Resource Lock must be a plain data object.",
-      );
-      if (
-        !exactKeys(lock, ["resourceRef", "contentHash"]) ||
-        typeof lock.resourceRef !== "string" ||
-        lock.resourceRef.length === 0 ||
-        typeof lock.contentHash !== "string" ||
-        !SHA256_PATTERN.test(lock.contentHash)
-      ) featureError("Resource Lock has an invalid closed shape.");
+      let lock: GameplayFeatureResourceLockV1;
+      try {
+        lock = parseGameplayFeatureResourceLockV1(lockInput);
+      } catch {
+        featureError("Resource Lock has an invalid closed shape.");
+      }
       if (locksByRef.has(lock.resourceRef)) featureError(
         `Duplicate Resource Lock '${lock.resourceRef}'.`,
       );
-      locksByRef.set(lock.resourceRef, Object.freeze({
-        resourceRef: lock.resourceRef,
-        contentHash: lock.contentHash as Sha256HashV1,
-      }));
+      locksByRef.set(lock.resourceRef, lock);
     }
-    const availableCapabilities = new Set(parseStringSet(
+    const availableCapabilities = new Set(parseCanonicalStringSet(
       options.availableCapabilityRefs,
       "availableCapabilityRefs",
     ));
@@ -384,7 +275,7 @@ export class GameplayFeatureManager {
       }
       for (const commandType of manifest.commandTypes) {
         const owner = commandOwnerByType.get(commandType);
-        if (owner !== undefined) {
+        if (!isNil(owner)) {
           throw new Error(
             `Duplicate Gameplay command Handler '${commandType}' declared by '${owner}' and '${manifest.resourceRef}'.`,
           );
@@ -395,7 +286,7 @@ export class GameplayFeatureManager {
     }
     const surplusLockRefs = [...locksByRef.keys()]
       .filter((resourceRef) => !factoriesByRef.has(resourceRef))
-      .sort((left, right) => left.localeCompare(right));
+      .sort(compareCodeUnits);
     if (surplusLockRefs.length > 0 || locksByRef.size !== factoriesByRef.size) {
       featureError(
         `Resource Lock set must exactly match Feature manifests; surplus Locks: ${surplusLockRefs.join(", ") || "none"}.`,
@@ -454,8 +345,8 @@ export class GameplayFeatureManager {
             plan: handler.plan as GameplayCommandHandlerV1["plan"],
           }) as GameplayCommandHandlerV1;
         });
-        const handlerTypes = commandHandlers.map(({ type }) => type).sort();
-        const manifestTypes = [...factory.manifest.commandTypes].sort();
+        const handlerTypes = commandHandlers.map(({ type }) => type).sort(compareCodeUnits);
+        const manifestTypes = [...factory.manifest.commandTypes].sort(compareCodeUnits);
         if (
           handlerTypes.length !== manifestTypes.length ||
           handlerTypes.some((type, index) => type !== manifestTypes[index])

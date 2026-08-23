@@ -1,9 +1,12 @@
-import { describe, expect, it, vi } from "vitest";
+import { describe, expect, it } from "vitest";
+
+import {
+  createGameplayActionDefinitionV1,
+  type GameplayActionDefinitionV1,
+} from "@whitebox-world/gameplay-contracts";
 
 import {
   createGameplayActionCatalogV1,
-  deriveGameplayActionDefinitionContentHashV1,
-  type GameplayActionDefinitionV1,
 } from "./core-semantic-action-feature";
 
 const HASH = `sha256:${"a".repeat(64)}` as const;
@@ -25,8 +28,7 @@ function body(overrides: Partial<Omit<GameplayActionDefinitionV1, "contentHash">
 }
 
 function valid(overrides: Partial<Omit<GameplayActionDefinitionV1, "contentHash">> = {}): GameplayActionDefinitionV1 {
-  const value = body(overrides);
-  return { ...value, contentHash: deriveGameplayActionDefinitionContentHashV1(value) };
+  return createGameplayActionDefinitionV1(body(overrides));
 }
 
 describe("GameplayActionCatalogV1", () => {
@@ -58,36 +60,27 @@ describe("GameplayActionCatalogV1", () => {
       .toThrow(/GAMEPLAY_CAPACITY_EXCEEDED/);
   });
 
-  it("rejects invalid durations, request schemas, and duplicate availability refs", () => {
-    expect(() => deriveGameplayActionDefinitionContentHashV1(body({
-      completion: { mode: "fixed-duration", durationTicks: 0 },
-    }))).toThrow(/ACTION_CATALOG_INVALID/);
-    expect(() => deriveGameplayActionDefinitionContentHashV1(body({
-      request: { mode: "required", actionRequestSchemaRef: "schema", actionRequestSchemaHash: "bad" as typeof HASH },
-    }))).toThrow(/ACTION_CATALOG_INVALID/);
-    expect(() => deriveGameplayActionDefinitionContentHashV1(body({
-      requiredActorCapabilityRefs: ["cap-a", "cap-a"],
-    }))).toThrow(/ACTION_CATALOG_INVALID/);
-  });
-
-  it("rejects accessor-backed arrays without invoking them", () => {
-    const capabilityRefs: string[] = [];
-    const getter = vi.fn(() => "capability:side-effect");
-    Object.defineProperty(capabilityRefs, "0", {
-      enumerable: true,
-      configurable: true,
-      get: getter,
-    });
-    capabilityRefs.length = 1;
-    expect(() => deriveGameplayActionDefinitionContentHashV1(body({
-      requiredActorCapabilityRefs: capabilityRefs,
-    }))).toThrow(/ACTION_CATALOG_INVALID/);
-    expect(getter).not.toHaveBeenCalled();
-  });
-
   it("rejects negative zero catalog capacity", () => {
     expect(() => createGameplayActionCatalogV1([], -0)).toThrow(
       /ACTION_CATALOG_INVALID/,
     );
+  });
+
+  it("rejects non-canonical serialized definitions instead of normalizing them", () => {
+    const canonical = valid({
+      requiredActorCapabilityRefs: ["capability:a", "capability:z"],
+    });
+    expect(() => createGameplayActionCatalogV1([{
+      ...canonical,
+      requiredActorCapabilityRefs: [...canonical.requiredActorCapabilityRefs].reverse(),
+    }], 1)).toThrow(/ACTION_CATALOG_INVALID/);
+  });
+
+  it("uses code-unit order for the public catalog list", () => {
+    const z = valid({ id: "z", resourceRef: "action:z" });
+    const umlaut = valid({ id: "umlaut", resourceRef: "action:ä" });
+    expect(createGameplayActionCatalogV1([umlaut, z], 2).definitions.map(
+      ({ resourceRef }) => resourceRef,
+    )).toEqual(["action:z", "action:ä"]);
   });
 });

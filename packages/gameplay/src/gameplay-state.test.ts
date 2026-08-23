@@ -2,20 +2,20 @@ import { describe, expect, it, vi } from "vitest";
 
 import {
   DEFAULT_GAMEPLAY_CAPACITY_BUDGET_V1,
+  createGameplayActionDefinitionV1,
   type ActionActivateGameplayCommandV1,
   type ActionCancelGameplayCommandV1,
   type ControlBindGameplayCommandV1,
   type ControlReleaseGameplayCommandV1,
   type ControllerEntityStateV1,
   type GameplayCapacityBudgetV1,
+  type GameplayActionDefinitionV1,
   type GameplayCommandV1,
   type GameplayParticipantStateV1,
 } from "@whitebox-world/gameplay-contracts";
 
 import {
   createGameplayActionCatalogV1,
-  deriveGameplayActionDefinitionContentHashV1,
-  type GameplayActionDefinitionV1,
 } from "./core-semantic-action-feature";
 import {
   GameplayCommandDispatcher,
@@ -53,10 +53,7 @@ function definition(
     request: { mode: "none" as const },
     ...overrides,
   };
-  return {
-    ...body,
-    contentHash: deriveGameplayActionDefinitionContentHashV1(body),
-  };
+  return createGameplayActionDefinitionV1(body);
 }
 
 function options(
@@ -259,6 +256,16 @@ function stageAndCommit(
 }
 
 describe("GameplayState possession", () => {
+  it("rejects a non-canonical serialized Entity Descriptor", () => {
+    expect(() => new GameplayState(options({
+      entityDescriptors: [{
+        id: "subject-a",
+        entityDefinitionRef: "worldkit://entity/humanoid@1",
+        capabilityRefs: ["capability:ä", "capability:z"],
+      }],
+    }))).toThrow(/INPUT_INVALID/);
+  });
+
   it("rejects an issued command plan until the Dispatcher authorizes it", () => {
     const projectState = new GameplayState(options());
     const directCommand = command({
@@ -1241,7 +1248,7 @@ describe("GameplayState actions", () => {
     });
   });
 
-  it("enforces exclusive actions and permanent retired execution IDs", () => {
+  it("enforces exclusive actions and permanent used execution IDs", () => {
     const state = new GameplayState(options());
     bind(state);
     const activateCommand = command({
@@ -1256,6 +1263,7 @@ describe("GameplayState actions", () => {
     const activate = dispatchCanonicalCommand(state, activateCommand, 10);
     if (activate.status !== "planned") return;
     stageAndCommit(state, activate.transitionPlan, 10);
+    expect(state.usedActionExecutionIds()).toEqual(["execution-wave"]);
     expect(state.planAction(command({
       id: "activate-second",
       type: "action.activate",
@@ -1276,7 +1284,7 @@ describe("GameplayState actions", () => {
     const cancel = dispatchCanonicalCommand(state, cancelCommand, 12);
     if (cancel.status !== "planned") return;
     stageAndCommit(state, cancel.transitionPlan, 12);
-    expect(state.retiredActionExecutionIds()).toEqual(["execution-wave"]);
+    expect(state.usedActionExecutionIds()).toEqual(["execution-wave"]);
     expect(state.planAction(command({
       id: "reuse-wave",
       type: "action.activate",
@@ -1307,8 +1315,8 @@ describe("GameplayState actions", () => {
     bind(state, "controller-a", "subject-a", "bind-a", 1);
     bind(state, "controller-b", "subject-b", "bind-b", 1);
     for (const [controllerEntityId, actorEntityId, actionExecutionId] of [
-      ["controller-b", "subject-b", "z-execution"],
-      ["controller-a", "subject-a", "a-execution"],
+      ["controller-b", "subject-b", "ä-execution"],
+      ["controller-a", "subject-a", "z-execution"],
     ] as const) {
       const activationCommand = command({
         id: `activate-${actionExecutionId}`,
@@ -1325,13 +1333,13 @@ describe("GameplayState actions", () => {
     }
     const completion = state.planDueActionCompletions(15);
     expect(completion?.completedActionExecutionIds).toEqual([
-      "a-execution",
       "z-execution",
+      "ä-execution",
     ]);
     if (completion === undefined) return;
     expect(completion.commandId).toBeUndefined();
     stageAndCommit(state, completion, 15);
-    expect(state.retiredActionExecutionIds()).toEqual(["a-execution", "z-execution"]);
+    expect(state.usedActionExecutionIds()).toEqual(["z-execution", "ä-execution"]);
   });
 
   it("enforces independent active and permanently used execution-ID capacities", () => {

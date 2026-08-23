@@ -1,18 +1,21 @@
 import {
   buildWorldStateSnapshotV1,
   deriveGameplayCommandHashV1,
+  parseGameplayEntityDescriptorV1,
   parseGameplayInspectionSnapshotV1,
   type ActionActivateGameplayCommandV1,
   type ActionCancelGameplayCommandV1,
   type ControlBindGameplayCommandV1,
   type ControlReleaseGameplayCommandV1,
   type GameplayActionStateV1,
+  type GameplayActionDefinitionV1,
   type GameplayCapacityBudgetV1,
   type GameplayCapabilityStateV1,
   type GameplayCommandV1,
   type ControllerEntityStateV1,
   type GameplayDiagnosticCodeV1,
   type GameplayDiagnosticV1,
+  type GameplayEntityDescriptorV1,
   type GameplayInspectionSnapshotV1,
   type GameplayParticipantStateV1,
   type GameplaySemanticFactV1,
@@ -29,12 +32,6 @@ import type {
   GameplayActionRequestResolverV1,
   InternalGameplayActionExecutionV1,
 } from "./core-semantic-action-feature";
-
-export interface GameplayEntityDescriptorV1 {
-  readonly id: string;
-  readonly entityDefinitionRef: string;
-  readonly capabilityRefs: readonly string[];
-}
 
 export interface GameplayStateOptionsV1 {
   readonly runtimeSessionId: string;
@@ -178,7 +175,7 @@ interface PreparedGameplayTransitionV1 {
   readonly activeActionExecutionsById: Readonly<
     Record<string, InternalGameplayActionExecutionV1>
   >;
-  readonly committedActionExecutionIds: ReadonlySet<string>;
+  readonly usedActionExecutionIds: ReadonlySet<string>;
   readonly terminalEventReservationCount: number;
 }
 
@@ -222,21 +219,25 @@ function safeAdd(left: number, right: number): number | undefined {
 }
 
 function deepFreeze<T>(input: T): Readonly<T> {
-  if (typeof input !== "object" || input === null || Object.isFrozen(input)) {
+  if (typeof input !== "object" || isNil(input) || Object.isFrozen(input)) {
     return input;
   }
   for (const key of Reflect.ownKeys(input)) {
     const descriptor = Reflect.getOwnPropertyDescriptor(input, key);
-    if (descriptor !== undefined && "value" in descriptor) {
+    if (!isNil(descriptor) && "value" in descriptor) {
       deepFreeze(descriptor.value);
     }
   }
   return Object.freeze(input);
 }
 
+function compareCodeUnits(left: string, right: string): number {
+  return left < right ? -1 : left > right ? 1 : 0;
+}
+
 function ownValue<T>(record: Readonly<Record<string, T>>, id: string): T | undefined {
   const descriptor = Reflect.getOwnPropertyDescriptor(record, id);
-  return descriptor !== undefined && "value" in descriptor
+  return !isNil(descriptor) && "value" in descriptor
     ? descriptor.value
     : undefined;
 }
@@ -246,7 +247,7 @@ function sortedRecord<T extends { readonly id: string }>(
 ): Readonly<Record<string, T>> {
   return Object.fromEntries(
     [...values]
-      .sort((left, right) => left.id.localeCompare(right.id))
+      .sort((left, right) => compareCodeUnits(left.id, right.id))
       .map((value) => [value.id, value]),
   );
 }
@@ -261,7 +262,7 @@ function cloneActionExecution(
   return deepFreeze({
     state: { ...execution.state },
     isMovementInputBlocked: execution.isMovementInputBlocked,
-    ...(execution.scheduledEndSimulationTick === undefined
+    ...(isNil(execution.scheduledEndSimulationTick)
       ? {}
       : { scheduledEndSimulationTick: execution.scheduledEndSimulationTick }),
   });
@@ -298,7 +299,7 @@ export class GameplayState implements GameplayPlanningStateV1 {
   private activeActionExecutionsById: Readonly<
     Record<string, InternalGameplayActionExecutionV1>
   > = Object.freeze({});
-  private committedActionExecutionIds: ReadonlySet<string> = new Set<string>();
+  private usedActionExecutionIdSet: ReadonlySet<string> = new Set<string>();
   private terminalEventReservationCount = 0;
   private stateRevision = 0;
   private readonly planningState: GameplayPlanningStateV1;
@@ -345,7 +346,13 @@ export class GameplayState implements GameplayPlanningStateV1 {
       controllers.set(controller.id, deepFreeze({ ...controller }));
     }
     const descriptors = new Map<string, GameplayEntityDescriptorV1>();
-    for (const descriptor of options.entityDescriptors) {
+    for (const descriptorInput of options.entityDescriptors) {
+      let descriptor: GameplayEntityDescriptorV1;
+      try {
+        descriptor = parseGameplayEntityDescriptorV1(descriptorInput);
+      } catch {
+        throw new Error("INPUT_INVALID: Entity descriptor is not canonical.");
+      }
       if (descriptors.has(descriptor.id)) {
         throw new Error(`INPUT_INVALID: Duplicate Entity '${descriptor.id}'.`);
       }
@@ -354,16 +361,7 @@ export class GameplayState implements GameplayPlanningStateV1 {
           `INPUT_INVALID: Entity descriptor '${descriptor.id}' overlaps a Controller identity.`,
         );
       }
-      const capabilityRefs = [...descriptor.capabilityRefs].sort((left, right) =>
-        left.localeCompare(right)
-      );
-      if (
-        descriptor.id.length === 0 ||
-        descriptor.entityDefinitionRef.length === 0 ||
-        capabilityRefs.some((ref) => ref.length === 0) ||
-        new Set(capabilityRefs).size !== capabilityRefs.length
-      ) throw new Error(`INPUT_INVALID: Invalid Entity descriptor '${descriptor.id}'.`);
-      descriptors.set(descriptor.id, deepFreeze({ ...descriptor, capabilityRefs }));
+      descriptors.set(descriptor.id, descriptor);
     }
 
     this.runtimeSessionId = options.runtimeSessionId;
@@ -415,17 +413,16 @@ export class GameplayState implements GameplayPlanningStateV1 {
     return ownValue(this.activeActionExecutionsById, actionExecutionId)?.state;
   }
 
-  retiredActionExecutionIds(): readonly string[] {
+  usedActionExecutionIds(): readonly string[] {
     return Object.freeze(
-      [...this.committedActionExecutionIds]
-        .filter((id) => ownValue(this.activeActionExecutionsById, id) === undefined)
-        .sort((left, right) => left.localeCompare(right)),
+      [...this.usedActionExecutionIdSet]
+        .sort(compareCodeUnits),
     );
   }
 
   isMovementInputBlocked(controllerEntityId: string): boolean {
     const possession = this.possessionForController(controllerEntityId);
-    return possession !== undefined && Object.values(
+    return !isNil(possession) && Object.values(
       this.activeActionExecutionsById,
     ).some((execution) =>
       execution.state.actorEntityId === possession.controlledEntityId &&
@@ -438,7 +435,7 @@ export class GameplayState implements GameplayPlanningStateV1 {
     simulationTick: number,
   ): GameplayStatePlanResultV1 {
     assertTick(simulationTick, "simulationTick");
-    if (ownValue(this.controllerStatesById, command.controllerEntityId) === undefined) {
+    if (isNil(ownValue(this.controllerStatesById, command.controllerEntityId))) {
       return reject(
         "CONTROLLER_NOT_FOUND",
         `Controller '${command.controllerEntityId}' does not exist.`,
@@ -447,7 +444,7 @@ export class GameplayState implements GameplayPlanningStateV1 {
     const current = this.possessionForController(command.controllerEntityId);
     const expected = command.expectedPossession;
     if (
-      (expected.mode === "unbound" && current !== undefined) ||
+      (expected.mode === "unbound" && !isNil(current)) ||
       (expected.mode === "possessed" &&
         current?.controlledEntityId !== expected.controlledEntityId)
     ) {
@@ -458,7 +455,7 @@ export class GameplayState implements GameplayPlanningStateV1 {
     }
 
     if (command.type === "control.release") {
-      if (current === undefined) {
+      if (isNil(current)) {
         return reject(
           "CONTROL_POSSESSION_STALE",
           `Controller '${command.controllerEntityId}' is unbound.`,
@@ -476,7 +473,7 @@ export class GameplayState implements GameplayPlanningStateV1 {
       });
     }
 
-    if (ownValue(this.entityDescriptorsById, command.controlledEntityId) === undefined) {
+    if (isNil(ownValue(this.entityDescriptorsById, command.controlledEntityId))) {
       return reject(
         "CONTROLLED_ENTITY_NOT_FOUND",
         `Controlled Entity '${command.controlledEntityId}' does not exist.`,
@@ -489,7 +486,7 @@ export class GameplayState implements GameplayPlanningStateV1 {
       );
     }
     const existingOwner = this.possessionForControlledEntity(command.controlledEntityId);
-    if (existingOwner !== undefined) {
+    if (!isNil(existingOwner)) {
       return reject(
         "CONTROL_ALREADY_OWNED",
         `Controlled Entity '${command.controlledEntityId}' is already possessed.`,
@@ -503,14 +500,14 @@ export class GameplayState implements GameplayPlanningStateV1 {
       controllerEntityId: command.controllerEntityId,
       establishedSimulationTick: simulationTick,
     });
-    const relationshipChanges: GameplayRelationshipChangeV1[] = current === undefined
+    const relationshipChanges: GameplayRelationshipChangeV1[] = isNil(current)
       ? [{ operation: "add", after: next }]
       : [
           { operation: "remove", before: current },
           { operation: "add", after: next },
         ];
     const finalCount = Object.keys(this.relationshipStatesById).length +
-      (current === undefined ? 1 : 0);
+      (isNil(current) ? 1 : 0);
     if (finalCount > this.capacityBudget.maximumPossessedByRelationshipCount) {
       return reject(
         "GAMEPLAY_CAPACITY_EXCEEDED",
@@ -518,10 +515,10 @@ export class GameplayState implements GameplayPlanningStateV1 {
       );
     }
     return this.plannedCommand(command, simulationTick, relationshipChanges, [], [], {
-      relationshipStateCountDelta: current === undefined ? 1 : 0,
+      relationshipStateCountDelta: isNil(current) ? 1 : 0,
       activeActionStateCountDelta: 0,
       usedActionExecutionIdCountDelta: 0,
-      immediateEventCount: current === undefined ? 1 : 2,
+      immediateEventCount: isNil(current) ? 1 : 2,
       terminalEventReservationCountDelta: 0,
     });
   }
@@ -531,7 +528,7 @@ export class GameplayState implements GameplayPlanningStateV1 {
     simulationTick: number,
   ): GameplayStatePlanResultV1 {
     assertTick(simulationTick, "simulationTick");
-    if (ownValue(this.controllerStatesById, command.controllerEntityId) === undefined) {
+    if (isNil(ownValue(this.controllerStatesById, command.controllerEntityId))) {
       return reject(
         "CONTROLLER_NOT_FOUND",
         `Controller '${command.controllerEntityId}' does not exist.`,
@@ -556,7 +553,7 @@ export class GameplayState implements GameplayPlanningStateV1 {
         this.activeActionExecutionsById,
         command.actionExecutionId,
       );
-      if (execution === undefined) {
+      if (isNil(execution)) {
         return reject(
           "ACTION_EXECUTION_NOT_ACTIVE",
           `Action execution '${command.actionExecutionId}' is not active.`,
@@ -581,14 +578,14 @@ export class GameplayState implements GameplayPlanningStateV1 {
     }
 
     const definition = this.actionCatalog.get(command.semanticActionRef);
-    if (definition === undefined) {
+    if (isNil(definition)) {
       return reject(
         "ACTION_DEFINITION_NOT_FOUND",
         `Semantic Action '${command.semanticActionRef}' is not registered.`,
       );
     }
-    if (this.committedActionExecutionIds.has(command.actionExecutionId) ||
-      ownValue(this.activeActionExecutionsById, command.actionExecutionId) !== undefined
+    if (this.usedActionExecutionIdSet.has(command.actionExecutionId) ||
+      !isNil(ownValue(this.activeActionExecutionsById, command.actionExecutionId))
     ) {
       return reject(
         "ACTION_EXECUTION_ID_CONFLICT",
@@ -607,7 +604,7 @@ export class GameplayState implements GameplayPlanningStateV1 {
     }
     const descriptor = ownValue(this.entityDescriptorsById, command.actorEntityId);
     if (
-      descriptor === undefined ||
+      isNil(descriptor) ||
       !definition.allowedActorEntityDefinitionRefs.includes(
         descriptor.entityDefinitionRef,
       ) ||
@@ -621,13 +618,13 @@ export class GameplayState implements GameplayPlanningStateV1 {
       );
     }
     const requestDiagnostic = this.validateActionRequest(command, definition.request);
-    if (requestDiagnostic !== undefined) {
+    if (!isNil(requestDiagnostic)) {
       return { status: "rejected", diagnostic: requestDiagnostic };
     }
     if (
       Object.keys(this.activeActionExecutionsById).length + 1 >
         this.capacityBudget.maximumActiveActionStateCount ||
-      this.committedActionExecutionIds.size + 1 >
+      this.usedActionExecutionIdSet.size + 1 >
         this.capacityBudget.maximumUsedActionExecutionIdCount ||
       this.terminalEventReservationCount + 1 >
         this.capacityBudget.maximumRetainedEventCount
@@ -642,7 +639,7 @@ export class GameplayState implements GameplayPlanningStateV1 {
       : undefined;
     if (
       definition.completion.mode === "fixed-duration" &&
-      scheduledEndSimulationTick === undefined
+      isNil(scheduledEndSimulationTick)
     ) {
       return reject(
         "ACTION_CATALOG_INVALID",
@@ -658,7 +655,7 @@ export class GameplayState implements GameplayPlanningStateV1 {
       mode: "active",
       startedSimulationTick: simulationTick,
       lastTransitionSimulationTick: simulationTick,
-      ...(command.actionRequestRef === undefined
+      ...(isNil(command.actionRequestRef)
         ? {}
         : {
             actionRequestRef: command.actionRequestRef,
@@ -668,7 +665,7 @@ export class GameplayState implements GameplayPlanningStateV1 {
     const execution = cloneActionExecution({
       state,
       isMovementInputBlocked: definition.isMovementInputBlocked,
-      ...(scheduledEndSimulationTick === undefined
+      ...(isNil(scheduledEndSimulationTick)
         ? {}
         : { scheduledEndSimulationTick }),
     });
@@ -690,13 +687,13 @@ export class GameplayState implements GameplayPlanningStateV1 {
     assertTick(simulationTick, "simulationTick");
     const due = Object.values(this.activeActionExecutionsById)
       .filter((execution) =>
-        execution.scheduledEndSimulationTick !== undefined &&
+        !isNil(execution.scheduledEndSimulationTick) &&
         execution.scheduledEndSimulationTick <= simulationTick
       )
       .sort((left, right) =>
         (left.scheduledEndSimulationTick ?? Number.MAX_SAFE_INTEGER) -
           (right.scheduledEndSimulationTick ?? Number.MAX_SAFE_INTEGER) ||
-        left.state.id.localeCompare(right.state.id)
+        compareCodeUnits(left.state.id, right.state.id)
       );
     if (due.length === 0) return undefined;
     const transitionPlan: GameplayActionCompletionTransitionPlanV1 = deepFreeze({
@@ -741,7 +738,7 @@ export class GameplayState implements GameplayPlanningStateV1 {
     }
     this.relationshipStatesById = prepared.relationshipStatesById;
     this.activeActionExecutionsById = prepared.activeActionExecutionsById;
-    this.committedActionExecutionIds = prepared.committedActionExecutionIds;
+    this.usedActionExecutionIdSet = prepared.usedActionExecutionIds;
     this.terminalEventReservationCount = prepared.terminalEventReservationCount;
     this.stateRevision += 1;
     this.preparedTransitions.delete(transitionPlan);
@@ -763,7 +760,7 @@ export class GameplayState implements GameplayPlanningStateV1 {
     context: GameplayInspectionProjectionContextV1,
   ): GameplayInspectionSnapshotV1 {
     const activatedGameplayFeatureRefs = [...context.activatedGameplayFeatureRefs]
-      .sort((left, right) => left.localeCompare(right));
+      .sort(compareCodeUnits);
     if (
       activatedGameplayFeatureRefs.some((ref) => ref.length === 0) ||
       new Set(activatedGameplayFeatureRefs).size !==
@@ -842,24 +839,24 @@ export class GameplayState implements GameplayPlanningStateV1 {
       Object.create(null) as Record<string, InternalGameplayActionExecutionV1>,
       this.activeActionExecutionsById,
     );
-    const committedIds = new Set(this.committedActionExecutionIds);
+    const usedActionExecutionIds = new Set(this.usedActionExecutionIdSet);
     const terminalEventReservationCountBefore =
       this.terminalEventReservationCount;
     const relationshipStateCountBefore = Object.keys(relationships).length;
     const activeActionStateCountBefore = Object.keys(actions).length;
-    const usedActionExecutionIdCountBefore = committedIds.size;
+    const usedActionExecutionIdCountBefore = usedActionExecutionIds.size;
 
     for (const change of transitionPlan.relationshipChanges) {
       if (change.operation === "remove") {
         const current = ownValue(relationships, change.before.id);
-        if (current === undefined || !sameCanonical(current, change.before)) {
+        if (isNil(current) || !sameCanonical(current, change.before)) {
           throw new Error(
             `GAMEPLAY_STATE_STALE: Relationship '${change.before.id}' changed before commit.`,
           );
         }
         delete relationships[change.before.id];
       } else {
-        if (ownValue(relationships, change.after.id) !== undefined) {
+        if (!isNil(ownValue(relationships, change.after.id))) {
           throw new Error(
             `GAMEPLAY_STATE_STALE: Relationship '${change.after.id}' already exists.`,
           );
@@ -870,14 +867,14 @@ export class GameplayState implements GameplayPlanningStateV1 {
     for (const change of transitionPlan.actionChanges) {
       if (change.operation === "remove") {
         const current = ownValue(actions, change.before.state.id);
-        if (current === undefined || !sameCanonical(current, change.before)) {
+        if (isNil(current) || !sameCanonical(current, change.before)) {
           throw new Error(
             `GAMEPLAY_STATE_STALE: Action '${change.before.state.id}' changed before commit.`,
           );
         }
         delete actions[change.before.state.id];
       } else {
-        if (ownValue(actions, change.after.state.id) !== undefined) {
+        if (!isNil(ownValue(actions, change.after.state.id))) {
           throw new Error(
             `GAMEPLAY_STATE_STALE: Action '${change.after.state.id}' already exists.`,
           );
@@ -886,12 +883,12 @@ export class GameplayState implements GameplayPlanningStateV1 {
       }
     }
     for (const id of transitionPlan.newlyCommittedActionExecutionIds) {
-      if (committedIds.has(id)) {
+      if (usedActionExecutionIds.has(id)) {
         throw new Error(
-          `ACTION_EXECUTION_ID_CONFLICT: Action execution '${id}' was already committed.`,
+          `ACTION_EXECUTION_ID_CONFLICT: Action execution '${id}' was already used.`,
         );
       }
-      committedIds.add(id);
+      usedActionExecutionIds.add(id);
     }
     const actualCapacityDelta: GameplayTransitionCapacityDeltaV1 = {
       relationshipStateCountDelta:
@@ -899,7 +896,7 @@ export class GameplayState implements GameplayPlanningStateV1 {
       activeActionStateCountDelta:
         Object.keys(actions).length - activeActionStateCountBefore,
       usedActionExecutionIdCountDelta:
-        committedIds.size - usedActionExecutionIdCountBefore,
+        usedActionExecutionIds.size - usedActionExecutionIdCountBefore,
       immediateEventCount:
         transitionPlan.relationshipChanges.length + transitionPlan.actionChanges.length,
       terminalEventReservationCountDelta:
@@ -936,7 +933,7 @@ export class GameplayState implements GameplayPlanningStateV1 {
     this.assertCardinalityAndCapacity(
       relationships,
       actions,
-      committedIds,
+      usedActionExecutionIds,
       terminalEventReservationCount,
     );
     return {
@@ -946,10 +943,10 @@ export class GameplayState implements GameplayPlanningStateV1 {
       ),
       activeActionExecutionsById: deepFreeze(Object.fromEntries(
         Object.values(actions)
-          .sort((left, right) => left.state.id.localeCompare(right.state.id))
+          .sort((left, right) => compareCodeUnits(left.state.id, right.state.id))
           .map((value) => [value.state.id, value]),
       )),
-      committedActionExecutionIds: committedIds,
+      usedActionExecutionIds,
       terminalEventReservationCount,
     };
   }
@@ -964,7 +961,7 @@ export class GameplayState implements GameplayPlanningStateV1 {
     >,
   ): WorldStateSnapshotV1 {
     for (const [id, state] of Object.entries(context.spatialEntityStatesById)) {
-      if (ownValue(this.controllerStatesById, id) !== undefined) {
+      if (!isNil(ownValue(this.controllerStatesById, id))) {
         throw new Error(
           `INPUT_INVALID: Spatial Entity State '${id}' overlaps a Gameplay-owned Controller.`,
         );
@@ -978,7 +975,7 @@ export class GameplayState implements GameplayPlanningStateV1 {
     const entityStatesById = Object.fromEntries([
       ...Object.entries(context.spatialEntityStatesById),
       ...Object.entries(this.controllerStatesById),
-    ].sort(([left], [right]) => left.localeCompare(right)));
+    ].sort(([left], [right]) => compareCodeUnits(left, right)));
     return buildWorldStateSnapshotV1({
       kind: "worldkit-world-state-snapshot",
       schemaVersion: 1,
@@ -1083,10 +1080,10 @@ export class GameplayState implements GameplayPlanningStateV1 {
 
   private validateActionRequest(
     command: ActionActivateGameplayCommandV1,
-    request: import("./core-semantic-action-feature").GameplayActionDefinitionV1["request"],
+    request: GameplayActionDefinitionV1["request"],
   ): GameplayDiagnosticV1 | undefined {
     if (request.mode === "none") {
-      return command.actionRequestRef === undefined
+      return isNil(command.actionRequestRef)
         ? undefined
         : Object.freeze({
             code: "ACTION_REQUEST_INVALID",
@@ -1094,9 +1091,9 @@ export class GameplayState implements GameplayPlanningStateV1 {
           });
     }
     if (
-      command.actionRequestRef === undefined ||
-      command.actionRequestHash === undefined ||
-      this.actionRequestResolver === undefined
+      isNil(command.actionRequestRef) ||
+      isNil(command.actionRequestHash) ||
+      isNil(this.actionRequestResolver)
     ) {
       return Object.freeze({
         code: "ACTION_REQUEST_INVALID",
@@ -1122,7 +1119,7 @@ export class GameplayState implements GameplayPlanningStateV1 {
   private assertCardinalityAndCapacity(
     relationships: Readonly<Record<string, PossessedByRelationshipStateV1>>,
     actions: Readonly<Record<string, InternalGameplayActionExecutionV1>>,
-    committedIds: ReadonlySet<string>,
+    usedActionExecutionIds: ReadonlySet<string>,
     terminalEventReservationCount: number,
   ): void {
     const controllers = new Set<string>();
@@ -1151,7 +1148,8 @@ export class GameplayState implements GameplayPlanningStateV1 {
       Object.keys(relationships).length >
         this.capacityBudget.maximumPossessedByRelationshipCount ||
       Object.keys(actions).length > this.capacityBudget.maximumActiveActionStateCount ||
-      committedIds.size > this.capacityBudget.maximumUsedActionExecutionIdCount ||
+      usedActionExecutionIds.size >
+        this.capacityBudget.maximumUsedActionExecutionIdCount ||
       terminalEventReservationCount < 0 ||
       terminalEventReservationCount > this.capacityBudget.maximumRetainedEventCount
     ) throw new Error("GAMEPLAY_CAPACITY_EXCEEDED: Transition exceeds capacity.");

@@ -1,8 +1,7 @@
+import { createGameplayFeatureManifestV1 } from "@whitebox-world/gameplay-contracts";
+
 import type { GameplayCommandHandlerV1 } from "./gameplay-command-dispatcher";
-import {
-  createGameplayFeatureManifestV1,
-  type GameplayFeatureFactoryV1,
-} from "./gameplay-feature-manager";
+import type { GameplayFeatureFactoryV1 } from "./gameplay-feature-manager";
 
 export const CORE_CONTROL_FEATURE_REF =
   "worldkit://gameplay-feature/core-control@1" as const;

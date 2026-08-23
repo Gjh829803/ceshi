@@ -1,12 +1,14 @@
 import { describe, expect, it, vi } from "vitest";
 
-import { DEFAULT_GAMEPLAY_CAPACITY_BUDGET_V1 } from "@whitebox-world/gameplay-contracts";
+import {
+  DEFAULT_GAMEPLAY_CAPACITY_BUDGET_V1,
+  createGameplayFeatureManifestV1,
+  type GameplayFeatureManifestBodyV1,
+} from "@whitebox-world/gameplay-contracts";
 
 import {
   GameplayFeatureManager,
-  createGameplayFeatureManifestV1,
   type GameplayFeatureFactoryV1,
-  type GameplayFeatureManifestBodyV1,
 } from "./gameplay-feature-manager";
 
 const HASH = `sha256:${"a".repeat(64)}` as const;
@@ -180,11 +182,41 @@ describe("GameplayFeatureManager", () => {
     expect(capabilityGetter).not.toHaveBeenCalled();
   });
 
-  it("rejects negative zero command handler budget", () => {
-    expect(() => createGameplayFeatureManifestV1({
-      ...manifestBody("feature:negative-zero"),
-      resourceBudget: { stateSliceCount: 1, commandHandlerCount: -0 },
+  it("rejects non-canonical serialized manifests instead of normalizing them", () => {
+    const canonical = createGameplayFeatureManifestV1(manifestBody("feature:strict", {
+      dependencyFeatureRefs: ["feature:a", "feature:z"],
+    }));
+    const nonCanonical = {
+      ...canonical,
+      dependencyFeatureRefs: [...canonical.dependencyFeatureRefs].reverse(),
+    };
+    expect(() => new GameplayFeatureManager({
+      factories: [{ manifest: nonCanonical, create: vi.fn() }],
+      resourceLocks: [{
+        resourceRef: canonical.resourceRef,
+        contentHash: canonical.contentHash,
+      }],
+      availableCapabilityRefs: [],
+      capacityBudget: DEFAULT_GAMEPLAY_CAPACITY_BUDGET_V1,
     })).toThrow(/FEATURE_NOT_LOCKED/);
+  });
+
+  it("rejects a non-canonical available Capability Ref set", () => {
+    expect(() => new GameplayFeatureManager({
+      factories: [],
+      resourceLocks: [],
+      availableCapabilityRefs: ["capability:ä", "capability:z"],
+      capacityBudget: DEFAULT_GAMEPLAY_CAPACITY_BUDGET_V1,
+    })).toThrow(/canonical code-unit order/);
+  });
+
+  it("uses code-unit order for independent Feature activation", async () => {
+    const log: string[] = [];
+    const z = factory("feature:z", log);
+    const umlaut = factory("feature:ä", log);
+    const handle = await manager([umlaut, z]).activate({ worldSessionId: "world-a" });
+    expect(handle.activeFeatureRefs).toEqual(["feature:z", "feature:ä"]);
+    await handle.dispose();
   });
 
   it("activates in stable topological order regardless of input order", async () => {
