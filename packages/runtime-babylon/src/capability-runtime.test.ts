@@ -979,7 +979,7 @@ describe("capability package runtime smoke tests", () => {
     }
   });
 
-  it("commits Control Feel on the next tick, keeps authoring selection across reset, and forbids extra-subject Camera overrides", async () => {
+  it("commits Control Feel on the next tick and clears authoring Camera state across reset", async () => {
     const loaded = await loadAuthoringScene(
       async () => new Response(JSON.stringify(createFlatTerrainCapabilitySpec())),
       { subjectDefinitionRef: "worldkit://subject-definition/humanoid.g-bot@1" },
@@ -999,6 +999,9 @@ describe("capability package runtime smoke tests", () => {
     const capabilityAssembly = playerSubject.capabilityAssembly!;
     const orbitProfile = capabilityAssembly.cameraContext.cameraRigProfiles.find(
       (profile) => profile.resourceRef === "worldkit://camera-profile/orbit.medium@1",
+    )!;
+    const followProfile = capabilityAssembly.cameraContext.cameraRigProfiles.find(
+      (profile) => profile.resourceRef === "worldkit://camera-profile/follow.medium@1",
     )!;
     const runtime = await BabylonWorldRuntime.create({
       executionPlan,
@@ -1020,6 +1023,7 @@ describe("capability package runtime smoke tests", () => {
     try {
       await runtime.runFixedInput({ actions: [], ticks: 8 });
       const beforeRequest = runtime.snapshot();
+      const automaticCameraProfileRef = beforeRequest.camera.activeCameraProfileRef;
       const beforePlayer = beforeRequest.subjectStatesByEntityId.player!;
       expect(beforePlayer.activeControlFeelProfileRef).toBe(MEDIUM_FEEL_REF);
 
@@ -1038,7 +1042,7 @@ describe("capability package runtime smoke tests", () => {
       expect(afterTick.subjectStatesByEntityId.player!.activeControlFeelProfileRef)
         .toBe(HEAVY_FEEL_REF);
 
-      runtime.requestCameraProfile(orbitProfile.resourceRef);
+      runtime.requestCameraProfile(followProfile.resourceRef);
       const orbitPreview = runtime.applyCameraPreview({
         tuningByProfileRef: { [orbitProfile.resourceRef]: { targetHeightMeters: 1.4 } },
       });
@@ -1049,8 +1053,8 @@ describe("capability package runtime smoke tests", () => {
       expect(afterReset.subjectStatesByEntityId.player!.activeControlFeelProfileRef)
         .toBe(HEAVY_FEEL_REF);
       expect(afterReset.camera).not.toHaveProperty("tuning");
-      expect(runtime.getCameraPreviewState().tuningByProfileRef[orbitProfile.resourceRef])
-        .toEqual({ targetHeightMeters: 1.4 });
+      expect(afterReset.camera.activeCameraProfileRef).toBe(automaticCameraProfileRef);
+      expect(runtime.getCameraPreviewState().tuningByProfileRef).toEqual({});
 
       expect(runtime.requestControlFeelProfile("extra", HEAVY_FEEL_REF)).toBe(true);
       const extraAfterTick = await runtime.runFixedInput({ actions: [], ticks: 1 });
@@ -1062,7 +1066,7 @@ describe("capability package runtime smoke tests", () => {
     }
   }, 15_000);
 
-  it("rejects Camera writes from the previous owner after bindControl rebind", async () => {
+  it("clears the previous owner's Camera selection and preview after bindControl rebind", async () => {
     const loaded = await loadAuthoringScene(
       async () => new Response(JSON.stringify(createFlatTerrainCapabilitySpec())),
       { subjectDefinitionRef: "worldkit://subject-definition/humanoid.g-bot@1" },
@@ -1083,6 +1087,9 @@ describe("capability package runtime smoke tests", () => {
     const orbitProfile = capabilityAssembly.cameraContext.cameraRigProfiles.find(
       (profile) => profile.resourceRef === "worldkit://camera-profile/orbit.medium@1",
     )!;
+    const followProfile = capabilityAssembly.cameraContext.cameraRigProfiles.find(
+      (profile) => profile.resourceRef === "worldkit://camera-profile/follow.medium@1",
+    )!;
     const runtime = await BabylonWorldRuntime.create({
       executionPlan,
       havokWasmBinary,
@@ -1102,12 +1109,17 @@ describe("capability package runtime smoke tests", () => {
     });
     try {
       await runtime.runFixedInput({ actions: [], ticks: 4 });
-      runtime.requestCameraProfile(orbitProfile.resourceRef);
+      const automaticCameraProfileRef = runtime.snapshot().camera.activeCameraProfileRef;
+      runtime.requestCameraProfile(followProfile.resourceRef);
       const orbitPreview = runtime.applyCameraPreview({
         tuningByProfileRef: { [orbitProfile.resourceRef]: { targetHeightMeters: 1.4 } },
       });
       expect(orbitPreview.tuningByProfileRef[orbitProfile.resourceRef])
         .toEqual({ targetHeightMeters: 1.4 });
+      await runtime.runFixedInput({
+        actions: ["move-forward", "run"],
+        ticks: 1,
+      });
 
       const rebound = runtime.bindControl({
         controllerId: TRUSTED_DEFAULT_CONTROLLER_ID,
@@ -1116,7 +1128,9 @@ describe("capability package runtime smoke tests", () => {
       });
       expect(rebound.status).toBe("committed");
       expect(runtime.snapshot().camera.targetEntityId).toBe(extraSubject.entityId);
+      expect(runtime.snapshot().camera.activeCameraProfileRef).toBe(automaticCameraProfileRef);
       expect(runtime.snapshot().camera).not.toHaveProperty("tuning");
+      expect(runtime.getCameraPreviewState().tuningByProfileRef).toEqual({});
     } finally {
       await runtime.dispose();
     }

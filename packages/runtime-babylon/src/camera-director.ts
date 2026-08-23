@@ -147,6 +147,14 @@ export class CameraDirectorV1 {
   private viewPitchOffsetRadians = 0;
   private viewDistanceOffsetMeters = 0;
   private readonly tuningByProfileRef = new Map<string, CameraTuningV1>();
+  private controlInitialized = false;
+  private controlTargetYawOffsetRadians = 0;
+  private controlViewYawOffsetRadians = 0;
+  private controlBaseHeadingYawRadians = Math.PI;
+  private controlBaseHeadingIdentity: string | undefined;
+  private controlLastStableVelocityForward: Vector3 | undefined;
+  private controlSecondsSinceManualViewInput = Number.POSITIVE_INFINITY;
+  private controlLastBaseTarget: Vector3 | undefined;
   private baseHeadingYawRadians = Math.PI;
   private baseHeadingIdentity: string | undefined;
   private lastStableVelocityForward: Vector3 | undefined;
@@ -165,6 +173,7 @@ export class CameraDirectorV1 {
   private collisionDistanceMeters: number | undefined;
   private smoothedFovRadians = Math.PI / 3;
   private activeParameters: CameraParametersV1 | undefined;
+  private activeLockedParameters: CameraParametersV1 | undefined;
   private controlForward = new Vector3(0, 0, -1);
 
   constructor(
@@ -207,8 +216,12 @@ export class CameraDirectorV1 {
     if (!deltas.every(Number.isFinite)) return false;
     const sensitivityX = this.activeParameters?.lookSensitivityXRatio ?? 1;
     const sensitivityY = this.activeParameters?.lookSensitivityYRatio ?? 1;
+    const lockedSensitivityX = this.activeLockedParameters?.lookSensitivityXRatio ?? 1;
     this.targetYawOffsetRadians = wrapRadians(
       this.targetYawOffsetRadians + deltas[0]! * sensitivityX,
+    );
+    this.controlTargetYawOffsetRadians = wrapRadians(
+      this.controlTargetYawOffsetRadians + deltas[0]! * lockedSensitivityX,
     );
     this.targetPitchOffsetRadians = clamp(
       this.targetPitchOffsetRadians + deltas[1]! * sensitivityY,
@@ -222,6 +235,7 @@ export class CameraDirectorV1 {
     );
     if (Math.abs(deltas[0]!) + Math.abs(deltas[1]!) > 0.000001) {
       this.secondsSinceManualViewInput = 0;
+      this.controlSecondsSinceManualViewInput = 0;
     }
     return true;
   }
@@ -230,13 +244,16 @@ export class CameraDirectorV1 {
     this.targetYawOffsetRadians = 0;
     this.targetPitchOffsetRadians = 0;
     this.targetDistanceOffsetMeters = 0;
+    this.controlTargetYawOffsetRadians = 0;
     this.baseHeadingIdentity = undefined;
+    this.controlBaseHeadingIdentity = undefined;
   }
 
   applyPreview(
     tuningByProfileRef: Readonly<Record<string, CameraTuningV1>>,
     profiles: readonly ExecutionCameraRigProfileV1[],
   ): boolean {
+    if (Array.isArray(tuningByProfileRef)) return false;
     const profilesByRef = new Map(
       profiles.map((profile) => [profile.resourceRef, profile] as const),
     );
@@ -322,6 +339,7 @@ export class CameraDirectorV1 {
       this.transitionStartTarget.copyFrom(this.smoothedTarget);
       this.transitionStartFovRadians = this.camera.fov;
       this.baseHeadingIdentity = undefined;
+      this.controlBaseHeadingIdentity = undefined;
     }
     this.activeProfileRef = profile.resourceRef;
     this.activeRigRef = profile.algorithmRef;
@@ -333,6 +351,8 @@ export class CameraDirectorV1 {
       tuning,
     );
     this.activeParameters = parameters;
+    const lockedParameters = profile.parameters;
+    this.activeLockedParameters = lockedParameters;
     if (profileChanged) this.transitionDurationSeconds = parameters.transitionSeconds;
 
     const targetPosition = new Vector3(...sample.targetPositionMetersXYZ);
@@ -341,6 +361,9 @@ export class CameraDirectorV1 {
       .find((position) => position !== undefined);
     const baseTarget = socketPosition === undefined
       ? targetPosition.add(new Vector3(0, parameters.targetHeightMeters, 0))
+      : new Vector3(...socketPosition);
+    const controlBaseTarget = socketPosition === undefined
+      ? targetPosition.add(new Vector3(0, lockedParameters.targetHeightMeters, 0))
       : new Vector3(...socketPosition);
     if (
       this.lastBaseTarget !== undefined &&
@@ -352,6 +375,15 @@ export class CameraDirectorV1 {
       this.transitionDurationSeconds = 0;
     }
     this.lastBaseTarget = baseTarget.clone();
+    if (
+      this.controlLastBaseTarget !== undefined &&
+      Vector3.DistanceSquared(controlBaseTarget, this.controlLastBaseTarget) >
+        lockedParameters.teleportSnapDistanceMeters *
+          lockedParameters.teleportSnapDistanceMeters
+    ) {
+      this.controlInitialized = false;
+    }
+    this.controlLastBaseTarget = controlBaseTarget.clone();
     const velocity = new Vector3(...sample.velocityMetersPerSecondXYZ);
     const speed = velocity.length();
     const baseForward = this.resolveBaseForward(
@@ -361,10 +393,25 @@ export class CameraDirectorV1 {
       velocity,
       deltaSeconds,
     );
+    const controlBaseForward = this.resolveControlBaseForward(
+      profile,
+      lockedParameters,
+      sample,
+      velocity,
+      deltaSeconds,
+    );
     this.secondsSinceManualViewInput += Math.max(0, deltaSeconds);
+    this.controlSecondsSinceManualViewInput += Math.max(0, deltaSeconds);
     this.applyAutomaticRecentering(
       profile,
       parameters,
+      sample,
+      velocity,
+      deltaSeconds,
+    );
+    this.applyControlAutomaticRecentering(
+      profile,
+      lockedParameters,
       sample,
       velocity,
       deltaSeconds,
@@ -381,6 +428,9 @@ export class CameraDirectorV1 {
     const pitchAlpha = this.initialized
       ? exponentialAlpha(parameters.pitchDampingPerSecond, deltaSeconds)
       : 1;
+    const controlYawAlpha = this.controlInitialized
+      ? exponentialAlpha(lockedParameters.yawDampingPerSecond, deltaSeconds)
+      : 1;
     this.viewYawOffsetRadians += wrapRadians(
       this.targetYawOffsetRadians - this.viewYawOffsetRadians,
     ) * yawAlpha;
@@ -390,6 +440,9 @@ export class CameraDirectorV1 {
     this.viewDistanceOffsetMeters += (
       this.targetDistanceOffsetMeters - this.viewDistanceOffsetMeters
     ) * horizontalPositionAlpha;
+    this.controlViewYawOffsetRadians += wrapRadians(
+      this.controlTargetYawOffsetRadians - this.controlViewYawOffsetRadians,
+    ) * controlYawAlpha;
 
     this.lookBackBlendRatio += (
       (this.activeInputActions.has("camera-look-back") ? 1 : 0) -
@@ -397,10 +450,10 @@ export class CameraDirectorV1 {
     ) * yawAlpha;
 
     this.controlForward.copyFrom(
-      rotateAroundY(baseForward, this.viewYawOffsetRadians).normalize(),
+      rotateAroundY(controlBaseForward, this.controlViewYawOffsetRadians).normalize(),
     );
     const forward = rotateAroundY(
-      this.controlForward,
+      rotateAroundY(baseForward, this.viewYawOffsetRadians).normalize(),
       Math.PI * this.lookBackBlendRatio,
     ).normalize();
     const chaseAlgorithm =
@@ -525,10 +578,13 @@ export class CameraDirectorV1 {
     this.transitionElapsedSeconds += Math.max(0, deltaSeconds);
     this.camera.setTarget(this.smoothedTarget);
     this.initialized = true;
+    this.controlInitialized = true;
   }
 
   reset(): void {
     this.initialized = false;
+    this.explicitProfileRef = undefined;
+    this.tuningByProfileRef.clear();
     this.fallbackActive = false;
     this.smoothedTarget.setAll(0);
     this.targetYawOffsetRadians = 0;
@@ -537,6 +593,14 @@ export class CameraDirectorV1 {
     this.viewYawOffsetRadians = 0;
     this.viewPitchOffsetRadians = 0;
     this.viewDistanceOffsetMeters = 0;
+    this.controlInitialized = false;
+    this.controlTargetYawOffsetRadians = 0;
+    this.controlViewYawOffsetRadians = 0;
+    this.controlBaseHeadingYawRadians = Math.PI;
+    this.controlBaseHeadingIdentity = undefined;
+    this.controlLastStableVelocityForward = undefined;
+    this.controlSecondsSinceManualViewInput = Number.POSITIVE_INFINITY;
+    this.controlLastBaseTarget = undefined;
     this.baseHeadingYawRadians = Math.PI;
     this.baseHeadingIdentity = undefined;
     this.lastStableVelocityForward = undefined;
@@ -553,6 +617,7 @@ export class CameraDirectorV1 {
     this.collisionDistanceMeters = undefined;
     this.smoothedFovRadians = Math.PI / 3;
     this.activeParameters = undefined;
+    this.activeLockedParameters = undefined;
     this.controlForward.set(0, 0, -1);
   }
 
@@ -628,6 +693,50 @@ export class CameraDirectorV1 {
     return yawDirection(this.baseHeadingYawRadians);
   }
 
+  private resolveControlBaseForward(
+    profile: ExecutionCameraRigProfileV1,
+    parameters: CameraParametersV1,
+    sample: ViewTargetSampleV1,
+    velocity: Vector3,
+    deltaSeconds: number,
+  ): Vector3 {
+    const identity = `${sample.entityId}:${profile.resourceRef}`;
+    const targetForward = horizontalDirection(new Vector3(...sample.forwardXYZ)) ??
+      new Vector3(0, 0, -1);
+    if (this.controlBaseHeadingIdentity !== identity) {
+      this.controlBaseHeadingIdentity = identity;
+      this.controlBaseHeadingYawRadians = directionYaw(targetForward);
+      this.controlLastStableVelocityForward = targetForward.clone();
+    }
+    let desired = targetForward;
+    if (profile.headingSource === "view") {
+      desired = yawDirection(this.controlBaseHeadingYawRadians);
+    } else if (profile.headingSource === "target-velocity") {
+      const horizontalVelocity = horizontalDirection(velocity);
+      const horizontalSpeed = Math.hypot(velocity.x, velocity.z);
+      if (
+        horizontalVelocity !== undefined &&
+        horizontalSpeed >= parameters.minimumHeadingSpeedMetersPerSecond
+      ) {
+        this.controlLastStableVelocityForward =
+          profile.reverseHeadingPolicy === "preserve-target-forward" &&
+            Vector3.Dot(horizontalVelocity, targetForward) < 0
+            ? horizontalVelocity.scale(-1)
+            : horizontalVelocity.clone();
+      }
+      desired = this.controlLastStableVelocityForward ?? targetForward;
+    }
+    if (profile.headingSource !== "view") {
+      const alpha = this.controlInitialized
+        ? exponentialAlpha(parameters.velocityHeadingDampingPerSecond, deltaSeconds)
+        : 1;
+      this.controlBaseHeadingYawRadians += wrapRadians(
+        directionYaw(desired) - this.controlBaseHeadingYawRadians,
+      ) * alpha;
+    }
+    return yawDirection(this.controlBaseHeadingYawRadians);
+  }
+
   private applyAutomaticRecentering(
     profile: ExecutionCameraRigProfileV1,
     parameters: CameraParametersV1,
@@ -663,6 +772,43 @@ export class CameraDirectorV1 {
     ) * recenterAlpha;
     this.targetPitchOffsetRadians +=
       (0 - this.targetPitchOffsetRadians) * recenterAlpha;
+  }
+
+  private applyControlAutomaticRecentering(
+    profile: ExecutionCameraRigProfileV1,
+    parameters: CameraParametersV1,
+    sample: ViewTargetSampleV1,
+    velocity: Vector3,
+    deltaSeconds: number,
+  ): void {
+    if (
+      profile.recenterMode === "off" ||
+      this.controlSecondsSinceManualViewInput < parameters.recenterDelaySeconds ||
+      this.activeInputActions.has("camera-look-back")
+    ) return;
+    const targetForward = horizontalDirection(new Vector3(...sample.forwardXYZ)) ??
+      new Vector3(0, 0, -1);
+    const horizontalVelocity = horizontalDirection(velocity);
+    const horizontalSpeed = Math.hypot(velocity.x, velocity.z);
+    if (profile.recenterMode === "forward-motion") {
+      if (
+        !sample.cameraContextTags.includes("forward-intent") ||
+        horizontalVelocity === undefined ||
+        horizontalSpeed < parameters.recenterMinimumSpeedMetersPerSecond ||
+        Vector3.Dot(horizontalVelocity, targetForward) < 0.65
+      ) return;
+    }
+    const desiredYawOffset = profile.headingSource === "view"
+      ? wrapRadians(
+          directionYaw(targetForward) - this.controlBaseHeadingYawRadians,
+        )
+      : 0;
+    const recenterAlpha = parameters.recenterDurationSeconds <= 0
+      ? 1
+      : exponentialAlpha(4.6 / parameters.recenterDurationSeconds, deltaSeconds);
+    this.controlTargetYawOffsetRadians += wrapRadians(
+      desiredYawOffset - this.controlTargetYawOffsetRadians,
+    ) * recenterAlpha;
   }
 
   private targetWithDeadZone(

@@ -880,10 +880,13 @@ export class BabylonWorldRuntime implements WorldRuntimeSessionV3 {
     previousController.clearRetainedCharacterSupportSample();
     this.visualFor(this.controlledEntityId).stepAnimation(this.tick, "idle");
     this.controlledEntityId = request.controlledEntityId;
+    this.activeInputActions = [];
+    this.activeInputAxes = {};
     this.controllerFor(this.controlledEntityId)
       .clearRetainedCharacterSupportSample();
     this.traversalConfigurationEpoch += 1;
     this.latestRenderReadyReceipt = undefined;
+    this.cameraDirector.reset();
     this.updateCamera();
     return {
       kind: "worldkit-control-binding-receipt",
@@ -1387,7 +1390,11 @@ export class BabylonWorldRuntime implements WorldRuntimeSessionV3 {
   applyCameraPreview(request: ApplyCameraPreviewRequestV1): CameraPreviewStateV1 {
     this.assertUsable();
     const tuningByProfileRef = request?.tuningByProfileRef;
-    if (tuningByProfileRef === null || typeof tuningByProfileRef !== "object") {
+    if (
+      tuningByProfileRef === null ||
+      typeof tuningByProfileRef !== "object" ||
+      Array.isArray(tuningByProfileRef)
+    ) {
       throw new Error("SUBJECT_PRESET_INVALID_CAMERA_TUNING");
     }
     const subject = this.executionPlan.subjects.find(

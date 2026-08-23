@@ -78,6 +78,7 @@ describe("camera preview channel stays out of Gameplay truth", () => {
     try {
       await runtime.runFixedInput({ actions: [], ticks: 4 });
       const before = runtime.snapshot();
+      const automaticProfileRef = before.camera.activeCameraProfileRef;
       expect(before.camera).not.toHaveProperty("tuning");
       expect(before.camera).not.toHaveProperty("preference");
 
@@ -112,14 +113,54 @@ describe("camera preview channel stays out of Gameplay truth", () => {
         withoutPreview.subjectStatesByEntityId.player,
       );
 
-      // Preview survives reset but never leaks into another Profile's snapshot.
-      expect(
-        runtime.getCameraPreviewState().tuningByProfileRef[ORBIT_REF],
-      ).toEqual({ lookAheadSeconds: 1.5, targetHeightMeters: 3 });
+      // Runtime reset restores the locked Camera Context baseline. The
+      // authoring host may explicitly reapply its current working draft.
+      runtime.requestCameraProfile(FOLLOW_REF);
+      const reset = runtime.reset();
+      expect(reset.camera.activeCameraProfileRef).toBe(automaticProfileRef);
+      expect(runtime.getCameraPreviewState().tuningByProfileRef).toEqual({});
+      runtime.requestCameraProfile(ORBIT_REF);
+      expect(runtime.getCameraPreviewState().tuningByProfileRef[ORBIT_REF])
+        .toBeUndefined();
       const switched = runtime.requestCameraProfile(FOLLOW_REF);
       expect(switched.camera).not.toHaveProperty("tuning");
       expect(runtime.getCameraPreviewState().tuningByProfileRef[FOLLOW_REF])
         .toBeUndefined();
+    } finally {
+      await runtime.dispose();
+    }
+  });
+
+  it("keeps authoring preview sensitivity out of fixed-tick Gameplay movement", async () => {
+    const runtime = await createCameraPreviewChannelRuntime();
+    try {
+      await runtime.runFixedInput({ actions: [], ticks: 4 });
+      runtime.requestCameraProfile(ORBIT_REF);
+      runtime.adjustCameraView({ yawDeltaRadians: 1 });
+      const withoutPreview = await runtime.runFixedInput({
+        actions: ["move-forward"],
+        ticks: 30,
+      });
+
+      runtime.reset();
+      runtime.requestCameraProfile(ORBIT_REF);
+      runtime.applyCameraPreview({
+        tuningByProfileRef: {
+          [ORBIT_REF]: { lookSensitivityXRatio: 3 },
+        },
+      });
+      runtime.adjustCameraView({ yawDeltaRadians: 1 });
+      const withPreview = await runtime.runFixedInput({
+        actions: ["move-forward"],
+        ticks: 30,
+      });
+
+      expect(withPreview.subjectStatesByEntityId.player).toEqual(
+        withoutPreview.subjectStatesByEntityId.player,
+      );
+      expect(withPreview.camera.positionMetersXYZ).not.toEqual(
+        withoutPreview.camera.positionMetersXYZ,
+      );
     } finally {
       await runtime.dispose();
     }
@@ -169,6 +210,7 @@ describe("camera preview channel stays out of Gameplay truth", () => {
         { tuningByProfileRef: { [ORBIT_REF]: { targetHeightMeters: 999 } } },
         { tuningByProfileRef: { [ORBIT_REF]: { inventedKnob: 1 } as never } },
         { tuningByProfileRef: { [ORBIT_REF]: 5 as never } },
+        { tuningByProfileRef: [] as never },
         // An invalid second entry must reject the whole request.
         {
           tuningByProfileRef: {
