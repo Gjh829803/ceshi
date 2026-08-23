@@ -2,12 +2,15 @@
 
 ## 1. 文档状态
 
-- 状态：**R0 Contract Frozen / R1 Runtime Pending（2026-08-21）**。
+- 状态：**R0 Contract Frozen / R1 Heightfield Implemented / R1b Pending（2026-08-23）**。
   Authoring V4、Traversal Lock/Graph 合同、Validation Profile V2 与
-  `pnpm verify:route-r0-contract` 已冻结协议层。这不表示 Graph Builder、Runtime Probe
-  或两条生产 Route Gate 已经通过。审查记录见
-  [作者审查](../../reviews/2026-08-21-route-graph-traversability-design-review.md)与
-  [独立审查及处置](../../reviews/2026-08-21-route-graph-traversability-independent-review.md)。
+  `pnpm verify:route-r0-contract` 已冻结协议层。R1 Heightfield 已通过
+  `pnpm verify:route-r1-heightfield`：Graph Builder、Runtime Probe 与两条生产 Route Gate
+  对 Heightfield 切片成立。这不表示 R1b 静态平台/多 Surface 或完整 M5 已经通过。
+  审查记录见
+  [作者审查](../../reviews/2026-08-21-route-graph-traversability-design-review.md)、
+  [独立审查及处置](../../reviews/2026-08-21-route-graph-traversability-independent-review.md)
+  与 [R1 Heightfield Runtime Review](../../reviews/2026-08-22-route-r1-heightfield-runtime-review.md)。
 - 所属里程碑：P0.1 / M5。
 - 当前问题：Canonical 世界可以通过 Schema、编译、渲染和局部碰撞检查，却仍可能出现
   出生点与目标之间没有人物可走通的连续路线。

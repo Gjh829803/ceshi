@@ -44,16 +44,15 @@ Director LLM → Render Directive SDK ────────────┘
 
 > Golden Humanoid S1b 首个可视纵向切片已完成并进入回归；S1b 整体与 Semantic Actions 整体仍未完成.
 
-> Placement Solver S1 首个海湾纵向切片已完成并进入回归；通用 Terrain Mask、完整 Route R1、更多 Constraint 与 P0.1 整体仍未完成。
+> Placement Solver S1 首个海湾纵向切片已完成并进入回归；通用 Terrain Mask、Route R1b、更多 Constraint 与 P0.1 整体仍未完成。
 
 > Simulation Take / Control Capture V1 已完成固定 Tick 时间线、五 Pass Babylon 捕获、
 > Render Ready Receipt、原子 Bundle 和真实 Chromium Gate；统一 Validation 的
 > Capture/Integrity V1 也已交付。完整 Replay/Resume、Placement/Physics/Composition
 > Validation 接入与 Video Adapter 仍未完成。
 
-> Route R1 Task 8 的 shared contract、可信 CLI/Host 运行链路、只读 Browser Protocol
-> V4 与最终门禁已完成。阶段 Cursor CR 超时且无 verdict，按 `TIMEOUT` 记录；Task 8 已由
-> 宿主审查与回归证据关闭。Task 9 Fixture、R1b、R1 和 M5 仍开放。
+> Route R1 Heightfield 已完成 Golden/Adversarial Fixture、双 Blocking Gate 与
+> `pnpm verify:route-r1-heightfield`。R1b、完整 M5 仍开放。
 
 第一期 Alpha 已证明以下链路可以运行：
 
@@ -101,7 +100,7 @@ Director LLM → Render Directive SDK ────────────┘
 
 当前的“自由创造”严格指室外高度场白膜世界，不等于任意 3D 游戏类型。
 Primitive 四足代理已经可以自定义和控制，但动物资产、骨骼、动画与行为尚未
-实现；通用 Terrain Mask、Route Task 9/R1b 与完整 R1 Gate、更多 Constraint、洞穴、倒悬结构、完整
+实现；通用 Terrain Mask、Route R1b 与完整 M5、更多 Constraint、洞穴、倒悬结构、完整
 室内、车辆、骑乘、NPC、寻路、Gameplay、联网、Render Bridge、实时世界模型和
 Runtime Director 也都尚未实现。
 
@@ -151,11 +150,11 @@ Entity 通过八种关闭 Constraint、Required/Preferred 优先级和锁定 Sol
 Required Runtime Assertion，不重新布局。海湾 Fixture 覆盖接地、净空、路线坡度、
 镜头可见性、冲突、篡改、预算和连续/并发确定性。
 
-未完成：通用 Terrain Mask、Route R1 的 Task 9/R1b、更多 Constraint、增量求解、通用
+未完成：通用 Terrain Mask、Route R1b、更多 Constraint、增量求解、通用
 Validation Report 以及完整 P0.1。S1 证明的是一个受控纵向切片，不是任意开放世界
 布局已经生产完成。
 
-### Route R1 Task 8：可信验证与只读证据投影
+### Route R1 Heightfield：可信验证与 Golden Gate
 
 已实施：`worldkit verify route` 从 Canonical Authoring V4/ExecutionPlan V5 出发，
 通过 `@whitebox-world/world-package` 建立最小正式 Package Root/Build Receipt，由
@@ -163,9 +162,11 @@ Validation Subject 绑定五个权威 Hash，再用 Recast Graph/Path 与真实 
 `NullEngine` Character Controller Probe 生成 Canonical Route Evidence 和统一 Report。
 `worldkit run` 复用同一可信链路，通过 Host 私有、只读传输把证据注入 Browser
 Protocol V4；页面只读取 Route Summary、Path Receipt、Probe Receipt 和 Overlay。
+Task 9 的 11 个 Authoring V4 Golden/Adversarial Fixture 与
+`pnpm verify:route-r1-heightfield` 已进入回归。终审记录见
+[R1 Heightfield Runtime Review](reviews/2026-08-22-route-r1-heightfield-runtime-review.md)。
 
-未完成：Task 9 Golden/Adversarial Fixture、R1b 静态平台/Surface→Collider Subshape，
-以及完整 R1/M5 验收。Task 8 阶段 Cursor CR 超时且无 verdict，只记录 `TIMEOUT`；V3 输入明确不进入
+未完成：R1b 静态平台/Surface→Collider Subshape，以及完整 M5 验收。V3 输入明确不进入
 Route Verification；页面也不会成为备用 Evidence Producer。
 
 ### Simulation Take / Control Capture V1：首个五 Pass 切片

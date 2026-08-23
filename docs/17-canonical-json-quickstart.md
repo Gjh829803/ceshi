@@ -22,10 +22,10 @@ AuthoringSpec V4 (Route Connectivity)
 
 > Golden Humanoid S1b 首个可视纵向切片已完成并进入回归；S1b 整体与 Semantic Actions 整体仍未完成.
 
-> Placement Solver S1 首个海湾纵向切片已完成并进入回归；通用 Terrain Mask、完整 Route R1、更多 Constraint 与 P0.1 整体仍未完成。
+> Placement Solver S1 首个海湾纵向切片已完成并进入回归；通用 Terrain Mask、Route R1b、更多 Constraint 与 P0.1 整体仍未完成。
 
-> Route R1 Task 8 已完成并通过最终门禁；阶段 Cursor CR 超时且无 verdict，按 `TIMEOUT`
-> 记录。当前没有 Task 9 的公开 Golden Fixture，因此示例命令用 `<world-v4.json>` 占位。
+> Route R1 Heightfield 已完成并通过 `pnpm verify:route-r1-heightfield`。公开 Golden
+> 示例为 `examples/traversal/r1-heightfield/`。R1b 与完整 M5 仍开放。
 
 ## 1. 最短运行路径
 
@@ -360,9 +360,9 @@ pnpm worldkit layout explain /tmp/placement-coastal-layout/layout-report.json \
 Route 验证使用唯一冻结 Profile：
 
 ```bash
-pnpm worldkit verify route <world-v4.json> \
+pnpm worldkit verify route examples/traversal/r1-heightfield/success.json \
   --profile worldkit://validation-profile/outdoor-world-package-dev@1 \
-  --output /tmp/route.validation-report.json --json
+  --output /tmp/route-r1-success.validation-report.json --json
 ```
 
 命令依次完成 Authoring V4 → NormalizedWorldIR V4 → ExecutionPlan V5 Pipeline、
@@ -453,7 +453,7 @@ Screen Region、八种关闭 Constraint、Required/Preferred 与锁定 Profile/S
 - Relationship、挂载、坐骑、拖拽、装备、武器和车辆；
 - NPC 行为、战斗、导航、玩法规则、网络与动态刚体；
 - 飞行、第一人称/自由镜头、室内、洞穴、悬挑和 Overhang 地形；
-- 通用 Terrain Mask、Route Task 9/R1b/完整 R1、S1 之外的 Constraint、增量 Solver 和完整 P0.1；
+- 通用 Terrain Mask、Route R1b、S1 之外的 Constraint、增量 Solver 和完整 P0.1；
 - 非空 `relationships`、非空 `rules` 和运行时动态 Spawn。
 
 `seat.mount` 目前只是可验证、可解释的 Socket 数据，不代表骑乘逻辑已经实现。

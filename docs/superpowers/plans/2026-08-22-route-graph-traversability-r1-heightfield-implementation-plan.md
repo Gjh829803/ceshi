@@ -10,6 +10,8 @@
 
 **Spec:** `docs/superpowers/specs/2026-08-21-route-graph-and-traversability-design.md`
 
+**Status:** R1 Heightfield complete. Evidence: `docs/reviews/2026-08-22-route-r1-heightfield-runtime-review.md`. M5 remains open; Task 10 Step 5 (write the R1b plan) starts after this branch is integrated.
+
 **Baseline:** `main` / `origin/main` at `5e0d6bf537c22f71aee5dc31ed8d9829be9fe9b3` (the plan commit on top of PR #18 and the Canonical World State design); `pnpm verify:route-r0-contract`, `pnpm typecheck`, `pnpm test` (94 files / 848 tests), and `pnpm build` all passed from this exact commit on 2026-08-22.
 
 ## Delivery Boundary
@@ -979,13 +981,13 @@ Recorded completion evidence at `c778794`:
 
 **Gate:** `pnpm verify:route-r1-heightfield`
 
-- [ ] **Step 1: Create fixtures through Canonical Authoring V4**
+- [x] **Step 1: Create fixtures through Canonical Authoring V4**
 
 Every fixture must use the actual Authoring Normalizer, Compiler, Graph Builder, Runtime, and Validation evaluator. No test may begin from a hand-written Execution Plan, Graph, or Report.
 
 The success world uses the capability-driven primitive `worldkit://subject-definition/humanoid.third-person@1`, so the gate has a complete Resource Lock without depending on a product GLB. It has one explicit Spawn Anchor, Goal Anchor, Route, `connected-by-route`, deterministic seed, locked profile, and static obstacle arrangement that proves in-ribbon navigation rather than a straight unobstructed line. Its Route is first authored as the current `OutdoorWorldSpec.PlannedRoute`, projected through the existing `projectPlannedRouteToCanonicalRouteV1()`, inserted into Authoring V4, and then passed through the same Normalizer/Compiler/Graph/Probe/Validation path. The verifier must assert that planner-only `priority`, `maximumDesignSlopeDegrees`, and `evidence` never enter Canonical Route bytes; this closes the current Agent whitebox entry without making planning slope evidence a gameplay authority.
 
-- [ ] **Step 2: Implement the R1 verification script**
+- [x] **Step 2: Implement the R1 verification script**
 
 The script must assert expected exit/status/diagnostic for each fixture according to this closed oracle table, compare repeat/concurrent hashes, run the success fixture under 30/60/120 Hz-like render schedules, and assert no provider ID appears in evidence:
 
@@ -1003,9 +1005,9 @@ The script must assert expected exit/status/diagnostic for each fixture accordin
 | `fail-budget` | `incomplete` / `ROUTE_GRAPH_BUDGET_EXCEEDED` |
 | `fail-outside-detour` | `failed` / `ROUTE_REQUIRED_PATH_UNREACHABLE` |
 
-`fail-start-support` proves the controller is physically unsupported; `fail-start-surface` separately proves supported-but-unmatched/ambiguous surface identity is rejected. The orchestration/integration matrix must also inject and reject lock mismatch, Graph-pass/Runtime-stall, support loss, route deviation, missing Probe evidence, and at least two locked Capability Envelopes at Backend-coupling slope/clearance boundaries; these fault cases need not be separate Authoring JSON when their trigger is an evidence/orchestration fault, but they must enter the same blocking verification gate. In R1, `fail-water` and `fail-gap` are distinct Heightfield exclusion cases; collider seams and terrain-to-platform gaps remain mandatory R1b fixtures rather than being simulated as Heightfield-only support.
+`fail-start-support` proves the controller is physically unsupported (`ROUTE_START_SUPPORT_INVALID`). `fail-start-surface` proves Graph start-poly identity is missing (`ROUTE_START_SURFACE_NOT_FOUND`); Heightfield runtime collision may still exist. Supported-but-unmatched/ambiguous CharacterSurfaceInfo classification is rejected by the same blocking gate through the named real Havok Probe adversarial check `start-surface-unmatched-or-wrong-resolved`, which need not be a twelfth Authoring JSON. The orchestration/integration matrix must also inject and reject lock mismatch, Graph-pass/Runtime-stall, support loss, route deviation, missing Probe evidence, and at least two locked Capability Envelopes at Backend-coupling slope/clearance boundaries; these fault cases need not be separate Authoring JSON when their trigger is an evidence/orchestration fault, but they must enter the same blocking verification gate. In R1, `fail-water` and `fail-gap` are distinct Heightfield exclusion cases; collider seams and terrain-to-platform gaps remain mandatory R1b fixtures rather than being simulated as Heightfield-only support.
 
-- [ ] **Step 3: Register and run the new gate**
+- [x] **Step 3: Register and run the new gate**
 
 Add:
 
@@ -1017,7 +1019,7 @@ Run: `pnpm verify:route-r1-heightfield`
 
 Expected: PASS with one dual-gate success and every failure fixture rejected by its expected blocking diagnostic.
 
-- [ ] **Step 4: Prove the post-Task-4 final R0 contract remains frozen**
+- [x] **Step 4: Prove the post-Task-4 final R0 contract remains frozen**
 
 Run: `pnpm verify:route-r0-contract`
 
@@ -1035,7 +1037,7 @@ Expected: PASS against the final reviewed fixture containing both Task 3A `route
 - Modify: `scripts/verify-canonical-world.ts`
 - Create: `docs/reviews/2026-08-22-route-r1-heightfield-runtime-review.md`
 
-- [ ] **Step 1: Run all mandatory gates**
+- [x] **Step 1: Run all mandatory gates**
 
 Run:
 
@@ -1053,7 +1055,7 @@ pnpm build
 
 Expected: all pass. The existing large-chunk build warning may be recorded but cannot hide a new chunk or WASM regression; compare output before disposition.
 
-- [ ] **Step 2: Perform a full-dimension runtime review**
+- [x] **Step 2: Perform a full-dimension runtime review**
 
 Use both:
 
@@ -1062,11 +1064,11 @@ Use both:
 
 The review must explicitly cover authority ownership, Babylon 9.21.2 `CharacterSurfaceInfo` limitations, one-`checkSupport()` evidence, unmatched/ambiguous surface classification, V5 collision-body uniqueness, shared triangle bytes, Backend/Recast coupling acceptance, provider cleanup, fixed/render time separation, reset/rebind, 30/60/120 cadence, lock equality, provider-ID redaction, deterministic bytes, Browser V4 clean-break conformance, failure fixtures, and Graph-pass/Runtime-fail behavior.
 
-- [ ] **Step 3: Update status truthfully**
+- [x] **Step 3: Update status truthfully**
 
 Mark R1 complete only when both blocking gates pass for the success fixture and all adversarial fixtures fail as expected. Keep M5 open and R1b pending. Link the R1 review and this plan from the spec, backlog, and README.
 
-- [ ] **Step 4: Commit by semantic slice**
+- [x] **Step 4: Commit by semantic slice**
 
 Do not produce one giant commit. Use reviewable commits in this order:
 
@@ -1083,23 +1085,23 @@ After R1 is merged and verified, write a separate R1b implementation plan for ex
 
 ## Completion Review
 
-- [ ] Authoring V4 connectivity flows through `NormalizedWorldIRV4` and `ExecutionPlanV5`; there is no V4 sidecar next to a V3 plan.
-- [ ] AI-facing fields remain Route/Anchor/Subject intent only; no NavMesh or provider configuration leaks into Schema.
-- [ ] Graph Builder/Driver/Validation/Subject ownership is unchanged from the frozen spec.
-- [ ] Graph and Runtime evidence share an identical `resolvedTraversalLockHash`.
-- [ ] Recast/Detour is isolated behind `@whitebox-world/traversal-recast` and absent from canonical bytes.
-- [ ] Static collision input comes from authoritative locked primitives, not visual/AABB bounds.
-- [ ] `hard-ribbon` is enforced even when a global outside detour exists.
-- [ ] One compiler-owned lock receipt is passed unchanged to Graph, query, Runtime probe, and Validation; no consumer reconstructs a lock.
-- [ ] The provider-neutral Capability Envelope is the only Recast parameter source and contains no Validation/Driver/Provider fields.
-- [ ] Every runtime tick consumes one and only one Character Controller support sample.
-- [ ] Heightfield evidence classification never changes Ground/Air or physics.
-- [ ] V5 render, sampling, collision, Graph, and evidence share one tested Heightfield triangle diagonal; V4 compatibility remains unchanged.
-- [ ] World-XZ probe results are invariant under camera yaw.
-- [ ] The real Babylon/Havok controller reaches the success destination without teleport or parameter override.
-- [ ] Graph pass alone cannot pass the runtime gate.
-- [ ] `SLIDING`, `UNSUPPORTED`, wrong surface, stall, deviation, invalid numbers, reset, rebind, and cleanup have adversarial coverage.
-- [ ] 30/60/120 Hz-like render schedules yield identical fixed-tick receipt/final-state hashes.
-- [ ] CLI, Browser, Validation, examples, and generated/public types use the same canonical names.
-- [ ] R0, canonical, placement, rigged-subject, G Bot, typecheck, full tests, and build remain green.
-- [ ] M5 remains open until the separately planned R1b static-platform slice passes.
+- [x] Authoring V4 connectivity flows through `NormalizedWorldIRV4` and `ExecutionPlanV5`; there is no V4 sidecar next to a V3 plan.
+- [x] AI-facing fields remain Route/Anchor/Subject intent only; no NavMesh or provider configuration leaks into Schema.
+- [x] Graph Builder/Driver/Validation/Subject ownership is unchanged from the frozen spec.
+- [x] Graph and Runtime evidence share an identical `resolvedTraversalLockHash`.
+- [x] Recast/Detour is isolated behind `@whitebox-world/traversal-recast` and absent from canonical bytes.
+- [x] Static collision input comes from authoritative locked primitives, not visual/AABB bounds.
+- [x] `hard-ribbon` is enforced even when a global outside detour exists.
+- [x] One compiler-owned lock receipt is passed unchanged to Graph, query, Runtime probe, and Validation; no consumer reconstructs a lock.
+- [x] The provider-neutral Capability Envelope is the only Recast parameter source and contains no Validation/Driver/Provider fields.
+- [x] Every runtime tick consumes one and only one Character Controller support sample.
+- [x] Heightfield evidence classification never changes Ground/Air or physics.
+- [x] V5 render, sampling, collision, Graph, and evidence share one tested Heightfield triangle diagonal; V4 compatibility remains unchanged.
+- [x] World-XZ probe results are invariant under camera yaw.
+- [x] The real Babylon/Havok controller reaches the success destination without teleport or parameter override.
+- [x] Graph pass alone cannot pass the runtime gate.
+- [x] `SLIDING`, `UNSUPPORTED`, wrong surface, stall, deviation, invalid numbers, reset, rebind, and cleanup have adversarial coverage.
+- [x] 30/60/120 Hz-like render schedules yield identical fixed-tick receipt/final-state hashes.
+- [x] CLI, Browser, Validation, examples, and generated/public types use the same canonical names.
+- [x] R0, canonical, placement, rigged-subject, G Bot, typecheck, full tests, and build remain green.
+- [x] M5 remains open until the separately planned R1b static-platform slice passes.

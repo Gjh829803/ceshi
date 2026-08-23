@@ -7,17 +7,17 @@
 后续视频模型只消费 SDK 输出的白模与控制通道，不负责决定碰撞、位置、导航或
 Gameplay 真相。
 
-> 当前长期重构总进度约 **62%**；“JSON → IR → Babylon/Havok → 多主体控制、
+> 当前长期重构总进度约 **65%**；“JSON → IR → Babylon/Havok → 多主体控制、
 > 确定性落位与截图”的第一条 Canonical 纵向切片约 **90%**。详细口径和全部待办见
 > [SDK 重构总进度与 Backlog](docs/18-refactor-progress-and-backlog.md)。
 
 > Golden Humanoid S1b 首个可视纵向切片已完成并进入回归；S1b 整体与 Semantic Actions 整体仍未完成.
 
-> Placement Solver S1 首个海湾纵向切片已完成并进入回归；通用 Terrain Mask、完整 Route R1、更多 Constraint 与 P0.1 整体仍未完成。
+> Placement Solver S1 首个海湾纵向切片已完成并进入回归；通用 Terrain Mask、Route R1b、更多 Constraint 与 P0.1 整体仍未完成。
 
-> Route R1 Task 8 已完成 shared contract、CLI/可信运行链路、只读 Browser Protocol V4
-> 与最终门禁。阶段 Cursor CR 超时且无 verdict，按 `TIMEOUT` 记录；Task 8 已由宿主审查
-> 与回归证据关闭，Task 9、R1b、R1 和 M5 仍未完成。
+> Route R1 Heightfield 已完成：Authoring V4 Golden/Adversarial Fixture、双 Blocking Gate、
+> 真实 Babylon/Havok Probe 与 `pnpm verify:route-r1-heightfield` 已进入回归。R1b 静态平台
+> 与完整 M5 仍未完成。
 
 第一次阅读建议依次查看：
 
@@ -144,7 +144,7 @@ WorldPackage Root/Build Receipt、Validation Subject、Recast Graph/Path、真�
 Babylon/Havok `NullEngine` 固定 Tick Probe、Canonical Route Evidence/Report、
 `worldkit verify route` 和只读 Browser Protocol V4；Task 8 最终门禁已关闭。
 Placement/Physics/Composition 等其余统一 Validation 扩展、完整 P1.4
-WorldPackage 发布格式、Task 9 Fixture、R1b、恢复续拍和视频模型 Adapter 仍在后续
+WorldPackage 发布格式、R1b、恢复续拍和视频模型 Adapter 仍在后续
 Backlog 中。
 
 ## 职责边界
@@ -214,7 +214,7 @@ Socket 和类型化关系表达。
 | 运动与相机 | 地面移动、跳跃、第三人称跟随；WaterBody 可查询/可渲染，主体介质只发布 `ground / air` | 游泳与 `movementMedium: water`、第一人称、飞行、车辆、Camera Director 和多 Rig 切换 |
 | 自动化 | validate/build/run/capture、Registry Discovery、Definition Validate、Subject Explain、`verify route`、Browser Protocol V4、Take Driver 与 Control Capture Gate | 持久 Runtime Session、恢复续拍、多人同时控制 |
 | Capture | 单帧截图、Runtime Snapshot、Simulation Take V1、Neutral/Depth/Semantic/Instance/Normal 五 Pass、原子 Bundle | Event/Action/Relationship Receipt、Motion Vector、完整 Replay/Resume 与视频 Adapter |
-| Validation | Canonical Browser Gate、现有物理/构图检查；Capture/Integrity V1；Route 双 Blocking Gate、Canonical Evidence/Report 与可信 Host 只读投影 | Placement/Physics/Composition/Replay/Performance 接入统一 Report、Route Task 9/R1b、Profile 组合、compare 与完整生产 Policy |
+| Validation | Canonical Browser Gate、现有物理/构图检查；Capture/Integrity V1；Route 双 Blocking Gate、R1 Heightfield Golden Fixture、Canonical Evidence/Report 与可信 Host 只读投影 | Placement/Physics/Composition/Replay/Performance 接入统一 Report、Route R1b、Profile 组合、compare 与完整生产 Policy |
 | Gameplay | 基础固定输入、控制绑定与 Golden/G Bot `idle/walk/run/jump` 动作状态 | 完整 Semantic Action、姿态、游泳、装备、NPC、导航、任务、战斗、联网 |
 | 最终视觉 | 本地白模渲染 | Render Bridge、实时世界模型和生产 Video Model Adapter |
 
@@ -260,8 +260,14 @@ Recast Graph/Path、真实 Babylon/Havok `NullEngine` 固定 Tick Probe 和统�
 Report。成功、确定性不可达与证据不完整分别退出 `0 / 2 / 3`，基础设施失败退出
 `1`；已存在的 Report 或 Evidence 路径不会被覆盖。`worldkit run <world-v4.json>`
 复用同一可信链路，再通过 Host 私有临时文件和只读端点把已完成证据注入页面；页面
-自身不构图、不运行 Probe、也不生产证据。Task 9 的公开 R1 Golden Fixture 尚未加入，
-因此这里使用 `<world-v4.json>` 占位而不伪造可复制示例。
+自身不构图、不运行 Probe、也不生产证据。R1 Heightfield Golden 示例：
+
+```bash
+pnpm worldkit verify route examples/traversal/r1-heightfield/success.json \
+  --profile worldkit://validation-profile/outdoor-world-package-dev@1 \
+  --output /tmp/route-r1-success.validation-report.json --json
+pnpm verify:route-r1-heightfield
+```
 
 本地体验产品 G Bot 时使用固定入口；它会同时注入 AuthoringSpec 并打开
 `?authoring=1` 对应的 Canonical Runtime：
@@ -467,6 +473,7 @@ Compiler 和 Runtime 不能反向读取 Agent Prompt；Runtime Adapter 不能把
 - [Route Graph 与主体可通行性独立审查及处置](docs/reviews/2026-08-21-route-graph-traversability-independent-review.md)
 - [Route Graph / Traversability R0 实施计划](docs/superpowers/plans/2026-08-21-route-graph-traversability-r0-implementation-plan.md)
 - [Route Graph / Traversability R1 Heightfield 实施计划](docs/superpowers/plans/2026-08-22-route-graph-traversability-r1-heightfield-implementation-plan.md)
+- [Route R1 Heightfield Runtime Review](docs/reviews/2026-08-22-route-r1-heightfield-runtime-review.md)
 - [Simulation Take 与 Control Capture Bundle 设计](docs/superpowers/specs/2026-08-19-simulation-take-control-capture-design.md)
 - [World Validation Report 与质量门禁设计](docs/superpowers/specs/2026-08-19-world-validation-report-and-quality-gates-design.md)
 - [AI 自定义场景几何扩展候选方案（未来探索）](docs/superpowers/specs/2026-08-20-ai-authored-geometry-extension-design.md)

@@ -464,8 +464,8 @@ Authoring、IR、ExecutionPlan 或 Browser Protocol。
 - Golden Humanoid GLB、17 根解剖语义骨骼、独立 Skeleton Root、Bone Socket 与 `idle/walk/run/jump`；
 - CLI/Browser V4 的校验、编译、运行、控制、Snapshot、单截图和 Take/Capture 操作；
 - Route Task 8 的 WorldPackage Build Receipt、Validation Subject、Recast Graph/Path、
-  真实 Babylon/Havok `NullEngine` Probe、Canonical Evidence/Report、`verify route` 与
-  四个只读 Browser getter及最终门禁；阶段 Cursor CR 超时且无 verdict，按 `TIMEOUT` 记录；
+  真实 Babylon/Havok `NullEngine` Probe、Canonical Evidence/Report、`verify route`、
+  R1 Heightfield Golden Gate 与四个只读 Browser getter；
 - Simulation Take V1、五 Pass Babylon Capture、Render Ready Receipt 与原子 Bundle；
 - Validation Capture/Integrity V1：版本化 Profile、严格 Report、Blocking/Incomplete
   Policy、Bundle Adapter、`verify capture|explain` 与五类 Conformance Fixture；
@@ -478,7 +478,7 @@ Authoring、IR、ExecutionPlan 或 Browser Protocol。
 - 任意产品资产自动 Retarget、Compound Collider、LOD 和更多拓扑；
 - 完整 P1.4 WorldPackage 发布格式（Task 8 的最小 Manifest/Root/Build Receipt 已实现）、WorldChangeSet、持久 Runtime Session；
 - 完整 Replay/Resume、Event/Action/Relationship Receipt、Motion Vector 和视频 Adapter；
-- Placement/Physics/Composition/Replay/Performance 等统一 Validation 扩展，以及 Route Task 9/R1b/最终 R1 Gate 与
+- Placement/Physics/Composition/Replay/Performance 等统一 Validation 扩展，以及 Route R1b 与
   生产 Video Model Adapter；
 - 室内、洞穴、Overhang、联网和完整 Gameplay。
 

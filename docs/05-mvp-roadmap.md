@@ -14,7 +14,7 @@
 | Phase I：第三人称人形 + 室外搭建 | Alpha 收敛中 | 主链路可运行；资产/动作 QA、视觉回归、手感和更多图像场景仍需收敛 |
 | Subject Authoring S1a | 已完成 | Authoring V2、Registry/Package Primitive Definition、自动 Capsule、Hash/Lock、复数实例、CLI Explain；Browser Protocol 已干净升级至 V4 并保留原能力 |
 | Subject Authoring S1b | Golden + 首个产品切片已完成 | 项目自有 Golden 与产品 G Bot 的 GLB、Rig、Collider Profile 与 `idle/walk/run/jump` 已通过 Canonical Babylon/Havok E2E；更多产品资产、Compound Collider、LOD 和更多动作/拓扑仍开放 |
-| M5 Route Graph / Traversability R1 | Task 8 已完成 | Authoring V4 → IR V4 → ExecutionPlan V5 → WorldPackage Receipt → Validation Subject → Recast → real Babylon/Havok Probe → Canonical Evidence/Report → Browser V4 只读投影与门禁已接通；Task 9、R1b 与 M5 总验收仍开放 |
+| M5 Route Graph / Traversability | R1 Heightfield 已完成 | Authoring V4 Golden/Adversarial Fixture、双 Blocking Gate、真实 Babylon/Havok Probe 与 `pnpm verify:route-r1-heightfield` 已进入回归；R1b 与 M5 总验收仍开放 |
 | Phase II：更多主体/动作 + 室内 | 未开始 | 优先级尚未冻结 |
 | World Model Integration | 契约设计 | 尚无 Render Bridge 实现，可立即与模型团队开始 WM-0/WM-1 |
 | Runtime World Director | 方案完成 | 尚无运行时代码；依赖稳定 Entity/Action/Nav 等能力 |
@@ -106,20 +106,18 @@ Coding Agent 在不修改 SDK 内部代码的前提下完成：
 
 M5 的目标不是让 AI 编写 NavMesh，而是让 AI 继续使用 Route、Anchor、Subject 和
 `connected-by-route` 表达意图；SDK 根据锁定主体能力和世界物理真相证明路线是否真的
-可走。当前 R1 Task 8 已完成：
+可走。当前 R1 Heightfield 已完成：
 
 1. Canonical Authoring V4 → NormalizedWorldIR V4 → ExecutionPlan V5；
 2. `@whitebox-world/world-package` 生成最小正式 Package Root/Build Receipt；
 3. Validation Subject 绑定同一组五个权威 Hash；
 4. Recast 只作为 Provider Adapter 构建 Graph/Path；
 5. 真实 Babylon/Havok `NullEngine` Character Controller 做固定 Tick Probe；
-6. CLI 发布 Canonical Evidence/Report，可信 Host 向 Browser Protocol V4 注入只读投影。
+6. CLI 发布 Canonical Evidence/Report，可信 Host 向 Browser Protocol V4 注入只读投影；
+7. 11 个 Authoring V4 Golden/Adversarial Fixture 与 `pnpm verify:route-r1-heightfield` 进入回归。
 
-Task 8 的完整聚焦门禁、Typecheck、Build 与既有回归门禁均通过；阶段 Cursor CR 超时且
-无 verdict，按 `TIMEOUT` 记录。之后还要完成 Task 9 的 Golden/Adversarial Fixture
-Matrix 和 R1b 静态平台/Collider Subshape 合同。只有成功
-Fixture 的 `route-connectivity` 与 `route-runtime-conformance` 两条 Blocking Gate 都
-通过、失败 Fixture 均按预期拒绝后，才能标记 R1；M5 仍需等待 R1b。
+终审见 [R1 Heightfield Runtime Review](reviews/2026-08-22-route-r1-heightfield-runtime-review.md)。
+R1b 静态平台/Collider Subshape 合同与完整 M5 仍开放。
 
 ## 第二期：扩展主体、动作与室内搭建
 

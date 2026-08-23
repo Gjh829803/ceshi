@@ -2,7 +2,7 @@
 
 - 状态：Active，重构执行进度与剩余工作的唯一跟踪入口。
 - 基准日期：2026-08-23。
-- 长期目标总进度：约 **63%**，合理误差范围为 ±5%。
+- 长期目标总进度：约 **65%**，合理误差范围为 ±5%。
 - 第一条 Canonical 纵向切片：约 **90%**。
 - 当前代码入口：基础世界走 Canonical Authoring V3 → NormalizedWorldIR V3 → ExecutionPlan V4；Route 世界走 Authoring V4 → IR V4 → ExecutionPlan V5 → WorldPackage Build Receipt → Validation Subject → Recast → Babylon.js/Havok Probe → Canonical Route Evidence/Report；两者共享 Babylon/Havok Runtime 与 Browser Protocol V4。
 
@@ -11,10 +11,10 @@
 > 首个产品资产 G Bot 已通过独立 Registry/CLI/Babylon/Havok/Browser Gate；这只代表
 > 当前版本 G Bot 的 `idle/walk/run/jump`，不代表任意产品包或其余 21 个 Clip 已开放。
 
-> Placement Solver S1 首个海湾纵向切片已完成并进入回归；通用 Terrain Mask、完整 Route R1、更多 Constraint 与 P0.1 整体仍未完成。
+> Placement Solver S1 首个海湾纵向切片已完成并进入回归；通用 Terrain Mask、Route R1b、更多 Constraint 与 P0.1 整体仍未完成。
 
-> Route R1 Task 8 已完成并通过最终门禁。阶段 Cursor CR 超时且无 verdict，按 `TIMEOUT`
-> 记录；Task 8 由宿主审查与回归证据关闭。Task 9、R1b、R1 与 M5 仍未完成。
+> Route R1 Heightfield 已完成并通过 `pnpm verify:route-r1-heightfield` 与 Task 10
+> 全维度 Runtime Review。R1b、完整 M5 仍未完成。
 
 > Simulation Take / Control Capture V1 已完成 60 Hz → 24 fps 精确时间映射、五 Pass
 > Babylon 捕获、Render Ready Receipt、原子 Bundle、CLI/Browser/Playwright 和真实 Chromium
@@ -64,12 +64,12 @@ Normalizer/Compiler、Runtime、CLI/Browser 和对应 Conformance Gate 的纵向
 | Canonical Schema、IR、Registry 与 Compiler | 15% | 82% | 12.3% | 基础链路 Authoring V3 → IR V3 → Plan V4 与 Route 链路 Authoring V4 → IR V4 → Plan V5、Hash、Lock、严格校验、Placement、Primitive 与首个 Asset Subject 已交付；Task 8 最小 WorldPackage Root/Build Receipt 已实现，完整 P1.4 发布格式、WorldChangeSet 和完整 Capability 尚未交付 |
 | Babylon/Havok Runtime、物理与相机 | 15% | 75% | 11.25% | Heightfield、障碍、水域、多主体、第三人称、碰撞、资产主体、Placement Assertion 与五 Pass Capture 已交付；多视角与完整生产预算尚未完成 |
 | Subject LEGO 组装体系 | 15% | 45% | 6.75% | S0、S1a、Golden 与首个产品 G Bot 可视切片已完成；S1b 后续、S2、S3、S4 尚未完成 |
-| Terrain、Region 与 Placement | 12% | 63% | 7.56% | Alpha 地形和 Placement Solver S1 已运行；Route R1 Task 4–8 已审查/门禁关闭；Task 9、R1b、通用 Terrain Mask、更多 Constraint 与完整 P0.1 未完成 |
-| CLI、Browser Protocol 与自动化 | 10% | 87% | 8.7% | 已交付 Take/Capture、`verify capture|explain`；Route `verify route`、可信 Host Evidence Transport、完整继承 V3 的 Browser V4 与 Task 8 Gate 已完成；compare、持久 Session 和完整 Package 工具未完成 |
+| Terrain、Region 与 Placement | 12% | 74% | 8.88% | Alpha 地形和 Placement Solver S1 已运行；Route R0 合同与 R1 Heightfield 已审查/门禁关闭；R1b、通用 Terrain Mask、更多 Constraint 与完整 P0.1 未完成 |
+| CLI、Browser Protocol 与自动化 | 10% | 90% | 9.0% | 已交付 Take/Capture、`verify capture|explain`；Route `verify route`、R1 Golden Fixture、可信 Host Evidence Transport、完整继承 V3 的 Browser V4 已完成；compare、持久 Session 和完整 Package 工具未完成 |
 | Semantic Action、动画与 Gameplay | 8% | 33% | 2.64% | Golden 与 G Bot `idle/walk/run/jump` 固定 Tick Animation Binding 已交付；通用 Action Request/Receipt、姿态、装备与规则未交付 |
 | Simulation Take、控制通道与视频接入 | 10% | 70% | 7.0% | V1 Take、五 Pass、Bundle 和真实浏览器 Gate 已交付，Capture/Integrity 已进入统一 Report；完整 Replay/Resume 与模型 Adapter 未交付 |
-| 生产 Gate、默认切换与旧实现退出 | 7% | 52% | 3.64% | Canonical/资产/Placement/Capture Gate 可运行；Capture/Integrity 与 Route 双 Blocking Gate、Task 8 最终 Gate 已关闭；其他统一 Gate、默认切换和旧路径退出未交付 |
-| **合计** | **100%** |  | **约 68%** | 对外按通用 Terrain/Route、完整统一生产 Gate、WorldPackage 与视频闭环的不确定性保守报告 **约 63%** |
+| 生产 Gate、默认切换与旧实现退出 | 7% | 60% | 4.2% | Canonical/资产/Placement/Capture Gate 可运行；Capture/Integrity 与 Route 双 Blocking Gate、R1 Heightfield Golden Gate 已关闭；其他统一 Gate、默认切换和旧路径退出未交付 |
+| **合计** | **100%** |  | **约 70%** | 对外按通用 Terrain/R1b、完整统一生产 Gate、WorldPackage 与视频闭环的不确定性保守报告 **约 65%** |
 
 “第一条 Canonical 纵向切片约 90%”只指以下较窄范围：AI 提交 JSON，SDK
 完成严格校验、确定性编译、Babylon/Havok 运行、多主体控制、首个 Golden Asset
@@ -198,66 +198,14 @@ P1.5、P1.6、P2.5 与 P2.6 是把既有总体设计和产品对接契约显式�
 - [x] 编写 [R1 Heightfield 实施计划](superpowers/plans/2026-08-22-route-graph-traversability-r1-heightfield-implementation-plan.md)，
   将 Authoring V4 → IR V4 → ExecutionPlan V5、Recast Provider Adapter、确定性 Graph/Query、
   单一 `checkSupport()` Runtime Evidence、真实 Babylon/Havok Probe、双 Blocking Gate、CLI/Browser
-  与对抗 Fixture 拆成可追踪任务；R1 计划完成不表示 R1 Runtime 已实现。
-- [ ] R1 实现普通人形 Heightfield Route：坡度、静态阻挡、胶囊宽高净空、缝隙、确定性
+  与对抗 Fixture 拆成可追踪任务。计划成稿本身不等于 Runtime 已实现；Heightfield Runtime 由下一勾选项关闭。
+- [x] R1 实现普通人形 Heightfield Route：坡度、静态阻挡、胶囊宽高净空、缝隙、确定性
   Path Query 与真实固定 Tick Character Controller Gate；P1.5 Ground/Air Runtime 已删除
   步高/坡度 Motion fallback、spawn ray 和 AABB Support 旁路，原前置阻塞已解除。
-  当前实施分支已完成 Task 1、Task 2、Task 3A/3B，并在 commit `d38e954` 完成
-  Task 3C 的锁定 Build Input、Hard Ribbon 地形裁剪、保守静态 Collider、水域排除、
-  内容 Hash 与单一 Tile Budget 证据；commit `2d2480c` 又收紧了重复 Locomotion Ref、
-  Collider Artifact Hash 和缺失 Envelope 的失败合同。Task 4 已完成：
-  Provider source-area、Canonical Graph/Path/Failure Receipt、SDK-owned A*、raw Query
-  生命周期、五类保守拒绝证明和 Validation 投影已接通；主审聚焦门禁为 19 files / 176 tests，
-  全仓为 120 files / 1043 tests，Typecheck、Build、R0 Contract Gate、冻结安装与 diff
-  检查均已通过。Cursor 初审确认并关闭一条临界宽度量化 P1，同会话复审为 `CODE GO`；
-  宿主另以 RED/GREEN 关闭复合碰撞体垂直分层与实心截面赋因缺口；新鲜终审为 `FINAL GO`，
-  唯一非阻断 P3 端点投影测试缺口也已补齐。Task 5 Runtime Support 已完成：
-  V5 Runtime 已以 Heightfield 与 `staticColliders` 为物理权威，Traversal Port 与不可变
-  Support Evidence 已接通；完整 Execution Resource Lock 已写入 V5、绑定进 Traversal Lock，
-  并在 Compiler/Runtime 对完整资源权威做严格一致性检查；单次 `checkSupport()` 失败会封闭为
-  Runtime 不可用且不能发布陈旧成功证据；V5 `supported-by` 使用变换后的精确静态 Collider
-  三角网格，不回退到 Visual 或 AABB。Runtime 与 Graph 现共享 Authoring/Layout/Resource
-  World Identity，并以 Runtime 创建时捕获的完整 `executionPlanHash` 封闭 Port 创建前后的
-  同一 Plan 原地漂移；ordinary reset 与
-  成功 unsupported tick 也已有每 Subject 单次 `checkSupport()` 的 mutation 证据。Task 5
-  全量门禁为 124 files / 1102 tests，Typecheck、Build 和 5 个发布/能力 verifier 均通过。
-  宿主终审 finding 已修复且最终窄复核为 `GO`；当前完成 diff 的 Cursor review
-  `m5-task5-final-85ac842-571d7395` 以 `FINAL GO`、零 P0-P3 findings 关闭 Task 5。Task 6
-  的 provider-neutral Request/Tick/Receipt/Runtime Port 合同已在 `b1835a0` / `b3035bb`
-  完成，Validation-owned fixed-tick Driver 已在 `3ef2608` / `af76249` 完成；`7c2f6e3`
-  又以真实 Babylon `NullEngine` + Havok + Recast 补齐 10 个集成场景。聚焦门禁、11 files /
-  211 tests 深 Runtime 集、127 files / 1148 tests 全仓、Typecheck 与 Build 均已通过。该阶段
-  唯一 Cursor review 在 8 分钟时超时且未给出 verdict，因此不得记为 `GO`；宿主与新鲜独立
-  review 已给出 `GO`，且唯一测试资源获取失败清理 P2 已在 `5319262` 以回归关闭。Task 6
-  已审查关闭。Task 7 也已在 commit `67bfb17` 完成：统一
-  `createRouteValidationReportV2()` 以 `complete | unreachable | incomplete` 闭集结果评估
-  `route-connectivity` 与 `route-runtime-conformance` 两条 Blocking Gate；确定性不可达为
-  Failed、证据或预算不完整为 Incomplete，缺失 Probe 绝不伪装为 Passed。独立窄复核提出的
-  BuildInput 上下文 P1 已关闭：即使失败路径没有 Graph/Path，也必须携带并校验锁定
-  `HeightfieldRouteBuildInputReceiptV1`，不能把失败证据套用到另一个 World/Build Input。
-  Task 7 聚焦门禁为 77 tests，宿主组合复核为 82 tests，Typecheck 与 R0 Contract Gate
-  均通过；宿主与独立窄复核为 `GO`。该阶段唯一 Cursor review 在 8 分钟时超时且没有
-  verdict，只记录为 `TIMEOUT`，不得记为 `GO`。Task 7 已审查关闭。Task 8 已在
-  当前实施分支完成并由宿主关闭：`32a97e9` 冻结 canonical Route Overlay；`184fa82` 在经审查后选择的
-  `@whitebox-world/world-package` 装配边界实现最小正式 Manifest、Package Root 与 Build
-  Receipt；`bc1e266` 把 Layout Solve Report Evidence 保留进 Pipeline，`715f32f` 完成唯一
-  Validation-subject seam；`d5116b9` 定义完整继承
-  V3 的 Browser Protocol V4 与四个只读 Route getter；`976969d` / `16f9253` / `04d4bcb`
-  完成 Canonical Publication、确定性多 Route 编排和可信 runner。本轮 Task 8 实施进一步接通
-  `worldkit verify route`、`worldkit run` 的私有 Host Transport 与真实 Playwright 注入。
-  可信链路固定为 Authoring V4 → IR V4 → ExecutionPlan V5 → Build Receipt →
-  Validation Subject → Recast → real
-  Babylon/Havok `NullEngine` Probe → Canonical Evidence/Report；页面不生产证据，V3 Route
-  输入明确拒绝。Package Root 从原计划的 `@whitebox-world/protocol` 调整到
-  `@whitebox-world/world-package` 是依赖方向审查后的修正：Protocol 继续只拥有通用
-  Canonical Bytes/Hash，跨 Authoring/Compiler/Layout/Runtime 的装配合同不下沉污染基础层。
-  Task 8 Step 6 最终聚焦门禁已通过；阶段唯一 Cursor CR 约 12 分钟后仍无 verdict，按
-  `TIMEOUT` 记录，不计为 `GO`。Task 8 已由宿主审查与回归证据关闭；R1、M5 和 R1b
-  仍未标记完成。
-  Task 4 的
-  Graph/Query、source-area、失败证据与生命周期设计已在
-  `m5-task4-design-2d2480c-r3` 完成主审和 Cursor Grok 4.6 Extra High 独立审查，最终
-  `DESIGN GO`、零未关闭 P0–P2；这只表示实施合同已冻结，不提高 Runtime 能力完成度。
+  Task 1–8 审查关闭记录见既有 Task 段落。Task 9 的 11 个 Authoring V4 Golden/Adversarial
+  Fixture 与 `pnpm verify:route-r1-heightfield` 已进入回归；Task 10 全维度 Runtime Review
+  见 [2026-08-22-route-r1-heightfield-runtime-review.md](reviews/2026-08-22-route-r1-heightfield-runtime-review.md)。
+  R1 Heightfield 已关闭。M5 与 R1b 仍未标记完成。
 - [ ] R1b 与 P2.6 H1 共享最小 Traversal Surface → Collider Subshape 合同，覆盖地形、
   台阶、坡道和普通静态平台；阈值从同一 `resolvedTraversalLockHash` 推导，当前锁定
   `0.3m` 人形 Profile 的 Golden 要求 `0.25m` 通过、`0.35m` 失败。
@@ -720,25 +668,10 @@ Placement S1、Simulation Take / Control Capture V1 与 Validation Capture/Integ
 
 ## 6. 下一里程碑
 
-M5 R0 字段冻结已由 `pnpm verify:route-r0-contract` 完成；M5 R1/R1b 所需的 M7 P1.5
-Ground/Air Runtime 前置依赖已随 PR #10 合入。Graph Builder/Query 已通过 Task 4
-全量门禁和独立新鲜终审；Task 5 Runtime Support 已完成实现并通过全量相关门禁，宿主
-终审为 `GO`，Cursor 新鲜终审为 `FINAL GO`。Task 6 的 provider-neutral 合同、固定 Tick
-Driver 与真实 Babylon/Havok 10-case 集成已完成并通过聚焦、深 Runtime、全仓、Typecheck
-和 Build 门禁；其 Cursor 阶段审查在 8 分钟时超时，未伪装成 `GO`。宿主与新鲜独立 review
-已给出 `GO`，唯一测试清理 P2 已在 `5319262` 关闭。Task 7 已在 `67bfb17` 将
-`complete | unreachable | incomplete` 统一 evaluator 与两条 Route Blocking Gate 接入
-`ValidationReportV2`；BuildInput 上下文 P1 已关闭，77 focused / 82 host-combined tests、
-Typecheck 与 R0 Contract Gate 均通过，宿主与独立窄复核为 `GO`。Task 7 唯一 Cursor
-阶段审查在 8 分钟时超时，只记录 `TIMEOUT`。Task 8 已实施并完成最终门禁：最小正式
-WorldPackage Root/Build Receipt、唯一 Validation Subject、Canonical Route Overlay 与
-Publication、确定性多 Route Orchestrator、可信 Authoring V4/ExecutionPlan V5 Runner、`worldkit verify route`、
-完整继承 V3 的 Browser Protocol V4，以及 `worldkit run` 私有只读 Host Transport 已接通。
-真实验证链路使用 Recast Graph/Path 与 Babylon/Havok `NullEngine` fixed-tick Probe；页面
-不生产证据，V3 Route 输入明确拒绝。Package Root 经依赖方向审查放在
-`@whitebox-world/world-package`，不再按旧文件表塞入 `@whitebox-world/protocol`。Task 8
-Step 6 最终聚焦门禁已关闭；阶段唯一 Cursor CR 超时且无 verdict，按 `TIMEOUT` 记录。
-之后完成 Task 9 并进入 R1b。S1b Golden、
+M5 R0 字段冻结已由 `pnpm verify:route-r0-contract` 完成；R1 Heightfield 已由
+`pnpm verify:route-r1-heightfield` 与
+[Runtime Review](reviews/2026-08-22-route-r1-heightfield-runtime-review.md) 关闭。
+M7 P1.5 Ground/Air Runtime 前置依赖已随 PR #10 合入。R1b 仍开放。S1b Golden、
 首个产品 G Bot、Placement Solver S1、Control Capture V1 与 Validation Capture/Integrity V1
 都已进入回归，下一步：
 
@@ -750,28 +683,14 @@ Step 6 最终聚焦门禁已关闭；阶段唯一 Cursor CR 超时且无 verdict
 3. **M3（已完成）：实现五 Pass Capture 窄纵向切片并复用 Placement World Identity/Hash**；
 4. **M4（已完成）：实现 P0.3 统一 Validation Profile/Report 的 Capture/Integrity 窄切片，把现有 Bundle Gate 纳入同一报告协议**；
 5. **M5：完成 Route Graph 与主体可通行性 R0/R1/R1b**：R0 字段冻结已由
-   `pnpm verify:route-r0-contract` 证明；R1 Task 4 Graph Builder/Query 已过全量门禁和新鲜终审，
-   R1 Task 5 Runtime Support 已完成实现并通过全量门禁，宿主终审 finding 已修复且最终窄复核为 `GO`，
-   当前完成 diff 的 Cursor 新鲜终审为 `FINAL GO`、零 P0-P3 findings；Task 6 的 provider-neutral
-   合同、固定 Tick Driver 与真实 Babylon/Havok 10-case 集成已完成，相关聚焦、深 Runtime、全仓、
-   Typecheck 和 Build 门禁均通过。Task 6 阶段 Cursor review 在 8 分钟时超时且没有 verdict，
-   不能记为 `GO`；宿主与新鲜独立 review 已给出 `GO`，唯一测试资源获取失败清理 P2 已在
-   `5319262` 关闭，Task 6 已审查关闭。Task 7 已在 `67bfb17` 以统一
-   `complete | unreachable | incomplete` evaluator 接通 `route-connectivity` 与
-   `route-runtime-conformance` 两条生产 Blocking Gate；BuildInput 上下文 P1 已关闭，
-   77 focused / 82 host-combined tests、Typecheck 与 R0 Contract Gate 通过，宿主与独立窄复核
-   为 `GO`。唯一 Cursor 阶段审查在 8 分钟时超时，只记录 `TIMEOUT`。Task 7 已审查关闭；
-   Task 8 已实施并完成最终门禁：最小正式 WorldPackage Root/Build Receipt、Validation Subject、
-   `worldkit verify route`、可信 Recast + Babylon/Havok Runner、Canonical Evidence/Report、
-   完整继承 V3 的 Browser Protocol V4 和私有只读 Host Transport 均已接通。Package Root
-   经依赖方向审查归属 `@whitebox-world/world-package`；页面不生产证据，V3 Route 输入明确
-   拒绝。Step 6 最终聚焦门禁已关闭；阶段唯一 Cursor CR 超时且无 verdict，只记录
-   `TIMEOUT`。Task 9、R1 与 R1b 仍未完成。
+   `pnpm verify:route-r0-contract` 证明；R1 Heightfield 已由
+   `pnpm verify:route-r1-heightfield` 与
+   [Runtime Review](reviews/2026-08-22-route-r1-heightfield-runtime-review.md) 关闭。
+   R1b 静态平台 / Surface→Collider Subshape 仍未完成，因此 M5 保持开放。
    P1.5 Ground/Air Runtime 前置依赖已经满足。之后复用既有
-   Route/Region，按主体 Lock 从 Heightfield 与显式 Traversal Surface 构建分层 3D Graph，
-   并用真实 Babylon/Havok 人物控制器证明地形→台阶/坡道→静态平台路线；只有 Required
-   Route 接入 Blocking Validation、成功 Fixture 走通且失败 Fixture 给出结构化 Diagnostic
-   后完成；
+   Route/Region，按主体 Lock 从显式 Traversal Surface 构建地形→台阶/坡道→静态平台路线；
+   只有 Required Route 接入 Blocking Validation、成功 Fixture 走通且失败 Fixture 给出
+   结构化 Diagnostic 后完成 R1b/M5；
 6. **M6：在 Placement + Take + Validation 闭环上接入实验 Video Model Adapter**；
 7. **M7（Ground/Air 首切片已完成）：继续扩展 P1.5 Control Feel/Physics Medium/State
    Resolver**：首条 Ground/Air 切片的
