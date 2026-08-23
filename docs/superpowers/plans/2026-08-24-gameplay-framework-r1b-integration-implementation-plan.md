@@ -131,6 +131,7 @@ Event type 首批固定为：
 
 ```ts
 "relationship.committed" | "relationship.removed" |
+"semantic-fact.started" | "semantic-fact.ended" |
 "action.started" | "action.completed" |
 "action.cancelled" | "action.failed" | "world.failed"
 ```
