@@ -2,6 +2,7 @@ import { sha256CanonicalJson } from "@whitebox-world/protocol";
 import { describe, expect, it } from "vitest";
 
 import {
+  BUILT_IN_HEIGHTFIELD_R1_LOW_BUDGET_TRAVERSAL_GRAPH_BUILDER_PROFILE_REF,
   BUILT_IN_TRAVERSAL_GRAPH_BUILDER_PROFILE_REF,
   ROUTE_CONNECTIVITY_FAILURE_CODES_V2,
   assertRouteOverlayContextV2,
@@ -18,6 +19,7 @@ import {
   hashRoutePathReceiptV2,
   hashTraversalGraphV2,
   resolveTraversalGraphBuilderProfileV1,
+  resolveTraversalGraphBuilderProfileV2,
 } from "./index.js";
 import type { RouteBuildInputV2 } from "./build-input.js";
 import { summarizeRoutePathGraphMetricsV2 } from "./path-receipt.js";
@@ -295,8 +297,8 @@ describe("Route V2 Graph, Path, Overlay, and Connectivity", () => {
   it("binds every Graph V2 provenance, lock, profile, route, and anchor field to Build Input", () => {
     const receipt = v2BuildInputReceipt();
     const graph = graphDraft(receipt);
-    const v1Builder = resolveTraversalGraphBuilderProfileV1(
-      BUILT_IN_TRAVERSAL_GRAPH_BUILDER_PROFILE_REF,
+    const alternateV2Builder = resolveTraversalGraphBuilderProfileV2(
+      BUILT_IN_HEIGHTFIELD_R1_LOW_BUDGET_TRAVERSAL_GRAPH_BUILDER_PROFILE_REF,
     );
     const mutations = [
       { authoringSpecHash: HASH_B },
@@ -309,9 +311,9 @@ describe("Route V2 Graph, Path, Overlay, and Connectivity", () => {
       { routeBuildInputHash: HASH_B },
       { resolvedTraversalLockHash: HASH_B },
       {
-        graphBuilderProfileRef: v1Builder.resourceRef,
-        graphBuilderResolvedVersion: v1Builder.resolvedVersion,
-        graphBuilderProfileHash: v1Builder.contentHash,
+        graphBuilderProfileRef: alternateV2Builder.resourceRef,
+        graphBuilderResolvedVersion: alternateV2Builder.resolvedVersion,
+        graphBuilderProfileHash: alternateV2Builder.contentHash,
       },
       { routeId: "forged-route" },
       { startAnchorEntityId: "forged-start" },
@@ -377,17 +379,19 @@ describe("Route V2 Graph, Path, Overlay, and Connectivity", () => {
     const path = {
       ...pathDraft(graph),
       orderedPathPositionsMetersXYZ: [
-        [0.2, 0, 0],
+        [0, 0, 0],
         [4.2, 0, 2],
-        [8.2, 0, 0],
+        [8, 0, 0],
       ] as const,
+      routePathDistanceMeters: 8.947,
+      routePathDistanceMetersXZ: 8.947,
     };
 
-    expect(path.orderedPathPositionsMetersXYZ[0]).not.toEqual(
-      graph.traversalNodesById["node-a"]!.positionMetersXYZ,
+    expect(path.orderedPathPositionsMetersXYZ[1]).not.toEqual(
+      graph.traversalNodesById["node-b"]!.positionMetersXYZ,
     );
     expect(assertRoutePathReceiptForGraphV2(path, graph))
-      .toMatchObject({ routePathDistanceMeters: 8.946 });
+      .toMatchObject({ routePathDistanceMeters: 8.947 });
   });
 
   it("summarizes Profile-sized Path metrics without argument spreading", () => {
