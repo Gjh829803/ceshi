@@ -809,6 +809,12 @@ export function parseGameplayEventV1(input: unknown): GameplayEventV1 {
     if (!hasExactKeys(record, [...baseKeys, "semanticFact"])) invalid(schemaName);
     const semanticFact = parseGameplaySemanticFactV1(record.semanticFact) ??
       invalid(schemaName);
+    if (
+      (record.type === "semantic-fact.started" &&
+        semanticFact.startedSimulationTick !== base.simulationTick) ||
+      (record.type === "semantic-fact.ended" &&
+        semanticFact.startedSimulationTick > base.simulationTick)
+    ) invalid(schemaName);
     return deepFreeze({
       ...base,
       type: record.type,

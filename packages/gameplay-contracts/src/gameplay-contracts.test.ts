@@ -341,7 +341,7 @@ const semanticFactStartedEvent = {
   type: "semantic-fact.started",
   runtimeSessionId: "runtime-primary",
   worldSessionId: "world-primary",
-  simulationTick: 12,
+  simulationTick: 1,
   sequence: 8,
   semanticFact: eventSemanticFact,
 } as const satisfies GameplayEventV1;
@@ -484,6 +484,14 @@ describe("GameplayEventV1", () => {
     ["semantic Fact event with mismatched identity", {
       ...semanticFactStartedEvent,
       semanticFact: { ...eventSemanticFact, id: "semantic-fact:wrong" },
+    }],
+    ["semantic Fact started event after the Fact start", {
+      ...semanticFactStartedEvent,
+      simulationTick: eventSemanticFact.startedSimulationTick + 1,
+    }],
+    ["semantic Fact ended event before the Fact start", {
+      ...semanticFactEndedEvent,
+      simulationTick: eventSemanticFact.startedSimulationTick - 1,
     }],
     ["world failure without diagnostic", {
       kind: "worldkit-gameplay-event",
