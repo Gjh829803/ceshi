@@ -24,8 +24,8 @@ AuthoringSpec V4 (Route Connectivity)
 
 > Placement Solver S1 首个海湾纵向切片已完成并进入回归；通用 Terrain Mask、完整 Route R1、更多 Constraint 与 P0.1 整体仍未完成。
 
-> Route R1 Task 8 已实施到 Step 5；最终聚焦门禁与 Cursor CR 尚未关闭。当前没有
-> Task 9 的公开 Golden Fixture，因此示例命令用 `<world-v4.json>` 占位。
+> Route R1 Task 8 已完成并通过最终门禁；阶段 Cursor CR 超时且无 verdict，按 `TIMEOUT`
+> 记录。当前没有 Task 9 的公开 Golden Fixture，因此示例命令用 `<world-v4.json>` 占位。
 
 ## 1. 最短运行路径
 
@@ -453,7 +453,7 @@ Screen Region、八种关闭 Constraint、Required/Preferred 与锁定 Profile/S
 - Relationship、挂载、坐骑、拖拽、装备、武器和车辆；
 - NPC 行为、战斗、导航、玩法规则、网络与动态刚体；
 - 飞行、第一人称/自由镜头、室内、洞穴、悬挑和 Overhang 地形；
-- 通用 Terrain Mask、Route Task 8 最终门禁、Task 9/R1b/完整 R1、S1 之外的 Constraint、增量 Solver 和完整 P0.1；
+- 通用 Terrain Mask、Route Task 9/R1b/完整 R1、S1 之外的 Constraint、增量 Solver 和完整 P0.1；
 - 非空 `relationships`、非空 `rules` 和运行时动态 Spawn。
 
 `seat.mount` 目前只是可验证、可解释的 Socket 数据，不代表骑乘逻辑已经实现。

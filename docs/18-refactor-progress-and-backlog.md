@@ -2,7 +2,7 @@
 
 - 状态：Active，重构执行进度与剩余工作的唯一跟踪入口。
 - 基准日期：2026-08-23。
-- 长期目标总进度：约 **62%**，合理误差范围为 ±5%。
+- 长期目标总进度：约 **63%**，合理误差范围为 ±5%。
 - 第一条 Canonical 纵向切片：约 **90%**。
 - 当前代码入口：基础世界走 Canonical Authoring V3 → NormalizedWorldIR V3 → ExecutionPlan V4；Route 世界走 Authoring V4 → IR V4 → ExecutionPlan V5 → WorldPackage Build Receipt → Validation Subject → Recast → Babylon.js/Havok Probe → Canonical Route Evidence/Report；两者共享 Babylon/Havok Runtime 与 Browser Protocol V4。
 
@@ -13,8 +13,8 @@
 
 > Placement Solver S1 首个海湾纵向切片已完成并进入回归；通用 Terrain Mask、完整 Route R1、更多 Constraint 与 P0.1 整体仍未完成。
 
-> Route R1 Task 8 Step 1–5 已实施；Step 6 最终聚焦门禁与独立 Cursor CR 尚未关闭。
-> Task 9、R1b、R1 与 M5 仍未完成，进度百分比暂不因未关闭的 Task 8 上调。
+> Route R1 Task 8 已完成并通过最终门禁。阶段 Cursor CR 超时且无 verdict，按 `TIMEOUT`
+> 记录；Task 8 由宿主审查与回归证据关闭。Task 9、R1b、R1 与 M5 仍未完成。
 
 > Simulation Take / Control Capture V1 已完成 60 Hz → 24 fps 精确时间映射、五 Pass
 > Babylon 捕获、Render Ready Receipt、原子 Bundle、CLI/Browser/Playwright 和真实 Chromium
@@ -64,12 +64,12 @@ Normalizer/Compiler、Runtime、CLI/Browser 和对应 Conformance Gate 的纵向
 | Canonical Schema、IR、Registry 与 Compiler | 15% | 82% | 12.3% | 基础链路 Authoring V3 → IR V3 → Plan V4 与 Route 链路 Authoring V4 → IR V4 → Plan V5、Hash、Lock、严格校验、Placement、Primitive 与首个 Asset Subject 已交付；Task 8 最小 WorldPackage Root/Build Receipt 已实现，完整 P1.4 发布格式、WorldChangeSet 和完整 Capability 尚未交付 |
 | Babylon/Havok Runtime、物理与相机 | 15% | 75% | 11.25% | Heightfield、障碍、水域、多主体、第三人称、碰撞、资产主体、Placement Assertion 与五 Pass Capture 已交付；多视角与完整生产预算尚未完成 |
 | Subject LEGO 组装体系 | 15% | 45% | 6.75% | S0、S1a、Golden 与首个产品 G Bot 可视切片已完成；S1b 后续、S2、S3、S4 尚未完成 |
-| Terrain、Region 与 Placement | 12% | 60% | 7.2% | Alpha 地形和 Placement Solver S1 已运行；Route R1 Task 4–7 已审查关闭，Task 8 Step 1–5 已实施；Step 6、Task 9、R1b、通用 Terrain Mask、更多 Constraint 与完整 P0.1 未完成 |
-| CLI、Browser Protocol 与自动化 | 10% | 84% | 8.4% | 已交付 Take/Capture、`verify capture|explain`；Route `verify route`、可信 Host Evidence Transport 与完整继承 V3 的 Browser V4 已实施并等待最终 Task 8 Gate；compare、持久 Session 和完整 Package 工具未完成 |
+| Terrain、Region 与 Placement | 12% | 63% | 7.56% | Alpha 地形和 Placement Solver S1 已运行；Route R1 Task 4–8 已审查/门禁关闭；Task 9、R1b、通用 Terrain Mask、更多 Constraint 与完整 P0.1 未完成 |
+| CLI、Browser Protocol 与自动化 | 10% | 87% | 8.7% | 已交付 Take/Capture、`verify capture|explain`；Route `verify route`、可信 Host Evidence Transport、完整继承 V3 的 Browser V4 与 Task 8 Gate 已完成；compare、持久 Session 和完整 Package 工具未完成 |
 | Semantic Action、动画与 Gameplay | 8% | 33% | 2.64% | Golden 与 G Bot `idle/walk/run/jump` 固定 Tick Animation Binding 已交付；通用 Action Request/Receipt、姿态、装备与规则未交付 |
 | Simulation Take、控制通道与视频接入 | 10% | 70% | 7.0% | V1 Take、五 Pass、Bundle 和真实浏览器 Gate 已交付，Capture/Integrity 已进入统一 Report；完整 Replay/Resume 与模型 Adapter 未交付 |
-| 生产 Gate、默认切换与旧实现退出 | 7% | 48% | 3.36% | Canonical/资产/Placement/Capture Gate 可运行；Capture/Integrity 与 Route 双 Blocking Gate 已实现，Route Task 8 最终 Gate/CR 尚未关闭；其他统一 Gate、默认切换和旧路径退出未交付 |
-| **合计** | **100%** |  | **约 67%** | 对外按通用 Terrain/Route、完整统一生产 Gate、WorldPackage 与视频闭环的不确定性保守报告 **约 62%** |
+| 生产 Gate、默认切换与旧实现退出 | 7% | 52% | 3.64% | Canonical/资产/Placement/Capture Gate 可运行；Capture/Integrity 与 Route 双 Blocking Gate、Task 8 最终 Gate 已关闭；其他统一 Gate、默认切换和旧路径退出未交付 |
+| **合计** | **100%** |  | **约 68%** | 对外按通用 Terrain/Route、完整统一生产 Gate、WorldPackage 与视频闭环的不确定性保守报告 **约 63%** |
 
 “第一条 Canonical 纵向切片约 90%”只指以下较窄范围：AI 提交 JSON，SDK
 完成严格校验、确定性编译、Babylon/Havok 运行、多主体控制、首个 Golden Asset
@@ -237,8 +237,8 @@ P1.5、P1.6、P2.5 与 P2.6 是把既有总体设计和产品对接契约显式�
   `HeightfieldRouteBuildInputReceiptV1`，不能把失败证据套用到另一个 World/Build Input。
   Task 7 聚焦门禁为 77 tests，宿主组合复核为 82 tests，Typecheck 与 R0 Contract Gate
   均通过；宿主与独立窄复核为 `GO`。该阶段唯一 Cursor review 在 8 分钟时超时且没有
-  verdict，只记录为 `TIMEOUT`，不得记为 `GO`。Task 7 已审查关闭。Task 8 Step 1–5 已在
-  当前实施分支完成：`32a97e9` 冻结 canonical Route Overlay；`184fa82` 在经审查后选择的
+  verdict，只记录为 `TIMEOUT`，不得记为 `GO`。Task 7 已审查关闭。Task 8 已在
+  当前实施分支完成并由宿主关闭：`32a97e9` 冻结 canonical Route Overlay；`184fa82` 在经审查后选择的
   `@whitebox-world/world-package` 装配边界实现最小正式 Manifest、Package Root 与 Build
   Receipt；`bc1e266` 把 Layout Solve Report Evidence 保留进 Pipeline，`715f32f` 完成唯一
   Validation-subject seam；`d5116b9` 定义完整继承
@@ -251,7 +251,8 @@ P1.5、P1.6、P2.5 与 P2.6 是把既有总体设计和产品对接契约显式�
   输入明确拒绝。Package Root 从原计划的 `@whitebox-world/protocol` 调整到
   `@whitebox-world/world-package` 是依赖方向审查后的修正：Protocol 继续只拥有通用
   Canonical Bytes/Hash，跨 Authoring/Compiler/Layout/Runtime 的装配合同不下沉污染基础层。
-  Task 8 Step 6 最终聚焦门禁和阶段唯一 Cursor CR 仍未关闭，因此 Task 8、R1、M5 和 R1b
+  Task 8 Step 6 最终聚焦门禁已通过；阶段唯一 Cursor CR 约 12 分钟后仍无 verdict，按
+  `TIMEOUT` 记录，不计为 `GO`。Task 8 已由宿主审查与回归证据关闭；R1、M5 和 R1b
   仍未标记完成。
   Task 4 的
   Graph/Query、source-area、失败证据与生命周期设计已在
@@ -729,14 +730,15 @@ Driver 与真实 Babylon/Havok 10-case 集成已完成并通过聚焦、深 Runt
 `complete | unreachable | incomplete` 统一 evaluator 与两条 Route Blocking Gate 接入
 `ValidationReportV2`；BuildInput 上下文 P1 已关闭，77 focused / 82 host-combined tests、
 Typecheck 与 R0 Contract Gate 均通过，宿主与独立窄复核为 `GO`。Task 7 唯一 Cursor
-阶段审查在 8 分钟时超时，只记录 `TIMEOUT`。Task 8 Step 1–5 已实施：最小正式
+阶段审查在 8 分钟时超时，只记录 `TIMEOUT`。Task 8 已实施并完成最终门禁：最小正式
 WorldPackage Root/Build Receipt、唯一 Validation Subject、Canonical Route Overlay 与
 Publication、确定性多 Route Orchestrator、可信 Authoring V4/ExecutionPlan V5 Runner、`worldkit verify route`、
 完整继承 V3 的 Browser Protocol V4，以及 `worldkit run` 私有只读 Host Transport 已接通。
 真实验证链路使用 Recast Graph/Path 与 Babylon/Havok `NullEngine` fixed-tick Probe；页面
 不生产证据，V3 Route 输入明确拒绝。Package Root 经依赖方向审查放在
 `@whitebox-world/world-package`，不再按旧文件表塞入 `@whitebox-world/protocol`。Task 8
-Step 6 最终聚焦门禁与阶段唯一 Cursor CR 仍待关闭；之后完成 Task 9 并进入 R1b。S1b Golden、
+Step 6 最终聚焦门禁已关闭；阶段唯一 Cursor CR 超时且无 verdict，按 `TIMEOUT` 记录。
+之后完成 Task 9 并进入 R1b。S1b Golden、
 首个产品 G Bot、Placement Solver S1、Control Capture V1 与 Validation Capture/Integrity V1
 都已进入回归，下一步：
 
@@ -759,11 +761,12 @@ Step 6 最终聚焦门禁与阶段唯一 Cursor CR 仍待关闭；之后完成 T
    `route-runtime-conformance` 两条生产 Blocking Gate；BuildInput 上下文 P1 已关闭，
    77 focused / 82 host-combined tests、Typecheck 与 R0 Contract Gate 通过，宿主与独立窄复核
    为 `GO`。唯一 Cursor 阶段审查在 8 分钟时超时，只记录 `TIMEOUT`。Task 7 已审查关闭；
-   Task 8 Step 1–5 已实施：最小正式 WorldPackage Root/Build Receipt、Validation Subject、
+   Task 8 已实施并完成最终门禁：最小正式 WorldPackage Root/Build Receipt、Validation Subject、
    `worldkit verify route`、可信 Recast + Babylon/Havok Runner、Canonical Evidence/Report、
    完整继承 V3 的 Browser Protocol V4 和私有只读 Host Transport 均已接通。Package Root
    经依赖方向审查归属 `@whitebox-world/world-package`；页面不生产证据，V3 Route 输入明确
-   拒绝。Step 6 最终聚焦门禁与阶段唯一 Cursor CR 仍未关闭，Task 9、R1 与 R1b 仍未完成。
+   拒绝。Step 6 最终聚焦门禁已关闭；阶段唯一 Cursor CR 超时且无 verdict，只记录
+   `TIMEOUT`。Task 9、R1 与 R1b 仍未完成。
    P1.5 Ground/Air Runtime 前置依赖已经满足。之后复用既有
    Route/Region，按主体 Lock 从 Heightfield 与显式 Traversal Surface 构建分层 3D Graph，
    并用真实 Babylon/Havok 人物控制器证明地形→台阶/坡道→静态平台路线；只有 Required

@@ -810,11 +810,13 @@ Host review and a fresh independent narrow review returned `GO`, with the
 BuildInput contextual P1 closed before the final verdict. The single
 stage-boundary Cursor review reached the 8-minute timeout without a verdict; it
 is recorded as `TIMEOUT`, never as `GO`. Task 7 is review-closed. R1 and M5 remain
-open. Task 8 Step 1–5 are now implemented: canonical Overlay, the reviewed
+open. Task 8 is now implemented: canonical Overlay, the reviewed
 `@whitebox-world/world-package` Root/Build Receipt authority, the single
 Validation-subject seam, deterministic orchestration, trusted Authoring V4 / ExecutionPlan V5 Runner, CLI,
 Browser Protocol V4 and private Host transport are connected. Step 6 focused gates
-and the single stage-boundary Cursor CR remain open, so Task 8 is not yet complete.
+passed. The single stage-boundary Cursor CR produced no verdict after roughly 12
+minutes and is recorded as `TIMEOUT`, never as `GO`; host review and the full gate
+set close Task 8.
 Task 9's R1 gate/fixtures and the separately planned R1b surface/platform slice
 still follow Task 8.
 
@@ -928,7 +930,7 @@ Prove that the browser fields use the same canonical names and typed payloads as
 
 Implement the complete `WorldkitBrowserApiV4` and update host wiring, CLI/Playwright consumers, canonical verification, docs/examples, and generated/public types atomically. Do not add optional aliases to V3. `scripts/lib/worldkit-server.ts` owns trusted server-side Route evidence configuration, `apps/playground/vite.config.mjs` exposes only the narrow read endpoint needed by the local Host, `apps/playground/src/authoring-loader.ts` validates/loads that already-created evidence, and `apps/playground/src/main.ts` injects the resulting immutable projection into `installWorldkitBrowserApi()`. The Host reuses the same canonical overlay and `WorldPackageValidationSubjectV1` assembly seams as CLI. Page scripts may only inspect/overlay the injected projection; they may not import Graph builders, issue arbitrary queries, start Havok probes, accept mutable thresholds, or receive provider handles. Direct installer tests are necessary but are not a substitute for one real `worldkit run` Host-transport test.
 
-- [ ] **Step 6: Run focused gates**
+- [x] **Step 6: Run focused gates**
 
 Run:
 
@@ -942,6 +944,19 @@ pnpm verify:g-bot-subject
 ```
 
 Expected: PASS.
+
+Recorded completion evidence at `c778794`:
+
+- the 15-file focused set passed 217/217 tests serially, including the real
+  Recast/Babylon/Havok Runner and real `worldkit run` → private Host → Browser V4 E2E;
+- `pnpm typecheck`, `pnpm build`, `pnpm verify:canonical`,
+  `pnpm verify:placement-layout`, `pnpm verify:rigged-subject`,
+  `pnpm verify:g-bot-subject`, and `pnpm verify:route-r0-contract` passed;
+- host review confirmed and closed two late P1 findings: forged but internally
+  self-consistent Package Roots now fail the authoritative build-closure binding,
+  and raw provider messages/causes/paths/handles no longer cross public CLI JSON;
+- the single final Cursor CR timed out without a verdict after roughly 12 minutes.
+  It is recorded as `TIMEOUT`, not `GO`; no Cursor finding was accepted or hidden.
 
 ---
 

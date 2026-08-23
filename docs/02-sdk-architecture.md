@@ -196,7 +196,7 @@ flowchart TB
 | L5 领域层 | 定义世界、主体、Capability、Relationship、动作、控制、相机、物理和 Runtime Port 的引擎无关语义 | 不决定 Babylon API 的调用方式 | 当前分布在 `packages/authoring`、`subject-composition`、`subject-actions`、`subject-registry` 与 `runtime-contracts`；通用 Capability/Relationship/Port 仍未完成 |
 | L6 引擎适配层 | 把 ExecutionPlan 和资产字节翻译为 Babylon/Havok 对象，并把锁定 Traversal 输入交给 Recast Provider | 不补写 AI 意图、不修改 Schema、不把 Provider Handle 写入协议 | `packages/runtime-babylon` 与 `packages/traversal-recast` |
 | L7 运行时层 | Session、固定 Tick、控制绑定、物理移动、动画状态、相机跟随和 Snapshot | 不重新求解 Placement，不读取 Registry URI | `packages/runtime-babylon`；正式持久 Session 尚在设计 |
-| L8 证据层 | 输出截图、状态、Hash、指标和下游模型输入 | 不用视觉结果掩盖结构错误，页面不生产可信 Route 证据 | snapshot/screenshot、五 Pass Control Capture Bundle V1；Capture/Integrity 与 Route 双 Blocking Gate、Canonical Evidence/Report 已实现到 Task 8 Step 5 |
+| L8 证据层 | 输出截图、状态、Hash、指标和下游模型输入 | 不用视觉结果掩盖结构错误，页面不生产可信 Route 证据 | snapshot/screenshot、五 Pass Control Capture Bundle V1；Capture/Integrity 与 Route 双 Blocking Gate、Canonical Evidence/Report 已完成 Task 8 |
 
 `Registry` 是横跨 L2、L3 和 L5 的“乐高零件目录”：公共面提供可发现的 Ref 和
 Manifest，Authoring 负责解析并锁定版本，领域定义则描述 Subject、Rig、Animation、
@@ -456,7 +456,7 @@ Authoring、IR、ExecutionPlan 或 Browser Protocol。
 
 ## 9. 当前完成边界
 
-截至 2026-08-23，以下窄纵向切片已经运行并进入回归，或已实施并等待最后阶段门禁：
+截至 2026-08-23，以下窄纵向切片已经运行并进入回归：
 
 - Canonical Authoring V3 → IR V3 → ExecutionPlan V4；
 - Placement Solver S1 的八种 Constraint 和海湾 Golden 场景；
@@ -465,7 +465,7 @@ Authoring、IR、ExecutionPlan 或 Browser Protocol。
 - CLI/Browser V4 的校验、编译、运行、控制、Snapshot、单截图和 Take/Capture 操作；
 - Route Task 8 的 WorldPackage Build Receipt、Validation Subject、Recast Graph/Path、
   真实 Babylon/Havok `NullEngine` Probe、Canonical Evidence/Report、`verify route` 与
-  四个只读 Browser getter；Step 6 最终门禁和独立 Cursor CR 尚未关闭；
+  四个只读 Browser getter及最终门禁；阶段 Cursor CR 超时且无 verdict，按 `TIMEOUT` 记录；
 - Simulation Take V1、五 Pass Babylon Capture、Render Ready Receipt 与原子 Bundle；
 - Validation Capture/Integrity V1：版本化 Profile、严格 Report、Blocking/Incomplete
   Policy、Bundle Adapter、`verify capture|explain` 与五类 Conformance Fixture；

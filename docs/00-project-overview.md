@@ -51,8 +51,9 @@ Director LLM → Render Directive SDK ────────────┘
 > Capture/Integrity V1 也已交付。完整 Replay/Resume、Placement/Physics/Composition
 > Validation 接入与 Video Adapter 仍未完成。
 
-> Route R1 Task 8 的 shared contract、可信 CLI/Host 运行链路与只读 Browser Protocol
-> V4 已实施；最终聚焦门禁与 Cursor CR 仍在进行。Task 9 Fixture、R1b、R1 和 M5 仍开放。
+> Route R1 Task 8 的 shared contract、可信 CLI/Host 运行链路、只读 Browser Protocol
+> V4 与最终门禁已完成。阶段 Cursor CR 超时且无 verdict，按 `TIMEOUT` 记录；Task 8 已由
+> 宿主审查与回归证据关闭。Task 9 Fixture、R1b、R1 和 M5 仍开放。
 
 第一期 Alpha 已证明以下链路可以运行：
 
@@ -150,7 +151,7 @@ Entity 通过八种关闭 Constraint、Required/Preferred 优先级和锁定 Sol
 Required Runtime Assertion，不重新布局。海湾 Fixture 覆盖接地、净空、路线坡度、
 镜头可见性、冲突、篡改、预算和连续/并发确定性。
 
-未完成：通用 Terrain Mask、Route R1 的 Task 9/R1b/最终门禁、更多 Constraint、增量求解、通用
+未完成：通用 Terrain Mask、Route R1 的 Task 9/R1b、更多 Constraint、增量求解、通用
 Validation Report 以及完整 P0.1。S1 证明的是一个受控纵向切片，不是任意开放世界
 布局已经生产完成。
 
@@ -163,8 +164,8 @@ Validation Subject 绑定五个权威 Hash，再用 Recast Graph/Path 与真实 
 `worldkit run` 复用同一可信链路，通过 Host 私有、只读传输把证据注入 Browser
 Protocol V4；页面只读取 Route Summary、Path Receipt、Probe Receipt 和 Overlay。
 
-未完成：Task 8 的最终聚焦门禁与独立 Cursor CR、Task 9 Golden/Adversarial Fixture、
-R1b 静态平台/Surface→Collider Subshape，以及完整 R1/M5 验收。V3 输入明确不进入
+未完成：Task 9 Golden/Adversarial Fixture、R1b 静态平台/Surface→Collider Subshape，
+以及完整 R1/M5 验收。Task 8 阶段 Cursor CR 超时且无 verdict，只记录 `TIMEOUT`；V3 输入明确不进入
 Route Verification；页面也不会成为备用 Evidence Producer。
 
 ### Simulation Take / Control Capture V1：首个五 Pass 切片
