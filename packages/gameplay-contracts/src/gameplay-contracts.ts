@@ -343,6 +343,7 @@ export function hashGameplayCommandV1(input: unknown): Sha256HashV1 {
 }
 
 export type GameplayDiagnosticCodeV1 =
+  | "INPUT_INVALID"
   | "RUNTIME_SESSION_NOT_FOUND"
   | "WORLD_SESSION_NOT_READY"
   | "WORLD_SESSION_ID_INVALID"
@@ -357,6 +358,8 @@ export type GameplayDiagnosticCodeV1 =
   | "CONTROL_POSSESSION_STALE"
   | "GAMEPLAY_RULE_REJECTED"
   | "GAMEPLAY_CAPACITY_EXCEEDED"
+  | "FEATURE_NOT_LOCKED"
+  | "ACTION_CATALOG_INVALID"
   | "ACTION_DEFINITION_NOT_FOUND"
   | "ACTION_NOT_AVAILABLE_FOR_ACTOR"
   | "ACTION_ALREADY_ACTIVE"
@@ -377,6 +380,7 @@ export interface GameplayDiagnosticV1 {
 }
 
 const GAMEPLAY_DIAGNOSTIC_CODES = new Set<GameplayDiagnosticCodeV1>([
+  "INPUT_INVALID",
   "RUNTIME_SESSION_NOT_FOUND",
   "WORLD_SESSION_NOT_READY",
   "WORLD_SESSION_ID_INVALID",
@@ -391,6 +395,8 @@ const GAMEPLAY_DIAGNOSTIC_CODES = new Set<GameplayDiagnosticCodeV1>([
   "CONTROL_POSSESSION_STALE",
   "GAMEPLAY_RULE_REJECTED",
   "GAMEPLAY_CAPACITY_EXCEEDED",
+  "FEATURE_NOT_LOCKED",
+  "ACTION_CATALOG_INVALID",
   "ACTION_DEFINITION_NOT_FOUND",
   "ACTION_NOT_AVAILABLE_FOR_ACTOR",
   "ACTION_ALREADY_ACTIVE",
@@ -850,6 +856,41 @@ export interface PossessedByRelationshipStateV1 {
 
 export type GameplayRelationshipStateV1 = PossessedByRelationshipStateV1;
 
+export interface SupportedByFactV1 {
+  readonly id: string;
+  readonly type: "supportedBy";
+  readonly schemaVersion: 1;
+  readonly supportedEntityId: string;
+  readonly supportSurfaceEntityId: string;
+  readonly supportColliderSubshapeId: string;
+  readonly supportTraversalSurfaceId?: string;
+  readonly supportPointMetersXYZ: readonly [number, number, number];
+  readonly supportNormalXYZ: readonly [number, number, number];
+  readonly startedSimulationTick: number;
+}
+
+export interface TouchingFactV1 {
+  readonly id: string;
+  readonly type: "touching";
+  readonly schemaVersion: 1;
+  readonly entityIds: readonly [string, string];
+  readonly startedSimulationTick: number;
+}
+
+export interface InsideVolumeFactV1 {
+  readonly id: string;
+  readonly type: "insideVolume";
+  readonly schemaVersion: 1;
+  readonly containedEntityId: string;
+  readonly volumeEntityId: string;
+  readonly startedSimulationTick: number;
+}
+
+export type GameplaySemanticFactV1 =
+  | SupportedByFactV1
+  | TouchingFactV1
+  | InsideVolumeFactV1;
+
 interface GameplayActionStateBaseV1 {
   readonly id: string;
   readonly kind: "action-state";
@@ -884,8 +925,10 @@ export interface WorldStateSnapshotV1 {
   readonly entityStatesById: Readonly<Record<string, GameplayEntityStateV1>>;
   readonly capabilityStatesById: Readonly<Record<string, GameplayCapabilityStateV1>>;
   readonly relationshipStatesById: Readonly<Record<string, GameplayRelationshipStateV1>>;
+  readonly semanticFactsById: Readonly<Record<string, GameplaySemanticFactV1>>;
   readonly activeActionStatesById: Readonly<Record<string, GameplayActionStateV1>>;
   readonly lastEventSequence: number;
+  readonly worldStateHash: Sha256HashV1;
 }
 
 function hasOnlyKnownKeys(
@@ -1091,6 +1134,125 @@ function parsePossessedByRelationshipStateV1(
   };
 }
 
+function parseSupportedByFactV1(
+  record: Readonly<Record<string, unknown>>,
+): SupportedByFactV1 | undefined {
+  const baseKeys = [
+    "id",
+    "type",
+    "schemaVersion",
+    "supportedEntityId",
+    "supportSurfaceEntityId",
+    "supportColliderSubshapeId",
+    "supportPointMetersXYZ",
+    "supportNormalXYZ",
+    "startedSimulationTick",
+  ] as const;
+  const hasTraversalSurface = hasExactKeys(record, [
+    ...baseKeys,
+    "supportTraversalSurfaceId",
+  ]);
+  if ((!hasExactKeys(record, baseKeys) && !hasTraversalSurface) ||
+    record.type !== "supportedBy" ||
+    record.schemaVersion !== 1 ||
+    !isNonEmptyString(record.id) ||
+    !isNonEmptyString(record.supportedEntityId) ||
+    !isNonEmptyString(record.supportSurfaceEntityId) ||
+    !isNonEmptyString(record.supportColliderSubshapeId) ||
+    (hasTraversalSurface && !isNonEmptyString(record.supportTraversalSurfaceId)) ||
+    !isSafeNonNegativeInteger(record.startedSimulationTick)
+  ) return undefined;
+  const supportPointMetersXYZ = parseFiniteTuple(record.supportPointMetersXYZ, 3);
+  const supportNormalXYZ = parseFiniteTuple(record.supportNormalXYZ, 3);
+  if (supportPointMetersXYZ === undefined || supportNormalXYZ === undefined) {
+    return undefined;
+  }
+  return {
+    id: record.id,
+    type: "supportedBy",
+    schemaVersion: 1,
+    supportedEntityId: record.supportedEntityId,
+    supportSurfaceEntityId: record.supportSurfaceEntityId,
+    supportColliderSubshapeId: record.supportColliderSubshapeId,
+    ...(hasTraversalSurface
+      ? { supportTraversalSurfaceId: record.supportTraversalSurfaceId as string }
+      : {}),
+    supportPointMetersXYZ: supportPointMetersXYZ as readonly [number, number, number],
+    supportNormalXYZ: supportNormalXYZ as readonly [number, number, number],
+    startedSimulationTick: record.startedSimulationTick,
+  };
+}
+
+function parseTouchingFactV1(
+  record: Readonly<Record<string, unknown>>,
+): TouchingFactV1 | undefined {
+  if (!hasExactKeys(record, [
+    "id",
+    "type",
+    "schemaVersion",
+    "entityIds",
+    "startedSimulationTick",
+  ]) ||
+    record.type !== "touching" ||
+    record.schemaVersion !== 1 ||
+    !isNonEmptyString(record.id) ||
+    !isSafeNonNegativeInteger(record.startedSimulationTick)
+  ) return undefined;
+  const entityIds = snapshotDataArray(record.entityIds);
+  if (
+    entityIds === undefined ||
+    entityIds.length !== 2 ||
+    !isNonEmptyString(entityIds[0]) ||
+    !isNonEmptyString(entityIds[1]) ||
+    entityIds[0] >= entityIds[1]
+  ) return undefined;
+  return {
+    id: record.id,
+    type: "touching",
+    schemaVersion: 1,
+    entityIds: [entityIds[0], entityIds[1]],
+    startedSimulationTick: record.startedSimulationTick,
+  };
+}
+
+function parseInsideVolumeFactV1(
+  record: Readonly<Record<string, unknown>>,
+): InsideVolumeFactV1 | undefined {
+  if (!hasExactKeys(record, [
+    "id",
+    "type",
+    "schemaVersion",
+    "containedEntityId",
+    "volumeEntityId",
+    "startedSimulationTick",
+  ]) ||
+    record.type !== "insideVolume" ||
+    record.schemaVersion !== 1 ||
+    !isNonEmptyString(record.id) ||
+    !isNonEmptyString(record.containedEntityId) ||
+    !isNonEmptyString(record.volumeEntityId) ||
+    !isSafeNonNegativeInteger(record.startedSimulationTick)
+  ) return undefined;
+  return {
+    id: record.id,
+    type: "insideVolume",
+    schemaVersion: 1,
+    containedEntityId: record.containedEntityId,
+    volumeEntityId: record.volumeEntityId,
+    startedSimulationTick: record.startedSimulationTick,
+  };
+}
+
+function parseGameplaySemanticFactV1(
+  input: unknown,
+): GameplaySemanticFactV1 | undefined {
+  const record = snapshotDataRecord(input);
+  if (record?.type === "supportedBy") return parseSupportedByFactV1(record);
+  if (record?.type === "touching") return parseTouchingFactV1(record);
+  if (record?.type === "insideVolume") return parseInsideVolumeFactV1(record);
+  return undefined;
+}
+
 function parseGameplayActionStateV1(input: unknown): GameplayActionStateV1 | undefined {
   const record = snapshotDataRecord(input);
   if (record === undefined) return undefined;
@@ -1145,20 +1307,32 @@ function parseIdMap<T extends Readonly<{ id: string }>>(
 ): Readonly<Record<string, T>> | undefined {
   const record = snapshotDataRecord(input);
   if (record === undefined) return undefined;
-  const result: Record<string, T> = {};
+  const entries: [string, T][] = [];
   for (const key of Object.keys(record).sort()) {
     if (!isNonEmptyString(key)) return undefined;
     const parsed = parseValue(record[key]);
     if (parsed === undefined || parsed.id !== key) return undefined;
-    result[key] = parsed;
+    entries.push([key, parsed]);
   }
-  return result;
+  return Object.fromEntries(entries);
 }
 
-export function parseWorldStateSnapshotV1(input: unknown): WorldStateSnapshotV1 {
+type WorldStateSnapshotBodyV1 = Omit<WorldStateSnapshotV1, "worldStateHash">;
+
+function getOwnMapValue<T>(
+  map: Readonly<Record<string, T>>,
+  id: string,
+): T | undefined {
+  const descriptor = Reflect.getOwnPropertyDescriptor(map, id);
+  return descriptor !== undefined && "value" in descriptor
+    ? descriptor.value
+    : undefined;
+}
+
+function parseWorldStateSnapshotBodyV1(input: unknown): WorldStateSnapshotBodyV1 {
   const schemaName = "WorldStateSnapshotV1";
   const record = snapshotDataRecord(input) ?? invalid(schemaName);
-  if (!hasExactKeys(record, [
+  const bodyKeys = [
     "kind",
     "schemaVersion",
     "id",
@@ -1171,9 +1345,12 @@ export function parseWorldStateSnapshotV1(input: unknown): WorldStateSnapshotV1 
     "entityStatesById",
     "capabilityStatesById",
     "relationshipStatesById",
+    "semanticFactsById",
     "activeActionStatesById",
     "lastEventSequence",
-  ]) ||
+  ] as const;
+  if ((!hasExactKeys(record, bodyKeys) &&
+      !hasExactKeys(record, [...bodyKeys, "worldStateHash"])) ||
     record.kind !== "worldkit-world-state-snapshot" ||
     record.schemaVersion !== 1 ||
     !isNonEmptyString(record.id) ||
@@ -1198,6 +1375,10 @@ export function parseWorldStateSnapshotV1(input: unknown): WorldStateSnapshotV1 
     record.relationshipStatesById,
     parsePossessedByRelationshipStateV1,
   ) ?? invalid(schemaName);
+  const semanticFactsById = parseIdMap(
+    record.semanticFactsById,
+    parseGameplaySemanticFactV1,
+  ) ?? invalid(schemaName);
   const activeActionStatesById = parseIdMap(
     record.activeActionStatesById,
     parseGameplayActionStateV1,
@@ -1210,11 +1391,37 @@ export function parseWorldStateSnapshotV1(input: unknown): WorldStateSnapshotV1 
       controlledEntityIds.has(relationship.controlledEntityId) ||
       controllerEntityIds.has(relationship.controllerEntityId)
     ) invalid(schemaName);
+    const controlledEntity = getOwnMapValue(
+      entityStatesById,
+      relationship.controlledEntityId,
+    );
+    const controllerEntity = getOwnMapValue(
+      entityStatesById,
+      relationship.controllerEntityId,
+    );
+    if (
+      controlledEntity?.kind !== "spatial-entity-state" ||
+      controllerEntity?.kind !== "controller-entity-state"
+    ) invalid(schemaName);
     controlledEntityIds.add(relationship.controlledEntityId);
     controllerEntityIds.add(relationship.controllerEntityId);
   }
 
-  return deepFreeze({
+  for (const capability of Object.values(capabilityStatesById)) {
+    if (
+      getOwnMapValue(entityStatesById, capability.ownerEntityId)?.kind !==
+        "spatial-entity-state"
+    ) invalid(schemaName);
+  }
+
+  for (const action of Object.values(activeActionStatesById)) {
+    if (
+      getOwnMapValue(entityStatesById, action.actorEntityId)?.kind !==
+        "spatial-entity-state"
+    ) invalid(schemaName);
+  }
+
+  return {
     kind: "worldkit-world-state-snapshot",
     schemaVersion: 1,
     id: record.id as string,
@@ -1227,9 +1434,50 @@ export function parseWorldStateSnapshotV1(input: unknown): WorldStateSnapshotV1 
     entityStatesById,
     capabilityStatesById,
     relationshipStatesById,
+    semanticFactsById,
     activeActionStatesById,
     lastEventSequence: record.lastEventSequence as number,
+  };
+}
+
+function worldStateHashDomainV1(body: WorldStateSnapshotBodyV1): unknown {
+  return {
+    simulationTick: body.simulationTick,
+    worldPackageRootHash: body.worldPackageRootHash,
+    executionPlanHash: body.executionPlanHash,
+    entityStatesById: body.entityStatesById,
+    capabilityStatesById: body.capabilityStatesById,
+    relationshipStatesById: body.relationshipStatesById,
+    semanticFactsById: body.semanticFactsById,
+    activeActionStatesById: body.activeActionStatesById,
+    lastEventSequence: body.lastEventSequence,
+  };
+}
+
+export function deriveWorldStateHashV1(input: unknown): Sha256HashV1 {
+  const body = parseWorldStateSnapshotBodyV1(input);
+  return sha256CanonicalJson(worldStateHashDomainV1(body)) as Sha256HashV1;
+}
+
+export function buildWorldStateSnapshotV1(input: unknown): WorldStateSnapshotV1 {
+  const body = parseWorldStateSnapshotBodyV1(input);
+  return deepFreeze({
+    ...body,
+    worldStateHash: sha256CanonicalJson(
+      worldStateHashDomainV1(body),
+    ) as Sha256HashV1,
   });
+}
+
+export function parseWorldStateSnapshotV1(input: unknown): WorldStateSnapshotV1 {
+  const schemaName = "WorldStateSnapshotV1";
+  const record = snapshotDataRecord(input) ?? invalid(schemaName);
+  if (!Object.hasOwn(record, "worldStateHash") || !isSha256(record.worldStateHash)) {
+    return invalid(schemaName);
+  }
+  const snapshot = buildWorldStateSnapshotV1(record);
+  if (snapshot.worldStateHash !== record.worldStateHash) return invalid(schemaName);
+  return snapshot;
 }
 
 export function canonicalizeWorldStateSnapshotV1(input: unknown): string {
@@ -1241,7 +1489,7 @@ export function worldStateSnapshotCanonicalBytesV1(input: unknown): Uint8Array {
 }
 
 export function hashWorldStateSnapshotV1(input: unknown): Sha256HashV1 {
-  return sha256CanonicalJson(parseWorldStateSnapshotV1(input)) as Sha256HashV1;
+  return parseWorldStateSnapshotV1(input).worldStateHash;
 }
 
 export interface GameplayParticipantStateV1 {
@@ -1366,12 +1614,20 @@ export function parseGameplayInspectionSnapshotV1(
     record.activatedGameplayFeatureRefs,
   ) ?? invalid(schemaName);
 
+  for (const controller of Object.values(controllerStatesById)) {
+    if (getOwnMapValue(participantStatesById, controller.participantId) === undefined) {
+      invalid(schemaName);
+    }
+  }
+
   const controlledEntityIds = new Set<string>();
   const controllerEntityIds = new Set<string>();
   for (const relationship of Object.values(possessedByRelationshipsById)) {
     if (
       controlledEntityIds.has(relationship.controlledEntityId) ||
-      controllerEntityIds.has(relationship.controllerEntityId)
+      controllerEntityIds.has(relationship.controllerEntityId) ||
+      getOwnMapValue(controllerStatesById, relationship.controllerEntityId) ===
+        undefined
     ) invalid(schemaName);
     controlledEntityIds.add(relationship.controlledEntityId);
     controllerEntityIds.add(relationship.controllerEntityId);

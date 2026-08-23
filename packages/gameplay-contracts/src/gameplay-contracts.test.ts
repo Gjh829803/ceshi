@@ -2,9 +2,11 @@ import { describe, expect, it } from "vitest";
 
 import {
   DEFAULT_GAMEPLAY_CAPACITY_BUDGET_V1,
+  buildWorldStateSnapshotV1,
   canonicalizeGameplayCommandV1,
   canonicalizeGameplayEventV1,
   canonicalizeWorldStateSnapshotV1,
+  deriveWorldStateHashV1,
   deriveGameplayEventIdV1,
   hashWorldStateSnapshotV1,
   parseGameplayCapacityBudgetV1,
@@ -18,6 +20,7 @@ import {
   type GameplayCommandReceiptV1,
   type GameplayEventV1,
   type GameplayInspectionSnapshotV1,
+  type GameplaySemanticFactV1,
   type WorldStateSnapshotV1,
 } from "./gameplay-contracts";
 
@@ -270,6 +273,17 @@ describe("GameplayCommandReceiptV1", () => {
       "closed GameplayCommandReceiptV1 schema",
     );
   });
+
+  it.each([
+    "INPUT_INVALID",
+    "FEATURE_NOT_LOCKED",
+    "ACTION_CATALOG_INVALID",
+  ] as const)("accepts downstream admission diagnostic %s", (code) => {
+    expect(parseGameplayCommandReceiptV1({
+      ...rejectedReceipt,
+      diagnostic: { code, message: `Stable ${code} diagnostic.` },
+    })).toMatchObject({ status: "rejected", diagnostic: { code } });
+  });
 });
 
 const relationshipCommittedEvent = {
@@ -479,6 +493,22 @@ const actionState = {
   lastTransitionSimulationTick: 12,
 } as const;
 
+const supportedByFact = {
+  id: "support-g-bot-primary",
+  type: "supportedBy",
+  schemaVersion: 1,
+  supportedEntityId: "g-bot-primary",
+  supportSurfaceEntityId: "terrain-primary",
+  supportColliderSubshapeId: "terrain-collider-primary",
+  supportTraversalSurfaceId: "traversal-surface-primary",
+  supportPointMetersXYZ: [0, 0, 2],
+  supportNormalXYZ: [0, 1, 0],
+  startedSimulationTick: 1,
+} as const satisfies GameplaySemanticFactV1;
+
+const WORLD_STATE_GOLDEN_HASH =
+  "sha256:b7b8047333099f4db76101e09a07c0981cbddbaec1a3c425f65e4f072dff2042" as const;
+
 const worldStateSnapshot = {
   kind: "worldkit-world-state-snapshot",
   schemaVersion: 1,
@@ -499,10 +529,14 @@ const worldStateSnapshot = {
   relationshipStatesById: {
     "possession-primary": possessionRelationshipState,
   },
+  semanticFactsById: {
+    "support-g-bot-primary": supportedByFact,
+  },
   activeActionStatesById: {
     "action-execution-primary": actionState,
   },
   lastEventSequence: 2,
+  worldStateHash: WORLD_STATE_GOLDEN_HASH,
 } as const satisfies WorldStateSnapshotV1;
 
 describe("WorldStateSnapshotV1", () => {
@@ -513,6 +547,220 @@ describe("WorldStateSnapshotV1", () => {
     expect(Object.isFrozen(parsed)).toBe(true);
     expect(Object.isFrozen(parsed.entityStatesById["g-bot-primary"])).toBe(true);
     expect(Object.isFrozen(parsed.relationshipStatesById)).toBe(true);
+  });
+
+  it("has a golden semantic hash over the canonical authority domain", () => {
+    expect(deriveWorldStateHashV1(worldStateSnapshot)).toBe(
+      WORLD_STATE_GOLDEN_HASH,
+    );
+    expect(hashWorldStateSnapshotV1(worldStateSnapshot)).toBe(
+      WORLD_STATE_GOLDEN_HASH,
+    );
+  });
+
+  it("excludes artifact identity, location, and the self hash", () => {
+    const changedIdentity = {
+      ...worldStateSnapshot,
+      id: "world-state-other",
+      runtimeSessionId: "runtime-other",
+      worldSessionId: "world-other",
+      worldPackageRef: "worldkit://world-package/relocated@1",
+      worldStateHash: HASH_C,
+    };
+
+    expect(deriveWorldStateHashV1(changedIdentity)).toBe(
+      WORLD_STATE_GOLDEN_HASH,
+    );
+    const rebuilt = buildWorldStateSnapshotV1(changedIdentity);
+    expect(rebuilt.worldStateHash).toBe(WORLD_STATE_GOLDEN_HASH);
+    expect(canonicalizeWorldStateSnapshotV1(rebuilt)).not.toBe(
+      canonicalizeWorldStateSnapshotV1(worldStateSnapshot),
+    );
+  });
+
+  it("changes the semantic hash for tick, lock, map, fact, or sequence tampering", () => {
+    const tamperedInputs = [
+      { ...worldStateSnapshot, simulationTick: 13 },
+      { ...worldStateSnapshot, worldPackageRootHash: HASH_C },
+      { ...worldStateSnapshot, executionPlanHash: HASH_C },
+      {
+        ...worldStateSnapshot,
+        entityStatesById: {
+          ...worldStateSnapshot.entityStatesById,
+          "g-bot-primary": {
+            ...spatialEntityState,
+            positionMetersXYZ: [1, 1, 2],
+          },
+        },
+      },
+      {
+        ...worldStateSnapshot,
+        semanticFactsById: {
+          "support-g-bot-primary": {
+            ...supportedByFact,
+            supportPointMetersXYZ: [1, 0, 2],
+          },
+        },
+      },
+      { ...worldStateSnapshot, lastEventSequence: 3 },
+    ];
+
+    for (const tampered of tamperedInputs) {
+      expect(deriveWorldStateHashV1(tampered)).not.toBe(
+        WORLD_STATE_GOLDEN_HASH,
+      );
+      expect(() => parseWorldStateSnapshotV1(tampered)).toThrow(
+        "closed WorldStateSnapshotV1 schema",
+      );
+    }
+
+    const selfHashTampered = { ...worldStateSnapshot, worldStateHash: HASH_C };
+    expect(deriveWorldStateHashV1(selfHashTampered)).toBe(
+      WORLD_STATE_GOLDEN_HASH,
+    );
+    expect(() => parseWorldStateSnapshotV1(selfHashTampered)).toThrow(
+      "closed WorldStateSnapshotV1 schema",
+    );
+  });
+
+  it("builds a valid snapshot with a derived hash", () => {
+    const { worldStateHash: _ignored, ...input } = worldStateSnapshot;
+    const built = buildWorldStateSnapshotV1(input);
+
+    expect(built.worldStateHash).toBe(WORLD_STATE_GOLDEN_HASH);
+    expect(parseWorldStateSnapshotV1(built)).toEqual(built);
+  });
+
+  it("safely preserves __proto__ as a valid ID in every canonical map", () => {
+    const cases = [
+      {
+        ...worldStateSnapshot,
+        entityStatesById: Object.fromEntries([
+          ...Object.entries(worldStateSnapshot.entityStatesById),
+          ["__proto__", { ...spatialEntityState, id: "__proto__" }],
+        ]),
+      },
+      {
+        ...worldStateSnapshot,
+        capabilityStatesById: Object.fromEntries([
+          ["__proto__", { ...locomotionCapabilityState, id: "__proto__" }],
+        ]),
+      },
+      {
+        ...worldStateSnapshot,
+        relationshipStatesById: Object.fromEntries([
+          ["__proto__", { ...possessionRelationshipState, id: "__proto__" }],
+        ]),
+      },
+      {
+        ...worldStateSnapshot,
+        semanticFactsById: Object.fromEntries([
+          ["__proto__", { ...supportedByFact, id: "__proto__" }],
+        ]),
+      },
+      {
+        ...worldStateSnapshot,
+        activeActionStatesById: Object.fromEntries([
+          ["__proto__", { ...actionState, id: "__proto__" }],
+        ]),
+      },
+    ];
+
+    for (const input of cases) {
+      const built = buildWorldStateSnapshotV1(input);
+      const map = [
+        built.entityStatesById,
+        built.capabilityStatesById,
+        built.relationshipStatesById,
+        built.semanticFactsById,
+        built.activeActionStatesById,
+      ].find((candidate) => Object.hasOwn(candidate, "__proto__"));
+      expect(map).toBeDefined();
+      expect(Object.hasOwn(map!, "__proto__")).toBe(true);
+      expect(Object.getPrototypeOf(map!)).toBe(Object.prototype);
+      expect(map!["__proto__"]?.id).toBe("__proto__");
+      expect(canonicalizeWorldStateSnapshotV1(built)).toContain('"__proto__"');
+      expect(built.worldStateHash).not.toBe(WORLD_STATE_GOLDEN_HASH);
+    }
+  });
+
+  it.each([
+    ["dangling possession Controller", {
+      ...worldStateSnapshot,
+      relationshipStatesById: {
+        "possession-primary": {
+          ...possessionRelationshipState,
+          controllerEntityId: "controller-missing",
+        },
+      },
+    }],
+    ["wrong-kind possession Controller", {
+      ...worldStateSnapshot,
+      relationshipStatesById: {
+        "possession-primary": {
+          ...possessionRelationshipState,
+          controllerEntityId: "g-bot-primary",
+        },
+      },
+    }],
+    ["dangling possession target", {
+      ...worldStateSnapshot,
+      relationshipStatesById: {
+        "possession-primary": {
+          ...possessionRelationshipState,
+          controlledEntityId: "subject-missing",
+        },
+      },
+    }],
+    ["wrong-kind possession target", {
+      ...worldStateSnapshot,
+      relationshipStatesById: {
+        "possession-primary": {
+          ...possessionRelationshipState,
+          controlledEntityId: "controller-primary",
+        },
+      },
+    }],
+    ["dangling capability owner", {
+      ...worldStateSnapshot,
+      capabilityStatesById: {
+        "locomotion-g-bot-primary": {
+          ...locomotionCapabilityState,
+          ownerEntityId: "subject-missing",
+        },
+      },
+    }],
+    ["wrong-kind capability owner", {
+      ...worldStateSnapshot,
+      capabilityStatesById: {
+        "locomotion-g-bot-primary": {
+          ...locomotionCapabilityState,
+          ownerEntityId: "controller-primary",
+        },
+      },
+    }],
+    ["dangling Action actor", {
+      ...worldStateSnapshot,
+      activeActionStatesById: {
+        "action-execution-primary": {
+          ...actionState,
+          actorEntityId: "subject-missing",
+        },
+      },
+    }],
+    ["wrong-kind Action actor", {
+      ...worldStateSnapshot,
+      activeActionStatesById: {
+        "action-execution-primary": {
+          ...actionState,
+          actorEntityId: "controller-primary",
+        },
+      },
+    }],
+  ])("rejects %s", (_label, input) => {
+    expect(() => buildWorldStateSnapshotV1(input)).toThrow(
+      "closed WorldStateSnapshotV1 schema",
+    );
   });
 
   it("sorts ID maps so insertion order cannot change canonical bytes or hash", () => {
@@ -552,6 +800,10 @@ describe("WorldStateSnapshotV1", () => {
       ...worldStateSnapshot,
       activeActionStatesById: { wrong: actionState },
     }],
+    ["semantic Fact map key mismatch", {
+      ...worldStateSnapshot,
+      semanticFactsById: { wrong: supportedByFact },
+    }],
     ["two Controllers possessing one entity", {
       ...worldStateSnapshot,
       relationshipStatesById: {
@@ -590,6 +842,63 @@ describe("WorldStateSnapshotV1", () => {
     expect(() => parseWorldStateSnapshotV1(input)).toThrow(
       "closed WorldStateSnapshotV1 schema",
     );
+  });
+});
+
+describe("GameplaySemanticFactV1", () => {
+  const touchingFact = {
+    id: "touching-g-bot-ground",
+    type: "touching",
+    schemaVersion: 1,
+    entityIds: ["g-bot-primary", "ground-primary"],
+    startedSimulationTick: 2,
+  } as const satisfies GameplaySemanticFactV1;
+  const insideVolumeFact = {
+    id: "inside-g-bot-zone",
+    type: "insideVolume",
+    schemaVersion: 1,
+    containedEntityId: "g-bot-primary",
+    volumeEntityId: "zone-primary",
+    startedSimulationTick: 3,
+  } as const satisfies GameplaySemanticFactV1;
+
+  it.each([
+    ["supportedBy", supportedByFact],
+    ["touching", touchingFact],
+    ["insideVolume", insideVolumeFact],
+  ])("parses and freezes the closed %s branch", (_label, fact) => {
+    const built = buildWorldStateSnapshotV1({
+      ...worldStateSnapshot,
+      semanticFactsById: { [fact.id]: fact },
+    });
+
+    expect(built.semanticFactsById[fact.id]).toEqual(fact);
+    expect(Object.isFrozen(built.semanticFactsById[fact.id])).toBe(true);
+  });
+
+  it.each([
+    ["unsorted touching endpoints", {
+      ...touchingFact,
+      entityIds: ["ground-primary", "g-bot-primary"],
+    }],
+    ["duplicate touching endpoints", {
+      ...touchingFact,
+      entityIds: ["g-bot-primary", "g-bot-primary"],
+    }],
+    ["non-finite support point", {
+      ...supportedByFact,
+      supportPointMetersXYZ: [0, Infinity, 2],
+    }],
+    ["unsafe started tick", {
+      ...insideVolumeFact,
+      startedSimulationTick: Number.MAX_SAFE_INTEGER + 1,
+    }],
+    ["unknown Fact key", { ...insideVolumeFact, providerHandle: 1 }],
+  ])("rejects %s", (_label, fact) => {
+    expect(() => buildWorldStateSnapshotV1({
+      ...worldStateSnapshot,
+      semanticFactsById: { [fact.id]: fact },
+    })).toThrow("closed WorldStateSnapshotV1 schema");
   });
 });
 
@@ -677,6 +986,24 @@ describe("GameplayInspectionSnapshotV1", () => {
     }],
     ["missing projection marker", withoutKey(inspectionSnapshot, "projection")],
     ["wrong projection marker", { ...inspectionSnapshot, projection: "canonical" }],
+    ["dangling Controller participant", {
+      ...inspectionSnapshot,
+      controllerStatesById: {
+        "controller-primary": {
+          id: "controller-primary",
+          participantId: "participant-missing",
+        },
+      },
+    }],
+    ["dangling possession Controller", {
+      ...inspectionSnapshot,
+      possessedByRelationshipsById: {
+        "possession-primary": {
+          ...possessionRelationshipState,
+          controllerEntityId: "controller-missing",
+        },
+      },
+    }],
   ])("rejects %s", (_label, input) => {
     expect(() => parseGameplayInspectionSnapshotV1(input)).toThrow(
       "closed GameplayInspectionSnapshotV1 schema",
