@@ -12,6 +12,7 @@ import {
   type QueryCanonicalTraversalSurfaceHitsInputV1,
 } from "./index.js";
 import * as terrainSurface from "./index.js";
+import * as traversalSurfaceQueryModule from "./traversal-surface-query.js";
 
 const XZ_EPSILON = TRAVERSAL_SURFACE_QUERY_XZ_EPSILON_METERS_V1;
 const DELTA = 1e-7;
@@ -82,6 +83,39 @@ describe("canonical traversal surface query constants", () => {
 });
 
 describe("queryCanonicalTraversalSurfaceHitsV1", () => {
+  it("rejects finite triangle inputs whose derived geometry becomes non-finite", () => {
+    const overflow: CanonicalTraversalSurfaceTriangleSourceV1 = {
+      traversalSurfaceId: "overflow",
+      worldPositionsMetersXYZ: [
+        0, 0, 0,
+        0, 0, 1e200,
+        1e200, 0, 0,
+      ],
+      triangleIndices: [0, 1, 2],
+    };
+
+    expect(() => queryHits({
+      sources: [overflow],
+      pointMetersXZ: [0, 0],
+    })).toThrow("TRAVERSAL_SURFACE_QUERY_INPUT_INVALID");
+  });
+
+  it("rejects a finite retained normal whose normalization overflows", () => {
+    expect(() => queryHits({
+      sources: [horizontalSource("floor")],
+      normalAdmission: {
+        mode: "retained-support",
+        minimumUpwardNormalYRatio: 0,
+        referenceNormalXYZ: [
+          Number.MAX_VALUE,
+          Number.MAX_VALUE,
+          0,
+        ],
+        minimumReferenceNormalDotRatio: 0,
+      },
+    })).toThrow("TRAVERSAL_SURFACE_QUERY_INPUT_INVALID");
+  });
+
   it("classifies XZ offsets by meter distance on both 1m and 100m triangles", () => {
     for (const sizeMeters of [1, 100]) {
       const surface = horizontalSource("floor", [0, 0], sizeMeters);
@@ -245,6 +279,75 @@ describe("queryCanonicalTraversalSurfaceHitsV1", () => {
     }
   });
 
+  it.each([
+    {
+      name: "flat-to-ramp",
+      referenceHeightMeters: 0,
+      first: {
+        traversalSurfaceId: "z-flat",
+        worldPositionsMetersXYZ: [0, 0, 0, 0, 0, 1, 1, 0, 0],
+        triangleIndices: [0, 1, 2],
+      },
+      second: {
+        traversalSurfaceId: "a-ramp",
+        worldPositionsMetersXYZ: [0, 0, 0, -1, 1, 0, 0, 0, 1],
+        triangleIndices: [0, 1, 2],
+      },
+    },
+    {
+      name: "ridge",
+      referenceHeightMeters: 1,
+      first: {
+        traversalSurfaceId: "z-right-slope",
+        worldPositionsMetersXYZ: [0, 1, 0, 0, 1, 1, 1, 0, 0],
+        triangleIndices: [0, 1, 2],
+      },
+      second: {
+        traversalSurfaceId: "a-left-slope",
+        worldPositionsMetersXYZ: [0, 1, 0, -1, 0, 0, 0, 1, 1],
+        triangleIndices: [0, 1, 2],
+      },
+    },
+    {
+      name: "legal-0.25m-step",
+      referenceHeightMeters: 0.125,
+      first: {
+        traversalSurfaceId: "z-lower-step",
+        worldPositionsMetersXYZ: [0, 0, 0, 0, 0, 1, 1, 0, 0],
+        triangleIndices: [0, 1, 2],
+      },
+      second: {
+        traversalSurfaceId: "a-upper-step",
+        worldPositionsMetersXYZ: [0, 0.25, 0, -1, 0.25, 0, 0, 0.25, 1],
+        triangleIndices: [0, 1, 2],
+      },
+    },
+  ])("uses the lowest boundary owner at a $name seam", ({
+    referenceHeightMeters,
+    first,
+    second,
+  }) => {
+    const resolution = queryHits({
+      sources: [first, second],
+      pointMetersXZ: [0, 0.4],
+      referenceHeightMeters,
+      maximumReferenceHeightDifferenceMeters: 0.2,
+      normalAdmission: {
+        mode: "upward-slope",
+        minimumUpwardNormalYRatio: 0.5,
+      },
+    });
+
+    expect(resolution.mode).toBe("resolved");
+    if (resolution.mode === "resolved") {
+      expect(resolution.hit.traversalSurfaceId).toBe(
+        second.traversalSurfaceId,
+      );
+      expect(resolution.hit.location).toBe("boundary-only");
+      expect(resolution.hits).toHaveLength(2);
+    }
+  });
+
   it("keeps canonical ordinals assigned before slope filtering", () => {
     const mixed: CanonicalTraversalSurfaceTriangleSourceV1 = {
       traversalSurfaceId: "mixed",
@@ -330,6 +433,42 @@ describe("queryCanonicalTraversalSurfaceHitsV1", () => {
 });
 
 describe("preflightCanonicalTraversalSurfaceOverlapsV1", () => {
+  it("rejects non-finite geometry derivation before overlap classification", () => {
+    const overflow: CanonicalTraversalSurfaceTriangleSourceV1 = {
+      traversalSurfaceId: "overflow",
+      worldPositionsMetersXYZ: [
+        0, 0, 0,
+        0, 0, 1e200,
+        1e200, 0, 0,
+      ],
+      triangleIndices: [0, 1, 2],
+    };
+
+    expect(() => preflight([
+      overflow,
+      horizontalSource("floor"),
+    ])).toThrow("TRAVERSAL_SURFACE_QUERY_INPUT_INVALID");
+  });
+
+  it("rejects a non-finite translated polygon area derived from finite triangles", () => {
+    const origin = 1e160;
+    const extent = 1e145;
+    const translated = (traversalSurfaceId: string): CanonicalTraversalSurfaceTriangleSourceV1 => ({
+      traversalSurfaceId,
+      worldPositionsMetersXYZ: [
+        origin, 0, origin,
+        origin, 0, origin + extent,
+        origin + extent, 0, origin,
+      ],
+      triangleIndices: [0, 1, 2],
+    });
+
+    expect(() => preflight([
+      translated("translated-a"),
+      translated("translated-b"),
+    ])).toThrow("TRAVERSAL_SURFACE_QUERY_INPUT_INVALID");
+  });
+
   it("blocks coplanar interior overlap and crossing same-band slopes", () => {
     const first = horizontalSource("platform-a", [0, 0], 2, 0);
     const second = horizontalSource("platform-b", [0.5, 0.5], 2, 0);
@@ -405,6 +544,111 @@ describe("preflightCanonicalTraversalSurfaceOverlapsV1", () => {
     const lower = horizontalSource("lower", [0, 0], 1, 0);
     const upper = horizontalSource("upper", [0, 0], 1, 1);
     expect(preflight([upper, lower])).toEqual(preflight([lower, upper]));
+  });
+
+  it("preserves the canonical blocker and witness when sources are reversed", () => {
+    const alpha = horizontalSource("alpha", [0, 0], 2, 0);
+    const zeta = horizontalSource("zeta", [0, 0], 2, 0);
+    const expected = {
+      mode: "blocked",
+      blocker: {
+        firstTraversalSurfaceId: "alpha",
+        secondTraversalSurfaceId: "zeta",
+        witnessPointMetersXZ: [0, 0],
+        minimumHeightDifferenceMeters: 0,
+      },
+    };
+
+    expect(preflight([zeta, alpha])).toEqual(expected);
+    expect(preflight([alpha, zeta])).toEqual(expected);
+  });
+});
+
+describe("package-private deterministic XZ broadphase", () => {
+  type BroadphaseFactory = (entries: readonly Readonly<{
+      ordinal: number;
+      minimumMetersXZ: readonly [number, number];
+      maximumMetersXZ: readonly [number, number];
+    }>[]) => Readonly<{
+      overlappingOrdinals(
+        minimumMetersXZ: readonly [number, number],
+        maximumMetersXZ: readonly [number, number],
+      ): Iterable<number>;
+    }>;
+  const factory = (
+    traversalSurfaceQueryModule as unknown as {
+      createTriangleXzBroadphaseIndexV1?: BroadphaseFactory;
+    }
+  ).createTriangleXzBroadphaseIndexV1;
+
+  it("returns overlapping triangle ordinals in canonical order", () => {
+    expect(factory).toBeTypeOf("function");
+    if (factory === undefined) return;
+    const index = factory([
+      {
+        ordinal: 7,
+        minimumMetersXZ: [100, 100],
+        maximumMetersXZ: [101, 101],
+      },
+      {
+        ordinal: 4,
+        minimumMetersXZ: [0.5, 0.5],
+        maximumMetersXZ: [2, 2],
+      },
+      {
+        ordinal: 1,
+        minimumMetersXZ: [-1, -1],
+        maximumMetersXZ: [0.25, 0.25],
+      },
+    ]);
+
+    expect([...index.overlappingOrdinals([0, 0], [1, 1])]).toEqual([1, 4]);
+  });
+
+  it("streams a fully covered root in strict canonical order under entry reversal", () => {
+    expect(factory).toBeTypeOf("function");
+    if (factory === undefined) return;
+    const entries = [
+      {
+        ordinal: 5,
+        minimumMetersXZ: [4, 4] as const,
+        maximumMetersXZ: [5, 5] as const,
+      },
+      {
+        ordinal: 1,
+        minimumMetersXZ: [-5, -5] as const,
+        maximumMetersXZ: [-4, -4] as const,
+      },
+      {
+        ordinal: 3,
+        minimumMetersXZ: [0, 0] as const,
+        maximumMetersXZ: [1, 1] as const,
+      },
+    ];
+    const queryMinimum = [-10, -10] as const;
+    const queryMaximum = [10, 10] as const;
+
+    expect([
+      ...factory(entries).overlappingOrdinals(queryMinimum, queryMaximum),
+    ]).toEqual([1, 3, 5]);
+    expect([
+      ...factory([...entries].reverse()).overlappingOrdinals(
+        queryMinimum,
+        queryMaximum,
+      ),
+    ]).toEqual([1, 3, 5]);
+  });
+
+  it("builds a large source without exceeding the JavaScript argument limit", () => {
+    expect(factory).toBeTypeOf("function");
+    if (factory === undefined) return;
+    const entries = Array.from({ length: 130_000 }, (_, ordinal) => ({
+      ordinal,
+      minimumMetersXZ: [ordinal * 2, 0] as const,
+      maximumMetersXZ: [ordinal * 2 + 1, 1] as const,
+    }));
+
+    expect(() => factory(entries)).not.toThrow();
   });
 });
 

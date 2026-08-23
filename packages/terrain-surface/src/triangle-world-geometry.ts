@@ -36,6 +36,22 @@ export interface TriangleXZOverlapV1 {
 
 const BARYCENTRIC_FACADE_TOLERANCE = 1e-12;
 
+export class TriangleWorldGeometryNonFiniteErrorV1 extends Error {
+  public constructor(label: string) {
+    super(`TRIANGLE_WORLD_GEOMETRY_NON_FINITE: ${label}`);
+    this.name = "TriangleWorldGeometryNonFiniteErrorV1";
+  }
+}
+
+function requireFiniteDerived(
+  values: readonly number[],
+  label: string,
+): void {
+  if (values.some((value) => !Number.isFinite(value))) {
+    throw new TriangleWorldGeometryNonFiniteErrorV1(label);
+  }
+}
+
 export function describeWorldTriangleV1(
   aMetersXYZ: TriangleVertexMetersXYZV1,
   bMetersXYZ: TriangleVertexMetersXYZV1,
@@ -47,25 +63,49 @@ export function describeWorldTriangleV1(
   const edgeBX = cMetersXYZ[0] - aMetersXYZ[0];
   const edgeBY = cMetersXYZ[1] - aMetersXYZ[1];
   const edgeBZ = cMetersXYZ[2] - aMetersXYZ[2];
+  requireFiniteDerived(
+    [edgeAX, edgeAY, edgeAZ, edgeBX, edgeBY, edgeBZ],
+    "triangle edges must remain finite",
+  );
   const normalX = edgeAY * edgeBZ - edgeAZ * edgeBY;
   const normalY = edgeAZ * edgeBX - edgeAX * edgeBZ;
   const normalZ = edgeAX * edgeBY - edgeAY * edgeBX;
+  requireFiniteDerived(
+    [normalX, normalY, normalZ],
+    "triangle cross product must remain finite",
+  );
   const normalLength = Math.hypot(normalX, normalY, normalZ);
+  requireFiniteDerived(
+    [normalLength],
+    "triangle normal length must remain finite",
+  );
   if (!(normalLength > 0)) {
     return undefined;
   }
   const projectedTwiceArea =
     (bMetersXYZ[0] - aMetersXYZ[0]) * (cMetersXYZ[2] - aMetersXYZ[2]) -
     (bMetersXYZ[2] - aMetersXYZ[2]) * (cMetersXYZ[0] - aMetersXYZ[0]);
+  const unitNormalXYZ = [
+    normalX / normalLength,
+    normalY / normalLength,
+    normalZ / normalLength,
+  ] as const;
+  const threeDimensionalAreaSquareMeters = normalLength / 2;
+  const projectedAreaSquareMeters = Math.abs(projectedTwiceArea) / 2;
+  requireFiniteDerived(
+    [
+      projectedTwiceArea,
+      ...unitNormalXYZ,
+      threeDimensionalAreaSquareMeters,
+      projectedAreaSquareMeters,
+    ],
+    "triangle normal and area must remain finite",
+  );
   return {
     verticesMetersXYZ: [aMetersXYZ, bMetersXYZ, cMetersXYZ],
-    unitNormalXYZ: [
-      normalX / normalLength,
-      normalY / normalLength,
-      normalZ / normalLength,
-    ],
-    threeDimensionalAreaSquareMeters: normalLength / 2,
-    projectedAreaSquareMeters: Math.abs(projectedTwiceArea) / 2,
+    unitNormalXYZ,
+    threeDimensionalAreaSquareMeters,
+    projectedAreaSquareMeters,
     aabbMinimumMetersXZ: [
       Math.min(aMetersXYZ[0], bMetersXYZ[0], cMetersXYZ[0]),
       Math.min(aMetersXYZ[2], bMetersXYZ[2], cMetersXYZ[2]),
@@ -92,6 +132,10 @@ export function samplePointOnWorldTriangleV1(
   const denominator =
     (bMetersXYZ[2] - cMetersXYZ[2]) * (aMetersXYZ[0] - cMetersXYZ[0]) +
     (cMetersXYZ[0] - bMetersXYZ[0]) * (aMetersXYZ[2] - cMetersXYZ[2]);
+  requireFiniteDerived(
+    [denominator],
+    "barycentric denominator must remain finite",
+  );
   if (Math.abs(denominator) <= Number.EPSILON) {
     return undefined;
   }
@@ -104,17 +148,23 @@ export function samplePointOnWorldTriangleV1(
       (aMetersXYZ[0] - cMetersXYZ[0]) * (pointZ - cMetersXYZ[2])) /
     denominator;
   const weightC = 1 - weightA - weightB;
+  const heightMeters =
+    aMetersXYZ[1] * weightA +
+    bMetersXYZ[1] * weightB +
+    cMetersXYZ[1] * weightC;
+  const inwardEdgeDistancesMeters = [
+    inwardEdgeDistanceMeters(aMetersXYZ, bMetersXYZ, cMetersXYZ, pointX, pointZ),
+    inwardEdgeDistanceMeters(bMetersXYZ, cMetersXYZ, aMetersXYZ, pointX, pointZ),
+    inwardEdgeDistanceMeters(cMetersXYZ, aMetersXYZ, bMetersXYZ, pointX, pointZ),
+  ] as const;
+  requireFiniteDerived(
+    [weightA, weightB, weightC, heightMeters, ...inwardEdgeDistancesMeters],
+    "barycentric weights, height, and edge distances must remain finite",
+  );
   return {
     barycentricUVW: [weightA, weightB, weightC],
-    heightMeters:
-      aMetersXYZ[1] * weightA +
-      bMetersXYZ[1] * weightB +
-      cMetersXYZ[1] * weightC,
-    inwardEdgeDistancesMeters: [
-      inwardEdgeDistanceMeters(aMetersXYZ, bMetersXYZ, cMetersXYZ, pointX, pointZ),
-      inwardEdgeDistanceMeters(bMetersXYZ, cMetersXYZ, aMetersXYZ, pointX, pointZ),
-      inwardEdgeDistanceMeters(cMetersXYZ, aMetersXYZ, bMetersXYZ, pointX, pointZ),
-    ],
+    heightMeters,
+    inwardEdgeDistancesMeters,
   };
 }
 
@@ -224,6 +274,10 @@ export function minimumAbsoluteAffineHeightSeparationMetersV1(
       continue;
     }
     const signed = firstHeight - secondHeight;
+    requireFiniteDerived(
+      [signed],
+      "affine height separation must remain finite",
+    );
     if (signed < minimumSigned) {
       minimumSigned = signed;
     }
@@ -268,6 +322,10 @@ function inwardEdgeDistanceMeters(
   const edgeX = endMetersXYZ[0] - startMetersXYZ[0];
   const edgeZ = endMetersXYZ[2] - startMetersXYZ[2];
   const edgeLength = Math.hypot(edgeX, edgeZ);
+  requireFiniteDerived(
+    [edgeX, edgeZ, edgeLength],
+    "projected edge must remain finite",
+  );
   if (!(edgeLength > 0)) {
     return Number.NEGATIVE_INFINITY;
   }
@@ -277,6 +335,10 @@ function inwardEdgeDistanceMeters(
     edgeX * (thirdMetersXYZ[2] - startMetersXYZ[2]) -
     edgeZ * (thirdMetersXYZ[0] - startMetersXYZ[0]);
   const signedDistance = crossPoint / edgeLength;
+  requireFiniteDerived(
+    [crossPoint, crossThird, signedDistance],
+    "projected edge distance must remain finite",
+  );
   return crossThird < 0 ? -signedDistance : signedDistance;
 }
 
@@ -365,6 +427,10 @@ function edgeIntersection(
   const deltaSecondX = secondEnd[0] - secondStart[0];
   const deltaSecondZ = secondEnd[1] - secondStart[1];
   const denominator = deltaFirstX * deltaSecondZ - deltaFirstZ * deltaSecondX;
+  requireFiniteDerived(
+    [deltaFirstX, deltaFirstZ, deltaSecondX, deltaSecondZ, denominator],
+    "projected edge intersection must remain finite",
+  );
   if (Math.abs(denominator) <= Number.EPSILON) {
     return undefined;
   }
@@ -372,10 +438,15 @@ function edgeIntersection(
     ((secondStart[0] - firstStart[0]) * deltaSecondZ -
       (secondStart[1] - firstStart[1]) * deltaSecondX) /
     denominator;
-  return [
+  const intersection = [
     firstStart[0] + parameter * deltaFirstX,
     firstStart[1] + parameter * deltaFirstZ,
-  ];
+  ] as const;
+  requireFiniteDerived(
+    [parameter, ...intersection],
+    "projected edge intersection must remain finite",
+  );
+  return intersection;
 }
 
 function polygonAreaSquareMeters(
@@ -394,7 +465,16 @@ function polygonAreaTwice(
   for (let index = 0; index < polygon.length; index += 1) {
     const current = polygon[index]!;
     const next = polygon[(index + 1) % polygon.length]!;
-    twiceArea += current[0] * next[1] - next[0] * current[1];
+    const areaTerm = current[0] * next[1] - next[0] * current[1];
+    requireFiniteDerived(
+      [areaTerm],
+      "projected polygon area term must remain finite",
+    );
+    twiceArea += areaTerm;
+    requireFiniteDerived(
+      [twiceArea],
+      "projected polygon area must remain finite",
+    );
   }
   return twiceArea;
 }
@@ -529,21 +609,40 @@ function distancePointToSegment(
   const edgeX = end[0] - start[0];
   const edgeZ = end[1] - start[1];
   const squaredLength = edgeX * edgeX + edgeZ * edgeZ;
+  requireFiniteDerived(
+    [edgeX, edgeZ, squaredLength],
+    "projected segment length must remain finite",
+  );
   if (squaredLength === 0) {
-    return Math.hypot(point[0] - start[0], point[1] - start[1]);
+    const pointDistance = Math.hypot(point[0] - start[0], point[1] - start[1]);
+    requireFiniteDerived(
+      [pointDistance],
+      "projected point distance must remain finite",
+    );
+    return pointDistance;
   }
+  const projectedDot =
+    (point[0] - start[0]) * edgeX + (point[1] - start[1]) * edgeZ;
+  requireFiniteDerived(
+    [projectedDot],
+    "projected segment parameter must remain finite",
+  );
   const parameter = Math.max(
     0,
     Math.min(
       1,
-      ((point[0] - start[0]) * edgeX + (point[1] - start[1]) * edgeZ) /
-        squaredLength,
+      projectedDot / squaredLength,
     ),
   );
-  return Math.hypot(
+  const distanceMeters = Math.hypot(
     point[0] - (start[0] + parameter * edgeX),
     point[1] - (start[1] + parameter * edgeZ),
   );
+  requireFiniteDerived(
+    [parameter, distanceMeters],
+    "projected edge distance must remain finite",
+  );
+  return distanceMeters;
 }
 
 function cross2(
@@ -551,10 +650,14 @@ function cross2(
   first: readonly [number, number],
   second: readonly [number, number],
 ): number {
-  return (
+  const cross =
     (first[0] - origin[0]) * (second[1] - origin[1]) -
-    (first[1] - origin[1]) * (second[0] - origin[0])
+    (first[1] - origin[1]) * (second[0] - origin[0]);
+  requireFiniteDerived(
+    [cross],
+    "projected cross product must remain finite",
   );
+  return cross;
 }
 
 function deduplicatePoints(

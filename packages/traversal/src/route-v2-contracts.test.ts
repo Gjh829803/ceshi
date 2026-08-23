@@ -2,6 +2,7 @@ import { sha256CanonicalJson } from "@whitebox-world/protocol";
 import { describe, expect, it } from "vitest";
 
 import {
+  BUILT_IN_TRAVERSAL_GRAPH_BUILDER_PROFILE_REF,
   ROUTE_CONNECTIVITY_FAILURE_CODES_V2,
   assertRouteOverlayContextV2,
   assertRoutePathReceiptForGraphV2,
@@ -16,10 +17,12 @@ import {
   hashRouteOverlayV2,
   hashRoutePathReceiptV2,
   hashTraversalGraphV2,
+  resolveTraversalGraphBuilderProfileV1,
 } from "./index.js";
 import type { RouteBuildInputV2 } from "./build-input.js";
 import {
   HASH_A,
+  HASH_B,
   completeV2BuildInput,
   heightfieldSurface,
   platformSurface,
@@ -158,8 +161,8 @@ function pathDraft(graph: ReturnType<typeof canonicalTraversalGraphV2>) {
       [8, 0, 0],
     ] as const,
     orderedTraversalSurfaceIdentities: [heightfield, platform, heightfield],
-    routePathDistanceMeters: 9,
-    routePathDistanceMetersXZ: 9,
+    routePathDistanceMeters: 8.946,
+    routePathDistanceMetersXZ: 8.946,
     routePathCost: 9,
     maximumObservedSlopeDegrees: 0,
     maximumObservedStepHeightMeters: 0,
@@ -286,6 +289,81 @@ describe("Route V2 Graph, Path, Overlay, and Connectivity", () => {
       ...graph,
       geometryArtifactHash: HASH_A,
     }, receipt)).toThrow("TRAVERSAL_GRAPH_INVALID");
+  });
+
+  it("binds every Graph V2 provenance, lock, profile, route, and anchor field to Build Input", () => {
+    const receipt = v2BuildInputReceipt();
+    const graph = graphDraft(receipt);
+    const v1Builder = resolveTraversalGraphBuilderProfileV1(
+      BUILT_IN_TRAVERSAL_GRAPH_BUILDER_PROFILE_REF,
+    );
+    const mutations = [
+      { authoringSpecHash: HASH_B },
+      { layoutSolveReportHash: HASH_B },
+      { resourceLockHash: HASH_B },
+      { resolvedTraversalLockHash: HASH_B },
+      {
+        graphBuilderProfileRef: v1Builder.resourceRef,
+        graphBuilderResolvedVersion: v1Builder.resolvedVersion,
+        graphBuilderProfileHash: v1Builder.contentHash,
+      },
+      { routeId: "forged-route" },
+      { startAnchorEntityId: "forged-start" },
+      { destinationAnchorEntityId: "forged-destination" },
+    ] as const;
+
+    for (const mutation of mutations) {
+      expect(() => assertTraversalGraphForBuildInputV2({
+        ...graph,
+        ...mutation,
+      }, receipt)).toThrow("TRAVERSAL_GRAPH_INVALID");
+    }
+  });
+
+  it("rejects broken Path edge adjacency across Heightfield and platform Surfaces", () => {
+    const graph = canonicalTraversalGraphV2(graphDraft());
+    const path = pathDraft(graph);
+
+    expect(() => assertRoutePathReceiptForGraphV2({
+      ...path,
+      orderedTraversalEdgeIds: ["edge-bc", "edge-ab"],
+    }, graph)).toThrow("ROUTE_PATH_RECEIPT_INVALID");
+  });
+
+  it("recomputes every Path metric from canonical positions, Edges, and Nodes", () => {
+    const graph = canonicalTraversalGraphV2(graphDraft());
+    const path = {
+      ...pathDraft(graph),
+      routePathDistanceMeters: 8.946,
+      routePathDistanceMetersXZ: 8.946,
+    };
+    const mutations = [
+      { routePathDistanceMeters: 999 },
+      { routePathDistanceMetersXZ: 999 },
+      { routePathCost: 999 },
+      { maximumObservedSlopeDegrees: 1 },
+      { maximumObservedStepHeightMeters: 1 },
+      { minimumObservedClearanceWidthMeters: 1 },
+      { minimumObservedClearanceHeightMeters: 3 },
+      { maximumObservedSurfaceGapMeters: 1 },
+    ] as const;
+
+    expect(assertRoutePathReceiptForGraphV2(path, graph)).toMatchObject({
+      orderedTraversalSurfaceIdentities: [
+        heightfieldSurface(),
+        platformSurface(),
+        heightfieldSurface(),
+      ],
+      routePathDistanceMeters: 8.946,
+      routePathDistanceMetersXZ: 8.946,
+      routePathCost: 9,
+    });
+    for (const mutation of mutations) {
+      expect(() => assertRoutePathReceiptForGraphV2({
+        ...path,
+        ...mutation,
+      }, graph)).toThrow("ROUTE_PATH_RECEIPT_INVALID");
+    }
   });
 
   it("rejects Overlay/Path identity drift, collider inventory mutation, and Surface replacement", () => {

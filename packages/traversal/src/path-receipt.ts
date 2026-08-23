@@ -536,6 +536,18 @@ export function hashRoutePathReceiptV2(value: unknown): Sha256Hash {
   return sha256CanonicalJson(canonicalRoutePathReceiptV2(value)) as Sha256Hash;
 }
 
+function ceilToQuantum(
+  value: number,
+  quantum: number,
+  field: string,
+): number {
+  const units = Math.ceil(value / quantum - Number.EPSILON);
+  if (!Number.isSafeInteger(units)) {
+    fail(field, "metric exceeds safe range");
+  }
+  return units * quantum;
+}
+
 export function assertRoutePathReceiptForGraphV2(
   value: unknown,
   graph: TraversalGraphV2,
@@ -562,7 +574,7 @@ export function assertRoutePathReceiptForGraphV2(
       fail(field, "must match the Traversal Graph V2");
     }
   }
-  path.orderedTraversalNodeIds.forEach((nodeId, index) => {
+  const selectedNodes = path.orderedTraversalNodeIds.map((nodeId, index) => {
     const node = graph.traversalNodesById[nodeId];
     if (isNil(node)) {
       fail(`orderedTraversalNodeIds/${index}`, `unknown Node '${nodeId}'`);
@@ -591,6 +603,89 @@ export function assertRoutePathReceiptForGraphV2(
         "must match the Node Surface triple",
       );
     }
+    return node;
   });
+  const selectedEdges = path.orderedTraversalEdgeIds.map((edgeId, index) => {
+    const edge = graph.traversalEdgesById[edgeId];
+    if (isNil(edge)) {
+      fail(`orderedTraversalEdgeIds/${index}`, `unknown Edge '${edgeId}'`);
+    }
+    if (
+      edge.fromTraversalNodeId !== path.orderedTraversalNodeIds[index] ||
+      edge.toTraversalNodeId !== path.orderedTraversalNodeIds[index + 1]
+    ) {
+      fail(
+        `orderedTraversalEdgeIds/${index}`,
+        `Edge '${edgeId}' breaks ordered adjacency`,
+      );
+    }
+    return edge;
+  });
+  const profile = resolveTraversalGraphBuilderProfile(
+    path.graphBuilderProfileRef,
+  ).profile;
+  let distanceMeters = 0;
+  let distanceMetersXZ = 0;
+  let segmentSlopeDegrees = 0;
+  for (let index = 1; index < path.orderedPathPositionsMetersXYZ.length; index += 1) {
+    const previous = path.orderedPathPositionsMetersXYZ[index - 1]!;
+    const current = path.orderedPathPositionsMetersXYZ[index]!;
+    const dx = current[0] - previous[0];
+    const dy = current[1] - previous[1];
+    const dz = current[2] - previous[2];
+    distanceMeters += ceilToQuantum(
+      Math.hypot(dx, dy, dz),
+      profile.positionQuantizationMeters,
+      "routePathDistanceMeters",
+    );
+    const horizontal = Math.hypot(dx, dz);
+    distanceMetersXZ += ceilToQuantum(
+      horizontal,
+      profile.positionQuantizationMeters,
+      "routePathDistanceMetersXZ",
+    );
+    const rawSlope = horizontal === 0
+      ? 90
+      : Math.atan2(Math.abs(dy), horizontal) * 180 / Math.PI;
+    segmentSlopeDegrees = Math.max(
+      segmentSlopeDegrees,
+      ceilToQuantum(rawSlope, 0.000001, "maximumObservedSlopeDegrees"),
+    );
+  }
+  const costUnits = selectedEdges.reduce((sum, edge) => {
+    const units = Math.round(edge.routePathCost / 0.000001);
+    if (!Number.isSafeInteger(units) || !Number.isSafeInteger(sum + units)) {
+      fail("routePathCost", "cost exceeds safe range");
+    }
+    return sum + units;
+  }, 0);
+  const expectedMetrics = {
+    routePathDistanceMeters: distanceMeters,
+    routePathDistanceMetersXZ: distanceMetersXZ,
+    routePathCost: costUnits * 0.000001,
+    maximumObservedSlopeDegrees: Math.max(
+      segmentSlopeDegrees,
+      ...selectedEdges.map((edge) => edge.slopeDegrees),
+      0,
+    ),
+    maximumObservedStepHeightMeters: Math.max(
+      ...selectedEdges.map((edge) => edge.stepHeightMeters),
+      0,
+    ),
+    minimumObservedClearanceWidthMeters: Math.min(
+      ...selectedNodes.map((node) => node.clearanceWidthMeters),
+      ...selectedEdges.map((edge) => edge.minimumClearanceWidthMeters),
+    ),
+    minimumObservedClearanceHeightMeters: Math.min(
+      ...selectedNodes.map((node) => node.clearanceHeightMeters),
+      ...selectedEdges.map((edge) => edge.minimumClearanceHeightMeters),
+    ),
+    maximumObservedSurfaceGapMeters: 0,
+  } as const;
+  for (const [field, expected] of Object.entries(expectedMetrics)) {
+    if (path[field as keyof typeof expectedMetrics] !== expected) {
+      fail(field, `must equal ${expected}`);
+    }
+  }
   return path;
 }

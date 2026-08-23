@@ -2,7 +2,10 @@ import { sha256CanonicalJson } from "@whitebox-world/protocol";
 import { isEmpty, isNil, isPlainObject } from "lodash-es";
 
 import type { RouteBuildInputReceiptV2 } from "./build-input.js";
-import { resolveTraversalGraphBuilderProfile } from "./profile-registry.js";
+import {
+  resolveTraversalGraphBuilderProfile,
+  resolveTraversalGraphBuilderProfileV2,
+} from "./profile-registry.js";
 import type { TraversalSurfaceIdentityV1 } from "./types.js";
 
 export interface TraversalNodeV1 {
@@ -197,6 +200,31 @@ function assertResolvedGraphBuilderIdentity(
   ) {
     failGraph(
       "graphBuilderProfileRef, graphBuilderResolvedVersion, and graphBuilderProfileHash must match the Registry Profile.",
+    );
+  }
+}
+
+function assertResolvedGraphBuilderIdentityV2(
+  resourceRef: string,
+  resolvedVersion: string,
+  resourceHash: `sha256:${string}`,
+): void {
+  let resolved;
+  try {
+    resolved = resolveTraversalGraphBuilderProfileV2(resourceRef);
+  } catch (cause) {
+    failGraph(
+      cause instanceof Error
+        ? cause.message
+        : "graphBuilderProfileRef must resolve to a Registry V2 Profile.",
+    );
+  }
+  if (
+    resolved.resolvedVersion !== resolvedVersion ||
+    resolved.contentHash !== resourceHash
+  ) {
+    failGraph(
+      "graphBuilderProfileRef, graphBuilderResolvedVersion, and graphBuilderProfileHash must match the Registry V2 Profile.",
     );
   }
 }
@@ -586,7 +614,7 @@ export function canonicalTraversalGraphV2(value: unknown): TraversalGraphV2 {
       requireNonEmptyString(record[field], field),
     ]),
   ) as Pick<TraversalGraphV2, (typeof GRAPH_STRING_FIELDS)[number]>;
-  assertResolvedGraphBuilderIdentity(
+  assertResolvedGraphBuilderIdentityV2(
     strings.graphBuilderProfileRef,
     strings.graphBuilderResolvedVersion,
     hashes.graphBuilderProfileHash,
@@ -665,20 +693,28 @@ export function assertTraversalGraphForBuildInputV2(
 ): TraversalGraphV2 {
   const graph = canonicalTraversalGraphV2(value);
   const input = buildInputReceipt.input;
-  if (graph.routeBuildInputHash !== buildInputReceipt.routeBuildInputHash) {
-    failGraph("routeBuildInputHash must equal the Build Input Receipt hash.");
-  }
-  if (graph.terrainArtifactHash !== input.terrainArtifactHash) {
-    failGraph("terrainArtifactHash must equal Build Input.");
-  }
-  if (graph.colliderArtifactHash !== input.colliderArtifactHash) {
-    failGraph("colliderArtifactHash must equal Build Input.");
-  }
-  if (graph.geometryArtifactHash !== input.geometryArtifactHash) {
-    failGraph("geometryArtifactHash must equal Build Input.");
-  }
-  if (graph.surfaceArtifactHash !== input.surfaceArtifactHash) {
-    failGraph("surfaceArtifactHash must equal Build Input.");
+  const expectedBindings = {
+    authoringSpecHash: input.authoringSpecHash,
+    layoutSolveReportHash: input.layoutSolveReportHash,
+    resourceLockHash: input.resourceLockHash,
+    terrainArtifactHash: input.terrainArtifactHash,
+    colliderArtifactHash: input.colliderArtifactHash,
+    geometryArtifactHash: input.geometryArtifactHash,
+    surfaceArtifactHash: input.surfaceArtifactHash,
+    routeBuildInputHash: buildInputReceipt.routeBuildInputHash,
+    resolvedTraversalLockHash: input.capabilityEnvelope.resolvedTraversalLockHash,
+    graphBuilderProfileRef: input.capabilityEnvelope.graphBuilderProfileRef,
+    graphBuilderResolvedVersion:
+      input.capabilityEnvelope.graphBuilderResolvedVersion,
+    graphBuilderProfileHash: input.capabilityEnvelope.graphBuilderProfileHash,
+    routeId: input.connectivityRequirement.routeId,
+    startAnchorEntityId: input.startAnchor.entityId,
+    destinationAnchorEntityId: input.destinationAnchor.entityId,
+  } as const;
+  for (const [field, expected] of Object.entries(expectedBindings)) {
+    if (graph[field as keyof typeof expectedBindings] !== expected) {
+      failGraph(`${field} must equal Build Input.`);
+    }
   }
   const expectedInventory = canonicalInventory(
     Object.fromEntries(

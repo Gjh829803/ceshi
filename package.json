@@ -43,7 +43,8 @@
     "verify:control-capture": "tsx scripts/verify-control-capture.ts",
     "verify:validation-capture": "tsx scripts/verify-validation-capture.ts",
     "verify:route-r0-contract": "tsx scripts/verify-route-r0-contract.ts",
-    "verify:route-r1-heightfield": "tsx scripts/verify-route-r1-heightfield.ts"
+    "verify:route-r1-heightfield": "tsx scripts/verify-route-r1-heightfield.ts",
+    "benchmark:route-r1b-surface-preflight": "tsx scripts/benchmark-route-r1b-surface-preflight.ts"
   },
   "dependencies": {
     "@babylonjs/core": "9.21.2",

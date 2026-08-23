@@ -8,6 +8,7 @@ import {
   firstCoordinateOrderedPointXZV1,
   minimumAbsoluteAffineHeightSeparationMetersV1,
   samplePointOnWorldTriangleV1,
+  TriangleWorldGeometryNonFiniteErrorV1,
   type WorldTriangleGeometryV1,
 } from "./triangle-world-geometry.js";
 
@@ -128,6 +129,7 @@ interface IndexedTriangleV1 {
 interface IndexedSourceV1 {
   readonly traversalSurfaceId: string;
   readonly triangles: readonly IndexedTriangleV1[];
+  readonly broadphase: TriangleXzBroadphaseIndexV1;
 }
 
 interface SurfaceHitCandidateV1 {
@@ -142,6 +144,17 @@ interface SurfaceHitCandidateV1 {
 
 function failQuery(message: string): never {
   throw new Error(`TRAVERSAL_SURFACE_QUERY_INPUT_INVALID: ${message}`);
+}
+
+function withFiniteGeometryErrors<T>(operation: () => T): T {
+  try {
+    return operation();
+  } catch (cause) {
+    if (cause instanceof TriangleWorldGeometryNonFiniteErrorV1) {
+      failQuery(cause.message);
+    }
+    throw cause;
+  }
 }
 
 function requirePlainObject(
@@ -380,8 +393,14 @@ function parseNormalAdmission(
       record.referenceNormalXYZ,
       "normalAdmission.referenceNormalXYZ",
     );
-    if (!(Math.hypot(...referenceNormalXYZ) > 0)) {
-      failQuery("normalAdmission.referenceNormalXYZ must be non-zero.");
+    const referenceNormalLength = Math.hypot(...referenceNormalXYZ);
+    if (
+      !Number.isFinite(referenceNormalLength) ||
+      !(referenceNormalLength > 0)
+    ) {
+      failQuery(
+        "normalAdmission.referenceNormalXYZ must have a finite non-zero length.",
+      );
     }
     return {
       mode: "retained-support",
@@ -533,107 +552,273 @@ function compareSurfaceIds(left: string, right: string): number {
   return left < right ? -1 : 1;
 }
 
+export interface TriangleXzBroadphaseEntryV1 {
+  readonly ordinal: number;
+  readonly minimumMetersXZ: readonly [number, number];
+  readonly maximumMetersXZ: readonly [number, number];
+}
+
+export interface TriangleXzBroadphaseIndexV1 {
+  overlappingOrdinals(
+    minimumMetersXZ: readonly [number, number],
+    maximumMetersXZ: readonly [number, number],
+  ): Iterable<number>;
+}
+
+interface TriangleXzBroadphaseNodeV1 {
+  readonly minimumMetersXZ: readonly [number, number];
+  readonly maximumMetersXZ: readonly [number, number];
+  readonly minimumOrdinal: number;
+  readonly entry?: TriangleXzBroadphaseEntryV1;
+  readonly left?: TriangleXzBroadphaseNodeV1;
+  readonly right?: TriangleXzBroadphaseNodeV1;
+}
+
+function entryCenter(
+  entry: TriangleXzBroadphaseEntryV1,
+  axis: 0 | 1,
+): number {
+  return entry.minimumMetersXZ[axis] +
+    (entry.maximumMetersXZ[axis] - entry.minimumMetersXZ[axis]) / 2;
+}
+
+function buildTriangleXzBroadphaseNode(
+  entries: readonly TriangleXzBroadphaseEntryV1[],
+): TriangleXzBroadphaseNodeV1 | undefined {
+  if (entries.length === 0) return undefined;
+  let minimumX = Number.POSITIVE_INFINITY;
+  let minimumZ = Number.POSITIVE_INFINITY;
+  let maximumX = Number.NEGATIVE_INFINITY;
+  let maximumZ = Number.NEGATIVE_INFINITY;
+  let minimumCenterX = Number.POSITIVE_INFINITY;
+  let minimumCenterZ = Number.POSITIVE_INFINITY;
+  let maximumCenterX = Number.NEGATIVE_INFINITY;
+  let maximumCenterZ = Number.NEGATIVE_INFINITY;
+  let minimumOrdinal = Number.POSITIVE_INFINITY;
+  for (const entry of entries) {
+    minimumX = Math.min(minimumX, entry.minimumMetersXZ[0]);
+    minimumZ = Math.min(minimumZ, entry.minimumMetersXZ[1]);
+    maximumX = Math.max(maximumX, entry.maximumMetersXZ[0]);
+    maximumZ = Math.max(maximumZ, entry.maximumMetersXZ[1]);
+    const centerX = entryCenter(entry, 0);
+    const centerZ = entryCenter(entry, 1);
+    minimumCenterX = Math.min(minimumCenterX, centerX);
+    minimumCenterZ = Math.min(minimumCenterZ, centerZ);
+    maximumCenterX = Math.max(maximumCenterX, centerX);
+    maximumCenterZ = Math.max(maximumCenterZ, centerZ);
+    minimumOrdinal = Math.min(minimumOrdinal, entry.ordinal);
+  }
+  const minimumMetersXZ = [minimumX, minimumZ] as const;
+  const maximumMetersXZ = [maximumX, maximumZ] as const;
+  if (entries.length === 1) {
+    return {
+      minimumMetersXZ,
+      maximumMetersXZ,
+      minimumOrdinal,
+      entry: entries[0]!,
+    };
+  }
+  const centerExtentX = maximumCenterX - minimumCenterX;
+  const centerExtentZ = maximumCenterZ - minimumCenterZ;
+  const splitAxis: 0 | 1 = centerExtentX >= centerExtentZ ? 0 : 1;
+  const otherAxis: 0 | 1 = splitAxis === 0 ? 1 : 0;
+  const ordered = [...entries].sort((left, right) =>
+    entryCenter(left, splitAxis) - entryCenter(right, splitAxis) ||
+    entryCenter(left, otherAxis) - entryCenter(right, otherAxis) ||
+    left.ordinal - right.ordinal
+  );
+  const split = Math.floor(ordered.length / 2);
+  return {
+    minimumMetersXZ,
+    maximumMetersXZ,
+    minimumOrdinal,
+    left: buildTriangleXzBroadphaseNode(ordered.slice(0, split))!,
+    right: buildTriangleXzBroadphaseNode(ordered.slice(split))!,
+  };
+}
+
+function pushBroadphaseNode(
+  heap: TriangleXzBroadphaseNodeV1[],
+  node: TriangleXzBroadphaseNodeV1,
+): void {
+  heap.push(node);
+  let index = heap.length - 1;
+  while (index > 0) {
+    const parent = Math.floor((index - 1) / 2);
+    if (heap[parent]!.minimumOrdinal <= node.minimumOrdinal) break;
+    heap[index] = heap[parent]!;
+    index = parent;
+  }
+  heap[index] = node;
+}
+
+function popBroadphaseNode(
+  heap: TriangleXzBroadphaseNodeV1[],
+): TriangleXzBroadphaseNodeV1 | undefined {
+  const first = heap[0];
+  const last = heap.pop();
+  if (heap.length === 0 || isNil(last)) return first;
+  let index = 0;
+  while (true) {
+    const left = index * 2 + 1;
+    if (left >= heap.length) break;
+    const right = left + 1;
+    const child = right < heap.length &&
+        heap[right]!.minimumOrdinal < heap[left]!.minimumOrdinal
+      ? right
+      : left;
+    if (heap[child]!.minimumOrdinal >= last.minimumOrdinal) break;
+    heap[index] = heap[child]!;
+    index = child;
+  }
+  heap[index] = last;
+  return first;
+}
+
+/** Package-private: deliberately not re-exported from the package root. */
+export function createTriangleXzBroadphaseIndexV1(
+  entries: readonly TriangleXzBroadphaseEntryV1[],
+): TriangleXzBroadphaseIndexV1 {
+  const root = buildTriangleXzBroadphaseNode(entries);
+  const entriesByOrdinal = [...entries].sort(
+    (left, right) => left.ordinal - right.ordinal,
+  );
+  return {
+    *overlappingOrdinals(minimumMetersXZ, maximumMetersXZ): Generator<number> {
+      if (isNil(root)) return;
+      const overlaps = (node: TriangleXzBroadphaseNodeV1) =>
+        aabbOverlapsInclusiveXZV1(
+          minimumMetersXZ,
+          maximumMetersXZ,
+          node.minimumMetersXZ,
+          node.maximumMetersXZ,
+        );
+      if (!overlaps(root)) return;
+      const containsRoot =
+        minimumMetersXZ[0] <= root.minimumMetersXZ[0] &&
+        minimumMetersXZ[1] <= root.minimumMetersXZ[1] &&
+        maximumMetersXZ[0] >= root.maximumMetersXZ[0] &&
+        maximumMetersXZ[1] >= root.maximumMetersXZ[1];
+      if (containsRoot) {
+        for (const entry of entriesByOrdinal) {
+          yield entry.ordinal;
+        }
+        return;
+      }
+      const heap: TriangleXzBroadphaseNodeV1[] = [];
+      pushBroadphaseNode(heap, root);
+      while (heap.length > 0) {
+        const node = popBroadphaseNode(heap)!;
+        if (!isNil(node.entry)) {
+          yield node.entry.ordinal;
+          continue;
+        }
+        if (!isNil(node.left) && overlaps(node.left)) {
+          pushBroadphaseNode(heap, node.left);
+        }
+        if (!isNil(node.right) && overlaps(node.right)) {
+          pushBroadphaseNode(heap, node.right);
+        }
+      }
+    },
+  };
+}
+
 export function queryCanonicalTraversalSurfaceHitsV1(
   input: QueryCanonicalTraversalSurfaceHitsInputV1,
 ): CanonicalTraversalSurfaceHitResolutionV1 {
-  const parsed = parseQueryInput(input);
-  const bestBySurfaceId = new Map<string, SurfaceHitCandidateV1>();
-  const hasRetainedNormal = parsed.normalAdmission.mode === "retained-support";
-  for (const source of parsed.sources) {
-    for (const triangle of indexSourceTriangles(source)) {
-      const sample = samplePointOnWorldTriangleV1(
-        triangle.geometry,
-        parsed.pointMetersXZ,
-      );
-      if (isNil(sample)) {
-        continue;
-      }
-      const location = classifyTriangleXZLocationV1(
-        sample.inwardEdgeDistancesMeters,
-      );
-      if (location === "outside") {
-        continue;
-      }
-      const heightDeltaMeters = Math.abs(
-        sample.heightMeters - parsed.referenceHeightMeters,
-      );
-      if (heightDeltaMeters > parsed.maximumReferenceHeightDifferenceMeters) {
-        continue;
-      }
-      const admission = admitsNormal(
-        triangle.geometry.unitNormalXYZ,
-        parsed.normalAdmission,
-      );
-      if (!admission.admitted) {
-        continue;
-      }
-      const candidate: SurfaceHitCandidateV1 = {
-        traversalSurfaceId: source.traversalSurfaceId,
-        location,
-        heightMeters: sample.heightMeters,
-        normalXYZ: triangle.geometry.unitNormalXYZ,
-        heightDeltaMeters,
-        retainedNormalDot: admission.retainedNormalDot,
-        ordinal: triangle.ordinal,
-      };
-      const current = bestBySurfaceId.get(source.traversalSurfaceId);
-      if (
-        isNil(current) ||
-        compareSurfaceHitCandidates(candidate, current, hasRetainedNormal) < 0
-      ) {
-        bestBySurfaceId.set(source.traversalSurfaceId, candidate);
+  return withFiniteGeometryErrors(() => {
+    const parsed = parseQueryInput(input);
+    const bestBySurfaceId = new Map<string, SurfaceHitCandidateV1>();
+    const hasRetainedNormal = parsed.normalAdmission.mode === "retained-support";
+    for (const source of parsed.sources) {
+      for (const triangle of indexSourceTriangles(source)) {
+        const sample = samplePointOnWorldTriangleV1(
+          triangle.geometry,
+          parsed.pointMetersXZ,
+        );
+        if (isNil(sample)) {
+          continue;
+        }
+        const location = classifyTriangleXZLocationV1(
+          sample.inwardEdgeDistancesMeters,
+        );
+        if (location === "outside") {
+          continue;
+        }
+        const heightDeltaMeters = Math.abs(
+          sample.heightMeters - parsed.referenceHeightMeters,
+        );
+        if (heightDeltaMeters > parsed.maximumReferenceHeightDifferenceMeters) {
+          continue;
+        }
+        const admission = admitsNormal(
+          triangle.geometry.unitNormalXYZ,
+          parsed.normalAdmission,
+        );
+        if (!admission.admitted) {
+          continue;
+        }
+        const candidate: SurfaceHitCandidateV1 = {
+          traversalSurfaceId: source.traversalSurfaceId,
+          location,
+          heightMeters: sample.heightMeters,
+          normalXYZ: triangle.geometry.unitNormalXYZ,
+          heightDeltaMeters,
+          retainedNormalDot: admission.retainedNormalDot,
+          ordinal: triangle.ordinal,
+        };
+        const current = bestBySurfaceId.get(source.traversalSurfaceId);
+        if (
+          isNil(current) ||
+          compareSurfaceHitCandidates(candidate, current, hasRetainedNormal) < 0
+        ) {
+          bestBySurfaceId.set(source.traversalSurfaceId, candidate);
+        }
       }
     }
-  }
-  const hits = [...bestBySurfaceId.values()]
-    .sort((left, right) =>
-      compareSurfaceIds(left.traversalSurfaceId, right.traversalSurfaceId),
-    )
-    .map((candidate) =>
-      deepFreeze({
-        traversalSurfaceId: candidate.traversalSurfaceId,
-        location: candidate.location,
-        heightMeters: candidate.heightMeters,
-        normalXYZ: candidate.normalXYZ,
-      } satisfies CanonicalTraversalSurfaceHitV1),
-    );
-  if (hits.length === 0) {
-    return deepFreeze({ mode: "missing", hits: [] as const });
-  }
-  const interiors = hits.filter((hit) => hit.location === "interior");
-  if (interiors.length === 1) {
+    const hits = [...bestBySurfaceId.values()]
+      .sort((left, right) =>
+        compareSurfaceIds(left.traversalSurfaceId, right.traversalSurfaceId),
+      )
+      .map((candidate) =>
+        deepFreeze({
+          traversalSurfaceId: candidate.traversalSurfaceId,
+          location: candidate.location,
+          heightMeters: candidate.heightMeters,
+          normalXYZ: candidate.normalXYZ,
+        } satisfies CanonicalTraversalSurfaceHitV1),
+      );
+    if (hits.length === 0) {
+      return deepFreeze({ mode: "missing", hits: [] as const });
+    }
+    const interiors = hits.filter((hit) => hit.location === "interior");
+    if (interiors.length === 1) {
+      return deepFreeze({
+        mode: "resolved",
+        hit: interiors[0]!,
+        hits,
+      });
+    }
+    if (interiors.length >= 2) {
+      return deepFreeze({ mode: "ambiguous", hits });
+    }
     return deepFreeze({
       mode: "resolved",
-      hit: interiors[0]!,
+      hit: hits[0]!,
       hits,
     });
-  }
-  if (interiors.length >= 2) {
-    return deepFreeze({ mode: "ambiguous", hits });
-  }
-  return deepFreeze({
-    mode: "resolved",
-    hit: hits[0]!,
-    hits,
   });
 }
 
 function* overlappingSecondOrdinals(
   first: IndexedTriangleV1,
-  seconds: readonly IndexedTriangleV1[],
+  secondBroadphase: TriangleXzBroadphaseIndexV1,
 ): Generator<number> {
-  for (const second of seconds) {
-    if (
-      aabbOverlapsInclusiveXZV1(
-        first.geometry.aabbMinimumMetersXZ,
-        first.geometry.aabbMaximumMetersXZ,
-        second.geometry.aabbMinimumMetersXZ,
-        second.geometry.aabbMaximumMetersXZ,
-      )
-    ) {
-      yield second.ordinal;
-    }
-  }
+  yield* secondBroadphase.overlappingOrdinals(
+    first.geometry.aabbMinimumMetersXZ,
+    first.geometry.aabbMaximumMetersXZ,
+  );
 }
 
 function classifyIndexedTrianglePair(
@@ -686,70 +871,82 @@ function classifyIndexedTrianglePair(
 export function preflightCanonicalTraversalSurfaceOverlapsV1(
   input: PreflightCanonicalTraversalSurfaceOverlapsInputV1,
 ): PreflightCanonicalTraversalSurfaceOverlapsResultV1 {
-  const parsed = parsePreflightInput(input);
-  const indexedSources: IndexedSourceV1[] = [...parsed.sources]
-    .sort((left, right) =>
-      compareSurfaceIds(left.traversalSurfaceId, right.traversalSurfaceId),
-    )
-    .map((source) => ({
-      traversalSurfaceId: source.traversalSurfaceId,
-      triangles: indexSourceTriangles(source),
-    }));
-  let testedCount = 0;
-  for (
-    let firstSourceIndex = 0;
-    firstSourceIndex < indexedSources.length;
-    firstSourceIndex += 1
-  ) {
-    const firstSource = indexedSources[firstSourceIndex]!;
+  return withFiniteGeometryErrors(() => {
+    const parsed = parsePreflightInput(input);
+    const indexedSources: IndexedSourceV1[] = [...parsed.sources]
+      .sort((left, right) =>
+        compareSurfaceIds(left.traversalSurfaceId, right.traversalSurfaceId),
+      )
+      .map((source) => {
+        const triangles = indexSourceTriangles(source);
+        return {
+          traversalSurfaceId: source.traversalSurfaceId,
+          triangles,
+          broadphase: createTriangleXzBroadphaseIndexV1(
+            triangles.map((triangle) => ({
+              ordinal: triangle.ordinal,
+              minimumMetersXZ: triangle.geometry.aabbMinimumMetersXZ,
+              maximumMetersXZ: triangle.geometry.aabbMaximumMetersXZ,
+            })),
+          ),
+        };
+      });
+    let testedCount = 0;
     for (
-      let secondSourceIndex = firstSourceIndex + 1;
-      secondSourceIndex < indexedSources.length;
-      secondSourceIndex += 1
+      let firstSourceIndex = 0;
+      firstSourceIndex < indexedSources.length;
+      firstSourceIndex += 1
     ) {
-      const secondSource = indexedSources[secondSourceIndex]!;
-      for (const firstTriangle of firstSource.triangles) {
-        for (const secondOrdinal of overlappingSecondOrdinals(
-          firstTriangle,
-          secondSource.triangles,
-        )) {
-          testedCount += 1;
-          if (
-            testedCount ===
-            parsed.maximumTraversalSurfaceTrianglePairTestCount + 1
-          ) {
-            return deepFreeze({
-              mode: "budget-exceeded",
-              reason:
-                "traversal-surface-triangle-pair-test-budget-exceeded" as const,
-              maximumAllowedCount:
-                parsed.maximumTraversalSurfaceTrianglePairTestCount,
-              minimumRequiredCount:
-                parsed.maximumTraversalSurfaceTrianglePairTestCount + 1,
-            });
-          }
-          const secondTriangle = secondSource.triangles[secondOrdinal]!;
-          const relation = classifyIndexedTrianglePair(
+      const firstSource = indexedSources[firstSourceIndex]!;
+      for (
+        let secondSourceIndex = firstSourceIndex + 1;
+        secondSourceIndex < indexedSources.length;
+        secondSourceIndex += 1
+      ) {
+        const secondSource = indexedSources[secondSourceIndex]!;
+        for (const firstTriangle of firstSource.triangles) {
+          for (const secondOrdinal of overlappingSecondOrdinals(
             firstTriangle,
-            secondTriangle,
-            parsed.minimumUpwardNormalYRatio,
-            parsed.maximumSameBandHeightDifferenceMeters,
-          );
-          if (relation.kind === "blocker") {
-            return deepFreeze({
-              mode: "blocked",
-              blocker: {
-                firstTraversalSurfaceId: firstSource.traversalSurfaceId,
-                secondTraversalSurfaceId: secondSource.traversalSurfaceId,
-                witnessPointMetersXZ: relation.witnessPointMetersXZ,
-                minimumHeightDifferenceMeters:
-                  relation.minimumHeightDifferenceMeters,
-              },
-            });
+            secondSource.broadphase,
+          )) {
+            testedCount += 1;
+            if (
+              testedCount ===
+              parsed.maximumTraversalSurfaceTrianglePairTestCount + 1
+            ) {
+              return deepFreeze({
+                mode: "budget-exceeded",
+                reason:
+                  "traversal-surface-triangle-pair-test-budget-exceeded" as const,
+                maximumAllowedCount:
+                  parsed.maximumTraversalSurfaceTrianglePairTestCount,
+                minimumRequiredCount:
+                  parsed.maximumTraversalSurfaceTrianglePairTestCount + 1,
+              });
+            }
+            const secondTriangle = secondSource.triangles[secondOrdinal]!;
+            const relation = classifyIndexedTrianglePair(
+              firstTriangle,
+              secondTriangle,
+              parsed.minimumUpwardNormalYRatio,
+              parsed.maximumSameBandHeightDifferenceMeters,
+            );
+            if (relation.kind === "blocker") {
+              return deepFreeze({
+                mode: "blocked",
+                blocker: {
+                  firstTraversalSurfaceId: firstSource.traversalSurfaceId,
+                  secondTraversalSurfaceId: secondSource.traversalSurfaceId,
+                  witnessPointMetersXZ: relation.witnessPointMetersXZ,
+                  minimumHeightDifferenceMeters:
+                    relation.minimumHeightDifferenceMeters,
+                },
+              });
+            }
           }
         }
       }
     }
-  }
-  return deepFreeze({ mode: "clear" });
+    return deepFreeze({ mode: "clear" });
+  });
 }

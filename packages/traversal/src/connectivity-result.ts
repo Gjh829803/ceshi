@@ -1358,10 +1358,12 @@ const REASON_FIELDS_V2: Readonly<
   ],
 };
 
-type RouteThresholdRejectionReasonV2 = Omit<
-  RouteThresholdRejectionReasonV1,
-  "terrainEntityId"
->;
+type OmitTerrainEntityId<T> = T extends unknown
+  ? Omit<T, "terrainEntityId">
+  : never;
+
+type RouteThresholdRejectionReasonV2 =
+  OmitTerrainEntityId<RouteThresholdRejectionReasonV1>;
 
 export type RouteConnectivityFailureReasonV2 =
   | Readonly<{
@@ -2199,6 +2201,11 @@ function assertContextualFailureV2(
         "empty-heightfield-source requires empty terrainSource and empty staticColliders",
       );
     }
+    requireEqualV2(
+      failure.reason.terrainEntityId,
+      input.terrainSource.terrainEntityId,
+      "connectivityFailure/reason/terrainEntityId",
+    );
   }
   const quantum = input.capabilityEnvelope.positionQuantizationMeters;
   const expectedStart = input.startAnchor.positionMetersXYZ.map((component) =>
@@ -2221,6 +2228,127 @@ function assertContextualFailureV2(
       `connectivityFailure/destinationAnchorPositionMetersXYZ/${index}`,
     ),
   );
+  if (failure.reason.kind === "start-surface-not-found") {
+    requireEqualV2(
+      failure.reason.anchorEntityId,
+      input.startAnchor.entityId,
+      "connectivityFailure/reason/anchorEntityId",
+    );
+    failure.reason.positionMetersXYZ.forEach((component, index) =>
+      requireEqualV2(
+        component,
+        expectedStart[index],
+        `connectivityFailure/reason/positionMetersXYZ/${index}`,
+      ),
+    );
+  } else if (failure.reason.kind === "destination-surface-not-found") {
+    requireEqualV2(
+      failure.reason.anchorEntityId,
+      input.destinationAnchor.entityId,
+      "connectivityFailure/reason/anchorEntityId",
+    );
+    failure.reason.positionMetersXYZ.forEach((component, index) =>
+      requireEqualV2(
+        component,
+        expectedDestination[index],
+        `connectivityFailure/reason/positionMetersXYZ/${index}`,
+      ),
+    );
+  }
+  let actualMaximumAllowedCount: number | undefined;
+  let expectedMaximumAllowedCount: number | undefined;
+  if (failure.reason.kind === "node-budget-exceeded") {
+    actualMaximumAllowedCount = failure.reason.maximumAllowedCount;
+    expectedMaximumAllowedCount = input.capabilityEnvelope.maximumNodes;
+  } else if (failure.reason.kind === "edge-budget-exceeded") {
+    actualMaximumAllowedCount = failure.reason.maximumAllowedCount;
+    expectedMaximumAllowedCount = input.capabilityEnvelope.maximumEdges;
+  } else if (failure.reason.kind === "search-budget-exceeded") {
+    actualMaximumAllowedCount = failure.reason.maximumAllowedCount;
+    expectedMaximumAllowedCount = input.capabilityEnvelope.maximumSearchSteps;
+  } else if (
+    failure.reason.kind === "traversal-surface-count-budget-exceeded"
+  ) {
+    actualMaximumAllowedCount = failure.reason.maximumAllowedCount;
+    expectedMaximumAllowedCount =
+      input.capabilityEnvelope.maximumTraversalSurfaceCount;
+  } else if (
+    failure.reason.kind ===
+    "traversal-surface-triangle-pair-test-budget-exceeded"
+  ) {
+    actualMaximumAllowedCount = failure.reason.maximumAllowedCount;
+    expectedMaximumAllowedCount =
+      input.capabilityEnvelope.maximumTraversalSurfaceTrianglePairTestCount;
+  }
+  if (!isNil(expectedMaximumAllowedCount)) {
+    requireEqualV2(
+      actualMaximumAllowedCount,
+      expectedMaximumAllowedCount,
+      "connectivityFailure/reason/maximumAllowedCount",
+    );
+  }
+  if (
+    failure.reason.kind ===
+    "traversal-surface-triangle-pair-test-budget-exceeded"
+  ) {
+    requireEqualV2(
+      failure.reason.minimumRequiredCount,
+      input.capabilityEnvelope.maximumTraversalSurfaceTrianglePairTestCount +
+        1,
+      "connectivityFailure/reason/minimumRequiredCount",
+    );
+  }
+  if (failure.reason.kind === "slope-threshold-exceeded") {
+    requireEqualV2(
+      "maximumAllowedSlopeDegrees" in failure.reason
+        ? failure.reason.maximumAllowedSlopeDegrees
+        : undefined,
+      input.capabilityEnvelope.maxSlopeDegrees,
+      "connectivityFailure/reason/maximumAllowedSlopeDegrees",
+    );
+  } else if (failure.reason.kind === "step-height-threshold-exceeded") {
+    requireEqualV2(
+      "maximumAllowedStepHeightMeters" in failure.reason
+        ? failure.reason.maximumAllowedStepHeightMeters
+        : undefined,
+      input.capabilityEnvelope.maxStepHeightMeters,
+      "connectivityFailure/reason/maximumAllowedStepHeightMeters",
+    );
+  } else if (failure.reason.kind === "clearance-width-insufficient") {
+    requireEqualV2(
+      failure.reason.minimumRequiredClearanceWidthMeters,
+      2 * (
+        input.capabilityEnvelope.capsuleRadiusMeters +
+        input.capabilityEnvelope.clearanceMarginMeters
+      ),
+      "connectivityFailure/reason/minimumRequiredClearanceWidthMeters",
+    );
+  } else if (failure.reason.kind === "overhead-clearance-insufficient") {
+    requireEqualV2(
+      failure.reason.minimumRequiredClearanceHeightMeters,
+      input.capabilityEnvelope.capsuleHeightMeters,
+      "connectivityFailure/reason/minimumRequiredClearanceHeightMeters",
+    );
+  }
+  if (
+    failure.reason.kind === "clearance-width-insufficient" ||
+    failure.reason.kind === "overhead-clearance-insufficient" ||
+    failure.reason.kind === "surface-profile-missing"
+  ) {
+    const colliderSubshapeIds = new Set(
+      input.staticColliders.map((collider) => collider.colliderSubshapeId),
+    );
+    failure.reason.relevantColliderSubshapeIds.forEach(
+      (colliderSubshapeId, index) => {
+        if (!colliderSubshapeIds.has(colliderSubshapeId)) {
+          failResultV2(
+            `connectivityFailure/reason/relevantColliderSubshapeIds/${index}`,
+            "must reference a Build Input static Collider",
+          );
+        }
+      },
+    );
+  }
 }
 
 export function assertRouteConnectivityResultForBuildInputV2(

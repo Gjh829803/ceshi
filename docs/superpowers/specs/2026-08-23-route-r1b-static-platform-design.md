@@ -2,7 +2,7 @@
 
 ## 1. 文档状态
 
-- 状态：**Proposed / Pending Human Review（2026-08-23）**。
+- 状态：**Approved for phased implementation / R1b in progress（2026-08-23）**。
 - 所属里程碑：P0.1 / M5。
 - 前置能力：Route R0 与 R1 Heightfield 已通过 PR #20 合入 `main`；
   `pnpm verify:route-r0-contract`、`pnpm verify:route-r1-heightfield` 和真实
