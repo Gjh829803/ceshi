@@ -45,11 +45,13 @@ import type {
   CompileWorldResultV5,
   ExecutionConnectivityRequirementV1,
   ExecutionHeightfieldTraversalSurfaceV1,
+  ExecutionTraversalAreaV1,
   ExecutionPlanV5,
   ExecutionStaticColliderShapeV1,
   ExecutionStaticColliderV1,
 } from "@whitebox-world/runtime-contracts";
 import { deriveColliderSubshapeIdV1 } from "@whitebox-world/traversal";
+import { isNil, max, min } from "lodash-es";
 
 import { sampleFractalNoise } from "./noise";
 
@@ -1407,6 +1409,11 @@ function compileLockedTerrainV4(
   if (heightSamplesHash !== baseline.heightSamplesHash) {
     throw new Error("COMPILER_LAYOUT_HEIGHTFIELD_MISMATCH");
   }
+  const minimumHeightMeters = min(heightSamplesMeters);
+  const maximumHeightMeters = max(heightSamplesMeters);
+  if (isNil(minimumHeightMeters) || isNil(maximumHeightMeters)) {
+    throw new Error("COMPILER_LAYOUT_HEIGHTFIELD_INVALID");
+  }
   return {
     entityId: baseline.entityId,
     centerMetersXZ: [...heightfield.centerMetersXZ],
@@ -1414,8 +1421,8 @@ function compileLockedTerrainV4(
     resolutionCellsXZ: [...heightfield.resolutionVerticesXZ],
     heightSamplesMeters,
     heightSamplesHash,
-    minimumHeightMeters: Math.min(...heightSamplesMeters),
-    maximumHeightMeters: Math.max(...heightSamplesMeters),
+    minimumHeightMeters,
+    maximumHeightMeters,
     semanticClassId: baseline.semanticClassId,
   };
 }
@@ -1532,12 +1539,25 @@ function projectNormalizedWorldV4ToV3(world: NormalizedWorldIRV4): NormalizedWor
   } = clone;
   const {
     connectivityRequirements: _connectivityRequirements,
+    traversalAreas: _traversalAreas,
     ...layout
   } = layoutV4;
   return {
     ...worldV3,
     schemaVersion: 3,
     layout,
+  };
+}
+
+function compileTraversalAreaV1(
+  area: NormalizedWorldIRV4["layout"]["traversalAreas"][number],
+): ExecutionTraversalAreaV1 {
+  return {
+    id: area.id,
+    kind: area.kind,
+    pointsMetersXZ: area.pointsMetersXZ.map((point) => [...point]),
+    surfaceEntityId: area.surfaceEntityId,
+    mode: area.mode,
   };
 }
 
@@ -1653,6 +1673,9 @@ export function compileWorldV5(input: CompileWorldInputV5): CompileWorldResultV5
       ),
       traversal: {
         surfaces: [compileHeightfieldTraversalSurfaceV1(planV4)],
+        traversalAreas: input.normalizedWorldIr.layout.traversalAreas
+          .map(compileTraversalAreaV1)
+          .sort((left, right) => left.id.localeCompare(right.id)),
         connectivityRequirements: input.normalizedWorldIr.layout
           .connectivityRequirements
           .map(compileConnectivityRequirementV1)

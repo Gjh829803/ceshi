@@ -209,7 +209,7 @@ function completeResult(
   }, receipt);
 }
 
-function genericUnreachableReason(
+export function genericUnreachableReasonForBuildInputV1(
   receipt: HeightfieldRouteBuildInputReceiptV1,
 ): RouteConnectivityFailureReasonV1 {
   return {
@@ -298,7 +298,7 @@ function sourceDerivedUnreachableReason(
 ): RouteConnectivityFailureReasonV1 {
   return routeConnectivityReasonForRejectionProofV1(
     evaluateRouteRejectionProofV1(rejectionProofInput),
-  ) ?? genericUnreachableReason(receipt);
+  ) ?? genericUnreachableReasonForBuildInputV1(receipt);
 }
 
 function endpointFailure(

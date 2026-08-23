@@ -11,6 +11,15 @@ export {
   type StaticColliderTransformV1,
   type StaticColliderWorldTriangleMeshV1,
 } from "./static-collider-triangle-mesh.js";
+export {
+  TRAVERSAL_AREA_COMPLEXITY_LIMITS_V1,
+  validateSimplePolygonXZV1,
+  validateTraversalAreaComplexityV1,
+  type SimplePolygonXZValidationIssueCodeV1,
+  type SimplePolygonXZValidationResultV1,
+  type TraversalAreaComplexityIssueCodeV1,
+  type TraversalAreaComplexityValidationResultV1,
+} from "./simple-polygon-xz.js";
 
 export type TerrainSurfaceVec2 = readonly [x: number, z: number];
 export type TerrainSurfaceVec3 = readonly [x: number, y: number, z: number];

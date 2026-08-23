@@ -93,6 +93,7 @@ function receipt(
     },
     blockingColliders: [],
     colliderArtifactHash: sha256CanonicalJson([]) as `sha256:${string}`,
+    blockedTraversalAreaExclusions: [],
     blockedWaterExclusions: [],
   };
   const estimate = assertTraversalGraphBuildBudgetV1({

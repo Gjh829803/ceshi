@@ -34,6 +34,7 @@ function validV4(): AuthoringSpecV4 {
     schemaVersion: 4,
     spatial: {
       ...source.spatial,
+      traversalAreas: [],
       routes: [
         {
           id: "spawn-to-watchtower",
@@ -77,7 +78,174 @@ function withConnectivity(
   return copy;
 }
 
+function regularPolygonPoints(
+  pointCount: number,
+  centerXMeters = 0,
+): readonly (readonly [number, number])[] {
+  return Array.from({ length: pointCount }, (_, index) => {
+    const angle = (index / pointCount) * Math.PI * 2;
+    return [centerXMeters + Math.cos(angle), Math.sin(angle)] as const;
+  });
+}
+
+function traversalArea(id: string, pointsMetersXZ: readonly (readonly [number, number])[]) {
+  return {
+    id,
+    kind: "polygon-xz" as const,
+    pointsMetersXZ,
+    surfaceEntityId: "terrain-main",
+    mode: "blocked" as const,
+  };
+}
+
 describe("Authoring Spec V4 connectivity schema", () => {
+  it("requires closed blocked traversal areas on a declared Terrain surface", () => {
+    const valid = structuredClone(validV4()) as unknown as {
+      spatial: { traversalAreas: unknown[] };
+    };
+    valid.spatial.traversalAreas = [{
+      id: "dry-trench",
+      kind: "polygon-xz",
+      pointsMetersXZ: [[-1, -4], [1, -4], [1, 4], [-1, 4]],
+      surfaceEntityId: "terrain-main",
+      mode: "blocked",
+    }];
+    expect(validateAuthoringSpecV4(valid).ok).toBe(true);
+
+    const missing = structuredClone(validV4()) as unknown as {
+      spatial: { traversalAreas?: unknown[] };
+    };
+    delete missing.spatial.traversalAreas;
+    expect(validateAuthoringSpecV4(missing).ok).toBe(false);
+
+    expect(validateAuthoringSpecV4({
+      ...valid,
+      spatial: {
+        ...valid.spatial,
+        traversalAreas: [{
+          ...(valid.spatial.traversalAreas[0] as object),
+          mode: "jumpable",
+        }],
+      },
+    }).ok).toBe(false);
+
+    expect(validateAuthoringSpecV4({
+      ...valid,
+      spatial: {
+        ...valid.spatial,
+        traversalAreas: [{
+          ...(valid.spatial.traversalAreas[0] as object),
+          surfaceEntityId: "missing-terrain",
+        }],
+      },
+    })).toMatchObject({
+      ok: false,
+      diagnostics: expect.arrayContaining([expect.objectContaining({
+        code: "AUTHORING_REFERENCE_NOT_FOUND",
+        instancePath: "/spatial/traversalAreas/0/surfaceEntityId",
+      })]),
+    });
+  });
+
+  it("requires each blocked traversal area to be a simple polygon", () => {
+    const polygonCases = [
+      {
+        name: "self-intersection",
+        pointsMetersXZ: [[0, 0], [3, 0], [0, 2], [2, 2]],
+      },
+      {
+        name: "consecutive duplicate",
+        pointsMetersXZ: [[0, 0], [2, 0], [2, 0], [0, 2]],
+      },
+      {
+        name: "non-consecutive duplicate",
+        pointsMetersXZ: [[0, 0], [2, 0], [2, 2], [0, 2], [2, 0]],
+      },
+      {
+        name: "collinear overlap",
+        pointsMetersXZ: [[0, 0], [3, 0], [1, 0], [1, 2], [0, 2]],
+      },
+    ] as const;
+    for (const polygonCase of polygonCases) {
+      const spec = structuredClone(validV4()) as unknown as {
+        spatial: { traversalAreas: unknown[] };
+      };
+      spec.spatial.traversalAreas = [{
+        id: `invalid-${polygonCase.name.replaceAll(" ", "-")}`,
+        kind: "polygon-xz",
+        pointsMetersXZ: polygonCase.pointsMetersXZ,
+        surfaceEntityId: "terrain-main",
+        mode: "blocked",
+      }];
+      expect(validateAuthoringSpecV4(spec), polygonCase.name).toMatchObject({
+        ok: false,
+        diagnostics: expect.arrayContaining([expect.objectContaining({
+          code: "AUTHORING_SPATIAL_RANGE_INVALID",
+          instancePath: "/spatial/traversalAreas/0/pointsMetersXZ",
+        })]),
+      });
+    }
+
+    const concave = structuredClone(validV4()) as unknown as {
+      spatial: { traversalAreas: unknown[] };
+    };
+    concave.spatial.traversalAreas = [{
+      id: "valid-concave-area",
+      kind: "polygon-xz",
+      pointsMetersXZ: [[0, 0], [3, 0], [3, 3], [1.5, 1], [0, 3]],
+      surfaceEntityId: "terrain-main",
+      mode: "blocked",
+    }];
+    expect(validateAuthoringSpecV4(concave).ok).toBe(true);
+  });
+
+  it("enforces frozen blocked traversal-area collection complexity limits", () => {
+    const validateAreas = (traversalAreas: readonly unknown[]) => {
+      const spec = structuredClone(validV4()) as unknown as {
+        spatial: { traversalAreas: readonly unknown[] };
+      };
+      spec.spatial.traversalAreas = traversalAreas;
+      return validateAuthoringSpecV4(spec);
+    };
+    const tooManyAreas = Array.from({ length: 65 }, (_, index) =>
+      traversalArea(`area-${String(index).padStart(3, "0")}`, regularPolygonPoints(4)),
+    );
+    expect(validateAreas(tooManyAreas)).toMatchObject({
+      ok: false,
+      diagnostics: expect.arrayContaining([expect.objectContaining({
+        code: "AUTHORING_SPATIAL_BUDGET_EXCEEDED",
+        instancePath: "/spatial/traversalAreas",
+      })]),
+    });
+    expect(validateAreas([
+      traversalArea("too-detailed", regularPolygonPoints(129)),
+    ])).toMatchObject({
+      ok: false,
+      diagnostics: expect.arrayContaining([expect.objectContaining({
+        code: "AUTHORING_SPATIAL_BUDGET_EXCEEDED",
+        instancePath: "/spatial/traversalAreas/0/pointsMetersXZ",
+      })]),
+    });
+    expect(validateAreas(Array.from({ length: 17 }, (_, index) =>
+      traversalArea(
+        `area-${String(index).padStart(3, "0")}`,
+        regularPolygonPoints(128, index * 3),
+      ),
+    ))).toMatchObject({
+      ok: false,
+      diagnostics: expect.arrayContaining([expect.objectContaining({
+        code: "AUTHORING_SPATIAL_BUDGET_EXCEEDED",
+        instancePath: "/spatial/traversalAreas",
+      })]),
+    });
+    expect(validateAreas(Array.from({ length: 16 }, (_, index) =>
+      traversalArea(
+        `area-${String(index).padStart(3, "0")}`,
+        regularPolygonPoints(128, index * 3),
+      ),
+    )).ok).toBe(true);
+  });
+
   it("accepts required connected-by-route in V4 and rejects it from V3", () => {
     expect(validateAuthoringSpecV4(withConnectivity(validV4(), requiredRoute)).ok).toBe(true);
     expect(validateAuthoringSpecV3(withConnectivity(validV3(), requiredRoute)).ok).toBe(false);

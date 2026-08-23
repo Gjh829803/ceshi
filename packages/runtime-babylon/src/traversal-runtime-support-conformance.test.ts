@@ -45,6 +45,7 @@ function routeWorld(
     schemaVersion: 4,
     spatial: {
       ...source.spatial,
+      traversalAreas: [],
       routes: [{
         id: "main-route",
         kind: "polyline-xz",

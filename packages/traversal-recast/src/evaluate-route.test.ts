@@ -10,6 +10,7 @@ import { describe, expect, it } from "vitest";
 
 import {
   evaluateRequiredHeightfieldRouteV1,
+  genericUnreachableReasonForBuildInputV1,
   RouteConnectivityOperationAbortedErrorV1,
 } from "./evaluate-route.js";
 import { createRecastTestEnvelopeV1 } from "./test-fixture.test-support.js";
@@ -87,6 +88,7 @@ function boundedReceipt(
     },
     blockingColliders: [],
     colliderArtifactHash: sha256CanonicalJson([]) as `sha256:${string}`,
+    blockedTraversalAreaExclusions: [],
     blockedWaterExclusions: [],
   } satisfies HeightfieldRouteBuildInputV1);
   const estimate = assertTraversalGraphBuildBudgetV1({
@@ -166,6 +168,33 @@ function emptyReceipt(): HeightfieldRouteBuildInputReceiptV1 {
 }
 
 describe("evaluateRequiredHeightfieldRouteV1", () => {
+  it("keeps every canonical blocked Water id in generic unreachable evidence", () => {
+    const baseline = flatReceipt();
+    const input = deepFreeze({
+      ...baseline.input,
+      blockedWaterExclusions: [{
+        waterEntityId: "a-water",
+        boundary: { kind: "circle" as const, centerMetersXZ: [2, 2] as const, radiusMeters: 1 },
+        waterLevelMeters: 0.5,
+        depthMeters: 2,
+      }, {
+        waterEntityId: "z-water",
+        boundary: { kind: "circle" as const, centerMetersXZ: [2, 2] as const, radiusMeters: 1 },
+        waterLevelMeters: 0.5,
+        depthMeters: 2,
+      }],
+    });
+    const receipt = deepFreeze({
+      ...baseline,
+      input,
+      routeBuildInputHash: hashHeightfieldRouteBuildInputV1(input),
+    });
+    expect(genericUnreachableReasonForBuildInputV1(receipt)).toMatchObject({
+      kind: "required-path-unreachable",
+      blockedWaterEntityIds: ["a-water", "z-water"],
+    });
+  });
+
   it("builds one real Recast Graph and returns a canonical complete path", async () => {
     const receipt = flatReceipt();
     const result = await evaluateRequiredHeightfieldRouteV1({

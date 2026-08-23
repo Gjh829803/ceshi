@@ -155,6 +155,7 @@ function createRouteAuthoringSpec(input: Readonly<{
     },
     spatial: {
       ...source.spatial,
+      traversalAreas: [],
       routes: [{
         id: "main-route",
         kind: "polyline-xz",

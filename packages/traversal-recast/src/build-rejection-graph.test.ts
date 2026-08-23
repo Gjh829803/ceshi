@@ -212,6 +212,7 @@ function receipt(input: Readonly<{
     },
     blockingColliders,
     colliderArtifactHash: sha256CanonicalJson(blockingColliders) as `sha256:${string}`,
+    blockedTraversalAreaExclusions: [],
     blockedWaterExclusions: [],
   };
   const frozenInput = deepFreeze(buildInput);

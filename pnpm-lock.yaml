@@ -188,6 +188,9 @@ importers:
       '@whitebox-world/subject-registry':
         specifier: workspace:*
         version: link:../subject-registry
+      '@whitebox-world/terrain-surface':
+        specifier: workspace:*
+        version: link:../terrain-surface
       ajv:
         specifier: ^8.17.1
         version: 8.20.0
@@ -390,6 +393,9 @@ importers:
       '@whitebox-world/protocol':
         specifier: workspace:*
         version: link:../protocol
+      '@whitebox-world/terrain-surface':
+        specifier: workspace:*
+        version: link:../terrain-surface
       lodash-es:
         specifier: ^4.18.1
         version: 4.18.1

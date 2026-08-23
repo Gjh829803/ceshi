@@ -16,6 +16,7 @@
     "@whitebox-world/runtime-contracts": "workspace:*",
     "@whitebox-world/subject-composition": "workspace:*",
     "@whitebox-world/subject-registry": "workspace:*",
+    "@whitebox-world/terrain-surface": "workspace:*",
     "ajv": "^8.17.1",
     "ajv-formats": "^3.0.1",
     "jsonc-parser": "^3.3.1",

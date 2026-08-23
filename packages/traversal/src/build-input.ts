@@ -1,4 +1,9 @@
 import { sha256CanonicalJson } from "@whitebox-world/protocol";
+import {
+  TRAVERSAL_AREA_COMPLEXITY_LIMITS_V1,
+  validateSimplePolygonXZV1,
+  validateTraversalAreaComplexityV1,
+} from "@whitebox-world/terrain-surface";
 import { isNil, isPlainObject } from "lodash-es";
 
 import { assertTraversalGraphBuildBudgetV1 } from "./build-budget.js";
@@ -62,6 +67,15 @@ export interface BlockedWaterExclusionV1 {
   readonly depthMeters: number;
 }
 
+export interface BlockedTraversalAreaExclusionV1 {
+  readonly traversalAreaId: string;
+  readonly surfaceEntityId: string;
+  readonly boundary: Readonly<{
+    kind: "polygon-xz";
+    pointsMetersXZ: readonly Vec2[];
+  }>;
+}
+
 export type HeightfieldRouteTerrainSourceV1 =
   | Readonly<{
       kind: "empty";
@@ -98,6 +112,7 @@ export interface HeightfieldRouteBuildInputV1 {
   readonly terrainSource: HeightfieldRouteTerrainSourceV1;
   readonly blockingColliders: readonly StaticBlockingColliderV1[];
   readonly colliderArtifactHash: Sha256Hash;
+  readonly blockedTraversalAreaExclusions: readonly BlockedTraversalAreaExclusionV1[];
   readonly blockedWaterExclusions: readonly BlockedWaterExclusionV1[];
 }
 
@@ -163,6 +178,7 @@ const BUILD_INPUT_FIELDS = [
   "terrainSource",
   "blockingColliders",
   "colliderArtifactHash",
+  "blockedTraversalAreaExclusions",
   "blockedWaterExclusions",
 ] as const;
 
@@ -206,6 +222,12 @@ const WATER_FIELDS = [
   "waterLevelMeters",
   "depthMeters",
 ] as const;
+const TRAVERSAL_AREA_EXCLUSION_FIELDS = [
+  "traversalAreaId",
+  "surfaceEntityId",
+  "boundary",
+] as const;
+const TRAVERSAL_AREA_BOUNDARY_FIELDS = ["kind", "pointsMetersXZ"] as const;
 
 const CAPABILITY_FIELDS = [
   "kind",
@@ -711,6 +733,86 @@ function validateWaterExclusions(value: unknown): readonly BlockedWaterExclusion
   return value as readonly BlockedWaterExclusionV1[];
 }
 
+function validateTraversalAreaExclusions(
+  value: unknown,
+): readonly BlockedTraversalAreaExclusionV1[] {
+  if (!Array.isArray(value)) {
+    fail("blockedTraversalAreaExclusions", "must be an array");
+  }
+  if (
+    value.length >
+      TRAVERSAL_AREA_COMPLEXITY_LIMITS_V1.maximumAreaCount
+  ) {
+    fail(
+      "blockedTraversalAreaExclusions",
+      `area-count-exceeded: ${value.length} > ${TRAVERSAL_AREA_COMPLEXITY_LIMITS_V1.maximumAreaCount}`,
+    );
+  }
+  let previousId: string | undefined;
+  const pointCountsByArea: number[] = [];
+  value.forEach((candidate, index) => {
+    const path = `blockedTraversalAreaExclusions/${index}`;
+    const record = requireExactFields(
+      candidate,
+      TRAVERSAL_AREA_EXCLUSION_FIELDS,
+      path,
+    );
+    const traversalAreaId = requireString(
+      record.traversalAreaId,
+      `${path}/traversalAreaId`,
+    );
+    requireString(record.surfaceEntityId, `${path}/surfaceEntityId`);
+    const boundary = requireExactFields(
+      record.boundary,
+      TRAVERSAL_AREA_BOUNDARY_FIELDS,
+      `${path}/boundary`,
+    );
+    if (boundary.kind !== "polygon-xz") {
+      fail(`${path}/boundary/kind`, "must be 'polygon-xz'");
+    }
+    if (!Array.isArray(boundary.pointsMetersXZ) || boundary.pointsMetersXZ.length < 3) {
+      fail(`${path}/boundary/pointsMetersXZ`, "must contain at least three points");
+    }
+    if (
+      boundary.pointsMetersXZ.length >
+        TRAVERSAL_AREA_COMPLEXITY_LIMITS_V1.maximumPointsPerArea
+    ) {
+      fail(
+        `${path}/boundary/pointsMetersXZ`,
+        `points-per-area-exceeded: ${boundary.pointsMetersXZ.length} > ${TRAVERSAL_AREA_COMPLEXITY_LIMITS_V1.maximumPointsPerArea}`,
+      );
+    }
+    pointCountsByArea.push(boundary.pointsMetersXZ.length);
+    const points = boundary.pointsMetersXZ.map((point, pointIndex) =>
+      requireVec2(point, `${path}/boundary/pointsMetersXZ/${pointIndex}`),
+    );
+    const polygonValidation = validateSimplePolygonXZV1(points);
+    if (!polygonValidation.ok) {
+      fail(
+        `${path}/boundary/pointsMetersXZ`,
+        `polygon must be simple (${polygonValidation.issueCode})`,
+      );
+    }
+    if (!isNil(previousId) && traversalAreaId <= previousId) {
+      fail(
+        "blockedTraversalAreaExclusions",
+        "must be strictly sorted by traversalAreaId",
+      );
+    }
+    previousId = traversalAreaId;
+  });
+  const complexity = validateTraversalAreaComplexityV1({ pointCountsByArea });
+  if (!complexity.ok) {
+    fail(
+      isNil(complexity.areaIndex)
+        ? "blockedTraversalAreaExclusions"
+        : `blockedTraversalAreaExclusions/${complexity.areaIndex}/boundary/pointsMetersXZ`,
+      `${complexity.issueCode}: ${complexity.actualCount} > ${complexity.maximumCount}`,
+    );
+  }
+  return value as readonly BlockedTraversalAreaExclusionV1[];
+}
+
 export function assertHeightfieldRouteBuildInputV1(
   value: unknown,
 ): HeightfieldRouteBuildInputV1 {
@@ -755,6 +857,9 @@ export function assertHeightfieldRouteBuildInputV1(
   const capabilityEnvelope = validateCapabilityEnvelope(record.capabilityEnvelope);
   const terrainSource = validateTerrainSource(record.terrainSource);
   const blockingColliders = validateBlockingColliders(record.blockingColliders);
+  const blockedTraversalAreaExclusions = validateTraversalAreaExclusions(
+    record.blockedTraversalAreaExclusions,
+  );
   validateWaterExclusions(record.blockedWaterExclusions);
 
   if (connectivity.startAnchorEntityId !== startAnchor.entityId) {
@@ -783,6 +888,14 @@ export function assertHeightfieldRouteBuildInputV1(
   }
   if (terrainSource.terrainEntityId !== traversalSurface.surfaceEntityId) {
     fail("terrainSource/terrainEntityId", "must match traversalSurface.surfaceEntityId");
+  }
+  for (const [index, exclusion] of blockedTraversalAreaExclusions.entries()) {
+    if (exclusion.surfaceEntityId !== traversalSurface.surfaceEntityId) {
+      fail(
+        `blockedTraversalAreaExclusions/${index}/surfaceEntityId`,
+        "must match traversalSurface.surfaceEntityId",
+      );
+    }
   }
   if (colliderArtifactHash !== sha256CanonicalJson(blockingColliders)) {
     fail(

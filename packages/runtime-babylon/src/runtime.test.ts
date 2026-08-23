@@ -602,6 +602,7 @@ function createV5StaticColliderSupportExecutionPlan(): ExecutionPlanV5 {
     resourceLockEntries,
     resourceLockHash: sha256CanonicalJson(resourceLockEntries),
     traversal: {
+      traversalAreas: [],
       surfaces: [{
         kind: "heightfield",
         traversalSurfaceId: "surface:terrain-main:heightfield",

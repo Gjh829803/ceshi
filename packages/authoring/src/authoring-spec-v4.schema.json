@@ -55,6 +55,7 @@
       "required": [
         "regions",
         "routes",
+        "traversalAreas",
         "screenRegions"
       ],
       "properties": {
@@ -70,6 +71,13 @@
           "maxItems": 256,
           "items": {
             "$ref": "#/$defs/route"
+          }
+        },
+        "traversalAreas": {
+          "type": "array",
+          "maxItems": 64,
+          "items": {
+            "$ref": "#/$defs/traversalArea"
           }
         },
         "screenRegions": {
@@ -265,6 +273,39 @@
         "locomotionProfileRef": {
           "type": "string",
           "format": "locomotion-profile-ref"
+        }
+      }
+    },
+    "traversalArea": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "kind",
+        "pointsMetersXZ",
+        "surfaceEntityId",
+        "mode"
+      ],
+      "properties": {
+        "id": {
+          "$ref": "#/$defs/id"
+        },
+        "kind": {
+          "const": "polygon-xz"
+        },
+        "pointsMetersXZ": {
+          "type": "array",
+          "minItems": 3,
+          "maxItems": 128,
+          "items": {
+            "$ref": "#/$defs/vec2"
+          }
+        },
+        "surfaceEntityId": {
+          "$ref": "#/$defs/id"
+        },
+        "mode": {
+          "const": "blocked"
         }
       }
     },

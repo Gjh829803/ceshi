@@ -17,6 +17,7 @@ function routeWorld(options: {
   constraintId?: string;
   routeId?: string;
   terrainEntityId?: string;
+  traversalArea?: boolean;
 } = {}): AuthoringSpecV4 {
   const source = createValidAuthoringSpec();
   const prototype = source.resources.prototypes[0]!;
@@ -49,6 +50,15 @@ function routeWorld(options: {
     },
     spatial: {
       ...source.spatial,
+      traversalAreas: options.traversalArea === true
+        ? [{
+            id: "dry-trench",
+            kind: "polygon-xz",
+            pointsMetersXZ: [[-2, 2], [2, 2], [2, -2], [-2, -2]],
+            surfaceEntityId: terrainEntityId,
+            mode: "blocked",
+          }]
+        : [],
       routes: [{
         id: routeId,
         kind: "polyline-xz",
@@ -134,6 +144,7 @@ describe("compileWorldV5", () => {
         }),
       ]),
       traversal: {
+        traversalAreas: [],
         anchorEntityIds: ["goal", "spawn-main"],
         connectivityRequirements: [{
           constraintId: "hero-to-goal",
@@ -178,6 +189,62 @@ describe("compileWorldV5", () => {
     expect(plan.authoringSpecHash).toBe(normalized.value?.authoringSpecHash);
     expect(JSON.stringify(plan)).not.toMatch(/recast|detour|polyRef|provider/i);
   });
+
+  it("compiles blocked traversal areas without changing Runtime terrain collision", () => {
+    const baseline = compile(routeWorld());
+    const excluded = compile(routeWorld({ traversalArea: true }));
+
+    expect(excluded.executionPlan?.traversal.traversalAreas).toEqual([{
+      id: "dry-trench",
+      kind: "polygon-xz",
+      pointsMetersXZ: [[-2, 2], [2, 2], [2, -2], [-2, -2]],
+      surfaceEntityId: "terrain-main",
+      mode: "blocked",
+    }]);
+    expect(excluded.executionPlan?.terrain).toEqual(baseline.executionPlan?.terrain);
+    expect(excluded.executionPlanHash).not.toBe(baseline.executionPlanHash);
+  });
+
+  it("compiles Heightfields whose sample count exceeds the JavaScript argument limit", () => {
+    const source = routeWorld();
+    const spec: AuthoringSpecV4 = {
+      ...source,
+      world: {
+        ...source.world,
+        resourceBudget: {
+          maxVertices: 1_000_000,
+          maxTriangles: 2_000_000,
+          maxColliders: source.world.resourceBudget.maxColliders,
+        },
+      },
+      nodes: source.nodes.map((node) => node.kind === "terrain"
+        ? {
+            ...node,
+            components: {
+              terrain: {
+                ...node.components.terrain,
+                grid: {
+                  ...node.components.terrain.grid,
+                  resolutionCellsXZ: [513, 513],
+                },
+              },
+            },
+          }
+        : node),
+    };
+
+    const compiled = compile(spec);
+
+    expect(compiled.executionPlan?.terrain.heightSamplesMeters).toHaveLength(
+      513 * 513,
+    );
+    expect(compiled.executionPlan?.terrain.minimumHeightMeters).toBeTypeOf(
+      "number",
+    );
+    expect(compiled.executionPlan?.terrain.maximumHeightMeters).toBeTypeOf(
+      "number",
+    );
+  }, 15_000);
 
   it("keeps identities stable across repeated compilation while content hashes geometry", () => {
     const first = compile(routeWorld());

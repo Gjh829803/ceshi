@@ -127,6 +127,7 @@ function buildInputReceipt(): HeightfieldRouteBuildInputReceiptV1 {
     },
     blockingColliders: [],
     colliderArtifactHash: EMPTY_COLLIDER_HASH,
+    blockedTraversalAreaExclusions: [],
     blockedWaterExclusions: [],
   } as const);
   return assertHeightfieldRouteBuildInputReceiptV1(deepFreeze({

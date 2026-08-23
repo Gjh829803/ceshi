@@ -120,6 +120,7 @@ function validBuildInput() {
     },
     blockingColliders: [],
     colliderArtifactHash: EMPTY_COLLIDER_ARTIFACT_HASH,
+    blockedTraversalAreaExclusions: [],
     blockedWaterExclusions: [],
   };
 }
@@ -145,6 +146,94 @@ function hashBuildInput(value: unknown): string {
 }
 
 describe("Heightfield route build input contract", () => {
+  it("accepts only sorted provider-neutral blocked traversal-area provenance", () => {
+    const input = validBuildInput();
+    const exclusion = {
+      traversalAreaId: "dry-trench",
+      surfaceEntityId: "terrain-main",
+      boundary: {
+        kind: "polygon-xz",
+        pointsMetersXZ: [[-1, -1], [1, -1], [1, 1], [-1, 1]],
+      },
+    };
+    expect(assertBuildInput({
+      ...input,
+      blockedTraversalAreaExclusions: [exclusion],
+    })).toMatchObject({ blockedTraversalAreaExclusions: [exclusion] });
+    expect(() => assertBuildInput({
+      ...input,
+      blockedTraversalAreaExclusions: [
+        { ...exclusion, traversalAreaId: "z-area" },
+        { ...exclusion, traversalAreaId: "a-area" },
+      ],
+    })).toThrow("HEIGHTFIELD_ROUTE_BUILD_INPUT_INVALID");
+    expect(() => assertBuildInput({
+      ...input,
+      blockedTraversalAreaExclusions: [{
+        ...exclusion,
+        surfaceEntityId: "terrain-other",
+      }],
+    })).toThrow("HEIGHTFIELD_ROUTE_BUILD_INPUT_INVALID");
+  });
+
+  it("rejects non-simple traversal-area exclusion boundaries and accepts concavity", () => {
+    const input = validBuildInput();
+    const exclusion = (pointsMetersXZ: readonly (readonly [number, number])[]) => ({
+      traversalAreaId: "dry-trench",
+      surfaceEntityId: "terrain-main",
+      boundary: { kind: "polygon-xz" as const, pointsMetersXZ },
+    });
+    expect(() => assertBuildInput({
+      ...input,
+      blockedTraversalAreaExclusions: [exclusion([
+        [0, 0], [3, 0], [1, 0], [1, 2], [0, 2],
+      ])],
+    })).toThrow("HEIGHTFIELD_ROUTE_BUILD_INPUT_INVALID");
+    expect(assertBuildInput({
+      ...input,
+      blockedTraversalAreaExclusions: [exclusion([
+        [0, 0], [3, 0], [3, 3], [1.5, 1], [0, 3],
+      ])],
+    })).toMatchObject({
+      blockedTraversalAreaExclusions: [{ traversalAreaId: "dry-trench" }],
+    });
+  });
+
+  it("enforces the frozen traversal-area provenance complexity limits", () => {
+    const input = validBuildInput();
+    const regularPolygon = (pointCount: number) =>
+      Array.from({ length: pointCount }, (_, index) => {
+        const angle = (index / pointCount) * Math.PI * 2;
+        return [Math.cos(angle), Math.sin(angle)] as const;
+      });
+    const exclusions = (areaCount: number, pointCount: number) =>
+      Array.from({ length: areaCount }, (_, index) => ({
+        traversalAreaId: `area-${String(index).padStart(3, "0")}`,
+        surfaceEntityId: "terrain-main",
+        boundary: {
+          kind: "polygon-xz" as const,
+          pointsMetersXZ: regularPolygon(pointCount),
+        },
+      }));
+    expect(() => assertBuildInput({
+      ...input,
+      blockedTraversalAreaExclusions: exclusions(65, 4),
+    })).toThrow("blockedTraversalAreaExclusions");
+    expect(() => assertBuildInput({
+      ...input,
+      blockedTraversalAreaExclusions: exclusions(1, 129),
+    })).toThrow("blockedTraversalAreaExclusions/0/boundary/pointsMetersXZ");
+    expect(() => assertBuildInput({
+      ...input,
+      blockedTraversalAreaExclusions: exclusions(17, 128),
+    })).toThrow("blockedTraversalAreaExclusions");
+    const accepted = assertBuildInput({
+      ...input,
+      blockedTraversalAreaExclusions: exclusions(16, 128),
+    }) as { readonly blockedTraversalAreaExclusions: readonly unknown[] };
+    expect(accepted.blockedTraversalAreaExclusions).toHaveLength(16);
+  });
+
   it("accepts exact provider-neutral bytes and hashes them deterministically", () => {
     const input = validBuildInput();
 

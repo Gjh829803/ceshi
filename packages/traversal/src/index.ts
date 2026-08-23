@@ -19,6 +19,7 @@ export {
   hashHeightfieldRouteBuildInputV1,
 } from "./build-input.js";
 export type {
+  BlockedTraversalAreaExclusionV1,
   BlockedWaterBoundaryV1,
   BlockedWaterExclusionV1,
   CanonicalTriangleSoupV1,
@@ -118,6 +119,7 @@ export {
 } from "./lock.js";
 export {
   BUILT_IN_HEIGHTFIELD_R1_TRAVERSAL_GRAPH_BUILDER_PROFILE_REF,
+  BUILT_IN_HEIGHTFIELD_R1_LOW_BUDGET_TRAVERSAL_GRAPH_BUILDER_PROFILE_REF,
   BUILT_IN_TRAVERSAL_DRIVER_PROFILE_REF,
   BUILT_IN_TRAVERSAL_GRAPH_BUILDER_PROFILE_REF,
   resolveTraversalGraphBuilderProfile,

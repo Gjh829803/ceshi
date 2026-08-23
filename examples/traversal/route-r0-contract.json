@@ -269,6 +269,7 @@
           "locomotionProfileRef": "worldkit://locomotion-profile/ground.standard@1"
         }
       ],
+      "traversalAreas": [],
       "screenRegions": []
     },
     "constraints": {

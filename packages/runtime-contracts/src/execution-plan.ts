@@ -551,6 +551,14 @@ export interface ExecutionHeightfieldTraversalSurfaceV1
 export type ExecutionTraversalSurfaceV1 =
   | ExecutionHeightfieldTraversalSurfaceV1;
 
+export interface ExecutionTraversalAreaV1 {
+  readonly id: string;
+  readonly kind: "polygon-xz";
+  readonly pointsMetersXZ: readonly Vec2[];
+  readonly surfaceEntityId: string;
+  readonly mode: "blocked";
+}
+
 export type ExecutionStaticColliderShapeV1 =
   | Readonly<{ kind: "box"; sizeMetersXYZ: Vec3 }>
   | Readonly<{ kind: "sphere"; radiusMeters: number }>
@@ -681,6 +689,7 @@ export interface ExecutionPlanV5
   readonly resourceLockEntries: readonly ExecutionResourceLockEntryV1[];
   readonly traversal: Readonly<{
     surfaces: readonly ExecutionTraversalSurfaceV1[];
+    traversalAreas: readonly ExecutionTraversalAreaV1[];
     connectivityRequirements: readonly ExecutionConnectivityRequirementV1[];
     anchorEntityIds: readonly string[];
   }>;

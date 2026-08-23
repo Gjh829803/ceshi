@@ -15,6 +15,13 @@ function routeWorld(): AuthoringSpecV4 {
     schemaVersion: 4,
     spatial: {
       ...source.spatial,
+      traversalAreas: [{
+        id: "dry-trench",
+        kind: "polygon-xz",
+        pointsMetersXZ: [[-2, 1], [2, 1], [2, -1], [-2, -1]],
+        surfaceEntityId: "terrain-main",
+        mode: "blocked",
+      }],
       routes: [{
         id: "main-route",
         kind: "polyline-xz",
@@ -60,6 +67,13 @@ describe("normalizeAuthoringSpecV4", () => {
       schemaVersion: 4,
       authoringSpecHash: expect.stringMatching(/^sha256:[a-f0-9]{64}$/),
       layout: {
+        traversalAreas: [{
+          id: "dry-trench",
+          kind: "polygon-xz",
+          pointsMetersXZ: [[-2, 1], [2, 1], [2, -1], [-2, -1]],
+          surfaceEntityId: "terrain-main",
+          mode: "blocked",
+        }],
         connectivityRequirements: [{
           constraintId: "hero-to-goal",
           kind: "connected-by-route",

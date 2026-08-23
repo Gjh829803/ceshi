@@ -6,7 +6,10 @@ import {
 } from "@whitebox-world/terrain-surface";
 import { describe, expect, it } from "vitest";
 
-import { createHeightfieldRouteBuildInputV1 } from "./index.js";
+import {
+  createHeightfieldRouteBuildInputV1,
+  evaluateRequiredHeightfieldRouteV1,
+} from "./index.js";
 import * as heightfieldSourceModule from "./heightfield-source.js";
 import { createRecastTestEnvelopeV1 } from "./test-fixture.test-support.js";
 
@@ -120,6 +123,7 @@ function basePlan(): HeightfieldSourcePlanFixture {
       },
     },
     traversal: {
+      traversalAreas: [],
       anchorEntityIds: ["goal", "spawn-main"],
       surfaces: [{
         kind: "heightfield",
@@ -207,6 +211,205 @@ function minimumFacePlaneDistance(
 }
 
 describe("Heightfield Route R1 locked source assembly", () => {
+  it("removes a blocked traversal area only from the Graph source and preserves provenance", () => {
+    const baseline = build(basePlan());
+    const plan = basePlan();
+    plan.traversal.traversalAreas = [{
+      id: "dry-trench",
+      kind: "polygon-xz",
+      pointsMetersXZ: [[-1, -2], [1, -2], [1, 2], [-1, 2]],
+      surfaceEntityId: "terrain-main",
+      mode: "blocked",
+    }];
+
+    const excluded = build(plan);
+    expect(excluded.input.blockedTraversalAreaExclusions).toEqual([{
+      traversalAreaId: "dry-trench",
+      surfaceEntityId: "terrain-main",
+      boundary: {
+        kind: "polygon-xz",
+        pointsMetersXZ: [[-1, -2], [1, -2], [1, 2], [-1, 2]],
+      },
+    }]);
+    if (
+      baseline.input.terrainSource.kind !== "bounded" ||
+      excluded.input.terrainSource.kind !== "bounded"
+    ) throw new Error("expected bounded Graph sources");
+    expect(excluded.input.terrainSource.triangleSoup.triangleIndices.length)
+      .toBeLessThan(baseline.input.terrainSource.triangleSoup.triangleIndices.length);
+    expect(plan.terrain.heightSamplesMeters).toEqual(flatSamples(5, 5));
+  });
+
+  it("rejects a non-simple traversal-area polygon at the Execution Plan trust boundary", () => {
+    const plan = basePlan();
+    plan.traversal.traversalAreas = [{
+      id: "self-crossing-area",
+      kind: "polygon-xz",
+      pointsMetersXZ: [[0, 0], [3, 0], [0, 2], [2, 2]],
+      surfaceEntityId: "terrain-main",
+      mode: "blocked",
+    }];
+    expect(() => build(plan)).toThrow("contract-invalid");
+  });
+
+  it("rejects a forged Execution Plan that exceeds traversal-area collection limits", () => {
+    const regularPolygon = (pointCount: number) =>
+      Array.from({ length: pointCount }, (_, index) => {
+        const angle = (index / pointCount) * Math.PI * 2;
+        return [Math.cos(angle), Math.sin(angle)] as [number, number];
+      });
+    const areas = (areaCount: number, pointCount: number) =>
+      Array.from({ length: areaCount }, (_, index) => ({
+        id: `area-${String(index).padStart(3, "0")}`,
+        kind: "polygon-xz" as const,
+        pointsMetersXZ: regularPolygon(pointCount),
+        surfaceEntityId: "terrain-main",
+        mode: "blocked" as const,
+      }));
+    for (const traversalAreas of [
+      areas(65, 4),
+      areas(1, 129),
+      areas(17, 128),
+    ]) {
+      const plan = basePlan();
+      plan.traversal.traversalAreas = traversalAreas;
+      expect(() => build(plan)).toThrow("complexity-budget-exceeded");
+    }
+  });
+
+  it("rejects traversal-area triangle work before the Area-by-source traversal", () => {
+    const plan = basePlan();
+    plan.terrain = {
+      ...plan.terrain,
+      resolutionCellsXZ: [101, 101],
+      heightSamplesMeters: flatSamples(101, 101),
+    };
+    plan.layout.routes[0] = {
+      ...plan.layout.routes[0]!,
+      widthMeters: 10,
+    };
+    plan.traversal.traversalAreas = Array.from({ length: 64 }, (_, index) => ({
+      id: `area-${String(index).padStart(3, "0")}`,
+      kind: "polygon-xz" as const,
+      pointsMetersXZ: [[-1, -1], [1, -1], [1, 1], [-1, 1]],
+      surfaceEntityId: "terrain-main",
+      mode: "blocked" as const,
+    }));
+    expect(() => build(plan)).toThrow("complexity-budget-exceeded");
+  });
+
+  it("preserves every overlapping blocked Area and Water provenance deterministically", () => {
+    const plan = basePlan();
+    plan.traversal.traversalAreas = [{
+      id: "z-inner-area",
+      kind: "polygon-xz",
+      pointsMetersXZ: [[-1, -0.5], [1, -0.5], [1, 0.5], [-1, 0.5]],
+      surfaceEntityId: "terrain-main",
+      mode: "blocked",
+    }, {
+      id: "a-wide-area",
+      kind: "polygon-xz",
+      pointsMetersXZ: [[-2, -1], [2, -1], [2, 1], [-2, 1]],
+      surfaceEntityId: "terrain-main",
+      mode: "blocked",
+    }, {
+      id: "m-partial-area",
+      kind: "polygon-xz",
+      pointsMetersXZ: [[1, -1], [3, -1], [3, 1], [1, 1]],
+      surfaceEntityId: "terrain-main",
+      mode: "blocked",
+    }];
+    plan.waters = [{
+      entityId: "z-inner-water",
+      terrainEntityId: "terrain-main",
+      boundary: { kind: "circle", centerMetersXZ: [0, 0], radiusMeters: 0.75 },
+      depthMeters: 2,
+      shoreWidthMeters: 0.2,
+      waterLevelMeters: 0.5,
+      traversalMode: "blocked",
+      semanticClassId: "water.test",
+    }, {
+      entityId: "a-wide-water",
+      terrainEntityId: "terrain-main",
+      boundary: { kind: "circle", centerMetersXZ: [0, 0], radiusMeters: 1.5 },
+      depthMeters: 2,
+      shoreWidthMeters: 0.2,
+      waterLevelMeters: 0.5,
+      traversalMode: "blocked",
+      semanticClassId: "water.test",
+    }];
+
+    const first = build(plan);
+    const reversed = structuredClone(plan);
+    reversed.traversal.traversalAreas.reverse();
+    reversed.waters.reverse();
+    const second = build(reversed);
+
+    expect(first.input.blockedTraversalAreaExclusions.map(
+      (entry) => entry.traversalAreaId,
+    )).toEqual(["a-wide-area", "m-partial-area", "z-inner-area"]);
+    expect(first.input.blockedWaterExclusions.map(
+      (entry) => entry.waterEntityId,
+    )).toEqual(["a-wide-water", "z-inner-water"]);
+    expect(second.input).toEqual(first.input);
+    expect(second.routeBuildInputHash).toBe(first.routeBuildInputHash);
+  });
+
+  it("checks swimmable Water against the unclipped-by-Area source", () => {
+    const plan = basePlan();
+    plan.traversal.traversalAreas = [{
+      id: "wide-area",
+      kind: "polygon-xz",
+      pointsMetersXZ: [[-10, -10], [10, -10], [10, 10], [-10, 10]],
+      surfaceEntityId: "terrain-main",
+      mode: "blocked",
+    }];
+    plan.waters = [{
+      entityId: "overlapped-swimmable-water",
+      terrainEntityId: "terrain-main",
+      boundary: { kind: "circle", centerMetersXZ: [0, 0], radiusMeters: 0.75 },
+      depthMeters: 2,
+      shoreWidthMeters: 0.2,
+      waterLevelMeters: 0.5,
+      traversalMode: "swimmable",
+      semanticClassId: "water.test",
+    }];
+    expect(() => build(plan)).toThrow("ROUTE_WATER_TRAVERSAL_UNSUPPORTED");
+  });
+
+  it("derives the canonical gap diagnostic from a non-Water blocked traversal area", async () => {
+    const plan = basePlan();
+    plan.terrain = {
+      ...plan.terrain,
+      sizeMetersXZ: [10, 2],
+      resolutionCellsXZ: [11, 2],
+      heightSamplesMeters: flatSamples(11, 2),
+    };
+    plan.traversal.traversalAreas = [{
+      id: "dry-trench",
+      kind: "polygon-xz",
+      pointsMetersXZ: [[-0.1, -2], [0.1, -2], [0.1, 2], [-0.1, 2]],
+      surfaceEntityId: "terrain-main",
+      mode: "blocked",
+    }];
+
+    const receipt = build(plan);
+    const result = await evaluateRequiredHeightfieldRouteV1({
+      buildInputReceipt: receipt,
+    });
+
+    expect(receipt.input.blockedWaterExclusions).toEqual([]);
+    expect(result.status).toBe("unreachable");
+    if (result.status !== "unreachable") return;
+    expect(result.connectivityFailure.reason).toMatchObject({
+      kind: "surface-gap-exceeded",
+      code: "ROUTE_SURFACE_GAP_EXCEEDED",
+      terrainEntityId: "terrain-main",
+      maximumObservedSurfaceGapMeters: 2,
+      maximumAllowedSurfaceGapMeters: 0,
+    });
+  });
+
   it("maps terrain first and omits sourceAreaMode unless blocker triangles are positive", () => {
     const mapSource = (heightfieldSourceModule as {
       mapHeightfieldRouteBuildInputToRecastSourceV1?: (

@@ -10,6 +10,9 @@ import {
 import {
   emitStaticColliderTriangleMeshV1,
   emitTriangleHeightfieldSurfaceV1,
+  TRAVERSAL_AREA_COMPLEXITY_LIMITS_V1,
+  validateSimplePolygonXZV1,
+  validateTraversalAreaComplexityV1,
 } from "@whitebox-world/terrain-surface";
 import {
   assertHeightfieldRouteBuildInputV1,
@@ -17,6 +20,7 @@ import {
   hashHeightfieldRouteBuildInputV1,
   type BlockedWaterBoundaryV1,
   type BlockedWaterExclusionV1,
+  type BlockedTraversalAreaExclusionV1,
   type CanonicalTriangleSoupV1,
   type HeightfieldRouteBuildBudgetEvidenceV1,
   type HeightfieldRouteBuildInputReceiptV1,
@@ -51,6 +55,7 @@ export type HeightfieldRouteBuildInputInvalidReasonV1 =
   | "surface-ambiguous"
   | "surface-terrain-mismatch"
   | "envelope-mutable"
+  | "complexity-budget-exceeded"
   | "non-finite"
   | "non-positive-scale"
   | "contract-invalid";
@@ -576,23 +581,125 @@ function applyWaterSemantics(
     }
   }
 
-  let triangles = [...sourceTriangles];
-  const exclusions: BlockedWaterExclusionV1[] = [];
-  for (const { water, boundary } of relevant) {
-    if (water.traversalMode !== "blocked") continue;
-    const next = triangles.filter((triangle) =>
-      !triangleIntersectsWaterVolume(triangle, water, boundary),
+  const blocked = relevant.filter(({ water }) => water.traversalMode === "blocked");
+  const exclusions: BlockedWaterExclusionV1[] = blocked
+    .filter(({ water, boundary }) =>
+      sourceTriangles.some((triangle) =>
+        triangleIntersectsWaterVolume(triangle, water, boundary),
+      ),
+    )
+    .map(({ water, boundary }) => ({
+      waterEntityId: water.entityId,
+      boundary,
+      waterLevelMeters: water.waterLevelMeters,
+      depthMeters: water.depthMeters,
+    }));
+  const triangles = sourceTriangles.filter((triangle) =>
+    !blocked.some(({ water, boundary }) =>
+      triangleIntersectsWaterVolume(triangle, water, boundary),
+    ),
+  );
+  return { triangles, exclusions };
+}
+
+function applyTraversalAreaSemantics(
+  sourceTriangles: readonly Triangle[],
+  traversalAreas: ExecutionPlanV5["traversal"]["traversalAreas"],
+  terrainEntityId: string,
+): {
+  readonly triangles: readonly Triangle[];
+  readonly exclusions: readonly BlockedTraversalAreaExclusionV1[];
+} {
+  if (
+    traversalAreas.length >
+      TRAVERSAL_AREA_COMPLEXITY_LIMITS_V1.maximumAreaCount
+  ) {
+    failStructural(
+      "complexity-budget-exceeded",
+      `Traversal Area count ${traversalAreas.length} exceeds ${TRAVERSAL_AREA_COMPLEXITY_LIMITS_V1.maximumAreaCount}.`,
     );
-    if (next.length !== triangles.length) {
-      exclusions.push({
-        waterEntityId: water.entityId,
-        boundary,
-        waterLevelMeters: water.waterLevelMeters,
-        depthMeters: water.depthMeters,
-      });
-    }
-    triangles = next;
   }
+  const traversalAreaIds = new Set<string>();
+  const relevant = traversalAreas.map((area) => {
+    if (
+      isNil(area) ||
+      typeof area !== "object" ||
+      Array.isArray(area) ||
+      Object.keys(area).sort().join("|") !==
+        ["id", "kind", "mode", "pointsMetersXZ", "surfaceEntityId"].sort().join("|")
+    ) {
+      failStructural("contract-invalid", "Traversal Area must use the exact R1 contract.");
+    }
+    if (typeof area.id !== "string" || area.id.length === 0 || traversalAreaIds.has(area.id)) {
+      failStructural("contract-invalid", "Traversal Area id must be non-empty and unique.");
+    }
+    traversalAreaIds.add(area.id);
+    if (
+      area.kind !== "polygon-xz" ||
+      area.mode !== "blocked" ||
+      area.surfaceEntityId !== terrainEntityId ||
+      !Array.isArray(area.pointsMetersXZ) ||
+      area.pointsMetersXZ.length < 3
+    ) {
+      failStructural(
+        "surface-terrain-mismatch",
+        `Traversal Area '${area.id}' must block the selected Heightfield surface.`,
+      );
+    }
+    if (
+      area.pointsMetersXZ.length >
+        TRAVERSAL_AREA_COMPLEXITY_LIMITS_V1.maximumPointsPerArea
+    ) {
+      failStructural(
+        "complexity-budget-exceeded",
+        `Traversal Area '${area.id}' point count ${area.pointsMetersXZ.length} exceeds ${TRAVERSAL_AREA_COMPLEXITY_LIMITS_V1.maximumPointsPerArea}.`,
+      );
+    }
+    area.pointsMetersXZ.forEach((point, index) =>
+      requireVec2(point, `${area.id}.pointsMetersXZ[${index}]`),
+    );
+    const polygonValidation = validateSimplePolygonXZV1(area.pointsMetersXZ);
+    if (!polygonValidation.ok) {
+      failStructural(
+        "contract-invalid",
+        `Traversal Area '${area.id}' polygon must be simple (${polygonValidation.issueCode}).`,
+      );
+    }
+    return {
+      area,
+      boundary: {
+        kind: "polygon" as const,
+        pointsMetersXZ: area.pointsMetersXZ,
+      },
+    };
+  }).sort((left, right) => compareCanonicalId(left.area.id, right.area.id));
+
+  const complexity = validateTraversalAreaComplexityV1({
+    pointCountsByArea: relevant.map(({ area }) => area.pointsMetersXZ.length),
+    sourceTriangleCount: sourceTriangles.length,
+  });
+  if (!complexity.ok) {
+    failStructural(
+      "complexity-budget-exceeded",
+      `Traversal Area complexity exceeds the frozen budget (${complexity.issueCode}: ${complexity.actualCount} > ${complexity.maximumCount}).`,
+    );
+  }
+
+  const exclusions: BlockedTraversalAreaExclusionV1[] = relevant
+    .filter(({ boundary }) =>
+      sourceTriangles.some((triangle) => triangleIntersectsBoundary(triangle, boundary)),
+    )
+    .map(({ area }) => ({
+      traversalAreaId: area.id,
+      surfaceEntityId: area.surfaceEntityId,
+      boundary: {
+        kind: "polygon-xz",
+        pointsMetersXZ: area.pointsMetersXZ.map((point) => [...point]),
+      },
+    }));
+  const triangles = sourceTriangles.filter((triangle) =>
+    !relevant.some(({ boundary }) => triangleIntersectsBoundary(triangle, boundary)),
+  );
   return { triangles, exclusions };
 }
 
@@ -818,6 +925,7 @@ function requirePlanAndEnvelope(input: CreateHeightfieldRouteBuildInputInputV1):
     !Array.isArray(input.executionPlan.traversal.connectivityRequirements) ||
     !Array.isArray(input.executionPlan.traversal.anchorEntityIds) ||
     !Array.isArray(input.executionPlan.traversal.surfaces) ||
+    !Array.isArray(input.executionPlan.traversal.traversalAreas) ||
     isNil(input.executionPlan.layout) ||
     !Array.isArray(input.executionPlan.layout.routes) ||
     isNil(input.executionPlan.layout.placementsByEntityId) ||
@@ -965,8 +1073,21 @@ export function createHeightfieldRouteBuildInputV1(
     );
   }
   const clipped = clipTerrainToRibbon(emitted.triangles, route.pointsMetersXZ, route.widthMeters);
-  const waterResult = applyWaterSemantics(clipped, plan.waters, plan.terrain.entityId);
-  const terrainSoup = canonicalSoup(waterResult.triangles);
+  const traversalAreaResult = applyTraversalAreaSemantics(
+    clipped,
+    plan.traversal.traversalAreas,
+    plan.terrain.entityId,
+  );
+  const waterResult = applyWaterSemantics(
+    clipped,
+    plan.waters,
+    plan.terrain.entityId,
+  );
+  const waterRetainedTriangles = new Set(waterResult.triangles);
+  const retainedTriangles = traversalAreaResult.triangles.filter(
+    (triangle) => waterRetainedTriangles.has(triangle),
+  );
+  const terrainSoup = canonicalSoup(retainedTriangles);
   if (!isNil(terrainSoup)) {
     for (let offset = 0; offset < terrainSoup.positionsMetersXYZ.length; offset += 3) {
       if (!inHardRibbon(
@@ -1039,6 +1160,7 @@ export function createHeightfieldRouteBuildInputV1(
     terrainSource,
     blockingColliders,
     colliderArtifactHash,
+    blockedTraversalAreaExclusions: traversalAreaResult.exclusions,
     blockedWaterExclusions: waterResult.exclusions,
   };
 

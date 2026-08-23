@@ -31,6 +31,7 @@ function asV4(
   return {
     ...source,
     schemaVersion: 4,
+    spatial: { ...source.spatial, traversalAreas: [] },
     constraints: {
       placements: source.constraints.placements,
       connectivity: [],

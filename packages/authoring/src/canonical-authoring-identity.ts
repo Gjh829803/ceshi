@@ -103,9 +103,13 @@ export function canonicalAuthoringIdentityV4(
   spec: AuthoringSpecV4,
   normalizedBase: NormalizedWorldBase,
 ) {
+  const { traversalAreas: _traversalAreas, ...spatial } = structuredClone(
+    spec.spatial,
+  );
   const projectedV3: AuthoringSpecV3 = {
     ...structuredClone(spec),
     schemaVersion: 3,
+    spatial,
     constraints: {
       placements: structuredClone([...spec.constraints.placements]),
     },
@@ -114,6 +118,12 @@ export function canonicalAuthoringIdentityV4(
   return {
     ...v3Identity,
     schemaVersion: 4 as const,
+    spatial: {
+      ...v3Identity.spatial,
+      traversalAreas: [...spec.spatial.traversalAreas]
+        .sort((left, right) => left.id.localeCompare(right.id))
+        .map((row) => structuredClone(row)),
+    },
     constraints: {
       placements: v3Identity.constraints.placements,
       connectivity: [...spec.constraints.connectivity]

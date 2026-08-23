@@ -12,9 +12,13 @@ import type {
 import { validateAuthoringSpecV4 } from "./validate-v4.js";
 
 function projectPlacementsToV3(spec: AuthoringSpecV4): AuthoringSpecV3 {
+  const { traversalAreas: _traversalAreas, ...spatial } = structuredClone(
+    spec.spatial,
+  );
   return {
     ...structuredClone(spec),
     schemaVersion: 3,
+    spatial,
     constraints: {
       placements: structuredClone([...spec.constraints.placements]),
     },
@@ -66,6 +70,9 @@ export function normalizeAuthoringSpecV4(
     ) as `sha256:${string}`,
     layout: {
       ...structuredClone(v3.value.layout),
+      traversalAreas: [...spec.spatial.traversalAreas]
+        .sort((left, right) => left.id.localeCompare(right.id))
+        .map((area) => structuredClone(area)),
       connectivityRequirements: spec.constraints.connectivity
         .map(normalizeConnectivityRequirement)
         .sort((left, right) => left.constraintId.localeCompare(right.constraintId)),

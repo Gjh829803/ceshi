@@ -69,6 +69,7 @@ async function writeRouteWorld(directory: string): Promise<string> {
     schemaVersion: 4,
     spatial: {
       ...source.spatial,
+      traversalAreas: [],
       routes: [{
         id: "main-route",
         kind: "polyline-xz",

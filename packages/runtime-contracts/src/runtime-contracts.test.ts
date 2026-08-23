@@ -11,6 +11,7 @@ import {
   type ExecutionSubjectV3,
   type ExecutionLayoutAssertionV1,
   type ExecutionStaticColliderV1,
+  type ExecutionTraversalAreaV1,
   type ExecutionPlanV5,
   type ExecutionTraversalSurfaceV1,
   type FixedInputV1,
@@ -91,6 +92,7 @@ describe("runtime contracts V3", () => {
   it("requires V5 Authoring provenance and explicit sorted Anchor identities", () => {
     const traversal = {
       surfaces: [],
+      traversalAreas: [],
       connectivityRequirements: [],
       anchorEntityIds: ["goal", "spawn-main"],
     } satisfies ExecutionPlanV5["traversal"];
@@ -108,13 +110,14 @@ describe("runtime contracts V3", () => {
       authoringSpecHash: `sha256:${"6".repeat(64)}`,
       traversal: {
         surfaces: [],
+        traversalAreas: [],
         connectivityRequirements: [],
         anchorEntityIds: ["goal", "spawn-main"],
       },
     });
   });
 
-  it("keeps V5 traversal surfaces closed and static Collider Subshape identity explicit", () => {
+  it("keeps V5 traversal surfaces and areas closed and Collider Subshape identity explicit", () => {
     const surface = {
       kind: "heightfield",
       traversalSurfaceId: `traversal-surface:sha256:${"1".repeat(64)}`,
@@ -124,6 +127,13 @@ describe("runtime contracts V3", () => {
       resolvedVersion: "1",
       resourceHash: `sha256:${"3".repeat(64)}`,
     } satisfies ExecutionTraversalSurfaceV1;
+    const traversalArea = {
+      id: "dry-trench",
+      kind: "polygon-xz",
+      pointsMetersXZ: [[-1, -2], [1, -2], [1, 2], [-1, 2]],
+      surfaceEntityId: "terrain-main",
+      mode: "blocked",
+    } satisfies ExecutionTraversalAreaV1;
     const collider = {
       entityId: "wall-east",
       logicalSubshapeId: "primary",
@@ -151,7 +161,14 @@ describe("runtime contracts V3", () => {
       logicalSubshapeId: "primary",
       shape: { kind: "box" },
     });
-    expect(JSON.stringify({ surface, collider })).not.toMatch(
+    expect(Object.keys(traversalArea).sort()).toEqual([
+      "id",
+      "kind",
+      "mode",
+      "pointsMetersXZ",
+      "surfaceEntityId",
+    ]);
+    expect(JSON.stringify({ surface, traversalArea, collider })).not.toMatch(
       /Babylon|Havok|Recast|Detour|provider|handle|polyRef/,
     );
   });
