@@ -1633,6 +1633,59 @@ function compileStaticColliderV1(
   };
 }
 
+const PROTOTYPE_TRAVERSAL_SURFACE_BINDING_FIELDS_V1 = [
+  "id",
+  "kind",
+  "logicalSubshapeId",
+  "traversalSurfaceProfileRef",
+] as const;
+const PROTOTYPE_TRAVERSAL_SURFACE_BINDING_ID_PATTERN_V1 =
+  /^[a-z0-9][a-z0-9.-]{0,63}$/;
+const TRAVERSAL_SURFACE_PROFILE_REF_PATTERN_V1 =
+  /^worldkit:\/\/traversal-surface-profile\/[a-z0-9][a-z0-9.-]{0,63}@[1-9][0-9]*$/;
+
+function canonicalPrototypeTraversalSurfaceBindingV1(
+  value: unknown,
+  prototypeId: string,
+): PrototypeTraversalSurfaceBindingV1 {
+  if (isNil(value) || typeof value !== "object" || Array.isArray(value)) {
+    throw new Error(
+      `Traversal Surface binding '${prototypeId}.<unknown>' is invalid.`,
+    );
+  }
+  const record = value as Record<string, unknown>;
+  const fields = Object.keys(record).sort();
+  const expectedFields = [
+    ...PROTOTYPE_TRAVERSAL_SURFACE_BINDING_FIELDS_V1,
+  ].sort();
+  const bindingId = typeof record.id === "string" ? record.id : "<unknown>";
+  if (
+    fields.length !== expectedFields.length ||
+    fields.some((field, index) => field !== expectedFields[index]) ||
+    typeof record.id !== "string" ||
+    !PROTOTYPE_TRAVERSAL_SURFACE_BINDING_ID_PATTERN_V1.test(record.id) ||
+    record.kind !== "collider-subshape" ||
+    typeof record.logicalSubshapeId !== "string" ||
+    !PROTOTYPE_TRAVERSAL_SURFACE_BINDING_ID_PATTERN_V1.test(
+      record.logicalSubshapeId,
+    ) ||
+    typeof record.traversalSurfaceProfileRef !== "string" ||
+    !TRAVERSAL_SURFACE_PROFILE_REF_PATTERN_V1.test(
+      record.traversalSurfaceProfileRef,
+    )
+  ) {
+    throw new Error(
+      `Traversal Surface binding '${prototypeId}.${bindingId}' is invalid.`,
+    );
+  }
+  return Object.freeze({
+    id: record.id,
+    kind: record.kind,
+    logicalSubshapeId: record.logicalSubshapeId,
+    traversalSurfaceProfileRef: record.traversalSurfaceProfileRef,
+  });
+}
+
 function compileStaticColliderTraversalSurfaceV1(input: {
   readonly prototypeId: string;
   readonly prototypeVersion: number;
@@ -1652,6 +1705,16 @@ function compileStaticColliderTraversalSurfaceV1(input: {
     );
   }
   const collider = matchingColliders[0]!;
+  if (
+    collider.colliderSubshapeId !== deriveColliderSubshapeIdV1(
+      input.entityId,
+      input.binding.logicalSubshapeId,
+    )
+  ) {
+    throw new Error(
+      `Traversal Surface Collider join for '${input.entityId}.${input.binding.id}' has a non-canonical colliderSubshapeId.`,
+    );
+  }
   const resolvedProfile = resolveTraversalSurfaceProfileV1(
     input.binding.traversalSurfaceProfileRef,
   );
@@ -1678,6 +1741,12 @@ function compileStaticColliderTraversalSurfaceV1(input: {
   const traversalSurfaceProfileRef = profileRow.resourceRef;
   const traversalSurfaceProfileResolvedVersion = profileRow.resolvedVersion;
   const traversalSurfaceProfileHash = profileRow.contentHash as `sha256:${string}`;
+  const bindingIdentity = {
+    id: input.binding.id,
+    kind: input.binding.kind,
+    logicalSubshapeId: input.binding.logicalSubshapeId,
+    traversalSurfaceProfileRef: input.binding.traversalSurfaceProfileRef,
+  };
   const traversalSurfaceId = `traversal-surface:${sha256CanonicalJson({
     kind: "static-collider",
     surfaceEntityId: input.entityId,
@@ -1686,7 +1755,7 @@ function compileStaticColliderTraversalSurfaceV1(input: {
   const resourceHash = sha256CanonicalJson({
     prototypeId: input.prototypeId,
     prototypeVersion: input.prototypeVersion,
-    binding: input.binding,
+    binding: bindingIdentity,
     traversalSurfaceProfileRef,
     traversalSurfaceProfileResolvedVersion,
     traversalSurfaceProfileHash,
@@ -1713,11 +1782,13 @@ function compileStaticColliderTraversalSurfaceV1(input: {
 function compileStaticColliderTraversalSurfacesV1(
   world: NormalizedWorldIRV4,
   staticColliders: readonly ExecutionStaticColliderV1[],
+  resourceLock: NormalizedWorldIRV4["resources"]["resourceLock"],
 ): readonly ExecutionStaticColliderTraversalSurfaceV1[] {
   const objectNodes = world.nodes.filter((node) => node.kind === "object");
   const surfaces: ExecutionStaticColliderTraversalSurfaceV1[] = [];
   for (const prototype of world.resources.prototypes) {
-    const bindings = prototype.traversalSurfaceBindings ?? [];
+    const bindings = (prototype.traversalSurfaceBindings ?? []).map((binding) =>
+      canonicalPrototypeTraversalSurfaceBindingV1(binding, prototype.id));
     const seenBindingIds = new Set<string>();
     const seenLogicalSubshapeIds = new Set<string>();
     for (const binding of bindings) {
@@ -1743,12 +1814,25 @@ function compileStaticColliderTraversalSurfacesV1(
           binding,
           entityId: node.id,
           staticColliders,
-          resourceLock: world.resources.resourceLock,
+          resourceLock,
         }));
       }
     }
   }
   return surfaces;
+}
+
+function requireUniquePrototypeIdentitiesV1(
+  prototypes: NormalizedWorldIRV4["resources"]["prototypes"],
+): void {
+  const seenPrototypeIdentities = new Set<string>();
+  for (const prototype of prototypes) {
+    const prototypeIdentity = `${prototype.id}@${prototype.version}`;
+    if (seenPrototypeIdentities.has(prototypeIdentity)) {
+      throw new Error(`Prototype identity '${prototypeIdentity}' is duplicated.`);
+    }
+    seenPrototypeIdentities.add(prototypeIdentity);
+  }
 }
 
 function compileConnectivityRequirementV1(
@@ -1776,6 +1860,16 @@ export function compileWorldV5(input: CompileWorldInputV5): CompileWorldResultV5
   }
 
   try {
+    const resourceLockEntries = canonicalExecutionResourceLockEntriesV1(
+      input.normalizedWorldIr.resources.resourceLock,
+    );
+    const resourceLockHash = sha256CanonicalJson(resourceLockEntries);
+    if (input.normalizedWorldIr.resources.resourceLockHash !== resourceLockHash) {
+      throw new Error("Resource Lock hash does not match canonical entries.");
+    }
+    requireUniquePrototypeIdentitiesV1(
+      input.normalizedWorldIr.resources.prototypes,
+    );
     const projectedWorld = projectNormalizedWorldV4ToV3(input.normalizedWorldIr);
     const compiledV4 = compileWorldV4({
       normalizedWorldIr: projectedWorld,
@@ -1791,26 +1885,34 @@ export function compileWorldV5(input: CompileWorldInputV5): CompileWorldResultV5
       .map(compileStaticColliderV1)
       .sort((left, right) =>
         left.colliderSubshapeId.localeCompare(right.colliderSubshapeId));
+    const sortedTraversalSurfaces = [
+      compileHeightfieldTraversalSurfaceV1(planV4),
+      ...compileStaticColliderTraversalSurfacesV1(
+        input.normalizedWorldIr,
+        staticColliders,
+        resourceLockEntries,
+      ),
+    ].sort((left, right) =>
+      left.traversalSurfaceId.localeCompare(right.traversalSurfaceId));
+    for (let index = 1; index < sortedTraversalSurfaces.length; index += 1) {
+      const previous = sortedTraversalSurfaces[index - 1]!;
+      const current = sortedTraversalSurfaces[index]!;
+      if (current.traversalSurfaceId === previous.traversalSurfaceId) {
+        throw new Error(
+          `Traversal Surface id '${current.traversalSurfaceId}' is duplicated.`,
+        );
+      }
+    }
     const traversalSurfaces = Object.freeze(
-      [
-        compileHeightfieldTraversalSurfaceV1(planV4),
-        ...compileStaticColliderTraversalSurfacesV1(
-          input.normalizedWorldIr,
-          staticColliders,
-        ),
-      ]
-        .sort((left, right) =>
-          left.traversalSurfaceId.localeCompare(right.traversalSurfaceId))
-        .map((surface) => Object.freeze(surface)),
+      sortedTraversalSurfaces.map((surface) => Object.freeze(surface)),
     );
     const plan: ExecutionPlanV5 = {
       ...planV4,
       schemaVersion: 5,
       authoringSpecHash: input.normalizedWorldIr.authoringSpecHash,
       normalizedWorldIrHash: input.normalizedWorldIrHash,
-      resourceLockEntries: canonicalExecutionResourceLockEntriesV1(
-        input.normalizedWorldIr.resources.resourceLock,
-      ),
+      resourceLockHash,
+      resourceLockEntries,
       traversal: {
         surfaces: traversalSurfaces,
         traversalAreas: input.normalizedWorldIr.layout.traversalAreas

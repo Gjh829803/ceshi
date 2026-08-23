@@ -1,4 +1,31 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
+
+const colliderSubshapeIdFault = vi.hoisted(() => ({
+  isEnabled: false,
+  invocationCount: 0,
+}));
+
+vi.mock("@whitebox-world/traversal", async (importOriginal) => {
+  const actual = await importOriginal<
+    typeof import("@whitebox-world/traversal")
+  >();
+  return {
+    ...actual,
+    deriveColliderSubshapeIdV1(
+      entityId: string,
+      logicalSubshapeId: string,
+    ) {
+      colliderSubshapeIdFault.invocationCount += 1;
+      if (
+        colliderSubshapeIdFault.isEnabled &&
+        colliderSubshapeIdFault.invocationCount === 1
+      ) {
+        return `collider-subshape:sha256:${"f".repeat(64)}` as const;
+      }
+      return actual.deriveColliderSubshapeIdV1(entityId, logicalSubshapeId);
+    },
+  };
+});
 
 import {
   normalizeAuthoringSpecV4,
@@ -161,6 +188,34 @@ function compile(spec = routeWorld()) {
 }
 
 describe("compileWorldV5", () => {
+  it("rejects a hash-consistent IR whose Resource Lock hash contradicts its entries", () => {
+    const normalized = normalizeAuthoringSpecV4(
+      routeWorld({ staticSurface: true }),
+    );
+    if (!normalized.ok || normalized.value === undefined) {
+      throw new Error("Bound fixture normalization failed.");
+    }
+    const forged = structuredClone(normalized.value);
+    forged.resources.resourceLockHash = `sha256:${"f".repeat(64)}`;
+
+    const result = compileWorldV5({
+      normalizedWorldIr: forged,
+      normalizedWorldIrHash: sha256CanonicalJson(forged),
+    });
+
+    expect(result).toEqual({
+      ok: false,
+      diagnostics: [{
+        severity: "error",
+        code: "COMPILER_NORMALIZED_IR_INVALID",
+        instancePath: "/normalizedWorldIr",
+        message: "Resource Lock hash does not match canonical entries.",
+      }],
+    });
+    expect(result).not.toHaveProperty("executionPlan");
+    expect(result).not.toHaveProperty("executionPlanHash");
+  });
+
   it("compiles one exact static Surface-to-Collider join per bound Object instance", () => {
     const plan = compile(routeWorld({
       staticSurface: true,
@@ -191,6 +246,10 @@ describe("compileWorldV5", () => {
       expect(surface.surfaceEntityId).toBe(collider.entityId);
       expect(surface.logicalSubshapeId).toBe(collider.logicalSubshapeId);
       expect(surface.colliderSubshapeId).toBe(collider.colliderSubshapeId);
+      expect(surface.colliderSubshapeId).toBe(deriveColliderSubshapeIdV1(
+        surface.surfaceEntityId,
+        surface.logicalSubshapeId,
+      ));
       expect(surface.colliderHash).toBe(collider.colliderHash);
       expect(surface.traversalSurfaceProfileRef).toBe(
         "worldkit://traversal-surface-profile/ground.static@1",
@@ -271,6 +330,140 @@ describe("compileWorldV5", () => {
     });
   });
 
+  it("rejects a forged Collider row whose Subshape id is not its derivation", () => {
+    const normalized = normalizeAuthoringSpecV4(
+      routeWorld({ staticSurface: true }),
+    );
+    if (!normalized.ok || normalized.value === undefined) {
+      throw new Error("Bound fixture normalization failed.");
+    }
+    colliderSubshapeIdFault.invocationCount = 0;
+    colliderSubshapeIdFault.isEnabled = true;
+    const result = compileWorldV5({
+      normalizedWorldIr: normalized.value,
+      normalizedWorldIrHash: sha256CanonicalJson(normalized.value),
+    });
+    colliderSubshapeIdFault.isEnabled = false;
+
+    expect(result).toEqual({
+      ok: false,
+      diagnostics: [{
+        severity: "error",
+        code: "COMPILER_NORMALIZED_IR_INVALID",
+        instancePath: "/normalizedWorldIr",
+        message:
+          "Traversal Surface Collider join for 'wall-east.deck' has a non-canonical colliderSubshapeId.",
+      }],
+    });
+    expect(result).not.toHaveProperty("executionPlan");
+    expect(result).not.toHaveProperty("executionPlanHash");
+  });
+
+  it("rejects a hash-consistent normalized binding with an unknown provider field", () => {
+    const normalized = normalizeAuthoringSpecV4(
+      routeWorld({ staticSurface: true }),
+    );
+    if (!normalized.ok || normalized.value === undefined) {
+      throw new Error("Bound fixture normalization failed.");
+    }
+    const forged = structuredClone(normalized.value);
+    const forgedBinding = forged.resources.prototypes[0]!
+      .traversalSurfaceBindings![0]! as unknown as Record<string, unknown>;
+    forgedBinding.providerArea = 7;
+
+    const result = compileWorldV5({
+      normalizedWorldIr: forged,
+      normalizedWorldIrHash: sha256CanonicalJson(forged),
+    });
+
+    expect(result).toEqual({
+      ok: false,
+      diagnostics: [{
+        severity: "error",
+        code: "COMPILER_NORMALIZED_IR_INVALID",
+        instancePath: "/normalizedWorldIr",
+        message: "Traversal Surface binding 'wall.deck' is invalid.",
+      }],
+    });
+    expect(result).not.toHaveProperty("executionPlan");
+    expect(result).not.toHaveProperty("executionPlanHash");
+  });
+
+  it("rejects a hash-consistent IR with a duplicated bound Prototype identity", () => {
+    const normalized = normalizeAuthoringSpecV4(
+      routeWorld({ staticSurface: true }),
+    );
+    if (!normalized.ok || normalized.value === undefined) {
+      throw new Error("Bound fixture normalization failed.");
+    }
+    const forged = structuredClone(normalized.value);
+    const prototypes = forged.resources.prototypes as Array<
+      (typeof forged.resources.prototypes)[number]
+    >;
+    prototypes.push(structuredClone(prototypes[0]!));
+
+    const result = compileWorldV5({
+      normalizedWorldIr: forged,
+      normalizedWorldIrHash: sha256CanonicalJson(forged),
+    });
+
+    expect(result).toEqual({
+      ok: false,
+      diagnostics: [{
+        severity: "error",
+        code: "COMPILER_NORMALIZED_IR_INVALID",
+        instancePath: "/normalizedWorldIr",
+        message: "Prototype identity 'wall@1' is duplicated.",
+      }],
+    });
+    expect(result).not.toHaveProperty("executionPlan");
+    expect(result).not.toHaveProperty("executionPlanHash");
+  });
+
+  it("independently rejects duplicate emitted Traversal Surface ids", () => {
+    const normalized = normalizeAuthoringSpecV4(
+      routeWorld({ staticSurface: true }),
+    );
+    if (!normalized.ok || normalized.value === undefined) {
+      throw new Error("Bound fixture normalization failed.");
+    }
+    const forged = structuredClone(normalized.value);
+    const prototypes = forged.resources.prototypes as Array<
+      (typeof forged.resources.prototypes)[number]
+    >;
+    const secondPrototype = structuredClone(prototypes[0]!) as unknown as {
+      id: string;
+      collisionEnabled: boolean;
+    };
+    secondPrototype.id = "platform-alt";
+    secondPrototype.collisionEnabled = false;
+    prototypes.push(secondPrototype as (typeof prototypes)[number]);
+    const nodes = forged.nodes as Array<(typeof forged.nodes)[number]>;
+    const secondObjectNode = structuredClone(
+      nodes.find((node) => node.kind === "object")!,
+    ) as unknown as { prototypeRef: string };
+    secondObjectNode.prototypeRef = "package://prototype/platform-alt@1";
+    nodes.push(secondObjectNode as (typeof nodes)[number]);
+
+    const result = compileWorldV5({
+      normalizedWorldIr: forged,
+      normalizedWorldIrHash: sha256CanonicalJson(forged),
+    });
+
+    expect(result).toEqual({
+      ok: false,
+      diagnostics: [{
+        severity: "error",
+        code: "COMPILER_NORMALIZED_IR_INVALID",
+        instancePath: "/normalizedWorldIr",
+        message:
+          "Traversal Surface id 'traversal-surface:sha256:6ef902919cb5e5a908ae9dc898ae52ff68e1f2d8230b2e11a427a54bc7cef574' is duplicated.",
+      }],
+    });
+    expect(result).not.toHaveProperty("executionPlan");
+    expect(result).not.toHaveProperty("executionPlanHash");
+  });
+
   it("promotes Heightfield traversal, connectivity, and canonical static colliders", () => {
     const compiled = compile();
     const plan = compiled.executionPlan!;
@@ -310,6 +503,9 @@ describe("compileWorldV5", () => {
       surface.surfaceEntityId,
       surface.colliderSubshapeId,
     ]).size).toBe(3);
+    expect(plan.resourceLockHash).toBe(
+      sha256CanonicalJson(plan.resourceLockEntries),
+    );
     expect(wall).toMatchObject({
       entityId: "wall-east",
       logicalSubshapeId: "primary",
