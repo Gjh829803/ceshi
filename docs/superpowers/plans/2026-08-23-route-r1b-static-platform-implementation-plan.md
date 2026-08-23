@@ -314,7 +314,7 @@ Assert the built-in Profile is exactly:
 
 Prove the built-in V2 Graph Builder Profile fixes `maximumTraversalSurfaceCount` at `61`; the Envelope copies it, rejects zero/non-integer/provider-named fields, changes its hash when the generic count changes, and remains admissible to the existing R1 V1 Build Input.
 
-Include the Path Receipt, Connectivity Result, Runtime Probe, and Browser API fixtures in the RED integration surface. Their Profile hash and Envelope-derived fields must come from `resolveTraversalGraphBuilderProfileV2()` / `createTraversalCapabilityEnvelopeV1()` rather than the pre-R1b literal, so the Profile content change cannot leave internally inconsistent fixtures green.
+Keep the core RED assertions in `profile-registry.test.ts`, `capability-envelope.test.ts`, and `build-budget.test.ts`: those tests must fail before the Profile/count implementation exists. Run the Path Receipt, Connectivity Result, Runtime Probe, and Browser API fixtures in the same integration command as stale-identity guards, but do not require all four downstream fixtures to fail in the initial RED state. Their Profile hash and Envelope-derived fields must come from `resolveTraversalGraphBuilderProfileV2()` / `createTraversalCapabilityEnvelopeV1()` rather than the pre-R1b literal, so the Profile content change cannot leave internally inconsistent fixtures green.
 
 - [ ] **Step 2: Verify RED**
 
@@ -322,7 +322,7 @@ Include the Path Receipt, Connectivity Result, Runtime Probe, and Browser API fi
 pnpm vitest run packages/traversal/src/profile-registry.test.ts packages/traversal/src/capability-envelope.test.ts packages/traversal/src/build-budget.test.ts packages/traversal/src/path-receipt.test.ts packages/traversal/src/connectivity-result.test.ts packages/traversal/src/runtime-probe-contract.test.ts apps/playground/src/worldkit-browser-api.test.ts
 ```
 
-Expected: FAIL because the Surface Profile and count are absent.
+Expected: FAIL in the core Profile/Envelope/budget assertions because the Surface Profile and count are absent. The four downstream fixture suites may still pass before the content-hash change; they become mandatory green integration gates after Step 3 updates the resolved Profile identity and Envelope-derived fixture values.
 
 - [ ] **Step 3: Implement Profile resolution and generic budget**
 
@@ -714,6 +714,8 @@ Expected: focused tests and typecheck pass.
 
 Require the success fixture plus all failure fixtures—including the distinct Graph-overlap and injected-complete/Runtime-ambiguous overlap cases—exact expected diagnostic codes, real Recast/Babylon flags, repeat/concurrent hashes, cadence hashes, cleanup checks, provider-leak scan results, and a zero-match legacy Route V1/Browser V4 public-symbol scan. The machine-readable result must include a `legacyConsumerCensus` with fixed search roots, the symbol-family pattern, historical exclusions, match count, and matched paths. It must discover consumers from repository contents rather than compare against a hand-maintained file allowlist. Parse `examples/traversal/route-r0-contract.json` separately and require its embedded Graph evidence to be V2 with valid child/root hashes; plain symbol grep is not sufficient evidence for JSON fixtures.
 
+Add an adversarial census test that writes one temporary source file under the scanned `scripts` root whose path is intentionally absent from this task's `Files` list. Build the file contents from split fragments in the test source, with one symbol per line for `RouteRuntimeProbeFailureV1`, `RouteRuntimeProbeMetricsV1`, `RouteRuntimeProbeValidationProfileIdentityV1`, `RouteRuntimeProbeErrorV1`, `ROUTE_RUNTIME_PROBE_ERROR_CODES_V1`, `RouteConnectivityOperationAbortedErrorV1`, and `queryRequiredRouteV1`. Run the real census, assert `matchCount === 7` and `matchedPaths` contains exactly that temporary repository-relative path, then remove the file in `finally`. This proves both satellite-family coverage and discovery of an unlisted live file without excluding the verifier or its test from `scripts`.
+
 - [ ] **Step 2: Verify gate RED**
 
 ```bash
@@ -730,7 +732,7 @@ Derive the 0.3m step threshold from the locked Profile. The success fixture uses
 
 Migrate every remaining consumer to V2/V5, switch the installed Browser API once, and delete V1/V4 declarations and exports rather than aliasing them. This includes the Traversal and Traversal-Recast implementations/barrels/tests, Validation route evaluators/publication/probe/tests, trusted host and CLI scripts/integrations, the R0 contract fixture/verifier, and the Canonical JSON quickstart. Run the real `worldkit verify route` path and prove CLI JSON, stored Evidence, Browser projection, and validation input use the same canonical V2 bytes/hashes.
 
-The census must use current-tree names, including `HeightfieldRouteBuildInputV1`, `createHeightfieldRouteBuildInputV1`, `HeightfieldRouteConnectivityResultV1`, `canonicalHeightfieldRouteConnectivityResultV1`, `evaluateRequiredHeightfieldRouteV1`, `TraversalGraphV1`, `RoutePathReceiptV1`, `RouteOverlayV1`, `RouteRuntimeProbeRequestV1`, `WorldkitBrowserRouteEvidencePublicationV1`, and `WorldkitBrowserApiV4`, plus constructor/canonical/hash/receipt helpers in those symbol families. Use the exact Heightfield-qualified Connectivity name from the tree rather than a shortened invented name. Delete the old declarations/exports and migrate call sites directly; do not add a converter, alias, fallback read, or mixed-version receipt.
+The census must use current-tree names, including `HeightfieldRouteBuildInputV1`, `createHeightfieldRouteBuildInputV1`, `HeightfieldRouteConnectivityResultV1`, `canonicalHeightfieldRouteConnectivityResultV1`, `evaluateRequiredHeightfieldRouteV1`, `TraversalGraphV1`, `RoutePathReceiptV1`, `RouteOverlayV1`, every live `RouteRuntimeProbe*V1` satellite (including Failure, Metrics, Validation Profile Identity, Validation Error, and Error Codes), `RouteConnectivityOperationAbortedErrorV1`, `queryRequiredRouteV1`, `WorldkitBrowserRouteEvidencePublicationV1`, and `WorldkitBrowserApiV4`, plus constructor/canonical/hash/receipt helpers in those symbol families. Use the exact Heightfield-qualified Connectivity name from the tree rather than a shortened invented name. Delete the old declarations/exports and migrate call sites directly; do not add a converter, alias, fallback read, or mixed-version receipt.
 
 - [ ] **Step 5: Run the cutover consumer census and prove zero matches**
 
@@ -738,7 +740,7 @@ The verifier must execute the equivalent family-based scan so a newly discovered
 
 ```bash
 ! rg -n --pcre2 \
-  '\b(?:[A-Za-z0-9_]*HeightfieldRouteBuildInput[A-Za-z0-9_]*V1|HeightfieldRouteBuildBudgetEvidenceV1|StaticBlockingColliderV1|[A-Za-z0-9_]*RequiredHeightfieldRoute[A-Za-z0-9_]*V1|[A-Za-z0-9_]*HeightfieldRouteConnectivityResult[A-Za-z0-9_]*V1|[A-Za-z0-9_]*TraversalGraphV1|[A-Za-z0-9_]*RoutePathReceipt[A-Za-z0-9_]*V1|[A-Za-z0-9_]*RouteOverlay[A-Za-z0-9_]*V1|[A-Za-z0-9_]*RouteConnectivity(?:Failure|Unavailable|Complete)[A-Za-z0-9_]*V1|ROUTE_CONNECTIVITY_FAILURE_CODES_V1|[A-Za-z0-9_]*RouteRuntimeProbe(?:Request|Tick|Receipt)[A-Za-z0-9_]*V1|runRouteRuntimeProbeV1|RunRouteRuntimeProbeInputV1|[A-Za-z0-9_]*RouteEvidence(?:Publication|Projection)[A-Za-z0-9_]*V1|WorldkitBrowserApiV4)\b' \
+  '\b(?:[A-Za-z0-9_]*HeightfieldRouteBuildInput[A-Za-z0-9_]*V1|HeightfieldRouteBuildBudgetEvidenceV1|StaticBlockingColliderV1|[A-Za-z0-9_]*RequiredHeightfieldRoute[A-Za-z0-9_]*V1|[A-Za-z0-9_]*HeightfieldRouteConnectivityResult[A-Za-z0-9_]*V1|[A-Za-z0-9_]*TraversalGraphV1|[A-Za-z0-9_]*RoutePathReceipt[A-Za-z0-9_]*V1|[A-Za-z0-9_]*RouteOverlay[A-Za-z0-9_]*V1|[A-Za-z0-9_]*RouteConnectivity(?:Failure|Unavailable|Complete)[A-Za-z0-9_]*V1|ROUTE_CONNECTIVITY_FAILURE_CODES_V1|[A-Za-z0-9_]*RouteRuntimeProbe[A-Za-z0-9_]*V1|ROUTE_RUNTIME_PROBE_ERROR_CODES_V1|RouteConnectivityOperationAbortedErrorV1|queryRequiredRouteV1|[A-Za-z0-9_]*RouteEvidence(?:Publication|Projection)[A-Za-z0-9_]*V1|WorldkitBrowserApiV4)\b' \
   packages apps scripts examples README.md docs/17-canonical-json-quickstart.md
 pnpm vitest run scripts/verify-route-r1b-static-platform.test.ts -t "legacy consumer census"
 ```
