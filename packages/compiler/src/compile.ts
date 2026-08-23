@@ -1835,6 +1835,18 @@ function requireUniquePrototypeIdentitiesV1(
   }
 }
 
+function requireUniqueNodeEntityIdsV1(
+  nodes: NormalizedWorldIRV4["nodes"],
+): void {
+  const seenEntityIds = new Set<string>();
+  for (const node of nodes) {
+    if (seenEntityIds.has(node.id)) {
+      throw new Error(`Node entity id '${node.id}' is duplicated.`);
+    }
+    seenEntityIds.add(node.id);
+  }
+}
+
 function compileConnectivityRequirementV1(
   requirement: NormalizedWorldIRV4["layout"]["connectivityRequirements"][number],
 ): ExecutionConnectivityRequirementV1 {
@@ -1870,6 +1882,7 @@ export function compileWorldV5(input: CompileWorldInputV5): CompileWorldResultV5
     requireUniquePrototypeIdentitiesV1(
       input.normalizedWorldIr.resources.prototypes,
     );
+    requireUniqueNodeEntityIdsV1(input.normalizedWorldIr.nodes);
     const projectedWorld = projectNormalizedWorldV4ToV3(input.normalizedWorldIr);
     const compiledV4 = compileWorldV4({
       normalizedWorldIr: projectedWorld,

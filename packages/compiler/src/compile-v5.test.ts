@@ -5,6 +5,10 @@ const colliderSubshapeIdFault = vi.hoisted(() => ({
   invocationCount: 0,
 }));
 
+const traversalSurfaceIdFault = vi.hoisted(() => ({
+  isEnabled: false,
+}));
+
 vi.mock("@whitebox-world/traversal", async (importOriginal) => {
   const actual = await importOriginal<
     typeof import("@whitebox-world/traversal")
@@ -23,6 +27,31 @@ vi.mock("@whitebox-world/traversal", async (importOriginal) => {
         return `collider-subshape:sha256:${"f".repeat(64)}` as const;
       }
       return actual.deriveColliderSubshapeIdV1(entityId, logicalSubshapeId);
+    },
+  };
+});
+
+vi.mock("@whitebox-world/protocol", async (importOriginal) => {
+  const actual = await importOriginal<
+    typeof import("@whitebox-world/protocol")
+  >();
+  return {
+    ...actual,
+    sha256CanonicalJson(value: unknown) {
+      const candidate = value as {
+        kind?: unknown;
+        logicalSurfaceId?: unknown;
+        surfaceEntityId?: unknown;
+      };
+      if (
+        traversalSurfaceIdFault.isEnabled &&
+        candidate.kind === "static-collider" &&
+        typeof candidate.logicalSurfaceId === "string" &&
+        typeof candidate.surfaceEntityId === "string"
+      ) {
+        return `sha256:${"e".repeat(64)}` as const;
+      }
+      return actual.sha256CanonicalJson(value);
     },
   };
 });
@@ -422,6 +451,42 @@ describe("compileWorldV5", () => {
 
   it("independently rejects duplicate emitted Traversal Surface ids", () => {
     const normalized = normalizeAuthoringSpecV4(
+      routeWorld({ staticSurface: true, secondInstance: true }),
+    );
+    if (
+      !normalized.ok ||
+      normalized.value === undefined ||
+      normalized.normalizedWorldIrHash === undefined
+    ) {
+      throw new Error("Bound fixture normalization failed.");
+    }
+    traversalSurfaceIdFault.isEnabled = true;
+    let result: ReturnType<typeof compileWorldV5>;
+    try {
+      result = compileWorldV5({
+        normalizedWorldIr: normalized.value,
+        normalizedWorldIrHash: normalized.normalizedWorldIrHash,
+      });
+    } finally {
+      traversalSurfaceIdFault.isEnabled = false;
+    }
+
+    expect(result).toEqual({
+      ok: false,
+      diagnostics: [{
+        severity: "error",
+        code: "COMPILER_NORMALIZED_IR_INVALID",
+        instancePath: "/normalizedWorldIr",
+        message:
+          `Traversal Surface id 'traversal-surface:sha256:${"e".repeat(64)}' is duplicated.`,
+      }],
+    });
+    expect(result).not.toHaveProperty("executionPlan");
+    expect(result).not.toHaveProperty("executionPlanHash");
+  });
+
+  it("rejects a hash-consistent IR whose distinct Prototype Object reuses an entity id", () => {
+    const normalized = normalizeAuthoringSpecV4(
       routeWorld({ staticSurface: true }),
     );
     if (!normalized.ok || normalized.value === undefined) {
@@ -434,10 +499,14 @@ describe("compileWorldV5", () => {
     const secondPrototype = structuredClone(prototypes[0]!) as unknown as {
       id: string;
       collisionEnabled: boolean;
+      traversalSurfaceBindings: Array<{ id: string }>;
     };
     secondPrototype.id = "platform-alt";
     secondPrototype.collisionEnabled = false;
-    prototypes.push(secondPrototype as (typeof prototypes)[number]);
+    secondPrototype.traversalSurfaceBindings[0]!.id = "upper-deck";
+    prototypes.push(
+      secondPrototype as unknown as (typeof prototypes)[number],
+    );
     const nodes = forged.nodes as Array<(typeof forged.nodes)[number]>;
     const secondObjectNode = structuredClone(
       nodes.find((node) => node.kind === "object")!,
@@ -456,8 +525,7 @@ describe("compileWorldV5", () => {
         severity: "error",
         code: "COMPILER_NORMALIZED_IR_INVALID",
         instancePath: "/normalizedWorldIr",
-        message:
-          "Traversal Surface id 'traversal-surface:sha256:6ef902919cb5e5a908ae9dc898ae52ff68e1f2d8230b2e11a427a54bc7cef574' is duplicated.",
+        message: "Node entity id 'wall-east' is duplicated.",
       }],
     });
     expect(result).not.toHaveProperty("executionPlan");
