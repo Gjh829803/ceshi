@@ -1,0 +1,30 @@
+{
+  "kind": "worldkit-authoring-spec",
+  "schemaVersion": 4,
+  "id": "route-r1-heightfield-fail-gap",
+  "seed": 19010,
+  "world": {
+    "coordinateSystem": "right-handed-y-up-minus-z-forward",
+    "bounds": { "centerMetersXZ": [0, 0], "sizeMetersXZ": [20, 20], "heightRangeMeters": [-5, 10] },
+    "gravityMetersPerSecondSquaredXYZ": [0, -9.81, 0], "environment": { "preset": "clear-day" },
+    "resourceBudget": { "maxVertices": 200000, "maxTriangles": 300000, "maxColliders": 128 }
+  },
+  "resources": { "prototypes": [], "subjectDefinitions": [] },
+  "nodes": [
+    { "id": "terrain-main", "kind": "terrain", "components": { "terrain": { "source": { "kind": "procedural", "relief": "flat", "baseHeightMeters": 0, "amplitudeMeters": 0 }, "grid": { "centerMetersXZ": [0, 0], "sizeMetersXZ": [20, 20], "resolutionCellsXZ": [33, 33] }, "semantic": { "classId": "terrain.route-test" } } } },
+    { "id": "spawn-main", "kind": "anchor", "placement": { "kind": "fixed", "transform": { "positionMetersXYZ": [0, 0, 4] } }, "semantic": { "classId": "spawn.player" } },
+    { "id": "player", "kind": "subject", "subjectDefinitionRef": "worldkit://subject-definition/humanoid.third-person@1", "spawnAnchorEntityId": "spawn-main" },
+    { "id": "goal-main", "kind": "anchor", "placement": { "kind": "fixed", "transform": { "positionMetersXYZ": [0, 0, -4] } }, "semantic": { "classId": "route.destination" } },
+    { "id": "camera-main", "kind": "camera", "components": { "cameraRig": { "defaultRigRef": "worldkit://camera/third-person.standard@1", "allowedRigRefs": ["worldkit://camera/third-person.standard@1"], "target": { "targetEntityId": "player" }, "thirdPerson": { "pitchRadians": 0.3, "distanceMeters": 5, "targetHeightMeters": 1, "fovDegrees": 56, "aspectRatio": 1.7777777777777777 }, "manualSwitchAllowed": false } } }
+  ],
+  "relationships": [], "rules": [],
+  "startup": { "spawnAnchorEntityId": "spawn-main", "controlledEntityId": "player", "cameraEntityId": "camera-main" },
+  "layout": { "solverProfileRef": "worldkit://layout-solver-profile/outdoor.s1@1" },
+  "spatial": {
+    "regions": [],
+    "routes": [{ "id": "main-route", "kind": "polyline-xz", "pointsMetersXZ": [[0, 4], [0, -4]], "widthMeters": 8, "locomotionProfileRef": "worldkit://locomotion-profile/ground.standard@1" }],
+    "screenRegions": [],
+    "traversalAreas": [{ "id": "non-water-gap", "kind": "polygon-xz", "pointsMetersXZ": [[-4.5, -0.5], [4.5, -0.5], [4.5, 0.5], [-4.5, 0.5]], "surfaceEntityId": "terrain-main", "mode": "blocked" }]
+  },
+  "constraints": { "placements": [], "connectivity": [{ "id": "player-to-goal", "kind": "connected-by-route", "requirement": "required", "traversingEntityId": "player", "startAnchorEntityId": "spawn-main", "destinationAnchorEntityId": "goal-main", "routeId": "main-route" }] }
+}

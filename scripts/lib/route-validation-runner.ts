@@ -17,6 +17,8 @@ import {
   createTraversalCapabilityEnvelopeV1,
   resolveTraversalDriverProfileV1,
   resolveTraversalGraphBuilderProfileV2,
+  type HeightfieldRouteBuildInputReceiptV1,
+  type TraversalRuntimePortV1,
 } from "@whitebox-world/traversal";
 import {
   createHeightfieldRouteBuildInputV1,
@@ -48,6 +50,34 @@ import { resolveWorldPackageResourceArtifactsV1 } from "./world-package-resource
 
 type Hash = `sha256:${string}`;
 
+export const TRUSTED_ROUTE_RENDER_CADENCES_V1 = Object.freeze([
+  "30-like",
+  "60-like",
+  "120-like",
+] as const);
+
+export type TrustedRouteRenderCadenceV1 =
+  (typeof TRUSTED_ROUTE_RENDER_CADENCES_V1)[number];
+
+export interface TrustedRouteValidationOptionsV1 {
+  /**
+   * Trusted Host-only render scheduling used by deterministic validation.
+   * It is intentionally absent from Authoring JSON and Browser/CLI protocols.
+   */
+  readonly renderCadence?: TrustedRouteRenderCadenceV1;
+  /**
+   * Trusted Host-only Registry selection. Values are resolved as locked V2
+   * Profiles; callers cannot supply a numeric parameter bag.
+   */
+  readonly graphBuilderProfileRef?: string;
+}
+
+export interface TrustedRouteRenderScheduleStatsV1 {
+  readonly renderCadence: TrustedRouteRenderCadenceV1;
+  readonly fixedTickCount: number;
+  readonly renderFrameCount: number;
+}
+
 export interface TrustedRouteValidationResultV1 {
   readonly worldPackageBuildReceipt: WorldPackageBuildReceiptV1;
   readonly subject: WorldPackageValidationSubjectV1;
@@ -55,6 +85,9 @@ export interface TrustedRouteValidationResultV1 {
   readonly validationReportHash: Hash;
   readonly evidenceFiles: readonly RouteValidationEvidenceFileV1[];
   readonly routeEvidencePublication: WorldkitBrowserRouteEvidencePublicationV1;
+  readonly routeBuildInputReceipts:
+    readonly HeightfieldRouteBuildInputReceiptV1[];
+  readonly hostRenderScheduleStats?: TrustedRouteRenderScheduleStatsV1;
 }
 
 export class RouteValidationRunnerInfrastructureErrorV1 extends Error {
@@ -91,6 +124,55 @@ function copyArrayBuffer(bytes: Readonly<Uint8Array>): ArrayBuffer {
     copy.byteOffset,
     copy.byteOffset + copy.byteLength,
   ) as ArrayBuffer;
+}
+
+function renderFrameCountAfterTick(
+  renderCadence: TrustedRouteRenderCadenceV1,
+  fixedTickCount: number,
+): number {
+  if (renderCadence === "30-like") return fixedTickCount % 2 === 0 ? 1 : 0;
+  if (renderCadence === "60-like") return 1;
+  if (renderCadence === "120-like") return 2;
+  throw infrastructureFailure("WORLDKIT_ROUTE_RENDER_CADENCE_INVALID", {
+    renderCadence,
+  });
+}
+
+function wrapRuntimePortWithRenderCadenceV1(
+  runtimePort: TraversalRuntimePortV1,
+  renderFrame: () => unknown,
+  renderCadence: TrustedRouteRenderCadenceV1,
+  recordFixedTick: (renderFrameCount: number) => void,
+): TraversalRuntimePortV1 {
+  let fixedTickCount = 0;
+  const wrappedPort: TraversalRuntimePortV1 = {
+    kind: runtimePort.kind,
+    schemaVersion: runtimePort.schemaVersion,
+    traversingEntityId: runtimePort.traversingEntityId,
+    authoringSpecHash: runtimePort.authoringSpecHash,
+    layoutSolveReportHash: runtimePort.layoutSolveReportHash,
+    resourceLockHash: runtimePort.resourceLockHash,
+    executionPlanHash: runtimePort.executionPlanHash,
+    resolvedTraversalLockHash: runtimePort.resolvedTraversalLockHash,
+    runtimeImplementationIdentity: runtimePort.runtimeImplementationIdentity,
+    readLatestTickEvidence: () => runtimePort.readLatestTickEvidence(),
+    resetToStartAnchor: (request) =>
+      runtimePort.resetToStartAnchor(request),
+    runFixedTick: async (request) => {
+      const evidence = await runtimePort.runFixedTick(request);
+      fixedTickCount += 1;
+      const renderFrameCount = renderFrameCountAfterTick(
+        renderCadence,
+        fixedTickCount,
+      );
+      for (let index = 0; index < renderFrameCount; index += 1) {
+        renderFrame();
+      }
+      recordFixedTick(renderFrameCount);
+      return evidence;
+    },
+  };
+  return Object.freeze(wrappedPort);
 }
 
 /**
@@ -164,7 +246,34 @@ async function loadHavokWasmBytesV1(): Promise<Uint8Array> {
 
 export async function runTrustedRouteValidationV1(
   inputPath: string,
+  options: TrustedRouteValidationOptionsV1 = {},
 ): Promise<TrustedRouteValidationResultV1> {
+  if (
+    !isNil(options.renderCadence) &&
+    !TRUSTED_ROUTE_RENDER_CADENCES_V1.includes(options.renderCadence)
+  ) {
+    throw infrastructureFailure("WORLDKIT_ROUTE_RENDER_CADENCE_INVALID", {
+      renderCadence: options.renderCadence,
+    });
+  }
+  let hostFixedTickCount = 0;
+  let hostRenderFrameCount = 0;
+  const routeBuildInputReceipts: HeightfieldRouteBuildInputReceiptV1[] = [];
+  let graphBuilderProfile: ReturnType<
+    typeof resolveTraversalGraphBuilderProfileV2
+  >;
+  try {
+    graphBuilderProfile = resolveTraversalGraphBuilderProfileV2(
+      options.graphBuilderProfileRef ??
+        BUILT_IN_HEIGHTFIELD_R1_TRAVERSAL_GRAPH_BUILDER_PROFILE_REF,
+    );
+  } catch (error) {
+    throw infrastructureFailure(
+      "WORLDKIT_ROUTE_GRAPH_BUILDER_PROFILE_INVALID",
+      { graphBuilderProfileRef: options.graphBuilderProfileRef },
+      error,
+    );
+  }
   const pipeline = await loadWorldkitRoutePipeline(inputPath);
   if (!pipeline.ok) {
     throw infrastructureFailure(
@@ -228,13 +337,14 @@ export async function runTrustedRouteValidationV1(
         runtimeImplementationIdentity:
           runtimeBabylon.BABYLON_TRAVERSAL_RUNTIME_IMPLEMENTATION_IDENTITY_V1,
       }),
-    resolveGraphBuilderProfile: () =>
-      resolveTraversalGraphBuilderProfileV2(
-        BUILT_IN_HEIGHTFIELD_R1_TRAVERSAL_GRAPH_BUILDER_PROFILE_REF,
-      ),
+    resolveGraphBuilderProfile: () => graphBuilderProfile,
     createCapabilityEnvelope: (input) =>
       createTraversalCapabilityEnvelopeV1(input),
-    createBuildInput: (input) => createHeightfieldRouteBuildInputV1(input),
+    createBuildInput: (input) => {
+      const receipt = createHeightfieldRouteBuildInputV1(input);
+      routeBuildInputReceipts.push(receipt);
+      return receipt;
+    },
     evaluateRoute: (input) => evaluateRequiredHeightfieldRouteV1(input),
     createRuntimeLease: async (input) => {
       const havokWasmBytes = input.havokWasmBytes ??
@@ -257,10 +367,22 @@ export async function runTrustedRouteValidationV1(
         }),
       });
       try {
-        const runtimePort = runtimeBabylon.createBabylonTraversalRuntimePortV1({
-          runtime,
-          traversalLockReceipt: input.traversalLockReceipt,
-        });
+        const providerRuntimePort =
+          runtimeBabylon.createBabylonTraversalRuntimePortV1({
+            runtime,
+            traversalLockReceipt: input.traversalLockReceipt,
+          });
+        const runtimePort = isNil(options.renderCadence)
+          ? providerRuntimePort
+          : wrapRuntimePortWithRenderCadenceV1(
+            providerRuntimePort,
+            () => runtime.renderFrame(),
+            options.renderCadence,
+            (renderFrameCount) => {
+              hostFixedTickCount += 1;
+              hostRenderFrameCount += renderFrameCount;
+            },
+          );
         return Object.freeze({
           runtimePort,
           dispose: () => runtime.dispose(),
@@ -302,5 +424,15 @@ export async function runTrustedRouteValidationV1(
       hashValidationReportV2(orchestration.report) as Hash,
     evidenceFiles: orchestration.evidenceFiles,
     routeEvidencePublication,
+    routeBuildInputReceipts: Object.freeze([...routeBuildInputReceipts]),
+    ...(isNil(options.renderCadence)
+      ? {}
+      : {
+        hostRenderScheduleStats: Object.freeze({
+          renderCadence: options.renderCadence,
+          fixedTickCount: hostFixedTickCount,
+          renderFrameCount: hostRenderFrameCount,
+        }),
+      }),
   });
 }

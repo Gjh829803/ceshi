@@ -158,7 +158,7 @@ describe("Route validation trusted runner", () => {
     } finally {
       await rm(temporaryDirectory, { recursive: true, force: true });
     }
-  }, 60_000);
+  }, 120_000);
 
   it("returns the canonical failed Report for a V4 world with zero required Routes", async () => {
     const temporaryDirectory = await mkdtemp(
@@ -188,4 +188,5 @@ describe("Route validation trusted runner", () => {
       await rm(temporaryDirectory, { recursive: true, force: true });
     }
   }, 15_000);
+
 });

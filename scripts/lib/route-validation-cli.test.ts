@@ -76,6 +76,7 @@ function runnerResult(status: ValidationReportV2["status"]): TrustedRouteValidat
       bytes: new TextEncoder().encode(`evidence-${status}`),
     }],
     routeEvidencePublication: {} as TrustedRouteValidationResultV1["routeEvidencePublication"],
+    routeBuildInputReceipts: [],
   };
 }
 

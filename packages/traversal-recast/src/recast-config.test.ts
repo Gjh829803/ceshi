@@ -45,6 +45,42 @@ describe("Recast tiled config mapping", () => {
     expect(belowStep.walkableClimb).toBe(2);
   });
 
+  it("maps the locked slope limit below the unsupported vertical boundary", () => {
+    const supported = mapTraversalCapabilityEnvelopeToRecastTiledConfigV1(
+      createRecastTestEnvelopeV1({ maxSlopeDegrees: 89.999 }),
+    );
+    const vertical = createRecastTestEnvelopeV1({ maxSlopeDegrees: 90 });
+
+    expect(supported.walkableSlopeAngle).toBe(89.999);
+    expect(() => mapTraversalCapabilityEnvelopeToRecastTiledConfigV1(
+      vertical,
+    )).toThrow("TRAVERSAL_RECAST_CONFIG_INVALID");
+  });
+
+  it("keeps the locked capsule-clearance boundary coupled to the audited backend tuple", () => {
+    const exactBoundary = createRecastTestEnvelopeV1({
+      capsuleRadiusMeters: 0.4,
+    });
+    const crossedBoundary = createRecastTestEnvelopeV1({
+      capsuleRadiusMeters: 0.400001,
+    });
+    const unauditedBackend = createRecastTestEnvelopeV1({
+      runtimeAdapterHash:
+        "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    });
+
+    expect(exactBoundary.clearanceMarginMeters).toBe(0.05);
+    expect(mapTraversalCapabilityEnvelopeToRecastTiledConfigV1(
+      exactBoundary,
+    ).walkableRadius).toBe(3);
+    expect(mapTraversalCapabilityEnvelopeToRecastTiledConfigV1(
+      crossedBoundary,
+    ).walkableRadius).toBe(4);
+    expect(() => mapTraversalCapabilityEnvelopeToRecastTiledConfigV1(
+      unauditedBackend,
+    )).toThrow("TRAVERSAL_RECAST_BACKEND_MAPPING_NOT_AUDITED");
+  });
+
   it("keeps exact-multiple height ceil semantics independent of collider offset", () => {
     const baseline = mapTraversalCapabilityEnvelopeToRecastTiledConfigV1(
       createRecastTestEnvelopeV1({ capsuleHeightMeters: 0.3 }),
