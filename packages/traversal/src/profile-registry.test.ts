@@ -2,14 +2,17 @@ import { sha256CanonicalJson } from "@whitebox-world/protocol";
 import { describe, expect, it } from "vitest";
 
 import {
+  BUILT_IN_GROUND_STATIC_TRAVERSAL_SURFACE_PROFILE_REF,
   BUILT_IN_HEIGHTFIELD_R1_TRAVERSAL_GRAPH_BUILDER_PROFILE_REF,
   BUILT_IN_HEIGHTFIELD_R1_LOW_BUDGET_TRAVERSAL_GRAPH_BUILDER_PROFILE_REF,
   BUILT_IN_TRAVERSAL_DRIVER_PROFILE_REF,
   BUILT_IN_TRAVERSAL_GRAPH_BUILDER_PROFILE_REF,
+  resolveTraversalSurfaceProfileV1,
   resolveTraversalGraphBuilderProfile,
   resolveTraversalDriverProfileV1,
   resolveTraversalGraphBuilderProfileV1,
   resolveTraversalGraphBuilderProfileV2,
+  validateTraversalSurfaceProfileV1,
   validateTraversalDriverProfileV1,
   validateTraversalGraphBuilderProfileV1,
   validateTraversalGraphBuilderProfileV2,
@@ -20,6 +23,7 @@ import type {
   TraversalDriverProfileV1,
   TraversalGraphBuilderProfileV1,
   TraversalGraphBuilderProfileV2,
+  TraversalSurfaceProfileV1,
   TraversalSurfaceIdentityV1,
 } from "./index.js";
 
@@ -61,6 +65,7 @@ const CLOSED_HEIGHTFIELD_R1_GRAPH_BUILDER_PROFILE: TraversalGraphBuilderProfileV
   maximumEdges: 200000,
   maximumTiles: 1024,
   maximumSearchSteps: 100000,
+  maximumTraversalSurfaceCount: 61,
 };
 
 const FORBIDDEN_GRAPH_BUILDER_V2_FIELDS: Readonly<Record<string, unknown>> = {
@@ -79,6 +84,25 @@ const FORBIDDEN_GRAPH_BUILDER_V2_FIELDS: Readonly<Record<string, unknown>> = {
   walkableHeight: 20,
   walkableClimb: 3,
   agentRadius: 0.32,
+  maximumRecastAreaCount: 61,
+};
+
+const CLOSED_STATIC_GROUND_TRAVERSAL_SURFACE_PROFILE: TraversalSurfaceProfileV1 = {
+  kind: "traversal-surface-profile",
+  schemaVersion: 1,
+  traversalMode: "ground",
+  faceSelectionMode: "subject-slope-compatible",
+};
+
+const FORBIDDEN_TRAVERSAL_SURFACE_PROFILE_FIELDS: Readonly<Record<string, unknown>> = {
+  capsuleRadiusMeters: 0.32,
+  capsuleHeightMeters: 1.92,
+  maxSlopeDegrees: 42,
+  maxStepHeightMeters: 0.3,
+  walkSpeedMetersPerSecond: 3,
+  frictionRatio: 0.8,
+  maximumProbeTicks: 600,
+  recastAreaId: 2,
 };
 
 const FORBIDDEN_DRIVER_FIELDS: Readonly<Record<string, unknown>> = {
@@ -250,7 +274,7 @@ describe("traversal graph builder profile registry", () => {
       profile: CLOSED_HEIGHTFIELD_R1_GRAPH_BUILDER_PROFILE,
     });
     expect(resolved.contentHash).toBe(
-      "sha256:9720639dac7de3da1d140c7afd1ea7df4258cef202468e39fa222158caaad231",
+      "sha256:f3bbb2dfc950c7db15101134894aa6eba0db54d8a7e3aca4800006ab3425681b",
     );
     expect(resolveTraversalGraphBuilderProfile(
       BUILT_IN_TRAVERSAL_GRAPH_BUILDER_PROFILE_REF,
@@ -294,7 +318,7 @@ describe("traversal graph builder profile registry", () => {
     });
     expect(lowBudget.contentHash).toBe(sha256CanonicalJson(lowBudget.profile));
     expect(lowBudget.contentHash).toBe(
-      "sha256:d2f3ebf7afe77f2a2323173f6dde6f5d27896279befc96b0aff23eb591f962e6",
+      "sha256:9786c6783d75722d9d57f0f14549bc134925f2dbd5bca9298c29bb85d31b1b66",
     );
     expect(resolveTraversalGraphBuilderProfile(
       BUILT_IN_HEIGHTFIELD_R1_LOW_BUDGET_TRAVERSAL_GRAPH_BUILDER_PROFILE_REF,
@@ -323,6 +347,8 @@ describe("traversal graph builder profile registry", () => {
       { tileSizeCells: 8 },
       { maximumEdgeLengthMeters: 0.1 },
       { maximumSimplificationErrorMeters: Number.NaN },
+      { maximumTraversalSurfaceCount: 0 },
+      { maximumTraversalSurfaceCount: 1.5 },
     ]) {
       expect(() => validateTraversalGraphBuilderProfileV2({
         ...CLOSED_HEIGHTFIELD_R1_GRAPH_BUILDER_PROFILE,
@@ -419,6 +445,55 @@ describe("traversal graph builder profile registry", () => {
     })).toThrow("TRAVERSAL_GRAPH_BUILDER_FIELD_FORBIDDEN");
     expect(() => validateTraversalGraphBuilderProfileV1(CLOSED_GRAPH_BUILDER_PROFILE))
       .not.toThrow();
+  });
+});
+
+describe("traversal surface profile registry", () => {
+  it("resolves the exact locked static ground surface semantics", () => {
+    const resolved = resolveTraversalSurfaceProfileV1(
+      BUILT_IN_GROUND_STATIC_TRAVERSAL_SURFACE_PROFILE_REF,
+    );
+
+    expect(BUILT_IN_GROUND_STATIC_TRAVERSAL_SURFACE_PROFILE_REF).toBe(
+      "worldkit://traversal-surface-profile/ground.static@1",
+    );
+    expect(resolved).toEqual({
+      resourceRef: BUILT_IN_GROUND_STATIC_TRAVERSAL_SURFACE_PROFILE_REF,
+      resolvedVersion: "1",
+      contentHash: sha256CanonicalJson(CLOSED_STATIC_GROUND_TRAVERSAL_SURFACE_PROFILE),
+      profile: CLOSED_STATIC_GROUND_TRAVERSAL_SURFACE_PROFILE,
+    });
+  });
+
+  it("rejects profile fields that belong to Subject, Feel, and Provider authorities", () => {
+    for (const [field, value] of Object.entries(
+      FORBIDDEN_TRAVERSAL_SURFACE_PROFILE_FIELDS,
+    )) {
+      expect(() => validateTraversalSurfaceProfileV1({
+        ...CLOSED_STATIC_GROUND_TRAVERSAL_SURFACE_PROFILE,
+        [field]: value,
+      })).toThrow("TRAVERSAL_SURFACE_PROFILE_FIELD_FORBIDDEN");
+    }
+  });
+
+  it("returns fresh deeply frozen receipts and rejects unknown refs", () => {
+    const first = resolveTraversalSurfaceProfileV1(
+      BUILT_IN_GROUND_STATIC_TRAVERSAL_SURFACE_PROFILE_REF,
+    );
+    const second = resolveTraversalSurfaceProfileV1(
+      BUILT_IN_GROUND_STATIC_TRAVERSAL_SURFACE_PROFILE_REF,
+    );
+
+    expect(first).not.toBe(second);
+    expect(first.profile).not.toBe(second.profile);
+    expect(Object.isFrozen(first)).toBe(true);
+    expect(Object.isFrozen(first.profile)).toBe(true);
+    expect(() => {
+      (first.profile as { traversalMode: string }).traversalMode = "air";
+    }).toThrow(TypeError);
+    expect(() => resolveTraversalSurfaceProfileV1(
+      "worldkit://traversal-surface-profile/ground.static@latest",
+    )).toThrow("TRAVERSAL_SURFACE_PROFILE_NOT_FOUND");
   });
 });
 

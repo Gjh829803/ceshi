@@ -9,9 +9,11 @@ export type {
 } from "./capability-envelope.js";
 export {
   assertTraversalGraphBuildBudgetV1,
+  assertTraversalSurfaceCountBudgetV1,
   estimateHeightfieldTileCountV1,
   quantizeTraversalMetersToMicrometersV1,
   TraversalGraphBuildBudgetExceededErrorV1,
+  TraversalSurfaceCountBudgetExceededErrorV1,
 } from "./build-budget.js";
 export {
   assertHeightfieldRouteBuildInputReceiptV1,
@@ -35,6 +37,7 @@ export type {
   HeightfieldTileBudgetInputV1,
   HeightfieldTileEstimateInputV1,
   HeightfieldTileEstimateV1,
+  TraversalSurfaceCountBudgetInputV1,
 } from "./build-budget.js";
 export type {
   TraversalEdgeV1,
@@ -122,6 +125,8 @@ export {
   BUILT_IN_HEIGHTFIELD_R1_LOW_BUDGET_TRAVERSAL_GRAPH_BUILDER_PROFILE_REF,
   BUILT_IN_TRAVERSAL_DRIVER_PROFILE_REF,
   BUILT_IN_TRAVERSAL_GRAPH_BUILDER_PROFILE_REF,
+  BUILT_IN_GROUND_STATIC_TRAVERSAL_SURFACE_PROFILE_REF,
+  resolveTraversalSurfaceProfileV1,
   resolveTraversalGraphBuilderProfile,
   resolveTraversalDriverProfileV1,
   resolveTraversalGraphBuilderProfileV1,
@@ -129,12 +134,14 @@ export {
   validateTraversalDriverProfileV1,
   validateTraversalGraphBuilderProfileV1,
   validateTraversalGraphBuilderProfileV2,
+  validateTraversalSurfaceProfileV1,
 } from "./profile-registry.js";
 export type {
   ResolvedTraversalGraphBuilderProfile,
   ResolvedTraversalDriverProfileV1,
   ResolvedTraversalGraphBuilderProfileV1,
   ResolvedTraversalGraphBuilderProfileV2,
+  ResolvedTraversalSurfaceProfileV1,
   ResolvedTraversalLockReceiptV1,
   ResolvedTraversalLockV1,
   TraversalDriverProfileV1,
@@ -144,4 +151,5 @@ export type {
   TraversalCapabilityEnvelopeV1,
   TraversalRuntimeImplementationIdentityV1,
   TraversalSurfaceIdentityV1,
+  TraversalSurfaceProfileV1,
 } from "./types.js";

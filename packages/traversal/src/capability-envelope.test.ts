@@ -119,6 +119,7 @@ describe("createTraversalCapabilityEnvelopeV1", () => {
       maximumEdges: 200000,
       maximumTiles: 1024,
       maximumSearchSteps: 100000,
+      maximumTraversalSurfaceCount: 61,
     });
     expect(receipt.traversalCapabilityEnvelopeHash).toBe(
       sha256CanonicalJson(receipt.envelope),
@@ -267,6 +268,10 @@ describe("createTraversalCapabilityEnvelopeV1", () => {
       ...baseline.envelope,
       voxelCellSizeMeters: 0.16,
     };
+    const changedSurfaceCountEnvelope = {
+      ...baseline.envelope,
+      maximumTraversalSurfaceCount: 60,
+    };
 
     expect(changedRadius.traversalCapabilityEnvelopeHash).not.toBe(
       baseline.traversalCapabilityEnvelopeHash,
@@ -275,6 +280,9 @@ describe("createTraversalCapabilityEnvelopeV1", () => {
       baseline.traversalCapabilityEnvelopeHash,
     );
     expect(sha256CanonicalJson(changedVoxelEnvelope)).not.toBe(
+      baseline.traversalCapabilityEnvelopeHash,
+    );
+    expect(sha256CanonicalJson(changedSurfaceCountEnvelope)).not.toBe(
       baseline.traversalCapabilityEnvelopeHash,
     );
   });

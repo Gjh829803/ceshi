@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
 
 import {
+  assertTraversalSurfaceCountBudgetV1,
   assertTraversalGraphBuildBudgetV1,
   estimateHeightfieldTileCountV1,
   quantizeTraversalMetersToMicrometersV1,
@@ -132,6 +133,40 @@ describe("Heightfield traversal tile budget", () => {
       },
     ]) {
       expect(() => estimateHeightfieldTileCountV1(input)).toThrow(
+        "TRAVERSAL_GRAPH_BUILD_BUDGET_INVALID",
+      );
+    }
+  });
+});
+
+describe("Traversal surface count budget", () => {
+  it("admits a count at the provider-neutral Envelope limit", () => {
+    expect(() => assertTraversalSurfaceCountBudgetV1({
+      traversalSurfaceCount: 61,
+      maximumTraversalSurfaceCount: 61,
+    })).not.toThrow();
+  });
+
+  it("fails closed when the generic traversal surface count exceeds the Envelope limit", () => {
+    expect(() => assertTraversalSurfaceCountBudgetV1({
+      traversalSurfaceCount: 62,
+      maximumTraversalSurfaceCount: 61,
+    })).toThrow("ROUTE_GRAPH_BUDGET_EXCEEDED");
+  });
+
+  it("rejects invalid generic count values without accepting provider-named inputs", () => {
+    for (const input of [
+      { traversalSurfaceCount: 0, maximumTraversalSurfaceCount: 61 },
+      { traversalSurfaceCount: 1.5, maximumTraversalSurfaceCount: 61 },
+      { traversalSurfaceCount: 1, maximumTraversalSurfaceCount: 0 },
+      { traversalSurfaceCount: 1, maximumTraversalSurfaceCount: 1.5 },
+      {
+        traversalSurfaceCount: 1,
+        maximumTraversalSurfaceCount: 1,
+        maximumRecastAreaCount: 61,
+      },
+    ]) {
+      expect(() => assertTraversalSurfaceCountBudgetV1(input)).toThrow(
         "TRAVERSAL_GRAPH_BUILD_BUDGET_INVALID",
       );
     }

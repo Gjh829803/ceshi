@@ -23,6 +23,26 @@ export interface HeightfieldTileEstimateV1 {
   readonly estimatedTiles: number;
 }
 
+export interface TraversalSurfaceCountBudgetInputV1 {
+  readonly traversalSurfaceCount: number;
+  readonly maximumTraversalSurfaceCount: number;
+}
+
+export class TraversalSurfaceCountBudgetExceededErrorV1 extends Error {
+  readonly code = "ROUTE_GRAPH_BUDGET_EXCEEDED" as const;
+  readonly traversalSurfaceCount: number;
+  readonly maximumTraversalSurfaceCount: number;
+
+  constructor(input: TraversalSurfaceCountBudgetInputV1) {
+    super(
+      `ROUTE_GRAPH_BUDGET_EXCEEDED: traversalSurfaceCount ${input.traversalSurfaceCount} exceeds maximumTraversalSurfaceCount ${input.maximumTraversalSurfaceCount}.`,
+    );
+    this.name = "TraversalSurfaceCountBudgetExceededErrorV1";
+    this.traversalSurfaceCount = input.traversalSurfaceCount;
+    this.maximumTraversalSurfaceCount = input.maximumTraversalSurfaceCount;
+  }
+}
+
 export class TraversalGraphBuildBudgetExceededErrorV1 extends Error {
   readonly code = "ROUTE_GRAPH_BUDGET_EXCEEDED" as const;
   readonly tilesX: number;
@@ -59,6 +79,53 @@ export class TraversalGraphBuildBudgetExceededErrorV1 extends Error {
 
 function failBudget(message: string): never {
   throw new Error(`TRAVERSAL_GRAPH_BUILD_BUDGET_INVALID: ${message}`);
+}
+
+function requireExactSurfaceCountBudgetInput(
+  input: unknown,
+): TraversalSurfaceCountBudgetInputV1 {
+  if (
+    input === null ||
+    typeof input !== "object" ||
+    Array.isArray(input) ||
+    Object.getPrototypeOf(input) !== Object.prototype
+  ) {
+    failBudget("surface count budget input must be a plain object.");
+  }
+  const record = input as Record<string, unknown>;
+  const fields = Object.keys(record);
+  if (
+    fields.length !== 2 ||
+    !Object.hasOwn(record, "traversalSurfaceCount") ||
+    !Object.hasOwn(record, "maximumTraversalSurfaceCount")
+  ) {
+    failBudget("surface count budget input fields must be closed.");
+  }
+  const traversalSurfaceCount = record.traversalSurfaceCount;
+  const maximumTraversalSurfaceCount = record.maximumTraversalSurfaceCount;
+  if (
+    typeof traversalSurfaceCount !== "number" ||
+    !Number.isSafeInteger(traversalSurfaceCount) ||
+    !(traversalSurfaceCount > 0) ||
+    typeof maximumTraversalSurfaceCount !== "number" ||
+    !Number.isSafeInteger(maximumTraversalSurfaceCount) ||
+    !(maximumTraversalSurfaceCount > 0)
+  ) {
+    failBudget("surface count values must be positive safe integers.");
+  }
+  return {
+    traversalSurfaceCount,
+    maximumTraversalSurfaceCount,
+  };
+}
+
+export function assertTraversalSurfaceCountBudgetV1(
+  input: TraversalSurfaceCountBudgetInputV1,
+): void {
+  const budget = requireExactSurfaceCountBudgetInput(input);
+  if (budget.traversalSurfaceCount > budget.maximumTraversalSurfaceCount) {
+    throw new TraversalSurfaceCountBudgetExceededErrorV1(budget);
+  }
 }
 
 export function quantizeTraversalMetersToMicrometersV1(

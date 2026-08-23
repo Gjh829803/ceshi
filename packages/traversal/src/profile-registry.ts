@@ -6,9 +6,11 @@ import type {
   ResolvedTraversalGraphBuilderProfile,
   ResolvedTraversalGraphBuilderProfileV1,
   ResolvedTraversalGraphBuilderProfileV2,
+  ResolvedTraversalSurfaceProfileV1,
   TraversalDriverProfileV1,
   TraversalGraphBuilderProfileV1,
   TraversalGraphBuilderProfileV2,
+  TraversalSurfaceProfileV1,
 } from "./types.js";
 
 export const BUILT_IN_TRAVERSAL_DRIVER_PROFILE_REF =
@@ -22,6 +24,9 @@ export const BUILT_IN_HEIGHTFIELD_R1_TRAVERSAL_GRAPH_BUILDER_PROFILE_REF =
 
 export const BUILT_IN_HEIGHTFIELD_R1_LOW_BUDGET_TRAVERSAL_GRAPH_BUILDER_PROFILE_REF =
   "worldkit://traversal-graph-builder-profile/outdoor-humanoid.heightfield-r1-low-budget@1" as const;
+
+export const BUILT_IN_GROUND_STATIC_TRAVERSAL_SURFACE_PROFILE_REF =
+  "worldkit://traversal-surface-profile/ground.static@1" as const;
 
 const TRAVERSAL_DRIVER_PROFILE_REQUIRED_KEYS = [
   "kind",
@@ -69,10 +74,22 @@ const TRAVERSAL_GRAPH_BUILDER_PROFILE_V2_REQUIRED_KEYS = [
   "maximumEdges",
   "maximumTiles",
   "maximumSearchSteps",
+  "maximumTraversalSurfaceCount",
 ] as const;
 
 const TRAVERSAL_GRAPH_BUILDER_PROFILE_V2_ALLOWED_KEYS = new Set(
   TRAVERSAL_GRAPH_BUILDER_PROFILE_V2_REQUIRED_KEYS,
+);
+
+const TRAVERSAL_SURFACE_PROFILE_REQUIRED_KEYS = [
+  "kind",
+  "schemaVersion",
+  "traversalMode",
+  "faceSelectionMode",
+] as const;
+
+const TRAVERSAL_SURFACE_PROFILE_ALLOWED_KEYS = new Set(
+  TRAVERSAL_SURFACE_PROFILE_REQUIRED_KEYS,
 );
 
 const BUILT_IN_WALK_HARD_RIBBON_DRIVER_PROFILE: TraversalDriverProfileV1 = {
@@ -113,6 +130,7 @@ const BUILT_IN_HEIGHTFIELD_R1_GRAPH_BUILDER_PROFILE: TraversalGraphBuilderProfil
   maximumEdges: 200000,
   maximumTiles: 1024,
   maximumSearchSteps: 100000,
+  maximumTraversalSurfaceCount: 61,
 };
 
 const BUILT_IN_HEIGHTFIELD_R1_LOW_BUDGET_GRAPH_BUILDER_PROFILE:
@@ -122,7 +140,14 @@ const BUILT_IN_HEIGHTFIELD_R1_LOW_BUDGET_GRAPH_BUILDER_PROFILE:
     maximumEdges: 32,
     maximumTiles: 64,
     maximumSearchSteps: 16,
-  };
+};
+
+const BUILT_IN_GROUND_STATIC_TRAVERSAL_SURFACE_PROFILE: TraversalSurfaceProfileV1 = {
+  kind: "traversal-surface-profile",
+  schemaVersion: 1,
+  traversalMode: "ground",
+  faceSelectionMode: "subject-slope-compatible",
+};
 
 function deepFreeze<T>(value: T): T {
   if (value === null || typeof value !== "object" || Object.isFrozen(value)) return value;
@@ -360,6 +385,37 @@ export function validateTraversalGraphBuilderProfileV1(value: unknown): void {
   );
 }
 
+export function validateTraversalSurfaceProfileV1(value: unknown): void {
+  const source = requirePlainProfile(value, "TRAVERSAL_SURFACE_PROFILE_NOT_PLAIN");
+  rejectForbiddenAndMissingKeys(
+    source,
+    TRAVERSAL_SURFACE_PROFILE_ALLOWED_KEYS,
+    TRAVERSAL_SURFACE_PROFILE_REQUIRED_KEYS,
+    "TRAVERSAL_SURFACE_PROFILE_FIELD_FORBIDDEN",
+    "TRAVERSAL_SURFACE_PROFILE_FIELD_MISSING",
+  );
+  if (source.kind !== "traversal-surface-profile") {
+    throw new Error(
+      "TRAVERSAL_SURFACE_PROFILE_KIND_MISMATCH: kind must be traversal-surface-profile.",
+    );
+  }
+  if (source.schemaVersion !== 1) {
+    throw new Error(
+      "TRAVERSAL_SURFACE_PROFILE_SCHEMA_VERSION_MISMATCH: schemaVersion must be 1.",
+    );
+  }
+  if (source.traversalMode !== "ground") {
+    throw new Error(
+      "TRAVERSAL_SURFACE_PROFILE_ENUM_INVALID: traversalMode must be ground.",
+    );
+  }
+  if (source.faceSelectionMode !== "subject-slope-compatible") {
+    throw new Error(
+      "TRAVERSAL_SURFACE_PROFILE_ENUM_INVALID: faceSelectionMode must be subject-slope-compatible.",
+    );
+  }
+}
+
 export function validateTraversalGraphBuilderProfileV2(value: unknown): void {
   const source = requirePlainProfile(
     value,
@@ -472,6 +528,13 @@ export function validateTraversalGraphBuilderProfileV2(value: unknown): void {
     1,
     1_000_000,
   );
+  requireSafeIntegerInRange(
+    source.maximumTraversalSurfaceCount,
+    "TRAVERSAL_GRAPH_BUILDER_NUMBER_INVALID",
+    "maximumTraversalSurfaceCount",
+    1,
+    1_000_000,
+  );
 }
 
 export function resolveTraversalDriverProfileV1(
@@ -528,6 +591,23 @@ export function resolveTraversalGraphBuilderProfileV2(
   validateTraversalGraphBuilderProfileV2(profile);
   return deepFreeze({
     resourceRef,
+    resolvedVersion: "1",
+    contentHash: contentHashOf(profile),
+    profile: deepFreeze(profile),
+  });
+}
+
+export function resolveTraversalSurfaceProfileV1(
+  resourceRef: string,
+): ResolvedTraversalSurfaceProfileV1 {
+  if (resourceRef !== BUILT_IN_GROUND_STATIC_TRAVERSAL_SURFACE_PROFILE_REF) {
+    throw new Error(`TRAVERSAL_SURFACE_PROFILE_NOT_FOUND: '${resourceRef}'.`);
+  }
+
+  const profile = structuredClone(BUILT_IN_GROUND_STATIC_TRAVERSAL_SURFACE_PROFILE);
+  validateTraversalSurfaceProfileV1(profile);
+  return deepFreeze({
+    resourceRef: BUILT_IN_GROUND_STATIC_TRAVERSAL_SURFACE_PROFILE_REF,
     resolvedVersion: "1",
     contentHash: contentHashOf(profile),
     profile: deepFreeze(profile),
