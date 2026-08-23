@@ -541,6 +541,7 @@ interface RuntimeHostCreateOptionsV1 {
   readonly initialWorld: RuntimeWorldConfigurationV1;
   readonly participantStates: readonly GameplayParticipantStateV1[];
   readonly controllerStates: readonly GameplayControllerStateV1[];
+  readonly fixedInputControllerEntityId: string;
   readonly gameplayModeFactory: () => GameplayModeV1;
   readonly gameplayFeatureFactories: readonly GameplayFeatureFactoryV1[];
   readonly gameplayActionRequestResolver?: GameplayActionRequestResolverV1;
@@ -557,6 +558,12 @@ interface RuntimeHostCreateOptionsV1 {
 Action Catalog、Entity descriptors 与 available Capability 必须逐项对拍该 Bootstrap。Participant/
 Controller 属于 Host bootstrap policy，Core 不提供默认 ID。ID factory 产生的 WorldSession ID 在同一
 RuntimeHost 生命周期内不可复用，重复值使 candidate 初始化失败。
+
+`fixedInputControllerEntityId` 是 trusted Host composition lane，不进入 Canonical Schema、Browser 或
+`FixedInputV1`。它必须引用注入且 lifecycle 为 `active` 的 Controller Entity；WorldSession 以该 Controller 的 committed
+`possessedBy` 关系解释 fixed input，并在其 actor 的 blocking Action 活跃时只中和移动 Action 与连续移动
+axes，保留 Camera、Aim 和非移动语义 Action。这样首期单输入 lane 不依赖 View State 猜测控制权，后续
+多人物 CLI 可在公开协议冻结时显式选择 Controller，而无需改写 GameplayState 或 Babylon Port。
 
 Bootstrap 的四个语义集合必须使用唯一 canonical order：`entityDescriptors` 按 `id`，
 `featureResourceLocks` 与 `semanticActionDefinitions` 按 `resourceRef`，`availableCapabilityRefs` 按
@@ -710,6 +717,9 @@ Fact begin/end、natural Action completion 和 failure Event 预留容量；`run
 `ticks === 1` 并返回该 Tick 末 projection。Host 逐 Tick 对比 Fact ID、发布 ordered Events/Snapshot，
 再进入下一 Tick。这样同一批输入中间 Tick 出现又消失的 `touching/supportedBy/insideVolume` 不会被首尾
 状态抵消。实际 Fact delta 不得超过该 Tick estimate；`ticks === 0` 只返回上一 published Snapshot。
+同 Tick 的跨类别 Event 顺序冻结为：按 Fact ID code-unit 排序的全部 `semantic-fact.ended`，再按 Fact ID
+排序的全部 `semantic-fact.started`，最后是 GameplayState 已按 scheduled Tick、Action Execution ID 排序的
+`action.completed`。这一顺序不能由 Adapter map 插入顺序、Promise 完成顺序或 provider callback 顺序决定。
 
 Physics fixed step 不能通用 rollback；如果事前无法证明容量则在推进前拒绝本段。如果 Adapter
 fixed input、projection、estimate breach 或理论上不应失败的预验证 logical commit 失败，Session
@@ -736,8 +746,11 @@ Action 可能进入永远无法终止的状态。所有永久集合和 journal �
 Canonical Schema、CLI 或 Browser wire contract，也不修改仍由 R1b 演进的 `runtime-contracts`。
 kind 关闭为 `runtime-run | simulation-take | control-capture`，request 使用 exact
 `{ kind, requestId, payloadHash }`；retained record 锁定 `kind/requestId/payloadHash/boundWorldSessionId/
-runtimeActivityEpoch/status: active|released|terminated-by-host`，lease 仅持有不可变 record identity 和
-release 能力。acquire 同 ID/同 payload 幂等、changed payload 冲突；release 幂等；已终态 request 不可复活；
+runtimeActivityEpoch/status: active|released|terminated-by-host`。lease 持有不可变 record identity、
+`AbortSignal`、单次 `registerCleanup(PromiseLike<void>)` 与 release 能力；这些只属于 trusted in-process
+orchestration，不序列化到 Browser/CLI。Host dispose 先 abort，再等待已注册 cleanup；未注册 cleanup 的 active
+lease 必须由迟到 release 收口，不能让 Host 提前完成销毁。acquire 同 ID/同 payload 幂等、changed payload
+冲突；release 幂等；已终态 request 不可复活；
 任一 active lease 阻止 reset/replace，但不能阻止 Host dispose。Runtime Run 显式 acquire；Take/Capture
 trusted orchestration 在接触 World/View artifact 前自动 acquire，并在 finally release。后续 Browser V5 需要公开控制时，在 Task 8
 单独定义并生成对应 wire protocol，不直接序列化进程内 lease 对象。

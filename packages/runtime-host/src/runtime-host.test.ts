@@ -120,6 +120,34 @@ describe("RuntimeActivityCoordinator", () => {
     });
   });
 
+  it("aborts active work and joins its registered cleanup before Host disposal", async () => {
+    const coordinator = new RuntimeActivityCoordinator({
+      maximumRuntimeActivityRecordCount: 1,
+    });
+    const acquired = coordinator.acquire(firstRequest, "world-session-1");
+    if (acquired.status !== "active") throw new Error("Expected active lease.");
+    let finishCleanup!: () => void;
+    const cleanup = new Promise<void>((resolve) => {
+      finishCleanup = resolve;
+    });
+    acquired.lease.registerCleanup(cleanup);
+
+    const joined = coordinator.terminateAllForHostDisposal();
+    expect(acquired.lease.cancellationSignal.aborted).toBe(true);
+    let settled = false;
+    void joined.then(() => {
+      settled = true;
+    });
+    await Promise.resolve();
+    expect(settled).toBe(false);
+
+    finishCleanup();
+    await expect(joined).resolves.toBeUndefined();
+    expect(acquired.lease.release()).toMatchObject({
+      status: "terminated-by-host",
+    });
+  });
+
   it("rejects hostile requests without invoking accessors", () => {
     const coordinator = new RuntimeActivityCoordinator({
       maximumRuntimeActivityRecordCount: 2,
