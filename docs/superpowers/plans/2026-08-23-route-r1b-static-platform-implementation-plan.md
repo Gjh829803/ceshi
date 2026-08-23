@@ -22,7 +22,9 @@
 - Static Surface IDs use `{ kind: "static-collider", surfaceEntityId, logicalSurfaceId }`; resource/version/content drift remains in Ref/Version/Hash and `colliderHash`.
 - Every fixed tick calls Character Controller `checkSupport()` exactly once. Surface classification consumes its retained sample and never writes Ground/Air, velocity, Controller pose, or Physics state.
 - Intent uses the existing XZ lookahead. Expected Surface uses Probe-private monotonic 3D support station; expected IDs never enter Runtime Port evidence.
-- Graph Builder Adapter consumes `TraversalCapabilityEnvelopeV1`, not Registry/Profile resources. `maximumTraversalSurfaceCount` is copied into the Envelope.
+- Graph Builder Adapter consumes `TraversalCapabilityEnvelopeV1`, not Registry/Profile resources.
+  `maximumTraversalSurfaceCount`, `minimumEquivalentPlaneNormalDotRatio`, and
+  `maximumTraversalSurfaceTrianglePairTestCount` are copied into the Envelope.
 - Installed Recast/Detour 0.43.1 evidence freezes `maximumTraversalSurfaceCount` at `61`, including the Heightfield: candidate ordinals `0..60` map to private areas `2..62`, while `0` is null, `1` is blocker, and `63` is the walkable sentinel.
 - Provider-private source area/tag values never enter Canonical Schema, Graph, Path, Report, CLI, Browser, or Snapshot.
 - R1b remains static ground traversal only. Do not add bridges with underpasses, caves, interiors, dynamic platforms, traversal links, NPCs, vehicles, or public `goTo`.
@@ -200,6 +202,10 @@ Expected: all commands pass; R1 Heightfield identity remains stable.
 - Renames Overlay V2 collider evidence to `staticColliderIdentities` and makes Traversal the sole Overlay context-validator owner.
 - Exports the four exact artifact hash helpers, root `hashRouteBuildInputV2()`, and one `createRouteBuildInputReceiptV2(input: RouteBuildInputV2)` producer from the package root.
 - Makes bounded Terrain admission self-proving: non-empty soup, exact normalized world-XZ extrema, Terrain hash helper, validator, and receipt factory all reuse one owner.
+- Keeps `packages/traversal/src/build-input.ts` closed over the complete Capability Envelope, including
+  `maximumTraversalSurfaceCount`, `minimumEquivalentPlaneNormalDotRatio`, and
+  `maximumTraversalSurfaceTrianglePairTestCount`; Build Input and Receipt admission re-resolve the locked
+  Graph Builder Profile and require exact field equality.
 - Migrates every V1 Connectivity reason through the complete V2 status/field/cardinality table in design §7.1; no common or reason-local singular Surface alias survives.
 - Keeps the unchanged V1 declarations temporarily available only so untouched R1 consumers continue compiling; do not implement V1↔V2 aliases, converters, fallback reads, or mixed receipts. Task 9 removes V1 atomically after every consumer migrates.
 
@@ -231,7 +237,7 @@ expect(receipt.routeBuildInputHash).toBe(
 );
 ```
 
-Call only the public `hashRouteTerrainArtifactV2`, `hashRouteColliderArtifactV2`, `hashRouteGeometryArtifactV2`, `hashRouteSurfaceArtifactV2`, and `hashRouteBuildInputV2` helpers. Root hash is exactly `sha256CanonicalJson(canonical RouteBuildInputV2)` after admission has verified all four declared artifact hashes; the Receipt factory must call `hashRouteBuildInputV2()` rather than reimplement it. Reject reordered serialized arrays, duplicate Surface IDs, zero/multiple Terrain surfaces, missing Collider joins, stale child/root hashes, and extra fields. For bounded Terrain, require at least one Triangle and exact positive-extent `minimumMetersXZ` / `maximumMetersXZ` recomputed from all canonical soup world vertices after `-0` normalization. Add forged-bounds adversaries that widen, shrink, and shift the declared bounds, recompute `terrainArtifactHash`, `geometryArtifactHash`, and `routeBuildInputHash` through public helpers, and still fail Terrain/Build Input/Receipt admission.
+Call only the public `hashRouteTerrainArtifactV2`, `hashRouteColliderArtifactV2`, `hashRouteGeometryArtifactV2`, `hashRouteSurfaceArtifactV2`, and `hashRouteBuildInputV2` helpers. Root hash is exactly `sha256CanonicalJson(canonical RouteBuildInputV2)` after admission has verified all four declared artifact hashes; the Receipt factory must call `hashRouteBuildInputV2()` rather than reimplement it. Reject reordered serialized arrays, duplicate Surface IDs, zero/multiple Terrain surfaces, missing Collider joins, stale child/root hashes, and extra fields. For bounded Terrain, require at least one Triangle and exact positive-extent `minimumMetersXZ` / `maximumMetersXZ` recomputed from all canonical soup world vertices after `-0` normalization. Add forged-bounds adversaries that widen, shrink, and shift the declared bounds, recompute `terrainArtifactHash`, `geometryArtifactHash`, and `routeBuildInputHash` through public helpers, and still fail Terrain/Build Input/Receipt admission. Add forged Envelope adversaries for each R1b field: mutate the pair-test budget or equivalent-plane threshold and recompute Envelope/Input/artifact/Receipt hashes; admission must still fail because the resolved Profile values do not match.
 
 Add two budget adversaries. First, `terrainSource.kind === "empty"` plus a non-empty Static Surface/Collider soup must produce `route-geometry-tile-estimate`, whose bounds are the exact world-space XZ union of all canonical soup vertices. Second, only `terrainSource.kind === "empty"` plus an empty `staticColliders` inventory may produce `not-required-empty-geometry`. Changing only an exclusion declaration while preserving the already post-exclusion soup must change `routeBuildInputHash` but not `terrainArtifactHash`/`geometryArtifactHash`; assert both the helper result and Receipt root equality after each mutation.
 
@@ -292,7 +298,7 @@ hashRouteBuildInputV2(input)
 
 Bounded Terrain must contain non-empty canonical soup and exact positive-extent XZ extrema recomputed from every world-space soup vertex after `-0` normalization. Implement this admission once in the Traversal Build Input module. `hashRouteTerrainArtifactV2()` calls that owner before hashing its canonical return; `assertRouteBuildInputV2()` and `createRouteBuildInputReceiptV2()` reuse it and do not duplicate extrema logic.
 
-Exclusions remain full Build Input fields and enter only `routeBuildInputHash`; their geometry effect is already represented by post-exclusion Terrain soup. Define `RouteBuildBudgetEvidenceV2` as `not-required-empty-geometry | route-geometry-tile-estimate`, with the estimate bounds recomputed from the Terrain + all Static Collider soup XZ union. Surface-count admission is independently recomputed from the frozen Envelope and is not duplicated in Receipt bytes. `createRouteBuildInputReceiptV2(input: RouteBuildInputV2)` canonicalizes and validates the complete input, recomputes and verifies its four declared artifact hashes through the public helpers, calls `hashRouteBuildInputV2(canonicalInput)` for the root, computes combined-geometry budget evidence, and returns the deeply frozen three-field receipt `{ input, routeBuildInputHash, budgetEvidence }`. `assertRouteBuildInputReceiptV2()` constructs the expected receipt through that factory and requires full canonical byte equality. Recast uses the same public helpers to assemble the complete input, then calls this producer rather than constructing Receipt Hash or budget evidence independently.
+Exclusions remain full Build Input fields and enter only `routeBuildInputHash`; their geometry effect is already represented by post-exclusion Terrain soup. Define `RouteBuildBudgetEvidenceV2` as `not-required-empty-geometry | route-geometry-tile-estimate`, with the estimate bounds recomputed from the Terrain + all Static Collider soup XZ union. Surface-count and triangle-pair budgets are independently recomputed from the frozen Envelope and are not duplicated in Receipt bytes. `createRouteBuildInputReceiptV2(input: RouteBuildInputV2)` canonicalizes and validates the complete input, re-resolves the Graph Builder Profile, requires exact Envelope equality, recomputes and verifies its four declared artifact hashes through the public helpers, calls `hashRouteBuildInputV2(canonicalInput)` for the root, computes combined-geometry budget evidence, and returns the deeply frozen three-field receipt `{ input, routeBuildInputHash, budgetEvidence }`. `assertRouteBuildInputReceiptV2()` constructs the expected receipt through that factory and requires full canonical byte equality. Recast uses the same public helpers to assemble the complete input, then calls this producer rather than constructing Receipt Hash or budget evidence independently. Add neither the pair-test budget nor the plane-metadata threshold to `RouteBuildBudgetEvidenceV2`.
 
 Add strict V2 declarations/exports beside the unchanged V1 implementation as feature-branch staging. Recompute every V2 child/root hash inside the canonical validator. Do not translate, alias, auto-upgrade, or change the meaning of any V1 field; V1 remains byte-stable until Task 9 deletes it.
 
@@ -327,6 +333,7 @@ In addition to every migrated V1 reason, exercise these exact new variants:
 | `surface-correlation-missing` | `incomplete / unavailable` | 0..1 |
 | `surface-correlation-ambiguous` | `incomplete / unavailable` | at least 2 |
 | `traversal-surface-count-budget-exceeded` | `incomplete / unavailable` | 0 |
+| `traversal-surface-triangle-pair-test-budget-exceeded` | `incomplete / unavailable` | 0 |
 
 The Profile reason requires non-empty sorted `relevantColliderSubshapeIds`; unresolved Profile Refs remain Authoring/Compiler admission errors. Correlation Missing carries one identity only when a unique candidate range existed; Ambiguous carries every distinct candidate. Threshold reasons carry the sorted unique union of full identities proven by their rejection candidates and fall back to generic unreachable when that union cannot be established. Generic/start/destination/capacity reasons keep an empty identity array. Reject two rows with the same `traversalSurfaceId` even when version/hash differ, unknown codes, every common or reason-local singular V1 Surface field, and invalid reason field/status/cardinality pairs.
 
@@ -378,8 +385,12 @@ Expected: all focused tests, fixed V1-byte guards, the R1 Heightfield gate, and 
 
 **Interfaces:**
 - Produces `TraversalSurfaceProfileV1` and built-in `worldkit://traversal-surface-profile/ground.static@1`.
-- Adds provider-neutral `maximumTraversalSurfaceCount` to `TraversalGraphBuilderProfileV2` and `TraversalCapabilityEnvelopeV1`.
-- Extends the existing R1 V1 Build Input's exact closed Envelope admission with the same field so Wave 1 preserves the Heightfield gate until Task 2 introduces V2.
+- Adds provider-neutral `maximumTraversalSurfaceCount`,
+  `minimumEquivalentPlaneNormalDotRatio`, and
+  `maximumTraversalSurfaceTrianglePairTestCount` to `TraversalGraphBuilderProfileV2` and
+  `TraversalCapabilityEnvelopeV1`.
+- Extends the existing R1 V1 Build Input's exact closed Envelope admission with all three fields so Wave
+  1 preserves the Heightfield gate until Task 2 introduces V2.
 - Keeps downstream Path, Connectivity, Probe, and Browser fixtures bound to the exact resolved built-in Profile hash and Envelope bytes instead of duplicating a stale hash literal. Playground tests import the resolver only from the public `@whitebox-world/traversal` package root and declare that package as a direct dev dependency; no deep-relative package-internal import is allowed.
 
 - [ ] **Step 1: Write RED Profile and Envelope tests**
@@ -395,9 +406,16 @@ Assert the built-in Profile is exactly:
 }
 ```
 
-Prove the built-in V2 Graph Builder Profile fixes `maximumTraversalSurfaceCount` at `61`; the Envelope copies it, rejects zero/non-integer/provider-named fields, changes its hash when the generic count changes, and remains admissible to the existing R1 V1 Build Input.
+Prove the built-in V2 Graph Builder Profile fixes `maximumTraversalSurfaceCount` at `61`,
+`minimumEquivalentPlaneNormalDotRatio` at `0.99999` (approximately 0.256° and only pair-plane
+metadata), and `maximumTraversalSurfaceTrianglePairTestCount` at `4_000_000`. The threshold accepts only
+`(0, 1]`; the budget accepts only positive safe integers no greater than
+`Number.MAX_SAFE_INTEGER - 1`. The Envelope copies all three, rejects provider-named fields, changes its
+hash when any value changes, and remains admissible to the existing R1 V1 Build Input. The 4,000,000
+default is a conservative policy cap derived from the existing generic geometry-predicate ceiling, not
+a claim that point and pair predicates have equivalent cost.
 
-Keep the core RED assertions in `profile-registry.test.ts`, `capability-envelope.test.ts`, and `build-budget.test.ts`: those tests must fail before the Profile/count implementation exists. Run the Path Receipt, Connectivity Result, Runtime Probe, and Browser API fixtures in the same integration command as stale-identity guards, but do not require all four downstream fixtures to fail in the initial RED state. Their Profile hash and Envelope-derived fields must come from `resolveTraversalGraphBuilderProfileV2()` / `createTraversalCapabilityEnvelopeV1()` rather than the pre-R1b literal, so the Profile content change cannot leave internally inconsistent fixtures green.
+Keep the core RED assertions in `profile-registry.test.ts`, `capability-envelope.test.ts`, and `build-budget.test.ts`: those tests must fail before the Profile and all three Envelope fields exist. Run the Path Receipt, Connectivity Result, Runtime Probe, and Browser API fixtures in the same integration command as stale-identity guards, but do not require all four downstream fixtures to fail in the initial RED state. Their Profile hash and Envelope-derived fields must come from `resolveTraversalGraphBuilderProfileV2()` / `createTraversalCapabilityEnvelopeV1()` rather than the pre-R1b literal, so the Profile content change cannot leave internally inconsistent fixtures green.
 
 - [ ] **Step 2: Verify RED**
 
@@ -405,11 +423,14 @@ Keep the core RED assertions in `profile-registry.test.ts`, `capability-envelope
 pnpm vitest run packages/traversal/src/profile-registry.test.ts packages/traversal/src/capability-envelope.test.ts packages/traversal/src/build-budget.test.ts packages/traversal/src/path-receipt.test.ts packages/traversal/src/connectivity-result.test.ts packages/traversal/src/runtime-probe-contract.test.ts apps/playground/src/worldkit-browser-api.test.ts
 ```
 
-Expected: FAIL in the core Profile/Envelope/budget assertions because the Surface Profile and count are absent. The four downstream fixture suites may still pass before the content-hash change; they become mandatory green integration gates after Step 3 updates the resolved Profile identity and Envelope-derived fixture values.
+Expected: FAIL in the core Profile/Envelope/budget assertions because the Surface Profile and three
+Envelope fields are absent. The four downstream fixture suites may still pass before the content-hash
+change; they become mandatory green integration gates after Step 3 updates the resolved Profile identity
+and Envelope-derived fixture values.
 
 - [ ] **Step 3: Implement Profile resolution and generic budget**
 
-Keep slope, step, capsule, clearance, speed, and Provider area values out of `TraversalSurfaceProfileV1`. Adapter budget admission consumes only the count already copied into the Envelope. Update every listed downstream fixture to derive the built-in Graph Builder Profile hash and Envelope fields from the public resolver/factory. In `apps/playground/src/worldkit-browser-api.test.ts`, import `resolveTraversalGraphBuilderProfileV2` from `@whitebox-world/traversal`, add `@whitebox-world/traversal: "workspace:*"` to Playground `devDependencies`, and refresh `pnpm-lock.yaml`; do not reach into `packages/traversal/src` from the app.
+Keep slope, step, capsule, clearance, speed, and Provider area values out of `TraversalSurfaceProfileV1`. Adapter admission consumes only the three provider-neutral values already copied into the Envelope. Update every listed downstream fixture to derive the built-in Graph Builder Profile hash and Envelope fields from the public resolver/factory. In `apps/playground/src/worldkit-browser-api.test.ts`, import `resolveTraversalGraphBuilderProfileV2` from `@whitebox-world/traversal`, add `@whitebox-world/traversal: "workspace:*"` to Playground `devDependencies`, and refresh `pnpm-lock.yaml`; do not reach into `packages/traversal/src` from the app.
 
 - [ ] **Step 4: Run Task 3 gates and commit**
 
@@ -457,8 +478,9 @@ Expected: all focused tests, the R1 Heightfield gate, and typecheck pass.
   `TRAVERSAL_SURFACE_QUERY_HEIGHT_EPSILON_METERS_V1 = 0.00001`.
 - Produces `CanonicalTraversalSurfaceTriangleSourceV1`, plural
   `queryCanonicalTraversalSurfaceHitsV1()` with shared owner resolution,
-  `classifyCanonicalTraversalSurfacePairV1()`, and
-  `preflightCanonicalTraversalSurfaceOverlapsV1()` exactly as frozen in design §9.1.
+  and budgeted `preflightCanonicalTraversalSurfaceOverlapsV1()` exactly as frozen in design §9.1.
+- Keeps the single-triangle leaf and source-pair classifier package-private and out of the package-root
+  exports. Task 6/7 consume only the plural point query and public preflight.
 - Keeps equivalent-plane and retained-support normal thresholds caller-owned; does not add a global
   normal epsilon and never flips downward normals upward.
 - Replaces duplicated Recast Euler/TRS geometry code with the existing world-space `emitTransformedStaticColliderTriangleMeshV1()` authority.
@@ -474,14 +496,22 @@ Write RED tests for the exact query and pair contracts before production exports
   ambiguity;
 - one interior plus another boundary resolves the interior; two distinct interior Surface IDs are
   ambiguous even when coplanar;
-- multiple equivalent boundary-only Surface IDs select the lowest ID; non-equivalent height or
-  normal returns ambiguous;
+- multiple boundary-only Surface IDs always select the code-point-lowest ID after Y/normal admission,
+  including flat↔ramp, ridge, and legal 0.25m step seams; only multiple admitted interiors are ambiguous;
 - coplanar interior overlap, crossing-slope overlap, exact boundary-only boxes, a 1cm gap, and
   vertically stacked layers close the pairwise relation partition;
+- canonical triangle ordinal is the source's original `triangleIndices` tuple offset divided by 3,
+  fixed before any filter; normal/slope filtering must not renumber it;
 - source inventory reversal preserves plural query/preflight output and its ordering. Do not assert
   arbitrary triangle-soup byte reversal preserves a child hash;
-- reject malformed indices, non-finite values, duplicate Surface IDs, zero-length normals, and
-  non-closed inputs; assert every returned object/array is deeply frozen.
+- reject unknown fields, malformed/non-integer/out-of-range indices, non-finite values, duplicate
+  Surface IDs, 3D zero-area triangles, zero-length normals, invalid closed enums, threshold outside
+  `(0, 1]`, and pair budget outside positive safe integer `<= Number.MAX_SAFE_INTEGER - 1`; accept legal
+  open Heightfield/static sheets and vertically projected-degenerate walls without manifold/watertight
+  closure; normal admission excludes walls; assert every returned object/array is deeply frozen;
+- prove deterministic streaming budget behavior: limit 1 with many overlapping candidates classifies
+  the first and returns `budget-exceeded` on the second, with `minimumRequiredCount === 2`; forged budget
+  values fail before broadphase work.
 
 - [ ] **Step 2: Verify geometry RED**
 
@@ -500,19 +530,27 @@ constant; caller-provided Y and normal bands remain explicit inputs.
 
 `queryCanonicalTraversalSurfaceHitsV1()` groups qualifying triangles by `traversalSurfaceId`, emits at
 most one hit per Surface, sorts by code-point ID, deep-freezes output, and owns the complete resolution:
-missing; unique interior; multiple interiors ambiguous; unique boundary; or equivalent multiple
-boundaries resolved to the lowest ID. Inside one Surface, tie-break by interior, smallest absolute Y
-difference, largest retained-normal dot when present, then canonical triangle ordinal.
+missing; unique interior; multiple interiors ambiguous; or any boundary-only set resolved to the
+code-point-lowest ID. Inside one Surface, tie-break by interior, smallest absolute Y difference, largest
+retained-normal dot when present, then the pre-filter canonical triangle ordinal. Expected Path state
+never chooses Runtime actual owner; retained normal only participates in admission/tie-break.
 
-`classifyCanonicalTraversalSurfacePairV1()` returns the closed disjoint / boundary-only with
-equivalent-plane relation / interior-overlap with same-band-or-distinct-layer relation. Compute minimum
-absolute affine height separation over the projected intersection polygon, including a zero when signed
-vertex values cross. `preflightCanonicalTraversalSurfaceOverlapsV1()` returns only the first
-Canonical-ID-sorted same-band interior blocker or `clear`; do not materialize every disjoint pair.
+The package-private source-pair classifier partitions disjoint / boundary-only with equivalent-plane
+metadata / interior-overlap with same-band-or-distinct-layer. Compute minimum absolute affine height
+separation over the projected intersection polygon, including zero when signed vertex values cross.
+`preflightCanonicalTraversalSurfaceOverlapsV1()` canonicalizes sources by ID, streams source pairs, then
+first triangle ordinals, and consumes second ordinals from a deterministic XZ index in ascending order.
+Count and classify each candidate immediately; return the first same-band interior blocker, or return
+`traversal-surface-triangle-pair-test-budget-exceeded` before classifying candidate `maximum + 1`.
+Never materialize all candidate pairs or an unbounded per-triangle result array. Boundary-only and
+distinct-layer pairs remain clear regardless of pair-plane metadata. Count broadphase candidates before
+normal admission, including candidates that classification later rejects for slope/normal, so budget
+results cannot drift with filter order.
 
 Implement legacy `sampleTriangleHeightfieldSurface()` and
-`queryStaticColliderTriangleMeshSupportHeightMetersV1()` through the shared triangle primitive, or add
-compatibility tests that prove a third independent barycentric implementation was not silently retained.
+`queryStaticColliderTriangleMeshSupportHeightMetersV1()` as compatibility facades over the shared
+package-private triangle primitive. Delete or deprecate independent barycentric/vertical-query code and
+prove no third semantic implementation remains.
 
 - [ ] **Step 4: Write RED shared-emitter Recast test**
 
@@ -534,12 +572,30 @@ dependency direction. Fail closed on same-band interior overlap, but retain boun
 distinct Y layers.
 
 The Task 4 preflight is a pure deterministic utility only. Task 6 maps its first blocking witness to the
-V2 failure and includes full Surface identities; Task 4 must not construct that failure or claim Graph
-support. Babylon 9.21.2 Float32 agreement belongs only to Task 7's private Runtime Adapter conformance,
-using `1e-6m + 1e-6 * max(1, abs(expectedMeters), abs(actualMeters))`; that tolerance never enters
-Canonical Schema, query constants, public protocols, receipts, Profiles, or hashes.
+V2 ambiguity failure and maps budget exhaustion to
+`traversal-surface-triangle-pair-test-budget-exceeded` / `ROUTE_GRAPH_BUDGET_EXCEEDED`, with zero related
+Surface identities and exact `maximumAllowedCount` / `minimumRequiredCount = maximum + 1`. Task 4 must
+not construct Connectivity failures or claim Graph support. The Profile/Envelope own
+`maximumTraversalSurfaceTrianglePairTestCount = 4_000_000` and
+`minimumEquivalentPlaneNormalDotRatio = 0.99999`; the former is a conservative policy cap borrowed from
+the existing generic geometry-predicate ceiling, not a performance-equivalence claim.
 
-- [ ] **Step 6: Run Task 4 gates and commit**
+Babylon 9.21.2 Float32 agreement belongs only to Task 7's private Runtime Adapter conformance. Its
+per-axis tolerance is `1e-6m + 2 * 2^-23 * max(1, operationMagnitudeMeters)`, where operation magnitude
+is computed from canonical translation plus the sum of absolute canonical linear-transform × local
+vertex terms. It never uses only final-coordinate magnitude and never enters Canonical Schema, query
+constants, public protocols, receipts, Profiles, or hashes.
+
+- [ ] **Step 6: Benchmark the admitted ceiling and record Task 4 disposition**
+
+After focused GREEN, run a deterministic representative R1b fixture and a near-4,000,000-candidate
+adversarial fixture on a supported environment. Record command, OS/CPU/runtime versions, source/triangle/
+candidate counts, wall time, and peak RSS in the Task 4 disposition. The benchmark is release-policy
+evidence, not a machine-independent pass threshold. If time or memory is unacceptable, change the
+unreleased Profile value and content Hash, rerun Profile/Envelope/query RED→GREEN, and repeat independent
+review before Task 6 starts.
+
+- [ ] **Step 7: Run Task 4 gates and commit**
 
 ```bash
 pnpm vitest run packages/terrain-surface/src packages/traversal-recast/src/heightfield-source.test.ts
@@ -550,7 +606,8 @@ git commit -m "feat: share traversal surface geometry queries"
 ```
 
 Expected: all focused tests and the R1 Heightfield gate pass, canonical source arrays equal the shared
-emitter arrays exactly, and the R1 duplicate TRS path is removed.
+emitter arrays exactly, the R1 duplicate TRS path is removed, no package-root pair classifier is
+exported, and the benchmark disposition records elapsed time plus peak memory.
 
 ### Task 5: Add the Private Layered Recast Source Mode
 
@@ -637,6 +694,10 @@ Expected: real Provider acceptance and identity tests pass.
 - Maps `RouteBuildInputV2` to one ordered candidate-prefix/blocker-suffix Provider operation.
 - Uses Task 2's four public hash helpers to populate the complete V2 Input, then calls `createRouteBuildInputReceiptV2(input)`. It does not define another preimage, construct a Receipt Hash, or calculate combined-geometry budget evidence independently; the factory recomputes the four declared hashes as validation.
 - Projects each polygon's private source range back to one Canonical Surface, publishes the complete `TraversalGraphV2.traversalSurfaceIdentitiesById` inventory once, keeps only the three stable Surface IDs on each Node, and publishes `RoutePathReceiptV2` from that inventory.
+- Calls Task 4 public preflight with same-band/equivalent-height derived only from
+  `positionQuantizationMeters / 2 + TRAVERSAL_SURFACE_QUERY_HEIGHT_EPSILON_METERS_V1`, the locked slope
+  cosine, and the two exact Capability Envelope fields. It does not call the package-private pair
+  classifier or create a second same-band authority.
 - Produces provider-private `TraversalGraphProjectionV2` and `QueryRequiredRouteInputV2` beside the staging V1 types; neither may retain Heightfield-only Build Input/Graph assumptions. Task 9 deletes `HeightfieldTraversalGraphProjectionV1`, `QueryRequiredRouteInputV1`, and their V1 constructor/assert/canonical/hash satellites after all call sites migrate.
 
 - [ ] **Step 1: Write RED successful multi-Surface Graph test**
@@ -653,15 +714,15 @@ Expected: FAIL because the R1 mapper puts every static Collider in the blocker s
 
 - [ ] **Step 3: Implement multi-source mapping and Node correlation**
 
-Sort candidate ranges by `traversalSurfaceId`, blockers by `colliderSubshapeId`, and verify private tag → source range → Surface/geometry hashes. Build Graph inventory from the exact canonical `input.traversalSurfaces` rows; each emitted Node triple must match the referenced inventory row. Query only the tagged range with barycentric epsilon and the locked Node-Y height band. Never select highest/lowest/nearest Surface or repeat Resource Ref/Version/Hash on every Node. Route evaluation consumes only `TraversalGraphProjectionV2` + `RouteBuildInputReceiptV2` through `QueryRequiredRouteInputV2`; do not hide a Heightfield/V1 receipt behind an unchanged internal type.
+Sort candidate ranges by `traversalSurfaceId`, blockers by `colliderSubshapeId`, and verify private tag → source range → Surface/geometry hashes. Build Graph inventory from the exact canonical `input.traversalSurfaces` rows; each emitted Node triple must match the referenced inventory row. Query only the tagged canonical source through Task 4 `queryCanonicalTraversalSurfaceHitsV1()`, using quantized Node Y, `positionQuantizationMeters / 2 + TRAVERSAL_SURFACE_QUERY_HEIGHT_EPSILON_METERS_V1`, and `minimumUpwardNormalYRatio = cos(maxSlopeDegrees)`. Delete Task 6's barycentric epsilon/leaf; never select highest/lowest/nearest Surface or repeat Resource Ref/Version/Hash on every Node. Route evaluation consumes only `TraversalGraphProjectionV2` + `RouteBuildInputReceiptV2` through `QueryRequiredRouteInputV2`; do not hide a Heightfield/V1 receipt behind an unchanged internal type.
 
 - [ ] **Step 4: Write RED failure and rejection-proof tests**
 
-Cover 0.35m step, 1cm gap, narrow tread, low overhead, missing Profile, forged Collider binding, coplanar interior overlap, stacked layers, and candidate budget overflow. Each dedicated diagnostic must be backed by a one-relaxation rejection proof; mixed failures remain generic.
+Cover 0.35m step, 1cm gap, narrow tread, low overhead, missing Profile, forged Collider binding, coplanar interior overlap, stacked layers, Surface-count overflow, and triangle-pair limit 1 overflow. Assert the pair budget exits on candidate 2 and maps to the exact reason/zero identities/count fields. Each dedicated diagnostic must be backed by a one-relaxation rejection proof; mixed failures remain generic.
 
 - [ ] **Step 5: Implement multi-Surface edges and V2 failures**
 
-Publish only `walk | slope | step`. A seam requires canonical boundary evidence. Do not use visual bounds or raw Provider adjacency to bridge a gap. Populate `relatedTraversalSurfaceIdentities` only from canonical Build Input rows and obey Task 2 reason cardinalities: Profile Missing has zero identities plus collider evidence, Correlation Missing has zero or one, Correlation Ambiguous has at least two, and Surface-count budget has zero.
+Publish only `walk | slope | step`. A seam requires canonical boundary evidence. Do not use visual bounds or raw Provider adjacency to bridge a gap. Populate `relatedTraversalSurfaceIdentities` only from canonical Build Input rows and obey Task 2 reason cardinalities: Profile Missing has zero identities plus collider evidence, Correlation Missing has zero or one, Correlation Ambiguous has at least two, and both Surface-count and triangle-pair-test budgets have zero. The latter uses `traversal-surface-triangle-pair-test-budget-exceeded`, `maximumAllowedCount = Envelope budget`, and `minimumRequiredCount = maximum + 1`; do not copy it into `RouteBuildBudgetEvidenceV2`.
 
 - [ ] **Step 6: Run Task 6 gates and commit**
 
@@ -691,18 +752,26 @@ Expected: multi-Surface success/failure tests pass and R1 remains green.
 - Keeps `TraversalRuntimeTickEvidenceV1` free of expected Path Surface state.
 - Consumes Task 4 `queryCanonicalTraversalSurfaceHitsV1()` and its owner resolution; Runtime does not
   retain a duplicate vertical-triangle classifier or flip downward normals.
+- Builds one canonical JavaScript-double source inventory for Heightfield plus all bound Static
+  Surfaces and performs one shared plural query per retained support sample. Babylon Mesh is private
+  conformance evidence only, not a semantic query source.
 - Keeps Babylon/Havok Float32 conformance tolerance private to the Runtime Adapter and out of every
   Canonical/public/hash contract.
 
 - [ ] **Step 1: Write RED Runtime correlation tests**
 
-Cover Heightfield, bound static platform, unbound Collider, dynamic support, exact seam, coplanar
-overlap, stacked lower layer, downward bottom/vertical side rejection, `SLIDING`, Reset, Rebind, and two
-Runtime instances. Assert `checkSupport()` is called once per tick in every case. Add a non-orthogonal
-multi-axis Euler + non-uniform scale conformance fixture proving Babylon/Havok positions agree with the
-canonical emitter under the private tolerance
-`1e-6m + 1e-6 * max(1, abs(expectedMeters), abs(actualMeters))`; do not assert byte equality at the
-Float32 engine boundary.
+Cover Heightfield, bound static platform, unbound Collider, dynamic support, flat↔ramp/ridge/0.25m exact
+seams, coplanar overlap, stacked lower layer, downward bottom/vertical side rejection, `SLIDING`, Reset,
+Rebind, and two Runtime instances. Assert `checkSupport()` is called once per tick in every case. The
+Runtime query uses retained pre-integration foot Y,
+`keepDistanceMeters + keepContactToleranceMeters`, and retained-support admission whose upward/reference
+dot thresholds both come from locked Live Lock `maxSlopeCosine`; expected Path state never selects the
+actual Surface owner. Add non-orthogonal multi-axis Euler + non-uniform scale conformance fixtures at
+ordinary scale and 100m/1km/10km cancellation. Prove Babylon/Havok positions agree with the canonical
+emitter under private per-axis tolerance
+`1e-6m + 2 * 2^-23 * max(1, operationMagnitudeMeters)`, with operation magnitude derived from canonical
+translation plus absolute linear-transform × local-vertex terms. A wrong Euler order must still fail;
+do not assert byte equality at the Float32 engine boundary.
 
 - [ ] **Step 2: Verify Runtime RED**
 
@@ -714,10 +783,11 @@ Expected: FAIL because static support is currently counted only as Heightfield a
 
 - [ ] **Step 3: Implement immutable static Surface correlation**
 
-Index collision meshes by `colliderSubshapeId`; query only compiled Surface-bound rows through the
-shared plural query and join its returned `traversalSurfaceId` to the Execution Surface inventory. Use
-the Runtime Adapter Live Lock contact band and retained pre-integration foot/normal. Delete the duplicate
-`verticalTriangleHit()` path and its negative-normal flip. Return
+Index canonical sources by `colliderSubshapeId`, then query Heightfield plus compiled Surface-bound rows
+in one shared plural call and join its returned `traversalSurfaceId` to the Execution Surface inventory.
+Use the Runtime Adapter Live Lock contact band and retained pre-integration foot/normal. Delete the
+duplicate `verticalTriangleHit()` path, private barycentric epsilon, and negative-normal flip; compatibility
+sampler facades must reuse Task 4's shared package-private leaf. Return
 `unsupported | unmatched | ambiguous | resolved` without changing movement state.
 
 - [ ] **Step 4: Run Task 7 gates and commit**
