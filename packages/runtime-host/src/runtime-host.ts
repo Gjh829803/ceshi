@@ -94,6 +94,7 @@ interface RetainedRuntimeActivityV1 {
   readonly resolveSettlement: () => void;
   readonly rejectSettlement: (reason: unknown) => void;
   cleanupRegistered: boolean;
+  releaseInvoked: boolean;
   settlementCompleted: boolean;
   status: RuntimeActivityStatusV1;
 }
@@ -300,6 +301,7 @@ export class RuntimeActivityCoordinator {
       resolveSettlement,
       rejectSettlement,
       cleanupRegistered: false,
+      releaseInvoked: false,
       settlementCompleted: false,
       status: "active" as const,
     };
@@ -315,16 +317,25 @@ export class RuntimeActivityCoordinator {
 
   terminateAllForHostDisposal(): Promise<void> {
     const active = this.terminateActive();
-    const unsettled = [...this.retainedByRequestId.values()].filter(
+    const joinable = [...this.retainedByRequestId.values()].filter(
       (retained) =>
-        retained.status === "terminated-by-host" &&
-        !retained.settlementCompleted,
+        retained.status === "terminated-by-host" ||
+        retained.cleanupRegistered,
     );
-    if (active.length === 0 && unsettled.length === 0) {
+    if (active.length === 0 && joinable.length === 0) {
       return Promise.resolve();
     }
-    return Promise.all(unsettled.map(({ settlementPromise }) => settlementPromise))
-      .then(() => undefined);
+    return Promise.allSettled(
+      joinable.map(({ settlementPromise }) => settlementPromise),
+    ).then((results) => {
+      const failures = results.filter((result) => result.status === "rejected");
+      if (failures.length > 0) {
+        throw new AggregateError(
+          failures.map(({ reason }) => reason),
+          "Runtime Activity cleanup failed.",
+        );
+      }
+    });
   }
 
   snapshot(): RuntimeActivityCoordinatorSnapshotV1 {
@@ -336,6 +347,7 @@ export class RuntimeActivityCoordinator {
   }
 
   private release(retained: RetainedRuntimeActivityV1): RuntimeActivityRecordV1 {
+    retained.releaseInvoked = true;
     if (retained.status !== "active") {
       if (
         retained.status === "terminated-by-host" &&
@@ -354,7 +366,7 @@ export class RuntimeActivityCoordinator {
     retained: RetainedRuntimeActivityV1,
     cleanup: PromiseLike<void>,
   ): void {
-    if (retained.cleanupRegistered || retained.status === "released") {
+    if (retained.cleanupRegistered || retained.releaseInvoked) {
       throw new Error(
         "RUNTIME_ACTIVITY_ID_CONFLICT: Runtime Activity cleanup is already registered.",
       );
@@ -375,6 +387,8 @@ export class RuntimeActivityCoordinator {
     this.activeRuntimeActivityCount = 0;
     for (const retained of active) {
       retained.status = "terminated-by-host";
+    }
+    for (const retained of active) {
       retained.cancellationController.abort();
     }
     return Object.freeze(active);

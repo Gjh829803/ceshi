@@ -801,6 +801,13 @@ Simulation Take runner 在第一次 bind/input/capture 前 acquire `simulation-t
 R1b 的 `ExecutionPlanV5` 是当前权威。仓库为 private `0.0.0` 且没有 release tag，本次采用一次
 明确 clean break，不新建 V6：
 
+G19-3 的 `RuntimeHost` 只是 trusted in-process staging：在 R1b completion 前只校验 Plan 的
+`kind/schemaVersion`、canonical hash 与 Build Receipt 中的 `executionPlanHash` 一致性，不得由 Loader、CLI
+或 Browser 构造。G19-4 必须在 `runtime-contracts` 建立唯一 authoritative V5 closed parser，并让 Host 在
+任何 Adapter factory 运行前调用它；随后再加入 `gameplay-bootstrap` 的 Plan Resource Lock、Manifest resource、
+file-integrity row、Package root 与 Host input 六方 membership 证明。完成这两项之前，不能把当前 staging
+描述为可接收外部 WorldPackage 的生产入口，也不能在 `runtime-host` 复制一份临时 Plan validator。
+
 ```ts
 interface ExecutionPlanV5 extends Omit<
   ExecutionPlanV4,

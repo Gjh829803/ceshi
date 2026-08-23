@@ -25,6 +25,15 @@
 - 每个行为先写失败测试并观察正确失败，再写最小实现。
 - 每个任务形成独立提交；子智能体报告不是集成证据。
 
+## Current implementation status (2026-08-24)
+
+| Workstream | Status | Evidence / next boundary |
+| --- | --- | --- |
+| G19-0 design and dependency graph | Complete | Design and plan are committed from `db01979`; later review dispositions are incorporated in the authoritative spec. |
+| G19-2 / G19-2A / G19-2B contracts and artifacts | Complete | Closed Gameplay contracts, identity/hash helpers, Feature/Action artifacts, capacity and retention invariants are committed through `1a3d824`. |
+| G19-3 Gameplay core, WorldSession and RuntimeHost | Complete | Implementation checkpoint starts at `f71bcb3`; post-review RuntimeHost suite passes 118/118, full repository suite passes 1,972/1,972, typecheck/build and canonical/placement/subject/Route gates pass. Cursor code re-review returned `CODE GO`; see the G19-3 review disposition. |
+| G19-4 onward | Blocked by declared dependency | `origin/codex/r1b-integration` is still `df9f674`; wait for R1b Task 9 atomic cutover and Task 10 completion HEAD before touching shared ExecutionPlan/Compiler/WorldPackage/Babylon/Browser owners. |
+
 ---
 
 ### Task 1: 冻结设计、基线与执行账本

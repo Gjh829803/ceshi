@@ -408,6 +408,23 @@ function diagnostic(
   return Object.freeze({ code, message });
 }
 
+class WorldSessionOperationErrorV1 extends Error {
+  readonly diagnostic: GameplayDiagnosticV1;
+
+  constructor(code: GameplayDiagnosticCodeV1, message: string) {
+    super(`${code}: ${message}`);
+    this.name = "WorldSessionOperationErrorV1";
+    this.diagnostic = diagnostic(code, message);
+  }
+}
+
+function sessionFailure(
+  code: GameplayDiagnosticCodeV1,
+  message: string,
+): WorldSessionOperationErrorV1 {
+  return new WorldSessionOperationErrorV1(code, message);
+}
+
 function receipt(
   command: GameplayCommandV1,
   simulationTick: number,
@@ -1194,7 +1211,10 @@ export class WorldSession {
     const currentTick = this.currentPublication.worldState.simulationTick;
     const nextTick = currentTick + 1;
     if (!Number.isSafeInteger(nextTick)) {
-      throw new Error("GAMEPLAY_CAPACITY_EXCEEDED: Simulation Tick is exhausted.");
+      throw sessionFailure(
+        "GAMEPLAY_CAPACITY_EXCEEDED",
+        "Simulation Tick is exhausted.",
+      );
     }
 
     const activeTerminalEventCountBeforeEstimate = Object.keys(
@@ -1205,16 +1225,18 @@ export class WorldSession {
           activeTerminalEventCountBeforeEstimate + 1 >
         this.options.gameplayCapacityBudget.maximumRetainedEventCount
     ) {
-      throw new Error(
-        "GAMEPLAY_CAPACITY_EXCEEDED: Fixed input cannot preserve failure evidence.",
+      throw sessionFailure(
+        "GAMEPLAY_CAPACITY_EXCEEDED",
+        "Fixed input cannot preserve failure evidence.",
       );
     }
     const failureReservation = this.commandJournal.reserveEventCapacity({
       eventCount: 1,
     });
     if (failureReservation.status !== "reserved") {
-      throw new Error(
-        "GAMEPLAY_CAPACITY_EXCEEDED: Gameplay Event capacity is exhausted.",
+      throw sessionFailure(
+        "GAMEPLAY_CAPACITY_EXCEEDED",
+        "Gameplay Event capacity is exhausted.",
       );
     }
     const failureBundle = this.buildWorldFailureBundle(diagnostic(
@@ -1246,8 +1268,9 @@ export class WorldSession {
         this.options.gameplayCapacityBudget
           .maximumSemanticFactTransitionCountPerTick
     ) {
-      throw new Error(
-        "GAMEPLAY_CAPACITY_EXCEEDED: Fixed input cannot be admitted within the Gameplay budget.",
+      throw sessionFailure(
+        "GAMEPLAY_CAPACITY_EXCEEDED",
+        "Fixed input cannot be admitted within the Gameplay budget.",
       );
     }
 
@@ -1265,8 +1288,9 @@ export class WorldSession {
         estimate.maximumSemanticFactTransitionEventCount,
       ) > this.options.gameplayCapacityBudget.maximumRetainedEventCount
     ) {
-      throw new Error(
-        "GAMEPLAY_CAPACITY_EXCEEDED: Fixed input cannot preserve terminal Event evidence.",
+      throw sessionFailure(
+        "GAMEPLAY_CAPACITY_EXCEEDED",
+        "Fixed input cannot preserve terminal Event evidence.",
       );
     }
 
@@ -1278,8 +1302,9 @@ export class WorldSession {
       eventCount: reservedEventCount,
     });
     if (eventReservation.status !== "reserved") {
-      throw new Error(
-        "GAMEPLAY_CAPACITY_EXCEEDED: Gameplay Event capacity is exhausted.",
+      throw sessionFailure(
+        "GAMEPLAY_CAPACITY_EXCEEDED",
+        "Gameplay Event capacity is exhausted.",
       );
     }
     const failure = this.buildWorldFailureBundle(diagnostic(

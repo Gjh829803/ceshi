@@ -148,6 +148,110 @@ describe("RuntimeActivityCoordinator", () => {
     });
   });
 
+  it("joins registered cleanup after the Activity was released", async () => {
+    const coordinator = new RuntimeActivityCoordinator({
+      maximumRuntimeActivityRecordCount: 1,
+    });
+    const acquired = coordinator.acquire(firstRequest, "world-session-1");
+    if (acquired.status !== "active") throw new Error("Expected active lease.");
+    let finishCleanup!: () => void;
+    acquired.lease.registerCleanup(new Promise<void>((resolve) => {
+      finishCleanup = resolve;
+    }));
+    expect(acquired.lease.release()).toMatchObject({ status: "released" });
+
+    const joined = coordinator.terminateAllForHostDisposal();
+    let settled = false;
+    void joined.then(() => {
+      settled = true;
+    });
+    await Promise.resolve();
+    expect(settled).toBe(false);
+
+    finishCleanup();
+    await expect(joined).resolves.toBeUndefined();
+  });
+
+  it("waits for every registered cleanup before reporting a failure", async () => {
+    const coordinator = new RuntimeActivityCoordinator({
+      maximumRuntimeActivityRecordCount: 2,
+    });
+    const first = coordinator.acquire(firstRequest, "world-session-1");
+    const second = coordinator.acquire({
+      kind: "simulation-take",
+      requestId: "take-cleanup-pending",
+      payloadHash: `sha256:${"2".repeat(64)}`,
+    }, "world-session-1");
+    if (first.status !== "active" || second.status !== "active") {
+      throw new Error("Expected active leases.");
+    }
+    first.lease.registerCleanup(Promise.reject(new Error("private failure")));
+    let finishSecondCleanup!: () => void;
+    second.lease.registerCleanup(new Promise<void>((resolve) => {
+      finishSecondCleanup = resolve;
+    }));
+
+    const joined = coordinator.terminateAllForHostDisposal();
+    let settled = false;
+    void joined.catch(() => {
+      settled = true;
+    });
+    await Promise.resolve();
+    await Promise.resolve();
+    expect(settled).toBe(false);
+
+    finishSecondCleanup();
+    await expect(joined).rejects.toBeInstanceOf(AggregateError);
+  });
+
+  it("marks every lease terminal before dispatching synchronous abort callbacks", () => {
+    const coordinator = new RuntimeActivityCoordinator({
+      maximumRuntimeActivityRecordCount: 2,
+    });
+    const first = coordinator.acquire(firstRequest, "world-session-1");
+    const second = coordinator.acquire({
+      kind: "simulation-take",
+      requestId: "take-abort-reentrant-release",
+      payloadHash: `sha256:${"2".repeat(64)}`,
+    }, "world-session-1");
+    if (first.status !== "active" || second.status !== "active") {
+      throw new Error("Expected active leases.");
+    }
+    first.lease.cancellationSignal.addEventListener("abort", () => {
+      second.lease.release();
+    });
+
+    expect(coordinator.terminateAll()).toEqual([
+      expect.objectContaining({
+        requestId: firstRequest.requestId,
+        status: "terminated-by-host",
+      }),
+      expect.objectContaining({
+        requestId: "take-abort-reentrant-release",
+        status: "terminated-by-host",
+      }),
+    ]);
+    expect(coordinator.snapshot().activeRuntimeActivityCount).toBe(0);
+    expect(second.lease.release()).toMatchObject({ status: "terminated-by-host" });
+    expect(coordinator.snapshot().activeRuntimeActivityCount).toBe(0);
+  });
+
+  it("rejects cleanup registration after terminal release", async () => {
+    const coordinator = new RuntimeActivityCoordinator({
+      maximumRuntimeActivityRecordCount: 1,
+    });
+    const acquired = coordinator.acquire(firstRequest, "world-session-1");
+    if (acquired.status !== "active") throw new Error("Expected active lease.");
+
+    coordinator.terminateAll();
+    acquired.lease.release();
+    expect(() => acquired.lease.registerCleanup(Promise.resolve())).toThrow(
+      /RUNTIME_ACTIVITY_ID_CONFLICT/,
+    );
+    await expect(coordinator.terminateAllForHostDisposal()).resolves
+      .toBeUndefined();
+  });
+
   it("rejects hostile requests without invoking accessors", () => {
     const coordinator = new RuntimeActivityCoordinator({
       maximumRuntimeActivityRecordCount: 2,

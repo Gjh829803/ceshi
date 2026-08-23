@@ -540,7 +540,9 @@ describe("WorldSession fixed input", () => {
     });
 
     await expect(session.runFixedInput({ actions: [], ticks: 1 })).rejects
-      .toThrow(/GAMEPLAY_CAPACITY_EXCEEDED/);
+      .toMatchObject({
+        diagnostic: { code: "GAMEPLAY_CAPACITY_EXCEEDED" },
+      });
     expect(harness.calls.some(({ operation }) =>
       operation === "run-fixed-input-tick"
     )).toBe(false);

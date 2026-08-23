@@ -459,6 +459,35 @@ describe("RuntimeHost lifecycle isolation and admission", () => {
     expect(second.host.snapshot().worldState.simulationTick).toBe(0);
   });
 
+  it("returns a closed capacity Diagnostic after preserving prior fixed Ticks", async () => {
+    const current = createPortHarness();
+    current.queueFixedInputTick({
+      capacityEstimate: {
+        maximumSemanticFactCountAfterInput: 0,
+        maximumSemanticFactTransitionEventCount: 0,
+      },
+      worldProjectionAfter: projection(1),
+    });
+    current.queueFixedInputTick({
+      capacityEstimate: {
+        maximumSemanticFactCountAfterInput:
+          DEFAULT_GAMEPLAY_CAPACITY_BUDGET_V1.maximumSemanticFactCount + 1,
+        maximumSemanticFactTransitionEventCount: 0,
+      },
+      worldProjectionAfter: projection(2),
+    });
+    const { host } = await createHost([current]);
+
+    await expect(host.runFixedInput({ actions: [], ticks: 2 })).rejects
+      .toMatchObject({
+        diagnostic: { code: "GAMEPLAY_CAPACITY_EXCEEDED" },
+      });
+    expect(host.snapshot().worldState.simulationTick).toBe(1);
+    expect(current.calls.filter(({ operation }) =>
+      operation === "run-fixed-input-tick"
+    )).toHaveLength(1);
+  });
+
   it("rejects exact hostile Host options before ID, preflight, or adapter factories", async () => {
     const port = createPortHarness();
     const adapter = createAdapterFactoryHarness([port]);
@@ -882,6 +911,101 @@ describe("RuntimeHost disposal joins", () => {
     expect(acquired.lease.release()).toMatchObject({
       status: "terminated-by-host",
     });
+    expect(current.disposeCount).toBe(1);
+  });
+
+  it("sanitizes a registered Runtime Activity cleanup that failed before disposal", async () => {
+    const current = createPortHarness();
+    const { host } = await createHost([current]);
+    const acquired = host.acquireRuntimeActivity({
+      kind: "control-capture",
+      requestId: "activity.failed-cleanup",
+      payloadHash: HASH_A,
+    });
+    if (acquired.status !== "active") {
+      throw new Error("Expected an active Runtime Activity lease.");
+    }
+    const privateMessage = "private capture cleanup failure";
+    acquired.lease.registerCleanup(Promise.reject(new Error(privateMessage)));
+    await Promise.resolve();
+
+    const error = await host.dispose().catch((reason: unknown) => reason);
+    expect(error).toMatchObject({
+      diagnostic: { code: "WORLD_SESSION_FAILED" },
+    });
+    expect(String(error)).not.toContain(privateMessage);
+    expect(acquired.lease.cancellationSignal.aborted).toBe(true);
+    expect(current.disposeCount).toBe(1);
+  });
+
+  it("joins cleanup registered before a Runtime Activity was released", async () => {
+    const current = createPortHarness();
+    const { host } = await createHost([current]);
+    const acquired = host.acquireRuntimeActivity({
+      kind: "runtime-run",
+      requestId: "activity.released-cleanup",
+      payloadHash: HASH_A,
+    });
+    if (acquired.status !== "active") {
+      throw new Error("Expected an active Runtime Activity lease.");
+    }
+    let finishCleanup!: () => void;
+    acquired.lease.registerCleanup(new Promise<void>((resolve) => {
+      finishCleanup = resolve;
+    }));
+    expect(acquired.lease.release()).toMatchObject({ status: "released" });
+
+    const disposing = host.dispose();
+    let settled = false;
+    void disposing.then(() => {
+      settled = true;
+    });
+    await Promise.resolve();
+    expect(settled).toBe(false);
+
+    finishCleanup();
+    await expect(disposing).resolves.toBeUndefined();
+    expect(current.disposeCount).toBe(1);
+  });
+
+  it("waits for every Activity cleanup before returning a sanitized failure", async () => {
+    const current = createPortHarness();
+    const { host } = await createHost([current]);
+    const first = host.acquireRuntimeActivity({
+      kind: "control-capture",
+      requestId: "activity.cleanup-fails",
+      payloadHash: HASH_A,
+    });
+    const second = host.acquireRuntimeActivity({
+      kind: "simulation-take",
+      requestId: "activity.cleanup-pending",
+      payloadHash: HASH_B,
+    });
+    if (first.status !== "active" || second.status !== "active") {
+      throw new Error("Expected active Runtime Activity leases.");
+    }
+    const privateMessage = "private first cleanup failure";
+    first.lease.registerCleanup(Promise.reject(new Error(privateMessage)));
+    let finishSecondCleanup!: () => void;
+    second.lease.registerCleanup(new Promise<void>((resolve) => {
+      finishSecondCleanup = resolve;
+    }));
+
+    const disposing = host.dispose();
+    let settled = false;
+    void disposing.catch(() => {
+      settled = true;
+    });
+    await Promise.resolve();
+    await Promise.resolve();
+    expect(settled).toBe(false);
+
+    finishSecondCleanup();
+    const error = await disposing.catch((reason: unknown) => reason);
+    expect(error).toMatchObject({
+      diagnostic: { code: "WORLD_SESSION_FAILED" },
+    });
+    expect(String(error)).not.toContain(privateMessage);
     expect(current.disposeCount).toBe(1);
   });
 
