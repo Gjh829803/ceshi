@@ -269,8 +269,9 @@ WorldSession 失败。rollback failure 必须返回 failed，并使 WorldSession
   递增 `sequence`；
 - Event ID 由 `worldSessionId + sequence` 派生，时间戳不参与权威排序；
 - 控制事件使用 `relationship.committed/relationship.removed`，Action 使用
-  `action.started/action.completed/action.cancelled/action.failed`；拒绝只由 Receipt 表达，
-  不产生 `gameplay.command-rejected` Event；
+  `action.started/action.completed/action.cancelled/action.failed`，Semantic Fact Projector 使用
+  `semantic-fact.started/semantic-fact.ended`；拒绝只由 Receipt 表达，不产生
+  `gameplay.command-rejected` Event；
 - `WorldStateSnapshotV1` 是 Receipt 引用的 canonical artifact，首期包含 Subject/Controller
   Entity State、`possessedBy` Relationship、Locomotion Capability State、Semantic Fact 和
   active Action State；
@@ -312,6 +313,16 @@ Runtime 尚未投影的类型使用空 Map，不得删掉根字段。关系端�
 和 inspection 的 Participant/Controller 引用必须存在且角色兼容，不能把 dangling graph 冻结为
 Canonical State。
 
+每条 Fact 必须携带锁定 `semanticFactProjectorProfileRef/hash`。Fact ID 由 type、角色化 canonical
+端点、`startedSimulationTick` 和该 Profile Ref/Hash 派生，连续期间会变化的 support point/normal
+不进入身份。parser 必须重算并拒绝任意命名或不匹配的 Fact ID。`semantic-fact.started/ended`
+Event 都携带 exact `semanticFact` 快照以支持 standalone audit/begin-end 配对；physics-derived Fact
+Event 不伪造 `commandId`。
+
+Canonical Snapshot 还必须拒绝以下矛盾：`air` 必须且只能对应 `airborne`；`ground` 只能对应
+`idle | walk | run`；实际速度非负；Relationship established Tick、Fact started Tick、Action
+started/transition Tick 都不得越过 Snapshot Tick，且 Action transition Tick 不得早于 started Tick。
+
 `worldStateHash` 的输入固定为 `simulationTick`、`worldPackageRootHash`、`executionPlanHash`、按 ID
 排序后的五类 State Map 和 `lastEventSequence`。`id`、`runtimeSessionId`、`worldSessionId`、
 `worldPackageRef` 与 `worldStateHash` 自身不进入 hash 域。不同 Session 到达相同锁定世界与 Tick
@@ -329,12 +340,16 @@ WorldSession 创建时锁定 `GameplayCapacityBudgetV1`，至少包含：
 - `maximumGameplayFeatureCount`；
 - `maximumSemanticActionDefinitionCount`；
 - `maximumIdempotencyRecordCount`；
+- `maximumRetiredActionExecutionIdCount`；
 - `maximumRetainedReceiptCount`；
 - `maximumRetainedEventCount`。
 
-默认 trusted local profile 使用确定值：`1/1/1/256/16/256/4096/4096/8192`。所有字段必须是
+默认 trusted local profile 使用确定值：`1/1/1/256/16/256/4096/4096/4096/8192`。所有字段必须是
 非负 safe integer。事务在 Adapter prepare 前一次性预留所需 relationship/action/receipt/
 event/idempotency slots。
+
+`maximumRetiredActionExecutionIdCount` 独立约束永久保留的 Action execution ID；不得把它暗中
+计入 `maximumIdempotencyRecordCount`，也不得淘汰后允许同一 execution ID 被另一命令复用。
 
 预算耗尽时拒绝新的状态改变并返回稳定 Diagnostic；不得淘汰 command idempotency 或 Event
 历史后继续运行，从而让相同命令在同一 WorldSession 获得不同结果。Reset 创建新

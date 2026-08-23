@@ -549,6 +549,8 @@ interface SupportedByFactV1 {
   id: string;
   type: "supportedBy";
   schemaVersion: 1;
+  semanticFactProjectorProfileRef: string;
+  semanticFactProjectorProfileHash: `sha256:${string}`;
   supportedEntityId: string;
   supportSurfaceEntityId: string;
   supportColliderSubshapeId: string;
@@ -562,6 +564,8 @@ interface TouchingFactV1 {
   id: string;
   type: "touching";
   schemaVersion: 1;
+  semanticFactProjectorProfileRef: string;
+  semanticFactProjectorProfileHash: `sha256:${string}`;
   entityIds: readonly [string, string];
   startedSimulationTick: number;
 }
@@ -570,13 +574,19 @@ interface InsideVolumeFactV1 {
   id: string;
   type: "insideVolume";
   schemaVersion: 1;
+  semanticFactProjectorProfileRef: string;
+  semanticFactProjectorProfileHash: `sha256:${string}`;
   containedEntityId: string;
   volumeEntityId: string;
   startedSimulationTick: number;
 }
 ```
 
-`TouchingFactV1.entityIds` 是对称端点，必须按 Entity ID 字典序排序；其余 Fact 使用角色化端点。`supportSurfaceEntityId`、`supportColliderSubshapeId` 与可选的 `supportTraversalSurfaceId` 复用 Route/Hybrid Terrain 已冻结的三层 Surface 身份：世界所有者、几何命中和可通行语义不能缩成同一个含糊 `surfaceId`。
+`TouchingFactV1.entityIds` 是对称端点，必须按 Entity ID 字典序排序；其余 Fact 使用角色化端点。
+每条 Fact 显式携带锁定 `semanticFactProjectorProfileRef/hash`，以便 standalone parser 能验证
+Fact ID，不能依赖进程内隐式默认 Projector。`supportSurfaceEntityId`、
+`supportColliderSubshapeId` 与可选的 `supportTraversalSurfaceId` 复用 Route/Hybrid Terrain 已冻结的
+三层 Surface 身份：世界所有者、几何命中和可通行语义不能缩成同一个含糊 `surfaceId`。
 
 ### 10.3 Semantic Fact Projector
 
@@ -713,7 +723,9 @@ type WorldEventV1 =
 - Command ID 由调用方提供并承担幂等键；同 ID 不允许复用为不同 Payload。
 - Relationship ID 在 Bind Request/初始 WorldPackage 中确定，并在连续存在期间保持不变；解除后重新建立产生新 ID。
 - Action State ID 由已接受的 Action Request 确定；同一 Command 产生多个 Action 时使用稳定 Ordinal 派生，不能使用数组插入顺序。
-- Semantic Fact ID 由 Fact Type、Canonical Endpoint、开始 Tick 和锁定 Projector Profile 派生；同一连续接触期间不变，结束后重新开始产生新 ID。
+- Semantic Fact ID 由 Fact Type、Canonical Endpoint、开始 Tick 和 Fact 内显式锁定的
+  `semanticFactProjectorProfileRef/hash` 派生；连续期间会变化的接触点/法线不进入 ID。parser 必须
+  重算并拒绝不匹配的 ID；同一连续接触期间 ID 不变，结束后重新开始产生新 ID。
 - Event ID 由 `worldSessionId + sequence` 派生；`sequence` 是 WorldSession 内唯一顺序真相，Timestamp 只作观测信息，不能用于排序。
 - Snapshot 只保留当前 Entity、Relationship、Fact 和未终止 Action；终态、删除和历史只保留在 Receipt/Event Log 与 Checkpoint Artifact 中。
 

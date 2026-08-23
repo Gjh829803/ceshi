@@ -147,9 +147,12 @@ Relationship payload 使用 `controlledEntityId/controllerEntityId`；Action pay
   Controller 的 dangling 或错误角色引用全部拒绝；
 - `__proto__` 作为 JSON map key 不得修改结果对象 prototype、丢失条目或破坏 canonicalization；
 - `semanticFactsById` 是必填 Map，首批关闭联合为 `supportedBy | touching | insideVolume`；
+- Fact 必须携带锁定 Projector Profile Ref/Hash，ID 由 type、canonical endpoints、started Tick 和
+  Profile 派生；`semantic-fact.started/ended` Event 携带 exact Fact 快照；
 - `worldStateHash` 排除 artifact/session identity 和自身，包含 Tick、WorldPackage/ExecutionPlan
   Hash、五类 State Map 与 `lastEventSequence`；跨 Session 相同语义状态 hash 相同，任何 hash 域
-  字段被篡改都拒绝。
+  字段被篡改都拒绝；
+- air/ground 与 locomotion mode、非负速度、Relationship/Fact/Action Tick 顺序全部一致。
 
 - [ ] **Step 6: 实现 State/Capacity canonicalizer**
 
@@ -167,6 +170,7 @@ budget 常量为：
   maximumGameplayFeatureCount: 16,
   maximumSemanticActionDefinitionCount: 256,
   maximumIdempotencyRecordCount: 4096,
+  maximumRetiredActionExecutionIdCount: 4096,
   maximumRetainedReceiptCount: 4096,
   maximumRetainedEventCount: 8192
 }
