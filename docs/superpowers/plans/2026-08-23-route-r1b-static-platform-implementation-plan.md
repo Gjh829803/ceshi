@@ -55,15 +55,23 @@ Each parallel worker uses a dedicated Git worktree and branch. Integration is co
 - Modify: `packages/authoring/src/validate-v4.ts`
 - Modify: `packages/authoring/src/normalize-v4.ts`
 - Modify: `packages/authoring/src/normalize-v4.test.ts`
+- Modify: `packages/authoring/src/canonical-authoring-identity.ts`
+- Modify: `packages/authoring/src/resource-lock.ts`
+- Modify: `packages/authoring/src/index.ts`
+- Modify: `packages/authoring/package.json`
 - Modify: `packages/compiler/src/compile.ts`
 - Modify: `packages/compiler/src/compile-v5.test.ts`
+- Modify: `packages/compiler/src/compile-traversal-lock.test.ts`
 - Modify: `packages/runtime-contracts/src/execution-plan.ts`
 - Modify: `packages/runtime-contracts/src/runtime-contracts.test.ts`
 - Modify: `packages/runtime-contracts/src/index.ts`
+- Modify: `pnpm-lock.yaml`
 
 **Interfaces:**
 - Produces `PrototypeTraversalSurfaceBindingV1`, `ExecutionStaticColliderTraversalSurfaceV1`, and the expanded `ExecutionTraversalSurfaceV1` union.
 - Extends `EXECUTION_RESOURCE_KINDS_V1` with `traversal-surface-profile`.
+- Keeps `traversalSurfaceBindings` as a V4-only Prototype extension: V3 remains closed, while V4 strips the extension before V3 normalization and restores its canonical sorted/frozen form afterward.
+- Adds each distinct resolved Traversal Surface Profile receipt to the Authoring Resource Lock and preserves byte-identical Authoring/Execution lock rows.
 - Uses existing `deriveColliderSubshapeIdV1(entityId, logicalSubshapeId)` and existing `ExecutionStaticColliderV1` fields unchanged.
 
 - [ ] **Step 1: Write RED Authoring normalization tests**
@@ -80,7 +88,7 @@ traversalSurfaceBindings: [{
 }]
 ```
 
-Assert canonical preservation, strict field rejection, duplicate `id` rejection, unknown Subshape rejection, and rejection when `collisionEnabled === false`.
+Assert canonical preservation, strict field rejection, duplicate `id` rejection, unknown Subshape rejection, and rejection when `collisionEnabled === false`. Also assert V3 still rejects `traversalSurfaceBindings`, while V4 normalization sorts/deep-freezes bindings and changes `authoringSpecHash`, `normalizedWorldIrHash`, and `resourceLockHash` when the binding or resolved Profile changes.
 
 - [ ] **Step 2: Verify Authoring RED**
 
@@ -105,7 +113,7 @@ export interface PrototypeTraversalSurfaceBindingV1 {
 }
 ```
 
-Add the same closed shape and a dedicated `traversal-surface-profile-ref` format to the V4 JSON Schema/AJV validator. Normalize bindings by `id`, deep-freeze them, and keep Object instances free of per-instance Surface geometry or toggles.
+Add the same closed shape and a dedicated `traversal-surface-profile-ref` format to the V4 JSON Schema/AJV validator. Put only the shared binding vocabulary in `types.ts`; widen Prototype/resource types in `types-v4.ts` without weakening V3. Strip bindings before calling the V3 normalizer, then restore them by `id`, deep-freeze them, and include them in the V4 canonical identity. Resolve every distinct Profile Ref through Task 3, insert the exact receipt through `ResourceLockBuilderV1`, and add `@whitebox-world/traversal` as a direct Authoring dependency. Keep Object instances free of per-instance Surface geometry or toggles.
 
 - [ ] **Step 4: Write RED Compiler and Runtime Contract tests**
 
@@ -118,7 +126,7 @@ expect(surface.colliderSubshapeId).toBe(collider.colliderSubshapeId);
 expect(surface.colliderHash).toBe(collider.colliderHash);
 ```
 
-Also prove the R1 Heightfield ID is byte-identical to the pre-R1b fixture and that a forged join fails Plan admission.
+Also prove the R1 Heightfield ID is byte-identical to the pre-R1b fixture and that a forged-but-hash-consistent normalized V4 join fails Plan admission. Extend `compile-traversal-lock.test.ts` to prove the Traversal Surface Profile row survives byte-identically from normalized to Execution Resource Lock and that a missing or changed row fails closed.
 
 - [ ] **Step 5: Verify Compiler RED**
 
@@ -151,15 +159,15 @@ Compile the static Surface resource identity as:
 }
 ```
 
-Sort compiled surfaces by `traversalSurfaceId`. Fail before returning a Plan on missing/ambiguous Collider joins or unresolved Profile refs.
+Sort compiled surfaces by `traversalSurfaceId`. Resolve every Profile again in Compiler, require an exact `resourceRef`/`resourceKind`/`resolvedVersion`/`contentHash` match with one normalized lock row, and copy that receipt into the compiled Surface. Fail before returning a Plan on missing/ambiguous Collider joins, unresolved Profile refs, or lock drift.
 
 - [ ] **Step 7: Run Task 1 gates and commit**
 
 ```bash
-pnpm vitest run packages/authoring/src/authoring-v4.test.ts packages/authoring/src/normalize-v4.test.ts packages/compiler/src/compile-v5.test.ts packages/runtime-contracts/src/runtime-contracts.test.ts
+pnpm vitest run packages/authoring/src/authoring-v4.test.ts packages/authoring/src/normalize-v4.test.ts packages/compiler/src/compile-v5.test.ts packages/compiler/src/compile-traversal-lock.test.ts packages/runtime-contracts/src/runtime-contracts.test.ts
 pnpm verify:route-r1-heightfield
 pnpm typecheck
-git add packages/authoring packages/compiler packages/runtime-contracts
+git add packages/authoring packages/compiler packages/runtime-contracts pnpm-lock.yaml
 git commit -m "feat: compile static traversal surfaces"
 ```
 
