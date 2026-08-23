@@ -1,9 +1,14 @@
 import { sha256CanonicalJson } from "@whitebox-world/protocol";
 import {
   assertHeightfieldRouteBuildInputReceiptV1,
+  assertRouteBuildInputReceiptV2,
   type CanonicalTriangleSoupV1,
   type HeightfieldRouteBuildInputReceiptV1,
+  type RouteBuildAnchorV1,
+  type RouteBuildInputReceiptV2,
+  type RouteHardRibbonV1,
   type StaticBlockingColliderV1,
+  type TraversalCapabilityEnvelopeV1,
 } from "@whitebox-world/traversal";
 import { isNil } from "lodash-es";
 
@@ -11,6 +16,10 @@ import {
   createHardRibbonProofV1,
   isSegmentInsideHardRibbonV1,
 } from "./hard-ribbon-proof.js";
+import {
+  collectBoundTraversalSurfaceGeometryV2,
+  collectUnboundStaticCollidersV2,
+} from "./heightfield-source.js";
 import type {
   EvaluateRouteRejectionProofInputV1,
   RouteRejectionCandidateV1,
@@ -87,6 +96,123 @@ interface GapPairV1 {
 export interface BuildSourceDerivedRouteRejectionProofInputV1 {
   readonly buildInputReceipt: HeightfieldRouteBuildInputReceiptV1;
   readonly isSourceProjectionConsistent: boolean;
+}
+
+export interface BuildSourceDerivedRouteRejectionProofInputV2 {
+  readonly buildInputReceipt: RouteBuildInputReceiptV2;
+  readonly isSourceProjectionConsistent: boolean;
+}
+
+interface RouteRejectionProofGeometryV1 {
+  readonly terrainEntityId: string;
+  readonly terrainKind: "bounded" | "empty";
+  readonly triangleSoup: CanonicalTriangleSoupV1 | undefined;
+  readonly capabilityEnvelope: TraversalCapabilityEnvelopeV1;
+  readonly startAnchor: RouteBuildAnchorV1;
+  readonly destinationAnchor: RouteBuildAnchorV1;
+  readonly hardRibbon: RouteHardRibbonV1;
+  readonly blockingColliders: readonly StaticBlockingColliderV1[];
+  readonly includeIntrinsicWalkableWidth?: boolean;
+  readonly includeZeroGapStepPairs?: boolean;
+  readonly admitWhenRelaxedKindPresent?: boolean;
+}
+
+function mergeTriangleSoupsV1(
+  soups: readonly CanonicalTriangleSoupV1[],
+): CanonicalTriangleSoupV1 {
+  const positionsMetersXYZ: number[] = [];
+  const triangleIndices: number[] = [];
+  for (const soup of soups) {
+    const vertexOffset = positionsMetersXYZ.length / 3;
+    positionsMetersXYZ.push(...soup.positionsMetersXYZ);
+    for (const triangleIndex of soup.triangleIndices) {
+      triangleIndices.push(vertexOffset + triangleIndex);
+    }
+  }
+  return { positionsMetersXYZ, triangleIndices };
+}
+
+function filterTriangleSoupToUpwardFacesOnlyV1(
+  soup: CanonicalTriangleSoupV1,
+  minimumUpwardNormalY = Number.MIN_VALUE,
+): CanonicalTriangleSoupV1 {
+  const positionsMetersXYZ: number[] = [];
+  const triangleIndices: number[] = [];
+  const pointAt = (index: number): Vec3 => [
+    soup.positionsMetersXYZ[index * 3]!,
+    soup.positionsMetersXYZ[index * 3 + 1]!,
+    soup.positionsMetersXYZ[index * 3 + 2]!,
+  ];
+  const appendVertex = (point: Vec3): number => {
+    const vertexIndex = positionsMetersXYZ.length / 3;
+    positionsMetersXYZ.push(point[0], point[1], point[2]);
+    return vertexIndex;
+  };
+  const minimumNy = minimumUpwardNormalY > 0 ? minimumUpwardNormalY : Number.MIN_VALUE;
+  for (let offset = 0; offset < soup.triangleIndices.length; offset += 3) {
+    const triangle: [Vec3, Vec3, Vec3] = [
+      pointAt(soup.triangleIndices[offset]!),
+      pointAt(soup.triangleIndices[offset + 1]!),
+      pointAt(soup.triangleIndices[offset + 2]!),
+    ];
+    const normal = triangleNormal(triangle);
+    const magnitude = Math.hypot(normal[0], normal[1], normal[2]);
+    if (!(magnitude > 0)) continue;
+    const unitY = normal[1] / magnitude;
+    if (!(unitY > 0) || unitY < minimumNy) continue;
+    triangleIndices.push(
+      appendVertex(triangle[0]),
+      appendVertex(triangle[1]),
+      appendVertex(triangle[2]),
+    );
+  }
+  return { positionsMetersXYZ, triangleIndices };
+}
+
+function geometryFromHeightfieldReceiptV1(
+  receipt: HeightfieldRouteBuildInputReceiptV1,
+): RouteRejectionProofGeometryV1 {
+  return {
+    terrainEntityId: receipt.input.terrainSource.terrainEntityId,
+    terrainKind: receipt.input.terrainSource.kind,
+    triangleSoup: receipt.input.terrainSource.kind === "bounded"
+      ? receipt.input.terrainSource.triangleSoup
+      : undefined,
+    capabilityEnvelope: receipt.input.capabilityEnvelope,
+    startAnchor: receipt.input.startAnchor,
+    destinationAnchor: receipt.input.destinationAnchor,
+    hardRibbon: receipt.input.hardRibbon,
+    blockingColliders: receipt.input.blockingColliders,
+  };
+}
+
+function geometryFromRouteBuildInputReceiptV2(
+  receipt: RouteBuildInputReceiptV2,
+): RouteRejectionProofGeometryV1 {
+  const boundSoups = collectBoundTraversalSurfaceGeometryV2(receipt.input)
+    .map((row) => row.triangleSoup);
+  return {
+    terrainEntityId: receipt.input.terrainSource.terrainEntityId,
+    terrainKind: receipt.input.terrainSource.kind,
+    triangleSoup: receipt.input.terrainSource.kind === "bounded"
+      ? filterTriangleSoupToUpwardFacesOnlyV1(
+          mergeTriangleSoupsV1(
+            boundSoups.length === 0
+              ? [receipt.input.terrainSource.triangleSoup]
+              : boundSoups,
+          ),
+          Math.cos(receipt.input.capabilityEnvelope.maxSlopeDegrees * Math.PI / 180),
+        )
+      : undefined,
+    capabilityEnvelope: receipt.input.capabilityEnvelope,
+    startAnchor: receipt.input.startAnchor,
+    destinationAnchor: receipt.input.destinationAnchor,
+    hardRibbon: receipt.input.hardRibbon,
+    blockingColliders: collectUnboundStaticCollidersV2(receipt.input),
+    includeIntrinsicWalkableWidth: true,
+    includeZeroGapStepPairs: true,
+    admitWhenRelaxedKindPresent: true,
+  };
 }
 
 function deepFreeze<T>(value: T): T {
@@ -679,13 +805,31 @@ function coveringOverheadEvidence(
   };
 }
 
+
+function triangleMinimumWidthMetersXZ(
+  points: readonly [Vec3, Vec3, Vec3],
+): number {
+  const ab = Math.hypot(points[1][0] - points[0][0], points[1][2] - points[0][2]);
+  const bc = Math.hypot(points[2][0] - points[1][0], points[2][2] - points[1][2]);
+  const ca = Math.hypot(points[0][0] - points[2][0], points[0][2] - points[2][2]);
+  const areaTwice = Math.abs(
+    (points[1][0] - points[0][0]) * (points[2][2] - points[0][2]) -
+    (points[1][2] - points[0][2]) * (points[2][0] - points[0][0]),
+  );
+  let longest = ab;
+  if (bc > longest) longest = bc;
+  if (ca > longest) longest = ca;
+  if (!(longest > 0)) return 0;
+  return areaTwice / longest;
+}
+
 function regionEvidence(
   triangle: Omit<SourceTriangleV1, "regionEvidence">,
-  receipt: HeightfieldRouteBuildInputReceiptV1,
+  receipt: RouteRejectionProofGeometryV1,
 ): RegionEvidenceV1 {
-  const envelope = receipt.input.capabilityEnvelope;
+  const envelope = receipt.capabilityEnvelope;
   const quantumMeters = envelope.positionQuantizationMeters;
-  const terrainEntityId = receipt.input.terrainSource.terrainEntityId;
+  const terrainEntityId = receipt.terrainEntityId;
   const evidence: CandidateEvidenceV1[] = [];
   const normal = triangleNormal(triangle.pointsMetersXYZ);
   const slopeDegrees = ceilingToQuantum(
@@ -706,7 +850,7 @@ function regionEvidence(
 
   const minimumGroundMeters = Math.min(...triangle.pointsMetersXYZ.map((point) => point[1]));
   const maximumGroundMeters = Math.max(...triangle.pointsMetersXYZ.map((point) => point[1]));
-  const lowColliders = receipt.input.blockingColliders
+  const lowColliders = receipt.blockingColliders
     .map((collider) => projectedCollider(
       collider,
       minimumGroundMeters,
@@ -717,8 +861,8 @@ function regionEvidence(
   const widthWitness = proveWidthInsufficient(
     triangle.pointsMetersXYZ,
     lowColliders,
-    receipt.input.hardRibbon.pointsMetersXZ,
-    receipt.input.hardRibbon.widthMeters,
+    receipt.hardRibbon.pointsMetersXZ,
+    receipt.hardRibbon.widthMeters,
     requiredRadiusMeters,
     WIDTH_PROOF_MAXIMUM_DEPTH,
   );
@@ -746,9 +890,38 @@ function regionEvidence(
     });
   }
 
+  if (
+    receipt.includeIntrinsicWalkableWidth === true &&
+    isNil(widthWitness)
+  ) {
+    const intrinsicWidthMeters = triangleMinimumWidthMetersXZ(
+      triangle.pointsMetersXYZ,
+    );
+    const requiredWidthMeters = normalizeZero(requiredRadiusMeters * 2);
+    if (intrinsicWidthMeters + GEOMETRY_EPSILON < requiredWidthMeters) {
+      evidence.push({
+        reason: {
+          kind: "width",
+          terrainEntityId,
+          relevantColliderSubshapeIds: [],
+          minimumObservedClearanceWidthMeters: floorToQuantum(
+            intrinsicWidthMeters,
+            quantumMeters,
+          ),
+          minimumRequiredClearanceWidthMeters: requiredWidthMeters,
+        },
+        witnessMetersXYZ: [
+          quantizeMeters(triangle.centroidMetersXYZ[0], quantumMeters),
+          quantizeMeters(triangle.centroidMetersXYZ[1], quantumMeters),
+          quantizeMeters(triangle.centroidMetersXYZ[2], quantumMeters),
+        ],
+      });
+    }
+  }
+
   const overhead = coveringOverheadEvidence(
     triangle,
-    receipt.input.blockingColliders,
+    receipt.blockingColliders,
     envelope.capsuleHeightMeters,
     quantumMeters,
     terrainEntityId,
@@ -766,15 +939,15 @@ function regionEvidence(
 }
 
 function sourceTriangles(
-  receipt: HeightfieldRouteBuildInputReceiptV1,
+  receipt: RouteRejectionProofGeometryV1,
 ): Readonly<{ triangles: readonly SourceTriangleV1[]; isConsistent: boolean }> {
-  if (receipt.input.terrainSource.kind !== "bounded") {
+  if (receipt.terrainKind !== "bounded" || isNil(receipt.triangleSoup)) {
     return { triangles: [], isConsistent: true };
   }
-  const quantumMeters = receipt.input.capabilityEnvelope.positionQuantizationMeters;
+  const quantumMeters = receipt.capabilityEnvelope.positionQuantizationMeters;
   const byId = new Map<string, SourceTriangleV1>();
   let isConsistent = true;
-  for (const raw of soupTriangles(receipt.input.terrainSource.triangleSoup)) {
+  for (const raw of soupTriangles(receipt.triangleSoup)) {
     const pointsUnitsXYZ = raw.map((point) =>
       pointToUnits(point, quantumMeters),
     ) as unknown as readonly [Vec3Units, Vec3Units, Vec3Units];
@@ -794,7 +967,7 @@ function sourceTriangles(
     const id = canonicalHashId("route-rejection-source-triangle", {
       kind: "route-rejection-source-triangle-identity",
       schemaVersion: 1,
-      terrainEntityId: receipt.input.terrainSource.terrainEntityId,
+      terrainEntityId: receipt.terrainEntityId,
       pointsUnitsXYZ: canonicalPoints,
     });
     const nodeId = canonicalHashId("route-rejection-node", {
@@ -985,9 +1158,9 @@ function evidenceFromRegion(region: RegionEvidenceV1): readonly CandidateEvidenc
 function sharedBoundaryEvidence(
   source: SourceBoundaryV1,
   target: SourceBoundaryV1,
-  receipt: HeightfieldRouteBuildInputReceiptV1,
+  receipt: RouteRejectionProofGeometryV1,
 ): CandidateEvidenceV1 | undefined {
-  const quantumMeters = receipt.input.capabilityEnvelope.positionQuantizationMeters;
+  const quantumMeters = receipt.capabilityEnvelope.positionQuantizationMeters;
   const sourceByProjectedPoint = new Map([
     [projectedPointKey(source.fromUnitsXYZ), source.fromUnitsXYZ],
     [projectedPointKey(source.toUnitsXYZ), source.toUnitsXYZ],
@@ -1006,13 +1179,13 @@ function sharedBoundaryEvidence(
     );
   }, 0);
   const observedMeters = unitsToMeters(observedUnits, quantumMeters);
-  if (!(observedMeters > receipt.input.capabilityEnvelope.maxStepHeightMeters)) return undefined;
+  if (!(observedMeters > receipt.capabilityEnvelope.maxStepHeightMeters)) return undefined;
   return {
     reason: {
       kind: "step",
-      terrainEntityId: receipt.input.terrainSource.terrainEntityId,
+      terrainEntityId: receipt.terrainEntityId,
       maximumObservedStepHeightMeters: observedMeters,
-      maximumAllowedStepHeightMeters: receipt.input.capabilityEnvelope.maxStepHeightMeters,
+      maximumAllowedStepHeightMeters: receipt.capabilityEnvelope.maxStepHeightMeters,
     },
     witnessMetersXYZ: [
       source.midpointMetersXYZ[0],
@@ -1049,10 +1222,10 @@ function routeTangentAt(point: Vec2, routePointsMetersXZ: readonly Vec2[]): Vec2
 function compatibleGapPair(
   left: SourceBoundaryV1,
   right: SourceBoundaryV1,
-  receipt: HeightfieldRouteBuildInputReceiptV1,
+  receipt: RouteRejectionProofGeometryV1,
 ): GapPairV1 | undefined {
   if (left.triangle.id === right.triangle.id) return undefined;
-  const quantumMeters = receipt.input.capabilityEnvelope.positionQuantizationMeters;
+  const quantumMeters = receipt.capabilityEnvelope.positionQuantizationMeters;
   const leftFrom = pointUnitsToMeters(left.fromUnitsXYZ, quantumMeters);
   const leftTo = pointUnitsToMeters(left.toUnitsXYZ, quantumMeters);
   const rightFrom = pointUnitsToMeters(right.fromUnitsXYZ, quantumMeters);
@@ -1068,7 +1241,7 @@ function compatibleGapPair(
   if (facingRatio > -0.999999) return undefined;
   const leftMidpointXZ: Vec2 = [left.midpointMetersXYZ[0], left.midpointMetersXYZ[2]];
   const rightMidpointXZ: Vec2 = [right.midpointMetersXYZ[0], right.midpointMetersXYZ[2]];
-  const tangent = routeTangentAt(leftMidpointXZ, receipt.input.hardRibbon.pointsMetersXZ);
+  const tangent = routeTangentAt(leftMidpointXZ, receipt.hardRibbon.pointsMetersXZ);
   if (isNil(tangent)) return undefined;
   const edgeTangentRatio = Math.abs(
     leftDirection[0] * tangent[0] + leftDirection[1] * tangent[1]
@@ -1079,27 +1252,33 @@ function compatibleGapPair(
     rightMidpointXZ[1] - leftMidpointXZ[1],
   ];
   const gapMetersRaw = Math.hypot(...connector);
+  const stepHeightMetersRaw = Math.abs(
+    left.midpointMetersXYZ[1] - right.midpointMetersXYZ[1],
+  );
+  const isZeroGapSeam = (
+    receipt.includeZeroGapStepPairs === true &&
+    !(gapMetersRaw > GEOMETRY_EPSILON)
+  );
   if (
-    !(gapMetersRaw > GEOMETRY_EPSILON) ||
-    gapMetersRaw > receipt.input.capabilityEnvelope.maximumEdgeLengthMeters
+    (!isZeroGapSeam && !(gapMetersRaw > GEOMETRY_EPSILON)) ||
+    gapMetersRaw > receipt.capabilityEnvelope.maximumEdgeLengthMeters
   ) return undefined;
-  const connectorTangentRatio = Math.abs(
-    connector[0] * tangent[0] + connector[1] * tangent[1]
-  ) / gapMetersRaw;
-  if (connectorTangentRatio < 0.999999) return undefined;
+  if (!isZeroGapSeam) {
+    const connectorTangentRatio = Math.abs(
+      connector[0] * tangent[0] + connector[1] * tangent[1]
+    ) / gapMetersRaw;
+    if (connectorTangentRatio < 0.999999) return undefined;
+  }
   const ribbon = createHardRibbonProofV1({
-    pointsMetersXZ: receipt.input.hardRibbon.pointsMetersXZ,
-    widthMeters: receipt.input.hardRibbon.widthMeters,
+    pointsMetersXZ: receipt.hardRibbon.pointsMetersXZ,
+    widthMeters: receipt.hardRibbon.widthMeters,
   });
   if (!isSegmentInsideHardRibbonV1(ribbon, leftMidpointXZ, rightMidpointXZ)) return undefined;
   return {
     left,
     right,
     gapMeters: ceilingToQuantum(gapMetersRaw, quantumMeters),
-    stepHeightMeters: ceilingToQuantum(
-      Math.abs(left.midpointMetersXYZ[1] - right.midpointMetersXYZ[1]),
-      quantumMeters,
-    ),
+    stepHeightMeters: ceilingToQuantum(stepHeightMetersRaw, quantumMeters),
     witnessMetersXYZ: [
       quantizeMeters((leftMidpointXZ[0] + rightMidpointXZ[0]) / 2, quantumMeters),
       quantizeMeters(
@@ -1113,13 +1292,13 @@ function compatibleGapPair(
 
 function mutuallyNearestGapPairs(
   boundaries: readonly SourceBoundaryV1[],
-  receipt: HeightfieldRouteBuildInputReceiptV1,
+  receipt: RouteRejectionProofGeometryV1,
 ): readonly GapPairV1[] | undefined {
   const options: GapPairV1[] = [];
   let comparisonCount = 0;
   for (let leftIndex = 0; leftIndex < boundaries.length; leftIndex += 1) {
     for (let rightIndex = leftIndex + 1; rightIndex < boundaries.length; rightIndex += 1) {
-      if (comparisonCount === receipt.input.capabilityEnvelope.maximumSearchSteps) {
+      if (comparisonCount === receipt.capabilityEnvelope.maximumSearchSteps) {
         return undefined;
       }
       comparisonCount += 1;
@@ -1156,11 +1335,11 @@ function mutuallyNearestGapPairs(
 }
 
 function proofBudgetExhaustedInput(
-  receipt: HeightfieldRouteBuildInputReceiptV1,
+  receipt: RouteRejectionProofGeometryV1,
   startNodeId: string,
   destinationNodeId: string,
 ): EvaluateRouteRejectionProofInputV1 {
-  const envelope = receipt.input.capabilityEnvelope;
+  const envelope = receipt.capabilityEnvelope;
   return deepFreeze({
     nodeIds: [startNodeId, destinationNodeId].sort(compareId),
     candidates: [],
@@ -1171,6 +1350,9 @@ function proofBudgetExhaustedInput(
     maximumNodes: envelope.maximumNodes,
     maximumEdges: envelope.maximumEdges,
     maximumSearchSteps: envelope.maximumSearchSteps,
+    ...(receipt.admitWhenRelaxedKindPresent === true
+      ? { admitWhenRelaxedKindPresent: true }
+      : {}),
   });
 }
 
@@ -1208,23 +1390,46 @@ export function buildSourceDerivedRouteRejectionProofInputV1(
   input: BuildSourceDerivedRouteRejectionProofInputV1,
 ): EvaluateRouteRejectionProofInputV1 | undefined {
   const receipt = assertHeightfieldRouteBuildInputReceiptV1(input.buildInputReceipt);
-  if (receipt.input.terrainSource.kind === "empty") return undefined;
-  const quantumMeters = receipt.input.capabilityEnvelope.positionQuantizationMeters;
+  return buildSourceDerivedRouteRejectionProofFromGeometryV1(
+    geometryFromHeightfieldReceiptV1(receipt),
+    input.isSourceProjectionConsistent,
+  );
+}
+
+export function buildSourceDerivedRouteRejectionProofInputV2(
+  input: BuildSourceDerivedRouteRejectionProofInputV2,
+): EvaluateRouteRejectionProofInputV1 | undefined {
+  const receipt = assertRouteBuildInputReceiptV2(input.buildInputReceipt);
+  return buildSourceDerivedRouteRejectionProofFromGeometryV1(
+    geometryFromRouteBuildInputReceiptV2(receipt),
+    input.isSourceProjectionConsistent,
+  );
+}
+
+function buildSourceDerivedRouteRejectionProofFromGeometryV1(
+  receipt: RouteRejectionProofGeometryV1,
+  isSourceProjectionConsistent: boolean,
+): EvaluateRouteRejectionProofInputV1 | undefined {
+  if (receipt.terrainKind === "empty") return undefined;
+  const quantumMeters = receipt.capabilityEnvelope.positionQuantizationMeters;
   const startNodeId = canonicalHashId("route-rejection-node", {
     kind: "route-rejection-node-identity",
     schemaVersion: 1,
     role: "start-anchor",
-    anchorEntityId: receipt.input.startAnchor.entityId,
+    anchorEntityId: receipt.startAnchor.entityId,
   });
   const destinationNodeId = canonicalHashId("route-rejection-node", {
     kind: "route-rejection-node-identity",
     schemaVersion: 1,
     role: "destination-anchor",
-    anchorEntityId: receipt.input.destinationAnchor.entityId,
+    anchorEntityId: receipt.destinationAnchor.entityId,
   });
-  const sourceTriangleCount =
-    receipt.input.terrainSource.triangleSoup.triangleIndices.length / 3;
-  if (sourceTriangleCount + 2 > receipt.input.capabilityEnvelope.maximumNodes) {
+  const sourceSoup = receipt.triangleSoup;
+  if (isNil(sourceSoup)) {
+    return proofBudgetExhaustedInput(receipt, startNodeId, destinationNodeId);
+  }
+  const sourceTriangleCount = sourceSoup.triangleIndices.length / 3;
+  if (sourceTriangleCount + 2 > receipt.capabilityEnvelope.maximumNodes) {
     return proofBudgetExhaustedInput(receipt, startNodeId, destinationNodeId);
   }
   const source = sourceTriangles(receipt);
@@ -1267,7 +1472,7 @@ export function buildSourceDerivedRouteRejectionProofInputV1(
         ],
         step?.witnessMetersXYZ ?? from.midpointMetersXYZ,
       ));
-      if (candidates.length > receipt.input.capabilityEnvelope.maximumEdges) {
+      if (candidates.length > receipt.capabilityEnvelope.maximumEdges) {
         return proofBudgetExhaustedInput(receipt, startNodeId, destinationNodeId);
       }
     }
@@ -1280,13 +1485,25 @@ export function buildSourceDerivedRouteRejectionProofInputV1(
   for (const gap of gapPairs) {
     for (const [from, to] of [[gap.left, gap.right], [gap.right, gap.left]] as const) {
       const stepEvidence: CandidateEvidenceV1[] =
-        gap.stepHeightMeters > receipt.input.capabilityEnvelope.maxStepHeightMeters
+        gap.stepHeightMeters > receipt.capabilityEnvelope.maxStepHeightMeters
           ? [{
               reason: {
                 kind: "step",
-                terrainEntityId: receipt.input.terrainSource.terrainEntityId,
+                terrainEntityId: receipt.terrainEntityId,
                 maximumObservedStepHeightMeters: gap.stepHeightMeters,
-                maximumAllowedStepHeightMeters: receipt.input.capabilityEnvelope.maxStepHeightMeters,
+                maximumAllowedStepHeightMeters: receipt.capabilityEnvelope.maxStepHeightMeters,
+              },
+              witnessMetersXYZ: gap.witnessMetersXYZ,
+            }]
+          : [];
+      const gapEvidence: CandidateEvidenceV1[] =
+        gap.gapMeters > 0
+          ? [{
+              reason: {
+                kind: "gap",
+                terrainEntityId: receipt.terrainEntityId,
+                maximumObservedSurfaceGapMeters: gap.gapMeters,
+                maximumAllowedSurfaceGapMeters: 0,
               },
               witnessMetersXYZ: gap.witnessMetersXYZ,
             }]
@@ -1299,30 +1516,22 @@ export function buildSourceDerivedRouteRejectionProofInputV1(
         [
           ...evidenceFromRegion(to.triangle.regionEvidence),
           ...stepEvidence,
-          {
-            reason: {
-              kind: "gap",
-              terrainEntityId: receipt.input.terrainSource.terrainEntityId,
-              maximumObservedSurfaceGapMeters: gap.gapMeters,
-              maximumAllowedSurfaceGapMeters: 0,
-            },
-            witnessMetersXYZ: gap.witnessMetersXYZ,
-          },
+          ...gapEvidence,
         ],
         gap.witnessMetersXYZ,
       ));
-      if (candidates.length > receipt.input.capabilityEnvelope.maximumEdges) {
+      if (candidates.length > receipt.capabilityEnvelope.maximumEdges) {
         return proofBudgetExhaustedInput(receipt, startNodeId, destinationNodeId);
       }
     }
   }
 
   const startPosition = pointUnitsToMeters(
-    pointToUnits(receipt.input.startAnchor.positionMetersXYZ, quantumMeters),
+    pointToUnits(receipt.startAnchor.positionMetersXYZ, quantumMeters),
     quantumMeters,
   );
   for (const triangle of anchorTriangles(
-    receipt.input.startAnchor.positionMetersXYZ,
+    receipt.startAnchor.positionMetersXYZ,
     source.triangles,
     quantumMeters,
   )) {
@@ -1330,20 +1539,20 @@ export function buildSourceDerivedRouteRejectionProofInputV1(
       "start",
       startNodeId,
       triangle.nodeId,
-      [receipt.input.startAnchor.entityId, triangle.id],
+      [receipt.startAnchor.entityId, triangle.id],
       evidenceFromRegion(triangle.regionEvidence),
       startPosition,
     ));
-    if (candidates.length > receipt.input.capabilityEnvelope.maximumEdges) {
+    if (candidates.length > receipt.capabilityEnvelope.maximumEdges) {
       return proofBudgetExhaustedInput(receipt, startNodeId, destinationNodeId);
     }
   }
   const destinationPosition = pointUnitsToMeters(
-    pointToUnits(receipt.input.destinationAnchor.positionMetersXYZ, quantumMeters),
+    pointToUnits(receipt.destinationAnchor.positionMetersXYZ, quantumMeters),
     quantumMeters,
   );
   for (const triangle of anchorTriangles(
-    receipt.input.destinationAnchor.positionMetersXYZ,
+    receipt.destinationAnchor.positionMetersXYZ,
     source.triangles,
     quantumMeters,
   )) {
@@ -1351,11 +1560,11 @@ export function buildSourceDerivedRouteRejectionProofInputV1(
       "destination",
       triangle.nodeId,
       destinationNodeId,
-      [triangle.id, receipt.input.destinationAnchor.entityId],
+      [triangle.id, receipt.destinationAnchor.entityId],
       [],
       destinationPosition,
     ));
-    if (candidates.length > receipt.input.capabilityEnvelope.maximumEdges) {
+    if (candidates.length > receipt.capabilityEnvelope.maximumEdges) {
       return proofBudgetExhaustedInput(receipt, startNodeId, destinationNodeId);
     }
   }
@@ -1372,10 +1581,13 @@ export function buildSourceDerivedRouteRejectionProofInputV1(
     startNodeId,
     destinationNodeId,
     isSourceProjectionConsistent:
-      input.isSourceProjectionConsistent && isInternallyConsistent,
+      isSourceProjectionConsistent && isInternallyConsistent,
     isProofBudgetExhausted: false,
-    maximumNodes: receipt.input.capabilityEnvelope.maximumNodes,
-    maximumEdges: receipt.input.capabilityEnvelope.maximumEdges,
-    maximumSearchSteps: receipt.input.capabilityEnvelope.maximumSearchSteps,
+    maximumNodes: receipt.capabilityEnvelope.maximumNodes,
+    maximumEdges: receipt.capabilityEnvelope.maximumEdges,
+    maximumSearchSteps: receipt.capabilityEnvelope.maximumSearchSteps,
+    ...(receipt.admitWhenRelaxedKindPresent === true
+      ? { admitWhenRelaxedKindPresent: true }
+      : {}),
   });
 }

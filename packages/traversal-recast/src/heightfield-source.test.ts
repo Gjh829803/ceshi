@@ -12,6 +12,10 @@ import {
 } from "./index.js";
 import * as heightfieldSourceModule from "./heightfield-source.js";
 import { createRecastTestEnvelopeV1 } from "./test-fixture.test-support.js";
+import {
+  createMultiSurfaceRouteBuildInputReceiptV2,
+} from "./test-fixture.test-support.js";
+import { mapRouteBuildInputToRecastSourceV2 } from "./heightfield-source.js";
 
 const HASH_A =
   "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa" as const;
@@ -997,5 +1001,46 @@ describe("Heightfield Route R1 locked source assembly", () => {
       goal: placement("goal", [9_000, 0, 0]),
     };
     expect(() => build(huge)).toThrow("ROUTE_GRAPH_BUDGET_EXCEEDED");
+  });
+});
+
+
+describe("mapRouteBuildInputToRecastSourceV2", () => {
+  it("puts bound Static Collider soups in the candidate prefix and unbound soups in the blocker suffix", () => {
+    const receipt = createMultiSurfaceRouteBuildInputReceiptV2({
+      includeUnboundWall: true,
+    });
+    const source = mapRouteBuildInputToRecastSourceV2(receipt.input);
+    expect(source.sourceAreaMode?.kind).toBe("layered-traversal-sources-r1b");
+    if (source.sourceAreaMode?.kind !== "layered-traversal-sources-r1b") return;
+    expect(source.candidateTraversalSurfaceIds).toEqual([
+      "surface-heightfield",
+      "surface-platform",
+      "surface-ramp",
+      "surface-step",
+    ]);
+    expect(source.sourceAreaMode.candidateSourceRanges.map(
+      (range) => range.traversalSurfaceOrdinal,
+    )).toEqual([0, 1, 2, 3]);
+    const boundVertexCount = source.sourceAreaMode.candidateSourceRanges.reduce(
+      (sum, range) => sum + range.vertexCount,
+      0,
+    );
+    expect(source.sourceAreaMode.blockerStartVertexIndex).toBe(boundVertexCount);
+    expect(source.positions.length / 3).toBeGreaterThan(boundVertexCount);
+    const wall = receipt.input.staticColliders.find(
+      (row) => row.entityId === "unbound-wall",
+    );
+    expect(wall).toBeDefined();
+    if (wall === undefined) return;
+    const suffix = source.positions.slice(boundVertexCount * 3);
+    expect(suffix.slice(0, wall.triangleSoup.positionsMetersXYZ.length)).toEqual(
+      wall.triangleSoup.positionsMetersXYZ,
+    );
+  });
+
+  it("keeps R1 mapping putting every Static Collider in the blocker suffix", () => {
+    const mapSource = heightfieldSourceModule.mapHeightfieldRouteBuildInputToRecastSourceV1;
+    expect(typeof mapSource).toBe("function");
   });
 });

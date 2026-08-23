@@ -11,6 +11,7 @@ describe("traversal-recast provider boundary", () => {
       "RouteConnectivityOperationAbortedErrorV1",
       "createHeightfieldRouteBuildInputV1",
       "evaluateRequiredHeightfieldRouteV1",
+      "evaluateRequiredRouteV2",
     ]);
 
     const publicSource = readFileSync(

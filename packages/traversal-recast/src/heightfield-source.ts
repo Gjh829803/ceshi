@@ -13,6 +13,7 @@ import {
   TRAVERSAL_AREA_COMPLEXITY_LIMITS_V1,
   validateSimplePolygonXZV1,
   validateTraversalAreaComplexityV1,
+  type CanonicalTraversalSurfaceTriangleSourceV1,
 } from "@whitebox-world/terrain-surface";
 import {
   assertHeightfieldRouteBuildInputV1,
@@ -26,10 +27,14 @@ import {
   type HeightfieldRouteBuildInputReceiptV1,
   type HeightfieldRouteBuildInputV1,
   type HeightfieldRouteTerrainSourceV1,
+  type RouteBuildInputV2,
   type StaticBlockingColliderV1,
+  type StaticColliderSourceV1,
   type TraversalCapabilityEnvelopeV1,
+  type TraversalSurfaceIdentityV1,
+  assertRouteBuildInputV2,
 } from "@whitebox-world/traversal";
-import { isEqual, isNil } from "lodash-es";
+import { isEmpty, isEqual, isNil } from "lodash-es";
 
 type Vec2 = readonly [number, number];
 type Vec3 = readonly [number, number, number];
@@ -1170,17 +1175,28 @@ export function createHeightfieldRouteBuildInputV1(
   });
 }
 
-export interface RecastHeightfieldSourceAreaModeV1 {
-  readonly kind: "terrain-with-static-blockers-r1";
-  readonly terrainVertexCount: number;
-  readonly blockerAreaId: 1;
-}
+export type RecastHeightfieldSourceAreaModeV1 =
+  | Readonly<{
+      kind: "terrain-with-static-blockers-r1";
+      terrainVertexCount: number;
+      blockerAreaId: 1;
+    }>
+  | Readonly<{
+      kind: "layered-traversal-sources-r1b";
+      candidateSourceRanges: readonly Readonly<{
+        traversalSurfaceOrdinal: number;
+        startVertexIndex: number;
+        vertexCount: number;
+      }>[];
+      blockerStartVertexIndex: number;
+    }>;
 
 export interface RecastHeightfieldSourceV1 {
   readonly positions: readonly number[];
   readonly indices: readonly number[];
   readonly bounds: readonly [Vec3, Vec3];
   readonly sourceAreaMode?: RecastHeightfieldSourceAreaModeV1;
+  readonly candidateTraversalSurfaceIds?: readonly string[];
 }
 
 export function mapHeightfieldRouteBuildInputToRecastSourceV1(
@@ -1253,5 +1269,175 @@ export function mapHeightfieldRouteBuildInputToRecastSourceV1(
       terrainVertexCount,
       blockerAreaId: 1,
     },
+  });
+}
+
+function appendSoup(
+  positions: number[],
+  indices: number[],
+  soup: CanonicalTriangleSoupV1,
+): { readonly startVertexIndex: number; readonly vertexCount: number } {
+  const startVertexIndex = positions.length / 3;
+  const vertexCount = soup.positionsMetersXYZ.length / 3;
+  positions.push(...soup.positionsMetersXYZ);
+  for (const triangleIndex of soup.triangleIndices) {
+    indices.push(startVertexIndex + triangleIndex);
+  }
+  return { startVertexIndex, vertexCount };
+}
+
+function boundsFromPositions(
+  positions: readonly number[],
+): readonly [Vec3, Vec3] {
+  let minimumX = Number.POSITIVE_INFINITY;
+  let maximumX = Number.NEGATIVE_INFINITY;
+  let minimumY = Number.POSITIVE_INFINITY;
+  let maximumY = Number.NEGATIVE_INFINITY;
+  let minimumZ = Number.POSITIVE_INFINITY;
+  let maximumZ = Number.NEGATIVE_INFINITY;
+  for (let offset = 0; offset < positions.length; offset += 3) {
+    const x = positions[offset]!;
+    const y = positions[offset + 1]!;
+    const z = positions[offset + 2]!;
+    minimumX = Math.min(minimumX, x);
+    maximumX = Math.max(maximumX, x);
+    minimumY = Math.min(minimumY, y);
+    maximumY = Math.max(maximumY, y);
+    minimumZ = Math.min(minimumZ, z);
+    maximumZ = Math.max(maximumZ, z);
+  }
+  return [
+    [minimumX, minimumY, minimumZ],
+    [maximumX, maximumY, maximumZ],
+  ];
+}
+
+export function mapRouteBuildInputToRecastSourceV2(
+  input: RouteBuildInputV2,
+): RecastHeightfieldSourceV1 {
+  const canonical = assertRouteBuildInputV2(input);
+  const positions: number[] = [];
+  const indices: number[] = [];
+  const candidateSourceRanges: Array<{
+    traversalSurfaceOrdinal: number;
+    startVertexIndex: number;
+    vertexCount: number;
+  }> = [];
+  const candidateTraversalSurfaceIds: string[] = [];
+  const terrainEntityId = canonical.terrainSource.terrainEntityId;
+  const colliderByKey = new Map(
+    canonical.staticColliders.map((row) => [
+      `${row.entityId}\0${row.colliderSubshapeId}`,
+      row,
+    ] as const),
+  );
+  const boundColliderKeys = new Set<string>();
+  let ordinal = 0;
+  for (const surface of canonical.traversalSurfaces) {
+    let soup: CanonicalTriangleSoupV1 | undefined;
+    if (surface.surfaceEntityId === terrainEntityId) {
+      soup = canonical.terrainSource.kind === "bounded"
+        ? canonical.terrainSource.triangleSoup
+        : undefined;
+    } else {
+      const key = `${surface.surfaceEntityId}\0${surface.colliderSubshapeId}` as `${string}\0${string}`;
+      boundColliderKeys.add(key);
+      soup = colliderByKey.get(key)?.triangleSoup;
+    }
+    if (isNil(soup) || isEmpty(soup.positionsMetersXYZ)) {
+      continue;
+    }
+    const range = appendSoup(positions, indices, soup);
+    candidateSourceRanges.push({
+      traversalSurfaceOrdinal: ordinal,
+      startVertexIndex: range.startVertexIndex,
+      vertexCount: range.vertexCount,
+    });
+    candidateTraversalSurfaceIds.push(surface.traversalSurfaceId);
+    ordinal += 1;
+  }
+  const blockerStartVertexIndex = positions.length / 3;
+  for (const collider of canonical.staticColliders) {
+    const key = `${collider.entityId}\0${collider.colliderSubshapeId}`;
+    if (boundColliderKeys.has(key) || isEmpty(collider.triangleSoup.positionsMetersXYZ)) {
+      continue;
+    }
+    appendSoup(positions, indices, collider.triangleSoup);
+  }
+  if (positions.length === 0) {
+    failStructural(
+      "contract-invalid",
+      "Route Build Input V2 must retain at least one candidate or blocker vertex.",
+    );
+  }
+  return deepFreeze({
+    positions: Object.freeze(positions),
+    indices: Object.freeze(indices),
+    bounds: deepFreeze(boundsFromPositions(positions)),
+    sourceAreaMode: {
+      kind: "layered-traversal-sources-r1b",
+      candidateSourceRanges,
+      blockerStartVertexIndex,
+    },
+    candidateTraversalSurfaceIds,
+  });
+}
+
+export interface BoundTraversalSurfaceGeometryV2 {
+  readonly identity: TraversalSurfaceIdentityV1;
+  readonly triangleSoup: CanonicalTriangleSoupV1;
+}
+
+function boundSurfaceSoupV2(
+  input: RouteBuildInputV2,
+  surface: TraversalSurfaceIdentityV1,
+): CanonicalTriangleSoupV1 | undefined {
+  if (surface.surfaceEntityId === input.terrainSource.terrainEntityId) {
+    return input.terrainSource.kind === "bounded"
+      ? input.terrainSource.triangleSoup
+      : undefined;
+  }
+  return input.staticColliders.find(
+    (row) =>
+      row.entityId === surface.surfaceEntityId &&
+      row.colliderSubshapeId === surface.colliderSubshapeId,
+  )?.triangleSoup;
+}
+
+export function collectBoundTraversalSurfaceGeometryV2(
+  input: RouteBuildInputV2,
+): readonly BoundTraversalSurfaceGeometryV2[] {
+  const canonical = assertRouteBuildInputV2(input);
+  return canonical.traversalSurfaces.flatMap((surface) => {
+    const triangleSoup = boundSurfaceSoupV2(canonical, surface);
+    if (isNil(triangleSoup) || isEmpty(triangleSoup.positionsMetersXYZ)) {
+      return [];
+    }
+    return [{ identity: surface, triangleSoup }];
+  });
+}
+
+export function collectBoundTraversalSurfaceQuerySourcesV2(
+  input: RouteBuildInputV2,
+): readonly CanonicalTraversalSurfaceTriangleSourceV1[] {
+  return collectBoundTraversalSurfaceGeometryV2(input).map((row) => ({
+    traversalSurfaceId: row.identity.traversalSurfaceId,
+    worldPositionsMetersXYZ: row.triangleSoup.positionsMetersXYZ,
+    triangleIndices: row.triangleSoup.triangleIndices,
+  }));
+}
+
+export function collectUnboundStaticCollidersV2(
+  input: RouteBuildInputV2,
+): readonly StaticColliderSourceV1[] {
+  const canonical = assertRouteBuildInputV2(input);
+  const boundKeys = new Set(
+    canonical.traversalSurfaces.map(
+      (surface) => `${surface.surfaceEntityId}\0${surface.colliderSubshapeId}`,
+    ),
+  );
+  return canonical.staticColliders.filter((collider) => {
+    const key = `${collider.entityId}\0${collider.colliderSubshapeId}`;
+    return !boundKeys.has(key) && !isEmpty(collider.triangleSoup.positionsMetersXYZ);
   });
 }

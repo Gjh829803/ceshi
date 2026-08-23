@@ -33,7 +33,10 @@ export type CanonicalTraversalPathSelectionV1 =
   | IncompletePathSelectionV1;
 
 export interface SelectCanonicalTraversalPathInputV1 {
-  readonly traversalGraph: TraversalGraphV1;
+  readonly traversalGraph: Pick<
+    TraversalGraphV1,
+    "traversalNodesById" | "traversalEdgesById"
+  >;
   readonly startTraversalNodeId: string;
   readonly destinationTraversalNodeId: string;
   readonly maximumEdgeLengthMeters: number;
