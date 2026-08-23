@@ -22,6 +22,8 @@ describe("RuntimeActivityCoordinator", () => {
 
     expect(first).toMatchObject({ status: "active" });
     expect(replay).toBe(first);
+    if (first.status !== "active") throw new Error("Expected active lease.");
+    expect(first.lease).not.toHaveProperty("status");
     expect(coordinator.snapshot()).toEqual({
       runtimeActivityEpoch: 1,
       activeRuntimeActivityCount: 1,
@@ -56,8 +58,9 @@ describe("RuntimeActivityCoordinator", () => {
     const acquired = coordinator.acquire(firstRequest, "world-session-1");
     if (acquired.status !== "active") throw new Error("Expected active lease.");
 
-    expect(acquired.release()).toMatchObject({ status: "released" });
-    expect(acquired.release()).toMatchObject({ status: "released" });
+    expect(acquired.lease.release()).toMatchObject({ status: "released" });
+    expect(acquired.lease.release()).toMatchObject({ status: "released" });
+    expect(acquired.lease).not.toHaveProperty("status");
     expect(coordinator.acquire(firstRequest, "world-session-1")).toMatchObject({
       status: "rejected",
       diagnostic: { code: "RUNTIME_ACTIVITY_NOT_ACTIVE" },
@@ -108,8 +111,8 @@ describe("RuntimeActivityCoordinator", () => {
       expect.objectContaining({ requestId: "runtime-run-1", status: "terminated-by-host" }),
       expect.objectContaining({ requestId: "take-2", status: "terminated-by-host" }),
     ]);
-    expect(first.release()).toMatchObject({ status: "terminated-by-host" });
-    expect(second.release()).toMatchObject({ status: "terminated-by-host" });
+    expect(first.lease.release()).toMatchObject({ status: "terminated-by-host" });
+    expect(second.lease.release()).toMatchObject({ status: "terminated-by-host" });
     expect(coordinator.snapshot()).toEqual({
       runtimeActivityEpoch: 3,
       activeRuntimeActivityCount: 0,
@@ -142,4 +145,56 @@ describe("RuntimeActivityCoordinator", () => {
     expect(reads).toBe(0);
     expect(coordinator.snapshot().runtimeActivityEpoch).toBe(0);
   });
+
+  it("snapshots exact constructor options once and rejects hostile shapes", () => {
+    let reads = 0;
+    const accessorOptions = {} as Record<string, unknown>;
+    Object.defineProperty(accessorOptions, "maximumRuntimeActivityRecordCount", {
+      enumerable: true,
+      get: () => {
+        reads += 1;
+        return reads < 3 ? 1 : -1;
+      },
+    });
+
+    for (const options of [
+      accessorOptions,
+      { maximumRuntimeActivityRecordCount: 1, extra: true },
+      { maximumRuntimeActivityRecordCount: 1, [Symbol("hidden")]: true },
+      Object.assign(Object.create({ inherited: true }), {
+        maximumRuntimeActivityRecordCount: 1,
+      }),
+    ]) {
+      expect(() => new RuntimeActivityCoordinator(options)).toThrow(
+        /maximumRuntimeActivityRecordCount/,
+      );
+    }
+    expect(reads).toBe(0);
+  });
+
+  it.each(["released", "terminated-by-host"] as const)(
+    "keeps a %s record in retention capacity",
+    (terminalStatus) => {
+      const coordinator = new RuntimeActivityCoordinator({
+        maximumRuntimeActivityRecordCount: 1,
+      });
+      const acquired = coordinator.acquire(firstRequest, "world-session-1");
+      if (acquired.status !== "active") throw new Error("Expected active lease.");
+      if (terminalStatus === "released") acquired.lease.release();
+      else coordinator.terminateAll();
+
+      expect(coordinator.acquire({
+        kind: "control-capture",
+        requestId: "capture-after-terminal",
+        payloadHash: `sha256:${"4".repeat(64)}`,
+      }, "world-session-1")).toMatchObject({
+        status: "rejected",
+        diagnostic: { code: "RUNTIME_HOST_CAPACITY_EXCEEDED" },
+      });
+      expect(coordinator.snapshot()).toMatchObject({
+        activeRuntimeActivityCount: 0,
+        retainedRuntimeActivityRecordCount: 1,
+      });
+    },
+  );
 });

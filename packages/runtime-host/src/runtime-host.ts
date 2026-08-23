@@ -26,13 +26,17 @@ export interface RuntimeActivityRecordV1 extends RuntimeActivityRequestV1 {
   readonly status: RuntimeActivityStatusV1;
 }
 
-export interface RuntimeActivityLeaseV1 extends RuntimeActivityRecordV1 {
-  readonly status: "active";
+export interface RuntimeActivityLeaseV1 extends RuntimeActivityRequestV1 {
+  readonly boundWorldSessionId: string;
+  readonly runtimeActivityEpoch: number;
   release(): RuntimeActivityRecordV1;
 }
 
 export type RuntimeActivityAcquireResultV1 =
-  | RuntimeActivityLeaseV1
+  | Readonly<{
+      status: "active";
+      lease: RuntimeActivityLeaseV1;
+    }>
   | Readonly<{
       status: "rejected";
       diagnostic: GameplayDiagnosticV1;
@@ -49,6 +53,10 @@ interface RetainedRuntimeActivityV1 {
   readonly boundWorldSessionId: string;
   readonly acquiredEpoch: number;
   readonly lease: RuntimeActivityLeaseV1;
+  readonly acquisition: Extract<
+    RuntimeActivityAcquireResultV1,
+    { status: "active" }
+  >;
   status: RuntimeActivityStatusV1;
 }
 
@@ -149,21 +157,34 @@ function toRecord(retained: RetainedRuntimeActivityV1): RuntimeActivityRecordV1 
   });
 }
 
+function parseRuntimeActivityCoordinatorOptions(
+  input: unknown,
+): Readonly<{ maximumRuntimeActivityRecordCount: number }> {
+  const record = snapshotDataRecord(input);
+  if (
+    isNil(record) ||
+    !hasExactKeys(record, ["maximumRuntimeActivityRecordCount"]) ||
+    !Number.isSafeInteger(record.maximumRuntimeActivityRecordCount) ||
+    (record.maximumRuntimeActivityRecordCount as number) <= 0
+  ) {
+    throw new RangeError(
+      "maximumRuntimeActivityRecordCount must be a positive safe integer in an exact data object.",
+    );
+  }
+  return Object.freeze({
+    maximumRuntimeActivityRecordCount:
+      record.maximumRuntimeActivityRecordCount as number,
+  });
+}
+
 export class RuntimeActivityCoordinator {
   private readonly maximumRuntimeActivityRecordCount: number;
   private readonly retainedByRequestId = new Map<string, RetainedRuntimeActivityV1>();
   private runtimeActivityEpoch = 0;
   private activeRuntimeActivityCount = 0;
 
-  constructor(options: Readonly<{ maximumRuntimeActivityRecordCount: number }>) {
-    if (
-      !Number.isSafeInteger(options.maximumRuntimeActivityRecordCount) ||
-      options.maximumRuntimeActivityRecordCount <= 0
-    ) {
-      throw new RangeError(
-        "maximumRuntimeActivityRecordCount must be a positive safe integer.",
-      );
-    }
+  constructor(optionsInput: unknown) {
+    const options = parseRuntimeActivityCoordinatorOptions(optionsInput);
     this.maximumRuntimeActivityRecordCount =
       options.maximumRuntimeActivityRecordCount;
   }
@@ -194,7 +215,7 @@ export class RuntimeActivityCoordinator {
           `Runtime Activity request '${request.requestId}' is already terminal.`,
         );
       }
-      return retained.lease;
+      return retained.acquisition;
     }
 
     if (
@@ -208,23 +229,27 @@ export class RuntimeActivityCoordinator {
 
     this.runtimeActivityEpoch += 1;
     this.activeRuntimeActivityCount += 1;
-    const retainedActivity = {} as RetainedRuntimeActivityV1;
+    let retainedActivity: RetainedRuntimeActivityV1;
     const lease = Object.freeze({
       ...request,
       boundWorldSessionId,
       runtimeActivityEpoch: this.runtimeActivityEpoch,
-      status: "active" as const,
       release: (): RuntimeActivityRecordV1 => this.release(retainedActivity),
     });
-    Object.assign(retainedActivity, {
+    const acquisition = Object.freeze({
+      status: "active" as const,
+      lease,
+    });
+    retainedActivity = {
       request,
       boundWorldSessionId,
       acquiredEpoch: this.runtimeActivityEpoch,
       lease,
+      acquisition,
       status: "active" as const,
-    });
+    };
     this.retainedByRequestId.set(request.requestId, retainedActivity);
-    return lease;
+    return acquisition;
   }
 
   terminateAll(): readonly RuntimeActivityRecordV1[] {
