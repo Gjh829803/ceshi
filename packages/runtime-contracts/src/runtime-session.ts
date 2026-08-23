@@ -11,7 +11,6 @@ import type {
 } from "./browser-route-evidence";
 import type { CameraTuningV1 } from "./camera-parameter-contract";
 import type { Vec3 } from "./execution-plan";
-import type { NumericProfileOverrideV1 } from "./subject-preset";
 import type { SubjectPresetBaselineV1 } from "./subject-preset";
 
 export type SemanticInputActionV1 =
@@ -136,10 +135,6 @@ export interface ApplySubjectPresetTuningRequestV1 {
   selectedMotionProfileRef: string;
   selectedControlFeelProfileRef: string;
   selectedControlProfileRef: string;
-  cameraOverridesByProfileRef: Readonly<
-    Record<string, NumericProfileOverrideV1>
-  >;
-  cameraPreference: string;
 }
 
 export interface SubjectPresetTuningReceiptV1 {
@@ -164,12 +159,10 @@ export interface WorldRuntimeSnapshotV3 {
     activeCameraProfileRef?: string;
     activeCameraRigRef?: string;
     activeCameraModifierRefs?: readonly string[];
-    preference?: string;
     safeFallbackActive?: boolean;
     viewYawOffsetRadians?: number;
     viewPitchOffsetRadians?: number;
     viewDistanceOffsetMeters?: number;
-    tuning?: Readonly<CameraTuningV1>;
   };
   physics: { backend: "havok"; ready: boolean; fixedTimeStepSeconds: number };
   resources: {
@@ -177,6 +170,19 @@ export interface WorldRuntimeSnapshotV3 {
     bodies: number;
     terrainSamples: number;
   };
+}
+
+export interface ApplyCameraPreviewRequestV1 {
+  readonly tuningByProfileRef: Readonly<Record<string, Readonly<CameraTuningV1>>>;
+}
+
+export interface CameraPreviewStateV1 {
+  readonly kind: "worldkit-camera-preview-state";
+  readonly schemaVersion: 1;
+  readonly activeCameraProfileRef: string;
+  readonly activeCameraRigRef: string;
+  readonly activeCameraModifierRefs: readonly string[];
+  readonly tuningByProfileRef: Readonly<Record<string, Readonly<CameraTuningV1>>>;
 }
 
 export interface ControlCaptureCapabilitiesV1 {
@@ -385,10 +391,12 @@ export interface WorldkitBrowserApiV5 {
     subjectDefinitionRef: string,
   ): SubjectPackageValidationResultV1;
   setIntent?(input: FixedInputV1): Promise<WorldRuntimeSnapshotV3>;
-  setCameraPreference?(preference: string): WorldRuntimeSnapshotV3;
+  requestCameraProfile?(profileRef: string): WorldRuntimeSnapshotV3;
+  resetCameraProfile?(): WorldRuntimeSnapshotV3;
   adjustCameraView?(input: CameraViewInputV1): WorldRuntimeSnapshotV3;
   resetCameraView?(): WorldRuntimeSnapshotV3;
-  setCameraTuning?(tuning: CameraTuningV1): WorldRuntimeSnapshotV3;
+  getCameraPreviewState?(): CameraPreviewStateV1;
+  applyCameraPreview?(request: ApplyCameraPreviewRequestV1): CameraPreviewStateV1;
   applySubjectPresetTuning?(
     request: ApplySubjectPresetTuningRequestV1,
   ): SubjectPresetTuningReceiptV1;

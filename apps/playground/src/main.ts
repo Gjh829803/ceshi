@@ -33,6 +33,7 @@ import {
   type SubjectPresetWorkingDraftV1,
 } from "./subject-preset-local.js";
 import {
+  cameraPreviewRequestFromDraftV1,
   createSubjectPresetWorkbenchDraftV1,
   normalizeSubjectPresetCameraPreferenceV1,
   subjectPresetTuningRequestFromDraftV1,
@@ -773,6 +774,13 @@ function installTuningWorkbench(
         saveStatus.textContent = `版本没有应用：${receipt.diagnostic?.message ?? "配置与当前主体不匹配"}`;
         return false;
       }
+      const cameraRef = draft.selectedCameraPreferenceRef;
+      if (cameraRef === null) {
+        api.resetCameraProfile?.();
+      } else {
+        api.requestCameraProfile?.(cameraRef);
+      }
+      api.applyCameraPreview?.(cameraPreviewRequestFromDraftV1(draft));
       const compactCameraSelect = document.querySelector<HTMLSelectElement>("#camera-preference-select");
       if (compactCameraSelect !== null) {
         compactCameraSelect.value = cameraPreference;
@@ -894,7 +902,9 @@ function installTuningWorkbench(
       ? {}
       : { ...(cameraTuningByProfileRef[profile.resourceRef] ?? {}) } as CameraTuningV1;
     try {
-      api.setCameraTuning?.(cameraTuning);
+      api.applyCameraPreview?.({
+        tuningByProfileRef: cameraTuningByProfileRef as Record<string, CameraTuningV1>,
+      });
     } catch {
       saveStatus.textContent = "相机微调未能应用，原镜头设置已保留";
     }
@@ -998,7 +1008,11 @@ function installTuningWorkbench(
       button.disabled = row.resourceRef === cameraPreference;
       button.addEventListener("click", () => {
         try {
-          api.setCameraPreference?.(row.resourceRef);
+          if (row.resourceRef === "auto") {
+            api.resetCameraProfile?.();
+          } else {
+            api.requestCameraProfile?.(row.resourceRef);
+          }
           cameraPreference = row.resourceRef;
           syncCompactCameraSelect();
           writeLocalDraft("worldkit.camera-preference", row.resourceRef);
@@ -1480,7 +1494,11 @@ function installCapabilityAuthoringPanel(
   ) {
     cameraSelect.value = storedCameraPreference;
     try {
-      api.setCameraPreference?.(storedCameraPreference);
+      if (storedCameraPreference === "auto") {
+        api.resetCameraProfile?.();
+      } else {
+        api.requestCameraProfile?.(storedCameraPreference);
+      }
     } catch {
       cameraSelect.value = "auto";
     }
@@ -1571,7 +1589,11 @@ function installCapabilityAuthoringPanel(
   });
   cameraSelect.addEventListener("change", () => {
     try {
-      api.setCameraPreference?.(cameraSelect.value);
+      if (cameraSelect.value === "auto") {
+        api.resetCameraProfile?.();
+      } else {
+        api.requestCameraProfile?.(cameraSelect.value);
+      }
       writeLocalDraft("worldkit.camera-preference", cameraSelect.value);
       tuningWorkbench.setCameraPreferenceFromCompact(cameraSelect.value);
     } catch {

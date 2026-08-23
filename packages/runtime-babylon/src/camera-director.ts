@@ -4,6 +4,7 @@ import { Vector3 } from "@babylonjs/core/Maths/math.vector.js";
 import type { Scene } from "@babylonjs/core/scene.pure.js";
 
 import type {
+  CameraPreviewStateV1,
   CameraTuningV1,
   CameraViewInputV1,
   ExecutionCameraModifierProfileV1,
@@ -20,18 +21,14 @@ import {
   validateCameraTuningV1,
 } from "@whitebox-world/runtime-contracts";
 
-export type CameraPreferenceV1 = "auto" | "first-person" | string;
-
 export interface CameraDirectorSnapshotV1 {
   activeCameraProfileRef: string;
   activeCameraRigRef: string;
   activeCameraModifierRefs: readonly string[];
-  preference: CameraPreferenceV1;
   fallbackActive: boolean;
   viewYawOffsetRadians: number;
   viewPitchOffsetRadians: number;
   viewDistanceOffsetMeters: number;
-  tuning: Readonly<CameraTuningV1>;
 }
 
 type CameraContextV1 = ExecutionSubjectCapabilityAssemblyV1["cameraContext"];
@@ -137,7 +134,7 @@ function ruleMatches(
 
 export class CameraDirectorV1 {
   private initialized = false;
-  private preference: CameraPreferenceV1 = "auto";
+  private explicitProfileRef: string | undefined;
   private activeProfileRef: string;
   private activeRigRef = "worldkit://camera-rig/orbit-follow@1";
   private activeModifierRefs: readonly string[] = [];
@@ -178,10 +175,14 @@ export class CameraDirectorV1 {
     this.activeProfileRef = executionPlan.camera.rigRef;
   }
 
-  setPreference(preference: CameraPreferenceV1): boolean {
-    if (preference.trim().length === 0) return false;
-    this.preference = preference;
+  requestProfile(profileRef: string): boolean {
+    if (profileRef.trim().length === 0) return false;
+    this.explicitProfileRef = profileRef;
     return true;
+  }
+
+  resetProfileSelection(): void {
+    this.explicitProfileRef = undefined;
   }
 
   setInputActions(actions: readonly SemanticInputActionV1[]): void {
@@ -232,34 +233,13 @@ export class CameraDirectorV1 {
     this.baseHeadingIdentity = undefined;
   }
 
-  setTuning(tuning: CameraTuningV1): boolean {
-    const profile = this.resolveActiveCameraProfile();
-    const result = validateCameraTuningV1(
-      {
-        algorithmRef: profile?.algorithmRef ?? this.activeRigRef,
-        ...(profile === undefined ? {} : { parameters: profile.parameters }),
-      },
-      tuning,
-    );
-    if (!result.ok) return false;
-    this.tuningByProfileRef.set(this.activeProfileRef, result.tuning);
-    return true;
-  }
-
-  replacePresetTunings(
+  applyPreview(
     tuningByProfileRef: Readonly<Record<string, CameraTuningV1>>,
     profiles: readonly ExecutionCameraRigProfileV1[],
-    preference: CameraPreferenceV1,
   ): boolean {
     const profilesByRef = new Map(
       profiles.map((profile) => [profile.resourceRef, profile] as const),
     );
-    if (
-      preference.trim().length === 0 ||
-      (preference !== "auto" &&
-        preference !== "first-person" &&
-        !profilesByRef.has(preference))
-    ) return false;
     const nextTunings = new Map<string, CameraTuningV1>();
     for (const [profileRef, tuning] of Object.entries(tuningByProfileRef)) {
       const profile = profilesByRef.get(profileRef);
@@ -279,7 +259,6 @@ export class CameraDirectorV1 {
     for (const [profileRef, tuning] of nextTunings) {
       this.tuningByProfileRef.set(profileRef, tuning);
     }
-    this.preference = preference;
     return true;
   }
 
@@ -579,12 +558,26 @@ export class CameraDirectorV1 {
       activeCameraProfileRef: this.activeProfileRef,
       activeCameraRigRef: this.activeRigRef,
       activeCameraModifierRefs: this.activeModifierRefs,
-      preference: this.preference,
       fallbackActive: this.fallbackActive,
       viewYawOffsetRadians: this.viewYawOffsetRadians,
       viewPitchOffsetRadians: this.viewPitchOffsetRadians,
       viewDistanceOffsetMeters: this.viewDistanceOffsetMeters,
-      tuning: { ...(this.tuningByProfileRef.get(this.activeProfileRef) ?? {}) },
+    };
+  }
+
+  previewState(): CameraPreviewStateV1 {
+    return {
+      kind: "worldkit-camera-preview-state",
+      schemaVersion: 1,
+      activeCameraProfileRef: this.activeProfileRef,
+      activeCameraRigRef: this.activeRigRef,
+      activeCameraModifierRefs: this.activeModifierRefs,
+      tuningByProfileRef: Object.fromEntries(
+        [...this.tuningByProfileRef].map(([profileRef, tuning]) => [
+          profileRef,
+          { ...tuning },
+        ]),
+      ),
     };
   }
 
@@ -719,11 +712,8 @@ export class CameraDirectorV1 {
       .sort((left, right) => right.priority - left.priority || left.id.localeCompare(right.id))
       .filter((rule) => ruleMatches(rule, sample));
     let selectedRef: string;
-    if (this.preference === "first-person") {
-      selectedRef =
-        context.firstPersonCameraRigProfileRef ?? context.defaultCameraRigProfileRef;
-    } else if (this.preference !== "auto" && byRef.has(this.preference)) {
-      selectedRef = this.preference;
+    if (this.explicitProfileRef !== undefined && byRef.has(this.explicitProfileRef)) {
+      selectedRef = this.explicitProfileRef;
     } else {
       selectedRef = matchingRules.find(
         (rule) => rule.cameraRigProfileRef !== undefined,
@@ -825,15 +815,5 @@ export class CameraDirectorV1 {
     );
     this.fallbackActive = false;
     this.initialized = true;
-  }
-
-  private resolveActiveCameraProfile(): ExecutionCameraRigProfileV1 | undefined {
-    for (const subject of this.executionPlan.subjects) {
-      const profile = subject.capabilityAssembly?.cameraContext.cameraRigProfiles.find(
-        (candidate) => candidate.resourceRef === this.activeProfileRef,
-      );
-      if (profile !== undefined) return profile;
-    }
-    return undefined;
   }
 }

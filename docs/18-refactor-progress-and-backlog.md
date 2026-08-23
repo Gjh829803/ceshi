@@ -413,10 +413,12 @@ placement-layout / rigged-subject / g-bot-subject）；专项规格见
   Runtime 会话类型不再暴露 Feel/Control 数字袋方言。草稿数字只在 authoring workspace，
   发布时物化新 Registry 版本。
 - [ ] **P1.5 合入后仍待收尾**（不阻塞 Ground/Air 首切片）：
-  1. 相机仍保留会话数字 overlay（`setCameraTuning`、
-     `applySubjectPresetTuning.cameraOverridesByProfileRef`、Snapshot `camera.tuning`）。
-     后续与 Feel 一样收成锁定 Camera Profile Ref，或明确把相机预览定义为独立会话状态。
-  2. P1.5 + Subject Preset 合并后的整支分支对抗审查另开，不把它当成合入门禁。
+  1. [x] 相机数字 overlay 已收口：删除 `setCameraTuning`、`applySubjectPresetTuning.cameraOverridesByProfileRef`
+     与 Snapshot `camera.tuning` / `camera.preference`；production 只认锁定 Camera Profile Ref
+     （`requestCameraProfile` / `resetCameraProfile`），实时预览走显式非 Gameplay 的 preview 通道
+     （`getCameraPreviewState` / `applyCameraPreview`）。实施见
+     [`P1.5 相机收尾`](superpowers/plans/2026-08-23-p15-camera-tuning-cleanup.md)。
+  2. [ ] P1.5 + Subject Preset 合并后的整支分支对抗审查另开，不把它当成合入门禁。
 
 完成标准：仅替换版本化 Profile 就能改变主体的加减速、转向、介质重力/阻力和浮力，
 同一输入与 Registry Lock 在固定 Tick 下得到相同 Snapshot/Hash；普通场景 JSON 不需要

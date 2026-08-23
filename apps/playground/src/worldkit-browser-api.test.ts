@@ -509,10 +509,12 @@ describe("installDeferredWorldkitBrowserApi", () => {
       "getSubjectPresetBaseline",
       "validateSubjectPackage",
       "setIntent",
-      "setCameraPreference",
+      "requestCameraProfile",
+      "resetCameraProfile",
       "adjustCameraView",
       "resetCameraView",
-      "setCameraTuning",
+      "getCameraPreviewState",
+      "applyCameraPreview",
       "applySubjectPresetTuning",
       "setMotionProfile",
       "runHarness",
@@ -526,7 +528,7 @@ describe("installDeferredWorldkitBrowserApi", () => {
       "getRouteOverlay",
     ] as const;
 
-    expect(inheritedMethodNames).toHaveLength(27);
+    expect(inheritedMethodNames).toHaveLength(29);
     for (const methodName of [...inheritedMethodNames, ...routeGetterNames]) {
       expect(installation.api[methodName]).toEqual(expect.any(Function));
     }

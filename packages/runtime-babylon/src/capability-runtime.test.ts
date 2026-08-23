@@ -207,22 +207,28 @@ describe("capability package runtime smoke tests", () => {
           .camera.activeCameraModifierRefs,
       ).toContain("worldkit://camera-modifier/sprint-emphasis@1");
       for (const [cameraProfileRef, cameraRigRef] of CAMERA_PROFILES) {
-        const camera = runtime.setCameraPreference(cameraProfileRef).camera;
+        const camera = runtime.requestCameraProfile(cameraProfileRef).camera;
         expect(camera).toMatchObject({
           activeCameraProfileRef: cameraProfileRef,
           activeCameraRigRef: cameraRigRef,
-          preference: cameraProfileRef,
           safeFallbackActive: false,
         });
         expect(camera.positionMetersXYZ.every(Number.isFinite)).toBe(true);
       }
-      runtime.setCameraPreference("worldkit://camera-profile/first-person.standard@1");
-      expect(() => runtime.setCameraTuning({ distanceMeters: 6 }))
-        .toThrow(/supported registered finite parameters/);
-      expect(() => runtime.setCameraTuning({
-        minimumDistanceMeters: 1,
-      } as never)).toThrow(/supported registered finite parameters/);
-      runtime.setCameraPreference("worldkit://camera-profile/orbit.medium@1");
+      runtime.requestCameraProfile("worldkit://camera-profile/first-person.standard@1");
+      expect(() => runtime.applyCameraPreview({
+        tuningByProfileRef: {
+          "worldkit://camera-profile/first-person.standard@1": { distanceMeters: 6 },
+        },
+      })).toThrow(/SUBJECT_PRESET_INVALID_CAMERA_TUNING/);
+      expect(() => runtime.applyCameraPreview({
+        tuningByProfileRef: {
+          "worldkit://camera-profile/first-person.standard@1": {
+            minimumDistanceMeters: 1,
+          } as never,
+        },
+      })).toThrow(/SUBJECT_PRESET_INVALID_CAMERA_TUNING/);
+      runtime.requestCameraProfile("worldkit://camera-profile/orbit.medium@1");
       const adjustedCamera = runtime.adjustCameraView({
         yawDeltaRadians: 0.5,
         pitchDeltaRadians: 0.2,
@@ -231,26 +237,40 @@ describe("capability package runtime smoke tests", () => {
       expect(adjustedCamera.viewYawOffsetRadians).toBeGreaterThan(0);
       expect(adjustedCamera.viewPitchOffsetRadians).toBeGreaterThan(0);
       expect(adjustedCamera.viewDistanceOffsetMeters).toBeGreaterThan(0);
-      expect(runtime.setCameraTuning({
-        distanceMeters: 6,
-        rotationDampingPerSecond: 18,
-        lookAheadSeconds: 0.4,
-      }).camera.tuning).toEqual({
-        distanceMeters: 6,
-        rotationDampingPerSecond: 18,
-        lookAheadSeconds: 0.4,
+      const orbitPreview = runtime.applyCameraPreview({
+        tuningByProfileRef: {
+          "worldkit://camera-profile/orbit.medium@1": {
+            distanceMeters: 6,
+            rotationDampingPerSecond: 18,
+            lookAheadSeconds: 0.4,
+          },
+        },
       });
-      expect(() => runtime.setCameraTuning({
-        inventedCameraKnob: 1,
-      } as never)).toThrow(/supported registered finite parameters/);
-      expect(() => runtime.setCameraTuning({ targetHeightMeters: 999 }))
-        .toThrow(/supported registered finite parameters/);
-      expect(() => runtime.setCameraTuning({ pitchRadians: 1.3 }))
-        .toThrow(/supported registered finite parameters/);
+      expect(orbitPreview.tuningByProfileRef["worldkit://camera-profile/orbit.medium@1"])
+        .toEqual({
+          distanceMeters: 6,
+          rotationDampingPerSecond: 18,
+          lookAheadSeconds: 0.4,
+        });
+      expect(() => runtime.applyCameraPreview({
+        tuningByProfileRef: {
+          "worldkit://camera-profile/orbit.medium@1": { inventedCameraKnob: 1 } as never,
+        },
+      })).toThrow(/SUBJECT_PRESET_INVALID_CAMERA_TUNING/);
+      expect(() => runtime.applyCameraPreview({
+        tuningByProfileRef: {
+          "worldkit://camera-profile/orbit.medium@1": { targetHeightMeters: 999 },
+        },
+      })).toThrow(/SUBJECT_PRESET_INVALID_CAMERA_TUNING/);
+      expect(() => runtime.applyCameraPreview({
+        tuningByProfileRef: {
+          "worldkit://camera-profile/orbit.medium@1": { pitchRadians: 1.3 },
+        },
+      })).toThrow(/SUBJECT_PRESET_INVALID_CAMERA_TUNING/);
       runtime.resetCameraView();
-      expect(runtime.setCameraPreference("auto").camera.preference).toBe("auto");
+      expect(runtime.resetCameraProfile().camera).not.toHaveProperty("preference");
       runtime.reset();
-      runtime.setCameraPreference("worldkit://camera-profile/orbit.medium@1");
+      runtime.requestCameraProfile("worldkit://camera-profile/orbit.medium@1");
       const runRenderedFixedInput = async (
         actions: readonly ("move-left")[],
         ticks: number,
@@ -279,13 +299,13 @@ describe("capability package runtime smoke tests", () => {
         .toBeGreaterThan(0.9);
 
       runtime.reset();
-      runtime.setCameraPreference("worldkit://camera-profile/orbit.medium@1");
+      runtime.requestCameraProfile("worldkit://camera-profile/orbit.medium@1");
       const movingNormally = await runtime.runFixedInput({
         actions: ["move-forward"],
         ticks: 60,
       });
       runtime.reset();
-      runtime.setCameraPreference("worldkit://camera-profile/orbit.medium@1");
+      runtime.requestCameraProfile("worldkit://camera-profile/orbit.medium@1");
       const movingWhileLookingBack = await runtime.runFixedInput({
         actions: ["move-forward", "camera-look-back"],
         ticks: 60,
@@ -300,19 +320,28 @@ describe("capability package runtime smoke tests", () => {
       ).toBeGreaterThan(0.995);
 
       runtime.reset();
-      runtime.setCameraPreference("worldkit://camera-profile/orbit.medium@1");
-      runtime.setCameraTuning({ distanceMeters: 6 });
+      runtime.requestCameraProfile("worldkit://camera-profile/orbit.medium@1");
+      runtime.applyCameraPreview({
+        tuningByProfileRef: {
+          "worldkit://camera-profile/orbit.medium@1": { distanceMeters: 6 },
+        },
+      });
       expect(
-        runtime.setCameraPreference("worldkit://camera-profile/follow.medium@1")
-          .camera.tuning,
-      ).toEqual({});
+        runtime.requestCameraProfile("worldkit://camera-profile/follow.medium@1")
+          .camera,
+      ).not.toHaveProperty("tuning");
       expect(
-        runtime.setCameraPreference("worldkit://camera-profile/orbit.medium@1")
-          .camera.tuning,
+        runtime.getCameraPreviewState()
+          .tuningByProfileRef["worldkit://camera-profile/follow.medium@1"],
+      ).toBeUndefined();
+      expect(
+        runtime.getCameraPreviewState()
+          .tuningByProfileRef["worldkit://camera-profile/orbit.medium@1"],
       ).toEqual({ distanceMeters: 6 });
 
+      runtime.requestCameraProfile("worldkit://camera-profile/orbit.medium@1");
       const beforeTransition = runtime.snapshot().camera.positionMetersXYZ;
-      const firstTransitionFrame = runtime.setCameraPreference(
+      const firstTransitionFrame = runtime.requestCameraProfile(
         "worldkit://camera-profile/follow.medium@1",
       ).camera.positionMetersXYZ;
       expect(firstTransitionFrame).toEqual(beforeTransition);
@@ -400,8 +429,6 @@ describe("capability package runtime smoke tests", () => {
         selectedMotionProfileRef: defaultMotionProfileRef,
         selectedControlFeelProfileRef,
         selectedControlProfileRef,
-        cameraOverridesByProfileRef: {},
-        cameraPreference: "auto",
       });
       expect(rejectedPreset.status).toBe("rejected");
       expect(rejectedPreset.snapshot).toEqual(beforeRejectedPreset);
@@ -415,8 +442,6 @@ describe("capability package runtime smoke tests", () => {
         selectedControlFeelProfileRef:
           "worldkit://control-feel-profile/unknown.unlisted@1",
         selectedControlProfileRef,
-        cameraOverridesByProfileRef: {},
-        cameraPreference: orbitProfile.resourceRef,
       });
       expect(rejectedUnlockedFeel.status).toBe("rejected");
       expect(rejectedUnlockedFeel.snapshot).toEqual(beforeRejectedPreset);
@@ -430,32 +455,16 @@ describe("capability package runtime smoke tests", () => {
         selectedControlFeelProfileRef,
         selectedControlProfileRef:
           "worldkit://control-profile/unknown.unlisted@1",
-        cameraOverridesByProfileRef: {},
-        cameraPreference: orbitProfile.resourceRef,
       });
       expect(rejectedControlProfile.status).toBe("rejected");
       expect(rejectedControlProfile.snapshot).toEqual(beforeRejectedPreset);
 
       const exactControlProfile = capabilityAssembly.controlProfile;
-      const rejectedUnsafeCameraPreset = runtime.applySubjectPresetTuning({
-        subjectEntityId: "player",
-        expectedSubjectDefinitionRef: subjectDefinitionRef,
-        expectedSubjectDefinitionContentHash:
-          loaded.executionPlan.subjects[0]!.subjectDefinitionHash,
-        selectedMotionProfileRef: defaultMotionProfileRef,
-        selectedControlFeelProfileRef,
-        selectedControlProfileRef,
-        cameraOverridesByProfileRef: {
-          [orbitProfile.resourceRef]: {
-            baseResourceRef: orbitProfile.resourceRef,
-            baseContentHash: orbitProfile.contentHash,
-            values: { targetHeightMeters: 999 },
-          },
+      expect(() => runtime.applyCameraPreview({
+        tuningByProfileRef: {
+          [orbitProfile.resourceRef]: { targetHeightMeters: 999 },
         },
-        cameraPreference: orbitProfile.resourceRef,
-      });
-      expect(rejectedUnsafeCameraPreset.status).toBe("rejected");
-      expect(rejectedUnsafeCameraPreset.snapshot).toEqual(beforeRejectedPreset);
+      })).toThrow(/SUBJECT_PRESET_INVALID_CAMERA_TUNING/);
 
       const controlProfile = exactControlProfile;
       const committedPreset = runtime.applySubjectPresetTuning({
@@ -467,20 +476,10 @@ describe("capability package runtime smoke tests", () => {
         selectedControlFeelProfileRef:
           "worldkit://control-feel-profile/humanoid.heavy-ground@1",
         selectedControlProfileRef: controlProfile.resourceRef,
-        cameraOverridesByProfileRef: {
-          [orbitProfile.resourceRef]: {
-            baseResourceRef: orbitProfile.resourceRef,
-            baseContentHash: orbitProfile.contentHash,
-            values: { targetHeightMeters: 1.4 },
-          },
-        },
-        cameraPreference: orbitProfile.resourceRef,
       });
       expect(committedPreset.status).toBe("committed");
-      expect(committedPreset.snapshot.camera).toMatchObject({
-        preference: orbitProfile.resourceRef,
-        tuning: { targetHeightMeters: 1.4 },
-      });
+      expect(committedPreset.snapshot.camera).not.toHaveProperty("tuning");
+      expect(committedPreset.snapshot.camera).not.toHaveProperty("preference");
       expect(committedPreset.snapshot.subjectStatesByEntityId.player)
         .toMatchObject({
           activeControlFeelProfileRef:
@@ -619,7 +618,7 @@ describe("capability package runtime smoke tests", () => {
           )).toThrow(/^SUBJECT_OVERRIDE_FORBIDDEN/);
 
           runtime.reset();
-          runtime.setCameraPreference("worldkit://camera-profile/chase.surface-fast@1");
+          runtime.requestCameraProfile("worldkit://camera-profile/chase.surface-fast@1");
           const reversing = await runtime.runFixedInput({
             actions: ["move-backward"],
             ticks: 90,
@@ -643,12 +642,16 @@ describe("capability package runtime smoke tests", () => {
             minimumHeadingSpeedMetersPerSecond: number,
           ) => {
             runtime.reset();
-            runtime.setCameraPreference("worldkit://camera-profile/chase.surface-fast@1");
-            runtime.setCameraTuning({
-              minimumHeadingSpeedMetersPerSecond,
-              velocityHeadingDampingPerSecond: 40,
-              yawDampingPerSecond: 40,
-              transitionSeconds: 0,
+            runtime.requestCameraProfile("worldkit://camera-profile/chase.surface-fast@1");
+            runtime.applyCameraPreview({
+              tuningByProfileRef: {
+                "worldkit://camera-profile/chase.surface-fast@1": {
+                  minimumHeadingSpeedMetersPerSecond,
+                  velocityHeadingDampingPerSecond: 40,
+                  yawDampingPerSecond: 40,
+                  transitionSeconds: 0,
+                },
+              },
             });
             return (await runtime.runFixedInput({
               actions: ["move-forward", "move-left"],
@@ -664,11 +667,15 @@ describe("capability package runtime smoke tests", () => {
 
           const cameraDistanceAfterRun = async (maximumPositionLagMeters: number) => {
             runtime.reset();
-            runtime.setCameraPreference("worldkit://camera-profile/chase.surface-fast@1");
-            runtime.setCameraTuning({
-              positionDampingPerSecond: 0,
-              maximumPositionLagMeters,
-              lookAheadSeconds: 0,
+            runtime.requestCameraProfile("worldkit://camera-profile/chase.surface-fast@1");
+            runtime.applyCameraPreview({
+              tuningByProfileRef: {
+                "worldkit://camera-profile/chase.surface-fast@1": {
+                  positionDampingPerSecond: 0,
+                  maximumPositionLagMeters,
+                  lookAheadSeconds: 0,
+                },
+              },
             });
             const after = await runtime.runFixedInput({
               actions: ["move-forward"],
@@ -686,7 +693,7 @@ describe("capability package runtime smoke tests", () => {
         }
         if (lockedMotionKernelRef === "worldkit://motion-kernel/water-surface@1") {
           runtime.reset();
-          runtime.setCameraPreference(
+          runtime.requestCameraProfile(
             "worldkit://camera-profile/follow.medium@1",
           );
           await runtime.runFixedInput({
@@ -778,7 +785,7 @@ describe("capability package runtime smoke tests", () => {
         }),
     });
     try {
-      runtime.setCameraPreference("worldkit://camera-profile/orbit.medium@1");
+      runtime.requestCameraProfile("worldkit://camera-profile/orbit.medium@1");
       runtime.adjustCameraView({
         yawDeltaRadians: 0.8,
         pitchDeltaRadians: 0.25,
@@ -1031,57 +1038,25 @@ describe("capability package runtime smoke tests", () => {
       expect(afterTick.subjectStatesByEntityId.player!.activeControlFeelProfileRef)
         .toBe(HEAVY_FEEL_REF);
 
-      runtime.setCameraPreference(orbitProfile.resourceRef);
-      expect(runtime.setCameraTuning({ targetHeightMeters: 1.4 }).camera.tuning)
+      runtime.requestCameraProfile(orbitProfile.resourceRef);
+      const orbitPreview = runtime.applyCameraPreview({
+        tuningByProfileRef: { [orbitProfile.resourceRef]: { targetHeightMeters: 1.4 } },
+      });
+      expect(orbitPreview.tuningByProfileRef[orbitProfile.resourceRef])
         .toEqual({ targetHeightMeters: 1.4 });
       runtime.reset();
       const afterReset = runtime.snapshot();
       expect(afterReset.subjectStatesByEntityId.player!.activeControlFeelProfileRef)
         .toBe(HEAVY_FEEL_REF);
-      expect(afterReset.camera.tuning).toEqual({ targetHeightMeters: 1.4 });
+      expect(afterReset.camera).not.toHaveProperty("tuning");
+      expect(runtime.getCameraPreviewState().tuningByProfileRef[orbitProfile.resourceRef])
+        .toEqual({ targetHeightMeters: 1.4 });
 
-      const extraCamera = runtime.applySubjectPresetTuning({
-        subjectEntityId: extraSubject.entityId,
-        expectedSubjectDefinitionRef: extraSubject.subjectDefinitionRef,
-        expectedSubjectDefinitionContentHash: extraSubject.subjectDefinitionHash,
-        selectedMotionProfileRef: capabilityAssembly.defaultMotionProfile.resourceRef,
-        selectedControlFeelProfileRef: HEAVY_FEEL_REF,
-        selectedControlProfileRef: capabilityAssembly.controlProfile.resourceRef,
-        cameraOverridesByProfileRef: {
-          [orbitProfile.resourceRef]: {
-            baseResourceRef: orbitProfile.resourceRef,
-            baseContentHash: orbitProfile.contentHash,
-            values: { targetHeightMeters: 1.6 },
-          },
-        },
-        cameraPreference: orbitProfile.resourceRef,
-      });
-      expect(extraCamera.status).toBe("rejected");
-      expect(extraCamera.diagnostic?.code).toBe(
-        "SUBJECT_PRESET_CAMERA_OWNERSHIP_FORBIDDEN",
-      );
-      expect(runtime.snapshot().camera.tuning).toEqual({ targetHeightMeters: 1.4 });
-
-      const extraFeelOnly = runtime.applySubjectPresetTuning({
-        subjectEntityId: extraSubject.entityId,
-        expectedSubjectDefinitionRef: extraSubject.subjectDefinitionRef,
-        expectedSubjectDefinitionContentHash: extraSubject.subjectDefinitionHash,
-        selectedMotionProfileRef: capabilityAssembly.defaultMotionProfile.resourceRef,
-        selectedControlFeelProfileRef: HEAVY_FEEL_REF,
-        selectedControlProfileRef: capabilityAssembly.controlProfile.resourceRef,
-        cameraOverridesByProfileRef: {},
-        cameraPreference: "auto",
-      });
-      expect(extraFeelOnly.status).toBe("rejected");
-      expect(extraFeelOnly.diagnostic?.code).toBe(
-        "SUBJECT_PRESET_CAMERA_OWNERSHIP_FORBIDDEN",
-      );
-      expect(runtime.snapshot().camera.tuning).toEqual({ targetHeightMeters: 1.4 });
       expect(runtime.requestControlFeelProfile("extra", HEAVY_FEEL_REF)).toBe(true);
       const extraAfterTick = await runtime.runFixedInput({ actions: [], ticks: 1 });
       expect(extraAfterTick.subjectStatesByEntityId.extra!.activeControlFeelProfileRef)
         .toBe(HEAVY_FEEL_REF);
-      expect(extraAfterTick.camera.tuning).toEqual({ targetHeightMeters: 1.4 });
+      expect(extraAfterTick.camera).not.toHaveProperty("tuning");
     } finally {
       await runtime.dispose();
     }
@@ -1127,8 +1102,11 @@ describe("capability package runtime smoke tests", () => {
     });
     try {
       await runtime.runFixedInput({ actions: [], ticks: 4 });
-      runtime.setCameraPreference(orbitProfile.resourceRef);
-      expect(runtime.setCameraTuning({ targetHeightMeters: 1.4 }).camera.tuning)
+      runtime.requestCameraProfile(orbitProfile.resourceRef);
+      const orbitPreview = runtime.applyCameraPreview({
+        tuningByProfileRef: { [orbitProfile.resourceRef]: { targetHeightMeters: 1.4 } },
+      });
+      expect(orbitPreview.tuningByProfileRef[orbitProfile.resourceRef])
         .toEqual({ targetHeightMeters: 1.4 });
 
       const rebound = runtime.bindControl({
@@ -1138,43 +1116,7 @@ describe("capability package runtime smoke tests", () => {
       });
       expect(rebound.status).toBe("committed");
       expect(runtime.snapshot().camera.targetEntityId).toBe(extraSubject.entityId);
-
-      const formerOwnerNumeric = runtime.applySubjectPresetTuning({
-        subjectEntityId: playerSubject.entityId,
-        expectedSubjectDefinitionRef: playerSubject.subjectDefinitionRef,
-        expectedSubjectDefinitionContentHash: playerSubject.subjectDefinitionHash,
-        selectedMotionProfileRef: capabilityAssembly.defaultMotionProfile.resourceRef,
-        selectedControlFeelProfileRef: HEAVY_FEEL_REF,
-        selectedControlProfileRef: capabilityAssembly.controlProfile.resourceRef,
-        cameraOverridesByProfileRef: {
-          [orbitProfile.resourceRef]: {
-            baseResourceRef: orbitProfile.resourceRef,
-            baseContentHash: orbitProfile.contentHash,
-            values: { targetHeightMeters: 1.8 },
-          },
-        },
-        cameraPreference: orbitProfile.resourceRef,
-      });
-      expect(formerOwnerNumeric.status).toBe("rejected");
-      expect(formerOwnerNumeric.diagnostic?.code).toBe(
-        "SUBJECT_PRESET_CAMERA_OWNERSHIP_FORBIDDEN",
-      );
-
-      const formerOwnerPreferenceOnly = runtime.applySubjectPresetTuning({
-        subjectEntityId: playerSubject.entityId,
-        expectedSubjectDefinitionRef: playerSubject.subjectDefinitionRef,
-        expectedSubjectDefinitionContentHash: playerSubject.subjectDefinitionHash,
-        selectedMotionProfileRef: capabilityAssembly.defaultMotionProfile.resourceRef,
-        selectedControlFeelProfileRef: HEAVY_FEEL_REF,
-        selectedControlProfileRef: capabilityAssembly.controlProfile.resourceRef,
-        cameraOverridesByProfileRef: {},
-        cameraPreference: "auto",
-      });
-      expect(formerOwnerPreferenceOnly.status).toBe("rejected");
-      expect(formerOwnerPreferenceOnly.diagnostic?.code).toBe(
-        "SUBJECT_PRESET_CAMERA_OWNERSHIP_FORBIDDEN",
-      );
-      expect(runtime.snapshot().camera.tuning).toEqual({ targetHeightMeters: 1.4 });
+      expect(runtime.snapshot().camera).not.toHaveProperty("tuning");
     } finally {
       await runtime.dispose();
     }

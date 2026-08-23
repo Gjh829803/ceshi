@@ -1,4 +1,5 @@
 import type {
+  ApplyCameraPreviewRequestV1,
   ApplySubjectPresetTuningRequestV1,
   NumericProfileOverrideV1,
 } from "@whitebox-world/runtime-contracts";
@@ -161,7 +162,18 @@ export function subjectPresetTuningRequestFromDraftV1(
     selectedMotionProfileRef: draft.selectedMotionProfileRef,
     selectedControlFeelProfileRef: draft.selectedControlFeelProfileRef,
     selectedControlProfileRef: draft.selectedControlProfileRef,
-    cameraOverridesByProfileRef: draft.cameraOverridesByProfileRef,
-    cameraPreference: draft.selectedCameraPreferenceRef ?? "auto",
+  };
+}
+
+export function cameraPreviewRequestFromDraftV1(
+  draft: SubjectPresetWorkingDraftV1,
+): ApplyCameraPreviewRequestV1 {
+  return {
+    tuningByProfileRef: Object.fromEntries(
+      Object.entries(draft.cameraOverridesByProfileRef).map(([profileRef, override]) => [
+        profileRef,
+        override.values,
+      ]),
+    ),
   };
 }

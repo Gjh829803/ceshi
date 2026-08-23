@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 
 import type { SubjectPresetLocalBaselineV1 } from "./subject-preset-local";
 import {
+  cameraPreviewRequestFromDraftV1,
   createSubjectPresetWorkbenchDraftV1,
   normalizeSubjectPresetCameraPreferenceV1,
   subjectPresetTuningRequestFromDraftV1,
@@ -179,8 +180,9 @@ describe("subject preset workbench projection", () => {
       selectedControlFeelProfileRef:
         "worldkit://control-feel-profile/humanoid.heavy-ground@1",
       selectedControlProfileRef: baseline.controlProfile.resourceRef,
-      cameraOverridesByProfileRef: {},
-      cameraPreference: "auto",
+    });
+    expect(cameraPreviewRequestFromDraftV1(draft)).toEqual({
+      tuningByProfileRef: {},
     });
   });
 
