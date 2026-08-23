@@ -88,7 +88,7 @@ Babylon Port 和 Browser Gate 的死代码。包可以先实施，但不能作�
 | 控制关系 | `possessedBy` Relationship | Input、Camera、Snapshot | 根级 `controlledEntityId`、Adapter 私有 fallback |
 | Gameplay 命令规则 | GameplayMode + typed Handler | WorldSession | Babylon 直接接受 Gameplay 命令 |
 | Logical Action | GameplayState | Animation Projection、Snapshot | 动画 Clip 播放状态决定 Action 结果 |
-| Physics/Support/Medium/Facing | Babylon Runtime 现有 owner | Gameplay Projection、Camera | Graph、高度采样或第二次 support query |
+| Physics/Support/Medium/Facing | Babylon Runtime 现有 fixed-tick owner | Canonical Locomotion 投影、Camera | Gameplay 重算 Medium/Facing/Speed、Graph、高度采样或第二次 support query |
 | Route 可达性 | Route Graph/Query Evidence | Browser、Validation、未来 Planner | Gameplay State 把 Graph 当真实移动 |
 | Camera Profile 和 View State | CameraDirector | Render、Browser View inspection | Possession 或 Subject 保存镜头数值 |
 | Runtime Tick | Babylon fixed simulation tick | Host barrier、Gameplay、Animation | WorldSession 推进另一套时钟 |
@@ -152,6 +152,54 @@ interface GameplayCommandBaseV1 {
 `expectedPossession` 只是乐观并发前置条件，不能作为路由或权威关系来源。Action request
 需要参数时引用由 Action Definition Schema 校验并内容寻址的 `actionRequestRef/hash`；不得增加
 公共 `params` 袋。
+
+`expectedPossession` 的关闭形状为：
+
+```ts
+type ExpectedPossessionV1 =
+  | Readonly<{ mode: "unbound" }>
+  | Readonly<{ mode: "possessed"; controlledEntityId: string }>;
+```
+
+四个变体的 payload 也固定，不由 Handler 自行补字段：
+
+```ts
+type GameplayCommandV1 =
+  | Readonly<GameplayCommandBaseV1 & {
+      type: "control.bind";
+      controlledEntityId: string;
+      expectedPossession: ExpectedPossessionV1;
+    }>
+  | Readonly<GameplayCommandBaseV1 & {
+      type: "control.release";
+      expectedPossession: Extract<ExpectedPossessionV1, { mode: "possessed" }>;
+    }>
+  | Readonly<GameplayCommandBaseV1 & {
+      type: "action.activate";
+      actionExecutionId: string;
+      semanticActionRef: string;
+      actorEntityId: string;
+      expectedPossession: Extract<ExpectedPossessionV1, { mode: "possessed" }>;
+      // 需要参数时二者同时存在；无参数时二者都不存在。
+      actionRequestRef?: string;
+      actionRequestHash?: `sha256:${string}`;
+    }>
+  | Readonly<GameplayCommandBaseV1 & {
+      type: "action.cancel";
+      actionExecutionId: string;
+      actorEntityId: string;
+      expectedPossession: Extract<ExpectedPossessionV1, { mode: "possessed" }>;
+    }>;
+```
+
+`actionRequestRef/actionRequestHash` 在实际类型中必须以“成对存在或成对不存在”的子联合表达；
+上面的注释形式只为缩短设计示例，parser 不接受只出现其中一个字段。
+
+已控制 A 时提交 `control.bind(B)` 的语义固定为原子 rebind：命令必须携带
+`expectedPossession: { mode: "possessed", controlledEntityId: A }`；同一事务移除 A 的
+`possessedBy`、向 A 提交 neutral input、建立 B 的 `possessedBy` 并切换 Camera。任一步失败都
+rollback 到 A。若期望关系已经过期，稳定返回 `CONTROL_POSSESSION_STALE`，不得先 release 再由
+第二条命令 bind，从而暴露半提交状态。
 
 Parser 必须：
 
@@ -224,15 +272,51 @@ WorldSession 失败。rollback failure 必须返回 failed，并使 WorldSession
   `action.started/action.completed/action.cancelled/action.failed`；拒绝只由 Receipt 表达，
   不产生 `gameplay.command-rejected` Event；
 - `WorldStateSnapshotV1` 是 Receipt 引用的 canonical artifact，首期包含 Subject/Controller
-  Entity State、`possessedBy` Relationship、Locomotion Capability State 和 active Action
-  State；它按 canonical JSON 计算 Ref/Hash；
-- GameplaySnapshotV1 只作为 Browser inspection projection，包含 Participant、Controller、
+  Entity State、`possessedBy` Relationship、Locomotion Capability State、Semantic Fact 和
+  active Action State；
+- `GameplayInspectionSnapshotV1` 只作为 Browser inspection projection，包含 Participant、Controller、
   `possessedBy`、active Action、activated Feature、`lastEventSequence` 和稳定 phase/diagnostic，
   不作为第二个 World State Hash 权威；
 - Participant 不保存 `controllerEntityIds`，Controller 不保存 binding/controlled target；
   Browser 如需 binding 只能从 `possessedBy` 即时派生；
-- Subject 位置、速度、Support、Medium 和 rendered Action 继续来自 Runtime Snapshot；
-- Camera、Route Evidence 和 Runtime 健康状态不塞进 GameplaySnapshot。
+- Subject 位置、速度、Support、Medium、Facing 和实际速度只由 Babylon fixed-tick owner 提交；
+  `WorldStateSnapshotV1` 中的 Spatial/Locomotion/`supportedBy` 只是同一已提交结果的 canonical
+  projection，不允许 Gameplay 再计算、修正或以 Route/Height Query 推断；
+- Camera、Route Evidence 和 Runtime 健康状态不塞进 `GameplayInspectionSnapshotV1`。
+
+`WorldStateSnapshotV1` 严格沿用上位 Canonical State V1 envelope，不允许再定义同名方言：
+
+```ts
+interface WorldStateSnapshotV1 {
+  readonly kind: "worldkit-world-state-snapshot";
+  readonly schemaVersion: 1;
+  readonly id: string;
+  readonly runtimeSessionId: string;
+  readonly worldSessionId: string;
+  readonly simulationTick: number;
+  readonly worldPackageRef: string;
+  readonly worldPackageRootHash: `sha256:${string}`;
+  readonly executionPlanHash: `sha256:${string}`;
+  readonly entityStatesById: Readonly<Record<string, GameplayEntityStateV1>>;
+  readonly capabilityStatesById: Readonly<Record<string, GameplayCapabilityStateV1>>;
+  readonly relationshipStatesById: Readonly<Record<string, GameplayRelationshipStateV1>>;
+  readonly semanticFactsById: Readonly<Record<string, GameplaySemanticFactV1>>;
+  readonly activeActionStatesById: Readonly<Record<string, GameplayActionStateV1>>;
+  readonly lastEventSequence: number;
+  readonly worldStateHash: `sha256:${string}`;
+}
+```
+
+首批 `GameplaySemanticFactV1` 采用上位关闭联合 `supportedBy | touching | insideVolume`；当前
+Runtime 尚未投影的类型使用空 Map，不得删掉根字段。关系端点、Capability owner、Action actor
+和 inspection 的 Participant/Controller 引用必须存在且角色兼容，不能把 dangling graph 冻结为
+Canonical State。
+
+`worldStateHash` 的输入固定为 `simulationTick`、`worldPackageRootHash`、`executionPlanHash`、按 ID
+排序后的五类 State Map 和 `lastEventSequence`。`id`、`runtimeSessionId`、`worldSessionId`、
+`worldPackageRef` 与 `worldStateHash` 自身不进入 hash 域。不同 Session 到达相同锁定世界与 Tick
+状态必须得到相同 hash；任何 hash 域字段被篡改，parser 必须拒绝。Artifact 的完整 canonical
+bytes 仍包含 envelope 身份字段，两种 hash 不得混用。
 
 ### 6.4 容量预算
 
@@ -422,9 +506,11 @@ Subject Transform。
 
 ## 12. Browser Protocol V5
 
-当前 main/R1b 与 #19 分别占用了两份不兼容 Browser V4。融合结果必须升为 V5。
+当前 main 与 #19 分别占用了两份不兼容 Browser V4；R1b completion 将首先原子发布 Route
+Evidence V2 的 `WorldkitBrowserApiV5`。Gameplay 不从任一 V4 再升一份 V5，而是在 fetch 并验证
+R1b completion HEAD 后，扩展那一份尚未发布的 V5，并在同一个 exact-key cutover 中完成。
 
-V5 保留当前 R1b V4 的：
+Gameplay 扩展保留 R1b V5 的完整公共 surface：
 
 - `ready/getSnapshot/getDiagnostics`；
 - fixed input、intent、pause、reset；
@@ -433,11 +519,18 @@ V5 保留当前 R1b V4 的：
 - Camera Profile 与隔离 Preview；
 - `getRouteSummary/getRoutePathReceipt/getRouteRuntimeProbeReceipt/getRouteOverlay`。
 
-V5 新增：
+在该 exact base 上只新增：
 
 - `executeGameplayCommand(command)`；
 - `getGameplayEvents(query)`；
-- Gameplay Snapshot 投影。
+- `getGameplayInspectionSnapshot()` 投影。
+
+组合类型以 R1b completion 实际导出的 `WorldkitBrowserApiV5` 为唯一 base；实现前必须把它的
+完整 enumerable key 列表冻结为 conformance fixture。Gameplay 计划不得复制当前 V4 interface、
+不得先占用另一份 `WORLDKIT_BROWSER_PROTOCOL_VERSION = 5`，也不得以 optional method 隐藏缺失
+接线。四个 Route getter 的 selector 和 query-result 类型名称、字段及可枚举性必须原样继承 R1b
+completion 实际导出的 V5 声明；其 publication/projection/path/probe/overlay payload 必须是 V2，
+不能在本文提前发明另一组 selector/query-result 名称或把 V1 payload 包在新外壳中。
 
 R1b Task 8/9 产出的 Route Evidence 必须使用 V2 publication/projection/path/probe/overlay，
 不存在 V1 fallback、V1↔V2 converter 或 mixed receipt。Browser 安装的是 Trusted Host 已完成
@@ -450,7 +543,7 @@ V5 删除：
 - provider/backend 字面量；
 - Snapshot 根级 `controlledEntityId`。
 
-`WorldRuntimeSnapshotV4` 包含 WorldSession ID、tick、Subject states、GameplaySnapshotV1、
+`WorldRuntimeSnapshotV4` 包含 WorldSession ID、tick、Subject states、GameplayInspectionSnapshotV1、
 Camera/View state、resource/runtime health 的 provider-neutral 投影。它不是完整 Canonical World
 State；Relationship/Event/Physics Fact 的后续切片仍按上位设计演进。
 
@@ -476,26 +569,33 @@ Browser exact-key conformance、Authoring Loader、CLI/examples/generated types 
 - throwing cleanup 保留首个 load-bearing failure，同时记录清理失败为内部 evidence；
 - unknown command/field/version、stale session、capacity exhaustion 和 resource mismatch 均 fail closed。
 
+`GameplayDiagnosticV1` 是 exact-key 的 `{ code, message }`，`code` 使用关闭枚举。首批必须至少
+覆盖 `INPUT_INVALID`、`COMMAND_ID_CONFLICT`、`CONTROL_POSSESSION_STALE`、
+`GAMEPLAY_CAPACITY_EXCEEDED`、`FEATURE_NOT_LOCKED`、`ACTION_CATALOG_INVALID` 与事务
+prepare/commit/rollback 失败；新增稳定 code 必须与 parser、fixtures、Browser generated types 一起
+原子演进。Provider message、stack、cause、handle 和自由 details 袋都不进入该合同。
+
 ## 15. 依赖感知实施图
 
 | ID | 目标与可验收交付 | depends_on | blocks | 独占所有权 | 集成点 | 验证 | 模式 |
 | --- | --- | --- | --- | --- | --- | --- | --- |
 | G19-0 | 冻结本文与实施计划 | 无 | 全部 | 本文、计划、SDD ledger | R1b `1bf9f5d` | 文档自审、Cursor design CR | main-agent-only |
-| G19-1 | 将 Aurora Camera cleanup 语义移植到 R1b | G19-0 | G19-5 | CameraDirector、camera preview、现有 Camera API/tests | Babylon/Playground Camera boundary | focused camera tests、R1b gates | sequential |
+| G19-1 | 将 Aurora Camera cleanup 语义移植到 R1b | G19-0、R1b completion HEAD | G19-5 | CameraDirector、camera preview、R1b V5 Camera API/tests | Babylon/Playground Camera boundary | focused camera tests、R1b gates | sequential |
 | G19-2 | 干净 Gameplay contracts/core | G19-0 | G19-3 | 新 `gameplay-contracts`、`gameplay` packages | typed interfaces | parser/state/feature/action tests | parallel-safe |
 | G19-3 | RuntimeHost/WorldSession/Port | G19-2 | G19-4/G19-5 | 新 `runtime-host` package | Runtime contracts + Adapter factory | lifecycle/transaction/idempotency tests | sequential |
-| G19-4 | 组合 ExecutionPlanV5/Compiler/R1b | G19-0 | G19-5/G19-6 | runtime-contracts execution plan、compiler、fixtures | Plan V5 exact shape | compiler + Route R1b gates | parallel-safe after G19-0 |
+| G19-4 | 组合 ExecutionPlanV5/Compiler/R1b | G19-0、G19-3、R1b completion HEAD | G19-5/G19-6 | runtime-contracts execution plan、compiler、fixtures | Plan V5 exact shape | compiler + Route R1b gates | sequential |
 | G19-5 | Babylon Gameplay Port + Camera/Possession | G19-1/G19-3/G19-4 | G19-6 | runtime-babylon、Babylon adapter | GameplayWorldPort | Havok fixed-tick/adversarial runtime tests | sequential |
 | G19-6 | Browser V5/Loader/Playground reset | G19-3/G19-4/G19-5 | G19-7 | browser protocol/api、authoring loader、main | RuntimeHost public surface | exact-key、reset/rebind、Route evidence | sequential |
 | G19-7 | Outdoor runtime unification与门禁 | G19-6 | G19-8 | outdoor importer、verify script、scene fixtures | current compiler/runtime | six scenes、unknown fail-closed、artifact isolation | sequential |
 | G19-8 | 全量审查、修复、发布准备 | 全部 | 无 | review docs、generated evidence | whole branch | full gates + Browser + Cursor final | main-agent-only |
 
-G19-2 与 G19-4 只有在本文接口冻结后才可并行，且不得修改相同文件。G19-1 先于 Camera
-Gameplay transaction，避免基于旧 overlay 编写第二套适配。
+G19-2 与 G19-3 可以在 R1b 未完成时依次推进，因为只创建独立 package。G19-1 先于 Camera
+Gameplay transaction，避免基于旧 overlay 编写第二套适配；G19-4 必须等 G19-3 与 R1b
+completion，不能再作为 parallel-safe 任务提前修改共享 ExecutionPlan/Compiler。
 
-由于 `codex/r1b-integration@1bf9f5d` 仍缺 Task 5–10，G19-5/G19-6/G19-7 还额外依赖
+由于 `codex/r1b-integration@1bf9f5d` 仍缺 Task 5–10，G19-1/G19-4/G19-5/G19-6/G19-7 还额外依赖
 “R1b completion HEAD 已 fetch 并通过其 Completion Review”。若远端尚未完成，实施分支只推进
-G19-1/G19-2/G19-3 和不冲突的 G19-4；不得自行复制 R1b 剩余工作或在旧 Browser V4 上临时
+G19-2/G19-3；不得自行复制 R1b 剩余工作或在旧 Browser V4 上临时
 建立 Gameplay 旁路。
 
 ## 16. 强制门禁

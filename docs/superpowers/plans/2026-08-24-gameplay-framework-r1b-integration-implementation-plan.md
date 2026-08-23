@@ -141,9 +141,22 @@ Relationship payload 使用 `controlledEntityId/controllerEntityId`；Action pay
 
 断言 Participant 无 controller ID 数组、Controller 无 binding/target、Possession 基数和 map key/object ID 一致；插入顺序不同得到相同 canonical hash；容量每个字段拒绝负数、小数、NaN、Infinity 和超 safe integer。
 
+同时覆盖：
+
+- `relationship` Controller/Subject、Capability owner、Action actor 和 inspection Participant/
+  Controller 的 dangling 或错误角色引用全部拒绝；
+- `__proto__` 作为 JSON map key 不得修改结果对象 prototype、丢失条目或破坏 canonicalization；
+- `semanticFactsById` 是必填 Map，首批关闭联合为 `supportedBy | touching | insideVolume`；
+- `worldStateHash` 排除 artifact/session identity 和自身，包含 Tick、WorldPackage/ExecutionPlan
+  Hash、五类 State Map 与 `lastEventSequence`；跨 Session 相同语义状态 hash 相同，任何 hash 域
+  字段被篡改都拒绝。
+
 - [ ] **Step 6: 实现 State/Capacity canonicalizer**
 
-`WorldStateSnapshotV1` 包含 entity、relationship、capability、active Action map；`GameplayInspectionSnapshotV1` 明确标记 inspection projection。默认 budget 常量为：
+`WorldStateSnapshotV1` 与上位 Canonical State V1 使用同一 exact envelope，包含 entity、
+relationship、capability、semantic fact、active Action map 和已验证 `worldStateHash`；
+`GameplayInspectionSnapshotV1` 是唯一 inspection 公名并明确标记 inspection projection。默认
+budget 常量为：
 
 ```ts
 {
@@ -306,7 +319,8 @@ git fetch origin codex/r1b-integration
 git log --oneline 1bf9f5d..origin/codex/r1b-integration
 ```
 
-要求 completion docs/gates 明确 Task 5–10 完成；否则记录 blocked，不修改共享 Runtime/Browser 文件，只继续 Task 2–4。
+要求 completion docs/gates 明确 Task 5–10 完成；否则记录 blocked，不修改 Camera、ExecutionPlan、
+Compiler、Runtime 或 Browser 共享文件，只继续独立 package 的 Task 2–4。
 
 - [ ] **Step 2: merge/rebase R1b 新提交并运行其门禁**
 
