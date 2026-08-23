@@ -26,7 +26,8 @@
   - [Subject Control Feel、Physics Medium 与 State Resolver](./2026-08-21-control-feel-physics-medium-state-resolver-design.md)
 - 实施入口：
   [Route Graph / Traversability R0 实施计划](../plans/2026-08-21-route-graph-traversability-r0-implementation-plan.md)；
-  [R1 Heightfield 实施计划](../plans/2026-08-22-route-graph-traversability-r1-heightfield-implementation-plan.md)。
+  [R1 Heightfield 实施计划](../plans/2026-08-22-route-graph-traversability-r1-heightfield-implementation-plan.md)；
+  [R1b Static Platform 专项设计](./2026-08-23-route-r1b-static-platform-design.md)。
 
 本文解决的是“指定主体是否能从声明的起点实际到达声明的终点”。它不把 NPC 行为、
 动态避障、任务系统或自动驾驶混入当前范围，也不建立与既有 `spatial.routes`、Surface、
@@ -235,9 +236,10 @@ Canonical Graph 输出按 Node/Edge ID 排序并深冻结；R1 的单 Heightfiel
 ### 6.2 分层 3D 图
 
 Heightfield 可使用 Tile/Raster 邻接作为构建输入，但 Graph 节点保存 3D 世界位置与稳定
-`traversalSurfaceId`。Heightfield 的最小稳定身份必须从 Terrain Entity ID、稳定逻辑
-Collider Subshape ID 和锁定资源版本派生；Tile 拆分、LOD、数组顺序和 Runtime Handle
-不得改变该身份。来源显式声明的逻辑 Subshape ID 必须原样保留；R1 的单 Primitive
+`traversalSurfaceId`。Heightfield 的最小稳定逻辑身份必须从 Terrain Entity ID 与稳定逻辑
+Collider Subshape ID 派生；锁定 Resource Ref/Version/Hash 与 Collider Hash 另行证明具体实现
+和几何版本。Tile 拆分、LOD、数组顺序、资源升级和 Runtime Handle 不得重命名该逻辑身份。
+来源显式声明的逻辑 Subshape ID 必须原样保留；R1 的单 Primitive
 兼容投影使用保留逻辑 ID `primary`。`colliderSubshapeId` 使用带字段名的 Canonical JSON
 `{ entityId, logicalSubshapeId }` 的 SHA-256 并加 `collider-subshape:` 前缀，禁止依赖分隔符解析、
 数组序号或几何内容；几何变化由独立 Collider Hash 表达。静态平台来自显式 Traversal Surface，
@@ -250,6 +252,10 @@ terrain-ground       y = 0m
 
 两层只有在存在满足 Profile 的坡道、台阶或未来 Typed Traversal Link 时才能连接。Graph
 Builder 不使用“最近 Y”把两层静默合并，也不把垂直距离小于搜索半径等同于可走。
+
+R1 Heightfield 的 Path/Overlay 可以投影一个全局 Surface，但该形状只适用于单 Surface 特例。
+从 R1b 起，Path/Overlay/Probe 按有序 Graph Node 与 Probe 3D support station 表达期望 Surface；
+不得继续保留 path-global `traversalSurfaceIdentity`，也不得用 XZ 行走 lookahead 决定支撑层。
 
 ### 6.3 主体净空与 Profile Filter
 
@@ -565,6 +571,11 @@ CLI/Playwright 消费方、Canonical Gate、文档、示例和生成类型一次
 `window.__WORLDKIT__` 并存 V3 alias。V4 不暴露任意 NavMesh Builder 执行、Babylon Scene、Havok
 Handle 或 Provider 内部 ID。CLI JSON、Browser Protocol、Canonical Schema 和生成类型使用同一
 公开字段名；合同测试必须证明 V3 的方法集合和行为没有在版本升级中丢失。
+
+R1b 引入多 Surface Path 后，route-evidence publication/projection 升级为 V2，外层 Browser
+Protocol 同步升级为 V5。V5 保留 V4 的方法集合与 read-only selector，但删除单 Surface
+`traversalSurfaceIdentity` 和 V4/V1 alias；详细形状以
+[R1b Static Platform 设计 §7.1](./2026-08-23-route-r1b-static-platform-design.md) 为准。
 
 Agent 修复循环固定为：
 
