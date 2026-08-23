@@ -216,6 +216,27 @@ describe("CommandJournal", () => {
     expect(journal.reserveEventCapacity({ eventCount: 2 }).status).toBe("reserved");
   });
 
+  it("preserves a valid prepared event-only alternative after a later prepare fails", () => {
+    const journal = new CommandJournal({
+      maximumIdempotencyRecordCount: 0,
+      maximumRetainedReceiptCount: 0,
+      maximumRetainedEventCount: 1,
+    });
+    const result = journal.reserveEventCapacity({ eventCount: 1 });
+    if (result.status !== "reserved") throw new Error("Expected Event capacity.");
+    const event = worldFailedEvent(1);
+    const prepared = result.reservation.prepare([event]);
+
+    expect(() => result.reservation.prepare([
+      worldFailedEvent(2),
+      event,
+    ])).toThrow(/exceeds the reservation/);
+    expect(journal.snapshot().reservedEventCount).toBe(1);
+    expect(prepared.commitPrepared).not.toThrow();
+    expect(journal.getEvent(event.id)).toBe(prepared.events[0]);
+    expect(journal.snapshot().reservedEventCount).toBe(0);
+  });
+
   it("releases prepared Event claims and makes the prepared publication inert", () => {
     const journal = new CommandJournal({
       maximumIdempotencyRecordCount: 1,
@@ -379,6 +400,52 @@ describe("CommandJournal", () => {
     expect(journal.lookup(firstCommand, deriveGameplayCommandHashV1(firstCommand)))
       .toMatchObject({ status: "replay", receipt: failure.receipt });
     expect(journal.getEvent(event.id)).toEqual(event);
+  });
+
+  it("preserves a valid prepared command failure after a later prepare fails", () => {
+    const journal = new CommandJournal({
+      maximumIdempotencyRecordCount: 1,
+      maximumRetainedReceiptCount: 1,
+      maximumRetainedEventCount: 1,
+    });
+    const firstCommand = command("command-valid-before-invalid");
+    const event = worldFailedEvent(1);
+    const reservation = journal.reserveCapacity({
+      simulationTick: 8,
+      idempotencyRecordCount: 1,
+      receiptCount: 1,
+      eventCount: 1,
+    });
+    if (reservation.status !== "reserved") throw new Error("Expected capacity.");
+    const failure = reservation.reservation.prepare({
+      command: firstCommand,
+      commandHash: deriveGameplayCommandHashV1(firstCommand),
+      receipt: failedReceipt(firstCommand, 8, event),
+      events: [event],
+    });
+
+    expect(() => reservation.reservation.prepare({
+      command: firstCommand,
+      commandHash: deriveGameplayCommandHashV1(firstCommand),
+      receipt: rejectedReceipt(firstCommand, 9),
+      events: [],
+    })).toThrow(/Receipt Tick differs/);
+    expect(journal.snapshot()).toMatchObject({
+      reservedIdempotencyRecordCount: 1,
+      reservedReceiptCount: 1,
+      reservedEventCount: 1,
+    });
+    expect(failure.commitPrepared).not.toThrow();
+    expect(journal.lookup(
+      firstCommand,
+      deriveGameplayCommandHashV1(firstCommand),
+    )).toMatchObject({ status: "replay", receipt: failure.receipt });
+    expect(journal.getEvent(event.id)).toEqual(event);
+    expect(journal.snapshot()).toMatchObject({
+      reservedIdempotencyRecordCount: 0,
+      reservedReceiptCount: 0,
+      reservedEventCount: 0,
+    });
   });
 
   it("replays the exact retained Receipt for the same canonical command", () => {
@@ -688,6 +755,11 @@ describe("CommandJournal", () => {
       events: hostileEvents,
     })).toThrow(/commit bundle is invalid/);
     expect(reads).toBe(0);
+    expect(journal.snapshot()).toMatchObject({
+      reservedIdempotencyRecordCount: 0,
+      reservedReceiptCount: 0,
+      reservedEventCount: 0,
+    });
   });
 
   it("queries retained Events in canonical sequence order after an exclusive cursor", () => {

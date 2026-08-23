@@ -420,6 +420,7 @@ export class CommandJournal {
     this.reserved.eventCount += request.eventCount;
     const claimOwner = Symbol("CommandJournal Event reservation");
     let state: "reserved" | "released" | "committed" = "reserved";
+    let hasPreparedAlternative = false;
     let committedEvents: readonly GameplayEventV1[] | undefined;
 
     const releaseReservation = (): void => {
@@ -446,10 +447,13 @@ export class CommandJournal {
           }
           this.stageEventClaims(events, claimOwner);
         } catch (error) {
-          state = "released";
-          releaseReservation();
+          if (!hasPreparedAlternative) {
+            state = "released";
+            releaseReservation();
+          }
           throw error;
         }
+        hasPreparedAlternative = true;
 
         return Object.freeze({
           events,
@@ -503,6 +507,7 @@ export class CommandJournal {
     this.reserved.eventCount += request.eventCount;
     const claimOwner = Symbol("CommandJournal command reservation");
     let state: "reserved" | "released" | "committed" = "reserved";
+    let hasPreparedAlternative = false;
     let committedReceipt: GameplayCommandReceiptV1 | undefined;
 
     const releaseCounts = (): void => {
@@ -539,10 +544,13 @@ export class CommandJournal {
           }
           this.stageEventClaims(bundle.events, claimOwner);
         } catch (error) {
-          state = "released";
-          releaseCounts();
+          if (!hasPreparedAlternative) {
+            state = "released";
+            releaseCounts();
+          }
           throw error;
         }
+        hasPreparedAlternative = true;
 
         const replay = Object.freeze({
           status: "replay" as const,
