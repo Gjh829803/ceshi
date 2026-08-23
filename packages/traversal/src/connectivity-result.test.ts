@@ -119,6 +119,10 @@ function buildInputReceipt(): HeightfieldRouteBuildInputReceiptV1 {
       maximumSearchSteps: 100_000,
       maximumTraversalSurfaceCount:
         GRAPH_BUILDER_PROFILE.profile.maximumTraversalSurfaceCount,
+      minimumEquivalentPlaneNormalDotRatio:
+        GRAPH_BUILDER_PROFILE.profile.minimumEquivalentPlaneNormalDotRatio,
+      maximumTraversalSurfaceTrianglePairTestCount:
+        GRAPH_BUILDER_PROFILE.profile.maximumTraversalSurfaceTrianglePairTestCount,
     },
     terrainSource: {
       kind: "bounded",

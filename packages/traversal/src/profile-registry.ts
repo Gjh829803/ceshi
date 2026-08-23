@@ -75,6 +75,8 @@ const TRAVERSAL_GRAPH_BUILDER_PROFILE_V2_REQUIRED_KEYS = [
   "maximumTiles",
   "maximumSearchSteps",
   "maximumTraversalSurfaceCount",
+  "minimumEquivalentPlaneNormalDotRatio",
+  "maximumTraversalSurfaceTrianglePairTestCount",
 ] as const;
 
 const TRAVERSAL_GRAPH_BUILDER_PROFILE_V2_ALLOWED_KEYS = new Set(
@@ -131,6 +133,8 @@ const BUILT_IN_HEIGHTFIELD_R1_GRAPH_BUILDER_PROFILE: TraversalGraphBuilderProfil
   maximumTiles: 1024,
   maximumSearchSteps: 100000,
   maximumTraversalSurfaceCount: 61,
+  minimumEquivalentPlaneNormalDotRatio: 0.99999,
+  maximumTraversalSurfaceTrianglePairTestCount: 4_000_000,
 };
 
 const BUILT_IN_HEIGHTFIELD_R1_LOW_BUDGET_GRAPH_BUILDER_PROFILE:
@@ -534,6 +538,19 @@ export function validateTraversalGraphBuilderProfileV2(value: unknown): void {
     "maximumTraversalSurfaceCount",
     1,
     1_000_000,
+  );
+  requirePositiveNumber(
+    source.minimumEquivalentPlaneNormalDotRatio,
+    "TRAVERSAL_GRAPH_BUILDER_NUMBER_INVALID",
+    "minimumEquivalentPlaneNormalDotRatio",
+    1,
+  );
+  requireSafeIntegerInRange(
+    source.maximumTraversalSurfaceTrianglePairTestCount,
+    "TRAVERSAL_GRAPH_BUILDER_NUMBER_INVALID",
+    "maximumTraversalSurfaceTrianglePairTestCount",
+    1,
+    Number.MAX_SAFE_INTEGER - 1,
   );
 }
 

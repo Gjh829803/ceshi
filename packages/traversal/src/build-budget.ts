@@ -144,7 +144,11 @@ function requireExactSurfaceCountBudgetInput(
     envelope.graphBuilderResolvedVersion !== resolvedProfile.resolvedVersion ||
     envelope.graphBuilderProfileHash !== resolvedProfile.contentHash ||
     envelope.maximumTraversalSurfaceCount !==
-      resolvedProfile.profile.maximumTraversalSurfaceCount
+      resolvedProfile.profile.maximumTraversalSurfaceCount ||
+    envelope.minimumEquivalentPlaneNormalDotRatio !==
+      resolvedProfile.profile.minimumEquivalentPlaneNormalDotRatio ||
+    envelope.maximumTraversalSurfaceTrianglePairTestCount !==
+      resolvedProfile.profile.maximumTraversalSurfaceTrianglePairTestCount
   ) {
     failBudget("capabilityEnvelope Graph Builder Profile identity is invalid.");
   }

@@ -162,6 +162,8 @@ const GRAPH_POLICY_FIELDS = [
   "maximumTiles",
   "maximumSearchSteps",
   "maximumTraversalSurfaceCount",
+  "minimumEquivalentPlaneNormalDotRatio",
+  "maximumTraversalSurfaceTrianglePairTestCount",
 ] as const;
 
 const BUILD_INPUT_FIELDS = [
@@ -273,6 +275,8 @@ const CAPABILITY_FIELDS = [
   "maximumTiles",
   "maximumSearchSteps",
   "maximumTraversalSurfaceCount",
+  "minimumEquivalentPlaneNormalDotRatio",
+  "maximumTraversalSurfaceTrianglePairTestCount",
 ] as const;
 
 function fail(path: string, message: string): never {
@@ -457,8 +461,28 @@ function validateCapabilityEnvelope(
     "maximumTiles",
     "maximumSearchSteps",
     "maximumTraversalSurfaceCount",
+    "maximumTraversalSurfaceTrianglePairTestCount",
   ] as const) {
     requirePositiveSafeInteger(record[field], `${path}/${field}`);
+  }
+  if (
+    (record.maximumTraversalSurfaceTrianglePairTestCount as number) >
+    Number.MAX_SAFE_INTEGER - 1
+  ) {
+    fail(
+      `${path}/maximumTraversalSurfaceTrianglePairTestCount`,
+      "must be <= Number.MAX_SAFE_INTEGER - 1",
+    );
+  }
+  const minimumEquivalentPlaneNormalDotRatio = requirePositive(
+    record.minimumEquivalentPlaneNormalDotRatio,
+    `${path}/minimumEquivalentPlaneNormalDotRatio`,
+  );
+  if (minimumEquivalentPlaneNormalDotRatio > 1) {
+    fail(
+      `${path}/minimumEquivalentPlaneNormalDotRatio`,
+      "must be in (0, 1]",
+    );
   }
   return value as TraversalCapabilityEnvelopeV1;
 }

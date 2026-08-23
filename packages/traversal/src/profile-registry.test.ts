@@ -66,6 +66,8 @@ const CLOSED_HEIGHTFIELD_R1_GRAPH_BUILDER_PROFILE: TraversalGraphBuilderProfileV
   maximumTiles: 1024,
   maximumSearchSteps: 100000,
   maximumTraversalSurfaceCount: 61,
+  minimumEquivalentPlaneNormalDotRatio: 0.99999,
+  maximumTraversalSurfaceTrianglePairTestCount: 4_000_000,
 };
 
 const FORBIDDEN_GRAPH_BUILDER_V2_FIELDS: Readonly<Record<string, unknown>> = {
@@ -274,7 +276,7 @@ describe("traversal graph builder profile registry", () => {
       profile: CLOSED_HEIGHTFIELD_R1_GRAPH_BUILDER_PROFILE,
     });
     expect(resolved.contentHash).toBe(
-      "sha256:f3bbb2dfc950c7db15101134894aa6eba0db54d8a7e3aca4800006ab3425681b",
+      "sha256:14e9e5ccf593320f719e457bd79b12688469c5bbcc492dfdaa2ad3f21067715a",
     );
     expect(resolveTraversalGraphBuilderProfile(
       BUILT_IN_TRAVERSAL_GRAPH_BUILDER_PROFILE_REF,
@@ -318,7 +320,7 @@ describe("traversal graph builder profile registry", () => {
     });
     expect(lowBudget.contentHash).toBe(sha256CanonicalJson(lowBudget.profile));
     expect(lowBudget.contentHash).toBe(
-      "sha256:9786c6783d75722d9d57f0f14549bc134925f2dbd5bca9298c29bb85d31b1b66",
+      "sha256:21755675ff0028dd7ebf56e3ce2fcbd7b1993bcf591bce92a6759b480198e2f6",
     );
     expect(resolveTraversalGraphBuilderProfile(
       BUILT_IN_HEIGHTFIELD_R1_LOW_BUDGET_TRAVERSAL_GRAPH_BUILDER_PROFILE_REF,
@@ -349,6 +351,11 @@ describe("traversal graph builder profile registry", () => {
       { maximumSimplificationErrorMeters: Number.NaN },
       { maximumTraversalSurfaceCount: 0 },
       { maximumTraversalSurfaceCount: 1.5 },
+      { minimumEquivalentPlaneNormalDotRatio: 0 },
+      { minimumEquivalentPlaneNormalDotRatio: 1.00001 },
+      { maximumTraversalSurfaceTrianglePairTestCount: 0 },
+      { maximumTraversalSurfaceTrianglePairTestCount: 1.5 },
+      { maximumTraversalSurfaceTrianglePairTestCount: Number.MAX_SAFE_INTEGER },
     ]) {
       expect(() => validateTraversalGraphBuilderProfileV2({
         ...CLOSED_HEIGHTFIELD_R1_GRAPH_BUILDER_PROFILE,

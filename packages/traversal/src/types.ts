@@ -98,6 +98,8 @@ export interface TraversalGraphBuilderProfileV2 {
   readonly maximumTiles: number;
   readonly maximumSearchSteps: number;
   readonly maximumTraversalSurfaceCount: number;
+  readonly minimumEquivalentPlaneNormalDotRatio: number;
+  readonly maximumTraversalSurfaceTrianglePairTestCount: number;
 }
 
 export interface TraversalSurfaceProfileV1 {
@@ -182,6 +184,8 @@ export interface TraversalCapabilityEnvelopeV1 {
   readonly maximumTiles: number;
   readonly maximumSearchSteps: number;
   readonly maximumTraversalSurfaceCount: number;
+  readonly minimumEquivalentPlaneNormalDotRatio: number;
+  readonly maximumTraversalSurfaceTrianglePairTestCount: number;
 }
 
 export interface TraversalCapabilityEnvelopeReceiptV1 {
