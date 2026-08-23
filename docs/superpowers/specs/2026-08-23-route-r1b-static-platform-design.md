@@ -291,17 +291,21 @@ interface RouteBuildInputV2 {
 3. 每个 Static Surface 精确引用 `staticColliders` 中一行；
 4. 未被 Surface 引用的 Static Collider 仍是纯 blocker；
 5. 被 Surface 引用的 Collider 同时提供支撑几何和侧面/底面阻挡，不能复制两份 soup；
-6. `terrainSource` 不内嵌自己的 Hash，`terrainArtifactHash` 精确等于
+6. `terrainSource.kind === "bounded"` 时 `triangleSoup` 必须包含至少一个 Triangle，
+   `minimumMetersXZ` / `maximumMetersXZ` 必须由该 canonical soup 全部 world-space vertex 的
+   XZ extrema 重算并在 `-0` 归一化后逐项精确相等，且 X/Z extent 都必须为正；不得接受只与
+   自己声明 Hash 一致的扩大、缩小或平移 bounds；
+7. `terrainSource` 不内嵌自己的 Hash，`terrainArtifactHash` 精确等于
    `hashRouteTerrainArtifactV2(terrainSource)`；
-7. `colliderArtifactHash` 覆盖按 `colliderSubshapeId` 排序的全部 `staticColliders`；
-8. `geometryArtifactHash = sha256CanonicalJson({ terrainArtifactHash, colliderArtifactHash })`；
-9. `surfaceArtifactHash` 覆盖排序后的 Surface identity/binding；
-10. Build Input Receipt 重新计算所有 child/root hash、Graph Builder budget 和 Capability Envelope；
-11. `hard-ribbon` 继续是所有 Surface 的 XZ 硬边界；
-12. Water/Area exclusion 只修改 Graph candidate source，不删除 Runtime Collider。
+8. `colliderArtifactHash` 覆盖按 `colliderSubshapeId` 排序的全部 `staticColliders`；
+9. `geometryArtifactHash = sha256CanonicalJson({ terrainArtifactHash, colliderArtifactHash })`；
+10. `surfaceArtifactHash` 覆盖排序后的 Surface identity/binding；
+11. Build Input Receipt 重新计算所有 child/root hash、Graph Builder budget 和 Capability Envelope；
+12. `hard-ribbon` 继续是所有 Surface 的 XZ 硬边界；
+13. Water/Area exclusion 只修改 Graph candidate source，不删除 Runtime Collider。
 
-Task 2 必须从 `@whitebox-world/traversal` package root 导出以下四个唯一 Hash
-owner，Compiler/Graph/Validation 不得重新实现 preimage：
+Task 2 必须从 `@whitebox-world/traversal` package root 导出以下四个 artifact Hash owner 与
+一个 Build Input root Hash owner，Compiler/Graph/Validation 不得重新实现 preimage：
 
 ```ts
 terrainArtifactHash = hashRouteTerrainArtifactV2(terrainSource);
@@ -311,6 +315,7 @@ geometryArtifactHash = hashRouteGeometryArtifactV2({
   colliderArtifactHash,
 });
 surfaceArtifactHash = hashRouteSurfaceArtifactV2(traversalSurfaces);
+routeBuildInputHash = hashRouteBuildInputV2(input);
 ```
 
 其中精确 preimage 为：
@@ -323,6 +328,23 @@ surfaceArtifactHash = hashRouteSurfaceArtifactV2(traversalSurfaces);
   `{ terrainArtifactHash, colliderArtifactHash }`；
 - `hashRouteSurfaceArtifactV2`：已按 `traversalSurfaceId` 严格排序的完整
   `TraversalSurfaceIdentityV1[]`。
+
+Root preimage 精确为 `sha256CanonicalJson(canonical RouteBuildInputV2)`。Canonical admission
+必须先重算并核对上述四个已声明 child/root artifact hash，再返回闭集 Input；因此
+`routeBuildInputHash` 同时绑定已验证四 Hash、完整 Surface/geometry inventory、Capability
+Envelope、anchors/ribbon 与两组 exclusion declaration。`hashRouteBuildInputV2()` 是该 root
+preimage 的唯一 owner；Compiler、Recast、Validation 和 Receipt factory 不得直接调用
+`sha256CanonicalJson(input)` 复制实现。`assertRouteBuildInputReceiptV2()` 必须调用
+`createRouteBuildInputReceiptV2(receipt.input)` 生成 expected receipt，并对 canonical full receipt
+做 byte equality；不得只检查传入字符串或顶层字段形状。
+
+上述 bounded extrema admission 只有一个实现 owner：Task 2 在
+`@whitebox-world/traversal` 的 Build Input 模块内定义共享 canonical Terrain admission；
+`hashRouteTerrainArtifactV2()` 必须先调用该 admission，再对返回的 canonical source 计算
+preimage。`assertRouteBuildInputV2()` 与 `createRouteBuildInputReceiptV2()` 复用同一入口，不得各自
+重新实现 extrema 或 `-0` 规则。因此攻击者即使按伪造 bounds 重算
+`terrainArtifactHash` / `geometryArtifactHash` / `routeBuildInputHash`，仍必须在 Terrain admission
+阶段 fail closed。
 
 `blockedTraversalAreaExclusions` 与 `blockedWaterExclusions` 不进入
 `terrainArtifactHash`：它们的几何效果已体现在 post-exclusion `triangleSoup`，而完整
@@ -353,8 +375,9 @@ Graph budget，因为 Static Surface/Collider 仍可能需要真实 Provider bui
 Surface-count budget 继续单独从冻结 Envelope 重算，不复制 maximum 到 Receipt
 bytes。`createRouteBuildInputReceiptV2(input: RouteBuildInputV2)` 是 Receipt、
 `routeBuildInputHash` 与 combined-geometry budget evidence 的唯一生产者。它必须先
-canonicalize 并校验 Input，使用上述四个唯一 helper 重新计算并核对 Input 已声明的
-child/root hash，再返回 deeply frozen 的
+canonicalize 并校验 Input，使用上述四个 artifact helper 重新计算并核对 Input 已声明的
+artifact hash，再调用唯一 `hashRouteBuildInputV2(canonicalInput)` 生成 root hash 并返回
+deeply frozen 的
 `{ input, routeBuildInputHash, budgetEvidence }`。Recast 使用相同四个 public helper
 组装完整 V2 Input 后只调用该 factory，不得另算 Receipt Hash 或 budget evidence。
 
@@ -377,8 +400,13 @@ R1b 必须 clean break 删除这三个 path-global 单值。
 `RoutePathReceiptV2` 保留 `orderedTraversalNodeIds`，并增加与其等长、同顺序的
 `orderedTraversalSurfaceIdentities`。每一项必须与 `traversalGraphHash` 所绑定 Graph 中对应
 Node 的三个稳定 ID 及其 Surface Resource identity 精确一致；它是 Graph 的可独立验证投影，
-不是第二个作者权威。`RouteOverlayV2` 投影相同的有序数组，不再声称整条 Overlay 属于一个
-Surface。Probe Request 绑定 V2 Path Receipt Hash，不再复制 path-global Surface。
+不是第二个作者权威。`RouteOverlayV2` 必须使用完全相同的字段名
+`orderedTraversalSurfaceIdentities` 投影相同有序数组；该数组与 Overlay/Path 各自的
+`orderedTraversalNodeIds` 等长，并按 index 与同一 Graph inventory row 对齐，不得改名、排序或
+去重成集合。`assertRouteOverlayContextV2()` 必须证明 Overlay 数组与 Path 数组 byte-equal，且
+两者每一项都等于对应 Node 的 inventory identity；缺行、多行、顺序漂移或只改一侧均 fail
+closed。Overlay 不再声称整条 Path 属于一个 Surface。Probe Request 绑定 V2 Path Receipt Hash，
+不再复制 path-global Surface。
 
 Graph V2 不把 Ref/Version/Hash 重复嵌入每个 Node。Node 保留 R0 已冻结的
 `traversalSurfaceId` / `surfaceEntityId` / `colliderSubshapeId` 三个稳定 ID，
@@ -440,18 +468,53 @@ readonly relatedTraversalSurfaceIdentities:
 identity 字段精确匹配 Build Input。同一 `traversalSurfaceId` 的不同资源版本
 不得同时出现；版本升级是替换该行并改变 Surface/Input Hash，不是多版本并存。
 
-| reason kind | code | `status / graphStatus` | Surface cardinality | 必需附加证据 |
+V2 clean break 不保留任何旧单数 Surface alias。除 common 中删除的
+`traversalSurfaceId/surfaceEntityId/colliderSubshapeId` 外，V1 reason-local 的
+`traversalSurfaceId` 全部删除；Threshold reason 的 Heightfield-only `terrainEntityId` 也删除。
+只有 `empty-heightfield-source` 保留用于标识 canonical Terrain source 的 `terrainEntityId`，它不是
+Surface identity。Surface 证据只能来自 `relatedTraversalSurfaceIdentities`。
+`graphStatus === "complete"` 时仍必须携带
+`traversalGraphHash`，`unavailable` 时禁止该字段。以下是全部现存 V1 reason 到 V2 的精确迁移，
+不是只约束新增 reason：
+
+| V2 reason kind | code | `status / graphStatus` | identity cardinality | 精确 reason-local fields（除 `kind/code`） |
 | --- | --- | --- | ---: | --- |
-| `surface-profile-missing` | `ROUTE_SURFACE_PROFILE_MISSING` | `incomplete / unavailable` | 0 | 非空且排序的 `relevantColliderSubshapeIds`、`failurePositionMetersXYZ` |
+| `empty-heightfield-source` | `ROUTE_REQUIRED_PATH_UNREACHABLE` | `unreachable / unavailable` | 0 | `terrainEntityId` |
+| `no-queryable-ground-surface` | `ROUTE_REQUIRED_PATH_UNREACHABLE` | `unreachable / unavailable` | 0 | 无 |
+| `start-surface-not-found` | `ROUTE_START_SURFACE_NOT_FOUND` | `unreachable / complete` | 0 | `anchorEntityId`, `positionMetersXYZ` |
+| `destination-surface-not-found` | `ROUTE_DESTINATION_SURFACE_NOT_FOUND` | `unreachable / complete` | 0 | `anchorEntityId`, `positionMetersXYZ` |
+| `required-path-unreachable` | `ROUTE_REQUIRED_PATH_UNREACHABLE` | `unreachable / complete` | 0 | 排序唯一的 `relevantBlockingColliderEntityIds`, `blockedWaterEntityIds` |
+| `node-budget-exceeded` | `ROUTE_GRAPH_BUDGET_EXCEEDED` | `incomplete / unavailable` | 0 | `maximumAllowedCount`, `minimumRequiredCount` |
+| `edge-budget-exceeded` | `ROUTE_GRAPH_BUDGET_EXCEEDED` | `incomplete / unavailable` | 0 | `maximumAllowedCount`, `minimumRequiredCount` |
+| `search-budget-exceeded` | `ROUTE_GRAPH_BUDGET_EXCEEDED` | `incomplete / complete` | 0 | `maximumAllowedCount`, `minimumRequiredCount` |
+| `straight-path-capacity-exceeded` | `ROUTE_GRAPH_BUDGET_EXCEEDED` | `incomplete / complete` | 0 | `maximumAllowedCount`, `minimumRequiredCount` |
+| `slope-threshold-exceeded` | `ROUTE_SLOPE_EXCEEDED` | `unreachable / unavailable` 或 `unreachable / complete` | 至少 1 | proof common + `maximumObservedSlopeDegrees`, `maximumAllowedSlopeDegrees` |
+| `step-height-threshold-exceeded` | `ROUTE_STEP_HEIGHT_EXCEEDED` | `unreachable / unavailable` 或 `unreachable / complete` | 至少 1 | proof common + `maximumObservedStepHeightMeters`, `maximumAllowedStepHeightMeters` |
+| `clearance-width-insufficient` | `ROUTE_CLEARANCE_WIDTH_INSUFFICIENT` | `unreachable / unavailable` 或 `unreachable / complete` | 至少 1 | proof common + 排序唯一的 `relevantColliderSubshapeIds`, `minimumObservedClearanceWidthMeters`, `minimumRequiredClearanceWidthMeters` |
+| `overhead-clearance-insufficient` | `ROUTE_OVERHEAD_CLEARANCE_INSUFFICIENT` | `unreachable / unavailable` 或 `unreachable / complete` | 至少 1 | proof common + 排序唯一的 `relevantColliderSubshapeIds`, `minimumObservedClearanceHeightMeters`, `minimumRequiredClearanceHeightMeters` |
+| `surface-gap-exceeded` | `ROUTE_SURFACE_GAP_EXCEEDED` | `unreachable / unavailable` 或 `unreachable / complete` | 至少 1 | proof common + `maximumObservedSurfaceGapMeters`, `maximumAllowedSurfaceGapMeters: 0` |
+| `surface-profile-missing` | `ROUTE_SURFACE_PROFILE_MISSING` | `incomplete / unavailable` | 0 | 非空且排序唯一的 `relevantColliderSubshapeIds`, `failurePositionMetersXYZ` |
 | `surface-correlation-missing` | `ROUTE_SURFACE_CORRELATION_MISSING` | `incomplete / unavailable` | 0..1 | `failurePositionMetersXYZ` |
 | `surface-correlation-ambiguous` | `ROUTE_SURFACE_CORRELATION_AMBIGUOUS` | `incomplete / unavailable` | 至少 2 | `failurePositionMetersXYZ` |
-| `traversal-surface-count-budget-exceeded` | `ROUTE_GRAPH_BUDGET_EXCEEDED` | `incomplete / unavailable` | 0 | `maximumAllowedCount`、`minimumRequiredCount` |
+| `traversal-surface-count-budget-exceeded` | `ROUTE_GRAPH_BUDGET_EXCEEDED` | `incomplete / unavailable` | 0 | `maximumAllowedCount`, `minimumRequiredCount` |
 
-`surface-correlation-missing` 在 Provider range 已唯一对应 Canonical Surface、但 Node
-barycentric/height correlation 失败时保留一个 identity；连唯一 range 都无法确定时为
-0。`ambiguous` 必须保留所有非等价/内部重叠候选。其他旧 reason 也使用该数组：
-只有当拒绝证明确定了参与 Surface 时才填充，pre-Graph capacity/start/destination 失败
-不得猜测 Surface。
+表中的 proof common 精确为
+`proofKind: "unique-single-reason-cut"`、非空且排序唯一的 `proofCandidateIds`、
+`failurePositionMetersXYZ`。Threshold reason 的 identity 数组必须是该唯一拒绝证明中全部
+candidate evidence 所引用 Canonical Surface identity 的排序去重 union；无法从 proof candidate
+确定至少一个完整 identity 时不得发布专用 threshold reason，必须回退通用不可达。
+`unavailable` 只用于 Graph 尚未产生时的 Build Rejection Graph proof；已有完整 Graph 上的
+Query/Rejection proof 必须使用 `complete` 与同一 Graph Hash。
+
+V2 `empty-heightfield-source` 只能在 combined canonical geometry inventory 真空时发布：
+`terrainSource.kind === "empty"` 且 `staticColliders.length === 0`（每个存在的 canonical collider
+soup 本身必须非空）；只要平台或任何 Static Collider 存在就禁止该 reason，并继续真实 Provider build。Combined geometry 非空但
+slope/filter/provider 结果没有任何可查询 candidate 时才发布
+`no-queryable-ground-surface`。`surface-correlation-missing` 在 Provider range 已唯一对应
+Canonical Surface、但 Node barycentric/height correlation 失败时保留一个 identity；连唯一 range
+都无法确定时为 0。`ambiguous` 必须保留所有非等价/内部重叠候选。Pre-Graph capacity、
+start/destination miss、generic unreachable 和 query capacity reason 的 identity 数组固定为空，
+不得从 Build Input inventory 猜测参与 Surface。
 
 `RouteOverlayV2` 将 V1 `blockingColliderIdentities` clean break 为
 `staticColliderIdentities`，它精确投影全部 `input.staticColliders`，包含
@@ -468,8 +531,19 @@ assertRouteOverlayContextV2({
 });
 ```
 
-Runtime Contracts/Browser 只调用该入口，不再重建 Path/Overlay/Collider inventory
-绑定规则。
+该 validator 需要可信 `RouteBuildInputReceiptV2`，因此调用点冻结在
+`@whitebox-world/validation` 的 `createWorldkitBrowserRouteEvidencePublicationV2()`：每个
+publication row 已携带 Validation admission 使用的同一 Build Input Receipt；factory 必须在构建、
+哈希和发布 DTO 前调用上述入口。Validation/Trusted Host 是 raw publication provenance admission
+owner；从磁盘、CLI 或网络接收的 raw row 只有在 Host 同时持有并核验对应 Validation Receipt、
+Build Input Receipt 与 hash chain 后，才能进入该 factory。禁止把任意 raw JSON 直接标记为
+trusted publication。
+
+Runtime Contracts 的 V2 canonicalizer 只负责无需 Build Input context 即可自证的 standalone
+closed-shape、child hash、Path/Overlay 内部对齐与 deep-freeze；它不接收虚构的 Build Input，
+也不重建 Collider inventory provenance。Browser V5 只安装 Trusted Host 提供的 canonical DTO，
+保持 read-only selector/getter；它不是 raw publication trust owner，也不声称仅凭
+`staticColliderIdentities` 和一个可重算 Overlay Hash 就能证明 Build Input provenance。
 
 Browser 的 route evidence 返回形状同步版本化为
 `WorldkitBrowserRouteEvidencePublicationV2` / `RouteEvidenceProjectionV2`，Path 与 Overlay 都只
@@ -952,6 +1026,11 @@ R1b 新增 `examples/traversal/r1b-static-platform/`，至少包含：
   rasterize/compact → blocker compact span null 的顺序执行；0.15m contour simplification 下相邻
   共面 Surface 仍不产生跨 source range polygon；
 - 改 Collider geometry、Binding、Profile 或 Placement，相关 child/root hash 必变；
+- bounded Terrain 的扩大/缩小/平移 forged bounds 即使重算全部 Hash 仍失败；只改 exclusion
+  declaration 时 `routeBuildInputHash` 必变而 geometry artifact Hash 不变，Receipt root 必须等于
+  唯一 `hashRouteBuildInputV2()`；
+- empty Terrain + 非空平台/Static Collider 必须执行真实 budget/Provider build，不能发布
+  `empty-heightfield-source` 或 `not-required-empty-geometry`；
 - forged Surface → Collider identity、stale lock、mixed-world evidence fail closed；
 - exact seam、微小 gap、coplanar overlap、stacked overlap 的不同结果，Graph/Runtime 各自 band
   必须记录并命中相同拓扑分类；
@@ -959,7 +1038,8 @@ R1b 新增 `examples/traversal/r1b-static-platform/`，至少包含：
 - Reset、Rebind、两实例并发、创建中 throw、cleanup throw；
 - 30/60/120 Hz-like cadence 得到相同 tick/evidence/final-state hash；
 - V2 terrain/collider/geometry/surface child-root hash 全部重算；Browser V5 只发布 V2 ordered
-  Surface identities，不保留 path-global alias；Controller contact band 继续由 Runtime Adapter
+  Surface identities，Overlay/Path 同名数组必须 byte-equal 且顺序对齐 Graph inventory，不保留
+  path-global alias；Controller contact band 继续由 Runtime Adapter
   Live Lock 核验，不扩展 Physics Body Profile；
 - Canonical Schema、CLI、Browser、Report、Snapshot 不得出现未审计的 Provider handle、内部
   name、raw error 或原生 path；R1 已冻结并审计的 Runtime Backend/Adapter Resource Ref 与
