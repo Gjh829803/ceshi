@@ -1520,7 +1520,7 @@ describe("GameplayCapacityBudgetV1", () => {
       maximumSemanticFactCount: 4096,
       maximumSemanticFactTransitionCountPerTick: 1024,
       maximumIdempotencyRecordCount: 4096,
-      maximumRetiredActionExecutionIdCount: 4096,
+      maximumUsedActionExecutionIdCount: 4096,
       maximumRetainedReceiptCount: 4096,
       maximumRetainedEventCount: 8192,
     });
@@ -1532,7 +1532,7 @@ describe("GameplayCapacityBudgetV1", () => {
       DEFAULT_GAMEPLAY_CAPACITY_BUDGET_V1 as unknown as Readonly<
         Record<string, unknown>
       >,
-      "maximumRetiredActionExecutionIdCount",
+      "maximumUsedActionExecutionIdCount",
     ))).toThrow("closed GameplayCapacityBudgetV1 schema");
   });
 

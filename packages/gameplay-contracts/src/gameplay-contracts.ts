@@ -1999,7 +1999,7 @@ export interface GameplayCapacityBudgetV1 {
   readonly maximumSemanticFactCount: number;
   readonly maximumSemanticFactTransitionCountPerTick: number;
   readonly maximumIdempotencyRecordCount: number;
-  readonly maximumRetiredActionExecutionIdCount: number;
+  readonly maximumUsedActionExecutionIdCount: number;
   readonly maximumRetainedReceiptCount: number;
   readonly maximumRetainedEventCount: number;
 }
@@ -2014,7 +2014,7 @@ const GAMEPLAY_CAPACITY_BUDGET_KEYS = [
   "maximumSemanticFactCount",
   "maximumSemanticFactTransitionCountPerTick",
   "maximumIdempotencyRecordCount",
-  "maximumRetiredActionExecutionIdCount",
+  "maximumUsedActionExecutionIdCount",
   "maximumRetainedReceiptCount",
   "maximumRetainedEventCount",
 ] as const satisfies readonly (keyof GameplayCapacityBudgetV1)[];
@@ -2045,7 +2045,7 @@ export const DEFAULT_GAMEPLAY_CAPACITY_BUDGET_V1: GameplayCapacityBudgetV1 =
     maximumSemanticFactCount: 4096,
     maximumSemanticFactTransitionCountPerTick: 1024,
     maximumIdempotencyRecordCount: 4096,
-    maximumRetiredActionExecutionIdCount: 4096,
+    maximumUsedActionExecutionIdCount: 4096,
     maximumRetainedReceiptCount: 4096,
     maximumRetainedEventCount: 8192,
   });

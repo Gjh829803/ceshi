@@ -5,6 +5,7 @@ import type {
 
 import type { GameplayModeV1 } from "./gameplay-mode";
 import type {
+  GameplayCommandPlanAuthorityV1,
   GameplayPlanningStateV1,
   GameplayStatePlanResultV1,
 } from "./gameplay-state";
@@ -33,6 +34,7 @@ export type GameplayCommandHandlerV1 = {
 export interface GameplayDispatchInputV1 {
   readonly command: GameplayCommandV1;
   readonly state: GameplayPlanningStateV1;
+  readonly commandPlanAuthority: GameplayCommandPlanAuthorityV1;
   readonly simulationTick: number;
   readonly gameplayMode: GameplayModeV1;
 }
@@ -81,10 +83,18 @@ export class GameplayCommandDispatcher {
     const typedHandler = handler as Readonly<{
       plan(context: GameplayCommandHandlerContextV1): GameplayStatePlanResultV1;
     }>;
-    return typedHandler.plan({
+    const result = typedHandler.plan({
       command: input.command,
       state: input.state,
       simulationTick: input.simulationTick,
     });
+    if (result.status === "planned") {
+      input.commandPlanAuthority.authorizeCommandPlan({
+        transitionPlan: result.transitionPlan,
+        command: input.command,
+        simulationTick: input.simulationTick,
+      });
+    }
+    return result;
   }
 }

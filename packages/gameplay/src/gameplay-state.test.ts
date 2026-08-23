@@ -18,6 +18,11 @@ import {
   type GameplayActionDefinitionV1,
 } from "./core-semantic-action-feature";
 import {
+  GameplayCommandDispatcher,
+  type GameplayCommandHandlerContextV1,
+  type GameplayCommandHandlerV1,
+} from "./gameplay-command-dispatcher";
+import {
   GameplayState,
   derivePossessedByRelationshipIdV1,
   type GameplayStateOptionsV1,
@@ -27,6 +32,10 @@ import {
 
 const HASH_A = `sha256:${"a".repeat(64)}` as const;
 const HASH_B = `sha256:${"b".repeat(64)}` as const;
+const ACCEPT_ALL_GAMEPLAY_MODE = Object.freeze({
+  gameplayModeRef: "worldkit://gameplay-mode/test@1",
+  evaluateCommand: () => Object.freeze({ status: "accepted" as const }),
+});
 
 function definition(
   overrides: Partial<Omit<GameplayActionDefinitionV1, "contentHash">> = {},
@@ -162,45 +171,315 @@ function bind(
   id = `bind-${controllerEntityId}-${controlledEntityId}`,
   tick = 1,
 ): void {
-  const result = state.planControl(command({
+  const bindCommand = command({
     id,
     type: "control.bind",
     controllerEntityId,
     controlledEntityId,
     expectedPossession: { mode: "unbound" },
-  }), tick);
+  });
+  const result = dispatchCanonicalCommand(state, bindCommand, tick);
   if (result.status !== "planned") throw new Error(result.diagnostic.code);
+  state.projectWorldStateAfter(result.transitionPlan, projectionContext(tick));
   state.commit(result.transitionPlan);
 }
 
 function reissueWithCapacityDelta(
   state: GameplayState,
+  sourceCommand: GameplayCommandV1,
+  simulationTick: number,
   source: Extract<GameplayTransitionPlanV1, { commandId: string }>,
   capacityDelta: GameplayTransitionCapacityDeltaV1,
 ): GameplayTransitionPlanV1 {
   const planner = Reflect.get(state, "plannedCommand");
   if (typeof planner !== "function") throw new Error("internal planner unavailable");
   const result = Reflect.apply(planner, state, [
-    source.type,
-    source.commandId,
+    sourceCommand,
+    simulationTick,
     source.relationshipChanges,
     source.actionChanges,
     source.newlyCommittedActionExecutionIds,
     capacityDelta,
   ]) as { readonly transitionPlan: GameplayTransitionPlanV1 };
+  state.commandPlanAuthorityPort().authorizeCommandPlan({
+    transitionPlan: result.transitionPlan as Extract<
+      GameplayTransitionPlanV1,
+      { commandId: string }
+    >,
+    command: sourceCommand,
+    simulationTick,
+  });
   return result.transitionPlan;
 }
 
+function dispatchWithHandler(
+  state: GameplayState,
+  handler: GameplayCommandHandlerV1,
+  gameplayCommand: GameplayCommandV1,
+  simulationTick: number,
+) {
+  return new GameplayCommandDispatcher([handler]).dispatch({
+    command: gameplayCommand,
+    state: state.planningPort(),
+    commandPlanAuthority: state.commandPlanAuthorityPort(),
+    simulationTick,
+    gameplayMode: ACCEPT_ALL_GAMEPLAY_MODE,
+  });
+}
+
+function dispatchCanonicalCommand(
+  state: GameplayState,
+  gameplayCommand: GameplayCommandV1,
+  simulationTick: number,
+) {
+  const plan = ({
+    command: receivedCommand,
+    state: planningState,
+    simulationTick: receivedTick,
+  }: GameplayCommandHandlerContextV1) =>
+    receivedCommand.type === "control.bind" ||
+      receivedCommand.type === "control.release"
+      ? planningState.planControl(receivedCommand, receivedTick)
+      : planningState.planAction(receivedCommand, receivedTick);
+  return dispatchWithHandler(
+    state,
+    { type: gameplayCommand.type, plan } as GameplayCommandHandlerV1,
+    gameplayCommand,
+    simulationTick,
+  );
+}
+
+function stageAndCommit(
+  state: GameplayState,
+  transitionPlan: GameplayTransitionPlanV1,
+  simulationTick: number,
+): void {
+  state.projectWorldStateAfter(transitionPlan, projectionContext(simulationTick));
+  state.commit(transitionPlan);
+}
+
 describe("GameplayState possession", () => {
+  it("rejects an issued command plan until the Dispatcher authorizes it", () => {
+    const projectState = new GameplayState(options());
+    const directCommand = command({
+      id: "direct-bind",
+      type: "control.bind",
+      controllerEntityId: "controller-a",
+      controlledEntityId: "subject-a",
+      expectedPossession: { mode: "unbound" },
+    });
+    const projectPlan = projectState.planControl(directCommand, 1);
+    if (projectPlan.status !== "planned") throw new Error("bind rejected");
+    expect(() => projectState.projectWorldStateAfter(
+      projectPlan.transitionPlan,
+      projectionContext(1),
+    )).toThrow(/GAMEPLAY_TRANSITION_NOT_AUTHORIZED/);
+    expect(projectState.revision).toBe(0);
+
+    const commitState = new GameplayState(options());
+    const commitPlan = commitState.planControl(directCommand, 1);
+    if (commitPlan.status !== "planned") throw new Error("bind rejected");
+    expect(() => commitState.commit(commitPlan.transitionPlan)).toThrow(
+      /GAMEPLAY_TRANSITION_NOT_AUTHORIZED/,
+    );
+    expect(commitState.revision).toBe(0);
+    expect(commitState.possessionForController("controller-a")).toBeUndefined();
+  });
+
+  it.each([
+    ["command ID", { id: "other-bind" }, 1],
+    ["same-ID payload", { controlledEntityId: "subject-b" }, 1],
+    ["simulation Tick", {}, 2],
+  ] as const)(
+    "rejects a Handler-issued plan for another %s",
+    (_dimension, commandOverrides, plannedTick) => {
+      const state = new GameplayState(options());
+      const dispatchedCommand = command({
+        id: "canonical-bind",
+        type: "control.bind",
+        controllerEntityId: "controller-a",
+        controlledEntityId: "subject-a",
+        expectedPossession: { mode: "unbound" },
+      });
+      const otherCommand = {
+        ...dispatchedCommand,
+        ...commandOverrides,
+      } as ControlBindGameplayCommandV1;
+      let mismatchedPlan: GameplayTransitionPlanV1 | undefined;
+      const handler: GameplayCommandHandlerV1 = {
+        type: "control.bind",
+        plan: ({ state: planningState }) => {
+          const result = planningState.planControl(otherCommand, plannedTick);
+          if (result.status === "planned") mismatchedPlan = result.transitionPlan;
+          return result;
+        },
+      };
+      expect(() => dispatchWithHandler(
+        state,
+        handler,
+        dispatchedCommand,
+        1,
+      )).toThrow(/GAMEPLAY_TRANSITION_COMMAND_MISMATCH/);
+      const rejectedPlan = mismatchedPlan;
+      if (rejectedPlan === undefined) throw new Error("mismatched plan missing");
+      expect(() => state.projectWorldStateAfter(
+        rejectedPlan,
+        projectionContext(plannedTick),
+      )).toThrow(/GAMEPLAY_TRANSITION_NOT_AUTHORIZED/);
+      expect(() => state.commit(rejectedPlan)).toThrow(
+        /GAMEPLAY_TRANSITION_NOT_AUTHORIZED/,
+      );
+      expect(state.revision).toBe(0);
+      expect(state.possessionForController("controller-a")).toBeUndefined();
+    },
+  );
+
+  it("rejects a Handler plan for another command type", () => {
+    const state = new GameplayState(options());
+    bind(state);
+    const dispatchedCommand = command({
+      id: "release-original",
+      type: "control.release",
+      controllerEntityId: "controller-a",
+      expectedPossession: { mode: "possessed", controlledEntityId: "subject-a" },
+    });
+    const otherCommand = command({
+      id: "activate-other-type",
+      type: "action.activate",
+      controllerEntityId: "controller-a",
+      actionExecutionId: "execution-other-type",
+      semanticActionRef: "worldkit://semantic-action/wave@1",
+      actorEntityId: "subject-a",
+      expectedPossession: { mode: "possessed", controlledEntityId: "subject-a" },
+    });
+    let mismatchedPlan: GameplayTransitionPlanV1 | undefined;
+    const handler: GameplayCommandHandlerV1 = {
+      type: "control.release",
+      plan: ({ state: planningState }) => {
+        const result = planningState.planAction(otherCommand, 2);
+        if (result.status === "planned") mismatchedPlan = result.transitionPlan;
+        return result;
+      },
+    };
+    expect(() => dispatchWithHandler(
+      state,
+      handler,
+      dispatchedCommand,
+      2,
+    )).toThrow(/GAMEPLAY_TRANSITION_COMMAND_MISMATCH/);
+    const rejectedPlan = mismatchedPlan;
+    if (rejectedPlan === undefined) throw new Error("mismatched plan missing");
+    expect(() => state.projectWorldStateAfter(
+      rejectedPlan,
+      projectionContext(2),
+    )).toThrow(/GAMEPLAY_TRANSITION_NOT_AUTHORIZED/);
+    expect(() => state.commit(rejectedPlan)).toThrow(
+      /GAMEPLAY_TRANSITION_NOT_AUTHORIZED/,
+    );
+    expect(state.possessionForController("controller-a")?.controlledEntityId)
+      .toBe("subject-a");
+    expect(state.activeActionState("execution-other-type")).toBeUndefined();
+  });
+
+  it("rejects a genuinely issued plan from another GameplayState", () => {
+    const state = new GameplayState(options());
+    const otherState = new GameplayState(options());
+    const dispatchedCommand = command({
+      id: "cross-state-bind",
+      type: "control.bind",
+      controllerEntityId: "controller-a",
+      controlledEntityId: "subject-a",
+      expectedPossession: { mode: "unbound" },
+    });
+    let foreignPlan: GameplayTransitionPlanV1 | undefined;
+    const handler: GameplayCommandHandlerV1 = {
+      type: "control.bind",
+      plan: () => {
+        const result = otherState.planControl(dispatchedCommand, 1);
+        if (result.status === "planned") foreignPlan = result.transitionPlan;
+        return result;
+      },
+    };
+    expect(() => dispatchWithHandler(
+      state,
+      handler,
+      dispatchedCommand,
+      1,
+    )).toThrow(/GAMEPLAY_TRANSITION_NOT_ISSUED/);
+    const rejectedPlan = foreignPlan;
+    if (rejectedPlan === undefined) throw new Error("foreign plan missing");
+    expect(() => state.projectWorldStateAfter(
+      rejectedPlan,
+      projectionContext(1),
+    )).toThrow(/GAMEPLAY_TRANSITION_NOT_AUTHORIZED|NOT_ISSUED/);
+    expect(() => otherState.projectWorldStateAfter(
+      rejectedPlan,
+      projectionContext(1),
+    )).toThrow(/GAMEPLAY_TRANSITION_NOT_AUTHORIZED/);
+    expect(state.revision).toBe(0);
+    expect(otherState.revision).toBe(0);
+  });
+
+  it("authorizes the exact Dispatcher result without exposing authority to the Handler", () => {
+    const state = new GameplayState(options());
+    const dispatchedCommand = command({
+      id: "authorized-bind",
+      type: "control.bind",
+      controllerEntityId: "controller-a",
+      controlledEntityId: "subject-a",
+      expectedPossession: { mode: "unbound" },
+    });
+    const handler: GameplayCommandHandlerV1 = {
+      type: "control.bind",
+      plan: ({ command: receivedCommand, state: planningState, simulationTick }) => {
+        expect(Object.keys(planningState).sort()).toEqual(["planAction", "planControl"]);
+        expect("commandPlanAuthorityPort" in planningState).toBe(false);
+        return planningState.planControl(receivedCommand, simulationTick);
+      },
+    };
+    const result = dispatchWithHandler(state, handler, dispatchedCommand, 1);
+    if (result.status !== "planned") throw new Error("bind rejected");
+    state.projectWorldStateAfter(result.transitionPlan, projectionContext(1));
+    state.commit(result.transitionPlan);
+    expect(state.possessionForController("controller-a")?.controlledEntityId)
+      .toBe("subject-a");
+  });
+
+  it("requires staging before commit without consuming command authorization", () => {
+    const state = new GameplayState(options());
+    const dispatchedCommand = command({
+      id: "authorized-unstaged-bind",
+      type: "control.bind",
+      controllerEntityId: "controller-a",
+      controlledEntityId: "subject-a",
+      expectedPossession: { mode: "unbound" },
+    });
+    const result = dispatchCanonicalCommand(state, dispatchedCommand, 1);
+    if (result.status !== "planned") throw new Error("bind rejected");
+
+    expect(() => state.commit(result.transitionPlan)).toThrow(
+      /GAMEPLAY_TRANSITION_NOT_STAGED/,
+    );
+    expect(state.revision).toBe(0);
+    expect(state.possessionForController("controller-a")).toBeUndefined();
+
+    state.projectWorldStateAfter(result.transitionPlan, projectionContext(1));
+    state.commit(result.transitionPlan);
+    expect(state.revision).toBe(1);
+    expect(state.possessionForController("controller-a")?.controlledEntityId)
+      .toBe("subject-a");
+  });
+
   it("plans without mutation and derives a deterministic relationship ID from the command", () => {
     const state = new GameplayState(options());
-    const result = state.planControl(command({
+    const bindCommand = command({
       id: "bind:with/special chars",
       type: "control.bind",
       controllerEntityId: "controller-a",
       controlledEntityId: "subject-a",
       expectedPossession: { mode: "unbound" },
-    }), 3);
+    });
+    const result = dispatchCanonicalCommand(state, bindCommand, 3);
     expect(result.status).toBe("planned");
     expect(state.possessionForController("controller-a")).toBeUndefined();
     if (result.status !== "planned") return;
@@ -211,10 +490,11 @@ describe("GameplayState possession", () => {
     expect(result.transitionPlan.capacityDelta).toEqual({
       relationshipStateCountDelta: 1,
       activeActionStateCountDelta: 0,
-      retiredActionExecutionIdCountDelta: 0,
-      requiredEventCount: 1,
+      usedActionExecutionIdCountDelta: 0,
+      immediateEventCount: 1,
+      terminalEventReservationCountDelta: 0,
     });
-    state.commit(result.transitionPlan);
+    stageAndCommit(state, result.transitionPlan, 3);
     expect(state.revision).toBe(1);
     expect(state.possessionForController("controller-a")).toMatchObject({
       controlledEntityId: "subject-a",
@@ -226,19 +506,20 @@ describe("GameplayState possession", () => {
   it("rebinds atomically with one revision and two event slots", () => {
     const state = new GameplayState(options());
     bind(state);
-    const result = state.planControl(command({
+    const rebindCommand = command({
       id: "rebind-b",
       type: "control.bind",
       controllerEntityId: "controller-a",
       controlledEntityId: "subject-b",
       expectedPossession: { mode: "possessed", controlledEntityId: "subject-a" },
-    }), 5);
+    });
+    const result = dispatchCanonicalCommand(state, rebindCommand, 5);
     expect(result.status).toBe("planned");
     if (result.status !== "planned") return;
     expect(result.transitionPlan.relationshipChanges.map((change) => change.operation))
       .toEqual(["remove", "add"]);
-    expect(result.transitionPlan.capacityDelta.requiredEventCount).toBe(2);
-    state.commit(result.transitionPlan);
+    expect(result.transitionPlan.capacityDelta.immediateEventCount).toBe(2);
+    stageAndCommit(state, result.transitionPlan, 5);
     expect(state.revision).toBe(2);
     expect(state.possessionForController("controller-a")?.controlledEntityId)
       .toBe("subject-b");
@@ -291,21 +572,24 @@ describe("GameplayState possession", () => {
   it("release validates before-images and a stale commit cannot partially mutate", () => {
     const state = new GameplayState(options());
     bind(state);
-    const release = state.planControl(command({
+    const releaseCommand = command({
       id: "release-a",
       type: "control.release",
       controllerEntityId: "controller-a",
       expectedPossession: { mode: "possessed", controlledEntityId: "subject-a" },
-    }), 4);
-    const rebind = state.planControl(command({
+    });
+    const rebindCommand = command({
       id: "rebind-first",
       type: "control.bind",
       controllerEntityId: "controller-a",
       controlledEntityId: "subject-b",
       expectedPossession: { mode: "possessed", controlledEntityId: "subject-a" },
-    }), 4);
+    });
+    const release = dispatchCanonicalCommand(state, releaseCommand, 4);
+    const rebind = dispatchCanonicalCommand(state, rebindCommand, 4);
     if (release.status !== "planned" || rebind.status !== "planned") return;
-    state.commit(rebind.transitionPlan);
+    state.projectWorldStateAfter(release.transitionPlan, projectionContext(4));
+    stageAndCommit(state, rebind.transitionPlan, 4);
     expect(() => state.commit(release.transitionPlan)).toThrow(/GAMEPLAY_STATE_STALE/);
     expect(state.possessionForController("controller-a")?.controlledEntityId)
       .toBe("subject-b");
@@ -336,8 +620,9 @@ describe("GameplayState possession", () => {
       capacityDelta: {
         relationshipStateCountDelta: 0,
         activeActionStateCountDelta: 0,
-        retiredActionExecutionIdCountDelta: 0,
-        requiredEventCount: 0,
+        usedActionExecutionIdCountDelta: 0,
+        immediateEventCount: 0,
+        terminalEventReservationCountDelta: 0,
       },
     }) as unknown as GameplayTransitionPlanV1;
     expect(() => state.commit(forgedRelationshipPlan)).toThrow(
@@ -371,8 +656,9 @@ describe("GameplayState possession", () => {
       capacityDelta: {
         relationshipStateCountDelta: 0,
         activeActionStateCountDelta: 0,
-        retiredActionExecutionIdCountDelta: 0,
-        requiredEventCount: 0,
+        usedActionExecutionIdCountDelta: 0,
+        immediateEventCount: 0,
+        terminalEventReservationCountDelta: 0,
       },
     }) as unknown as GameplayTransitionPlanV1;
     expect(() => state.projectWorldStateAfter(
@@ -387,13 +673,14 @@ describe("GameplayState possession", () => {
   it("rejects cross-instance and already-consumed issued plans", () => {
     const issuer = new GameplayState(options());
     const other = new GameplayState(options());
-    const result = issuer.planControl(command({
+    const issuedCommand = command({
       id: "issued-bind",
       type: "control.bind",
       controllerEntityId: "controller-a",
       controlledEntityId: "subject-a",
       expectedPossession: { mode: "unbound" },
-    }), 1);
+    });
+    const result = dispatchCanonicalCommand(issuer, issuedCommand, 1);
     if (result.status !== "planned") throw new Error("bind rejected");
     expect(() => other.commit(result.transitionPlan)).toThrow(
       /GAMEPLAY_TRANSITION_NOT_ISSUED/,
@@ -403,7 +690,7 @@ describe("GameplayState possession", () => {
       projectionContext(),
     )).toThrow(/GAMEPLAY_TRANSITION_NOT_ISSUED/);
     expect(other.revision).toBe(0);
-    issuer.commit(result.transitionPlan);
+    stageAndCommit(issuer, result.transitionPlan, 1);
     expect(() => issuer.commit(result.transitionPlan)).toThrow(
       /GAMEPLAY_TRANSITION_NOT_ISSUED/,
     );
@@ -429,23 +716,31 @@ describe("GameplayState possession", () => {
 
   it("rejects an issued Relationship transition whose reservation understates changes", () => {
     const state = new GameplayState(options());
-    const source = state.planControl(command({
+    const sourceCommand = command({
       id: "bind-under-reserved",
       type: "control.bind",
       controllerEntityId: "controller-a",
       controlledEntityId: "subject-a",
       expectedPossession: { mode: "unbound" },
-    }), 1);
+    });
+    const source = state.planControl(sourceCommand, 1);
     if (source.status !== "planned") throw new Error("bind rejected");
-    const underReserved = reissueWithCapacityDelta(state, source.transitionPlan, {
+    const underReserved = reissueWithCapacityDelta(
+      state,
+      sourceCommand,
+      1,
+      source.transitionPlan,
+      {
       relationshipStateCountDelta: 0,
       activeActionStateCountDelta: 0,
-      retiredActionExecutionIdCountDelta: 0,
-      requiredEventCount: 0,
-    });
+      usedActionExecutionIdCountDelta: 0,
+      immediateEventCount: 0,
+      terminalEventReservationCountDelta: 0,
+      },
+    );
     expect(() => state.projectWorldStateAfter(
       underReserved,
-      projectionContext(),
+      projectionContext(1),
     )).toThrow(/GAMEPLAY_TRANSITION_INVARIANT/);
     expect(state.revision).toBe(0);
     expect(state.possessionForController("controller-a")).toBeUndefined();
@@ -509,13 +804,14 @@ describe("GameplayState possession", () => {
 
   it("prebuilds a complete post-transition projection without mutation, then commits the staged pointers", () => {
     const state = new GameplayState(options());
-    const result = state.planControl(command({
+    const bindCommand = command({
       id: "bind-preview",
       type: "control.bind",
       controllerEntityId: "controller-a",
       controlledEntityId: "subject-a",
       expectedPossession: { mode: "unbound" },
-    }), 2);
+    });
+    const result = dispatchCanonicalCommand(state, bindCommand, 2);
     if (result.status !== "planned") throw new Error("bind rejected");
     const projected = state.projectWorldStateAfter(result.transitionPlan, {
       simulationTick: 2,
@@ -594,7 +890,7 @@ describe("GameplayState possession", () => {
       worldSessionId: "world-b",
     }));
     bind(first, "controller-a", "subject-a", "shared-bind", 1);
-    const secondBind = second.planControl({
+    const secondBindCommand: ControlBindGameplayCommandV1 = {
       schemaVersion: 1,
       id: "shared-bind",
       type: "control.bind",
@@ -603,9 +899,10 @@ describe("GameplayState possession", () => {
       controllerEntityId: "controller-a",
       controlledEntityId: "subject-a",
       expectedPossession: { mode: "unbound" },
-    }, 1);
+    };
+    const secondBind = dispatchCanonicalCommand(second, secondBindCommand, 1);
     if (secondBind.status !== "planned") throw new Error("bind rejected");
-    second.commit(secondBind.transitionPlan);
+    stageAndCommit(second, secondBind.transitionPlan, 1);
     const context = {
       simulationTick: 1,
       worldPackageRef: "worldkit://world/a@1",
@@ -643,27 +940,37 @@ describe("GameplayState actions", () => {
     ["active Action", {
       relationshipStateCountDelta: 0,
       activeActionStateCountDelta: 0,
-      retiredActionExecutionIdCountDelta: 1,
-      requiredEventCount: 1,
+      usedActionExecutionIdCountDelta: 1,
+      immediateEventCount: 1,
+      terminalEventReservationCountDelta: 1,
     }],
-    ["retired execution ID", {
+    ["used execution ID", {
       relationshipStateCountDelta: 0,
       activeActionStateCountDelta: 1,
-      retiredActionExecutionIdCountDelta: 0,
-      requiredEventCount: 1,
+      usedActionExecutionIdCountDelta: 0,
+      immediateEventCount: 1,
+      terminalEventReservationCountDelta: 1,
     }],
     ["success Event", {
       relationshipStateCountDelta: 0,
       activeActionStateCountDelta: 1,
-      retiredActionExecutionIdCountDelta: 1,
-      requiredEventCount: 0,
+      usedActionExecutionIdCountDelta: 1,
+      immediateEventCount: 0,
+      terminalEventReservationCountDelta: 1,
+    }],
+    ["terminal Event reservation", {
+      relationshipStateCountDelta: 0,
+      activeActionStateCountDelta: 1,
+      usedActionExecutionIdCountDelta: 1,
+      immediateEventCount: 1,
+      terminalEventReservationCountDelta: 0,
     }],
   ] as const)(
     "rejects an issued Action transition whose reservation understates the %s change",
     (_dimension, capacityDelta) => {
       const state = new GameplayState(options());
       bind(state);
-      const source = state.planAction(command({
+      const sourceCommand = command({
         id: "activate-under-reserved",
         type: "action.activate",
         controllerEntityId: "controller-a",
@@ -674,10 +981,13 @@ describe("GameplayState actions", () => {
           mode: "possessed",
           controlledEntityId: "subject-a",
         },
-      }), 2);
+      });
+      const source = state.planAction(sourceCommand, 2);
       if (source.status !== "planned") throw new Error("activation rejected");
       const underReserved = reissueWithCapacityDelta(
         state,
+        sourceCommand,
+        2,
         source.transitionPlan,
         capacityDelta,
       );
@@ -690,10 +1000,216 @@ describe("GameplayState actions", () => {
     },
   );
 
+  it("enforces terminal Event reservation capacity at N and N+1", () => {
+    const state = new GameplayState(options({
+      capacityBudget: {
+        ...DEFAULT_GAMEPLAY_CAPACITY_BUDGET_V1,
+        maximumControllerEntityCount: 2,
+        maximumPossessedByRelationshipCount: 2,
+        maximumActiveActionStateCount: 2,
+        maximumRetainedEventCount: 1,
+      },
+    }));
+    bind(state, "controller-a", "subject-a", "bind-a", 1);
+    bind(state, "controller-b", "subject-b", "bind-b", 1);
+    const firstCommand = command({
+      id: "activate-reserved-a",
+      type: "action.activate",
+      controllerEntityId: "controller-a",
+      actionExecutionId: "execution-reserved-a",
+      semanticActionRef: "worldkit://semantic-action/wave@1",
+      actorEntityId: "subject-a",
+      expectedPossession: { mode: "possessed", controlledEntityId: "subject-a" },
+    });
+    const first = dispatchCanonicalCommand(state, firstCommand, 2);
+    if (first.status !== "planned") throw new Error("activation rejected");
+    expect(first.transitionPlan.capacityDelta).toMatchObject({
+      immediateEventCount: 1,
+      terminalEventReservationCountDelta: 1,
+    });
+    stageAndCommit(state, first.transitionPlan, 2);
+    expect(state.planAction(command({
+      id: "activate-reserved-b",
+      type: "action.activate",
+      controllerEntityId: "controller-b",
+      actionExecutionId: "execution-reserved-b",
+      semanticActionRef: "worldkit://semantic-action/wave@1",
+      actorEntityId: "subject-b",
+      expectedPossession: { mode: "possessed", controlledEntityId: "subject-b" },
+    }), 2)).toMatchObject({
+      status: "rejected",
+      diagnostic: { code: "GAMEPLAY_CAPACITY_EXCEEDED" },
+    });
+  });
+
+  it("releases a terminal Event reservation when an Action is cancelled", () => {
+    const state = new GameplayState(options({
+      capacityBudget: {
+        ...DEFAULT_GAMEPLAY_CAPACITY_BUDGET_V1,
+        maximumControllerEntityCount: 2,
+        maximumPossessedByRelationshipCount: 2,
+        maximumRetainedEventCount: 1,
+      },
+    }));
+    bind(state);
+    const activateCommand = command({
+      id: "activate-before-cancel",
+      type: "action.activate",
+      controllerEntityId: "controller-a",
+      actionExecutionId: "execution-before-cancel",
+      semanticActionRef: "worldkit://semantic-action/wave@1",
+      actorEntityId: "subject-a",
+      expectedPossession: { mode: "possessed", controlledEntityId: "subject-a" },
+    });
+    const activation = dispatchCanonicalCommand(state, activateCommand, 2);
+    if (activation.status !== "planned") throw new Error("activation rejected");
+    stageAndCommit(state, activation.transitionPlan, 2);
+    const cancelCommand = command({
+      id: "cancel-and-release",
+      type: "action.cancel",
+      controllerEntityId: "controller-a",
+      actionExecutionId: "execution-before-cancel",
+      actorEntityId: "subject-a",
+      expectedPossession: { mode: "possessed", controlledEntityId: "subject-a" },
+    });
+    const cancellation = dispatchCanonicalCommand(state, cancelCommand, 3);
+    if (cancellation.status !== "planned") throw new Error("cancel rejected");
+    expect(cancellation.transitionPlan.capacityDelta).toMatchObject({
+      immediateEventCount: 1,
+      terminalEventReservationCountDelta: -1,
+    });
+    stageAndCommit(state, cancellation.transitionPlan, 3);
+    expect(state.planAction(command({
+      id: "activate-after-cancel",
+      type: "action.activate",
+      controllerEntityId: "controller-a",
+      actionExecutionId: "execution-after-cancel",
+      semanticActionRef: "worldkit://semantic-action/wave@1",
+      actorEntityId: "subject-a",
+      expectedPossession: { mode: "possessed", controlledEntityId: "subject-a" },
+    }), 4).status).toBe("planned");
+  });
+
+  it("consumes all terminal Event reservations for same-Tick natural completions", () => {
+    const fixed = definition({
+      id: "fixed-reservation",
+      resourceRef: "worldkit://semantic-action/fixed-reservation@1",
+      completion: { mode: "fixed-duration", durationTicks: 2 },
+    });
+    const state = new GameplayState(options({
+      controllerStates: [controller("controller-a"), controller("controller-b")],
+      actionCatalog: createGameplayActionCatalogV1([fixed], 2),
+      capacityBudget: {
+        ...DEFAULT_GAMEPLAY_CAPACITY_BUDGET_V1,
+        maximumControllerEntityCount: 2,
+        maximumPossessedByRelationshipCount: 2,
+        maximumRetainedEventCount: 2,
+      },
+    }));
+    bind(state, "controller-a", "subject-a", "bind-a", 1);
+    bind(state, "controller-b", "subject-b", "bind-b", 1);
+    for (const [controllerEntityId, actorEntityId, executionId] of [
+      ["controller-a", "subject-a", "execution-fixed-a"],
+      ["controller-b", "subject-b", "execution-fixed-b"],
+    ] as const) {
+      const activationCommand = command({
+        id: `activate-${executionId}`,
+        type: "action.activate",
+        controllerEntityId,
+        actionExecutionId: executionId,
+        semanticActionRef: fixed.resourceRef,
+        actorEntityId,
+        expectedPossession: { mode: "possessed", controlledEntityId: actorEntityId },
+      });
+      const activation = dispatchCanonicalCommand(state, activationCommand, 2);
+      if (activation.status !== "planned") throw new Error("activation rejected");
+      stageAndCommit(state, activation.transitionPlan, 2);
+    }
+    const completion = state.planDueActionCompletions(4);
+    if (completion === undefined) throw new Error("completion missing");
+    expect(completion.capacityDelta).toMatchObject({
+      immediateEventCount: 2,
+      terminalEventReservationCountDelta: -2,
+    });
+    stageAndCommit(state, completion, 4);
+    expect(state.planAction(command({
+      id: "activate-after-completions",
+      type: "action.activate",
+      controllerEntityId: "controller-a",
+      actionExecutionId: "execution-after-completions",
+      semanticActionRef: fixed.resourceRef,
+      actorEntityId: "subject-a",
+      expectedPossession: { mode: "possessed", controlledEntityId: "subject-a" },
+    }), 5).status).toBe("planned");
+  });
+
+  it("does not leak terminal Event reservations from failed or uncommitted staging", () => {
+    const state = new GameplayState(options({
+      capacityBudget: {
+        ...DEFAULT_GAMEPLAY_CAPACITY_BUDGET_V1,
+        maximumControllerEntityCount: 2,
+        maximumPossessedByRelationshipCount: 2,
+        maximumRetainedEventCount: 1,
+      },
+    }));
+    bind(state, "controller-a", "subject-a", "bind-a", 1);
+    bind(state, "controller-b", "subject-b", "bind-b", 1);
+    const firstCommand = command({
+      id: "activate-failed-stage",
+      type: "action.activate",
+      controllerEntityId: "controller-a",
+      actionExecutionId: "execution-failed-stage",
+      semanticActionRef: "worldkit://semantic-action/wave@1",
+      actorEntityId: "subject-a",
+      expectedPossession: { mode: "possessed", controlledEntityId: "subject-a" },
+    });
+    const first = dispatchCanonicalCommand(state, firstCommand, 2);
+    if (first.status !== "planned") throw new Error("activation rejected");
+    expect(() => state.projectWorldStateAfter(
+      first.transitionPlan,
+      projectionContext(3),
+    )).toThrow(/GAMEPLAY_TRANSITION_TICK_MISMATCH/);
+
+    const secondCommand = command({
+      id: "activate-staged-only",
+      type: "action.activate",
+      controllerEntityId: "controller-b",
+      actionExecutionId: "execution-staged-only",
+      semanticActionRef: "worldkit://semantic-action/wave@1",
+      actorEntityId: "subject-b",
+      expectedPossession: { mode: "possessed", controlledEntityId: "subject-b" },
+    });
+    const second = dispatchCanonicalCommand(state, secondCommand, 2);
+    if (second.status !== "planned") throw new Error("activation rejected");
+    state.projectWorldStateAfter(second.transitionPlan, projectionContext(2));
+    expect(state.planAction(command({
+      id: "activate-while-uncommitted",
+      type: "action.activate",
+      controllerEntityId: "controller-a",
+      actionExecutionId: "execution-while-uncommitted",
+      semanticActionRef: "worldkit://semantic-action/wave@1",
+      actorEntityId: "subject-a",
+      expectedPossession: { mode: "possessed", controlledEntityId: "subject-a" },
+    }), 2).status).toBe("planned");
+    state.commit(second.transitionPlan);
+    expect(state.planAction(command({
+      id: "activate-after-commit",
+      type: "action.activate",
+      controllerEntityId: "controller-a",
+      actionExecutionId: "execution-after-commit",
+      semanticActionRef: "worldkit://semantic-action/wave@1",
+      actorEntityId: "subject-a",
+      expectedPossession: { mode: "possessed", controlledEntityId: "subject-a" },
+    }), 3)).toMatchObject({
+      status: "rejected",
+      diagnostic: { code: "GAMEPLAY_CAPACITY_EXCEEDED" },
+    });
+  });
+
   it("activates only for the expected possessed actor and enforces availability", () => {
     const state = new GameplayState(options());
     bind(state);
-    const planned = state.planAction(command({
+    const activateCommand = command({
       id: "activate-wave",
       type: "action.activate",
       controllerEntityId: "controller-a",
@@ -701,10 +1217,11 @@ describe("GameplayState actions", () => {
       semanticActionRef: "worldkit://semantic-action/wave@1",
       actorEntityId: "subject-a",
       expectedPossession: { mode: "possessed", controlledEntityId: "subject-a" },
-    }), 10);
+    });
+    const planned = dispatchCanonicalCommand(state, activateCommand, 10);
     expect(planned.status).toBe("planned");
     if (planned.status !== "planned") return;
-    state.commit(planned.transitionPlan);
+    stageAndCommit(state, planned.transitionPlan, 10);
     expect(state.activeActionState("execution-wave")).toMatchObject({
       mode: "active",
       semanticActionRef: "worldkit://semantic-action/wave@1",
@@ -727,7 +1244,7 @@ describe("GameplayState actions", () => {
   it("enforces exclusive actions and permanent retired execution IDs", () => {
     const state = new GameplayState(options());
     bind(state);
-    const activate = state.planAction(command({
+    const activateCommand = command({
       id: "activate-wave",
       type: "action.activate",
       controllerEntityId: "controller-a",
@@ -735,9 +1252,10 @@ describe("GameplayState actions", () => {
       semanticActionRef: "worldkit://semantic-action/wave@1",
       actorEntityId: "subject-a",
       expectedPossession: { mode: "possessed", controlledEntityId: "subject-a" },
-    }), 10);
+    });
+    const activate = dispatchCanonicalCommand(state, activateCommand, 10);
     if (activate.status !== "planned") return;
-    state.commit(activate.transitionPlan);
+    stageAndCommit(state, activate.transitionPlan, 10);
     expect(state.planAction(command({
       id: "activate-second",
       type: "action.activate",
@@ -747,16 +1265,17 @@ describe("GameplayState actions", () => {
       actorEntityId: "subject-a",
       expectedPossession: { mode: "possessed", controlledEntityId: "subject-a" },
     }), 11)).toMatchObject({ status: "rejected", diagnostic: { code: "ACTION_ALREADY_ACTIVE" } });
-    const cancel = state.planAction(command({
+    const cancelCommand = command({
       id: "cancel-wave",
       type: "action.cancel",
       controllerEntityId: "controller-a",
       actionExecutionId: "execution-wave",
       actorEntityId: "subject-a",
       expectedPossession: { mode: "possessed", controlledEntityId: "subject-a" },
-    }), 12);
+    });
+    const cancel = dispatchCanonicalCommand(state, cancelCommand, 12);
     if (cancel.status !== "planned") return;
-    state.commit(cancel.transitionPlan);
+    stageAndCommit(state, cancel.transitionPlan, 12);
     expect(state.retiredActionExecutionIds()).toEqual(["execution-wave"]);
     expect(state.planAction(command({
       id: "reuse-wave",
@@ -791,7 +1310,7 @@ describe("GameplayState actions", () => {
       ["controller-b", "subject-b", "z-execution"],
       ["controller-a", "subject-a", "a-execution"],
     ] as const) {
-      const activation = state.planAction(command({
+      const activationCommand = command({
         id: `activate-${actionExecutionId}`,
         type: "action.activate",
         controllerEntityId,
@@ -799,9 +1318,10 @@ describe("GameplayState actions", () => {
         semanticActionRef: fixedA.resourceRef,
         actorEntityId,
         expectedPossession: { mode: "possessed", controlledEntityId: actorEntityId },
-      }), 10);
+      });
+      const activation = dispatchCanonicalCommand(state, activationCommand, 10);
       if (activation.status !== "planned") throw new Error("activation rejected");
-      state.commit(activation.transitionPlan);
+      stageAndCommit(state, activation.transitionPlan, 10);
     }
     const completion = state.planDueActionCompletions(15);
     expect(completion?.completedActionExecutionIds).toEqual([
@@ -810,21 +1330,21 @@ describe("GameplayState actions", () => {
     ]);
     if (completion === undefined) return;
     expect(completion.commandId).toBeUndefined();
-    state.commit(completion);
+    stageAndCommit(state, completion, 15);
     expect(state.retiredActionExecutionIds()).toEqual(["a-execution", "z-execution"]);
   });
 
-  it("enforces independent active and retired capacities", () => {
+  it("enforces independent active and permanently used execution-ID capacities", () => {
     const budget = {
       ...DEFAULT_GAMEPLAY_CAPACITY_BUDGET_V1,
       maximumControllerEntityCount: 2,
       maximumPossessedByRelationshipCount: 2,
       maximumActiveActionStateCount: 1,
-      maximumRetiredActionExecutionIdCount: 1,
+      maximumUsedActionExecutionIdCount: 1,
     };
     const state = new GameplayState(options({ capacityBudget: budget }));
     bind(state);
-    const activation = state.planAction(command({
+    const activationCommand = command({
       id: "activate-1",
       type: "action.activate",
       controllerEntityId: "controller-a",
@@ -832,19 +1352,21 @@ describe("GameplayState actions", () => {
       semanticActionRef: "worldkit://semantic-action/wave@1",
       actorEntityId: "subject-a",
       expectedPossession: { mode: "possessed", controlledEntityId: "subject-a" },
-    }), 2);
+    });
+    const activation = dispatchCanonicalCommand(state, activationCommand, 2);
     if (activation.status !== "planned") return;
-    state.commit(activation.transitionPlan);
-    const cancel = state.planAction(command({
+    stageAndCommit(state, activation.transitionPlan, 2);
+    const cancelCommand = command({
       id: "cancel-1",
       type: "action.cancel",
       controllerEntityId: "controller-a",
       actionExecutionId: "execution-1",
       actorEntityId: "subject-a",
       expectedPossession: { mode: "possessed", controlledEntityId: "subject-a" },
-    }), 3);
+    });
+    const cancel = dispatchCanonicalCommand(state, cancelCommand, 3);
     if (cancel.status !== "planned") return;
-    state.commit(cancel.transitionPlan);
+    stageAndCommit(state, cancel.transitionPlan, 3);
     expect(state.planAction(command({
       id: "activate-2",
       type: "action.activate",
@@ -876,7 +1398,7 @@ describe("GameplayState actions", () => {
     }));
     bind(state, "controller-a", "subject-a", "bind-a");
     bind(state, "controller-b", "subject-b", "bind-b");
-    const first = state.planAction(command({
+    const firstCommand = command({
       id: "activate-a",
       type: "action.activate",
       controllerEntityId: "controller-a",
@@ -884,9 +1406,10 @@ describe("GameplayState actions", () => {
       semanticActionRef: fixed.resourceRef,
       actorEntityId: "subject-a",
       expectedPossession: { mode: "possessed", controlledEntityId: "subject-a" },
-    }), 2);
+    });
+    const first = dispatchCanonicalCommand(state, firstCommand, 2);
     if (first.status !== "planned") throw new Error("activation rejected");
-    state.commit(first.transitionPlan);
+    stageAndCommit(state, first.transitionPlan, 2);
     expect(state.planAction(command({
       id: "activate-b",
       type: "action.activate",
@@ -965,7 +1488,7 @@ describe("GameplayState actions", () => {
       actionCatalog: createGameplayActionCatalogV1([action], 1),
     }));
     bind(state);
-    const activation = state.planAction(command({
+    const activationCommand = command({
       id: `activate-${executionId}`,
       type: "action.activate",
       controllerEntityId: "controller-a",
@@ -973,23 +1496,25 @@ describe("GameplayState actions", () => {
       semanticActionRef: action.resourceRef,
       actorEntityId: "subject-a",
       expectedPossession: { mode: "possessed", controlledEntityId: "subject-a" },
-    }), 2);
+    });
+    const activation = dispatchCanonicalCommand(state, activationCommand, 2);
     if (activation.status !== "planned") throw new Error("activation rejected");
-    state.commit(activation.transitionPlan);
+    stageAndCommit(state, activation.transitionPlan, 2);
     expect(state.activeActionState(executionId)?.id).toBe(executionId);
     expect(state.isMovementInputBlocked("controller-a")).toBe(
       isMovementInputBlocked,
     );
 
-    const release = state.planControl(command({
+    const releaseCommand = command({
       id: `release-${executionId}`,
       type: "control.release",
       controllerEntityId: "controller-a",
       expectedPossession: { mode: "possessed", controlledEntityId: "subject-a" },
-    }), 3);
+    });
+    const release = dispatchCanonicalCommand(state, releaseCommand, 3);
     expect(release.status).toBe("planned");
     if (release.status !== "planned") return;
-    state.commit(release.transitionPlan);
+    stageAndCommit(state, release.transitionPlan, 3);
     expect(state.activeActionState(executionId)).toBeDefined();
     expect(state.isMovementInputBlocked("controller-a")).toBe(false);
 
@@ -1009,17 +1534,18 @@ describe("GameplayState actions", () => {
     expect(state.isMovementInputBlocked("controller-b")).toBe(
       isMovementInputBlocked,
     );
-    const cancel = state.planAction(command({
+    const cancelCommand = command({
       id: `new-cancel-${executionId}`,
       type: "action.cancel",
       controllerEntityId: "controller-b",
       actionExecutionId: executionId,
       actorEntityId: "subject-a",
       expectedPossession: { mode: "possessed", controlledEntityId: "subject-a" },
-    }), 5);
+    });
+    const cancel = dispatchCanonicalCommand(state, cancelCommand, 5);
     expect(cancel.status).toBe("planned");
     if (cancel.status !== "planned") return;
-    state.commit(cancel.transitionPlan);
+    stageAndCommit(state, cancel.transitionPlan, 5);
     expect(state.activeActionState(executionId)).toBeUndefined();
   });
 
@@ -1029,7 +1555,7 @@ describe("GameplayState actions", () => {
       actionCatalog: createGameplayActionCatalogV1([blocking], 1),
     }));
     bind(state);
-    const activation = state.planAction(command({
+    const activationCommand = command({
       id: "activate-actor-owned",
       type: "action.activate",
       controllerEntityId: "controller-a",
@@ -1037,19 +1563,21 @@ describe("GameplayState actions", () => {
       semanticActionRef: blocking.resourceRef,
       actorEntityId: "subject-a",
       expectedPossession: { mode: "possessed", controlledEntityId: "subject-a" },
-    }), 2);
+    });
+    const activation = dispatchCanonicalCommand(state, activationCommand, 2);
     if (activation.status !== "planned") throw new Error("activation rejected");
-    state.commit(activation.transitionPlan);
-    const rebind = state.planControl(command({
+    stageAndCommit(state, activation.transitionPlan, 2);
+    const rebindCommand = command({
       id: "rebind-away-from-actor",
       type: "control.bind",
       controllerEntityId: "controller-a",
       controlledEntityId: "subject-b",
       expectedPossession: { mode: "possessed", controlledEntityId: "subject-a" },
-    }), 3);
+    });
+    const rebind = dispatchCanonicalCommand(state, rebindCommand, 3);
     expect(rebind.status).toBe("planned");
     if (rebind.status !== "planned") return;
-    state.commit(rebind.transitionPlan);
+    stageAndCommit(state, rebind.transitionPlan, 3);
     expect(state.isMovementInputBlocked("controller-a")).toBe(false);
     bind(state, "controller-b", "subject-a", "bind-b-to-actor", 4);
     expect(state.isMovementInputBlocked("controller-b")).toBe(true);

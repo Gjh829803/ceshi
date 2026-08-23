@@ -1,5 +1,6 @@
 import {
   buildWorldStateSnapshotV1,
+  deriveGameplayCommandHashV1,
   parseGameplayInspectionSnapshotV1,
   type ActionActivateGameplayCommandV1,
   type ActionCancelGameplayCommandV1,
@@ -8,6 +9,7 @@ import {
   type GameplayActionStateV1,
   type GameplayCapacityBudgetV1,
   type GameplayCapabilityStateV1,
+  type GameplayCommandV1,
   type ControllerEntityStateV1,
   type GameplayDiagnosticCodeV1,
   type GameplayDiagnosticV1,
@@ -47,8 +49,9 @@ export interface GameplayStateOptionsV1 {
 export interface GameplayTransitionCapacityDeltaV1 {
   readonly relationshipStateCountDelta: number;
   readonly activeActionStateCountDelta: number;
-  readonly retiredActionExecutionIdCountDelta: number;
-  readonly requiredEventCount: number;
+  readonly usedActionExecutionIdCountDelta: number;
+  readonly immediateEventCount: number;
+  readonly terminalEventReservationCountDelta: number;
 }
 
 export type GameplayRelationshipChangeV1 =
@@ -158,6 +161,14 @@ export interface GameplayPlanningStateV1 {
   ): GameplayStatePlanResultV1;
 }
 
+export interface GameplayCommandPlanAuthorityV1 {
+  authorizeCommandPlan(input: Readonly<{
+    transitionPlan: GameplayCommandTransitionPlanV1;
+    command: GameplayCommandV1;
+    simulationTick: number;
+  }>): void;
+}
+
 interface PreparedGameplayTransitionV1 {
   readonly expectedStateRevision: number;
   readonly relationshipStatesById: Readonly<
@@ -167,7 +178,22 @@ interface PreparedGameplayTransitionV1 {
     Record<string, InternalGameplayActionExecutionV1>
   >;
   readonly committedActionExecutionIds: ReadonlySet<string>;
+  readonly terminalEventReservationCount: number;
 }
+
+type GameplayTransitionProvenanceV1 =
+  | Readonly<{
+      kind: "command";
+      commandHash: Sha256HashV1;
+      commandId: string;
+      commandType: GameplayCommandTransitionPlanV1["type"];
+      simulationTick: number;
+    }>
+  | Readonly<{
+      kind: "system";
+      transitionType: "action.complete";
+      simulationTick: number;
+    }>;
 
 function reject(
   code: GameplayDiagnosticCodeV1,
@@ -272,13 +298,21 @@ export class GameplayState implements GameplayPlanningStateV1 {
     Record<string, InternalGameplayActionExecutionV1>
   > = Object.freeze({});
   private committedActionExecutionIds: ReadonlySet<string> = new Set<string>();
+  private terminalEventReservationCount = 0;
   private stateRevision = 0;
   private readonly planningState: GameplayPlanningStateV1;
+  private readonly commandPlanAuthority: GameplayCommandPlanAuthorityV1;
   private readonly preparedTransitions = new WeakMap<
     GameplayTransitionPlanV1,
     PreparedGameplayTransitionV1
   >();
-  private readonly issuedTransitionPlans = new WeakSet<GameplayTransitionPlanV1>();
+  private readonly transitionProvenance = new WeakMap<
+    GameplayTransitionPlanV1,
+    GameplayTransitionProvenanceV1
+  >();
+  private readonly authorizedTransitionPlans = new WeakSet<
+    GameplayTransitionPlanV1
+  >();
 
   constructor(options: GameplayStateOptionsV1) {
     assertNonEmpty(options.runtimeSessionId, "runtimeSessionId");
@@ -343,6 +377,9 @@ export class GameplayState implements GameplayPlanningStateV1 {
       planControl: this.planControl.bind(this),
       planAction: this.planAction.bind(this),
     });
+    this.commandPlanAuthority = Object.freeze({
+      authorizeCommandPlan: this.authorizeCommandPlan.bind(this),
+    });
   }
 
   get revision(): number {
@@ -351,6 +388,10 @@ export class GameplayState implements GameplayPlanningStateV1 {
 
   planningPort(): GameplayPlanningStateV1 {
     return this.planningState;
+  }
+
+  commandPlanAuthorityPort(): GameplayCommandPlanAuthorityV1 {
+    return this.commandPlanAuthority;
   }
 
   possessionForController(
@@ -422,14 +463,15 @@ export class GameplayState implements GameplayPlanningStateV1 {
           `Controller '${command.controllerEntityId}' is unbound.`,
         );
       }
-      return this.plannedCommand(command.type, command.id, [{
+      return this.plannedCommand(command, simulationTick, [{
         operation: "remove",
         before: current,
       }], [], [], {
         relationshipStateCountDelta: -1,
         activeActionStateCountDelta: 0,
-        retiredActionExecutionIdCountDelta: 0,
-        requiredEventCount: 1,
+        usedActionExecutionIdCountDelta: 0,
+        immediateEventCount: 1,
+        terminalEventReservationCountDelta: 0,
       });
     }
 
@@ -474,11 +516,12 @@ export class GameplayState implements GameplayPlanningStateV1 {
         "Possession Relationship capacity is exhausted.",
       );
     }
-    return this.plannedCommand(command.type, command.id, relationshipChanges, [], [], {
+    return this.plannedCommand(command, simulationTick, relationshipChanges, [], [], {
       relationshipStateCountDelta: current === undefined ? 1 : 0,
       activeActionStateCountDelta: 0,
-      retiredActionExecutionIdCountDelta: 0,
-      requiredEventCount: current === undefined ? 1 : 2,
+      usedActionExecutionIdCountDelta: 0,
+      immediateEventCount: current === undefined ? 1 : 2,
+      terminalEventReservationCountDelta: 0,
     });
   }
 
@@ -524,14 +567,15 @@ export class GameplayState implements GameplayPlanningStateV1 {
           `Action execution '${command.actionExecutionId}' has another owner.`,
         );
       }
-      return this.plannedCommand(command.type, command.id, [], [{
+      return this.plannedCommand(command, simulationTick, [], [{
         operation: "remove",
         before: execution,
       }], [], {
         relationshipStateCountDelta: 0,
         activeActionStateCountDelta: -1,
-        retiredActionExecutionIdCountDelta: 0,
-        requiredEventCount: 1,
+        usedActionExecutionIdCountDelta: 0,
+        immediateEventCount: 1,
+        terminalEventReservationCountDelta: -1,
       });
     }
 
@@ -583,7 +627,9 @@ export class GameplayState implements GameplayPlanningStateV1 {
       Object.keys(this.activeActionExecutionsById).length + 1 >
         this.capacityBudget.maximumActiveActionStateCount ||
       this.committedActionExecutionIds.size + 1 >
-        this.capacityBudget.maximumRetiredActionExecutionIdCount
+        this.capacityBudget.maximumUsedActionExecutionIdCount ||
+      this.terminalEventReservationCount + 1 >
+        this.capacityBudget.maximumRetainedEventCount
     ) {
       return reject(
         "GAMEPLAY_CAPACITY_EXCEEDED",
@@ -625,14 +671,15 @@ export class GameplayState implements GameplayPlanningStateV1 {
         ? {}
         : { scheduledEndSimulationTick }),
     });
-    return this.plannedCommand(command.type, command.id, [], [{
+    return this.plannedCommand(command, simulationTick, [], [{
       operation: "add",
       after: execution,
     }], [command.actionExecutionId], {
       relationshipStateCountDelta: 0,
       activeActionStateCountDelta: 1,
-      retiredActionExecutionIdCountDelta: 1,
-      requiredEventCount: 1,
+      usedActionExecutionIdCountDelta: 1,
+      immediateEventCount: 1,
+      terminalEventReservationCountDelta: 1,
     });
   }
 
@@ -663,18 +710,29 @@ export class GameplayState implements GameplayPlanningStateV1 {
       capacityDelta: {
         relationshipStateCountDelta: 0,
         activeActionStateCountDelta: -due.length,
-        retiredActionExecutionIdCountDelta: 0,
-        requiredEventCount: due.length,
+        usedActionExecutionIdCountDelta: 0,
+        immediateEventCount: due.length,
+        terminalEventReservationCountDelta: -due.length,
       },
     });
-    this.issuedTransitionPlans.add(transitionPlan);
+    const provenance: GameplayTransitionProvenanceV1 = deepFreeze({
+      kind: "system" as const,
+      transitionType: "action.complete" as const,
+      simulationTick,
+    });
+    this.transitionProvenance.set(transitionPlan, provenance);
+    this.authorizedTransitionPlans.add(transitionPlan);
     return transitionPlan;
   }
 
   commit(transitionPlan: GameplayTransitionPlanV1): void {
-    this.assertIssuedTransitionPlan(transitionPlan);
-    const prepared = this.preparedTransitions.get(transitionPlan) ??
-      this.prepareTransition(transitionPlan);
+    this.assertAuthorizedTransitionPlan(transitionPlan);
+    const prepared = this.preparedTransitions.get(transitionPlan);
+    if (prepared === undefined) {
+      throw new Error(
+        "GAMEPLAY_TRANSITION_NOT_STAGED: Transition must be projected before commit.",
+      );
+    }
     if (prepared.expectedStateRevision !== this.stateRevision) {
       throw new Error(
         `GAMEPLAY_STATE_STALE: expected revision ${prepared.expectedStateRevision}, current ${this.stateRevision}.`,
@@ -683,8 +741,11 @@ export class GameplayState implements GameplayPlanningStateV1 {
     this.relationshipStatesById = prepared.relationshipStatesById;
     this.activeActionExecutionsById = prepared.activeActionExecutionsById;
     this.committedActionExecutionIds = prepared.committedActionExecutionIds;
+    this.terminalEventReservationCount = prepared.terminalEventReservationCount;
     this.stateRevision += 1;
-    this.issuedTransitionPlans.delete(transitionPlan);
+    this.preparedTransitions.delete(transitionPlan);
+    this.authorizedTransitionPlans.delete(transitionPlan);
+    this.transitionProvenance.delete(transitionPlan);
   }
 
   projectWorldState(
@@ -745,7 +806,12 @@ export class GameplayState implements GameplayPlanningStateV1 {
     transitionPlan: GameplayTransitionPlanV1,
     context: GameplayWorldStateProjectionContextV1,
   ): WorldStateSnapshotV1 {
-    this.assertIssuedTransitionPlan(transitionPlan);
+    const provenance = this.assertAuthorizedTransitionPlan(transitionPlan);
+    if (provenance.simulationTick !== context.simulationTick) {
+      throw new Error(
+        "GAMEPLAY_TRANSITION_TICK_MISMATCH: Projection Tick does not match transition provenance.",
+      );
+    }
     const prepared = this.prepareTransition(transitionPlan);
     const snapshot = this.buildProjectedWorldState(
       context,
@@ -776,9 +842,11 @@ export class GameplayState implements GameplayPlanningStateV1 {
       this.activeActionExecutionsById,
     );
     const committedIds = new Set(this.committedActionExecutionIds);
+    const terminalEventReservationCountBefore =
+      this.terminalEventReservationCount;
     const relationshipStateCountBefore = Object.keys(relationships).length;
     const activeActionStateCountBefore = Object.keys(actions).length;
-    const retiredActionExecutionIdCountBefore = committedIds.size;
+    const usedActionExecutionIdCountBefore = committedIds.size;
 
     for (const change of transitionPlan.relationshipChanges) {
       if (change.operation === "remove") {
@@ -829,10 +897,12 @@ export class GameplayState implements GameplayPlanningStateV1 {
         Object.keys(relationships).length - relationshipStateCountBefore,
       activeActionStateCountDelta:
         Object.keys(actions).length - activeActionStateCountBefore,
-      retiredActionExecutionIdCountDelta:
-        committedIds.size - retiredActionExecutionIdCountBefore,
-      requiredEventCount:
+      usedActionExecutionIdCountDelta:
+        committedIds.size - usedActionExecutionIdCountBefore,
+      immediateEventCount:
         transitionPlan.relationshipChanges.length + transitionPlan.actionChanges.length,
+      terminalEventReservationCountDelta:
+        Object.keys(actions).length - activeActionStateCountBefore,
     };
     if (
       !Object.is(
@@ -844,19 +914,30 @@ export class GameplayState implements GameplayPlanningStateV1 {
         actualCapacityDelta.activeActionStateCountDelta,
       ) ||
       !Object.is(
-        transitionPlan.capacityDelta.retiredActionExecutionIdCountDelta,
-        actualCapacityDelta.retiredActionExecutionIdCountDelta,
+        transitionPlan.capacityDelta.usedActionExecutionIdCountDelta,
+        actualCapacityDelta.usedActionExecutionIdCountDelta,
       ) ||
       !Object.is(
-        transitionPlan.capacityDelta.requiredEventCount,
-        actualCapacityDelta.requiredEventCount,
+        transitionPlan.capacityDelta.immediateEventCount,
+        actualCapacityDelta.immediateEventCount,
+      ) ||
+      !Object.is(
+        transitionPlan.capacityDelta.terminalEventReservationCountDelta,
+        actualCapacityDelta.terminalEventReservationCountDelta,
       )
     ) {
       throw new Error(
         "GAMEPLAY_TRANSITION_INVARIANT: Capacity and Event reservations do not match the planned state changes.",
       );
     }
-    this.assertCardinalityAndCapacity(relationships, actions, committedIds);
+    const terminalEventReservationCount = terminalEventReservationCountBefore +
+      actualCapacityDelta.terminalEventReservationCountDelta;
+    this.assertCardinalityAndCapacity(
+      relationships,
+      actions,
+      committedIds,
+      terminalEventReservationCount,
+    );
     return {
       expectedStateRevision: this.stateRevision,
       relationshipStatesById: deepFreeze(
@@ -868,6 +949,7 @@ export class GameplayState implements GameplayPlanningStateV1 {
           .map((value) => [value.state.id, value]),
       )),
       committedActionExecutionIds: committedIds,
+      terminalEventReservationCount,
     };
   }
 
@@ -920,8 +1002,8 @@ export class GameplayState implements GameplayPlanningStateV1 {
   }
 
   private plannedCommand(
-    type: GameplayCommandTransitionPlanV1["type"],
-    commandId: string,
+    command: GameplayCommandV1,
+    simulationTick: number,
     relationshipChanges: readonly GameplayRelationshipChangeV1[],
     actionChanges: readonly GameplayActionChangeV1[],
     newlyCommittedActionExecutionIds: readonly string[],
@@ -933,8 +1015,8 @@ export class GameplayState implements GameplayPlanningStateV1 {
         transitionPlan: {
           kind: "gameplay-transition-plan",
           schemaVersion: 1,
-          type,
-          commandId,
+          type: command.type,
+          commandId: command.id,
           expectedStateRevision: this.stateRevision,
           relationshipChanges,
           actionChanges,
@@ -942,21 +1024,60 @@ export class GameplayState implements GameplayPlanningStateV1 {
           capacityDelta,
         },
       });
-    this.issuedTransitionPlans.add(result.transitionPlan);
+    this.transitionProvenance.set(result.transitionPlan, deepFreeze({
+      kind: "command",
+      commandHash: deriveGameplayCommandHashV1(command),
+      commandId: command.id,
+      commandType: command.type,
+      simulationTick,
+    }));
     return result;
   }
 
-  private assertIssuedTransitionPlan(
-    transitionPlan: GameplayTransitionPlanV1,
-  ): void {
+  private authorizeCommandPlan(input: Readonly<{
+    transitionPlan: GameplayCommandTransitionPlanV1;
+    command: GameplayCommandV1;
+    simulationTick: number;
+  }>): void {
+    assertTick(input.simulationTick, "simulationTick");
+    const provenance = this.transitionProvenance.get(input.transitionPlan);
+    if (provenance === undefined || !Object.isFrozen(input.transitionPlan)) {
+      throw new Error(
+        "GAMEPLAY_TRANSITION_NOT_ISSUED: Transition plan was not issued by this GameplayState.",
+      );
+    }
     if (
-      !this.issuedTransitionPlans.has(transitionPlan) ||
+      provenance.kind !== "command" ||
+      provenance.commandId !== input.command.id ||
+      provenance.commandType !== input.command.type ||
+      provenance.simulationTick !== input.simulationTick ||
+      provenance.commandHash !== deriveGameplayCommandHashV1(input.command)
+    ) {
+      throw new Error(
+        "GAMEPLAY_TRANSITION_COMMAND_MISMATCH: Transition does not belong to the dispatched command and Tick.",
+      );
+    }
+    this.authorizedTransitionPlans.add(input.transitionPlan);
+  }
+
+  private assertAuthorizedTransitionPlan(
+    transitionPlan: GameplayTransitionPlanV1,
+  ): GameplayTransitionProvenanceV1 {
+    const provenance = this.transitionProvenance.get(transitionPlan);
+    if (
+      provenance === undefined ||
       !Object.isFrozen(transitionPlan)
     ) {
       throw new Error(
         "GAMEPLAY_TRANSITION_NOT_ISSUED: Transition plan was not issued by this GameplayState.",
       );
     }
+    if (!this.authorizedTransitionPlans.has(transitionPlan)) {
+      throw new Error(
+        "GAMEPLAY_TRANSITION_NOT_AUTHORIZED: Transition plan has not passed trusted authorization.",
+      );
+    }
+    return provenance;
   }
 
   private validateActionRequest(
@@ -1001,6 +1122,7 @@ export class GameplayState implements GameplayPlanningStateV1 {
     relationships: Readonly<Record<string, PossessedByRelationshipStateV1>>,
     actions: Readonly<Record<string, InternalGameplayActionExecutionV1>>,
     committedIds: ReadonlySet<string>,
+    terminalEventReservationCount: number,
   ): void {
     const controllers = new Set<string>();
     const controlledEntities = new Set<string>();
@@ -1019,11 +1141,18 @@ export class GameplayState implements GameplayPlanningStateV1 {
       }
       actors.add(execution.state.actorEntityId);
     }
+    if (terminalEventReservationCount !== Object.keys(actions).length) {
+      throw new Error(
+        "GAMEPLAY_TRANSITION_INVARIANT: Active Actions and terminal Event reservations diverged.",
+      );
+    }
     if (
       Object.keys(relationships).length >
         this.capacityBudget.maximumPossessedByRelationshipCount ||
       Object.keys(actions).length > this.capacityBudget.maximumActiveActionStateCount ||
-      committedIds.size > this.capacityBudget.maximumRetiredActionExecutionIdCount
+      committedIds.size > this.capacityBudget.maximumUsedActionExecutionIdCount ||
+      terminalEventReservationCount < 0 ||
+      terminalEventReservationCount > this.capacityBudget.maximumRetainedEventCount
     ) throw new Error("GAMEPLAY_CAPACITY_EXCEEDED: Transition exceeds capacity.");
   }
 }
