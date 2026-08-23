@@ -759,6 +759,50 @@ export class GameplayState implements GameplayPlanningStateV1 {
   projectGameplayInspection(
     context: GameplayInspectionProjectionContextV1,
   ): GameplayInspectionSnapshotV1 {
+    return this.buildProjectedGameplayInspection(
+      context,
+      this.relationshipStatesById,
+      this.activeActionExecutionsById,
+    );
+  }
+
+  projectGameplayInspectionAfter(
+    transitionPlan: GameplayTransitionPlanV1,
+    context: GameplayInspectionProjectionContextV1,
+  ): GameplayInspectionSnapshotV1 {
+    const provenance = this.assertAuthorizedTransitionPlan(transitionPlan);
+    if (provenance.simulationTick !== context.simulationTick) {
+      throw new Error(
+        "GAMEPLAY_TRANSITION_TICK_MISMATCH: Projection Tick does not match transition provenance.",
+      );
+    }
+    const prepared = this.preparedTransitions.get(transitionPlan);
+    if (isNil(prepared)) {
+      throw new Error(
+        "GAMEPLAY_TRANSITION_NOT_STAGED: Transition must be projected before staged inspection.",
+      );
+    }
+    if (prepared.expectedStateRevision !== this.stateRevision) {
+      throw new Error(
+        `GAMEPLAY_STATE_STALE: expected revision ${prepared.expectedStateRevision}, current ${this.stateRevision}.`,
+      );
+    }
+    return this.buildProjectedGameplayInspection(
+      context,
+      prepared.relationshipStatesById,
+      prepared.activeActionExecutionsById,
+    );
+  }
+
+  private buildProjectedGameplayInspection(
+    context: GameplayInspectionProjectionContextV1,
+    relationshipStatesById: Readonly<
+      Record<string, PossessedByRelationshipStateV1>
+    >,
+    activeActionExecutionsById: Readonly<
+      Record<string, InternalGameplayActionExecutionV1>
+    >,
+  ): GameplayInspectionSnapshotV1 {
     const activatedGameplayFeatureRefs = [...context.activatedGameplayFeatureRefs]
       .sort(compareCodeUnits);
     if (
@@ -783,9 +827,9 @@ export class GameplayState implements GameplayPlanningStateV1 {
           { id: controller.id, participantId: controller.participantId },
         ]),
       ),
-      possessedByRelationshipsById: this.relationshipStatesById,
+      possessedByRelationshipsById: relationshipStatesById,
       activeActionStatesById: Object.fromEntries(
-        Object.values(this.activeActionExecutionsById).map((execution) => [
+        Object.values(activeActionExecutionsById).map((execution) => [
           execution.state.id,
           execution.state,
         ]),

@@ -141,6 +141,20 @@ function projectionContext(simulationTick = 2) {
   };
 }
 
+function inspectionContext(
+  id = "inspection-a",
+  simulationTick = 2,
+) {
+  return {
+    id,
+    gameplayModeRef: "worldkit://gameplay-mode/test@1",
+    phase: "ready" as const,
+    simulationTick,
+    activatedGameplayFeatureRefs: ["feature:b", "feature:a"],
+    lastEventSequence: 1,
+  };
+}
+
 type WithoutSession<T extends GameplayCommandV1> = Omit<
   T,
   "schemaVersion" | "runtimeSessionId" | "worldSessionId"
@@ -888,6 +902,235 @@ describe("GameplayState possession", () => {
     expect(inspection.possessedByRelationshipsById).toHaveProperty(
       derivePossessedByRelationshipIdV1("bind-controller-a-subject-a"),
     );
+  });
+
+  it("projects a staged bind for inspection without exposing it as current state", () => {
+    const state = new GameplayState(options());
+    const bindCommand = command({
+      id: "bind-staged-inspection",
+      type: "control.bind",
+      controllerEntityId: "controller-a",
+      controlledEntityId: "subject-a",
+      expectedPossession: { mode: "unbound" },
+    });
+    const result = dispatchCanonicalCommand(state, bindCommand, 2);
+    if (result.status !== "planned") throw new Error("bind rejected");
+    state.projectWorldStateAfter(result.transitionPlan, projectionContext(2));
+
+    const current = state.projectGameplayInspection(
+      inspectionContext("inspection-current-bind", 2),
+    );
+    const staged = state.projectGameplayInspectionAfter(
+      result.transitionPlan,
+      inspectionContext("inspection-staged-bind", 2),
+    );
+
+    expect(current.possessedByRelationshipsById).toEqual({});
+    expect(staged.possessedByRelationshipsById).toHaveProperty(
+      derivePossessedByRelationshipIdV1("bind-staged-inspection"),
+    );
+    expect(state.revision).toBe(0);
+    expect(state.possessionForController("controller-a")).toBeUndefined();
+
+    state.commit(result.transitionPlan);
+    const committed = state.projectGameplayInspection(
+      inspectionContext("inspection-committed-bind", 2),
+    );
+    expect(committed.possessedByRelationshipsById).toEqual(
+      staged.possessedByRelationshipsById,
+    );
+    expect(state.revision).toBe(1);
+  });
+
+  it("projects a staged rebind and a staged Action from their prepared maps", () => {
+    const state = new GameplayState(options());
+    bind(state, "controller-a", "subject-a", "bind-before-rebind", 1);
+    const rebindCommand = command({
+      id: "rebind-staged-inspection",
+      type: "control.bind",
+      controllerEntityId: "controller-a",
+      controlledEntityId: "subject-b",
+      expectedPossession: {
+        mode: "possessed",
+        controlledEntityId: "subject-a",
+      },
+    });
+    const rebind = dispatchCanonicalCommand(state, rebindCommand, 2);
+    if (rebind.status !== "planned") throw new Error("rebind rejected");
+    state.projectWorldStateAfter(rebind.transitionPlan, projectionContext(2));
+
+    const currentBeforeRebind = state.projectGameplayInspection(
+      inspectionContext("inspection-current-rebind", 2),
+    );
+    const stagedRebind = state.projectGameplayInspectionAfter(
+      rebind.transitionPlan,
+      inspectionContext("inspection-staged-rebind", 2),
+    );
+    expect(Object.values(currentBeforeRebind.possessedByRelationshipsById))
+      .toEqual([expect.objectContaining({ controlledEntityId: "subject-a" })]);
+    expect(Object.values(stagedRebind.possessedByRelationshipsById))
+      .toEqual([expect.objectContaining({ controlledEntityId: "subject-b" })]);
+    expect(state.revision).toBe(1);
+
+    state.commit(rebind.transitionPlan);
+    const committedRebind = state.projectGameplayInspection(
+      inspectionContext("inspection-committed-rebind", 2),
+    );
+    expect(committedRebind.possessedByRelationshipsById).toEqual(
+      stagedRebind.possessedByRelationshipsById,
+    );
+    const activateCommand = command({
+      id: "activate-staged-inspection",
+      type: "action.activate",
+      controllerEntityId: "controller-a",
+      actionExecutionId: "execution-staged-inspection",
+      semanticActionRef: "worldkit://semantic-action/wave@1",
+      actorEntityId: "subject-b",
+      expectedPossession: {
+        mode: "possessed",
+        controlledEntityId: "subject-b",
+      },
+    });
+    const activation = dispatchCanonicalCommand(state, activateCommand, 3);
+    if (activation.status !== "planned") throw new Error("activation rejected");
+    state.projectWorldStateAfter(
+      activation.transitionPlan,
+      projectionContext(3),
+    );
+
+    const currentBeforeActivation = state.projectGameplayInspection(
+      inspectionContext("inspection-current-action", 3),
+    );
+    const stagedActivation = state.projectGameplayInspectionAfter(
+      activation.transitionPlan,
+      inspectionContext("inspection-staged-action", 3),
+    );
+    expect(currentBeforeActivation.activeActionStatesById).toEqual({});
+    expect(stagedActivation.activeActionStatesById).toEqual({
+      "execution-staged-inspection": expect.objectContaining({
+        actorEntityId: "subject-b",
+        mode: "active",
+      }),
+    });
+    expect(state.revision).toBe(2);
+
+    state.commit(activation.transitionPlan);
+    const committed = state.projectGameplayInspection(
+      inspectionContext("inspection-committed-action", 3),
+    );
+    expect(committed.activeActionStatesById).toEqual(
+      stagedActivation.activeActionStatesById,
+    );
+    expect(state.revision).toBe(3);
+  });
+
+  it("rejects a staged inspection from another GameplayState", () => {
+    const state = new GameplayState(options());
+    const otherState = new GameplayState(options());
+    const foreignCommand = command({
+      id: "bind-foreign-staged-inspection",
+      type: "control.bind",
+      controllerEntityId: "controller-a",
+      controlledEntityId: "subject-a",
+      expectedPossession: { mode: "unbound" },
+    });
+    const foreign = dispatchCanonicalCommand(otherState, foreignCommand, 1);
+    if (foreign.status !== "planned") throw new Error("foreign bind rejected");
+    otherState.projectWorldStateAfter(
+      foreign.transitionPlan,
+      projectionContext(1),
+    );
+    expect(() => state.projectGameplayInspectionAfter(
+      foreign.transitionPlan,
+      inspectionContext("inspection-foreign", 1),
+    )).toThrow(/GAMEPLAY_TRANSITION_NOT_ISSUED/);
+  });
+
+  it("rejects a staged inspection before trusted authorization", () => {
+    const state = new GameplayState(options());
+    const unauthorizedCommand = command({
+      id: "bind-unauthorized-staged-inspection",
+      type: "control.bind",
+      controllerEntityId: "controller-a",
+      controlledEntityId: "subject-a",
+      expectedPossession: { mode: "unbound" },
+    });
+    const unauthorized = state.planControl(unauthorizedCommand, 1);
+    if (unauthorized.status !== "planned") {
+      throw new Error("unauthorized bind rejected");
+    }
+    expect(() => state.projectGameplayInspectionAfter(
+      unauthorized.transitionPlan,
+      inspectionContext("inspection-unauthorized", 1),
+    )).toThrow(/GAMEPLAY_TRANSITION_NOT_AUTHORIZED/);
+  });
+
+  it("rejects an authorized inspection until its World State is staged", () => {
+    const state = new GameplayState(options());
+    const notStagedCommand = command({
+      id: "bind-not-staged-inspection",
+      type: "control.bind",
+      controllerEntityId: "controller-a",
+      controlledEntityId: "subject-a",
+      expectedPossession: { mode: "unbound" },
+    });
+    const notStaged = dispatchCanonicalCommand(state, notStagedCommand, 1);
+    if (notStaged.status !== "planned") throw new Error("bind rejected");
+    expect(() => state.projectGameplayInspectionAfter(
+      notStaged.transitionPlan,
+      inspectionContext("inspection-not-staged", 1),
+    )).toThrow(/GAMEPLAY_TRANSITION_NOT_STAGED/);
+  });
+
+  it("rejects a staged inspection whose Tick differs from plan provenance", () => {
+    const state = new GameplayState(options());
+    const bindCommand = command({
+      id: "bind-tick-mismatch-inspection",
+      type: "control.bind",
+      controllerEntityId: "controller-a",
+      controlledEntityId: "subject-a",
+      expectedPossession: { mode: "unbound" },
+    });
+    const bindResult = dispatchCanonicalCommand(state, bindCommand, 1);
+    if (bindResult.status !== "planned") throw new Error("bind rejected");
+    state.projectWorldStateAfter(
+      bindResult.transitionPlan,
+      projectionContext(1),
+    );
+    expect(() => state.projectGameplayInspectionAfter(
+      bindResult.transitionPlan,
+      inspectionContext("inspection-wrong-tick", 2),
+    )).toThrow(/GAMEPLAY_TRANSITION_TICK_MISMATCH/);
+  });
+
+  it("rejects a staged inspection after another transition advances revision", () => {
+    const state = new GameplayState(options());
+    const staleCommand = command({
+      id: "bind-stale-staged-inspection",
+      type: "control.bind",
+      controllerEntityId: "controller-a",
+      controlledEntityId: "subject-a",
+      expectedPossession: { mode: "unbound" },
+    });
+    const stale = dispatchCanonicalCommand(state, staleCommand, 1);
+    if (stale.status !== "planned") throw new Error("bind rejected");
+    state.projectWorldStateAfter(stale.transitionPlan, projectionContext(1));
+    const competingCommand = command({
+      id: "bind-competing-staged-inspection",
+      type: "control.bind",
+      controllerEntityId: "controller-b",
+      controlledEntityId: "subject-b",
+      expectedPossession: { mode: "unbound" },
+    });
+    const competing = dispatchCanonicalCommand(state, competingCommand, 1);
+    if (competing.status !== "planned") throw new Error("bind rejected");
+    stageAndCommit(state, competing.transitionPlan, 1);
+    expect(() => state.projectGameplayInspectionAfter(
+      stale.transitionPlan,
+      inspectionContext("inspection-stale", 1),
+    )).toThrow(/GAMEPLAY_STATE_STALE/);
+    expect(state.revision).toBe(1);
+    expect(state.possessionForController("controller-a")).toBeUndefined();
   });
 
   it("derives stable artifact IDs that differ across Session identities", () => {
