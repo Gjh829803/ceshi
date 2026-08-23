@@ -17,6 +17,8 @@ export const RECAST_QUERY_PROVIDER_CONSTANTS_V1 = Object.freeze({
   maximumProviderPolygonRef: 0xffff_ffff,
 } as const);
 
+export const RECAST_LAYERED_SOURCE_MAXIMUM_TRAVERSAL_SURFACE_COUNT_V1 = 61;
+
 const RECAST_MAPPING_FORMULAS_V1 = Object.freeze({
   walkableHeight: "ceil(capsuleHeightMicrometers/voxelCellHeightMicrometers)",
   walkableClimb: "floor(maxStepHeightMicrometers/voxelCellHeightMicrometers)",
@@ -65,12 +67,12 @@ const RECAST_LIFECYCLE_PATCHES_V1 = Object.freeze({
       "sha256:7a330d1418a92699943cf161cdcb47c6e144a6858bb0cfbcb33aa91dd1de33dd",
   }),
   generators: Object.freeze({
-    revision: "lifecycle.1+source-areas.1",
+    revision: "lifecycle.1+source-areas.3",
     patchedDependencyKey: "@recast-navigation/generators@0.43.1",
     repositoryRelativePatchPath:
       "patches/@recast-navigation__generators@0.43.1.patch",
     patchBytesSha256:
-      "sha256:473d1656cf37232187c24a5f81289d1a5a854732d54fd54b667f3402faa18a06",
+      "sha256:6c5bd3e917bd258087cb1a62fcd821c8730cd3d5fe62a253ddb241ffd84d26b6",
   }),
 } as const);
 
@@ -86,24 +88,42 @@ const RECAST_INSTALLED_FILES_V1 = Object.freeze([
     packageRelativeFilePath:
       "dist/generators/generate-tiled-nav-mesh.d.ts",
     fileBytesSha256:
-      "sha256:96961d693bdc58eeac65ea725e1fbaf637ff751bd7346dc409e7562cc8832f6c",
+      "sha256:7a5e5bac8b86bd4b5a426ad3240ce7646d74e3e89c5ff69f02b14399ad6dc70a",
   }),
   Object.freeze({
     packageRole: "generators",
     packageRelativeFilePath: "dist/index.mjs",
     fileBytesSha256:
-      "sha256:a5f1170ca1f0a339750e5af066bbb1d717dac30e4a093b7f5ffc45c8e1cebbdf",
+      "sha256:8febcc7aba6018c006aeb857e6319a6cc063d0f6b4f90bfd8088fea72c294c61",
   }),
 ] as const);
 
 const RECAST_SOURCE_MAPPING_V1 = Object.freeze({
-  mergeOrder: "terrain-first-then-blockers-sorted-by-colliderSubshapeId",
+  mergeOrder:
+    "candidate-sources-sorted-by-traversalSurfaceId-then-blockers-sorted-by-colliderSubshapeId",
   terrainVertexBoundary: "terrain-position-count-divided-by-three",
   sourceAreaActivationPredicate: "blocking-triangle-count-greater-than-zero",
+  layeredSourceModeKind: "layered-traversal-sources-r1b",
+  candidateSourceRangeOrder: "canonical-traversalSurfaceId",
+  candidateAreaIdFormula: "2+traversalSurfaceOrdinal",
+  candidateAreaIdMinimum: 2,
+  candidateAreaIdMaximum: 62,
+  maximumCandidateSourceRangeCount:
+    RECAST_LAYERED_SOURCE_MAXIMUM_TRAVERSAL_SURFACE_COUNT_V1,
   blockerReservedAreaId: 1,
   blockerFinalAreaId: 0,
+  recastNullAreaId: 0,
+  recastWalkableAreaId: 63,
+  candidateAreaAssignmentPredicate: "slope-marked-area-is-not-null",
+  candidateAreaAssignmentPoint:
+    "after-markWalkableTriangles-before-blocker-area-and-rasterizeTriangles",
+  blockerAreaAssignmentPoint:
+    "after-candidate-area-before-rasterizeTriangles",
   compactAreaConversionPoint:
     "after-buildCompactHeightfield-before-erodeWalkableArea",
+  candidatePolygonFlag: 1,
+  candidatePolygonFlagAssignmentPoint:
+    "after-buildPolyMeshDetail-before-createNavMeshData",
   terrainPolygonFlag: 1,
   noOptionCompatibility:
     "task-2-packed-golden-sha256:97459be30f32a7a37bcdb92bc655d5b70a0378cd43d930c07cb4c0eae076b374",
@@ -151,7 +171,7 @@ export const RECAST_GRAPH_PROVIDER_ADAPTER_MANIFEST_V1 = Object.freeze({
   graphProviderAdapterRef:
     "worldkit://graph-provider-adapter/recast-navigation.tiled@1",
   graphProviderAdapterResolvedVersion:
-    "0.43.1+lifecycle.1+source-areas.1+mapping.3",
+    "0.43.1+lifecycle.1+source-areas.3+mapping.5",
   providerPackageName: "recast-navigation",
   providerPackageVersion: "0.43.1",
   providerPackages: RECAST_PROVIDER_PACKAGES_V1,

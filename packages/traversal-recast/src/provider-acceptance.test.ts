@@ -68,6 +68,107 @@ function planeWithBox(blockerHeightMeters: number, bottomMeters = 0) {
   return { positions, indices };
 }
 
+interface BoxSourceInput {
+  readonly minimumX: number;
+  readonly maximumX: number;
+  readonly minimumZ: number;
+  readonly maximumZ: number;
+  readonly bottomMeters: number;
+  readonly topMeters: number;
+}
+
+function appendBoxSource(
+  positions: number[],
+  indices: number[],
+  input: BoxSourceInput,
+): { readonly startVertexIndex: number; readonly vertexCount: 8 } {
+  const startVertexIndex = positions.length / 3;
+  positions.push(
+    input.minimumX, input.bottomMeters, input.minimumZ,
+    input.minimumX, input.bottomMeters, input.maximumZ,
+    input.maximumX, input.bottomMeters, input.minimumZ,
+    input.maximumX, input.bottomMeters, input.maximumZ,
+    input.minimumX, input.topMeters, input.minimumZ,
+    input.minimumX, input.topMeters, input.maximumZ,
+    input.maximumX, input.topMeters, input.minimumZ,
+    input.maximumX, input.topMeters, input.maximumZ,
+  );
+  indices.push(
+    startVertexIndex, startVertexIndex + 2, startVertexIndex + 1,
+    startVertexIndex + 2, startVertexIndex + 3, startVertexIndex + 1,
+    startVertexIndex + 4, startVertexIndex + 5, startVertexIndex + 6,
+    startVertexIndex + 6, startVertexIndex + 5, startVertexIndex + 7,
+    startVertexIndex, startVertexIndex + 1, startVertexIndex + 4,
+    startVertexIndex + 4, startVertexIndex + 1, startVertexIndex + 5,
+    startVertexIndex + 2, startVertexIndex + 6, startVertexIndex + 3,
+    startVertexIndex + 6, startVertexIndex + 7, startVertexIndex + 3,
+    startVertexIndex, startVertexIndex + 4, startVertexIndex + 2,
+    startVertexIndex + 2, startVertexIndex + 4, startVertexIndex + 6,
+    startVertexIndex + 1, startVertexIndex + 3, startVertexIndex + 5,
+    startVertexIndex + 5, startVertexIndex + 3, startVertexIndex + 7,
+  );
+  return { startVertexIndex, vertexCount: 8 };
+}
+
+function hasInteriorTopTriangleAtX(
+  positions: readonly number[],
+  indices: readonly number[],
+  minimumX: number,
+  maximumX: number,
+  minimumHeightMeters: number,
+): boolean {
+  for (let offset = 0; offset < indices.length; offset += 3) {
+    const vertexIndices = [
+      indices[offset]!,
+      indices[offset + 1]!,
+      indices[offset + 2]!,
+    ];
+    const centroid = [0, 1, 2].map((axis) => vertexIndices.reduce(
+      (sum, vertexIndex) => sum + positions[vertexIndex * 3 + axis]!,
+      0,
+    ) / 3);
+    if (
+      centroid[0]! > minimumX && centroid[0]! < maximumX &&
+      centroid[1]! > minimumHeightMeters
+    ) return true;
+  }
+  return false;
+}
+
+interface ProviderPolygonSnapshot {
+  readonly area: number;
+  readonly verticesMetersXYZ: readonly (readonly [number, number, number])[];
+}
+
+function snapshotProviderPolygons(navMesh: NavMesh): ProviderPolygonSnapshot[] {
+  const polygons: ProviderPolygonSnapshot[] = [];
+  for (let tileIndex = 0; tileIndex < navMesh.getMaxTiles(); tileIndex += 1) {
+    const tile = navMesh.getTile(tileIndex);
+    const header = tile.header();
+    if (header === null) continue;
+    const baseRef = navMesh.getPolyRefBase(tile);
+    for (let polygonIndex = 0; polygonIndex < header.polyCount(); polygonIndex += 1) {
+      const polygon = tile.polys(polygonIndex);
+      const areaResult = navMesh.getPolyArea(baseRef + polygonIndex);
+      polygons.push({
+        area: areaResult.area,
+        verticesMetersXYZ: Array.from(
+          { length: polygon.vertCount() },
+          (_, vertexOffset) => {
+            const vertexIndex = polygon.verts(vertexOffset);
+            return [
+              tile.verts(vertexIndex * 3),
+              tile.verts(vertexIndex * 3 + 1),
+              tile.verts(vertexIndex * 3 + 2),
+            ] as const;
+          },
+        ),
+      });
+    }
+  }
+  return polygons;
+}
+
 function hasInteriorBoxTopTriangle(
   positions: readonly number[],
   indices: readonly number[],
@@ -321,6 +422,367 @@ describe("recast-navigation 0.43.1 provider acceptance", () => {
         expect(positions.length).toBeGreaterThan(0);
       } finally {
         destroyRecastTiledOperationResourcesV1(undefined, result);
+      }
+    });
+  });
+
+  it("keeps a bound Box top walkable while removing an equal unbound Box top", async () => {
+    await runRecastProviderOperationV1(async () => {
+      const positions: number[] = [];
+      const indices: number[] = [];
+      const boundBox = appendBoxSource(positions, indices, {
+        minimumX: 0,
+        maximumX: 3,
+        minimumZ: 0,
+        maximumZ: 3,
+        bottomMeters: 0,
+        topMeters: 0.2,
+      });
+      appendBoxSource(positions, indices, {
+        minimumX: 5,
+        maximumX: 8,
+        minimumZ: 0,
+        maximumZ: 3,
+        bottomMeters: 0,
+        topMeters: 0.2,
+      });
+      const result = generateTiledNavMesh(
+        positions,
+        indices,
+        {
+          ...mapTraversalCapabilityEnvelopeToRecastTiledConfigV1(
+            createRecastTestEnvelopeV1(),
+          ),
+          bounds: [[0, 0, 0], [8, 0.2, 3]],
+          sourceAreaMode: {
+            kind: "layered-traversal-sources-r1b",
+            candidateSourceRanges: [{
+              traversalSurfaceOrdinal: 0,
+              ...boundBox,
+            }],
+            blockerStartVertexIndex: boundBox.vertexCount,
+          },
+        } as never,
+        true,
+      );
+      let queryProviderReceipt: RecastQueryProviderReceiptV1 | undefined;
+      try {
+        expect(result.success).toBe(true);
+        if (!result.success) return;
+        const [navPositions, navIndices] = getNavMeshPositionsAndIndices(
+          result.navMesh,
+        );
+        expect(hasInteriorTopTriangleAtX(
+          navPositions,
+          navIndices,
+          0.5,
+          2.5,
+          0.05,
+        )).toBe(true);
+        expect(hasInteriorTopTriangleAtX(
+          navPositions,
+          navIndices,
+          5.5,
+          7.5,
+          0.05,
+        )).toBe(false);
+        expect([...new Set(snapshotProviderPolygons(result.navMesh).map(
+          (polygon) => polygon.area,
+        ))]).toEqual([2]);
+        queryProviderReceipt = createRecastQueryProviderV1(result.navMesh);
+        expect(findNearestRecastPolygonV1(queryProviderReceipt, {
+          positionMetersXYZ: [1.5, 0.2, 1.5],
+          halfExtentsMetersXYZ: [0.4, 0.5, 0.4],
+        }).kind).toBe("complete");
+        expect(findNearestRecastPolygonV1(queryProviderReceipt, {
+          positionMetersXYZ: [6.5, 0.2, 1.5],
+          halfExtentsMetersXYZ: [0.4, 0.5, 0.4],
+        }).kind).toBe("miss");
+      } finally {
+        if (queryProviderReceipt !== undefined) {
+          destroyRecastQueryProviderV1(queryProviderReceipt);
+        }
+        destroyRecastTiledOperationResourcesV1(undefined, result);
+      }
+    });
+  });
+
+  it("keeps adjacent coplanar bound Box tops in distinct Provider source polygons", async () => {
+    await runRecastProviderOperationV1(async () => {
+      const positions: number[] = [];
+      const indices: number[] = [];
+      const leftBox = appendBoxSource(positions, indices, {
+        minimumX: 0,
+        maximumX: 3,
+        minimumZ: 0,
+        maximumZ: 3,
+        bottomMeters: 0,
+        topMeters: 0.2,
+      });
+      const rightBox = appendBoxSource(positions, indices, {
+        minimumX: 3,
+        maximumX: 6,
+        minimumZ: 0,
+        maximumZ: 3,
+        bottomMeters: 0,
+        topMeters: 0.2,
+      });
+      const result = generateTiledNavMesh(
+        positions,
+        indices,
+        {
+          ...mapTraversalCapabilityEnvelopeToRecastTiledConfigV1(
+            createRecastTestEnvelopeV1(),
+          ),
+          bounds: [[0, 0, 0], [6, 0.2, 3]],
+          sourceAreaMode: {
+            kind: "layered-traversal-sources-r1b",
+            candidateSourceRanges: [
+              { traversalSurfaceOrdinal: 0, ...leftBox },
+              { traversalSurfaceOrdinal: 1, ...rightBox },
+            ],
+            blockerStartVertexIndex:
+              leftBox.vertexCount + rightBox.vertexCount,
+          },
+        } as never,
+        true,
+      );
+      let queryProviderReceipt: RecastQueryProviderReceiptV1 | undefined;
+      try {
+        expect(result.success).toBe(true);
+        if (!result.success) return;
+        const polygons = snapshotProviderPolygons(result.navMesh);
+        expect([...new Set(polygons.map((polygon) => polygon.area))].sort(
+          (left, right) => left - right,
+        )).toEqual([2, 3]);
+        expect(polygons.some((polygon) => {
+          const xCoordinates = polygon.verticesMetersXYZ.map(
+            (vertex) => vertex[0],
+          );
+          return Math.min(...xCoordinates) < 3 && Math.max(...xCoordinates) > 3;
+        })).toBe(false);
+        queryProviderReceipt = createRecastQueryProviderV1(result.navMesh);
+        for (const positionMetersXYZ of [
+          [1.5, 0.2, 1.5],
+          [4.5, 0.2, 1.5],
+        ] as const) {
+          expect(findNearestRecastPolygonV1(queryProviderReceipt, {
+            positionMetersXYZ,
+            halfExtentsMetersXYZ: [0.4, 0.5, 0.4],
+          }).kind).toBe("complete");
+        }
+      } finally {
+        if (queryProviderReceipt !== undefined) {
+          destroyRecastQueryProviderV1(queryProviderReceipt);
+        }
+        destroyRecastTiledOperationResourcesV1(undefined, result);
+      }
+    });
+  });
+
+  it("does not relabel slope-incompatible candidate faces as walkable", async () => {
+    await runRecastProviderOperationV1(async () => {
+      const positions = [
+        0, 0, 0,
+        0, 0, 4,
+        2, 5, 0,
+        2, 5, 4,
+      ];
+      const result = generateTiledNavMesh(
+        positions,
+        COUNTER_CLOCKWISE_INDICES,
+        {
+          ...mapTraversalCapabilityEnvelopeToRecastTiledConfigV1(
+            createRecastTestEnvelopeV1(),
+          ),
+          bounds: [[0, 0, 0], [2, 5, 4]],
+          sourceAreaMode: {
+            kind: "layered-traversal-sources-r1b",
+            candidateSourceRanges: [{
+              traversalSurfaceOrdinal: 0,
+              startVertexIndex: 0,
+              vertexCount: positions.length / 3,
+            }],
+            blockerStartVertexIndex: positions.length / 3,
+          },
+        } as never,
+        true,
+      );
+      try {
+        expect(result.success).toBe(true);
+        if (!result.success) return;
+        expect(snapshotProviderPolygons(result.navMesh)).toEqual([]);
+      } finally {
+        destroyRecastTiledOperationResourcesV1(undefined, result);
+      }
+    });
+  });
+
+  it.each([
+    {
+      name: "mixed-range triangle",
+      positions: [
+        0, 0, 0,
+        0, 0, 1,
+        1, 0, 0,
+        1, 0, 1,
+        2, 0, 0,
+        2, 0, 1,
+      ],
+      indices: [0, 1, 3],
+      mode: {
+        kind: "layered-traversal-sources-r1b",
+        candidateSourceRanges: [
+          { traversalSurfaceOrdinal: 0, startVertexIndex: 0, vertexCount: 3 },
+          { traversalSurfaceOrdinal: 1, startVertexIndex: 3, vertexCount: 3 },
+        ],
+        blockerStartVertexIndex: 6,
+      },
+      error: "triangle crosses a candidate source range boundary",
+    },
+    {
+      name: "overlapping ranges",
+      positions: PLANE_POSITIONS,
+      indices: COUNTER_CLOCKWISE_INDICES,
+      mode: {
+        kind: "layered-traversal-sources-r1b",
+        candidateSourceRanges: [
+          { traversalSurfaceOrdinal: 0, startVertexIndex: 0, vertexCount: 3 },
+          { traversalSurfaceOrdinal: 1, startVertexIndex: 2, vertexCount: 2 },
+        ],
+        blockerStartVertexIndex: 4,
+      },
+      error: "candidate source ranges must be contiguous and non-overlapping",
+    },
+    {
+      name: "unsorted ordinals",
+      positions: PLANE_POSITIONS,
+      indices: COUNTER_CLOCKWISE_INDICES,
+      mode: {
+        kind: "layered-traversal-sources-r1b",
+        candidateSourceRanges: [
+          { traversalSurfaceOrdinal: 1, startVertexIndex: 0, vertexCount: 2 },
+          { traversalSurfaceOrdinal: 0, startVertexIndex: 2, vertexCount: 2 },
+        ],
+        blockerStartVertexIndex: 4,
+      },
+      error: "traversalSurfaceOrdinal must equal candidate range order",
+    },
+    {
+      name: "out-of-bounds range",
+      positions: PLANE_POSITIONS,
+      indices: COUNTER_CLOCKWISE_INDICES,
+      mode: {
+        kind: "layered-traversal-sources-r1b",
+        candidateSourceRanges: [
+          { traversalSurfaceOrdinal: 0, startVertexIndex: 0, vertexCount: 5 },
+        ],
+        blockerStartVertexIndex: 4,
+      },
+      error: "candidate source range exceeds blockerStartVertexIndex",
+    },
+    {
+      name: "unknown mode field",
+      positions: PLANE_POSITIONS,
+      indices: COUNTER_CLOCKWISE_INDICES,
+      mode: {
+        kind: "layered-traversal-sources-r1b",
+        candidateSourceRanges: [
+          { traversalSurfaceOrdinal: 0, startVertexIndex: 0, vertexCount: 4 },
+        ],
+        blockerStartVertexIndex: 4,
+        unsupported: true,
+      },
+      error: "sourceAreaMode fields must be closed",
+    },
+    {
+      name: "unknown range field",
+      positions: PLANE_POSITIONS,
+      indices: COUNTER_CLOCKWISE_INDICES,
+      mode: {
+        kind: "layered-traversal-sources-r1b",
+        candidateSourceRanges: [
+          {
+            traversalSurfaceOrdinal: 0,
+            startVertexIndex: 0,
+            vertexCount: 4,
+            unsupported: true,
+          },
+        ],
+        blockerStartVertexIndex: 4,
+      },
+      error: "candidate source range fields must be closed",
+    },
+  ])("rejects layered source validation case: $name", async ({
+    positions,
+    indices,
+    mode,
+    error,
+  }) => {
+    await runRecastProviderOperationV1(async () => {
+      expect(() => generateTiledNavMesh(
+        positions,
+        indices,
+        {
+          ...mapTraversalCapabilityEnvelopeToRecastTiledConfigV1(
+            createRecastTestEnvelopeV1(),
+          ),
+          sourceAreaMode: mode,
+        } as never,
+        true,
+      )).toThrow(error);
+    });
+  });
+
+  it("rejects a 62nd layered candidate range before Provider allocation", async () => {
+    await runRecastProviderOperationV1(async () => {
+      if (Raw.Module === undefined) throw new Error("expected initialized Raw module");
+      const candidateSourceRanges = Array.from({ length: 62 }, (_, index) => ({
+        traversalSurfaceOrdinal: index,
+        startVertexIndex: index * 3,
+        vertexCount: 3,
+      }));
+      const positions = candidateSourceRanges.flatMap((range) => [
+        range.traversalSurfaceOrdinal * 2, 0, 0,
+        range.traversalSurfaceOrdinal * 2, 0, 1,
+        range.traversalSurfaceOrdinal * 2 + 1, 0, 0,
+      ]);
+      const indices = Array.from(
+        { length: candidateSourceRanges.length * 3 },
+        (_, index) => index,
+      );
+      const rawModule = Raw.Module as unknown as Record<string, unknown>;
+      const originalBuildContextImplementation = rawModule.RecastBuildContextJsImpl as
+        new (...args: never[]) => object;
+      let allocationCount = 0;
+      rawModule.RecastBuildContextJsImpl = new Proxy(
+        originalBuildContextImplementation,
+        {
+          construct(target, argumentsList, newTarget) {
+            allocationCount += 1;
+            return Reflect.construct(target, argumentsList, newTarget);
+          },
+        },
+      );
+      try {
+        expect(() => generateTiledNavMesh(
+          positions,
+          indices,
+          {
+            ...mapTraversalCapabilityEnvelopeToRecastTiledConfigV1(
+              createRecastTestEnvelopeV1(),
+            ),
+            sourceAreaMode: {
+              kind: "layered-traversal-sources-r1b",
+              candidateSourceRanges,
+              blockerStartVertexIndex: positions.length / 3,
+            },
+          } as never,
+          true,
+        )).toThrow("candidateSourceRanges must contain at most 61 ranges");
+        expect(allocationCount).toBe(0);
+      } finally {
+        rawModule.RecastBuildContextJsImpl = originalBuildContextImplementation;
       }
     });
   });

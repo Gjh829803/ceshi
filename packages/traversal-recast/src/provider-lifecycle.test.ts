@@ -1,8 +1,32 @@
 import { describe, expect, it, vi } from "vitest";
 
-import { RecastProviderLifecycleV1 } from "./provider-lifecycle.js";
+import {
+  generateRetainedTiledNavMeshV1,
+  RecastProviderLifecycleV1,
+} from "./provider-lifecycle.js";
 
 describe("RecastProviderLifecycleV1", () => {
+  it("rejects more layered candidate ranges than the installed Provider can encode before Provider initialization", () => {
+    const candidateSourceRanges = Array.from({ length: 62 }, (_, index) => ({
+      traversalSurfaceOrdinal: index,
+      startVertexIndex: index * 3,
+      vertexCount: 3,
+    }));
+
+    expect(() => generateRetainedTiledNavMeshV1(
+      [],
+      [],
+      {} as never,
+      {
+        sourceAreaMode: {
+          kind: "layered-traversal-sources-r1b",
+          candidateSourceRanges,
+          blockerStartVertexIndex: candidateSourceRanges.length * 3,
+        },
+      } as never,
+    )).toThrow("ROUTE_GRAPH_BUDGET_EXCEEDED");
+  });
+
   it("initializes once and serializes concurrent operations", async () => {
     const initialize = vi.fn(async () => undefined);
     const lifecycle = new RecastProviderLifecycleV1(initialize);

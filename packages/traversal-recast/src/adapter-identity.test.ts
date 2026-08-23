@@ -48,18 +48,35 @@ describe("Recast Graph Provider Adapter identity", () => {
       graphProviderAdapterRef:
         "worldkit://graph-provider-adapter/recast-navigation.tiled@1",
       graphProviderAdapterResolvedVersion:
-        "0.43.1+lifecycle.1+source-areas.1+mapping.3",
+        "0.43.1+lifecycle.1+source-areas.3+mapping.5",
       providerPackageName: "recast-navigation",
       providerPackageVersion: "0.43.1",
       generatorMode: "tiled",
       meterQuantization: "nearest-integer-micrometer",
       sourceMapping: {
-        mergeOrder: "terrain-first-then-blockers-sorted-by-colliderSubshapeId",
+        mergeOrder:
+          "candidate-sources-sorted-by-traversalSurfaceId-then-blockers-sorted-by-colliderSubshapeId",
         terrainVertexBoundary: "terrain-position-count-divided-by-three",
         sourceAreaActivationPredicate: "blocking-triangle-count-greater-than-zero",
+        layeredSourceModeKind: "layered-traversal-sources-r1b",
+        candidateSourceRangeOrder: "canonical-traversalSurfaceId",
+        candidateAreaIdFormula: "2+traversalSurfaceOrdinal",
+        candidateAreaIdMinimum: 2,
+        candidateAreaIdMaximum: 62,
+        maximumCandidateSourceRangeCount: 61,
         blockerReservedAreaId: 1,
         blockerFinalAreaId: 0,
+        recastNullAreaId: 0,
+        recastWalkableAreaId: 63,
+        candidateAreaAssignmentPredicate: "slope-marked-area-is-not-null",
+        candidateAreaAssignmentPoint:
+          "after-markWalkableTriangles-before-blocker-area-and-rasterizeTriangles",
+        blockerAreaAssignmentPoint:
+          "after-candidate-area-before-rasterizeTriangles",
         compactAreaConversionPoint: "after-buildCompactHeightfield-before-erodeWalkableArea",
+        candidatePolygonFlag: 1,
+        candidatePolygonFlagAssignmentPoint:
+          "after-buildPolyMeshDetail-before-createNavMeshData",
         terrainPolygonFlag: 1,
         noOptionCompatibility: "task-2-packed-golden-sha256:97459be30f32a7a37bcdb92bc655d5b70a0378cd43d930c07cb4c0eae076b374",
       },
@@ -114,7 +131,7 @@ describe("Recast Graph Provider Adapter identity", () => {
       sha256CanonicalJson(RECAST_GRAPH_PROVIDER_ADAPTER_MANIFEST_V1),
     );
     expect(RECAST_GRAPH_PROVIDER_ADAPTER_HASH_V1).toBe(
-      "sha256:32b3f30e117a5d6a9515015f5e8568c149b8f23d4345f2318ed632a488865bae",
+      "sha256:188ff09ee328ad7e17fd21f5c1ccd759c05e0cf4c8d280bc66c814d8a99937e2",
     );
     expect(Object.isFrozen(RECAST_GRAPH_PROVIDER_ADAPTER_MANIFEST_V1)).toBe(true);
     expect(Object.isFrozen(RECAST_GRAPH_PROVIDER_ADAPTER_MANIFEST_V1.constants))

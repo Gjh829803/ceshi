@@ -9,7 +9,7 @@ patchedDependencies:
     hash: 7a330d1418a92699943cf161cdcb47c6e144a6858bb0cfbcb33aa91dd1de33dd
     path: patches/@recast-navigation__core@0.43.1.patch
   '@recast-navigation/generators@0.43.1':
-    hash: 473d1656cf37232187c24a5f81289d1a5a854732d54fd54b667f3402faa18a06
+    hash: 6c5bd3e917bd258087cb1a62fcd821c8730cd3d5fe62a253ddb241ffd84d26b6
     path: patches/@recast-navigation__generators@0.43.1.patch
 
 importers:
@@ -1570,7 +1570,7 @@ snapshots:
     dependencies:
       '@recast-navigation/wasm': 0.43.1
 
-  '@recast-navigation/generators@0.43.1(patch_hash=473d1656cf37232187c24a5f81289d1a5a854732d54fd54b667f3402faa18a06)':
+  '@recast-navigation/generators@0.43.1(patch_hash=6c5bd3e917bd258087cb1a62fcd821c8730cd3d5fe62a253ddb241ffd84d26b6)':
     dependencies:
       '@recast-navigation/core': 0.43.1(patch_hash=7a330d1418a92699943cf161cdcb47c6e144a6858bb0cfbcb33aa91dd1de33dd)
       '@recast-navigation/wasm': 0.43.1
@@ -2011,7 +2011,7 @@ snapshots:
   recast-navigation@0.43.1:
     dependencies:
       '@recast-navigation/core': 0.43.1(patch_hash=7a330d1418a92699943cf161cdcb47c6e144a6858bb0cfbcb33aa91dd1de33dd)
-      '@recast-navigation/generators': 0.43.1(patch_hash=473d1656cf37232187c24a5f81289d1a5a854732d54fd54b667f3402faa18a06)
+      '@recast-navigation/generators': 0.43.1(patch_hash=6c5bd3e917bd258087cb1a62fcd821c8730cd3d5fe62a253ddb241ffd84d26b6)
 
   require-from-string@2.0.2: {}
 
