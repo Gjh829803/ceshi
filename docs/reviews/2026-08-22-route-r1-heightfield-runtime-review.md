@@ -5,8 +5,8 @@
 - 模式：B 变更审查（`origin/main...HEAD`），必查 D2–D6；D1 只用来把 R1b / NPC / 洞穴 / 载具 / 公开 `goTo` 标成 capability gap，不当成实现 bug。Runtime 专项完整执行 `runtime-deep-review-checklist.md`。
 - 对象：PR [#20](https://github.com/seedleap/agent-whitebox-world-sdk/pull/20) / 分支 `cursor/m5-route-r1-heightfield-39e1`。覆盖 M5 **已经落地** 的部分：R0 合同（已在 `main`）+ 本 PR 的 R1 Heightfield。**不**把 M5 标成完成。
 - Base：`5e0d6bf537c22f71aee5dc31ed8d9829be9fe9b3`（`origin/main`）
-- Head：`5de4ee7383933ceadab5fefe571733ba52cf001e`
-- 独立审查范围：`git diff --stat origin/main...HEAD`（216 files）。本审查是只读结论；`5de4ee7` 仅含 Task 10 对审查 P1 的门禁补强，不改 Graph/Runtime 权威路径。
+- 已审实现 Head：`4495d8c8ccb30c1268c4a880ee7a5935fead893a`
+- 独立审查范围：`git diff --stat origin/main...HEAD`（219 files）。`5de4ee7` 仅补强 Task 10 的 adversarial 门禁；独立复跑完整门禁后，`4495d8c` 额外收紧 Vitest 默认 worker 预算，不改 Graph/Runtime 权威路径或任何产品 timeout。
 - 安装版本（lockfile / `package.json`，非训练记忆）：Babylon.js **9.21.2**，`@babylonjs/havok` **1.3.14**，`recast-navigation` **0.43.1**（含仓库 pinned patch）。
 - 证据层级：`static-read` + `automated-contract`。R1 生产门禁跑的是 Babylon `NullEngine` + Havok，**没有** rendered-visual 截图，也**没有** manual-interaction 手感验收。不得把本审查说成控制手感或像素构图已生产验收。
 - 阶段 Cursor CR（Codex 交接里的 `reviewing-with-cursor`）保持 `INTERRUPTED/TIMEOUT`，不当作 `GO`。本文件是 Task 10 要求的全维度 + Runtime 终审记录。
@@ -29,18 +29,17 @@
 
 | 命令 | HEAD | Exit | 记录 |
 | --- | --- | --- | --- |
-| `pnpm typecheck` | `a846320` 与 `5de4ee7` | 0 | 无新诊断 |
-| `pnpm test` | `a846320` | 0 | 143 files / 1407 tests。`b1c20a5` 已把完整 R1 重型矩阵移出通用 Vitest；少 1 条相对早期 1408 是预期 |
-| `pnpm build` | `a846320` | 0 | 既有 Vite large-chunk 警告；Havok WASM ≈ 2094.56 kB / gzip 664.19 kB。本切片未新增 chunk/WASM 回归 |
-| `pnpm verify:route-r0-contract` | `5de4ee7` | 0 | 八项 frozen check 全绿。结尾改为 `R0 contract frozen; this command does not prove R1/R1b runtime capability` |
-| `pnpm verify:route-r1-heightfield` | `a846320` 与 `5de4ee7` | 0 | `ok: true`。success 双 Gate `passed`。11 fixture oracle 全中。success report hash `sha256:df9af3a6d133a3fdffd284cc2903a26926bde95813da1ec1aa6ff2f6cbfdaf49`（repeat + 两次 concurrent 相同）。30/60/120-like：同一 `runtimeProbeReceiptHash` `sha256:bff269115813cc99a376e116124cb3cab5774ae7a4263251f6f140e650f90a44` / `finalRuntimeEvidenceHash` `sha256:cc18a4746b65e35315557df5fff582e77fb2f7df3bf846f771e351156c53c9e9`；`processedTickCount` 均为 221；`renderFrameCount` 110 / 221 / 442。`plannerOnlyFieldsInCanonicalRoute: []`，`providerIdentityLeaks: []`。`5de4ee7` 额外精确命中 `start-surface-unmatched-or-wrong-resolved`；fixture hash 相对 `a846320` 未漂移 |
-| `pnpm verify:canonical` | `a846320` | 0 | Browser + Babylon/Havok 既有门禁 |
-| `pnpm verify:placement-layout` | `a846320` | 0 | Placement S1 回归 |
-| `pnpm verify:rigged-subject` | `a846320` | 0 | pose / isolation / collision / asset-tamper |
-| `pnpm verify:g-bot-subject` | `a846320` | 0 | 四动作、实例隔离、墙体碰撞 |
-| focused `route-evaluator` / R0 / R1 fail-closed | `5de4ee7` | 0 | 3 files / 44 tests |
+| `pnpm typecheck` | `4495d8c` | 0 | 无诊断 |
+| `pnpm test` | `4495d8c` | 0 | 143 files / 1407 tests，标准仓库命令完整通过。默认 4 workers；未放宽测试 timeout |
+| `pnpm build` | `4495d8c` | 0 | 既有 Vite large-chunk 警告；Havok WASM 2094.56 kB / gzip 664.19 kB |
+| `pnpm verify:route-r0-contract` | `4495d8c` | 0 | 八项 frozen check 全绿；提示语明确该命令不证明 R1/R1b Runtime 能力 |
+| `pnpm verify:route-r1-heightfield` | `4495d8c` | 0 | `ok: true`。success 双 Gate `passed`；11 fixture oracle 全中；8 个 adversarial check 全命中。success report hash `sha256:df9af3a6d133a3fdffd284cc2903a26926bde95813da1ec1aa6ff2f6cbfdaf49`（repeat + 两次 concurrent 相同）。30/60/120-like 的 Probe/final-state hash 相同；221 ticks；110 / 221 / 442 render frames。`plannerOnlyFieldsInCanonicalRoute: []`，`providerIdentityLeaks: []` |
+| `pnpm verify:canonical` | `4495d8c` | 0 | Browser V4 + Babylon/Havok 既有门禁 |
+| `pnpm verify:placement-layout` | `4495d8c` | 0 | Placement S1 回归 |
+| `pnpm verify:rigged-subject` | `4495d8c` | 0 | pose / isolation / collision / asset-tamper |
+| `pnpm verify:g-bot-subject` | `4495d8c` | 0 | 四动作、实例隔离、墙体碰撞 |
 
-`5de4ee7` 未重跑 canonical / placement / rigged / g-bot / 全量 `pnpm test` / `pnpm build`：该 commit 只改 R1 adversarial 清单、R0 提示句和一处等价 `isNil`。这些门禁与 R1 fixture 矩阵无共享权威状态。
+独立接手时先在 `90d30ed` 按仓库默认 16 workers 运行 `pnpm test`：功能断言没有失败，但 4 条涉及 Vite/Playwright 子进程、临时 Git 仓库和重型资源的测试超时；三个失败文件逐个运行均通过。随后用 `--maxWorkers=4 --minWorkers=1` 验证假设，全量 1407 tests 通过，再以 `4495d8c` 固化相同默认并重新运行标准 `pnpm test`。这是门禁资源预算修复，不是用延长 timeout 掩盖 Runtime 缺陷。
 
 已知警告分类：Vite large-chunk 与既有 NullEngine/Rapier deprecation 警告继续存在，不作为 R1 blocker，也不当作 R1 能力证据。
 
@@ -73,13 +72,20 @@
 - 建议 / 已实施：保留 `fail-start-surface` = Graph `ROUTE_START_SURFACE_NOT_FOUND`。`5de4ee7` 把已有真实 Havok 测试 `Route R1 fixed-tick probe with real Recast and Babylon/Havok rejects real unmatched static support and a wrong resolved path surface at tick zero` 编进 adversarial check `start-surface-unmatched-or-wrong-resolved`。
 - 复核：已被本审查确认，并在 `5de4ee7` 关闭。不再作为 open P1。
 
+### [P1] [D5/D6] 默认 Vitest 并发使完整门禁在 16-core 主机上不稳定
+
+- 证据（`automated-contract`）：`90d30ed` 的标准 `pnpm test` 出现 4 条 timeout；失败都位于真实子进程/重型集成路径，功能断言未失败，三个失败文件逐个重跑全部通过。限制到 4 workers 后，同一全量测试一次通过。
+- 期望：仓库标准门禁在常见高核主机上仍有明确资源预算，不能依赖开发者手工串行重跑来解释绿灯。
+- 处置：`4495d8c` 在 `vitest.config.ts` 设置 `maxWorkers: 4`、`minWorkers: 1`；不修改测试 timeout。随后标准 `pnpm test` 143/143 files、1407/1407 tests 通过。
+- 复核：已关闭，不再作为 open P1。
+
 ### [P2] [D5] R1 provider 扫描仍以禁止 key 为主
 
 - 证据（`static-read`）：`scripts/verify-route-r1-heightfield.ts` 的 `FORBIDDEN_PROVIDER_HANDLE_KEYS` 抓 `providerHandle` / `tileRef` 等 key，不扫 string leaf。CLI 另有 runner-failure 投影，不把 raw provider cause 送进公共诊断。Canonical 身份 Ref 有意包含 `worldkit://runtime-backend/babylon-havok@1`；Snapshot V3 仍冻结 `runtimeBackend: "babylon-havok"`。对全体 string 做 `/babylon|havok|recast/` 会误伤已审计身份。
 - 期望：Canonical Report / Evidence 无 Recast polyRef、WASM pointer、Babylon/Havok handle。已审计 Backend 身份 Ref 可以保留。
 - 影响：若内部 throw 文案漏进 Report message，key 扫描不会红。当前 CLI 投影与 package `public-boundary` 测试仍挡住主路径。
 - 建议：以后若要加强，只扫未审计的 provider 句子/句柄，不要禁掉锁定 Backend Ref。
-- 复核：未复核。不阻断 R1 收口。
+- 复核：已复核。禁止 key、CLI raw-error 投影、package public-boundary 三层主路径都成立；保留为非阻断纵深防御债务。
 
 ### [P2] [D5] Recast adapter 重复了一份 Euler TRS
 
@@ -87,7 +93,7 @@
 - 期望：Graph soup 与 Runtime/layout 网格共用同一 TRS helper，避免未来修一边漏一边。
 - 影响：当前有对齐回归；漂移时 Graph 阻挡与 Runtime 碰撞会分叉。
 - 建议：R1b / 后续维护里改委托，不在本 Heightfield 收口扩大 scope。
-- 复核：未复核。不阻断 R1 收口。
+- 复核：已复核。当前 `heightfield-source.test.ts` 对拍 shared emitter；保留为非阻断去重债务，不在 R1 Heightfield 收口扩大改动面。
 
 无 open P0。R1b 静态平台、Collider 缝、多 Surface 身份、公开 `goTo`、NPC、载具、洞穴不是本切片缺陷。
 
@@ -99,8 +105,8 @@
 | D2 Schema 与 AI-friendly | 已查 | Authoring/CLI/Browser 无 Recast 字段。数值带单位。`kind`/`type`/`mode` 用法符合 AGENTS。低预算 Graph Builder Profile 只出现在 trusted-host runner option，不进 Authoring JSON。 |
 | D3 承诺与事实 | 已查 | 公开进度在本 disposition commit 与事实对拍：R1 Heightfield 完成，M5/R1b 仍开放。R0 提示句不再声称 R1 未实现。 |
 | D4 单一权威 | 已查 | 见权威表。分类器在 `traversal-runtime-port.ts` `classifySurface()`；`unsupported` / dynamic / 零 Heightfield hit / Heightfield+collider → `unmatched` 或 `ambiguous`，均不改 Ground/Air。 |
-| D5 工程质量 | 已查 | 新包具名 `lodash-es`；`===`/`!==`；一处 `isNil` 已修。确定性：canonical JSON + 稳定排序 + 同 hash。对抗：墙、坡、宽、顶、水、缝、预算、起点支撑、起点表面、ribbon 外绕行、lock mismatch、Graph-pass/Runtime-fail、support loss、deviation、cadence、unmatched/wrong surface。 |
-| D6 门禁与证据分层 | 已查 | Blocking Gate 不被总分抵消。Graph 与 Runtime 独立。自动化合同已跑。无 rendered-visual / manual-interaction 证据。 |
+| D5 工程质量 | 已查 | 新包直接声明依赖；具名 `lodash-es`；变更 TS 无宽松等号，nil 检查走 `isNil`。确定性：canonical JSON + 稳定排序 + 同 hash。默认测试 worker 有界。对抗：墙、坡、宽、顶、水、缝、预算、起点支撑、起点表面、ribbon 外绕行、lock mismatch、Graph-pass/Runtime-fail、support loss、deviation、cadence、unmatched/wrong surface。 |
+| D6 门禁与证据分层 | 已查 | Blocking Gate 不被总分抵消。Graph 与 Runtime 独立。九条要求的仓库门禁已在同一已审实现 HEAD 独立复跑。无 rendered-visual / manual-interaction 证据。 |
 
 ## 5. Runtime checklist 逐项
 
@@ -146,4 +152,4 @@
 
 **可以关闭 R1 Heightfield（不可以关闭 M5）。**
 
-条件：`5de4ee7` 上 `pnpm verify:route-r1-heightfield` 与 R0 合同门禁为绿；本审查无 open P0/P1；公开进度文档在随后的 `docs: record route r1 heightfield disposition` commit 中与事实对拍。R1b 另开计划。无 rendered-visual / 手感证据，R1 声称的是固定 Tick 可信管道合同，不是美术或手感生产验收。
+依据：`4495d8c` 上用户指定的九条门禁全部独立复跑为绿；本审查无 open P0/P1；公开进度与实现一致。R1b 另开计划。无 rendered-visual / 手感证据，R1 声称的是固定 Tick 可信管道合同，不是美术或手感生产验收。
