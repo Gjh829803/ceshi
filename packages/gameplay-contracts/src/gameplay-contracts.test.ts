@@ -1,0 +1,729 @@
+import { describe, expect, it } from "vitest";
+
+import {
+  DEFAULT_GAMEPLAY_CAPACITY_BUDGET_V1,
+  canonicalizeGameplayCommandV1,
+  canonicalizeGameplayEventV1,
+  canonicalizeWorldStateSnapshotV1,
+  deriveGameplayEventIdV1,
+  hashWorldStateSnapshotV1,
+  parseGameplayCapacityBudgetV1,
+  parseGameplayCommandV1,
+  parseGameplayCommandReceiptV1,
+  parseGameplayEventV1,
+  parseGameplayInspectionSnapshotV1,
+  parseWorldStateSnapshotV1,
+  type GameplayCapacityBudgetV1,
+  type GameplayCommandV1,
+  type GameplayCommandReceiptV1,
+  type GameplayEventV1,
+  type GameplayInspectionSnapshotV1,
+  type WorldStateSnapshotV1,
+} from "./gameplay-contracts";
+
+const bindCommand = {
+  schemaVersion: 1,
+  id: "command-bind-primary",
+  type: "control.bind",
+  runtimeSessionId: "runtime-primary",
+  worldSessionId: "world-primary",
+  controllerEntityId: "controller-primary",
+  controlledEntityId: "g-bot-primary",
+  expectedPossession: { mode: "unbound" },
+} as const satisfies GameplayCommandV1;
+
+const possessed = {
+  mode: "possessed",
+  controlledEntityId: "g-bot-primary",
+} as const;
+
+const releaseCommand = {
+  schemaVersion: 1,
+  id: "command-release-primary",
+  type: "control.release",
+  runtimeSessionId: "runtime-primary",
+  worldSessionId: "world-primary",
+  controllerEntityId: "controller-primary",
+  expectedPossession: possessed,
+} as const satisfies GameplayCommandV1;
+
+const activateCommand = {
+  schemaVersion: 1,
+  id: "command-action-primary",
+  type: "action.activate",
+  runtimeSessionId: "runtime-primary",
+  worldSessionId: "world-primary",
+  controllerEntityId: "controller-primary",
+  actionExecutionId: "action-execution-primary",
+  semanticActionRef: "worldkit://semantic-action/dance@1",
+  actorEntityId: "g-bot-primary",
+  expectedPossession: possessed,
+} as const satisfies GameplayCommandV1;
+
+const cancelCommand = {
+  schemaVersion: 1,
+  id: "command-cancel-primary",
+  type: "action.cancel",
+  runtimeSessionId: "runtime-primary",
+  worldSessionId: "world-primary",
+  controllerEntityId: "controller-primary",
+  actionExecutionId: "action-execution-primary",
+  actorEntityId: "g-bot-primary",
+  expectedPossession: possessed,
+} as const satisfies GameplayCommandV1;
+
+function withoutKey(
+  value: Readonly<Record<string, unknown>>,
+  omittedKey: string,
+): Record<string, unknown> {
+  return Object.fromEntries(
+    Object.entries(value).filter(([key]) => key !== omittedKey),
+  );
+}
+
+describe("GameplayCommandV1", () => {
+  it.each([
+    ["bind", bindCommand],
+    ["release", releaseCommand],
+    ["activate", activateCommand],
+    ["cancel", cancelCommand],
+  ])("parses and deeply freezes the closed %s branch", (_label, command) => {
+    const parsed = parseGameplayCommandV1(command);
+
+    expect(parsed).toEqual(command);
+    expect(Object.isFrozen(parsed)).toBe(true);
+    expect(Object.isFrozen(parsed.expectedPossession)).toBe(true);
+  });
+
+  it("canonicalizes equivalent commands to the same bytes", () => {
+    const reordered = {
+      expectedPossession: { mode: "unbound" },
+      controlledEntityId: "g-bot-primary",
+      controllerEntityId: "controller-primary",
+      worldSessionId: "world-primary",
+      runtimeSessionId: "runtime-primary",
+      type: "control.bind",
+      id: "command-bind-primary",
+      schemaVersion: 1,
+    };
+
+    expect(canonicalizeGameplayCommandV1(reordered)).toEqual(
+      canonicalizeGameplayCommandV1(bindCommand),
+    );
+  });
+
+  it.each([
+    ["missing schemaVersion", withoutKey(bindCommand, "schemaVersion")],
+    ["wrong schemaVersion", { ...bindCommand, schemaVersion: 2 }],
+    ["non-finite schemaVersion", { ...bindCommand, schemaVersion: Number.NaN }],
+    ["legacy subjectEntityId", {
+      ...withoutKey(bindCommand, "controlledEntityId"),
+      subjectEntityId: "g-bot-primary",
+    }],
+    ["legacy actionId", {
+      ...withoutKey(activateCommand, "semanticActionRef"),
+      actionId: "dance",
+    }],
+    ["legacy expectedBinding", {
+      ...withoutKey(bindCommand, "expectedPossession"),
+      expectedBinding: { mode: "unbound" },
+    }],
+    ["unknown field", { ...bindCommand, debug: true }],
+    ["empty command id", { ...bindCommand, id: "" }],
+    ["empty role id", { ...bindCommand, controlledEntityId: "" }],
+    ["invalid union shape", {
+      ...releaseCommand,
+      expectedPossession: { mode: "unbound" },
+    }],
+    ["non-finite numeric field", { ...bindCommand, simulationTick: Infinity }],
+  ])("rejects %s", (_label, input) => {
+    expect(() => parseGameplayCommandV1(input)).toThrow(
+      "closed GameplayCommandV1 schema",
+    );
+  });
+
+  it("rejects accessor-backed fields without invoking them", () => {
+    let reads = 0;
+    const accessorCommand = { ...bindCommand } as Record<string, unknown>;
+    Object.defineProperty(accessorCommand, "controlledEntityId", {
+      enumerable: true,
+      get: () => {
+        reads += 1;
+        return "g-bot-primary";
+      },
+    });
+
+    expect(() => parseGameplayCommandV1(accessorCommand)).toThrow(
+      "closed GameplayCommandV1 schema",
+    );
+    expect(reads).toBe(0);
+  });
+
+  it("rejects symbol keys and non-plain prototypes", () => {
+    const symbolCommand = { ...bindCommand, [Symbol("hidden")]: true };
+    const prototypeCommand = Object.assign(
+      Object.create({ inherited: true }),
+      bindCommand,
+    );
+
+    expect(() => parseGameplayCommandV1(symbolCommand)).toThrow(
+      "closed GameplayCommandV1 schema",
+    );
+    expect(() => parseGameplayCommandV1(prototypeCommand)).toThrow(
+      "closed GameplayCommandV1 schema",
+    );
+  });
+});
+
+const HASH_A = `sha256:${"a".repeat(64)}` as const;
+
+const committedReceipt = {
+  kind: "worldkit-gameplay-command-receipt",
+  schemaVersion: 1,
+  id: "receipt-bind-primary",
+  runtimeSessionId: "runtime-primary",
+  worldSessionId: "world-primary",
+  commandId: "command-bind-primary",
+  commandType: "control.bind",
+  status: "committed",
+  simulationTick: 12,
+  eventIds: ["gameplay-event:world-primary:1"],
+  worldStateAfterRef: "worldkit://world-state/world-primary/12",
+  worldStateAfterHash: HASH_A,
+} as const satisfies GameplayCommandReceiptV1;
+
+const rejectedReceipt = {
+  kind: "worldkit-gameplay-command-receipt",
+  schemaVersion: 1,
+  id: "receipt-rejected-primary",
+  runtimeSessionId: "runtime-primary",
+  worldSessionId: "world-primary",
+  commandId: "command-bind-rejected",
+  commandType: "control.bind",
+  status: "rejected",
+  simulationTick: 12,
+  eventIds: [],
+  diagnostic: {
+    code: "CONTROL_ALREADY_OWNED",
+    message: "The controlled entity is already possessed.",
+  },
+} as const satisfies GameplayCommandReceiptV1;
+
+const failedReceipt = {
+  kind: "worldkit-gameplay-command-receipt",
+  schemaVersion: 1,
+  id: "receipt-failed-primary",
+  runtimeSessionId: "runtime-primary",
+  worldSessionId: "world-primary",
+  commandId: "command-action-primary",
+  commandType: "action.activate",
+  status: "failed",
+  simulationTick: 13,
+  eventIds: ["gameplay-event:world-primary:2"],
+  diagnostic: {
+    code: "ADAPTER_ROLLBACK_FAILED",
+    message: "The prepared transition could not be rolled back.",
+  },
+} as const satisfies GameplayCommandReceiptV1;
+
+describe("GameplayCommandReceiptV1", () => {
+  it.each([
+    ["committed", committedReceipt],
+    ["rejected", rejectedReceipt],
+    ["failed", failedReceipt],
+  ])("parses and deeply freezes the closed %s branch", (_label, receipt) => {
+    const parsed = parseGameplayCommandReceiptV1(receipt);
+
+    expect(parsed).toEqual(receipt);
+    expect(Object.isFrozen(parsed)).toBe(true);
+    expect(Object.isFrozen(parsed.eventIds)).toBe(true);
+    if (parsed.status !== "committed") {
+      expect(Object.isFrozen(parsed.diagnostic)).toBe(true);
+    }
+  });
+
+  it.each([
+    ["committed without state-after", withoutKey(committedReceipt, "worldStateAfterRef")],
+    ["committed with diagnostic", {
+      ...committedReceipt,
+      diagnostic: rejectedReceipt.diagnostic,
+    }],
+    ["rejected without diagnostic", withoutKey(rejectedReceipt, "diagnostic")],
+    ["rejected with events", { ...rejectedReceipt, eventIds: ["event-forbidden"] }],
+    ["rejected with state-after", {
+      ...rejectedReceipt,
+      worldStateAfterRef: "worldkit://world-state/forbidden",
+      worldStateAfterHash: HASH_A,
+    }],
+    ["failed without diagnostic", withoutKey(failedReceipt, "diagnostic")],
+    ["failed with state-after", {
+      ...failedReceipt,
+      worldStateAfterRef: "worldkit://world-state/forbidden",
+      worldStateAfterHash: HASH_A,
+    }],
+    ["unknown status", { ...committedReceipt, status: "pending" }],
+    ["unknown key", { ...committedReceipt, timestamp: 123 }],
+    ["non-finite tick", { ...committedReceipt, simulationTick: Infinity }],
+    ["fractional tick", { ...committedReceipt, simulationTick: 1.5 }],
+  ])("rejects %s", (_label, input) => {
+    expect(() => parseGameplayCommandReceiptV1(input)).toThrow(
+      "closed GameplayCommandReceiptV1 schema",
+    );
+  });
+});
+
+const relationshipCommittedEvent = {
+  kind: "worldkit-gameplay-event",
+  schemaVersion: 1,
+  id: "gameplay-event:world-primary:1",
+  type: "relationship.committed",
+  runtimeSessionId: "runtime-primary",
+  worldSessionId: "world-primary",
+  simulationTick: 12,
+  sequence: 1,
+  commandId: "command-bind-primary",
+  relationshipId: "possession-primary",
+  controlledEntityId: "g-bot-primary",
+  controllerEntityId: "controller-primary",
+} as const satisfies GameplayEventV1;
+
+const naturallyCompletedEvent = {
+  kind: "worldkit-gameplay-event",
+  schemaVersion: 1,
+  id: "gameplay-event:world-primary:2",
+  type: "action.completed",
+  runtimeSessionId: "runtime-primary",
+  worldSessionId: "world-primary",
+  simulationTick: 182,
+  sequence: 2,
+  semanticActionRef: "worldkit://semantic-action/dance@1",
+  actionExecutionId: "action-execution-primary",
+  actorEntityId: "g-bot-primary",
+} as const satisfies GameplayEventV1;
+
+describe("GameplayEventV1", () => {
+  it("derives a stable event ID from worldSessionId and sequence", () => {
+    expect(deriveGameplayEventIdV1("world-primary", 7)).toBe(
+      "gameplay-event:world-primary:7",
+    );
+    expect(deriveGameplayEventIdV1("world-primary", 7)).not.toBe(
+      deriveGameplayEventIdV1("world-primary", 8),
+    );
+  });
+
+  it("parses relationship endpoints with role-qualified names", () => {
+    expect(parseGameplayEventV1(relationshipCommittedEvent)).toEqual(
+      relationshipCommittedEvent,
+    );
+  });
+
+  it("models natural action completion without a fabricated commandId", () => {
+    const parsed = parseGameplayEventV1(naturallyCompletedEvent);
+
+    expect(parsed).toEqual(naturallyCompletedEvent);
+    expect(parsed).not.toHaveProperty("commandId");
+    expect(Object.isFrozen(parsed)).toBe(true);
+  });
+
+  it.each([
+    ["relationship removed", {
+      ...relationshipCommittedEvent,
+      id: "gameplay-event:world-primary:3",
+      type: "relationship.removed",
+      sequence: 3,
+    }],
+    ["action started", {
+      ...withoutKey(
+        withoutKey(
+          withoutKey(relationshipCommittedEvent, "relationshipId"),
+          "controlledEntityId",
+        ),
+        "controllerEntityId",
+      ),
+      id: "gameplay-event:world-primary:4",
+      type: "action.started",
+      sequence: 4,
+      semanticActionRef: "worldkit://semantic-action/dance@1",
+      actionExecutionId: "action-execution-primary",
+      actorEntityId: "g-bot-primary",
+    }],
+    ["action completed", naturallyCompletedEvent],
+    ["action cancelled", {
+      ...naturallyCompletedEvent,
+      id: "gameplay-event:world-primary:5",
+      type: "action.cancelled",
+      sequence: 5,
+      commandId: "command-cancel-primary",
+    }],
+    ["action failed", {
+      ...naturallyCompletedEvent,
+      id: "gameplay-event:world-primary:6",
+      type: "action.failed",
+      sequence: 6,
+      diagnostic: {
+        code: "ADAPTER_COMMIT_FAILED",
+        message: "The action projection failed.",
+      },
+    }],
+    ["world failed", {
+      kind: "worldkit-gameplay-event",
+      schemaVersion: 1,
+      id: "gameplay-event:world-primary:7",
+      type: "world.failed",
+      runtimeSessionId: "runtime-primary",
+      worldSessionId: "world-primary",
+      simulationTick: 183,
+      sequence: 7,
+      diagnostic: {
+        code: "ADAPTER_ROLLBACK_FAILED",
+        message: "The world session failed closed.",
+      },
+    }],
+  ])("accepts the closed %s event branch", (_label, event) => {
+    expect(() => parseGameplayEventV1(event)).not.toThrow();
+  });
+
+  it("canonicalizes reordered event input identically", () => {
+    const reordered = Object.fromEntries(
+      Object.entries(relationshipCommittedEvent).reverse(),
+    );
+    expect(canonicalizeGameplayEventV1(reordered)).toBe(
+      canonicalizeGameplayEventV1(relationshipCommittedEvent),
+    );
+  });
+
+  it.each([
+    ["unknown type", { ...relationshipCommittedEvent, type: "control.bound" }],
+    ["unknown key", { ...relationshipCommittedEvent, target: "g-bot-primary" }],
+    ["missing sequence", withoutKey(relationshipCommittedEvent, "sequence")],
+    ["fractional sequence", { ...relationshipCommittedEvent, sequence: 1.5 }],
+    ["non-finite tick", { ...relationshipCommittedEvent, simulationTick: NaN }],
+    ["unstable event id", { ...relationshipCommittedEvent, id: "event-1" }],
+    ["natural completion with command", {
+      ...naturallyCompletedEvent,
+      commandId: "fabricated-command",
+    }],
+    ["world failure without diagnostic", {
+      kind: "worldkit-gameplay-event",
+      schemaVersion: 1,
+      id: "gameplay-event:world-primary:7",
+      type: "world.failed",
+      runtimeSessionId: "runtime-primary",
+      worldSessionId: "world-primary",
+      simulationTick: 183,
+      sequence: 7,
+    }],
+  ])("rejects %s", (_label, input) => {
+    expect(() => parseGameplayEventV1(input)).toThrow(
+      "closed GameplayEventV1 schema",
+    );
+  });
+});
+
+const HASH_B = `sha256:${"b".repeat(64)}` as const;
+const HASH_C = `sha256:${"c".repeat(64)}` as const;
+
+const spatialEntityState = {
+  id: "g-bot-primary",
+  kind: "spatial-entity-state",
+  entityDefinitionRef: "worldkit://entity-definition/g-bot@1",
+  entityDefinitionHash: HASH_A,
+  semanticClassId: "character.robot",
+  lifecycleMode: "active",
+  positionMetersXYZ: [0, 1, 2],
+  rotationQuaternionXYZW: [0, 0, 0, 1],
+  scaleRatioXYZ: [1, 1, 1],
+  linearVelocityMetersPerSecondXYZ: [0, 0, -2],
+  angularVelocityRadiansPerSecondXYZ: [0, 0, 0],
+} as const;
+
+const controllerEntityState = {
+  id: "controller-primary",
+  kind: "controller-entity-state",
+  controllerDefinitionRef: "worldkit://controller-definition/local@1",
+  controllerDefinitionHash: HASH_B,
+  participantId: "participant-primary",
+  lifecycleMode: "active",
+  inputMode: "human",
+} as const;
+
+const locomotionCapabilityState = {
+  id: "locomotion-g-bot-primary",
+  kind: "locomotion-capability-state",
+  ownerEntityId: "g-bot-primary",
+  locomotionCapabilityRef: "worldkit://locomotion-profile/g-bot@1",
+  locomotionCapabilityHash: HASH_C,
+  mode: "run",
+  movementMedium: "ground",
+  facingYawRadians: Math.PI,
+  speedMetersPerSecond: 2,
+} as const;
+
+const possessionRelationshipState = {
+  id: "possession-primary",
+  type: "possessedBy",
+  schemaVersion: 1,
+  controlledEntityId: "g-bot-primary",
+  controllerEntityId: "controller-primary",
+  establishedSimulationTick: 1,
+} as const;
+
+const actionState = {
+  id: "action-execution-primary",
+  kind: "action-state",
+  semanticActionRef: "worldkit://semantic-action/dance@1",
+  semanticActionHash: HASH_A,
+  actorEntityId: "g-bot-primary",
+  mode: "active",
+  startedSimulationTick: 12,
+  lastTransitionSimulationTick: 12,
+} as const;
+
+const worldStateSnapshot = {
+  kind: "worldkit-world-state-snapshot",
+  schemaVersion: 1,
+  id: "world-state-world-primary-12",
+  runtimeSessionId: "runtime-primary",
+  worldSessionId: "world-primary",
+  simulationTick: 12,
+  worldPackageRef: "worldkit://world-package/g-bot@1",
+  worldPackageRootHash: HASH_A,
+  executionPlanHash: HASH_B,
+  entityStatesById: {
+    "g-bot-primary": spatialEntityState,
+    "controller-primary": controllerEntityState,
+  },
+  capabilityStatesById: {
+    "locomotion-g-bot-primary": locomotionCapabilityState,
+  },
+  relationshipStatesById: {
+    "possession-primary": possessionRelationshipState,
+  },
+  activeActionStatesById: {
+    "action-execution-primary": actionState,
+  },
+  lastEventSequence: 2,
+} as const satisfies WorldStateSnapshotV1;
+
+describe("WorldStateSnapshotV1", () => {
+  it("parses canonical entity, relationship, capability, and active Action maps", () => {
+    const parsed = parseWorldStateSnapshotV1(worldStateSnapshot);
+
+    expect(parsed).toEqual(worldStateSnapshot);
+    expect(Object.isFrozen(parsed)).toBe(true);
+    expect(Object.isFrozen(parsed.entityStatesById["g-bot-primary"])).toBe(true);
+    expect(Object.isFrozen(parsed.relationshipStatesById)).toBe(true);
+  });
+
+  it("sorts ID maps so insertion order cannot change canonical bytes or hash", () => {
+    const reversed = {
+      ...worldStateSnapshot,
+      entityStatesById: {
+        "controller-primary": controllerEntityState,
+        "g-bot-primary": spatialEntityState,
+      },
+    };
+
+    expect(canonicalizeWorldStateSnapshotV1(reversed)).toBe(
+      canonicalizeWorldStateSnapshotV1(worldStateSnapshot),
+    );
+    expect(hashWorldStateSnapshotV1(reversed)).toBe(
+      hashWorldStateSnapshotV1(worldStateSnapshot),
+    );
+    expect(hashWorldStateSnapshotV1(worldStateSnapshot)).toMatch(
+      /^sha256:[a-f0-9]{64}$/,
+    );
+  });
+
+  it.each([
+    ["entity map key mismatch", {
+      ...worldStateSnapshot,
+      entityStatesById: { wrong: spatialEntityState },
+    }],
+    ["relationship map key mismatch", {
+      ...worldStateSnapshot,
+      relationshipStatesById: { wrong: possessionRelationshipState },
+    }],
+    ["capability map key mismatch", {
+      ...worldStateSnapshot,
+      capabilityStatesById: { wrong: locomotionCapabilityState },
+    }],
+    ["Action map key mismatch", {
+      ...worldStateSnapshot,
+      activeActionStatesById: { wrong: actionState },
+    }],
+    ["two Controllers possessing one entity", {
+      ...worldStateSnapshot,
+      relationshipStatesById: {
+        "possession-primary": possessionRelationshipState,
+        "possession-secondary": {
+          ...possessionRelationshipState,
+          id: "possession-secondary",
+          controllerEntityId: "controller-secondary",
+        },
+      },
+    }],
+    ["one Controller possessing two entities", {
+      ...worldStateSnapshot,
+      relationshipStatesById: {
+        "possession-primary": possessionRelationshipState,
+        "possession-secondary": {
+          ...possessionRelationshipState,
+          id: "possession-secondary",
+          controlledEntityId: "g-bot-secondary",
+        },
+      },
+    }],
+    ["non-finite state number", {
+      ...worldStateSnapshot,
+      entityStatesById: {
+        ...worldStateSnapshot.entityStatesById,
+        "g-bot-primary": {
+          ...spatialEntityState,
+          positionMetersXYZ: [0, NaN, 2],
+        },
+      },
+    }],
+    ["fractional tick", { ...worldStateSnapshot, simulationTick: 1.5 }],
+    ["unknown root key", { ...worldStateSnapshot, cameraStatesById: {} }],
+  ])("rejects %s", (_label, input) => {
+    expect(() => parseWorldStateSnapshotV1(input)).toThrow(
+      "closed WorldStateSnapshotV1 schema",
+    );
+  });
+});
+
+const inspectionSnapshot = {
+  kind: "worldkit-gameplay-inspection-snapshot",
+  schemaVersion: 1,
+  projection: "inspection",
+  id: "gameplay-inspection-world-primary-12",
+  runtimeSessionId: "runtime-primary",
+  worldSessionId: "world-primary",
+  gameplayModeRef: "worldkit://gameplay-mode/exploration@1",
+  phase: "ready",
+  simulationTick: 12,
+  participantStatesById: {
+    "participant-primary": {
+      id: "participant-primary",
+      mode: "active",
+    },
+  },
+  controllerStatesById: {
+    "controller-primary": {
+      id: "controller-primary",
+      participantId: "participant-primary",
+    },
+  },
+  possessedByRelationshipsById: {
+    "possession-primary": possessionRelationshipState,
+  },
+  activeActionStatesById: {
+    "action-execution-primary": actionState,
+  },
+  activatedGameplayFeatureRefs: [
+    "worldkit://gameplay-feature/core-control@1",
+    "worldkit://gameplay-feature/core-semantic-action@1",
+  ],
+  lastEventSequence: 2,
+} as const satisfies GameplayInspectionSnapshotV1;
+
+describe("GameplayInspectionSnapshotV1", () => {
+  it("is explicitly an inspection projection and has no duplicate binding truth", () => {
+    const parsed = parseGameplayInspectionSnapshotV1(inspectionSnapshot);
+
+    expect(parsed.projection).toBe("inspection");
+    expect(parsed.participantStatesById["participant-primary"]).not.toHaveProperty(
+      "controllerEntityIds",
+    );
+    expect(parsed.controllerStatesById["controller-primary"]).not.toHaveProperty(
+      "binding",
+    );
+    expect(parsed.controllerStatesById["controller-primary"]).not.toHaveProperty(
+      "controlledEntityId",
+    );
+  });
+
+  it.each([
+    ["participant controller array", {
+      ...inspectionSnapshot,
+      participantStatesById: {
+        "participant-primary": {
+          id: "participant-primary",
+          mode: "active",
+          controllerEntityIds: ["controller-primary"],
+        },
+      },
+    }],
+    ["Controller binding", {
+      ...inspectionSnapshot,
+      controllerStatesById: {
+        "controller-primary": {
+          id: "controller-primary",
+          participantId: "participant-primary",
+          binding: { mode: "possessed", controlledEntityId: "g-bot-primary" },
+        },
+      },
+    }],
+    ["Controller target", {
+      ...inspectionSnapshot,
+      controllerStatesById: {
+        "controller-primary": {
+          id: "controller-primary",
+          participantId: "participant-primary",
+          controlledEntityId: "g-bot-primary",
+        },
+      },
+    }],
+    ["missing projection marker", withoutKey(inspectionSnapshot, "projection")],
+    ["wrong projection marker", { ...inspectionSnapshot, projection: "canonical" }],
+  ])("rejects %s", (_label, input) => {
+    expect(() => parseGameplayInspectionSnapshotV1(input)).toThrow(
+      "closed GameplayInspectionSnapshotV1 schema",
+    );
+  });
+});
+
+const capacityFields = Object.keys(
+  DEFAULT_GAMEPLAY_CAPACITY_BUDGET_V1,
+) as (keyof GameplayCapacityBudgetV1)[];
+
+describe("GameplayCapacityBudgetV1", () => {
+  it("uses the frozen trusted-local default budget", () => {
+    expect(DEFAULT_GAMEPLAY_CAPACITY_BUDGET_V1).toEqual({
+      maximumParticipantCount: 1,
+      maximumControllerEntityCount: 1,
+      maximumPossessedByRelationshipCount: 1,
+      maximumActiveActionStateCount: 256,
+      maximumGameplayFeatureCount: 16,
+      maximumSemanticActionDefinitionCount: 256,
+      maximumIdempotencyRecordCount: 4096,
+      maximumRetainedReceiptCount: 4096,
+      maximumRetainedEventCount: 8192,
+    });
+    expect(Object.isFrozen(DEFAULT_GAMEPLAY_CAPACITY_BUDGET_V1)).toBe(true);
+  });
+
+  it.each(capacityFields.flatMap((field) => [
+    [field, -1],
+    [field, 1.5],
+    [field, Number.NaN],
+    [field, Infinity],
+    [field, Number.MAX_SAFE_INTEGER + 1],
+  ] as const))("rejects %s=%s", (field, value) => {
+    expect(() => parseGameplayCapacityBudgetV1({
+      ...DEFAULT_GAMEPLAY_CAPACITY_BUDGET_V1,
+      [field]: value,
+    })).toThrow("closed GameplayCapacityBudgetV1 schema");
+  });
+
+  it("accepts zero and deep-freezes the exact budget", () => {
+    const zeroBudget = Object.fromEntries(
+      capacityFields.map((field) => [field, 0]),
+    );
+    const parsed = parseGameplayCapacityBudgetV1(zeroBudget);
+
+    expect(Object.values(parsed)).toEqual(new Array(capacityFields.length).fill(0));
+    expect(Object.isFrozen(parsed)).toBe(true);
+  });
+});
