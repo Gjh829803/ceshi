@@ -242,6 +242,9 @@ export class CameraDirectorV1 {
     );
     const nextTunings = new Map<string, CameraTuningV1>();
     for (const [profileRef, tuning] of Object.entries(tuningByProfileRef)) {
+      if (tuning === null || typeof tuning !== "object" || Array.isArray(tuning)) {
+        return false;
+      }
       const profile = profilesByRef.get(profileRef);
       if (profile === undefined) return false;
       const result = validateCameraTuningV1(

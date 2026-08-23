@@ -1,0 +1,215 @@
+import { readFile } from "node:fs/promises";
+import { createRequire } from "node:module";
+
+import { NullEngine } from "@babylonjs/core/Engines/nullEngine.pure.js";
+import { describe, expect, it } from "vitest";
+
+import { loadAuthoringScene } from "../../../apps/playground/src/authoring-loader";
+import { createValidAuthoringSpec } from "../../authoring/src/test-fixture";
+import { BabylonWorldRuntime } from "./babylon-world-runtime";
+
+const havokWasmBytes = await readFile(
+  createRequire(import.meta.url).resolve(
+    "@babylonjs/havok/lib/esm/HavokPhysics.wasm",
+  ),
+);
+const havokWasmBinary = havokWasmBytes.buffer.slice(
+  havokWasmBytes.byteOffset,
+  havokWasmBytes.byteOffset + havokWasmBytes.byteLength,
+) as ArrayBuffer;
+const gBotAssetBytes = new Uint8Array(
+  await readFile(
+    new URL(
+      "../../../apps/playground/public/subject-assets/humanoid/g-bot/v1/g-bot.glb",
+      import.meta.url,
+    ),
+  ),
+);
+
+const ORBIT_REF = "worldkit://camera-profile/orbit.medium@1";
+const FOLLOW_REF = "worldkit://camera-profile/follow.medium@1";
+
+function createFlatTerrainCapabilitySpec() {
+  const spec = createValidAuthoringSpec();
+  const terrain = spec.nodes.find((node) => node.kind === "terrain");
+  if (terrain?.kind !== "terrain") {
+    throw new Error("Capability fixture terrain is missing.");
+  }
+  terrain.components.terrain.source = {
+    kind: "procedural",
+    relief: "flat",
+    baseHeightMeters: 0,
+    amplitudeMeters: 0,
+  };
+  return spec;
+}
+
+async function createCameraPreviewChannelRuntime() {
+  const subjectDefinitionRef = "worldkit://subject-definition/humanoid.g-bot@1";
+  const loaded = await loadAuthoringScene(
+    async () => new Response(JSON.stringify(createFlatTerrainCapabilitySpec())),
+    { subjectDefinitionRef },
+  );
+  if (!loaded.ok || loaded.executionPlan === undefined) {
+    throw new Error(`G Bot package failed to load: ${JSON.stringify(loaded.diagnostics)}`);
+  }
+  return BabylonWorldRuntime.create({
+    executionPlan: loaded.executionPlan,
+    havokWasmBinary,
+    subjectAssetResolver: {
+      async resolveSubjectAsset() {
+        return { bytes: gBotAssetBytes, sourceLabel: "camera-preview-channel-test" };
+      },
+    },
+    engineFactory: () =>
+      new NullEngine({
+        renderWidth: 640,
+        renderHeight: 360,
+        textureSize: 512,
+        deterministicLockstep: true,
+        lockstepMaxSteps: 4,
+      }),
+  });
+}
+
+describe("camera preview channel stays out of Gameplay truth", () => {
+  it("never exposes tuning or preference in the canonical snapshot", async () => {
+    const runtime = await createCameraPreviewChannelRuntime();
+    try {
+      await runtime.runFixedInput({ actions: [], ticks: 4 });
+      const before = runtime.snapshot();
+      expect(before.camera).not.toHaveProperty("tuning");
+      expect(before.camera).not.toHaveProperty("preference");
+
+      runtime.applyCameraPreview({
+        tuningByProfileRef: { [ORBIT_REF]: { distanceMeters: 6 } },
+      });
+      const afterPreview = runtime.snapshot();
+      expect(afterPreview.camera).not.toHaveProperty("tuning");
+      expect(afterPreview.camera).not.toHaveProperty("preference");
+      // Preview is render-layer state: it must not perturb Subject gameplay truth.
+      expect(afterPreview.subjectStatesByEntityId).toEqual(before.subjectStatesByEntityId);
+
+      // Same fixed input with and without preview keeps Subject determinism.
+      runtime.reset();
+      runtime.requestCameraProfile(ORBIT_REF);
+      const withoutPreview = await runtime.runFixedInput({
+        actions: ["move-forward"],
+        ticks: 30,
+      });
+      runtime.reset();
+      runtime.requestCameraProfile(ORBIT_REF);
+      runtime.applyCameraPreview({
+        tuningByProfileRef: {
+          [ORBIT_REF]: { lookAheadSeconds: 1.5, targetHeightMeters: 3 },
+        },
+      });
+      const withPreview = await runtime.runFixedInput({
+        actions: ["move-forward"],
+        ticks: 30,
+      });
+      expect(withPreview.subjectStatesByEntityId.player).toEqual(
+        withoutPreview.subjectStatesByEntityId.player,
+      );
+
+      // Preview survives reset but never leaks into another Profile's snapshot.
+      expect(
+        runtime.getCameraPreviewState().tuningByProfileRef[ORBIT_REF],
+      ).toEqual({ lookAheadSeconds: 1.5, targetHeightMeters: 3 });
+      const switched = runtime.requestCameraProfile(FOLLOW_REF);
+      expect(switched.camera).not.toHaveProperty("tuning");
+      expect(runtime.getCameraPreviewState().tuningByProfileRef[FOLLOW_REF])
+        .toBeUndefined();
+    } finally {
+      await runtime.dispose();
+    }
+  });
+
+  it("requestCameraProfile rejects unreachable refs without mutating the active Profile", async () => {
+    const runtime = await createCameraPreviewChannelRuntime();
+    try {
+      await runtime.runFixedInput({ actions: [], ticks: 4 });
+      runtime.requestCameraProfile(ORBIT_REF);
+      const stableRef = runtime.snapshot().camera.activeCameraProfileRef;
+
+      expect(() => runtime.requestCameraProfile("not-a-ref")).toThrow(RangeError);
+      expect(() =>
+        runtime.requestCameraProfile("worldkit://camera-profile/does-not-exist@1"),
+      ).toThrow(RangeError);
+      // Legacy free strings are no longer accepted by the production path.
+      expect(() => runtime.requestCameraProfile("auto")).toThrow(RangeError);
+      expect(() => runtime.requestCameraProfile("first-person")).toThrow(RangeError);
+      expect(() => runtime.requestCameraProfile("")).toThrow(RangeError);
+      expect(() => runtime.requestCameraProfile("   ")).toThrow(RangeError);
+      expect(runtime.snapshot().camera.activeCameraProfileRef).toBe(stableRef);
+
+      // Reset returns the Camera Context default deterministically.
+      const firstDefault = runtime.resetCameraProfile().camera.activeCameraProfileRef;
+      runtime.requestCameraProfile(FOLLOW_REF);
+      const secondDefault = runtime.resetCameraProfile().camera.activeCameraProfileRef;
+      expect(secondDefault).toBe(firstDefault);
+    } finally {
+      await runtime.dispose();
+    }
+  });
+
+  it("applyCameraPreview rejects malformed requests atomically and stably", async () => {
+    const runtime = await createCameraPreviewChannelRuntime();
+    try {
+      await runtime.runFixedInput({ actions: [], ticks: 4 });
+      runtime.requestCameraProfile(ORBIT_REF);
+      runtime.applyCameraPreview({
+        tuningByProfileRef: { [ORBIT_REF]: { distanceMeters: 5 } },
+      });
+
+      const invalidRequests = [
+        { tuningByProfileRef: { "worldkit://camera-profile/ghost@1": { distanceMeters: 4 } } },
+        { tuningByProfileRef: { [ORBIT_REF]: { distanceMeters: Number.NaN } } },
+        { tuningByProfileRef: { [ORBIT_REF]: { distanceMeters: Number.POSITIVE_INFINITY } } },
+        { tuningByProfileRef: { [ORBIT_REF]: { targetHeightMeters: 999 } } },
+        { tuningByProfileRef: { [ORBIT_REF]: { inventedKnob: 1 } as never } },
+        { tuningByProfileRef: { [ORBIT_REF]: 5 as never } },
+        // An invalid second entry must reject the whole request.
+        {
+          tuningByProfileRef: {
+            [ORBIT_REF]: { distanceMeters: 6 },
+            [FOLLOW_REF]: { targetHeightMeters: -5 },
+          },
+        },
+        // Missing tuningByProfileRef must fail with the stable contract error.
+        {} as never,
+      ];
+      for (const request of invalidRequests) {
+        expect(() => runtime.applyCameraPreview(request))
+          .toThrow(/SUBJECT_PRESET_INVALID_CAMERA_TUNING/);
+      }
+      // Failed requests leave the previous preview state untouched.
+      expect(runtime.getCameraPreviewState().tuningByProfileRef[ORBIT_REF])
+        .toEqual({ distanceMeters: 5 });
+    } finally {
+      await runtime.dispose();
+    }
+  });
+
+  it("keeps orbit authority separate from Subject facing", async () => {
+    const runtime = await createCameraPreviewChannelRuntime();
+    try {
+      await runtime.runFixedInput({ actions: [], ticks: 4 });
+      runtime.requestCameraProfile(ORBIT_REF);
+      const forwardBefore = runtime.snapshot().subjectStatesByEntityId.player?.forwardXYZ;
+      runtime.adjustCameraView({ yawDeltaRadians: 1.2, pitchDeltaRadians: 0.3 });
+      // Orbit alone never rotates the Subject.
+      expect(runtime.snapshot().subjectStatesByEntityId.player?.forwardXYZ)
+        .toEqual(forwardBefore);
+      // Moving afterwards turns the Subject toward the committed view direction.
+      const moved = await runtime.runFixedInput({ actions: ["move-forward"], ticks: 10 });
+      expect(moved.subjectStatesByEntityId.player?.forwardXYZ).not.toEqual(forwardBefore);
+      // Reset clears the user view offsets immediately.
+      const afterReset = runtime.reset().camera;
+      expect(afterReset.viewYawOffsetRadians).toBe(0);
+      expect(afterReset.viewPitchOffsetRadians).toBe(0);
+    } finally {
+      await runtime.dispose();
+    }
+  });
+});

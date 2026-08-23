@@ -1386,13 +1386,17 @@ export class BabylonWorldRuntime implements WorldRuntimeSessionV3 {
 
   applyCameraPreview(request: ApplyCameraPreviewRequestV1): CameraPreviewStateV1 {
     this.assertUsable();
+    const tuningByProfileRef = request?.tuningByProfileRef;
+    if (tuningByProfileRef === null || typeof tuningByProfileRef !== "object") {
+      throw new Error("SUBJECT_PRESET_INVALID_CAMERA_TUNING");
+    }
     const subject = this.executionPlan.subjects.find(
       (candidate) => candidate.entityId === this.controlledEntityId,
     );
     const cameraProfiles =
       subject?.capabilityAssembly?.cameraContext.cameraRigProfiles ?? [];
     if (!this.cameraDirector.applyPreview(
-      request.tuningByProfileRef,
+      tuningByProfileRef,
       cameraProfiles,
     )) {
       throw new Error("SUBJECT_PRESET_INVALID_CAMERA_TUNING");

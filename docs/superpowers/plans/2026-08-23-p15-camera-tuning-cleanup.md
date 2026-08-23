@@ -8,8 +8,10 @@
 ## 完成证据
 
 - `pnpm typecheck`：通过；
-- `pnpm test`：143 个测试文件、1424 项测试通过；
-- `pnpm verify:canonical`：真实 Chromium 下 Browser Protocol V4 方法集合（33 个）与相机行为通过。
+- `pnpm test`：144 个测试文件、1428 项测试；全量并发下仅 `subject-preset-promotion.test.ts`
+  的 `requires --write...` 一项偶发 20s 超时，单独重跑稳定通过（22/22），
+  判定为并发资源争用，与本切片无关；
+- `pnpm verify:canonical`：真实 Chromium 下 Browser Protocol V4 方法集合（33 个）与全部门禁通过。
 
 ## 1. 目标
 
@@ -72,33 +74,50 @@ export interface CameraPreviewStateV1 {
 新方法（Runtime + Browser API，均带可选签名，标记 `?`）：
 
 - `getCameraPreviewState(): CameraPreviewStateV1`
-- `applyCameraPreview(request: { activeCameraProfileRef: string; tuningByProfileRef: Readonly<Record<string, CameraTuningV1>> }): void`
+- `applyCameraPreview(request: ApplyCameraPreviewRequestV1): CameraPreviewStateV1`
+
+`ApplyCameraPreviewRequestV1` 最终实现仅含 `tuningByProfileRef`（早期草稿曾带
+`activeCameraProfileRef`，已收窄：preview 只改数值，不切换激活 Profile；切换走
+`requestCameraProfile` / `resetCameraProfile`）。
 
 preview 通道语义：仅服务 authoring 预览，修改 `tuningByProfileRef` 不影响
 `WorldRuntimeSnapshotV3` 的字段或 Hash；`camera-director` 内部保留
 `tuningByProfileRef` 用于渲染，但 snapshot 只输出 Ref 与视角偏移。
 
-## 4. 受影响文件
+## 4. 受影响文件（实际改动面）
 
 - `packages/runtime-contracts/src/runtime-session.ts`
-- `packages/runtime-contracts/src/camera-parameter-contract.ts`（`CameraTuningV1` 保留，供 preview 通道使用）
 - `packages/runtime-babylon/src/camera-director.ts`
 - `packages/runtime-babylon/src/babylon-world-runtime.ts`
+- `packages/runtime-babylon/src/capability-runtime.test.ts`
 - `apps/playground/src/babylon-world-adapter.ts`
-- `apps/playground/src/worldkit-browser-api.ts`
-- `apps/playground/src/subject-preset-workbench.ts`
-- `apps/playground/src/subject-preset-local.ts`
-- 测试：`worldkit-browser-api.test.ts`、`subject-preset-workbench.test.ts`、
-  `subject-preset-local.test.ts`、`capability-runtime.test.ts`、
-  `subject-preset-candidate.test.ts`、`scripts/lib/subject-preset-promotion.test.ts`
+- `apps/playground/src/worldkit-browser-api.ts` + `worldkit-browser-api.test.ts`
+- `apps/playground/src/subject-preset-workbench.ts` + `subject-preset-workbench.test.ts`
+- `apps/playground/src/main.ts`
+- `scripts/verify-canonical-world.ts`
+- `artifacts/examples/package-subject-world/snapshot.json`（确定性裁剪）
+- `docs/18-refactor-progress-and-backlog.md`、`.gitignore`
+
+未改动（早期清单多列，现澄清）：`camera-parameter-contract.ts`（`CameraTuningV1`
+原样保留供 preview 通道使用）、`subject-preset-local.ts`、
+`subject-preset-local.test.ts`、`subject-preset-candidate.test.ts`、
+`scripts/lib/subject-preset-promotion.test.ts`。
+
+评审补强（后续提交）：新增 `packages/runtime-babylon/src/camera-preview-channel.test.ts`；
+`applyCameraPreview` 补上缺失/非对象请求的稳定失败；Playground 草稿原子应用改为相机阶段先行。
 
 ## 5. Conformance 覆盖
 
-1. `WorldRuntimeSnapshotV3.camera` 结构断言不含 `tuning` / `preference`。
-2. `applyCameraPreview` 修改 tuning 后，同一世界 + 同一输入固定 Tick 下 `snapshot()` 的
-   Camera 字段与 Hash 不变（preview 不污染确定性）。
-3. `requestCameraProfile` 对非锁定/不可达 Ref 返回稳定失败，不改动 `activeCameraProfileRef`。
-4. `applySubjectPresetTuning` 不再接受相机数字字段（请求结构断言）。
+1. `WorldRuntimeSnapshotV3.camera` 结构断言不含 `tuning` / `preference`
+   （`capability-runtime.test.ts` + `camera-preview-channel.test.ts`）。
+2. `applyCameraPreview` 后 `snapshot()` 不再输出 `tuning` / `preference`，且 Subject
+   状态与同输入固定 Tick 的 Gameplay 真相不受影响（`camera-preview-channel.test.ts`）。
+   澄清：渲染相机的 `positionMetersXYZ` 是 preview 的呈现层效果，会随预览数值变化；
+   它不进入 Capture Hash（`SimulationTakeV1` 不含 tuning 字段），Take 重放也不读取
+   preview tuning（`scripts/lib/simulation-take-runner.ts` 无 preview 调用）。
+3. `requestCameraProfile` 对非锁定/不可达/自由字符串 Ref 返回稳定失败（`RangeError`），
+   不改动 `activeCameraProfileRef`（`camera-preview-channel.test.ts`）。
+4. `applySubjectPresetTuning` 不再接受相机数字字段（请求结构断言，类型层面删除）。
 
 ## 6. 验收命令
 

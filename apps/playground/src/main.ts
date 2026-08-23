@@ -767,13 +767,8 @@ function installTuningWorkbench(
   const applyWorkingDraftAtomically = (draft: SubjectPresetWorkingDraftV1): boolean => {
     if (api.applySubjectPresetTuning === undefined) return false;
     try {
-      const receipt = api.applySubjectPresetTuning(
-        subjectPresetTuningRequestFromDraftV1(draft, workbenchContext.controlledEntityId),
-      );
-      if (receipt.status === "rejected") {
-        saveStatus.textContent = `版本没有应用：${receipt.diagnostic?.message ?? "配置与当前主体不匹配"}`;
-        return false;
-      }
+      // 相机预览阶段先行：Profile 请求或 tuning 校验失败时，Gameplay 预设尚未提交，
+      // 不会出现「预设已生效却提示整套配置未应用」的部分应用。
       const cameraRef = draft.selectedCameraPreferenceRef;
       if (cameraRef === null) {
         api.resetCameraProfile?.();
@@ -781,6 +776,13 @@ function installTuningWorkbench(
         api.requestCameraProfile?.(cameraRef);
       }
       api.applyCameraPreview?.(cameraPreviewRequestFromDraftV1(draft));
+      const receipt = api.applySubjectPresetTuning(
+        subjectPresetTuningRequestFromDraftV1(draft, workbenchContext.controlledEntityId),
+      );
+      if (receipt.status === "rejected") {
+        saveStatus.textContent = `版本没有应用：${receipt.diagnostic?.message ?? "配置与当前主体不匹配"}`;
+        return false;
+      }
       const compactCameraSelect = document.querySelector<HTMLSelectElement>("#camera-preference-select");
       if (compactCameraSelect !== null) {
         compactCameraSelect.value = cameraPreference;
