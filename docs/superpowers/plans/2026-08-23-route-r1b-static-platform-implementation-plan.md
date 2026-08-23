@@ -23,6 +23,7 @@
 - Every fixed tick calls Character Controller `checkSupport()` exactly once. Surface classification consumes its retained sample and never writes Ground/Air, velocity, Controller pose, or Physics state.
 - Intent uses the existing XZ lookahead. Expected Surface uses Probe-private monotonic 3D support station; expected IDs never enter Runtime Port evidence.
 - Graph Builder Adapter consumes `TraversalCapabilityEnvelopeV1`, not Registry/Profile resources. `maximumTraversalSurfaceCount` is copied into the Envelope.
+- Installed Recast/Detour 0.43.1 evidence freezes `maximumTraversalSurfaceCount` at `61`, including the Heightfield: candidate ordinals `0..60` map to private areas `2..62`, while `0` is null, `1` is blocker, and `63` is the walkable sentinel.
 - Provider-private source area/tag values never enter Canonical Schema, Graph, Path, Report, CLI, Browser, or Snapshot.
 - R1b remains static ground traversal only. Do not add bridges with underpasses, caves, interiors, dynamic platforms, traversal links, NPCs, vehicles, or public `goTo`.
 - New behavior follows RED → verified failure → minimal GREEN → focused regression → relevant full gate.
@@ -298,7 +299,7 @@ Assert the built-in Profile is exactly:
 }
 ```
 
-Prove the Envelope copies `maximumTraversalSurfaceCount`, rejects zero/non-integer/provider-named fields, and changes its hash when the generic count changes.
+Prove the built-in V2 Graph Builder Profile fixes `maximumTraversalSurfaceCount` at `61`; the Envelope copies it, rejects zero/non-integer/provider-named fields, and changes its hash when the generic count changes.
 
 - [ ] **Step 2: Verify RED**
 
@@ -401,7 +402,7 @@ Use real `generateTiledNavMesh` to prove:
 2. equal unbound box top does not;
 3. adjacent coplanar bound boxes retain distinct source ranges/polygons;
 4. slope-incompatible faces remain non-walkable;
-5. too many candidate ranges fail before Provider execution.
+5. 61 candidate ranges are accepted, while 62 candidate ranges fail before Provider execution.
 
 - [ ] **Step 2: Verify provider RED**
 
@@ -424,7 +425,7 @@ markWalkableTriangles
 → contour/simplify/polygonize
 ```
 
-Validate every triangle belongs entirely to one declared vertex range. Reject mixed-range indices, overlapping ranges, unsorted ordinals, out-of-bounds ranges, and unknown fields.
+Validate every triangle belongs entirely to one declared vertex range. Reserve area `0` for null, `1` for blocker, and `63` for the Recast walkable sentinel; map candidate ordinals `0..60` to `2..62`. Reject mixed-range indices, overlapping ranges, unsorted ordinals, out-of-bounds ranges, 62 candidate ranges, and unknown fields.
 
 - [ ] **Step 4: Refresh patch and Adapter identities**
 

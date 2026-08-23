@@ -409,8 +409,12 @@ R1 已安装的 provider-private
 
 Ordinal 只用于一次 Provider operation 内分配临时 area/tag，范围顺序来自 Canonical
 `traversalSurfaceId`；最终 Graph identity 仍必须回查 canonical triangle provenance，不能信任
-Ordinal。安装版 Recast 的可用 area 数是有限资源，Graph Builder Budget 必须根据依赖源码冻结
-每次 Build 的最大候选 Surface 数并 fail closed；不得静默复用相邻 Surface 的 area。该
+Ordinal。安装版 Recast 的可用 area 数是有限资源。安装态 0.43.1 源码与真实 round-trip 探针
+冻结：`RC_NULL_AREA = 0`、保留 blocker area 为 `1`、`RC_WALKABLE_AREA = 63`，Detour area
+是 6-bit 的 `0..63`；因此 candidate ordinal `0..60` 只能映射到临时 area `2..62`，每次
+Build 最多容纳 **61 个候选 Traversal Surface（包含 Heightfield）**。有一个 Heightfield 时
+最多再容纳 60 个 Static candidate Surface，第 62 个候选必须在 Provider 调用前 fail closed，
+不得静默复用相邻 Surface 的 area。该
 provider-neutral 限额以 `maximumTraversalSurfaceCount` 进入 Graph Builder Profile，并按 R1
 既有做法逐项复制进 `TraversalCapabilityEnvelopeV1`；Recast Adapter 只消费 Envelope，不回头
 读取 Profile。未来更换 Provider/分片策略只修改 Adapter 和 Budget Profile，不改变公共
@@ -420,8 +424,8 @@ Surface/Graph 合同。
 
 ```text
 markWalkableTriangles(subject slope)
-  → 对仍为 walkable 的 candidate range 写入互异临时 area/tag
-  → 将 blocker suffix 的 triangle area 写为保留 blocker area
+  → 对仍为 walkable 的 candidate range 按 ordinal `0..60` 写入互异临时 area `2..62`
+  → 将 blocker suffix 的 triangle area 写为保留 blocker area `1`
   → rasterize / buildCompactHeightfield
   → 将 blocker area 的 compact spans 写为 null area
   → contour / simplify / polygonize
