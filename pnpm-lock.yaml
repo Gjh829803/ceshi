@@ -368,9 +368,15 @@ importers:
 
   packages/runtime-host:
     dependencies:
+      '@whitebox-world/gameplay':
+        specifier: workspace:*
+        version: link:../gameplay
       '@whitebox-world/gameplay-contracts':
         specifier: workspace:*
         version: link:../gameplay-contracts
+      '@whitebox-world/runtime-contracts':
+        specifier: workspace:*
+        version: link:../runtime-contracts
       lodash-es:
         specifier: ^4.18.1
         version: 4.18.1
