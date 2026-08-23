@@ -487,8 +487,9 @@ support station”拆成两个权威，禁止前者决定期望 Surface：
   `control-feel-profile.walkSpeedMetersPerSecond` × fixed timestep 加 Graph quantization 推导，
   不增加可调数字；允许一个 quantization band 的物理回退；
 - 多个相邻 segment 与最小 3D 距离之差在
-  `positionQuantizationMeters / 2 + TRAVERSAL_SURFACE_QUERY_EPSILON_V1` 内时全部保留，处理
-  A→B→C 的精确 seam；不相邻的自交 segment 不能通过 tie 扩大集合；
+  `positionQuantizationMeters / 2` 内时全部保留，处理 A→B→C 的精确 seam；Task 4 的 XZ、
+  area、height query constants 不复用于 3D station distance；不相邻的自交 segment 不能通过
+  tie 扩大集合；
 - 每个 Tick 的允许 Surface 集合是保留 segment 两端 Graph Node 的 Surface identity 去重结果；
   单 Node 起终点只允许该 Node Surface。
 
@@ -603,8 +604,10 @@ Canonical Graph Node 的 Surface 身份不能直接复制 Provider area/poly Ref
 1. Provider 前先对 Canonical candidate ranges 执行 §9.1 overlap/boundary preflight；同一 band
    的 interior overlap fail closed，boundary-only seam 与不同 Y layer 保留；
 2. Provider polygon 的临时 area 必须精确解析到一个 Canonical candidate range；
-3. 只在该 range 的 triangles 上对 Node XZ 做 barycentric/interior/boundary 命中；横向只使用
-   `TRAVERSAL_SURFACE_QUERY_EPSILON_V1`，不得把 Graph quantization 当成 XY 搜索半径；
+3. 只在该 range 的 triangles 上对 Node XZ 做 interior/boundary 命中；横向只使用
+   `TRAVERSAL_SURFACE_QUERY_XZ_EPSILON_METERS_V1`，面积退化只使用
+   `TRAVERSAL_SURFACE_QUERY_AREA_EPSILON_SQUARE_METERS_V1`，不得把 Graph quantization 当成
+   XZ 搜索半径；
 4. 命中高度必须与量化后的 Node Y 落在锁定 Graph height band 内，法线必须满足 Subject
    slope；只共享 XZ、但 Y 位于另一层的 Surface 不是候选；
 5. 禁止全局 highest-Y、lowest-Y 或 nearest-surface 规则；
@@ -616,7 +619,8 @@ Canonical Graph Node 的 Surface 身份不能直接复制 Provider area/poly Ref
 
 Graph correlation band 冻结为 Graph Builder 的 `positionQuantizationMeters / 2` 加
 `@whitebox-world/terrain-surface` 唯一导出的
-`TRAVERSAL_SURFACE_QUERY_EPSILON_V1`，并进入 Profile/hash。它不是 Runtime contact band。
+`TRAVERSAL_SURFACE_QUERY_HEIGHT_EPSILON_METERS_V1`，并进入 Profile/hash。它不是 Runtime
+contact band；XZ epsilon 与面积 epsilon 不得参与 Y band 算术。
 
 Provider polygon 的临时 area 必须精确映射回一个 candidate source range，且对应 range、
 `surfaceArtifactHash` 与 `geometryArtifactHash` 必须重新校验。Contour 的
@@ -661,29 +665,208 @@ PhysicsCharacterController.checkSupport()
 
 ### 9.1 共享命中等价与边界所有权
 
-Graph 与 Runtime 必须复用 `@whitebox-world/terrain-surface` 的同一套 triangle hit 分类：
+Graph 与 Runtime 必须复用 `@whitebox-world/terrain-surface` 的同一套 triangle query 与
+Surface owner 解析，不得各自实现 barycentric、edge owner 或法线翻转。以下三个常量是唯一
+公共数值容差，名称和值一起冻结：
 
-- `interior`：XZ 严格位于三角内部；
-- `boundary-only`：仅在共享边/顶点 epsilon 内命中；
-- `equivalent-plane`：命中高度和法线在调用方锁定 band 内等价；
-- `overlap`：两个 Surface 都产生 interior 命中。
+```ts
+export const TRAVERSAL_SURFACE_QUERY_XZ_EPSILON_METERS_V1 = 0.00001;
+export const TRAVERSAL_SURFACE_QUERY_AREA_EPSILON_SQUARE_METERS_V1 = 1e-10;
+export const TRAVERSAL_SURFACE_QUERY_HEIGHT_EPSILON_METERS_V1 = 0.00001;
+```
 
-两层使用相同分类和 Canonical owner 规则，但不伪装成相同数值 band：
+三者用途严格分离：
 
-- Graph 高度 band 是
-  `positionQuantizationMeters / 2 + TRAVERSAL_SURFACE_QUERY_EPSILON_V1`，属于 Graph Builder
-  Profile/hash；
-- Runtime contact band 来自锁定 Runtime Adapter 实现中、被 Live Lock 明确核验的 Character
-  Controller `keepDistance + keepContactTolerance`；当前安装版行为仍由 0.05m + 0.1m conformance
-  锁定，但这些是 Adapter/Controller 参数，不得新增到 `physics-body-profile`；
-- Graph band、共享 query epsilon、Runtime Adapter Ref/Version/Hash 与 Live Lock 检查必须形成
-  可验证证据，Validation 不得临时覆写。
+- XZ epsilon 只用于 world-space 点到投影边的垂直距离与 point/segment boundary contact；
+  `interior` 要求每条 inward edge distance 都大于该值，`boundary-only` 要求所有距离至少为
+  其负值且至少一条落在闭 epsilon band；不得把 raw cross product（m²）或 barycentric weight
+  （无量纲）直接与它比较；
+- area epsilon 精确等于 XZ epsilon 的平方，只区分正面积投影交集与 point/segment 接触；
+- height epsilon 只给调用方 Y band 增加确定性 padding；Graph 使用
+  `positionQuantizationMeters / 2 + TRAVERSAL_SURFACE_QUERY_HEIGHT_EPSILON_METERS_V1`，Runtime
+  仍使用 Live Lock 核验的 `keepDistance + keepContactTolerance`，不得用公共 height epsilon
+  替换 Runtime contact band；
+- 法线没有第四个全局 epsilon。`minimumUpwardNormalYRatio`、
+  `minimumEquivalentPlaneNormalDotRatio` 和 retained-support normal dot 都由调用方锁定
+  Profile/Adapter 提供。公共 query 不把 downward normal 翻成 upward；底面、垂直面和超坡度面
+  必须保持不可走。
 
-owner 规则固定为：唯一 interior 胜出；只有多个 boundary-only 且 equivalent-plane 时按
-`traversalSurfaceId` Canonical order 选唯一 owner；两个以上 interior、非等价高度或非等价法线
-均为 ambiguous。Graph 遇到 ambiguous 使整个 build fail closed；Runtime 发布
-`surfaceResolution.mode = "ambiguous"` 并由 Probe 阻断。这样 exact seam 可以通过，coplanar
-内部重叠不能伪装成 seam。
+公共 leaf contract 只携带 query 所需的稳定 Surface ID 与 canonical triangle bytes，不复制
+Task 2 的六字段 `TraversalSurfaceIdentityV1`：
+
+```ts
+export interface CanonicalTraversalSurfaceTriangleSourceV1 {
+  readonly traversalSurfaceId: string;
+  readonly worldPositionsMetersXYZ: readonly number[];
+  readonly triangleIndices: readonly number[];
+}
+
+export type TraversalSurfaceNormalAdmissionV1 =
+  | Readonly<{
+      mode: "upward-slope";
+      minimumUpwardNormalYRatio: number;
+    }>
+  | Readonly<{
+      mode: "retained-support";
+      minimumUpwardNormalYRatio: number;
+      referenceNormalXYZ: readonly [number, number, number];
+      minimumReferenceNormalDotRatio: number;
+    }>;
+
+export interface QueryCanonicalTraversalSurfaceHitsInputV1 {
+  readonly sources: readonly CanonicalTraversalSurfaceTriangleSourceV1[];
+  readonly pointMetersXZ: readonly [number, number];
+  readonly referenceHeightMeters: number;
+  readonly maximumReferenceHeightDifferenceMeters: number;
+  readonly normalAdmission: TraversalSurfaceNormalAdmissionV1;
+  readonly maximumEquivalentPlaneHeightDifferenceMeters: number;
+  readonly minimumEquivalentPlaneNormalDotRatio: number;
+}
+
+export interface CanonicalTraversalSurfaceHitV1 {
+  readonly traversalSurfaceId: string;
+  readonly location: "interior" | "boundary-only";
+  readonly heightMeters: number;
+  readonly normalXYZ: readonly [number, number, number];
+}
+
+export type CanonicalTraversalSurfaceHitResolutionV1 =
+  | Readonly<{ mode: "missing"; hits: readonly [] }>
+  | Readonly<{
+      mode: "resolved";
+      hit: CanonicalTraversalSurfaceHitV1;
+      hits: readonly CanonicalTraversalSurfaceHitV1[];
+    }>
+  | Readonly<{
+      mode: "ambiguous";
+      hits: readonly CanonicalTraversalSurfaceHitV1[];
+    }>;
+
+export function queryCanonicalTraversalSurfaceHitsV1(
+  input: QueryCanonicalTraversalSurfaceHitsInputV1,
+): CanonicalTraversalSurfaceHitResolutionV1;
+```
+
+该函数校验有限闭集输入，按 `traversalSurfaceId` 聚合同一 Surface 的 triangle hits，每个
+Surface 最多保留一行，按 ID code-point order 排序并 deep-freeze。Surface 内 tie-break 固定为：
+`interior` 优先；再选与 reference Y 绝对差最小者；若有 retained normal，再选 normal dot
+最大者；最后按 canonical triangle ordinal。Triangle ordinal 只用于内部 tie-break，不返回、
+不哈希，也不是 Surface identity。
+
+共享 owner resolution 也由该函数完成：零命中为 `missing`；唯一 interior 胜出，即使另有
+boundary-only；两个以上不同 Surface 的 interior 为 `ambiguous`；没有 interior 时，唯一
+boundary-only 直接胜出；多个 boundary-only 只有在每一对的高度和法线都落在调用方 equivalent
+plane bands 时才按最低 ID 解析，否则为 `ambiguous`。Task 6/7 只能用返回的 ID 回接各自完整
+Surface inventory，不得再做第二次 owner 推断。Graph 遇到 ambiguous 使 build fail closed；
+Runtime 发布 `surfaceResolution.mode = "ambiguous"` 并由 Probe 阻断。
+
+#### 9.1.1 Pairwise overlap preflight
+
+`interior/boundary-only` 是单点命中；`equivalent-plane` 是两个 boundary hits 的关系；
+`same-band/distinct-layer` 是两个 Surface footprint 的关系。不得把这些不同层级压成同一个
+字符串 union。Pair classifier 与全 inventory preflight 的最小闭集合同为：
+
+```ts
+export type CanonicalTraversalSurfacePairRelationV1 =
+  | Readonly<{
+      mode: "disjoint";
+      firstTraversalSurfaceId: string;
+      secondTraversalSurfaceId: string;
+    }>
+  | Readonly<{
+      mode: "boundary-only";
+      planeRelation: "equivalent-plane" | "non-equivalent-plane";
+      firstTraversalSurfaceId: string;
+      secondTraversalSurfaceId: string;
+      witnessPointMetersXZ: readonly [number, number];
+    }>
+  | Readonly<{
+      mode: "interior-overlap";
+      heightRelation: "same-band";
+      firstTraversalSurfaceId: string;
+      secondTraversalSurfaceId: string;
+      witnessPointMetersXZ: readonly [number, number];
+      minimumHeightDifferenceMeters: number;
+    }>
+  | Readonly<{
+      mode: "interior-overlap";
+      heightRelation: "distinct-layer";
+      firstTraversalSurfaceId: string;
+      secondTraversalSurfaceId: string;
+      witnessPointMetersXZ: readonly [number, number];
+      minimumHeightDifferenceMeters: number;
+    }>;
+
+export interface ClassifyCanonicalTraversalSurfacePairInputV1 {
+  readonly firstSource: CanonicalTraversalSurfaceTriangleSourceV1;
+  readonly secondSource: CanonicalTraversalSurfaceTriangleSourceV1;
+  readonly minimumUpwardNormalYRatio: number;
+  readonly maximumSameBandHeightDifferenceMeters: number;
+  readonly maximumEquivalentPlaneHeightDifferenceMeters: number;
+  readonly minimumEquivalentPlaneNormalDotRatio: number;
+}
+
+export interface PreflightCanonicalTraversalSurfaceOverlapsInputV1 {
+  readonly sources: readonly CanonicalTraversalSurfaceTriangleSourceV1[];
+  readonly minimumUpwardNormalYRatio: number;
+  readonly maximumSameBandHeightDifferenceMeters: number;
+  readonly maximumEquivalentPlaneHeightDifferenceMeters: number;
+  readonly minimumEquivalentPlaneNormalDotRatio: number;
+}
+
+export function classifyCanonicalTraversalSurfacePairV1(
+  input: ClassifyCanonicalTraversalSurfacePairInputV1,
+): CanonicalTraversalSurfacePairRelationV1;
+
+export function preflightCanonicalTraversalSurfaceOverlapsV1(
+  input: PreflightCanonicalTraversalSurfaceOverlapsInputV1,
+):
+  | Readonly<{ mode: "clear" }>
+  | Readonly<{
+      mode: "blocked";
+      relation: Extract<
+        CanonicalTraversalSurfacePairRelationV1,
+        { readonly mode: "interior-overlap" }
+      > & Readonly<{ heightRelation: "same-band" }>;
+    }>;
+```
+
+Pair IDs 必须按 code point 放入 `first.../second...`，candidate pairs 也按该二元组顺序访问。
+只比较不同 Surface ID 的、满足 upward slope 的 triangles。投影交集面积大于 area epsilon 为
+`interior-overlap`；否则闭 XZ distance epsilon 内的 point/segment contact 为
+`boundary-only`；其余为 `disjoint`。对于 interior intersection polygon，两平面的高度差是
+affine：在确定性排序后的 polygon vertices 求 signed values；若最小值 `<= 0` 且最大值
+`>= 0`，minimum absolute separation 为 0，否则取绝对 vertex value 的最小值。该值不大于
+`maximumSameBandHeightDifferenceMeters` 时为 `same-band`，否则为 `distinct-layer`，因此相交
+坡面不能伪装成上下叠层。
+
+一个 Surface pair 中任何 triangle pair 为 same-band interior 就优先形成 blocker；否则
+interior 优先于 boundary-only。只有全部 retained boundary witnesses 都满足 equivalent height
+与 normal band，pair 才是 `boundary-only + equivalent-plane`。Witness 取 code-point/坐标稳定
+顺序中的第一项。Preflight 只返回第一个 Canonical-ID-sorted same-band interior blocker，不生成
+O(n²) 的 disjoint relation 数组；没有 blocker 返回 `clear`。所有输出 deep-freeze，source
+inventory 反转不能改变结果。任意 triangle-soup 顶点/索引字节反转不在该承诺内；soup 已内容
+寻址，改变 canonical soup bytes 必须改变或拒绝对应 child hash。
+
+#### 9.1.2 Canonical bytes 与 Babylon Float32 boundary
+
+`emitTransformedStaticColliderTriangleMeshV1()` 的 JavaScript double world positions 是 Graph
+`StaticColliderSourceV1`、共享 query 和 canonical geometry hash 的唯一字节。Traversal-Recast
+必须把 `worldPositionsMetersXYZ` 原值映射到 `triangleSoup.positionsMetersXYZ` 并原样复制 indices；
+不得用 Babylon/Havok round-trip 后的值替换。Babylon 9.21.2 默认 Matrix 使用 Float32，因此
+任意非正交 TRS 与 canonical double 数学等价但不保证 byte-exact。该差异只由 Task 7 的私有
+Runtime Adapter conformance tolerance 所有：
+
+```ts
+allowedDeltaMeters =
+  0.000001 +
+  0.000001 * Math.max(1, Math.abs(expectedMeters), Math.abs(actualMeters));
+```
+
+该 tolerance 不得进入 Canonical Schema、query epsilon、CLI/Browser、Snapshot、Receipt、
+Profile 或任何 hash。Task 7 必须通过非正交 multi-axis Euler + non-uniform scale fixture 验证
+Babylon/Havok geometry 与 canonical emitter 在此 tolerance 内，并删除当前 duplicate vertical
+triangle query 的 downward-normal flip。
 
 ### 9.2 Runtime classifier
 

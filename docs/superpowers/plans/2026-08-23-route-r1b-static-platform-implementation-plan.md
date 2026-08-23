@@ -404,6 +404,17 @@ Expected: all focused tests, the R1 Heightfield gate, and typecheck pass.
 
 ### Task 4: Share Surface Hit Classification and Static Collider Sources
 
+**Start conditions and ordering:**
+
+- Start only after Task 1's closed Heightfield/static `ExecutionTraversalSurfaceV1` union and Task 2's
+  `StaticColliderSourceV1`, four V2 hash helpers, strict validators, and
+  `createRouteBuildInputReceiptV2()` are integrated on this branch.
+- Task 4 owns pure shared query/preflight mechanics and the Execution Collider -> static source
+  projection. It does not construct `RouteBuildInputReceiptV2`, reimplement hash preimages/budget, or
+  publish a multi-Surface Graph.
+- Integrated Task 5 does not modify `heightfield-source.ts` and has no direct textual overlap. Task 4
+  must land before Task 6 because both Task 4 and Task 6 modify `heightfield-source.ts` and its tests.
+
 **Files:**
 - Modify: `packages/terrain-surface/src/static-collider-triangle-mesh.ts`
 - Modify: `packages/terrain-surface/src/static-collider-triangle-mesh.test.ts`
@@ -416,12 +427,37 @@ Expected: all focused tests, the R1 Heightfield gate, and typecheck pass.
 - Modify: `packages/traversal-recast/src/heightfield-source.test.ts`
 
 **Interfaces:**
-- Produces `TRAVERSAL_SURFACE_QUERY_EPSILON_V1`, `queryCanonicalTraversalSurfaceHitV1()`, and overlap preflight results `interior | boundary-only | equivalent-plane | overlap`.
+- Produces unit-bearing constants with exact values:
+  `TRAVERSAL_SURFACE_QUERY_XZ_EPSILON_METERS_V1 = 0.00001`,
+  `TRAVERSAL_SURFACE_QUERY_AREA_EPSILON_SQUARE_METERS_V1 = 1e-10`, and
+  `TRAVERSAL_SURFACE_QUERY_HEIGHT_EPSILON_METERS_V1 = 0.00001`.
+- Produces `CanonicalTraversalSurfaceTriangleSourceV1`, plural
+  `queryCanonicalTraversalSurfaceHitsV1()` with shared owner resolution,
+  `classifyCanonicalTraversalSurfacePairV1()`, and
+  `preflightCanonicalTraversalSurfaceOverlapsV1()` exactly as frozen in design §9.1.
+- Keeps equivalent-plane and retained-support normal thresholds caller-owned; does not add a global
+  normal epsilon and never flips downward normals upward.
 - Replaces duplicated Recast Euler/TRS geometry code with the existing world-space `emitTransformedStaticColliderTriangleMeshV1()` authority.
 
 - [ ] **Step 1: Write RED asymmetric geometry tests**
 
-Cover a rotated/scaled box, a sloped box, two exact boundary-only boxes, a 1cm gap, coplanar interior overlap, and stacked triangles at the same XZ. Assert that array reversal does not change sorted hits or hashes.
+Write RED tests for the exact query and pair contracts before production exports exist:
+
+- XZ points at `epsilon - delta`, exactly epsilon, and `epsilon + delta` on both 1m and 100m
+  triangles, proving meter-distance scale independence and separate area/height dimensions;
+- downward bottom, vertical wall, legal slope, and over-slope faces; assert there is no normal flip;
+- two triangles of one Heightfield Surface on the canonical diagonal resolve one Surface, not
+  ambiguity;
+- one interior plus another boundary resolves the interior; two distinct interior Surface IDs are
+  ambiguous even when coplanar;
+- multiple equivalent boundary-only Surface IDs select the lowest ID; non-equivalent height or
+  normal returns ambiguous;
+- coplanar interior overlap, crossing-slope overlap, exact boundary-only boxes, a 1cm gap, and
+  vertically stacked layers close the pairwise relation partition;
+- source inventory reversal preserves plural query/preflight output and its ordering. Do not assert
+  arbitrary triangle-soup byte reversal preserves a child hash;
+- reject malformed indices, non-finite values, duplicate Surface IDs, zero-length normals, and
+  non-closed inputs; assert every returned object/array is deeply frozen.
 
 - [ ] **Step 2: Verify geometry RED**
 
@@ -433,26 +469,64 @@ Expected: FAIL because the shared query module does not exist.
 
 - [ ] **Step 3: Implement deterministic shared query classification**
 
-Use Babylon-compatible vector math through existing terrain-surface utilities. Barycentric XZ admission uses only `TRAVERSAL_SURFACE_QUERY_EPSILON_V1`; caller-provided Y/normal bands remain explicit inputs. Return immutable, Canonical-ID-sorted hits.
+Use deterministic world-space vector math through existing terrain-surface utilities. XZ point
+admission compares perpendicular edge distance only with
+`TRAVERSAL_SURFACE_QUERY_XZ_EPSILON_METERS_V1`; projected intersection area uses only the square-meter
+constant; caller-provided Y and normal bands remain explicit inputs.
+
+`queryCanonicalTraversalSurfaceHitsV1()` groups qualifying triangles by `traversalSurfaceId`, emits at
+most one hit per Surface, sorts by code-point ID, deep-freezes output, and owns the complete resolution:
+missing; unique interior; multiple interiors ambiguous; unique boundary; or equivalent multiple
+boundaries resolved to the lowest ID. Inside one Surface, tie-break by interior, smallest absolute Y
+difference, largest retained-normal dot when present, then canonical triangle ordinal.
+
+`classifyCanonicalTraversalSurfacePairV1()` returns the closed disjoint / boundary-only with
+equivalent-plane relation / interior-overlap with same-band-or-distinct-layer relation. Compute minimum
+absolute affine height separation over the projected intersection polygon, including a zero when signed
+vertex values cross. `preflightCanonicalTraversalSurfaceOverlapsV1()` returns only the first
+Canonical-ID-sorted same-band interior blocker or `clear`; do not materialize every disjoint pair.
+
+Implement legacy `sampleTriangleHeightfieldSurface()` and
+`queryStaticColliderTriangleMeshSupportHeightMetersV1()` through the shared triangle primitive, or add
+compatibility tests that prove a third independent barycentric implementation was not silently retained.
 
 - [ ] **Step 4: Write RED shared-emitter Recast test**
 
-Spy on the shared emitter output only through value comparison: Graph source positions/indices must equal `emitTransformedStaticColliderTriangleMeshV1()` `worldPositionsMetersXYZ`/indices for asymmetric rotation and non-uniform scale. Delete expectations tied to the duplicate Recast TRS implementation and remove the local Euler/`transformSoup` path from `heightfield-source.ts`.
+Spy on the shared emitter output only through value comparison: Graph source positions/indices must
+equal `emitTransformedStaticColliderTriangleMeshV1()` `worldPositionsMetersXYZ`/indices for asymmetric
+multi-axis Euler rotation and non-uniform scale. Canonical JavaScript double arrays must be equal
+byte-for-byte; Babylon Float32 is not part of this Task 4 assertion. Delete expectations tied to the
+duplicate Recast TRS implementation and remove the local Euler/`transformSoup` path from
+`heightfield-source.ts`.
 
 - [ ] **Step 5: Implement shared source emission and preflight**
 
-Build `StaticColliderSourceV1` only in Traversal-Recast from the Execution Collider and the shared emitter: map `worldPositionsMetersXYZ` to `triangleSoup.positionsMetersXYZ` and copy triangle indices exactly. `@whitebox-world/traversal` owns only the provider-neutral soup contract and must not import Runtime Contracts; moving the emitter or Execution type into Traversal would create the wrong dependency direction. Fail closed on same-band interior overlap, but retain boundary-only seams and distinct Y layers.
+Build `StaticColliderSourceV1` only in Traversal-Recast from the Execution Collider and the shared
+emitter: copy `entityId`, `logicalSubshapeId`, `colliderSubshapeId`, and `colliderHash` from the compiled
+Collider row; map `worldPositionsMetersXYZ` to `triangleSoup.positionsMetersXYZ`; and copy triangle
+indices exactly. `@whitebox-world/traversal` owns only the provider-neutral soup contract and must not
+import Runtime Contracts; moving the emitter or Execution type into Traversal would create the wrong
+dependency direction. Fail closed on same-band interior overlap, but retain boundary-only seams and
+distinct Y layers.
+
+The Task 4 preflight is a pure deterministic utility only. Task 6 maps its first blocking witness to the
+V2 failure and includes full Surface identities; Task 4 must not construct that failure or claim Graph
+support. Babylon 9.21.2 Float32 agreement belongs only to Task 7's private Runtime Adapter conformance,
+using `1e-6m + 1e-6 * max(1, abs(expectedMeters), abs(actualMeters))`; that tolerance never enters
+Canonical Schema, query constants, public protocols, receipts, Profiles, or hashes.
 
 - [ ] **Step 6: Run Task 4 gates and commit**
 
 ```bash
 pnpm vitest run packages/terrain-surface/src packages/traversal-recast/src/heightfield-source.test.ts
+pnpm verify:route-r1-heightfield
 pnpm typecheck
 git add packages/terrain-surface packages/traversal-recast/src/heightfield-source.ts packages/traversal-recast/src/heightfield-source.test.ts
 git commit -m "feat: share traversal surface geometry queries"
 ```
 
-Expected: all focused tests pass and the R1 duplicate TRS path is removed.
+Expected: all focused tests and the R1 Heightfield gate pass, canonical source arrays equal the shared
+emitter arrays exactly, and the R1 duplicate TRS path is removed.
 
 ### Task 5: Add the Private Layered Recast Source Mode
 
@@ -590,10 +664,20 @@ Expected: multi-Surface success/failure tests pass and R1 remains green.
 **Interfaces:**
 - Extends `classifySurface()` over the complete Execution Surface/Collider index while consuming one retained `RetainedCharacterSupportSampleV1`.
 - Keeps `TraversalRuntimeTickEvidenceV1` free of expected Path Surface state.
+- Consumes Task 4 `queryCanonicalTraversalSurfaceHitsV1()` and its owner resolution; Runtime does not
+  retain a duplicate vertical-triangle classifier or flip downward normals.
+- Keeps Babylon/Havok Float32 conformance tolerance private to the Runtime Adapter and out of every
+  Canonical/public/hash contract.
 
 - [ ] **Step 1: Write RED Runtime correlation tests**
 
-Cover Heightfield, bound static platform, unbound Collider, dynamic support, exact seam, coplanar overlap, stacked lower layer, `SLIDING`, Reset, Rebind, and two Runtime instances. Assert `checkSupport()` is called once per tick in every case.
+Cover Heightfield, bound static platform, unbound Collider, dynamic support, exact seam, coplanar
+overlap, stacked lower layer, downward bottom/vertical side rejection, `SLIDING`, Reset, Rebind, and two
+Runtime instances. Assert `checkSupport()` is called once per tick in every case. Add a non-orthogonal
+multi-axis Euler + non-uniform scale conformance fixture proving Babylon/Havok positions agree with the
+canonical emitter under the private tolerance
+`1e-6m + 1e-6 * max(1, abs(expectedMeters), abs(actualMeters))`; do not assert byte equality at the
+Float32 engine boundary.
 
 - [ ] **Step 2: Verify Runtime RED**
 
@@ -605,7 +689,11 @@ Expected: FAIL because static support is currently counted only as Heightfield a
 
 - [ ] **Step 3: Implement immutable static Surface correlation**
 
-Index collision meshes by `colliderSubshapeId`; query only compiled Surface-bound rows through the shared triangle classifier. Use the Runtime Adapter Live Lock contact band and retained pre-integration foot/normal. Return `unsupported | unmatched | ambiguous | resolved` without changing movement state.
+Index collision meshes by `colliderSubshapeId`; query only compiled Surface-bound rows through the
+shared plural query and join its returned `traversalSurfaceId` to the Execution Surface inventory. Use
+the Runtime Adapter Live Lock contact band and retained pre-integration foot/normal. Delete the duplicate
+`verticalTriangleHit()` path and its negative-normal flip. Return
+`unsupported | unmatched | ambiguous | resolved` without changing movement state.
 
 - [ ] **Step 4: Run Task 7 gates and commit**
 
