@@ -22,6 +22,7 @@ import {
   type WorldStateSnapshotV1,
 } from "@whitebox-world/gameplay-contracts";
 import { sha256CanonicalJson } from "@whitebox-world/protocol";
+import { isNil } from "lodash-es";
 
 import type {
   GameplayActionCatalogV1,
@@ -728,7 +729,7 @@ export class GameplayState implements GameplayPlanningStateV1 {
   commit(transitionPlan: GameplayTransitionPlanV1): void {
     this.assertAuthorizedTransitionPlan(transitionPlan);
     const prepared = this.preparedTransitions.get(transitionPlan);
-    if (prepared === undefined) {
+    if (isNil(prepared)) {
       throw new Error(
         "GAMEPLAY_TRANSITION_NOT_STAGED: Transition must be projected before commit.",
       );
@@ -1041,7 +1042,7 @@ export class GameplayState implements GameplayPlanningStateV1 {
   }>): void {
     assertTick(input.simulationTick, "simulationTick");
     const provenance = this.transitionProvenance.get(input.transitionPlan);
-    if (provenance === undefined || !Object.isFrozen(input.transitionPlan)) {
+    if (isNil(provenance) || !Object.isFrozen(input.transitionPlan)) {
       throw new Error(
         "GAMEPLAY_TRANSITION_NOT_ISSUED: Transition plan was not issued by this GameplayState.",
       );
@@ -1065,7 +1066,7 @@ export class GameplayState implements GameplayPlanningStateV1 {
   ): GameplayTransitionProvenanceV1 {
     const provenance = this.transitionProvenance.get(transitionPlan);
     if (
-      provenance === undefined ||
+      isNil(provenance) ||
       !Object.isFrozen(transitionPlan)
     ) {
       throw new Error(

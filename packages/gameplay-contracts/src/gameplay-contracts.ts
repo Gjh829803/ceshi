@@ -419,7 +419,7 @@ const GAMEPLAY_DIAGNOSTIC_CODES = new Set<GameplayDiagnosticCodeV1>([
   "RUNTIME_HOST_CAPACITY_EXCEEDED",
 ]);
 
-function parseGameplayDiagnosticV1(
+export function parseGameplayDiagnosticV1(
   input: unknown,
 ): GameplayDiagnosticV1 | undefined {
   const record = snapshotDataRecord(input);
