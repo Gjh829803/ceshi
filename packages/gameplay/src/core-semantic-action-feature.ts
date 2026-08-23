@@ -280,6 +280,7 @@ export function createGameplayActionCatalogV1(
 ): GameplayActionCatalogV1 {
   if (
     !Number.isSafeInteger(maximumSemanticActionDefinitionCount) ||
+    Object.is(maximumSemanticActionDefinitionCount, -0) ||
     maximumSemanticActionDefinitionCount < 0
   ) actionCatalogError("definition capacity must be a non-negative safe integer.");
   const definitionsInput = snapshotArray(input) ?? actionCatalogError(
@@ -309,7 +310,6 @@ export function createGameplayActionCatalogV1(
 
 export interface InternalGameplayActionExecutionV1 {
   readonly state: GameplayActionStateV1;
-  readonly controllerEntityId: string;
   readonly isMovementInputBlocked: boolean;
   readonly scheduledEndSimulationTick?: number;
 }

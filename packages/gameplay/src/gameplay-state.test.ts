@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 
 import {
   DEFAULT_GAMEPLAY_CAPACITY_BUDGET_V1,
@@ -21,6 +21,8 @@ import {
   GameplayState,
   derivePossessedByRelationshipIdV1,
   type GameplayStateOptionsV1,
+  type GameplayTransitionCapacityDeltaV1,
+  type GameplayTransitionPlanV1,
 } from "./gameplay-state";
 
 const HASH_A = `sha256:${"a".repeat(64)}` as const;
@@ -97,6 +99,43 @@ function controller(id: string): ControllerEntityStateV1 {
   };
 }
 
+function projectionContext(simulationTick = 2) {
+  return {
+    id: `snapshot-${simulationTick}`,
+    simulationTick,
+    worldPackageRef: "worldkit://world/a@1",
+    worldPackageRootHash: HASH_A,
+    executionPlanHash: HASH_B,
+    spatialEntityStatesById: {
+      "subject-a": {
+        id: "subject-a",
+        kind: "spatial-entity-state" as const,
+        entityDefinitionRef: "worldkit://entity/humanoid@1",
+        entityDefinitionHash: HASH_B,
+        semanticClassId: "humanoid",
+        lifecycleMode: "active" as const,
+        positionMetersXYZ: [0, 0, 0] as const,
+        rotationQuaternionXYZW: [0, 0, 0, 1] as const,
+        scaleRatioXYZ: [1, 1, 1] as const,
+      },
+      "subject-b": {
+        id: "subject-b",
+        kind: "spatial-entity-state" as const,
+        entityDefinitionRef: "worldkit://entity/humanoid@1",
+        entityDefinitionHash: HASH_B,
+        semanticClassId: "humanoid",
+        lifecycleMode: "active" as const,
+        positionMetersXYZ: [1, 0, 0] as const,
+        rotationQuaternionXYZW: [0, 0, 0, 1] as const,
+        scaleRatioXYZ: [1, 1, 1] as const,
+      },
+    },
+    capabilityStatesById: {},
+    semanticFactsById: {},
+    lastEventSequence: 1,
+  };
+}
+
 type WithoutSession<T extends GameplayCommandV1> = Omit<
   T,
   "schemaVersion" | "runtimeSessionId" | "worldSessionId"
@@ -133,6 +172,24 @@ function bind(
   }), tick);
   if (result.status !== "planned") throw new Error(result.diagnostic.code);
   state.commit(result.transitionPlan);
+}
+
+function reissueWithCapacityDelta(
+  state: GameplayState,
+  source: Extract<GameplayTransitionPlanV1, { commandId: string }>,
+  capacityDelta: GameplayTransitionCapacityDeltaV1,
+): GameplayTransitionPlanV1 {
+  const planner = Reflect.get(state, "plannedCommand");
+  if (typeof planner !== "function") throw new Error("internal planner unavailable");
+  const result = Reflect.apply(planner, state, [
+    source.type,
+    source.commandId,
+    source.relationshipChanges,
+    source.actionChanges,
+    source.newlyCommittedActionExecutionIds,
+    capacityDelta,
+  ]) as { readonly transitionPlan: GameplayTransitionPlanV1 };
+  return result.transitionPlan;
 }
 
 describe("GameplayState possession", () => {
@@ -253,6 +310,146 @@ describe("GameplayState possession", () => {
     expect(() => state.commit(release.transitionPlan)).toThrow(/GAMEPLAY_STATE_STALE/);
     expect(state.possessionForController("controller-a")?.controlledEntityId)
       .toBe("subject-b");
+  });
+
+  it("rejects fabricated Relationship and Action plans without mutation", () => {
+    const state = new GameplayState(options());
+    const relationshipId = derivePossessedByRelationshipIdV1("forged-bind");
+    const forgedRelationshipPlan = Object.freeze({
+      kind: "gameplay-transition-plan",
+      schemaVersion: 1,
+      type: "control.bind",
+      commandId: "forged-bind",
+      expectedStateRevision: 0,
+      relationshipChanges: [{
+        operation: "add",
+        after: {
+          id: relationshipId,
+          type: "possessedBy",
+          schemaVersion: 1,
+          controlledEntityId: "subject-a",
+          controllerEntityId: "controller-a",
+          establishedSimulationTick: 1,
+        },
+      }],
+      actionChanges: [],
+      newlyCommittedActionExecutionIds: [],
+      capacityDelta: {
+        relationshipStateCountDelta: 0,
+        activeActionStateCountDelta: 0,
+        retiredActionExecutionIdCountDelta: 0,
+        requiredEventCount: 0,
+      },
+    }) as unknown as GameplayTransitionPlanV1;
+    expect(() => state.commit(forgedRelationshipPlan)).toThrow(
+      /GAMEPLAY_TRANSITION_NOT_ISSUED/,
+    );
+
+    const forgedActionPlan = Object.freeze({
+      kind: "gameplay-transition-plan",
+      schemaVersion: 1,
+      type: "action.activate",
+      commandId: "forged-action",
+      expectedStateRevision: 0,
+      relationshipChanges: [],
+      actionChanges: [{
+        operation: "add",
+        after: {
+          state: {
+            id: "forged-execution",
+            kind: "action-state",
+            semanticActionRef: "worldkit://semantic-action/wave@1",
+            semanticActionHash: HASH_A,
+            actorEntityId: "subject-a",
+            mode: "active",
+            startedSimulationTick: 1,
+            lastTransitionSimulationTick: 1,
+          },
+          isMovementInputBlocked: false,
+        },
+      }],
+      newlyCommittedActionExecutionIds: ["forged-execution"],
+      capacityDelta: {
+        relationshipStateCountDelta: 0,
+        activeActionStateCountDelta: 0,
+        retiredActionExecutionIdCountDelta: 0,
+        requiredEventCount: 0,
+      },
+    }) as unknown as GameplayTransitionPlanV1;
+    expect(() => state.projectWorldStateAfter(
+      forgedActionPlan,
+      projectionContext(),
+    )).toThrow(/GAMEPLAY_TRANSITION_NOT_ISSUED/);
+    expect(state.revision).toBe(0);
+    expect(state.possessionForController("controller-a")).toBeUndefined();
+    expect(state.activeActionState("forged-execution")).toBeUndefined();
+  });
+
+  it("rejects cross-instance and already-consumed issued plans", () => {
+    const issuer = new GameplayState(options());
+    const other = new GameplayState(options());
+    const result = issuer.planControl(command({
+      id: "issued-bind",
+      type: "control.bind",
+      controllerEntityId: "controller-a",
+      controlledEntityId: "subject-a",
+      expectedPossession: { mode: "unbound" },
+    }), 1);
+    if (result.status !== "planned") throw new Error("bind rejected");
+    expect(() => other.commit(result.transitionPlan)).toThrow(
+      /GAMEPLAY_TRANSITION_NOT_ISSUED/,
+    );
+    expect(() => other.projectWorldStateAfter(
+      result.transitionPlan,
+      projectionContext(),
+    )).toThrow(/GAMEPLAY_TRANSITION_NOT_ISSUED/);
+    expect(other.revision).toBe(0);
+    issuer.commit(result.transitionPlan);
+    expect(() => issuer.commit(result.transitionPlan)).toThrow(
+      /GAMEPLAY_TRANSITION_NOT_ISSUED/,
+    );
+    expect(issuer.revision).toBe(1);
+  });
+
+  it("rejects foreign objects before reading any transition fields", () => {
+    const state = new GameplayState(options());
+    const revisionGetter = vi.fn(() => {
+      throw new Error("must not inspect");
+    });
+    const foreign = {};
+    Object.defineProperty(foreign, "expectedStateRevision", {
+      enumerable: true,
+      get: revisionGetter,
+    });
+    expect(() => state.commit(foreign as GameplayTransitionPlanV1)).toThrow(
+      /GAMEPLAY_TRANSITION_NOT_ISSUED/,
+    );
+    expect(revisionGetter).not.toHaveBeenCalled();
+    expect(state.revision).toBe(0);
+  });
+
+  it("rejects an issued Relationship transition whose reservation understates changes", () => {
+    const state = new GameplayState(options());
+    const source = state.planControl(command({
+      id: "bind-under-reserved",
+      type: "control.bind",
+      controllerEntityId: "controller-a",
+      controlledEntityId: "subject-a",
+      expectedPossession: { mode: "unbound" },
+    }), 1);
+    if (source.status !== "planned") throw new Error("bind rejected");
+    const underReserved = reissueWithCapacityDelta(state, source.transitionPlan, {
+      relationshipStateCountDelta: 0,
+      activeActionStateCountDelta: 0,
+      retiredActionExecutionIdCountDelta: 0,
+      requiredEventCount: 0,
+    });
+    expect(() => state.projectWorldStateAfter(
+      underReserved,
+      projectionContext(),
+    )).toThrow(/GAMEPLAY_TRANSITION_INVARIANT/);
+    expect(state.revision).toBe(0);
+    expect(state.possessionForController("controller-a")).toBeUndefined();
   });
 
   it("enforces relationship capacity at N and N+1", () => {
@@ -443,6 +640,57 @@ describe("GameplayState possession", () => {
 });
 
 describe("GameplayState actions", () => {
+  it.each([
+    ["active Action", {
+      relationshipStateCountDelta: 0,
+      activeActionStateCountDelta: 0,
+      retiredActionExecutionIdCountDelta: 1,
+      requiredEventCount: 1,
+    }],
+    ["retired execution ID", {
+      relationshipStateCountDelta: 0,
+      activeActionStateCountDelta: 1,
+      retiredActionExecutionIdCountDelta: 0,
+      requiredEventCount: 1,
+    }],
+    ["success Event", {
+      relationshipStateCountDelta: 0,
+      activeActionStateCountDelta: 1,
+      retiredActionExecutionIdCountDelta: 1,
+      requiredEventCount: 0,
+    }],
+  ] as const)(
+    "rejects an issued Action transition whose reservation understates the %s change",
+    (_dimension, capacityDelta) => {
+      const state = new GameplayState(options());
+      bind(state);
+      const source = state.planAction(command({
+        id: "activate-under-reserved",
+        type: "action.activate",
+        controllerEntityId: "controller-a",
+        actionExecutionId: "execution-under-reserved",
+        semanticActionRef: "worldkit://semantic-action/wave@1",
+        actorEntityId: "subject-a",
+        expectedPossession: {
+          mode: "possessed",
+          controlledEntityId: "subject-a",
+        },
+      }), 2);
+      if (source.status !== "planned") throw new Error("activation rejected");
+      const underReserved = reissueWithCapacityDelta(
+        state,
+        source.transitionPlan,
+        capacityDelta,
+      );
+      expect(() => state.projectWorldStateAfter(
+        underReserved,
+        projectionContext(),
+      )).toThrow(/GAMEPLAY_TRANSITION_INVARIANT/);
+      expect(state.revision).toBe(1);
+      expect(state.activeActionState("execution-under-reserved")).toBeUndefined();
+    },
+  );
+
   it("activates only for the expected possessed actor and enforces availability", () => {
     const state = new GameplayState(options());
     bind(state);
@@ -706,33 +954,105 @@ describe("GameplayState actions", () => {
     }), 2).status).toBe("planned");
   });
 
-  it("supports special execution IDs without prototype mutation and blocks control changes when declared", () => {
+  it.each([
+    { label: "nonblocking", isMovementInputBlocked: false, executionId: "execution-nonblocking" },
+    { label: "blocking", isMovementInputBlocked: true, executionId: "__proto__" },
+  ])("keeps a $label Action actor-owned across release and lets the new possessor cancel", ({
+    isMovementInputBlocked,
+    executionId,
+  }) => {
+    const action = definition({ isMovementInputBlocked });
+    const state = new GameplayState(options({
+      actionCatalog: createGameplayActionCatalogV1([action], 1),
+    }));
+    bind(state);
+    const activation = state.planAction(command({
+      id: `activate-${executionId}`,
+      type: "action.activate",
+      controllerEntityId: "controller-a",
+      actionExecutionId: executionId,
+      semanticActionRef: action.resourceRef,
+      actorEntityId: "subject-a",
+      expectedPossession: { mode: "possessed", controlledEntityId: "subject-a" },
+    }), 2);
+    if (activation.status !== "planned") throw new Error("activation rejected");
+    state.commit(activation.transitionPlan);
+    expect(state.activeActionState(executionId)?.id).toBe(executionId);
+    expect(state.isMovementInputBlocked("controller-a")).toBe(
+      isMovementInputBlocked,
+    );
+
+    const release = state.planControl(command({
+      id: `release-${executionId}`,
+      type: "control.release",
+      controllerEntityId: "controller-a",
+      expectedPossession: { mode: "possessed", controlledEntityId: "subject-a" },
+    }), 3);
+    expect(release.status).toBe("planned");
+    if (release.status !== "planned") return;
+    state.commit(release.transitionPlan);
+    expect(state.activeActionState(executionId)).toBeDefined();
+    expect(state.isMovementInputBlocked("controller-a")).toBe(false);
+
+    expect(state.planAction(command({
+      id: `old-cancel-${executionId}`,
+      type: "action.cancel",
+      controllerEntityId: "controller-a",
+      actionExecutionId: executionId,
+      actorEntityId: "subject-a",
+      expectedPossession: { mode: "possessed", controlledEntityId: "subject-a" },
+    }), 4)).toMatchObject({
+      status: "rejected",
+      diagnostic: { code: "CONTROL_POSSESSION_STALE" },
+    });
+
+    bind(state, "controller-b", "subject-a", `bind-new-${executionId}`, 4);
+    expect(state.isMovementInputBlocked("controller-b")).toBe(
+      isMovementInputBlocked,
+    );
+    const cancel = state.planAction(command({
+      id: `new-cancel-${executionId}`,
+      type: "action.cancel",
+      controllerEntityId: "controller-b",
+      actionExecutionId: executionId,
+      actorEntityId: "subject-a",
+      expectedPossession: { mode: "possessed", controlledEntityId: "subject-a" },
+    }), 5);
+    expect(cancel.status).toBe("planned");
+    if (cancel.status !== "planned") return;
+    state.commit(cancel.transitionPlan);
+    expect(state.activeActionState(executionId)).toBeUndefined();
+  });
+
+  it("moves movement blocking with the actor rather than the initiating Controller", () => {
     const blocking = definition({ isMovementInputBlocked: true });
     const state = new GameplayState(options({
       actionCatalog: createGameplayActionCatalogV1([blocking], 1),
     }));
     bind(state);
     const activation = state.planAction(command({
-      id: "activate-special",
+      id: "activate-actor-owned",
       type: "action.activate",
       controllerEntityId: "controller-a",
-      actionExecutionId: "__proto__",
+      actionExecutionId: "execution-actor-owned",
       semanticActionRef: blocking.resourceRef,
       actorEntityId: "subject-a",
       expectedPossession: { mode: "possessed", controlledEntityId: "subject-a" },
     }), 2);
     if (activation.status !== "planned") throw new Error("activation rejected");
     state.commit(activation.transitionPlan);
-    expect(state.activeActionState("__proto__")?.id).toBe("__proto__");
-    expect(state.isMovementInputBlocked("controller-a")).toBe(true);
-    expect(state.planControl(command({
-      id: "release-blocked",
-      type: "control.release",
+    const rebind = state.planControl(command({
+      id: "rebind-away-from-actor",
+      type: "control.bind",
       controllerEntityId: "controller-a",
+      controlledEntityId: "subject-b",
       expectedPossession: { mode: "possessed", controlledEntityId: "subject-a" },
-    }), 3)).toMatchObject({
-      status: "rejected",
-      diagnostic: { code: "ACTION_BLOCKS_CONTROL_CHANGE" },
-    });
+    }), 3);
+    expect(rebind.status).toBe("planned");
+    if (rebind.status !== "planned") return;
+    state.commit(rebind.transitionPlan);
+    expect(state.isMovementInputBlocked("controller-a")).toBe(false);
+    bind(state, "controller-b", "subject-a", "bind-b-to-actor", 4);
+    expect(state.isMovementInputBlocked("controller-b")).toBe(true);
   });
 });

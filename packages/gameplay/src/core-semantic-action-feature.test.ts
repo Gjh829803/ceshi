@@ -84,4 +84,10 @@ describe("GameplayActionCatalogV1", () => {
     }))).toThrow(/ACTION_CATALOG_INVALID/);
     expect(getter).not.toHaveBeenCalled();
   });
+
+  it("rejects negative zero catalog capacity", () => {
+    expect(() => createGameplayActionCatalogV1([], -0)).toThrow(
+      /ACTION_CATALOG_INVALID/,
+    );
+  });
 });

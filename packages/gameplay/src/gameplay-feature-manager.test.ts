@@ -120,6 +120,73 @@ describe("GameplayFeatureManager", () => {
     expect(create).not.toHaveBeenCalled();
   });
 
+  it("requires the Resource Lock set to exactly equal the factory manifest set", () => {
+    expect(() => new GameplayFeatureManager({
+      factories: [],
+      resourceLocks: [{ resourceRef: "feature:surplus", contentHash: HASH }],
+      availableCapabilityRefs: [],
+      capacityBudget: DEFAULT_GAMEPLAY_CAPACITY_BUDGET_V1,
+    })).toThrow(/surplus|exact/i);
+
+    const log: string[] = [];
+    const a = factory("feature:a", log);
+    const create = vi.spyOn(a, "create");
+    expect(() => new GameplayFeatureManager({
+      factories: [a],
+      resourceLocks: [
+        { resourceRef: a.manifest.resourceRef, contentHash: a.manifest.contentHash },
+        { resourceRef: "feature:surplus", contentHash: HASH },
+      ],
+      availableCapabilityRefs: [],
+      capacityBudget: DEFAULT_GAMEPLAY_CAPACITY_BUDGET_V1,
+    })).toThrow(/surplus|exact/i);
+    expect(create).not.toHaveBeenCalled();
+  });
+
+  it("rejects accessor-backed lock/capability arrays without invoking them", () => {
+    const lockGetter = vi.fn(() => ({
+      resourceRef: "feature:side-effect",
+      contentHash: HASH,
+    }));
+    const resourceLocks: Array<{ resourceRef: string; contentHash: typeof HASH }> = [];
+    Object.defineProperty(resourceLocks, "0", {
+      enumerable: true,
+      configurable: true,
+      get: lockGetter,
+    });
+    resourceLocks.length = 1;
+    expect(() => new GameplayFeatureManager({
+      factories: [],
+      resourceLocks,
+      availableCapabilityRefs: [],
+      capacityBudget: DEFAULT_GAMEPLAY_CAPACITY_BUDGET_V1,
+    })).toThrow();
+    expect(lockGetter).not.toHaveBeenCalled();
+
+    const capabilityGetter = vi.fn(() => "capability:side-effect");
+    const capabilityRefs: string[] = [];
+    Object.defineProperty(capabilityRefs, "0", {
+      enumerable: true,
+      configurable: true,
+      get: capabilityGetter,
+    });
+    capabilityRefs.length = 1;
+    expect(() => new GameplayFeatureManager({
+      factories: [],
+      resourceLocks: [],
+      availableCapabilityRefs: capabilityRefs,
+      capacityBudget: DEFAULT_GAMEPLAY_CAPACITY_BUDGET_V1,
+    })).toThrow();
+    expect(capabilityGetter).not.toHaveBeenCalled();
+  });
+
+  it("rejects negative zero command handler budget", () => {
+    expect(() => createGameplayFeatureManifestV1({
+      ...manifestBody("feature:negative-zero"),
+      resourceBudget: { stateSliceCount: 1, commandHandlerCount: -0 },
+    })).toThrow(/FEATURE_NOT_LOCKED/);
+  });
+
   it("activates in stable topological order regardless of input order", async () => {
     const log: string[] = [];
     const a = factory("feature:a", log);
@@ -180,6 +247,90 @@ describe("GameplayFeatureManager", () => {
       .rejects.toMatchObject({ errors: [primary, cleanup] });
     expect(log).toContain("dispose:feature:a");
     expect(log).toContain("dispose:feature:b");
+  });
+
+  it.each(["resource-ref", "handlers"] as const)(
+    "disposes a returned instance after %s validation fails",
+    async (failure) => {
+      const log: string[] = [];
+      const base = factory("feature:a", log);
+      const invalid: GameplayFeatureFactoryV1 = {
+        ...base,
+        create: (context) => ({
+          ...base.create(context),
+          ...(failure === "resource-ref"
+            ? { resourceRef: "feature:wrong" }
+            : {
+                commandHandlers: [{
+                  type: "control.bind" as const,
+                  plan: () => ({
+                    status: "rejected" as const,
+                    diagnostic: {
+                      code: "GAMEPLAY_RULE_REJECTED" as const,
+                      message: "unused",
+                    },
+                  }),
+                }],
+              }),
+        }),
+      };
+      await expect(manager([invalid]).activate({ worldSessionId: "world-a" }))
+        .rejects.toThrow();
+      expect(log).toEqual(["dispose:feature:a"]);
+    },
+  );
+
+  it("aggregates returned-instance cleanup failure behind the validation error", async () => {
+    const primaryPattern = /Factory returned/;
+    const cleanup = new Error("cleanup failed");
+    const base = factory("feature:a", []);
+    const invalid: GameplayFeatureFactoryV1 = {
+      ...base,
+      create: (context) => ({
+        ...base.create(context),
+        resourceRef: "feature:wrong",
+        dispose: () => { throw cleanup; },
+      }),
+    };
+    try {
+      await manager([invalid]).activate({ worldSessionId: "world-a" });
+      throw new Error("expected activation failure");
+    } catch (error) {
+      expect(error).toBeInstanceOf(AggregateError);
+      const errors = (error as AggregateError).errors;
+      expect(errors).toHaveLength(2);
+      expect((errors[0] as Error).message).toMatch(primaryPattern);
+      expect(errors[1]).toBe(cleanup);
+    }
+  });
+
+  it("rejects a declared Handler whose plan member is not executable and disposes it", async () => {
+    const log: string[] = [];
+    const manifest = createGameplayFeatureManifestV1(manifestBody("feature:handler-shape", {
+      commandTypes: ["control.bind"],
+      resourceBudget: { stateSliceCount: 1, commandHandlerCount: 1 },
+    }));
+    const invalid: GameplayFeatureFactoryV1 = {
+      manifest,
+      create: () => ({
+        resourceRef: manifest.resourceRef,
+        commandHandlers: [{
+          type: "control.bind",
+          plan: 123,
+        } as never],
+        createStateSlice: () => {
+          log.push("slice");
+          return {};
+        },
+        prepare: () => undefined,
+        activate: () => undefined,
+        deactivate: () => undefined,
+        dispose: () => { log.push("dispose"); },
+      }),
+    };
+    await expect(manager([invalid]).activate({ worldSessionId: "world-a" }))
+      .rejects.toThrow(/Handler/);
+    expect(log).toEqual(["dispose"]);
   });
 
   it.each(["factory", "slice", "prepare"] as const)(

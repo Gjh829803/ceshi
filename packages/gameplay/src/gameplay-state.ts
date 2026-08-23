@@ -234,7 +234,6 @@ function cloneActionExecution(
 ): InternalGameplayActionExecutionV1 {
   return deepFreeze({
     state: { ...execution.state },
-    controllerEntityId: execution.controllerEntityId,
     isMovementInputBlocked: execution.isMovementInputBlocked,
     ...(execution.scheduledEndSimulationTick === undefined
       ? {}
@@ -280,6 +279,7 @@ export class GameplayState implements GameplayPlanningStateV1 {
     GameplayTransitionPlanV1,
     PreparedGameplayTransitionV1
   >();
+  private readonly issuedTransitionPlans = new WeakSet<GameplayTransitionPlanV1>();
 
   constructor(options: GameplayStateOptionsV1) {
     assertNonEmpty(options.runtimeSessionId, "runtimeSessionId");
@@ -423,12 +423,6 @@ export class GameplayState implements GameplayPlanningStateV1 {
           `Controller '${command.controllerEntityId}' is unbound.`,
         );
       }
-      if (this.controlChangeIsBlocked(command.controllerEntityId, current.controlledEntityId)) {
-        return reject(
-          "ACTION_BLOCKS_CONTROL_CHANGE",
-          `An active Action blocks release of '${current.controlledEntityId}'.`,
-        );
-      }
       return this.plannedCommand(command.type, command.id, [{
         operation: "remove",
         before: current,
@@ -457,15 +451,6 @@ export class GameplayState implements GameplayPlanningStateV1 {
       return reject(
         "CONTROL_ALREADY_OWNED",
         `Controlled Entity '${command.controlledEntityId}' is already possessed.`,
-      );
-    }
-    if (
-      current !== undefined &&
-      this.controlChangeIsBlocked(command.controllerEntityId, current.controlledEntityId)
-    ) {
-      return reject(
-        "ACTION_BLOCKS_CONTROL_CHANGE",
-        `An active Action blocks rebind from '${current.controlledEntityId}'.`,
       );
     }
     const next: PossessedByRelationshipStateV1 = deepFreeze({
@@ -534,10 +519,7 @@ export class GameplayState implements GameplayPlanningStateV1 {
           `Action execution '${command.actionExecutionId}' is not active.`,
         );
       }
-      if (
-        execution.controllerEntityId !== command.controllerEntityId ||
-        execution.state.actorEntityId !== command.actorEntityId
-      ) {
+      if (execution.state.actorEntityId !== command.actorEntityId) {
         return reject(
           "ACTION_EXECUTION_OWNERSHIP_MISMATCH",
           `Action execution '${command.actionExecutionId}' has another owner.`,
@@ -639,7 +621,6 @@ export class GameplayState implements GameplayPlanningStateV1 {
     });
     const execution = cloneActionExecution({
       state,
-      controllerEntityId: command.controllerEntityId,
       isMovementInputBlocked: definition.isMovementInputBlocked,
       ...(scheduledEndSimulationTick === undefined
         ? {}
@@ -671,7 +652,7 @@ export class GameplayState implements GameplayPlanningStateV1 {
         left.state.id.localeCompare(right.state.id)
       );
     if (due.length === 0) return undefined;
-    return deepFreeze({
+    const transitionPlan: GameplayActionCompletionTransitionPlanV1 = deepFreeze({
       kind: "gameplay-transition-plan",
       schemaVersion: 1,
       type: "action.complete",
@@ -687,9 +668,12 @@ export class GameplayState implements GameplayPlanningStateV1 {
         requiredEventCount: due.length,
       },
     });
+    this.issuedTransitionPlans.add(transitionPlan);
+    return transitionPlan;
   }
 
   commit(transitionPlan: GameplayTransitionPlanV1): void {
+    this.assertIssuedTransitionPlan(transitionPlan);
     const prepared = this.preparedTransitions.get(transitionPlan) ??
       this.prepareTransition(transitionPlan);
     if (prepared.expectedStateRevision !== this.stateRevision) {
@@ -701,6 +685,7 @@ export class GameplayState implements GameplayPlanningStateV1 {
     this.activeActionExecutionsById = prepared.activeActionExecutionsById;
     this.committedActionExecutionIds = prepared.committedActionExecutionIds;
     this.stateRevision += 1;
+    this.issuedTransitionPlans.delete(transitionPlan);
   }
 
   projectWorldState(
@@ -761,6 +746,7 @@ export class GameplayState implements GameplayPlanningStateV1 {
     transitionPlan: GameplayTransitionPlanV1,
     context: GameplayWorldStateProjectionContextV1,
   ): WorldStateSnapshotV1 {
+    this.assertIssuedTransitionPlan(transitionPlan);
     const prepared = this.prepareTransition(transitionPlan);
     const snapshot = this.buildProjectedWorldState(
       context,
@@ -791,6 +777,9 @@ export class GameplayState implements GameplayPlanningStateV1 {
       this.activeActionExecutionsById,
     );
     const committedIds = new Set(this.committedActionExecutionIds);
+    const relationshipStateCountBefore = Object.keys(relationships).length;
+    const activeActionStateCountBefore = Object.keys(actions).length;
+    const retiredActionExecutionIdCountBefore = committedIds.size;
 
     for (const change of transitionPlan.relationshipChanges) {
       if (change.operation === "remove") {
@@ -835,6 +824,38 @@ export class GameplayState implements GameplayPlanningStateV1 {
         );
       }
       committedIds.add(id);
+    }
+    const actualCapacityDelta: GameplayTransitionCapacityDeltaV1 = {
+      relationshipStateCountDelta:
+        Object.keys(relationships).length - relationshipStateCountBefore,
+      activeActionStateCountDelta:
+        Object.keys(actions).length - activeActionStateCountBefore,
+      retiredActionExecutionIdCountDelta:
+        committedIds.size - retiredActionExecutionIdCountBefore,
+      requiredEventCount:
+        transitionPlan.relationshipChanges.length + transitionPlan.actionChanges.length,
+    };
+    if (
+      !Object.is(
+        transitionPlan.capacityDelta.relationshipStateCountDelta,
+        actualCapacityDelta.relationshipStateCountDelta,
+      ) ||
+      !Object.is(
+        transitionPlan.capacityDelta.activeActionStateCountDelta,
+        actualCapacityDelta.activeActionStateCountDelta,
+      ) ||
+      !Object.is(
+        transitionPlan.capacityDelta.retiredActionExecutionIdCountDelta,
+        actualCapacityDelta.retiredActionExecutionIdCountDelta,
+      ) ||
+      !Object.is(
+        transitionPlan.capacityDelta.requiredEventCount,
+        actualCapacityDelta.requiredEventCount,
+      )
+    ) {
+      throw new Error(
+        "GAMEPLAY_TRANSITION_INVARIANT: Capacity and Event reservations do not match the planned state changes.",
+      );
     }
     this.assertCardinalityAndCapacity(relationships, actions, committedIds);
     return {
@@ -908,31 +929,36 @@ export class GameplayState implements GameplayPlanningStateV1 {
     newlyCommittedActionExecutionIds: readonly string[],
     capacityDelta: GameplayTransitionCapacityDeltaV1,
   ): Extract<GameplayStatePlanResultV1, { status: "planned" }> {
-    return deepFreeze({
-      status: "planned",
-      transitionPlan: {
-        kind: "gameplay-transition-plan",
-        schemaVersion: 1,
-        type,
-        commandId,
-        expectedStateRevision: this.stateRevision,
-        relationshipChanges,
-        actionChanges,
-        newlyCommittedActionExecutionIds,
-        capacityDelta,
-      },
-    });
+    const result: Extract<GameplayStatePlanResultV1, { status: "planned" }> =
+      deepFreeze({
+        status: "planned",
+        transitionPlan: {
+          kind: "gameplay-transition-plan",
+          schemaVersion: 1,
+          type,
+          commandId,
+          expectedStateRevision: this.stateRevision,
+          relationshipChanges,
+          actionChanges,
+          newlyCommittedActionExecutionIds,
+          capacityDelta,
+        },
+      });
+    this.issuedTransitionPlans.add(result.transitionPlan);
+    return result;
   }
 
-  private controlChangeIsBlocked(
-    controllerEntityId: string,
-    controlledEntityId: string,
-  ): boolean {
-    return Object.values(this.activeActionExecutionsById).some((execution) =>
-      execution.isMovementInputBlocked &&
-      (execution.controllerEntityId === controllerEntityId ||
-        execution.state.actorEntityId === controlledEntityId)
-    );
+  private assertIssuedTransitionPlan(
+    transitionPlan: GameplayTransitionPlanV1,
+  ): void {
+    if (
+      !this.issuedTransitionPlans.has(transitionPlan) ||
+      !Object.isFrozen(transitionPlan)
+    ) {
+      throw new Error(
+        "GAMEPLAY_TRANSITION_NOT_ISSUED: Transition plan was not issued by this GameplayState.",
+      );
+    }
   }
 
   private validateActionRequest(

@@ -92,6 +92,7 @@ const COMMAND_TYPES = new Set<GameplayCommandTypeV1>([
   "action.activate",
   "action.cancel",
 ]);
+const SHA256_PATTERN = /^sha256:[0-9a-f]{64}$/;
 
 function featureError(message: string): never {
   throw new Error(`FEATURE_NOT_LOCKED: ${message}`);
@@ -201,6 +202,7 @@ function parseManifestBody(input: unknown): GameplayFeatureManifestBodyV1 {
   if (!exactKeys(budget, ["stateSliceCount", "commandHandlerCount"]) ||
     budget.stateSliceCount !== 1 ||
     !Number.isSafeInteger(budget.commandHandlerCount) ||
+    Object.is(budget.commandHandlerCount, -0) ||
     (budget.commandHandlerCount as number) < 0 ||
     budget.commandHandlerCount !== commandTypes.length
   ) featureError("Feature resourceBudget does not exactly match its declarations.");
@@ -289,6 +291,7 @@ function stableTopologicalSort(
 
 interface LifecycleRecord {
   readonly feature: GameplayFeatureV1;
+  commandHandlers: readonly GameplayCommandHandlerV1[];
   stateSlice: unknown | undefined;
   activationStarted: boolean;
 }
@@ -335,13 +338,32 @@ export class GameplayFeatureManager {
       throw new Error("GAMEPLAY_CAPACITY_EXCEEDED: Gameplay Feature count exceeded.");
     }
     const locksByRef = new Map<string, GameplayFeatureResourceLockV1>();
-    for (const lock of options.resourceLocks) {
+    const resourceLockInputs = snapshotArray(options.resourceLocks) ?? featureError(
+      "resourceLocks must be an Array.",
+    );
+    for (const lockInput of resourceLockInputs) {
+      const lock = snapshotRecord(lockInput) ?? featureError(
+        "Every Resource Lock must be a plain data object.",
+      );
+      if (
+        !exactKeys(lock, ["resourceRef", "contentHash"]) ||
+        typeof lock.resourceRef !== "string" ||
+        lock.resourceRef.length === 0 ||
+        typeof lock.contentHash !== "string" ||
+        !SHA256_PATTERN.test(lock.contentHash)
+      ) featureError("Resource Lock has an invalid closed shape.");
       if (locksByRef.has(lock.resourceRef)) featureError(
         `Duplicate Resource Lock '${lock.resourceRef}'.`,
       );
-      locksByRef.set(lock.resourceRef, lock);
+      locksByRef.set(lock.resourceRef, Object.freeze({
+        resourceRef: lock.resourceRef,
+        contentHash: lock.contentHash as Sha256HashV1,
+      }));
     }
-    const availableCapabilities = new Set(options.availableCapabilityRefs);
+    const availableCapabilities = new Set(parseStringSet(
+      options.availableCapabilityRefs,
+      "availableCapabilityRefs",
+    ));
     const factoriesByRef = new Map<string, GameplayFeatureFactoryV1>();
     const commandOwnerByType = new Map<GameplayCommandTypeV1, string>();
     for (const factory of options.factories) {
@@ -371,6 +393,14 @@ export class GameplayFeatureManager {
       }
       factoriesByRef.set(manifest.resourceRef, { ...factory, manifest });
     }
+    const surplusLockRefs = [...locksByRef.keys()]
+      .filter((resourceRef) => !factoriesByRef.has(resourceRef))
+      .sort((left, right) => left.localeCompare(right));
+    if (surplusLockRefs.length > 0 || locksByRef.size !== factoriesByRef.size) {
+      featureError(
+        `Resource Lock set must exactly match Feature manifests; surplus Locks: ${surplusLockRefs.join(", ") || "none"}.`,
+      );
+    }
     for (const factory of factoriesByRef.values()) {
       for (const dependencyRef of factory.manifest.dependencyFeatureRefs) {
         if (!factoriesByRef.has(dependencyRef)) {
@@ -392,18 +422,45 @@ export class GameplayFeatureManager {
     try {
       for (const factory of this.orderedFactories) {
         const feature = factory.create({ worldSessionId: context.worldSessionId });
+        const record: LifecycleRecord = {
+          feature,
+          commandHandlers: Object.freeze([]),
+          stateSlice: undefined,
+          activationStarted: false,
+        };
+        records.push(record);
         if (feature.resourceRef !== factory.manifest.resourceRef) {
           featureError(
             `Factory returned '${feature.resourceRef}' for '${factory.manifest.resourceRef}'.`,
           );
         }
-        const handlerTypes = feature.commandHandlers.map(({ type }) => type).sort();
+        const handlerInputs = snapshotArray(feature.commandHandlers) ?? featureError(
+          `Feature '${feature.resourceRef}' Handlers must be an Array.`,
+        );
+        const commandHandlers = handlerInputs.map((handlerInput) => {
+          const handler = snapshotRecord(handlerInput) ?? featureError(
+            `Feature '${feature.resourceRef}' Handler must be a plain data object.`,
+          );
+          if (
+            !exactKeys(handler, ["type", "plan"]) ||
+            typeof handler.type !== "string" ||
+            !COMMAND_TYPES.has(handler.type as GameplayCommandTypeV1) ||
+            typeof handler.plan !== "function"
+          ) featureError(
+            `Feature '${feature.resourceRef}' Handler has an invalid executable shape.`,
+          );
+          return Object.freeze({
+            type: handler.type as GameplayCommandTypeV1,
+            plan: handler.plan as GameplayCommandHandlerV1["plan"],
+          }) as GameplayCommandHandlerV1;
+        });
+        const handlerTypes = commandHandlers.map(({ type }) => type).sort();
         const manifestTypes = [...factory.manifest.commandTypes].sort();
         if (
           handlerTypes.length !== manifestTypes.length ||
           handlerTypes.some((type, index) => type !== manifestTypes[index])
         ) featureError(`Feature '${feature.resourceRef}' Handler declarations do not match.`);
-        records.push({ feature, stateSlice: undefined, activationStarted: false });
+        record.commandHandlers = Object.freeze(commandHandlers);
       }
       for (const record of records) {
         record.stateSlice = record.feature.createStateSlice(context);
@@ -424,7 +481,7 @@ export class GameplayFeatureManager {
       );
     }
     const dispatcher = new GameplayCommandDispatcher(
-      records.flatMap(({ feature }) => feature.commandHandlers),
+      records.flatMap(({ commandHandlers }) => commandHandlers),
     );
     let disposePromise: Promise<void> | undefined;
     return Object.freeze({
