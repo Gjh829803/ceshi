@@ -15,6 +15,7 @@ import {
   parseGameplayCommandReceiptV1,
   parseGameplayEventV1,
   parseGameplayInspectionSnapshotV1,
+  parseGameplaySemanticFactV1,
   parseWorldStateSnapshotV1,
   type GameplayCapacityBudgetV1,
   type GameplayCommandV1,
@@ -24,6 +25,9 @@ import {
   type GameplaySemanticFactV1,
   type WorldStateSnapshotV1,
 } from "./gameplay-contracts";
+import {
+  parseGameplaySemanticFactV1 as parseGameplaySemanticFactV1FromBarrel,
+} from "@whitebox-world/gameplay-contracts";
 
 const bindCommand = {
   schemaVersion: 1,
@@ -287,6 +291,45 @@ describe("GameplayCommandReceiptV1", () => {
       ...rejectedReceipt,
       diagnostic: { code, message: `Stable ${code} diagnostic.` },
     })).toMatchObject({ status: "rejected", diagnostic: { code } });
+  });
+
+  it("accepts exact same-session event IDs in increasing sequence order", () => {
+    const parsed = parseGameplayCommandReceiptV1({
+      ...committedReceipt,
+      eventIds: [
+        "gameplay-event:world-primary:0",
+        "gameplay-event:world-primary:2",
+        "gameplay-event:world-primary:10",
+      ],
+    });
+
+    expect(parsed.eventIds).toEqual([
+      "gameplay-event:world-primary:0",
+      "gameplay-event:world-primary:2",
+      "gameplay-event:world-primary:10",
+    ]);
+  });
+
+  it.each([
+    ["malformed ID", ["event-1"]],
+    ["cross-session ID", ["gameplay-event:world-secondary:1"]],
+    ["duplicate sequence", [
+      "gameplay-event:world-primary:1",
+      "gameplay-event:world-primary:1",
+    ]],
+    ["decreasing sequence", [
+      "gameplay-event:world-primary:2",
+      "gameplay-event:world-primary:1",
+    ]],
+    ["non-canonical leading zero", ["gameplay-event:world-primary:01"]],
+    ["unsafe sequence", [
+      `gameplay-event:world-primary:${Number.MAX_SAFE_INTEGER + 1}`,
+    ]],
+  ])("rejects %s in eventIds", (_label, eventIds) => {
+    expect(() => parseGameplayCommandReceiptV1({
+      ...committedReceipt,
+      eventIds,
+    })).toThrow("closed GameplayCommandReceiptV1 schema");
   });
 });
 
@@ -625,6 +668,36 @@ describe("WorldStateSnapshotV1", () => {
     expect(Object.isFrozen(parsed)).toBe(true);
     expect(Object.isFrozen(parsed.entityStatesById["g-bot-primary"])).toBe(true);
     expect(Object.isFrozen(parsed.relationshipStatesById)).toBe(true);
+  });
+
+  it("accepts requestless and request-backed Action states as an exact paired union", () => {
+    const requestBackedActionState = {
+      ...actionState,
+      id: "action-execution-request-backed",
+      actionRequestRef: "worldkit://action-request/request-backed@1",
+      actionRequestHash: HASH_C,
+    } as const;
+    const parsed = buildWorldStateSnapshotV1({
+      ...worldStateSnapshot,
+      activeActionStatesById: {
+        [actionState.id]: actionState,
+        [requestBackedActionState.id]: requestBackedActionState,
+      },
+    });
+
+    expect(parsed.activeActionStatesById[actionState.id]).toEqual(actionState);
+    expect(parsed.activeActionStatesById[requestBackedActionState.id]).toEqual(
+      requestBackedActionState,
+    );
+    expect(() => buildWorldStateSnapshotV1({
+      ...worldStateSnapshot,
+      activeActionStatesById: {
+        [actionState.id]: {
+          ...actionState,
+          actionRequestRef: "worldkit://action-request/unpaired@1",
+        },
+      },
+    })).toThrow("closed WorldStateSnapshotV1 schema");
   });
 
   it("has a golden semantic hash over the canonical authority domain", () => {
@@ -1077,6 +1150,48 @@ describe("GameplaySemanticFactV1", () => {
   });
 
   it.each([
+    ["supportedBy", supportedByFact],
+    ["touching", touchingFact],
+    ["insideVolume", insideVolumeFact],
+  ])("exports a standalone throwing parser for %s through the package barrel", (
+    _label,
+    fact,
+  ) => {
+    const parsed = parseGameplaySemanticFactV1FromBarrel(fact);
+
+    expect(parsed).toEqual(fact);
+    expect(Object.isFrozen(parsed)).toBe(true);
+    if (parsed.type === "supportedBy") {
+      expect(Object.isFrozen(parsed.supportPointMetersXYZ)).toBe(true);
+      expect(Object.isFrozen(parsed.supportNormalXYZ)).toBe(true);
+    }
+    if (parsed.type === "touching") {
+      expect(Object.isFrozen(parsed.entityIds)).toBe(true);
+    }
+    expect(() => parseGameplaySemanticFactV1FromBarrel({
+      ...fact,
+      id: "semantic-fact:invalid",
+    })).toThrow("closed GameplaySemanticFactV1 schema");
+  });
+
+  it("rejects accessor-backed standalone Facts without invoking accessors", () => {
+    let reads = 0;
+    const accessorFact = { ...supportedByFact } as Record<string, unknown>;
+    Object.defineProperty(accessorFact, "supportedEntityId", {
+      enumerable: true,
+      get: () => {
+        reads += 1;
+        return "g-bot-primary";
+      },
+    });
+
+    expect(() => parseGameplaySemanticFactV1(accessorFact)).toThrow(
+      "closed GameplaySemanticFactV1 schema",
+    );
+    expect(reads).toBe(0);
+  });
+
+  it.each([
     ["unsorted touching endpoints", {
       ...touchingFact,
       entityIds: ["ground-primary", "g-bot-primary"],
@@ -1271,5 +1386,107 @@ describe("GameplayCapacityBudgetV1", () => {
 
     expect(Object.values(parsed)).toEqual(new Array(capacityFields.length).fill(0));
     expect(Object.isFrozen(parsed)).toBe(true);
+  });
+});
+
+describe("canonical numeric parsing", () => {
+  const zeroTickFactWithoutId = {
+    ...supportedByFact,
+    startedSimulationTick: 0,
+  };
+  const zeroTickFact = {
+    ...zeroTickFactWithoutId,
+    id: deriveGameplaySemanticFactIdV1(zeroTickFactWithoutId),
+  } as const;
+
+  it.each([
+    ["Receipt tick", () => parseGameplayCommandReceiptV1({
+      ...committedReceipt,
+      simulationTick: -0,
+    })],
+    ["Event tick", () => parseGameplayEventV1({
+      ...relationshipCommittedEvent,
+      simulationTick: -0,
+    })],
+    ["Event sequence", () => parseGameplayEventV1({
+      ...relationshipCommittedEvent,
+      id: "gameplay-event:world-primary:0",
+      sequence: -0,
+    })],
+    ["Event ID derivation", () => deriveGameplayEventIdV1(
+      "world-primary",
+      -0,
+    )],
+    ["standalone Fact tick", () => parseGameplaySemanticFactV1({
+      ...zeroTickFact,
+      startedSimulationTick: -0,
+    })],
+    ["Fact ID derivation", () => deriveGameplaySemanticFactIdV1({
+      ...zeroTickFact,
+      startedSimulationTick: -0,
+    })],
+    ["World State tick", () => buildWorldStateSnapshotV1({
+      ...worldStateSnapshot,
+      simulationTick: -0,
+      lastEventSequence: 0,
+      relationshipStatesById: {},
+      semanticFactsById: {},
+      activeActionStatesById: {},
+    })],
+    ["World State last Event sequence", () => buildWorldStateSnapshotV1({
+      ...worldStateSnapshot,
+      lastEventSequence: -0,
+    })],
+    ["World State finite tuple", () => buildWorldStateSnapshotV1({
+      ...worldStateSnapshot,
+      entityStatesById: {
+        ...worldStateSnapshot.entityStatesById,
+        "g-bot-primary": {
+          ...spatialEntityState,
+          positionMetersXYZ: [-0, 0, 2],
+        },
+      },
+    })],
+    ["World State locomotion number", () => buildWorldStateSnapshotV1({
+      ...worldStateSnapshot,
+      capabilityStatesById: {
+        "locomotion-g-bot-primary": {
+          ...locomotionCapabilityState,
+          speedMetersPerSecond: -0,
+        },
+      },
+    })],
+    ["World State relationship tick", () => buildWorldStateSnapshotV1({
+      ...worldStateSnapshot,
+      relationshipStatesById: {
+        "possession-primary": {
+          ...possessionRelationshipState,
+          establishedSimulationTick: -0,
+        },
+      },
+    })],
+    ["World State Action tick", () => buildWorldStateSnapshotV1({
+      ...worldStateSnapshot,
+      activeActionStatesById: {
+        "action-execution-primary": {
+          ...actionState,
+          startedSimulationTick: -0,
+        },
+      },
+    })],
+    ["inspection tick", () => parseGameplayInspectionSnapshotV1({
+      ...inspectionSnapshot,
+      simulationTick: -0,
+    })],
+    ["inspection last Event sequence", () => parseGameplayInspectionSnapshotV1({
+      ...inspectionSnapshot,
+      lastEventSequence: -0,
+    })],
+    ["capacity value", () => parseGameplayCapacityBudgetV1({
+      ...DEFAULT_GAMEPLAY_CAPACITY_BUDGET_V1,
+      maximumParticipantCount: -0,
+    })],
+  ])("rejects negative zero in the %s path", (_label, parse) => {
+    expect(parse).toThrow();
   });
 });

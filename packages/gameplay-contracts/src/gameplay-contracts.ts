@@ -131,11 +131,16 @@ function isNonEmptyString(value: unknown): value is string {
 }
 
 function isSafeNonNegativeInteger(value: unknown): value is number {
-  return typeof value === "number" && Number.isSafeInteger(value) && value >= 0;
+  return typeof value === "number" &&
+    Number.isSafeInteger(value) &&
+    value >= 0 &&
+    !Object.is(value, -0);
 }
 
 function isFiniteNumber(value: unknown): value is number {
-  return typeof value === "number" && Number.isFinite(value);
+  return typeof value === "number" &&
+    Number.isFinite(value) &&
+    !Object.is(value, -0);
 }
 
 function isSha256(value: unknown): value is Sha256HashV1 {
@@ -435,6 +440,29 @@ function parseStringArray(input: unknown): readonly string[] | undefined {
   return [...values] as string[];
 }
 
+function parseReceiptEventIds(
+  input: unknown,
+  worldSessionId: string,
+): readonly string[] | undefined {
+  const eventIds = parseStringArray(input);
+  if (eventIds === undefined) return undefined;
+  const eventIdPrefix = `gameplay-event:${worldSessionId}:`;
+  let previousSequence = -1;
+  for (const eventId of eventIds) {
+    if (!eventId.startsWith(eventIdPrefix)) return undefined;
+    const sequenceText = eventId.slice(eventIdPrefix.length);
+    if (!/^(0|[1-9][0-9]*)$/.test(sequenceText)) return undefined;
+    const sequence = Number(sequenceText);
+    if (
+      !isSafeNonNegativeInteger(sequence) ||
+      sequence <= previousSequence ||
+      eventId !== deriveGameplayEventIdV1(worldSessionId, sequence)
+    ) return undefined;
+    previousSequence = sequence;
+  }
+  return eventIds;
+}
+
 interface GameplayCommandReceiptBaseV1 {
   readonly kind: "worldkit-gameplay-command-receipt";
   readonly schemaVersion: 1;
@@ -515,7 +543,8 @@ export function parseGameplayCommandReceiptV1(
     "simulationTick",
     "eventIds",
   ] as const;
-  const eventIds = parseStringArray(record.eventIds) ?? invalid(schemaName);
+  const eventIds = parseReceiptEventIds(record.eventIds, base.worldSessionId) ??
+    invalid(schemaName);
 
   if (record.status === "committed") {
     if (
@@ -807,7 +836,7 @@ export function parseGameplayEventV1(input: unknown): GameplayEventV1 {
     record.type === "semantic-fact.ended"
   ) {
     if (!hasExactKeys(record, [...baseKeys, "semanticFact"])) invalid(schemaName);
-    const semanticFact = parseGameplaySemanticFactV1(record.semanticFact) ??
+    const semanticFact = tryParseGameplaySemanticFactV1(record.semanticFact) ??
       invalid(schemaName);
     if (
       (record.type === "semantic-fact.started" &&
@@ -1410,7 +1439,7 @@ function parseInsideVolumeFactV1(
   };
 }
 
-function parseGameplaySemanticFactV1(
+function tryParseGameplaySemanticFactV1(
   input: unknown,
 ): GameplaySemanticFactV1 | undefined {
   const record = snapshotDataRecord(input);
@@ -1422,6 +1451,14 @@ function parseGameplaySemanticFactV1(
     return undefined;
   }
   return parsed;
+}
+
+export function parseGameplaySemanticFactV1(
+  input: unknown,
+): GameplaySemanticFactV1 {
+  return deepFreeze(
+    tryParseGameplaySemanticFactV1(input) ?? invalid("GameplaySemanticFactV1"),
+  );
 }
 
 function parseGameplayActionStateV1(input: unknown): GameplayActionStateV1 | undefined {
@@ -1549,7 +1586,7 @@ function parseWorldStateSnapshotBodyV1(input: unknown): WorldStateSnapshotBodyV1
   ) ?? invalid(schemaName);
   const semanticFactsById = parseIdMap(
     record.semanticFactsById,
-    parseGameplaySemanticFactV1,
+    tryParseGameplaySemanticFactV1,
   ) ?? invalid(schemaName);
   const activeActionStatesById = parseIdMap(
     record.activeActionStatesById,

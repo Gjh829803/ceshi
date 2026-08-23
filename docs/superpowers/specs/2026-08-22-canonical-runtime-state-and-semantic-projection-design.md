@@ -627,21 +627,30 @@ Havok / Character Support / Trigger / Constraint raw result
 ### 11.1 Action State
 
 ```ts
-interface ActionStateV1 {
+interface ActionStateBaseV1 {
   id: string;
   kind: "action-state";
   semanticActionRef: string;
   semanticActionHash: `sha256:${string}`;
-  actionRequestRef: string;
-  actionRequestHash: `sha256:${string}`;
   actorEntityId: string;
   mode: "starting" | "active" | "completing";
   startedSimulationTick: number;
   lastTransitionSimulationTick: number;
 }
+
+type ActionStateV1 = ActionStateBaseV1 & (
+  | {
+      actionRequestRef?: never;
+      actionRequestHash?: never;
+    }
+  | {
+      actionRequestRef: string;
+      actionRequestHash: `sha256:${string}`;
+    }
+);
 ```
 
-`actionRequestRef` 指向已经过对应 Action Definition Schema 验证的不可变 Canonical Request；Mount Request 使用 `riderEntityId/mountEntityId/mountSlotId`，Equipment Request 使用 `itemEntityId/wearerEntityId/equipmentSlotId`。新 Action 通过 Registry Schema 扩展，不在公共 State Envelope 中增加 `params` 或 `targetIdsByRole` 通用袋。`actorEntityId` 是用于查询的受校验投影，必须与 Request 中的 Actor 角色一致，否则整个 Snapshot 无效。
+无参数的 Semantic Action 可以合法地不携带 Action Request；需要参数的 Action 必须同时携带 `actionRequestRef` 与 `actionRequestHash`，不允许只出现其中一个，也不为无参数动作制造空 Request。`actionRequestRef` 指向已经过对应 Action Definition Schema 验证的不可变 Canonical Request；Mount Request 使用 `riderEntityId/mountEntityId/mountSlotId`，Equipment Request 使用 `itemEntityId/wearerEntityId/equipmentSlotId`。新 Action 通过 Registry Schema 扩展，不在公共 State Envelope 中增加 `params` 或 `targetIdsByRole` 通用袋。携带 Request 时，`actorEntityId` 是用于查询的受校验投影，必须与 Request 中的 Actor 角色一致，否则整个 Snapshot 无效。
 
 Animation Clip、Blend、Layer 和 Root Motion 是 Action 的 Runtime/Visual 执行细节。Snapshot 可以记录 `semanticActionRef` 和 Phase，但不把 Clip Name 当作语义动作真相。`activeActionStatesById` 只包含尚未终止的实例；`completed/cancelled/failed` 只进入 Receipt/Event，避免 Snapshot 形成无界历史日志。
 
@@ -658,6 +667,7 @@ Receipt 必须包含：
 - committed 时的 `worldStateAfterRef` 与 `worldStateAfterHash`。
 
 相同 Command ID + 相同 Canonical Payload 重试返回同一 Receipt；相同 ID + 不同 Payload 返回 `COMMAND_ID_CONFLICT`。
+Receipt 的 `eventIds` 必须使用同一 `worldSessionId`，每项严格等于 `gameplay-event:<worldSessionId>:<sequence>`；`sequence` 遵循 Event 的安全非负整数域，数组按 sequence 严格递增，不允许重复、逆序、前导零或跨 Session 引用。Rejected Receipt 的 `eventIds` 必须为空。
 
 ### 11.3 Event
 
