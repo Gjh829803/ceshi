@@ -101,7 +101,7 @@ function deepFreezeDataGraph<T>(
   value: T,
   visited: WeakSet<object> = new WeakSet<object>(),
 ): T {
-  if (value === null || value === undefined || typeof value !== "object") {
+  if (isNil(value) || typeof value !== "object") {
     return value;
   }
   const objectValue = value as object;

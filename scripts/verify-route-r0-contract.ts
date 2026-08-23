@@ -72,7 +72,7 @@ interface RouteR0LockMismatchFixture {
 }
 
 const FROZEN_NOTICE =
-  "R0 contract frozen; R1/R1b runtime capability not implemented";
+  "R0 contract frozen; this command does not prove R1/R1b runtime capability";
 
 async function readJsonFixture(filePath: string): Promise<unknown> {
   return JSON.parse(await readFile(filePath, "utf8")) as unknown;

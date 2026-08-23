@@ -204,6 +204,13 @@ const ADVERSARIAL_ROUTE_CHECKS_V1 = Object.freeze([
     ]),
   }),
   Object.freeze({
+    checkId: "start-surface-unmatched-or-wrong-resolved",
+    testFile: "scripts/lib/route-runtime-probe.integration.test.ts",
+    expectedTestFullNames: Object.freeze([
+      "Route R1 fixed-tick probe with real Recast and Babylon/Havok rejects real unmatched static support and a wrong resolved path surface at tick zero",
+    ]),
+  }),
+  Object.freeze({
     checkId: "route-deviation",
     testFile: "packages/validation/src/route-runtime-probe.test.ts",
     expectedTestFullNames: Object.freeze([

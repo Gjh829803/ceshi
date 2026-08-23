@@ -585,7 +585,7 @@ The verifier must call exported parsers/validators and canonical-hash functions 
 - [ ] **Step 4: Run the full R0 gate set**
 
 Run: `pnpm verify:route-r0-contract && pnpm typecheck && pnpm test && pnpm build`
-Expected: PASS. Output must explicitly end with `R0 contract frozen; R1/R1b runtime capability not implemented`.
+Expected: PASS. Output must explicitly end with `R0 contract frozen; this command does not prove R1/R1b runtime capability`.
 
 - [ ] **Step 5: Update status without overstating implementation**
 
