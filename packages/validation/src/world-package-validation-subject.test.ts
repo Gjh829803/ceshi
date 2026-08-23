@@ -4,9 +4,18 @@ import {
 } from "@whitebox-world/authoring";
 import { compileWorldV5 } from "@whitebox-world/compiler";
 import type { LayoutSolveResultV1 } from "@whitebox-world/layout-solver";
+import { canonicalJsonBytes, sha256Bytes } from "@whitebox-world/protocol";
 import {
+  assertWorldPackageBuildReceiptV1,
+  canonicalWorldPackageFileIntegrityEntriesV1,
   createWorldPackageBuildReceiptV1,
+  hashWorldPackageManifestV1,
+  hashWorldPackageRootV1,
   type CreateWorldPackageBuildReceiptInputV1,
+  type WorldPackageBuildReceiptV1,
+  type WorldPackageFileIntegrityEntryV1,
+  type WorldPackageManifestV1,
+  type WorldPackageSha256HashV1,
 } from "@whitebox-world/world-package";
 import { describe, expect, it } from "vitest";
 
@@ -79,6 +88,30 @@ function createFixture(
   };
 }
 
+function resignReceipt(
+  receipt: WorldPackageBuildReceiptV1,
+  manifest: WorldPackageManifestV1,
+  entries: readonly WorldPackageFileIntegrityEntryV1[],
+): WorldPackageBuildReceiptV1 {
+  const manifestHash = hashWorldPackageManifestV1(manifest);
+  const fileIntegrityEntries = canonicalWorldPackageFileIntegrityEntriesV1([
+    ...entries.filter((entry) => entry.path !== "manifest.json"),
+    {
+      path: "manifest.json",
+      mediaType: "application/json",
+      sizeBytes: canonicalJsonBytes(manifest).byteLength,
+      sha256: manifestHash,
+    },
+  ]);
+  return {
+    ...receipt,
+    manifest,
+    manifestHash,
+    fileIntegrityEntries,
+    worldPackageRootHash: hashWorldPackageRootV1(fileIntegrityEntries),
+  };
+}
+
 describe("WorldPackageValidationSubjectV1 assembly", () => {
   it("derives the exact canonical subject from one validated package build", () => {
     const { validationInput } = createFixture();
@@ -147,6 +180,81 @@ describe("WorldPackageValidationSubjectV1 assembly", () => {
     expect(() => createWorldPackageValidationSubjectV1({
       ...validationInput,
       executionPlan,
+    })).toThrow("WORLD_PACKAGE_VALIDATION_SUBJECT_INPUT_INVALID");
+  });
+
+  it("rejects an internally valid Receipt with a resource outside the actual IR closure", () => {
+    const { validationInput } = createFixture();
+    const receipt = validationInput.worldPackageBuildReceipt;
+    const extraBytes = new Uint8Array([11, 22, 33]);
+    const extraHash = sha256Bytes(extraBytes) as WorldPackageSha256HashV1;
+    const extraResource = {
+      resourceRef: "worldkit://subject-asset/unbound.extra@1",
+      packagePath: "resources/subject-assets/unbound.extra.glb",
+      mediaType: "model/gltf-binary",
+      sizeBytes: extraBytes.byteLength,
+      contentHash: extraHash,
+    } as const;
+    const forged = resignReceipt(
+      receipt,
+      {
+        ...receipt.manifest,
+        resources: [...receipt.manifest.resources, extraResource],
+      },
+      [
+        ...receipt.fileIntegrityEntries,
+        {
+          path: extraResource.packagePath,
+          mediaType: extraResource.mediaType,
+          sizeBytes: extraResource.sizeBytes,
+          sha256: extraResource.contentHash,
+        },
+      ],
+    );
+
+    expect(assertWorldPackageBuildReceiptV1(forged)).toEqual(forged);
+    expect(() => createWorldPackageValidationSubjectV1({
+      ...validationInput,
+      worldPackageBuildReceipt: forged,
+    })).toThrow("WORLD_PACKAGE_VALIDATION_SUBJECT_INPUT_INVALID");
+  });
+
+  it("rejects an internally valid Root with a core JSON size that differs from the actual artifact", () => {
+    const { validationInput } = createFixture();
+    const receipt = validationInput.worldPackageBuildReceipt;
+    const entries = receipt.fileIntegrityEntries.map((entry) =>
+      entry.path === "world.normalized.json"
+        ? { ...entry, sizeBytes: entry.sizeBytes + 1 }
+        : entry
+    );
+    const forged = resignReceipt(receipt, receipt.manifest, entries);
+
+    expect(assertWorldPackageBuildReceiptV1(forged)).toEqual(forged);
+    expect(() => createWorldPackageValidationSubjectV1({
+      ...validationInput,
+      worldPackageBuildReceipt: forged,
+    })).toThrow("WORLD_PACKAGE_VALIDATION_SUBJECT_INPUT_INVALID");
+  });
+
+  it("rejects an internally valid Root whose Authoring file hash and size differ from the actual V4 spec", () => {
+    const { validationInput } = createFixture();
+    const receipt = validationInput.worldPackageBuildReceipt;
+    const unrelatedBytes = canonicalJsonBytes({ unrelated: true });
+    const entries = receipt.fileIntegrityEntries.map((entry) =>
+      entry.path === "authoring-spec.json"
+        ? {
+            ...entry,
+            sizeBytes: unrelatedBytes.byteLength,
+            sha256: sha256Bytes(unrelatedBytes) as WorldPackageSha256HashV1,
+          }
+        : entry
+    );
+    const forged = resignReceipt(receipt, receipt.manifest, entries);
+
+    expect(assertWorldPackageBuildReceiptV1(forged)).toEqual(forged);
+    expect(() => createWorldPackageValidationSubjectV1({
+      ...validationInput,
+      worldPackageBuildReceipt: forged,
     })).toThrow("WORLD_PACKAGE_VALIDATION_SUBJECT_INPUT_INVALID");
   });
 

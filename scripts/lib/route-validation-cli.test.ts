@@ -28,7 +28,10 @@ vi.mock("./route-validation-runner", async (importOriginal) => {
 });
 
 import { verifyRouteFileV1 } from "./route-validation-cli";
-import { runTrustedRouteValidationV1 } from "./route-validation-runner";
+import {
+  RouteValidationRunnerInfrastructureErrorV1,
+  runTrustedRouteValidationV1,
+} from "./route-validation-runner";
 
 const temporaryDirectories: string[] = [];
 const HASH_A = `sha256:${"a".repeat(64)}` as const;
@@ -172,10 +175,12 @@ describe("verifyRouteFileV1", () => {
     },
   );
 
-  it("returns infrastructure failure and publishes nothing when the runner fails", async () => {
+  it("redacts a raw provider failure from the public diagnostic", async () => {
     const { inputPath, outputPath } = await fixture();
+    const privateProviderMessage =
+      "Recast/Havok failed at /Users/private-user/internal/provider-state.bin";
     vi.mocked(runTrustedRouteValidationV1).mockRejectedValue(
-      new Error("synthetic runner failure"),
+      new Error(privateProviderMessage),
     );
 
     const result = await verifyRouteFileV1(inputPath, PROFILE_REF, outputPath);
@@ -188,11 +193,75 @@ describe("verifyRouteFileV1", () => {
         code: "WORLDKIT_ROUTE_VALIDATION_RUNNER_FAILED",
         instancePath: "",
         message: "Unable to run trusted Route validation.",
-        details: { cause: "synthetic runner failure" },
       }],
     });
+    expect(JSON.stringify(result)).not.toContain(privateProviderMessage);
     await expectMissing(outputPath);
     await expectMissing(`${outputPath}.evidence`);
+  });
+
+  it("publishes only a closed runner reason and redacts its details and cause", async () => {
+    const { inputPath, outputPath } = await fixture();
+    const privateInputPath =
+      "/Users/private-user/worlds/internal-route-source.json";
+    const privateProviderMessage =
+      "Recast resource resolver failed through Havok native provider";
+    vi.mocked(runTrustedRouteValidationV1).mockRejectedValue(
+      new RouteValidationRunnerInfrastructureErrorV1(
+        "WORLDKIT_ROUTE_VALIDATION_RESOURCE_RESOLUTION_FAILED",
+        { inputPath: privateInputPath, providerHandle: 42 },
+        new Error(privateProviderMessage),
+      ),
+    );
+
+    const result = await verifyRouteFileV1(inputPath, PROFILE_REF, outputPath);
+
+    expect(result).toEqual({
+      ok: false,
+      exitCode: 1,
+      diagnostics: [{
+        severity: "error",
+        code: "WORLDKIT_ROUTE_VALIDATION_INFRASTRUCTURE_ERROR",
+        instancePath: "",
+        message: "Unable to run trusted Route validation.",
+        details: {
+          reason: "WORLDKIT_ROUTE_VALIDATION_RESOURCE_RESOLUTION_FAILED",
+        },
+      }],
+    });
+    const publicJson = JSON.stringify(result);
+    expect(publicJson).not.toContain(privateInputPath);
+    expect(publicJson).not.toContain(privateProviderMessage);
+    expect(publicJson).not.toContain("providerHandle");
+    expect(publicJson).not.toContain("cause");
+    await expectMissing(outputPath);
+    await expectMissing(`${outputPath}.evidence`);
+  });
+
+  it("does not publish an unrecognized runner reason", async () => {
+    const { inputPath, outputPath } = await fixture();
+    const privateReason =
+      "RECAST_PRIVATE_FAILURE_AT_/Users/private-user/provider-cache";
+    vi.mocked(runTrustedRouteValidationV1).mockRejectedValue(
+      new RouteValidationRunnerInfrastructureErrorV1(
+        privateReason,
+        { nativeProviderMessage: "Havok internal state" },
+      ),
+    );
+
+    const result = await verifyRouteFileV1(inputPath, PROFILE_REF, outputPath);
+
+    expect(result).toEqual({
+      ok: false,
+      exitCode: 1,
+      diagnostics: [{
+        severity: "error",
+        code: "WORLDKIT_ROUTE_VALIDATION_RUNNER_FAILED",
+        instancePath: "",
+        message: "Unable to run trusted Route validation.",
+      }],
+    });
+    expect(JSON.stringify(result)).not.toContain(privateReason);
   });
 
   it("refuses an existing report without replacing either output target", async () => {
@@ -263,15 +332,21 @@ describe("verifyRouteFileV1", () => {
 
     const result = await verifyRouteFileV1(inputPath, PROFILE_REF, outputPath);
 
-    expect(result).toMatchObject({
+    expect(result).toEqual({
       ok: false,
       exitCode: 1,
       diagnostics: [{
         severity: "error",
         code: "WORLDKIT_ROUTE_VALIDATION_OUTPUT_INSPECTION_FAILED",
         instancePath: "/outputPath",
+        message: "Unable to inspect the Route validation output targets.",
+        details: {
+          outputPath: path.resolve(outputPath),
+          evidenceDirectory: `${path.resolve(outputPath)}.evidence`,
+        },
       }],
     });
+    expect(JSON.stringify(result)).not.toContain("cause");
     expect(runTrustedRouteValidationV1).not.toHaveBeenCalled();
   });
 });

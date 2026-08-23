@@ -60,7 +60,10 @@ import {
   explainValidationReportFileV1,
   verifyControlCaptureFileV1,
 } from "./lib/validation-cli";
-import { verifyRouteFileV1 } from "./lib/route-validation-cli";
+import {
+  publicRouteValidationRunnerFailureV1,
+  verifyRouteFileV1,
+} from "./lib/route-validation-cli";
 
 const execFile = promisify(execFileCallback);
 const REPOSITORY_ROOT = path.resolve(
@@ -1230,28 +1233,10 @@ async function runUntilSignal(
             runnerModule.RouteValidationRunnerInfrastructureErrorV1
         ? error
         : undefined;
-      const result = {
-        ok: false as const,
-        exitCode: 1 as const,
-        diagnostics: [{
-          severity: "error" as const,
-          code: !isNil(runnerInfrastructureError)
-            ? runnerInfrastructureError.code
-            : "WORLDKIT_ROUTE_VALIDATION_RUNNER_FAILED",
-          instancePath: "",
-          message:
-            "Unable to prepare trusted Route evidence for the playground.",
-          details: {
-            cause: error instanceof Error ? error.message : String(error),
-            ...(!isNil(runnerInfrastructureError)
-              ? {
-                  reason: runnerInfrastructureError.reason,
-                  ...runnerInfrastructureError.details,
-                }
-              : {}),
-          },
-        }],
-      };
+      const result = publicRouteValidationRunnerFailureV1(
+        "run-playground",
+        runnerInfrastructureError?.reason,
+      );
       printResult(result, json);
       return result.exitCode;
     }

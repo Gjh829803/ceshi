@@ -43,6 +43,15 @@ export type RouteValidationCommandResultV1 =
       readonly diagnostics: readonly CliDiagnostic[];
     };
 
+const PUBLIC_ROUTE_VALIDATION_INFRASTRUCTURE_REASONS_V1 = Object.freeze([
+  "WORLDKIT_ROUTE_VALIDATION_ASSET_DUPLICATE",
+  "WORLDKIT_ROUTE_VALIDATION_ASSET_IDENTITY_MISMATCH",
+  "WORLDKIT_ROUTE_VALIDATION_ASSET_INVALID",
+  "WORLDKIT_ROUTE_VALIDATION_ASSET_UNAVAILABLE",
+  "WORLDKIT_ROUTE_VALIDATION_INPUT_INVALID",
+  "WORLDKIT_ROUTE_VALIDATION_RESOURCE_RESOLUTION_FAILED",
+] as const);
+
 function infrastructureFailure(
   code: string,
   instancePath: string,
@@ -60,6 +69,33 @@ function infrastructureFailure(
       ...(isNil(details) ? {} : { details }),
     }],
   };
+}
+
+/**
+ * Projects a trusted-runner failure onto the public CLI/Browser diagnostic
+ * contract. Raw provider errors, native causes, paths, and runner-owned
+ * details intentionally never enter this function.
+ */
+export function publicRouteValidationRunnerFailureV1(
+  context: "verify-route" | "run-playground",
+  reason?: unknown,
+): Extract<RouteValidationCommandResultV1, { readonly exitCode: 1 }> {
+  const publicReason = typeof reason === "string" &&
+      PUBLIC_ROUTE_VALIDATION_INFRASTRUCTURE_REASONS_V1.some(
+        (candidate) => candidate === reason,
+      )
+    ? reason
+    : undefined;
+  return infrastructureFailure(
+    isNil(publicReason)
+      ? "WORLDKIT_ROUTE_VALIDATION_RUNNER_FAILED"
+      : "WORLDKIT_ROUTE_VALIDATION_INFRASTRUCTURE_ERROR",
+    "",
+    context === "verify-route"
+      ? "Unable to run trusted Route validation."
+      : "Unable to prepare trusted Route evidence for the playground.",
+    isNil(publicReason) ? undefined : { reason: publicReason },
+  );
 }
 
 function errorMessage(error: unknown): string {
@@ -194,7 +230,6 @@ export async function verifyRouteFileV1(
       {
         outputPath: absoluteOutputPath,
         evidenceDirectory,
-        cause: errorMessage(error),
       },
     );
   }
@@ -211,23 +246,12 @@ export async function verifyRouteFileV1(
       !isNil(runnerModule) &&
       error instanceof runnerModule.RouteValidationRunnerInfrastructureErrorV1
     ) {
-      return infrastructureFailure(
-        error.code,
-        "",
-        "Unable to run trusted Route validation.",
-        {
-          reason: error.reason,
-          ...error.details,
-          cause: errorMessage(isNil(error.cause) ? error : error.cause),
-        },
+      return publicRouteValidationRunnerFailureV1(
+        "verify-route",
+        error.reason,
       );
     }
-    return infrastructureFailure(
-      "WORLDKIT_ROUTE_VALIDATION_RUNNER_FAILED",
-      "",
-      "Unable to run trusted Route validation.",
-      { cause: errorMessage(error) },
-    );
+    return publicRouteValidationRunnerFailureV1("verify-route");
   }
 
   let publication: Awaited<ReturnType<
@@ -258,7 +282,6 @@ export async function verifyRouteFileV1(
       {
         outputPath: absoluteOutputPath,
         evidenceDirectory,
-        cause: message,
       },
     );
   }

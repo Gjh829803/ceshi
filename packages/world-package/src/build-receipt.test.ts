@@ -16,9 +16,11 @@ import { readFile } from "node:fs/promises";
 import { describe, expect, it } from "vitest";
 
 import {
+  assertWorldPackageBuildReceiptClosureV1,
   assertWorldPackageBuildReceiptV1,
   createWorldPackageBuildReceiptV1,
   type CreateWorldPackageBuildReceiptInputV1,
+  type WorldPackageBuildClosureV1,
   type WorldPackageBuildReceiptV1,
 } from "./index.js";
 import {
@@ -167,6 +169,50 @@ describe("WorldPackageBuildReceiptV1", () => {
       sha256: sha256Bytes(artifact.bytes),
     });
     expect(receipt.worldPackageRootHash).toMatch(/^sha256:[a-f0-9]{64}$/);
+  });
+
+  it("binds a real asset Receipt to its exact canonical build closure", async () => {
+    const input = await riggedInput();
+    const receipt = createWorldPackageBuildReceiptV1(input);
+    const closure: WorldPackageBuildClosureV1 = {
+      authoringSpec: input.authoringSpec,
+      normalizedWorldIr: input.normalizedWorldIr,
+      layoutSolveResult: input.layoutSolveResult,
+      executionPlan: input.executionPlan,
+    };
+
+    expect(assertWorldPackageBuildReceiptClosureV1(receipt, closure)).toEqual(
+      receipt,
+    );
+    expect(() => assertWorldPackageBuildReceiptClosureV1(receipt, {
+      ...closure,
+      normalizedWorldIr: {
+        ...closure.normalizedWorldIr,
+        resources: {
+          ...closure.normalizedWorldIr.resources,
+          subjectAssets: [],
+        },
+      },
+    })).toThrow("WORLD_PACKAGE_BUILD_RECEIPT_CLOSURE_INVALID");
+  });
+
+  it("reports non-cloneable closure input through the stable closure error domain", () => {
+    const input = assetFreeInput();
+    const receipt = createWorldPackageBuildReceiptV1(input);
+    const closure = {
+      authoringSpec: {
+        ...input.authoringSpec,
+        id: () => "not-cloneable",
+      },
+      normalizedWorldIr: input.normalizedWorldIr,
+      layoutSolveResult: input.layoutSolveResult,
+      executionPlan: input.executionPlan,
+    } as unknown as WorldPackageBuildClosureV1;
+
+    expect(() => assertWorldPackageBuildReceiptClosureV1(
+      receipt,
+      closure,
+    )).toThrow("WORLD_PACKAGE_BUILD_RECEIPT_CLOSURE_INVALID");
   });
 
   it("changes the Resource Lock child identity and Root when the real resource closure changes", async () => {

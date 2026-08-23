@@ -5,6 +5,16 @@ import { fileURLToPath } from "node:url";
 
 import { afterEach, describe, expect, it, vi } from "vitest";
 
+vi.mock("./lib/route-validation-runner", async (importOriginal) => {
+  const actual = await importOriginal<
+    typeof import("./lib/route-validation-runner")
+  >();
+  return {
+    ...actual,
+    runTrustedRouteValidationV1: vi.fn(actual.runTrustedRouteValidationV1),
+  };
+});
+
 import {
   createValidAuthoringSpec,
   createValidPackageSubjectWorld,
@@ -16,6 +26,10 @@ import {
   loadWorldkitPipeline,
   loadWorldkitRoutePipeline,
 } from "./lib/worldkit-pipeline";
+import {
+  RouteValidationRunnerInfrastructureErrorV1,
+  runTrustedRouteValidationV1,
+} from "./lib/route-validation-runner";
 
 import { explainSubjectFile } from "./lib/subject-explain";
 import {
@@ -407,6 +421,32 @@ describe("worldkit CLI", () => {
     expect(() =>
       parseWorldkitArgs([
         "verify",
+        "route",
+        "route-world.json",
+        "--profile",
+        "worldkit://validation-profile/outdoor-world-package-dev@1",
+        "--profile",
+        "worldkit://validation-profile/outdoor-world-package-dev@1",
+        "--output",
+        "route-validation-report.json",
+      ]),
+    ).toThrow("--profile may be provided only once");
+    expect(() =>
+      parseWorldkitArgs([
+        "verify",
+        "route",
+        "route-world.json",
+        "--profile",
+        "worldkit://validation-profile/outdoor-world-package-dev@1",
+        "--output",
+        "route-validation-report.json",
+        "--output",
+        "other-route-validation-report.json",
+      ]),
+    ).toThrow("--output may be provided only once");
+    expect(() =>
+      parseWorldkitArgs([
+        "verify",
         "explain",
         "validation-report.json",
         "--gate-id",
@@ -545,6 +585,107 @@ describe("worldkit CLI", () => {
       stdoutWrite.mockRestore();
       stderrWrite.mockRestore();
     }
+  });
+
+  it("redacts provider errors from worldkit run JSON diagnostics", async () => {
+    const directory = await createTemporaryDirectory();
+    const inputPath = await writeRouteWorld(directory);
+    const privateProviderMessage =
+      "Recast/Havok failed at /Users/private-user/native/provider-state.bin";
+    vi.mocked(runTrustedRouteValidationV1).mockRejectedValueOnce(
+      new Error(privateProviderMessage),
+    );
+    let stdout = "";
+    let stderr = "";
+    const stdoutWrite = vi
+      .spyOn(process.stdout, "write")
+      .mockImplementation((chunk) => {
+        stdout += String(chunk);
+        return true;
+      });
+    const stderrWrite = vi
+      .spyOn(process.stderr, "write")
+      .mockImplementation((chunk) => {
+        stderr += String(chunk);
+        return true;
+      });
+    try {
+      await expect(main(["run", inputPath, "--json"])).resolves.toBe(1);
+    } finally {
+      stdoutWrite.mockRestore();
+      stderrWrite.mockRestore();
+    }
+
+    expect(stderr).toBe("");
+    expect(stdout.trim().split("\n")).toHaveLength(1);
+    expect(JSON.parse(stdout)).toEqual({
+      ok: false,
+      exitCode: 1,
+      diagnostics: [{
+        severity: "error",
+        code: "WORLDKIT_ROUTE_VALIDATION_RUNNER_FAILED",
+        instancePath: "",
+        message:
+          "Unable to prepare trusted Route evidence for the playground.",
+      }],
+    });
+    expect(stdout).not.toContain(privateProviderMessage);
+    expect(stdout).not.toContain("/Users/private-user");
+  });
+
+  it("redacts runner-owned paths and cause from worldkit run JSON diagnostics", async () => {
+    const directory = await createTemporaryDirectory();
+    const inputPath = await writeRouteWorld(directory);
+    const privateInputPath =
+      "/Users/private-user/worlds/unpublished-route-source.json";
+    const privateProviderMessage = "Recast native status from Havok adapter";
+    vi.mocked(runTrustedRouteValidationV1).mockRejectedValueOnce(
+      new RouteValidationRunnerInfrastructureErrorV1(
+        "WORLDKIT_ROUTE_VALIDATION_RESOURCE_RESOLUTION_FAILED",
+        { inputPath: privateInputPath, nativeProviderHandle: 7 },
+        new Error(privateProviderMessage),
+      ),
+    );
+    let stdout = "";
+    let stderr = "";
+    const stdoutWrite = vi
+      .spyOn(process.stdout, "write")
+      .mockImplementation((chunk) => {
+        stdout += String(chunk);
+        return true;
+      });
+    const stderrWrite = vi
+      .spyOn(process.stderr, "write")
+      .mockImplementation((chunk) => {
+        stderr += String(chunk);
+        return true;
+      });
+    try {
+      await expect(main(["run", inputPath, "--json"])).resolves.toBe(1);
+    } finally {
+      stdoutWrite.mockRestore();
+      stderrWrite.mockRestore();
+    }
+
+    expect(stderr).toBe("");
+    expect(JSON.parse(stdout)).toEqual({
+      ok: false,
+      exitCode: 1,
+      diagnostics: [{
+        severity: "error",
+        code: "WORLDKIT_ROUTE_VALIDATION_INFRASTRUCTURE_ERROR",
+        instancePath: "",
+        message:
+          "Unable to prepare trusted Route evidence for the playground.",
+        details: {
+          reason: "WORLDKIT_ROUTE_VALIDATION_RESOURCE_RESOLUTION_FAILED",
+        },
+      }],
+    });
+    expect(stdout).not.toContain(privateInputPath);
+    expect(stdout).not.toContain(privateProviderMessage);
+    expect(stdout).not.toContain("nativeProviderHandle");
+    expect(stdout).not.toContain("cause");
   });
 
   it("runs the public Route command and publishes a canonical failed report", async () => {

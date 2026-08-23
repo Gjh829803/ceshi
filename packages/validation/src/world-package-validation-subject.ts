@@ -17,6 +17,7 @@ import {
 } from "@whitebox-world/runtime-contracts";
 import {
   assertWorldPackageAccessorFreeDataGraphV1,
+  assertWorldPackageBuildReceiptClosureV1,
   assertWorldPackageBuildReceiptV1,
   type WorldPackageBuildReceiptV1,
   type WorldPackageSha256HashV1,
@@ -306,6 +307,20 @@ export function createWorldPackageValidationSubjectV1(
     layoutSolveReportHash,
     "manifest/layoutSolveReportHash",
   );
+
+  try {
+    receipt = assertWorldPackageBuildReceiptClosureV1(receipt, {
+      authoringSpec: validated.value,
+      normalizedWorldIr: snapshot.normalizedWorldIr,
+      layoutSolveResult: snapshot.layoutSolveResult,
+      executionPlan: snapshot.executionPlan,
+    });
+  } catch {
+    fail(
+      "worldPackageBuildReceipt",
+      "must match the canonical V4/V5 build artifact closure",
+    );
+  }
 
   return Object.freeze({
     kind: "world-package",

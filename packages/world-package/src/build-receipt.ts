@@ -25,6 +25,7 @@ import {
 import type {
   CreateWorldPackageBuildReceiptInputV1,
   ResolvedWorldPackageResourceArtifactV1,
+  WorldPackageBuildClosureV1,
   WorldPackageBuildReceiptV1,
   WorldPackageFileIntegrityEntryV1,
   WorldPackageManifestV1,
@@ -53,6 +54,12 @@ const INPUT_REQUIRED_FIELDS = [
 ] as const;
 const INPUT_ALLOWED_FIELDS = [...INPUT_REQUIRED_FIELDS, "includeAuthoringSpec"] as const;
 const RESOURCE_INPUT_FIELDS = ["resourceRef", "packagePath", "mediaType", "bytes"] as const;
+const BUILD_CLOSURE_FIELDS = [
+  "authoringSpec",
+  "normalizedWorldIr",
+  "layoutSolveResult",
+  "executionPlan",
+] as const;
 
 function fail(code: string, path: string, message: string): never {
   throw new Error(`${code}: ${path.length === 0 ? message : `${path}: ${message}`}`);
@@ -481,4 +488,101 @@ export function assertWorldPackageBuildReceiptV1(
     fileIntegrityEntries: entries,
     worldPackageRootHash,
   });
+}
+
+/**
+ * Binds a self-consistent receipt to the canonical files and resource closure
+ * that actually produced it. Package Root assembly remains owned here rather
+ * than being independently reinterpreted by Validation or Host code.
+ */
+export function assertWorldPackageBuildReceiptClosureV1(
+  value: unknown,
+  closure: WorldPackageBuildClosureV1,
+): WorldPackageBuildReceiptV1 {
+  const code = "WORLD_PACKAGE_BUILD_RECEIPT_CLOSURE_INVALID";
+  assertWorldPackageAccessorFreeDataGraphV1(
+    closure,
+    "WORLD_PACKAGE_BUILD_RECEIPT_CLOSURE_ACCESSOR_FORBIDDEN",
+  );
+  exactRecord(
+    closure,
+    BUILD_CLOSURE_FIELDS,
+    BUILD_CLOSURE_FIELDS,
+    "",
+    code,
+  );
+  let snapshot: WorldPackageBuildClosureV1;
+  try {
+    snapshot = structuredClone(closure);
+  } catch {
+    fail(code, "", "closure must be a cloneable canonical data graph");
+  }
+  const receipt = assertWorldPackageBuildReceiptV1(value);
+
+  const expectedAssetsByRef = new Map(
+    snapshot.normalizedWorldIr.resources.subjectAssets.map((asset) => [
+      asset.subjectAssetRef,
+      asset,
+    ]),
+  );
+  if (
+    expectedAssetsByRef.size !==
+      snapshot.normalizedWorldIr.resources.subjectAssets.length ||
+    receipt.manifest.resources.length !== expectedAssetsByRef.size
+  ) {
+    fail(code, "manifest/resources", "does not match the Normalized IR resource closure");
+  }
+  for (const resource of receipt.manifest.resources) {
+    const expected = expectedAssetsByRef.get(resource.resourceRef);
+    if (
+      isNil(expected) ||
+      resource.mediaType !== expected.mediaType ||
+      resource.sizeBytes !== expected.byteLength ||
+      resource.contentHash !== expected.artifactContentHash
+    ) {
+      fail(
+        code,
+        `manifest/resources/${resource.resourceRef}`,
+        "does not match the Normalized IR resource closure",
+      );
+    }
+  }
+
+  const hasAuthoringSpec = receipt.fileIntegrityEntries.some(
+    (entry) => entry.path === "authoring-spec.json",
+  );
+  const expectedEntries = canonicalWorldPackageFileIntegrityEntriesV1([
+    jsonIntegrityEntry("manifest.json", receipt.manifest),
+    ...(hasAuthoringSpec
+      ? [jsonIntegrityEntry("authoring-spec.json", snapshot.authoringSpec)]
+      : []),
+    jsonIntegrityEntry("world.normalized.json", snapshot.normalizedWorldIr),
+    jsonIntegrityEntry(
+      "registry-lock.json",
+      snapshot.normalizedWorldIr.resources.resourceLock,
+    ),
+    jsonIntegrityEntry(
+      "layout-solve-report.json",
+      snapshot.layoutSolveResult.report,
+    ),
+    jsonIntegrityEntry(
+      receipt.manifest.entryPoint.executionPlanPath,
+      snapshot.executionPlan,
+    ),
+    ...receipt.manifest.resources.map((resource) => ({
+      path: resource.packagePath,
+      mediaType: resource.mediaType,
+      sizeBytes: resource.sizeBytes,
+      sha256: resource.contentHash,
+    })),
+  ]);
+  if (!isEqual(receipt.fileIntegrityEntries, expectedEntries)) {
+    fail(
+      code,
+      "fileIntegrityEntries",
+      "does not match the canonical build artifact closure",
+    );
+  }
+
+  return receipt;
 }

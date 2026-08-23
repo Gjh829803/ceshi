@@ -53,6 +53,13 @@ export interface WorldPackageBuildReceiptV1 {
   readonly worldPackageRootHash: WorldPackageSha256HashV1;
 }
 
+export interface WorldPackageBuildClosureV1 {
+  readonly authoringSpec: AuthoringSpecV4;
+  readonly normalizedWorldIr: NormalizedWorldIRV4;
+  readonly layoutSolveResult: LayoutSolveResultV1;
+  readonly executionPlan: ExecutionPlanV5;
+}
+
 export interface ResolvedWorldPackageResourceArtifactV1 {
   readonly resourceRef: string;
   readonly packagePath: string;

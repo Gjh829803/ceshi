@@ -7,11 +7,13 @@ export {
 } from "./manifest.js";
 export {
   assertWorldPackageBuildReceiptV1,
+  assertWorldPackageBuildReceiptClosureV1,
   createWorldPackageBuildReceiptV1,
 } from "./build-receipt.js";
 export type {
   CreateWorldPackageBuildReceiptInputV1,
   ResolvedWorldPackageResourceArtifactV1,
+  WorldPackageBuildClosureV1,
   WorldPackageBuildReceiptV1,
   WorldPackageFileIntegrityEntryV1,
   WorldPackageManifestV1,
