@@ -6,6 +6,7 @@ import {
   canonicalizeGameplayCommandV1,
   canonicalizeGameplayEventV1,
   canonicalizeWorldStateSnapshotV1,
+  deriveGameplaySemanticFactIdV1,
   deriveWorldStateHashV1,
   deriveGameplayEventIdV1,
   hashWorldStateSnapshotV1,
@@ -179,6 +180,9 @@ describe("GameplayCommandV1", () => {
 });
 
 const HASH_A = `sha256:${"a".repeat(64)}` as const;
+const HASH_E = `sha256:${"e".repeat(64)}` as const;
+const SEMANTIC_FACT_PROJECTOR_PROFILE_REF =
+  "worldkit://semantic-fact-projector/default@1" as const;
 
 const committedReceipt = {
   kind: "worldkit-gameplay-command-receipt",
@@ -315,6 +319,41 @@ const naturallyCompletedEvent = {
   actorEntityId: "g-bot-primary",
 } as const satisfies GameplayEventV1;
 
+const eventSemanticFact = {
+  id: "semantic-fact:aa7d4d693180a2ee822ef248143598ca50f31e9d30ff5ed94fcef34fe59e2f77",
+  type: "supportedBy",
+  schemaVersion: 1,
+  supportedEntityId: "g-bot-primary",
+  supportSurfaceEntityId: "terrain-primary",
+  supportColliderSubshapeId: "terrain-collider-primary",
+  supportTraversalSurfaceId: "traversal-surface-primary",
+  supportPointMetersXYZ: [0, 0, 2],
+  supportNormalXYZ: [0, 1, 0],
+  startedSimulationTick: 1,
+  semanticFactProjectorProfileRef: SEMANTIC_FACT_PROJECTOR_PROFILE_REF,
+  semanticFactProjectorProfileHash: HASH_E,
+} as const satisfies GameplaySemanticFactV1;
+
+const semanticFactStartedEvent = {
+  kind: "worldkit-gameplay-event",
+  schemaVersion: 1,
+  id: "gameplay-event:world-primary:8",
+  type: "semantic-fact.started",
+  runtimeSessionId: "runtime-primary",
+  worldSessionId: "world-primary",
+  simulationTick: 12,
+  sequence: 8,
+  semanticFact: eventSemanticFact,
+} as const satisfies GameplayEventV1;
+
+const semanticFactEndedEvent = {
+  ...semanticFactStartedEvent,
+  id: "gameplay-event:world-primary:9",
+  type: "semantic-fact.ended",
+  simulationTick: 18,
+  sequence: 9,
+} as const satisfies GameplayEventV1;
+
 describe("GameplayEventV1", () => {
   it("derives a stable event ID from worldSessionId and sequence", () => {
     expect(deriveGameplayEventIdV1("world-primary", 7)).toBe(
@@ -379,6 +418,8 @@ describe("GameplayEventV1", () => {
         message: "The action projection failed.",
       },
     }],
+    ["semantic Fact started", semanticFactStartedEvent],
+    ["semantic Fact ended", semanticFactEndedEvent],
     ["world failed", {
       kind: "worldkit-gameplay-event",
       schemaVersion: 1,
@@ -407,6 +448,25 @@ describe("GameplayEventV1", () => {
   });
 
   it.each([
+    ["started", semanticFactStartedEvent],
+    ["ended", semanticFactEndedEvent],
+  ])("canonicalizes a closed physics-derived semantic Fact %s event", (_label, event) => {
+    const parsed = parseGameplayEventV1(event);
+    const reordered = Object.fromEntries(Object.entries(event).reverse());
+
+    expect(parsed).toEqual(event);
+    expect(parsed).not.toHaveProperty("commandId");
+    if (
+      parsed.type !== "semantic-fact.started" &&
+      parsed.type !== "semantic-fact.ended"
+    ) throw new Error("Expected a semantic Fact event.");
+    expect(Object.isFrozen(parsed.semanticFact)).toBe(true);
+    expect(canonicalizeGameplayEventV1(reordered)).toBe(
+      canonicalizeGameplayEventV1(event),
+    );
+  });
+
+  it.each([
     ["unknown type", { ...relationshipCommittedEvent, type: "control.bound" }],
     ["unknown key", { ...relationshipCommittedEvent, target: "g-bot-primary" }],
     ["missing sequence", withoutKey(relationshipCommittedEvent, "sequence")],
@@ -416,6 +476,14 @@ describe("GameplayEventV1", () => {
     ["natural completion with command", {
       ...naturallyCompletedEvent,
       commandId: "fabricated-command",
+    }],
+    ["semantic Fact event with command", {
+      ...semanticFactStartedEvent,
+      commandId: "fabricated-command",
+    }],
+    ["semantic Fact event with mismatched identity", {
+      ...semanticFactStartedEvent,
+      semanticFact: { ...eventSemanticFact, id: "semantic-fact:wrong" },
     }],
     ["world failure without diagnostic", {
       kind: "worldkit-gameplay-event",
@@ -494,7 +562,7 @@ const actionState = {
 } as const;
 
 const supportedByFact = {
-  id: "support-g-bot-primary",
+  id: "semantic-fact:aa7d4d693180a2ee822ef248143598ca50f31e9d30ff5ed94fcef34fe59e2f77",
   type: "supportedBy",
   schemaVersion: 1,
   supportedEntityId: "g-bot-primary",
@@ -504,10 +572,12 @@ const supportedByFact = {
   supportPointMetersXYZ: [0, 0, 2],
   supportNormalXYZ: [0, 1, 0],
   startedSimulationTick: 1,
+  semanticFactProjectorProfileRef: SEMANTIC_FACT_PROJECTOR_PROFILE_REF,
+  semanticFactProjectorProfileHash: HASH_E,
 } as const satisfies GameplaySemanticFactV1;
 
 const WORLD_STATE_GOLDEN_HASH =
-  "sha256:b7b8047333099f4db76101e09a07c0981cbddbaec1a3c425f65e4f072dff2042" as const;
+  "sha256:d0f0bf97d9f66711738ead0a2f29ae76229be6afeb5de7b09dc0e33a56089934" as const;
 
 const worldStateSnapshot = {
   kind: "worldkit-world-state-snapshot",
@@ -530,7 +600,7 @@ const worldStateSnapshot = {
     "possession-primary": possessionRelationshipState,
   },
   semanticFactsById: {
-    "support-g-bot-primary": supportedByFact,
+    [supportedByFact.id]: supportedByFact,
   },
   activeActionStatesById: {
     "action-execution-primary": actionState,
@@ -596,7 +666,7 @@ describe("WorldStateSnapshotV1", () => {
       {
         ...worldStateSnapshot,
         semanticFactsById: {
-          "support-g-bot-primary": {
+          [supportedByFact.id]: {
             ...supportedByFact,
             supportPointMetersXYZ: [1, 0, 2],
           },
@@ -631,7 +701,7 @@ describe("WorldStateSnapshotV1", () => {
     expect(parseWorldStateSnapshotV1(built)).toEqual(built);
   });
 
-  it("safely preserves __proto__ as a valid ID in every canonical map", () => {
+  it("safely preserves __proto__ where it remains a valid canonical ID", () => {
     const cases = [
       {
         ...worldStateSnapshot,
@@ -650,12 +720,6 @@ describe("WorldStateSnapshotV1", () => {
         ...worldStateSnapshot,
         relationshipStatesById: Object.fromEntries([
           ["__proto__", { ...possessionRelationshipState, id: "__proto__" }],
-        ]),
-      },
-      {
-        ...worldStateSnapshot,
-        semanticFactsById: Object.fromEntries([
-          ["__proto__", { ...supportedByFact, id: "__proto__" }],
         ]),
       },
       {
@@ -682,6 +746,16 @@ describe("WorldStateSnapshotV1", () => {
       expect(canonicalizeWorldStateSnapshotV1(built)).toContain('"__proto__"');
       expect(built.worldStateHash).not.toBe(WORLD_STATE_GOLDEN_HASH);
     }
+  });
+
+  it("stably rejects __proto__ as a forged derived Semantic Fact ID", () => {
+    expect(() => buildWorldStateSnapshotV1({
+      ...worldStateSnapshot,
+      semanticFactsById: Object.fromEntries([
+        ["__proto__", { ...supportedByFact, id: "__proto__" }],
+      ]),
+    })).toThrow("closed WorldStateSnapshotV1 schema");
+    expect(Object.getPrototypeOf({})).toBe(Object.prototype);
   });
 
   it.each([
@@ -758,6 +832,85 @@ describe("WorldStateSnapshotV1", () => {
       },
     }],
   ])("rejects %s", (_label, input) => {
+    expect(() => buildWorldStateSnapshotV1(input)).toThrow(
+      "closed WorldStateSnapshotV1 schema",
+    );
+  });
+
+  it.each([
+    ["air medium with non-airborne mode", {
+      ...locomotionCapabilityState,
+      mode: "run",
+      movementMedium: "air",
+    }],
+    ["airborne mode with ground medium", {
+      ...locomotionCapabilityState,
+      mode: "airborne",
+      movementMedium: "ground",
+    }],
+    ["negative speed", {
+      ...locomotionCapabilityState,
+      speedMetersPerSecond: -0.01,
+    }],
+  ])("rejects invalid locomotion cross-field state: %s", (_label, capability) => {
+    expect(() => buildWorldStateSnapshotV1({
+      ...worldStateSnapshot,
+      capabilityStatesById: { [capability.id]: capability },
+    })).toThrow("closed WorldStateSnapshotV1 schema");
+  });
+
+  const futureFactWithoutId = {
+    ...supportedByFact,
+    startedSimulationTick: worldStateSnapshot.simulationTick + 1,
+  };
+  const futureFact = {
+    ...futureFactWithoutId,
+    id: deriveGameplaySemanticFactIdV1(futureFactWithoutId),
+  };
+  it.each([
+    ["relationship established after snapshot", {
+      ...worldStateSnapshot,
+      relationshipStatesById: {
+        "possession-primary": {
+          ...possessionRelationshipState,
+          establishedSimulationTick: worldStateSnapshot.simulationTick + 1,
+        },
+      },
+    }],
+    ["Fact started after snapshot", {
+      ...worldStateSnapshot,
+      semanticFactsById: { [futureFact.id]: futureFact },
+    }],
+    ["Action started after snapshot", {
+      ...worldStateSnapshot,
+      activeActionStatesById: {
+        "action-execution-primary": {
+          ...actionState,
+          startedSimulationTick: worldStateSnapshot.simulationTick + 1,
+          lastTransitionSimulationTick: worldStateSnapshot.simulationTick + 1,
+        },
+      },
+    }],
+    ["Action transitioned after snapshot", {
+      ...worldStateSnapshot,
+      activeActionStatesById: {
+        "action-execution-primary": {
+          ...actionState,
+          lastTransitionSimulationTick: worldStateSnapshot.simulationTick + 1,
+        },
+      },
+    }],
+    ["Action transitioned before it started", {
+      ...worldStateSnapshot,
+      activeActionStatesById: {
+        "action-execution-primary": {
+          ...actionState,
+          startedSimulationTick: 10,
+          lastTransitionSimulationTick: 9,
+        },
+      },
+    }],
+  ])("rejects invalid cross-snapshot timing: %s", (_label, input) => {
     expect(() => buildWorldStateSnapshotV1(input)).toThrow(
       "closed WorldStateSnapshotV1 schema",
     );
@@ -847,20 +1000,59 @@ describe("WorldStateSnapshotV1", () => {
 
 describe("GameplaySemanticFactV1", () => {
   const touchingFact = {
-    id: "touching-g-bot-ground",
+    id: "semantic-fact:a85547ebee21b423c0d5cc3c2327fc168cd10d3ff484fbdb26144357b9ea8808",
     type: "touching",
     schemaVersion: 1,
     entityIds: ["g-bot-primary", "ground-primary"],
     startedSimulationTick: 2,
+    semanticFactProjectorProfileRef: SEMANTIC_FACT_PROJECTOR_PROFILE_REF,
+    semanticFactProjectorProfileHash: HASH_E,
   } as const satisfies GameplaySemanticFactV1;
   const insideVolumeFact = {
-    id: "inside-g-bot-zone",
+    id: "semantic-fact:f45502b593d70873d6de24b08a3f58f403e8508e31c8b23492c7f82d69112bbc",
     type: "insideVolume",
     schemaVersion: 1,
     containedEntityId: "g-bot-primary",
     volumeEntityId: "zone-primary",
     startedSimulationTick: 3,
+    semanticFactProjectorProfileRef: SEMANTIC_FACT_PROJECTOR_PROFILE_REF,
+    semanticFactProjectorProfileHash: HASH_E,
   } as const satisfies GameplaySemanticFactV1;
+
+  it.each([
+    [supportedByFact, supportedByFact.id],
+    [touchingFact, touchingFact.id],
+    [insideVolumeFact, insideVolumeFact.id],
+  ])("derives the stable canonical Fact identity for %s", (fact, expectedId) => {
+    expect(deriveGameplaySemanticFactIdV1(fact)).toBe(expectedId);
+  });
+
+  it("excludes changing support point and normal from continuous Fact identity", () => {
+    expect(deriveGameplaySemanticFactIdV1({
+      ...supportedByFact,
+      supportPointMetersXYZ: [100, 200, 300],
+      supportNormalXYZ: [1, 0, 0],
+    })).toBe(supportedByFact.id);
+  });
+
+  it("changes Fact identity when an endpoint, start tick, or locked projector changes", () => {
+    const changes = [
+      { ...supportedByFact, supportedEntityId: "g-bot-secondary" },
+      { ...supportedByFact, startedSimulationTick: 2 },
+      {
+        ...supportedByFact,
+        semanticFactProjectorProfileRef:
+          "worldkit://semantic-fact-projector/alternate@1",
+      },
+      { ...supportedByFact, semanticFactProjectorProfileHash: HASH_A },
+    ];
+
+    for (const changed of changes) {
+      expect(deriveGameplaySemanticFactIdV1(changed)).not.toBe(
+        supportedByFact.id,
+      );
+    }
+  });
 
   it.each([
     ["supportedBy", supportedByFact],
@@ -894,10 +1086,19 @@ describe("GameplaySemanticFactV1", () => {
       startedSimulationTick: Number.MAX_SAFE_INTEGER + 1,
     }],
     ["unknown Fact key", { ...insideVolumeFact, providerHandle: 1 }],
+    ["mismatched derived Fact ID", {
+      ...insideVolumeFact,
+      id: "semantic-fact:ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff",
+    }],
+    ["missing projector ref", withoutKey(
+      supportedByFact,
+      "semanticFactProjectorProfileRef",
+    )],
   ])("rejects %s", (_label, fact) => {
+    const factId = typeof fact.id === "string" ? fact.id : "invalid-fact";
     expect(() => buildWorldStateSnapshotV1({
       ...worldStateSnapshot,
-      semanticFactsById: { [fact.id]: fact },
+      semanticFactsById: { [factId]: fact },
     })).toThrow("closed WorldStateSnapshotV1 schema");
   });
 });
@@ -1025,10 +1226,20 @@ describe("GameplayCapacityBudgetV1", () => {
       maximumGameplayFeatureCount: 16,
       maximumSemanticActionDefinitionCount: 256,
       maximumIdempotencyRecordCount: 4096,
+      maximumRetiredActionExecutionIdCount: 4096,
       maximumRetainedReceiptCount: 4096,
       maximumRetainedEventCount: 8192,
     });
     expect(Object.isFrozen(DEFAULT_GAMEPLAY_CAPACITY_BUDGET_V1)).toBe(true);
+  });
+
+  it("requires a distinct retired Action execution ID budget", () => {
+    expect(() => parseGameplayCapacityBudgetV1(withoutKey(
+      DEFAULT_GAMEPLAY_CAPACITY_BUDGET_V1 as unknown as Readonly<
+        Record<string, unknown>
+      >,
+      "maximumRetiredActionExecutionIdCount",
+    ))).toThrow("closed GameplayCapacityBudgetV1 schema");
   });
 
   it.each(capacityFields.flatMap((field) => [

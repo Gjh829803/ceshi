@@ -621,6 +621,20 @@ export type GameplayActionFailedEventV1 = GameplayActionEventBaseV1 &
     commandId?: string;
   }>;
 
+interface GameplaySemanticFactEventBaseV1 extends GameplayEventBaseV1 {
+  readonly semanticFact: GameplaySemanticFactV1;
+}
+
+export interface GameplaySemanticFactStartedEventV1
+  extends GameplaySemanticFactEventBaseV1 {
+  readonly type: "semantic-fact.started";
+}
+
+export interface GameplaySemanticFactEndedEventV1
+  extends GameplaySemanticFactEventBaseV1 {
+  readonly type: "semantic-fact.ended";
+}
+
 export interface GameplayWorldFailedEventV1 extends GameplayEventBaseV1 {
   readonly type: "world.failed";
   readonly diagnostic: GameplayDiagnosticV1;
@@ -633,6 +647,8 @@ export type GameplayEventV1 =
   | GameplayActionCompletedEventV1
   | GameplayActionCancelledEventV1
   | GameplayActionFailedEventV1
+  | GameplaySemanticFactStartedEventV1
+  | GameplaySemanticFactEndedEventV1
   | GameplayWorldFailedEventV1;
 
 export function deriveGameplayEventIdV1(
@@ -786,6 +802,20 @@ export function parseGameplayEventV1(input: unknown): GameplayEventV1 {
     });
   }
 
+  if (
+    record.type === "semantic-fact.started" ||
+    record.type === "semantic-fact.ended"
+  ) {
+    if (!hasExactKeys(record, [...baseKeys, "semanticFact"])) invalid(schemaName);
+    const semanticFact = parseGameplaySemanticFactV1(record.semanticFact) ??
+      invalid(schemaName);
+    return deepFreeze({
+      ...base,
+      type: record.type,
+      semanticFact,
+    });
+  }
+
   if (record.type === "world.failed") {
     if (!hasExactKeys(record, [...baseKeys, "diagnostic"])) invalid(schemaName);
     const diagnostic = parseGameplayDiagnosticV1(record.diagnostic) ?? invalid(schemaName);
@@ -856,8 +886,10 @@ export interface PossessedByRelationshipStateV1 {
 
 export type GameplayRelationshipStateV1 = PossessedByRelationshipStateV1;
 
+export type GameplaySemanticFactIdV1 = `semantic-fact:${string}`;
+
 export interface SupportedByFactV1 {
-  readonly id: string;
+  readonly id: GameplaySemanticFactIdV1;
   readonly type: "supportedBy";
   readonly schemaVersion: 1;
   readonly supportedEntityId: string;
@@ -867,23 +899,29 @@ export interface SupportedByFactV1 {
   readonly supportPointMetersXYZ: readonly [number, number, number];
   readonly supportNormalXYZ: readonly [number, number, number];
   readonly startedSimulationTick: number;
+  readonly semanticFactProjectorProfileRef: string;
+  readonly semanticFactProjectorProfileHash: Sha256HashV1;
 }
 
 export interface TouchingFactV1 {
-  readonly id: string;
+  readonly id: GameplaySemanticFactIdV1;
   readonly type: "touching";
   readonly schemaVersion: 1;
   readonly entityIds: readonly [string, string];
   readonly startedSimulationTick: number;
+  readonly semanticFactProjectorProfileRef: string;
+  readonly semanticFactProjectorProfileHash: Sha256HashV1;
 }
 
 export interface InsideVolumeFactV1 {
-  readonly id: string;
+  readonly id: GameplaySemanticFactIdV1;
   readonly type: "insideVolume";
   readonly schemaVersion: 1;
   readonly containedEntityId: string;
   readonly volumeEntityId: string;
   readonly startedSimulationTick: number;
+  readonly semanticFactProjectorProfileRef: string;
+  readonly semanticFactProjectorProfileHash: Sha256HashV1;
 }
 
 export type GameplaySemanticFactV1 =
@@ -1090,7 +1128,9 @@ function parseLocomotionCapabilityStateV1(
     !["idle", "walk", "run", "airborne"].includes(record.mode as string) ||
     !["ground", "air"].includes(record.movementMedium as string) ||
     !isFiniteNumber(record.facingYawRadians) ||
-    !isFiniteNumber(record.speedMetersPerSecond)
+    !isFiniteNumber(record.speedMetersPerSecond) ||
+    record.speedMetersPerSecond < 0 ||
+    ((record.mode === "airborne") !== (record.movementMedium === "air"))
   ) return undefined;
   return {
     id: record.id,
@@ -1134,6 +1174,109 @@ function parsePossessedByRelationshipStateV1(
   };
 }
 
+function semanticFactIdentityDomainV1(input: unknown): unknown {
+  const schemaName = "GameplaySemanticFactV1";
+  const record = snapshotDataRecord(input) ?? invalid(schemaName);
+  const commonKeys = [
+    "type",
+    "schemaVersion",
+    "startedSimulationTick",
+    "semanticFactProjectorProfileRef",
+    "semanticFactProjectorProfileHash",
+  ] as const;
+  if (
+    record.schemaVersion !== 1 ||
+    !isSafeNonNegativeInteger(record.startedSimulationTick) ||
+    !isNonEmptyString(record.semanticFactProjectorProfileRef) ||
+    !isSha256(record.semanticFactProjectorProfileHash) ||
+    (Object.hasOwn(record, "id") && !isNonEmptyString(record.id))
+  ) return invalid(schemaName);
+
+  if (record.type === "supportedBy") {
+    const requiredKeys = [
+      ...commonKeys,
+      "supportedEntityId",
+      "supportSurfaceEntityId",
+      "supportColliderSubshapeId",
+      "supportPointMetersXYZ",
+      "supportNormalXYZ",
+    ] as const;
+    if (!hasOnlyKnownKeys(record, requiredKeys, [
+      "id",
+      "supportTraversalSurfaceId",
+    ]) ||
+      !isNonEmptyString(record.supportedEntityId) ||
+      !isNonEmptyString(record.supportSurfaceEntityId) ||
+      !isNonEmptyString(record.supportColliderSubshapeId) ||
+      (Object.hasOwn(record, "supportTraversalSurfaceId") &&
+        !isNonEmptyString(record.supportTraversalSurfaceId)) ||
+      parseFiniteTuple(record.supportPointMetersXYZ, 3) === undefined ||
+      parseFiniteTuple(record.supportNormalXYZ, 3) === undefined
+    ) return invalid(schemaName);
+    return {
+      type: "supportedBy",
+      supportedEntityId: record.supportedEntityId,
+      supportSurfaceEntityId: record.supportSurfaceEntityId,
+      supportColliderSubshapeId: record.supportColliderSubshapeId,
+      ...(Object.hasOwn(record, "supportTraversalSurfaceId")
+        ? { supportTraversalSurfaceId: record.supportTraversalSurfaceId }
+        : {}),
+      startedSimulationTick: record.startedSimulationTick,
+      semanticFactProjectorProfileRef: record.semanticFactProjectorProfileRef,
+      semanticFactProjectorProfileHash: record.semanticFactProjectorProfileHash,
+    };
+  }
+
+  if (record.type === "touching") {
+    if (!hasOnlyKnownKeys(record, [...commonKeys, "entityIds"], ["id"])) {
+      return invalid(schemaName);
+    }
+    const entityIds = snapshotDataArray(record.entityIds);
+    if (
+      entityIds === undefined ||
+      entityIds.length !== 2 ||
+      !isNonEmptyString(entityIds[0]) ||
+      !isNonEmptyString(entityIds[1]) ||
+      entityIds[0] >= entityIds[1]
+    ) return invalid(schemaName);
+    return {
+      type: "touching",
+      entityIds: [entityIds[0], entityIds[1]],
+      startedSimulationTick: record.startedSimulationTick,
+      semanticFactProjectorProfileRef: record.semanticFactProjectorProfileRef,
+      semanticFactProjectorProfileHash: record.semanticFactProjectorProfileHash,
+    };
+  }
+
+  if (record.type === "insideVolume") {
+    if (!hasOnlyKnownKeys(record, [
+      ...commonKeys,
+      "containedEntityId",
+      "volumeEntityId",
+    ], ["id"]) ||
+      !isNonEmptyString(record.containedEntityId) ||
+      !isNonEmptyString(record.volumeEntityId)
+    ) return invalid(schemaName);
+    return {
+      type: "insideVolume",
+      containedEntityId: record.containedEntityId,
+      volumeEntityId: record.volumeEntityId,
+      startedSimulationTick: record.startedSimulationTick,
+      semanticFactProjectorProfileRef: record.semanticFactProjectorProfileRef,
+      semanticFactProjectorProfileHash: record.semanticFactProjectorProfileHash,
+    };
+  }
+
+  return invalid(schemaName);
+}
+
+export function deriveGameplaySemanticFactIdV1(
+  input: unknown,
+): GameplaySemanticFactIdV1 {
+  const hash = sha256CanonicalJson(semanticFactIdentityDomainV1(input));
+  return `semantic-fact:${hash.slice("sha256:".length)}`;
+}
+
 function parseSupportedByFactV1(
   record: Readonly<Record<string, unknown>>,
 ): SupportedByFactV1 | undefined {
@@ -1147,6 +1290,8 @@ function parseSupportedByFactV1(
     "supportPointMetersXYZ",
     "supportNormalXYZ",
     "startedSimulationTick",
+    "semanticFactProjectorProfileRef",
+    "semanticFactProjectorProfileHash",
   ] as const;
   const hasTraversalSurface = hasExactKeys(record, [
     ...baseKeys,
@@ -1160,7 +1305,9 @@ function parseSupportedByFactV1(
     !isNonEmptyString(record.supportSurfaceEntityId) ||
     !isNonEmptyString(record.supportColliderSubshapeId) ||
     (hasTraversalSurface && !isNonEmptyString(record.supportTraversalSurfaceId)) ||
-    !isSafeNonNegativeInteger(record.startedSimulationTick)
+    !isSafeNonNegativeInteger(record.startedSimulationTick) ||
+    !isNonEmptyString(record.semanticFactProjectorProfileRef) ||
+    !isSha256(record.semanticFactProjectorProfileHash)
   ) return undefined;
   const supportPointMetersXYZ = parseFiniteTuple(record.supportPointMetersXYZ, 3);
   const supportNormalXYZ = parseFiniteTuple(record.supportNormalXYZ, 3);
@@ -1168,7 +1315,7 @@ function parseSupportedByFactV1(
     return undefined;
   }
   return {
-    id: record.id,
+    id: record.id as GameplaySemanticFactIdV1,
     type: "supportedBy",
     schemaVersion: 1,
     supportedEntityId: record.supportedEntityId,
@@ -1180,6 +1327,8 @@ function parseSupportedByFactV1(
     supportPointMetersXYZ: supportPointMetersXYZ as readonly [number, number, number],
     supportNormalXYZ: supportNormalXYZ as readonly [number, number, number],
     startedSimulationTick: record.startedSimulationTick,
+    semanticFactProjectorProfileRef: record.semanticFactProjectorProfileRef,
+    semanticFactProjectorProfileHash: record.semanticFactProjectorProfileHash,
   };
 }
 
@@ -1192,11 +1341,15 @@ function parseTouchingFactV1(
     "schemaVersion",
     "entityIds",
     "startedSimulationTick",
+    "semanticFactProjectorProfileRef",
+    "semanticFactProjectorProfileHash",
   ]) ||
     record.type !== "touching" ||
     record.schemaVersion !== 1 ||
     !isNonEmptyString(record.id) ||
-    !isSafeNonNegativeInteger(record.startedSimulationTick)
+    !isSafeNonNegativeInteger(record.startedSimulationTick) ||
+    !isNonEmptyString(record.semanticFactProjectorProfileRef) ||
+    !isSha256(record.semanticFactProjectorProfileHash)
   ) return undefined;
   const entityIds = snapshotDataArray(record.entityIds);
   if (
@@ -1207,11 +1360,13 @@ function parseTouchingFactV1(
     entityIds[0] >= entityIds[1]
   ) return undefined;
   return {
-    id: record.id,
+    id: record.id as GameplaySemanticFactIdV1,
     type: "touching",
     schemaVersion: 1,
     entityIds: [entityIds[0], entityIds[1]],
     startedSimulationTick: record.startedSimulationTick,
+    semanticFactProjectorProfileRef: record.semanticFactProjectorProfileRef,
+    semanticFactProjectorProfileHash: record.semanticFactProjectorProfileHash,
   };
 }
 
@@ -1225,21 +1380,27 @@ function parseInsideVolumeFactV1(
     "containedEntityId",
     "volumeEntityId",
     "startedSimulationTick",
+    "semanticFactProjectorProfileRef",
+    "semanticFactProjectorProfileHash",
   ]) ||
     record.type !== "insideVolume" ||
     record.schemaVersion !== 1 ||
     !isNonEmptyString(record.id) ||
     !isNonEmptyString(record.containedEntityId) ||
     !isNonEmptyString(record.volumeEntityId) ||
-    !isSafeNonNegativeInteger(record.startedSimulationTick)
+    !isSafeNonNegativeInteger(record.startedSimulationTick) ||
+    !isNonEmptyString(record.semanticFactProjectorProfileRef) ||
+    !isSha256(record.semanticFactProjectorProfileHash)
   ) return undefined;
   return {
-    id: record.id,
+    id: record.id as GameplaySemanticFactIdV1,
     type: "insideVolume",
     schemaVersion: 1,
     containedEntityId: record.containedEntityId,
     volumeEntityId: record.volumeEntityId,
     startedSimulationTick: record.startedSimulationTick,
+    semanticFactProjectorProfileRef: record.semanticFactProjectorProfileRef,
+    semanticFactProjectorProfileHash: record.semanticFactProjectorProfileHash,
   };
 }
 
@@ -1247,10 +1408,14 @@ function parseGameplaySemanticFactV1(
   input: unknown,
 ): GameplaySemanticFactV1 | undefined {
   const record = snapshotDataRecord(input);
-  if (record?.type === "supportedBy") return parseSupportedByFactV1(record);
-  if (record?.type === "touching") return parseTouchingFactV1(record);
-  if (record?.type === "insideVolume") return parseInsideVolumeFactV1(record);
-  return undefined;
+  let parsed: GameplaySemanticFactV1 | undefined;
+  if (record?.type === "supportedBy") parsed = parseSupportedByFactV1(record);
+  if (record?.type === "touching") parsed = parseTouchingFactV1(record);
+  if (record?.type === "insideVolume") parsed = parseInsideVolumeFactV1(record);
+  if (parsed === undefined || parsed.id !== deriveGameplaySemanticFactIdV1(parsed)) {
+    return undefined;
+  }
+  return parsed;
 }
 
 function parseGameplayActionStateV1(input: unknown): GameplayActionStateV1 | undefined {
@@ -1362,6 +1527,7 @@ function parseWorldStateSnapshotBodyV1(input: unknown): WorldStateSnapshotBodyV1
     !isSha256(record.executionPlanHash) ||
     !isSafeNonNegativeInteger(record.lastEventSequence)
   ) invalid(schemaName);
+  const simulationTick = record.simulationTick as number;
 
   const entityStatesById = parseIdMap(
     record.entityStatesById,
@@ -1389,7 +1555,8 @@ function parseWorldStateSnapshotBodyV1(input: unknown): WorldStateSnapshotBodyV1
   for (const relationship of Object.values(relationshipStatesById)) {
     if (
       controlledEntityIds.has(relationship.controlledEntityId) ||
-      controllerEntityIds.has(relationship.controllerEntityId)
+      controllerEntityIds.has(relationship.controllerEntityId) ||
+      relationship.establishedSimulationTick > simulationTick
     ) invalid(schemaName);
     const controlledEntity = getOwnMapValue(
       entityStatesById,
@@ -1414,10 +1581,16 @@ function parseWorldStateSnapshotBodyV1(input: unknown): WorldStateSnapshotBodyV1
     ) invalid(schemaName);
   }
 
+  for (const semanticFact of Object.values(semanticFactsById)) {
+    if (semanticFact.startedSimulationTick > simulationTick) invalid(schemaName);
+  }
+
   for (const action of Object.values(activeActionStatesById)) {
     if (
       getOwnMapValue(entityStatesById, action.actorEntityId)?.kind !==
-        "spatial-entity-state"
+        "spatial-entity-state" ||
+      action.startedSimulationTick > action.lastTransitionSimulationTick ||
+      action.lastTransitionSimulationTick > simulationTick
     ) invalid(schemaName);
   }
 
@@ -1427,7 +1600,7 @@ function parseWorldStateSnapshotBodyV1(input: unknown): WorldStateSnapshotBodyV1
     id: record.id as string,
     runtimeSessionId: record.runtimeSessionId as string,
     worldSessionId: record.worldSessionId as string,
-    simulationTick: record.simulationTick as number,
+    simulationTick,
     worldPackageRef: record.worldPackageRef as string,
     worldPackageRootHash: record.worldPackageRootHash as Sha256HashV1,
     executionPlanHash: record.executionPlanHash as Sha256HashV1,
@@ -1671,6 +1844,7 @@ export interface GameplayCapacityBudgetV1 {
   readonly maximumGameplayFeatureCount: number;
   readonly maximumSemanticActionDefinitionCount: number;
   readonly maximumIdempotencyRecordCount: number;
+  readonly maximumRetiredActionExecutionIdCount: number;
   readonly maximumRetainedReceiptCount: number;
   readonly maximumRetainedEventCount: number;
 }
@@ -1683,6 +1857,7 @@ const GAMEPLAY_CAPACITY_BUDGET_KEYS = [
   "maximumGameplayFeatureCount",
   "maximumSemanticActionDefinitionCount",
   "maximumIdempotencyRecordCount",
+  "maximumRetiredActionExecutionIdCount",
   "maximumRetainedReceiptCount",
   "maximumRetainedEventCount",
 ] as const satisfies readonly (keyof GameplayCapacityBudgetV1)[];
@@ -1711,6 +1886,7 @@ export const DEFAULT_GAMEPLAY_CAPACITY_BUDGET_V1: GameplayCapacityBudgetV1 =
     maximumGameplayFeatureCount: 16,
     maximumSemanticActionDefinitionCount: 256,
     maximumIdempotencyRecordCount: 4096,
+    maximumRetiredActionExecutionIdCount: 4096,
     maximumRetainedReceiptCount: 4096,
     maximumRetainedEventCount: 8192,
   });
