@@ -527,6 +527,31 @@ describe("preflightCanonicalTraversalSurfaceOverlapsV1", () => {
     expect(Object.isFrozen(result)).toBe(true);
   });
 
+  it("counts downward candidates before normal admission", () => {
+    const upward: CanonicalTraversalSurfaceTriangleSourceV1 = {
+      traversalSurfaceId: "upward",
+      worldPositionsMetersXYZ: [0, 0, 0, 0, 0, 2, 2, 0, 0],
+      triangleIndices: [0, 1, 2],
+    };
+    const downward: CanonicalTraversalSurfaceTriangleSourceV1 = {
+      traversalSurfaceId: "downward",
+      worldPositionsMetersXYZ: [
+        0, 2, 0, 2, 2, 0, 0, 2, 2,
+        0, 3, 0, 2, 3, 0, 0, 3, 2,
+      ],
+      triangleIndices: [0, 1, 2, 3, 4, 5],
+    };
+
+    expect(preflight([upward, downward], {
+      maximumTraversalSurfaceTrianglePairTestCount: 1,
+    })).toEqual({
+      mode: "budget-exceeded",
+      reason: "traversal-surface-triangle-pair-test-budget-exceeded",
+      maximumAllowedCount: 1,
+      minimumRequiredCount: 2,
+    });
+  });
+
   it("rejects forged pair budgets before broadphase work", () => {
     const first = horizontalSource("a");
     const second = horizontalSource("b", [0, 0], 1, 2);

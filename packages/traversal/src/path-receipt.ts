@@ -4,9 +4,14 @@ import { isNil, isPlainObject } from "lodash-es";
 import {
   assertTraversalSurfaceIdentityV1,
   hashTraversalGraphV2,
+  type TraversalEdgeV1,
   type TraversalGraphV2,
+  type TraversalNodeV1,
 } from "./graph-contract.js";
-import { resolveTraversalGraphBuilderProfile } from "./profile-registry.js";
+import {
+  resolveTraversalGraphBuilderProfile,
+  resolveTraversalGraphBuilderProfileV2,
+} from "./profile-registry.js";
 import type { TraversalSurfaceIdentityV1 } from "./types.js";
 
 type Sha256Hash = `sha256:${string}`;
@@ -242,7 +247,9 @@ export function canonicalRoutePathReceiptV1(
   }
   let resolved;
   try {
-    resolved = resolveTraversalGraphBuilderProfile(strings.graphBuilderProfileRef);
+    resolved = resolveTraversalGraphBuilderProfile(
+      strings.graphBuilderProfileRef,
+    );
   } catch (cause) {
     fail(
       "graphBuilderProfileRef",
@@ -433,7 +440,9 @@ export function canonicalRoutePathReceiptV2(value: unknown): RoutePathReceiptV2 
   } as const;
   let resolved;
   try {
-    resolved = resolveTraversalGraphBuilderProfile(strings.graphBuilderProfileRef);
+    resolved = resolveTraversalGraphBuilderProfileV2(
+      strings.graphBuilderProfileRef,
+    );
   } catch (cause) {
     fail(
       "graphBuilderProfileRef",
@@ -548,6 +557,59 @@ function ceilToQuantum(
   return units * quantum;
 }
 
+interface RoutePathGraphMetricsV2 {
+  readonly maximumObservedSlopeDegrees: number;
+  readonly maximumObservedStepHeightMeters: number;
+  readonly minimumObservedClearanceWidthMeters: number;
+  readonly minimumObservedClearanceHeightMeters: number;
+}
+
+/** Package-private: deliberately not re-exported from the package root. */
+export function summarizeRoutePathGraphMetricsV2(
+  selectedNodes: readonly TraversalNodeV1[],
+  selectedEdges: readonly TraversalEdgeV1[],
+  segmentSlopeDegrees: number,
+): RoutePathGraphMetricsV2 {
+  let maximumObservedSlopeDegrees = segmentSlopeDegrees;
+  let maximumObservedStepHeightMeters = 0;
+  let minimumObservedClearanceWidthMeters = Number.POSITIVE_INFINITY;
+  let minimumObservedClearanceHeightMeters = Number.POSITIVE_INFINITY;
+  for (const node of selectedNodes) {
+    minimumObservedClearanceWidthMeters = Math.min(
+      minimumObservedClearanceWidthMeters,
+      node.clearanceWidthMeters,
+    );
+    minimumObservedClearanceHeightMeters = Math.min(
+      minimumObservedClearanceHeightMeters,
+      node.clearanceHeightMeters,
+    );
+  }
+  for (const edge of selectedEdges) {
+    maximumObservedSlopeDegrees = Math.max(
+      maximumObservedSlopeDegrees,
+      edge.slopeDegrees,
+    );
+    maximumObservedStepHeightMeters = Math.max(
+      maximumObservedStepHeightMeters,
+      edge.stepHeightMeters,
+    );
+    minimumObservedClearanceWidthMeters = Math.min(
+      minimumObservedClearanceWidthMeters,
+      edge.minimumClearanceWidthMeters,
+    );
+    minimumObservedClearanceHeightMeters = Math.min(
+      minimumObservedClearanceHeightMeters,
+      edge.minimumClearanceHeightMeters,
+    );
+  }
+  return {
+    maximumObservedSlopeDegrees,
+    maximumObservedStepHeightMeters,
+    minimumObservedClearanceWidthMeters,
+    minimumObservedClearanceHeightMeters,
+  };
+}
+
 export function assertRoutePathReceiptForGraphV2(
   value: unknown,
   graph: TraversalGraphV2,
@@ -621,7 +683,7 @@ export function assertRoutePathReceiptForGraphV2(
     }
     return edge;
   });
-  const profile = resolveTraversalGraphBuilderProfile(
+  const profile = resolveTraversalGraphBuilderProfileV2(
     path.graphBuilderProfileRef,
   ).profile;
   let distanceMeters = 0;
@@ -659,27 +721,16 @@ export function assertRoutePathReceiptForGraphV2(
     }
     return sum + units;
   }, 0);
+  const graphMetrics = summarizeRoutePathGraphMetricsV2(
+    selectedNodes,
+    selectedEdges,
+    segmentSlopeDegrees,
+  );
   const expectedMetrics = {
     routePathDistanceMeters: distanceMeters,
     routePathDistanceMetersXZ: distanceMetersXZ,
     routePathCost: costUnits * 0.000001,
-    maximumObservedSlopeDegrees: Math.max(
-      segmentSlopeDegrees,
-      ...selectedEdges.map((edge) => edge.slopeDegrees),
-      0,
-    ),
-    maximumObservedStepHeightMeters: Math.max(
-      ...selectedEdges.map((edge) => edge.stepHeightMeters),
-      0,
-    ),
-    minimumObservedClearanceWidthMeters: Math.min(
-      ...selectedNodes.map((node) => node.clearanceWidthMeters),
-      ...selectedEdges.map((edge) => edge.minimumClearanceWidthMeters),
-    ),
-    minimumObservedClearanceHeightMeters: Math.min(
-      ...selectedNodes.map((node) => node.clearanceHeightMeters),
-      ...selectedEdges.map((edge) => edge.minimumClearanceHeightMeters),
-    ),
+    ...graphMetrics,
     maximumObservedSurfaceGapMeters: 0,
   } as const;
   for (const [field, expected] of Object.entries(expectedMetrics)) {

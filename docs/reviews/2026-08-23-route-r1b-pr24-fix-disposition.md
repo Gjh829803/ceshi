@@ -38,7 +38,7 @@ This repair does not claim R1b or M5 completion.
 ## Verification evidence
 
 - `pnpm typecheck` — passed.
-- `pnpm test -- --reporter=dot` — 146 files / 1,499 tests passed.
+- `pnpm test -- --reporter=dot` — 146 files / 1,503 tests passed.
 - `pnpm build` — passed; only the existing Vite large-chunk advisory remains.
 - Focused V2 Traversal and Task 4 suites — passed.
 - `pnpm verify:route-r1-heightfield` — passed, including deterministic repeat/concurrent/cadence evidence and no Provider identity leaks.
@@ -47,8 +47,18 @@ This repair does not claim R1b or M5 completion.
 - `pnpm verify:rigged-subject` — passed.
 - `pnpm verify:g-bot-subject` — passed.
 
-The first full-suite run had one Browser navigation race in `worldkit-server.test.ts` (`Execution context was destroyed`); its focused rerun passed 12/12, and the subsequent complete suite passed 1,499/1,499.
+The first full-suite run had one Browser navigation race in `worldkit-server.test.ts` (`Execution context was destroyed`); its focused rerun passed 12/12. A subsequent complete suite passed 1,499/1,499 before the final review corrections, and the post-correction complete suite passed 1,503/1,503.
 
 ## Independent review
 
-Pending fresh Cursor completion review against the committed repair SHA. Every reported finding must be reproduced and dispositioned by the host before push.
+Cursor fresh review `pr24-route-r1b-final-19b1d72` returned **FINAL GO** with no P0/P1. Its remaining findings were independently checked and dispositioned as follows:
+
+| Finding | Host disposition |
+| --- | --- |
+| Path metric aggregation used large-array argument spreading. | Confirmed and fixed with iterative aggregation plus a 130,000-Node package-private regression. |
+| Straight-path positions were independent from Node centers in code but not locked by a test. | Confirmed test gap; an offset straight-path fixture now proves the intended independence. |
+| Pair budget counted before normal admission in code but had no downward-face regression. | Confirmed test gap; the budget now proves a downward candidate still counts. |
+| Graph contextual mutation coverage omitted several artifact/root hashes. | Confirmed test gap; all deterministic artifact and Build Input root fields are now mutated. |
+| Standalone V2 Path/Failure canonicalizers accepted a registered V1 Graph Builder identity. | Confirmed and fixed; V2 evidence now requires the V2 Registry resolver before contextual admission. |
+
+A second fresh completion review is required against the final correction SHA. Cursor remains read-only; the host owns every disposition and verification claim.

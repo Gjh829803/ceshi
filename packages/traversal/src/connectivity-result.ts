@@ -26,7 +26,10 @@ import {
   type RoutePathReceiptV1,
   type RoutePathReceiptV2,
 } from "./path-receipt.js";
-import { resolveTraversalGraphBuilderProfile } from "./profile-registry.js";
+import {
+  resolveTraversalGraphBuilderProfile,
+  resolveTraversalGraphBuilderProfileV2,
+} from "./profile-registry.js";
 import type { TraversalSurfaceIdentityV1 } from "./types.js";
 
 type Sha256Hash = `sha256:${string}`;
@@ -807,7 +810,9 @@ export function canonicalRouteConnectivityFailureV1(
   } as const;
   let resolved;
   try {
-    resolved = resolveTraversalGraphBuilderProfile(commonStrings.graphBuilderProfileRef!);
+    resolved = resolveTraversalGraphBuilderProfile(
+      commonStrings.graphBuilderProfileRef!,
+    );
   } catch (cause) {
     failFailure(
       "graphBuilderProfileRef",
@@ -1945,7 +1950,9 @@ export function canonicalRouteConnectivityFailureV2(
   } as const;
   let resolved;
   try {
-    resolved = resolveTraversalGraphBuilderProfile(commonStrings.graphBuilderProfileRef!);
+    resolved = resolveTraversalGraphBuilderProfileV2(
+      commonStrings.graphBuilderProfileRef!,
+    );
   } catch (cause) {
     failFailure(
       "graphBuilderProfileRef",

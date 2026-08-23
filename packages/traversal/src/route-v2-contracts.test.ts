@@ -20,6 +20,7 @@ import {
   resolveTraversalGraphBuilderProfileV1,
 } from "./index.js";
 import type { RouteBuildInputV2 } from "./build-input.js";
+import { summarizeRoutePathGraphMetricsV2 } from "./path-receipt.js";
 import {
   HASH_A,
   HASH_B,
@@ -301,6 +302,11 @@ describe("Route V2 Graph, Path, Overlay, and Connectivity", () => {
       { authoringSpecHash: HASH_B },
       { layoutSolveReportHash: HASH_B },
       { resourceLockHash: HASH_B },
+      { terrainArtifactHash: HASH_B },
+      { colliderArtifactHash: HASH_B },
+      { geometryArtifactHash: HASH_B },
+      { surfaceArtifactHash: HASH_B },
+      { routeBuildInputHash: HASH_B },
       { resolvedTraversalLockHash: HASH_B },
       {
         graphBuilderProfileRef: v1Builder.resourceRef,
@@ -364,6 +370,75 @@ describe("Route V2 Graph, Path, Overlay, and Connectivity", () => {
         ...mutation,
       }, graph)).toThrow("ROUTE_PATH_RECEIPT_INVALID");
     }
+  });
+
+  it("keeps straight-path positions independent from Graph Node centers", () => {
+    const graph = canonicalTraversalGraphV2(graphDraft());
+    const path = {
+      ...pathDraft(graph),
+      orderedPathPositionsMetersXYZ: [
+        [0.2, 0, 0],
+        [4.2, 0, 2],
+        [8.2, 0, 0],
+      ] as const,
+    };
+
+    expect(path.orderedPathPositionsMetersXYZ[0]).not.toEqual(
+      graph.traversalNodesById["node-a"]!.positionMetersXYZ,
+    );
+    expect(assertRoutePathReceiptForGraphV2(path, graph))
+      .toMatchObject({ routePathDistanceMeters: 8.946 });
+  });
+
+  it("summarizes Profile-sized Path metrics without argument spreading", () => {
+    const graph = canonicalTraversalGraphV2(graphDraft());
+    const node = graph.traversalNodesById["node-a"]!;
+    const edge = graph.traversalEdgesById["edge-ab"]!;
+
+    expect(summarizeRoutePathGraphMetricsV2(
+      Array(130_000).fill(node),
+      Array(129_999).fill(edge),
+      0,
+    )).toEqual({
+      maximumObservedSlopeDegrees: edge.slopeDegrees,
+      maximumObservedStepHeightMeters: edge.stepHeightMeters,
+      minimumObservedClearanceWidthMeters: Math.min(
+        node.clearanceWidthMeters,
+        edge.minimumClearanceWidthMeters,
+      ),
+      minimumObservedClearanceHeightMeters: Math.min(
+        node.clearanceHeightMeters,
+        edge.minimumClearanceHeightMeters,
+      ),
+    });
+  });
+
+  it("rejects V1 Graph Builder identities in standalone V2 evidence", () => {
+    const graph = canonicalTraversalGraphV2(graphDraft());
+    const v1Builder = resolveTraversalGraphBuilderProfileV1(
+      BUILT_IN_TRAVERSAL_GRAPH_BUILDER_PROFILE_REF,
+    );
+    const profileIdentity = {
+      graphBuilderProfileRef: v1Builder.resourceRef,
+      graphBuilderResolvedVersion: v1Builder.resolvedVersion,
+      graphBuilderProfileHash: v1Builder.contentHash,
+    };
+    expect(() => canonicalRoutePathReceiptV2({
+      ...pathDraft(graph),
+      ...profileIdentity,
+    })).toThrow("ROUTE_PATH_RECEIPT_INVALID");
+    expect(() => canonicalRouteConnectivityFailureV2({
+      ...failureCommon(),
+      ...profileIdentity,
+      status: "unreachable",
+      graphStatus: "unavailable",
+      reason: {
+        kind: "required-path-unreachable",
+        code: "ROUTE_REQUIRED_PATH_UNREACHABLE",
+        relevantBlockingColliderEntityIds: [],
+        blockedWaterEntityIds: [],
+      },
+    })).toThrow("ROUTE_CONNECTIVITY_FAILURE_INVALID");
   });
 
   it("rejects Overlay/Path identity drift, collider inventory mutation, and Surface replacement", () => {
