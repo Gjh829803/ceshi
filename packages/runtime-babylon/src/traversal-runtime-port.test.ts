@@ -18,7 +18,11 @@ import type {
 } from "@whitebox-world/runtime-contracts";
 import { TRUSTED_DEFAULT_CONTROLLER_ID } from "@whitebox-world/runtime-contracts";
 import { sha256CanonicalJson } from "@whitebox-world/protocol";
-import { emitStaticColliderTriangleMeshV1 } from "@whitebox-world/terrain-surface";
+import { Vector3 } from "@babylonjs/core/Maths/math.vector.js";
+import {
+  emitStaticColliderTriangleMeshV1,
+  emitTransformedStaticColliderTriangleMeshV1,
+} from "@whitebox-world/terrain-surface";
 import {
   assertTraversalRuntimeWorldIdentityMatchesGraphV1,
   resolveTraversalLockV1,
@@ -416,6 +420,503 @@ function withTieredStaticSupportAssertion(
           scaleXYZ: [1, 1, 1],
         },
         shape: { kind: "box", sizeMetersXYZ: [4, 1, 4] },
+      },
+    ],
+  };
+}
+
+
+function privateFloat32ToleranceMeters(operationMagnitudeMeters: number): number {
+  return 1e-6 + 2 * (2 ** -23) * Math.max(1, operationMagnitudeMeters);
+}
+
+function spyPlayerCheckSupport(runtime: BabylonWorldRuntime) {
+  const controller = (runtime as unknown as {
+    subjectControllersByEntityId: Map<string, {
+      physicsController: { checkSupport: (...args: unknown[]) => unknown };
+    }>;
+  }).subjectControllersByEntityId.get("player")!;
+  return vi.spyOn(controller.physicsController, "checkSupport");
+}
+
+function expectNoExpectedPathSurfaceState(evidence: {
+  characterSupport: { surfaceResolution: object };
+}): void {
+  expect(JSON.stringify(evidence)).not.toMatch(/expectedPath/i);
+  const keys = Object.keys(evidence.characterSupport.surfaceResolution).sort();
+  if (keys.includes("mode") && keys.length === 1) {
+    return;
+  }
+  expect(keys).toEqual([
+    "colliderSubshapeId",
+    "mode",
+    "resolvedVersion",
+    "resourceHash",
+    "resourceRef",
+    "surfaceEntityId",
+    "traversalSurfaceId",
+  ]);
+}
+
+function boundSurfaceForCollider(
+  collider: ExecutionPlanV5["staticColliders"][number],
+  logicalSurfaceId: string,
+): ExecutionPlanV5["traversal"]["surfaces"][number] {
+  return {
+    kind: "static-collider",
+    traversalSurfaceId: `traversal-surface:${collider.entityId}:${logicalSurfaceId}`,
+    surfaceEntityId: collider.entityId,
+    colliderSubshapeId: collider.colliderSubshapeId,
+    resourceRef: `package://traversal-surface/${collider.entityId}.${logicalSurfaceId}@1`,
+    resolvedVersion: "1",
+    resourceHash: `sha256:${"a".repeat(64)}`,
+    logicalSurfaceId,
+    logicalSubshapeId: collider.logicalSubshapeId,
+    colliderHash: collider.colliderHash,
+    traversalSurfaceProfileRef:
+      "worldkit://traversal-surface-profile/ground.static@1",
+    traversalSurfaceProfileResolvedVersion: "1",
+    traversalSurfaceProfileHash: `sha256:${"b".repeat(64)}`,
+  };
+}
+
+function withBoundStaticBoxAtStart(
+  fixture: ReturnType<typeof compileFixture>,
+  heightMeters: number,
+): ExecutionPlanV5 {
+  const plan = withStaticBoxAtStart(fixture, heightMeters);
+  const collider = plan.staticColliders[plan.staticColliders.length - 1]!;
+  return {
+    ...plan,
+    traversal: {
+      ...plan.traversal,
+      surfaces: [
+        ...plan.traversal.surfaces,
+        boundSurfaceForCollider(collider, "primary"),
+      ],
+    },
+  };
+}
+
+function rotateScaleCanonical(
+  localMetersXYZ: readonly [number, number, number],
+  rotationEulerRadiansXYZ: readonly [number, number, number],
+  scaleXYZ: readonly [number, number, number],
+): [number, number, number] {
+  let x = localMetersXYZ[0] * scaleXYZ[0];
+  let y = localMetersXYZ[1] * scaleXYZ[1];
+  let z = localMetersXYZ[2] * scaleXYZ[2];
+  const [pitch, yaw, roll] = rotationEulerRadiansXYZ;
+  const cosineRoll = Math.cos(roll);
+  const sineRoll = Math.sin(roll);
+  [x, y] = [
+    x * cosineRoll - y * sineRoll,
+    x * sineRoll + y * cosineRoll,
+  ];
+  const cosinePitch = Math.cos(pitch);
+  const sinePitch = Math.sin(pitch);
+  [y, z] = [
+    y * cosinePitch - z * sinePitch,
+    y * sinePitch + z * cosinePitch,
+  ];
+  const cosineYaw = Math.cos(yaw);
+  const sineYaw = Math.sin(yaw);
+  [x, z] = [
+    x * cosineYaw + z * sineYaw,
+    -x * sineYaw + z * cosineYaw,
+  ];
+  return [x, y, z];
+}
+
+function rotateScaleWrongEulerXyz(
+  localMetersXYZ: readonly [number, number, number],
+  rotationEulerRadiansXYZ: readonly [number, number, number],
+  scaleXYZ: readonly [number, number, number],
+): [number, number, number] {
+  let x = localMetersXYZ[0] * scaleXYZ[0];
+  let y = localMetersXYZ[1] * scaleXYZ[1];
+  let z = localMetersXYZ[2] * scaleXYZ[2];
+  const [pitch, yaw, roll] = rotationEulerRadiansXYZ;
+  const cosinePitch = Math.cos(pitch);
+  const sinePitch = Math.sin(pitch);
+  [y, z] = [
+    y * cosinePitch - z * sinePitch,
+    y * sinePitch + z * cosinePitch,
+  ];
+  const cosineYaw = Math.cos(yaw);
+  const sineYaw = Math.sin(yaw);
+  [x, z] = [
+    x * cosineYaw + z * sineYaw,
+    -x * sineYaw + z * cosineYaw,
+  ];
+  const cosineRoll = Math.cos(roll);
+  const sineRoll = Math.sin(roll);
+  [x, y] = [
+    x * cosineRoll - y * sineRoll,
+    x * sineRoll + y * cosineRoll,
+  ];
+  return [x, y, z];
+}
+
+function linearRowsCanonical(
+  rotationEulerRadiansXYZ: readonly [number, number, number],
+  scaleXYZ: readonly [number, number, number],
+): readonly [readonly [number, number, number], readonly [number, number, number], readonly [number, number, number]] {
+  const basis = [
+    rotateScaleCanonical([1, 0, 0], rotationEulerRadiansXYZ, scaleXYZ),
+    rotateScaleCanonical([0, 1, 0], rotationEulerRadiansXYZ, scaleXYZ),
+    rotateScaleCanonical([0, 0, 1], rotationEulerRadiansXYZ, scaleXYZ),
+  ] as const;
+  return [
+    [basis[0][0], basis[1][0], basis[2][0]],
+    [basis[0][1], basis[1][1], basis[2][1]],
+    [basis[0][2], basis[1][2], basis[2][2]],
+  ];
+}
+
+function operationMagnitudeMeters(
+  translationMetersXYZ: readonly [number, number, number],
+  linear: readonly [readonly [number, number, number], readonly [number, number, number], readonly [number, number, number]],
+  localMetersXYZ: readonly [number, number, number],
+): [number, number, number] {
+  return [0, 1, 2].map((axis) =>
+    Math.abs(translationMetersXYZ[axis]!) +
+    Math.abs(linear[axis]![0]! * localMetersXYZ[0]) +
+    Math.abs(linear[axis]![1]! * localMetersXYZ[1]) +
+    Math.abs(linear[axis]![2]! * localMetersXYZ[2])
+  ) as [number, number, number];
+}
+
+function withBoundOrientedPlatformAtStart(
+  fixture: ReturnType<typeof compileFixture>,
+  options: Readonly<{
+    entityId: string;
+    heightMeters: number;
+    sizeMetersXYZ: readonly [number, number, number];
+    rotationEulerRadiansXYZ: readonly [number, number, number];
+    scaleXYZ: readonly [number, number, number];
+    translationMetersXYZ?: readonly [number, number, number];
+  }>,
+): ExecutionPlanV5 {
+  const plan = structuredClone(fixture.executionPlan);
+  const placement = plan.layout.placementsByEntityId["spawn-main"]!;
+  const spawnXz: readonly [number, number] = [
+    placement.transform.positionMetersXYZ[0],
+    placement.transform.positionMetersXYZ[2],
+  ];
+  const localTopCenter: readonly [number, number, number] = [
+    0,
+    options.sizeMetersXYZ[1] / 2,
+    0,
+  ];
+  const rotated = rotateScaleCanonical(
+    localTopCenter,
+    options.rotationEulerRadiansXYZ,
+    options.scaleXYZ,
+  );
+  const translationMetersXYZ = options.translationMetersXYZ ?? [
+    spawnXz[0] - rotated[0],
+    options.heightMeters - rotated[1],
+    spawnXz[1] - rotated[2],
+  ];
+  const supportCollider = {
+    entityId: options.entityId,
+    logicalSubshapeId: "primary",
+    colliderSubshapeId: `collider:${options.entityId}:primary`,
+    colliderHash: `sha256:${"c".repeat(64)}` as const,
+    transform: {
+      positionMetersXYZ: translationMetersXYZ,
+      rotationEulerRadiansXYZ: options.rotationEulerRadiansXYZ,
+      scaleXYZ: options.scaleXYZ,
+    },
+    shape: {
+      kind: "box" as const,
+      sizeMetersXYZ: options.sizeMetersXYZ,
+    },
+  };
+  return {
+    ...plan,
+    layout: {
+      ...plan.layout,
+      layoutAssertions: [],
+      placementsByEntityId: {
+        ...plan.layout.placementsByEntityId,
+        "spawn-main": {
+          ...placement,
+          transform: {
+            ...placement.transform,
+            positionMetersXYZ: [
+              spawnXz[0],
+              options.heightMeters,
+              spawnXz[1],
+            ],
+          },
+        },
+      },
+    },
+    staticColliders: [...plan.staticColliders, supportCollider],
+    traversal: {
+      ...plan.traversal,
+      surfaces: [
+        ...plan.traversal.surfaces,
+        boundSurfaceForCollider(supportCollider, "primary"),
+      ],
+    },
+  };
+}
+
+function withBoundCeilingAboveStart(
+  fixture: ReturnType<typeof compileFixture>,
+): ExecutionPlanV5 {
+  const plan = structuredClone(fixture.executionPlan);
+  const placement = plan.layout.placementsByEntityId["spawn-main"]!;
+  const ceiling = {
+    entityId: "ceiling-slab",
+    logicalSubshapeId: "primary",
+    colliderSubshapeId: "collider:ceiling-slab:primary",
+    colliderHash: `sha256:${"d".repeat(64)}` as const,
+    transform: {
+      positionMetersXYZ: [
+        placement.transform.positionMetersXYZ[0],
+        0.6,
+        placement.transform.positionMetersXYZ[2],
+      ] as const,
+      rotationEulerRadiansXYZ: [0, 0, 0] as const,
+      scaleXYZ: [1, 1, 1] as const,
+    },
+    shape: {
+      kind: "box" as const,
+      sizeMetersXYZ: [4, 1, 4] as const,
+    },
+  };
+  return {
+    ...plan,
+    staticColliders: [...plan.staticColliders, ceiling],
+    traversal: {
+      ...plan.traversal,
+      surfaces: [
+        ...plan.traversal.surfaces,
+        boundSurfaceForCollider(ceiling, "primary"),
+      ],
+    },
+  };
+}
+
+function withBoundVerticalWallAtStart(
+  fixture: ReturnType<typeof compileFixture>,
+): ExecutionPlanV5 {
+  const plan = structuredClone(fixture.executionPlan);
+  const placement = plan.layout.placementsByEntityId["spawn-main"]!;
+  const wall = {
+    entityId: "vertical-wall",
+    logicalSubshapeId: "primary",
+    colliderSubshapeId: "collider:vertical-wall:primary",
+    colliderHash: `sha256:${"e".repeat(64)}` as const,
+    transform: {
+      positionMetersXYZ: [
+        placement.transform.positionMetersXYZ[0] + 0.6,
+        1,
+        placement.transform.positionMetersXYZ[2],
+      ] as const,
+      rotationEulerRadiansXYZ: [0, 0, 0] as const,
+      scaleXYZ: [1, 1, 1] as const,
+    },
+    shape: {
+      kind: "box" as const,
+      sizeMetersXYZ: [0.2, 2, 4] as const,
+    },
+  };
+  return {
+    ...plan,
+    staticColliders: [...plan.staticColliders, wall],
+    traversal: {
+      ...plan.traversal,
+      surfaces: [
+        ...plan.traversal.surfaces,
+        boundSurfaceForCollider(wall, "primary"),
+      ],
+    },
+  };
+}
+
+function withCoplanarBoundPlatformsAtStart(
+  fixture: ReturnType<typeof compileFixture>,
+): ExecutionPlanV5 {
+  const plan = structuredClone(fixture.executionPlan);
+  const placement = plan.layout.placementsByEntityId["spawn-main"]!;
+  const spawn = placement.transform.positionMetersXYZ;
+  const makeBox = (entityId: string, offsetX: number) => ({
+    entityId,
+    logicalSubshapeId: "primary" as const,
+    colliderSubshapeId: `collider:${entityId}:primary`,
+    colliderHash: `sha256:${entityId.padEnd(64, "0").slice(0, 64)}` as const,
+    transform: {
+      positionMetersXYZ: [spawn[0] + offsetX, 0.5, spawn[2]] as const,
+      rotationEulerRadiansXYZ: [0, 0, 0] as const,
+      scaleXYZ: [1, 1, 1] as const,
+    },
+    shape: {
+      kind: "box" as const,
+      sizeMetersXYZ: [2, 1, 2] as const,
+    },
+  });
+  const first = makeBox("coplanar-a", -0.4);
+  const second = makeBox("coplanar-b", 0.4);
+  return {
+    ...plan,
+    layout: {
+      ...plan.layout,
+      layoutAssertions: [],
+      placementsByEntityId: {
+        ...plan.layout.placementsByEntityId,
+        "spawn-main": {
+          ...placement,
+          transform: {
+            ...placement.transform,
+            positionMetersXYZ: [spawn[0], 1, spawn[2]],
+          },
+        },
+      },
+    },
+    staticColliders: [...plan.staticColliders, first, second],
+    traversal: {
+      ...plan.traversal,
+      surfaces: [
+        ...plan.traversal.surfaces,
+        boundSurfaceForCollider(first, "primary"),
+        boundSurfaceForCollider(second, "primary"),
+      ],
+    },
+  };
+}
+
+function withStackedBoundPlatformsAtStart(
+  fixture: ReturnType<typeof compileFixture>,
+): ExecutionPlanV5 {
+  const plan = structuredClone(fixture.executionPlan);
+  const placement = plan.layout.placementsByEntityId["spawn-main"]!;
+  const spawn = placement.transform.positionMetersXYZ;
+  const lower = {
+    entityId: "stacked-lower",
+    logicalSubshapeId: "primary" as const,
+    colliderSubshapeId: "collider:stacked-lower:primary",
+    colliderHash: `sha256:${"1".repeat(64)}` as const,
+    transform: {
+      positionMetersXYZ: [spawn[0], 0.1, spawn[2]] as const,
+      rotationEulerRadiansXYZ: [0, 0, 0] as const,
+      scaleXYZ: [1, 1, 1] as const,
+    },
+    shape: { kind: "box" as const, sizeMetersXYZ: [3, 0.2, 3] as const },
+  };
+  const upper = {
+    entityId: "stacked-upper",
+    logicalSubshapeId: "primary" as const,
+    colliderSubshapeId: "collider:stacked-upper:primary",
+    colliderHash: `sha256:${"2".repeat(64)}` as const,
+    transform: {
+      positionMetersXYZ: [spawn[0], 0.5, spawn[2]] as const,
+      rotationEulerRadiansXYZ: [0, 0, 0] as const,
+      scaleXYZ: [1, 1, 1] as const,
+    },
+    shape: { kind: "box" as const, sizeMetersXYZ: [2, 1, 2] as const },
+  };
+  return {
+    ...plan,
+    layout: {
+      ...plan.layout,
+      layoutAssertions: [],
+      placementsByEntityId: {
+        ...plan.layout.placementsByEntityId,
+        "spawn-main": {
+          ...placement,
+          transform: {
+            ...placement.transform,
+            positionMetersXYZ: [spawn[0], 1, spawn[2]],
+          },
+        },
+      },
+    },
+    staticColliders: [...plan.staticColliders, lower, upper],
+    traversal: {
+      ...plan.traversal,
+      surfaces: [
+        ...plan.traversal.surfaces,
+        boundSurfaceForCollider(lower, "primary"),
+        boundSurfaceForCollider(upper, "primary"),
+      ],
+    },
+  };
+}
+
+function withQuarterMeterSeamAtStart(
+  fixture: ReturnType<typeof compileFixture>,
+): ExecutionPlanV5 {
+  const plan = structuredClone(fixture.executionPlan);
+  const placement = plan.layout.placementsByEntityId["spawn-main"]!;
+  return {
+    ...plan,
+    terrain: {
+      ...plan.terrain,
+      centerMetersXZ: [0, 30],
+      sizeMetersXZ: [2, 2],
+      resolutionCellsXZ: [2, 2],
+      heightSamplesMeters: [0, 0, 0.25, 0.25],
+      minimumHeightMeters: 0,
+      maximumHeightMeters: 0.25,
+    },
+    layout: {
+      ...plan.layout,
+      placementsByEntityId: {
+        ...plan.layout.placementsByEntityId,
+        "spawn-main": {
+          ...placement,
+          transform: {
+            ...placement.transform,
+            positionMetersXYZ: [0, 0.125, 30],
+          },
+        },
+      },
+    },
+  };
+}
+
+function withSteepRampAtStart(
+  fixture: ReturnType<typeof compileFixture>,
+): ExecutionPlanV5 {
+  const plan = structuredClone(fixture.executionPlan);
+  const placement = plan.layout.placementsByEntityId["spawn-main"]!;
+  return {
+    ...plan,
+    layout: {
+      ...plan.layout,
+      layoutAssertions: [],
+      placementsByEntityId: {
+        ...plan.layout.placementsByEntityId,
+        "spawn-main": {
+          ...placement,
+          transform: {
+            ...placement.transform,
+            positionMetersXYZ: [0.4, 3, 30],
+          },
+        },
+      },
+    },
+    staticColliders: [
+      ...plan.staticColliders,
+      {
+        entityId: "steep-ramp",
+        logicalSubshapeId: "primary",
+        colliderSubshapeId: "collider:steep-ramp:primary",
+        colliderHash: `sha256:${"c".repeat(64)}`,
+        transform: {
+          positionMetersXYZ: [0, 2.4, 30],
+          rotationEulerRadiansXYZ: [0, 0, -0.9],
+          scaleXYZ: [1, 1, 1],
+        },
+        shape: {
+          kind: "box",
+          sizeMetersXYZ: [4, 1, 4],
+        },
       },
     ],
   };
@@ -1101,9 +1602,9 @@ describe("createBabylonTraversalRuntimePortV1", () => {
     }
   }, 30_000);
 
-  it("classifies low overlapping support as ambiguous and tall support as unmatched", async () => {
+  it("classifies low overlapping unbound support as heightfield-resolved and tall unbound support as unmatched", async () => {
     for (const [heightMeters, expectedMode] of [
-      [0.1, "ambiguous"],
+      [0.1, "resolved"],
       [1, "unmatched"],
     ] as const) {
       const fixture = compileFixture();
@@ -1329,6 +1830,542 @@ describe("createBabylonTraversalRuntimePortV1", () => {
       await runtime.dispose();
     }
   }, 30_000);
+
+
+  it("resolves a bound static platform and queries support once", async () => {
+    const fixture = compileFixture();
+    const plan = withBoundStaticBoxAtStart(fixture, 1);
+    const runtime = await createRuntime(plan);
+    try {
+      const port = createBabylonTraversalRuntimePortV1({
+        runtime,
+        traversalLockReceipt: fixture.traversalLockReceipt,
+      });
+      const supportSpy = spyPlayerCheckSupport(runtime);
+      const evidence = port.resetToStartAnchor({
+        startAnchorEntityId: "spawn-main",
+      });
+      const bound = plan.traversal.surfaces.find(
+        (surface) => surface.kind === "static-collider",
+      )!;
+
+      expect(supportSpy).toHaveBeenCalledTimes(1);
+      expect(evidence.characterSupport.supportState).toBe("supported");
+      expect(evidence.characterSupport.surfaceResolution).toEqual({
+        mode: "resolved",
+        traversalSurfaceId: bound.traversalSurfaceId,
+        surfaceEntityId: bound.surfaceEntityId,
+        colliderSubshapeId: bound.colliderSubshapeId,
+        resourceRef: bound.resourceRef,
+        resolvedVersion: bound.resolvedVersion,
+        resourceHash: bound.resourceHash,
+      });
+      expectNoExpectedPathSurfaceState(evidence);
+    } finally {
+      await runtime.dispose();
+    }
+  }, 30_000);
+
+  it("keeps unbound colliders unmatched when they are the only support", async () => {
+    const fixture = compileFixture();
+    const runtime = await createRuntime(withStaticBoxAtStart(fixture, 1));
+    try {
+      const port = createBabylonTraversalRuntimePortV1({
+        runtime,
+        traversalLockReceipt: fixture.traversalLockReceipt,
+      });
+      const supportSpy = spyPlayerCheckSupport(runtime);
+      const evidence = port.resetToStartAnchor({
+        startAnchorEntityId: "spawn-main",
+      });
+
+      expect(supportSpy).toHaveBeenCalledTimes(1);
+      expect(evidence.characterSupport.supportState).toBe("supported");
+      expect(evidence.characterSupport.surfaceResolution).toEqual({
+        mode: "unmatched",
+      });
+      expectNoExpectedPathSurfaceState(evidence);
+    } finally {
+      await runtime.dispose();
+    }
+  }, 30_000);
+
+  it("marks dynamic retained support as unmatched without selecting a surface", async () => {
+    const fixture = compileFixture();
+    const runtime = await createRuntime(fixture.executionPlan);
+    try {
+      const controller = (runtime as unknown as {
+        subjectControllersByEntityId: Map<string, {
+          physicsController: { checkSupport: (...args: unknown[]) => unknown };
+        }>;
+      }).subjectControllersByEntityId.get("player")!;
+      const original = controller.physicsController.checkSupport.bind(
+        controller.physicsController,
+      );
+      const supportSpy = vi.spyOn(
+        controller.physicsController,
+        "checkSupport",
+      ).mockImplementation((...args: unknown[]) => {
+        const sample = (original as (...callArgs: unknown[]) => { isSurfaceDynamic: boolean })(
+          ...args,
+        );
+        sample.isSurfaceDynamic = true;
+        return sample;
+      });
+      const port = createBabylonTraversalRuntimePortV1({
+        runtime,
+        traversalLockReceipt: fixture.traversalLockReceipt,
+      });
+      supportSpy.mockClear();
+      const evidence = port.resetToStartAnchor({
+        startAnchorEntityId: "spawn-main",
+      });
+
+      expect(supportSpy).toHaveBeenCalledTimes(1);
+      expect(evidence.characterSupport.isSupportSurfaceDynamic).toBe(true);
+      expect(evidence.characterSupport.surfaceResolution).toEqual({
+        mode: "unmatched",
+      });
+      expectNoExpectedPathSurfaceState(evidence);
+    } finally {
+      await runtime.dispose();
+    }
+  }, 30_000);
+
+  it("resolves the 0.25m heightfield seam without expected Path Surface state", async () => {
+    const fixture = compileFixture();
+    const runtime = await createRuntime(withQuarterMeterSeamAtStart(fixture));
+    try {
+      const port = createBabylonTraversalRuntimePortV1({
+        runtime,
+        traversalLockReceipt: fixture.traversalLockReceipt,
+      });
+      const supportSpy = spyPlayerCheckSupport(runtime);
+      const evidence = port.resetToStartAnchor({
+        startAnchorEntityId: "spawn-main",
+      });
+      const heightfield = fixture.executionPlan.traversal.surfaces[0]!;
+
+      expect(supportSpy).toHaveBeenCalledTimes(1);
+      expect(evidence.characterSupport.supportState).toBe("supported");
+      expect(evidence.characterSupport.surfaceResolution.mode).toBe("resolved");
+      expect(evidence.characterSupport.surfaceResolution).toMatchObject({
+        traversalSurfaceId: heightfield.traversalSurfaceId,
+      });
+      expectNoExpectedPathSurfaceState(evidence);
+    } finally {
+      await runtime.dispose();
+    }
+  }, 30_000);
+
+  it("classifies coplanar bound platforms as ambiguous", async () => {
+    const fixture = compileFixture();
+    const runtime = await createRuntime(withCoplanarBoundPlatformsAtStart(fixture));
+    try {
+      const port = createBabylonTraversalRuntimePortV1({
+        runtime,
+        traversalLockReceipt: fixture.traversalLockReceipt,
+      });
+      const supportSpy = spyPlayerCheckSupport(runtime);
+      const evidence = port.resetToStartAnchor({
+        startAnchorEntityId: "spawn-main",
+      });
+
+      expect(supportSpy).toHaveBeenCalledTimes(1);
+      expect(evidence.characterSupport.supportState).toBe("supported");
+      expect(evidence.characterSupport.surfaceResolution.mode).toBe("ambiguous");
+      expectNoExpectedPathSurfaceState(evidence);
+    } finally {
+      await runtime.dispose();
+    }
+  }, 30_000);
+
+  it("resolves the stacked upper bound platform and ignores the lower layer", async () => {
+    const fixture = compileFixture();
+    const plan = withStackedBoundPlatformsAtStart(fixture);
+    const runtime = await createRuntime(plan);
+    try {
+      const port = createBabylonTraversalRuntimePortV1({
+        runtime,
+        traversalLockReceipt: fixture.traversalLockReceipt,
+      });
+      const supportSpy = spyPlayerCheckSupport(runtime);
+      const evidence = port.resetToStartAnchor({
+        startAnchorEntityId: "spawn-main",
+      });
+      const upper = plan.traversal.surfaces.find(
+        (surface) => surface.surfaceEntityId === "stacked-upper",
+      )!;
+
+      expect(supportSpy).toHaveBeenCalledTimes(1);
+      expect(evidence.characterSupport.surfaceResolution).toEqual({
+        mode: "resolved",
+        traversalSurfaceId: upper.traversalSurfaceId,
+        surfaceEntityId: upper.surfaceEntityId,
+        colliderSubshapeId: upper.colliderSubshapeId,
+        resourceRef: upper.resourceRef,
+        resolvedVersion: upper.resolvedVersion,
+        resourceHash: upper.resourceHash,
+      });
+      expectNoExpectedPathSurfaceState(evidence);
+    } finally {
+      await runtime.dispose();
+    }
+  }, 30_000);
+
+  it("rejects a downward bound ceiling and keeps heightfield resolved", async () => {
+    const fixture = compileFixture();
+    const runtime = await createRuntime(withBoundCeilingAboveStart(fixture));
+    try {
+      const port = createBabylonTraversalRuntimePortV1({
+        runtime,
+        traversalLockReceipt: fixture.traversalLockReceipt,
+      });
+      const supportSpy = spyPlayerCheckSupport(runtime);
+      const evidence = port.resetToStartAnchor({
+        startAnchorEntityId: "spawn-main",
+      });
+      const heightfield = fixture.executionPlan.traversal.surfaces[0]!;
+
+      expect(supportSpy).toHaveBeenCalledTimes(1);
+      expect(evidence.characterSupport.surfaceResolution).toMatchObject({
+        mode: "resolved",
+        traversalSurfaceId: heightfield.traversalSurfaceId,
+      });
+      expectNoExpectedPathSurfaceState(evidence);
+    } finally {
+      await runtime.dispose();
+    }
+  }, 30_000);
+
+  it("rejects a bound vertical wall and keeps heightfield resolved", async () => {
+    const fixture = compileFixture();
+    const runtime = await createRuntime(withBoundVerticalWallAtStart(fixture));
+    try {
+      const port = createBabylonTraversalRuntimePortV1({
+        runtime,
+        traversalLockReceipt: fixture.traversalLockReceipt,
+      });
+      const supportSpy = spyPlayerCheckSupport(runtime);
+      const evidence = port.resetToStartAnchor({
+        startAnchorEntityId: "spawn-main",
+      });
+      const heightfield = fixture.executionPlan.traversal.surfaces[0]!;
+
+      expect(supportSpy).toHaveBeenCalledTimes(1);
+      expect(evidence.characterSupport.surfaceResolution).toMatchObject({
+        mode: "resolved",
+        traversalSurfaceId: heightfield.traversalSurfaceId,
+      });
+    } finally {
+      await runtime.dispose();
+    }
+  }, 30_000);
+
+  it("classifies sliding steep unbound support as unmatched with one support query", async () => {
+    const fixture = compileFixture();
+    const runtime = await createRuntime(withSteepRampAtStart(fixture));
+    try {
+      const port = createBabylonTraversalRuntimePortV1({
+        runtime,
+        traversalLockReceipt: fixture.traversalLockReceipt,
+      });
+      port.resetToStartAnchor({ startAnchorEntityId: "spawn-main" });
+      const supportSpy = spyPlayerCheckSupport(runtime);
+      let slidingEvidence: Awaited<ReturnType<typeof port.runFixedTick>> | undefined;
+      for (let tick = 0; tick < 120; tick += 1) {
+        supportSpy.mockClear();
+        const evidence = await port.runFixedTick({
+          walkDirectionWorldXZ: [0, 0],
+        });
+        expect(supportSpy).toHaveBeenCalledTimes(1);
+        if (evidence.characterSupport.supportState === "sliding") {
+          slidingEvidence = evidence;
+          break;
+        }
+      }
+      expect(slidingEvidence?.characterSupport.surfaceResolution).toEqual({
+        mode: "unmatched",
+      });
+      expectNoExpectedPathSurfaceState(slidingEvidence!);
+    } finally {
+      await runtime.dispose();
+    }
+  }, 30_000);
+
+  it("keeps bound-platform resolution across reset and rebind-back", async () => {
+    const fixture = compileFixture(routeWorld(createValidPackageSubjectWorld()));
+    const plan = withBoundStaticBoxAtStart(fixture, 1);
+    const runtime = await createRuntime(plan);
+    try {
+      const port = createBabylonTraversalRuntimePortV1({
+        runtime,
+        traversalLockReceipt: fixture.traversalLockReceipt,
+      });
+      const bound = plan.traversal.surfaces.find(
+        (surface) => surface.kind === "static-collider",
+      )!;
+      const firstSpy = spyPlayerCheckSupport(runtime);
+      const first = port.resetToStartAnchor({
+        startAnchorEntityId: "spawn-main",
+      });
+      expect(firstSpy).toHaveBeenCalledTimes(1);
+      expect(first.characterSupport.surfaceResolution).toMatchObject({
+        mode: "resolved",
+        traversalSurfaceId: bound.traversalSurfaceId,
+      });
+
+      expect(runtime.bindControl({
+        controllerId: TRUSTED_DEFAULT_CONTROLLER_ID,
+        expectedControlledEntityId: "player",
+        controlledEntityId: "pack-animal-a",
+      }).status).toBe("committed");
+      expectRuntimeCode(
+        () => port.readLatestTickEvidence(),
+        "TRAVERSAL_RUNTIME_NOT_CONTROLLED",
+      );
+      expect(runtime.bindControl({
+        controllerId: TRUSTED_DEFAULT_CONTROLLER_ID,
+        expectedControlledEntityId: "pack-animal-a",
+        controlledEntityId: "player",
+      }).status).toBe("committed");
+      expectRuntimeCode(
+        () => port.readLatestTickEvidence(),
+        "TRAVERSAL_RUNTIME_EVIDENCE_UNAVAILABLE",
+      );
+
+      firstSpy.mockClear();
+      const restored = port.resetToStartAnchor({
+        startAnchorEntityId: "spawn-main",
+      });
+      expect(firstSpy).toHaveBeenCalledTimes(1);
+      expect(restored.characterSupport.surfaceResolution).toMatchObject({
+        mode: "resolved",
+        traversalSurfaceId: bound.traversalSurfaceId,
+      });
+      expectNoExpectedPathSurfaceState(restored);
+    } finally {
+      await runtime.dispose();
+    }
+  }, 30_000);
+
+  it("isolates bound-platform identity across two Runtime instances", async () => {
+    const fixture = compileFixture();
+    const firstPlan = withBoundStaticBoxAtStart(fixture, 1);
+    const secondPlan = withBoundOrientedPlatformAtStart(fixture, {
+      entityId: "second-platform",
+      heightMeters: 1,
+      sizeMetersXYZ: [2, 1, 2],
+      rotationEulerRadiansXYZ: [0, 0, 0],
+      scaleXYZ: [1, 1, 1],
+    });
+    const firstRuntime = await createRuntime(firstPlan);
+    const secondRuntime = await createRuntime(secondPlan);
+    try {
+      const firstPort = createBabylonTraversalRuntimePortV1({
+        runtime: firstRuntime,
+        traversalLockReceipt: fixture.traversalLockReceipt,
+      });
+      const secondPort = createBabylonTraversalRuntimePortV1({
+        runtime: secondRuntime,
+        traversalLockReceipt: fixture.traversalLockReceipt,
+      });
+      const firstSpy = spyPlayerCheckSupport(firstRuntime);
+      const secondSpy = spyPlayerCheckSupport(secondRuntime);
+      const first = firstPort.resetToStartAnchor({
+        startAnchorEntityId: "spawn-main",
+      });
+      const second = secondPort.resetToStartAnchor({
+        startAnchorEntityId: "spawn-main",
+      });
+      const firstBound = firstPlan.traversal.surfaces.find(
+        (surface) => surface.kind === "static-collider",
+      )!;
+      const secondBound = secondPlan.traversal.surfaces.find(
+        (surface) => surface.kind === "static-collider",
+      )!;
+
+      expect(firstSpy).toHaveBeenCalledTimes(1);
+      expect(secondSpy).toHaveBeenCalledTimes(1);
+      expect(first.characterSupport.surfaceResolution).toMatchObject({
+        traversalSurfaceId: firstBound.traversalSurfaceId,
+      });
+      expect(second.characterSupport.surfaceResolution).toMatchObject({
+        traversalSurfaceId: secondBound.traversalSurfaceId,
+      });
+      expect(firstBound.traversalSurfaceId).not.toBe(secondBound.traversalSurfaceId);
+    } finally {
+      await firstRuntime.dispose();
+      await secondRuntime.dispose();
+    }
+  }, 30_000);
+
+  it.each([
+    ["ordinary", undefined],
+    ["100m", 100],
+    ["1km", 1_000],
+    ["10km", 10_000],
+  ] as const)(
+    "resolves a non-orthogonal non-uniform bound platform at %s cancellation",
+    async (_label, cancellationMeters) => {
+      const fixture = compileFixture();
+      const rotationEulerRadiansXYZ = [0.31, 0.47, 0.19] as const;
+      const scaleXYZ = [1.4, 0.8, 1.25] as const;
+      const spawn = fixture.executionPlan.layout
+        .placementsByEntityId["spawn-main"]!.transform.positionMetersXYZ;
+      const cancelMeters = cancellationMeters ?? 0;
+      const sizeMetersXYZ = [
+        cancelMeters === 0 ? 2 : 2 * cancelMeters + 2,
+        1,
+        4,
+      ] as const;
+      const localOnTop: readonly [number, number, number] = [
+        cancelMeters === 0 ? 0 : -cancelMeters,
+        sizeMetersXYZ[1] / 2,
+        0,
+      ];
+      const rotated = rotateScaleCanonical(
+        localOnTop,
+        rotationEulerRadiansXYZ,
+        scaleXYZ,
+      );
+      const supportSizeMetersXYZ = cancelMeters > 1_000
+        ? ([2, 1, 2] as const)
+        : sizeMetersXYZ;
+      const supportLocal: readonly [number, number, number] = [
+        0,
+        supportSizeMetersXYZ[1] / 2,
+        0,
+      ];
+      const supportRotated = cancelMeters > 1_000
+        ? rotateScaleCanonical(
+            supportLocal,
+            rotationEulerRadiansXYZ,
+            scaleXYZ,
+          )
+        : rotated;
+      const plan = withBoundOrientedPlatformAtStart(fixture, {
+        entityId: `oriented-${_label}`,
+        heightMeters: 1,
+        sizeMetersXYZ: supportSizeMetersXYZ,
+        rotationEulerRadiansXYZ,
+        scaleXYZ,
+        translationMetersXYZ: [
+          spawn[0] - supportRotated[0],
+          1 - supportRotated[1],
+          spawn[2] - supportRotated[2],
+        ],
+      });
+      const cancellationTransform = cancelMeters > 1_000
+        ? {
+            positionMetersXYZ: [
+              spawn[0] - rotated[0],
+              1 - rotated[1],
+              spawn[2] - rotated[2],
+            ] as const,
+            rotationEulerRadiansXYZ,
+            scaleXYZ,
+          }
+        : undefined;
+      const runtime = await createRuntime(plan);
+      try {
+        const port = createBabylonTraversalRuntimePortV1({
+          runtime,
+          traversalLockReceipt: fixture.traversalLockReceipt,
+        });
+        const supportSpy = spyPlayerCheckSupport(runtime);
+        const evidence = port.resetToStartAnchor({
+          startAnchorEntityId: "spawn-main",
+        });
+        const bound = plan.traversal.surfaces.find(
+          (surface) => surface.kind === "static-collider",
+        )!;
+        expect(supportSpy).toHaveBeenCalledTimes(1);
+        expect(evidence.characterSupport.surfaceResolution).toMatchObject({
+          mode: "resolved",
+          traversalSurfaceId: bound.traversalSurfaceId,
+        });
+
+        const collider = plan.staticColliders[plan.staticColliders.length - 1]!;
+        const meshTransform = cancellationTransform ?? collider.transform;
+        const meshShape = cancellationTransform === undefined
+          ? collider.shape
+          : { kind: "box" as const, sizeMetersXYZ };
+        const canonical = emitTransformedStaticColliderTriangleMeshV1(
+          meshShape,
+          meshTransform,
+        );
+        const linear = linearRowsCanonical(
+          meshTransform.rotationEulerRadiansXYZ,
+          meshTransform.scaleXYZ,
+        );
+        const localMesh = cancellationTransform === undefined
+          ? (() => {
+              const internal = runtime[BABYLON_TRAVERSAL_RUNTIME_INTERNAL]();
+              const collisionMesh = internal.readStaticCollisionMeshes().find(
+                (entry) => entry.collider.entityId === collider.entityId,
+              )!;
+              collisionMesh.mesh.computeWorldMatrix(true);
+              return {
+                worldMatrix: collisionMesh.mesh.getWorldMatrix(),
+                local: collisionMesh.mesh.getVerticesData(VertexBuffer.PositionKind)!,
+              };
+            })()
+          : {
+              worldMatrix: undefined,
+              local: emitStaticColliderTriangleMeshV1(meshShape).localPositionsMetersXYZ,
+            };
+        let maxWrongDelta = 0;
+        const local = localMesh.local;
+        for (let offset = 0; offset < local.length; offset += 3) {
+          const localVertex = [
+            local[offset]!,
+            local[offset + 1]!,
+            local[offset + 2]!,
+          ] as const;
+          const magnitudes = operationMagnitudeMeters(
+            meshTransform.positionMetersXYZ,
+            linear,
+            localVertex,
+          );
+          if (localMesh.worldMatrix !== undefined) {
+            const world = Vector3.TransformCoordinates(
+              new Vector3(localVertex[0], localVertex[1], localVertex[2]),
+              localMesh.worldMatrix,
+            );
+            expect(Math.abs(world.x - canonical.worldPositionsMetersXYZ[offset]!))
+              .toBeLessThanOrEqual(privateFloat32ToleranceMeters(magnitudes[0]));
+            expect(Math.abs(world.y - canonical.worldPositionsMetersXYZ[offset + 1]!))
+              .toBeLessThanOrEqual(privateFloat32ToleranceMeters(magnitudes[1]));
+            expect(Math.abs(world.z - canonical.worldPositionsMetersXYZ[offset + 2]!))
+              .toBeLessThanOrEqual(privateFloat32ToleranceMeters(magnitudes[2]));
+          }
+          const wrong = rotateScaleWrongEulerXyz(
+            localVertex,
+            meshTransform.rotationEulerRadiansXYZ,
+            meshTransform.scaleXYZ,
+          );
+          const wrongWorld = [
+            wrong[0] + meshTransform.positionMetersXYZ[0],
+            wrong[1] + meshTransform.positionMetersXYZ[1],
+            wrong[2] + meshTransform.positionMetersXYZ[2],
+          ] as const;
+          maxWrongDelta = Math.max(
+            maxWrongDelta,
+            Math.abs(wrongWorld[0] - canonical.worldPositionsMetersXYZ[offset]!),
+            Math.abs(wrongWorld[1] - canonical.worldPositionsMetersXYZ[offset + 1]!),
+            Math.abs(wrongWorld[2] - canonical.worldPositionsMetersXYZ[offset + 2]!),
+          );
+        }
+        expect(maxWrongDelta).toBeGreaterThan(
+          privateFloat32ToleranceMeters(1),
+        );
+      } finally {
+        await runtime.dispose();
+      }
+    },
+    30_000,
+  );
 
   it("fails closed after Runtime disposal", async () => {
     const fixture = compileFixture();

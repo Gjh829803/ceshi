@@ -133,6 +133,76 @@ function compileFixture(world = routeWorld()): {
   };
 }
 
+
+function withBoundStaticBoxAtStart(
+  fixture: ReturnType<typeof compileFixture>,
+  heightMeters: number,
+): ExecutionPlanV5 {
+  const plan = structuredClone(fixture.executionPlan);
+  const placement = plan.layout.placementsByEntityId["spawn-main"]!;
+  const supportCollider = {
+    entityId: `support-box-${heightMeters}`,
+    logicalSubshapeId: "primary",
+    colliderSubshapeId: `collider:support-box-${heightMeters}:primary`,
+    colliderHash: `sha256:${"c".repeat(64)}` as const,
+    transform: {
+      positionMetersXYZ: [
+        placement.transform.positionMetersXYZ[0],
+        heightMeters / 2,
+        placement.transform.positionMetersXYZ[2],
+      ] as const,
+      rotationEulerRadiansXYZ: [0, 0.37, 0] as const,
+      scaleXYZ: [1.5, 1, 0.5] as const,
+    },
+    shape: {
+      kind: "box" as const,
+      sizeMetersXYZ: [2, heightMeters, 2] as const,
+    },
+  };
+  const boundSurface = {
+    kind: "static-collider" as const,
+    traversalSurfaceId: `traversal-surface:${supportCollider.entityId}:primary`,
+    surfaceEntityId: supportCollider.entityId,
+    colliderSubshapeId: supportCollider.colliderSubshapeId,
+    resourceRef: `package://traversal-surface/${supportCollider.entityId}.primary@1`,
+    resolvedVersion: "1",
+    resourceHash: `sha256:${"a".repeat(64)}` as const,
+    logicalSurfaceId: "primary",
+    logicalSubshapeId: supportCollider.logicalSubshapeId,
+    colliderHash: supportCollider.colliderHash,
+    traversalSurfaceProfileRef:
+      "worldkit://traversal-surface-profile/ground.static@1",
+    traversalSurfaceProfileResolvedVersion: "1",
+    traversalSurfaceProfileHash: `sha256:${"b".repeat(64)}` as const,
+  };
+  return {
+    ...plan,
+    layout: {
+      ...plan.layout,
+      layoutAssertions: [],
+      placementsByEntityId: {
+        ...plan.layout.placementsByEntityId,
+        "spawn-main": {
+          ...placement,
+          transform: {
+            ...placement.transform,
+            positionMetersXYZ: [
+              placement.transform.positionMetersXYZ[0],
+              heightMeters,
+              placement.transform.positionMetersXYZ[2],
+            ],
+          },
+        },
+      },
+    },
+    staticColliders: [...plan.staticColliders, supportCollider],
+    traversal: {
+      ...plan.traversal,
+      surfaces: [...plan.traversal.surfaces, boundSurface],
+    },
+  };
+}
+
 function withSteepRampAtStart(
   fixture: ReturnType<typeof compileFixture>,
 ): ExecutionPlanV5 {
@@ -435,6 +505,39 @@ describe("Traversal runtime support conformance", () => {
           locomotionMode: "airborne",
         });
       }
+    } finally {
+      await runtime.dispose();
+    }
+  }, 30_000);
+
+
+  it("resolves a bound static platform from one checkSupport query", async () => {
+    const fixture = compileFixture();
+    const plan = withBoundStaticBoxAtStart(fixture, 1);
+    const runtime = await createRuntime(plan);
+    try {
+      const port = createBabylonTraversalRuntimePortV1({
+        runtime,
+        traversalLockReceipt: fixture.traversalLockReceipt,
+      });
+      const supportSpy = vi.spyOn(
+        controllerFor(runtime, "player").physicsController,
+        "checkSupport",
+      );
+      const evidence = port.resetToStartAnchor({
+        startAnchorEntityId: "spawn-main",
+      });
+      const bound = plan.traversal.surfaces.find(
+        (surface) => surface.kind === "static-collider",
+      )!;
+      expect(supportSpy).toHaveBeenCalledTimes(1);
+      expect(evidence.characterSupport.supportState).toBe("supported");
+      expect(evidence.characterSupport.surfaceResolution).toMatchObject({
+        mode: "resolved",
+        traversalSurfaceId: bound.traversalSurfaceId,
+        surfaceEntityId: bound.surfaceEntityId,
+        colliderSubshapeId: bound.colliderSubshapeId,
+      });
     } finally {
       await runtime.dispose();
     }
