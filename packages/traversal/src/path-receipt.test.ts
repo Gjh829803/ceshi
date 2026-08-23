@@ -6,10 +6,15 @@ import {
   hashRoutePathReceiptV1,
   type RoutePathReceiptV1,
 } from "./path-receipt.js";
+import {
+  BUILT_IN_HEIGHTFIELD_R1_TRAVERSAL_GRAPH_BUILDER_PROFILE_REF,
+  resolveTraversalGraphBuilderProfileV2,
+} from "./profile-registry.js";
 
 const HASH_A = `sha256:${"a".repeat(64)}` as const;
-const PROFILE_HASH =
-  "sha256:9720639dac7de3da1d140c7afd1ea7df4258cef202468e39fa222158caaad231" as const;
+const GRAPH_BUILDER_PROFILE = resolveTraversalGraphBuilderProfileV2(
+  BUILT_IN_HEIGHTFIELD_R1_TRAVERSAL_GRAPH_BUILDER_PROFILE_REF,
+);
 
 function validReceipt(
   overrides: Partial<RoutePathReceiptV1> = {},
@@ -37,10 +42,9 @@ function validReceipt(
       resolvedVersion: "1",
       resourceHash: HASH_A,
     },
-    graphBuilderProfileRef:
-      "worldkit://traversal-graph-builder-profile/outdoor-humanoid.heightfield-r1@1",
-    graphBuilderResolvedVersion: "1",
-    graphBuilderProfileHash: PROFILE_HASH,
+    graphBuilderProfileRef: GRAPH_BUILDER_PROFILE.resourceRef,
+    graphBuilderResolvedVersion: GRAPH_BUILDER_PROFILE.resolvedVersion,
+    graphBuilderProfileHash: GRAPH_BUILDER_PROFILE.contentHash,
     orderedTraversalNodeIds: ["node-a", "node-b"],
     orderedTraversalEdgeIds: ["edge-a-b"],
     orderedPathPositionsMetersXYZ: [[0, 0, 0], [1, 0, 0]],

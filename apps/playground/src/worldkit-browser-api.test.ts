@@ -21,6 +21,10 @@ import {
   builtInSubjectResourceRegistry,
   type SubjectResourceRegistryV3,
 } from "@whitebox-world/subject-registry";
+import {
+  BUILT_IN_HEIGHTFIELD_R1_TRAVERSAL_GRAPH_BUILDER_PROFILE_REF,
+  resolveTraversalGraphBuilderProfileV2,
+} from "@whitebox-world/traversal";
 
 import {
   installDeferredWorldkitBrowserApi,
@@ -39,6 +43,9 @@ const ROUTE_SELECTOR = {
   constraintId: "player-to-goal",
   routeId: "main-route",
 } as const satisfies RouteEvidenceSelectorV1;
+const GRAPH_BUILDER_PROFILE = resolveTraversalGraphBuilderProfileV2(
+  BUILT_IN_HEIGHTFIELD_R1_TRAVERSAL_GRAPH_BUILDER_PROFILE_REF,
+);
 
 function routeEvidencePublicationFixture(): WorldkitBrowserRouteEvidencePublicationV1 {
   const traversalSurfaceIdentity = {
@@ -49,10 +56,9 @@ function routeEvidencePublicationFixture(): WorldkitBrowserRouteEvidencePublicat
     resolvedVersion: "1",
     resourceHash: HASH_A,
   } as const;
-  const graphBuilderProfileRef =
-    "worldkit://traversal-graph-builder-profile/outdoor-humanoid.heightfield-r1@1";
-  const graphBuilderProfileHash =
-    "sha256:9720639dac7de3da1d140c7afd1ea7df4258cef202468e39fa222158caaad231" as const;
+  const graphBuilderProfileRef = GRAPH_BUILDER_PROFILE.resourceRef;
+  const graphBuilderResolvedVersion = GRAPH_BUILDER_PROFILE.resolvedVersion;
+  const graphBuilderProfileHash = GRAPH_BUILDER_PROFILE.contentHash;
   const nodeBase = {
     traversalSurfaceId: traversalSurfaceIdentity.traversalSurfaceId,
     surfaceEntityId: traversalSurfaceIdentity.surfaceEntityId,
@@ -73,7 +79,7 @@ function routeEvidencePublicationFixture(): WorldkitBrowserRouteEvidencePublicat
     routeBuildInputHash: HASH_B,
     resolvedTraversalLockHash: HASH_C,
     graphBuilderProfileRef,
-    graphBuilderResolvedVersion: "1",
+    graphBuilderResolvedVersion,
     graphBuilderProfileHash,
     routeId: ROUTE_SELECTOR.routeId,
     startAnchorEntityId: "spawn",
@@ -124,7 +130,7 @@ function routeEvidencePublicationFixture(): WorldkitBrowserRouteEvidencePublicat
     resolvedTraversalLockHash: traversalGraph.resolvedTraversalLockHash,
     traversalSurfaceIdentity,
     graphBuilderProfileRef,
-    graphBuilderResolvedVersion: "1",
+    graphBuilderResolvedVersion,
     graphBuilderProfileHash,
     orderedTraversalNodeIds: ["node-start", "node-goal"],
     orderedTraversalEdgeIds: ["edge-start-goal"],

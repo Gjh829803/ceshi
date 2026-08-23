@@ -24,13 +24,18 @@ import {
   hashRoutePathReceiptV1,
   type RoutePathReceiptV1,
 } from "./path-receipt.js";
+import {
+  BUILT_IN_HEIGHTFIELD_R1_TRAVERSAL_GRAPH_BUILDER_PROFILE_REF,
+  resolveTraversalGraphBuilderProfileV2,
+} from "./profile-registry.js";
 
 const HASH_A = `sha256:${"a".repeat(64)}` as const;
 const HASH_B = `sha256:${"b".repeat(64)}` as const;
 const EMPTY_COLLIDER_HASH =
   "sha256:4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945" as const;
-const PROFILE_HASH =
-  "sha256:9720639dac7de3da1d140c7afd1ea7df4258cef202468e39fa222158caaad231" as const;
+const GRAPH_BUILDER_PROFILE = resolveTraversalGraphBuilderProfileV2(
+  BUILT_IN_HEIGHTFIELD_R1_TRAVERSAL_GRAPH_BUILDER_PROFILE_REF,
+);
 
 function deepFreeze<T>(value: T): T {
   if (value === null || typeof value !== "object" || Object.isFrozen(value)) {
@@ -96,10 +101,9 @@ function buildInputReceipt(): HeightfieldRouteBuildInputReceiptV1 {
       maxSlopeDegrees: 42,
       maxStepHeightMeters: 0.3,
       resolvedTraversalLockHash: HASH_B,
-      graphBuilderProfileRef:
-        "worldkit://traversal-graph-builder-profile/outdoor-humanoid.heightfield-r1@1",
-      graphBuilderResolvedVersion: "1",
-      graphBuilderProfileHash: PROFILE_HASH,
+      graphBuilderProfileRef: GRAPH_BUILDER_PROFILE.resourceRef,
+      graphBuilderResolvedVersion: GRAPH_BUILDER_PROFILE.resolvedVersion,
+      graphBuilderProfileHash: GRAPH_BUILDER_PROFILE.contentHash,
       clearanceMarginMeters: 0.05,
       voxelCellSizeMeters: 0.15,
       voxelCellHeightMeters: 0.1,
@@ -113,6 +117,8 @@ function buildInputReceipt(): HeightfieldRouteBuildInputReceiptV1 {
       maximumEdges: 200_000,
       maximumTiles: 1_024,
       maximumSearchSteps: 100_000,
+      maximumTraversalSurfaceCount:
+        GRAPH_BUILDER_PROFILE.profile.maximumTraversalSurfaceCount,
     },
     terrainSource: {
       kind: "bounded",

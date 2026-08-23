@@ -88,6 +88,9 @@ const HASH_B = `sha256:${"b".repeat(64)}` as const;
 const HASH_C = `sha256:${"c".repeat(64)}` as const;
 const DRIVER_HASH =
   "sha256:a3312d306ad499dabb29a50c868a98d8bb3b65592e050cd277ae3571d5347405" as const;
+const GRAPH_BUILDER_PROFILE = traversal.resolveTraversalGraphBuilderProfileV2(
+  traversal.BUILT_IN_HEIGHTFIELD_R1_TRAVERSAL_GRAPH_BUILDER_PROFILE_REF,
+);
 
 const SURFACE = {
   traversalSurfaceId: "surface-main",
@@ -146,11 +149,9 @@ function pathReceipt(): RoutePathReceiptV1 {
     routeBuildInputHash: HASH_B,
     resolvedTraversalLockHash: HASH_C,
     traversalSurfaceIdentity: SURFACE,
-    graphBuilderProfileRef:
-      "worldkit://traversal-graph-builder-profile/outdoor-humanoid.heightfield-r1@1",
-    graphBuilderResolvedVersion: "1",
-    graphBuilderProfileHash:
-      "sha256:9720639dac7de3da1d140c7afd1ea7df4258cef202468e39fa222158caaad231",
+    graphBuilderProfileRef: GRAPH_BUILDER_PROFILE.resourceRef,
+    graphBuilderResolvedVersion: GRAPH_BUILDER_PROFILE.resolvedVersion,
+    graphBuilderProfileHash: GRAPH_BUILDER_PROFILE.contentHash,
     orderedTraversalNodeIds: ["node-a", "node-b"],
     orderedTraversalEdgeIds: ["edge-a-b"],
     orderedPathPositionsMetersXYZ: [[0, 0, 0], [1, 0, 0]],

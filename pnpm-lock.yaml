@@ -150,6 +150,9 @@ importers:
       '@types/three':
         specifier: ^0.180.0
         version: 0.180.0
+      '@whitebox-world/traversal':
+        specifier: workspace:*
+        version: link:../../packages/traversal
       typescript:
         specifier: ^5.9.2
         version: 5.9.3
