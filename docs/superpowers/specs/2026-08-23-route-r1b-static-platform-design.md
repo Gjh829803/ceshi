@@ -248,6 +248,19 @@ interface StaticColliderSourceV1 {
   readonly triangleSoup: CanonicalTriangleSoupV1;
 }
 
+type RouteTerrainSourceV2 =
+  | Readonly<{
+      kind: "empty";
+      terrainEntityId: string;
+    }>
+  | Readonly<{
+      kind: "bounded";
+      terrainEntityId: string;
+      triangleSoup: CanonicalTriangleSoupV1;
+      minimumMetersXZ: readonly [number, number];
+      maximumMetersXZ: readonly [number, number];
+    }>;
+
 interface RouteBuildInputV2 {
   readonly kind: "route-build-input";
   readonly schemaVersion: 2;
@@ -260,7 +273,7 @@ interface RouteBuildInputV2 {
   readonly hardRibbon: RouteHardRibbonV1;
   readonly traversalSurfaces: readonly TraversalSurfaceIdentityV1[];
   readonly capabilityEnvelope: TraversalCapabilityEnvelopeV1;
-  readonly terrainSource: HeightfieldRouteTerrainSourceV1;
+  readonly terrainSource: RouteTerrainSourceV2;
   readonly staticColliders: readonly StaticColliderSourceV1[];
   readonly terrainArtifactHash: `sha256:${string}`;
   readonly colliderArtifactHash: `sha256:${string}`;
@@ -278,13 +291,72 @@ interface RouteBuildInputV2 {
 3. 每个 Static Surface 精确引用 `staticColliders` 中一行；
 4. 未被 Surface 引用的 Static Collider 仍是纯 blocker；
 5. 被 Surface 引用的 Collider 同时提供支撑几何和侧面/底面阻挡，不能复制两份 soup；
-6. `terrainArtifactHash` 精确等于 `terrainSource` 的 canonical terrain child hash；
+6. `terrainSource` 不内嵌自己的 Hash，`terrainArtifactHash` 精确等于
+   `hashRouteTerrainArtifactV2(terrainSource)`；
 7. `colliderArtifactHash` 覆盖按 `colliderSubshapeId` 排序的全部 `staticColliders`；
 8. `geometryArtifactHash = sha256CanonicalJson({ terrainArtifactHash, colliderArtifactHash })`；
 9. `surfaceArtifactHash` 覆盖排序后的 Surface identity/binding；
 10. Build Input Receipt 重新计算所有 child/root hash、Graph Builder budget 和 Capability Envelope；
 11. `hard-ribbon` 继续是所有 Surface 的 XZ 硬边界；
 12. Water/Area exclusion 只修改 Graph candidate source，不删除 Runtime Collider。
+
+Task 2 必须从 `@whitebox-world/traversal` package root 导出以下四个唯一 Hash
+owner，Compiler/Graph/Validation 不得重新实现 preimage：
+
+```ts
+terrainArtifactHash = hashRouteTerrainArtifactV2(terrainSource);
+colliderArtifactHash = hashRouteColliderArtifactV2(staticColliders);
+geometryArtifactHash = hashRouteGeometryArtifactV2({
+  terrainArtifactHash,
+  colliderArtifactHash,
+});
+surfaceArtifactHash = hashRouteSurfaceArtifactV2(traversalSurfaces);
+```
+
+其中精确 preimage 为：
+
+- `hashRouteTerrainArtifactV2`：`empty` 为 `{ kind, terrainEntityId }`；`bounded` 为
+  `{ kind, terrainEntityId, triangleSoup, minimumMetersXZ, maximumMetersXZ }`；
+- `hashRouteColliderArtifactV2`：已按 `colliderSubshapeId` 严格排序的完整
+  `StaticColliderSourceV1[]`；
+- `hashRouteGeometryArtifactV2`：
+  `{ terrainArtifactHash, colliderArtifactHash }`；
+- `hashRouteSurfaceArtifactV2`：已按 `traversalSurfaceId` 严格排序的完整
+  `TraversalSurfaceIdentityV1[]`。
+
+`blockedTraversalAreaExclusions` 与 `blockedWaterExclusions` 不进入
+`terrainArtifactHash`：它们的几何效果已体现在 post-exclusion `triangleSoup`，而完整
+声明/provenance 由 `routeBuildInputHash` 绑定。因此“声明变化但最终几何未变”必须
+改变 Input Hash，但不得伪造 Geometry Hash 漂移。
+
+`RouteBuildInputReceiptV2` 保持 `{ input, routeBuildInputHash, budgetEvidence }` 三个
+顶层职责，但不复用 Heightfield-only 的判空/边界语义：
+
+```ts
+type RouteBuildBudgetEvidenceV2 =
+  | Readonly<{ kind: "not-required-empty-geometry" }>
+  | Readonly<{
+      kind: "route-geometry-tile-estimate";
+      tilesX: number;
+      tilesZ: number;
+      estimatedTiles: number;
+      maximumTiles: number;
+      minimumMetersXZ: readonly [number, number];
+      maximumMetersXZ: readonly [number, number];
+    }>;
+```
+
+Tile bounds 必须从非空 Terrain soup 与全部 `staticColliders` soup 的 world-space XZ
+union 重算；只有整个 Canonical geometry inventory 没有 Triangle 时才允许
+`not-required-empty-geometry`。因此 `terrainSource.kind === "empty"` 不能单独跳过
+Graph budget，因为 Static Surface/Collider 仍可能需要真实 Provider build。
+Surface-count budget 继续单独从冻结 Envelope 重算，不复制 maximum 到 Receipt
+bytes。`createRouteBuildInputReceiptV2(input: RouteBuildInputV2)` 是 Receipt、
+`routeBuildInputHash` 与 combined-geometry budget evidence 的唯一生产者。它必须先
+canonicalize 并校验 Input，使用上述四个唯一 helper 重新计算并核对 Input 已声明的
+child/root hash，再返回 deeply frozen 的
+`{ input, routeBuildInputHash, budgetEvidence }`。Recast 使用相同四个 public helper
+组装完整 V2 Input 后只调用该 factory，不得另算 Receipt Hash 或 budget evidence。
 
 旧 `blockingColliders` 改为 `staticColliders`，因为显式平台 Collider 同时可能是 Surface 与
 blocker。`StaticColliderSourceV1` 沿用现有 `StaticBlockingColliderV1` 的完整闭集字段，不增加
@@ -308,14 +380,42 @@ Node 的三个稳定 ID 及其 Surface Resource identity 精确一致；它是 G
 不是第二个作者权威。`RouteOverlayV2` 投影相同的有序数组，不再声称整条 Overlay 属于一个
 Surface。Probe Request 绑定 V2 Path Receipt Hash，不再复制 path-global Surface。
 
+Graph V2 不把 Ref/Version/Hash 重复嵌入每个 Node。Node 保留 R0 已冻结的
+`traversalSurfaceId` / `surfaceEntityId` / `colliderSubshapeId` 三个稳定 ID，
+Graph 只增加一份内容寻址资源 inventory：
+
+```ts
+interface TraversalGraphV2 {
+  readonly kind: "traversal-graph";
+  readonly schemaVersion: 2;
+  // existing world/lock/profile/route and artifact fields
+  readonly traversalSurfaceIdentitiesById:
+    Readonly<Record<string, TraversalSurfaceIdentityV1>>;
+  readonly traversalNodesById:
+    Readonly<Record<string, TraversalNodeV1>>;
+  readonly traversalEdgesById:
+    Readonly<Record<string, TraversalEdgeV1>>;
+}
+```
+
+Node 的 serialized shape 在 V2 保持 `TraversalNodeV1`，不创建只为改名的 alias；
+Graph V2 负责新增 Resource inventory。Inventory 的 key 必须等于
+value.`traversalSurfaceId`，并精确投影全部
+`input.traversalSurfaces`；每个 Node 的三个稳定 ID 必须精确匹配其引用的 inventory
+行。Path/Overlay 的第 `i` 个完整 identity 必须等于对应 Node 引用的该行。
+这样 Resource identity 在 Graph 中只有一个可哈希权威，同时避免大量 Node 重复
+序列化相同 Ref/Version/Hash。
+
 `RouteConnectivityResultV2` 使用 provider-neutral `kind: "route-connectivity-result"` 与
 `schemaVersion: 2`，上下文校验改为：
 
 1. `TraversalGraphV2` 同时携带 `terrainArtifactHash`、`colliderArtifactHash`、
    `geometryArtifactHash` 与 `surfaceArtifactHash`，逐一等于 Build Input；
 2. Graph validator 重算 child/root 关系，不能只比较传入字符串；
-3. 每个 Graph Node 的 Surface identity 必须精确属于 `input.traversalSurfaces`；
-4. 每个 Path Node 的 Surface identity 必须精确等于 Graph 同 ID Node，且仍属于 Input；
+3. Graph inventory 必须精确投影 `input.traversalSurfaces`，每个 Node 的三个
+   Surface ID 必须精确匹配 inventory 中同 ID 行；
+4. 每个 Path Node 的完整 Surface identity 必须精确等于 Graph inventory 中该
+   Node 引用的行，且仍属于 Input；
 5. 不再把所有 Graph/Path Node 与一个 Build Input Surface 做等值比较；
 6. Failure 若发生在某个 Surface，使用明确的 Surface identity；若构建尚未确定唯一 Surface，
    不伪造 path-global Surface 字段。
@@ -323,6 +423,53 @@ Surface。Probe Request 绑定 V2 Path Receipt Hash，不再复制 path-global S
 `ROUTE_SURFACE_CORRELATION_MISSING` 与 `ROUTE_SURFACE_CORRELATION_AMBIGUOUS` 必须进入
 V2 Connectivity Failure/Validation Diagnostic 的 closed enum、canonical validator、CLI 和
 Browser 投影；未知诊断仍 fail closed。
+
+V2 closed enum 同时必须加入 `ROUTE_SURFACE_PROFILE_MISSING`。该错误表示
+Route 必需的 Collider 没有兼容 Binding，不表示已存在但解析失败的 Profile Ref；
+后者必须更早在 Authoring/Compiler admission fail closed。
+
+`RouteConnectivityFailureV2` 删除 V1 common 中的单数
+`traversalSurfaceId/surfaceEntityId/colliderSubshapeId`，改为始终存在的闭集数组：
+
+```ts
+readonly relatedTraversalSurfaceIdentities:
+  readonly TraversalSurfaceIdentityV1[];
+```
+
+该数组按 `traversalSurfaceId` 严格排序且 ID 唯一；上下文校验必须按六个
+identity 字段精确匹配 Build Input。同一 `traversalSurfaceId` 的不同资源版本
+不得同时出现；版本升级是替换该行并改变 Surface/Input Hash，不是多版本并存。
+
+| reason kind | code | `status / graphStatus` | Surface cardinality | 必需附加证据 |
+| --- | --- | --- | ---: | --- |
+| `surface-profile-missing` | `ROUTE_SURFACE_PROFILE_MISSING` | `incomplete / unavailable` | 0 | 非空且排序的 `relevantColliderSubshapeIds`、`failurePositionMetersXYZ` |
+| `surface-correlation-missing` | `ROUTE_SURFACE_CORRELATION_MISSING` | `incomplete / unavailable` | 0..1 | `failurePositionMetersXYZ` |
+| `surface-correlation-ambiguous` | `ROUTE_SURFACE_CORRELATION_AMBIGUOUS` | `incomplete / unavailable` | 至少 2 | `failurePositionMetersXYZ` |
+| `traversal-surface-count-budget-exceeded` | `ROUTE_GRAPH_BUDGET_EXCEEDED` | `incomplete / unavailable` | 0 | `maximumAllowedCount`、`minimumRequiredCount` |
+
+`surface-correlation-missing` 在 Provider range 已唯一对应 Canonical Surface、但 Node
+barycentric/height correlation 失败时保留一个 identity；连唯一 range 都无法确定时为
+0。`ambiguous` 必须保留所有非等价/内部重叠候选。其他旧 reason 也使用该数组：
+只有当拒绝证明确定了参与 Surface 时才填充，pre-Graph capacity/start/destination 失败
+不得猜测 Surface。
+
+`RouteOverlayV2` 将 V1 `blockingColliderIdentities` clean break 为
+`staticColliderIdentities`，它精确投影全部 `input.staticColliders`，包含
+Surface-bound 与 blocker-only Collider。候选平台的顶面可通行，但侧面/底面仍是阻挡，
+因此不得沿用“从 blockers 中排除 path-global Surface Collider”的 V1 规则。
+`@whitebox-world/traversal` 是唯一 Overlay 上下文校验 owner：
+
+```ts
+assertRouteOverlayContextV2({
+  overlay,
+  routePathReceipt,
+  routePathReceiptHash,
+  buildInputReceipt,
+});
+```
+
+Runtime Contracts/Browser 只调用该入口，不再重建 Path/Overlay/Collider inventory
+绑定规则。
 
 Browser 的 route evidence 返回形状同步版本化为
 `WorldkitBrowserRouteEvidencePublicationV2` / `RouteEvidenceProjectionV2`，Path 与 Overlay 都只

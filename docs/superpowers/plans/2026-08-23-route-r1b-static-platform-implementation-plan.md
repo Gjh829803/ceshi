@@ -190,16 +190,22 @@ Expected: all commands pass; R1 Heightfield identity remains stable.
 - Modify: `packages/traversal/src/connectivity-result.ts`
 - Modify: `packages/traversal/src/connectivity-result.test.ts`
 - Modify: `packages/traversal/src/index.ts`
+- Verify: `packages/traversal/src/build-budget.test.ts`
 
 **Interfaces:**
-- Produces `StaticColliderSourceV1`, `RouteBuildInputV2`, `RouteBuildInputReceiptV2`, `TraversalGraphV2`, `RoutePathReceiptV2`, `RouteOverlayV2`, and `RouteConnectivityResultV2`.
+- Produces `RouteTerrainSourceV2`, `StaticColliderSourceV1`, `RouteBuildInputV2`, `RouteBuildInputReceiptV2`, `TraversalGraphV2`, `RoutePathReceiptV2`, `RouteOverlayV2`, and `RouteConnectivityResultV2`.
 - V2 deletes the R1 path-global `traversalSurfaceIdentity` from Path and Overlay.
-- Adds `ROUTE_SURFACE_CORRELATION_MISSING` and `ROUTE_SURFACE_CORRELATION_AMBIGUOUS` to the V2 closed failure union.
+- Adds `ROUTE_SURFACE_PROFILE_MISSING`, `ROUTE_SURFACE_CORRELATION_MISSING`, and `ROUTE_SURFACE_CORRELATION_AMBIGUOUS` to the V2 closed failure union.
+- Gives Graph V2 one `traversalSurfaceIdentitiesById` resource inventory while keeping the three stable Surface IDs on each Node; full Ref/Version/Hash identity is not repeated on every Node.
+- Renames Overlay V2 collider evidence to `staticColliderIdentities` and makes Traversal the sole Overlay context-validator owner.
+- Exports the four exact child/root hash helpers and one `createRouteBuildInputReceiptV2(input: RouteBuildInputV2)` producer from the package root.
 - Keeps the unchanged V1 declarations temporarily available only so untouched R1 consumers continue compiling; do not implement V1↔V2 aliases, converters, fallback reads, or mixed receipts. Task 9 removes V1 atomically after every consumer migrates.
 
 - [ ] **Step 1: Write RED Build Input V2 tests**
 
-Use one Heightfield Surface, one bound platform Collider, and one unbound wall Collider. Assert:
+Before adding V2 production declarations, pin one literal canonical hash for every V1 serialized root touched by this task: Build Input, Graph, Path, Overlay, Connectivity Failure, and Connectivity Result. Assert V1 rejects V2 roots/fields and V2 rejects V1 roots/fields; these staging regressions are deleted with V1 in Task 9 and are not a compatibility layer.
+
+Use one Heightfield Surface, one bound platform Collider, and one unbound wall Collider. `RouteTerrainSourceV2` contains no nested `terrainArtifactHash`. Assert:
 
 ```ts
 expect(input.traversalSurfaces.map((surface) => surface.traversalSurfaceId))
@@ -210,7 +216,11 @@ expect(input.geometryArtifactHash).toBe(sha256CanonicalJson({
 }));
 ```
 
-Reject reordered serialized arrays, duplicate Surface IDs, zero/multiple Terrain surfaces, missing Collider joins, stale child/root hashes, and extra fields.
+Call only the public `hashRouteTerrainArtifactV2`, `hashRouteColliderArtifactV2`, `hashRouteGeometryArtifactV2`, and `hashRouteSurfaceArtifactV2` helpers. Reject reordered serialized arrays, duplicate Surface IDs, zero/multiple Terrain surfaces, missing Collider joins, stale child/root hashes, and extra fields.
+
+Add two budget adversaries. First, `terrainSource.kind === "empty"` plus a non-empty Static Surface/Collider soup must produce `route-geometry-tile-estimate`, whose bounds are the exact world-space XZ union of all canonical soup vertices. Second, only an inventory with no Terrain or Static Collider triangles may produce `not-required-empty-geometry`. Changing only an exclusion declaration while preserving the already post-exclusion soup must change `routeBuildInputHash` but not `terrainArtifactHash`/`geometryArtifactHash`.
+
+Import these runtime entrypoints from the Traversal package root so RED is executable rather than type-erased: `assertRouteBuildInputV2`, `hashRouteBuildInputV2`, `assertRouteBuildInputReceiptV2`, the four child/root hash helpers, and `createRouteBuildInputReceiptV2`. The literal V1 hash fixtures and V1/V2 cross-rejection assertions must be written before any production declaration changes.
 
 - [ ] **Step 2: Verify Build Input RED**
 
@@ -218,13 +228,26 @@ Reject reordered serialized arrays, duplicate Surface IDs, zero/multiple Terrain
 pnpm vitest run packages/traversal/src/build-input.test.ts
 ```
 
-Expected: FAIL because only `HeightfieldRouteBuildInputV1` exists.
+Expected: FAIL because the executable V2 Build Input/hash/receipt entrypoints do not exist.
 
 - [ ] **Step 3: Implement strict V2 Build Input and receipt**
 
-Define the exact closed static source:
+Define the exact closed Terrain and static sources:
 
 ```ts
+export type RouteTerrainSourceV2 =
+  | Readonly<{
+      kind: "empty";
+      terrainEntityId: string;
+    }>
+  | Readonly<{
+      kind: "bounded";
+      terrainEntityId: string;
+      triangleSoup: CanonicalTriangleSoupV1;
+      minimumMetersXZ: readonly [number, number];
+      maximumMetersXZ: readonly [number, number];
+    }>;
+
 export interface StaticColliderSourceV1 {
   readonly entityId: string;
   readonly logicalSubshapeId: string;
@@ -234,7 +257,25 @@ export interface StaticColliderSourceV1 {
 }
 ```
 
-Add strict V2 declarations/exports beside the unchanged V1 implementation as feature-branch staging. Recompute every V2 child/root hash inside the canonical validator. Do not translate, alias, or auto-upgrade V1 bytes; V1 remains byte-stable until Task 9 deletes it.
+Freeze these exact preimages and public helper names:
+
+```text
+hashRouteTerrainArtifactV2(empty)
+  = sha256CanonicalJson({ kind, terrainEntityId })
+hashRouteTerrainArtifactV2(bounded)
+  = sha256CanonicalJson({ kind, terrainEntityId, triangleSoup,
+                          minimumMetersXZ, maximumMetersXZ })
+hashRouteColliderArtifactV2(staticColliders)
+  = sha256CanonicalJson(canonical sorted staticColliders)
+hashRouteGeometryArtifactV2({ terrainArtifactHash, colliderArtifactHash })
+  = sha256CanonicalJson({ terrainArtifactHash, colliderArtifactHash })
+hashRouteSurfaceArtifactV2(traversalSurfaces)
+  = sha256CanonicalJson(canonical sorted traversalSurfaces)
+```
+
+Exclusions remain full Build Input fields and enter only `routeBuildInputHash`; their geometry effect is already represented by post-exclusion Terrain soup. Define `RouteBuildBudgetEvidenceV2` as `not-required-empty-geometry | route-geometry-tile-estimate`, with the estimate bounds recomputed from the Terrain + all Static Collider soup XZ union. Surface-count admission is independently recomputed from the frozen Envelope and is not duplicated in Receipt bytes. `createRouteBuildInputReceiptV2(input: RouteBuildInputV2)` canonicalizes and validates the complete input, recomputes and verifies its four declared child/root hashes through the public helpers, computes `routeBuildInputHash` plus combined-geometry budget evidence, and returns the deeply frozen three-field receipt `{ input, routeBuildInputHash, budgetEvidence }`. Recast uses the same public helpers to assemble the complete input, then calls this producer rather than constructing Receipt Hash or budget evidence independently.
+
+Add strict V2 declarations/exports beside the unchanged V1 implementation as feature-branch staging. Recompute every V2 child/root hash inside the canonical validator. Do not translate, alias, auto-upgrade, or change the meaning of any V1 field; V1 remains byte-stable until Task 9 deletes it.
 
 - [ ] **Step 4: Write RED Graph/Path/Overlay/Connectivity V2 tests**
 
@@ -246,9 +287,26 @@ expect(path.orderedTraversalSurfaceIdentities).toHaveLength(
 );
 expect(path).not.toHaveProperty("traversalSurfaceIdentity");
 expect(overlay).not.toHaveProperty("traversalSurfaceIdentity");
+expect(overlay).toHaveProperty("staticColliderIdentities");
+expect(overlay).not.toHaveProperty("blockingColliderIdentities");
 ```
 
-Reject a Path identity that differs from its Graph Node, a Graph Node Surface absent from Build Input, and mismatched `terrainArtifactHash`, `colliderArtifactHash`, `geometryArtifactHash`, or `surfaceArtifactHash`.
+Graph V2 must carry the complete `traversalSurfaceIdentitiesById` projection of `input.traversalSurfaces`, keyed by `traversalSurfaceId`; Nodes retain flat `traversalSurfaceId`, `surfaceEntityId`, and `colliderSubshapeId`. Reject a map key/value mismatch, missing/extra inventory row, a Node triple that differs from its inventory row, a Path identity that differs from the corresponding inventory row, a Graph Node Surface absent from Build Input, and mismatched `terrainArtifactHash`, `colliderArtifactHash`, `geometryArtifactHash`, or `surfaceArtifactHash`.
+
+`RouteOverlayV2.staticColliderIdentities` must be the exact identity-only projection of all `input.staticColliders`, including Surface-bound and blocker-only rows. RED `assertRouteOverlayContextV2({ overlay, routePathReceipt, routePathReceiptHash, buildInputReceipt })` so Runtime Contracts/Browser cannot remain the context owner.
+
+Freeze `RouteConnectivityFailureV2.relatedTraversalSurfaceIdentities` as a required array, strictly sorted/unique by `traversalSurfaceId`, with every full row contextually equal to Build Input. Exercise these exact new variants:
+
+| reason | status / graphStatus | identity count |
+| --- | --- | ---: |
+| `surface-profile-missing` | `incomplete / unavailable` | 0 |
+| `surface-correlation-missing` | `incomplete / unavailable` | 0..1 |
+| `surface-correlation-ambiguous` | `incomplete / unavailable` | at least 2 |
+| `traversal-surface-count-budget-exceeded` | `incomplete / unavailable` | 0 |
+
+The Profile reason requires non-empty sorted `relevantColliderSubshapeIds`; unresolved Profile Refs remain Authoring/Compiler admission errors. Correlation Missing carries one identity only when a unique candidate range existed; Ambiguous carries every distinct candidate. Reject two rows with the same `traversalSurfaceId` even when version/hash differ, unknown codes, singular V1 Surface fields, and invalid status/cardinality pairs.
+
+Import executable RED entrypoints from the package root: `canonicalTraversalGraphV2`, `hashTraversalGraphV2`, `assertTraversalGraphForBuildInputV2`, `canonicalRoutePathReceiptV2`, `hashRoutePathReceiptV2`, `assertRoutePathReceiptForGraphV2`, `canonicalRouteOverlayV2`, `hashRouteOverlayV2`, `assertRouteOverlayContextV2`, `ROUTE_CONNECTIVITY_FAILURE_CODES_V2`, `canonicalRouteConnectivityFailureV2`, `hashRouteConnectivityFailureV2`, `canonicalRouteConnectivityResultV2`, and `assertRouteConnectivityResultForBuildInputV2`. Missing functions, rather than erased interfaces, are the required initial RED.
 
 - [ ] **Step 5: Verify V2 receipt RED**
 
@@ -256,22 +314,23 @@ Reject a Path identity that differs from its Graph Node, a Graph Node Surface ab
 pnpm vitest run packages/traversal/src/graph-contract.test.ts packages/traversal/src/path-receipt.test.ts packages/traversal/src/route-overlay.test.ts packages/traversal/src/connectivity-result.test.ts
 ```
 
-Expected: FAIL on missing V2 types and path-global Surface assertions.
+Expected: FAIL on missing executable V2 Graph/Path/Overlay/Connectivity entrypoints and path-global Surface assertions.
 
 - [ ] **Step 6: Implement V2 Graph and receipt contextual validation**
 
-`RouteConnectivityResultV2` must use `kind: "route-connectivity-result"`, `schemaVersion: 2`, validate every Graph Node against exactly one Build Input Surface, validate every ordered Path identity against the matching Graph Node, and never invent one Surface for a pre-correlation failure.
+`RouteConnectivityResultV2` must use `kind: "route-connectivity-result"`, `schemaVersion: 2`; validate Graph inventory exactly against Build Input; validate every Node triple against its inventory row; validate every ordered Path identity against the matching Node inventory row; and never invent one Surface for a pre-correlation failure. Connectivity Result does not contain an Overlay, so its context validator must not synthesize that dependency. Task 2 separately exports `assertRouteOverlayContextV2()` for direct Overlay checks and for the Task 8 Runtime Contracts/Browser consumer.
 
 - [ ] **Step 7: Run Task 2 gates and commit**
 
 ```bash
-pnpm vitest run packages/traversal/src/build-input.test.ts packages/traversal/src/graph-contract.test.ts packages/traversal/src/path-receipt.test.ts packages/traversal/src/route-overlay.test.ts packages/traversal/src/connectivity-result.test.ts
+pnpm vitest run packages/traversal/src/build-budget.test.ts packages/traversal/src/build-input.test.ts packages/traversal/src/graph-contract.test.ts packages/traversal/src/path-receipt.test.ts packages/traversal/src/route-overlay.test.ts packages/traversal/src/connectivity-result.test.ts
+pnpm verify:route-r1-heightfield
 pnpm typecheck
 git add packages/traversal
 git commit -m "feat: add multi-surface route contracts"
 ```
 
-Expected: all focused tests and typecheck pass.
+Expected: all focused tests, fixed V1-byte guards, the R1 Heightfield gate, and typecheck pass.
 
 ### Task 3: Add Traversal Surface Profile and Capability Budget
 
@@ -382,7 +441,7 @@ Spy on the shared emitter output only through value comparison: Graph source pos
 
 - [ ] **Step 5: Implement shared source emission and preflight**
 
-Build `StaticColliderSourceV1` from the Execution Collider and the shared emitter. Fail closed on same-band interior overlap, but retain boundary-only seams and distinct Y layers.
+Build `StaticColliderSourceV1` only in Traversal-Recast from the Execution Collider and the shared emitter: map `worldPositionsMetersXYZ` to `triangleSoup.positionsMetersXYZ` and copy triangle indices exactly. `@whitebox-world/traversal` owns only the provider-neutral soup contract and must not import Runtime Contracts; moving the emitter or Execution type into Traversal would create the wrong dependency direction. Fail closed on same-band interior overlap, but retain boundary-only seams and distinct Y layers.
 
 - [ ] **Step 6: Run Task 4 gates and commit**
 
@@ -478,7 +537,8 @@ Expected: real Provider acceptance and identity tests pass.
 
 **Interfaces:**
 - Maps `RouteBuildInputV2` to one ordered candidate-prefix/blocker-suffix Provider operation.
-- Projects each polygon's private source range back to one Canonical Surface and publishes `TraversalGraphV2`/`RoutePathReceiptV2`.
+- Uses Task 2's four public hash helpers to populate the complete V2 Input, then calls `createRouteBuildInputReceiptV2(input)`. It does not define another preimage, construct a Receipt Hash, or calculate combined-geometry budget evidence independently; the factory recomputes the four declared hashes as validation.
+- Projects each polygon's private source range back to one Canonical Surface, publishes the complete `TraversalGraphV2.traversalSurfaceIdentitiesById` inventory once, keeps only the three stable Surface IDs on each Node, and publishes `RoutePathReceiptV2` from that inventory.
 
 - [ ] **Step 1: Write RED successful multi-Surface Graph test**
 
@@ -494,7 +554,7 @@ Expected: FAIL because the R1 mapper puts every static Collider in the blocker s
 
 - [ ] **Step 3: Implement multi-source mapping and Node correlation**
 
-Sort candidate ranges by `traversalSurfaceId`, blockers by `colliderSubshapeId`, and verify private tag → source range → Surface/geometry hashes. Query only the tagged range with barycentric epsilon and the locked Node-Y height band. Never select highest/lowest/nearest Surface.
+Sort candidate ranges by `traversalSurfaceId`, blockers by `colliderSubshapeId`, and verify private tag → source range → Surface/geometry hashes. Build Graph inventory from the exact canonical `input.traversalSurfaces` rows; each emitted Node triple must match the referenced inventory row. Query only the tagged range with barycentric epsilon and the locked Node-Y height band. Never select highest/lowest/nearest Surface or repeat Resource Ref/Version/Hash on every Node.
 
 - [ ] **Step 4: Write RED failure and rejection-proof tests**
 
@@ -502,7 +562,7 @@ Cover 0.35m step, 1cm gap, narrow tread, low overhead, missing Profile, forged C
 
 - [ ] **Step 5: Implement multi-Surface edges and V2 failures**
 
-Publish only `walk | slope | step`. A seam requires canonical boundary evidence. Do not use visual bounds or raw Provider adjacency to bridge a gap.
+Publish only `walk | slope | step`. A seam requires canonical boundary evidence. Do not use visual bounds or raw Provider adjacency to bridge a gap. Populate `relatedTraversalSurfaceIdentities` only from canonical Build Input rows and obey Task 2 reason cardinalities: Profile Missing has zero identities plus collider evidence, Correlation Missing has zero or one, Correlation Ambiguous has at least two, and Surface-count budget has zero.
 
 - [ ] **Step 6: Run Task 6 gates and commit**
 
@@ -582,6 +642,7 @@ Expected: Runtime tests pass with exactly one support query per tick.
 - Produces `RouteRuntimeProbeRequestV2`, `RouteRuntimeProbeTickV2`, `RouteRuntimeProbeReceiptV2`, `WorldkitBrowserRouteEvidencePublicationV2`, `RouteEvidenceProjectionV2`, and `WorldkitBrowserApiV5`.
 - Adds `expectedTraversalSurfaceIds` only to Probe ticks.
 - Exports the Probe V2 contract from the `@whitebox-world/traversal` package root so Validation never imports a package-internal source path.
+- Consumes Task 2 `assertRouteOverlayContextV2()` and publishes `staticColliderIdentities`; Runtime Contracts/Browser must not recreate Path/Overlay/Build Input binding checks or expose the deleted V1 `blockingColliderIdentities` name.
 - Defines and tests V5 builders/contracts beside unchanged V4 declarations, but does not switch `window.__WORLDKIT__` or trusted-host consumers until Task 9's atomic cutover.
 
 - [ ] **Step 1: Write RED 3D station tests**
@@ -609,11 +670,11 @@ Bound each tick's search window with resolved `control-feel-profile.walkSpeedMet
 
 - [ ] **Step 4: Write RED Browser V5 tests**
 
-Assert V5 preserves V4 methods but route evidence publishes V2 Path/Overlay arrays, rejects old `traversalSurfaceIdentity`, deep-freezes results, and never exposes Provider fields.
+Assert V5 preserves V4 methods but route evidence publishes V2 Path/Overlay arrays plus `staticColliderIdentities`, rejects old `traversalSurfaceIdentity` and `blockingColliderIdentities`, deep-freezes results, and never exposes Provider fields. Tamper one Path identity, one Static Collider inventory row, and the Path Receipt Hash; all three must fail through the Traversal-owned context validator rather than Browser-local equality logic.
 
 - [ ] **Step 5: Implement route evidence V2 and Browser V5 preparation**
 
-Add strict V5 builders and V2 projection without alias fields, fallback reads, or V1↔V2 conversion. Keep the installed `window.__WORLDKIT__` V4 until Task 9 so the unmodified trusted host remains green; Task 9 switches the window, host, CLI, examples, generated/public exports, and tests atomically, then deletes V4/V1.
+Add strict V5 builders and V2 projection without alias fields, fallback reads, or V1↔V2 conversion. Import and call `assertRouteOverlayContextV2()` from the Traversal package root; delete Browser-owned V1-style Overlay equality checks from the V5 path. Keep the installed `window.__WORLDKIT__` V4 until Task 9 so the unmodified trusted host remains green; Task 9 switches the window, host, CLI, examples, generated/public exports, and tests atomically, then deletes V4/V1.
 
 - [ ] **Step 6: Run Task 8 gates and commit**
 
@@ -712,9 +773,9 @@ Expected: focused tests and typecheck pass.
 
 - [ ] **Step 1: Write RED gate inventory test**
 
-Require the success fixture plus all failure fixtures—including the distinct Graph-overlap and injected-complete/Runtime-ambiguous overlap cases—exact expected diagnostic codes, real Recast/Babylon flags, repeat/concurrent hashes, cadence hashes, cleanup checks, provider-leak scan results, and a zero-match legacy Route V1/Browser V4 public-symbol scan. The machine-readable result must include a `legacyConsumerCensus` with fixed search roots, the symbol-family pattern, historical exclusions, match count, and matched paths. It must discover consumers from repository contents rather than compare against a hand-maintained file allowlist. Parse `examples/traversal/route-r0-contract.json` separately and require its embedded Graph evidence to be V2 with valid child/root hashes; plain symbol grep is not sufficient evidence for JSON fixtures.
+Require the success fixture plus all failure fixtures—including the distinct Graph-overlap and injected-complete/Runtime-ambiguous overlap cases—exact expected diagnostic codes, real Recast/Babylon flags, repeat/concurrent hashes, cadence hashes, cleanup checks, provider-leak scan results, and a zero-match legacy Route V1/Browser V4 public-symbol/field scan. The machine-readable result must include a `legacyConsumerCensus` with fixed search roots, the symbol-family pattern, the deleted `blockingColliderIdentities` / Heightfield-only budget discriminators, historical exclusions, match count, and matched paths. It must discover consumers from repository contents rather than compare against a hand-maintained file allowlist. Parse `examples/traversal/route-r0-contract.json` separately and require its embedded Graph evidence to be V2 with valid child/root hashes; plain symbol grep is not sufficient evidence for JSON fixtures.
 
-Add an adversarial census test that writes one temporary source file under the scanned `scripts` root whose path is intentionally absent from this task's `Files` list. Build the file contents from split fragments in the test source, with one symbol per line for `RouteRuntimeProbeFailureV1`, `RouteRuntimeProbeMetricsV1`, `RouteRuntimeProbeValidationProfileIdentityV1`, `RouteRuntimeProbeErrorV1`, `ROUTE_RUNTIME_PROBE_ERROR_CODES_V1`, `RouteConnectivityOperationAbortedErrorV1`, and `queryRequiredRouteV1`. Run the real census, assert `matchCount === 7` and `matchedPaths` contains exactly that temporary repository-relative path, then remove the file in `finally`. This proves both satellite-family coverage and discovery of an unlisted live file without excluding the verifier or its test from `scripts`.
+Add an adversarial census test that writes one temporary source file under the scanned `scripts` root whose path is intentionally absent from this task's `Files` list. Build the file contents from split fragments in the test source, with one item per line for `RouteRuntimeProbeFailureV1`, `RouteRuntimeProbeMetricsV1`, `RouteRuntimeProbeValidationProfileIdentityV1`, `RouteRuntimeProbeErrorV1`, `ROUTE_RUNTIME_PROBE_ERROR_CODES_V1`, `RouteConnectivityOperationAbortedErrorV1`, `queryRequiredRouteV1`, `HeightfieldRouteTerrainSourceV1`, `blockingColliderIdentities`, `heightfield-tile-estimate`, and `not-required-empty-source`. Run the real census, assert `matchCount === 11` and `matchedPaths` contains exactly that temporary repository-relative path, then remove the file in `finally`. This proves satellite-family/field coverage and discovery of an unlisted live file without excluding the verifier or its test from `scripts`.
 
 - [ ] **Step 2: Verify gate RED**
 
@@ -732,7 +793,7 @@ Derive the 0.3m step threshold from the locked Profile. The success fixture uses
 
 Migrate every remaining consumer to V2/V5, switch the installed Browser API once, and delete V1/V4 declarations and exports rather than aliasing them. This includes the Traversal and Traversal-Recast implementations/barrels/tests, Validation route evaluators/publication/probe/tests, trusted host and CLI scripts/integrations, the R0 contract fixture/verifier, and the Canonical JSON quickstart. Run the real `worldkit verify route` path and prove CLI JSON, stored Evidence, Browser projection, and validation input use the same canonical V2 bytes/hashes.
 
-The census must use current-tree names, including `HeightfieldRouteBuildInputV1`, `createHeightfieldRouteBuildInputV1`, `HeightfieldRouteConnectivityResultV1`, `canonicalHeightfieldRouteConnectivityResultV1`, `evaluateRequiredHeightfieldRouteV1`, `TraversalGraphV1`, `RoutePathReceiptV1`, `RouteOverlayV1`, every live `RouteRuntimeProbe*V1` satellite (including Failure, Metrics, Validation Profile Identity, Validation Error, and Error Codes), `RouteConnectivityOperationAbortedErrorV1`, `queryRequiredRouteV1`, `WorldkitBrowserRouteEvidencePublicationV1`, and `WorldkitBrowserApiV4`, plus constructor/canonical/hash/receipt helpers in those symbol families. Use the exact Heightfield-qualified Connectivity name from the tree rather than a shortened invented name. Delete the old declarations/exports and migrate call sites directly; do not add a converter, alias, fallback read, or mixed-version receipt.
+The census must use current-tree names, including `HeightfieldRouteBuildInputV1`, `HeightfieldRouteTerrainSourceV1`, `createHeightfieldRouteBuildInputV1`, `HeightfieldRouteConnectivityResultV1`, `canonicalHeightfieldRouteConnectivityResultV1`, `evaluateRequiredHeightfieldRouteV1`, `TraversalGraphV1`, `RoutePathReceiptV1`, `RouteOverlayV1`, every live `RouteRuntimeProbe*V1` satellite (including Failure, Metrics, Validation Profile Identity, Validation Error, and Error Codes), `RouteConnectivityOperationAbortedErrorV1`, `queryRequiredRouteV1`, `WorldkitBrowserRouteEvidencePublicationV1`, and `WorldkitBrowserApiV4`, plus constructor/canonical/hash/receipt helpers in those symbol families. It must also reject serialized/live source uses of `blockingColliderIdentities`, `heightfield-tile-estimate`, and `not-required-empty-source`; V2 uses `staticColliderIdentities`, `route-geometry-tile-estimate`, and `not-required-empty-geometry`. Use the exact Heightfield-qualified Connectivity name from the tree rather than a shortened invented name. Delete the old declarations/exports and migrate call sites directly; do not add a converter, alias, fallback read, or mixed-version receipt.
 
 - [ ] **Step 5: Run the cutover consumer census and prove zero matches**
 
@@ -740,7 +801,7 @@ The verifier must execute the equivalent family-based scan so a newly discovered
 
 ```bash
 ! rg -n --pcre2 \
-  '\b(?:[A-Za-z0-9_]*HeightfieldRouteBuildInput[A-Za-z0-9_]*V1|HeightfieldRouteBuildBudgetEvidenceV1|StaticBlockingColliderV1|[A-Za-z0-9_]*RequiredHeightfieldRoute[A-Za-z0-9_]*V1|[A-Za-z0-9_]*HeightfieldRouteConnectivityResult[A-Za-z0-9_]*V1|[A-Za-z0-9_]*TraversalGraphV1|[A-Za-z0-9_]*RoutePathReceipt[A-Za-z0-9_]*V1|[A-Za-z0-9_]*RouteOverlay[A-Za-z0-9_]*V1|[A-Za-z0-9_]*RouteConnectivity(?:Failure|Unavailable|Complete)[A-Za-z0-9_]*V1|ROUTE_CONNECTIVITY_FAILURE_CODES_V1|[A-Za-z0-9_]*RouteRuntimeProbe[A-Za-z0-9_]*V1|ROUTE_RUNTIME_PROBE_ERROR_CODES_V1|RouteConnectivityOperationAbortedErrorV1|queryRequiredRouteV1|[A-Za-z0-9_]*RouteEvidence(?:Publication|Projection)[A-Za-z0-9_]*V1|WorldkitBrowserApiV4)\b' \
+  '\b(?:[A-Za-z0-9_]*HeightfieldRouteBuildInput[A-Za-z0-9_]*V1|HeightfieldRouteTerrainSourceV1|HeightfieldRouteBuildBudgetEvidenceV1|StaticBlockingColliderV1|[A-Za-z0-9_]*RequiredHeightfieldRoute[A-Za-z0-9_]*V1|[A-Za-z0-9_]*HeightfieldRouteConnectivityResult[A-Za-z0-9_]*V1|[A-Za-z0-9_]*TraversalGraphV1|[A-Za-z0-9_]*RoutePathReceipt[A-Za-z0-9_]*V1|[A-Za-z0-9_]*RouteOverlay[A-Za-z0-9_]*V1|[A-Za-z0-9_]*RouteConnectivity(?:Failure|Unavailable|Complete)[A-Za-z0-9_]*V1|ROUTE_CONNECTIVITY_FAILURE_CODES_V1|[A-Za-z0-9_]*RouteRuntimeProbe[A-Za-z0-9_]*V1|ROUTE_RUNTIME_PROBE_ERROR_CODES_V1|RouteConnectivityOperationAbortedErrorV1|queryRequiredRouteV1|[A-Za-z0-9_]*RouteEvidence(?:Publication|Projection)[A-Za-z0-9_]*V1|WorldkitBrowserApiV4|blockingColliderIdentities|heightfield-tile-estimate|not-required-empty-source)\b' \
   packages apps scripts examples README.md docs/17-canonical-json-quickstart.md
 pnpm vitest run scripts/verify-route-r1b-static-platform.test.ts -t "legacy consumer census"
 ```
