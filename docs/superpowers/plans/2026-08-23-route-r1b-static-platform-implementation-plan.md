@@ -42,6 +42,8 @@ Task numbers describe the architecture from public contracts toward final gates;
 
 Each parallel worker uses a dedicated Git worktree and branch. Integration is commit-based onto `codex/m5-route-r1b-static-platform`; never share one writable worktree between implementers. Cursor remains a read-only reviewer and does not own integration decisions.
 
+The V2/V5 public clean break is atomic at Task 9. Earlier tasks may add the new V2/V5 definitions beside unchanged V1/V4 declarations solely as an unmerged feature-branch staging mechanism so every intermediate commit typechecks; they must not add alias fields, converters, or adapters between dialects. Task 9 migrates the final trusted-host/CLI consumers and deletes every V1/V4 declaration/export in the same commit. No dual public contract may reach the completion gate or `main`.
+
 ---
 
 ## Phase A — Canonical contracts and compilation
@@ -174,7 +176,7 @@ git commit -m "feat: compile static traversal surfaces"
 
 Expected: all commands pass; R1 Heightfield identity remains stable.
 
-### Task 2: Clean-Break Route Build, Graph, Path, Overlay, and Connectivity to V2
+### Task 2: Introduce Route Build, Graph, Path, Overlay, and Connectivity V2
 
 **Files:**
 - Modify: `packages/traversal/src/build-input.ts`
@@ -191,8 +193,9 @@ Expected: all commands pass; R1 Heightfield identity remains stable.
 
 **Interfaces:**
 - Produces `StaticColliderSourceV1`, `RouteBuildInputV2`, `RouteBuildInputReceiptV2`, `TraversalGraphV2`, `RoutePathReceiptV2`, `RouteOverlayV2`, and `RouteConnectivityResultV2`.
-- Deletes the R1 path-global `traversalSurfaceIdentity` from Path and Overlay.
+- V2 deletes the R1 path-global `traversalSurfaceIdentity` from Path and Overlay.
 - Adds `ROUTE_SURFACE_CORRELATION_MISSING` and `ROUTE_SURFACE_CORRELATION_AMBIGUOUS` to the V2 closed failure union.
+- Keeps the unchanged V1 declarations temporarily available only so untouched R1 consumers continue compiling; do not implement V1↔V2 aliases, converters, fallback reads, or mixed receipts. Task 9 removes V1 atomically after every consumer migrates.
 
 - [ ] **Step 1: Write RED Build Input V2 tests**
 
@@ -231,7 +234,7 @@ export interface StaticColliderSourceV1 {
 }
 ```
 
-Replace V1 exports and fixtures rather than maintaining aliases. Recompute every child/root hash inside the canonical validator.
+Add strict V2 declarations/exports beside the unchanged V1 implementation as feature-branch staging. Recompute every V2 child/root hash inside the canonical validator. Do not translate, alias, or auto-upgrade V1 bytes; V1 remains byte-stable until Task 9 deletes it.
 
 - [ ] **Step 4: Write RED Graph/Path/Overlay/Connectivity V2 tests**
 
@@ -280,11 +283,14 @@ Expected: all focused tests and typecheck pass.
 - Modify: `packages/traversal/src/capability-envelope.test.ts`
 - Modify: `packages/traversal/src/build-budget.ts`
 - Modify: `packages/traversal/src/build-budget.test.ts`
+- Modify: `packages/traversal/src/build-input.ts`
+- Modify: `packages/traversal/src/build-input.test.ts`
 - Modify: `packages/traversal/src/index.ts`
 
 **Interfaces:**
 - Produces `TraversalSurfaceProfileV1` and built-in `worldkit://traversal-surface-profile/ground.static@1`.
 - Adds provider-neutral `maximumTraversalSurfaceCount` to `TraversalGraphBuilderProfileV2` and `TraversalCapabilityEnvelopeV1`.
+- Extends the existing R1 V1 Build Input's exact closed Envelope admission with the same field so Wave 1 preserves the Heightfield gate until Task 2 introduces V2.
 
 - [ ] **Step 1: Write RED Profile and Envelope tests**
 
@@ -299,7 +305,7 @@ Assert the built-in Profile is exactly:
 }
 ```
 
-Prove the built-in V2 Graph Builder Profile fixes `maximumTraversalSurfaceCount` at `61`; the Envelope copies it, rejects zero/non-integer/provider-named fields, and changes its hash when the generic count changes.
+Prove the built-in V2 Graph Builder Profile fixes `maximumTraversalSurfaceCount` at `61`; the Envelope copies it, rejects zero/non-integer/provider-named fields, changes its hash when the generic count changes, and remains admissible to the existing R1 V1 Build Input.
 
 - [ ] **Step 2: Verify RED**
 
@@ -316,13 +322,14 @@ Keep slope, step, capsule, clearance, speed, and Provider area values out of `Tr
 - [ ] **Step 4: Run Task 3 gates and commit**
 
 ```bash
-pnpm vitest run packages/traversal/src/profile-registry.test.ts packages/traversal/src/capability-envelope.test.ts packages/traversal/src/build-budget.test.ts
+pnpm vitest run packages/traversal/src/profile-registry.test.ts packages/traversal/src/capability-envelope.test.ts packages/traversal/src/build-budget.test.ts packages/traversal/src/build-input.test.ts
+pnpm verify:route-r1-heightfield
 pnpm typecheck
 git add packages/traversal
 git commit -m "feat: define static traversal surface profile"
 ```
 
-Expected: all focused tests pass.
+Expected: all focused tests, the R1 Heightfield gate, and typecheck pass.
 
 ## Phase B — Shared geometry and multi-source Graph
 
@@ -341,7 +348,7 @@ Expected: all focused tests pass.
 
 **Interfaces:**
 - Produces `TRAVERSAL_SURFACE_QUERY_EPSILON_V1`, `queryCanonicalTraversalSurfaceHitV1()`, and overlap preflight results `interior | boundary-only | equivalent-plane | overlap`.
-- Replaces duplicated Recast Euler/TRS geometry code with `emitStaticColliderTriangleMeshV1()`.
+- Replaces duplicated Recast Euler/TRS geometry code with the existing world-space `emitTransformedStaticColliderTriangleMeshV1()` authority.
 
 - [ ] **Step 1: Write RED asymmetric geometry tests**
 
@@ -361,7 +368,7 @@ Use Babylon-compatible vector math through existing terrain-surface utilities. B
 
 - [ ] **Step 4: Write RED shared-emitter Recast test**
 
-Spy on the shared emitter output only through value comparison: Graph source positions/indices must equal the emitter bytes for asymmetric rotation and non-uniform scale. Delete expectations tied to the duplicate Recast TRS implementation.
+Spy on the shared emitter output only through value comparison: Graph source positions/indices must equal `emitTransformedStaticColliderTriangleMeshV1()` `worldPositionsMetersXYZ`/indices for asymmetric rotation and non-uniform scale. Delete expectations tied to the duplicate Recast TRS implementation and remove the local Euler/`transformSoup` path from `heightfield-source.ts`.
 
 - [ ] **Step 5: Implement shared source emission and preflight**
 
@@ -542,11 +549,12 @@ git commit -m "feat: resolve runtime support on static surfaces"
 
 Expected: Runtime tests pass with exactly one support query per tick.
 
-### Task 8: Add Probe V2 3D Support Station and Browser V5 Publication
+### Task 8: Add Probe V2 3D Support Station and Prepare Browser V5
 
 **Files:**
 - Modify: `packages/traversal/src/runtime-probe-contract.ts`
 - Modify: `packages/traversal/src/runtime-probe-contract.test.ts`
+- Modify: `packages/traversal/src/runtime-evidence.ts`
 - Modify: `packages/validation/src/route-runtime-probe.ts`
 - Modify: `packages/validation/src/route-runtime-probe.test.ts`
 - Modify: `packages/validation/src/route-evaluator.ts`
@@ -558,12 +566,11 @@ Expected: Runtime tests pass with exactly one support query per tick.
 - Modify: `packages/runtime-contracts/src/runtime-contracts.test.ts`
 - Modify: `apps/playground/src/worldkit-browser-api.ts`
 - Modify: `apps/playground/src/worldkit-browser-api.test.ts`
-- Modify: `apps/playground/src/playground-world.ts`
-- Modify: `apps/playground/src/main.ts`
 
 **Interfaces:**
 - Produces `RouteRuntimeProbeRequestV2`, `RouteRuntimeProbeTickV2`, `RouteRuntimeProbeReceiptV2`, `WorldkitBrowserRouteEvidencePublicationV2`, `RouteEvidenceProjectionV2`, and `WorldkitBrowserApiV5`.
 - Adds `expectedTraversalSurfaceIds` only to Probe ticks.
+- Defines and tests V5 builders/contracts beside unchanged V4 declarations, but does not switch `window.__WORLDKIT__` or trusted-host consumers until Task 9's atomic cutover.
 
 - [ ] **Step 1: Write RED 3D station tests**
 
@@ -592,22 +599,22 @@ Bound each tick's search window with resolved `control-feel-profile.walkSpeedMet
 
 Assert V5 preserves V4 methods but route evidence publishes V2 Path/Overlay arrays, rejects old `traversalSurfaceIdentity`, deep-freezes results, and never exposes Provider fields.
 
-- [ ] **Step 5: Implement route evidence V2 and Browser V5 clean break**
+- [ ] **Step 5: Implement route evidence V2 and Browser V5 preparation**
 
-Rename the public Browser interface and all application consumers atomically. Do not keep V4/V1 aliases in `window.__WORLDKIT__`, generated types, examples, or tests.
+Add strict V5 builders and V2 projection without alias fields, fallback reads, or V1↔V2 conversion. Keep the installed `window.__WORLDKIT__` V4 until Task 9 so the unmodified trusted host remains green; Task 9 switches the window, host, CLI, examples, generated/public exports, and tests atomically, then deletes V4/V1.
 
 - [ ] **Step 6: Run Task 8 gates and commit**
 
 ```bash
 pnpm vitest run packages/traversal/src/runtime-probe-contract.test.ts packages/validation/src/route-runtime-probe.test.ts packages/validation/src/route-evaluator.test.ts packages/validation/src/route-evidence-publication.test.ts packages/runtime-contracts/src/runtime-contracts.test.ts apps/playground/src/worldkit-browser-api.test.ts
 pnpm typecheck
-git add packages/traversal packages/validation packages/runtime-contracts apps/playground/src
+git add packages/traversal packages/validation packages/runtime-contracts apps/playground/src/worldkit-browser-api.ts apps/playground/src/worldkit-browser-api.test.ts
 git commit -m "feat: publish multi-surface route evidence"
 ```
 
 Expected: focused tests and typecheck pass.
 
-### Task 9: Add R1b Golden Fixtures, CLI Gate, and Adversarial Inventory
+### Task 9: Atomically Cut Over V2/V5 and Add the R1b Golden Gate
 
 **Files:**
 - Create: `examples/traversal/r1b-static-platform/success-steps-platform-ramp.world.json`
@@ -620,23 +627,52 @@ Expected: focused tests and typecheck pass.
 - Create: `examples/traversal/r1b-static-platform/fail-wrong-runtime-surface.world.json`
 - Create: `examples/traversal/r1b-static-platform/fail-platform-edge-fall.world.json`
 - Create: `examples/traversal/r1b-static-platform/fail-overlapping-surfaces.world.json`
+- Create: `examples/traversal/r1b-static-platform/fail-runtime-overlapping-surfaces.world.json`
 - Create: `scripts/verify-route-r1b-static-platform.ts`
 - Create: `scripts/verify-route-r1b-static-platform.test.ts`
+- Modify: `packages/traversal/src/build-input.ts`
+- Modify: `packages/traversal/src/build-input.test.ts`
+- Modify: `packages/traversal/src/graph-contract.ts`
+- Modify: `packages/traversal/src/graph-contract.test.ts`
+- Modify: `packages/traversal/src/path-receipt.ts`
+- Modify: `packages/traversal/src/path-receipt.test.ts`
+- Modify: `packages/traversal/src/route-overlay.ts`
+- Modify: `packages/traversal/src/route-overlay.test.ts`
+- Modify: `packages/traversal/src/connectivity-result.ts`
+- Modify: `packages/traversal/src/connectivity-result.test.ts`
+- Modify: `packages/traversal/src/index.ts`
+- Modify: `packages/runtime-contracts/src/browser-route-evidence.ts`
+- Modify: `packages/runtime-contracts/src/runtime-session.ts`
+- Modify: `packages/runtime-contracts/src/runtime-contracts.test.ts`
+- Modify: `apps/playground/src/worldkit-browser-api.ts`
+- Modify: `apps/playground/src/worldkit-browser-api.test.ts`
+- Modify: `apps/playground/src/authoring-loader.ts`
+- Modify: `apps/playground/src/authoring-loader.test.ts`
+- Modify: `apps/playground/src/playground-world.ts`
+- Modify: `apps/playground/src/main.ts`
 - Modify: `scripts/lib/route-validation-orchestrator.ts`
 - Modify: `scripts/lib/route-validation-orchestrator.test.ts`
 - Modify: `scripts/lib/route-validation-cli.ts`
 - Modify: `scripts/lib/route-validation-cli.test.ts`
+- Modify: `scripts/lib/route-validation-runner.ts`
+- Modify: `scripts/lib/route-runtime-probe.integration.test.ts`
 - Modify: `scripts/lib/worldkit-route-evidence-transport.ts`
+- Modify: `scripts/lib/worldkit-server.ts`
+- Modify: `scripts/lib/worldkit-server.test.ts`
+- Modify: `scripts/worldkit-route-run.integration.test.ts`
 - Modify: `scripts/worldkit.test.ts`
+- Modify: `scripts/verify-route-r0-contract.ts`
+- Modify: `scripts/verify-route-r1-heightfield.ts`
 - Modify: `package.json`
 
 **Interfaces:**
 - Adds blocking `pnpm verify:route-r1b-static-platform`.
 - Publishes a machine-readable inventory of fixtures, expected Graph/Runtime outcomes, hashes, and adversarial check IDs.
+- Switches `window.__WORLDKIT__`, trusted host, Validation, CLI, R0/R1 verifiers, examples, and public exports to V5/V2 in one commit, then deletes every V4/V1 Route declaration; no alias or conversion layer survives.
 
 - [ ] **Step 1: Write RED gate inventory test**
 
-Require the success fixture plus all failure fixtures, exact expected diagnostic codes, real Recast/Babylon flags, repeat/concurrent hashes, cadence hashes, cleanup checks, and provider-leak scan results.
+Require the success fixture plus all failure fixtures—including the distinct Graph-overlap and injected-complete/Runtime-ambiguous overlap cases—exact expected diagnostic codes, real Recast/Babylon flags, repeat/concurrent hashes, cadence hashes, cleanup checks, provider-leak scan results, and a zero-match legacy Route V1/Browser V4 public-symbol scan.
 
 - [ ] **Step 2: Verify gate RED**
 
@@ -650,19 +686,19 @@ Expected: FAIL because the verifier and fixtures do not exist.
 
 Derive the 0.3m step threshold from the locked Profile. The success fixture uses 0.25m; the failure uses 0.35m. Do not copy `0.3` into Driver, Validation, or Surface Profile code.
 
-- [ ] **Step 4: Add CLI and same-byte transport coverage**
+- [ ] **Step 4: Perform the atomic public cutover and same-byte transport coverage**
 
-Run the real `worldkit verify route` path and prove CLI JSON, stored Evidence, Browser projection, and validation input use the same canonical V2 bytes/hashes.
+Migrate every remaining consumer to V2/V5, switch the installed Browser API once, and delete V1/V4 declarations and exports rather than aliasing them. Run the real `worldkit verify route` path and prove CLI JSON, stored Evidence, Browser projection, and validation input use the same canonical V2 bytes/hashes. A repository scan must reject `HeightfieldRouteBuildInputV1`, `TraversalGraphV1`, `RoutePathReceiptV1`, `RouteOverlayV1`, `RouteConnectivityResultV1`, `RouteRuntimeProbeRequestV1`, `WorldkitBrowserRouteEvidencePublicationV1`, and `WorldkitBrowserApiV4` outside historical review/design documents.
 
 - [ ] **Step 5: Run Task 9 gates and commit**
 
 ```bash
-pnpm vitest run scripts/verify-route-r1b-static-platform.test.ts scripts/lib/route-validation-orchestrator.test.ts scripts/lib/route-validation-cli.test.ts scripts/worldkit.test.ts
+pnpm vitest run scripts/verify-route-r1b-static-platform.test.ts scripts/lib/route-validation-orchestrator.test.ts scripts/lib/route-validation-cli.test.ts scripts/lib/worldkit-server.test.ts scripts/worldkit-route-run.integration.test.ts scripts/worldkit.test.ts apps/playground/src/authoring-loader.test.ts apps/playground/src/worldkit-browser-api.test.ts
 pnpm verify:route-r0-contract
 pnpm verify:route-r1-heightfield
 pnpm verify:route-r1b-static-platform
 pnpm typecheck
-git add examples/traversal/r1b-static-platform scripts package.json
+git add examples/traversal/r1b-static-platform packages/traversal packages/runtime-contracts apps/playground/src scripts package.json
 git commit -m "test: gate route r1b static platforms"
 ```
 
@@ -705,7 +741,7 @@ Apply `docs/reviews/full-dimension-review-protocol.md` and `docs/reviews/runtime
 
 - [ ] **Step 3: Request independent Cursor code review**
 
-Use `/Users/xiateng/.agents/skills/reviewing-with-cursor/SKILL.md` with a fresh code review ID bound to base `4f9b8b2` and the final head SHA. Record every finding as confirmed, rejected, or deferred; fix only confirmed in-scope defects with a failing reproducer.
+Use `/Users/xiateng/.agents/skills/reviewing-with-cursor/SKILL.md` with a fresh code review ID bound to the actual `git merge-base origin/main HEAD` at review time and the final head SHA. Record every finding as confirmed, rejected, or deferred; fix only confirmed in-scope defects with a failing reproducer.
 
 - [ ] **Step 4: Request fresh Cursor final review**
 
