@@ -117,7 +117,6 @@ export type GameplayStatePlanResultV1 =
     }>;
 
 export interface GameplayWorldStateProjectionContextV1 {
-  readonly id: string;
   readonly simulationTick: number;
   readonly worldPackageRef: string;
   readonly worldPackageRootHash: Sha256HashV1;
@@ -900,7 +899,6 @@ export class GameplayState implements GameplayPlanningStateV1 {
     return buildWorldStateSnapshotV1({
       kind: "worldkit-world-state-snapshot",
       schemaVersion: 1,
-      id: context.id,
       runtimeSessionId: this.runtimeSessionId,
       worldSessionId: this.worldSessionId,
       simulationTick: context.simulationTick,

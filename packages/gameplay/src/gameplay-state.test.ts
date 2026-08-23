@@ -101,7 +101,6 @@ function controller(id: string): ControllerEntityStateV1 {
 
 function projectionContext(simulationTick = 2) {
   return {
-    id: `snapshot-${simulationTick}`,
     simulationTick,
     worldPackageRef: "worldkit://world/a@1",
     worldPackageRootHash: HASH_A,
@@ -476,7 +475,6 @@ describe("GameplayState possession", () => {
     const state = new GameplayState(options());
     bind(state);
     const snapshot = state.projectWorldState({
-      id: "snapshot-a",
       simulationTick: 4,
       worldPackageRef: "worldkit://world/a@1",
       worldPackageRootHash: HASH_A,
@@ -520,7 +518,6 @@ describe("GameplayState possession", () => {
     }), 2);
     if (result.status !== "planned") throw new Error("bind rejected");
     const projected = state.projectWorldStateAfter(result.transitionPlan, {
-      id: "snapshot-after-bind",
       simulationTick: 2,
       worldPackageRef: "worldkit://world/a@1",
       worldPackageRootHash: HASH_A,
@@ -556,7 +553,6 @@ describe("GameplayState possession", () => {
   it("rejects Adapter projection attempts that overlap Gameplay-owned Controllers", () => {
     const state = new GameplayState(options());
     expect(() => state.projectWorldState({
-      id: "overlap",
       simulationTick: 0,
       worldPackageRef: "worldkit://world/a@1",
       worldPackageRootHash: HASH_A,
@@ -591,7 +587,7 @@ describe("GameplayState possession", () => {
     );
   });
 
-  it("produces the same semantic hash across Session identities", () => {
+  it("derives stable artifact IDs that differ across Session identities", () => {
     const first = new GameplayState(options());
     const second = new GameplayState(options({
       runtimeSessionId: "runtime-b",
@@ -611,7 +607,6 @@ describe("GameplayState possession", () => {
     if (secondBind.status !== "planned") throw new Error("bind rejected");
     second.commit(secondBind.transitionPlan);
     const context = {
-      id: "snapshot-a",
       simulationTick: 1,
       worldPackageRef: "worldkit://world/a@1",
       worldPackageRootHash: HASH_A,
@@ -633,9 +628,13 @@ describe("GameplayState possession", () => {
       semanticFactsById: {},
       lastEventSequence: 1,
     };
-    expect(first.projectWorldState(context).worldStateHash).toBe(
-      second.projectWorldState({ ...context, id: "snapshot-b" }).worldStateHash,
-    );
+    const firstSnapshot = first.projectWorldState(context);
+    const repeatedFirstSnapshot = first.projectWorldState(context);
+    const secondSnapshot = second.projectWorldState(context);
+    expect(repeatedFirstSnapshot.id).toBe(firstSnapshot.id);
+    expect(secondSnapshot.worldStateHash).toBe(firstSnapshot.worldStateHash);
+    expect(secondSnapshot.id).not.toBe(firstSnapshot.id);
+    expect(firstSnapshot.id).toMatch(/^world-state:[a-f0-9]{64}$/);
   });
 });
 
