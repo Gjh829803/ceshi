@@ -3,10 +3,66 @@ import { describe, expect, it, vi } from "vitest";
 import {
   assertTraversalSurfaceCountBudgetV1,
   assertTraversalGraphBuildBudgetV1,
+  BUILT_IN_HEIGHTFIELD_R1_TRAVERSAL_GRAPH_BUILDER_PROFILE_REF,
+  createTraversalCapabilityEnvelopeV1,
   estimateHeightfieldTileCountV1,
   quantizeTraversalMetersToMicrometersV1,
+  resolveTraversalGraphBuilderProfileV2,
+  resolveTraversalLockV1,
   TraversalGraphBuildBudgetExceededErrorV1,
 } from "./index.js";
+import type { ResolvedTraversalLockV1 } from "./index.js";
+
+const HASH_A =
+  "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa" as const;
+const HASH_B =
+  "sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb" as const;
+
+function surfaceCountEnvelope() {
+  const lock: ResolvedTraversalLockV1 = {
+    kind: "resolved-traversal-lock",
+    schemaVersion: 1,
+    subjectEntityId: "player",
+    resourceLockHash: HASH_A,
+    subjectDefinitionRef: "worldkit://subject-definition/humanoid.third-person@1",
+    subjectDefinitionHash: HASH_A,
+    colliderProfileRef: "worldkit://collider-profile/humanoid.medium-capsule@1",
+    colliderProfileHash: HASH_A,
+    physicsBodyProfileRef: "worldkit://physics-body-profile/character.medium@1",
+    physicsBodyProfileHash: HASH_A,
+    locomotionProfileRef: "worldkit://locomotion-profile/ground.standard@1",
+    locomotionProfileHash: HASH_A,
+    locomotionCapabilityRef: "worldkit://capability/locomotion.ground@1",
+    locomotionCapabilityHash: HASH_A,
+    controlFeelProfileRef: "worldkit://control-feel-profile/humanoid.medium-ground@1",
+    controlFeelProfileHash: HASH_A,
+    controlProfileRef: "worldkit://control-profile/planar.camera-relative@1",
+    controlProfileHash: HASH_A,
+    motionProfileRef: "worldkit://motion-profile/free-ground.humanoid-medium@1",
+    motionProfileHash: HASH_A,
+    motionKernelRef: "worldkit://motion-kernel/free-ground@1",
+    motionKernelHash: HASH_A,
+    mediumProfileRef: "worldkit://medium-profile/ground-air.standard@1",
+    mediumProfileHash: HASH_A,
+    runtimeBackendRef: "worldkit://runtime-backend/babylon-havok@1",
+    runtimeBackendResolvedVersion: "9.21.2+1.3.14",
+    runtimeBackendHash: HASH_A,
+    runtimeAdapterRef: "worldkit://runtime-adapter/babylon.character-controller@1",
+    runtimeAdapterResolvedVersion: "1",
+    runtimeAdapterHash: HASH_B,
+    capsuleRadiusMeters: 0.32,
+    capsuleHeightMeters: 1.92,
+    colliderCenterOffsetMetersXYZ: [0, 0.96, 0],
+    maxSlopeDegrees: 42,
+    maxStepHeightMeters: 0.3,
+  };
+  return createTraversalCapabilityEnvelopeV1({
+    traversalLockReceipt: resolveTraversalLockV1(lock),
+    graphBuilderProfile: resolveTraversalGraphBuilderProfileV2(
+      BUILT_IN_HEIGHTFIELD_R1_TRAVERSAL_GRAPH_BUILDER_PROFILE_REF,
+    ),
+  }).envelope;
+}
 
 describe("Heightfield traversal tile budget", () => {
   it("normalizes decimal meter values without exact-multiple drift", () => {
@@ -140,30 +196,31 @@ describe("Heightfield traversal tile budget", () => {
 });
 
 describe("Traversal surface count budget", () => {
-  it("admits a count at the provider-neutral Envelope limit", () => {
-    expect(() => assertTraversalSurfaceCountBudgetV1({
-      traversalSurfaceCount: 61,
-      maximumTraversalSurfaceCount: 61,
-    })).not.toThrow();
-  });
+  it("uses one factory-created Envelope to admit 60 and 61 surfaces but reject 62", () => {
+    const capabilityEnvelope = surfaceCountEnvelope();
 
-  it("fails closed when the generic traversal surface count exceeds the Envelope limit", () => {
+    expect(capabilityEnvelope.maximumTraversalSurfaceCount).toBe(61);
+    for (const traversalSurfaceCount of [60, 61]) {
+      expect(() => assertTraversalSurfaceCountBudgetV1({
+        traversalSurfaceCount,
+        capabilityEnvelope,
+      })).not.toThrow();
+    }
     expect(() => assertTraversalSurfaceCountBudgetV1({
       traversalSurfaceCount: 62,
-      maximumTraversalSurfaceCount: 61,
+      capabilityEnvelope,
     })).toThrow("ROUTE_GRAPH_BUDGET_EXCEEDED");
   });
 
-  it("rejects invalid generic count values without accepting provider-named inputs", () => {
+  it("rejects invalid counts and a self-reported maximum override", () => {
+    const capabilityEnvelope = surfaceCountEnvelope();
     for (const input of [
-      { traversalSurfaceCount: 0, maximumTraversalSurfaceCount: 61 },
-      { traversalSurfaceCount: 1.5, maximumTraversalSurfaceCount: 61 },
-      { traversalSurfaceCount: 1, maximumTraversalSurfaceCount: 0 },
-      { traversalSurfaceCount: 1, maximumTraversalSurfaceCount: 1.5 },
+      { traversalSurfaceCount: 0, capabilityEnvelope },
+      { traversalSurfaceCount: 1.5, capabilityEnvelope },
       {
-        traversalSurfaceCount: 1,
-        maximumTraversalSurfaceCount: 1,
-        maximumRecastAreaCount: 61,
+        traversalSurfaceCount: 62,
+        capabilityEnvelope,
+        maximumTraversalSurfaceCount: 62,
       },
     ]) {
       expect(() => assertTraversalSurfaceCountBudgetV1(input)).toThrow(

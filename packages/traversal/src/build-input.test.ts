@@ -21,13 +21,14 @@ function deepFreeze<T>(value: T): T {
   return Object.freeze(value);
 }
 
-function capabilityEnvelope() {
-  return deepFreeze({
-    kind: "traversal-capability-envelope",
+function traversalLock() {
+  return {
+    kind: "resolved-traversal-lock",
     schemaVersion: 1,
-    traversalMode: "ground",
     subjectEntityId: "player",
     resourceLockHash: HASH_A,
+    subjectDefinitionRef: "worldkit://subject-definition/humanoid.third-person@1",
+    subjectDefinitionHash: HASH_A,
     colliderProfileRef: "worldkit://collider-profile/humanoid.medium-capsule@1",
     colliderProfileHash: HASH_A,
     physicsBodyProfileRef: "worldkit://physics-body-profile/character.medium@1",
@@ -36,6 +37,16 @@ function capabilityEnvelope() {
     locomotionProfileHash: HASH_A,
     locomotionCapabilityRef: "worldkit://capability/locomotion.ground@1",
     locomotionCapabilityHash: HASH_A,
+    controlFeelProfileRef: "worldkit://control-feel-profile/humanoid.medium-ground@1",
+    controlFeelProfileHash: HASH_A,
+    controlProfileRef: "worldkit://control-profile/planar.camera-relative@1",
+    controlProfileHash: HASH_A,
+    motionProfileRef: "worldkit://motion-profile/free-ground.humanoid-medium@1",
+    motionProfileHash: HASH_A,
+    motionKernelRef: "worldkit://motion-kernel/free-ground@1",
+    motionKernelHash: HASH_A,
+    mediumProfileRef: "worldkit://medium-profile/ground-air.standard@1",
+    mediumProfileHash: HASH_A,
     runtimeBackendRef: "worldkit://runtime-backend/babylon-havok@1",
     runtimeBackendResolvedVersion: "9.21.2+1.3.14",
     runtimeBackendHash: HASH_A,
@@ -47,26 +58,16 @@ function capabilityEnvelope() {
     colliderCenterOffsetMetersXYZ: [0, 0.96, 0],
     maxSlopeDegrees: 42,
     maxStepHeightMeters: 0.3,
-    resolvedTraversalLockHash: HASH_A,
-    graphBuilderProfileRef:
-      "worldkit://traversal-graph-builder-profile/outdoor-humanoid.heightfield-r1@1",
-    graphBuilderResolvedVersion: "1",
-    graphBuilderProfileHash:
-      "sha256:9720639dac7de3da1d140c7afd1ea7df4258cef202468e39fa222158caaad231",
-    clearanceMarginMeters: 0.05,
-    voxelCellSizeMeters: 0.15,
-    voxelCellHeightMeters: 0.1,
-    tileSizeCells: 64,
-    maximumEdgeLengthMeters: 2.4,
-    maximumSimplificationErrorMeters: 0.15,
-    positionQuantizationMeters: 0.001,
-    slopeCostWeight: 1,
-    stepCostWeight: 1,
-    maximumNodes: 100_000,
-    maximumEdges: 200_000,
-    maximumTiles: 1_024,
-    maximumSearchSteps: 100_000,
-  });
+  } as const;
+}
+
+function capabilityEnvelope() {
+  return traversal.createTraversalCapabilityEnvelopeV1({
+    traversalLockReceipt: traversal.resolveTraversalLockV1(traversalLock()),
+    graphBuilderProfile: traversal.resolveTraversalGraphBuilderProfileV2(
+      traversal.BUILT_IN_HEIGHTFIELD_R1_TRAVERSAL_GRAPH_BUILDER_PROFILE_REF,
+    ),
+  }).envelope;
 }
 
 function validBuildInput() {
@@ -237,6 +238,7 @@ describe("Heightfield route build input contract", () => {
   it("accepts exact provider-neutral bytes and hashes them deterministically", () => {
     const input = validBuildInput();
 
+    expect(input.capabilityEnvelope.maximumTraversalSurfaceCount).toBe(61);
     expect(assertBuildInput(input)).toEqual(input);
     expect(hashBuildInput(input)).toBe(hashBuildInput(validBuildInput()));
     expect(hashBuildInput(input)).toMatch(/^sha256:[a-f0-9]{64}$/);
@@ -372,6 +374,21 @@ describe("Heightfield route build input contract", () => {
 
     expect(assertHeightfieldRouteBuildInputReceiptV1(receipt)).toBe(receipt);
     expect(Object.isFrozen(receipt.input.terrainSource)).toBe(true);
+    const changedSurfaceCountInput = deepFreeze({
+      ...input,
+      capabilityEnvelope: deepFreeze({
+        ...input.capabilityEnvelope,
+        maximumTraversalSurfaceCount: 60,
+      }),
+    });
+    expect(hashHeightfieldRouteBuildInputV1(changedSurfaceCountInput)).not.toBe(
+      receipt.routeBuildInputHash,
+    );
+    expect(() => assertHeightfieldRouteBuildInputReceiptV1(deepFreeze({
+      ...receipt,
+      input: changedSurfaceCountInput,
+      routeBuildInputHash: hashHeightfieldRouteBuildInputV1(changedSurfaceCountInput),
+    }))).toThrow("HEIGHTFIELD_ROUTE_BUILD_INPUT_RECEIPT_INVALID");
   });
 
   it("rejects mutable, stale-hash, forged-policy, and stale-budget Receipts", () => {

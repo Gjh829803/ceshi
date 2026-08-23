@@ -161,6 +161,7 @@ const GRAPH_POLICY_FIELDS = [
   "maximumEdges",
   "maximumTiles",
   "maximumSearchSteps",
+  "maximumTraversalSurfaceCount",
 ] as const;
 
 const BUILD_INPUT_FIELDS = [
@@ -271,6 +272,7 @@ const CAPABILITY_FIELDS = [
   "maximumEdges",
   "maximumTiles",
   "maximumSearchSteps",
+  "maximumTraversalSurfaceCount",
 ] as const;
 
 function fail(path: string, message: string): never {
@@ -454,6 +456,7 @@ function validateCapabilityEnvelope(
     "maximumEdges",
     "maximumTiles",
     "maximumSearchSteps",
+    "maximumTraversalSurfaceCount",
   ] as const) {
     requirePositiveSafeInteger(record[field], `${path}/${field}`);
   }
