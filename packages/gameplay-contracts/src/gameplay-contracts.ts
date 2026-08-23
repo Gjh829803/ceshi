@@ -2002,6 +2002,7 @@ export interface GameplayCapacityBudgetV1 {
   readonly maximumUsedActionExecutionIdCount: number;
   readonly maximumRetainedReceiptCount: number;
   readonly maximumRetainedEventCount: number;
+  readonly maximumRetainedWorldStateSnapshotCount: number;
 }
 
 const GAMEPLAY_CAPACITY_BUDGET_KEYS = [
@@ -2017,6 +2018,7 @@ const GAMEPLAY_CAPACITY_BUDGET_KEYS = [
   "maximumUsedActionExecutionIdCount",
   "maximumRetainedReceiptCount",
   "maximumRetainedEventCount",
+  "maximumRetainedWorldStateSnapshotCount",
 ] as const satisfies readonly (keyof GameplayCapacityBudgetV1)[];
 
 export function parseGameplayCapacityBudgetV1(
@@ -2048,4 +2050,5 @@ export const DEFAULT_GAMEPLAY_CAPACITY_BUDGET_V1: GameplayCapacityBudgetV1 =
     maximumUsedActionExecutionIdCount: 4096,
     maximumRetainedReceiptCount: 4096,
     maximumRetainedEventCount: 8192,
+    maximumRetainedWorldStateSnapshotCount: 4096,
   });

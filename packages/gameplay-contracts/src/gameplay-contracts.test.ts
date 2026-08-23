@@ -1523,11 +1523,12 @@ describe("GameplayCapacityBudgetV1", () => {
       maximumUsedActionExecutionIdCount: 4096,
       maximumRetainedReceiptCount: 4096,
       maximumRetainedEventCount: 8192,
+      maximumRetainedWorldStateSnapshotCount: 4096,
     });
     expect(Object.isFrozen(DEFAULT_GAMEPLAY_CAPACITY_BUDGET_V1)).toBe(true);
   });
 
-  it("requires a distinct retired Action execution ID budget", () => {
+  it("requires a distinct used Action execution ID budget", () => {
     expect(() => parseGameplayCapacityBudgetV1(withoutKey(
       DEFAULT_GAMEPLAY_CAPACITY_BUDGET_V1 as unknown as Readonly<
         Record<string, unknown>
@@ -1539,6 +1540,7 @@ describe("GameplayCapacityBudgetV1", () => {
   it.each([
     "maximumSemanticFactCount",
     "maximumSemanticFactTransitionCountPerTick",
+    "maximumRetainedWorldStateSnapshotCount",
   ] as const)("requires the %s budget field", (field) => {
     expect(() => parseGameplayCapacityBudgetV1(withoutKey(
       DEFAULT_GAMEPLAY_CAPACITY_BUDGET_V1 as unknown as Readonly<
@@ -1553,6 +1555,8 @@ describe("GameplayCapacityBudgetV1", () => {
     ["maximumSemanticFactCount", 4097],
     ["maximumSemanticFactTransitionCountPerTick", 1024],
     ["maximumSemanticFactTransitionCountPerTick", 1025],
+    ["maximumRetainedWorldStateSnapshotCount", 4096],
+    ["maximumRetainedWorldStateSnapshotCount", 4097],
   ] as const)("accepts exact safe-integer %s=%s", (field, value) => {
     expect(parseGameplayCapacityBudgetV1({
       ...DEFAULT_GAMEPLAY_CAPACITY_BUDGET_V1,
