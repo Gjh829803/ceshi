@@ -3,6 +3,7 @@ import {
   sha256CanonicalJson,
   stringifyCanonicalJson,
 } from "@whitebox-world/protocol";
+import { isNil } from "lodash-es";
 
 import type { GameplayCommandV1, Sha256HashV1 } from "./gameplay-contracts";
 
@@ -96,7 +97,7 @@ function invalid(schemaName: string): never {
 }
 
 function snapshotDataRecord(value: unknown): Record<string, unknown> | undefined {
-  if (typeof value !== "object" || value === null) return undefined;
+  if (typeof value !== "object" || isNil(value)) return undefined;
   try {
     if (Reflect.getPrototypeOf(value) !== Object.prototype) return undefined;
     const snapshot: Record<string, unknown> = {};
@@ -104,7 +105,7 @@ function snapshotDataRecord(value: unknown): Record<string, unknown> | undefined
       const descriptor = Reflect.getOwnPropertyDescriptor(value, key);
       if (
         typeof key !== "string" ||
-        descriptor === undefined ||
+        isNil(descriptor) ||
         !descriptor.enumerable ||
         !("value" in descriptor)
       ) return undefined;
@@ -135,14 +136,16 @@ function snapshotDataArray(value: unknown): readonly unknown[] | undefined {
     for (let index = 0; index < value.length; index += 1) {
       const descriptor = Reflect.getOwnPropertyDescriptor(value, String(index));
       if (
-        descriptor === undefined ||
+        isNil(descriptor) ||
         !descriptor.enumerable ||
         !("value" in descriptor)
       ) return undefined;
       snapshot.push(descriptor.value);
     }
     const lengthDescriptor = Reflect.getOwnPropertyDescriptor(value, "length");
-    if (lengthDescriptor?.enumerable !== false) return undefined;
+    if (isNil(lengthDescriptor) || lengthDescriptor.enumerable !== false) {
+      return undefined;
+    }
     return snapshot;
   } catch {
     return undefined;
@@ -196,7 +199,8 @@ function canonicalStringSet(
   schemaName: string,
   mode: ParseMode,
 ): readonly string[] {
-  const values = snapshotDataArray(input) ?? invalid(schemaName);
+  const values = snapshotDataArray(input);
+  if (isNil(values)) invalid(schemaName);
   if (!values.every(isNonEmptyString)) invalid(schemaName);
   const typedValues = values as readonly string[];
   if (new Set(typedValues).size !== typedValues.length) invalid(schemaName);
@@ -206,12 +210,12 @@ function canonicalStringSet(
 }
 
 function deepFreeze<T>(value: T): Readonly<T> {
-  if (typeof value !== "object" || value === null || Object.isFrozen(value)) {
+  if (typeof value !== "object" || isNil(value) || Object.isFrozen(value)) {
     return value;
   }
   for (const key of Reflect.ownKeys(value)) {
     const descriptor = Reflect.getOwnPropertyDescriptor(value, key);
-    if (descriptor !== undefined && "value" in descriptor) {
+    if (!isNil(descriptor) && "value" in descriptor) {
       deepFreeze(descriptor.value);
     }
   }
@@ -223,7 +227,8 @@ function parseGameplayEntityDescriptor(
   mode: ParseMode,
   schemaName: string,
 ): GameplayEntityDescriptorV1 {
-  const record = snapshotDataRecord(input) ?? invalid(schemaName);
+  const record = snapshotDataRecord(input);
+  if (isNil(record)) invalid(schemaName);
   if (
     !hasExactKeys(record, ["id", "entityDefinitionRef", "capabilityRefs"]) ||
     !isNonEmptyString(record.id) ||
@@ -257,7 +262,8 @@ function parseGameplayFeatureManifestBody(
   mode: ParseMode,
 ): GameplayFeatureManifestBodyV1 {
   const schemaName = "GameplayFeatureManifestBodyV1";
-  const record = snapshotDataRecord(input) ?? invalid(schemaName);
+  const record = snapshotDataRecord(input);
+  if (isNil(record)) invalid(schemaName);
   if (!hasExactKeys(record, [
     "kind",
     "id",
@@ -278,7 +284,8 @@ function parseGameplayFeatureManifestBody(
   if (!commandTypes.every((type) =>
     GAMEPLAY_COMMAND_TYPES.has(type as GameplayCommandTypeV1)
   )) invalid(schemaName);
-  const resourceBudget = snapshotDataRecord(record.resourceBudget) ?? invalid(schemaName);
+  const resourceBudget = snapshotDataRecord(record.resourceBudget);
+  if (isNil(resourceBudget)) invalid(schemaName);
   if (
     !hasExactKeys(resourceBudget, ["stateSliceCount", "commandHandlerCount"]) ||
     resourceBudget.stateSliceCount !== 1 ||
@@ -331,7 +338,8 @@ export function parseGameplayFeatureManifestV1(
   input: unknown,
 ): GameplayFeatureManifestV1 {
   const schemaName = "GameplayFeatureManifestV1";
-  const record = snapshotDataRecord(input) ?? invalid(schemaName);
+  const record = snapshotDataRecord(input);
+  if (isNil(record)) invalid(schemaName);
   if (!hasExactKeys(record, [
     "kind",
     "id",
@@ -369,7 +377,8 @@ export function parseGameplayFeatureResourceLockV1(
   input: unknown,
 ): GameplayFeatureResourceLockV1 {
   const schemaName = "GameplayFeatureResourceLockV1";
-  const record = snapshotDataRecord(input) ?? invalid(schemaName);
+  const record = snapshotDataRecord(input);
+  if (isNil(record)) invalid(schemaName);
   if (
     !hasExactKeys(record, ["resourceRef", "contentHash"]) ||
     !isNonEmptyString(record.resourceRef) ||
@@ -386,7 +395,8 @@ function parseGameplayActionDefinitionBody(
   mode: ParseMode,
 ): GameplayActionDefinitionBodyV1 {
   const schemaName = "GameplayActionDefinitionBodyV1";
-  const record = snapshotDataRecord(input) ?? invalid(schemaName);
+  const record = snapshotDataRecord(input);
+  if (isNil(record)) invalid(schemaName);
   if (!hasExactKeys(record, [
     "kind",
     "id",
@@ -407,7 +417,8 @@ function parseGameplayActionDefinitionBody(
     typeof record.isMovementInputBlocked !== "boolean"
   ) invalid(schemaName);
 
-  const completionRecord = snapshotDataRecord(record.completion) ?? invalid(schemaName);
+  const completionRecord = snapshotDataRecord(record.completion);
+  if (isNil(completionRecord)) invalid(schemaName);
   let completion: GameplayActionDefinitionV1["completion"];
   if (
     completionRecord.mode === "explicit-cancel" &&
@@ -427,7 +438,8 @@ function parseGameplayActionDefinitionBody(
     return invalid(schemaName);
   }
 
-  const requestRecord = snapshotDataRecord(record.request) ?? invalid(schemaName);
+  const requestRecord = snapshotDataRecord(record.request);
+  if (isNil(requestRecord)) invalid(schemaName);
   let request: GameplayActionDefinitionV1["request"];
   if (requestRecord.mode === "none" && hasExactKeys(requestRecord, ["mode"])) {
     request = { mode: "none" };
@@ -494,7 +506,8 @@ export function parseGameplayActionDefinitionV1(
   input: unknown,
 ): GameplayActionDefinitionV1 {
   const schemaName = "GameplayActionDefinitionV1";
-  const record = snapshotDataRecord(input) ?? invalid(schemaName);
+  const record = snapshotDataRecord(input);
+  if (isNil(record)) invalid(schemaName);
   if (!hasExactKeys(record, [
     "kind",
     "id",
@@ -537,7 +550,8 @@ function canonicalObjectCollection<T>(
   parse: (value: unknown) => T,
   identity: (value: T) => string,
 ): readonly T[] {
-  const source = snapshotDataArray(input) ?? invalid(schemaName);
+  const source = snapshotDataArray(input);
+  if (isNil(source)) invalid(schemaName);
   let parsed: T[];
   try {
     parsed = source.map(parse);
@@ -562,7 +576,8 @@ function parseGameplayBootstrapBody(
   mode: ParseMode,
 ): GameplayBootstrapBodyV1 {
   const schemaName = "GameplayBootstrapBodyV1";
-  const record = snapshotDataRecord(input) ?? invalid(schemaName);
+  const record = snapshotDataRecord(input);
+  if (isNil(record)) invalid(schemaName);
   if (!hasExactKeys(record, [
     "kind",
     "id",
@@ -639,7 +654,8 @@ export function createGameplayBootstrapV1(
 
 export function parseGameplayBootstrapV1(input: unknown): GameplayBootstrapV1 {
   const schemaName = "GameplayBootstrapV1";
-  const record = snapshotDataRecord(input) ?? invalid(schemaName);
+  const record = snapshotDataRecord(input);
+  if (isNil(record)) invalid(schemaName);
   if (!hasExactKeys(record, [
     "kind",
     "id",

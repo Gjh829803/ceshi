@@ -280,6 +280,9 @@ importers:
       '@whitebox-world/protocol':
         specifier: workspace:*
         version: link:../protocol
+      lodash-es:
+        specifier: ^4.18.1
+        version: 4.18.1
 
   packages/layout-solver:
     dependencies:

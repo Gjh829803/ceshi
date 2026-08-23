@@ -17,6 +17,7 @@ import {
   parseGameplayCapacityBudgetV1,
   parseGameplayCommandV1,
   parseGameplayCommandReceiptV1,
+  parseGameplayDiagnosticV1,
   parseGameplayEventV1,
   parseGameplayInspectionSnapshotV1,
   parseGameplaySemanticFactV1,
@@ -94,6 +95,62 @@ function withoutKey(
     Object.entries(value).filter(([key]) => key !== omittedKey),
   );
 }
+
+describe("GameplayDiagnosticV1", () => {
+  it.each([
+    "ADAPTER_ABORT_FAILED",
+    "ADAPTER_COMMIT_CONTRACT_VIOLATED",
+    "WORLD_REPLACEMENT_BLOCKED_BY_ACTIVE_ACTIVITY",
+    "RUNTIME_ACTIVITY_ID_CONFLICT",
+    "RUNTIME_ACTIVITY_NOT_ACTIVE",
+  ] as const)("accepts the stable %s code through the exact parser", (code) => {
+    expect(parseGameplayDiagnosticV1({
+      code,
+      message: `Stable ${code} diagnostic.`,
+    })).toEqual({ code, message: `Stable ${code} diagnostic.` });
+  });
+
+  it.each([
+    "ADAPTER_COMMIT_FAILED",
+    "ADAPTER_ROLLBACK_FAILED",
+    "WORLD_REPLACEMENT_BLOCKED_BY_ACTIVE_RUN",
+  ] as const)("rejects the removed %s code", (code) => {
+    expect(parseGameplayDiagnosticV1({ code, message: "Obsolete diagnostic." }))
+      .toBeUndefined();
+  });
+
+  it.each([
+    undefined,
+    null,
+    [],
+    { code: "INPUT_INVALID" },
+    { code: "INPUT_INVALID", message: "" },
+    { code: "INPUT_INVALID", message: "Stable.", details: {} },
+    { code: "UNKNOWN", message: "Stable." },
+    Object.assign(Object.create({ inherited: true }), {
+      code: "INPUT_INVALID",
+      message: "Stable.",
+    }),
+    { code: "INPUT_INVALID", message: "Stable.", [Symbol("hidden")]: true },
+  ])("rejects hostile or non-exact diagnostic %#", (input) => {
+    expect(parseGameplayDiagnosticV1(input)).toBeUndefined();
+  });
+
+  it("rejects accessor-backed diagnostics without invoking accessors", () => {
+    let reads = 0;
+    const hostile = { message: "Stable." } as Record<string, unknown>;
+    Object.defineProperty(hostile, "code", {
+      enumerable: true,
+      get: () => {
+        reads += 1;
+        return "INPUT_INVALID";
+      },
+    });
+
+    expect(parseGameplayDiagnosticV1(hostile)).toBeUndefined();
+    expect(reads).toBe(0);
+  });
+});
 
 describe("GameplayCommandV1", () => {
   it.each([
@@ -252,8 +309,8 @@ const failedReceiptBody = {
   simulationTick: 13,
   eventIds: ["gameplay-event:world-primary:2"],
   diagnostic: {
-    code: "ADAPTER_ROLLBACK_FAILED",
-    message: "The prepared transition could not be rolled back.",
+    code: "WORLD_SESSION_FAILED",
+    message: "The world session failed.",
   },
 } as const;
 
@@ -558,8 +615,8 @@ describe("GameplayEventV1", () => {
       type: "action.failed",
       sequence: 6,
       diagnostic: {
-        code: "ADAPTER_COMMIT_FAILED",
-        message: "The action projection failed.",
+        code: "GAMEPLAY_RULE_REJECTED",
+        message: "The action failed under a gameplay rule.",
       },
     }],
     ["semantic Fact started", semanticFactStartedEvent],
@@ -574,7 +631,7 @@ describe("GameplayEventV1", () => {
       simulationTick: 183,
       sequence: 7,
       diagnostic: {
-        code: "ADAPTER_ROLLBACK_FAILED",
+        code: "WORLD_SESSION_FAILED",
         message: "The world session failed closed.",
       },
     }],
