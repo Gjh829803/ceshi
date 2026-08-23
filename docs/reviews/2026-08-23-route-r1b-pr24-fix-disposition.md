@@ -61,4 +61,9 @@ Cursor fresh review `pr24-route-r1b-final-19b1d72` returned **FINAL GO** with no
 | Graph contextual mutation coverage omitted several artifact/root hashes. | Confirmed test gap; all deterministic artifact and Build Input root fields are now mutated. |
 | Standalone V2 Path/Failure canonicalizers accepted a registered V1 Graph Builder identity. | Confirmed and fixed; V2 evidence now requires the V2 Registry resolver before contextual admission. |
 
-A second fresh completion review is required against the final correction SHA. Cursor remains read-only; the host owns every disposition and verification claim.
+Fresh Cursor completion review `pr24-route-r1b-final-452c2cb` inspected correction commit `452c2cb` and returned **FINAL GO** with no P0/P1. The host confirmed and closed its two remaining P2 test-proof gaps in test-only commit `2589c6d`:
+
+- the Path-position regression now holds both endpoints fixed, moves only the middle Path point away from its Graph Node center, and requires the distinct quantized distance `8.947` instead of the Node-center distance `8.946`;
+- the Graph contextual mutation now uses a second registered V2 Graph Builder Profile, independently from the existing V1 identity-rejection coverage.
+
+The same read-only review session re-inspected `452c2cb..2589c6d` and returned **FINAL GO / No findings**. Post-follow-up focused evidence was 11/11 Route V2 contract tests plus a clean `pnpm typecheck` and `git diff --check`. Cursor did not rerun repository commands; all executable verification claims in this disposition remain host-owned.
