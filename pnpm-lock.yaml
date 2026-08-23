@@ -263,6 +263,15 @@ importers:
         specifier: ^0.180.0
         version: 0.180.0
 
+  packages/gameplay:
+    dependencies:
+      '@whitebox-world/gameplay-contracts':
+        specifier: workspace:*
+        version: link:../gameplay-contracts
+      '@whitebox-world/protocol':
+        specifier: workspace:*
+        version: link:../protocol
+
   packages/gameplay-contracts:
     dependencies:
       '@whitebox-world/protocol':
