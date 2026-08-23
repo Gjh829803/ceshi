@@ -3,6 +3,8 @@ import { describe, expect, it } from "vitest";
 import {
   TRUSTED_DEFAULT_CONTROLLER_ID,
   WORLDKIT_BROWSER_PROTOCOL_VERSION,
+  EXECUTION_RESOURCE_KINDS_V1,
+  canonicalExecutionResourceLockEntriesV1,
   canonicalWorldkitBrowserRouteEvidencePublicationV1,
   type ExecutionAnimationSetV1,
   type ExecutionColliderProfileV1,
@@ -11,6 +13,7 @@ import {
   type ExecutionSubjectV3,
   type ExecutionLayoutAssertionV1,
   type ExecutionStaticColliderV1,
+  type ExecutionStaticColliderTraversalSurfaceV1,
   type ExecutionTraversalAreaV1,
   type ExecutionPlanV5,
   type ExecutionTraversalSurfaceV1,
@@ -134,6 +137,26 @@ describe("runtime contracts V3", () => {
       surfaceEntityId: "terrain-main",
       mode: "blocked",
     } satisfies ExecutionTraversalAreaV1;
+    const staticSurface = {
+      kind: "static-collider",
+      traversalSurfaceId: `traversal-surface:sha256:${"6".repeat(64)}`,
+      surfaceEntityId: "platform-main",
+      colliderSubshapeId: `collider-subshape:sha256:${"7".repeat(64)}`,
+      resourceRef: "package://traversal-surface/platform-main.deck@1",
+      resolvedVersion: "1",
+      resourceHash: `sha256:${"8".repeat(64)}`,
+      logicalSurfaceId: "deck",
+      logicalSubshapeId: "primary",
+      colliderHash: `sha256:${"9".repeat(64)}`,
+      traversalSurfaceProfileRef:
+        "worldkit://traversal-surface-profile/ground.static@1",
+      traversalSurfaceProfileResolvedVersion: "1",
+      traversalSurfaceProfileHash: `sha256:${"a".repeat(64)}`,
+    } satisfies ExecutionStaticColliderTraversalSurfaceV1;
+    const surfaceUnion: readonly ExecutionTraversalSurfaceV1[] = [
+      surface,
+      staticSurface,
+    ];
     const collider = {
       entityId: "wall-east",
       logicalSubshapeId: "primary",
@@ -156,6 +179,25 @@ describe("runtime contracts V3", () => {
       "surfaceEntityId",
       "traversalSurfaceId",
     ]);
+    expect(Object.keys(staticSurface).sort()).toEqual([
+      "colliderHash",
+      "colliderSubshapeId",
+      "kind",
+      "logicalSubshapeId",
+      "logicalSurfaceId",
+      "resolvedVersion",
+      "resourceHash",
+      "resourceRef",
+      "surfaceEntityId",
+      "traversalSurfaceId",
+      "traversalSurfaceProfileHash",
+      "traversalSurfaceProfileRef",
+      "traversalSurfaceProfileResolvedVersion",
+    ]);
+    expect(surfaceUnion.map((row) => row.kind)).toEqual([
+      "heightfield",
+      "static-collider",
+    ]);
     expect(collider).toMatchObject({
       entityId: "wall-east",
       logicalSubshapeId: "primary",
@@ -168,9 +210,27 @@ describe("runtime contracts V3", () => {
       "pointsMetersXZ",
       "surfaceEntityId",
     ]);
-    expect(JSON.stringify({ surface, traversalArea, collider })).not.toMatch(
+    expect(JSON.stringify({ surfaceUnion, traversalArea, collider })).not.toMatch(
       /Babylon|Havok|Recast|Detour|provider|handle|polyRef/,
     );
+  });
+
+  it("admits the locked Traversal Surface Profile resource kind and rejects unknown kinds", () => {
+    const profileRow = {
+      resourceRef: "worldkit://traversal-surface-profile/ground.static@1",
+      resourceKind: "traversal-surface-profile",
+      resolvedVersion: "1",
+      contentHash: `sha256:${"a".repeat(64)}`,
+    } as const;
+
+    expect(EXECUTION_RESOURCE_KINDS_V1).toContain("traversal-surface-profile");
+    expect(canonicalExecutionResourceLockEntriesV1([profileRow])).toEqual([
+      profileRow,
+    ]);
+    expect(() => canonicalExecutionResourceLockEntriesV1([{
+      ...profileRow,
+      resourceKind: "provider-traversal-surface-profile",
+    }])).toThrowError("EXECUTION_RESOURCE_LOCK_INVALID");
   });
 
   it("separates Subject Origin from Collider center in ExecutionSubjectV3", () => {

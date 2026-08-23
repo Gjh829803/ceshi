@@ -548,8 +548,20 @@ export interface ExecutionHeightfieldTraversalSurfaceV1
   readonly kind: "heightfield";
 }
 
+export interface ExecutionStaticColliderTraversalSurfaceV1
+  extends TraversalSurfaceIdentityV1 {
+  readonly kind: "static-collider";
+  readonly logicalSurfaceId: string;
+  readonly logicalSubshapeId: string;
+  readonly colliderHash: `sha256:${string}`;
+  readonly traversalSurfaceProfileRef: string;
+  readonly traversalSurfaceProfileResolvedVersion: string;
+  readonly traversalSurfaceProfileHash: `sha256:${string}`;
+}
+
 export type ExecutionTraversalSurfaceV1 =
-  | ExecutionHeightfieldTraversalSurfaceV1;
+  | ExecutionHeightfieldTraversalSurfaceV1
+  | ExecutionStaticColliderTraversalSurfaceV1;
 
 export interface ExecutionTraversalAreaV1 {
   readonly id: string;
@@ -605,6 +617,7 @@ export const EXECUTION_RESOURCE_KINDS_V1 = [
   "harness-profile",
   "pose-set-profile",
   "render-binding-profile",
+  "traversal-surface-profile",
 ] as const;
 
 export type ExecutionResourceKindV1 =

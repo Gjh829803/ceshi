@@ -26,6 +26,19 @@ function routeWorld(): AuthoringSpecV4 {
   return {
     ...source,
     schemaVersion: 4,
+    resources: {
+      ...source.resources,
+      prototypes: source.resources.prototypes.map((prototype) => ({
+        ...prototype,
+        traversalSurfaceBindings: [{
+          id: "deck",
+          kind: "collider-subshape" as const,
+          logicalSubshapeId: "primary",
+          traversalSurfaceProfileRef:
+            "worldkit://traversal-surface-profile/ground.static@1",
+        }],
+      })),
+    },
     spatial: {
       ...source.spatial,
       traversalAreas: [],
@@ -84,6 +97,64 @@ function compileFixture(): {
 }
 
 describe("compileResolvedTraversalLockV1", () => {
+  it("preserves the Traversal Surface Profile row byte-identically", () => {
+    const fixture = compileFixture();
+    const normalizedRow = fixture.normalizedWorldIr.resources.resourceLock.find(
+      (row) => row.resourceKind === "traversal-surface-profile",
+    );
+    const executionRow = fixture.executionPlan.resourceLockEntries.find(
+      (row) => row.resourceKind === "traversal-surface-profile",
+    );
+
+    expect(normalizedRow).toEqual({
+      resourceRef: "worldkit://traversal-surface-profile/ground.static@1",
+      resourceKind: "traversal-surface-profile",
+      resolvedVersion: "1",
+      contentHash:
+        "sha256:16d21f75625a849156be42b27c11cea30f461292f346ce8aae52f6049f0aa4d4",
+    });
+    expect(executionRow).toEqual(normalizedRow);
+  });
+
+  it("fails closed when a bound Profile lock row is missing or changed consistently", () => {
+    const fixture = compileFixture();
+    const compileTampered = (normalizedWorldIr: NormalizedWorldIRV4) =>
+      compileWorldV5({
+        normalizedWorldIr,
+        normalizedWorldIrHash: sha256CanonicalJson(normalizedWorldIr),
+      });
+
+    const expectProfileLockFailure = (result: ReturnType<typeof compileWorldV5>) => {
+      expect(result).toMatchObject({
+        ok: false,
+        diagnostics: expect.arrayContaining([expect.objectContaining({
+          code: "COMPILER_NORMALIZED_IR_INVALID",
+          message: expect.stringMatching(/Traversal Surface Profile lock join/),
+        })]),
+      });
+    };
+
+    const missingWorld = structuredClone(fixture.normalizedWorldIr);
+    missingWorld.resources.resourceLock = missingWorld.resources.resourceLock.filter(
+      (row) => row.resourceKind !== "traversal-surface-profile",
+    );
+    missingWorld.resources.resourceLockHash = sha256CanonicalJson(
+      missingWorld.resources.resourceLock,
+    );
+    expectProfileLockFailure(compileTampered(missingWorld));
+
+    const changedWorld = structuredClone(fixture.normalizedWorldIr);
+    changedWorld.resources.resourceLock = changedWorld.resources.resourceLock.map(
+      (row) => row.resourceKind === "traversal-surface-profile"
+        ? { ...row, contentHash: `sha256:${"f".repeat(64)}` }
+        : row,
+    );
+    changedWorld.resources.resourceLockHash = sha256CanonicalJson(
+      changedWorld.resources.resourceLock,
+    );
+    expectProfileLockFailure(compileTampered(changedWorld));
+  });
+
   it("joins only normalized lock resources, compiled Subject geometry, and trusted Runtime identity", () => {
     const fixture = compileFixture();
     const receipt = compileResolvedTraversalLockV1({

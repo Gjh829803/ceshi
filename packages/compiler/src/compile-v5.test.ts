@@ -18,6 +18,8 @@ function routeWorld(options: {
   routeId?: string;
   terrainEntityId?: string;
   traversalArea?: boolean;
+  staticSurface?: boolean;
+  secondInstance?: boolean;
 } = {}): AuthoringSpecV4 {
   const source = createValidAuthoringSpec();
   const prototype = source.resources.prototypes[0]!;
@@ -39,6 +41,17 @@ function routeWorld(options: {
             radiusMeters: 1,
             heightMeters: 4,
             collisionEnabled: options.collisionEnabled ?? true,
+            ...(options.staticSurface === true
+              ? {
+                  traversalSurfaceBindings: [{
+                    id: "deck",
+                    kind: "collider-subshape" as const,
+                    logicalSubshapeId: "primary",
+                    traversalSurfaceProfileRef:
+                      "worldkit://traversal-surface-profile/ground.static@1",
+                  }],
+                }
+              : {}),
             ...(prototype.semantic === undefined
               ? {}
               : { semantic: prototype.semantic }),
@@ -46,6 +59,17 @@ function routeWorld(options: {
         : source.resources.prototypes.map((candidate) => ({
             ...candidate,
             collisionEnabled: options.collisionEnabled ?? candidate.collisionEnabled,
+            ...(options.staticSurface === true
+              ? {
+                  traversalSurfaceBindings: [{
+                    id: "deck",
+                    kind: "collider-subshape" as const,
+                    logicalSubshapeId: "primary",
+                    traversalSurfaceProfileRef:
+                      "worldkit://traversal-surface-profile/ground.static@1",
+                  }],
+                }
+              : {}),
           })),
     },
     spatial: {
@@ -83,6 +107,17 @@ function routeWorld(options: {
         }
         return node;
       }),
+      ...(options.secondInstance === true
+        ? [{
+            id: "wall-west",
+            kind: "object" as const,
+            prototypeRef: "package://prototype/wall@1",
+            placement: {
+              kind: "fixed" as const,
+              transform: { positionMetersXYZ: [-12, 2, 10] as const },
+            },
+          }]
+        : []),
       {
         id: "goal",
         kind: "anchor",
@@ -126,6 +161,116 @@ function compile(spec = routeWorld()) {
 }
 
 describe("compileWorldV5", () => {
+  it("compiles one exact static Surface-to-Collider join per bound Object instance", () => {
+    const plan = compile(routeWorld({
+      staticSurface: true,
+      secondInstance: true,
+    })).executionPlan!;
+    const surfaces = plan.traversal.surfaces.filter(
+      (surface) => surface.kind === "static-collider",
+    );
+
+    expect(surfaces).toHaveLength(2);
+    expect(new Set(surfaces.map((surface) => surface.surfaceEntityId))).toEqual(
+      new Set(["wall-east", "wall-west"]),
+    );
+    expect(surfaces.map((surface) => surface.traversalSurfaceId)).toEqual(
+      [...surfaces]
+        .sort((left, right) =>
+          left.traversalSurfaceId.localeCompare(right.traversalSurfaceId))
+        .map((surface) => surface.traversalSurfaceId),
+    );
+    for (const surface of surfaces) {
+      const matchingColliders = plan.staticColliders.filter(
+        (collider) =>
+          collider.entityId === surface.surfaceEntityId &&
+          collider.logicalSubshapeId === surface.logicalSubshapeId,
+      );
+      expect(matchingColliders).toHaveLength(1);
+      const collider = matchingColliders[0]!;
+      expect(surface.surfaceEntityId).toBe(collider.entityId);
+      expect(surface.logicalSubshapeId).toBe(collider.logicalSubshapeId);
+      expect(surface.colliderSubshapeId).toBe(collider.colliderSubshapeId);
+      expect(surface.colliderHash).toBe(collider.colliderHash);
+      expect(surface.traversalSurfaceProfileRef).toBe(
+        "worldkit://traversal-surface-profile/ground.static@1",
+      );
+      expect(surface.resourceHash).toBe(sha256CanonicalJson({
+        prototypeId: "wall",
+        prototypeVersion: 1,
+        binding: {
+          id: "deck",
+          kind: "collider-subshape",
+          logicalSubshapeId: "primary",
+          traversalSurfaceProfileRef:
+            "worldkit://traversal-surface-profile/ground.static@1",
+        },
+        traversalSurfaceProfileRef:
+          "worldkit://traversal-surface-profile/ground.static@1",
+        traversalSurfaceProfileResolvedVersion: "1",
+        traversalSurfaceProfileHash:
+          "sha256:16d21f75625a849156be42b27c11cea30f461292f346ce8aae52f6049f0aa4d4",
+        colliderHash: collider.colliderHash,
+      }));
+    }
+  });
+
+  it("strictly sorts and deep-freezes the enlarged Execution Surface union", () => {
+    const surfaces = compile(routeWorld({
+      staticSurface: true,
+      secondInstance: true,
+    })).executionPlan!.traversal.surfaces;
+    const traversalSurfaceIds = surfaces.map(
+      (surface) => surface.traversalSurfaceId,
+    );
+
+    expect(traversalSurfaceIds).toEqual([...traversalSurfaceIds].sort());
+    expect(new Set(traversalSurfaceIds).size).toBe(traversalSurfaceIds.length);
+    expect(Object.isFrozen(surfaces)).toBe(true);
+    for (const surface of surfaces) expect(Object.isFrozen(surface)).toBe(true);
+  });
+
+  it("keeps the frozen R1 Heightfield traversalSurfaceId byte-identical", () => {
+    const baseline = compile(routeWorld()).executionPlan!.traversal.surfaces
+      .find((surface) => surface.kind === "heightfield")!;
+    const withStaticSurface = compile(routeWorld({ staticSurface: true }))
+      .executionPlan!.traversal.surfaces
+      .find((surface) => surface.kind === "heightfield")!;
+
+    expect(baseline.traversalSurfaceId).toBe(
+      "traversal-surface:sha256:f9a56d8e45affe3245ef4830b3c9d07b0cb08ee4e059b592fb1eb36d2cd43422",
+    );
+    expect(withStaticSurface.traversalSurfaceId).toBe(
+      baseline.traversalSurfaceId,
+    );
+  });
+
+  it("rejects a forged hash-consistent normalized binding with no Collider join", () => {
+    const normalized = normalizeAuthoringSpecV4(
+      routeWorld({ staticSurface: true }),
+    );
+    if (!normalized.ok || normalized.value === undefined) {
+      throw new Error("Bound fixture normalization failed.");
+    }
+    const forged = structuredClone(normalized.value);
+    const forgedBinding = forged.resources.prototypes[0]!
+      .traversalSurfaceBindings![0]! as {
+        logicalSubshapeId: string;
+      };
+    forgedBinding.logicalSubshapeId = "forged-subshape";
+
+    expect(compileWorldV5({
+      normalizedWorldIr: forged,
+      normalizedWorldIrHash: sha256CanonicalJson(forged),
+    })).toMatchObject({
+      ok: false,
+      diagnostics: expect.arrayContaining([expect.objectContaining({
+        code: "COMPILER_NORMALIZED_IR_INVALID",
+        message: expect.stringMatching(/Collider join/),
+      })]),
+    });
+  });
+
   it("promotes Heightfield traversal, connectivity, and canonical static colliders", () => {
     const compiled = compile();
     const plan = compiled.executionPlan!;

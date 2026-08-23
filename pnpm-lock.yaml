@@ -194,6 +194,9 @@ importers:
       '@whitebox-world/terrain-surface':
         specifier: workspace:*
         version: link:../terrain-surface
+      '@whitebox-world/traversal':
+        specifier: workspace:*
+        version: link:../traversal
       ajv:
         specifier: ^8.17.1
         version: 8.20.0

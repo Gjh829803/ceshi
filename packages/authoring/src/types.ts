@@ -45,6 +45,13 @@ export interface TransformSpecV2 {
   scaleXYZ?: Vec3;
 }
 
+export interface PrototypeTraversalSurfaceBindingV1 {
+  readonly id: string;
+  readonly kind: "collider-subshape";
+  readonly logicalSubshapeId: string;
+  readonly traversalSurfaceProfileRef: string;
+}
+
 interface PrimitivePrototypeBaseV2 {
   id: string;
   version: 1;
@@ -537,7 +544,8 @@ export type ResolvedResourceKindV1 =
   | "relationship-profile"
   | "harness-profile"
   | "pose-set-profile"
-  | "render-binding-profile";
+  | "render-binding-profile"
+  | "traversal-surface-profile";
 
 export interface ResolvedResourceLockEntryV1 {
   resourceRef: string;

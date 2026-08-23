@@ -11,6 +11,7 @@ import type {
   NormalizedSubjectSocketV2,
   NormalizedSubjectVisualPartV2,
   PrimitivePrototypeSpecV2,
+  PrototypeTraversalSurfaceBindingV1,
   Vec2,
 } from "@whitebox-world/authoring";
 import { sha256CanonicalJson } from "@whitebox-world/protocol";
@@ -49,8 +50,12 @@ import type {
   ExecutionPlanV5,
   ExecutionStaticColliderShapeV1,
   ExecutionStaticColliderV1,
+  ExecutionStaticColliderTraversalSurfaceV1,
 } from "@whitebox-world/runtime-contracts";
-import { deriveColliderSubshapeIdV1 } from "@whitebox-world/traversal";
+import {
+  deriveColliderSubshapeIdV1,
+  resolveTraversalSurfaceProfileV1,
+} from "@whitebox-world/traversal";
 import { isNil, max, min } from "lodash-es";
 
 import { sampleFractalNoise } from "./noise";
@@ -1628,6 +1633,124 @@ function compileStaticColliderV1(
   };
 }
 
+function compileStaticColliderTraversalSurfaceV1(input: {
+  readonly prototypeId: string;
+  readonly prototypeVersion: number;
+  readonly binding: PrototypeTraversalSurfaceBindingV1;
+  readonly entityId: string;
+  readonly staticColliders: readonly ExecutionStaticColliderV1[];
+  readonly resourceLock: NormalizedWorldIRV4["resources"]["resourceLock"];
+}): ExecutionStaticColliderTraversalSurfaceV1 {
+  const matchingColliders = input.staticColliders.filter(
+    (collider) =>
+      collider.entityId === input.entityId &&
+      collider.logicalSubshapeId === input.binding.logicalSubshapeId,
+  );
+  if (matchingColliders.length !== 1) {
+    throw new Error(
+      `Traversal Surface Collider join for '${input.entityId}.${input.binding.id}' requires exactly one Collider; received ${matchingColliders.length}.`,
+    );
+  }
+  const collider = matchingColliders[0]!;
+  const resolvedProfile = resolveTraversalSurfaceProfileV1(
+    input.binding.traversalSurfaceProfileRef,
+  );
+  const matchingProfileRows = input.resourceLock.filter(
+    (row) => row.resourceRef === resolvedProfile.resourceRef,
+  );
+  if (matchingProfileRows.length !== 1) {
+    throw new Error(
+      `Traversal Surface Profile lock join for '${resolvedProfile.resourceRef}' requires exactly one row; received ${matchingProfileRows.length}.`,
+    );
+  }
+  const profileRow = matchingProfileRows[0]!;
+  if (
+    profileRow.resourceRef !== resolvedProfile.resourceRef ||
+    profileRow.resourceKind !== "traversal-surface-profile" ||
+    profileRow.resolvedVersion !== resolvedProfile.resolvedVersion ||
+    profileRow.contentHash !== resolvedProfile.contentHash
+  ) {
+    throw new Error(
+      `Traversal Surface Profile lock join for '${resolvedProfile.resourceRef}' does not match the resolved receipt.`,
+    );
+  }
+
+  const traversalSurfaceProfileRef = profileRow.resourceRef;
+  const traversalSurfaceProfileResolvedVersion = profileRow.resolvedVersion;
+  const traversalSurfaceProfileHash = profileRow.contentHash as `sha256:${string}`;
+  const traversalSurfaceId = `traversal-surface:${sha256CanonicalJson({
+    kind: "static-collider",
+    surfaceEntityId: input.entityId,
+    logicalSurfaceId: input.binding.id,
+  })}`;
+  const resourceHash = sha256CanonicalJson({
+    prototypeId: input.prototypeId,
+    prototypeVersion: input.prototypeVersion,
+    binding: input.binding,
+    traversalSurfaceProfileRef,
+    traversalSurfaceProfileResolvedVersion,
+    traversalSurfaceProfileHash,
+    colliderHash: collider.colliderHash,
+  }) as `sha256:${string}`;
+  return {
+    kind: "static-collider",
+    traversalSurfaceId,
+    surfaceEntityId: collider.entityId,
+    colliderSubshapeId: collider.colliderSubshapeId,
+    resourceRef:
+      `package://traversal-surface/${input.entityId}.${input.binding.id}@${input.prototypeVersion}`,
+    resolvedVersion: String(input.prototypeVersion),
+    resourceHash,
+    logicalSurfaceId: input.binding.id,
+    logicalSubshapeId: collider.logicalSubshapeId,
+    colliderHash: collider.colliderHash,
+    traversalSurfaceProfileRef,
+    traversalSurfaceProfileResolvedVersion,
+    traversalSurfaceProfileHash,
+  };
+}
+
+function compileStaticColliderTraversalSurfacesV1(
+  world: NormalizedWorldIRV4,
+  staticColliders: readonly ExecutionStaticColliderV1[],
+): readonly ExecutionStaticColliderTraversalSurfaceV1[] {
+  const objectNodes = world.nodes.filter((node) => node.kind === "object");
+  const surfaces: ExecutionStaticColliderTraversalSurfaceV1[] = [];
+  for (const prototype of world.resources.prototypes) {
+    const bindings = prototype.traversalSurfaceBindings ?? [];
+    const seenBindingIds = new Set<string>();
+    const seenLogicalSubshapeIds = new Set<string>();
+    for (const binding of bindings) {
+      if (
+        seenBindingIds.has(binding.id) ||
+        seenLogicalSubshapeIds.has(binding.logicalSubshapeId)
+      ) {
+        throw new Error(
+          `Traversal Surface binding '${prototype.id}.${binding.id}' is duplicated.`,
+        );
+      }
+      seenBindingIds.add(binding.id);
+      seenLogicalSubshapeIds.add(binding.logicalSubshapeId);
+    }
+    const prototypeRef =
+      `package://prototype/${prototype.id}@${prototype.version}`;
+    for (const node of objectNodes) {
+      if (node.prototypeRef !== prototypeRef) continue;
+      for (const binding of bindings) {
+        surfaces.push(compileStaticColliderTraversalSurfaceV1({
+          prototypeId: prototype.id,
+          prototypeVersion: prototype.version,
+          binding,
+          entityId: node.id,
+          staticColliders,
+          resourceLock: world.resources.resourceLock,
+        }));
+      }
+    }
+  }
+  return surfaces;
+}
+
 function compileConnectivityRequirementV1(
   requirement: NormalizedWorldIRV4["layout"]["connectivityRequirements"][number],
 ): ExecutionConnectivityRequirementV1 {
@@ -1663,6 +1786,23 @@ export function compileWorldV5(input: CompileWorldInputV5): CompileWorldResultV5
     }
 
     const planV4 = compiledV4.executionPlan;
+    const staticColliders = planV4.objects
+      .filter((object) => object.collisionEnabled)
+      .map(compileStaticColliderV1)
+      .sort((left, right) =>
+        left.colliderSubshapeId.localeCompare(right.colliderSubshapeId));
+    const traversalSurfaces = Object.freeze(
+      [
+        compileHeightfieldTraversalSurfaceV1(planV4),
+        ...compileStaticColliderTraversalSurfacesV1(
+          input.normalizedWorldIr,
+          staticColliders,
+        ),
+      ]
+        .sort((left, right) =>
+          left.traversalSurfaceId.localeCompare(right.traversalSurfaceId))
+        .map((surface) => Object.freeze(surface)),
+    );
     const plan: ExecutionPlanV5 = {
       ...planV4,
       schemaVersion: 5,
@@ -1672,7 +1812,7 @@ export function compileWorldV5(input: CompileWorldInputV5): CompileWorldResultV5
         input.normalizedWorldIr.resources.resourceLock,
       ),
       traversal: {
-        surfaces: [compileHeightfieldTraversalSurfaceV1(planV4)],
+        surfaces: traversalSurfaces,
         traversalAreas: input.normalizedWorldIr.layout.traversalAreas
           .map(compileTraversalAreaV1)
           .sort((left, right) => left.id.localeCompare(right.id)),
@@ -1685,11 +1825,7 @@ export function compileWorldV5(input: CompileWorldInputV5): CompileWorldResultV5
           .map((node) => node.id)
           .sort((left, right) => left.localeCompare(right)),
       },
-      staticColliders: planV4.objects
-        .filter((object) => object.collisionEnabled)
-        .map(compileStaticColliderV1)
-        .sort((left, right) =>
-          left.colliderSubshapeId.localeCompare(right.colliderSubshapeId)),
+      staticColliders,
     };
     return {
       ok: true,

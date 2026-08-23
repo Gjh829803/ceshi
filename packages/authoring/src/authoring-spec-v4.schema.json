@@ -1369,6 +1369,31 @@
         }
       }
     },
+    "traversalSurfaceBinding": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "kind",
+        "logicalSubshapeId",
+        "traversalSurfaceProfileRef"
+      ],
+      "properties": {
+        "id": {
+          "$ref": "#/$defs/id"
+        },
+        "kind": {
+          "const": "collider-subshape"
+        },
+        "logicalSubshapeId": {
+          "$ref": "#/$defs/id"
+        },
+        "traversalSurfaceProfileRef": {
+          "type": "string",
+          "format": "traversal-surface-profile-ref"
+        }
+      }
+    },
     "prototype": {
       "oneOf": [
         {
@@ -1400,6 +1425,12 @@
             },
             "collisionEnabled": {
               "type": "boolean"
+            },
+            "traversalSurfaceBindings": {
+              "type": "array",
+              "items": {
+                "$ref": "#/$defs/traversalSurfaceBinding"
+              }
             },
             "semantic": {
               "$ref": "#/$defs/semantic"
@@ -1435,6 +1466,12 @@
             },
             "collisionEnabled": {
               "type": "boolean"
+            },
+            "traversalSurfaceBindings": {
+              "type": "array",
+              "items": {
+                "$ref": "#/$defs/traversalSurfaceBinding"
+              }
             },
             "semantic": {
               "$ref": "#/$defs/semantic"
@@ -1475,6 +1512,12 @@
             "collisionEnabled": {
               "type": "boolean"
             },
+            "traversalSurfaceBindings": {
+              "type": "array",
+              "items": {
+                "$ref": "#/$defs/traversalSurfaceBinding"
+              }
+            },
             "semantic": {
               "$ref": "#/$defs/semantic"
             }
@@ -1513,6 +1556,12 @@
             },
             "collisionEnabled": {
               "type": "boolean"
+            },
+            "traversalSurfaceBindings": {
+              "type": "array",
+              "items": {
+                "$ref": "#/$defs/traversalSurfaceBinding"
+              }
             },
             "semantic": {
               "$ref": "#/$defs/semantic"

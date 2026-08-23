@@ -106,9 +106,20 @@ export function canonicalAuthoringIdentityV4(
   const { traversalAreas: _traversalAreas, ...spatial } = structuredClone(
     spec.spatial,
   );
+  const prototypes = spec.resources.prototypes.map((prototype) => {
+    const {
+      traversalSurfaceBindings: _traversalSurfaceBindings,
+      ...projectedPrototype
+    } = structuredClone(prototype);
+    return projectedPrototype;
+  });
   const projectedV3: AuthoringSpecV3 = {
     ...structuredClone(spec),
     schemaVersion: 3,
+    resources: {
+      ...structuredClone(spec.resources),
+      prototypes,
+    },
     spatial,
     constraints: {
       placements: structuredClone([...spec.constraints.placements]),
