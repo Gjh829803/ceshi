@@ -377,4 +377,10 @@ describe("canonicalTraversalGraphV1", () => {
       routeBuildInputHashAlias: HASH_A,
     } as TraversalGraphV1)).toThrow("TRAVERSAL_GRAPH_INVALID");
   });
+
+  it("pins the V1 Traversal Graph canonical hash", () => {
+    expect(hashTraversalGraphV1(validGraph())).toBe(
+      "sha256:093746603b8d72cb8a74c51c6d505a194a58926e0cb1cf077703b8c378a535d9",
+    );
+  });
 });

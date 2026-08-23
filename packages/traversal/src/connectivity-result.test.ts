@@ -507,4 +507,35 @@ describe("HeightfieldRouteConnectivityResultV1", () => {
       otherReceipt,
     )).toThrow("HEIGHTFIELD_ROUTE_BUILD_INPUT_RECEIPT_INVALID");
   });
+
+  it("pins the V1 Connectivity Failure and Result canonical hashes", () => {
+    const receipt = buildInputReceipt();
+    const traversalGraph = graph(receipt);
+    const routePathReceipt = pathReceipt(receipt, traversalGraph);
+    const failure = canonicalRouteConnectivityFailureV1({
+      ...failureCommon(receipt),
+      status: "unreachable",
+      graphStatus: "unavailable",
+      reason: {
+        kind: "empty-heightfield-source",
+        code: "ROUTE_REQUIRED_PATH_UNREACHABLE",
+        terrainEntityId: "terrain-main",
+      },
+    });
+    const result = canonicalHeightfieldRouteConnectivityResultV1({
+      kind: "heightfield-route-connectivity-result",
+      schemaVersion: 1,
+      status: "complete",
+      traversalGraph,
+      traversalGraphHash: hashTraversalGraphV1(traversalGraph),
+      routePathReceipt,
+      routePathReceiptHash: hashRoutePathReceiptV1(routePathReceipt),
+    });
+    expect(hashRouteConnectivityFailureV1(failure)).toBe(
+      "sha256:cd31352c6250176075e37861c97323dc8ba25eb651475be207a24818429cc513",
+    );
+    expect(sha256CanonicalJson(result)).toBe(
+      "sha256:4bcaf153307e3bc5ec7d44a39b1784600bbed34066879164a7d79de68c5bcccd",
+    );
+  });
 });

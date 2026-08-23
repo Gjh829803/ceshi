@@ -461,4 +461,10 @@ describe("Heightfield route build input contract", () => {
       },
     }))).toThrow("HEIGHTFIELD_ROUTE_BUILD_INPUT_RECEIPT_INVALID");
   });
+
+  it("pins the V1 Heightfield Build Input canonical hash", () => {
+    expect(hashHeightfieldRouteBuildInputV1(validBuildInput())).toBe(
+      "sha256:779799b5aaddb96f2b1c454b78922f5e4a16c920e810ce1a359e52584947b7db",
+    );
+  });
 });

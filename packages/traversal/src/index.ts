@@ -1,7 +1,10 @@
 export {
+  assertTraversalGraphForBuildInputV2,
   assertTraversalSurfaceIdentityV1,
   canonicalTraversalGraphV1,
+  canonicalTraversalGraphV2,
   hashTraversalGraphV1,
+  hashTraversalGraphV2,
 } from "./graph-contract.js";
 export { createTraversalCapabilityEnvelopeV1 } from "./capability-envelope.js";
 export type {
@@ -18,7 +21,15 @@ export {
 export {
   assertHeightfieldRouteBuildInputReceiptV1,
   assertHeightfieldRouteBuildInputV1,
+  assertRouteBuildInputReceiptV2,
+  assertRouteBuildInputV2,
+  createRouteBuildInputReceiptV2,
   hashHeightfieldRouteBuildInputV1,
+  hashRouteBuildInputV2,
+  hashRouteColliderArtifactV2,
+  hashRouteGeometryArtifactV2,
+  hashRouteSurfaceArtifactV2,
+  hashRouteTerrainArtifactV2,
 } from "./build-input.js";
 export type {
   BlockedTraversalAreaExclusionV1,
@@ -30,8 +41,13 @@ export type {
   HeightfieldRouteBuildInputV1,
   HeightfieldRouteTerrainSourceV1,
   RouteBuildAnchorV1,
+  RouteBuildBudgetEvidenceV2,
+  RouteBuildInputReceiptV2,
+  RouteBuildInputV2,
   RouteHardRibbonV1,
+  RouteTerrainSourceV2,
   StaticBlockingColliderV1,
+  StaticColliderSourceV1,
 } from "./build-input.js";
 export type {
   HeightfieldTileBudgetInputV1,
@@ -42,20 +58,29 @@ export type {
 export type {
   TraversalEdgeV1,
   TraversalGraphV1,
+  TraversalGraphV2,
   TraversalNodeV1,
 } from "./graph-contract.js";
 export {
+  assertRoutePathReceiptForGraphV2,
   canonicalRoutePathReceiptV1,
+  canonicalRoutePathReceiptV2,
   hashRoutePathReceiptV1,
+  hashRoutePathReceiptV2,
 } from "./path-receipt.js";
-export type { RoutePathReceiptV1 } from "./path-receipt.js";
+export type { RoutePathReceiptV1, RoutePathReceiptV2 } from "./path-receipt.js";
 export {
+  assertRouteOverlayContextV2,
   canonicalRouteOverlayV1,
+  canonicalRouteOverlayV2,
   hashRouteOverlayV1,
+  hashRouteOverlayV2,
 } from "./route-overlay.js";
 export type {
+  AssertRouteOverlayContextInputV2,
   RouteOverlayColliderIdentityV1,
   RouteOverlayV1,
+  RouteOverlayV2,
 } from "./route-overlay.js";
 export {
   assertRouteRuntimeProbeReceiptContextV1,
@@ -94,22 +119,31 @@ export type {
 } from "./runtime-evidence.js";
 export {
   assertHeightfieldRouteConnectivityResultForBuildInputV1,
+  assertRouteConnectivityResultForBuildInputV2,
   canonicalHeightfieldRouteConnectivityResultV1,
   canonicalRouteConnectivityFailureV1,
+  canonicalRouteConnectivityFailureV2,
+  canonicalRouteConnectivityResultV2,
   hashRouteConnectivityFailureV1,
+  hashRouteConnectivityFailureV2,
   ROUTE_CONNECTIVITY_FAILURE_CODES_V1,
+  ROUTE_CONNECTIVITY_FAILURE_CODES_V2,
 } from "./connectivity-result.js";
 export type {
   HeightfieldRouteConnectivityResultV1,
   RouteConnectivityCompleteIncompleteReasonV1,
   RouteConnectivityCompleteUnreachableReasonV1,
   RouteConnectivityFailureCodeV1,
+  RouteConnectivityFailureCodeV2,
   RouteConnectivityFailureCompleteIncompleteV1,
   RouteConnectivityFailureCompleteUnreachableV1,
   RouteConnectivityFailureReasonV1,
+  RouteConnectivityFailureReasonV2,
   RouteConnectivityFailureUnavailableIncompleteV1,
   RouteConnectivityFailureUnavailableUnreachableV1,
   RouteConnectivityFailureV1,
+  RouteConnectivityFailureV2,
+  RouteConnectivityResultV2,
   RouteConnectivityUnavailableIncompleteReasonV1,
   RouteConnectivityUnavailableUnreachableReasonV1,
   RouteThresholdRejectionProofV1,

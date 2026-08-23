@@ -198,4 +198,10 @@ describe("RouteOverlayV1", () => {
       ],
     }))).toThrow("ROUTE_OVERLAY_INVALID");
   });
+
+  it("pins the V1 Route Overlay canonical hash", () => {
+    expect(hashRouteOverlayV1(validOverlay())).toBe(
+      "sha256:2b85188dce74c75c1abe5c23bdf3c3af23c438c5f12098345758ffcf6f3ad1d9",
+    );
+  });
 });

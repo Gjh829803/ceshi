@@ -1,8 +1,13 @@
 import { sha256CanonicalJson } from "@whitebox-world/protocol";
-import { isNil, isPlainObject } from "lodash-es";
+import { isEqual, isNil, isPlainObject } from "lodash-es";
 
-import type { RouteBuildAnchorV1, RouteHardRibbonV1 } from "./build-input.js";
+import {
+  assertRouteBuildInputReceiptV2,
+  type RouteBuildAnchorV1,
+  type RouteHardRibbonV1,
+} from "./build-input.js";
 import { deriveColliderSubshapeIdV1 } from "./collider-subshape-id.js";
+import { assertRouteConnectivityResultForBuildInputV2 } from "./connectivity-result.js";
 import { assertTraversalSurfaceIdentityV1 } from "./graph-contract.js";
 import type { TraversalSurfaceIdentityV1 } from "./types.js";
 
@@ -403,4 +408,287 @@ export function canonicalRouteOverlayV1(value: unknown): RouteOverlayV1 {
 
 export function hashRouteOverlayV1(value: unknown): Sha256Hash {
   return sha256CanonicalJson(canonicalRouteOverlayV1(value)) as Sha256Hash;
+}
+
+const OVERLAY_FIELDS_V2 = OVERLAY_FIELDS.map((field) => {
+  if (field === "traversalSurfaceIdentity") return "orderedTraversalSurfaceIdentities";
+  if (field === "blockingColliderIdentities") return "staticColliderIdentities";
+  return field;
+});
+
+export interface RouteOverlayV2 extends Omit<
+  RouteOverlayV1,
+  "schemaVersion" | "traversalSurfaceIdentity" | "blockingColliderIdentities"
+> {
+  readonly schemaVersion: 2;
+  readonly orderedTraversalSurfaceIdentities: readonly TraversalSurfaceIdentityV1[];
+  readonly staticColliderIdentities: readonly RouteOverlayColliderIdentityV1[];
+}
+
+export interface AssertRouteOverlayContextInputV2 {
+  readonly overlay: unknown;
+  readonly routeConnectivityResult: unknown;
+  readonly buildInputReceipt: unknown;
+}
+
+function canonicalOrderedOverlayIdentities(
+  value: unknown,
+  expectedLength: number,
+): readonly TraversalSurfaceIdentityV1[] {
+  if (!Array.isArray(value)) {
+    fail("orderedTraversalSurfaceIdentities", "must be an array");
+  }
+  if (value.length !== expectedLength) {
+    fail(
+      "orderedTraversalSurfaceIdentities",
+      "length must equal orderedTraversalNodeIds.length",
+    );
+  }
+  return value.map((candidate, index) => {
+    try {
+      return assertTraversalSurfaceIdentityV1(candidate);
+    } catch {
+      fail(
+        `orderedTraversalSurfaceIdentities/${index}`,
+        "must be a canonical Traversal Surface identity",
+      );
+    }
+  });
+}
+
+function canonicalStaticColliderIdentities(
+  value: unknown,
+): readonly RouteOverlayColliderIdentityV1[] {
+  const path = "staticColliderIdentities";
+  if (!Array.isArray(value)) {
+    fail(path, "must be an array");
+  }
+  let previousColliderSubshapeId: string | undefined;
+  return value.map((entry, index) => {
+    const entryPath = `${path}/${index}`;
+    const record = requireExactRecord(
+      entry,
+      COLLIDER_IDENTITY_FIELDS,
+      entryPath,
+    );
+    const entityId = requireString(record.entityId, `${entryPath}/entityId`);
+    const logicalSubshapeId = requireString(
+      record.logicalSubshapeId,
+      `${entryPath}/logicalSubshapeId`,
+    );
+    const colliderSubshapeId = requireString(
+      record.colliderSubshapeId,
+      `${entryPath}/colliderSubshapeId`,
+    );
+    if (
+      colliderSubshapeId !== deriveColliderSubshapeIdV1(
+        entityId,
+        logicalSubshapeId,
+      )
+    ) {
+      fail(
+        `${entryPath}/colliderSubshapeId`,
+        "must match the canonical Entity and logical Subshape identity",
+      );
+    }
+    if (
+      !isNil(previousColliderSubshapeId) &&
+      colliderSubshapeId <= previousColliderSubshapeId
+    ) {
+      fail(path, "must be strictly sorted by colliderSubshapeId");
+    }
+    previousColliderSubshapeId = colliderSubshapeId;
+    return {
+      entityId,
+      logicalSubshapeId,
+      colliderSubshapeId,
+      colliderHash: requireHash(record.colliderHash, `${entryPath}/colliderHash`),
+    };
+  });
+}
+
+export function canonicalRouteOverlayV2(value: unknown): RouteOverlayV2 {
+  const record = requireExactRecord(value, OVERLAY_FIELDS_V2, "");
+  if (record.kind !== "route-overlay") {
+    fail("kind", "must be 'route-overlay'");
+  }
+  if (record.schemaVersion !== 2) {
+    fail("schemaVersion", "must be 2");
+  }
+
+  const routeId = requireString(record.routeId, "routeId");
+  const startAnchor = canonicalAnchor(record.startAnchor, "startAnchor");
+  const destinationAnchor = canonicalAnchor(
+    record.destinationAnchor,
+    "destinationAnchor",
+  );
+  if (startAnchor.entityId === destinationAnchor.entityId) {
+    fail("destinationAnchor/entityId", "must differ from startAnchor/entityId");
+  }
+
+  const orderedTraversalNodeIds = requireUniqueStringArray(
+    record.orderedTraversalNodeIds,
+    "orderedTraversalNodeIds",
+  );
+  if (orderedTraversalNodeIds.length === 0) {
+    fail("orderedTraversalNodeIds", "must contain at least one Node id");
+  }
+  const orderedTraversalEdgeIds = requireUniqueStringArray(
+    record.orderedTraversalEdgeIds,
+    "orderedTraversalEdgeIds",
+  );
+  if (orderedTraversalEdgeIds.length !== orderedTraversalNodeIds.length - 1) {
+    fail(
+      "orderedTraversalEdgeIds",
+      "length must equal orderedTraversalNodeIds.length - 1",
+    );
+  }
+
+  const hardRibbon = canonicalHardRibbon(record.hardRibbon);
+  if (hardRibbon.routeId !== routeId) {
+    fail("hardRibbon/routeId", "must match routeId");
+  }
+
+  return deepFreeze({
+    kind: "route-overlay",
+    schemaVersion: 2,
+    constraintId: requireString(record.constraintId, "constraintId"),
+    routeId,
+    traversingEntityId: requireString(
+      record.traversingEntityId,
+      "traversingEntityId",
+    ),
+    startAnchor,
+    destinationAnchor,
+    resolvedTraversalLockHash: requireHash(
+      record.resolvedTraversalLockHash,
+      "resolvedTraversalLockHash",
+    ),
+    traversalGraphHash: requireHash(
+      record.traversalGraphHash,
+      "traversalGraphHash",
+    ),
+    routePathReceiptHash: requireHash(
+      record.routePathReceiptHash,
+      "routePathReceiptHash",
+    ),
+    orderedTraversalNodeIds,
+    orderedTraversalEdgeIds,
+    orderedPathPositionsMetersXYZ: requireDistinctAdjacentVec3Array(
+      record.orderedPathPositionsMetersXYZ,
+      "orderedPathPositionsMetersXYZ",
+    ),
+    orderedTraversalSurfaceIdentities: canonicalOrderedOverlayIdentities(
+      record.orderedTraversalSurfaceIdentities,
+      orderedTraversalNodeIds.length,
+    ),
+    hardRibbon,
+    staticColliderIdentities: canonicalStaticColliderIdentities(
+      record.staticColliderIdentities,
+    ),
+  });
+}
+
+export function hashRouteOverlayV2(value: unknown): Sha256Hash {
+  return sha256CanonicalJson(canonicalRouteOverlayV2(value)) as Sha256Hash;
+}
+
+export function assertRouteOverlayContextV2(
+  input: AssertRouteOverlayContextInputV2,
+): RouteOverlayV2 {
+  if (isNil(input) || !isPlainObject(input)) {
+    fail("", "expected a plain object");
+  }
+  const record = requireExactRecord(
+    input,
+    ["overlay", "routeConnectivityResult", "buildInputReceipt"],
+    "",
+  );
+  const receipt = assertRouteBuildInputReceiptV2(record.buildInputReceipt);
+  const result = assertRouteConnectivityResultForBuildInputV2(
+    record.routeConnectivityResult,
+    receipt,
+  );
+  if (result.status !== "complete") {
+    fail("", "routeConnectivityResult must be complete");
+  }
+  const overlay = canonicalRouteOverlayV2(record.overlay);
+  const graph = result.traversalGraph;
+  const path = result.routePathReceipt;
+  if (overlay.constraintId !== path.constraintId) {
+    fail("constraintId", "must match the Path Receipt");
+  }
+  if (overlay.routeId !== path.routeId) {
+    fail("routeId", "must match the Path Receipt");
+  }
+  if (overlay.traversingEntityId !== path.traversingEntityId) {
+    fail("traversingEntityId", "must match the Path Receipt");
+  }
+  if (overlay.resolvedTraversalLockHash !== path.resolvedTraversalLockHash) {
+    fail("resolvedTraversalLockHash", "must match the Path Receipt");
+  }
+  if (overlay.traversalGraphHash !== result.traversalGraphHash) {
+    fail("traversalGraphHash", "must match the Connectivity Result");
+  }
+  if (overlay.routePathReceiptHash !== result.routePathReceiptHash) {
+    fail("routePathReceiptHash", "must match the Connectivity Result");
+  }
+  if (!isEqual(overlay.startAnchor, receipt.input.startAnchor)) {
+    fail("startAnchor", "must match Build Input");
+  }
+  if (!isEqual(overlay.destinationAnchor, receipt.input.destinationAnchor)) {
+    fail("destinationAnchor", "must match Build Input");
+  }
+  if (!isEqual(overlay.hardRibbon, receipt.input.hardRibbon)) {
+    fail("hardRibbon", "must match Build Input");
+  }
+  if (!isEqual(overlay.orderedTraversalNodeIds, path.orderedTraversalNodeIds)) {
+    fail("orderedTraversalNodeIds", "must match the Path Receipt");
+  }
+  if (!isEqual(overlay.orderedTraversalEdgeIds, path.orderedTraversalEdgeIds)) {
+    fail("orderedTraversalEdgeIds", "must match the Path Receipt");
+  }
+  if (
+    !isEqual(
+      overlay.orderedPathPositionsMetersXYZ,
+      path.orderedPathPositionsMetersXYZ,
+    )
+  ) {
+    fail("orderedPathPositionsMetersXYZ", "must match the Path Receipt");
+  }
+  if (
+    !isEqual(
+      overlay.orderedTraversalSurfaceIdentities,
+      path.orderedTraversalSurfaceIdentities,
+    )
+  ) {
+    fail("orderedTraversalSurfaceIdentities", "must match the Path Receipt");
+  }
+  overlay.orderedTraversalNodeIds.forEach((nodeId, index) => {
+    const node = graph.traversalNodesById[nodeId];
+    if (isNil(node)) {
+      fail(`orderedTraversalNodeIds/${index}`, `unknown Node '${nodeId}'`);
+    }
+    const inventory = graph.traversalSurfaceIdentitiesById[node.traversalSurfaceId];
+    const identity = overlay.orderedTraversalSurfaceIdentities[index]!;
+    if (isNil(inventory) || !isEqual(identity, inventory)) {
+      fail(
+        `orderedTraversalSurfaceIdentities/${index}`,
+        "must equal the Graph inventory row for the Node",
+      );
+    }
+  });
+  const expectedColliders = receipt.input.staticColliders.map((row) => ({
+    entityId: row.entityId,
+    logicalSubshapeId: row.logicalSubshapeId,
+    colliderSubshapeId: row.colliderSubshapeId,
+    colliderHash: row.colliderHash,
+  }));
+  if (!isEqual(overlay.staticColliderIdentities, expectedColliders)) {
+    fail(
+      "staticColliderIdentities",
+      "must project every Build Input static collider",
+    );
+  }
+  return overlay;
 }

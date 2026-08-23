@@ -209,6 +209,46 @@ Expected: all commands pass; R1 Heightfield identity remains stable.
 - Migrates every V1 Connectivity reason through the complete V2 status/field/cardinality table in design §7.1; no common or reason-local singular Surface alias survives.
 - Keeps the unchanged V1 declarations temporarily available only so untouched R1 consumers continue compiling; do not implement V1↔V2 aliases, converters, fallback reads, or mixed receipts. Task 9 removes V1 atomically after every consumer migrates.
 
+**Canonical identifier lock (disk + this task):**
+
+Do not invent synonyms. If a name is missing from this lock or from `packages/traversal/src/index.ts`, it is not a public identifier. Conversation summaries are not a source of names. V1 bytes stay unchanged until Task 9.
+
+| Layer | Locked name |
+| --- | --- |
+| Package | `@whitebox-world/traversal` |
+| Hash | `sha256CanonicalJson` from `@whitebox-world/protocol`; digest prefix `sha256:` |
+| Collections | `lodash-es` `isEmpty` / `isNil` / `isPlainObject` / `isEqual` |
+| Terrain helpers | `@whitebox-world/terrain-surface` |
+| Source files | `build-input.ts`, `graph-contract.ts`, `path-receipt.ts`, `route-overlay.ts`, `connectivity-result.ts`, `capability-envelope.ts`, `profile-registry.ts`, `build-budget.ts`, `collider-subshape-id.ts`, `types.ts`, `index.ts` |
+| Soup | `CanonicalTriangleSoupV1`: `positionsMetersXYZ`, `triangleIndices` |
+| Surface identity | `TraversalSurfaceIdentityV1`: `traversalSurfaceId`, `surfaceEntityId`, `colliderSubshapeId`, `resourceRef`, `resolvedVersion`, `resourceHash` |
+| Collider id | `deriveColliderSubshapeIdV1(entityId, logicalSubshapeId)` |
+| Envelope | `createTraversalCapabilityEnvelopeV1({ traversalLockReceipt, graphBuilderProfile })`; `TraversalCapabilityEnvelopeV1` |
+| Profile | `resolveTraversalGraphBuilderProfileV2`, `BUILT_IN_HEIGHTFIELD_R1_TRAVERSAL_GRAPH_BUILDER_PROFILE_REF` |
+| Lock | `resolveTraversalLockV1` |
+
+V1 public roots and fields (copy from disk; do not rename):
+
+- Build Input: `kind: "heightfield-route-build-input"`, `schemaVersion: 1`, `HeightfieldRouteBuildInputV1`, `HeightfieldRouteTerrainSourceV1` (`empty` \| `bounded` with nested `terrainArtifactHash`), `traversalSurface`, `blockingColliders`, `colliderArtifactHash`, `blockedTraversalAreaExclusions`, `blockedWaterExclusions`, `RouteHardRibbonV1` (`routeId`, `pointsMetersXZ`, `widthMeters`, `locomotionProfileRef`), `RouteBuildAnchorV1` (`entityId`, `positionMetersXYZ`), `StaticBlockingColliderV1` (`entityId`, `logicalSubshapeId`, `colliderSubshapeId`, `colliderHash`, `triangleSoup`)
+- Budget V1: `not-required-empty-source` \| `heightfield-tile-estimate` (`tilesX`, `tilesZ`, `estimatedTiles`, `maximumTiles`, `minimumMetersXZ`, `maximumMetersXZ`)
+- Functions V1: `assertHeightfieldRouteBuildInputV1`, `hashHeightfieldRouteBuildInputV1`, `assertHeightfieldRouteBuildInputReceiptV1`
+- Error V1: `HEIGHTFIELD_ROUTE_BUILD_INPUT_INVALID`, `HEIGHTFIELD_ROUTE_BUILD_INPUT_RECEIPT_INVALID`
+- Graph: `kind: "traversal-graph"`, `schemaVersion: 1`, `TraversalNodeV1` / `TraversalEdgeV1` / `TraversalGraphV1`, `canonicalTraversalGraphV1`, `hashTraversalGraphV1`, `assertTraversalSurfaceIdentityV1`, `TRAVERSAL_GRAPH_INVALID`; Node keeps `traversalSurfaceId`, `surfaceEntityId`, `colliderSubshapeId`, `positionMetersXYZ`, `tileId`, `clearanceWidthMeters`, `clearanceHeightMeters`; Edge keeps `fromTraversalNodeId`, `toTraversalNodeId`, `type: "walk" \| "slope" \| "step"`
+- Path: `kind: "route-path-receipt"`, `RoutePathReceiptV1.traversalSurfaceIdentity`, `orderedTraversalNodeIds`, `orderedTraversalEdgeIds`, `orderedPathPositionsMetersXYZ`, `canonicalRoutePathReceiptV1`, `hashRoutePathReceiptV1`, `ROUTE_PATH_RECEIPT_INVALID`
+- Overlay: `kind: "route-overlay"`, `RouteOverlayV1.blockingColliderIdentities`, `canonicalRouteOverlayV1`, `hashRouteOverlayV1`, `ROUTE_OVERLAY_INVALID`
+- Connectivity: `kind: "route-connectivity-failure"` / `kind: "heightfield-route-connectivity-result"`, `status: "unreachable" \| "incomplete"`, `graphStatus: "complete" \| "unavailable"`, common singular `traversalSurfaceId` / `surfaceEntityId` / `colliderSubshapeId`, `ROUTE_CONNECTIVITY_FAILURE_CODES_V1`, `canonicalRouteConnectivityFailureV1`, `hashRouteConnectivityFailureV1`, `canonicalHeightfieldRouteConnectivityResultV1`, `assertHeightfieldRouteConnectivityResultForBuildInputV1`, `ROUTE_CONNECTIVITY_FAILURE_INVALID`, `HEIGHTFIELD_ROUTE_CONNECTIVITY_RESULT_INVALID`
+
+V2 names this task must create (do not alias to V1):
+
+- Build Input: `kind: "route-build-input"`, `schemaVersion: 2`, `RouteTerrainSourceV2` (no nested `terrainArtifactHash`), `StaticColliderSourceV1`, `traversalSurfaces`, `staticColliders`, root hashes `terrainArtifactHash`, `colliderArtifactHash`, `geometryArtifactHash`, `surfaceArtifactHash`, budget `not-required-empty-geometry` \| `route-geometry-tile-estimate`, error `ROUTE_BUILD_INPUT_INVALID`
+- Functions: `hashRouteTerrainArtifactV2`, `hashRouteColliderArtifactV2`, `hashRouteGeometryArtifactV2`, `hashRouteSurfaceArtifactV2`, `hashRouteBuildInputV2`, `assertRouteBuildInputV2`, `createRouteBuildInputReceiptV2`, `assertRouteBuildInputReceiptV2`
+- Graph: `schemaVersion: 2`, add `geometryArtifactHash` and `traversalSurfaceIdentitiesById`; keep `TraversalNodeV1` triples; `canonicalTraversalGraphV2`, `hashTraversalGraphV2`, `assertTraversalGraphForBuildInputV2` (type-only / structural receipt; do not runtime-import `build-input.ts`)
+- Path: delete `traversalSurfaceIdentity`; add `orderedTraversalSurfaceIdentities`; `canonicalRoutePathReceiptV2`, `hashRoutePathReceiptV2`, `assertRoutePathReceiptForGraphV2`
+- Overlay: delete `traversalSurfaceIdentity` and `blockingColliderIdentities`; add `orderedTraversalSurfaceIdentities` and `staticColliderIdentities`; `canonicalRouteOverlayV2`, `hashRouteOverlayV2`, `assertRouteOverlayContextV2({ overlay, routeConnectivityResult, buildInputReceipt })`
+- Connectivity: `kind: "route-connectivity-result"`, `schemaVersion: 2`, `relatedTraversalSurfaceIdentities` required sorted unique array, `ROUTE_CONNECTIVITY_FAILURE_CODES_V2`, `canonicalRouteConnectivityFailureV2`, `hashRouteConnectivityFailureV2`, `canonicalRouteConnectivityResultV2`, `assertRouteConnectivityResultForBuildInputV2`, result error `ROUTE_CONNECTIVITY_RESULT_INVALID`
+- `empty-heightfield-source` only when `terrainSource.kind === "empty"` and `staticColliders.length === 0`
+- New reasons: `surface-profile-missing`, `surface-correlation-missing`, `surface-correlation-ambiguous`, `traversal-surface-count-budget-exceeded`, `traversal-surface-triangle-pair-test-budget-exceeded`
+
 - [ ] **Step 1: Write and execute V1-only byte characterization guards**
 
 Before importing any missing V2 symbol, pin one literal canonical hash for every V1 serialized root touched by this task: Build Input, Graph, Path, Overlay, Connectivity Failure, and Connectivity Result. Keep this checkpoint V1-only: it must not import V2 entrypoints or depend on module-link failure.

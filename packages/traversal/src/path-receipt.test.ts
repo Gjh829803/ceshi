@@ -131,4 +131,10 @@ describe("RoutePathReceiptV1", () => {
       maximumObservedSlopeDegrees: 91,
     }))).toThrow("ROUTE_PATH_RECEIPT_INVALID");
   });
+
+  it("pins the V1 Route Path Receipt canonical hash", () => {
+    expect(hashRoutePathReceiptV1(validReceipt())).toBe(
+      "sha256:52c778f78ec6498ac274a80c2b6e983b1b9a449d3dbd5131584deaab7e5323cd",
+    );
+  });
 });
