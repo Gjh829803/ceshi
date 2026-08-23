@@ -208,32 +208,47 @@ git commit -m "feat: define canonical gameplay contracts"
 **Interfaces:**
 - Consumes: Task 2 V1 contracts。
 - Produces: pure `GameplayState`, `GameplayModeV1`, typed transition plans, injected `GameplayFeatureFactoryV1` 与 frozen Action Catalog。
+- Direct dependencies: `@whitebox-world/gameplay-contracts` 与用于 manifest/definition canonical hash 的
+  `@whitebox-world/protocol`；不得依赖 Runtime/Browser/Babylon。
 
 - [ ] **Step 1: 写 Possession State 的失败测试**
 
-覆盖 bind/release/rebind、stale `expectedPossession`、一 Controller 多目标、一目标多 Controller、输入顺序确定性、Participant→Controller 单向归属和 commit 前后 snapshot/hash。
+覆盖 bind/release/rebind、stale `expectedPossession`、一 Controller 多目标、一目标多 Controller、输入顺序确定性、Participant→Controller 单向归属和 commit 前后 snapshot/hash。已绑定同一目标时稳定拒绝 `CONTROL_ALREADY_OWNED`；Relationship ID 从 accepted bind command ID canonical 派生，replay 稳定且解除后新建得到新 ID。
 
 Expected production mutation caught: 若 Controller 自带 target 或同一目标允许两个 Controller，测试失败。
 
 - [ ] **Step 2: 实现最小 GameplayState control planning/commit**
 
-Planning 不改变 State，返回判别 Transition Plan；commit 校验 revision，提交 `possessedBy`，使用关系 map 为唯一事实。
+Planning 不改变 State，返回判别 Transition Plan；commit 校验 revision/所有 before-image，在 cloned
+map 上一次 swap 并只增加一次 revision。Rebind 的一个 plan 同时包含 remove+add 和 2 个 Event
+容量；使用关系 map 为唯一事实。World State projection 必须显式接收 Adapter-owned entity/
+capability/fact context，再调用 Task 2 builder，不能由 Gameplay 推断 Physics/Medium/Fact。
 
 - [ ] **Step 3: 写 FeatureManager/Dispatcher 的失败测试**
 
-覆盖 dependency cycle、missing feature/capability、duplicate ref/handler、稳定拓扑顺序、activation throw、reverse cleanup、cleanup aggregation 与单命令单 handler。
+覆盖 dependency cycle、missing feature/capability/lock、manifest content-hash mismatch、duplicate
+ref/handler、稳定拓扑顺序、factory/create/prepare/activation throw、reverse cleanup、cleanup
+aggregation、单命令单 handler和多 WorldSession factory 隔离。证明全部 graph/lock/handler 校验在
+创建 State Slice 前完成。
 
 - [ ] **Step 4: 实现 FeatureManager/Dispatcher**
 
-Function-bearing Feature 仅 package-private；公共 manifest 使用 Ref/version/hash/budget，Host 注入 factory。
+Function-bearing Feature/State Slice 仅 package-private；可序列化 manifest 使用冻结的
+`kind/id/version/resourceRef/contentHash/dependencyFeatureRefs/requiredCapabilityRefs/commandTypes/budget`
+形状，Host 注入每 Session factory。Manifest hash 与实现 build fingerprint 分离。
 
 - [ ] **Step 5: 写 Action Catalog/State 的失败测试**
 
-覆盖 unknown/duplicate `semanticActionRef`、hash/request mismatch、exclusive-per-subject、movement blocking、fixed-duration、explicit cancel、retired execution ID、natural completion 无 commandId、容量 N/N+1。
+覆盖 unknown/duplicate `semanticActionRef`、definition content-hash、request presence/schema mismatch、
+actor/possession mismatch、availability constraint、exclusive-per-subject、movement blocking、
+fixed-duration、explicit cancel、retired execution ID、natural completion 无 commandId、同 Tick稳定排序、
+active 与 retired 两个容量维度 N/N+1。
 
 - [ ] **Step 6: 实现通用 Semantic Action Feature**
 
-不得硬编码 `dance.rumba`/`emote.salute`；Action Definition 从 WorldSession 构造参数注入并冻结。
+不得硬编码 `dance.rumba`/`emote.salute`；Action Definition 使用设计 §8.2 exact shape，从
+WorldSession 构造参数注入、canonical hash 校验、排序并冻结。首期 activation 直接进入 active，
+cancel/completion 直接移除，不制造 starting/completing 中间阶段。
 
 - [ ] **Step 7: 验证并提交**
 

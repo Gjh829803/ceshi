@@ -369,6 +369,11 @@ WorldSession 并获得新预算。
   `controllerEntityId` 角色端点；Controller Snapshot 不保存 binding 或 target。
 - 一个 Controller 同时最多 Possess 一个 Subject；一个 Subject 同时最多被一个 Controller
   Possess。
+- `control.bind` 在同一 Controller 已拥有同一目标时稳定拒绝 `CONTROL_ALREADY_OWNED`，不删除/
+  重建 Relationship，也不产生 Event；切换到不同目标才走原子 rebind。
+- 每次新建 `possessedBy` 的 ID 由已接受 `control.bind` 的 command ID 通过 canonical hash 派生，
+  不含 WorldSession ID。相同 replay command 可复现，同一 Session 的不同 command 不会误用同一
+  Relationship ID；解除后重新建立使用新 command，因此产生新 ID。
 - Group control 在上层展开为多条独立命令，首期不实现。
 
 ExecutionPlan 中的 `initialControlledEntityId` 只是可信 Host 的初始绑定候选，不是 Runtime
@@ -390,20 +395,56 @@ readonly gameplayCapacityBudget: GameplayCapacityBudgetV1;
 Host 不导入 `createCoreControlFeature` 或 `createCoreSemanticActionFeature`。FeatureManager 使用
 稳定 Ref、显式依赖、拓扑激活、逆序释放；循环、缺失依赖和重复注册在世界创建前失败。
 
+`GameplayFeatureManifestV1` 是可序列化 manifest，至少包含
+`kind/id/version/resourceRef/contentHash/dependencyFeatureRefs/requiredCapabilityRefs/commandTypes`
+与 exact resource budget；manifest canonical hash 与实现代码/build fingerprint 分离。
+`GameplayFeatureFactoryV1` 是 trusted composition-root extension，携带该 manifest 并且每个
+WorldSession 只调用一次 `create()`。Function、State Slice 和 Handler 不进入 Browser/CLI/
+Canonical Schema；Factory 返回的 ref 必须与 manifest/Resource Lock 一致。全部 manifest 的锁、
+数量、依赖、循环、Capability 和 command-handler 唯一性必须在创建任何 State Slice 前验证。
+
 ### 8.2 Action Catalog
 
 Core 只提供通用 Action Handler 和状态机，不内置 `dance.rumba`、`emote.salute` 或魔法 Tick
-数字。Action Definitions 由已编译 Subject/Registry 能力和应用组合根提供，至少包含：
+数字。Action Definitions 由已编译 Subject/Registry 能力和应用组合根提供，关闭形状至少包含：
 
-- stable `id`；
-- `executionMode: "exclusive-per-subject"`；
-- `completion: explicit-cancel | fixed-duration(durationTicks)`；
-- `isMovementInputBlocked`；
-- 可用 Subject/Capability 约束。
+```ts
+interface GameplayActionDefinitionV1 {
+  readonly kind: "semantic-action";
+  readonly id: string;
+  readonly version: number;
+  readonly resourceRef: string;
+  readonly contentHash: `sha256:${string}`;
+  readonly executionMode: "exclusive-per-subject";
+  readonly completion:
+    | Readonly<{ mode: "explicit-cancel" }>
+    | Readonly<{ mode: "fixed-duration"; durationTicks: number }>;
+  readonly isMovementInputBlocked: boolean;
+  readonly allowedActorEntityDefinitionRefs: readonly string[];
+  readonly requiredActorCapabilityRefs: readonly string[];
+  readonly request:
+    | Readonly<{ mode: "none" }>
+    | Readonly<{
+        mode: "required";
+        actionRequestSchemaRef: string;
+        actionRequestSchemaHash: `sha256:${string}`;
+      }>;
+}
+```
 
 Runtime 中统一引用 `semanticActionRef`，不使用裸 `actionId`。Action Definition 使用
 Registry `kind/id/version` 和锁定 hash；重复 Ref、未知 Ref、Hash/Request Schema 不匹配在
 Adapter prepare 前拒绝。
+
+Action Catalog 在 WorldSession 构造时 snapshot、canonicalize、按 `resourceRef` 排序并冻结；
+definition `contentHash` 必须覆盖除自身以外的完整声明字段。首期 Action activation 直接提交为
+`mode: "active"`，cancel/completion 直接移除；`starting/completing` 只保留为 Canonical State 的
+后续扩展值，当前状态机不制造无观察阶段。`actorEntityId` 必须等于 expected possession 的目标。
+相同 actor 已有 exclusive Action 时稳定拒绝。
+
+retired `actionExecutionId` 使用独立永久集合和独立容量预算；不得因 command record eviction 重用。
+同 Tick 到期的 Action 按 scheduled Tick、再按 execution ID 排序；natural completion 不携带
+`commandId`。
 
 Gameplay logical Action 在提交 Tick 生效；Babylon rendered Action 在下一 fixed tick 根据
 Projection 选择动画。缺失专用 Clip 只能按锁定 fallback 或稳定拒绝，不能反向取消逻辑 Action。
