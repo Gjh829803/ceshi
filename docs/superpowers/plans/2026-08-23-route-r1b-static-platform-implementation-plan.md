@@ -285,12 +285,19 @@ Expected: all focused tests and typecheck pass.
 - Modify: `packages/traversal/src/build-budget.test.ts`
 - Modify: `packages/traversal/src/build-input.ts`
 - Modify: `packages/traversal/src/build-input.test.ts`
+- Modify: `packages/traversal/src/path-receipt.test.ts`
+- Modify: `packages/traversal/src/connectivity-result.test.ts`
+- Modify: `packages/traversal/src/runtime-probe-contract.test.ts`
 - Modify: `packages/traversal/src/index.ts`
+- Modify: `apps/playground/src/worldkit-browser-api.test.ts`
+- Modify: `apps/playground/package.json`
+- Modify: `pnpm-lock.yaml`
 
 **Interfaces:**
 - Produces `TraversalSurfaceProfileV1` and built-in `worldkit://traversal-surface-profile/ground.static@1`.
 - Adds provider-neutral `maximumTraversalSurfaceCount` to `TraversalGraphBuilderProfileV2` and `TraversalCapabilityEnvelopeV1`.
 - Extends the existing R1 V1 Build Input's exact closed Envelope admission with the same field so Wave 1 preserves the Heightfield gate until Task 2 introduces V2.
+- Keeps downstream Path, Connectivity, Probe, and Browser fixtures bound to the exact resolved built-in Profile hash and Envelope bytes instead of duplicating a stale hash literal. Playground tests import the resolver only from the public `@whitebox-world/traversal` package root and declare that package as a direct dev dependency; no deep-relative package-internal import is allowed.
 
 - [ ] **Step 1: Write RED Profile and Envelope tests**
 
@@ -307,25 +314,28 @@ Assert the built-in Profile is exactly:
 
 Prove the built-in V2 Graph Builder Profile fixes `maximumTraversalSurfaceCount` at `61`; the Envelope copies it, rejects zero/non-integer/provider-named fields, changes its hash when the generic count changes, and remains admissible to the existing R1 V1 Build Input.
 
+Include the Path Receipt, Connectivity Result, Runtime Probe, and Browser API fixtures in the RED integration surface. Their Profile hash and Envelope-derived fields must come from `resolveTraversalGraphBuilderProfileV2()` / `createTraversalCapabilityEnvelopeV1()` rather than the pre-R1b literal, so the Profile content change cannot leave internally inconsistent fixtures green.
+
 - [ ] **Step 2: Verify RED**
 
 ```bash
-pnpm vitest run packages/traversal/src/profile-registry.test.ts packages/traversal/src/capability-envelope.test.ts packages/traversal/src/build-budget.test.ts
+pnpm vitest run packages/traversal/src/profile-registry.test.ts packages/traversal/src/capability-envelope.test.ts packages/traversal/src/build-budget.test.ts packages/traversal/src/path-receipt.test.ts packages/traversal/src/connectivity-result.test.ts packages/traversal/src/runtime-probe-contract.test.ts apps/playground/src/worldkit-browser-api.test.ts
 ```
 
 Expected: FAIL because the Surface Profile and count are absent.
 
 - [ ] **Step 3: Implement Profile resolution and generic budget**
 
-Keep slope, step, capsule, clearance, speed, and Provider area values out of `TraversalSurfaceProfileV1`. Adapter budget admission consumes only the count already copied into the Envelope.
+Keep slope, step, capsule, clearance, speed, and Provider area values out of `TraversalSurfaceProfileV1`. Adapter budget admission consumes only the count already copied into the Envelope. Update every listed downstream fixture to derive the built-in Graph Builder Profile hash and Envelope fields from the public resolver/factory. In `apps/playground/src/worldkit-browser-api.test.ts`, import `resolveTraversalGraphBuilderProfileV2` from `@whitebox-world/traversal`, add `@whitebox-world/traversal: "workspace:*"` to Playground `devDependencies`, and refresh `pnpm-lock.yaml`; do not reach into `packages/traversal/src` from the app.
 
 - [ ] **Step 4: Run Task 3 gates and commit**
 
 ```bash
-pnpm vitest run packages/traversal/src/profile-registry.test.ts packages/traversal/src/capability-envelope.test.ts packages/traversal/src/build-budget.test.ts packages/traversal/src/build-input.test.ts
+pnpm install
+pnpm vitest run packages/traversal/src/profile-registry.test.ts packages/traversal/src/capability-envelope.test.ts packages/traversal/src/build-budget.test.ts packages/traversal/src/build-input.test.ts packages/traversal/src/path-receipt.test.ts packages/traversal/src/connectivity-result.test.ts packages/traversal/src/runtime-probe-contract.test.ts apps/playground/src/worldkit-browser-api.test.ts
 pnpm verify:route-r1-heightfield
 pnpm typecheck
-git add packages/traversal
+git add packages/traversal apps/playground/src/worldkit-browser-api.test.ts apps/playground/package.json pnpm-lock.yaml
 git commit -m "feat: define static traversal surface profile"
 ```
 
@@ -555,6 +565,7 @@ Expected: Runtime tests pass with exactly one support query per tick.
 - Modify: `packages/traversal/src/runtime-probe-contract.ts`
 - Modify: `packages/traversal/src/runtime-probe-contract.test.ts`
 - Modify: `packages/traversal/src/runtime-evidence.ts`
+- Modify: `packages/traversal/src/index.ts`
 - Modify: `packages/validation/src/route-runtime-probe.ts`
 - Modify: `packages/validation/src/route-runtime-probe.test.ts`
 - Modify: `packages/validation/src/route-evaluator.ts`
@@ -570,6 +581,7 @@ Expected: Runtime tests pass with exactly one support query per tick.
 **Interfaces:**
 - Produces `RouteRuntimeProbeRequestV2`, `RouteRuntimeProbeTickV2`, `RouteRuntimeProbeReceiptV2`, `WorldkitBrowserRouteEvidencePublicationV2`, `RouteEvidenceProjectionV2`, and `WorldkitBrowserApiV5`.
 - Adds `expectedTraversalSurfaceIds` only to Probe ticks.
+- Exports the Probe V2 contract from the `@whitebox-world/traversal` package root so Validation never imports a package-internal source path.
 - Defines and tests V5 builders/contracts beside unchanged V4 declarations, but does not switch `window.__WORLDKIT__` or trusted-host consumers until Task 9's atomic cutover.
 
 - [ ] **Step 1: Write RED 3D station tests**
@@ -628,6 +640,7 @@ Expected: focused tests and typecheck pass.
 - Create: `examples/traversal/r1b-static-platform/fail-platform-edge-fall.world.json`
 - Create: `examples/traversal/r1b-static-platform/fail-overlapping-surfaces.world.json`
 - Create: `examples/traversal/r1b-static-platform/fail-runtime-overlapping-surfaces.world.json`
+- Modify: `examples/traversal/route-r0-contract.json`
 - Create: `scripts/verify-route-r1b-static-platform.ts`
 - Create: `scripts/verify-route-r1b-static-platform.test.ts`
 - Modify: `packages/traversal/src/build-input.ts`
@@ -640,7 +653,31 @@ Expected: focused tests and typecheck pass.
 - Modify: `packages/traversal/src/route-overlay.test.ts`
 - Modify: `packages/traversal/src/connectivity-result.ts`
 - Modify: `packages/traversal/src/connectivity-result.test.ts`
+- Modify: `packages/traversal/src/runtime-evidence.ts`
+- Modify: `packages/traversal/src/runtime-evidence.test.ts`
+- Modify: `packages/traversal/src/runtime-probe-contract.ts`
+- Modify: `packages/traversal/src/runtime-probe-contract.test.ts`
 - Modify: `packages/traversal/src/index.ts`
+- Modify: `packages/traversal-recast/src/heightfield-source.ts`
+- Modify: `packages/traversal-recast/src/heightfield-source.test.ts`
+- Modify: `packages/traversal-recast/src/build-graph.ts`
+- Modify: `packages/traversal-recast/src/build-graph.test.ts`
+- Modify: `packages/traversal-recast/src/build-rejection-graph.ts`
+- Modify: `packages/traversal-recast/src/build-rejection-graph.test.ts`
+- Modify: `packages/traversal-recast/src/query-route.ts`
+- Modify: `packages/traversal-recast/src/query-route.test.ts`
+- Modify: `packages/traversal-recast/src/evaluate-route.ts`
+- Modify: `packages/traversal-recast/src/evaluate-route.test.ts`
+- Modify: `packages/traversal-recast/src/index.ts`
+- Modify: `packages/traversal-recast/src/public-boundary.test.ts`
+- Modify: `packages/validation/src/route.ts`
+- Modify: `packages/validation/src/route.test.ts`
+- Modify: `packages/validation/src/route-evaluator.ts`
+- Modify: `packages/validation/src/route-evaluator.test.ts`
+- Modify: `packages/validation/src/route-evidence-publication.ts`
+- Modify: `packages/validation/src/route-evidence-publication.test.ts`
+- Modify: `packages/validation/src/route-runtime-probe.ts`
+- Modify: `packages/validation/src/route-runtime-probe.test.ts`
 - Modify: `packages/runtime-contracts/src/browser-route-evidence.ts`
 - Modify: `packages/runtime-contracts/src/runtime-session.ts`
 - Modify: `packages/runtime-contracts/src/runtime-contracts.test.ts`
@@ -656,6 +693,7 @@ Expected: focused tests and typecheck pass.
 - Modify: `scripts/lib/route-validation-cli.test.ts`
 - Modify: `scripts/lib/route-validation-runner.ts`
 - Modify: `scripts/lib/route-runtime-probe.integration.test.ts`
+- Modify: `scripts/lib/traversal-area-runtime-collision.integration.test.ts`
 - Modify: `scripts/lib/worldkit-route-evidence-transport.ts`
 - Modify: `scripts/lib/worldkit-server.ts`
 - Modify: `scripts/lib/worldkit-server.test.ts`
@@ -663,16 +701,18 @@ Expected: focused tests and typecheck pass.
 - Modify: `scripts/worldkit.test.ts`
 - Modify: `scripts/verify-route-r0-contract.ts`
 - Modify: `scripts/verify-route-r1-heightfield.ts`
+- Modify: `docs/17-canonical-json-quickstart.md`
 - Modify: `package.json`
 
 **Interfaces:**
 - Adds blocking `pnpm verify:route-r1b-static-platform`.
 - Publishes a machine-readable inventory of fixtures, expected Graph/Runtime outcomes, hashes, and adversarial check IDs.
 - Switches `window.__WORLDKIT__`, trusted host, Validation, CLI, R0/R1 verifiers, examples, and public exports to V5/V2 in one commit, then deletes every V4/V1 Route declaration; no alias or conversion layer survives.
+- Owns a repository-wide consumer census over production, tests, apps, scripts, examples, and `docs/17-canonical-json-quickstart.md`; historical reviews/specs are outside the scan root, while the R0 JSON fixture receives an explicit parsed Graph V2 assertion.
 
 - [ ] **Step 1: Write RED gate inventory test**
 
-Require the success fixture plus all failure fixtures—including the distinct Graph-overlap and injected-complete/Runtime-ambiguous overlap cases—exact expected diagnostic codes, real Recast/Babylon flags, repeat/concurrent hashes, cadence hashes, cleanup checks, provider-leak scan results, and a zero-match legacy Route V1/Browser V4 public-symbol scan.
+Require the success fixture plus all failure fixtures—including the distinct Graph-overlap and injected-complete/Runtime-ambiguous overlap cases—exact expected diagnostic codes, real Recast/Babylon flags, repeat/concurrent hashes, cadence hashes, cleanup checks, provider-leak scan results, and a zero-match legacy Route V1/Browser V4 public-symbol scan. The machine-readable result must include a `legacyConsumerCensus` with fixed search roots, the symbol-family pattern, historical exclusions, match count, and matched paths. It must discover consumers from repository contents rather than compare against a hand-maintained file allowlist. Parse `examples/traversal/route-r0-contract.json` separately and require its embedded Graph evidence to be V2 with valid child/root hashes; plain symbol grep is not sufficient evidence for JSON fixtures.
 
 - [ ] **Step 2: Verify gate RED**
 
@@ -688,17 +728,32 @@ Derive the 0.3m step threshold from the locked Profile. The success fixture uses
 
 - [ ] **Step 4: Perform the atomic public cutover and same-byte transport coverage**
 
-Migrate every remaining consumer to V2/V5, switch the installed Browser API once, and delete V1/V4 declarations and exports rather than aliasing them. Run the real `worldkit verify route` path and prove CLI JSON, stored Evidence, Browser projection, and validation input use the same canonical V2 bytes/hashes. A repository scan must reject `HeightfieldRouteBuildInputV1`, `TraversalGraphV1`, `RoutePathReceiptV1`, `RouteOverlayV1`, `RouteConnectivityResultV1`, `RouteRuntimeProbeRequestV1`, `WorldkitBrowserRouteEvidencePublicationV1`, and `WorldkitBrowserApiV4` outside historical review/design documents.
+Migrate every remaining consumer to V2/V5, switch the installed Browser API once, and delete V1/V4 declarations and exports rather than aliasing them. This includes the Traversal and Traversal-Recast implementations/barrels/tests, Validation route evaluators/publication/probe/tests, trusted host and CLI scripts/integrations, the R0 contract fixture/verifier, and the Canonical JSON quickstart. Run the real `worldkit verify route` path and prove CLI JSON, stored Evidence, Browser projection, and validation input use the same canonical V2 bytes/hashes.
 
-- [ ] **Step 5: Run Task 9 gates and commit**
+The census must use current-tree names, including `HeightfieldRouteBuildInputV1`, `createHeightfieldRouteBuildInputV1`, `HeightfieldRouteConnectivityResultV1`, `canonicalHeightfieldRouteConnectivityResultV1`, `evaluateRequiredHeightfieldRouteV1`, `TraversalGraphV1`, `RoutePathReceiptV1`, `RouteOverlayV1`, `RouteRuntimeProbeRequestV1`, `WorldkitBrowserRouteEvidencePublicationV1`, and `WorldkitBrowserApiV4`, plus constructor/canonical/hash/receipt helpers in those symbol families. Use the exact Heightfield-qualified Connectivity name from the tree rather than a shortened invented name. Delete the old declarations/exports and migrate call sites directly; do not add a converter, alias, fallback read, or mixed-version receipt.
+
+- [ ] **Step 5: Run the cutover consumer census and prove zero matches**
+
+The verifier must execute the equivalent family-based scan so a newly discovered file fails the gate even when it was omitted from the `Files` list. Build its regex from split string fragments so the verifier and its test stay inside the scanned `scripts` root without self-matching; do not exclude those files. Limit documentation scanning to the live quickstart; historical reviews/specs remain readable history.
 
 ```bash
-pnpm vitest run scripts/verify-route-r1b-static-platform.test.ts scripts/lib/route-validation-orchestrator.test.ts scripts/lib/route-validation-cli.test.ts scripts/lib/worldkit-server.test.ts scripts/worldkit-route-run.integration.test.ts scripts/worldkit.test.ts apps/playground/src/authoring-loader.test.ts apps/playground/src/worldkit-browser-api.test.ts
+! rg -n --pcre2 \
+  '\b(?:[A-Za-z0-9_]*HeightfieldRouteBuildInput[A-Za-z0-9_]*V1|HeightfieldRouteBuildBudgetEvidenceV1|StaticBlockingColliderV1|[A-Za-z0-9_]*RequiredHeightfieldRoute[A-Za-z0-9_]*V1|[A-Za-z0-9_]*HeightfieldRouteConnectivityResult[A-Za-z0-9_]*V1|[A-Za-z0-9_]*TraversalGraphV1|[A-Za-z0-9_]*RoutePathReceipt[A-Za-z0-9_]*V1|[A-Za-z0-9_]*RouteOverlay[A-Za-z0-9_]*V1|[A-Za-z0-9_]*RouteConnectivity(?:Failure|Unavailable|Complete)[A-Za-z0-9_]*V1|ROUTE_CONNECTIVITY_FAILURE_CODES_V1|[A-Za-z0-9_]*RouteRuntimeProbe(?:Request|Tick|Receipt)[A-Za-z0-9_]*V1|runRouteRuntimeProbeV1|RunRouteRuntimeProbeInputV1|[A-Za-z0-9_]*RouteEvidence(?:Publication|Projection)[A-Za-z0-9_]*V1|WorldkitBrowserApiV4)\b' \
+  packages apps scripts examples README.md docs/17-canonical-json-quickstart.md
+pnpm vitest run scripts/verify-route-r1b-static-platform.test.ts -t "legacy consumer census"
+```
+
+Expected: `rg` prints no matches, the census reports zero across all fixed roots, and the parsed R0 fixture assertion proves Graph V2 rather than relying on text absence.
+
+- [ ] **Step 6: Run Task 9 gates and commit**
+
+```bash
+pnpm vitest run packages/traversal/src packages/traversal-recast/src packages/validation/src/route.test.ts packages/validation/src/route-evaluator.test.ts packages/validation/src/route-evidence-publication.test.ts packages/validation/src/route-runtime-probe.test.ts scripts/verify-route-r1b-static-platform.test.ts scripts/lib/route-validation-orchestrator.test.ts scripts/lib/route-validation-cli.test.ts scripts/lib/route-runtime-probe.integration.test.ts scripts/lib/traversal-area-runtime-collision.integration.test.ts scripts/lib/worldkit-server.test.ts scripts/worldkit-route-run.integration.test.ts scripts/worldkit.test.ts apps/playground/src/authoring-loader.test.ts apps/playground/src/worldkit-browser-api.test.ts
 pnpm verify:route-r0-contract
 pnpm verify:route-r1-heightfield
 pnpm verify:route-r1b-static-platform
 pnpm typecheck
-git add examples/traversal/r1b-static-platform packages/traversal packages/runtime-contracts apps/playground/src scripts package.json
+git add examples/traversal/route-r0-contract.json examples/traversal/r1b-static-platform packages/traversal packages/traversal-recast packages/validation packages/runtime-contracts apps/playground/src scripts docs/17-canonical-json-quickstart.md package.json
 git commit -m "test: gate route r1b static platforms"
 ```
 
