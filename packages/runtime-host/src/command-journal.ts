@@ -24,6 +24,10 @@ interface CommandJournalReservationRequestV1 {
   readonly eventCount: number;
 }
 
+interface EventJournalReservationRequestV1 {
+  readonly eventCount: number;
+}
+
 interface CommandJournalCommitBundleV1 {
   readonly command: GameplayCommandV1;
   readonly commandHash: Sha256HashV1;
@@ -67,6 +71,23 @@ export type CommandJournalReservationResultV1 =
   | Readonly<{
       status: "command-admission-closed";
       commandAdmissionClosedSimulationTick: number;
+    }>
+  | Readonly<{ status: "event-capacity-exceeded" }>;
+
+interface EventJournalCapacityReservationV1 {
+  prepare(events: readonly GameplayEventV1[]): PreparedEventJournalPublicationV1;
+  release(): "released";
+}
+
+interface PreparedEventJournalPublicationV1 {
+  readonly events: readonly GameplayEventV1[];
+  commitPrepared(): readonly GameplayEventV1[];
+}
+
+type EventJournalReservationResultV1 =
+  | Readonly<{
+      status: "reserved";
+      reservation: EventJournalCapacityReservationV1;
     }>
   | Readonly<{ status: "event-capacity-exceeded" }>;
 
@@ -208,6 +229,28 @@ function parseReservationRequest(input: unknown): CommandJournalReservationReque
   });
 }
 
+function parseEventReservationRequest(input: unknown): EventJournalReservationRequestV1 {
+  const record = snapshotPlainRecord(input);
+  if (
+    isNil(record) ||
+    !hasExactKeys(record, ["eventCount"]) ||
+    !isSafeNonNegativeInteger(record.eventCount)
+  ) {
+    throw new RangeError(
+      "CommandJournal Event reservation must be an exact non-negative integer request.",
+    );
+  }
+  return Object.freeze({ eventCount: record.eventCount });
+}
+
+function parseEventBundle(input: unknown): readonly GameplayEventV1[] {
+  const eventInputs = snapshotPlainArray(input);
+  if (isNil(eventInputs)) {
+    throw new RangeError("CommandJournal Event publication is invalid.");
+  }
+  return Object.freeze(eventInputs.map((event) => parseGameplayEventV1(event)));
+}
+
 function parseCommitBundle(input: unknown): Readonly<{
   command: GameplayCommandV1;
   commandHash: Sha256HashV1;
@@ -268,6 +311,9 @@ export class CommandJournal {
   private readonly capacity: CommandJournalCapacityV1;
   private readonly retainedCommandsById = new Map<string, RetainedCommandRecordV1>();
   private readonly retainedEventsById = new Map<string, GameplayEventV1>();
+  private readonly retainedEventSequences = new Set<number>();
+  private readonly stagedEventOwnerById = new Map<string, symbol>();
+  private readonly stagedEventOwnerBySequence = new Map<number, symbol>();
   private readonly reserved: MutableReservationCountsV1 = {
     idempotencyRecordCount: 0,
     receiptCount: 0,
@@ -294,6 +340,134 @@ export class CommandJournal {
       retained.commandCanonical !== canonicalizeGameplayCommandV1(command)
     ) return CONFLICT;
     return retained.lookupResult;
+  }
+
+  private releaseStagedEventClaims(owner: symbol): void {
+    for (const [eventId, claimOwner] of this.stagedEventOwnerById) {
+      if (claimOwner === owner) this.stagedEventOwnerById.delete(eventId);
+    }
+    for (const [sequence, claimOwner] of this.stagedEventOwnerBySequence) {
+      if (claimOwner === owner) this.stagedEventOwnerBySequence.delete(sequence);
+    }
+  }
+
+  private stageEventClaims(
+    events: readonly GameplayEventV1[],
+    owner: symbol,
+  ): void {
+    if (
+      events.some((event, index) =>
+        event.sequence <= (index === 0
+          ? this.lastRetainedEventSequence
+          : events[index - 1]!.sequence)
+      )
+    ) {
+      throw new RangeError("CommandJournal Events are not in canonical sequence order.");
+    }
+
+    for (const event of events) {
+      const idOwner = this.stagedEventOwnerById.get(event.id);
+      const sequenceOwner = this.stagedEventOwnerBySequence.get(event.sequence);
+      if (
+        this.retainedEventsById.has(event.id) ||
+        this.retainedEventSequences.has(event.sequence) ||
+        (!isNil(idOwner) && idOwner !== owner) ||
+        (!isNil(sequenceOwner) && sequenceOwner !== owner)
+      ) {
+        throw new Error(`CommandJournal Event '${event.id}' is already staged or retained.`);
+      }
+    }
+    let lastSequenceClaimedByAnotherReservation = this.lastRetainedEventSequence;
+    for (const [sequence, claimOwner] of this.stagedEventOwnerBySequence) {
+      if (claimOwner !== owner) {
+        lastSequenceClaimedByAnotherReservation = Math.max(
+          lastSequenceClaimedByAnotherReservation,
+          sequence,
+        );
+      }
+    }
+    const firstEvent = events[0];
+    if (
+      !isNil(firstEvent) &&
+      firstEvent.sequence <= lastSequenceClaimedByAnotherReservation
+    ) {
+      throw new RangeError("CommandJournal Events are not in canonical sequence order.");
+    }
+    for (const event of events) {
+      this.stagedEventOwnerById.set(event.id, owner);
+      this.stagedEventOwnerBySequence.set(event.sequence, owner);
+    }
+  }
+
+  private retainEvents(events: readonly GameplayEventV1[]): void {
+    for (const event of events) {
+      this.retainedEventsById.set(event.id, event);
+      this.retainedEventSequences.add(event.sequence);
+      this.lastRetainedEventSequence = Math.max(
+        this.lastRetainedEventSequence,
+        event.sequence,
+      );
+    }
+  }
+
+  reserveEventCapacity(input: unknown): EventJournalReservationResultV1 {
+    const request = parseEventReservationRequest(input);
+    if (
+      this.retainedEventsById.size + this.reserved.eventCount + request.eventCount >
+      this.capacity.maximumRetainedEventCount
+    ) return EVENT_CAPACITY_EXCEEDED;
+
+    this.reserved.eventCount += request.eventCount;
+    const claimOwner = Symbol("CommandJournal Event reservation");
+    let state: "reserved" | "released" | "committed" = "reserved";
+    let committedEvents: readonly GameplayEventV1[] | undefined;
+
+    const releaseReservation = (): void => {
+      this.reserved.eventCount -= request.eventCount;
+      this.releaseStagedEventClaims(claimOwner);
+    };
+    const reservation = Object.freeze({
+      release: (): "released" => {
+        if (state === "reserved") {
+          state = "released";
+          releaseReservation();
+        }
+        return "released";
+      },
+      prepare: (eventsInput: readonly GameplayEventV1[]): PreparedEventJournalPublicationV1 => {
+        if (state !== "reserved") {
+          throw new Error("CommandJournal Event reservation is no longer available to prepare.");
+        }
+        let events: readonly GameplayEventV1[];
+        try {
+          events = parseEventBundle(eventsInput);
+          if (events.length > request.eventCount) {
+            throw new RangeError("CommandJournal Event count exceeds the reservation.");
+          }
+          this.stageEventClaims(events, claimOwner);
+        } catch (error) {
+          state = "released";
+          releaseReservation();
+          throw error;
+        }
+
+        return Object.freeze({
+          events,
+          commitPrepared: (): readonly GameplayEventV1[] => {
+            if (state === "committed" && !isNil(committedEvents)) {
+              return committedEvents;
+            }
+            if (state !== "reserved") return events;
+            state = "committed";
+            committedEvents = events;
+            releaseReservation();
+            this.retainEvents(events);
+            return events;
+          },
+        });
+      },
+    });
+    return Object.freeze({ status: "reserved", reservation });
   }
 
   reserveCapacity(input: unknown): CommandJournalReservationResultV1 {
@@ -327,6 +501,7 @@ export class CommandJournal {
     this.reserved.idempotencyRecordCount += request.idempotencyRecordCount;
     this.reserved.receiptCount += request.receiptCount;
     this.reserved.eventCount += request.eventCount;
+    const claimOwner = Symbol("CommandJournal command reservation");
     let state: "reserved" | "released" | "committed" = "reserved";
     let committedReceipt: GameplayCommandReceiptV1 | undefined;
 
@@ -334,6 +509,7 @@ export class CommandJournal {
       this.reserved.idempotencyRecordCount -= request.idempotencyRecordCount;
       this.reserved.receiptCount -= request.receiptCount;
       this.reserved.eventCount -= request.eventCount;
+      this.releaseStagedEventClaims(claimOwner);
     };
     const reservation = Object.freeze({
       release: (): "released" => {
@@ -361,20 +537,7 @@ export class CommandJournal {
           if (this.retainedCommandsById.has(bundle.command.id)) {
             throw new Error("CommandJournal command ID is already retained.");
           }
-          for (const event of bundle.events) {
-            if (this.retainedEventsById.has(event.id)) {
-              throw new Error(`CommandJournal Event '${event.id}' is already retained.`);
-            }
-          }
-          if (
-            bundle.events.some((event, index) =>
-              event.sequence <= (index === 0
-                ? this.lastRetainedEventSequence
-                : bundle.events[index - 1]!.sequence)
-            )
-          ) {
-            throw new RangeError("CommandJournal Events are not in canonical sequence order.");
-          }
+          this.stageEventClaims(bundle.events, claimOwner);
         } catch (error) {
           state = "released";
           releaseCounts();
@@ -403,10 +566,7 @@ export class CommandJournal {
             releaseCounts();
             this.retainedCommandsById.set(bundle.command.id, retainedRecord);
             this.retainedReceiptCount += 1;
-            for (const event of bundle.events) {
-              this.retainedEventsById.set(event.id, event);
-              this.lastRetainedEventSequence = event.sequence;
-            }
+            this.retainEvents(bundle.events);
             return bundle.receipt;
           },
         });
@@ -434,6 +594,7 @@ export class CommandJournal {
     if (maximumCountInput === 0) return Object.freeze([]);
     return Object.freeze([...this.retainedEventsById.values()]
       .filter((event) => event.sequence > afterSequenceInput)
+      .sort((left, right) => left.sequence - right.sequence)
       .slice(0, maximumCountInput));
   }
 

@@ -96,6 +96,225 @@ function worldFailedEvent(sequence: number): GameplayEventV1 {
 }
 
 describe("CommandJournal", () => {
+  it("stages event-only publications invisibly and commits them exactly once", () => {
+    const journal = new CommandJournal({
+      maximumIdempotencyRecordCount: 1,
+      maximumRetainedReceiptCount: 1,
+      maximumRetainedEventCount: 2,
+    });
+    const firstEvent = worldFailedEvent(1);
+    const secondEvent = worldFailedEvent(2);
+    const result = journal.reserveEventCapacity({ eventCount: 2 });
+    if (result.status !== "reserved") throw new Error("Expected Event capacity.");
+
+    const prepared = result.reservation.prepare([firstEvent, secondEvent]);
+    expect(journal.getEvent(firstEvent.id)).toBeUndefined();
+    expect(journal.eventsAfter(0, 10)).toEqual([]);
+    expect(prepared.events).toEqual([firstEvent, secondEvent]);
+    expect(prepared.commitPrepared).not.toThrow();
+    expect(prepared.commitPrepared()).toBe(prepared.events);
+    expect(journal.eventsAfter(0, 10)).toEqual([firstEvent, secondEvent]);
+    expect(journal.reserveEventCapacity({ eventCount: 1 })).toEqual({
+      status: "event-capacity-exceeded",
+    });
+    expect(journal.snapshot()).toMatchObject({
+      retainedIdempotencyRecordCount: 0,
+      retainedReceiptCount: 0,
+      retainedEventCount: 2,
+      reservedIdempotencyRecordCount: 0,
+      reservedReceiptCount: 0,
+      reservedEventCount: 0,
+    });
+  });
+
+  it("shares Event capacity between command and event-only reservations without closing command admission", () => {
+    const journal = new CommandJournal({
+      maximumIdempotencyRecordCount: 1,
+      maximumRetainedReceiptCount: 1,
+      maximumRetainedEventCount: 1,
+    });
+    const eventOnly = journal.reserveEventCapacity({ eventCount: 1 });
+    if (eventOnly.status !== "reserved") throw new Error("Expected Event capacity.");
+
+    expect(journal.reserveCapacity({
+      simulationTick: 8,
+      idempotencyRecordCount: 1,
+      receiptCount: 1,
+      eventCount: 1,
+    })).toEqual({ status: "event-capacity-exceeded" });
+    expect(journal.reserveEventCapacity({ eventCount: 1 })).toEqual({
+      status: "event-capacity-exceeded",
+    });
+    expect(journal.snapshot().commandAdmissionClosedSimulationTick).toBeUndefined();
+
+    expect(eventOnly.reservation.release()).toBe("released");
+    expect(journal.reserveCapacity({
+      simulationTick: 8,
+      idempotencyRecordCount: 1,
+      receiptCount: 1,
+      eventCount: 1,
+    }).status).toBe("reserved");
+  });
+
+  it("supports a zero-Event no-op reservation without consuming journal capacity", () => {
+    const journal = new CommandJournal({
+      maximumIdempotencyRecordCount: 0,
+      maximumRetainedReceiptCount: 0,
+      maximumRetainedEventCount: 0,
+    });
+    const result = journal.reserveEventCapacity({ eventCount: 0 });
+    if (result.status !== "reserved") throw new Error("Expected zero-Event reservation.");
+
+    const prepared = result.reservation.prepare([]);
+    expect(prepared.events).toEqual([]);
+    expect(prepared.commitPrepared).not.toThrow();
+    expect(prepared.commitPrepared()).toBe(prepared.events);
+    expect(journal.snapshot()).toEqual({
+      commandAdmissionClosedSimulationTick: undefined,
+      retainedIdempotencyRecordCount: 0,
+      retainedReceiptCount: 0,
+      retainedEventCount: 0,
+      reservedIdempotencyRecordCount: 0,
+      reservedReceiptCount: 0,
+      reservedEventCount: 0,
+    });
+  });
+
+  it("rejects non-exact and unsafe event-only reservation requests", () => {
+    const journal = new CommandJournal({
+      maximumIdempotencyRecordCount: 0,
+      maximumRetainedReceiptCount: 0,
+      maximumRetainedEventCount: 1,
+    });
+
+    expect(() => journal.reserveEventCapacity({
+      eventCount: 0,
+      unexpected: true,
+    })).toThrow(/exact non-negative integer/);
+    expect(() => journal.reserveEventCapacity({ eventCount: -0 })).toThrow(
+      /exact non-negative integer/,
+    );
+    expect(() => journal.reserveEventCapacity({ eventCount: 1.5 })).toThrow(
+      /exact non-negative integer/,
+    );
+  });
+
+  it("rejects non-canonical event-only preparation and releases its reservation", () => {
+    const journal = new CommandJournal({
+      maximumIdempotencyRecordCount: 1,
+      maximumRetainedReceiptCount: 1,
+      maximumRetainedEventCount: 2,
+    });
+    const result = journal.reserveEventCapacity({ eventCount: 2 });
+    if (result.status !== "reserved") throw new Error("Expected Event capacity.");
+
+    expect(() => result.reservation.prepare([
+      worldFailedEvent(2),
+      worldFailedEvent(1),
+    ])).toThrow(/canonical sequence order/);
+    expect(journal.snapshot().reservedEventCount).toBe(0);
+    expect(journal.reserveEventCapacity({ eventCount: 2 }).status).toBe("reserved");
+  });
+
+  it("releases prepared Event claims and makes the prepared publication inert", () => {
+    const journal = new CommandJournal({
+      maximumIdempotencyRecordCount: 1,
+      maximumRetainedReceiptCount: 1,
+      maximumRetainedEventCount: 1,
+    });
+    const first = journal.reserveEventCapacity({ eventCount: 1 });
+    if (first.status !== "reserved") throw new Error("Expected Event capacity.");
+    const event = worldFailedEvent(1);
+    const prepared = first.reservation.prepare([event]);
+
+    expect(first.reservation.release()).toBe("released");
+    const second = journal.reserveEventCapacity({ eventCount: 1 });
+    if (second.status !== "reserved") throw new Error("Expected reclaimed Event capacity.");
+    expect(() => second.reservation.prepare([event])).not.toThrow();
+    expect(prepared.commitPrepared).not.toThrow();
+    expect(journal.getEvent(event.id)).toBeUndefined();
+  });
+
+  it("keeps event-only admission available after command admission closes", () => {
+    const journal = new CommandJournal({
+      maximumIdempotencyRecordCount: 0,
+      maximumRetainedReceiptCount: 0,
+      maximumRetainedEventCount: 1,
+    });
+    expect(journal.reserveCapacity({
+      simulationTick: 4,
+      idempotencyRecordCount: 1,
+      receiptCount: 1,
+      eventCount: 0,
+    })).toMatchObject({ status: "command-admission-closed" });
+
+    const eventOnly = journal.reserveEventCapacity({ eventCount: 1 });
+    expect(eventOnly.status).toBe("reserved");
+    expect(journal.snapshot().commandAdmissionClosedSimulationTick).toBe(4);
+  });
+
+  it("prevents staged command and event-only publications from claiming the same Event identity", () => {
+    const journal = new CommandJournal({
+      maximumIdempotencyRecordCount: 1,
+      maximumRetainedReceiptCount: 1,
+      maximumRetainedEventCount: 2,
+    });
+    const sharedEvent = worldFailedEvent(1);
+    const eventOnly = journal.reserveEventCapacity({ eventCount: 1 });
+    const commandOnly = journal.reserveCapacity({
+      simulationTick: 8,
+      idempotencyRecordCount: 1,
+      receiptCount: 1,
+      eventCount: 1,
+    });
+    if (eventOnly.status !== "reserved" || commandOnly.status !== "reserved") {
+      throw new Error("Expected both reservations.");
+    }
+    eventOnly.reservation.prepare([sharedEvent]);
+    const firstCommand = command("command-shared-event");
+
+    expect(() => commandOnly.reservation.prepare({
+      command: firstCommand,
+      commandHash: deriveGameplayCommandHashV1(firstCommand),
+      receipt: failedReceipt(firstCommand, 8, sharedEvent),
+      events: [sharedEvent],
+    })).toThrow(/already staged/);
+    expect(journal.snapshot().reservedIdempotencyRecordCount).toBe(0);
+    expect(journal.snapshot().reservedReceiptCount).toBe(0);
+  });
+
+  it("keeps staged Event sequences globally ordered across reservation kinds and commit order", () => {
+    const journal = new CommandJournal({
+      maximumIdempotencyRecordCount: 1,
+      maximumRetainedReceiptCount: 1,
+      maximumRetainedEventCount: 2,
+    });
+    const commandResult = journal.reserveCapacity({
+      simulationTick: 8,
+      idempotencyRecordCount: 1,
+      receiptCount: 1,
+      eventCount: 1,
+    });
+    const eventResult = journal.reserveEventCapacity({ eventCount: 1 });
+    if (commandResult.status !== "reserved" || eventResult.status !== "reserved") {
+      throw new Error("Expected both reservations.");
+    }
+    const firstCommand = command("command-sequence-one");
+    const firstEvent = worldFailedEvent(1);
+    const commandPrepared = commandResult.reservation.prepare({
+      command: firstCommand,
+      commandHash: deriveGameplayCommandHashV1(firstCommand),
+      receipt: failedReceipt(firstCommand, 8, firstEvent),
+      events: [firstEvent],
+    });
+    const secondEvent = worldFailedEvent(2);
+    const eventPrepared = eventResult.reservation.prepare([secondEvent]);
+
+    expect(eventPrepared.commitPrepared).not.toThrow();
+    expect(commandPrepared.commitPrepared).not.toThrow();
+    expect(journal.eventsAfter(0, 10)).toEqual([firstEvent, secondEvent]);
+  });
+
   it("keeps a prepared publication invisible until its no-throw pointer swap", () => {
     const journal = new CommandJournal({
       maximumIdempotencyRecordCount: 1,
