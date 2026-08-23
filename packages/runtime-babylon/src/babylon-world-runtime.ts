@@ -32,6 +32,8 @@ import type {
   ExecutionLayoutAssertionV1,
   ExecutionLayoutPlacementV1,
   ExecutionPlanV4,
+  ExecutionPlanV5,
+  ExecutionStaticColliderV1,
   ExecutionWaterBoundaryV3,
   ExecutionWaterV3,
   FixedInputV1,
@@ -48,11 +50,16 @@ import type {
   WorldRuntimeSnapshotV3,
 } from "@whitebox-world/runtime-contracts";
 import { TRUSTED_DEFAULT_CONTROLLER_ID } from "@whitebox-world/runtime-contracts";
+import { sha256CanonicalJson } from "@whitebox-world/protocol";
 import { resolveGroundHumanoidAction } from "@whitebox-world/subject-actions";
 import {
+  emitStaticColliderTriangleMeshV1,
+  emitTransformedStaticColliderTriangleMeshV1,
+  queryStaticColliderTriangleMeshSupportHeightMetersV1,
   queryLockedColliderSupportHeightMeters,
   type LockedSupportColliderV1,
 } from "@whitebox-world/terrain-surface";
+import { isNil } from "lodash-es";
 
 import "./babylon-shader-bootstrap";
 import { createWhiteboxMaterials, type WhiteboxMaterials } from "./materials";
@@ -73,6 +80,11 @@ import {
   toBabylonHeightfieldData,
 } from "./terrain";
 import { captureBabylonControlFrameV1 } from "./control-capture";
+import {
+  BABYLON_TRAVERSAL_RUNTIME_INTERNAL,
+  type BabylonTraversalRuntimeInternalV1,
+  type StaticCollisionMeshEntryV1,
+} from "./traversal-runtime-internal";
 
 export type BabylonWorldRuntimeInitializationStageV1 =
   | "engine"
@@ -84,7 +96,7 @@ export type BabylonWorldRuntimeInitializationStageV1 =
   | "ready";
 
 export interface BabylonWorldRuntimeOptions {
-  executionPlan: ExecutionPlanV4;
+  executionPlan: ExecutionPlanV4 | ExecutionPlanV5;
   runtimeSessionId?: string;
   canvas?: HTMLCanvasElement;
   engineFactory?: () => AbstractEngine;
@@ -95,6 +107,8 @@ export interface BabylonWorldRuntimeOptions {
   subjectAssetCacheOptions?: SubjectAssetCacheOptionsV1;
   onInitializationStage?(stage: BabylonWorldRuntimeInitializationStageV1): void;
 }
+
+type RuntimeExecutionPlanV1 = ExecutionPlanV4 | ExecutionPlanV5;
 
 type OwnedDisposer = () => void | Promise<void>;
 
@@ -140,7 +154,7 @@ interface RuntimeLayoutBoundsV1 {
 }
 
 function runtimeLayoutBounds(
-  executionPlan: ExecutionPlanV4,
+  executionPlan: RuntimeExecutionPlanV1,
   placement: ExecutionLayoutPlacementV1,
 ): RuntimeLayoutBoundsV1 {
   const object = executionPlan.objects.find((row) => row.entityId === placement.entityId);
@@ -222,7 +236,7 @@ function runtimeAabbsOverlap(
  * the AABB top is never a fallback support surface.
  */
 function lockedSupportColliderForPlacement(
-  executionPlan: ExecutionPlanV4,
+  executionPlan: RuntimeExecutionPlanV1,
   placement: ExecutionLayoutPlacementV1,
 ): LockedSupportColliderV1 {
   const object = executionPlan.objects.find((row) => row.entityId === placement.entityId);
@@ -271,7 +285,7 @@ function lockedSupportColliderForPlacement(
 }
 
 function revalidateSupportAssertion(
-  executionPlan: ExecutionPlanV4,
+  executionPlan: RuntimeExecutionPlanV1,
   assertion: Extract<ExecutionLayoutAssertionV1, { kind: "supported-by" }>,
   boundsByEntityId: Readonly<Record<string, RuntimeLayoutBoundsV1>>,
 ): boolean {
@@ -288,6 +302,33 @@ function revalidateSupportAssertion(
     ).length;
     return Math.max(...gaps) <= assertion.maximumSupportGapMeters + supportGapTolerance &&
       passing / gaps.length + 0.000001 >= assertion.minimumSupportRatio;
+  }
+  if (executionPlan.schemaVersion === 5) {
+    const colliderMeshes = executionPlan.staticColliders
+      .filter((collider) => collider.entityId === assertion.supportingEntityId)
+      .map((collider) => emitTransformedStaticColliderTriangleMeshV1(
+        collider.shape,
+        collider.transform,
+      ));
+    if (colliderMeshes.length === 0) return false;
+    const samples = runtimeSupportSamples(supported);
+    const gaps: number[] = [];
+    for (const point of samples) {
+      const supportHeightsMeters = colliderMeshes
+        .map((mesh) =>
+          queryStaticColliderTriangleMeshSupportHeightMetersV1(mesh, point)
+        )
+        .filter((heightMeters): heightMeters is number => !isNil(heightMeters));
+      if (supportHeightsMeters.length === 0) continue;
+      gaps.push(Math.abs(bottom - Math.max(...supportHeightsMeters)));
+    }
+    if (gaps.length === 0) return false;
+    const passing = gaps.filter((gap) =>
+      gap <= assertion.maximumSupportGapMeters + supportGapTolerance
+    ).length;
+    return Math.max(...gaps) <=
+        assertion.maximumSupportGapMeters + supportGapTolerance &&
+      passing / samples.length + 0.000001 >= assertion.minimumSupportRatio;
   }
   const supportingPlacement =
     executionPlan.layout.placementsByEntityId[assertion.supportingEntityId];
@@ -309,7 +350,7 @@ function revalidateSupportAssertion(
 
 function revalidateClearanceAssertion(
   assertion: Extract<ExecutionLayoutAssertionV1, { kind: "minimum-clearance" }>,
-  executionPlan: ExecutionPlanV4,
+  executionPlan: RuntimeExecutionPlanV1,
   boundsByEntityId: Readonly<Record<string, RuntimeLayoutBoundsV1>>,
 ): boolean {
   const entity = boundsByEntityId[assertion.entityId];
@@ -326,7 +367,7 @@ function revalidateClearanceAssertion(
   return minimumClearance + (assertion.tolerances.overlapMeters ?? 0) >= assertion.clearanceMeters;
 }
 
-function revalidateRuntimeLayoutAssertions(executionPlan: ExecutionPlanV4): void {
+function revalidateRuntimeLayoutAssertions(executionPlan: RuntimeExecutionPlanV1): void {
   const placements = Object.values(executionPlan.layout.placementsByEntityId);
   const boundsByEntityId = Object.fromEntries(placements.map((placement) => [
     placement.entityId,
@@ -400,6 +441,35 @@ function createObjectMesh(object: ExecutionObjectV3, materials: WhiteboxMaterial
   return mesh;
 }
 
+function createStaticCollisionMesh(
+  collider: ExecutionStaticColliderV1,
+  scene: Scene,
+): Mesh {
+  const topology = emitStaticColliderTriangleMeshV1(collider.shape);
+  const mesh = new Mesh(`worldkit.static-collider.${collider.colliderSubshapeId}`, scene);
+  const positions = [...topology.localPositionsMetersXYZ];
+  const indices = [...topology.triangleIndices];
+  const normals: number[] = [];
+  VertexData.ComputeNormals(positions, indices, normals);
+  const vertexData = new VertexData();
+  vertexData.positions = positions;
+  vertexData.indices = indices;
+  vertexData.normals = normals;
+  vertexData.applyToMesh(mesh, false);
+  mesh.position = new Vector3(...collider.transform.positionMetersXYZ);
+  mesh.rotationQuaternion = Quaternion.FromEulerAngles(
+    ...collider.transform.rotationEulerRadiansXYZ,
+  );
+  mesh.scaling = new Vector3(...collider.transform.scaleXYZ);
+  mesh.metadata = {
+    worldkitEntityId: collider.entityId,
+    colliderSubshapeId: collider.colliderSubshapeId,
+  };
+  mesh.isVisible = false;
+  mesh.computeWorldMatrix(true);
+  return mesh;
+}
+
 function createWaterMesh(water: ExecutionWaterV3, materials: WhiteboxMaterials, scene: Scene): Mesh {
   const boundary = water.boundary;
   let mesh: Mesh;
@@ -463,7 +533,7 @@ function containsPoint(boundary: ExecutionWaterBoundaryV3, x: number, z: number)
 }
 
 function waterSurfaceHeightAtSubjectOrigin(
-  executionPlan: ExecutionPlanV4,
+  executionPlan: RuntimeExecutionPlanV1,
   subjectOrigin: Vector3,
 ): number | undefined {
   return executionPlan.waters.find((water) =>
@@ -475,7 +545,10 @@ function waterSurfaceHeightAtSubjectOrigin(
   )?.waterLevelMeters;
 }
 
-function configureAtmosphere(scene: Scene, preset: ExecutionPlanV4["atmospherePreset"]): void {
+function configureAtmosphere(
+  scene: Scene,
+  preset: RuntimeExecutionPlanV1["atmospherePreset"],
+): void {
   const colors = {
     "clear-day": new Color4(0.55, 0.78, 0.92, 1),
     "golden-hour": new Color4(0.91, 0.65, 0.42, 1),
@@ -516,8 +589,10 @@ export class BabylonWorldRuntime implements WorldRuntimeSessionV3 {
   private disposed = false;
   private latestRenderReadyReceipt: RenderReadyReceiptV1 | undefined;
   private controlledEntityId: string;
+  private traversalConfigurationEpoch = 0;
   private readonly aggregates: PhysicsAggregate[] = [];
   private readonly ownedTerrainShape: PhysicsShape;
+  private readonly staticCollisionMeshes: readonly StaticCollisionMeshEntryV1[];
   private readonly subjectControllersByEntityId: ReadonlyMap<string, SubjectController>;
   private readonly subjectVisuals: readonly SubjectVisual[];
   private readonly subjectVisualsByEntityId: ReadonlyMap<string, SubjectVisual>;
@@ -528,9 +603,10 @@ export class BabylonWorldRuntime implements WorldRuntimeSessionV3 {
   private readonly ownedDisposers: readonly OwnedDisposer[];
   private activeInputActions: readonly SemanticInputActionV1[] = [];
   private activeInputAxes: Readonly<ControlInputAxesV2> = {};
+  readonly #creationExecutionPlanHash: `sha256:${string}` | undefined;
 
   private constructor(
-    private readonly executionPlan: ExecutionPlanV4,
+    private readonly executionPlan: RuntimeExecutionPlanV1,
     private readonly runtimeSessionId: string,
     private readonly engine: AbstractEngine,
     private readonly scene: Scene,
@@ -539,8 +615,10 @@ export class BabylonWorldRuntime implements WorldRuntimeSessionV3 {
     camera: FreeCamera,
     ownedTerrainShape: PhysicsShape,
     aggregates: PhysicsAggregate[],
+    staticCollisionMeshes: readonly StaticCollisionMeshEntryV1[],
     ownedDisposers: readonly OwnedDisposer[],
     autoStartRenderLoop: boolean,
+    creationExecutionPlanHash: `sha256:${string}` | undefined,
   ) {
     this.controlledEntityId = executionPlan.controlledEntityId;
     this.subjectControllersByEntityId = subjectControllersByEntityId;
@@ -555,9 +633,11 @@ export class BabylonWorldRuntime implements WorldRuntimeSessionV3 {
     this.cameraDirector = new CameraDirectorV1(executionPlan, camera, scene);
     this.ownedTerrainShape = ownedTerrainShape;
     this.aggregates.push(...aggregates);
+    this.staticCollisionMeshes = staticCollisionMeshes;
     this.ownedDisposers = ownedDisposers;
     this.renderLoop = () => this.renderFrame();
     this.autoStartRenderLoop = autoStartRenderLoop;
+    this.#creationExecutionPlanHash = creationExecutionPlanHash;
     this.updateCamera();
     if (autoStartRenderLoop) this.engine.runRenderLoop(this.renderLoop);
   }
@@ -584,6 +664,9 @@ export class BabylonWorldRuntime implements WorldRuntimeSessionV3 {
         `WORLDKIT_RUNTIME_CONTROL_TARGET_NOT_FOUND: ${options.executionPlan.controlledEntityId}`,
       );
     }
+    const creationExecutionPlanHash = options.executionPlan.schemaVersion === 5
+      ? sha256CanonicalJson(options.executionPlan) as `sha256:${string}`
+      : undefined;
     const ownedDisposers: OwnedDisposer[] = [];
     options.onInitializationStage?.("engine");
     const engine = options.engineFactory?.() ?? new Engine(options.canvas!, true, { preserveDrawingBuffer: true, stencil: true });
@@ -606,7 +689,9 @@ export class BabylonWorldRuntime implements WorldRuntimeSessionV3 {
       const terrainMesh = createTerrainMesh(options.executionPlan.terrain, materials.terrain, scene);
       const terrain = options.executionPlan.terrain;
       const [terrainColumns, terrainRows] = terrain.resolutionCellsXZ;
-      const terrainShape: PhysicsShape = terrainColumns === terrainRows
+      const terrainShape: PhysicsShape = options.executionPlan.schemaVersion === 5
+        ? new PhysicsShapeMesh(terrainMesh, scene)
+        : terrainColumns === terrainRows
         ? new PhysicsShapeHeightField(
             terrain.sizeMetersXZ[0],
             terrain.sizeMetersXZ[1],
@@ -630,7 +715,7 @@ export class BabylonWorldRuntime implements WorldRuntimeSessionV3 {
       for (const water of options.executionPlan.waters) createWaterMesh(water, materials, scene);
       for (const object of options.executionPlan.objects) {
         const mesh = createObjectMesh(object, materials, scene);
-        if (object.collisionEnabled) {
+        if (options.executionPlan.schemaVersion === 4 && object.collisionEnabled) {
           const shapeType = object.primitive.kind === "box"
             ? PhysicsShapeType.BOX
             : object.primitive.kind === "sphere"
@@ -643,6 +728,23 @@ export class BabylonWorldRuntime implements WorldRuntimeSessionV3 {
             scene,
           );
           aggregates.push(aggregate);
+          ownedDisposers.push(() => aggregate.dispose());
+        }
+      }
+      const staticCollisionMeshes: StaticCollisionMeshEntryV1[] = [];
+      if (options.executionPlan.schemaVersion === 5) {
+        for (const collider of options.executionPlan.staticColliders) {
+          const mesh = createStaticCollisionMesh(collider, scene);
+          const shape = new PhysicsShapeMesh(mesh, scene);
+          ownedDisposers.push(() => shape.dispose());
+          const aggregate = new PhysicsAggregate(
+            mesh,
+            shape,
+            { mass: 0, friction: 0.75, restitution: 0 },
+            scene,
+          );
+          aggregates.push(aggregate);
+          staticCollisionMeshes.push({ collider, mesh });
           ownedDisposers.push(() => aggregate.dispose());
         }
       }
@@ -701,8 +803,10 @@ export class BabylonWorldRuntime implements WorldRuntimeSessionV3 {
         camera,
         terrainShape,
         aggregates,
+        staticCollisionMeshes,
         ownedDisposers,
         options.engineFactory === undefined && options.autoStartRenderLoop !== false,
+        creationExecutionPlanHash,
       );
     } catch (error) {
       try {
@@ -770,9 +874,14 @@ export class BabylonWorldRuntime implements WorldRuntimeSessionV3 {
       };
     }
 
-    this.controllerFor(this.controlledEntityId).stop();
+    const previousController = this.controllerFor(this.controlledEntityId);
+    previousController.stop();
+    previousController.clearRetainedCharacterSupportSample();
     this.visualFor(this.controlledEntityId).stepAnimation(this.tick, "idle");
     this.controlledEntityId = request.controlledEntityId;
+    this.controllerFor(this.controlledEntityId)
+      .clearRetainedCharacterSupportSample();
+    this.traversalConfigurationEpoch += 1;
     this.latestRenderReadyReceipt = undefined;
     this.updateCamera();
     return {
@@ -790,8 +899,6 @@ export class BabylonWorldRuntime implements WorldRuntimeSessionV3 {
     if (!Number.isSafeInteger(input.ticks) || input.ticks < 0 || input.ticks > 36_000) {
       throw new RangeError("Fixed input ticks must be an integer from 0 through 36000.");
     }
-    const physicsEngine = this.scene.getPhysicsEngine();
-    if (physicsEngine === null) throw new Error("WORLDKIT_HAVOK_ENGINE_MISSING");
     if (input.ticks > 0) this.latestRenderReadyReceipt = undefined;
     for (let index = 0; index < input.ticks; index += 1) {
       this.activeInputActions = [...input.actions];
@@ -814,24 +921,108 @@ export class BabylonWorldRuntime implements WorldRuntimeSessionV3 {
           controller.publishSupport();
         }
       }
-      physicsEngine._step(FIXED_TIME_STEP_SECONDS);
-      this.tick += 1;
-      for (const subject of this.executionPlan.subjects) {
-        const controller = this.controllerFor(subject.entityId);
-        const visual = this.visualFor(subject.entityId);
-        controller.synchronizeVisual();
-        if (subject.entityId !== this.controlledEntityId) {
-          visual.stepAnimation(this.tick, "idle");
-          continue;
-        }
-        const motion = controller.sampleMotion(
-          input.actions.includes("run") || input.actions.includes("boost"),
-        );
-        visual.stepAnimation(this.tick, resolveGroundHumanoidAction(motion));
-      }
-      this.updateCamera();
+      this.commitFixedTick(
+        input.actions.includes("run") || input.actions.includes("boost"),
+      );
     }
     return this.snapshot();
+  }
+
+  [BABYLON_TRAVERSAL_RUNTIME_INTERNAL](): BabylonTraversalRuntimeInternalV1 {
+    return {
+      readExecutionPlan: () => this.executionPlan,
+      readCreationExecutionPlanHash: () => this.#creationExecutionPlanHash,
+      readControlledEntityId: () => this.controlledEntityId,
+      readConfigurationEpoch: () => this.traversalConfigurationEpoch,
+      readTick: () => this.tick,
+      isDisposed: () => this.disposed,
+      readSubjectController: (entityId) =>
+        this.subjectControllersByEntityId.get(entityId),
+      readStaticCollisionMeshes: () => this.staticCollisionMeshes,
+      resetToTraversalAnchor: (input) => this.resetToTraversalAnchor(input),
+      runTraversalFixedTick: (input) => this.runTraversalFixedTick(input),
+    };
+  }
+
+  private commitFixedTick(runRequested: boolean): void {
+    const physicsEngine = this.scene.getPhysicsEngine();
+    if (physicsEngine === null) throw new Error("WORLDKIT_HAVOK_ENGINE_MISSING");
+    physicsEngine._step(FIXED_TIME_STEP_SECONDS);
+    this.tick += 1;
+    for (const subject of this.executionPlan.subjects) {
+      const controller = this.controllerFor(subject.entityId);
+      const visual = this.visualFor(subject.entityId);
+      controller.synchronizeVisual();
+      if (subject.entityId !== this.controlledEntityId) {
+        visual.stepAnimation(this.tick, "idle");
+        continue;
+      }
+      const motion = controller.sampleMotion(runRequested);
+      visual.stepAnimation(this.tick, resolveGroundHumanoidAction(motion));
+    }
+    this.updateCamera();
+  }
+
+  private resetToTraversalAnchor(input: Readonly<{
+    traversingEntityId: string;
+    subjectOriginPositionMetersXYZ: Vec3;
+    facingYawRadians: number;
+  }>): void {
+    this.assertUsable();
+    if (input.traversingEntityId !== this.controlledEntityId) {
+      throw new Error("TRAVERSAL_RUNTIME_NOT_CONTROLLED");
+    }
+    this.traversalConfigurationEpoch += 1;
+    for (const subject of this.executionPlan.subjects) {
+      const controller = this.controllerFor(subject.entityId);
+      if (subject.entityId === input.traversingEntityId) {
+        controller.resetAt(
+          input.subjectOriginPositionMetersXYZ,
+          input.facingYawRadians,
+        );
+      } else {
+        controller.reset();
+      }
+    }
+    for (const visual of this.subjectVisuals) visual.resetAnimation();
+    this.tick = 0;
+    this.activeInputActions = [];
+    this.activeInputAxes = {};
+    this.cameraDirector.reset();
+    this.latestRenderReadyReceipt = undefined;
+    this.updateCamera();
+  }
+
+  private runTraversalFixedTick(input: Readonly<{
+    traversingEntityId: string;
+    walkDirectionWorldXZ: readonly [number, number];
+  }>): void {
+    this.assertUsable();
+    if (input.traversingEntityId !== this.controlledEntityId) {
+      throw new Error("TRAVERSAL_RUNTIME_NOT_CONTROLLED");
+    }
+    this.latestRenderReadyReceipt = undefined;
+    this.activeInputActions = [];
+    this.activeInputAxes = {};
+    this.cameraDirector.setInputActions([]);
+    for (const subject of this.executionPlan.subjects) {
+      const controller = this.controllerFor(subject.entityId);
+      if (subject.entityId === input.traversingEntityId) {
+        controller.stepCommand({
+          kind: "planar-vector",
+          directionMetersXZ: input.walkDirectionWorldXZ,
+          runRequested: false,
+          jumpRequested: false,
+          aimRequested: false,
+          facingDirectionMetersXZ: input.walkDirectionWorldXZ,
+        });
+      } else if (controller.movementMedium !== "ground") {
+        controller.stepCommand({ kind: "none" });
+      } else {
+        controller.publishSupport();
+      }
+    }
+    this.commitFixedTick(false);
   }
 
   snapshot(): WorldRuntimeSnapshotV3 {
@@ -918,6 +1109,7 @@ export class BabylonWorldRuntime implements WorldRuntimeSessionV3 {
 
   reset(): WorldRuntimeSnapshotV3 {
     this.assertUsable();
+    this.traversalConfigurationEpoch += 1;
     for (const controller of this.subjectControllersByEntityId.values()) controller.reset();
     for (const visual of this.subjectVisuals) visual.resetAnimation();
     this.controlledEntityId = this.executionPlan.controlledEntityId;
@@ -1183,7 +1375,10 @@ export class BabylonWorldRuntime implements WorldRuntimeSessionV3 {
   requestMotionProfile(subjectEntityId: string, motionProfileRef: string): boolean {
     this.assertUsable();
     const changed = this.controllerFor(subjectEntityId).requestMotionProfile(motionProfileRef);
-    if (changed) this.latestRenderReadyReceipt = undefined;
+    if (changed) {
+      this.traversalConfigurationEpoch += 1;
+      this.latestRenderReadyReceipt = undefined;
+    }
     return changed;
   }
 
@@ -1192,7 +1387,10 @@ export class BabylonWorldRuntime implements WorldRuntimeSessionV3 {
     const changed = this.controllerFor(subjectEntityId).requestControlFeelProfile(
       resourceRef,
     );
-    if (changed) this.latestRenderReadyReceipt = undefined;
+    if (changed) {
+      this.traversalConfigurationEpoch += 1;
+      this.latestRenderReadyReceipt = undefined;
+    }
     return changed;
   }
 
@@ -1310,6 +1508,7 @@ export class BabylonWorldRuntime implements WorldRuntimeSessionV3 {
         "Preset Motion selection validation diverged from fixed-tick Runtime application.",
       );
     }
+    this.traversalConfigurationEpoch += 1;
     this.latestRenderReadyReceipt = undefined;
     this.updateCamera();
     return { status: "committed", snapshot: this.snapshot() };

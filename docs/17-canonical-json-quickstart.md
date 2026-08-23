@@ -1,7 +1,7 @@
-# Canonical Authoring V3 / Runtime Protocol V3 快速接入
+# Canonical Authoring V3/V4 / Browser Protocol V4 快速接入
 
-Canonical Authoring V3 是本仓库面向 AI Agent 和其他程序的唯一 JSON
-输入协议。调用方只描述世界、资源、节点和启动绑定；SDK 负责严格校验、
+Canonical Authoring V3 是基础世界的当前 JSON 输入；声明 Route Connectivity 的世界
+使用干净升级后的 V4。调用方只描述世界、资源、节点、Route/Anchor 和启动绑定；SDK 负责严格校验、
 Registry 解析、确定性 Placement 求解、归一化、Collider 推导、编译、物理执行和截图。
 
 旧 Authoring 版本从未发布，现已删除，也没有兼容解析或字段别名。当前版本链路为：
@@ -11,12 +11,21 @@ AuthoringSpec V3
   -> LayoutSolveReport V1
   -> NormalizedWorldIR V3
   -> ExecutionPlan V4
-  -> Runtime Snapshot V3 / Browser Protocol V3
+  -> Runtime Snapshot V3 / Browser Protocol V4
+
+AuthoringSpec V4 (Route Connectivity)
+  -> LayoutSolveReport V1
+  -> NormalizedWorldIR V4
+  -> ExecutionPlan V5
+  -> trusted Route Validation + Browser Protocol V4
 ```
 
 > Golden Humanoid S1b 首个可视纵向切片已完成并进入回归；S1b 整体与 Semantic Actions 整体仍未完成.
 
-> Placement Solver S1 首个海湾纵向切片已完成并进入回归；通用 Terrain Mask/Route Graph、更多 Constraint 与 P0.1 整体仍未完成。
+> Placement Solver S1 首个海湾纵向切片已完成并进入回归；通用 Terrain Mask、Route R1b、更多 Constraint 与 P0.1 整体仍未完成。
+
+> Route R1 Heightfield 已完成并通过 `pnpm verify:route-r1-heightfield`。公开 Golden
+> 示例为 `examples/traversal/r1-heightfield/`。R1b 与完整 M5 仍开放。
 
 ## 1. 最短运行路径
 
@@ -53,6 +62,8 @@ SDK 从上游交付的 Canonical JSON 开始工作。
 
 权威 Schema 是
 [`authoring-spec-v3.schema.json`](../packages/authoring/src/authoring-spec-v3.schema.json)，
+Route 世界 Schema 是
+[`authoring-spec-v4.schema.json`](../packages/authoring/src/authoring-spec-v4.schema.json)，
 Package 主体 Schema 是
 [`subject-definition-v1.schema.json`](../packages/authoring/src/subject-definition-v1.schema.json)，
 完整示例是
@@ -112,6 +123,11 @@ Package 主体 Schema 是
 所有对象都是闭合 Schema。未知字段、重复 JSON Key、注释、尾逗号、
 非有限数字、错误引用、版本缺失、超预算和当前不支持的能力都会返回结构化
 Diagnostic，不会被静默忽略。
+
+V3 保持基础世界合同，不通过 sidecar 或空字段伪装 Route 支持。需要验证主体从
+Start Anchor 到 Destination Anchor 是否可通行时，调用方必须提交 Authoring V4；AI
+仍只填写 Route/Anchor/Subject 意图和稳定 Ref，不填写 NavMesh、Recast 参数、Havok
+Handle 或运行时阈值。
 
 ### 2.1 Fixed、Solved 与 Required/Preferred
 
@@ -324,6 +340,7 @@ Compiler 版本会得到字节稳定的 Definition、IR 与 Plan 哈希。
 | `layout solve <world> --output <dir> [--json]` | 0 | 2/3/4/5 | 事务性写 Report、IR 与 Integrity Manifest |
 | `layout explain <report> --entity-id <id> [--json]` | 0 | 2 | 解释一个最终 Placement |
 | `layout explain <report> --constraint-id <id> [--json]` | 0 | 2 | 解释一条 Constraint 结果 |
+| `verify route <world-v4.json> --profile <ref> --output <report.json> [--json]` | 0 | 2/3 | 可信执行 Route Graph/Path 与真实 Controller Probe，原子发布 Canonical Evidence/Report |
 
 `--json` 输出稳定字段名、`code`、JSON Pointer 风格的 `instancePath`、
 `message` 和可选 `details`。命令不会回显源文件正文或环境变量。
@@ -340,7 +357,23 @@ pnpm worldkit layout explain /tmp/placement-coastal-layout/layout-report.json \
   --constraint-id lighthouse-visible --json
 ```
 
-## 7. Browser Protocol V3
+Route 验证使用唯一冻结 Profile：
+
+```bash
+pnpm worldkit verify route examples/traversal/r1-heightfield/success.json \
+  --profile worldkit://validation-profile/outdoor-world-package-dev@1 \
+  --output /tmp/route-r1-success.validation-report.json --json
+```
+
+命令依次完成 Authoring V4 → NormalizedWorldIR V4 → ExecutionPlan V5 Pipeline、
+WorldPackage Build Receipt、Validation Subject、
+Recast Graph/Path、真实 Babylon/Havok `NullEngine` 固定 Tick Probe 和统一 Route
+Report。Report 写到 `--output`，Canonical Evidence 写到兄弟目录
+`<report.json>.evidence/`；两者都使用 no-replace 发布。`passed / failed / incomplete /
+infrastructure` 分别退出 `0 / 2 / 3 / 1`，基础设施异常不会被伪装成 Route 失败。
+V3 输入会被明确拒绝，不会自动补空 Connectivity 或升级为 V4。
+
+## 7. Browser Protocol V4
 
 Canonical 页面就绪后暴露 `window.__WORLDKIT__`：
 
@@ -353,29 +386,51 @@ interface WorldkitBrowserDiagnosticV1 {
   details?: Readonly<Record<string, unknown>>;
 }
 
-interface WorldkitBrowserApiV3 {
-  version: 3;
+interface WorldkitBrowserApiV4 {
+  version: 4;
   ready(): Promise<WorldRuntimeSnapshotV3>;
   getSnapshot(): WorldRuntimeSnapshotV3;
   getDiagnostics(): readonly WorldkitBrowserDiagnosticV1[];
   bindControl(request: BindControlRequestV2): ControlBindingReceiptV2;
   runFixedInput(steps: readonly FixedInputV1[]): Promise<WorldRuntimeSnapshotV3>;
+  getControlCaptureCapabilities(): ControlCaptureCapabilitiesV1;
+  waitForSimulationTick(tick: number): Promise<WorldRuntimeSnapshotV3>;
+  waitForRenderReady(tick: number): Promise<RenderReadyReceiptV1>;
+  captureControlFrame(request: ControlCaptureRequestV1): Promise<RuntimeControlCaptureFrameV1>;
   captureScreenshot(): string;
   reset(): WorldRuntimeSnapshotV3;
   setPaused(paused: boolean): WorldRuntimeSnapshotV3;
+
+  // V4 additive, read-only Route evidence
+  getRouteSummary(selector: RouteEvidenceSelectorV1): RouteSummaryQueryResultV1;
+  getRoutePathReceipt(selector: RouteEvidenceSelectorV1): RoutePathReceiptQueryResultV1;
+  getRouteRuntimeProbeReceipt(selector: RouteEvidenceSelectorV1): RouteRuntimeProbeReceiptQueryResultV1;
+  getRouteOverlay(selector: RouteEvidenceSelectorV1): RouteOverlayQueryResultV1;
 }
 ```
+
+V4 完整保留 V3 的控制、Capture、Pause、Reset、截图以及可选 Capability Discovery/
+Subject Harness/Camera Authoring 方法，只增加上面的四个必选只读 Route getter；仓库
+contract test 会枚举 V3 方法集，防止升级时丢失旧能力。`window.__WORLDKIT__` 只暴露
+V4，不保留并行 V3 alias。
 
 固定输入使用 `move-forward / move-backward / move-left / move-right / jump / run`
 和明确 tick 数。`bindControl` 用 `expectedControlledEntityId` 做原子比较并切换。
 Snapshot 通过 `subjectStatesByEntityId` 报告每个主体的 Definition 身份、Subject
-Origin 位置、速度、`ground / air / water` 介质与
+Origin 位置、速度、`ground / air` 介质与
 `idle / walk / run / jump` 的 `activeActionId`。
 
 对于 Placement 世界，`getDiagnostics()` 还会发布只读、递归冻结的
 `WORLDKIT_LAYOUT_ASSERTION_SATISFIED` 证据。Browser 不暴露 Candidate、搜索、
 修改 Constraint 或重新布局接口；Runtime 只按 ExecutionPlan V4 复验 Required
 Assertion，失败即拒绝发布世界。
+
+对 Authoring V4 Route 世界，`worldkit run` 先在可信 Node 侧执行与 CLI 相同的
+WorldPackage → Recast → Babylon/Havok Probe → Canonical Publication 链路，再由 Host
+把严格绑定 World/Plan/Profile Hash 的证据写入私有临时文件，并通过 no-store 只读端点
+注入 Loader。四个 getter 只按稳定的 `{ constraintId, routeId }` 查询递归冻结数据；
+未加载、Route 不存在或某类证据未发布时返回关闭的 `unavailable` 结果。Browser 不暴露
+Opaque Bytes、Graph Builder、任意 Query、Probe 启动、Provider Handle 或可变阈值。
 
 当前 Host 只有一个受信默认 Controller；同时创建多个 Controller、NDJSON
 长连接和按 Tick 批量输入属于后续控制协议，不应由调用方自行模拟。
@@ -385,7 +440,8 @@ Assertion，失败即拒绝发布世界。
 当前支持室外 Heightfield 白膜世界、Primitive 静态物体、一个第三人称相机、
 Registry/Package Primitive 主体，以及首个 Registry Golden GLB Rigged Subject。
 Golden 切片包括内容 Hash Gate、Rig/Animation/Collider Profile、Bone Socket、
-`idle/walk/run/jump`、地面移动、跳跃、碰撞、可游泳水域检测和控制目标切换。
+`idle/walk/run/jump`、地面移动、跳跃、碰撞、WaterBody 查询/渲染和控制目标切换。
+当前 Subject Snapshot 不发布 `movementMedium: water`，游泳尚未交付。
 Placement Solver S1 还支持 Object/Anchor Fixed/Solved Placement、解析 Region/Route/
 Screen Region、八种关闭 Constraint、Required/Preferred 与锁定 Profile/Seed 的
 确定性求解。
@@ -397,7 +453,7 @@ Screen Region、八种关闭 Constraint、Required/Preferred 与锁定 Profile/S
 - Relationship、挂载、坐骑、拖拽、装备、武器和车辆；
 - NPC 行为、战斗、导航、玩法规则、网络与动态刚体；
 - 飞行、第一人称/自由镜头、室内、洞穴、悬挑和 Overhang 地形；
-- 通用 Terrain Mask/Route Graph、S1 之外的 Constraint、增量 Solver 和完整 P0.1；
+- 通用 Terrain Mask、Route R1b、S1 之外的 Constraint、增量 Solver 和完整 P0.1；
 - 非空 `relationships`、非空 `rules` 和运行时动态 Spawn。
 
 `seat.mount` 目前只是可验证、可解释的 Socket 数据，不代表骑乘逻辑已经实现。

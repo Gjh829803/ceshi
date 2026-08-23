@@ -1,0 +1,194 @@
+diff --git a/dist/detour.d.ts b/dist/detour.d.ts
+index a70139024f58d4076ee93ecb09cedbaae6383707..8ea0a754e503b8b9fb7be5db598cb89d8dfae9ed 100644
+--- a/dist/detour.d.ts
++++ b/dist/detour.d.ts
+@@ -98,8 +98,11 @@ export declare class DetourMeshTile {
+     next(): DetourMeshTile;
+ }
+ export declare const createNavMeshData: (navMeshCreateParams: NavMeshCreateParams) => {
+-    success: boolean;
++    success: true;
+     navMeshData: UnsignedCharArray;
++} | {
++    success: false;
++    navMeshData: undefined;
+ };
+ export type OffMeshConnectionParams = {
+     startPosition: Vector3;
+diff --git a/dist/index.mjs b/dist/index.mjs
+index 460c184cce8b96988ed4f90a3415fd3161ca2d6b..c65085c6a9c7bc2cc9300565d97ee9039ffcabe9 100644
+--- a/dist/index.mjs
++++ b/dist/index.mjs
+@@ -560,9 +560,52 @@ class DetourMeshTile {
+ }
+ const createNavMeshData = navMeshCreateParams => {
+   const result = Raw.DetourNavMeshBuilder.createNavMeshData(navMeshCreateParams.raw);
++  let success = false;
++  let navMeshData;
++  let snapshotError;
++  try {
++    success = result.success;
++    const rawNavMeshData = result.navMeshData;
++    navMeshData = Raw.isNull(rawNavMeshData) ? undefined : UnsignedCharArray.fromRaw(rawNavMeshData);
++  } catch (error) {
++    snapshotError = error;
++  }
++  const cleanupErrors = [];
++  try {
++    Raw.destroy(result);
++  } catch (error) {
++    cleanupErrors.push(error);
++  }
++  if (snapshotError !== undefined || cleanupErrors.length > 0) {
++    if (navMeshData !== undefined) {
++      try {
++        navMeshData.destroy();
++      } catch (error) {
++        cleanupErrors.push(error);
++      }
++    }
++    if (snapshotError !== undefined && cleanupErrors.length === 0) {
++      throw snapshotError;
++    }
++    const errors = snapshotError === undefined ? cleanupErrors : [snapshotError, ...cleanupErrors];
++    throw new AggregateError(errors, `RECAST_CREATE_NAV_MESH_DATA_RESOURCE_CLEANUP_FAILED${snapshotError instanceof Error ? `: ${snapshotError.message}` : ''}`);
++  }
++  if (success && navMeshData !== undefined) {
++    return {
++      success: true,
++      navMeshData
++    };
++  }
++  if (navMeshData !== undefined) {
++    try {
++      navMeshData.destroy();
++    } catch (error) {
++      throw new AggregateError([error], 'RECAST_CREATE_NAV_MESH_DATA_FAILURE_RESOURCE_CLEANUP_FAILED');
++    }
++  }
+   return {
+-    success: result.success,
+-    navMeshData: UnsignedCharArray.fromRaw(result.navMeshData)
++    success: false,
++    navMeshData: undefined
+   };
+ };
+ class NavMeshCreateParams {
+@@ -2483,8 +2526,12 @@ class RecastBuildContext {
+   logs = [];
+   startTimes = {};
+   accumulatedTimes = {};
++  impl;
++  isDestroyed = false;
+   constructor(timersAndLogsEnabled = true) {
+     const impl = new Raw.Module.RecastBuildContextJsImpl();
++    let raw;
++    try {
+     impl.log = (category, msg, len) => {
+       if (!this.raw.logEnabled()) return;
+       // type is string, but webidl binder passes us a pointer
+@@ -2515,10 +2562,32 @@ class RecastBuildContext {
+       this.startTimes = {};
+       this.accumulatedTimes = {};
+     };
+-    this.raw = new Raw.Module.RecastBuildContext(impl);
++    this.impl = impl;
++    raw = new Raw.Module.RecastBuildContext(impl);
++    this.raw = raw;
+     this.raw.enableTimer(timersAndLogsEnabled);
+     this.raw.enableLog(timersAndLogsEnabled);
+     this.resetTimers();
++    } catch (error) {
++      this.isDestroyed = true;
++      const cleanupErrors = [];
++      if (raw) {
++        try {
++          Raw.destroy(raw);
++        } catch (cleanupError) {
++          cleanupErrors.push(cleanupError);
++        }
++      }
++      try {
++        Raw.destroy(impl);
++      } catch (cleanupError) {
++        cleanupErrors.push(cleanupError);
++      }
++      if (cleanupErrors.length > 0) {
++        throw new AggregateError([error, ...cleanupErrors], `RECAST_BUILD_CONTEXT_CONSTRUCTION_UNWIND_FAILED: ${error instanceof Error ? error.message : String(error)}`);
++      }
++      throw error;
++    }
+   }
+   log(category, msg) {
+     this.logs.push({
+@@ -2550,6 +2619,24 @@ class RecastBuildContext {
+       this.accumulatedTimes[i] = -1;
+     }
+   }
++  destroy() {
++    if (this.isDestroyed) return;
++    this.isDestroyed = true;
++    const errors = [];
++    try {
++      Raw.destroy(this.raw);
++    } catch (error) {
++      errors.push(error);
++    }
++    try {
++      Raw.destroy(this.impl);
++    } catch (error) {
++      errors.push(error);
++    }
++    if (errors.length > 0) {
++      throw new AggregateError(errors, 'RECAST_BUILD_CONTEXT_RESOURCE_CLEANUP_FAILED');
++    }
++  }
+ }
+ class RecastChunkyTriMesh {
+   constructor(raw) {
+@@ -2914,7 +3001,23 @@ const calcBounds = (verts, nv) => {
+   return Raw.Recast.calcBounds(verts.raw, nv);
+ };
+ const calcGridSize = (bmin, bmax, cs) => {
+-  return Raw.Recast.calcGridSize(bmin, bmax, cs);
++  const result = Raw.Recast.calcGridSize(bmin, bmax, cs);
++  let snapshotError;
++  try {
++    return {
++      width: result.width,
++      height: result.height
++    };
++  } catch (error) {
++    snapshotError = error;
++    throw error;
++  } finally {
++    try {
++      Raw.destroy(result);
++    } catch (error) {
++      throw new AggregateError(snapshotError === undefined ? [error] : [snapshotError, error], `RECAST_CALC_GRID_SIZE_RESOURCE_CLEANUP_FAILED${snapshotError instanceof Error ? `: ${snapshotError.message}` : ''}`);
++    }
++  }
+ };
+ const createHeightfield = (buildContext, heightfield, width, height, bmin, bmax, cs, ch) => {
+   return Raw.Recast.createHeightfield(buildContext.raw, heightfield.raw, width, height, bmin, bmax, cs, ch);
+diff --git a/dist/recast.d.ts b/dist/recast.d.ts
+index f70666d0116f2470773da2db59b3bac3bb31afcb..487af7e8b32125d33d541ae40792d77a7f83e61c 100644
+--- a/dist/recast.d.ts
++++ b/dist/recast.d.ts
+@@ -99,6 +99,8 @@ export declare const createRcConfig: (partialConfig: Partial<RecastConfig>) => R
+ export declare const cloneRcConfig: (rcConfig: RawModule.rcConfig) => RawModule.rcConfig;
+ export declare class RecastBuildContext {
+     raw: RawModule.RecastBuildContext;
++    private impl;
++    private isDestroyed;
+     logs: Array<{
+         category: number;
+         msg: string;
+@@ -116,6 +118,7 @@ export declare class RecastBuildContext {
+     stopTimer(label: number): void;
+     getAccumulatedTime(label: number): number;
+     resetTimers(): void;
++    destroy(): void;
+ }
+ export declare class RecastChunkyTriMesh {
+     raw: RawModule.rcChunkyTriMesh;

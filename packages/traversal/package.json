@@ -8,6 +8,7 @@
   },
   "dependencies": {
     "@whitebox-world/protocol": "workspace:*",
+    "@whitebox-world/terrain-surface": "workspace:*",
     "lodash-es": "^4.18.1"
   }
 }

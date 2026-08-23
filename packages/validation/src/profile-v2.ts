@@ -143,19 +143,19 @@ export const OUTDOOR_WORLD_PACKAGE_DEV_VALIDATION_PROFILE_V2 = {
           "maximum-observed-surface-gap-meters",
           {},
         ),
-        "route-path-distance-meters": metersMetric("route-path-distance-meters", {
+        "total-route-path-distance-meters": metersMetric("total-route-path-distance-meters", {
           minimumAllowedMeters: 0,
         }),
-        "route-path-cost": costMetric("route-path-cost", {
+        "total-route-path-cost": costMetric("total-route-path-cost", {
           minimumAllowedCost: 0,
         }),
-        "traversal-graph-node-count": countMetric("traversal-graph-node-count", {
+        "total-traversal-graph-node-count": countMetric("total-traversal-graph-node-count", {
           minimumAllowedCount: 1,
         }),
-        "traversal-graph-edge-count": countMetric("traversal-graph-edge-count", {
+        "total-traversal-graph-edge-count": countMetric("total-traversal-graph-edge-count", {
           minimumAllowedCount: 0,
         }),
-        "traversal-lock-match": booleanMetric("traversal-lock-match", true),
+        "all-traversal-locks-match": booleanMetric("all-traversal-locks-match", true),
       },
     },
     "route-runtime-conformance": {
@@ -173,15 +173,15 @@ export const OUTDOOR_WORLD_PACKAGE_DEV_VALIDATION_PROFILE_V2 = {
           "maximum-stalled-duration-ticks",
           { maximumAllowedTicks: THRESHOLDS.stalledWindowTicks },
         ),
-        "maximum-route-deviation-meters": metersMetric(
-          "maximum-route-deviation-meters",
-          { maximumAllowedMeters: THRESHOLDS.maximumRouteDeviationMeters },
+        "maximum-route-deviation-meters-xz": metersMetric(
+          "maximum-route-deviation-meters-xz",
+          { maximumAllowedMeters: THRESHOLDS.maximumRouteDeviationMetersXZ },
         ),
         "maximum-consecutive-unexpected-unsupported-ticks": ticksMetric(
           "maximum-consecutive-unexpected-unsupported-ticks",
           { maximumAllowedTicks: THRESHOLDS.maximumConsecutiveUnsupportedTicks },
         ),
-        "sliding-duration-ticks": ticksMetric("sliding-duration-ticks", {
+        "total-sliding-duration-ticks": ticksMetric("total-sliding-duration-ticks", {
           minimumAllowedTicks: 0,
         }),
         "unexpected-support-loss-count": countMetric(
@@ -194,10 +194,10 @@ export const OUTDOOR_WORLD_PACKAGE_DEV_VALIDATION_PROFILE_V2 = {
         "invalid-physics-value-count": countMetric("invalid-physics-value-count", {
           maximumAllowedCount: 0,
         }),
-        "completion-duration-ticks": ticksMetric("completion-duration-ticks", {
+        "maximum-completion-duration-ticks": ticksMetric("maximum-completion-duration-ticks", {
           maximumAllowedTicks: THRESHOLDS.maximumProbeTicks,
         }),
-        "traversal-lock-match": booleanMetric("traversal-lock-match", true),
+        "all-traversal-locks-match": booleanMetric("all-traversal-locks-match", true),
       },
     },
   },

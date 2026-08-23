@@ -12,10 +12,15 @@ import type {
   ViewControlFrameV1,
 } from "@whitebox-world/runtime-contracts";
 
-import { compileMotionCommandV1 } from "./control-profile-runtime";
+import {
+  compileMotionCommandV1,
+  type MotionCommandV1,
+} from "./control-profile-runtime";
 import {
   MotionKernelRuntimeV1,
+  type MotionKernelLiveLockStateV1,
   type MotionKernelSnapshotV1,
+  type RetainedCharacterSupportSampleV1,
 } from "./motion-kernel-runtime";
 
 export interface SubjectMotionSampleV1 {
@@ -84,6 +89,10 @@ export class SubjectController {
     this.motionKernel.publishSupport();
   }
 
+  stepCommand(command: MotionCommandV1): void {
+    this.motionKernel.step(command);
+  }
+
   requestMotionProfile(resourceRef: string): boolean {
     if (this.subject.capabilityAssembly === undefined) return false;
     return this.motionKernel.requestMotionProfile(resourceRef);
@@ -114,6 +123,18 @@ export class SubjectController {
     return this.motionKernel.snapshot();
   }
 
+  retainedCharacterSupportSample(): RetainedCharacterSupportSampleV1 | undefined {
+    return this.motionKernel.retainedCharacterSupportSample();
+  }
+
+  clearRetainedCharacterSupportSample(): void {
+    this.motionKernel.clearRetainedCharacterSupportSample();
+  }
+
+  liveLockState(): MotionKernelLiveLockStateV1 {
+    return this.motionKernel.liveLockState();
+  }
+
   get subjectOrigin(): Vector3 {
     return this.motionKernel.subjectOrigin;
   }
@@ -140,6 +161,13 @@ export class SubjectController {
 
   reset(): void {
     this.motionKernel.reset();
+  }
+
+  resetAt(subjectOriginMetersXYZ: Vec3, facingYawRadians: number): void {
+    this.motionKernel.resetAt(
+      new Vector3(...subjectOriginMetersXYZ),
+      facingYawRadians,
+    );
   }
 
   stop(): void {

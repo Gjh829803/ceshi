@@ -5,10 +5,31 @@ import { fileURLToPath } from "node:url";
 
 import { afterEach, describe, expect, it, vi } from "vitest";
 
+vi.mock("./lib/route-validation-runner", async (importOriginal) => {
+  const actual = await importOriginal<
+    typeof import("./lib/route-validation-runner")
+  >();
+  return {
+    ...actual,
+    runTrustedRouteValidationV1: vi.fn(actual.runTrustedRouteValidationV1),
+  };
+});
+
 import {
+  createValidAuthoringSpec,
   createValidPackageSubjectWorld,
   createValidRiggedPackageDefinition,
 } from "../packages/authoring/src/test-fixture";
+import type { AuthoringSpecV4 } from "@whitebox-world/authoring";
+
+import {
+  loadWorldkitPipeline,
+  loadWorldkitRoutePipeline,
+} from "./lib/worldkit-pipeline";
+import {
+  RouteValidationRunnerInfrastructureErrorV1,
+  runTrustedRouteValidationV1,
+} from "./lib/route-validation-runner";
 
 import { explainSubjectFile } from "./lib/subject-explain";
 import {
@@ -41,6 +62,46 @@ async function writePackageWorld(directory: string): Promise<string> {
   return inputPath;
 }
 
+async function writeRouteWorld(directory: string): Promise<string> {
+  const source = createValidAuthoringSpec();
+  const world: AuthoringSpecV4 = {
+    ...source,
+    schemaVersion: 4,
+    spatial: {
+      ...source.spatial,
+      traversalAreas: [],
+      routes: [{
+        id: "main-route",
+        kind: "polyline-xz",
+        pointsMetersXZ: [[0, 30], [0, -20]],
+        widthMeters: 4,
+        locomotionProfileRef: "worldkit://locomotion-profile/ground.standard@1",
+      }],
+    },
+    nodes: [...source.nodes, {
+      id: "goal",
+      kind: "anchor",
+      placement: { kind: "fixed", transform: { positionMetersXYZ: [0, 0, -20] } },
+      semantic: { classId: "route.destination" },
+    }],
+    constraints: {
+      placements: source.constraints.placements,
+      connectivity: [{
+        id: "hero-to-goal",
+        kind: "connected-by-route",
+        requirement: "required",
+        traversingEntityId: "player",
+        startAnchorEntityId: "spawn-main",
+        destinationAnchorEntityId: "goal",
+        routeId: "main-route",
+      }],
+    },
+  };
+  const inputPath = path.join(directory, "route-world.json");
+  await writeFile(inputPath, JSON.stringify(world), "utf8");
+  return inputPath;
+}
+
 const RIGGED_SUBJECT_WORLD_PATH = path.resolve(
   fileURLToPath(new URL("../examples/authoring/rigged-subject-world.json", import.meta.url)),
 );
@@ -64,6 +125,30 @@ afterEach(async () => {
 });
 
 describe("worldkit CLI", () => {
+  it("loads V4 Route worlds only through the explicit V4/V5 pipeline", async () => {
+    const directory = await createTemporaryDirectory();
+    const inputPath = await writeRouteWorld(directory);
+    const route = await loadWorldkitRoutePipeline(inputPath);
+    const legacy = await loadWorldkitPipeline(inputPath);
+
+    expect(route).toMatchObject({
+      ok: true,
+      authoringSpec: {
+        schemaVersion: 4,
+        id: expect.any(String),
+      },
+      normalizedWorldIr: { schemaVersion: 4 },
+      layoutSolveReport: {
+        kind: "worldkit-layout-solve-report",
+        schemaVersion: 1,
+        status: "solved",
+      },
+      layoutSolveReportHash: expect.stringMatching(/^sha256:[0-9a-f]{64}$/),
+      executionPlan: { schemaVersion: 5 },
+    });
+    expect(legacy).toMatchObject({ ok: false, exitCode: 2 });
+  });
+
   it("parses an explicit dependency refresh for local Runtime startup", () => {
     expect(
       parseWorldkitArgs([
@@ -168,6 +253,25 @@ describe("worldkit CLI", () => {
       command: "verify-capture",
       inputPath: "capture-bundle",
       outputPath: "validation-report.json",
+      json: true,
+    });
+    expect(
+      parseWorldkitArgs([
+        "verify",
+        "route",
+        "route-world.json",
+        "--profile",
+        "worldkit://validation-profile/outdoor-world-package-dev@1",
+        "--output",
+        "route-validation-report.json",
+        "--json",
+      ]),
+    ).toEqual({
+      command: "verify-route",
+      inputPath: "route-world.json",
+      validationProfileRef:
+        "worldkit://validation-profile/outdoor-world-package-dev@1",
+      outputPath: "route-validation-report.json",
       json: true,
     });
     expect(
@@ -300,6 +404,50 @@ describe("worldkit CLI", () => {
     expect(() =>
       parseWorldkitArgs([
         "verify",
+        "route",
+        "route-world.json",
+        "--output",
+        "route-validation-report.json",
+      ]),
+    ).toThrow("verify route requires --profile <validation-profile-ref>");
+    expect(() =>
+      parseWorldkitArgs([
+        "verify",
+        "route",
+        "route-world.json",
+        "--profile",
+        "worldkit://validation-profile/outdoor-world-package-dev@1",
+      ]),
+    ).toThrow("verify route requires --output <validation-report.json>");
+    expect(() =>
+      parseWorldkitArgs([
+        "verify",
+        "route",
+        "route-world.json",
+        "--profile",
+        "worldkit://validation-profile/outdoor-world-package-dev@1",
+        "--profile",
+        "worldkit://validation-profile/outdoor-world-package-dev@1",
+        "--output",
+        "route-validation-report.json",
+      ]),
+    ).toThrow("--profile may be provided only once");
+    expect(() =>
+      parseWorldkitArgs([
+        "verify",
+        "route",
+        "route-world.json",
+        "--profile",
+        "worldkit://validation-profile/outdoor-world-package-dev@1",
+        "--output",
+        "route-validation-report.json",
+        "--output",
+        "other-route-validation-report.json",
+      ]),
+    ).toThrow("--output may be provided only once");
+    expect(() =>
+      parseWorldkitArgs([
+        "verify",
         "explain",
         "validation-report.json",
         "--gate-id",
@@ -376,6 +524,227 @@ describe("worldkit CLI", () => {
       kind: "worldkit-layout-solve",
       status: "solved",
       outputPath,
+    });
+  });
+
+  it("prints stable Route validation diagnostics in human and JSON modes", async () => {
+    const directory = await createTemporaryDirectory();
+    const outputPath = path.join(directory, "route-report.json");
+    let stdout = "";
+    let stderr = "";
+    const stdoutWrite = vi
+      .spyOn(process.stdout, "write")
+      .mockImplementation((chunk) => {
+        stdout += String(chunk);
+        return true;
+      });
+    const stderrWrite = vi
+      .spyOn(process.stderr, "write")
+      .mockImplementation((chunk) => {
+        stderr += String(chunk);
+        return true;
+      });
+    try {
+      await expect(main([
+        "verify",
+        "route",
+        "world.json",
+        "--profile",
+        "worldkit://validation-profile/unsupported@1",
+        "--output",
+        outputPath,
+      ])).resolves.toBe(1);
+      expect(stdout).toBe("");
+      expect(stderr).toContain(
+        "[error] WORLDKIT_ROUTE_VALIDATION_PROFILE_UNSUPPORTED /validationProfileRef",
+      );
+
+      stdout = "";
+      stderr = "";
+      await expect(main([
+        "verify",
+        "route",
+        "world.json",
+        "--profile",
+        "worldkit://validation-profile/unsupported@1",
+        "--output",
+        outputPath,
+        "--json",
+      ])).resolves.toBe(1);
+      expect(stderr).toBe("");
+      expect(stdout.trim().split("\n")).toHaveLength(1);
+      expect(JSON.parse(stdout)).toMatchObject({
+        ok: false,
+        exitCode: 1,
+        diagnostics: [{
+          severity: "error",
+          code: "WORLDKIT_ROUTE_VALIDATION_PROFILE_UNSUPPORTED",
+          instancePath: "/validationProfileRef",
+        }],
+      });
+    } finally {
+      stdoutWrite.mockRestore();
+      stderrWrite.mockRestore();
+    }
+  });
+
+  it("redacts provider errors from worldkit run JSON diagnostics", async () => {
+    const directory = await createTemporaryDirectory();
+    const inputPath = await writeRouteWorld(directory);
+    const privateProviderMessage =
+      "Recast/Havok failed at /Users/private-user/native/provider-state.bin";
+    vi.mocked(runTrustedRouteValidationV1).mockRejectedValueOnce(
+      new Error(privateProviderMessage),
+    );
+    let stdout = "";
+    let stderr = "";
+    const stdoutWrite = vi
+      .spyOn(process.stdout, "write")
+      .mockImplementation((chunk) => {
+        stdout += String(chunk);
+        return true;
+      });
+    const stderrWrite = vi
+      .spyOn(process.stderr, "write")
+      .mockImplementation((chunk) => {
+        stderr += String(chunk);
+        return true;
+      });
+    try {
+      await expect(main(["run", inputPath, "--json"])).resolves.toBe(1);
+    } finally {
+      stdoutWrite.mockRestore();
+      stderrWrite.mockRestore();
+    }
+
+    expect(stderr).toBe("");
+    expect(stdout.trim().split("\n")).toHaveLength(1);
+    expect(JSON.parse(stdout)).toEqual({
+      ok: false,
+      exitCode: 1,
+      diagnostics: [{
+        severity: "error",
+        code: "WORLDKIT_ROUTE_VALIDATION_RUNNER_FAILED",
+        instancePath: "",
+        message:
+          "Unable to prepare trusted Route evidence for the playground.",
+      }],
+    });
+    expect(stdout).not.toContain(privateProviderMessage);
+    expect(stdout).not.toContain("/Users/private-user");
+  });
+
+  it("redacts runner-owned paths and cause from worldkit run JSON diagnostics", async () => {
+    const directory = await createTemporaryDirectory();
+    const inputPath = await writeRouteWorld(directory);
+    const privateInputPath =
+      "/Users/private-user/worlds/unpublished-route-source.json";
+    const privateProviderMessage = "Recast native status from Havok adapter";
+    vi.mocked(runTrustedRouteValidationV1).mockRejectedValueOnce(
+      new RouteValidationRunnerInfrastructureErrorV1(
+        "WORLDKIT_ROUTE_VALIDATION_RESOURCE_RESOLUTION_FAILED",
+        { inputPath: privateInputPath, nativeProviderHandle: 7 },
+        new Error(privateProviderMessage),
+      ),
+    );
+    let stdout = "";
+    let stderr = "";
+    const stdoutWrite = vi
+      .spyOn(process.stdout, "write")
+      .mockImplementation((chunk) => {
+        stdout += String(chunk);
+        return true;
+      });
+    const stderrWrite = vi
+      .spyOn(process.stderr, "write")
+      .mockImplementation((chunk) => {
+        stderr += String(chunk);
+        return true;
+      });
+    try {
+      await expect(main(["run", inputPath, "--json"])).resolves.toBe(1);
+    } finally {
+      stdoutWrite.mockRestore();
+      stderrWrite.mockRestore();
+    }
+
+    expect(stderr).toBe("");
+    expect(JSON.parse(stdout)).toEqual({
+      ok: false,
+      exitCode: 1,
+      diagnostics: [{
+        severity: "error",
+        code: "WORLDKIT_ROUTE_VALIDATION_INFRASTRUCTURE_ERROR",
+        instancePath: "",
+        message:
+          "Unable to prepare trusted Route evidence for the playground.",
+        details: {
+          reason: "WORLDKIT_ROUTE_VALIDATION_RESOURCE_RESOLUTION_FAILED",
+        },
+      }],
+    });
+    expect(stdout).not.toContain(privateInputPath);
+    expect(stdout).not.toContain(privateProviderMessage);
+    expect(stdout).not.toContain("nativeProviderHandle");
+    expect(stdout).not.toContain("cause");
+  });
+
+  it("runs the public Route command and publishes a canonical failed report", async () => {
+    const directory = await createTemporaryDirectory();
+    const inputPath = await writeRouteWorld(directory);
+    const world = JSON.parse(await readFile(inputPath, "utf8")) as {
+      constraints: { connectivity: readonly unknown[] };
+    };
+    world.constraints.connectivity = [];
+    await writeFile(inputPath, JSON.stringify(world), "utf8");
+    const outputPath = path.join(directory, "route-report.json");
+    let stdout = "";
+    let stderr = "";
+    const stdoutWrite = vi
+      .spyOn(process.stdout, "write")
+      .mockImplementation((chunk) => {
+        stdout += String(chunk);
+        return true;
+      });
+    const stderrWrite = vi
+      .spyOn(process.stderr, "write")
+      .mockImplementation((chunk) => {
+        stderr += String(chunk);
+        return true;
+      });
+    try {
+      await expect(main([
+        "verify",
+        "route",
+        inputPath,
+        "--profile",
+        "worldkit://validation-profile/outdoor-world-package-dev@1",
+        "--output",
+        outputPath,
+        "--json",
+      ])).resolves.toBe(2);
+    } finally {
+      stdoutWrite.mockRestore();
+      stderrWrite.mockRestore();
+    }
+
+    expect(stderr).toBe("");
+    expect(stdout.trim().split("\n")).toHaveLength(1);
+    expect(JSON.parse(stdout)).toMatchObject({
+      ok: false,
+      exitCode: 2,
+      kind: "worldkit-route-validation-command-result",
+      schemaVersion: 1,
+      validationStatus: "failed",
+      validationReportHash: expect.stringMatching(/^sha256:[a-f0-9]{64}$/),
+      outputPath,
+      evidenceDirectory: `${outputPath}.evidence`,
+    });
+    expect(JSON.parse(await readFile(outputPath, "utf8"))).toMatchObject({
+      kind: "worldkit-validation-report",
+      schemaVersion: 2,
+      status: "failed",
+      routeValidationSetReceipt: { rows: [] },
     });
   });
 

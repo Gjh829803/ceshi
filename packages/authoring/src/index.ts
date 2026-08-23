@@ -1,10 +1,15 @@
 export * from "./canonical-json";
+export {
+  canonicalAuthoringIdentityV3,
+  canonicalAuthoringIdentityV4,
+} from "./canonical-authoring-identity";
 export { BUILT_IN_LAYOUT_SOLVER_PROFILE_REF } from "@whitebox-world/layout-solver";
 export * from "./layout-input";
 export {
   normalizeAuthoringSpecV3,
   normalizeAuthoringSpecV3 as normalizeAuthoringSpec,
 } from "./normalize-v3";
+export { normalizeAuthoringSpecV4 } from "./normalize-v4";
 export * from "./parse";
 export * from "./parse-v3";
 export * from "./parse-v4";

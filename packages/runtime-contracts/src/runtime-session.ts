@@ -2,6 +2,13 @@ import type {
   ControlCapturePassIdV1,
   Sha256HashV1,
 } from "@whitebox-world/control-capture";
+import type {
+  RouteEvidenceSelectorV1,
+  RouteOverlayQueryResultV1,
+  RoutePathReceiptQueryResultV1,
+  RouteRuntimeProbeReceiptQueryResultV1,
+  RouteSummaryQueryResultV1,
+} from "./browser-route-evidence";
 import type { CameraTuningV1 } from "./camera-parameter-contract";
 import type { Vec3 } from "./execution-plan";
 import type { NumericProfileOverrideV1 } from "./subject-preset";
@@ -338,7 +345,7 @@ export interface SubjectHarnessReportV1 {
   tick: number;
 }
 
-export const WORLDKIT_BROWSER_PROTOCOL_VERSION = 3 as const;
+export const WORLDKIT_BROWSER_PROTOCOL_VERSION = 4 as const;
 
 export interface WorldkitBrowserDiagnosticV1 {
   severity: "info" | "warning" | "error";
@@ -348,7 +355,7 @@ export interface WorldkitBrowserDiagnosticV1 {
   details?: Readonly<Record<string, unknown>>;
 }
 
-export interface WorldkitBrowserApiV3 {
+export interface WorldkitBrowserApiV4 {
   version: typeof WORLDKIT_BROWSER_PROTOCOL_VERSION;
   ready(): Promise<WorldRuntimeSnapshotV3>;
   getSnapshot(): WorldRuntimeSnapshotV3;
@@ -392,4 +399,12 @@ export interface WorldkitBrowserApiV3 {
   runHarness?(subjectEntityId: string): Promise<SubjectHarnessReportV1>;
   getSubjectSnapshot?(subjectEntityId: string): SubjectRuntimeStateV3 | undefined;
   getCameraSnapshot?(): WorldRuntimeSnapshotV3["camera"];
+  getRouteSummary(selector: RouteEvidenceSelectorV1): RouteSummaryQueryResultV1;
+  getRoutePathReceipt(
+    selector: RouteEvidenceSelectorV1,
+  ): RoutePathReceiptQueryResultV1;
+  getRouteRuntimeProbeReceipt(
+    selector: RouteEvidenceSelectorV1,
+  ): RouteRuntimeProbeReceiptQueryResultV1;
+  getRouteOverlay(selector: RouteEvidenceSelectorV1): RouteOverlayQueryResultV1;
 }

@@ -33,11 +33,13 @@ const SHARED_PROFILES = {
   controlFeelProfileRef: SHARED_GROUND_FEEL_PROFILE_REF,
 } as const;
 
-const HUMANOID_THIRD_PERSON_DEFINITION: RegistrySubjectDefinitionInputV2 = {
+const HUMANOID_THIRD_PERSON_DEFINITION: RegistrySubjectDefinitionInputV3 = {
   kind: "subject-definition",
+  schemaVersion: 3,
   id: "humanoid.third-person",
   version: 1,
   resourceRef: "worldkit://subject-definition/humanoid.third-person@1",
+  authoringAvailability: "recommended",
   category: "human",
   bodyTopology: "biped",
   semanticClassId: "subject.humanoid",
@@ -67,9 +69,33 @@ const HUMANOID_THIRD_PERSON_DEFINITION: RegistrySubjectDefinitionInputV2 = {
       semanticTags: ["equipment-grip", "hand"],
     },
   ],
-  colliderPolicy: SHARED_COLLIDER_POLICY,
+  colliderPolicy: {
+    kind: "profile",
+    colliderProfileRef:
+      "worldkit://collider-profile/humanoid.medium-capsule@1",
+  },
   capabilityRefs: SHARED_CAPABILITY_REFS,
-  profiles: SHARED_PROFILES,
+  profiles: {
+    physicsBodyProfileRef:
+      "worldkit://physics-body-profile/character.capability-medium@1",
+    locomotionProfileRef: SHARED_PROFILES.locomotionProfileRef,
+    controlFeelProfileRef: SHARED_GROUND_FEEL_PROFILE_REF,
+    allowedControlFeelProfileRefs: SHARED_GROUND_ALLOWED_CONTROL_FEEL_PROFILE_REFS,
+    motion: {
+      defaultMotionProfileRef:
+        "worldkit://motion-profile/free-ground.humanoid-medium@1",
+      optionalMotionProfileRefs: ["worldkit://motion-profile/safe-ground@1"],
+      fallbackMotionProfileRef: "worldkit://motion-profile/safe-ground@1",
+    },
+    controlProfileRef: "worldkit://control-profile/planar.camera-relative@1",
+    cameraContextProfileRef:
+      "worldkit://camera-context/capability-driven.default@1",
+    mediumProfileRef: SHARED_GROUND_MEDIUM_PROFILE_REF,
+    harnessProfileRef: "worldkit://harness-profile/subject.standard@1",
+  },
+  relationshipCapabilityRefs: [],
+  actionOrPoseSetRef: "worldkit://pose-set/static.whitebox@1",
+  renderBindingProfileRef: "worldkit://render-binding/subject.standard@1",
   aiMetadata: {
     displayName: "Third-person humanoid",
     description: "A controllable humanoid whitebox proxy for outdoor traversal.",

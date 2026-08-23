@@ -1,7 +1,8 @@
 import { groupBy, isEqual, isNil, isPlainObject } from "lodash-es";
+import { canonicalJsonBytes, sha256Bytes } from "@whitebox-world/protocol";
 import {
   resolveTraversalDriverProfileV1,
-  resolveTraversalGraphBuilderProfileV1,
+  resolveTraversalGraphBuilderProfile,
 } from "@whitebox-world/traversal";
 
 import {
@@ -13,6 +14,7 @@ import {
   OUTDOOR_WORLD_PACKAGE_DEV_VALIDATION_PROFILE_V2,
 } from "./profile-v2";
 import { ROUTE_VALIDATION_DIAGNOSTIC_CODES_V2 } from "./route";
+import { canonicalRouteValidationSetReceiptV1 } from "./route-validation-set";
 import type {
   ValidationContractDiagnosticCodeV1,
   ValidationContractDiagnosticV1,
@@ -31,6 +33,7 @@ import type {
 } from "./types-v2";
 
 const SHA256_PATTERN = /^sha256:[a-f0-9]{64}$/;
+const ZERO_SHA256 = `sha256:${"0".repeat(64)}`;
 const CAPTURE_DIAGNOSTIC_CODES_V1 = [
   "CAPTURE_BUNDLE_JSON_INVALID",
   "CAPTURE_FILE_HASH_MISMATCH",
@@ -59,8 +62,10 @@ const VALIDATION_DIAGNOSTIC_CODES_V2 = [
 ];
 
 const EVIDENCE_KINDS_V2 = [
+  "route-validation-set-receipt",
   "traversal-graph",
   "route-path-receipt",
+  "route-connectivity-failure",
   "route-runtime-probe-receipt",
   "route-overlay",
 ] as const;
@@ -73,6 +78,39 @@ const LOCK_DERIVED_THRESHOLD_METRIC_IDS = new Set([
   "maximum-observed-surface-gap-meters",
 ]);
 
+function hasClosedLockDerivedResultBounds(
+  metricId: string,
+  kind: string,
+  record: Readonly<Record<string, unknown>>,
+): boolean {
+  if (metricId === "maximum-observed-slope-degrees") {
+    return kind === "degrees-threshold" &&
+      isNil(record.minimumAllowedDegrees) &&
+      typeof record.maximumAllowedDegrees === "number";
+  }
+  if (
+    metricId === "maximum-observed-step-height-meters"
+  ) {
+    return kind === "meters-threshold" &&
+      isNil(record.minimumAllowedMeters) &&
+      typeof record.maximumAllowedMeters === "number";
+  }
+  if (metricId === "maximum-observed-surface-gap-meters") {
+    return kind === "meters-threshold" &&
+      isNil(record.minimumAllowedMeters) &&
+      record.maximumAllowedMeters === 0;
+  }
+  if (
+    metricId === "minimum-observed-clearance-width-meters" ||
+    metricId === "minimum-observed-clearance-height-meters"
+  ) {
+    return kind === "meters-threshold" &&
+      typeof record.minimumAllowedMeters === "number" &&
+      isNil(record.maximumAllowedMeters);
+  }
+  return false;
+}
+
 const EVIDENCE_BASE_FIELDS = [
   "id",
   "kind",
@@ -82,23 +120,37 @@ const EVIDENCE_BASE_FIELDS = [
   "contentHash",
 ] as const;
 
+const ROUTE_EVIDENCE_BASE_FIELDS = [
+  ...EVIDENCE_BASE_FIELDS,
+  "constraintId",
+  "routeId",
+] as const;
+
 const EVIDENCE_FIELDS_BY_KIND: Readonly<Record<string, readonly string[]>> = {
   "traversal-graph": [
-    ...EVIDENCE_BASE_FIELDS,
+    ...ROUTE_EVIDENCE_BASE_FIELDS,
     "resolvedTraversalLockHash",
     "graphBuilderProfileRef",
     "graphBuilderResolvedVersion",
     "graphBuilderProfileHash",
   ],
   "route-path-receipt": [
-    ...EVIDENCE_BASE_FIELDS,
+    ...ROUTE_EVIDENCE_BASE_FIELDS,
+    "resolvedTraversalLockHash",
+    "graphBuilderProfileRef",
+    "graphBuilderResolvedVersion",
+    "graphBuilderProfileHash",
+  ],
+  "route-connectivity-failure": [
+    ...ROUTE_EVIDENCE_BASE_FIELDS,
+    "routeBuildInputHash",
     "resolvedTraversalLockHash",
     "graphBuilderProfileRef",
     "graphBuilderResolvedVersion",
     "graphBuilderProfileHash",
   ],
   "route-runtime-probe-receipt": [
-    ...EVIDENCE_BASE_FIELDS,
+    ...ROUTE_EVIDENCE_BASE_FIELDS,
     "resolvedTraversalLockHash",
     "driverProfileRef",
     "driverResolvedVersion",
@@ -110,7 +162,11 @@ const EVIDENCE_FIELDS_BY_KIND: Readonly<Record<string, readonly string[]>> = {
     "runtimeAdapterResolvedVersion",
     "runtimeAdapterHash",
   ],
-  "route-overlay": EVIDENCE_BASE_FIELDS,
+  "route-overlay": [
+    ...ROUTE_EVIDENCE_BASE_FIELDS,
+    "resolvedTraversalLockHash",
+  ],
+  "route-validation-set-receipt": [...EVIDENCE_BASE_FIELDS, "receipt"],
 };
 
 const REQUIRED_EVIDENCE_KINDS_BY_GATE: Readonly<
@@ -259,6 +315,11 @@ const DETAILS_FIELDS_BY_KIND: Readonly<Record<string, readonly string[]>> = {
   "degrees-threshold": ["kind", "expectedDegrees", "actualDegrees"],
   "ticks-threshold": ["kind", "expectedTicks", "actualTicks"],
   "count-threshold": ["kind", "maximumAllowedCount", "actualCount"],
+  "capacity-exceeded": [
+    "kind",
+    "maximumAllowedCount",
+    "minimumRequiredCount",
+  ],
   "hash-mismatch": ["kind", "expectedHash", "actualHash"],
   "identity-mismatch": ["kind", "expectedId", "actualId"],
   "missing-reference": ["kind", "missingRef"],
@@ -378,7 +439,11 @@ function requireHash(
   path: string,
   diagnostics: ValidationContractDiagnosticV1[],
 ): value is string {
-  if (typeof value !== "string" || !SHA256_PATTERN.test(value)) {
+  if (
+    typeof value !== "string" ||
+    !SHA256_PATTERN.test(value) ||
+    value === ZERO_SHA256
+  ) {
     addDiagnostic(
       diagnostics,
       "VALIDATION_HASH_INVALID",
@@ -637,9 +702,9 @@ function validateRouteRuntimeGateThresholds(
   rejectUnknownFields(
     record,
     [
-      "destinationToleranceMeters",
-      "maximumRouteDeviationMeters",
-      "minimumProgressMeters",
+      "destinationToleranceMetersXZ",
+      "maximumRouteDeviationMetersXZ",
+      "minimumProgressMetersXZ",
       "stalledWindowTicks",
       "maximumConsecutiveUnsupportedTicks",
       "maximumProbeTicks",
@@ -648,9 +713,9 @@ function validateRouteRuntimeGateThresholds(
     diagnostics,
   );
   for (const field of [
-    "destinationToleranceMeters",
-    "maximumRouteDeviationMeters",
-    "minimumProgressMeters",
+    "destinationToleranceMetersXZ",
+    "maximumRouteDeviationMetersXZ",
+    "minimumProgressMetersXZ",
   ]) {
     if (requireFiniteNumber(record[field], `${path}/${field}`, diagnostics)) {
       if ((record[field] as number) <= 0) {
@@ -903,6 +968,7 @@ function validateMetricResult(
   if (
     (record.status === "passed" || record.status === "failed") &&
     canEvaluateAssertion &&
+    !LOCK_DERIVED_THRESHOLD_METRIC_IDS.has(mapId) &&
     (record.status === "passed") !== assertionPassed
   ) {
     addDiagnostic(
@@ -989,7 +1055,47 @@ function validateEvidenceArtifact(
   requireString(record.mediaType, `${path}/mediaType`, diagnostics);
   requireNonNegativeInteger(record.sizeBytes, `${path}/sizeBytes`, diagnostics);
   requireHash(record.contentHash, `${path}/contentHash`, diagnostics);
-  if (record.kind === "traversal-graph" || record.kind === "route-path-receipt") {
+  if (record.kind === "route-validation-set-receipt") {
+    try {
+      const receipt = canonicalRouteValidationSetReceiptV1(record.receipt);
+      const bytes = canonicalJsonBytes(receipt);
+      if (record.sizeBytes !== bytes.byteLength) {
+        addReferenceInvalid(
+          diagnostics,
+          `${path}/sizeBytes`,
+          "Route Validation Set receipt size must match its canonical bytes.",
+        );
+      }
+      if (record.contentHash !== sha256Bytes(bytes)) {
+        addReferenceInvalid(
+          diagnostics,
+          `${path}/contentHash`,
+          "Route Validation Set receipt hash must match its canonical bytes.",
+        );
+      }
+    } catch (error) {
+      addReferenceInvalid(
+        diagnostics,
+        `${path}/receipt`,
+        error instanceof Error ? error.message : String(error),
+      );
+    }
+  } else {
+    requireString(record.constraintId, `${path}/constraintId`, diagnostics);
+    requireString(record.routeId, `${path}/routeId`, diagnostics);
+  }
+  if (
+    record.kind === "traversal-graph" ||
+    record.kind === "route-path-receipt" ||
+    record.kind === "route-connectivity-failure"
+  ) {
+    if (record.kind === "route-connectivity-failure") {
+      requireHash(
+        record.routeBuildInputHash,
+        `${path}/routeBuildInputHash`,
+        diagnostics,
+      );
+    }
     requireHash(record.resolvedTraversalLockHash, `${path}/resolvedTraversalLockHash`, diagnostics);
     requireString(record.graphBuilderProfileRef, `${path}/graphBuilderProfileRef`, diagnostics);
     requireString(
@@ -1018,6 +1124,13 @@ function validateEvidenceArtifact(
       diagnostics,
     );
     requireHash(record.runtimeAdapterHash, `${path}/runtimeAdapterHash`, diagnostics);
+  }
+  if (record.kind === "route-overlay") {
+    requireHash(
+      record.resolvedTraversalLockHash,
+      `${path}/resolvedTraversalLockHash`,
+      diagnostics,
+    );
   }
 }
 
@@ -1055,6 +1168,30 @@ function validateDiagnosticDetails(
       diagnostics,
     );
     requireNonNegativeInteger(record.actualCount, `${path}/actualCount`, diagnostics);
+  } else if (kind === "capacity-exceeded") {
+    const maximumValid = requireNonNegativeInteger(
+      record.maximumAllowedCount,
+      `${path}/maximumAllowedCount`,
+      diagnostics,
+    );
+    const minimumValid = requireNonNegativeInteger(
+      record.minimumRequiredCount,
+      `${path}/minimumRequiredCount`,
+      diagnostics,
+    );
+    if (
+      maximumValid &&
+      minimumValid &&
+      (record.minimumRequiredCount as number) <=
+        (record.maximumAllowedCount as number)
+    ) {
+      addDiagnostic(
+        diagnostics,
+        "VALIDATION_NUMBER_INVALID",
+        `${path}/minimumRequiredCount`,
+        "minimumRequiredCount must be greater than maximumAllowedCount.",
+      );
+    }
   } else if (kind === "hash-mismatch") {
     requireHash(record.expectedHash, `${path}/expectedHash`, diagnostics);
     requireHash(record.actualHash, `${path}/actualHash`, diagnostics);
@@ -1076,14 +1213,26 @@ function validateReportDiagnostic(
 ): void {
   const record = asRecord(value, path, diagnostics);
   if (record === undefined) return;
+  const scope = record.scope;
+  if (scope !== "world" && scope !== "route-row") {
+    addDiagnostic(
+      diagnostics,
+      "VALIDATION_ENUM_INVALID",
+      `${path}/scope`,
+      "Expected world or route-row.",
+    );
+    return;
+  }
   rejectUnknownFields(
     record,
     [
       "id",
+      "scope",
       "code",
       "severity",
       "gateId",
       "metricId",
+      ...(scope === "route-row" ? ["constraintId"] : []),
       "routeId",
       "traversingEntityId",
       "startAnchorEntityId",
@@ -1095,7 +1244,18 @@ function validateReportDiagnostic(
       "details",
       "message",
       "suggestedFix",
-    ],
+    ].filter((field) =>
+      scope === "route-row" ||
+      ![
+        "routeId",
+        "traversingEntityId",
+        "startAnchorEntityId",
+        "destinationAnchorEntityId",
+        "traversalSurfaceId",
+        "colliderSubshapeId",
+        "positionMetersXYZ",
+      ].includes(field)
+    ),
     path,
     diagnostics,
   );
@@ -1103,14 +1263,21 @@ function validateReportDiagnostic(
     "id",
     "gateId",
     "metricId",
-    "routeId",
-    "traversingEntityId",
-    "startAnchorEntityId",
-    "destinationAnchorEntityId",
     "message",
     "suggestedFix",
   ]) {
     requireString(record[field], `${path}/${field}`, diagnostics);
+  }
+  if (scope === "route-row") {
+    for (const field of [
+      "constraintId",
+      "routeId",
+      "traversingEntityId",
+      "startAnchorEntityId",
+      "destinationAnchorEntityId",
+    ]) {
+      requireString(record[field], `${path}/${field}`, diagnostics);
+    }
   }
   requireEnum(record.code, VALIDATION_DIAGNOSTIC_CODES_V2, `${path}/code`, diagnostics);
   requireEnum(record.severity, ["error", "warning"], `${path}/severity`, diagnostics);
@@ -1236,7 +1403,14 @@ function assertEvaluatedMetricEvidenceKinds(
   artifacts: ReadonlyMap<string, EvidenceArtifactV2>,
   diagnostics: ValidationContractDiagnosticV1[],
 ): void {
-  const requiredKinds = REQUIRED_EVIDENCE_KINDS_BY_GATE[gateId];
+  const requiredKinds =
+    gateId === "route-connectivity" && metricResult.status === "failed"
+      ? new Set<EvidenceArtifactKindV2>([
+          "traversal-graph",
+          "route-path-receipt",
+          "route-connectivity-failure",
+        ])
+      : REQUIRED_EVIDENCE_KINDS_BY_GATE[gateId];
   if (isNil(requiredKinds)) {
     return;
   }
@@ -1247,6 +1421,22 @@ function assertEvaluatedMetricEvidenceKinds(
     }),
   );
   const hasRequiredKind = [...requiredKinds].some((kind) => referencedKinds.has(kind));
+  if (
+    metricResult.id === "required-route-count" &&
+    referencedKinds.has("route-validation-set-receipt")
+  ) {
+    return;
+  }
+  const routeSetArtifact = [...artifacts.values()].find(
+    ({ kind }) => kind === "route-validation-set-receipt",
+  );
+  if (
+    routeSetArtifact?.kind === "route-validation-set-receipt" &&
+    routeSetArtifact.receipt.rows.length === 0 &&
+    referencedKinds.has("route-validation-set-receipt")
+  ) {
+    return;
+  }
   if (!hasRequiredKind) {
     addReferenceInvalid(
       diagnostics,
@@ -1286,21 +1476,130 @@ function assertEvidenceArtifactIdentities(
   report: ValidationReportV2,
   diagnostics: ValidationContractDiagnosticV1[],
 ): void {
-  const lockHashes = new Set<string>();
+  const receipt = report.routeValidationSetReceipt;
+  if (
+    receipt.authoringSpecHash !== report.subject.authoringSpecHash ||
+    receipt.normalizedWorldIrHash !== report.subject.normalizedWorldIrHash ||
+    receipt.executionPlanHash !== report.subject.executionPlanHash ||
+    receipt.resourceLockHash !== report.subject.resourceLockHash ||
+    receipt.layoutSolveReportHash !== report.subject.layoutSolveReportHash
+  ) {
+    addReferenceInvalid(
+      diagnostics,
+      "/routeValidationSetReceipt",
+      "Route Validation Set receipt must match the Report subject.",
+    );
+  }
+  const rowsByKey = new Map(receipt.rows.map((row) => [
+    `${row.constraintId}\u0000${row.routeId}`,
+    row,
+  ]));
+  const artifactOwnersByRef = groupBy(
+    receipt.rows.flatMap((row) => row.evidenceArtifactRefs.map((artifactRef) => ({
+      artifactRef,
+      row,
+    }))),
+    "artifactRef",
+  );
+  const artifacts = Object.values(report.evidenceArtifactsById);
+  const artifactRefs = artifacts.map(({ artifactRef }) => artifactRef);
+  if (new Set(artifactRefs).size !== artifactRefs.length) {
+    addReferenceInvalid(
+      diagnostics,
+      "/evidenceArtifactsById",
+      "Evidence Artifact refs must be unique.",
+    );
+  }
+  const setArtifacts = artifacts.filter(
+    ({ kind }) => kind === "route-validation-set-receipt",
+  );
+  const setArtifact = setArtifacts[0];
+  if (
+    setArtifacts.length !== 1 ||
+    setArtifact?.kind !== "route-validation-set-receipt" ||
+    !isEqual(setArtifact.receipt, receipt)
+  ) {
+    addReferenceInvalid(
+      diagnostics,
+      "/routeValidationSetReceipt",
+      "Report must contain exactly one matching Route Validation Set Evidence Artifact.",
+    );
+  } else if (
+    setArtifact.id !== "route-validation-set-receipt" ||
+    setArtifact.artifactRef !==
+      "artifact://world/route-validation-set-receipt.json"
+  ) {
+    addReferenceInvalid(
+      diagnostics,
+      "/routeValidationSetReceipt",
+      "Route Validation Set Evidence Artifact ID and Ref must be canonical.",
+    );
+  }
   for (const [artifactId, artifact] of Object.entries(report.evidenceArtifactsById)) {
     const path = `/evidenceArtifactsById/${artifactId}`;
-    if (artifact.kind === "traversal-graph" || artifact.kind === "route-path-receipt") {
-      lockHashes.add(artifact.resolvedTraversalLockHash);
+    if (artifact.kind === "route-validation-set-receipt") continue;
+    const row = rowsByKey.get(`${artifact.constraintId}\u0000${artifact.routeId}`);
+    if (isNil(row) || !row.evidenceArtifactRefs.includes(artifact.artifactRef)) {
+      addReferenceInvalid(
+        diagnostics,
+        path,
+        "Route Evidence Artifact must belong to exactly one indexed Route row.",
+      );
+    }
+    const owners = artifactOwnersByRef[artifact.artifactRef] ?? [];
+    if (owners.length !== 1) {
+      addReferenceInvalid(
+        diagnostics,
+        path,
+        "Route Evidence Artifact Ref must have exactly one Route row owner.",
+      );
+    }
+    const filenameByKind: Readonly<Record<string, string>> = {
+      "traversal-graph": "traversal-graph.json",
+      "route-path-receipt": "route-path-receipt.json",
+      "route-connectivity-failure": "route-connectivity-failure.json",
+      "route-runtime-probe-receipt": "route-runtime-probe-receipt.json",
+      "route-overlay": "route-overlay.bin",
+    };
+    const expectedId = `route:${artifact.constraintId}:${artifact.kind}`;
+    const expectedRef =
+      `artifact://route/${encodeURIComponent(artifact.routeId)}/constraint/` +
+      `${encodeURIComponent(artifact.constraintId)}/${filenameByKind[artifact.kind]}`;
+    if (artifact.id !== expectedId || artifact.artifactRef !== expectedRef) {
+      addReferenceInvalid(
+        diagnostics,
+        path,
+        "Route Evidence Artifact ID and Ref must be constraint-qualified canonical values.",
+      );
+    }
+    if (
+      artifact.kind === "traversal-graph" ||
+      artifact.kind === "route-path-receipt" ||
+      artifact.kind === "route-connectivity-failure"
+    ) {
+      if (!isNil(row) && artifact.resolvedTraversalLockHash !== row.resolvedTraversalLockHash) {
+        addReferenceInvalid(
+          diagnostics,
+          `${path}/resolvedTraversalLockHash`,
+          "Artifact lock must match its indexed Route row lock.",
+        );
+      }
       assertRegistryIdentity(
         path,
-        () => resolveTraversalGraphBuilderProfileV1(artifact.graphBuilderProfileRef),
+        () => resolveTraversalGraphBuilderProfile(artifact.graphBuilderProfileRef),
         artifact.graphBuilderResolvedVersion,
         artifact.graphBuilderProfileHash,
         "Graph Builder identity",
         diagnostics,
       );
     } else if (artifact.kind === "route-runtime-probe-receipt") {
-      lockHashes.add(artifact.resolvedTraversalLockHash);
+      if (!isNil(row) && artifact.resolvedTraversalLockHash !== row.resolvedTraversalLockHash) {
+        addReferenceInvalid(
+          diagnostics,
+          `${path}/resolvedTraversalLockHash`,
+          "Artifact lock must match its indexed Route row lock.",
+        );
+      }
       assertRegistryIdentity(
         path,
         () => resolveTraversalDriverProfileV1(artifact.driverProfileRef),
@@ -1309,14 +1608,84 @@ function assertEvidenceArtifactIdentities(
         "Traversal Driver identity",
         diagnostics,
       );
+    } else if (artifact.kind === "route-overlay") {
+      if (!isNil(row) && artifact.resolvedTraversalLockHash !== row.resolvedTraversalLockHash) {
+        addReferenceInvalid(
+          diagnostics,
+          `${path}/resolvedTraversalLockHash`,
+          "Artifact lock must match its indexed Route row lock.",
+        );
+      }
     }
   }
-  if (lockHashes.size > 1) {
-    addReferenceInvalid(
-      diagnostics,
-      "/evidenceArtifactsById",
-      "Evidence artifacts in one Report must share a single resolvedTraversalLockHash.",
+  const artifactsByArtifactRef = new Set(artifactRefs);
+  for (const [rowIndex, row] of receipt.rows.entries()) {
+    const rowArtifacts = row.evidenceArtifactRefs.flatMap((artifactRef) => {
+      const artifact = artifacts.find((candidate) => candidate.artifactRef === artifactRef);
+      return isNil(artifact) ? [] : [artifact];
+    });
+    const rowKinds = new Set(rowArtifacts.map(({ kind }) => kind));
+    const hasGraph = rowKinds.has("traversal-graph");
+    const hasPath = rowKinds.has("route-path-receipt");
+    const hasFailure = rowKinds.has("route-connectivity-failure");
+    const hasProbe = rowKinds.has("route-runtime-probe-receipt");
+    const connectivityEvidenceValid = row.connectivityStatus === "complete"
+      ? hasGraph && hasPath && !hasFailure
+      : hasFailure && !hasPath;
+    const runtimeEvidenceValid = row.runtimeStatus === "not-run"
+      ? !hasProbe
+      : row.connectivityStatus === "complete" && hasProbe;
+    if (!connectivityEvidenceValid || !runtimeEvidenceValid) {
+      addReferenceInvalid(
+        diagnostics,
+        `/routeValidationSetReceipt/rows/${rowIndex}`,
+        "Route row status must match its Graph, Path, Failure, and Probe evidence kinds.",
+      );
+    }
+    for (const artifactRef of row.evidenceArtifactRefs) {
+      if (artifactRef === "artifact://world/route-validation-set-receipt.json") {
+        addReferenceInvalid(
+          diagnostics,
+          `/routeValidationSetReceipt/rows/${rowIndex}/evidenceArtifactRefs`,
+          "A Route row cannot own the world-level Route Validation Set receipt.",
+        );
+      }
+      if (!artifactsByArtifactRef.has(artifactRef)) {
+        addReferenceInvalid(
+          diagnostics,
+          `/routeValidationSetReceipt/rows/${rowIndex}/evidenceArtifactRefs`,
+          `Unknown Evidence Artifact Ref '${artifactRef}'.`,
+        );
+      }
+    }
+  }
+  for (const [diagnosticIndex, diagnostic] of report.diagnostics.entries()) {
+    if (diagnostic.scope !== "route-row") continue;
+    const row = rowsByKey.get(
+      `${diagnostic.constraintId}\u0000${diagnostic.routeId}`,
     );
+    if (isNil(row)) {
+      addReferenceInvalid(
+        diagnostics,
+        `/diagnostics/${diagnosticIndex}`,
+        "Route-row Diagnostic must match one indexed Route row.",
+      );
+    } else if (
+      !diagnostic.id.startsWith(`route:${diagnostic.constraintId}:`) ||
+      diagnostic.traversingEntityId !== row.traversingEntityId ||
+      diagnostic.startAnchorEntityId !== row.startAnchorEntityId ||
+      diagnostic.destinationAnchorEntityId !== row.destinationAnchorEntityId ||
+      diagnostic.evidenceArtifactRefs.some((artifactRef) =>
+        artifactRef !== "artifact://world/route-validation-set-receipt.json" &&
+        !row.evidenceArtifactRefs.includes(artifactRef)
+      )
+    ) {
+      addReferenceInvalid(
+        diagnostics,
+        `/diagnostics/${diagnosticIndex}`,
+        "Route-row Diagnostic ID and Evidence refs must stay constraint-qualified to its row.",
+      );
+    }
   }
 }
 
@@ -1467,6 +1836,7 @@ export function validateValidationReportV2(
         "validationProfileRef",
         "resolvedVersion",
         "validationProfileHash",
+        "routeValidationSetReceipt",
         "status",
         "gateResultsById",
         "evidenceArtifactsById",
@@ -1513,6 +1883,16 @@ export function validateValidationReportV2(
     requireString(record.validationProfileRef, "/validationProfileRef", diagnostics);
     requireString(record.resolvedVersion, "/resolvedVersion", diagnostics);
     requireHash(record.validationProfileHash, "/validationProfileHash", diagnostics);
+    try {
+      canonicalRouteValidationSetReceiptV1(record.routeValidationSetReceipt);
+    } catch (error) {
+      addDiagnostic(
+        diagnostics,
+        "VALIDATION_REFERENCE_INVALID",
+        "/routeValidationSetReceipt",
+        error instanceof Error ? error.message : String(error),
+      );
+    }
     requireEnum(record.status, ["passed", "failed", "incomplete"], "/status", diagnostics);
     const gates = asRecord(record.gateResultsById, "/gateResultsById", diagnostics);
     if (gates !== undefined) {

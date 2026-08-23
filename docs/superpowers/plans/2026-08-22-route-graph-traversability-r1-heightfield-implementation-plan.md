@@ -10,7 +10,9 @@
 
 **Spec:** `docs/superpowers/specs/2026-08-21-route-graph-and-traversability-design.md`
 
-**Baseline:** PR #18 merge commit `2fb12e4c8dd852fb47b4fd657d3f5dfa4a3a62d1`; `pnpm verify:route-r0-contract`, `pnpm typecheck`, `pnpm test` (94 files / 848 tests), and `pnpm build` passed on `main` at `0b1af67` on 2026-08-22.
+**Status:** R1 Heightfield complete. Evidence: `docs/reviews/2026-08-22-route-r1-heightfield-runtime-review.md`. M5 remains open; Task 10 Step 5 (write the R1b plan) starts after this branch is integrated.
+
+**Baseline:** `main` / `origin/main` at `5e0d6bf537c22f71aee5dc31ed8d9829be9fe9b3` (the plan commit on top of PR #18 and the Canonical World State design); `pnpm verify:route-r0-contract`, `pnpm typecheck`, `pnpm test` (94 files / 848 tests), and `pnpm build` all passed from this exact commit on 2026-08-22.
 
 ## Delivery Boundary
 
@@ -26,16 +28,24 @@ This plan delivers **R1 Heightfield Route only**. It does not close M5 by itself
 - AI authors `spatial.routes`, Anchors, subjects, and `constraints.connectivity`; AI never writes NavMesh polygons, graph nodes, provider parameters, or Babylon/Havok handles.
 - `AuthoringSpecV4 -> NormalizedWorldIRV4 -> ExecutionPlanV5` is the only R1 projection path. Do not read V4 connectivity directly beside an independently compiled V3 plan.
 - The compiled Heightfield Traversal Surface is derived deterministically from the locked terrain entity. Its `traversalSurfaceId`, `surfaceEntityId`, and `colliderSubshapeId` remain distinct.
+- `ExecutionPlanV5.staticColliders` is a flat, sorted collection of canonical Collider Subshape rows. R1 emits one row for each collision-enabled static object; the same entity may own multiple rows later, so consumers must key by `colliderSubshapeId`, not assume one collider per entity. A source-declared logical Subshape ID is preserved; the R1 single-primitive compatibility projection uses the reserved logical ID `primary`. `deriveColliderSubshapeIdV1(entityId, logicalSubshapeId)` returns `collider-subshape:` plus the canonical SHA-256 of those two named inputs, so identity never depends on delimiter parsing, an array index, Tile, LOD, or Runtime handle.
+- `compileResolvedTraversalLockV1()` is the only lock-construction seam. It joins `NormalizedWorldIRV4`, `ExecutionPlanV5`, the selected Subject, and one trusted `TraversalRuntimeImplementationIdentityV1`; Graph build, Path query, Runtime probe, and Validation receive the same immutable receipt and never reconstruct it independently.
+- `@whitebox-world/traversal` owns the provider-neutral `TraversalRuntimeImplementationIdentityV1` contract type. The trusted Babylon adapter exports a value satisfying that type with its Backend/Adapter Ref, resolved version, and content hash. The Compiler accepts that value as input; it does not own the type, import Babylon, or hard-code Babylon/Havok identity, and Recast cannot invent Runtime identity.
+- `TraversalCapabilityEnvelopeV1` is the sole provider-neutral projection of locked capsule, slope, step, ground capability/Profile identities, conservative builder clearance, and the locked Runtime implementation identity needed to select a tested equivalence mapping. Its canonical factory accepts exactly `ResolvedTraversalLockReceiptV1` plus `ResolvedTraversalGraphBuilderProfileV2`; it does not add fields to frozen `ResolvedTraversalLockV1`. `@whitebox-world/traversal` owns the type and derivation; `@whitebox-world/traversal-recast` maps it to provider build parameters without rereading Subject/Profile resources. Provider field names and formulas stay inside the adapter.
 - Recast/Detour is an internal Graph Builder provider. Provider polygon/tile refs, WASM pointers, provider paths, and provider errors never enter canonical artifacts or Browser/CLI public fields.
-- Recast agent radius, height, maximum climb, and maximum slope are derived from the same `resolvedTraversalLockHash` used by the Character Controller. No adapter-owned copy is permitted.
+- Recast agent geometry, maximum climb, and maximum slope are derived from the `ResolvedTraversalLockReceiptV1` used by the Character Controller; conservative erosion additionally uses the resolved Graph Builder Profile's clearance. The resulting Envelope carries both identities/hashes, and no adapter-owned copy is permitted.
 - The Graph Builder Profile owns voxel/tile/quantization/build-budget policy. It does not own Subject speed, acceleration, gravity, capsule, step, slope, validation thresholds, or runtime stop conditions.
 - `route-connectivity` passing never implies `route-runtime-conformance` passing. Both are blocking for a required Route.
 - Runtime simulation uses the existing fixed timestep. Rendering never advances the probe.
 - Every simulated tick performs exactly one Character Controller `checkSupport()` call. The returned raw support state/normal is retained as evidence from that same call. Do not add a ray, AABB, terrain-height, NavMesh-height, or extra `checkSupport()` grounding path.
 - Heightfield sampling may map an already-supported tick to a canonical R1 surface identity for evidence. It must not decide Ground/Air, jump eligibility, gravity, or Character Controller support.
+- Support-to-surface classification consumes the already-sampled Character Controller support result, the controller center/foot pose frozen at that same pre-integration instant, and a compiled surface/collider index. It must not reread the post-integration live controller pose. Only raw `SUPPORTED` or `SLIDING` enters correlation. Heightfield correlation uses the unclamped shared triangle sampler. Collider correlation uses one vertical exact-collision-mesh query through the frozen foot XZ plus the same contact-band/normal check; no AABB, horizontal-nearness, visual, or provider-handle fallback is allowed. Zero candidate surfaces is `unmatched`, one Heightfield with no collider candidate is `resolved`, and multiple/overlapping candidates are `ambiguous`. Heightfield sampling is corroborating evidence only after raw support exists; an unsupported tick cannot resolve a surface, and neither `unmatched` nor `ambiguous` may satisfy the runtime gate.
+- `@whitebox-world/terrain-surface` owns one canonical Heightfield triangle emitter. V5 render mesh, `PhysicsShapeMesh`, sampling, Graph build, and evidence consume that topology rather than duplicating triangle loops. Babylon 9.21.2's HeightField adapter exposes sample reordering but does not freeze Havok's cell diagonal; V4 keeps its existing compatibility path.
 - `SLIDING` is recorded as raw support and is not Support Loss. `UNSUPPORTED` is recorded from the first tick; only Validation Profile thresholds decide whether the run fails.
 - Runtime probe setup may reset the subject to the explicit start Anchor. After tick 0, the probe must not teleport, disable collision, change step/slope, or skip graph corners.
 - Tests and implementations use strict `===` / `!==`; null/undefined checks use `lodash-es` `isNil` where both values are intentionally accepted.
+- World-XZ probe intent enters the Motion Kernel as a canonical planar-vector command and bypasses camera-relative input compilation. Browser input and probe input share only the post-command fixed-tick simulation/commit path; camera yaw cannot change a probe receipt.
+- `@whitebox-world/traversal` owns only provider-neutral request/receipt/tick contracts. It may not import `@whitebox-world/validation`; all arrival, deviation, stall, unsupported-duration, and timeout thresholds and counters remain in the Validation runner.
 - Every runtime change follows `docs/reviews/runtime-deep-review-checklist.md`; every completed slice runs the relevant full-dimension review protocol.
 
 ---
@@ -46,22 +56,41 @@ This plan delivers **R1 Heightfield Route only**. It does not close M5 by itself
 - Modify: `packages/authoring/src/types-v4.ts`
 - Create: `packages/authoring/src/normalize-v4.ts`
 - Create: `packages/authoring/src/normalize-v4.test.ts`
+- Modify: `packages/authoring/src/subject-definition-normalizer.test.ts`
 - Modify: `packages/authoring/src/index.ts`
 - Modify: `packages/runtime-contracts/src/execution-plan.ts`
 - Modify: `packages/runtime-contracts/src/runtime-contracts.test.ts`
 - Modify: `packages/runtime-contracts/package.json`
+- Modify: `packages/traversal/src/types.ts`
+- Create: `packages/traversal/src/collider-subshape-id.ts`
+- Create: `packages/traversal/src/collider-subshape-id.test.ts`
+- Modify: `packages/traversal/src/index.ts`
+- Modify: `packages/subject-registry/src/built-in-subject-definitions.ts`
+- Modify: `packages/subject-registry/src/subject-resource-registry.ts`
+- Modify: `packages/subject-registry/src/subject-registry.test.ts`
+- Modify: `packages/subject-registry/src/capability-registry.test.ts`
 - Modify: `packages/compiler/src/compile.ts`
 - Modify: `packages/compiler/src/compile.test.ts`
+- Create: `packages/compiler/src/compile-traversal-lock.ts`
+- Create: `packages/compiler/src/compile-traversal-lock.test.ts`
 - Modify: `packages/compiler/src/index.ts`
+- Modify: `packages/compiler/package.json`
+- Modify: `packages/runtime-babylon/src/runtime.test.ts`
+- Verify: `apps/playground/src/authoring-loader.test.ts`
+- Modify: `scripts/worldkit.test.ts`
 - Modify: `scripts/lib/worldkit-pipeline.ts`
 - Modify: `pnpm-lock.yaml`
 
 **Interfaces:**
-- Produces `NormalizedConnectivityRequirementV1`, `NormalizedWorldIRV4`, `NormalizeAuthoringResultV4`, `normalizeAuthoringSpecV4()`, `ExecutionHeightfieldTraversalSurfaceV1`, `ExecutionStaticColliderV1`, `ExecutionConnectivityRequirementV1`, `ExecutionPlanV5`, `CompileWorldInputV5`, `CompileWorldResultV5`, `compileWorldV5()`, and `loadWorldkitRoutePipeline()`.
-- `ExecutionPlanV5.traversal` contains exactly `surfaces` and `connectivityRequirements` in R1. `ExecutionPlanV5.staticColliders` is the separate locked collision authority shared by Graph Builder and Runtime; it is not inferred independently from visual meshes.
+- Produces `NormalizedConnectivityRequirementV1`, `NormalizedWorldIRV4`, `NormalizeAuthoringResultV4`, `normalizeAuthoringSpecV4()`, `ExecutionHeightfieldTraversalSurfaceV1`, the versioned closed discriminated union `ExecutionTraversalSurfaceV1`, `ExecutionStaticColliderV1`, `ExecutionConnectivityRequirementV1`, `ExecutionPlanV5`, `CompileWorldInputV5`, `CompileWorldResultV5`, `compileWorldV5()`, `compileResolvedTraversalLockV1()`, and `loadWorldkitRoutePipeline()`. `@whitebox-world/traversal` separately owns and exports both the `TraversalRuntimeImplementationIdentityV1` input contract and the unique `deriveColliderSubshapeIdV1()` identity function; Compiler, Graph, Runtime evidence, and R1b consumers call that function rather than copying its hash algorithm.
+- `ExecutionPlanV5.traversal` contains exactly `surfaces` and `connectivityRequirements` in R1. `surfaces` is typed as `readonly ExecutionTraversalSurfaceV1[]`; R1 emits only rows with `kind: "heightfield"`, while R1b may add a new closed union member without changing the collection or its consumers. `ExecutionPlanV5.staticColliders` is the separate locked collision authority shared by Graph Builder and Runtime; it is not inferred independently from visual meshes.
+- Each `ExecutionStaticColliderV1` describes one closed primitive Collider Subshape, including `entityId`, stable `logicalSubshapeId`, derived `colliderSubshapeId`, transform, dimensions, and canonical collider hash. Rows are sorted by `colliderSubshapeId`; R1 emits one row per collision-enabled object, while R1b may emit multiple rows for one entity without nesting or changing consumer ownership. The ID derivation is tested as a pure canonical-hash function of the owning Entity ID and source logical Subshape ID; list position and collider bytes are not identity inputs, while the separate collider hash changes with geometry.
 - The R1 Heightfield surface identity is compiler-derived from the locked terrain entity and content hashes; no Authoring duplicate is introduced.
+- The built-in primitive `humanoid.third-person@1` is clean-broken from legacy Subject Definition V2 to capability-driven V3 while retaining primitive visuals and the static whitebox Pose Set. It selects the explicit `worldkit://collider-profile/humanoid.medium-capsule@1` rather than a derivation profile, so frozen `colliderProfileRef/Hash` keep their literal contract meaning. It uses the capability-driven Character Physics Body and complete Motion/Control/Feel/Medium assembly. This gives R1 a GLB-independent humanoid whose every lock resource exists in the normalized Resource Lock; the lock compiler must never synthesize missing legacy identities or store a Collider Derivation Profile in a `colliderProfileRef` field.
+- Registry discovery classifies the migrated primitive exactly like other V3 capability Subjects: it appears once in both the canonical CLI Subject Definition list and capability Subject list, is absent from the legacy `listResources()` projection, and resolves to the same frozen content hash through every supported discovery path.
+- Registry `resourceLock[].contentHash` locks the immutable Registry resource bytes, while `ExecutionSubjectV3.subjectDefinitionHash` and `ResolvedTraversalLockV1.subjectDefinitionHash` lock the normalized Definition bytes. These byte domains are intentionally distinct for Registry Subjects and must never be compared as aliases. The lock compiler binds them by validating the complete canonical `resourceLockHash` against both Normalized IR and Execution Plan, while separately validating Plan-to-normalized-Definition identity.
 
-- [ ] **Step 1: Write RED normalization tests**
+- [x] **Step 1: Write RED normalization tests**
 
 Cover all of the following:
 
@@ -72,7 +101,7 @@ expect(normalizeAuthoringSpecV4(validV4).value).toMatchObject({
   layout: {
     connectivityRequirements: [{
       constraintId: "hero-to-goal",
-      type: "connected-by-route",
+      kind: "connected-by-route",
       traversingEntityId: "hero",
       startAnchorEntityId: "spawn",
       destinationAnchorEntityId: "goal",
@@ -88,49 +117,66 @@ expect(normalizeAuthoringSpecV4(changedRouteV4).normalizedWorldIrHash)
 
 Also prove that the explicit V3 normalizer still rejects V4 and that V4 normalization does not erase layout-solver provenance.
 
-- [ ] **Step 2: Run the RED normalization test**
+Add Registry and Authoring Subject Normalizer regressions proving the primitive R1 humanoid resolves as schemaVersion 3, uses `worldkit://pose-set/static.whitebox@1`, has exactly one ground-locomotion capability, and contributes every resource required by `ResolvedTraversalLockV1` to the normalized Resource Lock without loading a GLB. Prove CLI/capability discovery returns it exactly once with the resolved content hash and that the legacy resource projection no longer returns the V3 definition.
+
+- [x] **Step 2: Run the RED normalization test**
 
 Run: `pnpm vitest run packages/authoring/src/normalize-v4.test.ts`
 
 Expected: FAIL because `normalizeAuthoringSpecV4` and `NormalizedWorldIRV4` do not exist.
 
-- [ ] **Step 3: Implement V4 normalization without duplicating the layout solver**
+- [x] **Step 3: Implement V4 normalization without duplicating the layout solver**
 
 Implement an explicit V4-to-V3 placement projection for the existing solver, then wrap the solved V3 result with sorted connectivity requirements and recompute the V4 canonical hash. The inner V3 hash is an implementation detail and must not be returned as the V4 hash.
 
 Do not mutate `NormalizedWorldIRV3`, do not add empty connectivity fields to it, and do not alias `normalizeAuthoringSpecV4` to the V3 function.
 
-- [ ] **Step 4: Write RED compiler tests for `ExecutionPlanV5.traversal`**
+- [x] **Step 4: Write RED compiler tests for `ExecutionPlanV5.traversal`**
 
 The tests must prove:
 
 - the connectivity row is carried from normalized V4 with unchanged role-qualified IDs;
 - one deterministic Heightfield Traversal Surface is compiled;
+- the surface uses the persistent-definition discriminator `kind: "heightfield"` and is exposed through `ExecutionTraversalSurfaceV1` rather than a Heightfield-only collection type;
 - its three IDs are distinct and stable across reordered input;
-- every collision-enabled static object has one deterministic `ExecutionStaticColliderV1` with a stable Collider Subshape ID;
+- every collision-enabled static object has one deterministic `ExecutionStaticColliderV1` with `logicalSubshapeId: "primary"` and a stable derived Collider Subshape ID;
+- static collider consumers do not key by `entityId` or assume one collider per entity;
 - the current cone visual compiles to the same cylinder collider shape used by Babylon/Havok instead of inventing a cone-only Graph collider;
 - `resourceHash` changes when height samples change;
 - the execution plan hash includes connectivity and surface identity;
 - no Recast/provider field exists in the plan.
 
-- [ ] **Step 5: Implement `ExecutionPlanV5` and `compileWorldV5()`**
+- [x] **Step 5: Implement `ExecutionPlanV5` and `compileWorldV5()`**
 
-Use the existing V4 compiler core for shared world projection, then add the V5 traversal section, explicit static colliders, and recompute the plan hash. The derived Heightfield surface must use a stable package resource ref and a content hash over the canonical locked terrain/collider source. The Graph Builder consumes `staticColliders`; Task 5 changes Runtime V5 to consume the same rows. Visual object primitives remain rendering input only.
+Use the existing V4 compiler core for shared world projection, then add the V5 traversal section, explicit static colliders, and recompute the plan hash. The derived Heightfield surface uses a stable package resource ref and a content hash over the canonical locked terrain source only; every Static Collider row has its own canonical hash, the Execution Plan hash covers both collections, and the later Graph Build Input hash covers the combined terrain/collider source. The Graph Builder consumes `staticColliders`; Task 5 changes Runtime V5 to consume the same rows. Visual object primitives remain rendering input only.
 
-`ExecutionPlanV5` must reuse `TraversalSurfaceIdentityV1` from `@whitebox-world/traversal` through a declared direct dependency rather than copying a competing surface-identity shape.
+`ExecutionPlanV5` and the Compiler must reuse `TraversalSurfaceIdentityV1` and `TraversalRuntimeImplementationIdentityV1` from `@whitebox-world/traversal` through declared direct package dependencies rather than relying on workspace hoisting or copying competing shapes. This direction remains acyclic: Traversal does not import Runtime Contracts or Compiler.
 
-- [ ] **Step 6: Add a route-specific pipeline entry**
+- [x] **Step 6: Write RED lock-compilation tests**
 
-`loadWorldkitRoutePipeline()` must require Authoring V4 and return `NormalizedWorldIRV4` plus `ExecutionPlanV5`. Existing `loadWorldkitPipeline()` remains the V3 runtime entry until a separately reviewed default-version migration; R1 must not silently reinterpret existing V3 worlds.
+Prove that `compileResolvedTraversalLockV1()`:
 
-- [ ] **Step 7: Run focused and dependency gates**
+- resolves every Subject/Profile/Capability/Kernel hash from the normalized resource lock and compiled Subject rather than fixture constants;
+- rejects a one-sided mutation in either the Resource Lock hash chain or the Plan-to-normalized-Definition hash chain without comparing their unlike Subject Definition hashes;
+- requires exactly one compatible ground-locomotion capability for the R1 subject and fails closed on missing or ambiguous capability identity;
+- rejects legacy/incomplete Subjects instead of filling absent Control/Motion/Medium hashes from Runtime constants;
+- requires a complete trusted `TraversalRuntimeImplementationIdentityV1` and changes the lock hash when Backend or Adapter identity changes;
+- returns byte-identical immutable receipts across reordered normalized inputs;
+- exposes the only lock-construction seam for Graph build and Runtime orchestration; Tasks 3-9 must prove those consumers receive its receipt instead of reconstructing locks when the consumers exist.
+
+- [x] **Step 7: Implement the unique lock compiler and add a route-specific pipeline entry**
+
+`compileResolvedTraversalLockV1()` accepts `NormalizedWorldIRV4`, `ExecutionPlanV5`, `traversingEntityId`, and a trusted provider-neutral Runtime implementation identity. It delegates final closed validation/hash construction to `resolveTraversalLockV1()` and never reads a Registry at Runtime. `loadWorldkitRoutePipeline()` must require Authoring V4 and return `NormalizedWorldIRV4` plus `ExecutionPlanV5`. Existing `loadWorldkitPipeline()` remains the V3 runtime entry until a separately reviewed default-version migration; R1 must not silently reinterpret existing V3 worlds.
+
+- [x] **Step 8: Run focused and dependency gates**
 
 Run:
 
 ```bash
-pnpm vitest run packages/authoring/src/normalize-v4.test.ts packages/compiler/src/compile.test.ts packages/runtime-contracts/src/runtime-contracts.test.ts
+pnpm vitest run packages/authoring/src/normalize-v4.test.ts packages/authoring/src/subject-definition-normalizer.test.ts packages/subject-registry/src/subject-registry.test.ts packages/subject-registry/src/capability-registry.test.ts packages/compiler/src/compile.test.ts packages/compiler/src/compile-v5.test.ts packages/compiler/src/compile-traversal-lock.test.ts packages/runtime-contracts/src/runtime-contracts.test.ts packages/traversal/src/collider-subshape-id.test.ts packages/runtime-babylon/src/runtime.test.ts apps/playground/src/authoring-loader.test.ts scripts/worldkit.test.ts
 pnpm verify:route-r0-contract
 pnpm typecheck
+pnpm test
 ```
 
 Expected: PASS, and the R0 verifier remains byte-stable.
@@ -145,109 +191,241 @@ Expected: PASS, and the R0 verifier remains byte-stable.
 - Modify: `packages/traversal/src/profile-registry.test.ts`
 - Modify: `packages/traversal/src/graph-contract.ts`
 - Modify: `packages/traversal/src/graph-contract.test.ts`
+- Create: `packages/traversal/src/capability-envelope.ts`
+- Create: `packages/traversal/src/capability-envelope.test.ts`
+- Create: `packages/traversal/src/build-budget.ts`
+- Create: `packages/traversal/src/build-budget.test.ts`
 - Modify: `packages/traversal/src/index.ts`
 - Create: `packages/traversal-recast/package.json`
 - Create: `packages/traversal-recast/src/adapter-identity.ts`
 - Create: `packages/traversal-recast/src/adapter-identity.test.ts`
+- Create: `packages/traversal-recast/src/provider-patch-identity.test.ts`
+- Create: `packages/traversal-recast/src/recast-config.ts`
+- Create: `packages/traversal-recast/src/recast-config.test.ts`
+- Create: `packages/traversal-recast/src/provider-lifecycle.ts`
+- Create: `packages/traversal-recast/src/provider-lifecycle.test.ts`
+- Create: `packages/traversal-recast/src/provider-acceptance.test.ts`
 - Create: `packages/traversal-recast/src/index.ts`
+- Create: `packages/runtime-babylon/src/traversal-implementation-identity.ts`
+- Create: `packages/runtime-babylon/src/traversal-implementation-identity.test.ts`
+- Modify: `packages/runtime-babylon/src/index.ts`
+- Modify: `packages/runtime-babylon/package.json`
+- Create: `patches/@recast-navigation__core@0.43.1.patch`
+- Create: `patches/@recast-navigation__generators@0.43.1.patch`
+- Modify: `package.json`
 - Modify: `pnpm-lock.yaml`
 
 **Interfaces:**
-- Adds `TraversalGraphBuilderProfileV2`, `ResolvedTraversalGraphBuilderProfileV2`, and a version-dispatching `resolveTraversalGraphBuilderProfile()` without mutating frozen V1.
+- Adds `TraversalGraphBuilderProfileV2`, `ResolvedTraversalGraphBuilderProfileV2`, a version-dispatching `resolveTraversalGraphBuilderProfile()`, `TraversalCapabilityEnvelopeV1`, and `createTraversalCapabilityEnvelopeV1()` without mutating frozen V1.
 - Built-in ref: `worldkit://traversal-graph-builder-profile/outdoor-humanoid.heightfield-r1@1`.
 - V2 adds provider-neutral voxel/tile build policy required by a real builder: `voxelCellSizeMeters`, `voxelCellHeightMeters`, `tileSizeCells`, `maximumEdgeLengthMeters`, `maximumSimplificationErrorMeters`, and the existing quantization/cost/budget fields.
+- The built-in V2 Profile is fully frozen rather than left to adapter defaults: `clearanceMarginMeters: 0.05`, `voxelCellSizeMeters: 0.15`, `voxelCellHeightMeters: 0.1`, `tileSizeCells: 64`, `maximumEdgeLengthMeters: 2.4`, `maximumSimplificationErrorMeters: 0.15`, `positionQuantizationMeters: 0.001`, both cost weights `1`, `maximumNodes: 100000`, `maximumEdges: 200000`, `maximumTiles: 1024`, and `maximumSearchSteps: 100000`. Validation accepts finite clearance in `[0, 2]`, cell sizes in `[0.001m, 4m]`/`[0.001m, 2m]`, integer tile size in `[16, 1024]`, positive maximum edge length no greater than `256m` and no smaller than one horizontal cell, positive simplification error no greater than `16m`, and the existing V1 cost/budget domains. These are canonical policy values and units, not Recast names or defaults.
 - `@whitebox-world/traversal-recast` owns the pinned provider dependency and conversion only; `@whitebox-world/traversal` stays provider-neutral.
+- The Capability Envelope is derived from the frozen V1 lock receipt plus the resolved V2 Graph Builder Profile. It contains canonical geometry/capability units, the locked ground capability/Profile identities, conservative builder clearance, the complete V2 voxel/tile/quantization/cost/budget policy, the `resolvedTraversalLockHash`, Graph Builder Profile identity, and the locked provider-neutral Backend/Adapter identity needed for an audited equivalence mapping. It does not mutate the R0 lock and contains no Recast field names, poly refs, WASM identity, validation thresholds, speed, acceleration, gravity, Control/Feel/Motion/Medium identity, or Driver policy.
+- `TraversalCapabilityEnvelopeV1` is a closed object with `kind: "traversal-capability-envelope"`, `schemaVersion: 1`, `traversalMode: "ground"`, and no self-hash field. Its factory returns `{ envelope, traversalCapabilityEnvelopeHash }`, where the hash is `sha256CanonicalJson(envelope)`. In addition to the lock/profile receipt hashes and exact identities, the Envelope copies only these payload fields: `subjectEntityId`, capsule radius/height/center offset, slope/step limits, Collider/Physics Body/Locomotion/Ground Capability refs and hashes, Runtime Backend/Adapter refs/versions/hashes, Graph Builder ref/version/hash, and every V2 build-policy field. The adapter accepts the Envelope only; it never accepts a raw lock, Profile, Subject, or Registry.
+- Registry Subject Definition bytes and normalized Definition bytes remain separate as frozen in Task 1. The Envelope does not copy either Subject Definition hash because Recast mapping needs the already-bound `resolvedTraversalLockHash`, capability identities, and geometry rather than visual/semantic Definition identity.
+- V2 uses `schemaVersion: 2`, resource version `@1`, and `resolvedVersion: "1"`. The dispatcher is an exact two-ref table; it does not infer versions from a suffix or payload. `resolveTraversalGraphBuilderProfileV1()` and the exact V1 hash remain byte-stable.
+- Receipt validation is independent: lock receipt hash must equal `sha256CanonicalJson(lock)`; Profile content hash must equal `sha256CanonicalJson(profile)` and its exact Registry resolution; V1 Profiles are rejected by the Envelope factory. The lock hash is never compared with the Profile hash.
+- `@whitebox-world/runtime-babylon` owns and exports the one production `TraversalRuntimeImplementationIdentityV1`. Its Backend manifest is canonical JSON over `{ kind: "traversal-runtime-backend-manifest", schemaVersion: 1, resourceRef: "worldkit://runtime-backend/babylon-havok@1", resolvedVersion: "9.21.2+1.3.14", babylonCoreVersion: "9.21.2", havokPluginVersion: "1.3.14" }`; its Adapter manifest is canonical JSON over `{ kind: "traversal-runtime-adapter-manifest", schemaVersion: 1, resourceRef: "worldkit://runtime-adapter/babylon.character-controller@1", resolvedVersion: "1", runtimeBackendRef: "worldkit://runtime-backend/babylon-havok@1", runtimeBackendResolvedVersion: "9.21.2+1.3.14", adapterContractVersion: "character-controller-ground-support.v1" }`. The two content hashes are `sha256CanonicalJson()` of those exact manifests. No fixture hash or legacy `babylon-world-runtime@1` Ref is accepted as production identity.
+- Task 2 pins `@babylonjs/core` and `@babylonjs/loaders` to exact `9.21.2` and `@babylonjs/havok` to exact `1.3.14` in `runtime-babylon` rather than leaving compatible ranges. The identity test reads the package's declared direct dependency versions and fails if they drift from the manifest before a manifest/hash update; an upgraded engine cannot retain the old production identity silently.
+- `@whitebox-world/traversal-recast` keeps a compatibility allowlist keyed by that exact six-field Runtime identity tuple, but its production code does not import Runtime Babylon or invent a competing Runtime identity. Its test package declares Runtime Babylon as a dev dependency and proves the exported production tuple is accepted, while R0 placeholder hashes and the legacy Adapter Ref fail with `TRAVERSAL_RECAST_BACKEND_MAPPING_NOT_AUDITED`. Recast provider identity uses separate internal `graphProviderAdapter...` fields and never enters Profile, Envelope, Lock, canonical Graph, or Runtime identity.
+- R1 uses `generateTiledNavMesh`. `tileSizeCells` is required, integer, and mapped to the tiled generator. `maximumTiles` is not a Recast config field: the provider-neutral `estimateHeightfieldTileCountV1()` first applies the same integer-micrometer normalization and computes `ceil(widthMicrometers / (tileSizeCells * voxelCellSizeMicrometers)) * ceil(depthMicrometers / (tileSizeCells * voxelCellSizeMicrometers))` for the one-layer R1 Heightfield. `assertTraversalGraphBuildBudgetV1()` fails with `ROUTE_GRAPH_BUDGET_EXCEEDED` before any WASM allocation when the estimate exceeds the Envelope budget. Task 3 must call this named guard before invoking the provider. Solo generation is not an R1 fallback.
+- Published `@recast-navigation/core` and `@recast-navigation/generators` `0.43.1` do not release every operation-local WASM wrapper on tiled builds, including retained-intermediate builds required by the SDK's query-before-dispose lifecycle. Task 2 therefore carries exact pnpm patches whose original scope is resource ownership and cleanup. Task 4 adds one separately reviewed optional `sourceAreaMode` extension to the Generators patch so R1 can preserve terrain/blocker source semantics before rasterization; the omitted-option path must remain byte-identical to Task 2. No other geometry, winding, configuration, query, ownership, or canonical SDK behavior may change. `RECAST_GRAPH_PROVIDER_ADAPTER_MANIFEST_V1` binds exact package versions/integrities, both version-qualified patch keys, repository-relative patch paths, explicit per-patch revisions and patch-byte hashes, plus a lexicographically sorted `installedFiles` list for Core `dist/index.mjs`, Generators `dist/index.mjs`, and the changed Generators declaration leaf `dist/generators/generate-tiled-nav-mesh.d.ts`. Dependency, patch, declaration, or installed-byte drift therefore cannot retain the old Adapter identity. Absolute installation paths and non-local registry metadata never enter the manifest. Ownership is frozen in `docs/reviews/2026-08-22-recast-0431-resource-lifecycle-adr.md`; the sole source-label extension and Adapter identity bump are frozen in `docs/reviews/2026-08-22-recast-r1-source-area-adr.md`.
 
-- [ ] **Step 1: Write RED profile tests**
+- [x] **Step 1: Write RED profile tests**
 
-Prove that V2 accepts only its closed field set, rejects Subject/Validation values such as `capsuleRadiusMeters`, `maxSlopeDegrees`, `walkSpeedMetersPerSecond`, and `maximumProbeTicks`, and produces a stable Registry content hash.
+Prove that V2 accepts only its closed field set, rejects Subject/Validation values such as `capsuleRadiusMeters`, `maxSlopeDegrees`, `maxStepHeightMeters`, `walkSpeedMetersPerSecond`, `gravityMetersPerSecondSquared`, and `maximumProbeTicks`, rejects Provider dialects such as `cs`, `ch`, `walkableRadius`, `walkableClimb`, and `agentRadius`, and produces a stable Registry content hash. Lock `schemaVersion: 2`, resource `resolvedVersion: "1"`, the exact V1 hash `sha256:0c716c3d733d679d8518018ec2e54d678bc26715beac98c9928218862778d4a1`, and mismatched V1/V2 Ref-hash pairs in Graph validation.
 
-- [ ] **Step 2: Run the RED profile test**
+- [x] **Step 2: Run the RED profile test**
 
 Run: `pnpm vitest run packages/traversal/src/profile-registry.test.ts`
 
 Expected: FAIL because V2 resolution is absent.
 
-- [ ] **Step 3: Implement V2 profile resolution**
+- [x] **Step 3: Implement V2 profile resolution**
 
-Keep Subject geometry and motion values out of the profile. At build time those values are supplied only through `ResolvedTraversalLockV1`. Update Graph validation to resolve either the frozen V1 profile or the new V2 profile by exact resource ref/hash; do not weaken validation to accept arbitrary profiles.
+Keep Subject geometry and motion values out of the profile. At build time, locked Subject geometry and traversal limits come from `ResolvedTraversalLockReceiptV1`, while conservative builder clearance and voxel/tile policy come from the separately resolved `ResolvedTraversalGraphBuilderProfileV2`. Those two immutable inputs are joined exactly once by `createTraversalCapabilityEnvelopeV1()`; do not add either input's fields to the other contract. Update Graph validation to resolve either the frozen V1 profile or the new V2 profile by exact resource ref/hash; do not weaken validation to accept arbitrary profiles.
 
-- [ ] **Step 4: Add the isolated Recast package**
+- [x] **Step 4: Write and run RED Capability Envelope and build-budget tests**
 
-Declare `recast-navigation` `0.43.1` as a direct dependency of `@whitebox-world/traversal-recast`. Do not add it to the root or `runtime-babylon` package. Define an internal adapter identity/hash that is resolved by the profile implementation but never serialized into `TraversalGraphV1`.
+Prove that `createTraversalCapabilityEnvelopeV1()` accepts only one immutable `ResolvedTraversalLockReceiptV1` plus one immutable `ResolvedTraversalGraphBuilderProfileV2`, copies every geometry/capability/identity and V2 policy field from the correct owner, independently validates each receipt's canonical hash and exact Profile Registry identity, rejects V1 Profiles and non-finite values, returns immutable canonical bytes plus a non-self-referential envelope hash, and contains no Validation, Driver, speed, gravity, Control/Feel/Motion/Medium, Provider, or Recast field. Changing only `capsuleRadiusMeters`, `clearanceMarginMeters`, or `voxelCellSizeMeters` must change the Envelope hash. Separately prove exact-multiple and boundary tile estimates, one-layer semantics, integer-overflow rejection, and stable `ROUTE_GRAPH_BUDGET_EXCEEDED` before a provider callback can run. Run: `pnpm vitest run packages/traversal/src/capability-envelope.test.ts packages/traversal/src/build-budget.test.ts`. Expected: FAIL because the factories do not exist.
 
-- [ ] **Step 5: Add the provider acceptance test**
+- [x] **Step 5: Implement the canonical Capability Envelope and pre-provider budget guard**
 
-The test must initialize/destroy the WASM provider repeatedly, prove Node compatibility, prove a right-handed Y-up triangle is interpreted correctly, and prove that provider refs/polygon refs do not appear in canonical JSON.
+Implement and export the strict Envelope factory plus the pure Heightfield tile estimator/budget guard in `@whitebox-world/traversal` before adding any Recast mapping. No adapter code may accept a raw lock or Graph Builder Profile. The guard owns no WASM or provider values and Task 3 must invoke it before the first provider call.
+
+- [x] **Step 6: Add the isolated Recast package**
+
+Declare `recast-navigation` `0.43.1` as a direct dependency of `@whitebox-world/traversal-recast`. Do not add it to the root or `runtime-babylon` package. Pin exact `@recast-navigation/core@0.43.1` and `@recast-navigation/generators@0.43.1` patches through the root `pnpm-workspace.yaml#patchedDependencies` map used by pnpm 10; no workspace package imports a transitive provider module as an undeclared dependency. Core remains ownership-only at revision `lifecycle.1`. Generators advances to `lifecycle.1+source-areas.1`, combining the approved ownership repairs with the closed optional source-area extension from the source-area ADR. Define a separate internal Graph Provider Adapter identity/hash over all four exact provider package versions/lockfile integrities, both version-qualified patch keys, repository-relative patch paths, explicit per-patch revisions and patch-byte hashes, the sorted three-entry installed-file evidence set, tiled-generator choice, closed mapping/rounding/source-area formulas, raw Query capacity, unsigned Provider Ref ABI, and every remaining explicit provider constant. The final Adapter version is `0.43.1+lifecycle.1+source-areas.1+mapping.3`. The manifest contains portable literals only; test-only resolution paths never enter it, and its final hash remains outside the hash input. `provider-patch-identity.test.ts` must start from the declared umbrella entry and use chained `createRequire()` lookup to validate root patch declarations, lockfile SRI/patch entries, patch bytes, installed versions, Core and Generators JavaScript bytes, and the actual changed Generators declaration-leaf bytes under pnpm strict isolation. Do not equate pnpm's generated patch hash with the SDK patch-byte SHA-256. The Adapter identity is not resolved by the Graph Builder Profile and is never serialized into Profile, Envelope, Lock, or `TraversalGraphV1`.
+
+The Recast adapter accepts only the already-derived Envelope and maps it to provider build parameters; Recast radius, height, climb, slope, and erosion inputs must come only from that mapping. The adapter may conservatively transform canonical values but may not accept or reread Subject, Physics Body, Locomotion, raw Lock, or Graph Builder Profile records.
+
+Source audit of published `recast-navigation` `0.43.1` freezes the mapping boundary: `cs`/`ch` are world units; `walkableHeight`, `walkableClimb`, `walkableRadius`, `maxEdgeLen`, and `maxSimplificationError` are voxel-domain inputs in the high-level generator. Map exactly once inside the adapter after normalizing meter values to nearest integer micrometers (`round(meters * 1_000_000)`) so decimal policy values do not lose a voxel through IEEE-754 division: height uses integer `ceil(capsuleHeightMicrometers / voxelCellHeightMicrometers)`, climb uses integer `floor(maxStepHeightMicrometers / voxelCellHeightMicrometers)`, radius uses integer `ceil((capsuleRadiusMicrometers + clearanceMarginMicrometers) / voxelCellSizeMicrometers)`, maximum edge length uses integer `floor(maximumEdgeLengthMicrometers / voxelCellSizeMicrometers)` with V2 requiring at least one cell, simplification error uses `maximumSimplificationErrorMicrometers / voxelCellSizeMicrometers`, and slope remains degrees. `walkableHeight` never uses collider center offset. RED locks `0.3m / 0.1m -> 3`, `2.4m / 0.15m -> 16`, and `0.299m / 0.1m -> 2`. Remaining generator values are closed adapter constants included in the internal adapter hash: input `borderSize: 0` (the pinned tiled generator derives effective border as walkable radius plus three cells), `minRegionArea: 8`, `mergeRegionArea: 20`, `maxVertsPerPoly: 6`, `detailSampleDist: 6`, `detailSampleMaxError: 1`, `buildBvTree: true`, and `chunkyTriMeshTrisPerChunk: 128`; library defaults are not accepted implicitly. Unknown Runtime Backend/Adapter identity tuples fail with `TRAVERSAL_RECAST_BACKEND_MAPPING_NOT_AUDITED`.
+
+- [x] **Step 7: Add the provider acceptance test**
+
+The test must initialize/use the real WASM provider repeatedly, prove Node compatibility, prove a right-handed Y-up counter-clockwise triangle is walkable while reversed winding is not accepted as the same walkable surface, and prove that provider refs/polygon refs do not appear in canonical JSON. It must prove at least two locked Capability Envelopes map deterministically without reading any external Subject/Profile value. Canonical changes always change the Envelope hash, but quantization-equivalent inputs may intentionally map to the same voxel parameters; mapping tests therefore prove that crossing a voxel boundary changes the mapped value and that the effective eroded radius in meters is always greater than or equal to `capsuleRadiusMeters + clearanceMarginMeters`.
+
+Lifecycle is frozen to one process-level idempotent `init()` Promise because 0.43.1 exposes no global shutdown and documents repeated `init()` as immediate. All provider build/query operations share one package-owned asynchronous mutex. Each operation follows the exact ownership table in the lifecycle ADR; no test or production path destroys global WASM. Before applying either patch, pack the unpatched plane fixture output as Float32 positions plus Int32 indices and commit its SHA-256 golden. The core patch closes grid/data result holders and the build-context implementation handle. The generator patch closes input arrays, configs/parameters, temporary owned arrays and view shells, tile-data wrapper transfer, remove-tile receipts, retained intermediates, and partial/empty/failure/throw paths. A returned retained result transfers only NavMesh, build context, chunky mesh, and tile intermediates to SDK cleanup. Instrumented real-WASM tests observe arrays once through inner `Raw.destroy`, separately observe NavMesh/build-context destruction and all five `Raw.Recast.free*` functions, key returned SDK-owned pointers through `Raw.Module.getPointer`, and treat reused temporary addresses as new lifetimes. The empty fixture uses two `8 x 8` grid islands (128 triangles each) at `x=0..4m` and `x=24..28m`; with the frozen 128-triangle chunk limit, tests prove the two leaf AABBs do not overlap the middle tile's expanded `x=8.7..20.1m` query rectangle, then prove tile `x=1` has no compact/polygon data and no tile-add call. Separate tests inject a later `Raw.Recast.createHeightfield` failure and a `NavMesh.prototype.addTile` throw after one successful transfer. They must prove no double-free, no generator destruction of returned SDK-owned objects, exactly-once SDK cleanup, repeated/concurrent safety, and the same packed-output hash after patching. Patch-identity tests bind root patch declarations, lockfile versions/integrities/patch entries, patch bytes, installed patched bytes, and the Adapter manifest/hash.
 
 If any provider acceptance assertion fails, stop this plan and write a short ADR under `docs/reviews/`; do not silently ship a second custom graph dialect.
 
-- [ ] **Step 6: Run focused gates**
+- [x] **Step 8: Run focused gates**
 
 Run:
 
 ```bash
-pnpm vitest run packages/traversal/src/profile-registry.test.ts packages/traversal/src/graph-contract.test.ts packages/traversal-recast/src/adapter-identity.test.ts
+pnpm vitest run packages/traversal/src/profile-registry.test.ts packages/traversal/src/capability-envelope.test.ts packages/traversal/src/build-budget.test.ts packages/traversal/src/graph-contract.test.ts packages/runtime-babylon/src/traversal-implementation-identity.test.ts packages/traversal-recast/src/adapter-identity.test.ts packages/traversal-recast/src/provider-patch-identity.test.ts packages/traversal-recast/src/recast-config.test.ts packages/traversal-recast/src/provider-lifecycle.test.ts packages/traversal-recast/src/provider-acceptance.test.ts
 pnpm typecheck
+pnpm verify:route-r0-contract
 ```
 
-Expected: PASS.
+Expected: PASS. Also run dependency/grep guards proving `packages/traversal` does not import `@whitebox-world/validation` or `recast-navigation`, does not expose Validation threshold names, and `traversal-recast` public exports do not expose Recast config/WASM/handle types.
 
 ---
 
 ### Task 3: Build the Locked Heightfield Traversal Source
 
+**Frozen design:** `docs/reviews/2026-08-22-heightfield-route-build-input-design.md`
+
 **Files:**
+- Create: `packages/authoring/src/canonical-authoring-identity.ts`
+- Modify: `packages/authoring/src/layout-input.ts`
+- Modify: `packages/authoring/src/normalize-v4.ts`
+- Modify: `packages/authoring/src/normalize-v4.test.ts`
+- Modify: `packages/authoring/src/types-v4.ts`
+- Modify: `packages/authoring/src/authoring-v4.test.ts`
+- Modify: `packages/runtime-contracts/src/execution-plan.ts`
+- Modify: `packages/runtime-contracts/src/runtime-contracts.test.ts`
+- Modify: `packages/compiler/src/compile.ts`
+- Modify: `packages/compiler/src/compile-v5.test.ts`
 - Create: `packages/traversal/src/build-input.ts`
 - Create: `packages/traversal/src/build-input.test.ts`
+- Modify: `packages/traversal/src/build-budget.ts`
+- Modify: `packages/traversal/src/build-budget.test.ts`
+- Modify: `packages/traversal/src/graph-contract.ts`
+- Modify: `packages/traversal/src/graph-contract.test.ts`
 - Modify: `packages/traversal/src/index.ts`
+- Modify: `packages/terrain-surface/src/index.ts`
+- Create: `packages/terrain-surface/src/triangle-heightfield.test.ts`
+- Modify: `packages/runtime-babylon/src/terrain.ts`
+- Create: `packages/runtime-babylon/src/terrain-topology.test.ts`
 - Create: `packages/traversal-recast/src/heightfield-source.ts`
 - Create: `packages/traversal-recast/src/heightfield-source.test.ts`
 - Modify: `packages/traversal-recast/package.json`
+- Modify: `packages/validation/src/route.ts`
+- Modify: `packages/validation/src/route.test.ts`
+- Modify: `docs/superpowers/specs/2026-08-21-route-graph-and-traversability-design.md`
 
 **Interfaces:**
-- `@whitebox-world/traversal` produces provider-neutral strict `HeightfieldRouteBuildInputV1`, `StaticBlockingColliderV1`, `RouteHardRibbonV1`, and `assertHeightfieldRouteBuildInputV1()` without importing Runtime Contracts.
-- `@whitebox-world/traversal-recast` produces `createHeightfieldRouteBuildInputV1()` from `ExecutionPlanV5` plus `ResolvedTraversalLockReceiptV1`; it declares `@whitebox-world/runtime-contracts`, `@whitebox-world/terrain-surface`, and `@whitebox-world/traversal` as direct dependencies.
-- The input contains the exact hashes required by `TraversalGraphV1`, the V5 connectivity row, locked subject/capsule/physics limits, the compiled Heightfield surface identity, blocked water boundaries, and collision-enabled static primitive geometry.
-- Terrain height/normal sampling delegates to `@whitebox-world/terrain-surface` so render, collision, slope, graph, and evidence use the same triangle diagonal.
+- `NormalizedWorldIRV4` and `ExecutionPlanV5` carry a true V4 `authoringSpecHash` that includes sorted Connectivity bytes. It is distinct from `normalizedWorldIrHash` and the V3 Layout Solve Report identity. `ExecutionPlanV5.traversal.anchorEntityIds` proves endpoint kind without duplicating placement transforms.
+- The unreleased `TraversalGraphV1` adds `routeBuildInputHash`, so ribbon/source changes remain content-bound even when the projected nodes happen to be unchanged.
+- `@whitebox-world/traversal` produces provider-neutral strict `HeightfieldRouteBuildInputV1`, `HeightfieldRouteBuildInputReceiptV1`, `CanonicalTriangleSoupV1`, `StaticBlockingColliderV1`, `BlockedWaterExclusionV1`, `RouteHardRibbonV1`, and `assertHeightfieldRouteBuildInputV1()` without importing Runtime Contracts.
+- `@whitebox-world/traversal-recast` produces `createHeightfieldRouteBuildInputV1({ executionPlan, capabilityEnvelope, constraintId })`; it declares `@whitebox-world/runtime-contracts`, `@whitebox-world/terrain-surface`, and `@whitebox-world/traversal` as direct dependencies. It never accepts raw Subject/Profile records, picks the first connectivity row, or recompiles the Envelope.
+- The input contains the exact Graph provenance sources, selected V5 connectivity roles, explicit Anchor positions, locked Capability Envelope, compiled Heightfield Surface identity, conservative hard-ribbon terrain soup, relevant blocked-water evidence, and conservative collision-enabled static collider soup. Browser/Babylon/Havok/Recast handles, provider refs, meshes, visual bounds, and file paths are forbidden.
+- `@whitebox-world/terrain-surface` exports one deterministic canonical local vertex/index emitter plus sampling over those exact indexed triangles. Task 3 also switches the existing render mesh payload to that emitter without changing mesh world placement or the V4 square HeightField/rectangular Mesh physics compatibility path. Task 5 later consumes the same emitter for V5 `PhysicsShapeMesh`; matching diagonals implemented by duplicated loops are not accepted as common topology.
+- Task 3 source assembly is pure and imports no Recast/provider lifecycle code. Task 4 must create, use, query, and clean its Recast Result/Query inside one `runRecastProviderOperationV1()` operation.
 
-- [ ] **Step 1: Write RED source-assembly tests**
+- [x] **Step 1: Write RED provenance and Graph-binding tests (Task 3A)**
 
 Cover:
 
-- asymmetric 2x2 saddle orientation;
-- rotated/scaled box blocker from `ExecutionStaticColliderV1`;
-- sphere/cylinder deterministic tessellation, including a cone visual already locked as the Runtime's cylinder collider;
-- `collisionEnabled:false` exclusion;
-- blocked water exclusion and `swimmable` rejection for the R1 ground profile;
-- source hash changes for terrain/collider/surface changes;
-- route/anchor/profile missing diagnostics;
-- no Babylon mesh, visual bounds, file path, or provider ref in the build input.
+- identical V4 Authoring produces identical `authoringSpecHash`;
+- changing only Connectivity changes V4 Authoring/Normalized IR/V5 Plan hashes but leaves the V3 Layout Solve Report identity unchanged;
+- `projectNormalizedWorldV4ToV3()` does not leak V4 `authoringSpecHash` or Connectivity;
+- V5 carries sorted, duplicate-free explicit `anchorEntityIds` derived only from Anchor nodes;
+- `TraversalGraphV1` rejects absent, malformed, or unknown `routeBuildInputHash`;
+- the R0 Graph golden is atomically rewritten with the required field and deterministic `traversalGraphHash`.
 
-- [ ] **Step 2: Run the RED source test**
+The R0 value is a contract placeholder because R0 predates Task 3C source assembly. Do not fabricate a real Build Input for it and do not rewrite it again after 3A; real source-hash goldens belong to the 3C fixtures.
 
-Run: `pnpm vitest run packages/traversal/src/build-input.test.ts packages/traversal-recast/src/heightfield-source.test.ts`
+- [x] **Step 2: Implement the provenance prerequisites**
 
-Expected: FAIL because the build source does not exist.
+Move V3 canonical Authoring identity construction into one package-internal helper and derive V4 identity from the complete V3 identity plus sorted Connectivity. Do not export a second public Authoring hash dialect. Add the V4 IR/V5 Plan field and explicit Anchor IDs, update V5 compilation/projection, and clean-break the unreleased Graph contract with `routeBuildInputHash`.
 
-- [ ] **Step 3: Implement deterministic locked input assembly**
-
-Use ExecutionPlan V5 only. Generate collision triangle soup from `ExecutionStaticColliderV1`, not rendered meshes, visual primitives, or AABBs. Crop/resample Heightfield triangles conservatively to the `hard-ribbon`; Recast erosion then applies the locked capsule radius plus builder clearance margin. Points outside the ribbon may never become walkable just because the global terrain is connected.
-
-- [ ] **Step 4: Add input budget checks**
-
-Reject non-finite values and stop before WASM allocation when source triangle/tile estimates exceed the locked builder profile. Return stable structured failure data for `ROUTE_GRAPH_BUDGET_EXCEEDED`.
-
-- [ ] **Step 5: Run focused gates**
+- [x] **Step 3: Run Task 3A gates**
 
 Run:
 
 ```bash
-pnpm vitest run packages/traversal/src/build-input.test.ts packages/traversal-recast/src/heightfield-source.test.ts
+pnpm vitest run packages/authoring/src/authoring-v4.test.ts packages/authoring/src/normalize-v4.test.ts packages/runtime-contracts/src/runtime-contracts.test.ts packages/compiler/src/compile-v5.test.ts packages/traversal/src/graph-contract.test.ts
+pnpm typecheck
+pnpm verify:route-r0-contract
+```
+
+- [x] **Step 4: Write RED topology tests (Task 3B)**
+
+Cover asymmetric 2x2 saddle orientation; a non-square grid; strict finite/dimension/sample validation; shared canonical local positions and index bytes across emitter, terrain sampling, and Runtime render payload; positive-Y triangle normals plus negative XZ signed area without ambiguous 2D "CCW" wording; and unchanged terrain mesh world placement.
+
+- [x] **Step 5: Implement the single Heightfield topology authority**
+
+`emitTriangleHeightfieldSurfaceV1()` emits the exact existing Runtime local vertex order and `[topLeft, bottomLeft, topRight, topRight, bottomLeft, bottomRight]` diagonal with `originMetersXYZ`. Sampling uses barycentric interpolation over those emitted triangles rather than a parallel diagonal formula. `createTerrainMesh()` consumes the emitter but retains current world transform and physics shape selection. Do not resample terrain.
+
+- [x] **Step 6: Run Task 3B gates**
+
+Run:
+
+```bash
+pnpm vitest run packages/terrain-surface/src/triangle-heightfield.test.ts packages/runtime-babylon/src/terrain-topology.test.ts packages/runtime-babylon/src/runtime.test.ts
 pnpm typecheck
 ```
 
-Expected: PASS.
+- [x] **Step 7: Write RED source-assembly tests (Task 3C)**
+
+Cover:
+
+- multiple connectivity rows selected only by required `constraintId`;
+- explicit Anchor proof, absolute positions, route/subject/surface/Profile matching, and stable missing/ambiguous diagnostics;
+- endpoint membership in the exact hard ribbon and a U-shaped route that rejects a convex-hull shortcut;
+- no retained terrain vertex outside the exact hard ribbon and no capsule/clearance double erosion;
+- `empty` terrain source has no soup/bounds; `bounded` requires a non-empty soup whose stored bounds exactly equal recomputed vertex extrema;
+- repeated route/start/destination role IDs in nested records must be strictly equal;
+- rotated/scaled box blocker from `ExecutionStaticColliderV1`;
+- spanning wall retained when every projected vertex is outside the ribbon but its convex-hull region crosses the centerline;
+- conservative circumscribed cylinder and level-2 icosphere containment against analytic Babylon/Havok shapes, including a cone visual already locked as the Runtime's cylinder collider;
+- `collisionEnabled:false` exclusion;
+- blocked circle/ellipse/polygon water-volume exclusion, land above water retention, remote swimmable allowance, intersecting `swimmable` rejection, and `walkable` visual-only behavior;
+- `routeBuildInputHash` changes for relevant terrain/collider/surface/ribbon/water/Anchor/Envelope changes and remains identical for repeated input;
+- empty retained terrain skips the tile guard; non-empty terrain returns the exact Task 2 estimate; budget failure carries structured details;
+- route/anchor/profile/surface missing and mismatch diagnostics;
+- unknown fields, non-finite values, and forged non-positive scales;
+- malformed/degenerate soup, unreferenced vertices, duplicate triangles, wrong terrain winding, and mismatched bounded extrema;
+- no Babylon mesh, visual bounds, file path, or provider ref in the build input.
+
+Geometry tests assert mathematical properties—analytic containment, filled-region intersection, positive-Y terrain winding, and absence of outside ribbon points. They must not freeze arbitrary stadium/icosphere start-vertex numbering as a second public hash contract.
+
+- [x] **Step 8: Run the RED source tests**
+
+Run:
+
+```bash
+pnpm vitest run packages/traversal/src/build-input.test.ts packages/traversal-recast/src/heightfield-source.test.ts packages/traversal/src/build-budget.test.ts packages/validation/src/route.test.ts
+```
+
+Expected: FAIL because the build source does not exist.
+
+- [x] **Step 9: Implement deterministic locked input assembly**
+
+Use ExecutionPlan V5 only. Generate collision triangle soup from `ExecutionStaticColliderV1`, not rendered meshes, visual primitives, or AABBs. Primitive tessellation must contain the analytic Runtime collider after the same Babylon `T * R * S`; Graph construction may reject marginal clearance, but it may not approve a path that physics blocks. Reject forged non-positive scale rather than adding mirrored behavior outside the Authoring contract.
+
+The semantic hard ribbon is exact point-to-polyline distance `<= widthMeters / 2`. Finite clipping uses an SDK-owned inscribed 16-chord-per-half-cap stadium for each non-zero segment with the frozen negative XZ signed-area order, clips each shared Heightfield triangle without resampling, interpolates Y on its source plane, retains no outside point, and does not pre-apply capsule or clearance erosion. Relevant blockers are selected by minimum distance between their complete projected convex hull and the route polyline, not by vertex membership; their complete conservative soup is retained. Task 4 Recast erosion applies the locked capsule radius plus builder clearance margin.
+
+Water surface visuals never become ground. Blocked water drops conservatively intersecting terrain triangles and records evidence, intersecting swimmable water fails with `ROUTE_WATER_TRAVERSAL_UNSUPPORTED`, and walkable water leaves the Heightfield unchanged. Add the new stable code once to the Route diagnostic vocabulary; blocked water that cuts the route still becomes `ROUTE_REQUIRED_PATH_UNREACHABLE` in Task 4/Task 7.
+
+- [x] **Step 10: Add input budget evidence**
+
+Reject non-finite values and call the Task 2 `assertTraversalGraphBuildBudgetV1()` guard exactly once for the final non-empty retained-terrain AABB; do not duplicate its integer-micrometer tile estimate and do not invent a triangle budget absent from Graph Builder Profile V2. Upgrade the guard error to carry its exact estimate and caller-supplied bounds as stable structured `ROUTE_GRAPH_BUDGET_EXCEEDED` evidence. Empty source is not a budget failure.
+
+- [ ] **Step 11: Run focused gates and design/code review**
+
+Run:
+
+```bash
+pnpm vitest run packages/authoring/src/authoring-v4.test.ts packages/authoring/src/normalize-v4.test.ts packages/runtime-contracts/src/runtime-contracts.test.ts packages/compiler/src/compile-v5.test.ts packages/terrain-surface/src/triangle-heightfield.test.ts packages/runtime-babylon/src/terrain-topology.test.ts packages/traversal/src/graph-contract.test.ts packages/traversal/src/build-budget.test.ts packages/traversal/src/build-input.test.ts packages/traversal-recast/src/heightfield-source.test.ts packages/validation/src/route.test.ts
+pnpm typecheck
+```
+
+Expected: PASS. Then run self-review plus skill-managed Cursor code and fresh final reviews. Task 3 is not complete from focused tests alone.
 
 ---
 
@@ -256,68 +434,137 @@ Expected: PASS.
 **Files:**
 - Create: `packages/traversal/src/path-receipt.ts`
 - Create: `packages/traversal/src/path-receipt.test.ts`
+- Create: `packages/traversal/src/connectivity-result.ts`
+- Create: `packages/traversal/src/connectivity-result.test.ts`
+- Modify: `packages/traversal/src/build-input.ts`
+- Modify: `packages/traversal/src/build-input.test.ts`
+- Modify: `packages/traversal/src/graph-contract.ts`
+- Modify: `packages/traversal/src/graph-contract.test.ts`
 - Modify: `packages/traversal/src/index.ts`
+- Modify: `packages/validation/src/route.ts`
+- Modify: `packages/validation/src/types-v2.ts`
+- Modify: `packages/validation/src/route.test.ts`
+- Modify: `packages/validation/src/validate-v2.ts`
+- Modify: `packages/validation/src/validation.test.ts`
+- Modify: `examples/traversal/route-r0-contract.json`
+- Modify: `docs/superpowers/specs/2026-08-21-route-graph-and-traversability-design.md`
+- Modify: `packages/traversal-recast/src/heightfield-source.ts`
 - Create: `packages/traversal-recast/src/build-graph.ts`
 - Create: `packages/traversal-recast/src/build-graph.test.ts`
+- Create: `packages/traversal-recast/src/route-rejection-proof.ts`
+- Create: `packages/traversal-recast/src/route-rejection-proof.test.ts`
+- Create: `packages/traversal-recast/src/build-rejection-graph.ts`
+- Create: `packages/traversal-recast/src/build-rejection-graph.test.ts`
 - Create: `packages/traversal-recast/src/query-route.ts`
 - Create: `packages/traversal-recast/src/query-route.test.ts`
+- Create: `packages/traversal-recast/src/query-provider.ts`
+- Create: `packages/traversal-recast/src/query-provider.test.ts`
+- Modify: `packages/traversal-recast/src/provider-lifecycle.ts`
+- Modify: `packages/traversal-recast/src/provider-lifecycle.test.ts`
+- Modify: `packages/traversal-recast/src/provider-acceptance.test.ts`
+- Modify: `packages/traversal-recast/src/public-boundary.test.ts`
+- Modify: `packages/traversal-recast/src/adapter-identity.ts`
+- Modify: `packages/traversal-recast/src/adapter-identity.test.ts`
+- Modify: `packages/traversal-recast/src/provider-patch-identity.test.ts`
 - Modify: `packages/traversal-recast/src/index.ts`
+- Create: `packages/traversal-recast/src/evaluate-route.ts`
+- Create: `packages/traversal-recast/src/evaluate-route.test.ts`
+- Modify: `packages/traversal-recast/package.json`
+- Modify: `patches/@recast-navigation__generators@0.43.1.patch`
+- Modify: `pnpm-lock.yaml`
+- Modify: `docs/reviews/2026-08-22-recast-0431-resource-lifecycle-adr.md`
+- Create: `docs/reviews/2026-08-22-recast-r1-source-area-adr.md`
+- Create: `docs/reviews/2026-08-22-route-r1-task4-graph-query-design.md`
 
 **Interfaces:**
-- Produces strict `RoutePathReceiptV1`, `RouteConnectivityFailureV1`, `buildHeightfieldTraversalGraphV1()`, and `queryRequiredRouteV1()`.
-- `RoutePathReceiptV1` includes Route/Subject/Anchor IDs, graph hash, lock hash, ordered canonical node IDs/positions, distance, dimensionless cost, observed slope/step/clearance/gap metrics, completion status, and stable diagnostics.
+- The revised Task 4 authority is `docs/reviews/2026-08-22-route-r1-task4-graph-query-design.md`; the provider source-area decision is `docs/reviews/2026-08-22-recast-r1-source-area-adr.md`.
+- Produces strict `RoutePathReceiptV1`, narrow provider-neutral `RouteConnectivityFailureV1`, `evaluateRequiredHeightfieldRouteV1()`, `buildHeightfieldTraversalGraphV1()`, and `queryRequiredRouteV1()`.
+- A failure result uses four structurally correlated variants: unavailable/unreachable for empty or no-queryable ground, unavailable/incomplete for Node/Edge projection capacity, complete/unreachable for endpoints/reachability, and complete/incomplete for search/straight-path capacity. Endpoint, unreachable, search, and straight-path failures retain and hash a completed Graph; empty source, empty queryable projection, and Node/Edge projection capacity never publish a partial Graph.
+- `RoutePathReceiptV1` includes Route/Subject/Anchor IDs, graph hash, lock hash, ordered canonical Node IDs, ordered canonical Edge IDs, straight-path positions, distance, dimensionless cost, observed slope/step/clearance/gap metrics, and completion status. Every failure binds quantized start/destination Anchor positions and the locked Surface identity; each uniquely attributed threshold failure also binds one deterministic canonical `failurePositionMetersXYZ` copied from the proof before disposal.
+- `evaluateRequiredHeightfieldRouteV1()` accepts the immutable `HeightfieldRouteBuildInputReceiptV1`, recomputes `routeBuildInputHash`, budget evidence, and every copied Registry V2 Graph policy before provider allocation, and copies the source Hash into `TraversalGraphV1`. It never accepts a naked, unhashed triangle soup.
+- One provider operation owns build, Graph projection, endpoint query, SDK-owned weighted A*, Detour straight-path projection, and cleanup. It uses checked raw Query initialization, two-stage raw Query native/Embind release, one explicitly owned QueryFilter, and SDK-owned total-unwind nearest/straight call seams because the pinned high-level wrappers leak on raw throws. It never constructs the high-level Query wrapper. Provider Refs remain operation-local.
+- The existing high-level generator cannot infer terrain versus blocker source. The pinned generator patch adds the exact optional `source-areas.1` mode: the Adapter activates it only when the Build Input has at least one blocker triangle and blocker vertex, terrain is slope-classified, and blockers use a reserved area until compact build before becoming null prior to erosion. A zero-blocker Heightfield omits the option and remains on the Task 2 byte-identical path. The source decision entered `mapping.2`; the completed raw-query audit advances the combined identity to `mapping.3` while retaining the activation predicate and no-option golden unchanged.
+- Task 4 host review proved the existing signed `heightDeltaMeters` is Node-height delta and cannot also carry non-negative Portal step evidence. The unreleased Graph V1 receives one final narrow clean break adding `stepHeightMeters`; update the R0 fixture/hash exactly once with the review disposition, including changing its non-zero-slope Edge from inconsistent `walk` to `slope`, then freeze it. Keep `heightDeltaMeters` signed, enforce same-surface identity against the locked Build Input, and make canonical map emission sorted and deeply frozen.
+- Path selection runs bounded canonical A* over positive safe-integer Edge costs, closes the equal-cost frontier, then derives the lexicographically smallest shortest Edge sequence through the shortest-path DAG without per-heap path arrays. Exact maximum-th search-budget outcomes are frozen. `NavMeshQuery.computePath()` and provider `findPath()` are not path-selection authorities; Detour only clamps endpoints and string-pulls the selected provider-ref corridor through a private one-slot capacity sentinel.
+- `canonicalHeightfieldRouteConnectivityResultV1(value)` owns strict standalone structure/hash/metric validation. `assertHeightfieldRouteConnectivityResultForBuildInputV1(value, receipt)` separately proves every Build Input binding, and the evaluator calls it before returning.
+- `assertHeightfieldRouteBuildInputReceiptV1(receipt)` is the single exact deep-freeze/input-Hash/Tile-evidence admission implementation used by both evaluator and contextual Result validator.
+- Validation V2 adds `route-connectivity-failure` evidence for canonical failures without Graph/Path, resolves V1/V2 Graph Builder identities through the version dispatcher, and represents lower-bound budget proof as `capacity-exceeded { maximumAllowedCount, minimumRequiredCount }` rather than a false `actualCount`.
+- Task 4 retains an operation-local provider-neutral rejection proof graph derived from canonical Heightfield/collider/ribbon evidence. It emits a frozen slope/step/width/overhead/gap diagnostic only when exactly one singleton relaxation restores connectivity; ambiguous, mixed, over-budget, or inconsistent explanations remain generic unreachable. This proof never changes Graph/path pass/fail authority.
+- Task 4 width attribution uses the filled solid intersection with the terrain/step vertical slab, not a whole-collider XZ shadow and not a hollow surface ring. High disconnected components cannot become ground-width blockers, while a tall solid containing a source region cannot disappear and leave a false unique slope reason. Canonicalized threshold evidence is rechecked after rounding before publication.
 
-- [ ] **Step 1: Write RED graph/query tests**
+- [x] **Step 1: Write RED graph/query tests**
 
 Required fixtures:
 
 - continuous flat/slope route passes;
+- SDK slope/step weights choose a different corridor from shortest raw Detour distance, and equal costs use canonical IDs;
 - static wall across the ribbon is unreachable;
+- a low Box top never becomes a terrain Node or undeclared platform;
 - a global detour outside the ribbon remains unreachable;
 - slope above the locked maximum fails;
 - corridor narrower than locked capsule clearance fails;
 - low overhead collider fails;
 - blocked water/trench disconnects the route;
 - start/destination surface miss fails;
-- maximum node/edge/tile/search budget fails closed;
+- maximum Node/Edge/search/straight-path capacity fails closed; forged Tile evidence is rejected before provider initialization because Task 3 already owns the Tile guard;
+- zero queryable ground has an unavailable/unreachable reason; search maximum-th success/empty-unreachable/open-incomplete and stale entries are distinguished; straight-path exact-fit succeeds through a one-slot sentinel while true overflow is incomplete;
+- same-polygon one-Node/zero-Edge success, quantized-equal one-point output, per-segment distance ceiling, observed segment slope, and overflow rejection have exact metrics;
 - repeated and concurrent builds produce identical graph/path hashes;
-- changing the `resolvedTraversalLockHash` blocks query before provider execution;
+- changing only `routeBuildInputHash`, nested `resolvedTraversalLockHash`, copied V2 Profile policy, or budget evidence blocks stale input before provider execution;
+- passed connectivity requires Graph/Path evidence; failed connectivity may cite canonical failure evidence; V2 Graph Builder evidence resolves exactly; budget diagnostics preserve minimum-required rather than fake actual counts;
 - serialized graph/path bytes contain no Recast polygon or tile refs.
+- cross-Tile partial portals use Link `edge/side/bmin/bmax`; detail triangles own maximum slope; signed centroid `heightDeltaMeters` and non-negative Portal `stepHeightMeters` remain distinct.
+- U-shaped Route tests prove complete segments, not only points, remain in shared hard-ribbon proof geometry.
+- unique source-derived slope/step/width/overhead/gap cuts emit their exact frozen codes; mixed or multiple causes and proof-budget exhaustion remain generic, and Validation never invents a specific code from generic unreachable.
+- zero blockers omit `sourceAreaMode` and reproduce the Task 2 packed golden; adding a Box activates the mode with a strictly interior terrain boundary.
+- every failure has finite quantized start/destination Anchor positions; specialized threshold failures have a deterministic finite failure position, and Validation only copies those coordinates.
 
-- [ ] **Step 2: Run the RED graph/query tests**
+- [x] **Step 2: Run the RED graph/query tests**
 
-Run: `pnpm vitest run packages/traversal-recast/src/build-graph.test.ts packages/traversal-recast/src/query-route.test.ts packages/traversal/src/path-receipt.test.ts`
+Run: `pnpm vitest run packages/traversal/src/build-input.test.ts packages/traversal/src/graph-contract.test.ts packages/traversal/src/path-receipt.test.ts packages/traversal/src/connectivity-result.test.ts packages/traversal-recast/src/provider-acceptance.test.ts packages/traversal-recast/src/query-provider.test.ts packages/traversal-recast/src/build-graph.test.ts packages/traversal-recast/src/route-rejection-proof.test.ts packages/traversal-recast/src/query-route.test.ts packages/validation/src/route.test.ts packages/validation/src/validation.test.ts`
 
-Expected: FAIL because builder/query/receipt code is absent.
+Expected: FAIL because builder/query/receipt/source-area code is absent.
 
-- [ ] **Step 3: Implement Recast build and canonical projection**
+- [x] **Step 3: Implement and identity-bind source-area rasterization**
 
-Initialize the provider once per builder lifecycle and always destroy owned WASM objects in reverse order, including partial construction and thrown-query paths. Set walkable radius/height/climb/slope only from the resolved lock. Convert provider polygons/adjacency into stable, sorted `TraversalNodeV1` / `TraversalEdgeV1` IDs using canonical positions and surface identity; provider refs remain local lookup keys only.
+Add the optional exact-version generator source-area mode from its ADR. Merge terrain first, activate the option only when at least one blocker triangle and blocker vertex exists, globally validate every source triangle before the first provider allocation when active (including triangles outside explicit bounds), rasterize blockers under the reserved area, convert that area to null after compact build and before erosion, and pass exact terrain XZ bounds. Update patch/declaration/install-byte drift evidence and the final Adapter `mapping.3` identity, including the exact activation predicate, raw Query capacity, and unsigned Provider Ref ABI. Prove a zero-blocker build omits the option and reproduces the old no-option semantic golden before accepting the new low-Box golden, and probe sub-voxel blockers before claiming the mapping covers arbitrary low blockers.
 
-- [ ] **Step 4: Implement deterministic route query**
+- [x] **Step 4: Implement canonical Graph projection and contracts**
 
-Use the provider query internally, but calculate the published `routePathCost` with the frozen SDK formula and graph profile weights. Treat partial paths as unreachable. Validate every returned point/segment against the hard-ribbon and the same surface identity before publishing the receipt.
+Implement the reviewed final Graph clean break and update its R0 fixture/hash once. Then implement the shared Build Input Receipt assertion, exact source/profile/budget admission, detail-mesh slope, Link-aware portal recovery, signed centroid `heightDeltaMeters`, non-negative Portal `stepHeightMeters`, lower-bound clearance, fixed unit-correct quantization, canonical IDs, deeply frozen sorted maps, and strict capacity handling. Build the bounded source-derived rejection proof graph beside the publishable Graph and use it only for conservative unique-cause diagnostics. One `runRecastProviderOperationV1()` callback owns the retained result, checked raw Query native allocation plus Embind wrapper, and explicit QueryFilter and invokes the one aggregate cleanup path in `finally`; no provider owner escapes.
 
-- [ ] **Step 5: Implement diagnostic projection**
+- [x] **Step 5: Implement deterministic route query and Receipts**
 
-Map provider/build failures to the frozen Route diagnostic vocabulary. Do not publish provider error strings as stable codes. Include actual location, observed value, expected lock value, unit, evidence IDs, and a concrete fix suggestion.
+Run bounded SDK-owned A* over positive safe-integer canonical Edge costs, close the complete equal-cost frontier, and reconstruct the lexicographically smallest shortest Edge sequence through a shortest-path DAG. Freeze stale-entry and inclusive budget behavior. Invoke raw Detour string-pulling only through the total-unwind query-provider seam with a private one-slot sentinel so exact-fit output succeeds and true overflow is incomplete. Validate every returned point and complete segment against the shared hard-ribbon proof. Implement same-polygon zero-Edge metrics, per-segment distance ceiling, strict Path/failure/result canonicalizers, contextual Build Input validation, external hashes, cross-object equality, and a narrow connectivity failure vocabulary owned by Traversal. Validation composes and maps that vocabulary, adds canonical failure Evidence and truthful capacity details, and dispatches Graph Builder version resolution; Traversal never imports Validation. Invalid input, abort, provider failure, projection invariant, and cleanup failure remain typed non-gameplay errors.
 
-- [ ] **Step 6: Run focused and leak-adversarial gates**
+- [x] **Step 6: Run focused, identity, and leak-adversarial gates**
 
 Run:
 
 ```bash
-pnpm vitest run packages/traversal/src/path-receipt.test.ts packages/traversal-recast/src/build-graph.test.ts packages/traversal-recast/src/query-route.test.ts
+pnpm vitest run packages/traversal/src/build-input.test.ts packages/traversal/src/graph-contract.test.ts packages/traversal/src/path-receipt.test.ts packages/traversal/src/connectivity-result.test.ts packages/traversal-recast/src/adapter-identity.test.ts packages/traversal-recast/src/provider-patch-identity.test.ts packages/traversal-recast/src/provider-lifecycle.test.ts packages/traversal-recast/src/provider-acceptance.test.ts packages/traversal-recast/src/public-boundary.test.ts packages/traversal-recast/src/heightfield-source.test.ts packages/traversal-recast/src/query-provider.test.ts packages/traversal-recast/src/build-graph.test.ts packages/traversal-recast/src/build-rejection-graph.test.ts packages/traversal-recast/src/hard-ribbon-proof.test.ts packages/traversal-recast/src/route-rejection-proof.test.ts packages/traversal-recast/src/query-route.test.ts packages/traversal-recast/src/evaluate-route.test.ts packages/validation/src/route.test.ts packages/validation/src/validation.test.ts
 pnpm typecheck
+pnpm verify:route-r0-contract
 ```
 
-Expected: PASS, including repeated construction/disposal and throwing cleanup.
+Expected: PASS, including the unchanged legacy provider golden, new source-area golden, repeated construction/disposal, abort, and throwing cleanup. Then run host self-review plus one skill-managed Cursor Grok 4.6 Extra High code/final review for the complete Task 4 range; do not micro-review each helper.
+
+Completed evidence: focused 19 files / 176 tests, full 120 files / 1043 tests, Typecheck,
+`verify:route-r0-contract`, frozen-lockfile install, Build, and diff check all pass. Cursor review
+`task4-candidate-616a75c-wt1` progressed from one confirmed P1 to same-session `CODE GO`; fresh
+review `task4-final-616a75c-wt2` returned `FINAL GO`. The host closed every P1/P2 and the sole
+non-blocking P3 evaluator-test gap. This completes Task 4 only; Task 5–10 and M5 remain open.
 
 ---
 
 ### Task 5: Expose Single-Source Character Support Evidence
 
 **Files:**
+- Create: `packages/terrain-surface/src/static-collider-triangle-mesh.ts`
+- Create: `packages/terrain-surface/src/static-collider-triangle-mesh.test.ts`
+- Modify: `packages/terrain-surface/src/index.ts`
+- Modify: `packages/traversal-recast/src/heightfield-source.ts`
+- Modify: `packages/traversal-recast/src/heightfield-source.test.ts`
 - Create: `packages/traversal/src/runtime-evidence.ts`
 - Create: `packages/traversal/src/runtime-evidence.test.ts`
 - Modify: `packages/traversal/src/index.ts`
@@ -325,6 +572,9 @@ Expected: PASS, including repeated construction/disposal and throwing cleanup.
 - Modify: `packages/runtime-babylon/src/motion-kernel-runtime.ts`
 - Modify: `packages/runtime-babylon/src/subject-controller.ts`
 - Modify: `packages/runtime-babylon/src/babylon-world-runtime.ts`
+- Modify: `packages/runtime-babylon/src/camera-director.ts`
+- Modify: `packages/runtime-babylon/src/subject-visual.ts`
+- Modify: `packages/runtime-babylon/src/terrain.ts`
 - Create: `packages/runtime-babylon/src/traversal-runtime-port.ts`
 - Create: `packages/runtime-babylon/src/traversal-runtime-port.test.ts`
 - Modify: `packages/runtime-babylon/src/index.ts`
@@ -332,9 +582,18 @@ Expected: PASS, including repeated construction/disposal and throwing cleanup.
 
 **Interfaces:**
 - Produces `CharacterSupportEvidenceV1`, `TraversalRuntimeTickEvidenceV1`, `TraversalRuntimePortV1`, and `createBabylonTraversalRuntimePortV1()`.
-- Raw support is exactly `supported | sliding | unsupported` plus normal and dynamic-surface flag from the single Character Controller sample.
+- Raw support is exactly `supported | sliding | unsupported` plus normal,
+  dynamic-surface flag, and the controller foot pose frozen at the single
+  Character Controller sample. Post-integration live position must not be used
+  to classify that pre-integration sample.
 - The R1 surface classifier is evidence-only and returns `resolved | unsupported | unmatched | ambiguous`; surface IDs are absent when no surface is resolved.
+- Traversal Runtime failures use a closed provider-neutral
+  `TRAVERSAL_RUNTIME_*` code vocabulary; Babylon/Havok/native messages do not
+  cross the port.
 - Babylon Runtime accepts `ExecutionPlanV4 | ExecutionPlanV5`; V5 static bodies are created only from `ExecutionPlanV5.staticColliders`, while existing V4 fixtures retain their current compatibility projection.
+- The V5 terrain body uses `PhysicsShapeMesh` over the exact compiled Heightfield triangle topology. V4 retains its current square-HeightField/rectangular-Mesh compatibility path and is covered by unchanged fixtures.
+- Camera and Subject Visual consumers are widened only to the explicit `ExecutionPlanV4 | ExecutionPlanV5` union (or a named common read-only projection); they must not accept arbitrary plan-shaped objects or fork behavior by duplicating camera/visual logic.
+- `@whitebox-world/runtime-babylon` uses the immutable `TraversalRuntimeImplementationIdentityV1` value already frozen and exported in Task 2; Task 5 does not redefine its manifests, hashes, Ref, or version. Neither Compiler, CLI, tests, nor Recast may substitute fixture hashes.
 
 - [ ] **Step 1: Write a RED call-count regression**
 
@@ -345,18 +604,26 @@ Spy on `PhysicsCharacterController.checkSupport()` for constructor/reset and eve
 Prove:
 
 - `MotionKernelRuntimeV1.publishResolvedState()` retains a read-only copy of the same support sample it resolves;
+- that retained sample freezes controller center/foot at the same pre-integration instant, and a seam-crossing tick cannot pair it with the post-integration foot;
 - reading evidence does not call physics;
 - evidence classification cannot mutate `movementMedium`;
 - supported terrain resolves the compiled Heightfield surface identity;
+- support classification starts from the retained Character Controller sample and then correlates controller bottom/contact normal to the compiled surface/collider index within a conservative contact band; terrain sampling alone can never produce `resolved`;
+- zero candidate surfaces returns `unmatched`, more than one returns `ambiguous`, and neither mode satisfies expected-surface validation;
 - supported contact that does not match the R1 surface reports `unmatched`, not fake terrain support;
+- collider candidates use one vertical exact-collision-mesh query through the frozen foot XZ and the same conservative normal/contact band; no AABB, horizontal-nearness, visual, or provider-handle fallback is allowed;
 - V5 Runtime and Graph input consume byte-identical static collider rows, including the current cone-visual-to-cylinder-collider mapping;
+- V5 creates exactly one physics body for each `staticColliders` row and never creates a second body from `objects[].collisionEnabled`; V4 continues to derive its compatibility bodies from objects;
 - unsupported ticks publish no surface IDs;
 - `SLIDING` remains distinct;
 - reset/rebind clears old evidence.
+- create-before-port-reset, ordinary Runtime reset, rebind-away/back, accepted
+  Feel/Motion changes, and live capsule/slope/step drift all make port evidence
+  unavailable or fail with the exact frozen error code before simulation.
 
 - [ ] **Step 3: Run the RED runtime evidence tests**
 
-Run: `pnpm vitest run packages/runtime-babylon/src/traversal-runtime-port.test.ts packages/runtime-babylon/src/p15-conformance.test.ts`
+Run: `pnpm vitest run packages/terrain-surface/src/static-collider-triangle-mesh.test.ts packages/traversal/src/runtime-evidence.test.ts packages/traversal-recast/src/heightfield-source.test.ts packages/runtime-babylon/src/traversal-runtime-port.test.ts packages/runtime-babylon/src/p15-conformance.test.ts`
 
 Expected: FAIL because the port/evidence seam is absent.
 
@@ -364,20 +631,34 @@ Expected: FAIL because the port/evidence seam is absent.
 
 Add an internal immutable support evidence field at the point where `publishResolvedState()` consumes `CharacterSurfaceInfo`. Expose it through `SubjectController` and the dedicated traversal runtime port only. Do not add raw Havok data to `WorldRuntimeSnapshotV3` and do not add a second public ground owner.
 
-Make V5 static physics construction consume the compiled `staticColliders` rows. Keep V4 compatibility behavior isolated and tested; do not let the Graph Builder reverse-engineer V4 visual objects.
+Branch physics construction explicitly by execution-plan `schemaVersion`. V4 continues deriving compatibility bodies from `objects`; V5 still uses `objects` for visuals but creates static physics bodies only from `staticColliders`, never both. Create both the V5 rendered terrain mesh and its collision body from the canonical triangle emitter in `@whitebox-world/terrain-surface`. Extract the existing Task 4 box/circumscribed-cylinder/icosphere blocker soup into one provider-neutral static-collider triangle emitter and consume its exact local vertices from both Graph and Runtime. Graph retains its existing full world `transformSoup`; Runtime applies the complete row position/rotation/scale to one unparented collision mesh before forcing its world matrix and constructing `PhysicsShapeMesh` plus the static body. Do not mutate TRS afterward, include children, or attach a body to the cone visual. Add an asymmetric saddle regression that distinguishes the two possible cell diagonals across rendered mesh, `PhysicsShapeMesh`, sampling, and Graph input; a non-origin/yawed/non-uniform collider regression; and a body-count regression that detects duplicate V5 collision. Keep V4 behavior isolated and tested; do not let the Graph Builder reverse-engineer V4 visual objects.
 
 - [ ] **Step 5: Add trusted reset-to-start and canonical walk intent**
 
-The runtime port may reset the controlled subject to the explicit start Anchor before tick 0 and may submit a unit world-XZ walk direction per fixed tick. It must reuse the existing Motion Kernel, Control Feel speed, Physics Body step/slope, animation, physics step, and cleanup paths. It must not accept speed, jump, gravity, step, slope, or capsule overrides.
+The runtime port may reset the controlled subject to the explicit start Anchor before tick 0 and may submit a unit world-XZ walk direction per fixed tick. That intent is a canonical planar-vector Motion Kernel command and must not pass through camera-relative browser input compilation. It must reuse the existing Motion Kernel, Control Feel speed, Physics Body step/slope, animation, physics step, and cleanup paths. It must not accept speed, jump, gravity, step, slope, or capsule overrides.
 
-Refactor the fixed-tick loop once so Browser input and traversal intent share the same physics/visual/camera commit path; do not duplicate a second simulation loop.
+`createBabylonTraversalRuntimePortV1()` starts unavailable until its own
+`resetToStartAnchor()` succeeds. It performs one merged reset rather than an
+ordinary spawn reset followed by teleport: the traversing Subject bootstraps
+directly at
+`layout.placementsByEntityId[startAnchorEntityId].transform.positionMetersXYZ`
+plus collider-center offset with placement yaw only, while every other Subject
+resets once to spawn. Each Subject calls `checkSupport()` exactly once. Before
+any reset mutation/query, and before every read/tick, the port verifies the paper
+lock against live controller shape options, foot-offset, slope, step, active and
+requested/pending Feel/Motion, and all other locked Profile identities. A Runtime
+configuration epoch invalidates ordinary reset/rebind/Profile changes. Refactor the fixed-tick
+loop once so Browser input and traversal intent share the same post-command
+physics/visual/camera commit path; do not duplicate a second simulation loop.
+Add a regression proving identical world-XZ intent and fixed ticks produce
+identical Probe evidence under different camera yaw values.
 
 - [ ] **Step 6: Run the deep runtime regression set**
 
 Run:
 
 ```bash
-pnpm vitest run packages/runtime-babylon/src/traversal-runtime-port.test.ts packages/runtime-babylon/src/p15-conformance.test.ts packages/runtime-babylon/src/p15-runtime-debt-repro.test.ts packages/runtime-babylon/src/runtime.test.ts
+pnpm vitest run packages/terrain-surface/src/static-collider-triangle-mesh.test.ts packages/traversal/src/runtime-evidence.test.ts packages/traversal-recast/src/heightfield-source.test.ts packages/runtime-babylon/src/traversal-implementation-identity.test.ts packages/runtime-babylon/src/traversal-runtime-port.test.ts packages/runtime-babylon/src/p15-conformance.test.ts packages/runtime-babylon/src/p15-runtime-debt-repro.test.ts packages/runtime-babylon/src/runtime.test.ts
 pnpm typecheck
 ```
 
@@ -399,23 +680,25 @@ Expected: PASS. Review against `docs/reviews/runtime-deep-review-checklist.md` b
 **Interfaces:**
 - Produces `RouteRuntimeProbeRequestV1`, `RouteRuntimeProbeReceiptV1`, `RouteRuntimeProbeTickV1`, and `runRouteRuntimeProbeV1()`.
 - Receipt/request contracts stay provider-neutral in `@whitebox-world/traversal`. The runner lives in `@whitebox-world/validation`, which already owns `RouteRuntimeGateThresholdsV1`; this avoids a Traversal → Validation dependency cycle and prevents threshold copies.
-- The driver consumes only Path receipt, resolved Driver Profile, the Runtime Port, and the Validation Profile. It cannot declare or override thresholds.
+- `@whitebox-world/traversal` declares only the closed provider-neutral request/receipt/tick and Runtime Port shapes. `@whitebox-world/validation` owns the executable driver, all progress/counter state, and every arrival/deviation/stall/support-loss/timeout threshold. The driver consumes only Path receipt, resolved Driver Profile, the Runtime Port, and the Validation Profile; it cannot declare or override thresholds.
 
-- [ ] **Step 1: Write RED driver-unit tests with a fake runtime port**
+- [x] **Step 1: Write RED provider-neutral receipt/port contract tests**
 
-Cover lookahead/corner choice, intent quantization, no run/jump requests, destination completion, stall/deviation timeout, consecutive unsupported counting, `SLIDING` handling, invalid numeric detection, and lock mismatch before reset/tick 0.
+In `packages/traversal/src/runtime-probe-contract.test.ts`, cover only closed request/receipt/tick/Runtime Port shape, immutable canonicalization, lock mismatch before any reset/tick 0, invalid numeric rejection, provider-ID rejection, and the absence of Validation thresholds/counters. Do not put lookahead, progress, stall, deviation, unsupported-duration, arrival, or timeout constants in this package or test.
 
-- [ ] **Step 2: Run the RED driver test**
+In `packages/validation/src/route-runtime-probe.test.ts`, use a fake Runtime Port to cover lookahead/corner choice, intent quantization, no run/jump requests, destination completion, stall/deviation timeout, consecutive unsupported counting, `SLIDING` handling, and invalid runtime evidence. Every threshold/counter assertion comes from `ValidationProfileV2.routeRuntimeGateThresholds`.
+
+- [x] **Step 2: Run the RED driver test**
 
 Run: `pnpm vitest run packages/traversal/src/runtime-probe-contract.test.ts packages/validation/src/route-runtime-probe.test.ts`
 
 Expected: FAIL because the runner/receipt is absent.
 
-- [ ] **Step 3: Implement the engine-neutral fixed-tick driver**
+- [x] **Step 3: Implement the engine-neutral fixed-tick driver**
 
-For each tick, choose the next visible path segment using the locked Driver Profile, quantize only the unit intent direction, call one Runtime Port tick, then compute progress/deviation/stall counters using `ValidationProfileV2.routeRuntimeGateThresholds`. Record the original runtime evidence and derived progress separately.
+For each tick, choose the next visible path segment using the locked Driver Profile, quantize only the unit intent direction, call one Runtime Port tick, then compute progress/deviation/stall counters using `ValidationProfileV2.routeRuntimeGateThresholds`. Record the original runtime evidence and derived progress separately. A package dependency/grep test must prove `@whitebox-world/traversal` neither imports Validation nor declares those thresholds/counters.
 
-- [ ] **Step 4: Write RED real Babylon/Havok tests**
+- [x] **Step 4: Write RED real Babylon/Havok tests**
 
 Required cases:
 
@@ -427,7 +710,7 @@ Required cases:
 - reset after pass/fail restores subject/listener/body/resource counts;
 - two consecutive and two concurrent runtimes remain isolated.
 
-- [ ] **Step 5: Run real Runtime tests**
+- [x] **Step 5: Run real Runtime tests**
 
 Run:
 
@@ -437,6 +720,20 @@ pnpm typecheck
 ```
 
 Expected: PASS.
+
+**Task 6 disposition (2026-08-23):** provider-neutral Request/Tick/Receipt/Runtime Port contracts
+landed in commits `b1835a0` and `b3035bb`; the Validation-owned deterministic fixed-tick Driver landed in
+`3ef2608` and its support/profile/numeric semantic boundaries were closed in `af76249`. Commit `7c2f6e3`
+adds a real Babylon `NullEngine` + Havok + Recast integration matrix with 10 cases covering completion,
+stall, support loss, wrong support surface, fixed-tick render-cadence equivalence, camera-orbit independence,
+reset/disposal, sequential reuse, concurrent isolation, and a wide-corridor path. Focused Task 6 tests,
+11-file / 211-test deep Runtime coverage, the full 127-file / 1148-test suite, `pnpm typecheck`, and
+`pnpm build` passed. The single stage-boundary Cursor review reached the 8-minute timeout without a
+verdict; it is recorded as a timeout, not presented as `GO`. Host review and a fresh independent review
+returned `GO` with no P0/P1 finding. Its only P2—Runtime cleanup when a test harness fails during
+acquisition—was closed in `5319262` with a failing acquisition regression and focused 10/10 GREEN.
+Task 6 is review-closed. At this checkpoint Task 7 was still open; its completed
+disposition is recorded in the next section. R1, M5, and R1b remain open.
 
 ---
 
@@ -453,7 +750,7 @@ Expected: PASS.
 - Produces `createRouteValidationReportV2()` from V5 world identity, Graph, Path, Probe, Lock, Profile, and evidence bytes.
 - Produces only the existing `route-connectivity` and `route-runtime-conformance` gates inside `ValidationReportV2`; no Route-only report is introduced.
 
-- [ ] **Step 1: Write RED report tests**
+- [x] **Step 1: Write RED report tests**
 
 Prove:
 
@@ -466,17 +763,17 @@ Prove:
 - stable diagnostics include Route, Subject, Anchors, surface/collider IDs where known, position, unit, expected/actual values, evidence ref, and suggested fix;
 - report hash is stable under input-map reorder.
 
-- [ ] **Step 2: Run the RED report test**
+- [x] **Step 2: Run the RED report test**
 
 Run: `pnpm vitest run packages/validation/src/route-evaluator.test.ts packages/validation/src/validation.test.ts`
 
 Expected: FAIL because the evaluator is absent.
 
-- [ ] **Step 3: Implement evidence assembly and gate evaluation**
+- [x] **Step 3: Implement evidence assembly and gate evaluation**
 
 Use canonical `artifact://route/<routeId>/...` refs. Hash and size the actual canonical Graph/Path/Probe/Overlay bytes before constructing Evidence rows. Do not infer a passed metric when its evidence is absent or malformed. Update V2 evidence validation to use the exact version-dispatching Graph Builder Profile resolver created in Task 2; a V2 profile must not bypass Registry ref/version/hash checks.
 
-- [ ] **Step 4: Run focused gates**
+- [x] **Step 4: Run focused gates**
 
 Run:
 
@@ -488,19 +785,108 @@ pnpm typecheck
 
 Expected: PASS.
 
+**Task 7 disposition (2026-08-23):** commit `67bfb17` adds the single
+`createRouteValidationReportV2()` evaluation path and keeps both required
+`route-connectivity` and `route-runtime-conformance` results inside the existing
+`ValidationReportV2`; no Route-only report or second policy owner was introduced.
+The evaluator consumes the canonical Heightfield Route connectivity result as a
+closed `complete | unreachable | incomplete` union: deterministic unreachability
+fails the connectivity Blocking Gate, incomplete Graph/Query evidence keeps it
+incomplete, and absent Probe evidence keeps the Runtime Blocking Gate and overall
+Report incomplete rather than manufacturing a pass. A complete Graph/Path can
+pass connectivity independently while a failing fixed-tick Probe still blocks the
+Report through `route-runtime-conformance`.
+
+The final review also closed a contextual P1 in the failed-connectivity path:
+`HeightfieldRouteBuildInputReceiptV1` is now a required evaluator input even when
+no Graph/Path exists, and its Authoring, Layout, Resource Lock, Capability
+Envelope, Subject, Surface, Route, Anchor, Profile, and Traversal Lock bindings
+are validated before failure evidence is accepted. This prevents an
+`unreachable` or `incomplete` result from being replayed against a different
+World/Build Input merely because no success Graph was available to carry that
+context.
+
+Focused Task 7 evidence passed 77 tests; the host's combined Task 7 review set
+passed 82 tests. `pnpm typecheck` and `pnpm verify:route-r0-contract` also passed.
+Host review and a fresh independent narrow review returned `GO`, with the
+BuildInput contextual P1 closed before the final verdict. The single
+stage-boundary Cursor review reached the 8-minute timeout without a verdict; it
+is recorded as `TIMEOUT`, never as `GO`. Task 7 is review-closed. R1 and M5 remain
+open. Task 8 is now implemented: canonical Overlay, the reviewed
+`@whitebox-world/world-package` Root/Build Receipt authority, the single
+Validation-subject seam, deterministic orchestration, trusted Authoring V4 / ExecutionPlan V5 Runner, CLI,
+Browser Protocol V4 and private Host transport are connected. Step 6 focused gates
+passed. The single stage-boundary Cursor CR produced no verdict after roughly 12
+minutes and is recorded as `TIMEOUT`, never as `GO`; host review and the full gate
+set close Task 8.
+Task 9's R1 gate/fixtures and the separately planned R1b surface/platform slice
+still follow Task 8.
+
 ---
 
 ### Task 8: Add `worldkit verify route` and Read-Only Browser Evidence
 
-**Files:**
+**Primary implementation files:**
+- Create: `packages/traversal/src/route-overlay.ts`
+- Create: `packages/traversal/src/route-overlay.test.ts`
+- Modify: `packages/traversal/src/index.ts`
+- Create: `packages/world-package/package.json`
+- Create: `packages/world-package/src/types.ts`
+- Create: `packages/world-package/src/manifest.ts`
+- Create: `packages/world-package/src/manifest.test.ts`
+- Create: `packages/world-package/src/build-receipt.ts`
+- Create: `packages/world-package/src/build-receipt.test.ts`
+- Create: `packages/world-package/src/index.ts`
+- Create: `packages/validation/src/world-package-validation-subject.ts`
+- Create: `packages/validation/src/world-package-validation-subject.test.ts`
+- Create: `packages/validation/src/route-evidence-publication.ts`
+- Create: `packages/validation/src/route-evidence-publication.test.ts`
+- Create: `packages/validation/src/route-validation-set.ts`
+- Create: `packages/validation/src/route-validation-set.test.ts`
+- Modify: `packages/validation/src/profile-v2.ts`
+- Modify: `packages/validation/src/route-evaluator.ts`
+- Modify: `packages/validation/src/types-v2.ts`
+- Modify: `packages/validation/src/validate-v2.ts`
+- Modify: `packages/validation/src/index.ts`
+- Create: `scripts/lib/world-package-resource-resolver.ts`
+- Create: `scripts/lib/world-package-resource-resolver.test.ts`
+- Create: `scripts/lib/exclusive-evidence-publication.ts`
+- Create: `scripts/lib/exclusive-evidence-publication.test.ts`
+- Create: `scripts/lib/route-validation-orchestrator.ts`
+- Create: `scripts/lib/route-validation-orchestrator.test.ts`
+- Create: `scripts/lib/route-validation-runner.ts`
+- Create: `scripts/lib/route-validation-runner.test.ts`
+- Modify: `scripts/lib/worldkit-pipeline.ts`
+- Create: `scripts/lib/worldkit-route-evidence-transport.ts`
 - Create: `scripts/lib/route-validation-cli.ts`
 - Create: `scripts/lib/route-validation-cli.test.ts`
 - Modify: `scripts/lib/validation-cli.ts`
+- Modify: `scripts/lib/validation-cli.test.ts`
 - Modify: `scripts/worldkit.ts`
+- Modify: `scripts/worldkit.test.ts`
+- Modify: `scripts/lib/worldkit-server.ts`
+- Modify: `scripts/lib/worldkit-server.test.ts`
 - Modify: `packages/runtime-contracts/src/runtime-session.ts`
+- Create: `packages/runtime-contracts/src/browser-route-evidence.ts`
 - Modify: `packages/runtime-contracts/src/runtime-contracts.test.ts`
+- Modify: `apps/playground/vite.config.mjs`
 - Modify: `apps/playground/src/worldkit-browser-api.ts`
 - Modify: `apps/playground/src/worldkit-browser-api.test.ts`
+- Modify: `apps/playground/src/authoring-loader.ts`
+- Modify: `apps/playground/src/authoring-loader.test.ts`
+- Modify: `apps/playground/src/main.ts`
+- Modify: `apps/playground/src/babylon-world-adapter.ts`
+- Modify: `apps/playground/src/playground-world.ts`
+- Modify: `packages/runtime-babylon/src/physics.ts`
+- Modify: `scripts/verify-canonical-world.ts`
+- Modify: `scripts/verify-placement-layout.ts`
+- Create: `scripts/worldkit-route-run.integration.test.ts`
+- Modify: `README.md`
+- Modify: `docs/00-project-overview.md`
+- Modify: `docs/02-sdk-architecture.md`
+- Modify: `docs/05-mvp-roadmap.md`
+- Modify: `docs/17-canonical-json-quickstart.md`
+- Modify: `docs/18-refactor-progress-and-backlog.md`
 - Modify: `package.json`
 - Modify: `pnpm-lock.yaml`
 
@@ -513,42 +899,66 @@ worldkit verify route <world.json> \
 ```
 
 **Interfaces:**
-- CLI writes the report without replacing an existing file and writes canonical evidence to a sibling `<report-name>.evidence/` directory using a temporary directory plus atomic rename.
+- CLI writes the report without replacing an existing file and writes canonical evidence to a sibling `<report-name>.evidence/` directory. Evidence is completed in a unique sibling staging directory and published through an atomic no-replace claim; the Report is published last as the commit marker. A preflight existence check plus ordinary directory rename is not sufficient concurrency evidence, and handled rollback may remove only artifacts proven to belong to the current invocation.
 - `worldkit verify explain` dispatches V1/V2 by `schemaVersion` and explains either Route gate.
-- Browser exposes only getters for Route summary, Path receipt, Probe receipt, and overlay data. It does not expose graph building, arbitrary queries, provider handles, or mutable validation thresholds.
+- Browser introduces `WORLDKIT_BROWSER_PROTOCOL_VERSION = 4` and a complete `WorldkitBrowserApiV4` successor containing every V3 method, with unchanged control/capture/reset semantics, plus read-only getters for Route summary, Path receipt, Probe receipt, and overlay data. Route evidence is additive to the complete protocol, not a route-only replacement interface. Because the protocol is unreleased, update host wiring, CLI/Playwright consumers, canonical verification, docs, examples, and generated/public types in the same clean-break slice; do not retain a parallel V3 alias on `window.__WORLDKIT__`. A contract test enumerates the V3 method set and proves that V4 loses none of it before checking the new getters. It does not expose graph building, arbitrary queries, provider handles, or mutable validation thresholds.
 
-- [ ] **Step 1: Write RED CLI parser and failure tests**
+**Prerequisite contracts and parallel boundary:**
+- Task 7 remains the sole owner of the unified Route Validation result/report semantics. Commit `67bfb17` froze the single exported `complete | unreachable | incomplete` input/result path and both Blocking Gate policies. Task 8 consumes that reviewed contract and must not create a happy-path-only adapter, reinterpret infrastructure exceptions as failed Routes, or modify Task 7's gate policy.
+- The canonical Route Overlay shared contract was completed in `32a97e9` with one provider-neutral typed payload, canonical bytes, its own content hash, canonical Route/Surface/Collider identities, no Babylon/Havok/Recast handles, and a hash domain separate from the Traversal Graph. Its independent review returned `GO` after the P1 duplicate-`hardRibbon` semantic source and P2 derived Collider identity findings were closed; 94 Traversal tests and `pnpm typecheck` passed. Opaque evidence remains a persistence detail and never crosses Browser V4.
+- The minimum formal `WorldPackageManifestV1` plus `WorldPackageBuildReceiptV1` authority was implemented in `@whitebox-world/world-package`, not the originally proposed `@whitebox-world/protocol`. Review showed that Package assembly depends on Authoring, Compiler, Layout Solver and Runtime Contracts while Protocol must remain the dependency-light owner of generic Canonical Bytes/Hash. This is an approved dependency-direction correction, not a second public dialect. The authority binds and cross-checks `authoringSpecHash`, `normalizedWorldIrHash`, `executionPlanHash`, `resourceLockHash`, and `layoutSolveReportHash`; transitional Take/Capture identity and `WorldBuildArtifactV3` remain invalid substitutes. The minimum contract does not claim the complete P1.4 directory, signature, licensing, or Host Compatibility scope.
+- The authoritative `WorldPackageValidationSubjectV1` assembly seam is implemented in `@whitebox-world/validation`. CLI and trusted Host orchestration consume it and cannot independently construct placeholder subjects or Package Roots.
+- Task 8A and 8B now converge on one trusted Runner/Orchestrator/Publication authority. The Browser page is only a read-only projection consumer; it never becomes a fallback Graph, Query, Probe or Evidence producer.
 
-Cover missing/duplicate options, unsupported profile, V3 input, existing output, partial evidence-write cleanup, exit codes (`0 passed`, `2 failed`, `3 incomplete`, `1 infrastructure`), and JSON/non-JSON diagnostics.
+- [x] **Step 1 (shared contracts + Task 8A): Write RED contract, CLI parser, and failure tests**
 
-- [ ] **Step 2: Run the RED CLI tests**
+The canonical Route Overlay proof is already complete in `32a97e9`. First write RED tests for the minimum formal `WorldPackageManifestV1` / `WorldPackageBuildReceiptV1` root-hash authority, including mismatched five-hash inputs and explicit rejection of transitional identity or V3 build-artifact substitution. After that contract is green, prove that the single Validation-subject assembly seam consumes its receipt, derives every field from authoritative matching Authoring V4 / IR V4 / ExecutionPlan V5 identities, and rejects mismatches or placeholders. Then cover missing/duplicate CLI options, unsupported profile, V3 input, existing output, partial evidence-write cleanup, exit codes (`0 passed`, `2 failed`, `3 incomplete`, `1 infrastructure`), and JSON/non-JSON diagnostics.
 
-Run: `pnpm vitest run scripts/lib/route-validation-cli.test.ts`
+- [x] **Step 2: Run the RED CLI tests**
 
-Expected: FAIL because the command is absent.
+Run: `pnpm vitest run packages/traversal/src/route-overlay.test.ts packages/world-package/src/manifest.test.ts packages/world-package/src/build-receipt.test.ts packages/validation/src/world-package-validation-subject.test.ts scripts/lib/route-validation-cli.test.ts`
 
-- [ ] **Step 3: Implement the CLI orchestration**
+Recorded RED intent: the canonical Overlay suite remained green while the absent Package Root authority, Validation-subject seam, and command paths failed. Those implementations now exist; Step 6 reruns their green suites as the completion evidence.
 
-The command must run the V4/V5 pipeline, resolve one lock per required connectivity row, build/query the graph, create a real Babylon/Havok runtime using the same `BabylonWorldRuntime.create()` path with `NullEngine`, run the probe, dispose all resources, and finally build the unified report. Infrastructure exceptions never become gameplay diagnostics. Because root scripts import `@whitebox-world/traversal-recast` and `@whitebox-world/runtime-babylon`, declare both as direct root workspace dependencies.
+- [x] **Step 3 (Task 8A): Implement the CLI orchestration**
 
-- [ ] **Step 4: Write RED Browser Protocol tests**
+The command must run the Authoring V4 → IR V4 → ExecutionPlan V5 pipeline, obtain a validated `WorldPackageBuildReceiptV1` from the formal Package Root authority, and create its Validation subject through the single `WorldPackageValidationSubjectV1` assembly seam. It must never call `deriveTransitionalWorldPackageIdentityV1()` or reinterpret `WorldBuildArtifactV3` as Package Root evidence. It then obtains the trusted implementation identity exported by `@whitebox-world/runtime-babylon` and compiles exactly one lock receipt per required connectivity row. It resolves the locked Graph Builder Profile, joins that profile with the receipt exactly once through `createTraversalCapabilityEnvelopeV1()`, and passes the resulting Envelope to `createHeightfieldRouteBuildInputV1()`. Graph/query, Runtime probe, and Validation receive the same unchanged lock receipt; none may reconstruct the lock or reread capability geometry from Registry resources. Complete, deterministic failure, and incomplete connectivity outcomes flow into Task 7's unified result contract; only a complete Path may start a Runtime probe. The command creates a real Babylon/Havok runtime using the same `BabylonWorldRuntime.create()` path with `NullEngine`, runs the probe, disposes all resources, validates and persists the canonical typed overlay/evidence bytes, and finally builds the unified report. Infrastructure exceptions never become gameplay diagnostics. Because root scripts import `@whitebox-world/traversal-recast` and `@whitebox-world/runtime-babylon`, declare both as direct root workspace dependencies.
 
-Prove that the browser fields use the same canonical names as CLI artifacts, return immutable data, hide provider IDs, are unavailable before evidence is loaded, and cannot initiate build/query/probe work.
+- [x] **Step 4 (Task 8B): Write RED Browser Protocol and Host-injection tests**
 
-- [ ] **Step 5: Implement the read-only Browser projection**
+Prove that the browser fields use the same canonical names and typed payloads as CLI artifacts, return immutable data selected by stable Route identity, hide provider IDs/handles, are unavailable before evidence is loaded, and cannot initiate build/query/probe work. Prove that opaque overlay bytes cannot cross the Browser boundary. Also prove that every V3 control, capture, pause, screenshot, reset, and capability-discovery method remains available with unchanged behavior after the V4 version bump.
 
-Version the Browser Protocol cleanly if its public shape changes. Do not add optional aliases to the existing version. The trusted host may inject already-created Route evidence; page scripts may only inspect/overlay it.
+- [x] **Step 5 (Task 8B): Implement the read-only Browser projection and real Host transport**
 
-- [ ] **Step 6: Run focused gates**
+Implement the complete `WorldkitBrowserApiV4` and update host wiring, CLI/Playwright consumers, canonical verification, docs/examples, and generated/public types atomically. Do not add optional aliases to V3. `scripts/lib/worldkit-server.ts` owns trusted server-side Route evidence configuration, `apps/playground/vite.config.mjs` exposes only the narrow read endpoint needed by the local Host, `apps/playground/src/authoring-loader.ts` validates/loads that already-created evidence, and `apps/playground/src/main.ts` injects the resulting immutable projection into `installWorldkitBrowserApi()`. The Host reuses the same canonical overlay and `WorldPackageValidationSubjectV1` assembly seams as CLI. Page scripts may only inspect/overlay the injected projection; they may not import Graph builders, issue arbitrary queries, start Havok probes, accept mutable thresholds, or receive provider handles. Direct installer tests are necessary but are not a substitute for one real `worldkit run` Host-transport test.
+
+- [x] **Step 6: Run focused gates**
 
 Run:
 
 ```bash
-pnpm vitest run scripts/lib/route-validation-cli.test.ts packages/runtime-contracts/src/runtime-contracts.test.ts apps/playground/src/worldkit-browser-api.test.ts
+pnpm vitest run packages/traversal/src/route-overlay.test.ts packages/world-package/src/manifest.test.ts packages/world-package/src/build-receipt.test.ts packages/validation/src/world-package-validation-subject.test.ts packages/validation/src/route-evidence-publication.test.ts scripts/lib/route-validation-orchestrator.test.ts scripts/lib/route-validation-runner.test.ts scripts/lib/route-validation-cli.test.ts scripts/lib/validation-cli.test.ts scripts/worldkit.test.ts scripts/worldkit-route-run.integration.test.ts scripts/lib/worldkit-server.test.ts packages/runtime-contracts/src/runtime-contracts.test.ts apps/playground/src/authoring-loader.test.ts apps/playground/src/worldkit-browser-api.test.ts
 pnpm typecheck
+pnpm verify:canonical
+pnpm verify:placement-layout
+pnpm verify:rigged-subject
+pnpm verify:g-bot-subject
 ```
 
 Expected: PASS.
+
+Recorded completion evidence at `c778794`:
+
+- the 15-file focused set passed 217/217 tests serially, including the real
+  Recast/Babylon/Havok Runner and real `worldkit run` → private Host → Browser V4 E2E;
+- `pnpm typecheck`, `pnpm build`, `pnpm verify:canonical`,
+  `pnpm verify:placement-layout`, `pnpm verify:rigged-subject`,
+  `pnpm verify:g-bot-subject`, and `pnpm verify:route-r0-contract` passed;
+- host review confirmed and closed two late P1 findings: forged but internally
+  self-consistent Package Roots now fail the authoritative build-closure binding,
+  and raw provider messages/causes/paths/handles no longer cross public CLI JSON;
+- the single final Cursor CR timed out without a verdict after roughly 12 minutes.
+  It is recorded as `TIMEOUT`, not `GO`; no Cursor finding was accepted or hidden.
 
 ---
 
@@ -560,25 +970,44 @@ Expected: PASS.
 - Create: `examples/traversal/r1-heightfield/fail-slope.json`
 - Create: `examples/traversal/r1-heightfield/fail-width.json`
 - Create: `examples/traversal/r1-heightfield/fail-overhead.json`
-- Create: `examples/traversal/r1-heightfield/fail-water-gap.json`
+- Create: `examples/traversal/r1-heightfield/fail-water.json`
+- Create: `examples/traversal/r1-heightfield/fail-gap.json`
 - Create: `examples/traversal/r1-heightfield/fail-start-support.json`
+- Create: `examples/traversal/r1-heightfield/fail-start-surface.json`
 - Create: `examples/traversal/r1-heightfield/fail-budget.json`
+- Create: `examples/traversal/r1-heightfield/fail-outside-detour.json`
 - Create: `scripts/verify-route-r1-heightfield.ts`
 - Modify: `package.json`
 
 **Gate:** `pnpm verify:route-r1-heightfield`
 
-- [ ] **Step 1: Create fixtures through Canonical Authoring V4**
+- [x] **Step 1: Create fixtures through Canonical Authoring V4**
 
 Every fixture must use the actual Authoring Normalizer, Compiler, Graph Builder, Runtime, and Validation evaluator. No test may begin from a hand-written Execution Plan, Graph, or Report.
 
-The success world uses a primitive humanoid so the gate does not depend on a product GLB. It has one explicit Spawn Anchor, Goal Anchor, Route, `connected-by-route`, deterministic seed, locked profile, and static obstacle arrangement that proves in-ribbon navigation rather than a straight unobstructed line.
+The success world uses the capability-driven primitive `worldkit://subject-definition/humanoid.third-person@1`, so the gate has a complete Resource Lock without depending on a product GLB. It has one explicit Spawn Anchor, Goal Anchor, Route, `connected-by-route`, deterministic seed, locked profile, and static obstacle arrangement that proves in-ribbon navigation rather than a straight unobstructed line. Its Route is first authored as the current `OutdoorWorldSpec.PlannedRoute`, projected through the existing `projectPlannedRouteToCanonicalRouteV1()`, inserted into Authoring V4, and then passed through the same Normalizer/Compiler/Graph/Probe/Validation path. The verifier must assert that planner-only `priority`, `maximumDesignSlopeDegrees`, and `evidence` never enter Canonical Route bytes; this closes the current Agent whitebox entry without making planning slope evidence a gameplay authority.
 
-- [ ] **Step 2: Implement the R1 verification script**
+- [x] **Step 2: Implement the R1 verification script**
 
-The script must assert expected exit/status/diagnostic for each fixture, compare repeat/concurrent hashes, run the success fixture under 30/60/120 Hz-like render schedules, and assert no provider ID appears in evidence.
+The script must assert expected exit/status/diagnostic for each fixture according to this closed oracle table, compare repeat/concurrent hashes, run the success fixture under 30/60/120 Hz-like render schedules, and assert no provider ID appears in evidence:
 
-- [ ] **Step 3: Register and run the new gate**
+| Fixture | Required status / primary diagnostic |
+| --- | --- |
+| `success` | both Route gates `passed`; no error diagnostic |
+| `fail-wall` | `failed` / `ROUTE_REQUIRED_PATH_UNREACHABLE` |
+| `fail-slope` | `failed` / `ROUTE_SLOPE_EXCEEDED` |
+| `fail-width` | `failed` / `ROUTE_CLEARANCE_WIDTH_INSUFFICIENT` |
+| `fail-overhead` | `failed` / `ROUTE_OVERHEAD_CLEARANCE_INSUFFICIENT` |
+| `fail-water` | `failed` / `ROUTE_REQUIRED_PATH_UNREACHABLE`, with structured evidence naming the blocked Water entity rather than a new provider-specific code |
+| `fail-gap` | `failed` / `ROUTE_SURFACE_GAP_EXCEEDED`; a non-water trench/excluded walkable interval separates the two walkable Heightfield regions, not a fabricated hole in the collision mesh |
+| `fail-start-support` | `failed` / `ROUTE_START_SUPPORT_INVALID` |
+| `fail-start-surface` | `failed` / `ROUTE_START_SURFACE_NOT_FOUND` |
+| `fail-budget` | `incomplete` / `ROUTE_GRAPH_BUDGET_EXCEEDED` |
+| `fail-outside-detour` | `failed` / `ROUTE_REQUIRED_PATH_UNREACHABLE` |
+
+`fail-start-support` proves the controller is physically unsupported (`ROUTE_START_SUPPORT_INVALID`). `fail-start-surface` proves Graph start-poly identity is missing (`ROUTE_START_SURFACE_NOT_FOUND`); Heightfield runtime collision may still exist. Supported-but-unmatched/ambiguous CharacterSurfaceInfo classification is rejected by the same blocking gate through the named real Havok Probe adversarial check `start-surface-unmatched-or-wrong-resolved`, which need not be a twelfth Authoring JSON. The orchestration/integration matrix must also inject and reject lock mismatch, Graph-pass/Runtime-stall, support loss, route deviation, missing Probe evidence, and at least two locked Capability Envelopes at Backend-coupling slope/clearance boundaries; these fault cases need not be separate Authoring JSON when their trigger is an evidence/orchestration fault, but they must enter the same blocking verification gate. In R1, `fail-water` and `fail-gap` are distinct Heightfield exclusion cases; collider seams and terrain-to-platform gaps remain mandatory R1b fixtures rather than being simulated as Heightfield-only support.
+
+- [x] **Step 3: Register and run the new gate**
 
 Add:
 
@@ -590,11 +1019,11 @@ Run: `pnpm verify:route-r1-heightfield`
 
 Expected: PASS with one dual-gate success and every failure fixture rejected by its expected blocking diagnostic.
 
-- [ ] **Step 4: Prove R0 remains frozen**
+- [x] **Step 4: Prove the post-Task-4 final R0 contract remains frozen**
 
 Run: `pnpm verify:route-r0-contract`
 
-Expected: PASS without refreezing R0 fixtures.
+Expected: PASS against the final reviewed fixture containing both Task 3A `routeBuildInputHash` and Task 4 `stepHeightMeters`; do not refreeze it again after the Task 4 contract commit.
 
 ---
 
@@ -604,9 +1033,11 @@ Expected: PASS without refreezing R0 fixtures.
 - Modify: `docs/superpowers/specs/2026-08-21-route-graph-and-traversability-design.md`
 - Modify: `docs/18-refactor-progress-and-backlog.md`
 - Modify: `README.md`
+- Modify: `docs/17-canonical-json-quickstart.md`
+- Modify: `scripts/verify-canonical-world.ts`
 - Create: `docs/reviews/2026-08-22-route-r1-heightfield-runtime-review.md`
 
-- [ ] **Step 1: Run all mandatory gates**
+- [x] **Step 1: Run all mandatory gates**
 
 Run:
 
@@ -624,20 +1055,20 @@ pnpm build
 
 Expected: all pass. The existing large-chunk build warning may be recorded but cannot hide a new chunk or WASM regression; compare output before disposition.
 
-- [ ] **Step 2: Perform a full-dimension runtime review**
+- [x] **Step 2: Perform a full-dimension runtime review**
 
 Use both:
 
 - `docs/reviews/full-dimension-review-protocol.md`
 - `docs/reviews/runtime-deep-review-checklist.md`
 
-The review must explicitly cover authority ownership, Babylon 9.21.2 `CharacterSurfaceInfo` limitations, one-`checkSupport()` evidence, provider cleanup, fixed/render time separation, reset/rebind, 30/60/120 cadence, lock equality, provider-ID redaction, deterministic bytes, failure fixtures, and Graph-pass/Runtime-fail behavior.
+The review must explicitly cover authority ownership, Babylon 9.21.2 `CharacterSurfaceInfo` limitations, one-`checkSupport()` evidence, unmatched/ambiguous surface classification, V5 collision-body uniqueness, shared triangle bytes, Backend/Recast coupling acceptance, provider cleanup, fixed/render time separation, reset/rebind, 30/60/120 cadence, lock equality, provider-ID redaction, deterministic bytes, Browser V4 clean-break conformance, failure fixtures, and Graph-pass/Runtime-fail behavior.
 
-- [ ] **Step 3: Update status truthfully**
+- [x] **Step 3: Update status truthfully**
 
 Mark R1 complete only when both blocking gates pass for the success fixture and all adversarial fixtures fail as expected. Keep M5 open and R1b pending. Link the R1 review and this plan from the spec, backlog, and README.
 
-- [ ] **Step 4: Commit by semantic slice**
+- [x] **Step 4: Commit by semantic slice**
 
 Do not produce one giant commit. Use reviewable commits in this order:
 
@@ -654,19 +1085,23 @@ After R1 is merged and verified, write a separate R1b implementation plan for ex
 
 ## Completion Review
 
-- [ ] Authoring V4 connectivity flows through `NormalizedWorldIRV4` and `ExecutionPlanV5`; there is no V4 sidecar next to a V3 plan.
-- [ ] AI-facing fields remain Route/Anchor/Subject intent only; no NavMesh or provider configuration leaks into Schema.
-- [ ] Graph Builder/Driver/Validation/Subject ownership is unchanged from the frozen spec.
-- [ ] Graph and Runtime evidence share an identical `resolvedTraversalLockHash`.
-- [ ] Recast/Detour is isolated behind `@whitebox-world/traversal-recast` and absent from canonical bytes.
-- [ ] Static collision input comes from authoritative locked primitives, not visual/AABB bounds.
-- [ ] `hard-ribbon` is enforced even when a global outside detour exists.
-- [ ] Every runtime tick consumes one and only one Character Controller support sample.
-- [ ] Heightfield evidence classification never changes Ground/Air or physics.
-- [ ] The real Babylon/Havok controller reaches the success destination without teleport or parameter override.
-- [ ] Graph pass alone cannot pass the runtime gate.
-- [ ] `SLIDING`, `UNSUPPORTED`, wrong surface, stall, deviation, invalid numbers, reset, rebind, and cleanup have adversarial coverage.
-- [ ] 30/60/120 Hz-like render schedules yield identical fixed-tick receipt/final-state hashes.
-- [ ] CLI, Browser, Validation, examples, and generated/public types use the same canonical names.
-- [ ] R0, canonical, placement, rigged-subject, G Bot, typecheck, full tests, and build remain green.
-- [ ] M5 remains open until the separately planned R1b static-platform slice passes.
+- [x] Authoring V4 connectivity flows through `NormalizedWorldIRV4` and `ExecutionPlanV5`; there is no V4 sidecar next to a V3 plan.
+- [x] AI-facing fields remain Route/Anchor/Subject intent only; no NavMesh or provider configuration leaks into Schema.
+- [x] Graph Builder/Driver/Validation/Subject ownership is unchanged from the frozen spec.
+- [x] Graph and Runtime evidence share an identical `resolvedTraversalLockHash`.
+- [x] Recast/Detour is isolated behind `@whitebox-world/traversal-recast` and absent from canonical bytes.
+- [x] Static collision input comes from authoritative locked primitives, not visual/AABB bounds.
+- [x] `hard-ribbon` is enforced even when a global outside detour exists.
+- [x] One compiler-owned lock receipt is passed unchanged to Graph, query, Runtime probe, and Validation; no consumer reconstructs a lock.
+- [x] The provider-neutral Capability Envelope is the only Recast parameter source and contains no Validation/Driver/Provider fields.
+- [x] Every runtime tick consumes one and only one Character Controller support sample.
+- [x] Heightfield evidence classification never changes Ground/Air or physics.
+- [x] V5 render, sampling, collision, Graph, and evidence share one tested Heightfield triangle diagonal; V4 compatibility remains unchanged.
+- [x] World-XZ probe results are invariant under camera yaw.
+- [x] The real Babylon/Havok controller reaches the success destination without teleport or parameter override.
+- [x] Graph pass alone cannot pass the runtime gate.
+- [x] `SLIDING`, `UNSUPPORTED`, wrong surface, stall, deviation, invalid numbers, reset, rebind, and cleanup have adversarial coverage.
+- [x] 30/60/120 Hz-like render schedules yield identical fixed-tick receipt/final-state hashes.
+- [x] CLI, Browser, Validation, examples, and generated/public types use the same canonical names.
+- [x] R0, canonical, placement, rigged-subject, G Bot, typecheck, full tests, and build remain green.
+- [x] M5 remains open until the separately planned R1b static-platform slice passes.

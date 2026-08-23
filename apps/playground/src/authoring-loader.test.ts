@@ -6,8 +6,17 @@ import {
   createValidAuthoringSpec,
   createValidPackageSubjectWorld,
 } from "../../../packages/authoring/src/test-fixture";
-import type { WorldkitBrowserApiV3 } from "@whitebox-world/runtime-contracts";
-import { WORLDKIT_BROWSER_PROTOCOL_VERSION } from "@whitebox-world/runtime-contracts";
+import {
+  normalizeAuthoringSpecV4,
+  type AuthoringSpecV4,
+} from "@whitebox-world/authoring";
+import { compileWorldV5 } from "@whitebox-world/compiler";
+import {
+  canonicalWorldkitBrowserRouteEvidencePublicationV1,
+  WORLDKIT_BROWSER_PROTOCOL_VERSION,
+  type WorldkitBrowserApiV4,
+  type WorldkitBrowserRouteEvidencePublicationV1,
+} from "@whitebox-world/runtime-contracts";
 
 import {
   PhysicalKeyboardActionTracker,
@@ -23,6 +32,101 @@ function deepFreeze<T>(value: T): Readonly<T> {
     Object.freeze(value);
   }
   return value;
+}
+
+const ROUTE_EVIDENCE_HASH = `sha256:${"9".repeat(64)}` as const;
+
+function routeAuthoringWorld(): AuthoringSpecV4 {
+  const source = createValidAuthoringSpec();
+  return {
+    ...source,
+    schemaVersion: 4,
+    spatial: {
+      ...source.spatial,
+      traversalAreas: [],
+      routes: [{
+        id: "main-route",
+        kind: "polyline-xz",
+        pointsMetersXZ: [[0, 30], [0, -20]],
+        widthMeters: 4,
+        locomotionProfileRef:
+          "worldkit://locomotion-profile/ground.standard@1",
+      }],
+    },
+    nodes: [
+      ...source.nodes,
+      {
+        id: "goal",
+        kind: "anchor",
+        placement: {
+          kind: "fixed",
+          transform: { positionMetersXYZ: [0, 0, -20] },
+        },
+        semantic: { classId: "route.destination" },
+      },
+    ],
+    constraints: {
+      placements: source.constraints.placements,
+      connectivity: [{
+        id: "player-to-goal",
+        kind: "connected-by-route",
+        requirement: "required",
+        traversingEntityId: "player",
+        startAnchorEntityId: "spawn-main",
+        destinationAnchorEntityId: "goal",
+        routeId: "main-route",
+      }],
+    },
+  };
+}
+
+function matchingRouteEvidencePublication(
+  source: AuthoringSpecV4,
+): WorldkitBrowserRouteEvidencePublicationV1 {
+  const normalized = normalizeAuthoringSpecV4(source);
+  if (
+    !normalized.ok ||
+    normalized.value === undefined ||
+    normalized.normalizedWorldIrHash === undefined ||
+    normalized.layoutSolveReportHash === undefined
+  ) {
+    throw new Error("Route Authoring fixture did not normalize.");
+  }
+  const compiled = compileWorldV5({
+    normalizedWorldIr: normalized.value,
+    normalizedWorldIrHash: normalized.normalizedWorldIrHash,
+  });
+  if (
+    !compiled.ok ||
+    compiled.executionPlan === undefined ||
+    compiled.executionPlanHash === undefined
+  ) {
+    throw new Error("Route Authoring fixture did not compile.");
+  }
+  return canonicalWorldkitBrowserRouteEvidencePublicationV1({
+    kind: "worldkit-browser-route-evidence-publication",
+    schemaVersion: 1,
+    worldPackageRootHash: ROUTE_EVIDENCE_HASH,
+    authoringSpecHash: normalized.value.authoringSpecHash,
+    normalizedWorldIrHash: normalized.normalizedWorldIrHash,
+    executionPlanHash: compiled.executionPlanHash,
+    resourceLockHash: normalized.value.resources.resourceLockHash,
+    layoutSolveReportHash: normalized.layoutSolveReportHash,
+    validationReportHash: ROUTE_EVIDENCE_HASH,
+    routeValidationSetReceiptHash: ROUTE_EVIDENCE_HASH,
+    validationProfileRef:
+      "worldkit://validation-profile/outdoor-world-package-dev@2",
+    validationProfileResolvedVersion: "2.0.0",
+    validationProfileHash: ROUTE_EVIDENCE_HASH,
+    routes: [],
+  });
+}
+
+function jsonResponse(value: unknown, status = 200): Response {
+  return new Response(JSON.stringify(value), {
+    status,
+    headers: { "content-type": "application/json" },
+  });
 }
 
 describe("loadAuthoringScene", () => {
@@ -184,6 +288,138 @@ describe("loadAuthoringScene", () => {
     expect(loaded.normalizedWorldIrHash).toMatch(/^sha256:[a-f0-9]{64}$/);
     expect(loaded.executionPlanHash).toMatch(/^sha256:[a-f0-9]{64}$/);
     expect(loaded).not.toHaveProperty("hostOverlay");
+  });
+
+  it("runs strict Authoring V4 JSON through NormalizedWorldIR V4 and ExecutionPlan V5", async () => {
+    const source = routeAuthoringWorld();
+    const loaded = await loadAuthoringScene(
+      async () => jsonResponse(source),
+    );
+
+    expect(loaded).toMatchObject({
+      ok: true,
+      diagnostics: [],
+      executionPlan: {
+        schemaVersion: 5,
+        authoringSpecHash: expect.stringMatching(/^sha256:[a-f0-9]{64}$/),
+        traversal: {
+          connectivityRequirements: [{
+            constraintId: "player-to-goal",
+            routeId: "main-route",
+          }],
+        },
+      },
+    });
+    expect(loaded.routeEvidencePublication).toBeUndefined();
+  });
+
+  it("accepts and freezes same-world Host Route evidence for Authoring V4", async () => {
+    const source = routeAuthoringWorld();
+    const publication = matchingRouteEvidencePublication(source);
+    const loaded = await loadAuthoringScene(
+      async () => jsonResponse(source),
+      { fetchRouteEvidence: async () => jsonResponse(publication) },
+    );
+
+    expect(loaded).toMatchObject({
+      ok: true,
+      diagnostics: [],
+      routeEvidencePublication: publication,
+    });
+    expect(Object.isFrozen(loaded.routeEvidencePublication)).toBe(true);
+    expect(Object.isFrozen(loaded.routeEvidencePublication?.routes)).toBe(true);
+  });
+
+  it.each([
+    "authoringSpecHash",
+    "normalizedWorldIrHash",
+    "executionPlanHash",
+    "resourceLockHash",
+    "layoutSolveReportHash",
+  ] as const)("rejects Route evidence with a different %s", async (field) => {
+    const source = routeAuthoringWorld();
+    const publication = matchingRouteEvidencePublication(source);
+    const mismatched = {
+      ...publication,
+      [field]: `sha256:${"8".repeat(64)}`,
+    };
+    const loaded = await loadAuthoringScene(
+      async () => jsonResponse(source),
+      { fetchRouteEvidence: async () => jsonResponse(mismatched) },
+    );
+
+    expect(loaded).toMatchObject({
+      ok: false,
+      diagnostics: [{
+        code: "WORLDKIT_ROUTE_EVIDENCE_WORLD_MISMATCH",
+        instancePath: `/${field}`,
+        details: { field },
+      }],
+    });
+    expect(loaded.executionPlan).toBeUndefined();
+    expect(loaded.routeEvidencePublication).toBeUndefined();
+  });
+
+  it("rejects malformed configured Route evidence", async () => {
+    const loaded = await loadAuthoringScene(
+      async () => jsonResponse(routeAuthoringWorld()),
+      {
+        fetchRouteEvidence: async () => jsonResponse({
+          kind: "worldkit-browser-route-evidence-publication",
+          schemaVersion: 1,
+        }),
+      },
+    );
+
+    expect(loaded).toMatchObject({
+      ok: false,
+      diagnostics: [{
+        code: "WORLDKIT_ROUTE_EVIDENCE_INVALID",
+        instancePath: "",
+      }],
+    });
+  });
+
+  it("treats the explicit unconfigured Route evidence response as optional", async () => {
+    const loaded = await loadAuthoringScene(
+      async () => jsonResponse(routeAuthoringWorld()),
+      {
+        fetchRouteEvidence: async () => jsonResponse({
+          diagnostics: [{
+            severity: "error",
+            code: "WORLDKIT_ROUTE_EVIDENCE_NOT_CONFIGURED",
+            instancePath: "",
+            message: "Route evidence is not configured for this server.",
+          }],
+        }, 404),
+      },
+    );
+
+    expect(loaded).toMatchObject({
+      ok: true,
+      diagnostics: [],
+      executionPlan: { schemaVersion: 5 },
+    });
+    expect(loaded.routeEvidencePublication).toBeUndefined();
+  });
+
+  it("does not attach configured Route evidence to an Authoring V3 world", async () => {
+    const source = createValidPackageSubjectWorld();
+    const routeSource = routeAuthoringWorld();
+    const publication = matchingRouteEvidencePublication(routeSource);
+    const loaded = await loadAuthoringScene(
+      async () => jsonResponse(source),
+      { fetchRouteEvidence: async () => jsonResponse(publication) },
+    );
+
+    expect(loaded).toMatchObject({
+      ok: false,
+      diagnostics: [{
+        code: "WORLDKIT_ROUTE_EVIDENCE_REQUIRES_AUTHORING_V4",
+        instancePath: "/schemaVersion",
+      }],
+    });
+    expect(loaded.executionPlan).toBeUndefined();
   });
 
   it("previews water and air packages without claiming their reserved relationships run", async () => {
@@ -520,11 +756,18 @@ describe("loadAuthoringScene", () => {
     });
   });
 
-  it("defines Browser Protocol V3 with explicit control binding", () => {
+  it("defines Browser Protocol V4 with explicit control binding", () => {
     const fail = (): never => {
       throw new Error("not invoked");
     };
-    const api: WorldkitBrowserApiV3 = {
+    const unavailable = {
+      kind: "worldkit-route-evidence-query-result",
+      schemaVersion: 1,
+      availability: "unavailable",
+      selector: { constraintId: "player-to-goal", routeId: "main-route" },
+      reason: "route-evidence-not-loaded",
+    } as const;
+    const api: WorldkitBrowserApiV4 = {
       version: WORLDKIT_BROWSER_PROTOCOL_VERSION,
       ready: async () => fail(),
       getSnapshot: fail,
@@ -538,9 +781,13 @@ describe("loadAuthoringScene", () => {
       captureScreenshot: fail,
       reset: fail,
       setPaused: fail,
+      getRouteSummary: () => unavailable,
+      getRoutePathReceipt: () => unavailable,
+      getRouteRuntimeProbeReceipt: () => unavailable,
+      getRouteOverlay: () => unavailable,
     };
 
-    expect(api.version).toBe(3);
+    expect(api.version).toBe(4);
     expect(api.bindControl).toBeTypeOf("function");
   });
 
@@ -550,6 +797,20 @@ describe("loadAuthoringScene", () => {
     expect(loaded.ok).toBe(false);
     expect(loaded.executionPlan).toBeUndefined();
     expect(loaded.diagnostics[0]).toMatchObject({ code: "AUTHORING_SCHEMA_INVALID" });
+  });
+
+  it("reports the complete loader schema-version support set", async () => {
+    const source = { ...createValidAuthoringSpec(), schemaVersion: 5 };
+    const loaded = await loadAuthoringScene(async () => jsonResponse(source));
+
+    expect(loaded).toMatchObject({
+      ok: false,
+      diagnostics: [{
+        code: "AUTHORING_SCHEMA_VERSION_NOT_SUPPORTED",
+        instancePath: "/schemaVersion",
+        details: { supportedSchemaVersions: [3, 4] },
+      }],
+    });
   });
 
   it("does not parse an unsuccessful source response", async () => {

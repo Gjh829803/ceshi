@@ -6,13 +6,20 @@ import {
   rm,
   symlink,
   unlink,
+  writeFile,
 } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 
 import { afterEach, describe, expect, it } from "vitest";
 
-import { validateValidationReportV1 } from "@whitebox-world/validation";
+import {
+  OUTDOOR_WORLD_PACKAGE_DEV_VALIDATION_PROFILE_V2,
+  createRouteValidationReportV2,
+  validateValidationReportV1,
+  validateValidationReportV2,
+} from "@whitebox-world/validation";
+import { stringifyCanonicalJson } from "@whitebox-world/protocol";
 
 import { createControlCaptureValidationReportV1 } from "./control-capture-validation";
 import {
@@ -28,6 +35,10 @@ import {
 import { main } from "../worldkit";
 
 const temporaryDirectories: string[] = [];
+
+const HASH_A = `sha256:${"a".repeat(64)}` as const;
+const HASH_B = `sha256:${"b".repeat(64)}` as const;
+const HASH_C = `sha256:${"c".repeat(64)}` as const;
 
 async function createDirectoryAlias(
   targetDirectory: string,
@@ -51,6 +62,34 @@ async function createFixture(): Promise<{
   const bundleDirectory = path.join(parentDirectory, "capture-bundle");
   await createControlCaptureValidationFixtureV1(bundleDirectory);
   return { parentDirectory, bundleDirectory };
+}
+
+async function createStrictValidationReportV2File(): Promise<{
+  readonly parentDirectory: string;
+  readonly reportPath: string;
+  readonly report: ReturnType<typeof createRouteValidationReportV2>;
+}> {
+  const parentDirectory = await mkdtemp(
+    path.join(tmpdir(), "worldkit-validation-cli-v2-"),
+  );
+  temporaryDirectories.push(parentDirectory);
+  const report = createRouteValidationReportV2({
+    reportId: "world-package-route-validation",
+    subject: {
+      kind: "world-package",
+      worldPackageRootHash: HASH_A,
+      authoringSpecHash: HASH_A,
+      normalizedWorldIrHash: HASH_B,
+      executionPlanHash: HASH_C,
+      resourceLockHash: HASH_B,
+      layoutSolveReportHash: HASH_C,
+    },
+    validationProfile: OUTDOOR_WORLD_PACKAGE_DEV_VALIDATION_PROFILE_V2,
+    rows: [],
+  });
+  const reportPath = path.join(parentDirectory, "route-validation-report.json");
+  await writeFile(reportPath, `${stringifyCanonicalJson(report)}\n`, "utf8");
+  return { parentDirectory, reportPath, report };
 }
 
 afterEach(async () => {
@@ -270,6 +309,136 @@ describe("Validation CLI", () => {
       exitCode: 1,
       diagnostics: [
         expect.objectContaining({ code: "VALIDATION_GATE_NOT_FOUND" }),
+      ],
+    });
+  });
+
+  it("strictly explains a V2 world-package Gate without casting its Diagnostics to V1", async () => {
+    const { reportPath, report } = await createStrictValidationReportV2File();
+    expect(validateValidationReportV2(report)).toMatchObject({ ok: true });
+
+    const explanation = await explainValidationReportFileV1(
+      reportPath,
+      "route-connectivity",
+    );
+
+    expect(explanation).toMatchObject({
+      ok: true,
+      exitCode: 0,
+      kind: "worldkit-validation-gate-explanation",
+      schemaVersion: 2,
+      validationStatus: "failed",
+      gate: {
+        id: "route-connectivity",
+        status: "failed",
+      },
+      validationDiagnostics: [
+        expect.objectContaining({
+          scope: "world",
+          code: "ROUTE_REQUIRED_ROWS_MISSING",
+          evidenceArtifactRefs: expect.any(Array),
+          suggestedFix: expect.any(String),
+        }),
+      ],
+      evidenceArtifacts: [
+        expect.objectContaining({
+          kind: "route-validation-set-receipt",
+        }),
+      ],
+      humanReadableText: expect.stringContaining("scope=world"),
+    });
+    if (explanation.ok) {
+      expect(explanation.validationDiagnostics[0]).not.toHaveProperty(
+        "artifactPath",
+      );
+    }
+  });
+
+  it("rejects an unknown V2 Gate ID without guessing", async () => {
+    const { reportPath } = await createStrictValidationReportV2File();
+
+    const explanation = await explainValidationReportFileV1(
+      reportPath,
+      "capture-completeness",
+    );
+
+    expect(explanation).toMatchObject({
+      ok: false,
+      exitCode: 1,
+      diagnostics: [
+        expect.objectContaining({
+          code: "VALIDATION_GATE_NOT_FOUND",
+          details: {
+            gateId: "capture-completeness",
+            availableGateIds: [
+              "route-connectivity",
+              "route-runtime-conformance",
+            ],
+          },
+        }),
+      ],
+    });
+  });
+
+  it("rejects an unknown Report version without attempting a migration", async () => {
+    const { parentDirectory, report } = await createStrictValidationReportV2File();
+    const reportPath = path.join(parentDirectory, "unknown-version.json");
+    await writeFile(
+      reportPath,
+      `${stringifyCanonicalJson({ ...report, schemaVersion: 3 })}\n`,
+      "utf8",
+    );
+
+    const explanation = await explainValidationReportFileV1(
+      reportPath,
+      "route-connectivity",
+    );
+
+    expect(explanation).toMatchObject({
+      ok: false,
+      exitCode: 1,
+      diagnostics: [
+        expect.objectContaining({
+          code: "VALIDATION_REPORT_VERSION_UNSUPPORTED",
+          details: expect.objectContaining({
+            kind: "worldkit-validation-report",
+            schemaVersion: 3,
+          }),
+        }),
+      ],
+    });
+  });
+
+  it("rejects unknown V2 Report fields through the strict V2 validator", async () => {
+    const { parentDirectory, report } = await createStrictValidationReportV2File();
+    const reportPath = path.join(parentDirectory, "unknown-field.json");
+    await writeFile(
+      reportPath,
+      `${stringifyCanonicalJson({ ...report, unexpectedField: true })}\n`,
+      "utf8",
+    );
+
+    const explanation = await explainValidationReportFileV1(
+      reportPath,
+      "route-connectivity",
+    );
+
+    expect(explanation).toMatchObject({
+      ok: false,
+      exitCode: 1,
+      diagnostics: [
+        expect.objectContaining({
+          code: "VALIDATION_REPORT_INVALID",
+          message: "Validation Report does not satisfy the strict V2 contract.",
+          details: expect.objectContaining({
+            contractDiagnostics: expect.arrayContaining([
+              expect.objectContaining({
+                code: "VALIDATION_FIELD_UNKNOWN",
+                path: "/unexpectedField",
+              }),
+            ]),
+          }),
+        }),
       ],
     });
   });

@@ -9,6 +9,7 @@ import {
 } from "@whitebox-world/layout-solver";
 
 import { sha256CanonicalJson } from "./canonical-json.js";
+import { canonicalAuthoringIdentityV3 } from "./canonical-authoring-identity.js";
 import { normalizeAuthoringBaseV3 } from "./normalize.js";
 import type {
   AuthoringDiagnostic,
@@ -234,63 +235,6 @@ function semanticReferenceDiagnostics(spec: AuthoringSpecV3): readonly Authoring
     }
   });
   return diagnostics;
-}
-
-function canonicalAuthoringIdentityV3(
-  spec: AuthoringSpecV3,
-  normalizedBase: NormalizedWorldBase,
-): unknown {
-  return {
-    kind: spec.kind,
-    schemaVersion: spec.schemaVersion,
-    id: spec.id,
-    seed: spec.seed,
-    ...(spec.provenance === undefined ? {} : { provenance: structuredClone(spec.provenance) }),
-    world: structuredClone(spec.world),
-    resources: structuredClone(normalizedBase.resources),
-    layout: structuredClone(spec.layout),
-    spatial: {
-      regions: [...spec.spatial.regions].sort((left, right) => left.id.localeCompare(right.id)).map((row) => structuredClone(row)),
-      routes: [...spec.spatial.routes].sort((left, right) => left.id.localeCompare(right.id)).map((row) => structuredClone(row)),
-      screenRegions: [...spec.spatial.screenRegions].sort((left, right) => left.id.localeCompare(right.id)).map((row) => structuredClone(row)),
-    },
-    nodes: [...spec.nodes].sort((left, right) => left.id.localeCompare(right.id)).map((node) => {
-      if ((node.kind === "object" || node.kind === "anchor") && node.placement.kind === "solved") {
-        return {
-          ...structuredClone(node),
-          placement: {
-            ...structuredClone(node.placement),
-            placementConstraintIds: [...node.placement.placementConstraintIds].sort(),
-          },
-        };
-      }
-      if (node.kind === "camera") {
-        return {
-          ...structuredClone(node),
-          components: {
-            cameraRig: {
-              ...structuredClone(node.components.cameraRig),
-              allowedRigRefs: [...node.components.cameraRig.allowedRigRefs].sort(),
-            },
-          },
-        };
-      }
-      return structuredClone(node);
-    }),
-    relationships: [...spec.relationships].sort((left, right) => left.id.localeCompare(right.id)).map((row) => structuredClone(row)),
-    rules: [...spec.rules].sort((left, right) => left.id.localeCompare(right.id)).map((row) => structuredClone(row)),
-    startup: structuredClone(spec.startup),
-    constraints: {
-      placements: [...spec.constraints.placements]
-        .sort((left, right) => left.id.localeCompare(right.id))
-        .map((constraint) => {
-          if (constraint.kind !== "minimum-clearance") return structuredClone(constraint);
-          return constraint.otherEntityIds === undefined
-            ? { ...structuredClone(constraint), semanticClassIds: [...constraint.semanticClassIds].sort() }
-            : { ...structuredClone(constraint), otherEntityIds: [...constraint.otherEntityIds].sort() };
-        }),
-    },
-  };
 }
 
 export function resolveAuthoringLayoutV3(

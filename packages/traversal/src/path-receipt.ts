@@ -1,0 +1,338 @@
+import { sha256CanonicalJson } from "@whitebox-world/protocol";
+import { isNil, isPlainObject } from "lodash-es";
+
+import { assertTraversalSurfaceIdentityV1 } from "./graph-contract.js";
+import { resolveTraversalGraphBuilderProfile } from "./profile-registry.js";
+import type { TraversalSurfaceIdentityV1 } from "./types.js";
+
+type Sha256Hash = `sha256:${string}`;
+type Vec3 = readonly [number, number, number];
+type UnknownRecord = Record<string, unknown>;
+
+export interface RoutePathReceiptV1 {
+  readonly kind: "route-path-receipt";
+  readonly schemaVersion: 1;
+  readonly status: "complete";
+  readonly constraintId: string;
+  readonly routeId: string;
+  readonly traversingEntityId: string;
+  readonly startAnchorEntityId: string;
+  readonly destinationAnchorEntityId: string;
+  readonly authoringSpecHash: Sha256Hash;
+  readonly layoutSolveReportHash: Sha256Hash;
+  readonly resourceLockHash: Sha256Hash;
+  readonly traversalGraphHash: Sha256Hash;
+  readonly routeBuildInputHash: Sha256Hash;
+  readonly resolvedTraversalLockHash: Sha256Hash;
+  readonly traversalSurfaceIdentity: TraversalSurfaceIdentityV1;
+  readonly graphBuilderProfileRef: string;
+  readonly graphBuilderResolvedVersion: string;
+  readonly graphBuilderProfileHash: Sha256Hash;
+  readonly orderedTraversalNodeIds: readonly string[];
+  readonly orderedTraversalEdgeIds: readonly string[];
+  readonly orderedPathPositionsMetersXYZ: readonly Vec3[];
+  readonly routePathDistanceMeters: number;
+  readonly routePathDistanceMetersXZ: number;
+  readonly routePathCost: number;
+  readonly maximumObservedSlopeDegrees: number;
+  readonly maximumObservedStepHeightMeters: number;
+  readonly minimumObservedClearanceWidthMeters: number;
+  readonly minimumObservedClearanceHeightMeters: number;
+  readonly maximumObservedSurfaceGapMeters: number;
+}
+
+const SHA256_PATTERN = /^sha256:[a-f0-9]{64}$/;
+const RECEIPT_FIELDS = [
+  "kind",
+  "schemaVersion",
+  "status",
+  "constraintId",
+  "routeId",
+  "traversingEntityId",
+  "startAnchorEntityId",
+  "destinationAnchorEntityId",
+  "authoringSpecHash",
+  "layoutSolveReportHash",
+  "resourceLockHash",
+  "traversalGraphHash",
+  "routeBuildInputHash",
+  "resolvedTraversalLockHash",
+  "traversalSurfaceIdentity",
+  "graphBuilderProfileRef",
+  "graphBuilderResolvedVersion",
+  "graphBuilderProfileHash",
+  "orderedTraversalNodeIds",
+  "orderedTraversalEdgeIds",
+  "orderedPathPositionsMetersXYZ",
+  "routePathDistanceMeters",
+  "routePathDistanceMetersXZ",
+  "routePathCost",
+  "maximumObservedSlopeDegrees",
+  "maximumObservedStepHeightMeters",
+  "minimumObservedClearanceWidthMeters",
+  "minimumObservedClearanceHeightMeters",
+  "maximumObservedSurfaceGapMeters",
+] as const;
+
+function fail(path: string, message: string): never {
+  throw new Error(
+    `ROUTE_PATH_RECEIPT_INVALID: ${path.length > 0 ? `${path}: ` : ""}${message}`,
+  );
+}
+
+function requireRecord(value: unknown, path: string): UnknownRecord {
+  if (isNil(value) || !isPlainObject(value)) {
+    fail(path, "expected a plain object");
+  }
+  return value as UnknownRecord;
+}
+
+function requireExactRecord(
+  value: unknown,
+  fields: readonly string[],
+  path: string,
+): UnknownRecord {
+  const record = requireRecord(value, path);
+  const allowed = new Set(fields);
+  const unknown = Object.keys(record).find((field) => !allowed.has(field));
+  if (!isNil(unknown)) fail(path, `unknown field '${unknown}'`);
+  for (const field of fields) {
+    if (isNil(record[field])) fail(path, `missing field '${field}'`);
+  }
+  return record;
+}
+
+function requireString(value: unknown, path: string): string {
+  if (typeof value !== "string" || value.length === 0) {
+    fail(path, "must be a non-empty string");
+  }
+  return value;
+}
+
+function requireHash(value: unknown, path: string): Sha256Hash {
+  if (typeof value !== "string" || !SHA256_PATTERN.test(value)) {
+    fail(path, "must be a lowercase sha256 hash");
+  }
+  return value as Sha256Hash;
+}
+
+function requireFinite(value: unknown, path: string): number {
+  if (typeof value !== "number" || !Number.isFinite(value)) {
+    fail(path, "must be finite");
+  }
+  return value === 0 ? 0 : value;
+}
+
+function requireNonNegative(value: unknown, path: string): number {
+  const number = requireFinite(value, path);
+  if (number < 0) fail(path, "must be >= 0");
+  return number;
+}
+
+function requirePositive(value: unknown, path: string): number {
+  const number = requireFinite(value, path);
+  if (!(number > 0)) fail(path, "must be > 0");
+  return number;
+}
+
+function requireSlope(value: unknown, path: string): number {
+  const degrees = requireFinite(value, path);
+  if (degrees < 0 || degrees > 90) fail(path, "must be in [0, 90]");
+  return degrees;
+}
+
+function requireUniqueStringArray(value: unknown, path: string): readonly string[] {
+  if (!Array.isArray(value)) fail(path, "must be an array");
+  const values = value.map((entry, index) =>
+    requireString(entry, `${path}/${index}`)
+  );
+  if (new Set(values).size !== values.length) {
+    fail(path, "must not contain duplicate ids");
+  }
+  return values;
+}
+
+function requireVec3(value: unknown, path: string): Vec3 {
+  if (!Array.isArray(value) || value.length !== 3) {
+    fail(path, "must be a 3-tuple");
+  }
+  return [
+    requireFinite(value[0], `${path}/0`),
+    requireFinite(value[1], `${path}/1`),
+    requireFinite(value[2], `${path}/2`),
+  ];
+}
+
+function deepFreeze<T>(value: T): T {
+  if (isNil(value) || typeof value !== "object" || Object.isFrozen(value)) {
+    return value;
+  }
+  for (const child of Object.values(value as Record<string, unknown>)) {
+    deepFreeze(child);
+  }
+  return Object.freeze(value);
+}
+
+export function canonicalRoutePathReceiptV1(
+  value: unknown,
+): RoutePathReceiptV1 {
+  const record = requireExactRecord(value, RECEIPT_FIELDS, "");
+  if (record.kind !== "route-path-receipt") {
+    fail("kind", "must be 'route-path-receipt'");
+  }
+  if (record.schemaVersion !== 1) fail("schemaVersion", "must be 1");
+  if (record.status !== "complete") fail("status", "must be 'complete'");
+
+  const strings = {
+    constraintId: requireString(record.constraintId, "constraintId"),
+    routeId: requireString(record.routeId, "routeId"),
+    traversingEntityId: requireString(
+      record.traversingEntityId,
+      "traversingEntityId",
+    ),
+    startAnchorEntityId: requireString(
+      record.startAnchorEntityId,
+      "startAnchorEntityId",
+    ),
+    destinationAnchorEntityId: requireString(
+      record.destinationAnchorEntityId,
+      "destinationAnchorEntityId",
+    ),
+    graphBuilderProfileRef: requireString(
+      record.graphBuilderProfileRef,
+      "graphBuilderProfileRef",
+    ),
+    graphBuilderResolvedVersion: requireString(
+      record.graphBuilderResolvedVersion,
+      "graphBuilderResolvedVersion",
+    ),
+  } as const;
+  if (strings.startAnchorEntityId === strings.destinationAnchorEntityId) {
+    fail("startAnchorEntityId", "must differ from destinationAnchorEntityId");
+  }
+  const hashes = {
+    authoringSpecHash: requireHash(record.authoringSpecHash, "authoringSpecHash"),
+    layoutSolveReportHash: requireHash(
+      record.layoutSolveReportHash,
+      "layoutSolveReportHash",
+    ),
+    resourceLockHash: requireHash(record.resourceLockHash, "resourceLockHash"),
+    traversalGraphHash: requireHash(record.traversalGraphHash, "traversalGraphHash"),
+    routeBuildInputHash: requireHash(record.routeBuildInputHash, "routeBuildInputHash"),
+    resolvedTraversalLockHash: requireHash(
+      record.resolvedTraversalLockHash,
+      "resolvedTraversalLockHash",
+    ),
+    graphBuilderProfileHash: requireHash(
+      record.graphBuilderProfileHash,
+      "graphBuilderProfileHash",
+    ),
+  } as const;
+  let traversalSurfaceIdentity: TraversalSurfaceIdentityV1;
+  try {
+    traversalSurfaceIdentity = assertTraversalSurfaceIdentityV1(
+      record.traversalSurfaceIdentity,
+    );
+  } catch {
+    fail("traversalSurfaceIdentity", "must be a canonical Traversal Surface identity");
+  }
+  let resolved;
+  try {
+    resolved = resolveTraversalGraphBuilderProfile(strings.graphBuilderProfileRef);
+  } catch (cause) {
+    fail(
+      "graphBuilderProfileRef",
+      cause instanceof Error ? cause.message : "Profile resolution failed",
+    );
+  }
+  if (
+    resolved.resolvedVersion !== strings.graphBuilderResolvedVersion ||
+    resolved.contentHash !== hashes.graphBuilderProfileHash
+  ) {
+    fail("graphBuilderProfileRef", "must match the Registry Profile identity");
+  }
+
+  const orderedTraversalNodeIds = requireUniqueStringArray(
+    record.orderedTraversalNodeIds,
+    "orderedTraversalNodeIds",
+  );
+  if (orderedTraversalNodeIds.length === 0) {
+    fail("orderedTraversalNodeIds", "must contain at least one Node id");
+  }
+  const orderedTraversalEdgeIds = requireUniqueStringArray(
+    record.orderedTraversalEdgeIds,
+    "orderedTraversalEdgeIds",
+  );
+  if (orderedTraversalEdgeIds.length !== orderedTraversalNodeIds.length - 1) {
+    fail(
+      "orderedTraversalEdgeIds",
+      "length must equal orderedTraversalNodeIds.length - 1",
+    );
+  }
+  if (!Array.isArray(record.orderedPathPositionsMetersXYZ)) {
+    fail("orderedPathPositionsMetersXYZ", "must be an array");
+  }
+  const orderedPathPositionsMetersXYZ = record.orderedPathPositionsMetersXYZ.map(
+    (position, index) =>
+      requireVec3(position, `orderedPathPositionsMetersXYZ/${index}`),
+  );
+  if (orderedPathPositionsMetersXYZ.length === 0) {
+    fail("orderedPathPositionsMetersXYZ", "must contain at least one position");
+  }
+  for (let index = 1; index < orderedPathPositionsMetersXYZ.length; index += 1) {
+    const previous = orderedPathPositionsMetersXYZ[index - 1]!;
+    const current = orderedPathPositionsMetersXYZ[index]!;
+    if (
+      previous[0] === current[0] &&
+      previous[1] === current[1] &&
+      previous[2] === current[2]
+    ) {
+      fail("orderedPathPositionsMetersXYZ", "adjacent positions must be distinct");
+    }
+  }
+
+  return deepFreeze({
+    kind: "route-path-receipt",
+    schemaVersion: 1,
+    status: "complete",
+    ...strings,
+    ...hashes,
+    traversalSurfaceIdentity,
+    orderedTraversalNodeIds,
+    orderedTraversalEdgeIds,
+    orderedPathPositionsMetersXYZ,
+    routePathDistanceMeters: requireNonNegative(
+      record.routePathDistanceMeters,
+      "routePathDistanceMeters",
+    ),
+    routePathDistanceMetersXZ: requireNonNegative(
+      record.routePathDistanceMetersXZ,
+      "routePathDistanceMetersXZ",
+    ),
+    routePathCost: requireNonNegative(record.routePathCost, "routePathCost"),
+    maximumObservedSlopeDegrees: requireSlope(
+      record.maximumObservedSlopeDegrees,
+      "maximumObservedSlopeDegrees",
+    ),
+    maximumObservedStepHeightMeters: requireNonNegative(
+      record.maximumObservedStepHeightMeters,
+      "maximumObservedStepHeightMeters",
+    ),
+    minimumObservedClearanceWidthMeters: requirePositive(
+      record.minimumObservedClearanceWidthMeters,
+      "minimumObservedClearanceWidthMeters",
+    ),
+    minimumObservedClearanceHeightMeters: requirePositive(
+      record.minimumObservedClearanceHeightMeters,
+      "minimumObservedClearanceHeightMeters",
+    ),
+    maximumObservedSurfaceGapMeters: requireNonNegative(
+      record.maximumObservedSurfaceGapMeters,
+      "maximumObservedSurfaceGapMeters",
+    ),
+  });
+}
+
+export function hashRoutePathReceiptV1(value: unknown): Sha256Hash {
+  return sha256CanonicalJson(canonicalRoutePathReceiptV1(value)) as Sha256Hash;
+}

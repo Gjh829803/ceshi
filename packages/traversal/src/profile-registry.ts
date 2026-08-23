@@ -3,9 +3,12 @@ import { isEmpty, isNil } from "lodash-es";
 
 import type {
   ResolvedTraversalDriverProfileV1,
+  ResolvedTraversalGraphBuilderProfile,
   ResolvedTraversalGraphBuilderProfileV1,
+  ResolvedTraversalGraphBuilderProfileV2,
   TraversalDriverProfileV1,
   TraversalGraphBuilderProfileV1,
+  TraversalGraphBuilderProfileV2,
 } from "./types.js";
 
 export const BUILT_IN_TRAVERSAL_DRIVER_PROFILE_REF =
@@ -14,10 +17,16 @@ export const BUILT_IN_TRAVERSAL_DRIVER_PROFILE_REF =
 export const BUILT_IN_TRAVERSAL_GRAPH_BUILDER_PROFILE_REF =
   "worldkit://traversal-graph-builder-profile/outdoor-humanoid.r1@1" as const;
 
+export const BUILT_IN_HEIGHTFIELD_R1_TRAVERSAL_GRAPH_BUILDER_PROFILE_REF =
+  "worldkit://traversal-graph-builder-profile/outdoor-humanoid.heightfield-r1@1" as const;
+
+export const BUILT_IN_HEIGHTFIELD_R1_LOW_BUDGET_TRAVERSAL_GRAPH_BUILDER_PROFILE_REF =
+  "worldkit://traversal-graph-builder-profile/outdoor-humanoid.heightfield-r1-low-budget@1" as const;
+
 const TRAVERSAL_DRIVER_PROFILE_REQUIRED_KEYS = [
   "kind",
   "schemaVersion",
-  "pathLookaheadMeters",
+  "pathLookaheadMetersXZ",
   "cornerSelectionMode",
   "intentDirectionQuantizationRatio",
   "locomotionIntentMode",
@@ -44,10 +53,32 @@ const TRAVERSAL_GRAPH_BUILDER_PROFILE_ALLOWED_KEYS = new Set(
   TRAVERSAL_GRAPH_BUILDER_PROFILE_REQUIRED_KEYS,
 );
 
+const TRAVERSAL_GRAPH_BUILDER_PROFILE_V2_REQUIRED_KEYS = [
+  "kind",
+  "schemaVersion",
+  "clearanceMarginMeters",
+  "voxelCellSizeMeters",
+  "voxelCellHeightMeters",
+  "tileSizeCells",
+  "maximumEdgeLengthMeters",
+  "maximumSimplificationErrorMeters",
+  "positionQuantizationMeters",
+  "slopeCostWeight",
+  "stepCostWeight",
+  "maximumNodes",
+  "maximumEdges",
+  "maximumTiles",
+  "maximumSearchSteps",
+] as const;
+
+const TRAVERSAL_GRAPH_BUILDER_PROFILE_V2_ALLOWED_KEYS = new Set(
+  TRAVERSAL_GRAPH_BUILDER_PROFILE_V2_REQUIRED_KEYS,
+);
+
 const BUILT_IN_WALK_HARD_RIBBON_DRIVER_PROFILE: TraversalDriverProfileV1 = {
   kind: "traversal-driver-profile",
   schemaVersion: 1,
-  pathLookaheadMeters: 2.4,
+  pathLookaheadMetersXZ: 2.4,
   cornerSelectionMode: "next-visible-segment",
   intentDirectionQuantizationRatio: 0.001,
   locomotionIntentMode: "walk",
@@ -65,6 +96,33 @@ const BUILT_IN_OUTDOOR_HUMANOID_GRAPH_BUILDER_PROFILE: TraversalGraphBuilderProf
   maximumTiles: 1024,
   maximumSearchSteps: 100000,
 };
+
+const BUILT_IN_HEIGHTFIELD_R1_GRAPH_BUILDER_PROFILE: TraversalGraphBuilderProfileV2 = {
+  kind: "traversal-graph-builder-profile",
+  schemaVersion: 2,
+  clearanceMarginMeters: 0.05,
+  voxelCellSizeMeters: 0.15,
+  voxelCellHeightMeters: 0.1,
+  tileSizeCells: 64,
+  maximumEdgeLengthMeters: 2.4,
+  maximumSimplificationErrorMeters: 0.15,
+  positionQuantizationMeters: 0.001,
+  slopeCostWeight: 1,
+  stepCostWeight: 1,
+  maximumNodes: 100000,
+  maximumEdges: 200000,
+  maximumTiles: 1024,
+  maximumSearchSteps: 100000,
+};
+
+const BUILT_IN_HEIGHTFIELD_R1_LOW_BUDGET_GRAPH_BUILDER_PROFILE:
+  TraversalGraphBuilderProfileV2 = {
+    ...BUILT_IN_HEIGHTFIELD_R1_GRAPH_BUILDER_PROFILE,
+    maximumNodes: 16,
+    maximumEdges: 32,
+    maximumTiles: 64,
+    maximumSearchSteps: 16,
+  };
 
 function deepFreeze<T>(value: T): T {
   if (value === null || typeof value !== "object" || Object.isFrozen(value)) return value;
@@ -153,6 +211,22 @@ function requireNonNegativeNumber(
   return numberValue;
 }
 
+function requireNumberInRange(
+  value: unknown,
+  code: string,
+  field: string,
+  minimum: number,
+  maximum: number,
+): number {
+  const numberValue = requireFiniteNumber(value, code, field);
+  if (numberValue < minimum || numberValue > maximum) {
+    throw new Error(
+      `${code}: '${field}' must be >= ${minimum} and <= ${maximum}.`,
+    );
+  }
+  return numberValue;
+}
+
 function requireSafeIntegerInRange(
   value: unknown,
   code: string,
@@ -189,9 +263,9 @@ export function validateTraversalDriverProfileV1(value: unknown): void {
     throw new Error("TRAVERSAL_DRIVER_SCHEMA_VERSION_MISMATCH: schemaVersion must be 1.");
   }
   requirePositiveNumber(
-    source.pathLookaheadMeters,
+    source.pathLookaheadMetersXZ,
     "TRAVERSAL_DRIVER_NUMBER_INVALID",
-    "pathLookaheadMeters",
+    "pathLookaheadMetersXZ",
     32,
   );
   requirePositiveNumber(
@@ -286,6 +360,120 @@ export function validateTraversalGraphBuilderProfileV1(value: unknown): void {
   );
 }
 
+export function validateTraversalGraphBuilderProfileV2(value: unknown): void {
+  const source = requirePlainProfile(
+    value,
+    "TRAVERSAL_GRAPH_BUILDER_PROFILE_NOT_PLAIN",
+  );
+  rejectForbiddenAndMissingKeys(
+    source,
+    TRAVERSAL_GRAPH_BUILDER_PROFILE_V2_ALLOWED_KEYS,
+    TRAVERSAL_GRAPH_BUILDER_PROFILE_V2_REQUIRED_KEYS,
+    "TRAVERSAL_GRAPH_BUILDER_FIELD_FORBIDDEN",
+    "TRAVERSAL_GRAPH_BUILDER_FIELD_MISSING",
+  );
+  if (source.kind !== "traversal-graph-builder-profile") {
+    throw new Error(
+      "TRAVERSAL_GRAPH_BUILDER_KIND_MISMATCH: kind must be traversal-graph-builder-profile.",
+    );
+  }
+  if (source.schemaVersion !== 2) {
+    throw new Error(
+      "TRAVERSAL_GRAPH_BUILDER_SCHEMA_VERSION_MISMATCH: schemaVersion must be 2.",
+    );
+  }
+  requireNonNegativeNumber(
+    source.clearanceMarginMeters,
+    "TRAVERSAL_GRAPH_BUILDER_NUMBER_INVALID",
+    "clearanceMarginMeters",
+    2,
+  );
+  const voxelCellSizeMeters = requireNumberInRange(
+    source.voxelCellSizeMeters,
+    "TRAVERSAL_GRAPH_BUILDER_NUMBER_INVALID",
+    "voxelCellSizeMeters",
+    0.001,
+    4,
+  );
+  requireNumberInRange(
+    source.voxelCellHeightMeters,
+    "TRAVERSAL_GRAPH_BUILDER_NUMBER_INVALID",
+    "voxelCellHeightMeters",
+    0.001,
+    2,
+  );
+  requireSafeIntegerInRange(
+    source.tileSizeCells,
+    "TRAVERSAL_GRAPH_BUILDER_NUMBER_INVALID",
+    "tileSizeCells",
+    16,
+    1024,
+  );
+  const maximumEdgeLengthMeters = requirePositiveNumber(
+    source.maximumEdgeLengthMeters,
+    "TRAVERSAL_GRAPH_BUILDER_NUMBER_INVALID",
+    "maximumEdgeLengthMeters",
+    256,
+  );
+  if (maximumEdgeLengthMeters < voxelCellSizeMeters) {
+    throw new Error(
+      "TRAVERSAL_GRAPH_BUILDER_NUMBER_INVALID: 'maximumEdgeLengthMeters' must be at least one voxelCellSizeMeters.",
+    );
+  }
+  requirePositiveNumber(
+    source.maximumSimplificationErrorMeters,
+    "TRAVERSAL_GRAPH_BUILDER_NUMBER_INVALID",
+    "maximumSimplificationErrorMeters",
+    16,
+  );
+  requirePositiveNumber(
+    source.positionQuantizationMeters,
+    "TRAVERSAL_GRAPH_BUILDER_NUMBER_INVALID",
+    "positionQuantizationMeters",
+    1,
+  );
+  requireNonNegativeNumber(
+    source.slopeCostWeight,
+    "TRAVERSAL_GRAPH_BUILDER_NUMBER_INVALID",
+    "slopeCostWeight",
+    100,
+  );
+  requireNonNegativeNumber(
+    source.stepCostWeight,
+    "TRAVERSAL_GRAPH_BUILDER_NUMBER_INVALID",
+    "stepCostWeight",
+    100,
+  );
+  requireSafeIntegerInRange(
+    source.maximumNodes,
+    "TRAVERSAL_GRAPH_BUILDER_NUMBER_INVALID",
+    "maximumNodes",
+    1,
+    1_000_000,
+  );
+  requireSafeIntegerInRange(
+    source.maximumEdges,
+    "TRAVERSAL_GRAPH_BUILDER_NUMBER_INVALID",
+    "maximumEdges",
+    1,
+    2_000_000,
+  );
+  requireSafeIntegerInRange(
+    source.maximumTiles,
+    "TRAVERSAL_GRAPH_BUILDER_NUMBER_INVALID",
+    "maximumTiles",
+    1,
+    4096,
+  );
+  requireSafeIntegerInRange(
+    source.maximumSearchSteps,
+    "TRAVERSAL_GRAPH_BUILDER_NUMBER_INVALID",
+    "maximumSearchSteps",
+    1,
+    1_000_000,
+  );
+}
+
 export function resolveTraversalDriverProfileV1(
   resourceRef: string,
 ): ResolvedTraversalDriverProfileV1 {
@@ -318,4 +506,48 @@ export function resolveTraversalGraphBuilderProfileV1(
     contentHash: contentHashOf(profile),
     profile: deepFreeze(profile),
   });
+}
+
+export function resolveTraversalGraphBuilderProfileV2(
+  resourceRef: string,
+): ResolvedTraversalGraphBuilderProfileV2 {
+  let profile: TraversalGraphBuilderProfileV2;
+  if (resourceRef === BUILT_IN_HEIGHTFIELD_R1_TRAVERSAL_GRAPH_BUILDER_PROFILE_REF) {
+    profile = structuredClone(BUILT_IN_HEIGHTFIELD_R1_GRAPH_BUILDER_PROFILE);
+  } else if (
+    resourceRef ===
+    BUILT_IN_HEIGHTFIELD_R1_LOW_BUDGET_TRAVERSAL_GRAPH_BUILDER_PROFILE_REF
+  ) {
+    profile = structuredClone(
+      BUILT_IN_HEIGHTFIELD_R1_LOW_BUDGET_GRAPH_BUILDER_PROFILE,
+    );
+  } else {
+    throw new Error(`TRAVERSAL_GRAPH_BUILDER_PROFILE_NOT_FOUND: '${resourceRef}'.`);
+  }
+
+  validateTraversalGraphBuilderProfileV2(profile);
+  return deepFreeze({
+    resourceRef,
+    resolvedVersion: "1",
+    contentHash: contentHashOf(profile),
+    profile: deepFreeze(profile),
+  });
+}
+
+export function resolveTraversalGraphBuilderProfile(
+  resourceRef: string,
+): ResolvedTraversalGraphBuilderProfile {
+  if (resourceRef === BUILT_IN_TRAVERSAL_GRAPH_BUILDER_PROFILE_REF) {
+    return resolveTraversalGraphBuilderProfileV1(resourceRef);
+  }
+  if (resourceRef === BUILT_IN_HEIGHTFIELD_R1_TRAVERSAL_GRAPH_BUILDER_PROFILE_REF) {
+    return resolveTraversalGraphBuilderProfileV2(resourceRef);
+  }
+  if (
+    resourceRef ===
+    BUILT_IN_HEIGHTFIELD_R1_LOW_BUDGET_TRAVERSAL_GRAPH_BUILDER_PROFILE_REF
+  ) {
+    return resolveTraversalGraphBuilderProfileV2(resourceRef);
+  }
+  throw new Error(`TRAVERSAL_GRAPH_BUILDER_PROFILE_NOT_FOUND: '${resourceRef}'.`);
 }

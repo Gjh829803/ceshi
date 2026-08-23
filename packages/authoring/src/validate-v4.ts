@@ -1,5 +1,9 @@
 import Ajv2020, { type ErrorObject } from "ajv/dist/2020.js";
 import addFormats from "ajv-formats";
+import {
+  validateSimplePolygonXZV1,
+  validateTraversalAreaComplexityV1,
+} from "@whitebox-world/terrain-surface";
 import { isEmpty, isNil } from "lodash-es";
 
 import authoringSpecV4Schema from "./authoring-spec-v4.schema.json";
@@ -82,7 +86,16 @@ function diagnosticFor(error: ErrorObject): AuthoringDiagnostic {
         : undefined;
   return {
     severity: "error",
-    code: "AUTHORING_SCHEMA_INVALID",
+    code:
+      error.keyword === "maxItems" &&
+        (
+          error.instancePath === "/spatial/traversalAreas" ||
+          /^\/spatial\/traversalAreas\/[0-9]+\/pointsMetersXZ$/.test(
+            error.instancePath,
+          )
+        )
+        ? "AUTHORING_SPATIAL_BUDGET_EXCEEDED"
+        : "AUTHORING_SCHEMA_INVALID",
     instancePath:
       missingOrAdditionalProperty === undefined
         ? error.instancePath
@@ -102,6 +115,7 @@ function duplicateIdDiagnostics(spec: AuthoringSpecV4): AuthoringDiagnostic[] {
     ["/nodes", spec.nodes],
     ["/spatial/regions", spec.spatial.regions],
     ["/spatial/routes", spec.spatial.routes],
+    ["/spatial/traversalAreas", spec.spatial.traversalAreas],
     ["/spatial/screenRegions", spec.spatial.screenRegions],
     ["/constraints/placements", spec.constraints.placements],
     ["/constraints/connectivity", spec.constraints.connectivity],
@@ -232,6 +246,46 @@ function connectivityReferenceDiagnostics(spec: AuthoringSpecV4): AuthoringDiagn
   return diagnostics;
 }
 
+function traversalAreaDiagnostics(spec: AuthoringSpecV4): AuthoringDiagnostic[] {
+  const diagnostics: AuthoringDiagnostic[] = [];
+  const nodeById = new Map(spec.nodes.map((node) => [node.id, node] as const));
+  const complexity = validateTraversalAreaComplexityV1({
+    pointCountsByArea: spec.spatial.traversalAreas.map(
+      (area) => area.pointsMetersXZ.length,
+    ),
+  });
+  if (!complexity.ok) {
+    diagnostics.push({
+      severity: "error",
+      code: "AUTHORING_SPATIAL_BUDGET_EXCEEDED",
+      instancePath: isNil(complexity.areaIndex)
+        ? "/spatial/traversalAreas"
+        : `/spatial/traversalAreas/${complexity.areaIndex}/pointsMetersXZ`,
+      message: `Traversal Area complexity exceeds the frozen budget (${complexity.issueCode}: ${complexity.actualCount} > ${complexity.maximumCount}).`,
+    });
+  }
+  spec.spatial.traversalAreas.forEach((area, index) => {
+    const base = `/spatial/traversalAreas/${index}`;
+    requireNodeKind(
+      nodeById,
+      area.surfaceEntityId,
+      "terrain",
+      `${base}/surfaceEntityId`,
+      diagnostics,
+    );
+    const polygonValidation = validateSimplePolygonXZV1(area.pointsMetersXZ);
+    if (!polygonValidation.ok) {
+      diagnostics.push({
+        severity: "error",
+        code: "AUTHORING_SPATIAL_RANGE_INVALID",
+        instancePath: `${base}/pointsMetersXZ`,
+        message: `Traversal Area polygon must be simple (${polygonValidation.issueCode}).`,
+      });
+    }
+  });
+  return diagnostics;
+}
+
 export function validateAuthoringSpecV4(
   value: unknown,
 ): AuthoringResult<AuthoringSpecV4> {
@@ -246,6 +300,7 @@ export function validateAuthoringSpecV4(
   const diagnostics = [
     ...duplicateIdDiagnostics(value),
     ...orderedRangeDiagnostics(value),
+    ...traversalAreaDiagnostics(value),
     ...connectivityReferenceDiagnostics(value),
   ];
   return isEmpty(diagnostics)

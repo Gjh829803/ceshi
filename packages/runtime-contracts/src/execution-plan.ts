@@ -2,6 +2,8 @@ import type {
   CameraRigParameterNameV1,
   CameraRigParametersV1,
 } from "./camera-parameter-contract";
+import type { TraversalSurfaceIdentityV1 } from "@whitebox-world/traversal";
+import { isNil } from "lodash-es";
 
 export type Vec2 = readonly [x: number, z: number];
 export type Vec3 = readonly [x: number, y: number, z: number];
@@ -537,6 +539,166 @@ export interface ExecutionPlanV4 {
 export interface CompileWorldResultV4 {
   readonly ok: boolean;
   readonly executionPlan?: ExecutionPlanV4;
+  readonly executionPlanHash?: string;
+  readonly diagnostics: readonly CompileDiagnostic[];
+}
+
+export interface ExecutionHeightfieldTraversalSurfaceV1
+  extends TraversalSurfaceIdentityV1 {
+  readonly kind: "heightfield";
+}
+
+export type ExecutionTraversalSurfaceV1 =
+  | ExecutionHeightfieldTraversalSurfaceV1;
+
+export interface ExecutionTraversalAreaV1 {
+  readonly id: string;
+  readonly kind: "polygon-xz";
+  readonly pointsMetersXZ: readonly Vec2[];
+  readonly surfaceEntityId: string;
+  readonly mode: "blocked";
+}
+
+export type ExecutionStaticColliderShapeV1 =
+  | Readonly<{ kind: "box"; sizeMetersXYZ: Vec3 }>
+  | Readonly<{ kind: "sphere"; radiusMeters: number }>
+  | Readonly<{ kind: "cylinder"; radiusMeters: number; heightMeters: number }>;
+
+export interface ExecutionStaticColliderV1 {
+  readonly entityId: string;
+  readonly logicalSubshapeId: string;
+  readonly colliderSubshapeId: string;
+  readonly transform: ExecutionTransformV3;
+  readonly shape: ExecutionStaticColliderShapeV1;
+  readonly colliderHash: `sha256:${string}`;
+}
+
+export interface ExecutionConnectivityRequirementV1 {
+  readonly constraintId: string;
+  readonly kind: "connected-by-route";
+  readonly traversingEntityId: string;
+  readonly startAnchorEntityId: string;
+  readonly destinationAnchorEntityId: string;
+  readonly routeId: string;
+}
+
+export const EXECUTION_RESOURCE_KINDS_V1 = [
+  "subject-definition",
+  "subject-asset",
+  "rig-profile",
+  "animation-set",
+  "collider-profile",
+  "capability",
+  "physics-body-profile",
+  "locomotion-profile",
+  "control-feel-profile",
+  "collider-derivation-profile",
+  "motion-kernel",
+  "motion-profile",
+  "control-profile",
+  "camera-rig-algorithm",
+  "camera-rig-profile",
+  "camera-modifier-profile",
+  "camera-context-profile",
+  "medium-profile",
+  "relationship-profile",
+  "harness-profile",
+  "pose-set-profile",
+  "render-binding-profile",
+] as const;
+
+export type ExecutionResourceKindV1 =
+  typeof EXECUTION_RESOURCE_KINDS_V1[number];
+
+export interface ExecutionResourceLockEntryV1 {
+  readonly resourceRef: string;
+  readonly resourceKind: ExecutionResourceKindV1;
+  readonly resolvedVersion: string;
+  readonly contentHash: `sha256:${string}`;
+}
+
+const EXECUTION_RESOURCE_LOCK_ENTRY_FIELDS_V1 = [
+  "resourceRef",
+  "resourceKind",
+  "resolvedVersion",
+  "contentHash",
+] as const;
+const EXECUTION_RESOURCE_HASH_PATTERN_V1 = /^sha256:[a-f0-9]{64}$/;
+
+/**
+ * Validates and canonicalizes the complete Execution Resource Lock. Callers
+ * compare the returned order with serialized input when canonical wire order
+ * is required.
+ */
+export function canonicalExecutionResourceLockEntriesV1(
+  value: unknown,
+): readonly ExecutionResourceLockEntryV1[] {
+  if (!Array.isArray(value)) {
+    throw new TypeError("EXECUTION_RESOURCE_LOCK_INVALID");
+  }
+  const seenResourceRefs = new Set<string>();
+  const rows = value.map((candidate) => {
+    if (isNil(candidate) || typeof candidate !== "object" || Array.isArray(candidate)) {
+      throw new TypeError("EXECUTION_RESOURCE_LOCK_INVALID");
+    }
+    const record = candidate as Record<string, unknown>;
+    const fields = Object.keys(record).sort();
+    const expectedFields = [...EXECUTION_RESOURCE_LOCK_ENTRY_FIELDS_V1].sort();
+    if (
+      fields.length !== expectedFields.length ||
+      fields.some((field, index) => field !== expectedFields[index]) ||
+      typeof record.resourceRef !== "string" ||
+      record.resourceRef.length === 0 ||
+      typeof record.resolvedVersion !== "string" ||
+      record.resolvedVersion.length === 0 ||
+      typeof record.contentHash !== "string" ||
+      !EXECUTION_RESOURCE_HASH_PATTERN_V1.test(record.contentHash) ||
+      !EXECUTION_RESOURCE_KINDS_V1.includes(
+        record.resourceKind as ExecutionResourceKindV1,
+      ) ||
+      seenResourceRefs.has(record.resourceRef)
+    ) {
+      throw new TypeError("EXECUTION_RESOURCE_LOCK_INVALID");
+    }
+    seenResourceRefs.add(record.resourceRef);
+    return Object.freeze({
+      resourceRef: record.resourceRef,
+      resourceKind: record.resourceKind as ExecutionResourceKindV1,
+      resolvedVersion: record.resolvedVersion,
+      contentHash: record.contentHash as `sha256:${string}`,
+    });
+  });
+  rows.sort((left, right) =>
+    left.resourceRef < right.resourceRef
+      ? -1
+      : left.resourceRef > right.resourceRef
+        ? 1
+        : left.resourceKind < right.resourceKind
+          ? -1
+          : left.resourceKind > right.resourceKind
+            ? 1
+            : 0
+  );
+  return Object.freeze(rows);
+}
+
+export interface ExecutionPlanV5
+  extends Omit<ExecutionPlanV4, "schemaVersion"> {
+  readonly schemaVersion: 5;
+  readonly authoringSpecHash: `sha256:${string}`;
+  readonly resourceLockEntries: readonly ExecutionResourceLockEntryV1[];
+  readonly traversal: Readonly<{
+    surfaces: readonly ExecutionTraversalSurfaceV1[];
+    traversalAreas: readonly ExecutionTraversalAreaV1[];
+    connectivityRequirements: readonly ExecutionConnectivityRequirementV1[];
+    anchorEntityIds: readonly string[];
+  }>;
+  readonly staticColliders: readonly ExecutionStaticColliderV1[];
+}
+
+export interface CompileWorldResultV5 {
+  readonly ok: boolean;
+  readonly executionPlan?: ExecutionPlanV5;
   readonly executionPlanHash?: string;
   readonly diagnostics: readonly CompileDiagnostic[];
 }

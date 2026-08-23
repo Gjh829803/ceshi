@@ -7,19 +7,23 @@
 后续视频模型只消费 SDK 输出的白模与控制通道，不负责决定碰撞、位置、导航或
 Gameplay 真相。
 
-> 当前长期重构总进度约 **62%**；“JSON → IR → Babylon/Havok → 多主体控制、
+> 当前长期重构总进度约 **65%**；“JSON → IR → Babylon/Havok → 多主体控制、
 > 确定性落位与截图”的第一条 Canonical 纵向切片约 **90%**。详细口径和全部待办见
 > [SDK 重构总进度与 Backlog](docs/18-refactor-progress-and-backlog.md)。
 
 > Golden Humanoid S1b 首个可视纵向切片已完成并进入回归；S1b 整体与 Semantic Actions 整体仍未完成.
 
-> Placement Solver S1 首个海湾纵向切片已完成并进入回归；通用 Terrain Mask/Route Graph、更多 Constraint 与 P0.1 整体仍未完成。
+> Placement Solver S1 首个海湾纵向切片已完成并进入回归；通用 Terrain Mask、Route R1b、更多 Constraint 与 P0.1 整体仍未完成。
+
+> Route R1 Heightfield 已完成：Authoring V4 Golden/Adversarial Fixture、双 Blocking Gate、
+> 真实 Babylon/Havok Probe 与 `pnpm verify:route-r1-heightfield` 已进入回归。R1b 静态平台
+> 与完整 M5 仍未完成。
 
 第一次阅读建议依次查看：
 
 1. [项目总览](docs/00-project-overview.md)：产品范围、当前能力和明确不支持的部分；
 2. [SDK 分层架构](docs/02-sdk-architecture.md)：系统边界、八层架构、代码包归属和运行时序列；
-3. [Canonical JSON V3 快速接入](docs/17-canonical-json-quickstart.md)：当前唯一 JSON 协议和命令；
+3. [Canonical JSON V3/V4 快速接入](docs/17-canonical-json-quickstart.md)：基础世界、Route 世界、CLI 与 Browser Protocol；
 4. [主体手感配表与版本工作区](docs/19-subject-preset-workspace.md)：本地版本、公共默认、发布与回滚；
 5. [重构总进度与 Backlog](docs/18-refactor-progress-and-backlog.md)：完成度、优先级、依赖和验收标准。
 
@@ -30,15 +34,15 @@ flowchart TB
     INPUT["Prompt + Reference Image"] --> AGENT["External Planning / Coding Agent<br/>上游团队负责"]
 
     subgraph SDK["Agent Whitebox World SDK"]
-        AUTHOR["AI Schema Profile<br/>Canonical AuthoringSpec"]
+        AUTHOR["AI Schema Profile<br/>Canonical AuthoringSpec V3 / V4"]
         VALIDATE["Schema Validation<br/>Registry Resolution"]
         COMPILE["Normalizer + Terrain Compiler<br/>Deterministic Layout Solver"]
         IR["NormalizedWorldIR<br/>Resource Lock"]
-        PACKAGE["ExecutionPlan<br/>WorldPackage"]
+        PACKAGE["ExecutionPlan V4 / V5<br/>WorldPackage Build Receipt"]
         TAKE["Simulation Take V1<br/>60 Hz Fixed Tick · Exact Schedule"]
         RUNTIME["Babylon.js Runtime + Havok Physics<br/>唯一白模世界真相"]
         CAPTURE["Control Capture Bundle<br/>Neutral Color · Linear Depth · Semantic · Instance · Normal"]
-        REPORT["Validation Report<br/>Capture/Integrity V1 · Blocking Gate 一票否决"]
+        REPORT["Validation Report<br/>Capture/Integrity · Route Blocking Gates"]
 
         AUTHOR --> VALIDATE --> COMPILE --> IR --> PACKAGE --> TAKE --> RUNTIME --> CAPTURE --> REPORT
     end
@@ -130,13 +134,18 @@ Linear Depth、Bundle Hash 和 Package/Take/Session 归属。人物是否掉入�
 因此，这个 SDK 不只是对 Babylon.js 做一层简单封装，而是在 AI 与 3D 游戏引擎
 之间提供一套**稳定、确定、可验证、可复现的世界编译系统**。
 
-当前已经交付到 AuthoringSpec V3、NormalizedWorldIR V3、ExecutionPlan V4、
+当前已经交付到基础世界的 AuthoringSpec V3、NormalizedWorldIR V3、ExecutionPlan V4，
+以及 Route R1 的 AuthoringSpec V4、NormalizedWorldIR V4、ExecutionPlan V5、
 Placement Solver S1、Babylon/Havok Runtime、Simulation Take / Control Capture V1，
 以及统一 Validation 的 Capture/Integrity V1 窄切片：精确 Tick/Frame Schedule、五
 Pass、Render Ready Receipt、原子 Bundle、版本化 Profile、Canonical Report、
-`verify capture|explain` 和正负向门禁。Placement/Physics/Composition 等统一
-Validation 扩展、完整 WorldPackage、通用 Terrain/Route、恢复续拍和视频模型
-Adapter 仍在后续 Backlog 中。
+`verify capture|explain` 和正负向门禁。Route Task 8 还实现了正式的最小
+WorldPackage Root/Build Receipt、Validation Subject、Recast Graph/Path、真实
+Babylon/Havok `NullEngine` 固定 Tick Probe、Canonical Route Evidence/Report、
+`worldkit verify route` 和只读 Browser Protocol V4；Task 8 最终门禁已关闭。
+Placement/Physics/Composition 等其余统一 Validation 扩展、完整 P1.4
+WorldPackage 发布格式、R1b、恢复续拍和视频模型 Adapter 仍在后续
+Backlog 中。
 
 ## 职责边界
 
@@ -198,14 +207,14 @@ Socket 和类型化关系表达。
 
 | 领域 | 当前已交付 | 尚未交付 |
 |---|---|---|
-| 世界输入 | Canonical Authoring V3、严格 Schema、Registry/Package Definition、八种 Placement Constraint 与确定性 Solver S1 | 通用 Terrain Mask、Route Graph、主体 Profile 驱动的真实通行 Gate、更多 Constraint、完整 WorldPackage |
+| 世界输入 | 基础世界使用 Canonical Authoring V3；Route 世界使用 V4 → IR V4 → ExecutionPlan V5；严格 Schema、Registry/Package Definition、八种 Placement Constraint 与确定性 Solver S1 | 通用 Terrain Mask、更多 Constraint、完整 P1.4 WorldPackage 发布格式 |
 | 地形 | 室外 Heightfield、基础 Relief、静态障碍、水域和物理查询 | Canonical Raster/Mask/Region Pipeline；已设计但未实现的 Hybrid Terrain、洞穴、Overhang、多层可行走表面和完整室内 |
 | 主体 | Primitive 人形/四足代理；Golden 与首个产品 G Bot 的 GLB、Rig/Animation/Collider Profile、多实例与独立控制 | 更多产品资产、Compound Collider、LOD、更多拓扑和独立动画资产 |
 | 关系 | Socket 数据可以声明和查询 | 动态 Bind、骑乘、装备、拖拽、Joint、事务与回滚 |
-| 运动与相机 | 地面移动、跳跃、水域状态、第三人称跟随 | 第一人称、飞行、车辆、Camera Director 和多 Rig 切换 |
-| 自动化 | validate/build/run/capture、Registry Discovery、Definition Validate、Subject Explain、Browser V3、Take Driver 与 Control Capture Gate | 持久 Runtime Session、恢复续拍、多人同时控制 |
+| 运动与相机 | 地面移动、跳跃、第三人称跟随；WaterBody 可查询/可渲染，主体介质只发布 `ground / air` | 游泳与 `movementMedium: water`、第一人称、飞行、车辆、Camera Director 和多 Rig 切换 |
+| 自动化 | validate/build/run/capture、Registry Discovery、Definition Validate、Subject Explain、`verify route`、Browser Protocol V4、Take Driver 与 Control Capture Gate | 持久 Runtime Session、恢复续拍、多人同时控制 |
 | Capture | 单帧截图、Runtime Snapshot、Simulation Take V1、Neutral/Depth/Semantic/Instance/Normal 五 Pass、原子 Bundle | Event/Action/Relationship Receipt、Motion Vector、完整 Replay/Resume 与视频 Adapter |
-| Validation | Canonical Browser Gate、现有物理/构图检查；Capture/Integrity V1 的版本化 Profile、严格 Report、Blocking Policy、Evidence/Diagnostic、verify/explain | Placement/Physics/Route/Composition/Replay/Performance 接入统一 Report、Profile 组合、compare、Browser/CI Evidence 发布与完整生产 Policy |
+| Validation | Canonical Browser Gate、现有物理/构图检查；Capture/Integrity V1；Route 双 Blocking Gate、R1 Heightfield Golden Fixture、Canonical Evidence/Report 与可信 Host 只读投影 | Placement/Physics/Composition/Replay/Performance 接入统一 Report、Route R1b、Profile 组合、compare 与完整生产 Policy |
 | Gameplay | 基础固定输入、控制绑定与 Golden/G Bot `idle/walk/run/jump` 动作状态 | 完整 Semantic Action、姿态、游泳、装备、NPC、导航、任务、战斗、联网 |
 | 最终视觉 | 本地白模渲染 | Render Bridge、实时世界模型和生产 Video Model Adapter |
 
@@ -235,6 +244,29 @@ pnpm worldkit subject explain \
 
 ```bash
 pnpm worldkit run examples/authoring/package-subject-world.json
+```
+
+验证一个 Canonical Authoring V4 Route 世界，并原子发布 Canonical Report 与兄弟
+Evidence 目录：
+
+```bash
+pnpm worldkit verify route <world-v4.json> \
+  --profile worldkit://validation-profile/outdoor-world-package-dev@1 \
+  --output /tmp/route.validation-report.json --json
+```
+
+该命令的可信 Node 链路依次创建 WorldPackage Build Receipt、Validation Subject、
+Recast Graph/Path、真实 Babylon/Havok `NullEngine` 固定 Tick Probe 和统一 Route
+Report。成功、确定性不可达与证据不完整分别退出 `0 / 2 / 3`，基础设施失败退出
+`1`；已存在的 Report 或 Evidence 路径不会被覆盖。`worldkit run <world-v4.json>`
+复用同一可信链路，再通过 Host 私有临时文件和只读端点把已完成证据注入页面；页面
+自身不构图、不运行 Probe、也不生产证据。R1 Heightfield Golden 示例：
+
+```bash
+pnpm worldkit verify route examples/traversal/r1-heightfield/success.json \
+  --profile worldkit://validation-profile/outdoor-world-package-dev@1 \
+  --output /tmp/route-r1-success.validation-report.json --json
+pnpm verify:route-r1-heightfield
 ```
 
 本地体验产品 G Bot 时使用固定入口；它会同时注入 AuthoringSpec 并打开
@@ -283,7 +315,8 @@ pnpm worldkit verify explain /tmp/coastal-walk-opening.validation-report.json \
 `take run` 由 Node/Playwright 驱动固定 Tick Runtime，并在精确 Capture Schedule 上等待
 Render Ready Receipt；页面不获得文件系统权限。输出目录已存在时命令会拒绝覆盖。
 
-Canonical Authoring V3 是唯一输入；未发布的旧版本已经删除，也不存在兼容字段。
+Canonical Authoring V3 是基础世界的当前输入；声明 Route Connectivity 的世界使用
+干净升级后的 V4。V3 不会被当成 Route 输入，未发布的更旧版本也没有兼容字段。
 
 让 SDK 根据空间意图求解海湾场景，而不是由 Agent 为地标填写最终坐标：
 
@@ -395,15 +428,17 @@ Validation 词汇。它不构建 Traversal Graph，不跑 Character Controller�
 | 路径 | 职责 |
 |---|---|
 | `packages/protocol/` | Canonical JSON Bytes 与 Hash |
+| `packages/world-package/` | 最小正式 WorldPackage Manifest、Package Root 与 Build Receipt 权威 |
 | `packages/subject-composition/` | 引擎无关的 Primitive Bounds、Collider 推导和资源成本 |
 | `packages/subject-registry/` | 精确版本的 Definition、Capability 和 Profile Registry |
-| `packages/authoring/` | Authoring V3 Schema、V4 connectivity、解析、语义校验、资源解析、Solver 编排和 Normalized IR V3 |
+| `packages/authoring/` | Authoring V3 Schema、V4 connectivity、解析、语义校验、资源解析、Solver 编排和 Normalized IR V3/V4 |
 | `packages/layout-solver/` | 引擎无关的候选、八种 Constraint Evaluator、确定性搜索、冲突与 Report |
 | `packages/compiler/` | NormalizedWorldIR → ExecutionPlan 的确定性编译 |
 | `packages/control-capture/` | 引擎无关的 Simulation Take、Schedule、Profile、严格校验与 Hash |
 | `packages/validation/` | 引擎无关的 Validation Profile/Report/Gate/Metric/Evidence、严格解析、Policy 与 Hash |
-| `packages/traversal/` | 引擎无关的 Traversal Surface 身份、Lock、Driver/Graph Builder Profile 与 Graph 合同 |
-| `packages/runtime-contracts/` | ExecutionPlan、Snapshot 与 Browser Protocol 数据协议 |
+| `packages/traversal/` | 引擎无关的 Traversal Surface、Lock、Capability Envelope、Graph/Path/Probe Receipt 与 Route Overlay 合同 |
+| `packages/traversal-recast/` | Recast/Detour Provider Adapter；Provider 类型不进入 Canonical 协议 |
+| `packages/runtime-contracts/` | ExecutionPlan、Snapshot、Browser Protocol V4 与只读 Route Evidence 投影协议 |
 | `packages/runtime-babylon/` | Babylon/Havok Runtime Adapter |
 | `apps/playground/` | Canonical Runtime 页面、旧 Alpha 场景和浏览器验证入口 |
 | `scripts/worldkit.ts` | SDK CLI |
@@ -417,7 +452,7 @@ Compiler 和 Runtime 不能反向读取 Agent Prompt；Runtime Adapter 不能把
 ### 使用与当前状态
 
 - [项目总览：范围、状态与阅读顺序](docs/00-project-overview.md)
-- [Canonical JSON V3：AI/CLI 接入与运行指南](docs/17-canonical-json-quickstart.md)
+- [Canonical JSON V3/V4：AI/CLI 接入与运行指南](docs/17-canonical-json-quickstart.md)
 - [主体手感配表与版本工作区](docs/19-subject-preset-workspace.md)
 - [SDK 重构总进度与 Backlog](docs/18-refactor-progress-and-backlog.md)
 - [当前实验与验证记录](docs/10-current-experiments.md)
@@ -438,6 +473,7 @@ Compiler 和 Runtime 不能反向读取 Agent Prompt；Runtime Adapter 不能把
 - [Route Graph 与主体可通行性独立审查及处置](docs/reviews/2026-08-21-route-graph-traversability-independent-review.md)
 - [Route Graph / Traversability R0 实施计划](docs/superpowers/plans/2026-08-21-route-graph-traversability-r0-implementation-plan.md)
 - [Route Graph / Traversability R1 Heightfield 实施计划](docs/superpowers/plans/2026-08-22-route-graph-traversability-r1-heightfield-implementation-plan.md)
+- [Route R1 Heightfield Runtime Review](docs/reviews/2026-08-22-route-r1-heightfield-runtime-review.md)
 - [Simulation Take 与 Control Capture Bundle 设计](docs/superpowers/specs/2026-08-19-simulation-take-control-capture-design.md)
 - [World Validation Report 与质量门禁设计](docs/superpowers/specs/2026-08-19-world-validation-report-and-quality-gates-design.md)
 - [AI 自定义场景几何扩展候选方案（未来探索）](docs/superpowers/specs/2026-08-20-ai-authored-geometry-extension-design.md)
@@ -494,7 +530,8 @@ pnpm studio
 `pnpm dev` 只用于 Legacy/场景目录 Playground，不能为 `?authoring=1` 注入
 AuthoringSpec。Canonical G Bot 体验使用 `pnpm dev:g-bot`。这些 Legacy 入口不是新
 程序的 Canonical 协议真相，不再承接新的底层能力。新外部程序应
-使用 `worldkit`、Authoring V3 和 Browser Protocol V3。最终切换计划见
+使用 `worldkit`、基础世界 Authoring V3、Route 世界 Authoring V4 和 Browser
+Protocol V4。最终切换计划见
 [重构总进度与 Backlog](docs/18-refactor-progress-and-backlog.md#p32-默认实现切换)。
 
 仓库不分发来源尚未确认的 Xbot。以下 Mixamo 入口只属于 Legacy Three/Rapier

@@ -271,8 +271,14 @@ describe("subject resource registry", () => {
       },
     });
     expect(staticHumanoid).toMatchObject({
+      schemaVersion: 3,
       visualBinding: { mode: "static" },
       sockets: [expect.objectContaining({ kind: "local" })],
+      colliderPolicy: {
+        kind: "profile",
+        colliderProfileRef: COLLIDER_PROFILE_REF,
+      },
+      actionOrPoseSetRef: "worldkit://pose-set/static.whitebox@1",
     });
     expect(staticQuadruped).toMatchObject({
       visualBinding: { mode: "static" },

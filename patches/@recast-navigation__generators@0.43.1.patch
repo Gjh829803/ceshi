@@ -1,0 +1,535 @@
+diff --git a/dist/index.mjs b/dist/index.mjs
+index adc7270..0a1f73b 100644
+--- a/dist/index.mjs
++++ b/dist/index.mjs
+@@ -687,33 +687,74 @@ const tiledNavMeshGeneratorConfigDefaults = {
+   chunkyTriMeshTrisPerChunk: 256,
+   buildBvTree: true
+ };
+-const generateTileNavMeshData = (positions, indices, rcConfig, chunkyTriMesh, tile, options = {}, keepIntermediates = false, buildContext = new RecastBuildContext()) => {
++const validateSourceAreaMode = (positionsLength, indicesLength, getIndex, sourceAreaMode) => {
++  if (sourceAreaMode === undefined) return undefined;
++  if (sourceAreaMode === null || typeof sourceAreaMode !== 'object' || Array.isArray(sourceAreaMode)) {
++    throw new Error('RECAST_SOURCE_AREA_MODE_INVALID: sourceAreaMode must be an object');
++  }
++  const keys = Object.keys(sourceAreaMode).sort();
++  if (keys.length !== 3 || keys[0] !== 'blockerAreaId' || keys[1] !== 'kind' || keys[2] !== 'terrainVertexCount') {
++    throw new Error('RECAST_SOURCE_AREA_MODE_INVALID: sourceAreaMode fields must be closed');
++  }
++  if (sourceAreaMode.kind !== 'terrain-with-static-blockers-r1') {
++    throw new Error('RECAST_SOURCE_AREA_MODE_INVALID: sourceAreaMode kind is unsupported');
++  }
++  if (sourceAreaMode.blockerAreaId !== 1) {
++    throw new Error('RECAST_SOURCE_AREA_MODE_INVALID: blockerAreaId must equal 1');
++  }
++  if (!Number.isSafeInteger(positionsLength) || positionsLength % 3 !== 0 || !Number.isSafeInteger(indicesLength) || indicesLength % 3 !== 0) {
++    throw new Error('RECAST_SOURCE_AREA_MODE_INVALID: position and index counts must be safe triples');
++  }
++  const mergedVertexCount = positionsLength / 3;
++  if (!Number.isSafeInteger(sourceAreaMode.terrainVertexCount) || !(sourceAreaMode.terrainVertexCount > 0) || !(sourceAreaMode.terrainVertexCount < mergedVertexCount)) {
++    throw new Error('RECAST_SOURCE_AREA_MODE_INVALID: terrainVertexCount must be strictly inside merged vertices');
++  }
++  for (let offset = 0; offset < indicesLength; offset += 3) {
++    const first = getIndex(offset);
++    const second = getIndex(offset + 1);
++    const third = getIndex(offset + 2);
++    if (![first, second, third].every(index => Number.isSafeInteger(index) && index >= 0 && index < mergedVertexCount)) {
++      throw new Error('RECAST_SOURCE_AREA_MODE_INVALID: triangle index is out of range');
++    }
++    const firstIsTerrain = first < sourceAreaMode.terrainVertexCount;
++    if ((second < sourceAreaMode.terrainVertexCount) !== firstIsTerrain || (third < sourceAreaMode.terrainVertexCount) !== firstIsTerrain) {
++      throw new Error('RECAST_SOURCE_AREA_MODE_INVALID: triangle crosses the terrain vertex boundary');
++    }
++  }
++  return sourceAreaMode;
++};
++const releaseTileIntermediates = tileIntermediate => {
++  const errors = [];
++  const release = (key, free) => {
++    const resource = tileIntermediate[key];
++    if (!resource) return;
++    tileIntermediate[key] = undefined;
++    try {
++      free(resource);
++    } catch (error) {
++      errors.push(error);
++    }
++  };
++  release('polyMeshDetail', freePolyMeshDetail);
++  release('polyMesh', freePolyMesh);
++  release('contourSet', freeContourSet);
++  release('compactHeightfield', freeCompactHeightfield);
++  release('heightfield', freeHeightfield);
++  if (errors.length > 0) {
++    throw new AggregateError(errors, 'RECAST_TILE_INTERMEDIATE_RESOURCE_CLEANUP_FAILED');
++  }
++};
++const generateTileNavMeshData = (positions, indices, rcConfig, chunkyTriMesh, tile, options = {}, keepIntermediates = false, buildContext) => {
++  const sourceAreaMode = validateSourceAreaMode(positions.size, indices.size, index => indices.get(index), options.sourceAreaMode);
++  const ownsBuildContext = buildContext === undefined;
++  if (buildContext === undefined) buildContext = new RecastBuildContext();
+   const tileIntermediate = {
+     x: tile.x,
+     y: tile.y
+   };
+-  const cleanup = () => {
+-    if (keepIntermediates) return;
+-    if (tileIntermediate.compactHeightfield) {
+-      freeCompactHeightfield(tileIntermediate.compactHeightfield);
+-      tileIntermediate.compactHeightfield = undefined;
+-    }
+-    if (tileIntermediate.heightfield) {
+-      freeHeightfield(tileIntermediate.heightfield);
+-      tileIntermediate.heightfield = undefined;
+-    }
+-    if (tileIntermediate.contourSet) {
+-      freeContourSet(tileIntermediate.contourSet);
+-      tileIntermediate.contourSet = undefined;
+-    }
+-    if (tileIntermediate.polyMesh) {
+-      freePolyMesh(tileIntermediate.polyMesh);
+-      tileIntermediate.polyMesh = undefined;
+-    }
+-    if (tileIntermediate.polyMeshDetail) {
+-      freePolyMeshDetail(tileIntermediate.polyMeshDetail);
+-      tileIntermediate.polyMeshDetail = undefined;
+-    }
++  const cleanup = (force = false) => {
++    if (keepIntermediates && !force) return;
++    releaseTileIntermediates(tileIntermediate);
+   };
+   const failTileMesh = error => {
+     buildContext.log(Recast.RC_LOG_ERROR, error);
+@@ -724,7 +765,15 @@ const generateTileNavMeshData = (positions, indices, rcConfig, chunkyTriMesh, ti
+       intermediates: tileIntermediate
+     };
+   };
+-  const tileConfig = cloneRcConfig(rcConfig);
++  let tileConfig;
++  let triAreas;
++  let chunkIdsArray;
++  let navMeshCreateParams;
++  let pendingNavMeshData;
++  let isReturningNavMeshData = false;
++  let generationError;
++  try {
++  tileConfig = cloneRcConfig(rcConfig);
+   // Expand the heightfield bounding box by border size to find the extents of geometry we need to build this tile.
+   //
+   // This is done in order to make sure that the navmesh tiles connect correctly at the borders,
+@@ -774,13 +823,13 @@ const generateTileNavMeshData = (positions, indices, rcConfig, chunkyTriMesh, ti
+   // Allocate array that can hold triangle flags.
+   // If you have multiple meshes you need to process, allocate
+   // and array which can hold the max number of triangles you need to process.
+-  const triAreas = new TriangleAreasArray();
++  triAreas = new TriangleAreasArray();
+   triAreas.resize(chunkyTriMesh.maxTrisPerChunk());
+   const tbmin = [expandedTileBoundsMin[0], expandedTileBoundsMin[2]];
+   const tbmax = [expandedTileBoundsMax[0], expandedTileBoundsMax[2]];
+   // TODO: Make grow when returning too many items.
+   const maxChunkIds = 512;
+-  const chunkIdsArray = new ChunkIdsArray();
++  chunkIdsArray = new ChunkIdsArray();
+   chunkIdsArray.resize(maxChunkIds);
+   const nChunksOverlapping = chunkyTriMesh.getChunksOverlappingRect(tbmin, tbmax, chunkIdsArray, maxChunkIds);
+   if (nChunksOverlapping === 0) {
+@@ -793,15 +842,50 @@ const generateTileNavMeshData = (positions, indices, rcConfig, chunkyTriMesh, ti
+     const nodeId = chunkIdsArray.get(i);
+     const node = chunkyTriMesh.nodes(nodeId);
+     const nNodeTris = node.n;
+-    const nodeTrianglesArray = chunkyTriMesh.getNodeTris(nodeId);
+-    const triangleAreasArray = new TriangleAreasArray();
+-    triangleAreasArray.resize(nNodeTris);
+-    // Find triangles which are walkable based on their slope and rasterize them.
+-    // If your input data is multiple meshes, you can transform them here, calculate
+-    // the are type for each of the meshes and rasterize them.
+-    markWalkableTriangles(buildContext, tileConfig.walkableSlopeAngle, positions, indices.size, nodeTrianglesArray, nNodeTris, triangleAreasArray);
+-    const success = rasterizeTriangles(buildContext, positions, indices.size, nodeTrianglesArray, triangleAreasArray, nNodeTris, heightfield, tileConfig.walkableClimb);
+-    triangleAreasArray.destroy();
++    let nodeTrianglesArray;
++    let triangleAreasArray;
++    let success;
++    let chunkError;
++    try {
++      nodeTrianglesArray = chunkyTriMesh.getNodeTris(nodeId);
++      triangleAreasArray = new TriangleAreasArray();
++      triangleAreasArray.resize(nNodeTris);
++      // Find triangles which are walkable based on their slope and rasterize them.
++      // If your input data is multiple meshes, you can transform them here, calculate
++      // the are type for each of the meshes and rasterize them.
++      markWalkableTriangles(buildContext, tileConfig.walkableSlopeAngle, positions, indices.size, nodeTrianglesArray, nNodeTris, triangleAreasArray);
++      if (sourceAreaMode !== undefined) {
++        for (let triangleIndex = 0; triangleIndex < nNodeTris; triangleIndex++) {
++          const firstVertexIndex = nodeTrianglesArray.get(triangleIndex * 3);
++          const secondVertexIndex = nodeTrianglesArray.get(triangleIndex * 3 + 1);
++          const thirdVertexIndex = nodeTrianglesArray.get(triangleIndex * 3 + 2);
++          const firstIsTerrain = firstVertexIndex < sourceAreaMode.terrainVertexCount;
++          if ((secondVertexIndex < sourceAreaMode.terrainVertexCount) !== firstIsTerrain || (thirdVertexIndex < sourceAreaMode.terrainVertexCount) !== firstIsTerrain) {
++            throw new Error('RECAST_SOURCE_AREA_MODE_INVALID: local triangle crosses the terrain vertex boundary');
++          }
++          if (!firstIsTerrain) triangleAreasArray.set(triangleIndex, sourceAreaMode.blockerAreaId);
++        }
++      }
++      success = rasterizeTriangles(buildContext, positions, indices.size, nodeTrianglesArray, triangleAreasArray, nNodeTris, heightfield, tileConfig.walkableClimb);
++    } catch (error) {
++      chunkError = error;
++      throw error;
++    } finally {
++      const cleanupErrors = [];
++      try {
++        triangleAreasArray?.destroy();
++      } catch (error) {
++        cleanupErrors.push(error);
++      }
++      try {
++        nodeTrianglesArray?.destroy();
++      } catch (error) {
++        cleanupErrors.push(error);
++      }
++      if (cleanupErrors.length > 0) {
++        throw new AggregateError(chunkError ? [chunkError, ...cleanupErrors] : cleanupErrors, `RECAST_CHUNK_RESOURCE_CLEANUP_FAILED${chunkError instanceof Error ? `: ${chunkError.message}` : ''}`);
++      }
++    }
+     if (!success) {
+       return failTileMesh('Could not rasterize triangles');
+     }
+@@ -820,6 +904,13 @@ const generateTileNavMeshData = (positions, indices, rcConfig, chunkyTriMesh, ti
+   if (!buildCompactHeightfield(buildContext, tileConfig.walkableHeight, tileConfig.walkableClimb, heightfield, compactHeightfield)) {
+     return failTileMesh('Could not build compact heightfield');
+   }
++  if (sourceAreaMode !== undefined) {
++    for (let spanIndex = 0; spanIndex < compactHeightfield.spanCount(); spanIndex++) {
++      if (compactHeightfield.areas(spanIndex) === sourceAreaMode.blockerAreaId) {
++        compactHeightfield.raw.set_areas(spanIndex, Recast.RC_NULL_AREA);
++      }
++    }
++  }
+   if (!keepIntermediates) {
+     freeHeightfield(tileIntermediate.heightfield);
+     tileIntermediate.heightfield = undefined;
+@@ -877,7 +968,7 @@ const generateTileNavMeshData = (positions, indices, rcConfig, chunkyTriMesh, ti
+       polyMesh.setFlags(i, 1);
+     }
+   }
+-  const navMeshCreateParams = new NavMeshCreateParams();
++  navMeshCreateParams = new NavMeshCreateParams();
+   navMeshCreateParams.setPolyMeshCreateParams(polyMesh);
+   navMeshCreateParams.setPolyMeshDetailCreateParams(polyMeshDetail);
+   navMeshCreateParams.setWalkableHeight(tileConfig.walkableHeight * tileConfig.ch);
+@@ -895,12 +986,54 @@ const generateTileNavMeshData = (positions, indices, rcConfig, chunkyTriMesh, ti
+   if (!createNavMeshDataResult.success) {
+     return failTileMesh('Failed to create Detour navmesh data');
+   }
++  pendingNavMeshData = createNavMeshDataResult.navMeshData;
+   buildContext.log(Recast.RC_LOG_PROGRESS, `>> Polymesh: ${polyMesh.nverts()} vertices  ${polyMesh.npolys()} polygons`);
++  const navMeshData = pendingNavMeshData;
++  isReturningNavMeshData = true;
+   return {
+     success: true,
+-    data: createNavMeshDataResult.navMeshData,
++    data: navMeshData,
+     intermediates: tileIntermediate
+   };
++  } catch (error) {
++    const cleanupErrors = [];
++    const navMeshData = pendingNavMeshData;
++    pendingNavMeshData = undefined;
++    try {
++      navMeshData?.destroy();
++    } catch (cleanupError) {
++      cleanupErrors.push(cleanupError);
++    }
++    try {
++      cleanup(true);
++    } catch (cleanupError) {
++      cleanupErrors.push(cleanupError);
++    }
++    generationError = cleanupErrors.length > 0 ? new AggregateError([error, ...cleanupErrors], `RECAST_TILE_GENERATION_UNWIND_FAILED: ${error instanceof Error ? error.message : String(error)}`) : error;
++    throw generationError;
++  } finally {
++    const cleanupErrors = [];
++    const release = cleanup => {
++      try {
++        cleanup();
++      } catch (error) {
++        cleanupErrors.push(error);
++      }
++    };
++    if (navMeshCreateParams) release(() => Raw.destroy(navMeshCreateParams.raw));
++    if (chunkIdsArray) release(() => chunkIdsArray.destroy());
++    if (triAreas) release(() => triAreas.destroy());
++    if (tileConfig) release(() => Raw.destroy(tileConfig));
++    if (ownsBuildContext) release(() => buildContext.destroy());
++    if (cleanupErrors.length > 0) {
++      const navMeshData = pendingNavMeshData;
++      pendingNavMeshData = undefined;
++      if (navMeshData) release(() => navMeshData.destroy());
++      release(() => cleanup(true));
++      throw new AggregateError(generationError ? [generationError, ...cleanupErrors] : cleanupErrors, `RECAST_TILE_LOCAL_RESOURCE_CLEANUP_FAILED${generationError instanceof Error ? `: ${generationError.message}` : ''}`);
++    }
++    if (isReturningNavMeshData) pendingNavMeshData = undefined;
++  }
+ };
+ /**
+  * Builds a Tiled NavMesh
+@@ -913,33 +1046,66 @@ const generateTiledNavMesh = (positions, indices, navMeshGeneratorConfig = {}, k
+   if (!Raw.Module) {
+     throw new Error('"init" must be called before using any recast-navigation-js APIs. See: https://github.com/isaac-mason/recast-navigation-js?tab=readme-ov-file#initialization');
+   }
+-  const buildContext = new RecastBuildContext();
++  const sourceAreaMode = validateSourceAreaMode(positions.length, indices.length, index => indices[index], navMeshGeneratorConfig.sourceAreaMode);
++  let buildContext;
+   const intermediates = {
+     type: 'tiled',
+-    buildContext,
++    buildContext: undefined,
+     chunkyTriMesh: undefined,
+     tileIntermediates: []
+   };
+-  const navMesh = new NavMesh();
++  let navMesh;
++  let navMeshIsOwned = false;
++  let buildContextIsOwned = false;
++  let rcConfig;
++  let inputResourcesAreReleased = false;
+   /* input geometry */
+-  const vertices = positions;
+-  const verticesArray = new VerticesArray();
+-  verticesArray.copy(vertices);
+-  const triangles = indices;
++  let verticesArray;
+   const numTriangles = indices.length / 3;
+-  const trianglesArray = new TrianglesArray();
+-  trianglesArray.copy(triangles);
+-  const cleanup = () => {
+-    verticesArray.destroy();
+-    trianglesArray.destroy();
+-    if (keepIntermediates) return;
++  let trianglesArray;
++  const collectCleanupError = (errors, cleanup) => {
++    try {
++      cleanup();
++    } catch (error) {
++      errors.push(error);
++    }
++  };
++  const releaseInputResources = errors => {
++    if (inputResourcesAreReleased) return;
++    inputResourcesAreReleased = true;
++    if (rcConfig) collectCleanupError(errors, () => Raw.destroy(rcConfig));
++    if (trianglesArray) collectCleanupError(errors, () => trianglesArray.destroy());
++    if (verticesArray) collectCleanupError(errors, () => verticesArray.destroy());
++  };
++  const releaseChunkyTriMesh = errors => {
+     if (intermediates.chunkyTriMesh) {
++      const chunkyTriMesh = intermediates.chunkyTriMesh;
+       intermediates.chunkyTriMesh = undefined;
++      collectCleanupError(errors, () => Raw.destroy(chunkyTriMesh.raw));
++    }
++  };
++  const releaseTileResources = errors => {
++    for (let index = intermediates.tileIntermediates.length - 1; index >= 0; index--) {
++      collectCleanupError(errors, () => releaseTileIntermediates(intermediates.tileIntermediates[index]));
+     }
+   };
++  const throwCleanupErrors = (errors, message) => {
++    if (errors.length > 0) throw new AggregateError(errors, message);
++  };
++  const cleanupUnretainedIntermediates = () => {
++    if (keepIntermediates) return;
++    const errors = [];
++    releaseTileResources(errors);
++    releaseChunkyTriMesh(errors);
++    throwCleanupErrors(errors, 'RECAST_GENERATOR_RESOURCE_CLEANUP_FAILED');
++  };
+   const fail = error => {
+-    cleanup();
+-    navMesh.destroy();
++    const errors = [];
++    cleanupUnretainedIntermediates();
++    navMeshIsOwned = false;
++    collectCleanupError(errors, () => navMesh.destroy());
++    releaseInputResources(errors);
++    throwCleanupErrors(errors, 'RECAST_GENERATOR_FAILURE_RESOURCE_CLEANUP_FAILED');
+     return {
+       success: false,
+       navMesh: undefined,
+@@ -954,6 +1120,16 @@ const generateTiledNavMesh = (positions, indices, navMeshGeneratorConfig = {}, k
+     ...tiledNavMeshGeneratorConfigDefaults,
+     ...navMeshGeneratorConfig
+   };
++  try {
++  buildContext = new RecastBuildContext();
++  buildContextIsOwned = true;
++  intermediates.buildContext = buildContext;
++  navMesh = new NavMesh();
++  navMeshIsOwned = true;
++  verticesArray = new VerticesArray();
++  verticesArray.copy(positions);
++  trianglesArray = new TrianglesArray();
++  trianglesArray.copy(indices);
+   let bbMin;
+   let bbMax;
+   if (navMeshGeneratorConfig.bounds) {
+@@ -964,26 +1140,44 @@ const generateTiledNavMesh = (positions, indices, navMeshGeneratorConfig = {}, k
+     bbMin = boundingBox.bbMin;
+     bbMax = boundingBox.bbMax;
+   }
++  const tiledConfig = buildTiledNavMeshRcConfig({
++    recastConfig: generatorConfig,
++    navMeshBounds: [bbMin, bbMax]
++  });
++  rcConfig = tiledConfig.config;
+   const {
+-    config: rcConfig,
+     tileWidth,
+     tileHeight,
+     tcs,
+     orig,
+     maxTiles,
+     maxPolysPerTile
+-  } = buildTiledNavMeshRcConfig({
+-    recastConfig: generatorConfig,
+-    navMeshBounds: [bbMin, bbMax]
+-  });
+-  const navMeshParams = NavMeshParams.create({
+-    orig,
+-    tileWidth: generatorConfig.tileSize * generatorConfig.cs,
+-    tileHeight: generatorConfig.tileSize * generatorConfig.cs,
+-    maxTiles,
+-    maxPolys: maxPolysPerTile
+-  });
+-  if (!navMesh.initTiled(navMeshParams)) {
++  } = tiledConfig;
++  let navMeshParams;
++  let navMeshInitialized;
++  let navMeshInitializationError;
++  try {
++    navMeshParams = NavMeshParams.create({
++      orig,
++      tileWidth: generatorConfig.tileSize * generatorConfig.cs,
++      tileHeight: generatorConfig.tileSize * generatorConfig.cs,
++      maxTiles,
++      maxPolys: maxPolysPerTile
++    });
++    navMeshInitialized = navMesh.initTiled(navMeshParams);
++  } catch (error) {
++    navMeshInitializationError = error;
++    throw error;
++  } finally {
++    if (navMeshParams) {
++      try {
++        Raw.destroy(navMeshParams.raw);
++      } catch (error) {
++        throw new AggregateError(navMeshInitializationError ? [navMeshInitializationError, error] : [error], `RECAST_NAV_MESH_PARAMS_RESOURCE_CLEANUP_FAILED${navMeshInitializationError instanceof Error ? `: ${navMeshInitializationError.message}` : ''}`);
++      }
++    }
++  }
++  if (!navMeshInitialized) {
+     return fail('Could not init nav mesh for tiled use');
+   }
+   /* create chunky tri mesh */
+@@ -1011,27 +1205,66 @@ const generateTiledNavMesh = (positions, indices, navMeshGeneratorConfig = {}, k
+       };
+       const generatorOptions = {
+         offMeshConnections: generatorConfig.offMeshConnections,
+-        buildBvTree: generatorConfig.buildBvTree
++        buildBvTree: generatorConfig.buildBvTree,
++        sourceAreaMode
+       };
+       const result = generateTileNavMeshData(verticesArray, trianglesArray, rcConfig, chunkyTriMesh, tile, generatorOptions, keepIntermediates, buildContext);
+       intermediates.tileIntermediates.push(result.intermediates);
+       if (result.success && result.data) {
+-        navMesh.removeTile(navMesh.getTileRefAt(x, y, 0));
+-        const addTileResult = navMesh.addTile(result.data, Detour.DT_TILE_FREE_DATA, 0);
+-        if (statusFailed(addTileResult.status)) {
+-          buildContext.log(Recast.RC_LOG_WARNING, `Failed to add tile to nav mesh tx: ${x}, ty: ${y}, status: ${statusToReadableString(addTileResult.status)} (${addTileResult.status})`);
+-          result.data.destroy();
++        const navMeshData = result.data;
++        let removeTileResult;
++        let transferError;
++        try {
++          removeTileResult = navMesh.removeTile(navMesh.getTileRefAt(x, y, 0));
++          navMeshData.raw.isView = true;
++          const addTileResult = navMesh.addTile(navMeshData, Detour.DT_TILE_FREE_DATA, 0);
++          if (statusFailed(addTileResult.status)) {
++            navMeshData.raw.isView = false;
++            buildContext.log(Recast.RC_LOG_WARNING, `Failed to add tile to nav mesh tx: ${x}, ty: ${y}, status: ${statusToReadableString(addTileResult.status)} (${addTileResult.status})`);
++          }
++        } catch (error) {
++          transferError = error;
++          throw error;
++        } finally {
++          const transferCleanupErrors = [];
++          result.data = undefined;
++          collectCleanupError(transferCleanupErrors, () => navMeshData.destroy());
++          if (removeTileResult) collectCleanupError(transferCleanupErrors, () => Raw.destroy(removeTileResult.raw));
++          if (transferCleanupErrors.length > 0) {
++            throw new AggregateError(transferError ? [transferError, ...transferCleanupErrors] : transferCleanupErrors, `RECAST_TILE_TRANSFER_RESOURCE_CLEANUP_FAILED${transferError instanceof Error ? `: ${transferError.message}` : ''}`);
++          }
+         }
+       }
+     }
+   }
+   buildContext.stopTimer(Recast.RC_TIMER_TEMP);
+-  if (!keepIntermediates) {
+-    cleanup();
+-  }
++  cleanupUnretainedIntermediates();
++  const completionCleanupErrors = [];
++  releaseInputResources(completionCleanupErrors);
++  throwCleanupErrors(completionCleanupErrors, 'RECAST_GENERATOR_COMPLETION_RESOURCE_CLEANUP_FAILED');
++  navMeshIsOwned = false;
++  buildContextIsOwned = false;
+   return {
+     success: true,
+     navMesh,
+     intermediates
+   };
++  } catch (error) {
++    const cleanupErrors = [];
++    releaseTileResources(cleanupErrors);
++    releaseChunkyTriMesh(cleanupErrors);
++    if (navMeshIsOwned) {
++      navMeshIsOwned = false;
++      collectCleanupError(cleanupErrors, () => navMesh.destroy());
++    }
++    if (buildContextIsOwned) {
++      buildContextIsOwned = false;
++      collectCleanupError(cleanupErrors, () => buildContext.destroy());
++    }
++    releaseInputResources(cleanupErrors);
++    if (cleanupErrors.length > 0) {
++      throw new AggregateError([error, ...cleanupErrors], `RECAST_GENERATOR_UNWIND_FAILED: ${error instanceof Error ? error.message : String(error)}`);
++    }
++    throw error;
++  }
+ };
+diff --git a/dist/generators/generate-tiled-nav-mesh.d.ts b/dist/generators/generate-tiled-nav-mesh.d.ts
+index f6d291f..396af72 100644
+--- a/dist/generators/generate-tiled-nav-mesh.d.ts
++++ b/dist/generators/generate-tiled-nav-mesh.d.ts
+@@ -20,6 +20,11 @@ export declare const buildTiledNavMeshRcConfig: ({ recastConfig, navMeshBounds:
+     maxPolysPerTile: number;
+ };
+ export type TiledNavMeshGeneratorConfig = Pretty<RecastConfig & OffMeshConnectionGeneratorParams & {
++    readonly sourceAreaMode?: Readonly<{
++        kind: 'terrain-with-static-blockers-r1';
++        terrainVertexCount: number;
++        blockerAreaId: 1;
++    }>;
+     /**
+      * The minimum and maximum bounds of the heightfield's AABB in world units.
+      * If not provided, the bounding box will be calculated from the input positions and indices
+@@ -81,6 +86,11 @@ export declare const generateTileNavMeshData: (positions: FloatArray, indices: I
+ }, options?: {
+     offMeshConnections?: OffMeshConnectionParams[];
+     buildBvTree?: boolean;
++    readonly sourceAreaMode?: Readonly<{
++        kind: 'terrain-with-static-blockers-r1';
++        terrainVertexCount: number;
++        blockerAreaId: 1;
++    }>;
+ }, keepIntermediates?: boolean, buildContext?: RecastBuildContext) => GenerateTileNavMeshDataResult;
+ export type TiledNavMeshGeneratorIntermediates = {
+     type: 'tiled';

@@ -7,6 +7,7 @@ import type {
   ControlCaptureRequestV1,
   ControlBindingReceiptV2,
   ExecutionPlanV4,
+  ExecutionPlanV5,
   FixedInputV1,
   RenderReadyReceiptV1,
   RuntimeControlCaptureFrameV1,
@@ -28,6 +29,8 @@ import type {
   PlaygroundWorldAdapter,
   WorldSnapshot,
 } from "./playground-world";
+
+type PlaygroundExecutionPlanV1 = ExecutionPlanV4 | ExecutionPlanV5;
 
 const INPUT_ACTION_MAP: Readonly<Partial<Record<InputAction, SemanticInputActionV1>>> = {
   forward: "move-forward",
@@ -160,7 +163,7 @@ export function activeActionForControlledSubject(
   return controlledSubject.activeActionId;
 }
 
-export function featureInspections(plan: ExecutionPlanV4): readonly FeatureInspection[] {
+export function featureInspections(plan: PlaygroundExecutionPlanV1): readonly FeatureInspection[] {
   return [
     {
       id: plan.terrain.entityId,
@@ -267,7 +270,7 @@ export class BabylonWorldAdapter implements PlaygroundWorldAdapter {
   private lastCameraPointerPosition: readonly [number, number] = [0, 0];
 
   private constructor(
-    private readonly executionPlan: ExecutionPlanV4,
+    private readonly executionPlan: PlaygroundExecutionPlanV1,
     private readonly runtime: BabylonWorldRuntime,
     canvas: HTMLCanvasElement,
   ) {
@@ -289,7 +292,7 @@ export class BabylonWorldAdapter implements PlaygroundWorldAdapter {
   }
 
   static async create(
-    executionPlan: ExecutionPlanV4,
+    executionPlan: PlaygroundExecutionPlanV1,
     options: Pick<
       BabylonWorldRuntimeOptions,
       | "subjectAssetResolver"

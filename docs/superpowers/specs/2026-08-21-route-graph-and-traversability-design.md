@@ -2,12 +2,15 @@
 
 ## 1. 文档状态
 
-- 状态：**R0 Contract Frozen / R1 Runtime Pending（2026-08-21）**。
+- 状态：**R0 Contract Frozen / R1 Heightfield Implemented / R1b Pending（2026-08-23）**。
   Authoring V4、Traversal Lock/Graph 合同、Validation Profile V2 与
-  `pnpm verify:route-r0-contract` 已冻结协议层。这不表示 Graph Builder、Runtime Probe
-  或两条生产 Route Gate 已经通过。审查记录见
-  [作者审查](../../reviews/2026-08-21-route-graph-traversability-design-review.md)与
-  [独立审查及处置](../../reviews/2026-08-21-route-graph-traversability-independent-review.md)。
+  `pnpm verify:route-r0-contract` 已冻结协议层。R1 Heightfield 已通过
+  `pnpm verify:route-r1-heightfield`：Graph Builder、Runtime Probe 与两条生产 Route Gate
+  对 Heightfield 切片成立。这不表示 R1b 静态平台/多 Surface 或完整 M5 已经通过。
+  审查记录见
+  [作者审查](../../reviews/2026-08-21-route-graph-traversability-design-review.md)、
+  [独立审查及处置](../../reviews/2026-08-21-route-graph-traversability-independent-review.md)
+  与 [R1 Heightfield Runtime Review](../../reviews/2026-08-22-route-r1-heightfield-runtime-review.md)。
 - 所属里程碑：P0.1 / M5。
 - 当前问题：Canonical 世界可以通过 Schema、编译、渲染和局部碰撞检查，却仍可能出现
   出生点与目标之间没有人物可走通的连续路线。
@@ -129,9 +132,9 @@ Compatibility 需要证明二者兼容，不能按 Ref 字符串猜测；不兼�
 
 ### 5.2 Planner Route 到 Canonical Route 的唯一归一化
 
-当前 Agent 白模入口 `OutdoorWorldSpec.PlannedRoute` 仍使用 `points`、`width` 和
-`maxSlopeDegrees`，而 Canonical Route 使用 `pointsMetersXZ`、`widthMeters` 和
-`locomotionProfileRef`。R0 采用未发布私有 Schema 的 Clean Break，不保留两套永久方言：
+当前 Agent 白模入口 `OutdoorWorldSpec.PlannedRoute` 与 Canonical Route 已在 R0 统一使用
+`pointsMetersXZ`、`widthMeters` 和 `locomotionProfileRef`。R0 对未发布私有 Schema 采用
+Clean Break，没有保留 `points`、`width`、`maxSlopeDegrees` 的第二套永久方言：
 
 - Planner Route 改用 `pointsMetersXZ` 与 `widthMeters`；
 - 新增必填 `locomotionProfileRef`，其兼容性最终由 Traversing Subject Lock 证明；
@@ -189,8 +192,20 @@ Provider。
 
 `TraversalGraphV1` 是内容寻址的派生制品，至少绑定：
 
-- `authoringSpecHash`、`layoutSolveReportHash` 和 `resourceLockHash`；
+> 当前 V1 仍未外部发布。Task 3A 为补齐 `routeBuildInputHash` 执行过一次 Clean Break。Task 4
+> 对拍该 Golden 后又确认 `heightDeltaMeters` 已表示有符号节点高差，不能同时充当非负 Portal
+> 跨阶高度，因此 Task 4 主审拟定最后一次窄修正：新增 `stepHeightMeters` 并原子更新 R0
+> Golden 与 Hash；只有独立设计审查通过后才进入实现。该合同提交后，Tasks 4–10 不得再通过
+> 继续改 Golden 规避合同失败。
+
+- `authoringSpecHash`、`layoutSolveReportHash` 和 `resourceLockHash`。其中 R1 的
+  `authoringSpecHash` 来自包含排序后 Connectivity 约束的 V4 Canonical Authoring Identity，
+  不是 `normalizedWorldIrHash` 的别名，也不是不含 Connectivity 的 V3 Layout Solve Report
+  Authoring Identity；
 - Terrain/Collider/Surface Artifact Hash；
+- `routeBuildInputHash`，绑定选中的 Connectivity 行、显式 Anchor、`hard-ribbon`、裁剪后的
+  Heightfield 三角形、静态阻挡物、水域排除和 Capability Envelope；即使这些输入变化后恰好
+  得到相同 Node/Edge，也不能沿用旧 Graph Hash；
 - `resolvedTraversalLockHash`，其 Canonical Bytes 锁定 traversing Subject Definition、Collider、
   Physics Body、Locomotion Capability、Control Feel、Control、Motion/Kernel、Medium 与实际
   Runtime Backend/Adapter 版本；
@@ -204,7 +219,8 @@ Graph 节点至少保存稳定 `id`、`traversalSurfaceId`、`surfaceEntityId`�
 Subshape 是几何命中；不得把它们缩成同义的 `surfaceId`。Graph Edge 使用角色化
 `fromTraversalNodeId` 与
 `toTraversalNodeId`，并以关闭 `type` 表达 `walk`、`slope` 或 `step`。边保存米制距离、
-高度差、坡度、最小宽度/高度净空和确定性通行成本。
+有符号节点高度差、非负 Portal 跨阶高度、坡度、最小宽度/高度净空和确定性通行成本；
+`heightDeltaMeters` 与 `stepHeightMeters` 不得互相代用。
 
 Runtime Handle、Mesh 数组序号、Recast Poly Ref、Havok Shape 指针和加载顺序不能进入
 Canonical ID。内部 Provider ID 只能存在于可丢弃的 Adapter Audit 中。
@@ -212,13 +228,20 @@ Canonical ID。内部 Provider ID 只能存在于可丢弃的 Adapter Audit 中�
 `traversalGraphHash` 对完整 Canonical Graph Bytes 计算，由 Compiler/Artifact Index 返回并
 供 Validation Evidence 引用；Graph 正文不保存该 Hash，避免自引用。若图制品包含额外
 Overlay/Debug 文件，整个目录另算 `traversalArtifactRootHash`，不得与 Graph Hash 混用。
+Canonical Graph 输出按 Node/Edge ID 排序并深冻结；R1 的单 Heightfield Surface 一致性由
+携带 Build Input 的上下文校验器证明，通用 Graph 校验器不得为未来分层 Graph 伪造单 Surface
+根字段。
 
 ### 6.2 分层 3D 图
 
 Heightfield 可使用 Tile/Raster 邻接作为构建输入，但 Graph 节点保存 3D 世界位置与稳定
 `traversalSurfaceId`。Heightfield 的最小稳定身份必须从 Terrain Entity ID、稳定逻辑
 Collider Subshape ID 和锁定资源版本派生；Tile 拆分、LOD、数组顺序和 Runtime Handle
-不得改变该身份。静态平台来自显式 Traversal Surface，因此同一 XZ 可以同时存在：
+不得改变该身份。来源显式声明的逻辑 Subshape ID 必须原样保留；R1 的单 Primitive
+兼容投影使用保留逻辑 ID `primary`。`colliderSubshapeId` 使用带字段名的 Canonical JSON
+`{ entityId, logicalSubshapeId }` 的 SHA-256 并加 `collider-subshape:` 前缀，禁止依赖分隔符解析、
+数组序号或几何内容；几何变化由独立 Collider Hash 表达。静态平台来自显式 Traversal Surface，
+因此同一 XZ 可以同时存在：
 
 ```text
 bridge-deck surface  y = 8m
@@ -244,10 +267,21 @@ Graph Builder 使用主体半径侵蚀可走区域，使用主体高度排除低
 `physics-body-profile` 编译，Collider 尺寸只从锁定 Collider 编译；Motion、Feel、Medium、
 Driver 和 Adapter fallback 均不得覆盖。
 
-Graph Provider Adapter 必须把同一锁编译为 Provider-neutral `TraversalCapabilityEnvelope`，
-并针对锁定 Babylon 版本覆盖胶囊半径、步高与坡度接触的耦合语义。Provider 公式不进入
-AI-facing Schema；等价探针和 Backend/Adapter 版本进入 Evidence。Graph 是保守预测，真实
-Controller 仍是最终真相，但 Builder 不得明知使用与锁定 Controller 不等价的独立公式。
+Canonical Traversal Contract 必须从同一 `ResolvedTraversalLock` Receipt 与已解析的 Graph
+Builder Profile 派生唯一的 Provider-neutral `TraversalCapabilityEnvelope`，其中携带胶囊、
+步高、坡度、保守净空和锁定的 Backend/Adapter 实现身份；不得为了 Envelope 修改已经冻结的
+R0 Lock 形状。Graph Provider Adapter 只能把这个 Envelope 映射为 Provider 参数，不得再次读取
+Subject/Profile 或维护第二份能力参数；映射必须针对锁定 Babylon 版本覆盖胶囊半径、步高与
+坡度接触的耦合语义。Provider 公式不进入 AI-facing Schema；等价探针和 Backend/Adapter
+版本进入 Evidence。Graph 是保守预测，真实 Controller 仍是最终真相，但 Builder 不得明知
+使用与锁定 Controller 不等价的独立公式。
+
+R1 的 Envelope 工厂由 `@whitebox-world/traversal` 唯一拥有，只接受不可变的
+`ResolvedTraversalLockReceiptV1` 与 `ResolvedTraversalGraphBuilderProfileV2`。前者提供已锁定的
+主体几何、步高、坡度、能力/Profile 身份和 Runtime 实现身份，后者只提供保守净空与构建策略；
+两者不得互相复制字段。R1 在锁编译阶段已经闭合验证唯一 Ground Locomotion Capability，Envelope
+因此记录规范化的 `traversalMode: "ground"`，不得由 Adapter 再读 Subject、再查 Registry 或从
+Resource Ref 字符串猜语义。Recast Adapter 只消费该 Envelope，不拥有第二个编译入口。
 
 R1b 的成功/失败高度从 Fixture 锁中的 `maxStepHeightMeters` 推导。当前 `0.3m` 人形锁下
 保留 `0.25m` 成功和 `0.35m` 失败 Fixture；若未来 Profile 版本变化，Fixture 必须显式锁
@@ -267,6 +301,13 @@ R1 的 `routePathCost` 是无量纲、仅用于稳定排序的关闭公式结果
 步数等确定性语义预算时返回 `incomplete`，不能随机选择或假装不连通。Host 墙钟 Deadline
 只能取消执行并形成 Infrastructure `incomplete` Evidence，不能进入 Canonical Graph/Path
 选择、Hash 或把同一输入变成 `unreachable`。
+
+Graph Builder 在发布 Graph 之外保留一次操作内的 Provider-neutral Rejection Proof Graph，
+从同一 Heightfield Triangle、Collider Soup、Hard Ribbon、量化与 Lock 判断 slope、step、width、
+overhead、gap 候选拒绝。它不改变 Graph/Path 结论；仅当放宽一个且仅一个关闭原因就能恢复
+起终点连通时，Failure 才可发布对应的 `ROUTE_*_EXCEEDED/INSUFFICIENT` 专用码。混合原因、
+多个可恢复原因、证明预算耗尽或 Provider/Source 不一致必须退回
+`ROUTE_REQUIRED_PATH_UNREACHABLE`，Validation 禁止从通用失败反向猜专用码。
 
 ## 7. 从几何到 Graph 的工程链路
 
@@ -352,9 +393,16 @@ Blocking Gate，不创建 Route 专用报告格式，也不修改 Capture-only `
 - `routePathCost`；
 - `traversalGraphNodeCount`、`traversalGraphEdgeCount` 和 `traversalGraphHash`。
 
-已评（`passed` / `failed`）Metric 必须至少引用 `traversal-graph` 或 `route-path-receipt`。
-该类 Evidence 必须携带同一 `resolvedTraversalLockHash` 以及与 Registry 一致的 Graph
-Builder `resourceRef` / `resolvedVersion` / `contentHash`。步高、坡度、净空和缝隙阈值不写入
+`passed` Metric 必须至少引用 `traversal-graph` 或 `route-path-receipt`；`failed` Metric
+可以引用这些制品，也可以引用内容寻址的 `route-connectivity-failure`。后者用于空
+Heightfield、零可查询 Ground 或 Node/Edge 容量耗尽等故意不发布部分 Graph 的结果，携带
+`routeBuildInputHash`。这些 Evidence 都必须携带同一 `resolvedTraversalLockHash` 以及与 Registry
+一致的 Graph Builder `resourceRef` / `resolvedVersion` / `contentHash`，并通过版本分发解析器同时
+支持锁定 V1/V2 Profile，禁止把 Heightfield V2 误按 V1 拒绝。`incomplete` 导致的
+`not-evaluated` 应在存在确定性 Failure 时引用它；基础设施失败不能伪造 Canonical Failure。
+
+容量诊断使用 `capacity-exceeded`，分别保存 `maximumAllowedCount` 与已证明的
+`minimumRequiredCount`；不得把下界写成 `actualCount`。步高、坡度、净空和缝隙阈值不写入
 Validation Profile；观测 Metric 在评测时对照 Lock。Profile 只冻结到达容差、卡住窗口和
 最大 Probe Ticks。Canonical Graph 的 `distanceMeters >= 0`，节点/边净空 `> 0`，
 `slopeDegrees` 落在 `[0, 90]`。
@@ -366,7 +414,7 @@ Validation Profile；观测 Metric 在评测时对照 Lock。Profile 只冻结�
 - `completedRequiredRouteCount`；
 - `failedRequiredRouteCount`；
 - `maximumStalledDurationTicks`；
-- `maximumRouteDeviationMeters`；
+- `maximumRouteDeviationMetersXZ`（Metric id：`maximum-route-deviation-meters-xz`）；
 - `maximumConsecutiveUnexpectedUnsupportedTicks`；
 - `slidingDurationTicks`；
 - `unexpectedSupportLossCount`；
@@ -404,11 +452,16 @@ Graph 通过而 Runtime 失败时，以 Runtime Gate 失败为最终结论，同
 - `ROUTE_RUNTIME_STALLED`；
 - `ROUTE_RUNTIME_DEVIATED`；
 - `ROUTE_RUNTIME_SUPPORT_LOST`；
+- `ROUTE_WATER_TRAVERSAL_UNSUPPORTED`；
 - `ROUTE_GRAPH_BUDGET_EXCEEDED`。
 
 Diagnostic 必须包含 Route、Traversing Entity、起终点 Anchor、Surface/Collider、世界坐标、
 阈值、实测值、单位、Evidence Ref 和结构化修复方向。例如台阶失败建议降低台阶高度、
 增加中间踏步或改成满足坡度/净空的坡道，而不是笼统返回“走不过去”。
+Canonical Connectivity Failure 必须直接保存量化后的起终点世界坐标；若坡度、台阶、宽度、
+顶部净空或缝隙由唯一保守证据归因，还必须在销毁构建期证据前保存一个确定性的
+`failurePositionMetersXYZ`。Validation 只能复制这些 Canonical 坐标，不能回查 Runtime/
+Provider 或从 Entity Bounds 猜测位置。
 
 ## 10. M5 分阶段交付
 
@@ -477,6 +530,9 @@ Fixture 仍属于 P2.6 H1/M10，不由普通静态平台 Fixture 冒充完成。
 | 视觉相接、Collider 留缝 | `ROUTE_SURFACE_GAP_EXCEEDED` |
 | 踏面比胶囊安全宽度更窄 | `ROUTE_CLEARANCE_WIDTH_INSUFFICIENT` |
 | 平台上方有低顶 | `ROUTE_OVERHEAD_CLEARANCE_INSUFFICIENT` |
+| Water 完全切断 Heightfield `hard-ribbon` | `ROUTE_REQUIRED_PATH_UNREACHABLE`，Diagnostic Evidence 指明 Water Entity |
+| Ground-only R1 Route 与 `swimmable` Water 体积相交 | `ROUTE_WATER_TRAVERSAL_UNSUPPORTED`；禁止把 Water Level 当地面或静默伪装成普通 Surface Gap |
+| 非 Water 沟槽/排除带使两段可走 Heightfield 区域的间隔超过锁定阈值 | `ROUTE_SURFACE_GAP_EXCEEDED` |
 | 同 XZ 的桥面和桥下地面 | Graph 合同可表达两层 Node；完整 Runtime Gate 由 P2.6 H1/M10 验收 |
 | 未声明 Traversal Surface 的装饰 Mesh | 不进入 Graph |
 | Graph 通过、Controller 在 Collider 接缝卡住 | Runtime Conformance 失败 |
@@ -502,9 +558,13 @@ worldkit verify explain <validation-report.json> --gate-id route-connectivity
 worldkit verify explain <validation-report.json> --gate-id route-runtime-conformance
 ```
 
-Browser Protocol 只读暴露 Route Summary、Path Evidence、Surface/Collider Overlay 和 Runtime
-Probe Receipt，不暴露任意 NavMesh Builder 执行、Babylon Scene、Havok Handle 或 Provider
-内部 ID。CLI JSON、Browser Protocol、Canonical Schema 和生成类型使用同一公开字段名。
+Browser Protocol V4 在保留 V3 全部 Control/Capture/Pause/Reset/Capability Discovery 行为的基础上，
+只读增加 Route Summary、Path Evidence、Surface/Collider Overlay 和 Runtime Probe Receipt；它不是
+getter-only 的替代接口。由于该协议尚未对外发布，本次允许原子化 clean break：全局版本、Host、
+CLI/Playwright 消费方、Canonical Gate、文档、示例和生成类型一次升级到 V4，且不在
+`window.__WORLDKIT__` 并存 V3 alias。V4 不暴露任意 NavMesh Builder 执行、Babylon Scene、Havok
+Handle 或 Provider 内部 ID。CLI JSON、Browser Protocol、Canonical Schema 和生成类型使用同一
+公开字段名；合同测试必须证明 V3 的方法集合和行为没有在版本升级中丢失。
 
 Agent 修复循环固定为：
 

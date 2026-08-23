@@ -1,3 +1,7 @@
 packages:
   - "packages/*"
   - "apps/*"
+
+patchedDependencies:
+  '@recast-navigation/core@0.43.1': patches/@recast-navigation__core@0.43.1.patch
+  '@recast-navigation/generators@0.43.1': patches/@recast-navigation__generators@0.43.1.patch

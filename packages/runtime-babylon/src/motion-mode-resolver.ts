@@ -81,6 +81,10 @@ export class MotionModeResolverV1 {
     return this.active;
   }
 
+  get requestedProfileRef(): string {
+    return this.pendingProfileRef ?? this.active.resourceRef;
+  }
+
   snapshot(): MotionModeSnapshotV1 {
     return {
       activeProfile: this.active,

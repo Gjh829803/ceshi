@@ -1,3 +1,5 @@
+import { readFile } from "node:fs/promises";
+import path from "node:path";
 import { fileURLToPath } from "node:url";
 
 import { describe, expect, it } from "vitest";
@@ -9,6 +11,17 @@ const repositoryRoot = fileURLToPath(new URL("..", import.meta.url));
 describe("route R0 contract verifier", () => {
   it("validates frozen contracts without claiming runtime gates", async () => {
     const result = await runRouteR0ContractVerification({ repositoryRoot });
+    const frozenContract = JSON.parse(await readFile(path.join(
+      repositoryRoot,
+      "examples/traversal/route-r0-contract.json",
+    ), "utf8")) as {
+      readonly lock: { readonly resourceLockHash: string };
+      readonly graph: {
+        readonly resourceLockHash: string;
+        readonly resolvedTraversalLockHash: string;
+      };
+      readonly traversalGraphHash: string;
+    };
     expect(result).toEqual({
       ok: true,
       checks: [
@@ -22,5 +35,17 @@ describe("route R0 contract verifier", () => {
         "lock-mismatch-diagnostic",
       ],
     });
+    expect(frozenContract.lock.resourceLockHash).toBe(
+      frozenContract.graph.resourceLockHash,
+    );
+    expect(frozenContract.graph).toMatchObject({
+      resourceLockHash:
+        "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      resolvedTraversalLockHash:
+        "sha256:8bb93add235d04fa2e2c31b25c42456da450a09f3c2b09e0dffb90a69dc98d5f",
+    });
+    expect(frozenContract.traversalGraphHash).toBe(
+      "sha256:d3d60291bfa87f6fc461409d34450d61e761c08b91900e313ceb3b43d34734f5",
+    );
   });
 });

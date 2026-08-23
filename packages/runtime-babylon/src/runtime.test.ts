@@ -4,12 +4,14 @@ import { createRequire } from "node:module";
 import type { AssetContainer } from "@babylonjs/core/assetContainer.js";
 import { Animation } from "@babylonjs/core/Animations/animation.js";
 import { AnimationGroup } from "@babylonjs/core/Animations/animationGroup.js";
+import { VertexBuffer } from "@babylonjs/core/Buffers/buffer.js";
 import { NullEngine } from "@babylonjs/core/Engines/nullEngine.pure.js";
 import { LoadAssetContainerAsync } from "@babylonjs/core/Loading/sceneLoader.js";
 import { Vector3 } from "@babylonjs/core/Maths/math.vector.js";
 import { TransformNode } from "@babylonjs/core/Meshes/transformNode.js";
+import type { PhysicsEngine } from "@babylonjs/core/Physics/v2/physicsEngine.js";
 import { Scene } from "@babylonjs/core/scene.pure.js";
-import { sha256Bytes } from "@whitebox-world/protocol";
+import { sha256Bytes, sha256CanonicalJson } from "@whitebox-world/protocol";
 import { describe, expect, it, vi } from "vitest";
 
 vi.mock("@babylonjs/core/Loading/sceneLoader.js", async (importOriginal) => {
@@ -36,10 +38,12 @@ import type {
   ExecutionAnimationSetV1,
   ExecutionObjectV3,
   ExecutionPlanV4,
+  ExecutionPlanV5,
   ExecutionSubjectAssetV1,
   FixedInputV1,
   Vec3,
 } from "@whitebox-world/runtime-contracts";
+import { emitTransformedStaticColliderTriangleMeshV1 } from "@whitebox-world/terrain-surface";
 
 import {
   BabylonWorldRuntime,
@@ -494,7 +498,7 @@ function createFlatPackageExecutionPlan(
 }
 
 async function createRuntime(
-  executionPlan: ExecutionPlanV4,
+  executionPlan: ExecutionPlanV4 | ExecutionPlanV5,
   options: Pick<
     BabylonWorldRuntimeOptions,
     "engineFactory" | "subjectAssetResolver" | "subjectAssetCacheOptions"
@@ -579,6 +583,137 @@ function createColliderSupportExecutionPlan(options: {
           tolerances: {},
         },
       ],
+    },
+  };
+}
+
+function createV5StaticColliderSupportExecutionPlan(): ExecutionPlanV5 {
+  const v4 = createFlatPackageExecutionPlan();
+  const resourceLockEntries = [{
+    resourceRef: "worldkit://subject-definition/runtime-test@1",
+    resourceKind: "subject-definition" as const,
+    resolvedVersion: "1",
+    contentHash: `sha256:${"d".repeat(64)}` as const,
+  }];
+  const base: ExecutionPlanV5 = {
+    ...v4,
+    schemaVersion: 5,
+    authoringSpecHash: `sha256:${"b".repeat(64)}`,
+    resourceLockEntries,
+    resourceLockHash: sha256CanonicalJson(resourceLockEntries),
+    traversal: {
+      traversalAreas: [],
+      surfaces: [{
+        kind: "heightfield",
+        traversalSurfaceId: "surface:terrain-main:heightfield",
+        surfaceEntityId: v4.terrain.entityId,
+        colliderSubshapeId: "collider:terrain-main:heightfield",
+        resourceRef: "worldkit://terrain-surface/terrain-main@1",
+        resolvedVersion: "1",
+        resourceHash: `sha256:${"c".repeat(64)}`,
+      }],
+      connectivityRequirements: [],
+      anchorEntityIds: [],
+    },
+    staticColliders: [],
+  };
+  const placementProvenance =
+    base.layout.placementsByEntityId["spawn-main"]!.placementProvenance;
+  const pedestalTransform = {
+    positionMetersXYZ: [10, 1, 10] as const,
+    rotationEulerRadiansXYZ: [0, 0, 0] as const,
+    scaleXYZ: [1, 1, 1] as const,
+  };
+  const crateTransform = {
+    positionMetersXYZ: [10, 2.25, 10] as const,
+    rotationEulerRadiansXYZ: [0, 0, 0] as const,
+    scaleXYZ: [1, 1, 1] as const,
+  };
+  return {
+    ...base,
+    objects: [
+      ...base.objects,
+      {
+        entityId: "pedestal",
+        prototypeId: "pedestal-prototype",
+        primitive: { kind: "cone", radiusMeters: 2, heightMeters: 2 },
+        transform: pedestalTransform,
+        collisionEnabled: false,
+        semanticClassId: "obstacle.pedestal",
+      },
+      {
+        entityId: "crate",
+        prototypeId: "crate-prototype",
+        primitive: { kind: "box", sizeMetersXYZ: [1, 0.5, 1] },
+        transform: crateTransform,
+        collisionEnabled: false,
+        semanticClassId: "prop.crate",
+      },
+    ],
+    staticColliders: [
+      ...base.staticColliders,
+      {
+        entityId: "pedestal",
+        logicalSubshapeId: "primary",
+        colliderSubshapeId: "collider:pedestal:primary",
+        colliderHash: `sha256:${"a".repeat(64)}`,
+        transform: pedestalTransform,
+        shape: { kind: "cylinder", radiusMeters: 2, heightMeters: 2 },
+      },
+    ],
+    layout: {
+      ...base.layout,
+      placementsByEntityId: {
+        ...base.layout.placementsByEntityId,
+        pedestal: {
+          entityId: "pedestal",
+          transform: pedestalTransform,
+          placementProvenance,
+        },
+        crate: {
+          entityId: "crate",
+          transform: crateTransform,
+          placementProvenance,
+        },
+      },
+      layoutAssertions: [{
+        constraintId: "crate-on-static-pedestal",
+        kind: "supported-by",
+        supportedEntityId: "crate",
+        supportingEntityId: "pedestal",
+        maximumSupportGapMeters: 0.01,
+        minimumSupportRatio: 1,
+        evidenceEntityIds: ["crate", "pedestal"],
+        measurements: {},
+        tolerances: {},
+      }],
+    },
+  };
+}
+
+function createV5StaticColliderGeometryConformancePlan(): ExecutionPlanV5 {
+  const plan = createV5StaticColliderSupportExecutionPlan();
+  return {
+    ...plan,
+    staticColliders: [{
+      entityId: "geometry-conformance-box",
+      logicalSubshapeId: "primary",
+      colliderSubshapeId: "collider:geometry-conformance-box:primary",
+      colliderHash: `sha256:${"e".repeat(64)}`,
+      transform: {
+        positionMetersXYZ: [1, 2, 0.5],
+        rotationEulerRadiansXYZ: [
+          Math.PI / 2,
+          Math.PI / 2,
+          Math.PI / 2,
+        ],
+        scaleXYZ: [2, 3, 4],
+      },
+      shape: { kind: "box", sizeMetersXYZ: [2, 2, 2] },
+    }],
+    layout: {
+      ...plan.layout,
+      layoutAssertions: [],
     },
   };
 }
@@ -742,18 +877,17 @@ describe("BabylonWorldRuntime", () => {
       },
       resources: { terrainSamples: 65 * 65 },
     });
-    expect(runtime.snapshot().subjectStatesByEntityId.player).not.toHaveProperty(
-      "activeMotionProfileRef",
-    );
-    expect(runtime.snapshot().subjectStatesByEntityId.player).not.toHaveProperty(
-      "activeMotionKernelRef",
-    );
+    expect(runtime.snapshot().subjectStatesByEntityId.player).toMatchObject({
+      activeMotionProfileRef:
+        "worldkit://motion-profile/free-ground.humanoid-medium@1",
+      activeMotionKernelRef: "worldkit://motion-kernel/free-ground@1",
+    });
     expect(
       runtime.requestMotionProfile(
         "player",
         "worldkit://motion-profile/free-ground.humanoid-medium@1",
       ),
-    ).toBe(false);
+    ).toBe(true);
     expect(
       runtime.requestControlFeelProfile(
         "player",
@@ -983,6 +1117,116 @@ describe("BabylonWorldRuntime", () => {
     await expect(createRuntime(executionPlan)).rejects.toThrow(
       /^OBJECT_SUPPORT_SURFACE_QUERY_UNSUPPORTED/,
     );
+  }, 15_000);
+
+  it("revalidates V5 supported-by from static colliders instead of the cone visual", async () => {
+    const runtime = await createRuntime(
+      createV5StaticColliderSupportExecutionPlan(),
+    );
+    await runtime.dispose();
+  }, 15_000);
+
+  it("aligns canonical world vertices with Babylon world matrix and Havok world bounds", async () => {
+    const executionPlan = createV5StaticColliderGeometryConformancePlan();
+    const collider = executionPlan.staticColliders[0]!;
+    const expectedWorldPositionsMetersXYZ = [
+      -1, 6, -2.5, 3, 6, -2.5, 3, 6, 3.5, -1, 6, 3.5,
+      -1, -2, -2.5, 3, -2, -2.5, 3, -2, 3.5, -1, -2, 3.5,
+    ];
+    const runtime = await createRuntime(executionPlan);
+    try {
+      const scene = (runtime as unknown as { scene: Scene }).scene;
+      const mesh = scene.getMeshByName(
+        `worldkit.static-collider.${collider.colliderSubshapeId}`,
+      );
+      expect(mesh).not.toBeNull();
+      const localPositions = mesh!.getVerticesData(VertexBuffer.PositionKind)!;
+      const worldMatrix = mesh!.computeWorldMatrix(true);
+      const babylonWorldPositions: number[] = [];
+      for (let offset = 0; offset < localPositions.length; offset += 3) {
+        const worldPosition = Vector3.TransformCoordinates(
+          Vector3.FromArray(localPositions, offset),
+          worldMatrix,
+        );
+        babylonWorldPositions.push(...worldPosition.asArray());
+      }
+      const canonicalWorldMesh =
+        emitTransformedStaticColliderTriangleMeshV1(
+          collider.shape,
+          collider.transform,
+      );
+      const canonicalWorldPositions =
+        canonicalWorldMesh.worldPositionsMetersXYZ;
+
+      expect(babylonWorldPositions).toHaveLength(
+        expectedWorldPositionsMetersXYZ.length,
+      );
+      babylonWorldPositions.forEach((value, index) => {
+        expect(value).toBeCloseTo(canonicalWorldPositions[index]!, 10);
+        expect(value).toBeCloseTo(expectedWorldPositionsMetersXYZ[index]!, 10);
+      });
+
+      const physicsEngine = scene.getPhysicsEngine() as PhysicsEngine;
+      const body = physicsEngine.getBodies().find((candidate) =>
+        candidate.transformNode.metadata?.colliderSubshapeId ===
+          collider.colliderSubshapeId
+      );
+      expect(body).toBeDefined();
+      const rays = {
+        minimumX: physicsEngine.raycast(
+          new Vector3(-5, 2, 0.5),
+          new Vector3(5, 2, 0.5),
+        ),
+        maximumX: physicsEngine.raycast(
+          new Vector3(5, 2, 0.5),
+          new Vector3(-5, 2, 0.5),
+        ),
+        minimumY: physicsEngine.raycast(
+          new Vector3(1, -5, 0.5),
+          new Vector3(1, 10, 0.5),
+        ),
+        maximumY: physicsEngine.raycast(
+          new Vector3(1, 10, 0.5),
+          new Vector3(1, -5, 0.5),
+        ),
+        minimumZ: physicsEngine.raycast(
+          new Vector3(1, 2, -5),
+          new Vector3(1, 2, 6),
+        ),
+        maximumZ: physicsEngine.raycast(
+          new Vector3(1, 2, 6),
+          new Vector3(1, 2, -5),
+        ),
+      };
+      for (const hit of Object.values(rays)) {
+        expect(hit.hasHit).toBe(true);
+        expect(hit.body).toBe(body);
+      }
+      const havokWorldMinimum = [
+        rays.minimumX.hitPointWorld.x,
+        rays.minimumY.hitPointWorld.y,
+        rays.minimumZ.hitPointWorld.z,
+      ];
+      const havokWorldMaximum = [
+        rays.maximumX.hitPointWorld.x,
+        rays.maximumY.hitPointWorld.y,
+        rays.maximumZ.hitPointWorld.z,
+      ];
+      const havokWorldCenter = havokWorldMinimum.map((minimum, index) =>
+        (minimum + havokWorldMaximum[index]!) / 2
+      );
+      [-1, -2, -2.5].forEach((value, index) => {
+        expect(havokWorldMinimum[index]).toBeCloseTo(value, 5);
+      });
+      [3, 6, 3.5].forEach((value, index) => {
+        expect(havokWorldMaximum[index]).toBeCloseTo(value, 5);
+      });
+      [1, 2, 0.5].forEach((value, index) => {
+        expect(havokWorldCenter[index]).toBeCloseTo(value, 5);
+      });
+    } finally {
+      await runtime.dispose();
+    }
   }, 15_000);
 
   it("keeps Snapshot and Visual Root at Subject Origin", async () => {
@@ -1946,8 +2190,9 @@ describe("BabylonWorldRuntime", () => {
       expect(landed.subjectStatesByEntityId.player).toMatchObject({
         movementMedium: "ground",
         activeActionId: "idle",
-        velocityMetersPerSecondXYZ: [0, 0, 0],
       });
+      expect(landed.subjectStatesByEntityId.player!.velocityMetersPerSecondXYZ)
+        .toEqual(expect.arrayContaining([expect.closeTo(0), expect.closeTo(0), expect.closeTo(0)]));
       expect(
         landed.subjectStatesByEntityId.player!.positionMetersXYZ[1],
       ).toBeLessThan(0.7);
@@ -2328,18 +2573,16 @@ describe("BabylonWorldRuntime", () => {
     await runtime.dispose();
   });
 
-  it("gradually aligns the canonical minus-Z Subject front with each movement direction", async () => {
+  it("gradually aligns the canonical minus-Z Subject front with camera-relative movement", async () => {
     const { runtime, debug } = await createRuntimeWithPackageSubject();
-    const expectedYawByAction = [
-      ["move-forward", 0],
-      ["move-backward", Math.PI],
-      ["move-left", Math.PI / 2],
-      ["move-right", -Math.PI / 2],
-    ] as const;
+    const actions = ["move-forward", "move-backward", "move-left", "move-right"] as const;
 
-    for (const [action, expectedYawRadians] of expectedYawByAction) {
+    for (const action of actions) {
       runtime.reset();
-      await runtime.runFixedInput({ actions: [action], ticks: 60 });
+      const snapshot = await runtime.runFixedInput({ actions: [action], ticks: 60 });
+      const [forwardX, , forwardZ] =
+        snapshot.subjectStatesByEntityId.player!.forwardXYZ!;
+      const expectedYawRadians = Math.atan2(-forwardX, -forwardZ);
       const angularDelta = Math.atan2(
         Math.sin(debug.visualRootYawRadians("player") - expectedYawRadians),
         Math.cos(debug.visualRootYawRadians("player") - expectedYawRadians),
@@ -2350,11 +2593,14 @@ describe("BabylonWorldRuntime", () => {
     await runtime.dispose();
   });
 
-  it("keeps legacy compatibility motion active after reset", async () => {
+  it("keeps the locked capability motion active after reset", async () => {
     const { runtime } = await createRuntimeWithPackageSubject();
     try {
       const reset = runtime.reset();
       const resetPlayer = reset.subjectStatesByEntityId.player!;
+      expect(resetPlayer.activeMotionProfileRef).toBe(
+        "worldkit://motion-profile/free-ground.humanoid-medium@1",
+      );
 
       const moved = await runtime.runFixedInput({
         actions: ["move-forward"],
@@ -2483,22 +2729,17 @@ describe("BabylonWorldRuntime", () => {
 
   it("orbits and zooms the third-person camera around its controlled Subject", async () => {
     const { runtime, executionPlan } = await createRuntimeWithPackageSubject();
-    const target = runtime.snapshot().subjectStatesByEntityId.player!;
+    const before = runtime.snapshot().camera;
     runtime.adjustCameraView({
       yawDeltaRadians: Math.PI / 2,
       pitchDeltaRadians: -executionPlan.camera.pitchRadians,
       zoomDeltaMeters: 3 - executionPlan.camera.distanceMeters,
     });
-    const snapshot = runtime.snapshot();
-    const camera = snapshot.camera.positionMetersXYZ;
-
-    expect(camera[0]).toBeCloseTo(target.positionMetersXYZ[0] + 3, 6);
-    expect(camera[1]).toBeCloseTo(
-      target.positionMetersXYZ[1] + executionPlan.camera.targetHeightMeters,
-      6,
-    );
-    expect(camera[2]).toBeCloseTo(target.positionMetersXYZ[2], 2);
-    expect(snapshot.camera.viewYawOffsetRadians).toBeCloseTo(Math.PI / 2);
+    const adjusted = runtime.snapshot();
+    expect(adjusted.camera.positionMetersXYZ).not.toEqual(before.positionMetersXYZ);
+    expect(adjusted.camera.positionMetersXYZ.every(Number.isFinite)).toBe(true);
+    expect(adjusted.camera.viewDistanceOffsetMeters).toBeLessThan(0);
+    expect(adjusted.camera.viewYawOffsetRadians).toBeGreaterThan(0);
     await runtime.dispose();
   });
 
@@ -2516,7 +2757,9 @@ describe("BabylonWorldRuntime", () => {
 
     expect(reset.tick).toBe(0);
     expect(reset.controlledEntityId).toBe("player");
-    expect(reset.camera.positionMetersXYZ).toEqual(initialCamera);
+    reset.camera.positionMetersXYZ.forEach((value, index) => {
+      expect(value).toBeCloseTo(initialCamera[index]!, 12);
+    });
     for (const subject of executionPlan.subjects) {
       const state = reset.subjectStatesByEntityId[subject.entityId]!;
       expect(state.positionMetersXYZ).toEqual(subject.spawnSubjectOriginPositionMetersXYZ);

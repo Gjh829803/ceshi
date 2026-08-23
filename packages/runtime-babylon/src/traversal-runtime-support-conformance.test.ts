@@ -1,0 +1,489 @@
+import { readFile } from "node:fs/promises";
+import { createRequire } from "node:module";
+
+import { NullEngine } from "@babylonjs/core/Engines/nullEngine.pure.js";
+import { PhysicsCharacterController } from "@babylonjs/core/Physics/v2/characterController.js";
+import {
+  normalizeAuthoringSpecV4,
+  type AuthoringSpecV4,
+  type NormalizedWorldIRV4,
+} from "@whitebox-world/authoring";
+import {
+  compileResolvedTraversalLockV1,
+  compileWorldV5,
+} from "@whitebox-world/compiler";
+import type { ExecutionPlanV5 } from "@whitebox-world/runtime-contracts";
+import type {
+  ResolvedTraversalLockReceiptV1,
+  TraversalRuntimeTickEvidenceV1,
+} from "@whitebox-world/traversal";
+import { describe, expect, it, vi } from "vitest";
+
+import {
+  createValidAuthoringSpec,
+  createValidPackageSubjectWorld,
+} from "../../authoring/src/test-fixture";
+import { BabylonWorldRuntime } from "./babylon-world-runtime";
+import { createBabylonTraversalRuntimePortV1 } from "./traversal-runtime-port";
+import { BABYLON_TRAVERSAL_RUNTIME_IMPLEMENTATION_IDENTITY_V1 } from "./traversal-implementation-identity";
+
+const havokWasmBytes = await readFile(
+  createRequire(import.meta.url).resolve(
+    "@babylonjs/havok/lib/esm/HavokPhysics.wasm",
+  ),
+);
+const havokWasmBinary = havokWasmBytes.buffer.slice(
+  havokWasmBytes.byteOffset,
+  havokWasmBytes.byteOffset + havokWasmBytes.byteLength,
+) as ArrayBuffer;
+
+function routeWorld(
+  source = createValidAuthoringSpec(),
+): AuthoringSpecV4 {
+  return {
+    ...source,
+    schemaVersion: 4,
+    spatial: {
+      ...source.spatial,
+      traversalAreas: [],
+      routes: [{
+        id: "main-route",
+        kind: "polyline-xz",
+        pointsMetersXZ: [[0, 30], [0, -20]],
+        widthMeters: 4,
+        locomotionProfileRef:
+          "worldkit://locomotion-profile/ground.standard@1",
+      }],
+    },
+    nodes: [
+      ...source.nodes.map((node) =>
+        node.kind === "terrain" &&
+          node.components.terrain.source.kind === "procedural"
+          ? {
+              ...node,
+              components: {
+                terrain: {
+                  ...node.components.terrain,
+                  source: {
+                    ...node.components.terrain.source,
+                    relief: "flat" as const,
+                    baseHeightMeters: 0,
+                    amplitudeMeters: 0,
+                  },
+                },
+              },
+            }
+          : node
+      ),
+      {
+        id: "goal",
+        kind: "anchor",
+        placement: {
+          kind: "fixed",
+          transform: { positionMetersXYZ: [0, 0, -20] },
+        },
+        semantic: { classId: "route.destination" },
+      },
+    ],
+    constraints: {
+      placements: source.constraints.placements,
+      connectivity: [{
+        id: "hero-to-goal",
+        kind: "connected-by-route",
+        requirement: "required",
+        traversingEntityId: "player",
+        startAnchorEntityId: "spawn-main",
+        destinationAnchorEntityId: "goal",
+        routeId: "main-route",
+      }],
+    },
+  };
+}
+
+function compileFixture(world = routeWorld()): {
+  normalizedWorldIr: NormalizedWorldIRV4;
+  executionPlan: ExecutionPlanV5;
+  traversalLockReceipt: ResolvedTraversalLockReceiptV1;
+} {
+  const normalized = normalizeAuthoringSpecV4(world);
+  if (
+    !normalized.ok ||
+    normalized.value === undefined ||
+    normalized.normalizedWorldIrHash === undefined
+  ) {
+    throw new Error("Route fixture normalization failed.");
+  }
+  const compiled = compileWorldV5({
+    normalizedWorldIr: normalized.value,
+    normalizedWorldIrHash: normalized.normalizedWorldIrHash,
+  });
+  if (!compiled.ok || compiled.executionPlan === undefined) {
+    throw new Error("Route fixture compilation failed.");
+  }
+  return {
+    normalizedWorldIr: normalized.value,
+    executionPlan: compiled.executionPlan,
+    traversalLockReceipt: compileResolvedTraversalLockV1({
+      normalizedWorldIr: normalized.value,
+      executionPlan: compiled.executionPlan,
+      traversingEntityId: "player",
+      runtimeImplementationIdentity:
+        BABYLON_TRAVERSAL_RUNTIME_IMPLEMENTATION_IDENTITY_V1,
+    }),
+  };
+}
+
+function withSteepRampAtStart(
+  fixture: ReturnType<typeof compileFixture>,
+): ExecutionPlanV5 {
+  const plan = structuredClone(fixture.executionPlan);
+  const placement = plan.layout.placementsByEntityId["spawn-main"]!;
+  return {
+    ...plan,
+    layout: {
+      ...plan.layout,
+      layoutAssertions: [],
+      placementsByEntityId: {
+        ...plan.layout.placementsByEntityId,
+        "spawn-main": {
+          ...placement,
+          transform: {
+            ...placement.transform,
+            positionMetersXYZ: [0.4, 3, 30],
+          },
+        },
+      },
+    },
+    staticColliders: [
+      ...plan.staticColliders,
+      {
+        entityId: "steep-ramp",
+        logicalSubshapeId: "primary",
+        colliderSubshapeId: "collider:steep-ramp:primary",
+        colliderHash: `sha256:${"c".repeat(64)}`,
+        transform: {
+          positionMetersXYZ: [0, 2.4, 30],
+          rotationEulerRadiansXYZ: [0, 0, -0.9],
+          scaleXYZ: [1, 1, 1],
+        },
+        shape: {
+          kind: "box",
+          sizeMetersXYZ: [4, 1, 4],
+        },
+      },
+    ],
+  };
+}
+
+function withEverySubjectAirborne(
+  fixture: ReturnType<typeof compileFixture>,
+): ExecutionPlanV5 {
+  const plan = fixture.executionPlan;
+  const startPlacement = plan.layout.placementsByEntityId["spawn-main"]!;
+  return {
+    ...plan,
+    subjects: plan.subjects.map((subject) => ({
+      ...subject,
+      spawnSubjectOriginPositionMetersXYZ: [
+        subject.spawnSubjectOriginPositionMetersXYZ[0],
+        2,
+        subject.spawnSubjectOriginPositionMetersXYZ[2],
+      ],
+    })),
+    layout: {
+      ...plan.layout,
+      layoutAssertions: [],
+      placementsByEntityId: {
+        ...plan.layout.placementsByEntityId,
+        "spawn-main": {
+          ...startPlacement,
+          transform: {
+            ...startPlacement.transform,
+            positionMetersXYZ: [
+              startPlacement.transform.positionMetersXYZ[0],
+              2,
+              startPlacement.transform.positionMetersXYZ[2],
+            ],
+          },
+        },
+      },
+    },
+  };
+}
+
+async function createRuntime(
+  executionPlan: ExecutionPlanV5,
+): Promise<BabylonWorldRuntime> {
+  return BabylonWorldRuntime.create({
+    executionPlan,
+    havokWasmBinary,
+    autoStartRenderLoop: false,
+    engineFactory: () => new NullEngine({
+      renderWidth: 320,
+      renderHeight: 180,
+      textureSize: 256,
+      deterministicLockstep: true,
+      lockstepMaxSteps: 4,
+    }),
+  });
+}
+
+type SupportInspectableController = Readonly<{
+  physicsController: PhysicsCharacterController;
+}>;
+
+function controllerFor(
+  runtime: BabylonWorldRuntime,
+  entityId: string,
+): SupportInspectableController {
+  const controller = (runtime as unknown as {
+    subjectControllersByEntityId: Map<string, SupportInspectableController>;
+  }).subjectControllersByEntityId.get(entityId);
+  if (controller === undefined) {
+    throw new Error(`Missing Subject controller '${entityId}'.`);
+  }
+  return controller;
+}
+
+describe("Traversal runtime support conformance", () => {
+  it("publishes constructor support from exactly one checkSupport call", async () => {
+    const fixture = compileFixture();
+    const supportSpy = vi.spyOn(
+      PhysicsCharacterController.prototype,
+      "checkSupport",
+    );
+    let runtime: BabylonWorldRuntime | undefined;
+    try {
+      runtime = await createRuntime(fixture.executionPlan);
+
+      expect(supportSpy).toHaveBeenCalledTimes(1);
+      expect(runtime.snapshot().subjectStatesByEntityId.player).toMatchObject({
+        movementMedium: "ground",
+        locomotionMode: "idle",
+      });
+    } finally {
+      await runtime?.dispose();
+      supportSpy.mockRestore();
+    }
+  }, 30_000);
+
+  it("uses one support query for a sliding tick and publishes that query as Evidence", async () => {
+    const fixture = compileFixture();
+    const runtime = await createRuntime(withSteepRampAtStart(fixture));
+    try {
+      const port = createBabylonTraversalRuntimePortV1({
+        runtime,
+        traversalLockReceipt: fixture.traversalLockReceipt,
+      });
+      port.resetToStartAnchor({ startAnchorEntityId: "spawn-main" });
+      const supportSpy = vi.spyOn(
+        controllerFor(runtime, "player").physicsController,
+        "checkSupport",
+      );
+      let slidingEvidence: TraversalRuntimeTickEvidenceV1 | undefined;
+
+      for (let tick = 0; tick < 120; tick += 1) {
+        supportSpy.mockClear();
+        const evidence = await port.runFixedTick({
+          walkDirectionWorldXZ: [0, 0],
+        });
+        expect(supportSpy).toHaveBeenCalledTimes(1);
+        if (evidence.characterSupport.supportState === "sliding") {
+          const queriedSupport = supportSpy.mock.results[0]!.value;
+          expect(evidence.characterSupport.supportNormalWorldXYZ).toEqual([
+            queriedSupport.averageSurfaceNormal.x,
+            queriedSupport.averageSurfaceNormal.y,
+            queriedSupport.averageSurfaceNormal.z,
+          ]);
+          expect(evidence.characterSupport.isSupportSurfaceDynamic).toBe(
+            queriedSupport.isSurfaceDynamic,
+          );
+          slidingEvidence = evidence;
+          break;
+        }
+      }
+
+      expect(slidingEvidence).toMatchObject({
+        kind: "traversal-runtime-tick-evidence",
+        movementMedium: "ground",
+        characterSupport: {
+          kind: "character-support-evidence",
+          supportState: "sliding",
+          surfaceResolution: { mode: "unmatched" },
+        },
+      });
+      expect(Object.isFrozen(slidingEvidence)).toBe(true);
+      expect(Object.isFrozen(slidingEvidence!.characterSupport)).toBe(true);
+    } finally {
+      await runtime.dispose();
+    }
+  }, 30_000);
+
+  it("uses one support query for each uncontrolled grounded Subject and publishes public state", async () => {
+    const fixture = compileFixture(routeWorld(createValidPackageSubjectWorld()));
+    const runtime = await createRuntime(fixture.executionPlan);
+    try {
+      const port = createBabylonTraversalRuntimePortV1({
+        runtime,
+        traversalLockReceipt: fixture.traversalLockReceipt,
+      });
+      port.resetToStartAnchor({ startAnchorEntityId: "spawn-main" });
+      const controlledSupportSpy = vi.spyOn(
+        controllerFor(runtime, "player").physicsController,
+        "checkSupport",
+      );
+      const uncontrolledSupportSpies = ["pack-animal-a", "pack-animal-b"].map(
+        (entityId) => vi.spyOn(
+          controllerFor(runtime, entityId).physicsController,
+          "checkSupport",
+        ),
+      );
+
+      const evidence = await port.runFixedTick({
+        walkDirectionWorldXZ: [0, 0],
+      });
+      const snapshot = runtime.snapshot();
+
+      expect(controlledSupportSpy).toHaveBeenCalledTimes(1);
+      for (const supportSpy of uncontrolledSupportSpies) {
+        expect(supportSpy).toHaveBeenCalledTimes(1);
+      }
+      expect(evidence).toMatchObject({
+        tick: 1,
+        movementMedium: "ground",
+        characterSupport: { supportState: "supported" },
+      });
+      for (const entityId of ["pack-animal-a", "pack-animal-b"] as const) {
+        expect(snapshot.subjectStatesByEntityId[entityId]).toMatchObject({
+          movementMedium: "ground",
+          locomotionMode: "idle",
+        });
+      }
+    } finally {
+      await runtime.dispose();
+    }
+  }, 30_000);
+
+  it("uses exactly one support query per Subject during an ordinary runtime reset", async () => {
+    const fixture = compileFixture(routeWorld(createValidPackageSubjectWorld()));
+    const runtime = await createRuntime(fixture.executionPlan);
+    try {
+      const supportSpies = fixture.executionPlan.subjects.map((subject) => ({
+        entityId: subject.entityId,
+        spy: vi.spyOn(
+          controllerFor(runtime, subject.entityId).physicsController,
+          "checkSupport",
+        ),
+      }));
+
+      const snapshot = runtime.reset();
+
+      expect(snapshot.tick).toBe(0);
+      for (const { entityId, spy } of supportSpies) {
+        expect(spy, entityId).toHaveBeenCalledTimes(1);
+        expect(snapshot.subjectStatesByEntityId[entityId]).toMatchObject({
+          movementMedium: "ground",
+          locomotionMode: "idle",
+        });
+      }
+    } finally {
+      await runtime.dispose();
+    }
+  }, 30_000);
+
+  it("uses exactly one support query per Subject for a successful unsupported traversal tick", async () => {
+    const fixture = compileFixture(routeWorld(createValidPackageSubjectWorld()));
+    const runtime = await createRuntime(withEverySubjectAirborne(fixture));
+    try {
+      const port = createBabylonTraversalRuntimePortV1({
+        runtime,
+        traversalLockReceipt: fixture.traversalLockReceipt,
+      });
+      const resetEvidence = port.resetToStartAnchor({
+        startAnchorEntityId: "spawn-main",
+      });
+      expect(resetEvidence.characterSupport).toMatchObject({
+        supportState: "unsupported",
+        surfaceResolution: { mode: "unsupported" },
+      });
+      const supportSpies = fixture.executionPlan.subjects.map((subject) => ({
+        entityId: subject.entityId,
+        spy: vi.spyOn(
+          controllerFor(runtime, subject.entityId).physicsController,
+          "checkSupport",
+        ),
+      }));
+
+      const evidence = await port.runFixedTick({
+        walkDirectionWorldXZ: [0, 0],
+      });
+      const snapshot = runtime.snapshot();
+
+      expect(evidence).toMatchObject({
+        tick: 1,
+        movementMedium: "air",
+        locomotionMode: "airborne",
+        characterSupport: {
+          supportState: "unsupported",
+          surfaceResolution: { mode: "unsupported" },
+        },
+      });
+      for (const { entityId, spy } of supportSpies) {
+        expect(spy, entityId).toHaveBeenCalledTimes(1);
+        expect(snapshot.subjectStatesByEntityId[entityId]).toMatchObject({
+          movementMedium: "air",
+          locomotionMode: "airborne",
+        });
+      }
+    } finally {
+      await runtime.dispose();
+    }
+  }, 30_000);
+
+  it.each(["Feel", "capsule", "step"] as const)(
+    "fails closed before a support query when live %s state drifts",
+    async (driftKind) => {
+      const fixture = compileFixture();
+      const runtime = await createRuntime(fixture.executionPlan);
+      try {
+        const port = createBabylonTraversalRuntimePortV1({
+          runtime,
+          traversalLockReceipt: fixture.traversalLockReceipt,
+        });
+        port.resetToStartAnchor({ startAnchorEntityId: "spawn-main" });
+        const physicsController = controllerFor(
+          runtime,
+          "player",
+        ).physicsController;
+        const supportSpy = vi.spyOn(physicsController, "checkSupport");
+
+        if (driftKind === "Feel") {
+          expect(runtime.requestControlFeelProfile(
+            "player",
+            "worldkit://control-feel-profile/humanoid.heavy-ground@1",
+          )).toBe(true);
+        } else if (driftKind === "capsule") {
+          const shape = physicsController.shapeOptions;
+          physicsController.setShapeOptions({
+            capsuleHeight: shape.capsuleHeight!,
+            capsuleRadius: shape.capsuleRadius! + 0.01,
+          });
+        } else {
+          physicsController.maxStepHeight += 0.01;
+        }
+        supportSpy.mockClear();
+
+        await expect(port.runFixedTick({
+          walkDirectionWorldXZ: [0, 0],
+        })).rejects.toMatchObject({
+          code: "TRAVERSAL_RUNTIME_LIVE_LOCK_MISMATCH",
+          message: "TRAVERSAL_RUNTIME_LIVE_LOCK_MISMATCH",
+        });
+        expect(supportSpy).not.toHaveBeenCalled();
+      } finally {
+        await runtime.dispose();
+      }
+    },
+    30_000,
+  );
+});

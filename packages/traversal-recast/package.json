@@ -1,0 +1,21 @@
+{
+  "name": "@whitebox-world/traversal-recast",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "dependencies": {
+    "@whitebox-world/protocol": "workspace:*",
+    "@whitebox-world/runtime-contracts": "workspace:*",
+    "@whitebox-world/terrain-surface": "workspace:*",
+    "@whitebox-world/traversal": "workspace:*",
+    "lodash-es": "^4.18.1",
+    "recast-navigation": "0.43.1"
+  },
+  "devDependencies": {
+    "@whitebox-world/runtime-babylon": "workspace:*",
+    "yaml": "^2.9.0"
+  }
+}

@@ -198,6 +198,7 @@ function normalizeCapabilityAssemblyV1(
     typeof registry.resolveMediumProfile !== "function" ||
     typeof registry.resolveRelationshipProfile !== "function" ||
     typeof registry.resolveHarnessProfile !== "function" ||
+    typeof registry.resolvePoseSetProfile !== "function" ||
     typeof registry.resolveRenderBindingProfile !== "function"
   ) {
     addError(
@@ -294,6 +295,12 @@ function normalizeCapabilityAssemblyV1(
   if (renderBindingProfile === undefined) {
     missing(subject.renderBindingProfileRef, "Render Binding Profile");
   }
+  const actionOrPoseSet =
+    registry.resolvePoseSetProfile(subject.actionOrPoseSetRef) ??
+    request.subjectResourceRegistry.resolveAnimationSet(subject.actionOrPoseSetRef);
+  if (actionOrPoseSet === undefined) {
+    missing(subject.actionOrPoseSetRef, "Action or Pose Set");
+  }
 
   const cameraRigProfileRefs = new Set<string>();
   const cameraModifierProfileRefs = new Set<string>();
@@ -361,7 +368,8 @@ function normalizeCapabilityAssemblyV1(
     cameraContextProfile === undefined ||
     mediumProfile === undefined ||
     harnessProfile === undefined ||
-    renderBindingProfile === undefined
+    renderBindingProfile === undefined ||
+    actionOrPoseSet === undefined
   ) {
     return undefined;
   }
@@ -416,6 +424,7 @@ function normalizeCapabilityAssemblyV1(
     ...relationshipProfiles,
     harnessProfile,
     renderBindingProfile,
+    actionOrPoseSet,
   ].forEach(addLock);
 
   return {

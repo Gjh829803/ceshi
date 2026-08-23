@@ -1,5 +1,4 @@
 import HavokPhysics from "@babylonjs/havok";
-import havokWasmUrl from "@babylonjs/havok/lib/esm/HavokPhysics.wasm?url";
 import { Vector3 } from "@babylonjs/core/Maths/math.vector.js";
 import { HavokPlugin } from "@babylonjs/core/Physics/v2/Plugins/havokPlugin.js";
 import type { Scene } from "@babylonjs/core/scene.pure.js";
@@ -10,6 +9,13 @@ import type { Vec3 } from "@whitebox-world/runtime-contracts";
 let browserHavokPromise: ReturnType<typeof HavokPhysics> | undefined;
 let injectedHavokPromise: ReturnType<typeof HavokPhysics> | undefined;
 
+async function createBrowserHavok(): ReturnType<typeof HavokPhysics> {
+  const { default: havokWasmUrl } = await import(
+    "@babylonjs/havok/lib/esm/HavokPhysics.wasm?url"
+  );
+  return HavokPhysics({ locateFile: () => havokWasmUrl });
+}
+
 export const FIXED_TIME_STEP_SECONDS = 1 / 60;
 
 export async function enableHavokPhysics(
@@ -18,7 +24,7 @@ export async function enableHavokPhysics(
   wasmBinary?: ArrayBuffer,
 ): Promise<HavokPlugin> {
   const havokPromise = wasmBinary === undefined
-    ? (browserHavokPromise ??= HavokPhysics({ locateFile: () => havokWasmUrl }))
+    ? (browserHavokPromise ??= createBrowserHavok())
     : (injectedHavokPromise ??= HavokPhysics({ wasmBinary }));
   const havok = await havokPromise;
   const plugin = new HavokPlugin(true, havok);

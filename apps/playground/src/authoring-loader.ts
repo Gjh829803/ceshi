@@ -1,11 +1,15 @@
 import {
   normalizeAuthoringSpec,
+  normalizeAuthoringSpecV4,
+  parseCanonicalJson,
   parseAuthoringSpecJson,
+  parseAuthoringSpecV4,
   sha256CanonicalJson,
   type AuthoringDiagnostic,
   type AuthoringSpecV3,
+  type AuthoringSpecV4,
 } from "@whitebox-world/authoring";
-import { compileWorld } from "@whitebox-world/compiler";
+import { compileWorld, compileWorldV5 } from "@whitebox-world/compiler";
 import {
   builtInSubjectResourceRegistry,
   type RegistrySubjectDefinitionV3,
@@ -14,6 +18,11 @@ import {
 import type {
   CompileDiagnostic,
   ExecutionPlanV4,
+  ExecutionPlanV5,
+} from "@whitebox-world/runtime-contracts";
+import {
+  canonicalWorldkitBrowserRouteEvidencePublicationV1,
+  type WorldkitBrowserRouteEvidencePublicationV1,
 } from "@whitebox-world/runtime-contracts";
 
 type CapabilityDemoResourceBudgetV1 = Readonly<
@@ -57,18 +66,22 @@ export interface CapabilityDemoHostOverlayV1 {
 
 export interface AuthoringSceneLoadResult {
   ok: boolean;
-  executionPlan?: ExecutionPlanV4;
+  executionPlan?: ExecutionPlanV4 | ExecutionPlanV5;
   normalizedWorldIrHash?: string;
   executionPlanHash?: string;
   diagnostics: readonly (AuthoringDiagnostic | CompileDiagnostic)[];
   hostOverlay?: CapabilityDemoHostOverlayV1;
+  routeEvidencePublication?: WorldkitBrowserRouteEvidencePublicationV1;
 }
 
 export type AuthoringSourceFetcher = () => Promise<Response>;
 
 export interface AuthoringSceneLoadOptionsV1 {
   subjectDefinitionRef?: string;
+  fetchRouteEvidence?: AuthoringSourceFetcher;
 }
+
+type SupportedAuthoringSpec = AuthoringSpecV3 | AuthoringSpecV4;
 
 const CAPABILITY_PLAYGROUND_MINIMUM_RESOURCE_BUDGET = Object.freeze({
   maxVertices: 200_000,
@@ -197,11 +210,11 @@ async function sourceResponseDiagnosticCode(
   }
 }
 
-function applyCapabilityDemoContext(
-  source: AuthoringSpecV3,
+function applyCapabilityDemoContext<Source extends SupportedAuthoringSpec>(
+  source: Source,
   subjectDefinitionRef: string,
 ): Readonly<{
-  source: AuthoringSpecV3;
+  source: Source;
   hostOverlay?: CapabilityDemoHostOverlayV1;
   subjectResourceRegistry?: SubjectResourceRegistryV3;
 }> {
@@ -374,12 +387,132 @@ function applyCapabilityDemoContext(
         }
         return node;
       }),
-    },
+    } as Source,
   };
 }
 
+type RouteEvidenceLoadResult =
+  | Readonly<{
+      ok: true;
+      publication?: WorldkitBrowserRouteEvidencePublicationV1;
+    }>
+  | Readonly<{
+      ok: false;
+      diagnostics: readonly AuthoringDiagnostic[];
+    }>;
+
+function routeEvidenceDiagnostic(
+  code: string,
+  message: string,
+  instancePath = "",
+  details?: Readonly<Record<string, unknown>>,
+): RouteEvidenceLoadResult {
+  return {
+    ok: false,
+    diagnostics: [{
+      severity: "error",
+      code,
+      instancePath,
+      message,
+      ...(details === undefined ? {} : { details }),
+    }],
+  };
+}
+
+async function loadRouteEvidence(
+  fetchRouteEvidence: AuthoringSourceFetcher | undefined,
+): Promise<RouteEvidenceLoadResult> {
+  if (fetchRouteEvidence === undefined) return { ok: true };
+  let response: Response;
+  try {
+    response = await fetchRouteEvidence();
+  } catch (error) {
+    return routeEvidenceDiagnostic(
+      "WORLDKIT_ROUTE_EVIDENCE_SOURCE_UNAVAILABLE",
+      "Unable to fetch the configured Route evidence.",
+      "",
+      { cause: error instanceof Error ? error.message : String(error) },
+    );
+  }
+  if (!response.ok) {
+    const diagnosticCode = await sourceResponseDiagnosticCode(response);
+    if (
+      response.status === 404 &&
+      diagnosticCode === "WORLDKIT_ROUTE_EVIDENCE_NOT_CONFIGURED"
+    ) {
+      return { ok: true };
+    }
+    return routeEvidenceDiagnostic(
+      "WORLDKIT_ROUTE_EVIDENCE_SOURCE_UNAVAILABLE",
+      `Route evidence source returned HTTP ${response.status}.`,
+      "",
+      {
+        status: response.status,
+        ...(diagnosticCode === undefined ? {} : { sourceDiagnosticCode: diagnosticCode }),
+      },
+    );
+  }
+
+  let sourceText: string;
+  try {
+    sourceText = await response.text();
+  } catch (error) {
+    return routeEvidenceDiagnostic(
+      "WORLDKIT_ROUTE_EVIDENCE_SOURCE_UNAVAILABLE",
+      "Unable to read the configured Route evidence response.",
+      "",
+      { cause: error instanceof Error ? error.message : String(error) },
+    );
+  }
+  const parsed = parseCanonicalJson(sourceText);
+  if (!parsed.ok) {
+    return routeEvidenceDiagnostic(
+      "WORLDKIT_ROUTE_EVIDENCE_INVALID",
+      "Configured Route evidence is not canonical JSON.",
+      "",
+      { diagnostics: parsed.diagnostics },
+    );
+  }
+  try {
+    return {
+      ok: true,
+      publication: canonicalWorldkitBrowserRouteEvidencePublicationV1(
+        parsed.value,
+      ),
+    };
+  } catch {
+    return routeEvidenceDiagnostic(
+      "WORLDKIT_ROUTE_EVIDENCE_INVALID",
+      "Configured Route evidence does not match the Browser publication contract.",
+    );
+  }
+}
+
+function mismatchDiagnostic(
+  field: "authoringSpecHash" | "normalizedWorldIrHash" | "executionPlanHash" |
+    "resourceLockHash" | "layoutSolveReportHash",
+  expected: string,
+  actual: string,
+): AuthoringSceneLoadResult {
+  return {
+    ok: false,
+    diagnostics: [{
+      severity: "error",
+      code: "WORLDKIT_ROUTE_EVIDENCE_WORLD_MISMATCH",
+      instancePath: `/${field}`,
+      message: `Route evidence ${field} does not match the loaded Authoring world.`,
+      details: { field, expected, actual },
+    }],
+  };
+}
+
+const fetchDefaultAuthoringSource: AuthoringSourceFetcher = () =>
+  fetch("/__worldkit/authoring-spec", { cache: "no-store" });
+const fetchDefaultRouteEvidence: AuthoringSourceFetcher = () =>
+  fetch("/__worldkit/route-evidence", { cache: "no-store" });
+
 export async function loadAuthoringScene(
-  fetchSource: AuthoringSourceFetcher = () => fetch("/__worldkit/authoring-spec", { cache: "no-store" }),
+  fetchSource: AuthoringSourceFetcher = fetchDefaultAuthoringSource,
   options: AuthoringSceneLoadOptionsV1 = {},
 ): Promise<AuthoringSceneLoadResult> {
   let response: Response;
@@ -411,19 +544,48 @@ export async function loadAuthoringScene(
       cause: error instanceof Error ? error.message : String(error),
     });
   }
-  const parsed = parseAuthoringSpecJson(sourceText);
+  const syntax = parseCanonicalJson(sourceText);
+  if (!syntax.ok) return { ok: false, diagnostics: syntax.diagnostics };
+  const schemaVersion =
+    syntax.value !== null && typeof syntax.value === "object"
+      ? (syntax.value as { schemaVersion?: unknown }).schemaVersion
+      : undefined;
+  if (
+    syntax.value !== null &&
+    typeof syntax.value === "object" &&
+    (syntax.value as { kind?: unknown }).kind === "worldkit-authoring-spec" &&
+    Object.hasOwn(syntax.value, "schemaVersion") &&
+    schemaVersion !== 3 &&
+    schemaVersion !== 4
+  ) {
+    return {
+      ok: false,
+      diagnostics: [{
+        severity: "error",
+        code: "AUTHORING_SCHEMA_VERSION_NOT_SUPPORTED",
+        instancePath: "/schemaVersion",
+        message: `Authoring schema version '${String(schemaVersion)}' is not supported.`,
+        details: { supportedSchemaVersions: [3, 4] },
+      }],
+    };
+  }
+  const parsed = schemaVersion === 4
+    ? parseAuthoringSpecV4(sourceText)
+    : parseAuthoringSpecJson(sourceText);
   if (!parsed.ok || parsed.value === undefined) return { ok: false, diagnostics: parsed.diagnostics };
   const overlayResult = options.subjectDefinitionRef === undefined
     ? { source: parsed.value }
     : applyCapabilityDemoContext(
-        parsed.value as AuthoringSpecV3,
+        parsed.value,
         options.subjectDefinitionRef,
       );
   const { source, hostOverlay, subjectResourceRegistry } = overlayResult;
-  const normalized = normalizeAuthoringSpec(
-    source,
-    subjectResourceRegistry === undefined ? {} : { subjectResourceRegistry },
-  );
+  const normalizeOptions = subjectResourceRegistry === undefined
+    ? {}
+    : { subjectResourceRegistry };
+  const normalized = source.schemaVersion === 4
+    ? normalizeAuthoringSpecV4(source, normalizeOptions)
+    : normalizeAuthoringSpec(source, normalizeOptions);
   if (!normalized.ok || normalized.value === undefined || normalized.normalizedWorldIrHash === undefined) {
     return {
       ok: false,
@@ -431,10 +593,15 @@ export async function loadAuthoringScene(
       ...(hostOverlay === undefined ? {} : { hostOverlay }),
     };
   }
-  const compiled = compileWorld({
-    normalizedWorldIr: normalized.value,
-    normalizedWorldIrHash: normalized.normalizedWorldIrHash,
-  });
+  const compiled = normalized.value.schemaVersion === 4
+    ? compileWorldV5({
+        normalizedWorldIr: normalized.value,
+        normalizedWorldIrHash: normalized.normalizedWorldIrHash,
+      })
+    : compileWorld({
+        normalizedWorldIr: normalized.value,
+        normalizedWorldIrHash: normalized.normalizedWorldIrHash,
+      });
   if (!compiled.ok || compiled.executionPlan === undefined || compiled.executionPlanHash === undefined) {
     return {
       ok: false,
@@ -442,6 +609,66 @@ export async function loadAuthoringScene(
       ...(hostOverlay === undefined ? {} : { hostOverlay }),
     };
   }
+  const fetchRouteEvidence = options.fetchRouteEvidence ??
+    (fetchSource === fetchDefaultAuthoringSource
+      ? fetchDefaultRouteEvidence
+      : undefined);
+  const routeEvidence = await loadRouteEvidence(fetchRouteEvidence);
+  if (!routeEvidence.ok) {
+    return {
+      ok: false,
+      diagnostics: routeEvidence.diagnostics,
+      ...(hostOverlay === undefined ? {} : { hostOverlay }),
+    };
+  }
+  if (
+    source.schemaVersion === 3 &&
+    routeEvidence.publication !== undefined
+  ) {
+    return {
+      ok: false,
+      diagnostics: [{
+        severity: "error",
+        code: "WORLDKIT_ROUTE_EVIDENCE_REQUIRES_AUTHORING_V4",
+        instancePath: "/schemaVersion",
+        message: "Configured Route evidence requires AuthoringSpec V4 and ExecutionPlan V5.",
+      }],
+      ...(hostOverlay === undefined ? {} : { hostOverlay }),
+    };
+  }
+  if (
+    source.schemaVersion === 4 &&
+    routeEvidence.publication !== undefined
+  ) {
+    if (
+      normalized.value.schemaVersion !== 4 ||
+      compiled.executionPlan.schemaVersion !== 5 ||
+      normalized.layoutSolveReportHash === undefined
+    ) {
+      throw new Error("WORLDKIT_ROUTE_EVIDENCE_INTERNAL_VERSION_MISMATCH");
+    }
+    const identities = {
+      authoringSpecHash: normalized.value.authoringSpecHash,
+      normalizedWorldIrHash: normalized.normalizedWorldIrHash,
+      executionPlanHash: compiled.executionPlanHash,
+      resourceLockHash: normalized.value.resources.resourceLockHash,
+      layoutSolveReportHash: normalized.layoutSolveReportHash,
+    } as const;
+    for (const field of [
+      "authoringSpecHash",
+      "normalizedWorldIrHash",
+      "executionPlanHash",
+      "resourceLockHash",
+      "layoutSolveReportHash",
+    ] as const) {
+      const actual = routeEvidence.publication[field];
+      const expected = identities[field];
+      if (actual !== expected) {
+        return mismatchDiagnostic(field, expected, actual);
+      }
+    }
+  }
+
   return {
     ok: true,
     executionPlan: compiled.executionPlan,
@@ -449,5 +676,8 @@ export async function loadAuthoringScene(
     executionPlanHash: compiled.executionPlanHash,
     diagnostics: [],
     ...(hostOverlay === undefined ? {} : { hostOverlay }),
+    ...(routeEvidence.publication === undefined
+      ? {}
+      : { routeEvidencePublication: routeEvidence.publication }),
   };
 }

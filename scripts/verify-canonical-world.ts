@@ -57,6 +57,49 @@ const FIRST_PACKAGE_SUBJECT_ENTITY_ID = "pack-animal-a";
 const SECOND_PACKAGE_SUBJECT_ENTITY_ID = "pack-animal-b";
 const PACKAGE_SUBJECT_DEFINITION_REF =
   "package://subject-definition/coastal-pack-animal@1";
+const BROWSER_PROTOCOL_V4_METHOD_NAMES = [
+  "ready",
+  "getSnapshot",
+  "getDiagnostics",
+  "bindControl",
+  "runFixedInput",
+  "getControlCaptureCapabilities",
+  "waitForSimulationTick",
+  "waitForRenderReady",
+  "captureControlFrame",
+  "captureScreenshot",
+  "reset",
+  "setPaused",
+  "listSubjectDefinitions",
+  "listMotionKernels",
+  "listCompatibleProfiles",
+  "getSubjectPresetBaseline",
+  "validateSubjectPackage",
+  "setIntent",
+  "setCameraPreference",
+  "adjustCameraView",
+  "resetCameraView",
+  "setCameraTuning",
+  "applySubjectPresetTuning",
+  "setMotionProfile",
+  "runHarness",
+  "getSubjectSnapshot",
+  "getCameraSnapshot",
+  "getRouteSummary",
+  "getRoutePathReceipt",
+  "getRouteRuntimeProbeReceipt",
+  "getRouteOverlay",
+] as const;
+const FORBIDDEN_BROWSER_ROUTE_AUTHORITY_NAMES = [
+  "buildTraversalGraph",
+  "buildRouteGraph",
+  "queryRoute",
+  "probeRoute",
+  "runRouteProbe",
+  "setRouteValidationThresholds",
+  "setValidationThresholds",
+  "setRouteEvidence",
+] as const;
 
 interface WorldBuildArtifactV3 {
   kind: "worldkit-build-artifact";
@@ -380,7 +423,7 @@ async function verifyBrowserProtocolAndPhysics(): Promise<{
       undefined,
       { timeout: 30_000 },
     );
-    assert.equal(await page.evaluate(() => window.__WORLDKIT__!.version), 3);
+    assert.equal(await page.evaluate(() => window.__WORLDKIT__!.version), 4);
     const ready = await page.evaluate(async () => window.__WORLDKIT__!.ready());
     assert.equal(ready.schemaVersion, 3);
     assert.equal(ready.runtimeBackend, "babylon-havok");
@@ -392,6 +435,57 @@ async function verifyBrowserProtocolAndPhysics(): Promise<{
       SECOND_PACKAGE_SUBJECT_ENTITY_ID,
       PLAYER_ENTITY_ID,
     ]);
+    const browserProtocol = await page.evaluate(
+      ({ methodNames, forbiddenNames }) => {
+        const api = window.__WORLDKIT__!;
+        const apiRecord = api as unknown as Record<string, unknown>;
+        api.setPaused(true);
+        const before = api.getSnapshot();
+        const selector = {
+          constraintId: "canonical-world-unconfigured-route",
+          routeId: "canonical-world-unconfigured-route",
+        };
+        const unloaded = [
+          api.getRouteSummary(selector),
+          api.getRoutePathReceipt(selector),
+          api.getRouteRuntimeProbeReceipt(selector),
+          api.getRouteOverlay(selector),
+        ];
+        return {
+          missingMethodNames: methodNames.filter(
+            (methodName) => typeof apiRecord[methodName] !== "function",
+          ),
+          forbiddenAuthorityNames: forbiddenNames.filter(
+            (methodName) => methodName in apiRecord,
+          ),
+          unloaded,
+          before,
+          after: api.getSnapshot(),
+        };
+      },
+      {
+        methodNames: BROWSER_PROTOCOL_V4_METHOD_NAMES,
+        forbiddenNames: FORBIDDEN_BROWSER_ROUTE_AUTHORITY_NAMES,
+      },
+    );
+    assert.equal(BROWSER_PROTOCOL_V4_METHOD_NAMES.length, 31);
+    assert.deepEqual(browserProtocol.missingMethodNames, []);
+    assert.deepEqual(browserProtocol.forbiddenAuthorityNames, []);
+    assert.deepEqual(
+      browserProtocol.unloaded.map((result) => ({
+        availability: result.availability,
+        reason: result.availability === "unavailable" ? result.reason : undefined,
+      })),
+      Array.from({ length: 4 }, () => ({
+        availability: "unavailable",
+        reason: "route-evidence-not-loaded",
+      })),
+    );
+    assert.deepEqual(
+      browserProtocol.after,
+      browserProtocol.before,
+      "Read-only Route evidence getters changed the Runtime Snapshot or Tick.",
+    );
 
     const wallStop = await page.evaluate(async () => {
       const api = window.__WORLDKIT__!;
@@ -641,7 +735,7 @@ async function run(): Promise<void> {
           normalizedWorldIr: 3,
           executionPlan: 4,
           runtimeSnapshot: 3,
-          browserProtocol: 3,
+          browserProtocol: 4,
         },
         gates: [
           "strict-valid-input",
@@ -649,7 +743,7 @@ async function run(): Promise<void> {
           "deterministic-v3-v4-build-artifact",
           "subject-explain-artifact",
           "playwright-capture",
-          "browser-protocol-v3",
+          "browser-protocol-v4",
           "babylon-havok-runtime",
           "shared-package-definition",
           "independent-subject-runtime-state",

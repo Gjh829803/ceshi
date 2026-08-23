@@ -23,6 +23,7 @@ import {
   type NormalizeAuthoringResultV3,
 } from "./index";
 import {
+  createValidAuthoringSpec,
   createValidPackageSubjectWorld,
   createValidRiggedPackageDefinition,
   createValidRiggedPackageSubjectWorld,
@@ -163,6 +164,44 @@ function packageDefinitionHash(result: NormalizeAuthoringResultV3): string {
     (definition) => definition.source === "package",
   )!.subjectDefinitionHash;
 }
+
+describe("ResourceLockBuilderV1 canonical ordering", () => {
+  it("uses locale-independent byte order for punctuation-bearing refs", () => {
+    const refs = [
+      "package://subject-definition/a_a@1",
+      "package://subject-definition/a.a@1",
+      "package://subject-definition/a-a@1",
+    ];
+    const build = (orderedRefs: readonly string[]) => {
+      const builder = new ResourceLockBuilderV1();
+      const diagnostics: Array<
+        NormalizeAuthoringResultV3["diagnostics"][number]
+      > = [];
+      for (const resourceRef of orderedRefs) {
+        builder.addPackageSubjectDefinition(
+          resourceRef,
+          1,
+          sha256CanonicalJson({ resourceRef }),
+          "/resources",
+          diagnostics,
+        );
+      }
+      expect(diagnostics).toEqual([]);
+      return builder.finish();
+    };
+
+    const forward = build(refs);
+    const reversed = build([...refs].reverse());
+    expect(forward.resourceLock.map((entry) => entry.resourceRef)).toEqual(
+      [...refs].sort((left, right) => left < right ? -1 : left > right ? 1 : 0),
+    );
+    expect(reversed.resourceLock).toEqual(forward.resourceLock);
+    expect(forward.resourceLockHash).toBe(
+      sha256CanonicalJson(forward.resourceLock),
+    );
+    expect(reversed.resourceLockHash).toBe(forward.resourceLockHash);
+  });
+});
 
 describe("Package Subject Definition normalization", () => {
   it("normalizes and locks the complete Golden rigged graph without asset bytes", () => {
@@ -984,17 +1023,86 @@ describe("Package Subject Definition normalization", () => {
     const lock = result.value!.resources.resourceLock;
     expect(lock.map((entry) => entry.resourceRef)).toEqual([
       "package://subject-definition/coastal-pack-animal@1",
+      "worldkit://camera-context/capability-driven.default@1",
+      "worldkit://camera-modifier/aim-framing@1",
+      "worldkit://camera-modifier/mounted-framing@1",
+      "worldkit://camera-modifier/reverse-stability@1",
+      "worldkit://camera-modifier/sprint-emphasis@1",
+      "worldkit://camera-modifier/water-stability@1",
+      "worldkit://camera-profile/chase.surface-fast@1",
+      "worldkit://camera-profile/first-person.standard@1",
+      "worldkit://camera-profile/flight.glide@1",
+      "worldkit://camera-profile/follow.medium@1",
+      "worldkit://camera-profile/orbit.medium@1",
+      "worldkit://camera-rig/flight-horizon@1",
+      "worldkit://camera-rig/orbit-follow@1",
+      "worldkit://camera-rig/socket-first-person@1",
+      "worldkit://camera-rig/velocity-chase@1",
       "worldkit://capability/locomotion.ground@1",
       "worldkit://collider-derivation-profile/vertical-character-capsule@1",
+      "worldkit://collider-profile/humanoid.medium-capsule@1",
+      "worldkit://control-feel-profile/humanoid.heavy-ground@1",
       "worldkit://control-feel-profile/humanoid.medium-ground@1",
+      "worldkit://control-profile/planar.camera-relative@1",
+      "worldkit://harness-profile/subject.standard@1",
       "worldkit://locomotion-profile/ground.standard@1",
+      "worldkit://medium-profile/ground-air.standard@1",
+      "worldkit://motion-kernel/free-ground@1",
+      "worldkit://motion-profile/free-ground.humanoid-medium@1",
+      "worldkit://motion-profile/safe-ground@1",
+      "worldkit://physics-body-profile/character.capability-medium@1",
       "worldkit://physics-body-profile/character.medium@1",
+      "worldkit://pose-set/static.whitebox@1",
+      "worldkit://render-binding/subject.standard@1",
       "worldkit://subject-definition/humanoid.third-person@1",
     ]);
     expect(lock.every((entry) => /^sha256:[a-f0-9]{64}$/.test(entry.contentHash))).toBe(
       true,
     );
     expect(result.value!.resources.resourceLockHash).toMatch(/^sha256:[a-f0-9]{64}$/);
+  });
+
+  it("locks the complete capability graph for the primitive R1 humanoid without a GLB", () => {
+    const result = normalizeAuthoringSpec(createValidAuthoringSpec());
+
+    expect(result.ok).toBe(true);
+    const definition = result.value!.resources.subjectDefinitions.find(
+      (row) => row.subjectDefinitionRef ===
+        "worldkit://subject-definition/humanoid.third-person@1",
+    );
+    expect(definition).toMatchObject({
+      visualBinding: { mode: "static" },
+      visualParts: [expect.objectContaining({ kind: "primitive" })],
+      colliderPolicy: {
+        kind: "profile",
+        colliderProfileRef: COLLIDER_PROFILE_REF,
+      },
+      capabilityAssembly: {
+        actionOrPoseSetRef: "worldkit://pose-set/static.whitebox@1",
+      },
+    });
+    expect(result.value!.resources.subjectAssets).toEqual([]);
+    const lockRefs = result.value!.resources.resourceLock.map(
+      (entry) => entry.resourceRef,
+    );
+    expect(lockRefs).toEqual(expect.arrayContaining([
+        "worldkit://subject-definition/humanoid.third-person@1",
+        COLLIDER_PROFILE_REF,
+        "worldkit://physics-body-profile/character.capability-medium@1",
+        "worldkit://locomotion-profile/ground.standard@1",
+        "worldkit://capability/locomotion.ground@1",
+        "worldkit://control-feel-profile/humanoid.medium-ground@1",
+        "worldkit://motion-profile/free-ground.humanoid-medium@1",
+        "worldkit://motion-kernel/free-ground@1",
+        "worldkit://control-profile/planar.camera-relative@1",
+        "worldkit://medium-profile/ground-air.standard@1",
+        "worldkit://harness-profile/subject.standard@1",
+        "worldkit://pose-set/static.whitebox@1",
+        "worldkit://render-binding/subject.standard@1",
+      ]));
+    expect(lockRefs).not.toContain(
+      "worldkit://collider-derivation-profile/vertical-character-capsule@1",
+    );
   });
 
   it("rejects duplicate Package Definition identity", () => {

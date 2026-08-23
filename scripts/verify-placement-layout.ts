@@ -675,7 +675,7 @@ export async function runPlacementLayoutVerification(): Promise<void> {
         normalizedWorldIr: 3,
         executionPlan: 4,
         runtimeSnapshot: 3,
-        browserProtocol: 3,
+        browserProtocol: 4,
       },
       hashes: {
         authoringSpec: primary.report.authoringSpecHash,

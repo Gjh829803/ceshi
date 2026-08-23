@@ -2,25 +2,31 @@ import { sha256CanonicalJson } from "@whitebox-world/protocol";
 import { describe, expect, it } from "vitest";
 
 import {
+  BUILT_IN_HEIGHTFIELD_R1_TRAVERSAL_GRAPH_BUILDER_PROFILE_REF,
+  BUILT_IN_HEIGHTFIELD_R1_LOW_BUDGET_TRAVERSAL_GRAPH_BUILDER_PROFILE_REF,
   BUILT_IN_TRAVERSAL_DRIVER_PROFILE_REF,
   BUILT_IN_TRAVERSAL_GRAPH_BUILDER_PROFILE_REF,
+  resolveTraversalGraphBuilderProfile,
   resolveTraversalDriverProfileV1,
   resolveTraversalGraphBuilderProfileV1,
+  resolveTraversalGraphBuilderProfileV2,
   validateTraversalDriverProfileV1,
   validateTraversalGraphBuilderProfileV1,
+  validateTraversalGraphBuilderProfileV2,
 } from "./index.js";
 import type {
   ResolvedTraversalLockReceiptV1,
   ResolvedTraversalLockV1,
   TraversalDriverProfileV1,
   TraversalGraphBuilderProfileV1,
+  TraversalGraphBuilderProfileV2,
   TraversalSurfaceIdentityV1,
 } from "./index.js";
 
 const CLOSED_DRIVER_PROFILE: TraversalDriverProfileV1 = {
   kind: "traversal-driver-profile",
   schemaVersion: 1,
-  pathLookaheadMeters: 2.4,
+  pathLookaheadMetersXZ: 2.4,
   cornerSelectionMode: "next-visible-segment",
   intentDirectionQuantizationRatio: 0.001,
   locomotionIntentMode: "walk",
@@ -39,7 +45,44 @@ const CLOSED_GRAPH_BUILDER_PROFILE: TraversalGraphBuilderProfileV1 = {
   maximumSearchSteps: 100000,
 };
 
+const CLOSED_HEIGHTFIELD_R1_GRAPH_BUILDER_PROFILE: TraversalGraphBuilderProfileV2 = {
+  kind: "traversal-graph-builder-profile",
+  schemaVersion: 2,
+  clearanceMarginMeters: 0.05,
+  voxelCellSizeMeters: 0.15,
+  voxelCellHeightMeters: 0.1,
+  tileSizeCells: 64,
+  maximumEdgeLengthMeters: 2.4,
+  maximumSimplificationErrorMeters: 0.15,
+  positionQuantizationMeters: 0.001,
+  slopeCostWeight: 1,
+  stepCostWeight: 1,
+  maximumNodes: 100000,
+  maximumEdges: 200000,
+  maximumTiles: 1024,
+  maximumSearchSteps: 100000,
+};
+
+const FORBIDDEN_GRAPH_BUILDER_V2_FIELDS: Readonly<Record<string, unknown>> = {
+  capsuleRadiusMeters: 0.32,
+  capsuleHeightMeters: 1.92,
+  maxSlopeDegrees: 42,
+  maxStepHeightMeters: 0.3,
+  walkSpeedMetersPerSecond: 3,
+  gravityMetersPerSecondSquared: 9.81,
+  maximumProbeTicks: 600,
+  subjectDefinitionRef: "worldkit://subject-definition/humanoid@1",
+  validationProfileRef: "worldkit://validation-profile/route-r1@1",
+  cs: 0.15,
+  ch: 0.1,
+  walkableRadius: 3,
+  walkableHeight: 20,
+  walkableClimb: 3,
+  agentRadius: 0.32,
+};
+
 const FORBIDDEN_DRIVER_FIELDS: Readonly<Record<string, unknown>> = {
+  pathLookaheadMeters: 2.4,
   walkSpeedMetersPerSecond: 3,
   runSpeedMetersPerSecond: 5,
   accelerationMetersPerSecondSquared: 10,
@@ -70,7 +113,7 @@ describe("traversal driver profile registry", () => {
       profile: {
         kind: "traversal-driver-profile",
         schemaVersion: 1,
-        pathLookaheadMeters: expect.any(Number),
+        pathLookaheadMetersXZ: expect.any(Number),
         cornerSelectionMode: "next-visible-segment",
         intentDirectionQuantizationRatio: expect.any(Number),
         locomotionIntentMode: "walk",
@@ -110,9 +153,9 @@ describe("traversal driver profile registry", () => {
     expect(Object.isFrozen(first)).toBe(true);
     expect(Object.isFrozen(first.profile)).toBe(true);
     expect(() => {
-      (first.profile as { pathLookaheadMeters: number }).pathLookaheadMeters = 1;
+      (first.profile as { pathLookaheadMetersXZ: number }).pathLookaheadMetersXZ = 1;
     }).toThrow(TypeError);
-    expect(second.profile.pathLookaheadMeters).toBe(2.4);
+    expect(second.profile.pathLookaheadMetersXZ).toBe(2.4);
   });
 
   it("rejects unknown driver fields including movement, physics, and medium authorities", () => {
@@ -154,11 +197,11 @@ describe("traversal driver profile registry", () => {
     })).toThrow("TRAVERSAL_DRIVER_SCHEMA_VERSION_MISMATCH");
     expect(() => validateTraversalDriverProfileV1({
       ...CLOSED_DRIVER_PROFILE,
-      pathLookaheadMeters: -1,
+      pathLookaheadMetersXZ: -1,
     })).toThrow("TRAVERSAL_DRIVER_NUMBER_INVALID");
     expect(() => validateTraversalDriverProfileV1({
       ...CLOSED_DRIVER_PROFILE,
-      pathLookaheadMeters: Number.NaN,
+      pathLookaheadMetersXZ: Number.NaN,
     })).toThrow("TRAVERSAL_DRIVER_NUMBER_INVALID");
     expect(() => validateTraversalDriverProfileV1({
       ...CLOSED_DRIVER_PROFILE,
@@ -167,7 +210,7 @@ describe("traversal driver profile registry", () => {
     expect(() => validateTraversalDriverProfileV1({
       kind: "traversal-driver-profile",
       schemaVersion: 1,
-      pathLookaheadMeters: 2.4,
+      pathLookaheadMetersXZ: 2.4,
     })).toThrow("TRAVERSAL_DRIVER_FIELD_MISSING");
   });
 });
@@ -187,6 +230,132 @@ describe("traversal graph builder profile registry", () => {
       contentHash: sha256CanonicalJson(resolved.profile),
       profile: CLOSED_GRAPH_BUILDER_PROFILE,
     });
+    expect(resolved.contentHash).toBe(
+      "sha256:0c716c3d733d679d8518018ec2e54d678bc26715beac98c9928218862778d4a1",
+    );
+  });
+
+  it("resolves the closed Heightfield R1 V2 profile without mutating V1", () => {
+    const resolved = resolveTraversalGraphBuilderProfileV2(
+      BUILT_IN_HEIGHTFIELD_R1_TRAVERSAL_GRAPH_BUILDER_PROFILE_REF,
+    );
+
+    expect(BUILT_IN_HEIGHTFIELD_R1_TRAVERSAL_GRAPH_BUILDER_PROFILE_REF).toBe(
+      "worldkit://traversal-graph-builder-profile/outdoor-humanoid.heightfield-r1@1",
+    );
+    expect(resolved).toEqual({
+      resourceRef: BUILT_IN_HEIGHTFIELD_R1_TRAVERSAL_GRAPH_BUILDER_PROFILE_REF,
+      resolvedVersion: "1",
+      contentHash: sha256CanonicalJson(CLOSED_HEIGHTFIELD_R1_GRAPH_BUILDER_PROFILE),
+      profile: CLOSED_HEIGHTFIELD_R1_GRAPH_BUILDER_PROFILE,
+    });
+    expect(resolved.contentHash).toBe(
+      "sha256:9720639dac7de3da1d140c7afd1ea7df4258cef202468e39fa222158caaad231",
+    );
+    expect(resolveTraversalGraphBuilderProfile(
+      BUILT_IN_TRAVERSAL_GRAPH_BUILDER_PROFILE_REF,
+    ).profile.schemaVersion).toBe(1);
+    expect(resolveTraversalGraphBuilderProfile(
+      BUILT_IN_HEIGHTFIELD_R1_TRAVERSAL_GRAPH_BUILDER_PROFILE_REF,
+    ).profile.schemaVersion).toBe(2);
+    expect(resolveTraversalGraphBuilderProfileV1(
+      BUILT_IN_TRAVERSAL_GRAPH_BUILDER_PROFILE_REF,
+    ).contentHash).toBe(
+      "sha256:0c716c3d733d679d8518018ec2e54d678bc26715beac98c9928218862778d4a1",
+    );
+  });
+
+  it("resolves an independently hashed locked low-budget Heightfield R1 profile", () => {
+    const standard = resolveTraversalGraphBuilderProfileV2(
+      BUILT_IN_HEIGHTFIELD_R1_TRAVERSAL_GRAPH_BUILDER_PROFILE_REF,
+    );
+    const lowBudget = resolveTraversalGraphBuilderProfileV2(
+      BUILT_IN_HEIGHTFIELD_R1_LOW_BUDGET_TRAVERSAL_GRAPH_BUILDER_PROFILE_REF,
+    );
+
+    expect(BUILT_IN_HEIGHTFIELD_R1_LOW_BUDGET_TRAVERSAL_GRAPH_BUILDER_PROFILE_REF)
+      .toBe(
+        "worldkit://traversal-graph-builder-profile/outdoor-humanoid.heightfield-r1-low-budget@1",
+      );
+    expect(lowBudget.resourceRef).not.toBe(standard.resourceRef);
+    expect(lowBudget.contentHash).not.toBe(standard.contentHash);
+    expect({
+      ...lowBudget.profile,
+      maximumNodes: standard.profile.maximumNodes,
+      maximumEdges: standard.profile.maximumEdges,
+      maximumTiles: standard.profile.maximumTiles,
+      maximumSearchSteps: standard.profile.maximumSearchSteps,
+    }).toEqual(standard.profile);
+    expect(lowBudget.profile).toMatchObject({
+      maximumNodes: 16,
+      maximumEdges: 32,
+      maximumTiles: 64,
+      maximumSearchSteps: 16,
+    });
+    expect(lowBudget.contentHash).toBe(sha256CanonicalJson(lowBudget.profile));
+    expect(lowBudget.contentHash).toBe(
+      "sha256:d2f3ebf7afe77f2a2323173f6dde6f5d27896279befc96b0aff23eb591f962e6",
+    );
+    expect(resolveTraversalGraphBuilderProfile(
+      BUILT_IN_HEIGHTFIELD_R1_LOW_BUDGET_TRAVERSAL_GRAPH_BUILDER_PROFILE_REF,
+    )).toEqual(lowBudget);
+    expect(Object.isFrozen(lowBudget)).toBe(true);
+    expect(Object.isFrozen(lowBudget.profile)).toBe(true);
+  });
+
+  it("keeps V2 closed against Subject, Validation, and Provider dialects", () => {
+    for (const [field, value] of Object.entries(FORBIDDEN_GRAPH_BUILDER_V2_FIELDS)) {
+      expect(() => validateTraversalGraphBuilderProfileV2({
+        ...CLOSED_HEIGHTFIELD_R1_GRAPH_BUILDER_PROFILE,
+        [field]: value,
+      })).toThrow("TRAVERSAL_GRAPH_BUILDER_FIELD_FORBIDDEN");
+    }
+    expect(() => validateTraversalGraphBuilderProfileV2(
+      CLOSED_HEIGHTFIELD_R1_GRAPH_BUILDER_PROFILE,
+    )).not.toThrow();
+  });
+
+  it("rejects invalid V2 ranges and cross-version resolver calls", () => {
+    for (const mutation of [
+      { voxelCellSizeMeters: 0.0001 },
+      { voxelCellHeightMeters: 3 },
+      { tileSizeCells: 63.5 },
+      { tileSizeCells: 8 },
+      { maximumEdgeLengthMeters: 0.1 },
+      { maximumSimplificationErrorMeters: Number.NaN },
+    ]) {
+      expect(() => validateTraversalGraphBuilderProfileV2({
+        ...CLOSED_HEIGHTFIELD_R1_GRAPH_BUILDER_PROFILE,
+        ...mutation,
+      })).toThrow("TRAVERSAL_GRAPH_BUILDER_NUMBER_INVALID");
+    }
+    expect(() => resolveTraversalGraphBuilderProfileV1(
+      BUILT_IN_HEIGHTFIELD_R1_TRAVERSAL_GRAPH_BUILDER_PROFILE_REF,
+    )).toThrow("TRAVERSAL_GRAPH_BUILDER_PROFILE_NOT_FOUND");
+    expect(() => resolveTraversalGraphBuilderProfileV2(
+      BUILT_IN_TRAVERSAL_GRAPH_BUILDER_PROFILE_REF,
+    )).toThrow("TRAVERSAL_GRAPH_BUILDER_PROFILE_NOT_FOUND");
+    expect(() => resolveTraversalGraphBuilderProfile(
+      "worldkit://traversal-graph-builder-profile/unknown@1",
+    )).toThrow("TRAVERSAL_GRAPH_BUILDER_PROFILE_NOT_FOUND");
+  });
+
+  it("returns fresh deeply frozen V2 projections", () => {
+    const first = resolveTraversalGraphBuilderProfileV2(
+      BUILT_IN_HEIGHTFIELD_R1_TRAVERSAL_GRAPH_BUILDER_PROFILE_REF,
+    );
+    const second = resolveTraversalGraphBuilderProfileV2(
+      BUILT_IN_HEIGHTFIELD_R1_TRAVERSAL_GRAPH_BUILDER_PROFILE_REF,
+    );
+
+    expect(first).not.toBe(second);
+    expect(first.profile).not.toBe(second.profile);
+    expect(Object.isFrozen(first)).toBe(true);
+    expect(Object.isFrozen(first.profile)).toBe(true);
+    expect(() => {
+      (first.profile as { tileSizeCells: number }).tileSizeCells = 32;
+    }).toThrow(TypeError);
+    expect(second.profile.tileSizeCells).toBe(64);
   });
 
   it("rejects unregistered and floating graph builder profile refs with a stable code", () => {
@@ -267,6 +436,7 @@ describe("traversal contract type exports", () => {
       kind: "resolved-traversal-lock",
       schemaVersion: 1,
       subjectEntityId: "player",
+      resourceLockHash: identity.resourceHash,
       subjectDefinitionRef: "worldkit://subject-definition/player@1",
       subjectDefinitionHash: identity.resourceHash,
       colliderProfileRef: "worldkit://collider-profile/humanoid@1",

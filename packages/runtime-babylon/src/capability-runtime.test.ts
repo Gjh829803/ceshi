@@ -977,7 +977,11 @@ describe("capability package runtime smoke tests", () => {
       async () => new Response(JSON.stringify(createFlatTerrainCapabilitySpec())),
       { subjectDefinitionRef: "worldkit://subject-definition/humanoid.g-bot@1" },
     );
-    if (!loaded.ok || loaded.executionPlan === undefined) {
+    if (
+      !loaded.ok ||
+      loaded.executionPlan === undefined ||
+      loaded.executionPlan.schemaVersion !== 4
+    ) {
       throw new Error(
         `G Bot package failed to load: ${JSON.stringify(loaded.diagnostics)}`,
       );
@@ -1088,7 +1092,11 @@ describe("capability package runtime smoke tests", () => {
       async () => new Response(JSON.stringify(createFlatTerrainCapabilitySpec())),
       { subjectDefinitionRef: "worldkit://subject-definition/humanoid.g-bot@1" },
     );
-    if (!loaded.ok || loaded.executionPlan === undefined) {
+    if (
+      !loaded.ok ||
+      loaded.executionPlan === undefined ||
+      loaded.executionPlan.schemaVersion !== 4
+    ) {
       throw new Error(
         `G Bot package failed to load: ${JSON.stringify(loaded.diagnostics)}`,
       );

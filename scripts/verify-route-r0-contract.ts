@@ -72,7 +72,7 @@ interface RouteR0LockMismatchFixture {
 }
 
 const FROZEN_NOTICE =
-  "R0 contract frozen; R1/R1b runtime capability not implemented";
+  "R0 contract frozen; this command does not prove R1/R1b runtime capability";
 
 async function readJsonFixture(filePath: string): Promise<unknown> {
   return JSON.parse(await readFile(filePath, "utf8")) as unknown;
@@ -182,7 +182,7 @@ function checkDriverProfileWhitelist(): void {
     () =>
       validateTraversalDriverProfileV1({
         ...resolved.profile,
-        destinationToleranceMeters: 0.5,
+        destinationToleranceMetersXZ: 0.5,
       }),
     (error: unknown) =>
       error instanceof Error && error.message.includes("TRAVERSAL_DRIVER_FIELD_FORBIDDEN"),
@@ -197,6 +197,35 @@ function checkCanonicalGraphBytes(
   const canonical = canonicalTraversalGraphV1(graph);
   assert.equal(Object.hasOwn(canonical, "traversalGraphHash"), false);
   assert.equal(canonical.resolvedTraversalLockHash, resolvedTraversalLockHash);
+  for (const edge of Object.values(canonical.traversalEdgesById)) {
+    assert.equal(
+      Object.hasOwn(edge, "stepHeightMeters"),
+      true,
+      "Graph V1 Edge must carry distinct non-negative stepHeightMeters evidence.",
+    );
+    assert.equal(edge.stepHeightMeters >= 0, true);
+    assert.equal(
+      edge.type,
+      edge.stepHeightMeters > 0
+        ? "step"
+        : edge.slopeDegrees > 0
+        ? "slope"
+        : "walk",
+      "Graph V1 Edge type must follow step, slope, walk priority.",
+    );
+  }
+  assert.equal(Object.isFrozen(canonical), true);
+  assert.equal(Object.isFrozen(canonical.traversalNodesById), true);
+  assert.deepEqual(
+    Object.keys(canonical.traversalNodesById),
+    Object.keys(canonical.traversalNodesById).sort(),
+    "Graph V1 Node map must be emitted in canonical id order.",
+  );
+  assert.deepEqual(
+    Object.keys(canonical.traversalEdgesById),
+    Object.keys(canonical.traversalEdgesById).sort(),
+    "Graph V1 Edge map must be emitted in canonical id order.",
+  );
   assert.equal(hashTraversalGraphV1(graph), expectedHash);
 }
 

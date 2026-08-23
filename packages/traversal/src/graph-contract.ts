@@ -1,7 +1,7 @@
 import { sha256CanonicalJson } from "@whitebox-world/protocol";
 import { isEmpty, isNil, isPlainObject } from "lodash-es";
 
-import { resolveTraversalGraphBuilderProfileV1 } from "./profile-registry.js";
+import { resolveTraversalGraphBuilderProfile } from "./profile-registry.js";
 import type { TraversalSurfaceIdentityV1 } from "./types.js";
 
 export interface TraversalNodeV1 {
@@ -22,6 +22,7 @@ export interface TraversalEdgeV1 {
   readonly toTraversalNodeId: string;
   readonly distanceMeters: number;
   readonly heightDeltaMeters: number;
+  readonly stepHeightMeters: number;
   readonly slopeDegrees: number;
   readonly minimumClearanceWidthMeters: number;
   readonly minimumClearanceHeightMeters: number;
@@ -37,6 +38,7 @@ export interface TraversalGraphV1 {
   readonly terrainArtifactHash: `sha256:${string}`;
   readonly colliderArtifactHash: `sha256:${string}`;
   readonly surfaceArtifactHash: `sha256:${string}`;
+  readonly routeBuildInputHash: `sha256:${string}`;
   readonly resolvedTraversalLockHash: `sha256:${string}`;
   readonly graphBuilderProfileRef: string;
   readonly graphBuilderResolvedVersion: string;
@@ -60,6 +62,7 @@ const GRAPH_FIELDS = [
   "terrainArtifactHash",
   "colliderArtifactHash",
   "surfaceArtifactHash",
+  "routeBuildInputHash",
   "resolvedTraversalLockHash",
   "graphBuilderProfileRef",
   "graphBuilderResolvedVersion",
@@ -89,6 +92,7 @@ const EDGE_FIELDS = [
   "toTraversalNodeId",
   "distanceMeters",
   "heightDeltaMeters",
+  "stepHeightMeters",
   "slopeDegrees",
   "minimumClearanceWidthMeters",
   "minimumClearanceHeightMeters",
@@ -102,6 +106,7 @@ const GRAPH_HASH_FIELDS = [
   "terrainArtifactHash",
   "colliderArtifactHash",
   "surfaceArtifactHash",
+  "routeBuildInputHash",
   "resolvedTraversalLockHash",
   "graphBuilderProfileHash",
 ] as const;
@@ -120,6 +125,10 @@ function failGraph(message: string): never {
 
 function failSurface(message: string): never {
   throw new Error(`TRAVERSAL_SURFACE_IDENTITY_INVALID: ${message}`);
+}
+
+function compareCanonicalId(left: string, right: string): number {
+  return left < right ? -1 : left > right ? 1 : 0;
 }
 
 const SURFACE_IDENTITY_FIELDS = [
@@ -180,7 +189,7 @@ function assertResolvedGraphBuilderIdentity(
   resolvedVersion: string,
   resourceHash: `sha256:${string}`,
 ): void {
-  const resolved = resolveTraversalGraphBuilderProfileV1(resourceRef);
+  const resolved = resolveTraversalGraphBuilderProfile(resourceRef);
   if (
     resolved.resolvedVersion !== resolvedVersion ||
     resolved.contentHash !== resourceHash
@@ -221,7 +230,7 @@ function requireFiniteNumber(value: unknown, path: string): number {
   if (typeof value !== "number" || !Number.isFinite(value)) {
     failGraph(`'${path}' must be a finite number.`);
   }
-  return value;
+  return Object.is(value, -0) ? 0 : value;
 }
 
 function requireNonNegativeMeters(value: unknown, path: string): number {
@@ -260,6 +269,16 @@ function requireMetersTuple(
     requireFiniteNumber(value[1], `${path}/1`),
     requireFiniteNumber(value[2], `${path}/2`),
   ];
+}
+
+function deepFreeze<T>(value: T): T {
+  if (isNil(value) || typeof value !== "object" || Object.isFrozen(value)) {
+    return value;
+  }
+  for (const child of Object.values(value as Record<string, unknown>)) {
+    deepFreeze(child);
+  }
+  return Object.freeze(value);
 }
 
 function validateNode(
@@ -354,6 +373,24 @@ function validateEdge(
   if (routePathCost < 0) {
     failGraph(`'${path}/routePathCost' must be a non-negative dimensionless cost.`);
   }
+  const stepHeightMeters = requireNonNegativeMeters(
+    record.stepHeightMeters,
+    `${path}/stepHeightMeters`,
+  );
+  const slopeDegrees = requireSlopeDegrees(
+    record.slopeDegrees,
+    `${path}/slopeDegrees`,
+  );
+  const expectedType: TraversalEdgeV1["type"] = stepHeightMeters > 0
+    ? "step"
+    : slopeDegrees > 0
+    ? "slope"
+    : "walk";
+  if (record.type !== expectedType) {
+    failGraph(
+      `'${path}/type' must be '${expectedType}' for its step and slope evidence.`,
+    );
+  }
   return {
     id,
     type: record.type as TraversalEdgeV1["type"],
@@ -367,7 +404,8 @@ function validateEdge(
       record.heightDeltaMeters,
       `${path}/heightDeltaMeters`,
     ),
-    slopeDegrees: requireSlopeDegrees(record.slopeDegrees, `${path}/slopeDegrees`),
+    stepHeightMeters,
+    slopeDegrees,
     minimumClearanceWidthMeters: requirePositiveMeters(
       record.minimumClearanceWidthMeters,
       `${path}/minimumClearanceWidthMeters`,
@@ -423,7 +461,7 @@ export function canonicalTraversalGraphV1(value: unknown): TraversalGraphV1 {
   const traversalNodesById: Record<string, TraversalNodeV1> = {};
   for (const [nodeId, node] of Object.entries(
     record.traversalNodesById as Record<string, unknown>,
-  )) {
+  ).sort(([left], [right]) => compareCanonicalId(left, right))) {
     traversalNodesById[nodeId] = validateNode(
       node,
       `traversalNodesById/${nodeId}`,
@@ -438,7 +476,7 @@ export function canonicalTraversalGraphV1(value: unknown): TraversalGraphV1 {
   const traversalEdgesById: Record<string, TraversalEdgeV1> = {};
   for (const [edgeId, edge] of Object.entries(
     record.traversalEdgesById as Record<string, unknown>,
-  )) {
+  ).sort(([left], [right]) => compareCanonicalId(left, right))) {
     traversalEdgesById[edgeId] = validateEdge(
       edge,
       `traversalEdgesById/${edgeId}`,
@@ -447,14 +485,14 @@ export function canonicalTraversalGraphV1(value: unknown): TraversalGraphV1 {
     );
   }
 
-  return {
+  return deepFreeze({
     kind: "traversal-graph",
     schemaVersion: 1,
     ...hashes,
     ...strings,
     traversalNodesById,
     traversalEdgesById,
-  };
+  });
 }
 
 export function hashTraversalGraphV1(value: unknown): `sha256:${string}` {
