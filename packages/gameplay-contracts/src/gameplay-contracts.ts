@@ -3,6 +3,7 @@ import {
   sha256CanonicalJson,
   stringifyCanonicalJson,
 } from "@whitebox-world/protocol";
+import { isNil } from "lodash-es";
 
 export type Sha256HashV1 = `sha256:${string}`;
 
@@ -428,16 +429,16 @@ export function parseGameplayDiagnosticV1(
 ): GameplayDiagnosticV1 | undefined {
   const record = snapshotDataRecord(input);
   if (
-    record === undefined ||
+    isNil(record) ||
     !hasExactKeys(record, ["code", "message"]) ||
     typeof record.code !== "string" ||
     !GAMEPLAY_DIAGNOSTIC_CODES.has(record.code as GameplayDiagnosticCodeV1) ||
     !isNonEmptyString(record.message)
   ) return undefined;
-  return {
+  return Object.freeze({
     code: record.code as GameplayDiagnosticCodeV1,
     message: record.message,
-  };
+  });
 }
 
 function parseStringArray(input: unknown): readonly string[] | undefined {
@@ -1669,8 +1670,27 @@ function parseWorldStateSnapshotBuildInputV1(
     ) invalid(schemaName);
   }
 
+  const isSpatialEntityEndpoint = (entityId: string): boolean => {
+    const endpoint = getOwnMapValue(entityStatesById, entityId);
+    return !isNil(endpoint) && endpoint.kind === "spatial-entity-state";
+  };
   for (const semanticFact of Object.values(semanticFactsById)) {
     if (semanticFact.startedSimulationTick > simulationTick) invalid(schemaName);
+    if (semanticFact.type === "supportedBy") {
+      if (
+        !isSpatialEntityEndpoint(semanticFact.supportedEntityId) ||
+        !isSpatialEntityEndpoint(semanticFact.supportSurfaceEntityId)
+      ) invalid(schemaName);
+    } else if (semanticFact.type === "touching") {
+      if (!semanticFact.entityIds.every(isSpatialEntityEndpoint)) {
+        invalid(schemaName);
+      }
+    } else if (
+      !isSpatialEntityEndpoint(semanticFact.containedEntityId) ||
+      !isSpatialEntityEndpoint(semanticFact.volumeEntityId)
+    ) {
+      invalid(schemaName);
+    }
   }
 
   for (const action of Object.values(activeActionStatesById)) {

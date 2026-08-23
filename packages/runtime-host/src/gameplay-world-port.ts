@@ -120,7 +120,9 @@ function snapshotDataArray(value: unknown): readonly unknown[] | undefined {
       snapshot.push(descriptor.value);
     }
     const lengthDescriptor = Reflect.getOwnPropertyDescriptor(value, "length");
-    if (lengthDescriptor?.enumerable !== false) return undefined;
+    if (isNil(lengthDescriptor) || lengthDescriptor.enumerable !== false) {
+      return undefined;
+    }
     return snapshot;
   } catch {
     return undefined;
@@ -150,13 +152,17 @@ function isSafeNonNegativeInteger(value: unknown): value is number {
 function parseControllerEntityIds(
   input: unknown,
 ): ReadonlySet<string> {
-  const options = snapshotDataRecord(input) ??
-    invalid("GameplayWorldProjectionValidationOptionsV1");
+  const options = snapshotDataRecord(input);
+  if (isNil(options)) {
+    return invalid("GameplayWorldProjectionValidationOptionsV1");
+  }
   if (!hasExactKeys(options, ["controllerEntityIds"])) {
     return invalid("GameplayWorldProjectionValidationOptionsV1");
   }
-  const values = snapshotDataArray(options.controllerEntityIds) ??
-    invalid("GameplayWorldProjectionValidationOptionsV1");
+  const values = snapshotDataArray(options.controllerEntityIds);
+  if (isNil(values)) {
+    return invalid("GameplayWorldProjectionValidationOptionsV1");
+  }
   const controllerEntityIds = new Set<string>();
   for (const value of values) {
     if (!isNonEmptyString(value) || controllerEntityIds.has(value)) {
@@ -173,7 +179,8 @@ export function parseGameplayWorldStateProjectionV1(
 ): GameplayWorldStateProjectionV1 {
   const schemaName = "GameplayWorldStateProjectionV1";
   try {
-    const record = snapshotDataRecord(input) ?? invalid(schemaName);
+    const record = snapshotDataRecord(input);
+    if (isNil(record)) return invalid(schemaName);
     if (!hasExactKeys(record, [
       "simulationTick",
       "spatialEntityStatesById",
@@ -224,7 +231,8 @@ export function parseGameplayViewStateProjectionV1(
   input: unknown,
 ): GameplayViewStateProjectionV1 {
   const schemaName = "GameplayViewStateProjectionV1";
-  const record = snapshotDataRecord(input) ?? invalid(schemaName);
+  const record = snapshotDataRecord(input);
+  if (isNil(record)) return invalid(schemaName);
   const hasControlledEntity = hasExactKeys(record, [
     "viewStateRevision",
     "controlledEntityId",
@@ -246,7 +254,8 @@ export function parseGameplayFixedInputCapacityEstimateV1(
   input: unknown,
 ): GameplayFixedInputCapacityEstimateV1 {
   const schemaName = "GameplayFixedInputCapacityEstimateV1";
-  const record = snapshotDataRecord(input) ?? invalid(schemaName);
+  const record = snapshotDataRecord(input);
+  if (isNil(record)) return invalid(schemaName);
   if (!hasExactKeys(record, [
     "maximumSemanticFactCountAfterInput",
     "maximumSemanticFactTransitionEventCount",
@@ -270,7 +279,8 @@ export function parseGameplayWorldTransactionV1(
 ): GameplayWorldTransactionV1 {
   const schemaName = "GameplayWorldTransactionV1";
   try {
-    const record = snapshotDataRecord(input) ?? invalid(schemaName);
+    const record = snapshotDataRecord(input);
+    if (isNil(record)) return invalid(schemaName);
     if (!hasExactKeys(record, [
       "projectedWorldStateAfter",
       "projectedViewStateAfter",
@@ -288,8 +298,45 @@ export function parseGameplayWorldTransactionV1(
     const projectedViewStateAfter = parseGameplayViewStateProjectionV1(
       record.projectedViewStateAfter,
     );
-    const commitPrepared = record.commitPrepared as () => void;
-    const abort = record.abort as () => Promise<void>;
+    const transactionReceiver = input;
+    const providerCommitPrepared = record.commitPrepared as () => unknown;
+    const providerAbort = record.abort as () => Promise<void>;
+    let lifecycle: "prepared" | "committed" | "aborted" = "prepared";
+    let abortPromise: Promise<void> | undefined;
+    const commitPrepared = (): void => {
+      if (lifecycle === "committed") {
+        throw new Error("GameplayWorldTransactionV1 is already committed.");
+      }
+      if (lifecycle === "aborted") {
+        throw new Error("GameplayWorldTransactionV1 is already aborted.");
+      }
+      lifecycle = "committed";
+      const result = Reflect.apply(
+        providerCommitPrepared,
+        transactionReceiver,
+        [],
+      );
+      if (!isNil(result)) {
+        void Promise.resolve(result).catch(() => undefined);
+        throw new TypeError(
+          "GameplayWorldTransactionV1 commitPrepared must return undefined.",
+        );
+      }
+    };
+    const abort = (): Promise<void> => {
+      if (!isNil(abortPromise)) return abortPromise;
+      if (lifecycle === "committed") {
+        abortPromise = Promise.reject(
+          new Error("GameplayWorldTransactionV1 is already committed."),
+        );
+        return abortPromise;
+      }
+      lifecycle = "aborted";
+      abortPromise = Promise.resolve().then(() =>
+        Reflect.apply(providerAbort, transactionReceiver, [])
+      );
+      return abortPromise;
+    };
 
     return Object.freeze({
       projectedWorldStateAfter,

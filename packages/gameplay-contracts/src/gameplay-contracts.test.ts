@@ -32,6 +32,7 @@ import {
   type WorldStateSnapshotV1,
 } from "./gameplay-contracts";
 import { sha256CanonicalJson } from "@whitebox-world/protocol";
+import { isNil } from "lodash-es";
 import {
   parseGameplaySemanticFactV1 as parseGameplaySemanticFactV1FromBarrel,
 } from "@whitebox-world/gameplay-contracts";
@@ -104,10 +105,12 @@ describe("GameplayDiagnosticV1", () => {
     "RUNTIME_ACTIVITY_ID_CONFLICT",
     "RUNTIME_ACTIVITY_NOT_ACTIVE",
   ] as const)("accepts the stable %s code through the exact parser", (code) => {
-    expect(parseGameplayDiagnosticV1({
+    const parsed = parseGameplayDiagnosticV1({
       code,
       message: `Stable ${code} diagnostic.`,
-    })).toEqual({ code, message: `Stable ${code} diagnostic.` });
+    });
+    expect(parsed).toEqual({ code, message: `Stable ${code} diagnostic.` });
+    expect(Object.isFrozen(parsed)).toBe(true);
   });
 
   it.each([
@@ -728,6 +731,30 @@ const spatialEntityState = {
   angularVelocityRadiansPerSecondXYZ: [0, 0, 0],
 } as const;
 
+function staticSpatialEntityState(
+  id: string,
+  semanticClassId: string,
+) {
+  return {
+    id,
+    kind: "spatial-entity-state" as const,
+    entityDefinitionRef: `worldkit://entity-definition/${id}@1`,
+    entityDefinitionHash: HASH_A,
+    semanticClassId,
+    lifecycleMode: "active" as const,
+    positionMetersXYZ: [0, 0, 0] as const,
+    rotationQuaternionXYZW: [0, 0, 0, 1] as const,
+    scaleRatioXYZ: [1, 1, 1] as const,
+    linearVelocityMetersPerSecondXYZ: [0, 0, 0] as const,
+    angularVelocityRadiansPerSecondXYZ: [0, 0, 0] as const,
+  };
+}
+
+const terrainSpatialEntityState = staticSpatialEntityState(
+  "terrain-primary",
+  "terrain.surface",
+);
+
 const controllerEntityState = {
   id: "controller-primary",
   kind: "controller-entity-state",
@@ -797,6 +824,7 @@ const worldStateSnapshotInput = {
   entityStatesById: {
     "g-bot-primary": spatialEntityState,
     "controller-primary": controllerEntityState,
+    "terrain-primary": terrainSpatialEntityState,
   },
   capabilityStatesById: {
     "locomotion-g-bot-primary": locomotionCapabilityState,
@@ -818,9 +846,9 @@ const worldStateSnapshot = buildWorldStateSnapshotV1(
 );
 
 const WORLD_STATE_GOLDEN_HASH =
-  "sha256:d0f0bf97d9f66711738ead0a2f29ae76229be6afeb5de7b09dc0e33a56089934" as const;
+  "sha256:d379e8c5447b4d456b7ed74ab0213452fc9e406252deca6f5e731096126eee68" as const;
 const WORLD_STATE_GOLDEN_ID =
-  "world-state:c7a7bef7c5673759c65118f7203706778a633a002ae0ba318c410d5fd0ae12b8" as const;
+  "world-state:661dc9f864d54022085a53ded5cffab5080b39ffdd3daa82e832d67f942885ec" as const;
 
 function worldStateBuildInputOf(
   input: object,
@@ -1145,6 +1173,36 @@ describe("WorldStateSnapshotV1", () => {
   });
 
   it.each([
+    ["a dangling supportedBy surface", {
+      ...supportedByFact,
+      supportSurfaceEntityId: "terrain-missing",
+    }],
+    ["a Controller endpoint in touching", {
+      type: "touching" as const,
+      schemaVersion: 1 as const,
+      entityIds: ["controller-primary", "g-bot-primary"] as const,
+      startedSimulationTick: 2,
+      semanticFactProjectorProfileRef: SEMANTIC_FACT_PROJECTOR_PROFILE_REF,
+      semanticFactProjectorProfileHash: HASH_E,
+    }],
+    ["a dangling insideVolume container", {
+      type: "insideVolume" as const,
+      schemaVersion: 1 as const,
+      containedEntityId: "g-bot-primary",
+      volumeEntityId: "volume-missing",
+      startedSimulationTick: 3,
+      semanticFactProjectorProfileRef: SEMANTIC_FACT_PROJECTOR_PROFILE_REF,
+      semanticFactProjectorProfileHash: HASH_E,
+    }],
+  ])("rejects %s even when the Fact identity is canonical", (_label, body) => {
+    const fact = { ...body, id: deriveGameplaySemanticFactIdV1(body) };
+    expect(() => rebuildWorldStateSnapshotV1({
+      ...worldStateSnapshot,
+      semanticFactsById: { [fact.id]: fact },
+    })).toThrow("closed WorldStateSnapshotV1 schema");
+  });
+
+  it.each([
     ["air medium with non-airborne mode", {
       ...locomotionCapabilityState,
       mode: "run",
@@ -1229,6 +1287,7 @@ describe("WorldStateSnapshotV1", () => {
       entityStatesById: {
         "controller-primary": controllerEntityState,
         "g-bot-primary": spatialEntityState,
+        "terrain-primary": terrainSpatialEntityState,
       },
     };
 
@@ -1366,8 +1425,19 @@ describe("GameplaySemanticFactV1", () => {
     ["touching", touchingFact],
     ["insideVolume", insideVolumeFact],
   ])("parses and freezes the closed %s branch", (_label, fact) => {
+    const additionalEndpointState = fact.type === "touching"
+      ? staticSpatialEntityState("ground-primary", "terrain.surface")
+      : fact.type === "insideVolume"
+      ? staticSpatialEntityState("zone-primary", "volume.zone")
+      : undefined;
     const built = rebuildWorldStateSnapshotV1({
       ...worldStateSnapshot,
+      entityStatesById: {
+        ...worldStateSnapshot.entityStatesById,
+        ...(isNil(additionalEndpointState)
+          ? {}
+          : { [additionalEndpointState.id]: additionalEndpointState }),
+      },
       semanticFactsById: { [fact.id]: fact },
     });
 

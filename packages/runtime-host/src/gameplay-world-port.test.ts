@@ -48,10 +48,11 @@ function touchingFact(): GameplaySemanticFactV1 {
 
 function worldProjectionInput() {
   const hero = spatialEntity();
+  const wall = spatialEntity("entity.wall");
   const fact = touchingFact();
   return {
     simulationTick: 7,
-    spatialEntityStatesById: { [hero.id]: hero },
+    spatialEntityStatesById: { [hero.id]: hero, [wall.id]: wall },
     capabilityStatesById: {
       "capability.hero.locomotion": {
         id: "capability.hero.locomotion",
@@ -159,6 +160,31 @@ describe("GameplayWorldPortV1 projection boundary", () => {
     }
   });
 
+  it.each([
+    ["a Controller Fact endpoint", "controller.primary"],
+    ["a dangling Fact endpoint", "entity.missing"],
+  ])("rejects %s", (_label, invalidEndpointEntityId) => {
+    const body = {
+      type: "touching" as const,
+      schemaVersion: 1 as const,
+      entityIds: [invalidEndpointEntityId, "entity.hero"].sort() as [string, string],
+      startedSimulationTick: 7,
+      semanticFactProjectorProfileRef:
+        "worldkit://semantic-fact-projector/default@1",
+      semanticFactProjectorProfileHash: HASH,
+    };
+    const fact = { ...body, id: deriveGameplaySemanticFactIdV1(body) };
+    const input = {
+      ...worldProjectionInput(),
+      semanticFactsById: { [fact.id]: fact },
+    };
+
+    expect(() => parseGameplayWorldStateProjectionV1(
+      input,
+      projectionValidationOptions(),
+    )).toThrow(/GameplayWorldStateProjectionV1/);
+  });
+
   it("uses only an opaque provider-neutral view revision and controlled entity", () => {
     expect(parseGameplayViewStateProjectionV1({ viewStateRevision: 3 })).toEqual({
       viewStateRevision: 3,
@@ -225,23 +251,26 @@ describe("GameplayWorldPortV1 transaction boundary", () => {
   it("snapshots projections and fixes lifecycle function identity without executing them", async () => {
     let commitCount = 0;
     let abortCount = 0;
-    const abortPromise = Promise.resolve();
-    const commitPrepared = () => {
-      commitCount += 1;
-    };
-    const abort = () => {
-      abortCount += 1;
-      return abortPromise;
-    };
+    let commitReceiverMatches = false;
+    let abortReceiverMatches = false;
     const input = {
       projectedWorldStateAfter: worldProjectionInput(),
       projectedViewStateAfter: {
         viewStateRevision: 8,
         controlledEntityId: "entity.hero",
       },
-      commitPrepared,
-      abort,
+      commitPrepared(this: unknown) {
+        commitReceiverMatches = this === input;
+        commitCount += 1;
+      },
+      abort(this: unknown) {
+        abortReceiverMatches = this === input;
+        abortCount += 1;
+        return Promise.resolve();
+      },
     };
+    const originalCommitPrepared = input.commitPrepared;
+    const originalAbort = input.abort;
 
     const transaction = parseGameplayWorldTransactionV1(
       input,
@@ -250,17 +279,120 @@ describe("GameplayWorldPortV1 transaction boundary", () => {
 
     expect(commitCount).toBe(0);
     expect(abortCount).toBe(0);
-    expect(transaction.commitPrepared).toBe(commitPrepared);
-    expect(transaction.abort).toBe(abort);
+    expect(transaction.commitPrepared).not.toBe(originalCommitPrepared);
+    expect(transaction.abort).not.toBe(originalAbort);
     expect(Object.isFrozen(transaction)).toBe(true);
     expect(Object.isFrozen(transaction.projectedWorldStateAfter)).toBe(true);
     expect(Object.isFrozen(transaction.projectedViewStateAfter)).toBe(true);
 
     input.projectedViewStateAfter.viewStateRevision = 99;
     expect(transaction.projectedViewStateAfter.viewStateRevision).toBe(8);
-    expect(transaction.abort()).toBe(transaction.abort());
-    await transaction.abort();
-    expect(abortCount).toBe(3);
+    const firstAbort = transaction.abort();
+    expect(transaction.abort()).toBe(firstAbort);
+    await firstAbort;
+    expect(abortCount).toBe(1);
+    expect(abortReceiverMatches).toBe(true);
+    expect(() => transaction.commitPrepared()).toThrow(/already aborted/);
+    expect(commitCount).toBe(0);
+  });
+
+  it("commits exactly once with the accepted transaction as receiver", () => {
+    let commitCount = 0;
+    let commitReceiverMatches = false;
+    const input = {
+      projectedWorldStateAfter: worldProjectionInput(),
+      projectedViewStateAfter: { viewStateRevision: 8 },
+      commitPrepared(this: unknown) {
+        commitReceiverMatches = this === input;
+        commitCount += 1;
+      },
+      abort: () => Promise.resolve(),
+    };
+    const transaction = parseGameplayWorldTransactionV1(
+      input,
+      projectionValidationOptions(),
+    );
+
+    transaction.commitPrepared();
+    expect(commitCount).toBe(1);
+    expect(commitReceiverMatches).toBe(true);
+    expect(() => transaction.commitPrepared()).toThrow(/already committed/);
+    expect(commitCount).toBe(1);
+  });
+
+  it("rejects an asynchronous provider commit contract violation synchronously", () => {
+    let providerState = "prepared";
+    const input = {
+      projectedWorldStateAfter: worldProjectionInput(),
+      projectedViewStateAfter: { viewStateRevision: 8 },
+      commitPrepared() {
+        return Promise.resolve().then(() => {
+          providerState = "committed-late";
+        });
+      },
+      abort: () => Promise.resolve(),
+    };
+    const transaction = parseGameplayWorldTransactionV1(
+      input,
+      projectionValidationOptions(),
+    );
+
+    expect(() => transaction.commitPrepared()).toThrow(
+      /commitPrepared.*undefined/,
+    );
+    expect(providerState).toBe("prepared");
+  });
+
+  it("consumes a rejected asynchronous commit result after the synchronous violation", async () => {
+    const unhandledReasons: unknown[] = [];
+    const onUnhandledRejection = (reason: unknown): void => {
+      unhandledReasons.push(reason);
+    };
+    process.on("unhandledRejection", onUnhandledRejection);
+    try {
+      const input = {
+        projectedWorldStateAfter: worldProjectionInput(),
+        projectedViewStateAfter: { viewStateRevision: 8 },
+        commitPrepared() {
+          return Promise.reject(new Error("provider async rejection"));
+        },
+        abort: () => Promise.resolve(),
+      };
+      const transaction = parseGameplayWorldTransactionV1(
+        input,
+        projectionValidationOptions(),
+      );
+
+      expect(() => transaction.commitPrepared()).toThrow(
+        /commitPrepared.*undefined/,
+      );
+      await new Promise<void>((resolve) => setTimeout(resolve, 0));
+      expect(unhandledReasons).toEqual([]);
+    } finally {
+      process.off("unhandledRejection", onUnhandledRejection);
+    }
+  });
+
+  it("returns one rejected abort Promise when the provider abort throws", async () => {
+    let abortCount = 0;
+    const input = {
+      projectedWorldStateAfter: worldProjectionInput(),
+      projectedViewStateAfter: { viewStateRevision: 8 },
+      commitPrepared: () => {},
+      abort() {
+        abortCount += 1;
+        throw new Error("provider abort failed");
+      },
+    };
+    const transaction = parseGameplayWorldTransactionV1(
+      input,
+      projectionValidationOptions(),
+    );
+
+    const firstAbort = transaction.abort();
+    expect(transaction.abort()).toBe(firstAbort);
+    await expect(firstAbort).rejects.toThrow("provider abort failed");
+    expect(abortCount).toBe(1);
   });
 
   it("rejects hostile transaction containers and invalid staged projections", () => {
