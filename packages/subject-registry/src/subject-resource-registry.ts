@@ -18,7 +18,6 @@ import type {
   PhysicsBodyProfileManifestInputV1,
   PhysicsBodyProfileManifestV1,
   RigProfileManifestInputV1,
-  RegistrySubjectDefinitionV2,
   RigProfileManifestV1,
   SubjectAssetManifestV1,
   SubjectAssetManifestInputV1,
@@ -804,7 +803,12 @@ export function createSubjectResourceRegistry(
     if (source.kind === "medium-profile") validateMediumProfile(source);
     if (source.kind === "camera-rig-profile") validateCameraProfile(source);
     if (source.kind === "camera-modifier-profile") validateCameraModifierProfile(source);
-    if (source.kind === "subject-definition" && "schemaVersion" in source) {
+    if (source.kind === "subject-definition") {
+      if (!("schemaVersion" in source) || source.schemaVersion !== 3) {
+        throw new Error(
+          `SUBJECT_REGISTRY_SUBJECT_DEFINITION_VERSION_NOT_SUPPORTED: '${source.resourceRef}'.`,
+        );
+      }
       validateSubjectDefinitionV3(source);
     }
     if (source.kind === "motion-kernel") {
@@ -827,28 +831,12 @@ export function createSubjectResourceRegistry(
   );
   const stableSubjectDefinitions = deepFreeze(
     stableResources.filter(
-      (resource): resource is RegistrySubjectDefinitionV2 | RegistrySubjectDefinitionV3 =>
+      (resource): resource is RegistrySubjectDefinitionV3 =>
         resource.kind === "subject-definition",
     ),
   );
-  const stableCliSubjectDefinitions = deepFreeze(
-    stableSubjectDefinitions.filter(
-      (
-        resource,
-      ): resource is RegistrySubjectDefinitionV2 | RegistrySubjectDefinitionV3 =>
-        !("schemaVersion" in resource) ||
-        resource.resourceRef ===
-          "worldkit://subject-definition/humanoid.g-bot@1" ||
-        resource.resourceRef ===
-          "worldkit://subject-definition/humanoid.third-person@1",
-    ),
-  );
-  const stableCapabilitySubjectDefinitions = deepFreeze(
-    stableSubjectDefinitions.filter(
-      (resource): resource is RegistrySubjectDefinitionV3 =>
-        "schemaVersion" in resource && resource.schemaVersion === 3,
-    ),
-  );
+  const stableCliSubjectDefinitions = stableSubjectDefinitions;
+  const stableCapabilitySubjectDefinitions = stableSubjectDefinitions;
   const stableCapabilityResources = deepFreeze(
     stableResources.filter(
       (resource): resource is SubjectCapabilityResourceV1 =>
@@ -856,36 +844,13 @@ export function createSubjectResourceRegistry(
         "authoringAvailability" in resource,
     ),
   );
-  const capabilityDrivenRegistry = stableResources.some(
-    (resource) => resource.kind === "motion-kernel",
-  );
-  const builtInLegacyResourceRefs = new Set([
-    "worldkit://subject-asset/humanoid.golden@1",
-    "worldkit://subject-asset/actor.humanoid.g-bot@1",
-    "worldkit://rig-profile/biped.golden@1",
-    "worldkit://rig-profile/biped.mixamo-g-bot@1",
-    "worldkit://animation-set/humanoid.ground.golden@1",
-    "worldkit://animation-set/humanoid.ground.g-bot@1",
-    "worldkit://collider-profile/humanoid.medium-capsule@1",
-    "worldkit://collider-profile/humanoid.g-bot-capsule@1",
-    "worldkit://subject-definition/humanoid.rigged-golden@1",
-    "worldkit://subject-definition/quadruped.ground-proxy@1",
-    "worldkit://capability/locomotion.ground@1",
-    "worldkit://physics-body-profile/character.medium@1",
-    "worldkit://locomotion-profile/ground.standard@1",
-    "worldkit://collider-derivation-profile/vertical-character-capsule@1",
-  ]);
-  const stableLegacyResources = deepFreeze(
+  const stableBaseResources = deepFreeze(
     stableResources.filter(
       (resource): resource is SubjectRegistryResourceV1 => {
-        if (capabilityDrivenRegistry) {
-          return builtInLegacyResourceRefs.has(resource.resourceRef);
-        }
         return resource.kind === "subject-asset" ||
           resource.kind === "rig-profile" ||
           resource.kind === "animation-set" ||
           resource.kind === "collider-profile" ||
-          (resource.kind === "subject-definition" && !("schemaVersion" in resource)) ||
           resource.kind === "capability" ||
           resource.kind === "physics-body-profile" ||
           resource.kind === "locomotion-profile" ||
@@ -913,7 +878,7 @@ export function createSubjectResourceRegistry(
     },
     resolveSubjectDefinition(
       resourceRef: string,
-    ): RegistrySubjectDefinitionV2 | RegistrySubjectDefinitionV3 | undefined {
+    ): RegistrySubjectDefinitionV3 | undefined {
       const resource = resourcesByRef.get(resourceRef);
       return resource?.kind === "subject-definition" ? resource : undefined;
     },
@@ -991,17 +956,14 @@ export function createSubjectResourceRegistry(
       const resource = resourcesByRef.get(resourceRef);
       return resource?.kind === "render-binding-profile" ? resource : undefined;
     },
-    listSubjectDefinitions(): readonly (
-      | RegistrySubjectDefinitionV2
-      | RegistrySubjectDefinitionV3
-    )[] {
+    listSubjectDefinitions(): readonly RegistrySubjectDefinitionV3[] {
       return stableCliSubjectDefinitions;
     },
     listCapabilitySubjectDefinitions(): readonly RegistrySubjectDefinitionV3[] {
       return stableCapabilitySubjectDefinitions;
     },
     listResources(): readonly SubjectRegistryResourceV1[] {
-      return stableLegacyResources;
+      return stableBaseResources;
     },
     listCapabilityResources(): readonly SubjectCapabilityResourceV1[] {
       return stableCapabilityResources;

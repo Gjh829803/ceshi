@@ -1,6 +1,6 @@
 import {
   builtInSubjectResourceRegistry,
-  type RegistrySubjectDefinitionV2,
+  type RegistrySubjectDefinitionV3,
 } from "@whitebox-world/subject-registry";
 
 import { sha256CanonicalJson } from "./canonical-json";
@@ -238,7 +238,7 @@ function normalizeNodeV2(
 }
 
 interface ResolvedDefinitionInputV2 {
-  definition: PackageSubjectDefinitionV1 | RegistrySubjectDefinitionV2;
+  definition: PackageSubjectDefinitionV1 | RegistrySubjectDefinitionV3;
   subjectDefinitionRef: string;
   source: "package" | "registry";
   instancePath: string;

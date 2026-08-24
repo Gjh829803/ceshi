@@ -423,7 +423,7 @@ export interface ExecutionSubjectV3 {
    * Registry at compile time; the Runtime never reverse-reads the Registry.
    */
   availableControlFeels: readonly ExecutionSubjectV3["controlFeel"][];
-  capabilityAssembly?: ExecutionSubjectCapabilityAssemblyV1;
+  capabilityAssembly: ExecutionSubjectCapabilityAssemblyV1;
 }
 
 interface ExecutionCameraCore {
@@ -538,13 +538,6 @@ export interface ExecutionPlanV4 {
     placementsByEntityId: Readonly<Record<string, ExecutionLayoutPlacementV1>>;
     layoutAssertions: readonly ExecutionLayoutAssertionV1[];
   }>;
-}
-
-export interface CompileWorldResultV4 {
-  readonly ok: boolean;
-  readonly executionPlan?: ExecutionPlanV4;
-  readonly executionPlanHash?: string;
-  readonly diagnostics: readonly CompileDiagnostic[];
 }
 
 export interface ExecutionHeightfieldTraversalSurfaceV1
@@ -1466,7 +1459,8 @@ function validateSubject(input: unknown): void {
     "locomotionProfileRef",
     "controlFeel",
     "availableControlFeels",
-  ], ["capabilityAssembly"]);
+    "capabilityAssembly",
+  ]);
   requireString(value.entityId);
   requireString(value.subjectDefinitionRef);
   requireHash(value.subjectDefinitionHash);
@@ -1605,9 +1599,7 @@ function validateSubject(input: unknown): void {
   };
   validateFeel(value.controlFeel);
   dataArray(value.availableControlFeels).forEach(validateFeel);
-  if (Object.hasOwn(value, "capabilityAssembly")) {
-    validateCapabilityAssembly(value.capabilityAssembly);
-  }
+  validateCapabilityAssembly(value.capabilityAssembly);
 }
 
 function validateCamera(input: unknown): void {

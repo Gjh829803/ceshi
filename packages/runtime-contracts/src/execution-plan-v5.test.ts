@@ -5,9 +5,61 @@ import {
   hashExecutionPlanV5,
   parseExecutionPlanV5,
   type ExecutionPlanV5,
+  type ExecutionSubjectCapabilityAssemblyV1,
 } from "./execution-plan";
 
 const HASH = `sha256:${"a".repeat(64)}` as const;
+
+function capabilityAssemblyFixture(): ExecutionSubjectCapabilityAssemblyV1 {
+  const motionProfile = {
+    resourceRef: "worldkit://motion-profile/test@1",
+    contentHash: HASH,
+    motionKernelRef: "worldkit://motion-kernel/test@1",
+    motionTags: ["ground"],
+  };
+  return {
+    authoringAvailability: "recommended",
+    physicsBodyProfileRef: "worldkit://physics-body-profile/test@1",
+    locomotionProfileRef: "worldkit://locomotion-profile/test@1",
+    defaultMotionProfile: motionProfile,
+    optionalMotionProfiles: [],
+    fallbackMotionProfile: motionProfile,
+    motionKernels: [{
+      resourceRef: "worldkit://motion-kernel/test@1",
+      implementationId: "free-ground",
+      commandKind: "planar-vector",
+      supportedMediums: ["ground", "air"],
+      runtimeParameterNames: [],
+      fallbackMotionProfileRef: motionProfile.resourceRef,
+      deterministic: true,
+    }],
+    controlProfile: {
+      resourceRef: "worldkit://control-profile/test@1",
+      contentHash: HASH,
+      commandKind: "planar-vector",
+      inputSpace: "camera-relative",
+      facingPolicy: "align-to-move",
+      lateralMovementPolicy: "allowed",
+      moveDeadzoneRatio: 0.1,
+    },
+    cameraContext: {
+      resourceRef: "worldkit://camera-context/test@1",
+      defaultCameraRigProfileRef: "worldkit://camera-profile/test@1",
+      rules: [],
+      cameraRigProfiles: [],
+      cameraModifierProfiles: [],
+    },
+    mediumProfile: {
+      resourceRef: "worldkit://medium-profile/test@1",
+      air: { gravityRatio: 1, linearDragPerSecond: 0 },
+    },
+    relationshipProfiles: [],
+    harnessProfileRef: "worldkit://harness-profile/test@1",
+    requiredHarnessCheckIds: ["H01"],
+    actionOrPoseSetRef: "worldkit://pose-set/test@1",
+    renderBindingProfileRef: "worldkit://render-binding/test@1",
+  };
+}
 
 function planFixture(): ExecutionPlanV5 {
   const resourceLockEntries = [{
@@ -91,6 +143,7 @@ function planFixture(): ExecutionPlanV5 {
         jumpReleaseGravityRatio: 2,
       },
       availableControlFeels: [],
+      capabilityAssembly: capabilityAssemblyFixture(),
     }],
     camera: {
       cameraEntityId: "camera-main",
@@ -161,6 +214,17 @@ describe("ExecutionPlanV5 canonical boundary", () => {
       "EXECUTION_PLAN_V5_INVALID",
     );
     expect(() => parseExecutionPlanV5(nestedUnknown)).toThrowError(
+      "EXECUTION_PLAN_V5_INVALID",
+    );
+  });
+
+  it("rejects a V5 Subject without its locked capability assembly", () => {
+    const input = structuredClone(planFixture()) as unknown as {
+      subjects: Array<Record<string, unknown>>;
+    };
+    delete input.subjects[0]!.capabilityAssembly;
+
+    expect(() => parseExecutionPlanV5(input)).toThrowError(
       "EXECUTION_PLAN_V5_INVALID",
     );
   });

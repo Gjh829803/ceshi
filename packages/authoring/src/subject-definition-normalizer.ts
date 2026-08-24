@@ -7,10 +7,8 @@ import type {
   AnimationSetManifestV1,
   ControlFeelProfileV1,
   RegistrySubjectDefinitionV3,
-  RegistrySubjectDefinitionV2,
   RigProfileManifestV1,
   SubjectAssetManifestV1,
-  SubjectResourceRegistryV2,
   SubjectResourceRegistryV3,
 } from "@whitebox-world/subject-registry";
 import { selectableControlFeelProfileRefsV1 } from "@whitebox-world/subject-registry";
@@ -30,14 +28,14 @@ import type {
   Vec3,
 } from "./types";
 
-type SubjectDefinitionSourceV2 = PackageSubjectDefinitionV1 | RegistrySubjectDefinitionV2;
+type SubjectDefinitionSourceV2 = PackageSubjectDefinitionV1 | RegistrySubjectDefinitionV3;
 
 export interface NormalizeSubjectDefinitionRequestV2 {
   definition: SubjectDefinitionSourceV2;
   subjectDefinitionRef: string;
   source: "package" | "registry";
   instancePath: string;
-  subjectResourceRegistry: SubjectResourceRegistryV2;
+  subjectResourceRegistry: SubjectResourceRegistryV3;
   resourceLockBuilder: ResourceLockBuilderV1;
   diagnostics: AuthoringDiagnostic[];
   resourceBudget?: AuthoringDocumentBase["world"]["resourceBudget"];
@@ -66,13 +64,7 @@ function controlFeelProfileRefForDefinition(
 function selectableControlFeelRefsForDefinition(
   definition: SubjectDefinitionSourceV2,
 ): readonly string[] {
-  if ("schemaVersion" in definition && definition.schemaVersion === 3) {
-    return selectableControlFeelProfileRefsV1(
-      (definition as RegistrySubjectDefinitionV3).profiles,
-    );
-  }
-  const defaultRef = controlFeelProfileRefForDefinition(definition);
-  return defaultRef === undefined ? [] : [defaultRef];
+  return selectableControlFeelProfileRefsV1(definition.profiles);
 }
 
 function projectControlFeelProfile(
@@ -101,17 +93,7 @@ function resolveControlFeelProfileV1(
   definition: SubjectDefinitionSourceV2,
   request: NormalizeSubjectDefinitionRequestV2,
 ): ControlFeelProfileV1 | undefined {
-  const registry = request.subjectResourceRegistry as Partial<SubjectResourceRegistryV3>;
-  if (typeof registry.resolveControlFeelProfile !== "function") {
-    addError(
-      request.diagnostics,
-      "SUBJECT_CAPABILITY_UNSATISFIED",
-      `${request.instancePath}/profiles/controlFeelProfileRef`,
-      "Control Feel Profile resolution requires a capability-driven Subject Registry.",
-      { subjectDefinitionRef: request.subjectDefinitionRef },
-    );
-    return undefined;
-  }
+  const registry = request.subjectResourceRegistry;
   const controlFeelProfileRef = controlFeelProfileRefForDefinition(definition);
   if (controlFeelProfileRef === undefined) {
     addError(
@@ -145,8 +127,7 @@ function resolveControlFeelProfileV1(
 function resolveAvailableControlFeelsV1(
   request: NormalizeSubjectDefinitionRequestV2,
 ): readonly NormalizedControlFeelV1[] {
-  const registry = request.subjectResourceRegistry as Partial<SubjectResourceRegistryV3>;
-  if (typeof registry.resolveControlFeelProfile !== "function") return [];
+  const registry = request.subjectResourceRegistry;
   return selectableControlFeelRefsForDefinition(request.definition).flatMap((resourceRef) => {
     const profile = registry.resolveControlFeelProfile!(resourceRef);
     if (profile === undefined) return [];
@@ -183,11 +164,8 @@ function normalizeCapabilityAssemblyV1(
   definition: SubjectDefinitionSourceV2,
   request: NormalizeSubjectDefinitionRequestV2,
 ): NormalizedCapabilityAssemblyV1 | undefined {
-  if (!("schemaVersion" in definition) || definition.schemaVersion !== 3) {
-    return undefined;
-  }
-  const subject = definition as RegistrySubjectDefinitionV3;
-  const registry = request.subjectResourceRegistry as Partial<SubjectResourceRegistryV3>;
+  const subject = definition;
+  const registry = request.subjectResourceRegistry;
   if (
     typeof registry.resolveMotionProfile !== "function" ||
     typeof registry.resolveMotionKernel !== "function" ||
@@ -205,8 +183,8 @@ function normalizeCapabilityAssemblyV1(
       request.diagnostics,
       "SUBJECT_CAPABILITY_UNSATISFIED",
       request.instancePath,
-      "A schemaVersion 3 Subject Definition requires a capability-driven Subject Registry.",
-      { subjectDefinitionRef: subject.resourceRef },
+      "A current Subject Definition requires the complete capability-driven Subject Registry.",
+      { subjectDefinitionRef: request.subjectDefinitionRef },
     );
     return undefined;
   }
@@ -555,7 +533,7 @@ function normalizeSockets(
 }
 
 function resourcesOfKind(
-  registry: SubjectResourceRegistryV2,
+  registry: SubjectResourceRegistryV3,
   kind: "subject-asset" | "rig-profile" | "animation-set" | "collider-profile",
 ): readonly string[] {
   return registry.listResources()
@@ -860,7 +838,7 @@ export function normalizeSubjectDefinitionV2(
   const initialErrorCount = diagnostics.filter((item) => item.severity === "error").length;
 
   if (source === "registry") {
-    resourceLockBuilder.addRegistryResource(definition as RegistrySubjectDefinitionV2,
+    resourceLockBuilder.addRegistryResource(definition as RegistrySubjectDefinitionV3,
       instancePath, diagnostics);
   }
   const visualParts = normalizeVisualParts(definition, instancePath, diagnostics);
@@ -945,16 +923,7 @@ export function normalizeSubjectDefinitionV2(
       }
     }
   }
-  const isCapabilityDrivenV3 =
-    "schemaVersion" in definition && definition.schemaVersion === 3;
-  if (!isCapabilityDrivenV3 && (capabilityRefs.length !== 1 ||
-    capabilityRefs[0] !== "worldkit://capability/locomotion.ground@1" ||
-    capabilities[0]?.providedFeatures.includes("ground-locomotion") !== true)) {
-    addError(diagnostics, "SUBJECT_CAPABILITY_UNSATISFIED", `${instancePath}/capabilityRefs`,
-      "S1b Subject Definitions require exactly the ground locomotion capability.",
-      { requiredCapabilityRefs: ["worldkit://capability/locomotion.ground@1"] });
-  }
-  if (!isCapabilityDrivenV3 && locomotionProfile !== undefined && locomotionProfile.requiredCapabilityRefs.some(
+  if (locomotionProfile !== undefined && locomotionProfile.requiredCapabilityRefs.some(
     (resourceRef) => !selectedCapabilityRefs.has(resourceRef))) {
     addError(diagnostics, "SUBJECT_CAPABILITY_UNSATISFIED",
       `${instancePath}/profiles/locomotionProfileRef`,
@@ -1026,6 +995,7 @@ export function normalizeSubjectDefinitionV2(
   if (finalErrorCount > initialErrorCount || physicsBodyProfile === undefined ||
     locomotionProfile === undefined || controlFeelProfile === undefined ||
     locomotionCapability === undefined ||
+    capabilityAssembly === undefined ||
     normalizedCollider === undefined ||
     (definition.visualBinding.mode === "rigged" && riggedResources === undefined)) {
     return undefined;
@@ -1060,7 +1030,7 @@ export function normalizeSubjectDefinitionV2(
       allowJump: locomotionProfile.allowJump,
     },
     controlFeel: projectControlFeelProfile(controlFeelProfile),
-    ...(capabilityAssembly === undefined ? {} : { capabilityAssembly }),
+    capabilityAssembly,
     aiMetadata: {
       ...structuredClone(definition.aiMetadata),
       semanticTags: sortedStrings(definition.aiMetadata.semanticTags),

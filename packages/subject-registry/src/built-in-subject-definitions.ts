@@ -1,4 +1,3 @@
-import type { RegistrySubjectDefinitionInputV2 } from "./types-v2";
 import type { RegistrySubjectDefinitionInputV3 } from "./types-v3";
 
 const SHARED_COORDINATE_CONVENTION = {
@@ -103,11 +102,13 @@ const HUMANOID_THIRD_PERSON_DEFINITION: RegistrySubjectDefinitionInputV3 = {
   },
 };
 
-const QUADRUPED_GROUND_PROXY_DEFINITION: RegistrySubjectDefinitionInputV2 = {
+const QUADRUPED_GROUND_PROXY_DEFINITION: RegistrySubjectDefinitionInputV3 = {
   kind: "subject-definition",
+  schemaVersion: 3,
   id: "quadruped.ground-proxy",
   version: 1,
   resourceRef: "worldkit://subject-definition/quadruped.ground-proxy@1",
+  authoringAvailability: "advanced",
   category: "animal",
   bodyTopology: "quadruped",
   semanticClassId: "subject.animal.quadruped",
@@ -205,7 +206,27 @@ const QUADRUPED_GROUND_PROXY_DEFINITION: RegistrySubjectDefinitionInputV2 = {
   ],
   colliderPolicy: SHARED_COLLIDER_POLICY,
   capabilityRefs: SHARED_CAPABILITY_REFS,
-  profiles: SHARED_PROFILES,
+  profiles: {
+    physicsBodyProfileRef:
+      "worldkit://physics-body-profile/character.capability-medium@1",
+    locomotionProfileRef: SHARED_PROFILES.locomotionProfileRef,
+    controlFeelProfileRef: SHARED_GROUND_FEEL_PROFILE_REF,
+    allowedControlFeelProfileRefs: SHARED_GROUND_ALLOWED_CONTROL_FEEL_PROFILE_REFS,
+    motion: {
+      defaultMotionProfileRef:
+        "worldkit://motion-profile/free-ground.humanoid-medium@1",
+      optionalMotionProfileRefs: ["worldkit://motion-profile/safe-ground@1"],
+      fallbackMotionProfileRef: "worldkit://motion-profile/safe-ground@1",
+    },
+    controlProfileRef: "worldkit://control-profile/planar.camera-relative@1",
+    cameraContextProfileRef:
+      "worldkit://camera-context/capability-driven.default@1",
+    mediumProfileRef: SHARED_GROUND_MEDIUM_PROFILE_REF,
+    harnessProfileRef: "worldkit://harness-profile/subject.standard@1",
+  },
+  relationshipCapabilityRefs: [],
+  actionOrPoseSetRef: "worldkit://pose-set/static.whitebox@1",
+  renderBindingProfileRef: "worldkit://render-binding/subject.standard@1",
   aiMetadata: {
     displayName: "Ground quadruped proxy",
     description: "A controllable quadruped whitebox proxy for outdoor traversal tests.",
@@ -416,7 +437,4 @@ export const BUILT_IN_SUBJECT_DEFINITIONS = [
   RIGGED_GOLDEN_HUMANOID_DEFINITION,
   HUMANOID_THIRD_PERSON_DEFINITION,
   QUADRUPED_GROUND_PROXY_DEFINITION,
-] as const satisfies readonly (
-  | RegistrySubjectDefinitionInputV2
-  | RegistrySubjectDefinitionInputV3
-)[];
+] as const satisfies readonly RegistrySubjectDefinitionInputV3[];

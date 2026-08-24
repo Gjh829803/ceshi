@@ -4,7 +4,7 @@ import {
   builtInSubjectResourceRegistry,
   createSubjectResourceRegistry,
   type SubjectRegistryResourceInputV3,
-  type SubjectResourceRegistryV2,
+  type SubjectResourceRegistryV3,
 } from "@whitebox-world/subject-registry";
 import subjectDefinitionsV3 from "../../../assets/registry/subject-definitions/catalog.json";
 import {
@@ -70,7 +70,7 @@ function registryFrom(
   transform: (
     resource: SubjectRegistryResourceInputV3,
   ) => SubjectRegistryResourceInputV3 | undefined,
-): SubjectResourceRegistryV2 {
+): SubjectResourceRegistryV3 {
   return createSubjectResourceRegistry(
     ALL_BUILT_IN_REGISTRY_INPUTS.flatMap((resource) => {
       const transformed = transform(structuredClone(resource));
@@ -81,7 +81,7 @@ function registryFrom(
 
 function registryWithPermutedNewResourceCollections(
   isReversed: boolean,
-): SubjectResourceRegistryV2 {
+): SubjectResourceRegistryV3 {
   const maybeReverse = <T>(values: readonly T[]): readonly T[] =>
     isReversed ? [...values].reverse() : [...values];
 
@@ -149,7 +149,7 @@ function registryWithPermutedNewResourceCollections(
 }
 
 function diagnosticForRiggedWorld(
-  subjectResourceRegistry: SubjectResourceRegistryV2,
+  subjectResourceRegistry: SubjectResourceRegistryV3,
   mutateWorld?: (world: ReturnType<typeof createValidRiggedPackageSubjectWorld>) => void,
 ) {
   const world = createValidRiggedPackageSubjectWorld();
@@ -267,11 +267,34 @@ describe("Package Subject Definition normalization", () => {
     expect(lockRefs).toEqual([
       "package://subject-definition/rigged-golden-package@1",
       ANIMATION_SET_REF,
+      "worldkit://camera-context/capability-driven.default@1",
+      "worldkit://camera-modifier/aim-framing@1",
+      "worldkit://camera-modifier/mounted-framing@1",
+      "worldkit://camera-modifier/reverse-stability@1",
+      "worldkit://camera-modifier/sprint-emphasis@1",
+      "worldkit://camera-modifier/water-stability@1",
+      "worldkit://camera-profile/chase.surface-fast@1",
+      "worldkit://camera-profile/first-person.standard@1",
+      "worldkit://camera-profile/flight.glide@1",
+      "worldkit://camera-profile/follow.medium@1",
+      "worldkit://camera-profile/orbit.medium@1",
+      "worldkit://camera-rig/flight-horizon@1",
+      "worldkit://camera-rig/orbit-follow@1",
+      "worldkit://camera-rig/socket-first-person@1",
+      "worldkit://camera-rig/velocity-chase@1",
       "worldkit://capability/locomotion.ground@1",
       COLLIDER_PROFILE_REF,
+      "worldkit://control-feel-profile/humanoid.heavy-ground@1",
       "worldkit://control-feel-profile/humanoid.medium-ground@1",
+      "worldkit://control-profile/planar.camera-relative@1",
+      "worldkit://harness-profile/subject.standard@1",
       "worldkit://locomotion-profile/ground.standard@1",
-      "worldkit://physics-body-profile/character.medium@1",
+      "worldkit://medium-profile/ground-air.standard@1",
+      "worldkit://motion-kernel/free-ground@1",
+      "worldkit://motion-profile/free-ground.humanoid-medium@1",
+      "worldkit://motion-profile/safe-ground@1",
+      "worldkit://physics-body-profile/character.capability-medium@1",
+      "worldkit://render-binding/subject.standard@1",
       RIG_PROFILE_REF,
       SUBJECT_ASSET_REF,
     ]);
@@ -286,13 +309,13 @@ describe("Package Subject Definition normalization", () => {
 
     expect(result.ok).toBe(true);
     expect(packageDefinitionHash(result)).toBe(
-      "sha256:7bd5515d26edee88ab427317cd24c4b89e07596c750c164ce85f53dddd9bdbbd",
+      "sha256:f1e3d29c97842b1447e93e696e83ff6df370d6409604dad43b0b485a61f58e7d",
     );
     expect(result.value?.resources.resourceLockHash).toBe(
-      "sha256:af999810bb6087b623c3ded79f3edbd74f2ad50859e0114e74ef29b34e7fb2c8",
+      "sha256:8d04944564bb926529d71cce1ca8fe27c59df87702ed856d23db5156d32f0dc1",
     );
     expect(result.normalizedWorldIrHash).toBe(
-      "sha256:9b61a0d9c5f0670fbe6660fb06f07c48214b5cb710fcc7b6e085ac3dccdb1f01",
+      "sha256:3bc6ec3e03bc88b88de10b27e8193c92b9a7500ac927f6c9d6fcf0d5c7c453c2",
     );
   });
 
@@ -584,6 +607,7 @@ describe("Package Subject Definition normalization", () => {
       normalizedDefinition.availableControlFeels.map((feel) => feel.resourceRef),
     ).toEqual([
       "worldkit://control-feel-profile/humanoid.medium-ground@1",
+      "worldkit://control-feel-profile/humanoid.heavy-ground@1",
     ]);
     for (const availableFeel of normalizedDefinition.availableControlFeels) {
       expectExactKeys(availableFeel, controlFeelKeys);
@@ -993,6 +1017,49 @@ describe("Package Subject Definition normalization", () => {
     ).toHaveLength(2);
   });
 
+  it("assembles every Package Subject from the complete locked capability graph", () => {
+    const result = normalizeAuthoringSpec(createValidPackageSubjectWorld());
+    const definition = result.value?.resources.subjectDefinitions.find(
+      (row) =>
+        row.subjectDefinitionRef ===
+        "package://subject-definition/coastal-pack-animal@1",
+    );
+
+    expect(result.ok).toBe(true);
+    expect(definition?.capabilityAssembly).toMatchObject({
+      authoringAvailability: "recommended",
+      physicsBodyProfileRef:
+        "worldkit://physics-body-profile/character.capability-medium@1",
+      locomotionProfileRef:
+        "worldkit://locomotion-profile/ground.standard@1",
+      defaultMotionProfile: {
+        resourceRef:
+          "worldkit://motion-profile/free-ground.humanoid-medium@1",
+      },
+      fallbackMotionProfile: {
+        resourceRef: "worldkit://motion-profile/safe-ground@1",
+      },
+      controlProfile: {
+        resourceRef:
+          "worldkit://control-profile/planar.camera-relative@1",
+      },
+      cameraContextProfile: {
+        resourceRef:
+          "worldkit://camera-context/capability-driven.default@1",
+      },
+      mediumProfile: {
+        resourceRef: "worldkit://medium-profile/ground-air.standard@1",
+      },
+      harnessProfile: {
+        resourceRef: "worldkit://harness-profile/subject.standard@1",
+      },
+      actionOrPoseSetRef: "worldkit://pose-set/static.whitebox@1",
+      renderBindingProfile: {
+        resourceRef: "worldkit://render-binding/subject.standard@1",
+      },
+    });
+  });
+
   it("makes Definition and world hashes insensitive to order-only changes", () => {
     const first = normalizeAuthoringSpec(createValidPackageSubjectWorld());
     const reordered = normalizeAuthoringSpec(
@@ -1051,7 +1118,6 @@ describe("Package Subject Definition normalization", () => {
       "worldkit://motion-profile/free-ground.humanoid-medium@1",
       "worldkit://motion-profile/safe-ground@1",
       "worldkit://physics-body-profile/character.capability-medium@1",
-      "worldkit://physics-body-profile/character.medium@1",
       "worldkit://pose-set/static.whitebox@1",
       "worldkit://render-binding/subject.standard@1",
       "worldkit://subject-definition/humanoid.third-person@1",
@@ -1271,7 +1337,7 @@ describe("Package Subject Definition normalization", () => {
   });
 
   it("rejects Registry content that conflicts with its immutable hash", () => {
-    const conflictingRegistry: SubjectResourceRegistryV2 = {
+    const conflictingRegistry: SubjectResourceRegistryV3 = {
       ...builtInSubjectResourceRegistry,
       resolveCapability(resourceRef) {
         const resource = builtInSubjectResourceRegistry.resolveCapability(resourceRef);

@@ -152,6 +152,7 @@ function createPackageSubjectDefinition(
     id: "coastal-pack-animal",
     version: 1,
     kind: "subject-definition",
+    authoringAvailability: "recommended",
     category: "animal",
     bodyTopology: "quadruped",
     semanticClassId: "subject.animal.pack",
@@ -209,11 +210,31 @@ function createPackageSubjectDefinition(
     },
     capabilityRefs: ["worldkit://capability/locomotion.ground@1"],
     profiles: {
-      physicsBodyProfileRef: "worldkit://physics-body-profile/character.medium@1",
+      physicsBodyProfileRef:
+        "worldkit://physics-body-profile/character.capability-medium@1",
       locomotionProfileRef: "worldkit://locomotion-profile/ground.standard@1",
       controlFeelProfileRef:
         "worldkit://control-feel-profile/humanoid.medium-ground@1",
+      allowedControlFeelProfileRefs: [
+        "worldkit://control-feel-profile/humanoid.medium-ground@1",
+        "worldkit://control-feel-profile/humanoid.heavy-ground@1",
+      ],
+      motion: {
+        defaultMotionProfileRef:
+          "worldkit://motion-profile/free-ground.humanoid-medium@1",
+        optionalMotionProfileRefs: ["worldkit://motion-profile/safe-ground@1"],
+        fallbackMotionProfileRef: "worldkit://motion-profile/safe-ground@1",
+      },
+      controlProfileRef:
+        "worldkit://control-profile/planar.camera-relative@1",
+      cameraContextProfileRef:
+        "worldkit://camera-context/capability-driven.default@1",
+      mediumProfileRef: "worldkit://medium-profile/ground-air.standard@1",
+      harnessProfileRef: "worldkit://harness-profile/subject.standard@1",
     },
+    relationshipCapabilityRefs: [],
+    actionOrPoseSetRef: "worldkit://pose-set/static.whitebox@1",
+    renderBindingProfileRef: "worldkit://render-binding/subject.standard@1",
     aiMetadata: {
       displayName: "Coastal pack animal",
       description: "A controllable quadruped whitebox proxy for outdoor traversal tests.",
@@ -291,6 +312,7 @@ export function createValidRiggedPackageDefinition(): PackageSubjectDefinitionV1
     id: "rigged-golden-package",
     version: 1,
     kind: "subject-definition",
+    authoringAvailability: "recommended",
     category: "human",
     bodyTopology: "biped",
     semanticClassId: "subject.humanoid.rigged",
@@ -338,11 +360,32 @@ export function createValidRiggedPackageDefinition(): PackageSubjectDefinitionV1
     },
     capabilityRefs: ["worldkit://capability/locomotion.ground@1"],
     profiles: {
-      physicsBodyProfileRef: "worldkit://physics-body-profile/character.medium@1",
+      physicsBodyProfileRef:
+        "worldkit://physics-body-profile/character.capability-medium@1",
       locomotionProfileRef: "worldkit://locomotion-profile/ground.standard@1",
       controlFeelProfileRef:
         "worldkit://control-feel-profile/humanoid.medium-ground@1",
+      allowedControlFeelProfileRefs: [
+        "worldkit://control-feel-profile/humanoid.medium-ground@1",
+        "worldkit://control-feel-profile/humanoid.heavy-ground@1",
+      ],
+      motion: {
+        defaultMotionProfileRef:
+          "worldkit://motion-profile/free-ground.humanoid-medium@1",
+        optionalMotionProfileRefs: ["worldkit://motion-profile/safe-ground@1"],
+        fallbackMotionProfileRef: "worldkit://motion-profile/safe-ground@1",
+      },
+      controlProfileRef:
+        "worldkit://control-profile/planar.camera-relative@1",
+      cameraContextProfileRef:
+        "worldkit://camera-context/capability-driven.default@1",
+      mediumProfileRef: "worldkit://medium-profile/ground-air.standard@1",
+      harnessProfileRef: "worldkit://harness-profile/subject.standard@1",
     },
+    relationshipCapabilityRefs: [],
+    actionOrPoseSetRef:
+      "worldkit://animation-set/humanoid.ground.golden@1",
+    renderBindingProfileRef: "worldkit://render-binding/subject.standard@1",
     aiMetadata: {
       displayName: "Package rigged Golden humanoid",
       description: "A package definition that exercises the complete rigged asset graph.",
