@@ -4,7 +4,6 @@ import type {
   NormalizedRigProfileV1,
   NormalizedSubjectAssetV1,
   NormalizedSubjectDefinitionV2,
-  NormalizedWorldIRV3,
   NormalizedWorldIRV4,
   NormalizedLayoutAssertionV1,
   NormalizedWorldNodeV3,
@@ -26,13 +25,11 @@ import {
   hashExecutionPlanV5,
   parseExecutionPlanV5,
   type CompileDiagnostic,
-  type CompileWorldResultV4,
   type ExecutionAnimationSetV1,
   type ExecutionBipedBoneIdV1,
   type ExecutionColliderProfileV1,
   type ExecutionObjectPrimitiveV3,
   type ExecutionObjectV3,
-  type ExecutionPlanV4,
   type ExecutionPlanV5,
   type GameplayBootstrapExecutionResourceLockV1,
   type ExecutionLayoutAssertionV1,
@@ -140,11 +137,6 @@ interface CompileWorldCoreResult {
   readonly ok: boolean;
   readonly components?: CompiledWorldComponents;
   readonly diagnostics: readonly CompileDiagnostic[];
-}
-
-export interface CompileWorldInputV4 {
-  readonly normalizedWorldIr: NormalizedWorldIRV3;
-  readonly normalizedWorldIrHash: string;
 }
 
 export interface CompileWorldInputV5 {
@@ -1574,56 +1566,6 @@ function compileExecutionLayoutV1(
       .sort((left, right) => left.constraintId.localeCompare(right.constraintId))
       .map(projectLayoutAssertionV1),
   };
-}
-
-export function compileWorldV4(input: CompileWorldInputV4): CompileWorldResultV4 {
-  const actualNormalizedWorldIrHash = sha256CanonicalJson(input.normalizedWorldIr);
-  if (input.normalizedWorldIrHash !== actualNormalizedWorldIrHash) {
-    return {
-      ok: false,
-      diagnostics: [{
-        severity: "error",
-        code: "COMPILER_NORMALIZED_HASH_MISMATCH",
-        instancePath: "/normalizedWorldIrHash",
-        message: "The supplied normalizedWorldIrHash does not match NormalizedWorldIRV3.",
-        details: { expected: actualNormalizedWorldIrHash, actual: input.normalizedWorldIrHash },
-      }],
-    };
-  }
-  try {
-    const world = input.normalizedWorldIr;
-    const baseline = compileWorldCore({
-      normalizedWorldIr: world,
-    });
-    if (!baseline.ok || baseline.components === undefined) {
-      return { ok: false, diagnostics: baseline.diagnostics };
-    }
-    const plan: ExecutionPlanV4 = {
-      kind: "worldkit-execution-plan",
-      ...baseline.components,
-      schemaVersion: 4,
-      normalizedWorldIrHash: input.normalizedWorldIrHash,
-      resourceLockHash: world.resources.resourceLockHash,
-      terrain: compileLockedTerrainV4(world, baseline.components.terrain),
-      layout: compileExecutionLayoutV1(world),
-    };
-    return {
-      ok: true,
-      executionPlan: plan,
-      executionPlanHash: sha256CanonicalJson(plan),
-      diagnostics: [],
-    };
-  } catch (cause) {
-    return {
-      ok: false,
-      diagnostics: [{
-        severity: "error",
-        code: "COMPILER_NORMALIZED_IR_INVALID",
-        instancePath: "/normalizedWorldIr",
-        message: cause instanceof Error ? cause.message : "NormalizedWorldIRV3 could not be compiled.",
-      }],
-    };
-  }
 }
 
 function compileTraversalAreaV1(
