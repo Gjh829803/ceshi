@@ -918,6 +918,22 @@ function unavailableProjectionResultV2(
   }, []);
 }
 
+/**
+ * Trusted verification seam for exercising a provider-private non-complete
+ * Graph projection against the exact admitted Build Input. This is not
+ * exported from the package root and does not alter normal evaluation.
+ */
+export function evaluateUnavailableTraversalGraphProjectionV2(
+  rawReceipt: RouteBuildInputReceiptV2,
+  projection: Exclude<
+    TraversalGraphProjectionV2,
+    { readonly status: "complete" }
+  >,
+): RouteConnectivityResultV2 {
+  const receipt = assertRouteBuildInputReceiptV2(rawReceipt);
+  return unavailableProjectionResultV2(receipt, projection, undefined);
+}
+
 export async function evaluateRequiredRouteV2(
   rawInput: EvaluateRequiredRouteInputV2,
 ): Promise<RouteConnectivityResultV2> {

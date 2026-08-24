@@ -368,9 +368,7 @@ function incompleteResultForBuildInput(
     destinationAnchorEntityId: input.destinationAnchor.entityId,
     startAnchorPositionMetersXYZ: input.startAnchor.positionMetersXYZ,
     destinationAnchorPositionMetersXYZ: input.destinationAnchor.positionMetersXYZ,
-    traversalSurfaceId: input.traversalSurfaces[0]!.traversalSurfaceId,
-    surfaceEntityId: input.traversalSurfaces[0]!.surfaceEntityId,
-    colliderSubshapeId: input.traversalSurfaces[0]!.colliderSubshapeId,
+    relatedTraversalSurfaceIdentities: [],
     routeBuildInputHash: receipt.routeBuildInputHash,
     resolvedTraversalLockHash: envelope.resolvedTraversalLockHash,
     graphBuilderProfileRef: envelope.graphBuilderProfileRef,
@@ -386,8 +384,8 @@ function incompleteResultForBuildInput(
     },
   });
   return canonicalRouteConnectivityResultV2({
-    kind: "heightfield-route-connectivity-result",
-    schemaVersion: 1,
+    kind: "route-connectivity-result",
+    schemaVersion: 2,
     status: "incomplete",
     graphStatus: "unavailable",
     connectivityFailure: failure,
@@ -471,7 +469,7 @@ describe("orchestrateRouteValidationV1", () => {
     );
   }, 60_000);
 
-  it("executes every complete-row stage exactly once in the frozen order", async () => {
+  it("executes complete-row stages in the frozen order", async () => {
     const events: string[] = [];
     const base = operationsForFixture(complete);
     const operations: RouteValidationOrchestratorOperationsV1 = {
@@ -534,6 +532,7 @@ describe("orchestrateRouteValidationV1", () => {
       "recast-evaluation",
       "runtime-create",
       "driver-profile",
+      "profile",
       "runtime-probe",
       "runtime-dispose",
       "report",

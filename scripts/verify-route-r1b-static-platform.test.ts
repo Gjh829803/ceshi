@@ -13,6 +13,7 @@ import {
   R1B_STATIC_PLATFORM_FIXTURE_ORACLE,
   censusLegacyRouteConsumers,
   type LegacyRouteConsumerCensus,
+  type RouteR1bFixtureVerification,
 } from "./verify-route-r1b-static-platform.js";
 
 const repositoryRoot = path.resolve(
@@ -185,6 +186,29 @@ describe("verify:route-r1b-static-platform", () => {
         },
       },
     ]);
+  });
+
+  it("keeps all eleven fixture summaries on the canonical Validation Report hash shape", () => {
+    const reportHash = `sha256:${"1".repeat(64)}` as const;
+    const fixtures: readonly RouteR1bFixtureVerification[] =
+      R1B_STATIC_PLATFORM_FIXTURE_ORACLE.map((oracle) => Object.freeze({
+        ...oracle,
+        validationReportHash: reportHash,
+      }));
+
+    expect(fixtures).toHaveLength(11);
+    expect(fixtures.map(({ fixtureId }) => fixtureId)).toEqual(
+      R1B_STATIC_PLATFORM_FIXTURE_ORACLE.map(({ fixtureId }) => fixtureId),
+    );
+    for (const fixture of fixtures) {
+      expect(fixture.validationReportHash).toBe(reportHash);
+      expect(Object.keys(fixture).sort()).toEqual([
+        "fixtureId",
+        "graph",
+        "runtime",
+        "validationReportHash",
+      ]);
+    }
   });
 
   it("legacy consumer census reports fixed roots, family pattern, deleted fields, and matches", () => {

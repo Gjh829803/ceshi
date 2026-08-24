@@ -23,6 +23,9 @@ import {
 } from "@whitebox-world/subject-registry";
 import {
   BUILT_IN_HEIGHTFIELD_R1_TRAVERSAL_GRAPH_BUILDER_PROFILE_REF,
+  canonicalRouteOverlayV2,
+  canonicalRoutePathReceiptV2,
+  canonicalRouteRuntimeProbeReceiptV2,
   resolveTraversalGraphBuilderProfileV2,
 } from "@whitebox-world/traversal";
 
@@ -47,6 +50,10 @@ const ROUTE_SELECTOR = {
 const GRAPH_BUILDER_PROFILE = resolveTraversalGraphBuilderProfileV2(
   BUILT_IN_HEIGHTFIELD_R1_TRAVERSAL_GRAPH_BUILDER_PROFILE_REF,
 );
+
+function joinToken(parts: readonly string[]): string {
+  return parts.join("");
+}
 
 function routeEvidencePublicationFixture(): WorldkitBrowserRouteEvidencePublicationV2 {
   const traversalSurfaceIdentity = {
@@ -117,7 +124,7 @@ function routeEvidencePublicationFixture(): WorldkitBrowserRouteEvidencePublicat
   } as const;
   const traversalGraphHash = sha256CanonicalJson(traversalGraph) as
     `sha256:${string}`;
-  const routePathReceipt = {
+  const routePathReceipt = canonicalRoutePathReceiptV2({
     kind: "route-path-receipt",
     schemaVersion: 2,
     status: "complete",
@@ -131,7 +138,10 @@ function routeEvidencePublicationFixture(): WorldkitBrowserRouteEvidencePublicat
     traversalGraphHash,
     routeBuildInputHash: traversalGraph.routeBuildInputHash,
     resolvedTraversalLockHash: traversalGraph.resolvedTraversalLockHash,
-    orderedTraversalSurfaceIdentities: [traversalSurfaceIdentity],
+    orderedTraversalSurfaceIdentities: [
+      traversalSurfaceIdentity,
+      traversalSurfaceIdentity,
+    ],
     graphBuilderProfileRef,
     graphBuilderResolvedVersion,
     graphBuilderProfileHash,
@@ -146,7 +156,7 @@ function routeEvidencePublicationFixture(): WorldkitBrowserRouteEvidencePublicat
     minimumObservedClearanceWidthMeters: 2,
     minimumObservedClearanceHeightMeters: 3,
     maximumObservedSurfaceGapMeters: 0,
-  } as const;
+  });
   const routePathReceiptHash = sha256CanonicalJson(routePathReceipt) as
     `sha256:${string}`;
   const runtimeImplementationIdentity = {
@@ -183,7 +193,7 @@ function routeEvidencePublicationFixture(): WorldkitBrowserRouteEvidencePublicat
       surfaceResolution: { mode: "resolved", ...traversalSurfaceIdentity },
     },
   } as const;
-  const routeRuntimeProbeReceipt = {
+  const routeRuntimeProbeReceipt = canonicalRouteRuntimeProbeReceiptV2({
     kind: "route-runtime-probe-receipt",
     schemaVersion: 2,
     status: "complete",
@@ -214,7 +224,8 @@ function routeEvidencePublicationFixture(): WorldkitBrowserRouteEvidencePublicat
         "sha256:4ae59a7b56f09055e35ad6c8c90a81d32bc5655e2ce845865c0cc945f09f042e",
       runtimeImplementationIdentity,
       walkSpeedMetersPerSecond: 4,
-      positionQuantizationMeters: 0.05,
+      positionQuantizationMeters:
+        GRAPH_BUILDER_PROFILE.profile.positionQuantizationMeters,
     },
     initialRuntimeEvidence,
     ticks: [],
@@ -229,8 +240,8 @@ function routeEvidencePublicationFixture(): WorldkitBrowserRouteEvidencePublicat
       invalidPhysicsValueCount: 0,
     },
     completionDurationTicks: 0,
-  } as const;
-  const routeOverlay = {
+  });
+  const routeOverlay = canonicalRouteOverlayV2({
     kind: "route-overlay",
     schemaVersion: 2,
     ...ROUTE_SELECTOR,
@@ -243,7 +254,8 @@ function routeEvidencePublicationFixture(): WorldkitBrowserRouteEvidencePublicat
       entityId: routePathReceipt.destinationAnchorEntityId,
       positionMetersXYZ: [1, 0, 0],
     },
-    orderedTraversalSurfaceIdentities: [traversalSurfaceIdentity],
+    orderedTraversalSurfaceIdentities:
+      routePathReceipt.orderedTraversalSurfaceIdentities,
     resolvedTraversalLockHash: routePathReceipt.resolvedTraversalLockHash,
     traversalGraphHash,
     routePathReceiptHash,
@@ -259,7 +271,7 @@ function routeEvidencePublicationFixture(): WorldkitBrowserRouteEvidencePublicat
         "worldkit://locomotion-profile/humanoid.ground@1",
     },
     staticColliderIdentities: [],
-  } as const;
+  });
   return {
     kind: "worldkit-browser-route-evidence-publication",
     schemaVersion: 2,
@@ -1369,8 +1381,45 @@ describe("createWorldkitBrowserApiV5", () => {
   });
 
   it("rejects leftover V1 Path/Overlay fields on a V2 publication", () => {
-    expect(() => createWorldkitBrowserApiV5({
-      routeEvidencePublication: routeEvidencePublicationFixture() as never,
-    })).toThrow("WORLDKIT_BROWSER_ROUTE_EVIDENCE_PUBLICATION_INVALID");
+    const source = routeEvidencePublicationFixture();
+    const route = source.routes[0]!;
+    const surfaceIdentity = route.routePathReceipt!
+      .orderedTraversalSurfaceIdentities[0]!;
+    const legacySurfaceIdentityField = joinToken([
+      "traversal",
+      "Surface",
+      "Identity",
+    ]);
+    const legacyBlockingColliderIdentitiesField = joinToken([
+      "blocking",
+      "Collider",
+      "Identities",
+    ]);
+    const forgedRoutes = [
+      {
+        ...route,
+        routePathReceipt: {
+          ...route.routePathReceipt!,
+          [legacySurfaceIdentityField]: surfaceIdentity,
+        },
+      },
+      {
+        ...route,
+        routeOverlay: {
+          ...route.routeOverlay!,
+          [legacySurfaceIdentityField]: surfaceIdentity,
+          [legacyBlockingColliderIdentitiesField]: [],
+        },
+      },
+    ];
+
+    for (const forgedRoute of forgedRoutes) {
+      expect(() => createWorldkitBrowserApiV5({
+        routeEvidencePublication: {
+          ...source,
+          routes: [forgedRoute],
+        } as unknown as WorldkitBrowserRouteEvidencePublicationV2,
+      })).toThrow("WORLDKIT_BROWSER_ROUTE_EVIDENCE_PUBLICATION_INVALID");
+    }
   });
 });

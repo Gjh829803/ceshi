@@ -4,6 +4,7 @@ import {
   hashRouteGeometryArtifactV2,
   hashRouteSurfaceArtifactV2,
   hashRouteTerrainArtifactV2,
+  type CanonicalTriangleSoupV1,
   type RouteBuildInputReceiptV2,
   type RouteBuildInputV2,
 } from "@whitebox-world/traversal";
@@ -36,6 +37,19 @@ function deepFreeze<T>(value: T): T {
 
 function receipt(
   overrides: Partial<RouteBuildInputV2["capabilityEnvelope"]> = {},
+  terrainTriangleSoup: CanonicalTriangleSoupV1 = {
+    positionsMetersXYZ: [
+      0, 0, 0,
+      0, 0, 4,
+      2, 0, 0,
+      2, 0, 4,
+      2, 0.2, 0,
+      2, 0.2, 4,
+      16, 0.2, 0,
+      16, 0.2, 4,
+    ],
+    triangleIndices: [0, 1, 2, 2, 1, 3, 4, 5, 6, 6, 5, 7],
+  },
 ): RouteBuildInputReceiptV2 {
   const resourceLockHash = HASH_C;
   const capabilityEnvelope = deepFreeze({
@@ -82,19 +96,7 @@ function receipt(
     terrainSource: {
       kind: "bounded",
       terrainEntityId: "terrain-ground",
-      triangleSoup: {
-        positionsMetersXYZ: [
-          0, 0, 0,
-          0, 0, 4,
-          2, 0, 0,
-          2, 0, 4,
-          2, 0.2, 0,
-          2, 0.2, 4,
-          16, 0.2, 0,
-          16, 0.2, 4,
-        ],
-        triangleIndices: [0, 1, 2, 2, 1, 3, 4, 5, 6, 6, 5, 7],
-      },
+      triangleSoup: terrainTriangleSoup,
       minimumMetersXZ: [0, 0],
       maximumMetersXZ: [16, 4],
     },
@@ -279,6 +281,70 @@ describe("canonical Recast traversal Graph projection", () => {
     expect(buildTraversalGraphFromSnapshotV2(moved, receipt())).toEqual({
       status: "unavailable",
       reason: "no-queryable-ground-surface",
+    });
+  });
+
+  it("fails closed when a tagged provider polygon centroid misses its canonical source", () => {
+    const splitSource: CanonicalTriangleSoupV1 = {
+      positionsMetersXYZ: [
+        0, 0, 0,
+        0, 0, 4,
+        1, 0, 0,
+        1, 0, 4,
+        3, 0, 0,
+        3, 0, 4,
+        16, 0, 0,
+        16, 0, 4,
+      ],
+      triangleIndices: [0, 1, 2, 2, 1, 3, 4, 5, 6, 6, 5, 7],
+    };
+    const snapshot: RecastNavMeshAuditSnapshotV1 = deepFreeze({
+      kind: "recast-navmesh-audit-snapshot",
+      schemaVersion: 1,
+      nullLinkIndex: 0xffff_ffff,
+      tiles: [{
+        tileX: 0,
+        tileZ: 0,
+        tileLayer: 0,
+        maximumLinkCount: 0,
+        offMeshConnectionCount: 0,
+        verticesMetersXYZ: [
+          [0, 0, 0],
+          [4, 0, 0],
+          [4, 0, 4],
+          [0, 0, 4],
+        ],
+        polygons: [{
+          providerPolygonRef: 101,
+          providerType: 0,
+          areaId: 2,
+          flags: 1,
+          vertexIndices: [0, 1, 2, 3],
+          firstLinkIndex: 0xffff_ffff,
+          detailTrianglesMetersXYZ: [
+            [[0, 0, 0], [4, 0, 4], [4, 0, 0]],
+            [[0, 0, 0], [0, 0, 4], [4, 0, 4]],
+          ],
+        }],
+        links: [],
+      }],
+    });
+
+    expect(buildTraversalGraphFromSnapshotV2(
+      snapshot,
+      receipt({}, splitSource),
+    )).toEqual({
+      status: "incomplete",
+      reason: "surface-correlation-missing",
+      relatedTraversalSurfaceIdentities: [{
+        traversalSurfaceId: "surface-ground",
+        surfaceEntityId: "terrain-ground",
+        colliderSubshapeId: "collider-terrain",
+        resourceRef: "worldkit://terrain/ground@1",
+        resolvedVersion: "1",
+        resourceHash: HASH_A,
+      }],
+      failurePositionMetersXYZ: [2, 0, 2],
     });
   });
 

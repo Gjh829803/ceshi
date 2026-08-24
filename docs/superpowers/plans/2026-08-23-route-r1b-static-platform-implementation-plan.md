@@ -968,6 +968,14 @@ Expected: focused tests and typecheck pass.
 
 ### Task 9: Atomically Cut Over V2/V5 and Add the R1b Golden Gate
 
+**Status as of 2026-08-24:** complete on the Task 9 integration worktree based
+on `codex/r1b-integration@c48537f`. The atomic V2/V5 public cutover, fixture
+inventory, eleven Authoring worlds, consumer census, both verifier-only
+negative proofs, and the focused blocking gates are complete. The accepted
+fixture disposition and fresh evidence are recorded in
+`docs/reviews/2026-08-24-route-r1b-task9-fixture-disposition.md`. Task 10, R1b
+completion, and M5 completion remain open.
+
 **Files:**
 - Create: `examples/traversal/r1b-static-platform/success-steps-platform-ramp.world.json`
 - Create: `examples/traversal/r1b-static-platform/fail-step-height.world.json`
@@ -1050,7 +1058,7 @@ Expected: focused tests and typecheck pass.
 - Switches `window.__WORLDKIT__`, trusted host, Validation, CLI, R0/R1 verifiers, examples, and public exports to V5/V2 in one commit, then deletes every V4/V1 Route declaration; no alias or conversion layer survives.
 - Owns a repository-wide consumer census over production, tests, apps, scripts, examples, and `docs/17-canonical-json-quickstart.md`; historical reviews/specs are outside the scan root, while the R0 JSON fixture receives an explicit parsed Graph V2 assertion.
 
-- [ ] **Step 1: Write RED gate inventory test**
+- [x] **Step 1: Write RED gate inventory test**
 
 Require the success fixture plus all failure fixtures—including the distinct Graph-overlap and injected-complete/Runtime-ambiguous overlap cases—exact expected diagnostic codes, real Recast/Babylon flags, repeat/concurrent hashes, cadence hashes, cleanup checks, provider-leak scan results, and a zero-match legacy Route V1/Browser V4 public-symbol/field scan. The machine-readable result must include a `legacyConsumerCensus` with fixed search roots, the symbol-family pattern, the deleted `blockingColliderIdentities` / Heightfield-only budget discriminators, historical exclusions, match count, and matched paths. It must discover consumers from repository contents rather than compare against a hand-maintained file allowlist. Parse `examples/traversal/route-r0-contract.json` separately and require its embedded Graph evidence to be V2 with valid child/root hashes; plain symbol grep is not sufficient evidence for JSON fixtures.
 
@@ -1068,17 +1076,38 @@ pnpm vitest run scripts/verify-route-r1b-static-platform.test.ts
 
 Expected: FAIL because the verifier and fixtures do not exist.
 
-- [ ] **Step 3: Implement deterministic fixtures and verifier**
+- [x] **Step 3: Implement deterministic fixtures and verifier**
 
 Derive the 0.3m step threshold from the locked Profile. The success fixture uses 0.25m; the failure uses 0.35m. Do not copy `0.3` into Driver, Validation, or Surface Profile code.
 
-- [ ] **Step 4: Perform the atomic public cutover and same-byte transport coverage**
+All eleven worlds and the verifier inventory exist and align with the frozen
+oracle. The verifier owns two closed, trusted-host-only fault mappings without
+changing that oracle:
+
+- `fail-wrong-collider-binding` selects
+  `inject-surface-correlation-miss`, injects a private projection against the
+  real fixture Build Input, and lets the normal evaluator and Validation Report
+  path publish a canonical non-complete Result. The Orchestrator creates no
+  Runtime Lease;
+- `fail-platform-edge-fall` keeps its real complete Graph, confirms resolved
+  `terrain-main` support at reset, then withdraws that fixture-owned support in
+  the trusted host so the real Havok Probe publishes
+  `ROUTE_RUNTIME_SUPPORT_LOST`.
+
+Neither injection enters Authoring, Schema, Registry, CLI, Browser, Report,
+Snapshot, or Runtime public contracts. Focused coverage proves the support
+receipt fails after seven consecutive unsupported Ticks and records one
+support-loss episode with zero wrong-Surface observations. See the linked
+disposition for the exact regression evidence and the rationale for not
+continuing pure-JSON geometry searches.
+
+- [x] **Step 4: Perform the atomic public cutover and same-byte transport coverage**
 
 Migrate every remaining consumer to V2/V5, switch the installed Browser API once, and delete V1/V4 declarations and exports rather than aliasing them. This includes the Traversal and Traversal-Recast implementations/barrels/tests, Validation route evaluators/publication/probe/tests, trusted host and CLI scripts/integrations, the R0 contract fixture/verifier, and the Canonical JSON quickstart. Run the real `worldkit verify route` path and prove CLI JSON, stored Evidence, Browser projection, and validation input use the same canonical V2 bytes/hashes.
 
 The census must use current-tree names, including `HeightfieldRouteBuildInputV1`, `HeightfieldRouteTerrainSourceV1`, `createHeightfieldRouteBuildInputV1`, `HeightfieldRouteConnectivityResultV1`, `canonicalHeightfieldRouteConnectivityResultV1`, `evaluateRequiredHeightfieldRouteV1`, `HeightfieldTraversalGraphProjectionV1`, `QueryRequiredRouteInputV1`, `TraversalGraphV1`, `RoutePathReceiptV1`, `RouteOverlayV1`, every live `RouteRuntimeProbe*V1` satellite (including Failure, Metrics, Validation Profile Identity, Validation Error, and Error Codes), `RouteConnectivityOperationAbortedErrorV1`, `queryRequiredRouteV1`, `RouteThresholdRejectionProofV1`, `RouteThresholdRejectionReasonV1`, `WorldkitBrowserRouteEvidencePublicationV1`, and `WorldkitBrowserApiV4`, plus every constructor/assert/canonical/hash/receipt helper in those symbol families. Delete both Threshold V1 declarations and exports with `RouteConnectivityFailureV1`; unlike the explicitly reused `TraversalNodeV1`, `TraversalEdgeV1`, and `TraversalSurfaceIdentityV1` leaves, they are not V2 contracts. The census must also reject serialized/live source uses of `blockingColliderIdentities`, `heightfield-tile-estimate`, and `not-required-empty-source`; V2 uses `staticColliderIdentities`, `route-geometry-tile-estimate`, and `not-required-empty-geometry`. Use the exact Heightfield-qualified Connectivity and Graph Projection names from the tree rather than shortened invented names. Delete the old declarations/exports and migrate call sites directly; do not add a converter, alias, fallback read, or mixed-version receipt.
 
-- [ ] **Step 5: Run the cutover consumer census and prove zero matches**
+- [x] **Step 5: Run the cutover consumer census and prove zero matches**
 
 The verifier must execute the equivalent family-based scan so a newly discovered file fails the gate even when it was omitted from the `Files` list. Build its regex from split string fragments so the verifier and its test stay inside the scanned `scripts` root without self-matching; do not exclude those files. Limit documentation scanning to the live quickstart; historical reviews/specs remain readable history.
 
@@ -1091,7 +1120,11 @@ pnpm vitest run scripts/verify-route-r1b-static-platform.test.ts -t "legacy cons
 
 Expected: `rg` prints no matches, the census reports zero across all fixed roots, and the parsed R0 fixture assertion proves Graph V2 rather than relying on text absence.
 
-- [ ] **Step 6: Run Task 9 gates and commit**
+Implementation and recorded cutover evidence are present. The fresh Task 9
+focused matrix and R1b gate reran the executable census after integrating both
+fixture proofs and reported zero legacy consumers.
+
+- [x] **Step 6: Run Task 9 gates and commit**
 
 ```bash
 pnpm vitest run packages/traversal/src packages/traversal-recast/src packages/validation/src/route.test.ts packages/validation/src/route-evaluator.test.ts packages/validation/src/route-evidence-publication.test.ts packages/validation/src/route-runtime-probe.test.ts scripts/verify-route-r1b-static-platform.test.ts scripts/lib/route-validation-orchestrator.test.ts scripts/lib/route-validation-cli.test.ts scripts/lib/route-runtime-probe.integration.test.ts scripts/lib/traversal-area-runtime-collision.integration.test.ts scripts/lib/worldkit-server.test.ts scripts/worldkit-route-run.integration.test.ts scripts/worldkit.test.ts apps/playground/src/authoring-loader.test.ts apps/playground/src/worldkit-browser-api.test.ts
@@ -1104,6 +1137,12 @@ git commit -m "test: gate route r1b static platforms"
 ```
 
 Expected: R0, R1, and R1b gates pass.
+
+Fresh 2026-08-24 evidence: the focused matrix passed 43 files / 525 tests;
+`verify:route-r0-contract`, `verify:route-r1-heightfield`,
+`verify:route-r1b-static-platform`, `typecheck`, and `git diff --check` all
+passed. This Task 9 evidence does not claim that `pnpm test`, `pnpm build`, or
+Task 10 review gates have run.
 
 ### Task 10: Full Verification, Deep Review, and M5 Handoff
 

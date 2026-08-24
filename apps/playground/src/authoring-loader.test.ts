@@ -105,7 +105,7 @@ function matchingRouteEvidencePublication(
   }
   return canonicalWorldkitBrowserRouteEvidencePublicationV2({
     kind: "worldkit-browser-route-evidence-publication",
-    schemaVersion: 1,
+    schemaVersion: 2,
     worldPackageRootHash: ROUTE_EVIDENCE_HASH,
     authoringSpecHash: normalized.value.authoringSpecHash,
     normalizedWorldIrHash: normalized.normalizedWorldIrHash,
@@ -756,7 +756,7 @@ describe("loadAuthoringScene", () => {
     });
   });
 
-  it("defines Browser Protocol V4 with explicit control binding", () => {
+  it("defines Browser Protocol V5 with explicit control binding", () => {
     const fail = (): never => {
       throw new Error("not invoked");
     };
@@ -787,7 +787,7 @@ describe("loadAuthoringScene", () => {
       getRouteOverlay: () => unavailable,
     };
 
-    expect(api.version).toBe(4);
+    expect(api.version).toBe(5);
     expect(api.bindControl).toBeTypeOf("function");
   });
 

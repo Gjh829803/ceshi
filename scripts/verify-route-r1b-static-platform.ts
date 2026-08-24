@@ -546,7 +546,25 @@ export async function runRouteR1bStaticPlatformVerification(options: {
 
   const fixtureRuns: Awaited<ReturnType<typeof runFixture>>[] = [];
   for (const oracle of R1B_STATIC_PLATFORM_FIXTURE_ORACLE) {
-    fixtureRuns.push(await runFixture(options.repositoryRoot, oracle));
+    const run = await runFixture(
+      options.repositoryRoot,
+      oracle,
+      oracle.fixtureId === "fail-wrong-collider-binding"
+        ? {
+          fixtureFaultInjection: {
+            kind: "inject-surface-correlation-miss",
+          },
+        }
+        : oracle.fixtureId === "fail-platform-edge-fall"
+        ? {
+          fixtureFaultInjection: {
+            kind: "withdraw-static-support-after-reset",
+            supportEntityId: "terrain-main",
+          },
+        }
+        : {},
+    );
+    fixtureRuns.push(run);
   }
   const success = fixtureRuns[0]!;
   const repeatSuccess = await runFixture(
