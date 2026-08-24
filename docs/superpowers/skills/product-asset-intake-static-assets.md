@@ -127,12 +127,23 @@ xier120 的实现位置分别是
 | Canonical Playground Runtime | `apps/playground/src/main.ts` 用 `PLAYGROUND_CAPABILITY_SUBJECT_ASSET_URI_BY_REF_V1` 调用 `createFetchSubjectAssetResolver` |
 | Authoring Loader / World Package artifact 收集 | `apps/playground/src/authoring-loader.ts` 使用 `PLAYGROUND_SUBJECT_ASSET_URI_BY_REF_V1` 与 `PLAYGROUND_SUBJECT_ASSET_PACKAGE_PATH_BY_REF_V1` 调用 `resolveWorldPackageSubjectAssetArtifactsV1` |
 | xier120 的已有 batch 级映射 | `XIER120_SUBJECT_ASSET_URI_BY_REF_V1` 与 `XIER120_SUBJECT_ASSET_PACKAGE_PATH_BY_REF_V1`；它们只属于 xier120，通用 Playground 映射由 spread 合成 |
-| Trusted `worldkit run` | `pnpm worldkit run` 通过 `scripts/worldkit.ts` 启动带 `?authoring=1` 的受信 Host；它加载同一 Authoring Loader 和 Runtime Resolver，因此前两行都缺一不可 |
+| Trusted `worldkit run` preflight | `scripts/lib/route-validation-runner.ts` 在 schema-v4 `worldkit run` 启动 Host 前调用 `resolveWorldPackageResourceArtifactsV1`；该函数使用 `scripts/lib/world-package-resource-resolver.ts` 的 `DEFAULT_WORLD_PACKAGE_RESOURCE_MAPPING_BY_REF_V1` 独立读取、锁定并校验 public asset bytes |
+| Trusted `worldkit run` Host | `pnpm worldkit run` 通过 `scripts/worldkit.ts` 启动带 `?authoring=1` 的受信 Host；它先经过上行 preflight，再加载同一 Authoring Loader 和 Runtime Resolver |
 
 Host URL 必须以 `/subject-assets/` 开头，并同 Registry 锁定的 `artifactContentHash`、
-`byteLength` 匹配。新的非 xier120 batch 应扩展通用 Playground URI/package-path 映射或
-先引入自己的 batch map 再由这两个通用 map 合成；不要污染 `XIER120_*` 常量。不要用
-plain `pnpm dev` 加 `?authoring=1` 代替 `worldkit run`。
+`byteLength` 匹配。新的非 xier120 batch 必须维护四个相互独立的映射面：
+
+1. `PLAYGROUND_CAPABILITY_SUBJECT_ASSET_URI_BY_REF_V1`；
+2. `PLAYGROUND_SUBJECT_ASSET_URI_BY_REF_V1`；
+3. `PLAYGROUND_SUBJECT_ASSET_PACKAGE_PATH_BY_REF_V1`；
+4. `DEFAULT_WORLD_PACKAGE_RESOURCE_MAPPING_BY_REF_V1`。
+
+前三项只满足 Playground Runtime 和 Authoring Loader；它们**不足以**通过 trusted
+`worldkit run` 的 resource-resolution preflight。新 batch 应扩展通用 Playground
+URI/package-path 映射，并扩展或由新 batch map 合成第四项；为该 Ref 测试第四项的
+`publicUri`、`packagePath`、media type、磁盘 bytes、长度和 Hash。若将来把这四项合并为
+一个权威来源，必须先完成独立重构和回归；在当前实现中不能省略第四项。不要污染
+`XIER120_*` 常量。不要用 plain `pnpm dev` 加 `?authoring=1` 代替 `worldkit run`。
 
 场景使用的唯一直接选择是 Definition Ref，例如：
 
@@ -161,6 +172,14 @@ batch verifier 还要断言
 Definitions。不要把该 CLI list 的通过当作 capability discovery；在拿到精确 Ref 后，
 `worldkit registry describe` 仍应通过。
 
+Capability Catalog discovery 和已知 Ref 的直接使用也不等于 public Browser selector
+可见。`apps/playground/src/worldkit-browser-api.ts` 的 `listSubjectDefinitions()` 从
+`builtInSubjectDefaultRegistry.listPublicDefaults()` 生成选择项；它是默认公开产品目录，
+不是全部 capability Definitions。xier120 的 internal-only、advanced 或 experimental
+条目故意不在这个 defaults Catalog 中；把一个新 batch 加入
+`listPublicDefaults()` 是单独的公开产品/发布策略决定，不能作为 Registry、Resolver 或
+直接 `subjectDefinitionRef` 接入的副作用。
+
 ## 5. 必需验证证据
 
 每个新 batch 都需要自己的命名 verifier 与受测 fixture；没有通用的
@@ -170,9 +189,9 @@ Definitions。不要把该 CLI list 的通过当作 capability discovery；在�
 
 | 证据层 | 每资产或每 batch 的最小证明 |
 |---|---|
-| 自动化合同 | 冻结 source/ready bytes Hash 和长度；FBX bake 的 exact-byte 回归；GLB inventory；Asset/Collider/Definition closure；Capability Catalog discovery；`subjectDefinitionRef` 的 normalize/compile；同一 asset 的双实例、隔离、dispose、cache 生命周期和 Hash 拒绝 |
+| 自动化合同 | 冻结 source/ready bytes Hash 和长度；FBX bake 的 exact-byte 回归；GLB inventory；Asset/Collider/Definition closure；Capability Catalog discovery；`subjectDefinitionRef` 的 normalize/compile；同一 asset 的双实例、隔离、dispose、cache 生命周期和 Hash 拒绝；以及 `DEFAULT_WORLD_PACKAGE_RESOURCE_MAPPING_BY_REF_V1` 的 trusted preflight 解析、路径和 bytes/Hash 匹配 |
 | 渲染 | 每个资产在 Canonical Authoring Runtime 的截图或同等持久画面证据，核对朝向、up、support-center、可见网格与 Collider 对位；更新 Definition 或 Resolver 后重新跑 |
-| 人工交互 | 通过 trusted `pnpm worldkit run` Host，对每个可发布 asset 至少验证 spawn、W/A/S/D、jump、相机拖拽/滚轮和 reset；记录这是 ground Character 交互，不将其解释为驾驶、飞行、骑乘或 NPC 行为 |
+| 人工交互 | 先声明交互等价类别。静态 ground Subject 共用同一 capability/profile/Host 路径且所有资产已有自动化加渲染证据时，每类抽一个代表验证 spawn、W/A/S/D、jump、相机拖拽/滚轮和 reset；样本只证明该类代表。若要对每个资产作单独交互承诺、它引入新 capability/profile/Host 路径，或渲染/抽样发现异常，则该资产必须逐项人工验证。所有记录都只能声明 ground Character 交互，不能解释为驾驶、飞行、骑乘或 NPC 行为。 |
 
 xier120 可作为完整工作例子：
 
@@ -188,7 +207,15 @@ pnpm worldkit run examples/authoring/xier120-subject-gallery.json
 其持久的渲染/人工记录位于
 `artifacts/examples/xier120-subject-gallery/gallery.png` 和
 `artifacts/examples/xier120-subject-gallery/manual-check.json`。这些是 xier120 的先例，
-不是新 batch 可以复用的通过证书。
+不是新 batch 可以复用的通过证书。该例对全部 19 个 Definition 完成自动化和渲染检查；
+人工 trusted-host interaction 仅覆盖 animal、vehicle、composition 三个代表类别，
+不是 19 个资产逐项手工通过的声明。
+
+在 batch verifier 和渲染证据通过后，还要运行
+`pnpm vitest run scripts/lib/world-package-resource-resolver.test.ts`，确认 trusted
+preflight 的 fourth mapping surface 能读取并锁定对应 Subject Asset；最后启动同一
+schema-v4 fixture 的 `pnpm worldkit run`，确认 preflight 和 Host 都成功。新 batch 的
+测试不得只断言三个 Playground 映射。
 
 ## 常见失败与处理
 
@@ -197,7 +224,7 @@ pnpm worldkit run examples/authoring/xier120-subject-gallery.json
 | source Hash 或长度变化 | 停止；确认来源版本和许可后，以新版本重新 Catalog、bake、Registry 和 Resolver，而不是篡改旧记录 |
 | 反射后黑面、内翻或 normals 错误 | 检查 bake matrix determinant；负值必须反转 winding 后再算 normals |
 | 资产横放、倒置、脚悬空或正面错误 | 回到 batch 配置/normalizer；明确 scale、旋转、up、forward 和 support-center，不用世界 Transform 补偿 |
-| Registry 可 describe 但 Playground 或 `worldkit run` 解析失败 | 同时检查通用 URI map、package-path map 和 capability Runtime URI map；确认 URL 在 `/subject-assets/` 下且 bytes/Hash 一致 |
-| CLI 能列出 Definition，Capability UI 却不显示 | 在 verifier 中检查 `listCapabilitySubjectDefinitions()`，并修复 schema-v3 定义与 Registry 注册 |
+| Registry 可 describe 但 Playground 或 `worldkit run` 解析失败 | 同时检查三个 Playground maps 与 `DEFAULT_WORLD_PACKAGE_RESOURCE_MAPPING_BY_REF_V1`；确认 URL 在 `/subject-assets/` 下、package path 唯一，且四面读取的 bytes/Hash 一致 |
+| Capability Catalog 能发现 Definition，Browser selector 却不显示 | 先区分 direct/capability use 与 public-default policy。检查 `listCapabilitySubjectDefinitions()`；不要自动修改 `listPublicDefaults()`，除非公开产品目录策略已批准 |
 | 资产外观像车、飞行器或带骑手 | 保持 internal/static ground 范围；若产品需要 vehicle、flight、mount 或 NPC，提交 Capability Gap，不虚构行为 |
 | 想把一个未验证目录批量发布 | 按每资产 inventory、Registry Ref、Resolver 和三类证据收齐；抽样不能替代 30 个资产的视觉朝向 QA |

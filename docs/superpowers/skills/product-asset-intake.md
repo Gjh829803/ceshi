@@ -74,3 +74,7 @@ pnpm worldkit registry describe \
 
 不要根据文件名、类别（例如 `vehicle`）或外观推断可用行动。Registry 的
 `authoringAvailability` 和 Capability Catalog 才是选择依据。
+Capability Catalog 可发现或场景可直接引用的 Definition，也不自动出现在 public Browser
+selector；该 selector 只从 `builtInSubjectDefaultRegistry.listPublicDefaults()` 读取批准的
+defaults。把 internal-only、advanced 或 experimental 资产加入公开 defaults 是独立策略，
+不是资产接入步骤。
