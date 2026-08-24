@@ -111,8 +111,6 @@ function textFamilyDefinitions(): readonly TextFamilyDefinition[] {
     escaped(token(["compile", "World", "V4"])),
     escaped(token(["load", "Worldkit", "Pipeline"])),
     `${escaped(token(["Execution", "Plan", "V4"]))}\\s*\\|\\s*${escaped(token(["Execution", "Plan", "V5"]))}`,
-    `${escaped(token(["schema", "Version"]))}\\s*===\\s*4`,
-    `${escaped(token(["schema", "Version"]))}\\s*!==\\s*5`,
     escaped(token(["legacy", "-control"])),
     escaped(token(["legacy", "-motion"])),
     `${escaped(token(["legacy"]))}\\.(?:${alternatives(["camera", "ground"])})`,

@@ -149,6 +149,25 @@ describe("verify:unreleased-clean-break", () => {
     expect(report.ok).toBe(false);
   });
 
+  it("allows strict checks for the current authoring and execution versions", async () => {
+    const fixtureRoot = await mkdtemp(path.join(os.tmpdir(), "clean-break-current-version-"));
+    cleanupPaths.push(fixtureRoot);
+    await mkdir(path.join(fixtureRoot, "packages", "runtime"), { recursive: true });
+    await writeFile(
+      path.join(fixtureRoot, "packages", "runtime", "current-version.ts"),
+      [
+        "if (authoring.schemaVersion === 4) useCurrentAuthoring(authoring);",
+        "if (plan.schemaVersion !== 5) throw new Error('ExecutionPlanV5 required');",
+      ].join("\n"),
+      "utf8",
+    );
+
+    const report = await scanUnreleasedCleanBreak(fixtureRoot);
+
+    expect(family(report, "superseded-compatibility-mechanisms").matchCount).toBe(0);
+    expect(report.ok).toBe(true);
+  });
+
   it("blocks superseded runtime ownership and subject registry compatibility", async () => {
     const fixtureRoot = await mkdtemp(path.join(os.tmpdir(), "clean-break-runtime-"));
     cleanupPaths.push(fixtureRoot);

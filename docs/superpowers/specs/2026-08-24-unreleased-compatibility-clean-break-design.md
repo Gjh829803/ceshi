@@ -350,11 +350,13 @@ rg -n --hidden \
   --glob '!dist/**' \
   --glob '!coverage/**' \
   --glob '!.git/**' \
-  '(WorldRuntimeSnapshotV3|BindControlRequestV2|RegistrySubjectDefinition(Input)?V2|SubjectResourceRegistryV2|migrateAuthoringSpecV2ToV3|projectPlacementsToV3|projectNormalizedWorldV4ToV3|compileWorldV4|loadWorldkitPipeline|ExecutionPlanV4 \| ExecutionPlanV5|schemaVersion === 4|schemaVersion !== 5|LEGACY_(CONTROL|MOTION|CAMERA)|legacy-(control|motion)|legacy\.(camera|ground)|bindControl\()' \
+  '(WorldRuntimeSnapshotV3|BindControlRequestV2|RegistrySubjectDefinition(Input)?V2|SubjectResourceRegistryV2|migrateAuthoringSpecV2ToV3|projectPlacementsToV3|projectNormalizedWorldV4ToV3|compileWorldV4|loadWorldkitPipeline|ExecutionPlanV4 \| ExecutionPlanV5|LEGACY_(CONTROL|MOTION|CAMERA)|legacy-(control|motion)|legacy\.(camera|ground)|bindControl\()' \
   packages apps scripts examples
 ```
 
 期望结果：被本设计确认的兼容符号零匹配。业务意义上的 safe fallback、历史 UI migration 或其他当前协议不得被此命令自动删除；每个剩余匹配必须按第 5 节分类并记录。
+
+`schemaVersion === 4` 和 `schemaVersion !== 5` 这类表达式本身不是兼容机制：它们通常是当前 Authoring V4 / ExecutionPlan V5 的严格识别或 fail-closed 门禁。机器 gate 不把它们计为债务；审查应确认它们没有把旧输入转换为当前输入，而不是为了追求文本零匹配删除正确的版本校验。
 
 ### 10.3 Serialized assets 只使用当前 Authoring 版本
 
