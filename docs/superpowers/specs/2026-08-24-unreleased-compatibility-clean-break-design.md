@@ -350,7 +350,7 @@ rg -n --hidden \
   --glob '!dist/**' \
   --glob '!coverage/**' \
   --glob '!.git/**' \
-  '(migrateAuthoringSpecV2ToV3|projectPlacementsToV3|projectNormalizedWorldV4ToV3|compileWorldV4|loadWorldkitPipeline|ExecutionPlanV4 \| ExecutionPlanV5|schemaVersion === 4|schemaVersion !== 5|legacy-(control|motion)|legacy\.(camera|ground))' \
+  '(WorldRuntimeSnapshotV3|BindControlRequestV2|RegistrySubjectDefinition(Input)?V2|SubjectResourceRegistryV2|migrateAuthoringSpecV2ToV3|projectPlacementsToV3|projectNormalizedWorldV4ToV3|compileWorldV4|loadWorldkitPipeline|ExecutionPlanV4 \| ExecutionPlanV5|schemaVersion === 4|schemaVersion !== 5|LEGACY_(CONTROL|MOTION|CAMERA)|legacy-(control|motion)|legacy\.(camera|ground)|bindControl\()' \
   packages apps scripts examples
 ```
 
