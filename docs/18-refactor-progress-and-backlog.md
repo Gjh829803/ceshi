@@ -61,6 +61,7 @@
 - [`2026-08-24-gameplay-browser-g19-6-review.md`](reviews/2026-08-24-gameplay-browser-g19-6-review.md)：G19-6 Browser V5/Snapshot V4、RuntimeHost Activity 与 consumer cutover 的 Final GO disposition；
 - [`2026-08-24-g19-7-outdoor-gameplay-completion.md`](reviews/2026-08-24-g19-7-outdoor-gameplay-completion.md)：G19-7 六场景 Gameplay 与 artifact-only 生命周期的完成证据；
 - [`2026-08-24-unreleased-compatibility-clean-break-design.md`](superpowers/specs/2026-08-24-unreleased-compatibility-clean-break-design.md)：G19-8 未发布协议 clean break 的权威边界、UCCB 依赖图与零消费者门禁；
+- [`2026-08-25-historical-naming-and-compatibility-path-cleanup-plan.md`](superpowers/plans/2026-08-25-historical-naming-and-compatibility-path-cleanup-plan.md)：UCCB-65 历史命名、公共导出、隐式兼容行为、生成资产与延期清理账本的专项执行计划；
 - [`2026-08-25-gameplay-g19-8-completion.md`](reviews/2026-08-25-gameplay-g19-8-completion.md)：G19-8 当前实施证据、待跑全量门禁与最终 disposition 入口；
 - [`2026-08-24-context-driven-gameplay-camera-composition-design.md`](superpowers/specs/2026-08-24-context-driven-gameplay-camera-composition-design.md)：已评审的 Kit、Relationship、Action、Equipment、Flight 与 Camera Context/Director 端到端组合合同；能力仍未实施；
 - [`2026-08-19-world-validation-report-and-quality-gates-design.md`](superpowers/specs/2026-08-19-world-validation-report-and-quality-gates-design.md)：量化 Gate、Metric、Evidence 和生产阻断协议；
@@ -739,7 +740,7 @@ Placement S1、Simulation Take / Control Capture V1 与 Validation Capture/Integ
 | G19-5 | **已完成，作为 G19-6 前置底座** | Babylon Gameplay Port；`possessedBy` 唯一控制权；输入目标与 Camera Target projection 事务 | G19-4 | optional Possession、fixed-input Controller 隔离、staged transaction、provider-neutral projection 与 fail-closed Action 已完成 |
 | G19-6 | **已完成并在 `main`** | exact 39-key Browser Protocol V5 Gameplay 唯一入口、Snapshot V4、Reset/Rebind、Runtime Activity、Authoring/CLI/Capture/Take consumer cutover；Execution Subject locomotion Capability lock 与 Canonical capability state | G19-5 | `main@5ffd031`；typecheck、build、168 files / 2,134 tests、Canonical/Placement/Rigged/G Bot/R0/R1/R1b 与两项 Capture verifier 全通过；无 open confirmed P0/P1/P2 |
 | G19-7 | **已完成于集成分支** | Outdoor/catalog route、page/artifact lifecycle 与六场景接线，不增加第二套 Gameplay 真相 | G19-6 | `da90f16` + completion record `1594823`；6/6 Gameplay、6/6 artifact-only、unknown-scene fail-closed Browser Gate 通过 |
-| G19-8 | **进行中** | 未发布协议 clean break、零消费者 census、G19 整体全量验证、主 Agent深审与最终 disposition | G19-7 | UCCB-00 至 UCCB-40 已形成提交；UCCB-50/60/70、全量 Gate 和最终 completion claim 仍开放 |
+| G19-8 | **进行中** | 未发布协议 clean break、历史命名/兼容路径专项清理、零消费者 census、G19 整体全量验证、主 Agent深审与最终 disposition | G19-7 | UCCB-00 至 UCCB-40 已形成提交；UCCB-50/60/65/70、全量 Gate 和最终 completion claim 仍开放 |
 | M8-S1 | 阻塞于 G19-8 | 首个 `mountedOn` 人—滑板关系切片 | G19-8 | Relationship/Action/Event/Receipt/Capture 端到端一致 |
 
 G19-8 的 clean-break 子任务以
@@ -755,6 +756,7 @@ G19-8 的 clean-break 子任务以
 | UCCB-40 | 已完成 | `9ae108a`、`592fbeb`：Subject capability assembly 成为 Authoring/Registry/Plan 必填当前合同 | 最终 Runtime 与资产 Gate 回归 |
 | UCCB-50 | 进行中 | `c0c05ad`、`3e4fda0` 已完成 Adapter/consumer V5-only 与 provider projection；Babylon Runtime clean break 尚在工作树 | 删除剩余 V4/SnapshotV3/direct-bind/legacy profile 路径并完成 Runtime 深审 |
 | UCCB-60 | 进行中 | `c32ecb5`、`2d312b1`、`b148472` 等已删除 Authoring V3/Plan V4 合同并迁移部分 verifier | 等 UCCB-50 稳定后执行跨包旧表面、fixture、export 零引用清理 |
+| UCCB-65 | 进行中 | 已新增历史命名与兼容路径专项计划；机器 census 当前为零 forbidden matches | 完成人工语义分类、公共 export/serialized asset census、隐式 fallback 复核和延期清理账本 |
 | UCCB-70 | 进行中 | G19-8 completion record 已建立 | `verify:unreleased-clean-break` 零匹配、全量 Gate、最终 diff review 与 disposition |
 
 项目尚未上线，因此本轮能删除的被替代兼容路径全部删除，不为开发历史保留 alias、converter、
@@ -762,6 +764,12 @@ fallback read、双写或双发布。当前仍是唯一权威的版本化嵌套�
 Traversal V2 与 Browser V5）不是兼容债务，不能因版本号较小而误删。若最终确有被替代路径无法在
 本轮删除，必须在 G19-8 completion record 中逐项登记 consumer、blocker、owner、removal gate
 和 deadline；没有完整登记的延期不允许通过 G19-8。
+
+UCCB-65 的任务账本见
+[`历史命名与兼容路径清理专项计划`](superpowers/plans/2026-08-25-historical-naming-and-compatibility-path-cleanup-plan.md)。
+该任务不以“删除所有低版本后缀”为目标：尚无替代版本且仍是唯一权威的嵌套合同必须保留并登记
+为 `current-authority`；只有已有当前替代实现的旧名称、alias、converter、双读写和 fallback 才进入
+`superseded-delete`。
 
 G19-4E 已关闭此前的两项验证债务：Simulation Take 不再手改 `worldPackageRootHash`，而由
 `generate:example-takes` 从 canonical WorldPackage identity 原子生成；两个 Route 重型套件保留

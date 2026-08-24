@@ -502,6 +502,8 @@ Browser、示例和门禁。若本轮确实无法删除某个旧路径，技术�
 - [Canonical Runtime State 与 Semantic Projection 设计](docs/superpowers/specs/2026-08-22-canonical-runtime-state-and-semantic-projection-design.md)
 - [Gameplay Framework 与 Route R1b 融合设计](docs/superpowers/specs/2026-08-24-gameplay-framework-r1b-integration-design.md)
 - [Gameplay Framework 与 Route R1b 实施计划](docs/superpowers/plans/2026-08-24-gameplay-framework-r1b-integration-implementation-plan.md)
+- [未发布协议兼容层 Clean Break 设计](docs/superpowers/specs/2026-08-24-unreleased-compatibility-clean-break-design.md)
+- [历史命名与兼容路径清理专项计划](docs/superpowers/plans/2026-08-25-historical-naming-and-compatibility-path-cleanup-plan.md)
 - [Gameplay RuntimeHost G19-3 审查处置](docs/reviews/2026-08-24-gameplay-runtime-host-g19-3-review.md)
 - [上下文驱动 Gameplay 与 Camera 组合设计（已评审，未来能力）](docs/superpowers/specs/2026-08-24-context-driven-gameplay-camera-composition-design.md)
 - [上下文驱动 Gameplay 与 Camera 设计审查记录](docs/reviews/2026-08-24-context-driven-gameplay-camera-composition-design-review.md)

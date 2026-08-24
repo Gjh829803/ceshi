@@ -100,6 +100,7 @@ evidence until UCCB-70 reruns the full matrix and the host reviews the integrate
 | UCCB-40 | Complete | `9ae108a`, `592fbeb`: required locked Subject capability assemblies | Final Runtime and asset gates |
 | UCCB-50 | In progress | `c0c05ad`, `3e4fda0`: V5-only adapter/consumer seam and provider projection | Complete Babylon V5-only migration and Runtime deep review |
 | UCCB-60 | In progress | `c32ecb5`, `2d312b1`, `b148472`: old Authoring V3/Plan V4 contracts removed and some verifiers migrated | Delete remaining superseded files, exports, fixtures and branches after UCCB-50 |
+| UCCB-65 | In progress | Dedicated implementation plan: `2026-08-25-historical-naming-and-compatibility-path-cleanup-plan.md`; machine census currently reports zero forbidden matches | Complete semantic naming/export/fallback classification, generated artifact cleanup and deferred-removal ledger |
 | UCCB-70 | In progress | G19-8 completion record established | Zero census, full gates, final host review and disposition |
 
 Because the project has not shipped, every superseded compatibility path that can be removed in this slice
@@ -107,6 +108,11 @@ must be removed. Current versioned nested components are retained when they rema
 small version suffix is not deletion evidence. If a superseded path is genuinely blocked at final review,
 its entry must name the exact consumer, blocker, owner, removal gate and deadline. An undocumented or
 open-ended compatibility deferral fails G19-8.
+
+`UCCB-65` is a blocking subtask between deletion and final completion. It prevents two opposite errors: retaining
+obsolete aliases because they still compile, and deleting current contracts merely because their names contain
+`V1`, `V2` or `V3`. Its execution ledger and exact commands live in
+[`2026-08-25-historical-naming-and-compatibility-path-cleanup-plan.md`](2026-08-25-historical-naming-and-compatibility-path-cleanup-plan.md).
 
 ---
 

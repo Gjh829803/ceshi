@@ -45,6 +45,7 @@ consumer that requires development-history compatibility. Consequently:
 | UCCB-40 | Complete | `9ae108a`, `592fbeb`, `1e58c0b` require a locked Subject capability assembly through Registry, Compiler and RuntimeHost tests | Runtime and asset gates |
 | UCCB-50 | In progress | `c0c05ad` makes the Playground adapter V5-only; `3e4fda0` moves app consumers to the Babylon provider projection | Finish Babylon Runtime V5-only construction, remove V3 snapshot/direct-bind/legacy-profile paths, run Runtime deep review |
 | UCCB-60 | In progress | `c32ecb5`, `2d312b1`, `b148472` remove old Authoring V3/Plan V4 contracts and migrate part of the verifier surface | Delete all remaining superseded exports, fixtures, branches and test consumers after UCCB-50 |
+| UCCB-65 | In progress | `docs/superpowers/plans/2026-08-25-historical-naming-and-compatibility-path-cleanup-plan.md` defines the blocking naming/compatibility census | Classify retained versioned names, remove hidden compatibility behavior, regenerate superseded artifacts and close or register every deferral |
 | UCCB-70 | In progress | This review record and the machine clean-break verifier provide the disposition surface | Zero census, full gates, final host review and Git integration evidence |
 
 ## Focused evidence already observed
@@ -93,6 +94,10 @@ and manual interaction evidence must be reported separately.
 ## Deferred-removal ledger
 
 No compatibility deferral is approved at this observation point.
+
+This ledger is the mandatory HNC-50 output of UCCB-65. A current authoritative contract with a version
+suffix belongs in the classified census, not in this deferral table. Only a proven superseded path with a
+real current production blocker may be deferred.
 
 If a real blocker appears during final integration, add exactly one row per superseded path. Every column is
 mandatory; `unknown`, `later`, `compatibility` or a release without an exact removal gate is not acceptable.

@@ -163,8 +163,11 @@ UCCB-00  G19-7 稳定基线冻结
    +--------------------------------------+
                                           v
                               UCCB-60  旧文件/导出/fixture 删除
-                                          |
-                                          v
+                                  |
+                                  v
+                              UCCB-65  历史命名/兼容路径专项 census
+                                  |
+                                  v
                               UCCB-70  zero-census + G19-8 review
 ```
 
@@ -255,10 +258,22 @@ UCCB-00  G19-7 稳定基线冻结
 - 验证证据：删除前失败 census；删除后精确 symbol、schemaVersion branch、legacy alias、converter、fallback census；相关包全测、typecheck、build。
 - execution mode：`main-agent-only`，因为它执行跨包原子删除和最终冲突处置。
 
+### UCCB-65 — 历史命名与兼容路径专项清理
+
+- 目标与交付物：按 `current-authority`、`superseded-delete`、`historical-only`、`deferred-blocked` 分类所有历史命名和兼容路径，删除已被替代项，证明保留的版本化名称仍是唯一当前权威。
+- `depends_on`：UCCB-50、UCCB-60。
+- `blocks`：UCCB-70。
+- 独占所有权：历史命名 census、公共 export 复核、兼容机制语义审查、延期清理账本；实施细节见 `docs/superpowers/plans/2026-08-25-historical-naming-and-compatibility-path-cleanup-plan.md`。
+- 输入合同：当前协议实现稳定、旧消费者完成迁移、机器 clean-break verifier 可运行。
+- 输出合同：被替代路径零匹配；每个保留的版本化公共符号都有当前权威分类；每个真实延期项都有 owner、删除任务、机器门禁和最晚阶段。
+- 集成点：G19-8 completion review 的命名 census 和 deferred-removal ledger。
+- 验证证据：`pnpm verify:unreleased-clean-break`、公共 export/serialized asset census、Runtime 隐式 fallback 审查、全量 typecheck/test/build。
+- execution mode：`main-agent-only`；只读 census 可并行，删除和最终 classification 由主代理集成。
+
 ### UCCB-70 — Zero census 与 G19-8 completion review
 
 - 目标与交付物：生成可复查的最终 census、门禁结果、暂缓登记和 Git 状态；只有全部必要证据通过后才允许 G19-8 completion claim。
-- `depends_on`：UCCB-60。
+- `depends_on`：UCCB-65。
 - `blocks`：G19-8 completion、合入 main。
 - 独占所有权：最终集成、completion report、Git branch/upstream 状态；不在此任务中补实现。
 - 输入合同：已集成 clean-break diff 和全部聚焦证据。
