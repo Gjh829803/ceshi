@@ -24,8 +24,9 @@
 > transactional port，以及 G19-6 的 exact Browser V5、Snapshot V4、RuntimeHost Activity 与
 > Authoring/CLI/Capture/Take consumer cutover 已完成并通过主 Agent completion review。最终
 > `typecheck`、`build`、168 files / 2,134 tests、七项 World/Route verifier，以及 Control Capture / Validation
-> Capture 门禁全部通过；无 open confirmed P0/P1/P2。G19-6 已 Final GO、可独立合入但尚未合入；
-> Outdoor/catalog lifecycle 仍属于 G19-7，#19 的完整融合仍未完成。
+> Capture 门禁全部通过；无 open confirmed P0/P1/P2。G19-6 已由 `eef75c6` 实现并随
+> `5ffd031` completion review 合入 `main`；Outdoor/catalog lifecycle 仍属于 G19-7，
+> G19 整体融合要到 G19-8 终审后才完成。
 
 > Simulation Take / Control Capture V1 已完成 60 Hz → 24 fps 精确时间映射、五 Pass
 > Babylon 捕获、Render Ready Receipt、原子 Bundle、CLI/Browser/Playwright 和真实 Chromium
@@ -56,8 +57,9 @@
 - [`2026-08-19-simulation-take-control-capture-design.md`](superpowers/specs/2026-08-19-simulation-take-control-capture-design.md)：WorldPackage、Take、Session、多 Pass Capture 与视频 Adapter 边界；
 - [`2026-08-22-canonical-runtime-state-and-semantic-projection-design.md`](superpowers/specs/2026-08-22-canonical-runtime-state-and-semantic-projection-design.md)：Canonical World/View/Runtime Status、Typed Relationship、Semantic Fact、Action/Event Receipt 与世界模型轨迹边界；
 - [`2026-08-24-gameplay-framework-r1b-integration-design.md`](superpowers/specs/2026-08-24-gameplay-framework-r1b-integration-design.md)：Gameplay Framework、RuntimeHost、R1b、Camera 与 Browser V5 的唯一所有权和事务融合合同；执行见同名实施计划；
-- [`2026-08-24-gameplay-browser-g19-6-review.md`](reviews/2026-08-24-gameplay-browser-g19-6-review.md)：G19-6 Browser V5/Snapshot V4、RuntimeHost Activity 与 consumer cutover 的实现 disposition；最终门禁仍由主 Agent 补齐；
-- [`2026-08-24-context-driven-gameplay-camera-composition-design.md`](superpowers/specs/2026-08-24-context-driven-gameplay-camera-composition-design.md)：已评审的 Kit、Relationship、Action、Equipment、Flight 与 Camera Context/Director 端到端组合合同；能力仍未实施；
+- [`2026-08-24-gameplay-browser-g19-6-review.md`](reviews/2026-08-24-gameplay-browser-g19-6-review.md)：G19-6 Browser V5/Snapshot V4、RuntimeHost Activity 与 consumer cutover 的实现 disposition；completion review 已由 `5ffd031` 合入 `main`；
+- [`2026-08-24-context-driven-gameplay-camera-composition-design.md`](superpowers/specs/2026-08-24-context-driven-gameplay-camera-composition-design.md)：已评审并按当前 `main` 复核的 Kit、Relationship、Action、Equipment、Flight 与 Camera Context/Director 端到端组合合同；已决策 Canonical Camera 独立包方向、Legacy Three 隔离边界和 GCC 工作图，公共合同仍待 GCC-0～0C 冻结，能力仍未实施；
+- [`2026-08-25-context-driven-camera-package-boundary-review.md`](reviews/2026-08-25-context-driven-camera-package-boundary-review.md)：基于当前源码的 Canonical Camera 分包、Legacy Three 反向可达性与成组清退门禁复审；无 open confirmed P0/P1/P2，实施仍由 P2.4 GCC-0～8 和 P3.2 跟踪；
 - [`2026-08-19-world-validation-report-and-quality-gates-design.md`](superpowers/specs/2026-08-19-world-validation-report-and-quality-gates-design.md)：量化 Gate、Metric、Evidence 和生产阻断协议；
 - [`2026-08-20-ai-authored-geometry-extension-design.md`](superpowers/specs/2026-08-20-ai-authored-geometry-extension-design.md)：未来可能需要的 AI 自定义几何能力及候选技术，仅供调研评审，不属于当前 Roadmap；
 - `docs/superpowers/plans/`：已经进入实施阶段的单个纵向切片计划与证据。
@@ -151,7 +153,8 @@ Capture V1 是独立的新纵向切片，不改变该 90% 口径。
   恢复。WorldPackage Runtime 配置构建阶段的资产失败在公共 Authoring 边界稳定 fail closed。
   主 locomotion Capability 使用已选 locomotion Capability 子图的唯一 dependency leaf：排除被其他已选
   locomotion Capability require 的节点；Definition 锁 Ref/hash，Compiler/Runtime 不猜 `ground`。
-  最终 full regression、两项 Capture gate 与 completion review 已收口；该切片 Final GO、可独立合入。
+  最终 full regression、两项 Capture gate 与 completion review 已收口；该切片 Final GO，已由
+  `eef75c6` / `5ffd031` 合入 `main`。
 - [x] 真实 Chromium 下验证 Package Definition 的两个实例可以分别控制。
 
 2026-08-20 的新鲜验证证据：
@@ -536,7 +539,22 @@ Incremental Hot Apply，以及哪些 Runtime 状态被保留、重置或替换�
 
 #### P2.4 多 Controller、相机模式与受控操作
 
-- [x] 完成并评审 [上下文驱动 Gameplay 与 Camera 组合设计](superpowers/specs/2026-08-24-context-driven-gameplay-camera-composition-design.md)；已接受 Kit → committed state → Camera Context → CameraDirector 的单向链路、唯一 View Preference 和代表性 Fixture，GCC-0/GCC-0A 冻结及实现尚未开始。
+- [x] 完成并评审 [上下文驱动 Gameplay 与 Camera 组合设计](superpowers/specs/2026-08-24-context-driven-gameplay-camera-composition-design.md)；已接受 Kit → committed state → Camera Context → CameraDirector 的单向链路、唯一 View Preference 和代表性 Fixture；代码实现及公共合同 clean break 尚未开始。
+- [x] 完成 Package Boundary/current-main 复审：Canonical Camera 目标为 clean-break 后的
+  `@whitebox-world/camera` provider-neutral Domain；当前同名 Three.js 包仍属 Legacy，不能
+  承接新能力，也不能在 catalog/scene 工作流迁移前被单点删除。
+- [ ] GCC-0/GCC-0A：冻结术语、Schema 版本和 Browser V5/View clean break，并与已经合入
+  `main` 的 G19-6 当前合同对拍；不得反向重开 G19-5/G19-6 或保留旧命令 alias。
+- [ ] GCC-0B/GCC-0C：冻结 package API/dependency DAG；把旧 Three Camera Rig 原子迁入明确
+  Legacy scope，释放并 clean-break 建立 Canonical `packages/camera`，同时保持
+  `pnpm dev`、scene tests 和 build 不退化。
+- [ ] GCC-1/GCC-2/GCC-3：完成 committed Gameplay → Camera Context Projection、Profile
+  Admission/Selection/Explain 和唯一 `cameraViewPreference` / View State 公共合同。
+- [ ] GCC-4/GCC-5：CameraDirector 消费纯 Selection Decision；Mount/Equipment/Flight 事务
+  只提交 Camera 输入并与 Gameplay 一起原子回滚。
+- [ ] GCC-6/GCC-7：交付两个 Kit、Registry Lock、Browser/CLI/Take 与两个 Golden Fixture，
+  分离 automated contract、runtime numeric、rendered visual 和 manual interaction 证据。
+- [ ] GCC-8：全门禁、Legacy 隔离审计、最终复核和 production/experimental 声明。
 - [ ] 同一 Runtime Session 创建多个 Controller 并在同一 Tick 提交 Intent Batch。
 - [ ] Possession 权限、Sequence、Expected State 和冲突策略。
 - [ ] 第一人称、第三人称和声明式 Camera Rig 切换。
@@ -645,9 +663,15 @@ Replay、Streaming/Dispose 和自动 Diagnostic；普通 Agent 只引用稳定 P
 #### P3.2 默认实现切换
 
 - [ ] Playground 默认入口切换到 Canonical Babylon/Havok Runtime。
+- [ ] Babylon 承接 `?scene=` catalog 的场景加载、交互、Opening Composition、规划捕获和
+  SDK-derived tri-view，或由产品明确退役这些入口；替代证据进入同等 Blocking Gate。
 - [ ] 生产 Agent 编排迁出 SDK 仓库，只保留 SDK Fixture、Skill/CLI 接入文档和 Conformance。
 - [ ] 旧 Plan-first 工件格式冻结为回归 Fixture，相关 ADR 标记为 Superseded。
-- [ ] Three.js/Rapier Alpha 归档或移除，不继续承接新能力。
+- [ ] 反向可达性证明为零后，原子移除 `sdk-world-adapter`、旧
+  `core/physics/subjects/animation` Runtime 和 Rapier 依赖；`world/contracts/testkit` 仍被
+  Planner/Compiler/Gate 使用，不随 Legacy Runtime 误删。
+- [ ] Three.js/Rapier Alpha 归档或移除，不继续承接新能力；不得只删除
+  `packages/camera` 留下半残依赖。
 - [ ] README、AGENTS、快速接入、示例和发布流程只指向 Canonical 协议。
 - [ ] 完整清理验证证明没有旧字段、双重运行时真相或隐式兼容分支。
 
@@ -728,8 +752,8 @@ Placement S1、Simulation Take / Control Capture V1 与 Validation Capture/Integ
 | G19-4D | 已完成 | 所有 Compiler/Babylon/Route/Playground 生产调用方原子迁移到 V5，并从 Normalized IR 生成真实 canonical Bootstrap/Capability set | G19-4A、G19-4B、G19-4C | 全仓 typecheck 通过；17 files / 374 tests 的集成矩阵通过；无生产固定假 hash |
 | G19-4E | **已完成** | 全量门禁、真实回归 disposition、生成物治理 | G19-4D | `pnpm typecheck`、165 files / 2,079 tests、`pnpm build` 与 9 项 verify Gate 全通过；Take 根哈希由 `generate:example-takes` 生成；Route 重型套件在全量并发下通过 |
 | G19-5 | **已完成，作为 G19-6 前置底座** | Babylon Gameplay Port；`possessedBy` 唯一控制权；输入目标与 Camera Target projection 事务 | G19-4 | optional Possession、fixed-input Controller 隔离、staged transaction、provider-neutral projection 与 fail-closed Action 已完成 |
-| G19-6 | **Final GO；merge-ready，尚未合入** | exact 39-key Browser Protocol V5 Gameplay 唯一入口、Snapshot V4、Reset/Rebind、Runtime Activity、Authoring/CLI/Capture/Take consumer cutover；Execution Subject locomotion Capability lock 与 Canonical capability state | G19-5 | typecheck、build、168 files / 2,134 tests、Canonical/Placement/Rigged/G Bot/R0/R1/R1b 与两项 Capture verifier 全通过；无 open confirmed P0/P1/P2 |
-| G19-7 | 待开始 | Outdoor/catalog route、page/artifact lifecycle 与六场景接线，不增加第二套 Gameplay 真相 | G19-6 | G19-6 已解除阻塞；待六场景真实 Authoring Runtime 与 Browser Gate，不重复迁移 CLI/WorldKit pipeline、Capture/Take |
+| G19-6 | **已完成并在 `main`** | exact 39-key Browser Protocol V5 Gameplay 唯一入口、Snapshot V4、Reset/Rebind、Runtime Activity、Authoring/CLI/Capture/Take consumer cutover；Execution Subject locomotion Capability lock 与 Canonical capability state | G19-5 | `eef75c6` 实现、`5ffd031` completion review；typecheck、build、168 files / 2,134 tests、Canonical/Placement/Rigged/G Bot/R0/R1/R1b 与两项 Capture verifier 全通过；无 open confirmed P0/P1/P2 |
+| G19-7 | 待开始 | Outdoor/catalog route、page/artifact lifecycle 与六场景接线，不增加第二套 Gameplay/Camera 真相 | G19-6 | G19-6 已合入并解除阻塞；待六场景真实 Authoring Runtime 与 Browser Gate，不重复迁移 CLI/WorldKit pipeline、Capture/Take |
 | G19-8 | 待开始 | G19 整体全量验证、主 Agent 深审与最终 disposition | G19-7 | 全部相关 Gate 通过且无 open confirmed P0/P1 |
 | M8-S1 | 阻塞于 G19-8 | 首个 `mountedOn` 人—滑板关系切片 | G19-8 | Relationship/Action/Event/Receipt/Capture 端到端一致 |
 
@@ -772,7 +796,7 @@ S1b Golden、
    M7 不标记完成；
 8. **M8：完成 Canonical World State + Typed Relationship 人—滑板窄可视切片**：G19-2/G19-4
    已交付 Canonical Gameplay 合同、provider-neutral RuntimeHost staging 和 WorldPackage membership；
-   下一步先关闭 G19-6 最终门禁并完成 G19-7 Outdoor/catalog lifecycle，再按
+   G19-6 已完成并合入；下一步完成 G19-7 Outdoor/catalog lifecycle，再按
    [专项设计](superpowers/specs/2026-08-22-canonical-runtime-state-and-semantic-projection-design.md)
    沿用已冻结的 World/View/Runtime Status/Transition 四类投影，再实现 `mountedOn` 权威关系、
    `supportedBy` 派生事实、Mount/Dismount Action、Receipt/Event 与 Capture 对齐；在这条

@@ -451,7 +451,7 @@ Validation 词汇。它不构建 Traversal Graph，不跑 Character Controller�
 | `packages/subject-actions/` | Character State、Ground Humanoid Action 与动作解析 | 引擎无关动作语义 | 直接播放 AnimationGroup 或控制输入设备 |
 | `packages/subjects/` | 早期 Humanoid Kit、Visual 与 Motor 组合 | 兼容/实验入口 | 定义新的 Canonical Subject 方言 |
 | `packages/animation/` | Action Registry、Humanoid 动作状态机与动画状态推进 | 内部运行能力 | 决定 Gameplay Action 准入或 World State |
-| `packages/camera/` | 引擎无关的第三人称 Camera Rig 数学与跟随策略 | 内部 Camera 算法 | 拥有 Gameplay 关系、Subject facing 或输入真相 |
+| `packages/camera/` | **当前为 Legacy Three.js** 第三人称 Rig，仅服务旧 `subjects`/catalog 回归；目标是在隔离旧实现后 clean-break 为 provider-neutral Camera Domain | 当前不属于 Canonical 公开边界 | 承接新的 Camera Profile/Context、被 Babylon Runtime 依赖前假装已完成 clean break |
 | `packages/physics/` | Physics Body、Collider、Shape 与早期 Physics System 抽象 | 内部物理合同 | 把 Provider Body/Shape Handle 写入 Schema |
 | `packages/terrain-surface/` | Heightfield、Triangle Mesh、Collider Support 与 Surface Query | Traversal/Runtime 内部几何合同 | 把单一 Heightfield 冒充全部空间拓扑 |
 | `packages/traversal/` | Traversal Surface、Lock、Capability Envelope、Graph/Path/Probe Receipt 与 Route Overlay | Provider-neutral Route 合同 | 暴露 Recast 数据或替代 Runtime 支撑事实 |
@@ -496,6 +496,7 @@ Compiler 和 Runtime 不能反向读取 Agent Prompt；Runtime Adapter 不能把
 - [Gameplay RuntimeHost G19-3 审查处置](docs/reviews/2026-08-24-gameplay-runtime-host-g19-3-review.md)
 - [上下文驱动 Gameplay 与 Camera 组合设计（已评审，未来能力）](docs/superpowers/specs/2026-08-24-context-driven-gameplay-camera-composition-design.md)
 - [上下文驱动 Gameplay 与 Camera 设计审查记录](docs/reviews/2026-08-24-context-driven-gameplay-camera-composition-design-review.md)
+- [Camera Canonical 分包与 Legacy Three 清退边界复审](docs/reviews/2026-08-25-context-driven-camera-package-boundary-review.md)
 - [AI-first Terrain Authoring Pipeline 设计](docs/superpowers/specs/2026-08-17-terrain-authoring-pipeline-design.md)
 - [Hybrid Terrain 与非 Heightfield 特殊地形设计](docs/superpowers/specs/2026-08-21-hybrid-terrain-and-non-heightfield-topology-design.md)
 - [可扩展主体组装 Authoring 专项设计](docs/superpowers/specs/2026-08-19-extensible-subject-authoring-design.md)
@@ -554,6 +555,12 @@ Compiler 和 Runtime 不能反向读取 Agent Prompt；Runtime Adapter 不能把
 
 仓库仍保留 Three.js/Rapier Alpha Playground、Plan-first 多 Agent 场景流程、
 Creator Studio 和若干已验证场景，作为创作实验、视觉回归和迁移 Fixture。
+
+当前 `packages/camera` 也属于这条 Legacy 链，不能作为 Canonical Camera Profile/Context
+实现入口。新 Camera 的目标包边界、旧 Rig 隔离顺序和删除门禁见
+[上下文驱动 Gameplay 与 Camera 组合设计](docs/superpowers/specs/2026-08-24-context-driven-gameplay-camera-composition-design.md#51-canonical-package-boundary)。
+在 Babylon 承接 catalog scene、Opening Composition、tri-view 和 scene gates 之前，不得
+单点删除旧 Camera 包或让 Three/Rapier 链继续承接新能力。
 
 ```bash
 pnpm dev
