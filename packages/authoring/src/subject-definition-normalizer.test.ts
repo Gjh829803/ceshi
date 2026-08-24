@@ -397,7 +397,7 @@ describe("Package Subject Definition normalization", () => {
       "sha256:8d04944564bb926529d71cce1ca8fe27c59df87702ed856d23db5156d32f0dc1",
     );
     expect(result.normalizedWorldIrHash).toBe(
-      "sha256:3bc6ec3e03bc88b88de10b27e8193c92b9a7500ac927f6c9d6fcf0d5c7c453c2",
+      "sha256:8491394f6d0fcff1da84a300050fe882e6e6a1ba676ed76a90a4b1464b4999a0",
     );
   });
 
@@ -489,8 +489,8 @@ describe("Package Subject Definition normalization", () => {
       "format",
       "inventory",
       "mediaType",
-      "subjectAssetRef",
       "subjectAssetManifestHash",
+      "subjectAssetRef",
     ]);
     expect(Object.keys(tables.rigProfiles[0]!).sort()).toEqual([
       "bodyTopology",
