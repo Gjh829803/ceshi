@@ -211,6 +211,13 @@ function isDescendantOfAnyRoot(
   return false;
 }
 
+interface StaticAssetPartResetStateV1 {
+  readonly node: TransformNode;
+  readonly position: Vector3;
+  readonly rotationQuaternion: Quaternion;
+  readonly scaling: Vector3;
+}
+
 class OwnedSubjectVisual implements SubjectVisual {
   private disposed = false;
   private fallbackActionId: GroundHumanoidActionIdV1 = "idle";
@@ -221,6 +228,8 @@ class OwnedSubjectVisual implements SubjectVisual {
     readonly socketNodesById: ReadonlyMap<string, TransformNode>,
     private readonly primitiveMeshes: readonly Mesh[],
     private readonly assetPartRoots: readonly TransformNode[],
+    private readonly staticAssetPartResetStates:
+      readonly StaticAssetPartResetStateV1[],
     private readonly animationPlayer: SubjectAnimationPlayer | undefined,
     private readonly assetDescriptor: ExecutionSubjectAssetV1 | undefined,
     private readonly assetInstance: SubjectAssetInstanceV1 | undefined,
@@ -242,6 +251,12 @@ class OwnedSubjectVisual implements SubjectVisual {
 
   resetAnimation(): void {
     this.fallbackActionId = "idle";
+    for (const state of this.staticAssetPartResetStates) {
+      state.node.position.copyFrom(state.position);
+      state.node.rotation.setAll(0);
+      state.node.rotationQuaternion = state.rotationQuaternion.clone();
+      state.node.scaling.copyFrom(state.scaling);
+    }
     this.animationPlayer?.reset();
   }
 
@@ -290,6 +305,7 @@ export async function createSubjectVisual(
   const primitiveMeshes: Mesh[] = [];
   const allMeshes: AbstractMesh[] = [];
   const assetPartRoots: TransformNode[] = [];
+  const staticAssetPartResetStates: StaticAssetPartResetStateV1[] = [];
   const socketNodesById = new Map<string, TransformNode>();
   let assetLease: SubjectAssetLeaseV1 | undefined;
   let assetInstance: SubjectAssetInstanceV1 | undefined;
@@ -344,8 +360,14 @@ export async function createSubjectVisual(
         allMeshes.push(mesh);
       }
 
-      if (subject.visualBinding.mode !== "rigged") {
-        throw assetError("SUBJECT_ASSET_RIG_INCOMPATIBLE", asset);
+      if (subject.visualBinding.mode === "static") {
+        staticAssetPartResetStates.push({
+          node: partRoot,
+          position: partRoot.position.clone(),
+          rotationQuaternion: partRoot.rotationQuaternion!.clone(),
+          scaling: partRoot.scaling.clone(),
+        });
+        continue;
       }
       const rigProfile = exactResource(
         executionPlan.rigProfiles,
@@ -428,10 +450,10 @@ export async function createSubjectVisual(
       });
     }
 
-    if (assetParts.length === 0) {
+    if (subject.visualBinding.mode === "static") {
       for (const socket of subject.sockets) {
         if (socket.kind !== "local") {
-          throw assetError("SUBJECT_ASSET_SOCKET_BONE_MISSING");
+          throw assetError("SUBJECT_ASSET_SOCKET_BONE_MISSING", assetDescriptor);
         }
         const socketNode = new TransformNode(
           `${subject.entityId}.socket.${socket.id}`,
@@ -454,6 +476,7 @@ export async function createSubjectVisual(
       socketNodesById,
       primitiveMeshes,
       assetPartRoots,
+      staticAssetPartResetStates,
       animationPlayer,
       assetDescriptor,
       assetInstance,

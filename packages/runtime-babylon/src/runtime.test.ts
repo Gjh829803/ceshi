@@ -7,7 +7,8 @@ import { AnimationGroup } from "@babylonjs/core/Animations/animationGroup.js";
 import { VertexBuffer } from "@babylonjs/core/Buffers/buffer.js";
 import { NullEngine } from "@babylonjs/core/Engines/nullEngine.pure.js";
 import { LoadAssetContainerAsync } from "@babylonjs/core/Loading/sceneLoader.js";
-import { Vector3 } from "@babylonjs/core/Maths/math.vector.js";
+import { StandardMaterial } from "@babylonjs/core/Materials/standardMaterial.js";
+import { Quaternion, Vector3 } from "@babylonjs/core/Maths/math.vector.js";
 import { TransformNode } from "@babylonjs/core/Meshes/transformNode.js";
 import type { PhysicsEngine } from "@babylonjs/core/Physics/v2/physicsEngine.js";
 import { Scene } from "@babylonjs/core/scene.pure.js";
@@ -67,6 +68,7 @@ import {
 import { lockPublishedGroundFeels } from "./lock-published-ground-feels";
 import { BABYLON_GAMEPLAY_RUNTIME_INTERNAL } from "./gameplay-runtime-internal";
 import { SubjectAnimationPlayer } from "./subject-animation-player";
+import { createSubjectVisual } from "./subject-visual";
 import { sampleExecutionTerrainHeight } from "./terrain";
 
 const loadAssetContainerImplementation = vi
@@ -160,6 +162,109 @@ const goldenSubjectAssetDescriptor = {
     skeletonCount: 1,
     boneCount: 18,
     animationClipNames: ["idle", "jump", "run", "walk"],
+  },
+} as const satisfies ExecutionSubjectAssetV1;
+
+function buildStaticTriangleGlb(): Uint8Array {
+  const positions = [
+    -0.5, 0, 0,
+    0.5, 0, 0,
+    0, 1, 0,
+  ] as const;
+  const normals = [
+    0, 0, 1,
+    0, 0, 1,
+    0, 0, 1,
+  ] as const;
+  const binary = new Uint8Array(80);
+  const binaryView = new DataView(binary.buffer);
+  for (let index = 0; index < positions.length; index += 1) {
+    binaryView.setFloat32(index * 4, positions[index]!, true);
+  }
+  for (let index = 0; index < normals.length; index += 1) {
+    binaryView.setFloat32(36 + index * 4, normals[index]!, true);
+  }
+  for (let index = 0; index < 3; index += 1) {
+    binaryView.setUint16(72 + index * 2, index, true);
+  }
+
+  const gltf = {
+    asset: { version: "2.0", generator: "worldkit-runtime-static-test" },
+    scene: 0,
+    scenes: [{ nodes: [0] }],
+    nodes: [{ name: "static-triangle", mesh: 0 }],
+    meshes: [{
+      name: "static-triangle",
+      primitives: [{
+        attributes: { POSITION: 0, NORMAL: 1 },
+        indices: 2,
+        material: 0,
+        mode: 4,
+      }],
+    }],
+    materials: [{
+      name: "fixture-whitebox",
+      pbrMetallicRoughness: {
+        baseColorFactor: [0.4, 0.6, 0.8, 1],
+        metallicFactor: 0,
+        roughnessFactor: 1,
+      },
+    }],
+    buffers: [{ byteLength: binary.byteLength }],
+    bufferViews: [
+      { buffer: 0, byteOffset: 0, byteLength: 36, target: 34962 },
+      { buffer: 0, byteOffset: 36, byteLength: 36, target: 34962 },
+      { buffer: 0, byteOffset: 72, byteLength: 6, target: 34963 },
+    ],
+    accessors: [
+      {
+        bufferView: 0,
+        componentType: 5126,
+        count: 3,
+        type: "VEC3",
+        min: [-0.5, 0, 0],
+        max: [0.5, 1, 0],
+      },
+      { bufferView: 1, componentType: 5126, count: 3, type: "VEC3" },
+      { bufferView: 2, componentType: 5123, count: 3, type: "SCALAR" },
+    ],
+  };
+  const encodedJson = new TextEncoder().encode(JSON.stringify(gltf));
+  const paddedJsonLength = Math.ceil(encodedJson.byteLength / 4) * 4;
+  const json = new Uint8Array(paddedJsonLength);
+  json.fill(0x20);
+  json.set(encodedJson);
+  const totalLength = 12 + 8 + json.byteLength + 8 + binary.byteLength;
+  const glb = new Uint8Array(totalLength);
+  const glbView = new DataView(glb.buffer);
+  glbView.setUint32(0, 0x46546c67, true);
+  glbView.setUint32(4, 2, true);
+  glbView.setUint32(8, totalLength, true);
+  glbView.setUint32(12, json.byteLength, true);
+  glbView.setUint32(16, 0x4e4f534a, true);
+  glb.set(json, 20);
+  const binaryHeaderOffset = 20 + json.byteLength;
+  glbView.setUint32(binaryHeaderOffset, binary.byteLength, true);
+  glbView.setUint32(binaryHeaderOffset + 4, 0x004e4942, true);
+  glb.set(binary, binaryHeaderOffset + 8);
+  return glb;
+}
+
+const staticSubjectAssetBytes = buildStaticTriangleGlb();
+
+const staticSubjectAssetDescriptor = {
+  subjectAssetRef: "worldkit://subject-asset/static.runtime-test@1",
+  artifactContentHash: sha256Bytes(staticSubjectAssetBytes),
+  byteLength: staticSubjectAssetBytes.byteLength,
+  mediaType: "model/gltf-binary",
+  format: "glb",
+  inventory: {
+    meshCount: 1,
+    vertexCount: 3,
+    triangleCount: 1,
+    skeletonCount: 0,
+    boneCount: 0,
+    animationClipNames: [],
   },
 } as const satisfies ExecutionSubjectAssetV1;
 
@@ -369,15 +474,15 @@ interface RuntimeDebugProbe {
   visualRootYawRadians(subjectEntityId: string): number;
 }
 
-interface RiggedVisualInternals extends SubjectVisual {
+interface SubjectVisualInternals extends SubjectVisual {
   assetInstance?: SubjectAssetInstanceV1;
   assetLease?: SubjectAssetLeaseV1;
   primitiveMeshes?: readonly TransformNode[];
   assetPartRoots?: readonly TransformNode[];
 }
 
-interface RiggedRuntimeProbe {
-  visual(subjectEntityId: string): RiggedVisualInternals;
+interface SubjectVisualProbe {
+  visual(subjectEntityId: string): SubjectVisualInternals;
 }
 
 interface CartesianVector {
@@ -429,9 +534,9 @@ function createRuntimeDebugProbe(runtime: BabylonWorldRuntime): RuntimeDebugProb
   };
 }
 
-function createRiggedRuntimeProbe(runtime: BabylonWorldRuntime): RiggedRuntimeProbe {
+function createSubjectVisualProbe(runtime: BabylonWorldRuntime): SubjectVisualProbe {
   const internals = runtime as unknown as {
-    subjectVisuals: readonly RiggedVisualInternals[];
+    subjectVisuals: readonly SubjectVisualInternals[];
   };
   return {
     visual(subjectEntityId) {
@@ -781,6 +886,57 @@ function createV5StaticColliderGeometryConformancePlan(): ExecutionPlanV5 {
 
 function createFlatRiggedExecutionPlan(): ExecutionPlanV4 {
   return compileFlatTerrainExecutionPlan(createValidRiggedPackageSubjectWorld());
+}
+
+const staticAssetPartLocalTransform = {
+  positionMetersXYZ: [1, 2, -3] as const,
+  rotationEulerRadiansXYZ: [0, Math.PI / 3, 0] as const,
+  scaleXYZ: [2, 3, 4] as const,
+};
+
+function createStaticAssetSubjectExecutionPlan(options: {
+  twoSubjects?: boolean;
+} = {}): ExecutionPlanV4 {
+  const base = createFlatRiggedExecutionPlan();
+  const baseSubject = base.subjects[0]!;
+  const assetPart = baseSubject.visualParts.find((part) => part.kind === "asset");
+  if (assetPart === undefined) throw new Error("Rigged fixture Asset Part missing.");
+  const staticSubject = {
+    ...baseSubject,
+    visualParts: [{
+      ...assetPart,
+      subjectAssetRef: staticSubjectAssetDescriptor.subjectAssetRef,
+      localTransform: staticAssetPartLocalTransform,
+      semanticTags: ["body", "static", "runtime-test"],
+    }],
+    visualBinding: { mode: "static" as const },
+    sockets: [{
+      id: "focus.local",
+      kind: "local" as const,
+      localTransform: {
+        positionMetersXYZ: [0, 1.5, 0] as const,
+        rotationEulerRadiansXYZ: [0, 0, 0] as const,
+      },
+      semanticTags: ["focus"],
+    }],
+  };
+  return {
+    ...base,
+    subjects: options.twoSubjects
+      ? [
+          staticSubject,
+          {
+            ...staticSubject,
+            entityId: "static-secondary",
+            spawnAnchorEntityId: "spawn-static-secondary",
+            spawnSubjectOriginPositionMetersXYZ: [4, 0, 30],
+          },
+        ]
+      : [staticSubject],
+    subjectAssets: [structuredClone(staticSubjectAssetDescriptor)],
+    rigProfiles: [],
+    animationSets: [],
+  };
 }
 
 function createTwoRiggedSubjectExecutionPlan(): ExecutionPlanV4 {
@@ -1373,6 +1529,157 @@ describe("BabylonWorldRuntime", () => {
     await runtime.dispose();
   });
 
+  describe("static asset subject", () => {
+    it("loads a real static GLB without Rig resources and isolates two instances", async () => {
+      const runtime = await createRuntime(
+        createStaticAssetSubjectExecutionPlan({ twoSubjects: true }),
+        { subjectAssetResolver: createMemoryResolver(staticSubjectAssetBytes) },
+      );
+      try {
+        const probe = createSubjectVisualProbe(runtime);
+        const primaryVisual = probe.visual("player");
+        const secondaryVisual = probe.visual("static-secondary");
+        const primaryInstance = primaryVisual.assetInstance!;
+        const secondaryInstance = secondaryVisual.assetInstance!;
+        const primaryPartRoot = primaryVisual.assetPartRoots![0]!;
+        const secondaryPartRoot = secondaryVisual.assetPartRoots![0]!;
+
+        expect(primaryInstance.skeletons).toEqual([]);
+        expect(primaryInstance.animationGroups).toEqual([]);
+        expect(primaryInstance.rootNodes[0]).not.toBe(secondaryInstance.rootNodes[0]);
+        expect(primaryInstance.meshes[0]).not.toBe(secondaryInstance.meshes[0]);
+        expect(primaryPartRoot).not.toBe(secondaryPartRoot);
+        expect(primaryInstance.rootNodes[0]!.parent).toBe(primaryPartRoot);
+        expect(secondaryInstance.rootNodes[0]!.parent).toBe(secondaryPartRoot);
+        expect(primaryVisual.socketNodesById.get("focus.local")).not.toBe(
+          secondaryVisual.socketNodesById.get("focus.local"),
+        );
+        expect(primaryVisual.socketNodesById.get("focus.local")?.parent).toBe(
+          primaryVisual.root,
+        );
+      } finally {
+        await runtime.dispose();
+      }
+    });
+
+    it("restores the authored Asset Part local transform on reset", async () => {
+      const runtime = await createRuntime(createStaticAssetSubjectExecutionPlan(), {
+        subjectAssetResolver: createMemoryResolver(staticSubjectAssetBytes),
+      });
+      try {
+        const partRoot = createSubjectVisualProbe(runtime)
+          .visual("player")
+          .assetPartRoots![0]!;
+        partRoot.position.set(9, 8, 7);
+        partRoot.rotationQuaternion = Quaternion.FromEulerAngles(0.4, 0.5, 0.6);
+        partRoot.scaling.set(6, 5, 4);
+
+        runtime.reset();
+
+        expect(partRoot.position.asArray()).toEqual([1, 2, -3]);
+        expect(partRoot.scaling.asArray()).toEqual([2, 3, 4]);
+        expect(partRoot.rotationQuaternion?.x).toBeCloseTo(0, 12);
+        expect(partRoot.rotationQuaternion?.y).toBeCloseTo(0.5, 12);
+        expect(partRoot.rotationQuaternion?.z).toBeCloseTo(0, 12);
+        expect(partRoot.rotationQuaternion?.w).toBeCloseTo(Math.sqrt(3) / 2, 12);
+      } finally {
+        await runtime.dispose();
+      }
+    });
+
+    it("releases the real Asset lease when construction fails after instantiation", async () => {
+      const { engine, scene } = createAssetScene();
+      const material = new StandardMaterial("static-subject-test", scene);
+      const cache = new SubjectAssetCacheV1(
+        scene,
+        createMemoryResolver(staticSubjectAssetBytes),
+      );
+      const nativeAcquire = cache.acquire.bind(cache);
+      let partialInstance: SubjectAssetInstanceV1 | undefined;
+      vi.spyOn(cache, "acquire").mockImplementation(async (asset) => {
+        const lease = await nativeAcquire(asset);
+        const nativeInstantiate = lease.instantiate.bind(lease);
+        vi.spyOn(lease, "instantiate").mockImplementation((subjectEntityId) => {
+          partialInstance = nativeInstantiate(subjectEntityId);
+          throw new Error("BABYLON_PROVIDER_PRIVATE_PARTIAL_CONSTRUCTION_FAILURE");
+        });
+        return lease;
+      });
+      const executionPlan = createStaticAssetSubjectExecutionPlan();
+
+      try {
+        const error = await createSubjectVisual({
+          subject: executionPlan.subjects[0]!,
+          executionPlan,
+          material,
+          scene,
+          subjectAssetCache: cache,
+        }).catch((reason) => reason as unknown);
+        const cacheInternals = cache as unknown as {
+          leases: ReadonlySet<SubjectAssetLeaseV1>;
+          entriesByKey: ReadonlyMap<string, { refCount: number }>;
+        };
+
+        expect(error).toMatchObject({ code: "SUBJECT_ASSET_RIG_INCOMPATIBLE" });
+        expect(error).not.toHaveProperty("cause");
+        expect(String(error)).not.toMatch(/babylon|provider/i);
+        expect(partialInstance).toBeDefined();
+        expect(partialInstance!.rootNodes.every((node) => node.isDisposed())).toBe(true);
+        expect(cacheInternals.leases.size).toBe(0);
+        expect(
+          [...cacheInternals.entriesByKey.values()].map((entry) => entry.refCount),
+        ).toEqual([0]);
+      } finally {
+        await cache.dispose();
+        material.dispose();
+        scene.dispose();
+        engine.dispose();
+      }
+    });
+
+    it("disposes the static instance before releasing its Asset lease", async () => {
+      const { engine, scene } = createAssetScene();
+      const material = new StandardMaterial("static-subject-test", scene);
+      const cache = new SubjectAssetCacheV1(
+        scene,
+        createMemoryResolver(staticSubjectAssetBytes),
+      );
+      const executionPlan = createStaticAssetSubjectExecutionPlan();
+      let visual: SubjectVisualInternals | undefined;
+
+      try {
+        visual = await createSubjectVisual({
+          subject: executionPlan.subjects[0]!,
+          executionPlan,
+          material,
+          scene,
+          subjectAssetCache: cache,
+        }) as SubjectVisualInternals;
+        const instance = visual.assetInstance!;
+        const lease = visual.assetLease!;
+        const nativeRelease = lease.release.bind(lease);
+        let instanceWasDisposedBeforeRelease = false;
+        vi.spyOn(lease, "release").mockImplementation(() => {
+          instanceWasDisposedBeforeRelease = instance.rootNodes.every((node) =>
+            node.isDisposed()
+          );
+          nativeRelease();
+        });
+
+        visual.dispose();
+
+        expect(instanceWasDisposedBeforeRelease).toBe(true);
+        expect(instance.rootNodes.every((node) => node.isDisposed())).toBe(true);
+      } finally {
+        visual?.dispose();
+        await cache.dispose();
+        material.dispose();
+        scene.dispose();
+        engine.dispose();
+      }
+    });
+  });
+
   it("requires an explicit Subject Asset resolver before constructing Asset visuals", async () => {
     const executionPlan = compileExecutionPlan(
       createValidRiggedPackageSubjectWorld(),
@@ -1445,7 +1752,7 @@ describe("BabylonWorldRuntime", () => {
     const runtime = await createRuntime(executionPlan, {
       subjectAssetResolver: createMemoryResolver(gBotSubjectAssetBytes),
     });
-    const probe = createRiggedRuntimeProbe(runtime);
+    const probe = createSubjectVisualProbe(runtime);
     const visual = probe.visual("player");
     const secondaryVisual = probe.visual("g-bot-secondary");
     const primaryInstance = visual.assetInstance!;
@@ -1536,7 +1843,7 @@ describe("BabylonWorldRuntime", () => {
       compileRouteExecutionPlan(structuredClone(gBotAuthoringSpec)),
       { subjectAssetResolver: createMemoryResolver(gBotSubjectAssetBytes) },
     );
-    const animationGroups = createRiggedRuntimeProbe(runtime)
+    const animationGroups = createSubjectVisualProbe(runtime)
       .visual("g-bot-primary")
       .assetInstance!.animationGroups;
     const poseSampleSpies = animationGroups.map((group) =>
@@ -1627,7 +1934,7 @@ describe("BabylonWorldRuntime", () => {
       })),
     };
     const runtime = await createRiggedRuntime(executionPlan);
-    const probe = createRiggedRuntimeProbe(runtime);
+    const probe = createSubjectVisualProbe(runtime);
     const playerVisual = probe.visual("player");
     const heroBVisual = probe.visual("hero-b");
     const playerInstance = playerVisual.assetInstance!;
@@ -1715,7 +2022,7 @@ describe("BabylonWorldRuntime", () => {
 
   it("transitions jump back to idle and reset restores Tick zero and idle frame", async () => {
     const runtime = await createRiggedRuntime();
-    const probe = createRiggedRuntimeProbe(runtime);
+    const probe = createSubjectVisualProbe(runtime);
     const visual = probe.visual("player");
 
     await runtime.runFixedInput({ actions: [], ticks: 5 });
@@ -2065,7 +2372,7 @@ describe("BabylonWorldRuntime", () => {
       ],
     };
     const runtime = await createRiggedRuntime(executionPlan);
-    const visual = createRiggedRuntimeProbe(runtime).visual("player");
+    const visual = createSubjectVisualProbe(runtime).visual("player");
     const boneSocket = visual.socketNodesById.get("hand.right")!;
     const localSocket = visual.socketNodesById.get("focus.local")!;
     const instance = visual.assetInstance!;
