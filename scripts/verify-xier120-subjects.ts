@@ -77,6 +77,7 @@ export interface Xier120SubjectActualUseResultV1 {
   readonly leaseCount: 2;
   readonly instanceCount: 2;
   readonly mutationIsolationVerified: true;
+  readonly crossLeaseReleaseIsolationVerified: true;
   readonly disposedInstanceCount: 2;
   readonly releasedLeaseCount: 2;
   readonly cacheDisposed: true;
@@ -225,6 +226,7 @@ async function verifyCacheLifecycle(
   | "leaseCount"
   | "instanceCount"
   | "mutationIsolationVerified"
+  | "crossLeaseReleaseIsolationVerified"
   | "disposedInstanceCount"
   | "releasedLeaseCount"
   | "cacheDisposed"
@@ -258,6 +260,7 @@ async function verifyCacheLifecycle(
     | "leaseCount"
     | "instanceCount"
     | "mutationIsolationVerified"
+    | "crossLeaseReleaseIsolationVerified"
     | "disposedInstanceCount"
     | "releasedLeaseCount"
     | "cacheDisposed"
@@ -304,11 +307,50 @@ async function verifyCacheLifecycle(
       !secondRoot.isDisposed(),
       "XIER120_SECOND_INSTANCE_DISPOSED_EARLY",
     );
+    requireInvariant(
+      firstInstance.meshes.every((mesh) => mesh.isDisposed()),
+      "XIER120_FIRST_INSTANCE_MESH_NOT_DISPOSED",
+    );
+    let observedReleasedLeaseCount = 0;
     firstLease.release();
+    requireInvariant(
+      firstRoot.isDisposed(),
+      "XIER120_FIRST_INSTANCE_REVIVED_AFTER_LEASE_RELEASE",
+    );
+    requireInvariant(
+      !secondRoot.isDisposed() &&
+        secondInstance.meshes.every((mesh) => !mesh.isDisposed()),
+      "XIER120_SECOND_INSTANCE_DISPOSED_BY_FIRST_LEASE_RELEASE",
+    );
+    const secondPositionBeforeReleaseMutation = secondRoot.position.clone();
+    const secondMeshVisibilityBeforeReleaseMutation =
+      secondInstance.meshes.map((mesh) => mesh.isVisible);
+    secondRoot.position.z += 3;
+    secondRoot.computeWorldMatrix(true);
+    for (const [index, mesh] of secondInstance.meshes.entries()) {
+      mesh.isVisible = !secondMeshVisibilityBeforeReleaseMutation[index];
+      mesh.computeWorldMatrix(true);
+    }
+    requireInvariant(
+      !secondRoot.position.equals(secondPositionBeforeReleaseMutation) &&
+        secondInstance.meshes.every(
+          (mesh, index) =>
+            !mesh.isDisposed() &&
+            mesh.isVisible !== secondMeshVisibilityBeforeReleaseMutation[index],
+        ),
+      "XIER120_SECOND_INSTANCE_NOT_MUTABLE_AFTER_FIRST_LEASE_RELEASE",
+    );
+    observedReleasedLeaseCount += 1;
     secondLease.release();
     requireInvariant(
-      secondRoot.isDisposed(),
+      secondRoot.isDisposed() &&
+        secondInstance.meshes.every((mesh) => mesh.isDisposed()),
       "XIER120_SECOND_INSTANCE_NOT_DISPOSED_ON_RELEASE",
+    );
+    observedReleasedLeaseCount += 1;
+    requireInvariant(
+      observedReleasedLeaseCount === 2,
+      "XIER120_RELEASE_TRANSITION_COUNT_INVALID",
     );
     await cache.dispose();
     let closedCacheError: unknown;
@@ -328,8 +370,9 @@ async function verifyCacheLifecycle(
       leaseCount: 2,
       instanceCount: 2,
       mutationIsolationVerified: true,
+      crossLeaseReleaseIsolationVerified: true,
       disposedInstanceCount: 2,
-      releasedLeaseCount: 2,
+      releasedLeaseCount: observedReleasedLeaseCount,
       cacheDisposed: true,
       meshCountPerInstance: firstInstance.meshes.length,
     });

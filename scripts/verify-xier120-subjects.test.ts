@@ -58,6 +58,7 @@ describe("xier120 actual-use verifier", () => {
       leaseCount: 2,
       instanceCount: 2,
       mutationIsolationVerified: true,
+      crossLeaseReleaseIsolationVerified: true,
       disposedInstanceCount: 2,
       releasedLeaseCount: 2,
       cacheDisposed: true,
