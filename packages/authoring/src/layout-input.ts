@@ -120,7 +120,9 @@ function terrainHeightfield(normalized: NormalizedWorldBase): LayoutHeightfieldV
     if (sampledHeights.length !== columns * rows) {
       throw new Error("AUTHORING_TERRAIN_HEIGHT_SAMPLES_LENGTH_INVALID");
     }
-    heightSamplesMeters.push(...sampledHeights);
+    for (const heightMeters of sampledHeights) {
+      heightSamplesMeters.push(heightMeters);
+    }
   } else {
     for (let zIndex = 0; zIndex < rows; zIndex += 1) {
       const z = minimumZ + zIndex / (rows - 1) * sizeZ;

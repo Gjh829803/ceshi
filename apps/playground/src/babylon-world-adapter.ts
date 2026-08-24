@@ -31,11 +31,13 @@ import {
   type BabylonWorldRuntimeOptions,
 } from "@whitebox-world/runtime-babylon";
 import type { RuntimeWorldConfigurationV1 } from "@whitebox-world/runtime-host";
+import { isNil } from "lodash-es";
 
 import type {
   FeatureInspection,
   FixedInputStep,
   InputAction,
+  PlaygroundWorldMetadataV1,
   PlaygroundWorldAdapter,
   WorldSnapshot,
 } from "./playground-world";
@@ -45,6 +47,15 @@ import {
 } from "./gameplay-babylon-runtime-coordinator";
 
 type PlaygroundExecutionPlanV1 = ExecutionPlanV4 | ExecutionPlanV5;
+
+export interface BabylonWorldAdapterCreateOptionsV1 extends Pick<
+  BabylonWorldRuntimeOptions,
+  | "subjectAssetResolver"
+  | "subjectAssetCacheOptions"
+  | "onInitializationStage"
+> {
+  readonly playgroundMetadata?: PlaygroundWorldMetadataV1;
+}
 
 const INPUT_ACTION_MAP: Readonly<Partial<Record<InputAction, SemanticInputActionV1>>> = {
   forward: "move-forward",
@@ -287,9 +298,12 @@ export class BabylonWorldAdapter implements PlaygroundWorldAdapter {
   private constructor(
     private readonly executionPlan: PlaygroundExecutionPlanV1,
     private readonly coordinator: GameplayBabylonRuntimeCoordinatorV1,
+    private readonly playgroundMetadata?: PlaygroundWorldMetadataV1,
   ) {
     this.name = `babylon-havok/${executionPlan.id}`;
-    this.inspections = featureInspections(executionPlan);
+    this.inspections = structuredClone(
+      playgroundMetadata?.featureInspections ?? featureInspections(executionPlan),
+    );
     this.resizeObserver = new ResizeObserver(() => this.activeRuntime().resize());
     window.addEventListener("keydown", this.handleKeyDown);
     window.addEventListener("keyup", this.handleKeyUp);
@@ -303,12 +317,7 @@ export class BabylonWorldAdapter implements PlaygroundWorldAdapter {
 
   static async create(
     runtimeWorldConfiguration: RuntimeWorldConfigurationV1,
-    options: Pick<
-      BabylonWorldRuntimeOptions,
-      | "subjectAssetResolver"
-      | "subjectAssetCacheOptions"
-      | "onInitializationStage"
-  > = {},
+    options: BabylonWorldAdapterCreateOptionsV1 = {},
   ): Promise<BabylonWorldAdapter> {
     const coordinator = await createGameplayBabylonRuntimeCoordinatorV1({
       runtimeSessionId: crypto.randomUUID(),
@@ -330,6 +339,7 @@ export class BabylonWorldAdapter implements PlaygroundWorldAdapter {
       return new BabylonWorldAdapter(
         runtimeWorldConfiguration.executionPlan,
         coordinator,
+        options.playgroundMetadata,
       );
     } catch (error) {
       try {
@@ -658,20 +668,26 @@ export class BabylonWorldAdapter implements PlaygroundWorldAdapter {
     throw new Error("Opening-frame artifact export is not available for Canonical JSON V2.");
   }
 
-  getWorldSpec(): null {
-    return null;
+  getWorldSpec(): NonNullable<PlaygroundWorldMetadataV1["worldSpec"]> | null {
+    return isNil(this.playgroundMetadata?.worldSpec)
+      ? null
+      : structuredClone(this.playgroundMetadata.worldSpec);
   }
 
-  getPlanArtifacts(): null {
-    return null;
+  getPlanArtifacts(): NonNullable<PlaygroundWorldMetadataV1["planArtifacts"]> | null {
+    return isNil(this.playgroundMetadata?.planArtifacts)
+      ? null
+      : structuredClone(this.playgroundMetadata.planArtifacts);
   }
 
   capturePlanningView(): string {
     throw new Error("Planning views are not available for Canonical JSON V2.");
   }
 
-  getVisualPrototypes(): readonly [] {
-    return [];
+  getVisualPrototypes(): ReturnType<PlaygroundWorldAdapter["getVisualPrototypes"]> {
+    return isNil(this.playgroundMetadata?.worldSpec)
+      ? []
+      : structuredClone(this.playgroundMetadata.worldSpec.entityCatalog.prototypes);
   }
 
   captureWhiteboxTriview(): string {
@@ -683,7 +699,7 @@ export class BabylonWorldAdapter implements PlaygroundWorldAdapter {
   }
 
   inspectFeatures(): readonly FeatureInspection[] {
-    return this.inspections;
+    return structuredClone(this.inspections);
   }
 
   snapshot(): WorldSnapshot {

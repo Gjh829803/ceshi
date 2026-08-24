@@ -40,11 +40,18 @@ import {
   createSubjectPresetWorkbenchDraftV1,
   normalizeSubjectPresetCameraPreferenceV1,
 } from "./subject-preset-workbench.js";
+import { resolvePlaygroundRuntimeRoute } from "./playground-runtime-route.js";
+import { sceneCatalog } from "./scenes/index.js";
+import { createGameplayPageLifecycle } from "./gameplay-page-lifecycle.js";
 
 const app = document.querySelector<HTMLDivElement>("#app");
 if (app === null) throw new Error("Missing #app container");
 const urlParameters = new URLSearchParams(window.location.search);
-const authoringMode = urlParameters.get("authoring") === "1";
+const runtimeRoute = resolvePlaygroundRuntimeRoute(
+  window.location.search,
+  sceneCatalog,
+);
+const authoringMode = runtimeRoute.mode === "authoring";
 
 interface AuthoringStartupDebugV1 {
   stage: string;
@@ -1718,9 +1725,20 @@ function installCapabilityAuthoringPanel(
   return tuningWorkbench;
 }
 
-if (authoringMode) {
+if (runtimeRoute.mode === "unknown") {
+  delete window.__WORLDKIT__;
+  delete (window as { __WHITEBOX_PLAYGROUND__?: unknown }).__WHITEBOX_PLAYGROUND__;
+  document.documentElement.dataset.worldkitStatus = "error";
+  requiredElement("#adapter-name").textContent = "route-error";
+  inspection.innerHTML = `<pre>${escapeHtml(JSON.stringify({
+    diagnostics: [runtimeRoute.diagnostic],
+  }, null, 2))}</pre>`;
+} else if (runtimeRoute.mode !== "artifact-only") {
   let createdAdapter: BabylonWorldAdapter | null = null;
   let createdHostOverlay: CapabilityDemoHostOverlayV1 | undefined;
+  let createdPlaygroundMetadata:
+    | import("./playground-world.js").PlaygroundWorldMetadataV1
+    | undefined;
   let startupStage = "host-resolver";
   let preparationError: unknown;
   let prepared: Readonly<{
@@ -1729,16 +1747,33 @@ if (authoringMode) {
   }> | undefined;
   try {
     startupStage = "module-import";
-    const [{ loadAuthoringScene }, { BabylonWorldAdapter }] = await Promise.all([
-      import("./authoring-loader.js"),
-      import("./babylon-world-adapter.js"),
-    ]);
-    startupStage = "authoring-load";
-    const loaded = await loadAuthoringScene(undefined, {
-      ...(urlParameters.get("subjectDefinitionRef") === null
-        ? {}
-        : { subjectDefinitionRef: urlParameters.get("subjectDefinitionRef")! }),
-    });
+    const { BabylonWorldAdapter } = await import("./babylon-world-adapter.js");
+    const subjectDefinitionRef = urlParameters.get("subjectDefinitionRef");
+    let loaded: Awaited<ReturnType<typeof import("./authoring-loader.js")["loadAuthoringScene"]>>;
+    if (runtimeRoute.mode === "authoring") {
+      const { loadAuthoringScene } = await import("./authoring-loader.js");
+      startupStage = "authoring-load";
+      loaded = await loadAuthoringScene(undefined, {
+        ...(isNil(subjectDefinitionRef) ? {} : { subjectDefinitionRef }),
+      });
+    } else {
+      const { loadOutdoorGameplaySceneV1 } = await import(
+        "./outdoor-scene-gameplay-loader.js"
+      );
+      startupStage = "outdoor-scene-load";
+      const outdoorLoaded = await loadOutdoorGameplaySceneV1(
+        sceneCatalog[runtimeRoute.sceneCatalogId]!,
+        {
+          sceneCatalogId: runtimeRoute.sceneCatalogId,
+          aspectRatio: viewport.clientWidth > 0 && viewport.clientHeight > 0
+            ? viewport.clientWidth / viewport.clientHeight
+            : 16 / 9,
+          ...(isNil(subjectDefinitionRef) ? {} : { subjectDefinitionRef }),
+        },
+      );
+      createdPlaygroundMetadata = outdoorLoaded.playgroundMetadata;
+      loaded = outdoorLoaded;
+    }
     prepared = { loaded, BabylonWorldAdapter };
   } catch (error) {
     preparationError = error;
@@ -1776,10 +1811,13 @@ if (authoringMode) {
         const adapter = await BabylonWorldAdapter.create(
           loaded.runtimeWorldConfiguration,
           {
-          subjectAssetResolver,
-          onInitializationStage(stage) {
-            startupStage = `runtime:${stage}`;
-          },
+            subjectAssetResolver,
+            ...(isNil(createdPlaygroundMetadata)
+              ? {}
+              : { playgroundMetadata: createdPlaygroundMetadata }),
+            onInitializationStage(stage) {
+              startupStage = `runtime:${stage}`;
+            },
           },
         );
         createdAdapter = adapter;
@@ -1796,28 +1834,49 @@ if (authoringMode) {
       }
     },
   });
-  const initialized = await browserInstallation.initialization;
-  if (initialized !== undefined && createdAdapter !== null) {
-    const workbench = installCapabilityAuthoringPanel(
-      browserInstallation.api,
-      createdHostOverlay,
-    );
-    startPlayground(createdAdapter, () => browserInstallation.dispose(), {
-      resetSimulation: async () => {
-        await browserInstallation.api.reset();
-      },
-      afterSimulationReset: () => workbench?.reapplyWorkingDraftAfterSimulationReset(),
-    });
-  } else {
+  const pageLifecycle = createGameplayPageLifecycle({
+    initialization: browserInstallation.initialization,
+    getAdapter: () => createdAdapter,
+    setup(adapter) {
+      const workbench = runtimeRoute.mode === "authoring"
+        ? installCapabilityAuthoringPanel(
+            browserInstallation.api,
+            createdHostOverlay,
+          )
+        : undefined;
+      startPlayground(adapter, () => pageLifecycle.dispose(), {
+        resetSimulation: async () => {
+          await browserInstallation.api.reset();
+        },
+        afterSimulationReset: () => workbench?.reapplyWorkingDraftAfterSimulationReset(),
+      });
+    },
+    rollbackPageState() {
+      delete (window as { __WHITEBOX_PLAYGROUND__?: unknown }).__WHITEBOX_PLAYGROUND__;
+    },
+    disposeRuntimeHost: () => browserInstallation.dispose(),
+  });
+  let pageSetupSucceeded = false;
+  try {
+    pageSetupSucceeded = await pageLifecycle.completeSetup();
+  } catch (error) {
+    captureAuthoringStartupFailure("page-setup", error);
+    document.documentElement.dataset.worldkitStatus = "error";
+  }
+  if (!pageSetupSucceeded) {
     inspection.innerHTML = `<pre>${escapeHtml(JSON.stringify(authoringStartupEvidence(browserInstallation.api), null, 2))}</pre>`;
-    installAuthoringRecoveryPanel(browserInstallation.api);
+    if (runtimeRoute.mode === "authoring") {
+      installAuthoringRecoveryPanel(browserInstallation.api);
+    }
   }
 } else {
-  const [{ SdkWorldAdapter }, { resolveScene }] = await Promise.all([
-    import("./sdk-world-adapter.js"),
-    import("./scenes/index.js"),
-  ]);
-  const adapter = await SdkWorldAdapter.create(resolveScene(window.location.search));
+  delete window.__WORLDKIT__;
+  delete (window as { __WHITEBOX_PLAYGROUND__?: unknown }).__WHITEBOX_PLAYGROUND__;
+  delete document.documentElement.dataset.worldkitStatus;
+  const { SdkWorldAdapter } = await import("./sdk-world-adapter.js");
+  const adapter = await SdkWorldAdapter.create(
+    sceneCatalog[runtimeRoute.sceneCatalogId]!,
+  );
   adapter.mount(viewport);
   startPlayground(adapter);
 }

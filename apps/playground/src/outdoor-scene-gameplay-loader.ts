@@ -1,20 +1,19 @@
 import {
-  normalizeAuthoringSpec,
   sha256CanonicalJson,
   type AuthoringDiagnostic,
-  type AuthoringSpecV3,
-  type NormalizedWorldIRV3,
+  type AuthoringSpecV4,
   type PrimitivePrototypeSpecV2,
   type WorldNodeSpecV3,
 } from "@whitebox-world/authoring";
-import { compileWorld } from "@whitebox-world/compiler";
 import type {
   CompileDiagnostic,
   ExecutionPlanV5,
 } from "@whitebox-world/runtime-contracts";
+import type { RuntimeWorldConfigurationV1 } from "@whitebox-world/runtime-host";
 import {
   SceneCompilationError,
   compileOutdoorScene,
+  deriveWorldPlanArtifacts,
   hashString,
   isTerrainSurface,
   type CompiledOutdoorScene,
@@ -27,10 +26,20 @@ import {
   type WaterSurfaceDescriptor,
 } from "@whitebox-world/world";
 import { Euler, Matrix4, Quaternion, Vector3 } from "three";
+import { isNil } from "lodash-es";
+
+import {
+  loadAuthoringScene,
+  type CapabilityDemoHostOverlayV1,
+} from "./authoring-loader.js";
+import type {
+  PlaygroundWorldMetadataV1,
+} from "./playground-world.js";
+import { inspectPlaygroundFeatures } from "./playground-feature-inspection.js";
 
 const LAYOUT_SOLVER_PROFILE_REF =
   "worldkit://layout-solver-profile/outdoor.s1@1";
-const SUBJECT_DEFINITION_REF =
+const DEFAULT_SUBJECT_DEFINITION_REF =
   "worldkit://subject-definition/humanoid.third-person@1";
 const CAMERA_RIG_REF = "worldkit://camera/third-person.standard@1";
 const LEGACY_SUBJECT_CENTER_OFFSET_METERS = 0.9;
@@ -40,7 +49,9 @@ export type OutdoorSceneGameplayDiagnostic =
   | CompileDiagnostic;
 
 export interface OutdoorSceneGameplayLoadOptionsV1 {
+  readonly sceneCatalogId: string;
   readonly aspectRatio?: number;
+  readonly subjectDefinitionRef?: string;
 }
 
 export interface OutdoorSceneGameplayLoadResultV1 {
@@ -49,6 +60,10 @@ export interface OutdoorSceneGameplayLoadResultV1 {
   readonly normalizedWorldIrHash?: string;
   readonly executionPlanHash?: string;
   readonly diagnostics: readonly OutdoorSceneGameplayDiagnostic[];
+  readonly hostOverlay?: CapabilityDemoHostOverlayV1;
+  readonly playgroundMetadata?: PlaygroundWorldMetadataV1;
+  /** Internal Host bootstrap. This is intentionally not a Browser DTO. */
+  readonly runtimeWorldConfiguration?: RuntimeWorldConfigurationV1;
 }
 
 class OutdoorSceneImportError extends Error {
@@ -68,7 +83,6 @@ interface ImportedHeightfieldV1 {
   readonly sizeMetersXZ: readonly [number, number];
   readonly resolutionVerticesXZ: readonly [number, number];
   readonly heightSamplesMeters: readonly number[];
-  readonly heightSamplesHash: `sha256:${string}`;
   readonly minimumHeightMeters: number;
   readonly maximumHeightMeters: number;
 }
@@ -79,8 +93,68 @@ interface FlattenedLandmarkPrimitiveV1 {
   readonly node: Extract<WorldNodeSpecV3, { kind: "object" }>;
 }
 
-function asSha256(value: string): `sha256:${string}` {
-  return value as `sha256:${string}`;
+function isFiniteVector3(value: unknown, positive = false): value is readonly [number, number, number] {
+  return Array.isArray(value) &&
+    value.length === 3 &&
+    value.every((component) =>
+      typeof component === "number" &&
+      Number.isFinite(component) &&
+      (!positive || component > 0)
+    );
+}
+
+/** Validates the SDK-owned registry value before converting it into Canonical Authoring data. */
+function isLandmarkDescriptor(value: unknown): value is LandmarkDescriptor {
+  if (typeof value !== "object" || isNil(value) || Array.isArray(value)) return false;
+  const row = value as Readonly<Record<string, unknown>>;
+  const transform = row.transform;
+  if (
+    typeof transform !== "object" ||
+    isNil(transform) ||
+    Array.isArray(transform)
+  ) return false;
+  const transformRow = transform as Readonly<Record<string, unknown>>;
+  if (
+    !isFiniteVector3(transformRow.position) ||
+    !isFiniteVector3(transformRow.rotation) ||
+    !isFiniteVector3(transformRow.scale, true)
+  ) return false;
+  if (typeof row.collision !== "boolean") return false;
+  if (row.kind === "compound") {
+    return Array.isArray(row.children) && row.children.every(isLandmarkDescriptor);
+  }
+  if (row.kind !== "primitive") return false;
+  if (
+    row.primitive !== "box" &&
+    row.primitive !== "sphere" &&
+    row.primitive !== "cylinder" &&
+    row.primitive !== "cone" &&
+    row.primitive !== "plane"
+  ) return false;
+  if (!isNil(row.size) && !isFiniteVector3(row.size, true)) return false;
+  if (!isNil(row.radius) && (typeof row.radius !== "number" || !Number.isFinite(row.radius) || row.radius <= 0)) {
+    return false;
+  }
+  if (!isNil(row.height) && (typeof row.height !== "number" || !Number.isFinite(row.height) || row.height <= 0)) {
+    return false;
+  }
+  return true;
+}
+
+function playgroundMetadata(
+  scene: CompiledOutdoorScene,
+  sceneCatalogId: string,
+): PlaygroundWorldMetadataV1 {
+  return {
+    sceneCatalogId,
+    ...(scene.worldSpec === undefined
+      ? {}
+      : {
+          worldSpec: scene.worldSpec,
+          planArtifacts: deriveWorldPlanArtifacts(scene),
+        }),
+    featureInspections: inspectPlaygroundFeatures(scene.registry),
+  };
 }
 
 function diagnostic(
@@ -181,6 +255,66 @@ function terrainResolution(surface: TerrainSurface): readonly [number, number] {
   return [xSegments + 1, zSegments + 1];
 }
 
+function validateTerrainTileSeams(
+  surface: TerrainSurface,
+  resolutionVerticesXZ: readonly [number, number],
+): void {
+  const [columns, rows] = resolutionVerticesXZ;
+  const minimumX = surface.origin[0] - surface.width / 2;
+  const minimumZ = surface.origin[1] - surface.depth / 2;
+  const cellSizeX = surface.width / (columns - 1);
+  const cellSizeZ = surface.depth / (rows - 1);
+  const tolerance = 1e-7;
+  const heightByVertex = new Map<string, number>();
+
+  surface.forEachHeightfield((heightfield) => {
+    for (let localRow = 0; localRow <= heightfield.zSegments; localRow += 1) {
+      for (let localColumn = 0; localColumn <= heightfield.xSegments; localColumn += 1) {
+        const [xMeters, zMeters] = heightfield.pointAt(localColumn, localRow);
+        const column = Math.round((xMeters - minimumX) / cellSizeX);
+        const row = Math.round((zMeters - minimumZ) / cellSizeZ);
+        if (
+          column < 0 || column >= columns ||
+          row < 0 || row >= rows ||
+          Math.abs(minimumX + column * cellSizeX - xMeters) > tolerance ||
+          Math.abs(minimumZ + row * cellSizeZ - zMeters) > tolerance
+        ) {
+          throw new OutdoorSceneImportError(
+            "OUTDOOR_SCENE_IMPORT_TERRAIN_GRID_IRREGULAR",
+            "Every terrain tile vertex must align to the global terrain grid.",
+            { column, row, xMeters, zMeters },
+          );
+        }
+        const heightMeters = heightfield.getHeight(localColumn, localRow);
+        if (!Number.isFinite(heightMeters)) {
+          throw new OutdoorSceneImportError(
+            "OUTDOOR_SCENE_IMPORT_TERRAIN_SAMPLE_INVALID",
+            "Every locked terrain vertex requires one finite height sample.",
+            { column, row, xMeters, zMeters, heightMeters },
+          );
+        }
+        const key = `${column}:${row}`;
+        const existingHeightMeters = heightByVertex.get(key);
+        if (existingHeightMeters !== undefined && existingHeightMeters !== heightMeters) {
+          throw new OutdoorSceneImportError(
+            "OUTDOOR_SCENE_IMPORT_TERRAIN_SEAM_MISMATCH",
+            "Terrain tiles must agree exactly at every shared vertex.",
+            {
+              column,
+              row,
+              xMeters,
+              zMeters,
+              existingHeightMeters,
+              conflictingHeightMeters: heightMeters,
+            },
+          );
+        }
+        heightByVertex.set(key, heightMeters);
+      }
+    }
+  });
+}
+
 function importHeightfield(surface: TerrainSurface): ImportedHeightfieldV1 {
   finitePositive(surface.width, "terrain.width");
   finitePositive(surface.depth, "terrain.depth");
@@ -191,6 +325,7 @@ function importHeightfield(surface: TerrainSurface): ImportedHeightfieldV1 {
     );
   }
   const [columns, rows] = terrainResolution(surface);
+  validateTerrainTileSeams(surface, [columns, rows]);
   const minimumX = surface.origin[0] - surface.width / 2;
   const minimumZ = surface.origin[1] - surface.depth / 2;
   const heightSamplesMeters: number[] = [];
@@ -219,7 +354,6 @@ function importHeightfield(surface: TerrainSurface): ImportedHeightfieldV1 {
     sizeMetersXZ: [surface.width, surface.depth],
     resolutionVerticesXZ: [columns, rows],
     heightSamplesMeters,
-    heightSamplesHash: asSha256(sha256CanonicalJson(heightSamplesMeters)),
     minimumHeightMeters,
     maximumHeightMeters,
   };
@@ -241,11 +375,12 @@ function stableSuffix(value: unknown, length = 12): string {
 
 function landmarkEntityId(
   ownerFeatureId: string,
+  resourceId: string,
   path: readonly string[],
 ): string {
   const owner = safeIdToken(ownerFeatureId).slice(0, 20);
   const leaf = safeIdToken(path.at(-1) ?? "primitive").slice(0, 18);
-  return `obj.${owner}.${leaf}.${stableSuffix({ ownerFeatureId, path })}`;
+  return `obj.${owner}.${leaf}.${stableSuffix({ ownerFeatureId, resourceId, path })}`;
 }
 
 function prototypeId(entityId: string): string {
@@ -363,6 +498,7 @@ function primitivePrototype(
 
 function flattenLandmark(
   ownerFeatureId: string,
+  landmarkResourceId: string,
   descriptor: LandmarkDescriptor,
 ): readonly FlattenedLandmarkPrimitiveV1[] {
   const result: FlattenedLandmarkPrimitiveV1[] = [];
@@ -388,7 +524,7 @@ function flattenLandmark(
       });
       return;
     }
-    const entityId = landmarkEntityId(ownerFeatureId, currentPath);
+    const entityId = landmarkEntityId(ownerFeatureId, landmarkResourceId, currentPath);
     const resourceId = prototypeId(entityId);
     result.push({
       entityId,
@@ -419,12 +555,6 @@ function isWater(value: unknown): value is WaterSurfaceDescriptor {
     value !== null &&
     (value as { kind?: unknown }).kind === "water"
   );
-}
-
-function isLandmark(value: unknown): value is LandmarkDescriptor {
-  if (typeof value !== "object" || value === null) return false;
-  const kind = (value as { kind?: unknown }).kind;
-  return kind === "primitive" || kind === "compound";
 }
 
 function waterNode(
@@ -471,40 +601,27 @@ function waterNode(
   };
 }
 
-function resourceBudget(
+const OUTDOOR_GAMEPLAY_IMPORT_RESOURCE_LIMIT = {
+  maxVertices: 500_000,
+  maxTriangles: 1_000_000,
+  maxColliders: 2_048,
+} as const satisfies AuthoringSpecV4["world"]["resourceBudget"];
+
+function importedResourceBudget(
   scene: CompiledOutdoorScene,
-  heightfield: ImportedHeightfieldV1,
-): AuthoringSpecV3["world"]["resourceBudget"] {
-  const terrainResourceIds = new Set(scene.terrainHandles.map((handle) => handle.terrainId));
-  const otherUsage = scene.registry
-    .listResources()
-    .filter((resource) => !terrainResourceIds.has(resource.id))
-    .reduce(
-      (total, resource) => ({
-        vertices: total.vertices + resource.metrics.vertices,
-        triangles: total.triangles + resource.metrics.triangles,
-        colliders: total.colliders + resource.metrics.colliders,
-      }),
-      { vertices: 0, triangles: 0, colliders: 0 },
-    );
-  const terrainVertices =
-    heightfield.resolutionVerticesXZ[0] * heightfield.resolutionVerticesXZ[1];
-  const terrainTriangles =
-    (heightfield.resolutionVerticesXZ[0] - 1) *
-    (heightfield.resolutionVerticesXZ[1] - 1) *
-    2;
+): AuthoringSpecV4["world"]["resourceBudget"] {
   return {
-    maxVertices: Math.max(
-      scene.definition.budget?.maxVertices ?? 0,
-      terrainVertices + otherUsage.vertices + 10_000,
+    maxVertices: Math.min(
+      scene.definition.budget?.maxVertices ?? OUTDOOR_GAMEPLAY_IMPORT_RESOURCE_LIMIT.maxVertices,
+      OUTDOOR_GAMEPLAY_IMPORT_RESOURCE_LIMIT.maxVertices,
     ),
-    maxTriangles: Math.max(
-      scene.definition.budget?.maxTriangles ?? 0,
-      terrainTriangles + otherUsage.triangles + 20_000,
+    maxTriangles: Math.min(
+      scene.definition.budget?.maxTriangles ?? OUTDOOR_GAMEPLAY_IMPORT_RESOURCE_LIMIT.maxTriangles,
+      OUTDOOR_GAMEPLAY_IMPORT_RESOURCE_LIMIT.maxTriangles,
     ),
-    maxColliders: Math.max(
-      scene.definition.budget?.maxColliders ?? 0,
-      2 + otherUsage.colliders + 8,
+    maxColliders: Math.min(
+      scene.definition.budget?.maxColliders ?? OUTDOOR_GAMEPLAY_IMPORT_RESOURCE_LIMIT.maxColliders,
+      OUTDOOR_GAMEPLAY_IMPORT_RESOURCE_LIMIT.maxColliders,
     ),
   };
 }
@@ -534,17 +651,25 @@ function buildAuthoringSpec(
   heightfield: ImportedHeightfieldV1,
   terrain: TerrainSurface,
   options: OutdoorSceneGameplayLoadOptionsV1,
-): AuthoringSpecV3 {
+  resourceBudget: AuthoringSpecV4["world"]["resourceBudget"],
+): AuthoringSpecV4 {
   const resources = scene.registry.listResources();
   const flattenedLandmarks = resources
-    .filter(
-      (resource): resource is TrackedWorldResource<LandmarkDescriptor> =>
-        resource.kind === "landmark" && isLandmark(resource.value),
-    )
+    .filter((resource) => resource.kind === "landmark")
     .sort((left, right) => left.id.localeCompare(right.id))
-    .flatMap((resource) =>
-      flattenLandmark(resource.ownerFeatureId, resource.value)
-    );
+    .flatMap((resource) => {
+      if (!isLandmarkDescriptor(resource.value)) {
+        throw new OutdoorSceneImportError(
+          "OUTDOOR_SCENE_IMPORT_LANDMARK_INVALID",
+          `Landmark resource '${resource.id}' is invalid.`,
+          {
+            resourceId: resource.id,
+            ownerFeatureId: resource.ownerFeatureId,
+          },
+        );
+      }
+      return flattenLandmark(resource.ownerFeatureId, resource.id, resource.value);
+    });
   const waters = resources
     .filter(
       (resource): resource is TrackedWorldResource<WaterSurfaceDescriptor> =>
@@ -599,11 +724,11 @@ function buildAuthoringSpec(
   );
   return {
     kind: "worldkit-authoring-spec",
-    schemaVersion: 3,
+    schemaVersion: 4,
     id: scene.definition.id,
     seed: sceneSeed(scene.definition),
     layout: { solverProfileRef: LAYOUT_SOLVER_PROFILE_REF },
-    spatial: { regions: [], routes, screenRegions: [] },
+    spatial: { regions: [], routes, screenRegions: [], traversalAreas: [] },
     world: {
       coordinateSystem: "right-handed-y-up-minus-z-forward",
       bounds: {
@@ -616,7 +741,7 @@ function buildAuthoringSpec(
       },
       gravityMetersPerSecondSquaredXYZ: [0, -9.81, 0],
       environment: { preset: scene.atmosphere.preset ?? "clear-day" },
-      resourceBudget: resourceBudget(scene, heightfield),
+      resourceBudget: { ...resourceBudget },
     },
     resources: {
       prototypes: flattenedLandmarks.map((row) => row.prototype),
@@ -637,7 +762,8 @@ function buildAuthoringSpec(
             grid: {
               centerMetersXZ: [...heightfield.centerMetersXZ],
               sizeMetersXZ: [...heightfield.sizeMetersXZ],
-              resolutionCellsXZ: [2, 2],
+              resolutionCellsXZ: [...heightfield.resolutionVerticesXZ],
+              heightSamplesMeters: [...heightfield.heightSamplesMeters],
             },
             semantic: { classId: "terrain.outdoor" },
           },
@@ -660,7 +786,7 @@ function buildAuthoringSpec(
       {
         id: "player",
         kind: "subject",
-        subjectDefinitionRef: SUBJECT_DEFINITION_REF,
+        subjectDefinitionRef: DEFAULT_SUBJECT_DEFINITION_REF,
         spawnAnchorEntityId: "spawn",
       },
       {
@@ -693,81 +819,7 @@ function buildAuthoringSpec(
       controlledEntityId: "player",
       cameraEntityId: "camera",
     },
-    constraints: { placements: [] },
-  };
-}
-
-function lockImportedLayout(
-  normalized: NormalizedWorldIRV3,
-  heightfield: ImportedHeightfieldV1,
-): Readonly<{
-  normalizedWorldIr: NormalizedWorldIRV3;
-  normalizedWorldIrHash: `sha256:${string}`;
-}> {
-  const layoutSolveReportHash = asSha256(sha256CanonicalJson({
-    kind: "outdoor-scene-import-layout",
-    schemaVersion: 1,
-    terrain: {
-      terrainEntityId: heightfield.terrainEntityId,
-      centerMetersXZ: heightfield.centerMetersXZ,
-      sizeMetersXZ: heightfield.sizeMetersXZ,
-      resolutionVerticesXZ: heightfield.resolutionVerticesXZ,
-      heightSamplesHash: heightfield.heightSamplesHash,
-    },
-    placements: normalized.nodes
-      .filter((node) => node.kind === "object" || node.kind === "anchor")
-      .map((node) => ({ id: node.id, transform: node.transform })),
-    routes: normalized.layout.routes,
-  }));
-  const nodes = normalized.nodes.map((node): NormalizedWorldIRV3["nodes"][number] => {
-    if (node.kind === "terrain") {
-      return {
-        ...node,
-        components: {
-          terrain: {
-            ...node.components.terrain,
-            source: {
-              kind: "locked-heightfield",
-              heightSamplesHash: heightfield.heightSamplesHash,
-            },
-            grid: {
-              centerMetersXZ: [...heightfield.centerMetersXZ],
-              sizeMetersXZ: [...heightfield.sizeMetersXZ],
-              resolutionCellsXZ: [...heightfield.resolutionVerticesXZ],
-            },
-          },
-        },
-      };
-    }
-    if (node.kind === "object" || node.kind === "anchor") {
-      return {
-        ...node,
-        placementProvenance: {
-          ...node.placementProvenance,
-          layoutSolveReportHash,
-        },
-      };
-    }
-    return node;
-  });
-  const normalizedWorldIr: NormalizedWorldIRV3 = {
-    ...normalized,
-    nodes,
-    layout: {
-      ...normalized.layout,
-      layoutSolveReportHash,
-      heightfields: [{
-        terrainEntityId: heightfield.terrainEntityId,
-        centerMetersXZ: [...heightfield.centerMetersXZ],
-        sizeMetersXZ: [...heightfield.sizeMetersXZ],
-        resolutionVerticesXZ: [...heightfield.resolutionVerticesXZ],
-        heightSamplesMeters: [...heightfield.heightSamplesMeters],
-      }],
-    },
-  };
-  return {
-    normalizedWorldIr,
-    normalizedWorldIrHash: asSha256(sha256CanonicalJson(normalizedWorldIr)),
+    constraints: { placements: [], connectivity: [] },
   };
 }
 
@@ -792,10 +844,10 @@ function selectedTerrain(
   return { registry: scene.registry, terrain: resource.value };
 }
 
-export function loadOutdoorGameplayScene(
+export async function loadOutdoorGameplaySceneV1(
   definition: OutdoorSceneDefinition,
-  options: OutdoorSceneGameplayLoadOptionsV1 = {},
-): OutdoorSceneGameplayLoadResultV1 {
+  options: OutdoorSceneGameplayLoadOptionsV1,
+): Promise<OutdoorSceneGameplayLoadResultV1> {
   let scene: CompiledOutdoorScene;
   try {
     scene = compileOutdoorScene(definition);
@@ -803,7 +855,9 @@ export function loadOutdoorGameplayScene(
     if (cause instanceof SceneCompilationError) {
       const projected = cause.diagnostics.map((row) => ({
         severity: row.severity,
-        code: row.code,
+        code: row.code === "LANDMARK_DESCRIPTOR_INVALID"
+          ? "OUTDOOR_SCENE_IMPORT_LANDMARK_INVALID"
+          : row.code,
         instancePath: "",
         message: row.message,
       } satisfies OutdoorSceneGameplayDiagnostic));
@@ -826,46 +880,50 @@ export function loadOutdoorGameplayScene(
   try {
     const { terrain } = selectedTerrain(scene);
     const heightfield = importHeightfield(terrain);
-    const authoringSpec = buildAuthoringSpec(scene, heightfield, terrain, options);
-    const normalized = normalizeAuthoringSpec(authoringSpec);
-    if (!normalized.ok || normalized.value === undefined) {
-      return {
-        ok: false,
-        diagnostics: [
-          ...scene.diagnostics.map(projectSceneDiagnostic),
-          ...normalized.diagnostics,
-        ],
-      };
-    }
-    const locked = lockImportedLayout(normalized.value, heightfield);
-    const compiled = compileWorld({
-      normalizedWorldIr: locked.normalizedWorldIr,
-      normalizedWorldIrHash: locked.normalizedWorldIrHash,
-    });
+    const authoringSpec = buildAuthoringSpec(
+      scene,
+      heightfield,
+      terrain,
+      options,
+      importedResourceBudget(scene),
+    );
+    const loaded = await loadAuthoringScene(
+      async () => new Response(JSON.stringify(authoringSpec), {
+        status: 200,
+        headers: { "content-type": "application/json" },
+      }),
+      isNil(options.subjectDefinitionRef)
+        ? {}
+        : { subjectDefinitionRef: options.subjectDefinitionRef },
+    );
     if (
-      !compiled.ok ||
-      compiled.executionPlan === undefined ||
-      compiled.executionPlanHash === undefined
+      !loaded.ok ||
+      loaded.executionPlan?.schemaVersion !== 5 ||
+      isNil(loaded.executionPlanHash) ||
+      isNil(loaded.normalizedWorldIrHash) ||
+      isNil(loaded.runtimeWorldConfiguration)
     ) {
       return {
         ok: false,
         diagnostics: [
           ...scene.diagnostics.map(projectSceneDiagnostic),
-          ...normalized.diagnostics,
-          ...compiled.diagnostics,
+          ...loaded.diagnostics,
         ],
+        ...(isNil(loaded.hostOverlay) ? {} : { hostOverlay: loaded.hostOverlay }),
       };
     }
     return {
       ok: true,
-      executionPlan: compiled.executionPlan,
-      normalizedWorldIrHash: locked.normalizedWorldIrHash,
-      executionPlanHash: compiled.executionPlanHash,
+      executionPlan: loaded.executionPlan,
+      normalizedWorldIrHash: loaded.normalizedWorldIrHash,
+      executionPlanHash: loaded.executionPlanHash,
       diagnostics: [
         ...scene.diagnostics.map(projectSceneDiagnostic),
-        ...normalized.diagnostics,
-        ...compiled.diagnostics,
+        ...loaded.diagnostics,
       ],
+      ...(isNil(loaded.hostOverlay) ? {} : { hostOverlay: loaded.hostOverlay }),
+      playgroundMetadata: playgroundMetadata(scene, options.sceneCatalogId),
+      runtimeWorldConfiguration: loaded.runtimeWorldConfiguration,
     };
   } catch (cause) {
     if (cause instanceof OutdoorSceneImportError) {

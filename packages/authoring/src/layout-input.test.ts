@@ -56,6 +56,37 @@ function solvedSpawnWorld(): AuthoringSpecV3 {
 }
 
 describe("Authoring V3 resolved layout input", () => {
+  it("copies production-scale locked heightfields without spreading them as call arguments", () => {
+    const source = solvedSpawnWorld();
+    const resolutionCellsXZ = [400, 400] as const;
+    const heightSamplesMeters = Array.from(
+      { length: resolutionCellsXZ[0] * resolutionCellsXZ[1] },
+      (_value, index) => index % 17 / 10,
+    );
+    const result = resolveAuthoringLayoutV3({
+      ...source,
+      nodes: source.nodes.map((node) => node.kind === "terrain"
+        ? {
+            ...node,
+            components: {
+              terrain: {
+                ...node.components.terrain,
+                grid: {
+                  ...node.components.terrain.grid,
+                  resolutionCellsXZ,
+                  heightSamplesMeters,
+                },
+              },
+            },
+          }
+        : node),
+    });
+
+    expect(result.ok, JSON.stringify(result.diagnostics)).toBe(true);
+    expect(result.value?.geometry.heightfieldsByTerrainEntityId["terrain-main"]
+      ?.heightSamplesMeters).toHaveLength(heightSamplesMeters.length);
+  });
+
   it("projects locked bounds, terrain, spatial rows, constraints, and a solved-anchor camera rig", () => {
     const result = resolveAuthoringLayoutV3(solvedSpawnWorld());
 

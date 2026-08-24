@@ -25,6 +25,9 @@
 - 公共对象 exact-key、严格 `===/!==`；null/undefined 检查使用 `lodash-es` 的 `isNil`。
 - 每个行为先写失败测试并观察正确失败，再写最小实现。
 - 每个任务形成独立提交；子智能体报告不是集成证据。
+- 项目未发布，最终候选不保留被当前权威协议取代的生产兼容层。G19-8 必须执行版本消费者 census：
+  能清理的旧 Authoring/IR/Plan/Snapshot/Browser/CLI 方言原子删除；暂时不能清理的逐项登记真实消费者、
+  阻塞原因、明确删除任务和机器门禁，禁止无期限保留 alias、converter、fallback read、双写或双发布。
 
 ## Current implementation status (2026-08-24)
 
@@ -73,7 +76,8 @@ authoritative execution status; old unchecked steps inside already completed tas
   已在 `codex/g19-6-browser-gameplay` 实现；最终门禁与主 Agent completion review 已通过。
 - [ ] **G19-7** — Outdoor/catalog route、page/artifact lifecycle 与六场景
   production-path wiring；不再重复实现已由 G19-6 迁移的 CLI/WorldKit pipeline、Capture 或 Take 合同。
-- [ ] **G19-8 (blocked by G19-7)** — complete G19 gates, host completion review and final disposition.
+- [ ] **G19-8 (blocked by G19-7)** — complete G19 gates, host completion review, compatibility-debt
+  census/clean break and final disposition.
 
 Closed baseline note: the stale Simulation Take WorldPackage root is no longer hand-maintained. The
 `generate:example-takes` command projects both example Takes from the current canonical WorldPackage
@@ -831,6 +835,13 @@ git commit -m "feat: unify outdoor gameplay runtime"
 **Interfaces:**
 - Consumes: Tasks 1–9 commits。
 - Produces: disposition、完整 gate evidence、可审查远端分支。
+
+- [ ] **Step 0: 执行未发布版本 clean-break census**
+
+扫描生产代码、测试、CLI、Browser、示例、生成类型和当前 quickstart，区分“当前权威 V1 合同”与
+“已被新版取代的旧方言”。删除无真实消费者的旧声明、export、parser、migration、fallback、fixture 和
+双版本 union，并补机器可执行的零消费者门禁。本轮无法删除的每一项必须在 completion review 中记录：
+旧符号/字段、生产消费者、阻塞依赖、目标权威版本、删除任务和验证命令；不得用笼统兼容理由延期。
 
 - [ ] **Step 1: 主 Agent 按两个 review checklist 自审**
 

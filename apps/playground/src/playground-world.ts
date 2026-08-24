@@ -44,6 +44,14 @@ export interface FeatureInspection {
   }[];
 }
 
+/** Internal catalog metadata kept outside the Canonical Runtime Snapshot. */
+export interface PlaygroundWorldMetadataV1 {
+  readonly sceneCatalogId: string;
+  readonly worldSpec?: OutdoorWorldSpec;
+  readonly planArtifacts?: DerivedWorldPlanArtifacts;
+  readonly featureInspections: readonly FeatureInspection[];
+}
+
 export interface WorldSnapshot {
   adapter: string;
   frame: number;

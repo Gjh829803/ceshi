@@ -750,6 +750,10 @@ describe("compileWorldV5", () => {
                 grid: {
                   ...node.components.terrain.grid,
                   resolutionCellsXZ: [513, 513],
+                  heightSamplesMeters: Array.from(
+                    { length: 513 * 513 },
+                    (_, index) => (index % 17) / 10,
+                  ),
                 },
               },
             },

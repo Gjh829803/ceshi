@@ -1542,7 +1542,7 @@
                     "heightSamplesMeters": {
                       "type": "array",
                       "minItems": 4,
-                      "maxItems": 4096,
+                      "maxItems": 1048576,
                       "items": {
                         "type": "number"
                       }

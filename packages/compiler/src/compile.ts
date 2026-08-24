@@ -218,7 +218,9 @@ function compileTerrainV3(world: NormalizedWorldIRV3): ExecutionTerrainV3 {
         "NormalizedWorldIRV3 invariant violated: terrain grid heightSamplesMeters length must equal resolutionCellsXZ product.",
       );
     }
-    heights.push(...sampledHeights);
+    for (const height of sampledHeights) {
+      heights.push(height);
+    }
   } else {
     for (let zIndex = 0; zIndex < rows; zIndex += 1) {
       const z = minimumZ + (zIndex / (rows - 1)) * sizeZ;

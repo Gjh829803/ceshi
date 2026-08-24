@@ -230,6 +230,34 @@ describe("Authoring Spec V4 Prototype traversal surface bindings", () => {
 });
 
 describe("Authoring Spec V4 connectivity schema", () => {
+  it("accepts production heightfields larger than the legacy 64 by 64 preview ceiling", () => {
+    const source = validV4();
+    const terrain = source.nodes.find((node) => node.kind === "terrain");
+    expect(terrain?.kind).toBe("terrain");
+    if (terrain?.kind !== "terrain") throw new Error("TEST_TERRAIN_MISSING");
+    const heightSamplesMeters = Array.from({ length: 65 * 65 }, () => 0);
+    const result = validateAuthoringSpecV4({
+      ...source,
+      nodes: source.nodes.map((node) => node.id === terrain.id
+        ? {
+            ...terrain,
+            components: {
+              terrain: {
+                ...terrain.components.terrain,
+                grid: {
+                  ...terrain.components.terrain.grid,
+                  resolutionCellsXZ: [65, 65],
+                  heightSamplesMeters,
+                },
+              },
+            },
+          }
+        : node),
+    });
+
+    expect(result.ok, JSON.stringify(result.diagnostics)).toBe(true);
+  });
+
   it("requires closed blocked traversal areas on a declared Terrain surface", () => {
     const valid = structuredClone(validV4()) as unknown as {
       spatial: { traversalAreas: unknown[] };
