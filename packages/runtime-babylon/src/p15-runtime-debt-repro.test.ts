@@ -6,15 +6,13 @@ import { readFileSync } from "node:fs";
 import { NullEngine } from "@babylonjs/core/Engines/nullEngine.pure.js";
 import { describe, expect, it } from "vitest";
 
-import {
-  normalizeAuthoringSpec,
-} from "@whitebox-world/authoring";
-import { compileWorld } from "@whitebox-world/compiler";
-import { createValidPackageSubjectWorld } from "../../authoring/src/test-fixture";
-import type { ExecutionPlanV4, WorldRuntimeSnapshotV3 } from "@whitebox-world/runtime-contracts";
+import { createValidPackageSubjectWorldV4 } from "../../authoring/src/test-fixture";
+import type { ExecutionPlanV5 } from "@whitebox-world/runtime-contracts";
 
 import { BabylonWorldRuntime } from "./babylon-world-runtime";
-import { lockPublishedGroundFeels } from "./lock-published-ground-feels";
+import { bindRuntimeTestPossession } from "./runtime-test-possession";
+import type { BabylonRuntimeProjectionV1 } from "./runtime-projection";
+import { compileRuntimeTestPlanV5 } from "./runtime-test-plan";
 
 const kernelSource = readFileSync(
   new URL("./motion-kernel-runtime.ts", import.meta.url),
@@ -36,8 +34,8 @@ const havokWasmBinary = havokWasmBytes.buffer.slice(
   havokWasmBytes.byteOffset + havokWasmBytes.byteLength,
 ) as ArrayBuffer;
 
-function compileFlatPackagePlan(): ExecutionPlanV4 {
-  const spec = createValidPackageSubjectWorld();
+function compileFlatPackagePlan(): ExecutionPlanV5 {
+  const spec = createValidPackageSubjectWorldV4();
   spec.nodes = spec.nodes.map((node) =>
     node.kind === "terrain" && node.components.terrain.source.kind === "procedural"
       ? {
@@ -56,28 +54,13 @@ function compileFlatPackagePlan(): ExecutionPlanV4 {
         }
       : node,
   );
-  const normalized = normalizeAuthoringSpec(spec);
-  if (
-    !normalized.ok ||
-    normalized.value === undefined ||
-    normalized.normalizedWorldIrHash === undefined
-  ) {
-    throw new Error(`Fixture normalize failed: ${JSON.stringify(normalized.diagnostics)}`);
-  }
-  const compiled = compileWorld({
-    normalizedWorldIr: normalized.value,
-    normalizedWorldIrHash: normalized.normalizedWorldIrHash,
-  });
-  if (!compiled.ok || compiled.executionPlan === undefined) {
-    throw new Error(`Fixture compile failed: ${JSON.stringify(compiled.diagnostics)}`);
-  }
-  return lockPublishedGroundFeels(compiled.executionPlan);
+  return compileRuntimeTestPlanV5(spec);
 }
 
 async function createDebtRuntime(
-  executionPlan: ExecutionPlanV4,
+  executionPlan: ExecutionPlanV5,
 ): Promise<BabylonWorldRuntime> {
-  return BabylonWorldRuntime.create({
+  const runtime = await BabylonWorldRuntime.create({
     executionPlan,
     havokWasmBinary,
     engineFactory: () =>
@@ -89,9 +72,14 @@ async function createDebtRuntime(
         lockstepMaxSteps: 4,
       }),
   });
+  await bindRuntimeTestPossession(
+    runtime,
+    executionPlan.initialControlledEntityId,
+  );
+  return runtime;
 }
 
-function playerTrajectoryHash(snapshot: WorldRuntimeSnapshotV3): string {
+function playerTrajectoryHash(snapshot: BabylonRuntimeProjectionV1): string {
   const player = snapshot.subjectStatesByEntityId.player!;
   return createHash("sha256")
     .update(JSON.stringify({
@@ -126,7 +114,7 @@ describe("P1.5 runtime debt", () => {
   it("publishes air from checkSupport after reset when spawned 0.4 m above terrain", async () => {
     const base = compileFlatPackagePlan();
     const player = base.subjects.find((subject) => subject.entityId === "player")!;
-    const executionPlan: ExecutionPlanV4 = {
+    const executionPlan: ExecutionPlanV5 = {
       ...base,
       terrain: {
         ...base.terrain,
@@ -168,6 +156,7 @@ describe("P1.5 runtime debt", () => {
         ticks: 30,
       });
       runtime.reset();
+      await bindRuntimeTestPossession(runtime, "player");
       expect(runtime.requestControlFeelProfile("player", HEAVY_FEEL_REF)).toBe(true);
       const heavy = await runtime.runFixedInput({
         actions: ["move-forward", "move-left"],

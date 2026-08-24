@@ -1,23 +1,20 @@
-# Canonical Authoring V3/V4 / Browser Protocol V4 快速接入
+# Canonical Authoring V4 / Browser Protocol V5 快速接入
 
-Canonical Authoring V3 是基础世界的当前 JSON 输入；声明 Route Connectivity 的世界
-使用干净升级后的 V4。调用方只描述世界、资源、节点、Route/Anchor 和启动绑定；SDK 负责严格校验、
+Canonical Authoring V4 是所有世界的唯一当前 JSON 输入。调用方只描述世界、资源、
+节点、Route/Anchor 和启动绑定；SDK 负责严格校验、
 Registry 解析、确定性 Placement 求解、归一化、Collider 推导、编译、物理执行和截图。
 
-旧 Authoring 版本从未发布，现已删除，也没有兼容解析或字段别名。当前版本链路为：
+未发布的旧 Authoring、IR、Plan、Snapshot 和 Browser 合同不提供兼容解析、迁移入口或
+字段别名。当前唯一版本链路为：
 
 ```text
-AuthoringSpec V3
-  -> LayoutSolveReport V1
-  -> NormalizedWorldIR V3
-  -> ExecutionPlan V4
-  -> Runtime Snapshot V3 / Browser Protocol V4
-
-AuthoringSpec V4 (Route Connectivity)
+AuthoringSpec V4
   -> LayoutSolveReport V1
   -> NormalizedWorldIR V4
   -> ExecutionPlan V5
-  -> trusted Route Validation + Browser Protocol V4
+  -> Babylon/Havok Runtime
+  -> Runtime Snapshot V4 / Browser Protocol V5
+  -> optional trusted Route Validation evidence
 ```
 
 > Golden Humanoid S1b 首个可视纵向切片已完成并进入回归；S1b 整体与 Semantic Actions 整体仍未完成.
@@ -60,9 +57,7 @@ SDK 从上游交付的 Canonical JSON 开始工作。
 
 ## 2. Agent 应输出什么
 
-权威 Schema 是
-[`authoring-spec-v3.schema.json`](../packages/authoring/src/authoring-spec-v3.schema.json)，
-Route 世界 Schema 是
+所有世界的权威 Schema 是
 [`authoring-spec-v4.schema.json`](../packages/authoring/src/authoring-spec-v4.schema.json)，
 Package 主体 Schema 是
 [`subject-definition-v1.schema.json`](../packages/authoring/src/subject-definition-v1.schema.json)，
@@ -77,7 +72,7 @@ Package 主体 Schema 是
 ```json
 {
   "kind": "worldkit-authoring-spec",
-  "schemaVersion": 3,
+  "schemaVersion": 4,
   "id": "package-subject-world",
   "seed": 4096,
   "world": {},
@@ -91,13 +86,17 @@ Package 主体 Schema 是
   "spatial": {
     "regions": [],
     "routes": [],
+    "traversalAreas": [],
     "screenRegions": []
   },
   "nodes": [],
   "relationships": [],
   "rules": [],
   "startup": {},
-  "constraints": {}
+  "constraints": {
+    "placements": [],
+    "connectivity": []
+  }
 }
 ```
 
@@ -124,10 +123,10 @@ Package 主体 Schema 是
 非有限数字、错误引用、版本缺失、超预算和当前不支持的能力都会返回结构化
 Diagnostic，不会被静默忽略。
 
-V3 保持基础世界合同，不通过 sidecar 或空字段伪装 Route 支持。需要验证主体从
-Start Anchor 到 Destination Anchor 是否可通行时，调用方必须提交 Authoring V4；AI
-仍只填写 Route/Anchor/Subject 意图和稳定 Ref，不填写 NavMesh、Recast 参数、Havok
-Handle 或运行时阈值。
+基础世界可以让 `constraints.connectivity` 保持空数组；需要验证主体从 Start Anchor
+到 Destination Anchor 是否可通行时，在同一 AuthoringSpec V4 中声明 Connectivity
+Constraint。AI 仍只填写 Route/Anchor/Subject 意图和稳定 Ref，不填写 NavMesh、Recast
+参数、Havok Handle 或运行时阈值。
 
 ### 2.1 Fixed、Solved 与 Required/Preferred
 
@@ -315,8 +314,8 @@ Canonical JSON bytes
   -> ResolvedLayoutInput + deterministic LayoutSolveReport
   -> normalized Part/Socket ordering + Collider derivation
   -> Definition Hash + Resource Lock
-  -> NormalizedWorldIR V3 + SHA-256
-  -> ExecutionPlan V4 + SHA-256
+  -> NormalizedWorldIR V4 + SHA-256
+  -> ExecutionPlan V5 + SHA-256
   -> Babylon Runtime Adapter + Havok
 ```
 
@@ -329,14 +328,14 @@ Compiler 版本会得到字节稳定的 Definition、IR 与 Plan 哈希。
 | 命令 | 成功 | 输入/语义失败 | 作用 |
 |---|---:|---:|---|
 | `validate <file> [--json]` | 0 | 2 | 校验完整管线并返回 IR/Plan 哈希 |
-| `build <file> --output <file> [--json]` | 0 | 2 | 原子写入 Build Artifact V3 |
+| `build <file> --output <file> [--json]` | 0 | 2 | 原子写入 Build Artifact V4 |
 | `run <file> [--port <port>] [--json]` | 0 | 2 | 启动本地交互式 Playground |
-| `capture <file> --output <png> [--snapshot <json>] [--json]` | 0 | 2 | 写入 PNG 与可选 Snapshot V3 |
+| `capture <file> --output <png> [--snapshot <json>] [--json]` | 0 | 2 | 写入 PNG 与可选 Runtime Snapshot V4 |
 | `registry list --kind subject-definition [--json]` | 0 | 2 | 稳定顺序列出主体定义 |
 | `registry describe --resource-ref <ref> [--json]` | 0 | 2 | 描述精确版本资源 |
 | `subject-definition validate <file> [--json]` | 0 | 2 | 独立校验 Package Definition |
 | `subject explain <world> --entity-id <id> [--json]` | 0 | 2 | 解释已编译主体 |
-| `layout validate <world> [--json]` | 0 | 2 | 校验 V3 Placement/Spatial/Constraint 并解析 Solver 输入 |
+| `layout validate <world> [--json]` | 0 | 2 | 校验 V4 Placement/Spatial/Constraint 并解析 Solver 输入 |
 | `layout solve <world> --output <dir> [--json]` | 0 | 2/3/4/5 | 事务性写 Report、IR 与 Integrity Manifest |
 | `layout explain <report> --entity-id <id> [--json]` | 0 | 2 | 解释一个最终 Placement |
 | `layout explain <report> --constraint-id <id> [--json]` | 0 | 2 | 解释一条 Constraint 结果 |
@@ -371,9 +370,9 @@ Recast Graph/Path、真实 Babylon/Havok `NullEngine` 固定 Tick Probe 和统�
 Report。Report 写到 `--output`，Canonical Evidence 写到兄弟目录
 `<report.json>.evidence/`；两者都使用 no-replace 发布。`passed / failed / incomplete /
 infrastructure` 分别退出 `0 / 2 / 3 / 1`，基础设施异常不会被伪装成 Route 失败。
-V3 输入会被明确拒绝，不会自动补空 Connectivity 或升级为 V4。
+非当前 AuthoringSpec V4 输入会被明确拒绝，不会自动补字段或迁移版本。
 
-## 7. Browser Protocol V4
+## 7. Browser Protocol V5
 
 Canonical 页面就绪后暴露 `window.__WORLDKIT__`：
 
@@ -387,21 +386,26 @@ interface WorldkitBrowserDiagnosticV1 {
 }
 
 interface WorldkitBrowserApiV5 {
-  version: 4;
-  ready(): Promise<WorldRuntimeSnapshotV3>;
-  getSnapshot(): WorldRuntimeSnapshotV3;
+  version: 5;
+  ready(): Promise<WorldRuntimeSnapshotV4>;
+  getSnapshot(): WorldRuntimeSnapshotV4;
   getDiagnostics(): readonly WorldkitBrowserDiagnosticV1[];
-  bindControl(request: BindControlRequestV2): ControlBindingReceiptV2;
-  runFixedInput(steps: readonly FixedInputV1[]): Promise<WorldRuntimeSnapshotV3>;
+  executeGameplayCommand(command: GameplayCommandV1): Promise<GameplayCommandReceiptV1>;
+  runFixedInput(steps: readonly FixedInputV1[]): Promise<WorldRuntimeSnapshotV4>;
+  getGameplayEvents(query: GameplayEventsQueryV1): GameplayEventsQueryResultV1;
+  getGameplayInspectionSnapshot(): GameplayInspectionSnapshotV1;
+  getWorldStateSnapshot(request: WorldStateSnapshotRequestV1): WorldStateSnapshotV1;
+  acquireRuntimeActivity(request: RuntimeActivityRequestV1): RuntimeActivityReceiptV1;
+  releaseRuntimeActivity(request: RuntimeActivityRequestV1): RuntimeActivityReceiptV1;
   getControlCaptureCapabilities(): ControlCaptureCapabilitiesV1;
-  waitForSimulationTick(tick: number): Promise<WorldRuntimeSnapshotV3>;
+  waitForSimulationTick(tick: number): Promise<WorldRuntimeSnapshotV4>;
   waitForRenderReady(tick: number): Promise<RenderReadyReceiptV1>;
   captureControlFrame(request: ControlCaptureRequestV1): Promise<RuntimeControlCaptureFrameV1>;
   captureScreenshot(): string;
-  reset(): WorldRuntimeSnapshotV3;
-  setPaused(paused: boolean): WorldRuntimeSnapshotV3;
+  reset(): Promise<WorldRuntimeSnapshotV4>;
+  setPaused(paused: boolean): WorldRuntimeSnapshotV4;
 
-  // V4 additive, read-only Route evidence
+  // V5 read-only Route evidence
   getRouteSummary(selector: RouteEvidenceSelectorV1): RouteSummaryQueryResultV1;
   getRoutePathReceipt(selector: RouteEvidenceSelectorV1): RoutePathReceiptQueryResultV2;
   getRouteRuntimeProbeReceipt(selector: RouteEvidenceSelectorV1): RouteRuntimeProbeReceiptQueryResultV2;
@@ -409,20 +413,21 @@ interface WorldkitBrowserApiV5 {
 }
 ```
 
-V4 完整保留 V3 的控制、Capture、Pause、Reset、截图以及可选 Capability Discovery/
-Subject Harness/Camera Authoring 方法，只增加上面的四个必选只读 Route getter；仓库
-contract test 会枚举 V3 方法集，防止升级时丢失旧能力。`window.__WORLDKIT__` 只暴露
-V4，不保留并行 V3 alias。
+上面列出 Browser V5 的 Host 控制、状态、Capture 与 Route 证据核心面；Capability
+Discovery、Subject Harness 和 Camera Authoring 方法以
+`WorldkitBrowserApiV5` 类型定义为准。`window.__WORLDKIT__` 只暴露 V5，不保留旧版本
+对象或方法别名。
 
 固定输入使用 `move-forward / move-backward / move-left / move-right / jump / run`
-和明确 tick 数。`bindControl` 用 `expectedControlledEntityId` 做原子比较并切换。
-Snapshot 通过 `subjectStatesByEntityId` 报告每个主体的 Definition 身份、Subject
-Origin 位置、速度、`ground / air` 介质与
-`idle / walk / run / jump` 的 `activeActionId`。
+和明确 tick 数。控制权通过 `executeGameplayCommand` 提交关闭的 `control.bind` /
+`control.release` 命令，并用 `expectedPossession` 做原子比较；Runtime 不从启动候选或
+旧 Snapshot 字段推断控制目标。Snapshot V4 通过 `world.gameplayInspection`、
+`world.subjectStatesByEntityId` 和 `view.camera` 分别表达 Gameplay 权威状态、主体投影和
+相机状态；Babylon/Havok 的内部 handle 或 provider projection 不进入 Browser 合同。
 
 对于 Placement 世界，`getDiagnostics()` 还会发布只读、递归冻结的
 `WORLDKIT_LAYOUT_ASSERTION_SATISFIED` 证据。Browser 不暴露 Candidate、搜索、
-修改 Constraint 或重新布局接口；Runtime 只按 ExecutionPlan V4 复验 Required
+修改 Constraint 或重新布局接口；Runtime 只按 ExecutionPlan V5 复验 Required
 Assertion，失败即拒绝发布世界。
 
 对 Authoring V4 Route 世界，`worldkit run` 先在可信 Node 侧执行与 CLI 相同的
@@ -432,8 +437,8 @@ WorldPackage → Recast → Babylon/Havok Probe → Canonical Publication 链路
 未加载、Route 不存在或某类证据未发布时返回关闭的 `unavailable` 结果。Browser 不暴露
 Opaque Bytes、Graph Builder、任意 Query、Probe 启动、Provider Handle 或可变阈值。
 
-当前 Host 只有一个受信默认 Controller；同时创建多个 Controller、NDJSON
-长连接和按 Tick 批量输入属于后续控制协议，不应由调用方自行模拟。
+当前 Host 通过 Gameplay Command 明确绑定受控主体；调用方不得绕过该事务直接写
+Runtime 内部 Controller、Babylon 节点或 Havok Handle。
 
 ## 8. 当前能力边界
 
@@ -474,7 +479,7 @@ pnpm verify:rigged-subject
 ## 9. 旧场景与发布门禁
 
 现有 `OutdoorWorldSpec`、Three.js/Rapier 场景 DSL 和 Plan-first Agent 流水线
-继续作为兼容回归与创作实验运行；它们不是新程序的 Canonical JSON 接口。
+属于隔离的创作实验；它们不是 Canonical 协议的版本兼容层，也不是新程序的 JSON 接口。
 新集成不要依赖 `sdk-world-adapter.ts`，也不要直接写 Three/Babylon 对象。
 
 完整门禁：

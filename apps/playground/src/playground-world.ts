@@ -44,6 +44,14 @@ export interface FeatureInspection {
   }[];
 }
 
+/** Internal catalog metadata kept outside the Canonical Runtime Snapshot. */
+export interface PlaygroundWorldMetadataV1 {
+  readonly sceneCatalogId: string;
+  readonly worldSpec?: OutdoorWorldSpec;
+  readonly planArtifacts?: DerivedWorldPlanArtifacts;
+  readonly featureInspections: readonly FeatureInspection[];
+}
+
 export interface WorldSnapshot {
   adapter: string;
   frame: number;
@@ -117,6 +125,33 @@ export interface PlaygroundWorldAdapter {
   dispose(): void;
 }
 
+/**
+ * Rendering-only surface for planning and visual artifact production.
+ *
+ * This boundary intentionally excludes Gameplay control, fixed simulation,
+ * snapshots, and subscriptions. Canonical Runtime/Browser ownership belongs to
+ * the Gameplay host, never to the legacy Three.js artifact renderer.
+ */
+export interface PlaygroundArtifactRenderer {
+  readonly name: string;
+  readonly canvas: HTMLCanvasElement;
+  mount(container: HTMLElement): void;
+  render(): void;
+  restoreOpeningView(): void;
+  captureScreenshot(): string;
+  captureCompositionMask(): string;
+  analyzeOpeningComposition(): OpeningCompositionReport | null;
+  exportOpeningFrame(report?: OpeningCompositionReport): Promise<string>;
+  getWorldSpec(): OutdoorWorldSpec | null;
+  getPlanArtifacts(): DerivedWorldPlanArtifacts | null;
+  capturePlanningView(kind: PlanningViewKind): string;
+  getVisualPrototypes(): readonly VisualPrototypeSpec[];
+  captureWhiteboxTriview(prototypeId: string): string;
+  exportWhiteboxTriviews(): Promise<readonly string[]>;
+  inspectFeatures(): readonly FeatureInspection[];
+  dispose(): void;
+}
+
 export interface PlaygroundAutomationApi {
   version: 3;
   getSnapshot(): WorldSnapshot;
@@ -136,9 +171,28 @@ export interface PlaygroundAutomationApi {
   setPaused(paused: boolean): WorldSnapshot;
 }
 
+export interface PlaygroundArtifactAutomationApiV1 {
+  readonly version: 1;
+  inspectFeatures(): readonly FeatureInspection[];
+  captureScreenshot(): string;
+  captureCompositionMask(): string;
+  analyzeOpeningComposition(): OpeningCompositionReport | null;
+  exportOpeningFrame(report?: OpeningCompositionReport): Promise<string>;
+  getWorldSpec(): OutdoorWorldSpec | null;
+  getPlanArtifacts(): DerivedWorldPlanArtifacts | null;
+  capturePlanningView(kind: PlanningViewKind): string;
+  getVisualPrototypes(): readonly VisualPrototypeSpec[];
+  captureWhiteboxTriview(prototypeId: string): string;
+  exportWhiteboxTriviews(): Promise<readonly string[]>;
+}
+
+export type PlaygroundBrowserAutomationApi =
+  | PlaygroundAutomationApi
+  | PlaygroundArtifactAutomationApiV1;
+
 declare global {
   interface Window {
-    __WHITEBOX_PLAYGROUND__: PlaygroundAutomationApi;
+    __WHITEBOX_PLAYGROUND__: PlaygroundBrowserAutomationApi;
     __WORLDKIT__?: WorldkitBrowserApiV5;
   }
 }

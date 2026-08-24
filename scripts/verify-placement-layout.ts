@@ -17,10 +17,9 @@ import { chromium, type Browser, type BrowserContext, type Page } from "playwrig
 
 import {
   parseAuthoringSpecV4,
-  resolveAuthoringLayoutV3,
+  resolveAuthoringLayoutV4,
   sha256CanonicalJson,
   stringifyCanonicalJson,
-  type AuthoringSpecV3,
   type AuthoringSpecV4,
   type NormalizedWorldIRV4,
 } from "@whitebox-world/authoring";
@@ -552,32 +551,8 @@ function conflictInput(resolved: ResolvedLayoutInputV1): ResolvedLayoutInputV1 {
   };
 }
 
-function projectPlacementSpecToV3(spec: AuthoringSpecV4): AuthoringSpecV3 {
-  const { traversalAreas: _traversalAreas, ...spatial } = structuredClone(
-    spec.spatial,
-  );
-  return {
-    ...structuredClone(spec),
-    schemaVersion: 3,
-    resources: {
-      ...structuredClone(spec.resources),
-      prototypes: spec.resources.prototypes.map((prototype) => {
-        const {
-          traversalSurfaceBindings: _traversalSurfaceBindings,
-          ...projectedPrototype
-        } = structuredClone(prototype);
-        return projectedPrototype;
-      }),
-    },
-    spatial,
-    constraints: {
-      placements: structuredClone([...spec.constraints.placements]),
-    },
-  };
-}
-
 function runNegativeGates(spec: AuthoringSpecV4, solvedReport: LayoutSolveReportV1) {
-  const resolved = resolveAuthoringLayoutV3(projectPlacementSpecToV3(spec));
+  const resolved = resolveAuthoringLayoutV4(spec);
   assert.equal(resolved.ok, true, JSON.stringify(resolved.diagnostics));
   assert.ok(resolved.value !== undefined && resolved.resolvedSolverProfile !== undefined);
   const conflict = solveLayoutV1(

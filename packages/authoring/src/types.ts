@@ -13,7 +13,7 @@ import type {
   RelationshipProfileV1,
   RenderBindingProfileV1,
   SubjectBodyTopologyV2,
-  SubjectResourceRegistryV2,
+  SubjectResourceRegistryV3,
 } from "@whitebox-world/subject-registry";
 
 export type Vec2 = readonly [x: number, z: number];
@@ -227,6 +227,7 @@ export interface PackageSubjectDefinitionV1 {
   id: string;
   version: 1;
   kind: "subject-definition";
+  authoringAvailability: "recommended" | "advanced" | "experimental";
   category: "human" | "animal" | "custom";
   bodyTopology: "biped" | "quadruped" | "custom";
   semanticClassId: string;
@@ -245,7 +246,20 @@ export interface PackageSubjectDefinitionV1 {
     physicsBodyProfileRef: string;
     locomotionProfileRef: string;
     controlFeelProfileRef: string;
+    allowedControlFeelProfileRefs: readonly string[];
+    motion: {
+      defaultMotionProfileRef: string;
+      optionalMotionProfileRefs: readonly string[];
+      fallbackMotionProfileRef: string;
+    };
+    controlProfileRef: string;
+    cameraContextProfileRef: string;
+    mediumProfileRef: string;
+    harnessProfileRef: string;
   };
+  relationshipCapabilityRefs: readonly string[];
+  actionOrPoseSetRef: string;
+  renderBindingProfileRef: string;
   aiMetadata: {
     displayName: string;
     description: string;
@@ -314,7 +328,7 @@ export interface AuthoringDocumentBase {
 }
 
 export interface NormalizeAuthoringOptions {
-  subjectResourceRegistry?: SubjectResourceRegistryV2;
+  subjectResourceRegistry?: SubjectResourceRegistryV3;
 }
 
 export interface NormalizeAuthoringBaseResult
@@ -466,7 +480,7 @@ export interface NormalizedSubjectDefinitionV2 {
     physicsBodyProfileRef: string;
     locomotionProfileRef: string;
   };
-  capabilityAssembly?: {
+  capabilityAssembly: {
     authoringAvailability: "recommended" | "advanced" | "experimental";
     physicsBodyProfileRef: string;
     locomotionProfileRef: string;

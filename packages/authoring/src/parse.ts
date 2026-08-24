@@ -10,8 +10,6 @@ import type {
   AuthoringDiagnostic,
   AuthoringResult,
 } from "./types";
-import type { AuthoringSpecV3 } from "./types-v3.js";
-import { validateAuthoringSpecV3 } from "./validate-v3.js";
 
 const MAX_AUTHORING_JSON_BYTES = 8 * 1024 * 1024;
 
@@ -98,34 +96,4 @@ export function parseCanonicalJson(sourceText: string): AuthoringResult<unknown>
     return { ok: false, diagnostics: duplicateDiagnostics };
   }
   return { ok: true, value: JSON.parse(sourceText) as unknown, diagnostics: [] };
-}
-
-export function parseAuthoringSpecJson(sourceText: string): AuthoringResult<AuthoringSpecV3> {
-  const parsed = parseCanonicalJson(sourceText);
-  if (!parsed.ok) return { ok: false, diagnostics: parsed.diagnostics };
-
-  const value = parsed.value;
-  if (
-    value !== null &&
-    typeof value === "object" &&
-    (value as { kind?: unknown }).kind === "worldkit-authoring-spec" &&
-    Object.hasOwn(value, "schemaVersion") &&
-    (value as { schemaVersion?: unknown }).schemaVersion !== 3
-  ) {
-    const version = (value as { schemaVersion?: unknown }).schemaVersion;
-    return {
-      ok: false,
-      diagnostics: [
-        {
-          severity: "error",
-          code: "AUTHORING_SCHEMA_VERSION_NOT_SUPPORTED",
-          instancePath: "/schemaVersion",
-          message: `Authoring schema version '${String(version)}' is not supported.`,
-          details: { supportedSchemaVersions: [3] },
-        },
-      ],
-    };
-  }
-
-  return validateAuthoringSpecV3(value);
 }

@@ -93,7 +93,7 @@ Do not modify `sdk-world-adapter.ts`, physics, camera, or rendering code merely 
 - `world.player.spawn(...)` exactly once.
 - `world.atmosphere.set(...)` for sky/fog/sun semantics.
 
-`world.player.spawn(...)` uses the SDK's Three.js-facing convention: `facingRadians: 0` faces `-Z`, while `Math.PI` faces `+Z`. For a composition-critical opening view, set `camera: { pitchRadians, distance, fovDegrees, targetHeight }`; a larger positive pitch looks farther downward. Supported pitch is `-0.95..0.65`, distance is `1.8..8m`, and target height is `0.5..4.5m`. Keep these as initial framing choices only—the SDK still owns runtime camera controls.
+In the **Legacy/catalog scene workflow only**, `world.player.spawn(...)` uses the old Three.js-facing convention: `facingRadians: 0` faces `-Z`, while `Math.PI` faces `+Z`. This is not a Canonical Babylon Runtime contract. For a composition-critical opening view in that Legacy workflow, set `camera: { pitchRadians, distance, fovDegrees, targetHeight }`; a larger positive pitch looks farther downward. Supported pitch is `-0.95..0.65`, distance is `1.8..8m`, and target height is `0.5..4.5m`. Keep these as initial framing choices only—the SDK still owns runtime camera controls.
 
 When built-ins are insufficient, define a local `defineWorldFeature(...)` and use only its tracked `BuildContext`. Register custom terrain through `world.terrain.custom(...)`. Never add opaque objects directly to `THREE.Scene` from a scene module.
 

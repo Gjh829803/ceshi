@@ -2,17 +2,14 @@ import { readFile } from "node:fs/promises";
 import path from "node:path";
 
 import {
-  normalizeAuthoringSpec,
   normalizeAuthoringSpecV4,
-  parseAuthoringSpecJson,
   parseAuthoringSpecV4,
   type AuthoringDiagnostic,
   type AuthoringSpecV4,
   type NormalizeAuthoringResultV4,
-  type NormalizedWorldIRV3,
   type NormalizedWorldIRV4,
 } from "@whitebox-world/authoring";
-import { compileWorld, compileWorldV5 } from "@whitebox-world/compiler";
+import { compileWorldV5 } from "@whitebox-world/compiler";
 import { createCoreGameplayBootstrapV1 } from "@whitebox-world/gameplay";
 import {
   createGameplayBootstrapResourceLockEntryV1,
@@ -20,7 +17,6 @@ import {
 } from "@whitebox-world/gameplay-contracts";
 import type {
   CompileDiagnostic,
-  ExecutionPlanV4,
   ExecutionPlanV5,
 } from "@whitebox-world/runtime-contracts";
 import { isNil } from "lodash-es";
@@ -42,17 +38,6 @@ export interface WorldkitFailure {
   ok: false;
   exitCode: 2;
   diagnostics: readonly WorldkitDiagnostic[];
-}
-
-export interface WorldkitPipelineSuccess {
-  ok: true;
-  exitCode: 0;
-  diagnostics: readonly [];
-  absoluteInputPath: string;
-  normalizedWorldIr: NormalizedWorldIRV3;
-  normalizedWorldIrHash: string;
-  executionPlan: ExecutionPlanV4;
-  executionPlanHash: string;
 }
 
 export interface WorldkitRoutePipelineSuccess {
@@ -138,47 +123,6 @@ export async function readWorldkitInput(
       { cause: error instanceof Error ? error.message : String(error) },
     );
   }
-}
-
-export async function loadWorldkitPipeline(
-  inputPath: string,
-): Promise<WorldkitPipelineSuccess | WorldkitFailure> {
-  const input = await readWorldkitInput(inputPath);
-  if (!input.ok) return input;
-
-  const parsed = parseAuthoringSpecJson(input.sourceText);
-  if (!parsed.ok || parsed.value === undefined) {
-    return { ok: false, exitCode: 2, diagnostics: parsed.diagnostics };
-  }
-  const normalized = normalizeAuthoringSpec(parsed.value);
-  if (
-    !normalized.ok ||
-    normalized.value === undefined ||
-    normalized.normalizedWorldIrHash === undefined
-  ) {
-    return { ok: false, exitCode: 2, diagnostics: normalized.diagnostics };
-  }
-  const compiled = compileWorld({
-    normalizedWorldIr: normalized.value,
-    normalizedWorldIrHash: normalized.normalizedWorldIrHash,
-  });
-  if (
-    !compiled.ok ||
-    compiled.executionPlan === undefined ||
-    compiled.executionPlanHash === undefined
-  ) {
-    return { ok: false, exitCode: 2, diagnostics: compiled.diagnostics };
-  }
-  return {
-    ok: true,
-    exitCode: 0,
-    diagnostics: [],
-    absoluteInputPath: input.absoluteInputPath,
-    normalizedWorldIr: normalized.value,
-    normalizedWorldIrHash: normalized.normalizedWorldIrHash,
-    executionPlan: compiled.executionPlan,
-    executionPlanHash: compiled.executionPlanHash,
-  };
 }
 
 export async function loadWorldkitRoutePipeline(

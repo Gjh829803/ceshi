@@ -8,7 +8,7 @@
 ## 1. 一句话定义
 
 这是一个面向创作 Agent 的语义白膜游戏 SDK：上游可以走 Plan-first
-场景创作链路，也可以直接交付 Canonical Authoring V3 JSON；SDK 把世界与
+场景创作链路，也可以直接交付 Canonical Authoring V4 JSON；SDK 把世界与
 主体定义确定性编译成可运行、可观察、带物理的白膜世界，未来实时世界模型
 再把白膜条件渲染成最终画面。
 
@@ -56,15 +56,15 @@ Director LLM → Render Directive SDK ────────────┘
 
 第一期 Alpha 已证明以下链路可以运行：
 
-- 基础世界使用 Canonical Authoring V3 → NormalizedWorldIR V3 → ExecutionPlan V4；
-  Route Connectivity 使用干净升级后的 V4 → IR V4 → ExecutionPlan V5。两者都保持严格
-  JSON、精确版本 Registry、Package 局部 Primitive Subject Definition、Socket、自动
-  Capsule、Definition Hash 和 Resource Lock。
+- 所有 Canonical 世界统一使用 AuthoringSpec V4 → NormalizedWorldIR V4 →
+  ExecutionPlan V5；这条唯一当前链路保持严格 JSON、精确版本 Registry、Package
+  局部 Primitive Subject Definition、Socket、自动 Capsule、Definition Hash 和
+  Resource Lock。未发布的旧版本已删除，不提供兼容解析或字段别名。
 - Placement Solver S1 已交付 Fixed/Solved Placement、Polygon Region、Polyline Route、
   Screen Region、八种关闭 Constraint、Required/Preferred、确定性 Report、CLI 和
   Browser/Havok 复验；海湾 Fixture 的 19 条约束已进入回归。
 - 一个内置人形与两个共享 Package Definition 的四足代理可以同时生成；三个
-  Subject 拥有独立 Havok Controller/状态，Browser Protocol V4 完整保留原控制、
+  Subject 拥有独立 Havok Controller/状态，Browser Protocol V5 提供 Gameplay Command、
   固定输入、复位、查询 Snapshot 和截图。
 - `worldkit` 支持校验、构建、运行、截图、Registry Discovery、独立 Definition
   校验、Subject Explain、Take validate/inspect/run、Capture validate/inspect，以及
@@ -74,7 +74,7 @@ Director LLM → Render Directive SDK ────────────┘
   ExecutionPlan V5 世界依次物化为最小正式
   WorldPackage Build Receipt、Validation Subject、Recast Graph/Path、真实
   Babylon/Havok `NullEngine` 固定 Tick Probe 和 Canonical Evidence/Report；Browser
-  Protocol V4 只增加 Route Summary、Path Receipt、Probe Receipt、Overlay 四个只读
+  Protocol V5 通过 Route Summary、Path Receipt、Probe Receipt、Overlay 四个只读
   getter，页面不构图、不运行 Probe、不生产证据。
 - Simulation Take V1 把 Control/Camera Keyframe 编译为 60 Hz 固定 Tick 与精确 Capture
   Schedule；Babylon 从同一 Render Ready 状态输出 Neutral、Depth、Semantic、Instance、
@@ -161,13 +161,13 @@ Validation Report 以及完整 P0.1。S1 证明的是一个受控纵向切片，
 Validation Subject 绑定五个权威 Hash，再用 Recast Graph/Path 与真实 Babylon/Havok
 `NullEngine` Character Controller Probe 生成 Canonical Route Evidence 和统一 Report。
 `worldkit run` 复用同一可信链路，通过 Host 私有、只读传输把证据注入 Browser
-Protocol V4；页面只读取 Route Summary、Path Receipt、Probe Receipt 和 Overlay。
+Protocol V5；页面只读取 Route Summary、Path Receipt、Probe Receipt 和 Overlay。
 Task 9 的 11 个 Authoring V4 Golden/Adversarial Fixture 与
 `pnpm verify:route-r1-heightfield` 已进入回归。终审记录见
 [R1 Heightfield Runtime Review](reviews/2026-08-22-route-r1-heightfield-runtime-review.md)。
 
-未完成：R1b 静态平台/Surface→Collider Subshape，以及完整 M5 验收。V3 输入明确不进入
-Route Verification；页面也不会成为备用 Evidence Producer。
+未完成：R1b 静态平台/Surface→Collider Subshape，以及完整 M5 验收。非当前
+AuthoringSpec V4 输入会在统一入口严格拒绝；页面也不会成为备用 Evidence Producer。
 
 ### Simulation Take / Control Capture V1：首个五 Pass 切片
 
@@ -214,8 +214,8 @@ Video Subject；Profile 组合/Override；`verify compare`；Browser/CI Evidence
 5. [Plan-first 世界创作协议](12-plan-first-world-authoring.md)：如何从输入得到可追踪世界和规划工件。
 6. [多 Agent 世界创作流水线](13-multi-agent-world-authoring.md)：三个 Agent 的权限、工件和门禁。
 7. [能力分层与体验路线](14-capability-levels-and-experience-roadmap.md)：SDK、World Model 和玩家体验如何逐级增长。
-8. [Canonical Authoring V3/V4 快速接入](17-canonical-json-quickstart.md)：AI/CLI
-   的基础世界与 Route 协议、Placement Solver、Package Definition、Route Verification 和 Browser V4。
+8. [Canonical Authoring V4 快速接入](17-canonical-json-quickstart.md)：AI/CLI
+   的基础世界与 Route 协议、Placement Solver、Package Definition、Route Verification 和 Browser V5。
 9. [AI-first LEGO Game SDK 生产设计](superpowers/specs/2026-08-17-ai-first-lego-game-sdk-design.md)：面向重构的长期 Schema、Compiler、Runtime、CLI 和门禁设计。
 10. [Placement Constraint 与确定性 Layout Solver](superpowers/specs/2026-08-19-placement-constraint-layout-solver-design.md)：AI 如何表达空间意图，SDK 如何生成最终 Transform。
 11. [Simulation Take 与 Control Capture Bundle](superpowers/specs/2026-08-19-simulation-take-control-capture-design.md)：世界、操作/镜头和多 Pass 控制制品如何分离。

@@ -13,6 +13,7 @@ const SUBJECT_DEFINITION_REFS = [
   "worldkit://subject-definition/humanoid.g-bot@1",
   "worldkit://subject-definition/humanoid.rigged-golden@1",
   "worldkit://subject-definition/humanoid.third-person@1",
+  "worldkit://subject-definition/quadruped.ground-proxy@1",
   "worldkit://subject-definition/surface-craft.ice-skimmer@1",
   "worldkit://subject-definition/vehicle.four-wheel.arcade@1",
   "worldkit://subject-definition/watercraft.kayak.surface@1",
@@ -65,7 +66,7 @@ function capabilityDefinitions(): readonly RegistrySubjectDefinitionV3[] {
 }
 
 describe("capability-driven subject registry", () => {
-  it("keeps immutable Subject versions and exact public defaults while retaining three CLI definitions", () => {
+  it("keeps immutable current Subject versions and exact public defaults", () => {
     expect(capabilityDefinitions().map((definition) => definition.resourceRef)).toEqual(
       SUBJECT_DEFINITION_REFS,
     );
@@ -73,7 +74,7 @@ describe("capability-driven subject registry", () => {
       builtInSubjectDefaultRegistry.listPublicDefaults()
         .map((entry) => entry.subjectDefinitionRef),
     ).toEqual(PUBLIC_DEFAULT_REFS);
-    expect(builtInSubjectResourceRegistry.listSubjectDefinitions()).toHaveLength(3);
+    expect(builtInSubjectResourceRegistry.listSubjectDefinitions()).toHaveLength(10);
   });
 
   it("discovers the primitive humanoid as one capability-driven V3 Definition", () => {

@@ -24,13 +24,10 @@ export function normalizeSubjectPresetCameraPreferenceV1(
   baseline: SubjectPresetLocalBaselineV1,
 ): string {
   if (preference === "auto") return "auto";
-  const exactPreference = preference === "first-person"
-    ? baseline.firstPersonCameraProfileRef
-    : preference;
-  return !isNil(exactPreference) && baseline.cameraProfiles.some(
-      (profile) => profile.resourceRef === exactPreference
+  return baseline.cameraProfiles.some(
+      (profile) => profile.resourceRef === preference
     )
-    ? exactPreference
+    ? preference
     : "auto";
 }
 

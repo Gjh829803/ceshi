@@ -8,24 +8,30 @@ import type { Scene } from "@babylonjs/core/scene.pure.js";
 import { sha256CanonicalJson } from "@whitebox-world/protocol";
 import { describe, expect, it } from "vitest";
 
-import { normalizeAuthoringSpec } from "@whitebox-world/authoring";
+import { normalizeAuthoringSpecV4 } from "@whitebox-world/authoring";
 import {
   assertPublishedMovementMediumSupported,
-  compileWorld,
+  compileWorldV5,
 } from "@whitebox-world/compiler";
 import {
-  createValidAuthoringSpec,
-  createValidPackageSubjectWorld,
+  createValidAuthoringSpecV4 as createValidAuthoringSpec,
+  createValidPackageSubjectWorldV4,
 } from "../../authoring/src/test-fixture";
 import type {
   ExecutionObjectV3,
-  ExecutionPlanV4,
+  ExecutionPlanV5,
+  ExecutionStaticColliderV1,
   FixedInputV1,
-  WorldRuntimeSnapshotV3,
 } from "@whitebox-world/runtime-contracts";
 
 import { BabylonWorldRuntime } from "./babylon-world-runtime";
-import { lockPublishedGroundFeels } from "./lock-published-ground-feels";
+import { bindRuntimeTestPossession } from "./runtime-test-possession";
+import { BABYLON_GAMEPLAY_RUNTIME_INTERNAL } from "./gameplay-runtime-internal";
+import type { BabylonRuntimeProjectionV1 } from "./runtime-projection";
+import {
+  compileRuntimeTestPlanV5,
+  createRuntimeTestGameplayBootstrapLockV1,
+} from "./runtime-test-plan";
 import type { SubjectController } from "./subject-controller";
 
 const MEDIUM_FEEL_REF = "worldkit://control-feel-profile/humanoid.medium-ground@1";
@@ -44,8 +50,8 @@ const havokWasmBinary = havokWasmBytes.buffer.slice(
   havokWasmBytes.byteOffset + havokWasmBytes.byteLength,
 ) as ArrayBuffer;
 
-function compileFlatPackagePlan(): ExecutionPlanV4 {
-  const spec = createValidPackageSubjectWorld();
+function compileFlatPackagePlan(): ExecutionPlanV5 {
+  const spec = createValidPackageSubjectWorldV4();
   spec.nodes = spec.nodes.map((node) =>
     node.kind === "terrain" && node.components.terrain.source.kind === "procedural"
       ? {
@@ -64,22 +70,7 @@ function compileFlatPackagePlan(): ExecutionPlanV4 {
         }
       : node,
   );
-  const normalized = normalizeAuthoringSpec(spec);
-  if (
-    !normalized.ok ||
-    normalized.value === undefined ||
-    normalized.normalizedWorldIrHash === undefined
-  ) {
-    throw new Error(`Fixture normalize failed: ${JSON.stringify(normalized.diagnostics)}`);
-  }
-  const compiled = compileWorld({
-    normalizedWorldIr: normalized.value,
-    normalizedWorldIrHash: normalized.normalizedWorldIrHash,
-  });
-  if (!compiled.ok || compiled.executionPlan === undefined) {
-    throw new Error(`Fixture compile failed: ${JSON.stringify(compiled.diagnostics)}`);
-  }
-  return lockPublishedGroundFeels(compiled.executionPlan);
+  return compileRuntimeTestPlanV5(spec);
 }
 
 /**
@@ -89,7 +80,7 @@ function compileFlatPackagePlan(): ExecutionPlanV4 {
 function playerOnlyPlan(options: {
   spawnMetersXYZ: readonly [number, number, number];
   objects?: readonly ExecutionObjectV3[];
-}): ExecutionPlanV4 {
+}): ExecutionPlanV5 {
   const base = compileFlatPackagePlan();
   const player = base.subjects.find((subject) => subject.entityId === "player")!;
   return {
@@ -102,6 +93,21 @@ function playerOnlyPlan(options: {
     },
     waters: [],
     objects: [...(options.objects ?? [])],
+    staticColliders: (options.objects ?? []).flatMap((object) =>
+      object.primitive.kind === "cone"
+        ? []
+        : [{
+            entityId: object.entityId,
+            logicalSubshapeId: "primary",
+            colliderSubshapeId: `collider:${object.entityId}:primary`,
+            colliderHash: sha256CanonicalJson({
+              primitive: object.primitive,
+              transform: object.transform,
+            }) as `sha256:${string}`,
+            transform: object.transform,
+            shape: object.primitive as ExecutionStaticColliderV1["shape"],
+          }],
+    ),
     subjects: [
       {
         ...player,
@@ -133,9 +139,9 @@ function staticBox(options: {
 }
 
 async function createConformanceRuntime(
-  executionPlan: ExecutionPlanV4,
+  executionPlan: ExecutionPlanV5,
 ): Promise<BabylonWorldRuntime> {
-  return BabylonWorldRuntime.create({
+  const runtime = await BabylonWorldRuntime.create({
     executionPlan,
     havokWasmBinary,
     engineFactory: () =>
@@ -147,10 +153,15 @@ async function createConformanceRuntime(
         lockstepMaxSteps: 4,
       }),
   });
+  await bindRuntimeTestPossession(
+    runtime,
+    executionPlan.initialControlledEntityId,
+  );
+  return runtime;
 }
 
 type SubjectRuntimeState =
-  WorldRuntimeSnapshotV3["subjectStatesByEntityId"][string];
+  BabylonRuntimeProjectionV1["subjectStatesByEntityId"][string];
 
 function fixedTickStateHash(state: SubjectRuntimeState): string {
   return createHash("sha256")
@@ -346,6 +357,7 @@ describe("P1.5 conformance: closed Ground/Air Feel slice", () => {
       // A 0.4 m airborne spawn republishes as air from checkSupport, not as
       // stale pre-reset ground state.
       expect(afterReset.subjectStatesByEntityId.player!.movementMedium).toBe("air");
+      await bindRuntimeTestPossession(airborneRuntime, "player");
 
       // Coyote and jump buffer were zeroed by the reset: a fresh jump press on
       // the first airborne tick must not take off from pre-reset ground time.
@@ -585,6 +597,7 @@ describe("P1.5 conformance: closed Ground/Air Feel slice", () => {
 
       const held = await measureJumpApex(["jump"]);
       runtime.reset();
+      await bindRuntimeTestPossession(runtime, "player");
       await runtime.runFixedInput({ actions: [], ticks: 10 });
       const released = await measureJumpApex([]);
 
@@ -615,13 +628,12 @@ describe("P1.5 conformance: closed Ground/Air Feel slice", () => {
       const baselineListeners = countListeners();
 
       for (let cycle = 0; cycle < 3; cycle += 1) {
-        expect(
-          runtime.bindControl({
-            controllerId: "controller-primary",
-            expectedControlledEntityId: "player",
+        const possession = await runtime[BABYLON_GAMEPLAY_RUNTIME_INTERNAL]()
+          .preparePossessionTarget({
+            mode: "possessed",
             controlledEntityId: "pack-animal-a",
-          }),
-        ).toMatchObject({ status: "committed" });
+          });
+        possession.commitPrepared();
         await runtime.runFixedInput({ actions: ["move-forward", "jump"], ticks: 20 });
         runtime.renderFrame();
         expect(
@@ -632,7 +644,7 @@ describe("P1.5 conformance: closed Ground/Air Feel slice", () => {
         ).toBe(true);
         const reset = runtime.reset();
 
-        expect(reset.controlledEntityId).toBe("player");
+        expect(reset.possessionTarget).toEqual({ mode: "unbound" });
         expect(reset.resources.bodies).toBe(baselineResources.bodies);
         expect(reset.resources.meshes).toBe(baselineResources.meshes);
         expect(internals.subjectControllersByEntityId.size).toBe(
@@ -661,7 +673,7 @@ describe("P1.5 conformance: closed Ground/Air Feel slice", () => {
       throw new Error("Expected the valid fixture to contain a Subject node.");
     }
     subject.subjectDefinitionRef = "worldkit://subject-definition/humanoid.g-bot@1";
-    const normalized = normalizeAuthoringSpec(spec);
+    const normalized = normalizeAuthoringSpecV4(spec);
     if (!normalized.ok || normalized.value === undefined) {
       throw new Error(
         `G Bot fixture did not normalize: ${JSON.stringify(normalized.diagnostics)}`,
@@ -678,9 +690,11 @@ describe("P1.5 conformance: closed Ground/Air Feel slice", () => {
     } as typeof definition.capabilityAssembly.mediumProfile;
 
     expect(
-      compileWorld({
+      compileWorldV5({
         normalizedWorldIr: forged,
         normalizedWorldIrHash: sha256CanonicalJson(forged),
+        gameplayBootstrapResourceLock:
+          createRuntimeTestGameplayBootstrapLockV1(forged),
       }),
     ).toMatchObject({
       ok: false,

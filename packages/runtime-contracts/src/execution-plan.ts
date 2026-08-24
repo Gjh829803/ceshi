@@ -423,7 +423,7 @@ export interface ExecutionSubjectV3 {
    * Registry at compile time; the Runtime never reverse-reads the Registry.
    */
   availableControlFeels: readonly ExecutionSubjectV3["controlFeel"][];
-  capabilityAssembly?: ExecutionSubjectCapabilityAssemblyV1;
+  capabilityAssembly: ExecutionSubjectCapabilityAssemblyV1;
 }
 
 interface ExecutionCameraCore {
@@ -497,54 +497,8 @@ export interface ExecutionLayoutScreenRegionV1 {
   readonly maximumUv: readonly [u: number, v: number];
 }
 
-export interface ExecutionCameraV4 extends ExecutionCameraCore {
+export interface ExecutionCameraV5 extends ExecutionCameraCore {
   readonly aspectRatio: number;
-}
-
-export interface ExecutionPlanV4 {
-  readonly kind: "worldkit-execution-plan";
-  readonly schemaVersion: 4;
-  readonly id: string;
-  readonly seed: number;
-  readonly runtimeBackend: "babylon-havok";
-  readonly normalizedWorldIrHash: string;
-  readonly resourceLockHash: string;
-  readonly coordinateSystem: "right-handed-y-up-minus-z-forward";
-  readonly gravityMetersPerSecondSquaredXYZ: Vec3;
-  readonly atmospherePreset: "clear-day" | "golden-hour" | "overcast" | "night";
-  readonly terrain: ExecutionTerrainV3;
-  readonly waters: readonly ExecutionWaterV3[];
-  readonly objects: readonly ExecutionObjectV3[];
-  readonly subjectAssets: readonly ExecutionSubjectAssetV1[];
-  readonly rigProfiles: readonly ExecutionRigProfileV1[];
-  readonly animationSets: readonly ExecutionAnimationSetV1[];
-  readonly colliderProfiles: readonly ExecutionColliderProfileV1[];
-  readonly controlledEntityId: string;
-  readonly subjects: readonly ExecutionSubjectV3[];
-  readonly camera: ExecutionCameraV4;
-  readonly resourceUsage: Readonly<{
-    vertices: number;
-    triangles: number;
-    colliders: number;
-  }>;
-  readonly layout: Readonly<{
-    solverProfileRef: string;
-    resolvedVersion: string;
-    solverProfileHash: string;
-    layoutSolveReportHash: string;
-    regions: readonly ExecutionLayoutRegionV1[];
-    routes: readonly ExecutionLayoutRouteV1[];
-    screenRegions: readonly ExecutionLayoutScreenRegionV1[];
-    placementsByEntityId: Readonly<Record<string, ExecutionLayoutPlacementV1>>;
-    layoutAssertions: readonly ExecutionLayoutAssertionV1[];
-  }>;
-}
-
-export interface CompileWorldResultV4 {
-  readonly ok: boolean;
-  readonly executionPlan?: ExecutionPlanV4;
-  readonly executionPlanHash?: string;
-  readonly diagnostics: readonly CompileDiagnostic[];
 }
 
 export interface ExecutionHeightfieldTraversalSurfaceV1
@@ -723,12 +677,45 @@ export function canonicalExecutionResourceLockEntriesV1(
   return Object.freeze(rows);
 }
 
-export interface ExecutionPlanV5
-  extends Omit<ExecutionPlanV4, "schemaVersion" | "controlledEntityId"> {
+export interface ExecutionPlanV5 {
+  readonly kind: "worldkit-execution-plan";
   readonly schemaVersion: 5;
-  readonly initialControlledEntityId: string;
+  readonly id: string;
+  readonly seed: number;
+  readonly runtimeBackend: "babylon-havok";
   readonly authoringSpecHash: `sha256:${string}`;
+  readonly normalizedWorldIrHash: string;
+  readonly resourceLockHash: string;
   readonly resourceLockEntries: readonly ExecutionResourceLockEntryV1[];
+  readonly coordinateSystem: "right-handed-y-up-minus-z-forward";
+  readonly gravityMetersPerSecondSquaredXYZ: Vec3;
+  readonly atmospherePreset: "clear-day" | "golden-hour" | "overcast" | "night";
+  readonly terrain: ExecutionTerrainV3;
+  readonly waters: readonly ExecutionWaterV3[];
+  readonly objects: readonly ExecutionObjectV3[];
+  readonly subjectAssets: readonly ExecutionSubjectAssetV1[];
+  readonly rigProfiles: readonly ExecutionRigProfileV1[];
+  readonly animationSets: readonly ExecutionAnimationSetV1[];
+  readonly colliderProfiles: readonly ExecutionColliderProfileV1[];
+  readonly initialControlledEntityId: string;
+  readonly subjects: readonly ExecutionSubjectV3[];
+  readonly camera: ExecutionCameraV5;
+  readonly resourceUsage: Readonly<{
+    vertices: number;
+    triangles: number;
+    colliders: number;
+  }>;
+  readonly layout: Readonly<{
+    solverProfileRef: string;
+    resolvedVersion: string;
+    solverProfileHash: string;
+    layoutSolveReportHash: string;
+    regions: readonly ExecutionLayoutRegionV1[];
+    routes: readonly ExecutionLayoutRouteV1[];
+    screenRegions: readonly ExecutionLayoutScreenRegionV1[];
+    placementsByEntityId: Readonly<Record<string, ExecutionLayoutPlacementV1>>;
+    layoutAssertions: readonly ExecutionLayoutAssertionV1[];
+  }>;
   readonly traversal: Readonly<{
     surfaces: readonly ExecutionTraversalSurfaceV1[];
     traversalAreas: readonly ExecutionTraversalAreaV1[];
@@ -1433,7 +1420,8 @@ function validateSubject(input: unknown): void {
     "locomotionProfileRef",
     "controlFeel",
     "availableControlFeels",
-  ], ["capabilityAssembly"]);
+    "capabilityAssembly",
+  ]);
   requireString(value.entityId);
   requireString(value.subjectDefinitionRef);
   requireHash(value.subjectDefinitionHash);
@@ -1572,9 +1560,7 @@ function validateSubject(input: unknown): void {
   };
   validateFeel(value.controlFeel);
   dataArray(value.availableControlFeels).forEach(validateFeel);
-  if (Object.hasOwn(value, "capabilityAssembly")) {
-    validateCapabilityAssembly(value.capabilityAssembly);
-  }
+  validateCapabilityAssembly(value.capabilityAssembly);
 }
 
 function validateCamera(input: unknown): void {

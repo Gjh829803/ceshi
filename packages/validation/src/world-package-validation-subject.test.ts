@@ -412,7 +412,7 @@ describe("WorldPackageValidationSubjectV1 assembly", () => {
     })).toThrow("WORLD_PACKAGE_VALIDATION_SUBJECT_INPUT_INVALID");
   });
 
-  it("rejects unknown fields, raw hash bags, transitional identities, and V3 artifacts", () => {
+  it("rejects unknown fields and raw hash bags", () => {
     const { validationInput } = createFixture();
     expect(() => createWorldPackageValidationSubjectV1({
       ...validationInput,
@@ -433,28 +433,6 @@ describe("WorldPackageValidationSubjectV1 assembly", () => {
     } as unknown as CreateWorldPackageValidationSubjectInputV1)).toThrow(
       "WORLD_PACKAGE_VALIDATION_SUBJECT_INPUT_INVALID",
     );
-    for (const invalidReceipt of [
-      {
-        kind: "worldkit-transitional-world-package-identity",
-        schemaVersion: 1,
-        worldPackageRootHash: validationInput.worldPackageBuildReceipt.worldPackageRootHash,
-      },
-      {
-        kind: "worldkit-build-artifact",
-        schemaVersion: 3,
-        normalizedWorldIrHash:
-          validationInput.worldPackageBuildReceipt.manifest.normalizedWorldIrHash,
-        executionPlanHash:
-          validationInput.worldPackageBuildReceipt.manifest.executionPlanHash,
-      },
-    ]) {
-      expect(() => createWorldPackageValidationSubjectV1({
-        ...validationInput,
-        worldPackageBuildReceipt: invalidReceipt,
-      } as unknown as CreateWorldPackageValidationSubjectInputV1)).toThrow(
-        "WORLD_PACKAGE_VALIDATION_SUBJECT_INPUT_INVALID",
-      );
-    }
   });
 
   it("rejects all-zero child identities before they can become a subject", () => {

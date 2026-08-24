@@ -4,9 +4,14 @@ import { createRequire } from "node:module";
 import { NullEngine } from "@babylonjs/core/Engines/nullEngine.pure.js";
 import { describe, expect, it } from "vitest";
 
-import { loadAuthoringScene } from "../../../apps/playground/src/authoring-loader";
-import { createValidAuthoringSpec } from "../../authoring/src/test-fixture";
+// Test-only Registry access via a cross-workspace relative path; production
+// runtime-babylon src must not read the Registry.
+import { builtInSubjectResourceRegistry } from "../../subject-registry/src/index";
+
+import { createValidAuthoringSpecV4 } from "../../authoring/src/test-fixture";
 import { BabylonWorldRuntime } from "./babylon-world-runtime";
+import { bindRuntimeTestPossession } from "./runtime-test-possession";
+import { compileRuntimeTestPlanV5 } from "./runtime-test-plan";
 
 const havokWasmBytes = await readFile(
   createRequire(import.meta.url).resolve(
@@ -30,7 +35,7 @@ const ORBIT_REF = "worldkit://camera-profile/orbit.medium@1";
 const FOLLOW_REF = "worldkit://camera-profile/follow.medium@1";
 
 function createFlatTerrainCapabilitySpec() {
-  const spec = createValidAuthoringSpec();
+  const spec = createValidAuthoringSpecV4();
   const terrain = spec.nodes.find((node) => node.kind === "terrain");
   if (terrain?.kind !== "terrain") {
     throw new Error("Capability fixture terrain is missing.");
@@ -46,15 +51,17 @@ function createFlatTerrainCapabilitySpec() {
 
 async function createCameraPreviewChannelRuntime() {
   const subjectDefinitionRef = "worldkit://subject-definition/humanoid.g-bot@1";
-  const loaded = await loadAuthoringScene(
-    async () => new Response(JSON.stringify(createFlatTerrainCapabilitySpec())),
-    { subjectDefinitionRef },
-  );
-  if (!loaded.ok || loaded.executionPlan === undefined) {
-    throw new Error(`G Bot package failed to load: ${JSON.stringify(loaded.diagnostics)}`);
+  const spec = createFlatTerrainCapabilitySpec();
+  const subject = spec.nodes.find((node) => node.kind === "subject");
+  if (subject?.kind !== "subject") {
+    throw new Error("Camera preview fixture Subject is missing.");
   }
-  return BabylonWorldRuntime.create({
-    executionPlan: loaded.executionPlan,
+  subject.subjectDefinitionRef = subjectDefinitionRef;
+  const executionPlan = compileRuntimeTestPlanV5(spec, {
+    subjectResourceRegistry: builtInSubjectResourceRegistry,
+  });
+  const runtime = await BabylonWorldRuntime.create({
+    executionPlan,
     havokWasmBinary,
     subjectAssetResolver: {
       async resolveSubjectAsset() {
@@ -70,6 +77,8 @@ async function createCameraPreviewChannelRuntime() {
         lockstepMaxSteps: 4,
       }),
   });
+  await bindRuntimeTestPossession(runtime, executionPlan.initialControlledEntityId);
+  return runtime;
 }
 
 describe("camera preview channel stays out of Gameplay truth", () => {
@@ -124,6 +133,7 @@ describe("camera preview channel stays out of Gameplay truth", () => {
         renderCadenceHz: 30 | 60 | 120,
       ) => {
         runtime.reset();
+        await bindRuntimeTestPossession(runtime, "player");
         runtime.requestCameraProfile(ORBIT_REF);
         if (previewEnabled) {
           runtime.applyCameraPreview({
@@ -196,12 +206,14 @@ describe("camera preview channel stays out of Gameplay truth", () => {
 
       // Same fixed input with and without preview keeps Subject determinism.
       runtime.reset();
+      await bindRuntimeTestPossession(runtime, "player");
       runtime.requestCameraProfile(ORBIT_REF);
       const withoutPreview = await runtime.runFixedInput({
         actions: ["move-forward"],
         ticks: 30,
       });
       runtime.reset();
+      await bindRuntimeTestPossession(runtime, "player");
       runtime.requestCameraProfile(ORBIT_REF);
       runtime.applyCameraPreview({
         tuningByProfileRef: {
@@ -220,8 +232,13 @@ describe("camera preview channel stays out of Gameplay truth", () => {
       // authoring host may explicitly reapply its current working draft.
       runtime.requestCameraProfile(FOLLOW_REF);
       const reset = runtime.reset();
-      expect(reset.camera.activeCameraProfileRef).toBe(automaticProfileRef);
+      expect(reset.possessionTarget).toEqual({ mode: "unbound" });
       expect(runtime.getCameraPreviewState().tuningByProfileRef).toEqual({});
+      await bindRuntimeTestPossession(runtime, "player");
+      const afterRebindTick = await runtime.runFixedInput({ actions: [], ticks: 1 });
+      expect(afterRebindTick.camera.activeCameraProfileRef).toBe(
+        automaticProfileRef,
+      );
       runtime.requestCameraProfile(ORBIT_REF);
       expect(runtime.getCameraPreviewState().tuningByProfileRef[ORBIT_REF])
         .toBeUndefined();
@@ -246,6 +263,7 @@ describe("camera preview channel stays out of Gameplay truth", () => {
       });
 
       runtime.reset();
+      await bindRuntimeTestPossession(runtime, "player");
       runtime.requestCameraProfile(ORBIT_REF);
       runtime.applyCameraPreview({
         tuningByProfileRef: {

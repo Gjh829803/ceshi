@@ -1,18 +1,16 @@
 import { canonicalExecutionResourceLockEntriesV1 } from "@whitebox-world/runtime-contracts";
 
 import { sha256CanonicalJson } from "./canonical-json.js";
-import type {
-  NormalizedWorldBase,
-  NormalizedWorldResourcesV2,
-} from "./types.js";
-import type { AuthoringSpecV3 } from "./types-v3.js";
+import type { NormalizedWorldBase, NormalizedWorldResourcesV2 } from "./types.js";
 import type {
   AuthoringSpecV4,
   NormalizedWorldResourcesV4,
 } from "./types-v4.js";
 
-function buildCanonicalAuthoringIdentityV3(
-  spec: AuthoringSpecV3,
+const TRAVERSAL_SURFACE_PROFILE_RESOURCE_KIND = "traversal-surface-profile";
+
+function canonicalIdentityBaseV4(
+  spec: AuthoringSpecV4,
   normalizedBase: NormalizedWorldBase,
 ) {
   return {
@@ -97,14 +95,7 @@ function buildCanonicalAuthoringIdentityV3(
   };
 }
 
-export type CanonicalAuthoringIdentityV3 = ReturnType<
-  typeof buildCanonicalAuthoringIdentityV3
->;
-
-
-const TRAVERSAL_SURFACE_PROFILE_RESOURCE_KIND = "traversal-surface-profile";
-
-export function projectNormalizedWorldResourcesToV3LayoutIdentity(
+export function projectNormalizedWorldResourcesToLayoutIdentityV4(
   resources: NormalizedWorldResourcesV4,
 ): NormalizedWorldResourcesV2 {
   const prototypes = resources.prototypes.map((prototype) => {
@@ -127,54 +118,36 @@ export function projectNormalizedWorldResourcesToV3LayoutIdentity(
   };
 }
 
-export function canonicalAuthoringIdentityV3(
-  spec: AuthoringSpecV3,
-  normalizedBase: NormalizedWorldBase,
-): CanonicalAuthoringIdentityV3 {
-  return buildCanonicalAuthoringIdentityV3(spec, normalizedBase);
-}
-
 export function canonicalAuthoringIdentityV4(
   spec: AuthoringSpecV4,
   normalizedBase: NormalizedWorldBase,
 ) {
-  const { traversalAreas: _traversalAreas, ...spatial } = structuredClone(
-    spec.spatial,
-  );
-  const prototypes = spec.resources.prototypes.map((prototype) => {
-    const {
-      traversalSurfaceBindings: _traversalSurfaceBindings,
-      ...projectedPrototype
-    } = structuredClone(prototype);
-    return projectedPrototype;
-  });
-  const projectedV3: AuthoringSpecV3 = {
-    ...structuredClone(spec),
-    schemaVersion: 3,
-    resources: {
-      ...structuredClone(spec.resources),
-      prototypes,
-    },
-    spatial,
-    constraints: {
-      placements: structuredClone([...spec.constraints.placements]),
-    },
-  };
-  const v3Identity = canonicalAuthoringIdentityV3(projectedV3, normalizedBase);
+  const baseIdentity = canonicalIdentityBaseV4(spec, normalizedBase);
   return {
-    ...v3Identity,
-    schemaVersion: 4 as const,
+    ...baseIdentity,
     spatial: {
-      ...v3Identity.spatial,
+      ...baseIdentity.spatial,
       traversalAreas: [...spec.spatial.traversalAreas]
         .sort((left, right) => left.id.localeCompare(right.id))
         .map((row) => structuredClone(row)),
     },
     constraints: {
-      placements: v3Identity.constraints.placements,
+      placements: baseIdentity.constraints.placements,
       connectivity: [...spec.constraints.connectivity]
         .sort((left, right) => left.id.localeCompare(right.id))
         .map((row) => structuredClone(row)),
     },
   };
+}
+
+export function canonicalAuthoringLayoutIdentityV4(
+  spec: AuthoringSpecV4,
+  normalizedBase: NormalizedWorldBase,
+) {
+  return canonicalIdentityBaseV4(spec, {
+    ...normalizedBase,
+    resources: projectNormalizedWorldResourcesToLayoutIdentityV4(
+      normalizedBase.resources as NormalizedWorldResourcesV4,
+    ),
+  });
 }

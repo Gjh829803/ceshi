@@ -11,24 +11,27 @@ import {
 import { isNil } from "lodash-es";
 
 import { sha256CanonicalJson } from "./canonical-json.js";
-import { canonicalAuthoringIdentityV3 } from "./canonical-authoring-identity.js";
-import { normalizeAuthoringBaseV3 } from "./normalize.js";
+import { canonicalAuthoringLayoutIdentityV4 } from "./canonical-authoring-identity-v4.js";
+import { normalizeAuthoringBaseV4 } from "./normalize.js";
 import type {
   AuthoringDiagnostic,
   AuthoringResult,
-  NormalizeAuthoringOptions,
   NormalizedProceduralTerrainSourceV2,
   NormalizedWorldBase,
   PrimitivePrototypeSpecV2,
   TransformSpecV2,
 } from "./types.js";
 import type {
-  AuthoringSpecV3,
-  PlacementConstraintSpecV1,
-} from "./types-v3.js";
-import { validateAuthoringSpecV3 } from "./validate-v3.js";
+  AuthoringSpecV4,
+  NormalizeAuthoringOptionsV4,
+  PlacementConstraintSpecV1 as PlacementConstraintSpecV4,
+} from "./types-v4.js";
+import { validateAuthoringSpecV4 } from "./validate-v4.js";
 
-export interface ResolveAuthoringLayoutV3Result
+type LayoutAuthoringSpec = AuthoringSpecV4;
+type LayoutPlacementConstraint = PlacementConstraintSpecV4;
+
+export interface ResolveAuthoringLayoutV4Result
   extends AuthoringResult<ResolvedLayoutInputV1> {
   readonly resolvedSolverProfile?: ResolvedLayoutSolverProfileV1;
 }
@@ -120,7 +123,9 @@ function terrainHeightfield(normalized: NormalizedWorldBase): LayoutHeightfieldV
     if (sampledHeights.length !== columns * rows) {
       throw new Error("AUTHORING_TERRAIN_HEIGHT_SAMPLES_LENGTH_INVALID");
     }
-    heightSamplesMeters.push(...sampledHeights);
+    for (const heightMeters of sampledHeights) {
+      heightSamplesMeters.push(heightMeters);
+    }
   } else {
     for (let zIndex = 0; zIndex < rows; zIndex += 1) {
       const z = minimumZ + zIndex / (rows - 1) * sizeZ;
@@ -159,7 +164,7 @@ function halfExtents(prototype: PrimitivePrototypeSpecV2): readonly [number, num
   }
 }
 
-function constraintEntityIds(constraint: PlacementConstraintSpecV1): readonly string[] {
+function constraintEntityIds(constraint: LayoutPlacementConstraint): readonly string[] {
   switch (constraint.kind) {
     case "inside-region":
     case "outside-region":
@@ -179,7 +184,7 @@ function constraintEntityIds(constraint: PlacementConstraintSpecV1): readonly st
   }
 }
 
-function semanticReferenceDiagnostics(spec: AuthoringSpecV3): readonly AuthoringDiagnostic[] {
+function semanticReferenceDiagnostics(spec: LayoutAuthoringSpec): readonly AuthoringDiagnostic[] {
   const diagnostics: AuthoringDiagnostic[] = [];
   const nodeById = new Map(spec.nodes.map((node) => [node.id, node]));
   const regionIds = new Set(spec.spatial.regions.map((region) => region.id));
@@ -247,31 +252,59 @@ function semanticReferenceDiagnostics(spec: AuthoringSpecV3): readonly Authoring
   return diagnostics;
 }
 
-export function resolveAuthoringLayoutV3(
+export function resolveAuthoringLayoutV4(
   value: unknown,
-  options: NormalizeAuthoringOptions = {},
-): ResolveAuthoringLayoutV3Result {
-  const schema = validateAuthoringSpecV3(value);
-  if (!schema.ok || schema.value === undefined) return { ok: false, diagnostics: schema.diagnostics };
+  options: NormalizeAuthoringOptionsV4 = {},
+): ResolveAuthoringLayoutV4Result {
+  const schema = validateAuthoringSpecV4(value);
+  if (!schema.ok || schema.value === undefined) {
+    return { ok: false, diagnostics: schema.diagnostics };
+  }
   const spec = schema.value;
   let resolvedSolverProfile: ResolvedLayoutSolverProfileV1;
   try {
-    resolvedSolverProfile = resolveLayoutSolverProfileV1(spec.layout.solverProfileRef);
+    resolvedSolverProfile = resolveLayoutSolverProfileV1(
+      spec.layout.solverProfileRef,
+    );
   } catch {
     return {
       ok: false,
-      diagnostics: [diagnostic("AUTHORING_LAYOUT_PROFILE_NOT_FOUND", "/layout/solverProfileRef", `Layout Solver Profile '${spec.layout.solverProfileRef}' is unavailable.`, { solverProfileRef: spec.layout.solverProfileRef })],
+      diagnostics: [diagnostic(
+        "AUTHORING_LAYOUT_PROFILE_NOT_FOUND",
+        "/layout/solverProfileRef",
+        `Layout Solver Profile '${spec.layout.solverProfileRef}' is unavailable.`,
+        { solverProfileRef: spec.layout.solverProfileRef },
+      )],
     };
   }
   const referenceDiagnostics = semanticReferenceDiagnostics(spec);
   if (referenceDiagnostics.length > 0) {
     return { ok: false, diagnostics: referenceDiagnostics, resolvedSolverProfile };
   }
-  const normalizedBase = normalizeAuthoringBaseV3(spec, options);
+  const normalizedBase = normalizeAuthoringBaseV4(spec, options);
   if (!normalizedBase.ok || normalizedBase.value === undefined) {
-    return { ok: false, diagnostics: normalizedBase.diagnostics, resolvedSolverProfile };
+    return {
+      ok: false,
+      diagnostics: normalizedBase.diagnostics,
+      resolvedSolverProfile,
+    };
   }
-  const normalized = normalizedBase.value;
+  return resolveValidatedAuthoringLayout(
+    spec,
+    normalizedBase.value,
+    resolvedSolverProfile,
+    sha256CanonicalJson(
+      canonicalAuthoringLayoutIdentityV4(spec, normalizedBase.value),
+    ) as `sha256:${string}`,
+  );
+}
+
+function resolveValidatedAuthoringLayout(
+  spec: LayoutAuthoringSpec,
+  normalized: NormalizedWorldBase,
+  resolvedSolverProfile: ResolvedLayoutSolverProfileV1,
+  authoringSpecHash: `sha256:${string}`,
+): ResolveAuthoringLayoutV4Result {
   const prototypeByRef = new Map(normalized.resources.prototypes.map((prototype) => [
     `package://prototype/${prototype.id}@${prototype.version}`,
     prototype,
@@ -345,9 +378,7 @@ export function resolveAuthoringLayoutV3(
     kind: "worldkit-resolved-layout-input",
     schemaVersion: 1,
     id: spec.id,
-    authoringSpecHash: sha256CanonicalJson(
-      canonicalAuthoringIdentityV3(spec, normalized),
-    ) as `sha256:${string}`,
+    authoringSpecHash,
     registryLockHash: normalized.resources.resourceLockHash as `sha256:${string}`,
     solverProfile: {
       solverProfileRef: resolvedSolverProfile.resourceRef,

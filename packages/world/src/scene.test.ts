@@ -1,8 +1,20 @@
 import { describe, expect, it } from "vitest";
 
 import { defineWorldFeature } from "./features";
-import { compileOutdoorScene, defineOutdoorScene, SceneCompilationError } from "./scene";
+import {
+  compileOutdoorScene,
+  defineOutdoorScene,
+  SceneCompilationError,
+  type OutdoorSceneAuthoringContext,
+} from "./scene";
 import { Heightfield, HeightfieldGrid } from "./terrain";
+
+type Expect<T extends true> = T;
+type TerrainAuthoringApiHasNoDeprecatedTiledRolling = Expect<
+  "tiledRolling" extends keyof OutdoorSceneAuthoringContext["terrain"]
+    ? false
+    : true
+>;
 
 describe("outdoor scene authoring", () => {
   it("samples the canonical rendered triangle across an asymmetric saddle cell", () => {

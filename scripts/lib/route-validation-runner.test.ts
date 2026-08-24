@@ -15,8 +15,6 @@ import {
 import type { ResolvedWorldPackageResourceArtifactV1 } from "@whitebox-world/world-package";
 import { isNil } from "lodash-es";
 
-import { createValidAuthoringSpec } from "../../packages/authoring/src/test-fixture";
-
 import {
   canonicalFixtureFaultInjectionV1,
   createWorldPackageSubjectAssetResolverV1,
@@ -223,15 +221,22 @@ describe("Route validation trusted runner", () => {
     ).transformNode.metadata?.worldkitEntityId).toBe("terrain-main");
   });
 
-  it("rejects Authoring V3 before creating Runtime infrastructure", async () => {
+  it("rejects non-canonical current Authoring input before creating Runtime infrastructure", async () => {
     const temporaryDirectory = await mkdtemp(
-      path.join(tmpdir(), "worldkit-route-runner-v3-"),
+      path.join(tmpdir(), "worldkit-route-runner-invalid-"),
     );
     try {
+      const fixture = JSON.parse(await readFile(
+        new URL("../../examples/traversal/route-r0-contract.json", import.meta.url),
+        "utf8",
+      )) as { authoringSpec: object };
       const inputPath = path.join(temporaryDirectory, "world.json");
       await writeFile(
         inputPath,
-        JSON.stringify(createValidAuthoringSpec()),
+        JSON.stringify({
+          ...fixture.authoringSpec,
+          unexpectedAlias: { controlledEntityId: "player" },
+        }),
         "utf8",
       );
 
