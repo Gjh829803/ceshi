@@ -18,6 +18,10 @@ import { isNil } from "lodash-es";
 import { CanvasRecorder } from "./canvas-recorder.js";
 import type {
   FeatureInspection,
+  OpeningCompositionReport,
+  PlanningViewKind,
+  PlaygroundArtifactAutomationApiV1,
+  PlaygroundArtifactRenderer,
   PlaygroundAutomationApi,
   PlaygroundWorldAdapter,
   WorldSnapshot,
@@ -43,6 +47,8 @@ import {
 import { resolvePlaygroundRuntimeRoute } from "./playground-runtime-route.js";
 import { sceneCatalog } from "./scenes/index.js";
 import { createGameplayPageLifecycle } from "./gameplay-page-lifecycle.js";
+import { createAndStartArtifactRenderer } from "./artifact-renderer-lifecycle.js";
+import { installPageExitDisposal } from "./page-exit-lifecycle.js";
 
 const app = document.querySelector<HTMLDivElement>("#app");
 if (app === null) throw new Error("Missing #app container");
@@ -1725,6 +1731,179 @@ function installCapabilityAuthoringPanel(
   return tuningWorkbench;
 }
 
+function setupArtifactPlayground(
+  renderer: PlaygroundArtifactRenderer,
+  captureArtifactsEnabled: boolean,
+): () => void {
+  const abortController = new AbortController();
+  let captureTimer: number | undefined;
+  const rollback = (): void => {
+    abortController.abort();
+    if (!isNil(captureTimer)) window.clearTimeout(captureTimer);
+    delete (window as { __WHITEBOX_PLAYGROUND__?: unknown }).__WHITEBOX_PLAYGROUND__;
+    delete document.documentElement.dataset.artifactCapture;
+  };
+
+  try {
+    requiredElement("#adapter-name").textContent = renderer.name;
+    requiredElement<HTMLButtonElement>("#pause-button").hidden = true;
+    requiredElement<HTMLButtonElement>("#record-button").hidden = true;
+    requiredElement<HTMLButtonElement>("#smoke-button").hidden = true;
+    const resetButton = requiredElement<HTMLButtonElement>("#reset-button");
+    resetButton.textContent = "恢复开场视图";
+
+    let selectedFeatureId: string | null = null;
+    const resourceTotal = (feature: FeatureInspection): number =>
+      feature.resources.reduce(
+        (sum, resource) => sum + (resource.vertices ?? 0),
+        0,
+      );
+    const renderFeatureList = (features: readonly FeatureInspection[]): void => {
+      requiredElement("#feature-count").textContent = `${features.length} FEATURES`;
+      featureList.replaceChildren(...features.map((feature) => {
+        const button = document.createElement("button");
+        button.type = "button";
+        button.className = `feature-item${selectedFeatureId === feature.id ? " selected" : ""}`;
+        button.dataset.featureId = feature.id;
+        button.innerHTML = `
+          <span class="feature-icon ${feature.resources[0]?.kind ?? "mesh"}"></span>
+          <span><strong>${feature.id}</strong><small>${feature.type} · v${feature.version}</small></span>
+          <em>${feature.status}</em>
+        `;
+        button.addEventListener("click", () => selectFeature(feature.id), {
+          signal: abortController.signal,
+        });
+        return button;
+      }));
+    };
+    const selectFeature = (featureId: string): void => {
+      selectedFeatureId = featureId;
+      const features = renderer.inspectFeatures();
+      const feature = features.find((item) => item.id === featureId);
+      renderFeatureList(features);
+      if (isNil(feature)) return;
+      const parameterRows = Object.entries(feature.parameters)
+        .map(([key, value]) =>
+          `<div><dt>${key}</dt><dd>${escapeHtml(JSON.stringify(value))}</dd></div>`)
+        .join("");
+      const resourceRows = feature.resources
+        .map((resource) => `
+          <li><span><i class="dot ${resource.kind}"></i>${resource.id}</span>
+          <em>${isNil(resource.vertices) ? resource.kind : `${resource.vertices.toLocaleString()} vertices`}</em></li>
+        `)
+        .join("");
+      const diagnostics = feature.diagnostics.length === 0
+        ? `<p class="diagnostic-ok">✓ No diagnostics</p>`
+        : feature.diagnostics
+            .map((item) =>
+              `<p class="diagnostic-${item.severity}">${item.code}: ${item.message}</p>`)
+            .join("");
+      inspection.innerHTML = `
+        <div class="inspection-title">
+          <div><p class="eyebrow">SELECTED FEATURE</p><h3>${feature.id}</h3></div>
+          <span>${resourceTotal(feature).toLocaleString()} VTX</span>
+        </div>
+        <dl class="parameter-grid">${parameterRows}</dl>
+        <div class="resource-section"><h4>Owned resources</h4><ul>${resourceRows}</ul></div>
+        <div class="diagnostic-section"><h4>Diagnostics</h4>${diagnostics}</div>
+      `;
+    };
+
+    const automationApi: PlaygroundArtifactAutomationApiV1 = Object.freeze({
+      version: 1,
+      inspectFeatures: () => renderer.inspectFeatures(),
+      captureScreenshot: () => renderer.captureScreenshot(),
+      captureCompositionMask: () => renderer.captureCompositionMask(),
+      analyzeOpeningComposition: () => renderer.analyzeOpeningComposition(),
+      exportOpeningFrame: (report?: OpeningCompositionReport) =>
+        renderer.exportOpeningFrame(report),
+      getWorldSpec: () => renderer.getWorldSpec(),
+      getPlanArtifacts: () => renderer.getPlanArtifacts(),
+      capturePlanningView: (kind: PlanningViewKind) =>
+        renderer.capturePlanningView(kind),
+      getVisualPrototypes: () => renderer.getVisualPrototypes(),
+      captureWhiteboxTriview: (prototypeId: string) =>
+        renderer.captureWhiteboxTriview(prototypeId),
+      exportWhiteboxTriviews: () => renderer.exportWhiteboxTriviews(),
+    });
+    window.__WHITEBOX_PLAYGROUND__ = automationApi;
+
+    const features = renderer.inspectFeatures();
+    renderFeatureList(features);
+    selectFeature(features[0]?.id ?? "");
+    resetButton.addEventListener("click", () => renderer.restoreOpeningView(), {
+      signal: abortController.signal,
+    });
+    requiredElement<HTMLButtonElement>("#capture-button").addEventListener("click", () => {
+      const link = document.createElement("a");
+      link.download = `whitebox-world-${Date.now()}.png`;
+      link.href = renderer.captureScreenshot();
+      link.click();
+    }, { signal: abortController.signal });
+    requiredElement<HTMLButtonElement>("#triview-button").addEventListener("click", () => {
+      const output = requiredElement<HTMLPreElement>("#smoke-output");
+      output.textContent = "exporting whitebox tri-views…";
+      void renderer.exportWhiteboxTriviews().then(
+        (paths) => {
+          output.textContent = `exported ${paths.length} tri-views\n${paths.join("\n")}`;
+        },
+        (error: unknown) => {
+          output.textContent = error instanceof Error ? error.message : String(error);
+        },
+      );
+    }, { signal: abortController.signal });
+    requiredElement<HTMLButtonElement>("#composition-button").addEventListener("click", () => {
+      renderer.restoreOpeningView();
+      const report = renderer.analyzeOpeningComposition();
+      const mask = requiredElement<HTMLImageElement>("#composition-mask");
+      mask.src = renderer.captureCompositionMask();
+      mask.hidden = isNil(report);
+      requiredElement<HTMLPreElement>("#smoke-output").textContent = isNil(report)
+        ? "This scene has no opening composition guide."
+        : JSON.stringify(report, null, 2);
+    }, { signal: abortController.signal });
+
+    if (captureArtifactsEnabled) {
+      captureTimer = window.setTimeout(() => {
+        void (async () => {
+          const sceneId = renderer.getWorldSpec()?.id ?? "unknown-scene";
+          try {
+            renderer.restoreOpeningView();
+            const triViewPaths = await renderer.exportWhiteboxTriviews();
+            renderer.restoreOpeningView();
+            const report = renderer.analyzeOpeningComposition();
+            const openingFramePath = isNil(report)
+              ? null
+              : await renderer.exportOpeningFrame(report);
+            document.documentElement.dataset.artifactCapture = "complete";
+            window.parent.postMessage({
+              type: "whitebox-artifact-capture",
+              sceneId,
+              status: "complete",
+              triViewCount: triViewPaths.length,
+              openingFramePath,
+              compositionPass: report?.pass ?? null,
+              compositionScore: report?.score ?? null,
+            }, "*");
+          } catch (error) {
+            document.documentElement.dataset.artifactCapture = "failed";
+            window.parent.postMessage({
+              type: "whitebox-artifact-capture",
+              sceneId,
+              status: "failed",
+              error: error instanceof Error ? error.message : String(error),
+            }, "*");
+          }
+        })();
+      }, 900);
+    }
+    return rollback;
+  } catch (error) {
+    rollback();
+    throw error;
+  }
+}
+
 if (runtimeRoute.mode === "unknown") {
   delete window.__WORLDKIT__;
   delete (window as { __WHITEBOX_PLAYGROUND__?: unknown }).__WHITEBOX_PLAYGROUND__;
@@ -1874,11 +2053,24 @@ if (runtimeRoute.mode === "unknown") {
   delete (window as { __WHITEBOX_PLAYGROUND__?: unknown }).__WHITEBOX_PLAYGROUND__;
   delete document.documentElement.dataset.worldkitStatus;
   const { SdkWorldAdapter } = await import("./sdk-world-adapter.js");
-  const adapter = await SdkWorldAdapter.create(
-    sceneCatalog[runtimeRoute.sceneCatalogId]!,
-  );
-  adapter.mount(viewport);
-  startPlayground(adapter);
+  let rollbackArtifactPageState = (): void => {};
+  const artifactLifecycle = await createAndStartArtifactRenderer({
+    create: () => SdkWorldAdapter.createArtifactRenderer(
+      sceneCatalog[runtimeRoute.sceneCatalogId]!,
+    ),
+    container: viewport,
+    setupPageState: (renderer) => {
+      rollbackArtifactPageState = setupArtifactPlayground(
+        renderer,
+        runtimeRoute.captureArtifactsEnabled,
+      );
+    },
+    rollbackPageState: () => rollbackArtifactPageState(),
+  });
+  installPageExitDisposal({
+    target: window,
+    dispose: () => artifactLifecycle.dispose(),
+  });
 }
 
 function startPlayground(
@@ -2215,10 +2407,13 @@ async function captureRequestedArtifacts(): Promise<void> {
 
 void captureRequestedArtifacts();
 
-window.addEventListener("beforeunload", () => {
-  if (recordingTimer !== null) window.clearInterval(recordingTimer);
-  canvasRecorder.dispose();
-  if (disposeBrowserRuntime === undefined) adapter.dispose();
-  else void disposeBrowserRuntime();
+installPageExitDisposal({
+  target: window,
+  dispose: async () => {
+    if (recordingTimer !== null) window.clearInterval(recordingTimer);
+    canvasRecorder.dispose();
+    if (disposeBrowserRuntime === undefined) adapter.dispose();
+    else await disposeBrowserRuntime();
+  },
 });
 }
