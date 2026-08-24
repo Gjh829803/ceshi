@@ -4,169 +4,317 @@
   "source": {
     "branch": "codex/xier120-non-human-subject-integration",
     "commit": "683731341bedcfaff700bea742bbee65f9bd0881",
+    "supersedesEvidenceCommit": "138d9c3e6ea1c28fc94ddd7397bc656b9f2f7eba",
     "canonicalCommand": "pnpm worldkit run examples/authoring/xier120-subject-gallery.json --port 5197",
     "canonicalBrowserUrl": "http://127.0.0.1:5197/?authoring=1"
   },
+  "redEvidenceGap": {
+    "outcome": "confirmed",
+    "missingFromSupersededArtifact": [
+      "Representative interaction evidence crossed only the Browser API fixed-tick path, not the host keyboard/pointer routing path.",
+      "Two-instance isolation and disposal evidence crossed only Babylon NullEngine, not the Canonical Authoring Runtime."
+    ]
+  },
   "evidenceLayers": {
-    "renderedManual": {
-      "surface": "real Canonical Authoring Runtime in Chromium through Playwright CLI",
-      "judgment": "Browser-exercised and visually reviewed from captured frames",
+    "deterministicBrowserApi": {
+      "surface": "Canonical Authoring Runtime Browser API runFixedInput and adjustCameraView",
+      "classification": "deterministic-browser-api",
+      "outcome": "pass",
+      "claimBoundary": "Deterministic command/state evidence only; not host keyboard, pointer, or wheel evidence."
+    },
+    "trustedHostInput": {
+      "surface": "Playwright keyboard and mouse devices routed through Chromium to the Canonical Authoring Runtime host listeners",
+      "classification": "trusted-host-input-rendered-browser",
+      "outcome": "pass",
+      "judgment": "Before/after runtime snapshots plus visually reviewed captured frames",
+      "trustedEventCount": 56,
+      "untrustedEventCount": 0
+    },
+    "canonicalTwoInstance": {
+      "surface": "Schema-v4 two-Subject temporary fixture in the Canonical Babylon/Havok Authoring Runtime",
+      "classification": "canonical-rendered-browser-lifecycle",
       "outcome": "pass"
     },
     "automatedLifecycle": {
       "surface": "Babylon NullEngine actual-use verifier",
+      "classification": "automated-contract",
       "outcome": "pass",
       "scope": "All 19 definitions compiled with two instances, cross-instance isolation, two disposed instances, and full lease/cache disposal."
     }
   },
-  "interactionProcedure": [
-    "Reset, pause, then settle for 30 fixed ticks.",
-    "Apply move-forward for 90 fixed ticks.",
-    "Apply move-right for 45 fixed ticks and inspect the 90-degree facing change.",
-    "Reset and settle, press jump for one tick, release for 10 ticks, then run 240 empty fixed ticks to inspect airborne and ground collision/support states.",
-    "Reset and adjust camera by yaw +0.85 radians, pitch -0.25 radians, and zoom +1.5 meters; run 60 fixed ticks.",
-    "Move and turn, invoke Reset, and inspect the immediate snapshot plus one rendered tick for spawn, facing, action, support, camera, mesh count, and body count restoration."
-  ],
-  "representatives": [
-    {
-      "role": "animal",
+  "deterministicBrowserApi": {
+    "procedure": [
+      "Reset, pause, then settle for 30 fixed ticks.",
+      "Apply move-forward for 90 fixed ticks.",
+      "Apply move-right for 45 fixed ticks and inspect the 90-degree facing change.",
+      "Reset and settle, press jump for one tick, release for 10 ticks, then run 240 empty fixed ticks to inspect airborne and ground collision/support states.",
+      "Reset and adjust camera by yaw +0.85 radians, pitch -0.25 radians, and zoom +1.5 meters; run 60 fixed ticks.",
+      "Move and turn, invoke Reset, and inspect spawn, facing, action, support, camera, mesh count, and body count restoration."
+    ],
+    "representatives": [
+      {
+        "role": "animal",
+        "definitionRef": "worldkit://subject-definition/xier120.quadruped-animal@1",
+        "movePositionMetersXYZ": [[0, 0.433087, 18.000000016], [0, 0.447, 14.560]],
+        "turnFacingYawRadians": -1.5707963267948966,
+        "airborneThenGround": true,
+        "cameraOffsetsRadiansAndMeters": [0.8499999267, -0.1999998683, 1.499999983],
+        "resetRestoredInitialState": true
+      },
+      {
+        "role": "vehicle",
+        "definitionRef": "worldkit://subject-definition/xier120.tracked@1",
+        "movePositionMetersXYZ": [[0, 0.4330880440354179, 18.00000001672637], [-4.2261224621134495e-16, 0.44653104179453607, 14.560156621788098]],
+        "turnFacingYawRadians": -1.5707963267948966,
+        "airborneThenGround": true,
+        "cameraOffsetsRadiansAndMeters": [0.8499999267, -0.1999998683, 1.499999983],
+        "resetRestoredInitialState": true
+      },
+      {
+        "role": "composition",
+        "definitionRef": "worldkit://subject-definition/xier120.aerial-cockpit@1",
+        "movePositionMetersXYZ": [[0, 0.433087, 18.000000016], [0, 0.447, 14.560]],
+        "turnFacingYawRadians": -1.5707963267948966,
+        "airborneThenGround": true,
+        "cameraOffsetsRadiansAndMeters": [0.8499999267, -0.1999998683, 1.499999983],
+        "resetRestoredInitialState": true
+      }
+    ]
+  },
+  "trustedHostInput": {
+    "browserCommands": {
+      "movement": "page.keyboard.down('w'); wait; snapshot/screenshot; page.keyboard.up('w')",
+      "turn": "page.keyboard.down('d'); wait; snapshot/screenshot; page.keyboard.up('d')",
+      "jump": "page.keyboard.down('Space'); wait 80ms; page.keyboard.up('Space'); observe airborne then poll until ground",
+      "camera": "page.mouse.down on canvas; pointer move +100/+35 over 8 steps; page.mouse.up; page.mouse.wheel(0, 160)"
+    },
+    "representatives": [
+      {
+        "role": "animal",
+        "definitionRef": "worldkit://subject-definition/xier120.quadruped-animal@1",
+        "assetHash": "sha256:70c16cd59ba37ec17ddb5481aa92f9442f54d250c885ffdf778313e5f10f206b",
+        "browserUrl": "http://127.0.0.1:5211/?authoring=1",
+        "resources": {"meshCount": 20, "physicsBodyCount": 2},
+        "trustedEvents": {
+          "total": 18,
+          "untrusted": 0,
+          "byType": {"keydown": 3, "keyup": 3, "pointermove": 9, "pointerdown": 1, "pointerup": 1, "wheel": 1},
+          "keyCodes": ["keydown:KeyW", "keyup:KeyW", "keydown:KeyD", "keyup:KeyD", "keydown:Space", "keyup:Space"],
+          "wheelDeltaY": [160]
+        },
+        "move": {
+          "beforeTick": 18,
+          "duringTick": 81,
+          "beforePositionMetersXYZ": [0, 0.4330587407266058, 18.000000016554075],
+          "duringPositionMetersXYZ": [-2.1691410266948123e-16, 0.44177864162043745, 16.240152716103065],
+          "mode": "walk",
+          "speedMetersPerSecond": 2.399964844075424,
+          "outcome": "pass"
+        },
+        "turn": {
+          "duringTick": 139,
+          "positionMetersXYZ": [1.3193104439972865, 0.44404435156566047, 15.515134154373046],
+          "rotationQuaternionXYZW": [0, -0.7071067811865475, 0, 0.7071067811865476],
+          "facingYawRadians": -1.5707963267948966,
+          "outcome": "pass"
+        },
+        "jumpAndLanding": {
+          "airborneTick": 35,
+          "airbornePositionMetersXYZ": [0, 1.440260824059939, 18.000000016554075],
+          "airborneMovementMedium": "air",
+          "landedTick": 65,
+          "landedPositionMetersXYZ": [0, 0.48321196948637213, 18.000000016554075],
+          "landedMovementMedium": "ground",
+          "landedVelocityMetersPerSecondXYZ": [0, 0, 0],
+          "outcome": "pass"
+        },
+        "camera": {
+          "beforeOffsetsRadiansAndMeters": [0, 0, 0],
+          "afterOffsetsRadiansAndMeters": [-0.5995923620435246, 0.13977859585093738, 1.2742187763934558],
+          "subjectRotationUnchanged": true,
+          "outcome": "pass"
+        },
+        "diagnostics": []
+      },
+      {
+        "role": "vehicle",
+        "definitionRef": "worldkit://subject-definition/xier120.tracked@1",
+        "assetHash": "sha256:c0c3e762f956a9cbcfe00fe760c765c220e4b12be1eaafa93696f7cc97652acd",
+        "browserUrl": "http://127.0.0.1:5212/?authoring=1",
+        "resources": {"meshCount": 8, "physicsBodyCount": 2},
+        "trustedEvents": {
+          "total": 20,
+          "untrusted": 0,
+          "byType": {"pointermove": 10, "wheel": 2, "keydown": 3, "keyup": 3, "pointerdown": 1, "pointerup": 1},
+          "keyCodes": ["keydown:KeyW", "keyup:KeyW", "keydown:KeyD", "keyup:KeyD", "keydown:Space", "keyup:Space"],
+          "wheelDeltaY": [625, 160]
+        },
+        "move": {
+          "beforeTick": 39,
+          "duringTick": 104,
+          "beforePositionMetersXYZ": [0, 0.43310602357932604, 18.00000001672637],
+          "duringPositionMetersXYZ": [-2.1107528807877552e-16, 0.4411662557177045, 16.280121433067553],
+          "mode": "walk",
+          "speedMetersPerSecond": 2.3999648440701855,
+          "outcome": "pass"
+        },
+        "turn": {
+          "duringTick": 165,
+          "positionMetersXYZ": [1.3200000000000003, 0.4436401528695382, 15.488482456678641],
+          "rotationQuaternionXYZW": [0, -0.7071067811865475, 0, 0.7071067811865476],
+          "facingYawRadians": -1.5707963267948966,
+          "outcome": "pass"
+        },
+        "jumpAndLanding": {
+          "airborneTick": 31,
+          "airbornePositionMetersXYZ": [0, 1.4469914535327217, 18.00000001672637],
+          "airborneMovementMedium": "air",
+          "landedTick": 65,
+          "landedPositionMetersXYZ": [0, 0.4832140829018219, 18.00000001672637],
+          "landedMovementMedium": "ground",
+          "landedVelocityMetersPerSecondXYZ": [0, 0, 0],
+          "outcome": "pass"
+        },
+        "camera": {
+          "beforeOffsetsRadiansAndMeters": [0, 0, 0],
+          "afterOffsetsRadiansAndMeters": [-0.599581384701954, 0.13977611350287233, 1.2694659237772543],
+          "subjectRotationUnchanged": true,
+          "outcome": "pass"
+        },
+        "captureNote": "A trusted wheel event with deltaY 625 provided display framing before W/D capture; the camera-specific probe reset first and used the separate drag plus deltaY 160 wheel sequence.",
+        "diagnostics": []
+      },
+      {
+        "role": "composition",
+        "definitionRef": "worldkit://subject-definition/xier120.aerial-cockpit@1",
+        "assetHash": "sha256:b2416d0ee1ce33ac33878850e8f77362f06986dba2c03ca195636f82eed7e341",
+        "browserUrl": "http://127.0.0.1:5213/?authoring=1",
+        "resources": {"meshCount": 8, "physicsBodyCount": 2},
+        "trustedEvents": {
+          "total": 18,
+          "untrusted": 0,
+          "byType": {"keydown": 3, "keyup": 3, "pointermove": 9, "pointerdown": 1, "pointerup": 1, "wheel": 1},
+          "keyCodes": ["keydown:KeyW", "keyup:KeyW", "keydown:KeyD", "keyup:KeyD", "keydown:Space", "keyup:Space"],
+          "wheelDeltaY": [160]
+        },
+        "move": {
+          "beforeTick": 19,
+          "duringTick": 87,
+          "beforePositionMetersXYZ": [0, 0.43306164840797023, 18.000000016642552],
+          "duringPositionMetersXYZ": [-2.260934989188528e-16, 0.44175454441652373, 16.16013699846013],
+          "mode": "walk",
+          "speedMetersPerSecond": 2.399964843284392,
+          "outcome": "pass"
+        },
+        "turn": {
+          "duringTick": 146,
+          "positionMetersXYZ": [1.2000000000000002, 0.44435343626505397, 15.328498803218297],
+          "rotationQuaternionXYZW": [0, -0.7071067811865475, 0, 0.7071067811865476],
+          "facingYawRadians": -1.5707963267948966,
+          "outcome": "pass"
+        },
+        "jumpAndLanding": {
+          "airborneTick": 34,
+          "airbornePositionMetersXYZ": [0, 1.5625069544198276, 18.000000016642552],
+          "airborneMovementMedium": "air",
+          "landedTick": 72,
+          "landedPositionMetersXYZ": [0, 0.4832129701465536, 18.000000016642552],
+          "landedMovementMedium": "ground",
+          "landedVelocityMetersPerSecondXYZ": [0, 0, 0],
+          "outcome": "pass"
+        },
+        "camera": {
+          "beforeOffsetsRadiansAndMeters": [0, 0, 0],
+          "afterOffsetsRadiansAndMeters": [-0.5995445265080074, 0.13975845234993947, 1.2694659237772543],
+          "subjectRotationUnchanged": true,
+          "outcome": "pass"
+        },
+        "diagnostics": []
+      }
+    ]
+  },
+  "canonicalTwoInstance": {
+    "fixture": {
+      "tracking": "temporary-untracked",
+      "pathDuringCapture": "output/playwright/xier120-round1/two-quadruped.json",
+      "schemaVersion": 4,
+      "browserUrl": "http://127.0.0.1:5214/?authoring=1",
       "definitionRef": "worldkit://subject-definition/xier120.quadruped-animal@1",
-      "assetHash": "sha256:70c16cd59ba37ec17ddb5481aa92f9442f54d250c885ffdf778313e5f10f206b",
-      "browserUrl": "http://127.0.0.1:5202/?authoring=1",
-      "resourceCounts": {"meshCount": 20, "physicsBodyCount": 2},
-      "move": {
-        "startPositionMetersXYZ": [0, 0.433087, 18.000000016],
-        "afterForwardPositionMetersXYZ": [0, 0.447, 14.560],
-        "activeActionId": "walk",
-        "speedMetersPerSecond": 2.399965,
-        "outcome": "pass"
-      },
-      "turn": {
-        "positionMetersXYZ": [1.565142, 0.4475, 14.325324],
-        "yawRadians": -1.5707963267948966,
-        "rotationQuaternionXYZW": [0, -0.7071067811865475, 0, 0.7071067811865476],
-        "outcome": "pass"
-      },
-      "collision": {
-        "takeoffVelocityYMetersPerSecond": 5.5,
-        "airborneMovementMedium": "air",
-        "airbornePositionYMetersAfterRelease": 1.14167,
-        "landedMovementMedium": "ground",
-        "landedPositionYMeters": 0.48321,
-        "landedVelocityYMetersPerSecond": 0,
-        "outcome": "pass"
-      },
-      "camera": {
-        "orbitOffsetRadiansAndMeters": [0.8499999267, -0.1999998683, 1.499999983],
-        "subjectTransformUnchanged": true,
-        "outcome": "pass"
-      },
-      "reset": {
-        "worldSessionReplaced": true,
-        "positionMetersXYZ": [0, 0.433, 18],
-        "rotationQuaternionXYZW": [0, 0, 0, 1],
-        "activeActionId": "idle",
-        "movementMedium": "ground",
-        "cameraOffsetsRestoredToZero": true,
-        "resourceCountsStable": true,
-        "outcome": "pass"
-      }
+      "definitionHash": "sha256:9296e43b249a68cd7993caeef19dbba951ed3822d97b2ab3467f4213ec108818"
     },
-    {
-      "role": "vehicle",
-      "definitionRef": "worldkit://subject-definition/xier120.tracked@1",
-      "assetHash": "sha256:c0c3e762f956a9cbcfe00fe760c765c220e4b12be1eaafa93696f7cc97652acd",
-      "browserUrl": "http://127.0.0.1:5201/?authoring=1",
-      "resourceCounts": {"meshCount": 8, "physicsBodyCount": 2},
-      "move": {
-        "startPositionMetersXYZ": [0, 0.4330880440354179, 18.00000001672637],
-        "afterForwardPositionMetersXYZ": [-4.2261224621134495e-16, 0.44653104179453607, 14.560156621788098],
-        "activeActionId": "walk",
-        "speedMetersPerSecond": 2.399965,
-        "outcome": "pass"
+    "beforeReset": {
+      "worldSessionSuffix": ".world.1",
+      "subjects": {
+        "xier120-primary": {
+          "positionMetersXYZ": [-2, 0.4332110051603084, 18.00000001655448],
+          "scaleRatioXYZ": [1, 1, 1],
+          "capabilityStateOwnerEntityIds": ["xier120-primary"],
+          "ownedFeatureResources": ["xier120-primary.body.asset", "xier120-primary.character-controller"]
+        },
+        "xier120-secondary": {
+          "positionMetersXYZ": [2, 0.4330035315364713, 18.000000016554075],
+          "scaleRatioXYZ": [1, 1, 1],
+          "capabilityStateOwnerEntityIds": ["xier120-secondary"],
+          "ownedFeatureResources": ["xier120-secondary.body.asset", "xier120-secondary.character-controller"]
+        }
       },
-      "turn": {
-        "positionMetersXYZ": [1.5651415217557814, 0.4472648955280878, 14.325323766800604],
-        "yawRadians": -1.5707963267948966,
-        "rotationQuaternionXYZW": [0, -0.7071067811865475, 0, 0.7071067811865476],
-        "outcome": "pass"
-      },
-      "collision": {
-        "takeoffVelocityYMetersPerSecond": 5.5,
-        "airborneMovementMedium": "air",
-        "airbornePositionYMetersAfterRelease": 1.1416713773687515,
-        "landedMovementMedium": "ground",
-        "landedPositionYMeters": 0.48321417280433976,
-        "landedVelocityYMetersPerSecond": 0,
-        "outcome": "pass"
-      },
-      "camera": {
-        "orbitOffsetRadiansAndMeters": [0.8499999267, -0.1999998683, 1.499999983],
-        "subjectTransformUnchanged": true,
-        "outcome": "pass"
-      },
-      "reset": {
-        "worldSessionReplaced": true,
-        "positionMetersXYZ": [0, 0.433, 18],
-        "rotationQuaternionXYZW": [0, 0, 0, 1],
-        "activeActionId": "idle",
-        "movementMedium": "ground",
-        "cameraOffsetsRestoredToZero": true,
-        "resourceCountsStable": true,
-        "outcome": "pass"
-      },
-      "captureNote": "Interaction measurements used the stated camera delta; gallery frames add a display-only +5 meter zoom so the full tracked silhouette remains visible."
+      "resources": {"meshCount": 39, "physicsBodyCount": 3, "terrainSampleCount": 4225}
     },
-    {
-      "role": "composition",
-      "definitionRef": "worldkit://subject-definition/xier120.aerial-cockpit@1",
-      "assetHash": "sha256:b2416d0ee1ce33ac33878850e8f77362f06986dba2c03ca195636f82eed7e341",
-      "browserUrl": "http://127.0.0.1:5203/?authoring=1",
-      "resourceCounts": {"meshCount": 8, "physicsBodyCount": 2},
-      "move": {
-        "startPositionMetersXYZ": [0, 0.433087, 18.000000016],
-        "afterForwardPositionMetersXYZ": [0, 0.447, 14.560],
-        "activeActionId": "walk",
-        "speedMetersPerSecond": 2.399965,
-        "outcome": "pass"
+    "resetReconstruction": {
+      "newWorldSessionSuffix": ".world.2",
+      "newSimulationTick": 0,
+      "newSubjects": {
+        "xier120-primary": {"positionMetersXYZ": [-2, 0.433, 18], "scaleRatioXYZ": [1, 1, 1]},
+        "xier120-secondary": {"positionMetersXYZ": [2, 0.433, 18], "scaleRatioXYZ": [1, 1, 1]}
       },
-      "turn": {
-        "positionMetersXYZ": [1.565142, 0.4475, 14.325324],
-        "yawRadians": -1.5707963267948966,
-        "rotationQuaternionXYZW": [0, -0.7071067811865475, 0, 0.7071067811865476],
-        "outcome": "pass"
+      "newResources": {"meshCount": 39, "physicsBodyCount": 3, "terrainSampleCount": 4225},
+      "canvasHandoff": {
+        "sameCanvasElement": false,
+        "oldCanvasConnected": false,
+        "newCanvasConnected": true,
+        "liveCanvasCount": 1,
+        "oldWebGlContextLost": false
       },
-      "collision": {
-        "takeoffVelocityYMetersPerSecond": 5.5,
-        "airborneMovementMedium": "air",
-        "airbornePositionYMetersAfterRelease": 1.14167,
-        "landedMovementMedium": "ground",
-        "landedPositionYMeters": 0.48321,
-        "landedVelocityYMetersPerSecond": 0,
-        "outcome": "pass"
+      "oldWorldStateQuery": {
+        "outcome": "rejected-after-reconstruction",
+        "code": "WORLDKIT_WORLD_STATE_SNAPSHOT_NOT_FOUND",
+        "message": "World State snapshot is not retained in the active World Session."
       },
-      "camera": {
-        "orbitOffsetRadiansAndMeters": [0.8499999267, -0.1999998683, 1.499999983],
-        "subjectTransformUnchanged": true,
-        "outcome": "pass"
+      "observedOldGpuResourceDeletionCalls": {
+        "deleteBuffer": 60,
+        "deleteProgram": 2,
+        "deleteTexture": 1,
+        "deleteVertexArray": 19,
+        "total": 82
       },
-      "reset": {
-        "worldSessionReplaced": true,
-        "positionMetersXYZ": [0, 0.433, 18],
-        "rotationQuaternionXYZW": [0, 0, 0, 1],
-        "activeActionId": "idle",
-        "movementMedium": "ground",
-        "cameraOffsetsRestoredToZero": true,
-        "resourceCountsStable": true,
-        "outcome": "pass"
-      }
-    }
-  ],
+      "outcome": "pass"
+    },
+    "trustedHostMoveIsolation": {
+      "beforeTick": 11,
+      "duringTick": 48,
+      "primaryBeforePositionMetersXYZ": [-2, 0.4330392611489218, 18.000000016554075],
+      "primaryDuringPositionMetersXYZ": [-2, 0.4403912759602855, 16.680146405720297],
+      "secondaryBeforePositionMetersXYZ": [2, 0.4330035315364713, 18.000000016554075],
+      "secondaryDuringPositionMetersXYZ": [2, 0.4330035315364713, 18.000000016554075],
+      "outcome": "pass"
+    },
+    "diagnostics": []
+  },
   "galleryPanels": {
     "filename": "gallery.png",
-    "interactionScreenshotsPerRepresentative": ["move-turn", "airborne", "camera", "reset"],
+    "widthPixels": 3840,
+    "heightPixels": 8165,
+    "byteLength": 2406470,
+    "sha256": "sha256:75e94fbccada2bcaceea68d2584fdee68c736b13dbb565740f4f8630ea3defb2",
+    "embeddedImageCount": 21,
+    "baseRenderedDefinitionViews": 57,
+    "trustedHostInputScreenshotsPerRepresentative": ["before", "move", "turn", "airborne", "camera"],
+    "canonicalTwoInstanceScreenshots": ["primary-ownership", "secondary-ownership", "before-reset", "after-reset", "host-isolation"],
     "redGreenRepresentatives": ["aerial-standing", "quadruped-animal", "snake-animal", "two-wheel-motorcycle"]
   },
+  "knownTransportNoise": [
+    "Each fresh Vite origin logged one favicon.ico 404; runtime diagnostics remained empty and no application/runtime console exception occurred."
+  ],
   "unsupportedClaims": [
     "vehicle driving",
     "flight",

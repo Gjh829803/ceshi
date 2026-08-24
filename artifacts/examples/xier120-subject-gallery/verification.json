@@ -4,6 +4,7 @@
   "source": {
     "branch": "codex/xier120-non-human-subject-integration",
     "commit": "683731341bedcfaff700bea742bbee65f9bd0881",
+    "supersedesEvidenceCommit": "138d9c3e6ea1c28fc94ddd7397bc656b9f2f7eba",
     "fixturePath": "examples/authoring/xier120-subject-gallery.json",
     "canonicalCommand": "pnpm worldkit run examples/authoring/xier120-subject-gallery.json --port 5197",
     "canonicalBrowserUrl": "http://127.0.0.1:5197/?authoring=1"
@@ -18,6 +19,12 @@
       "http://127.0.0.1:5203/?authoring=1",
       "http://127.0.0.1:5204/?authoring=1"
     ],
+    "hostInputBrowserUrls": [
+      "http://127.0.0.1:5211/?authoring=1",
+      "http://127.0.0.1:5212/?authoring=1",
+      "http://127.0.0.1:5213/?authoring=1"
+    ],
+    "canonicalTwoInstanceBrowserUrl": "http://127.0.0.1:5214/?authoring=1",
     "directQueryOverrideProbe": {
       "outcome": "expected-rejection",
       "error": "WorldkitBrowserStartupErrorV1: Route evidence authoringSpecHash does not match the loaded Authoring world.",
@@ -31,7 +38,9 @@
       "meshCount": 11,
       "physicsBodyCount": 2,
       "diagnostics": [],
-      "consoleErrorCount": 0,
+      "runtimeConsoleErrorCount": 0,
+      "knownTransportErrorCount": 1,
+      "knownTransportError": "favicon.ico 404",
       "consoleWarningCount": 0
     }
   },
@@ -68,9 +77,68 @@
       "gallery": {
         "filename": "gallery.png",
         "widthPixels": 3840,
-        "heightPixels": 2651,
-        "sha256": "sha256:14f8ffc1873a793d3080dbac549dadb44129153657dcb7a9682f14a4bb0de79f"
+        "heightPixels": 8165,
+        "byteLength": 2406470,
+        "sha256": "sha256:75e94fbccada2bcaceea68d2584fdee68c736b13dbb565740f4f8630ea3defb2",
+        "embeddedImageCount": 21,
+        "panels": {
+          "baseRenderedDefinitionViews": 57,
+          "trustedHostInputScreenshots": 15,
+          "canonicalTwoInstanceScreenshots": 5
+        }
       }
+    },
+    "trustedHostInput": {
+      "evidenceLayer": "trusted-host-input-rendered-browser",
+      "outcome": "pass",
+      "representativeCount": 3,
+      "representativeRoles": ["animal", "vehicle", "composition"],
+      "trustedEventCount": 56,
+      "untrustedEventCount": 0,
+      "keyCodes": ["KeyW", "KeyD", "Space"],
+      "pointerDragSupported": true,
+      "wheelSupported": true,
+      "runtimeStateChangedForEveryRepresentative": true,
+      "movementTurnJumpLandingCameraObservedForEveryRepresentative": true,
+      "diagnosticCount": 0,
+      "claimBoundary": "Playwright keyboard and mouse device events exercised the host routing path; deterministic Browser API evidence remains classified separately."
+    },
+    "canonicalTwoInstance": {
+      "evidenceLayer": "canonical-rendered-browser-lifecycle",
+      "outcome": "pass",
+      "schemaVersion": 4,
+      "subjectStateCount": 2,
+      "definitionRef": "worldkit://subject-definition/xier120.quadruped-animal@1",
+      "definitionHash": "sha256:9296e43b249a68cd7993caeef19dbba951ed3822d97b2ab3467f4213ec108818",
+      "entityIds": ["xier120-primary", "xier120-secondary"],
+      "ownedFeatureResourceIds": [
+        "xier120-primary.body.asset",
+        "xier120-primary.character-controller",
+        "xier120-secondary.body.asset",
+        "xier120-secondary.character-controller"
+      ],
+      "resourcesBeforeReset": {"meshCount": 39, "physicsBodyCount": 3, "terrainSampleCount": 4225},
+      "resourcesAfterReset": {"meshCount": 39, "physicsBodyCount": 3, "terrainSampleCount": 4225},
+      "resetReconstruction": {
+        "worldSessionChanged": true,
+        "newSimulationTick": 0,
+        "oldCanvasDisconnected": true,
+        "newCanvasConnected": true,
+        "liveCanvasCount": 1,
+        "oldWorldStateQueryRejectedWithCode": "WORLDKIT_WORLD_STATE_SNAPSHOT_NOT_FOUND",
+        "observedOldGpuResourceDeletionCalls": {
+          "deleteBuffer": 60,
+          "deleteProgram": 2,
+          "deleteTexture": 1,
+          "deleteVertexArray": 19,
+          "total": 82
+        }
+      },
+      "postResetTrustedHostIsolation": {
+        "primaryMoved": true,
+        "secondaryUnchanged": true
+      },
+      "diagnosticCount": 0
     }
   },
   "entries": [
