@@ -21,6 +21,7 @@ import {
   createGameplayBootstrapResourceLockEntryV1,
   createGameplayBootstrapV1,
 } from "@whitebox-world/gameplay-contracts";
+import type { BabylonRuntimeProjectionV1 } from "@whitebox-world/runtime-babylon";
 import { isNil, uniq } from "lodash-es";
 import {
   canonicalWorldkitBrowserRouteEvidencePublicationV2,
@@ -342,14 +343,11 @@ describe("loadAuthoringScene", () => {
       "run",
     ]);
 
-    const snapshot = {
-      kind: "worldkit-runtime-snapshot",
-      schemaVersion: 3,
+    const snapshot: BabylonRuntimeProjectionV1 = {
       runtimeBackend: "babylon-havok",
       tick: 1,
       ready: true,
       controlledEntityId: "player",
-      controllersById: {},
       subjectStatesByEntityId: {
         player: {
           entityId: "player",
@@ -359,16 +357,37 @@ describe("loadAuthoringScene", () => {
           velocityMetersPerSecondXYZ: [0, 0, 0],
           movementMedium: "ground",
           activeActionId: "run",
+          forwardXYZ: [0, 0, -1],
+          speedMetersPerSecond: 0,
+          activeControlFeelProfileRef:
+            "worldkit://control-feel-profile/test@1",
+          activePhysicsBodyProfileRef:
+            "worldkit://physics-body-profile/test@1",
+          activeLocomotionProfileRef:
+            "worldkit://locomotion-profile/test@1",
+          locomotionMode: "run",
+          activeMotionProfileRef: "worldkit://motion-profile/test@1",
+          activeMotionKernelRef: "worldkit://motion-kernel/free-ground@1",
+          motionTags: ["ground"],
+          relationshipRole: "none",
+          safeFallbackActive: false,
         },
       },
       camera: {
         entityId: "camera-main",
         targetEntityId: "player",
         positionMetersXYZ: [0, 4, 6],
+        activeCameraProfileRef: "worldkit://camera-profile/test@1",
+        activeCameraRigRef: "worldkit://camera-rig/test@1",
+        activeCameraModifierRefs: [],
+        safeFallbackActive: false,
+        viewYawOffsetRadians: 0,
+        viewPitchOffsetRadians: 0,
+        viewDistanceOffsetMeters: 0,
       },
       physics: { backend: "havok", ready: true, fixedTimeStepSeconds: 1 / 60 },
       resources: { meshes: 1, bodies: 1, terrainSamples: 9 },
-    } as const;
+    };
     expect(activeActionForControlledSubject(snapshot)).toBe("run");
   });
 

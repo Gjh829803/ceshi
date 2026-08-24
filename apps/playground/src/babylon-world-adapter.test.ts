@@ -9,13 +9,13 @@ import { createCoreGameplayBootstrapV1 } from "@whitebox-world/gameplay";
 import {
   createGameplayBootstrapResourceLockEntryV1,
 } from "@whitebox-world/gameplay-contracts";
+import type { BabylonRuntimeProjectionV1 } from "@whitebox-world/runtime-babylon";
 import type {
   CameraViewInputV1,
   ControlCaptureRequestV1,
   ExecutionPlanV5,
   FixedInputV1,
   RuntimeControlCaptureFrameV1,
-  WorldRuntimeSnapshotV3,
   WorldRuntimeSnapshotV4,
 } from "@whitebox-world/runtime-contracts";
 import { isNil } from "lodash-es";
@@ -27,11 +27,14 @@ import {
 import {
   BabylonWorldAdapter,
   PhysicalKeyboardActionTracker,
+  activeActionForControlledSubject,
   featureInspections,
 } from "./babylon-world-adapter";
 
 expectTypeOf<Parameters<typeof featureInspections>[0]>()
   .toEqualTypeOf<ExecutionPlanV5>();
+expectTypeOf<Parameters<typeof activeActionForControlledSubject>[0]>()
+  .toEqualTypeOf<BabylonRuntimeProjectionV1>();
 
 function gameplayEntityDescriptors(
   normalizedWorldIr: NormalizedWorldIRV4,
@@ -89,14 +92,14 @@ function createLockedExecutionPlanV5(): ExecutionPlanV5 {
 const LOCKED_EXECUTION_PLAN_V5 = createLockedExecutionPlanV5();
 
 interface RuntimeProbe {
-  runFixedInput: ReturnType<typeof vi.fn<(input: FixedInputV1) => Promise<WorldRuntimeSnapshotV3>>>;
+  runFixedInput: ReturnType<typeof vi.fn<(input: FixedInputV1) => Promise<BabylonRuntimeProjectionV1>>>;
   renderFrame: ReturnType<typeof vi.fn>;
-  reset: ReturnType<typeof vi.fn<() => WorldRuntimeSnapshotV3>>;
-  adjustCameraView(input: CameraViewInputV1): WorldRuntimeSnapshotV3;
+  reset: ReturnType<typeof vi.fn<() => BabylonRuntimeProjectionV1>>;
+  adjustCameraView(input: CameraViewInputV1): BabylonRuntimeProjectionV1;
   getControlCaptureCapabilities: ReturnType<typeof vi.fn>;
   waitForRenderReady: ReturnType<typeof vi.fn>;
   captureControlFrame: ReturnType<typeof vi.fn>;
-  snapshot(): WorldRuntimeSnapshotV3;
+  snapshot(): BabylonRuntimeProjectionV1;
 }
 
 interface AdapterProbe {
@@ -119,18 +122,18 @@ interface AdapterProbe {
 }
 
 function publicRuntimeSnapshot(
-  legacySnapshot: WorldRuntimeSnapshotV3,
+  providerProjection: BabylonRuntimeProjectionV1,
   paused = false,
 ): WorldRuntimeSnapshotV4 {
-  const subject = legacySnapshot.subjectStatesByEntityId.player!;
+  const subject = providerProjection.subjectStatesByEntityId.player!;
   return {
     kind: "worldkit-runtime-snapshot",
     schemaVersion: 4,
     runtimeSessionId: "runtime-session-test",
     worldSessionId: "world-session-test",
     world: {
-      publicationEpoch: legacySnapshot.tick + 1,
-      simulationTick: legacySnapshot.tick,
+      publicationEpoch: providerProjection.tick + 1,
+      simulationTick: providerProjection.tick,
       worldStateRef: `worldkit://world-state/world-state:${"a".repeat(64)}`,
       worldStateHash: `sha256:${"a".repeat(64)}`,
       subjectStatesByEntityId: {
@@ -156,7 +159,7 @@ function publicRuntimeSnapshot(
         schemaVersion: 1,
         runtimeSessionId: "runtime-session-test",
         worldSessionId: "world-session-test",
-        simulationTick: legacySnapshot.tick,
+        simulationTick: providerProjection.tick,
         participantStatesById: {},
         controllerStatesById: {},
         possessedByRelationshipsById: {
@@ -172,22 +175,24 @@ function publicRuntimeSnapshot(
       },
     },
     view: {
-      viewStateRevision: legacySnapshot.tick,
+      viewStateRevision: providerProjection.tick,
       camera: {
         mode: "tracking",
-        id: legacySnapshot.camera.entityId,
+        id: providerProjection.camera.entityId,
         targetEntityId: "player",
-        positionMetersXYZ: legacySnapshot.camera.positionMetersXYZ,
-        activeCameraProfileRef: "worldkit://camera-profile/test@1",
-        activeCameraRigRef: "worldkit://camera-rig/test@1",
-        activeCameraModifierRefs: [],
-        safeFallbackActive: false,
+        positionMetersXYZ: providerProjection.camera.positionMetersXYZ,
+        activeCameraProfileRef:
+          providerProjection.camera.activeCameraProfileRef,
+        activeCameraRigRef: providerProjection.camera.activeCameraRigRef,
+        activeCameraModifierRefs:
+          providerProjection.camera.activeCameraModifierRefs,
+        safeFallbackActive: providerProjection.camera.safeFallbackActive,
         viewYawOffsetRadians:
-          legacySnapshot.camera.viewYawOffsetRadians ?? 0,
+          providerProjection.camera.viewYawOffsetRadians ?? 0,
         viewPitchOffsetRadians:
-          legacySnapshot.camera.viewPitchOffsetRadians ?? 0,
+          providerProjection.camera.viewPitchOffsetRadians ?? 0,
         viewDistanceOffsetMeters:
-          legacySnapshot.camera.viewDistanceOffsetMeters ?? 0,
+          providerProjection.camera.viewDistanceOffsetMeters ?? 0,
       },
     },
     runtime: {
@@ -197,9 +202,9 @@ function publicRuntimeSnapshot(
     },
     resources: {
       phase: "ready",
-      meshCount: legacySnapshot.resources.meshes,
-      physicsBodyCount: legacySnapshot.resources.bodies,
-      terrainSampleCount: legacySnapshot.resources.terrainSamples,
+      meshCount: providerProjection.resources.meshes,
+      physicsBodyCount: providerProjection.resources.bodies,
+      terrainSampleCount: providerProjection.resources.terrainSamples,
     },
   } as unknown as WorldRuntimeSnapshotV4;
 }
@@ -211,15 +216,12 @@ function runtimeSnapshot(
     pitchRadians: number;
     distanceMeters: number;
   } = { yawRadians: 0, pitchRadians: 0, distanceMeters: 0 },
-): WorldRuntimeSnapshotV3 {
+): BabylonRuntimeProjectionV1 {
   return {
-    kind: "worldkit-runtime-snapshot",
-    schemaVersion: 3,
     runtimeBackend: "babylon-havok",
     tick,
     ready: true,
     controlledEntityId: "player",
-    controllersById: {},
     subjectStatesByEntityId: {
       player: {
         entityId: "player",
@@ -230,6 +232,19 @@ function runtimeSnapshot(
         movementMedium: "ground",
         activeActionId: "idle",
         forwardXYZ: [0, 0, -1],
+        speedMetersPerSecond: 0,
+        activeControlFeelProfileRef:
+          "worldkit://control-feel-profile/test@1",
+        activePhysicsBodyProfileRef:
+          "worldkit://physics-body-profile/test@1",
+        activeLocomotionProfileRef:
+          "worldkit://locomotion-profile/test@1",
+        locomotionMode: "idle",
+        activeMotionProfileRef: "worldkit://motion-profile/test@1",
+        activeMotionKernelRef: "worldkit://motion-kernel/test@1",
+        motionTags: ["ground"],
+        relationshipRole: "none",
+        safeFallbackActive: false,
       },
     },
     physics: { backend: "havok", ready: true, fixedTimeStepSeconds: 1 / 60 },
@@ -237,6 +252,10 @@ function runtimeSnapshot(
       entityId: "camera-main",
       targetEntityId: "player",
       positionMetersXYZ: [0, 2, 4],
+      activeCameraProfileRef: "worldkit://camera-profile/test@1",
+      activeCameraRigRef: "worldkit://camera-rig/test@1",
+      activeCameraModifierRefs: [],
+      safeFallbackActive: false,
       viewYawOffsetRadians: cameraView.yawRadians,
       viewPitchOffsetRadians: cameraView.pitchRadians,
       viewDistanceOffsetMeters: cameraView.distanceMeters,

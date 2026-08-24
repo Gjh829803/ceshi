@@ -12,7 +12,6 @@ import type {
   SemanticInputActionV1,
   RuntimeActivityReceiptV1,
   RuntimeActivityRequestV1,
-  WorldRuntimeSnapshotV3,
   WorldRuntimeSnapshotV4,
   SubjectPresetTuningReceiptV1,
   WorldkitBrowserDiagnosticV1,
@@ -27,6 +26,7 @@ import type {
 import {
   BabylonWorldRuntime,
   FIXED_TIME_STEP_SECONDS,
+  type BabylonRuntimeProjectionV1,
   type BabylonWorldRuntimeOptions,
 } from "@whitebox-world/runtime-babylon";
 import type { RuntimeWorldConfigurationV1 } from "@whitebox-world/runtime-host";
@@ -173,7 +173,7 @@ export class PhysicalKeyboardActionTracker {
 }
 
 export function activeActionForControlledSubject(
-  snapshot: WorldRuntimeSnapshotV3,
+  snapshot: BabylonRuntimeProjectionV1,
 ): WorldSnapshot["player"]["action"] {
   const controlledSubject =
     snapshot.subjectStatesByEntityId[snapshot.controlledEntityId];
@@ -864,11 +864,11 @@ export class BabylonWorldAdapter implements PlaygroundWorldAdapter {
       this.animationPending = true;
       try {
         this.applyCameraActions([...this.cameraInput], ticks);
-        const legacySnapshot = this.activeRuntime().snapshot();
+        const runtimeProjection = this.activeRuntime().snapshot();
         await this.coordinator.runFixedInput({
           actions: this.keyboardInput.actions(
-            legacySnapshot.subjectStatesByEntityId[
-              legacySnapshot.controlledEntityId
+            runtimeProjection.subjectStatesByEntityId[
+              runtimeProjection.controlledEntityId
             ]?.activeMotionKernelRef,
           ),
           ticks,

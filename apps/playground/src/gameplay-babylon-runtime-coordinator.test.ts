@@ -5,9 +5,7 @@ import type {
   GameplayWorldPortV1,
   GameplayWorldStateProjectionV1,
 } from "@whitebox-world/runtime-host";
-import type {
-  WorldRuntimeSnapshotV3,
-} from "@whitebox-world/runtime-contracts";
+import type { BabylonRuntimeProjectionV1 } from "@whitebox-world/runtime-babylon";
 import { createFakeGameplayWorldPortHarnessV1 } from
   "../../../packages/runtime-host/src/test/fake-gameplay-world-adapter";
 import { isNil } from "lodash-es";
@@ -78,7 +76,7 @@ interface FakeRuntimeV1 {
   readonly renderFrame: ReturnType<typeof vi.fn>;
   readonly renderFrameWhenReady: ReturnType<typeof vi.fn>;
   readonly dispose: ReturnType<typeof vi.fn>;
-  snapshot(): WorldRuntimeSnapshotV3;
+  snapshot(): BabylonRuntimeProjectionV1;
 }
 
 function fakeRuntimeFactory(
@@ -117,14 +115,11 @@ function fakeRuntimeFactory(
       renderFrame,
       renderFrameWhenReady: vi.fn(async () => renderFrame()),
       dispose,
-      snapshot: (): WorldRuntimeSnapshotV3 => ({
-        kind: "worldkit-runtime-snapshot",
-        schemaVersion: 3,
+      snapshot: (): BabylonRuntimeProjectionV1 => ({
         runtimeBackend: "babylon-havok",
         tick: harness.publishedWorldProjection.simulationTick,
         ready: true,
         controlledEntityId: configuration.executionPlan.initialControlledEntityId,
-        controllersById: {},
         subjectStatesByEntityId: {},
         camera: {
           entityId: "camera.main",
@@ -252,7 +247,7 @@ describe("Gameplay Babylon Runtime coordinator", () => {
     await coordinator.dispose();
   });
 
-  it("publishes an unbound camera after canonical control release despite the legacy target", async () => {
+  it("publishes an unbound camera after canonical control release despite the provider target", async () => {
     const { configuration, coordinator } = await createHarness();
     const current = coordinator.snapshot();
     await expect(coordinator.executeGameplayCommand({
