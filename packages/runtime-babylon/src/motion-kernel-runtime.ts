@@ -238,6 +238,7 @@ type PhysicsCharacterControllerCastCollectorHost = {
 const DYNAMIC_PHYSICS_MOTION_TYPE = 2;
 const SNAP_DOWN_UPWARD_SPEED_LIMIT_METERS_PER_SECOND = 0.5;
 const SNAP_DOWN_MINIMUM_DROP_METERS = 1e-4;
+const SNAP_DOWN_SURFACE_NORMAL_ALIGNMENT_EPSILON = 1e-3;
 
 function physicsCharacterControllerCastCollector(
   controller: PhysicsCharacterController,
@@ -289,10 +290,12 @@ class GroundAwarePhysicsCharacterController extends PhysicsCharacterController {
     gravity: Vector3,
   ): void {
     super.integrate(deltaTime, surfaceInfo, gravity);
-    this.snapDownToWalkableSupport();
+    this.snapDownToWalkableSupport(surfaceInfo);
   }
 
-  private snapDownToWalkableSupport(): void {
+  private snapDownToWalkableSupport(
+    supportBeforeIntegrate: CharacterSurfaceInfo,
+  ): void {
     if (
       Vector3.Dot(this.getVelocity(), this.up) >
       SNAP_DOWN_UPWARD_SPEED_LIMIT_METERS_PER_SECOND
@@ -336,6 +339,21 @@ class GroundAwarePhysicsCharacterController extends PhysicsCharacterController {
       Vector3.Dot(hit.normal, this.up) <
       Math.max(this.maxSlopeCosine, maxSlopeCosineEps)
     ) {
+      return;
+    }
+    if (
+      supportBeforeIntegrate.supportedState !==
+        CharacterSupportedState.UNSUPPORTED &&
+      Vector3.Dot(
+        hit.normal,
+        supportBeforeIntegrate.averageSurfaceNormal,
+      ) < 1 - SNAP_DOWN_SURFACE_NORMAL_ALIGNMENT_EPSILON
+    ) {
+      // A supported capsule cast can first touch the rounded Minkowski edge
+      // of the surface it is leaving. Snapping to that transient normal
+      // fabricates a SLIDING support tick and clears valid coyote time. A
+      // real continuation of the current plane keeps the same normal; after
+      // support is lost, any independently walkable landing remains eligible.
       return;
     }
     const probeDrop = hit.fraction * downDistance - keepDistance;

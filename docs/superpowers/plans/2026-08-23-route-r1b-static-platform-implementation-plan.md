@@ -1146,8 +1146,27 @@ Task 10 review gates have run.
 
 ### Task 10: Full Verification, Deep Review, and M5 Handoff
 
+**Current status (2026-08-24):** Task 9 implementation and its focused matrix are complete.
+After the Runtime snap-down correction, P1.5 focused conformance passed 9/9, the R1b verifier
+passed all 11 fixtures, and the complete matrix passed: `typecheck`, full `pnpm test`
+(148 files / 1574 tests), `build`, R0, R1, R1b, Canonical, Placement, Rigged Subject, and
+G Bot all exited 0. The host full-dimension/runtime review checked installed Babylon
+`checkSupport()` normal normalization, snap-down ownership, and the clean-break diff, with no
+open host P0/P1. Task 10 remains open only for one final independent Cursor core review; R1b
+and M5 must remain open until its findings are dispositioned.
+
+The snap-down root cause was a capsule cast accepting the rounded Minkowski edge of a surface
+being left as if it continued the previous support plane. The resulting synthetic `sliding`
+Tick cleared valid coyote time. The Runtime fix compares the candidate hit normal with the
+pre-integrate retained support normal and rejects a misaligned continuation, while still
+allowing a new walkable landing after support is lost. The existing
+`SNAP_DOWN_UPWARD_SPEED_LIMIT_METERS_PER_SECOND = 0.5` remains unchanged; the fix does not
+expand unrelated movement behavior. The regression proves the previous Tick remains
+`supported` before ledge departure and a one-Tick coyote jump succeeds. This changes no Schema, Camera, Route
+Graph/Query/Evidence contract, or R1b oracle.
+
 **Files:**
-- Create: `docs/reviews/2026-08-23-route-r1b-static-platform-runtime-review.md`
+- Create: `docs/reviews/2026-08-24-route-r1b-static-platform-runtime-review.md`
 - Modify: `docs/superpowers/plans/2026-08-23-route-r1b-static-platform-implementation-plan.md`
 - Modify: `docs/superpowers/specs/2026-08-23-route-r1b-static-platform-design.md`
 - Modify: `docs/18-refactor-progress-and-backlog.md`
@@ -1158,7 +1177,7 @@ Task 10 review gates have run.
 - Records full-dimension and runtime-deep-review evidence, finding dispositions, exact command results, and remaining H1/H2/H3 gaps.
 - Closes M5 only when every blocking gate passes and no P0/P1 remains.
 
-- [ ] **Step 1: Run the complete verification matrix from a clean tree**
+- [x] **Step 1: Run the complete verification matrix from the final source tree**
 
 ```bash
 pnpm typecheck
@@ -1175,17 +1194,27 @@ pnpm verify:g-bot-subject
 
 Expected: every command exits 0 with no unaccounted warning.
 
-- [ ] **Step 2: Perform host self-review**
+Fresh result: all commands exited 0; full `pnpm test` passed 148 files / 1574 tests and the
+R1b verifier passed all 11 fixtures.
+
+- [x] **Step 2: Perform host self-review**
 
 Apply `docs/reviews/full-dimension-review-protocol.md` and `docs/reviews/runtime-deep-review-checklist.md`. Re-read installed Babylon 9.21.2 and patched Recast 0.43.1 source for support semantics, area ordering, contour simplification, and disposal behavior.
 
-- [ ] **Step 3: Request independent Cursor code review**
+Disposition: reviewed the installed Babylon `checkSupport()` normal normalization, snap-down
+authority/ownership, V2/V5 clean-break diff and provider boundary. No host P0/P1 remains open.
+
+- [ ] **Step 3: Request one final independent Cursor core review**
 
 Use `/Users/xiateng/.agents/skills/reviewing-with-cursor/SKILL.md` with a fresh code review ID bound to the actual `git merge-base origin/main HEAD` at review time and the final head SHA. Record every finding as confirmed, rejected, or deferred; fix only confirmed in-scope defects with a failing reproducer.
 
-- [ ] **Step 4: Request fresh Cursor final review**
+- [ ] **Step 4: Conditionally re-review confirmed fixes**
 
-Use a new final review ID after fixes and re-running all gates. Completion requires `FINAL GO` or a host-evidenced rejection of every reported blocker.
+Do not request a mechanical second review when the core review reports no confirmed blocker.
+Only if Step 3 confirms a real defect and code changes are required, re-run the affected and
+complete gates, then use a new review ID to verify the resulting fix. Completion requires no
+open confirmed P0/P1; every reported blocker must otherwise have a host-evidenced rejection
+or an explicit out-of-scope disposition that does not violate the frozen completion contract.
 
 - [ ] **Step 5: Update public progress and remaining gaps**
 

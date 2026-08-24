@@ -2,7 +2,7 @@
 
 ## 1. 文档状态
 
-- 状态：**Approved for phased implementation / R1b in progress（2026-08-23）**。
+- 状态：**Task 10 complete matrix and host review green / final Cursor core review pending（2026-08-24）**。R1b 与 M5 仍开放。
 - 所属里程碑：P0.1 / M5。
 - 前置能力：Route R0 与 R1 Heightfield 已通过 PR #20 合入 `main`；
   `pnpm verify:route-r0-contract`、`pnpm verify:route-r1-heightfield` 和真实
@@ -11,7 +11,10 @@
   - [Route Graph 与主体可通行性设计](./2026-08-21-route-graph-and-traversability-design.md)
   - [Hybrid Terrain 与非 Heightfield 特殊地形](./2026-08-21-hybrid-terrain-and-non-heightfield-topology-design.md)
   - [Control Feel、Physics Medium 与 State Resolver](./2026-08-21-control-feel-physics-medium-state-resolver-design.md)
-- 本文只冻结 R1b 普通静态平台切片。实现计划必须在本文通过人工评审后另写。
+- 本文只冻结 R1b 普通静态平台切片。实现与收口进度以
+  [R1b 实施计划](../plans/2026-08-23-route-r1b-static-platform-implementation-plan.md)
+  为准；Task 9、完整矩阵和主 Agent 深审已完成且无 open host P0/P1，但一次最终核心
+  Cursor CR 尚未完成，因此不能提前宣布 R1b/M5 完成。
 
 ## 2. 目标与非目标
 

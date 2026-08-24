@@ -618,15 +618,16 @@ describe("runtime contracts V5 Route Evidence", () => {
     };
   }
 
-  it("canonicalizes an empty V2 Browser Route publication beside V1", () => {
+  it("canonicalizes V2 Browser Route publication and rejects the removed V1 version", () => {
     const input = emptyRouteEvidencePublicationFixtureV2();
     const canonical = canonicalWorldkitBrowserRouteEvidencePublicationV2(input);
     expect(canonical.schemaVersion).toBe(2);
     expect(canonical.routes).toEqual([]);
     expect(Object.isFrozen(canonical)).toBe(true);
-    expect(canonicalWorldkitBrowserRouteEvidencePublicationV2(
-      emptyRouteEvidencePublicationFixture(),
-    ).schemaVersion).toBe(1);
+    expect(() => canonicalWorldkitBrowserRouteEvidencePublicationV2({
+      ...emptyRouteEvidencePublicationFixture(),
+      schemaVersion: 1,
+    })).toThrow("WORLDKIT_BROWSER_ROUTE_EVIDENCE_PUBLICATION_INVALID");
   });
 
   it("rejects leftover V1 Path/Overlay fields on a V2 publication", () => {

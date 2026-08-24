@@ -17,6 +17,8 @@ describe("route R0 contract verifier", () => {
     ), "utf8")) as {
       readonly lock: { readonly resourceLockHash: string };
       readonly graph: {
+        readonly kind: string;
+        readonly schemaVersion: number;
         readonly resourceLockHash: string;
         readonly resolvedTraversalLockHash: string;
       };
@@ -39,13 +41,15 @@ describe("route R0 contract verifier", () => {
       frozenContract.graph.resourceLockHash,
     );
     expect(frozenContract.graph).toMatchObject({
+      kind: "traversal-graph",
+      schemaVersion: 2,
       resourceLockHash:
         "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
       resolvedTraversalLockHash:
         "sha256:8bb93add235d04fa2e2c31b25c42456da450a09f3c2b09e0dffb90a69dc98d5f",
     });
     expect(frozenContract.traversalGraphHash).toBe(
-      "sha256:d3d60291bfa87f6fc461409d34450d61e761c08b91900e313ceb3b43d34734f5",
+      "sha256:dada70388e0436f84feccd17d5fbe1b9135fc4bc6eb25ef3c7ea1c1f26b5f1d9",
     );
   });
 });
