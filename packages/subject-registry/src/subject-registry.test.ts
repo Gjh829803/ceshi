@@ -5,6 +5,7 @@ import { sha256CanonicalJson } from "@whitebox-world/protocol";
 import {
   builtInSubjectResourceRegistry,
   createSubjectResourceRegistry,
+  XIER120_SUBJECT_DEFINITIONS,
 } from "./index";
 import type {
   AnimationSetManifestInputV1,
@@ -238,6 +239,9 @@ describe("subject resource registry", () => {
       "worldkit://subject-definition/surface-craft.ice-skimmer@1",
       "worldkit://subject-definition/vehicle.four-wheel.arcade@1",
       "worldkit://subject-definition/watercraft.kayak.surface@1",
+      ...XIER120_SUBJECT_DEFINITIONS
+        .map((definition) => definition.resourceRef)
+        .sort((left, right) => left.localeCompare(right)),
     ]);
   });
 

@@ -25,6 +25,7 @@ import {
   CONTROL_TRANSITION_CAPABILITY_REF,
   createCoreControlFeatureFactoryV1,
 } from "@whitebox-world/gameplay";
+import { XIER120_SUBJECT_DEFINITIONS } from "@whitebox-world/subject-registry";
 
 import { loadWorldkitRoutePipeline } from "./lib/worldkit-pipeline";
 import { loadAuthoringScene } from "../apps/playground/src/authoring-loader";
@@ -809,6 +810,9 @@ describe("worldkit CLI", () => {
       "worldkit://subject-definition/surface-craft.ice-skimmer@1",
       "worldkit://subject-definition/vehicle.four-wheel.arcade@1",
       "worldkit://subject-definition/watercraft.kayak.surface@1",
+      ...XIER120_SUBJECT_DEFINITIONS
+        .map((definition) => definition.resourceRef)
+        .sort((left, right) => left.localeCompare(right)),
     ]);
     expect(first.resources[0]).toMatchObject({
       kind: "subject-definition",
