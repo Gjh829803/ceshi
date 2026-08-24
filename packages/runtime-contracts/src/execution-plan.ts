@@ -497,47 +497,8 @@ export interface ExecutionLayoutScreenRegionV1 {
   readonly maximumUv: readonly [u: number, v: number];
 }
 
-export interface ExecutionCameraV4 extends ExecutionCameraCore {
+export interface ExecutionCameraV5 extends ExecutionCameraCore {
   readonly aspectRatio: number;
-}
-
-export interface ExecutionPlanV4 {
-  readonly kind: "worldkit-execution-plan";
-  readonly schemaVersion: 4;
-  readonly id: string;
-  readonly seed: number;
-  readonly runtimeBackend: "babylon-havok";
-  readonly normalizedWorldIrHash: string;
-  readonly resourceLockHash: string;
-  readonly coordinateSystem: "right-handed-y-up-minus-z-forward";
-  readonly gravityMetersPerSecondSquaredXYZ: Vec3;
-  readonly atmospherePreset: "clear-day" | "golden-hour" | "overcast" | "night";
-  readonly terrain: ExecutionTerrainV3;
-  readonly waters: readonly ExecutionWaterV3[];
-  readonly objects: readonly ExecutionObjectV3[];
-  readonly subjectAssets: readonly ExecutionSubjectAssetV1[];
-  readonly rigProfiles: readonly ExecutionRigProfileV1[];
-  readonly animationSets: readonly ExecutionAnimationSetV1[];
-  readonly colliderProfiles: readonly ExecutionColliderProfileV1[];
-  readonly controlledEntityId: string;
-  readonly subjects: readonly ExecutionSubjectV3[];
-  readonly camera: ExecutionCameraV4;
-  readonly resourceUsage: Readonly<{
-    vertices: number;
-    triangles: number;
-    colliders: number;
-  }>;
-  readonly layout: Readonly<{
-    solverProfileRef: string;
-    resolvedVersion: string;
-    solverProfileHash: string;
-    layoutSolveReportHash: string;
-    regions: readonly ExecutionLayoutRegionV1[];
-    routes: readonly ExecutionLayoutRouteV1[];
-    screenRegions: readonly ExecutionLayoutScreenRegionV1[];
-    placementsByEntityId: Readonly<Record<string, ExecutionLayoutPlacementV1>>;
-    layoutAssertions: readonly ExecutionLayoutAssertionV1[];
-  }>;
 }
 
 export interface ExecutionHeightfieldTraversalSurfaceV1
@@ -738,7 +699,7 @@ export interface ExecutionPlanV5 {
   readonly colliderProfiles: readonly ExecutionColliderProfileV1[];
   readonly initialControlledEntityId: string;
   readonly subjects: readonly ExecutionSubjectV3[];
-  readonly camera: ExecutionCameraV4;
+  readonly camera: ExecutionCameraV5;
   readonly resourceUsage: Readonly<{
     vertices: number;
     triangles: number;
