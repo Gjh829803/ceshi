@@ -11,8 +11,10 @@
     "@babylonjs/havok": "1.3.14",
     "@babylonjs/loaders": "9.21.2",
     "@whitebox-world/control-capture": "workspace:*",
+    "@whitebox-world/gameplay-contracts": "workspace:*",
     "@whitebox-world/protocol": "workspace:*",
     "@whitebox-world/runtime-contracts": "workspace:*",
+    "@whitebox-world/runtime-host": "workspace:*",
     "@whitebox-world/subject-actions": "workspace:*",
     "@whitebox-world/terrain-surface": "workspace:*",
     "@whitebox-world/traversal": "workspace:*",
@@ -20,7 +22,6 @@
   },
   "devDependencies": {
     "@whitebox-world/authoring": "workspace:*",
-    "@whitebox-world/compiler": "workspace:*",
-    "@whitebox-world/gameplay-contracts": "workspace:*"
+    "@whitebox-world/compiler": "workspace:*"
   }
 }

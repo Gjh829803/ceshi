@@ -18,6 +18,7 @@ import { PhysicsShapeType } from "@babylonjs/core/Physics/v2/IPhysicsEnginePlugi
 import type { PhysicsEngine } from "@babylonjs/core/Physics/v2/physicsEngine.js";
 import { Scene } from "@babylonjs/core/scene.pure.js";
 import { CONTROL_CAPTURE_PASS_IDS_V1 } from "@whitebox-world/control-capture";
+import type { SpatialEntityStateV1 } from "@whitebox-world/gameplay-contracts";
 import type {
   ApplyCameraPreviewRequestV1,
   ApplySubjectPresetTuningRequestV1,
@@ -82,6 +83,12 @@ import {
 } from "./terrain";
 import { captureBabylonControlFrameV1 } from "./control-capture";
 import {
+  BABYLON_GAMEPLAY_RUNTIME_INTERNAL,
+  type BabylonGameplayPossessionTargetV1,
+  type BabylonGameplayRuntimeInternalV1,
+  type PreparedBabylonGameplayPossessionV1,
+} from "./gameplay-runtime-internal";
+import {
   BABYLON_TRAVERSAL_RUNTIME_INTERNAL,
   type BabylonTraversalRuntimeInternalV1,
   type StaticCollisionMeshEntryV1,
@@ -112,6 +119,18 @@ export interface BabylonWorldRuntimeOptions {
 type RuntimeExecutionPlanV1 = ExecutionPlanV4 | ExecutionPlanV5;
 
 type OwnedDisposer = () => void | Promise<void>;
+
+interface BabylonGameplayPublishedStateV1 {
+  readonly possessionTarget: BabylonGameplayPossessionTargetV1;
+  readonly viewProjection: ReturnType<
+    BabylonGameplayRuntimeInternalV1["readViewProjection"]
+  >;
+}
+
+const UNBOUND_GAMEPLAY_STATE: BabylonGameplayPublishedStateV1 = Object.freeze({
+  possessionTarget: Object.freeze({ mode: "unbound" }),
+  viewProjection: Object.freeze({ viewStateRevision: 0 }),
+});
 
 function initialRuntimeControlledEntityId(
   executionPlan: RuntimeExecutionPlanV1,
@@ -615,6 +634,7 @@ export class BabylonWorldRuntime implements WorldRuntimeSessionV3 {
   private readonly ownedDisposers: readonly OwnedDisposer[];
   private activeInputActions: readonly SemanticInputActionV1[] = [];
   private activeInputAxes: Readonly<ControlInputAxesV2> = {};
+  private gameplayPublishedState = UNBOUND_GAMEPLAY_STATE;
   readonly #creationExecutionPlanHash: `sha256:${string}` | undefined;
 
   private constructor(
@@ -962,6 +982,199 @@ export class BabylonWorldRuntime implements WorldRuntimeSessionV3 {
     };
   }
 
+  [BABYLON_GAMEPLAY_RUNTIME_INTERNAL](): BabylonGameplayRuntimeInternalV1 {
+    const executionPlan = this.executionPlan;
+    if (executionPlan.schemaVersion !== 5) {
+      throw new Error(
+        "WORLDKIT_GAMEPLAY_EXECUTION_PLAN_V5_REQUIRED: Gameplay Runtime requires ExecutionPlanV5.",
+      );
+    }
+    return {
+      readExecutionPlan: () => executionPlan,
+      readPossessionTarget: () => this.gameplayPublishedState.possessionTarget,
+      readWorldProjection: () => this.gameplayWorldProjection(),
+      readViewProjection: () => this.gameplayPublishedState.viewProjection,
+      hasEntity: (entityId) => this.subjectControllersByEntityId.has(entityId),
+      isEntityControllable: (entityId) =>
+        this.subjectControllersByEntityId.has(entityId),
+      preparePossessionTarget: (target) =>
+        this.prepareGameplayPossessionTarget(target),
+      runFixedInputTick: (input) => this.runGameplayFixedInputTick(input),
+      dispose: () => this.dispose(),
+    };
+  }
+
+  private gameplayWorldProjection(): ReturnType<
+    BabylonGameplayRuntimeInternalV1["readWorldProjection"]
+  > {
+    const spatialEntityStatesById: Record<string, SpatialEntityStateV1> = {};
+    for (const subject of this.executionPlan.subjects) {
+      const controller = this.controllerFor(subject.entityId);
+      const origin = controller.subjectOrigin;
+      const velocity = controller.velocity;
+      const halfYawRadians = controller.facingYawRadians / 2;
+      spatialEntityStatesById[subject.entityId] = Object.freeze({
+        id: subject.entityId,
+        kind: "spatial-entity-state",
+        entityDefinitionRef: subject.subjectDefinitionRef,
+        entityDefinitionHash:
+          subject.subjectDefinitionHash as `sha256:${string}`,
+        semanticClassId: subject.semanticClassId,
+        lifecycleMode: "active",
+        positionMetersXYZ: Object.freeze([
+          origin.x,
+          origin.y,
+          origin.z,
+        ]) as readonly [number, number, number],
+        rotationQuaternionXYZW: Object.freeze([
+          0,
+          Math.sin(halfYawRadians),
+          0,
+          Math.cos(halfYawRadians),
+        ]) as readonly [number, number, number, number],
+        scaleRatioXYZ: Object.freeze([1, 1, 1]) as readonly [number, number, number],
+        linearVelocityMetersPerSecondXYZ: Object.freeze([
+          velocity.x,
+          velocity.y,
+          velocity.z,
+        ]) as readonly [number, number, number],
+      });
+    }
+    return Object.freeze({
+      simulationTick: this.tick,
+      spatialEntityStatesById: Object.freeze(spatialEntityStatesById),
+      capabilityStatesById: Object.freeze({}),
+      semanticFactsById: Object.freeze({}),
+    });
+  }
+
+  private async prepareGameplayPossessionTarget(
+    targetInput: BabylonGameplayPossessionTargetV1,
+  ): Promise<PreparedBabylonGameplayPossessionV1> {
+    this.assertUsable();
+    const target = targetInput.mode === "unbound"
+      ? Object.freeze({ mode: "unbound" as const })
+      : Object.freeze({
+          mode: "possessed" as const,
+          controlledEntityId: targetInput.controlledEntityId,
+        });
+    if (
+      target.mode === "possessed" &&
+      !this.subjectControllersByEntityId.has(target.controlledEntityId)
+    ) {
+      throw new Error(
+        `WORLDKIT_GAMEPLAY_CONTROL_TARGET_NOT_FOUND: Gameplay target '${target.controlledEntityId}' does not exist.`,
+      );
+    }
+    if (
+      this.gameplayPublishedState.viewProjection.viewStateRevision ===
+        Number.MAX_SAFE_INTEGER
+    ) {
+      throw new Error(
+        "WORLDKIT_GAMEPLAY_VIEW_REVISION_EXHAUSTED: Gameplay View revision is exhausted.",
+      );
+    }
+    const projectedWorldStateAfter = this.gameplayWorldProjection();
+    const projectedViewStateAfter = Object.freeze({
+      viewStateRevision:
+        this.gameplayPublishedState.viewProjection.viewStateRevision + 1,
+    });
+    const stagedState: BabylonGameplayPublishedStateV1 = Object.freeze({
+      possessionTarget: target,
+      viewProjection: projectedViewStateAfter,
+    });
+    let lifecycle: "prepared" | "committed" | "aborted" = "prepared";
+    let abortPromise: Promise<void> | undefined;
+    return Object.freeze({
+      projectedWorldStateAfter,
+      projectedViewStateAfter,
+      commitPrepared: (): void => {
+        if (lifecycle === "aborted") {
+          throw new Error("Babylon Gameplay possession transaction is already aborted.");
+        }
+        if (lifecycle === "committed") {
+          throw new Error("Babylon Gameplay possession transaction is already committed.");
+        }
+        lifecycle = "committed";
+        this.gameplayPublishedState = stagedState;
+      },
+      abort: (): Promise<void> => {
+        if (!isNil(abortPromise)) return abortPromise;
+        if (lifecycle === "committed") {
+          abortPromise = Promise.reject(
+            new Error("Babylon Gameplay possession transaction is already committed."),
+          );
+          return abortPromise;
+        }
+        lifecycle = "aborted";
+        abortPromise = Promise.resolve();
+        return abortPromise;
+      },
+    });
+  }
+
+  private async runGameplayFixedInputTick(
+    input: Parameters<BabylonGameplayRuntimeInternalV1["runFixedInputTick"]>[0],
+  ): Promise<ReturnType<BabylonGameplayRuntimeInternalV1["readWorldProjection"]>> {
+    this.assertUsable();
+    if (input.ticks !== 1) {
+      throw new RangeError("Gameplay Runtime input must contain exactly one fixed Tick.");
+    }
+    this.latestRenderReadyReceipt = undefined;
+    const targetEntityId = this.gameplayPublishedState.possessionTarget.mode ===
+        "possessed"
+      ? this.gameplayPublishedState.possessionTarget.controlledEntityId
+      : undefined;
+    const targetIsBound = !isNil(targetEntityId);
+    this.activeInputActions = targetIsBound ? [...input.actions] : [];
+    this.activeInputAxes = targetIsBound && !isNil(input.axes)
+      ? { ...input.axes }
+      : {};
+    this.cameraDirector.setInputActions(this.activeInputActions);
+    const viewControlFrame = this.cameraDirector.controlFrame(this.tick);
+    for (const subject of this.executionPlan.subjects) {
+      const controller = this.controllerFor(subject.entityId);
+      const isTarget = subject.entityId === targetEntityId;
+      if (isTarget || controller.movementMedium !== "ground") {
+        controller.step(
+          isTarget ? input.actions : [],
+          viewControlFrame,
+          isTarget ? input.axes : undefined,
+        );
+      } else {
+        controller.publishSupport();
+      }
+    }
+    this.commitGameplayFixedTick(
+      targetIsBound &&
+        (input.actions.includes("run") || input.actions.includes("boost")),
+      targetEntityId,
+    );
+    return this.gameplayWorldProjection();
+  }
+
+  private commitGameplayFixedTick(
+    runRequested: boolean,
+    targetEntityId: string | undefined,
+  ): void {
+    const physicsEngine = this.scene.getPhysicsEngine();
+    if (physicsEngine === null) throw new Error("WORLDKIT_HAVOK_ENGINE_MISSING");
+    physicsEngine._step(FIXED_TIME_STEP_SECONDS);
+    this.tick += 1;
+    for (const subject of this.executionPlan.subjects) {
+      const controller = this.controllerFor(subject.entityId);
+      const visual = this.visualFor(subject.entityId);
+      controller.synchronizeVisual();
+      if (subject.entityId !== targetEntityId) {
+        visual.stepAnimation(this.tick, "idle");
+        continue;
+      }
+      const motion = controller.sampleMotion(runRequested);
+      visual.stepAnimation(this.tick, resolveGroundHumanoidAction(motion));
+    }
+    if (!isNil(targetEntityId)) this.updateCameraForEntity(targetEntityId);
+  }
+
   private commitFixedTick(runRequested: boolean): void {
     const physicsEngine = this.scene.getPhysicsEngine();
     if (physicsEngine === null) throw new Error("WORLDKIT_HAVOK_ENGINE_MISSING");
@@ -1291,12 +1504,16 @@ export class BabylonWorldRuntime implements WorldRuntimeSessionV3 {
   }
 
   private updateCamera(): void {
+    this.updateCameraForEntity(this.controlledEntityId);
+  }
+
+  private updateCameraForEntity(entityId: string): void {
     const subject = this.executionPlan.subjects.find(
-      (candidate) => candidate.entityId === this.controlledEntityId,
+      (candidate) => candidate.entityId === entityId,
     );
     if (subject === undefined) {
       throw new Error(
-        `WORLDKIT_RUNTIME_CONTROL_TARGET_NOT_FOUND: ${this.controlledEntityId}`,
+        `WORLDKIT_RUNTIME_CONTROL_TARGET_NOT_FOUND: ${entityId}`,
       );
     }
     const controller = this.controllerFor(subject.entityId);

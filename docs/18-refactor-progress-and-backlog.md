@@ -713,7 +713,7 @@ Placement S1、Simulation Take / Control Capture V1 与 Validation Capture/Integ
 | G19-4C | 已完成 | Validation closure replay 与 RuntimeHost adapter 创建前 admission | G19-4A、G19-4B | Validation 与 RuntimeHost 对抗测试通过；不合法 Plan/Bootstrap 在创建 Adapter 前 fail-close |
 | G19-4D | 已完成 | 所有 Compiler/Babylon/Route/Playground 生产调用方原子迁移到 V5，并从 Normalized IR 生成真实 canonical Bootstrap/Capability set | G19-4A、G19-4B、G19-4C | 全仓 typecheck 通过；17 files / 374 tests 的集成矩阵通过；无生产固定假 hash |
 | G19-4E | **已完成** | 全量门禁、真实回归 disposition、生成物治理 | G19-4D | `pnpm typecheck`、165 files / 2,079 tests、`pnpm build` 与 9 项 verify Gate 全通过；Take 根哈希由 `generate:example-takes` 生成；Route 重型套件在全量并发下通过 |
-| G19-5 | **待开始，当前最高优先级** | Babylon Gameplay Port；`possessedBy` 唯一控制权；Camera/Action/Control 原子事务 | G19-4 | 已解除阻塞；下一步先补 Runtime 对抗测试，再实现 staged transaction 与 30/60/120-like 证据 |
+| G19-5 | **对接底座完成，production cutover 待 G19-6** | Babylon Gameplay Port；`possessedBy` 唯一控制权；输入目标与 Camera Target projection 事务 | G19-4 | optional Possession、fixed-input Controller 隔离、staged transaction、provider-neutral projection 与 fail-closed Action 已完成；Browser 尚未公开，Legacy V3 旁路由 G19-6 删除 |
 | G19-6 | 待开始 | Browser Protocol V5 Gameplay 唯一入口、Reset/Rebind、Activity/Capture 接线 | G19-5 | 待 exact-key、重放、重置和多实例测试 |
 | G19-7 | 待开始 | Outdoor/CLI/WorldKit 六场景接线，不增加第二套 Gameplay 真相 | G19-6 | 待真实 Authoring Runtime 与 Browser Gate |
 | G19-8 | 待开始 | 全量验证、主 Agent 深审、文档 disposition、合入 `main` | G19-7 | 全部相关 Gate 通过且无 open confirmed P0/P1 |

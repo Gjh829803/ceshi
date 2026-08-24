@@ -35,7 +35,7 @@
 | G19-1 R1b and Camera prerequisites | Complete on main | R1b/M5 and Camera P1.5 are integrated through main `381255f`; Route V2, Browser V5 and the isolated Camera Preview channel are authoritative. The README package map from `main@4ae1912` is also synchronized. |
 | G19-3 Gameplay core, WorldSession and RuntimeHost | Complete on latest-main integration branch | The original checkpoint starts at `f71bcb3`; the foundation has been three-way merged onto main `381255f`, its contracts use the repository `isNil` convention, and the focused 14-file / 468-test matrix plus typecheck pass. It remains trusted in-process staging, not a Browser/Babylon production entry. |
 | G19-4 package/bootstrap cutover | Complete on integration branch | ExecutionPlanV5, `initialControlledEntityId`, Gameplay Bootstrap semantic lock, WorldPackage six-way membership, Validation replay and pre-adapter RuntimeHost admission are atomically connected. All production callers construct real Bootstrap artifacts. Full typecheck, 165 files / 2,079 tests, build and all nine required verification gates pass. |
-| G19-5 onward | G19-5 ready, sequential | Babylon Gameplay transaction is now the active next slice. Browser and Outdoor wiring remain incomplete until G19-6/G19-7 pass. |
+| G19-5 onward | G19-5 active, sequential integration with parallel-safe investigation/tests | Babylon Gameplay Port plus atomic Possession/Input/Camera Target publication is the active slice. Action presentation and Camera Profile/Preference selection are explicitly outside this slice. Browser and Outdoor wiring remain incomplete until G19-6/G19-7 pass. |
 
 ## Live TODO (authoritative)
 
@@ -63,8 +63,10 @@ authoritative execution status; old unchecked steps inside already completed tas
     Canonical, Placement, Rigged Subject, G Bot and Capture gates pass. The stale example Take root is
     now maintained by `generate:example-takes`; Compiler V5 snapshots untrusted accessor-free input before
     semantic reads; Route-heavy integration tests retain their assertions with realistic full-suite budgets.
-- [ ] **G19-5 (active, unblocked)** — Babylon transactional port, possession/action projection and Camera
-  atomicity.
+- [ ] **G19-5 (integration preview implemented; production closure remains)** — Babylon transactional Port、
+  fixed-input Controller isolation、optional Possession 与 provider-neutral projection 已完成；Browser 尚未公开，
+  Legacy V3 旁路、rendered Camera pose publication 与完整门禁继续由 G19-6/G19-8 收口。本切片不发明
+  Semantic Action presentation 或 Camera Profile/Preference selection。
 - [ ] **G19-6 (blocked by G19-5)** — Browser Protocol V5 Gameplay entry, reset/rebind and activity/capture.
 - [ ] **G19-7 (blocked by G19-6)** — Outdoor/CLI/WorldKit production-path wiring.
 - [ ] **G19-8 (blocked by G19-7)** — full gates, host completion review, disposition, merge and push main.
@@ -602,44 +604,75 @@ git commit -m "refactor: compose gameplay bootstrap into execution v5"
 
 ---
 
-### Task 7: 接入 Babylon Gameplay Port、Possession、Action 与 Camera transaction
+### Task 7: 接入 Babylon Gameplay Port、Possession 与 Camera Target transaction
 
 **Files:**
 - Modify: `packages/runtime-babylon/src/babylon-world-runtime.ts`
-- Modify/Create: `packages/runtime-babylon/src/gameplay-world-adapter.ts`
+- Create: `packages/runtime-babylon/src/gameplay-runtime-internal.ts`
+- Create: `packages/runtime-babylon/src/gameplay-world-adapter.ts`
+- Create: `packages/runtime-babylon/src/gameplay-world-adapter.test.ts`
 - Modify: `packages/runtime-babylon/src/runtime.test.ts`
 - Modify: `packages/runtime-babylon/src/traversal-runtime-port.test.ts`
-- Modify: `packages/runtime-babylon/src/camera-director.ts`
-- Modify: `apps/playground/src/babylon-world-adapter.ts`
+- Modify: `packages/runtime-babylon/src/traversal-runtime-internal.ts`
+- Modify: `packages/runtime-babylon/src/traversal-runtime-port.ts`
+- Modify: `packages/runtime-babylon/src/index.ts`
+- Modify: `packages/runtime-babylon/package.json`
+
+`camera-director.ts` 只有在 target staging 无法通过 Runtime epoch 安全复用时才允许修改；任何
+Camera Profile/Modifier/Preference 算法改动都不在本任务范围。Playground/Browser Adapter 接线属于
+G19-6，不在 G19-5 提前发布。
 
 **Interfaces:**
 - Consumes: Task 4 port、Task 5 Camera/Route、Task 6 Plan。
-- Produces: committed possession/action 的唯一物理/视觉投影。
+- Produces: committed `possessedBy` 的唯一输入与 Camera Target 投影。
 
-- [ ] **Step 1: 写 bind/rebind/release RED integration tests**
+**GCC-0A contract amendment:**
+
+- 本任务按已批准的
+  [`2026-08-24-context-driven-gameplay-camera-composition-design.md`](../specs/2026-08-24-context-driven-gameplay-camera-composition-design.md)
+  收口为 Possession/Camera Target 最小链路。
+- GameplayState 继续独占 logical Action；本任务不从 `semanticActionRef`、Definition `id`、GLB Clip
+  名或 Babylon AnimationGroup 猜 rendered Action。
+- Semantic Action 到 Subject Action 的展示绑定必须由后续独立、内容寻址的 Action Presentation
+  合同冻结，并与 AnimationSet 能力共同校验；在该合同存在前，Babylon Adapter 对 Action
+  availability fail closed。
+- CameraDirector 继续独占 Camera Profile、Modifier、Preference、数值与 pose history；本任务只把
+  committed Possession target 原子提供给 View，不增加第二套选择协议。
+
+**Dependency-aware work graph:**
+
+| ID | Goal / independently verifiable deliverable | depends_on | blocks | Exclusive ownership | Input / output contract and integration point | Evidence | Mode |
+|---|---|---|---|---|---|---|---|
+| G19-5A | 冻结 optional Possession 与 provider-neutral Babylon internal seam | G19-4, GCC-0A | G19-5B, G19-5C | `gameplay-runtime-internal.ts`, Runtime internal interface | `ExecutionPlanV5` + `GameplayWorldPortV1` → staged target/fixed-tick/projection seam | exact typecheck + seam tests | main-agent-only |
+| G19-5B | 实现真实 Babylon `GameplayWorldPortV1` 与 canonical spatial projection | G19-5A | G19-5D | `gameplay-world-adapter.ts` 及其聚焦测试 | Host transition/fixed input → provider-neutral projection/transaction | bind/rebind/release/abort tests | sequential |
+| G19-5C | 让 Runtime 以 optional committed target 路由输入并冻结 unbound Camera | G19-5A | G19-5D | `babylon-world-runtime.ts`、Camera transaction tests | staged target → synchronous pointer publication；render/capture只读 published epoch | Havok、Camera、30/60/120-like tests | sequential |
+| G19-5D | 集成 Port/Runtime/Traversal，完成深审与全门禁 | G19-5B, G19-5C | G19-6 | `index.ts`, package manifests, traversal regressions, disposition docs | RuntimeHost factory → real Babylon Port | focused + full relevant gates | main-agent-only |
+
+G19-5B 与 G19-5C 在 G19-5A 接口冻结后可以并行，但不得同时修改同一文件；主 Agent 负责接口、
+三方语义合并和最终门禁。Action Presentation 是后续独立任务，不通过扩张本表来伪装已完成。
+
+- [x] **Step 1: 写 bind/rebind/release RED integration tests**
 
 证明 A→B 即时转移 input/snapshot/camera；released Subject 只收 neutral input但 Havok/support继续；release 后 Camera suspended/frozen且 Snapshot无 target。
 
-- [ ] **Step 2: 实现 control transaction**
+- [x] **Step 2: 实现 control target-projection transaction**
 
-Prepare 构造隔离的 projected World/View state，不改变 live input/camera/render。`commitPrepared()` 只做
-同步 no-throw pointer swap；`abort()` 逆序释放 staged resources。render/capture 按 published epoch gated，
-不能看到 Gameplay 已新而 Camera 仍旧或反之。
+Prepare 构造隔离的 projected World/View target state，不改变 live input、Camera pose 或 render；
+`commitPrepared()` 在 Host 的单次提交路径只发布 staged pointer，`abort()` 幂等释放 staged state。
+实际 Camera pose 在下一 fixed tick 消费已发布 target；render/capture 的 epoch barrier 仍属于 G19-6。
 
-- [ ] **Step 3: 写 Action RED tests**
-
-证明 logical Action 与 rendered Action 分相、movement blocking 不冻结 physics/camera、fixed duration跨分段 tick自然完成、30/60/120 render cadence一致。
-
-- [ ] **Step 4: 实现 Action projection**
-
-只保存 committed semantic Action projection；下一 fixed tick映射锁定动画；自然 locomotion仍从 motion sample解析。
-
-- [ ] **Step 5: 补 Camera staged-abort 对抗测试**
+- [ ] **Step 3: 补 Camera staged-abort 对抗测试**
 
 覆盖 target/profile/modifiers/offsets/base heading/velocity-recenter history/transition/input edge/preview map；
 abort 后 byte-equivalent inspection state；30/60/120Hz render 与 capture 都只能观察完整 published epoch。
 
-- [ ] **Step 6: 运行 Runtime 深审门禁并提交**
+- [x] **Step 4: 验证 Action 边界而不实现展示猜测**
+
+证明 logical Action 与 rendered Action 分相、Host 的 movement blocking 不冻结 physics/camera、
+fixed-duration Action 跨分段 Tick 自然完成；Adapter 在没有锁定 Action Presentation binding 时稳定
+报告 unavailable。不得根据 Ref 尾段、Definition ID 或 Clip 名猜动画。
+
+- [ ] **Step 5: 运行 Runtime 深审门禁并提交**
 
 ```bash
 pnpm vitest run packages/runtime-babylon/src/runtime.test.ts packages/runtime-babylon/src/traversal-runtime-port.test.ts packages/runtime-babylon/src/camera-preview-channel.test.ts

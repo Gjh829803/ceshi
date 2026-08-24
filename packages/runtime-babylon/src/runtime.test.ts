@@ -59,6 +59,7 @@ import {
   type BabylonWorldRuntimeOptions,
 } from "./index";
 import { lockPublishedGroundFeels } from "./lock-published-ground-feels";
+import { BABYLON_GAMEPLAY_RUNTIME_INTERNAL } from "./gameplay-runtime-internal";
 import { SubjectAnimationPlayer } from "./subject-animation-player";
 import { sampleExecutionTerrainHeight } from "./terrain";
 
@@ -2557,6 +2558,135 @@ describe("BabylonWorldRuntime", () => {
     });
     expect(runtime.snapshot().controlledEntityId).toBe("player");
     await runtime.dispose();
+  });
+
+  it("stages Gameplay possession without mutating the live Runtime and publishes it atomically", async () => {
+    const runtime = await createRuntime(createV5StaticColliderSupportExecutionPlan());
+    try {
+      const internal = runtime[BABYLON_GAMEPLAY_RUNTIME_INTERNAL]();
+      const legacyBefore = runtime.snapshot();
+      const viewBefore = internal.readViewProjection();
+
+      expect(internal.readPossessionTarget()).toEqual({ mode: "unbound" });
+      expect(legacyBefore.controlledEntityId).toBe("player");
+
+      const prepared = await internal.preparePossessionTarget({
+        mode: "possessed",
+        controlledEntityId: "pack-animal-a",
+      });
+
+      expect(internal.readPossessionTarget()).toEqual({ mode: "unbound" });
+      expect(internal.readViewProjection()).toBe(viewBefore);
+      expect(runtime.snapshot()).toEqual(legacyBefore);
+      expect(prepared.projectedViewStateAfter.viewStateRevision).toBe(
+        viewBefore.viewStateRevision + 1,
+      );
+
+      expect(prepared.commitPrepared).not.toThrow();
+      expect(internal.readPossessionTarget()).toEqual({
+        mode: "possessed",
+        controlledEntityId: "pack-animal-a",
+      });
+      expect(internal.readViewProjection()).toEqual(
+        prepared.projectedViewStateAfter,
+      );
+      expect(runtime.snapshot().controlledEntityId).toBe("player");
+    } finally {
+      await runtime.dispose();
+    }
+  });
+
+  it("aborts staged Gameplay possession idempotently without changing target, Camera, or projection", async () => {
+    const runtime = await createRuntime(createV5StaticColliderSupportExecutionPlan());
+    try {
+      const internal = runtime[BABYLON_GAMEPLAY_RUNTIME_INTERNAL]();
+      const targetBefore = internal.readPossessionTarget();
+      const worldBefore = internal.readWorldProjection();
+      const viewBefore = internal.readViewProjection();
+      const cameraBefore = runtime.snapshot().camera;
+      const prepared = await internal.preparePossessionTarget({
+        mode: "possessed",
+        controlledEntityId: "pack-animal-a",
+      });
+
+      const firstAbort = prepared.abort();
+      expect(prepared.abort()).toBe(firstAbort);
+      await firstAbort;
+
+      expect(internal.readPossessionTarget()).toBe(targetBefore);
+      expect(internal.readWorldProjection()).toEqual(worldBefore);
+      expect(internal.readViewProjection()).toBe(viewBefore);
+      expect(runtime.snapshot().camera).toEqual(cameraBefore);
+      expect(() => prepared.commitPrepared()).toThrow(/aborted/);
+    } finally {
+      await runtime.dispose();
+    }
+  });
+
+  it("routes one Gameplay fixed Tick only to the committed target and freezes Camera while unbound", async () => {
+    const runtime = await createRuntime(createV5StaticColliderSupportExecutionPlan());
+    try {
+      const internal = runtime[BABYLON_GAMEPLAY_RUNTIME_INTERNAL]();
+      const bind = await internal.preparePossessionTarget({
+        mode: "possessed",
+        controlledEntityId: "pack-animal-a",
+      });
+      bind.commitPrepared();
+      const before = internal.readWorldProjection();
+      const moved = await internal.runFixedInputTick({
+        actions: ["move-right"],
+        ticks: 1,
+      });
+
+      expect(moved.simulationTick).toBe(before.simulationTick + 1);
+      expect(
+        moved.spatialEntityStatesById["pack-animal-a"]!.positionMetersXYZ[0],
+      ).toBeGreaterThan(
+        before.spatialEntityStatesById["pack-animal-a"]!.positionMetersXYZ[0],
+      );
+      expect(
+        moved.spatialEntityStatesById.player!.positionMetersXYZ[0],
+      ).toBeCloseTo(
+        before.spatialEntityStatesById.player!.positionMetersXYZ[0],
+        8,
+      );
+      expect(moved.capabilityStatesById).toEqual({});
+      expect(moved.semanticFactsById).toEqual({});
+
+      const cameraBeforeRelease = runtime.snapshot().camera.positionMetersXYZ;
+      const release = await internal.preparePossessionTarget({ mode: "unbound" });
+      release.commitPrepared();
+      await internal.runFixedInputTick({
+        actions: ["move-right", "camera-recenter"],
+        ticks: 1,
+      });
+
+      expect(internal.readPossessionTarget()).toEqual({ mode: "unbound" });
+      expect(runtime.snapshot().camera.positionMetersXYZ).toEqual(
+        cameraBeforeRelease,
+      );
+    } finally {
+      await runtime.dispose();
+    }
+  });
+
+  it("rejects invalid Gameplay targets and non-single-Tick batches before mutation", async () => {
+    const runtime = await createRuntime(createV5StaticColliderSupportExecutionPlan());
+    try {
+      const internal = runtime[BABYLON_GAMEPLAY_RUNTIME_INTERNAL]();
+      await expect(internal.preparePossessionTarget({
+        mode: "possessed",
+        controlledEntityId: "missing",
+      })).rejects.toThrow(/target/i);
+      await expect(internal.runFixedInputTick({
+        actions: [],
+        ticks: 2,
+      } as never)).rejects.toThrow(/one fixed Tick/i);
+      expect(internal.readPossessionTarget()).toEqual({ mode: "unbound" });
+      expect(internal.readWorldProjection().simulationTick).toBe(0);
+    } finally {
+      await runtime.dispose();
+    }
   });
 
   it("moves by semantic fixed input but cannot pass through a fixed wall", async () => {

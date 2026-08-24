@@ -20,7 +20,7 @@ export interface StaticCollisionMeshEntryV1 {
 export interface BabylonTraversalRuntimeInternalV1 {
   readExecutionPlan(): ExecutionPlanV4 | ExecutionPlanV5;
   readCreationExecutionPlanHash(): `sha256:${string}` | undefined;
-  readControlledEntityId(): string;
+  readControlledEntityId(): string | undefined;
   readConfigurationEpoch(): number;
   readTick(): number;
   isDisposed(): boolean;

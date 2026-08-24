@@ -341,12 +341,18 @@ importers:
       '@whitebox-world/control-capture':
         specifier: workspace:*
         version: link:../control-capture
+      '@whitebox-world/gameplay-contracts':
+        specifier: workspace:*
+        version: link:../gameplay-contracts
       '@whitebox-world/protocol':
         specifier: workspace:*
         version: link:../protocol
       '@whitebox-world/runtime-contracts':
         specifier: workspace:*
         version: link:../runtime-contracts
+      '@whitebox-world/runtime-host':
+        specifier: workspace:*
+        version: link:../runtime-host
       '@whitebox-world/subject-actions':
         specifier: workspace:*
         version: link:../subject-actions
@@ -366,9 +372,6 @@ importers:
       '@whitebox-world/compiler':
         specifier: workspace:*
         version: link:../compiler
-      '@whitebox-world/gameplay-contracts':
-        specifier: workspace:*
-        version: link:../gameplay-contracts
 
   packages/runtime-contracts:
     dependencies:

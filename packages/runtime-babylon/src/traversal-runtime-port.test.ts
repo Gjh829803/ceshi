@@ -44,7 +44,10 @@ import {
   BabylonWorldRuntime,
   isWorldRuntimeLayoutAssertionErrorV1,
 } from "./babylon-world-runtime";
-import { BABYLON_TRAVERSAL_RUNTIME_INTERNAL } from "./traversal-runtime-internal";
+import {
+  BABYLON_TRAVERSAL_RUNTIME_INTERNAL,
+  type BabylonTraversalRuntimeInternalV1,
+} from "./traversal-runtime-internal";
 import { createBabylonTraversalRuntimePortV1 } from "./traversal-runtime-port";
 import {
   BABYLON_TRAVERSAL_RUNTIME_IMPLEMENTATION_IDENTITY_V1,
@@ -198,6 +201,22 @@ function expectRuntimeCode(
     expect((error as TraversalRuntimeErrorV1).code).toBe(code);
     expect((error as Error).message).toBe(code);
   }
+}
+
+function overrideControlledEntityReader(
+  runtime: BabylonWorldRuntime,
+  readControlledEntityId: () => string | undefined,
+): BabylonTraversalRuntimeInternalV1 {
+  const original = runtime[BABYLON_TRAVERSAL_RUNTIME_INTERNAL]();
+  const overridden: BabylonTraversalRuntimeInternalV1 = {
+    ...original,
+    readControlledEntityId,
+  };
+  Object.defineProperty(runtime, BABYLON_TRAVERSAL_RUNTIME_INTERNAL, {
+    configurable: true,
+    value: () => overridden,
+  });
+  return overridden;
 }
 
 function withStaticBoxAtStart(
@@ -1011,6 +1030,58 @@ describe("createBabylonTraversalRuntimePortV1", () => {
         }),
         "TRAVERSAL_RUNTIME_PLAN_NOT_V5",
       );
+    } finally {
+      await runtime.dispose();
+    }
+  }, 30_000);
+
+  it("fails closed before reading world evidence after Gameplay releases control", async () => {
+    const fixture = compileFixture();
+    const runtime = await createRuntime(fixture.executionPlan);
+    let controlledEntityId: string | undefined = "player";
+    const host = overrideControlledEntityReader(
+      runtime,
+      () => controlledEntityId,
+    );
+    try {
+      const port = createBabylonTraversalRuntimePortV1({
+        runtime,
+        traversalLockReceipt: fixture.traversalLockReceipt,
+      });
+      port.resetToStartAnchor({ startAnchorEntityId: "spawn-main" });
+      const lockedIdentity = {
+        authoringSpecHash: port.authoringSpecHash,
+        layoutSolveReportHash: port.layoutSolveReportHash,
+        resourceLockHash: port.resourceLockHash,
+        executionPlanHash: port.executionPlanHash,
+        resolvedTraversalLockHash: port.resolvedTraversalLockHash,
+      };
+
+      controlledEntityId = undefined;
+      const planRead = vi.spyOn(host, "readExecutionPlan").mockImplementation(
+        () => {
+          throw new Error("released control must be rejected first");
+        },
+      );
+
+      expectRuntimeCode(
+        () => port.readLatestTickEvidence(),
+        "TRAVERSAL_RUNTIME_NOT_CONTROLLED",
+      );
+      expectRuntimeCode(
+        () => port.resetToStartAnchor({ startAnchorEntityId: "spawn-main" }),
+        "TRAVERSAL_RUNTIME_NOT_CONTROLLED",
+      );
+      await expect(port.runFixedTick({ walkDirectionWorldXZ: [0, -1] }))
+        .rejects.toMatchObject({ code: "TRAVERSAL_RUNTIME_NOT_CONTROLLED" });
+      expect(planRead).not.toHaveBeenCalled();
+      expect({
+        authoringSpecHash: port.authoringSpecHash,
+        layoutSolveReportHash: port.layoutSolveReportHash,
+        resourceLockHash: port.resourceLockHash,
+        executionPlanHash: port.executionPlanHash,
+        resolvedTraversalLockHash: port.resolvedTraversalLockHash,
+      }).toEqual(lockedIdentity);
     } finally {
       await runtime.dispose();
     }
