@@ -14,6 +14,7 @@ export const CLEAN_BREAK_SCAN_ROOTS = Object.freeze([
   "docs/02-sdk-architecture.md",
   "docs/05-mvp-roadmap.md",
   "docs/17-canonical-json-quickstart.md",
+  "docs/20-gameplay-integration-contract.md",
 ] as const);
 
 export const CLEAN_BREAK_HISTORICAL_EXCLUSIONS = Object.freeze([
@@ -139,7 +140,7 @@ function textFamilyDefinitions(): readonly TextFamilyDefinition[] {
       familyId: "superseded-active-documentation",
       classification: "superseded-delete" as const,
       blocksCompletion: true,
-      pathPattern: /^(?:README\.md|docs\/(?:00-project-overview|02-sdk-architecture|05-mvp-roadmap|17-canonical-json-quickstart)\.md)$/,
+      pathPattern: /^(?:README\.md|docs\/(?:00-project-overview|02-sdk-architecture|05-mvp-roadmap|17-canonical-json-quickstart|20-gameplay-integration-contract)\.md)$/,
       pattern: /\b(?:AuthoringSpec\s+V[1-3]|NormalizedWorldIR\s+V[1-3]|ExecutionPlan\s+V[1-4]|Snapshot\s+V3|Browser Protocol\s+V4)\b/g,
     }),
     Object.freeze({

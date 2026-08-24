@@ -28,7 +28,7 @@ Gameplay 真相。
 2. [SDK 分层架构](docs/02-sdk-architecture.md)：系统边界、八层架构、代码包归属和运行时序列；
 3. [Canonical JSON V4 快速接入](docs/17-canonical-json-quickstart.md)：当前世界输入、CLI 与 Browser Protocol；
 4. [主体手感配表与版本工作区](docs/19-subject-preset-workspace.md)：本地版本、公共默认、发布与回滚；
-5. [Gameplay 对接协议冻结版](docs/20-gameplay-integration-preview-contract.md)：当前 Domain Schema、Browser V5 / Snapshot V4 与正式版清理边界；
+5. [Gameplay 正式对接合同](docs/20-gameplay-integration-contract.md)：当前 Domain Schema、Browser V5 / Snapshot V4 与 clean-break 边界；
 6. [重构总进度与 Backlog](docs/18-refactor-progress-and-backlog.md)：完成度、优先级、依赖和验收标准。
 
 ## 核心链路

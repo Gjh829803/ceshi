@@ -273,6 +273,37 @@ describe("verify:unreleased-clean-break", () => {
     expect(report.ok).toBe(false);
   });
 
+  it("treats the Gameplay integration contract as active documentation", async () => {
+    const fixtureRoot = await mkdtemp(path.join(os.tmpdir(), "clean-break-gameplay-doc-"));
+    cleanupPaths.push(fixtureRoot);
+    const contractPath = path.join(
+      fixtureRoot,
+      "docs",
+      "20-gameplay-integration-contract.md",
+    );
+    await mkdir(path.dirname(contractPath), { recursive: true });
+    await writeFile(
+      contractPath,
+      `${token(["Execution", "Plan"])} V4 produces ${token(["Snapshot"])} V3.\n`,
+      "utf8",
+    );
+
+    const report = await scanUnreleasedCleanBreak(fixtureRoot);
+
+    expect(CLEAN_BREAK_SCAN_ROOTS).toContain(
+      "docs/20-gameplay-integration-contract.md",
+    );
+    expect(family(report, "superseded-active-documentation").matchesByPath)
+      .toEqual([{
+        path: "docs/20-gameplay-integration-contract.md",
+        matches: [
+          { line: 1, value: `${token(["Execution", "Plan"])} V4` },
+          { line: 1, value: `${token(["Snapshot"])} V3` },
+        ],
+      }]);
+    expect(report.ok).toBe(false);
+  });
+
   it("blocks a second public V4 JSON parser name and a hidden legacy camera path", async () => {
     const fixtureRoot = await mkdtemp(path.join(os.tmpdir(), "clean-break-parser-alias-"));
     cleanupPaths.push(fixtureRoot);
