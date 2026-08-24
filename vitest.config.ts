@@ -9,7 +9,7 @@ export default defineConfig({
     // those integration tests compete for process and CPU budgets until their
     // lifecycle assertions time out. Keep the default gate bounded; focused
     // commands can still override this explicitly from the CLI.
-    maxWorkers: 4,
+    maxWorkers: 3,
     minWorkers: 1,
     coverage: {
       provider: "v8",
