@@ -426,23 +426,47 @@ Validation 词汇。它不构建 Traversal Graph，不跑 Character Controller�
 `route-connectivity` 或 `route-runtime-conformance` 已经通过。已评 Runtime Metric
 必须引用 `route-runtime-probe-receipt`；一份 Traversal Graph 不能让 Runtime Gate 通过。
 
-## 代码边界
+## Workspace Package Map
+
+内部按稳定合同、领域能力、运行时和 Provider Adapter 拆包；AI 与 SDK 使用者不需要理解
+这些内部目录，只使用统一 Schema、CLI、Browser Protocol 和顶层 `world.*` API。`公开边界`
+表示该包是否定义可序列化合同或 SDK 入口；它不表示允许绕过 Compiler/Runtime Host 直接调用。
+
+| Package | 核心职责 | 公开边界 | 明确禁止 |
+|---|---|---|---|
+| `packages/contracts/` | Alpha 层共享 ID、Transform、Frame、Action 与 Diagnostic 基础类型 | 仅遗留/底层共享类型 | 承载新 Canonical Schema 或引擎对象 |
+| `packages/protocol/` | Canonical JSON Bytes、稳定排序与 SHA-256 Hash | Canonical 序列化基础 | 依赖领域 Runtime 或 Provider |
+| `packages/runtime-contracts/` | ExecutionPlan、Runtime Snapshot、Camera 参数和 Browser Protocol V5 | Runtime/Browser 公共合同 | 暴露 Babylon、Havok、Recast Handle |
+| `packages/gameplay-contracts/` | Gameplay Command、Receipt、Event、State 与 Bootstrap 的关闭合同 | G19 集成中；未来 Gameplay 公共合同 | 实现 Gameplay 规则或依赖引擎 |
+| `packages/core/` | 早期 Entity、Transform、Input、Event 与 World 基础实现 | 内部兼容层 | 成为无边界的通用工具杂物包 |
+| `packages/world/` | `world.*` Authoring DSL、Feature、Terrain、Landmark、规划工件与场景规格 | AI/场景作者入口 | 直接创建 Provider 对象或修改 Runtime 内部 |
+| `packages/authoring/` | Authoring Schema、Parser、Normalizer、Resource Lock、Preset Candidate 与 Normalized IR | AI Schema 与 Authoring Pipeline | 执行 Babylon/Havok 或反向读取 Runtime State |
+| `packages/layout-solver/` | 候选生成、Constraint Evaluator、确定性搜索和 Layout Report | 引擎无关 Solver 合同 | 直接修改场景或依赖渲染结果 |
+| `packages/compiler/` | NormalizedWorldIR 到锁定 ExecutionPlan 的确定性编译 | Compiler API | 读取 Prompt、执行 Gameplay 或创建引擎对象 |
+| `packages/world-package/` | WorldPackage Manifest、Package Root、Build Closure 与 Receipt | 正式内容包合同 | 保存运行时 Handle 或未锁定草稿 |
+| `packages/validation/` | Validation Profile、Metric、Evidence、Gate、Report 与 Package 校验 | CLI/自动化验证合同 | 用渲染成功替代合同/身份校验 |
+| `packages/subject-registry/` | 精确版本的 Subject Definition、Capability、Profile 与 Asset Inventory | Registry 资源入口 | 保存会话状态或未版本化数字 overlay |
+| `packages/subject-composition/` | Primitive Bounds、Collider 推导、角色胶囊和资源成本 | 内部可复用 LEGO 几何合同 | 依赖 Babylon Mesh 或场景层级 |
+| `packages/subject-actions/` | Character State、Ground Humanoid Action 与动作解析 | 引擎无关动作语义 | 直接播放 AnimationGroup 或控制输入设备 |
+| `packages/subjects/` | 早期 Humanoid Kit、Visual 与 Motor 组合 | 兼容/实验入口 | 定义新的 Canonical Subject 方言 |
+| `packages/animation/` | Action Registry、Humanoid 动作状态机与动画状态推进 | 内部运行能力 | 决定 Gameplay Action 准入或 World State |
+| `packages/camera/` | 引擎无关的第三人称 Camera Rig 数学与跟随策略 | 内部 Camera 算法 | 拥有 Gameplay 关系、Subject facing 或输入真相 |
+| `packages/physics/` | Physics Body、Collider、Shape 与早期 Physics System 抽象 | 内部物理合同 | 把 Provider Body/Shape Handle 写入 Schema |
+| `packages/terrain-surface/` | Heightfield、Triangle Mesh、Collider Support 与 Surface Query | Traversal/Runtime 内部几何合同 | 把单一 Heightfield 冒充全部空间拓扑 |
+| `packages/traversal/` | Traversal Surface、Lock、Capability Envelope、Graph/Path/Probe Receipt 与 Route Overlay | Provider-neutral Route 合同 | 暴露 Recast 数据或替代 Runtime 支撑事实 |
+| `packages/traversal-recast/` | Recast/Detour Graph Build、Query 与 Route Evidence Provider Adapter | 不直接面向 AI | 让 Provider 名称或 Handle 进入 Canonical 协议 |
+| `packages/gameplay/` | Gameplay State、Feature、Semantic Action 与 Command Dispatcher | G19 集成中；引擎无关组合层 | 依赖 Babylon、Browser DOM 或设备输入 |
+| `packages/runtime-host/` | WorldSession、Command Journal、事务、容量和生命周期所有权 | G19 集成中；Runtime Host API | 实现 Babylon 场景细节或重复推导 Gameplay State |
+| `packages/runtime-babylon/` | Babylon/Havok Runtime、Camera Director、Subject Controller、Capture 与资产生命周期 | Engine Adapter，不直接面向 AI | 定义 Canonical Schema 或泄漏引擎 Handle |
+| `packages/control-capture/` | Simulation Take、Capture Schedule、Profile、严格校验与 Hash | Take/Capture 自动化合同 | 把 Authoring Preview 当作 Gameplay Ground Truth |
+| `packages/testkit/` | Feature Ownership、Transform、Spawn Safety 与诊断测试辅助 | 仅测试/门禁 | 被生产 Runtime 依赖为业务实现 |
+
+`packages/gameplay-contracts/`、`packages/gameplay/` 与 `packages/runtime-host/` 当前位于 G19
+集成分支；合入前 README 先冻结其职责，避免实现阶段把 Gameplay 合同、规则和 Babylon
+Adapter 再次耦合。应用与工具入口保持为：
 
 | 路径 | 职责 |
 |---|---|
-| `packages/protocol/` | Canonical JSON Bytes 与 Hash |
-| `packages/world-package/` | 最小正式 WorldPackage Manifest、Package Root 与 Build Receipt 权威 |
-| `packages/subject-composition/` | 引擎无关的 Primitive Bounds、Collider 推导和资源成本 |
-| `packages/subject-registry/` | 精确版本的 Definition、Capability 和 Profile Registry |
-| `packages/authoring/` | Authoring V3 Schema、V4 connectivity、解析、语义校验、资源解析、Solver 编排和 Normalized IR V3/V4 |
-| `packages/layout-solver/` | 引擎无关的候选、八种 Constraint Evaluator、确定性搜索、冲突与 Report |
-| `packages/compiler/` | NormalizedWorldIR → ExecutionPlan 的确定性编译 |
-| `packages/control-capture/` | 引擎无关的 Simulation Take、Schedule、Profile、严格校验与 Hash |
-| `packages/validation/` | 引擎无关的 Validation Profile/Report/Gate/Metric/Evidence、严格解析、Policy 与 Hash |
-| `packages/traversal/` | 引擎无关的 Traversal Surface、Lock、Capability Envelope、Graph/Path/Probe Receipt 与 Route Overlay 合同 |
-| `packages/traversal-recast/` | Recast/Detour Provider Adapter；Provider 类型不进入 Canonical 协议 |
-| `packages/runtime-contracts/` | ExecutionPlan、Snapshot、Browser Protocol V5 与只读 Route Evidence V2 投影协议 |
-| `packages/runtime-babylon/` | Babylon/Havok Runtime Adapter |
 | `apps/playground/` | Canonical Runtime 页面、旧 Alpha 场景和浏览器验证入口 |
 | `scripts/worldkit.ts` | SDK CLI |
 
