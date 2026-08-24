@@ -159,6 +159,20 @@ function diagnosticForRiggedWorld(
   return result.diagnostics;
 }
 
+function createStaticAssetPackageSubjectWorld() {
+  const world = createValidRiggedPackageSubjectWorld();
+  const definition = world.resources.subjectDefinitions[0]!;
+  world.resources = {
+    ...world.resources,
+    subjectDefinitions: [{
+      ...definition,
+      visualBinding: { mode: "static" },
+      sockets: [],
+    }],
+  };
+  return world;
+}
+
 function packageDefinitionHash(result: NormalizeAuthoringResultV3): string {
   return result.value!.resources.subjectDefinitions.find(
     (definition) => definition.source === "package",
@@ -204,6 +218,73 @@ describe("ResourceLockBuilderV1 canonical ordering", () => {
 });
 
 describe("Package Subject Definition normalization", () => {
+  it("resolves, locks, and costs the one Asset Part of a static Definition", () => {
+    const result = normalizeAuthoringSpec(createStaticAssetPackageSubjectWorld());
+
+    expect(result.ok).toBe(true);
+    const definition = result.value!.resources.subjectDefinitions[0]!;
+    expect(definition.visualBinding).toEqual({ mode: "static" });
+    expect(definition.visualParts).toEqual([
+      expect.objectContaining({
+        id: "body.asset",
+        kind: "asset",
+        subjectAssetRef: SUBJECT_ASSET_REF,
+      }),
+    ]);
+    expect(definition.resourceCost).toEqual({
+      vertices: 360,
+      triangles: 180,
+      colliders: 1,
+    });
+    expect(result.value!.resources.subjectAssets).toEqual([
+      expect.objectContaining({ subjectAssetRef: SUBJECT_ASSET_REF }),
+    ]);
+    const lockRefs = result.value!.resources.resourceLock.map(
+      (entry) => entry.resourceRef,
+    );
+    expect(lockRefs).toContain(SUBJECT_ASSET_REF);
+    expect(lockRefs).not.toContain(RIG_PROFILE_REF);
+    expect(lockRefs).not.toContain(ANIMATION_SET_REF);
+  });
+
+  it("rejects more than one Asset Part in a static Definition", () => {
+    const world = createStaticAssetPackageSubjectWorld();
+    const definition = world.resources.subjectDefinitions[0]!;
+    const assetPart = definition.visualParts[0]!;
+    world.resources = {
+      ...world.resources,
+      subjectDefinitions: [{
+        ...definition,
+        visualParts: [assetPart, { ...assetPart, id: "body.asset.copy" }],
+      }],
+    };
+
+    expect(normalizeAuthoringSpec(world).diagnostics).toContainEqual(
+      expect.objectContaining({
+        code: "STATIC_SUBJECT_MULTIPLE_ASSET_PARTS_UNSUPPORTED",
+        instancePath: "/resources/subjectDefinitions/0/visualParts",
+        details: expect.objectContaining({ assetPartCount: 2 }),
+      }),
+    );
+  });
+
+  it("preserves a zero-asset primitive static Definition", () => {
+    const result = normalizeAuthoringSpec(createValidPackageSubjectWorld());
+
+    expect(result.ok).toBe(true);
+    const definition = result.value!.resources.subjectDefinitions.find(
+      (candidate) =>
+        candidate.subjectDefinitionRef ===
+          "package://subject-definition/coastal-pack-animal@1",
+    );
+    expect(definition).toMatchObject({
+      visualBinding: { mode: "static" },
+      resourceCost: { vertices: 304, triangles: 524, colliders: 1 },
+    });
+    expect(definition?.visualParts.every((part) => part.kind === "primitive")).toBe(true);
+    expect(result.value!.resources.subjectAssets).toEqual([]);
+  });
+
   it("normalizes and locks the complete Golden rigged graph without asset bytes", () => {
     const result = normalizeAuthoringSpec(createValidRiggedPackageSubjectWorld());
 

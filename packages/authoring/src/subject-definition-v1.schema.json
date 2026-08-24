@@ -95,28 +95,6 @@
     {
       "if": {
         "properties": {
-          "visualParts": {
-            "type": "array",
-            "contains": {
-              "type": "object",
-              "required": ["kind"],
-              "properties": { "kind": { "const": "asset" } }
-            }
-          }
-        }
-      },
-      "then": {
-        "properties": {
-          "visualBinding": {
-            "type": "object",
-            "properties": { "mode": { "const": "rigged" } }
-          }
-        }
-      }
-    },
-    {
-      "if": {
-        "properties": {
           "visualBinding": {
             "type": "object",
             "required": ["mode"],

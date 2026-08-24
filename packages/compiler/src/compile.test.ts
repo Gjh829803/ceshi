@@ -153,6 +153,20 @@ function normalizeRiggedWorld(
   return normalized;
 }
 
+function normalizeStaticAssetWorld() {
+  return normalizeRiggedWorld((spec) => {
+    const definition = spec.resources.subjectDefinitions[0]!;
+    spec.resources = {
+      ...spec.resources,
+      subjectDefinitions: [{
+        ...definition,
+        visualBinding: { mode: "static" },
+        sockets: [],
+      }],
+    };
+  });
+}
+
 function compileNormalizedWorld(world: NormalizedWorldIRV3) {
   return compileWorld({
     normalizedWorldIr: world,
@@ -505,6 +519,48 @@ describe("compileWorld", () => {
       /Babylon|Havok|AssetContainer|Uint8Array|ArrayBuffer/,
     );
     expect(plan.subjects[0]?.controlFeel.contentHash).toMatch(/^sha256:[a-f0-9]{64}$/);
+  });
+
+  it("compiles one static Subject Asset into the addressable ExecutionPlan asset table", () => {
+    const normalized = normalizeStaticAssetWorld();
+    const result = compileWorld({
+      normalizedWorldIr: normalized.value!,
+      normalizedWorldIrHash: normalized.normalizedWorldIrHash!,
+    });
+
+    expect(result.ok).toBe(true);
+    const plan = result.executionPlan!;
+    const subject = plan.subjects.find((candidate) => candidate.entityId === "player")!;
+    expect(subject.visualBinding).toEqual({ mode: "static" });
+    expect(subject.visualParts).toEqual([
+      expect.objectContaining({
+        id: "body.asset",
+        kind: "asset",
+        subjectAssetRef: SUBJECT_ASSET_REF,
+      }),
+    ]);
+    expect(plan.subjectAssets).toEqual([
+      expect.objectContaining({ subjectAssetRef: SUBJECT_ASSET_REF }),
+    ]);
+    expect(plan.rigProfiles).toEqual([]);
+    expect(plan.animationSets).toEqual([]);
+  });
+
+  it("preserves the unresolved Subject Asset invariant for a static Subject", () => {
+    const normalized = normalizeStaticAssetWorld();
+    const world = structuredClone(normalized.value!);
+    world.resources.subjectAssets = [];
+
+    expect(compileNormalizedWorld(world)).toEqual({
+      ok: false,
+      diagnostics: [{
+        severity: "error",
+        code: "COMPILER_NORMALIZED_IR_INVALID",
+        instancePath: "/normalizedWorldIr",
+        message:
+          "NormalizedWorldIRV3 invariant violated: missing Subject Asset 'worldkit://subject-asset/humanoid.golden@1'.",
+      }],
+    });
   });
 
   it("locks the current valid rigged ExecutionPlan hash", () => {

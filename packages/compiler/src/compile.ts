@@ -990,13 +990,22 @@ function compileSubjectsV3(
         }
         reachableRigProfilesByRef.set(rigProfile.rigProfileRef, rigProfile);
         reachableAnimationSetsByRef.set(animationSet.animationSetRef, animationSet);
-      } else if (
-        assetParts.length > 0 ||
-        definition.sockets.some((socket) => socket.kind === "bone")
-      ) {
-        throw new Error(
-          `NormalizedWorldIRV3 invariant violated: static Subject '${node.id}' contains rigged visual data.`,
-        );
+      } else {
+        if (assetParts.length > 1) {
+          throw new Error(
+            `NormalizedWorldIRV3 invariant violated: static Subject '${node.id}' supports at most one Subject Asset.`,
+          );
+        }
+        const staticBinding = definition.visualBinding;
+        if (
+          definition.sockets.some((socket) => socket.kind === "bone") ||
+          Object.prototype.hasOwnProperty.call(staticBinding, "rigProfileRef") ||
+          Object.prototype.hasOwnProperty.call(staticBinding, "animationSetRef")
+        ) {
+          throw new Error(
+            `NormalizedWorldIRV3 invariant violated: static Subject '${node.id}' contains rigged visual data.`,
+          );
+        }
       }
 
       if (definition.colliderPolicy.kind === "profile") {

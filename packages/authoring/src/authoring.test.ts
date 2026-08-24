@@ -191,10 +191,24 @@ describe("AuthoringSpecV3", () => {
     });
   });
 
+  it("accepts one static Asset Part without rigged-only resources", () => {
+    const definition = createValidRiggedPackageDefinition();
+    const staticDefinition = {
+      ...definition,
+      visualBinding: { mode: "static" as const },
+      sockets: [],
+    };
+
+    expect(validatePackageSubjectDefinition(staticDefinition)).toEqual({
+      ok: true,
+      value: staticDefinition,
+      diagnostics: [],
+    });
+  });
+
   it.each([
     ["asset part with colliderContribution", "/visualParts/0/colliderContribution"],
     ["rigged binding without animationSetRef", "/visualBinding/animationSetRef"],
-    ["static binding containing an asset part", "/visualBinding/mode"],
     ["bone socket without boneId", "/sockets/0/boneId"],
   ])("rejects %s at the exact property path", (_label, instancePath) => {
     const definition = structuredClone(
@@ -210,9 +224,6 @@ describe("AuthoringSpecV3", () => {
         break;
       case "/visualBinding/animationSetRef":
         delete visualBinding.animationSetRef;
-        break;
-      case "/visualBinding/mode":
-        definition.visualBinding = { mode: "static" };
         break;
       case "/sockets/0/boneId":
         delete sockets[0]!.boneId;

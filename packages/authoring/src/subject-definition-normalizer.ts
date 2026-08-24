@@ -43,10 +43,10 @@ export interface NormalizeSubjectDefinitionRequestV2 {
   resourceBudget?: AuthoringDocumentBase["world"]["resourceBudget"];
 }
 
-interface NormalizedRiggedVisualResourcesV1 {
-  subjectAssetResource: SubjectAssetManifestV1;
-  rigProfileResource: RigProfileManifestV1;
-  animationSetResource: AnimationSetManifestV1;
+interface NormalizedVisualResourcesV1 {
+  subjectAssetResource?: SubjectAssetManifestV1;
+  rigProfileResource?: RigProfileManifestV1;
+  animationSetResource?: AnimationSetManifestV1;
 }
 
 const REQUIRED_GROUND_ACTION_IDS = ["idle", "jump", "run", "walk"] as const;
@@ -564,22 +564,29 @@ function resourcesOfKind(
     .sort((left, right) => left.localeCompare(right));
 }
 
-function resolveRiggedVisualResources(
+function resolveVisualResources(
   definition: SubjectDefinitionSourceV2,
   request: NormalizeSubjectDefinitionRequestV2,
-): NormalizedRiggedVisualResourcesV1 | undefined {
+): NormalizedVisualResourcesV1 | undefined {
   const { diagnostics, instancePath, resourceLockBuilder, subjectResourceRegistry } = request;
-  if (definition.visualBinding.mode !== "rigged") return undefined;
-
   const assetParts = definition.visualParts.filter((part) => part.kind === "asset");
-  if (assetParts.length !== 1) {
+  if (definition.visualBinding.mode === "static" && assetParts.length > 1) {
+    addError(diagnostics, "STATIC_SUBJECT_MULTIPLE_ASSET_PARTS_UNSUPPORTED",
+      `${instancePath}/visualParts`,
+      "A static Subject Definition supports at most one Asset Part.",
+      { assetPartCount: assetParts.length });
+    return undefined;
+  }
+  if (definition.visualBinding.mode === "rigged" && assetParts.length !== 1) {
     addError(diagnostics, "SUBJECT_ASSET_PROFILE_INCOMPATIBLE",
       `${instancePath}/visualParts`,
       "A rigged Subject Definition requires exactly one Asset Part.",
       { requiredAssetPartCount: 1, assetPartCount: assetParts.length });
   }
   const assetPart = assetParts[0];
-  if (assetPart === undefined) return undefined;
+  if (assetPart === undefined) {
+    return definition.visualBinding.mode === "static" ? {} : undefined;
+  }
   const assetPartIndex = definition.visualParts.indexOf(assetPart);
 
   const subjectAsset = subjectResourceRegistry.resolveSubjectAsset(assetPart.subjectAssetRef);
@@ -595,6 +602,12 @@ function resolveRiggedVisualResources(
   } else {
     resourceLockBuilder.addRegistryResource(subjectAsset,
       `${instancePath}/visualParts/${assetPartIndex}/subjectAssetRef`, diagnostics);
+  }
+
+  if (definition.visualBinding.mode === "static") {
+    return subjectAsset === undefined
+      ? undefined
+      : { subjectAssetResource: structuredClone(subjectAsset) };
   }
 
   const { rigProfileRef, animationSetRef } = definition.visualBinding;
@@ -969,17 +982,8 @@ export function normalizeSubjectDefinitionV2(
       { bodyTopology: definition.bodyTopology });
   }
 
-  let riggedResources: NormalizedRiggedVisualResourcesV1 | undefined;
-  if (definition.visualBinding.mode === "rigged") {
-    riggedResources = resolveRiggedVisualResources(definition, request);
-  } else {
-    const assetPartIds = definition.visualParts.filter((part) => part.kind === "asset")
-      .map((part) => part.id).sort((left, right) => left.localeCompare(right));
-    if (assetPartIds.length > 0) {
-      addError(diagnostics, "SUBJECT_ASSET_PROFILE_INCOMPATIBLE",
-        `${instancePath}/visualBinding/mode`,
-        "A static Subject Definition cannot contain Asset Parts.", { assetPartIds });
-    }
+  const visualResources = resolveVisualResources(definition, request);
+  if (definition.visualBinding.mode === "static") {
     definition.sockets.forEach((socket, index) => {
       if (socket.kind === "bone") {
         addError(diagnostics, "SUBJECT_ASSET_PROFILE_INCOMPATIBLE",
@@ -993,7 +997,7 @@ export function normalizeSubjectDefinitionV2(
   const capabilityAssembly = normalizeCapabilityAssemblyV1(definition, request);
   const primitiveCost = calculatePrimitiveResourceCost(
     visualParts.filter((part) => part.kind === "primitive"));
-  const subjectAsset = riggedResources?.subjectAssetResource;
+  const subjectAsset = visualResources?.subjectAssetResource;
   const resourceCost = {
     vertices: primitiveCost.vertices + (subjectAsset?.inventory.vertexCount ?? 0),
     triangles: primitiveCost.triangles + (subjectAsset?.inventory.triangleCount ?? 0),
@@ -1027,7 +1031,10 @@ export function normalizeSubjectDefinitionV2(
     locomotionProfile === undefined || controlFeelProfile === undefined ||
     locomotionCapability === undefined ||
     normalizedCollider === undefined ||
-    (definition.visualBinding.mode === "rigged" && riggedResources === undefined)) {
+    (definition.visualBinding.mode === "rigged" &&
+      (visualResources?.subjectAssetResource === undefined ||
+        visualResources.rigProfileResource === undefined ||
+        visualResources.animationSetResource === undefined))) {
     return undefined;
   }
 
