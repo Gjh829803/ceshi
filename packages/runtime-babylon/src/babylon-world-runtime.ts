@@ -41,14 +41,12 @@ import type {
   FixedInputV1,
   PublishedMovementMediumV1,
   RenderReadyReceiptV1,
-  RuntimeControlCaptureFrameV1,
   SemanticInputActionV1,
   SubjectHarnessReportV1,
   SubjectPresetTuningReceiptV1,
   Vec2,
   Vec3,
   ViewTargetSampleV1,
-  WorldRuntimeSessionV3,
   WorldRuntimeSnapshotV3,
 } from "@whitebox-world/runtime-contracts";
 import { TRUSTED_DEFAULT_CONTROLLER_ID } from "@whitebox-world/runtime-contracts";
@@ -81,7 +79,10 @@ import {
   sampleExecutionTerrainHeight,
   toBabylonHeightfieldData,
 } from "./terrain";
-import { captureBabylonControlFrameV1 } from "./control-capture";
+import {
+  captureBabylonControlFrameV1,
+  type BabylonControlCaptureFrameV1,
+} from "./control-capture";
 import {
   BABYLON_GAMEPLAY_RUNTIME_INTERNAL,
   type BabylonGameplayPossessionTargetV1,
@@ -611,7 +612,14 @@ async function disposeOwnedStack(
   }
 }
 
-export class BabylonWorldRuntime implements WorldRuntimeSessionV3 {
+export interface BabylonSubjectPresetTuningReceiptV1 extends Omit<
+  SubjectPresetTuningReceiptV1,
+  "snapshot"
+> {
+  readonly snapshot: WorldRuntimeSnapshotV3;
+}
+
+export class BabylonWorldRuntime {
   readonly runtimeBackend = "babylon-havok" as const;
   readonly ready: Promise<void> = Promise.resolve();
 
@@ -1396,7 +1404,7 @@ export class BabylonWorldRuntime implements WorldRuntimeSessionV3 {
 
   async captureControlFrame(
     request: ControlCaptureRequestV1,
-  ): Promise<RuntimeControlCaptureFrameV1> {
+  ): Promise<BabylonControlCaptureFrameV1> {
     this.assertUsable();
     if (!Number.isSafeInteger(request.captureFrameIndex) || request.captureFrameIndex < 0) {
       throw new RangeError("Capture Frame Index must be a non-negative safe integer.");
@@ -1670,9 +1678,12 @@ export class BabylonWorldRuntime implements WorldRuntimeSessionV3 {
 
   applySubjectPresetTuning(
     request: ApplySubjectPresetTuningRequestV1,
-  ): SubjectPresetTuningReceiptV1 {
+  ): BabylonSubjectPresetTuningReceiptV1 {
     this.assertUsable();
-    const reject = (code: string, message: string): SubjectPresetTuningReceiptV1 => ({
+    const reject = (
+      code: string,
+      message: string,
+    ): BabylonSubjectPresetTuningReceiptV1 => ({
       status: "rejected",
       diagnostic: { code, message },
       snapshot: this.snapshot(),

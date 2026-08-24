@@ -58,6 +58,16 @@ export interface CaptureBabylonControlFrameOptionsV1 {
   readonly snapshot: WorldRuntimeSnapshotV3;
 }
 
+/**
+ * Provider-internal capture result. The Browser protocol replaces this legacy
+ * runtime snapshot with the canonical WorldRuntimeSnapshotV4 projection before
+ * publication.
+ */
+export type BabylonControlCaptureFrameV1 = Omit<
+  RuntimeControlCaptureFrameV1,
+  "snapshot"
+> & Readonly<{ snapshot: WorldRuntimeSnapshotV3 }>;
+
 const MAX_CAPTURE_TABLE_ID = 0x00ff_ffff;
 
 function assertRgbaLength(
@@ -528,7 +538,7 @@ function captureCamera(
 
 export async function captureBabylonControlFrameV1(
   options: CaptureBabylonControlFrameOptionsV1,
-): Promise<RuntimeControlCaptureFrameV1> {
+): Promise<BabylonControlCaptureFrameV1> {
   await options.scene.whenReadyAsync(false);
   const meshes = captureMeshes(options.scene);
   const tables = buildControlCaptureTablesV1(meshes);
