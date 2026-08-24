@@ -18,17 +18,15 @@ import type {
   PackageSubjectDefinitionV1,
   ProceduralTerrainSourceSpecV2,
 } from "./types";
-import type { AuthoringSpecV3, WorldNodeSpecV3 } from "./types-v3.js";
 import type {
   AuthoringSpecV4,
   NormalizeAuthoringBaseV4Result,
   WorldNodeSpecV4,
 } from "./types-v4.js";
-import { validateAuthoringSpecV3 } from "./validate-v3.js";
 import { validateAuthoringSpecV4 } from "./validate-v4.js";
 
-type AuthoringBaseSpec = AuthoringSpecV3 | AuthoringSpecV4;
-type AuthoringWorldNode = WorldNodeSpecV3 | WorldNodeSpecV4;
+type AuthoringBaseSpec = AuthoringSpecV4;
+type AuthoringWorldNode = WorldNodeSpecV4;
 
 const SUPPORTED_CAMERA_RIG = "worldkit://camera/third-person.standard@1";
 
@@ -248,25 +246,13 @@ function packageDefinitionRef(definition: PackageSubjectDefinitionV1): string {
   return `package://subject-definition/${definition.id}@${definition.version}`;
 }
 
-export interface NormalizeAuthoringBaseV3Options extends NormalizeAuthoringOptions {
+export interface NormalizeAuthoringBaseV4Options extends NormalizeAuthoringOptions {
   readonly finalTransformsByEntityId?: Readonly<Record<string, NormalizedTransformV2>>;
-}
-
-export function normalizeAuthoringBaseV3(
-  value: unknown,
-  options: NormalizeAuthoringBaseV3Options = {},
-): NormalizeAuthoringBaseResult {
-  const schemaResult = validateAuthoringSpecV3(value);
-  if (!schemaResult.ok || schemaResult.value === undefined) {
-    return { ok: false, diagnostics: schemaResult.diagnostics };
-  }
-
-  return normalizeValidatedAuthoringBase(schemaResult.value, options);
 }
 
 export function normalizeAuthoringBaseV4(
   value: unknown,
-  options: NormalizeAuthoringBaseV3Options = {},
+  options: NormalizeAuthoringBaseV4Options = {},
 ): NormalizeAuthoringBaseV4Result {
   const schemaResult = validateAuthoringSpecV4(value);
   if (!schemaResult.ok || schemaResult.value === undefined) {
@@ -277,7 +263,7 @@ export function normalizeAuthoringBaseV4(
 
 function normalizeValidatedAuthoringBase(
   spec: AuthoringBaseSpec,
-  options: NormalizeAuthoringBaseV3Options,
+  options: NormalizeAuthoringBaseV4Options,
 ): NormalizeAuthoringBaseResult {
   const diagnostics: AuthoringDiagnostic[] = [];
   const subjectResourceRegistry =

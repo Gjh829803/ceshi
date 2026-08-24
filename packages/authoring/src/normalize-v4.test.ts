@@ -2,14 +2,11 @@ import { describe, expect, it } from "vitest";
 
 import {
   canonicalAuthoringLayoutIdentityV4,
-  normalizeAuthoringSpecV3,
   normalizeAuthoringSpecV4,
   projectNormalizedWorldResourcesToLayoutIdentityV4,
   type AuthoringSpecV4,
 } from "./index.js";
-import {
-  createValidAuthoringSpecV4 as createValidAuthoringSpec,
-} from "./test-fixture.js";
+import { createValidAuthoringSpec } from "./test-fixture.js";
 import { sha256CanonicalJson } from "./canonical-json.js";
 
 const GROUND_STATIC_PROFILE_REF =
@@ -235,7 +232,7 @@ describe("normalizeAuthoringSpecV4", () => {
     expect(result.normalizedWorldIrHash).not.toBe(result.layoutSolveReportHash);
   });
 
-  it("hashes the complete V4 Authoring identity without aliasing the V3 layout identity", () => {
+  it("hashes the complete V4 Authoring identity independently from layout identity", () => {
     const baseline = normalizeAuthoringSpecV4(routeWorld());
     const repeated = normalizeAuthoringSpecV4(routeWorld());
     const changedSource = routeWorld();
@@ -373,15 +370,4 @@ describe("normalizeAuthoringSpecV4", () => {
       .not.toBe(normalizeAuthoringSpecV4(routeWorld()).normalizedWorldIrHash);
   });
 
-  it("does not let the explicit V3 normalizer reinterpret V4", () => {
-    expect(normalizeAuthoringSpecV3(routeWorld())).toMatchObject({
-      ok: false,
-      diagnostics: expect.arrayContaining([
-        expect.objectContaining({
-          code: "AUTHORING_SCHEMA_INVALID",
-          instancePath: "/schemaVersion",
-        }),
-      ]),
-    });
-  });
 });

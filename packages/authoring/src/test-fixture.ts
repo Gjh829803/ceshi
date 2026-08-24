@@ -1,17 +1,16 @@
 import type {
   PackageSubjectDefinitionV1,
 } from "./types";
-import type { AuthoringSpecV3 } from "./types-v3.js";
 import type { AuthoringSpecV4 } from "./types-v4.js";
 
-export function createValidAuthoringSpecV3(): AuthoringSpecV3 {
+export function createValidAuthoringSpec(): AuthoringSpecV4 {
   return {
     kind: "worldkit-authoring-spec",
-    schemaVersion: 3,
+    schemaVersion: 4,
     layout: {
       solverProfileRef: "worldkit://layout-solver-profile/outdoor.s1@1",
     },
-    spatial: { regions: [], routes: [], screenRegions: [] },
+    spatial: { regions: [], routes: [], screenRegions: [], traversalAreas: [] },
     id: "basic-world",
     seed: 1024,
     world: {
@@ -121,28 +120,12 @@ export function createValidAuthoringSpecV3(): AuthoringSpecV3 {
       controlledEntityId: "player",
       cameraEntityId: "camera-main",
     },
-    constraints: { placements: [] },
+    constraints: { placements: [], connectivity: [] },
   };
-}
-
-export function createValidAuthoringSpec(): AuthoringSpecV3 {
-  return createValidAuthoringSpecV3();
 }
 
 export function createValidAuthoringSpecV4(): AuthoringSpecV4 {
-  const source = createValidAuthoringSpecV3();
-  return {
-    ...source,
-    schemaVersion: 4,
-    spatial: {
-      ...source.spatial,
-      traversalAreas: [],
-    },
-    constraints: {
-      placements: source.constraints.placements,
-      connectivity: [],
-    },
-  };
+  return createValidAuthoringSpec();
 }
 
 function createPackageSubjectDefinition(
@@ -246,7 +229,7 @@ function createPackageSubjectDefinition(
 export function createValidPackageSubjectWorld(options: {
   reverseDefinitionCollections?: boolean;
   bodyWidthMeters?: number;
-} = {}): AuthoringSpecV3 {
+} = {}): AuthoringSpecV4 {
   const base = createValidAuthoringSpec();
   const sourceDefinition = createPackageSubjectDefinition(options.bodyWidthMeters ?? 0.8);
   const definition = options.reverseDefinitionCollections
@@ -398,16 +381,10 @@ export function createValidPackageSubjectWorldV4(options: {
   reverseDefinitionCollections?: boolean;
   bodyWidthMeters?: number;
 } = {}): AuthoringSpecV4 {
-  const source = createValidPackageSubjectWorld(options);
-  return {
-    ...source,
-    schemaVersion: 4,
-    spatial: { ...source.spatial, traversalAreas: [] },
-    constraints: { ...source.constraints, connectivity: [] },
-  };
+  return createValidPackageSubjectWorld(options);
 }
 
-export function createValidRiggedPackageSubjectWorld(): AuthoringSpecV3 {
+export function createValidRiggedPackageSubjectWorld(): AuthoringSpecV4 {
   const base = createValidAuthoringSpec();
   return {
     ...base,
@@ -428,11 +405,5 @@ export function createValidRiggedPackageSubjectWorld(): AuthoringSpecV3 {
 }
 
 export function createValidRiggedPackageSubjectWorldV4(): AuthoringSpecV4 {
-  const source = createValidRiggedPackageSubjectWorld();
-  return {
-    ...source,
-    schemaVersion: 4,
-    spatial: { ...source.spatial, traversalAreas: [] },
-    constraints: { ...source.constraints, connectivity: [] },
-  };
+  return createValidRiggedPackageSubjectWorld();
 }

@@ -1,20 +1,14 @@
 import type {
-  LayoutHeightfieldV1,
-  LayoutSolveReportV1,
   ResolvedPlacementConstraintV1,
 } from "@whitebox-world/layout-solver";
 import type {
   AnchorNodeSpecV2,
-  AuthoringDocumentBase,
   CameraNodeSpecV2,
   ObjectNodeSpecV2,
   TransformSpecV2,
   Vec2,
   WorldNodeSpecV2,
-  NormalizeAuthoringOptions,
-  NormalizedWorldBase,
   NormalizedWorldNodeV2,
-  AuthoringResult,
 } from "./types.js";
 
 export type TransformSpecV3 = TransformSpecV2;
@@ -160,21 +154,6 @@ export type PlacementConstraintSpecV1 = ConstraintBaseV1 &
       }>
   );
 
-export interface AuthoringSpecV3
-  extends AuthoringDocumentBase {
-  schemaVersion: 3;
-  layout: { solverProfileRef: string };
-  spatial: {
-    regions: SpatialRegionSpecV1[];
-    routes: RouteSpecV1[];
-    screenRegions: ScreenRegionSpecV1[];
-  };
-  nodes: WorldNodeSpecV3[];
-  constraints: {
-    placements: PlacementConstraintSpecV1[];
-  };
-}
-
 export interface NormalizedPlacementProvenanceV1 {
   readonly kind: "fixed" | "solved";
   readonly candidateId: string;
@@ -209,30 +188,3 @@ export type NormalizedWorldNodeV3 =
       placementProvenance: NormalizedPlacementProvenanceV1;
     })
   | CameraNodeSpecV3;
-
-export interface NormalizedWorldIRV3
-  extends Omit<NormalizedWorldBase, "nodes"> {
-  readonly kind: "worldkit-normalized-world";
-  readonly schemaVersion: 3;
-  readonly nodes: readonly NormalizedWorldNodeV3[];
-  readonly layout: Readonly<{
-    solverProfileRef: string;
-    resolvedVersion: string;
-    solverProfileHash: `sha256:${string}`;
-    layoutSolveReportHash: `sha256:${string}`;
-    regions: readonly SpatialRegionSpecV1[];
-    routes: readonly RouteSpecV1[];
-    screenRegions: readonly ScreenRegionSpecV1[];
-    heightfields: readonly LayoutHeightfieldV1[];
-    assertions: readonly NormalizedLayoutAssertionV1[];
-  }>;
-}
-
-export interface NormalizeAuthoringResultV3
-  extends AuthoringResult<NormalizedWorldIRV3> {
-  readonly normalizedWorldIrHash?: `sha256:${string}`;
-  readonly layoutSolveReport?: LayoutSolveReportV1;
-  readonly layoutSolveReportHash?: `sha256:${string}`;
-}
-
-export type NormalizeAuthoringOptionsV3 = NormalizeAuthoringOptions;

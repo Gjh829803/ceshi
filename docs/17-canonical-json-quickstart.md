@@ -373,7 +373,7 @@ Report。Report 写到 `--output`，Canonical Evidence 写到兄弟目录
 infrastructure` 分别退出 `0 / 2 / 3 / 1`，基础设施异常不会被伪装成 Route 失败。
 V3 输入会被明确拒绝，不会自动补空 Connectivity 或升级为 V4。
 
-## 7. Browser Protocol V4
+## 7. Browser Protocol V5
 
 Canonical 页面就绪后暴露 `window.__WORLDKIT__`：
 
@@ -387,19 +387,22 @@ interface WorldkitBrowserDiagnosticV1 {
 }
 
 interface WorldkitBrowserApiV5 {
-  version: 4;
-  ready(): Promise<WorldRuntimeSnapshotV3>;
-  getSnapshot(): WorldRuntimeSnapshotV3;
+  version: 5;
+  ready(): Promise<WorldRuntimeSnapshotV4>;
+  getSnapshot(): WorldRuntimeSnapshotV4;
   getDiagnostics(): readonly WorldkitBrowserDiagnosticV1[];
-  bindControl(request: BindControlRequestV2): ControlBindingReceiptV2;
-  runFixedInput(steps: readonly FixedInputV1[]): Promise<WorldRuntimeSnapshotV3>;
+  executeGameplayCommand(command: GameplayCommandV1): Promise<GameplayCommandReceiptV1>;
+  runFixedInput(steps: readonly FixedInputV1[]): Promise<WorldRuntimeSnapshotV4>;
+  getGameplayEvents(query: GameplayEventsQueryV1): GameplayEventsQueryResultV1;
+  getGameplayInspectionSnapshot(): GameplayInspectionSnapshotV1;
+  getWorldStateSnapshot(request: WorldStateSnapshotRequestV1): WorldStateSnapshotV1;
   getControlCaptureCapabilities(): ControlCaptureCapabilitiesV1;
-  waitForSimulationTick(tick: number): Promise<WorldRuntimeSnapshotV3>;
+  waitForSimulationTick(tick: number): Promise<WorldRuntimeSnapshotV4>;
   waitForRenderReady(tick: number): Promise<RenderReadyReceiptV1>;
   captureControlFrame(request: ControlCaptureRequestV1): Promise<RuntimeControlCaptureFrameV1>;
   captureScreenshot(): string;
-  reset(): WorldRuntimeSnapshotV3;
-  setPaused(paused: boolean): WorldRuntimeSnapshotV3;
+  reset(): Promise<WorldRuntimeSnapshotV4>;
+  setPaused(paused: boolean): WorldRuntimeSnapshotV4;
 
   // V4 additive, read-only Route evidence
   getRouteSummary(selector: RouteEvidenceSelectorV1): RouteSummaryQueryResultV1;
@@ -409,16 +412,18 @@ interface WorldkitBrowserApiV5 {
 }
 ```
 
-V4 完整保留 V3 的控制、Capture、Pause、Reset、截图以及可选 Capability Discovery/
-Subject Harness/Camera Authoring 方法，只增加上面的四个必选只读 Route getter；仓库
-contract test 会枚举 V3 方法集，防止升级时丢失旧能力。`window.__WORLDKIT__` 只暴露
-V4，不保留并行 V3 alias。
+V5 是唯一 Browser 合同，不保留并行旧版本 alias。它把控制所有权、Semantic Action、
+Gameplay Event/Inspection 和 Canonical World State 统一到 Gameplay authority；Capture、
+Pause、Reset、截图、Capability Discovery、Subject Harness、Camera Preview 和四个只读
+Route getter 仍在同一 API 上。
 
 固定输入使用 `move-forward / move-backward / move-left / move-right / jump / run`
-和明确 tick 数。`bindControl` 用 `expectedControlledEntityId` 做原子比较并切换。
-Snapshot 通过 `subjectStatesByEntityId` 报告每个主体的 Definition 身份、Subject
-Origin 位置、速度、`ground / air` 介质与
-`idle / walk / run / jump` 的 `activeActionId`。
+和明确 tick 数。控制切换只能提交 `control.bind` / `control.release` Gameplay Command；
+Command 必须携带 `runtimeSessionId`、`worldSessionId`、`controllerEntityId` 和
+`expectedPossession`，以 compare-and-set 语义原子提交，Babylon Runtime 不再公开第二个
+直接控制入口。Snapshot V4 的 `state.entityStatesById`、`state.relationshipStatesById`、
+`state.capabilityStatesById` 和 `view.camera` 分别承载 Canonical World State 与 View State；
+Babylon/Havok 的内部 handle 或 provider projection 不进入 Browser 合同。
 
 对于 Placement 世界，`getDiagnostics()` 还会发布只读、递归冻结的
 `WORLDKIT_LAYOUT_ASSERTION_SATISFIED` 证据。Browser 不暴露 Candidate、搜索、

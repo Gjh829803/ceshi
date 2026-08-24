@@ -1,9 +1,5 @@
 export * from "./canonical-json";
 export {
-  canonicalAuthoringIdentityV3,
-  projectNormalizedWorldResourcesToV3LayoutIdentity,
-} from "./canonical-authoring-identity";
-export {
   canonicalAuthoringIdentityV4,
   canonicalAuthoringLayoutIdentityV4,
   projectNormalizedWorldResourcesToLayoutIdentityV4,
@@ -11,14 +7,10 @@ export {
 export { BUILT_IN_LAYOUT_SOLVER_PROFILE_REF } from "@whitebox-world/layout-solver";
 export * from "./layout-input";
 export {
-  normalizeAuthoringSpecV3,
-} from "./normalize-v3";
-export {
   normalizeAuthoringSpecV4,
   normalizeAuthoringSpecV4 as normalizeAuthoringSpec,
 } from "./normalize-v4";
 export * from "./parse";
-export * from "./parse-v3";
 export * from "./parse-v4";
 export * from "./resource-lock";
 export * from "./subject-definition-normalizer";
@@ -26,11 +18,7 @@ export * from "./subject-preset-candidate";
 export * from "./types";
 export type {
   AnchorNodeSpecV3,
-  AuthoringSpecV3,
   CameraNodeSpecV3,
-  NormalizeAuthoringOptionsV3,
-  NormalizeAuthoringResultV3,
-  NormalizedWorldIRV3,
   NormalizedWorldNodeV3,
   ObjectNodeSpecV3,
   TransformSpecV3,
@@ -38,5 +26,4 @@ export type {
 } from "./types-v3";
 export * from "./types-v4";
 export * from "./validate";
-export * from "./validate-v3";
 export * from "./validate-v4";

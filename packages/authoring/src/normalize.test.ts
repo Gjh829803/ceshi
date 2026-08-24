@@ -2,8 +2,8 @@ import { describe, expect, it } from "vitest";
 
 import { normalizeAuthoringSpec } from "./index";
 import {
-  createValidAuthoringSpecV4 as createValidAuthoringSpec,
-  createValidPackageSubjectWorldV4 as createValidPackageSubjectWorld,
+  createValidAuthoringSpec,
+  createValidPackageSubjectWorld,
 } from "./test-fixture";
 
 describe("normalizeAuthoringSpec", () => {

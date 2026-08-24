@@ -11,38 +11,25 @@ import {
 import { isNil } from "lodash-es";
 
 import { sha256CanonicalJson } from "./canonical-json.js";
-import {
-  canonicalAuthoringIdentityV3,
-} from "./canonical-authoring-identity.js";
 import { canonicalAuthoringLayoutIdentityV4 } from "./canonical-authoring-identity-v4.js";
-import { normalizeAuthoringBaseV3, normalizeAuthoringBaseV4 } from "./normalize.js";
+import { normalizeAuthoringBaseV4 } from "./normalize.js";
 import type {
   AuthoringDiagnostic,
   AuthoringResult,
-  NormalizeAuthoringOptions,
   NormalizedProceduralTerrainSourceV2,
   NormalizedWorldBase,
   PrimitivePrototypeSpecV2,
   TransformSpecV2,
 } from "./types.js";
 import type {
-  AuthoringSpecV3,
-} from "./types-v3.js";
-import type {
   AuthoringSpecV4,
   NormalizeAuthoringOptionsV4,
   PlacementConstraintSpecV1 as PlacementConstraintSpecV4,
 } from "./types-v4.js";
-import { validateAuthoringSpecV3 } from "./validate-v3.js";
 import { validateAuthoringSpecV4 } from "./validate-v4.js";
 
 type LayoutAuthoringSpec = AuthoringSpecV4;
 type LayoutPlacementConstraint = PlacementConstraintSpecV4;
-
-export interface ResolveAuthoringLayoutV3Result
-  extends AuthoringResult<ResolvedLayoutInputV1> {
-  readonly resolvedSolverProfile?: ResolvedLayoutSolverProfileV1;
-}
 
 export interface ResolveAuthoringLayoutV4Result
   extends AuthoringResult<ResolvedLayoutInputV1> {
@@ -265,42 +252,6 @@ function semanticReferenceDiagnostics(spec: LayoutAuthoringSpec): readonly Autho
   return diagnostics;
 }
 
-export function resolveAuthoringLayoutV3(
-  value: unknown,
-  options: NormalizeAuthoringOptions = {},
-): ResolveAuthoringLayoutV3Result {
-  const schema = validateAuthoringSpecV3(value);
-  if (!schema.ok || schema.value === undefined) return { ok: false, diagnostics: schema.diagnostics };
-  const spec = schema.value;
-  let resolvedSolverProfile: ResolvedLayoutSolverProfileV1;
-  try {
-    resolvedSolverProfile = resolveLayoutSolverProfileV1(spec.layout.solverProfileRef);
-  } catch {
-    return {
-      ok: false,
-      diagnostics: [diagnostic("AUTHORING_LAYOUT_PROFILE_NOT_FOUND", "/layout/solverProfileRef", `Layout Solver Profile '${spec.layout.solverProfileRef}' is unavailable.`, { solverProfileRef: spec.layout.solverProfileRef })],
-    };
-  }
-  const referenceDiagnostics = semanticReferenceDiagnostics(
-    spec as unknown as LayoutAuthoringSpec,
-  );
-  if (referenceDiagnostics.length > 0) {
-    return { ok: false, diagnostics: referenceDiagnostics, resolvedSolverProfile };
-  }
-  const normalizedBase = normalizeAuthoringBaseV3(spec, options);
-  if (!normalizedBase.ok || normalizedBase.value === undefined) {
-    return { ok: false, diagnostics: normalizedBase.diagnostics, resolvedSolverProfile };
-  }
-  return resolveValidatedAuthoringLayout(
-    spec as unknown as LayoutAuthoringSpec,
-    normalizedBase.value,
-    resolvedSolverProfile,
-    sha256CanonicalJson(
-      canonicalAuthoringIdentityV3(spec, normalizedBase.value),
-    ) as `sha256:${string}`,
-  );
-}
-
 export function resolveAuthoringLayoutV4(
   value: unknown,
   options: NormalizeAuthoringOptionsV4 = {},
@@ -353,7 +304,7 @@ function resolveValidatedAuthoringLayout(
   normalized: NormalizedWorldBase,
   resolvedSolverProfile: ResolvedLayoutSolverProfileV1,
   authoringSpecHash: `sha256:${string}`,
-): ResolveAuthoringLayoutV3Result {
+): ResolveAuthoringLayoutV4Result {
   const prototypeByRef = new Map(normalized.resources.prototypes.map((prototype) => [
     `package://prototype/${prototype.id}@${prototype.version}`,
     prototype,

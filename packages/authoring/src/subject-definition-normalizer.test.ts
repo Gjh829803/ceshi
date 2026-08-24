@@ -23,10 +23,10 @@ import {
   type NormalizeAuthoringResultV4,
 } from "./index";
 import {
-  createValidAuthoringSpecV4 as createValidAuthoringSpec,
-  createValidPackageSubjectWorldV4 as createValidPackageSubjectWorld,
+  createValidAuthoringSpec,
+  createValidPackageSubjectWorld,
   createValidRiggedPackageDefinition,
-  createValidRiggedPackageSubjectWorldV4 as createValidRiggedPackageSubjectWorld,
+  createValidRiggedPackageSubjectWorld,
 } from "./test-fixture";
 
 const SUBJECT_ASSET_REF = "worldkit://subject-asset/humanoid.golden@1";

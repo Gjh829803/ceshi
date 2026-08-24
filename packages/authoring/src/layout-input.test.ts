@@ -1,13 +1,13 @@
 import { describe, expect, it } from "vitest";
 
 import {
-  resolveAuthoringLayoutV3,
-  type AuthoringSpecV3,
+  resolveAuthoringLayoutV4,
+  type AuthoringSpecV4,
 } from "./index.js";
-import { createValidAuthoringSpecV3 } from "./test-fixture.js";
+import { createValidAuthoringSpec } from "./test-fixture.js";
 
-function solvedSpawnWorld(): AuthoringSpecV3 {
-  const base = createValidAuthoringSpecV3();
+function solvedSpawnWorld(): AuthoringSpecV4 {
+  const base = createValidAuthoringSpec();
   return {
     ...base,
     spatial: {
@@ -19,6 +19,7 @@ function solvedSpawnWorld(): AuthoringSpecV3 {
       }],
       routes: [],
       screenRegions: [],
+      traversalAreas: [],
     },
     nodes: base.nodes.map((node) =>
       node.id === "spawn-main" && node.kind === "anchor"
@@ -51,11 +52,12 @@ function solvedSpawnWorld(): AuthoringSpecV3 {
           minimumSupportRatio: 1,
         },
       ],
+      connectivity: [],
     },
   };
 }
 
-describe("Authoring V3 resolved layout input", () => {
+describe("Authoring V4 resolved layout input", () => {
   it("copies production-scale locked heightfields without spreading them as call arguments", () => {
     const source = solvedSpawnWorld();
     const resolutionCellsXZ = [400, 400] as const;
@@ -63,7 +65,7 @@ describe("Authoring V3 resolved layout input", () => {
       { length: resolutionCellsXZ[0] * resolutionCellsXZ[1] },
       (_value, index) => index % 17 / 10,
     );
-    const result = resolveAuthoringLayoutV3({
+    const result = resolveAuthoringLayoutV4({
       ...source,
       nodes: source.nodes.map((node) => node.kind === "terrain"
         ? {
@@ -88,7 +90,7 @@ describe("Authoring V3 resolved layout input", () => {
   });
 
   it("projects locked bounds, terrain, spatial rows, constraints, and a solved-anchor camera rig", () => {
-    const result = resolveAuthoringLayoutV3(solvedSpawnWorld());
+    const result = resolveAuthoringLayoutV4(solvedSpawnWorld());
 
     expect(result.ok).toBe(true);
     expect(result.value).toMatchObject({
@@ -139,7 +141,7 @@ describe("Authoring V3 resolved layout input", () => {
       ...solvedSpawnWorld(),
       layout: { solverProfileRef: "worldkit://layout-solver-profile/missing@1" },
     };
-    expect(resolveAuthoringLayoutV3(missingProfile)).toMatchObject({
+    expect(resolveAuthoringLayoutV4(missingProfile)).toMatchObject({
       ok: false,
       diagnostics: expect.arrayContaining([
         expect.objectContaining({
@@ -153,14 +155,15 @@ describe("Authoring V3 resolved layout input", () => {
     const invalidRegion = {
       ...missingRegion,
       constraints: {
+        ...missingRegion.constraints,
         placements: missingRegion.constraints.placements.map((constraint) =>
           constraint.id === "spawn-inside"
             ? { ...constraint, regionId: "missing-zone" }
             : constraint
         ),
       },
-    } as AuthoringSpecV3;
-    expect(resolveAuthoringLayoutV3(invalidRegion)).toMatchObject({
+    } as AuthoringSpecV4;
+    expect(resolveAuthoringLayoutV4(invalidRegion)).toMatchObject({
       ok: false,
       diagnostics: expect.arrayContaining([
         expect.objectContaining({
@@ -179,7 +182,7 @@ describe("Authoring V3 resolved layout input", () => {
           : node
       ),
     };
-    expect(resolveAuthoringLayoutV3(invalidConstraint)).toMatchObject({
+    expect(resolveAuthoringLayoutV4(invalidConstraint)).toMatchObject({
       ok: false,
       diagnostics: expect.arrayContaining([
         expect.objectContaining({

@@ -7,8 +7,8 @@ import {
   validatePackageSubjectDefinition,
 } from "./index";
 import {
-  createValidAuthoringSpecV4 as createValidAuthoringSpec,
-  createValidPackageSubjectWorldV4 as createValidPackageSubjectWorld,
+  createValidAuthoringSpec,
+  createValidPackageSubjectWorld,
   createValidRiggedPackageDefinition,
 } from "./test-fixture";
 
