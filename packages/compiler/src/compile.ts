@@ -944,6 +944,17 @@ function compileSubjectsV3(
           assetPart.subjectAssetRef,
           "Subject Asset",
         );
+        const subjectAssetLockRows = world.resources.resourceLock.filter(
+          (row) => row.resourceRef === subjectAsset.subjectAssetRef,
+        );
+        if (
+          subjectAssetLockRows.length !== 1 ||
+          subjectAssetLockRows[0]?.resourceKind !== "subject-asset"
+        ) {
+          throw new Error(
+            `NormalizedWorldIRV3 invariant violated: Subject Asset '${subjectAsset.subjectAssetRef}' requires one matching locked Subject Asset.`,
+          );
+        }
         reachableSubjectAssetsByRef.set(subjectAsset.subjectAssetRef, subjectAsset);
       }
 

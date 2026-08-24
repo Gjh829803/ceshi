@@ -563,6 +563,60 @@ describe("compileWorld", () => {
     });
   });
 
+  it.each([
+    {
+      label: "missing Subject Asset Resource Lock row",
+      mutate: (world: NormalizedWorldIRV3) => {
+        world.resources.resourceLock = world.resources.resourceLock.filter(
+          (row) => row.resourceRef !== SUBJECT_ASSET_REF,
+        );
+      },
+    },
+    {
+      label: "duplicate Subject Asset Resource Lock row",
+      mutate: (world: NormalizedWorldIRV3) => {
+        const subjectAssetLock = world.resources.resourceLock.find(
+          (row) => row.resourceRef === SUBJECT_ASSET_REF,
+        );
+        if (subjectAssetLock === undefined) {
+          throw new Error("Static Subject Asset lock fixture is missing its lock row.");
+        }
+        world.resources.resourceLock = [
+          ...world.resources.resourceLock,
+          structuredClone(subjectAssetLock),
+        ];
+      },
+    },
+    {
+      label: "wrong-kind Subject Asset Resource Lock row",
+      mutate: (world: NormalizedWorldIRV3) => {
+        world.resources.resourceLock = world.resources.resourceLock.map((row) =>
+          row.resourceRef === SUBJECT_ASSET_REF
+            ? { ...row, resourceKind: "rig-profile" }
+            : row,
+        );
+      },
+    },
+  ])("rejects a $label for a static Subject", ({ mutate }) => {
+    const normalized = normalizeStaticAssetWorld();
+    const world = structuredClone(normalized.value!);
+    mutate(world);
+    world.resources.resourceLockHash = sha256CanonicalJson(
+      world.resources.resourceLock,
+    );
+
+    expect(compileNormalizedWorld(world)).toEqual({
+      ok: false,
+      diagnostics: [{
+        severity: "error",
+        code: "COMPILER_NORMALIZED_IR_INVALID",
+        instancePath: "/normalizedWorldIr",
+        message:
+          "NormalizedWorldIRV3 invariant violated: Subject Asset 'worldkit://subject-asset/humanoid.golden@1' requires one matching locked Subject Asset.",
+      }],
+    });
+  });
+
   it("locks the current valid rigged ExecutionPlan hash", () => {
     const rigged = normalizeRiggedWorld();
 
