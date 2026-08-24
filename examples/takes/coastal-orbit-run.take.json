@@ -3,7 +3,7 @@
   "schemaVersion": 1,
   "id": "coastal-orbit-run",
   "worldPackageRef": "worldkit://world-package/placement-coastal-world.20310417@1",
-  "worldPackageRootHash": "sha256:3f3daf9970f36f64bbe254d20ce56a266468a7b2f73bd0e6cfe70c1d560add32",
+  "worldPackageRootHash": "sha256:5806c6e5cc705cbf9b7a0b4e4d4b4bfe2c1561290ad41319fc67deef3c41add5",
   "seed": 731991,
   "simulationTickRate": {
     "numeratorTicks": 60,
