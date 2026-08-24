@@ -52,7 +52,7 @@ flowchart TB
 
     AGENT --> AUTHOR
 
-    LEGO["Registry / Package Definitions<br/>Capability · Profile · Kit · Action · Relationship"] -.-> VALIDATE
+    LEGO["Registry / Package Definitions<br/>Capability · Profile · 规划中的 Kit / Action / Relationship"] -.-> VALIDATE
     TOOLING["TypeScript API · CLI · Browser Protocol · Playwright Driver"] -.-> AUTHOR
     TOOLING -.-> RUNTIME
     TOOLING -.-> CAPTURE
@@ -466,6 +466,8 @@ Compiler 和 Runtime 不能反向读取 Agent Prompt；Runtime Adapter 不能把
 - [AI-first 白模游戏 SDK 设计评审简版](docs/reviews/2026-08-18-ai-first-sdk-design-review-brief.md)
 - [AI-first LEGO 游戏 SDK 总体设计](docs/superpowers/specs/2026-08-17-ai-first-lego-game-sdk-design.md)
 - [Canonical Runtime State 与 Semantic Projection 设计](docs/superpowers/specs/2026-08-22-canonical-runtime-state-and-semantic-projection-design.md)
+- [上下文驱动 Gameplay 与 Camera 组合设计（已评审，未来能力）](docs/superpowers/specs/2026-08-24-context-driven-gameplay-camera-composition-design.md)
+- [上下文驱动 Gameplay 与 Camera 设计审查记录](docs/reviews/2026-08-24-context-driven-gameplay-camera-composition-design-review.md)
 - [AI-first Terrain Authoring Pipeline 设计](docs/superpowers/specs/2026-08-17-terrain-authoring-pipeline-design.md)
 - [Hybrid Terrain 与非 Heightfield 特殊地形设计](docs/superpowers/specs/2026-08-21-hybrid-terrain-and-non-heightfield-topology-design.md)
 - [可扩展主体组装 Authoring 专项设计](docs/superpowers/specs/2026-08-19-extensible-subject-authoring-design.md)
