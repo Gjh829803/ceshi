@@ -6,7 +6,9 @@ import {
   WorldRuntimeLayoutAssertionErrorV1,
 } from "@whitebox-world/runtime-babylon";
 import type {
+  ApplyCameraPreviewRequestV1,
   BindControlRequestV2,
+  CameraPreviewStateV1,
   ControlCapturePassPayloadV1,
   ControlBindingReceiptV2,
   FixedInputV1,
@@ -538,6 +540,104 @@ describe("installDeferredWorldkitBrowserApi", () => {
     )).toEqual([]);
     expect(exposedNames).not.toContain("getTraversalGraph");
     expect(exposedNames).not.toContain("getRouteOverlayBytes");
+    expect(exposedNames).not.toContain("setCameraPreference");
+    expect(exposedNames).not.toContain("setCameraTuning");
+  });
+
+  it("forwards Camera Profile and preview calls through the single Browser V5 protocol", async () => {
+    const requestedProfileRefs: string[] = [];
+    const previewRequests: ApplyCameraPreviewRequestV1[] = [];
+    let resetCallCount = 0;
+    let previewReadCount = 0;
+    const requestedProfileSnapshot = snapshotFixture("walk");
+    const resetProfileSnapshot = snapshotFixture();
+    const previewState: CameraPreviewStateV1 = {
+      kind: "worldkit-camera-preview-state",
+      schemaVersion: 1,
+      activeCameraProfileRef:
+        "worldkit://camera-profile/orbit.humanoid-official@1",
+      activeCameraRigRef: "worldkit://camera-rig/orbit-third-person@1",
+      activeCameraModifierRefs: [
+        "worldkit://camera-modifier/collision-retraction@1",
+      ],
+      tuningByProfileRef: {
+        "worldkit://camera-profile/orbit.humanoid-official@1": {
+          distanceMeters: 4.5,
+          pitchRadians: 0.2,
+        },
+      },
+    };
+    const appliedPreviewState: CameraPreviewStateV1 = {
+      ...previewState,
+      tuningByProfileRef: {
+        "worldkit://camera-profile/orbit.humanoid-official@1": {
+          distanceMeters: 5.25,
+        },
+      },
+    };
+    const previewRequest: ApplyCameraPreviewRequestV1 = {
+      tuningByProfileRef: appliedPreviewState.tuningByProfileRef,
+    };
+    const adapter = adapterFixture();
+    adapter.requestCameraProfileRuntime = (profileRef) => {
+      requestedProfileRefs.push(profileRef);
+      return requestedProfileSnapshot;
+    };
+    adapter.resetCameraProfileRuntime = () => {
+      resetCallCount += 1;
+      return resetProfileSnapshot;
+    };
+    adapter.getCameraPreviewStateRuntime = () => {
+      previewReadCount += 1;
+      return previewState;
+    };
+    adapter.applyCameraPreviewRuntime = (request) => {
+      previewRequests.push(request);
+      return appliedPreviewState;
+    };
+    const installation = installDeferredWorldkitBrowserApi({
+      target: {},
+      statusElement: { dataset: {} },
+      initialize: async () => adapter,
+    });
+    await installation.initialization;
+
+    const profileRef = "worldkit://camera-profile/first-person.standard@1";
+    expect(installation.api.requestCameraProfile?.(profileRef)).toBe(
+      requestedProfileSnapshot,
+    );
+    expect(requestedProfileRefs).toEqual([profileRef]);
+    expect(installation.api.resetCameraProfile?.()).toBe(resetProfileSnapshot);
+    expect(resetCallCount).toBe(1);
+    expect(installation.api.getCameraPreviewState?.()).toBe(previewState);
+    expect(previewReadCount).toBe(1);
+    expect(installation.api.applyCameraPreview?.(previewRequest)).toBe(
+      appliedPreviewState,
+    );
+    expect(previewRequests).toHaveLength(1);
+    expect(previewRequests[0]).toBe(previewRequest);
+  });
+
+  it("reports stable errors when the Runtime Adapter lacks Camera Profile or preview support", async () => {
+    const installation = installDeferredWorldkitBrowserApi({
+      target: {},
+      statusElement: { dataset: {} },
+      initialize: async () => adapterFixture(),
+    });
+    await installation.initialization;
+
+    expect(() => installation.api.requestCameraProfile?.(
+      "worldkit://camera-profile/first-person.standard@1",
+    )).toThrowError("WORLDKIT_CAMERA_PROFILE_UNAVAILABLE");
+    expect(() => installation.api.resetCameraProfile?.()).toThrowError(
+      "WORLDKIT_CAMERA_PROFILE_RESET_UNAVAILABLE",
+    );
+    expect(() => installation.api.getCameraPreviewState?.()).toThrowError(
+      "WORLDKIT_CAMERA_PREVIEW_UNAVAILABLE",
+    );
+    expect(() => installation.api.applyCameraPreview?.({
+      tuningByProfileRef: {},
+    })).toThrowError("WORLDKIT_CAMERA_PREVIEW_UNAVAILABLE");
   });
 
   it("projects canonical Route Evidence by stable identity as detached immutable copies", async () => {

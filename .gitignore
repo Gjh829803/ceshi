@@ -11,5 +11,3 @@ agent-tmp/
 .codex-tmp/
 .playwright-cli/
 .worktrees/
-
-.workbuddy/

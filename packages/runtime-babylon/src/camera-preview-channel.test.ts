@@ -73,6 +73,109 @@ async function createCameraPreviewChannelRuntime() {
 }
 
 describe("camera preview channel stays out of Gameplay truth", () => {
+  it("isolates preview state between Runtime instances through reset and dispose", async () => {
+    const [firstRuntime, secondRuntime] = await Promise.all([
+      createCameraPreviewChannelRuntime(),
+      createCameraPreviewChannelRuntime(),
+    ]);
+    try {
+      await Promise.all([
+        firstRuntime.runFixedInput({ actions: [], ticks: 4 }),
+        secondRuntime.runFixedInput({ actions: [], ticks: 4 }),
+      ]);
+      firstRuntime.requestCameraProfile(ORBIT_REF);
+      secondRuntime.requestCameraProfile(ORBIT_REF);
+      firstRuntime.applyCameraPreview({
+        tuningByProfileRef: {
+          [ORBIT_REF]: { distanceMeters: 4, targetHeightMeters: 1.5 },
+        },
+      });
+      secondRuntime.applyCameraPreview({
+        tuningByProfileRef: {
+          [ORBIT_REF]: { distanceMeters: 7, targetHeightMeters: 2.75 },
+        },
+      });
+
+      expect(firstRuntime.getCameraPreviewState().tuningByProfileRef).toEqual({
+        [ORBIT_REF]: { distanceMeters: 4, targetHeightMeters: 1.5 },
+      });
+      const secondPreview = secondRuntime.getCameraPreviewState();
+      expect(secondPreview.tuningByProfileRef).toEqual({
+        [ORBIT_REF]: { distanceMeters: 7, targetHeightMeters: 2.75 },
+      });
+
+      firstRuntime.reset();
+      expect(firstRuntime.getCameraPreviewState().tuningByProfileRef).toEqual({});
+      expect(secondRuntime.getCameraPreviewState()).toEqual(secondPreview);
+
+      await firstRuntime.dispose();
+      expect(secondRuntime.getCameraPreviewState()).toEqual(secondPreview);
+      expect(secondRuntime.snapshot().camera.activeCameraProfileRef).toBe(ORBIT_REF);
+    } finally {
+      await Promise.all([firstRuntime.dispose(), secondRuntime.dispose()]);
+    }
+  }, 15_000);
+
+  it("keeps previewed rendered Camera state deterministic across 30/60/120 Hz cadence", async () => {
+    const runtime = await createCameraPreviewChannelRuntime();
+    try {
+      const runScenario = async (
+        previewEnabled: boolean,
+        renderCadenceHz: 30 | 60 | 120,
+      ) => {
+        runtime.reset();
+        runtime.requestCameraProfile(ORBIT_REF);
+        if (previewEnabled) {
+          runtime.applyCameraPreview({
+            tuningByProfileRef: {
+              [ORBIT_REF]: {
+                distanceMeters: 6,
+                targetHeightMeters: 3,
+                lookAheadSeconds: 0.75,
+              },
+            },
+          });
+        }
+        for (let tick = 0; tick < 60; tick += 1) {
+          await runtime.runFixedInput({ actions: ["move-forward"], ticks: 1 });
+          const renderCount = renderCadenceHz === 30
+            ? (tick % 2 === 1 ? 1 : 0)
+            : renderCadenceHz === 60
+              ? 1
+              : 2;
+          for (let render = 0; render < renderCount; render += 1) {
+            runtime.renderFrame();
+          }
+        }
+        return runtime.snapshot();
+      };
+
+      const baseline = await runScenario(false, 60);
+      const previewAt30Hz = await runScenario(true, 30);
+      const previewAt60Hz = await runScenario(true, 60);
+      const previewAt120Hz = await runScenario(true, 120);
+
+      expect(previewAt60Hz.camera.positionMetersXYZ).not.toEqual(
+        baseline.camera.positionMetersXYZ,
+      );
+      for (const previewSnapshot of [
+        previewAt30Hz,
+        previewAt60Hz,
+        previewAt120Hz,
+      ]) {
+        expect(previewSnapshot.tick).toBe(baseline.tick);
+        expect(previewSnapshot.subjectStatesByEntityId).toEqual(
+          baseline.subjectStatesByEntityId,
+        );
+        expect(previewSnapshot.camera.positionMetersXYZ).toEqual(
+          previewAt60Hz.camera.positionMetersXYZ,
+        );
+      }
+    } finally {
+      await runtime.dispose();
+    }
+  }, 15_000);
+
   it("never exposes tuning or preference in the canonical snapshot", async () => {
     const runtime = await createCameraPreviewChannelRuntime();
     try {

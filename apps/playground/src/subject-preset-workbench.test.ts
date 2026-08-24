@@ -2,11 +2,42 @@ import { describe, expect, it } from "vitest";
 
 import type { SubjectPresetLocalBaselineV1 } from "./subject-preset-local";
 import {
+  applySubjectPresetWorkingDraftTransactionV1,
   cameraPreviewRequestFromDraftV1,
   createSubjectPresetWorkbenchDraftV1,
   normalizeSubjectPresetCameraPreferenceV1,
   subjectPresetTuningRequestFromDraftV1,
+  type SubjectPresetWorkingDraftTransactionRuntimeV1,
 } from "./subject-preset-workbench";
+
+type TransactionRuntimeDouble = {
+  getSubjectSnapshot(subjectEntityId: string): {
+    activeControlFeelProfileRef?: string;
+    activeMotionProfileRef?: string;
+  } | undefined;
+  getCameraPreviewState(): {
+    tuningByProfileRef: Readonly<Record<string, Readonly<Record<string, number>>>>;
+  };
+  requestCameraProfile(profileRef: string): unknown;
+  resetCameraProfile(): unknown;
+  applyCameraPreview(request: {
+    tuningByProfileRef: Readonly<Record<string, Readonly<Record<string, number>>>>;
+  }): unknown;
+  applySubjectPresetTuning(request: {
+    selectedMotionProfileRef: string;
+    selectedControlFeelProfileRef: string;
+  }): { status: "committed" | "rejected"; diagnostic?: { message: string } };
+};
+
+const applyTransaction = (input: {
+  draft: ReturnType<typeof createSubjectPresetWorkbenchDraftV1>;
+  subjectEntityId: string;
+  previousCameraPreferenceRef: string | null;
+  runtime: TransactionRuntimeDouble;
+}) => applySubjectPresetWorkingDraftTransactionV1({
+  ...input,
+  runtime: input.runtime as unknown as SubjectPresetWorkingDraftTransactionRuntimeV1,
+});
 
 const baseline: SubjectPresetLocalBaselineV1 = {
   subjectDefinitionId: "vehicle.four-wheel.arcade",
@@ -207,5 +238,147 @@ describe("subject preset workbench projection", () => {
       },
       cameraByProfileRef: {},
     })).toThrow(/SUBJECT_PRESET_WORKBENCH_MOTION_UNREACHABLE/);
+  });
+});
+
+describe("subject preset workbench Runtime transaction", () => {
+  const createDraft = () => createSubjectPresetWorkbenchDraftV1({
+    baseline,
+    draftIdentity: {
+      draftId: "draft-transaction",
+      createdAtIso: "2026-08-21T08:00:00.000Z",
+      updatedAtIso: "2026-08-21T09:00:00.000Z",
+    },
+    selectedMotionProfileRef: "worldkit://motion-profile/safe-ground@1",
+    selectedControlFeelProfileRef:
+      "worldkit://control-feel-profile/humanoid.heavy-ground@1",
+    selectedCameraPreferenceRef: "worldkit://camera-profile/orbit.medium@1",
+    controlFeel: { baseParameters: {}, currentValues: {} },
+    control: { baseParameters: {}, currentValues: {} },
+    cameraByProfileRef: {
+      "worldkit://camera-profile/orbit.medium@1": {
+        baseParameters: { distanceMeters: 5 },
+        currentValues: { distanceMeters: 5.5 },
+      },
+    },
+  });
+
+  const createRuntime = (options: Readonly<{
+    gameplayOutcome?: "committed" | "rejected" | "throw-after-mutation";
+    cameraOutcome?: "committed" | "throw-after-preview-mutation";
+  }> = {}) => {
+    const state = {
+      cameraPreferenceRef: null as string | null,
+      cameraTuningByProfileRef: {
+        "worldkit://camera-profile/chase.surface-fast@1": { distanceMeters: 7.5 },
+      } as Record<string, Record<string, number>>,
+      motionProfileRef: baseline.defaultMotionProfile.resourceRef,
+      controlFeelProfileRef: baseline.controlFeelProfile.resourceRef,
+    };
+    let gameplayApplyCount = 0;
+    let cameraPreviewApplyCount = 0;
+    const runtime: TransactionRuntimeDouble = {
+      getSubjectSnapshot: () => ({
+        activeControlFeelProfileRef: state.controlFeelProfileRef,
+        activeMotionProfileRef: state.motionProfileRef,
+      }),
+      getCameraPreviewState: () => ({
+        tuningByProfileRef: structuredClone(state.cameraTuningByProfileRef),
+      }),
+      requestCameraProfile: (profileRef) => {
+        state.cameraPreferenceRef = profileRef;
+      },
+      resetCameraProfile: () => {
+        state.cameraPreferenceRef = null;
+      },
+      applyCameraPreview: (request) => {
+        cameraPreviewApplyCount += 1;
+        state.cameraTuningByProfileRef = structuredClone(request.tuningByProfileRef);
+        if (
+          options.cameraOutcome === "throw-after-preview-mutation" &&
+          cameraPreviewApplyCount === 1
+        ) {
+          throw new Error("camera preview failed");
+        }
+      },
+      applySubjectPresetTuning: (request) => {
+        gameplayApplyCount += 1;
+        if (options.gameplayOutcome === "rejected") {
+          return { status: "rejected", diagnostic: { message: "not applicable" } };
+        }
+        state.motionProfileRef = request.selectedMotionProfileRef;
+        state.controlFeelProfileRef = request.selectedControlFeelProfileRef;
+        if (options.gameplayOutcome === "throw-after-mutation" && gameplayApplyCount === 1) {
+          throw new Error("gameplay commit failed");
+        }
+        return { status: "committed" };
+      },
+    };
+    return { runtime, state };
+  };
+
+  it("rolls Camera Profile and preview tuning back when Gameplay rejects", () => {
+    const { runtime, state } = createRuntime({ gameplayOutcome: "rejected" });
+
+    const result = applyTransaction({
+      draft: createDraft(),
+      subjectEntityId: "player",
+      previousCameraPreferenceRef: null,
+      runtime,
+    });
+
+    expect(result.status).toBe("rejected");
+    expect(state).toEqual({
+      cameraPreferenceRef: null,
+      cameraTuningByProfileRef: {
+        "worldkit://camera-profile/chase.surface-fast@1": { distanceMeters: 7.5 },
+      },
+      motionProfileRef: baseline.defaultMotionProfile.resourceRef,
+      controlFeelProfileRef: baseline.controlFeelProfile.resourceRef,
+    });
+  });
+
+  it("rolls a Camera Profile mutation back when Camera preview fails", () => {
+    const { runtime, state } = createRuntime({
+      cameraOutcome: "throw-after-preview-mutation",
+    });
+
+    const result = applyTransaction({
+      draft: createDraft(),
+      subjectEntityId: "player",
+      previousCameraPreferenceRef: null,
+      runtime,
+    });
+
+    expect(result.status).toBe("failed");
+    expect(state).toEqual({
+      cameraPreferenceRef: null,
+      cameraTuningByProfileRef: {
+        "worldkit://camera-profile/chase.surface-fast@1": { distanceMeters: 7.5 },
+      },
+      motionProfileRef: baseline.defaultMotionProfile.resourceRef,
+      controlFeelProfileRef: baseline.controlFeelProfile.resourceRef,
+    });
+  });
+
+  it("compensates both Gameplay and Camera when Gameplay throws after mutation", () => {
+    const { runtime, state } = createRuntime({ gameplayOutcome: "throw-after-mutation" });
+
+    const result = applyTransaction({
+      draft: createDraft(),
+      subjectEntityId: "player",
+      previousCameraPreferenceRef: null,
+      runtime,
+    });
+
+    expect(result.status).toBe("failed");
+    expect(state).toEqual({
+      cameraPreferenceRef: null,
+      cameraTuningByProfileRef: {
+        "worldkit://camera-profile/chase.surface-fast@1": { distanceMeters: 7.5 },
+      },
+      motionProfileRef: baseline.defaultMotionProfile.resourceRef,
+      controlFeelProfileRef: baseline.controlFeelProfile.resourceRef,
+    });
   });
 });

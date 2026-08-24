@@ -1391,7 +1391,7 @@ export class BabylonWorldRuntime implements WorldRuntimeSessionV3 {
     this.assertUsable();
     const tuningByProfileRef = request?.tuningByProfileRef;
     if (
-      tuningByProfileRef === null ||
+      isNil(tuningByProfileRef) ||
       typeof tuningByProfileRef !== "object" ||
       Array.isArray(tuningByProfileRef)
     ) {

@@ -20,6 +20,7 @@ import {
   applyCameraRigParameterOverridesV1,
   validateCameraTuningV1,
 } from "@whitebox-world/runtime-contracts";
+import { isNil } from "lodash-es";
 
 export interface CameraDirectorSnapshotV1 {
   activeCameraProfileRef: string;
@@ -259,7 +260,7 @@ export class CameraDirectorV1 {
     );
     const nextTunings = new Map<string, CameraTuningV1>();
     for (const [profileRef, tuning] of Object.entries(tuningByProfileRef)) {
-      if (tuning === null || typeof tuning !== "object" || Array.isArray(tuning)) {
+      if (isNil(tuning) || typeof tuning !== "object" || Array.isArray(tuning)) {
         return false;
       }
       const profile = profilesByRef.get(profileRef);
@@ -641,10 +642,15 @@ export class CameraDirectorV1 {
       activeCameraRigRef: this.activeRigRef,
       activeCameraModifierRefs: this.activeModifierRefs,
       tuningByProfileRef: Object.fromEntries(
-        [...this.tuningByProfileRef].map(([profileRef, tuning]) => [
-          profileRef,
-          { ...tuning },
-        ]),
+        [...this.tuningByProfileRef]
+          .sort(([leftProfileRef], [rightProfileRef]) =>
+            leftProfileRef < rightProfileRef
+              ? -1
+              : leftProfileRef > rightProfileRef
+                ? 1
+                : 0
+          )
+          .map(([profileRef, tuning]) => [profileRef, { ...tuning }]),
       ),
     };
   }
