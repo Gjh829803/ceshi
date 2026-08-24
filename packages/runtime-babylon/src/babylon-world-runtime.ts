@@ -1298,6 +1298,14 @@ export class BabylonWorldRuntime {
 
   renderFrame(): RenderReadyReceiptV1 {
     this.assertUsable();
+    const controlledEntityId = this.controlledEntityId();
+    if (
+      controlledEntityId !== undefined &&
+      this.appliedCameraViewStateRevision !==
+        this.gameplayPublishedState.viewProjection.viewStateRevision
+    ) {
+      this.updateCameraForEntity(controlledEntityId, 0);
+    }
     for (const visual of this.subjectVisuals) visual.applyAnimationPose();
     this.scene.render();
     const receipt: RenderReadyReceiptV1 = {
@@ -1366,7 +1374,10 @@ export class BabylonWorldRuntime {
     this.appliedCameraViewStateRevision = publishedViewStateRevision;
   }
 
-  private updateCameraForEntity(entityId: string): void {
+  private updateCameraForEntity(
+    entityId: string,
+    deltaSeconds = FIXED_TIME_STEP_SECONDS,
+  ): void {
     this.synchronizeCameraViewSession();
     const subject = this.executionPlan.subjects.find(
       (candidate) => candidate.entityId === entityId,
@@ -1422,7 +1433,7 @@ export class BabylonWorldRuntime {
     this.cameraDirector.update(
       subject.capabilityAssembly.cameraContext,
       sample,
-      FIXED_TIME_STEP_SECONDS,
+      deltaSeconds,
     );
   }
 

@@ -2596,6 +2596,34 @@ describe("BabylonWorldRuntime", () => {
     }
   });
 
+  it("initializes a newly published Camera view on render without advancing fixed Tick", async () => {
+    const runtime = await createRuntime(
+      createV5StaticColliderSupportExecutionPlan(),
+      {},
+      false,
+    );
+    try {
+      const internal = runtime[BABYLON_GAMEPLAY_RUNTIME_INTERNAL]();
+      const prepared = await internal.preparePossessionTarget({
+        mode: "possessed",
+        controlledEntityId: "player",
+      });
+      prepared.commitPrepared();
+      const beforeRender = runtime.snapshot();
+
+      runtime.renderFrame();
+      const afterFirstRender = runtime.snapshot();
+      runtime.renderFrame();
+      const afterSecondRender = runtime.snapshot();
+
+      expect(afterFirstRender.tick).toBe(beforeRender.tick);
+      expect(afterFirstRender.camera.positionMetersXYZ).not.toEqual([0, 0, 0]);
+      expect(afterSecondRender.camera).toEqual(afterFirstRender.camera);
+    } finally {
+      await runtime.dispose();
+    }
+  });
+
   it("aborts staged Gameplay possession idempotently without changing target, Camera, or projection", async () => {
     const runtime = await createRuntime(createV5StaticColliderSupportExecutionPlan());
     try {
