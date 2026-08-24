@@ -7,6 +7,7 @@ import type {
   FixedInputV1,
   RuntimeControlCaptureFrameV1,
   WorldRuntimeSnapshotV3,
+  WorldRuntimeSnapshotV4,
 } from "@whitebox-world/runtime-contracts";
 
 import {
@@ -33,13 +34,101 @@ interface AdapterProbe {
   fixedStepAccumulatorSeconds: number;
   displayFramesPerSecond: number;
   snapshot(): ReturnType<BabylonWorldAdapter["snapshot"]>;
+  setPaused(paused: boolean): void;
   isPaused(): boolean;
   runtimeDiagnostics(): ReturnType<BabylonWorldAdapter["runtimeDiagnostics"]>;
-  resetRuntime(): WorldRuntimeSnapshotV3;
+  resetRuntime(): Promise<WorldRuntimeSnapshotV4>;
+  runWorldkitFixedInput(steps: readonly FixedInputV1[]): Promise<WorldRuntimeSnapshotV4>;
   render(): void;
-  waitForSimulationTick(expectedSimulationTick: number): Promise<WorldRuntimeSnapshotV3>;
+  waitForSimulationTick(expectedSimulationTick: number): Promise<WorldRuntimeSnapshotV4>;
   waitForRenderReady(expectedSimulationTick: number): Promise<unknown>;
   captureControlFrame(request: ControlCaptureRequestV1): Promise<RuntimeControlCaptureFrameV1>;
+}
+
+function publicRuntimeSnapshot(
+  legacySnapshot: WorldRuntimeSnapshotV3,
+  paused = false,
+): WorldRuntimeSnapshotV4 {
+  const subject = legacySnapshot.subjectStatesByEntityId.player!;
+  return {
+    kind: "worldkit-runtime-snapshot",
+    schemaVersion: 4,
+    runtimeSessionId: "runtime-session-test",
+    worldSessionId: "world-session-test",
+    world: {
+      publicationEpoch: legacySnapshot.tick + 1,
+      simulationTick: legacySnapshot.tick,
+      worldStateRef: `worldkit://world-state/world-state:${"a".repeat(64)}`,
+      worldStateHash: `sha256:${"a".repeat(64)}`,
+      subjectStatesByEntityId: {
+        player: {
+          entityState: {
+            id: "player",
+            kind: "spatial-entity-state",
+            entityDefinitionRef: subject.subjectDefinitionRef,
+            entityDefinitionHash: subject.subjectDefinitionHash,
+            semanticClassId: "subject.humanoid",
+            lifecycleMode: "active",
+            positionMetersXYZ: subject.positionMetersXYZ,
+            rotationQuaternionXYZW: [0, 0, 0, 1],
+            scaleRatioXYZ: [1, 1, 1],
+            linearVelocityMetersPerSecondXYZ:
+              subject.velocityMetersPerSecondXYZ,
+          },
+          capabilityStatesById: {},
+        },
+      },
+      gameplayInspection: {
+        kind: "gameplay-inspection-snapshot",
+        schemaVersion: 1,
+        runtimeSessionId: "runtime-session-test",
+        worldSessionId: "world-session-test",
+        simulationTick: legacySnapshot.tick,
+        participantStatesById: {},
+        controllerStatesById: {},
+        possessedByRelationshipsById: {
+          "possession.primary": {
+            id: "possession.primary",
+            type: "possessedBy",
+            controllerEntityId: "controller-primary",
+            controlledEntityId: "player",
+          },
+        },
+        featureStatesById: {},
+        pendingTransactionsById: {},
+      },
+    },
+    view: {
+      viewStateRevision: legacySnapshot.tick,
+      camera: {
+        mode: "tracking",
+        id: legacySnapshot.camera.entityId,
+        targetEntityId: "player",
+        positionMetersXYZ: legacySnapshot.camera.positionMetersXYZ,
+        activeCameraProfileRef: "worldkit://camera-profile/test@1",
+        activeCameraRigRef: "worldkit://camera-rig/test@1",
+        activeCameraModifierRefs: [],
+        safeFallbackActive: false,
+        viewYawOffsetRadians:
+          legacySnapshot.camera.viewYawOffsetRadians ?? 0,
+        viewPitchOffsetRadians:
+          legacySnapshot.camera.viewPitchOffsetRadians ?? 0,
+        viewDistanceOffsetMeters:
+          legacySnapshot.camera.viewDistanceOffsetMeters ?? 0,
+      },
+    },
+    runtime: {
+      phase: "ready",
+      isPaused: paused,
+      fixedTimeStepSeconds: 1 / 60,
+    },
+    resources: {
+      phase: "ready",
+      meshCount: legacySnapshot.resources.meshes,
+      physicsBodyCount: legacySnapshot.resources.bodies,
+      terrainSampleCount: legacySnapshot.resources.terrainSamples,
+    },
+  } as unknown as WorldRuntimeSnapshotV4;
 }
 
 function runtimeSnapshot(
@@ -87,8 +176,13 @@ function createAdapterProbe(): {
   adapter: AdapterProbe;
   runtime: RuntimeProbe;
   requestFrame: ReturnType<typeof vi.fn>;
+  acquireRuntimeActivity: ReturnType<typeof vi.fn>;
+  releaseRuntimeActivity: ReturnType<typeof vi.fn>;
+  setCoordinatorPaused: ReturnType<typeof vi.fn>;
+  coordinatorSnapshot: ReturnType<typeof vi.fn>;
 } {
   let tick = 0;
+  let paused = false;
   let cameraView = { yawRadians: 0, pitchRadians: 0, distanceMeters: 0 };
   const runtime: RuntimeProbe = {
     runFixedInput: vi.fn(async (input) => {
@@ -134,9 +228,55 @@ function createAdapterProbe(): {
     layout: { layoutAssertions: [], layoutSolveReportHash: `sha256:${"2".repeat(64)}` },
     resourceUsage: { triangles: 2 },
   } as unknown as ExecutionPlanV4;
+  const canvas = {} as HTMLCanvasElement;
+  const acquireRuntimeActivity = vi.fn(
+    (request: { id: string; activityKind: string }) => ({
+      kind: "worldkit-runtime-activity-receipt",
+      schemaVersion: 1,
+      requestId: request.id,
+      activityKind: request.activityKind,
+      worldSessionId: "world-session-test",
+      runtimeActivityEpoch: 1,
+      status: "active",
+    }),
+  );
+  const releaseRuntimeActivity = vi.fn(
+    (request: { id: string; activityKind: string }) => ({
+      kind: "worldkit-runtime-activity-receipt",
+      schemaVersion: 1,
+      requestId: request.id,
+      activityKind: request.activityKind,
+      worldSessionId: "world-session-test",
+      runtimeActivityEpoch: 1,
+      status: "released",
+    }),
+  );
+  const setCoordinatorPaused = vi.fn((nextPaused: boolean) => {
+    paused = nextPaused;
+    return publicRuntimeSnapshot(runtime.snapshot(), paused);
+  });
+  const coordinatorSnapshot = vi.fn(() =>
+    publicRuntimeSnapshot(runtime.snapshot(), paused)
+  );
+  const coordinator = {
+    activeRuntime: () => runtime,
+    activeCanvas: () => canvas,
+    snapshot: coordinatorSnapshot,
+    runFixedInput: async (input: FixedInputV1) => {
+      await runtime.runFixedInput(input);
+      return publicRuntimeSnapshot(runtime.snapshot(), paused);
+    },
+    resetWithInitialControlBinding: async () => {
+      runtime.reset();
+      return publicRuntimeSnapshot(runtime.snapshot(), paused);
+    },
+    setPaused: setCoordinatorPaused,
+    acquireRuntimeActivity,
+    releaseRuntimeActivity,
+  };
   const adapter = Object.assign(Object.create(BabylonWorldAdapter.prototype), {
     executionPlan,
-    runtime,
+    coordinator,
     keyboardInput: new PhysicalKeyboardActionTracker(),
     cameraInput: new Set<string>(),
     inspections: [],
@@ -146,13 +286,22 @@ function createAdapterProbe(): {
     animationPending: false,
     animationFrameId: null,
     frame: 0,
+    captureActivitySequence: 0,
     previousAnimationTimestampMilliseconds: 0,
     fixedStepAccumulatorSeconds: 0,
     displayFramesPerSecond: 0,
   }) as unknown as AdapterProbe;
   const requestFrame = vi.fn(() => 1);
   vi.stubGlobal("requestAnimationFrame", requestFrame);
-  return { adapter, runtime, requestFrame };
+  return {
+    adapter,
+    runtime,
+    requestFrame,
+    acquireRuntimeActivity,
+    releaseRuntimeActivity,
+    setCoordinatorPaused,
+    coordinatorSnapshot,
+  };
 }
 
 afterEach(() => {
@@ -197,7 +346,10 @@ describe("BabylonWorldAdapter frame loop", () => {
       message: "The runtime was paused after a simulation frame failed.",
     });
     expect(JSON.stringify(adapter.runtimeDiagnostics())).not.toContain("private provider");
-    expect(consoleError).toHaveBeenCalledWith("WORLDKIT_RUNTIME_FRAME_FAILED");
+    expect(consoleError).toHaveBeenCalledWith(
+      "WORLDKIT_RUNTIME_FRAME_FAILED",
+      expect.objectContaining({ message: "private provider failure" }),
+    );
     expect(requestFrame).toHaveBeenCalledOnce();
   });
 
@@ -222,7 +374,7 @@ describe("BabylonWorldAdapter frame loop", () => {
     adapter.keyboardInput.press("KeyW");
     adapter.cameraInput.add("cameraLeft");
 
-    adapter.resetRuntime();
+    await adapter.resetRuntime();
     await adapter.animate(0);
     await adapter.animate(17);
 
@@ -230,8 +382,49 @@ describe("BabylonWorldAdapter frame loop", () => {
     expect(adapter.snapshot().camera.yaw).toBe(0);
   });
 
+  it.each([
+    { initiallyPaused: false },
+    { initiallyPaused: true },
+  ])(
+    "restores pause state after Browser Fixed Input fails (initiallyPaused=$initiallyPaused)",
+    async ({ initiallyPaused }) => {
+      const { adapter, runtime, setCoordinatorPaused } = createAdapterProbe();
+      adapter.setPaused(initiallyPaused);
+      setCoordinatorPaused.mockClear();
+      runtime.runFixedInput.mockRejectedValueOnce(new Error("fixed input failed"));
+
+      await expect(adapter.runWorldkitFixedInput([{
+        actions: ["move-forward"],
+        ticks: 1,
+      }])).rejects.toThrow("fixed input failed");
+
+      expect(adapter.isPaused()).toBe(initiallyPaused);
+      expect(setCoordinatorPaused.mock.calls).toEqual([
+        [true],
+        [initiallyPaused],
+      ]);
+    },
+  );
+
+  it("restores pause state when the initial Browser Fixed Input snapshot fails", async () => {
+    const { adapter, coordinatorSnapshot, setCoordinatorPaused } = createAdapterProbe();
+    coordinatorSnapshot.mockImplementationOnce(() => {
+      throw new Error("snapshot failed");
+    });
+
+    await expect(adapter.runWorldkitFixedInput([])).rejects.toThrow("snapshot failed");
+
+    expect(adapter.isPaused()).toBe(false);
+    expect(setCoordinatorPaused.mock.calls).toEqual([[true], [false]]);
+  });
+
   it("requires an exact Simulation Tick and freezes adapter simulation during capture", async () => {
-    const { adapter, runtime } = createAdapterProbe();
+    const {
+      adapter,
+      runtime,
+      acquireRuntimeActivity,
+      releaseRuntimeActivity,
+    } = createAdapterProbe();
     const request = {
       captureFrameIndex: 0,
       expectedSimulationTick: 0,
@@ -243,16 +436,24 @@ describe("BabylonWorldAdapter frame loop", () => {
     await expect(adapter.waitForSimulationTick(1)).rejects.toThrow(
       "CONTROL_CAPTURE_SIMULATION_TICK_MISMATCH",
     );
-    await expect(adapter.waitForSimulationTick(0)).resolves.toMatchObject({ tick: 0 });
+    await expect(adapter.waitForSimulationTick(0)).resolves.toMatchObject({
+      world: { simulationTick: 0 },
+    });
 
     await adapter.waitForRenderReady(0);
     adapter.render();
     expect(runtime.renderFrame).not.toHaveBeenCalled();
     const capture = adapter.captureControlFrame(request);
     expect(adapter.isPaused()).toBe(true);
-    await expect(capture).resolves.toBeUndefined();
+    await expect(capture).resolves.toMatchObject({
+      snapshot: { schemaVersion: 4 },
+    });
     expect(adapter.isPaused()).toBe(false);
     expect(runtime.captureControlFrame).toHaveBeenCalledWith(request);
+    expect(acquireRuntimeActivity).toHaveBeenCalledOnce();
+    expect(releaseRuntimeActivity).toHaveBeenCalledWith(
+      acquireRuntimeActivity.mock.calls[0]![0],
+    );
     adapter.render();
     expect(runtime.renderFrame).toHaveBeenCalledOnce();
   });

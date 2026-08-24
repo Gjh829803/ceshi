@@ -1004,40 +1004,6 @@ describe("installDeferredWorldkitBrowserApi", () => {
     expect(previewRequests[0]).toBe(previewRequest);
   });
 
-  it("reports stable errors when the Runtime Adapter lacks Camera Profile or preview support", async () => {
-    const adapterRecord = adapterFixture() as unknown as Record<string, unknown>;
-    delete adapterRecord.requestCameraProfileRuntime;
-    delete adapterRecord.resetCameraProfileRuntime;
-    delete adapterRecord.getCameraPreviewStateRuntime;
-    delete adapterRecord.applyCameraPreviewRuntime;
-    const adapter = adapterRecord as unknown as DeferredWorldkitBrowserRuntimeAdapterV1;
-    const installation = installDeferredWorldkitBrowserApi({
-      target: {},
-      statusElement: { dataset: {} },
-      initialize: async () => adapter,
-    });
-    await installation.initialization;
-
-    expect(() => installation.api.requestCameraProfile(
-      "worldkit://camera-profile/first-person.standard@1",
-    )).toThrowError(expect.objectContaining({
-      code: "WORLDKIT_CAMERA_PROFILE_UNAVAILABLE",
-    }));
-    expect(() => installation.api.resetCameraProfile()).toThrowError(
-      expect.objectContaining({
-        code: "WORLDKIT_CAMERA_PROFILE_RESET_UNAVAILABLE",
-      }),
-    );
-    expect(() => installation.api.getCameraPreviewState()).toThrowError(
-      expect.objectContaining({ code: "WORLDKIT_CAMERA_PREVIEW_UNAVAILABLE" }),
-    );
-    expect(() => installation.api.applyCameraPreview({
-      tuningByProfileRef: {},
-    })).toThrowError(expect.objectContaining({
-      code: "WORLDKIT_CAMERA_PREVIEW_UNAVAILABLE",
-    }));
-  });
-
   it("projects canonical Route Evidence by stable identity as detached immutable copies", async () => {
     const mutableSource = structuredClone(routeEvidencePublicationFixture());
     const source = Object.freeze(mutableSource);

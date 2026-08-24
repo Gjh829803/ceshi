@@ -4,7 +4,6 @@ import type {
   CameraPreviewStateV1,
   NumericProfileOverrideV1,
   SubjectPresetTuningReceiptV1,
-  SubjectRuntimeStateV3,
 } from "@whitebox-world/runtime-contracts";
 import { isNil } from "lodash-es";
 
@@ -183,7 +182,6 @@ export function cameraPreviewRequestFromDraftV1(
 }
 
 export interface SubjectPresetWorkingDraftTransactionRuntimeV1 {
-  getSubjectSnapshot(subjectEntityId: string): SubjectRuntimeStateV3 | undefined;
   getCameraPreviewState(): CameraPreviewStateV1;
   requestCameraProfile(profileRef: string): unknown;
   resetCameraProfile(): unknown;
@@ -191,6 +189,11 @@ export interface SubjectPresetWorkingDraftTransactionRuntimeV1 {
   applySubjectPresetTuning(
     request: ApplySubjectPresetTuningRequestV1,
   ): SubjectPresetTuningReceiptV1;
+}
+
+export interface SubjectPresetGameplayProfileSelectionMementoV1 {
+  readonly motionProfileRef: string;
+  readonly controlFeelProfileRef: string;
 }
 
 export type SubjectPresetWorkingDraftTransactionResultV1 =
@@ -216,6 +219,36 @@ function copyCameraPreviewRequest(
   };
 }
 
+const MOTION_PROFILE_REF_PATTERN =
+  /^worldkit:\/\/motion-profile\/[A-Za-z0-9][A-Za-z0-9._-]*@[1-9][0-9]*$/;
+const CONTROL_FEEL_PROFILE_REF_PATTERN =
+  /^worldkit:\/\/control-feel-profile\/[A-Za-z0-9][A-Za-z0-9._-]*@[1-9][0-9]*$/;
+
+function parseGameplayProfileSelectionMemento(
+  input: unknown,
+): SubjectPresetGameplayProfileSelectionMementoV1 | undefined {
+  if (typeof input !== "object" || isNil(input) || Array.isArray(input)) {
+    return undefined;
+  }
+  const record = input as Record<string, unknown>;
+  const keys = Object.keys(record).sort((left, right) => left.localeCompare(right));
+  if (
+    keys.length !== 2 ||
+    keys[0] !== "controlFeelProfileRef" ||
+    keys[1] !== "motionProfileRef" ||
+    typeof record.motionProfileRef !== "string" ||
+    !MOTION_PROFILE_REF_PATTERN.test(record.motionProfileRef) ||
+    typeof record.controlFeelProfileRef !== "string" ||
+    !CONTROL_FEEL_PROFILE_REF_PATTERN.test(record.controlFeelProfileRef)
+  ) {
+    return undefined;
+  }
+  return {
+    motionProfileRef: record.motionProfileRef,
+    controlFeelProfileRef: record.controlFeelProfileRef,
+  };
+}
+
 /**
  * Applies the authoring-only Camera preview and the locked Gameplay selection as
  * one compensated transaction. The Runtime keeps the two channels separate, so
@@ -226,23 +259,26 @@ export function applySubjectPresetWorkingDraftTransactionV1(input: Readonly<{
   draft: SubjectPresetWorkingDraftV1;
   subjectEntityId: string;
   previousCameraPreferenceRef: string | null;
+  previousGameplayProfileSelection:
+    | SubjectPresetGameplayProfileSelectionMementoV1
+    | null
+    | undefined;
   runtime: SubjectPresetWorkingDraftTransactionRuntimeV1;
 }>): SubjectPresetWorkingDraftTransactionResultV1 {
-  let previousSubjectState: SubjectRuntimeStateV3 | undefined;
-  let previousCameraPreviewState: CameraPreviewStateV1;
-  try {
-    previousSubjectState = input.runtime.getSubjectSnapshot(input.subjectEntityId);
-    previousCameraPreviewState = input.runtime.getCameraPreviewState();
-  } catch (error) {
-    return { status: "failed", error };
-  }
-  const previousMotionProfileRef = previousSubjectState?.activeMotionProfileRef;
-  const previousControlFeelProfileRef = previousSubjectState?.activeControlFeelProfileRef;
-  if (previousMotionProfileRef === undefined || previousControlFeelProfileRef === undefined) {
+  const previousGameplayProfileSelection = parseGameplayProfileSelectionMemento(
+    input.previousGameplayProfileSelection,
+  );
+  if (previousGameplayProfileSelection === undefined) {
     return {
       status: "failed",
       error: new Error("SUBJECT_PRESET_TRANSACTION_BASELINE_UNAVAILABLE"),
     };
+  }
+  let previousCameraPreviewState: CameraPreviewStateV1;
+  try {
+    previousCameraPreviewState = input.runtime.getCameraPreviewState();
+  } catch (error) {
+    return { status: "failed", error };
   }
 
   const restoreCamera = (): void => {
@@ -259,8 +295,9 @@ export function applySubjectPresetWorkingDraftTransactionV1(input: Readonly<{
       expectedSubjectDefinitionRef: input.draft.baseSubjectDefinitionRef,
       expectedSubjectDefinitionContentHash:
         input.draft.baseSubjectDefinitionContentHash,
-      selectedMotionProfileRef: previousMotionProfileRef,
-      selectedControlFeelProfileRef: previousControlFeelProfileRef,
+      selectedMotionProfileRef: previousGameplayProfileSelection.motionProfileRef,
+      selectedControlFeelProfileRef:
+        previousGameplayProfileSelection.controlFeelProfileRef,
       selectedControlProfileRef: input.draft.selectedControlProfileRef,
     });
     if (receipt.status === "rejected") {

@@ -396,7 +396,7 @@ async function sanitizeStartupError(
 }
 
 function deepFreeze<T>(value: T): T {
-  if (value === null || typeof value !== "object" || Object.isFrozen(value)) {
+  if (typeof value !== "object" || isNil(value) || Object.isFrozen(value)) {
     return value;
   }
   for (const child of Object.values(value)) deepFreeze(child);
@@ -1065,12 +1065,6 @@ export function installDeferredWorldkitBrowserApi(options: {
     },
     requestCameraProfile: (profileRef) => {
       const adapter = requireReadyAdapter();
-      if (adapter.requestCameraProfileRuntime === undefined) {
-        throw boundaryError(
-          "WORLDKIT_CAMERA_PROFILE_UNAVAILABLE",
-          "Camera Profile operation is unavailable.",
-        );
-      }
       return callAdapter(
         "WORLDKIT_CAMERA_PROFILE_OPERATION_FAILED",
         "Camera Profile operation failed.",
@@ -1079,12 +1073,6 @@ export function installDeferredWorldkitBrowserApi(options: {
     },
     resetCameraProfile: () => {
       const adapter = requireReadyAdapter();
-      if (adapter.resetCameraProfileRuntime === undefined) {
-        throw boundaryError(
-          "WORLDKIT_CAMERA_PROFILE_RESET_UNAVAILABLE",
-          "Camera Profile reset is unavailable.",
-        );
-      }
       return callAdapter(
         "WORLDKIT_CAMERA_PROFILE_OPERATION_FAILED",
         "Camera Profile operation failed.",
@@ -1093,12 +1081,6 @@ export function installDeferredWorldkitBrowserApi(options: {
     },
     adjustCameraView: (input) => {
       const adapter = requireReadyAdapter();
-      if (adapter.adjustCameraViewRuntime === undefined) {
-        throw boundaryError(
-          "WORLDKIT_CAMERA_VIEW_INPUT_UNAVAILABLE",
-          "Camera View input is unavailable.",
-        );
-      }
       return callAdapter(
         "WORLDKIT_CAMERA_VIEW_OPERATION_FAILED",
         "Camera View operation failed.",
@@ -1107,12 +1089,6 @@ export function installDeferredWorldkitBrowserApi(options: {
     },
     resetCameraView: () => {
       const adapter = requireReadyAdapter();
-      if (adapter.resetCameraViewRuntime === undefined) {
-        throw boundaryError(
-          "WORLDKIT_CAMERA_VIEW_RESET_UNAVAILABLE",
-          "Camera View reset is unavailable.",
-        );
-      }
       return callAdapter(
         "WORLDKIT_CAMERA_VIEW_OPERATION_FAILED",
         "Camera View operation failed.",
@@ -1121,12 +1097,6 @@ export function installDeferredWorldkitBrowserApi(options: {
     },
     getCameraPreviewState: () => {
       const adapter = requireReadyAdapter();
-      if (adapter.getCameraPreviewStateRuntime === undefined) {
-        throw boundaryError(
-          "WORLDKIT_CAMERA_PREVIEW_UNAVAILABLE",
-          "Camera Preview is unavailable.",
-        );
-      }
       return callAdapter(
         "WORLDKIT_CAMERA_PREVIEW_OPERATION_FAILED",
         "Camera Preview operation failed.",
@@ -1135,12 +1105,6 @@ export function installDeferredWorldkitBrowserApi(options: {
     },
     applyCameraPreview: (request) => {
       const adapter = requireReadyAdapter();
-      if (adapter.applyCameraPreviewRuntime === undefined) {
-        throw boundaryError(
-          "WORLDKIT_CAMERA_PREVIEW_UNAVAILABLE",
-          "Camera Preview is unavailable.",
-        );
-      }
       return callAdapter(
         "WORLDKIT_CAMERA_PREVIEW_OPERATION_FAILED",
         "Camera Preview operation failed.",
@@ -1149,12 +1113,6 @@ export function installDeferredWorldkitBrowserApi(options: {
     },
     applySubjectPresetTuning: (request) => {
       const adapter = requireReadyAdapter();
-      if (adapter.applySubjectPresetTuningRuntime === undefined) {
-        throw boundaryError(
-          "WORLDKIT_SUBJECT_PRESET_TUNING_UNAVAILABLE",
-          "Subject Preset tuning is unavailable.",
-        );
-      }
       return callAdapter(
         "WORLDKIT_SUBJECT_PRESET_TUNING_FAILED",
         "Subject Preset tuning failed.",
@@ -1164,12 +1122,6 @@ export function installDeferredWorldkitBrowserApi(options: {
     setMotionProfile: async (subjectEntityId, motionProfileRef) => {
       await startupPromise;
       const adapter = requireReadyAdapter();
-      if (adapter.setMotionProfileRuntime === undefined) {
-        throw boundaryError(
-          "WORLDKIT_MOTION_PROFILE_SWITCH_UNAVAILABLE",
-          "Motion Profile switching is unavailable.",
-        );
-      }
       return callAdapterAsync(
         "WORLDKIT_MOTION_PROFILE_SWITCH_FAILED",
         "Motion Profile switching failed.",
@@ -1179,12 +1131,6 @@ export function installDeferredWorldkitBrowserApi(options: {
     runHarness: async (subjectEntityId) => {
       await startupPromise;
       const adapter = requireReadyAdapter();
-      if (adapter.runSubjectHarness === undefined) {
-        throw boundaryError(
-          "WORLDKIT_SUBJECT_HARNESS_UNAVAILABLE",
-          "Subject Harness is unavailable.",
-        );
-      }
       return callAdapterAsync(
         "WORLDKIT_SUBJECT_HARNESS_FAILED",
         "Subject Harness execution failed.",

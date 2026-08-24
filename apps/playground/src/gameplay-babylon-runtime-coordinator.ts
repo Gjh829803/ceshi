@@ -18,6 +18,7 @@ import {
   FIXED_TIME_STEP_SECONDS,
   createBabylonGameplayWorldPortV1,
   type BabylonWorldRuntimeInitializationStageV1,
+  type SubjectAssetCacheOptionsV1,
   type SubjectAssetResolverV1,
 } from "@whitebox-world/runtime-babylon";
 import {
@@ -45,8 +46,15 @@ export const PLAYGROUND_CONTROLLER_ENTITY_ID_V1 = "controller-primary" as const;
 
 const PLAYGROUND_CONTROLLER_DEFINITION_REF_V1 =
   "worldkit://controller-definition/playground.local@1";
+const PLAYGROUND_CONTROLLER_DEFINITION_V1 = Object.freeze({
+  kind: "controller-definition" as const,
+  id: "playground.local",
+  version: 1 as const,
+  inputMode: "human" as const,
+  controlModel: "single-possessed-entity" as const,
+});
 const PLAYGROUND_CONTROLLER_DEFINITION_HASH_V1 =
-  `sha256:${"8".repeat(64)}` as const;
+  sha256CanonicalJson(PLAYGROUND_CONTROLLER_DEFINITION_V1);
 const PLAYGROUND_GAMEPLAY_MODE_REF_V1 =
   "worldkit://gameplay-mode/outdoor.exploration@1";
 const MAXIMUM_WORLD_SESSION_COUNT_V1 = 1_024;
@@ -61,6 +69,7 @@ export type GameplayBabylonRuntimeV1 = Pick<
   BabylonWorldRuntime,
   | "snapshot"
   | "renderFrame"
+  | "renderFrameWhenReady"
   | "resize"
   | "getControlCaptureCapabilities"
   | "waitForRenderReady"
@@ -86,6 +95,7 @@ export interface GameplayBabylonRuntimeBundleFactoryInputV1 {
   readonly descriptor: RuntimeWorldAdapterDescriptorV1;
   readonly canvas: HTMLCanvasElement;
   readonly subjectAssetResolver?: SubjectAssetResolverV1;
+  readonly subjectAssetCacheOptions?: SubjectAssetCacheOptionsV1;
   readonly onInitializationStage?: (
     worldSessionId: string,
     stage: BabylonWorldRuntimeInitializationStageV1,
@@ -100,6 +110,7 @@ export interface CreateGameplayBabylonRuntimeCoordinatorOptionsV1 {
   readonly runtimeSessionId: string;
   readonly initialWorldConfiguration: RuntimeWorldConfigurationV1;
   readonly subjectAssetResolver?: SubjectAssetResolverV1;
+  readonly subjectAssetCacheOptions?: SubjectAssetCacheOptionsV1;
   readonly onInitializationStage?: (
     worldSessionId: string,
     stage: BabylonWorldRuntimeInitializationStageV1,
@@ -147,6 +158,9 @@ async function createProductionRuntimeBundle(
     ...(isNil(input.subjectAssetResolver)
       ? {}
       : { subjectAssetResolver: input.subjectAssetResolver }),
+    ...(isNil(input.subjectAssetCacheOptions)
+      ? {}
+      : { subjectAssetCacheOptions: input.subjectAssetCacheOptions }),
     ...(isNil(input.onInitializationStage)
       ? {}
       : {
@@ -356,6 +370,9 @@ export class GameplayBabylonRuntimeCoordinatorV1 {
           ...(isNil(options.subjectAssetResolver)
             ? {}
             : { subjectAssetResolver: options.subjectAssetResolver }),
+          ...(isNil(options.subjectAssetCacheOptions)
+            ? {}
+            : { subjectAssetCacheOptions: options.subjectAssetCacheOptions }),
           ...(isNil(options.onInitializationStage)
             ? {}
             : { onInitializationStage: options.onInitializationStage }),
@@ -396,7 +413,7 @@ export class GameplayBabylonRuntimeCoordinatorV1 {
         ) {
           throw new Error("WORLDKIT_RUNTIME_CANDIDATE_CONTROL_NOT_BOUND");
         }
-        handle.runtime.renderFrame();
+        await handle.runtime.renderFrameWhenReady();
       },
     });
     const worldSessionIdFactory = options.worldSessionIdFactory ?? (() => {
@@ -454,7 +471,7 @@ export class GameplayBabylonRuntimeCoordinatorV1 {
           `${receipt.diagnostic.code}: Initial control binding was rejected.`,
         );
       }
-      coordinator.activeRuntime().renderFrame();
+      await coordinator.activeRuntime().renderFrameWhenReady();
       return coordinator;
     } catch (error) {
       await host.dispose().catch(() => undefined);

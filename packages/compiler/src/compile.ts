@@ -906,6 +906,30 @@ function compileSubjectsV3(
           `NormalizedWorldIRV3 invariant violated: Subject '${node.id}' references missing Spawn Anchor '${node.spawnAnchorEntityId}'.`,
         );
       }
+      if (!definition.capabilityRefs.includes(definition.locomotionCapabilityRef)) {
+        throw new Error(
+          `NormalizedWorldIRV3 invariant violated: Subject '${node.id}' does not select its locomotion Capability.`,
+        );
+      }
+      const locomotionCapabilityLockRows = world.resources.resourceLock.filter(
+        (row) => row.resourceRef === definition.locomotionCapabilityRef,
+      );
+      if (
+        locomotionCapabilityLockRows.length !== 1 ||
+        locomotionCapabilityLockRows[0]?.resourceKind !== "capability" ||
+        locomotionCapabilityLockRows[0]?.contentHash !==
+          definition.locomotionCapabilityHash
+      ) {
+        throw new Error(
+          `NormalizedWorldIRV3 invariant violated: Subject '${node.id}' requires one matching locked locomotion Capability.`,
+        );
+      }
+      const locomotionCapabilityLock = locomotionCapabilityLockRows[0];
+      if (isNil(locomotionCapabilityLock)) {
+        throw new Error(
+          `NormalizedWorldIRV3 invariant violated: Subject '${node.id}' is missing its locked locomotion Capability.`,
+        );
+      }
 
       resourceCost.vertices += definition.resourceCost.vertices;
       resourceCost.triangles += definition.resourceCost.triangles;
@@ -1037,6 +1061,8 @@ function compileSubjectsV3(
           allowRun: definition.locomotion.allowRun,
           allowJump: definition.locomotion.allowJump,
         },
+        locomotionCapabilityRef: locomotionCapabilityLock.resourceRef,
+        locomotionCapabilityHash: locomotionCapabilityLock.contentHash,
         physicsBodyProfileRef: definition.profiles.physicsBodyProfileRef,
         locomotionProfileRef: definition.profiles.locomotionProfileRef,
         controlFeel: {

@@ -5,10 +5,16 @@ import { describe, expect, it } from "vitest";
 import {
   normalizeAuthoringSpec,
   normalizeAuthoringSpecV3,
+  normalizeAuthoringSpecV4,
   sha256CanonicalJson,
   type AuthoringSpecV3,
+  type AuthoringSpecV4,
   type NormalizedWorldIRV3,
 } from "@whitebox-world/authoring";
+import {
+  createGameplayBootstrapResourceLockEntryV1,
+  createGameplayBootstrapV1,
+} from "@whitebox-world/gameplay-contracts";
 import {
   builtInSubjectResourceRegistry,
   createSubjectResourceRegistry,
@@ -28,7 +34,12 @@ import {
   createValidRiggedPackageSubjectWorld,
 } from "../../authoring/src/test-fixture";
 
-import { compileWorld, compileWorldV4, sampleTerrainHeight } from "./index";
+import {
+  compileWorld,
+  compileWorldV4,
+  compileWorldV5,
+  sampleTerrainHeight,
+} from "./index";
 
 const SUBJECT_ASSET_REF = "worldkit://subject-asset/humanoid.golden@1";
 const RIG_PROFILE_REF = "worldkit://rig-profile/biped.golden@1";
@@ -505,7 +516,7 @@ describe("compileWorld", () => {
         normalizedWorldIrHash: rigged.normalizedWorldIrHash!,
       }).executionPlanHash,
     ).toBe(
-      "sha256:351614bc988e28afd7b2d6cd8ea0d42fd325d063cf2ea43bacf5b7aa786fe9b2",
+      "sha256:7ad29e87a514799b733071c636bddca43f71ca5471551e6f1fd1ffe3f10f4375",
     );
   });
 
@@ -1049,7 +1060,7 @@ describe("compileWorld", () => {
     expect(serialized).not.toContain('"constraints"');
     expect(serialized).not.toMatch(/candidateRegionIds|sourceUri|licenseUri|providerHandle/);
     expect(result.executionPlanHash).toBe(
-      "sha256:5c70313404f4b16e033fbf0bc150e2e6887db7272894c58b9d4c96fdb8b784a4",
+      "sha256:f59e629344e0fc6e2a5b9559ac4d505f4f4069f7d57ec12f411ddf7266c9232f",
     );
   });
 
@@ -1279,8 +1290,8 @@ describe("compileWorld", () => {
     async ({ path, spawns }) => {
       const spec = JSON.parse(
         await readFile(new URL(path, import.meta.url), "utf8"),
-      ) as AuthoringSpecV3;
-      const normalized = normalizeAuthoringSpec(spec);
+      ) as AuthoringSpecV4;
+      const normalized = normalizeAuthoringSpecV4(spec);
       if (
         !normalized.ok ||
         normalized.value === undefined ||
@@ -1290,9 +1301,21 @@ describe("compileWorld", () => {
           `Product fixture did not normalize: ${JSON.stringify(normalized.diagnostics)}`,
         );
       }
-      const compiled = compileWorld({
+      const gameplayBootstrapResourceLock =
+        createGameplayBootstrapResourceLockEntryV1(createGameplayBootstrapV1({
+          kind: "gameplay-bootstrap",
+          id: `${spec.id}.compile-product-fixture`,
+          version: 1,
+          resourceRef: `worldkit://gameplay-bootstrap/${spec.id}.compile-product-fixture@1`,
+          entityDescriptors: [],
+          featureResourceLocks: [],
+          semanticActionDefinitions: [],
+          availableCapabilityRefs: [],
+        }));
+      const compiled = compileWorldV5({
         normalizedWorldIr: normalized.value,
         normalizedWorldIrHash: normalized.normalizedWorldIrHash,
+        gameplayBootstrapResourceLock,
       });
       const executionPlan = compiled.executionPlan!;
 

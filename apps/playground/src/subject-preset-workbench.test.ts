@@ -11,10 +11,6 @@ import {
 } from "./subject-preset-workbench";
 
 type TransactionRuntimeDouble = {
-  getSubjectSnapshot(subjectEntityId: string): {
-    activeControlFeelProfileRef?: string;
-    activeMotionProfileRef?: string;
-  } | undefined;
   getCameraPreviewState(): {
     tuningByProfileRef: Readonly<Record<string, Readonly<Record<string, number>>>>;
   };
@@ -33,9 +29,20 @@ const applyTransaction = (input: {
   draft: ReturnType<typeof createSubjectPresetWorkbenchDraftV1>;
   subjectEntityId: string;
   previousCameraPreferenceRef: string | null;
+  previousGameplayProfileSelection?: {
+    motionProfileRef: string;
+    controlFeelProfileRef: string;
+  } | null;
   runtime: TransactionRuntimeDouble;
 }) => applySubjectPresetWorkingDraftTransactionV1({
   ...input,
+  previousGameplayProfileSelection:
+    input.previousGameplayProfileSelection === undefined
+      ? {
+          motionProfileRef: baseline.defaultMotionProfile.resourceRef,
+          controlFeelProfileRef: baseline.controlFeelProfile.resourceRef,
+        }
+      : input.previousGameplayProfileSelection,
   runtime: input.runtime as unknown as SubjectPresetWorkingDraftTransactionRuntimeV1,
 });
 
@@ -277,14 +284,18 @@ describe("subject preset workbench Runtime transaction", () => {
     };
     let gameplayApplyCount = 0;
     let cameraPreviewApplyCount = 0;
+    let cameraPreviewReadCount = 0;
+    const gameplayRequests: Array<{
+      selectedMotionProfileRef: string;
+      selectedControlFeelProfileRef: string;
+    }> = [];
     const runtime: TransactionRuntimeDouble = {
-      getSubjectSnapshot: () => ({
-        activeControlFeelProfileRef: state.controlFeelProfileRef,
-        activeMotionProfileRef: state.motionProfileRef,
-      }),
-      getCameraPreviewState: () => ({
-        tuningByProfileRef: structuredClone(state.cameraTuningByProfileRef),
-      }),
+      getCameraPreviewState: () => {
+        cameraPreviewReadCount += 1;
+        return {
+          tuningByProfileRef: structuredClone(state.cameraTuningByProfileRef),
+        };
+      },
       requestCameraProfile: (profileRef) => {
         state.cameraPreferenceRef = profileRef;
       },
@@ -303,6 +314,10 @@ describe("subject preset workbench Runtime transaction", () => {
       },
       applySubjectPresetTuning: (request) => {
         gameplayApplyCount += 1;
+        gameplayRequests.push({
+          selectedMotionProfileRef: request.selectedMotionProfileRef,
+          selectedControlFeelProfileRef: request.selectedControlFeelProfileRef,
+        });
         if (options.gameplayOutcome === "rejected") {
           return { status: "rejected", diagnostic: { message: "not applicable" } };
         }
@@ -314,8 +329,112 @@ describe("subject preset workbench Runtime transaction", () => {
         return { status: "committed" };
       },
     };
-    return { runtime, state };
+    return {
+      runtime,
+      state,
+      gameplayRequests,
+      cameraPreviewReadCount: () => cameraPreviewReadCount,
+    };
   };
+
+  it("fails closed when the explicit authoring profile-selection memento is missing", () => {
+    const { runtime, state, gameplayRequests, cameraPreviewReadCount } = createRuntime();
+
+    const result = applySubjectPresetWorkingDraftTransactionV1({
+      draft: createDraft(),
+      subjectEntityId: "player",
+      previousCameraPreferenceRef: null,
+      previousGameplayProfileSelection: undefined,
+      runtime: runtime as unknown as SubjectPresetWorkingDraftTransactionRuntimeV1,
+    });
+
+    expect(result).toMatchObject({
+      status: "failed",
+      error: { message: "SUBJECT_PRESET_TRANSACTION_BASELINE_UNAVAILABLE" },
+    });
+    expect(gameplayRequests).toEqual([]);
+    expect(cameraPreviewReadCount()).toBe(0);
+    expect(state.cameraPreferenceRef).toBeNull();
+  });
+
+  it("rejects legacy V3 snapshot aliases instead of treating them as a memento", () => {
+    const { runtime, gameplayRequests, cameraPreviewReadCount } = createRuntime();
+
+    const result = applySubjectPresetWorkingDraftTransactionV1({
+      draft: createDraft(),
+      subjectEntityId: "player",
+      previousCameraPreferenceRef: null,
+      previousGameplayProfileSelection: {
+        activeMotionProfileRef: baseline.defaultMotionProfile.resourceRef,
+        activeControlFeelProfileRef: baseline.controlFeelProfile.resourceRef,
+      } as unknown as Parameters<
+        typeof applySubjectPresetWorkingDraftTransactionV1
+      >[0]["previousGameplayProfileSelection"],
+      runtime: runtime as unknown as SubjectPresetWorkingDraftTransactionRuntimeV1,
+    });
+
+    expect(result).toMatchObject({
+      status: "failed",
+      error: { message: "SUBJECT_PRESET_TRANSACTION_BASELINE_UNAVAILABLE" },
+    });
+    expect(gameplayRequests).toEqual([]);
+    expect(cameraPreviewReadCount()).toBe(0);
+  });
+
+  it("rejects a profile-selection memento whose refs have the wrong Registry kinds", () => {
+    const { runtime, gameplayRequests, cameraPreviewReadCount } = createRuntime();
+
+    const result = applySubjectPresetWorkingDraftTransactionV1({
+      draft: createDraft(),
+      subjectEntityId: "player",
+      previousCameraPreferenceRef: null,
+      previousGameplayProfileSelection: {
+        motionProfileRef: baseline.controlFeelProfile.resourceRef,
+        controlFeelProfileRef: baseline.defaultMotionProfile.resourceRef,
+      },
+      runtime: runtime as unknown as SubjectPresetWorkingDraftTransactionRuntimeV1,
+    });
+
+    expect(result).toMatchObject({
+      status: "failed",
+      error: { message: "SUBJECT_PRESET_TRANSACTION_BASELINE_UNAVAILABLE" },
+    });
+    expect(gameplayRequests).toEqual([]);
+    expect(cameraPreviewReadCount()).toBe(0);
+  });
+
+  it("restores Gameplay from the explicit Workbench memento after a partial failure", () => {
+    const { runtime, gameplayRequests } = createRuntime({
+      gameplayOutcome: "throw-after-mutation",
+    });
+    const previousGameplayProfileSelection = {
+      motionProfileRef: "worldkit://motion-profile/forward-steer.medium@1",
+      controlFeelProfileRef:
+        "worldkit://control-feel-profile/humanoid.medium-ground@1",
+    };
+
+    const result = applyTransaction({
+      draft: createDraft(),
+      subjectEntityId: "player",
+      previousCameraPreferenceRef: null,
+      previousGameplayProfileSelection,
+      runtime,
+    });
+
+    expect(result.status).toBe("failed");
+    expect(gameplayRequests).toEqual([
+      {
+        selectedMotionProfileRef: "worldkit://motion-profile/safe-ground@1",
+        selectedControlFeelProfileRef:
+          "worldkit://control-feel-profile/humanoid.heavy-ground@1",
+      },
+      {
+        selectedMotionProfileRef: previousGameplayProfileSelection.motionProfileRef,
+        selectedControlFeelProfileRef:
+          previousGameplayProfileSelection.controlFeelProfileRef,
+      },
+    ]);
+  });
 
   it("rolls Camera Profile and preview tuning back when Gameplay rejects", () => {
     const { runtime, state } = createRuntime({ gameplayOutcome: "rejected" });

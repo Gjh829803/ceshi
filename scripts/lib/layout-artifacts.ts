@@ -3,15 +3,14 @@ import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
 import path from "node:path";
 
 import {
-  normalizeAuthoringSpec,
-  parseAuthoringSpecJson,
+  normalizeAuthoringSpecV4,
+  parseAuthoringSpecV4,
   parseCanonicalJson,
-  resolveAuthoringLayoutV3,
   sha256CanonicalJson,
   stringifyCanonicalJson,
-  type AuthoringSpecV3,
-  type NormalizeAuthoringResultV3,
-  type NormalizedWorldIRV3,
+  type AuthoringSpecV4,
+  type NormalizeAuthoringResultV4,
+  type NormalizedWorldIRV4,
 } from "@whitebox-world/authoring";
 
 import {
@@ -25,7 +24,7 @@ import {
 } from "./worldkit-pipeline";
 
 type LayoutSolveReport = NonNullable<
-  NormalizeAuthoringResultV3["layoutSolveReport"]
+  NormalizeAuthoringResultV4["layoutSolveReport"]
 >;
 type LayoutSolveStatus = LayoutSolveReport["status"];
 
@@ -109,13 +108,13 @@ async function readParsedAuthoring(
   | {
       readonly ok: true;
       readonly absoluteInputPath: string;
-      readonly spec: AuthoringSpecV3;
+      readonly spec: AuthoringSpecV4;
     }
   | LayoutCommandFailure
 > {
   const input = await readWorldkitInput(inputPath);
   if (!input.ok) return processInputFailure(input);
-  const parsed = parseAuthoringSpecJson(input.sourceText);
+  const parsed = parseAuthoringSpecV4(input.sourceText);
   if (!parsed.ok || parsed.value === undefined) {
     return {
       ok: false,
@@ -146,11 +145,11 @@ export function layoutExitCodeForStatus(status: LayoutSolveStatus): 0 | 2 | 3 | 
 export async function layoutValidateFile(inputPath: string) {
   const input = await readParsedAuthoring(inputPath);
   if (!input.ok) return input;
-  const resolved = resolveAuthoringLayoutV3(input.spec);
+  const resolved = normalizeAuthoringSpecV4(input.spec);
   if (
     !resolved.ok ||
     resolved.value === undefined ||
-    resolved.resolvedSolverProfile === undefined
+    resolved.normalizedWorldIrHash === undefined
   ) {
     return {
       ok: false as const,
@@ -164,13 +163,13 @@ export async function layoutValidateFile(inputPath: string) {
     kind: "worldkit-layout-validation" as const,
     schemaVersion: 1 as const,
     diagnostics: [] as const,
-    solverProfileRef: resolved.resolvedSolverProfile.resourceRef,
-    resolvedVersion: resolved.resolvedSolverProfile.resolvedVersion,
-    solverProfileHash: resolved.resolvedSolverProfile.contentHash,
+    solverProfileRef: resolved.value.layout.solverProfileRef,
+    resolvedVersion: resolved.value.layout.resolvedVersion,
+    solverProfileHash: resolved.value.layout.solverProfileHash,
     authoringSpecHash: resolved.value.authoringSpecHash,
-    registryLockHash: resolved.value.registryLockHash,
-    entityCount: resolved.value.entities.length,
-    constraintCount: resolved.value.constraints.length,
+    registryLockHash: resolved.value.resources.resourceLockHash,
+    entityCount: resolved.value.nodes.length,
+    constraintCount: input.spec.constraints.placements.length,
   };
 }
 
@@ -187,7 +186,7 @@ async function writeLayoutArtifactDirectory(
   outputDirectory: string,
   report: LayoutSolveReport,
   layoutSolveReportHash: string,
-  normalizedWorldIr: NormalizedWorldIRV3,
+  normalizedWorldIr: NormalizedWorldIRV4,
   normalizedWorldIrHash: string,
   options: LayoutArtifactWriteOptions,
 ): Promise<{
@@ -269,7 +268,7 @@ export async function layoutSolveFile(
       "Layout output directory must not contain or replace the AuthoringSpec input.",
     );
   }
-  const normalized = normalizeAuthoringSpec(input.spec);
+  const normalized = normalizeAuthoringSpecV4(input.spec);
   const report = normalized.layoutSolveReport;
   const reportHash = normalized.layoutSolveReportHash;
   if (report === undefined || reportHash === undefined) {

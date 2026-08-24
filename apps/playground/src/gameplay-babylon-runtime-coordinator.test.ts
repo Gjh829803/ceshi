@@ -76,6 +76,7 @@ function worldProjection(
 interface FakeRuntimeV1 {
   readonly canvas: HTMLCanvasElement;
   readonly renderFrame: ReturnType<typeof vi.fn>;
+  readonly renderFrameWhenReady: ReturnType<typeof vi.fn>;
   readonly dispose: ReturnType<typeof vi.fn>;
   snapshot(): WorldRuntimeSnapshotV3;
 }
@@ -96,23 +97,25 @@ function fakeRuntimeFactory(
     });
     let renderFrameIndex = 0;
     const dispose = vi.fn(async () => undefined);
+    const renderFrame = vi.fn(() => {
+      if (options.rejectCandidateRender === true && runtimes.length === 2) {
+        throw new Error("candidate render rejected");
+      }
+      const receipt = {
+        kind: "worldkit-render-ready-receipt" as const,
+        schemaVersion: 1 as const,
+        id: `render-ready:${runtimes.length}:${renderFrameIndex}`,
+        runtimeSessionId: "runtime.test",
+        simulationTick: harness.publishedWorldProjection.simulationTick,
+        renderFrameIndex,
+      };
+      renderFrameIndex += 1;
+      return receipt;
+    });
     const runtime: FakeRuntimeV1 = {
       canvas,
-      renderFrame: vi.fn(() => {
-        if (options.rejectCandidateRender === true && runtimes.length === 2) {
-          throw new Error("candidate render rejected");
-        }
-        const receipt = {
-          kind: "worldkit-render-ready-receipt" as const,
-          schemaVersion: 1 as const,
-          id: `render-ready:${runtimes.length}:${renderFrameIndex}`,
-          runtimeSessionId: "runtime.test",
-          simulationTick: harness.publishedWorldProjection.simulationTick,
-          renderFrameIndex,
-        };
-        renderFrameIndex += 1;
-        return receipt;
-      }),
+      renderFrame,
+      renderFrameWhenReady: vi.fn(async () => renderFrame()),
       dispose,
       snapshot: (): WorldRuntimeSnapshotV3 => ({
         kind: "worldkit-runtime-snapshot",

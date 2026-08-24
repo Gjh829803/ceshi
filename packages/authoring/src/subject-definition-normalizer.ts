@@ -879,6 +879,31 @@ export function normalizeSubjectDefinitionV2(
     resourceLockBuilder.addRegistryResource(resource, `${instancePath}/capabilityRefs`, diagnostics);
     return [resource];
   });
+  const locomotionCapabilities = capabilities.filter((capability) =>
+    capability.resourceRef.startsWith("worldkit://capability/locomotion.")
+  );
+  const primaryLocomotionCapabilities = locomotionCapabilities.filter(
+    (capability) =>
+      !locomotionCapabilities.some(
+        (candidate) =>
+          candidate.resourceRef !== capability.resourceRef &&
+          candidate.requiredCapabilityRefs.includes(capability.resourceRef),
+      ),
+  );
+  if (primaryLocomotionCapabilities.length !== 1) {
+    addError(
+      diagnostics,
+      "SUBJECT_CAPABILITY_UNSATISFIED",
+      `${instancePath}/capabilityRefs`,
+      "Subject Definition requires exactly one primary locomotion Capability after dependency resolution.",
+      {
+        primaryLocomotionCapabilityRefs: primaryLocomotionCapabilities.map(
+          (capability) => capability.resourceRef,
+        ),
+      },
+    );
+  }
+  const locomotionCapability = primaryLocomotionCapabilities[0];
 
   const physicsBodyProfile = subjectResourceRegistry.resolvePhysicsBodyProfile(
     definition.profiles.physicsBodyProfileRef);
@@ -1000,6 +1025,7 @@ export function normalizeSubjectDefinitionV2(
   const finalErrorCount = diagnostics.filter((item) => item.severity === "error").length;
   if (finalErrorCount > initialErrorCount || physicsBodyProfile === undefined ||
     locomotionProfile === undefined || controlFeelProfile === undefined ||
+    locomotionCapability === undefined ||
     normalizedCollider === undefined ||
     (definition.visualBinding.mode === "rigged" && riggedResources === undefined)) {
     return undefined;
@@ -1025,6 +1051,8 @@ export function normalizeSubjectDefinitionV2(
     sockets,
     colliderPolicy: structuredClone(definition.colliderPolicy),
     capabilityRefs,
+    locomotionCapabilityRef: locomotionCapability.resourceRef,
+    locomotionCapabilityHash: locomotionCapability.contentHash,
     profiles: structuredClone(definition.profiles),
     locomotion: {
       allowWalk: locomotionProfile.allowWalk,

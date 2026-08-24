@@ -281,6 +281,8 @@ function createExecutionPlan(worldPackageRef: string): ExecutionPlanV5 {
         allowRun: true,
         allowJump: true,
       },
+      locomotionCapabilityRef: "worldkit://capability/locomotion.ground@1",
+      locomotionCapabilityHash: HASH_A,
       physicsBodyProfileRef: "worldkit://physics-body-profile/humanoid@1",
       locomotionProfileRef: "worldkit://locomotion-profile/humanoid.ground@1",
       controlFeel,

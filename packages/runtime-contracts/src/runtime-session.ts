@@ -334,23 +334,6 @@ export interface RuntimeControlCaptureFrameV1 {
   readonly passesById: Readonly<Record<ControlCapturePassIdV1, ControlCapturePassPayloadV1>>;
 }
 
-export interface WorldRuntimeSessionV3 {
-  readonly runtimeBackend: "babylon-havok";
-  readonly ready: Promise<void>;
-  bindControl(request: BindControlRequestV2): ControlBindingReceiptV2;
-  runFixedInput(input: FixedInputV1): Promise<WorldRuntimeSnapshotV3>;
-  snapshot(): WorldRuntimeSnapshotV3;
-  reset(): WorldRuntimeSnapshotV3;
-  applySubjectPresetTuning?(
-    request: ApplySubjectPresetTuningRequestV1,
-  ): SubjectPresetTuningReceiptV1;
-  getControlCaptureCapabilities(): ControlCaptureCapabilitiesV1;
-  waitForRenderReady(expectedSimulationTick: number): RenderReadyReceiptV1;
-  captureControlFrame(request: ControlCaptureRequestV1): Promise<RuntimeControlCaptureFrameV1>;
-  renderFrame(): RenderReadyReceiptV1;
-  dispose(): Promise<void>;
-}
-
 export interface SubjectDefinitionSummaryV1 {
   resourceRef: string;
   contentHash: string;

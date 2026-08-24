@@ -1,27 +1,36 @@
 import type {
   ApplyCameraPreviewRequestV1,
   ApplySubjectPresetTuningRequestV1,
-  BindControlRequestV2,
   CameraPreviewStateV1,
   CameraViewInputV1,
   ControlCaptureCapabilitiesV1,
   ControlCaptureRequestV1,
-  ControlBindingReceiptV2,
   ExecutionPlanV4,
   ExecutionPlanV5,
   FixedInputV1,
   RenderReadyReceiptV1,
   RuntimeControlCaptureFrameV1,
   SemanticInputActionV1,
+  RuntimeActivityReceiptV1,
+  RuntimeActivityRequestV1,
   WorldRuntimeSnapshotV3,
+  WorldRuntimeSnapshotV4,
   SubjectPresetTuningReceiptV1,
   WorldkitBrowserDiagnosticV1,
 } from "@whitebox-world/runtime-contracts";
+import type {
+  GameplayCommandReceiptV1,
+  GameplayCommandV1,
+  GameplayEventV1,
+  GameplayInspectionSnapshotV1,
+  WorldStateSnapshotV1,
+} from "@whitebox-world/gameplay-contracts";
 import {
   BabylonWorldRuntime,
   FIXED_TIME_STEP_SECONDS,
   type BabylonWorldRuntimeOptions,
 } from "@whitebox-world/runtime-babylon";
+import type { RuntimeWorldConfigurationV1 } from "@whitebox-world/runtime-host";
 
 import type {
   FeatureInspection,
@@ -30,6 +39,10 @@ import type {
   PlaygroundWorldAdapter,
   WorldSnapshot,
 } from "./playground-world";
+import {
+  createGameplayBabylonRuntimeCoordinatorV1,
+  type GameplayBabylonRuntimeCoordinatorV1,
+} from "./gameplay-babylon-runtime-coordinator";
 
 type PlaygroundExecutionPlanV1 = ExecutionPlanV4 | ExecutionPlanV5;
 
@@ -249,7 +262,6 @@ export function featureInspections(plan: PlaygroundExecutionPlanV1): readonly Fe
 
 export class BabylonWorldAdapter implements PlaygroundWorldAdapter {
   readonly name: string;
-  readonly canvas: HTMLCanvasElement;
 
   private readonly listeners = new Set<(snapshot: WorldSnapshot) => void>();
   private readonly keyboardInput = new PhysicalKeyboardActionTracker();
@@ -267,53 +279,61 @@ export class BabylonWorldAdapter implements PlaygroundWorldAdapter {
   private displayFramesPerSecond = 0;
   private frameLoopDiagnostic: WorldkitBrowserDiagnosticV1 | undefined;
   private captureReservationReceiptId: string | undefined;
+  private captureActivitySequence = 0;
   private activeCameraPointerId: number | null = null;
   private lastCameraPointerPosition: readonly [number, number] = [0, 0];
+  private mountedContainer: HTMLElement | undefined;
 
   private constructor(
     private readonly executionPlan: PlaygroundExecutionPlanV1,
-    private readonly runtime: BabylonWorldRuntime,
-    canvas: HTMLCanvasElement,
+    private readonly coordinator: GameplayBabylonRuntimeCoordinatorV1,
   ) {
     this.name = `babylon-havok/${executionPlan.id}`;
-    this.canvas = canvas;
-    this.canvas.className = "world-canvas";
-    this.canvas.tabIndex = 0;
-    this.canvas.style.touchAction = "none";
     this.inspections = featureInspections(executionPlan);
-    this.resizeObserver = new ResizeObserver(() => this.runtime.resize());
+    this.resizeObserver = new ResizeObserver(() => this.activeRuntime().resize());
     window.addEventListener("keydown", this.handleKeyDown);
     window.addEventListener("keyup", this.handleKeyUp);
     window.addEventListener("blur", this.handleBlur);
-    this.canvas.addEventListener("pointerdown", this.handleCameraPointerDown);
-    this.canvas.addEventListener("pointermove", this.handleCameraPointerMove);
-    this.canvas.addEventListener("pointerup", this.handleCameraPointerUp);
-    this.canvas.addEventListener("pointercancel", this.handleCameraPointerUp);
-    this.canvas.addEventListener("wheel", this.handleCameraWheel, { passive: false });
+    this.attachCanvas(this.canvas);
+  }
+
+  get canvas(): HTMLCanvasElement {
+    return this.coordinator.activeCanvas();
   }
 
   static async create(
-    executionPlan: PlaygroundExecutionPlanV1,
+    runtimeWorldConfiguration: RuntimeWorldConfigurationV1,
     options: Pick<
       BabylonWorldRuntimeOptions,
       | "subjectAssetResolver"
       | "subjectAssetCacheOptions"
       | "onInitializationStage"
-    > = {},
+  > = {},
   ): Promise<BabylonWorldAdapter> {
-    const canvas = document.createElement("canvas");
-    const runtime = await BabylonWorldRuntime.create({
-      executionPlan,
+    const coordinator = await createGameplayBabylonRuntimeCoordinatorV1({
       runtimeSessionId: crypto.randomUUID(),
-      canvas,
-      autoStartRenderLoop: false,
-      ...options,
+      initialWorldConfiguration: runtimeWorldConfiguration,
+      ...(options.subjectAssetResolver === undefined
+        ? {}
+        : { subjectAssetResolver: options.subjectAssetResolver }),
+      ...(options.subjectAssetCacheOptions === undefined
+        ? {}
+        : { subjectAssetCacheOptions: options.subjectAssetCacheOptions }),
+      ...(options.onInitializationStage === undefined
+        ? {}
+        : {
+            onInitializationStage: (_worldSessionId, stage) =>
+              options.onInitializationStage?.(stage),
+          }),
     });
     try {
-      return new BabylonWorldAdapter(executionPlan, runtime, canvas);
+      return new BabylonWorldAdapter(
+        runtimeWorldConfiguration.executionPlan,
+        coordinator,
+      );
     } catch (error) {
       try {
-        await runtime.dispose();
+        await coordinator.dispose();
       } catch {
         // Preserve the primary Adapter construction failure.
       }
@@ -322,15 +342,17 @@ export class BabylonWorldAdapter implements PlaygroundWorldAdapter {
   }
 
   mount(container: HTMLElement): void {
+    this.mountedContainer = container;
     container.append(this.canvas);
     this.resizeObserver.observe(container);
-    this.runtime.resize();
+    this.activeRuntime().resize();
     this.canvas.focus();
     this.scheduleAnimationFrame();
   }
 
   setPaused(paused: boolean): void {
     this.paused = paused;
+    this.coordinator.setPaused(paused);
     this.resetAnimationClock();
     this.emit();
   }
@@ -340,20 +362,22 @@ export class BabylonWorldAdapter implements PlaygroundWorldAdapter {
   }
 
   reset(): void {
-    this.captureReservationReceiptId = undefined;
-    this.keyboardInput.clear();
-    this.cameraInput.clear();
-    this.activeCameraPointerId = null;
-    this.frameLoopDiagnostic = undefined;
-    this.resetAnimationClock();
-    this.runtime.reset();
-    this.render();
-    this.emit();
+    void this.resetRuntime().catch(() => {
+      this.paused = true;
+      this.coordinator.setPaused(true);
+      this.frameLoopDiagnostic = {
+        severity: "error",
+        code: "WORLDKIT_RUNTIME_RESET_FAILED",
+        instancePath: "",
+        message: "The runtime reset failed and the current World was preserved.",
+      };
+      this.emit();
+    });
   }
 
   render(): void {
     if (this.captureReservationReceiptId !== undefined) return;
-    this.runtime.renderFrame();
+    this.activeRuntime().renderFrame();
     this.frame += 1;
   }
 
@@ -364,7 +388,7 @@ export class BabylonWorldAdapter implements PlaygroundWorldAdapter {
     for (const step of steps) {
       const ticks = Math.max(0, Math.floor(step.ticks));
       this.applyCameraActions(step.actions, ticks);
-      await this.runtime.runFixedInput({
+      await this.coordinator.runFixedInput({
         actions: mapPlaygroundInputActions(step.actions),
         ticks,
       });
@@ -376,23 +400,19 @@ export class BabylonWorldAdapter implements PlaygroundWorldAdapter {
     return this.snapshot();
   }
 
-  bindControl(request: BindControlRequestV2): ControlBindingReceiptV2 {
-    this.captureReservationReceiptId = undefined;
-    const receipt = this.runtime.bindControl(request);
-    if (receipt.status === "committed") {
-      this.render();
-      this.emit();
-    }
-    return receipt;
-  }
-
-  async runWorldkitFixedInput(steps: readonly FixedInputV1[]): Promise<WorldRuntimeSnapshotV3> {
+  async runWorldkitFixedInput(steps: readonly FixedInputV1[]): Promise<WorldRuntimeSnapshotV4> {
     this.captureReservationReceiptId = undefined;
     const wasPaused = this.paused;
-    this.paused = true;
-    let snapshot = this.runtime.snapshot();
-    for (const step of steps) snapshot = await this.runtime.runFixedInput(step);
-    this.paused = wasPaused;
+    let snapshot: WorldRuntimeSnapshotV4;
+    try {
+      this.paused = true;
+      this.coordinator.setPaused(true);
+      snapshot = this.coordinator.snapshot();
+      for (const step of steps) snapshot = await this.coordinator.runFixedInput(step);
+    } finally {
+      this.paused = wasPaused;
+      this.coordinator.setPaused(wasPaused);
+    }
     this.resetAnimationClock();
     this.render();
     this.emit();
@@ -400,17 +420,17 @@ export class BabylonWorldAdapter implements PlaygroundWorldAdapter {
   }
 
   getControlCaptureCapabilities(): ControlCaptureCapabilitiesV1 {
-    return this.runtime.getControlCaptureCapabilities();
+    return this.activeRuntime().getControlCaptureCapabilities();
   }
 
   async waitForSimulationTick(
     expectedSimulationTick: number,
-  ): Promise<WorldRuntimeSnapshotV3> {
+  ): Promise<WorldRuntimeSnapshotV4> {
     if (!Number.isSafeInteger(expectedSimulationTick) || expectedSimulationTick < 0) {
       throw new RangeError("Expected Simulation Tick must be a non-negative safe integer.");
     }
-    const snapshot = this.runtime.snapshot();
-    if (snapshot.tick !== expectedSimulationTick) {
+    const snapshot = this.coordinator.snapshot();
+    if (snapshot.world.simulationTick !== expectedSimulationTick) {
       throw new Error("CONTROL_CAPTURE_SIMULATION_TICK_MISMATCH");
     }
     return snapshot;
@@ -419,7 +439,7 @@ export class BabylonWorldAdapter implements PlaygroundWorldAdapter {
   async waitForRenderReady(
     expectedSimulationTick: number,
   ): Promise<RenderReadyReceiptV1> {
-    const receipt = this.runtime.waitForRenderReady(expectedSimulationTick);
+    const receipt = this.activeRuntime().waitForRenderReady(expectedSimulationTick);
     this.captureReservationReceiptId = receipt.id;
     return receipt;
   }
@@ -431,55 +451,81 @@ export class BabylonWorldAdapter implements PlaygroundWorldAdapter {
       throw new Error("CONTROL_CAPTURE_RENDER_READY_REQUIRED");
     }
     const wasPaused = this.paused;
+    this.captureActivitySequence += 1;
+    const activityRequest: RuntimeActivityRequestV1 = Object.freeze({
+      schemaVersion: 1,
+      id: `control-capture.${this.runtimeSnapshot().worldSessionId}.${this.captureActivitySequence}`,
+      activityKind: "control-capture",
+      expectedWorldSessionId: this.runtimeSnapshot().worldSessionId,
+    });
+    const acquisition = this.acquireRuntimeActivityRuntime(activityRequest);
+    if (acquisition.status !== "active") {
+      throw new Error(
+        acquisition.status === "rejected"
+          ? acquisition.diagnostic.code
+          : "WORLDKIT_RUNTIME_ACTIVITY_NOT_ACTIVE",
+      );
+    }
     this.paused = true;
+    this.coordinator.setPaused(true);
+    let primaryError: unknown;
     try {
-      return await this.runtime.captureControlFrame(request);
+      const frame = await this.activeRuntime().captureControlFrame(request);
+      return Object.freeze({ ...frame, snapshot: this.coordinator.snapshot() });
+    } catch (error) {
+      primaryError = error;
+      throw error;
     } finally {
       this.captureReservationReceiptId = undefined;
       this.paused = wasPaused;
+      this.coordinator.setPaused(wasPaused);
       this.resetAnimationClock();
+      const release = this.releaseRuntimeActivityRuntime(activityRequest);
+      if (primaryError === undefined && release.status === "rejected") {
+        throw new Error(release.diagnostic.code);
+      }
     }
   }
 
-  requestCameraProfileRuntime(profileRef: string): WorldRuntimeSnapshotV3 {
+  requestCameraProfileRuntime(profileRef: string): WorldRuntimeSnapshotV4 {
     this.captureReservationReceiptId = undefined;
-    const snapshot = this.runtime.requestCameraProfile(profileRef);
+    this.activeRuntime().requestCameraProfile(profileRef);
     this.render();
     this.emit();
-    return snapshot;
+    return this.coordinator.snapshot();
   }
 
-  resetCameraProfileRuntime(): WorldRuntimeSnapshotV3 {
+  resetCameraProfileRuntime(): WorldRuntimeSnapshotV4 {
     this.captureReservationReceiptId = undefined;
-    const snapshot = this.runtime.resetCameraProfile();
+    this.activeRuntime().resetCameraProfile();
     this.render();
     this.emit();
-    return snapshot;
+    return this.coordinator.snapshot();
   }
 
-  adjustCameraViewRuntime(input: CameraViewInputV1): WorldRuntimeSnapshotV3 {
+  adjustCameraViewRuntime(input: CameraViewInputV1): WorldRuntimeSnapshotV4 {
     this.captureReservationReceiptId = undefined;
-    const snapshot = this.runtime.adjustCameraView(input);
+    this.activeRuntime().adjustCameraView(input);
     this.render();
     this.emit();
-    return snapshot;
+    return this.coordinator.snapshot();
   }
 
-  resetCameraViewRuntime(): WorldRuntimeSnapshotV3 {
+  resetCameraViewRuntime(): WorldRuntimeSnapshotV4 {
     this.captureReservationReceiptId = undefined;
-    const snapshot = this.runtime.resetCameraView();
+    this.activeRuntime().resetCameraView();
     this.render();
     this.emit();
-    return snapshot;
+    return this.coordinator.snapshot();
   }
 
   getCameraPreviewStateRuntime(): CameraPreviewStateV1 {
-    return this.runtime.getCameraPreviewState();
+    return this.activeRuntime().getCameraPreviewState();
   }
 
   applyCameraPreviewRuntime(request: ApplyCameraPreviewRequestV1): CameraPreviewStateV1 {
     this.captureReservationReceiptId = undefined;
-    const preview = this.runtime.applyCameraPreview(request);
+    const preview = this.activeRuntime().applyCameraPreview(request);
     this.render();
     this.emit();
     return preview;
@@ -489,24 +535,24 @@ export class BabylonWorldAdapter implements PlaygroundWorldAdapter {
     request: ApplySubjectPresetTuningRequestV1,
   ): SubjectPresetTuningReceiptV1 {
     this.captureReservationReceiptId = undefined;
-    const receipt = this.runtime.applySubjectPresetTuning(request);
+    const receipt = this.activeRuntime().applySubjectPresetTuning(request);
     this.render();
     this.emit();
-    return receipt;
+    return Object.freeze({ ...receipt, snapshot: this.coordinator.snapshot() });
   }
   runSubjectHarness(subjectEntityId: string) {
-    return this.runtime.runHarness(subjectEntityId);
+    return this.activeRuntime().runHarness(subjectEntityId);
   }
 
   async setMotionProfileRuntime(
     subjectEntityId: string,
     motionProfileRef: string,
-  ): Promise<WorldRuntimeSnapshotV3> {
+  ): Promise<WorldRuntimeSnapshotV4> {
     this.captureReservationReceiptId = undefined;
-    if (!this.runtime.requestMotionProfile(subjectEntityId, motionProfileRef)) {
+    if (!this.activeRuntime().requestMotionProfile(subjectEntityId, motionProfileRef)) {
       throw new Error("WORLDKIT_MOTION_PROFILE_INCOMPATIBLE");
     }
-    const snapshot = await this.runtime.runFixedInput({ actions: [], ticks: 1 });
+    const snapshot = await this.coordinator.runFixedInput({ actions: [], ticks: 1 });
     this.render();
     this.emit();
     return snapshot;
@@ -533,19 +579,64 @@ export class BabylonWorldAdapter implements PlaygroundWorldAdapter {
       : [...diagnostics, this.frameLoopDiagnostic];
   }
 
-  runtimeSnapshot(): WorldRuntimeSnapshotV3 {
-    return this.runtime.snapshot();
+  runtimeSnapshot(): WorldRuntimeSnapshotV4 {
+    return this.coordinator.snapshot();
   }
 
-  resetRuntime(): WorldRuntimeSnapshotV3 {
+  executeGameplayCommandRuntime(
+    command: GameplayCommandV1,
+  ): Promise<GameplayCommandReceiptV1> {
+    return this.coordinator.executeGameplayCommand(command);
+  }
+
+  gameplayEventsAfterRuntime(
+    afterEventSequence: number,
+    maximumEventCount: number,
+  ): readonly GameplayEventV1[] {
+    return this.coordinator.eventsAfter(afterEventSequence, maximumEventCount);
+  }
+
+  gameplayInspectionSnapshotRuntime(): GameplayInspectionSnapshotV1 {
+    return this.coordinator.getGameplayInspectionSnapshot();
+  }
+
+  worldStateSnapshotRuntime(
+    worldStateRef: string,
+  ): WorldStateSnapshotV1 | undefined {
+    return this.coordinator.getWorldStateSnapshot(worldStateRef);
+  }
+
+  acquireRuntimeActivityRuntime(
+    request: RuntimeActivityRequestV1,
+  ): RuntimeActivityReceiptV1 {
+    return this.coordinator.acquireRuntimeActivity(request);
+  }
+
+  releaseRuntimeActivityRuntime(
+    request: RuntimeActivityRequestV1,
+  ): RuntimeActivityReceiptV1 {
+    return this.coordinator.releaseRuntimeActivity(request);
+  }
+
+  async resetRuntime(): Promise<WorldRuntimeSnapshotV4> {
     this.captureReservationReceiptId = undefined;
     this.keyboardInput.clear();
     this.cameraInput.clear();
     this.activeCameraPointerId = null;
     this.frameLoopDiagnostic = undefined;
     this.resetAnimationClock();
-    const snapshot = this.runtime.reset();
-    this.render();
+    const previousCanvas = this.canvas;
+    const snapshot = await this.coordinator.resetWithInitialControlBinding();
+    const nextCanvas = this.canvas;
+    if (previousCanvas !== nextCanvas) {
+      this.detachCanvas(previousCanvas);
+      this.attachCanvas(nextCanvas);
+      if (this.mountedContainer !== undefined) {
+        previousCanvas.replaceWith(nextCanvas);
+        this.activeRuntime().resize();
+        nextCanvas.focus();
+      }
+    }
     this.emit();
     return snapshot;
   }
@@ -596,7 +687,7 @@ export class BabylonWorldAdapter implements PlaygroundWorldAdapter {
   }
 
   snapshot(): WorldSnapshot {
-    const snapshot = this.runtime.snapshot();
+    const snapshot = this.activeRuntime().snapshot();
     const controlledSubject = snapshot.subjectStatesByEntityId[snapshot.controlledEntityId];
     if (controlledSubject === undefined) {
       throw new Error(
@@ -630,7 +721,7 @@ export class BabylonWorldAdapter implements PlaygroundWorldAdapter {
       performance: {
         fps: this.displayFramesPerSecond,
         triangles: this.executionPlan.resourceUsage.triangles,
-        drawCalls: this.runtimeSnapshot().resources.meshes,
+        drawCalls: this.runtimeSnapshot().resources.meshCount,
       },
     };
   }
@@ -653,14 +744,33 @@ export class BabylonWorldAdapter implements PlaygroundWorldAdapter {
     window.removeEventListener("keydown", this.handleKeyDown);
     window.removeEventListener("keyup", this.handleKeyUp);
     window.removeEventListener("blur", this.handleBlur);
-    this.canvas.removeEventListener("pointerdown", this.handleCameraPointerDown);
-    this.canvas.removeEventListener("pointermove", this.handleCameraPointerMove);
-    this.canvas.removeEventListener("pointerup", this.handleCameraPointerUp);
-    this.canvas.removeEventListener("pointercancel", this.handleCameraPointerUp);
-    this.canvas.removeEventListener("wheel", this.handleCameraWheel);
+    this.detachCanvas(this.canvas);
     this.canvas.remove();
-    this.disposePromise = this.runtime.dispose();
+    this.disposePromise = this.coordinator.dispose();
     return this.disposePromise;
+  }
+
+  private activeRuntime(): BabylonWorldRuntime {
+    return this.coordinator.activeRuntime() as BabylonWorldRuntime;
+  }
+
+  private attachCanvas(canvas: HTMLCanvasElement): void {
+    canvas.className = "world-canvas";
+    canvas.tabIndex = 0;
+    canvas.style.touchAction = "none";
+    canvas.addEventListener("pointerdown", this.handleCameraPointerDown);
+    canvas.addEventListener("pointermove", this.handleCameraPointerMove);
+    canvas.addEventListener("pointerup", this.handleCameraPointerUp);
+    canvas.addEventListener("pointercancel", this.handleCameraPointerUp);
+    canvas.addEventListener("wheel", this.handleCameraWheel, { passive: false });
+  }
+
+  private detachCanvas(canvas: HTMLCanvasElement): void {
+    canvas.removeEventListener("pointerdown", this.handleCameraPointerDown);
+    canvas.removeEventListener("pointermove", this.handleCameraPointerMove);
+    canvas.removeEventListener("pointerup", this.handleCameraPointerUp);
+    canvas.removeEventListener("pointercancel", this.handleCameraPointerUp);
+    canvas.removeEventListener("wheel", this.handleCameraWheel);
   }
 
   private readonly handleKeyDown = (event: KeyboardEvent): void => {
@@ -727,6 +837,7 @@ export class BabylonWorldAdapter implements PlaygroundWorldAdapter {
   };
 
   private scheduleAnimationFrame(): void {
+    if (this.disposed) return;
     this.animationFrameId = requestAnimationFrame((timestampMilliseconds) => {
       this.animationFrameId = null;
       void this.animate(timestampMilliseconds);
@@ -740,15 +851,17 @@ export class BabylonWorldAdapter implements PlaygroundWorldAdapter {
       this.animationPending = true;
       try {
         this.applyCameraActions([...this.cameraInput], ticks);
-        await this.runtime.runFixedInput({
+        const legacySnapshot = this.activeRuntime().snapshot();
+        await this.coordinator.runFixedInput({
           actions: this.keyboardInput.actions(
-            this.runtime.snapshot().subjectStatesByEntityId[
-              this.runtime.snapshot().controlledEntityId
+            legacySnapshot.subjectStatesByEntityId[
+              legacySnapshot.controlledEntityId
             ]?.activeMotionKernelRef,
           ),
           ticks,
         });
-      } catch {
+      } catch (error) {
+        if (this.disposed) return;
         this.paused = true;
         this.frameLoopDiagnostic = {
           severity: "error",
@@ -756,11 +869,12 @@ export class BabylonWorldAdapter implements PlaygroundWorldAdapter {
           instancePath: "",
           message: "The runtime was paused after a simulation frame failed.",
         };
-        console.error("WORLDKIT_RUNTIME_FRAME_FAILED");
+        console.error("WORLDKIT_RUNTIME_FRAME_FAILED", error);
       } finally {
         this.animationPending = false;
       }
     }
+    if (this.disposed) return;
     this.render();
     this.emit();
     this.scheduleAnimationFrame();
@@ -823,7 +937,7 @@ export class BabylonWorldAdapter implements PlaygroundWorldAdapter {
       CAMERA_PITCH_RADIANS_PER_TICK *
       ticks;
     if (yawDeltaRadians === 0 && pitchDeltaRadians === 0) return;
-    this.runtime.adjustCameraView({ yawDeltaRadians, pitchDeltaRadians });
+    this.activeRuntime().adjustCameraView({ yawDeltaRadians, pitchDeltaRadians });
   }
 
   private emit(): void {

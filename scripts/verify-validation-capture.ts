@@ -10,6 +10,7 @@ import {
   validateValidationReportV1,
   type Sha256HashV1,
 } from "@whitebox-world/validation";
+import { isPlainObject } from "lodash-es";
 
 import {
   createControlCaptureValidationFixtureV1,
@@ -31,6 +32,85 @@ interface VerificationCaseResultV1 {
   readonly diagnosticCodes: readonly string[];
 }
 
+const SNAPSHOT_V4_ROOT_KEYS = [
+  "kind",
+  "resources",
+  "runtime",
+  "runtimeSessionId",
+  "schemaVersion",
+  "view",
+  "world",
+  "worldSessionId",
+] as const;
+
+const REMOVED_SNAPSHOT_V3_ROOT_KEYS = [
+  "camera",
+  "controlledEntityId",
+  "controllersById",
+  "physics",
+  "ready",
+  "runtimeBackend",
+  "subjectStatesByEntityId",
+  "tick",
+] as const;
+
+async function assertSnapshotTrackUsesV4(
+  bundleDirectory: string,
+): Promise<void> {
+  const trackPath = path.join(
+    bundleDirectory,
+    "tracks/snapshots.ndjson",
+  );
+  const rows = (await readFile(trackPath, "utf8"))
+    .trim()
+    .split("\n")
+    .map((line) => JSON.parse(line) as unknown);
+  assert.equal(rows.length, 2, "Snapshot track must contain both capture frames");
+
+  rows.forEach((row, captureFrameIndex) => {
+    assert.ok(isPlainObject(row), "Snapshot track row must be an object");
+    const record = row as Readonly<Record<string, unknown>>;
+    assert.deepEqual(
+      Object.keys(record).sort(),
+      ["captureFrameIndex", "simulationTick", "snapshot"],
+      "Snapshot track row must keep the exact V1 envelope",
+    );
+    assert.equal(record.captureFrameIndex, captureFrameIndex);
+    assert.ok(isPlainObject(record.snapshot), "Snapshot payload must be an object");
+    const snapshot = record.snapshot as Readonly<Record<string, unknown>>;
+    assert.deepEqual(
+      Object.keys(snapshot).sort(),
+      [...SNAPSHOT_V4_ROOT_KEYS].sort(),
+      "Capture must publish the exact Runtime Snapshot V4 root envelope",
+    );
+    assert.equal(snapshot.kind, "worldkit-runtime-snapshot");
+    assert.equal(snapshot.schemaVersion, 4);
+    assert.equal(snapshot.runtimeSessionId, "validation-fixture-session");
+    assert.equal(
+      snapshot.worldSessionId,
+      "validation-fixture-world-session",
+    );
+    for (const removedKey of REMOVED_SNAPSHOT_V3_ROOT_KEYS) {
+      assert.equal(
+        removedKey in snapshot,
+        false,
+        `Capture Snapshot V4 must not publish removed V3 field '${removedKey}'`,
+      );
+    }
+    assert.ok(isPlainObject(snapshot.world), "Snapshot V4 world must be an object");
+    const world = snapshot.world as Readonly<Record<string, unknown>>;
+    assert.equal(
+      world.simulationTick,
+      record.simulationTick,
+      "Snapshot V4 World Tick must match its Capture track row",
+    );
+    assert.ok(
+      isPlainObject(world.gameplayInspection),
+      "Snapshot V4 must publish Gameplay inspection state",
+    );
+  });
+}
+
 async function runCaseV1(
   parentDirectory: string,
   id: string,
@@ -44,6 +124,7 @@ async function runCaseV1(
   const bundleDirectory = path.join(parentDirectory, id);
   const reportPath = path.join(parentDirectory, `${id}.validation-report.json`);
   await createControlCaptureValidationFixtureV1(bundleDirectory);
+  await assertSnapshotTrackUsesV4(bundleDirectory);
   await mutate(bundleDirectory);
   const commandResult = await verifyControlCaptureFileV1(
     bundleDirectory,

@@ -376,6 +376,8 @@ describe("runtime contracts V3", () => {
         allowRun: true,
         allowJump: true,
       },
+      locomotionCapabilityRef: "worldkit://capability/locomotion.ground@1",
+      locomotionCapabilityHash: `sha256:${"3".repeat(64)}`,
       physicsBodyProfileRef: "worldkit://physics-body-profile/character.medium@1",
       locomotionProfileRef: "worldkit://locomotion-profile/ground.standard@1",
       controlFeel: {

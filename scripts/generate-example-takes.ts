@@ -7,7 +7,7 @@ import { bindSimulationTakeWorldIdentityV1 } from "./lib/example-take-world-iden
 import {
   deriveTransitionalWorldPackageIdentityV1,
 } from "./lib/simulation-take-cli";
-import { loadWorldkitPipeline } from "./lib/worldkit-pipeline";
+import { loadWorldkitRoutePipeline } from "./lib/worldkit-pipeline";
 
 const REPOSITORY_ROOT = path.resolve(import.meta.dirname, "..");
 const WORLD_PATH = path.join(
@@ -20,7 +20,7 @@ const TAKE_PATHS = [
 ] as const;
 
 async function main(): Promise<void> {
-  const pipeline = await loadWorldkitPipeline(WORLD_PATH);
+  const pipeline = await loadWorldkitRoutePipeline(WORLD_PATH);
   if (!pipeline.ok) {
     throw new Error(JSON.stringify(pipeline.diagnostics));
   }

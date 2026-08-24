@@ -3,7 +3,7 @@
   "schemaVersion": 1,
   "id": "coastal-walk-opening",
   "worldPackageRef": "worldkit://world-package/coastal-whitebox@1",
-  "worldPackageRootHash": "sha256:28f3d9b5aed02250909e5a2e2af8a7d1c13b9127038ab8163a1475da0e9ee073",
+  "worldPackageRootHash": "sha256:13a472c79c931351645f77dadde81b8a31df6e30317cb8618021551438540fd3",
   "seed": 731991,
   "simulationTickRate": {
     "numeratorTicks": 60,

@@ -9,14 +9,13 @@ import { chromium, type Browser, type BrowserContext, type Page } from "playwrig
 
 import {
   stringifyCanonicalJson,
-  type NormalizedWorldIRV3,
+  type NormalizedWorldIRV4,
 } from "@whitebox-world/authoring";
 import { builtInSubjectResourceRegistry } from "@whitebox-world/subject-registry";
 import type {
-  ExecutionPlanV4,
-  SubjectRuntimeStateV3,
+  ExecutionPlanV5,
   Vec3,
-  WorldRuntimeSnapshotV3,
+  WorldRuntimeSnapshotV4,
 } from "@whitebox-world/runtime-contracts";
 
 import { promoteArtifactDirectory } from "./lib/artifact-directory-promotion";
@@ -89,16 +88,16 @@ const ARTIFACT_FILES = [
   "world.png",
 ] as const;
 
-type ActionId = SubjectRuntimeStateV3["activeActionId"];
+type ActionId = "idle" | "walk" | "run" | "jump";
 type CaptureActionId = "idle" | "walk" | "run" | "jump";
 
-interface WorldBuildArtifactV3 {
+interface WorldBuildArtifactV4 {
   readonly kind: "worldkit-build-artifact";
-  readonly schemaVersion: 3;
+  readonly schemaVersion: 4;
   readonly normalizedWorldIrHash: string;
   readonly executionPlanHash: string;
-  readonly normalizedWorldIr: NormalizedWorldIRV3;
-  readonly executionPlan: ExecutionPlanV4;
+  readonly normalizedWorldIr: NormalizedWorldIRV4;
+  readonly executionPlan: ExecutionPlanV5;
 }
 
 interface ArtifactPaths {
@@ -124,7 +123,7 @@ interface ActionCaptureEvidence extends PngInspection {
   readonly actionId: CaptureActionId;
   readonly subjectEntityId: typeof PRIMARY_ENTITY_ID;
   readonly positionMetersXYZ: Vec3;
-  readonly movementMedium: SubjectRuntimeStateV3["movementMedium"];
+  readonly movementMedium: "ground" | "air";
   readonly subjectSilhouette: SubjectPoseEvidenceV1;
 }
 
@@ -234,6 +233,36 @@ function assertPositionUnchanged(actual: Vec3, expected: Vec3, message: string):
   assert.ok(maximumDriftMeters <= 1e-9, `${message} Drift=${maximumDriftMeters}m.`);
 }
 
+function requireSubjectProjection(snapshot: WorldRuntimeSnapshotV4, entityId: string) {
+  const subject = snapshot.world.subjectStatesByEntityId[entityId];
+  assert.ok(subject !== undefined, `Missing Subject projection '${entityId}'.`);
+  return subject;
+}
+
+function requireLocomotionCapability(snapshot: WorldRuntimeSnapshotV4, entityId: string) {
+  const capability = Object.values(
+    requireSubjectProjection(snapshot, entityId).capabilityStatesById,
+  ).find((candidate) => candidate.kind === "locomotion-capability-state");
+  assert.ok(capability !== undefined, `Missing locomotion capability state for '${entityId}'.`);
+  return capability;
+}
+
+function locomotionActionId(snapshot: WorldRuntimeSnapshotV4, entityId: string): ActionId {
+  const mode = requireLocomotionCapability(snapshot, entityId).mode;
+  return mode === "airborne" ? "jump" : mode;
+}
+
+function assertPossessedBy(snapshot: WorldRuntimeSnapshotV4, controlledEntityId: string): void {
+  assert.ok(
+    Object.values(snapshot.world.gameplayInspection.possessedByRelationshipsById).some(
+      (relationship) =>
+        relationship.controllerEntityId === CONTROLLER_ID &&
+        relationship.controlledEntityId === controlledEntityId,
+    ),
+    `Controller '${CONTROLLER_ID}' does not possess '${controlledEntityId}'.`,
+  );
+}
+
 async function inspectProductAsset(): Promise<ProductAssetEvidenceV1> {
   const [glbBytes, assetManifestText, actionManifestText] = await Promise.all([
     readFile(ASSET_PATH),
@@ -249,7 +278,7 @@ async function inspectProductAsset(): Promise<ProductAssetEvidenceV1> {
   });
 }
 
-async function runCliGates(paths: ArtifactPaths): Promise<WorldBuildArtifactV3> {
+async function runCliGates(paths: ArtifactPaths): Promise<WorldBuildArtifactV4> {
   assert.equal(await worldkitMain(["validate", INPUT_PATH, "--json"]), 0);
   assert.equal(
     await worldkitMain(["build", INPUT_PATH, "--output", paths.build, "--json"]),
@@ -277,16 +306,15 @@ async function runCliGates(paths: ArtifactPaths): Promise<WorldBuildArtifactV3> 
   assert.equal(explanation.ok, true);
   await writeFile(paths.explain, `${stringifyCanonicalJson(explanation)}\n`);
 
-  const artifact = parseJson<WorldBuildArtifactV3>(
+  const artifact = parseJson<WorldBuildArtifactV4>(
     await readFile(paths.build, "utf8"),
     "G Bot build artifact",
   );
   assert.equal(artifact.kind, "worldkit-build-artifact");
-  assert.equal(artifact.schemaVersion, 3);
-  assert.equal(artifact.normalizedWorldIr.schemaVersion, 3);
-  assert.equal(artifact.executionPlan.schemaVersion, 4);
-  assert.equal(artifact.executionPlan.runtimeBackend, "babylon-havok");
-  assert.equal(artifact.executionPlan.controlledEntityId, PRIMARY_ENTITY_ID);
+  assert.equal(artifact.schemaVersion, 4);
+  assert.equal(artifact.normalizedWorldIr.schemaVersion, 4);
+  assert.equal(artifact.executionPlan.schemaVersion, 5);
+  assert.equal(artifact.executionPlan.initialControlledEntityId, PRIMARY_ENTITY_ID);
   assert.deepEqual(
     artifact.executionPlan.subjects.map((subject) => subject.entityId),
     [PRIMARY_ENTITY_ID, SECONDARY_ENTITY_ID],
@@ -301,12 +329,12 @@ async function runCliGates(paths: ArtifactPaths): Promise<WorldBuildArtifactV3> 
   const explanationArtifact = explanation as SubjectExplanationSuccessV1;
   assert.equal(explanationArtifact.subject.entityId, PRIMARY_ENTITY_ID);
   assert.equal(explanationArtifact.subject.subjectDefinitionRef, SUBJECT_DEFINITION_REF);
-  const snapshot = parseJson<WorldRuntimeSnapshotV3>(
+  const snapshot = parseJson<WorldRuntimeSnapshotV4>(
     await readFile(paths.snapshot, "utf8"),
     "G Bot CLI snapshot",
   );
-  assert.equal(snapshot.subjectStatesByEntityId[PRIMARY_ENTITY_ID]?.activeActionId, "idle");
-  assert.equal(snapshot.subjectStatesByEntityId[SECONDARY_ENTITY_ID]?.activeActionId, "idle");
+  assert.equal(locomotionActionId(snapshot, PRIMARY_ENTITY_ID), "idle");
+  assert.equal(locomotionActionId(snapshot, SECONDARY_ENTITY_ID), "idle");
   inspectPng(await readFile(paths.world));
   return artifact;
 }
@@ -340,18 +368,18 @@ async function captureAction(
   actions: readonly ("move-forward" | "move-right" | "run" | "jump")[],
   ticks: number,
 ): Promise<ActionCaptureResult> {
-  const reset = await page.evaluate(() => window.__WORLDKIT__!.reset());
-  assert.equal(reset.tick, 0);
-  assert.equal(reset.controlledEntityId, PRIMARY_ENTITY_ID);
+  const reset = await page.evaluate(async () => window.__WORLDKIT__!.reset());
+  assert.equal(reset.world.simulationTick, 0);
+  assertPossessedBy(reset, PRIMARY_ENTITY_ID);
   const snapshot = await page.evaluate(
     async ({ fixedActions, fixedTicks }) =>
       window.__WORLDKIT__!.runFixedInput([{ actions: fixedActions, ticks: fixedTicks }]),
     { fixedActions: actions, fixedTicks: ticks },
   );
-  const state = snapshot.subjectStatesByEntityId[PRIMARY_ENTITY_ID];
-  assert.ok(state !== undefined);
-  assert.equal(state.activeActionId, actionId);
-  if (actionId === "jump") assert.equal(state.movementMedium, "air");
+  const state = requireSubjectProjection(snapshot, PRIMARY_ENTITY_ID).entityState;
+  const locomotion = requireLocomotionCapability(snapshot, PRIMARY_ENTITY_ID);
+  assert.equal(locomotionActionId(snapshot, PRIMARY_ENTITY_ID), actionId);
+  if (actionId === "jump") assert.equal(locomotion.movementMedium, "air");
 
   const capture = await page.evaluate(async () => {
     window.__WORLDKIT__!.captureScreenshot();
@@ -399,11 +427,11 @@ async function captureAction(
     evidence: {
       filename: `${actionId}.png` as ActionCaptureEvidence["filename"],
       source: "browser-fixed-tick",
-      tick: snapshot.tick,
+      tick: snapshot.world.simulationTick,
       actionId,
       subjectEntityId: PRIMARY_ENTITY_ID,
       positionMetersXYZ: state.positionMetersXYZ,
-      movementMedium: state.movementMedium,
+      movementMedium: locomotion.movementMedium,
       subjectSilhouette: poseAnalysis.evidence,
       ...inspectPng(bytes),
     },
@@ -413,7 +441,7 @@ async function captureAction(
 
 async function verifyBrowser(
   paths: ArtifactPaths,
-  artifact: WorldBuildArtifactV3,
+  artifact: WorldBuildArtifactV4,
   productAsset: ProductAssetEvidenceV1,
 ): Promise<BrowserEvidence> {
   const animationSet = artifact.executionPlan.animationSets.find(
@@ -449,12 +477,12 @@ async function verifyBrowser(
       timeout: 30_000,
     });
     const ready = await page.evaluate(async () => window.__WORLDKIT__!.ready());
-    assert.equal(ready.controlledEntityId, PRIMARY_ENTITY_ID);
-    assert.deepEqual(Object.keys(ready.subjectStatesByEntityId).sort(), [
+    assertPossessedBy(ready, PRIMARY_ENTITY_ID);
+    assert.deepEqual(Object.keys(ready.world.subjectStatesByEntityId).sort(), [
       PRIMARY_ENTITY_ID,
       SECONDARY_ENTITY_ID,
     ]);
-    const fixedTicksPerSecond = 1 / ready.physics.fixedTimeStepSeconds;
+    const fixedTicksPerSecond = 1 / ready.runtime.fixedTimeStepSeconds;
     assert.ok(Number.isSafeInteger(fixedTicksPerSecond));
     const walkCaptureTiming = {
       actionStartTick: 1,
@@ -475,8 +503,10 @@ async function verifyBrowser(
       new Promise<void>((resolve) => requestAnimationFrame(() => resolve())),
     );
     await page.evaluate(() => window.__WORLDKIT__!.setPaused(true));
-    const fixedReset = await page.evaluate(() => window.__WORLDKIT__!.reset());
-    assert.equal(fixedReset.tick, 0);
+    const fixedReset = await page.evaluate(async () => window.__WORLDKIT__!.reset());
+    assert.equal(fixedReset.world.simulationTick, 0);
+    assert.notEqual(fixedReset.worldSessionId, ready.worldSessionId);
+    assertPossessedBy(fixedReset, PRIMARY_ENTITY_ID);
     await page.evaluate(async () => {
       await new Promise<void>((resolve) => requestAnimationFrame(() => resolve()));
       await new Promise<void>((resolve) => requestAnimationFrame(() => resolve()));
@@ -530,49 +560,78 @@ async function verifyBrowser(
 
     const isolationBefore = await page.evaluate(async () => {
       const api = window.__WORLDKIT__!;
-      api.reset();
+      await api.reset();
       return api.runFixedInput([{ actions: [], ticks: 1 }]);
     });
     const receipt = await page.evaluate(
-      (request) => window.__WORLDKIT__!.bindControl(request),
+      async ({ snapshot, controllerEntityId, primaryEntityId, secondaryEntityId }) =>
+        window.__WORLDKIT__!.executeGameplayCommand({
+        schemaVersion: 1,
+        id: "g-bot-bind-secondary-isolation",
+        type: "control.bind",
+        runtimeSessionId: snapshot.runtimeSessionId,
+        worldSessionId: snapshot.worldSessionId,
+        controllerEntityId,
+        controlledEntityId: secondaryEntityId,
+        expectedPossession: {
+          mode: "possessed",
+          controlledEntityId: primaryEntityId,
+        },
+      }),
       {
-        controllerId: CONTROLLER_ID,
-        expectedControlledEntityId: PRIMARY_ENTITY_ID,
-        controlledEntityId: SECONDARY_ENTITY_ID,
+        snapshot: isolationBefore,
+        controllerEntityId: CONTROLLER_ID,
+        primaryEntityId: PRIMARY_ENTITY_ID,
+        secondaryEntityId: SECONDARY_ENTITY_ID,
       },
     );
     assert.equal(receipt.status, "committed");
     const isolationAfter = await page.evaluate(async () =>
       window.__WORLDKIT__!.runFixedInput([{ actions: ["move-right"], ticks: 60 }]),
     );
-    const primaryBefore = isolationBefore.subjectStatesByEntityId[PRIMARY_ENTITY_ID]!;
-    const primaryAfter = isolationAfter.subjectStatesByEntityId[PRIMARY_ENTITY_ID]!;
-    const secondaryBefore = isolationBefore.subjectStatesByEntityId[SECONDARY_ENTITY_ID]!;
-    const secondaryAfter = isolationAfter.subjectStatesByEntityId[SECONDARY_ENTITY_ID]!;
+    assertPossessedBy(isolationAfter, SECONDARY_ENTITY_ID);
+    const primaryBefore = requireSubjectProjection(isolationBefore, PRIMARY_ENTITY_ID).entityState;
+    const primaryAfter = requireSubjectProjection(isolationAfter, PRIMARY_ENTITY_ID).entityState;
+    const secondaryBefore = requireSubjectProjection(isolationBefore, SECONDARY_ENTITY_ID).entityState;
+    const secondaryAfter = requireSubjectProjection(isolationAfter, SECONDARY_ENTITY_ID).entityState;
     assertPositionUnchanged(
       primaryAfter.positionMetersXYZ,
       primaryBefore.positionMetersXYZ,
       "Uncontrolled G Bot moved during second-instance control.",
     );
-    assert.equal(primaryAfter.activeActionId, "idle");
+    assert.equal(locomotionActionId(isolationAfter, PRIMARY_ENTITY_ID), "idle");
     assert.ok(secondaryAfter.positionMetersXYZ[0] > secondaryBefore.positionMetersXYZ[0]);
-    assert.equal(secondaryAfter.activeActionId, "walk");
+    assert.equal(locomotionActionId(isolationAfter, SECONDARY_ENTITY_ID), "walk");
 
-    const wallStart = await page.evaluate(() => window.__WORLDKIT__!.reset());
+    const wallStart = await page.evaluate(async () => window.__WORLDKIT__!.reset());
     const wallReceipt = await page.evaluate(
-      (request) => window.__WORLDKIT__!.bindControl(request),
+      async ({ snapshot, controllerEntityId, primaryEntityId, secondaryEntityId }) =>
+        window.__WORLDKIT__!.executeGameplayCommand({
+        schemaVersion: 1,
+        id: "g-bot-bind-secondary-wall",
+        type: "control.bind",
+        runtimeSessionId: snapshot.runtimeSessionId,
+        worldSessionId: snapshot.worldSessionId,
+        controllerEntityId,
+        controlledEntityId: secondaryEntityId,
+        expectedPossession: {
+          mode: "possessed",
+          controlledEntityId: primaryEntityId,
+        },
+      }),
       {
-        controllerId: CONTROLLER_ID,
-        expectedControlledEntityId: PRIMARY_ENTITY_ID,
-        controlledEntityId: SECONDARY_ENTITY_ID,
+        snapshot: wallStart,
+        controllerEntityId: CONTROLLER_ID,
+        primaryEntityId: PRIMARY_ENTITY_ID,
+        secondaryEntityId: SECONDARY_ENTITY_ID,
       },
     );
     assert.equal(wallReceipt.status, "committed");
     const wallEnd = await page.evaluate(async () =>
       window.__WORLDKIT__!.runFixedInput([{ actions: ["move-right"], ticks: 360 }]),
     );
-    const wallStartState = wallStart.subjectStatesByEntityId[SECONDARY_ENTITY_ID]!;
-    const wallEndState = wallEnd.subjectStatesByEntityId[SECONDARY_ENTITY_ID]!;
+    const wallStartState = requireSubjectProjection(wallStart, SECONDARY_ENTITY_ID).entityState;
+    const wallEndState = requireSubjectProjection(wallEnd, SECONDARY_ENTITY_ID).entityState;
     assert.ok(wallEndState.positionMetersXYZ[0] > wallStartState.positionMetersXYZ[0] + 2);
     assert.ok(
       wallEndState.positionMetersXYZ[0] < 6.8,
@@ -620,11 +679,11 @@ async function verifyBrowser(
 
 async function writeVerification(
   paths: ArtifactPaths,
-  artifact: WorldBuildArtifactV3,
+  artifact: WorldBuildArtifactV4,
   productAsset: ProductAssetEvidenceV1,
   browser: BrowserEvidence,
 ): Promise<void> {
-  const cliSnapshot = parseJson<WorldRuntimeSnapshotV3>(
+  const cliSnapshot = parseJson<WorldRuntimeSnapshotV4>(
     await readFile(paths.snapshot, "utf8"),
     "G Bot CLI snapshot",
   );
@@ -648,8 +707,8 @@ async function writeVerification(
       {
         filename: "world.png",
         source: "cli-capture",
-        tick: cliSnapshot.tick,
-        actionId: cliSnapshot.subjectStatesByEntityId[PRIMARY_ENTITY_ID]!.activeActionId,
+        tick: cliSnapshot.world.simulationTick,
+        actionId: locomotionActionId(cliSnapshot, PRIMARY_ENTITY_ID),
         subjectEntityId: PRIMARY_ENTITY_ID,
         ...inspectPng(await readFile(paths.world)),
       },

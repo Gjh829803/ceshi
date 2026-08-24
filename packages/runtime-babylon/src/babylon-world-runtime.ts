@@ -18,7 +18,10 @@ import { PhysicsShapeType } from "@babylonjs/core/Physics/v2/IPhysicsEnginePlugi
 import type { PhysicsEngine } from "@babylonjs/core/Physics/v2/physicsEngine.js";
 import { Scene } from "@babylonjs/core/scene.pure.js";
 import { CONTROL_CAPTURE_PASS_IDS_V1 } from "@whitebox-world/control-capture";
-import type { SpatialEntityStateV1 } from "@whitebox-world/gameplay-contracts";
+import type {
+  GameplayCapabilityStateV1,
+  SpatialEntityStateV1,
+} from "@whitebox-world/gameplay-contracts";
 import type {
   ApplyCameraPreviewRequestV1,
   ApplySubjectPresetTuningRequestV1,
@@ -94,6 +97,10 @@ import {
   type BabylonTraversalRuntimeInternalV1,
   type StaticCollisionMeshEntryV1,
 } from "./traversal-runtime-internal";
+
+function canonicalizeSignedZero(value: number): number {
+  return Object.is(value, -0) ? 0 : value;
+}
 
 export type BabylonWorldRuntimeInitializationStageV1 =
   | "engine"
@@ -1016,6 +1023,7 @@ export class BabylonWorldRuntime {
     BabylonGameplayRuntimeInternalV1["readWorldProjection"]
   > {
     const spatialEntityStatesById: Record<string, SpatialEntityStateV1> = {};
+    const capabilityStatesById: Record<string, GameplayCapabilityStateV1> = {};
     for (const subject of this.executionPlan.subjects) {
       const controller = this.controllerFor(subject.entityId);
       const origin = controller.subjectOrigin;
@@ -1030,28 +1038,44 @@ export class BabylonWorldRuntime {
         semanticClassId: subject.semanticClassId,
         lifecycleMode: "active",
         positionMetersXYZ: Object.freeze([
-          origin.x,
-          origin.y,
-          origin.z,
+          canonicalizeSignedZero(origin.x),
+          canonicalizeSignedZero(origin.y),
+          canonicalizeSignedZero(origin.z),
         ]) as readonly [number, number, number],
         rotationQuaternionXYZW: Object.freeze([
           0,
-          Math.sin(halfYawRadians),
+          canonicalizeSignedZero(Math.sin(halfYawRadians)),
           0,
-          Math.cos(halfYawRadians),
+          canonicalizeSignedZero(Math.cos(halfYawRadians)),
         ]) as readonly [number, number, number, number],
         scaleRatioXYZ: Object.freeze([1, 1, 1]) as readonly [number, number, number],
         linearVelocityMetersPerSecondXYZ: Object.freeze([
-          velocity.x,
-          velocity.y,
-          velocity.z,
+          canonicalizeSignedZero(velocity.x),
+          canonicalizeSignedZero(velocity.y),
+          canonicalizeSignedZero(velocity.z),
         ]) as readonly [number, number, number],
+      });
+      const motion = controller.motionSnapshot();
+      const capabilityStateId = `capability-state:${subject.entityId}:locomotion`;
+      capabilityStatesById[capabilityStateId] = Object.freeze({
+        id: capabilityStateId,
+        kind: "locomotion-capability-state",
+        ownerEntityId: subject.entityId,
+        locomotionCapabilityRef: subject.locomotionCapabilityRef,
+        locomotionCapabilityHash:
+          subject.locomotionCapabilityHash as `sha256:${string}`,
+        mode: motion.locomotionMode,
+        movementMedium: controller.movementMedium,
+        facingYawRadians: canonicalizeSignedZero(controller.facingYawRadians),
+        speedMetersPerSecond: canonicalizeSignedZero(
+          motion.speedMetersPerSecond,
+        ),
       });
     }
     return Object.freeze({
       simulationTick: this.tick,
       spatialEntityStatesById: Object.freeze(spatialEntityStatesById),
-      capabilityStatesById: Object.freeze({}),
+      capabilityStatesById: Object.freeze(capabilityStatesById),
       semanticFactsById: Object.freeze({}),
     });
   }
@@ -1479,6 +1503,12 @@ export class BabylonWorldRuntime {
     this.renderFrameIndex += 1;
     this.latestRenderReadyReceipt = receipt;
     return receipt;
+  }
+
+  async renderFrameWhenReady(): Promise<RenderReadyReceiptV1> {
+    this.assertUsable();
+    await this.scene.whenReadyAsync();
+    return this.renderFrame();
   }
 
   resize(): void {

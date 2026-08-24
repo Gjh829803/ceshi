@@ -12,6 +12,7 @@ import {
   sha256CanonicalJson,
   stringifyCanonicalJson,
 } from "@whitebox-world/protocol";
+import type { WorldRuntimeSnapshotV4 } from "@whitebox-world/runtime-contracts";
 
 import {
   createControlCaptureBundleWriterV1,
@@ -19,6 +20,84 @@ import {
 } from "./control-capture-bundle";
 
 const WORLD_HASH = `sha256:${"a".repeat(64)}` as Sha256HashV1;
+
+function runtimeSnapshot(simulationTick: number): WorldRuntimeSnapshotV4 {
+  const runtimeSessionId = "validation-fixture-session";
+  const worldSessionId = "validation-fixture-world-session";
+  return {
+    kind: "worldkit-runtime-snapshot",
+    schemaVersion: 4,
+    runtimeSessionId,
+    worldSessionId,
+    world: {
+      publicationEpoch: 1,
+      simulationTick,
+      worldStateRef: `worldkit://world-state/world-state:${"d".repeat(64)}`,
+      worldStateHash: WORLD_HASH,
+      subjectStatesByEntityId: {},
+      gameplayInspection: {
+        kind: "worldkit-gameplay-inspection-snapshot",
+        schemaVersion: 1,
+        projection: "inspection",
+        id: `gameplay-inspection:${worldSessionId}:${simulationTick}`,
+        runtimeSessionId,
+        worldSessionId,
+        gameplayModeRef: "worldkit://gameplay-mode/outdoor.default@1",
+        phase: "ready",
+        simulationTick,
+        participantStatesById: {
+          "participant-primary": { id: "participant-primary", mode: "active" },
+        },
+        controllerStatesById: {
+          "controller-primary": {
+            id: "controller-primary",
+            participantId: "participant-primary",
+          },
+        },
+        possessedByRelationshipsById: {
+          "possessed-by-primary": {
+            id: "possessed-by-primary",
+            type: "possessedBy",
+            schemaVersion: 1,
+            controlledEntityId: "player",
+            controllerEntityId: "controller-primary",
+            establishedSimulationTick: simulationTick,
+          },
+        },
+        activeActionStatesById: {},
+        activatedGameplayFeatureRefs: [],
+        lastEventSequence: 0,
+      },
+    },
+    view: {
+      viewStateRevision: simulationTick,
+      camera: {
+        mode: "tracking",
+        id: "camera-main",
+        targetEntityId: "player",
+        positionMetersXYZ: [0, 2, 5],
+        activeCameraProfileRef: "worldkit://camera-profile/test@1",
+        activeCameraRigRef: "worldkit://camera-rig/third-person-orbit@1",
+        activeCameraModifierRefs: [],
+        safeFallbackActive: false,
+        viewYawOffsetRadians: 0,
+        viewPitchOffsetRadians: 0,
+        viewDistanceOffsetMeters: 0,
+      },
+    },
+    runtime: {
+      phase: "ready",
+      isPaused: true,
+      fixedTimeStepSeconds: 1 / 60,
+    },
+    resources: {
+      phase: "ready",
+      meshCount: 1,
+      physicsBodyCount: 1,
+      terrainSampleCount: 4,
+    },
+  };
+}
 
 function takeInput(): Record<string, unknown> {
   return {
@@ -115,32 +194,7 @@ function frameInput(
       viewMatrixColumnMajor: [1, 0, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0],
       projectionMatrixColumnMajor: [1, 0, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0],
     },
-    snapshot: {
-      kind: "worldkit-runtime-snapshot",
-      schemaVersion: 3,
-      runtimeBackend: "babylon-havok",
-      tick: simulationTick,
-      ready: true,
-      controlledEntityId: "player",
-      controllersById: {
-        "controller-primary": {
-          id: "controller-primary",
-          controlledEntityId: "player",
-        },
-      },
-      subjectStatesByEntityId: {},
-      camera: {
-        entityId: "camera-main",
-        targetEntityId: "player",
-        positionMetersXYZ: [0, 2, 5],
-      },
-      physics: {
-        backend: "havok",
-        ready: true,
-        fixedTimeStepSeconds: 1 / 60,
-      },
-      resources: { meshes: 1, bodies: 1, terrainSamples: 4 },
-    },
+    snapshot: runtimeSnapshot(simulationTick),
     passesById: Object.fromEntries(
       CONTROL_CAPTURE_PASS_IDS_V1.map((passId) => [
         passId,
@@ -164,6 +218,7 @@ export async function createControlCaptureValidationFixtureV1(
       executionPlanHash: `sha256:${"c".repeat(64)}` as Sha256HashV1,
     },
     runtimeSessionId: "validation-fixture-session",
+    worldSessionId: "validation-fixture-world-session",
     semanticClasses: [{ numericId: 1, semanticClassId: "terrain.ground" }],
     instances: [
       {

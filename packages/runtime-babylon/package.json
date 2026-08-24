@@ -22,6 +22,7 @@
   },
   "devDependencies": {
     "@whitebox-world/authoring": "workspace:*",
-    "@whitebox-world/compiler": "workspace:*"
+    "@whitebox-world/compiler": "workspace:*",
+    "@whitebox-world/gameplay": "workspace:*"
   }
 }

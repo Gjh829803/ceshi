@@ -69,6 +69,8 @@ function planFixture(): ExecutionPlanV5 {
         maxStepHeightMeters: 0.3,
       },
       locomotion: { allowWalk: true, allowRun: true, allowJump: true },
+      locomotionCapabilityRef: "worldkit://capability/locomotion.ground@1",
+      locomotionCapabilityHash: HASH,
       physicsBodyProfileRef: "worldkit://physics-body-profile/test@1",
       locomotionProfileRef: "worldkit://locomotion-profile/test@1",
       controlFeel: {

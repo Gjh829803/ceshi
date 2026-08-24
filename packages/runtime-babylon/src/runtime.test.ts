@@ -26,9 +26,13 @@ vi.mock("@babylonjs/core/Loading/sceneLoader.js", async (importOriginal) => {
 
 import {
   normalizeAuthoringSpec,
+  normalizeAuthoringSpecV4,
   type AuthoringSpecV3,
+  type AuthoringSpecV4,
 } from "@whitebox-world/authoring";
-import { compileWorld } from "@whitebox-world/compiler";
+import { compileWorld, compileWorldV5 } from "@whitebox-world/compiler";
+import { createCoreGameplayBootstrapV1 } from "@whitebox-world/gameplay";
+import { createGameplayBootstrapResourceLockEntryV1 } from "@whitebox-world/gameplay-contracts";
 import {
   createValidAuthoringSpec,
   createValidPackageSubjectWorld,
@@ -44,6 +48,8 @@ import type {
   Vec3,
 } from "@whitebox-world/runtime-contracts";
 import { emitTransformedStaticColliderTriangleMeshV1 } from "@whitebox-world/terrain-surface";
+import { parseGameplayWorldStateProjectionV1 } from "@whitebox-world/runtime-host";
+import { isNil } from "lodash-es";
 
 import {
   BabylonWorldRuntime,
@@ -125,11 +131,11 @@ const gBotAuthoringSpec = JSON.parse(
     ),
     "utf8",
   ),
-) as AuthoringSpecV3;
+) as AuthoringSpecV4;
 
 describe("Babylon runtime fixture compilation", () => {
   it("keeps the real G Bot authored heightfield non-flat", () => {
-    const executionPlan = compileExecutionPlan(structuredClone(gBotAuthoringSpec));
+    const executionPlan = compileRouteExecutionPlan(structuredClone(gBotAuthoringSpec));
     const uniqueHeights = new Set(executionPlan.terrain.heightSamplesMeters);
 
     expect(uniqueHeights.size).toBeGreaterThan(1);
@@ -459,6 +465,47 @@ function compileExecutionPlan(spec: AuthoringSpecV3): ExecutionPlanV4 {
   const compiled = compileWorld({
     normalizedWorldIr: normalized.value,
     normalizedWorldIrHash: normalized.normalizedWorldIrHash,
+  });
+  if (!compiled.ok || compiled.executionPlan === undefined) {
+    throw new Error(`Fixture compile failed: ${JSON.stringify(compiled.diagnostics)}`);
+  }
+  return compiled.executionPlan;
+}
+
+function compileRouteExecutionPlan(spec: AuthoringSpecV4): ExecutionPlanV5 {
+  const normalized = normalizeAuthoringSpecV4(spec);
+  if (
+    !normalized.ok ||
+    normalized.value === undefined ||
+    normalized.normalizedWorldIrHash === undefined
+  ) {
+    throw new Error(`Fixture normalize failed: ${JSON.stringify(normalized.diagnostics)}`);
+  }
+  const entityDescriptors = normalized.value.nodes
+    .filter((node) => node.kind === "subject")
+    .map((node) => {
+      const definition = normalized.value?.resources.subjectDefinitions.find(
+        (candidate) => candidate.subjectDefinitionRef === node.subjectDefinitionRef,
+      );
+      if (isNil(definition)) {
+        throw new Error(`Fixture Subject Definition missing: ${node.subjectDefinitionRef}`);
+      }
+      return {
+        id: node.id,
+        entityDefinitionRef: node.subjectDefinitionRef,
+        capabilityRefs: definition.capabilityRefs,
+      };
+    });
+  const gameplayBootstrap = createCoreGameplayBootstrapV1({
+    worldId: normalized.value.id,
+    worldSeed: normalized.value.seed,
+    entityDescriptors,
+  });
+  const compiled = compileWorldV5({
+    normalizedWorldIr: normalized.value,
+    normalizedWorldIrHash: normalized.normalizedWorldIrHash,
+    gameplayBootstrapResourceLock:
+      createGameplayBootstrapResourceLockEntryV1(gameplayBootstrap),
   });
   if (!compiled.ok || compiled.executionPlan === undefined) {
     throw new Error(`Fixture compile failed: ${JSON.stringify(compiled.diagnostics)}`);
@@ -1486,7 +1533,7 @@ describe("BabylonWorldRuntime", () => {
 
   it("samples the G Bot pose once when many fixed Ticks share one rendered frame", async () => {
     const runtime = await createRuntime(
-      compileExecutionPlan(structuredClone(gBotAuthoringSpec)),
+      compileRouteExecutionPlan(structuredClone(gBotAuthoringSpec)),
       { subjectAssetResolver: createMemoryResolver(gBotSubjectAssetBytes) },
     );
     const animationGroups = createRiggedRuntimeProbe(runtime)
@@ -1518,7 +1565,7 @@ describe("BabylonWorldRuntime", () => {
 
   it("lands the product G Bot on its authored heightfield after one jump input", async () => {
     const runtime = await createRuntime(
-      compileExecutionPlan(structuredClone(gBotAuthoringSpec)),
+      compileRouteExecutionPlan(structuredClone(gBotAuthoringSpec)),
       { subjectAssetResolver: createMemoryResolver(gBotSubjectAssetBytes) },
     );
 
@@ -2638,6 +2685,10 @@ describe("BabylonWorldRuntime", () => {
         ticks: 1,
       });
 
+      expect(() => parseGameplayWorldStateProjectionV1(moved, {
+        controllerEntityIds: ["controller-primary"],
+      })).not.toThrow();
+
       expect(moved.simulationTick).toBe(before.simulationTick + 1);
       expect(
         moved.spatialEntityStatesById["pack-animal-a"]!.positionMetersXYZ[0],
@@ -2650,7 +2701,16 @@ describe("BabylonWorldRuntime", () => {
         before.spatialEntityStatesById.player!.positionMetersXYZ[0],
         8,
       );
-      expect(moved.capabilityStatesById).toEqual({});
+      expect(moved.capabilityStatesById[
+        "capability-state:pack-animal-a:locomotion"
+      ]).toMatchObject({
+        kind: "locomotion-capability-state",
+        ownerEntityId: "pack-animal-a",
+        locomotionCapabilityRef:
+          "worldkit://capability/locomotion.ground@1",
+        mode: "walk",
+        movementMedium: "ground",
+      });
       expect(moved.semanticFactsById).toEqual({});
 
       const cameraBeforeRelease = runtime.snapshot().camera.positionMetersXYZ;

@@ -1,6 +1,6 @@
 {
   "kind": "worldkit-authoring-spec",
-  "schemaVersion": 3,
+  "schemaVersion": 4,
   "id": "g-bot-subject-world",
   "seed": 8201,
   "provenance": {
@@ -10,6 +10,7 @@
     "solverProfileRef": "worldkit://layout-solver-profile/outdoor.s1@1"
   },
   "spatial": {
+    "traversalAreas": [],
     "regions": [],
     "routes": [],
     "screenRegions": []
@@ -151,6 +152,7 @@
     "cameraEntityId": "camera-main"
   },
   "constraints": {
+    "connectivity": [],
     "placements": []
   }
 }

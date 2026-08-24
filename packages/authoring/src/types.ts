@@ -460,6 +460,8 @@ export interface NormalizedSubjectDefinitionV2 {
   sockets: readonly NormalizedSubjectSocketV2[];
   colliderPolicy: SubjectColliderPolicyV2;
   capabilityRefs: readonly string[];
+  locomotionCapabilityRef: string;
+  locomotionCapabilityHash: string;
   profiles: {
     physicsBodyProfileRef: string;
     locomotionProfileRef: string;

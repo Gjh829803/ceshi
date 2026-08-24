@@ -21,8 +21,14 @@ async function createTemporaryDirectory(): Promise<string> {
 }
 
 async function writeWorld(directory: string, mutate?: (spec: ReturnType<typeof createValidAuthoringSpec>) => void): Promise<string> {
-  const spec = createValidAuthoringSpec();
-  mutate?.(spec);
+  const source = createValidAuthoringSpec();
+  mutate?.(source);
+  const spec = {
+    ...source,
+    schemaVersion: 4,
+    spatial: { ...source.spatial, traversalAreas: [] },
+    constraints: { ...source.constraints, connectivity: [] },
+  } as const;
   const inputPath = path.join(directory, "world.json");
   await writeFile(inputPath, JSON.stringify(spec), "utf8");
   return inputPath;

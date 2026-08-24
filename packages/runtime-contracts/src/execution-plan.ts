@@ -397,6 +397,8 @@ export interface ExecutionSubjectV3 {
     allowRun: boolean;
     allowJump: boolean;
   };
+  locomotionCapabilityRef: string;
+  locomotionCapabilityHash: string;
   physicsBodyProfileRef: string;
   locomotionProfileRef: string;
   controlFeel: {
@@ -1425,6 +1427,8 @@ function validateSubject(input: unknown): void {
     "sockets",
     "collider",
     "locomotion",
+    "locomotionCapabilityRef",
+    "locomotionCapabilityHash",
     "physicsBodyProfileRef",
     "locomotionProfileRef",
     "controlFeel",
@@ -1538,6 +1542,8 @@ function validateSubject(input: unknown): void {
   requireBoolean(locomotion.allowWalk);
   requireBoolean(locomotion.allowRun);
   requireBoolean(locomotion.allowJump);
+  requireString(value.locomotionCapabilityRef);
+  requireHash(value.locomotionCapabilityHash);
   requireString(value.physicsBodyProfileRef);
   requireString(value.locomotionProfileRef);
   const validateFeel = (inputValue: unknown): void => {

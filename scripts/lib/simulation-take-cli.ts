@@ -7,17 +7,21 @@ import {
   type CompiledSimulationTakeV1,
   type Sha256HashV1,
 } from "@whitebox-world/control-capture";
+import type {
+  GameplayCommandReceiptV1,
+  GameplayCommandV1,
+} from "@whitebox-world/gameplay-contracts";
 import { sha256Bytes, sha256CanonicalJson } from "@whitebox-world/protocol";
 import type {
-  BindControlRequestV2,
   CameraViewInputV1,
   ControlCaptureCapabilitiesV1,
   ControlCaptureRequestV1,
-  ControlBindingReceiptV2,
   FixedInputV1,
   RenderReadyReceiptV1,
+  RuntimeActivityReceiptV1,
+  RuntimeActivityRequestV1,
   RuntimeControlCaptureFrameV1,
-  WorldRuntimeSnapshotV3,
+  WorldRuntimeSnapshotV4,
 } from "@whitebox-world/runtime-contracts";
 import type { Browser, Page } from "playwright";
 
@@ -34,7 +38,7 @@ import {
 } from "./simulation-take-runner";
 import {
   cliFailure,
-  loadWorldkitPipeline,
+  loadWorldkitRoutePipeline,
   readWorldkitInput,
   type WorldkitFailure,
 } from "./worldkit-pipeline";
@@ -169,35 +173,55 @@ class PlaywrightSimulationTakeDriverV1 implements SimulationTakeBrowserDriverV1 
     });
   }
 
-  setPaused(paused: boolean): Promise<WorldRuntimeSnapshotV3> {
+  setPaused(paused: boolean): Promise<WorldRuntimeSnapshotV4> {
     return this.page.evaluate((value) => {
       if (window.__WORLDKIT__ === undefined) throw new Error("WORLDKIT_BROWSER_PROTOCOL_MISSING");
       return window.__WORLDKIT__.setPaused(value);
     }, paused);
   }
 
-  reset(): Promise<WorldRuntimeSnapshotV3> {
+  reset(): Promise<WorldRuntimeSnapshotV4> {
     return this.page.evaluate(() => {
       if (window.__WORLDKIT__ === undefined) throw new Error("WORLDKIT_BROWSER_PROTOCOL_MISSING");
       return window.__WORLDKIT__.reset();
     });
   }
 
-  bindControl(request: BindControlRequestV2): Promise<ControlBindingReceiptV2> {
+  acquireRuntimeActivity(
+    request: RuntimeActivityRequestV1,
+  ): Promise<RuntimeActivityReceiptV1> {
     return this.page.evaluate((value) => {
       if (window.__WORLDKIT__ === undefined) throw new Error("WORLDKIT_BROWSER_PROTOCOL_MISSING");
-      return window.__WORLDKIT__.bindControl(value);
+      return window.__WORLDKIT__.acquireRuntimeActivity(value);
     }, request);
   }
 
-  runFixedInput(steps: readonly FixedInputV1[]): Promise<WorldRuntimeSnapshotV3> {
+  releaseRuntimeActivity(
+    request: RuntimeActivityRequestV1,
+  ): Promise<RuntimeActivityReceiptV1> {
+    return this.page.evaluate((value) => {
+      if (window.__WORLDKIT__ === undefined) throw new Error("WORLDKIT_BROWSER_PROTOCOL_MISSING");
+      return window.__WORLDKIT__.releaseRuntimeActivity(value);
+    }, request);
+  }
+
+  executeGameplayCommand(
+    command: GameplayCommandV1,
+  ): Promise<GameplayCommandReceiptV1> {
+    return this.page.evaluate(async (value) => {
+      if (window.__WORLDKIT__ === undefined) throw new Error("WORLDKIT_BROWSER_PROTOCOL_MISSING");
+      return window.__WORLDKIT__.executeGameplayCommand(value);
+    }, command);
+  }
+
+  runFixedInput(steps: readonly FixedInputV1[]): Promise<WorldRuntimeSnapshotV4> {
     return this.page.evaluate(async (value) => {
       if (window.__WORLDKIT__ === undefined) throw new Error("WORLDKIT_BROWSER_PROTOCOL_MISSING");
       return window.__WORLDKIT__.runFixedInput(value);
     }, steps);
   }
 
-  adjustCameraView(input: CameraViewInputV1): Promise<WorldRuntimeSnapshotV3> {
+  adjustCameraView(input: CameraViewInputV1): Promise<WorldRuntimeSnapshotV4> {
     return this.page.evaluate((value) => {
       if (window.__WORLDKIT__?.adjustCameraView === undefined) {
         throw new Error("WORLDKIT_CAMERA_VIEW_PROTOCOL_MISSING");
@@ -206,7 +230,7 @@ class PlaywrightSimulationTakeDriverV1 implements SimulationTakeBrowserDriverV1 
     }, input);
   }
 
-  waitForSimulationTick(expectedSimulationTick: number): Promise<WorldRuntimeSnapshotV3> {
+  waitForSimulationTick(expectedSimulationTick: number): Promise<WorldRuntimeSnapshotV4> {
     return this.page.evaluate(async (value) => {
       if (window.__WORLDKIT__ === undefined) throw new Error("WORLDKIT_BROWSER_PROTOCOL_MISSING");
       return window.__WORLDKIT__.waitForSimulationTick(value);
@@ -270,7 +294,7 @@ export async function runSimulationTakeFileV1(
 ) {
   const loadedTake = await loadCompiledTakeFile(inputPath);
   if (!loadedTake.ok) return loadedTake;
-  const pipeline = await loadWorldkitPipeline(options.worldPath);
+  const pipeline = await loadWorldkitRoutePipeline(options.worldPath);
   if (!pipeline.ok) return pipeline;
   const outputDirectory = path.resolve(options.outputPath);
   if (await outputPathExists(outputDirectory)) {
@@ -334,6 +358,7 @@ export async function runSimulationTakeFileV1(
             compiledTake: loadedTake.compiledTake,
             worldPackageIdentity,
             runtimeSessionId: frame.runtimeSessionId,
+            worldSessionId: frame.snapshot.worldSessionId,
             semanticClasses: frame.semanticClasses,
             instances: frame.instances,
           });

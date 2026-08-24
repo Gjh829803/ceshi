@@ -59,9 +59,15 @@ async function createTemporaryDirectory(): Promise<string> {
 
 async function writePackageWorld(directory: string): Promise<string> {
   const inputPath = path.join(directory, "package-world.json");
+  const source = createValidPackageSubjectWorld();
   await writeFile(
     inputPath,
-    JSON.stringify(createValidPackageSubjectWorld()),
+    JSON.stringify({
+      ...source,
+      schemaVersion: 4,
+      spatial: { ...source.spatial, traversalAreas: [] },
+      constraints: { ...source.constraints, connectivity: [] },
+    }),
     "utf8",
   );
   return inputPath;
@@ -1146,7 +1152,7 @@ describe("worldkit CLI", () => {
     });
   });
 
-  it("validates V3 files and builds deterministic V3/V4 artifacts", async () => {
+  it("validates V4 files and builds deterministic V4/V5 artifacts", async () => {
     const directory = await createTemporaryDirectory();
     const inputPath = await writePackageWorld(directory);
     const outputPath = path.join(directory, "dist", "world.build.json");
@@ -1164,12 +1170,12 @@ describe("worldkit CLI", () => {
     expect(firstBytes).toBe(secondBytes);
     expect(artifact).toMatchObject({
       kind: "worldkit-build-artifact",
-      schemaVersion: 3,
-      normalizedWorldIr: { schemaVersion: 3 },
+      schemaVersion: 4,
+      normalizedWorldIr: { schemaVersion: 4 },
       executionPlan: {
-        schemaVersion: 4,
+        schemaVersion: 5,
         runtimeBackend: "babylon-havok",
-        controlledEntityId: "player",
+        initialControlledEntityId: "player",
       },
     });
     expect(firstBytes).not.toContain(["kit", "Ref"].join(""));

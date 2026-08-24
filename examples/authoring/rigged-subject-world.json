@@ -248,16 +248,18 @@
     "controlledEntityId": "rigged-primary",
     "cameraEntityId": "camera-main"
   },
-  "schemaVersion": 3,
+  "schemaVersion": 4,
   "layout": {
     "solverProfileRef": "worldkit://layout-solver-profile/outdoor.s1@1"
   },
   "spatial": {
+    "traversalAreas": [],
     "regions": [],
     "routes": [],
     "screenRegions": []
   },
   "constraints": {
+    "connectivity": [],
     "placements": []
   }
 }

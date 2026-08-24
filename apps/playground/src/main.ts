@@ -9,6 +9,8 @@ import type {
   MotionKernelSummaryV1,
   SemanticInputActionV1,
   SubjectDefinitionSummaryV1,
+  WorldRuntimeSnapshotV4,
+  WorldRuntimeSubjectStateV4,
   WorldkitBrowserApiV5,
 } from "@whitebox-world/runtime-contracts";
 import { isNil } from "lodash-es";
@@ -405,6 +407,35 @@ function kernelFriendlyName(kernel: MotionKernelSummaryV1 | undefined): string {
   return names[kernel.resourceRef] ?? kernel.displayName;
 }
 
+function controlledEntityIdFromSnapshotV4(
+  snapshot: WorldRuntimeSnapshotV4,
+): string {
+  const relationships = Object.values(
+    snapshot.world.gameplayInspection.possessedByRelationshipsById,
+  ).filter(({ controllerEntityId }) => controllerEntityId === "controller-primary");
+  if (relationships.length !== 1) {
+    throw new Error("WORLDKIT_PLAYGROUND_CONTROL_BINDING_UNAVAILABLE");
+  }
+  return relationships[0]!.controlledEntityId;
+}
+
+function locomotionStateFromSubjectV4(
+  subject: WorldRuntimeSubjectStateV4 | undefined,
+) {
+  return Object.values(subject?.capabilityStatesById ?? {}).find(
+    (state) => state.kind === "locomotion-capability-state",
+  );
+}
+
+function activeActionFromSnapshotV4(
+  snapshot: WorldRuntimeSnapshotV4,
+  actorEntityId: string,
+): string | undefined {
+  return Object.values(
+    snapshot.world.gameplayInspection.activeActionStatesById,
+  ).find((state) => state.actorEntityId === actorEntityId)?.semanticActionRef;
+}
+
 function downloadJson(filename: string, payload: unknown): void {
   const blob = new Blob([`${JSON.stringify(payload, null, 2)}\n`], {
     type: "application/json",
@@ -479,10 +510,11 @@ function installTuningWorkbench(
   subjectSelect.addEventListener("change", () => navigateToSubjectPackage(subjectSelect.value));
   const summary = requiredElement<HTMLDivElement>("#tuning-subject-summary");
   const currentSubject = api.getSubjectSnapshot?.(workbenchContext.controlledEntityId);
+  const currentLocomotionState = locomotionStateFromSubjectV4(currentSubject);
   summary.innerHTML = `
     <div><span>现在调的是</span><strong>${escapeHtml(subjectFriendlyName(workbenchContext.definition))}</strong></div>
     <div><span>移动方式</span><strong>${escapeHtml(kernelFriendlyName(workbenchContext.activeKernel))}</strong></div>
-    <div><span>所在环境</span><strong>${currentSubject?.movementMedium === "air" ? "空中" : "地面"}</strong></div>
+    <div><span>所在环境</span><strong>${currentLocomotionState?.movementMedium === "air" ? "空中" : "地面"}</strong></div>
     <div><span>配置权限</span><strong>${workbenchContext.definition.authoringAvailability}</strong></div>
   `;
 
@@ -534,8 +566,8 @@ function installTuningWorkbench(
       inputStatus.textContent = `正在执行“${item.title}”…`;
       try {
         const after = await api.runFixedInput(item.steps);
-        const state = after.subjectStatesByEntityId[after.controlledEntityId];
-        inputStatus.textContent = `“${item.title}”已执行 · 当前动作：${state?.activeActionId ?? "已提交"}`;
+        const controlledEntityId = controlledEntityIdFromSnapshotV4(after);
+        inputStatus.textContent = `“${item.title}”已执行 · 当前动作：${activeActionFromSnapshotV4(after, controlledEntityId) ?? "已提交"}`;
       } catch {
         inputStatus.textContent = `“${item.title}”没有成功执行，世界状态已保留。`;
       }
@@ -575,6 +607,10 @@ function installTuningWorkbench(
   let cameraTuning: CameraTuningV1 = {};
   let selectedControlFeelProfileRef = controlFeelProfile?.resourceRef ?? "";
   let selectedMotionProfileRef = defaultMotion?.resourceRef ?? "";
+  let appliedGameplayProfileSelection = {
+    motionProfileRef: selectedMotionProfileRef,
+    controlFeelProfileRef: selectedControlFeelProfileRef,
+  };
   const selectedControlFeelProfile = (): CompatibleProfileSummaryV1 | undefined =>
     controlFeelProfiles.find(
       (profile) => profile.resourceRef === selectedControlFeelProfileRef,
@@ -768,7 +804,6 @@ function installTuningWorkbench(
   const applyWorkingDraftAtomically = (draft: SubjectPresetWorkingDraftV1): boolean => {
     if (
       api.applySubjectPresetTuning === undefined ||
-      api.getSubjectSnapshot === undefined ||
       api.getCameraPreviewState === undefined ||
       api.requestCameraProfile === undefined ||
       api.resetCameraProfile === undefined ||
@@ -780,8 +815,8 @@ function installTuningWorkbench(
       draft,
       subjectEntityId: workbenchContext.controlledEntityId,
       previousCameraPreferenceRef: appliedCameraPreferenceRef,
+      previousGameplayProfileSelection: appliedGameplayProfileSelection,
       runtime: {
-        getSubjectSnapshot: (subjectEntityId) => api.getSubjectSnapshot!(subjectEntityId),
         getCameraPreviewState: () => api.getCameraPreviewState!(),
         requestCameraProfile: (profileRef) => api.requestCameraProfile!(profileRef),
         resetCameraProfile: () => api.resetCameraProfile!(),
@@ -802,6 +837,10 @@ function installTuningWorkbench(
       return false;
     }
     appliedCameraPreferenceRef = draft.selectedCameraPreferenceRef;
+    appliedGameplayProfileSelection = {
+      motionProfileRef: draft.selectedMotionProfileRef,
+      controlFeelProfileRef: draft.selectedControlFeelProfileRef,
+    };
     const compactCameraSelect = document.querySelector<HTMLSelectElement>("#camera-preference-select");
     if (compactCameraSelect !== null) {
       compactCameraSelect.value = cameraPreference;
@@ -907,8 +946,11 @@ function installTuningWorkbench(
   };
 
   const activeTunableCameraProfile = (): CompatibleProfileSummaryV1 | undefined => {
+    const camera = api.getCameraSnapshot?.();
     const profileRef = cameraPreference === "auto"
-      ? api.getCameraSnapshot?.().activeCameraProfileRef
+      ? camera?.mode === "tracking"
+        ? camera.activeCameraProfileRef
+        : undefined
       : cameraPreference;
     return cameraRows.find((row) => row.resourceRef === profileRef) ?? cameraRows[0];
   };
@@ -1363,6 +1405,10 @@ function installTuningWorkbench(
     },
     reapplyWorkingDraftAfterSimulationReset(): void {
       appliedCameraPreferenceRef = null;
+      appliedGameplayProfileSelection = {
+        motionProfileRef: defaultMotion?.resourceRef ?? "",
+        controlFeelProfileRef: controlFeelProfile?.resourceRef ?? "",
+      };
       const draft = createCurrentWorkingDraft();
       if (draft === undefined) return;
       applyWorkingDraftAtomically(draft);
@@ -1438,9 +1484,11 @@ function installCapabilityAuthoringPanel(
   const drafts = requiredElement<HTMLDivElement>("#parameter-drafts");
   const harnessOutput = requiredElement<HTMLPreElement>("#harness-output");
   const snapshot = api.getSnapshot();
-  const activeSubject = snapshot.subjectStatesByEntityId[snapshot.controlledEntityId];
+  const controlledEntityId = controlledEntityIdFromSnapshotV4(snapshot);
+  const activeSubject = snapshot.world.subjectStatesByEntityId[controlledEntityId];
   const requestedDefinitionRef = urlParameters.get("subjectDefinitionRef");
-  const activeDefinitionRef = requestedDefinitionRef ?? activeSubject?.subjectDefinitionRef ??
+  const activeDefinitionRef = requestedDefinitionRef ??
+    activeSubject?.entityState.entityDefinitionRef ??
     definitions[0]!.resourceRef;
   packageSelect.replaceChildren(...definitions.map((definition) => {
     const option = document.createElement("option");
@@ -1452,11 +1500,14 @@ function installCapabilityAuthoringPanel(
 
   const definition = definitions.find((row) => row.resourceRef === packageSelect.value) ??
     definitions[0]!;
+  const activeMotionProfile = builtInSubjectResourceRegistry.resolveMotionProfile(
+    definition.defaultMotionProfileRef,
+  );
   const activeKernel = api.listMotionKernels?.({
     includeExperimental: true,
     includeInternal: true,
   }).find(
-    (kernel) => kernel.resourceRef === activeSubject?.activeMotionKernelRef,
+    (kernel) => kernel.resourceRef === activeMotionProfile?.motionKernelRef,
   );
   const controls = requiredElement<HTMLDivElement>("#controls-card");
   controls.innerHTML = activeKernel?.commandKind === "throttle-steer"
@@ -1531,11 +1582,12 @@ function installCapabilityAuthoringPanel(
       cameraSelect.value = "auto";
     }
   }
+  const camera = snapshot.view.camera;
   context.innerHTML = `
     <div><span>当前主体</span><code>${escapeHtml(subjectFriendlyName(definition))}</code></div>
     <div><span>移动方式</span><code>${escapeHtml(kernelFriendlyName(activeKernel))}</code></div>
-    <div><span>当前镜头</span><code>${escapeHtml(FRIENDLY_CAMERA_PROFILES[snapshot.camera.activeCameraProfileRef ?? ""]?.[0] ?? "自动")}</code></div>
-    <div><span>自动镜头效果</span><code>${escapeHtml((snapshot.camera.activeCameraModifierRefs ?? []).map((resourceRef) => FRIENDLY_CAMERA_MODIFIERS[resourceRef] ?? resourceRef).join("、") || "无")}</code></div>
+    <div><span>当前镜头</span><code>${escapeHtml(camera.mode === "tracking" ? FRIENDLY_CAMERA_PROFILES[camera.activeCameraProfileRef]?.[0] ?? "自动" : "未绑定")}</code></div>
+    <div><span>自动镜头效果</span><code>${escapeHtml(camera.mode === "tracking" ? camera.activeCameraModifierRefs.map((resourceRef) => FRIENDLY_CAMERA_MODIFIERS[resourceRef] ?? resourceRef).join("、") || "无" : "无")}</code></div>
     ${hostOverlay?.changes.some((change) => change.type === "relationship-capabilities-deferred") === true
       ? "<div><span>关系能力</span><code>运动预览；Seat / Tether / Mount 暂缓</code></div>"
       : ""}
@@ -1607,7 +1659,7 @@ function installCapabilityAuthoringPanel(
     cameraProfiles,
     parameterDraft,
     motionDraftStorageKey,
-    controlledEntityId: snapshot.controlledEntityId,
+    controlledEntityId,
     initialCameraPreference: cameraSelect.value,
     ...(hostOverlay === undefined ? {} : { hostOverlay }),
   });
@@ -1636,8 +1688,8 @@ function installCapabilityAuthoringPanel(
       return;
     }
     harnessOutput.textContent = JSON.stringify(
-      api.getSubjectSnapshot?.(snapshot.controlledEntityId) ??
-        api.getSnapshot().subjectStatesByEntityId[snapshot.controlledEntityId],
+      api.getSubjectSnapshot?.(controlledEntityId) ??
+        api.getSnapshot().world.subjectStatesByEntityId[controlledEntityId],
       null,
       2,
     );
@@ -1646,7 +1698,7 @@ function installCapabilityAuthoringPanel(
     if (api.runHarness === undefined) return;
     harnessOutput.textContent = "running…";
     try {
-      const report = await api.runHarness(snapshot.controlledEntityId);
+      const report = await api.runHarness(controlledEntityId);
       harnessOutput.textContent = JSON.stringify(
         withCapabilityDemoHarnessScope(report, hostOverlay),
         null,
@@ -1709,7 +1761,11 @@ if (authoringMode) {
           throw new Error("WORLDKIT_AUTHORING_PREPARATION_MISSING");
         }
         const { loaded, BabylonWorldAdapter } = prepared;
-        if (!loaded.ok || loaded.executionPlan === undefined) {
+        if (
+          !loaded.ok ||
+          loaded.executionPlan === undefined ||
+          loaded.runtimeWorldConfiguration === undefined
+        ) {
           inspection.innerHTML = `<pre>${escapeHtml(JSON.stringify(loaded.diagnostics, null, 2))}</pre>`;
           throw new Error("WORLDKIT_AUTHORING_LOAD_FAILED");
         }
@@ -1717,12 +1773,15 @@ if (authoringMode) {
           PLAYGROUND_CAPABILITY_SUBJECT_ASSET_URI_BY_REF_V1,
         );
         startupStage = "runtime-create";
-        const adapter = await BabylonWorldAdapter.create(loaded.executionPlan, {
+        const adapter = await BabylonWorldAdapter.create(
+          loaded.runtimeWorldConfiguration,
+          {
           subjectAssetResolver,
           onInitializationStage(stage) {
             startupStage = `runtime:${stage}`;
           },
-        });
+          },
+        );
         createdAdapter = adapter;
         createdHostOverlay = loaded.hostOverlay;
         trackAdapter(adapter);
@@ -1744,6 +1803,9 @@ if (authoringMode) {
       createdHostOverlay,
     );
     startPlayground(createdAdapter, () => browserInstallation.dispose(), {
+      resetSimulation: async () => {
+        await browserInstallation.api.reset();
+      },
       afterSimulationReset: () => workbench?.reapplyWorkingDraftAfterSimulationReset(),
     });
   } else {
@@ -1763,11 +1825,28 @@ if (authoringMode) {
 function startPlayground(
   adapter: PlaygroundWorldAdapter,
   disposeBrowserRuntime?: () => Promise<void>,
-  options: { afterSimulationReset?: () => void } = {},
+  options: {
+    resetSimulation?: () => Promise<void>;
+    afterSimulationReset?: () => void | Promise<void>;
+  } = {},
 ): void {
 requiredElement("#adapter-name").textContent = adapter.name;
-const canvasRecorder = new CanvasRecorder(adapter.canvas);
+let recorderCanvas = adapter.canvas;
+let canvasRecorder = new CanvasRecorder(recorderCanvas);
 let recordingTimer: number | null = null;
+
+async function resetPlaygroundWorld(): Promise<void> {
+  if (canvasRecorder.state !== "idle") {
+    throw new Error("WORLDKIT_RECORDING_RESET_CONFLICT");
+  }
+  if (options.resetSimulation === undefined) adapter.reset();
+  else await options.resetSimulation();
+  await options.afterSimulationReset?.();
+  if (recorderCanvas === adapter.canvas) return;
+  canvasRecorder.dispose();
+  recorderCanvas = adapter.canvas;
+  canvasRecorder = new CanvasRecorder(recorderCanvas);
+}
 
 let selectedFeatureId: string | null = null;
 
@@ -1885,9 +1964,12 @@ requiredElement<HTMLButtonElement>("#pause-button").addEventListener("click", ()
   adapter.setPaused(!adapter.isPaused());
 });
 
-requiredElement<HTMLButtonElement>("#reset-button").addEventListener("click", () => {
-  adapter.reset();
-  options.afterSimulationReset?.();
+requiredElement<HTMLButtonElement>("#reset-button").addEventListener("click", async () => {
+  try {
+    await resetPlaygroundWorld();
+  } catch (error) {
+    window.alert(error instanceof Error ? error.message : String(error));
+  }
 });
 
 requiredElement<HTMLButtonElement>("#capture-button").addEventListener("click", () => {
@@ -1987,7 +2069,7 @@ requiredElement<HTMLButtonElement>("#triview-button").addEventListener("click", 
 requiredElement<HTMLButtonElement>("#smoke-button").addEventListener("click", async () => {
   const output = requiredElement<HTMLPreElement>("#smoke-output");
   output.textContent = "running…";
-  adapter.reset();
+  await resetPlaygroundWorld();
   const before = adapter.snapshot();
   const cameraUp = await adapter.runFixedInput([
     { actions: ["cameraUp"], ticks: 30 },
@@ -2023,7 +2105,7 @@ requiredElement<HTMLButtonElement>("#smoke-button").addEventListener("click", as
 
 requiredElement<HTMLButtonElement>("#composition-button").addEventListener("click", async () => {
   const output = requiredElement<HTMLPreElement>("#smoke-output");
-  adapter.reset();
+  await resetPlaygroundWorld();
   const report = adapter.analyzeOpeningComposition();
   const mask = requiredElement<HTMLImageElement>("#composition-mask");
   mask.src = adapter.captureCompositionMask();
@@ -2048,7 +2130,7 @@ async function captureRequestedArtifacts(): Promise<void> {
   try {
     await new Promise<void>((resolve) => window.setTimeout(resolve, 900));
     const triViewPaths = await adapter.exportWhiteboxTriviews();
-    adapter.reset();
+    await resetPlaygroundWorld();
     const report = adapter.analyzeOpeningComposition();
     const openingFramePath = report === null ? null : await adapter.exportOpeningFrame(report);
     document.documentElement.dataset.artifactCapture = "complete";

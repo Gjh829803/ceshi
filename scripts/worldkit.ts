@@ -15,7 +15,7 @@ import {
   type SubjectPresetCandidateV1,
 } from "@whitebox-world/authoring";
 import { canonicalJsonBytes } from "@whitebox-world/protocol";
-import type { WorldRuntimeSnapshotV3 } from "@whitebox-world/runtime-contracts";
+import type { WorldRuntimeSnapshotV4 } from "@whitebox-world/runtime-contracts";
 import {
   builtInSubjectResourceRegistry,
   type SubjectRegistryResourceV3,
@@ -730,7 +730,7 @@ export async function validateSubjectDefinitionFile(inputPath: string) {
 export async function validateFile(
   inputPath: string,
 ): Promise<WorldkitCommandResult> {
-  const pipeline = await loadWorldkitPipeline(inputPath);
+  const pipeline = await loadWorldkitRoutePipeline(inputPath);
   if (!pipeline.ok) return pipeline;
   return {
     ok: true,
@@ -772,11 +772,11 @@ export async function buildFile(
       "Build output must not overwrite the AuthoringSpec input.",
     );
   }
-  const pipeline = await loadWorldkitPipeline(absoluteInputPath);
+  const pipeline = await loadWorldkitRoutePipeline(absoluteInputPath);
   if (!pipeline.ok) return pipeline;
   const artifact = {
     kind: "worldkit-build-artifact",
-    schemaVersion: 3,
+    schemaVersion: 4,
     normalizedWorldIrHash: pipeline.normalizedWorldIrHash,
     executionPlanHash: pipeline.executionPlanHash,
     normalizedWorldIr: pipeline.normalizedWorldIr,
@@ -896,7 +896,7 @@ export async function captureFile(
     });
     const capture = await captureVisibleWorldWithRetries(() => page.evaluate(
       async (): Promise<{
-        snapshot: WorldRuntimeSnapshotV3;
+        snapshot: WorldRuntimeSnapshotV4;
         screenshotDataUrl: string;
         sampledRgbColorCount: number;
       }> => {
@@ -905,11 +905,14 @@ export async function captureFile(
           throw new Error("WORLDKIT_BROWSER_PROTOCOL_MISSING");
         }
         api.setPaused(true);
-        const snapshot = api.reset();
+        const snapshot = await api.reset();
         await new Promise<void>((resolve) => requestAnimationFrame(() => resolve()));
         await new Promise<void>((resolve) => requestAnimationFrame(() => resolve()));
         const beforeCapture = api.getSnapshot();
-        if (beforeCapture.tick !== snapshot.tick) {
+        if (
+          beforeCapture.world.simulationTick !==
+            snapshot.world.simulationTick
+        ) {
           throw new Error("WORLDKIT_CAPTURE_TICK_MISMATCH");
         }
         api.captureScreenshot();
@@ -945,7 +948,10 @@ export async function captureFile(
           if (sampledRgbColors.size >= 4) break;
         }
         const afterCapture = api.getSnapshot();
-        if (afterCapture.tick !== snapshot.tick) {
+        if (
+          afterCapture.world.simulationTick !==
+            snapshot.world.simulationTick
+        ) {
           throw new Error("WORLDKIT_CAPTURE_TICK_ADVANCED");
         }
         return {
