@@ -35,7 +35,9 @@
 | G19-1 R1b and Camera prerequisites | Complete on main | R1b/M5 and Camera P1.5 are integrated through main `381255f`; Route V2, Browser V5 and the isolated Camera Preview channel are authoritative. The README package map from `main@4ae1912` is also synchronized. |
 | G19-3 Gameplay core, WorldSession and RuntimeHost | Complete on latest-main integration branch | The original checkpoint starts at `f71bcb3`; the foundation has been three-way merged onto main `381255f`, its contracts use the repository `isNil` convention, and the focused 14-file / 468-test matrix plus typecheck pass. It remains trusted in-process staging, not a Browser/Babylon production entry. |
 | G19-4 package/bootstrap cutover | Complete on integration branch | ExecutionPlanV5, `initialControlledEntityId`, Gameplay Bootstrap semantic lock, WorldPackage six-way membership, Validation replay and pre-adapter RuntimeHost admission are atomically connected. All production callers construct real Bootstrap artifacts. Full typecheck, 165 files / 2,079 tests, build and all nine required verification gates pass. |
-| G19-5 onward | G19-5 active, sequential integration with parallel-safe investigation/tests | Babylon Gameplay Port plus atomic Possession/Input/Camera Target publication is the active slice. Action presentation and Camera Profile/Preference selection are explicitly outside this slice. Browser and Outdoor wiring remain incomplete until G19-6/G19-7 pass. |
+| G19-5 | Complete as G19-6 prerequisite | Babylon Gameplay Port and atomic Possession/Input/Camera Target publication are carried by the integration baseline. Action presentation and Camera Profile/Preference selection remain explicitly outside this slice. |
+| G19-6 | Final GO; merge-ready, not yet merged | The exact 39-key Browser V5 surface, Snapshot V4, RuntimeHost/Activity coordinator, atomic reset/rebind, and Authoring/CLI/Capture/Take consumer migration are complete on `codex/g19-6-browser-gameplay`. Typecheck, build, 168 files / 2,134 tests, seven World/Route gates and both Capture gates pass; no confirmed P0/P1/P2 remains open. |
+| G19-7 onward | Open | G19-7 now owns the remaining Outdoor/catalog route and lifecycle production wiring; G19-8 owns the complete G19 gate matrix and final disposition. G19-6 may merge independently first. |
 
 ## Live TODO (authoritative)
 
@@ -63,13 +65,15 @@ authoritative execution status; old unchecked steps inside already completed tas
     Canonical, Placement, Rigged Subject, G Bot and Capture gates pass. The stale example Take root is
     now maintained by `generate:example-takes`; Compiler V5 snapshots untrusted accessor-free input before
     semantic reads; Route-heavy integration tests retain their assertions with realistic full-suite budgets.
-- [ ] **G19-5 (integration preview implemented; production closure remains)** — Babylon transactional Port、
-  fixed-input Controller isolation、optional Possession 与 provider-neutral projection 已完成；Browser 尚未公开，
-  Legacy V3 旁路、rendered Camera pose publication 与完整门禁继续由 G19-6/G19-8 收口。本切片不发明
-  Semantic Action presentation 或 Camera Profile/Preference selection。
-- [ ] **G19-6 (blocked by G19-5)** — Browser Protocol V5 Gameplay entry, reset/rebind and activity/capture.
-- [ ] **G19-7 (blocked by G19-6)** — Outdoor/CLI/WorldKit production-path wiring.
-- [ ] **G19-8 (blocked by G19-7)** — full gates, host completion review, disposition, merge and push main.
+- [x] **G19-5** — Babylon transactional Port、fixed-input Controller isolation、optional Possession 与
+  provider-neutral projection 已作为 G19-6 前置底座完成。本切片不发明 Semantic Action presentation
+  或 Camera Profile/Preference selection。
+- [x] **G19-6 (Final GO; merge-ready, not yet merged)** — Browser Protocol V5 Gameplay
+  唯一入口、Snapshot V4、原子 reset/rebind、Runtime Activity、Authoring/CLI/Capture/Take 消费者迁移
+  已在 `codex/g19-6-browser-gameplay` 实现；最终门禁与主 Agent completion review 已通过。
+- [ ] **G19-7** — Outdoor/catalog route、page/artifact lifecycle 与六场景
+  production-path wiring；不再重复实现已由 G19-6 迁移的 CLI/WorldKit pipeline、Capture 或 Take 合同。
+- [ ] **G19-8 (blocked by G19-7)** — complete G19 gates, host completion review and final disposition.
 
 Closed baseline note: the stale Simulation Take WorldPackage root is no longer hand-maintained. The
 `generate:example-takes` command projects both example Takes from the current canonical WorldPackage
@@ -707,7 +711,7 @@ git commit -am "feat: project gameplay through babylon runtime"
 - Consumes: R1b Route Evidence V2、Task 2–7。
 - Produces: 单一 `WorldkitBrowserApiV5` 与 `WorldRuntimeSnapshotV4`。
 
-- [ ] **Step 1: 写 exact Browser V5 RED tests**
+- [x] **Step 1: 写 exact Browser V5 RED tests**
 
 Enumerable key 精确包含 Gameplay command/event/activity/capture/camera preview/4 Route getters，以及
 `getWorldStateSnapshot`；明确不含 `bindControl`、V4、Route V1和 runtime camera numeric overlay。
@@ -715,7 +719,7 @@ Enumerable key 精确包含 Gameplay command/event/activity/capture/camera previ
 `{ events, nextAfterEventSequence, hasMore }`；覆盖 exclusive cursor、空页 cursor、分页、unknown key 和
 unsafe count。
 
-- [ ] **Step 2: 实现 V5 contract/api**
+- [x] **Step 2: 实现 V5 contract/api**
 
 `executeGameplayCommand` 返回 V1 Receipt；`getWorldStateSnapshot({ worldStateRef })` 只返回当前或 retained
 canonical artifact，未知、跨 Session 或已释放 Ref fail closed；Route getter原样返回 trusted V2 DTO；
@@ -724,19 +728,19 @@ Snapshot分离 world/view/runtime status并移除 provider/root controlled truth
 expectedWorldSessionId，Host 派生 payload hash；receipt 返回 request/session/epoch/status。changed-payload、
 capacity、dispose termination 与迟到 release 均走稳定 Diagnostic/幂等语义。
 
-- [ ] **Step 3: 写 Reset RED tests**
+- [x] **Step 3: 写 Reset RED tests**
 
 按键保持时 reset：新 worldSession、tick 0、显式 bind committed、首次 render 后 Promise才 resolve；并发 getSnapshot稳定抛 `WORLDKIT_RUNTIME_RESET_IN_PROGRESS`；bind失败不发布 ready。
 
-- [ ] **Step 4: 实现 Playground reset policy**
+- [x] **Step 4: 实现 Playground reset policy**
 
 Host reset保持 generic unbound；Playground在同一 mutation barrier执行 bind initial candidate，清输入并等待 render。Workbench preview只在 bind committed后重放。
 
-- [ ] **Step 5: 保留 Authoring V4/Route fail-closed loader**
+- [x] **Step 5: 保留 Authoring V4/Route fail-closed loader**
 
 不采用 #19 loader；只把 RuntimeHost 接到现有 compileWorldV5/Route publication路径。
 
-- [ ] **Step 6: 迁移 Simulation Take、Capture 与 verifier 调用方**
+- [x] **Step 6: 迁移 Simulation Take、Capture 与 verifier 调用方**
 
 `SimulationTakeBrowserDriverV1` 删除 `bindControl`，改用
 `executeGameplayCommand(control.bind)`。Runner 在任何 bind/input/capture 前 acquire `simulation-take`，在
@@ -749,6 +753,26 @@ Host reset保持 generic unbound；Playground在同一 mutation barrier执行 bi
 
 运行 runtime-contracts、browser-api、authoring-loader、runtime-host、Simulation Take、两项 Capture verifier、
 Route Evidence tests与 typecheck。
+
+当前 disposition（2026-08-24）：Steps 1–6 已形成 G19-6 implementation candidate。Browser V5
+发布 39 个 mandatory own enumerable keys 且不包含 `bindControl`；Snapshot V4、RuntimeHost Activity、
+Authoring/CLI/WorldKit pipeline、Control Capture、Simulation Take 和四个既有 Browser verifier 已迁移到
+同一 Gameplay authority。本轮最终候选还完成以下收口：`ExecutionSubjectV3` 必填并严格校验
+`locomotionCapabilityRef/locomotionCapabilityHash`；Babylon 向 Canonical World State 投影锁定的
+`locomotion-capability-state`；Placement verifier 原子迁移到 Authoring/IR V4、ExecutionPlan V5、
+Snapshot V4 与 Browser V5；Rigged/G Bot verifier 的异步 reset、command 和 Snapshot 读取保持在正确的
+`page.evaluate`/Node 边界；WorldPackage Runtime 配置构建期资产失败在公共 Authoring 边界稳定收敛为
+`AUTHORING_RUNTIME_CONFIGURATION_INVALID`；fixed-input 临时 pause 使用 `finally` 恢复原状态。
+主 locomotion Capability 由 Definition normalizer 从已选择的 `locomotion.*` Capability 子图中求
+dependency leaf：排除任何被另一个已选 locomotion Capability 的 `requiredCapabilityRefs` 引用的节点，
+必须唯一剩余；Definition 固化该节点的 Ref/Hash，Compiler 只核对同一锁定行，Runtime 只投影锁定身份，
+三者都不再猜 `ground`。
+
+本轮最终证据：`pnpm typecheck`、`pnpm build`、168 files / 2,134 tests 全通过；`verify:canonical`、
+`verify:placement-layout`、`verify:rigged-subject`、`verify:g-bot-subject`、`verify:route-r0-contract`、
+`verify:route-r1-heightfield`、`verify:route-r1b-static-platform`、`verify:control-capture` 与
+`verify:validation-capture` 全部通过。Runtime/全维 completion review 无 open confirmed P0/P1/P2，
+G19-6 为 Final GO、可独立合入；本文状态仍不代表已经合入 main。
 
 ---
 
@@ -768,6 +792,10 @@ Route Evidence tests与 typecheck。
 **Interfaces:**
 - Consumes: 当前 Compiler V5、RuntimeHost、Browser V5。
 - Produces: 六个 Outdoor Scene 统一 Gameplay runtime；artifact-only 保持隔离。
+
+G19-6 boundary note：Authoring loader、共享 WorldKit pipeline、CLI、Capture 与 Simulation Take 的
+Browser V5/Snapshot V4 迁移已在 Task 8 完成。Task 9 只拥有 Outdoor/catalog route、页面与 artifact
+lifecycle、六场景真实 Chromium gate；不得建立第二套 Gameplay bootstrap、Activity 或控制协议。
 
 - [ ] **Step 1: 写 route/lifecycle RED tests**
 
