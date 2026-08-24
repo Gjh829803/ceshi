@@ -92,4 +92,50 @@ describe("xier120 actual-use verifier", () => {
     });
     expect(await readFile(ASSET_URL)).toEqual(committedBytes);
   }, 30_000);
+
+  it("attributes post-normalization compile failures to the compiler stage", async () => {
+    const [{ verifyXier120SubjectActualUse }, authoringSourceText, assetBytes] =
+      await Promise.all([
+        loadVerifier(),
+        readFile(AUTHORING_SOURCE_URL, "utf8"),
+        readFile(ASSET_URL),
+      ]);
+    const source = JSON.parse(authoringSourceText) as {
+      nodes: unknown[];
+    };
+    source.nodes.push({
+      id: "blocked-water",
+      kind: "water",
+      components: {
+        water: {
+          terrainEntityId: "terrain-main",
+          boundary: {
+            kind: "ellipse",
+            centerMetersXZ: [0, 18],
+            radiusMetersXZ: [4, 4],
+          },
+          depthMeters: 2,
+          shoreWidthMeters: 1,
+          waterLevelMeters: 1,
+          traversalMode: "blocked",
+          semantic: { classId: "water.blocked-verifier-fixture" },
+        },
+      },
+    });
+
+    await expect(
+      verifyXier120SubjectActualUse({
+        authoringSourceText: JSON.stringify(source),
+        subjectDefinitionRef: SUBJECT_DEFINITION_REF,
+        assetBytes,
+      }),
+    ).rejects.toMatchObject({
+      code: "XIER120_SUBJECT_ACTUAL_USE_FAILED",
+      stage: "compiler",
+      subjectDefinitionRef: SUBJECT_DEFINITION_REF,
+      subjectAssetRef: SUBJECT_ASSET_REF,
+      colliderProfileRef: COLLIDER_PROFILE_REF,
+      causeCode: "COMPILER_SPAWN_IN_BLOCKED_WATER",
+    });
+  }, 30_000);
 });

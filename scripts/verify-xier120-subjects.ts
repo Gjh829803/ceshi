@@ -166,6 +166,8 @@ function createGameplayBootstrap(normalizedWorldIr: NormalizedWorldIRV4) {
 function compileSelectedSubject(
   authoringSourceText: string,
   subjectDefinitionRef: string,
+  subjectAssetRef: string,
+  colliderProfileRef: string,
 ): Readonly<{
   executionPlan: ExecutionPlanV5;
   controlledEntityId: string;
@@ -197,21 +199,31 @@ function compileSelectedSubject(
       normalized.normalizedWorldIrHash !== undefined,
     normalized.diagnostics[0]?.code ?? "XIER120_AUTHORING_NORMALIZE_FAILED",
   );
-  const gameplayBootstrap = createGameplayBootstrap(normalized.value);
-  const compiled = compileWorldV5({
-    normalizedWorldIr: normalized.value,
-    normalizedWorldIrHash: normalized.normalizedWorldIrHash,
-    gameplayBootstrapResourceLock:
-      createGameplayBootstrapResourceLockEntryV1(gameplayBootstrap),
-  });
-  requireInvariant(
-    compiled.ok && compiled.executionPlan !== undefined,
-    compiled.diagnostics[0]?.code ?? "XIER120_COMPILE_FAILED",
-  );
-  return Object.freeze({
-    executionPlan: compiled.executionPlan,
-    controlledEntityId,
-  });
+  try {
+    const gameplayBootstrap = createGameplayBootstrap(normalized.value);
+    const compiled = compileWorldV5({
+      normalizedWorldIr: normalized.value,
+      normalizedWorldIrHash: normalized.normalizedWorldIrHash,
+      gameplayBootstrapResourceLock:
+        createGameplayBootstrapResourceLockEntryV1(gameplayBootstrap),
+    });
+    requireInvariant(
+      compiled.ok && compiled.executionPlan !== undefined,
+      compiled.diagnostics[0]?.code ?? "XIER120_COMPILE_FAILED",
+    );
+    return Object.freeze({
+      executionPlan: compiled.executionPlan,
+      controlledEntityId,
+    });
+  } catch (error) {
+    throw actualUseFailure(
+      "compiler",
+      subjectDefinitionRef,
+      subjectAssetRef,
+      colliderProfileRef,
+      error,
+    );
+  }
 }
 
 async function verifyCacheLifecycle(
@@ -474,6 +486,8 @@ export async function verifyXier120SubjectActualUse(input: {
       compiledSelection = compileSelectedSubject(
         input.authoringSourceText,
         input.subjectDefinitionRef,
+        subjectAssetRef,
+        colliderProfileRef,
       );
     } catch (error) {
       throw actualUseFailure(
