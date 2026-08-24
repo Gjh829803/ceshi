@@ -46,6 +46,7 @@
 - [`2026-08-19-placement-constraint-layout-solver-design.md`](superpowers/specs/2026-08-19-placement-constraint-layout-solver-design.md)：AI 空间意图、最终 Transform 求解与冲突报告专项规格；
 - [`2026-08-19-simulation-take-control-capture-design.md`](superpowers/specs/2026-08-19-simulation-take-control-capture-design.md)：WorldPackage、Take、Session、多 Pass Capture 与视频 Adapter 边界；
 - [`2026-08-22-canonical-runtime-state-and-semantic-projection-design.md`](superpowers/specs/2026-08-22-canonical-runtime-state-and-semantic-projection-design.md)：Canonical World/View/Runtime Status、Typed Relationship、Semantic Fact、Action/Event Receipt 与世界模型轨迹边界；
+- [`2026-08-24-context-driven-gameplay-camera-composition-design.md`](superpowers/specs/2026-08-24-context-driven-gameplay-camera-composition-design.md)：已评审的 Kit、Relationship、Action、Equipment、Flight 与 Camera Context/Director 端到端组合合同；能力仍未实施；
 - [`2026-08-19-world-validation-report-and-quality-gates-design.md`](superpowers/specs/2026-08-19-world-validation-report-and-quality-gates-design.md)：量化 Gate、Metric、Evidence 和生产阻断协议；
 - [`2026-08-20-ai-authored-geometry-extension-design.md`](superpowers/specs/2026-08-20-ai-authored-geometry-extension-design.md)：未来可能需要的 AI 自定义几何能力及候选技术，仅供调研评审，不属于当前 Roadmap；
 - `docs/superpowers/plans/`：已经进入实施阶段的单个纵向切片计划与证据。
@@ -505,6 +506,7 @@ Incremental Hot Apply，以及哪些 Runtime 状态被保留、重置或替换�
 
 #### P2.4 多 Controller、相机模式与受控操作
 
+- [x] 完成并评审 [上下文驱动 Gameplay 与 Camera 组合设计](superpowers/specs/2026-08-24-context-driven-gameplay-camera-composition-design.md)；已接受 Kit → committed state → Camera Context → CameraDirector 的单向链路、唯一 View Preference 和代表性 Fixture，GCC-0/GCC-0A 冻结及实现尚未开始。
 - [ ] 同一 Runtime Session 创建多个 Controller 并在同一 Tick 提交 Intent Batch。
 - [ ] Possession 权限、Sequence、Expected State 和冲突策略。
 - [ ] 第一人称、第三人称和声明式 Camera Rig 切换。
