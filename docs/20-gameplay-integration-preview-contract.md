@@ -29,6 +29,19 @@
 | `WorldRuntimeSnapshotV4` | `future-not-frozen` | G19-6 后续 generated type | G19-6 Snapshot gate | 不手写/持久化猜测形状 |
 | Action Presentation / 多 Controller 输入调度 | `future-not-frozen` | 后续独立设计 | 独立 Gate | 不猜字段，不创建本地协议 |
 
+对接 AI 开始工作前必须在自己的 checkout 执行以下基线门禁；任一命令失败就停止生成代码并先同步
+`origin/main`：
+
+```bash
+git fetch origin main
+git merge-base --is-ancestor 630d0bf2c49d35523e436212bc9ed5e2a7a20c92 HEAD
+test -f docs/20-gameplay-integration-preview-contract.md
+pnpm typecheck
+```
+
+其中 `630d0bf2c49d35523e436212bc9ed5e2a7a20c92` 是本对接版的最小代码基线，不是要求长期固定旧版本；
+对接方应继续拉取更新的 `main`。不得从未通过该门禁的旧 checkout 推断、补写或迁移 Gameplay 协议。
+
 ## 1. 对接方现在可以依赖什么
 
 下面这些 Canonical 名称、字段和语义已经冻结。正式版只补实现、性能、诊断和覆盖率，不再让对接方
@@ -283,7 +296,9 @@ ready
 > `runtimeSessionId/worldSessionId` 和准确 `expectedPossession`；收到 stale 时刷新 Snapshot，不盲重试。
 > 当前只生成 Canonical DTO、业务状态机和 fixture 测试；在 SDK 导出的
 > `WorldkitBrowserApiV5` exact 类型尚未包含 Gameplay facade 前，不把示意方法当成可执行 API，也不
-> 自造临时 transport 字段。只允许 Host 配置的 `fixedInputControllerEntityId` 消费本地固定输入。
+> 自造临时 transport 字段。只允许 Host 配置的 `fixedInputControllerEntityId` 消费本地固定输入。开始前
+> 必须确认当前 checkout 包含对接版最小基线 commit `630d0bf2c49d35523e436212bc9ed5e2a7a20c92`；
+> 不满足就停止并同步 `origin/main`，禁止基于旧代码自行补协议。
 
 权威类型定义位于：
 
