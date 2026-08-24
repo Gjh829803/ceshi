@@ -400,9 +400,23 @@ export function createWorldPackageBuildReceiptV1(
     fail(code, "executionPlan/subjectAssets", "subject asset Refs must be unique");
   }
   for (const asset of plan.subjectAssets) {
+    const normalizedAsset = normalizedSubjectAssetsByRef.get(
+      asset.subjectAssetRef,
+    );
+    if (isNil(normalizedAsset)) {
+      fail(
+        code,
+        `executionPlan/subjectAssets/${asset.subjectAssetRef}`,
+        "is missing from NormalizedWorldIRV4",
+      );
+    }
+    const {
+      subjectAssetManifestHash: _subjectAssetManifestHash,
+      ...expectedExecutionAsset
+    } = normalizedAsset;
     requireBinding(
       asset,
-      normalizedSubjectAssetsByRef.get(asset.subjectAssetRef),
+      expectedExecutionAsset,
       `executionPlan/subjectAssets/${asset.subjectAssetRef}`,
     );
   }

@@ -370,6 +370,12 @@ describe("WorldPackageBuildReceiptV1", () => {
 
   it("verifies real asset bytes and binds them into Manifest, integrity, and Root", async () => {
     const input = await riggedInput();
+    expect(input.normalizedWorldIr.resources.subjectAssets[0]).toHaveProperty(
+      "subjectAssetManifestHash",
+    );
+    expect(input.executionPlan.subjectAssets[0]).not.toHaveProperty(
+      "subjectAssetManifestHash",
+    );
     const receipt = createWorldPackageBuildReceiptV1(input);
     const artifact = input.resourceArtifacts[0]!;
 
