@@ -1,0 +1,178 @@
+{
+  "kind": "worldkit-xier120-subject-gallery-manual-check",
+  "schemaVersion": 1,
+  "source": {
+    "branch": "codex/xier120-non-human-subject-integration",
+    "commit": "683731341bedcfaff700bea742bbee65f9bd0881",
+    "canonicalCommand": "pnpm worldkit run examples/authoring/xier120-subject-gallery.json --port 5197",
+    "canonicalBrowserUrl": "http://127.0.0.1:5197/?authoring=1"
+  },
+  "evidenceLayers": {
+    "renderedManual": {
+      "surface": "real Canonical Authoring Runtime in Chromium through Playwright CLI",
+      "judgment": "Browser-exercised and visually reviewed from captured frames",
+      "outcome": "pass"
+    },
+    "automatedLifecycle": {
+      "surface": "Babylon NullEngine actual-use verifier",
+      "outcome": "pass",
+      "scope": "All 19 definitions compiled with two instances, cross-instance isolation, two disposed instances, and full lease/cache disposal."
+    }
+  },
+  "interactionProcedure": [
+    "Reset, pause, then settle for 30 fixed ticks.",
+    "Apply move-forward for 90 fixed ticks.",
+    "Apply move-right for 45 fixed ticks and inspect the 90-degree facing change.",
+    "Reset and settle, press jump for one tick, release for 10 ticks, then run 240 empty fixed ticks to inspect airborne and ground collision/support states.",
+    "Reset and adjust camera by yaw +0.85 radians, pitch -0.25 radians, and zoom +1.5 meters; run 60 fixed ticks.",
+    "Move and turn, invoke Reset, and inspect the immediate snapshot plus one rendered tick for spawn, facing, action, support, camera, mesh count, and body count restoration."
+  ],
+  "representatives": [
+    {
+      "role": "animal",
+      "definitionRef": "worldkit://subject-definition/xier120.quadruped-animal@1",
+      "assetHash": "sha256:70c16cd59ba37ec17ddb5481aa92f9442f54d250c885ffdf778313e5f10f206b",
+      "browserUrl": "http://127.0.0.1:5202/?authoring=1",
+      "resourceCounts": {"meshCount": 20, "physicsBodyCount": 2},
+      "move": {
+        "startPositionMetersXYZ": [0, 0.433087, 18.000000016],
+        "afterForwardPositionMetersXYZ": [0, 0.447, 14.560],
+        "activeActionId": "walk",
+        "speedMetersPerSecond": 2.399965,
+        "outcome": "pass"
+      },
+      "turn": {
+        "positionMetersXYZ": [1.565142, 0.4475, 14.325324],
+        "yawRadians": -1.5707963267948966,
+        "rotationQuaternionXYZW": [0, -0.7071067811865475, 0, 0.7071067811865476],
+        "outcome": "pass"
+      },
+      "collision": {
+        "takeoffVelocityYMetersPerSecond": 5.5,
+        "airborneMovementMedium": "air",
+        "airbornePositionYMetersAfterRelease": 1.14167,
+        "landedMovementMedium": "ground",
+        "landedPositionYMeters": 0.48321,
+        "landedVelocityYMetersPerSecond": 0,
+        "outcome": "pass"
+      },
+      "camera": {
+        "orbitOffsetRadiansAndMeters": [0.8499999267, -0.1999998683, 1.499999983],
+        "subjectTransformUnchanged": true,
+        "outcome": "pass"
+      },
+      "reset": {
+        "worldSessionReplaced": true,
+        "positionMetersXYZ": [0, 0.433, 18],
+        "rotationQuaternionXYZW": [0, 0, 0, 1],
+        "activeActionId": "idle",
+        "movementMedium": "ground",
+        "cameraOffsetsRestoredToZero": true,
+        "resourceCountsStable": true,
+        "outcome": "pass"
+      }
+    },
+    {
+      "role": "vehicle",
+      "definitionRef": "worldkit://subject-definition/xier120.tracked@1",
+      "assetHash": "sha256:c0c3e762f956a9cbcfe00fe760c765c220e4b12be1eaafa93696f7cc97652acd",
+      "browserUrl": "http://127.0.0.1:5201/?authoring=1",
+      "resourceCounts": {"meshCount": 8, "physicsBodyCount": 2},
+      "move": {
+        "startPositionMetersXYZ": [0, 0.4330880440354179, 18.00000001672637],
+        "afterForwardPositionMetersXYZ": [-4.2261224621134495e-16, 0.44653104179453607, 14.560156621788098],
+        "activeActionId": "walk",
+        "speedMetersPerSecond": 2.399965,
+        "outcome": "pass"
+      },
+      "turn": {
+        "positionMetersXYZ": [1.5651415217557814, 0.4472648955280878, 14.325323766800604],
+        "yawRadians": -1.5707963267948966,
+        "rotationQuaternionXYZW": [0, -0.7071067811865475, 0, 0.7071067811865476],
+        "outcome": "pass"
+      },
+      "collision": {
+        "takeoffVelocityYMetersPerSecond": 5.5,
+        "airborneMovementMedium": "air",
+        "airbornePositionYMetersAfterRelease": 1.1416713773687515,
+        "landedMovementMedium": "ground",
+        "landedPositionYMeters": 0.48321417280433976,
+        "landedVelocityYMetersPerSecond": 0,
+        "outcome": "pass"
+      },
+      "camera": {
+        "orbitOffsetRadiansAndMeters": [0.8499999267, -0.1999998683, 1.499999983],
+        "subjectTransformUnchanged": true,
+        "outcome": "pass"
+      },
+      "reset": {
+        "worldSessionReplaced": true,
+        "positionMetersXYZ": [0, 0.433, 18],
+        "rotationQuaternionXYZW": [0, 0, 0, 1],
+        "activeActionId": "idle",
+        "movementMedium": "ground",
+        "cameraOffsetsRestoredToZero": true,
+        "resourceCountsStable": true,
+        "outcome": "pass"
+      },
+      "captureNote": "Interaction measurements used the stated camera delta; gallery frames add a display-only +5 meter zoom so the full tracked silhouette remains visible."
+    },
+    {
+      "role": "composition",
+      "definitionRef": "worldkit://subject-definition/xier120.aerial-cockpit@1",
+      "assetHash": "sha256:b2416d0ee1ce33ac33878850e8f77362f06986dba2c03ca195636f82eed7e341",
+      "browserUrl": "http://127.0.0.1:5203/?authoring=1",
+      "resourceCounts": {"meshCount": 8, "physicsBodyCount": 2},
+      "move": {
+        "startPositionMetersXYZ": [0, 0.433087, 18.000000016],
+        "afterForwardPositionMetersXYZ": [0, 0.447, 14.560],
+        "activeActionId": "walk",
+        "speedMetersPerSecond": 2.399965,
+        "outcome": "pass"
+      },
+      "turn": {
+        "positionMetersXYZ": [1.565142, 0.4475, 14.325324],
+        "yawRadians": -1.5707963267948966,
+        "rotationQuaternionXYZW": [0, -0.7071067811865475, 0, 0.7071067811865476],
+        "outcome": "pass"
+      },
+      "collision": {
+        "takeoffVelocityYMetersPerSecond": 5.5,
+        "airborneMovementMedium": "air",
+        "airbornePositionYMetersAfterRelease": 1.14167,
+        "landedMovementMedium": "ground",
+        "landedPositionYMeters": 0.48321,
+        "landedVelocityYMetersPerSecond": 0,
+        "outcome": "pass"
+      },
+      "camera": {
+        "orbitOffsetRadiansAndMeters": [0.8499999267, -0.1999998683, 1.499999983],
+        "subjectTransformUnchanged": true,
+        "outcome": "pass"
+      },
+      "reset": {
+        "worldSessionReplaced": true,
+        "positionMetersXYZ": [0, 0.433, 18],
+        "rotationQuaternionXYZW": [0, 0, 0, 1],
+        "activeActionId": "idle",
+        "movementMedium": "ground",
+        "cameraOffsetsRestoredToZero": true,
+        "resourceCountsStable": true,
+        "outcome": "pass"
+      }
+    }
+  ],
+  "galleryPanels": {
+    "filename": "gallery.png",
+    "interactionScreenshotsPerRepresentative": ["move-turn", "airborne", "camera", "reset"],
+    "redGreenRepresentatives": ["aerial-standing", "quadruped-animal", "snake-animal", "two-wheel-motorcycle"]
+  },
+  "unsupportedClaims": [
+    "vehicle driving",
+    "flight",
+    "mounting or riding",
+    "NPC behavior",
+    "authored animation"
+  ],
+  "verdict": "pass"
+}
