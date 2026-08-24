@@ -12,6 +12,10 @@ import {
   compileResolvedTraversalLockV1,
   compileWorldV5,
 } from "@whitebox-world/compiler";
+import {
+  createGameplayBootstrapResourceLockEntryV1,
+  createGameplayBootstrapV1,
+} from "@whitebox-world/gameplay-contracts";
 import type {
   ExecutionPlanV4,
   ExecutionPlanV5,
@@ -55,6 +59,17 @@ const havokWasmBinary = havokWasmBytes.buffer.slice(
   havokWasmBytes.byteOffset,
   havokWasmBytes.byteOffset + havokWasmBytes.byteLength,
 ) as ArrayBuffer;
+const GAMEPLAY_BOOTSTRAP_RESOURCE_LOCK =
+  createGameplayBootstrapResourceLockEntryV1(createGameplayBootstrapV1({
+    kind: "gameplay-bootstrap",
+    id: "traversal-runtime-port-test.gameplay",
+    version: 1,
+    resourceRef: "worldkit://gameplay-bootstrap/traversal-runtime-port-test@1",
+    entityDescriptors: [],
+    featureResourceLocks: [],
+    semanticActionDefinitions: [],
+    availableCapabilityRefs: [],
+  }));
 
 function routeWorld(
   source = createValidAuthoringSpec(),
@@ -135,6 +150,7 @@ function compileFixture(world = routeWorld()): {
   const compiled = compileWorldV5({
     normalizedWorldIr: normalized.value,
     normalizedWorldIrHash: normalized.normalizedWorldIrHash,
+    gameplayBootstrapResourceLock: GAMEPLAY_BOOTSTRAP_RESOURCE_LOCK,
   });
   if (!compiled.ok || compiled.executionPlan === undefined) {
     throw new Error("Route fixture compilation failed.");
@@ -985,6 +1001,7 @@ describe("createBabylonTraversalRuntimePortV1", () => {
     const runtime = await createRuntime({
       ...fixture.executionPlan,
       schemaVersion: 4,
+      controlledEntityId: fixture.executionPlan.initialControlledEntityId,
     } as unknown as ExecutionPlanV4);
     try {
       expectRuntimeCode(
@@ -1164,9 +1181,10 @@ describe("createBabylonTraversalRuntimePortV1", () => {
 
   it("closes non-canonical world drift introduced after Runtime creation", async () => {
     const fixture = compileFixture();
-    const runtime = await createRuntime(fixture.executionPlan);
+    const executionPlan = structuredClone(fixture.executionPlan);
+    const runtime = await createRuntime(executionPlan);
     try {
-      const samples = fixture.executionPlan.terrain
+      const samples = executionPlan.terrain
         .heightSamplesMeters as unknown[];
       samples[0] = 1n;
 
@@ -1184,14 +1202,15 @@ describe("createBabylonTraversalRuntimePortV1", () => {
 
   it("rejects in-place V5 Plan drift even when its published world hashes stay unchanged", async () => {
     const fixture = compileFixture();
-    const runtime = await createRuntime(fixture.executionPlan);
+    const executionPlan = structuredClone(fixture.executionPlan);
+    const runtime = await createRuntime(executionPlan);
     try {
       const port = createBabylonTraversalRuntimePortV1({
         runtime,
         traversalLockReceipt: fixture.traversalLockReceipt,
       });
       const originalExecutionPlanHash = port.executionPlanHash;
-      const samples = fixture.executionPlan.terrain.heightSamplesMeters as number[];
+      const samples = executionPlan.terrain.heightSamplesMeters as number[];
       samples[0] = samples[0]! + 0.25;
 
       expect(port.executionPlanHash).toBe(originalExecutionPlanHash);
@@ -1206,13 +1225,14 @@ describe("createBabylonTraversalRuntimePortV1", () => {
 
   it("closes canonical hashing failures from adversarial in-place V5 Plan drift", async () => {
     const fixture = compileFixture();
-    const runtime = await createRuntime(fixture.executionPlan);
+    const executionPlan = structuredClone(fixture.executionPlan);
+    const runtime = await createRuntime(executionPlan);
     try {
       const port = createBabylonTraversalRuntimePortV1({
         runtime,
         traversalLockReceipt: fixture.traversalLockReceipt,
       });
-      const samples = fixture.executionPlan.terrain.heightSamplesMeters as unknown[];
+      const samples = executionPlan.terrain.heightSamplesMeters as unknown[];
       samples[0] = 1n;
 
       expectRuntimeCode(

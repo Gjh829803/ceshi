@@ -1,4 +1,5 @@
 import type { AuthoringSpecV4, NormalizedWorldIRV4 } from "@whitebox-world/authoring";
+import type { GameplayBootstrapV1 } from "@whitebox-world/gameplay-contracts";
 import type { LayoutSolveResultV1 } from "@whitebox-world/layout-solver";
 import type { ExecutionPlanV5 } from "@whitebox-world/runtime-contracts";
 
@@ -37,7 +38,7 @@ export interface WorldPackageManifestV1 {
   readonly executionPlanHash: WorldPackageSha256HashV1;
   readonly resourceLockHash: WorldPackageSha256HashV1;
   readonly layoutSolveReportHash: WorldPackageSha256HashV1;
-  readonly controlledEntityId: string;
+  readonly initialControlledEntityId: string;
   readonly entryPoint: Readonly<{
     readonly executionPlanPath: "targets/babylon-web/execution-plan.json";
   }>;
@@ -58,6 +59,7 @@ export interface WorldPackageBuildClosureV1 {
   readonly normalizedWorldIr: NormalizedWorldIRV4;
   readonly layoutSolveResult: LayoutSolveResultV1;
   readonly executionPlan: ExecutionPlanV5;
+  readonly gameplayBootstrap: GameplayBootstrapV1;
 }
 
 export interface ResolvedWorldPackageResourceArtifactV1 {
@@ -73,6 +75,13 @@ export interface CreateWorldPackageBuildReceiptInputV1 {
   readonly normalizedWorldIr: NormalizedWorldIRV4;
   readonly layoutSolveResult: LayoutSolveResultV1;
   readonly executionPlan: ExecutionPlanV5;
+  readonly gameplayBootstrap: GameplayBootstrapV1;
   readonly resourceArtifacts: readonly ResolvedWorldPackageResourceArtifactV1[];
   readonly includeAuthoringSpec?: boolean;
+}
+
+export interface WorldPackageGameplayBootstrapMembershipInputV1 {
+  readonly executionPlan: ExecutionPlanV5;
+  readonly gameplayBootstrap: GameplayBootstrapV1;
+  readonly worldPackageBuildReceipt: WorldPackageBuildReceiptV1;
 }

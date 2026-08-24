@@ -8,13 +8,19 @@ import path from "node:path";
 import {
   normalizeAuthoringSpecV4,
   type AuthoringSpecV4,
+  type NormalizedWorldIRV4,
 } from "@whitebox-world/authoring";
 import { compileWorldV5 } from "@whitebox-world/compiler";
+import {
+  createGameplayBootstrapResourceLockEntryV1,
+  createGameplayBootstrapV1,
+} from "@whitebox-world/gameplay-contracts";
 import { canonicalJsonBytes } from "@whitebox-world/protocol";
 import {
   canonicalWorldkitBrowserRouteEvidencePublicationV2,
   type WorldkitBrowserRouteEvidencePublicationV2,
 } from "@whitebox-world/runtime-contracts";
+import { isNil, uniq } from "lodash-es";
 import { chromium } from "playwright";
 import { afterEach, describe, expect, it } from "vitest";
 
@@ -28,6 +34,42 @@ const INPUT_PATH = fileURLToPath(
 const handles: WorldkitServerHandle[] = [];
 
 const HASH = `sha256:${"1".repeat(64)}` as const;
+
+function gameplayBootstrapResourceLock(
+  normalizedWorldIr: NormalizedWorldIRV4,
+) {
+  const entityDescriptors = normalizedWorldIr.nodes
+    .filter((node) => node.kind === "subject")
+    .map((node) => {
+      const definition = normalizedWorldIr.resources.subjectDefinitions.find(
+        (candidate) =>
+          candidate.subjectDefinitionRef === node.subjectDefinitionRef,
+      );
+      if (isNil(definition)) {
+        throw new Error(`Missing Subject Definition '${node.subjectDefinitionRef}'.`);
+      }
+      return {
+        id: node.id,
+        entityDefinitionRef: node.subjectDefinitionRef,
+        capabilityRefs: definition.capabilityRefs,
+      };
+    });
+  return createGameplayBootstrapResourceLockEntryV1(
+    createGameplayBootstrapV1({
+      kind: "gameplay-bootstrap",
+      id: `${normalizedWorldIr.id}.gameplay`,
+      version: 1,
+      resourceRef:
+        `worldkit://gameplay-bootstrap/${normalizedWorldIr.id}.${normalizedWorldIr.seed}@1`,
+      entityDescriptors,
+      featureResourceLocks: [],
+      semanticActionDefinitions: [],
+      availableCapabilityRefs: uniq(
+        entityDescriptors.flatMap((descriptor) => descriptor.capabilityRefs),
+      ),
+    }),
+  );
+}
 
 function routeEvidencePublication(
   overrides: Partial<WorldkitBrowserRouteEvidencePublicationV2> = {},
@@ -120,6 +162,8 @@ function sameWorldRouteEvidencePublication(
   const compiled = compileWorldV5({
     normalizedWorldIr: normalized.value,
     normalizedWorldIrHash: normalized.normalizedWorldIrHash,
+    gameplayBootstrapResourceLock:
+      gameplayBootstrapResourceLock(normalized.value),
   });
   if (
     !compiled.ok ||
@@ -134,7 +178,7 @@ function sameWorldRouteEvidencePublication(
       normalized.normalizedWorldIrHash as `sha256:${string}`,
     executionPlanHash: compiled.executionPlanHash as `sha256:${string}`,
     resourceLockHash:
-      normalized.value.resources.resourceLockHash as `sha256:${string}`,
+      compiled.executionPlan.resourceLockHash as `sha256:${string}`,
     layoutSolveReportHash:
       normalized.layoutSolveReportHash as `sha256:${string}`,
   });

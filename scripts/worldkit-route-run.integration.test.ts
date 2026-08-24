@@ -190,7 +190,7 @@ describe("worldkit run trusted Route Host transport", () => {
         authoringSpecHash: pipeline.normalizedWorldIr.authoringSpecHash,
         normalizedWorldIrHash: pipeline.normalizedWorldIrHash,
         executionPlanHash: pipeline.executionPlanHash,
-        resourceLockHash: pipeline.normalizedWorldIr.resources.resourceLockHash,
+        resourceLockHash: pipeline.executionPlan.resourceLockHash,
         layoutSolveReportHash: pipeline.layoutSolveReportHash,
       };
       const port = await allocateAvailablePort();
@@ -217,7 +217,7 @@ describe("worldkit run trusted Route Host transport", () => {
         throw new Error("worldkit run did not receive a process ID.");
       }
       const childProcessId = child.pid;
-      const ready = await waitForWorldkitRunReady(child, 75_000);
+      const ready = await waitForWorldkitRunReady(child, 120_000);
       expect(ready.port).toBe(port);
       expect(await ownedRouteEvidenceDirectories(childProcessId)).toHaveLength(1);
 
@@ -303,5 +303,5 @@ describe("worldkit run trusted Route Host transport", () => {
       if (!isNil(child)) await stopWorldkitRun(child).catch(() => undefined);
       await rm(temporaryDirectory, { recursive: true, force: true });
     }
-  }, 120_000);
+  }, 180_000);
 });

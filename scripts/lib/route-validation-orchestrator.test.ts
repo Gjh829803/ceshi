@@ -8,6 +8,10 @@ import {
   compileWorldV5,
 } from "@whitebox-world/compiler";
 import {
+  createGameplayBootstrapResourceLockEntryV1,
+  createGameplayBootstrapV1,
+} from "@whitebox-world/gameplay-contracts";
+import {
   canonicalJsonBytes,
   sha256CanonicalJson,
 } from "@whitebox-world/protocol";
@@ -51,6 +55,18 @@ import {
 } from "./route-validation-orchestrator.js";
 
 type Hash = `sha256:${string}`;
+const GAMEPLAY_BOOTSTRAP_RESOURCE_LOCK =
+  createGameplayBootstrapResourceLockEntryV1(createGameplayBootstrapV1({
+    kind: "gameplay-bootstrap",
+    id: "route-validation-orchestrator-test.gameplay",
+    version: 1,
+    resourceRef:
+      "worldkit://gameplay-bootstrap/route-validation-orchestrator-test@1",
+    entityDescriptors: [],
+    featureResourceLocks: [],
+    semanticActionDefinitions: [],
+    availableCapabilityRefs: [],
+  }));
 
 interface PreparedFixture {
   readonly normalizedWorldIr: NormalizedWorldIRV4;
@@ -259,6 +275,7 @@ function prepareFixture(spec: AuthoringSpecV4): PreparedFixture {
   const compiled = compileWorldV5({
     normalizedWorldIr: normalized.value,
     normalizedWorldIrHash: normalized.normalizedWorldIrHash,
+    gameplayBootstrapResourceLock: GAMEPLAY_BOOTSTRAP_RESOURCE_LOCK,
   });
   if (!compiled.ok || isNil(compiled.executionPlan)) {
     throw new Error(`compilation failed: ${JSON.stringify(compiled.diagnostics)}`);

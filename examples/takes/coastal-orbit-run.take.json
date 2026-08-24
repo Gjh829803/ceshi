@@ -3,7 +3,7 @@
   "schemaVersion": 1,
   "id": "coastal-orbit-run",
   "worldPackageRef": "worldkit://world-package/coastal-whitebox@1",
-  "worldPackageRootHash": "sha256:16ea169661da248a04db56c7ed3be9e0838e80cfe0bb4887f0c17704b72b44f6",
+  "worldPackageRootHash": "sha256:28f3d9b5aed02250909e5a2e2af8a7d1c13b9127038ab8163a1475da0e9ee073",
   "seed": 731991,
   "simulationTickRate": {
     "numeratorTicks": 60,
@@ -29,19 +29,28 @@
       "keyframes": [
         {
           "tick": 0,
-          "moveAxesXZ": [0, 1],
+          "moveAxesXZ": [
+            0,
+            1
+          ],
           "runEnabled": true,
           "jumpPressed": false
         },
         {
           "tick": 240,
-          "moveAxesXZ": [-0.35, 1],
+          "moveAxesXZ": [
+            -0.35,
+            1
+          ],
           "runEnabled": true,
           "jumpPressed": false
         },
         {
           "tick": 420,
-          "moveAxesXZ": [0, 0],
+          "moveAxesXZ": [
+            0,
+            0
+          ],
           "runEnabled": false,
           "jumpPressed": false
         }

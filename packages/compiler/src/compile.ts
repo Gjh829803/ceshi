@@ -23,6 +23,8 @@ import {
 import { sampleTriangleHeightfieldSurface } from "@whitebox-world/terrain-surface";
 import {
   canonicalExecutionResourceLockEntriesV1,
+  hashExecutionPlanV5,
+  parseExecutionPlanV5,
   type CompileDiagnostic,
   type CompileWorldResultV4,
   type ExecutionAnimationSetV1,
@@ -31,6 +33,7 @@ import {
   type ExecutionObjectPrimitiveV3,
   type ExecutionObjectV3,
   type ExecutionPlanV4,
+  type GameplayBootstrapExecutionResourceLockV1,
   type ExecutionLayoutAssertionV1,
   type ExecutionLayoutPlacementV1,
   type ExecutionRigProfileV1,
@@ -47,7 +50,6 @@ import type {
   ExecutionConnectivityRequirementV1,
   ExecutionHeightfieldTraversalSurfaceV1,
   ExecutionTraversalAreaV1,
-  ExecutionPlanV5,
   ExecutionStaticColliderShapeV1,
   ExecutionStaticColliderV1,
   ExecutionStaticColliderTraversalSurfaceV1,
@@ -129,6 +131,37 @@ export interface CompileWorldInputV4 {
 export interface CompileWorldInputV5 {
   readonly normalizedWorldIr: NormalizedWorldIRV4;
   readonly normalizedWorldIrHash: string;
+  readonly gameplayBootstrapResourceLock: GameplayBootstrapExecutionResourceLockV1;
+}
+
+class CompilerInputAccessorErrorV1 extends Error {}
+
+function assertCompilerInputAccessorFreeV1(
+  value: unknown,
+  visited: WeakSet<object> = new WeakSet<object>(),
+): void {
+  if (isNil(value) || typeof value !== "object" || visited.has(value)) return;
+  visited.add(value);
+  if (Object.getOwnPropertySymbols(value).length > 0) {
+    throw new CompilerInputAccessorErrorV1();
+  }
+  for (const descriptor of Object.values(
+    Object.getOwnPropertyDescriptors(value),
+  )) {
+    if (!isNil(descriptor.get) || !isNil(descriptor.set)) {
+      throw new CompilerInputAccessorErrorV1();
+    }
+    if (Object.hasOwn(descriptor, "value")) {
+      assertCompilerInputAccessorFreeV1(descriptor.value, visited);
+    }
+  }
+}
+
+function snapshotCompileWorldInputV5(
+  input: CompileWorldInputV5,
+): CompileWorldInputV5 {
+  assertCompilerInputAccessorFreeV1(input);
+  return structuredClone(input);
 }
 
 export function sampleTerrainHeight(
@@ -1864,8 +1897,28 @@ function compileConnectivityRequirementV1(
 }
 
 export function compileWorldV5(input: CompileWorldInputV5): CompileWorldResultV5 {
-  const actualNormalizedWorldIrHash = sha256CanonicalJson(input.normalizedWorldIr);
-  if (input.normalizedWorldIrHash !== actualNormalizedWorldIrHash) {
+  let snapshot: CompileWorldInputV5;
+  try {
+    snapshot = snapshotCompileWorldInputV5(input);
+  } catch (cause) {
+    return {
+      ok: false,
+      diagnostics: [{
+        severity: "error",
+        code: cause instanceof CompilerInputAccessorErrorV1
+          ? "COMPILER_INPUT_ACCESSOR_FORBIDDEN"
+          : "COMPILER_INPUT_INVALID",
+        instancePath: "/normalizedWorldIr",
+        message: cause instanceof CompilerInputAccessorErrorV1
+          ? "Compiler input must be an accessor-free data graph."
+          : "Compiler input must be a cloneable data graph.",
+      }],
+    };
+  }
+  const actualNormalizedWorldIrHash = sha256CanonicalJson(
+    snapshot.normalizedWorldIr,
+  );
+  if (snapshot.normalizedWorldIrHash !== actualNormalizedWorldIrHash) {
     return {
       ok: false,
       diagnostics: [{
@@ -1875,25 +1928,62 @@ export function compileWorldV5(input: CompileWorldInputV5): CompileWorldResultV5
         message: "The supplied normalizedWorldIrHash does not match NormalizedWorldIRV4.",
         details: {
           expected: actualNormalizedWorldIrHash,
-          actual: input.normalizedWorldIrHash,
+          actual: snapshot.normalizedWorldIrHash,
         },
       }],
     };
   }
 
   try {
-    const resourceLockEntries = canonicalExecutionResourceLockEntriesV1(
-      input.normalizedWorldIr.resources.resourceLock,
+    const normalizedResourceLockEntries = canonicalExecutionResourceLockEntriesV1(
+      snapshot.normalizedWorldIr.resources.resourceLock,
+    ) as NormalizedWorldIRV4["resources"]["resourceLock"];
+    const normalizedResourceLockHash = sha256CanonicalJson(
+      normalizedResourceLockEntries,
     );
-    const resourceLockHash = sha256CanonicalJson(resourceLockEntries);
-    if (input.normalizedWorldIr.resources.resourceLockHash !== resourceLockHash) {
+    if (
+      snapshot.normalizedWorldIr.resources.resourceLockHash !==
+      normalizedResourceLockHash
+    ) {
       throw new Error("Resource Lock hash does not match canonical entries.");
     }
+    let gameplayBootstrapResourceLock: GameplayBootstrapExecutionResourceLockV1;
+    try {
+      const [canonicalBootstrap] = canonicalExecutionResourceLockEntriesV1([
+        snapshot.gameplayBootstrapResourceLock,
+      ]);
+      if (
+        isNil(canonicalBootstrap) ||
+        canonicalBootstrap.resourceKind !== "gameplay-bootstrap" ||
+        normalizedResourceLockEntries.some(
+          (entry) => entry.resourceRef === canonicalBootstrap.resourceRef,
+        )
+      ) {
+        throw new TypeError("Invalid Gameplay Bootstrap Resource Lock.");
+      }
+      gameplayBootstrapResourceLock = canonicalBootstrap as
+        GameplayBootstrapExecutionResourceLockV1;
+    } catch {
+      return {
+        ok: false,
+        diagnostics: [{
+          severity: "error",
+          code: "COMPILER_GAMEPLAY_BOOTSTRAP_LOCK_INVALID",
+          instancePath: "/gameplayBootstrapResourceLock",
+          message: "The Gameplay Bootstrap Resource Lock must be one unique gameplay-bootstrap row.",
+        }],
+      };
+    }
+    const resourceLockEntries = canonicalExecutionResourceLockEntriesV1([
+      ...normalizedResourceLockEntries,
+      gameplayBootstrapResourceLock,
+    ]);
+    const resourceLockHash = sha256CanonicalJson(resourceLockEntries);
     requireUniquePrototypeIdentitiesV1(
-      input.normalizedWorldIr.resources.prototypes,
+      snapshot.normalizedWorldIr.resources.prototypes,
     );
-    requireUniqueNodeEntityIdsV1(input.normalizedWorldIr.nodes);
-    const projectedWorld = projectNormalizedWorldV4ToV3(input.normalizedWorldIr);
+    requireUniqueNodeEntityIdsV1(snapshot.normalizedWorldIr.nodes);
+    const projectedWorld = projectNormalizedWorldV4ToV3(snapshot.normalizedWorldIr);
     const compiledV4 = compileWorldV4({
       normalizedWorldIr: projectedWorld,
       normalizedWorldIrHash: sha256CanonicalJson(projectedWorld),
@@ -1911,9 +2001,9 @@ export function compileWorldV5(input: CompileWorldInputV5): CompileWorldResultV5
     const sortedTraversalSurfaces = [
       compileHeightfieldTraversalSurfaceV1(planV4),
       ...compileStaticColliderTraversalSurfacesV1(
-        input.normalizedWorldIr,
+        snapshot.normalizedWorldIr,
         staticColliders,
-        resourceLockEntries,
+        normalizedResourceLockEntries,
       ),
     ].sort((left, right) =>
       left.traversalSurfaceId.localeCompare(right.traversalSurfaceId));
@@ -1929,33 +2019,38 @@ export function compileWorldV5(input: CompileWorldInputV5): CompileWorldResultV5
     const traversalSurfaces = Object.freeze(
       sortedTraversalSurfaces.map((surface) => Object.freeze(surface)),
     );
-    const plan: ExecutionPlanV5 = {
-      ...planV4,
+    const {
+      controlledEntityId: initialControlledEntityId,
+      ...planV4WithoutControlledEntity
+    } = planV4;
+    const plan = parseExecutionPlanV5({
+      ...planV4WithoutControlledEntity,
       schemaVersion: 5,
-      authoringSpecHash: input.normalizedWorldIr.authoringSpecHash,
-      normalizedWorldIrHash: input.normalizedWorldIrHash,
+      initialControlledEntityId,
+      authoringSpecHash: snapshot.normalizedWorldIr.authoringSpecHash,
+      normalizedWorldIrHash: snapshot.normalizedWorldIrHash,
       resourceLockHash,
       resourceLockEntries,
       traversal: {
         surfaces: traversalSurfaces,
-        traversalAreas: input.normalizedWorldIr.layout.traversalAreas
+        traversalAreas: snapshot.normalizedWorldIr.layout.traversalAreas
           .map(compileTraversalAreaV1)
           .sort((left, right) => left.id.localeCompare(right.id)),
-        connectivityRequirements: input.normalizedWorldIr.layout
+        connectivityRequirements: snapshot.normalizedWorldIr.layout
           .connectivityRequirements
           .map(compileConnectivityRequirementV1)
           .sort((left, right) => left.constraintId.localeCompare(right.constraintId)),
-        anchorEntityIds: input.normalizedWorldIr.nodes
+        anchorEntityIds: snapshot.normalizedWorldIr.nodes
           .filter((node) => node.kind === "anchor")
           .map((node) => node.id)
           .sort((left, right) => left.localeCompare(right)),
       },
       staticColliders,
-    };
+    });
     return {
       ok: true,
       executionPlan: plan,
-      executionPlanHash: sha256CanonicalJson(plan),
+      executionPlanHash: hashExecutionPlanV5(plan),
       diagnostics: [],
     };
   } catch (cause) {

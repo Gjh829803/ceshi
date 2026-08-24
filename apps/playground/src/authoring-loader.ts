@@ -8,8 +8,14 @@ import {
   type AuthoringDiagnostic,
   type AuthoringSpecV3,
   type AuthoringSpecV4,
+  type NormalizedWorldIRV4,
 } from "@whitebox-world/authoring";
 import { compileWorld, compileWorldV5 } from "@whitebox-world/compiler";
+import {
+  createGameplayBootstrapResourceLockEntryV1,
+  createGameplayBootstrapV1,
+  type GameplayBootstrapV1,
+} from "@whitebox-world/gameplay-contracts";
 import {
   builtInSubjectResourceRegistry,
   type RegistrySubjectDefinitionV3,
@@ -24,6 +30,7 @@ import {
   canonicalWorldkitBrowserRouteEvidencePublicationV2,
   type WorldkitBrowserRouteEvidencePublicationV2,
 } from "@whitebox-world/runtime-contracts";
+import { isNil, uniq } from "lodash-es";
 
 type CapabilityDemoResourceBudgetV1 = Readonly<
   AuthoringSpecV3["world"]["resourceBudget"]
@@ -88,6 +95,42 @@ const CAPABILITY_PLAYGROUND_MINIMUM_RESOURCE_BUDGET = Object.freeze({
   maxTriangles: 300_000,
   maxColliders: 128,
 });
+
+function createDataOnlyGameplayBootstrap(
+  normalizedWorldIr: NormalizedWorldIRV4,
+): GameplayBootstrapV1 {
+  const entityDescriptors = normalizedWorldIr.nodes
+    .filter((node) => node.kind === "subject")
+    .map((node) => {
+      const definition = normalizedWorldIr.resources.subjectDefinitions.find(
+        (candidate) =>
+          candidate.subjectDefinitionRef === node.subjectDefinitionRef,
+      );
+      if (isNil(definition)) {
+        throw new Error(
+          `AUTHORING_GAMEPLAY_SUBJECT_DEFINITION_MISSING: ${node.subjectDefinitionRef}`,
+        );
+      }
+      return {
+        id: node.id,
+        entityDefinitionRef: node.subjectDefinitionRef,
+        capabilityRefs: definition.capabilityRefs,
+      };
+    });
+  return createGameplayBootstrapV1({
+    kind: "gameplay-bootstrap",
+    id: `${normalizedWorldIr.id}.gameplay`,
+    version: 1,
+    resourceRef:
+      `worldkit://gameplay-bootstrap/${normalizedWorldIr.id}.${normalizedWorldIr.seed}@1`,
+    entityDescriptors,
+    featureResourceLocks: [],
+    semanticActionDefinitions: [],
+    availableCapabilityRefs: uniq(
+      entityDescriptors.flatMap((descriptor) => descriptor.capabilityRefs),
+    ),
+  });
+}
 
 function frozenResourceBudget(
   resourceBudget: AuthoringSpecV3["world"]["resourceBudget"],
@@ -597,6 +640,10 @@ export async function loadAuthoringScene(
     ? compileWorldV5({
         normalizedWorldIr: normalized.value,
         normalizedWorldIrHash: normalized.normalizedWorldIrHash,
+        gameplayBootstrapResourceLock:
+          createGameplayBootstrapResourceLockEntryV1(
+            createDataOnlyGameplayBootstrap(normalized.value),
+          ),
       })
     : compileWorld({
         normalizedWorldIr: normalized.value,
@@ -651,7 +698,7 @@ export async function loadAuthoringScene(
       authoringSpecHash: normalized.value.authoringSpecHash,
       normalizedWorldIrHash: normalized.normalizedWorldIrHash,
       executionPlanHash: compiled.executionPlanHash,
-      resourceLockHash: normalized.value.resources.resourceLockHash,
+      resourceLockHash: compiled.executionPlan.resourceLockHash,
       layoutSolveReportHash: normalized.layoutSolveReportHash,
     } as const;
     for (const field of [

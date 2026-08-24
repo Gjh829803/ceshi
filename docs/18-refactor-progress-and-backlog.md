@@ -705,20 +705,24 @@ Placement S1、Simulation Take / Control Capture V1 与 Validation Capture/Integ
 | ID | 状态 | 当前交付物 | 依赖 / 阻塞关系 | 完成证据 |
 |---|---|---|---|---|
 | G19-0 | 已完成 | Gameplay/R1b 融合设计、责任图和冻结合同 | 无 | Spec 与 Implementation Plan 已进入文档入口 |
-| G19-1 | 已完成并在 `main` | R1b/M5、Browser V5、Camera P1.5 与隔离 Preview | 无 | `main@381255f`，R0/R1/R1b 与 Camera 门禁通过 |
+| G19-1 | 已完成并在 `main` | R1b/M5、Browser V5、Camera P1.5 与隔离 Preview | 无 | 代码基线 `main@381255f`，R0/R1/R1b 与 Camera 门禁通过；后续 `origin/main@4ae1912` 仅改 README，待最终同步 |
 | G19-2 | 已完成并已融合 | 关闭的 Command/Receipt/Event/World State、Feature/Action/Bootstrap data-only 合同 | G19-0 | Gameplay Contracts 聚焦测试通过 |
 | G19-3 | 已完成并已融合 | provider-neutral Gameplay State、WorldSession、RuntimeHost 与事务/容量/生命周期 | G19-2 | 14 files / 468 tests、typecheck、build 通过；仍仅是 in-process staging |
-| G19-4 | **进行中，当前最高优先级** | ExecutionPlanV5 权威关闭校验、`initialControlledEntityId` clean break、Gameplay Bootstrap 的 WorldPackage/Resource Lock 六方成员校验 | G19-1、G19-2、G19-3 | 待 Compiler、WorldPackage、closure replay、Route 回归全部通过 |
-| G19-5 | 待开始 | Babylon Gameplay Port；`possessedBy` 唯一控制权；Camera/Action/Control 原子事务 | G19-4 | 待 Runtime 对抗测试与 30/60/120-like 证据 |
+| G19-4A | 已完成 | `ExecutionPlanV5` 权威关闭/deep-freeze parser、`initialControlledEntityId` clean break、`gameplay-bootstrap` Resource Kind 与 Compiler 全量锁 | G19-1、G19-2、G19-3 | Runtime Contracts/Compiler 聚焦测试与全量门禁通过；Compiler 先拒绝 accessor/symbol key 并 snapshot 不可信输入，再读取语义 |
+| G19-4B | 已完成 | Bootstrap canonical semantic lock、WorldPackage manifest/integrity/build closure 与六方 membership | G19-4A | WorldPackage 聚焦测试与全量门禁通过；语义 hash 与 artifact bytes hash 保持分离 |
+| G19-4C | 已完成 | Validation closure replay 与 RuntimeHost adapter 创建前 admission | G19-4A、G19-4B | Validation 与 RuntimeHost 对抗测试通过；不合法 Plan/Bootstrap 在创建 Adapter 前 fail-close |
+| G19-4D | 已完成 | 所有 Compiler/Babylon/Route/Playground 生产调用方原子迁移到 V5，并从 Normalized IR 生成真实 canonical Bootstrap/Capability set | G19-4A、G19-4B、G19-4C | 全仓 typecheck 通过；17 files / 374 tests 的集成矩阵通过；无生产固定假 hash |
+| G19-4E | **已完成** | 全量门禁、真实回归 disposition、生成物治理 | G19-4D | `pnpm typecheck`、165 files / 2,079 tests、`pnpm build` 与 9 项 verify Gate 全通过；Take 根哈希由 `generate:example-takes` 生成；Route 重型套件在全量并发下通过 |
+| G19-5 | **待开始，当前最高优先级** | Babylon Gameplay Port；`possessedBy` 唯一控制权；Camera/Action/Control 原子事务 | G19-4 | 已解除阻塞；下一步先补 Runtime 对抗测试，再实现 staged transaction 与 30/60/120-like 证据 |
 | G19-6 | 待开始 | Browser Protocol V5 Gameplay 唯一入口、Reset/Rebind、Activity/Capture 接线 | G19-5 | 待 exact-key、重放、重置和多实例测试 |
 | G19-7 | 待开始 | Outdoor/CLI/WorldKit 六场景接线，不增加第二套 Gameplay 真相 | G19-6 | 待真实 Authoring Runtime 与 Browser Gate |
 | G19-8 | 待开始 | 全量验证、主 Agent 深审、文档 disposition、合入 `main` | G19-7 | 全部相关 Gate 通过且无 open confirmed P0/P1 |
 | M8-S1 | 阻塞于 G19-8 | 首个 `mountedOn` 人—滑板关系切片 | G19-8 | Relationship/Action/Event/Receipt/Capture 端到端一致 |
 
-当前已知基线门禁缺陷：`verify:control-capture` 在纯 `main@381255f` 与 Gameplay 集成分支均因
-陈旧 Simulation Take `worldPackageRootHash` 失败；它不计为 Gameplay 回归，但必须在 G19-8 前
-更新生成物或修复生成链路并恢复绿色。完整 `pnpm test` 的两个 Route 重型套件在并发矩阵中超时，
-串行复跑均通过；后续完成门禁须继续区分资源竞争和真实断言失败。
+G19-4E 已关闭此前的两项验证债务：Simulation Take 不再手改 `worldPackageRootHash`，而由
+`generate:example-takes` 从 canonical WorldPackage identity 原子生成；两个 Route 重型套件保留
+原断言，仅把 full-suite 等待预算调整到真实浏览器/Havok 并发耗时。最终 `pnpm test` 在并发模式下
+165 files / 2,079 tests 全通过，`verify:control-capture` 与 R0/R1/R1b 门禁也全部恢复绿色。
 
 M5 R0 字段冻结已由 `pnpm verify:route-r0-contract` 完成；R1 Heightfield 已由
 `pnpm verify:route-r1-heightfield` 与
@@ -752,9 +756,9 @@ S1b Golden、
    基线上完成门禁与最终审查；GCC-3 `cameraViewPreference` clean break 仍未完成；作者面板
    Feel 范围与 session 数字袋类型已在 Preset 语义合同修复中收口，
    M7 不标记完成；
-8. **M8：完成 Canonical World State + Typed Relationship 人—滑板窄可视切片**：G19-2/G19-3
-   已交付 Canonical Gameplay 合同和 provider-neutral RuntimeHost staging；下一步先完成 G19-4
-   WorldPackage membership、G19-5 Babylon transaction 与 G19-6 Browser V5 唯一入口，再按
+8. **M8：完成 Canonical World State + Typed Relationship 人—滑板窄可视切片**：G19-2/G19-4
+   已交付 Canonical Gameplay 合同、provider-neutral RuntimeHost staging 和 WorldPackage membership；
+   下一步先完成 G19-5 Babylon transaction 与 G19-6 Browser V5 唯一入口，再按
    [专项设计](superpowers/specs/2026-08-22-canonical-runtime-state-and-semantic-projection-design.md)
    沿用已冻结的 World/View/Runtime Status/Transition 四类投影，再实现 `mountedOn` 权威关系、
    `supportedBy` 派生事实、Mount/Dismount Action、Receipt/Event 与 Capture 对齐；在这条

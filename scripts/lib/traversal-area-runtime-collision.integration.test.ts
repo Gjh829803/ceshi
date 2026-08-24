@@ -11,6 +11,10 @@ import {
   compileWorldV5,
 } from "@whitebox-world/compiler";
 import {
+  createGameplayBootstrapResourceLockEntryV1,
+  createGameplayBootstrapV1,
+} from "@whitebox-world/gameplay-contracts";
+import {
   BABYLON_TRAVERSAL_RUNTIME_IMPLEMENTATION_IDENTITY_V1,
   BabylonWorldRuntime,
   createBabylonTraversalRuntimePortV1,
@@ -38,6 +42,18 @@ const havokWasmBinary = havokWasmBytes.buffer.slice(
   havokWasmBytes.byteOffset,
   havokWasmBytes.byteOffset + havokWasmBytes.byteLength,
 ) as ArrayBuffer;
+const GAMEPLAY_BOOTSTRAP_RESOURCE_LOCK =
+  createGameplayBootstrapResourceLockEntryV1(createGameplayBootstrapV1({
+    kind: "gameplay-bootstrap",
+    id: "traversal-area-runtime-collision-test.gameplay",
+    version: 1,
+    resourceRef:
+      "worldkit://gameplay-bootstrap/traversal-area-runtime-collision-test@1",
+    entityDescriptors: [],
+    featureResourceLocks: [],
+    semanticActionDefinitions: [],
+    availableCapabilityRefs: [],
+  }));
 
 function traversalAreaAtSpawnWorld(): AuthoringSpecV4 {
   const source = createValidAuthoringSpec();
@@ -148,6 +164,7 @@ describe("Traversal Area Runtime collision separation", () => {
     const compiled = compileWorldV5({
       normalizedWorldIr: normalized.value,
       normalizedWorldIrHash: normalized.normalizedWorldIrHash,
+      gameplayBootstrapResourceLock: GAMEPLAY_BOOTSTRAP_RESOURCE_LOCK,
     });
     if (!compiled.ok || isNil(compiled.executionPlan)) {
       throw new Error(JSON.stringify(compiled.diagnostics));

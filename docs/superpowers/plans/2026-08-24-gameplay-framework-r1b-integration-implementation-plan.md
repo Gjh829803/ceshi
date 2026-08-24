@@ -12,7 +12,8 @@
 
 ## Global Constraints
 
-- 当前实现以 `main@381255f` 为权威基线；R1b/M5、Browser V5 与 Camera P1.5 已全部先行合入。
+- 当前 Gameplay 集成实现以 `main@381255f` 为代码基线；R1b/M5、Browser V5 与 Camera P1.5 已全部先行合入。
+  `origin/main@4ae1912` 仅新增 README package map，尚未同步到集成分支，须在 G19-8 最终门禁前纳入。
 - 原 PR #19 的 provider-neutral 合同与 RuntimeHost 已通过三方语义融合移植到最新 main；不允许
   用旧分支快照覆盖最新 Route、Camera、Browser 或 Runtime authority。
 - Canonical Schema、CLI、Browser、Receipt、Report、Snapshot 不出现 Babylon、Havok、Recast provider 名或 Handle。
@@ -31,9 +32,10 @@
 | --- | --- | --- |
 | G19-0 design and dependency graph | Complete | Design and plan are committed from `db01979`; later review dispositions are incorporated in the authoritative spec. |
 | G19-2 / G19-2A / G19-2B contracts and artifacts | Complete | Closed Gameplay contracts, identity/hash helpers, Feature/Action artifacts, capacity and retention invariants are committed through `1a3d824`. |
-| G19-1 R1b and Camera prerequisites | Complete on main | R1b/M5 is closed and Camera P1.5 is integrated through main `381255f`; Route V2, Browser V5 and the isolated Camera Preview channel are now the authoritative baseline. |
+| G19-1 R1b and Camera prerequisites | Complete on main | R1b/M5 is closed and Camera P1.5 is integrated through main `381255f`; Route V2, Browser V5 and the isolated Camera Preview channel are now the authoritative baseline. The later `origin/main@4ae1912` change is README-only. |
 | G19-3 Gameplay core, WorldSession and RuntimeHost | Complete on latest-main integration branch | The original checkpoint starts at `f71bcb3`; the foundation has been three-way merged onto main `381255f`, its contracts use the repository `isNil` convention, and the focused 14-file / 468-test matrix plus typecheck pass. It remains trusted in-process staging, not a Browser/Babylon production entry. |
-| G19-4 onward | Ready, sequential | The former R1b/Camera blockers are satisfied. Next is the main-agent-owned ExecutionPlanV5/Compiler/WorldPackage membership cutover; Babylon, Browser and Outdoor wiring remain incomplete until G19-5 through G19-7 pass. |
+| G19-4 package/bootstrap cutover | Complete on integration branch | ExecutionPlanV5, `initialControlledEntityId`, Gameplay Bootstrap semantic lock, WorldPackage six-way membership, Validation replay and pre-adapter RuntimeHost admission are atomically connected. All production callers construct real Bootstrap artifacts. Full typecheck, 165 files / 2,079 tests, build and all nine required verification gates pass. |
+| G19-5 onward | G19-5 ready, sequential | Babylon Gameplay transaction is now the active next slice. Browser and Outdoor wiring remain incomplete until G19-6/G19-7 pass. |
 
 ## Live TODO (authoritative)
 
@@ -44,16 +46,33 @@ authoritative execution status; old unchecked steps inside already completed tas
 - [x] **G19-1** — land R1b/M5, Browser V5 and Camera P1.5 on main.
 - [x] **G19-2** — implement closed Gameplay contracts and data-only artifacts.
 - [x] **G19-3** — implement and latest-main-integrate Gameplay State, WorldSession and RuntimeHost.
-- [ ] **G19-4 (in progress, main-agent-only)** — authoritative ExecutionPlanV5 parsing, initial-control clean
-  break, Gameplay Bootstrap WorldPackage/Resource Lock membership and closure replay.
-- [ ] **G19-5 (blocked by G19-4)** — Babylon transactional port, possession/action projection and Camera
+- [x] **G19-4 (complete, main-agent-only)** — atomic ExecutionPlan/Bootstrap package cutover.
+  - [x] **G19-4A** — implement closed/deep-frozen `ExecutionPlanV5`, clean-break
+    `initialControlledEntityId`, `gameplay-bootstrap` Resource Kind and Compiler full-lock construction;
+    focused Runtime Contracts/Compiler tests pass.
+  - [x] **G19-4B** — implement canonical Gameplay Bootstrap semantic lock plus WorldPackage manifest,
+    integrity, build-closure and six-way membership verification; focused WorldPackage tests pass.
+  - [x] **G19-4C** — connect Validation replay and RuntimeHost pre-adapter admission to the authoritative
+    Plan parser and Bootstrap membership check; focused Validation and RuntimeHost adversarial tests plus
+    the integrated full suite pass.
+  - [x] **G19-4D** — migrate every production/compiler/Babylon/Route/Playground caller atomically
+    from V4 assumptions to V5 and construct real canonical Bootstrap artifacts. Fixed placeholder hashes
+    are forbidden; production composition roots derive Subject descriptors and the deduplicated capability
+    set from the Normalized IR. Full typecheck and the 17-file / 374-test integration matrix pass.
+  - [x] **G19-4E** — full typecheck, 165 files / 2,079 tests, build and all nine required Route,
+    Canonical, Placement, Rigged Subject, G Bot and Capture gates pass. The stale example Take root is
+    now maintained by `generate:example-takes`; Compiler V5 snapshots untrusted accessor-free input before
+    semantic reads; Route-heavy integration tests retain their assertions with realistic full-suite budgets.
+- [ ] **G19-5 (active, unblocked)** — Babylon transactional port, possession/action projection and Camera
   atomicity.
 - [ ] **G19-6 (blocked by G19-5)** — Browser Protocol V5 Gameplay entry, reset/rebind and activity/capture.
 - [ ] **G19-7 (blocked by G19-6)** — Outdoor/CLI/WorldKit production-path wiring.
 - [ ] **G19-8 (blocked by G19-7)** — full gates, host completion review, disposition, merge and push main.
 
-Baseline note: `verify:control-capture` currently reports the same stale Simulation Take WorldPackage hash
-on clean `main@381255f` and this integration. It remains a required G19-8 cleanup, not a G19-3 regression.
+Closed baseline note: the stale Simulation Take WorldPackage root is no longer hand-maintained. The
+`generate:example-takes` command projects both example Takes from the current canonical WorldPackage
+identity, and `verify:control-capture` passes with root
+`sha256:28f3d9b5aed02250909e5a2e2af8a7d1c13b9127038ab8163a1475da0e9ee073`.
 
 ---
 

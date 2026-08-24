@@ -12,6 +12,10 @@ import {
   compileResolvedTraversalLockV1,
   compileWorldV5,
 } from "@whitebox-world/compiler";
+import {
+  createGameplayBootstrapResourceLockEntryV1,
+  createGameplayBootstrapV1,
+} from "@whitebox-world/gameplay-contracts";
 import type { ExecutionPlanV5 } from "@whitebox-world/runtime-contracts";
 import type {
   ResolvedTraversalLockReceiptV1,
@@ -36,6 +40,18 @@ const havokWasmBinary = havokWasmBytes.buffer.slice(
   havokWasmBytes.byteOffset,
   havokWasmBytes.byteOffset + havokWasmBytes.byteLength,
 ) as ArrayBuffer;
+const GAMEPLAY_BOOTSTRAP_RESOURCE_LOCK =
+  createGameplayBootstrapResourceLockEntryV1(createGameplayBootstrapV1({
+    kind: "gameplay-bootstrap",
+    id: "traversal-runtime-support-conformance-test.gameplay",
+    version: 1,
+    resourceRef:
+      "worldkit://gameplay-bootstrap/traversal-runtime-support-conformance-test@1",
+    entityDescriptors: [],
+    featureResourceLocks: [],
+    semanticActionDefinitions: [],
+    availableCapabilityRefs: [],
+  }));
 
 function routeWorld(
   source = createValidAuthoringSpec(),
@@ -116,6 +132,7 @@ function compileFixture(world = routeWorld()): {
   const compiled = compileWorldV5({
     normalizedWorldIr: normalized.value,
     normalizedWorldIrHash: normalized.normalizedWorldIrHash,
+    gameplayBootstrapResourceLock: GAMEPLAY_BOOTSTRAP_RESOURCE_LOCK,
   });
   if (!compiled.ok || compiled.executionPlan === undefined) {
     throw new Error("Route fixture compilation failed.");

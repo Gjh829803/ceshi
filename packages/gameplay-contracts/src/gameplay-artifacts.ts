@@ -82,6 +82,18 @@ export interface GameplayBootstrapV1 {
 
 export type GameplayBootstrapBodyV1 = Omit<GameplayBootstrapV1, "contentHash">;
 
+/**
+ * Semantic lock for one canonical Gameplay Bootstrap declaration.
+ * `contentHash` is the Bootstrap body hash, not the serialized artifact bytes
+ * hash used by WorldPackage file-integrity records.
+ */
+export interface GameplayBootstrapResourceLockEntryV1 {
+  readonly resourceRef: string;
+  readonly resourceKind: "gameplay-bootstrap";
+  readonly resolvedVersion: string;
+  readonly contentHash: Sha256HashV1;
+}
+
 type ParseMode = "canonicalize" | "strict";
 
 const SHA256_PATTERN = /^sha256:[a-f0-9]{64}$/;
@@ -677,6 +689,18 @@ export function parseGameplayBootstrapV1(input: unknown): GameplayBootstrapV1 {
   const expectedHash = sha256CanonicalJson(body) as Sha256HashV1;
   if (contentHash !== expectedHash) invalid(schemaName);
   return deepFreeze({ ...body, contentHash: expectedHash });
+}
+
+export function createGameplayBootstrapResourceLockEntryV1(
+  input: unknown,
+): GameplayBootstrapResourceLockEntryV1 {
+  const bootstrap = parseGameplayBootstrapV1(input);
+  return deepFreeze({
+    resourceRef: bootstrap.resourceRef,
+    resourceKind: "gameplay-bootstrap",
+    resolvedVersion: String(bootstrap.version),
+    contentHash: bootstrap.contentHash,
+  });
 }
 
 export function canonicalizeGameplayBootstrapV1(input: unknown): string {

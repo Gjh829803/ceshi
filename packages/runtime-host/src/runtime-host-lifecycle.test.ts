@@ -1,6 +1,8 @@
 import {
+  createGameplayBootstrapResourceLockEntryV1,
   createGameplayBootstrapV1,
   DEFAULT_GAMEPLAY_CAPACITY_BUDGET_V1,
+  gameplayBootstrapCanonicalBytesV1,
   type ControllerEntityStateV1,
   type GameplayParticipantStateV1,
   type SpatialEntityStateV1,
@@ -12,12 +14,15 @@ import {
 } from "@whitebox-world/gameplay";
 import {
   canonicalJsonBytes,
+  sha256Bytes,
   sha256CanonicalJson,
 } from "@whitebox-world/protocol";
 import type { ExecutionPlanV5 } from "@whitebox-world/runtime-contracts";
 import {
   canonicalWorldPackageFileIntegrityEntriesV1,
   canonicalWorldPackageManifestV1,
+  GAMEPLAY_BOOTSTRAP_MEDIA_TYPE_V1,
+  GAMEPLAY_BOOTSTRAP_PACKAGE_PATH_V1,
   hashWorldPackageManifestV1,
   hashWorldPackageRootV1,
   type WorldPackageBuildReceiptV1,
@@ -41,7 +46,6 @@ const HASH_A = `sha256:${"a".repeat(64)}` as const;
 const HASH_B = `sha256:${"b".repeat(64)}` as const;
 const HASH_C = `sha256:${"c".repeat(64)}` as const;
 const HASH_D = `sha256:${"d".repeat(64)}` as const;
-const EMPTY_RESOURCE_LOCK_HASH = sha256CanonicalJson([]) as WorldPackageSha256HashV1;
 const RUNTIME_SESSION_ID = "runtime.lifecycle";
 const INITIAL_WORLD_PACKAGE_REF = "worldkit://world-package/initial@1";
 const REPLACEMENT_WORLD_PACKAGE_REF = "worldkit://world-package/replacement@1";
@@ -123,6 +127,12 @@ const gameplayBootstrap = createGameplayBootstrapV1({
   semanticActionDefinitions: [],
   availableCapabilityRefs: [CONTROL_TRANSITION_CAPABILITY_REF],
 });
+const gameplayBootstrapResourceLock =
+  createGameplayBootstrapResourceLockEntryV1(gameplayBootstrap);
+const gameplayResourceLock = Object.freeze([gameplayBootstrapResourceLock]);
+const gameplayResourceLockHash = sha256CanonicalJson(
+  gameplayResourceLock,
+) as WorldPackageSha256HashV1;
 
 const gameplayMode = Object.freeze({
   gameplayModeRef: "worldkit://gameplay-mode/exploration@1",
@@ -204,8 +214,8 @@ function createExecutionPlan(worldPackageRef: string): ExecutionPlanV5 {
     runtimeBackend: "babylon-havok",
     authoringSpecHash: HASH_A,
     normalizedWorldIrHash: HASH_B,
-    resourceLockHash: EMPTY_RESOURCE_LOCK_HASH,
-    resourceLockEntries: [],
+    resourceLockHash: gameplayResourceLockHash,
+    resourceLockEntries: gameplayResourceLock,
     coordinateSystem: "right-handed-y-up-minus-z-forward",
     gravityMetersPerSecondSquaredXYZ: [0, -9.81, 0],
     atmospherePreset: "clear-day",
@@ -226,7 +236,7 @@ function createExecutionPlan(worldPackageRef: string): ExecutionPlanV5 {
     rigProfiles: [],
     animationSets: [],
     colliderProfiles: [],
-    controlledEntityId: heroState.id,
+    initialControlledEntityId: heroState.id,
     subjects: [{
       entityId: heroState.id,
       subjectDefinitionRef: heroState.entityDefinitionRef,
@@ -341,11 +351,19 @@ function createBuildReceipt(
     executionPlanHash,
     resourceLockHash: executionPlan.resourceLockHash,
     layoutSolveReportHash: executionPlan.layout.layoutSolveReportHash,
-    controlledEntityId: executionPlan.controlledEntityId,
+    initialControlledEntityId: executionPlan.initialControlledEntityId,
     entryPoint: {
       executionPlanPath: "targets/babylon-web/execution-plan.json",
     },
-    resources: [],
+    resources: [{
+      resourceRef: gameplayBootstrap.resourceRef,
+      packagePath: GAMEPLAY_BOOTSTRAP_PACKAGE_PATH_V1,
+      mediaType: GAMEPLAY_BOOTSTRAP_MEDIA_TYPE_V1,
+      sizeBytes: gameplayBootstrapCanonicalBytesV1(gameplayBootstrap).byteLength,
+      contentHash: sha256Bytes(
+        gameplayBootstrapCanonicalBytesV1(gameplayBootstrap),
+      ) as WorldPackageSha256HashV1,
+    }],
   });
   const manifestHash = hashWorldPackageManifestV1(manifest);
   const fileIntegrityEntries = canonicalWorldPackageFileIntegrityEntriesV1([
@@ -370,6 +388,14 @@ function createBuildReceipt(
       executionPlan,
       executionPlanHash,
     ),
+    {
+      path: GAMEPLAY_BOOTSTRAP_PACKAGE_PATH_V1,
+      mediaType: GAMEPLAY_BOOTSTRAP_MEDIA_TYPE_V1,
+      sizeBytes: gameplayBootstrapCanonicalBytesV1(gameplayBootstrap).byteLength,
+      sha256: sha256Bytes(
+        gameplayBootstrapCanonicalBytesV1(gameplayBootstrap),
+      ) as WorldPackageSha256HashV1,
+    },
   ]);
   return Object.freeze({
     kind: "worldkit-world-package-build-receipt",
@@ -512,6 +538,77 @@ describe("RuntimeHost lifecycle isolation and admission", () => {
     expect(adapter.factory.preflightConcurrentResidency).not.toHaveBeenCalled();
     expect(adapter.factory.create).not.toHaveBeenCalled();
     expect(port.calls).toEqual([]);
+  });
+
+  it("rejects a consistently rehashed nested ExecutionPlan dialect before adapter creation", async () => {
+    const port = createPortHarness();
+    const adapter = createAdapterFactoryHarness([port]);
+    const baseline = mutableWorldConfiguration(INITIAL_WORLD_PACKAGE_REF);
+    const executionPlan = {
+      ...baseline.executionPlan,
+      terrain: {
+        ...baseline.executionPlan.terrain,
+        providerName: "private-heightfield-provider",
+      },
+    } as unknown as ExecutionPlanV5;
+    const executionPlanHash = sha256CanonicalJson(
+      executionPlan,
+    ) as WorldPackageSha256HashV1;
+    const initialWorld = {
+      ...baseline,
+      executionPlan,
+      executionPlanHash,
+      worldPackageBuildReceipt: createBuildReceipt(
+        executionPlan,
+        executionPlanHash,
+      ),
+    };
+
+    await expect(runtimeHostConstructor().create(hostOptions(
+      adapter.factory,
+      ["world-session.invalid-plan"],
+      { initialWorld },
+    ))).rejects.toThrow(/RuntimeWorldConfigurationV1/);
+    expect(adapter.factory.preflightConcurrentResidency).not.toHaveBeenCalled();
+    expect(adapter.factory.create).not.toHaveBeenCalled();
+    expect(port.calls).toEqual([]);
+  });
+
+  it("applies the same closed Plan admission before replacement preflight", async () => {
+    const current = createPortHarness();
+    const candidate = createPortHarness();
+    const { adapter, host } = await createHost(
+      [current, candidate],
+      ["world-session.initial", "world-session.candidate"],
+    );
+    const baseline = mutableWorldConfiguration(REPLACEMENT_WORLD_PACKAGE_REF);
+    const executionPlan = {
+      ...baseline.executionPlan,
+      traversal: {
+        ...baseline.executionPlan.traversal,
+        providerHandle: 7,
+      },
+    } as unknown as ExecutionPlanV5;
+    const executionPlanHash = sha256CanonicalJson(
+      executionPlan,
+    ) as WorldPackageSha256HashV1;
+
+    expect(() => host.replaceWorld({
+      worldConfiguration: {
+        ...baseline,
+        executionPlan,
+        executionPlanHash,
+        worldPackageBuildReceipt: createBuildReceipt(
+          executionPlan,
+          executionPlanHash,
+        ),
+      },
+    })).toThrow(/RuntimeWorldConfigurationV1/);
+    expect(adapter.factory.preflightConcurrentResidency).not.toHaveBeenCalled();
+    expect(adapter.factory.create).toHaveBeenCalledTimes(1);
+    expect(host.snapshot().worldState.worldSessionId).toBe(
+      "world-session.initial",
+    );
   });
 
   it("sanitizes a throwing initial WorldSession ID factory with a closed diagnostic", async () => {

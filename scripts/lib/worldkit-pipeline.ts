@@ -13,11 +13,17 @@ import {
   type NormalizedWorldIRV4,
 } from "@whitebox-world/authoring";
 import { compileWorld, compileWorldV5 } from "@whitebox-world/compiler";
+import {
+  createGameplayBootstrapResourceLockEntryV1,
+  createGameplayBootstrapV1,
+  type GameplayBootstrapV1,
+} from "@whitebox-world/gameplay-contracts";
 import type {
   CompileDiagnostic,
   ExecutionPlanV4,
   ExecutionPlanV5,
 } from "@whitebox-world/runtime-contracts";
+import { isNil, uniq } from "lodash-es";
 
 export interface CliDiagnostic {
   severity: "info" | "warning" | "error";
@@ -59,8 +65,45 @@ export interface WorldkitRoutePipelineSuccess {
   normalizedWorldIrHash: string;
   layoutSolveReport: NonNullable<NormalizeAuthoringResultV4["layoutSolveReport"]>;
   layoutSolveReportHash: `sha256:${string}`;
+  gameplayBootstrap: GameplayBootstrapV1;
   executionPlan: ExecutionPlanV5;
   executionPlanHash: string;
+}
+
+function createDataOnlyGameplayBootstrap(
+  normalizedWorldIr: NormalizedWorldIRV4,
+): GameplayBootstrapV1 {
+  const entityDescriptors = normalizedWorldIr.nodes
+    .filter((node) => node.kind === "subject")
+    .map((node) => {
+      const definition = normalizedWorldIr.resources.subjectDefinitions.find(
+        (candidate) =>
+          candidate.subjectDefinitionRef === node.subjectDefinitionRef,
+      );
+      if (isNil(definition)) {
+        throw new Error(
+          `WORLDKIT_PIPELINE_GAMEPLAY_SUBJECT_DEFINITION_MISSING: ${node.subjectDefinitionRef}`,
+        );
+      }
+      return {
+        id: node.id,
+        entityDefinitionRef: node.subjectDefinitionRef,
+        capabilityRefs: definition.capabilityRefs,
+      };
+    });
+  return createGameplayBootstrapV1({
+    kind: "gameplay-bootstrap",
+    id: `${normalizedWorldIr.id}.gameplay`,
+    version: 1,
+    resourceRef:
+      `worldkit://gameplay-bootstrap/${normalizedWorldIr.id}.${normalizedWorldIr.seed}@1`,
+    entityDescriptors,
+    featureResourceLocks: [],
+    semanticActionDefinitions: [],
+    availableCapabilityRefs: uniq(
+      entityDescriptors.flatMap((descriptor) => descriptor.capabilityRefs),
+    ),
+  });
 }
 
 export function cliFailure(
@@ -163,9 +206,12 @@ export async function loadWorldkitRoutePipeline(
     normalized.layoutSolveReportHash === undefined) {
     return { ok: false, exitCode: 2, diagnostics: normalized.diagnostics };
   }
+  const gameplayBootstrap = createDataOnlyGameplayBootstrap(normalized.value);
   const compiled = compileWorldV5({
     normalizedWorldIr: normalized.value,
     normalizedWorldIrHash: normalized.normalizedWorldIrHash,
+    gameplayBootstrapResourceLock:
+      createGameplayBootstrapResourceLockEntryV1(gameplayBootstrap),
   });
   if (!compiled.ok || compiled.executionPlan === undefined ||
     compiled.executionPlanHash === undefined) {
@@ -181,6 +227,7 @@ export async function loadWorldkitRoutePipeline(
     normalizedWorldIrHash: normalized.normalizedWorldIrHash,
     layoutSolveReport: normalized.layoutSolveReport,
     layoutSolveReportHash: normalized.layoutSolveReportHash,
+    gameplayBootstrap,
     executionPlan: compiled.executionPlan,
     executionPlanHash: compiled.executionPlanHash,
   };

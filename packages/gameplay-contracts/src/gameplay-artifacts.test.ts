@@ -10,6 +10,7 @@ import {
   canonicalizeGameplayBootstrapV1,
   canonicalizeGameplayFeatureManifestV1,
   createGameplayActionDefinitionV1,
+  createGameplayBootstrapResourceLockEntryV1,
   createGameplayBootstrapV1,
   createGameplayEntityDescriptorV1,
   createGameplayFeatureManifestV1,
@@ -289,6 +290,54 @@ describe("GameplayBootstrapV1", () => {
       .toBe(canonicalizeGameplayBootstrapV1(first));
     expect(Object.isFrozen(first.semanticActionDefinitions)).toBe(true);
     expect(Object.isFrozen(first.semanticActionDefinitions[0])).toBe(true);
+  });
+
+  it("derives one canonical semantic Resource Lock entry from a parsed Bootstrap", () => {
+    const body = bootstrapBody();
+    const first = createGameplayBootstrapResourceLockEntryV1(
+      createGameplayBootstrapV1(body),
+    );
+    const second = createGameplayBootstrapResourceLockEntryV1(
+      createGameplayBootstrapV1({
+        ...body,
+        entityDescriptors: [...body.entityDescriptors].reverse(),
+        featureResourceLocks: [...body.featureResourceLocks].reverse(),
+        semanticActionDefinitions: [...body.semanticActionDefinitions].reverse(),
+        availableCapabilityRefs: [...body.availableCapabilityRefs].reverse(),
+      }),
+    );
+
+    expect(first).toEqual(second);
+    expect(Object.keys(first)).toEqual([
+      "resourceRef",
+      "resourceKind",
+      "resolvedVersion",
+      "contentHash",
+    ]);
+    expect(first).toEqual({
+      resourceRef: "worldkit://gameplay-bootstrap/world-a@1",
+      resourceKind: "gameplay-bootstrap",
+      resolvedVersion: "1",
+      contentHash: createGameplayBootstrapV1(body).contentHash,
+    });
+    expect(Object.isFrozen(first)).toBe(true);
+  });
+
+  it("rejects an invalid Bootstrap instead of deriving a partial Resource Lock", () => {
+    const bootstrap = createGameplayBootstrapV1(bootstrapBody());
+
+    expect(() => createGameplayBootstrapResourceLockEntryV1({
+      ...bootstrap,
+      contentHash: HASH_A,
+    })).toThrow(/GameplayBootstrapV1/);
+    expect(() => createGameplayBootstrapResourceLockEntryV1({
+      ...bootstrap,
+      version: 0,
+    })).toThrow(/GameplayBootstrapV1/);
+    expect(() => createGameplayBootstrapResourceLockEntryV1({
+      ...bootstrap,
+      unknownField: true,
+    })).toThrow(/GameplayBootstrapV1/);
   });
 
   it.each([

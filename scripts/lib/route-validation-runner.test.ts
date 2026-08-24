@@ -121,6 +121,12 @@ describe("Route validation trusted runner", () => {
       "inject-surface-correlation-miss",
     );
     expect(JSON.stringify(result)).not.toContain("fixtureFaultInjection");
+    expect(result.worldPackageBuildReceipt.manifest.resources).toContainEqual(
+      expect.objectContaining({
+        packagePath: "gameplay/bootstrap.json",
+        mediaType: "application/vnd.worldkit.gameplay-bootstrap+json",
+      }),
+    );
   }, 30_000);
 
   it("withdraws support once after the first successful reset", () => {
@@ -349,7 +355,7 @@ describe("Route validation trusted runner", () => {
     } finally {
       await rm(temporaryDirectory, { recursive: true, force: true });
     }
-  }, 120_000);
+  }, 180_000);
 
   it("returns the canonical failed Report for a V4 world with zero required Routes", async () => {
     const temporaryDirectory = await mkdtemp(

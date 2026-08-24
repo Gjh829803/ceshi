@@ -34,6 +34,9 @@ importers:
       '@whitebox-world/control-capture':
         specifier: workspace:*
         version: link:packages/control-capture
+      '@whitebox-world/gameplay-contracts':
+        specifier: workspace:*
+        version: link:packages/gameplay-contracts
       '@whitebox-world/protocol':
         specifier: workspace:*
         version: link:packages/protocol
@@ -119,6 +122,9 @@ importers:
       '@whitebox-world/core':
         specifier: workspace:*
         version: link:../../packages/core
+      '@whitebox-world/gameplay-contracts':
+        specifier: workspace:*
+        version: link:../../packages/gameplay-contracts
       '@whitebox-world/physics':
         specifier: workspace:*
         version: link:../../packages/physics
@@ -245,6 +251,10 @@ importers:
       lodash-es:
         specifier: ^4.18.1
         version: 4.18.1
+    devDependencies:
+      '@whitebox-world/gameplay-contracts':
+        specifier: workspace:*
+        version: link:../gameplay-contracts
 
   packages/contracts: {}
 
@@ -356,12 +366,18 @@ importers:
       '@whitebox-world/compiler':
         specifier: workspace:*
         version: link:../compiler
+      '@whitebox-world/gameplay-contracts':
+        specifier: workspace:*
+        version: link:../gameplay-contracts
 
   packages/runtime-contracts:
     dependencies:
       '@whitebox-world/control-capture':
         specifier: workspace:*
         version: link:../control-capture
+      '@whitebox-world/protocol':
+        specifier: workspace:*
+        version: link:../protocol
       '@whitebox-world/traversal':
         specifier: workspace:*
         version: link:../traversal
@@ -487,6 +503,9 @@ importers:
       '@whitebox-world/compiler':
         specifier: workspace:*
         version: link:../compiler
+      '@whitebox-world/gameplay-contracts':
+        specifier: workspace:*
+        version: link:../gameplay-contracts
       '@whitebox-world/layout-solver':
         specifier: workspace:*
         version: link:../layout-solver
@@ -532,6 +551,9 @@ importers:
       '@whitebox-world/compiler':
         specifier: workspace:*
         version: link:../compiler
+      '@whitebox-world/gameplay-contracts':
+        specifier: workspace:*
+        version: link:../gameplay-contracts
       '@whitebox-world/layout-solver':
         specifier: workspace:*
         version: link:../layout-solver

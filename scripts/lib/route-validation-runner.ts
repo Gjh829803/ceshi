@@ -456,6 +456,7 @@ export async function runTrustedRouteValidationV1(
     normalizedWorldIr: pipeline.normalizedWorldIr,
     layoutSolveResult,
     executionPlan: pipeline.executionPlan,
+    gameplayBootstrap: pipeline.gameplayBootstrap,
     resourceArtifacts,
   });
   const subject = createWorldPackageValidationSubjectV1({
@@ -464,6 +465,7 @@ export async function runTrustedRouteValidationV1(
     normalizedWorldIr: pipeline.normalizedWorldIr,
     layoutSolveResult,
     executionPlan: pipeline.executionPlan,
+    gameplayBootstrap: pipeline.gameplayBootstrap,
   });
   const runtimeAssetResolver = createWorldPackageSubjectAssetResolverV1(
     resourceArtifacts,

@@ -113,6 +113,17 @@ type RuntimeExecutionPlanV1 = ExecutionPlanV4 | ExecutionPlanV5;
 
 type OwnedDisposer = () => void | Promise<void>;
 
+function initialRuntimeControlledEntityId(
+  executionPlan: RuntimeExecutionPlanV1,
+): string {
+  if (executionPlan.schemaVersion === 5) {
+    // G19-4 bridge only: this seeds the legacy runtime until G19-5 Possession
+    // owns committed control. It is not a second public control truth.
+    return executionPlan.initialControlledEntityId;
+  }
+  return executionPlan.controlledEntityId;
+}
+
 const WATER_SURFACE_CLASSIFICATION_EPSILON_METERS = 0.1;
 const LEGACY_CAMERA_RELATIVE_CONTROL_PROFILE = {
   resourceRef: "worldkit://control-profile/legacy.camera-relative@1",
@@ -621,7 +632,7 @@ export class BabylonWorldRuntime implements WorldRuntimeSessionV3 {
     autoStartRenderLoop: boolean,
     creationExecutionPlanHash: `sha256:${string}` | undefined,
   ) {
-    this.controlledEntityId = executionPlan.controlledEntityId;
+    this.controlledEntityId = initialRuntimeControlledEntityId(executionPlan);
     this.subjectControllersByEntityId = subjectControllersByEntityId;
     this.subjectVisuals = subjectVisuals;
     this.subjectVisualsByEntityId = new Map(
@@ -660,9 +671,12 @@ export class BabylonWorldRuntime implements WorldRuntimeSessionV3 {
       }
       subjectEntityIds.add(subject.entityId);
     }
-    if (!subjectEntityIds.has(options.executionPlan.controlledEntityId)) {
+    const initialControlledEntityId = initialRuntimeControlledEntityId(
+      options.executionPlan,
+    );
+    if (!subjectEntityIds.has(initialControlledEntityId)) {
       throw new Error(
-        `WORLDKIT_RUNTIME_CONTROL_TARGET_NOT_FOUND: ${options.executionPlan.controlledEntityId}`,
+        `WORLDKIT_RUNTIME_CONTROL_TARGET_NOT_FOUND: ${initialControlledEntityId}`,
       );
     }
     const creationExecutionPlanHash = options.executionPlan.schemaVersion === 5
@@ -1114,7 +1128,9 @@ export class BabylonWorldRuntime implements WorldRuntimeSessionV3 {
     this.traversalConfigurationEpoch += 1;
     for (const controller of this.subjectControllersByEntityId.values()) controller.reset();
     for (const visual of this.subjectVisuals) visual.resetAnimation();
-    this.controlledEntityId = this.executionPlan.controlledEntityId;
+    this.controlledEntityId = initialRuntimeControlledEntityId(
+      this.executionPlan,
+    );
     this.tick = 0;
     this.activeInputActions = [];
     this.activeInputAxes = {};

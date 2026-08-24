@@ -9,8 +9,14 @@ import {
 import {
   normalizeAuthoringSpecV4,
   type AuthoringSpecV4,
+  type NormalizedWorldIRV4,
 } from "@whitebox-world/authoring";
 import { compileWorldV5 } from "@whitebox-world/compiler";
+import {
+  createGameplayBootstrapResourceLockEntryV1,
+  createGameplayBootstrapV1,
+} from "@whitebox-world/gameplay-contracts";
+import { isNil, uniq } from "lodash-es";
 import {
   canonicalWorldkitBrowserRouteEvidencePublicationV2,
   WORLDKIT_BROWSER_PROTOCOL_VERSION,
@@ -35,6 +41,48 @@ function deepFreeze<T>(value: T): Readonly<T> {
 }
 
 const ROUTE_EVIDENCE_HASH = `sha256:${"9".repeat(64)}` as const;
+
+function dataOnlyGameplayBootstrap(
+  normalizedWorldIr: NormalizedWorldIRV4,
+) {
+  const entityDescriptors = normalizedWorldIr.nodes
+    .filter((node) => node.kind === "subject")
+    .map((node) => {
+      const definition = normalizedWorldIr.resources.subjectDefinitions.find(
+        (candidate) =>
+          candidate.subjectDefinitionRef === node.subjectDefinitionRef,
+      );
+      if (isNil(definition)) {
+        throw new Error(`Missing Subject Definition '${node.subjectDefinitionRef}'.`);
+      }
+      return {
+        id: node.id,
+        entityDefinitionRef: node.subjectDefinitionRef,
+        capabilityRefs: definition.capabilityRefs,
+      };
+    });
+  return createGameplayBootstrapV1({
+    kind: "gameplay-bootstrap",
+    id: `${normalizedWorldIr.id}.gameplay`,
+    version: 1,
+    resourceRef:
+      `worldkit://gameplay-bootstrap/${normalizedWorldIr.id}.${normalizedWorldIr.seed}@1`,
+    entityDescriptors,
+    featureResourceLocks: [],
+    semanticActionDefinitions: [],
+    availableCapabilityRefs: uniq(
+      entityDescriptors.flatMap((descriptor) => descriptor.capabilityRefs),
+    ),
+  });
+}
+
+function gameplayBootstrapResourceLock(
+  normalizedWorldIr: NormalizedWorldIRV4,
+) {
+  return createGameplayBootstrapResourceLockEntryV1(
+    dataOnlyGameplayBootstrap(normalizedWorldIr),
+  );
+}
 
 function routeAuthoringWorld(): AuthoringSpecV4 {
   const source = createValidAuthoringSpec();
@@ -95,6 +143,8 @@ function matchingRouteEvidencePublication(
   const compiled = compileWorldV5({
     normalizedWorldIr: normalized.value,
     normalizedWorldIrHash: normalized.normalizedWorldIrHash,
+    gameplayBootstrapResourceLock:
+      gameplayBootstrapResourceLock(normalized.value),
   });
   if (
     !compiled.ok ||
@@ -110,7 +160,7 @@ function matchingRouteEvidencePublication(
     authoringSpecHash: normalized.value.authoringSpecHash,
     normalizedWorldIrHash: normalized.normalizedWorldIrHash,
     executionPlanHash: compiled.executionPlanHash,
-    resourceLockHash: normalized.value.resources.resourceLockHash,
+    resourceLockHash: compiled.executionPlan.resourceLockHash,
     layoutSolveReportHash: normalized.layoutSolveReportHash,
     validationReportHash: ROUTE_EVIDENCE_HASH,
     routeValidationSetReceiptHash: ROUTE_EVIDENCE_HASH,
@@ -292,6 +342,11 @@ describe("loadAuthoringScene", () => {
 
   it("runs strict Authoring V4 JSON through NormalizedWorldIR V4 and ExecutionPlan V5", async () => {
     const source = routeAuthoringWorld();
+    const normalized = normalizeAuthoringSpecV4(source);
+    if (!normalized.ok || isNil(normalized.value)) {
+      throw new Error("Route Authoring fixture did not normalize.");
+    }
+    const gameplayBootstrap = dataOnlyGameplayBootstrap(normalized.value);
     const loaded = await loadAuthoringScene(
       async () => jsonResponse(source),
     );
@@ -310,6 +365,17 @@ describe("loadAuthoringScene", () => {
         },
       },
     });
+    expect(gameplayBootstrap.availableCapabilityRefs).toEqual(uniq(
+      gameplayBootstrap.entityDescriptors.flatMap(
+        (descriptor) => descriptor.capabilityRefs,
+      ),
+    ));
+    if (loaded.executionPlan?.schemaVersion !== 5) {
+      throw new Error("Expected an ExecutionPlanV5.");
+    }
+    expect(loaded.executionPlan.resourceLockEntries).toContainEqual(
+      createGameplayBootstrapResourceLockEntryV1(gameplayBootstrap),
+    );
     expect(loaded.routeEvidencePublication).toBeUndefined();
   });
 

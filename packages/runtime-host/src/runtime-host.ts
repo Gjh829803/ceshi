@@ -19,11 +19,15 @@ import type {
   GameplayFeatureFactoryV1,
   GameplayModeV1,
 } from "@whitebox-world/gameplay";
-import { sha256CanonicalJson } from "@whitebox-world/protocol";
-import type { ExecutionPlanV5 } from "@whitebox-world/runtime-contracts";
+import {
+  hashExecutionPlanV5,
+  parseExecutionPlanV5,
+  type ExecutionPlanV5,
+} from "@whitebox-world/runtime-contracts";
 import {
   assertWorldPackageAccessorFreeDataGraphV1,
   assertWorldPackageBuildReceiptV1,
+  assertWorldPackageGameplayBootstrapMembershipV1,
   type WorldPackageBuildReceiptV1,
 } from "@whitebox-world/world-package";
 import { isNil } from "lodash-es";
@@ -564,26 +568,23 @@ function parseRuntimeWorldConfiguration(
       "Value must match the closed RuntimeWorldConfigurationV1 schema.",
     );
   }
-  const executionPlan = cloneCanonicalData(
-    record.executionPlan,
-    "ExecutionPlanV5",
-  ) as ExecutionPlanV5;
-  if (
-    executionPlan.kind !== "worldkit-execution-plan" ||
-    executionPlan.schemaVersion !== 5 ||
-    sha256CanonicalJson(executionPlan) !== record.executionPlanHash
-  ) {
-    throw new RangeError(
-      "Value must match the closed RuntimeWorldConfigurationV1 schema.",
-    );
-  }
+  let executionPlan: ExecutionPlanV5;
   let worldPackageBuildReceipt: WorldPackageBuildReceiptV1;
   let gameplayBootstrap: GameplayBootstrapV1;
   try {
+    executionPlan = parseExecutionPlanV5(record.executionPlan);
+    if (hashExecutionPlanV5(executionPlan) !== record.executionPlanHash) {
+      throw new RangeError("ExecutionPlanV5 hash mismatch.");
+    }
     worldPackageBuildReceipt = assertWorldPackageBuildReceiptV1(
       record.worldPackageBuildReceipt,
     );
     gameplayBootstrap = parseGameplayBootstrapV1(record.gameplayBootstrap);
+    assertWorldPackageGameplayBootstrapMembershipV1({
+      executionPlan,
+      gameplayBootstrap,
+      worldPackageBuildReceipt,
+    });
   } catch {
     throw new RangeError(
       "Value must match the closed RuntimeWorldConfigurationV1 schema.",

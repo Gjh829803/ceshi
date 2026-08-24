@@ -589,15 +589,28 @@ function createColliderSupportExecutionPlan(options: {
 
 function createV5StaticColliderSupportExecutionPlan(): ExecutionPlanV5 {
   const v4 = createFlatPackageExecutionPlan();
-  const resourceLockEntries = [{
-    resourceRef: "worldkit://subject-definition/runtime-test@1",
-    resourceKind: "subject-definition" as const,
-    resolvedVersion: "1",
-    contentHash: `sha256:${"d".repeat(64)}` as const,
-  }];
+  const {
+    controlledEntityId: initialControlledEntityId,
+    ...v4WithoutControlledEntityId
+  } = v4;
+  const resourceLockEntries = [
+    {
+      resourceRef: "package://gameplay/bootstrap@1",
+      resourceKind: "gameplay-bootstrap" as const,
+      resolvedVersion: "1",
+      contentHash: `sha256:${"e".repeat(64)}` as const,
+    },
+    {
+      resourceRef: "worldkit://subject-definition/runtime-test@1",
+      resourceKind: "subject-definition" as const,
+      resolvedVersion: "1",
+      contentHash: `sha256:${"d".repeat(64)}` as const,
+    },
+  ];
   const base: ExecutionPlanV5 = {
-    ...v4,
+    ...v4WithoutControlledEntityId,
     schemaVersion: 5,
+    initialControlledEntityId,
     authoringSpecHash: `sha256:${"b".repeat(64)}`,
     resourceLockEntries,
     resourceLockHash: sha256CanonicalJson(resourceLockEntries),

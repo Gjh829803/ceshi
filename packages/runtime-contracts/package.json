@@ -8,6 +8,7 @@
   },
   "dependencies": {
     "@whitebox-world/control-capture": "workspace:*",
+    "@whitebox-world/protocol": "workspace:*",
     "@whitebox-world/traversal": "workspace:*",
     "lodash-es": "^4.18.1"
   }

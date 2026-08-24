@@ -1,8 +1,10 @@
-import type {
-  CameraRigParameterNameV1,
-  CameraRigParametersV1,
+import {
+  CAMERA_RIG_PARAMETER_NAMES_V1,
+  type CameraRigParameterNameV1,
+  type CameraRigParametersV1,
 } from "./camera-parameter-contract";
 import type { TraversalSurfaceIdentityV1 } from "@whitebox-world/traversal";
+import { sha256CanonicalJson } from "@whitebox-world/protocol";
 import { isNil } from "lodash-es";
 
 export type Vec2 = readonly [x: number, z: number];
@@ -618,6 +620,7 @@ export const EXECUTION_RESOURCE_KINDS_V1 = [
   "pose-set-profile",
   "render-binding-profile",
   "traversal-surface-profile",
+  "gameplay-bootstrap",
 ] as const;
 
 export type ExecutionResourceKindV1 =
@@ -628,6 +631,11 @@ export interface ExecutionResourceLockEntryV1 {
   readonly resourceKind: ExecutionResourceKindV1;
   readonly resolvedVersion: string;
   readonly contentHash: `sha256:${string}`;
+}
+
+export interface GameplayBootstrapExecutionResourceLockV1
+  extends ExecutionResourceLockEntryV1 {
+  readonly resourceKind: "gameplay-bootstrap";
 }
 
 const EXECUTION_RESOURCE_LOCK_ENTRY_FIELDS_V1 = [
@@ -643,13 +651,28 @@ const EXECUTION_RESOURCE_HASH_PATTERN_V1 = /^sha256:[a-f0-9]{64}$/;
  * compare the returned order with serialized input when canonical wire order
  * is required.
  */
+export function canonicalExecutionResourceLockEntriesV1<
+  Entry extends Readonly<{
+    resourceRef: string;
+    resourceKind: string;
+    resolvedVersion: string;
+    contentHash: string;
+  }>,
+>(
+  value: readonly Entry[],
+): readonly (ExecutionResourceLockEntryV1 & {
+  readonly resourceKind: Entry["resourceKind"];
+})[];
+export function canonicalExecutionResourceLockEntriesV1(
+  value: unknown,
+): readonly ExecutionResourceLockEntryV1[];
 export function canonicalExecutionResourceLockEntriesV1(
   value: unknown,
 ): readonly ExecutionResourceLockEntryV1[] {
   if (!Array.isArray(value)) {
     throw new TypeError("EXECUTION_RESOURCE_LOCK_INVALID");
   }
-  const seenResourceRefs = new Set<string>();
+  const seenResourceKeys = new Set<string>();
   const rows = value.map((candidate) => {
     if (isNil(candidate) || typeof candidate !== "object" || Array.isArray(candidate)) {
       throw new TypeError("EXECUTION_RESOURCE_LOCK_INVALID");
@@ -668,12 +691,15 @@ export function canonicalExecutionResourceLockEntriesV1(
       !EXECUTION_RESOURCE_HASH_PATTERN_V1.test(record.contentHash) ||
       !EXECUTION_RESOURCE_KINDS_V1.includes(
         record.resourceKind as ExecutionResourceKindV1,
-      ) ||
-      seenResourceRefs.has(record.resourceRef)
+      )
     ) {
       throw new TypeError("EXECUTION_RESOURCE_LOCK_INVALID");
     }
-    seenResourceRefs.add(record.resourceRef);
+    const resourceKey = `${record.resourceKind as string}\u0000${record.resourceRef}`;
+    if (seenResourceKeys.has(resourceKey)) {
+      throw new TypeError("EXECUTION_RESOURCE_LOCK_INVALID");
+    }
+    seenResourceKeys.add(resourceKey);
     return Object.freeze({
       resourceRef: record.resourceRef,
       resourceKind: record.resourceKind as ExecutionResourceKindV1,
@@ -696,8 +722,9 @@ export function canonicalExecutionResourceLockEntriesV1(
 }
 
 export interface ExecutionPlanV5
-  extends Omit<ExecutionPlanV4, "schemaVersion"> {
+  extends Omit<ExecutionPlanV4, "schemaVersion" | "controlledEntityId"> {
   readonly schemaVersion: 5;
+  readonly initialControlledEntityId: string;
   readonly authoringSpecHash: `sha256:${string}`;
   readonly resourceLockEntries: readonly ExecutionResourceLockEntryV1[];
   readonly traversal: Readonly<{
@@ -707,6 +734,1206 @@ export interface ExecutionPlanV5
     anchorEntityIds: readonly string[];
   }>;
   readonly staticColliders: readonly ExecutionStaticColliderV1[];
+}
+
+const EXECUTION_PLAN_V5_FIELDS = [
+  "kind",
+  "schemaVersion",
+  "id",
+  "seed",
+  "runtimeBackend",
+  "normalizedWorldIrHash",
+  "resourceLockHash",
+  "coordinateSystem",
+  "gravityMetersPerSecondSquaredXYZ",
+  "atmospherePreset",
+  "terrain",
+  "waters",
+  "objects",
+  "subjectAssets",
+  "rigProfiles",
+  "animationSets",
+  "colliderProfiles",
+  "initialControlledEntityId",
+  "subjects",
+  "camera",
+  "resourceUsage",
+  "layout",
+  "authoringSpecHash",
+  "resourceLockEntries",
+  "traversal",
+  "staticColliders",
+] as const;
+
+function invalidExecutionPlanV5(): never {
+  throw new TypeError("EXECUTION_PLAN_V5_INVALID");
+}
+
+function snapshotExecutionPlanData(input: unknown): unknown {
+  if (isNil(input)) return invalidExecutionPlanV5();
+  if (typeof input === "string" || typeof input === "boolean") return input;
+  if (typeof input === "number") {
+    if (!Number.isFinite(input) || Object.is(input, -0)) {
+      return invalidExecutionPlanV5();
+    }
+    return input;
+  }
+  if (Array.isArray(input)) {
+    if (
+      Reflect.getPrototypeOf(input) !== Array.prototype ||
+      Reflect.ownKeys(input).some((key) => typeof key === "symbol") ||
+      Object.getOwnPropertyNames(input).length !== input.length + 1
+    ) return invalidExecutionPlanV5();
+    const snapshot: unknown[] = [];
+    for (let index = 0; index < input.length; index += 1) {
+      const descriptor = Reflect.getOwnPropertyDescriptor(input, String(index));
+      if (
+        isNil(descriptor) ||
+        !descriptor.enumerable ||
+        !("value" in descriptor)
+      ) return invalidExecutionPlanV5();
+      snapshot.push(snapshotExecutionPlanData(descriptor.value));
+    }
+    return snapshot;
+  }
+  if (typeof input !== "object" || isNil(input)) {
+    return invalidExecutionPlanV5();
+  }
+  const prototype = Reflect.getPrototypeOf(input);
+  if (prototype !== Object.prototype) {
+    return invalidExecutionPlanV5();
+  }
+  const snapshot: Record<string, unknown> = {};
+  for (const key of Reflect.ownKeys(input)) {
+    const descriptor = Reflect.getOwnPropertyDescriptor(input, key);
+    if (
+      typeof key !== "string" ||
+      isNil(descriptor) ||
+      !descriptor.enumerable ||
+      !("value" in descriptor) ||
+      isNil(descriptor.value)
+    ) return invalidExecutionPlanV5();
+    snapshot[key] = snapshotExecutionPlanData(descriptor.value);
+  }
+  return snapshot;
+}
+
+function dataRecord(input: unknown): Record<string, unknown> {
+  if (typeof input !== "object" || isNil(input) || Array.isArray(input)) {
+    return invalidExecutionPlanV5();
+  }
+  return input as Record<string, unknown>;
+}
+
+function exactDataRecord(
+  input: unknown,
+  requiredFields: readonly string[],
+  optionalFields: readonly string[] = [],
+): Record<string, unknown> {
+  const record = dataRecord(input);
+  const keys = Object.keys(record);
+  if (
+    requiredFields.some((field) => !Object.hasOwn(record, field)) ||
+    keys.some((field) =>
+      !requiredFields.includes(field) && !optionalFields.includes(field)
+    )
+  ) return invalidExecutionPlanV5();
+  return record;
+}
+
+function dataArray(input: unknown): unknown[] {
+  if (!Array.isArray(input)) return invalidExecutionPlanV5();
+  return input;
+}
+
+function requireString(input: unknown): string {
+  if (typeof input !== "string" || input.length === 0) {
+    return invalidExecutionPlanV5();
+  }
+  return input;
+}
+
+function requireHash(input: unknown): `sha256:${string}` {
+  if (
+    typeof input !== "string" ||
+    !EXECUTION_RESOURCE_HASH_PATTERN_V1.test(input)
+  ) return invalidExecutionPlanV5();
+  return input as `sha256:${string}`;
+}
+
+function requireFinite(input: unknown): number {
+  if (typeof input !== "number" || !Number.isFinite(input)) {
+    return invalidExecutionPlanV5();
+  }
+  return input;
+}
+
+function requireSafeNonNegativeInteger(input: unknown): number {
+  if (
+    typeof input !== "number" ||
+    !Number.isSafeInteger(input) ||
+    input < 0
+  ) return invalidExecutionPlanV5();
+  return input;
+}
+
+function requireSafePositiveInteger(input: unknown): number {
+  if (
+    typeof input !== "number" ||
+    !Number.isSafeInteger(input) ||
+    input <= 0
+  ) return invalidExecutionPlanV5();
+  return input;
+}
+
+function requireBoolean(input: unknown): boolean {
+  if (typeof input !== "boolean") return invalidExecutionPlanV5();
+  return input;
+}
+
+function requireLiteral<Value extends string | number | boolean>(
+  input: unknown,
+  values: readonly Value[],
+): Value {
+  if (!values.includes(input as Value)) return invalidExecutionPlanV5();
+  return input as Value;
+}
+
+function requireTuple(input: unknown, length: number): readonly number[] {
+  const values = dataArray(input);
+  if (values.length !== length) return invalidExecutionPlanV5();
+  values.forEach(requireFinite);
+  return values as readonly number[];
+}
+
+function requireStringArray(input: unknown): void {
+  dataArray(input).forEach(requireString);
+}
+
+function validateTransform(input: unknown): void {
+  const value = exactDataRecord(input, [
+    "positionMetersXYZ",
+    "rotationEulerRadiansXYZ",
+    "scaleXYZ",
+  ]);
+  requireTuple(value.positionMetersXYZ, 3);
+  requireTuple(value.rotationEulerRadiansXYZ, 3);
+  requireTuple(value.scaleXYZ, 3);
+}
+
+function validatePrimitive(
+  input: unknown,
+  allowedKinds: readonly ("box" | "sphere" | "cylinder" | "cone" | "capsule")[],
+): void {
+  const value = dataRecord(input);
+  const kind = requireLiteral(value.kind, allowedKinds);
+  if (kind === "box") {
+    const box = exactDataRecord(value, ["kind", "sizeMetersXYZ"]);
+    requireTuple(box.sizeMetersXYZ, 3);
+  } else if (kind === "sphere") {
+    requireFinite(exactDataRecord(value, ["kind", "radiusMeters"]).radiusMeters);
+  } else {
+    const cylinder = exactDataRecord(value, [
+      "kind",
+      "radiusMeters",
+      "heightMeters",
+    ]);
+    requireFinite(cylinder.radiusMeters);
+    requireFinite(cylinder.heightMeters);
+  }
+}
+
+function validateTerrain(input: unknown): void {
+  const value = exactDataRecord(input, [
+    "entityId",
+    "centerMetersXZ",
+    "sizeMetersXZ",
+    "resolutionCellsXZ",
+    "heightSamplesMeters",
+    "heightSamplesHash",
+    "minimumHeightMeters",
+    "maximumHeightMeters",
+    "semanticClassId",
+  ]);
+  requireString(value.entityId);
+  requireTuple(value.centerMetersXZ, 2);
+  requireTuple(value.sizeMetersXZ, 2);
+  const resolution = requireTuple(value.resolutionCellsXZ, 2)
+    .map(requireSafePositiveInteger);
+  const heightSamplesMeters = dataArray(value.heightSamplesMeters)
+    .map(requireFinite);
+  if (
+    heightSamplesMeters.length !== resolution[0]! * resolution[1]! ||
+    requireHash(value.heightSamplesHash) !== sha256CanonicalJson(heightSamplesMeters)
+  ) return invalidExecutionPlanV5();
+  const minimumHeightMeters = heightSamplesMeters.reduce(
+    (minimum, sample) => Math.min(minimum, sample),
+    Number.POSITIVE_INFINITY,
+  );
+  const maximumHeightMeters = heightSamplesMeters.reduce(
+    (maximum, sample) => Math.max(maximum, sample),
+    Number.NEGATIVE_INFINITY,
+  );
+  if (
+    requireFinite(value.minimumHeightMeters) !== minimumHeightMeters ||
+    requireFinite(value.maximumHeightMeters) !== maximumHeightMeters ||
+    minimumHeightMeters > maximumHeightMeters
+  ) return invalidExecutionPlanV5();
+  requireString(value.semanticClassId);
+}
+
+function validateWater(input: unknown): void {
+  const value = exactDataRecord(input, [
+    "entityId",
+    "terrainEntityId",
+    "boundary",
+    "depthMeters",
+    "shoreWidthMeters",
+    "waterLevelMeters",
+    "traversalMode",
+    "semanticClassId",
+  ]);
+  requireString(value.entityId);
+  requireString(value.terrainEntityId);
+  const boundary = dataRecord(value.boundary);
+  const kind = requireLiteral(boundary.kind, ["circle", "ellipse", "polygon"]);
+  if (kind === "circle") {
+    const circle = exactDataRecord(boundary, ["kind", "centerMetersXZ", "radiusMeters"]);
+    requireTuple(circle.centerMetersXZ, 2);
+    requireFinite(circle.radiusMeters);
+  } else if (kind === "ellipse") {
+    const ellipse = exactDataRecord(boundary, ["kind", "centerMetersXZ", "radiusMetersXZ"]);
+    requireTuple(ellipse.centerMetersXZ, 2);
+    requireTuple(ellipse.radiusMetersXZ, 2);
+  } else {
+    const polygon = exactDataRecord(boundary, ["kind", "pointsMetersXZ"]);
+    dataArray(polygon.pointsMetersXZ).forEach((point) => requireTuple(point, 2));
+  }
+  requireFinite(value.depthMeters);
+  requireFinite(value.shoreWidthMeters);
+  requireFinite(value.waterLevelMeters);
+  requireLiteral(value.traversalMode, ["blocked", "swimmable", "walkable"]);
+  requireString(value.semanticClassId);
+}
+
+function validateObject(input: unknown): void {
+  const value = exactDataRecord(input, [
+    "entityId",
+    "prototypeId",
+    "primitive",
+    "transform",
+    "collisionEnabled",
+    "semanticClassId",
+  ]);
+  requireString(value.entityId);
+  requireString(value.prototypeId);
+  validatePrimitive(value.primitive, ["box", "sphere", "cylinder", "cone"]);
+  validateTransform(value.transform);
+  requireBoolean(value.collisionEnabled);
+  requireString(value.semanticClassId);
+}
+
+function validateSubjectAsset(input: unknown): void {
+  const value = exactDataRecord(input, [
+    "subjectAssetRef",
+    "artifactContentHash",
+    "byteLength",
+    "mediaType",
+    "format",
+    "inventory",
+  ]);
+  requireString(value.subjectAssetRef);
+  requireHash(value.artifactContentHash);
+  requireSafeNonNegativeInteger(value.byteLength);
+  requireLiteral(value.mediaType, ["model/gltf-binary"]);
+  requireLiteral(value.format, ["glb"]);
+  const inventory = exactDataRecord(value.inventory, [
+    "meshCount",
+    "vertexCount",
+    "triangleCount",
+    "skeletonCount",
+    "boneCount",
+    "animationClipNames",
+  ]);
+  [
+    inventory.meshCount,
+    inventory.vertexCount,
+    inventory.triangleCount,
+    inventory.skeletonCount,
+    inventory.boneCount,
+  ].forEach(requireSafeNonNegativeInteger);
+  requireStringArray(inventory.animationClipNames);
+}
+
+function validateRigProfile(input: unknown): void {
+  const value = exactDataRecord(input, [
+    "rigProfileRef",
+    "bodyTopology",
+    "skeletonRootBoneName",
+    "requiredBoneIds",
+    "sourceNodeNameByBoneId",
+  ]);
+  requireString(value.rigProfileRef);
+  requireLiteral(value.bodyTopology, ["biped"]);
+  requireString(value.skeletonRootBoneName);
+  requireStringArray(value.requiredBoneIds);
+  Object.values(dataRecord(value.sourceNodeNameByBoneId)).forEach(requireString);
+}
+
+function validateAnimationSet(input: unknown): void {
+  const value = exactDataRecord(input, [
+    "animationSetRef",
+    "subjectAssetRef",
+    "rigProfileRef",
+    "defaultActionId",
+    "requiredActionIds",
+    "animationBindings",
+  ]);
+  requireString(value.animationSetRef);
+  requireString(value.subjectAssetRef);
+  requireString(value.rigProfileRef);
+  requireString(value.defaultActionId);
+  requireStringArray(value.requiredActionIds);
+  dataArray(value.animationBindings).forEach((binding) => {
+    const row = exactDataRecord(binding, [
+      "actionId",
+      "sourceClipName",
+      "loopMode",
+      "playbackSpeedRatio",
+      "blendDurationSeconds",
+      "rootMotionMode",
+    ]);
+    requireString(row.actionId);
+    requireString(row.sourceClipName);
+    requireLiteral(row.loopMode, ["repeat", "once"]);
+    requireFinite(row.playbackSpeedRatio);
+    requireFinite(row.blendDurationSeconds);
+    requireLiteral(row.rootMotionMode, ["in-place"]);
+  });
+}
+
+function validateColliderProfile(input: unknown): void {
+  const value = exactDataRecord(input, [
+    "colliderProfileRef",
+    "supportedBodyTopologies",
+    "collider",
+  ]);
+  requireString(value.colliderProfileRef);
+  requireStringArray(value.supportedBodyTopologies);
+  const collider = exactDataRecord(value.collider, [
+    "kind",
+    "radiusMeters",
+    "heightMeters",
+    "centerOffsetFromSubjectOriginMetersXYZ",
+  ]);
+  requireLiteral(collider.kind, ["capsule"]);
+  requireFinite(collider.radiusMeters);
+  requireFinite(collider.heightMeters);
+  requireTuple(collider.centerOffsetFromSubjectOriginMetersXYZ, 3);
+}
+
+function validateMotionProfile(input: unknown): void {
+  const value = exactDataRecord(input, [
+    "resourceRef",
+    "contentHash",
+    "motionKernelRef",
+    "motionTags",
+  ]);
+  requireString(value.resourceRef);
+  requireHash(value.contentHash);
+  requireString(value.motionKernelRef);
+  requireStringArray(value.motionTags);
+}
+
+function validateCameraRigParameters(input: unknown, partial: boolean): void {
+  const value = dataRecord(input);
+  const keys = Object.keys(value);
+  if (
+    keys.some((key) =>
+      !CAMERA_RIG_PARAMETER_NAMES_V1.includes(key as CameraRigParameterNameV1)
+    ) ||
+    (!partial && keys.length !== CAMERA_RIG_PARAMETER_NAMES_V1.length) ||
+    (!partial && CAMERA_RIG_PARAMETER_NAMES_V1.some((key) => !Object.hasOwn(value, key)))
+  ) return invalidExecutionPlanV5();
+  Object.values(value).forEach(requireFinite);
+}
+
+function validateCameraContextRule(input: unknown): void {
+  const value = exactDataRecord(
+    input,
+    ["id", "priority", "when"],
+    ["cameraRigProfileRef", "cameraModifierRefs"],
+  );
+  requireString(value.id);
+  requireFinite(value.priority);
+  const when = exactDataRecord(value.when, [], [
+    "relationshipRoles",
+    "motionKernelRefs",
+    "requiredMotionTags",
+    "movementMediums",
+    "minimumSpeedMetersPerSecond",
+    "maximumSpeedMetersPerSecond",
+    "requiredSocketIds",
+    "requiredCameraContextTags",
+  ]);
+  for (const key of [
+    "relationshipRoles",
+    "motionKernelRefs",
+    "requiredMotionTags",
+    "movementMediums",
+    "requiredSocketIds",
+    "requiredCameraContextTags",
+  ]) {
+    if (Object.hasOwn(when, key)) requireStringArray(when[key]);
+  }
+  if (Object.hasOwn(when, "minimumSpeedMetersPerSecond")) {
+    requireFinite(when.minimumSpeedMetersPerSecond);
+  }
+  if (Object.hasOwn(when, "maximumSpeedMetersPerSecond")) {
+    requireFinite(when.maximumSpeedMetersPerSecond);
+  }
+  if (Object.hasOwn(value, "cameraRigProfileRef")) {
+    requireString(value.cameraRigProfileRef);
+  }
+  if (Object.hasOwn(value, "cameraModifierRefs")) {
+    requireStringArray(value.cameraModifierRefs);
+  }
+}
+
+function validateCapabilityAssembly(input: unknown): void {
+  const value = exactDataRecord(input, [
+    "authoringAvailability",
+    "physicsBodyProfileRef",
+    "locomotionProfileRef",
+    "defaultMotionProfile",
+    "optionalMotionProfiles",
+    "fallbackMotionProfile",
+    "motionKernels",
+    "controlProfile",
+    "cameraContext",
+    "mediumProfile",
+    "relationshipProfiles",
+    "harnessProfileRef",
+    "requiredHarnessCheckIds",
+    "actionOrPoseSetRef",
+    "renderBindingProfileRef",
+  ]);
+  requireLiteral(value.authoringAvailability, [
+    "recommended",
+    "advanced",
+    "experimental",
+  ]);
+  requireString(value.physicsBodyProfileRef);
+  requireString(value.locomotionProfileRef);
+  validateMotionProfile(value.defaultMotionProfile);
+  dataArray(value.optionalMotionProfiles).forEach(validateMotionProfile);
+  validateMotionProfile(value.fallbackMotionProfile);
+  dataArray(value.motionKernels).forEach((kernel) => {
+    const row = exactDataRecord(kernel, [
+      "resourceRef",
+      "implementationId",
+      "commandKind",
+      "supportedMediums",
+      "runtimeParameterNames",
+      "fallbackMotionProfileRef",
+      "deterministic",
+    ]);
+    requireString(row.resourceRef);
+    requireLiteral(row.implementationId, [
+      "free-ground",
+      "forward-steer",
+      "wheeled-arcade",
+      "surface-slide",
+      "water-surface",
+      "unpowered-glide",
+    ]);
+    requireLiteral(row.commandKind, [
+      "planar-vector",
+      "throttle-steer",
+      "flight-attitude",
+      "none",
+    ]);
+    requireStringArray(row.supportedMediums);
+    requireStringArray(row.runtimeParameterNames);
+    requireString(row.fallbackMotionProfileRef);
+    requireLiteral(row.deterministic, [true]);
+  });
+  const control = exactDataRecord(value.controlProfile, [
+    "resourceRef",
+    "contentHash",
+    "commandKind",
+    "inputSpace",
+    "facingPolicy",
+    "lateralMovementPolicy",
+    "moveDeadzoneRatio",
+  ]);
+  requireString(control.resourceRef);
+  requireHash(control.contentHash);
+  requireLiteral(control.commandKind, [
+    "planar-vector",
+    "throttle-steer",
+    "flight-attitude",
+    "none",
+  ]);
+  requireLiteral(control.inputSpace, [
+    "camera-relative",
+    "subject-local",
+    "flight-frame",
+    "none",
+  ]);
+  requireLiteral(control.facingPolicy, [
+    "align-to-move",
+    "align-to-view",
+    "steering-derived",
+    "flight-derived",
+    "fixed",
+  ]);
+  requireLiteral(control.lateralMovementPolicy, ["allowed", "forbidden"]);
+  requireFinite(control.moveDeadzoneRatio);
+
+  const camera = exactDataRecord(value.cameraContext, [
+    "resourceRef",
+    "defaultCameraRigProfileRef",
+    "rules",
+    "cameraRigProfiles",
+    "cameraModifierProfiles",
+  ], ["firstPersonCameraRigProfileRef"]);
+  requireString(camera.resourceRef);
+  requireString(camera.defaultCameraRigProfileRef);
+  if (Object.hasOwn(camera, "firstPersonCameraRigProfileRef")) {
+    requireString(camera.firstPersonCameraRigProfileRef);
+  }
+  dataArray(camera.rules).forEach(validateCameraContextRule);
+  dataArray(camera.cameraRigProfiles).forEach((profile) => {
+    const row = exactDataRecord(profile, [
+      "resourceRef",
+      "contentHash",
+      "baseMode",
+      "algorithmRef",
+      "headingSource",
+      "reverseHeadingPolicy",
+      "recenterMode",
+      "preferredSocketIds",
+      "parameters",
+    ], ["authoringRanges"]);
+    requireString(row.resourceRef);
+    requireHash(row.contentHash);
+    requireLiteral(row.baseMode, [
+      "first-person",
+      "free-orbit",
+      "stable-follow",
+      "speed-chase",
+      "flight-horizon",
+    ]);
+    requireString(row.algorithmRef);
+    requireLiteral(row.headingSource, ["view", "target-forward", "target-velocity"]);
+    requireLiteral(row.reverseHeadingPolicy, [
+      "follow-velocity",
+      "preserve-target-forward",
+    ]);
+    requireLiteral(row.recenterMode, ["off", "forward-motion", "always"]);
+    requireStringArray(row.preferredSocketIds);
+    validateCameraRigParameters(row.parameters, false);
+    if (Object.hasOwn(row, "authoringRanges")) {
+      const ranges = dataRecord(row.authoringRanges);
+      for (const [key, range] of Object.entries(ranges)) {
+        if (!CAMERA_RIG_PARAMETER_NAMES_V1.includes(key as CameraRigParameterNameV1)) {
+          return invalidExecutionPlanV5();
+        }
+        const bounds = exactDataRecord(range, ["minimum", "maximum", "step"]);
+        requireFinite(bounds.minimum);
+        requireFinite(bounds.maximum);
+        requireFinite(bounds.step);
+      }
+    }
+  });
+  dataArray(camera.cameraModifierProfiles).forEach((profile) => {
+    const row = exactDataRecord(profile, [
+      "resourceRef",
+      "parameterOverrides",
+    ], [
+      "headingSourceOverride",
+      "reverseHeadingPolicyOverride",
+      "recenterModeOverride",
+    ]);
+    requireString(row.resourceRef);
+    validateCameraRigParameters(row.parameterOverrides, true);
+    if (Object.hasOwn(row, "headingSourceOverride")) {
+      requireLiteral(row.headingSourceOverride, ["view", "target-forward", "target-velocity"]);
+    }
+    if (Object.hasOwn(row, "reverseHeadingPolicyOverride")) {
+      requireLiteral(row.reverseHeadingPolicyOverride, [
+        "follow-velocity",
+        "preserve-target-forward",
+      ]);
+    }
+    if (Object.hasOwn(row, "recenterModeOverride")) {
+      requireLiteral(row.recenterModeOverride, ["off", "forward-motion", "always"]);
+    }
+  });
+  const medium = exactDataRecord(value.mediumProfile, ["resourceRef", "air"]);
+  requireString(medium.resourceRef);
+  const air = exactDataRecord(medium.air, ["gravityRatio", "linearDragPerSecond"]);
+  requireFinite(air.gravityRatio);
+  requireFinite(air.linearDragPerSecond);
+  dataArray(value.relationshipProfiles).forEach((profile) => {
+    const row = exactDataRecord(profile, [
+      "resourceRef",
+      "relationshipType",
+      "requiredSourceSocketIds",
+      "requiredTargetSocketIds",
+      "controlTransferPolicy",
+      "cameraTargetPolicy",
+    ], ["maximumDistanceMeters"]);
+    requireString(row.resourceRef);
+    requireLiteral(row.relationshipType, ["seat", "tether"]);
+    requireStringArray(row.requiredSourceSocketIds);
+    requireStringArray(row.requiredTargetSocketIds);
+    requireLiteral(row.controlTransferPolicy, [
+      "keep-source",
+      "transfer-to-target",
+      "none",
+    ]);
+    requireLiteral(row.cameraTargetPolicy, [
+      "controlled-entity",
+      "source-entity",
+      "target-entity",
+    ]);
+    if (Object.hasOwn(row, "maximumDistanceMeters")) {
+      requireFinite(row.maximumDistanceMeters);
+    }
+  });
+  requireString(value.harnessProfileRef);
+  requireStringArray(value.requiredHarnessCheckIds);
+  requireString(value.actionOrPoseSetRef);
+  requireString(value.renderBindingProfileRef);
+}
+
+function validateSubject(input: unknown): void {
+  const value = exactDataRecord(input, [
+    "entityId",
+    "subjectDefinitionRef",
+    "subjectDefinitionHash",
+    "bodyTopology",
+    "semanticClassId",
+    "spawnAnchorEntityId",
+    "spawnSubjectOriginPositionMetersXYZ",
+    "spawnSubjectFacingRadians",
+    "forwardDirection",
+    "visualParts",
+    "visualBinding",
+    "sockets",
+    "collider",
+    "locomotion",
+    "physicsBodyProfileRef",
+    "locomotionProfileRef",
+    "controlFeel",
+    "availableControlFeels",
+  ], ["capabilityAssembly"]);
+  requireString(value.entityId);
+  requireString(value.subjectDefinitionRef);
+  requireHash(value.subjectDefinitionHash);
+  requireString(value.bodyTopology);
+  requireString(value.semanticClassId);
+  requireString(value.spawnAnchorEntityId);
+  requireTuple(value.spawnSubjectOriginPositionMetersXYZ, 3);
+  requireFinite(value.spawnSubjectFacingRadians);
+  requireLiteral(value.forwardDirection, ["-z"]);
+  dataArray(value.visualParts).forEach((part) => {
+    const row = dataRecord(part);
+    const kind = requireLiteral(row.kind, ["primitive", "asset"]);
+    if (kind === "primitive") {
+      const primitive = exactDataRecord(row, [
+        "id",
+        "kind",
+        "shape",
+        "localTransform",
+        "semanticTags",
+      ]);
+      requireString(primitive.id);
+      validatePrimitive(primitive.shape, ["box", "sphere", "cylinder", "capsule"]);
+      const transform = exactDataRecord(primitive.localTransform, [
+        "positionMetersXYZ",
+        "rotationEulerRadiansXYZ",
+      ]);
+      requireTuple(transform.positionMetersXYZ, 3);
+      requireTuple(transform.rotationEulerRadiansXYZ, 3);
+      requireStringArray(primitive.semanticTags);
+    } else {
+      const asset = exactDataRecord(row, [
+        "id",
+        "kind",
+        "subjectAssetRef",
+        "localTransform",
+        "appearance",
+        "semanticTags",
+      ]);
+      requireString(asset.id);
+      requireString(asset.subjectAssetRef);
+      validateTransform(asset.localTransform);
+      requireLiteral(exactDataRecord(asset.appearance, ["mode"]).mode, [
+        "whitebox-neutral",
+      ]);
+      requireStringArray(asset.semanticTags);
+    }
+  });
+  const visualBinding = dataRecord(value.visualBinding);
+  const bindingMode = requireLiteral(visualBinding.mode, ["static", "rigged"]);
+  if (bindingMode === "static") exactDataRecord(visualBinding, ["mode"]);
+  else {
+    const rigged = exactDataRecord(visualBinding, [
+      "mode",
+      "rigProfileRef",
+      "animationSetRef",
+    ]);
+    requireString(rigged.rigProfileRef);
+    requireString(rigged.animationSetRef);
+  }
+  dataArray(value.sockets).forEach((socket) => {
+    const row = dataRecord(socket);
+    const kind = requireLiteral(row.kind, ["local", "bone"]);
+    const socketValue = kind === "local"
+      ? exactDataRecord(row, ["id", "kind", "localTransform", "semanticTags"])
+      : exactDataRecord(row, ["id", "kind", "boneId", "offsetTransform", "semanticTags"]);
+    requireString(socketValue.id);
+    requireStringArray(socketValue.semanticTags);
+    if (kind === "local") {
+      const transform = exactDataRecord(socketValue.localTransform, [
+        "positionMetersXYZ",
+        "rotationEulerRadiansXYZ",
+      ]);
+      requireTuple(transform.positionMetersXYZ, 3);
+      requireTuple(transform.rotationEulerRadiansXYZ, 3);
+    } else {
+      requireString(socketValue.boneId);
+      const transform = exactDataRecord(socketValue.offsetTransform, [
+        "positionMetersXYZ",
+        "rotationEulerRadiansXYZ",
+      ]);
+      requireTuple(transform.positionMetersXYZ, 3);
+      requireTuple(transform.rotationEulerRadiansXYZ, 3);
+    }
+  });
+  const collider = exactDataRecord(value.collider, [
+    "kind",
+    "radiusMeters",
+    "heightMeters",
+    "centerOffsetFromSubjectOriginMetersXYZ",
+    "massKilograms",
+    "maxSlopeDegrees",
+    "maxStepHeightMeters",
+  ]);
+  requireLiteral(collider.kind, ["capsule"]);
+  requireFinite(collider.radiusMeters);
+  requireFinite(collider.heightMeters);
+  requireTuple(collider.centerOffsetFromSubjectOriginMetersXYZ, 3);
+  requireFinite(collider.massKilograms);
+  requireFinite(collider.maxSlopeDegrees);
+  requireFinite(collider.maxStepHeightMeters);
+  const locomotion = exactDataRecord(value.locomotion, [
+    "allowWalk",
+    "allowRun",
+    "allowJump",
+  ]);
+  requireBoolean(locomotion.allowWalk);
+  requireBoolean(locomotion.allowRun);
+  requireBoolean(locomotion.allowJump);
+  requireString(value.physicsBodyProfileRef);
+  requireString(value.locomotionProfileRef);
+  const validateFeel = (inputValue: unknown): void => {
+    const feel = exactDataRecord(inputValue, [
+      "resourceRef",
+      "contentHash",
+      "walkSpeedMetersPerSecond",
+      "runSpeedMetersPerSecond",
+      "jumpSpeedMetersPerSecond",
+      "accelerationMetersPerSecondSquared",
+      "decelerationMetersPerSecondSquared",
+      "turnRateRadiansPerSecond",
+      "moveResponseExponent",
+      "airControlRatio",
+      "coyoteTimeSeconds",
+      "jumpBufferSeconds",
+      "variableJumpHoldSeconds",
+      "jumpHoldGravityRatio",
+      "jumpReleaseGravityRatio",
+    ]);
+    requireString(feel.resourceRef);
+    requireHash(feel.contentHash);
+    Object.entries(feel)
+      .filter(([key]) => key !== "resourceRef" && key !== "contentHash")
+      .forEach(([, number]) => requireFinite(number));
+  };
+  validateFeel(value.controlFeel);
+  dataArray(value.availableControlFeels).forEach(validateFeel);
+  if (Object.hasOwn(value, "capabilityAssembly")) {
+    validateCapabilityAssembly(value.capabilityAssembly);
+  }
+}
+
+function validateCamera(input: unknown): void {
+  const value = exactDataRecord(input, [
+    "cameraEntityId",
+    "rigRef",
+    "targetEntityId",
+    "pitchRadians",
+    "distanceMeters",
+    "targetHeightMeters",
+    "fovDegrees",
+    "manualSwitchAllowed",
+    "aspectRatio",
+  ]);
+  requireString(value.cameraEntityId);
+  requireLiteral(value.rigRef, ["worldkit://camera/third-person.standard@1"]);
+  requireString(value.targetEntityId);
+  requireFinite(value.pitchRadians);
+  requireFinite(value.distanceMeters);
+  requireFinite(value.targetHeightMeters);
+  requireFinite(value.fovDegrees);
+  requireBoolean(value.manualSwitchAllowed);
+  requireFinite(value.aspectRatio);
+}
+
+function validateLayoutAssertion(input: unknown): void {
+  const value = dataRecord(input);
+  const kind = requireLiteral(value.kind, [
+    "inside-region",
+    "outside-region",
+    "distance-range",
+    "faces-entity",
+    "supported-by",
+    "minimum-clearance",
+    "within-slope-limit",
+    "visible-in-camera-region",
+  ]);
+  const baseFields = [
+    "constraintId",
+    "kind",
+    "evidenceEntityIds",
+    "measurements",
+    "tolerances",
+  ];
+  let required = [...baseFields];
+  let optional: string[] = [];
+  if (kind === "inside-region" || kind === "outside-region") {
+    required.push("entityId", "regionId", "boundaryClearanceMeters");
+  } else if (kind === "distance-range") {
+    required.push(
+      "entityId",
+      "referenceEntityId",
+      "minimumDistanceMeters",
+      "maximumDistanceMeters",
+    );
+  } else if (kind === "faces-entity") {
+    required.push("facingEntityId", "targetEntityId", "maximumAngularDeviationDegrees");
+  } else if (kind === "supported-by") {
+    required.push(
+      "supportedEntityId",
+      "supportingEntityId",
+      "maximumSupportGapMeters",
+      "minimumSupportRatio",
+    );
+  } else if (kind === "minimum-clearance") {
+    required.push("entityId", "clearanceMeters");
+    const hasEntities = Object.hasOwn(value, "otherEntityIds");
+    const hasClasses = Object.hasOwn(value, "semanticClassIds");
+    if (hasEntities === hasClasses) return invalidExecutionPlanV5();
+    required.push(hasEntities ? "otherEntityIds" : "semanticClassIds");
+  } else if (kind === "within-slope-limit") {
+    required.push("terrainEntityId", "maximumSlopeDegrees");
+    const hasEntity = Object.hasOwn(value, "entityId");
+    const hasRoute = Object.hasOwn(value, "routeId");
+    if (hasEntity === hasRoute) return invalidExecutionPlanV5();
+    required.push(hasEntity ? "entityId" : "routeId");
+  } else {
+    required.push(
+      "visibleEntityId",
+      "cameraEntityId",
+      "screenRegionId",
+      "minimumVisibleRatio",
+      "minimumProjectedAreaRatio",
+    );
+  }
+  const row = exactDataRecord(value, required, optional);
+  requireString(row.constraintId);
+  requireStringArray(row.evidenceEntityIds);
+  Object.values(dataRecord(row.measurements)).forEach((measurement) => {
+    if (
+      typeof measurement !== "string" &&
+      typeof measurement !== "boolean" &&
+      (typeof measurement !== "number" || !Number.isFinite(measurement))
+    ) return invalidExecutionPlanV5();
+  });
+  Object.values(dataRecord(row.tolerances)).forEach(requireFinite);
+  for (const [key, field] of Object.entries(row)) {
+    if (baseFields.includes(key) || key === "kind") continue;
+    if (key.endsWith("Ids")) requireStringArray(field);
+    else if (key.endsWith("Id")) requireString(field);
+    else requireFinite(field);
+  }
+}
+
+function validateLayout(input: unknown): void {
+  const value = exactDataRecord(input, [
+    "solverProfileRef",
+    "resolvedVersion",
+    "solverProfileHash",
+    "layoutSolveReportHash",
+    "regions",
+    "routes",
+    "screenRegions",
+    "placementsByEntityId",
+    "layoutAssertions",
+  ]);
+  requireString(value.solverProfileRef);
+  requireString(value.resolvedVersion);
+  requireHash(value.solverProfileHash);
+  requireHash(value.layoutSolveReportHash);
+  dataArray(value.regions).forEach((region) => {
+    const row = exactDataRecord(region, [
+      "id",
+      "kind",
+      "pointsMetersXZ",
+      "semanticClassId",
+    ], ["minimumHeightMeters", "maximumHeightMeters"]);
+    requireString(row.id);
+    requireLiteral(row.kind, ["polygon-xz"]);
+    dataArray(row.pointsMetersXZ).forEach((point) => requireTuple(point, 2));
+    requireString(row.semanticClassId);
+    if (Object.hasOwn(row, "minimumHeightMeters")) requireFinite(row.minimumHeightMeters);
+    if (Object.hasOwn(row, "maximumHeightMeters")) requireFinite(row.maximumHeightMeters);
+  });
+  dataArray(value.routes).forEach((route) => {
+    const row = exactDataRecord(route, [
+      "id",
+      "kind",
+      "pointsMetersXZ",
+      "widthMeters",
+      "locomotionProfileRef",
+    ]);
+    requireString(row.id);
+    requireLiteral(row.kind, ["polyline-xz"]);
+    dataArray(row.pointsMetersXZ).forEach((point) => requireTuple(point, 2));
+    requireFinite(row.widthMeters);
+    requireString(row.locomotionProfileRef);
+  });
+  dataArray(value.screenRegions).forEach((region) => {
+    const row = exactDataRecord(region, [
+      "id",
+      "kind",
+      "minimumUv",
+      "maximumUv",
+    ]);
+    requireString(row.id);
+    requireLiteral(row.kind, ["rectangle-uv"]);
+    requireTuple(row.minimumUv, 2);
+    requireTuple(row.maximumUv, 2);
+  });
+  for (const [entityId, placement] of Object.entries(
+    dataRecord(value.placementsByEntityId),
+  )) {
+    const row = exactDataRecord(placement, [
+      "entityId",
+      "transform",
+      "placementProvenance",
+    ]);
+    if (requireString(row.entityId) !== entityId) return invalidExecutionPlanV5();
+    validateTransform(row.transform);
+    const provenance = exactDataRecord(row.placementProvenance, [
+      "kind",
+      "candidateId",
+      "placementConstraintIds",
+      "solverProfileRef",
+      "layoutSolveReportHash",
+    ]);
+    requireLiteral(provenance.kind, ["fixed", "solved"]);
+    requireString(provenance.candidateId);
+    requireStringArray(provenance.placementConstraintIds);
+    requireString(provenance.solverProfileRef);
+    requireHash(provenance.layoutSolveReportHash);
+  }
+  dataArray(value.layoutAssertions).forEach(validateLayoutAssertion);
+}
+
+function validateTraversalSurface(input: unknown): void {
+  const value = dataRecord(input);
+  const kind = requireLiteral(value.kind, ["heightfield", "static-collider"]);
+  const base = [
+    "kind",
+    "traversalSurfaceId",
+    "surfaceEntityId",
+    "colliderSubshapeId",
+    "resourceRef",
+    "resolvedVersion",
+    "resourceHash",
+  ];
+  const row = kind === "heightfield"
+    ? exactDataRecord(value, base)
+    : exactDataRecord(value, [
+        ...base,
+        "logicalSurfaceId",
+        "logicalSubshapeId",
+        "colliderHash",
+        "traversalSurfaceProfileRef",
+        "traversalSurfaceProfileResolvedVersion",
+        "traversalSurfaceProfileHash",
+      ]);
+  requireString(row.traversalSurfaceId);
+  requireString(row.surfaceEntityId);
+  requireString(row.colliderSubshapeId);
+  requireString(row.resourceRef);
+  requireString(row.resolvedVersion);
+  requireHash(row.resourceHash);
+  if (kind === "static-collider") {
+    requireString(row.logicalSurfaceId);
+    requireString(row.logicalSubshapeId);
+    requireHash(row.colliderHash);
+    requireString(row.traversalSurfaceProfileRef);
+    requireString(row.traversalSurfaceProfileResolvedVersion);
+    requireHash(row.traversalSurfaceProfileHash);
+  }
+}
+
+function validateTraversal(input: unknown): void {
+  const value = exactDataRecord(input, [
+    "surfaces",
+    "traversalAreas",
+    "connectivityRequirements",
+    "anchorEntityIds",
+  ]);
+  dataArray(value.surfaces).forEach(validateTraversalSurface);
+  dataArray(value.traversalAreas).forEach((area) => {
+    const row = exactDataRecord(area, [
+      "id",
+      "kind",
+      "pointsMetersXZ",
+      "surfaceEntityId",
+      "mode",
+    ]);
+    requireString(row.id);
+    requireLiteral(row.kind, ["polygon-xz"]);
+    dataArray(row.pointsMetersXZ).forEach((point) => requireTuple(point, 2));
+    requireString(row.surfaceEntityId);
+    requireLiteral(row.mode, ["blocked"]);
+  });
+  dataArray(value.connectivityRequirements).forEach((requirement) => {
+    const row = exactDataRecord(requirement, [
+      "constraintId",
+      "kind",
+      "traversingEntityId",
+      "startAnchorEntityId",
+      "destinationAnchorEntityId",
+      "routeId",
+    ]);
+    requireString(row.constraintId);
+    requireLiteral(row.kind, ["connected-by-route"]);
+    requireString(row.traversingEntityId);
+    requireString(row.startAnchorEntityId);
+    requireString(row.destinationAnchorEntityId);
+    requireString(row.routeId);
+  });
+  requireStringArray(value.anchorEntityIds);
+}
+
+function validateStaticCollider(input: unknown): void {
+  const value = exactDataRecord(input, [
+    "entityId",
+    "logicalSubshapeId",
+    "colliderSubshapeId",
+    "transform",
+    "shape",
+    "colliderHash",
+  ]);
+  requireString(value.entityId);
+  requireString(value.logicalSubshapeId);
+  requireString(value.colliderSubshapeId);
+  validateTransform(value.transform);
+  validatePrimitive(value.shape, ["box", "sphere", "cylinder"]);
+  requireHash(value.colliderHash);
+}
+
+function deepFreezeExecutionPlan<Value>(value: Value): Value {
+  if (typeof value !== "object" || isNil(value) || Object.isFrozen(value)) {
+    return value;
+  }
+  Object.values(value as Record<string, unknown>).forEach(deepFreezeExecutionPlan);
+  return Object.freeze(value);
+}
+
+export function parseExecutionPlanV5(input: unknown): ExecutionPlanV5 {
+  try {
+    const snapshot = snapshotExecutionPlanData(input);
+    const plan = exactDataRecord(snapshot, EXECUTION_PLAN_V5_FIELDS);
+    requireLiteral(plan.kind, ["worldkit-execution-plan"]);
+    requireLiteral(plan.schemaVersion, [5]);
+    requireString(plan.id);
+    requireSafeNonNegativeInteger(plan.seed);
+    requireLiteral(plan.runtimeBackend, ["babylon-havok"]);
+    requireHash(plan.normalizedWorldIrHash);
+    requireHash(plan.resourceLockHash);
+    requireLiteral(plan.coordinateSystem, [
+      "right-handed-y-up-minus-z-forward",
+    ]);
+    requireTuple(plan.gravityMetersPerSecondSquaredXYZ, 3);
+    requireLiteral(plan.atmospherePreset, [
+      "clear-day",
+      "golden-hour",
+      "overcast",
+      "night",
+    ]);
+    validateTerrain(plan.terrain);
+    dataArray(plan.waters).forEach(validateWater);
+    dataArray(plan.objects).forEach(validateObject);
+    dataArray(plan.subjectAssets).forEach(validateSubjectAsset);
+    dataArray(plan.rigProfiles).forEach(validateRigProfile);
+    dataArray(plan.animationSets).forEach(validateAnimationSet);
+    dataArray(plan.colliderProfiles).forEach(validateColliderProfile);
+    const initialControlledEntityId = requireString(
+      plan.initialControlledEntityId,
+    );
+    const subjectEntityIds = new Set<string>();
+    dataArray(plan.subjects).forEach((subject) => {
+      validateSubject(subject);
+      const entityId = requireString(dataRecord(subject).entityId);
+      if (subjectEntityIds.has(entityId)) return invalidExecutionPlanV5();
+      subjectEntityIds.add(entityId);
+    });
+    if (!subjectEntityIds.has(initialControlledEntityId)) {
+      return invalidExecutionPlanV5();
+    }
+    validateCamera(plan.camera);
+    if (
+      !subjectEntityIds.has(
+        requireString(dataRecord(plan.camera).targetEntityId),
+      )
+    ) return invalidExecutionPlanV5();
+    const usage = exactDataRecord(plan.resourceUsage, [
+      "vertices",
+      "triangles",
+      "colliders",
+    ]);
+    requireSafeNonNegativeInteger(usage.vertices);
+    requireSafeNonNegativeInteger(usage.triangles);
+    requireSafeNonNegativeInteger(usage.colliders);
+    validateLayout(plan.layout);
+    requireHash(plan.authoringSpecHash);
+    const resourceLockEntries = canonicalExecutionResourceLockEntriesV1(
+      plan.resourceLockEntries,
+    );
+    if (
+      sha256CanonicalJson(resourceLockEntries) !== plan.resourceLockHash
+    ) return invalidExecutionPlanV5();
+    plan.resourceLockEntries = resourceLockEntries;
+    validateTraversal(plan.traversal);
+    dataArray(plan.staticColliders).forEach(validateStaticCollider);
+    return deepFreezeExecutionPlan(plan) as unknown as ExecutionPlanV5;
+  } catch {
+    return invalidExecutionPlanV5();
+  }
+}
+
+export function hashExecutionPlanV5(input: unknown): `sha256:${string}` {
+  return sha256CanonicalJson(parseExecutionPlanV5(input)) as `sha256:${string}`;
 }
 
 export interface CompileWorldResultV5 {

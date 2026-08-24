@@ -5,6 +5,10 @@ import {
   type AuthoringSpecV4,
   type NormalizedWorldIRV4,
 } from "@whitebox-world/authoring";
+import {
+  createGameplayBootstrapResourceLockEntryV1,
+  createGameplayBootstrapV1,
+} from "@whitebox-world/gameplay-contracts";
 import type { ExecutionPlanV5 } from "@whitebox-world/runtime-contracts";
 import type { TraversalRuntimeImplementationIdentityV1 } from "@whitebox-world/traversal";
 import { sha256CanonicalJson } from "@whitebox-world/protocol";
@@ -20,6 +24,17 @@ const RUNTIME_IDENTITY: TraversalRuntimeImplementationIdentityV1 = {
   runtimeAdapterResolvedVersion: "1",
   runtimeAdapterHash: `sha256:${"b".repeat(64)}`,
 };
+const GAMEPLAY_BOOTSTRAP_RESOURCE_LOCK =
+  createGameplayBootstrapResourceLockEntryV1(createGameplayBootstrapV1({
+    kind: "gameplay-bootstrap",
+    id: "compile-traversal-lock-test.gameplay",
+    version: 1,
+    resourceRef: "worldkit://gameplay-bootstrap/compile-traversal-lock-test@1",
+    entityDescriptors: [],
+    featureResourceLocks: [],
+    semanticActionDefinitions: [],
+    availableCapabilityRefs: [],
+  }));
 
 function routeWorld(): AuthoringSpecV4 {
   const source = createValidAuthoringSpec();
@@ -89,6 +104,7 @@ function compileFixture(): {
   const compiled = compileWorldV5({
     normalizedWorldIr: normalized.value,
     normalizedWorldIrHash: normalized.normalizedWorldIrHash,
+    gameplayBootstrapResourceLock: GAMEPLAY_BOOTSTRAP_RESOURCE_LOCK,
   });
   if (!compiled.ok || compiled.executionPlan === undefined) {
     throw new Error("Route fixture compilation failed.");
@@ -122,6 +138,7 @@ describe("compileResolvedTraversalLockV1", () => {
       compileWorldV5({
         normalizedWorldIr,
         normalizedWorldIrHash: sha256CanonicalJson(normalizedWorldIr),
+        gameplayBootstrapResourceLock: GAMEPLAY_BOOTSTRAP_RESOURCE_LOCK,
       });
 
     const expectProfileLockFailure = (result: ReturnType<typeof compileWorldV5>) => {

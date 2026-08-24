@@ -815,8 +815,11 @@ describe("capability package runtime smoke tests", () => {
       ...structuredClone(loaded.executionPlan),
       waters: [],
     };
+    const initialControlledEntityId = executionPlan.schemaVersion === 5
+      ? executionPlan.initialControlledEntityId
+      : executionPlan.controlledEntityId;
     const controlledSubject = executionPlan.subjects.find(
-      (subject) => subject.entityId === executionPlan.controlledEntityId,
+      (subject) => subject.entityId === initialControlledEntityId,
     );
     if (controlledSubject === undefined) throw new Error("Controlled Subject missing.");
     controlledSubject.spawnSubjectOriginPositionMetersXYZ = [0, 8, 30];

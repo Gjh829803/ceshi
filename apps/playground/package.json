@@ -13,6 +13,7 @@
     "@whitebox-world/compiler": "workspace:*",
     "@whitebox-world/contracts": "workspace:*",
     "@whitebox-world/core": "workspace:*",
+    "@whitebox-world/gameplay-contracts": "workspace:*",
     "@whitebox-world/physics": "workspace:*",
     "@whitebox-world/protocol": "workspace:*",
     "@whitebox-world/runtime-babylon": "workspace:*",
