@@ -3,8 +3,8 @@
   "schemaVersion": 1,
   "source": {
     "branch": "codex/xier120-non-human-subject-integration",
-    "commit": "683731341bedcfaff700bea742bbee65f9bd0881",
-    "supersedesEvidenceCommit": "138d9c3e6ea1c28fc94ddd7397bc656b9f2f7eba",
+    "commit": "f22ab9b9992084072141be17b40c86450fb3c017",
+    "supersedesEvidenceCommit": "7695c8f16cd69ed99ae3aff263da73245a0f4776",
     "fixturePath": "examples/authoring/xier120-subject-gallery.json",
     "canonicalCommand": "pnpm worldkit run examples/authoring/xier120-subject-gallery.json --port 5197",
     "canonicalBrowserUrl": "http://127.0.0.1:5197/?authoring=1"
@@ -14,17 +14,32 @@
     "npxVersion": "10.9.2",
     "selectionMethod": "Exact temporary fixture variants outside tracked source, each served by worldkit run; no public Schema or query parameter was invented.",
     "batchBrowserUrls": [
-      "http://127.0.0.1:5201/?authoring=1",
-      "http://127.0.0.1:5202/?authoring=1",
-      "http://127.0.0.1:5203/?authoring=1",
-      "http://127.0.0.1:5204/?authoring=1"
+      "http://127.0.0.1:5230/?authoring=1",
+      "http://127.0.0.1:5231/?authoring=1",
+      "http://127.0.0.1:5232/?authoring=1",
+      "http://127.0.0.1:5233/?authoring=1",
+      "http://127.0.0.1:5234/?authoring=1",
+      "http://127.0.0.1:5235/?authoring=1",
+      "http://127.0.0.1:5236/?authoring=1",
+      "http://127.0.0.1:5237/?authoring=1",
+      "http://127.0.0.1:5238/?authoring=1",
+      "http://127.0.0.1:5239/?authoring=1",
+      "http://127.0.0.1:5240/?authoring=1",
+      "http://127.0.0.1:5241/?authoring=1",
+      "http://127.0.0.1:5242/?authoring=1",
+      "http://127.0.0.1:5243/?authoring=1",
+      "http://127.0.0.1:5244/?authoring=1",
+      "http://127.0.0.1:5245/?authoring=1",
+      "http://127.0.0.1:5246/?authoring=1",
+      "http://127.0.0.1:5247/?authoring=1",
+      "http://127.0.0.1:5248/?authoring=1"
     ],
     "hostInputBrowserUrls": [
-      "http://127.0.0.1:5211/?authoring=1",
-      "http://127.0.0.1:5212/?authoring=1",
-      "http://127.0.0.1:5213/?authoring=1"
+      "http://127.0.0.1:5230/?authoring=1",
+      "http://127.0.0.1:5241/?authoring=1",
+      "http://127.0.0.1:5246/?authoring=1"
     ],
-    "canonicalTwoInstanceBrowserUrl": "http://127.0.0.1:5214/?authoring=1",
+    "canonicalTwoInstanceBrowserUrl": "http://127.0.0.1:5255/?authoring=1",
     "directQueryOverrideProbe": {
       "outcome": "expected-rejection",
       "error": "WorldkitBrowserStartupErrorV1: Route evidence authoringSpecHash does not match the loaded Authoring world.",
@@ -33,7 +48,11 @@
     "canonicalFixtureResult": {
       "definitionRef": "worldkit://subject-definition/xier120.biped-animal@1",
       "definitionHash": "sha256:f701c53271adce78201e5d36575492cfa86488a4544a28cb4708b66f701052b3",
-      "runtimeScaleXYZ": [1, 1, 1],
+      "runtimeScaleXYZ": [
+        1,
+        1,
+        1
+      ],
       "movementMedium": "ground",
       "meshCount": 11,
       "physicsBodyCount": 2,
@@ -68,23 +87,33 @@
       "definitionCount": 19,
       "greenCaptureCount": 19,
       "viewCount": 57,
-      "viewOrder": ["back", "right", "front"],
-      "cameraYawOffsetsRadians": [0, 1.5703927258633432, 3.141188948956882],
+      "viewOrder": [
+        "back",
+        "right",
+        "front"
+      ],
+      "cameraYawOffsetsRadians": [
+        0,
+        1.5707963267948966,
+        3.141592653589793
+      ],
       "cameraZoomDeltaMeters": 5,
-      "runtimeScaleXYZ": [1, 1, 1],
+      "runtimeScaleXYZ": [
+        1,
+        1,
+        1
+      ],
       "movementMedium": "ground",
       "diagnosticCount": 0,
       "gallery": {
         "filename": "gallery.png",
-        "widthPixels": 3840,
-        "heightPixels": 8165,
-        "byteLength": 2406470,
-        "sha256": "sha256:75e94fbccada2bcaceea68d2584fdee68c736b13dbb565740f4f8630ea3defb2",
-        "embeddedImageCount": 21,
+        "widthPixels": 1280,
+        "heightPixels": 6312,
+        "byteLength": 583988,
+        "sha256": "sha256:cdc1e5597fb185fccd09762e1e34d26c932583765f52580cfb529571c5a2c2e5",
+        "embeddedImageCount": 57,
         "panels": {
-          "baseRenderedDefinitionViews": 57,
-          "trustedHostInputScreenshots": 15,
-          "canonicalTwoInstanceScreenshots": 5
+          "finalCodeCommitTriViews": 57
         }
       }
     },
@@ -92,16 +121,25 @@
       "evidenceLayer": "trusted-host-input-rendered-browser",
       "outcome": "pass",
       "representativeCount": 3,
-      "representativeRoles": ["animal", "vehicle", "composition"],
-      "trustedEventCount": 56,
+      "representativeRoles": [
+        "composition",
+        "animal",
+        "vehicle"
+      ],
+      "trustedEventCount": 54,
       "untrustedEventCount": 0,
-      "keyCodes": ["KeyW", "KeyD", "Space"],
+      "keyCodes": [
+        "KeyW",
+        "KeyD",
+        "Space"
+      ],
       "pointerDragSupported": true,
       "wheelSupported": true,
       "runtimeStateChangedForEveryRepresentative": true,
-      "movementTurnJumpLandingCameraObservedForEveryRepresentative": true,
+      "movementTurnAndCameraObservedForEveryRepresentative": true,
+      "trustedJumpInputSentForEveryRepresentative": true,
       "diagnosticCount": 0,
-      "claimBoundary": "Playwright keyboard and mouse device events exercised the host routing path; deterministic Browser API evidence remains classified separately."
+      "claimBoundary": "Playwright keyboard and mouse device events exercised the host routing path on the final code commit; static Subjects use ground locomotion only."
     },
     "canonicalTwoInstance": {
       "evidenceLayer": "canonical-rendered-browser-lifecycle",
@@ -110,33 +148,28 @@
       "subjectStateCount": 2,
       "definitionRef": "worldkit://subject-definition/xier120.quadruped-animal@1",
       "definitionHash": "sha256:9296e43b249a68cd7993caeef19dbba951ed3822d97b2ab3467f4213ec108818",
-      "entityIds": ["xier120-primary", "xier120-secondary"],
-      "ownedFeatureResourceIds": [
-        "xier120-primary.body.asset",
-        "xier120-primary.character-controller",
-        "xier120-secondary.body.asset",
-        "xier120-secondary.character-controller"
+      "entityIds": [
+        "xier120-secondary",
+        "xier120-subject"
       ],
-      "resourcesBeforeReset": {"meshCount": 39, "physicsBodyCount": 3, "terrainSampleCount": 4225},
-      "resourcesAfterReset": {"meshCount": 39, "physicsBodyCount": 3, "terrainSampleCount": 4225},
+      "resourcesBeforeReset": {
+        "phase": "ready",
+        "meshCount": 39,
+        "physicsBodyCount": 3,
+        "terrainSampleCount": 4225
+      },
+      "resourcesAfterReset": {
+        "phase": "ready",
+        "meshCount": 39,
+        "physicsBodyCount": 3,
+        "terrainSampleCount": 4225
+      },
       "resetReconstruction": {
         "worldSessionChanged": true,
         "newSimulationTick": 0,
         "oldCanvasDisconnected": true,
-        "newCanvasConnected": true,
         "liveCanvasCount": 1,
-        "oldWorldStateQueryRejectedWithCode": "WORLDKIT_WORLD_STATE_SNAPSHOT_NOT_FOUND",
-        "observedOldGpuResourceDeletionCalls": {
-          "deleteBuffer": 60,
-          "deleteProgram": 2,
-          "deleteTexture": 1,
-          "deleteVertexArray": 19,
-          "total": 82
-        }
-      },
-      "postResetTrustedHostIsolation": {
-        "primaryMoved": true,
-        "secondaryUnchanged": true
+        "oldWorldStateQueryRejected": true
       },
       "diagnosticCount": 0
     }
@@ -149,7 +182,12 @@
       "assetHash": "sha256:b2416d0ee1ce33ac33878850e8f77362f06986dba2c03ca195636f82eed7e341",
       "sourceForwardAxis": "+Z",
       "bakeRotationYRadians": 3.141592653589793,
-      "verdict": {"visibleGeometry": "pass", "supportPlacement": "pass", "scale": "pass", "forward": "pass"}
+      "verdict": {
+        "visibleGeometry": "pass",
+        "supportPlacement": "pass",
+        "scale": "pass",
+        "forward": "pass"
+      }
     },
     {
       "slug": "aerial-hanging",
@@ -158,7 +196,12 @@
       "assetHash": "sha256:0010a055858bda14e6954bf291f57232f9f2eda90e6c20b8ee6ea41bf734f28d",
       "sourceForwardAxis": "+Z",
       "bakeRotationYRadians": 3.141592653589793,
-      "verdict": {"visibleGeometry": "pass", "supportPlacement": "pass", "scale": "pass", "forward": "pass"}
+      "verdict": {
+        "visibleGeometry": "pass",
+        "supportPlacement": "pass",
+        "scale": "pass",
+        "forward": "pass"
+      }
     },
     {
       "slug": "aerial-seated",
@@ -167,7 +210,12 @@
       "assetHash": "sha256:012b5eb2af7400f4e85a3c398dc441f702bf19a96c2c754022ba7ea4ff9ee587",
       "sourceForwardAxis": "+Z",
       "bakeRotationYRadians": 3.141592653589793,
-      "verdict": {"visibleGeometry": "pass", "supportPlacement": "pass", "scale": "pass", "forward": "pass"}
+      "verdict": {
+        "visibleGeometry": "pass",
+        "supportPlacement": "pass",
+        "scale": "pass",
+        "forward": "pass"
+      }
     },
     {
       "slug": "aerial-seated-variant",
@@ -176,7 +224,12 @@
       "assetHash": "sha256:ae55ee15fb4e07b232f07cdeac2ddfa653487bab408137651da4edacf90225be",
       "sourceForwardAxis": "+Z",
       "bakeRotationYRadians": 3.141592653589793,
-      "verdict": {"visibleGeometry": "pass", "supportPlacement": "pass", "scale": "pass", "forward": "pass"}
+      "verdict": {
+        "visibleGeometry": "pass",
+        "supportPlacement": "pass",
+        "scale": "pass",
+        "forward": "pass"
+      }
     },
     {
       "slug": "aerial-standing",
@@ -185,7 +238,12 @@
       "assetHash": "sha256:38df41c03aeda89c01d1b39e7333fac0f97305323d390a29f2b8a62dab3bbf92",
       "sourceForwardAxis": "+Z",
       "bakeRotationYRadians": 3.141592653589793,
-      "verdict": {"visibleGeometry": "pass", "supportPlacement": "pass", "scale": "pass", "forward": "pass"}
+      "verdict": {
+        "visibleGeometry": "pass",
+        "supportPlacement": "pass",
+        "scale": "pass",
+        "forward": "pass"
+      }
     },
     {
       "slug": "biped-animal",
@@ -194,7 +252,12 @@
       "assetHash": "sha256:d9885d03000557ec1b1a7838f98b752b16026183add7885ad8ef5233deeb89db",
       "sourceForwardAxis": "front-back-equivalent",
       "bakeRotationYRadians": 0,
-      "verdict": {"visibleGeometry": "pass", "supportPlacement": "pass", "scale": "pass", "forward": "pass-equivalent-symmetry"}
+      "verdict": {
+        "visibleGeometry": "pass",
+        "supportPlacement": "pass",
+        "scale": "pass",
+        "forward": "pass-equivalent-symmetry"
+      }
     },
     {
       "slug": "flat-seated-glider",
@@ -203,7 +266,12 @@
       "assetHash": "sha256:a58044ad4c8a95beaa1548234079bbd12335cb1fae3d1da9dfc8e646e54aad32",
       "sourceForwardAxis": "+Z",
       "bakeRotationYRadians": 3.141592653589793,
-      "verdict": {"visibleGeometry": "pass", "supportPlacement": "pass", "scale": "pass", "forward": "pass"}
+      "verdict": {
+        "visibleGeometry": "pass",
+        "supportPlacement": "pass",
+        "scale": "pass",
+        "forward": "pass"
+      }
     },
     {
       "slug": "four-wheel",
@@ -212,7 +280,12 @@
       "assetHash": "sha256:90de81af8af617a2714e014e1cdfcd041b5375893ab79cf12d28b9e9655c6afe",
       "sourceForwardAxis": "+Z",
       "bakeRotationYRadians": 3.141592653589793,
-      "verdict": {"visibleGeometry": "pass", "supportPlacement": "pass", "scale": "pass", "forward": "pass"}
+      "verdict": {
+        "visibleGeometry": "pass",
+        "supportPlacement": "pass",
+        "scale": "pass",
+        "forward": "pass"
+      }
     },
     {
       "slug": "four-wheel-variant",
@@ -221,7 +294,12 @@
       "assetHash": "sha256:10ffc48432ae9a4ca15e7161cbac275e1ae90b92cec96ed7c37f18c5d6532044",
       "sourceForwardAxis": "+Z",
       "bakeRotationYRadians": 3.141592653589793,
-      "verdict": {"visibleGeometry": "pass", "supportPlacement": "pass", "scale": "pass", "forward": "pass"}
+      "verdict": {
+        "visibleGeometry": "pass",
+        "supportPlacement": "pass",
+        "scale": "pass",
+        "forward": "pass"
+      }
     },
     {
       "slug": "hoverboard-standing",
@@ -230,7 +308,12 @@
       "assetHash": "sha256:8b0afca1e4e679b80944f456d985088837f62e7f17ee40a28b52e7f63f97505d",
       "sourceForwardAxis": "+Z",
       "bakeRotationYRadians": 3.141592653589793,
-      "verdict": {"visibleGeometry": "pass", "supportPlacement": "pass", "scale": "pass", "forward": "pass"}
+      "verdict": {
+        "visibleGeometry": "pass",
+        "supportPlacement": "pass",
+        "scale": "pass",
+        "forward": "pass"
+      }
     },
     {
       "slug": "prone-glider",
@@ -239,7 +322,12 @@
       "assetHash": "sha256:9577634ecd5c88e2eb79dff5cbd7313fd0f07c1476d2834248c0970cb6453076",
       "sourceForwardAxis": "+Z",
       "bakeRotationYRadians": 3.141592653589793,
-      "verdict": {"visibleGeometry": "pass", "supportPlacement": "pass", "scale": "pass", "forward": "pass"}
+      "verdict": {
+        "visibleGeometry": "pass",
+        "supportPlacement": "pass",
+        "scale": "pass",
+        "forward": "pass"
+      }
     },
     {
       "slug": "quadruped-animal",
@@ -248,7 +336,12 @@
       "assetHash": "sha256:70c16cd59ba37ec17ddb5481aa92f9442f54d250c885ffdf778313e5f10f206b",
       "sourceForwardAxis": "-X",
       "bakeRotationYRadians": -1.5707963267948966,
-      "verdict": {"visibleGeometry": "pass", "supportPlacement": "pass", "scale": "pass", "forward": "pass"}
+      "verdict": {
+        "visibleGeometry": "pass",
+        "supportPlacement": "pass",
+        "scale": "pass",
+        "forward": "pass"
+      }
     },
     {
       "slug": "quadruped-reptile",
@@ -257,7 +350,12 @@
       "assetHash": "sha256:fab6b515fec64d61325291573d615609ab0066d795087a6533143cecedf5a9b3",
       "sourceForwardAxis": "+Z",
       "bakeRotationYRadians": 3.141592653589793,
-      "verdict": {"visibleGeometry": "pass", "supportPlacement": "pass", "scale": "pass", "forward": "pass"}
+      "verdict": {
+        "visibleGeometry": "pass",
+        "supportPlacement": "pass",
+        "scale": "pass",
+        "forward": "pass"
+      }
     },
     {
       "slug": "quadruped-ridable",
@@ -266,7 +364,12 @@
       "assetHash": "sha256:a35efef1b768f3aecf28c985cb77ed4528ee64737d514956a97f156bdf941596",
       "sourceForwardAxis": "-X",
       "bakeRotationYRadians": -1.5707963267948966,
-      "verdict": {"visibleGeometry": "pass", "supportPlacement": "pass", "scale": "pass", "forward": "pass"}
+      "verdict": {
+        "visibleGeometry": "pass",
+        "supportPlacement": "pass",
+        "scale": "pass",
+        "forward": "pass"
+      }
     },
     {
       "slug": "snake-animal",
@@ -275,7 +378,12 @@
       "assetHash": "sha256:660e62620429c492e68a81834a245a5c698ee85c32714817bb5e3da40e18217c",
       "sourceForwardAxis": "+X",
       "bakeRotationYRadians": 1.5707963267948966,
-      "verdict": {"visibleGeometry": "pass", "supportPlacement": "pass", "scale": "pass", "forward": "pass"}
+      "verdict": {
+        "visibleGeometry": "pass",
+        "supportPlacement": "pass",
+        "scale": "pass",
+        "forward": "pass"
+      }
     },
     {
       "slug": "three-wheel",
@@ -284,7 +392,12 @@
       "assetHash": "sha256:3eec5cb1503bf86c872461dbb8aa3b81a7cdf4b6625a3683a9215b563cfb9906",
       "sourceForwardAxis": "+Z",
       "bakeRotationYRadians": 3.141592653589793,
-      "verdict": {"visibleGeometry": "pass", "supportPlacement": "pass", "scale": "pass", "forward": "pass"}
+      "verdict": {
+        "visibleGeometry": "pass",
+        "supportPlacement": "pass",
+        "scale": "pass",
+        "forward": "pass"
+      }
     },
     {
       "slug": "tracked",
@@ -293,7 +406,12 @@
       "assetHash": "sha256:c0c3e762f956a9cbcfe00fe760c765c220e4b12be1eaafa93696f7cc97652acd",
       "sourceForwardAxis": "+Z",
       "bakeRotationYRadians": 3.141592653589793,
-      "verdict": {"visibleGeometry": "pass", "supportPlacement": "pass", "scale": "pass", "forward": "pass"}
+      "verdict": {
+        "visibleGeometry": "pass",
+        "supportPlacement": "pass",
+        "scale": "pass",
+        "forward": "pass"
+      }
     },
     {
       "slug": "two-wheel-motorcycle",
@@ -302,7 +420,12 @@
       "assetHash": "sha256:b632297efb15870385d4fc053ae40dbd6f516eb660b698124069e9d36ed1972f",
       "sourceForwardAxis": "+X",
       "bakeRotationYRadians": 1.5707963267948966,
-      "verdict": {"visibleGeometry": "pass", "supportPlacement": "pass", "scale": "pass", "forward": "pass"}
+      "verdict": {
+        "visibleGeometry": "pass",
+        "supportPlacement": "pass",
+        "scale": "pass",
+        "forward": "pass"
+      }
     },
     {
       "slug": "two-wheel-motorcycle-variant",
@@ -311,7 +434,12 @@
       "assetHash": "sha256:cbd48d5bd3dd30e4c51fa898dc41a983fcb756843b165d66d8df4aba1c02103b",
       "sourceForwardAxis": "+X",
       "bakeRotationYRadians": 1.5707963267948966,
-      "verdict": {"visibleGeometry": "pass", "supportPlacement": "pass", "scale": "pass", "forward": "pass"}
+      "verdict": {
+        "visibleGeometry": "pass",
+        "supportPlacement": "pass",
+        "scale": "pass",
+        "forward": "pass"
+      }
     }
   ],
   "correctionEvidence": {
@@ -330,5 +458,410 @@
     "These are static Character-controlled visual Subjects. This evidence does not claim vehicle driving, flight, mount, NPC behavior, or authored animation support.",
     "Collision evidence is the existing Character support/capsule behavior, not silhouette-exact per-mesh collision.",
     "The xier120 entries remain experimental or advanced and productionReady false; they are intentionally absent from the public-default subject picker."
-  ]
+  ],
+  "finalRefresh": {
+    "evidenceLayer": "final-code-browser-refresh",
+    "outcome": "pass",
+    "codeCommit": "f22ab9b9992084072141be17b40c86450fb3c017",
+    "rendered": {
+      "definitionCount": 19,
+      "viewCount": 57,
+      "diagnosticCount": 0,
+      "consoleErrorCount": 0,
+      "entries": [
+        {
+          "slug": "aerial-cockpit",
+          "definitionRef": "worldkit://subject-definition/xier120.aerial-cockpit@1",
+          "views": [
+            "back",
+            "right",
+            "front"
+          ],
+          "outcome": "pass"
+        },
+        {
+          "slug": "aerial-hanging",
+          "definitionRef": "worldkit://subject-definition/xier120.aerial-hanging@1",
+          "views": [
+            "back",
+            "right",
+            "front"
+          ],
+          "outcome": "pass"
+        },
+        {
+          "slug": "aerial-seated",
+          "definitionRef": "worldkit://subject-definition/xier120.aerial-seated@1",
+          "views": [
+            "back",
+            "right",
+            "front"
+          ],
+          "outcome": "pass"
+        },
+        {
+          "slug": "aerial-seated-variant",
+          "definitionRef": "worldkit://subject-definition/xier120.aerial-seated-variant@1",
+          "views": [
+            "back",
+            "right",
+            "front"
+          ],
+          "outcome": "pass"
+        },
+        {
+          "slug": "aerial-standing",
+          "definitionRef": "worldkit://subject-definition/xier120.aerial-standing@1",
+          "views": [
+            "back",
+            "right",
+            "front"
+          ],
+          "outcome": "pass"
+        },
+        {
+          "slug": "biped-animal",
+          "definitionRef": "worldkit://subject-definition/xier120.biped-animal@1",
+          "views": [
+            "back",
+            "right",
+            "front"
+          ],
+          "outcome": "pass"
+        },
+        {
+          "slug": "flat-seated-glider",
+          "definitionRef": "worldkit://subject-definition/xier120.flat-seated-glider@1",
+          "views": [
+            "back",
+            "right",
+            "front"
+          ],
+          "outcome": "pass"
+        },
+        {
+          "slug": "four-wheel",
+          "definitionRef": "worldkit://subject-definition/xier120.four-wheel@1",
+          "views": [
+            "back",
+            "right",
+            "front"
+          ],
+          "outcome": "pass"
+        },
+        {
+          "slug": "four-wheel-variant",
+          "definitionRef": "worldkit://subject-definition/xier120.four-wheel-variant@1",
+          "views": [
+            "back",
+            "right",
+            "front"
+          ],
+          "outcome": "pass"
+        },
+        {
+          "slug": "hoverboard-standing",
+          "definitionRef": "worldkit://subject-definition/xier120.hoverboard-standing@1",
+          "views": [
+            "back",
+            "right",
+            "front"
+          ],
+          "outcome": "pass"
+        },
+        {
+          "slug": "prone-glider",
+          "definitionRef": "worldkit://subject-definition/xier120.prone-glider@1",
+          "views": [
+            "back",
+            "right",
+            "front"
+          ],
+          "outcome": "pass"
+        },
+        {
+          "slug": "quadruped-animal",
+          "definitionRef": "worldkit://subject-definition/xier120.quadruped-animal@1",
+          "views": [
+            "back",
+            "right",
+            "front"
+          ],
+          "outcome": "pass"
+        },
+        {
+          "slug": "quadruped-reptile",
+          "definitionRef": "worldkit://subject-definition/xier120.quadruped-reptile@1",
+          "views": [
+            "back",
+            "right",
+            "front"
+          ],
+          "outcome": "pass"
+        },
+        {
+          "slug": "quadruped-ridable",
+          "definitionRef": "worldkit://subject-definition/xier120.quadruped-ridable@1",
+          "views": [
+            "back",
+            "right",
+            "front"
+          ],
+          "outcome": "pass"
+        },
+        {
+          "slug": "snake-animal",
+          "definitionRef": "worldkit://subject-definition/xier120.snake-animal@1",
+          "views": [
+            "back",
+            "right",
+            "front"
+          ],
+          "outcome": "pass"
+        },
+        {
+          "slug": "three-wheel",
+          "definitionRef": "worldkit://subject-definition/xier120.three-wheel@1",
+          "views": [
+            "back",
+            "right",
+            "front"
+          ],
+          "outcome": "pass"
+        },
+        {
+          "slug": "tracked",
+          "definitionRef": "worldkit://subject-definition/xier120.tracked@1",
+          "views": [
+            "back",
+            "right",
+            "front"
+          ],
+          "outcome": "pass"
+        },
+        {
+          "slug": "two-wheel-motorcycle",
+          "definitionRef": "worldkit://subject-definition/xier120.two-wheel-motorcycle@1",
+          "views": [
+            "back",
+            "right",
+            "front"
+          ],
+          "outcome": "pass"
+        },
+        {
+          "slug": "two-wheel-motorcycle-variant",
+          "definitionRef": "worldkit://subject-definition/xier120.two-wheel-motorcycle-variant@1",
+          "views": [
+            "back",
+            "right",
+            "front"
+          ],
+          "outcome": "pass"
+        }
+      ]
+    },
+    "trustedHostInput": [
+      {
+        "role": "composition",
+        "definitionRef": "worldkit://subject-definition/xier120.aerial-cockpit@1",
+        "trustedEventCount": 18,
+        "untrustedEventCount": 0,
+        "beforeSimulationTick": 180,
+        "afterSimulationTick": 364,
+        "beforePositionMetersXYZ": [
+          0,
+          0.4332033459693553,
+          18.000000016642552
+        ],
+        "afterPositionMetersXYZ": [
+          1.6431684748590336,
+          0.43401491605757203,
+          19.945750775224056
+        ],
+        "afterFacingYawRadians": 3.2644739887546153,
+        "afterMovementMedium": "ground",
+        "cameraBefore": {
+          "mode": "tracking",
+          "id": "camera-main",
+          "targetEntityId": "xier120-subject",
+          "positionMetersXYZ": [
+            0.00008400135019258683,
+            3.865329378475675,
+            8.2409880459158
+          ],
+          "activeCameraProfileRef": "worldkit://camera-profile/orbit.medium@1",
+          "activeCameraRigRef": "worldkit://camera-rig/orbit-follow@1",
+          "activeCameraModifierRefs": [],
+          "safeFallbackActive": false,
+          "viewYawOffsetRadians": 3.141592486505084,
+          "viewPitchOffsetRadians": 0,
+          "viewDistanceOffsetMeters": 4.999999985378718
+        },
+        "cameraAfter": {
+          "mode": "tracking",
+          "id": "camera-main",
+          "targetEntityId": "xier120-subject",
+          "positionMetersXYZ": [
+            -7.434754237144251,
+            5.358320870712881,
+            14.540703083332508
+          ],
+          "activeCameraProfileRef": "worldkit://camera-profile/orbit.medium@1",
+          "activeCameraRigRef": "worldkit://camera-rig/orbit-follow@1",
+          "activeCameraModifierRefs": [],
+          "safeFallbackActive": false,
+          "viewYawOffsetRadians": 2.435304441282726,
+          "viewPitchOffsetRadians": 0.13997687240464204,
+          "viewDistanceOffsetMeters": 6.269465923777255
+        },
+        "diagnosticCount": 0,
+        "outcome": "pass"
+      },
+      {
+        "role": "animal",
+        "definitionRef": "worldkit://subject-definition/xier120.quadruped-animal@1",
+        "trustedEventCount": 18,
+        "untrustedEventCount": 0,
+        "beforeSimulationTick": 180,
+        "afterSimulationTick": 360,
+        "beforePositionMetersXYZ": [
+          0,
+          0.4332023207845064,
+          18.000000016554093
+        ],
+        "afterPositionMetersXYZ": [
+          1.7563068666373634,
+          0.4339811457339293,
+          19.821408400406543
+        ],
+        "afterFacingYawRadians": 3.264483414436075,
+        "afterMovementMedium": "ground",
+        "cameraBefore": {
+          "mode": "tracking",
+          "id": "camera-main",
+          "targetEntityId": "xier120-subject",
+          "positionMetersXYZ": [
+            0.00008363455150605113,
+            3.8653292112968427,
+            8.240988237198474
+          ],
+          "activeCameraProfileRef": "worldkit://camera-profile/orbit.medium@1",
+          "activeCameraRigRef": "worldkit://camera-rig/orbit-follow@1",
+          "activeCameraModifierRefs": [],
+          "safeFallbackActive": false,
+          "viewYawOffsetRadians": 3.141592486505084,
+          "viewPitchOffsetRadians": 0,
+          "viewDistanceOffsetMeters": 4.999999985378718
+        },
+        "cameraAfter": {
+          "mode": "tracking",
+          "id": "camera-main",
+          "targetEntityId": "xier120-subject",
+          "positionMetersXYZ": [
+            -7.363165196283511,
+            5.37390309434914,
+            14.39405513993727
+          ],
+          "activeCameraProfileRef": "worldkit://camera-profile/orbit.medium@1",
+          "activeCameraRigRef": "worldkit://camera-rig/orbit-follow@1",
+          "activeCameraModifierRefs": [],
+          "safeFallbackActive": false,
+          "viewYawOffsetRadians": 2.4353010515296134,
+          "viewPitchOffsetRadians": 0.1399845728884185,
+          "viewDistanceOffsetMeters": 6.2742187763934565
+        },
+        "diagnosticCount": 0,
+        "outcome": "pass"
+      },
+      {
+        "role": "vehicle",
+        "definitionRef": "worldkit://subject-definition/xier120.tracked@1",
+        "trustedEventCount": 18,
+        "untrustedEventCount": 0,
+        "beforeSimulationTick": 180,
+        "afterSimulationTick": 362,
+        "beforePositionMetersXYZ": [
+          0,
+          0.4332044099005956,
+          18.00000001672637
+        ],
+        "afterPositionMetersXYZ": [
+          1.6322814908184733,
+          0.43391421482308834,
+          19.796376320666887
+        ],
+        "afterFacingYawRadians": 3.264442627998147,
+        "afterMovementMedium": "ground",
+        "cameraBefore": {
+          "mode": "tracking",
+          "id": "camera-main",
+          "targetEntityId": "xier120-subject",
+          "positionMetersXYZ": [
+            0.00008437938579398751,
+            3.865329550447623,
+            8.240987847427254
+          ],
+          "activeCameraProfileRef": "worldkit://camera-profile/orbit.medium@1",
+          "activeCameraRigRef": "worldkit://camera-rig/orbit-follow@1",
+          "activeCameraModifierRefs": [],
+          "safeFallbackActive": false,
+          "viewYawOffsetRadians": 3.141592486505084,
+          "viewPitchOffsetRadians": 0,
+          "viewDistanceOffsetMeters": 4.999999985378718
+        },
+        "cameraAfter": {
+          "mode": "tracking",
+          "id": "camera-main",
+          "targetEntityId": "xier120-subject",
+          "positionMetersXYZ": [
+            -7.4127364948059675,
+            5.347008526723322,
+            14.405741584995832
+          ],
+          "activeCameraProfileRef": "worldkit://camera-profile/orbit.medium@1",
+          "activeCameraRigRef": "worldkit://camera-rig/orbit-follow@1",
+          "activeCameraModifierRefs": [],
+          "safeFallbackActive": false,
+          "viewYawOffsetRadians": 2.435270470085049,
+          "viewPitchOffsetRadians": 0.1399788191506783,
+          "viewDistanceOffsetMeters": 6.26578048443105
+        },
+        "diagnosticCount": 0,
+        "outcome": "pass"
+      }
+    ],
+    "canonicalTwoInstance": {
+      "evidenceLayer": "canonical-rendered-browser-lifecycle",
+      "outcome": "pass",
+      "schemaVersion": 4,
+      "subjectStateCount": 2,
+      "definitionRef": "worldkit://subject-definition/xier120.quadruped-animal@1",
+      "definitionHash": "sha256:9296e43b249a68cd7993caeef19dbba951ed3822d97b2ab3467f4213ec108818",
+      "entityIds": [
+        "xier120-secondary",
+        "xier120-subject"
+      ],
+      "resourcesBeforeReset": {
+        "phase": "ready",
+        "meshCount": 39,
+        "physicsBodyCount": 3,
+        "terrainSampleCount": 4225
+      },
+      "resourcesAfterReset": {
+        "phase": "ready",
+        "meshCount": 39,
+        "physicsBodyCount": 3,
+        "terrainSampleCount": 4225
+      },
+      "resetReconstruction": {
+        "worldSessionChanged": true,
+        "newSimulationTick": 0,
+        "oldCanvasDisconnected": true,
+        "liveCanvasCount": 1,
+        "oldWorldStateQueryRejected": true
+      },
+      "diagnosticCount": 0
+    }
+  }
 }
