@@ -106,6 +106,15 @@ mandatory; `unknown`, `later`, `compatibility` or a release without an exact rem
 | --- | --- | --- | --- | --- | --- |
 | _None currently approved_ | — | — | — | — | — |
 
+## Post-G19 structural cleanup commitment
+
+The compatibility deferral ledger remains empty: G19-8 does not retain a superseded alias or converter.
+The current Scene DSL center-height to Canonical support-origin conversion has instead been renamed to
+`SCENE_HUMANOID_SPAWN_CENTER_OFFSET_METERS` and registered as `SCENE-ORIGIN-1` in the historical naming
+cleanup plan. It is a current semantic bridge, not a legacy input compatibility path. `HNC-F1` must remove it
+before the first SDK Alpha release after the Scene origin/collider-derived placement contract is frozen and
+all scene, Outdoor Gameplay and Plan gates pass without the fixed 0.9m conversion.
+
 ## Final host disposition
 
 **Not yet performed.** Before changing this status, the host must:

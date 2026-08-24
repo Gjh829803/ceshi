@@ -741,6 +741,7 @@ Placement S1、Simulation Take / Control Capture V1 与 Validation Capture/Integ
 | G19-6 | **已完成并在 `main`** | exact 39-key Browser Protocol V5 Gameplay 唯一入口、Snapshot V4、Reset/Rebind、Runtime Activity、Authoring/CLI/Capture/Take consumer cutover；Execution Subject locomotion Capability lock 与 Canonical capability state | G19-5 | `main@5ffd031`；typecheck、build、168 files / 2,134 tests、Canonical/Placement/Rigged/G Bot/R0/R1/R1b 与两项 Capture verifier 全通过；无 open confirmed P0/P1/P2 |
 | G19-7 | **已完成于集成分支** | Outdoor/catalog route、page/artifact lifecycle 与六场景接线，不增加第二套 Gameplay 真相 | G19-6 | `da90f16` + completion record `1594823`；6/6 Gameplay、6/6 artifact-only、unknown-scene fail-closed Browser Gate 通过 |
 | G19-8 | **进行中** | 未发布协议 clean break、历史命名/兼容路径专项清理、零消费者 census、G19 整体全量验证、主 Agent深审与最终 disposition | G19-7 | UCCB-00 至 UCCB-40 已形成提交；UCCB-50/60/65/70、全量 Gate 和最终 completion claim 仍开放 |
+| HNC-F1 | 阻塞于 G19-8，Alpha 前强制执行 | 对当时全部公共命名、exports、parser、Browser/CLI、生成资产和隐式 fallback 再做一次全面兼容性清理；同时关闭 `SCENE-ORIGIN-1` | G19-8、Scene spawn-origin 与 collider-derived placement 合同 | 最新 clean-break machine gate + 人工语义分类；Scene 固定 0.9m bridge 删除；场景/Outdoor/Plan gates 全绿 |
 | M8-S1 | 阻塞于 G19-8 | 首个 `mountedOn` 人—滑板关系切片 | G19-8 | Relationship/Action/Event/Receipt/Capture 端到端一致 |
 
 G19-8 的 clean-break 子任务以
@@ -770,6 +771,12 @@ UCCB-65 的任务账本见
 该任务不以“删除所有低版本后缀”为目标：尚无替代版本且仍是唯一权威的嵌套合同必须保留并登记
 为 `current-authority`；只有已有当前替代实现的旧名称、alias、converter、双读写和 fallback 才进入
 `superseded-delete`。
+
+即使 G19-8 达到零历史兼容路径，也必须在首次 SDK Alpha 前执行 `HNC-F1` 全面复查，不能把本次
+census 当成永久证明。当前仍有语义职责、但未来应由显式合同替代的
+`SCENE_HUMANOID_SPAWN_CENTER_OFFSET_METERS` 已登记为 `SCENE-ORIGIN-1`：它不是兼容 alias，
+删除门禁是 Scene 明确 spawn origin 或从锁定 Collider 推导 placement，迁移全部 catalog scene，
+并通过 `test:scenes`、Outdoor Gameplay、Plan/Scene Plan gates。
 
 G19-4E 已关闭此前的两项验证债务：Simulation Take 不再手改 `worldPackageRootHash`，而由
 `generate:example-takes` 从 canonical WorldPackage identity 原子生成；两个 Route 重型套件保留

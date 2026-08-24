@@ -50,12 +50,39 @@ The following are explicitly **not** bulk-renamed by this plan: current nested c
 | Work item | Status at creation | Evidence / next gate |
 | --- | --- | --- |
 | HNC-00 | Complete | `pnpm verify:unreleased-clean-break` has focused classifier coverage and currently reports zero forbidden matches |
-| HNC-10 | In progress under UCCB-60 | Re-run public export and obsolete symbol census after Runtime commits |
-| HNC-20 | In progress under UCCB-50 | Finish explicit `unbound | possessed` projection and prove reset/release never use an initial-control fallback |
-| HNC-30 | Pending | Regenerate Placement and other canonical fixtures after current-only contracts stabilize |
-| HNC-40 | Pending | Attach exact match counts and retained-current classifications to the G19-8 completion review |
-| HNC-50 | Pending | Current approved deferred-removal ledger is empty |
+| HNC-10 | Complete | Superseded top-level contracts and public exports were removed; active code exposes only Authoring V4, IR V4, Plan V5, Snapshot V4 and Browser V5 |
+| HNC-20 | Complete | Runtime possession is explicitly `unbound | possessed`; reset/release do not restore an initial-control fallback, and no public direct-bind compatibility path remains |
+| HNC-30 | Complete | Canonical package fixtures, Registry expectations and both example Takes were regenerated from their current owning generators and identities |
+| HNC-40 | Complete | The live census reports 632 scanned files, zero forbidden matches and 489 retained current-authority matches |
+| HNC-50 | Complete | No superseded compatibility path is deferred; the approved deferral ledger is empty |
 | HNC-60 | Pending | Run the complete G19-8 matrix on one committed candidate |
+
+## 4. Post-G19 Cleanliness Commitment
+
+G19-8 removes every compatibility path known to have an existing current replacement. It does not authorize
+the repository to stop auditing after merge. `HNC-F1` is a mandatory pre-Alpha audit over public names,
+package exports, parsers, Browser/CLI methods, generated artifacts and implicit fallback behavior. It must run
+the latest clean-break verifier plus a fresh human classification against the then-current contracts; a green
+historical census copied from G19-8 is not sufficient.
+
+One current semantic bridge is explicitly scheduled for that audit:
+
+#### SCENE-ORIGIN-1 — Scene humanoid center offset bridge
+
+- classification: current-authority bridge; not an approved compatibility alias
+- files: `apps/playground/src/outdoor-scene-gameplay-loader.ts`, `packages/world/src/scene.ts`
+- current_owner: World Scene DSL and Playground Outdoor importer
+- current_semantics: Scene DSL humanoid spawn uses a center-height convention while Canonical Runtime placement uses the support-origin convention
+- current_name: `SCENE_HUMANOID_SPAWN_CENTER_OFFSET_METERS`
+- removal_task: HNC-F1 / SCENE-ORIGIN-1
+- depends_on: a frozen Scene spawn-origin contract and collider-derived placement contract
+- delete_when: Scene spawn requests declare their origin convention or resolve it from the locked collider; all catalog scenes are migrated; `pnpm test:scenes`, `pnpm verify:outdoor-gameplay`, `pnpm plan:check`, and `pnpm plan:scene:check` pass without a fixed 0.9m importer conversion
+- verification: exact constant/reference census plus the four gates above
+- latest_allowed_milestone: before the first SDK Alpha release
+
+This bridge was renamed during G19-8 so it no longer impersonates historical compatibility. It remains a
+tracked design cleanup because deleting the number before the replacement contract exists would change scene
+placement semantics rather than improve cleanliness.
 
 ### Task 1: Freeze the machine census
 
@@ -96,7 +123,7 @@ The following are explicitly **not** bulk-renamed by this plan: current nested c
 - Consumes: current Authoring V4, Normalized IR V4, ExecutionPlan V5, Registry current definitions, Browser V5 and Snapshot V4.
 - Produces: one public symbol for each current concept and no importable alias for a superseded top-level contract.
 
-- [ ] **Step 1: Capture the exact pre-change export census**
+- [x] **Step 1: Capture the exact pre-change export census**
 
   Run:
 
@@ -106,11 +133,11 @@ The following are explicitly **not** bulk-renamed by this plan: current nested c
     packages apps scripts examples
   ```
 
-- [ ] **Step 2: For each match, prove its replacement and remove the declaration, export and old-construction test together**
+- [x] **Step 2: For each match, prove its replacement and remove the declaration, export and old-construction test together**
 
   Do not rename a current nested contract solely to remove a numeric suffix. Any retained match must be classified in Task 5.
 
-- [ ] **Step 3: Run the owning package tests and typecheck**
+- [x] **Step 3: Run the owning package tests and typecheck**
 
   Run: `pnpm typecheck && pnpm test`
 
@@ -126,15 +153,15 @@ The following are explicitly **not** bulk-renamed by this plan: current nested c
 - Consumes: Gameplay Possession as the only runtime control owner and strict current-version parsers.
 - Produces: fail-closed current-only behavior with no converter, dual-read, union acceptor or hidden initial-control fallback.
 
-- [ ] **Step 1: Add or retain failing reproducers for every behavior being deleted**
+- [x] **Step 1: Add or retain failing reproducers for every behavior being deleted**
 
   Required examples include: old schema rejection, release remaining unbound, reset remaining unbound until the Host submits `control.bind`, and stale controller input not moving the newly possessed entity.
 
-- [ ] **Step 2: Delete the compatibility branch rather than translating old input**
+- [x] **Step 2: Delete the compatibility branch rather than translating old input**
 
   Runtime control projection must use a discriminated `unbound | possessed` state. Current strict guards may reject wrong versions but must not convert them.
 
-- [ ] **Step 3: Run focused Runtime, Host, Browser and CLI tests**
+- [x] **Step 3: Run focused Runtime, Host, Browser and CLI tests**
 
   Run:
 
@@ -154,7 +181,7 @@ The following are explicitly **not** bulk-renamed by this plan: current nested c
 - Consumes: current Authoring V4 and current generators.
 - Produces: fixtures/artifacts whose serialized top-level contracts match the current authority and whose hashes are generated, not hand-edited.
 
-- [ ] **Step 1: Census serialized top-level versions by kind**
+- [x] **Step 1: Census serialized top-level versions by kind**
 
   Run:
 
@@ -162,11 +189,11 @@ The following are explicitly **not** bulk-renamed by this plan: current nested c
   rg -n '"kind"\s*:\s*"worldkit-authoring-spec"|"schemaVersion"\s*:\s*[1-3]' examples apps packages scripts artifacts
   ```
 
-- [ ] **Step 2: Classify nested current schemas by `kind` and regenerate only superseded top-level artifacts**
+- [x] **Step 2: Classify nested current schemas by `kind` and regenerate only superseded top-level artifacts**
 
   A nested schema version 1–3 is kept when its `kind` remains the sole current authority.
 
-- [ ] **Step 3: Run owning generators and verify deterministic diffs**
+- [x] **Step 3: Run owning generators and verify deterministic diffs**
 
   Run: `pnpm verify:placement-layout && pnpm verify:control-capture && pnpm verify:validation-capture`
 
@@ -184,11 +211,11 @@ The following are explicitly **not** bulk-renamed by this plan: current nested c
 
   Copy evidence only from commands rerun on the committed integrated candidate.
 
-- [ ] **Step 2: Record every retained versioned symbol family as current authority or historical-only**
+- [x] **Step 2: Record every retained versioned symbol family as current authority or historical-only**
 
   Each current-authority family must name its owner and state that no replacement exists. Do not create cleanup work merely because a suffix is small.
 
-- [ ] **Step 3: Resolve or fully register every blocked deletion**
+- [x] **Step 3: Resolve or fully register every blocked deletion**
 
   Each row requires: superseded path, exact production consumer, blocker, owner, removal task, `depends_on`, executable `delete_when`, verification command and latest allowed milestone. The current expected ledger is empty.
 
