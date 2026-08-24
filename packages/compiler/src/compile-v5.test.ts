@@ -69,7 +69,7 @@ import { sha256CanonicalJson } from "@whitebox-world/protocol";
 import { deriveColliderSubshapeIdV1 } from "@whitebox-world/traversal";
 import { createValidAuthoringSpec } from "../../authoring/src/test-fixture";
 
-import { compileWorldV5 } from "./index";
+import { compileWorld, compileWorldV5 } from "./index";
 
 const GAMEPLAY_BOOTSTRAP_LOCK =
   createGameplayBootstrapResourceLockEntryV1(createGameplayBootstrapV1({
@@ -235,6 +235,28 @@ function compile(spec = routeWorld()) {
 }
 
 describe("compileWorldV5", () => {
+  it("uses V5 as the unversioned current compiler boundary", () => {
+    const normalized = normalizeAuthoringSpecV4(routeWorld());
+    if (!normalized.ok || isNil(normalized.value) ||
+      isNil(normalized.normalizedWorldIrHash)) {
+      throw new Error("Fixture normalization failed.");
+    }
+
+    const result = compileWorld({
+      normalizedWorldIr: normalized.value,
+      normalizedWorldIrHash: normalized.normalizedWorldIrHash,
+      gameplayBootstrapResourceLock: GAMEPLAY_BOOTSTRAP_LOCK,
+    });
+
+    expect(result).toMatchObject({
+      ok: true,
+      executionPlan: {
+        schemaVersion: 5,
+        initialControlledEntityId: "player",
+      },
+    });
+  });
+
   it("rejects accessor-backed input without invoking the accessor", () => {
     const normalized = normalizeAuthoringSpecV4(routeWorld());
     if (!normalized.ok || isNil(normalized.value) ||

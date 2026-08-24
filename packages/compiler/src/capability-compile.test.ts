@@ -1,12 +1,30 @@
 import { describe, expect, it } from "vitest";
 
 import { normalizeAuthoringSpec } from "@whitebox-world/authoring";
+import {
+  createGameplayBootstrapResourceLockEntryV1,
+  createGameplayBootstrapV1,
+} from "@whitebox-world/gameplay-contracts";
 import { sha256CanonicalJson } from "@whitebox-world/protocol";
 import type { ExecutionSubjectCapabilityAssemblyV1 } from "@whitebox-world/runtime-contracts";
 import { builtInSubjectResourceRegistry } from "@whitebox-world/subject-registry";
 
-import { createValidAuthoringSpec } from "../../authoring/src/test-fixture";
+import {
+  createValidAuthoringSpecV4 as createValidAuthoringSpec,
+} from "../../authoring/src/test-fixture";
 import { compileWorld } from "./index";
+
+const GAMEPLAY_BOOTSTRAP_LOCK =
+  createGameplayBootstrapResourceLockEntryV1(createGameplayBootstrapV1({
+    kind: "gameplay-bootstrap",
+    id: "capability-compile-test.gameplay",
+    version: 1,
+    resourceRef: "worldkit://gameplay-bootstrap/capability-compile-test@1",
+    entityDescriptors: [],
+    featureResourceLocks: [],
+    semanticActionDefinitions: [],
+    availableCapabilityRefs: [],
+  }));
 
 const IMPLEMENTED_PACKAGES = [
   {
@@ -57,6 +75,7 @@ function compilePackage(
   const compiled = compileWorld({
     normalizedWorldIr: normalized.value,
     normalizedWorldIrHash: normalized.normalizedWorldIrHash,
+    gameplayBootstrapResourceLock: GAMEPLAY_BOOTSTRAP_LOCK,
   });
   if (!compiled.ok || compiled.executionPlan === undefined) {
     throw new Error(`Capability package failed to compile: ${JSON.stringify(compiled.diagnostics)}`);
@@ -166,6 +185,7 @@ describe("capability-driven Subject compilation", () => {
     expect(compileWorld({
       normalizedWorldIr: forged,
       normalizedWorldIrHash: sha256CanonicalJson(forged),
+      gameplayBootstrapResourceLock: GAMEPLAY_BOOTSTRAP_LOCK,
     })).toMatchObject({
       ok: false,
       diagnostics: [{
