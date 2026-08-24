@@ -1992,7 +1992,7 @@ function v2RowInput(): RouteValidationRowInputV2 {
 }
 
 describe("createRouteValidationReportV2 Path/Probe V2 rows", () => {
-  it("accepts a complete V2 Build Input, Path, and Probe row beside V1", () => {
+  it("accepts a complete V2 Build Input, Path, and Probe row", () => {
     const report = createRouteValidationReportV2({
       reportId: "v2-route-validation",
       subject: SUBJECT,
