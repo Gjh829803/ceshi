@@ -290,7 +290,36 @@
 
 ---
 
-### Task 8: Animation Readiness, Full Gates, Review, and Main Integration
+### Task 8: Reusable Batch Subject Asset Intake Guide
+
+**Files:**
+- Modify: `docs/superpowers/skills/product-asset-intake.md`
+- Create: `docs/superpowers/skills/product-asset-intake-static-assets.md`
+- Modify: `docs/16-subject-assets-3c-integration.md`
+
+**Interfaces:**
+- Consumes: the verified xier120 source inventory, deterministic bake, Registry, resolver, verifier, and browser evidence workflow plus the existing rigged G Bot intake workflow.
+- Produces: one discoverable intake router and one detailed static/batch guide that another agent can follow without rediscovering repository ownership or claiming unsupported semantics.
+
+- [ ] **Step 1: Classify the existing documentation gap**
+
+  Record that `product-asset-intake.md` covers one already-normalized Rigged GLB but not source-only FBX batches or ready static GLB batches. Preserve its existing G Bot contract as the Rigged route.
+
+- [ ] **Step 2: Rewrite the entry document as a mode router**
+
+  Route among: ready Rigged GLB, ready Static GLB, and source FBX requiring deterministic bake. State the shared canonical invariants and link the static/batch guide only for the latter two modes.
+
+- [ ] **Step 3: Write the static/batch operational guide**
+
+  Include intake checklist, source Catalog fields, immutable hash validation, ready-GLB admission versus FBX bake decision, explicit units/axes/pivot/orientation config, reflected-winding rule, generated inventory, Asset/Collider/V3 Definition refs, all resolver surfaces including trusted `worldkit run`, direct `subjectDefinitionRef` example, capability catalog discovery, license policy, automated/rendered/manual gates, and common failures. Use xier120 as a concrete example while keeping names generic.
+
+- [ ] **Step 4: Validate the guide against the actual implementation**
+
+  Check every referenced path/command/export exists; run `git diff --check`; scan for placeholders and contradictory claims. An independent reviewer executes a realistic “import a new static asset batch” dry run from the documents and reports any missing decision or integration surface.
+
+---
+
+### Task 9: Animation Readiness, Full Gates, Review, and Main Integration
 
 **Files:**
 - Create: `docs/reviews/2026-08-24-xier120-animation-readiness.md`
@@ -317,6 +346,6 @@
 
   Use a fresh final review ID, keep Cursor read-only, classify each P0-P3 finding, and independently reproduce any confirmed issue before editing.
 
-- [ ] **Step 5: Merge into `main` and verify branch state**
+- [ ] **Step 5: Merge into `main`, push, and verify branch state**
 
-  Ensure the worktree is clean and all commits are on the feature branch. In the primary checkout, verify no unrelated user changes overlap, merge `codex/xier120-non-human-subject-integration` non-destructively, rerun `pnpm verify:xier120-subjects` and a focused smoke test on `main`, then report exact `main` HEAD and working-tree state.
+  Ensure the worktree is clean and all commits are on the feature branch. In the primary checkout, verify no unrelated user changes overlap, fetch and revalidate `origin/main`, merge `codex/xier120-non-human-subject-integration` non-destructively, rerun `pnpm verify:xier120-subjects` and a focused smoke test on `main`, push the verified `main` to `origin/main`, fetch again, and report matching local/remote HEAD plus both working-tree states.
