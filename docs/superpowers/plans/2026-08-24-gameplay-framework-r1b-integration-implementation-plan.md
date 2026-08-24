@@ -39,8 +39,9 @@
 | G19-3 Gameplay core, WorldSession and RuntimeHost | Complete on latest-main integration branch | The original checkpoint starts at `f71bcb3`; the foundation has been three-way merged onto main `381255f`, its contracts use the repository `isNil` convention, and the focused 14-file / 468-test matrix plus typecheck pass. It remains trusted in-process staging, not a Browser/Babylon production entry. |
 | G19-4 package/bootstrap cutover | Complete on integration branch | ExecutionPlanV5, `initialControlledEntityId`, Gameplay Bootstrap semantic lock, WorldPackage six-way membership, Validation replay and pre-adapter RuntimeHost admission are atomically connected. All production callers construct real Bootstrap artifacts. Full typecheck, 165 files / 2,079 tests, build and all nine required verification gates pass. |
 | G19-5 | Complete as G19-6 prerequisite | Babylon Gameplay Port and atomic Possession/Input/Camera Target publication are carried by the integration baseline. Action presentation and Camera Profile/Preference selection remain explicitly outside this slice. |
-| G19-6 | Final GO; merge-ready, not yet merged | The exact 39-key Browser V5 surface, Snapshot V4, RuntimeHost/Activity coordinator, atomic reset/rebind, and Authoring/CLI/Capture/Take consumer migration are complete on `codex/g19-6-browser-gameplay`. Typecheck, build, 168 files / 2,134 tests, seven World/Route gates and both Capture gates pass; no confirmed P0/P1/P2 remains open. |
-| G19-7 onward | Open | G19-7 now owns the remaining Outdoor/catalog route and lifecycle production wiring; G19-8 owns the complete G19 gate matrix and final disposition. G19-6 may merge independently first. |
+| G19-6 | Complete on main | Browser V5, Snapshot V4, RuntimeHost/Activity coordinator, atomic reset/rebind and Authoring/CLI/Capture/Take migration are integrated on main through `5ffd031`. |
+| G19-7 | Complete on integration branch | Outdoor/catalog gameplay, artifact-only isolation, page lifecycle and the six-scene browser gate are complete through `da90f16`; the fresh gate passed 6/6 Gameplay routes, 6/6 artifact-only routes and the unknown-scene fail-closed case. |
+| G19-8 | In progress | Full G19 gates, host completion review and the approved unreleased compatibility clean break remain open. The compatibility work is governed by `2026-08-24-unreleased-compatibility-clean-break-design.md`. |
 
 ## Live TODO (authoritative)
 
@@ -71,12 +72,12 @@ authoritative execution status; old unchecked steps inside already completed tas
 - [x] **G19-5** — Babylon transactional Port、fixed-input Controller isolation、optional Possession 与
   provider-neutral projection 已作为 G19-6 前置底座完成。本切片不发明 Semantic Action presentation
   或 Camera Profile/Preference selection。
-- [x] **G19-6 (Final GO; merge-ready, not yet merged)** — Browser Protocol V5 Gameplay
+- [x] **G19-6 (complete on main)** — Browser Protocol V5 Gameplay
   唯一入口、Snapshot V4、原子 reset/rebind、Runtime Activity、Authoring/CLI/Capture/Take 消费者迁移
   已在 `codex/g19-6-browser-gameplay` 实现；最终门禁与主 Agent completion review 已通过。
-- [ ] **G19-7** — Outdoor/catalog route、page/artifact lifecycle 与六场景
+- [x] **G19-7** — Outdoor/catalog route、page/artifact lifecycle 与六场景
   production-path wiring；不再重复实现已由 G19-6 迁移的 CLI/WorldKit pipeline、Capture 或 Take 合同。
-- [ ] **G19-8 (blocked by G19-7)** — complete G19 gates, host completion review, compatibility-debt
+- [ ] **G19-8** — complete G19 gates, host completion review, compatibility-debt
   census/clean break and final disposition.
 
 Closed baseline note: the stale Simulation Take WorldPackage root is no longer hand-maintained. The
@@ -823,6 +824,14 @@ lifecycle、六场景真实 Chromium gate；不得建立第二套 Gameplay boots
 git add apps/playground scripts package.json pnpm-lock.yaml
 git commit -m "feat: unify outdoor gameplay runtime"
 ```
+
+**Completion evidence (2026-08-24):** complete through `da90f16`. `pnpm verify:outdoor-gameplay`
+passed all six Catalog Gameplay routes, all six artifact-only routes and the unknown-scene fail-closed
+route. The gameplay evidence covers Browser V5/Snapshot V4 readiness, fixed input, deterministic reset,
+unchanged uncontrolled Subjects and read-only Route queries. Artifact routes expose neither `__WORLDKIT__`
+nor Gameplay methods. Combined `pnpm typecheck`, the 92-test G19-7/adjacent-cleanup focused matrix,
+`pnpm build` and `git diff --check` pass. Large Heightfield import remains a measured performance
+optimization target, not an alternate protocol or correctness fallback.
 
 ---
 
