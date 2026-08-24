@@ -1,12 +1,16 @@
+import { readFile } from "node:fs/promises";
 import { createServer } from "node:http";
 import type { AddressInfo } from "node:net";
 
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { sha256Bytes } from "@whitebox-world/protocol";
+import { XIER120_SUBJECT_ASSET_MANIFESTS } from "@whitebox-world/subject-registry";
 
 import {
   PLAYGROUND_SUBJECT_ASSET_PACKAGE_PATH_BY_REF_V1,
   PLAYGROUND_SUBJECT_ASSET_URI_BY_REF_V1,
+  XIER120_SUBJECT_ASSET_PACKAGE_PATH_BY_REF_V1,
+  XIER120_SUBJECT_ASSET_URI_BY_REF_V1,
   createFetchSubjectAssetResolver,
   resolveWorldPackageSubjectAssetArtifactsV1,
 } from "./worldkit-asset-resolver";
@@ -20,6 +24,28 @@ const REQUEST = {
   byteLength: ASSET_BYTES.byteLength,
   mediaType: "model/gltf-binary" as const,
 };
+
+const EXPECTED_XIER120_RESOLVER_ROWS = [
+  ["aerial-cockpit", "/subject-assets/xier120/aerial-cockpit/v1/aerial-cockpit.glb", "resources/subject-assets/xier120.aerial-cockpit.glb"],
+  ["aerial-hanging", "/subject-assets/xier120/aerial-hanging/v1/aerial-hanging.glb", "resources/subject-assets/xier120.aerial-hanging.glb"],
+  ["aerial-seated", "/subject-assets/xier120/aerial-seated/v1/aerial-seated.glb", "resources/subject-assets/xier120.aerial-seated.glb"],
+  ["aerial-seated-variant", "/subject-assets/xier120/aerial-seated-variant/v1/aerial-seated-variant.glb", "resources/subject-assets/xier120.aerial-seated-variant.glb"],
+  ["aerial-standing", "/subject-assets/xier120/aerial-standing/v1/aerial-standing.glb", "resources/subject-assets/xier120.aerial-standing.glb"],
+  ["biped-animal", "/subject-assets/xier120/biped-animal/v1/biped-animal.glb", "resources/subject-assets/xier120.biped-animal.glb"],
+  ["flat-seated-glider", "/subject-assets/xier120/flat-seated-glider/v1/flat-seated-glider.glb", "resources/subject-assets/xier120.flat-seated-glider.glb"],
+  ["four-wheel", "/subject-assets/xier120/four-wheel/v1/four-wheel.glb", "resources/subject-assets/xier120.four-wheel.glb"],
+  ["four-wheel-variant", "/subject-assets/xier120/four-wheel-variant/v1/four-wheel-variant.glb", "resources/subject-assets/xier120.four-wheel-variant.glb"],
+  ["hoverboard-standing", "/subject-assets/xier120/hoverboard-standing/v1/hoverboard-standing.glb", "resources/subject-assets/xier120.hoverboard-standing.glb"],
+  ["prone-glider", "/subject-assets/xier120/prone-glider/v1/prone-glider.glb", "resources/subject-assets/xier120.prone-glider.glb"],
+  ["quadruped-animal", "/subject-assets/xier120/quadruped-animal/v1/quadruped-animal.glb", "resources/subject-assets/xier120.quadruped-animal.glb"],
+  ["quadruped-reptile", "/subject-assets/xier120/quadruped-reptile/v1/quadruped-reptile.glb", "resources/subject-assets/xier120.quadruped-reptile.glb"],
+  ["quadruped-ridable", "/subject-assets/xier120/quadruped-ridable/v1/quadruped-ridable.glb", "resources/subject-assets/xier120.quadruped-ridable.glb"],
+  ["snake-animal", "/subject-assets/xier120/snake-animal/v1/snake-animal.glb", "resources/subject-assets/xier120.snake-animal.glb"],
+  ["three-wheel", "/subject-assets/xier120/three-wheel/v1/three-wheel.glb", "resources/subject-assets/xier120.three-wheel.glb"],
+  ["tracked", "/subject-assets/xier120/tracked/v1/tracked.glb", "resources/subject-assets/xier120.tracked.glb"],
+  ["two-wheel-motorcycle", "/subject-assets/xier120/two-wheel-motorcycle/v1/two-wheel-motorcycle.glb", "resources/subject-assets/xier120.two-wheel-motorcycle.glb"],
+  ["two-wheel-motorcycle-variant", "/subject-assets/xier120/two-wheel-motorcycle-variant/v1/two-wheel-motorcycle-variant.glb", "resources/subject-assets/xier120.two-wheel-motorcycle-variant.glb"],
+] as const;
 
 function responseFixture(options: {
   ok?: boolean;
@@ -125,15 +151,81 @@ describe("createFetchSubjectAssetResolver", () => {
   });
 
   it("contains the exact same-origin Golden and G Bot Host mappings", () => {
-    expect(PLAYGROUND_SUBJECT_ASSET_URI_BY_REF_V1).toEqual({
+    expect(PLAYGROUND_SUBJECT_ASSET_URI_BY_REF_V1).toMatchObject({
       [ASSET_REF]: "/worldkit-assets/golden-humanoid.glb",
       [G_BOT_ASSET_REF]: "/subject-assets/humanoid/g-bot/v1/g-bot.glb",
     });
-    expect(PLAYGROUND_SUBJECT_ASSET_PACKAGE_PATH_BY_REF_V1).toEqual({
+    expect(PLAYGROUND_SUBJECT_ASSET_PACKAGE_PATH_BY_REF_V1).toMatchObject({
       [ASSET_REF]: "resources/subject-assets/humanoid.golden.glb",
       [G_BOT_ASSET_REF]: "resources/subject-assets/actor.humanoid.g-bot.glb",
     });
   });
+
+  it("publishes exactly nineteen creator-qualified xier120 URI and WorldPackage paths", () => {
+    expect(EXPECTED_XIER120_RESOLVER_ROWS).toHaveLength(19);
+    expect(XIER120_SUBJECT_ASSET_MANIFESTS).toHaveLength(19);
+    expect(XIER120_SUBJECT_ASSET_URI_BY_REF_V1).toEqual(Object.fromEntries(
+      EXPECTED_XIER120_RESOLVER_ROWS.map(([slug, uri]) => [
+        `worldkit://subject-asset/xier120.${slug}@1`,
+        uri,
+      ]),
+    ));
+    expect(XIER120_SUBJECT_ASSET_PACKAGE_PATH_BY_REF_V1).toEqual(Object.fromEntries(
+      EXPECTED_XIER120_RESOLVER_ROWS.map(([slug, , packagePath]) => [
+        `worldkit://subject-asset/xier120.${slug}@1`,
+        packagePath,
+      ]),
+    ));
+    expect(PLAYGROUND_SUBJECT_ASSET_URI_BY_REF_V1).toMatchObject(
+      XIER120_SUBJECT_ASSET_URI_BY_REF_V1,
+    );
+    expect(PLAYGROUND_SUBJECT_ASSET_PACKAGE_PATH_BY_REF_V1).toMatchObject(
+      XIER120_SUBJECT_ASSET_PACKAGE_PATH_BY_REF_V1,
+    );
+  });
+
+  it("resolves every xier120 WorldPackage artifact from real GLB bytes", async () => {
+    vi.stubGlobal("location", { origin: "https://playground.test" });
+
+    for (const manifest of XIER120_SUBJECT_ASSET_MANIFESTS) {
+      const uri = XIER120_SUBJECT_ASSET_URI_BY_REF_V1[manifest.resourceRef];
+      const packagePath =
+        XIER120_SUBJECT_ASSET_PACKAGE_PATH_BY_REF_V1[manifest.resourceRef];
+      expect(uri).toBeTypeOf("string");
+      expect(packagePath).toBeTypeOf("string");
+      const diskBytes = await readFile(new URL(`../public${uri}`, import.meta.url));
+      expect(diskBytes.byteLength).toBe(manifest.artifact.byteLength);
+      expect(sha256Bytes(diskBytes)).toBe(manifest.artifact.contentHash);
+
+      const artifacts = await resolveWorldPackageSubjectAssetArtifactsV1(
+        [{
+          subjectAssetRef: manifest.resourceRef,
+          artifactContentHash: manifest.artifact.contentHash as `sha256:${string}`,
+          byteLength: manifest.artifact.byteLength,
+          mediaType: manifest.artifact.mediaType,
+          format: manifest.format,
+          inventory: manifest.inventory,
+        }],
+        PLAYGROUND_SUBJECT_ASSET_URI_BY_REF_V1,
+        PLAYGROUND_SUBJECT_ASSET_PACKAGE_PATH_BY_REF_V1,
+        (async (input) => ({
+          ok: true,
+          status: 200,
+          redirected: false,
+          url: String(input),
+          arrayBuffer: async () => Uint8Array.from(diskBytes).buffer,
+        }) as Response) as typeof fetch,
+      );
+
+      expect(artifacts).toMatchObject([{
+        resourceRef: manifest.resourceRef,
+        packagePath,
+        mediaType: "model/gltf-binary",
+      }]);
+      expect(artifacts[0]?.bytes.byteLength).toBe(diskBytes.byteLength);
+      expect(sha256Bytes(artifacts[0]!.bytes)).toBe(manifest.artifact.contentHash);
+    }
+  }, 30_000);
 
   it("resolves locked WorldPackage artifacts with stable package paths", async () => {
     vi.stubGlobal("location", { origin: "https://playground.test" });

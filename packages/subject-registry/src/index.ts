@@ -12,3 +12,5 @@ export * from "./selectable-control-feel";
 export * from "./source-asset-inventory";
 export * from "./subject-default-registry";
 export * from "./subject-preset-closure";
+export * from "./xier120-resource-manifests";
+export * from "./xier120-subject-definitions";
