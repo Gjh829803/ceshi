@@ -12,8 +12,8 @@
 
 ## Global Constraints
 
-- 当前 Gameplay 集成实现以 `main@381255f` 为代码基线；R1b/M5、Browser V5 与 Camera P1.5 已全部先行合入。
-  `origin/main@4ae1912` 仅新增 README package map，尚未同步到集成分支，须在 G19-8 最终门禁前纳入。
+- 当前 Gameplay 集成实现以 `main@4ae1912` 为代码基线；R1b/M5、Browser V5、Camera P1.5
+  与 README package map 已全部纳入集成分支。
 - 原 PR #19 的 provider-neutral 合同与 RuntimeHost 已通过三方语义融合移植到最新 main；不允许
   用旧分支快照覆盖最新 Route、Camera、Browser 或 Runtime authority。
 - Canonical Schema、CLI、Browser、Receipt、Report、Snapshot 不出现 Babylon、Havok、Recast provider 名或 Handle。
@@ -32,7 +32,7 @@
 | --- | --- | --- |
 | G19-0 design and dependency graph | Complete | Design and plan are committed from `db01979`; later review dispositions are incorporated in the authoritative spec. |
 | G19-2 / G19-2A / G19-2B contracts and artifacts | Complete | Closed Gameplay contracts, identity/hash helpers, Feature/Action artifacts, capacity and retention invariants are committed through `1a3d824`. |
-| G19-1 R1b and Camera prerequisites | Complete on main | R1b/M5 is closed and Camera P1.5 is integrated through main `381255f`; Route V2, Browser V5 and the isolated Camera Preview channel are now the authoritative baseline. The later `origin/main@4ae1912` change is README-only. |
+| G19-1 R1b and Camera prerequisites | Complete on main | R1b/M5 and Camera P1.5 are integrated through main `381255f`; Route V2, Browser V5 and the isolated Camera Preview channel are authoritative. The README package map from `main@4ae1912` is also synchronized. |
 | G19-3 Gameplay core, WorldSession and RuntimeHost | Complete on latest-main integration branch | The original checkpoint starts at `f71bcb3`; the foundation has been three-way merged onto main `381255f`, its contracts use the repository `isNil` convention, and the focused 14-file / 468-test matrix plus typecheck pass. It remains trusted in-process staging, not a Browser/Babylon production entry. |
 | G19-4 package/bootstrap cutover | Complete on integration branch | ExecutionPlanV5, `initialControlledEntityId`, Gameplay Bootstrap semantic lock, WorldPackage six-way membership, Validation replay and pre-adapter RuntimeHost admission are atomically connected. All production callers construct real Bootstrap artifacts. Full typecheck, 165 files / 2,079 tests, build and all nine required verification gates pass. |
 | G19-5 onward | G19-5 ready, sequential | Babylon Gameplay transaction is now the active next slice. Browser and Outdoor wiring remain incomplete until G19-6/G19-7 pass. |

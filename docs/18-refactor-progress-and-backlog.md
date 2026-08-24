@@ -705,7 +705,7 @@ Placement S1、Simulation Take / Control Capture V1 与 Validation Capture/Integ
 | ID | 状态 | 当前交付物 | 依赖 / 阻塞关系 | 完成证据 |
 |---|---|---|---|---|
 | G19-0 | 已完成 | Gameplay/R1b 融合设计、责任图和冻结合同 | 无 | Spec 与 Implementation Plan 已进入文档入口 |
-| G19-1 | 已完成并在 `main` | R1b/M5、Browser V5、Camera P1.5 与隔离 Preview | 无 | 代码基线 `main@381255f`，R0/R1/R1b 与 Camera 门禁通过；后续 `origin/main@4ae1912` 仅改 README，待最终同步 |
+| G19-1 | 已完成并在 `main` | R1b/M5、Browser V5、Camera P1.5 与隔离 Preview | 无 | R0/R1/R1b 与 Camera 门禁通过；集成分支已同步 `main@4ae1912` 的 README package map |
 | G19-2 | 已完成并已融合 | 关闭的 Command/Receipt/Event/World State、Feature/Action/Bootstrap data-only 合同 | G19-0 | Gameplay Contracts 聚焦测试通过 |
 | G19-3 | 已完成并已融合 | provider-neutral Gameplay State、WorldSession、RuntimeHost 与事务/容量/生命周期 | G19-2 | 14 files / 468 tests、typecheck、build 通过；仍仅是 in-process staging |
 | G19-4A | 已完成 | `ExecutionPlanV5` 权威关闭/deep-freeze parser、`initialControlledEntityId` clean break、`gameplay-bootstrap` Resource Kind 与 Compiler 全量锁 | G19-1、G19-2、G19-3 | Runtime Contracts/Compiler 聚焦测试与全量门禁通过；Compiler 先拒绝 accessor/symbol key 并 snapshot 不可信输入，再读取语义 |
