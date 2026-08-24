@@ -2,11 +2,10 @@
 
 > 状态：Active。本文是当前重构后 SDK 的分层架构入口。
 >
-> 当前基础世界主链路为：`AuthoringSpec V3 → Placement Solver S1 →
-> NormalizedWorldIR V3 → ExecutionPlan V4 → Babylon.js/Havok Runtime`；声明 Route
-> Connectivity 的世界使用干净升级链路 `AuthoringSpec V4 → NormalizedWorldIR V4 →
-> ExecutionPlan V5`。两条链路共享同一 Runtime；Route 验证只接受
-> AuthoringSpec V4 → NormalizedWorldIR V4 → ExecutionPlan V5。
+> 当前唯一 Canonical 世界主链路为：`AuthoringSpec V4 → Placement Solver S1 →
+> NormalizedWorldIR V4 → ExecutionPlan V5 → Babylon.js/Havok Runtime →
+> Runtime Snapshot V4 / Browser Protocol V5`。Authoring、编译、Runtime 和 Route
+> 验证都只接受这套当前合同；未发布旧版本不提供兼容入口或字段别名。
 >
 > 图中状态说明：**已实现**表示已有代码和回归门禁；**部分实现**表示只有窄纵向
 > 切片；**设计**表示已有专项方案但尚未形成完整生产实现。
@@ -36,7 +35,7 @@ flowchart LR
         API --> RUNTIME
     end
 
-    AGENT -->|"Canonical AuthoringSpec V3 / V4"| API
+    AGENT -->|"Canonical AuthoringSpec V4"| API
     ASSET_STORE -->|"Host Resolver 提供受控字节"| RUNTIME
     HOST["Host Application / CI / Playwright"] <--> API
     EVIDENCE -->|"白模、状态与结构证据"| ADAPTER["Video Model Adapter<br/>设计"]
@@ -61,12 +60,12 @@ flowchart TB
         AIP["AI Schema Profile / Provider Adapter<br/>设计"]
         TS["TypeScript API"]
         CLI["worldkit CLI"]
-        BP["Browser Protocol V4"]
+        BP["Browser Protocol V5"]
         PW["Playwright / CI Driver<br/>部分实现"]
     end
 
     subgraph L2["L2 AI 公共协议层 · Public Contracts"]
-        AS["Canonical AuthoringSpec V3 / V4"]
+        AS["Canonical AuthoringSpec V4"]
         RP["Registry Query / Package Definitions"]
         CP["Commands · Events · Snapshots<br/>部分实现"]
         WCS["WorldChangeSet<br/>设计"]
@@ -84,10 +83,10 @@ flowchart TB
     end
 
     subgraph L4["L4 确定性数据边界 · Canonical Artifacts"]
-        IR["NormalizedWorldIR V3 / V4"]
+        IR["NormalizedWorldIR V4"]
         LOCK["Resource Lock + Canonical Hash"]
         LSR["LayoutSolveReport S1"]
-        EP["ExecutionPlan V4 / V5"]
+        EP["ExecutionPlan V5"]
         WP["WorldPackage Root + Build Receipt<br/>Task 8 最小正式合同已实现"]
         TAKE["Simulation Take V1<br/>已实现窄切片"]
     end
@@ -214,7 +213,7 @@ Runtime 内部不是一棵万能节点树，而是三套通过明确 Binding 同
 
 ```mermaid
 flowchart LR
-    EP["ExecutionPlan V4"] --> ENTITY
+    EP["ExecutionPlan V5"] --> ENTITY
 
     subgraph LOGIC["逻辑图 · Gameplay Truth"]
         ENTITY["RuntimeEntity"]
@@ -259,30 +258,31 @@ Babylon 父子节点只是 Render Binding 的实现结果，不能代替 `mounte
 
 ## 5. 三个最重要的数据边界
 
-### 5.1 AuthoringSpec V3/V4：AI 的设计意图
+### 5.1 AuthoringSpec V4：AI 的设计意图
 
-由外部 Agent 编写，描述世界、主体、资源引用和 Placement Constraint。基础世界使用
-V3；Route Connectivity 使用 V4，AI 仍只描述 Route、Anchor、Subject 与连通意图，
+由外部 Agent 编写，描述世界、主体、资源引用、Placement Constraint 和可选的
+Route Connectivity。AI 只描述 Route、Anchor、Subject 与连通意图，
 不接触 NavMesh、Recast 参数或 Provider Handle。它可以表达
 “灯塔位于海湾右侧”“人物与水面至少保持两米”等空间意图，不要求 AI 猜出所有最终
 坐标。
 
-### 5.2 NormalizedWorldIR V3/V4：确定的内部施工图
+### 5.2 NormalizedWorldIR V4：确定的内部施工图
 
 由 SDK 生成。默认值、Registry 资源、Resource Lock、最终 Transform、Placement
 Provenance、冻结断言和 `layoutSolveReportHash` 已经确定并进入 Canonical Hash。完整
 `LayoutSolveReport` 是独立求解证据，不会整体内联到 IR。IR 不包含 Babylon/Havok
 类型，也不包含 Host 的资产 URI。
 
-### 5.3 ExecutionPlan V4/V5：Runtime 的施工任务单
+### 5.3 ExecutionPlan V5：Runtime 的施工任务单
 
 由 Compiler 从 IR 生成，只保留 Runtime 创建地形、主体、碰撞体、动画、控制和相机
-所需的信息。V5 额外绑定 Connectivity Requirement、Traversal Lock 与完整 Execution
-Resource Lock。Runtime 不需要理解 AI 为什么这样设计，只需严格执行并复验冻结断言。
+所需的信息，并绑定 Connectivity Requirement、Traversal Lock 与完整 Execution
+Resource Lock。Runtime 只接受 V5、在启动时复验冻结断言；它不需要理解 AI 为什么
+这样设计，也不提供旧 Plan 的兼容执行分支。
 
 ```text
 AI 可编辑                    SDK 拥有                         Runtime 只读
-AuthoringSpec V3/V4 ─────→  NormalizedWorldIR V3/V4 ─────→ ExecutionPlan V4/V5
+AuthoringSpec V4 ─────────→  NormalizedWorldIR V4 ─────────→ ExecutionPlan V5
 空间意图 / Ref / Constraint   最终 Transform / Lock / Hash    运行描述 / Assertion
 ```
 
@@ -320,22 +320,22 @@ sequenceDiagram
     participant H as Havok
     participant B as Babylon Renderer
 
-    A->>I: AuthoringSpec V3
+    A->>I: AuthoringSpec V4
     I->>AU: validate + normalize
     AU->>R: resolve exact resource refs
     R-->>AU: manifests + content hashes
     AU->>L: ResolvedLayoutInput
     L-->>AU: LayoutSolveReport + final transforms
-    AU-->>I: NormalizedWorldIR V3 + IR hash + Resource Lock
+    AU-->>I: NormalizedWorldIR V4 + IR hash + Resource Lock
     I->>C: compile(IR)
-    C-->>I: ExecutionPlan V4 + Plan hash
+    C-->>I: ExecutionPlan V5 + Plan hash
     I->>RT: create(ExecutionPlan)
     RT->>X: resolve required GLB bytes
     X-->>RT: hash-verifiable bytes
     RT->>H: create terrain, colliders, controllers
     RT->>B: create scene, assets, skeletons, animations, camera
-    A->>I: bindControl + runFixedInput
-    I->>RT: semantic fixed input
+    A->>I: executeGameplayCommand(control.bind) + runFixedInput
+    I->>RT: possession transaction + semantic fixed input
     loop Every fixed tick
         RT->>H: calculate authoritative movement
         H-->>RT: position + support + collision result
@@ -343,7 +343,7 @@ sequenceDiagram
     end
     A->>I: snapshot / screenshot
     I->>RT: capture current deterministic state
-    RT-->>I: Snapshot V3 + PNG
+    RT-->>I: Runtime Snapshot V4 + PNG
     I-->>A: state, image, hashes, diagnostics
 ```
 
@@ -365,14 +365,14 @@ Authoring V4 / ExecutionPlan V5
   → real Babylon/Havok NullEngine fixed-tick Probe
   → canonical Route Evidence + ValidationReportV2
   → private Host transport
-  → Browser Protocol V4 read-only projection
+  → Browser Protocol V5 read-only projection
 ```
 
 CLI `worldkit verify route` 与 `worldkit run` 复用同一个 runner、Validation Subject 和
 Canonical Publication authority。Host 把已经完成的 Evidence 写入自己拥有的私有临时
 文件，通过窄只读端点加载并递归冻结；页面只查询 Route Summary、Path Receipt、Probe
 Receipt 与 Overlay。页面不能构图、发任意 Path Query、启动 Havok Probe、修改阈值或
-获取 Recast/Babylon/Havok Handle。V3 世界不会被 Route runner 接受。
+获取 Recast/Babylon/Havok Handle。非当前 AuthoringSpec V4 输入会在统一入口被拒绝。
 
 ### 6.1 运行中修改不是直接操作页面
 
@@ -380,7 +380,7 @@ Receipt 与 Overlay。页面不能构图、发任意 Path Query、启动 Havok P
 
 | 修改类型 | 示例 | 协议 | 当前状态 |
 |---|---|---|---|
-| Runtime 状态操作 | 移动、跳跃、攻击、切换控制目标 | 固定 Tick Command/Intent | Browser V4 部分实现；完整继承 V3 控制语义 |
+| Runtime 状态操作 | 移动、跳跃、攻击、切换控制目标 | Gameplay Command + 固定 Tick Intent | Browser V5 部分实现；控制权由 Gameplay possession 单一持有 |
 | Authoring 结构修改 | 增加人物、房屋、障碍，删除实体，替换地形 | `WorldChangeSet` | 设计，尚未实现 |
 
 LLM 不直接执行 `scene.add(mesh)`、修改 DOM 或创建 Havok Body。结构修改必须通过受信
@@ -406,7 +406,7 @@ Operation/Node Kind，并在固定 Tick Phase Barrier 同时提交逻辑、渲�
 全局物理、Major Schema/Profile、插件等变化仍强制 Full Reload。
 
 因此“画面运行时让 LLM 加一个人或一栋房屋”是明确的长期能力，但不属于当前 Browser
-Protocol V4。详细事务、状态保留和权限边界见总体设计 §16.4–16.5，实施任务见 P1.6。
+Protocol V5。详细事务、状态保留和权限边界见总体设计 §16.4–16.5，实施任务见 P1.6。
 
 ## 7. 核心代码包与依赖边界
 
@@ -429,15 +429,15 @@ Protocol V4。详细事务、状态保留和权限边界见总体设计 §16.4�
 | `@whitebox-world/traversal-recast` | L6 | Recast/Detour Graph Builder 与 Query Provider Adapter；Provider 身份和 Handle 不进入 Canonical Bytes |
 | `@whitebox-world/runtime-babylon` | L6/L7 | Babylon/Havok 运行、资产、骨骼动画、控制、相机和状态 |
 
-### 7.2 Legacy 回归路径
+### 7.2 隔离的实验路径
 
 `packages/contracts`、`core`、`world`、`camera`、`physics`、`subjects`、`animation` 和
-相关 `testkit` 仍包含旧 Three.js/Rapier 路径，用于旧场景回归与迁移对照。它们不是
-Canonical Babylon Runtime 的公共协议，也不能把 Three/Rapier 类型反向带入
-Authoring、IR、ExecutionPlan 或 Browser Protocol。
+相关 `testkit` 仍包含 Three.js/Rapier 场景实验。它们不是 Canonical Babylon Runtime
+的版本兼容层或公共协议，也不能把 Three/Rapier 类型反向带入 Authoring、IR、
+ExecutionPlan 或 Browser Protocol。新集成只能使用当前 Canonical 链路。
 
-`apps/playground` 在迁移期间同时承载 Canonical Browser Gate 和 Legacy 场景回归，
-因此看到它同时依赖两组包并不代表两套 Runtime 可以在 Canonical 协议内混用。
+`apps/playground` 同时承载 Canonical Browser Gate 和隔离场景实验，因此看到它同时
+依赖两组包并不代表两套 Runtime 可以在 Canonical 协议内混用。
 
 ## 8. 横向基础能力
 
@@ -458,11 +458,11 @@ Authoring、IR、ExecutionPlan 或 Browser Protocol。
 
 截至 2026-08-23，以下窄纵向切片已经运行并进入回归：
 
-- Canonical Authoring V3 → IR V3 → ExecutionPlan V4；
+- Canonical AuthoringSpec V4 → NormalizedWorldIR V4 → ExecutionPlan V5；
 - Placement Solver S1 的八种 Constraint 和海湾 Golden 场景；
 - Babylon/Havok Heightfield、障碍、水域、第三人称和多主体控制；
 - Golden Humanoid GLB、17 根解剖语义骨骼、独立 Skeleton Root、Bone Socket 与 `idle/walk/run/jump`；
-- CLI/Browser V4 的校验、编译、运行、控制、Snapshot、单截图和 Take/Capture 操作；
+- CLI/Browser V5 的校验、编译、运行、Gameplay 控制、Runtime Snapshot V4、单截图和 Take/Capture 操作；
 - Route Task 8 的 WorldPackage Build Receipt、Validation Subject、Recast Graph/Path、
   真实 Babylon/Havok `NullEngine` Probe、Canonical Evidence/Report、`verify route`、
   R1 Heightfield Golden Gate 与四个只读 Browser getter；
