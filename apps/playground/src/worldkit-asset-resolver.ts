@@ -1,4 +1,8 @@
+import type { NormalizedSubjectAssetV1 } from "@whitebox-world/authoring";
+import { sha256Bytes } from "@whitebox-world/protocol";
 import type { SubjectAssetResolverV1 } from "@whitebox-world/runtime-babylon";
+import type { ResolvedWorldPackageResourceArtifactV1 } from "@whitebox-world/world-package";
+import { isNil } from "lodash-es";
 
 export const PLAYGROUND_SUBJECT_ASSET_URI_BY_REF_V1 = Object.freeze({
   "worldkit://subject-asset/actor.humanoid.g-bot@1":
@@ -11,6 +15,13 @@ export const PLAYGROUND_CAPABILITY_SUBJECT_ASSET_URI_BY_REF_V1 = Object.freeze({
   ...PLAYGROUND_SUBJECT_ASSET_URI_BY_REF_V1,
   "worldkit://subject-asset/actor.humanoid.g-bot@1":
     "/subject-assets/humanoid/g-bot/v1/g-bot.glb",
+});
+
+export const PLAYGROUND_SUBJECT_ASSET_PACKAGE_PATH_BY_REF_V1 = Object.freeze({
+  "worldkit://subject-asset/actor.humanoid.g-bot@1":
+    "resources/subject-assets/actor.humanoid.g-bot.glb",
+  "worldkit://subject-asset/humanoid.golden@1":
+    "resources/subject-assets/humanoid.golden.glb",
 });
 
 class WorldkitHostSubjectAssetResolveErrorV1 extends Error {
@@ -100,8 +111,16 @@ export function createFetchSubjectAssetResolver(
         const responseUrl = safeSameOriginUrl(response.url, pageOrigin);
         if (responseUrl.href !== networkUrl.href) throw hostResolveFailure();
         const body = await response.arrayBuffer();
+        const bytes = Uint8Array.from(new Uint8Array(body));
+        if (
+          request.mediaType !== "model/gltf-binary" ||
+          bytes.byteLength !== request.byteLength ||
+          sha256Bytes(bytes) !== request.artifactContentHash
+        ) {
+          throw hostResolveFailure();
+        }
         return {
-          bytes: Uint8Array.from(new Uint8Array(body)),
+          bytes,
           sourceLabel: policyUrl.pathname,
         };
       } catch (error) {
@@ -110,4 +129,56 @@ export function createFetchSubjectAssetResolver(
       }
     },
   };
+}
+
+export async function resolveWorldPackageSubjectAssetArtifactsV1(
+  subjectAssets: readonly NormalizedSubjectAssetV1[],
+  assetUriByRef: Readonly<Record<string, string>> =
+    PLAYGROUND_SUBJECT_ASSET_URI_BY_REF_V1,
+  packagePathByRef: Readonly<Record<string, string>> =
+    PLAYGROUND_SUBJECT_ASSET_PACKAGE_PATH_BY_REF_V1,
+  fetchImplementation: typeof fetch = fetch,
+): Promise<readonly ResolvedWorldPackageResourceArtifactV1[]> {
+  const orderedAssets = [...subjectAssets].sort((left, right) =>
+    left.subjectAssetRef.localeCompare(right.subjectAssetRef),
+  );
+  if (orderedAssets.length === 0) return Object.freeze([]);
+  const capturedPackagePathByRef = Object.freeze(
+    Object.fromEntries(Object.entries(packagePathByRef)),
+  ) as Readonly<Record<string, string>>;
+  if (
+    new Set(orderedAssets.map((asset) => asset.subjectAssetRef)).size !==
+      orderedAssets.length
+  ) {
+    throw hostResolveFailure();
+  }
+  const packagePaths = orderedAssets.map((asset) =>
+    capturedPackagePathByRef[asset.subjectAssetRef],
+  );
+  if (
+    packagePaths.some(isNil) ||
+    new Set(packagePaths).size !== packagePaths.length
+  ) {
+    throw hostResolveFailure();
+  }
+  const resolver = createFetchSubjectAssetResolver(
+    assetUriByRef,
+    fetchImplementation,
+  );
+  const artifacts: ResolvedWorldPackageResourceArtifactV1[] = [];
+  for (const asset of orderedAssets) {
+    if (!Object.hasOwn(capturedPackagePathByRef, asset.subjectAssetRef)) {
+      throw hostResolveFailure();
+    }
+    const packagePath = capturedPackagePathByRef[asset.subjectAssetRef];
+    if (isNil(packagePath)) throw hostResolveFailure();
+    const resolved = await resolver.resolveSubjectAsset(asset);
+    artifacts.push(Object.freeze({
+      resourceRef: asset.subjectAssetRef,
+      packagePath,
+      mediaType: asset.mediaType,
+      bytes: resolved.bytes,
+    }));
+  }
+  return Object.freeze(artifacts);
 }

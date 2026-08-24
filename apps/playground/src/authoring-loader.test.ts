@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { readFile } from "node:fs/promises";
 import { fileURLToPath } from "node:url";
 
@@ -12,6 +12,10 @@ import {
   type NormalizedWorldIRV4,
 } from "@whitebox-world/authoring";
 import { compileWorldV5 } from "@whitebox-world/compiler";
+import {
+  CONTROL_TRANSITION_CAPABILITY_REF,
+  createCoreControlFeatureFactoryV1,
+} from "@whitebox-world/gameplay";
 import {
   createGameplayBootstrapResourceLockEntryV1,
   createGameplayBootstrapV1,
@@ -41,8 +45,33 @@ function deepFreeze<T>(value: T): Readonly<T> {
 }
 
 const ROUTE_EVIDENCE_HASH = `sha256:${"9".repeat(64)}` as const;
+const coreControlManifest = createCoreControlFeatureFactoryV1().manifest;
+const goldenAssetBytes = new Uint8Array(await readFile(fileURLToPath(new URL(
+  "../public/worldkit-assets/golden-humanoid.glb",
+  import.meta.url,
+))));
 
-function dataOnlyGameplayBootstrap(
+beforeEach(() => {
+  vi.stubGlobal("location", { origin: "https://playground.test" });
+  vi.stubGlobal("fetch", (async (input: URL | RequestInfo) => {
+    const requestUrl = String(input);
+    return {
+      ok: true,
+      redirected: false,
+      url: requestUrl,
+      arrayBuffer: async () => goldenAssetBytes.buffer.slice(
+        goldenAssetBytes.byteOffset,
+        goldenAssetBytes.byteOffset + goldenAssetBytes.byteLength,
+      ),
+    } as Response;
+  }) as typeof fetch);
+});
+
+afterEach(() => {
+  vi.unstubAllGlobals();
+});
+
+function runtimeGameplayBootstrap(
   normalizedWorldIr: NormalizedWorldIRV4,
 ) {
   const entityDescriptors = normalizedWorldIr.nodes
@@ -68,11 +97,15 @@ function dataOnlyGameplayBootstrap(
     resourceRef:
       `worldkit://gameplay-bootstrap/${normalizedWorldIr.id}.${normalizedWorldIr.seed}@1`,
     entityDescriptors,
-    featureResourceLocks: [],
+    featureResourceLocks: [{
+      resourceRef: coreControlManifest.resourceRef,
+      contentHash: coreControlManifest.contentHash,
+    }],
     semanticActionDefinitions: [],
-    availableCapabilityRefs: uniq(
-      entityDescriptors.flatMap((descriptor) => descriptor.capabilityRefs),
-    ),
+    availableCapabilityRefs: uniq([
+      ...entityDescriptors.flatMap((descriptor) => descriptor.capabilityRefs),
+      CONTROL_TRANSITION_CAPABILITY_REF,
+    ]),
   });
 }
 
@@ -80,7 +113,7 @@ function gameplayBootstrapResourceLock(
   normalizedWorldIr: NormalizedWorldIRV4,
 ) {
   return createGameplayBootstrapResourceLockEntryV1(
-    dataOnlyGameplayBootstrap(normalizedWorldIr),
+    runtimeGameplayBootstrap(normalizedWorldIr),
   );
 }
 
@@ -124,6 +157,31 @@ function routeAuthoringWorld(): AuthoringSpecV4 {
         destinationAnchorEntityId: "goal",
         routeId: "main-route",
       }],
+    },
+  };
+}
+
+function assetFreeAuthoringWorld(): AuthoringSpecV4 {
+  const source = createValidPackageSubjectWorld();
+  return {
+    ...source,
+    schemaVersion: 4,
+    spatial: {
+      ...source.spatial,
+      traversalAreas: [],
+    },
+    nodes: source.nodes.map((node) =>
+      node.kind === "subject"
+        ? {
+            ...node,
+            subjectDefinitionRef:
+              "package://subject-definition/coastal-pack-animal@1",
+          }
+        : node,
+    ),
+    constraints: {
+      placements: source.constraints.placements,
+      connectivity: [],
     },
   };
 }
@@ -338,6 +396,7 @@ describe("loadAuthoringScene", () => {
     expect(loaded.normalizedWorldIrHash).toMatch(/^sha256:[a-f0-9]{64}$/);
     expect(loaded.executionPlanHash).toMatch(/^sha256:[a-f0-9]{64}$/);
     expect(loaded).not.toHaveProperty("hostOverlay");
+    expect(loaded.runtimeWorldConfiguration).toBeUndefined();
   });
 
   it("runs strict Authoring V4 JSON through NormalizedWorldIR V4 and ExecutionPlan V5", async () => {
@@ -346,8 +405,11 @@ describe("loadAuthoringScene", () => {
     if (!normalized.ok || isNil(normalized.value)) {
       throw new Error("Route Authoring fixture did not normalize.");
     }
-    const gameplayBootstrap = dataOnlyGameplayBootstrap(normalized.value);
+    const gameplayBootstrap = runtimeGameplayBootstrap(normalized.value);
     const loaded = await loadAuthoringScene(
+      async () => jsonResponse(source),
+    );
+    const repeated = await loadAuthoringScene(
       async () => jsonResponse(source),
     );
 
@@ -366,9 +428,12 @@ describe("loadAuthoringScene", () => {
       },
     });
     expect(gameplayBootstrap.availableCapabilityRefs).toEqual(uniq(
-      gameplayBootstrap.entityDescriptors.flatMap(
-        (descriptor) => descriptor.capabilityRefs,
-      ),
+      [
+        ...gameplayBootstrap.entityDescriptors.flatMap(
+          (descriptor) => descriptor.capabilityRefs,
+        ),
+        CONTROL_TRANSITION_CAPABILITY_REF,
+      ],
     ));
     if (loaded.executionPlan?.schemaVersion !== 5) {
       throw new Error("Expected an ExecutionPlanV5.");
@@ -376,8 +441,112 @@ describe("loadAuthoringScene", () => {
     expect(loaded.executionPlan.resourceLockEntries).toContainEqual(
       createGameplayBootstrapResourceLockEntryV1(gameplayBootstrap),
     );
+    expect(loaded.runtimeWorldConfiguration).toMatchObject({
+      executionPlan: loaded.executionPlan,
+      executionPlanHash: loaded.executionPlanHash,
+      gameplayBootstrap,
+      worldPackageRef: "worldkit://world-package/basic-world.1024@1",
+      worldPackageBuildReceipt: {
+        kind: "worldkit-world-package-build-receipt",
+        schemaVersion: 1,
+        manifest: {
+          authoringSpecHash: normalized.value.authoringSpecHash,
+          normalizedWorldIrHash: loaded.normalizedWorldIrHash,
+          executionPlanHash: loaded.executionPlanHash,
+        },
+        worldPackageRootHash: expect.stringMatching(/^sha256:[a-f0-9]{64}$/),
+      },
+    });
+    expect(
+      loaded.runtimeWorldConfiguration?.gameplayBootstrap.featureResourceLocks,
+    ).toEqual([{
+      resourceRef: coreControlManifest.resourceRef,
+      contentHash: coreControlManifest.contentHash,
+    }]);
+    expect(
+      loaded.runtimeWorldConfiguration?.gameplayBootstrap.availableCapabilityRefs,
+    ).toContain(CONTROL_TRANSITION_CAPABILITY_REF);
+    expect(
+      loaded.runtimeWorldConfiguration?.executionPlanHash,
+    ).toBe(loaded.runtimeWorldConfiguration?.worldPackageBuildReceipt.manifest.executionPlanHash);
+    expect(repeated.runtimeWorldConfiguration?.worldPackageRef).toBe(
+      loaded.runtimeWorldConfiguration?.worldPackageRef,
+    );
+    expect(
+      repeated.runtimeWorldConfiguration?.worldPackageBuildReceipt.worldPackageRootHash,
+    ).toBe(
+      loaded.runtimeWorldConfiguration?.worldPackageBuildReceipt.worldPackageRootHash,
+    );
     expect(loaded.routeEvidencePublication).toBeUndefined();
   });
+
+  it("builds an asset-free V4 Runtime World Configuration without fetching", async () => {
+    let fetchCount = 0;
+    const loaded = await loadAuthoringScene(
+      async () => jsonResponse(assetFreeAuthoringWorld()),
+      {
+        fetchSubjectAsset: (async () => {
+          fetchCount += 1;
+          throw new Error("asset-free worlds must not fetch");
+        }) as typeof fetch,
+      },
+    );
+
+    expect(loaded.ok).toBe(true);
+    expect(fetchCount).toBe(0);
+    expect(
+      loaded.runtimeWorldConfiguration?.worldPackageBuildReceipt.manifest.resources
+        .filter(({ resourceRef }) =>
+          resourceRef.startsWith("worldkit://subject-asset/"),
+        ),
+    ).toEqual([]);
+  });
+
+  it("builds the G Bot Runtime World Configuration from fetched locked bytes", async () => {
+    vi.stubGlobal("location", { origin: "https://playground.test" });
+    const gBotBytes = new Uint8Array(await readFile(fileURLToPath(new URL(
+      "../public/subject-assets/humanoid/g-bot/v1/g-bot.glb",
+      import.meta.url,
+    ))));
+    const fetchCalls: string[] = [];
+    const loaded = await loadAuthoringScene(
+      async () => jsonResponse(routeAuthoringWorld()),
+      {
+        subjectDefinitionRef:
+          "worldkit://subject-definition/humanoid.g-bot@1",
+        fetchSubjectAsset: (async (input: URL | RequestInfo) => {
+          const requestUrl = String(input);
+          fetchCalls.push(requestUrl);
+          return {
+            ok: true,
+            redirected: false,
+            url: requestUrl,
+            arrayBuffer: async () => gBotBytes.buffer.slice(
+              gBotBytes.byteOffset,
+              gBotBytes.byteOffset + gBotBytes.byteLength,
+            ),
+          } as Response;
+        }) as typeof fetch,
+      },
+    );
+
+    expect(loaded.ok).toBe(true);
+    expect(fetchCalls).toEqual([
+      expect.stringMatching(
+        /^https:\/\/playground\.test\/subject-assets\/humanoid\/g-bot\/v1\/g-bot\.glb\?worldkit-content-hash=sha256%3A[a-f0-9]{64}$/,
+      ),
+    ]);
+    expect(
+      loaded.runtimeWorldConfiguration?.worldPackageBuildReceipt.manifest.resources,
+    ).toContainEqual({
+      resourceRef: "worldkit://subject-asset/actor.humanoid.g-bot@1",
+      packagePath: "resources/subject-assets/actor.humanoid.g-bot.glb",
+      mediaType: "model/gltf-binary",
+      sizeBytes: gBotBytes.byteLength,
+      contentHash:
+        "sha256:41833210e735788da0777fc37badcec03f90ccf17ab5a7d89103f0727abeeb1b",
+    });
+  }, 15_000);
 
   it("accepts and freezes same-world Host Route evidence for Authoring V4", async () => {
     const source = routeAuthoringWorld();
@@ -822,39 +991,11 @@ describe("loadAuthoringScene", () => {
     });
   });
 
-  it("defines Browser Protocol V5 with explicit control binding", () => {
-    const fail = (): never => {
-      throw new Error("not invoked");
-    };
-    const unavailable = {
-      kind: "worldkit-route-evidence-query-result",
-      schemaVersion: 1,
-      availability: "unavailable",
-      selector: { constraintId: "player-to-goal", routeId: "main-route" },
-      reason: "route-evidence-not-loaded",
-    } as const;
-    const api: WorldkitBrowserApiV5 = {
-      version: WORLDKIT_BROWSER_PROTOCOL_VERSION,
-      ready: async () => fail(),
-      getSnapshot: fail,
-      getDiagnostics: () => [],
-      bindControl: fail,
-      runFixedInput: async () => fail(),
-      getControlCaptureCapabilities: fail,
-      waitForSimulationTick: async () => fail(),
-      waitForRenderReady: async () => fail(),
-      captureControlFrame: async () => fail(),
-      captureScreenshot: fail,
-      reset: fail,
-      setPaused: fail,
-      getRouteSummary: () => unavailable,
-      getRoutePathReceipt: () => unavailable,
-      getRouteRuntimeProbeReceipt: () => unavailable,
-      getRouteOverlay: () => unavailable,
-    };
+  it("defines Browser Protocol V5 with Gameplay command ownership", () => {
+    const methodName = "executeGameplayCommand" satisfies keyof WorldkitBrowserApiV5;
 
-    expect(api.version).toBe(5);
-    expect(api.bindControl).toBeTypeOf("function");
+    expect(WORLDKIT_BROWSER_PROTOCOL_VERSION).toBe(5);
+    expect(methodName).toBe("executeGameplayCommand");
   });
 
   it("returns machine-readable diagnostics for invalid authoring input", async () => {

@@ -12,6 +12,10 @@ import {
 } from "@whitebox-world/authoring";
 import { compileWorld, compileWorldV5 } from "@whitebox-world/compiler";
 import {
+  CONTROL_TRANSITION_CAPABILITY_REF,
+  createCoreControlFeatureFactoryV1,
+} from "@whitebox-world/gameplay";
+import {
   createGameplayBootstrapResourceLockEntryV1,
   createGameplayBootstrapV1,
   type GameplayBootstrapV1,
@@ -30,7 +34,15 @@ import {
   canonicalWorldkitBrowserRouteEvidencePublicationV2,
   type WorldkitBrowserRouteEvidencePublicationV2,
 } from "@whitebox-world/runtime-contracts";
+import type { RuntimeWorldConfigurationV1 } from "@whitebox-world/runtime-host";
+import { createWorldPackageBuildReceiptV1 } from "@whitebox-world/world-package";
 import { isNil, uniq } from "lodash-es";
+
+import {
+  PLAYGROUND_SUBJECT_ASSET_PACKAGE_PATH_BY_REF_V1,
+  PLAYGROUND_SUBJECT_ASSET_URI_BY_REF_V1,
+  resolveWorldPackageSubjectAssetArtifactsV1,
+} from "./worldkit-asset-resolver.js";
 
 type CapabilityDemoResourceBudgetV1 = Readonly<
   AuthoringSpecV3["world"]["resourceBudget"]
@@ -79,6 +91,8 @@ export interface AuthoringSceneLoadResult {
   diagnostics: readonly (AuthoringDiagnostic | CompileDiagnostic)[];
   hostOverlay?: CapabilityDemoHostOverlayV1;
   routeEvidencePublication?: WorldkitBrowserRouteEvidencePublicationV2;
+  /** Internal Host bootstrap. This is intentionally not a public Browser DTO. */
+  runtimeWorldConfiguration?: RuntimeWorldConfigurationV1;
 }
 
 export type AuthoringSourceFetcher = () => Promise<Response>;
@@ -86,6 +100,7 @@ export type AuthoringSourceFetcher = () => Promise<Response>;
 export interface AuthoringSceneLoadOptionsV1 {
   subjectDefinitionRef?: string;
   fetchRouteEvidence?: AuthoringSourceFetcher;
+  fetchSubjectAsset?: typeof fetch;
 }
 
 type SupportedAuthoringSpec = AuthoringSpecV3 | AuthoringSpecV4;
@@ -96,9 +111,10 @@ const CAPABILITY_PLAYGROUND_MINIMUM_RESOURCE_BUDGET = Object.freeze({
   maxColliders: 128,
 });
 
-function createDataOnlyGameplayBootstrap(
+function createRuntimeGameplayBootstrap(
   normalizedWorldIr: NormalizedWorldIRV4,
 ): GameplayBootstrapV1 {
+  const coreControlManifest = createCoreControlFeatureFactoryV1().manifest;
   const entityDescriptors = normalizedWorldIr.nodes
     .filter((node) => node.kind === "subject")
     .map((node) => {
@@ -124,11 +140,15 @@ function createDataOnlyGameplayBootstrap(
     resourceRef:
       `worldkit://gameplay-bootstrap/${normalizedWorldIr.id}.${normalizedWorldIr.seed}@1`,
     entityDescriptors,
-    featureResourceLocks: [],
+    featureResourceLocks: [{
+      resourceRef: coreControlManifest.resourceRef,
+      contentHash: coreControlManifest.contentHash,
+    }],
     semanticActionDefinitions: [],
-    availableCapabilityRefs: uniq(
-      entityDescriptors.flatMap((descriptor) => descriptor.capabilityRefs),
-    ),
+    availableCapabilityRefs: uniq([
+      ...entityDescriptors.flatMap((descriptor) => descriptor.capabilityRefs),
+      CONTROL_TRANSITION_CAPABILITY_REF,
+    ]),
   });
 }
 
@@ -636,14 +656,15 @@ export async function loadAuthoringScene(
       ...(hostOverlay === undefined ? {} : { hostOverlay }),
     };
   }
+  const gameplayBootstrap = normalized.value.schemaVersion === 4
+    ? createRuntimeGameplayBootstrap(normalized.value)
+    : undefined;
   const compiled = normalized.value.schemaVersion === 4
     ? compileWorldV5({
         normalizedWorldIr: normalized.value,
         normalizedWorldIrHash: normalized.normalizedWorldIrHash,
         gameplayBootstrapResourceLock:
-          createGameplayBootstrapResourceLockEntryV1(
-            createDataOnlyGameplayBootstrap(normalized.value),
-          ),
+          createGameplayBootstrapResourceLockEntryV1(gameplayBootstrap),
       })
     : compileWorld({
         normalizedWorldIr: normalized.value,
@@ -716,6 +737,67 @@ export async function loadAuthoringScene(
     }
   }
 
+  let runtimeWorldConfiguration: RuntimeWorldConfigurationV1 | undefined;
+  if (source.schemaVersion === 4) {
+    if (
+      normalized.value.schemaVersion !== 4 ||
+      compiled.executionPlan.schemaVersion !== 5 ||
+      isNil(gameplayBootstrap) ||
+      isNil(normalized.layoutSolveReport) ||
+      isNil(normalized.layoutSolveReportHash)
+    ) {
+      throw new Error("AUTHORING_RUNTIME_CONFIGURATION_INTERNAL_VERSION_MISMATCH");
+    }
+    try {
+      const resourceArtifacts = isNil(options.fetchSubjectAsset)
+        ? await resolveWorldPackageSubjectAssetArtifactsV1(
+            normalized.value.resources.subjectAssets,
+            PLAYGROUND_SUBJECT_ASSET_URI_BY_REF_V1,
+            PLAYGROUND_SUBJECT_ASSET_PACKAGE_PATH_BY_REF_V1,
+          )
+        : await resolveWorldPackageSubjectAssetArtifactsV1(
+            normalized.value.resources.subjectAssets,
+            PLAYGROUND_SUBJECT_ASSET_URI_BY_REF_V1,
+            PLAYGROUND_SUBJECT_ASSET_PACKAGE_PATH_BY_REF_V1,
+            options.fetchSubjectAsset,
+          );
+      const worldPackageBuildReceipt = createWorldPackageBuildReceiptV1({
+        packageId: `${source.id}.${source.seed}`,
+        authoringSpec: source,
+        normalizedWorldIr: normalized.value,
+        layoutSolveResult: {
+          status: normalized.layoutSolveReport.status,
+          report: normalized.layoutSolveReport,
+          layoutSolveReportHash: normalized.layoutSolveReportHash,
+        },
+        executionPlan: compiled.executionPlan,
+        gameplayBootstrap,
+        resourceArtifacts,
+      });
+      runtimeWorldConfiguration = Object.freeze({
+        executionPlan: compiled.executionPlan,
+        executionPlanHash:
+          worldPackageBuildReceipt.manifest.executionPlanHash,
+        worldPackageRef:
+          `worldkit://world-package/${source.id}.${source.seed}@1`,
+        worldPackageBuildReceipt,
+        gameplayBootstrap,
+      });
+    } catch {
+      return {
+        ok: false,
+        diagnostics: [{
+          severity: "error",
+          code: "AUTHORING_RUNTIME_CONFIGURATION_INVALID",
+          instancePath: "/resources",
+          message:
+            "Unable to construct the locked Runtime World Configuration from the Authoring world.",
+        }],
+        ...(hostOverlay === undefined ? {} : { hostOverlay }),
+      };
+    }
+  }
+
   return {
     ok: true,
     executionPlan: compiled.executionPlan,
@@ -726,5 +808,8 @@ export async function loadAuthoringScene(
     ...(routeEvidence.publication === undefined
       ? {}
       : { routeEvidencePublication: routeEvidence.publication }),
+    ...(isNil(runtimeWorldConfiguration)
+      ? {}
+      : { runtimeWorldConfiguration }),
   };
 }

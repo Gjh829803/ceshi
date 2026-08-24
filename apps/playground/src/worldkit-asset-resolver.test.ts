@@ -2,18 +2,22 @@ import { createServer } from "node:http";
 import type { AddressInfo } from "node:net";
 
 import { afterEach, describe, expect, it, vi } from "vitest";
+import { sha256Bytes } from "@whitebox-world/protocol";
 
 import {
+  PLAYGROUND_SUBJECT_ASSET_PACKAGE_PATH_BY_REF_V1,
   PLAYGROUND_SUBJECT_ASSET_URI_BY_REF_V1,
   createFetchSubjectAssetResolver,
+  resolveWorldPackageSubjectAssetArtifactsV1,
 } from "./worldkit-asset-resolver";
 
 const ASSET_REF = "worldkit://subject-asset/humanoid.golden@1";
 const G_BOT_ASSET_REF = "worldkit://subject-asset/actor.humanoid.g-bot@1";
+const ASSET_BYTES = new Uint8Array([1, 2, 3, 4]);
 const REQUEST = {
   subjectAssetRef: ASSET_REF,
-  artifactContentHash: `sha256:${"1".repeat(64)}`,
-  byteLength: 4,
+  artifactContentHash: sha256Bytes(ASSET_BYTES),
+  byteLength: ASSET_BYTES.byteLength,
   mediaType: "model/gltf-binary" as const,
 };
 
@@ -125,6 +129,113 @@ describe("createFetchSubjectAssetResolver", () => {
       [ASSET_REF]: "/worldkit-assets/golden-humanoid.glb",
       [G_BOT_ASSET_REF]: "/subject-assets/humanoid/g-bot/v1/g-bot.glb",
     });
+    expect(PLAYGROUND_SUBJECT_ASSET_PACKAGE_PATH_BY_REF_V1).toEqual({
+      [ASSET_REF]: "resources/subject-assets/humanoid.golden.glb",
+      [G_BOT_ASSET_REF]: "resources/subject-assets/actor.humanoid.g-bot.glb",
+    });
+  });
+
+  it("resolves locked WorldPackage artifacts with stable package paths", async () => {
+    vi.stubGlobal("location", { origin: "https://playground.test" });
+    const sourceBytes = new Uint8Array(ASSET_BYTES);
+    const artifacts = await resolveWorldPackageSubjectAssetArtifactsV1(
+      [{
+        ...REQUEST,
+        format: "glb",
+        inventory: {
+          meshCount: 1,
+          vertexCount: 1,
+          triangleCount: 1,
+          skeletonCount: 0,
+          boneCount: 0,
+          animationClipNames: [],
+        },
+      }],
+      PLAYGROUND_SUBJECT_ASSET_URI_BY_REF_V1,
+      PLAYGROUND_SUBJECT_ASSET_PACKAGE_PATH_BY_REF_V1,
+      (async () => responseFixture({
+        arrayBuffer: async () => sourceBytes.buffer,
+      })) as typeof fetch,
+    );
+    sourceBytes[0] = 99;
+
+    expect(artifacts).toEqual([{
+      resourceRef: ASSET_REF,
+      packagePath: "resources/subject-assets/humanoid.golden.glb",
+      mediaType: "model/gltf-binary",
+      bytes: ASSET_BYTES,
+    }]);
+    expect(Object.isFrozen(artifacts)).toBe(true);
+    expect(Object.isFrozen(artifacts[0])).toBe(true);
+  });
+
+  it("fails closed when a locked WorldPackage artifact has no Host mapping", async () => {
+    vi.stubGlobal("location", { origin: "https://playground.test" });
+    await expect(resolveWorldPackageSubjectAssetArtifactsV1(
+      [{
+        ...REQUEST,
+        subjectAssetRef: "worldkit://subject-asset/unknown@1",
+        format: "glb",
+        inventory: {
+          meshCount: 1,
+          vertexCount: 1,
+          triangleCount: 1,
+          skeletonCount: 0,
+          boneCount: 0,
+          animationClipNames: [],
+        },
+      }],
+      PLAYGROUND_SUBJECT_ASSET_URI_BY_REF_V1,
+      PLAYGROUND_SUBJECT_ASSET_PACKAGE_PATH_BY_REF_V1,
+      (async () => responseFixture()) as typeof fetch,
+    )).rejects.toMatchObject({
+      name: "WorldkitHostSubjectAssetResolveErrorV1",
+    });
+  });
+
+  it("fails closed on duplicate locked resource refs or package paths before fetch", async () => {
+    vi.stubGlobal("location", { origin: "https://playground.test" });
+    let fetchCount = 0;
+    const fetchImplementation = (async () => {
+      fetchCount += 1;
+      return responseFixture();
+    }) as typeof fetch;
+    const descriptor = {
+      ...REQUEST,
+      format: "glb" as const,
+      inventory: {
+        meshCount: 1,
+        vertexCount: 1,
+        triangleCount: 1,
+        skeletonCount: 0,
+        boneCount: 0,
+        animationClipNames: [],
+      },
+    };
+
+    await expect(resolveWorldPackageSubjectAssetArtifactsV1(
+      [descriptor, descriptor],
+      PLAYGROUND_SUBJECT_ASSET_URI_BY_REF_V1,
+      PLAYGROUND_SUBJECT_ASSET_PACKAGE_PATH_BY_REF_V1,
+      fetchImplementation,
+    )).rejects.toMatchObject({
+      name: "WorldkitHostSubjectAssetResolveErrorV1",
+    });
+    await expect(resolveWorldPackageSubjectAssetArtifactsV1(
+      [
+        descriptor,
+        { ...descriptor, subjectAssetRef: G_BOT_ASSET_REF },
+      ],
+      PLAYGROUND_SUBJECT_ASSET_URI_BY_REF_V1,
+      {
+        [ASSET_REF]: "resources/subject-assets/shared.glb",
+        [G_BOT_ASSET_REF]: "resources/subject-assets/shared.glb",
+      },
+      fetchImplementation,
+    )).rejects.toMatchObject({
+      name: "WorldkitHostSubjectAssetResolveErrorV1",
+    });
+    expect(fetchCount).toBe(0);
   });
 
   it("rejects unmapped and unsafe mappings before fetch", async () => {
@@ -181,5 +292,36 @@ describe("createFetchSubjectAssetResolver", () => {
       });
       expect(bodyReads).toBe(0);
     }
+  });
+
+  it.each([
+    {
+      label: "byte length",
+      request: { ...REQUEST, byteLength: REQUEST.byteLength + 1 },
+    },
+    {
+      label: "content hash",
+      request: {
+        ...REQUEST,
+        artifactContentHash: `sha256:${"f".repeat(64)}`,
+      },
+    },
+    {
+      label: "media type",
+      request: {
+        ...REQUEST,
+        mediaType: "model/gltf+json" as "model/gltf-binary",
+      },
+    },
+  ])("rejects bytes that do not match the locked $label", async ({ request }) => {
+    vi.stubGlobal("location", { origin: "https://playground.test" });
+    const resolver = createFetchSubjectAssetResolver(
+      PLAYGROUND_SUBJECT_ASSET_URI_BY_REF_V1,
+      (async () => responseFixture()) as typeof fetch,
+    );
+
+    await expect(resolver.resolveSubjectAsset(request)).rejects.toMatchObject({
+      name: "WorldkitHostSubjectAssetResolveErrorV1",
+    });
   });
 });
