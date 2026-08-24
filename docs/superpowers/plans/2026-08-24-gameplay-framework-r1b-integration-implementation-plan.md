@@ -41,7 +41,7 @@
 | G19-5 | Complete as G19-6 prerequisite | Babylon Gameplay Port and atomic Possession/Input/Camera Target publication are carried by the integration baseline. Action presentation and Camera Profile/Preference selection remain explicitly outside this slice. |
 | G19-6 | Complete on main | Browser V5, Snapshot V4, RuntimeHost/Activity coordinator, atomic reset/rebind and Authoring/CLI/Capture/Take migration are integrated on main through `5ffd031`. |
 | G19-7 | Complete on integration branch | Outdoor/catalog gameplay, artifact-only isolation, page lifecycle and the six-scene browser gate are complete through `da90f16`; completion is recorded by `1594823`. The fresh gate passed 6/6 Gameplay routes, 6/6 artifact-only routes and the unknown-scene fail-closed case. |
-| G19-8 | In progress | UCCB-00–40 have committed implementation evidence. UCCB-50 Babylon Runtime clean break, UCCB-60 zero-consumer deletion, UCCB-70 full gates and host completion review remain open. The compatibility work is governed by `2026-08-24-unreleased-compatibility-clean-break-design.md`; current status is recorded in `docs/reviews/2026-08-25-gameplay-g19-8-completion.md`. |
+| G19-8 | Complete; Final GO | Candidate `99fb822` completes the current-only Runtime/Authoring cutover, historical compatibility cleanup, generated artifact refresh and host review. 178 files / 2,172 tests plus every required structural, asset, Capture, Route and Outdoor gate pass; the clean-break census is 632/0/489. |
 
 ## Live TODO (authoritative)
 
@@ -77,9 +77,9 @@ authoritative execution status; old unchecked steps inside already completed tas
   已在 `codex/g19-6-browser-gameplay` 实现；最终门禁与主 Agent completion review 已通过。
 - [x] **G19-7** — Outdoor/catalog route、page/artifact lifecycle 与六场景
   production-path wiring；不再重复实现已由 G19-6 迁移的 CLI/WorldKit pipeline、Capture 或 Take 合同。
-- [ ] **G19-8 (in progress)** — complete G19 gates, host completion review, compatibility-debt
-  census/clean break and final disposition. UCCB-00–40 have committed implementation evidence;
-  UCCB-50/60/70 and all final gates are still open.
+- [x] **G19-8 (complete; Final GO)** — current-only clean break, historical naming/compatibility census,
+  all final gates and host completion review are complete on candidate `99fb822`. The superseded-path
+  deferral ledger is empty; HNC-F1 is a separate mandatory pre-Alpha cleanliness audit.
 
 Closed baseline note: the stale Simulation Take WorldPackage root is no longer hand-maintained. The
 `generate:example-takes` command projects both example Takes from the current canonical WorldPackage
@@ -98,10 +98,10 @@ evidence until UCCB-70 reruns the full matrix and the host reviews the integrate
 | UCCB-20 | Complete | `3fb2397`, `23f5985`, `fbe7ff4`: direct IR V4 → Plan V5 compilation and current golden | Final Compiler/full-suite regression |
 | UCCB-30 | Complete | `a44d160`, `2d312b1`: self-contained ExecutionPlan V5 and removal of the superseded Plan V4 public contract | Final Runtime/WorldPackage regression |
 | UCCB-40 | Complete | `9ae108a`, `592fbeb`: required locked Subject capability assemblies | Final Runtime and asset gates |
-| UCCB-50 | In progress | `c0c05ad`, `3e4fda0`: V5-only adapter/consumer seam and provider projection | Complete Babylon V5-only migration and Runtime deep review |
-| UCCB-60 | In progress | `c32ecb5`, `2d312b1`, `b148472`: old Authoring V3/Plan V4 contracts removed and some verifiers migrated | Delete remaining superseded files, exports, fixtures and branches after UCCB-50 |
-| UCCB-65 | In progress | Dedicated implementation plan: `2026-08-25-historical-naming-and-compatibility-path-cleanup-plan.md`; machine census currently reports zero forbidden matches | Complete semantic naming/export/fallback classification, generated artifact cleanup and deferred-removal ledger |
-| UCCB-70 | In progress | G19-8 completion record established | Zero census, full gates, final host review and disposition |
+| UCCB-50 | Complete | `f453810`, `da2fe27`: current-only Babylon Runtime, explicit possession and camera publication | None |
+| UCCB-60 | Complete | `f453810`, `cf94b90`, `3fea29b`, `0d9a2bd`: superseded contracts/consumers deleted and fixtures current | None |
+| UCCB-65 | Complete | `0ad72e8`, `3e671a2`, `99fb822`: classified census, generated artifacts and empty deferral ledger | HNC-F1 remains a new pre-Alpha audit, not compatibility debt |
+| UCCB-70 | Complete | `99fb822`: zero census, full matrix and Final GO host review | Main delivery only |
 
 Because the project has not shipped, every superseded compatibility path that can be removed in this slice
 must be removed. Current versioned nested components are retained when they remain the sole authority; a
@@ -874,31 +874,30 @@ optimization target, not an alternate protocol or correctness fallback.
 - Consumes: Tasks 1–9 commits。
 - Produces: disposition、完整 gate evidence、可审查远端分支。
 
-- [ ] **Step 0: 执行未发布版本 clean-break census**
+- [x] **Step 0: 执行未发布版本 clean-break census**
 
 扫描生产代码、测试、CLI、Browser、示例、生成类型和当前 quickstart，区分“当前权威 V1 合同”与
 “已被新版取代的旧方言”。删除无真实消费者的旧声明、export、parser、migration、fallback、fixture 和
 双版本 union，并补机器可执行的零消费者门禁。本轮无法删除的每一项必须在 completion review 中记录：
 旧符号/字段、生产消费者、阻塞依赖、目标权威版本、删除任务和验证命令；不得用笼统兼容理由延期。
 
-Current disposition (2026-08-25): UCCB-00–40 have committed implementation evidence; UCCB-50/60 remain
-open, so this checkbox intentionally remains unchecked. The completion claim requires a fresh
-`verify:unreleased-clean-break` zero census after all Runtime and consumer deletions.
+Current disposition (2026-08-25): candidate `99fb822` scans 632 files with zero forbidden matches and 489
+retained current-authority matches. No superseded compatibility path is deferred.
 
-- [ ] **Step 1: 主 Agent 按两个 review checklist 自审**
+- [x] **Step 1: 主 Agent 按两个 review checklist 自审**
 
 使用 `docs/reviews/full-dimension-review-protocol.md` 和 `runtime-deep-review-checklist.md`，逐项记录 P0–P3、复现、修复/拒绝/延期。
 
-- [ ] **Step 2: 子智能体 whole-branch review**
+- [x] **Step 2: 子智能体 whole-branch review**
 
 分别覆盖公共合同/AI naming、Runtime authority/physics/camera、R1b/Browser/outdoor；主 Agent 复核实际 diff 和每条 finding。
 
-- [ ] **Step 3: 主 Agent 复核并 disposition findings**
+- [x] **Step 3: 主 Agent 复核并 disposition findings**
 
 逐条对照现树、设计合同与依赖源码复现；只有真实成立的问题才进入修复。当前赶工阶段不把外部
 Reviewer 会话作为交付依赖，主 Agent 对结论和集成负责。
 
-- [ ] **Step 4: 跑完整门禁**
+- [x] **Step 4: 跑完整门禁**
 
 ```bash
 pnpm typecheck
@@ -917,12 +916,12 @@ pnpm verify:outdoor-gameplay
 pnpm verify:unreleased-clean-break
 ```
 
-- [ ] **Step 5: 主 Agent completion review**
+- [x] **Step 5: 主 Agent completion review**
 
 按全维协议重读最终 diff；所有 P0/P1 和成立 P2 必须 disposition，并把自动合同证据、真实 Runtime/Browser
 证据与人工交互证据分开记录。
 
-- [ ] **Step 6: 更新 review disposition、提交并推送集成分支**
+- [x] **Step 6: 更新 review disposition、提交并推送集成分支**
 
 ```bash
 git status --short

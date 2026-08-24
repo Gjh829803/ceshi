@@ -55,7 +55,7 @@ The following are explicitly **not** bulk-renamed by this plan: current nested c
 | HNC-30 | Complete | Canonical package fixtures, Registry expectations and both example Takes were regenerated from their current owning generators and identities |
 | HNC-40 | Complete | The live census reports 632 scanned files, zero forbidden matches and 489 retained current-authority matches |
 | HNC-50 | Complete | No superseded compatibility path is deferred; the approved deferral ledger is empty |
-| HNC-60 | Pending | Run the complete G19-8 matrix on one committed candidate |
+| HNC-60 | Complete | Candidate `99fb822` passed typecheck, 178 files / 2,172 tests, build and every required Canonical, Placement, asset, Capture, Route, Outdoor and clean-break gate |
 
 ## 4. Post-G19 Cleanliness Commitment
 
@@ -207,7 +207,7 @@ placement semantics rather than improve cleanliness.
 - Consumes: machine census plus host review of every retained versioned public name.
 - Produces: auditable current-authority inventory and zero or more complete `deferred-blocked` records.
 
-- [ ] **Step 1: Record the final candidate commit and exact census counts**
+- [x] **Step 1: Record the final candidate commit and exact census counts**
 
   Copy evidence only from commands rerun on the committed integrated candidate.
 
@@ -230,7 +230,7 @@ placement semantics rather than improve cleanliness.
 - Consumes: HNC-10 through HNC-50 complete on one committed candidate.
 - Produces: HNC-60 and UCCB-65 completion evidence that allows UCCB-70 to begin.
 
-- [ ] **Step 1: Run the current-only census and structural gates**
+- [x] **Step 1: Run the current-only census and structural gates**
 
   Run:
 
@@ -241,7 +241,7 @@ placement semantics rather than improve cleanliness.
   pnpm build
   ```
 
-- [ ] **Step 2: Run the G19 capability matrix**
+- [x] **Step 2: Run the G19 capability matrix**
 
   Run:
 
@@ -258,10 +258,10 @@ placement semantics rather than improve cleanliness.
   pnpm verify:outdoor-gameplay
   ```
 
-- [ ] **Step 3: Perform the host semantic review**
+- [x] **Step 3: Perform the host semantic review**
 
   Apply `docs/reviews/full-dimension-review-protocol.md` and `docs/reviews/runtime-deep-review-checklist.md`. Confirm that compatibility deletion did not create a second owner for possession, camera, support, medium, facing or fixed-step time.
 
-- [ ] **Step 4: Close the task only from evidence**
+- [x] **Step 4: Close the task only from evidence**
 
   Mark `UCCB-65` complete only when the forbidden census is zero, every retained name is classified, the deferred ledger is empty or complete, all commands pass on the same candidate, and `git diff --check` is clean.

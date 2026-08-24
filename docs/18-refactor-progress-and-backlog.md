@@ -2,8 +2,8 @@
 
 - 状态：Active，重构执行进度与剩余工作的唯一跟踪入口。
 - 基准日期：2026-08-25。
-- 长期目标总进度：约 **65%**，合理误差范围为 ±5%。
-- 第一条 Canonical 纵向切片：约 **90%**。
+- 长期目标总进度：约 **68%**，合理误差范围为 ±5%。
+- 第一条 Canonical 纵向切片：约 **94%**。
 - 当前唯一世界构建入口：Canonical Authoring V4 → NormalizedWorldIR V4 → ExecutionPlan V5 →
   RuntimeWorldConfiguration V1 → RuntimeHost → Babylon.js/Havok；Route 在同一 V5 Plan 上生成
   WorldPackage Build Receipt → Validation Subject → Recast → Canonical Route Evidence/Report。
@@ -24,10 +24,10 @@
 > Gameplay Framework G19-2 至 G19-6 已合入 `main@5ffd031`；关闭 Command/Receipt/Event/World
 > State、Gameplay State/Feature、事务式 WorldSession/RuntimeHost、Babylon transactional port、
 > exact Browser V5、Snapshot V4、RuntimeHost Activity 与 Authoring/CLI/Capture/Take consumer
-> cutover 已进入回归。G19-7 Outdoor/catalog lifecycle 已在集成分支通过 6/6 Gameplay、6/6
-> artifact-only 与 unknown-scene fail-closed Browser Gate，代码完成点为 `da90f16`，completion
-> record 为 `1594823`。G19-8 正在执行未发布协议 clean break 与最终全量门禁；在 Runtime
-> V5-only、零消费者 census、全量验证和主 Agent completion review 全部通过前，不宣称 G19 完成。
+> cutover 已进入回归。G19-7 Outdoor/catalog lifecycle 与 G19-8 未发布协议 clean break 已完成；
+> 候选 `99fb822` 通过 178 files / 2,172 tests、全部结构/资产/Capture/Route/Outdoor Gate 和
+> 632/0/489 clean-break census，主 Agent disposition 为 Final GO。G19 整体完成；首次 SDK Alpha
+> 前仍必须执行新的 HNC-F1 全面整洁度复查。
 
 > Simulation Take / Control Capture V1 已完成 60 Hz → 24 fps 精确时间映射、五 Pass
 > Babylon 捕获、Render Ready Receipt、原子 Bundle、CLI/Browser/Playwright 和真实 Chromium
@@ -62,7 +62,7 @@
 - [`2026-08-24-g19-7-outdoor-gameplay-completion.md`](reviews/2026-08-24-g19-7-outdoor-gameplay-completion.md)：G19-7 六场景 Gameplay 与 artifact-only 生命周期的完成证据；
 - [`2026-08-24-unreleased-compatibility-clean-break-design.md`](superpowers/specs/2026-08-24-unreleased-compatibility-clean-break-design.md)：G19-8 未发布协议 clean break 的权威边界、UCCB 依赖图与零消费者门禁；
 - [`2026-08-25-historical-naming-and-compatibility-path-cleanup-plan.md`](superpowers/plans/2026-08-25-historical-naming-and-compatibility-path-cleanup-plan.md)：UCCB-65 历史命名、公共导出、隐式兼容行为、生成资产与延期清理账本的专项执行计划；
-- [`2026-08-25-gameplay-g19-8-completion.md`](reviews/2026-08-25-gameplay-g19-8-completion.md)：G19-8 当前实施证据、待跑全量门禁与最终 disposition 入口；
+- [`2026-08-25-gameplay-g19-8-completion.md`](reviews/2026-08-25-gameplay-g19-8-completion.md)：G19-8 current-only clean break、全量门禁与 Final GO disposition；
 - [`2026-08-24-context-driven-gameplay-camera-composition-design.md`](superpowers/specs/2026-08-24-context-driven-gameplay-camera-composition-design.md)：已评审的 Kit、Relationship、Action、Equipment、Flight 与 Camera Context/Director 端到端组合合同；能力仍未实施；
 - [`2026-08-19-world-validation-report-and-quality-gates-design.md`](superpowers/specs/2026-08-19-world-validation-report-and-quality-gates-design.md)：量化 Gate、Metric、Evidence 和生产阻断协议；
 - [`2026-08-20-ai-authored-geometry-extension-design.md`](superpowers/specs/2026-08-20-ai-authored-geometry-extension-design.md)：未来可能需要的 AI 自定义几何能力及候选技术，仅供调研评审，不属于当前 Roadmap；
@@ -86,10 +86,10 @@ Normalizer/Compiler、Runtime、CLI/Browser 和对应 Conformance Gate 的纵向
 | Subject LEGO 组装体系 | 15% | 45% | 6.75% | S0、S1a、Golden 与首个产品 G Bot 可视切片已完成；S1b 后续、S2、S3、S4 尚未完成 |
 | Terrain、Region 与 Placement | 12% | 74% | 8.88% | Alpha 地形和 Placement Solver S1 已运行；Route R0、R1 Heightfield 与 R1b Static Platform 已审查/门禁关闭；通用 Terrain Mask、更多 Constraint 与完整 P0.1 未完成 |
 | CLI、Browser Protocol 与自动化 | 10% | 90% | 9.0% | 已交付 Take/Capture、`verify capture|explain`；Route `verify route`、R1 Golden Fixture、可信 Host Evidence Transport、Browser V5 clean break 已完成；compare、持久 Session 和完整 Package 工具未完成 |
-| Semantic Action、动画与 Gameplay | 8% | 72% | 5.76% | Golden 与 G Bot `idle/walk/run/jump` 已交付；G19-2 至 G19-7 的 Command/Receipt/Event/State、RuntimeHost、Babylon/Browser 接线和 Outdoor/catalog 生命周期已完成；姿态、装备、关系与规则仍未交付 |
+| Semantic Action、动画与 Gameplay | 8% | 80% | 6.4% | Golden 与 G Bot `idle/walk/run/jump` 已交付；G19-2 至 G19-8 的 Command/Receipt/Event/State、RuntimeHost、Babylon/Browser、Outdoor 生命周期及 current-only clean break 已完成；姿态、装备、关系与规则仍未交付 |
 | Simulation Take、控制通道与视频接入 | 10% | 70% | 7.0% | V1 Take、五 Pass、Bundle 和真实浏览器 Gate 已交付，Capture/Integrity 已进入统一 Report；完整 Replay/Resume 与模型 Adapter 未交付 |
-| 生产 Gate、默认切换与旧实现退出 | 7% | 72% | 5.04% | Canonical/资产/Placement/Capture/Route/Outdoor Gate 可运行；未发布旧路径清理进入 G19-8，零消费者 census、最终全量 Gate 与默认切换尚未关闭 |
-| **合计** | **100%** |  | **约 75%** | 对外按通用 Terrain、完整统一生产 Gate、WorldPackage 与视频闭环的不确定性保守报告 **约 65%** |
+| 生产 Gate、默认切换与旧实现退出 | 7% | 95% | 6.65% | Canonical/资产/Placement/Capture/Route/Outdoor Gate 全绿；未发布旧路径已清理，clean-break census 为 632/0/489；HNC-F1 作为首次 Alpha 前的新一轮全面审计保留 |
+| **合计** | **100%** |  | **约 77%** | 对外按通用 Terrain、完整统一生产 Gate、WorldPackage 与视频闭环的不确定性保守报告 **约 68%** |
 
 “第一条 Canonical 纵向切片约 90%”只指以下较窄范围：AI 提交 JSON，SDK
 完成严格校验、确定性编译、Babylon/Havok 运行、多主体控制、首个 Golden Asset
@@ -161,7 +161,7 @@ Capture V1 是独立的新纵向切片，不改变该 90% 口径。
   `5ffd031` 合入 `main`。
 - [x] G19-7 已把六个 Outdoor/catalog 场景接入同一 Gameplay Runtime，并保持 artifact-only
   renderer 不暴露 `__WORLDKIT__` 或 Gameplay 方法；真实 Browser Gate 通过 6/6 Gameplay、
-  6/6 artifact-only 与 unknown-scene fail-closed。G19-8 仍拥有 clean break 与最终全量验收。
+  6/6 artifact-only 与 unknown-scene fail-closed。G19-8 已继续关闭 clean break 与最终全量验收。
 - [x] 真实 Chromium 下验证 Package Definition 的两个实例可以分别控制。
 
 2026-08-20 的新鲜验证证据：
@@ -739,10 +739,10 @@ Placement S1、Simulation Take / Control Capture V1 与 Validation Capture/Integ
 | G19-4E | **已完成** | 全量门禁、真实回归 disposition、生成物治理 | G19-4D | `pnpm typecheck`、165 files / 2,079 tests、`pnpm build` 与 9 项 verify Gate 全通过；Take 根哈希由 `generate:example-takes` 生成；Route 重型套件在全量并发下通过 |
 | G19-5 | **已完成，作为 G19-6 前置底座** | Babylon Gameplay Port；`possessedBy` 唯一控制权；输入目标与 Camera Target projection 事务 | G19-4 | optional Possession、fixed-input Controller 隔离、staged transaction、provider-neutral projection 与 fail-closed Action 已完成 |
 | G19-6 | **已完成并在 `main`** | exact 39-key Browser Protocol V5 Gameplay 唯一入口、Snapshot V4、Reset/Rebind、Runtime Activity、Authoring/CLI/Capture/Take consumer cutover；Execution Subject locomotion Capability lock 与 Canonical capability state | G19-5 | `main@5ffd031`；typecheck、build、168 files / 2,134 tests、Canonical/Placement/Rigged/G Bot/R0/R1/R1b 与两项 Capture verifier 全通过；无 open confirmed P0/P1/P2 |
-| G19-7 | **已完成于集成分支** | Outdoor/catalog route、page/artifact lifecycle 与六场景接线，不增加第二套 Gameplay 真相 | G19-6 | `da90f16` + completion record `1594823`；6/6 Gameplay、6/6 artifact-only、unknown-scene fail-closed Browser Gate 通过 |
-| G19-8 | **进行中** | 未发布协议 clean break、历史命名/兼容路径专项清理、零消费者 census、G19 整体全量验证、主 Agent深审与最终 disposition | G19-7 | UCCB-00 至 UCCB-40 已形成提交；UCCB-50/60/65/70、全量 Gate 和最终 completion claim 仍开放 |
-| HNC-F1 | 阻塞于 G19-8，Alpha 前强制执行 | 对当时全部公共命名、exports、parser、Browser/CLI、生成资产和隐式 fallback 再做一次全面兼容性清理；同时关闭 `SCENE-ORIGIN-1` | G19-8、Scene spawn-origin 与 collider-derived placement 合同 | 最新 clean-break machine gate + 人工语义分类；Scene 固定 0.9m bridge 删除；场景/Outdoor/Plan gates 全绿 |
-| M8-S1 | 阻塞于 G19-8 | 首个 `mountedOn` 人—滑板关系切片 | G19-8 | Relationship/Action/Event/Receipt/Capture 端到端一致 |
+| G19-7 | **已完成** | Outdoor/catalog route、page/artifact lifecycle 与六场景接线，不增加第二套 Gameplay 真相 | G19-6 | `da90f16` + completion record `1594823`；6/6 Gameplay、6/6 artifact-only、unknown-scene fail-closed Browser Gate 通过 |
+| G19-8 | **已完成，Final GO** | 未发布协议 clean break、历史命名/兼容路径专项清理、零消费者 census、G19 整体全量验证、主 Agent深审与最终 disposition | G19-7 | 候选 `99fb822`；178 files / 2,172 tests、全部专项 Gate、632/0/489 census；无 open confirmed P0/P1/适用 P2 |
+| HNC-F1 | Alpha 前强制执行 | 对当时全部公共命名、exports、parser、Browser/CLI、生成资产和隐式 fallback 再做一次全面兼容性清理；同时关闭 `SCENE-ORIGIN-1` | Scene spawn-origin 与 collider-derived placement 合同 | 最新 clean-break machine gate + 人工语义分类；Scene 固定 0.9m bridge 删除；场景/Outdoor/Plan gates 全绿 |
+| M8-S1 | 下一主线 | 首个 `mountedOn` 人—滑板关系切片 | G19 已完成 | Relationship/Action/Event/Receipt/Capture 端到端一致 |
 
 G19-8 的 clean-break 子任务以
 [`未发布协议兼容层 Clean Break 设计`](superpowers/specs/2026-08-24-unreleased-compatibility-clean-break-design.md)
@@ -751,14 +751,14 @@ G19-8 的 clean-break 子任务以
 | UCCB | 状态 | 当前提交 / 证据 | 剩余边界 |
 |---|---|---|---|
 | UCCB-00 | 已完成 | G19-7 输入冻结于 `da90f16`，completion record `1594823` | 无 |
-| UCCB-10 | 已完成 | `1b8c311`、`cfa16b7`、`b19e56a`：Authoring/IR V4 自包含，Authoring loader 与 WorldKit consumer 切到当前协议 | 最终 census 复核 |
-| UCCB-20 | 已完成 | `3fb2397`、`23f5985`、`fbe7ff4`：Compiler 直接从 IR V4 生成 Plan V5，旧 V4 compiler 入口退出，当前 golden 更新 | 最终 Compiler/full-suite 回归 |
-| UCCB-30 | 已完成 | `a44d160`、`2d312b1`：ExecutionPlan V5 自包含，旧 Plan V4 公共合同删除 | 最终 Runtime/WorldPackage 回归 |
-| UCCB-40 | 已完成 | `9ae108a`、`592fbeb`：Subject capability assembly 成为 Authoring/Registry/Plan 必填当前合同 | 最终 Runtime 与资产 Gate 回归 |
-| UCCB-50 | 进行中 | `c0c05ad`、`3e4fda0` 已完成 Adapter/consumer V5-only 与 provider projection；Babylon Runtime clean break 尚在工作树 | 删除剩余 V4/SnapshotV3/direct-bind/legacy profile 路径并完成 Runtime 深审 |
-| UCCB-60 | 进行中 | `c32ecb5`、`2d312b1`、`b148472` 等已删除 Authoring V3/Plan V4 合同并迁移部分 verifier | 等 UCCB-50 稳定后执行跨包旧表面、fixture、export 零引用清理 |
-| UCCB-65 | 进行中 | 已新增历史命名与兼容路径专项计划；机器 census 当前为零 forbidden matches | 完成人工语义分类、公共 export/serialized asset census、隐式 fallback 复核和延期清理账本 |
-| UCCB-70 | 进行中 | G19-8 completion record 已建立 | `verify:unreleased-clean-break` 零匹配、全量 Gate、最终 diff review 与 disposition |
+| UCCB-10 | 已完成 | `1b8c311`、`cfa16b7`、`b19e56a`：Authoring/IR V4 自包含，Authoring loader 与 WorldKit consumer 切到当前协议 | 无 |
+| UCCB-20 | 已完成 | `3fb2397`、`23f5985`、`fbe7ff4`：Compiler 直接从 IR V4 生成 Plan V5，旧 V4 compiler 入口退出，当前 golden 更新 | 无 |
+| UCCB-30 | 已完成 | `a44d160`、`2d312b1`：ExecutionPlan V5 自包含，旧 Plan V4 公共合同删除 | 无 |
+| UCCB-40 | 已完成 | `9ae108a`、`592fbeb`：Subject capability assembly 成为 Authoring/Registry/Plan 必填当前合同 | 无 |
+| UCCB-50 | 已完成 | `f453810`、`da2fe27`：Babylon Runtime current-only、显式 possession 与 camera publication | 无 |
+| UCCB-60 | 已完成 | `f453810`、`cf94b90`、`3fea29b`、`0d9a2bd`：旧表面、消费者与 fixture 原子清理 | 无 |
+| UCCB-65 | 已完成 | `0ad72e8`、`3e671a2`、`99fb822`：机器/人工 census、生成资产与空延期账本 | HNC-F1 是新审计，不是延期兼容债务 |
+| UCCB-70 | 已完成 | 候选 `99fb822` 全量矩阵与 Final GO completion review | main 交付操作 |
 
 项目尚未上线，因此本轮能删除的被替代兼容路径全部删除，不为开发历史保留 alias、converter、
 fallback read、双写或双发布。当前仍是唯一权威的版本化嵌套组件（例如当前 Gameplay V1、
@@ -817,7 +817,7 @@ S1b Golden、
    M7 不标记完成；
 8. **M8：完成 Canonical World State + Typed Relationship 人—滑板窄可视切片**：G19-2/G19-4
    已交付 Canonical Gameplay 合同、provider-neutral RuntimeHost staging 和 WorldPackage membership；
-   G19-6 已在 main、G19-7 已完成于集成分支，下一步先关闭 G19-8 clean break 与最终全量门禁，再按
+   G19-6 至 G19-8 已完成并通过 Final GO，下一步按
    [专项设计](superpowers/specs/2026-08-22-canonical-runtime-state-and-semantic-projection-design.md)
    沿用已冻结的 World/View/Runtime Status/Transition 四类投影，再实现 `mountedOn` 权威关系、
    `supportedBy` 派生事实、Mount/Dismount Action、Receipt/Event 与 Capture 对齐；在这条

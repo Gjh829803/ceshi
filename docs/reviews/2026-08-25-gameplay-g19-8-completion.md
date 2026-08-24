@@ -4,18 +4,17 @@
 
 - Date: 2026-08-25.
 - Branch: `codex/g19-7-integration`.
-- Observation point: committed `HEAD@2d312b1`; Babylon Runtime V5-only work remained uncommitted and in
-  progress when this record was established.
-- Disposition: **In progress — not a completion claim**.
+- Observation point: committed candidate `99fb822`.
+- Disposition: **Final GO — G19-8 and the G19 program are complete**.
 - Scope: unreleased-protocol clean break, zero-consumer census, full G19 verification and host completion
   review.
 - Authority: `docs/superpowers/specs/2026-08-24-unreleased-compatibility-clean-break-design.md` plus the
   full-dimension and Runtime deep-review checklists.
 
-G19-7 is complete through code commit `da90f16` and completion record `1594823`. G19-8 remains open until
-UCCB-50, UCCB-60 and UCCB-70 are complete, every required gate below is rerun on the integrated candidate,
-and the host dispositions the final diff. A worker report, focused test pass or clean `typecheck` alone is
-not sufficient completion evidence.
+G19-7 is complete through code commit `da90f16` and completion record `1594823`. Candidate `99fb822`
+completes UCCB-50, UCCB-60, UCCB-65 and UCCB-70, passes the complete integrated matrix below and has been
+semantically reviewed by the host. The evidence remains separated into automated contract evidence and
+real Browser/Havok capture evidence; no unsupported broad manual-interaction claim is made.
 
 ## Clean-break policy
 
@@ -43,10 +42,10 @@ consumer that requires development-history compatibility. Consequently:
 | UCCB-20 | Complete | `3fb2397`, `23f5985`, `fbe7ff4` compile IR V4 directly to Plan V5, remove the old compiler entry and refresh the current locked hash | Compiler/full-suite rerun |
 | UCCB-30 | Complete | `a44d160`, `2d312b1` make Plan V5 self-contained and remove the superseded Plan V4 public contract | Runtime/WorldPackage rerun |
 | UCCB-40 | Complete | `9ae108a`, `592fbeb`, `1e58c0b` require a locked Subject capability assembly through Registry, Compiler and RuntimeHost tests | Runtime and asset gates |
-| UCCB-50 | In progress | `c0c05ad` makes the Playground adapter V5-only; `3e4fda0` moves app consumers to the Babylon provider projection | Finish Babylon Runtime V5-only construction, remove V3 snapshot/direct-bind/legacy-profile paths, run Runtime deep review |
-| UCCB-60 | In progress | `c32ecb5`, `2d312b1`, `b148472` remove old Authoring V3/Plan V4 contracts and migrate part of the verifier surface | Delete all remaining superseded exports, fixtures, branches and test consumers after UCCB-50 |
-| UCCB-65 | In progress | `docs/superpowers/plans/2026-08-25-historical-naming-and-compatibility-path-cleanup-plan.md` defines the blocking naming/compatibility census | Classify retained versioned names, remove hidden compatibility behavior, regenerate superseded artifacts and close or register every deferral |
-| UCCB-70 | In progress | This review record and the machine clean-break verifier provide the disposition surface | Zero census, full gates, final host review and Git integration evidence |
+| UCCB-50 | Complete | `f453810` and `da2fe27` make Babylon Runtime current-only, explicitly unbound/possessed and camera-publication safe | None |
+| UCCB-60 | Complete | `f453810`, `cf94b90`, `3fea29b`, `0d9a2bd` remove superseded Runtime/Authoring consumers and refresh current fixtures | None |
+| UCCB-65 | Complete | `0ad72e8`, `3e671a2`, `99fb822` close the classified census, generated artifacts and future cleanup ledger | None; HNC-F1 is a new pre-Alpha audit, not retained compatibility |
+| UCCB-70 | Complete | Candidate `99fb822` passed the integrated matrix and host semantic review | Main integration and push recorded after this review commit |
 
 ## Focused evidence already observed
 
@@ -65,8 +64,7 @@ integration, but it must not be copied into the final disposition as a substitut
 
 ## Required final verification
 
-All commands below are **pending as one fresh integrated matrix** unless a later section records their exact
-candidate commit, exit status and artifacts:
+All commands below passed on the tracked tree of committed candidate `99fb822`:
 
 ```bash
 pnpm typecheck
@@ -84,6 +82,24 @@ pnpm verify:route-r1b-static-platform
 pnpm verify:outdoor-gameplay
 pnpm verify:unreleased-clean-break
 ```
+
+Observed results:
+
+- `pnpm test`: 178/178 files and 2,172/2,172 tests passed; Vitest uses the official `threads` pool with two
+  workers because Vitest 3.2.7's fork RPC timed out after long Browser/Havok files despite passing assertions.
+  No unhandled-error suppression is enabled.
+- `pnpm verify:unreleased-clean-break`: 632 files scanned, 0 forbidden matches and 489 retained
+  current-authority matches.
+- Canonical, Placement, Rigged Subject and G Bot gates passed with real Browser screenshots, independent
+  Subject state, wall collision, jump/action pose and deterministic reset evidence.
+- Control Capture and Validation Capture passed, including invalid/mixed/damaged negative cases.
+- Route R0, R1 Heightfield and R1b Static Platform passed. R1/R1b include real Babylon/Havok execution,
+  support-loss and mismatch failures, provider-neutral evidence and identical 30/60/120-like outcomes.
+- Outdoor Gameplay passed all 6/6 Gameplay Browser gates, all 6/6 artifact-only gates and unknown-scene
+  fail-closed behavior.
+- `pnpm build` passed. The existing Vite large-chunk warning, Babylon bone-uniform warnings and deprecated
+  Rapier initialization warning are non-blocking existing warnings and were not converted into compatibility
+  behavior.
 
 Runtime completion also requires the applicable adversarial evidence from
 `docs/reviews/runtime-deep-review-checklist.md`: 30/60/120 Hz-like render timing, multi-instance isolation,
@@ -117,14 +133,8 @@ all scene, Outdoor Gameplay and Plan gates pass without the fixed 0.9m conversio
 
 ## Final host disposition
 
-**Not yet performed.** Before changing this status, the host must:
-
-1. inspect the final branch diff against `main`, not only the worker commits;
-2. confirm the clean-break census is zero or every remaining item is present in the ledger above;
-3. review Runtime state ownership, fixed-step time, possession, camera, support and resource cleanup against
-   both authoritative checklists;
-4. disposition every confirmed P0/P1 and applicable P2 finding;
-5. run the complete verification matrix on the exact candidate commit; and
-6. record branch push and authorized main integration evidence.
-
-Until those steps are recorded, G19-8 and the overall G19 program remain **in progress**.
+**Final GO.** The host reviewed the integrated diff against `main`, confirmed one owner for possession,
+fixed-step time, support, facing and camera state, and found no open confirmed P0/P1 or applicable P2 issue.
+The compatibility deferral ledger is empty, the current-only census is zero, and all required automated and
+real Browser/Havok gates passed. G19-8 and the overall G19 program are complete. Main integration and remote
+push are the remaining Git delivery operation, not an implementation or verification gap.
