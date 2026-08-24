@@ -3,8 +3,9 @@ import { readFile } from "node:fs/promises";
 import { fileURLToPath } from "node:url";
 
 import {
-  createValidAuthoringSpec,
+  createValidAuthoringSpecV4,
   createValidPackageSubjectWorld,
+  createValidPackageSubjectWorldV4,
 } from "../../../packages/authoring/src/test-fixture";
 import {
   normalizeAuthoringSpecV4,
@@ -48,6 +49,10 @@ const ROUTE_EVIDENCE_HASH = `sha256:${"9".repeat(64)}` as const;
 const coreControlManifest = createCoreControlFeatureFactoryV1().manifest;
 const goldenAssetBytes = new Uint8Array(await readFile(fileURLToPath(new URL(
   "../public/worldkit-assets/golden-humanoid.glb",
+  import.meta.url,
+))));
+const gBotAssetBytes = new Uint8Array(await readFile(fileURLToPath(new URL(
+  "../public/subject-assets/humanoid/g-bot/v1/g-bot.glb",
   import.meta.url,
 ))));
 
@@ -118,7 +123,7 @@ function gameplayBootstrapResourceLock(
 }
 
 function routeAuthoringWorld(): AuthoringSpecV4 {
-  const source = createValidAuthoringSpec();
+  const source = createValidAuthoringSpecV4();
   return {
     ...source,
     schemaVersion: 4,
@@ -162,7 +167,7 @@ function routeAuthoringWorld(): AuthoringSpecV4 {
 }
 
 function assetFreeAuthoringWorld(): AuthoringSpecV4 {
-  const source = createValidPackageSubjectWorld();
+  const source = createValidPackageSubjectWorldV4();
   return {
     ...source,
     schemaVersion: 4,
@@ -367,7 +372,7 @@ describe("loadAuthoringScene", () => {
     expect(activeActionForControlledSubject(snapshot)).toBe("run");
   });
 
-  it("runs strict Authoring V3 JSON through NormalizedWorldIR V3 and ExecutionPlan V4", async () => {
+  it("rejects obsolete Authoring V3 input before compilation", async () => {
     const loaded = await loadAuthoringScene(async () =>
       new Response(JSON.stringify(createValidPackageSubjectWorld()), {
         status: 200,
@@ -376,27 +381,14 @@ describe("loadAuthoringScene", () => {
     );
 
     expect(loaded).toMatchObject({
-      ok: true,
-      diagnostics: [],
-      executionPlan: {
-        schemaVersion: 4,
-        runtimeBackend: "babylon-havok",
-        id: "basic-world",
-        subjects: [
-          expect.objectContaining({
-            entityId: "pack-animal-a",
-            subjectDefinitionRef:
-              "package://subject-definition/coastal-pack-animal@1",
-          }),
-          expect.objectContaining({ entityId: "pack-animal-b" }),
-          expect.objectContaining({ entityId: "player" }),
-        ],
-      },
+      ok: false,
+      diagnostics: [{
+        code: "AUTHORING_SCHEMA_VERSION_NOT_SUPPORTED",
+        instancePath: "/schemaVersion",
+        details: { supportedSchemaVersions: [4] },
+      }],
     });
-    expect(loaded.normalizedWorldIrHash).toMatch(/^sha256:[a-f0-9]{64}$/);
-    expect(loaded.executionPlanHash).toMatch(/^sha256:[a-f0-9]{64}$/);
-    expect(loaded).not.toHaveProperty("hostOverlay");
-    expect(loaded.runtimeWorldConfiguration).toBeUndefined();
+    expect(loaded.executionPlan).toBeUndefined();
   });
 
   it("runs strict Authoring V4 JSON through NormalizedWorldIR V4 and ExecutionPlan V5", async () => {
@@ -504,10 +496,6 @@ describe("loadAuthoringScene", () => {
 
   it("builds the G Bot Runtime World Configuration from fetched locked bytes", async () => {
     vi.stubGlobal("location", { origin: "https://playground.test" });
-    const gBotBytes = new Uint8Array(await readFile(fileURLToPath(new URL(
-      "../public/subject-assets/humanoid/g-bot/v1/g-bot.glb",
-      import.meta.url,
-    ))));
     const fetchCalls: string[] = [];
     const loaded = await loadAuthoringScene(
       async () => jsonResponse(routeAuthoringWorld()),
@@ -521,9 +509,9 @@ describe("loadAuthoringScene", () => {
             ok: true,
             redirected: false,
             url: requestUrl,
-            arrayBuffer: async () => gBotBytes.buffer.slice(
-              gBotBytes.byteOffset,
-              gBotBytes.byteOffset + gBotBytes.byteLength,
+            arrayBuffer: async () => gBotAssetBytes.buffer.slice(
+              gBotAssetBytes.byteOffset,
+              gBotAssetBytes.byteOffset + gBotAssetBytes.byteLength,
             ),
           } as Response;
         }) as typeof fetch,
@@ -542,7 +530,7 @@ describe("loadAuthoringScene", () => {
       resourceRef: "worldkit://subject-asset/actor.humanoid.g-bot@1",
       packagePath: "resources/subject-assets/actor.humanoid.g-bot.glb",
       mediaType: "model/gltf-binary",
-      sizeBytes: gBotBytes.byteLength,
+      sizeBytes: gBotAssetBytes.byteLength,
       contentHash:
         "sha256:41833210e735788da0777fc37badcec03f90ccf17ab5a7d89103f0727abeeb1b",
     });
@@ -638,27 +626,8 @@ describe("loadAuthoringScene", () => {
     expect(loaded.routeEvidencePublication).toBeUndefined();
   });
 
-  it("does not attach configured Route evidence to an Authoring V3 world", async () => {
-    const source = createValidPackageSubjectWorld();
-    const routeSource = routeAuthoringWorld();
-    const publication = matchingRouteEvidencePublication(routeSource);
-    const loaded = await loadAuthoringScene(
-      async () => jsonResponse(source),
-      { fetchRouteEvidence: async () => jsonResponse(publication) },
-    );
-
-    expect(loaded).toMatchObject({
-      ok: false,
-      diagnostics: [{
-        code: "WORLDKIT_ROUTE_EVIDENCE_REQUIRES_AUTHORING_V4",
-        instancePath: "/schemaVersion",
-      }],
-    });
-    expect(loaded.executionPlan).toBeUndefined();
-  });
-
   it("previews water and air packages without claiming their reserved relationships run", async () => {
-    const mutableSource = createValidAuthoringSpec();
+    const mutableSource = createValidAuthoringSpecV4();
     const sourceSnapshot = structuredClone(mutableSource);
     const source = deepFreeze(mutableSource);
     const waterLoaded = await loadAuthoringScene(
@@ -782,7 +751,7 @@ describe("loadAuthoringScene", () => {
 
   it("loads the exact quadruped public-default version with its tuned motion and camera profiles", async () => {
     const loaded = await loadAuthoringScene(
-      async () => new Response(JSON.stringify(createValidAuthoringSpec())),
+      async () => new Response(JSON.stringify(createValidAuthoringSpecV4())),
       {
         subjectDefinitionRef:
           "worldkit://subject-definition/animal.quadruped.forward-steer@2",
@@ -835,7 +804,7 @@ describe("loadAuthoringScene", () => {
   });
 
   it("gives the capability Playground enough explicit budget for the locked G Bot asset", async () => {
-    const source = createValidAuthoringSpec();
+    const source = createValidAuthoringSpecV4();
     source.world.resourceBudget = {
       maxVertices: 20_000,
       maxTriangles: 30_000,
@@ -846,6 +815,15 @@ describe("loadAuthoringScene", () => {
       {
         subjectDefinitionRef:
           "worldkit://subject-definition/humanoid.g-bot@1",
+        fetchSubjectAsset: (async (input: URL | RequestInfo) => ({
+          ok: true,
+          redirected: false,
+          url: String(input),
+          arrayBuffer: async () => gBotAssetBytes.buffer.slice(
+            gBotAssetBytes.byteOffset,
+            gBotAssetBytes.byteOffset + gBotAssetBytes.byteLength,
+          ),
+        })) as typeof fetch,
       },
     );
 
@@ -901,10 +879,10 @@ describe("loadAuthoringScene", () => {
           : undefined,
       ),
     ).toBe(true);
-  });
+  }, 15_000);
 
   it("retains an immutable overlay only on an overlaid compile failure", async () => {
-    const source = createValidAuthoringSpec();
+    const source = createValidAuthoringSpecV4();
     const staticBlocker = source.nodes.find((node) => node.kind === "object");
     const spawn = source.nodes.find(
       (node) => node.kind === "anchor" && node.id === "spawn-main",
@@ -969,7 +947,7 @@ describe("loadAuthoringScene", () => {
 
   it("produces one runtime Feature inspection per compiled Subject", async () => {
     const loaded = await loadAuthoringScene(async () =>
-      new Response(JSON.stringify(createValidPackageSubjectWorld())),
+      new Response(JSON.stringify(createValidPackageSubjectWorldV4())),
     );
     if (!loaded.ok || loaded.executionPlan === undefined) {
       throw new Error("Fixture did not load.");
@@ -1007,7 +985,7 @@ describe("loadAuthoringScene", () => {
   });
 
   it("reports the complete loader schema-version support set", async () => {
-    const source = { ...createValidAuthoringSpec(), schemaVersion: 5 };
+    const source = { ...createValidAuthoringSpecV4(), schemaVersion: 5 };
     const loaded = await loadAuthoringScene(async () => jsonResponse(source));
 
     expect(loaded).toMatchObject({
@@ -1015,7 +993,7 @@ describe("loadAuthoringScene", () => {
       diagnostics: [{
         code: "AUTHORING_SCHEMA_VERSION_NOT_SUPPORTED",
         instancePath: "/schemaVersion",
-        details: { supportedSchemaVersions: [3, 4] },
+        details: { supportedSchemaVersions: [4] },
       }],
     });
   });

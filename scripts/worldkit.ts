@@ -29,7 +29,6 @@ import {
 } from "./lib/layout-artifacts";
 import {
   cliFailure,
-  loadWorldkitPipeline,
   loadWorldkitRoutePipeline,
   readWorldkitInput,
   type CliDiagnostic,

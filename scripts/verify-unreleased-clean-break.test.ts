@@ -148,4 +148,34 @@ describe("verify:unreleased-clean-break", () => {
     expect(report.forbiddenMatchCount).toBe(2);
     expect(report.ok).toBe(false);
   });
+
+  it("blocks superseded runtime ownership and subject registry compatibility", async () => {
+    const fixtureRoot = await mkdtemp(path.join(os.tmpdir(), "clean-break-runtime-"));
+    cleanupPaths.push(fixtureRoot);
+    await mkdir(path.join(fixtureRoot, "packages", "runtime"), { recursive: true });
+    await writeFile(
+      path.join(fixtureRoot, "packages", "runtime", "compatibility.ts"),
+      [
+        `type Snapshot = ${token(["World", "Runtime", "Snapshot", "V3"])};`,
+        `type Definition = ${token(["Registry", "Subject", "Definition", "V2"])};`,
+        `type Registry = ${token(["Subject", "Resource", "Registry", "V2"])};`,
+        `const ${token(["LEGACY", "_CONTROL", "_PROFILE"])} = {};`,
+        `runtime.${token(["bind", "Control"])}({});`,
+      ].join("\n"),
+      "utf8",
+    );
+
+    const report = await scanUnreleasedCleanBreak(fixtureRoot);
+
+    expect(family(report, "superseded-runtime-and-subject-contracts")).toMatchObject({
+      classification: "superseded-delete",
+      matchCount: 3,
+    });
+    expect(family(report, "superseded-compatibility-mechanisms")).toMatchObject({
+      classification: "superseded-delete",
+      matchCount: 2,
+    });
+    expect(report.forbiddenMatchCount).toBe(5);
+    expect(report.ok).toBe(false);
+  });
 });

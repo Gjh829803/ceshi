@@ -281,6 +281,9 @@ UCCB-00  G19-7 稳定基线冻结
 - `projectNormalizedWorldV4ToV3()` 及 V5 Compiler 的 `planV4` 中间值；
 - 顶层 `ExecutionPlanV4` 及 V5 对它的继承；
 - Babylon/Adapter 的 `ExecutionPlanV4 | ExecutionPlanV5` unions 和 schemaVersion 4 runtime branches；
+- 公开 `WorldRuntimeSnapshotV3`、`BindControlRequestV2` 与直接 `bindControl()` 入口；Snapshot 只发布 V4，控制所有权只通过 Gameplay Possession transaction 改变；
+- `RegistrySubjectDefinitionV2`、`RegistrySubjectDefinitionInputV2` 与 `SubjectResourceRegistryV2`；当前 Subject Registry 只接受 capability-driven definition，并在编译前完成精确 Resource Lock；
+- `LEGACY_CONTROL*`、`LEGACY_MOTION*`、`LEGACY_CAMERA*` 常量及其 Runtime 注入路径；
 - 只为 V4 runtime fixture 服务的 `lockPublishedGroundFeels()`；若测试语义仍有效，改为当前 V5 fixture；
 - `basic-world.json`、`invalid-world.json`、`multi-subject-world.json` 的 V3 serialized shape。
 

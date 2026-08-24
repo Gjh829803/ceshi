@@ -26,10 +26,7 @@ import {
   createCoreControlFeatureFactoryV1,
 } from "@whitebox-world/gameplay";
 
-import {
-  loadWorldkitPipeline,
-  loadWorldkitRoutePipeline,
-} from "./lib/worldkit-pipeline";
+import { loadWorldkitRoutePipeline } from "./lib/worldkit-pipeline";
 import { loadAuthoringScene } from "../apps/playground/src/authoring-loader";
 import {
   RouteValidationRunnerInfrastructureErrorV1,
@@ -136,11 +133,10 @@ afterEach(async () => {
 });
 
 describe("worldkit CLI", () => {
-  it("loads V4 Route worlds only through the explicit V4/V5 pipeline", async () => {
+  it("loads V4 Route worlds through the V4/V5 pipeline", async () => {
     const directory = await createTemporaryDirectory();
     const inputPath = await writeRouteWorld(directory);
     const route = await loadWorldkitRoutePipeline(inputPath);
-    const legacy = await loadWorldkitPipeline(inputPath);
 
     expect(route).toMatchObject({
       ok: true,
@@ -157,7 +153,6 @@ describe("worldkit CLI", () => {
       layoutSolveReportHash: expect.stringMatching(/^sha256:[0-9a-f]{64}$/),
       executionPlan: { schemaVersion: 5 },
     });
-    expect(legacy).toMatchObject({ ok: false, exitCode: 2 });
   });
 
   it("locks the authoritative core-control feature into Route V5 plans", async () => {

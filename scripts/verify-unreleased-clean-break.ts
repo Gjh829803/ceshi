@@ -97,6 +97,13 @@ function textFamilyDefinitions(): readonly TextFamilyDefinition[] {
     token(["Execution", "Object", "V3"]),
     token(["Package", "Subject", "Definition", "V1"]),
   ];
+  const supersededRuntimeAndSubjectContracts = [
+    token(["World", "Runtime", "Snapshot", "V3"]),
+    token(["Bind", "Control", "Request", "V2"]),
+    token(["Registry", "Subject", "Definition", "V2"]),
+    token(["Registry", "Subject", "Definition", "Input", "V2"]),
+    token(["Subject", "Resource", "Registry", "V2"]),
+  ];
   const supersededMechanisms = [
     escaped(token(["migrate", "Authoring", "Spec", "V2", "To", "V3"])),
     escaped(token(["project", "Placements", "To", "V3"])),
@@ -109,6 +116,10 @@ function textFamilyDefinitions(): readonly TextFamilyDefinition[] {
     escaped(token(["legacy", "-control"])),
     escaped(token(["legacy", "-motion"])),
     `${escaped(token(["legacy"]))}\\.(?:${alternatives(["camera", "ground"])})`,
+    escaped(token(["LEGACY", "_CONTROL"])),
+    escaped(token(["LEGACY", "_MOTION"])),
+    escaped(token(["LEGACY", "_CAMERA"])),
+    `\\b${escaped(token(["bind", "Control"]))}\\s*\\(`,
   ];
 
   return Object.freeze([
@@ -117,6 +128,15 @@ function textFamilyDefinitions(): readonly TextFamilyDefinition[] {
       classification: "superseded-delete" as const,
       blocksCompletion: true,
       pattern: new RegExp(`\\b(?:${alternatives(supersededTopLevel)})\\b`, "g"),
+    }),
+    Object.freeze({
+      familyId: "superseded-runtime-and-subject-contracts",
+      classification: "superseded-delete" as const,
+      blocksCompletion: true,
+      pattern: new RegExp(
+        `\\b(?:${alternatives(supersededRuntimeAndSubjectContracts)})\\b`,
+        "g",
+      ),
     }),
     Object.freeze({
       familyId: "superseded-compatibility-mechanisms",
