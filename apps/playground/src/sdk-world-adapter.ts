@@ -1,4 +1,4 @@
-import type { ActionManifest, MovementIntent, Vec3Tuple } from "@whitebox-world/contracts";
+import type { ActionManifest, Vec3Tuple } from "@whitebox-world/contracts";
 import { World } from "@whitebox-world/core";
 import {
   createPhysicsSystem,
@@ -37,13 +37,14 @@ import * as THREE from "three";
 import actionManifestJson from "../../../assets/humanoid/action-manifest.json";
 import type {
   FeatureInspection,
-  FixedInputStep,
-  InputAction,
   OpeningCompositionReport,
   PlanningViewKind,
-  PlaygroundWorldAdapter,
-  WorldSnapshot,
+  PlaygroundArtifactRenderer,
 } from "./playground-world.js";
+import {
+  artifactWriteHeaders,
+  loadArtifactWriteCapability,
+} from "./artifact-write-capability.js";
 import { currentScene } from "./scenes/current-scene.js";
 
 const FIXED_DELTA = 1 / 60;
@@ -53,6 +54,30 @@ const WHITE = 0xe7e8e3;
 interface LocalRigStatus {
   source: "mixamo-xbot-local" | "placeholder";
   limitations: readonly string[];
+}
+
+interface SdkWorldAdapterConstructionDependenciesV1 {
+  createPhysics(): Promise<PhysicsSystem>;
+  loadVisual(): Promise<{ visual: HumanoidVisual; status: LocalRigStatus }>;
+  createRenderer(): THREE.WebGLRenderer;
+  createResizeObserver(callback: ResizeObserverCallback): ResizeObserver;
+}
+
+interface ConstructionOwnerV1 {
+  active: boolean;
+  readonly dispose: () => void;
+}
+
+function disposeConstructionOwners(owners: readonly ConstructionOwnerV1[]): void {
+  for (const owner of [...owners].reverse()) {
+    if (owner.active !== true) continue;
+    owner.active = false;
+    try {
+      owner.dispose();
+    } catch {
+      // Preserve the primary construction failure while continuing cleanup.
+    }
+  }
 }
 
 function whiteMaterial(color = WHITE, vertexColors = false): THREE.MeshStandardMaterial {
@@ -263,7 +288,7 @@ function addOwnedRenderable(
   });
 }
 
-export class SdkWorldAdapter implements PlaygroundWorldAdapter {
+export class SdkWorldAdapter implements PlaygroundArtifactRenderer {
   readonly name: string;
   readonly canvas: HTMLCanvasElement;
 
@@ -275,9 +300,6 @@ export class SdkWorldAdapter implements PlaygroundWorldAdapter {
   private readonly subject: HumanoidThirdPersonSubjectKit<unknown>;
   private readonly renderer: THREE.WebGLRenderer;
   private readonly camera: THREE.PerspectiveCamera;
-  private readonly clock = new THREE.Clock();
-  private readonly listeners = new Set<(snapshot: WorldSnapshot) => void>();
-  private readonly pressed = new Set<InputAction>();
   private readonly resizeObserver: ResizeObserver;
   private readonly playerCollider: PhysicsCollider;
   private readonly rigStatus: LocalRigStatus;
@@ -288,39 +310,66 @@ export class SdkWorldAdapter implements PlaygroundWorldAdapter {
   private readonly waterMaterials = new Set<THREE.ShaderMaterial>();
   private readonly renderObjectsByBinding = new Map<string, THREE.Object3D[]>();
   private compositionCache: { dataUrl: string; report: OpeningCompositionReport } | null = null;
-  private frame = 0;
-  private paused = false;
   private disposed = false;
-  private dragPointerId: number | null = null;
-  private dragLast = new THREE.Vector2();
-  private fps = 0;
-  private fpsFrames = 0;
-  private fpsElapsed = 0;
-  private lastAction: WorldSnapshot["player"]["action"] = "idle";
 
-  static async create(
+  static async createArtifactRenderer(
     sceneDefinition: OutdoorSceneDefinition = currentScene,
+    dependencies: Partial<SdkWorldAdapterConstructionDependenciesV1> = {},
   ): Promise<SdkWorldAdapter> {
     const scene = compileOutdoorScene(sceneDefinition);
-    const physics = await createPhysicsSystem({ gravity: [0, -24, 0] });
-    const visual = await loadLocalVisual();
-    return new SdkWorldAdapter(scene, physics, visual);
+    const physics = await (dependencies.createPhysics ?? (() =>
+      createPhysicsSystem({ gravity: [0, -24, 0] })))();
+    let visual: { visual: HumanoidVisual; status: LocalRigStatus };
+    try {
+      visual = await (dependencies.loadVisual ?? loadLocalVisual)();
+    } catch (error) {
+      try {
+        physics.dispose();
+      } catch {
+        // Preserve the primary visual-load failure.
+      }
+      throw error;
+    }
+    return new SdkWorldAdapter(
+      scene,
+      physics,
+      visual,
+      dependencies.createRenderer ?? (() =>
+        new THREE.WebGLRenderer({ antialias: true, preserveDrawingBuffer: true })),
+      dependencies.createResizeObserver ?? ((callback) => new ResizeObserver(callback)),
+    );
   }
 
   private constructor(
     scene: CompiledOutdoorScene,
     physics: PhysicsSystem,
     visualResult: { visual: HumanoidVisual; status: LocalRigStatus },
+    createRenderer: () => THREE.WebGLRenderer,
+    createResizeObserver: (callback: ResizeObserverCallback) => ResizeObserver,
   ) {
+    const constructionOwners: ConstructionOwnerV1[] = [];
+    const own = (dispose: () => void): ConstructionOwnerV1 => {
+      const owner = { active: true, dispose };
+      constructionOwners.push(owner);
+      return owner;
+    };
+    const transfer = (owner: ConstructionOwnerV1): void => {
+      owner.active = false;
+    };
+    const physicsOwner = own(() => physics.dispose());
+    const visualOwner = own(() => visualResult.visual.dispose());
+    try {
     this.physics = physics;
     this.registry = scene.registry;
     this.worldSpec = scene.worldSpec ?? null;
     this.planArtifacts = scene.worldSpec === undefined ? null : deriveWorldPlanArtifacts(scene);
     this.rigStatus = visualResult.status;
-    this.name = `sdk-runtime/${scene.definition.id}/${visualResult.status.source}`;
+    this.name = `sdk-artifact/${scene.definition.id}/${visualResult.status.source}`;
     this.world = new World({ fixedDeltaSeconds: FIXED_DELTA, scheduler: null });
+    own(() => this.world.dispose());
     this.camera = new THREE.PerspectiveCamera(scene.spawn.camera.fovDegrees, 1, 0.1, 5_000);
-    this.renderer = new THREE.WebGLRenderer({ antialias: true, preserveDrawingBuffer: true });
+    this.renderer = createRenderer();
+    own(() => this.renderer.dispose());
     this.canvas = this.renderer.domElement;
     this.canvas.className = "world-canvas";
     this.canvas.tabIndex = 0;
@@ -383,6 +432,8 @@ export class SdkWorldAdapter implements PlaygroundWorldAdapter {
         },
       },
     });
+    const subjectOwner = own(() => this.subject.dispose());
+    transfer(visualOwner);
     this.subject.visual.root.position.y -= 0.9;
     this.world.createEntity({ id: PLAYER_ID, object3D: this.subject.root });
     this.world.registerSystem(this.subject, { order: -100 });
@@ -408,32 +459,23 @@ export class SdkWorldAdapter implements PlaygroundWorldAdapter {
     sun.shadow.camera.bottom = -70;
     this.world.scene.add(hemi, sun);
 
-    this.world.start();
-    this.bindInput();
-    this.resizeObserver = new ResizeObserver(() => this.resize());
-    this.renderer.setAnimationLoop(() => this.animate());
+    this.resizeObserver = createResizeObserver(() => this.resize());
+    transfer(subjectOwner);
+    transfer(physicsOwner);
+    } catch (error) {
+      disposeConstructionOwners(constructionOwners);
+      throw error;
+    }
   }
 
   mount(container: HTMLElement): void {
     container.append(this.canvas);
     this.resizeObserver.observe(container);
     this.resize();
-    this.canvas.focus();
   }
 
-  setPaused(paused: boolean): void {
-    this.paused = paused;
-    this.clock.getDelta();
-    this.emit();
-  }
-
-  isPaused(): boolean {
-    return this.paused;
-  }
-
-  reset(): void {
+  restoreOpeningView(): void {
     this.compositionCache = null;
-    this.pressed.clear();
     this.subject.reset(this.spawnPosition, {
       facingRadians: this.spawnFacingRadians,
       grounded: false,
@@ -441,35 +483,11 @@ export class SdkWorldAdapter implements PlaygroundWorldAdapter {
     this.subject.cameraRig.setOrbit(this.spawnFacingRadians, this.spawnCameraPitchRadians);
     this.subject.cameraRig.setDistance(this.spawnCameraDistance);
     this.subject.cameraRig.update(0);
-    this.lastAction = "idle";
-    this.clock.getDelta();
     this.render();
-    this.emit();
   }
 
   render(): void {
     this.renderer.render(this.world.scene, this.camera);
-    this.frame += 1;
-  }
-
-  async runFixedInput(steps: readonly FixedInputStep[]): Promise<WorldSnapshot> {
-    this.compositionCache = null;
-    const wasPaused = this.paused;
-    this.paused = true;
-    this.pressed.clear();
-    for (const step of steps) {
-      const actions = new Set(step.actions);
-      for (let tick = 0; tick < Math.max(0, Math.floor(step.ticks)); tick += 1) {
-        this.applyActions(actions, FIXED_DELTA);
-        this.world.advance(FIXED_DELTA);
-      }
-    }
-    this.subject.setMovementIntent({ forward: 0, right: 0, run: false, jump: false });
-    this.world.advance(FIXED_DELTA);
-    this.paused = wasPaused;
-    this.render();
-    this.emit();
-    return this.snapshot();
   }
 
   captureScreenshot(): string {
@@ -487,12 +505,15 @@ export class SdkWorldAdapter implements PlaygroundWorldAdapter {
 
   async exportOpeningFrame(report?: OpeningCompositionReport): Promise<string> {
     if (this.worldSpec === null) throw new Error("WorldSpec is unavailable.");
-    this.reset();
+    this.restoreOpeningView();
     const resolvedReport = report ?? this.analyzeOpeningComposition();
     if (resolvedReport === null) throw new Error("Opening composition guide is unavailable.");
+    const capability = await loadArtifactWriteCapability();
     const response = await fetch("/__whitebox/write-opening-frame", {
       method: "POST",
-      headers: { "content-type": "application/json" },
+      cache: "no-store",
+      credentials: "same-origin",
+      headers: artifactWriteHeaders(capability),
       body: JSON.stringify({
         sceneId: this.worldSpec.id,
         dataUrl: this.captureOpeningFrameDataUrl(),
@@ -541,11 +562,11 @@ export class SdkWorldAdapter implements PlaygroundWorldAdapter {
   }
 
   getWorldSpec(): OutdoorWorldSpec | null {
-    return this.worldSpec;
+    return this.worldSpec === null ? null : structuredClone(this.worldSpec);
   }
 
   getPlanArtifacts(): DerivedWorldPlanArtifacts | null {
-    return this.planArtifacts;
+    return this.planArtifacts === null ? null : structuredClone(this.planArtifacts);
   }
 
   capturePlanningView(kind: PlanningViewKind): string {
@@ -553,7 +574,7 @@ export class SdkWorldAdapter implements PlaygroundWorldAdapter {
       throw new Error("This legacy scene has no WorldSpec planning artifacts.");
     }
     if (kind === "opening-shot") {
-      this.reset();
+      this.restoreOpeningView();
       return this.canvas.toDataURL("image/png");
     }
     if (kind === "height-slope-plan") return this.captureHeightSlopePlan();
@@ -561,7 +582,9 @@ export class SdkWorldAdapter implements PlaygroundWorldAdapter {
   }
 
   getVisualPrototypes(): readonly VisualPrototypeSpec[] {
-    return this.worldSpec?.entityCatalog.prototypes ?? [];
+    return this.worldSpec === null
+      ? []
+      : structuredClone(this.worldSpec.entityCatalog.prototypes);
   }
 
   captureWhiteboxTriview(prototypeId: string): string {
@@ -583,10 +606,13 @@ export class SdkWorldAdapter implements PlaygroundWorldAdapter {
   async exportWhiteboxTriviews(): Promise<readonly string[]> {
     if (this.worldSpec === null) throw new Error("WorldSpec is unavailable.");
     const outputPaths: string[] = [];
+    const capability = await loadArtifactWriteCapability();
     for (const prototype of this.worldSpec.entityCatalog.prototypes) {
       const response = await fetch("/__whitebox/write-triview", {
         method: "POST",
-        headers: { "content-type": "application/json" },
+        cache: "no-store",
+        credentials: "same-origin",
+        headers: artifactWriteHeaders(capability),
         body: JSON.stringify({
           sceneId: this.worldSpec.id,
           prototypeId: prototype.id,
@@ -619,54 +645,29 @@ export class SdkWorldAdapter implements PlaygroundWorldAdapter {
         })),
       });
     }
-    return features;
-  }
-
-  snapshot(): WorldSnapshot {
-    const position = this.subject.root.position;
-    const orbit = this.subject.cameraRig.orbit;
-    return {
-      adapter: this.name,
-      frame: this.frame,
-      tick: this.world.tick,
-      paused: this.paused,
-      player: {
-        entityId: PLAYER_ID,
-        action: this.subject.actionStateMachine?.currentState ?? this.lastAction,
-        grounded: this.lastAction !== "jump",
-        position: [position.x, position.y, position.z],
-        rotationY: this.subject.root.rotation.y,
-      },
-      camera: {
-        position: [this.camera.position.x, this.camera.position.y, this.camera.position.z],
-        yaw: orbit.yaw,
-        pitch: orbit.pitch,
-        distance: orbit.distance,
-      },
-      features: this.inspectFeatures(),
-      performance: {
-        fps: this.fps,
-        triangles: this.renderer.info.render.triangles,
-        drawCalls: this.renderer.info.render.calls,
-      },
-    };
-  }
-
-  subscribe(listener: (snapshot: WorldSnapshot) => void): () => void {
-    this.listeners.add(listener);
-    listener(this.snapshot());
-    return () => this.listeners.delete(listener);
+    return structuredClone(features);
   }
 
   dispose(): void {
     if (this.disposed) return;
     this.disposed = true;
-    this.renderer.setAnimationLoop(null);
-    this.resizeObserver.disconnect();
-    this.unbindInput();
-    this.world.dispose();
-    this.waterMaterials.clear();
-    this.renderer.dispose();
+    let cleanupFailed = false;
+    for (const dispose of [
+      () => this.resizeObserver.disconnect(),
+      () => this.canvas.remove(),
+      () => this.world.dispose(),
+      () => this.subject.dispose(),
+      () => this.physics.dispose(),
+      () => this.waterMaterials.clear(),
+      () => this.renderer.dispose(),
+    ]) {
+      try {
+        dispose();
+      } catch {
+        cleanupFailed = true;
+      }
+    }
+    if (cleanupFailed) console.error("SDK_ARTIFACT_DISPOSE_FAILED");
   }
 
   private applyAtmosphere(scene: CompiledOutdoorScene): void {
@@ -1282,46 +1283,6 @@ export class SdkWorldAdapter implements PlaygroundWorldAdapter {
     return landmark;
   }
 
-  private animate(): void {
-    if (this.disposed) return;
-    const delta = Math.min(this.clock.getDelta(), 0.1);
-    this.fpsElapsed += delta;
-    this.fpsFrames += 1;
-    for (const material of this.waterMaterials) {
-      const time = material.uniforms.uTime;
-      if (time !== undefined) time.value = this.clock.elapsedTime;
-    }
-    if (this.fpsElapsed >= 0.5) {
-      this.fps = Math.round(this.fpsFrames / this.fpsElapsed);
-      this.fpsFrames = 0;
-      this.fpsElapsed = 0;
-    }
-    if (!this.paused) {
-      this.applyActions(this.pressed, delta);
-      this.world.advance(delta);
-    }
-    this.render();
-    if (this.frame % 10 === 0) this.emit();
-  }
-
-  private applyActions(actions: ReadonlySet<InputAction>, deltaSeconds: number): void {
-    if (actions.has("cameraLeft")) this.subject.cameraRig.rotate(-deltaSeconds * 260, 0);
-    if (actions.has("cameraRight")) this.subject.cameraRig.rotate(deltaSeconds * 260, 0);
-    // Arrow semantics describe where the player looks, not where the orbiting
-    // camera body moves: looking up lowers the camera's orbit pitch.
-    if (actions.has("cameraUp")) this.subject.cameraRig.rotate(0, deltaSeconds * 260);
-    if (actions.has("cameraDown")) this.subject.cameraRig.rotate(0, -deltaSeconds * 260);
-    const intent: MovementIntent = {
-      forward: Number(actions.has("forward")) - Number(actions.has("backward")),
-      right: Number(actions.has("right")) - Number(actions.has("left")),
-      run: actions.has("run"),
-      jump: actions.has("jump"),
-    };
-    this.subject.setMovementIntent(intent);
-    const moving = intent.forward !== 0 || intent.right !== 0;
-    this.lastAction = intent.jump ? "jump" : moving ? (intent.run ? "run" : "walk") : "idle";
-  }
-
   private resize(): void {
     const parent = this.canvas.parentElement;
     if (parent === null) return;
@@ -1331,90 +1292,5 @@ export class SdkWorldAdapter implements PlaygroundWorldAdapter {
     this.camera.aspect = width / height;
     this.camera.updateProjectionMatrix();
     this.render();
-  }
-
-  private emit(): void {
-    const snapshot = this.snapshot();
-    for (const listener of this.listeners) listener(snapshot);
-  }
-
-  private readonly onKeyDown = (event: KeyboardEvent): void => {
-    const action = this.keyAction(event.code);
-    if (action !== null) {
-      event.preventDefault();
-      this.pressed.add(action);
-    }
-  };
-
-  private readonly onKeyUp = (event: KeyboardEvent): void => {
-    const action = this.keyAction(event.code);
-    if (action !== null) this.pressed.delete(action);
-  };
-
-  private readonly onPointerDown = (event: PointerEvent): void => {
-    if (event.button !== 0) return;
-    this.dragPointerId = event.pointerId;
-    this.dragLast.set(event.clientX, event.clientY);
-    this.canvas.setPointerCapture(event.pointerId);
-  };
-
-  private readonly onPointerMove = (event: PointerEvent): void => {
-    if (event.pointerId !== this.dragPointerId) return;
-    this.subject.cameraRig.rotate(
-      event.clientX - this.dragLast.x,
-      event.clientY - this.dragLast.y,
-    );
-    this.dragLast.set(event.clientX, event.clientY);
-  };
-
-  private readonly onPointerUp = (event: PointerEvent): void => {
-    if (event.pointerId === this.dragPointerId) this.dragPointerId = null;
-  };
-
-  private readonly onWheel = (event: WheelEvent): void => {
-    event.preventDefault();
-    const orbit = this.subject.cameraRig.orbit;
-    this.subject.cameraRig.setDistance(orbit.distance + event.deltaY * 0.008);
-  };
-
-  private readonly onBlur = (): void => this.pressed.clear();
-
-  private bindInput(): void {
-    window.addEventListener("keydown", this.onKeyDown);
-    window.addEventListener("keyup", this.onKeyUp);
-    window.addEventListener("blur", this.onBlur);
-    this.canvas.addEventListener("pointerdown", this.onPointerDown);
-    this.canvas.addEventListener("pointermove", this.onPointerMove);
-    this.canvas.addEventListener("pointerup", this.onPointerUp);
-    this.canvas.addEventListener("pointercancel", this.onPointerUp);
-    this.canvas.addEventListener("wheel", this.onWheel, { passive: false });
-  }
-
-  private unbindInput(): void {
-    window.removeEventListener("keydown", this.onKeyDown);
-    window.removeEventListener("keyup", this.onKeyUp);
-    window.removeEventListener("blur", this.onBlur);
-    this.canvas.removeEventListener("pointerdown", this.onPointerDown);
-    this.canvas.removeEventListener("pointermove", this.onPointerMove);
-    this.canvas.removeEventListener("pointerup", this.onPointerUp);
-    this.canvas.removeEventListener("pointercancel", this.onPointerUp);
-    this.canvas.removeEventListener("wheel", this.onWheel);
-  }
-
-  private keyAction(code: string): InputAction | null {
-    switch (code) {
-      case "KeyW": return "forward";
-      case "KeyS": return "backward";
-      case "KeyA": return "left";
-      case "KeyD": return "right";
-      case "ShiftLeft":
-      case "ShiftRight": return "run";
-      case "Space": return "jump";
-      case "ArrowLeft": return "cameraLeft";
-      case "ArrowRight": return "cameraRight";
-      case "ArrowUp": return "cameraUp";
-      case "ArrowDown": return "cameraDown";
-      default: return null;
-    }
   }
 }
