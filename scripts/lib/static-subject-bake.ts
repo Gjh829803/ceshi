@@ -103,12 +103,16 @@ function isWorldVisible(mesh: Mesh): boolean {
   return true;
 }
 
-function flattenMeshGeometry(mesh: Mesh, worldToBakeMatrix: Matrix4): BufferGeometry | null {
+export function flattenStaticSubjectMeshGeometry(
+  mesh: Mesh,
+  worldToBakeMatrix: Matrix4,
+): BufferGeometry | null {
   const sourcePosition = mesh.geometry.getAttribute("position");
   if (sourcePosition === undefined || sourcePosition.count === 0) return null;
   const sourceIndex = mesh.geometry.getIndex();
   const sourceVertexSequence = sourceIndex?.array ??
     Uint32Array.from({ length: sourcePosition.count }, (_, index) => index);
+  const reversesWinding = worldToBakeMatrix.determinant() < 0;
   if (sourceVertexSequence.length % TRIANGLE_VERTEX_COUNT !== 0) {
     throw new Error(`Static bake mesh is not triangular: ${mesh.name || "unnamed"}`);
   }
@@ -121,8 +125,8 @@ function flattenMeshGeometry(mesh: Mesh, worldToBakeMatrix: Matrix4): BufferGeom
   const edgeAC = new Vector3();
   for (let offset = 0; offset < sourceVertexSequence.length; offset += 3) {
     const aIndex = sourceVertexSequence[offset];
-    const bIndex = sourceVertexSequence[offset + 1];
-    const cIndex = sourceVertexSequence[offset + 2];
+    const bIndex = sourceVertexSequence[offset + (reversesWinding ? 2 : 1)];
+    const cIndex = sourceVertexSequence[offset + (reversesWinding ? 1 : 2)];
     if (aIndex === undefined || bIndex === undefined || cIndex === undefined) {
       throw new Error(`Static bake triangle index is incomplete: ${mesh.name || "unnamed"}`);
     }
@@ -270,7 +274,7 @@ export async function bakeStaticSubjectFbx(
   const outputGeometries: BufferGeometry[] = [];
   sourceRoot.traverse((node) => {
     if (!(node instanceof Mesh) || !isWorldVisible(node)) return;
-    const geometry = flattenMeshGeometry(
+    const geometry = flattenStaticSubjectMeshGeometry(
       node,
       new Matrix4().multiplyMatrices(configMatrix, node.matrixWorld),
     );

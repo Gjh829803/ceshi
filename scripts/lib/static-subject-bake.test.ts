@@ -9,6 +9,13 @@ import { VertexBuffer } from "@babylonjs/core/Buffers/buffer.js";
 import { Scene } from "@babylonjs/core/scene.pure.js";
 import "@whitebox-world/runtime-babylon";
 import { sourceFbxContributorAssetInventory } from "@whitebox-world/subject-registry";
+import {
+  BufferGeometry,
+  Float32BufferAttribute,
+  Matrix4,
+  Mesh,
+  Vector3,
+} from "three";
 import { describe, expect, test } from "vitest";
 
 import { xier120StaticSubjectBakeConfigs } from "../../packages/subject-registry/src/xier120-static-subject-config";
@@ -18,6 +25,7 @@ import {
 } from "../bake-xier120-static-subjects";
 import {
   bakeStaticSubjectFbx,
+  flattenStaticSubjectMeshGeometry,
   type StaticSubjectBakeConfigV1,
 } from "./static-subject-bake";
 
@@ -54,6 +62,68 @@ function parseGlbJson(bytes: Uint8Array): ParsedGlbJsonV2 {
 }
 
 describe("bakeStaticSubjectFbx", () => {
+  test("preserves asymmetric exterior winding and normals across reflection parity", () => {
+    // Catches flattening reflected meshes without compensating for the negative
+    // transform determinant. The expected normals are hand-derived from
+    // cross([2, 1, 0], [0, 1, 1]) = [1, -2, 2].
+    const sourceGeometry = new BufferGeometry();
+    sourceGeometry.setAttribute(
+      "position",
+      new Float32BufferAttribute([
+        0, 0, 0,
+        2, 1, 0,
+        0, 1, 1,
+      ], 3),
+    );
+    sourceGeometry.setIndex([0, 1, 2]);
+    const sourceMesh = new Mesh(sourceGeometry);
+
+    const cases = [
+      {
+        name: "positive determinant",
+        matrix: new Matrix4().identity(),
+        expectedOutward: new Vector3(1, -2, 2).normalize(),
+      },
+      {
+        name: "negative determinant",
+        matrix: new Matrix4().makeScale(-1, 1, 1),
+        expectedOutward: new Vector3(-1, -2, 2).normalize(),
+      },
+    ] as const;
+
+    for (const testCase of cases) {
+      const baked = flattenStaticSubjectMeshGeometry(sourceMesh, testCase.matrix);
+      expect(baked, testCase.name).not.toBeNull();
+      const index = baked!.getIndex();
+      const position = baked!.getAttribute("position");
+      const normal = baked!.getAttribute("normal");
+      expect(index, testCase.name).not.toBeNull();
+      expect(index!.count, testCase.name).toBe(3);
+      const aIndex = index!.getX(0);
+      const bIndex = index!.getX(1);
+      const cIndex = index!.getX(2);
+      const a = new Vector3().fromBufferAttribute(position, aIndex);
+      const b = new Vector3().fromBufferAttribute(position, bIndex);
+      const c = new Vector3().fromBufferAttribute(position, cIndex);
+      const exteriorWinding = new Vector3()
+        .crossVectors(b.sub(a), c.sub(a))
+        .normalize();
+      expect(
+        exteriorWinding.dot(testCase.expectedOutward),
+        `${testCase.name} exterior winding`,
+      ).toBeGreaterThan(0.999_999);
+      for (const vertexIndex of [aIndex, bIndex, cIndex]) {
+        const vertexNormal = new Vector3().fromBufferAttribute(normal, vertexIndex);
+        expect(
+          vertexNormal.dot(testCase.expectedOutward),
+          `${testCase.name} vertex normal`,
+        ).toBeGreaterThan(0.999_999);
+      }
+      baked!.dispose();
+    }
+    sourceGeometry.dispose();
+  });
+
   test("produces byte-identical, self-contained static GLB admitted by Babylon", async () => {
     // Catches nondeterministic export metadata/order, leaked rig content, non-indexed
     // output, invalid normals, or failure to support-center the meter-scale artifact.
