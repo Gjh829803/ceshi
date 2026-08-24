@@ -2,15 +2,19 @@
 
 ## 1. 文档状态
 
-- 状态：**R0 Contract Frozen / R1 Heightfield Implemented / R1b Pending（2026-08-23）**。
+- 状态：**R0 Contract Frozen / R1 Heightfield Implemented / R1b Implemented / M5 Complete（2026-08-24）**。
   Authoring V4、Traversal Lock/Graph 合同、Validation Profile V2 与
   `pnpm verify:route-r0-contract` 已冻结协议层。R1 Heightfield 已通过
   `pnpm verify:route-r1-heightfield`：Graph Builder、Runtime Probe 与两条生产 Route Gate
-  对 Heightfield 切片成立。这不表示 R1b 静态平台/多 Surface 或完整 M5 已经通过。
-  审查记录见
+  对 Heightfield 切片成立。R1b Static Platform 进一步通过 11 个 Golden/Adversarial
+  Fixture、真实 Babylon/Havok Runtime Probe、V2/V5 clean break 和完整验证矩阵；候选
+  `506e088bf929d153f4bbc4a24be5eaaa64a1ba87` 相对 base
+  `9c5a6158c347e08ea0af01135cb827166ffbede0` 已由主 Agent 深审及 Cursor 首轮/条件复核
+  关闭，无 open confirmed P0/P1，因此 R1b 与 M5 已完成。审查记录见
   [作者审查](../../reviews/2026-08-21-route-graph-traversability-design-review.md)、
-  [独立审查及处置](../../reviews/2026-08-21-route-graph-traversability-independent-review.md)
-  与 [R1 Heightfield Runtime Review](../../reviews/2026-08-22-route-r1-heightfield-runtime-review.md)。
+  [独立审查及处置](../../reviews/2026-08-21-route-graph-traversability-independent-review.md)、
+  [R1 Heightfield Runtime Review](../../reviews/2026-08-22-route-r1-heightfield-runtime-review.md)
+  与 [R1b Static Platform Runtime Review](../../reviews/2026-08-24-route-r1b-static-platform-runtime-review.md)。
 - 所属里程碑：P0.1 / M5。
 - 当前问题：Canonical 世界可以通过 Schema、编译、渲染和局部碰撞检查，却仍可能出现
   出生点与目标之间没有人物可走通的连续路线。
@@ -504,8 +508,8 @@ Provider 或从 Entity Bounds 猜测位置。
 - 覆盖平台接缝、窄踏面、低顶、错误 Collider、错误 Surface 身份和边缘跌落；
 - 真实人物可以完整走通成功 Fixture，失败 Fixture 被 Blocking Gate 拒绝。
 
-**M5 只有 R0、R1 和 R1b 全部完成才算完成。** 只交付二维 Route Graph、只跑 A*、只看
-截图或只验证 Heightfield 坡度，均不能关闭本次“有台阶但人物走不过去”的问题类别。
+**M5 已在 R0、R1 和 R1b 全部通过后关闭。** 只交付二维 Route Graph、只跑 A*、只看
+截图或只验证 Heightfield 坡度，仍不能构成本次“有台阶但人物走不过去”问题类别的完成证据。
 Graph 协议从 R0 起必须允许同一 XZ 的多个 Surface Node；完整桥面/桥下地面双层 Runtime
 Fixture 仍属于 P2.6 H1/M10，不由普通静态平台 Fixture 冒充完成。
 

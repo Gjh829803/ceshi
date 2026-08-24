@@ -1,3 +1,11 @@
+import { isNil } from "lodash-es";
+
+import {
+  describeWorldTriangleV1,
+  isBarycentricInsideFacadeV1,
+  samplePointOnWorldTriangleV1,
+} from "./triangle-world-geometry.js";
+
 export {
   queryLockedColliderSupportHeightMeters,
   type LockedSupportColliderV1,
@@ -20,6 +28,21 @@ export {
   type TraversalAreaComplexityIssueCodeV1,
   type TraversalAreaComplexityValidationResultV1,
 } from "./simple-polygon-xz.js";
+export {
+  TRAVERSAL_SURFACE_QUERY_AREA_EPSILON_SQUARE_METERS_V1,
+  TRAVERSAL_SURFACE_QUERY_HEIGHT_EPSILON_METERS_V1,
+  TRAVERSAL_SURFACE_QUERY_XZ_EPSILON_METERS_V1,
+  queryCanonicalTraversalSurfaceHitsV1,
+  preflightCanonicalTraversalSurfaceOverlapsV1,
+  type CanonicalTraversalSurfaceTriangleSourceV1,
+  type TraversalSurfaceNormalAdmissionV1,
+  type QueryCanonicalTraversalSurfaceHitsInputV1,
+  type CanonicalTraversalSurfaceHitV1,
+  type CanonicalTraversalSurfaceHitResolutionV1,
+  type PreflightCanonicalTraversalSurfaceOverlapsInputV1,
+  type CanonicalTraversalSurfaceOverlapBlockerV1,
+  type PreflightCanonicalTraversalSurfaceOverlapsResultV1,
+} from "./traversal-surface-query.js";
 
 export type TerrainSurfaceVec2 = readonly [x: number, z: number];
 export type TerrainSurfaceVec3 = readonly [x: number, y: number, z: number];
@@ -148,60 +171,25 @@ export function emitTriangleHeightfieldSurfaceV1(
   };
 }
 
-function barycentricWeightsXZ(
-  point: TerrainSurfaceVec2,
-  first: TerrainSurfaceVec3,
-  second: TerrainSurfaceVec3,
-  third: TerrainSurfaceVec3,
-): readonly [number, number, number] | undefined {
-  const denominator =
-    (second[2] - third[2]) * (first[0] - third[0]) +
-    (third[0] - second[0]) * (first[2] - third[2]);
-  const firstWeight = (
-    (second[2] - third[2]) * (point[0] - third[0]) +
-    (third[0] - second[0]) * (point[1] - third[2])
-  ) / denominator;
-  const secondWeight = (
-    (third[2] - first[2]) * (point[0] - third[0]) +
-    (first[0] - third[0]) * (point[1] - third[2])
-  ) / denominator;
-  const thirdWeight = 1 - firstWeight - secondWeight;
-  const tolerance = 1e-12;
-  return firstWeight >= -tolerance && secondWeight >= -tolerance && thirdWeight >= -tolerance
-    ? [firstWeight, secondWeight, thirdWeight]
-    : undefined;
-}
-
 function triangleSample(
   point: TerrainSurfaceVec2,
   first: TerrainSurfaceVec3,
   second: TerrainSurfaceVec3,
   third: TerrainSurfaceVec3,
 ): TriangleHeightfieldSurfaceSample | undefined {
-  const weights = barycentricWeightsXZ(point, first, second, third);
-  if (weights === undefined) return undefined;
-  const edgeAX = second[0] - first[0];
-  const edgeAY = second[1] - first[1];
-  const edgeAZ = second[2] - first[2];
-  const edgeBX = third[0] - first[0];
-  const edgeBY = third[1] - first[1];
-  const edgeBZ = third[2] - first[2];
-  const normalX = edgeAY * edgeBZ - edgeAZ * edgeBY;
-  const normalY = edgeAZ * edgeBX - edgeAX * edgeBZ;
-  const normalZ = edgeAX * edgeBY - edgeAY * edgeBX;
-  const normalLength = Math.hypot(normalX, normalY, normalZ);
-  const normalizedY = normalY / normalLength;
+  const geometry = describeWorldTriangleV1(first, second, third);
+  if (isNil(geometry)) {
+    return undefined;
+  }
+  const sample = samplePointOnWorldTriangleV1(geometry, point);
+  if (isNil(sample) || !isBarycentricInsideFacadeV1(sample.barycentricUVW)) {
+    return undefined;
+  }
+  const unitNormalXYZ = geometry.unitNormalXYZ;
   return {
-    heightMeters:
-      first[1] * weights[0] +
-      second[1] * weights[1] +
-      third[1] * weights[2],
-    normalXYZ: [
-      normalX / normalLength,
-      normalizedY,
-      normalZ / normalLength,
-    ],
-    slopeDegrees: Math.acos(normalizedY) * (180 / Math.PI),
+    heightMeters: sample.heightMeters,
+    normalXYZ: [unitNormalXYZ[0], unitNormalXYZ[1], unitNormalXYZ[2]],
+    slopeDegrees: Math.acos(unitNormalXYZ[1]) * (180 / Math.PI),
   };
 }
 

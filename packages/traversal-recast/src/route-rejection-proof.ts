@@ -1,4 +1,5 @@
 import { isNil } from "lodash-es";
+import type { TraversalSurfaceIdentityV1 } from "@whitebox-world/traversal";
 
 type Vec3 = readonly [number, number, number];
 
@@ -52,6 +53,7 @@ export interface RouteRejectionCandidateV1 {
   readonly toNodeId: string;
   readonly failurePositionMetersXYZ: Vec3;
   readonly rejectionReasons: readonly RouteRejectionReasonV1[];
+  readonly relatedTraversalSurfaceIdentities?: readonly TraversalSurfaceIdentityV1[];
 }
 
 export interface EvaluateRouteRejectionProofInputV1 {
@@ -64,6 +66,7 @@ export interface EvaluateRouteRejectionProofInputV1 {
   readonly maximumNodes: number;
   readonly maximumEdges: number;
   readonly maximumSearchSteps: number;
+  readonly admitWhenRelaxedKindPresent?: boolean;
 }
 
 export type RouteRejectionProofGenericReasonV1 =
@@ -201,13 +204,15 @@ function validateInput(input: EvaluateRouteRejectionProofInputV1): Readonly<{
 function isAdmitted(
   candidate: RouteRejectionCandidateV1,
   relaxedKind: RouteRejectionKindV1,
+  admitWhenRelaxedKindPresent: boolean,
 ): boolean {
+  if (candidate.rejectionReasons.length === 0) return true;
+  if (admitWhenRelaxedKindPresent) {
+    return candidate.rejectionReasons.some((reason) => reason.kind === relaxedKind);
+  }
   return (
-    candidate.rejectionReasons.length === 0 ||
-    (
-      candidate.rejectionReasons.length === 1 &&
-      candidate.rejectionReasons[0]!.kind === relaxedKind
-    )
+    candidate.rejectionReasons.length === 1 &&
+    candidate.rejectionReasons[0]!.kind === relaxedKind
   );
 }
 
@@ -231,7 +236,14 @@ function findRestoringPath(
     budget.consumedSteps += 1;
     if (currentNodeId === input.destinationNodeId) break;
     for (const candidate of outgoingByNodeId.get(currentNodeId) ?? []) {
-      if (!isAdmitted(candidate, rejectionKind) || visited.has(candidate.toNodeId)) {
+      if (
+        !isAdmitted(
+          candidate,
+          rejectionKind,
+          input.admitWhenRelaxedKindPresent === true,
+        ) ||
+        visited.has(candidate.toNodeId)
+      ) {
         continue;
       }
       visited.add(candidate.toNodeId);

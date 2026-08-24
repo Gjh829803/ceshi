@@ -1,7 +1,7 @@
 import { isNil, isPlainObject } from "lodash-es";
 
 import type {
-  TraversalGraphV1,
+  TraversalGraphV2,
 } from "./graph-contract.js";
 import type {
   TraversalRuntimeImplementationIdentityV1,
@@ -477,7 +477,7 @@ export function canonicalTraversalRuntimeTickEvidenceV1(
 export function assertTraversalRuntimeWorldIdentityMatchesGraphV1(
   input: Readonly<{
     traversalGraph: Pick<
-      TraversalGraphV1,
+      TraversalGraphV2,
       "authoringSpecHash" | "layoutSolveReportHash" | "resourceLockHash"
     >;
     runtimeWorldIdentity: TraversalRuntimeWorldIdentityV1;

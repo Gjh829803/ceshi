@@ -50,7 +50,7 @@ const EXPECTED_PNPM_PATCH_HASHES = Object.freeze({
   "@recast-navigation/core@0.43.1":
     "7a330d1418a92699943cf161cdcb47c6e144a6858bb0cfbcb33aa91dd1de33dd",
   "@recast-navigation/generators@0.43.1":
-    "473d1656cf37232187c24a5f81289d1a5a854732d54fd54b667f3402faa18a06",
+    "6c5bd3e917bd258087cb1a62fcd821c8730cd3d5fe62a253ddb241ffd84d26b6",
 });
 
 interface LifecyclePatchIdentity {
@@ -123,7 +123,7 @@ describe("Recast provider lifecycle patch identity", () => {
 
   it("uses portable, version-qualified lifecycle patch identity", () => {
     expect(manifest.graphProviderAdapterResolvedVersion).toBe(
-      "0.43.1+lifecycle.1+source-areas.1+mapping.3",
+      "0.43.1+lifecycle.1+source-areas.3+mapping.5",
     );
     expect(manifest.providerPackages).toEqual(EXPECTED_PROVIDER_PACKAGES);
     expect(manifest.lifecyclePatches).toMatchObject({
@@ -134,7 +134,7 @@ describe("Recast provider lifecycle patch identity", () => {
           EXPECTED_PATCH_DECLARATIONS["@recast-navigation/core@0.43.1"],
       },
       generators: {
-        revision: "lifecycle.1+source-areas.1",
+        revision: "lifecycle.1+source-areas.3",
         patchedDependencyKey: "@recast-navigation/generators@0.43.1",
         repositoryRelativePatchPath:
           EXPECTED_PATCH_DECLARATIONS[

@@ -1,7 +1,11 @@
 import { sha256CanonicalJson } from "@whitebox-world/protocol";
 import { isEmpty, isNil, isPlainObject } from "lodash-es";
 
-import { resolveTraversalGraphBuilderProfile } from "./profile-registry.js";
+import type { RouteBuildInputReceiptV2 } from "./build-input.js";
+import {
+  resolveTraversalGraphBuilderProfile,
+  resolveTraversalGraphBuilderProfileV2,
+} from "./profile-registry.js";
 import type { TraversalSurfaceIdentityV1 } from "./types.js";
 
 export interface TraversalNodeV1 {
@@ -29,26 +33,6 @@ export interface TraversalEdgeV1 {
   readonly routePathCost: number;
 }
 
-export interface TraversalGraphV1 {
-  readonly kind: "traversal-graph";
-  readonly schemaVersion: 1;
-  readonly authoringSpecHash: `sha256:${string}`;
-  readonly layoutSolveReportHash: `sha256:${string}`;
-  readonly resourceLockHash: `sha256:${string}`;
-  readonly terrainArtifactHash: `sha256:${string}`;
-  readonly colliderArtifactHash: `sha256:${string}`;
-  readonly surfaceArtifactHash: `sha256:${string}`;
-  readonly routeBuildInputHash: `sha256:${string}`;
-  readonly resolvedTraversalLockHash: `sha256:${string}`;
-  readonly graphBuilderProfileRef: string;
-  readonly graphBuilderResolvedVersion: string;
-  readonly graphBuilderProfileHash: `sha256:${string}`;
-  readonly routeId: string;
-  readonly startAnchorEntityId: string;
-  readonly destinationAnchorEntityId: string;
-  readonly traversalNodesById: Readonly<Record<string, TraversalNodeV1>>;
-  readonly traversalEdgesById: Readonly<Record<string, TraversalEdgeV1>>;
-}
 
 const SHA256_PATTERN = /^sha256:[a-f0-9]{64}$/;
 const EDGE_TYPES = new Set(["walk", "slope", "step"]);
@@ -196,6 +180,31 @@ function assertResolvedGraphBuilderIdentity(
   ) {
     failGraph(
       "graphBuilderProfileRef, graphBuilderResolvedVersion, and graphBuilderProfileHash must match the Registry Profile.",
+    );
+  }
+}
+
+function assertResolvedGraphBuilderIdentityV2(
+  resourceRef: string,
+  resolvedVersion: string,
+  resourceHash: `sha256:${string}`,
+): void {
+  let resolved;
+  try {
+    resolved = resolveTraversalGraphBuilderProfileV2(resourceRef);
+  } catch (cause) {
+    failGraph(
+      cause instanceof Error
+        ? cause.message
+        : "graphBuilderProfileRef must resolve to a Registry V2 Profile.",
+    );
+  }
+  if (
+    resolved.resolvedVersion !== resolvedVersion ||
+    resolved.contentHash !== resourceHash
+  ) {
+    failGraph(
+      "graphBuilderProfileRef, graphBuilderResolvedVersion, and graphBuilderProfileHash must match the Registry V2 Profile.",
     );
   }
 }
@@ -418,13 +427,88 @@ function validateEdge(
   };
 }
 
-export function canonicalTraversalGraphV1(value: unknown): TraversalGraphV1 {
+
+
+const GRAPH_FIELDS_V2 = [
+  ...GRAPH_FIELDS.filter((field) => field !== "schemaVersion"),
+  "schemaVersion",
+  "geometryArtifactHash",
+  "traversalSurfaceIdentitiesById",
+] as const;
+
+function identitiesEqual(
+  left: TraversalSurfaceIdentityV1,
+  right: TraversalSurfaceIdentityV1,
+): boolean {
+  return sha256CanonicalJson(left) === sha256CanonicalJson(right);
+}
+
+function canonicalInventory(
+  value: unknown,
+): Readonly<Record<string, TraversalSurfaceIdentityV1>> {
+  if (isNil(value) || !isPlainObject(value)) {
+    failGraph("'traversalSurfaceIdentitiesById' must be an object.");
+  }
+  const record = value as Record<string, unknown>;
+  const inventory: Record<string, TraversalSurfaceIdentityV1> = {};
+  for (const [key, candidate] of Object.entries(record).sort(([left], [right]) =>
+    compareCanonicalId(left, right)
+  )) {
+    let identity: TraversalSurfaceIdentityV1;
+    try {
+      identity = assertTraversalSurfaceIdentityV1(candidate);
+    } catch (cause) {
+      failGraph(
+        `'traversalSurfaceIdentitiesById/${key}' must be a canonical Traversal Surface identity${
+          cause instanceof Error ? `: ${cause.message}` : "."
+        }`,
+      );
+    }
+    if (identity.traversalSurfaceId !== key) {
+      failGraph(
+        `'traversalSurfaceIdentitiesById/${key}' key must equal value.traversalSurfaceId.`,
+      );
+    }
+    inventory[key] = identity;
+  }
+  if (isEmpty(inventory)) {
+    failGraph("'traversalSurfaceIdentitiesById' must contain at least one identity.");
+  }
+  return inventory;
+}
+
+export interface TraversalGraphV2 {
+  readonly kind: "traversal-graph";
+  readonly schemaVersion: 2;
+  readonly authoringSpecHash: `sha256:${string}`;
+  readonly layoutSolveReportHash: `sha256:${string}`;
+  readonly resourceLockHash: `sha256:${string}`;
+  readonly terrainArtifactHash: `sha256:${string}`;
+  readonly colliderArtifactHash: `sha256:${string}`;
+  readonly surfaceArtifactHash: `sha256:${string}`;
+  readonly routeBuildInputHash: `sha256:${string}`;
+  readonly resolvedTraversalLockHash: `sha256:${string}`;
+  readonly graphBuilderProfileRef: string;
+  readonly graphBuilderResolvedVersion: string;
+  readonly graphBuilderProfileHash: `sha256:${string}`;
+  readonly routeId: string;
+  readonly startAnchorEntityId: string;
+  readonly destinationAnchorEntityId: string;
+  readonly traversalNodesById: Readonly<Record<string, TraversalNodeV1>>;
+  readonly traversalEdgesById: Readonly<Record<string, TraversalEdgeV1>>;
+  readonly geometryArtifactHash: `sha256:${string}`;
+  readonly traversalSurfaceIdentitiesById: Readonly<
+    Record<string, TraversalSurfaceIdentityV1>
+  >;
+}
+
+export function canonicalTraversalGraphV2(value: unknown): TraversalGraphV2 {
   if (isNil(value) || !isPlainObject(value)) {
     failGraph("expected an object.");
   }
   const record = value as Record<string, unknown>;
-  rejectUnknownFields(record, GRAPH_FIELDS, "");
-  for (const field of GRAPH_FIELDS) {
+  rejectUnknownFields(record, GRAPH_FIELDS_V2, "");
+  for (const field of GRAPH_FIELDS_V2) {
     if (isNil(record[field])) {
       failGraph(`missing field '${field}'.`);
     }
@@ -432,25 +516,31 @@ export function canonicalTraversalGraphV1(value: unknown): TraversalGraphV1 {
   if (record.kind !== "traversal-graph") {
     failGraph("kind must be 'traversal-graph'.");
   }
-  if (record.schemaVersion !== 1) {
-    failGraph("schemaVersion must be 1.");
+  if (record.schemaVersion !== 2) {
+    failGraph("schemaVersion must be 2.");
   }
 
   const hashes = Object.fromEntries(
-    GRAPH_HASH_FIELDS.map((field) => [field, requireHash(record[field], field)]),
-  ) as Pick<TraversalGraphV1, (typeof GRAPH_HASH_FIELDS)[number]>;
+    [...GRAPH_HASH_FIELDS, "geometryArtifactHash"].map((field) => [
+      field,
+      requireHash(record[field], field),
+    ]),
+  ) as Pick<TraversalGraphV2, (typeof GRAPH_HASH_FIELDS)[number] | "geometryArtifactHash">;
   const strings = Object.fromEntries(
     GRAPH_STRING_FIELDS.map((field) => [
       field,
       requireNonEmptyString(record[field], field),
     ]),
-  ) as Pick<TraversalGraphV1, (typeof GRAPH_STRING_FIELDS)[number]>;
-  assertResolvedGraphBuilderIdentity(
+  ) as Pick<TraversalGraphV2, (typeof GRAPH_STRING_FIELDS)[number]>;
+  assertResolvedGraphBuilderIdentityV2(
     strings.graphBuilderProfileRef,
     strings.graphBuilderResolvedVersion,
     hashes.graphBuilderProfileHash,
   );
 
+  const traversalSurfaceIdentitiesById = canonicalInventory(
+    record.traversalSurfaceIdentitiesById,
+  );
   if (!isPlainObject(record.traversalNodesById)) {
     failGraph("'traversalNodesById' must be an object.");
   }
@@ -462,11 +552,26 @@ export function canonicalTraversalGraphV1(value: unknown): TraversalGraphV1 {
   for (const [nodeId, node] of Object.entries(
     record.traversalNodesById as Record<string, unknown>,
   ).sort(([left], [right]) => compareCanonicalId(left, right))) {
-    traversalNodesById[nodeId] = validateNode(
+    const canonicalNode = validateNode(
       node,
       `traversalNodesById/${nodeId}`,
       nodeId,
     );
+    const identity = traversalSurfaceIdentitiesById[canonicalNode.traversalSurfaceId];
+    if (isNil(identity)) {
+      failGraph(
+        `'traversalNodesById/${nodeId}' Traversal Surface is absent from inventory.`,
+      );
+    }
+    if (
+      identity.surfaceEntityId !== canonicalNode.surfaceEntityId ||
+      identity.colliderSubshapeId !== canonicalNode.colliderSubshapeId
+    ) {
+      failGraph(
+        `'traversalNodesById/${nodeId}' Surface triple must match inventory.`,
+      );
+    }
+    traversalNodesById[nodeId] = canonicalNode;
   }
   if (isEmpty(traversalNodesById)) {
     failGraph("a Traversal Graph must contain at least one Node.");
@@ -487,14 +592,69 @@ export function canonicalTraversalGraphV1(value: unknown): TraversalGraphV1 {
 
   return deepFreeze({
     kind: "traversal-graph",
-    schemaVersion: 1,
+    schemaVersion: 2,
     ...hashes,
     ...strings,
+    traversalSurfaceIdentitiesById,
     traversalNodesById,
     traversalEdgesById,
   });
 }
 
-export function hashTraversalGraphV1(value: unknown): `sha256:${string}` {
-  return sha256CanonicalJson(canonicalTraversalGraphV1(value)) as `sha256:${string}`;
+export function hashTraversalGraphV2(value: unknown): `sha256:${string}` {
+  return sha256CanonicalJson(canonicalTraversalGraphV2(value)) as `sha256:${string}`;
+}
+
+export function assertTraversalGraphForBuildInputV2(
+  value: unknown,
+  buildInputReceipt: Pick<RouteBuildInputReceiptV2, "input" | "routeBuildInputHash">,
+): TraversalGraphV2 {
+  const graph = canonicalTraversalGraphV2(value);
+  const input = buildInputReceipt.input;
+  const expectedBindings = {
+    authoringSpecHash: input.authoringSpecHash,
+    layoutSolveReportHash: input.layoutSolveReportHash,
+    resourceLockHash: input.resourceLockHash,
+    terrainArtifactHash: input.terrainArtifactHash,
+    colliderArtifactHash: input.colliderArtifactHash,
+    geometryArtifactHash: input.geometryArtifactHash,
+    surfaceArtifactHash: input.surfaceArtifactHash,
+    routeBuildInputHash: buildInputReceipt.routeBuildInputHash,
+    resolvedTraversalLockHash: input.capabilityEnvelope.resolvedTraversalLockHash,
+    graphBuilderProfileRef: input.capabilityEnvelope.graphBuilderProfileRef,
+    graphBuilderResolvedVersion:
+      input.capabilityEnvelope.graphBuilderResolvedVersion,
+    graphBuilderProfileHash: input.capabilityEnvelope.graphBuilderProfileHash,
+    routeId: input.connectivityRequirement.routeId,
+    startAnchorEntityId: input.startAnchor.entityId,
+    destinationAnchorEntityId: input.destinationAnchor.entityId,
+  } as const;
+  for (const [field, expected] of Object.entries(expectedBindings)) {
+    if (graph[field as keyof typeof expectedBindings] !== expected) {
+      failGraph(`${field} must equal Build Input.`);
+    }
+  }
+  const expectedInventory = canonicalInventory(
+    Object.fromEntries(
+      input.traversalSurfaces.map((surface) => [surface.traversalSurfaceId, surface]),
+    ),
+  );
+  if (sha256CanonicalJson(graph.traversalSurfaceIdentitiesById) !==
+    sha256CanonicalJson(expectedInventory)
+  ) {
+    failGraph("traversalSurfaceIdentitiesById must project Build Input Surfaces.");
+  }
+  for (const node of Object.values(graph.traversalNodesById)) {
+    const identity = expectedInventory[node.traversalSurfaceId];
+    if (isNil(identity)) {
+      failGraph(`Node '${node.id}' Traversal Surface is absent from Build Input.`);
+    }
+    if (
+      identity.surfaceEntityId !== node.surfaceEntityId ||
+      identity.colliderSubshapeId !== node.colliderSubshapeId
+    ) {
+      failGraph(`Node '${node.id}' Surface triple must match Build Input inventory.`);
+    }
+  }
+  return graph;
 }

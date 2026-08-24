@@ -3,7 +3,9 @@ import { describe, expect, it } from "vitest";
 import {
   TRUSTED_DEFAULT_CONTROLLER_ID,
   WORLDKIT_BROWSER_PROTOCOL_VERSION,
-  canonicalWorldkitBrowserRouteEvidencePublicationV1,
+  EXECUTION_RESOURCE_KINDS_V1,
+  canonicalExecutionResourceLockEntriesV1,
+  canonicalWorldkitBrowserRouteEvidencePublicationV2,
   type ExecutionAnimationSetV1,
   type ExecutionColliderProfileV1,
   type ExecutionRigProfileV1,
@@ -11,22 +13,23 @@ import {
   type ExecutionSubjectV3,
   type ExecutionLayoutAssertionV1,
   type ExecutionStaticColliderV1,
+  type ExecutionStaticColliderTraversalSurfaceV1,
   type ExecutionTraversalAreaV1,
   type ExecutionPlanV5,
   type ExecutionTraversalSurfaceV1,
   type FixedInputV1,
   type WorldRuntimeSnapshotV3,
-  type WorldkitBrowserApiV4,
-  type WorldkitBrowserRouteEvidencePublicationV1,
+  type WorldkitBrowserApiV5,
+  type WorldkitBrowserRouteEvidencePublicationV2,
   type WorldkitBrowserDiagnosticV1,
 } from "./index";
 
 const ROUTE_PUBLICATION_HASH = `sha256:${"a".repeat(64)}` as const;
 
-function emptyRouteEvidencePublicationFixture(): WorldkitBrowserRouteEvidencePublicationV1 {
+function emptyRouteEvidencePublicationFixture(): WorldkitBrowserRouteEvidencePublicationV2 {
   return {
     kind: "worldkit-browser-route-evidence-publication",
-    schemaVersion: 1,
+    schemaVersion: 2,
     worldPackageRootHash: ROUTE_PUBLICATION_HASH,
     authoringSpecHash: ROUTE_PUBLICATION_HASH,
     normalizedWorldIrHash: ROUTE_PUBLICATION_HASH,
@@ -134,6 +137,26 @@ describe("runtime contracts V3", () => {
       surfaceEntityId: "terrain-main",
       mode: "blocked",
     } satisfies ExecutionTraversalAreaV1;
+    const staticSurface = {
+      kind: "static-collider",
+      traversalSurfaceId: `traversal-surface:sha256:${"6".repeat(64)}`,
+      surfaceEntityId: "platform-main",
+      colliderSubshapeId: `collider-subshape:sha256:${"7".repeat(64)}`,
+      resourceRef: "package://traversal-surface/platform-main.deck@1",
+      resolvedVersion: "1",
+      resourceHash: `sha256:${"8".repeat(64)}`,
+      logicalSurfaceId: "deck",
+      logicalSubshapeId: "primary",
+      colliderHash: `sha256:${"9".repeat(64)}`,
+      traversalSurfaceProfileRef:
+        "worldkit://traversal-surface-profile/ground.static@1",
+      traversalSurfaceProfileResolvedVersion: "1",
+      traversalSurfaceProfileHash: `sha256:${"a".repeat(64)}`,
+    } satisfies ExecutionStaticColliderTraversalSurfaceV1;
+    const surfaceUnion: readonly ExecutionTraversalSurfaceV1[] = [
+      surface,
+      staticSurface,
+    ];
     const collider = {
       entityId: "wall-east",
       logicalSubshapeId: "primary",
@@ -156,6 +179,25 @@ describe("runtime contracts V3", () => {
       "surfaceEntityId",
       "traversalSurfaceId",
     ]);
+    expect(Object.keys(staticSurface).sort()).toEqual([
+      "colliderHash",
+      "colliderSubshapeId",
+      "kind",
+      "logicalSubshapeId",
+      "logicalSurfaceId",
+      "resolvedVersion",
+      "resourceHash",
+      "resourceRef",
+      "surfaceEntityId",
+      "traversalSurfaceId",
+      "traversalSurfaceProfileHash",
+      "traversalSurfaceProfileRef",
+      "traversalSurfaceProfileResolvedVersion",
+    ]);
+    expect(surfaceUnion.map((row) => row.kind)).toEqual([
+      "heightfield",
+      "static-collider",
+    ]);
     expect(collider).toMatchObject({
       entityId: "wall-east",
       logicalSubshapeId: "primary",
@@ -168,9 +210,27 @@ describe("runtime contracts V3", () => {
       "pointsMetersXZ",
       "surfaceEntityId",
     ]);
-    expect(JSON.stringify({ surface, traversalArea, collider })).not.toMatch(
+    expect(JSON.stringify({ surfaceUnion, traversalArea, collider })).not.toMatch(
       /Babylon|Havok|Recast|Detour|provider|handle|polyRef/,
     );
+  });
+
+  it("admits the locked Traversal Surface Profile resource kind and rejects unknown kinds", () => {
+    const profileRow = {
+      resourceRef: "worldkit://traversal-surface-profile/ground.static@1",
+      resourceKind: "traversal-surface-profile",
+      resolvedVersion: "1",
+      contentHash: `sha256:${"a".repeat(64)}`,
+    } as const;
+
+    expect(EXECUTION_RESOURCE_KINDS_V1).toContain("traversal-surface-profile");
+    expect(canonicalExecutionResourceLockEntriesV1([profileRow])).toEqual([
+      profileRow,
+    ]);
+    expect(() => canonicalExecutionResourceLockEntriesV1([{
+      ...profileRow,
+      resourceKind: "provider-traversal-surface-profile",
+    }])).toThrowError("EXECUTION_RESOURCE_LOCK_INVALID");
   });
 
   it("separates Subject Origin from Collider center in ExecutionSubjectV3", () => {
@@ -475,16 +535,16 @@ describe("runtime contracts V3", () => {
         selector: { constraintId: "player-to-goal", routeId: "main-route" },
         reason: "route-evidence-not-loaded",
       }),
-    } satisfies WorldkitBrowserApiV4;
+    } satisfies WorldkitBrowserApiV5;
 
-    expect(api.version).toBe(4);
+    expect(api.version).toBe(5);
     await expect(api.ready()).resolves.toBe(snapshot);
     expect(api.getDiagnostics()).toEqual([diagnostic]);
   });
 
   it("canonicalizes the closed Browser Route publication as a detached deep-frozen DTO", () => {
     const input = emptyRouteEvidencePublicationFixture();
-    const canonical = canonicalWorldkitBrowserRouteEvidencePublicationV1(input);
+    const canonical = canonicalWorldkitBrowserRouteEvidencePublicationV2(input);
 
     expect(canonical).toEqual(input);
     expect(canonical).not.toBe(input);
@@ -521,7 +581,7 @@ describe("runtime contracts V3", () => {
     }));
 
     for (const input of invalidInputs) {
-      expect(() => canonicalWorldkitBrowserRouteEvidencePublicationV1(input))
+      expect(() => canonicalWorldkitBrowserRouteEvidencePublicationV2(input))
         .toThrow("WORLDKIT_BROWSER_ROUTE_EVIDENCE_PUBLICATION_INVALID");
     }
     expect(getterCalls).toBe(0);
@@ -546,5 +606,125 @@ describe("runtime contracts V3", () => {
       supportingEntityId: "terrain-main",
     });
     expect(assertion).not.toHaveProperty("params");
+  });
+});
+
+describe("runtime contracts V5 Route Evidence", () => {
+  function emptyRouteEvidencePublicationFixtureV2(): WorldkitBrowserRouteEvidencePublicationV2 {
+    return {
+      ...emptyRouteEvidencePublicationFixture(),
+      schemaVersion: 2,
+      routes: [],
+    };
+  }
+
+  it("canonicalizes V2 Browser Route publication and rejects the removed V1 version", () => {
+    const input = emptyRouteEvidencePublicationFixtureV2();
+    const canonical = canonicalWorldkitBrowserRouteEvidencePublicationV2(input);
+    expect(canonical.schemaVersion).toBe(2);
+    expect(canonical.routes).toEqual([]);
+    expect(Object.isFrozen(canonical)).toBe(true);
+    expect(() => canonicalWorldkitBrowserRouteEvidencePublicationV2({
+      ...emptyRouteEvidencePublicationFixture(),
+      schemaVersion: 1,
+    })).toThrow("WORLDKIT_BROWSER_ROUTE_EVIDENCE_PUBLICATION_INVALID");
+  });
+
+  it("rejects leftover V1 Path/Overlay fields on a V2 publication", () => {
+    const valid = emptyRouteEvidencePublicationFixtureV2();
+    expect(() => canonicalWorldkitBrowserRouteEvidencePublicationV2({
+      ...valid,
+      routes: [{
+        selector: { constraintId: "player-to-goal", routeId: "main-route" },
+        summary: {
+          kind: "route-evidence-summary",
+          schemaVersion: 1,
+          constraintId: "player-to-goal",
+          routeId: "main-route",
+          traversingEntityId: "player",
+          startAnchorEntityId: "spawn",
+          destinationAnchorEntityId: "goal",
+          connectivityStatus: "complete",
+          routePathStatus: "complete",
+          routeRuntimeProbeStatus: "unavailable",
+          routeOverlayStatus: "unavailable",
+        },
+        routePathReceipt: {
+          orderedTraversalSurfaceIdentities: [{ traversalSurfaceId: "surface-main" }],
+        },
+        routePathReceiptHash: ROUTE_PUBLICATION_HASH,
+      }],
+    })).toThrow("WORLDKIT_BROWSER_ROUTE_EVIDENCE_PUBLICATION_INVALID");
+    expect(() => canonicalWorldkitBrowserRouteEvidencePublicationV2({
+      ...valid,
+      routes: [{
+        selector: { constraintId: "player-to-goal", routeId: "main-route" },
+        summary: {
+          kind: "route-evidence-summary",
+          schemaVersion: 1,
+          constraintId: "player-to-goal",
+          routeId: "main-route",
+          traversingEntityId: "player",
+          startAnchorEntityId: "spawn",
+          destinationAnchorEntityId: "goal",
+          connectivityStatus: "complete",
+          routePathStatus: "complete",
+          routeRuntimeProbeStatus: "unavailable",
+          routeOverlayStatus: "available",
+        },
+        routeOverlay: {
+          staticColliderIdentities: [],
+        },
+        routeOverlayHash: ROUTE_PUBLICATION_HASH,
+      }],
+    })).toThrow("WORLDKIT_BROWSER_ROUTE_EVIDENCE_PUBLICATION_INVALID");
+  });
+
+  it("installs WorldkitBrowserApiV5 as the public Browser protocol", () => {
+    expect(WORLDKIT_BROWSER_PROTOCOL_VERSION).toBe(5);
+    const api = {
+      version: 5 as const,
+      ready: async () => createSnapshotFixtureV3(),
+      getSnapshot: () => createSnapshotFixtureV3(),
+      getDiagnostics: () => [],
+      bindControl: () => ({}) as never,
+      runFixedInput: async () => createSnapshotFixtureV3(),
+      getControlCaptureCapabilities: () => ({}) as never,
+      waitForSimulationTick: async () => createSnapshotFixtureV3(),
+      waitForRenderReady: async () => ({}) as never,
+      captureControlFrame: async () => ({}) as never,
+      captureScreenshot: () => "",
+      reset: () => createSnapshotFixtureV3(),
+      setPaused: () => createSnapshotFixtureV3(),
+      getRouteSummary: () => ({
+        kind: "worldkit-route-evidence-query-result",
+        schemaVersion: 1,
+        availability: "unavailable",
+        selector: { constraintId: "player-to-goal", routeId: "main-route" },
+        reason: "route-evidence-not-loaded",
+      }),
+      getRoutePathReceipt: () => ({
+        kind: "worldkit-route-evidence-query-result",
+        schemaVersion: 1,
+        availability: "unavailable",
+        selector: { constraintId: "player-to-goal", routeId: "main-route" },
+        reason: "route-evidence-not-loaded",
+      }),
+      getRouteRuntimeProbeReceipt: () => ({
+        kind: "worldkit-route-evidence-query-result",
+        schemaVersion: 1,
+        availability: "unavailable",
+        selector: { constraintId: "player-to-goal", routeId: "main-route" },
+        reason: "route-evidence-not-loaded",
+      }),
+      getRouteOverlay: () => ({
+        kind: "worldkit-route-evidence-query-result",
+        schemaVersion: 1,
+        availability: "unavailable",
+        selector: { constraintId: "player-to-goal", routeId: "main-route" },
+        reason: "route-evidence-not-loaded",
+      }),
+    } satisfies WorldkitBrowserApiV5;
+    expect(api.version).toBe(5);
   });
 });

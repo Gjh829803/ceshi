@@ -57,7 +57,7 @@ const FIRST_PACKAGE_SUBJECT_ENTITY_ID = "pack-animal-a";
 const SECOND_PACKAGE_SUBJECT_ENTITY_ID = "pack-animal-b";
 const PACKAGE_SUBJECT_DEFINITION_REF =
   "package://subject-definition/coastal-pack-animal@1";
-const BROWSER_PROTOCOL_V4_METHOD_NAMES = [
+const BROWSER_PROTOCOL_V5_METHOD_NAMES = [
   "ready",
   "getSnapshot",
   "getDiagnostics",
@@ -423,7 +423,7 @@ async function verifyBrowserProtocolAndPhysics(): Promise<{
       undefined,
       { timeout: 30_000 },
     );
-    assert.equal(await page.evaluate(() => window.__WORLDKIT__!.version), 4);
+    assert.equal(await page.evaluate(() => window.__WORLDKIT__!.version), 5);
     const ready = await page.evaluate(async () => window.__WORLDKIT__!.ready());
     assert.equal(ready.schemaVersion, 3);
     assert.equal(ready.runtimeBackend, "babylon-havok");
@@ -464,11 +464,11 @@ async function verifyBrowserProtocolAndPhysics(): Promise<{
         };
       },
       {
-        methodNames: BROWSER_PROTOCOL_V4_METHOD_NAMES,
+        methodNames: BROWSER_PROTOCOL_V5_METHOD_NAMES,
         forbiddenNames: FORBIDDEN_BROWSER_ROUTE_AUTHORITY_NAMES,
       },
     );
-    assert.equal(BROWSER_PROTOCOL_V4_METHOD_NAMES.length, 31);
+    assert.equal(BROWSER_PROTOCOL_V5_METHOD_NAMES.length, 31);
     assert.deepEqual(browserProtocol.missingMethodNames, []);
     assert.deepEqual(browserProtocol.forbiddenAuthorityNames, []);
     assert.deepEqual(
@@ -735,7 +735,7 @@ async function run(): Promise<void> {
           normalizedWorldIr: 3,
           executionPlan: 4,
           runtimeSnapshot: 3,
-          browserProtocol: 4,
+          browserProtocol: 5,
         },
         gates: [
           "strict-valid-input",
@@ -743,7 +743,7 @@ async function run(): Promise<void> {
           "deterministic-v3-v4-build-artifact",
           "subject-explain-artifact",
           "playwright-capture",
-          "browser-protocol-v4",
+          "browser-protocol-v5",
           "babylon-havok-runtime",
           "shared-package-definition",
           "independent-subject-runtime-state",

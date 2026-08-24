@@ -4,17 +4,19 @@
 - 基准日期：2026-08-23。
 - 长期目标总进度：约 **65%**，合理误差范围为 ±5%。
 - 第一条 Canonical 纵向切片：约 **90%**。
-- 当前代码入口：基础世界走 Canonical Authoring V3 → NormalizedWorldIR V3 → ExecutionPlan V4；Route 世界走 Authoring V4 → IR V4 → ExecutionPlan V5 → WorldPackage Build Receipt → Validation Subject → Recast → Babylon.js/Havok Probe → Canonical Route Evidence/Report；两者共享 Babylon/Havok Runtime 与 Browser Protocol V4。
+- 当前代码入口：基础世界走 Canonical Authoring V3 → NormalizedWorldIR V3 → ExecutionPlan V4；Route 世界走 Authoring V4 → IR V4 → ExecutionPlan V5 → WorldPackage Build Receipt → Validation Subject → Recast → Babylon.js/Havok Probe → Canonical Route Evidence/Report；两者共享 Babylon/Havok Runtime 与 Browser Protocol V5。
 
 > Golden Humanoid S1b 首个可视纵向切片已完成并进入回归；S1b 整体与 Semantic Actions 整体仍未完成.
 
 > 首个产品资产 G Bot 已通过独立 Registry/CLI/Babylon/Havok/Browser Gate；这只代表
 > 当前版本 G Bot 的 `idle/walk/run/jump`，不代表任意产品包或其余 21 个 Clip 已开放。
 
-> Placement Solver S1 首个海湾纵向切片已完成并进入回归；通用 Terrain Mask、Route R1b、更多 Constraint 与 P0.1 整体仍未完成。
+> Placement Solver S1 首个海湾纵向切片已完成并进入回归；通用 Terrain Mask、更多 Constraint 与 P0.1 整体仍未完成。
 
-> Route R1 Heightfield 已完成并通过 `pnpm verify:route-r1-heightfield` 与 Task 10
-> 全维度 Runtime Review。R1b、完整 M5 仍未完成。
+> Route R1 Heightfield 与 R1b Static Platform 已完成，M5 已关闭。候选 `506e088`
+> 相对 base `9c5a615` 的修后完整矩阵通过（148 files / 1577 tests、R1b 11/11）；
+> 主 Agent 全维度/Runtime 深审与 Cursor 首轮、条件复核均为 Final GO / No findings，
+> 无 open confirmed P0/P1。H1/H2/H3、动态平台、NPC/public `goTo` 与车辆仍开放。
 
 > Simulation Take / Control Capture V1 已完成 60 Hz → 24 fps 精确时间映射、五 Pass
 > Babylon 捕获、Render Ready Receipt、原子 Bundle、CLI/Browser/Playwright 和真实 Chromium
@@ -64,12 +66,12 @@ Normalizer/Compiler、Runtime、CLI/Browser 和对应 Conformance Gate 的纵向
 | Canonical Schema、IR、Registry 与 Compiler | 15% | 82% | 12.3% | 基础链路 Authoring V3 → IR V3 → Plan V4 与 Route 链路 Authoring V4 → IR V4 → Plan V5、Hash、Lock、严格校验、Placement、Primitive 与首个 Asset Subject 已交付；Task 8 最小 WorldPackage Root/Build Receipt 已实现，完整 P1.4 发布格式、WorldChangeSet 和完整 Capability 尚未交付 |
 | Babylon/Havok Runtime、物理与相机 | 15% | 75% | 11.25% | Heightfield、障碍、水域、多主体、第三人称、碰撞、资产主体、Placement Assertion 与五 Pass Capture 已交付；多视角与完整生产预算尚未完成 |
 | Subject LEGO 组装体系 | 15% | 45% | 6.75% | S0、S1a、Golden 与首个产品 G Bot 可视切片已完成；S1b 后续、S2、S3、S4 尚未完成 |
-| Terrain、Region 与 Placement | 12% | 74% | 8.88% | Alpha 地形和 Placement Solver S1 已运行；Route R0 合同与 R1 Heightfield 已审查/门禁关闭；R1b、通用 Terrain Mask、更多 Constraint 与完整 P0.1 未完成 |
-| CLI、Browser Protocol 与自动化 | 10% | 90% | 9.0% | 已交付 Take/Capture、`verify capture|explain`；Route `verify route`、R1 Golden Fixture、可信 Host Evidence Transport、完整继承 V3 的 Browser V4 已完成；compare、持久 Session 和完整 Package 工具未完成 |
+| Terrain、Region 与 Placement | 12% | 74% | 8.88% | Alpha 地形和 Placement Solver S1 已运行；Route R0、R1 Heightfield 与 R1b Static Platform 已审查/门禁关闭；通用 Terrain Mask、更多 Constraint 与完整 P0.1 未完成 |
+| CLI、Browser Protocol 与自动化 | 10% | 90% | 9.0% | 已交付 Take/Capture、`verify capture|explain`；Route `verify route`、R1 Golden Fixture、可信 Host Evidence Transport、Browser V5 clean break 已完成；compare、持久 Session 和完整 Package 工具未完成 |
 | Semantic Action、动画与 Gameplay | 8% | 33% | 2.64% | Golden 与 G Bot `idle/walk/run/jump` 固定 Tick Animation Binding 已交付；通用 Action Request/Receipt、姿态、装备与规则未交付 |
 | Simulation Take、控制通道与视频接入 | 10% | 70% | 7.0% | V1 Take、五 Pass、Bundle 和真实浏览器 Gate 已交付，Capture/Integrity 已进入统一 Report；完整 Replay/Resume 与模型 Adapter 未交付 |
 | 生产 Gate、默认切换与旧实现退出 | 7% | 60% | 4.2% | Canonical/资产/Placement/Capture Gate 可运行；Capture/Integrity 与 Route 双 Blocking Gate、R1 Heightfield Golden Gate 已关闭；其他统一 Gate、默认切换和旧路径退出未交付 |
-| **合计** | **100%** |  | **约 70%** | 对外按通用 Terrain/R1b、完整统一生产 Gate、WorldPackage 与视频闭环的不确定性保守报告 **约 65%** |
+| **合计** | **100%** |  | **约 70%** | 对外按通用 Terrain、完整统一生产 Gate、WorldPackage 与视频闭环的不确定性保守报告 **约 65%** |
 
 “第一条 Canonical 纵向切片约 90%”只指以下较窄范围：AI 提交 JSON，SDK
 完成严格校验、确定性编译、Babylon/Havok 运行、多主体控制、首个 Golden Asset
@@ -126,8 +128,8 @@ Capture V1 是独立的新纵向切片，不改变该 90% 口径。
   （水介质状态切换已随 P1.5 首切片收敛到 P2.5，不再由 Adapter 硬编码发布）。
 - [x] 第三人称跟随相机和受控主体切换。
 - [x] `worldkit validate / build / run / capture`。
-- [x] Browser Protocol V4 完整继承 V3 的加载、固定输入、Capture、绑定、Snapshot、Reset
-  和截图，并增加四个只读 Route Evidence getter；不保留并行 V3 alias。
+- [x] Browser Protocol V5 完整保留既有加载、固定输入、Capture、绑定、Snapshot、Reset
+  和截图能力，并发布多 Surface Route Evidence V2；不保留并行 V4 alias。
 - [x] 真实 Chromium 下验证 Package Definition 的两个实例可以分别控制。
 
 2026-08-20 的新鲜验证证据：
@@ -205,10 +207,19 @@ P1.5、P1.6、P2.5 与 P2.6 是把既有总体设计和产品对接契约显式�
   Task 1–8 审查关闭记录见既有 Task 段落。Task 9 的 11 个 Authoring V4 Golden/Adversarial
   Fixture 与 `pnpm verify:route-r1-heightfield` 已进入回归；Task 10 全维度 Runtime Review
   见 [2026-08-22-route-r1-heightfield-runtime-review.md](reviews/2026-08-22-route-r1-heightfield-runtime-review.md)。
-  R1 Heightfield 已关闭。M5 与 R1b 仍未标记完成。
-- [ ] R1b 与 P2.6 H1 共享最小 Traversal Surface → Collider Subshape 合同，覆盖地形、
+  R1 Heightfield 已关闭；R1b 与 M5 的完成证据见下项。
+- [x] R1b Task 9 已实现最小 Traversal Surface → Collider Subshape 合同，覆盖地形、
   台阶、坡道和普通静态平台；阈值从同一 `resolvedTraversalLockHash` 推导，当前锁定
-  `0.3m` 人形 Profile 的 Golden 要求 `0.25m` 通过、`0.35m` 失败。
+  `0.3m` 人形 Profile 的 Golden 要求 `0.25m` 通过、`0.35m` 失败。11 个 Fixture、
+  V2/V5 clean break、R0/R1/R1b 聚焦门禁与 43 files / 525 tests 已通过。
+- [x] R1b Task 10 已完成并关闭 R1b/M5：首轮 Cursor chat
+  `1e938715-a5b2-4a25-ad83-45eec0c37c15` 对 `28752e0` 为 Final GO / No findings，
+  同时给出 Runtime ambiguous 诊断分层建议；主审确认该分层问题并修复为 `506e088`，
+  三模式回归证明 Runtime `unmatched / ambiguous / wrong resolved Surface` 均输出
+  `ROUTE_RUNTIME_SUPPORT_SURFACE_MISMATCH`。修后 `typecheck`、148 files / 1577 tests、
+  `build`、R0、R1、R1b 11/11、Canonical、Placement、Rigged、G Bot 与 `diff-check`
+  全部通过；条件复核 chat `d61f751c-a398-4063-bcbf-2ddc55ea20a9` 对 `506e088`
+  再次为 Final GO / No findings，最终无 open confirmed P0/P1。
 - [x] Required 路线接入统一 Validation Report；Graph 通过但真实 Controller 卡住仍为
   Blocking Failure，并输出台阶、坡度、宽高净空、缝隙、Surface 身份和卡住坐标。
 - [ ] 增加 S1 之外的 Constraint、增量求解等价证明和通用 ValidationReport。
@@ -671,7 +682,8 @@ Placement S1、Simulation Take / Control Capture V1 与 Validation Capture/Integ
 M5 R0 字段冻结已由 `pnpm verify:route-r0-contract` 完成；R1 Heightfield 已由
 `pnpm verify:route-r1-heightfield` 与
 [Runtime Review](reviews/2026-08-22-route-r1-heightfield-runtime-review.md) 关闭。
-M7 P1.5 Ground/Air Runtime 前置依赖已随 PR #10 合入。R1b 仍开放。S1b Golden、
+M7 P1.5 Ground/Air Runtime 前置依赖已随 PR #10 合入。R1b Task 9/10 与 M5 已关闭。
+S1b Golden、
 首个产品 G Bot、Placement Solver S1、Control Capture V1 与 Validation Capture/Integrity V1
 都已进入回归，下一步：
 
@@ -682,15 +694,14 @@ M7 P1.5 Ground/Air Runtime 前置依赖已随 PR #10 合入。R1b 仍开放。S1
 2. **M2（已完成）：冻结 Take/Capture V1 首条实施范围**；
 3. **M3（已完成）：实现五 Pass Capture 窄纵向切片并复用 Placement World Identity/Hash**；
 4. **M4（已完成）：实现 P0.3 统一 Validation Profile/Report 的 Capture/Integrity 窄切片，把现有 Bundle Gate 纳入同一报告协议**；
-5. **M5：完成 Route Graph 与主体可通行性 R0/R1/R1b**：R0 字段冻结已由
+5. **M5（已完成）：Route Graph 与主体可通行性 R0/R1/R1b**：R0 字段冻结已由
    `pnpm verify:route-r0-contract` 证明；R1 Heightfield 已由
    `pnpm verify:route-r1-heightfield` 与
    [Runtime Review](reviews/2026-08-22-route-r1-heightfield-runtime-review.md) 关闭。
-   R1b 静态平台 / Surface→Collider Subshape 仍未完成，因此 M5 保持开放。
-   P1.5 Ground/Air Runtime 前置依赖已经满足。之后复用既有
-   Route/Region，按主体 Lock 从显式 Traversal Surface 构建地形→台阶/坡道→静态平台路线；
-   只有 Required Route 接入 Blocking Validation、成功 Fixture 走通且失败 Fixture 给出
-   结构化 Diagnostic 后完成 R1b/M5；
+   R1b Task 9/10 已完成静态平台 / Surface→Collider Subshape 实现、11 个 Fixture、V2/V5
+   clean break、完整矩阵和主 Agent 深审；首轮 Cursor 建议触发的 Runtime ambiguous
+   诊断分层修复已由三模式回归与条件复核关闭。M5 已完成，但 H1/H2/H3、动态平台、
+   NPC/public `goTo`、车辆等能力继续由后续里程碑拥有；
 6. **M6：在 Placement + Take + Validation 闭环上接入实验 Video Model Adapter**；
 7. **M7（Ground/Air 首切片已完成）：继续扩展 P1.5 Control Feel/Physics Medium/State
    Resolver**：首条 Ground/Air 切片的

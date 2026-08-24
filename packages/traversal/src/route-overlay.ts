@@ -1,8 +1,13 @@
 import { sha256CanonicalJson } from "@whitebox-world/protocol";
-import { isNil, isPlainObject } from "lodash-es";
+import { isEqual, isNil, isPlainObject } from "lodash-es";
 
-import type { RouteBuildAnchorV1, RouteHardRibbonV1 } from "./build-input.js";
+import {
+  assertRouteBuildInputReceiptV2,
+  type RouteBuildAnchorV1,
+  type RouteHardRibbonV1,
+} from "./build-input.js";
 import { deriveColliderSubshapeIdV1 } from "./collider-subshape-id.js";
+import { assertRouteConnectivityResultForBuildInputV2 } from "./connectivity-result.js";
 import { assertTraversalSurfaceIdentityV1 } from "./graph-contract.js";
 import type { TraversalSurfaceIdentityV1 } from "./types.js";
 
@@ -11,30 +16,11 @@ type UnknownRecord = Record<string, unknown>;
 type Vec2 = readonly [number, number];
 type Vec3 = readonly [number, number, number];
 
-export interface RouteOverlayColliderIdentityV1 {
+export interface RouteOverlayColliderIdentityV2 {
   readonly entityId: string;
   readonly logicalSubshapeId: string;
   readonly colliderSubshapeId: string;
   readonly colliderHash: Sha256Hash;
-}
-
-export interface RouteOverlayV1 {
-  readonly kind: "route-overlay";
-  readonly schemaVersion: 1;
-  readonly constraintId: string;
-  readonly routeId: string;
-  readonly traversingEntityId: string;
-  readonly startAnchor: RouteBuildAnchorV1;
-  readonly destinationAnchor: RouteBuildAnchorV1;
-  readonly traversalSurfaceIdentity: TraversalSurfaceIdentityV1;
-  readonly resolvedTraversalLockHash: Sha256Hash;
-  readonly traversalGraphHash: Sha256Hash;
-  readonly routePathReceiptHash: Sha256Hash;
-  readonly orderedTraversalNodeIds: readonly string[];
-  readonly orderedTraversalEdgeIds: readonly string[];
-  readonly orderedPathPositionsMetersXYZ: readonly Vec3[];
-  readonly hardRibbon: RouteHardRibbonV1;
-  readonly blockingColliderIdentities: readonly RouteOverlayColliderIdentityV1[];
 }
 
 const SHA256_PATTERN = /^sha256:[a-f0-9]{64}$/;
@@ -46,7 +32,7 @@ const OVERLAY_FIELDS = [
   "traversingEntityId",
   "startAnchor",
   "destinationAnchor",
-  "traversalSurfaceIdentity",
+  "orderedTraversalSurfaceIdentities",
   "resolvedTraversalLockHash",
   "traversalGraphHash",
   "routePathReceiptHash",
@@ -54,7 +40,7 @@ const OVERLAY_FIELDS = [
   "orderedTraversalEdgeIds",
   "orderedPathPositionsMetersXYZ",
   "hardRibbon",
-  "blockingColliderIdentities",
+  "staticColliderIdentities",
 ] as const;
 const ANCHOR_FIELDS = ["entityId", "positionMetersXYZ"] as const;
 const HARD_RIBBON_FIELDS = [
@@ -241,11 +227,72 @@ function canonicalHardRibbon(value: unknown): RouteHardRibbonV1 {
   };
 }
 
-function canonicalBlockingColliderIdentities(
+function deepFreeze<T>(value: T): T {
+  if (isNil(value) || typeof value !== "object" || Object.isFrozen(value)) {
+    return value;
+  }
+  for (const child of Object.values(value as Record<string, unknown>)) {
+    deepFreeze(child);
+  }
+  return Object.freeze(value);
+}
+
+
+export interface RouteOverlayV2 {
+  readonly kind: "route-overlay";
+  readonly schemaVersion: 2;
+  readonly constraintId: string;
+  readonly routeId: string;
+  readonly traversingEntityId: string;
+  readonly startAnchor: RouteBuildAnchorV1;
+  readonly destinationAnchor: RouteBuildAnchorV1;
+  readonly orderedTraversalSurfaceIdentities: readonly TraversalSurfaceIdentityV1[];
+  readonly resolvedTraversalLockHash: Sha256Hash;
+  readonly traversalGraphHash: Sha256Hash;
+  readonly routePathReceiptHash: Sha256Hash;
+  readonly orderedTraversalNodeIds: readonly string[];
+  readonly orderedTraversalEdgeIds: readonly string[];
+  readonly orderedPathPositionsMetersXYZ: readonly Vec3[];
+  readonly hardRibbon: RouteHardRibbonV1;
+  readonly staticColliderIdentities: readonly RouteOverlayColliderIdentityV2[];
+}
+
+
+export interface AssertRouteOverlayContextInputV2 {
+  readonly overlay: unknown;
+  readonly routeConnectivityResult: unknown;
+  readonly buildInputReceipt: unknown;
+}
+
+function canonicalOrderedOverlayIdentities(
   value: unknown,
-  traversalSurfaceColliderSubshapeId: string,
-): readonly RouteOverlayColliderIdentityV1[] {
-  const path = "blockingColliderIdentities";
+  expectedLength: number,
+): readonly TraversalSurfaceIdentityV1[] {
+  if (!Array.isArray(value)) {
+    fail("orderedTraversalSurfaceIdentities", "must be an array");
+  }
+  if (value.length !== expectedLength) {
+    fail(
+      "orderedTraversalSurfaceIdentities",
+      "length must equal orderedTraversalNodeIds.length",
+    );
+  }
+  return value.map((candidate, index) => {
+    try {
+      return assertTraversalSurfaceIdentityV1(candidate);
+    } catch {
+      fail(
+        `orderedTraversalSurfaceIdentities/${index}`,
+        "must be a canonical Traversal Surface identity",
+      );
+    }
+  });
+}
+
+function canonicalStaticColliderIdentities(
+  value: unknown,
+): readonly RouteOverlayColliderIdentityV2[] {
+  const path = "staticColliderIdentities";
   if (!Array.isArray(value)) {
     fail(path, "must be an array");
   }
@@ -284,12 +331,6 @@ function canonicalBlockingColliderIdentities(
       fail(path, "must be strictly sorted by colliderSubshapeId");
     }
     previousColliderSubshapeId = colliderSubshapeId;
-    if (colliderSubshapeId === traversalSurfaceColliderSubshapeId) {
-      fail(
-        `${entryPath}/colliderSubshapeId`,
-        "must not duplicate the Traversal Surface colliderSubshapeId",
-      );
-    }
     return {
       entityId,
       logicalSubshapeId,
@@ -299,23 +340,13 @@ function canonicalBlockingColliderIdentities(
   });
 }
 
-function deepFreeze<T>(value: T): T {
-  if (isNil(value) || typeof value !== "object" || Object.isFrozen(value)) {
-    return value;
-  }
-  for (const child of Object.values(value as Record<string, unknown>)) {
-    deepFreeze(child);
-  }
-  return Object.freeze(value);
-}
-
-export function canonicalRouteOverlayV1(value: unknown): RouteOverlayV1 {
+export function canonicalRouteOverlayV2(value: unknown): RouteOverlayV2 {
   const record = requireExactRecord(value, OVERLAY_FIELDS, "");
   if (record.kind !== "route-overlay") {
     fail("kind", "must be 'route-overlay'");
   }
-  if (record.schemaVersion !== 1) {
-    fail("schemaVersion", "must be 1");
+  if (record.schemaVersion !== 2) {
+    fail("schemaVersion", "must be 2");
   }
 
   const routeId = requireString(record.routeId, "routeId");
@@ -326,18 +357,6 @@ export function canonicalRouteOverlayV1(value: unknown): RouteOverlayV1 {
   );
   if (startAnchor.entityId === destinationAnchor.entityId) {
     fail("destinationAnchor/entityId", "must differ from startAnchor/entityId");
-  }
-
-  let traversalSurfaceIdentity: TraversalSurfaceIdentityV1;
-  try {
-    traversalSurfaceIdentity = assertTraversalSurfaceIdentityV1(
-      record.traversalSurfaceIdentity,
-    );
-  } catch {
-    fail(
-      "traversalSurfaceIdentity",
-      "must be a canonical Traversal Surface identity",
-    );
   }
 
   const orderedTraversalNodeIds = requireUniqueStringArray(
@@ -365,7 +384,7 @@ export function canonicalRouteOverlayV1(value: unknown): RouteOverlayV1 {
 
   return deepFreeze({
     kind: "route-overlay",
-    schemaVersion: 1,
+    schemaVersion: 2,
     constraintId: requireString(record.constraintId, "constraintId"),
     routeId,
     traversingEntityId: requireString(
@@ -374,7 +393,6 @@ export function canonicalRouteOverlayV1(value: unknown): RouteOverlayV1 {
     ),
     startAnchor,
     destinationAnchor,
-    traversalSurfaceIdentity,
     resolvedTraversalLockHash: requireHash(
       record.resolvedTraversalLockHash,
       "resolvedTraversalLockHash",
@@ -393,14 +411,117 @@ export function canonicalRouteOverlayV1(value: unknown): RouteOverlayV1 {
       record.orderedPathPositionsMetersXYZ,
       "orderedPathPositionsMetersXYZ",
     ),
+    orderedTraversalSurfaceIdentities: canonicalOrderedOverlayIdentities(
+      record.orderedTraversalSurfaceIdentities,
+      orderedTraversalNodeIds.length,
+    ),
     hardRibbon,
-    blockingColliderIdentities: canonicalBlockingColliderIdentities(
-      record.blockingColliderIdentities,
-      traversalSurfaceIdentity.colliderSubshapeId,
+    staticColliderIdentities: canonicalStaticColliderIdentities(
+      record.staticColliderIdentities,
     ),
   });
 }
 
-export function hashRouteOverlayV1(value: unknown): Sha256Hash {
-  return sha256CanonicalJson(canonicalRouteOverlayV1(value)) as Sha256Hash;
+export function hashRouteOverlayV2(value: unknown): Sha256Hash {
+  return sha256CanonicalJson(canonicalRouteOverlayV2(value)) as Sha256Hash;
+}
+
+export function assertRouteOverlayContextV2(
+  input: AssertRouteOverlayContextInputV2,
+): RouteOverlayV2 {
+  if (isNil(input) || !isPlainObject(input)) {
+    fail("", "expected a plain object");
+  }
+  const record = requireExactRecord(
+    input,
+    ["overlay", "routeConnectivityResult", "buildInputReceipt"],
+    "",
+  );
+  const receipt = assertRouteBuildInputReceiptV2(record.buildInputReceipt);
+  const result = assertRouteConnectivityResultForBuildInputV2(
+    record.routeConnectivityResult,
+    receipt,
+  );
+  if (result.status !== "complete") {
+    fail("", "routeConnectivityResult must be complete");
+  }
+  const overlay = canonicalRouteOverlayV2(record.overlay);
+  const graph = result.traversalGraph;
+  const path = result.routePathReceipt;
+  if (overlay.constraintId !== path.constraintId) {
+    fail("constraintId", "must match the Path Receipt");
+  }
+  if (overlay.routeId !== path.routeId) {
+    fail("routeId", "must match the Path Receipt");
+  }
+  if (overlay.traversingEntityId !== path.traversingEntityId) {
+    fail("traversingEntityId", "must match the Path Receipt");
+  }
+  if (overlay.resolvedTraversalLockHash !== path.resolvedTraversalLockHash) {
+    fail("resolvedTraversalLockHash", "must match the Path Receipt");
+  }
+  if (overlay.traversalGraphHash !== result.traversalGraphHash) {
+    fail("traversalGraphHash", "must match the Connectivity Result");
+  }
+  if (overlay.routePathReceiptHash !== result.routePathReceiptHash) {
+    fail("routePathReceiptHash", "must match the Connectivity Result");
+  }
+  if (!isEqual(overlay.startAnchor, receipt.input.startAnchor)) {
+    fail("startAnchor", "must match Build Input");
+  }
+  if (!isEqual(overlay.destinationAnchor, receipt.input.destinationAnchor)) {
+    fail("destinationAnchor", "must match Build Input");
+  }
+  if (!isEqual(overlay.hardRibbon, receipt.input.hardRibbon)) {
+    fail("hardRibbon", "must match Build Input");
+  }
+  if (!isEqual(overlay.orderedTraversalNodeIds, path.orderedTraversalNodeIds)) {
+    fail("orderedTraversalNodeIds", "must match the Path Receipt");
+  }
+  if (!isEqual(overlay.orderedTraversalEdgeIds, path.orderedTraversalEdgeIds)) {
+    fail("orderedTraversalEdgeIds", "must match the Path Receipt");
+  }
+  if (
+    !isEqual(
+      overlay.orderedPathPositionsMetersXYZ,
+      path.orderedPathPositionsMetersXYZ,
+    )
+  ) {
+    fail("orderedPathPositionsMetersXYZ", "must match the Path Receipt");
+  }
+  if (
+    !isEqual(
+      overlay.orderedTraversalSurfaceIdentities,
+      path.orderedTraversalSurfaceIdentities,
+    )
+  ) {
+    fail("orderedTraversalSurfaceIdentities", "must match the Path Receipt");
+  }
+  overlay.orderedTraversalNodeIds.forEach((nodeId, index) => {
+    const node = graph.traversalNodesById[nodeId];
+    if (isNil(node)) {
+      fail(`orderedTraversalNodeIds/${index}`, `unknown Node '${nodeId}'`);
+    }
+    const inventory = graph.traversalSurfaceIdentitiesById[node.traversalSurfaceId];
+    const identity = overlay.orderedTraversalSurfaceIdentities[index]!;
+    if (isNil(inventory) || !isEqual(identity, inventory)) {
+      fail(
+        `orderedTraversalSurfaceIdentities/${index}`,
+        "must equal the Graph inventory row for the Node",
+      );
+    }
+  });
+  const expectedColliders = receipt.input.staticColliders.map((row) => ({
+    entityId: row.entityId,
+    logicalSubshapeId: row.logicalSubshapeId,
+    colliderSubshapeId: row.colliderSubshapeId,
+    colliderHash: row.colliderHash,
+  }));
+  if (!isEqual(overlay.staticColliderIdentities, expectedColliders)) {
+    fail(
+      "staticColliderIdentities",
+      "must project every Build Input static collider",
+    );
+  }
+  return overlay;
 }

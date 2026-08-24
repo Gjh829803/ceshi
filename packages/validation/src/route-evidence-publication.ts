@@ -1,18 +1,19 @@
 import { canonicalJsonBytes, sha256Bytes, sha256CanonicalJson } from "@whitebox-world/protocol";
 import {
-  canonicalWorldkitBrowserRouteEvidencePublicationV1,
-  type WorldkitBrowserRouteEvidenceProjectionV1,
-  type WorldkitBrowserRouteEvidencePublicationV1,
+  canonicalWorldkitBrowserRouteEvidencePublicationV2,
+  type WorldkitBrowserRouteEvidenceProjectionV2,
+  type WorldkitBrowserRouteEvidencePublicationV2,
 } from "@whitebox-world/runtime-contracts";
 import {
-  canonicalRouteOverlayV1,
-  canonicalRoutePathReceiptV1,
-  canonicalRouteRuntimeProbeReceiptV1,
-  hashRouteOverlayV1,
-  hashRoutePathReceiptV1,
-  hashRouteRuntimeProbeReceiptV1,
-  type RouteOverlayV1,
-  type RouteRuntimeProbeReceiptV1,
+  assertRouteOverlayContextV2,
+  canonicalRouteOverlayV2,
+  canonicalRoutePathReceiptV2,
+  canonicalRouteRuntimeProbeReceiptV2,
+  hashRouteOverlayV2,
+  hashRoutePathReceiptV2,
+  hashRouteRuntimeProbeReceiptV2,
+  type RouteOverlayV2,
+  type RouteRuntimeProbeReceiptV2,
 } from "@whitebox-world/traversal";
 import { isEqual, isNil, isPlainObject } from "lodash-es";
 
@@ -65,15 +66,15 @@ const SUBJECT_FIELDS = [
   "layoutSolveReportHash",
 ] as const;
 
-export interface RouteEvidencePublicationRowInputV1 {
+export interface RouteEvidencePublicationRowInputV2 {
   readonly validationRow: RouteValidationRowInputV2;
-  readonly routeOverlay?: RouteOverlayV1;
+  readonly routeOverlay?: RouteOverlayV2;
 }
 
-export interface CreateWorldkitBrowserRouteEvidencePublicationInputV1 {
+export interface CreateWorldkitBrowserRouteEvidencePublicationInputV2 {
   readonly subject: WorldPackageValidationSubjectV1;
   readonly validationReport: ValidationReportV2;
-  readonly rows: readonly RouteEvidencePublicationRowInputV1[];
+  readonly rows: readonly RouteEvidencePublicationRowInputV2[];
 }
 
 function fail(): never {
@@ -193,8 +194,8 @@ function assertPureDataGraph(
 }
 
 function snapshotInput(
-  input: CreateWorldkitBrowserRouteEvidencePublicationInputV1,
-): CreateWorldkitBrowserRouteEvidencePublicationInputV1 {
+  input: CreateWorldkitBrowserRouteEvidencePublicationInputV2,
+): CreateWorldkitBrowserRouteEvidencePublicationInputV2 {
   assertPureDataGraph(input);
   exactFields(input, INPUT_FIELDS, INPUT_FIELDS);
   exactFields(input.subject, SUBJECT_FIELDS, SUBJECT_FIELDS);
@@ -340,43 +341,46 @@ function hashValidationReportV2(report: ValidationReportV2): Sha256HashV1 {
   return sha256CanonicalJson(report) as Sha256HashV1;
 }
 
-function expectedOverlay(
+
+
+export interface RouteEvidencePublicationRowInputV2 {
+  readonly validationRow: RouteValidationRowInputV2;
+  readonly routeOverlay?: RouteOverlayV2;
+}
+
+export interface CreateWorldkitBrowserRouteEvidencePublicationInputV2 {
+  readonly subject: WorldPackageValidationSubjectV1;
+  readonly validationReport: ValidationReportV2;
+  readonly rows: readonly RouteEvidencePublicationRowInputV2[];
+}
+
+function expectedOverlayV2(
   row: RouteValidationRowInputV2,
-): RouteOverlayV1 {
+  overlay: RouteOverlayV2,
+): RouteOverlayV2 {
   if (row.routeConnectivityResult.status !== "complete") fail();
-  const buildInput = row.routeBuildInputReceipt.input;
-  const connectivity = row.routeConnectivityResult;
-  const path = connectivity.routePathReceipt;
-  return canonicalRouteOverlayV1({
-    kind: "route-overlay",
-    schemaVersion: 1,
-    constraintId: buildInput.connectivityRequirement.constraintId,
-    routeId: buildInput.connectivityRequirement.routeId,
-    traversingEntityId: buildInput.connectivityRequirement.traversingEntityId,
-    startAnchor: buildInput.startAnchor,
-    destinationAnchor: buildInput.destinationAnchor,
-    traversalSurfaceIdentity: path.traversalSurfaceIdentity,
-    resolvedTraversalLockHash: path.resolvedTraversalLockHash,
-    traversalGraphHash: connectivity.traversalGraphHash,
-    routePathReceiptHash: connectivity.routePathReceiptHash,
-    orderedTraversalNodeIds: path.orderedTraversalNodeIds,
-    orderedTraversalEdgeIds: path.orderedTraversalEdgeIds,
-    orderedPathPositionsMetersXYZ: path.orderedPathPositionsMetersXYZ,
-    hardRibbon: buildInput.hardRibbon,
-    blockingColliderIdentities: buildInput.blockingColliders.map((collider) => ({
-      entityId: collider.entityId,
-      logicalSubshapeId: collider.logicalSubshapeId,
-      colliderSubshapeId: collider.colliderSubshapeId,
-      colliderHash: collider.colliderHash,
-    })),
+  const overlayRecord = overlay as unknown as Record<string, unknown>;
+  if (
+    Object.hasOwn(overlayRecord, "traversalSurfaceIdentity") ||
+    Object.hasOwn(
+      overlayRecord,
+      ["blocking", "Collider", "Identities"].join(""),
+    )
+  ) {
+    fail();
+  }
+  return assertRouteOverlayContextV2({
+    overlay,
+    routeConnectivityResult: row.routeConnectivityResult,
+    buildInputReceipt: row.routeBuildInputReceipt,
   });
 }
 
-function projectionForRow(
+function projectionForRowV2(
   report: ValidationReportV2,
   receiptRow: RouteValidationSetRowV1,
-  inputRow: RouteEvidencePublicationRowInputV1,
-): WorldkitBrowserRouteEvidenceProjectionV1 {
+  inputRow: RouteEvidencePublicationRowInputV2,
+): WorldkitBrowserRouteEvidenceProjectionV2 {
   const row = inputRow.validationRow;
   const requirement = row.routeBuildInputReceipt.input.connectivityRequirement;
   requireEqual(selectorForRow(row), {
@@ -428,17 +432,17 @@ function projectionForRow(
     };
   }
 
-  const path = canonicalRoutePathReceiptV1(
+  const path = canonicalRoutePathReceiptV2(
     row.routeConnectivityResult.routePathReceipt,
   );
   const pathBytes = row.evidenceBytes.routePathReceipt;
   if (isNil(pathBytes) || !bytesEqual(pathBytes, canonicalJsonBytes(path))) fail();
   requireEvidenceArtifact(report, receiptRow, "route-path-receipt", pathBytes);
 
-  let probe: RouteRuntimeProbeReceiptV1 | undefined;
+  let probe: RouteRuntimeProbeReceiptV2 | undefined;
   let probeHash: Sha256HashV1 | undefined;
   if (!isNil(row.routeRuntimeProbeReceipt)) {
-    probe = canonicalRouteRuntimeProbeReceiptV1(row.routeRuntimeProbeReceipt);
+    probe = canonicalRouteRuntimeProbeReceiptV2(row.routeRuntimeProbeReceipt);
     const probeBytes = row.evidenceBytes.routeRuntimeProbeReceipt;
     if (isNil(probeBytes) || !bytesEqual(probeBytes, canonicalJsonBytes(probe))) {
       fail();
@@ -449,18 +453,17 @@ function projectionForRow(
       "route-runtime-probe-receipt",
       probeBytes,
     );
-    probeHash = hashRouteRuntimeProbeReceiptV1(probe) as Sha256HashV1;
+    probeHash = hashRouteRuntimeProbeReceiptV2(probe) as Sha256HashV1;
   } else if (!isNil(row.evidenceBytes.routeRuntimeProbeReceipt)) {
     fail();
   }
 
   const hasOverlayBytes = !isNil(row.evidenceBytes.routeOverlay);
   if (hasOverlayBytes !== !isNil(inputRow.routeOverlay)) fail();
-  let overlay: RouteOverlayV1 | undefined;
+  let overlay: RouteOverlayV2 | undefined;
   let overlayHash: Sha256HashV1 | undefined;
   if (hasOverlayBytes) {
-    overlay = canonicalRouteOverlayV1(inputRow.routeOverlay);
-    requireEqual(overlay, expectedOverlay(row));
+    overlay = expectedOverlayV2(row, inputRow.routeOverlay!);
     if (!bytesEqual(row.evidenceBytes.routeOverlay!, canonicalJsonBytes(overlay))) {
       fail();
     }
@@ -470,7 +473,7 @@ function projectionForRow(
       "route-overlay",
       row.evidenceBytes.routeOverlay!,
     );
-    overlayHash = hashRouteOverlayV1(overlay) as Sha256HashV1;
+    overlayHash = hashRouteOverlayV2(overlay) as Sha256HashV1;
   }
 
   return {
@@ -488,7 +491,7 @@ function projectionForRow(
       routeOverlayStatus: isNil(overlay) ? "unavailable" : "available",
     },
     routePathReceipt: path,
-    routePathReceiptHash: hashRoutePathReceiptV1(path) as Sha256HashV1,
+    routePathReceiptHash: hashRoutePathReceiptV2(path) as Sha256HashV1,
     ...(isNil(probe)
       ? {}
       : {
@@ -501,11 +504,13 @@ function projectionForRow(
   };
 }
 
-export function createWorldkitBrowserRouteEvidencePublicationV1(
-  input: CreateWorldkitBrowserRouteEvidencePublicationInputV1,
-): WorldkitBrowserRouteEvidencePublicationV1 {
+export function createWorldkitBrowserRouteEvidencePublicationV2(
+  input: CreateWorldkitBrowserRouteEvidencePublicationInputV2,
+): WorldkitBrowserRouteEvidencePublicationV2 {
   try {
-    const snapshot = snapshotInput(input);
+    const snapshot = snapshotInput(
+      input as unknown as CreateWorldkitBrowserRouteEvidencePublicationInputV2,
+    );
     const rowsWithSelectors = snapshot.rows.map((row) => ({
       row,
       selector: selectorForRow(row.validationRow),
@@ -541,19 +546,23 @@ export function createWorldkitBrowserRouteEvidencePublicationV1(
     requireRouteSetArtifact(rebuiltReport, receipt);
     if (receipt.rows.length !== rowsWithSelectors.length) fail();
     const projections = rowsWithSelectors.map(({ row }, index) =>
-      projectionForRow(rebuiltReport, receipt.rows[index]!, row)
+      projectionForRowV2(
+        rebuiltReport,
+        receipt.rows[index]!,
+        row as unknown as RouteEvidencePublicationRowInputV2,
+      ),
     );
 
-    return canonicalWorldkitBrowserRouteEvidencePublicationV1({
+    return canonicalWorldkitBrowserRouteEvidencePublicationV2({
       kind: "worldkit-browser-route-evidence-publication",
-      schemaVersion: 1,
+      schemaVersion: 2,
       worldPackageRootHash: snapshot.subject.worldPackageRootHash,
       authoringSpecHash: snapshot.subject.authoringSpecHash,
       normalizedWorldIrHash: snapshot.subject.normalizedWorldIrHash,
       executionPlanHash: snapshot.subject.executionPlanHash,
       resourceLockHash: snapshot.subject.resourceLockHash,
       layoutSolveReportHash: snapshot.subject.layoutSolveReportHash,
-      validationReportHash: rebuiltReportHash as Sha256HashV1,
+      validationReportHash: rebuiltReportHash,
       routeValidationSetReceiptHash: hashRouteValidationSetReceiptV1(receipt),
       validationProfileRef:
         OUTDOOR_WORLD_PACKAGE_DEV_VALIDATION_PROFILE_V2.resourceRef,

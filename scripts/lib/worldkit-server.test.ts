@@ -12,8 +12,8 @@ import {
 import { compileWorldV5 } from "@whitebox-world/compiler";
 import { canonicalJsonBytes } from "@whitebox-world/protocol";
 import {
-  canonicalWorldkitBrowserRouteEvidencePublicationV1,
-  type WorldkitBrowserRouteEvidencePublicationV1,
+  canonicalWorldkitBrowserRouteEvidencePublicationV2,
+  type WorldkitBrowserRouteEvidencePublicationV2,
 } from "@whitebox-world/runtime-contracts";
 import { chromium } from "playwright";
 import { afterEach, describe, expect, it } from "vitest";
@@ -30,11 +30,11 @@ const handles: WorldkitServerHandle[] = [];
 const HASH = `sha256:${"1".repeat(64)}` as const;
 
 function routeEvidencePublication(
-  overrides: Partial<WorldkitBrowserRouteEvidencePublicationV1> = {},
-): WorldkitBrowserRouteEvidencePublicationV1 {
-  return canonicalWorldkitBrowserRouteEvidencePublicationV1({
+  overrides: Partial<WorldkitBrowserRouteEvidencePublicationV2> = {},
+): WorldkitBrowserRouteEvidencePublicationV2 {
+  return canonicalWorldkitBrowserRouteEvidencePublicationV2({
     kind: "worldkit-browser-route-evidence-publication",
-    schemaVersion: 1,
+    schemaVersion: 2,
     worldPackageRootHash: HASH,
     authoringSpecHash: HASH,
     normalizedWorldIrHash: HASH,
@@ -107,7 +107,7 @@ function routeAuthoringWorld(): AuthoringSpecV4 {
 
 function sameWorldRouteEvidencePublication(
   source: AuthoringSpecV4,
-): WorldkitBrowserRouteEvidencePublicationV1 {
+): WorldkitBrowserRouteEvidencePublicationV2 {
   const normalized = normalizeAuthoringSpecV4(source);
   if (
     !normalized.ok ||
@@ -189,7 +189,7 @@ describe("startWorldkitServer", () => {
     expect(await headResponse.text()).toBe("");
   }, 30_000);
 
-  it("injects same-world Route evidence into the Browser V4 API without page-side production", async () => {
+  it("injects same-world Route evidence into the Browser V5 API without page-side production", async () => {
     const source = routeAuthoringWorld();
     const publication = sameWorldRouteEvidencePublication(source);
     const inputDirectory = await mkdtemp(
@@ -229,7 +229,7 @@ describe("startWorldkitServer", () => {
         };
       });
       expect(result).toMatchObject({
-        version: 4,
+        version: 5,
         executionWorldId: "player",
         routeResult: {
           availability: "unavailable",

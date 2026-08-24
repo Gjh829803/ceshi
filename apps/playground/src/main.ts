@@ -9,7 +9,7 @@ import type {
   MotionKernelSummaryV1,
   SemanticInputActionV1,
   SubjectDefinitionSummaryV1,
-  WorldkitBrowserApiV4,
+  WorldkitBrowserApiV5,
 } from "@whitebox-world/runtime-contracts";
 
 import { CanvasRecorder } from "./canvas-recorder.js";
@@ -265,8 +265,8 @@ function captureAuthoringStartupFailure(stage: string, error: unknown): void {
 }
 
 function authoringStartupEvidence(
-  api: WorldkitBrowserApiV4,
-): { diagnostics: ReturnType<WorldkitBrowserApiV4["getDiagnostics"]>; developer: AuthoringStartupDebugV1 | null } {
+  api: WorldkitBrowserApiV5,
+): { diagnostics: ReturnType<WorldkitBrowserApiV5["getDiagnostics"]>; developer: AuthoringStartupDebugV1 | null } {
   return {
     diagnostics: api.getDiagnostics(),
     developer: authoringStartupDebug ?? null,
@@ -439,7 +439,7 @@ interface TuningWorkbenchControllerV1 {
 }
 
 function installTuningWorkbench(
-  api: WorldkitBrowserApiV4,
+  api: WorldkitBrowserApiV5,
   workbenchContext: TuningWorkbenchContextV1,
 ): TuningWorkbenchControllerV1 {
   const layer = requiredElement<HTMLDivElement>("#tuning-layer");
@@ -1339,7 +1339,7 @@ function installTuningWorkbench(
   };
 }
 
-function installAuthoringRecoveryPanel(api: WorldkitBrowserApiV4): void {
+function installAuthoringRecoveryPanel(api: WorldkitBrowserApiV5): void {
   const definitions = api.listSubjectDefinitions?.({ includeExperimental: true }) ?? [];
   if (definitions.length === 0) return;
   const panel = requiredElement<HTMLDivElement>("#capability-card");
@@ -1391,7 +1391,7 @@ function installAuthoringRecoveryPanel(api: WorldkitBrowserApiV4): void {
 }
 
 function installCapabilityAuthoringPanel(
-  api: WorldkitBrowserApiV4,
+  api: WorldkitBrowserApiV5,
   hostOverlay?: CapabilityDemoHostOverlayV1,
 ): TuningWorkbenchControllerV1 | undefined {
   const definitions = api.listSubjectDefinitions?.({ includeExperimental: true }) ?? [];

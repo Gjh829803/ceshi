@@ -1,4 +1,9 @@
-import type { AuthoringResult } from "./types.js";
+import type {
+  AuthoringResult,
+  NormalizedWorldResourcesV2,
+  PrimitivePrototypeSpecV2,
+  PrototypeTraversalSurfaceBindingV1,
+} from "./types.js";
 import type {
   AuthoringSpecV3,
   NormalizeAuthoringOptionsV3,
@@ -28,11 +33,23 @@ export type ConnectedByRouteConstraintV1 = Readonly<{
 
 export type ConnectivityConstraintSpecV1 = ConnectedByRouteConstraintV1;
 
+export type PrimitivePrototypeSpecV4 = PrimitivePrototypeSpecV2 & Readonly<{
+  traversalSurfaceBindings?: readonly PrototypeTraversalSurfaceBindingV1[];
+}>;
+
+export interface NormalizedWorldResourcesV4
+  extends Omit<NormalizedWorldResourcesV2, "prototypes"> {
+  readonly prototypes: readonly PrimitivePrototypeSpecV4[];
+}
+
 export interface AuthoringSpecV4 extends Omit<
   AuthoringSpecV3,
-  "schemaVersion" | "spatial" | "constraints"
+  "schemaVersion" | "resources" | "spatial" | "constraints"
 > {
   readonly schemaVersion: 4;
+  readonly resources: Omit<AuthoringSpecV3["resources"], "prototypes"> & {
+    readonly prototypes: readonly PrimitivePrototypeSpecV4[];
+  };
   readonly spatial: AuthoringSpecV3["spatial"] & Readonly<{
     traversalAreas: readonly TraversalAreaSpecV1[];
   }>;
@@ -52,9 +69,10 @@ export type NormalizedConnectivityRequirementV1 = Readonly<{
 }>;
 
 export interface NormalizedWorldIRV4
-  extends Omit<NormalizedWorldIRV3, "schemaVersion" | "layout"> {
+  extends Omit<NormalizedWorldIRV3, "schemaVersion" | "resources" | "layout"> {
   readonly schemaVersion: 4;
   readonly authoringSpecHash: `sha256:${string}`;
+  readonly resources: NormalizedWorldResourcesV4;
   readonly layout: NormalizedWorldIRV3["layout"] & Readonly<{
     traversalAreas: readonly TraversalAreaSpecV1[];
     connectivityRequirements: readonly NormalizedConnectivityRequirementV1[];

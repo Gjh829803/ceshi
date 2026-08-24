@@ -1,7 +1,10 @@
-import type {
-  TraversalEdgeV1,
-  TraversalGraphV1,
-  TraversalNodeV1,
+import {
+  BUILT_IN_HEIGHTFIELD_R1_TRAVERSAL_GRAPH_BUILDER_PROFILE_REF,
+  canonicalTraversalGraphV2,
+  resolveTraversalGraphBuilderProfileV2,
+  type TraversalEdgeV1,
+  type TraversalGraphV2,
+  type TraversalNodeV1,
 } from "@whitebox-world/traversal";
 import { describe, expect, it } from "vitest";
 
@@ -9,6 +12,9 @@ import { selectCanonicalTraversalPathV1 } from "./query-route.js";
 
 const HASH =
   "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa" as const;
+const GRAPH_BUILDER_PROFILE = resolveTraversalGraphBuilderProfileV2(
+  BUILT_IN_HEIGHTFIELD_R1_TRAVERSAL_GRAPH_BUILDER_PROFILE_REF,
+);
 
 function node(id: string, x: number, z = 0): TraversalNodeV1 {
   return {
@@ -47,23 +53,32 @@ function edge(
 function graph(
   nodes: readonly TraversalNodeV1[],
   edges: readonly TraversalEdgeV1[],
-): TraversalGraphV1 {
+): TraversalGraphV2 {
   return {
     kind: "traversal-graph",
-    schemaVersion: 1,
+    schemaVersion: 2,
     authoringSpecHash: HASH,
     layoutSolveReportHash: HASH,
     resourceLockHash: HASH,
     terrainArtifactHash: HASH,
     colliderArtifactHash: HASH,
     surfaceArtifactHash: HASH,
+    geometryArtifactHash: HASH,
+    traversalSurfaceIdentitiesById: {
+      "surface-main": {
+        traversalSurfaceId: "surface-main",
+        surfaceEntityId: "terrain-main",
+        colliderSubshapeId: "terrain-heightfield",
+        resourceRef: "package://traversal-surface/terrain-main.heightfield@1",
+        resolvedVersion: "1",
+        resourceHash: HASH,
+      },
+    },
     routeBuildInputHash: HASH,
     resolvedTraversalLockHash: HASH,
-    graphBuilderProfileRef:
-      "worldkit://traversal-graph-builder-profile/outdoor-humanoid.heightfield-r1@1",
-    graphBuilderResolvedVersion: "1",
-    graphBuilderProfileHash:
-      "sha256:65fdc54014d57c6eae75bd0f89e534333877ca6400e452526f16ebbd45e8b94a",
+    graphBuilderProfileRef: GRAPH_BUILDER_PROFILE.resourceRef,
+    graphBuilderResolvedVersion: GRAPH_BUILDER_PROFILE.resolvedVersion,
+    graphBuilderProfileHash: GRAPH_BUILDER_PROFILE.contentHash,
     routeId: "route-main",
     startAnchorEntityId: "start",
     destinationAnchorEntityId: "destination",
@@ -79,6 +94,19 @@ const PROFILE = {
 } as const;
 
 describe("selectCanonicalTraversalPathV1", () => {
+  it("binds each fixture Graph Builder identity to the canonical Registry Profile", () => {
+    const value = canonicalTraversalGraphV2(graph(
+      [node("start", 0), node("goal", 1)],
+      [edge("edge", "start", "goal", 1)],
+    ));
+
+    expect(value).toMatchObject({
+      graphBuilderProfileRef: GRAPH_BUILDER_PROFILE.resourceRef,
+      graphBuilderResolvedVersion: GRAPH_BUILDER_PROFILE.resolvedVersion,
+      graphBuilderProfileHash: GRAPH_BUILDER_PROFILE.contentHash,
+    });
+  });
+
   it("selects the lowest SDK cost instead of the fewest edges", () => {
     const value = graph(
       [node("start", 0), node("short", 1), node("long-a", 1, 1), node("long-b", 2, 1), node("goal", 3)],

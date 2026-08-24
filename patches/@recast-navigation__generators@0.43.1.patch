@@ -1,33 +1,151 @@
+diff --git a/dist/generators/generate-tiled-nav-mesh.d.ts b/dist/generators/generate-tiled-nav-mesh.d.ts
+index f6d291f5bd9af02936234e66aba60dd0f9ade996..a06b9e799720f467519e37c8b1dc80510ad0a3fb 100644
+--- a/dist/generators/generate-tiled-nav-mesh.d.ts
++++ b/dist/generators/generate-tiled-nav-mesh.d.ts
+@@ -20,6 +20,19 @@ export declare const buildTiledNavMeshRcConfig: ({ recastConfig, navMeshBounds:
+     maxPolysPerTile: number;
+ };
+ export type TiledNavMeshGeneratorConfig = Pretty<RecastConfig & OffMeshConnectionGeneratorParams & {
++    readonly sourceAreaMode?: Readonly<{
++        kind: 'terrain-with-static-blockers-r1';
++        terrainVertexCount: number;
++        blockerAreaId: 1;
++    }> | Readonly<{
++        kind: 'layered-traversal-sources-r1b';
++        candidateSourceRanges: readonly Readonly<{
++            traversalSurfaceOrdinal: number;
++            startVertexIndex: number;
++            vertexCount: number;
++        }>[];
++        blockerStartVertexIndex: number;
++    }>;
+     /**
+      * The minimum and maximum bounds of the heightfield's AABB in world units.
+      * If not provided, the bounding box will be calculated from the input positions and indices
+@@ -81,6 +94,19 @@ export declare const generateTileNavMeshData: (positions: FloatArray, indices: I
+ }, options?: {
+     offMeshConnections?: OffMeshConnectionParams[];
+     buildBvTree?: boolean;
++    readonly sourceAreaMode?: Readonly<{
++        kind: 'terrain-with-static-blockers-r1';
++        terrainVertexCount: number;
++        blockerAreaId: 1;
++    }> | Readonly<{
++        kind: 'layered-traversal-sources-r1b';
++        candidateSourceRanges: readonly Readonly<{
++            traversalSurfaceOrdinal: number;
++            startVertexIndex: number;
++            vertexCount: number;
++        }>[];
++        blockerStartVertexIndex: number;
++    }>;
+ }, keepIntermediates?: boolean, buildContext?: RecastBuildContext) => GenerateTileNavMeshDataResult;
+ export type TiledNavMeshGeneratorIntermediates = {
+     type: 'tiled';
 diff --git a/dist/index.mjs b/dist/index.mjs
-index adc7270..0a1f73b 100644
+index adc727017665f1db5b3b71ee0fdc158a99fb7762..d583e58d49eb66a4fb116b0a107168431bc81e75 100644
 --- a/dist/index.mjs
 +++ b/dist/index.mjs
-@@ -687,33 +687,74 @@ const tiledNavMeshGeneratorConfigDefaults = {
+@@ -687,34 +687,134 @@ const tiledNavMeshGeneratorConfigDefaults = {
    chunkyTriMeshTrisPerChunk: 256,
    buildBvTree: true
  };
 -const generateTileNavMeshData = (positions, indices, rcConfig, chunkyTriMesh, tile, options = {}, keepIntermediates = false, buildContext = new RecastBuildContext()) => {
+-  const tileIntermediate = {
+-    x: tile.x,
+-    y: tile.y
+-  };
+-  const cleanup = () => {
+-    if (keepIntermediates) return;
+-    if (tileIntermediate.compactHeightfield) {
+-      freeCompactHeightfield(tileIntermediate.compactHeightfield);
+-      tileIntermediate.compactHeightfield = undefined;
++const LAYERED_SOURCE_BLOCKER_AREA_ID = 1;
++const LAYERED_SOURCE_FIRST_CANDIDATE_AREA_ID = 2;
++const LAYERED_SOURCE_MAXIMUM_CANDIDATE_RANGE_COUNT = 61;
++const sourceAreaIdForVertexIndex = (sourceAreaMode, vertexIndex) => {
++  if (sourceAreaMode.kind === 'terrain-with-static-blockers-r1') {
++    return vertexIndex < sourceAreaMode.terrainVertexCount ? Recast.RC_WALKABLE_AREA : sourceAreaMode.blockerAreaId;
++  }
++  if (vertexIndex >= sourceAreaMode.blockerStartVertexIndex) return LAYERED_SOURCE_BLOCKER_AREA_ID;
++  const range = sourceAreaMode.candidateSourceRanges.find(candidate => vertexIndex >= candidate.startVertexIndex && vertexIndex < candidate.startVertexIndex + candidate.vertexCount);
++  if (range === undefined) {
++    throw new Error('RECAST_SOURCE_AREA_MODE_INVALID: vertex is not owned by a candidate source range');
++  }
++  return LAYERED_SOURCE_FIRST_CANDIDATE_AREA_ID + range.traversalSurfaceOrdinal;
++};
 +const validateSourceAreaMode = (positionsLength, indicesLength, getIndex, sourceAreaMode) => {
 +  if (sourceAreaMode === undefined) return undefined;
 +  if (sourceAreaMode === null || typeof sourceAreaMode !== 'object' || Array.isArray(sourceAreaMode)) {
 +    throw new Error('RECAST_SOURCE_AREA_MODE_INVALID: sourceAreaMode must be an object');
 +  }
 +  const keys = Object.keys(sourceAreaMode).sort();
-+  if (keys.length !== 3 || keys[0] !== 'blockerAreaId' || keys[1] !== 'kind' || keys[2] !== 'terrainVertexCount') {
-+    throw new Error('RECAST_SOURCE_AREA_MODE_INVALID: sourceAreaMode fields must be closed');
-+  }
-+  if (sourceAreaMode.kind !== 'terrain-with-static-blockers-r1') {
++  const isTerrainBlockerMode = sourceAreaMode.kind === 'terrain-with-static-blockers-r1';
++  const isLayeredSourceMode = sourceAreaMode.kind === 'layered-traversal-sources-r1b';
++  if (!isTerrainBlockerMode && !isLayeredSourceMode) {
 +    throw new Error('RECAST_SOURCE_AREA_MODE_INVALID: sourceAreaMode kind is unsupported');
 +  }
-+  if (sourceAreaMode.blockerAreaId !== 1) {
-+    throw new Error('RECAST_SOURCE_AREA_MODE_INVALID: blockerAreaId must equal 1');
++  if (isTerrainBlockerMode) {
++    if (keys.length !== 3 || keys[0] !== 'blockerAreaId' || keys[1] !== 'kind' || keys[2] !== 'terrainVertexCount') {
++      throw new Error('RECAST_SOURCE_AREA_MODE_INVALID: sourceAreaMode fields must be closed');
+     }
+-    if (tileIntermediate.heightfield) {
+-      freeHeightfield(tileIntermediate.heightfield);
+-      tileIntermediate.heightfield = undefined;
++    if (sourceAreaMode.blockerAreaId !== LAYERED_SOURCE_BLOCKER_AREA_ID) {
++      throw new Error('RECAST_SOURCE_AREA_MODE_INVALID: blockerAreaId must equal 1');
++    }
++  } else if (keys.length !== 3 || keys[0] !== 'blockerStartVertexIndex' || keys[1] !== 'candidateSourceRanges' || keys[2] !== 'kind') {
++    throw new Error('RECAST_SOURCE_AREA_MODE_INVALID: sourceAreaMode fields must be closed');
 +  }
 +  if (!Number.isSafeInteger(positionsLength) || positionsLength % 3 !== 0 || !Number.isSafeInteger(indicesLength) || indicesLength % 3 !== 0) {
 +    throw new Error('RECAST_SOURCE_AREA_MODE_INVALID: position and index counts must be safe triples');
 +  }
 +  const mergedVertexCount = positionsLength / 3;
-+  if (!Number.isSafeInteger(sourceAreaMode.terrainVertexCount) || !(sourceAreaMode.terrainVertexCount > 0) || !(sourceAreaMode.terrainVertexCount < mergedVertexCount)) {
-+    throw new Error('RECAST_SOURCE_AREA_MODE_INVALID: terrainVertexCount must be strictly inside merged vertices');
++  if (isTerrainBlockerMode) {
++    if (!Number.isSafeInteger(sourceAreaMode.terrainVertexCount) || !(sourceAreaMode.terrainVertexCount > 0) || !(sourceAreaMode.terrainVertexCount < mergedVertexCount)) {
++      throw new Error('RECAST_SOURCE_AREA_MODE_INVALID: terrainVertexCount must be strictly inside merged vertices');
+     }
+-    if (tileIntermediate.contourSet) {
+-      freeContourSet(tileIntermediate.contourSet);
+-      tileIntermediate.contourSet = undefined;
++  } else {
++    if (!Array.isArray(sourceAreaMode.candidateSourceRanges) || sourceAreaMode.candidateSourceRanges.length === 0) {
++      throw new Error('RECAST_SOURCE_AREA_MODE_INVALID: candidateSourceRanges must be a non-empty array');
++    }
++    if (sourceAreaMode.candidateSourceRanges.length > LAYERED_SOURCE_MAXIMUM_CANDIDATE_RANGE_COUNT) {
++      throw new Error('RECAST_SOURCE_AREA_MODE_INVALID: candidateSourceRanges must contain at most 61 ranges');
++    }
++    if (!Number.isSafeInteger(sourceAreaMode.blockerStartVertexIndex) || !(sourceAreaMode.blockerStartVertexIndex > 0) || sourceAreaMode.blockerStartVertexIndex > mergedVertexCount) {
++      throw new Error('RECAST_SOURCE_AREA_MODE_INVALID: blockerStartVertexIndex must not exceed merged vertices');
++    }
++    let expectedStartVertexIndex = 0;
++    for (let rangeIndex = 0; rangeIndex < sourceAreaMode.candidateSourceRanges.length; rangeIndex++) {
++      const range = sourceAreaMode.candidateSourceRanges[rangeIndex];
++      if (range === null || typeof range !== 'object' || Array.isArray(range)) {
++        throw new Error('RECAST_SOURCE_AREA_MODE_INVALID: candidate source range must be an object');
++      }
++      const rangeKeys = Object.keys(range).sort();
++      if (rangeKeys.length !== 3 || rangeKeys[0] !== 'startVertexIndex' || rangeKeys[1] !== 'traversalSurfaceOrdinal' || rangeKeys[2] !== 'vertexCount') {
++        throw new Error('RECAST_SOURCE_AREA_MODE_INVALID: candidate source range fields must be closed');
++      }
++      if (!Number.isSafeInteger(range.traversalSurfaceOrdinal) || range.traversalSurfaceOrdinal !== rangeIndex) {
++        throw new Error('RECAST_SOURCE_AREA_MODE_INVALID: traversalSurfaceOrdinal must equal candidate range order');
++      }
++      if (!Number.isSafeInteger(range.startVertexIndex) || !Number.isSafeInteger(range.vertexCount) || !(range.vertexCount > 0)) {
++        throw new Error('RECAST_SOURCE_AREA_MODE_INVALID: candidate source range indices must be positive safe integers');
++      }
++      if (range.startVertexIndex !== expectedStartVertexIndex) {
++        throw new Error('RECAST_SOURCE_AREA_MODE_INVALID: candidate source ranges must be contiguous and non-overlapping');
++      }
++      expectedStartVertexIndex += range.vertexCount;
++      if (!Number.isSafeInteger(expectedStartVertexIndex) || expectedStartVertexIndex > sourceAreaMode.blockerStartVertexIndex) {
++        throw new Error('RECAST_SOURCE_AREA_MODE_INVALID: candidate source range exceeds blockerStartVertexIndex');
++      }
++    }
++    if (expectedStartVertexIndex !== sourceAreaMode.blockerStartVertexIndex) {
++      throw new Error('RECAST_SOURCE_AREA_MODE_INVALID: candidate source ranges must be contiguous and non-overlapping');
++    }
 +  }
 +  for (let offset = 0; offset < indicesLength; offset += 3) {
 +    const first = getIndex(offset);
@@ -35,11 +153,17 @@ index adc7270..0a1f73b 100644
 +    const third = getIndex(offset + 2);
 +    if (![first, second, third].every(index => Number.isSafeInteger(index) && index >= 0 && index < mergedVertexCount)) {
 +      throw new Error('RECAST_SOURCE_AREA_MODE_INVALID: triangle index is out of range');
-+    }
-+    const firstIsTerrain = first < sourceAreaMode.terrainVertexCount;
-+    if ((second < sourceAreaMode.terrainVertexCount) !== firstIsTerrain || (third < sourceAreaMode.terrainVertexCount) !== firstIsTerrain) {
-+      throw new Error('RECAST_SOURCE_AREA_MODE_INVALID: triangle crosses the terrain vertex boundary');
-+    }
+     }
+-    if (tileIntermediate.polyMesh) {
+-      freePolyMesh(tileIntermediate.polyMesh);
+-      tileIntermediate.polyMesh = undefined;
++    const firstSourceAreaId = sourceAreaIdForVertexIndex(sourceAreaMode, first);
++    if (sourceAreaIdForVertexIndex(sourceAreaMode, second) !== firstSourceAreaId || sourceAreaIdForVertexIndex(sourceAreaMode, third) !== firstSourceAreaId) {
++      throw new Error(isTerrainBlockerMode ? 'RECAST_SOURCE_AREA_MODE_INVALID: triangle crosses the terrain vertex boundary' : 'RECAST_SOURCE_AREA_MODE_INVALID: triangle crosses a candidate source range boundary');
+     }
+-    if (tileIntermediate.polyMeshDetail) {
+-      freePolyMeshDetail(tileIntermediate.polyMeshDetail);
+-      tileIntermediate.polyMeshDetail = undefined;
 +  }
 +  return sourceAreaMode;
 +};
@@ -53,8 +177,8 @@ index adc7270..0a1f73b 100644
 +      free(resource);
 +    } catch (error) {
 +      errors.push(error);
-+    }
-+  };
+     }
+   };
 +  release('polyMeshDetail', freePolyMeshDetail);
 +  release('polyMesh', freePolyMesh);
 +  release('contourSet', freeContourSet);
@@ -68,39 +192,18 @@ index adc7270..0a1f73b 100644
 +  const sourceAreaMode = validateSourceAreaMode(positions.size, indices.size, index => indices.get(index), options.sourceAreaMode);
 +  const ownsBuildContext = buildContext === undefined;
 +  if (buildContext === undefined) buildContext = new RecastBuildContext();
-   const tileIntermediate = {
-     x: tile.x,
-     y: tile.y
-   };
--  const cleanup = () => {
--    if (keepIntermediates) return;
--    if (tileIntermediate.compactHeightfield) {
--      freeCompactHeightfield(tileIntermediate.compactHeightfield);
--      tileIntermediate.compactHeightfield = undefined;
--    }
--    if (tileIntermediate.heightfield) {
--      freeHeightfield(tileIntermediate.heightfield);
--      tileIntermediate.heightfield = undefined;
--    }
--    if (tileIntermediate.contourSet) {
--      freeContourSet(tileIntermediate.contourSet);
--      tileIntermediate.contourSet = undefined;
--    }
--    if (tileIntermediate.polyMesh) {
--      freePolyMesh(tileIntermediate.polyMesh);
--      tileIntermediate.polyMesh = undefined;
--    }
--    if (tileIntermediate.polyMeshDetail) {
--      freePolyMeshDetail(tileIntermediate.polyMeshDetail);
--      tileIntermediate.polyMeshDetail = undefined;
--    }
++  const tileIntermediate = {
++    x: tile.x,
++    y: tile.y
++  };
 +  const cleanup = (force = false) => {
 +    if (keepIntermediates && !force) return;
 +    releaseTileIntermediates(tileIntermediate);
-   };
++  };
    const failTileMesh = error => {
      buildContext.log(Recast.RC_LOG_ERROR, error);
-@@ -724,7 +765,15 @@ const generateTileNavMeshData = (positions, indices, rcConfig, chunkyTriMesh, ti
+     cleanup();
+@@ -724,7 +824,15 @@ const generateTileNavMeshData = (positions, indices, rcConfig, chunkyTriMesh, ti
        intermediates: tileIntermediate
      };
    };
@@ -117,7 +220,7 @@ index adc7270..0a1f73b 100644
    // Expand the heightfield bounding box by border size to find the extents of geometry we need to build this tile.
    //
    // This is done in order to make sure that the navmesh tiles connect correctly at the borders,
-@@ -774,13 +823,13 @@ const generateTileNavMeshData = (positions, indices, rcConfig, chunkyTriMesh, ti
+@@ -774,13 +882,13 @@ const generateTileNavMeshData = (positions, indices, rcConfig, chunkyTriMesh, ti
    // Allocate array that can hold triangle flags.
    // If you have multiple meshes you need to process, allocate
    // and array which can hold the max number of triangles you need to process.
@@ -133,7 +236,7 @@ index adc7270..0a1f73b 100644
    chunkIdsArray.resize(maxChunkIds);
    const nChunksOverlapping = chunkyTriMesh.getChunksOverlappingRect(tbmin, tbmax, chunkIdsArray, maxChunkIds);
    if (nChunksOverlapping === 0) {
-@@ -793,15 +842,50 @@ const generateTileNavMeshData = (positions, indices, rcConfig, chunkyTriMesh, ti
+@@ -793,15 +901,55 @@ const generateTileNavMeshData = (positions, indices, rcConfig, chunkyTriMesh, ti
      const nodeId = chunkIdsArray.get(i);
      const node = chunkyTriMesh.nodes(nodeId);
      const nNodeTris = node.n;
@@ -163,11 +266,16 @@ index adc7270..0a1f73b 100644
 +          const firstVertexIndex = nodeTrianglesArray.get(triangleIndex * 3);
 +          const secondVertexIndex = nodeTrianglesArray.get(triangleIndex * 3 + 1);
 +          const thirdVertexIndex = nodeTrianglesArray.get(triangleIndex * 3 + 2);
-+          const firstIsTerrain = firstVertexIndex < sourceAreaMode.terrainVertexCount;
-+          if ((secondVertexIndex < sourceAreaMode.terrainVertexCount) !== firstIsTerrain || (thirdVertexIndex < sourceAreaMode.terrainVertexCount) !== firstIsTerrain) {
-+            throw new Error('RECAST_SOURCE_AREA_MODE_INVALID: local triangle crosses the terrain vertex boundary');
++          const firstSourceAreaId = sourceAreaIdForVertexIndex(sourceAreaMode, firstVertexIndex);
++          if (sourceAreaIdForVertexIndex(sourceAreaMode, secondVertexIndex) !== firstSourceAreaId || sourceAreaIdForVertexIndex(sourceAreaMode, thirdVertexIndex) !== firstSourceAreaId) {
++            throw new Error(sourceAreaMode.kind === 'terrain-with-static-blockers-r1' ? 'RECAST_SOURCE_AREA_MODE_INVALID: local triangle crosses the terrain vertex boundary' : 'RECAST_SOURCE_AREA_MODE_INVALID: local triangle crosses a candidate source range boundary');
 +          }
-+          if (!firstIsTerrain) triangleAreasArray.set(triangleIndex, sourceAreaMode.blockerAreaId);
++          if (sourceAreaMode.kind === 'layered-traversal-sources-r1b' && firstSourceAreaId !== LAYERED_SOURCE_BLOCKER_AREA_ID && triangleAreasArray.get(triangleIndex) !== Recast.RC_NULL_AREA) {
++            triangleAreasArray.set(triangleIndex, firstSourceAreaId);
++          }
++          if (firstSourceAreaId === LAYERED_SOURCE_BLOCKER_AREA_ID) {
++            triangleAreasArray.set(triangleIndex, LAYERED_SOURCE_BLOCKER_AREA_ID);
++          }
 +        }
 +      }
 +      success = rasterizeTriangles(buildContext, positions, indices.size, nodeTrianglesArray, triangleAreasArray, nNodeTris, heightfield, tileConfig.walkableClimb);
@@ -193,13 +301,13 @@ index adc7270..0a1f73b 100644
      if (!success) {
        return failTileMesh('Could not rasterize triangles');
      }
-@@ -820,6 +904,13 @@ const generateTileNavMeshData = (positions, indices, rcConfig, chunkyTriMesh, ti
+@@ -820,6 +968,13 @@ const generateTileNavMeshData = (positions, indices, rcConfig, chunkyTriMesh, ti
    if (!buildCompactHeightfield(buildContext, tileConfig.walkableHeight, tileConfig.walkableClimb, heightfield, compactHeightfield)) {
      return failTileMesh('Could not build compact heightfield');
    }
 +  if (sourceAreaMode !== undefined) {
 +    for (let spanIndex = 0; spanIndex < compactHeightfield.spanCount(); spanIndex++) {
-+      if (compactHeightfield.areas(spanIndex) === sourceAreaMode.blockerAreaId) {
++      if (compactHeightfield.areas(spanIndex) === LAYERED_SOURCE_BLOCKER_AREA_ID) {
 +        compactHeightfield.raw.set_areas(spanIndex, Recast.RC_NULL_AREA);
 +      }
 +    }
@@ -207,7 +315,18 @@ index adc7270..0a1f73b 100644
    if (!keepIntermediates) {
      freeHeightfield(tileIntermediate.heightfield);
      tileIntermediate.heightfield = undefined;
-@@ -877,7 +968,7 @@ const generateTileNavMeshData = (positions, indices, rcConfig, chunkyTriMesh, ti
+@@ -873,11 +1028,17 @@ const generateTileNavMeshData = (positions, indices, rcConfig, chunkyTriMesh, ti
+     if (polyMesh.areas(i) === Recast.RC_WALKABLE_AREA) {
+       polyMesh.setAreas(i, 0);
+     }
+-    if (polyMesh.areas(i) === 0) {
++    const polygonAreaId = polyMesh.areas(i);
++    if (
++      polygonAreaId === 0 ||
++      sourceAreaMode?.kind === 'layered-traversal-sources-r1b' &&
++        polygonAreaId >= LAYERED_SOURCE_FIRST_CANDIDATE_AREA_ID &&
++        polygonAreaId < Recast.RC_WALKABLE_AREA
++    ) {
        polyMesh.setFlags(i, 1);
      }
    }
@@ -216,7 +335,7 @@ index adc7270..0a1f73b 100644
    navMeshCreateParams.setPolyMeshCreateParams(polyMesh);
    navMeshCreateParams.setPolyMeshDetailCreateParams(polyMeshDetail);
    navMeshCreateParams.setWalkableHeight(tileConfig.walkableHeight * tileConfig.ch);
-@@ -895,12 +986,54 @@ const generateTileNavMeshData = (positions, indices, rcConfig, chunkyTriMesh, ti
+@@ -895,12 +1056,54 @@ const generateTileNavMeshData = (positions, indices, rcConfig, chunkyTriMesh, ti
    if (!createNavMeshDataResult.success) {
      return failTileMesh('Failed to create Detour navmesh data');
    }
@@ -272,7 +391,7 @@ index adc7270..0a1f73b 100644
  };
  /**
   * Builds a Tiled NavMesh
-@@ -913,33 +1046,66 @@ const generateTiledNavMesh = (positions, indices, navMeshGeneratorConfig = {}, k
+@@ -913,33 +1116,66 @@ const generateTiledNavMesh = (positions, indices, navMeshGeneratorConfig = {}, k
    if (!Raw.Module) {
      throw new Error('"init" must be called before using any recast-navigation-js APIs. See: https://github.com/isaac-mason/recast-navigation-js?tab=readme-ov-file#initialization');
    }
@@ -354,7 +473,7 @@ index adc7270..0a1f73b 100644
      return {
        success: false,
        navMesh: undefined,
-@@ -954,6 +1120,16 @@ const generateTiledNavMesh = (positions, indices, navMeshGeneratorConfig = {}, k
+@@ -954,6 +1190,16 @@ const generateTiledNavMesh = (positions, indices, navMeshGeneratorConfig = {}, k
      ...tiledNavMeshGeneratorConfigDefaults,
      ...navMeshGeneratorConfig
    };
@@ -371,7 +490,7 @@ index adc7270..0a1f73b 100644
    let bbMin;
    let bbMax;
    if (navMeshGeneratorConfig.bounds) {
-@@ -964,26 +1140,44 @@ const generateTiledNavMesh = (positions, indices, navMeshGeneratorConfig = {}, k
+@@ -964,26 +1210,44 @@ const generateTiledNavMesh = (positions, indices, navMeshGeneratorConfig = {}, k
      bbMin = boundingBox.bbMin;
      bbMax = boundingBox.bbMax;
    }
@@ -429,7 +548,7 @@ index adc7270..0a1f73b 100644
      return fail('Could not init nav mesh for tiled use');
    }
    /* create chunky tri mesh */
-@@ -1011,27 +1205,66 @@ const generateTiledNavMesh = (positions, indices, navMeshGeneratorConfig = {}, k
+@@ -1011,29 +1275,68 @@ const generateTiledNavMesh = (positions, indices, navMeshGeneratorConfig = {}, k
        };
        const generatorOptions = {
          offMeshConnections: generatorConfig.offMeshConnections,
@@ -505,31 +624,5 @@ index adc7270..0a1f73b 100644
 +    throw error;
 +  }
  };
-diff --git a/dist/generators/generate-tiled-nav-mesh.d.ts b/dist/generators/generate-tiled-nav-mesh.d.ts
-index f6d291f..396af72 100644
---- a/dist/generators/generate-tiled-nav-mesh.d.ts
-+++ b/dist/generators/generate-tiled-nav-mesh.d.ts
-@@ -20,6 +20,11 @@ export declare const buildTiledNavMeshRcConfig: ({ recastConfig, navMeshBounds:
-     maxPolysPerTile: number;
- };
- export type TiledNavMeshGeneratorConfig = Pretty<RecastConfig & OffMeshConnectionGeneratorParams & {
-+    readonly sourceAreaMode?: Readonly<{
-+        kind: 'terrain-with-static-blockers-r1';
-+        terrainVertexCount: number;
-+        blockerAreaId: 1;
-+    }>;
-     /**
-      * The minimum and maximum bounds of the heightfield's AABB in world units.
-      * If not provided, the bounding box will be calculated from the input positions and indices
-@@ -81,6 +86,11 @@ export declare const generateTileNavMeshData: (positions: FloatArray, indices: I
- }, options?: {
-     offMeshConnections?: OffMeshConnectionParams[];
-     buildBvTree?: boolean;
-+    readonly sourceAreaMode?: Readonly<{
-+        kind: 'terrain-with-static-blockers-r1';
-+        terrainVertexCount: number;
-+        blockerAreaId: 1;
-+    }>;
- }, keepIntermediates?: boolean, buildContext?: RecastBuildContext) => GenerateTileNavMeshDataResult;
- export type TiledNavMeshGeneratorIntermediates = {
-     type: 'tiled';
+
+ const mergePositionsAndIndices = meshes => {

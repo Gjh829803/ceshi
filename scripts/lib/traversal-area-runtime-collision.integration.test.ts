@@ -21,8 +21,8 @@ import {
   resolveTraversalGraphBuilderProfileV2,
 } from "@whitebox-world/traversal";
 import {
-  createHeightfieldRouteBuildInputV1,
-  evaluateRequiredHeightfieldRouteV1,
+  createRouteBuildInputFromPlanV2,
+  evaluateRequiredRouteV2,
 } from "@whitebox-world/traversal-recast";
 import { isNil } from "lodash-es";
 import { describe, expect, it } from "vitest";
@@ -165,12 +165,12 @@ describe("Traversal Area Runtime collision separation", () => {
         BUILT_IN_HEIGHTFIELD_R1_TRAVERSAL_GRAPH_BUILDER_PROFILE_REF,
       ),
     });
-    const buildInputReceipt = createHeightfieldRouteBuildInputV1({
+    const buildInputReceipt = createRouteBuildInputFromPlanV2({
       executionPlan: compiled.executionPlan,
       capabilityEnvelope: capabilityEnvelope.envelope,
       constraintId: "hero-to-goal",
     });
-    const routeResult = await evaluateRequiredHeightfieldRouteV1({
+    const routeResult = await evaluateRequiredRouteV2({
       buildInputReceipt,
     });
 

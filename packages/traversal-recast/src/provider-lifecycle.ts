@@ -15,6 +15,9 @@ import {
 } from "recast-navigation/generators";
 import { isNil } from "lodash-es";
 
+import {
+  RECAST_LAYERED_SOURCE_MAXIMUM_TRAVERSAL_SURFACE_COUNT_V1,
+} from "./adapter-identity.js";
 import type { RecastTiledConfigV1 } from "./recast-config.js";
 import {
   destroyRecastQueryProviderV1,
@@ -26,11 +29,35 @@ export interface RecastTiledGenerationOptionsV1 {
     readonly [number, number, number],
     readonly [number, number, number],
   ];
-  readonly sourceAreaMode?: Readonly<{
-    kind: "terrain-with-static-blockers-r1";
-    terrainVertexCount: number;
-    blockerAreaId: 1;
-  }>;
+  readonly sourceAreaMode?:
+    | Readonly<{
+      kind: "terrain-with-static-blockers-r1";
+      terrainVertexCount: number;
+      blockerAreaId: 1;
+    }>
+    | Readonly<{
+      kind: "layered-traversal-sources-r1b";
+      candidateSourceRanges: readonly Readonly<{
+        traversalSurfaceOrdinal: number;
+        startVertexIndex: number;
+        vertexCount: number;
+      }>[];
+      blockerStartVertexIndex: number;
+    }>;
+}
+
+function assertRecastLayeredSourceBudgetV1(
+  sourceAreaMode: RecastTiledGenerationOptionsV1["sourceAreaMode"],
+): void {
+  if (
+    sourceAreaMode?.kind === "layered-traversal-sources-r1b" &&
+    sourceAreaMode.candidateSourceRanges.length >
+      RECAST_LAYERED_SOURCE_MAXIMUM_TRAVERSAL_SURFACE_COUNT_V1
+  ) {
+    throw new Error(
+      "ROUTE_GRAPH_BUDGET_EXCEEDED: maximumTraversalSurfaceCount exceeds the installed Recast Provider capacity of 61.",
+    );
+  }
 }
 
 export class RecastProviderLifecycleV1 {
@@ -93,6 +120,7 @@ export function generateRetainedTiledNavMeshV1(
   config: RecastTiledConfigV1,
   sourceOptions: RecastTiledGenerationOptionsV1 = {},
 ): GenerateTiledNavMeshResult {
+  assertRecastLayeredSourceBudgetV1(sourceOptions.sourceAreaMode);
   const generatorOptions = {
     ...(isNil(sourceOptions.sourceAreaMode)
       ? {}

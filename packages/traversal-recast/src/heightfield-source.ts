@@ -8,28 +8,33 @@ import {
   type ExecutionWaterV3,
 } from "@whitebox-world/runtime-contracts";
 import {
-  emitStaticColliderTriangleMeshV1,
+  emitTransformedStaticColliderTriangleMeshV1,
   emitTriangleHeightfieldSurfaceV1,
   TRAVERSAL_AREA_COMPLEXITY_LIMITS_V1,
   validateSimplePolygonXZV1,
   validateTraversalAreaComplexityV1,
+  type CanonicalTraversalSurfaceTriangleSourceV1,
 } from "@whitebox-world/terrain-surface";
 import {
-  assertHeightfieldRouteBuildInputV1,
+  assertRouteBuildInputV2,
   assertTraversalGraphBuildBudgetV1,
-  hashHeightfieldRouteBuildInputV1,
+  createRouteBuildInputReceiptV2,
+  hashRouteColliderArtifactV2,
+  hashRouteGeometryArtifactV2,
+  hashRouteSurfaceArtifactV2,
+  hashRouteTerrainArtifactV2,
   type BlockedWaterBoundaryV1,
   type BlockedWaterExclusionV1,
   type BlockedTraversalAreaExclusionV1,
   type CanonicalTriangleSoupV1,
-  type HeightfieldRouteBuildBudgetEvidenceV1,
-  type HeightfieldRouteBuildInputReceiptV1,
-  type HeightfieldRouteBuildInputV1,
-  type HeightfieldRouteTerrainSourceV1,
-  type StaticBlockingColliderV1,
+  type RouteBuildInputReceiptV2,
+  type RouteBuildInputV2,
+  type RouteTerrainSourceV2,
+  type StaticColliderSourceV1,
   type TraversalCapabilityEnvelopeV1,
+  type TraversalSurfaceIdentityV1,
 } from "@whitebox-world/traversal";
-import { isEqual, isNil } from "lodash-es";
+import { isEmpty, isEqual, isNil } from "lodash-es";
 
 type Vec2 = readonly [number, number];
 type Vec3 = readonly [number, number, number];
@@ -40,7 +45,7 @@ const SHA256_PATTERN = /^sha256:[a-f0-9]{64}$/;
 const STADIUM_HALF_CAP_CHORDS = 16;
 const GEOMETRY_EPSILON = 1e-10;
 
-export type HeightfieldRouteBuildInputInvalidReasonV1 =
+export type RouteBuildInputFromPlanInvalidReasonV2 =
   | "input-invalid"
   | "plan-not-v5"
   | "hash-invalid"
@@ -60,28 +65,28 @@ export type HeightfieldRouteBuildInputInvalidReasonV1 =
   | "non-positive-scale"
   | "contract-invalid";
 
-export class HeightfieldRouteBuildInputInvalidErrorV1 extends Error {
+export class RouteBuildInputFromPlanInvalidErrorV2 extends Error {
   readonly code = "HEIGHTFIELD_ROUTE_BUILD_INPUT_INVALID" as const;
-  readonly reason: HeightfieldRouteBuildInputInvalidReasonV1;
+  readonly reason: RouteBuildInputFromPlanInvalidReasonV2;
 
-  constructor(reason: HeightfieldRouteBuildInputInvalidReasonV1, message: string) {
+  constructor(reason: RouteBuildInputFromPlanInvalidReasonV2, message: string) {
     super(`HEIGHTFIELD_ROUTE_BUILD_INPUT_INVALID (${reason}): ${message}`);
-    this.name = "HeightfieldRouteBuildInputInvalidErrorV1";
+    this.name = "RouteBuildInputFromPlanInvalidErrorV2";
     this.reason = reason;
   }
 }
 
-export interface CreateHeightfieldRouteBuildInputInputV1 {
+export interface CreateRouteBuildInputFromPlanInputV2 {
   readonly executionPlan: ExecutionPlanV5;
   readonly capabilityEnvelope: TraversalCapabilityEnvelopeV1;
   readonly constraintId: string;
 }
 
 function failStructural(
-  reason: HeightfieldRouteBuildInputInvalidReasonV1,
+  reason: RouteBuildInputFromPlanInvalidReasonV2,
   message: string,
 ): never {
-  throw new HeightfieldRouteBuildInputInvalidErrorV1(reason, message);
+  throw new RouteBuildInputFromPlanInvalidErrorV2(reason, message);
 }
 
 function failSemantic(code: string, message: string): never {
@@ -703,46 +708,6 @@ function applyTraversalAreaSemantics(
   return { triangles, exclusions };
 }
 
-function transformPoint(point: Vec3, transform: ExecutionTransformV3): MutableVec3 {
-  requireVec3(transform.positionMetersXYZ, "collider transform position");
-  requireVec3(transform.rotationEulerRadiansXYZ, "collider transform rotation");
-  requireVec3(transform.scaleXYZ, "collider transform scale");
-  transform.scaleXYZ.forEach((value) => {
-    if (!(value > 0)) failStructural("non-positive-scale", "collider scale must be > 0.");
-  });
-  let [x, y, z] = point.map((value, index) => value * transform.scaleXYZ[index]!) as MutableVec3;
-  const [pitch, yaw, roll] = transform.rotationEulerRadiansXYZ;
-  const cosineRoll = Math.cos(roll);
-  const sineRoll = Math.sin(roll);
-  [x, y] = [x * cosineRoll - y * sineRoll, x * sineRoll + y * cosineRoll];
-  const cosinePitch = Math.cos(pitch);
-  const sinePitch = Math.sin(pitch);
-  [y, z] = [y * cosinePitch - z * sinePitch, y * sinePitch + z * cosinePitch];
-  const cosineYaw = Math.cos(yaw);
-  const sineYaw = Math.sin(yaw);
-  [x, z] = [x * cosineYaw + z * sineYaw, -x * sineYaw + z * cosineYaw];
-  return normalizedPoint([
-    x + transform.positionMetersXYZ[0],
-    y + transform.positionMetersXYZ[1],
-    z + transform.positionMetersXYZ[2],
-  ]);
-}
-
-function transformSoup(
-  soup: CanonicalTriangleSoupV1,
-  transform: ExecutionTransformV3,
-): CanonicalTriangleSoupV1 {
-  const positions: number[] = [];
-  for (let offset = 0; offset < soup.positionsMetersXYZ.length; offset += 3) {
-    positions.push(...transformPoint([
-      soup.positionsMetersXYZ[offset]!,
-      soup.positionsMetersXYZ[offset + 1]!,
-      soup.positionsMetersXYZ[offset + 2]!,
-    ], transform));
-  }
-  return { positionsMetersXYZ: positions, triangleIndices: [...soup.triangleIndices] };
-}
-
 function convexHull(points: readonly Vec2[]): Vec2[] {
   const unique = [...new Map(points.map((point) => [`${point[0]},${point[1]}`, point])).values()]
     .sort((left, right) => left[0] - right[0] || left[1] - right[1]);
@@ -805,18 +770,28 @@ function colliderIntersectsRibbon(
 }
 
 function colliderSoup(collider: ExecutionStaticColliderV1): CanonicalTriangleSoupV1 {
-  const local = emitStaticColliderTriangleMeshV1(collider.shape);
-  return transformSoup({
-    positionsMetersXYZ: local.localPositionsMetersXYZ,
-    triangleIndices: local.triangleIndices,
-  }, collider.transform);
+  const transform = collider.transform;
+  requireVec3(transform.positionMetersXYZ, "collider transform position");
+  requireVec3(transform.rotationEulerRadiansXYZ, "collider transform rotation");
+  requireVec3(transform.scaleXYZ, "collider transform scale");
+  transform.scaleXYZ.forEach((value) => {
+    if (!(value > 0)) failStructural("non-positive-scale", "collider scale must be > 0.");
+  });
+  const world = emitTransformedStaticColliderTriangleMeshV1(
+    collider.shape,
+    transform,
+  );
+  return {
+    positionsMetersXYZ: [...world.worldPositionsMetersXYZ],
+    triangleIndices: [...world.triangleIndices],
+  };
 }
 
 function relevantBlockingColliders(
   colliders: readonly ExecutionStaticColliderV1[],
   points: readonly Vec2[],
   widthMeters: number,
-): readonly StaticBlockingColliderV1[] {
+): readonly StaticColliderSourceV1[] {
   return colliders
     .map((collider) => ({ collider, soup: colliderSoup(collider) }))
     .filter(({ soup }) => colliderIntersectsRibbon(soup, points, widthMeters))
@@ -855,7 +830,7 @@ function exactBounds(soup: CanonicalTriangleSoupV1): {
   };
 }
 
-function requirePlanAndEnvelope(input: CreateHeightfieldRouteBuildInputInputV1): void {
+function requirePlanAndEnvelope(input: CreateRouteBuildInputFromPlanInputV2): void {
   if (isNil(input) || typeof input !== "object" || Array.isArray(input)) {
     failStructural("input-invalid", "factory input must be an object.");
   }
@@ -940,9 +915,9 @@ function requirePlanAndEnvelope(input: CreateHeightfieldRouteBuildInputInputV1):
   }
 }
 
-export function createHeightfieldRouteBuildInputV1(
-  input: CreateHeightfieldRouteBuildInputInputV1,
-): HeightfieldRouteBuildInputReceiptV1 {
+export function createRouteBuildInputFromPlanV2(
+  input: CreateRouteBuildInputFromPlanInputV2,
+): RouteBuildInputReceiptV2 {
   requirePlanAndEnvelope(input);
   const plan = input.executionPlan;
   const envelope = input.capabilityEnvelope;
@@ -1011,17 +986,39 @@ export function createHeightfieldRouteBuildInputV1(
     );
   }
 
-  const surfaces = plan.traversal.surfaces.filter((candidate) => {
+  if (!Array.isArray(plan.traversal.surfaces)) {
+    failStructural("contract-invalid", "Traversal Surface rows must be an array.");
+  }
+  const traversalSurfaces: TraversalSurfaceIdentityV1[] = plan.traversal.surfaces.map((candidate, index) => {
     if (isNil(candidate) || typeof candidate !== "object") {
       failStructural("contract-invalid", "Traversal Surface rows must be objects.");
     }
-    return candidate.kind === "heightfield";
-  });
-  if (surfaces.length === 0) failStructural("surface-missing", "Heightfield Traversal Surface is missing.");
-  if (surfaces.length !== 1) failStructural("surface-ambiguous", "Heightfield Traversal Surface is ambiguous.");
-  const surface = surfaces[0]!;
-  if (surface.surfaceEntityId !== plan.terrain.entityId) {
-    failStructural("surface-terrain-mismatch", "Traversal Surface does not identify the Plan terrain.");
+    return {
+      traversalSurfaceId: candidate.traversalSurfaceId,
+      surfaceEntityId: candidate.surfaceEntityId,
+      colliderSubshapeId: candidate.colliderSubshapeId,
+      resourceRef: candidate.resourceRef,
+      resolvedVersion: candidate.resolvedVersion,
+      resourceHash: candidate.resourceHash,
+    };
+  }).sort((left, right) =>
+    left.traversalSurfaceId < right.traversalSurfaceId
+      ? -1
+      : left.traversalSurfaceId > right.traversalSurfaceId
+        ? 1
+        : 0,
+  );
+  if (traversalSurfaces.length === 0) {
+    failStructural("surface-missing", "Traversal Surface is missing.");
+  }
+  const heightfieldSurfaces = traversalSurfaces.filter(
+    (surface) => surface.surfaceEntityId === plan.terrain.entityId,
+  );
+  if (heightfieldSurfaces.length === 0) {
+    failStructural("surface-missing", "Heightfield Traversal Surface is missing.");
+  }
+  if (heightfieldSurfaces.length !== 1) {
+    failStructural("surface-ambiguous", "Heightfield Traversal Surface is ambiguous.");
   }
 
   requireVec2(plan.terrain.centerMetersXZ, "terrain centerMetersXZ");
@@ -1064,7 +1061,7 @@ export function createHeightfieldRouteBuildInputV1(
   try {
     emitted = heightfieldTriangles(plan);
   } catch (cause) {
-    if (cause instanceof HeightfieldRouteBuildInputInvalidErrorV1) throw cause;
+    if (cause instanceof RouteBuildInputFromPlanInvalidErrorV2) throw cause;
     failStructural(
       "contract-invalid",
       cause instanceof Error
@@ -1099,28 +1096,38 @@ export function createHeightfieldRouteBuildInputV1(
       }
     }
   }
-  const terrainSource: HeightfieldRouteTerrainSourceV1 = isNil(terrainSoup)
+  const terrainSource: RouteTerrainSourceV2 = isNil(terrainSoup)
     ? {
         kind: "empty",
         terrainEntityId: plan.terrain.entityId,
-        terrainArtifactHash: emitted.emitterHash,
       }
     : {
         kind: "bounded",
         terrainEntityId: plan.terrain.entityId,
-        terrainArtifactHash: emitted.emitterHash,
         triangleSoup: terrainSoup,
         ...exactBounds(terrainSoup),
       };
-  const blockingColliders = relevantBlockingColliders(
+  const staticColliders = [...relevantBlockingColliders(
     plan.staticColliders,
     route.pointsMetersXZ,
     route.widthMeters,
+  )].sort((left, right) =>
+    left.colliderSubshapeId < right.colliderSubshapeId
+      ? -1
+      : left.colliderSubshapeId > right.colliderSubshapeId
+        ? 1
+        : 0,
   );
-  const colliderArtifactHash = sha256CanonicalJson(blockingColliders) as `sha256:${string}`;
-  const buildInput: HeightfieldRouteBuildInputV1 = {
-    kind: "heightfield-route-build-input",
-    schemaVersion: 1,
+  const terrainArtifactHash = hashRouteTerrainArtifactV2(terrainSource);
+  const colliderArtifactHash = hashRouteColliderArtifactV2(staticColliders);
+  const geometryArtifactHash = hashRouteGeometryArtifactV2({
+    terrainArtifactHash,
+    colliderArtifactHash,
+  });
+  const surfaceArtifactHash = hashRouteSurfaceArtifactV2(traversalSurfaces);
+  const buildInput: RouteBuildInputV2 = {
+    kind: "route-build-input",
+    schemaVersion: 2,
     authoringSpecHash: plan.authoringSpecHash,
     layoutSolveReportHash: plan.layout.layoutSolveReportHash as `sha256:${string}`,
     resourceLockHash: plan.resourceLockHash as `sha256:${string}`,
@@ -1148,140 +1155,218 @@ export function createHeightfieldRouteBuildInputV1(
       widthMeters: route.widthMeters,
       locomotionProfileRef: route.locomotionProfileRef,
     },
-    traversalSurface: {
-      traversalSurfaceId: surface.traversalSurfaceId,
-      surfaceEntityId: surface.surfaceEntityId,
-      colliderSubshapeId: surface.colliderSubshapeId,
-      resourceRef: surface.resourceRef,
-      resolvedVersion: surface.resolvedVersion,
-      resourceHash: surface.resourceHash,
-    },
+    traversalSurfaces,
     capabilityEnvelope: envelope,
     terrainSource,
-    blockingColliders,
+    staticColliders,
+    terrainArtifactHash,
     colliderArtifactHash,
+    geometryArtifactHash,
+    surfaceArtifactHash,
     blockedTraversalAreaExclusions: traversalAreaResult.exclusions,
     blockedWaterExclusions: waterResult.exclusions,
   };
 
   try {
-    assertHeightfieldRouteBuildInputV1(buildInput);
+    return createRouteBuildInputReceiptV2(buildInput);
   } catch (cause) {
     failStructural(
       "contract-invalid",
       cause instanceof Error ? cause.message : "assembled Build Input failed strict validation.",
     );
   }
-
-  let budgetEvidence: HeightfieldRouteBuildBudgetEvidenceV1;
-  if (terrainSource.kind === "empty") {
-    budgetEvidence = { kind: "not-required-empty-source" };
-  } else {
-    const estimate = assertTraversalGraphBuildBudgetV1({
-      minimumMetersXZ: terrainSource.minimumMetersXZ,
-      maximumMetersXZ: terrainSource.maximumMetersXZ,
-      tileSizeCells: envelope.tileSizeCells,
-      voxelCellSizeMeters: envelope.voxelCellSizeMeters,
-      maximumTiles: envelope.maximumTiles,
-    });
-    budgetEvidence = {
-      kind: "heightfield-tile-estimate",
-      ...estimate,
-      maximumTiles: envelope.maximumTiles,
-      minimumMetersXZ: [...terrainSource.minimumMetersXZ],
-      maximumMetersXZ: [...terrainSource.maximumMetersXZ],
-    };
-  }
-  const routeBuildInputHash = hashHeightfieldRouteBuildInputV1(buildInput);
-  return deepFreeze({
-    input: buildInput,
-    routeBuildInputHash,
-    budgetEvidence,
-  });
 }
 
-export interface RecastHeightfieldSourceAreaModeV1 {
-  readonly kind: "terrain-with-static-blockers-r1";
-  readonly terrainVertexCount: number;
-  readonly blockerAreaId: 1;
-}
+export type RecastHeightfieldSourceAreaModeV1 =
+  | Readonly<{
+      kind: "terrain-with-static-blockers-r1";
+      terrainVertexCount: number;
+      blockerAreaId: 1;
+    }>
+  | Readonly<{
+      kind: "layered-traversal-sources-r1b";
+      candidateSourceRanges: readonly Readonly<{
+        traversalSurfaceOrdinal: number;
+        startVertexIndex: number;
+        vertexCount: number;
+      }>[];
+      blockerStartVertexIndex: number;
+    }>;
 
 export interface RecastHeightfieldSourceV1 {
   readonly positions: readonly number[];
   readonly indices: readonly number[];
   readonly bounds: readonly [Vec3, Vec3];
   readonly sourceAreaMode?: RecastHeightfieldSourceAreaModeV1;
+  readonly candidateTraversalSurfaceIds?: readonly string[];
 }
 
-export function mapHeightfieldRouteBuildInputToRecastSourceV1(
-  input: HeightfieldRouteBuildInputV1,
-): RecastHeightfieldSourceV1 {
-  assertHeightfieldRouteBuildInputV1(input);
-  if (input.terrainSource.kind !== "bounded") {
-    failStructural(
-      "contract-invalid",
-      "a bounded terrain source is required before provider mapping.",
-    );
+function appendSoup(
+  positions: number[],
+  indices: number[],
+  soup: CanonicalTriangleSoupV1,
+): { readonly startVertexIndex: number; readonly vertexCount: number } {
+  const startVertexIndex = positions.length / 3;
+  const vertexCount = soup.positionsMetersXYZ.length / 3;
+  positions.push(...soup.positionsMetersXYZ);
+  for (const triangleIndex of soup.triangleIndices) {
+    indices.push(startVertexIndex + triangleIndex);
   }
-  const terrainPositions = input.terrainSource.triangleSoup.positionsMetersXYZ;
-  const terrainIndices = input.terrainSource.triangleSoup.triangleIndices;
-  const positions = [...terrainPositions];
-  const indices = [...terrainIndices];
-  const terrainVertexCount = terrainPositions.length / 3;
-  let blockerTriangleCount = 0;
+  return { startVertexIndex, vertexCount };
+}
 
-  for (const blocker of input.blockingColliders) {
-    const blockerPositions = blocker.triangleSoup.positionsMetersXYZ;
-    const blockerIndices = blocker.triangleSoup.triangleIndices;
-    const blockerVertexOffset = positions.length / 3;
-    positions.push(...blockerPositions);
-    for (const blockerIndex of blockerIndices) {
-      indices.push(blockerVertexOffset + blockerIndex);
-    }
-    blockerTriangleCount += blockerIndices.length / 3;
-  }
-
+function boundsFromPositions(
+  positions: readonly number[],
+): readonly [Vec3, Vec3] {
+  let minimumX = Number.POSITIVE_INFINITY;
+  let maximumX = Number.NEGATIVE_INFINITY;
   let minimumY = Number.POSITIVE_INFINITY;
   let maximumY = Number.NEGATIVE_INFINITY;
-  for (let offset = 1; offset < positions.length; offset += 3) {
-    minimumY = Math.min(minimumY, positions[offset]!);
-    maximumY = Math.max(maximumY, positions[offset]!);
+  let minimumZ = Number.POSITIVE_INFINITY;
+  let maximumZ = Number.NEGATIVE_INFINITY;
+  for (let offset = 0; offset < positions.length; offset += 3) {
+    const x = positions[offset]!;
+    const y = positions[offset + 1]!;
+    const z = positions[offset + 2]!;
+    minimumX = Math.min(minimumX, x);
+    maximumX = Math.max(maximumX, x);
+    minimumY = Math.min(minimumY, y);
+    maximumY = Math.max(maximumY, y);
+    minimumZ = Math.min(minimumZ, z);
+    maximumZ = Math.max(maximumZ, z);
   }
-  const bounds = [
-    [
-      input.terrainSource.minimumMetersXZ[0],
-      minimumY,
-      input.terrainSource.minimumMetersXZ[1],
-    ],
-    [
-      input.terrainSource.maximumMetersXZ[0],
-      maximumY,
-      input.terrainSource.maximumMetersXZ[1],
-    ],
-  ] as const;
-  const base = {
-    positions: Object.freeze(positions),
-    indices: Object.freeze(indices),
-    bounds: deepFreeze(bounds),
-  };
-  if (blockerTriangleCount === 0) {
-    return Object.freeze(base);
+  return [
+    [minimumX, minimumY, minimumZ],
+    [maximumX, maximumY, maximumZ],
+  ];
+}
+
+export function mapRouteBuildInputToRecastSourceV2(
+  input: RouteBuildInputV2,
+): RecastHeightfieldSourceV1 {
+  const canonical = assertRouteBuildInputV2(input);
+  const positions: number[] = [];
+  const indices: number[] = [];
+  const candidateSourceRanges: Array<{
+    traversalSurfaceOrdinal: number;
+    startVertexIndex: number;
+    vertexCount: number;
+  }> = [];
+  const candidateTraversalSurfaceIds: string[] = [];
+  const terrainEntityId = canonical.terrainSource.terrainEntityId;
+  const colliderByKey = new Map(
+    canonical.staticColliders.map((row) => [
+      `${row.entityId}\0${row.colliderSubshapeId}`,
+      row,
+    ] as const),
+  );
+  const boundColliderKeys = new Set<string>();
+  let ordinal = 0;
+  for (const surface of canonical.traversalSurfaces) {
+    let soup: CanonicalTriangleSoupV1 | undefined;
+    if (surface.surfaceEntityId === terrainEntityId) {
+      soup = canonical.terrainSource.kind === "bounded"
+        ? canonical.terrainSource.triangleSoup
+        : undefined;
+    } else {
+      const key = `${surface.surfaceEntityId}\0${surface.colliderSubshapeId}` as `${string}\0${string}`;
+      boundColliderKeys.add(key);
+      soup = colliderByKey.get(key)?.triangleSoup;
+    }
+    if (isNil(soup) || isEmpty(soup.positionsMetersXYZ)) {
+      continue;
+    }
+    const range = appendSoup(positions, indices, soup);
+    candidateSourceRanges.push({
+      traversalSurfaceOrdinal: ordinal,
+      startVertexIndex: range.startVertexIndex,
+      vertexCount: range.vertexCount,
+    });
+    candidateTraversalSurfaceIds.push(surface.traversalSurfaceId);
+    ordinal += 1;
   }
-  if (
-    !(terrainVertexCount > 0) ||
-    !(terrainVertexCount < positions.length / 3)
-  ) {
+  const blockerStartVertexIndex = positions.length / 3;
+  for (const collider of canonical.staticColliders) {
+    const key = `${collider.entityId}\0${collider.colliderSubshapeId}`;
+    if (boundColliderKeys.has(key) || isEmpty(collider.triangleSoup.positionsMetersXYZ)) {
+      continue;
+    }
+    appendSoup(positions, indices, collider.triangleSoup);
+  }
+  if (positions.length === 0) {
     failStructural(
       "contract-invalid",
-      "positive blocker triangles require a strictly interior terrain vertex boundary.",
+      "Route Build Input V2 must retain at least one candidate or blocker vertex.",
     );
   }
   return deepFreeze({
-    ...base,
+    positions: Object.freeze(positions),
+    indices: Object.freeze(indices),
+    bounds: deepFreeze(boundsFromPositions(positions)),
     sourceAreaMode: {
-      kind: "terrain-with-static-blockers-r1",
-      terrainVertexCount,
-      blockerAreaId: 1,
+      kind: "layered-traversal-sources-r1b",
+      candidateSourceRanges,
+      blockerStartVertexIndex,
     },
+    candidateTraversalSurfaceIds,
+  });
+}
+
+export interface BoundTraversalSurfaceGeometryV2 {
+  readonly identity: TraversalSurfaceIdentityV1;
+  readonly triangleSoup: CanonicalTriangleSoupV1;
+}
+
+function boundSurfaceSoupV2(
+  input: RouteBuildInputV2,
+  surface: TraversalSurfaceIdentityV1,
+): CanonicalTriangleSoupV1 | undefined {
+  if (surface.surfaceEntityId === input.terrainSource.terrainEntityId) {
+    return input.terrainSource.kind === "bounded"
+      ? input.terrainSource.triangleSoup
+      : undefined;
+  }
+  return input.staticColliders.find(
+    (row) =>
+      row.entityId === surface.surfaceEntityId &&
+      row.colliderSubshapeId === surface.colliderSubshapeId,
+  )?.triangleSoup;
+}
+
+export function collectBoundTraversalSurfaceGeometryV2(
+  input: RouteBuildInputV2,
+): readonly BoundTraversalSurfaceGeometryV2[] {
+  const canonical = assertRouteBuildInputV2(input);
+  return canonical.traversalSurfaces.flatMap((surface) => {
+    const triangleSoup = boundSurfaceSoupV2(canonical, surface);
+    if (isNil(triangleSoup) || isEmpty(triangleSoup.positionsMetersXYZ)) {
+      return [];
+    }
+    return [{ identity: surface, triangleSoup }];
+  });
+}
+
+export function collectBoundTraversalSurfaceQuerySourcesV2(
+  input: RouteBuildInputV2,
+): readonly CanonicalTraversalSurfaceTriangleSourceV1[] {
+  return collectBoundTraversalSurfaceGeometryV2(input).map((row) => ({
+    traversalSurfaceId: row.identity.traversalSurfaceId,
+    worldPositionsMetersXYZ: row.triangleSoup.positionsMetersXYZ,
+    triangleIndices: row.triangleSoup.triangleIndices,
+  }));
+}
+
+export function collectUnboundStaticCollidersV2(
+  input: RouteBuildInputV2,
+): readonly StaticColliderSourceV1[] {
+  const canonical = assertRouteBuildInputV2(input);
+  const boundKeys = new Set(
+    canonical.traversalSurfaces.map(
+      (surface) => `${surface.surfaceEntityId}\0${surface.colliderSubshapeId}`,
+    ),
+  );
+  return canonical.staticColliders.filter((collider) => {
+    const key = `${collider.entityId}\0${collider.colliderSubshapeId}`;
+    return !boundKeys.has(key) && !isEmpty(collider.triangleSoup.positionsMetersXYZ);
   });
 }

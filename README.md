@@ -13,11 +13,14 @@ Gameplay 真相。
 
 > Golden Humanoid S1b 首个可视纵向切片已完成并进入回归；S1b 整体与 Semantic Actions 整体仍未完成.
 
-> Placement Solver S1 首个海湾纵向切片已完成并进入回归；通用 Terrain Mask、Route R1b、更多 Constraint 与 P0.1 整体仍未完成。
+> Placement Solver S1 首个海湾纵向切片已完成并进入回归；通用 Terrain Mask、更多
+> Constraint 与 P0.1 整体仍未完成。
 
-> Route R1 Heightfield 已完成：Authoring V4 Golden/Adversarial Fixture、双 Blocking Gate、
-> 真实 Babylon/Havok Probe 与 `pnpm verify:route-r1-heightfield` 已进入回归。R1b 静态平台
-> 与完整 M5 仍未完成。
+> Route R1 Heightfield 与 R1b Static Platform 已完成，M5 已关闭：Authoring V4
+> Golden/Adversarial Fixture、双 Blocking Gate、真实 Babylon/Havok Probe、11 个 R1b
+> Fixture 和 V2/V5 clean break 均已进入回归。候选 `506e088` 相对 base `9c5a615`
+> 的修后完整矩阵通过（148 files / 1577 tests，R1b 11/11），主 Agent 深审及两轮
+> Cursor 独立复核均为 Final GO / No findings，且无 open confirmed P0/P1。
 
 第一次阅读建议依次查看：
 
@@ -142,10 +145,9 @@ Pass、Render Ready Receipt、原子 Bundle、版本化 Profile、Canonical Repo
 `verify capture|explain` 和正负向门禁。Route Task 8 还实现了正式的最小
 WorldPackage Root/Build Receipt、Validation Subject、Recast Graph/Path、真实
 Babylon/Havok `NullEngine` 固定 Tick Probe、Canonical Route Evidence/Report、
-`worldkit verify route` 和只读 Browser Protocol V4；Task 8 最终门禁已关闭。
+`worldkit verify route` 和只读 Browser Protocol V5；Task 8 最终门禁已关闭。
 Placement/Physics/Composition 等其余统一 Validation 扩展、完整 P1.4
-WorldPackage 发布格式、R1b、恢复续拍和视频模型 Adapter 仍在后续
-Backlog 中。
+WorldPackage 发布格式、恢复续拍和视频模型 Adapter 仍在后续 Backlog 中。
 
 ## 职责边界
 
@@ -212,14 +214,15 @@ Socket 和类型化关系表达。
 | 主体 | Primitive 人形/四足代理；Golden 与首个产品 G Bot 的 GLB、Rig/Animation/Collider Profile、多实例与独立控制 | 更多产品资产、Compound Collider、LOD、更多拓扑和独立动画资产 |
 | 关系 | Socket 数据可以声明和查询 | 动态 Bind、骑乘、装备、拖拽、Joint、事务与回滚 |
 | 运动与相机 | 地面移动、跳跃、第三人称跟随；WaterBody 可查询/可渲染，主体介质只发布 `ground / air` | 游泳与 `movementMedium: water`、第一人称、飞行、车辆、Camera Director 和多 Rig 切换 |
-| 自动化 | validate/build/run/capture、Registry Discovery、Definition Validate、Subject Explain、`verify route`、Browser Protocol V4、Take Driver 与 Control Capture Gate | 持久 Runtime Session、恢复续拍、多人同时控制 |
+| 自动化 | validate/build/run/capture、Registry Discovery、Definition Validate、Subject Explain、`verify route`、Browser Protocol V5、Take Driver 与 Control Capture Gate | 持久 Runtime Session、恢复续拍、多人同时控制 |
 | Capture | 单帧截图、Runtime Snapshot、Simulation Take V1、Neutral/Depth/Semantic/Instance/Normal 五 Pass、原子 Bundle | Event/Action/Relationship Receipt、Motion Vector、完整 Replay/Resume 与视频 Adapter |
-| Validation | Canonical Browser Gate、现有物理/构图检查；Capture/Integrity V1；Route 双 Blocking Gate、R1 Heightfield Golden Fixture、Canonical Evidence/Report 与可信 Host 只读投影 | Placement/Physics/Composition/Replay/Performance 接入统一 Report、Route R1b、Profile 组合、compare 与完整生产 Policy |
+| Validation | Canonical Browser Gate、现有物理/构图检查；Capture/Integrity V1；Route 双 Blocking Gate、R1 Heightfield Golden Fixture；R1b 的 11 个 Fixture、完整验证矩阵、Canonical Evidence/Report 与可信 Host 只读投影 | Placement/Physics/Composition/Replay/Performance 接入统一 Report、Profile 组合、compare 与完整生产 Policy |
 | Gameplay | 基础固定输入、控制绑定与 Golden/G Bot `idle/walk/run/jump` 动作状态 | 完整 Semantic Action、姿态、游泳、装备、NPC、导航、任务、战斗、联网 |
 | 最终视觉 | 本地白模渲染 | Render Bridge、实时世界模型和生产 Video Model Adapter |
 
-当前阶段只承诺室外 Heightfield 白模世界。不要把 NPC、车辆、坐骑、飞行、室内、
-洞穴、联网或视频模型接入当作已经存在的生产能力。
+当前 Route 能力只承诺室外 Heightfield 与普通静态平台地面通行。不要把 H1/H2/H3
+桥下双层/洞口/洞穴、动态平台、NPC 或公开 `goTo`、车辆、坐骑、飞行、室内、联网
+或视频模型接入当作已经存在的生产能力。
 
 ## 快速开始
 
@@ -438,7 +441,7 @@ Validation 词汇。它不构建 Traversal Graph，不跑 Character Controller�
 | `packages/validation/` | 引擎无关的 Validation Profile/Report/Gate/Metric/Evidence、严格解析、Policy 与 Hash |
 | `packages/traversal/` | 引擎无关的 Traversal Surface、Lock、Capability Envelope、Graph/Path/Probe Receipt 与 Route Overlay 合同 |
 | `packages/traversal-recast/` | Recast/Detour Provider Adapter；Provider 类型不进入 Canonical 协议 |
-| `packages/runtime-contracts/` | ExecutionPlan、Snapshot、Browser Protocol V4 与只读 Route Evidence 投影协议 |
+| `packages/runtime-contracts/` | ExecutionPlan、Snapshot、Browser Protocol V5 与只读 Route Evidence V2 投影协议 |
 | `packages/runtime-babylon/` | Babylon/Havok Runtime Adapter |
 | `apps/playground/` | Canonical Runtime 页面、旧 Alpha 场景和浏览器验证入口 |
 | `scripts/worldkit.ts` | SDK CLI |

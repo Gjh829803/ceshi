@@ -1,6 +1,7 @@
 import {
   canonicalAuthoringIdentityV3,
   canonicalAuthoringIdentityV4,
+  projectNormalizedWorldResourcesToV3LayoutIdentity,
   validateAuthoringSpecV4,
 } from "@whitebox-world/authoring";
 import { compileWorldV5 } from "@whitebox-world/compiler";
@@ -258,8 +259,14 @@ export function createWorldPackageBuildReceiptV1(
       placements: structuredClone([...spec.constraints.placements]),
     },
   };
+  const layoutResources = projectNormalizedWorldResourcesToV3LayoutIdentity(
+    world.resources,
+  );
   const layoutAuthoringSpecHash = sha256CanonicalJson(
-    canonicalAuthoringIdentityV3(projectedV3, world),
+    canonicalAuthoringIdentityV3(projectedV3, {
+      ...world,
+      resources: layoutResources,
+    }),
   );
   const requireBinding = (
     actual: unknown,
@@ -283,7 +290,7 @@ export function createWorldPackageBuildReceiptV1(
   // identity remains authoritative for the WorldPackage while this explicit
   // projection binding prevents an unrelated layout report from entering it.
   requireBinding(layout.report.authoringSpecHash, layoutAuthoringSpecHash, "layoutSolveResult/report/authoringSpecHash");
-  requireBinding(layout.report.registryLockHash, resourceLockHash, "layoutSolveResult/report/registryLockHash");
+  requireBinding(layout.report.registryLockHash, layoutResources.resourceLockHash, "layoutSolveResult/report/registryLockHash");
   requireBinding(layout.report.solverProfileRef, world.layout.solverProfileRef, "normalizedWorldIr/layout/solverProfileRef");
   requireBinding(layout.report.resolvedVersion, world.layout.resolvedVersion, "normalizedWorldIr/layout/resolvedVersion");
   requireBinding(layout.report.solverProfileHash, world.layout.solverProfileHash, "normalizedWorldIr/layout/solverProfileHash");

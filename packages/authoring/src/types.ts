@@ -45,6 +45,13 @@ export interface TransformSpecV2 {
   scaleXYZ?: Vec3;
 }
 
+export interface PrototypeTraversalSurfaceBindingV1 {
+  readonly id: string;
+  readonly kind: "collider-subshape";
+  readonly logicalSubshapeId: string;
+  readonly traversalSurfaceProfileRef: string;
+}
+
 interface PrimitivePrototypeBaseV2 {
   id: string;
   version: 1;
@@ -83,6 +90,7 @@ export interface TerrainNodeSpecV2 {
         centerMetersXZ: Vec2;
         sizeMetersXZ: Vec2;
         resolutionCellsXZ: readonly [columns: number, rows: number];
+        heightSamplesMeters?: readonly number[];
       };
       semantic?: { classId: string };
     };
@@ -537,7 +545,8 @@ export type ResolvedResourceKindV1 =
   | "relationship-profile"
   | "harness-profile"
   | "pose-set-profile"
-  | "render-binding-profile";
+  | "render-binding-profile"
+  | "traversal-surface-profile";
 
 export interface ResolvedResourceLockEntryV1 {
   resourceRef: string;

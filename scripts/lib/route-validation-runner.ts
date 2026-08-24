@@ -2,6 +2,7 @@ import { readFile } from "node:fs/promises";
 import { createRequire } from "node:module";
 
 import { NullEngine } from "@babylonjs/core/Engines/nullEngine.pure.js";
+import { PhysicsAggregate } from "@babylonjs/core/Physics/v2/physicsAggregate.js";
 import { compileResolvedTraversalLockV1 } from "@whitebox-world/compiler";
 import { sha256Bytes } from "@whitebox-world/protocol";
 import type {
@@ -9,7 +10,7 @@ import type {
   SubjectAssetResolverV1,
 } from "@whitebox-world/runtime-babylon";
 import type {
-  WorldkitBrowserRouteEvidencePublicationV1,
+  WorldkitBrowserRouteEvidencePublicationV2,
 } from "@whitebox-world/runtime-contracts";
 import {
   BUILT_IN_HEIGHTFIELD_R1_TRAVERSAL_GRAPH_BUILDER_PROFILE_REF,
@@ -17,20 +18,20 @@ import {
   createTraversalCapabilityEnvelopeV1,
   resolveTraversalDriverProfileV1,
   resolveTraversalGraphBuilderProfileV2,
-  type HeightfieldRouteBuildInputReceiptV1,
+  type RouteBuildInputReceiptV2,
   type TraversalRuntimePortV1,
 } from "@whitebox-world/traversal";
 import {
-  createHeightfieldRouteBuildInputV1,
-  evaluateRequiredHeightfieldRouteV1,
+  createRouteBuildInputFromPlanV2,
+  evaluateRequiredRouteV2,
 } from "@whitebox-world/traversal-recast";
 import {
   OUTDOOR_WORLD_PACKAGE_DEV_VALIDATION_PROFILE_V2,
   createRouteValidationReportV2,
   createWorldPackageValidationSubjectV1,
-  createWorldkitBrowserRouteEvidencePublicationV1,
+  createWorldkitBrowserRouteEvidencePublicationV2,
   hashValidationReportV2,
-  runRouteRuntimeProbeV1,
+  runRouteRuntimeProbeV2,
   type ValidationReportV2,
   type WorldPackageValidationSubjectV1,
 } from "@whitebox-world/validation";
@@ -42,9 +43,15 @@ import {
 import { isNil } from "lodash-es";
 
 import {
+  evaluateUnavailableTraversalGraphProjectionV2,
+} from "../../packages/traversal-recast/src/evaluate-route.js";
+import {
   orchestrateRouteValidationV1,
   type RouteValidationEvidenceFileV1,
 } from "./route-validation-orchestrator";
+import {
+  createRouteSurfaceCorrelationMissingProjectionV2,
+} from "./route-r1b-fixture-proofs.js";
 import { loadWorldkitRoutePipeline } from "./worldkit-pipeline";
 import { resolveWorldPackageResourceArtifactsV1 } from "./world-package-resource-resolver";
 
@@ -59,6 +66,15 @@ export const TRUSTED_ROUTE_RENDER_CADENCES_V1 = Object.freeze([
 export type TrustedRouteRenderCadenceV1 =
   (typeof TRUSTED_ROUTE_RENDER_CADENCES_V1)[number];
 
+export type TrustedRouteFixtureFaultInjectionV1 =
+  | {
+    readonly kind: "withdraw-static-support-after-reset";
+    readonly supportEntityId: string;
+  }
+  | {
+    readonly kind: "inject-surface-correlation-miss";
+  };
+
 export interface TrustedRouteValidationOptionsV1 {
   /**
    * Trusted Host-only render scheduling used by deterministic validation.
@@ -70,6 +86,11 @@ export interface TrustedRouteValidationOptionsV1 {
    * Profiles; callers cannot supply a numeric parameter bag.
    */
   readonly graphBuilderProfileRef?: string;
+  /**
+   * Verifier-only fault injection. It is intentionally absent from Authoring,
+   * CLI, Browser, Report, Snapshot, and Runtime public contracts.
+   */
+  readonly fixtureFaultInjection?: TrustedRouteFixtureFaultInjectionV1;
 }
 
 export interface TrustedRouteRenderScheduleStatsV1 {
@@ -84,9 +105,9 @@ export interface TrustedRouteValidationResultV1 {
   readonly report: ValidationReportV2;
   readonly validationReportHash: Hash;
   readonly evidenceFiles: readonly RouteValidationEvidenceFileV1[];
-  readonly routeEvidencePublication: WorldkitBrowserRouteEvidencePublicationV1;
+  readonly routeEvidencePublication: WorldkitBrowserRouteEvidencePublicationV2;
   readonly routeBuildInputReceipts:
-    readonly HeightfieldRouteBuildInputReceiptV1[];
+    readonly RouteBuildInputReceiptV2[];
   readonly hostRenderScheduleStats?: TrustedRouteRenderScheduleStatsV1;
 }
 
@@ -175,6 +196,134 @@ function wrapRuntimePortWithRenderCadenceV1(
   return Object.freeze(wrappedPort);
 }
 
+/** @internal Verifier-only closed-union validator. */
+export function canonicalFixtureFaultInjectionV1(
+  value: unknown,
+): TrustedRouteFixtureFaultInjectionV1 | undefined {
+  if (isNil(value)) return undefined;
+  if (typeof value !== "object" || Array.isArray(value)) {
+    throw infrastructureFailure("WORLDKIT_ROUTE_FIXTURE_FAULT_INVALID");
+  }
+  const candidate = value as Readonly<Record<string, unknown>>;
+  if (candidate.kind === "inject-surface-correlation-miss") {
+    if (Object.keys(candidate).length !== 1) {
+      throw infrastructureFailure("WORLDKIT_ROUTE_FIXTURE_FAULT_INVALID");
+    }
+    return Object.freeze({ kind: candidate.kind });
+  }
+  if (
+    candidate.kind === "withdraw-static-support-after-reset" &&
+    typeof candidate.supportEntityId === "string" &&
+    candidate.supportEntityId.length > 0 &&
+    Object.keys(candidate).length === 2
+  ) {
+    return Object.freeze({
+      kind: candidate.kind,
+      supportEntityId: candidate.supportEntityId,
+    });
+  }
+  throw infrastructureFailure("WORLDKIT_ROUTE_FIXTURE_FAULT_INVALID");
+}
+
+/** @internal Verifier-only wrapper; not part of a public Runtime protocol. */
+export function wrapRuntimePortWithSupportWithdrawalV1(
+  runtimePort: TraversalRuntimePortV1,
+  withdrawSupport: () => void,
+): TraversalRuntimePortV1 {
+  let supportWithdrawalState: "pending" | "withdrawn" | "failed" = "pending";
+  let supportWithdrawalError: unknown;
+  return Object.freeze({
+    kind: runtimePort.kind,
+    schemaVersion: runtimePort.schemaVersion,
+    traversingEntityId: runtimePort.traversingEntityId,
+    authoringSpecHash: runtimePort.authoringSpecHash,
+    layoutSolveReportHash: runtimePort.layoutSolveReportHash,
+    resourceLockHash: runtimePort.resourceLockHash,
+    executionPlanHash: runtimePort.executionPlanHash,
+    resolvedTraversalLockHash: runtimePort.resolvedTraversalLockHash,
+    runtimeImplementationIdentity: runtimePort.runtimeImplementationIdentity,
+    readLatestTickEvidence: () => runtimePort.readLatestTickEvidence(),
+    resetToStartAnchor: (
+      request: Parameters<TraversalRuntimePortV1["resetToStartAnchor"]>[0],
+    ) => {
+      if (supportWithdrawalState === "failed") {
+        throw supportWithdrawalError;
+      }
+      const evidence = runtimePort.resetToStartAnchor(request);
+      if (supportWithdrawalState === "pending") {
+        // A callback can throw after changing engine state. Poison the wrapper
+        // before the call so no reset can retry or emit evidence afterward.
+        supportWithdrawalState = "failed";
+        try {
+          withdrawSupport();
+          supportWithdrawalState = "withdrawn";
+        } catch (error) {
+          supportWithdrawalError = error;
+          throw error;
+        }
+      }
+      return evidence;
+    },
+    runFixedTick: (
+      request: Parameters<TraversalRuntimePortV1["runFixedTick"]>[0],
+    ) => runtimePort.runFixedTick(request),
+  });
+}
+
+interface FixtureSupportAggregateV1 {
+  readonly transformNode: {
+    readonly metadata?: {
+      readonly worldkitEntityId?: unknown;
+    } | null;
+  };
+  readonly body: {
+    readonly isDisposed: boolean;
+  };
+  dispose(): void;
+}
+
+/** @internal Verifier-only ownership guard. */
+export function selectUniqueFixtureSupportAggregateV1(
+  aggregates: readonly FixtureSupportAggregateV1[],
+  supportEntityId: string,
+): FixtureSupportAggregateV1 {
+  const matchingAggregates = aggregates.filter(
+    (aggregate) =>
+      aggregate.transformNode.metadata?.worldkitEntityId === supportEntityId,
+  );
+  const aggregate = matchingAggregates[0];
+  if (
+    matchingAggregates.length !== 1 ||
+    isNil(aggregate) ||
+    aggregate.body.isDisposed
+  ) {
+    throw infrastructureFailure(
+      "WORLDKIT_ROUTE_FIXTURE_SUPPORT_ENTITY_INVALID",
+      {
+        supportEntityId,
+        matchingAggregateCount: matchingAggregates.length,
+        matchingAggregateIsDisposed: aggregate?.body.isDisposed ?? null,
+      },
+    );
+  }
+  return aggregate;
+}
+
+function requireRuntimePhysicsAggregatesV1(runtime: unknown):
+  readonly PhysicsAggregate[] {
+  const aggregates = (runtime as { readonly aggregates?: unknown }).aggregates;
+  if (
+    !Array.isArray(aggregates) ||
+    !aggregates.every((aggregate) => aggregate instanceof PhysicsAggregate)
+  ) {
+    throw infrastructureFailure(
+      "WORLDKIT_ROUTE_FIXTURE_SUPPORT_ENTITY_INVALID",
+      { reason: "RUNTIME_PHYSICS_AGGREGATE_OWNERSHIP_UNAVAILABLE" },
+    );
+  }
+  return aggregates;
+}
+
 /**
  * Converts already-verified WorldPackage resource artifacts into the only
  * Subject Asset resolver used by the headless validation Runtime. The bytes
@@ -256,9 +405,12 @@ export async function runTrustedRouteValidationV1(
       renderCadence: options.renderCadence,
     });
   }
+  const fixtureFaultInjection = canonicalFixtureFaultInjectionV1(
+    options.fixtureFaultInjection,
+  );
   let hostFixedTickCount = 0;
   let hostRenderFrameCount = 0;
-  const routeBuildInputReceipts: HeightfieldRouteBuildInputReceiptV1[] = [];
+  const routeBuildInputReceipts: RouteBuildInputReceiptV2[] = [];
   let graphBuilderProfile: ReturnType<
     typeof resolveTraversalGraphBuilderProfileV2
   >;
@@ -341,11 +493,19 @@ export async function runTrustedRouteValidationV1(
     createCapabilityEnvelope: (input) =>
       createTraversalCapabilityEnvelopeV1(input),
     createBuildInput: (input) => {
-      const receipt = createHeightfieldRouteBuildInputV1(input);
+      const receipt = createRouteBuildInputFromPlanV2(input);
       routeBuildInputReceipts.push(receipt);
       return receipt;
     },
-    evaluateRoute: (input) => evaluateRequiredHeightfieldRouteV1(input),
+    evaluateRoute: async (input) =>
+      fixtureFaultInjection?.kind === "inject-surface-correlation-miss"
+        ? evaluateUnavailableTraversalGraphProjectionV2(
+          input.buildInputReceipt,
+          createRouteSurfaceCorrelationMissingProjectionV2(
+            input.buildInputReceipt,
+          ),
+        )
+        : evaluateRequiredRouteV2(input),
     createRuntimeLease: async (input) => {
       const havokWasmBytes = input.havokWasmBytes ??
         await loadHavokWasmBytesOnce();
@@ -372,10 +532,24 @@ export async function runTrustedRouteValidationV1(
             runtime,
             traversalLockReceipt: input.traversalLockReceipt,
           });
-        const runtimePort = isNil(options.renderCadence)
+        const faultInjectedRuntimePort =
+          fixtureFaultInjection?.kind !==
+              "withdraw-static-support-after-reset"
           ? providerRuntimePort
+          : (() => {
+            const supportAggregate = selectUniqueFixtureSupportAggregateV1(
+              requireRuntimePhysicsAggregatesV1(runtime),
+              fixtureFaultInjection.supportEntityId,
+            );
+            return wrapRuntimePortWithSupportWithdrawalV1(
+              providerRuntimePort,
+              () => supportAggregate.dispose(),
+            );
+          })();
+        const runtimePort = isNil(options.renderCadence)
+          ? faultInjectedRuntimePort
           : wrapRuntimePortWithRenderCadenceV1(
-            providerRuntimePort,
+            faultInjectedRuntimePort,
             () => runtime.renderFrame(),
             options.renderCadence,
             (renderFrameCount) => {
@@ -406,11 +580,11 @@ export async function runTrustedRouteValidationV1(
     resolveDriverProfile: () => resolveTraversalDriverProfileV1(
       BUILT_IN_TRAVERSAL_DRIVER_PROFILE_REF,
     ),
-    runRuntimeProbe: (input) => runRouteRuntimeProbeV1(input),
+    runRuntimeProbe: (input) => runRouteRuntimeProbeV2(input),
     createReport: (input) => createRouteValidationReportV2(input),
   });
   const routeEvidencePublication =
-    createWorldkitBrowserRouteEvidencePublicationV1({
+    createWorldkitBrowserRouteEvidencePublicationV2({
       subject,
       validationReport: orchestration.report,
       rows: orchestration.publicationRows,

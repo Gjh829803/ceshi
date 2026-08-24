@@ -1,7 +1,9 @@
 import {
-  ROUTE_CONNECTIVITY_FAILURE_CODES_V1,
-  type RouteConnectivityFailureV1,
+  ROUTE_CONNECTIVITY_FAILURE_CODES_V2,
+  type RouteConnectivityFailureV2,
 } from "@whitebox-world/traversal";
+
+import { isNil } from "lodash-es";
 
 import type { Sha256HashV1 } from "./types";
 import type {
@@ -10,8 +12,7 @@ import type {
 } from "./types-v2";
 
 export const ROUTE_VALIDATION_DIAGNOSTIC_CODES_V2 = [
-  ...ROUTE_CONNECTIVITY_FAILURE_CODES_V1,
-  "ROUTE_SURFACE_PROFILE_MISSING",
+  ...ROUTE_CONNECTIVITY_FAILURE_CODES_V2,
   "ROUTE_LOCOMOTION_PROFILE_MISMATCH",
   "ROUTE_WATER_TRAVERSAL_UNSUPPORTED",
   "ROUTE_TRAVERSAL_LOCK_MISMATCH",
@@ -78,11 +79,11 @@ export interface CreateRouteConnectivityValidationDiagnosticInputV2 {
   readonly id: string;
   readonly metricId: string;
   readonly evidenceArtifactRef: string;
-  readonly failure: RouteConnectivityFailureV1;
+  readonly failure: RouteConnectivityFailureV2;
 }
 
 function diagnosticDetailsForFailure(
-  failure: RouteConnectivityFailureV1,
+  failure: RouteConnectivityFailureV2,
 ): RouteDiagnosticDetailsV1 {
   const reason = failure.reason;
   switch (reason.kind) {
@@ -130,10 +131,20 @@ function diagnosticDetailsForFailure(
     case "start-surface-not-found":
     case "destination-surface-not-found":
     case "required-path-unreachable":
+    case "surface-profile-missing":
+    case "surface-correlation-missing":
+    case "surface-correlation-ambiguous":
       return {
         kind: "state-mismatch",
         expectedState: "reachable",
         actualState: reason.kind,
+      };
+    case "traversal-surface-count-budget-exceeded":
+    case "traversal-surface-triangle-pair-test-budget-exceeded":
+      return {
+        kind: "capacity-exceeded",
+        maximumAllowedCount: reason.maximumAllowedCount,
+        minimumRequiredCount: reason.minimumRequiredCount,
       };
   }
   const exhaustive: never = reason;
@@ -141,7 +152,7 @@ function diagnosticDetailsForFailure(
 }
 
 function diagnosticPositionForFailure(
-  failure: RouteConnectivityFailureV1,
+  failure: RouteConnectivityFailureV2,
 ): readonly [number, number, number] {
   const reason = failure.reason;
   switch (reason.kind) {
@@ -161,13 +172,19 @@ function diagnosticPositionForFailure(
     case "edge-budget-exceeded":
     case "search-budget-exceeded":
     case "straight-path-capacity-exceeded":
+    case "traversal-surface-count-budget-exceeded":
+    case "traversal-surface-triangle-pair-test-budget-exceeded":
       return failure.startAnchorPositionMetersXYZ;
+    case "surface-profile-missing":
+    case "surface-correlation-missing":
+    case "surface-correlation-ambiguous":
+      return reason.failurePositionMetersXYZ;
   }
   const exhaustive: never = reason;
   throw new Error(`ROUTE_CONNECTIVITY_FAILURE_REASON_UNHANDLED: ${String(exhaustive)}`);
 }
 
-function remediationForFailure(failure: RouteConnectivityFailureV1): string {
+function remediationForFailure(failure: RouteConnectivityFailureV2): string {
   switch (failure.reason.kind) {
     case "slope-threshold-exceeded":
       return "Reduce the slope or add a longer walkable ramp inside the Route ribbon.";
@@ -189,7 +206,13 @@ function remediationForFailure(failure: RouteConnectivityFailureV1): string {
     case "start-surface-not-found":
     case "destination-surface-not-found":
     case "required-path-unreachable":
+    case "surface-profile-missing":
+    case "surface-correlation-missing":
+    case "surface-correlation-ambiguous":
       return "Repair the Heightfield, Anchors, blockers, or Route ribbon and rebuild traversal evidence.";
+    case "traversal-surface-count-budget-exceeded":
+    case "traversal-surface-triangle-pair-test-budget-exceeded":
+      return "Reduce Route complexity or select a reviewed Graph Builder Profile with sufficient capacity.";
   }
   const exhaustive: never = failure.reason;
   throw new Error(`ROUTE_CONNECTIVITY_FAILURE_REASON_UNHANDLED: ${String(exhaustive)}`);
@@ -211,8 +234,14 @@ export function createRouteConnectivityValidationDiagnosticV2(
     traversingEntityId: failure.traversingEntityId,
     startAnchorEntityId: failure.startAnchorEntityId,
     destinationAnchorEntityId: failure.destinationAnchorEntityId,
-    traversalSurfaceId: failure.traversalSurfaceId,
-    colliderSubshapeId: failure.colliderSubshapeId,
+    ...(isNil(failure.relatedTraversalSurfaceIdentities[0])
+      ? {}
+      : {
+          traversalSurfaceId:
+            failure.relatedTraversalSurfaceIdentities[0].traversalSurfaceId,
+          colliderSubshapeId:
+            failure.relatedTraversalSurfaceIdentities[0].colliderSubshapeId,
+        }),
     positionMetersXYZ: diagnosticPositionForFailure(failure),
     evidenceArtifactRefs: [input.evidenceArtifactRef],
     details: diagnosticDetailsForFailure(failure),

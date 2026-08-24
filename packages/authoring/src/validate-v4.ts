@@ -67,6 +67,13 @@ ajv.addFormat("layout-solver-profile-ref", {
       value,
     ),
 });
+ajv.addFormat("traversal-surface-profile-ref", {
+  type: "string",
+  validate: (value: string) =>
+    /^worldkit:\/\/traversal-surface-profile\/[a-z0-9][a-z0-9.-]{0,63}@[1-9][0-9]*$/.test(
+      value,
+    ),
+});
 
 ajv.addSchema(subjectDefinitionV1Schema);
 const validateCanonicalAuthoringSpecV4 = ajv.compile<AuthoringSpecV4>(
@@ -137,6 +144,74 @@ function duplicateIdDiagnostics(spec: AuthoringSpecV4): AuthoringDiagnostic[] {
       seen.add(row.id);
     });
   }
+  spec.resources.prototypes.forEach((prototype, prototypeIndex) => {
+    const seen = new Set<string>();
+    prototype.traversalSurfaceBindings?.forEach((binding, bindingIndex) => {
+      if (seen.has(binding.id)) {
+        diagnostics.push({
+          severity: "error",
+          code: "AUTHORING_DUPLICATE_ID",
+          instancePath:
+            `/resources/prototypes/${prototypeIndex}/traversalSurfaceBindings/${bindingIndex}/id`,
+          message: `Duplicate id '${binding.id}' is not allowed in this collection.`,
+          details: { id: binding.id },
+        });
+      }
+      seen.add(binding.id);
+    });
+  });
+  return diagnostics;
+}
+
+function traversalSurfaceBindingDiagnostics(
+  spec: AuthoringSpecV4,
+): AuthoringDiagnostic[] {
+  const diagnostics: AuthoringDiagnostic[] = [];
+  spec.resources.prototypes.forEach((prototype, prototypeIndex) => {
+    const bindings = prototype.traversalSurfaceBindings ?? [];
+    const boundLogicalSubshapeIds = new Set<string>();
+    if (!prototype.collisionEnabled && bindings.length > 0) {
+      diagnostics.push({
+        severity: "error",
+        code: "AUTHORING_FEATURE_NOT_SUPPORTED",
+        instancePath:
+          `/resources/prototypes/${prototypeIndex}/traversalSurfaceBindings`,
+        message:
+          "Traversal Surface bindings require collisionEnabled to be true.",
+      });
+    }
+    bindings.forEach((binding, bindingIndex) => {
+      if (boundLogicalSubshapeIds.has(binding.logicalSubshapeId)) {
+        diagnostics.push({
+          severity: "error",
+          code: "AUTHORING_DUPLICATE_BINDING",
+          instancePath:
+            `/resources/prototypes/${prototypeIndex}/traversalSurfaceBindings/${bindingIndex}/logicalSubshapeId`,
+          message:
+            `Collider Subshape '${binding.logicalSubshapeId}' may have only one Traversal Surface binding.`,
+          details: {
+            prototypeId: prototype.id,
+            logicalSubshapeId: binding.logicalSubshapeId,
+          },
+        });
+      }
+      boundLogicalSubshapeIds.add(binding.logicalSubshapeId);
+      if (binding.logicalSubshapeId !== "primary") {
+        diagnostics.push({
+          severity: "error",
+          code: "AUTHORING_REFERENCE_NOT_FOUND",
+          instancePath:
+            `/resources/prototypes/${prototypeIndex}/traversalSurfaceBindings/${bindingIndex}/logicalSubshapeId`,
+          message:
+            `Collider Subshape '${binding.logicalSubshapeId}' does not exist on Primitive Prototype '${prototype.id}'.`,
+          details: {
+            prototypeId: prototype.id,
+            logicalSubshapeId: binding.logicalSubshapeId,
+          },
+        });
+      }
+    });
+  });
   return diagnostics;
 }
 
@@ -299,6 +374,7 @@ export function validateAuthoringSpecV4(
 
   const diagnostics = [
     ...duplicateIdDiagnostics(value),
+    ...traversalSurfaceBindingDiagnostics(value),
     ...orderedRangeDiagnostics(value),
     ...traversalAreaDiagnostics(value),
     ...connectivityReferenceDiagnostics(value),

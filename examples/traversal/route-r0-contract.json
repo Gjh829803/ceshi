@@ -356,7 +356,7 @@
   },
   "graph": {
     "kind": "traversal-graph",
-    "schemaVersion": 1,
+    "schemaVersion": 2,
     "authoringSpecHash": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
     "layoutSolveReportHash": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
     "resourceLockHash": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
@@ -365,12 +365,31 @@
     "surfaceArtifactHash": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
     "routeBuildInputHash": "sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
     "resolvedTraversalLockHash": "sha256:8bb93add235d04fa2e2c31b25c42456da450a09f3c2b09e0dffb90a69dc98d5f",
-    "graphBuilderProfileHash": "sha256:0c716c3d733d679d8518018ec2e54d678bc26715beac98c9928218862778d4a1",
-    "graphBuilderProfileRef": "worldkit://traversal-graph-builder-profile/outdoor-humanoid.r1@1",
+    "graphBuilderProfileHash": "sha256:14e9e5ccf593320f719e457bd79b12688469c5bbcc492dfdaa2ad3f21067715a",
+    "geometryArtifactHash": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    "graphBuilderProfileRef": "worldkit://traversal-graph-builder-profile/outdoor-humanoid.heightfield-r1@1",
     "graphBuilderResolvedVersion": "1",
     "routeId": "spawn-to-watchtower",
     "startAnchorEntityId": "spawn-main",
     "destinationAnchorEntityId": "watchtower-entry",
+    "traversalSurfaceIdentitiesById": {
+      "spawn-apron-surface": {
+        "traversalSurfaceId": "spawn-apron-surface",
+        "surfaceEntityId": "spawn-apron",
+        "colliderSubshapeId": "spawn-apron-top",
+        "resourceRef": "worldkit://traversal-surface/spawn-apron-surface@1",
+        "resolvedVersion": "1",
+        "resourceHash": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+      },
+      "watchtower-deck-surface": {
+        "traversalSurfaceId": "watchtower-deck-surface",
+        "surfaceEntityId": "watchtower-deck",
+        "colliderSubshapeId": "watchtower-deck-top",
+        "resourceRef": "worldkit://traversal-surface/watchtower-deck-surface@1",
+        "resolvedVersion": "1",
+        "resourceHash": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+      }
+    },
     "traversalNodesById": {
       "spawn-node": {
         "id": "spawn-node",
@@ -417,5 +436,5 @@
       }
     }
   },
-  "traversalGraphHash": "sha256:d3d60291bfa87f6fc461409d34450d61e761c08b91900e313ceb3b43d34734f5"
+  "traversalGraphHash": "sha256:dada70388e0436f84feccd17d5fbe1b9135fc4bc6eb25ef3c7ea1c1f26b5f1d9"
 }

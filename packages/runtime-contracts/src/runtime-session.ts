@@ -4,9 +4,9 @@ import type {
 } from "@whitebox-world/control-capture";
 import type {
   RouteEvidenceSelectorV1,
-  RouteOverlayQueryResultV1,
-  RoutePathReceiptQueryResultV1,
-  RouteRuntimeProbeReceiptQueryResultV1,
+  RouteOverlayQueryResultV2,
+  RoutePathReceiptQueryResultV2,
+  RouteRuntimeProbeReceiptQueryResultV2,
   RouteSummaryQueryResultV1,
 } from "./browser-route-evidence";
 import type { CameraTuningV1 } from "./camera-parameter-contract";
@@ -345,7 +345,7 @@ export interface SubjectHarnessReportV1 {
   tick: number;
 }
 
-export const WORLDKIT_BROWSER_PROTOCOL_VERSION = 4 as const;
+export const WORLDKIT_BROWSER_PROTOCOL_VERSION = 5 as const;
 
 export interface WorldkitBrowserDiagnosticV1 {
   severity: "info" | "warning" | "error";
@@ -355,7 +355,7 @@ export interface WorldkitBrowserDiagnosticV1 {
   details?: Readonly<Record<string, unknown>>;
 }
 
-export interface WorldkitBrowserApiV4 {
+export interface WorldkitBrowserApiV5 {
   version: typeof WORLDKIT_BROWSER_PROTOCOL_VERSION;
   ready(): Promise<WorldRuntimeSnapshotV3>;
   getSnapshot(): WorldRuntimeSnapshotV3;
@@ -402,9 +402,9 @@ export interface WorldkitBrowserApiV4 {
   getRouteSummary(selector: RouteEvidenceSelectorV1): RouteSummaryQueryResultV1;
   getRoutePathReceipt(
     selector: RouteEvidenceSelectorV1,
-  ): RoutePathReceiptQueryResultV1;
+  ): RoutePathReceiptQueryResultV2;
   getRouteRuntimeProbeReceipt(
     selector: RouteEvidenceSelectorV1,
-  ): RouteRuntimeProbeReceiptQueryResultV1;
-  getRouteOverlay(selector: RouteEvidenceSelectorV1): RouteOverlayQueryResultV1;
+  ): RouteRuntimeProbeReceiptQueryResultV2;
+  getRouteOverlay(selector: RouteEvidenceSelectorV1): RouteOverlayQueryResultV2;
 }

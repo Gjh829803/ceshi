@@ -1,6 +1,6 @@
 import type {
   TraversalEdgeV1,
-  TraversalGraphV1,
+  TraversalGraphV2,
   TraversalNodeV1,
 } from "@whitebox-world/traversal";
 import { isNil } from "lodash-es";
@@ -33,7 +33,10 @@ export type CanonicalTraversalPathSelectionV1 =
   | IncompletePathSelectionV1;
 
 export interface SelectCanonicalTraversalPathInputV1 {
-  readonly traversalGraph: TraversalGraphV1;
+  readonly traversalGraph: Pick<
+    TraversalGraphV2,
+    "traversalNodesById" | "traversalEdgesById"
+  >;
   readonly startTraversalNodeId: string;
   readonly destinationTraversalNodeId: string;
   readonly maximumEdgeLengthMeters: number;

@@ -19,25 +19,25 @@ import type { ExecutionPlanV5 } from "@whitebox-world/runtime-contracts";
 import {
   BUILT_IN_HEIGHTFIELD_R1_TRAVERSAL_GRAPH_BUILDER_PROFILE_REF,
   BUILT_IN_TRAVERSAL_DRIVER_PROFILE_REF,
-  canonicalRoutePathReceiptV1,
+  canonicalRoutePathReceiptV2,
   createTraversalCapabilityEnvelopeV1,
   deriveColliderSubshapeIdV1,
-  hashRouteRuntimeProbeReceiptV1,
+  hashRouteRuntimeProbeReceiptV2,
   resolveTraversalDriverProfileV1,
   resolveTraversalGraphBuilderProfileV2,
   type ResolvedTraversalLockReceiptV1,
-  type RoutePathReceiptV1,
-  type RouteRuntimeProbeReceiptV1,
+  type RoutePathReceiptV2,
+  type RouteRuntimeProbeReceiptV2,
   type TraversalRuntimePortV1,
   type TraversalRuntimeTickEvidenceV1,
 } from "@whitebox-world/traversal";
 import {
-  createHeightfieldRouteBuildInputV1,
-  evaluateRequiredHeightfieldRouteV1,
+  createRouteBuildInputFromPlanV2,
+  evaluateRequiredRouteV2,
 } from "@whitebox-world/traversal-recast";
 import {
   OUTDOOR_WORLD_PACKAGE_DEV_VALIDATION_PROFILE_V2,
-  runRouteRuntimeProbeV1,
+  runRouteRuntimeProbeV2,
 } from "@whitebox-world/validation";
 import { sha256CanonicalJson } from "@whitebox-world/protocol";
 import { isEqual, isNil } from "lodash-es";
@@ -58,7 +58,7 @@ const havokWasmBinary = havokWasmBytes.buffer.slice(
 interface RealRouteFixture {
   readonly executionPlan: ExecutionPlanV5;
   readonly traversalLockReceipt: ResolvedTraversalLockReceiptV1;
-  readonly routePathReceipt: RoutePathReceiptV1;
+  readonly routePathReceipt: RoutePathReceiptV2;
 }
 
 interface CreateRouteAuthoringSpecOptions {
@@ -191,12 +191,12 @@ async function prepareRealRouteFixture(
     traversalLockReceipt,
     graphBuilderProfile,
   });
-  const buildInputReceipt = createHeightfieldRouteBuildInputV1({
+  const buildInputReceipt = createRouteBuildInputFromPlanV2({
     executionPlan: compiled.executionPlan,
     capabilityEnvelope: capabilityEnvelope.envelope,
     constraintId: "hero-to-goal",
   });
-  const routeResult = await evaluateRequiredHeightfieldRouteV1({
+  const routeResult = await evaluateRequiredRouteV2({
     buildInputReceipt,
   });
   if (routeResult.status !== "complete") {
@@ -350,17 +350,21 @@ function withStaticSupportAtStart(
 
 function pathWithWrongResolvedSurface(
   fixture: RealRouteFixture,
-): RoutePathReceiptV1 {
-  return canonicalRoutePathReceiptV1({
+): RoutePathReceiptV2 {
+  const forgedIdentity = {
+    ...fixture.routePathReceipt.orderedTraversalSurfaceIdentities[0],
+    traversalSurfaceId: "forged-surface",
+    surfaceEntityId: "forged-terrain",
+    colliderSubshapeId: "forged-collider",
+    resourceRef: "package://traversal-surface/forged.heightfield@1",
+    resourceHash: `sha256:${"f".repeat(64)}`,
+  };
+  return canonicalRoutePathReceiptV2({
     ...fixture.routePathReceipt,
-    traversalSurfaceIdentity: {
-      ...fixture.routePathReceipt.traversalSurfaceIdentity,
-      traversalSurfaceId: "forged-surface",
-      surfaceEntityId: "forged-terrain",
-      colliderSubshapeId: "forged-collider",
-      resourceRef: "package://traversal-surface/forged.heightfield@1",
-      resourceHash: `sha256:${"f".repeat(64)}`,
-    },
+    orderedTraversalSurfaceIdentities:
+      fixture.routePathReceipt.orderedTraversalSurfaceIdentities.map(
+        () => forgedIdentity,
+      ),
   });
 }
 
@@ -443,15 +447,20 @@ function findForbiddenProviderHandleKeys(
 async function runProbe(
   fixture: RealRouteFixture,
   runtimePort: TraversalRuntimePortV1,
-  routePathReceipt: RoutePathReceiptV1 = fixture.routePathReceipt,
-): Promise<RouteRuntimeProbeReceiptV1> {
-  return runRouteRuntimeProbeV1({
+  routePathReceipt: RoutePathReceiptV2 = fixture.routePathReceipt,
+): Promise<RouteRuntimeProbeReceiptV2> {
+  return runRouteRuntimeProbeV2({
     routePathReceipt,
     traversalDriverProfile: resolveTraversalDriverProfileV1(
       BUILT_IN_TRAVERSAL_DRIVER_PROFILE_REF,
     ),
     runtimePort,
     validationProfile: OUTDOOR_WORLD_PACKAGE_DEV_VALIDATION_PROFILE_V2,
+    resolvedControlFeelProfile: { walkSpeedMetersPerSecond: 4 },
+    positionQuantizationMeters:
+      resolveTraversalGraphBuilderProfileV2(
+        BUILT_IN_HEIGHTFIELD_R1_TRAVERSAL_GRAPH_BUILDER_PROFILE_REF,
+      ).profile.positionQuantizationMeters,
   });
 }
 
@@ -488,7 +497,7 @@ describe("Route R1 fixed-tick probe with real Recast and Babylon/Havok", () => {
         tick.runtimeEvidence.characterSupport.surfaceResolution.mode === "resolved" &&
         isEqual(tick.runtimeEvidence.characterSupport.surfaceResolution, {
           mode: "resolved",
-          ...fixture.routePathReceipt.traversalSurfaceIdentity,
+          ...fixture.routePathReceipt.orderedTraversalSurfaceIdentities[0],
         })
       )).toBe(true);
       const positions = [
@@ -503,7 +512,7 @@ describe("Route R1 fixed-tick probe with real Recast and Babylon/Havok", () => {
         )).toBeLessThan(0.2);
       }
       expect(receipt.completionDurationTicks).toBe(receipt.metrics.processedTickCount);
-      expect(hashRouteRuntimeProbeReceiptV1(receipt)).toMatch(/^sha256:[a-f0-9]{64}$/);
+      expect(hashRouteRuntimeProbeReceiptV2(receipt)).toMatch(/^sha256:[a-f0-9]{64}$/);
       expect([...findForbiddenProviderHandleKeys(receipt)]).toEqual([]);
     } finally {
       await harness.runtime.dispose();
@@ -692,7 +701,7 @@ describe("Route R1 fixed-tick probe with real Recast and Babylon/Havok", () => {
           receipt.metrics.processedTickCount,
         );
         results.push({
-          receiptHash: hashRouteRuntimeProbeReceiptV1(receipt),
+          receiptHash: hashRouteRuntimeProbeReceiptV2(receipt),
           finalState: structuredClone(
             harness.runtime.snapshot().subjectStatesByEntityId.player,
           ),
@@ -754,8 +763,8 @@ describe("Route R1 fixed-tick probe with real Recast and Babylon/Havok", () => {
       expect(noYaw.ticks.map((tick) => tick.runtimeEvidence)).toEqual(
         yawed.ticks.map((tick) => tick.runtimeEvidence),
       );
-      expect(hashRouteRuntimeProbeReceiptV1(noYaw)).toBe(
-        hashRouteRuntimeProbeReceiptV1(yawed),
+      expect(hashRouteRuntimeProbeReceiptV2(noYaw)).toBe(
+        hashRouteRuntimeProbeReceiptV2(yawed),
       );
     } finally {
       await Promise.all([
@@ -821,8 +830,8 @@ describe("Route R1 fixed-tick probe with real Recast and Babylon/Havok", () => {
 
       expect(first.status).toBe("complete");
       expect(second.status).toBe("complete");
-      expect(hashRouteRuntimeProbeReceiptV1(first)).toBe(
-        hashRouteRuntimeProbeReceiptV1(second),
+      expect(hashRouteRuntimeProbeReceiptV2(first)).toBe(
+        hashRouteRuntimeProbeReceiptV2(second),
       );
       expect(first.metrics).toEqual(second.metrics);
       expect(runtimeLedger(harness)).toEqual(afterFirst);

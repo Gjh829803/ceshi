@@ -1,6 +1,3 @@
-import { Vector3 } from "@babylonjs/core/Maths/math.vector.js";
-import { VertexBuffer } from "@babylonjs/core/Buffers/buffer.js";
-import type { Mesh } from "@babylonjs/core/Meshes/mesh.js";
 import {
   canonicalExecutionResourceLockEntriesV1,
   type ExecutionPlanV5,
@@ -19,8 +16,13 @@ import {
   type TraversalRuntimePortV1,
   type TraversalRuntimeTickEvidenceV1,
 } from "@whitebox-world/traversal";
-import { sampleTriangleHeightfieldSurface } from "@whitebox-world/terrain-surface";
-import { isEqual, isNil } from "lodash-es";
+import {
+  emitTriangleHeightfieldSurfaceV1,
+  emitTransformedStaticColliderTriangleMeshV1,
+  queryCanonicalTraversalSurfaceHitsV1,
+  type CanonicalTraversalSurfaceTriangleSourceV1,
+} from "@whitebox-world/terrain-surface";
+import { isEmpty, isEqual, isNil } from "lodash-es";
 
 import type { BabylonWorldRuntime } from "./babylon-world-runtime";
 import { FIXED_TIME_STEP_SECONDS } from "./physics";
@@ -32,12 +34,9 @@ import { BABYLON_TRAVERSAL_RUNTIME_IMPLEMENTATION_IDENTITY_V1 } from "./traversa
 import {
   BABYLON_TRAVERSAL_RUNTIME_INTERNAL,
   type BabylonTraversalRuntimeInternalV1,
-  type StaticCollisionMeshEntryV1,
 } from "./traversal-runtime-internal";
 
 const DIRECTION_LENGTH_TOLERANCE = 1e-9;
-const NORMAL_LENGTH_EPSILON = 1e-12;
-const TRIANGLE_EPSILON = 1e-12;
 
 function fail(code: TraversalRuntimeErrorV1["code"]): never {
   throw new TraversalRuntimeErrorV1(code);
@@ -237,133 +236,117 @@ function liveLockMatches(
     live.mediumProfileRef === lock.mediumProfileRef;
 }
 
-function normalsCompatible(
-  retainedNormal: readonly [number, number, number],
-  candidateNormal: readonly [number, number, number],
-  minimumDot: number,
-): boolean {
-  const retainedLength = Math.hypot(...retainedNormal);
-  const candidateLength = Math.hypot(...candidateNormal);
-  if (
-    !Number.isFinite(retainedLength) ||
-    !Number.isFinite(candidateLength) ||
-    retainedLength <= NORMAL_LENGTH_EPSILON ||
-    candidateLength <= NORMAL_LENGTH_EPSILON
-  ) {
-    return false;
+function collectCanonicalTraversalSurfaceSources(
+  plan: ExecutionPlanV5,
+):
+  | {
+    status: "ok";
+    sources: CanonicalTraversalSurfaceTriangleSourceV1[];
   }
-  const dot = (
-    retainedNormal[0] * candidateNormal[0] +
-    retainedNormal[1] * candidateNormal[1] +
-    retainedNormal[2] * candidateNormal[2]
-  ) / (retainedLength * candidateLength);
-  return dot >= minimumDot;
-}
-
-function verticalTriangleHit(
-  mesh: Mesh,
-  footPositionMetersXYZ: readonly [number, number, number],
-  contactBandMeters: number,
-  retainedNormalWorldXYZ: readonly [number, number, number],
-  minimumNormalDot: number,
-): boolean {
-  const positions = mesh.getVerticesData(VertexBuffer.PositionKind);
-  const indices = mesh.getIndices();
-  if (isNil(positions) || isNil(indices)) return false;
-  const matrix = mesh.computeWorldMatrix(true);
-  const point = (index: number): Vector3 => Vector3.TransformCoordinates(
-    new Vector3(
-      positions[index * 3]!,
-      positions[index * 3 + 1]!,
-      positions[index * 3 + 2]!,
-    ),
-    matrix,
+  | {
+    status: "missing-bound-collider";
+  } {
+  const colliderBySubshapeId = new Map(
+    plan.staticColliders.map((collider) => [
+      collider.colliderSubshapeId,
+      collider,
+    ]),
   );
-  const footX = footPositionMetersXYZ[0];
-  const footY = footPositionMetersXYZ[1];
-  const footZ = footPositionMetersXYZ[2];
-  for (let offset = 0; offset < indices.length; offset += 3) {
-    const a = point(indices[offset]!);
-    const b = point(indices[offset + 1]!);
-    const c = point(indices[offset + 2]!);
-    const denominator =
-      (b.z - c.z) * (a.x - c.x) +
-      (c.x - b.x) * (a.z - c.z);
-    if (Math.abs(denominator) <= TRIANGLE_EPSILON) continue;
-    const weightA = (
-      (b.z - c.z) * (footX - c.x) +
-      (c.x - b.x) * (footZ - c.z)
-    ) / denominator;
-    const weightB = (
-      (c.z - a.z) * (footX - c.x) +
-      (a.x - c.x) * (footZ - c.z)
-    ) / denominator;
-    const weightC = 1 - weightA - weightB;
-    if (
-      weightA < -TRIANGLE_EPSILON ||
-      weightB < -TRIANGLE_EPSILON ||
-      weightC < -TRIANGLE_EPSILON
-    ) continue;
-    const hitY = a.y * weightA + b.y * weightB + c.y * weightC;
-    if (Math.abs(hitY - footY) > contactBandMeters) continue;
-    const normal = Vector3.Cross(b.subtract(a), c.subtract(a));
-    if (normal.y < 0) normal.scaleInPlace(-1);
-    if (normalsCompatible(
-      retainedNormalWorldXYZ,
-      [normal.x, normal.y, normal.z],
-      minimumNormalDot,
-    )) return true;
+  const sources: CanonicalTraversalSurfaceTriangleSourceV1[] = [];
+  for (const surface of plan.traversal.surfaces) {
+    if (surface.kind === "heightfield") {
+      if (surface.surfaceEntityId !== plan.terrain.entityId) {
+        continue;
+      }
+      const mesh = emitTriangleHeightfieldSurfaceV1({
+        centerMetersXZ: plan.terrain.centerMetersXZ,
+        sizeMetersXZ: plan.terrain.sizeMetersXZ,
+        resolutionVerticesXZ: plan.terrain.resolutionCellsXZ,
+        heightSamplesMeters: plan.terrain.heightSamplesMeters,
+      });
+      const worldPositionsMetersXYZ: number[] = [];
+      for (
+        let index = 0;
+        index < mesh.localPositionsMetersXYZ.length;
+        index += 1
+      ) {
+        worldPositionsMetersXYZ.push(
+          mesh.localPositionsMetersXYZ[index]! +
+            mesh.originMetersXYZ[index % 3]!,
+        );
+      }
+      sources.push({
+        traversalSurfaceId: surface.traversalSurfaceId,
+        worldPositionsMetersXYZ,
+        triangleIndices: mesh.triangleIndices,
+      });
+      continue;
+    }
+    if (surface.kind === "static-collider") {
+      const collider = colliderBySubshapeId.get(surface.colliderSubshapeId);
+      if (isNil(collider)) {
+        return { status: "missing-bound-collider" };
+      }
+      const mesh = emitTransformedStaticColliderTriangleMeshV1(
+        collider.shape,
+        collider.transform,
+      );
+      sources.push({
+        traversalSurfaceId: surface.traversalSurfaceId,
+        worldPositionsMetersXYZ: mesh.worldPositionsMetersXYZ,
+        triangleIndices: mesh.triangleIndices,
+      });
+    }
   }
-  return false;
+  return { status: "ok", sources };
 }
 
 function classifySurface(
   plan: ExecutionPlanV5,
   sample: RetainedCharacterSupportSampleV1,
   live: MotionKernelLiveLockStateV1,
-  collisionMeshes: readonly StaticCollisionMeshEntryV1[],
 ): CharacterSupportSurfaceResolutionV1 {
-  if (sample.supportState === "unsupported") return { mode: "unsupported" };
-  if (sample.isSupportSurfaceDynamic) return { mode: "unmatched" };
+  if (sample.supportState === "unsupported") {
+    return { mode: "unsupported" };
+  }
+  if (sample.isSupportSurfaceDynamic) {
+    return { mode: "unmatched" };
+  }
+  const collected = collectCanonicalTraversalSurfaceSources(plan);
+  if (collected.status === "missing-bound-collider") {
+    return { mode: "unmatched" };
+  }
+  const { sources } = collected;
+  if (isEmpty(sources)) {
+    return { mode: "unmatched" };
+  }
   const foot = sample.sampledFootPositionMetersXYZ;
-  const contactBandMeters =
-    live.keepDistanceMeters + live.keepContactToleranceMeters;
-  const terrainSample = sampleTriangleHeightfieldSurface(
-    {
-      centerMetersXZ: plan.terrain.centerMetersXZ,
-      sizeMetersXZ: plan.terrain.sizeMetersXZ,
-      resolutionVerticesXZ: plan.terrain.resolutionCellsXZ,
-      heightSamplesMeters: plan.terrain.heightSamplesMeters,
+  const query = queryCanonicalTraversalSurfaceHitsV1({
+    sources,
+    pointMetersXZ: [foot[0], foot[2]],
+    referenceHeightMeters: foot[1],
+    maximumReferenceHeightDifferenceMeters:
+      live.keepDistanceMeters + live.keepContactToleranceMeters,
+    normalAdmission: {
+      mode: "retained-support",
+      minimumUpwardNormalYRatio: live.maxSlopeCosine,
+      referenceNormalXYZ: sample.supportNormalWorldXYZ,
+      minimumReferenceNormalDotRatio: live.maxSlopeCosine,
     },
-    [foot[0], foot[2]],
-  );
-  const heightfieldCandidates = isNil(terrainSample) ||
-      Math.abs(terrainSample.heightMeters - foot[1]) > contactBandMeters ||
-      !normalsCompatible(
-        sample.supportNormalWorldXYZ,
-        terrainSample.normalXYZ,
-        live.maxSlopeCosine,
-      )
-    ? []
-    : plan.traversal.surfaces.filter(
-        (surface) =>
-          surface.kind === "heightfield" &&
-          surface.surfaceEntityId === plan.terrain.entityId,
-      );
-  if (heightfieldCandidates.length === 0) return { mode: "unmatched" };
-  const colliderCandidateCount = collisionMeshes.filter(({ mesh }) =>
-    verticalTriangleHit(
-      mesh,
-      foot,
-      contactBandMeters,
-      sample.supportNormalWorldXYZ,
-      live.maxSlopeCosine,
-    )
-  ).length;
-  if (heightfieldCandidates.length !== 1 || colliderCandidateCount > 0) {
+  });
+  if (query.mode === "missing") {
+    return { mode: "unmatched" };
+  }
+  if (query.mode === "ambiguous") {
     return { mode: "ambiguous" };
   }
-  const surface = heightfieldCandidates[0]!;
+  const surface = plan.traversal.surfaces.find(
+    (candidate) =>
+      candidate.traversalSurfaceId === query.hit.traversalSurfaceId,
+  );
+  if (isNil(surface)) {
+    return { mode: "unmatched" };
+  }
   return {
     mode: "resolved",
     traversalSurfaceId: surface.traversalSurfaceId,
@@ -614,7 +597,6 @@ class BabylonTraversalRuntimePortV1 implements TraversalRuntimePortV1 {
         this.#plan,
         sample,
         live,
-        this.#host.readStaticCollisionMeshes(),
       ),
     };
     const origin = controller.subjectOrigin;

@@ -202,6 +202,14 @@ export class ResourceLockBuilderV1 {
     );
   }
 
+  public addResolvedResource(
+    entry: ResolvedResourceLockEntryV1,
+    instancePath: string,
+    diagnostics: AuthoringDiagnostic[],
+  ): void {
+    this.#addEntry(structuredClone(entry), instancePath, diagnostics);
+  }
+
   public finish(): {
     subjectAssets: readonly NormalizedSubjectAssetV1[];
     rigProfiles: readonly NormalizedRigProfileV1[];

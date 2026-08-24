@@ -97,6 +97,16 @@ export interface TraversalGraphBuilderProfileV2 {
   readonly maximumEdges: number;
   readonly maximumTiles: number;
   readonly maximumSearchSteps: number;
+  readonly maximumTraversalSurfaceCount: number;
+  readonly minimumEquivalentPlaneNormalDotRatio: number;
+  readonly maximumTraversalSurfaceTrianglePairTestCount: number;
+}
+
+export interface TraversalSurfaceProfileV1 {
+  readonly kind: "traversal-surface-profile";
+  readonly schemaVersion: 1;
+  readonly traversalMode: "ground";
+  readonly faceSelectionMode: "subject-slope-compatible";
 }
 
 export interface ResolvedTraversalDriverProfileV1 {
@@ -118,6 +128,13 @@ export interface ResolvedTraversalGraphBuilderProfileV2 {
   readonly resolvedVersion: "1";
   readonly contentHash: `sha256:${string}`;
   readonly profile: TraversalGraphBuilderProfileV2;
+}
+
+export interface ResolvedTraversalSurfaceProfileV1 {
+  readonly resourceRef: string;
+  readonly resolvedVersion: "1";
+  readonly contentHash: `sha256:${string}`;
+  readonly profile: TraversalSurfaceProfileV1;
 }
 
 export type ResolvedTraversalGraphBuilderProfile =
@@ -166,6 +183,9 @@ export interface TraversalCapabilityEnvelopeV1 {
   readonly maximumEdges: number;
   readonly maximumTiles: number;
   readonly maximumSearchSteps: number;
+  readonly maximumTraversalSurfaceCount: number;
+  readonly minimumEquivalentPlaneNormalDotRatio: number;
+  readonly maximumTraversalSurfaceTrianglePairTestCount: number;
 }
 
 export interface TraversalCapabilityEnvelopeReceiptV1 {

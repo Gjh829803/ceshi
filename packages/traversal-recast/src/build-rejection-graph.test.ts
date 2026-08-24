@@ -1,20 +1,25 @@
 import { sha256CanonicalJson } from "@whitebox-world/protocol";
 import {
-  assertTraversalGraphBuildBudgetV1,
-  hashHeightfieldRouteBuildInputV1,
+  deriveColliderSubshapeIdV1,
+  createRouteBuildInputReceiptV2,
+  hashRouteColliderArtifactV2,
+  hashRouteGeometryArtifactV2,
+  hashRouteSurfaceArtifactV2,
+  hashRouteTerrainArtifactV2,
   type CanonicalTriangleSoupV1,
-  type HeightfieldRouteBuildInputReceiptV1,
-  type HeightfieldRouteBuildInputV1,
-  type StaticBlockingColliderV1,
+  type RouteBuildInputReceiptV2,
+  type RouteBuildInputV2,
+  type StaticColliderSourceV1,
 } from "@whitebox-world/traversal";
 import { describe, expect, it } from "vitest";
 
 import {
   buildSourceDerivedRouteRejectionProofInputV1,
+  buildSourceDerivedRouteRejectionProofInputV2,
   hasPositiveProjectedTriangleOverlapV1,
   quantizeInsufficientClearanceWidthMetersV1,
 } from "./build-rejection-graph.js";
-import { routeConnectivityReasonForRejectionProofV1 } from "./evaluate-route.js";
+import { routeConnectivityReasonForRejectionProofV2 } from "./evaluate-route.js";
 import { evaluateRouteRejectionProofV1 } from "./route-rejection-proof.js";
 import { createRecastTestEnvelopeV1 } from "./test-fixture.test-support.js";
 
@@ -39,7 +44,7 @@ function boxCollider(
   colliderSubshapeId: string,
   minimumMetersXYZ: Vec3,
   maximumMetersXYZ: Vec3,
-): StaticBlockingColliderV1 {
+): StaticColliderSourceV1 {
   const [minimumX, minimumY, minimumZ] = minimumMetersXYZ;
   const [maximumX, maximumY, maximumZ] = maximumMetersXYZ;
   const triangleSoup: CanonicalTriangleSoupV1 = {
@@ -65,7 +70,10 @@ function boxCollider(
   return {
     entityId: `entity-${colliderSubshapeId}`,
     logicalSubshapeId: `logical-${colliderSubshapeId}`,
-    colliderSubshapeId,
+    colliderSubshapeId: deriveColliderSubshapeIdV1(
+      `entity-${colliderSubshapeId}`,
+      `logical-${colliderSubshapeId}`,
+    ),
     colliderHash: sha256CanonicalJson(triangleSoup) as `sha256:${string}`,
     triangleSoup,
   };
@@ -77,7 +85,7 @@ function compoundBoxCollider(
     minimumMetersXYZ: Vec3;
     maximumMetersXYZ: Vec3;
   }>[],
-): StaticBlockingColliderV1 {
+): StaticColliderSourceV1 {
   const positionsMetersXYZ: number[] = [];
   const triangleIndices: number[] = [];
   for (const [index, box] of boxes.entries()) {
@@ -94,7 +102,10 @@ function compoundBoxCollider(
   return {
     entityId: `entity-${colliderSubshapeId}`,
     logicalSubshapeId: `logical-${colliderSubshapeId}`,
-    colliderSubshapeId,
+    colliderSubshapeId: deriveColliderSubshapeIdV1(
+      `entity-${colliderSubshapeId}`,
+      `logical-${colliderSubshapeId}`,
+    ),
     colliderHash: sha256CanonicalJson(triangleSoup) as `sha256:${string}`,
     triangleSoup,
   };
@@ -148,15 +159,15 @@ function disconnectedTriangleSoup(count: number): CanonicalTriangleSoupV1 {
 
 function receipt(input: Readonly<{
   terrainSoup: CanonicalTriangleSoupV1;
-  blockingColliders?: readonly StaticBlockingColliderV1[];
+  staticColliders?: readonly StaticColliderSourceV1[];
   startPositionMetersXYZ?: Vec3;
   destinationPositionMetersXYZ?: Vec3;
   routePointsMetersXZ?: readonly (readonly [number, number])[];
   routeWidthMeters?: number;
-}>): HeightfieldRouteBuildInputReceiptV1 {
+}>): RouteBuildInputReceiptV2 {
   const resourceLockHash = HASH_C;
   const capabilityEnvelope = createRecastTestEnvelopeV1({ resourceLockHash });
-  const blockingColliders = [...(input.blockingColliders ?? [])]
+  const staticColliders = [...(input.staticColliders ?? [])]
     .sort((left, right) => left.colliderSubshapeId < right.colliderSubshapeId ? -1 : 1);
   const xs: number[] = [];
   const zs: number[] = [];
@@ -166,9 +177,9 @@ function receipt(input: Readonly<{
   }
   const minimumMetersXZ = [Math.min(...xs), Math.min(...zs)] as const;
   const maximumMetersXZ = [Math.max(...xs), Math.max(...zs)] as const;
-  const buildInput: HeightfieldRouteBuildInputV1 = {
-    kind: "heightfield-route-build-input",
-    schemaVersion: 1,
+  const buildInput = {
+    kind: "route-build-input",
+    schemaVersion: 2,
     authoringSpecHash: HASH_A,
     layoutSolveReportHash: HASH_B,
     resourceLockHash,
@@ -193,51 +204,43 @@ function receipt(input: Readonly<{
       widthMeters: input.routeWidthMeters ?? 4,
       locomotionProfileRef: capabilityEnvelope.locomotionProfileRef,
     },
-    traversalSurface: {
+    traversalSurfaces: [{
       traversalSurfaceId: "surface-ground",
       surfaceEntityId: "terrain-ground",
       colliderSubshapeId: "collider-terrain",
       resourceRef: "worldkit://terrain/ground@1",
       resolvedVersion: "1",
       resourceHash: HASH_A,
-    },
+    }],
     capabilityEnvelope,
     terrainSource: {
       kind: "bounded",
       terrainEntityId: "terrain-ground",
-      terrainArtifactHash: HASH_B,
       triangleSoup: input.terrainSoup,
       minimumMetersXZ,
       maximumMetersXZ,
     },
-    blockingColliders,
-    colliderArtifactHash: sha256CanonicalJson(blockingColliders) as `sha256:${string}`,
+    staticColliders,
     blockedTraversalAreaExclusions: [],
     blockedWaterExclusions: [],
   };
-  const frozenInput = deepFreeze(buildInput);
-  const estimate = assertTraversalGraphBuildBudgetV1({
-    minimumMetersXZ,
-    maximumMetersXZ,
-    tileSizeCells: capabilityEnvelope.tileSizeCells,
-    voxelCellSizeMeters: capabilityEnvelope.voxelCellSizeMeters,
-    maximumTiles: capabilityEnvelope.maximumTiles,
-  });
-  return deepFreeze({
-    input: frozenInput,
-    routeBuildInputHash: hashHeightfieldRouteBuildInputV1(frozenInput),
-    budgetEvidence: {
-      kind: "heightfield-tile-estimate",
-      ...estimate,
-      maximumTiles: capabilityEnvelope.maximumTiles,
-      minimumMetersXZ,
-      maximumMetersXZ,
-    },
-  });
+  const terrainArtifactHash = hashRouteTerrainArtifactV2(buildInput.terrainSource);
+  const colliderArtifactHash = hashRouteColliderArtifactV2(buildInput.staticColliders);
+  const completeInput = {
+    ...buildInput,
+    terrainArtifactHash,
+    colliderArtifactHash,
+    geometryArtifactHash: hashRouteGeometryArtifactV2({
+      terrainArtifactHash,
+      colliderArtifactHash,
+    }),
+    surfaceArtifactHash: hashRouteSurfaceArtifactV2(buildInput.traversalSurfaces),
+  } as unknown as RouteBuildInputV2;
+  return createRouteBuildInputReceiptV2(completeInput);
 }
 
 function buildAndEvaluate(
-  buildInputReceipt: HeightfieldRouteBuildInputReceiptV1,
+  buildInputReceipt: RouteBuildInputReceiptV2,
   isSourceProjectionConsistent = true,
 ) {
   const proofInput = buildSourceDerivedRouteRejectionProofInputV1({
@@ -248,12 +251,14 @@ function buildAndEvaluate(
   return {
     proofInput: proofInput!,
     evaluation: evaluateRouteRejectionProofV1(proofInput!),
+    receipt: buildInputReceipt,
   };
 }
 
 function expectSpecialized(
   actual: ReturnType<typeof evaluateRouteRejectionProofV1>,
   rejectionKind: "slope" | "step" | "width" | "overhead" | "gap",
+  buildInputReceipt: RouteBuildInputReceiptV2,
 ) {
   expect(actual).toMatchObject({
     status: "specialized",
@@ -269,7 +274,7 @@ function expectSpecialized(
   expect(actual.failurePositionMetersXYZ.every((value) =>
     Number.isSafeInteger(value / 0.001),
   )).toBe(true);
-  expect(routeConnectivityReasonForRejectionProofV1(actual)?.code).toBe({
+  expect(routeConnectivityReasonForRejectionProofV2(actual, buildInputReceipt)?.code).toBe({
     slope: "ROUTE_SLOPE_EXCEEDED",
     step: "ROUTE_STEP_HEIGHT_EXCEEDED",
     width: "ROUTE_CLEARANCE_WIDTH_INSUFFICIENT",
@@ -298,7 +303,7 @@ describe("buildSourceDerivedRouteRejectionProofInputV1", () => {
   });
 
   it("derives a unique slope cut from quantized terrain triangle normals", () => {
-    const { evaluation } = buildAndEvaluate(receipt({
+    const { evaluation, receipt: inputReceipt } = buildAndEvaluate(receipt({
       terrainSoup: quadSoup([
         { minimumX: 0, maximumX: 2, leftY: 0, rightY: 0 },
         { minimumX: 2, maximumX: 4, leftY: 0, rightY: 2 },
@@ -307,7 +312,7 @@ describe("buildSourceDerivedRouteRejectionProofInputV1", () => {
       destinationPositionMetersXYZ: [5.5, 2, 0],
     }));
 
-    expectSpecialized(evaluation, "slope");
+    expectSpecialized(evaluation, "slope", inputReceipt);
     if (evaluation.status !== "specialized" || evaluation.rejectionReason.kind !== "slope") return;
     expect(evaluation.rejectionReason).toEqual({
       kind: "slope",
@@ -317,8 +322,30 @@ describe("buildSourceDerivedRouteRejectionProofInputV1", () => {
     });
   });
 
+  it("keeps steep upward faces in the V2 proof soup so a 45 degree ridge stays a unique slope cut", () => {
+    const buildInputReceipt = receipt({
+      terrainSoup: quadSoup([
+        { minimumX: 0, maximumX: 2, minimumZ: -2, maximumZ: 2, leftY: 0, rightY: 0 },
+        { minimumX: 2, maximumX: 4, minimumZ: -2, maximumZ: 2, leftY: 0, rightY: 2 },
+        { minimumX: 4, maximumX: 6, minimumZ: -2, maximumZ: 2, leftY: 2, rightY: 2 },
+      ]),
+      destinationPositionMetersXYZ: [5.5, 2, 0],
+    });
+    const proofInput = buildSourceDerivedRouteRejectionProofInputV2({
+      buildInputReceipt,
+      isSourceProjectionConsistent: true,
+    });
+    expect(proofInput).toBeDefined();
+    const evaluation = evaluateRouteRejectionProofV1(proofInput!);
+    expectSpecialized(evaluation, "slope", buildInputReceipt);
+    if (evaluation.status !== "specialized" || evaluation.rejectionReason.kind !== "slope") {
+      return;
+    }
+    expect(evaluation.rejectionReason.maximumObservedSlopeDegrees).toBe(45);
+  });
+
   it("derives a unique step cut from a quantized shared XZ boundary", () => {
-    const { evaluation } = buildAndEvaluate(receipt({
+    const { evaluation, receipt: inputReceipt } = buildAndEvaluate(receipt({
       terrainSoup: quadSoup([
         { minimumX: 0, maximumX: 3, leftY: 0, rightY: 0 },
         { minimumX: 3, maximumX: 6, leftY: 0.5, rightY: 0.5 },
@@ -326,44 +353,44 @@ describe("buildSourceDerivedRouteRejectionProofInputV1", () => {
       destinationPositionMetersXYZ: [5.5, 0.5, 0],
     }));
 
-    expectSpecialized(evaluation, "step");
+    expectSpecialized(evaluation, "step", inputReceipt);
     if (evaluation.status !== "specialized" || evaluation.rejectionReason.kind !== "step") return;
     expect(evaluation.rejectionReason.maximumObservedStepHeightMeters).toBe(0.5);
     expect(evaluation.rejectionReason.maximumAllowedStepHeightMeters).toBe(0.3);
   });
 
   it("derives a unique width cut from complete closed collider soups", () => {
-    const { evaluation } = buildAndEvaluate(receipt({
+    const { evaluation, receipt: inputReceipt } = buildAndEvaluate(receipt({
       terrainSoup: quadSoup([
         { minimumX: 0, maximumX: 2, minimumZ: -0.2, maximumZ: 0.2, leftY: 0, rightY: 0 },
         { minimumX: 2, maximumX: 4, minimumZ: -0.2, maximumZ: 0.2, leftY: 0, rightY: 0 },
         { minimumX: 4, maximumX: 6, minimumZ: -0.2, maximumZ: 0.2, leftY: 0, rightY: 0 },
       ]),
-      blockingColliders: [
+      staticColliders: [
         boxCollider("wall-north", [-1, -1, 0.25], [7, 3, 2]),
         boxCollider("wall-south", [-1, -1, -2], [7, 3, -0.25]),
       ],
     }));
 
-    expectSpecialized(evaluation, "width");
+    expectSpecialized(evaluation, "width", inputReceipt);
     if (evaluation.status !== "specialized" || evaluation.rejectionReason.kind !== "width") return;
     expect(evaluation.rejectionReason.relevantColliderSubshapeIds).toEqual([
-      "wall-north",
-      "wall-south",
-    ]);
+      deriveColliderSubshapeIdV1("entity-wall-north", "logical-wall-north"),
+      deriveColliderSubshapeIdV1("entity-wall-south", "logical-wall-south"),
+    ].sort((left, right) => (left < right ? -1 : 1)));
     expect(evaluation.rejectionReason.minimumObservedClearanceWidthMeters)
       .toBeLessThan(0.74);
     expect(evaluation.rejectionReason.minimumRequiredClearanceWidthMeters).toBe(0.74);
   });
 
   it("does not project a vertically irrelevant component as a width obstruction", () => {
-    const { evaluation } = buildAndEvaluate(receipt({
+    const { evaluation, receipt: inputReceipt } = buildAndEvaluate(receipt({
       terrainSoup: quadSoup([
         { minimumX: 0, maximumX: 2, leftY: 0, rightY: 0 },
         { minimumX: 2, maximumX: 4, leftY: 0, rightY: 0 },
         { minimumX: 4, maximumX: 6, leftY: 0, rightY: 0 },
       ]),
-      blockingColliders: [
+      staticColliders: [
         compoundBoxCollider("split-height", [
           {
             minimumMetersXYZ: [20, -1, -1],
@@ -384,7 +411,7 @@ describe("buildSourceDerivedRouteRejectionProofInputV1", () => {
   });
 
   it("keeps a tall solid blocker from being hidden by a separate slope cut", () => {
-    const { evaluation } = buildAndEvaluate(receipt({
+    const { evaluation, receipt: inputReceipt } = buildAndEvaluate(receipt({
       terrainSoup: quadSoup([
         {
           minimumX: 0,
@@ -411,7 +438,7 @@ describe("buildSourceDerivedRouteRejectionProofInputV1", () => {
           rightY: 2,
         },
       ]),
-      blockingColliders: [
+      staticColliders: [
         boxCollider("tall-solid", [4, -1, -2], [6, 8, 2]),
       ],
       destinationPositionMetersXYZ: [5.5, 2, 0],
@@ -424,43 +451,45 @@ describe("buildSourceDerivedRouteRejectionProofInputV1", () => {
   });
 
   it("derives a unique overhead cut only from a covering downward collider surface", () => {
-    const { evaluation } = buildAndEvaluate(receipt({
+    const { evaluation, receipt: inputReceipt } = buildAndEvaluate(receipt({
       terrainSoup: quadSoup([
         { minimumX: 0, maximumX: 2, leftY: 0, rightY: 0 },
         { minimumX: 2, maximumX: 4, leftY: 0, rightY: 0 },
         { minimumX: 4, maximumX: 6, leftY: 0, rightY: 0 },
       ]),
-      blockingColliders: [
+      staticColliders: [
         boxCollider("ceiling", [1.5, 1.5, -1.5], [4.5, 1.8, 1.5]),
       ],
     }));
 
-    expectSpecialized(evaluation, "overhead");
+    expectSpecialized(evaluation, "overhead", inputReceipt);
     if (
       evaluation.status !== "specialized" ||
       evaluation.rejectionReason.kind !== "overhead"
     ) return;
-    expect(evaluation.rejectionReason.relevantColliderSubshapeIds).toEqual(["ceiling"]);
+    expect(evaluation.rejectionReason.relevantColliderSubshapeIds).toEqual([
+      deriveColliderSubshapeIdV1("entity-ceiling", "logical-ceiling"),
+    ]);
     expect(evaluation.rejectionReason.minimumObservedClearanceHeightMeters).toBe(1.5);
     expect(evaluation.rejectionReason.minimumRequiredClearanceHeightMeters).toBe(1.92);
   });
 
   it("derives a unique gap cut only between mutually nearest route-crossing boundaries", () => {
-    const { evaluation } = buildAndEvaluate(receipt({
+    const { evaluation, receipt: inputReceipt } = buildAndEvaluate(receipt({
       terrainSoup: quadSoup([
         { minimumX: 0, maximumX: 2, leftY: 0, rightY: 0 },
         { minimumX: 2.2, maximumX: 6, leftY: 0, rightY: 0 },
       ]),
     }));
 
-    expectSpecialized(evaluation, "gap");
+    expectSpecialized(evaluation, "gap", inputReceipt);
     if (evaluation.status !== "specialized" || evaluation.rejectionReason.kind !== "gap") return;
     expect(evaluation.rejectionReason.maximumObservedSurfaceGapMeters).toBe(0.2);
     expect(evaluation.rejectionReason.maximumAllowedSurfaceGapMeters).toBe(0);
   });
 
   it("falls back to generic for a mixed slope-plus-step cut", () => {
-    const { evaluation } = buildAndEvaluate(receipt({
+    const { evaluation, receipt: inputReceipt } = buildAndEvaluate(receipt({
       terrainSoup: quadSoup([
         { minimumX: 0, maximumX: 2, leftY: 0, rightY: 0 },
         { minimumX: 2, maximumX: 4, leftY: 0, rightY: 2 },
@@ -506,9 +535,9 @@ describe("buildSourceDerivedRouteRejectionProofInputV1", () => {
         9, 10, 11,
       ],
     };
-    const { evaluation } = buildAndEvaluate(receipt({
+    const { evaluation, receipt: inputReceipt } = buildAndEvaluate(receipt({
       terrainSoup,
-      blockingColliders: [
+      staticColliders: [
         boxCollider("blocked-lane", [-2.1, -1, -2.1], [0.1, 3, 0.1]),
       ],
       startPositionMetersXYZ: [-1.4, 0, 0.3],

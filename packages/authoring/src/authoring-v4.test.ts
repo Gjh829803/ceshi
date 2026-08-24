@@ -23,6 +23,14 @@ const requiredRoute: ConnectedByRouteConstraintV1 = {
   routeId: "spawn-to-watchtower",
 };
 
+const groundStaticTraversalSurfaceBinding = {
+  id: "deck",
+  kind: "collider-subshape",
+  logicalSubshapeId: "primary",
+  traversalSurfaceProfileRef:
+    "worldkit://traversal-surface-profile/ground.static@1",
+} as const;
+
 function validV3(): AuthoringSpecV3 {
   return structuredClone(createValidAuthoringSpec());
 }
@@ -78,6 +86,24 @@ function withConnectivity(
   return copy;
 }
 
+function withPrototypeTraversalSurfaceBindings(
+  spec: AuthoringSpecV3 | AuthoringSpecV4,
+  bindings: readonly unknown[],
+  collisionEnabled = true,
+): unknown {
+  const copy = structuredClone(spec) as unknown as {
+    resources: {
+      prototypes: Array<{
+        collisionEnabled: boolean;
+        traversalSurfaceBindings?: readonly unknown[];
+      }>;
+    };
+  };
+  copy.resources.prototypes[0]!.collisionEnabled = collisionEnabled;
+  copy.resources.prototypes[0]!.traversalSurfaceBindings = bindings;
+  return copy;
+}
+
 function regularPolygonPoints(
   pointCount: number,
   centerXMeters = 0,
@@ -97,6 +123,111 @@ function traversalArea(id: string, pointsMetersXZ: readonly (readonly [number, n
     mode: "blocked" as const,
   };
 }
+
+describe("Authoring Spec V4 Prototype traversal surface bindings", () => {
+  it("admits the closed collider-subshape binding only in V4", () => {
+    expect(validateAuthoringSpecV4(withPrototypeTraversalSurfaceBindings(
+      validV4(),
+      [groundStaticTraversalSurfaceBinding],
+    )).ok).toBe(true);
+
+    expect(validateAuthoringSpecV3(withPrototypeTraversalSurfaceBindings(
+      validV3(),
+      [groundStaticTraversalSurfaceBinding],
+    ))).toMatchObject({
+      ok: false,
+      diagnostics: expect.arrayContaining([expect.objectContaining({
+        code: "AUTHORING_SCHEMA_INVALID",
+        instancePath: "/resources/prototypes/0/traversalSurfaceBindings",
+      })]),
+    });
+  });
+
+  it("rejects unknown binding fields and malformed Profile refs", () => {
+    expect(validateAuthoringSpecV4(withPrototypeTraversalSurfaceBindings(
+      validV4(),
+      [{ ...groundStaticTraversalSurfaceBinding, providerArea: 7 }],
+    ))).toMatchObject({
+      ok: false,
+      diagnostics: expect.arrayContaining([expect.objectContaining({
+        code: "AUTHORING_SCHEMA_INVALID",
+        instancePath:
+          "/resources/prototypes/0/traversalSurfaceBindings/0/providerArea",
+      })]),
+    });
+
+    expect(validateAuthoringSpecV4(withPrototypeTraversalSurfaceBindings(
+      validV4(),
+      [{
+        ...groundStaticTraversalSurfaceBinding,
+        traversalSurfaceProfileRef: "worldkit://profile/ground.static@1",
+      }],
+    ))).toMatchObject({
+      ok: false,
+      diagnostics: expect.arrayContaining([expect.objectContaining({
+        code: "AUTHORING_SCHEMA_INVALID",
+        instancePath:
+          "/resources/prototypes/0/traversalSurfaceBindings/0/traversalSurfaceProfileRef",
+      })]),
+    });
+  });
+
+  it("rejects duplicate binding ids, unknown Subshapes, and disabled collision", () => {
+    expect(validateAuthoringSpecV4(withPrototypeTraversalSurfaceBindings(
+      validV4(),
+      [
+        groundStaticTraversalSurfaceBinding,
+        { ...groundStaticTraversalSurfaceBinding },
+      ],
+    ))).toMatchObject({
+      ok: false,
+      diagnostics: expect.arrayContaining([expect.objectContaining({
+        code: "AUTHORING_DUPLICATE_ID",
+        instancePath:
+          "/resources/prototypes/0/traversalSurfaceBindings/1/id",
+      })]),
+    });
+
+    expect(validateAuthoringSpecV4(withPrototypeTraversalSurfaceBindings(
+      validV4(),
+      [
+        groundStaticTraversalSurfaceBinding,
+        { ...groundStaticTraversalSurfaceBinding, id: "upper-deck" },
+      ],
+    ))).toMatchObject({
+      ok: false,
+      diagnostics: expect.arrayContaining([expect.objectContaining({
+        code: "AUTHORING_DUPLICATE_BINDING",
+        instancePath:
+          "/resources/prototypes/0/traversalSurfaceBindings/1/logicalSubshapeId",
+      })]),
+    });
+
+    expect(validateAuthoringSpecV4(withPrototypeTraversalSurfaceBindings(
+      validV4(),
+      [{ ...groundStaticTraversalSurfaceBinding, logicalSubshapeId: "top" }],
+    ))).toMatchObject({
+      ok: false,
+      diagnostics: expect.arrayContaining([expect.objectContaining({
+        code: "AUTHORING_REFERENCE_NOT_FOUND",
+        instancePath:
+          "/resources/prototypes/0/traversalSurfaceBindings/0/logicalSubshapeId",
+      })]),
+    });
+
+    expect(validateAuthoringSpecV4(withPrototypeTraversalSurfaceBindings(
+      validV4(),
+      [groundStaticTraversalSurfaceBinding],
+      false,
+    ))).toMatchObject({
+      ok: false,
+      diagnostics: expect.arrayContaining([expect.objectContaining({
+        code: "AUTHORING_FEATURE_NOT_SUPPORTED",
+        instancePath: "/resources/prototypes/0/traversalSurfaceBindings",
+      })]),
+    });
+  });
+});
 
 describe("Authoring Spec V4 connectivity schema", () => {
   it("requires closed blocked traversal areas on a declared Terrain surface", () => {

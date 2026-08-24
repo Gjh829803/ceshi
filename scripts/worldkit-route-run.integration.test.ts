@@ -149,7 +149,7 @@ async function stopWorldkitRun(
 }
 
 describe("worldkit run trusted Route Host transport", () => {
-  it("publishes same-world trusted Route evidence through Browser V4 and cleans owned state", async () => {
+  it("publishes same-world trusted Route evidence through Browser V5 and cleans owned state", async () => {
     const temporaryDirectory = await mkdtemp(
       path.join(tmpdir(), "worldkit-route-run-integration-"),
     );
@@ -250,7 +250,7 @@ describe("worldkit run trusted Route Host transport", () => {
       }, ROUTE_SELECTOR);
 
       expect(result).toMatchObject({
-        protocolVersion: 4,
+        protocolVersion: 5,
         routeEvidenceStatus: 200,
         publication: expectedWorldHashes,
         summary: {

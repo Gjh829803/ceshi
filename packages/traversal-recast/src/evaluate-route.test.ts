@@ -1,19 +1,26 @@
 import { sha256CanonicalJson } from "@whitebox-world/protocol";
 import {
-  assertTraversalGraphBuildBudgetV1,
-  hashHeightfieldRouteBuildInputV1,
-  type HeightfieldRouteBuildInputReceiptV1,
-  type HeightfieldRouteBuildInputV1,
+  createRouteBuildInputReceiptV2,
+  hashRouteBuildInputV2,
+  hashRouteColliderArtifactV2,
+  hashRouteGeometryArtifactV2,
+  hashRouteSurfaceArtifactV2,
+  hashRouteTerrainArtifactV2,
+  type RouteBuildInputReceiptV2,
+  type RouteBuildInputV2,
 } from "@whitebox-world/traversal";
 import { Raw } from "recast-navigation";
 import { describe, expect, it } from "vitest";
 
 import {
-  evaluateRequiredHeightfieldRouteV1,
-  genericUnreachableReasonForBuildInputV1,
-  RouteConnectivityOperationAbortedErrorV1,
+  evaluateRequiredRouteV2,
+  genericUnreachableReasonForBuildInputV2,
+  RouteConnectivityOperationAbortedErrorV2,
 } from "./evaluate-route.js";
-import { createRecastTestEnvelopeV1 } from "./test-fixture.test-support.js";
+import {
+  createMultiSurfaceRouteBuildInputReceiptV2,
+  createRecastTestEnvelopeV1,
+} from "./test-fixture.test-support.js";
 
 const HASH_A =
   "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa" as const;
@@ -36,12 +43,12 @@ function boundedReceipt(
   maximumX: number,
   startX: number,
   destinationX: number,
-): HeightfieldRouteBuildInputReceiptV1 {
+): RouteBuildInputReceiptV2 {
   const resourceLockHash = HASH_C;
   const capabilityEnvelope = createRecastTestEnvelopeV1({ resourceLockHash });
-  const input = deepFreeze({
-    kind: "heightfield-route-build-input",
-    schemaVersion: 1,
+  const draft = {
+    kind: "route-build-input",
+    schemaVersion: 2,
     authoringSpecHash: HASH_A,
     layoutSolveReportHash: HASH_B,
     resourceLockHash,
@@ -66,19 +73,18 @@ function boundedReceipt(
       widthMeters: 4,
       locomotionProfileRef: capabilityEnvelope.locomotionProfileRef,
     },
-    traversalSurface: {
+    traversalSurfaces: [{
       traversalSurfaceId: "surface-ground",
       surfaceEntityId: "terrain-ground",
       colliderSubshapeId: "collider-terrain",
       resourceRef: "worldkit://terrain/ground@1",
       resolvedVersion: "1",
       resourceHash: HASH_A,
-    },
+    }],
     capabilityEnvelope,
     terrainSource: {
       kind: "bounded",
       terrainEntityId: "terrain-ground",
-      terrainArtifactHash: HASH_B,
       triangleSoup: {
         positionsMetersXYZ: terrainPositionsMetersXYZ,
         triangleIndices: terrainTriangleIndices,
@@ -86,32 +92,26 @@ function boundedReceipt(
       minimumMetersXZ: [0, 0],
       maximumMetersXZ: [maximumX, 4],
     },
-    blockingColliders: [],
-    colliderArtifactHash: sha256CanonicalJson([]) as `sha256:${string}`,
+    staticColliders: [],
     blockedTraversalAreaExclusions: [],
     blockedWaterExclusions: [],
-  } satisfies HeightfieldRouteBuildInputV1);
-  const estimate = assertTraversalGraphBuildBudgetV1({
-    minimumMetersXZ: [0, 0],
-    maximumMetersXZ: [maximumX, 4],
-    tileSizeCells: capabilityEnvelope.tileSizeCells,
-    voxelCellSizeMeters: capabilityEnvelope.voxelCellSizeMeters,
-    maximumTiles: capabilityEnvelope.maximumTiles,
-  });
-  return deepFreeze({
-    input,
-    routeBuildInputHash: hashHeightfieldRouteBuildInputV1(input),
-    budgetEvidence: {
-      kind: "heightfield-tile-estimate",
-      ...estimate,
-      maximumTiles: capabilityEnvelope.maximumTiles,
-      minimumMetersXZ: [0, 0],
-      maximumMetersXZ: [maximumX, 4],
-    },
-  });
+  };
+  const terrainArtifactHash = hashRouteTerrainArtifactV2(draft.terrainSource);
+  const colliderArtifactHash = hashRouteColliderArtifactV2(draft.staticColliders);
+  const input = deepFreeze({
+    ...draft,
+    terrainArtifactHash,
+    colliderArtifactHash,
+    geometryArtifactHash: hashRouteGeometryArtifactV2({
+      terrainArtifactHash,
+      colliderArtifactHash,
+    }),
+    surfaceArtifactHash: hashRouteSurfaceArtifactV2(draft.traversalSurfaces),
+  } as unknown as RouteBuildInputV2);
+  return createRouteBuildInputReceiptV2(input);
 }
 
-function flatReceipt(): HeightfieldRouteBuildInputReceiptV1 {
+function flatReceipt(): RouteBuildInputReceiptV2 {
   return boundedReceipt(
     [
       0, 0, 0,
@@ -126,7 +126,7 @@ function flatReceipt(): HeightfieldRouteBuildInputReceiptV1 {
   );
 }
 
-function disconnectedReceipt(): HeightfieldRouteBuildInputReceiptV1 {
+function disconnectedReceipt(): RouteBuildInputReceiptV2 {
   return boundedReceipt(
     [
       0, 0, 0,
@@ -150,24 +150,30 @@ function disconnectedReceipt(): HeightfieldRouteBuildInputReceiptV1 {
   );
 }
 
-function emptyReceipt(): HeightfieldRouteBuildInputReceiptV1 {
+function emptyReceipt(): RouteBuildInputReceiptV2 {
   const bounded = flatReceipt();
+  const terrainSource = {
+    kind: "empty" as const,
+    terrainEntityId: "terrain-ground",
+  };
+  const terrainArtifactHash = hashRouteTerrainArtifactV2(terrainSource);
+  const colliderArtifactHash = hashRouteColliderArtifactV2(
+    bounded.input.staticColliders,
+  );
   const input = deepFreeze({
     ...bounded.input,
-    terrainSource: {
-      kind: "empty" as const,
-      terrainEntityId: "terrain-ground",
-      terrainArtifactHash: HASH_B,
-    },
+    terrainSource,
+    terrainArtifactHash,
+    colliderArtifactHash,
+    geometryArtifactHash: hashRouteGeometryArtifactV2({
+      terrainArtifactHash,
+      colliderArtifactHash,
+    }),
   });
-  return deepFreeze({
-    input,
-    routeBuildInputHash: hashHeightfieldRouteBuildInputV1(input),
-    budgetEvidence: { kind: "not-required-empty-source" as const },
-  });
+  return createRouteBuildInputReceiptV2(input);
 }
 
-describe("evaluateRequiredHeightfieldRouteV1", () => {
+describe("evaluateRequiredRouteV2", () => {
   it("keeps every canonical blocked Water id in generic unreachable evidence", () => {
     const baseline = flatReceipt();
     const input = deepFreeze({
@@ -187,9 +193,9 @@ describe("evaluateRequiredHeightfieldRouteV1", () => {
     const receipt = deepFreeze({
       ...baseline,
       input,
-      routeBuildInputHash: hashHeightfieldRouteBuildInputV1(input),
+      routeBuildInputHash: hashRouteBuildInputV2(input),
     });
-    expect(genericUnreachableReasonForBuildInputV1(receipt)).toMatchObject({
+    expect(genericUnreachableReasonForBuildInputV2(receipt)).toMatchObject({
       kind: "required-path-unreachable",
       blockedWaterEntityIds: ["a-water", "z-water"],
     });
@@ -197,7 +203,7 @@ describe("evaluateRequiredHeightfieldRouteV1", () => {
 
   it("builds one real Recast Graph and returns a canonical complete path", async () => {
     const receipt = flatReceipt();
-    const result = await evaluateRequiredHeightfieldRouteV1({
+    const result = await evaluateRequiredRouteV2({
       buildInputReceipt: receipt,
     });
     expect(result.status).toBe("complete");
@@ -211,13 +217,15 @@ describe("evaluateRequiredHeightfieldRouteV1", () => {
       authoringSpecHash: receipt.input.authoringSpecHash,
       layoutSolveReportHash: receipt.input.layoutSolveReportHash,
       resourceLockHash: receipt.input.resourceLockHash,
-      traversalSurfaceIdentity: receipt.input.traversalSurface,
     });
+    expect(result.routePathReceipt.orderedTraversalSurfaceIdentities).toHaveLength(
+      result.routePathReceipt.orderedTraversalNodeIds.length,
+    );
     expect(JSON.stringify(result)).not.toMatch(/providerPolygonRef|recast|navMesh/i);
   });
 
   it("publishes a source-derived gap reason for a uniquely disconnected terrain cut", async () => {
-    const result = await evaluateRequiredHeightfieldRouteV1({
+    const result = await evaluateRequiredRouteV2({
       buildInputReceipt: disconnectedReceipt(),
     });
     expect(result.status).toBe("unreachable");
@@ -233,7 +241,7 @@ describe("evaluateRequiredHeightfieldRouteV1", () => {
   });
 
   it("skips provider allocation for an empty retained source", async () => {
-    const result = await evaluateRequiredHeightfieldRouteV1({
+    const result = await evaluateRequiredRouteV2({
       buildInputReceipt: emptyReceipt(),
     });
     expect(result.status).toBe("unreachable");
@@ -242,8 +250,22 @@ describe("evaluateRequiredHeightfieldRouteV1", () => {
     expect(result.connectivityFailure.reason.kind).toBe("empty-heightfield-source");
   });
 
+  it("does not admit empty-heightfield-source when empty terrain retains static colliders", async () => {
+    const receipt = createMultiSurfaceRouteBuildInputReceiptV2({
+      emptyTerrain: true,
+    });
+    const result = await evaluateRequiredRouteV2({
+      buildInputReceipt: receipt,
+    });
+    if (result.status === "complete") {
+      expect(result.status).toBe("complete");
+      return;
+    }
+    expect(result.connectivityFailure.reason.kind).not.toBe("empty-heightfield-source");
+  });
+
   it("projects a provider start miss into the canonical endpoint failure", async () => {
-    await evaluateRequiredHeightfieldRouteV1({ buildInputReceipt: flatReceipt() });
+    await evaluateRequiredRouteV2({ buildInputReceipt: flatReceipt() });
     if (Raw.Module === undefined) throw new Error("expected initialized Raw module");
     const queryPrototype = Raw.Module.NavMeshQuery.prototype;
     const originalFindNearestPoly = queryPrototype.findNearestPoly;
@@ -255,7 +277,7 @@ describe("evaluateRequiredHeightfieldRouteV1", () => {
       return status;
     };
     try {
-      const result = await evaluateRequiredHeightfieldRouteV1({
+      const result = await evaluateRequiredRouteV2({
         buildInputReceipt: flatReceipt(),
       });
       expect(result.status).toBe("unreachable");
@@ -264,7 +286,6 @@ describe("evaluateRequiredHeightfieldRouteV1", () => {
         kind: "start-surface-not-found",
         code: "ROUTE_START_SURFACE_NOT_FOUND",
         anchorEntityId: "anchor-start",
-        traversalSurfaceId: "surface-ground",
       });
     } finally {
       queryPrototype.findNearestPoly = originalFindNearestPoly;
@@ -272,7 +293,7 @@ describe("evaluateRequiredHeightfieldRouteV1", () => {
   });
 
   it("rejects a destination provider Ref filtered out of the canonical Graph", async () => {
-    await evaluateRequiredHeightfieldRouteV1({ buildInputReceipt: flatReceipt() });
+    await evaluateRequiredRouteV2({ buildInputReceipt: flatReceipt() });
     if (Raw.Module === undefined) throw new Error("expected initialized Raw module");
     const queryPrototype = Raw.Module.NavMeshQuery.prototype;
     const originalFindNearestPoly = queryPrototype.findNearestPoly;
@@ -284,7 +305,7 @@ describe("evaluateRequiredHeightfieldRouteV1", () => {
       return status;
     };
     try {
-      const result = await evaluateRequiredHeightfieldRouteV1({
+      const result = await evaluateRequiredRouteV2({
         buildInputReceipt: flatReceipt(),
       });
       expect(result.status).toBe("unreachable");
@@ -293,7 +314,6 @@ describe("evaluateRequiredHeightfieldRouteV1", () => {
         kind: "destination-surface-not-found",
         code: "ROUTE_DESTINATION_SURFACE_NOT_FOUND",
         anchorEntityId: "anchor-destination",
-        traversalSurfaceId: "surface-ground",
       });
     } finally {
       queryPrototype.findNearestPoly = originalFindNearestPoly;
@@ -303,21 +323,21 @@ describe("evaluateRequiredHeightfieldRouteV1", () => {
   it("rejects a pre-aborted operation before provider work", async () => {
     const controller = new AbortController();
     controller.abort();
-    await expect(evaluateRequiredHeightfieldRouteV1({
+    await expect(evaluateRequiredRouteV2({
       buildInputReceipt: flatReceipt(),
       abortSignal: controller.signal,
-    })).rejects.toBeInstanceOf(RouteConnectivityOperationAbortedErrorV1);
+    })).rejects.toBeInstanceOf(RouteConnectivityOperationAbortedErrorV2);
   });
 
   it("is hash-identical across repeated real provider operations", async () => {
     const receipt = flatReceipt();
-    const first = await evaluateRequiredHeightfieldRouteV1({ buildInputReceipt: receipt });
-    const second = await evaluateRequiredHeightfieldRouteV1({ buildInputReceipt: receipt });
+    const first = await evaluateRequiredRouteV2({ buildInputReceipt: receipt });
+    const second = await evaluateRequiredRouteV2({ buildInputReceipt: receipt });
     expect(second).toEqual(first);
   });
 
   it("preserves an undefined provider throw after total operation cleanup", async () => {
-    await evaluateRequiredHeightfieldRouteV1({ buildInputReceipt: flatReceipt() });
+    await evaluateRequiredRouteV2({ buildInputReceipt: flatReceipt() });
     if (Raw.Module === undefined) throw new Error("expected initialized Raw module");
     const queryPrototype = Raw.Module.NavMeshQuery.prototype;
     const originalFindNearestPoly = queryPrototype.findNearestPoly;
@@ -327,7 +347,7 @@ describe("evaluateRequiredHeightfieldRouteV1", () => {
     let didThrow = false;
     let caught: unknown = "not-thrown";
     try {
-      await evaluateRequiredHeightfieldRouteV1({ buildInputReceipt: flatReceipt() });
+      await evaluateRequiredRouteV2({ buildInputReceipt: flatReceipt() });
     } catch (error) {
       didThrow = true;
       caught = error;

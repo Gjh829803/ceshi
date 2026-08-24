@@ -26,6 +26,7 @@ import type {
 
 import { BabylonWorldRuntime } from "./babylon-world-runtime";
 import { lockPublishedGroundFeels } from "./lock-published-ground-feels";
+import type { SubjectController } from "./subject-controller";
 
 const MEDIUM_FEEL_REF = "worldkit://control-feel-profile/humanoid.medium-ground@1";
 const HEAVY_FEEL_REF = "worldkit://control-feel-profile/humanoid.heavy-ground@1";
@@ -213,6 +214,19 @@ async function tickUntil(
     if (isDone(state)) return { state, elapsedTicks: tick + 1 };
   }
   return undefined;
+}
+
+function controllerFor(
+  runtime: BabylonWorldRuntime,
+  entityId: string,
+): SubjectController {
+  const controller = (runtime as unknown as {
+    subjectControllersByEntityId: ReadonlyMap<string, SubjectController>;
+  }).subjectControllersByEntityId.get(entityId);
+  if (controller === undefined) {
+    throw new Error(`Missing Subject controller '${entityId}'.`);
+  }
+  return controller;
 }
 
 describe("P1.5 conformance: closed Ground/Air Feel slice", () => {
@@ -406,15 +420,33 @@ describe("P1.5 conformance: closed Ground/Air Feel slice", () => {
       expect(settled).toBeDefined();
       expect(settled!.state.positionMetersXYZ[1]).toBeGreaterThan(0.3);
 
-      // Walk off the edge and catch the first published air tick.
-      const departed = await tickUntil(
-        runtime,
-        ["move-right"],
-        300,
-        (state) => state.movementMedium === "air",
-      );
+      // Walk off the flat ledge and catch the first published air tick. The
+      // immediately preceding physical support must still be SUPPORTED; a
+      // synthetic SLIDING transition would correctly clear coyote and conceal
+      // the controller regression behind the later jump assertion.
+      const controller = controllerFor(runtime, "player");
+      let supportBeforeDeparture:
+        | ReturnType<SubjectController["retainedCharacterSupportSample"]>
+        | undefined;
+      let departed:
+        | { state: SubjectRuntimeState; elapsedTicks: number }
+        | undefined;
+      for (let tick = 0; tick < 300; tick += 1) {
+        const snapshot = await runtime.runFixedInput({
+          actions: ["move-right"],
+          ticks: 1,
+        });
+        const state = snapshot.subjectStatesByEntityId.player!;
+        const support = controller.retainedCharacterSupportSample();
+        if (state.movementMedium === "air") {
+          departed = { state, elapsedTicks: tick + 1 };
+          break;
+        }
+        supportBeforeDeparture = support;
+      }
       expect(departed).toBeDefined();
       expect(departed!.state.positionMetersXYZ[0]).toBeGreaterThan(1.5);
+      expect(supportBeforeDeparture?.supportState).toBe("supported");
 
       // Coyote from the supported ledge still allows the jump one tick into
       // the fall.

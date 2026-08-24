@@ -157,6 +157,11 @@ export function createTraversalCapabilityEnvelopeV1(
     maximumEdges: profile.maximumEdges,
     maximumTiles: profile.maximumTiles,
     maximumSearchSteps: profile.maximumSearchSteps,
+    maximumTraversalSurfaceCount: profile.maximumTraversalSurfaceCount,
+    minimumEquivalentPlaneNormalDotRatio:
+      profile.minimumEquivalentPlaneNormalDotRatio,
+    maximumTraversalSurfaceTrianglePairTestCount:
+      profile.maximumTraversalSurfaceTrianglePairTestCount,
   } satisfies TraversalCapabilityEnvelopeV1));
 
   return deepFreeze({

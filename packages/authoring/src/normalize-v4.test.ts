@@ -1,12 +1,19 @@
 import { describe, expect, it } from "vitest";
 
 import {
+  canonicalAuthoringIdentityV3,
   normalizeAuthoringSpecV3,
   normalizeAuthoringSpecV4,
+  projectNormalizedWorldResourcesToV3LayoutIdentity,
   type AuthoringSpecV4,
 } from "./index.js";
 import { createValidAuthoringSpec } from "./test-fixture.js";
 import { sha256CanonicalJson } from "./canonical-json.js";
+
+const GROUND_STATIC_PROFILE_REF =
+  "worldkit://traversal-surface-profile/ground.static@1";
+const GROUND_STATIC_PROFILE_HASH =
+  "sha256:16d21f75625a849156be42b27c11cea30f461292f346ce8aae52f6049f0aa4d4";
 
 function routeWorld(): AuthoringSpecV4 {
   const source = createValidAuthoringSpec();
@@ -57,7 +64,136 @@ function routeWorld(): AuthoringSpecV4 {
   };
 }
 
+function routeWorldWithBindings(
+  bindings: readonly {
+    readonly id: string;
+    readonly kind: "collider-subshape";
+    readonly logicalSubshapeId: string;
+    readonly traversalSurfaceProfileRef: string;
+  }[] = [{
+    id: "deck",
+    kind: "collider-subshape",
+    logicalSubshapeId: "primary",
+    traversalSurfaceProfileRef: GROUND_STATIC_PROFILE_REF,
+  }],
+): AuthoringSpecV4 {
+  const source = structuredClone(routeWorld()) as unknown as {
+    resources: {
+      prototypes: Array<{
+        traversalSurfaceBindings?: typeof bindings;
+      }>;
+    };
+  };
+  source.resources.prototypes[0]!.traversalSurfaceBindings = bindings;
+  return source as unknown as AuthoringSpecV4;
+}
+
+function routeWorldWithReorderableBoundPrototypes(reverse: boolean): AuthoringSpecV4 {
+  const source = routeWorldWithBindings();
+  const prototype = source.resources.prototypes[0]!;
+  const prototypes: AuthoringSpecV4["resources"]["prototypes"] = [
+    prototype,
+    {
+      id: "platform-alt",
+      version: 1,
+      kind: "primitive",
+      primitive: "box",
+      sizeMetersXYZ: [4, 0.5, 4],
+      collisionEnabled: true,
+      traversalSurfaceBindings: [{
+        id: "upper-deck",
+        kind: "collider-subshape",
+        logicalSubshapeId: "primary",
+        traversalSurfaceProfileRef: GROUND_STATIC_PROFILE_REF,
+      }],
+    },
+  ];
+  return {
+    ...source,
+    resources: {
+      ...source.resources,
+      prototypes: reverse ? [...prototypes].reverse() : prototypes,
+    },
+  };
+}
+
 describe("normalizeAuthoringSpecV4", () => {
+  it("sorts and recursively freezes V4-only Prototype bindings", () => {
+    const first = normalizeAuthoringSpecV4(
+      routeWorldWithReorderableBoundPrototypes(false),
+    );
+    const reversed = normalizeAuthoringSpecV4(
+      routeWorldWithReorderableBoundPrototypes(true),
+    );
+    const normalizedPrototypes = first.value?.resources.prototypes;
+
+    expect(first.ok).toBe(true);
+    expect(normalizedPrototypes?.map((prototype) => prototype.id)).toEqual([
+      "platform-alt",
+      "wall",
+    ]);
+    for (const prototype of normalizedPrototypes ?? []) {
+      expect(Object.isFrozen(prototype.traversalSurfaceBindings)).toBe(true);
+      expect(Object.isFrozen(prototype.traversalSurfaceBindings?.[0])).toBe(true);
+    }
+    expect(first.normalizedWorldIrHash).toBe(reversed.normalizedWorldIrHash);
+    expect(first.value?.authoringSpecHash).toBe(reversed.value?.authoringSpecHash);
+  });
+
+  it("locks each distinct resolved Profile receipt with exact canonical bytes", () => {
+    const result = normalizeAuthoringSpecV4(routeWorldWithBindings());
+
+    expect(result.ok).toBe(true);
+    expect(result.value?.resources.resourceLock).toContainEqual({
+      resourceRef: GROUND_STATIC_PROFILE_REF,
+      resourceKind: "traversal-surface-profile",
+      resolvedVersion: "1",
+      contentHash: GROUND_STATIC_PROFILE_HASH,
+    });
+    expect(result.value?.resources.resourceLock.filter(
+      (entry) => entry.resourceRef === GROUND_STATIC_PROFILE_REF,
+    )).toHaveLength(1);
+  });
+
+  it("binds Prototype and resolved Profile changes into every V4 identity layer", () => {
+    const unbound = normalizeAuthoringSpecV4(routeWorld());
+    const bound = normalizeAuthoringSpecV4(routeWorldWithBindings());
+    const renamed = normalizeAuthoringSpecV4(routeWorldWithBindings([{
+      id: "deck-renamed",
+      kind: "collider-subshape",
+      logicalSubshapeId: "primary",
+      traversalSurfaceProfileRef: GROUND_STATIC_PROFILE_REF,
+    }]));
+
+    expect(bound.value?.authoringSpecHash).not.toBe(unbound.value?.authoringSpecHash);
+    expect(bound.normalizedWorldIrHash).not.toBe(unbound.normalizedWorldIrHash);
+    expect(bound.value?.resources.resourceLockHash)
+      .not.toBe(unbound.value?.resources.resourceLockHash);
+    expect(renamed.value?.authoringSpecHash).not.toBe(bound.value?.authoringSpecHash);
+    expect(renamed.normalizedWorldIrHash).not.toBe(bound.normalizedWorldIrHash);
+    expect(renamed.value?.resources.resourceLockHash)
+      .toBe(bound.value?.resources.resourceLockHash);
+  });
+
+  it("fails closed when a syntactically valid Profile ref cannot be resolved", () => {
+    const result = normalizeAuthoringSpecV4(routeWorldWithBindings([{
+      id: "deck",
+      kind: "collider-subshape",
+      logicalSubshapeId: "primary",
+      traversalSurfaceProfileRef:
+        "worldkit://traversal-surface-profile/ground.static@2",
+    }]));
+
+    expect(result).toMatchObject({
+      ok: false,
+      diagnostics: expect.arrayContaining([expect.objectContaining({
+        code: "AUTHORING_REFERENCE_NOT_FOUND",
+        instancePath:
+          "/resources/prototypes/0/traversalSurfaceBindings/0/traversalSurfaceProfileRef",
+      })]),
+    });
+  });
+
   it("promotes connectivity into canonical IR and preserves solver provenance", () => {
     const result = normalizeAuthoringSpecV4(routeWorld());
 
@@ -129,6 +265,45 @@ describe("normalizeAuthoringSpecV4", () => {
     );
     expect(baseline.value?.authoringSpecHash).not.toBe(
       baseline.layoutSolveReport?.authoringSpecHash,
+    );
+  });
+
+  it("reconstructs the V3 layout identity from restored V4 Normalized IR resources", () => {
+    const spec = routeWorldWithBindings();
+    const result = normalizeAuthoringSpecV4(spec);
+    const world = result.value;
+    const layoutSolveReport = result.layoutSolveReport;
+    if (
+      result.ok !== true ||
+      world === undefined ||
+      layoutSolveReport === undefined
+    ) {
+      throw new Error(`bound fixture normalization failed: ${JSON.stringify(result.diagnostics)}`);
+    }
+
+    const layoutResources = projectNormalizedWorldResourcesToV3LayoutIdentity(
+      world.resources,
+    );
+    const projectedV3 = {
+      ...structuredClone(spec),
+      schemaVersion: 3 as const,
+      constraints: {
+        placements: structuredClone([...spec.constraints.placements]),
+      },
+    };
+    expect(
+      sha256CanonicalJson(
+        canonicalAuthoringIdentityV3(projectedV3, {
+          ...world,
+          resources: layoutResources,
+        }),
+      ),
+    ).toBe(layoutSolveReport.authoringSpecHash);
+    expect(layoutResources.resourceLockHash).toBe(
+      layoutSolveReport.registryLockHash,
+    );
+    expect(layoutResources.resourceLockHash).not.toBe(
+      world.resources.resourceLockHash,
     );
   });
 

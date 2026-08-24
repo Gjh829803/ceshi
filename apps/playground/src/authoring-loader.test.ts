@@ -12,10 +12,10 @@ import {
 } from "@whitebox-world/authoring";
 import { compileWorldV5 } from "@whitebox-world/compiler";
 import {
-  canonicalWorldkitBrowserRouteEvidencePublicationV1,
+  canonicalWorldkitBrowserRouteEvidencePublicationV2,
   WORLDKIT_BROWSER_PROTOCOL_VERSION,
-  type WorldkitBrowserApiV4,
-  type WorldkitBrowserRouteEvidencePublicationV1,
+  type WorldkitBrowserApiV5,
+  type WorldkitBrowserRouteEvidencePublicationV2,
 } from "@whitebox-world/runtime-contracts";
 
 import {
@@ -82,7 +82,7 @@ function routeAuthoringWorld(): AuthoringSpecV4 {
 
 function matchingRouteEvidencePublication(
   source: AuthoringSpecV4,
-): WorldkitBrowserRouteEvidencePublicationV1 {
+): WorldkitBrowserRouteEvidencePublicationV2 {
   const normalized = normalizeAuthoringSpecV4(source);
   if (
     !normalized.ok ||
@@ -103,9 +103,9 @@ function matchingRouteEvidencePublication(
   ) {
     throw new Error("Route Authoring fixture did not compile.");
   }
-  return canonicalWorldkitBrowserRouteEvidencePublicationV1({
+  return canonicalWorldkitBrowserRouteEvidencePublicationV2({
     kind: "worldkit-browser-route-evidence-publication",
-    schemaVersion: 1,
+    schemaVersion: 2,
     worldPackageRootHash: ROUTE_EVIDENCE_HASH,
     authoringSpecHash: normalized.value.authoringSpecHash,
     normalizedWorldIrHash: normalized.normalizedWorldIrHash,
@@ -756,7 +756,7 @@ describe("loadAuthoringScene", () => {
     });
   });
 
-  it("defines Browser Protocol V4 with explicit control binding", () => {
+  it("defines Browser Protocol V5 with explicit control binding", () => {
     const fail = (): never => {
       throw new Error("not invoked");
     };
@@ -767,7 +767,7 @@ describe("loadAuthoringScene", () => {
       selector: { constraintId: "player-to-goal", routeId: "main-route" },
       reason: "route-evidence-not-loaded",
     } as const;
-    const api: WorldkitBrowserApiV4 = {
+    const api: WorldkitBrowserApiV5 = {
       version: WORLDKIT_BROWSER_PROTOCOL_VERSION,
       ready: async () => fail(),
       getSnapshot: fail,
@@ -787,7 +787,7 @@ describe("loadAuthoringScene", () => {
       getRouteOverlay: () => unavailable,
     };
 
-    expect(api.version).toBe(4);
+    expect(api.version).toBe(5);
     expect(api.bindControl).toBeTypeOf("function");
   });
 

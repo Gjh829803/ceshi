@@ -141,6 +141,78 @@ describe("WorldPackageValidationSubjectV1 assembly", () => {
     expect(Object.isFrozen(subject)).toBe(true);
   });
 
+  it("binds a V4 world whose Prototypes restore Traversal Surface bindings", () => {
+    const source = createValidAuthoringSpec();
+    const authoringSpec: AuthoringSpecV4 = {
+      ...asV4(source),
+      resources: {
+        ...source.resources,
+        prototypes: source.resources.prototypes.map((prototype, index) =>
+          index !== 0
+            ? prototype
+            : {
+                ...prototype,
+                traversalSurfaceBindings: [{
+                  id: "deck",
+                  kind: "collider-subshape",
+                  logicalSubshapeId: "primary",
+                  traversalSurfaceProfileRef:
+                    "worldkit://traversal-surface-profile/ground.static@1",
+                }],
+              },
+        ),
+      },
+    };
+    const { validationInput } = (() => {
+      const normalized = normalizeAuthoringSpecV4(authoringSpec);
+      if (
+        !normalized.ok ||
+        normalized.value === undefined ||
+        normalized.normalizedWorldIrHash === undefined ||
+        normalized.layoutSolveReport === undefined ||
+        normalized.layoutSolveReportHash === undefined
+      ) {
+        throw new Error(`bound fixture normalization failed: ${JSON.stringify(normalized.diagnostics)}`);
+      }
+      const compiled = compileWorldV5({
+        normalizedWorldIr: normalized.value,
+        normalizedWorldIrHash: normalized.normalizedWorldIrHash,
+      });
+      if (!compiled.ok || compiled.executionPlan === undefined) {
+        throw new Error(`bound fixture compilation failed: ${JSON.stringify(compiled.diagnostics)}`);
+      }
+      const layoutSolveResult: LayoutSolveResultV1 = {
+        status: normalized.layoutSolveReport.status,
+        report: normalized.layoutSolveReport,
+        layoutSolveReportHash: normalized.layoutSolveReportHash,
+      };
+      const packageInput: CreateWorldPackageBuildReceiptInputV1 = {
+        packageId: `${authoringSpec.id}.package`,
+        authoringSpec,
+        normalizedWorldIr: normalized.value,
+        layoutSolveResult,
+        executionPlan: compiled.executionPlan,
+        resourceArtifacts: [],
+      };
+      return {
+        validationInput: {
+          worldPackageBuildReceipt: createWorldPackageBuildReceiptV1(packageInput),
+          authoringSpec,
+          normalizedWorldIr: normalized.value,
+          layoutSolveResult,
+          executionPlan: compiled.executionPlan,
+        },
+      };
+    })();
+    const subject = createWorldPackageValidationSubjectV1(validationInput);
+    expect(subject.resourceLockHash).toBe(
+      validationInput.normalizedWorldIr.resources.resourceLockHash,
+    );
+    expect(subject.layoutSolveReportHash).toBe(
+      validationInput.layoutSolveResult.layoutSolveReportHash,
+    );
+  });
+
   it("is deterministic and detached from later caller mutation", () => {
     const { validationInput } = createFixture();
     const subject = createWorldPackageValidationSubjectV1(validationInput);

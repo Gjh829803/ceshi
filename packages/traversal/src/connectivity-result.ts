@@ -1,408 +1,75 @@
 import { sha256CanonicalJson } from "@whitebox-world/protocol";
-import { isNil, isPlainObject } from "lodash-es";
+import { isEmpty, isEqual, isNil, isPlainObject } from "lodash-es";
 
 import {
-  assertHeightfieldRouteBuildInputReceiptV1,
-  type HeightfieldRouteBuildInputReceiptV1,
+  assertRouteBuildInputReceiptV2,
+  type RouteBuildInputReceiptV2,
 } from "./build-input.js";
 import {
-  canonicalTraversalGraphV1,
-  hashTraversalGraphV1,
-  type TraversalGraphV1,
+  assertTraversalGraphForBuildInputV2,
+  assertTraversalSurfaceIdentityV1,
+  canonicalTraversalGraphV2,
+  hashTraversalGraphV2,
+  type TraversalGraphV2,
 } from "./graph-contract.js";
 import {
-  canonicalRoutePathReceiptV1,
-  hashRoutePathReceiptV1,
-  type RoutePathReceiptV1,
+  assertRoutePathReceiptForGraphV2,
+  canonicalRoutePathReceiptV2,
+  hashRoutePathReceiptV2,
+  type RoutePathReceiptV2,
 } from "./path-receipt.js";
-import { resolveTraversalGraphBuilderProfile } from "./profile-registry.js";
+import {
+  resolveTraversalGraphBuilderProfile,
+  resolveTraversalGraphBuilderProfileV2,
+} from "./profile-registry.js";
+import type { TraversalSurfaceIdentityV1 } from "./types.js";
 
 type Sha256Hash = `sha256:${string}`;
 type Vec3 = readonly [number, number, number];
 type UnknownRecord = Record<string, unknown>;
 
-export const ROUTE_CONNECTIVITY_FAILURE_CODES_V1 = [
-  "ROUTE_START_SURFACE_NOT_FOUND",
-  "ROUTE_DESTINATION_SURFACE_NOT_FOUND",
-  "ROUTE_REQUIRED_PATH_UNREACHABLE",
-  "ROUTE_STEP_HEIGHT_EXCEEDED",
-  "ROUTE_SLOPE_EXCEEDED",
-  "ROUTE_CLEARANCE_WIDTH_INSUFFICIENT",
-  "ROUTE_OVERHEAD_CLEARANCE_INSUFFICIENT",
-  "ROUTE_SURFACE_GAP_EXCEEDED",
-  "ROUTE_GRAPH_BUDGET_EXCEEDED",
-] as const;
 
-export type RouteConnectivityFailureCodeV1 =
-  (typeof ROUTE_CONNECTIVITY_FAILURE_CODES_V1)[number];
-
-export interface RouteThresholdRejectionProofV1 {
+export interface RouteThresholdRejectionProofV2 {
   readonly proofKind: "unique-single-reason-cut";
   readonly proofCandidateIds: readonly string[];
   readonly failurePositionMetersXYZ: Vec3;
 }
 
-export type RouteThresholdRejectionReasonV1 =
-  | Readonly<RouteThresholdRejectionProofV1 & {
+export type RouteThresholdRejectionReasonV2 =
+  | Readonly<RouteThresholdRejectionProofV2 & {
       kind: "slope-threshold-exceeded";
       code: "ROUTE_SLOPE_EXCEEDED";
-      terrainEntityId: string;
       maximumObservedSlopeDegrees: number;
       maximumAllowedSlopeDegrees: number;
     }>
-  | Readonly<RouteThresholdRejectionProofV1 & {
+  | Readonly<RouteThresholdRejectionProofV2 & {
       kind: "step-height-threshold-exceeded";
       code: "ROUTE_STEP_HEIGHT_EXCEEDED";
-      terrainEntityId: string;
       maximumObservedStepHeightMeters: number;
       maximumAllowedStepHeightMeters: number;
     }>
-  | Readonly<RouteThresholdRejectionProofV1 & {
+  | Readonly<RouteThresholdRejectionProofV2 & {
       kind: "clearance-width-insufficient";
       code: "ROUTE_CLEARANCE_WIDTH_INSUFFICIENT";
-      terrainEntityId: string;
       relevantColliderSubshapeIds: readonly string[];
       minimumObservedClearanceWidthMeters: number;
       minimumRequiredClearanceWidthMeters: number;
     }>
-  | Readonly<RouteThresholdRejectionProofV1 & {
+  | Readonly<RouteThresholdRejectionProofV2 & {
       kind: "overhead-clearance-insufficient";
       code: "ROUTE_OVERHEAD_CLEARANCE_INSUFFICIENT";
-      terrainEntityId: string;
       relevantColliderSubshapeIds: readonly string[];
       minimumObservedClearanceHeightMeters: number;
       minimumRequiredClearanceHeightMeters: number;
     }>
-  | Readonly<RouteThresholdRejectionProofV1 & {
+  | Readonly<RouteThresholdRejectionProofV2 & {
       kind: "surface-gap-exceeded";
       code: "ROUTE_SURFACE_GAP_EXCEEDED";
-      terrainEntityId: string;
       maximumObservedSurfaceGapMeters: number;
       maximumAllowedSurfaceGapMeters: 0;
     }>;
 
-export type RouteConnectivityFailureReasonV1 =
-  | Readonly<{
-      kind: "empty-heightfield-source";
-      code: "ROUTE_REQUIRED_PATH_UNREACHABLE";
-      terrainEntityId: string;
-    }>
-  | Readonly<{
-      kind: "no-queryable-ground-surface";
-      code: "ROUTE_REQUIRED_PATH_UNREACHABLE";
-      terrainEntityId: string;
-      traversalSurfaceId: string;
-    }>
-  | Readonly<{
-      kind: "start-surface-not-found";
-      code: "ROUTE_START_SURFACE_NOT_FOUND";
-      anchorEntityId: string;
-      positionMetersXYZ: Vec3;
-      traversalSurfaceId: string;
-    }>
-  | Readonly<{
-      kind: "destination-surface-not-found";
-      code: "ROUTE_DESTINATION_SURFACE_NOT_FOUND";
-      anchorEntityId: string;
-      positionMetersXYZ: Vec3;
-      traversalSurfaceId: string;
-    }>
-  | Readonly<{
-      kind: "required-path-unreachable";
-      code: "ROUTE_REQUIRED_PATH_UNREACHABLE";
-      traversalSurfaceId: string;
-      relevantBlockingColliderEntityIds: readonly string[];
-      blockedWaterEntityIds: readonly string[];
-    }>
-  | Readonly<{
-      kind: "node-budget-exceeded";
-      code: "ROUTE_GRAPH_BUDGET_EXCEEDED";
-      maximumAllowedCount: number;
-      minimumRequiredCount: number;
-    }>
-  | Readonly<{
-      kind: "edge-budget-exceeded";
-      code: "ROUTE_GRAPH_BUDGET_EXCEEDED";
-      maximumAllowedCount: number;
-      minimumRequiredCount: number;
-    }>
-  | Readonly<{
-      kind: "search-budget-exceeded";
-      code: "ROUTE_GRAPH_BUDGET_EXCEEDED";
-      maximumAllowedCount: number;
-      minimumRequiredCount: number;
-    }>
-  | Readonly<{
-      kind: "straight-path-capacity-exceeded";
-      code: "ROUTE_GRAPH_BUDGET_EXCEEDED";
-      maximumAllowedCount: number;
-      minimumRequiredCount: number;
-    }>
-  | RouteThresholdRejectionReasonV1;
-
-export interface RouteConnectivityFailureCommonV1 {
-  readonly kind: "route-connectivity-failure";
-  readonly schemaVersion: 1;
-  readonly constraintId: string;
-  readonly routeId: string;
-  readonly traversingEntityId: string;
-  readonly startAnchorEntityId: string;
-  readonly destinationAnchorEntityId: string;
-  readonly startAnchorPositionMetersXYZ: Vec3;
-  readonly destinationAnchorPositionMetersXYZ: Vec3;
-  readonly traversalSurfaceId: string;
-  readonly surfaceEntityId: string;
-  readonly colliderSubshapeId: string;
-  readonly routeBuildInputHash: Sha256Hash;
-  readonly resolvedTraversalLockHash: Sha256Hash;
-  readonly graphBuilderProfileRef: string;
-  readonly graphBuilderResolvedVersion: string;
-  readonly graphBuilderProfileHash: Sha256Hash;
-}
-
-type ReasonOfKind<K extends RouteConnectivityFailureReasonV1["kind"]> =
-  Extract<RouteConnectivityFailureReasonV1, { kind: K }>;
-
-export type RouteConnectivityUnavailableUnreachableReasonV1 =
-  | ReasonOfKind<"empty-heightfield-source">
-  | ReasonOfKind<"no-queryable-ground-surface">
-  | RouteThresholdRejectionReasonV1;
-
-export type RouteConnectivityUnavailableIncompleteReasonV1 =
-  | ReasonOfKind<"node-budget-exceeded">
-  | ReasonOfKind<"edge-budget-exceeded">;
-
-export type RouteConnectivityCompleteUnreachableReasonV1 =
-  | ReasonOfKind<"start-surface-not-found">
-  | ReasonOfKind<"destination-surface-not-found">
-  | ReasonOfKind<"required-path-unreachable">
-  | RouteThresholdRejectionReasonV1;
-
-export type RouteConnectivityCompleteIncompleteReasonV1 =
-  | ReasonOfKind<"search-budget-exceeded">
-  | ReasonOfKind<"straight-path-capacity-exceeded">;
-
-export type RouteConnectivityFailureCompleteUnreachableV1 =
-  & RouteConnectivityFailureCommonV1
-  & Readonly<{
-      status: "unreachable";
-      graphStatus: "complete";
-      traversalGraphHash: Sha256Hash;
-      reason: RouteConnectivityCompleteUnreachableReasonV1;
-    }>;
-
-export type RouteConnectivityFailureCompleteIncompleteV1 =
-  & RouteConnectivityFailureCommonV1
-  & Readonly<{
-      status: "incomplete";
-      graphStatus: "complete";
-      traversalGraphHash: Sha256Hash;
-      reason: RouteConnectivityCompleteIncompleteReasonV1;
-    }>;
-
-export type RouteConnectivityFailureUnavailableUnreachableV1 =
-  & RouteConnectivityFailureCommonV1
-  & Readonly<{
-      status: "unreachable";
-      graphStatus: "unavailable";
-      reason: RouteConnectivityUnavailableUnreachableReasonV1;
-    }>;
-
-export type RouteConnectivityFailureUnavailableIncompleteV1 =
-  & RouteConnectivityFailureCommonV1
-  & Readonly<{
-      status: "incomplete";
-      graphStatus: "unavailable";
-      reason: RouteConnectivityUnavailableIncompleteReasonV1;
-    }>;
-
-export type RouteConnectivityFailureV1 =
-  | RouteConnectivityFailureCompleteUnreachableV1
-  | RouteConnectivityFailureCompleteIncompleteV1
-  | RouteConnectivityFailureUnavailableUnreachableV1
-  | RouteConnectivityFailureUnavailableIncompleteV1;
-
-export type HeightfieldRouteConnectivityResultV1 =
-  | Readonly<{
-      kind: "heightfield-route-connectivity-result";
-      schemaVersion: 1;
-      status: "complete";
-      traversalGraph: TraversalGraphV1;
-      traversalGraphHash: Sha256Hash;
-      routePathReceipt: RoutePathReceiptV1;
-      routePathReceiptHash: Sha256Hash;
-    }>
-  | Readonly<{
-      kind: "heightfield-route-connectivity-result";
-      schemaVersion: 1;
-      status: "unreachable";
-      graphStatus: "complete";
-      traversalGraph: TraversalGraphV1;
-      traversalGraphHash: Sha256Hash;
-      connectivityFailure: RouteConnectivityFailureCompleteUnreachableV1;
-      connectivityFailureHash: Sha256Hash;
-    }>
-  | Readonly<{
-      kind: "heightfield-route-connectivity-result";
-      schemaVersion: 1;
-      status: "incomplete";
-      graphStatus: "complete";
-      traversalGraph: TraversalGraphV1;
-      traversalGraphHash: Sha256Hash;
-      connectivityFailure: RouteConnectivityFailureCompleteIncompleteV1;
-      connectivityFailureHash: Sha256Hash;
-    }>
-  | Readonly<{
-      kind: "heightfield-route-connectivity-result";
-      schemaVersion: 1;
-      status: "unreachable";
-      graphStatus: "unavailable";
-      connectivityFailure: RouteConnectivityFailureUnavailableUnreachableV1;
-      connectivityFailureHash: Sha256Hash;
-    }>
-  | Readonly<{
-      kind: "heightfield-route-connectivity-result";
-      schemaVersion: 1;
-      status: "incomplete";
-      graphStatus: "unavailable";
-      connectivityFailure: RouteConnectivityFailureUnavailableIncompleteV1;
-      connectivityFailureHash: Sha256Hash;
-    }>;
-
 const SHA256_PATTERN = /^sha256:[a-f0-9]{64}$/;
-const COMMON_FIELDS = [
-  "kind",
-  "schemaVersion",
-  "constraintId",
-  "routeId",
-  "traversingEntityId",
-  "startAnchorEntityId",
-  "destinationAnchorEntityId",
-  "startAnchorPositionMetersXYZ",
-  "destinationAnchorPositionMetersXYZ",
-  "traversalSurfaceId",
-  "surfaceEntityId",
-  "colliderSubshapeId",
-  "routeBuildInputHash",
-  "resolvedTraversalLockHash",
-  "graphBuilderProfileRef",
-  "graphBuilderResolvedVersion",
-  "graphBuilderProfileHash",
-] as const;
-const FAILURE_BASE_FIELDS = [...COMMON_FIELDS, "status", "graphStatus", "reason"] as const;
-const THRESHOLD_KINDS = new Set<RouteConnectivityFailureReasonV1["kind"]>([
-  "slope-threshold-exceeded",
-  "step-height-threshold-exceeded",
-  "clearance-width-insufficient",
-  "overhead-clearance-insufficient",
-  "surface-gap-exceeded",
-]);
-const REASON_FIELDS: Readonly<Record<RouteConnectivityFailureReasonV1["kind"], readonly string[]>> = {
-  "empty-heightfield-source": ["kind", "code", "terrainEntityId"],
-  "no-queryable-ground-surface": [
-    "kind",
-    "code",
-    "terrainEntityId",
-    "traversalSurfaceId",
-  ],
-  "start-surface-not-found": [
-    "kind",
-    "code",
-    "anchorEntityId",
-    "positionMetersXYZ",
-    "traversalSurfaceId",
-  ],
-  "destination-surface-not-found": [
-    "kind",
-    "code",
-    "anchorEntityId",
-    "positionMetersXYZ",
-    "traversalSurfaceId",
-  ],
-  "required-path-unreachable": [
-    "kind",
-    "code",
-    "traversalSurfaceId",
-    "relevantBlockingColliderEntityIds",
-    "blockedWaterEntityIds",
-  ],
-  "node-budget-exceeded": [
-    "kind",
-    "code",
-    "maximumAllowedCount",
-    "minimumRequiredCount",
-  ],
-  "edge-budget-exceeded": [
-    "kind",
-    "code",
-    "maximumAllowedCount",
-    "minimumRequiredCount",
-  ],
-  "search-budget-exceeded": [
-    "kind",
-    "code",
-    "maximumAllowedCount",
-    "minimumRequiredCount",
-  ],
-  "straight-path-capacity-exceeded": [
-    "kind",
-    "code",
-    "maximumAllowedCount",
-    "minimumRequiredCount",
-  ],
-  "slope-threshold-exceeded": [
-    "kind",
-    "code",
-    "proofKind",
-    "proofCandidateIds",
-    "failurePositionMetersXYZ",
-    "terrainEntityId",
-    "maximumObservedSlopeDegrees",
-    "maximumAllowedSlopeDegrees",
-  ],
-  "step-height-threshold-exceeded": [
-    "kind",
-    "code",
-    "proofKind",
-    "proofCandidateIds",
-    "failurePositionMetersXYZ",
-    "terrainEntityId",
-    "maximumObservedStepHeightMeters",
-    "maximumAllowedStepHeightMeters",
-  ],
-  "clearance-width-insufficient": [
-    "kind",
-    "code",
-    "proofKind",
-    "proofCandidateIds",
-    "failurePositionMetersXYZ",
-    "terrainEntityId",
-    "relevantColliderSubshapeIds",
-    "minimumObservedClearanceWidthMeters",
-    "minimumRequiredClearanceWidthMeters",
-  ],
-  "overhead-clearance-insufficient": [
-    "kind",
-    "code",
-    "proofKind",
-    "proofCandidateIds",
-    "failurePositionMetersXYZ",
-    "terrainEntityId",
-    "relevantColliderSubshapeIds",
-    "minimumObservedClearanceHeightMeters",
-    "minimumRequiredClearanceHeightMeters",
-  ],
-  "surface-gap-exceeded": [
-    "kind",
-    "code",
-    "proofKind",
-    "proofCandidateIds",
-    "failurePositionMetersXYZ",
-    "terrainEntityId",
-    "maximumObservedSurfaceGapMeters",
-    "maximumAllowedSurfaceGapMeters",
-  ],
-};
 
 function failFailure(path: string, message: string): never {
   throw new Error(
@@ -561,19 +228,484 @@ function canonicalPlainCopy(value: unknown): unknown {
   );
 }
 
-function canonicalReason(value: unknown): RouteConnectivityFailureReasonV1 {
+function quantizeRoundHalfAwayFromZero(value: number, quantum: number): number {
+  const units = Math.sign(value) * Math.floor(Math.abs(value / quantum) + 0.5);
+  const quantized = units * quantum;
+  return Object.is(quantized, -0) ? 0 : quantized;
+}
+
+export const ROUTE_CONNECTIVITY_FAILURE_CODES_V2 = [
+  "ROUTE_START_SURFACE_NOT_FOUND",
+  "ROUTE_DESTINATION_SURFACE_NOT_FOUND",
+  "ROUTE_REQUIRED_PATH_UNREACHABLE",
+  "ROUTE_STEP_HEIGHT_EXCEEDED",
+  "ROUTE_SLOPE_EXCEEDED",
+  "ROUTE_CLEARANCE_WIDTH_INSUFFICIENT",
+  "ROUTE_OVERHEAD_CLEARANCE_INSUFFICIENT",
+  "ROUTE_SURFACE_GAP_EXCEEDED",
+  "ROUTE_GRAPH_BUDGET_EXCEEDED",
+  "ROUTE_SURFACE_PROFILE_MISSING",
+  "ROUTE_SURFACE_CORRELATION_MISSING",
+  "ROUTE_SURFACE_CORRELATION_AMBIGUOUS",
+] as const;
+
+export type RouteConnectivityFailureCodeV2 =
+  (typeof ROUTE_CONNECTIVITY_FAILURE_CODES_V2)[number];
+
+const COMMON_FIELDS_V2 = [
+  "kind",
+  "schemaVersion",
+  "constraintId",
+  "routeId",
+  "traversingEntityId",
+  "startAnchorEntityId",
+  "destinationAnchorEntityId",
+  "startAnchorPositionMetersXYZ",
+  "destinationAnchorPositionMetersXYZ",
+  "relatedTraversalSurfaceIdentities",
+  "routeBuildInputHash",
+  "resolvedTraversalLockHash",
+  "graphBuilderProfileRef",
+  "graphBuilderResolvedVersion",
+  "graphBuilderProfileHash",
+] as const;
+
+const FAILURE_BASE_FIELDS_V2 = [
+  ...COMMON_FIELDS_V2,
+  "status",
+  "graphStatus",
+  "reason",
+] as const;
+
+const REASON_FIELDS_V2: Readonly<
+  Record<RouteConnectivityFailureReasonV2["kind"], readonly string[]>
+> = {
+  "empty-heightfield-source": ["kind", "code", "terrainEntityId"],
+  "no-queryable-ground-surface": ["kind", "code"],
+  "start-surface-not-found": ["kind", "code", "anchorEntityId", "positionMetersXYZ"],
+  "destination-surface-not-found": [
+    "kind",
+    "code",
+    "anchorEntityId",
+    "positionMetersXYZ",
+  ],
+  "required-path-unreachable": [
+    "kind",
+    "code",
+    "relevantBlockingColliderEntityIds",
+    "blockedWaterEntityIds",
+  ],
+  "node-budget-exceeded": ["kind", "code", "maximumAllowedCount", "minimumRequiredCount"],
+  "edge-budget-exceeded": ["kind", "code", "maximumAllowedCount", "minimumRequiredCount"],
+  "search-budget-exceeded": [
+    "kind",
+    "code",
+    "maximumAllowedCount",
+    "minimumRequiredCount",
+  ],
+  "straight-path-capacity-exceeded": [
+    "kind",
+    "code",
+    "maximumAllowedCount",
+    "minimumRequiredCount",
+  ],
+  "slope-threshold-exceeded": [
+    "kind",
+    "code",
+    "proofKind",
+    "proofCandidateIds",
+    "failurePositionMetersXYZ",
+    "maximumObservedSlopeDegrees",
+    "maximumAllowedSlopeDegrees",
+  ],
+  "step-height-threshold-exceeded": [
+    "kind",
+    "code",
+    "proofKind",
+    "proofCandidateIds",
+    "failurePositionMetersXYZ",
+    "maximumObservedStepHeightMeters",
+    "maximumAllowedStepHeightMeters",
+  ],
+  "clearance-width-insufficient": [
+    "kind",
+    "code",
+    "proofKind",
+    "proofCandidateIds",
+    "failurePositionMetersXYZ",
+    "relevantColliderSubshapeIds",
+    "minimumObservedClearanceWidthMeters",
+    "minimumRequiredClearanceWidthMeters",
+  ],
+  "overhead-clearance-insufficient": [
+    "kind",
+    "code",
+    "proofKind",
+    "proofCandidateIds",
+    "failurePositionMetersXYZ",
+    "relevantColliderSubshapeIds",
+    "minimumObservedClearanceHeightMeters",
+    "minimumRequiredClearanceHeightMeters",
+  ],
+  "surface-gap-exceeded": [
+    "kind",
+    "code",
+    "proofKind",
+    "proofCandidateIds",
+    "failurePositionMetersXYZ",
+    "maximumObservedSurfaceGapMeters",
+    "maximumAllowedSurfaceGapMeters",
+  ],
+  "surface-profile-missing": [
+    "kind",
+    "code",
+    "relevantColliderSubshapeIds",
+    "failurePositionMetersXYZ",
+  ],
+  "surface-correlation-missing": ["kind", "code", "failurePositionMetersXYZ"],
+  "surface-correlation-ambiguous": ["kind", "code", "failurePositionMetersXYZ"],
+  "traversal-surface-count-budget-exceeded": [
+    "kind",
+    "code",
+    "maximumAllowedCount",
+    "minimumRequiredCount",
+  ],
+  "traversal-surface-triangle-pair-test-budget-exceeded": [
+    "kind",
+    "code",
+    "maximumAllowedCount",
+    "minimumRequiredCount",
+  ],
+};
+
+type OmitTerrainEntityId<T> = T extends unknown
+  ? Omit<T, "terrainEntityId">
+  : never;
+
+type RouteThresholdRejectionReasonV2SansTerrain =
+  OmitTerrainEntityId<RouteThresholdRejectionReasonV2>;
+
+export type RouteConnectivityFailureReasonV2 =
+  | Readonly<{
+      kind: "empty-heightfield-source";
+      code: "ROUTE_REQUIRED_PATH_UNREACHABLE";
+      terrainEntityId: string;
+    }>
+  | Readonly<{
+      kind: "no-queryable-ground-surface";
+      code: "ROUTE_REQUIRED_PATH_UNREACHABLE";
+    }>
+  | Readonly<{
+      kind: "start-surface-not-found";
+      code: "ROUTE_START_SURFACE_NOT_FOUND";
+      anchorEntityId: string;
+      positionMetersXYZ: Vec3;
+    }>
+  | Readonly<{
+      kind: "destination-surface-not-found";
+      code: "ROUTE_DESTINATION_SURFACE_NOT_FOUND";
+      anchorEntityId: string;
+      positionMetersXYZ: Vec3;
+    }>
+  | Readonly<{
+      kind: "required-path-unreachable";
+      code: "ROUTE_REQUIRED_PATH_UNREACHABLE";
+      relevantBlockingColliderEntityIds: readonly string[];
+      blockedWaterEntityIds: readonly string[];
+    }>
+  | Readonly<{
+      kind: "node-budget-exceeded";
+      code: "ROUTE_GRAPH_BUDGET_EXCEEDED";
+      maximumAllowedCount: number;
+      minimumRequiredCount: number;
+    }>
+  | Readonly<{
+      kind: "edge-budget-exceeded";
+      code: "ROUTE_GRAPH_BUDGET_EXCEEDED";
+      maximumAllowedCount: number;
+      minimumRequiredCount: number;
+    }>
+  | Readonly<{
+      kind: "search-budget-exceeded";
+      code: "ROUTE_GRAPH_BUDGET_EXCEEDED";
+      maximumAllowedCount: number;
+      minimumRequiredCount: number;
+    }>
+  | Readonly<{
+      kind: "straight-path-capacity-exceeded";
+      code: "ROUTE_GRAPH_BUDGET_EXCEEDED";
+      maximumAllowedCount: number;
+      minimumRequiredCount: number;
+    }>
+  | RouteThresholdRejectionReasonV2
+  | Readonly<{
+      kind: "surface-profile-missing";
+      code: "ROUTE_SURFACE_PROFILE_MISSING";
+      relevantColliderSubshapeIds: readonly string[];
+      failurePositionMetersXYZ: Vec3;
+    }>
+  | Readonly<{
+      kind: "surface-correlation-missing";
+      code: "ROUTE_SURFACE_CORRELATION_MISSING";
+      failurePositionMetersXYZ: Vec3;
+    }>
+  | Readonly<{
+      kind: "surface-correlation-ambiguous";
+      code: "ROUTE_SURFACE_CORRELATION_AMBIGUOUS";
+      failurePositionMetersXYZ: Vec3;
+    }>
+  | Readonly<{
+      kind: "traversal-surface-count-budget-exceeded";
+      code: "ROUTE_GRAPH_BUDGET_EXCEEDED";
+      maximumAllowedCount: number;
+      minimumRequiredCount: number;
+    }>
+  | Readonly<{
+      kind: "traversal-surface-triangle-pair-test-budget-exceeded";
+      code: "ROUTE_GRAPH_BUDGET_EXCEEDED";
+      maximumAllowedCount: number;
+      minimumRequiredCount: number;
+    }>;
+
+interface RouteConnectivityFailureCommonV2 {
+  readonly kind: "route-connectivity-failure";
+  readonly schemaVersion: 2;
+  readonly constraintId: string;
+  readonly routeId: string;
+  readonly traversingEntityId: string;
+  readonly startAnchorEntityId: string;
+  readonly destinationAnchorEntityId: string;
+  readonly startAnchorPositionMetersXYZ: Vec3;
+  readonly destinationAnchorPositionMetersXYZ: Vec3;
+  readonly relatedTraversalSurfaceIdentities: readonly TraversalSurfaceIdentityV1[];
+  readonly routeBuildInputHash: Sha256Hash;
+  readonly resolvedTraversalLockHash: Sha256Hash;
+  readonly graphBuilderProfileRef: string;
+  readonly graphBuilderResolvedVersion: string;
+  readonly graphBuilderProfileHash: Sha256Hash;
+}
+
+type ReasonKindV2 = RouteConnectivityFailureReasonV2["kind"];
+
+type RouteConnectivityUnavailableUnreachableReasonV2 =
+  | Extract<RouteConnectivityFailureReasonV2, { kind: "empty-heightfield-source" }>
+  | Extract<RouteConnectivityFailureReasonV2, { kind: "no-queryable-ground-surface" }>
+  | RouteThresholdRejectionReasonV2;
+
+type RouteConnectivityUnavailableIncompleteReasonV2 = Extract<
+  RouteConnectivityFailureReasonV2,
+  {
+    kind:
+      | "node-budget-exceeded"
+      | "edge-budget-exceeded"
+      | "surface-profile-missing"
+      | "surface-correlation-missing"
+      | "surface-correlation-ambiguous"
+      | "traversal-surface-count-budget-exceeded"
+      | "traversal-surface-triangle-pair-test-budget-exceeded";
+  }
+>;
+
+type RouteConnectivityCompleteUnreachableReasonV2 =
+  | Extract<RouteConnectivityFailureReasonV2, { kind: "start-surface-not-found" }>
+  | Extract<RouteConnectivityFailureReasonV2, { kind: "destination-surface-not-found" }>
+  | Extract<RouteConnectivityFailureReasonV2, { kind: "required-path-unreachable" }>
+  | RouteThresholdRejectionReasonV2;
+
+type RouteConnectivityCompleteIncompleteReasonV2 = Extract<
+  RouteConnectivityFailureReasonV2,
+  { kind: "search-budget-exceeded" | "straight-path-capacity-exceeded" }
+>;
+
+export type RouteConnectivityFailureV2 =
+  | (RouteConnectivityFailureCommonV2 &
+      Readonly<{
+        status: "unreachable";
+        graphStatus: "complete";
+        traversalGraphHash: Sha256Hash;
+        reason: RouteConnectivityCompleteUnreachableReasonV2;
+      }>)
+  | (RouteConnectivityFailureCommonV2 &
+      Readonly<{
+        status: "incomplete";
+        graphStatus: "complete";
+        traversalGraphHash: Sha256Hash;
+        reason: RouteConnectivityCompleteIncompleteReasonV2;
+      }>)
+  | (RouteConnectivityFailureCommonV2 &
+      Readonly<{
+        status: "unreachable";
+        graphStatus: "unavailable";
+        reason: RouteConnectivityUnavailableUnreachableReasonV2;
+      }>)
+  | (RouteConnectivityFailureCommonV2 &
+      Readonly<{
+        status: "incomplete";
+        graphStatus: "unavailable";
+        reason: RouteConnectivityUnavailableIncompleteReasonV2;
+      }>);
+
+export type RouteConnectivityResultV2 =
+  | Readonly<{
+      kind: "route-connectivity-result";
+      schemaVersion: 2;
+      status: "complete";
+      traversalGraph: TraversalGraphV2;
+      traversalGraphHash: Sha256Hash;
+      routePathReceipt: RoutePathReceiptV2;
+      routePathReceiptHash: Sha256Hash;
+    }>
+  | Readonly<{
+      kind: "route-connectivity-result";
+      schemaVersion: 2;
+      status: "unreachable";
+      graphStatus: "complete";
+      traversalGraph: TraversalGraphV2;
+      traversalGraphHash: Sha256Hash;
+      connectivityFailure: Extract<
+        RouteConnectivityFailureV2,
+        { status: "unreachable"; graphStatus: "complete" }
+      >;
+      connectivityFailureHash: Sha256Hash;
+    }>
+  | Readonly<{
+      kind: "route-connectivity-result";
+      schemaVersion: 2;
+      status: "incomplete";
+      graphStatus: "complete";
+      traversalGraph: TraversalGraphV2;
+      traversalGraphHash: Sha256Hash;
+      connectivityFailure: Extract<
+        RouteConnectivityFailureV2,
+        { status: "incomplete"; graphStatus: "complete" }
+      >;
+      connectivityFailureHash: Sha256Hash;
+    }>
+  | Readonly<{
+      kind: "route-connectivity-result";
+      schemaVersion: 2;
+      status: "unreachable";
+      graphStatus: "unavailable";
+      connectivityFailure: Extract<
+        RouteConnectivityFailureV2,
+        { status: "unreachable"; graphStatus: "unavailable" }
+      >;
+      connectivityFailureHash: Sha256Hash;
+    }>
+  | Readonly<{
+      kind: "route-connectivity-result";
+      schemaVersion: 2;
+      status: "incomplete";
+      graphStatus: "unavailable";
+      connectivityFailure: Extract<
+        RouteConnectivityFailureV2,
+        { status: "incomplete"; graphStatus: "unavailable" }
+      >;
+      connectivityFailureHash: Sha256Hash;
+    }>;
+
+const ZERO_RELATED_REASON_KINDS = new Set<ReasonKindV2>([
+  "empty-heightfield-source",
+  "no-queryable-ground-surface",
+  "start-surface-not-found",
+  "destination-surface-not-found",
+  "required-path-unreachable",
+  "node-budget-exceeded",
+  "edge-budget-exceeded",
+  "search-budget-exceeded",
+  "straight-path-capacity-exceeded",
+  "surface-profile-missing",
+  "traversal-surface-count-budget-exceeded",
+  "traversal-surface-triangle-pair-test-budget-exceeded",
+]);
+
+const THRESHOLD_KINDS_V2 = new Set<ReasonKindV2>([
+  "slope-threshold-exceeded",
+  "step-height-threshold-exceeded",
+  "clearance-width-insufficient",
+  "overhead-clearance-insufficient",
+  "surface-gap-exceeded",
+]);
+
+function failResultV2(path: string, message: string): never {
+  throw new Error(
+    `ROUTE_CONNECTIVITY_RESULT_INVALID: ${path.length > 0 ? `${path}: ` : ""}${message}`,
+  );
+}
+
+function requireEqualV2(actual: unknown, expected: unknown, path: string): void {
+  if (actual !== expected) {
+    failResultV2(path, "does not match related canonical evidence");
+  }
+}
+
+function canonicalRelatedIdentities(
+  value: unknown,
+  reasonKind: ReasonKindV2,
+): readonly TraversalSurfaceIdentityV1[] {
+  if (!Array.isArray(value)) {
+    failFailure("relatedTraversalSurfaceIdentities", "must be an array");
+  }
+  const identities = value.map((candidate, index) => {
+    try {
+      return assertTraversalSurfaceIdentityV1(candidate);
+    } catch {
+      failFailure(
+        `relatedTraversalSurfaceIdentities/${index}`,
+        "must be a canonical Traversal Surface identity",
+      );
+    }
+  });
+  let previousId: string | undefined;
+  for (const identity of identities) {
+    if (!isNil(previousId) && identity.traversalSurfaceId <= previousId) {
+      failFailure(
+        "relatedTraversalSurfaceIdentities",
+        "must be strictly sorted by unique traversalSurfaceId",
+      );
+    }
+    previousId = identity.traversalSurfaceId;
+  }
+  if (ZERO_RELATED_REASON_KINDS.has(reasonKind) && !isEmpty(identities)) {
+    failFailure(
+      "relatedTraversalSurfaceIdentities",
+      "must be empty for this reason",
+    );
+  }
+  if (reasonKind === "surface-correlation-missing" && identities.length > 1) {
+    failFailure(
+      "relatedTraversalSurfaceIdentities",
+      "must contain at most one identity",
+    );
+  }
+  if (reasonKind === "surface-correlation-ambiguous" && identities.length < 2) {
+    failFailure(
+      "relatedTraversalSurfaceIdentities",
+      "must contain at least two identities",
+    );
+  }
+  if (THRESHOLD_KINDS_V2.has(reasonKind) && isEmpty(identities)) {
+    failFailure(
+      "relatedTraversalSurfaceIdentities",
+      "must contain at least one identity",
+    );
+  }
+  return identities;
+}
+
+function canonicalReasonV2(value: unknown): RouteConnectivityFailureReasonV2 {
   const base = requireRecord(value, "reason", failFailure);
-  if (typeof base.kind !== "string" || !(base.kind in REASON_FIELDS)) {
+  if (typeof base.kind !== "string" || !(base.kind in REASON_FIELDS_V2)) {
     failFailure("reason/kind", "is not a supported failure reason");
   }
-  const kind = base.kind as RouteConnectivityFailureReasonV1["kind"];
+  const kind = base.kind as ReasonKindV2;
   const record = requireExactRecord(
     value,
-    REASON_FIELDS[kind],
+    REASON_FIELDS_V2[kind],
     "reason",
     failFailure,
   );
-  const expectedCodes: Readonly<Record<RouteConnectivityFailureReasonV1["kind"], RouteConnectivityFailureCodeV1>> = {
+  const expectedCodes: Readonly<Record<ReasonKindV2, RouteConnectivityFailureCodeV2>> = {
     "empty-heightfield-source": "ROUTE_REQUIRED_PATH_UNREACHABLE",
     "no-queryable-ground-surface": "ROUTE_REQUIRED_PATH_UNREACHABLE",
     "start-surface-not-found": "ROUTE_START_SURFACE_NOT_FOUND",
@@ -588,22 +720,28 @@ function canonicalReason(value: unknown): RouteConnectivityFailureReasonV1 {
     "clearance-width-insufficient": "ROUTE_CLEARANCE_WIDTH_INSUFFICIENT",
     "overhead-clearance-insufficient": "ROUTE_OVERHEAD_CLEARANCE_INSUFFICIENT",
     "surface-gap-exceeded": "ROUTE_SURFACE_GAP_EXCEEDED",
+    "surface-profile-missing": "ROUTE_SURFACE_PROFILE_MISSING",
+    "surface-correlation-missing": "ROUTE_SURFACE_CORRELATION_MISSING",
+    "surface-correlation-ambiguous": "ROUTE_SURFACE_CORRELATION_AMBIGUOUS",
+    "traversal-surface-count-budget-exceeded": "ROUTE_GRAPH_BUDGET_EXCEEDED",
+    "traversal-surface-triangle-pair-test-budget-exceeded": "ROUTE_GRAPH_BUDGET_EXCEEDED",
   };
   if (record.code !== expectedCodes[kind]) {
     failFailure("reason/code", `must be '${expectedCodes[kind]}'`);
   }
-  for (const field of [
-    "terrainEntityId",
-    "traversalSurfaceId",
-    "anchorEntityId",
-  ]) {
-    if (!isNil(record[field])) requireString(record[field], `reason/${field}`, failFailure);
+  if (!isNil(record.terrainEntityId)) {
+    requireString(record.terrainEntityId, "reason/terrainEntityId", failFailure);
+  }
+  if (!isNil(record.anchorEntityId)) {
+    requireString(record.anchorEntityId, "reason/anchorEntityId", failFailure);
   }
   if (
     kind === "node-budget-exceeded" ||
     kind === "edge-budget-exceeded" ||
     kind === "search-budget-exceeded" ||
-    kind === "straight-path-capacity-exceeded"
+    kind === "straight-path-capacity-exceeded" ||
+    kind === "traversal-surface-count-budget-exceeded" ||
+    kind === "traversal-surface-triangle-pair-test-budget-exceeded"
   ) {
     requireCapacity(record);
   }
@@ -615,9 +753,12 @@ function canonicalReason(value: unknown): RouteConnectivityFailureReasonV1 {
       record.relevantBlockingColliderEntityIds,
       "reason/relevantBlockingColliderEntityIds",
     );
-    requireSortedUniqueStrings(record.blockedWaterEntityIds, "reason/blockedWaterEntityIds");
+    requireSortedUniqueStrings(
+      record.blockedWaterEntityIds,
+      "reason/blockedWaterEntityIds",
+    );
   }
-  if (THRESHOLD_KINDS.has(kind)) {
+  if (THRESHOLD_KINDS_V2.has(kind)) {
     if (record.proofKind !== "unique-single-reason-cut") {
       failFailure("reason/proofKind", "must be 'unique-single-reason-cut'");
     }
@@ -625,7 +766,9 @@ function canonicalReason(value: unknown): RouteConnectivityFailureReasonV1 {
       record.proofCandidateIds,
       "reason/proofCandidateIds",
     );
-    if (proofIds.length === 0) failFailure("reason/proofCandidateIds", "must not be empty");
+    if (isEmpty(proofIds)) {
+      failFailure("reason/proofCandidateIds", "must not be empty");
+    }
     requireVec3(
       record.failurePositionMetersXYZ,
       "reason/failurePositionMetersXYZ",
@@ -666,7 +809,9 @@ function canonicalReason(value: unknown): RouteConnectivityFailureReasonV1 {
       "reason/maximumAllowedStepHeightMeters",
       failFailure,
     );
-    if (!(observed > allowed)) failFailure("reason", "step observation must exceed allowed");
+    if (!(observed > allowed)) {
+      failFailure("reason", "step observation must exceed allowed");
+    }
   } else if (kind === "clearance-width-insufficient") {
     const observed = requireNonNegative(
       record.minimumObservedClearanceWidthMeters,
@@ -678,7 +823,9 @@ function canonicalReason(value: unknown): RouteConnectivityFailureReasonV1 {
       "reason/minimumRequiredClearanceWidthMeters",
       failFailure,
     );
-    if (!(observed < required)) failFailure("reason", "width observation must be insufficient");
+    if (!(observed < required)) {
+      failFailure("reason", "width observation must be insufficient");
+    }
   } else if (kind === "overhead-clearance-insufficient") {
     const observed = requireNonNegative(
       record.minimumObservedClearanceHeightMeters,
@@ -690,7 +837,9 @@ function canonicalReason(value: unknown): RouteConnectivityFailureReasonV1 {
       "reason/minimumRequiredClearanceHeightMeters",
       failFailure,
     );
-    if (!(observed < required)) failFailure("reason", "height observation must be insufficient");
+    if (!(observed < required)) {
+      failFailure("reason", "height observation must be insufficient");
+    }
   } else if (kind === "surface-gap-exceeded") {
     const observed = requirePositive(
       record.maximumObservedSurfaceGapMeters,
@@ -698,42 +847,69 @@ function canonicalReason(value: unknown): RouteConnectivityFailureReasonV1 {
       failFailure,
     );
     if (record.maximumAllowedSurfaceGapMeters !== 0 || !(observed > 0)) {
-      failFailure("reason", "R1 allowed gap must be exactly zero");
+      failFailure("reason", "allowed gap must be exactly zero");
     }
+  } else if (kind === "surface-profile-missing") {
+    const ids = requireSortedUniqueStrings(
+      record.relevantColliderSubshapeIds,
+      "reason/relevantColliderSubshapeIds",
+    );
+    if (isEmpty(ids)) {
+      failFailure("reason/relevantColliderSubshapeIds", "must not be empty");
+    }
+    requireVec3(
+      record.failurePositionMetersXYZ,
+      "reason/failurePositionMetersXYZ",
+      failFailure,
+    );
+  } else if (
+    kind === "surface-correlation-missing" ||
+    kind === "surface-correlation-ambiguous"
+  ) {
+    requireVec3(
+      record.failurePositionMetersXYZ,
+      "reason/failurePositionMetersXYZ",
+      failFailure,
+    );
   }
-  return canonicalPlainCopy(record) as RouteConnectivityFailureReasonV1;
+  return canonicalPlainCopy(record) as RouteConnectivityFailureReasonV2;
 }
 
-export function canonicalRouteConnectivityFailureV1(
+export function canonicalRouteConnectivityFailureV2(
   value: unknown,
-): RouteConnectivityFailureV1 {
+): RouteConnectivityFailureV2 {
   const base = requireRecord(value, "", failFailure);
   const complete = base.graphStatus === "complete";
   const fields = complete
-    ? [...FAILURE_BASE_FIELDS, "traversalGraphHash"]
-    : FAILURE_BASE_FIELDS;
+    ? [...FAILURE_BASE_FIELDS_V2, "traversalGraphHash"]
+    : FAILURE_BASE_FIELDS_V2;
   const record = requireExactRecord(value, fields, "", failFailure);
   if (record.kind !== "route-connectivity-failure") {
     failFailure("kind", "must be 'route-connectivity-failure'");
   }
-  if (record.schemaVersion !== 1) failFailure("schemaVersion", "must be 1");
-  const reason = canonicalReason(record.reason);
-  const unavailableUnreachable = new Set<RouteConnectivityFailureReasonV1["kind"]>([
+  if (record.schemaVersion !== 2) failFailure("schemaVersion", "must be 2");
+  const reason = canonicalReasonV2(record.reason);
+  const unavailableUnreachable = new Set<ReasonKindV2>([
     "empty-heightfield-source",
     "no-queryable-ground-surface",
-    ...THRESHOLD_KINDS,
+    "surface-profile-missing",
+    "surface-correlation-missing",
+    "surface-correlation-ambiguous",
+    ...THRESHOLD_KINDS_V2,
   ]);
-  const unavailableIncomplete = new Set<RouteConnectivityFailureReasonV1["kind"]>([
+  const unavailableIncomplete = new Set<ReasonKindV2>([
     "node-budget-exceeded",
     "edge-budget-exceeded",
+    "traversal-surface-count-budget-exceeded",
+    "traversal-surface-triangle-pair-test-budget-exceeded",
   ]);
-  const completeUnreachable = new Set<RouteConnectivityFailureReasonV1["kind"]>([
+  const completeUnreachable = new Set<ReasonKindV2>([
     "start-surface-not-found",
     "destination-surface-not-found",
     "required-path-unreachable",
-    ...THRESHOLD_KINDS,
+    ...THRESHOLD_KINDS_V2,
   ]);
-  const completeIncomplete = new Set<RouteConnectivityFailureReasonV1["kind"]>([
+  const completeIncomplete = new Set<ReasonKindV2>([
     "search-budget-exceeded",
     "straight-path-capacity-exceeded",
   ]);
@@ -762,9 +938,6 @@ export function canonicalRouteConnectivityFailureV1(
     "traversingEntityId",
     "startAnchorEntityId",
     "destinationAnchorEntityId",
-    "traversalSurfaceId",
-    "surfaceEntityId",
-    "colliderSubshapeId",
     "graphBuilderProfileRef",
     "graphBuilderResolvedVersion",
   ]) {
@@ -773,15 +946,12 @@ export function canonicalRouteConnectivityFailureV1(
   if (commonStrings.startAnchorEntityId === commonStrings.destinationAnchorEntityId) {
     failFailure("startAnchorEntityId", "must differ from destinationAnchorEntityId");
   }
-  if (
-    commonStrings.traversalSurfaceId === commonStrings.surfaceEntityId ||
-    commonStrings.traversalSurfaceId === commonStrings.colliderSubshapeId ||
-    commonStrings.surfaceEntityId === commonStrings.colliderSubshapeId
-  ) {
-    failFailure("traversalSurfaceId", "Surface role ids must remain distinct");
-  }
   const commonHashes = {
-    routeBuildInputHash: requireHash(record.routeBuildInputHash, "routeBuildInputHash", failFailure),
+    routeBuildInputHash: requireHash(
+      record.routeBuildInputHash,
+      "routeBuildInputHash",
+      failFailure,
+    ),
     resolvedTraversalLockHash: requireHash(
       record.resolvedTraversalLockHash,
       "resolvedTraversalLockHash",
@@ -795,7 +965,9 @@ export function canonicalRouteConnectivityFailureV1(
   } as const;
   let resolved;
   try {
-    resolved = resolveTraversalGraphBuilderProfile(commonStrings.graphBuilderProfileRef!);
+    resolved = resolveTraversalGraphBuilderProfileV2(
+      commonStrings.graphBuilderProfileRef!,
+    );
   } catch (cause) {
     failFailure(
       "graphBuilderProfileRef",
@@ -808,12 +980,16 @@ export function canonicalRouteConnectivityFailureV1(
   ) {
     failFailure("graphBuilderProfileRef", "must match the Registry Profile identity");
   }
+  const relatedTraversalSurfaceIdentities = canonicalRelatedIdentities(
+    record.relatedTraversalSurfaceIdentities,
+    reasonKind,
+  );
   const traversalGraphHash = complete
     ? requireHash(record.traversalGraphHash, "traversalGraphHash", failFailure)
     : undefined;
   return deepFreeze({
     kind: "route-connectivity-failure",
-    schemaVersion: 1,
+    schemaVersion: 2,
     constraintId: commonStrings.constraintId!,
     routeId: commonStrings.routeId!,
     traversingEntityId: commonStrings.traversingEntityId!,
@@ -829,9 +1005,7 @@ export function canonicalRouteConnectivityFailureV1(
       "destinationAnchorPositionMetersXYZ",
       failFailure,
     ),
-    traversalSurfaceId: commonStrings.traversalSurfaceId!,
-    surfaceEntityId: commonStrings.surfaceEntityId!,
-    colliderSubshapeId: commonStrings.colliderSubshapeId!,
+    relatedTraversalSurfaceIdentities,
     ...commonHashes,
     graphBuilderProfileRef: commonStrings.graphBuilderProfileRef!,
     graphBuilderResolvedVersion: commonStrings.graphBuilderResolvedVersion!,
@@ -839,153 +1013,21 @@ export function canonicalRouteConnectivityFailureV1(
     graphStatus: record.graphStatus,
     ...(isNil(traversalGraphHash) ? {} : { traversalGraphHash }),
     reason,
-  }) as RouteConnectivityFailureV1;
+  }) as RouteConnectivityFailureV2;
 }
 
-export function hashRouteConnectivityFailureV1(value: unknown): Sha256Hash {
-  return sha256CanonicalJson(
-    canonicalRouteConnectivityFailureV1(value),
-  ) as Sha256Hash;
+export function hashRouteConnectivityFailureV2(value: unknown): Sha256Hash {
+  return sha256CanonicalJson(canonicalRouteConnectivityFailureV2(value)) as Sha256Hash;
 }
 
-function requireEqual(
-  actual: unknown,
-  expected: unknown,
-  path: string,
-): void {
-  if (actual !== expected) failResult(path, "does not match related canonical evidence");
-}
-
-function ceilToQuantum(value: number, quantum: number): number {
-  const units = Math.ceil(value / quantum - Number.EPSILON);
-  if (!Number.isSafeInteger(units)) failResult("routePathReceipt", "metric exceeds safe range");
-  return units * quantum;
-}
-
-function validatePathAgainstGraph(
-  path: RoutePathReceiptV1,
-  graph: TraversalGraphV1,
-): void {
-  const bindingFields = [
-    "authoringSpecHash",
-    "layoutSolveReportHash",
-    "resourceLockHash",
-    "routeId",
-    "startAnchorEntityId",
-    "destinationAnchorEntityId",
-    "routeBuildInputHash",
-    "resolvedTraversalLockHash",
-    "graphBuilderProfileRef",
-    "graphBuilderResolvedVersion",
-    "graphBuilderProfileHash",
-  ] as const;
-  for (const field of bindingFields) requireEqual(path[field], graph[field], `routePathReceipt/${field}`);
-
-  const selectedNodes = path.orderedTraversalNodeIds.map((id) => {
-    const node = graph.traversalNodesById[id];
-    if (isNil(node)) failResult("routePathReceipt/orderedTraversalNodeIds", `unknown Node '${id}'`);
-    requireEqual(
-      node.traversalSurfaceId,
-      path.traversalSurfaceIdentity.traversalSurfaceId,
-      `routePathReceipt/orderedTraversalNodeIds/${id}/traversalSurfaceId`,
-    );
-    requireEqual(
-      node.surfaceEntityId,
-      path.traversalSurfaceIdentity.surfaceEntityId,
-      `routePathReceipt/orderedTraversalNodeIds/${id}/surfaceEntityId`,
-    );
-    requireEqual(
-      node.colliderSubshapeId,
-      path.traversalSurfaceIdentity.colliderSubshapeId,
-      `routePathReceipt/orderedTraversalNodeIds/${id}/colliderSubshapeId`,
-    );
-    return node;
-  });
-  requireEqual(
-    path.traversalSurfaceIdentity.resourceHash,
-    graph.surfaceArtifactHash,
-    "routePathReceipt/traversalSurfaceIdentity/resourceHash",
-  );
-  const selectedEdges = path.orderedTraversalEdgeIds.map((id, index) => {
-    const edge = graph.traversalEdgesById[id];
-    if (isNil(edge)) failResult("routePathReceipt/orderedTraversalEdgeIds", `unknown Edge '${id}'`);
-    if (
-      edge.fromTraversalNodeId !== path.orderedTraversalNodeIds[index] ||
-      edge.toTraversalNodeId !== path.orderedTraversalNodeIds[index + 1]
-    ) {
-      failResult("routePathReceipt/orderedTraversalEdgeIds", `Edge '${id}' breaks ordered adjacency`);
-    }
-    return edge;
-  });
-  const profile = resolveTraversalGraphBuilderProfile(path.graphBuilderProfileRef).profile;
-  let distanceMeters = 0;
-  let distanceMetersXZ = 0;
-  let segmentSlopeDegrees = 0;
-  for (let index = 1; index < path.orderedPathPositionsMetersXYZ.length; index += 1) {
-    const previous = path.orderedPathPositionsMetersXYZ[index - 1]!;
-    const current = path.orderedPathPositionsMetersXYZ[index]!;
-    const dx = current[0] - previous[0];
-    const dy = current[1] - previous[1];
-    const dz = current[2] - previous[2];
-    distanceMeters += ceilToQuantum(
-      Math.hypot(dx, dy, dz),
-      profile.positionQuantizationMeters,
-    );
-    const horizontal = Math.hypot(dx, dz);
-    distanceMetersXZ += ceilToQuantum(
-      horizontal,
-      profile.positionQuantizationMeters,
-    );
-    const rawSlope = horizontal === 0 ? 90 : Math.atan2(Math.abs(dy), horizontal) * 180 / Math.PI;
-    segmentSlopeDegrees = Math.max(segmentSlopeDegrees, ceilToQuantum(rawSlope, 0.000001));
-  }
-  const costUnits = selectedEdges.reduce((sum, edge) => {
-    const units = Math.round(edge.routePathCost / 0.000001);
-    if (!Number.isSafeInteger(units) || !Number.isSafeInteger(sum + units)) {
-      failResult("routePathReceipt/routePathCost", "cost exceeds safe range");
-    }
-    return sum + units;
-  }, 0);
-  const nodeWidths = selectedNodes.map((node) => node.clearanceWidthMeters);
-  const nodeHeights = selectedNodes.map((node) => node.clearanceHeightMeters);
-  const edgeWidths = selectedEdges.map((edge) => edge.minimumClearanceWidthMeters);
-  const edgeHeights = selectedEdges.map((edge) => edge.minimumClearanceHeightMeters);
-  const edgeSlopes = selectedEdges.map((edge) => edge.slopeDegrees);
-  const edgeSteps = selectedEdges.map((edge) => edge.stepHeightMeters);
-  requireEqual(path.routePathDistanceMeters, distanceMeters, "routePathReceipt/routePathDistanceMeters");
-  requireEqual(path.routePathDistanceMetersXZ, distanceMetersXZ, "routePathReceipt/routePathDistanceMetersXZ");
-  requireEqual(path.routePathCost, costUnits * 0.000001, "routePathReceipt/routePathCost");
-  requireEqual(
-    path.maximumObservedSlopeDegrees,
-    Math.max(segmentSlopeDegrees, ...edgeSlopes, 0),
-    "routePathReceipt/maximumObservedSlopeDegrees",
-  );
-  requireEqual(
-    path.maximumObservedStepHeightMeters,
-    Math.max(...edgeSteps, 0),
-    "routePathReceipt/maximumObservedStepHeightMeters",
-  );
-  requireEqual(
-    path.minimumObservedClearanceWidthMeters,
-    Math.min(...nodeWidths, ...edgeWidths),
-    "routePathReceipt/minimumObservedClearanceWidthMeters",
-  );
-  requireEqual(
-    path.minimumObservedClearanceHeightMeters,
-    Math.min(...nodeHeights, ...edgeHeights),
-    "routePathReceipt/minimumObservedClearanceHeightMeters",
-  );
-  requireEqual(path.maximumObservedSurfaceGapMeters, 0, "routePathReceipt/maximumObservedSurfaceGapMeters");
-}
-
-export function canonicalHeightfieldRouteConnectivityResultV1(
+export function canonicalRouteConnectivityResultV2(
   value: unknown,
-): HeightfieldRouteConnectivityResultV1 {
-  const base = requireRecord(value, "", failResult);
-  if (base.kind !== "heightfield-route-connectivity-result") {
-    failResult("kind", "must be 'heightfield-route-connectivity-result'");
+): RouteConnectivityResultV2 {
+  const base = requireRecord(value, "", failResultV2);
+  if (base.kind !== "route-connectivity-result") {
+    failResultV2("kind", "must be 'route-connectivity-result'");
   }
-  if (base.schemaVersion !== 1) failResult("schemaVersion", "must be 1");
+  if (base.schemaVersion !== 2) failResultV2("schemaVersion", "must be 2");
   if (base.status === "complete") {
     const record = requireExactRecord(
       value,
@@ -999,23 +1041,36 @@ export function canonicalHeightfieldRouteConnectivityResultV1(
         "routePathReceiptHash",
       ],
       "",
-      failResult,
+      failResultV2,
     );
-    const traversalGraph = canonicalTraversalGraphV1(record.traversalGraph);
-    const traversalGraphHash = requireHash(record.traversalGraphHash, "traversalGraphHash", failResult);
-    requireEqual(traversalGraphHash, hashTraversalGraphV1(traversalGraph), "traversalGraphHash");
-    const routePathReceipt = canonicalRoutePathReceiptV1(record.routePathReceipt);
+    const traversalGraph = canonicalTraversalGraphV2(record.traversalGraph);
+    const traversalGraphHash = requireHash(
+      record.traversalGraphHash,
+      "traversalGraphHash",
+      failResultV2,
+    );
+    requireEqualV2(
+      traversalGraphHash,
+      hashTraversalGraphV2(traversalGraph),
+      "traversalGraphHash",
+    );
+    const routePathReceipt = assertRoutePathReceiptForGraphV2(
+      record.routePathReceipt,
+      traversalGraph,
+    );
     const routePathReceiptHash = requireHash(
       record.routePathReceiptHash,
       "routePathReceiptHash",
-      failResult,
+      failResultV2,
     );
-    requireEqual(routePathReceiptHash, hashRoutePathReceiptV1(routePathReceipt), "routePathReceiptHash");
-    requireEqual(routePathReceipt.traversalGraphHash, traversalGraphHash, "routePathReceipt/traversalGraphHash");
-    validatePathAgainstGraph(routePathReceipt, traversalGraph);
+    requireEqualV2(
+      routePathReceiptHash,
+      hashRoutePathReceiptV2(routePathReceipt),
+      "routePathReceiptHash",
+    );
     return deepFreeze({
-      kind: "heightfield-route-connectivity-result",
-      schemaVersion: 1,
+      kind: "route-connectivity-result",
+      schemaVersion: 2,
       status: "complete",
       traversalGraph,
       traversalGraphHash,
@@ -1047,44 +1102,56 @@ export function canonicalHeightfieldRouteConnectivityResultV1(
           "connectivityFailureHash",
         ],
     "",
-    failResult,
+    failResultV2,
   );
-  const connectivityFailure = canonicalRouteConnectivityFailureV1(
+  const connectivityFailure = canonicalRouteConnectivityFailureV2(
     record.connectivityFailure,
   );
   if (
     connectivityFailure.status !== record.status ||
     connectivityFailure.graphStatus !== record.graphStatus
   ) {
-    failResult("connectivityFailure", "status and graphStatus must match the outer variant");
+    failResultV2("connectivityFailure", "status and graphStatus must match the outer variant");
   }
   const connectivityFailureHash = requireHash(
     record.connectivityFailureHash,
     "connectivityFailureHash",
-    failResult,
+    failResultV2,
   );
-  requireEqual(
+  requireEqualV2(
     connectivityFailureHash,
-    hashRouteConnectivityFailureV1(connectivityFailure),
+    hashRouteConnectivityFailureV2(connectivityFailure),
     "connectivityFailureHash",
   );
   if (!completeGraph) {
     return deepFreeze({
-      kind: "heightfield-route-connectivity-result",
-      schemaVersion: 1,
+      kind: "route-connectivity-result",
+      schemaVersion: 2,
       status: connectivityFailure.status,
       graphStatus: "unavailable",
       connectivityFailure,
       connectivityFailureHash,
-    }) as HeightfieldRouteConnectivityResultV1;
+    }) as RouteConnectivityResultV2;
   }
-  const traversalGraph = canonicalTraversalGraphV1(record.traversalGraph);
-  const traversalGraphHash = requireHash(record.traversalGraphHash, "traversalGraphHash", failResult);
-  requireEqual(traversalGraphHash, hashTraversalGraphV1(traversalGraph), "traversalGraphHash");
+  const traversalGraph = canonicalTraversalGraphV2(record.traversalGraph);
+  const traversalGraphHash = requireHash(
+    record.traversalGraphHash,
+    "traversalGraphHash",
+    failResultV2,
+  );
+  requireEqualV2(
+    traversalGraphHash,
+    hashTraversalGraphV2(traversalGraph),
+    "traversalGraphHash",
+  );
   if (connectivityFailure.graphStatus !== "complete") {
-    failResult("connectivityFailure/graphStatus", "must be 'complete'");
+    failResultV2("connectivityFailure/graphStatus", "must be 'complete'");
   }
-  requireEqual(connectivityFailure.traversalGraphHash, traversalGraphHash, "connectivityFailure/traversalGraphHash");
+  requireEqualV2(
+    connectivityFailure.traversalGraphHash,
+    traversalGraphHash,
+    "connectivityFailure/traversalGraphHash",
+  );
   for (const field of [
     "routeId",
     "startAnchorEntityId",
@@ -1095,60 +1162,27 @@ export function canonicalHeightfieldRouteConnectivityResultV1(
     "graphBuilderResolvedVersion",
     "graphBuilderProfileHash",
   ] as const) {
-    requireEqual(connectivityFailure[field], traversalGraph[field], `connectivityFailure/${field}`);
+    requireEqualV2(
+      connectivityFailure[field],
+      traversalGraph[field],
+      `connectivityFailure/${field}`,
+    );
   }
   return deepFreeze({
-    kind: "heightfield-route-connectivity-result",
-    schemaVersion: 1,
+    kind: "route-connectivity-result",
+    schemaVersion: 2,
     status: connectivityFailure.status,
     graphStatus: "complete",
     traversalGraph,
     traversalGraphHash,
     connectivityFailure,
     connectivityFailureHash,
-  }) as HeightfieldRouteConnectivityResultV1;
+  }) as RouteConnectivityResultV2;
 }
 
-function quantizeRoundHalfAwayFromZero(value: number, quantum: number): number {
-  const units = Math.sign(value) * Math.floor(Math.abs(value / quantum) + 0.5);
-  const quantized = units * quantum;
-  return Object.is(quantized, -0) ? 0 : quantized;
-}
-
-function assertContextualGraph(
-  graph: TraversalGraphV1,
-  receipt: HeightfieldRouteBuildInputReceiptV1,
-): void {
-  const input = receipt.input;
-  const expected: Readonly<Record<string, unknown>> = {
-    authoringSpecHash: input.authoringSpecHash,
-    layoutSolveReportHash: input.layoutSolveReportHash,
-    resourceLockHash: input.resourceLockHash,
-    terrainArtifactHash: input.terrainSource.terrainArtifactHash,
-    colliderArtifactHash: input.colliderArtifactHash,
-    surfaceArtifactHash: input.traversalSurface.resourceHash,
-    routeBuildInputHash: receipt.routeBuildInputHash,
-    resolvedTraversalLockHash: input.capabilityEnvelope.resolvedTraversalLockHash,
-    graphBuilderProfileRef: input.capabilityEnvelope.graphBuilderProfileRef,
-    graphBuilderResolvedVersion: input.capabilityEnvelope.graphBuilderResolvedVersion,
-    graphBuilderProfileHash: input.capabilityEnvelope.graphBuilderProfileHash,
-    routeId: input.connectivityRequirement.routeId,
-    startAnchorEntityId: input.startAnchor.entityId,
-    destinationAnchorEntityId: input.destinationAnchor.entityId,
-  };
-  for (const [field, expectedValue] of Object.entries(expected)) {
-    requireEqual((graph as unknown as UnknownRecord)[field], expectedValue, `traversalGraph/${field}`);
-  }
-  for (const node of Object.values(graph.traversalNodesById)) {
-    requireEqual(node.traversalSurfaceId, input.traversalSurface.traversalSurfaceId, `traversalGraph/traversalNodesById/${node.id}/traversalSurfaceId`);
-    requireEqual(node.surfaceEntityId, input.traversalSurface.surfaceEntityId, `traversalGraph/traversalNodesById/${node.id}/surfaceEntityId`);
-    requireEqual(node.colliderSubshapeId, input.traversalSurface.colliderSubshapeId, `traversalGraph/traversalNodesById/${node.id}/colliderSubshapeId`);
-  }
-}
-
-function assertContextualFailure(
-  failure: RouteConnectivityFailureV1,
-  receipt: HeightfieldRouteBuildInputReceiptV1,
+function assertContextualFailureV2(
+  failure: RouteConnectivityFailureV2,
+  receipt: RouteBuildInputReceiptV2,
 ): void {
   const input = receipt.input;
   const expected: Readonly<Record<string, unknown>> = {
@@ -1157,9 +1191,6 @@ function assertContextualFailure(
     traversingEntityId: input.connectivityRequirement.traversingEntityId,
     startAnchorEntityId: input.startAnchor.entityId,
     destinationAnchorEntityId: input.destinationAnchor.entityId,
-    traversalSurfaceId: input.traversalSurface.traversalSurfaceId,
-    surfaceEntityId: input.traversalSurface.surfaceEntityId,
-    colliderSubshapeId: input.traversalSurface.colliderSubshapeId,
     routeBuildInputHash: receipt.routeBuildInputHash,
     resolvedTraversalLockHash: input.capabilityEnvelope.resolvedTraversalLockHash,
     graphBuilderProfileRef: input.capabilityEnvelope.graphBuilderProfileRef,
@@ -1167,45 +1198,204 @@ function assertContextualFailure(
     graphBuilderProfileHash: input.capabilityEnvelope.graphBuilderProfileHash,
   };
   for (const [field, expectedValue] of Object.entries(expected)) {
-    requireEqual((failure as unknown as UnknownRecord)[field], expectedValue, `connectivityFailure/${field}`);
+    requireEqualV2(
+      (failure as unknown as UnknownRecord)[field],
+      expectedValue,
+      `connectivityFailure/${field}`,
+    );
+  }
+  const inventory = new Map(
+    input.traversalSurfaces.map((surface) => [surface.traversalSurfaceId, surface]),
+  );
+  failure.relatedTraversalSurfaceIdentities.forEach((identity, index) => {
+    const expectedIdentity = inventory.get(identity.traversalSurfaceId);
+    if (isNil(expectedIdentity) || !isEqual(identity, expectedIdentity)) {
+      failResultV2(
+        `connectivityFailure/relatedTraversalSurfaceIdentities/${index}`,
+        "must equal a Build Input Traversal Surface identity",
+      );
+    }
+  });
+  if (failure.reason.kind === "empty-heightfield-source") {
+    if (input.terrainSource.kind !== "empty" || !isEmpty(input.staticColliders)) {
+      failResultV2(
+        "connectivityFailure/reason",
+        "empty-heightfield-source requires empty terrainSource and empty staticColliders",
+      );
+    }
+    requireEqualV2(
+      failure.reason.terrainEntityId,
+      input.terrainSource.terrainEntityId,
+      "connectivityFailure/reason/terrainEntityId",
+    );
   }
   const quantum = input.capabilityEnvelope.positionQuantizationMeters;
   const expectedStart = input.startAnchor.positionMetersXYZ.map((component) =>
-    quantizeRoundHalfAwayFromZero(component, quantum)
+    quantizeRoundHalfAwayFromZero(component, quantum),
   );
   const expectedDestination = input.destinationAnchor.positionMetersXYZ.map((component) =>
-    quantizeRoundHalfAwayFromZero(component, quantum)
+    quantizeRoundHalfAwayFromZero(component, quantum),
   );
   failure.startAnchorPositionMetersXYZ.forEach((component, index) =>
-    requireEqual(component, expectedStart[index], `connectivityFailure/startAnchorPositionMetersXYZ/${index}`)
+    requireEqualV2(
+      component,
+      expectedStart[index],
+      `connectivityFailure/startAnchorPositionMetersXYZ/${index}`,
+    ),
   );
   failure.destinationAnchorPositionMetersXYZ.forEach((component, index) =>
-    requireEqual(component, expectedDestination[index], `connectivityFailure/destinationAnchorPositionMetersXYZ/${index}`)
+    requireEqualV2(
+      component,
+      expectedDestination[index],
+      `connectivityFailure/destinationAnchorPositionMetersXYZ/${index}`,
+    ),
   );
+  if (failure.reason.kind === "start-surface-not-found") {
+    requireEqualV2(
+      failure.reason.anchorEntityId,
+      input.startAnchor.entityId,
+      "connectivityFailure/reason/anchorEntityId",
+    );
+    failure.reason.positionMetersXYZ.forEach((component, index) =>
+      requireEqualV2(
+        component,
+        expectedStart[index],
+        `connectivityFailure/reason/positionMetersXYZ/${index}`,
+      ),
+    );
+  } else if (failure.reason.kind === "destination-surface-not-found") {
+    requireEqualV2(
+      failure.reason.anchorEntityId,
+      input.destinationAnchor.entityId,
+      "connectivityFailure/reason/anchorEntityId",
+    );
+    failure.reason.positionMetersXYZ.forEach((component, index) =>
+      requireEqualV2(
+        component,
+        expectedDestination[index],
+        `connectivityFailure/reason/positionMetersXYZ/${index}`,
+      ),
+    );
+  }
+  let actualMaximumAllowedCount: number | undefined;
+  let expectedMaximumAllowedCount: number | undefined;
+  if (failure.reason.kind === "node-budget-exceeded") {
+    actualMaximumAllowedCount = failure.reason.maximumAllowedCount;
+    expectedMaximumAllowedCount = input.capabilityEnvelope.maximumNodes;
+  } else if (failure.reason.kind === "edge-budget-exceeded") {
+    actualMaximumAllowedCount = failure.reason.maximumAllowedCount;
+    expectedMaximumAllowedCount = input.capabilityEnvelope.maximumEdges;
+  } else if (failure.reason.kind === "search-budget-exceeded") {
+    actualMaximumAllowedCount = failure.reason.maximumAllowedCount;
+    expectedMaximumAllowedCount = input.capabilityEnvelope.maximumSearchSteps;
+  } else if (
+    failure.reason.kind === "traversal-surface-count-budget-exceeded"
+  ) {
+    actualMaximumAllowedCount = failure.reason.maximumAllowedCount;
+    expectedMaximumAllowedCount =
+      input.capabilityEnvelope.maximumTraversalSurfaceCount;
+  } else if (
+    failure.reason.kind ===
+    "traversal-surface-triangle-pair-test-budget-exceeded"
+  ) {
+    actualMaximumAllowedCount = failure.reason.maximumAllowedCount;
+    expectedMaximumAllowedCount =
+      input.capabilityEnvelope.maximumTraversalSurfaceTrianglePairTestCount;
+  }
+  if (!isNil(expectedMaximumAllowedCount)) {
+    requireEqualV2(
+      actualMaximumAllowedCount,
+      expectedMaximumAllowedCount,
+      "connectivityFailure/reason/maximumAllowedCount",
+    );
+  }
+  if (
+    failure.reason.kind ===
+    "traversal-surface-triangle-pair-test-budget-exceeded"
+  ) {
+    requireEqualV2(
+      failure.reason.minimumRequiredCount,
+      input.capabilityEnvelope.maximumTraversalSurfaceTrianglePairTestCount +
+        1,
+      "connectivityFailure/reason/minimumRequiredCount",
+    );
+  }
+  if (failure.reason.kind === "slope-threshold-exceeded") {
+    requireEqualV2(
+      "maximumAllowedSlopeDegrees" in failure.reason
+        ? failure.reason.maximumAllowedSlopeDegrees
+        : undefined,
+      input.capabilityEnvelope.maxSlopeDegrees,
+      "connectivityFailure/reason/maximumAllowedSlopeDegrees",
+    );
+  } else if (failure.reason.kind === "step-height-threshold-exceeded") {
+    requireEqualV2(
+      "maximumAllowedStepHeightMeters" in failure.reason
+        ? failure.reason.maximumAllowedStepHeightMeters
+        : undefined,
+      input.capabilityEnvelope.maxStepHeightMeters,
+      "connectivityFailure/reason/maximumAllowedStepHeightMeters",
+    );
+  } else if (failure.reason.kind === "clearance-width-insufficient") {
+    requireEqualV2(
+      failure.reason.minimumRequiredClearanceWidthMeters,
+      2 * (
+        input.capabilityEnvelope.capsuleRadiusMeters +
+        input.capabilityEnvelope.clearanceMarginMeters
+      ),
+      "connectivityFailure/reason/minimumRequiredClearanceWidthMeters",
+    );
+  } else if (failure.reason.kind === "overhead-clearance-insufficient") {
+    requireEqualV2(
+      failure.reason.minimumRequiredClearanceHeightMeters,
+      input.capabilityEnvelope.capsuleHeightMeters,
+      "connectivityFailure/reason/minimumRequiredClearanceHeightMeters",
+    );
+  }
+  if (
+    failure.reason.kind === "clearance-width-insufficient" ||
+    failure.reason.kind === "overhead-clearance-insufficient" ||
+    failure.reason.kind === "surface-profile-missing"
+  ) {
+    const colliderSubshapeIds = new Set(
+      input.staticColliders.map((collider) => collider.colliderSubshapeId),
+    );
+    failure.reason.relevantColliderSubshapeIds.forEach(
+      (colliderSubshapeId, index) => {
+        if (!colliderSubshapeIds.has(colliderSubshapeId)) {
+          failResultV2(
+            `connectivityFailure/reason/relevantColliderSubshapeIds/${index}`,
+            "must reference a Build Input static Collider",
+          );
+        }
+      },
+    );
+  }
 }
 
-export function assertHeightfieldRouteConnectivityResultForBuildInputV1(
+export function assertRouteConnectivityResultForBuildInputV2(
   value: unknown,
   buildInputReceipt: unknown,
-): HeightfieldRouteConnectivityResultV1 {
-  const receipt = assertHeightfieldRouteBuildInputReceiptV1(buildInputReceipt);
-  const result = canonicalHeightfieldRouteConnectivityResultV1(value);
+): RouteConnectivityResultV2 {
+  const receipt = assertRouteBuildInputReceiptV2(buildInputReceipt);
+  const result = canonicalRouteConnectivityResultV2(value);
   if (result.status === "complete") {
-    assertContextualGraph(result.traversalGraph, receipt);
-    const input = receipt.input;
-    requireEqual(result.routePathReceipt.constraintId, input.connectivityRequirement.constraintId, "routePathReceipt/constraintId");
-    requireEqual(result.routePathReceipt.traversingEntityId, input.connectivityRequirement.traversingEntityId, "routePathReceipt/traversingEntityId");
-    const pathSurface = result.routePathReceipt.traversalSurfaceIdentity;
-    const inputSurface = input.traversalSurface;
-    requireEqual(pathSurface.traversalSurfaceId, inputSurface.traversalSurfaceId, "routePathReceipt/traversalSurfaceIdentity/traversalSurfaceId");
-    requireEqual(pathSurface.surfaceEntityId, inputSurface.surfaceEntityId, "routePathReceipt/traversalSurfaceIdentity/surfaceEntityId");
-    requireEqual(pathSurface.colliderSubshapeId, inputSurface.colliderSubshapeId, "routePathReceipt/traversalSurfaceIdentity/colliderSubshapeId");
-    requireEqual(pathSurface.resourceRef, inputSurface.resourceRef, "routePathReceipt/traversalSurfaceIdentity/resourceRef");
-    requireEqual(pathSurface.resolvedVersion, inputSurface.resolvedVersion, "routePathReceipt/traversalSurfaceIdentity/resolvedVersion");
-    requireEqual(pathSurface.resourceHash, inputSurface.resourceHash, "routePathReceipt/traversalSurfaceIdentity/resourceHash");
+    assertTraversalGraphForBuildInputV2(result.traversalGraph, receipt);
+    requireEqualV2(
+      result.routePathReceipt.constraintId,
+      receipt.input.connectivityRequirement.constraintId,
+      "routePathReceipt/constraintId",
+    );
+    requireEqualV2(
+      result.routePathReceipt.traversingEntityId,
+      receipt.input.connectivityRequirement.traversingEntityId,
+      "routePathReceipt/traversingEntityId",
+    );
   } else {
-    assertContextualFailure(result.connectivityFailure, receipt);
-    if (result.graphStatus === "complete") assertContextualGraph(result.traversalGraph, receipt);
+    assertContextualFailureV2(result.connectivityFailure, receipt);
+    if (result.graphStatus === "complete") {
+      assertTraversalGraphForBuildInputV2(result.traversalGraph, receipt);
+    }
   }
   return result;
 }

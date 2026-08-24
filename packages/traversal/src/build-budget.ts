@@ -1,3 +1,6 @@
+import { resolveTraversalGraphBuilderProfileV2 } from "./profile-registry.js";
+import type { TraversalCapabilityEnvelopeV1 } from "./types.js";
+
 const MICROMETERS_PER_METER = 1_000_000;
 
 export interface HeightfieldTileEstimateInputV1 {
@@ -21,6 +24,29 @@ export interface HeightfieldTileEstimateV1 {
   readonly tilesX: number;
   readonly tilesZ: number;
   readonly estimatedTiles: number;
+}
+
+export interface TraversalSurfaceCountBudgetInputV1 {
+  readonly traversalSurfaceCount: number;
+  readonly capabilityEnvelope: TraversalCapabilityEnvelopeV1;
+}
+
+export class TraversalSurfaceCountBudgetExceededErrorV1 extends Error {
+  readonly code = "ROUTE_GRAPH_BUDGET_EXCEEDED" as const;
+  readonly traversalSurfaceCount: number;
+  readonly maximumTraversalSurfaceCount: number;
+
+  constructor(input: {
+    readonly traversalSurfaceCount: number;
+    readonly maximumTraversalSurfaceCount: number;
+  }) {
+    super(
+      `ROUTE_GRAPH_BUDGET_EXCEEDED: traversalSurfaceCount ${input.traversalSurfaceCount} exceeds maximumTraversalSurfaceCount ${input.maximumTraversalSurfaceCount}.`,
+    );
+    this.name = "TraversalSurfaceCountBudgetExceededErrorV1";
+    this.traversalSurfaceCount = input.traversalSurfaceCount;
+    this.maximumTraversalSurfaceCount = input.maximumTraversalSurfaceCount;
+  }
 }
 
 export class TraversalGraphBuildBudgetExceededErrorV1 extends Error {
@@ -59,6 +85,87 @@ export class TraversalGraphBuildBudgetExceededErrorV1 extends Error {
 
 function failBudget(message: string): never {
   throw new Error(`TRAVERSAL_GRAPH_BUILD_BUDGET_INVALID: ${message}`);
+}
+
+function requireExactSurfaceCountBudgetInput(
+  input: unknown,
+): {
+  readonly traversalSurfaceCount: number;
+  readonly maximumTraversalSurfaceCount: number;
+} {
+  if (
+    input === null ||
+    typeof input !== "object" ||
+    Array.isArray(input) ||
+    Object.getPrototypeOf(input) !== Object.prototype
+  ) {
+    failBudget("surface count budget input must be a plain object.");
+  }
+  const record = input as Record<string, unknown>;
+  const fields = Object.keys(record);
+  if (
+    fields.length !== 2 ||
+    !Object.hasOwn(record, "traversalSurfaceCount") ||
+    !Object.hasOwn(record, "capabilityEnvelope")
+  ) {
+    failBudget("surface count budget input fields must be closed.");
+  }
+  const traversalSurfaceCount = record.traversalSurfaceCount;
+  if (
+    typeof traversalSurfaceCount !== "number" ||
+    !Number.isSafeInteger(traversalSurfaceCount) ||
+    !(traversalSurfaceCount > 0)
+  ) {
+    failBudget("traversalSurfaceCount must be a positive safe integer.");
+  }
+  const capabilityEnvelope = record.capabilityEnvelope;
+  if (
+    capabilityEnvelope === null ||
+    typeof capabilityEnvelope !== "object" ||
+    Array.isArray(capabilityEnvelope) ||
+    !Object.isFrozen(capabilityEnvelope)
+  ) {
+    failBudget("capabilityEnvelope must be a frozen object.");
+  }
+  const envelope = capabilityEnvelope as TraversalCapabilityEnvelopeV1;
+  let resolvedProfile;
+  try {
+    resolvedProfile = resolveTraversalGraphBuilderProfileV2(
+      envelope.graphBuilderProfileRef,
+    );
+  } catch (cause) {
+    failBudget(
+      `capabilityEnvelope Graph Builder Profile must resolve: ${
+        cause instanceof Error ? cause.message : "unknown resolution failure"
+      }`,
+    );
+  }
+  if (
+    envelope.graphBuilderResolvedVersion !== resolvedProfile.resolvedVersion ||
+    envelope.graphBuilderProfileHash !== resolvedProfile.contentHash ||
+    envelope.maximumTraversalSurfaceCount !==
+      resolvedProfile.profile.maximumTraversalSurfaceCount ||
+    envelope.minimumEquivalentPlaneNormalDotRatio !==
+      resolvedProfile.profile.minimumEquivalentPlaneNormalDotRatio ||
+    envelope.maximumTraversalSurfaceTrianglePairTestCount !==
+      resolvedProfile.profile.maximumTraversalSurfaceTrianglePairTestCount
+  ) {
+    failBudget("capabilityEnvelope Graph Builder Profile identity is invalid.");
+  }
+  return {
+    traversalSurfaceCount,
+    maximumTraversalSurfaceCount:
+      resolvedProfile.profile.maximumTraversalSurfaceCount,
+  };
+}
+
+export function assertTraversalSurfaceCountBudgetV1(
+  input: TraversalSurfaceCountBudgetInputV1,
+): void {
+  const budget = requireExactSurfaceCountBudgetInput(input);
+  if (budget.traversalSurfaceCount > budget.maximumTraversalSurfaceCount) {
+    throw new TraversalSurfaceCountBudgetExceededErrorV1(budget);
+  }
 }
 
 export function quantizeTraversalMetersToMicrometersV1(

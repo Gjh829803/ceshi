@@ -8,8 +8,8 @@ import path from "node:path";
 
 import { canonicalJsonBytes } from "@whitebox-world/protocol";
 import {
-  canonicalWorldkitBrowserRouteEvidencePublicationV1,
-  type WorldkitBrowserRouteEvidencePublicationV1,
+  canonicalWorldkitBrowserRouteEvidencePublicationV2,
+  type WorldkitBrowserRouteEvidencePublicationV2,
 } from "@whitebox-world/runtime-contracts";
 
 import { resolveTrustedSourceCommit } from "./worldkit-source-commit";
@@ -26,7 +26,7 @@ const DEFAULT_STOP_TIMEOUT_MILLISECONDS = 3_000;
 const AUTOMATIC_PORT_ATTEMPTS = 5;
 
 export interface WorldkitServerRouteEvidenceV1 {
-  readonly publication: WorldkitBrowserRouteEvidencePublicationV1;
+  readonly publication: WorldkitBrowserRouteEvidencePublicationV2;
   readonly canonicalBytes: Uint8Array;
 }
 
@@ -105,7 +105,7 @@ async function createOwnedRouteEvidenceFile(
       `Route evidence exceeds the ${WORLDKIT_ROUTE_EVIDENCE_MAX_BYTES_V1} byte Host admission limit.`,
     );
   }
-  const publication = canonicalWorldkitBrowserRouteEvidencePublicationV1(
+  const publication = canonicalWorldkitBrowserRouteEvidencePublicationV2(
     input.publication,
   );
   const canonicalBytes = canonicalJsonBytes(publication);
