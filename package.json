@@ -11,6 +11,7 @@
     "dev:g-bot:refresh": "pnpm worldkit run examples/authoring/g-bot-subject-world.json --refresh-dependencies",
     "generate:golden-humanoid": "tsx scripts/fixtures/generate-golden-humanoid-glb.ts --write",
     "bake:xier120-subjects": "tsx scripts/bake-xier120-static-subjects.ts",
+    "verify:xier120-subjects": "tsx scripts/verify-xier120-subjects.ts",
     "generate:example-takes": "tsx scripts/generate-example-takes.ts",
     "studio": "pnpm --filter @whitebox-world/studio dev",
     "studio:public": "WORLDKIT_PUBLIC_MODE=1 WORLDKIT_STUDIO_PORT=4175 WORLDKIT_PLAYGROUND_ORIGIN=/play WORLDKIT_PLAYGROUND_INTERNAL_ORIGIN=http://127.0.0.1:5173 WORLDKIT_DISABLE_PLAYGROUND_SPAWN=1 pnpm --filter @whitebox-world/studio dev",
