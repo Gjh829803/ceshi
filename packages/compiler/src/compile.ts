@@ -1116,13 +1116,9 @@ function compileSubjectsV3(
           jumpHoldGravityRatio: feel.jumpHoldGravityRatio,
           jumpReleaseGravityRatio: feel.jumpReleaseGravityRatio,
         })),
-        ...(definition.capabilityAssembly === undefined
-          ? {}
-          : {
-              capabilityAssembly: compileCapabilityAssemblyV1(
-                definition.capabilityAssembly,
-              ),
-            }),
+        capabilityAssembly: compileCapabilityAssemblyV1(
+          definition.capabilityAssembly,
+        ),
       };
     })
     .sort((left, right) => left.entityId.localeCompare(right.entityId));
