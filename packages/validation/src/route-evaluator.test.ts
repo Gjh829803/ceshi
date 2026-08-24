@@ -500,6 +500,51 @@ function failedStartSupportProbe(
   });
 }
 
+function failedSupportSurfaceProbe(
+  routePath: RoutePathReceiptV2,
+  lock: ReturnType<typeof resolveTraversalLockV1>,
+  surfaceResolutionMode: "unmatched" | "ambiguous" | "resolved",
+): RouteRuntimeProbeReceiptV2 {
+  const complete = completeProbe(routePath, lock);
+  const surfaceResolution = surfaceResolutionMode === "resolved"
+    ? {
+        mode: "resolved" as const,
+        traversalSurfaceId: "surface-wrong",
+        surfaceEntityId: "platform-wrong",
+        colliderSubshapeId: "platform-wrong-primary",
+        resourceRef: "package://traversal-surface/platform-wrong@1",
+        resolvedVersion: "1",
+        resourceHash: HASH_C,
+      }
+    : { mode: surfaceResolutionMode };
+  const initialRuntimeEvidence = {
+    ...complete.initialRuntimeEvidence,
+    characterSupport: {
+      ...complete.initialRuntimeEvidence.characterSupport,
+      surfaceResolution,
+    },
+  };
+  return canonicalRouteRuntimeProbeReceiptV2({
+    kind: "route-runtime-probe-receipt",
+    schemaVersion: 2,
+    status: "failed",
+    request: complete.request,
+    initialRuntimeEvidence,
+    ticks: [],
+    metrics: {
+      ...complete.metrics,
+      wrongSupportSurfaceCount: 1,
+    },
+    failure: {
+      kind: "support-surface-mismatch",
+      failureProbeTick: 0,
+      failurePositionMetersXYZ: initialRuntimeEvidence.subjectPositionMetersXYZ,
+      supportState: "supported",
+      surfaceResolutionMode,
+    },
+  });
+}
+
 function rowInput(options: Readonly<{
   includeProbe?: boolean;
   reverseMaps?: boolean;
@@ -1413,6 +1458,45 @@ describe("createRouteValidationReportV2", () => {
     });
     expect(validateValidationReportV2(report)).toMatchObject({ ok: true });
   });
+
+  it.each(["unmatched", "ambiguous", "resolved"] as const)(
+    "publishes Runtime support-surface mismatch for %s support evidence",
+    (surfaceResolutionMode) => {
+      const baseline = input();
+      const baselineRow = onlyRow(baseline);
+      const routePathReceipt = completeConnectivity(baseline).routePathReceipt;
+      const failedProbe = failedSupportSurfaceProbe(
+        routePathReceipt,
+        baselineRow.resolvedTraversalLockReceipt,
+        surfaceResolutionMode,
+      );
+      const report = createRouteValidationReportV2({
+        ...baseline,
+        rows: [{
+          ...baselineRow,
+          routeRuntimeProbeReceipt: failedProbe,
+          evidenceBytes: {
+            ...baselineRow.evidenceBytes,
+            routeRuntimeProbeReceipt: canonicalJsonBytes(failedProbe),
+          },
+        }],
+      });
+
+      expect(report.gateResultsById["route-connectivity"]?.status).toBe("passed");
+      expect(report.gateResultsById["route-runtime-conformance"]?.status).toBe(
+        "failed",
+      );
+      expect(report.diagnostics.filter(
+        ({ gateId }) => gateId === "route-runtime-conformance",
+      )).not.toHaveLength(0);
+      expect(report.diagnostics.filter(
+        ({ gateId }) => gateId === "route-runtime-conformance",
+      ).every(
+        ({ code }) => code === "ROUTE_RUNTIME_SUPPORT_SURFACE_MISMATCH",
+      )).toBe(true);
+      expect(validateValidationReportV2(report)).toMatchObject({ ok: true });
+    },
+  );
 
   it("rejects mismatched Graph and Probe locks before evaluating either Gate", () => {
     const baseline = input();

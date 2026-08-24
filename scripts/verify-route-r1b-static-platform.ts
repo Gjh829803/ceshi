@@ -225,7 +225,7 @@ export const R1B_STATIC_PLATFORM_FIXTURE_ORACLE: readonly RouteR1bFixtureOracle[
       graph: Object.freeze({ status: "passed" as const }),
       runtime: Object.freeze({
         status: "failed" as const,
-        diagnosticCode: "ROUTE_SURFACE_CORRELATION_AMBIGUOUS",
+        diagnosticCode: "ROUTE_RUNTIME_SUPPORT_SURFACE_MISMATCH",
       }),
     }),
   ]);

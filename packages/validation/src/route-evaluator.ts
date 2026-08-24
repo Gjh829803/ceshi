@@ -798,9 +798,7 @@ function runtimeFailureCode(
     case "start-support-invalid":
       return "ROUTE_START_SUPPORT_INVALID";
     case "support-surface-mismatch":
-      return failure.surfaceResolutionMode === "ambiguous"
-        ? "ROUTE_SURFACE_CORRELATION_AMBIGUOUS"
-        : "ROUTE_RUNTIME_SUPPORT_SURFACE_MISMATCH";
+      return "ROUTE_RUNTIME_SUPPORT_SURFACE_MISMATCH";
     case "runtime-stalled":
       return "ROUTE_RUNTIME_STALLED";
     case "runtime-deviated":

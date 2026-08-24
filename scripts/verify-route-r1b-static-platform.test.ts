@@ -182,7 +182,7 @@ describe("verify:route-r1b-static-platform", () => {
         graph: { status: "passed" },
         runtime: {
           status: "failed",
-          diagnosticCode: "ROUTE_SURFACE_CORRELATION_AMBIGUOUS",
+          diagnosticCode: "ROUTE_RUNTIME_SUPPORT_SURFACE_MISMATCH",
         },
       },
     ]);
