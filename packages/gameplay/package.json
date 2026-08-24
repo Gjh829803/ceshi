@@ -1,0 +1,14 @@
+{
+  "name": "@whitebox-world/gameplay",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "dependencies": {
+    "@whitebox-world/gameplay-contracts": "workspace:*",
+    "@whitebox-world/protocol": "workspace:*",
+    "lodash-es": "^4.18.1"
+  }
+}

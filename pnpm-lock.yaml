@@ -266,6 +266,27 @@ importers:
         specifier: ^0.180.0
         version: 0.180.0
 
+  packages/gameplay:
+    dependencies:
+      '@whitebox-world/gameplay-contracts':
+        specifier: workspace:*
+        version: link:../gameplay-contracts
+      '@whitebox-world/protocol':
+        specifier: workspace:*
+        version: link:../protocol
+      lodash-es:
+        specifier: ^4.18.1
+        version: 4.18.1
+
+  packages/gameplay-contracts:
+    dependencies:
+      '@whitebox-world/protocol':
+        specifier: workspace:*
+        version: link:../protocol
+      lodash-es:
+        specifier: ^4.18.1
+        version: 4.18.1
+
   packages/layout-solver:
     dependencies:
       '@whitebox-world/protocol':
@@ -344,6 +365,27 @@ importers:
       '@whitebox-world/traversal':
         specifier: workspace:*
         version: link:../traversal
+      lodash-es:
+        specifier: ^4.18.1
+        version: 4.18.1
+
+  packages/runtime-host:
+    dependencies:
+      '@whitebox-world/gameplay':
+        specifier: workspace:*
+        version: link:../gameplay
+      '@whitebox-world/gameplay-contracts':
+        specifier: workspace:*
+        version: link:../gameplay-contracts
+      '@whitebox-world/protocol':
+        specifier: workspace:*
+        version: link:../protocol
+      '@whitebox-world/runtime-contracts':
+        specifier: workspace:*
+        version: link:../runtime-contracts
+      '@whitebox-world/world-package':
+        specifier: workspace:*
+        version: link:../world-package
       lodash-es:
         specifier: ^4.18.1
         version: 4.18.1
