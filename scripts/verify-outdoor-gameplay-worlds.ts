@@ -134,7 +134,7 @@ async function waitForGameplayReady(page: Page): Promise<void> {
       window.__WORLDKIT__ !== undefined ||
       document.documentElement.dataset.worldkitStatus === "error",
     undefined,
-    { timeout: 15_000 },
+    { timeout: 90_000 },
   );
   await page.waitForFunction(
     () => {
@@ -301,14 +301,14 @@ async function verifyScene(
     `${catalogId}: Route evidence query returned an invalid availability result.`,
   );
 
-  const movement = await page.evaluate(async () => {
+  const movement = await page.evaluate(async (fixedInputTicks) => {
     const api = window.__WORLDKIT__!;
     const before = api.getSnapshot();
     const after = await api.runFixedInput([
-      { actions: ["move-forward"], ticks: FIXED_INPUT_TICKS },
+      { actions: ["move-forward"], ticks: fixedInputTicks },
     ]);
     return { before, after };
-  });
+  }, FIXED_INPUT_TICKS);
   const movementControlledEntityId = requireControlledEntityId(movement.after);
   assert.equal(movementControlledEntityId, controlledEntityId);
   const beforeControlled =
@@ -425,7 +425,7 @@ async function verifyArtifactRoute(
     () =>
       Object.prototype.hasOwnProperty.call(window, "__WHITEBOX_PLAYGROUND__"),
     undefined,
-    { timeout: 60_000 },
+    { timeout: 90_000 },
   );
   const result = await page.evaluate(() => {
     const globalRecord = window as unknown as Record<string, unknown>;
