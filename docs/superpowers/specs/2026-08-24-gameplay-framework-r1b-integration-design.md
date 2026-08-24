@@ -59,6 +59,23 @@ Application / Playground / Browser Protocol V5
 - 实现 NPC、车辆、洞穴、联网、公开 `goTo` 或动态平台；
 - 让 Route Graph、动画 Clip、Mesh 名或材质成为 Gameplay 真相。
 
+### 2.1 未发布项目的版本清理原则
+
+本项目尚未发布，也没有必须回放的生产 WorldPackage 或外部稳定消费者。G19 的最终交付因此采用
+**clean break**，不把开发历史升级成长期兼容合同：
+
+- Outdoor、Authoring、Compiler、Runtime、Browser、CLI、Capture、示例与生成类型最终只消费同一套
+  当前权威协议；被新版取代的 Authoring、Normalized IR、ExecutionPlan、Snapshot 或 Browser 版本不得
+  以 union、alias、converter、fallback read、双写或双发布的形式留在生产路径；
+- 版本后缀本身不是删除依据。尚未被新版取代的初始 V1 合同可以继续作为权威合同；只有存在新版替代且
+  已无权威消费者的旧方言属于兼容债务；
+- G19-7 必须先把六个 Outdoor 目录场景迁到当前 Authoring V4 → Normalized IR V4 →
+  ExecutionPlan V5 → Snapshot V4 / Browser V5 链路，并保持 artifact-only 渲染器隔离；
+- G19-8 必须执行生产消费者 census，并删除已无消费者的旧声明、导出、parser、fixture 和兼容分支；
+- 本轮确因尚未迁移模块而不能删除的项，必须在 completion review 中逐项登记符号、文件、真实消费者、
+  阻塞原因、删除门禁和后续任务。禁止只写“为了兼容”或留下无 owner 的 TODO；
+- 历史设计/评审文档可以保留旧版本名称作为可追溯记录，但不能成为生产 census 的例外消费者。
+
 ## 3. 方案比较
 
 ### 3.1 采用：以 R1b 为底重新实现

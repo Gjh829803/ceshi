@@ -6,7 +6,6 @@ import { fileURLToPath } from "node:url";
 import {
   parseAuthoringSpecV4,
   stringifyCanonicalJson,
-  validateAuthoringSpecV3,
   validateAuthoringSpecV4,
   type AuthoringSpecV4,
 } from "@whitebox-world/authoring";
@@ -113,14 +112,14 @@ function checkAuthoringV4Connectivity(authoringSpec: unknown): void {
     "connected-by-route must not expose subjectId.",
   );
 
-  const v3Polluted = {
+  const obsoleteVersionPolluted = {
     ...(authoringSpec as Record<string, unknown>),
     schemaVersion: 3,
   };
   assert.equal(
-    validateAuthoringSpecV3(v3Polluted).ok,
+    validateAuthoringSpecV4(obsoleteVersionPolluted).ok,
     false,
-    "Authoring V3 must reject V4 connectivity.",
+    "Current Authoring validation must reject an obsolete top-level version.",
   );
 }
 

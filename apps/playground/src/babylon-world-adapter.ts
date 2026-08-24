@@ -5,7 +5,6 @@ import type {
   CameraViewInputV1,
   ControlCaptureCapabilitiesV1,
   ControlCaptureRequestV1,
-  ExecutionPlanV4,
   ExecutionPlanV5,
   FixedInputV1,
   RenderReadyReceiptV1,
@@ -13,7 +12,6 @@ import type {
   SemanticInputActionV1,
   RuntimeActivityReceiptV1,
   RuntimeActivityRequestV1,
-  WorldRuntimeSnapshotV3,
   WorldRuntimeSnapshotV4,
   SubjectPresetTuningReceiptV1,
   WorldkitBrowserDiagnosticV1,
@@ -28,14 +26,17 @@ import type {
 import {
   BabylonWorldRuntime,
   FIXED_TIME_STEP_SECONDS,
+  type BabylonRuntimeProjectionV1,
   type BabylonWorldRuntimeOptions,
 } from "@whitebox-world/runtime-babylon";
 import type { RuntimeWorldConfigurationV1 } from "@whitebox-world/runtime-host";
+import { isNil } from "lodash-es";
 
 import type {
   FeatureInspection,
   FixedInputStep,
   InputAction,
+  PlaygroundWorldMetadataV1,
   PlaygroundWorldAdapter,
   WorldSnapshot,
 } from "./playground-world";
@@ -44,7 +45,14 @@ import {
   type GameplayBabylonRuntimeCoordinatorV1,
 } from "./gameplay-babylon-runtime-coordinator";
 
-type PlaygroundExecutionPlanV1 = ExecutionPlanV4 | ExecutionPlanV5;
+export interface BabylonWorldAdapterCreateOptionsV1 extends Pick<
+  BabylonWorldRuntimeOptions,
+  | "subjectAssetResolver"
+  | "subjectAssetCacheOptions"
+  | "onInitializationStage"
+> {
+  readonly playgroundMetadata?: PlaygroundWorldMetadataV1;
+}
 
 const INPUT_ACTION_MAP: Readonly<Partial<Record<InputAction, SemanticInputActionV1>>> = {
   forward: "move-forward",
@@ -165,19 +173,22 @@ export class PhysicalKeyboardActionTracker {
 }
 
 export function activeActionForControlledSubject(
-  snapshot: WorldRuntimeSnapshotV3,
+  snapshot: BabylonRuntimeProjectionV1,
 ): WorldSnapshot["player"]["action"] {
-  const controlledSubject =
-    snapshot.subjectStatesByEntityId[snapshot.controlledEntityId];
+  if (snapshot.possessionTarget.mode === "unbound") {
+    throw new Error("WORLDKIT_RUNTIME_CONTROL_UNBOUND");
+  }
+  const { controlledEntityId } = snapshot.possessionTarget;
+  const controlledSubject = snapshot.subjectStatesByEntityId[controlledEntityId];
   if (controlledSubject === undefined) {
     throw new Error(
-      `WORLDKIT_RUNTIME_SNAPSHOT_CONTROL_TARGET_NOT_FOUND: ${snapshot.controlledEntityId}`,
+      `WORLDKIT_RUNTIME_SNAPSHOT_CONTROL_TARGET_NOT_FOUND: ${controlledEntityId}`,
     );
   }
   return controlledSubject.activeActionId;
 }
 
-export function featureInspections(plan: PlaygroundExecutionPlanV1): readonly FeatureInspection[] {
+export function featureInspections(plan: ExecutionPlanV5): readonly FeatureInspection[] {
   return [
     {
       id: plan.terrain.entityId,
@@ -285,11 +296,14 @@ export class BabylonWorldAdapter implements PlaygroundWorldAdapter {
   private mountedContainer: HTMLElement | undefined;
 
   private constructor(
-    private readonly executionPlan: PlaygroundExecutionPlanV1,
+    private readonly executionPlan: ExecutionPlanV5,
     private readonly coordinator: GameplayBabylonRuntimeCoordinatorV1,
+    private readonly playgroundMetadata?: PlaygroundWorldMetadataV1,
   ) {
     this.name = `babylon-havok/${executionPlan.id}`;
-    this.inspections = featureInspections(executionPlan);
+    this.inspections = structuredClone(
+      playgroundMetadata?.featureInspections ?? featureInspections(executionPlan),
+    );
     this.resizeObserver = new ResizeObserver(() => this.activeRuntime().resize());
     window.addEventListener("keydown", this.handleKeyDown);
     window.addEventListener("keyup", this.handleKeyUp);
@@ -303,12 +317,7 @@ export class BabylonWorldAdapter implements PlaygroundWorldAdapter {
 
   static async create(
     runtimeWorldConfiguration: RuntimeWorldConfigurationV1,
-    options: Pick<
-      BabylonWorldRuntimeOptions,
-      | "subjectAssetResolver"
-      | "subjectAssetCacheOptions"
-      | "onInitializationStage"
-  > = {},
+    options: BabylonWorldAdapterCreateOptionsV1 = {},
   ): Promise<BabylonWorldAdapter> {
     const coordinator = await createGameplayBabylonRuntimeCoordinatorV1({
       runtimeSessionId: crypto.randomUUID(),
@@ -330,6 +339,7 @@ export class BabylonWorldAdapter implements PlaygroundWorldAdapter {
       return new BabylonWorldAdapter(
         runtimeWorldConfiguration.executionPlan,
         coordinator,
+        options.playgroundMetadata,
       );
     } catch (error) {
       try {
@@ -658,20 +668,26 @@ export class BabylonWorldAdapter implements PlaygroundWorldAdapter {
     throw new Error("Opening-frame artifact export is not available for Canonical JSON V2.");
   }
 
-  getWorldSpec(): null {
-    return null;
+  getWorldSpec(): NonNullable<PlaygroundWorldMetadataV1["worldSpec"]> | null {
+    return isNil(this.playgroundMetadata?.worldSpec)
+      ? null
+      : structuredClone(this.playgroundMetadata.worldSpec);
   }
 
-  getPlanArtifacts(): null {
-    return null;
+  getPlanArtifacts(): NonNullable<PlaygroundWorldMetadataV1["planArtifacts"]> | null {
+    return isNil(this.playgroundMetadata?.planArtifacts)
+      ? null
+      : structuredClone(this.playgroundMetadata.planArtifacts);
   }
 
   capturePlanningView(): string {
     throw new Error("Planning views are not available for Canonical JSON V2.");
   }
 
-  getVisualPrototypes(): readonly [] {
-    return [];
+  getVisualPrototypes(): ReturnType<PlaygroundWorldAdapter["getVisualPrototypes"]> {
+    return isNil(this.playgroundMetadata?.worldSpec)
+      ? []
+      : structuredClone(this.playgroundMetadata.worldSpec.entityCatalog.prototypes);
   }
 
   captureWhiteboxTriview(): string {
@@ -683,15 +699,19 @@ export class BabylonWorldAdapter implements PlaygroundWorldAdapter {
   }
 
   inspectFeatures(): readonly FeatureInspection[] {
-    return this.inspections;
+    return structuredClone(this.inspections);
   }
 
   snapshot(): WorldSnapshot {
     const snapshot = this.activeRuntime().snapshot();
-    const controlledSubject = snapshot.subjectStatesByEntityId[snapshot.controlledEntityId];
+    if (snapshot.possessionTarget.mode === "unbound") {
+      throw new Error("WORLDKIT_RUNTIME_CONTROL_UNBOUND");
+    }
+    const { controlledEntityId } = snapshot.possessionTarget;
+    const controlledSubject = snapshot.subjectStatesByEntityId[controlledEntityId];
     if (controlledSubject === undefined) {
       throw new Error(
-        `WORLDKIT_RUNTIME_SNAPSHOT_CONTROL_TARGET_NOT_FOUND: ${snapshot.controlledEntityId}`,
+        `WORLDKIT_RUNTIME_SNAPSHOT_CONTROL_TARGET_NOT_FOUND: ${controlledEntityId}`,
       );
     }
     const forward = controlledSubject.forwardXYZ ?? [0, 0, -1];
@@ -850,14 +870,20 @@ export class BabylonWorldAdapter implements PlaygroundWorldAdapter {
     if (!this.paused && !this.animationPending && ticks > 0) {
       this.animationPending = true;
       try {
-        this.applyCameraActions([...this.cameraInput], ticks);
-        const legacySnapshot = this.activeRuntime().snapshot();
+        const runtimeProjection = this.activeRuntime().snapshot();
+        const controlledEntityId = runtimeProjection.possessionTarget.mode === "possessed"
+          ? runtimeProjection.possessionTarget.controlledEntityId
+          : undefined;
+        if (!isNil(controlledEntityId)) {
+          this.applyCameraActions([...this.cameraInput], ticks);
+        }
         await this.coordinator.runFixedInput({
-          actions: this.keyboardInput.actions(
-            legacySnapshot.subjectStatesByEntityId[
-              legacySnapshot.controlledEntityId
-            ]?.activeMotionKernelRef,
-          ),
+          actions: isNil(controlledEntityId)
+            ? []
+            : this.keyboardInput.actions(
+              runtimeProjection.subjectStatesByEntityId[controlledEntityId]
+                ?.activeMotionKernelRef,
+            ),
           ticks,
         });
       } catch (error) {
@@ -941,6 +967,9 @@ export class BabylonWorldAdapter implements PlaygroundWorldAdapter {
   }
 
   private emit(): void {
+    if (this.activeRuntime().snapshot().possessionTarget.mode === "unbound") {
+      return;
+    }
     const snapshot = this.snapshot();
     for (const listener of this.listeners) listener(snapshot);
   }

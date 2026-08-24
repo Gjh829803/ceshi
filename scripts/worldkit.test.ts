@@ -26,10 +26,7 @@ import {
   createCoreControlFeatureFactoryV1,
 } from "@whitebox-world/gameplay";
 
-import {
-  loadWorldkitPipeline,
-  loadWorldkitRoutePipeline,
-} from "./lib/worldkit-pipeline";
+import { loadWorldkitRoutePipeline } from "./lib/worldkit-pipeline";
 import { loadAuthoringScene } from "../apps/playground/src/authoring-loader";
 import {
   RouteValidationRunnerInfrastructureErrorV1,
@@ -136,11 +133,10 @@ afterEach(async () => {
 });
 
 describe("worldkit CLI", () => {
-  it("loads V4 Route worlds only through the explicit V4/V5 pipeline", async () => {
+  it("loads V4 Route worlds through the V4/V5 pipeline", async () => {
     const directory = await createTemporaryDirectory();
     const inputPath = await writeRouteWorld(directory);
     const route = await loadWorldkitRoutePipeline(inputPath);
-    const legacy = await loadWorldkitPipeline(inputPath);
 
     expect(route).toMatchObject({
       ok: true,
@@ -157,7 +153,6 @@ describe("worldkit CLI", () => {
       layoutSolveReportHash: expect.stringMatching(/^sha256:[0-9a-f]{64}$/),
       executionPlan: { schemaVersion: 5 },
     });
-    expect(legacy).toMatchObject({ ok: false, exitCode: 2 });
   });
 
   it("locks the authoritative core-control feature into Route V5 plans", async () => {
@@ -804,9 +799,16 @@ describe("worldkit CLI", () => {
       resourceKind: "subject-definition",
     });
     expect(first.resources.map((resource) => resource.resourceRef)).toEqual([
+      "worldkit://subject-definition/animal.quadruped.forward-steer@1",
+      "worldkit://subject-definition/animal.quadruped.forward-steer@2",
+      "worldkit://subject-definition/glider.paraglider.unpowered@1",
       "worldkit://subject-definition/humanoid.g-bot@1",
+      "worldkit://subject-definition/humanoid.rigged-golden@1",
       "worldkit://subject-definition/humanoid.third-person@1",
       "worldkit://subject-definition/quadruped.ground-proxy@1",
+      "worldkit://subject-definition/surface-craft.ice-skimmer@1",
+      "worldkit://subject-definition/vehicle.four-wheel.arcade@1",
+      "worldkit://subject-definition/watercraft.kayak.surface@1",
     ]);
     expect(first.resources[0]).toMatchObject({
       kind: "subject-definition",
@@ -830,7 +832,11 @@ describe("worldkit CLI", () => {
       resource: {
         resourceRef: "worldkit://subject-definition/humanoid.g-bot@1",
         schemaVersion: 3,
-        contentHash: first.resources[0]?.contentHash,
+        contentHash: first.resources.find(
+          (resource) =>
+            resource.resourceRef ===
+            "worldkit://subject-definition/humanoid.g-bot@1",
+        )?.contentHash,
       },
     });
 
@@ -1001,7 +1007,7 @@ describe("worldkit CLI", () => {
         },
         profiles: {
           physicsBodyProfileRef:
-            "worldkit://physics-body-profile/character.medium@1",
+            "worldkit://physics-body-profile/character.capability-medium@1",
           locomotionProfileRef:
             "worldkit://locomotion-profile/ground.standard@1",
         },

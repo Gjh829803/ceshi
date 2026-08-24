@@ -5,7 +5,7 @@ import { compileSimulationTakeV1 } from "@whitebox-world/control-capture";
 
 import { bindSimulationTakeWorldIdentityV1 } from "./lib/example-take-world-identity";
 import {
-  deriveTransitionalWorldPackageIdentityV1,
+  createSimulationTakeWorldPackageIdentityV1,
 } from "./lib/simulation-take-cli";
 import { loadWorldkitRoutePipeline } from "./lib/worldkit-pipeline";
 
@@ -24,17 +24,17 @@ async function main(): Promise<void> {
   if (!pipeline.ok) {
     throw new Error(JSON.stringify(pipeline.diagnostics));
   }
+  const worldIdentity =
+    await createSimulationTakeWorldPackageIdentityV1(pipeline);
   const reports = [];
   for (const takePath of TAKE_PATHS) {
     const source = JSON.parse(await readFile(takePath, "utf8")) as unknown;
     const compiledSource = compileSimulationTakeV1(source);
-    const worldIdentity = deriveTransitionalWorldPackageIdentityV1({
-      worldPackageRef: compiledSource.take.worldPackageRef,
-      normalizedWorldIrHash: pipeline.normalizedWorldIrHash,
-      executionPlanHash: pipeline.executionPlanHash,
-    });
     const generated = bindSimulationTakeWorldIdentityV1(
-      compiledSource.take,
+      {
+        ...compiledSource.take,
+        worldPackageRef: worldIdentity.worldPackageRef,
+      },
       worldIdentity.worldPackageRootHash,
     );
     const temporaryPath = `${takePath}.tmp-${process.pid}`;

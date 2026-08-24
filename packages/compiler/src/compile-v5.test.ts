@@ -235,6 +235,28 @@ function compile(spec = routeWorld()) {
 }
 
 describe("compileWorldV5", () => {
+  it("uses V5 as the unversioned current compiler boundary", () => {
+    const normalized = normalizeAuthoringSpecV4(routeWorld());
+    if (!normalized.ok || isNil(normalized.value) ||
+      isNil(normalized.normalizedWorldIrHash)) {
+      throw new Error("Fixture normalization failed.");
+    }
+
+    const result = compileWorldV5({
+      normalizedWorldIr: normalized.value,
+      normalizedWorldIrHash: normalized.normalizedWorldIrHash,
+      gameplayBootstrapResourceLock: GAMEPLAY_BOOTSTRAP_LOCK,
+    });
+
+    expect(result).toMatchObject({
+      ok: true,
+      executionPlan: {
+        schemaVersion: 5,
+        initialControlledEntityId: "player",
+      },
+    });
+  });
+
   it("rejects accessor-backed input without invoking the accessor", () => {
     const normalized = normalizeAuthoringSpecV4(routeWorld());
     if (!normalized.ok || isNil(normalized.value) ||
@@ -750,6 +772,10 @@ describe("compileWorldV5", () => {
                 grid: {
                   ...node.components.terrain.grid,
                   resolutionCellsXZ: [513, 513],
+                  heightSamplesMeters: Array.from(
+                    { length: 513 * 513 },
+                    (_, index) => (index % 17) / 10,
+                  ),
                 },
               },
             },

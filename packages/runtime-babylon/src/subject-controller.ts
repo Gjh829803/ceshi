@@ -3,7 +3,6 @@ import type { TransformNode } from "@babylonjs/core/Meshes/transformNode.js";
 import type { Scene } from "@babylonjs/core/scene.pure.js";
 
 import type {
-  ExecutionControlProfileV1,
   ExecutionSubjectV3,
   ControlInputAxesV2,
   PublishedMovementMediumV1,
@@ -29,18 +28,8 @@ export interface SubjectMotionSampleV1 {
   movementMedium: PublishedMovementMediumV1;
 }
 
-const LEGACY_CONTROL_PROFILE = {
-  resourceRef: "worldkit://control-profile/legacy-planar.camera-relative@1",
-  contentHash: "sha256:legacy-control-profile",
-  commandKind: "planar-vector",
-  inputSpace: "camera-relative",
-  facingPolicy: "align-to-move",
-  lateralMovementPolicy: "allowed",
-  moveDeadzoneRatio: 0.1,
-} as const satisfies ExecutionControlProfileV1;
-
 /**
- * Compatibility facade. Input interpretation and movement execution are owned by
+ * Input interpretation and movement execution are owned by
  * separate runtimes; this class only commits them on the same fixed-tick boundary.
  */
 export class SubjectController {
@@ -76,7 +65,7 @@ export class SubjectController {
     axes: Readonly<ControlInputAxesV2> = {},
   ): void {
     const command = compileMotionCommandV1(
-      this.subject.capabilityAssembly?.controlProfile ?? LEGACY_CONTROL_PROFILE,
+      this.subject.capabilityAssembly.controlProfile,
       this.motionKernel.activeControlFeel.moveResponseExponent,
       actions,
       viewControlFrame,
@@ -94,7 +83,6 @@ export class SubjectController {
   }
 
   requestMotionProfile(resourceRef: string): boolean {
-    if (this.subject.capabilityAssembly === undefined) return false;
     return this.motionKernel.requestMotionProfile(resourceRef);
   }
 

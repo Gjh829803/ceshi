@@ -1,7 +1,7 @@
 import {
   canonicalAuthoringIdentityV4,
   normalizeAuthoringSpecV4,
-  projectNormalizedWorldResourcesToV3LayoutIdentity,
+  projectNormalizedWorldResourcesToLayoutIdentityV4,
   validateAuthoringSpecV4,
   type AuthoringSpecV4,
   type NormalizedWorldIRV4,
@@ -301,7 +301,7 @@ export function createWorldPackageValidationSubjectV1(
   );
   requireEqual(
     snapshot.layoutSolveResult.report.registryLockHash,
-    projectNormalizedWorldResourcesToV3LayoutIdentity(
+    projectNormalizedWorldResourcesToLayoutIdentityV4(
       snapshot.normalizedWorldIr.resources,
     ).resourceLockHash,
     "layoutSolveResult/report/registryLockHash",

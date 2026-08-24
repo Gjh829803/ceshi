@@ -13,9 +13,7 @@ import path from "node:path";
 import { promisify } from "node:util";
 
 import {
-  importLegacyAuthoringSnapshotV4,
   parseSubjectPresetCandidateV1,
-  type LegacyAuthoringSnapshotV4ImportOptionsV1,
   type SubjectPresetCandidateV1,
 } from "@whitebox-world/authoring";
 import {
@@ -323,23 +321,6 @@ export async function validateSubjectPresetCandidateFile(
   return parseSubjectPresetCandidateV1(
     parseJsonBytes(bytes, "Subject Preset candidate"),
     options.registry ?? builtInSubjectResourceRegistry,
-  );
-}
-
-export async function importLegacySubjectPresetCandidateFileV4(
-  candidatePath: string,
-  options: LegacyAuthoringSnapshotV4ImportOptionsV1,
-): Promise<SubjectPresetCandidateV1> {
-  const bytes = await readFile(candidatePath);
-  if (bytes.byteLength > 4 * 1024 * 1024) {
-    fail(
-      "SUBJECT_PRESET_PROMOTION_CANDIDATE_TOO_LARGE",
-      "Legacy candidate files may not exceed 4 MiB.",
-    );
-  }
-  return importLegacyAuthoringSnapshotV4(
-    parseJsonBytes(bytes, "Legacy V4 Subject Preset export"),
-    options,
   );
 }
 

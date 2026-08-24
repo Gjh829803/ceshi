@@ -26,9 +26,9 @@ Gameplay 真相。
 
 1. [项目总览](docs/00-project-overview.md)：产品范围、当前能力和明确不支持的部分；
 2. [SDK 分层架构](docs/02-sdk-architecture.md)：系统边界、八层架构、代码包归属和运行时序列；
-3. [Canonical JSON V3/V4 快速接入](docs/17-canonical-json-quickstart.md)：基础世界、Route 世界、CLI 与 Browser Protocol；
+3. [Canonical JSON V4 快速接入](docs/17-canonical-json-quickstart.md)：当前世界输入、CLI 与 Browser Protocol；
 4. [主体手感配表与版本工作区](docs/19-subject-preset-workspace.md)：本地版本、公共默认、发布与回滚；
-5. [Gameplay 对接协议冻结版](docs/20-gameplay-integration-preview-contract.md)：源码已冻结的 Domain Schema、尚未发布的 Browser cutover 和正式版清理边界；
+5. [Gameplay 正式对接合同](docs/20-gameplay-integration-contract.md)：当前 Domain Schema、Browser V5 / Snapshot V4 与 clean-break 边界；
 6. [重构总进度与 Backlog](docs/18-refactor-progress-and-backlog.md)：完成度、优先级、依赖和验收标准。
 
 ## 核心链路
@@ -38,11 +38,11 @@ flowchart TB
     INPUT["Prompt + Reference Image"] --> AGENT["External Planning / Coding Agent<br/>上游团队负责"]
 
     subgraph SDK["Agent Whitebox World SDK"]
-        AUTHOR["AI Schema Profile<br/>Canonical AuthoringSpec V3 / V4"]
+        AUTHOR["AI Schema Profile<br/>Canonical AuthoringSpec V4"]
         VALIDATE["Schema Validation<br/>Registry Resolution"]
         COMPILE["Normalizer + Terrain Compiler<br/>Deterministic Layout Solver"]
-        IR["NormalizedWorldIR<br/>Resource Lock"]
-        PACKAGE["ExecutionPlan V4 / V5<br/>WorldPackage Build Receipt"]
+        IR["NormalizedWorldIR V4<br/>Resource Lock"]
+        PACKAGE["ExecutionPlan V5<br/>WorldPackage Build Receipt"]
         TAKE["Simulation Take V1<br/>60 Hz Fixed Tick · Exact Schedule"]
         RUNTIME["Babylon.js Runtime + Havok Physics<br/>唯一白模世界真相"]
         CAPTURE["Control Capture Bundle<br/>Neutral Color · Linear Depth · Semantic · Instance · Normal"]
@@ -138,8 +138,8 @@ Linear Depth、Bundle Hash 和 Package/Take/Session 归属。人物是否掉入�
 因此，这个 SDK 不只是对 Babylon.js 做一层简单封装，而是在 AI 与 3D 游戏引擎
 之间提供一套**稳定、确定、可验证、可复现的世界编译系统**。
 
-当前已经交付到基础世界的 AuthoringSpec V3、NormalizedWorldIR V3、ExecutionPlan V4，
-以及 Route R1 的 AuthoringSpec V4、NormalizedWorldIR V4、ExecutionPlan V5、
+当前所有 Canonical 世界统一使用 AuthoringSpec V4、NormalizedWorldIR V4 和
+ExecutionPlan V5；基础世界与 Route 世界不再分别暴露旧版本入口。已交付
 Placement Solver S1、Babylon/Havok Runtime、Simulation Take / Control Capture V1，
 以及统一 Validation 的 Capture/Integrity V1 窄切片：精确 Tick/Frame Schedule、五
 Pass、Render Ready Receipt、原子 Bundle、版本化 Profile、Canonical Report、
@@ -194,12 +194,12 @@ WorldPackage 发布格式、恢复续拍和视频模型 Adapter 仍在后续 Bac
 
 | 概念 | 含义 | 当前状态 |
 |---|---|---|
-| Subject Definition | 可复用主体定义，组合 Geometry/Asset、Socket、Collider Policy、Profile 和 Capability | Primitive Package/Registry Definition 已交付 |
+| Subject Definition | 可复用主体定义，组合 Geometry/Asset、Socket、Collider Policy、Profile 和 Capability | Primitive Package/Registry Definition 已交付；Normalizer/Plan 要求完整锁定的 Capability Assembly |
 | Subject Instance | 世界中的具体主体，具有独立 Entity ID、Transform、状态和控制权 | 已交付 |
 | Visual Part | Definition 内部的可渲染组成部分，不自动成为独立 Entity | Primitive Part、Golden GLB 与首个产品 G Bot Asset Part 已交付；更多拓扑仍未完成 |
 | Subject Socket | 主体局部空间中的稳定连接点，例如手、座位或拖车钩 | 声明与编译已交付，关系绑定未交付 |
 | Capability/Profile | 运动、控制、物理、动作等可组合能力及其锁定配置 | 首个 Ground Locomotion/Collider Profile 已交付 |
-| Relationship | `mountedOn`、装备、拖拽等实例之间的类型化 Gameplay 关系 | S2 规划中，当前 Authoring V3 不支持 |
+| Relationship | `mountedOn`、装备、拖拽等实例之间的类型化 Gameplay 关系 | Runtime 控制权已使用 `possessedBy`；通用 Authoring Relationship 仍在 S2 规划中 |
 | Semantic Action | 与具体动画 Clip 解耦的移动、攻击、交互等动作 | Golden 与 G Bot 的 `idle/walk/run/jump` 固定 Tick 地面切片已交付；通用 Action 协议仍未完成 |
 
 主体类别不决定能力。人、马、滑板、汽车、拖车或飞龙都使用同一套
@@ -210,15 +210,15 @@ Socket 和类型化关系表达。
 
 | 领域 | 当前已交付 | 尚未交付 |
 |---|---|---|
-| 世界输入 | 基础世界使用 Canonical Authoring V3；Route 世界使用 V4 → IR V4 → ExecutionPlan V5；严格 Schema、Registry/Package Definition、八种 Placement Constraint 与确定性 Solver S1 | 通用 Terrain Mask、更多 Constraint、完整 P1.4 WorldPackage 发布格式 |
+| 世界输入 | Canonical Authoring V4 → Normalized IR V4 → ExecutionPlan V5；严格 Schema、当前 Registry/Package Definition、八种 Placement Constraint 与确定性 Solver S1 | 通用 Terrain Mask、更多 Constraint、完整 P1.4 WorldPackage 发布格式 |
 | 地形 | 室外 Heightfield、基础 Relief、静态障碍、水域和物理查询 | Canonical Raster/Mask/Region Pipeline；已设计但未实现的 Hybrid Terrain、洞穴、Overhang、多层可行走表面和完整室内 |
 | 主体 | Primitive 人形/四足代理；Golden 与首个产品 G Bot 的 GLB、Rig/Animation/Collider Profile、多实例与独立控制 | 更多产品资产、Compound Collider、LOD、更多拓扑和独立动画资产 |
 | 关系 | Socket 数据可以声明和查询 | 动态 Bind、骑乘、装备、拖拽、Joint、事务与回滚 |
 | 运动与相机 | 地面移动、跳跃、第三人称跟随；WaterBody 可查询/可渲染，主体介质只发布 `ground / air` | 游泳与 `movementMedium: water`、第一人称、飞行、车辆、Camera Director 和多 Rig 切换 |
 | 自动化 | validate/build/run/capture、Registry Discovery、Definition Validate、Subject Explain、`verify route`、Browser Protocol V5、Take Driver 与 Control Capture Gate | 持久 Runtime Session、恢复续拍、多人同时控制 |
-| Capture | 单帧截图、Runtime Snapshot、Simulation Take V1、Neutral/Depth/Semantic/Instance/Normal 五 Pass、原子 Bundle | Event/Action/Relationship Receipt、Motion Vector、完整 Replay/Resume 与视频 Adapter |
+| Capture | 单帧截图、World Runtime Snapshot V4、Simulation Take V1、Neutral/Depth/Semantic/Instance/Normal 五 Pass、原子 Bundle | Event/Action/Relationship Receipt、Motion Vector、完整 Replay/Resume 与视频 Adapter |
 | Validation | Canonical Browser Gate、现有物理/构图检查；Capture/Integrity V1；Route 双 Blocking Gate、R1 Heightfield Golden Fixture；R1b 的 11 个 Fixture、完整验证矩阵、Canonical Evidence/Report 与可信 Host 只读投影 | Placement/Physics/Composition/Replay/Performance 接入统一 Report、Profile 组合、compare 与完整生产 Policy |
-| Gameplay | 基础固定输入、控制绑定与 Golden/G Bot `idle/walk/run/jump` 动作状态 | 完整 Semantic Action、姿态、游泳、装备、NPC、导航、任务、战斗、联网 |
+| Gameplay | 基础固定输入、Gameplay `possessedBy` 权威控制权与 Golden/G Bot `idle/walk/run/jump` 动作状态；Browser 不提供旁路 `bindControl` | 完整 Semantic Action、姿态、游泳、装备、NPC、导航、任务、战斗、联网 |
 | 最终视觉 | 本地白模渲染 | Render Bridge、实时世界模型和生产 Video Model Adapter |
 
 当前 Route 能力只承诺室外 Heightfield 与普通静态平台地面通行。不要把 H1/H2/H3
@@ -319,8 +319,9 @@ pnpm worldkit verify explain /tmp/coastal-walk-opening.validation-report.json \
 `take run` 由 Node/Playwright 驱动固定 Tick Runtime，并在精确 Capture Schedule 上等待
 Render Ready Receipt；页面不获得文件系统权限。输出目录已存在时命令会拒绝覆盖。
 
-Canonical Authoring V3 是基础世界的当前输入；声明 Route Connectivity 的世界使用
-干净升级后的 V4。V3 不会被当成 Route 输入，未发布的更旧版本也没有兼容字段。
+Canonical Authoring V4 是基础世界和 Route 世界的唯一当前输入。旧版
+Authoring/IR/Plan 只能在明确标记的历史文档中用于理解演进，不是可调用的
+兼容入口。
 
 让 SDK 根据空间意图求解海湾场景，而不是由 Agent 为地标填写最终坐标：
 
@@ -437,34 +438,34 @@ Validation 词汇。它不构建 Traversal Graph，不跑 Character Controller�
 |---|---|---|---|
 | `packages/contracts/` | Alpha 层共享 ID、Transform、Frame、Action 与 Diagnostic 基础类型 | 仅遗留/底层共享类型 | 承载新 Canonical Schema 或引擎对象 |
 | `packages/protocol/` | Canonical JSON Bytes、稳定排序与 SHA-256 Hash | Canonical 序列化基础 | 依赖领域 Runtime 或 Provider |
-| `packages/runtime-contracts/` | ExecutionPlan、Runtime Snapshot、Camera 参数和 Browser Protocol V5 | Runtime/Browser 公共合同 | 暴露 Babylon、Havok、Recast Handle |
-| `packages/gameplay-contracts/` | Gameplay Command、Receipt、Event、State 与 Bootstrap 的关闭合同 | G19 集成中；未来 Gameplay 公共合同 | 实现 Gameplay 规则或依赖引擎 |
-| `packages/core/` | 早期 Entity、Transform、Input、Event 与 World 基础实现 | 内部兼容层 | 成为无边界的通用工具杂物包 |
+| `packages/runtime-contracts/` | ExecutionPlan V5、World Runtime Snapshot V4、Camera 参数和 Browser Protocol V5 | Runtime/Browser 当前公共合同 | 暴露 Babylon、Havok、Recast Handle |
+| `packages/gameplay-contracts/` | Gameplay Command、Receipt、Event、State 与 Bootstrap 的关闭合同 | Gameplay 当前公共合同 | 实现 Gameplay 规则或依赖引擎 |
+| `packages/core/` | 早期 Entity、Transform、Input、Event 与 World 基础实现 | 历史内部模块，非公共入口 | 成为无边界的通用工具杂物包 |
 | `packages/world/` | `world.*` Authoring DSL、Feature、Terrain、Landmark、规划工件与场景规格 | AI/场景作者入口 | 直接创建 Provider 对象或修改 Runtime 内部 |
-| `packages/authoring/` | Authoring Schema、Parser、Normalizer、Resource Lock、Preset Candidate 与 Normalized IR | AI Schema 与 Authoring Pipeline | 执行 Babylon/Havok 或反向读取 Runtime State |
+| `packages/authoring/` | Authoring V4 Schema、Parser、Normalizer、Resource Lock、Preset Candidate 与 Normalized IR V4 | AI Schema 与 Authoring Pipeline | 执行 Babylon/Havok 或反向读取 Runtime State |
 | `packages/layout-solver/` | 候选生成、Constraint Evaluator、确定性搜索和 Layout Report | 引擎无关 Solver 合同 | 直接修改场景或依赖渲染结果 |
-| `packages/compiler/` | NormalizedWorldIR 到锁定 ExecutionPlan 的确定性编译 | Compiler API | 读取 Prompt、执行 Gameplay 或创建引擎对象 |
+| `packages/compiler/` | NormalizedWorldIR V4 到锁定 ExecutionPlan V5 的确定性编译 | Compiler API | 读取 Prompt、执行 Gameplay 或创建引擎对象 |
 | `packages/world-package/` | WorldPackage Manifest、Package Root、Build Closure 与 Receipt | 正式内容包合同 | 保存运行时 Handle 或未锁定草稿 |
 | `packages/validation/` | Validation Profile、Metric、Evidence、Gate、Report 与 Package 校验 | CLI/自动化验证合同 | 用渲染成功替代合同/身份校验 |
-| `packages/subject-registry/` | 精确版本的 Subject Definition、Capability、Profile 与 Asset Inventory | Registry 资源入口 | 保存会话状态或未版本化数字 overlay |
+| `packages/subject-registry/` | 精确版本的 Subject Definition、Capability Assembly、Profile 与 Asset Inventory | 当前 Registry 资源入口，不回退到旧 Definition | 保存会话状态或未版本化数字 overlay |
 | `packages/subject-composition/` | Primitive Bounds、Collider 推导、角色胶囊和资源成本 | 内部可复用 LEGO 几何合同 | 依赖 Babylon Mesh 或场景层级 |
 | `packages/subject-actions/` | Character State、Ground Humanoid Action 与动作解析 | 引擎无关动作语义 | 直接播放 AnimationGroup 或控制输入设备 |
-| `packages/subjects/` | 早期 Humanoid Kit、Visual 与 Motor 组合 | 兼容/实验入口 | 定义新的 Canonical Subject 方言 |
+| `packages/subjects/` | 早期 Humanoid Kit、Visual 与 Motor 组合 | 历史/实验内部模块，非生产兼容入口 | 定义新的 Canonical Subject 方言 |
 | `packages/animation/` | Action Registry、Humanoid 动作状态机与动画状态推进 | 内部运行能力 | 决定 Gameplay Action 准入或 World State |
 | `packages/camera/` | **当前为 Legacy Three.js** 第三人称 Rig，仅服务旧 `subjects`/catalog 回归；目标是在隔离旧实现后 clean-break 为 provider-neutral Camera Domain | 当前不属于 Canonical 公开边界 | 承接新的 Camera Profile/Context、被 Babylon Runtime 依赖前假装已完成 clean break |
 | `packages/physics/` | Physics Body、Collider、Shape 与早期 Physics System 抽象 | 内部物理合同 | 把 Provider Body/Shape Handle 写入 Schema |
 | `packages/terrain-surface/` | Heightfield、Triangle Mesh、Collider Support 与 Surface Query | Traversal/Runtime 内部几何合同 | 把单一 Heightfield 冒充全部空间拓扑 |
 | `packages/traversal/` | Traversal Surface、Lock、Capability Envelope、Graph/Path/Probe Receipt 与 Route Overlay | Provider-neutral Route 合同 | 暴露 Recast 数据或替代 Runtime 支撑事实 |
 | `packages/traversal-recast/` | Recast/Detour Graph Build、Query 与 Route Evidence Provider Adapter | 不直接面向 AI | 让 Provider 名称或 Handle 进入 Canonical 协议 |
-| `packages/gameplay/` | Gameplay State、Feature、Semantic Action 与 Command Dispatcher | G19 集成中；引擎无关组合层 | 依赖 Babylon、Browser DOM 或设备输入 |
-| `packages/runtime-host/` | WorldSession、Command Journal、事务、容量和生命周期所有权 | G19 集成中；Runtime Host API | 实现 Babylon 场景细节或重复推导 Gameplay State |
+| `packages/gameplay/` | Gameplay State、Feature、Semantic Action 与 Command Dispatcher | 引擎无关 Gameplay 组合层 | 依赖 Babylon、Browser DOM 或设备输入 |
+| `packages/runtime-host/` | WorldSession、Command Journal、事务、容量和生命周期所有权 | Runtime Host API | 实现 Babylon 场景细节或重复推导 Gameplay State |
 | `packages/runtime-babylon/` | Babylon/Havok Runtime、Camera Director、Subject Controller、Capture 与资产生命周期 | Engine Adapter，不直接面向 AI | 定义 Canonical Schema 或泄漏引擎 Handle |
 | `packages/control-capture/` | Simulation Take、Capture Schedule、Profile、严格校验与 Hash | Take/Capture 自动化合同 | 把 Authoring Preview 当作 Gameplay Ground Truth |
 | `packages/testkit/` | Feature Ownership、Transform、Spawn Safety 与诊断测试辅助 | 仅测试/门禁 | 被生产 Runtime 依赖为业务实现 |
 
-`packages/gameplay-contracts/`、`packages/gameplay/` 与 `packages/runtime-host/` 当前位于 G19
-集成分支；合入前 README 先冻结其职责，避免实现阶段把 Gameplay 合同、规则和 Babylon
-Adapter 再次耦合。应用与工具入口保持为：
+Gameplay 合同、引擎无关规则、Runtime Host 生命周期和 Babylon Adapter 各自拥有
+独立边界。控制权只能通过 Gameplay possession 事务改变，Browser/Adapter 不提供
+绕过关系真相的直接绑定入口。应用与工具入口保持为：
 
 | 路径 | 职责 |
 |---|---|
@@ -475,12 +476,20 @@ Compiler 和 Runtime 不能反向读取 Agent Prompt；Runtime Adapter 不能把
 对象泄漏到公共协议；场景模块不能为了创建内容而修改 Runtime、Physics 或 Camera
 内部实现。
 
+### 贡献者的未发布协议规则
+
+项目尚未对外发布，不为开发历史保留公共 alias、双轨 parser、旧 Browser 方法或
+仅用于迁移本地 Fixture 的 migration。合同改动应一次性更新 Schema、生成类型、CLI、
+Browser、示例和门禁。若本轮确实无法删除某个旧路径，技术设计和 Backlog 必须同时
+记录它的具体 consumer、owner、removal gate 和 deadline；达到门禁后删除，不能把
+“暂时兼容”固化成新的公共合同。
+
 ## 文档导航
 
 ### 使用与当前状态
 
 - [项目总览：范围、状态与阅读顺序](docs/00-project-overview.md)
-- [Canonical JSON V3/V4：AI/CLI 接入与运行指南](docs/17-canonical-json-quickstart.md)
+- [Canonical JSON V4：AI/CLI 接入与运行指南](docs/17-canonical-json-quickstart.md)
 - [主体手感配表与版本工作区](docs/19-subject-preset-workspace.md)
 - [SDK 重构总进度与 Backlog](docs/18-refactor-progress-and-backlog.md)
 - [当前实验与验证记录](docs/10-current-experiments.md)
@@ -493,6 +502,8 @@ Compiler 和 Runtime 不能反向读取 Agent Prompt；Runtime Adapter 不能把
 - [Canonical Runtime State 与 Semantic Projection 设计](docs/superpowers/specs/2026-08-22-canonical-runtime-state-and-semantic-projection-design.md)
 - [Gameplay Framework 与 Route R1b 融合设计](docs/superpowers/specs/2026-08-24-gameplay-framework-r1b-integration-design.md)
 - [Gameplay Framework 与 Route R1b 实施计划](docs/superpowers/plans/2026-08-24-gameplay-framework-r1b-integration-implementation-plan.md)
+- [未发布协议兼容层 Clean Break 设计](docs/superpowers/specs/2026-08-24-unreleased-compatibility-clean-break-design.md)
+- [历史命名与兼容路径清理专项计划](docs/superpowers/plans/2026-08-25-historical-naming-and-compatibility-path-cleanup-plan.md)
 - [Gameplay RuntimeHost G19-3 审查处置](docs/reviews/2026-08-24-gameplay-runtime-host-g19-3-review.md)
 - [上下文驱动 Gameplay 与 Camera 组合设计（已评审，未来能力）](docs/superpowers/specs/2026-08-24-context-driven-gameplay-camera-composition-design.md)
 - [上下文驱动 Gameplay 与 Camera 设计审查记录](docs/reviews/2026-08-24-context-driven-gameplay-camera-composition-design-review.md)
@@ -532,8 +543,8 @@ Compiler 和 Runtime 不能反向读取 Agent Prompt；Runtime Adapter 不能把
 
 - [Subject Foundation 可视切片](docs/superpowers/plans/2026-08-19-subject-foundation-visible-slice.md)
 - [Package Subject Definition 可视切片](docs/superpowers/plans/2026-08-19-package-subject-definition-visible-slice.md)
-- [Canonical JSON Babylon 历史实施计划](docs/superpowers/plans/2026-08-18-canonical-json-babylon-v1.md)：已被 Authoring V3 取代，仅保留历史上下文。
-- [Placement Solver S1 海湾纵向切片](docs/superpowers/plans/2026-08-20-placement-layout-solver-s1.md)：Authoring/IR/Plan V3/V3/V4、八种 Constraint、CLI、Browser/Havok 与事务证据已完成。
+- [Canonical JSON Babylon 历史实施计划](docs/superpowers/plans/2026-08-18-canonical-json-babylon-v1.md)：已被当前 Authoring V4 主链取代，仅保留历史上下文，不提供生产兼容。
+- [Placement Solver S1 海湾纵向切片](docs/superpowers/plans/2026-08-20-placement-layout-solver-s1.md)：记录当时 Authoring/IR/Plan V3/V3/V4、八种 Constraint、CLI、Browser/Havok 与事务证据；版本组合仅为历史，当前入口为 V4/V4/V5。
 - [Simulation Take / Control Capture V1](docs/superpowers/plans/2026-08-21-simulation-take-control-capture-v1.md)：精确 Schedule、五 Pass Babylon Capture、Render Ready、原子 Bundle、CLI/Browser/Playwright 与真实浏览器 Gate 已完成。
 - [Validation Capture/Integrity V1](docs/superpowers/plans/2026-08-21-validation-capture-integrity-v1.md)：版本化 Profile、Canonical Report、Blocking/Incomplete Policy、Capture Adapter、verify/explain 与五类 Conformance Fixture 已完成。
 
@@ -570,8 +581,7 @@ pnpm studio
 `pnpm dev` 只用于 Legacy/场景目录 Playground，不能为 `?authoring=1` 注入
 AuthoringSpec。Canonical G Bot 体验使用 `pnpm dev:g-bot`。这些 Legacy 入口不是新
 程序的 Canonical 协议真相，不再承接新的底层能力。新外部程序应
-使用 `worldkit`、基础世界 Authoring V3、Route 世界 Authoring V4 和 Browser
-Protocol V4。最终切换计划见
+使用 `worldkit`、Canonical Authoring V4 和 Browser Protocol V5。最终切换计划见
 [重构总进度与 Backlog](docs/18-refactor-progress-and-backlog.md#p32-默认实现切换)。
 
 仓库不分发来源尚未确认的 Xbot。以下 Mixamo 入口只属于 Legacy Three/Rapier

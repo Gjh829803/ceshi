@@ -93,7 +93,6 @@ const baseline: SubjectPresetLocalBaselineV1 = {
     },
   ],
   defaultCameraProfileRef: "worldkit://camera-profile/chase.surface-fast@1",
-  firstPersonCameraProfileRef: null,
 };
 
 describe("subject preset workbench projection", () => {
@@ -101,8 +100,8 @@ describe("subject preset workbench projection", () => {
     expect(normalizeSubjectPresetCameraPreferenceV1("auto", baseline)).toBe("auto");
     expect(normalizeSubjectPresetCameraPreferenceV1(
       "first-person",
-      { ...baseline, firstPersonCameraProfileRef: baseline.cameraProfiles[0]!.resourceRef },
-    )).toBe(baseline.cameraProfiles[0]!.resourceRef);
+      baseline,
+    )).toBe("auto");
     expect(normalizeSubjectPresetCameraPreferenceV1(
       baseline.defaultCameraProfileRef,
       baseline,

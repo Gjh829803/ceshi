@@ -46,6 +46,8 @@
     "verify:route-r0-contract": "tsx scripts/verify-route-r0-contract.ts",
     "verify:route-r1-heightfield": "tsx scripts/verify-route-r1-heightfield.ts",
     "verify:route-r1b-static-platform": "tsx scripts/verify-route-r1b-static-platform.ts",
+    "verify:outdoor-gameplay": "tsx scripts/verify-outdoor-gameplay-worlds.ts",
+    "verify:unreleased-clean-break": "tsx scripts/verify-unreleased-clean-break.ts",
     "benchmark:route-r1b-surface-preflight": "tsx scripts/benchmark-route-r1b-surface-preflight.ts"
   },
   "dependencies": {

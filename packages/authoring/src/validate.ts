@@ -7,8 +7,6 @@ import type {
   AuthoringResult,
   PackageSubjectDefinitionV1,
 } from "./types";
-import type { AuthoringSpecV3 } from "./types-v3.js";
-import { validateAuthoringSpecV3 } from "./validate-v3.js";
 
 const ajv = new Ajv2020({
   allErrors: true,
@@ -95,10 +93,6 @@ function diagnosticFor(error: ErrorObject): AuthoringDiagnostic {
     message: error.message ?? "AuthoringSpec does not match the canonical schema.",
     details,
   };
-}
-
-export function validateAuthoringSpec(value: unknown): AuthoringResult<AuthoringSpecV3> {
-  return validateAuthoringSpecV3(value);
 }
 
 export function validatePackageSubjectDefinition(

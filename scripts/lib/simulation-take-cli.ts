@@ -11,7 +11,7 @@ import type {
   GameplayCommandReceiptV1,
   GameplayCommandV1,
 } from "@whitebox-world/gameplay-contracts";
-import { sha256Bytes, sha256CanonicalJson } from "@whitebox-world/protocol";
+import { sha256Bytes } from "@whitebox-world/protocol";
 import type {
   CameraViewInputV1,
   ControlCaptureCapabilitiesV1,
@@ -23,6 +23,7 @@ import type {
   RuntimeControlCaptureFrameV1,
   WorldRuntimeSnapshotV4,
 } from "@whitebox-world/runtime-contracts";
+import { createWorldPackageBuildReceiptV1 } from "@whitebox-world/world-package";
 import type { Browser, Page } from "playwright";
 
 import {
@@ -41,10 +42,14 @@ import {
   loadWorldkitRoutePipeline,
   readWorldkitInput,
   type WorldkitFailure,
+  type WorldkitRoutePipelineSuccess,
 } from "./worldkit-pipeline";
+import {
+  resolveWorldPackageResourceArtifactsV1,
+} from "./world-package-resource-resolver";
 import { startWorldkitServer, type WorldkitServerHandle } from "./worldkit-server";
 
-interface TransitionalWorldPackageIdentityV1 {
+interface SimulationTakeWorldPackageIdentityV1 {
   readonly worldPackageRef: string;
   readonly worldPackageRootHash: Sha256HashV1;
   readonly normalizedWorldIrHash: Sha256HashV1;
@@ -97,24 +102,31 @@ async function loadCompiledTakeFile(
   }
 }
 
-export function deriveTransitionalWorldPackageIdentityV1(input: {
-  readonly worldPackageRef: string;
-  readonly normalizedWorldIrHash: string;
-  readonly executionPlanHash: string;
-}): TransitionalWorldPackageIdentityV1 {
-  const normalizedWorldIrHash = input.normalizedWorldIrHash as Sha256HashV1;
-  const executionPlanHash = input.executionPlanHash as Sha256HashV1;
+export async function createSimulationTakeWorldPackageIdentityV1(
+  pipeline: WorldkitRoutePipelineSuccess,
+): Promise<SimulationTakeWorldPackageIdentityV1> {
+  const packageId = `${pipeline.authoringSpec.id}.${pipeline.authoringSpec.seed}`;
+  const resourceArtifacts = await resolveWorldPackageResourceArtifactsV1(
+    pipeline.normalizedWorldIr,
+  );
+  const buildReceipt = createWorldPackageBuildReceiptV1({
+    packageId,
+    authoringSpec: pipeline.authoringSpec,
+    normalizedWorldIr: pipeline.normalizedWorldIr,
+    layoutSolveResult: {
+      status: pipeline.layoutSolveReport.status,
+      report: pipeline.layoutSolveReport,
+      layoutSolveReportHash: pipeline.layoutSolveReportHash,
+    },
+    executionPlan: pipeline.executionPlan,
+    gameplayBootstrap: pipeline.gameplayBootstrap,
+    resourceArtifacts,
+  });
   return {
-    worldPackageRef: input.worldPackageRef,
-    normalizedWorldIrHash,
-    executionPlanHash,
-    worldPackageRootHash: sha256CanonicalJson({
-      kind: "worldkit-transitional-world-package-identity",
-      schemaVersion: 1,
-      worldPackageRef: input.worldPackageRef,
-      normalizedWorldIrHash,
-      executionPlanHash,
-    }) as Sha256HashV1,
+    worldPackageRef: `worldkit://world-package/${packageId}@1`,
+    worldPackageRootHash: buildReceipt.worldPackageRootHash,
+    normalizedWorldIrHash: buildReceipt.manifest.normalizedWorldIrHash,
+    executionPlanHash: buildReceipt.manifest.executionPlanHash,
   };
 }
 
@@ -303,12 +315,11 @@ export async function runSimulationTakeFileV1(
       "Control Capture output directory already exists.",
     );
   }
-  const worldPackageIdentity = deriveTransitionalWorldPackageIdentityV1({
-    worldPackageRef: loadedTake.compiledTake.take.worldPackageRef,
-    normalizedWorldIrHash: pipeline.normalizedWorldIrHash,
-    executionPlanHash: pipeline.executionPlanHash,
-  });
+  const worldPackageIdentity =
+    await createSimulationTakeWorldPackageIdentityV1(pipeline);
   if (
+    worldPackageIdentity.worldPackageRef !==
+      loadedTake.compiledTake.take.worldPackageRef ||
     worldPackageIdentity.worldPackageRootHash !==
     loadedTake.compiledTake.take.worldPackageRootHash
   ) {
@@ -316,6 +327,8 @@ export async function runSimulationTakeFileV1(
       "TAKE_WORLD_PACKAGE_MISMATCH",
       "Simulation Take does not match the compiled world identity.",
       {
+        expectedWorldPackageRef: loadedTake.compiledTake.take.worldPackageRef,
+        actualWorldPackageRef: worldPackageIdentity.worldPackageRef,
         expectedWorldPackageRootHash: loadedTake.compiledTake.take.worldPackageRootHash,
         actualWorldPackageRootHash: worldPackageIdentity.worldPackageRootHash,
       },

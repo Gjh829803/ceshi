@@ -28,6 +28,7 @@ import {
   createValidPackageSubjectWorld,
 } from "../../authoring/src/test-fixture";
 import { BabylonWorldRuntime } from "./babylon-world-runtime";
+import { bindRuntimeTestPossession } from "./runtime-test-possession";
 import { createBabylonTraversalRuntimePortV1 } from "./traversal-runtime-port";
 import { BABYLON_TRAVERSAL_RUNTIME_IMPLEMENTATION_IDENTITY_V1 } from "./traversal-implementation-identity";
 
@@ -301,7 +302,7 @@ function withEverySubjectAirborne(
 async function createRuntime(
   executionPlan: ExecutionPlanV5,
 ): Promise<BabylonWorldRuntime> {
-  return BabylonWorldRuntime.create({
+  const runtime = await BabylonWorldRuntime.create({
     executionPlan,
     havokWasmBinary,
     autoStartRenderLoop: false,
@@ -313,6 +314,11 @@ async function createRuntime(
       lockstepMaxSteps: 4,
     }),
   });
+  await bindRuntimeTestPossession(
+    runtime,
+    executionPlan.initialControlledEntityId,
+  );
+  return runtime;
 }
 
 type SupportInspectableController = Readonly<{

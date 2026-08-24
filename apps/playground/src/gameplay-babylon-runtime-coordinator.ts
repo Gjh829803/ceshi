@@ -18,6 +18,7 @@ import {
   FIXED_TIME_STEP_SECONDS,
   createBabylonGameplayWorldPortV1,
   type BabylonWorldRuntimeInitializationStageV1,
+  type BabylonRuntimeProjectionV1,
   type SubjectAssetCacheOptionsV1,
   type SubjectAssetResolverV1,
 } from "@whitebox-world/runtime-babylon";
@@ -36,7 +37,6 @@ import type {
   FixedInputV1,
   RuntimeActivityReceiptV1,
   RuntimeActivityRequestV1,
-  WorldRuntimeSnapshotV3,
   WorldRuntimeSnapshotV4,
 } from "@whitebox-world/runtime-contracts";
 import { isNil } from "lodash-es";
@@ -67,7 +67,6 @@ const MAXIMUM_CONCURRENT_RUNTIME_HANDLE_COUNT_V1 = 2;
  */
 export type GameplayBabylonRuntimeV1 = Pick<
   BabylonWorldRuntime,
-  | "snapshot"
   | "renderFrame"
   | "renderFrameWhenReady"
   | "resize"
@@ -83,7 +82,9 @@ export type GameplayBabylonRuntimeV1 = Pick<
   | "applySubjectPresetTuning"
   | "runHarness"
   | "requestMotionProfile"
->;
+> & Readonly<{
+  snapshot(): BabylonRuntimeProjectionV1;
+}>;
 
 export interface GameplayBabylonRuntimeBundleV1 {
   readonly runtime: GameplayBabylonRuntimeV1;
@@ -238,13 +239,13 @@ function activePossessionEntityId(
 
 function cameraProjection(
   publication: WorldSessionPublicationV1,
-  legacySnapshot: WorldRuntimeSnapshotV3,
+  runtimeProjection: BabylonRuntimeProjectionV1,
 ): WorldRuntimeSnapshotV4["view"]["camera"] {
   const controlledEntityId = activePossessionEntityId(
     publication.gameplayInspection,
   );
   if (isNil(controlledEntityId)) return Object.freeze({ mode: "unbound" });
-  const camera = legacySnapshot.camera;
+  const camera = runtimeProjection.camera;
   if (
     isNil(camera.activeCameraProfileRef) ||
     isNil(camera.activeCameraRigRef) ||
@@ -493,7 +494,7 @@ export class GameplayBabylonRuntimeCoordinatorV1 {
 
   snapshot(): WorldRuntimeSnapshotV4 {
     const publication = this.host.snapshot();
-    const runtimeSnapshot = this.activeRuntime().snapshot();
+    const runtimeProjection = this.activeRuntime().snapshot();
     const hostPhase = this.host.phase;
     return Object.freeze({
       kind: "worldkit-runtime-snapshot",
@@ -514,7 +515,7 @@ export class GameplayBabylonRuntimeCoordinatorV1 {
       }),
       view: Object.freeze({
         viewStateRevision: publication.viewState.viewStateRevision,
-        camera: cameraProjection(publication, runtimeSnapshot),
+        camera: cameraProjection(publication, runtimeProjection),
       }),
       runtime: Object.freeze({
         phase: hostPhase === "failed"
@@ -527,9 +528,9 @@ export class GameplayBabylonRuntimeCoordinatorV1 {
       }),
       resources: Object.freeze({
         phase: hostPhase === "failed" ? "failed" as const : "ready" as const,
-        meshCount: runtimeSnapshot.resources.meshes,
-        physicsBodyCount: runtimeSnapshot.resources.bodies,
-        terrainSampleCount: runtimeSnapshot.resources.terrainSamples,
+        meshCount: runtimeProjection.resources.meshes,
+        physicsBodyCount: runtimeProjection.resources.bodies,
+        terrainSampleCount: runtimeProjection.resources.terrainSamples,
       }),
     });
   }

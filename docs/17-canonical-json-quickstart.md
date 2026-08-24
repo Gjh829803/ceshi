@@ -423,7 +423,7 @@ Discovery、Subject Harness 和 Camera Authoring 方法以
 `control.release` 命令，并用 `expectedPossession` 做原子比较；Runtime 不从启动候选或
 旧 Snapshot 字段推断控制目标。Snapshot V4 通过 `world.gameplayInspection`、
 `world.subjectStatesByEntityId` 和 `view.camera` 分别表达 Gameplay 权威状态、主体投影和
-相机状态。
+相机状态；Babylon/Havok 的内部 handle 或 provider projection 不进入 Browser 合同。
 
 对于 Placement 世界，`getDiagnostics()` 还会发布只读、递归冻结的
 `WORLDKIT_LAYOUT_ASSERTION_SATISFIED` 证据。Browser 不暴露 Candidate、搜索、

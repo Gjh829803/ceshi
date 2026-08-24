@@ -2,8 +2,6 @@ import { sha256CanonicalJson } from "@whitebox-world/protocol";
 import type { NumericProfileOverrideV1 } from "@whitebox-world/runtime-contracts";
 
 export const SUBJECT_PRESET_LOCAL_STORAGE_KEY = "worldkit.subject-preset-local.v1";
-export const SUBJECT_PRESET_V4_MIGRATION_RECEIPT_KEY =
-  "worldkit.subject-preset-migration.v1";
 
 const SHA256_PATTERN = /^sha256:[a-f0-9]{64}$/;
 
@@ -73,7 +71,6 @@ export interface SubjectPresetLocalBaselineV1 {
   controlProfile: SubjectPresetProfileLockV1;
   cameraProfiles: readonly SubjectPresetProfileLockV1[];
   defaultCameraProfileRef: string;
-  firstPersonCameraProfileRef: string | null;
 }
 
 export interface SubjectPresetLocalDiagnosticV1 {
@@ -138,32 +135,6 @@ export interface DeleteSubjectPresetLocalVersionResultV1 {
   clearedLocalDefault: boolean;
 }
 
-export interface SubjectPresetV4MigrationResultV1 {
-  migrationStatus: "migrated" | "no-compatible-data" | "already-migrated";
-  migratedSourceKeys: readonly string[];
-  diagnostics: readonly SubjectPresetLocalDiagnosticV1[];
-  draftId?: string;
-  localVersionId?: string;
-}
-
-interface SubjectPresetV4MigrationReceiptEntryV1 {
-  subjectDefinitionId: string;
-  subjectDefinitionRef: string;
-  subjectDefinitionContentHash: string;
-  migrationStatus: "migrated" | "no-compatible-data";
-  migratedSourceKeys: readonly string[];
-  diagnostics: readonly SubjectPresetLocalDiagnosticV1[];
-  draftId: string | null;
-  localVersionId: string | null;
-  completedAtIso: string;
-}
-
-interface SubjectPresetV4MigrationReceiptCatalogV1 {
-  kind: "worldkit-subject-preset-v4-migration-receipts";
-  schemaVersion: 1;
-  entries: SubjectPresetV4MigrationReceiptEntryV1[];
-}
-
 interface SubjectPresetLocalRepositoryStateV1 {
   kind: "worldkit-subject-preset-local-repository";
   schemaVersion: 1;
@@ -199,9 +170,6 @@ export interface SubjectPresetLocalRepositoryV1 {
   deleteVersion(
     localVersionId: string,
   ): SubjectPresetWriteReceiptV1<DeleteSubjectPresetLocalVersionResultV1>;
-  migrateV4(
-    baseline: SubjectPresetLocalBaselineV1,
-  ): SubjectPresetWriteReceiptV1<SubjectPresetV4MigrationResultV1>;
   setLocalDefault(
     pointer: SubjectPresetLocalDefaultPointerV1,
   ): SubjectPresetWriteReceiptV1<SubjectPresetLocalDefaultPointerV1>;
@@ -702,144 +670,6 @@ function parsePersistedState(raw: string): SubjectPresetLocalRepositoryStateV1 {
   };
 }
 
-function emptyV4MigrationReceiptCatalog(): SubjectPresetV4MigrationReceiptCatalogV1 {
-  return {
-    kind: "worldkit-subject-preset-v4-migration-receipts",
-    schemaVersion: 1,
-    entries: [],
-  };
-}
-
-function parseLocalDiagnostic(source: unknown): SubjectPresetLocalDiagnosticV1 {
-  assertRecord(source, "diagnostic");
-  const expectedKeys = Object.hasOwn(source, "storageKey")
-    ? ["code", "message", "storageKey"]
-    : ["code", "message"];
-  assertExactKeys(source, expectedKeys, "diagnostic");
-  assertString(source.code, "diagnostic.code");
-  assertString(source.message, "diagnostic.message");
-  if (source.storageKey !== undefined) assertString(source.storageKey, "diagnostic.storageKey");
-  return {
-    code: source.code,
-    message: source.message,
-    ...(source.storageKey === undefined ? {} : { storageKey: source.storageKey }),
-  };
-}
-
-function parseV4MigrationReceiptCatalog(raw: string): SubjectPresetV4MigrationReceiptCatalogV1 {
-  const source: unknown = JSON.parse(raw);
-  assertRecord(source, "V4 migration receipt catalog");
-  assertExactKeys(source, ["kind", "schemaVersion", "entries"], "V4 migration receipt catalog");
-  if (
-    source.kind !== "worldkit-subject-preset-v4-migration-receipts" ||
-    source.schemaVersion !== 1 ||
-    !Array.isArray(source.entries)
-  ) {
-    throw new TypeError("SUBJECT_PRESET_LOCAL_INVALID: V4 migration receipt envelope is invalid.");
-  }
-  const entries = source.entries.map((entryInput) => {
-    assertRecord(entryInput, "V4 migration receipt entry");
-    assertExactKeys(
-      entryInput,
-      [
-        "subjectDefinitionId",
-        "subjectDefinitionRef",
-        "subjectDefinitionContentHash",
-        "migrationStatus",
-        "migratedSourceKeys",
-        "diagnostics",
-        "draftId",
-        "localVersionId",
-        "completedAtIso",
-      ],
-      "V4 migration receipt entry",
-    );
-    assertString(entryInput.subjectDefinitionId, "subjectDefinitionId");
-    assertString(entryInput.subjectDefinitionRef, "subjectDefinitionRef");
-    assertHash(entryInput.subjectDefinitionContentHash, "subjectDefinitionContentHash");
-    if (
-      entryInput.migrationStatus !== "migrated" &&
-      entryInput.migrationStatus !== "no-compatible-data"
-    ) {
-      throw new TypeError("SUBJECT_PRESET_LOCAL_INVALID: V4 migration status is invalid.");
-    }
-    if (
-      !Array.isArray(entryInput.migratedSourceKeys) ||
-      !entryInput.migratedSourceKeys.every((key): key is string => typeof key === "string") ||
-      !Array.isArray(entryInput.diagnostics)
-    ) {
-      throw new TypeError("SUBJECT_PRESET_LOCAL_INVALID: V4 migration receipt arrays are invalid.");
-    }
-    if (entryInput.draftId !== null) assertString(entryInput.draftId, "draftId");
-    if (entryInput.localVersionId !== null) {
-      assertString(entryInput.localVersionId, "localVersionId");
-    }
-    assertIsoTimestamp(entryInput.completedAtIso, "completedAtIso");
-    return {
-      subjectDefinitionId: entryInput.subjectDefinitionId,
-      subjectDefinitionRef: entryInput.subjectDefinitionRef,
-      subjectDefinitionContentHash: entryInput.subjectDefinitionContentHash,
-      migrationStatus: entryInput.migrationStatus,
-      migratedSourceKeys: [...entryInput.migratedSourceKeys].sort(),
-      diagnostics: entryInput.diagnostics.map(parseLocalDiagnostic),
-      draftId: entryInput.draftId,
-      localVersionId: entryInput.localVersionId,
-      completedAtIso: entryInput.completedAtIso,
-    } satisfies SubjectPresetV4MigrationReceiptEntryV1;
-  });
-  const duplicate = entries.find(
-    (entry, index) =>
-      entries.findIndex(
-        (candidate) =>
-          candidate.subjectDefinitionId === entry.subjectDefinitionId &&
-          candidate.subjectDefinitionRef === entry.subjectDefinitionRef &&
-          candidate.subjectDefinitionContentHash === entry.subjectDefinitionContentHash,
-      ) !== index,
-  );
-  if (duplicate !== undefined) {
-    throw new TypeError("SUBJECT_PRESET_LOCAL_INVALID: duplicate V4 migration receipt.");
-  }
-  return {
-    kind: source.kind,
-    schemaVersion: source.schemaVersion,
-    entries,
-  };
-}
-
-function validateLocalBaseline(source: SubjectPresetLocalBaselineV1): void {
-  assertString(source.subjectDefinitionId, "baseline.subjectDefinitionId");
-  assertString(source.subjectDefinitionRef, "baseline.subjectDefinitionRef");
-  assertHash(source.subjectDefinitionContentHash, "baseline.subjectDefinitionContentHash");
-  assertString(source.defaultMotionProfile.resourceRef, "baseline.defaultMotionProfile.resourceRef");
-  assertHash(source.defaultMotionProfile.contentHash, "baseline.defaultMotionProfile.contentHash");
-  assertString(source.controlFeelProfile.resourceRef, "baseline.controlFeelProfile.resourceRef");
-  assertHash(source.controlFeelProfile.contentHash, "baseline.controlFeelProfile.contentHash");
-  assertString(source.controlProfile.resourceRef, "baseline.controlProfile.resourceRef");
-  assertHash(source.controlProfile.contentHash, "baseline.controlProfile.contentHash");
-  const cameraRefs = new Set<string>();
-  for (const profile of source.cameraProfiles) {
-    assertString(profile.resourceRef, "baseline.cameraProfiles.resourceRef");
-    assertHash(profile.contentHash, "baseline.cameraProfiles.contentHash");
-    if (cameraRefs.has(profile.resourceRef)) {
-      throw new TypeError("SUBJECT_PRESET_LOCAL_INVALID: duplicate baseline camera profile ref.");
-    }
-    cameraRefs.add(profile.resourceRef);
-  }
-  if (!cameraRefs.has(source.defaultCameraProfileRef)) {
-    throw new TypeError(
-      "SUBJECT_PRESET_LOCAL_INVALID: default camera profile is not in the baseline camera set.",
-    );
-  }
-  if (
-    source.firstPersonCameraProfileRef !== null &&
-    !cameraRefs.has(source.firstPersonCameraProfileRef)
-  ) {
-    throw new TypeError(
-      "SUBJECT_PRESET_LOCAL_INVALID: first-person camera profile is not in the baseline camera set.",
-    );
-  }
-}
-
 export function createSubjectPresetLocalRepository(
   storage: SubjectPresetStorageV1,
   options: SubjectPresetLocalRepositoryOptionsV1 = {},
@@ -866,21 +696,6 @@ export function createSubjectPresetLocalRepository(
       storageKey: SUBJECT_PRESET_LOCAL_STORAGE_KEY,
     });
   }
-  let v4MigrationReceipts = emptyV4MigrationReceiptCatalog();
-  try {
-    const receiptRaw = storage.getItem(SUBJECT_PRESET_V4_MIGRATION_RECEIPT_KEY);
-    if (receiptRaw !== null) {
-      v4MigrationReceipts = parseV4MigrationReceiptCatalog(receiptRaw);
-    }
-  } catch (error) {
-    diagnostics.push({
-      code: "SUBJECT_PRESET_V4_MIGRATION_RECEIPT_INVALID",
-      message:
-        error instanceof Error ? error.message : "The V4 migration receipt could not be read.",
-      storageKey: SUBJECT_PRESET_V4_MIGRATION_RECEIPT_KEY,
-    });
-  }
-
   function persist<T>(value: T): SubjectPresetWriteReceiptV1<T> {
     try {
       storage.setItem(SUBJECT_PRESET_LOCAL_STORAGE_KEY, JSON.stringify(state));
@@ -941,84 +756,6 @@ export function createSubjectPresetLocalRepository(
     );
     if (existingIndex < 0) state.drafts.push(draft);
     else state.drafts[existingIndex] = draft;
-  }
-
-  function listStorageKeys(): readonly string[] {
-    const keys: string[] = [];
-    try {
-      for (let index = 0; index < storage.length; index += 1) {
-        const key = storage.key(index);
-        if (key !== null) keys.push(key);
-      }
-    } catch {
-      return [];
-    }
-    return keys;
-  }
-
-  function readLegacyNumericValues(
-    storageKey: string,
-    migrationDiagnostics: SubjectPresetLocalDiagnosticV1[],
-  ): Readonly<Record<string, number>> | undefined {
-    let raw: string | null;
-    try {
-      raw = storage.getItem(storageKey);
-    } catch {
-      migrationDiagnostics.push({
-        code: "SUBJECT_PRESET_STORAGE_UNAVAILABLE",
-        message: "Legacy V4 storage could not be read.",
-        storageKey,
-      });
-      return undefined;
-    }
-    if (raw === null) return undefined;
-    try {
-      const parsed: unknown = JSON.parse(raw);
-      assertRecord(parsed, "legacy V4 numeric values");
-      return Object.fromEntries(
-        Object.entries(parsed)
-          .sort(([left], [right]) => left.localeCompare(right))
-          .map(([parameterName, value]) => {
-            assertString(parameterName, "legacy parameter name");
-            if (typeof value !== "number" || !Number.isFinite(value)) {
-              throw new TypeError(`legacy parameter ${parameterName} must be finite`);
-            }
-            return [parameterName, value] as const;
-          }),
-      );
-    } catch (error) {
-      migrationDiagnostics.push({
-        code: "SUBJECT_PRESET_V4_SOURCE_INVALID",
-        message:
-          error instanceof Error ? error.message : "Legacy V4 numeric values are malformed.",
-        storageKey,
-      });
-      return undefined;
-    }
-  }
-
-  function persistV4Migration(
-    result: SubjectPresetV4MigrationResultV1,
-  ): SubjectPresetWriteReceiptV1<SubjectPresetV4MigrationResultV1> {
-    const primaryReceipt = persist(result);
-    if (primaryReceipt.status === "memory-only") return primaryReceipt;
-    try {
-      storage.setItem(
-        SUBJECT_PRESET_V4_MIGRATION_RECEIPT_KEY,
-        JSON.stringify(v4MigrationReceipts),
-      );
-      return primaryReceipt;
-    } catch {
-      return {
-        value: structuredClone(result),
-        status: "memory-only",
-        diagnostic: {
-          code: "SUBJECT_PRESET_STORAGE_UNAVAILABLE",
-          message: "The V4 migration remains active in memory but its receipt was not persisted.",
-          storageKey: SUBJECT_PRESET_V4_MIGRATION_RECEIPT_KEY,
-        },
-      };
-    }
   }
 
   return {
@@ -1118,191 +855,6 @@ export function createSubjectPresetLocalRepository(
         deletedLocalVersionId: localVersionId,
         clearedLocalDefault: state.localDefaults.length !== defaultsBefore,
       });
-    },
-    migrateV4(baseline) {
-      validateLocalBaseline(baseline);
-      const previousReceipt = v4MigrationReceipts.entries.find(
-        (entry) =>
-          entry.subjectDefinitionId === baseline.subjectDefinitionId &&
-          entry.subjectDefinitionRef === baseline.subjectDefinitionRef &&
-          entry.subjectDefinitionContentHash === baseline.subjectDefinitionContentHash,
-      );
-      if (previousReceipt !== undefined) {
-        return {
-          value: {
-            migrationStatus: "already-migrated",
-            migratedSourceKeys: [...previousReceipt.migratedSourceKeys],
-            diagnostics: structuredClone(previousReceipt.diagnostics),
-            ...(previousReceipt.draftId === null
-              ? {}
-              : { draftId: previousReceipt.draftId }),
-            ...(previousReceipt.localVersionId === null
-              ? {}
-              : { localVersionId: previousReceipt.localVersionId }),
-          },
-          status: "persisted",
-        };
-      }
-
-      const migrationDiagnostics: SubjectPresetLocalDiagnosticV1[] = [];
-      const migratedSourceKeys: string[] = [];
-      const motionKey =
-        `worldkit.motion-draft.v4.${baseline.subjectDefinitionRef}.` +
-        `${baseline.defaultMotionProfile.resourceRef}.${baseline.defaultMotionProfile.contentHash}`;
-      const motionValues = readLegacyNumericValues(motionKey, migrationDiagnostics);
-      if (motionValues !== undefined) migratedSourceKeys.push(motionKey);
-
-      const cameraValuesByProfileRef: Record<string, Readonly<Record<string, number>>> = {};
-      for (const profile of baseline.cameraProfiles) {
-        const key =
-          `worldkit.camera-tuning.v4.${baseline.subjectDefinitionRef}.` +
-          `${profile.resourceRef}.${profile.contentHash}`;
-        const values = readLegacyNumericValues(key, migrationDiagnostics);
-        if (values !== undefined) {
-          migratedSourceKeys.push(key);
-          cameraValuesByProfileRef[profile.resourceRef] = values;
-        }
-      }
-
-      const expectedLegacyKeys = new Set([motionKey, ...baseline.cameraProfiles.map((profile) =>
-        `worldkit.camera-tuning.v4.${baseline.subjectDefinitionRef}.` +
-        `${profile.resourceRef}.${profile.contentHash}`,
-      )]);
-      const driftPrefixes = [
-        `worldkit.motion-draft.v4.${baseline.subjectDefinitionRef}.${baseline.defaultMotionProfile.resourceRef}.`,
-        ...baseline.cameraProfiles.map((profile) =>
-          `worldkit.camera-tuning.v4.${baseline.subjectDefinitionRef}.${profile.resourceRef}.`,
-        ),
-      ];
-      for (const storageKey of listStorageKeys()) {
-        if (
-          !expectedLegacyKeys.has(storageKey) &&
-          driftPrefixes.some((prefix) => storageKey.startsWith(prefix))
-        ) {
-          migrationDiagnostics.push({
-            code: "SUBJECT_PRESET_V4_HASH_DRIFT",
-            message: "Legacy V4 data targets a different exact profile hash and was not applied.",
-            storageKey,
-          });
-        }
-      }
-
-      let selectedCameraPreferenceRef: string | null = baseline.defaultCameraProfileRef;
-      try {
-        const cameraPreference = storage.getItem("worldkit.camera-preference");
-        if (cameraPreference !== null) {
-          const resolvedPreference =
-            cameraPreference === "auto"
-              ? null
-              : cameraPreference === "first-person"
-                ? baseline.firstPersonCameraProfileRef
-                : baseline.cameraProfiles.some(
-                    (profile) => profile.resourceRef === cameraPreference,
-                  )
-                  ? cameraPreference
-                  : undefined;
-          if (resolvedPreference === undefined) {
-            migrationDiagnostics.push({
-              code: "SUBJECT_PRESET_V4_CAMERA_PREFERENCE_INVALID",
-              message: "The legacy camera preference is not reachable from this subject baseline.",
-              storageKey: "worldkit.camera-preference",
-            });
-          } else {
-            selectedCameraPreferenceRef = resolvedPreference;
-            migratedSourceKeys.push("worldkit.camera-preference");
-          }
-        }
-      } catch {
-        migrationDiagnostics.push({
-          code: "SUBJECT_PRESET_STORAGE_UNAVAILABLE",
-          message: "The legacy camera preference could not be read.",
-          storageKey: "worldkit.camera-preference",
-        });
-      }
-
-      migratedSourceKeys.sort();
-      const completedAtIso = nowIso();
-      assertIsoTimestamp(completedAtIso, "completedAtIso");
-      let draftId: string | null = null;
-      let localVersionId: string | null = null;
-      let migrationStatus: "migrated" | "no-compatible-data" = "no-compatible-data";
-      if (migratedSourceKeys.length > 0) {
-        migrationStatus = "migrated";
-        draftId = createId("draft-v4");
-        assertString(draftId, "draftId");
-        const draft = parseSubjectPresetWorkingDraftV1({
-          kind: "worldkit-subject-preset-working-draft",
-          schemaVersion: 1,
-          draftId,
-          subjectDefinitionId: baseline.subjectDefinitionId,
-          baseSubjectDefinitionRef: baseline.subjectDefinitionRef,
-          baseSubjectDefinitionContentHash: baseline.subjectDefinitionContentHash,
-          selectedMotionProfileRef: baseline.defaultMotionProfile.resourceRef,
-          selectedControlFeelProfileRef: baseline.controlFeelProfile.resourceRef,
-          selectedControlProfileRef: baseline.controlProfile.resourceRef,
-          selectedCameraPreferenceRef,
-          controlFeelOverridesByProfileRef:
-            motionValues === undefined
-              ? {}
-              : {
-                  [baseline.controlFeelProfile.resourceRef]: {
-                    baseResourceRef: baseline.controlFeelProfile.resourceRef,
-                    baseContentHash: baseline.controlFeelProfile.contentHash,
-                    values: motionValues,
-                  },
-                },
-          controlOverridesByProfileRef: {},
-          cameraOverridesByProfileRef: Object.fromEntries(
-            baseline.cameraProfiles.flatMap((profile) => {
-              const values = cameraValuesByProfileRef[profile.resourceRef];
-              return values === undefined
-                ? []
-                : [[profile.resourceRef, {
-                    baseResourceRef: profile.resourceRef,
-                    baseContentHash: profile.contentHash,
-                    values,
-                  }] as const];
-            }),
-          ),
-          createdAtIso: completedAtIso,
-          updatedAtIso: completedAtIso,
-        });
-        storeWorkingDraft(draft);
-        const content = semanticContentFromWorkingDraft(draft);
-        localVersionId = createUniqueVersionId();
-        state.versions.push({
-          kind: "worldkit-subject-preset-local-version",
-          schemaVersion: 1,
-          localVersionId,
-          displayName: "Imported V4 settings",
-          notes: "Imported once from the legacy fragmented authoring keys.",
-          sourceDraftId: draftId,
-          contentHash: hashSubjectPresetSemanticContentV1(content),
-          content,
-          createdAtIso: completedAtIso,
-        });
-      }
-
-      const migrationReceipt: SubjectPresetV4MigrationReceiptEntryV1 = {
-        subjectDefinitionId: baseline.subjectDefinitionId,
-        subjectDefinitionRef: baseline.subjectDefinitionRef,
-        subjectDefinitionContentHash: baseline.subjectDefinitionContentHash,
-        migrationStatus,
-        migratedSourceKeys,
-        diagnostics: structuredClone(migrationDiagnostics),
-        draftId,
-        localVersionId,
-        completedAtIso,
-      };
-      v4MigrationReceipts.entries.push(migrationReceipt);
-      const result: SubjectPresetV4MigrationResultV1 = {
-        migrationStatus,
-        migratedSourceKeys,
-        diagnostics: migrationDiagnostics,
-        ...(draftId === null ? {} : { draftId }),
-        ...(localVersionId === null ? {} : { localVersionId }),
-      };
-      return persistV4Migration(result);
     },
     setLocalDefault(pointer) {
       if (pointer.schemaVersion !== 1) {

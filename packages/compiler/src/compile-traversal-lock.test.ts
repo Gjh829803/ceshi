@@ -269,7 +269,10 @@ describe("compileResolvedTraversalLockV1", () => {
     })).toThrowError(/TRAVERSAL_LOCK_COMPILE_FAILED.*ground-locomotion/);
 
     const legacyPlan = structuredClone(fixture.executionPlan);
-    delete legacyPlan.subjects[0]!.capabilityAssembly;
+    const legacySubject = legacyPlan.subjects[0] as {
+      capabilityAssembly?: unknown;
+    };
+    delete legacySubject.capabilityAssembly;
     expect(() => compileResolvedTraversalLockV1({
       normalizedWorldIr: fixture.normalizedWorldIr,
       executionPlan: legacyPlan,

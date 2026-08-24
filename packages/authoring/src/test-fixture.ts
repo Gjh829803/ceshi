@@ -1,16 +1,16 @@
 import type {
   PackageSubjectDefinitionV1,
 } from "./types";
-import type { AuthoringSpecV3 } from "./types-v3.js";
+import type { AuthoringSpecV4 } from "./types-v4.js";
 
-export function createValidAuthoringSpec(): AuthoringSpecV3 {
+export function createValidAuthoringSpec(): AuthoringSpecV4 {
   return {
     kind: "worldkit-authoring-spec",
-    schemaVersion: 3,
+    schemaVersion: 4,
     layout: {
       solverProfileRef: "worldkit://layout-solver-profile/outdoor.s1@1",
     },
-    spatial: { regions: [], routes: [], screenRegions: [] },
+    spatial: { regions: [], routes: [], screenRegions: [], traversalAreas: [] },
     id: "basic-world",
     seed: 1024,
     world: {
@@ -120,8 +120,12 @@ export function createValidAuthoringSpec(): AuthoringSpecV3 {
       controlledEntityId: "player",
       cameraEntityId: "camera-main",
     },
-    constraints: { placements: [] },
+    constraints: { placements: [], connectivity: [] },
   };
+}
+
+export function createValidAuthoringSpecV4(): AuthoringSpecV4 {
+  return createValidAuthoringSpec();
 }
 
 function createPackageSubjectDefinition(
@@ -131,6 +135,7 @@ function createPackageSubjectDefinition(
     id: "coastal-pack-animal",
     version: 1,
     kind: "subject-definition",
+    authoringAvailability: "recommended",
     category: "animal",
     bodyTopology: "quadruped",
     semanticClassId: "subject.animal.pack",
@@ -188,11 +193,31 @@ function createPackageSubjectDefinition(
     },
     capabilityRefs: ["worldkit://capability/locomotion.ground@1"],
     profiles: {
-      physicsBodyProfileRef: "worldkit://physics-body-profile/character.medium@1",
+      physicsBodyProfileRef:
+        "worldkit://physics-body-profile/character.capability-medium@1",
       locomotionProfileRef: "worldkit://locomotion-profile/ground.standard@1",
       controlFeelProfileRef:
         "worldkit://control-feel-profile/humanoid.medium-ground@1",
+      allowedControlFeelProfileRefs: [
+        "worldkit://control-feel-profile/humanoid.medium-ground@1",
+        "worldkit://control-feel-profile/humanoid.heavy-ground@1",
+      ],
+      motion: {
+        defaultMotionProfileRef:
+          "worldkit://motion-profile/free-ground.humanoid-medium@1",
+        optionalMotionProfileRefs: ["worldkit://motion-profile/safe-ground@1"],
+        fallbackMotionProfileRef: "worldkit://motion-profile/safe-ground@1",
+      },
+      controlProfileRef:
+        "worldkit://control-profile/planar.camera-relative@1",
+      cameraContextProfileRef:
+        "worldkit://camera-context/capability-driven.default@1",
+      mediumProfileRef: "worldkit://medium-profile/ground-air.standard@1",
+      harnessProfileRef: "worldkit://harness-profile/subject.standard@1",
     },
+    relationshipCapabilityRefs: [],
+    actionOrPoseSetRef: "worldkit://pose-set/static.whitebox@1",
+    renderBindingProfileRef: "worldkit://render-binding/subject.standard@1",
     aiMetadata: {
       displayName: "Coastal pack animal",
       description: "A controllable quadruped whitebox proxy for outdoor traversal tests.",
@@ -204,7 +229,7 @@ function createPackageSubjectDefinition(
 export function createValidPackageSubjectWorld(options: {
   reverseDefinitionCollections?: boolean;
   bodyWidthMeters?: number;
-} = {}): AuthoringSpecV3 {
+} = {}): AuthoringSpecV4 {
   const base = createValidAuthoringSpec();
   const sourceDefinition = createPackageSubjectDefinition(options.bodyWidthMeters ?? 0.8);
   const definition = options.reverseDefinitionCollections
@@ -270,6 +295,7 @@ export function createValidRiggedPackageDefinition(): PackageSubjectDefinitionV1
     id: "rigged-golden-package",
     version: 1,
     kind: "subject-definition",
+    authoringAvailability: "recommended",
     category: "human",
     bodyTopology: "biped",
     semanticClassId: "subject.humanoid.rigged",
@@ -317,11 +343,32 @@ export function createValidRiggedPackageDefinition(): PackageSubjectDefinitionV1
     },
     capabilityRefs: ["worldkit://capability/locomotion.ground@1"],
     profiles: {
-      physicsBodyProfileRef: "worldkit://physics-body-profile/character.medium@1",
+      physicsBodyProfileRef:
+        "worldkit://physics-body-profile/character.capability-medium@1",
       locomotionProfileRef: "worldkit://locomotion-profile/ground.standard@1",
       controlFeelProfileRef:
         "worldkit://control-feel-profile/humanoid.medium-ground@1",
+      allowedControlFeelProfileRefs: [
+        "worldkit://control-feel-profile/humanoid.medium-ground@1",
+        "worldkit://control-feel-profile/humanoid.heavy-ground@1",
+      ],
+      motion: {
+        defaultMotionProfileRef:
+          "worldkit://motion-profile/free-ground.humanoid-medium@1",
+        optionalMotionProfileRefs: ["worldkit://motion-profile/safe-ground@1"],
+        fallbackMotionProfileRef: "worldkit://motion-profile/safe-ground@1",
+      },
+      controlProfileRef:
+        "worldkit://control-profile/planar.camera-relative@1",
+      cameraContextProfileRef:
+        "worldkit://camera-context/capability-driven.default@1",
+      mediumProfileRef: "worldkit://medium-profile/ground-air.standard@1",
+      harnessProfileRef: "worldkit://harness-profile/subject.standard@1",
     },
+    relationshipCapabilityRefs: [],
+    actionOrPoseSetRef:
+      "worldkit://animation-set/humanoid.ground.golden@1",
+    renderBindingProfileRef: "worldkit://render-binding/subject.standard@1",
     aiMetadata: {
       displayName: "Package rigged Golden humanoid",
       description: "A package definition that exercises the complete rigged asset graph.",
@@ -330,7 +377,14 @@ export function createValidRiggedPackageDefinition(): PackageSubjectDefinitionV1
   };
 }
 
-export function createValidRiggedPackageSubjectWorld(): AuthoringSpecV3 {
+export function createValidPackageSubjectWorldV4(options: {
+  reverseDefinitionCollections?: boolean;
+  bodyWidthMeters?: number;
+} = {}): AuthoringSpecV4 {
+  return createValidPackageSubjectWorld(options);
+}
+
+export function createValidRiggedPackageSubjectWorld(): AuthoringSpecV4 {
   const base = createValidAuthoringSpec();
   return {
     ...base,
@@ -348,4 +402,8 @@ export function createValidRiggedPackageSubjectWorld(): AuthoringSpecV3 {
         : node,
     ),
   };
+}
+
+export function createValidRiggedPackageSubjectWorldV4(): AuthoringSpecV4 {
+  return createValidRiggedPackageSubjectWorld();
 }

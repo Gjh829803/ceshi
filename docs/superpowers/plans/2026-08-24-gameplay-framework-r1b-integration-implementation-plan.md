@@ -12,8 +12,8 @@
 
 ## Global Constraints
 
-- 当前 Gameplay 集成实现以 `main@4ae1912` 为代码基线；R1b/M5、Browser V5、Camera P1.5
-  与 README package map 已全部纳入集成分支。
+- G19-6 已通过 `main@5ffd031` 成为集成基线；G19-7 完成点为 `da90f16`，completion record
+  为 `1594823`。G19-8 在 `codex/g19-7-integration` 上执行未发布协议 clean break 与最终验收。
 - 原 PR #19 的 provider-neutral 合同与 RuntimeHost 已通过三方语义融合移植到最新 main；不允许
   用旧分支快照覆盖最新 Route、Camera、Browser 或 Runtime authority。
 - Canonical Schema、CLI、Browser、Receipt、Report、Snapshot 不出现 Babylon、Havok、Recast provider 名或 Handle。
@@ -25,8 +25,11 @@
 - 公共对象 exact-key、严格 `===/!==`；null/undefined 检查使用 `lodash-es` 的 `isNil`。
 - 每个行为先写失败测试并观察正确失败，再写最小实现。
 - 每个任务形成独立提交；子智能体报告不是集成证据。
+- 项目未发布，最终候选不保留被当前权威协议取代的生产兼容层。G19-8 必须执行版本消费者 census：
+  能清理的旧 Authoring/IR/Plan/Snapshot/Browser/CLI 方言原子删除；暂时不能清理的逐项登记真实消费者、
+  阻塞原因、明确删除任务和机器门禁，禁止无期限保留 alias、converter、fallback read、双写或双发布。
 
-## Current implementation status (2026-08-24)
+## Current implementation status (2026-08-25)
 
 | Workstream | Status | Evidence / next boundary |
 | --- | --- | --- |
@@ -36,8 +39,9 @@
 | G19-3 Gameplay core, WorldSession and RuntimeHost | Complete on latest-main integration branch | The original checkpoint starts at `f71bcb3`; the foundation has been three-way merged onto main `381255f`, its contracts use the repository `isNil` convention, and the focused 14-file / 468-test matrix plus typecheck pass. It remains trusted in-process staging, not a Browser/Babylon production entry. |
 | G19-4 package/bootstrap cutover | Complete on integration branch | ExecutionPlanV5, `initialControlledEntityId`, Gameplay Bootstrap semantic lock, WorldPackage six-way membership, Validation replay and pre-adapter RuntimeHost admission are atomically connected. All production callers construct real Bootstrap artifacts. Full typecheck, 165 files / 2,079 tests, build and all nine required verification gates pass. |
 | G19-5 | Complete as G19-6 prerequisite | Babylon Gameplay Port and atomic Possession/Input/Camera Target publication are carried by the integration baseline. Action presentation and Camera Profile/Preference selection remain explicitly outside this slice. |
-| G19-6 | Final GO; merge-ready, not yet merged | The exact 39-key Browser V5 surface, Snapshot V4, RuntimeHost/Activity coordinator, atomic reset/rebind, and Authoring/CLI/Capture/Take consumer migration are complete on `codex/g19-6-browser-gameplay`. Typecheck, build, 168 files / 2,134 tests, seven World/Route gates and both Capture gates pass; no confirmed P0/P1/P2 remains open. |
-| G19-7 onward | Open | G19-7 now owns the remaining Outdoor/catalog route and lifecycle production wiring; G19-8 owns the complete G19 gate matrix and final disposition. G19-6 may merge independently first. |
+| G19-6 | Complete on main | Browser V5, Snapshot V4, RuntimeHost/Activity coordinator, atomic reset/rebind and Authoring/CLI/Capture/Take migration are integrated on main through `5ffd031`. |
+| G19-7 | Complete on integration branch | Outdoor/catalog gameplay, artifact-only isolation, page lifecycle and the six-scene browser gate are complete through `da90f16`; completion is recorded by `1594823`. The fresh gate passed 6/6 Gameplay routes, 6/6 artifact-only routes and the unknown-scene fail-closed case. |
+| G19-8 | Complete; Final GO | Candidate `99fb822` completes the current-only Runtime/Authoring cutover, historical compatibility cleanup, generated artifact refresh and host review. 178 files / 2,172 tests plus every required structural, asset, Capture, Route and Outdoor gate pass; the clean-break census is 632/0/489. |
 
 ## Live TODO (authoritative)
 
@@ -68,17 +72,47 @@ authoritative execution status; old unchecked steps inside already completed tas
 - [x] **G19-5** — Babylon transactional Port、fixed-input Controller isolation、optional Possession 与
   provider-neutral projection 已作为 G19-6 前置底座完成。本切片不发明 Semantic Action presentation
   或 Camera Profile/Preference selection。
-- [x] **G19-6 (Final GO; merge-ready, not yet merged)** — Browser Protocol V5 Gameplay
+- [x] **G19-6 (complete on main)** — Browser Protocol V5 Gameplay
   唯一入口、Snapshot V4、原子 reset/rebind、Runtime Activity、Authoring/CLI/Capture/Take 消费者迁移
   已在 `codex/g19-6-browser-gameplay` 实现；最终门禁与主 Agent completion review 已通过。
-- [ ] **G19-7** — Outdoor/catalog route、page/artifact lifecycle 与六场景
+- [x] **G19-7** — Outdoor/catalog route、page/artifact lifecycle 与六场景
   production-path wiring；不再重复实现已由 G19-6 迁移的 CLI/WorldKit pipeline、Capture 或 Take 合同。
-- [ ] **G19-8 (blocked by G19-7)** — complete G19 gates, host completion review and final disposition.
+- [x] **G19-8 (complete; Final GO)** — current-only clean break, historical naming/compatibility census,
+  all final gates and host completion review are complete on candidate `99fb822`. The superseded-path
+  deferral ledger is empty; HNC-F1 is a separate mandatory pre-Alpha cleanliness audit.
 
 Closed baseline note: the stale Simulation Take WorldPackage root is no longer hand-maintained. The
 `generate:example-takes` command projects both example Takes from the current canonical WorldPackage
 identity, and `verify:control-capture` passes with root
 `sha256:28f3d9b5aed02250909e5a2e2af8a7d1c13b9127038ab8163a1475da0e9ee073`.
+
+### G19-8 UCCB execution ledger
+
+This ledger is the implementation status of the clean-break DAG. A committed work unit is not final G19-8
+evidence until UCCB-70 reruns the full matrix and the host reviews the integrated diff.
+
+| Work unit | Status | Current evidence | Open boundary |
+| --- | --- | --- | --- |
+| UCCB-00 | Complete | G19-7 code `da90f16`; completion record `1594823` | None |
+| UCCB-10 | Complete | `1b8c311`, `cfa16b7`, `b19e56a`: self-contained Authoring/IR V4 and current authoring consumers | Final census verification |
+| UCCB-20 | Complete | `3fb2397`, `23f5985`, `fbe7ff4`: direct IR V4 → Plan V5 compilation and current golden | Final Compiler/full-suite regression |
+| UCCB-30 | Complete | `a44d160`, `2d312b1`: self-contained ExecutionPlan V5 and removal of the superseded Plan V4 public contract | Final Runtime/WorldPackage regression |
+| UCCB-40 | Complete | `9ae108a`, `592fbeb`: required locked Subject capability assemblies | Final Runtime and asset gates |
+| UCCB-50 | Complete | `f453810`, `da2fe27`: current-only Babylon Runtime, explicit possession and camera publication | None |
+| UCCB-60 | Complete | `f453810`, `cf94b90`, `3fea29b`, `0d9a2bd`: superseded contracts/consumers deleted and fixtures current | None |
+| UCCB-65 | Complete | `0ad72e8`, `3e671a2`, `99fb822`: classified census, generated artifacts and empty deferral ledger | HNC-F1 remains a new pre-Alpha audit, not compatibility debt |
+| UCCB-70 | Complete | `99fb822`: zero census, full matrix and Final GO host review | Final merge preserves `main@134592e` Camera boundary work |
+
+Because the project has not shipped, every superseded compatibility path that can be removed in this slice
+must be removed. Current versioned nested components are retained when they remain the sole authority; a
+small version suffix is not deletion evidence. If a superseded path is genuinely blocked at final review,
+its entry must name the exact consumer, blocker, owner, removal gate and deadline. An undocumented or
+open-ended compatibility deferral fails G19-8.
+
+`UCCB-65` is a blocking subtask between deletion and final completion. It prevents two opposite errors: retaining
+obsolete aliases because they still compile, and deleting current contracts merely because their names contain
+`V1`, `V2` or `V3`. Its execution ledger and exact commands live in
+[`2026-08-25-historical-naming-and-compatibility-path-cleanup-plan.md`](2026-08-25-historical-naming-and-compatibility-path-cleanup-plan.md).
 
 ---
 
@@ -820,6 +854,14 @@ git add apps/playground scripts package.json pnpm-lock.yaml
 git commit -m "feat: unify outdoor gameplay runtime"
 ```
 
+**Completion evidence (2026-08-24):** complete through `da90f16`. `pnpm verify:outdoor-gameplay`
+passed all six Catalog Gameplay routes, all six artifact-only routes and the unknown-scene fail-closed
+route. The gameplay evidence covers Browser V5/Snapshot V4 readiness, fixed input, deterministic reset,
+unchanged uncontrolled Subjects and read-only Route queries. Artifact routes expose neither `__WORLDKIT__`
+nor Gameplay methods. Combined `pnpm typecheck`, the 92-test G19-7/adjacent-cleanup focused matrix,
+`pnpm build` and `git diff --check` pass. Large Heightfield import remains a measured performance
+optimization target, not an alternate protocol or correctness fallback.
+
 ---
 
 ### Task 10: 全维审查、修复与交付
@@ -832,20 +874,30 @@ git commit -m "feat: unify outdoor gameplay runtime"
 - Consumes: Tasks 1–9 commits。
 - Produces: disposition、完整 gate evidence、可审查远端分支。
 
-- [ ] **Step 1: 主 Agent 按两个 review checklist 自审**
+- [x] **Step 0: 执行未发布版本 clean-break census**
+
+扫描生产代码、测试、CLI、Browser、示例、生成类型和当前 quickstart，区分“当前权威 V1 合同”与
+“已被新版取代的旧方言”。删除无真实消费者的旧声明、export、parser、migration、fallback、fixture 和
+双版本 union，并补机器可执行的零消费者门禁。本轮无法删除的每一项必须在 completion review 中记录：
+旧符号/字段、生产消费者、阻塞依赖、目标权威版本、删除任务和验证命令；不得用笼统兼容理由延期。
+
+Current disposition (2026-08-25): candidate `99fb822` scans 632 files with zero forbidden matches and 489
+retained current-authority matches. No superseded compatibility path is deferred.
+
+- [x] **Step 1: 主 Agent 按两个 review checklist 自审**
 
 使用 `docs/reviews/full-dimension-review-protocol.md` 和 `runtime-deep-review-checklist.md`，逐项记录 P0–P3、复现、修复/拒绝/延期。
 
-- [ ] **Step 2: 子智能体 whole-branch review**
+- [x] **Step 2: 子智能体 whole-branch review**
 
 分别覆盖公共合同/AI naming、Runtime authority/physics/camera、R1b/Browser/outdoor；主 Agent 复核实际 diff 和每条 finding。
 
-- [ ] **Step 3: 主 Agent 复核并 disposition findings**
+- [x] **Step 3: 主 Agent 复核并 disposition findings**
 
 逐条对照现树、设计合同与依赖源码复现；只有真实成立的问题才进入修复。当前赶工阶段不把外部
 Reviewer 会话作为交付依赖，主 Agent 对结论和集成负责。
 
-- [ ] **Step 4: 跑完整门禁**
+- [x] **Step 4: 跑完整门禁**
 
 ```bash
 pnpm typecheck
@@ -861,21 +913,23 @@ pnpm verify:route-r0-contract
 pnpm verify:route-r1-heightfield
 pnpm verify:route-r1b-static-platform
 pnpm verify:outdoor-gameplay
+pnpm verify:unreleased-clean-break
 ```
 
-- [ ] **Step 5: 主 Agent completion review**
+- [x] **Step 5: 主 Agent completion review**
 
 按全维协议重读最终 diff；所有 P0/P1 和成立 P2 必须 disposition，并把自动合同证据、真实 Runtime/Browser
 证据与人工交互证据分开记录。
 
-- [ ] **Step 6: 更新 review disposition、提交并推送集成分支**
+- [x] **Step 6: 更新 review disposition、提交并推送集成分支**
 
 ```bash
 git status --short
-git log --oneline origin/codex/r1b-integration..HEAD
-git push -u origin codex/pr19-gameplay-r1b-integration
+git log --oneline origin/main..HEAD
+git push -u origin codex/g19-7-integration
 ```
 
-- [ ] **Step 7: main 集成门禁**
+- [x] **Step 7: main 集成门禁**
 
-PR #24 与 Camera P1.5 已独立合入 main；同步最新 main、完成三方语义合并、重跑 Step 4/5 后按用户授权合入并 push main。
+PR #24、Camera P1.5 与 G19-6 已独立合入 main；G19-8 已与最新 `main@134592e` 做三方语义合并，
+保留 Canonical Camera package-boundary 工作，并按用户授权合入及 push main。

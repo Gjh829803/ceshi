@@ -4,12 +4,22 @@ import type {
 } from "@whitebox-world/runtime-contracts";
 
 import type {
-  RegistrySubjectDefinitionInputV2,
-  RegistrySubjectDefinitionV2,
+  AnimationSetManifestV1,
+  CapabilityManifestV1,
+  ColliderDerivationProfileManifestV1,
+  ColliderProfileManifestV1,
+  LocomotionProfileManifestV1,
+  PhysicsBodyProfileManifestV1,
+  RigProfileManifestV1,
+  SubjectAssetManifestV1,
+  SubjectBodyTopologyV2,
+  SubjectColliderPolicyV2,
   SubjectRegistryResourceInputV1,
   SubjectRegistryResourceV1,
   SubjectResourceAiMetadataV1,
-  SubjectResourceRegistryV2,
+  SubjectSocketDefinitionV2,
+  SubjectVisualBindingV1,
+  SubjectVisualPartDefinitionV2,
 } from "./types-v2";
 
 export type MovementMediumV1 = "ground" | "water" | "air";
@@ -243,23 +253,27 @@ export interface RenderBindingProfileInputV1
   )[];
 }
 
-export interface RegistrySubjectDefinitionInputV3
-  extends Omit<
-    RegistrySubjectDefinitionInputV2,
-    "category" | "bodyTopology" | "profiles"
-  > {
+export interface RegistrySubjectDefinitionInputV3 {
+  kind: "subject-definition";
   schemaVersion: 3;
+  id: string;
+  version: number;
+  resourceRef: string;
   authoringAvailability: "recommended" | "advanced" | "experimental";
   category: "human" | "animal" | "vehicle" | "composite" | "custom";
-  bodyTopology:
-    | "biped"
-    | "quadruped"
-    | "four-wheel"
-    | "surface-craft"
-    | "watercraft"
-    | "glider"
-    | "composite"
-    | "custom";
+  bodyTopology: SubjectBodyTopologyV2;
+  semanticClassId: string;
+  coordinateConvention: {
+    forwardAxis: "-Z";
+    upAxis: "+Y";
+    metersPerUnit: 1;
+    pivot: "support-center";
+  };
+  visualParts: readonly SubjectVisualPartDefinitionV2[];
+  visualBinding: SubjectVisualBindingV1;
+  sockets: readonly SubjectSocketDefinitionV2[];
+  colliderPolicy: SubjectColliderPolicyV2;
+  capabilityRefs: readonly string[];
   profiles: {
     physicsBodyProfileRef: string;
     locomotionProfileRef: string;
@@ -278,6 +292,7 @@ export interface RegistrySubjectDefinitionInputV3
   relationshipCapabilityRefs: readonly string[];
   actionOrPoseSetRef: string;
   renderBindingProfileRef: string;
+  aiMetadata: SubjectResourceAiMetadataV1;
 }
 
 type WithContentHash<T> = Readonly<T & { contentHash: string }>;
@@ -338,10 +353,22 @@ export type SubjectRegistryResourceV3 =
   | SubjectCapabilityResourceV1
   | RegistrySubjectDefinitionV3;
 
-export interface SubjectResourceRegistryV3 extends SubjectResourceRegistryV2 {
+export interface SubjectResourceRegistryV3 {
+  resolveSubjectAsset(resourceRef: string): SubjectAssetManifestV1 | undefined;
+  resolveRigProfile(resourceRef: string): RigProfileManifestV1 | undefined;
+  resolveAnimationSet(resourceRef: string): AnimationSetManifestV1 | undefined;
+  resolveColliderProfile(resourceRef: string): ColliderProfileManifestV1 | undefined;
   resolveSubjectDefinition(
     resourceRef: string,
-  ): RegistrySubjectDefinitionV2 | RegistrySubjectDefinitionV3 | undefined;
+  ): RegistrySubjectDefinitionV3 | undefined;
+  resolveCapability(resourceRef: string): CapabilityManifestV1 | undefined;
+  resolvePhysicsBodyProfile(
+    resourceRef: string,
+  ): PhysicsBodyProfileManifestV1 | undefined;
+  resolveLocomotionProfile(resourceRef: string): LocomotionProfileManifestV1 | undefined;
+  resolveColliderDerivationProfile(
+    resourceRef: string,
+  ): ColliderDerivationProfileManifestV1 | undefined;
   resolveMotionKernel(resourceRef: string): MotionKernelDefinitionV1 | undefined;
   resolveMotionProfile(resourceRef: string): MotionProfileV1 | undefined;
   resolveControlFeelProfile(resourceRef: string): ControlFeelProfileV1 | undefined;
@@ -357,15 +384,8 @@ export interface SubjectResourceRegistryV3 extends SubjectResourceRegistryV2 {
   resolveHarnessProfile(resourceRef: string): HarnessProfileV1 | undefined;
   resolvePoseSetProfile(resourceRef: string): PoseSetProfileV1 | undefined;
   resolveRenderBindingProfile(resourceRef: string): RenderBindingProfileV1 | undefined;
-  /** CLI discovery view, including canonical V3 products that extend the V2 fields. */
-  listSubjectDefinitions(): readonly (
-    | RegistrySubjectDefinitionV2
-    | RegistrySubjectDefinitionV3
-  )[];
-  /** Capability-driven Authoring V3 definitions only. */
+  listSubjectDefinitions(): readonly RegistrySubjectDefinitionV3[];
   listCapabilitySubjectDefinitions(): readonly RegistrySubjectDefinitionV3[];
-  /** Canonical V1 resource view. */
   listResources(): readonly SubjectRegistryResourceV1[];
-  /** Capability resources only, without legacy resources or Subject Definitions. */
   listCapabilityResources(): readonly SubjectCapabilityResourceV1[];
 }
