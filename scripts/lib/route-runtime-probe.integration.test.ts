@@ -48,6 +48,7 @@ import { isEqual, isNil } from "lodash-es";
 import { beforeAll, describe, expect, it, vi } from "vitest";
 
 import { createValidAuthoringSpec } from "../../packages/authoring/src/test-fixture.js";
+import { bindRuntimeTestPossession } from "../../packages/runtime-babylon/src/runtime-test-possession.js";
 
 const havokWasmBytes = await readFile(
   createRequire(import.meta.url).resolve(
@@ -249,6 +250,10 @@ async function createRuntimeHarness(
   });
   try {
     if (isNil(engine)) throw new Error("NullEngine was not created.");
+    await bindRuntimeTestPossession(
+      runtime,
+      fixture.traversalLockReceipt.lock.subjectEntityId,
+    );
     const port = createBabylonTraversalRuntimePortV1({
       runtime,
       traversalLockReceipt: fixture.traversalLockReceipt,
