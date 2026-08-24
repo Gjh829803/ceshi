@@ -57,10 +57,15 @@ const REPLACEMENT_WORLD_PACKAGE_REF = "worldkit://world-package/replacement@1";
  * still being introduced in runtime-host.ts.
  */
 interface RuntimeHostUnderTestV1 {
+  readonly phase: runtimeHostModule.RuntimeHostPhaseV1;
+  readonly currentWorldSessionId: string;
   snapshot(): WorldSessionPublicationV1;
   runFixedInput(input: unknown): Promise<WorldSessionPublicationV1>;
   replaceWorld(world: unknown): Promise<WorldSessionPublicationV1>;
   reset(): Promise<WorldSessionPublicationV1>;
+  resetWithInitialControlBinding(
+    input: unknown,
+  ): Promise<WorldSessionPublicationV1>;
   acquireRuntimeActivity(input: unknown): RuntimeActivityAcquireResultV1;
   dispose(): Promise<void>;
 }
@@ -159,6 +164,7 @@ interface AdapterFactoryHarnessV1 {
   readonly factory: Readonly<{
     preflightConcurrentResidency: ReturnType<typeof vi.fn>;
     create: ReturnType<typeof vi.fn>;
+    awaitCandidatePublicationReady: ReturnType<typeof vi.fn>;
   }>;
   readonly ports: readonly FakeGameplayWorldPortHarnessV1[];
 }
@@ -181,6 +187,7 @@ function createAdapterFactoryHarness(
         }
         return port.port;
       }),
+      awaitCandidatePublicationReady: vi.fn(async () => undefined),
     }),
   });
 }
@@ -721,6 +728,153 @@ describe("RuntimeHost lifecycle isolation and admission", () => {
 });
 
 describe("RuntimeHost two-phase replacement", () => {
+  it("publishes a tick-zero bound reset only after the candidate publication gate", async () => {
+    const oldPort = createPortHarness();
+    const candidatePort = createPortHarness();
+    const { adapter, host } = await createHost([oldPort, candidatePort]);
+    const oldPublication = host.snapshot();
+    let enterGate!: () => void;
+    const gateEntered = new Promise<void>((resolve) => {
+      enterGate = resolve;
+    });
+    let releaseGate!: () => void;
+    const gateReleased = new Promise<void>((resolve) => {
+      releaseGate = resolve;
+    });
+    adapter.factory.awaitCandidatePublicationReady.mockImplementation(
+      async (input: {
+        runtimeSessionId: string;
+        worldSessionId: string;
+        publication: WorldSessionPublicationV1;
+      }) => {
+        expect(Object.keys(input)).toEqual([
+          "runtimeSessionId",
+          "worldSessionId",
+          "publication",
+        ]);
+        expect(input.runtimeSessionId).toBe(RUNTIME_SESSION_ID);
+        expect(input.worldSessionId).toBe("world-session.next");
+        const { publication } = input;
+        expect(publication.worldState).toMatchObject({
+          worldSessionId: "world-session.next",
+          simulationTick: 0,
+        });
+        expect(Object.values(
+          publication.gameplayInspection.possessedByRelationshipsById,
+        )).toEqual([
+          expect.objectContaining({
+            controllerEntityId: controllerState.id,
+            controlledEntityId: heroState.id,
+          }),
+        ]);
+        expect(candidatePort.commitCount).toBe(1);
+        enterGate();
+        await gateReleased;
+      },
+    );
+
+    const resetting = host.resetWithInitialControlBinding({
+      controllerEntityId: controllerState.id,
+      controlledEntityId: heroState.id,
+    });
+    await gateEntered;
+
+    expect(host.phase).toBe("replacing");
+    expect(host.snapshot()).toBe(oldPublication);
+    expect(oldPort.disposeCount).toBe(0);
+    releaseGate();
+
+    await expect(resetting).resolves.toMatchObject({
+      worldState: {
+        worldSessionId: "world-session.next",
+        simulationTick: 0,
+      },
+      gameplayInspection: {
+        possessedByRelationshipsById: expect.objectContaining({}),
+      },
+    });
+    expect(Object.values(
+      host.snapshot().gameplayInspection.possessedByRelationshipsById,
+    )).toEqual([
+      expect.objectContaining({
+        controllerEntityId: controllerState.id,
+        controlledEntityId: heroState.id,
+      }),
+    ]);
+    expect(host.phase).toBe("ready");
+    expect(adapter.factory.awaitCandidatePublicationReady).toHaveBeenCalledTimes(1);
+    expect(oldPort.disposeCount).toBe(1);
+    expect(candidatePort.disposeCount).toBe(0);
+  });
+
+  it("rejects an uncommitted initial bind without gating or swapping and keeps the old Session usable", async () => {
+    const oldPort = createPortHarness();
+    const candidatePort = createPortHarness();
+    const { adapter, host } = await createHost([oldPort, candidatePort]);
+    const oldSessionId = host.currentWorldSessionId;
+
+    await expect(host.resetWithInitialControlBinding({
+      controllerEntityId: controllerState.id,
+      controlledEntityId: "entity.not-controllable",
+    })).rejects.toMatchObject({
+      diagnostic: expect.objectContaining({ code: expect.any(String) }),
+    });
+
+    expect(host.phase).toBe("ready");
+    expect(host.currentWorldSessionId).toBe(oldSessionId);
+    expect(adapter.factory.awaitCandidatePublicationReady).not.toHaveBeenCalled();
+    expect(candidatePort.disposeCount).toBe(1);
+    await expect(host.runFixedInput({ actions: [], ticks: 1 })).resolves
+      .toMatchObject({
+        worldState: { worldSessionId: oldSessionId, simulationTick: 1 },
+      });
+  });
+
+  it("rejects a non-exact initial binding before starting replacement", async () => {
+    const oldPort = createPortHarness();
+    const candidatePort = createPortHarness();
+    const { adapter, host } = await createHost([oldPort, candidatePort]);
+    const before = host.snapshot();
+
+    expect(() => host.resetWithInitialControlBinding({
+      controllerEntityId: controllerState.id,
+      controlledEntityId: heroState.id,
+      legacyControlledSubjectId: heroState.id,
+    })).toThrow(/RuntimeHostInitialControlBindingV1/);
+
+    expect(host.snapshot()).toBe(before);
+    expect(adapter.factory.create).toHaveBeenCalledTimes(1);
+    expect(adapter.factory.awaitCandidatePublicationReady).not.toHaveBeenCalled();
+    expect(candidatePort.calls).toEqual([]);
+  });
+
+  it("does not publish a bound candidate when its publication gate throws", async () => {
+    const oldPort = createPortHarness();
+    const candidatePort = createPortHarness();
+    const { adapter, host } = await createHost([oldPort, candidatePort]);
+    const oldSessionId = host.currentWorldSessionId;
+    adapter.factory.awaitCandidatePublicationReady.mockRejectedValueOnce(
+      new Error("private first-render failure"),
+    );
+
+    const error = await host.resetWithInitialControlBinding({
+      controllerEntityId: controllerState.id,
+      controlledEntityId: heroState.id,
+    }).catch((reason: unknown) => reason);
+
+    expect(error).toMatchObject({
+      diagnostic: { code: "WORLD_SESSION_FAILED" },
+    });
+    expect(String(error)).not.toContain("private first-render failure");
+    expect(host.phase).toBe("ready");
+    expect(host.currentWorldSessionId).toBe(oldSessionId);
+    expect(candidatePort.disposeCount).toBe(1);
+    await expect(host.runFixedInput({ actions: [], ticks: 1 })).resolves
+      .toMatchObject({
+        worldState: { worldSessionId: oldSessionId, simulationTick: 1 },
+      });
+  });
+
   it("keeps the old Session routable while candidate initialization is deferred", async () => {
     const oldPort = createPortHarness();
     const candidatePort = createPortHarness();
@@ -972,6 +1126,12 @@ describe("RuntimeHost two-phase replacement", () => {
     });
     expect(reset.gameplayInspection.possessedByRelationshipsById).toEqual({});
     expect(reset.worldState.simulationTick).toBe(0);
+    const resetGateInput = created.adapter.factory
+      .awaitCandidatePublicationReady.mock.calls.at(-1)?.[0] as
+        | { publication: WorldSessionPublicationV1 }
+        | undefined;
+    expect(resetGateInput?.publication.gameplayInspection
+      .possessedByRelationshipsById).toEqual({});
   });
 });
 

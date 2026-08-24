@@ -378,6 +378,9 @@ importers:
       '@whitebox-world/control-capture':
         specifier: workspace:*
         version: link:../control-capture
+      '@whitebox-world/gameplay-contracts':
+        specifier: workspace:*
+        version: link:../gameplay-contracts
       '@whitebox-world/protocol':
         specifier: workspace:*
         version: link:../protocol

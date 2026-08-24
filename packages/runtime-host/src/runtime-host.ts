@@ -442,6 +442,15 @@ export interface GameplayWorldAdapterFactoryV1 {
     candidate: RuntimeWorldAdapterDescriptorV1,
   ): ConcurrentResidencyPreflightResultV1;
   create(candidate: RuntimeWorldAdapterDescriptorV1): Promise<GameplayWorldPortV1>;
+  awaitCandidatePublicationReady(
+    input: RuntimeCandidatePublicationGateInputV1,
+  ): Promise<void>;
+}
+
+export interface RuntimeCandidatePublicationGateInputV1 {
+  readonly runtimeSessionId: string;
+  readonly worldSessionId: string;
+  readonly publication: WorldSessionPublicationV1;
 }
 
 export interface RuntimeHostCreateOptionsV1 {
@@ -461,6 +470,11 @@ export interface RuntimeHostCreateOptionsV1 {
 
 export interface RuntimeWorldReplacementRequestV1 {
   readonly worldConfiguration: RuntimeWorldConfigurationV1;
+}
+
+export interface RuntimeHostInitialControlBindingV1 {
+  readonly controllerEntityId: string;
+  readonly controlledEntityId: string;
 }
 
 export type RuntimeHostPhaseV1 =
@@ -771,9 +785,11 @@ function parseRuntimeHostCreateOptions(
     !hasExactKeys(adapterFactoryRecord, [
       "preflightConcurrentResidency",
       "create",
+      "awaitCandidatePublicationReady",
     ]) ||
     typeof adapterFactoryRecord.preflightConcurrentResidency !== "function" ||
-    typeof adapterFactoryRecord.create !== "function"
+    typeof adapterFactoryRecord.create !== "function" ||
+    typeof adapterFactoryRecord.awaitCandidatePublicationReady !== "function"
   ) throw new RangeError(
     "Value must match the closed RuntimeHostCreateOptionsV1 schema.",
   );
@@ -799,6 +815,9 @@ function parseRuntimeHostCreateOptions(
   const preflight = adapterFactoryRecord.preflightConcurrentResidency as
     GameplayWorldAdapterFactoryV1["preflightConcurrentResidency"];
   const create = adapterFactoryRecord.create as GameplayWorldAdapterFactoryV1["create"];
+  const awaitCandidatePublicationReady =
+    adapterFactoryRecord.awaitCandidatePublicationReady as
+      GameplayWorldAdapterFactoryV1["awaitCandidatePublicationReady"];
   const adapterFactory = Object.freeze({
     preflightConcurrentResidency: (
       current: RuntimeWorldAdapterDescriptorV1,
@@ -807,6 +826,13 @@ function parseRuntimeHostCreateOptions(
       Reflect.apply(preflight, adapterReceiver, [current, candidate]),
     create: (candidate: RuntimeWorldAdapterDescriptorV1) =>
       Reflect.apply(create, adapterReceiver, [candidate]),
+    awaitCandidatePublicationReady: (
+      gateInput: RuntimeCandidatePublicationGateInputV1,
+    ) => Reflect.apply(
+      awaitCandidatePublicationReady,
+      adapterReceiver,
+      [gateInput],
+    ),
   });
   return Object.freeze({
     runtimeSessionId: record.runtimeSessionId,
@@ -841,6 +867,26 @@ function parseReplacementRequest(input: unknown): RuntimeWorldConfigurationV1 {
     );
   }
   return parseRuntimeWorldConfiguration(record.worldConfiguration);
+}
+
+function parseInitialControlBinding(
+  input: unknown,
+): RuntimeHostInitialControlBindingV1 {
+  const record = snapshotDataRecord(input);
+  if (
+    isNil(record) ||
+    !hasExactKeys(record, ["controllerEntityId", "controlledEntityId"]) ||
+    !isNonEmptyString(record.controllerEntityId) ||
+    !isNonEmptyString(record.controlledEntityId)
+  ) {
+    throw new RangeError(
+      "Value must match the closed RuntimeHostInitialControlBindingV1 schema.",
+    );
+  }
+  return Object.freeze({
+    controllerEntityId: record.controllerEntityId,
+    controlledEntityId: record.controlledEntityId,
+  });
 }
 
 function parsePreflightResult(
@@ -1056,13 +1102,33 @@ export class RuntimeHost {
 
   replaceWorld(input: unknown): Promise<WorldSessionPublicationV1> {
     const configuration = parseReplacementRequest(input);
+    return this.startReplacement(configuration);
+  }
+
+  resetWithInitialControlBinding(
+    input: unknown,
+  ): Promise<WorldSessionPublicationV1> {
+    const initialControlBinding = parseInitialControlBinding(input);
+    return this.startReplacement(
+      this.initialConfiguration,
+      initialControlBinding,
+    );
+  }
+
+  private startReplacement(
+    configuration: RuntimeWorldConfigurationV1,
+    initialControlBinding?: RuntimeHostInitialControlBindingV1,
+  ): Promise<WorldSessionPublicationV1> {
     if (!isNil(this.replacementOperationPromise)) {
       return Promise.reject(hostFailure(
         "WORLD_SESSION_NOT_READY",
         "A World replacement is already in progress.",
       ));
     }
-    const operation = this.performReplacement(configuration);
+    const operation = this.performReplacement(
+      configuration,
+      initialControlBinding,
+    );
     this.replacementOperationPromise = operation;
     void operation.finally(() => {
       if (this.replacementOperationPromise === operation) {
@@ -1125,6 +1191,7 @@ export class RuntimeHost {
 
   private async performReplacement(
     configuration: RuntimeWorldConfigurationV1,
+    initialControlBinding?: RuntimeHostInitialControlBindingV1,
   ): Promise<WorldSessionPublicationV1> {
     const token = await this.enqueueMutation(async () => {
       if (this.disposeRequested || this.phaseValue === "failed" ||
@@ -1238,6 +1305,33 @@ export class RuntimeHost {
         worldPort: port,
       });
 
+      if (!isNil(initialControlBinding)) {
+        const bindReceipt = await candidate.executeGameplayCommand({
+          schemaVersion: 1,
+          id: `command.runtime-host.initial-bind.${token.candidateWorldSessionId}`,
+          type: "control.bind",
+          runtimeSessionId: this.runtimeSessionId,
+          worldSessionId: token.candidateWorldSessionId,
+          controllerEntityId: initialControlBinding.controllerEntityId,
+          controlledEntityId: initialControlBinding.controlledEntityId,
+          expectedPossession: { mode: "unbound" },
+        });
+        if (bindReceipt.status !== "committed") {
+          throw hostFailure(
+            bindReceipt.diagnostic.code,
+            "The candidate initial control binding was not committed.",
+          );
+        }
+      }
+
+      await this.options.adapterFactory.awaitCandidatePublicationReady(
+        Object.freeze({
+          runtimeSessionId: this.runtimeSessionId,
+          worldSessionId: token.candidateWorldSessionId,
+          publication: candidate.snapshot(),
+        }),
+      );
+
       const swapped = await this.enqueueMutation(async () => {
         const activity = this.activityCoordinator.snapshot();
         if (
@@ -1261,7 +1355,6 @@ export class RuntimeHost {
         return true;
       });
       if (!swapped) {
-        await candidate.dispose().catch(() => undefined);
         throw hostFailure(
           this.disposeRequested
             ? "WORLD_SESSION_NOT_READY"
