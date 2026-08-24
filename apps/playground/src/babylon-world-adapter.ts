@@ -1,7 +1,8 @@
 import type {
+  ApplyCameraPreviewRequestV1,
   ApplySubjectPresetTuningRequestV1,
   BindControlRequestV2,
-  CameraTuningV1,
+  CameraPreviewStateV1,
   CameraViewInputV1,
   ControlCaptureCapabilitiesV1,
   ControlCaptureRequestV1,
@@ -440,9 +441,17 @@ export class BabylonWorldAdapter implements PlaygroundWorldAdapter {
     }
   }
 
-  setCameraPreferenceRuntime(preference: string): WorldRuntimeSnapshotV3 {
+  requestCameraProfileRuntime(profileRef: string): WorldRuntimeSnapshotV3 {
     this.captureReservationReceiptId = undefined;
-    const snapshot = this.runtime.setCameraPreference(preference);
+    const snapshot = this.runtime.requestCameraProfile(profileRef);
+    this.render();
+    this.emit();
+    return snapshot;
+  }
+
+  resetCameraProfileRuntime(): WorldRuntimeSnapshotV3 {
+    this.captureReservationReceiptId = undefined;
+    const snapshot = this.runtime.resetCameraProfile();
     this.render();
     this.emit();
     return snapshot;
@@ -464,12 +473,16 @@ export class BabylonWorldAdapter implements PlaygroundWorldAdapter {
     return snapshot;
   }
 
-  setCameraTuningRuntime(tuning: CameraTuningV1): WorldRuntimeSnapshotV3 {
+  getCameraPreviewStateRuntime(): CameraPreviewStateV1 {
+    return this.runtime.getCameraPreviewState();
+  }
+
+  applyCameraPreviewRuntime(request: ApplyCameraPreviewRequestV1): CameraPreviewStateV1 {
     this.captureReservationReceiptId = undefined;
-    const snapshot = this.runtime.setCameraTuning(tuning);
+    const preview = this.runtime.applyCameraPreview(request);
     this.render();
     this.emit();
-    return snapshot;
+    return preview;
   }
 
   applySubjectPresetTuningRuntime(

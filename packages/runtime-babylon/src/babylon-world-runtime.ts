@@ -19,9 +19,10 @@ import type { PhysicsEngine } from "@babylonjs/core/Physics/v2/physicsEngine.js"
 import { Scene } from "@babylonjs/core/scene.pure.js";
 import { CONTROL_CAPTURE_PASS_IDS_V1 } from "@whitebox-world/control-capture";
 import type {
+  ApplyCameraPreviewRequestV1,
   ApplySubjectPresetTuningRequestV1,
   BindControlRequestV2,
-  CameraTuningV1,
+  CameraPreviewStateV1,
   CameraViewInputV1,
   ControlCaptureCapabilitiesV1,
   ControlCaptureRequestV1,
@@ -65,7 +66,7 @@ import "./babylon-shader-bootstrap";
 import { createWhiteboxMaterials, type WhiteboxMaterials } from "./materials";
 import { enableHavokPhysics, FIXED_TIME_STEP_SECONDS } from "./physics";
 import { SubjectController } from "./subject-controller";
-import { CameraDirectorV1, type CameraPreferenceV1 } from "./camera-director";
+import { CameraDirectorV1 } from "./camera-director";
 import { hasForwardControlIntentV1 } from "./control-profile-runtime";
 import {
   isSubjectAssetRuntimeErrorV1,
@@ -879,10 +880,13 @@ export class BabylonWorldRuntime implements WorldRuntimeSessionV3 {
     previousController.clearRetainedCharacterSupportSample();
     this.visualFor(this.controlledEntityId).stepAnimation(this.tick, "idle");
     this.controlledEntityId = request.controlledEntityId;
+    this.activeInputActions = [];
+    this.activeInputAxes = {};
     this.controllerFor(this.controlledEntityId)
       .clearRetainedCharacterSupportSample();
     this.traversalConfigurationEpoch += 1;
     this.latestRenderReadyReceipt = undefined;
+    this.cameraDirector.reset();
     this.updateCamera();
     return {
       kind: "worldkit-control-binding-receipt",
@@ -1092,12 +1096,10 @@ export class BabylonWorldRuntime implements WorldRuntimeSessionV3 {
         activeCameraProfileRef: cameraDirectorSnapshot.activeCameraProfileRef,
         activeCameraRigRef: cameraDirectorSnapshot.activeCameraRigRef,
         activeCameraModifierRefs: cameraDirectorSnapshot.activeCameraModifierRefs,
-        preference: cameraDirectorSnapshot.preference,
         safeFallbackActive: cameraDirectorSnapshot.fallbackActive,
         viewYawOffsetRadians: cameraDirectorSnapshot.viewYawOffsetRadians,
         viewPitchOffsetRadians: cameraDirectorSnapshot.viewPitchOffsetRadians,
         viewDistanceOffsetMeters: cameraDirectorSnapshot.viewDistanceOffsetMeters,
-        tuning: cameraDirectorSnapshot.tuning,
       },
       resources: {
         meshes: this.scene.meshes.length,
@@ -1332,11 +1334,31 @@ export class BabylonWorldRuntime implements WorldRuntimeSessionV3 {
     );
   }
 
-  setCameraPreference(preference: CameraPreferenceV1): WorldRuntimeSnapshotV3 {
+  requestCameraProfile(profileRef: string): WorldRuntimeSnapshotV3 {
     this.assertUsable();
-    if (!this.cameraDirector.setPreference(preference)) {
-      throw new RangeError("Camera preference must be a non-empty string.");
+    const subject = this.executionPlan.subjects.find(
+      (candidate) => candidate.entityId === this.controlledEntityId,
+    );
+    const reachable = new Set(
+      (subject?.capabilityAssembly?.cameraContext.cameraRigProfiles ?? [])
+        .map((profile) => profile.resourceRef),
+    );
+    if (!reachable.has(profileRef)) {
+      throw new RangeError(
+        "Camera Profile Ref must be reachable from the Camera Context.",
+      );
     }
+    if (!this.cameraDirector.requestProfile(profileRef)) {
+      throw new RangeError("Camera Profile Ref must be a non-empty string.");
+    }
+    this.latestRenderReadyReceipt = undefined;
+    this.updateCamera();
+    return this.snapshot();
+  }
+
+  resetCameraProfile(): WorldRuntimeSnapshotV3 {
+    this.assertUsable();
+    this.cameraDirector.resetProfileSelection();
     this.latestRenderReadyReceipt = undefined;
     this.updateCamera();
     return this.snapshot();
@@ -1360,16 +1382,35 @@ export class BabylonWorldRuntime implements WorldRuntimeSessionV3 {
     return this.snapshot();
   }
 
-  setCameraTuning(tuning: CameraTuningV1): WorldRuntimeSnapshotV3 {
+  getCameraPreviewState(): CameraPreviewStateV1 {
     this.assertUsable();
-    if (!this.cameraDirector.setTuning(tuning)) {
-      throw new RangeError(
-        "Camera tuning must use supported registered finite parameters.",
-      );
+    return this.cameraDirector.previewState();
+  }
+
+  applyCameraPreview(request: ApplyCameraPreviewRequestV1): CameraPreviewStateV1 {
+    this.assertUsable();
+    const tuningByProfileRef = request?.tuningByProfileRef;
+    if (
+      isNil(tuningByProfileRef) ||
+      typeof tuningByProfileRef !== "object" ||
+      Array.isArray(tuningByProfileRef)
+    ) {
+      throw new Error("SUBJECT_PRESET_INVALID_CAMERA_TUNING");
+    }
+    const subject = this.executionPlan.subjects.find(
+      (candidate) => candidate.entityId === this.controlledEntityId,
+    );
+    const cameraProfiles =
+      subject?.capabilityAssembly?.cameraContext.cameraRigProfiles ?? [];
+    if (!this.cameraDirector.applyPreview(
+      tuningByProfileRef,
+      cameraProfiles,
+    )) {
+      throw new Error("SUBJECT_PRESET_INVALID_CAMERA_TUNING");
     }
     this.latestRenderReadyReceipt = undefined;
     this.updateCamera();
-    return this.snapshot();
+    return this.cameraDirector.previewState();
   }
 
   requestMotionProfile(subjectEntityId: string, motionProfileRef: string): boolean {
@@ -1459,43 +1500,6 @@ export class BabylonWorldRuntime implements WorldRuntimeSessionV3 {
       return reject(
         "SUBJECT_PRESET_MOTION_SELECTION_UNREACHABLE",
         "The selected Motion Profile is not locked in the Subject Execution Plan.",
-      );
-    }
-    if (request.subjectEntityId !== this.controlledEntityId) {
-      return reject(
-        "SUBJECT_PRESET_CAMERA_OWNERSHIP_FORBIDDEN",
-        "Camera preference and overrides may only be applied by the current runtime camera-target Subject.",
-      );
-    }
-
-    const cameraProfiles = assembly.cameraContext.cameraRigProfiles;
-    const cameraTuningByProfileRef: Record<string, CameraTuningV1> = {};
-    for (const [profileRef, override] of Object.entries(
-      request.cameraOverridesByProfileRef,
-    )) {
-      const profile = cameraProfiles.find(
-        (candidate) => candidate.resourceRef === profileRef,
-      );
-      if (
-        profile === undefined ||
-        override.baseResourceRef !== profileRef ||
-        override.baseContentHash !== profile.contentHash
-      ) {
-        return reject(
-          "SUBJECT_PRESET_CAMERA_PROFILE_MISMATCH",
-          "Camera overrides must target exact Camera Profiles reachable from the Context.",
-        );
-      }
-      cameraTuningByProfileRef[profileRef] = { ...override.values };
-    }
-    if (!this.cameraDirector.replacePresetTunings(
-      cameraTuningByProfileRef,
-      cameraProfiles,
-      request.cameraPreference,
-    )) {
-      return reject(
-        "SUBJECT_PRESET_INVALID_CAMERA_TUNING",
-        "Camera tuning or preference is unsupported by the selected Camera Profile.",
       );
     }
     if (!controller.requestControlFeelProfile(selectedControlFeelProfile.resourceRef)) {

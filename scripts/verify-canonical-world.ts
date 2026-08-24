@@ -76,10 +76,12 @@ const BROWSER_PROTOCOL_V5_METHOD_NAMES = [
   "getSubjectPresetBaseline",
   "validateSubjectPackage",
   "setIntent",
-  "setCameraPreference",
+  "requestCameraProfile",
+  "resetCameraProfile",
   "adjustCameraView",
   "resetCameraView",
-  "setCameraTuning",
+  "getCameraPreviewState",
+  "applyCameraPreview",
   "applySubjectPresetTuning",
   "setMotionProfile",
   "runHarness",
@@ -468,7 +470,7 @@ async function verifyBrowserProtocolAndPhysics(): Promise<{
         forbiddenNames: FORBIDDEN_BROWSER_ROUTE_AUTHORITY_NAMES,
       },
     );
-    assert.equal(BROWSER_PROTOCOL_V5_METHOD_NAMES.length, 31);
+    assert.equal(BROWSER_PROTOCOL_V5_METHOD_NAMES.length, 33);
     assert.deepEqual(browserProtocol.missingMethodNames, []);
     assert.deepEqual(browserProtocol.forbiddenAuthorityNames, []);
     assert.deepEqual(

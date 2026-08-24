@@ -1,7 +1,12 @@
 import type {
+  ApplyCameraPreviewRequestV1,
   ApplySubjectPresetTuningRequestV1,
+  CameraPreviewStateV1,
   NumericProfileOverrideV1,
+  SubjectPresetTuningReceiptV1,
+  SubjectRuntimeStateV3,
 } from "@whitebox-world/runtime-contracts";
+import { isNil } from "lodash-es";
 
 import {
   parseSubjectPresetWorkingDraftV1,
@@ -23,7 +28,7 @@ export function normalizeSubjectPresetCameraPreferenceV1(
   const exactPreference = preference === "first-person"
     ? baseline.firstPersonCameraProfileRef
     : preference;
-  return exactPreference !== null && baseline.cameraProfiles.some(
+  return !isNil(exactPreference) && baseline.cameraProfiles.some(
       (profile) => profile.resourceRef === exactPreference
     )
     ? exactPreference
@@ -103,7 +108,7 @@ export function createSubjectPresetWorkbenchDraftV1(
     input.baseline.cameraProfiles.map((profile) => [profile.resourceRef, profile]),
   );
   if (
-    input.selectedCameraPreferenceRef !== null &&
+    !isNil(input.selectedCameraPreferenceRef) &&
     !cameraLocks.has(input.selectedCameraPreferenceRef)
   ) {
     throw new TypeError(
@@ -161,7 +166,161 @@ export function subjectPresetTuningRequestFromDraftV1(
     selectedMotionProfileRef: draft.selectedMotionProfileRef,
     selectedControlFeelProfileRef: draft.selectedControlFeelProfileRef,
     selectedControlProfileRef: draft.selectedControlProfileRef,
-    cameraOverridesByProfileRef: draft.cameraOverridesByProfileRef,
-    cameraPreference: draft.selectedCameraPreferenceRef ?? "auto",
   };
+}
+
+export function cameraPreviewRequestFromDraftV1(
+  draft: SubjectPresetWorkingDraftV1,
+): ApplyCameraPreviewRequestV1 {
+  return {
+    tuningByProfileRef: Object.fromEntries(
+      Object.entries(draft.cameraOverridesByProfileRef).map(([profileRef, override]) => [
+        profileRef,
+        override.values,
+      ]),
+    ),
+  };
+}
+
+export interface SubjectPresetWorkingDraftTransactionRuntimeV1 {
+  getSubjectSnapshot(subjectEntityId: string): SubjectRuntimeStateV3 | undefined;
+  getCameraPreviewState(): CameraPreviewStateV1;
+  requestCameraProfile(profileRef: string): unknown;
+  resetCameraProfile(): unknown;
+  applyCameraPreview(request: ApplyCameraPreviewRequestV1): CameraPreviewStateV1;
+  applySubjectPresetTuning(
+    request: ApplySubjectPresetTuningRequestV1,
+  ): SubjectPresetTuningReceiptV1;
+}
+
+export type SubjectPresetWorkingDraftTransactionResultV1 =
+  | { readonly status: "committed"; readonly receipt: SubjectPresetTuningReceiptV1 }
+  | { readonly status: "rejected"; readonly receipt: SubjectPresetTuningReceiptV1 }
+  | { readonly status: "failed"; readonly error: unknown }
+  | {
+      readonly status: "rollback-failed";
+      readonly error: unknown;
+      readonly rollbackError: unknown;
+    };
+
+function copyCameraPreviewRequest(
+  previewState: CameraPreviewStateV1,
+): ApplyCameraPreviewRequestV1 {
+  return {
+    tuningByProfileRef: Object.fromEntries(
+      Object.entries(previewState.tuningByProfileRef).map(([profileRef, tuning]) => [
+        profileRef,
+        { ...tuning },
+      ]),
+    ),
+  };
+}
+
+/**
+ * Applies the authoring-only Camera preview and the locked Gameplay selection as
+ * one compensated transaction. The Runtime keeps the two channels separate, so
+ * this Workbench boundary owns the memento and restores both channels if either
+ * application step fails.
+ */
+export function applySubjectPresetWorkingDraftTransactionV1(input: Readonly<{
+  draft: SubjectPresetWorkingDraftV1;
+  subjectEntityId: string;
+  previousCameraPreferenceRef: string | null;
+  runtime: SubjectPresetWorkingDraftTransactionRuntimeV1;
+}>): SubjectPresetWorkingDraftTransactionResultV1 {
+  let previousSubjectState: SubjectRuntimeStateV3 | undefined;
+  let previousCameraPreviewState: CameraPreviewStateV1;
+  try {
+    previousSubjectState = input.runtime.getSubjectSnapshot(input.subjectEntityId);
+    previousCameraPreviewState = input.runtime.getCameraPreviewState();
+  } catch (error) {
+    return { status: "failed", error };
+  }
+  const previousMotionProfileRef = previousSubjectState?.activeMotionProfileRef;
+  const previousControlFeelProfileRef = previousSubjectState?.activeControlFeelProfileRef;
+  if (previousMotionProfileRef === undefined || previousControlFeelProfileRef === undefined) {
+    return {
+      status: "failed",
+      error: new Error("SUBJECT_PRESET_TRANSACTION_BASELINE_UNAVAILABLE"),
+    };
+  }
+
+  const restoreCamera = (): void => {
+    if (isNil(input.previousCameraPreferenceRef)) {
+      input.runtime.resetCameraProfile();
+    } else {
+      input.runtime.requestCameraProfile(input.previousCameraPreferenceRef);
+    }
+    input.runtime.applyCameraPreview(copyCameraPreviewRequest(previousCameraPreviewState));
+  };
+  const restoreGameplay = (): void => {
+    const receipt = input.runtime.applySubjectPresetTuning({
+      subjectEntityId: input.subjectEntityId,
+      expectedSubjectDefinitionRef: input.draft.baseSubjectDefinitionRef,
+      expectedSubjectDefinitionContentHash:
+        input.draft.baseSubjectDefinitionContentHash,
+      selectedMotionProfileRef: previousMotionProfileRef,
+      selectedControlFeelProfileRef: previousControlFeelProfileRef,
+      selectedControlProfileRef: input.draft.selectedControlProfileRef,
+    });
+    if (receipt.status === "rejected") {
+      throw new Error(
+        `SUBJECT_PRESET_TRANSACTION_GAMEPLAY_ROLLBACK_REJECTED: ${receipt.diagnostic?.message ?? "unknown rejection"}`,
+      );
+    }
+  };
+  const rollback = (restoreGameplayState: boolean): unknown | undefined => {
+    const errors: unknown[] = [];
+    if (restoreGameplayState) {
+      try {
+        restoreGameplay();
+      } catch (error) {
+        errors.push(error);
+      }
+    }
+    try {
+      restoreCamera();
+    } catch (error) {
+      errors.push(error);
+    }
+    return errors.length === 0
+      ? undefined
+      : new AggregateError(errors, "SUBJECT_PRESET_TRANSACTION_ROLLBACK_FAILED");
+  };
+
+  try {
+    if (isNil(input.draft.selectedCameraPreferenceRef)) {
+      input.runtime.resetCameraProfile();
+    } else {
+      input.runtime.requestCameraProfile(input.draft.selectedCameraPreferenceRef);
+    }
+    input.runtime.applyCameraPreview(cameraPreviewRequestFromDraftV1(input.draft));
+  } catch (error) {
+    const rollbackError = rollback(false);
+    return rollbackError === undefined
+      ? { status: "failed", error }
+      : { status: "rollback-failed", error, rollbackError };
+  }
+
+  try {
+    const receipt = input.runtime.applySubjectPresetTuning(
+      subjectPresetTuningRequestFromDraftV1(input.draft, input.subjectEntityId),
+    );
+    if (receipt.status === "committed") {
+      return { status: "committed", receipt };
+    }
+    const rollbackError = rollback(false);
+    return rollbackError === undefined
+      ? { status: "rejected", receipt }
+      : {
+          status: "rollback-failed",
+          error: new Error(receipt.diagnostic?.message ?? "SUBJECT_PRESET_TRANSACTION_REJECTED"),
+          rollbackError,
+        };
+  } catch (error) {
+    const rollbackError = rollback(true);
+    return rollbackError === undefined
+      ? { status: "failed", error }
+      : { status: "rollback-failed", error, rollbackError };
+  }
 }

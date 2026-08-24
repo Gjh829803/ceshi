@@ -413,10 +413,19 @@ placement-layout / rigged-subject / g-bot-subject）；专项规格见
   Runtime 会话类型不再暴露 Feel/Control 数字袋方言。草稿数字只在 authoring workspace，
   发布时物化新 Registry 版本。
 - [ ] **P1.5 合入后仍待收尾**（不阻塞 Ground/Air 首切片）：
-  1. 相机仍保留会话数字 overlay（`setCameraTuning`、
-     `applySubjectPresetTuning.cameraOverridesByProfileRef`、Snapshot `camera.tuning`）。
-     后续与 Feel 一样收成锁定 Camera Profile Ref，或明确把相机预览定义为独立会话状态。
-  2. P1.5 + Subject Preset 合并后的整支分支对抗审查另开，不把它当成合入门禁。
+  1. [x] 相机数字 overlay 已在 Browser V5 基线上完成并达到 Final GO：删除 `setCameraTuning`、
+     `applySubjectPresetTuning.cameraOverridesByProfileRef` 与 Snapshot `camera.tuning` / 旧
+     `camera.preference`；数字 tuning 只走显式非 Gameplay 的 preview 通道
+     （`getCameraPreviewState` / `applyCameraPreview`）。`requestCameraProfile` /
+     `resetCameraProfile` 只是 P1.5 尚未发布的过渡协议；GCC-3 必须 clean break 为唯一
+     `cameraViewPreference` 与 `view.camera-preference.set/reset`，不保留 alias。Preview 不属于
+     Take 输入或 Gameplay Subject truth，但会改变 rendered Camera、Capture Matrix/Pixels 和
+     Control Capture `frameHash`。最终 10 files / 190 tests 相机矩阵、Browser V5 / Route V2、
+     Runtime、Canonical、Placement、Rigged、G Bot 与 Validation Capture 门禁已通过；两条
+     full-suite Route 超时已串行通过并完成 `main` 对拍，确认是资源竞争而非 Camera
+     regression。实施边界和例外见
+     [`P1.5 相机收尾`](superpowers/plans/2026-08-23-p15-camera-tuning-cleanup.md)。
+  2. [ ] P1.5 + Subject Preset 合并后的整支分支对抗审查另开，不把它当成合入门禁。
 
 完成标准：仅替换版本化 Profile 就能改变主体的加减速、转向、介质重力/阻力和浮力，
 同一输入与 Registry Lock 在固定 Tick 下得到相同 Snapshot/Hash；普通场景 JSON 不需要
@@ -709,8 +718,10 @@ S1b Golden、
    Resolver**：首条 Ground/Air 切片的
    [实施计划](superpowers/plans/2026-08-21-p15-control-feel-state-resolver.md) 已实施、
    通过全部生产 Gate，并由 PR #10 合入 `main`；水介质、`ControlMethodProfile`、
-   CLI/Browser E2E 覆盖，以及相机 overlay / 整支对抗审查仍未交付。作者面板 Feel
-   范围与 session 数字袋类型已在 Preset 语义合同修复中收口，M7 不标记完成；
+   CLI/Browser E2E 覆盖，以及整支对抗审查仍未交付。相机 overlay 已在 Browser V5
+   基线上完成门禁与最终审查；GCC-3 `cameraViewPreference` clean break 仍未完成；作者面板
+   Feel 范围与 session 数字袋类型已在 Preset 语义合同修复中收口，
+   M7 不标记完成；
 8. **M8：完成 Canonical World State + Typed Relationship 人—滑板窄可视切片**：先按
    [专项设计](superpowers/specs/2026-08-22-canonical-runtime-state-and-semantic-projection-design.md)
    冻结 World/View/Runtime Status/Transition 四类投影，再实现 `mountedOn` 权威关系、

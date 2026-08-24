@@ -21,6 +21,7 @@
     "@whitebox-world/subjects": "workspace:*",
     "@whitebox-world/testkit": "workspace:*",
     "@whitebox-world/world": "workspace:*",
+    "lodash-es": "^4.18.1",
     "three": "^0.180.0"
   },
   "devDependencies": {

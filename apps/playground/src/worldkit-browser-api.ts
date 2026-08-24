@@ -12,9 +12,10 @@ import {
   WORLDKIT_BROWSER_PROTOCOL_VERSION,
   canonicalWorldkitBrowserRouteEvidencePublicationV2,
   canonicalRouteEvidenceSelectorV1,
+  type ApplyCameraPreviewRequestV1,
   type ApplySubjectPresetTuningRequestV1,
   type BindControlRequestV2,
-  type CameraTuningV1,
+  type CameraPreviewStateV1,
   type CameraViewInputV1,
   type CompatibleProfileSummaryV1,
   type ControlCaptureCapabilitiesV1,
@@ -54,10 +55,12 @@ export interface DeferredWorldkitBrowserRuntimeAdapterV1 {
   resetRuntime(): WorldRuntimeSnapshotV3;
   setPaused(paused: boolean): void;
   disposeRuntime(): Promise<void>;
-  setCameraPreferenceRuntime?(preference: string): WorldRuntimeSnapshotV3;
+  requestCameraProfileRuntime?(profileRef: string): WorldRuntimeSnapshotV3;
+  resetCameraProfileRuntime?(): WorldRuntimeSnapshotV3;
   adjustCameraViewRuntime?(input: CameraViewInputV1): WorldRuntimeSnapshotV3;
   resetCameraViewRuntime?(): WorldRuntimeSnapshotV3;
-  setCameraTuningRuntime?(tuning: CameraTuningV1): WorldRuntimeSnapshotV3;
+  getCameraPreviewStateRuntime?(): CameraPreviewStateV1;
+  applyCameraPreviewRuntime?(request: ApplyCameraPreviewRequestV1): CameraPreviewStateV1;
   applySubjectPresetTuningRuntime?(
     request: ApplySubjectPresetTuningRequestV1,
   ): SubjectPresetTuningReceiptV1;
@@ -668,12 +671,19 @@ export function installDeferredWorldkitBrowserApi(options: {
       await startupPromise;
       return requireReadyAdapter().runWorldkitFixedInput([input]);
     },
-    setCameraPreference: (preference) => {
+    requestCameraProfile: (profileRef) => {
       const adapter = requireReadyAdapter();
-      if (adapter.setCameraPreferenceRuntime === undefined) {
-        throw new Error("WORLDKIT_CAMERA_PREFERENCE_UNAVAILABLE");
+      if (adapter.requestCameraProfileRuntime === undefined) {
+        throw new Error("WORLDKIT_CAMERA_PROFILE_UNAVAILABLE");
       }
-      return adapter.setCameraPreferenceRuntime(preference);
+      return adapter.requestCameraProfileRuntime(profileRef);
+    },
+    resetCameraProfile: () => {
+      const adapter = requireReadyAdapter();
+      if (adapter.resetCameraProfileRuntime === undefined) {
+        throw new Error("WORLDKIT_CAMERA_PROFILE_RESET_UNAVAILABLE");
+      }
+      return adapter.resetCameraProfileRuntime();
     },
     adjustCameraView: (input) => {
       const adapter = requireReadyAdapter();
@@ -689,12 +699,19 @@ export function installDeferredWorldkitBrowserApi(options: {
       }
       return adapter.resetCameraViewRuntime();
     },
-    setCameraTuning: (tuning) => {
+    getCameraPreviewState: () => {
       const adapter = requireReadyAdapter();
-      if (adapter.setCameraTuningRuntime === undefined) {
-        throw new Error("WORLDKIT_CAMERA_TUNING_UNAVAILABLE");
+      if (adapter.getCameraPreviewStateRuntime === undefined) {
+        throw new Error("WORLDKIT_CAMERA_PREVIEW_UNAVAILABLE");
       }
-      return adapter.setCameraTuningRuntime(tuning);
+      return adapter.getCameraPreviewStateRuntime();
+    },
+    applyCameraPreview: (request) => {
+      const adapter = requireReadyAdapter();
+      if (adapter.applyCameraPreviewRuntime === undefined) {
+        throw new Error("WORLDKIT_CAMERA_PREVIEW_UNAVAILABLE");
+      }
+      return adapter.applyCameraPreviewRuntime(request);
     },
     applySubjectPresetTuning: (request) => {
       const adapter = requireReadyAdapter();
@@ -788,9 +805,11 @@ export function installDeferredWorldkitBrowserApi(options: {
     "listMotionKernels",
     "listSubjectDefinitions",
     "runHarness",
+    "applyCameraPreview",
+    "getCameraPreviewState",
+    "requestCameraProfile",
+    "resetCameraProfile",
     "resetCameraView",
-    "setCameraPreference",
-    "setCameraTuning",
     "setIntent",
     "setMotionProfile",
     "validateSubjectPackage",

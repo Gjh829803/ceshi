@@ -143,6 +143,9 @@ importers:
       '@whitebox-world/world':
         specifier: workspace:*
         version: link:../../packages/world
+      lodash-es:
+        specifier: ^4.18.1
+        version: 4.18.1
       three:
         specifier: ^0.180.0
         version: 0.180.0
