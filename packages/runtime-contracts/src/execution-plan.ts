@@ -723,12 +723,45 @@ export function canonicalExecutionResourceLockEntriesV1(
   return Object.freeze(rows);
 }
 
-export interface ExecutionPlanV5
-  extends Omit<ExecutionPlanV4, "schemaVersion" | "controlledEntityId"> {
+export interface ExecutionPlanV5 {
+  readonly kind: "worldkit-execution-plan";
   readonly schemaVersion: 5;
-  readonly initialControlledEntityId: string;
+  readonly id: string;
+  readonly seed: number;
+  readonly runtimeBackend: "babylon-havok";
   readonly authoringSpecHash: `sha256:${string}`;
+  readonly normalizedWorldIrHash: string;
+  readonly resourceLockHash: string;
   readonly resourceLockEntries: readonly ExecutionResourceLockEntryV1[];
+  readonly coordinateSystem: "right-handed-y-up-minus-z-forward";
+  readonly gravityMetersPerSecondSquaredXYZ: Vec3;
+  readonly atmospherePreset: "clear-day" | "golden-hour" | "overcast" | "night";
+  readonly terrain: ExecutionTerrainV3;
+  readonly waters: readonly ExecutionWaterV3[];
+  readonly objects: readonly ExecutionObjectV3[];
+  readonly subjectAssets: readonly ExecutionSubjectAssetV1[];
+  readonly rigProfiles: readonly ExecutionRigProfileV1[];
+  readonly animationSets: readonly ExecutionAnimationSetV1[];
+  readonly colliderProfiles: readonly ExecutionColliderProfileV1[];
+  readonly initialControlledEntityId: string;
+  readonly subjects: readonly ExecutionSubjectV3[];
+  readonly camera: ExecutionCameraV4;
+  readonly resourceUsage: Readonly<{
+    vertices: number;
+    triangles: number;
+    colliders: number;
+  }>;
+  readonly layout: Readonly<{
+    solverProfileRef: string;
+    resolvedVersion: string;
+    solverProfileHash: string;
+    layoutSolveReportHash: string;
+    regions: readonly ExecutionLayoutRegionV1[];
+    routes: readonly ExecutionLayoutRouteV1[];
+    screenRegions: readonly ExecutionLayoutScreenRegionV1[];
+    placementsByEntityId: Readonly<Record<string, ExecutionLayoutPlacementV1>>;
+    layoutAssertions: readonly ExecutionLayoutAssertionV1[];
+  }>;
   readonly traversal: Readonly<{
     surfaces: readonly ExecutionTraversalSurfaceV1[];
     traversalAreas: readonly ExecutionTraversalAreaV1[];
