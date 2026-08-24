@@ -682,6 +682,57 @@ describe("RuntimeHost lifecycle isolation and admission", () => {
     expect(port.calls).toEqual([]);
   });
 
+  it("rejects a consistently rehashed static Subject with two Asset Parts before adapter creation", async () => {
+    const port = createPortHarness();
+    const adapter = createAdapterFactoryHarness([port]);
+    const baseline = mutableWorldConfiguration(INITIAL_WORLD_PACKAGE_REF);
+    const subject = baseline.executionPlan.subjects[0]!;
+    const assetPart = {
+      id: "body.asset",
+      kind: "asset" as const,
+      subjectAssetRef: "worldkit://subject-asset/hostile@1",
+      localTransform: {
+        positionMetersXYZ: [0, 0, 0] as [number, number, number],
+        rotationEulerRadiansXYZ: [0, 0, 0] as [number, number, number],
+        scaleXYZ: [1, 1, 1] as [number, number, number],
+      },
+      appearance: { mode: "whitebox-neutral" as const },
+      semanticTags: ["hostile"],
+    };
+    const executionPlan = {
+      ...baseline.executionPlan,
+      subjects: [{
+        ...subject,
+        visualBinding: { mode: "static" as const },
+        visualParts: [
+          assetPart,
+          { ...structuredClone(assetPart), id: "body.asset.duplicate" },
+        ],
+      }],
+    } as ExecutionPlanV5;
+    const executionPlanHash = sha256CanonicalJson(
+      executionPlan,
+    ) as WorldPackageSha256HashV1;
+    const initialWorld = {
+      ...baseline,
+      executionPlan,
+      executionPlanHash,
+      worldPackageBuildReceipt: createBuildReceipt(
+        executionPlan,
+        executionPlanHash,
+      ),
+    };
+
+    await expect(runtimeHostConstructor().create(hostOptions(
+      adapter.factory,
+      ["world-session.invalid-static-assets"],
+      { initialWorld },
+    ))).rejects.toThrow(/RuntimeWorldConfigurationV1/);
+    expect(adapter.factory.preflightConcurrentResidency).not.toHaveBeenCalled();
+    expect(adapter.factory.create).not.toHaveBeenCalled();
+    expect(port.calls).toEqual([]);
+  });
+
   it("applies the same closed Plan admission before replacement preflight", async () => {
     const current = createPortHarness();
     const candidate = createPortHarness();

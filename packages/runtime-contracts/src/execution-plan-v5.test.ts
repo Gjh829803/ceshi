@@ -229,6 +229,30 @@ describe("ExecutionPlanV5 canonical boundary", () => {
     );
   });
 
+  it("rejects more than one Asset Part for a static Subject", () => {
+    const input = structuredClone(planFixture());
+    const assetPart = {
+      id: "body.asset",
+      kind: "asset" as const,
+      subjectAssetRef: "worldkit://subject-asset/test@1",
+      localTransform: {
+        positionMetersXYZ: [0, 0, 0] as [number, number, number],
+        rotationEulerRadiansXYZ: [0, 0, 0] as [number, number, number],
+        scaleXYZ: [1, 1, 1] as [number, number, number],
+      },
+      appearance: { mode: "whitebox-neutral" as const },
+      semanticTags: ["body"],
+    };
+    input.subjects[0]!.visualParts = [
+      assetPart,
+      { ...structuredClone(assetPart), id: "body.asset.duplicate" },
+    ];
+
+    expect(() => parseExecutionPlanV5(input)).toThrowError(
+      "EXECUTION_PLAN_V5_INVALID",
+    );
+  });
+
   it("rejects accessors before reading them", () => {
     const input = planFixture() as unknown as Record<string, unknown>;
     let getterCalls = 0;

@@ -1514,6 +1514,51 @@ describe("BabylonWorldRuntime", () => {
   });
 
   describe("static asset subject", () => {
+    it("rejects two static Asset Parts before acquiring either Asset lease", async () => {
+      const { engine, scene } = createAssetScene();
+      const material = new StandardMaterial("static-subject-test", scene);
+      const cache = new SubjectAssetCacheV1(
+        scene,
+        createMemoryResolver(staticSubjectAssetBytes),
+      );
+      const baseExecutionPlan = createStaticAssetSubjectExecutionPlan();
+      const staticSubject = baseExecutionPlan.subjects[0]!;
+      const assetPart = staticSubject.visualParts.find(
+        (part) => part.kind === "asset",
+      )!;
+      const executionPlan: ExecutionPlanV5 = {
+        ...baseExecutionPlan,
+        subjects: [{
+          ...staticSubject,
+          visualParts: [
+            assetPart,
+            { ...structuredClone(assetPart), id: "body.asset.duplicate" },
+          ],
+        }],
+      };
+      const acquire = vi.spyOn(cache, "acquire");
+
+      try {
+        await expect(createSubjectVisual({
+          subject: executionPlan.subjects[0]!,
+          executionPlan,
+          material,
+          scene,
+          subjectAssetCache: cache,
+        })).rejects.toMatchObject({ code: "SUBJECT_ASSET_RIG_INCOMPATIBLE" });
+        expect(acquire).not.toHaveBeenCalled();
+        expect(
+          (cache as unknown as { leases: ReadonlySet<SubjectAssetLeaseV1> }).leases
+            .size,
+        ).toBe(0);
+      } finally {
+        await cache.dispose();
+        material.dispose();
+        scene.dispose();
+        engine.dispose();
+      }
+    });
+
     it("loads a real static GLB without Rig resources and isolates two instances", async () => {
       const runtime = await createRuntime(
         createStaticAssetSubjectExecutionPlan({ twoSubjects: true }),

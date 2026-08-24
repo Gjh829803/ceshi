@@ -37,6 +37,7 @@ function normalizeSubjectAsset(
 ): NormalizedSubjectAssetV1 {
   return {
     subjectAssetRef: resource.resourceRef,
+    subjectAssetManifestHash: resource.contentHash,
     artifactContentHash: resource.artifact.contentHash,
     byteLength: resource.artifact.byteLength,
     mediaType: resource.artifact.mediaType,

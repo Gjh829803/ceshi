@@ -4,7 +4,10 @@ import type { AddressInfo } from "node:net";
 
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { sha256Bytes } from "@whitebox-world/protocol";
-import { XIER120_SUBJECT_ASSET_MANIFESTS } from "@whitebox-world/subject-registry";
+import {
+  XIER120_SUBJECT_ASSET_MANIFESTS,
+  builtInSubjectResourceRegistry,
+} from "@whitebox-world/subject-registry";
 
 import {
   PLAYGROUND_SUBJECT_ASSET_PACKAGE_PATH_BY_REF_V1,
@@ -188,6 +191,10 @@ describe("createFetchSubjectAssetResolver", () => {
     vi.stubGlobal("location", { origin: "https://playground.test" });
 
     for (const manifest of XIER120_SUBJECT_ASSET_MANIFESTS) {
+      const resolvedManifest = builtInSubjectResourceRegistry.resolveSubjectAsset(
+        manifest.resourceRef,
+      );
+      expect(resolvedManifest).toBeDefined();
       const uri = XIER120_SUBJECT_ASSET_URI_BY_REF_V1[manifest.resourceRef];
       const packagePath =
         XIER120_SUBJECT_ASSET_PACKAGE_PATH_BY_REF_V1[manifest.resourceRef];
@@ -200,6 +207,7 @@ describe("createFetchSubjectAssetResolver", () => {
       const artifacts = await resolveWorldPackageSubjectAssetArtifactsV1(
         [{
           subjectAssetRef: manifest.resourceRef,
+          subjectAssetManifestHash: resolvedManifest!.contentHash,
           artifactContentHash: manifest.artifact.contentHash as `sha256:${string}`,
           byteLength: manifest.artifact.byteLength,
           mediaType: manifest.artifact.mediaType,
@@ -233,6 +241,7 @@ describe("createFetchSubjectAssetResolver", () => {
     const artifacts = await resolveWorldPackageSubjectAssetArtifactsV1(
       [{
         ...REQUEST,
+        subjectAssetManifestHash: `sha256:${"f".repeat(64)}`,
         format: "glb",
         inventory: {
           meshCount: 1,
@@ -267,6 +276,7 @@ describe("createFetchSubjectAssetResolver", () => {
       [{
         ...REQUEST,
         subjectAssetRef: "worldkit://subject-asset/unknown@1",
+        subjectAssetManifestHash: `sha256:${"f".repeat(64)}`,
         format: "glb",
         inventory: {
           meshCount: 1,
@@ -294,6 +304,7 @@ describe("createFetchSubjectAssetResolver", () => {
     }) as typeof fetch;
     const descriptor = {
       ...REQUEST,
+      subjectAssetManifestHash: `sha256:${"f".repeat(64)}`,
       format: "glb" as const,
       inventory: {
         meshCount: 1,

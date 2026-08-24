@@ -620,6 +620,18 @@ describe("compileWorld", () => {
         );
       },
     },
+    {
+      label: "forged Subject Asset Resource Lock content hash",
+      expectedMessage:
+        "NormalizedWorldIR invariant violated: Subject Asset 'worldkit://subject-asset/humanoid.golden@1' does not match its locked Registry manifest hash.",
+      mutate: (world: NormalizedWorldIRV4) => {
+        world.resources.resourceLock = world.resources.resourceLock.map((row) =>
+          row.resourceRef === SUBJECT_ASSET_REF
+            ? { ...row, contentHash: `sha256:${"0".repeat(64)}` }
+            : row,
+        );
+      },
+    },
   ])("rejects a $label for a static Subject", ({ mutate, expectedMessage }) => {
     const normalized = normalizeStaticAssetWorld();
     const world = structuredClone(normalized.value!);
@@ -648,7 +660,7 @@ describe("compileWorld", () => {
         normalizedWorldIrHash: rigged.normalizedWorldIrHash!,
       }).executionPlanHash,
     ).toBe(
-      "sha256:225b274893f3a2cbaa858e740a302d0699077aeb183ea217f46ddf23fa859e49",
+      "sha256:e0bcaf42d565603caebd14f45935c5049af4f5f79f7818f0c61a7d12b7acb6e6",
     );
   });
 

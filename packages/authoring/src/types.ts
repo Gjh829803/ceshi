@@ -417,6 +417,7 @@ export interface NormalizedSubjectAssetInventoryV1 {
 
 export interface NormalizedSubjectAssetV1 {
   subjectAssetRef: string;
+  subjectAssetManifestHash: string;
   artifactContentHash: string;
   byteLength: number;
   mediaType: "model/gltf-binary";

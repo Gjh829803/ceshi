@@ -490,6 +490,7 @@ describe("Package Subject Definition normalization", () => {
       "inventory",
       "mediaType",
       "subjectAssetRef",
+      "subjectAssetManifestHash",
     ]);
     expect(Object.keys(tables.rigProfiles[0]!).sort()).toEqual([
       "bodyTopology",
@@ -513,6 +514,7 @@ describe("Package Subject Definition normalization", () => {
     ]);
     expect(tables.subjectAssets[0]).toEqual({
       subjectAssetRef: SUBJECT_ASSET_REF,
+      subjectAssetManifestHash: expect.stringMatching(/^sha256:[a-f0-9]{64}$/),
       artifactContentHash:
         "sha256:1095fd65c754d53e6db3757ab5e1c9e5e9dcea2581f85d40f37ea4890ee8c2c2",
       byteLength: 43_656,

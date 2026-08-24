@@ -52,6 +52,7 @@ function subjectAsset(
 ): NormalizedSubjectAssetV1 {
   return {
     subjectAssetRef,
+    subjectAssetManifestHash: `sha256:${"f".repeat(64)}`,
     artifactContentHash: hashBytes(bytes),
     byteLength: bytes.byteLength,
     mediaType: "model/gltf-binary",

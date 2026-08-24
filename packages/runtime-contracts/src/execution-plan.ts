@@ -1431,6 +1431,7 @@ function validateSubject(input: unknown): void {
   requireTuple(value.spawnSubjectOriginPositionMetersXYZ, 3);
   requireFinite(value.spawnSubjectFacingRadians);
   requireLiteral(value.forwardDirection, ["-z"]);
+  let assetPartCount = 0;
   dataArray(value.visualParts).forEach((part) => {
     const row = dataRecord(part);
     const kind = requireLiteral(row.kind, ["primitive", "asset"]);
@@ -1452,6 +1453,7 @@ function validateSubject(input: unknown): void {
       requireTuple(transform.rotationEulerRadiansXYZ, 3);
       requireStringArray(primitive.semanticTags);
     } else {
+      assetPartCount += 1;
       const asset = exactDataRecord(row, [
         "id",
         "kind",
@@ -1471,8 +1473,11 @@ function validateSubject(input: unknown): void {
   });
   const visualBinding = dataRecord(value.visualBinding);
   const bindingMode = requireLiteral(visualBinding.mode, ["static", "rigged"]);
-  if (bindingMode === "static") exactDataRecord(visualBinding, ["mode"]);
-  else {
+  if (bindingMode === "static") {
+    exactDataRecord(visualBinding, ["mode"]);
+    if (assetPartCount > 1) return invalidExecutionPlanV5();
+  } else {
+    if (assetPartCount !== 1) return invalidExecutionPlanV5();
     const rigged = exactDataRecord(visualBinding, [
       "mode",
       "rigProfileRef",

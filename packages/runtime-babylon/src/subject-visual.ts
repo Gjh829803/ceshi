@@ -363,6 +363,9 @@ export async function createSubjectVisual(
     if (subject.visualBinding.mode === "rigged" && assetParts.length !== 1) {
       throw assetError("SUBJECT_ASSET_RIG_INCOMPATIBLE");
     }
+    if (subject.visualBinding.mode === "static" && assetParts.length > 1) {
+      throw assetError("SUBJECT_ASSET_RIG_INCOMPATIBLE");
+    }
     if (subject.visualBinding.mode === "static" && assetParts.length > 0) {
       assetDescriptor = exactResource(
         executionPlan.subjectAssets,

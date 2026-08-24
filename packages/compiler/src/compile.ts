@@ -968,6 +968,14 @@ function compileSubjectsV3(
             `NormalizedWorldIR invariant violated: Subject Asset '${subjectAsset.subjectAssetRef}' requires one matching locked Subject Asset.`,
           );
         }
+        if (
+          subjectAssetLockRows[0].contentHash !==
+            subjectAsset.subjectAssetManifestHash
+        ) {
+          throw new Error(
+            `NormalizedWorldIR invariant violated: Subject Asset '${subjectAsset.subjectAssetRef}' does not match its locked Registry manifest hash.`,
+          );
+        }
         reachableSubjectAssetsByRef.set(subjectAsset.subjectAssetRef, subjectAsset);
       }
 
