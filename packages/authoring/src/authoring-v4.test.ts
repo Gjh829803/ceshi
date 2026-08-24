@@ -1,9 +1,11 @@
 import { describe, expect, it } from "vitest";
 
 import {
+  normalizeAuthoringSpec,
   parseAuthoringSpecJson,
   parseAuthoringSpecV3Json,
   parseAuthoringSpecV4,
+  validateAuthoringSpec,
   validateAuthoringSpecV3,
   validateAuthoringSpecV4,
   type AuthoringSpecV3,
@@ -11,7 +13,10 @@ import {
   type ConnectedByRouteConstraintV1,
   type ConnectivityConstraintSpecV1,
 } from "./index.js";
-import { createValidAuthoringSpec } from "./test-fixture.js";
+import {
+  createValidAuthoringSpecV4 as createValidAuthoringSpec,
+  createValidAuthoringSpecV3,
+} from "./test-fixture.js";
 
 const requiredRoute: ConnectedByRouteConstraintV1 = {
   id: "player-can-reach-watchtower",
@@ -32,7 +37,7 @@ const groundStaticTraversalSurfaceBinding = {
 } as const;
 
 function validV3(): AuthoringSpecV3 {
-  return structuredClone(createValidAuthoringSpec());
+  return structuredClone(createValidAuthoringSpecV3());
 }
 
 function validV4(): AuthoringSpecV4 {
@@ -123,6 +128,32 @@ function traversalArea(id: string, pointsMetersXZ: readonly (readonly [number, n
     mode: "blocked" as const,
   };
 }
+
+describe("current Authoring entrypoints", () => {
+  it("accepts V4 and rejects superseded V3 through every unversioned API", () => {
+    const v4 = validV4();
+
+    expect(parseAuthoringSpecJson(JSON.stringify(v4)).ok).toBe(true);
+    expect(validateAuthoringSpec(v4).ok).toBe(true);
+    expect(normalizeAuthoringSpec(v4)).toMatchObject({
+      ok: true,
+      value: {
+        kind: "worldkit-normalized-world",
+        schemaVersion: 4,
+      },
+    });
+
+    expect(parseAuthoringSpecJson(JSON.stringify(validV3()))).toMatchObject({
+      ok: false,
+      diagnostics: expect.arrayContaining([
+        expect.objectContaining({
+          code: "AUTHORING_SCHEMA_VERSION_NOT_SUPPORTED",
+          instancePath: "/schemaVersion",
+        }),
+      ]),
+    });
+  });
+});
 
 describe("Authoring Spec V4 Prototype traversal surface bindings", () => {
   it("admits the closed collider-subshape binding only in V4", () => {
@@ -619,7 +650,7 @@ describe("Authoring Spec V4 connectivity schema", () => {
     });
   });
 
-  it("parses only canonical V4 JSON and leaves the default parser on V3", () => {
+  it("parses canonical V4 JSON through both versioned and current parsers", () => {
     const v4 = withConnectivity(validV4(), requiredRoute);
     expect(parseAuthoringSpecV4(JSON.stringify(v4)).ok).toBe(true);
     expect(parseAuthoringSpecV4(JSON.stringify(validV3()))).toEqual({
@@ -643,15 +674,7 @@ describe("Authoring Spec V4 connectivity schema", () => {
         }),
       ],
     });
-    expect(parseAuthoringSpecJson(JSON.stringify(v4))).toMatchObject({
-      ok: false,
-      diagnostics: [
-        expect.objectContaining({
-          code: "AUTHORING_SCHEMA_VERSION_NOT_SUPPORTED",
-          details: { supportedSchemaVersions: [3] },
-        }),
-      ],
-    });
+    expect(parseAuthoringSpecJson(JSON.stringify(v4)).ok).toBe(true);
   });
 });
 

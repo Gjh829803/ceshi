@@ -1,13 +1,15 @@
 import { describe, expect, it } from "vitest";
 
 import {
-  canonicalAuthoringIdentityV3,
+  canonicalAuthoringLayoutIdentityV4,
   normalizeAuthoringSpecV3,
   normalizeAuthoringSpecV4,
-  projectNormalizedWorldResourcesToV3LayoutIdentity,
+  projectNormalizedWorldResourcesToLayoutIdentityV4,
   type AuthoringSpecV4,
 } from "./index.js";
-import { createValidAuthoringSpec } from "./test-fixture.js";
+import {
+  createValidAuthoringSpecV4 as createValidAuthoringSpec,
+} from "./test-fixture.js";
 import { sha256CanonicalJson } from "./canonical-json.js";
 
 const GROUND_STATIC_PROFILE_REF =
@@ -268,7 +270,7 @@ describe("normalizeAuthoringSpecV4", () => {
     );
   });
 
-  it("reconstructs the V3 layout identity from restored V4 Normalized IR resources", () => {
+  it("reconstructs the self-contained V4 layout identity from normalized resources", () => {
     const spec = routeWorldWithBindings();
     const result = normalizeAuthoringSpecV4(spec);
     const world = result.value;
@@ -281,19 +283,12 @@ describe("normalizeAuthoringSpecV4", () => {
       throw new Error(`bound fixture normalization failed: ${JSON.stringify(result.diagnostics)}`);
     }
 
-    const layoutResources = projectNormalizedWorldResourcesToV3LayoutIdentity(
+    const layoutResources = projectNormalizedWorldResourcesToLayoutIdentityV4(
       world.resources,
     );
-    const projectedV3 = {
-      ...structuredClone(spec),
-      schemaVersion: 3 as const,
-      constraints: {
-        placements: structuredClone([...spec.constraints.placements]),
-      },
-    };
     expect(
       sha256CanonicalJson(
-        canonicalAuthoringIdentityV3(projectedV3, {
+        canonicalAuthoringLayoutIdentityV4(spec, {
           ...world,
           resources: layoutResources,
         }),

@@ -7,6 +7,7 @@ import { sha256CanonicalJson } from "./canonical-json";
 import { ResourceLockBuilderV1 } from "./resource-lock";
 import { normalizeSubjectDefinitionV2 } from "./subject-definition-normalizer";
 import type {
+  AuthoringDocumentBase,
   AuthoringDiagnostic,
   NormalizeAuthoringOptions,
   NormalizeAuthoringBaseResult,
@@ -18,7 +19,16 @@ import type {
   ProceduralTerrainSourceSpecV2,
 } from "./types";
 import type { AuthoringSpecV3, WorldNodeSpecV3 } from "./types-v3.js";
+import type {
+  AuthoringSpecV4,
+  NormalizeAuthoringBaseV4Result,
+  WorldNodeSpecV4,
+} from "./types-v4.js";
 import { validateAuthoringSpecV3 } from "./validate-v3.js";
+import { validateAuthoringSpecV4 } from "./validate-v4.js";
+
+type AuthoringBaseSpec = AuthoringSpecV3 | AuthoringSpecV4;
+type AuthoringWorldNode = WorldNodeSpecV3 | WorldNodeSpecV4;
 
 const SUPPORTED_CAMERA_RIG = "worldkit://camera/third-person.standard@1";
 
@@ -101,9 +111,9 @@ function buildUniqueIndex<T extends { id: string }>(
 }
 
 function requireNodeKind(
-  nodes: ReadonlyMap<string, WorldNodeSpecV3>,
+  nodes: ReadonlyMap<string, AuthoringWorldNode>,
   id: string,
-  kind: WorldNodeSpecV3["kind"],
+  kind: AuthoringWorldNode["kind"],
   instancePath: string,
   diagnostics: AuthoringDiagnostic[],
 ): void {
@@ -156,8 +166,8 @@ function normalizeTerrainSourceV2(
 }
 
 function normalizeNodeV2(
-  node: WorldNodeSpecV3,
-  startup: AuthoringSpecV3["startup"],
+  node: AuthoringWorldNode,
+  startup: AuthoringDocumentBase["startup"],
   finalTransformsByEntityId: Readonly<Record<string, NormalizedTransformV2>>,
   fallbackPositionMetersXYZ: readonly [number, number, number],
 ): NormalizedWorldNodeV2 {
@@ -204,7 +214,7 @@ function normalizeNodeV2(
           : undefined);
       if (spawnAnchorEntityId === undefined) {
         throw new Error(
-          `NormalizedWorldIRV3 invariant violated: Subject '${node.id}' has no spawn anchor.`,
+          `Normalized World IR invariant violated: Subject '${node.id}' has no spawn anchor.`,
         );
       }
       return { ...structuredClone(node), spawnAnchorEntityId };
@@ -251,7 +261,24 @@ export function normalizeAuthoringBaseV3(
     return { ok: false, diagnostics: schemaResult.diagnostics };
   }
 
-  const spec = schemaResult.value;
+  return normalizeValidatedAuthoringBase(schemaResult.value, options);
+}
+
+export function normalizeAuthoringBaseV4(
+  value: unknown,
+  options: NormalizeAuthoringBaseV3Options = {},
+): NormalizeAuthoringBaseV4Result {
+  const schemaResult = validateAuthoringSpecV4(value);
+  if (!schemaResult.ok || schemaResult.value === undefined) {
+    return { ok: false, diagnostics: schemaResult.diagnostics };
+  }
+  return normalizeValidatedAuthoringBase(schemaResult.value, options);
+}
+
+function normalizeValidatedAuthoringBase(
+  spec: AuthoringBaseSpec,
+  options: NormalizeAuthoringBaseV3Options,
+): NormalizeAuthoringBaseResult {
   const diagnostics: AuthoringDiagnostic[] = [];
   const subjectResourceRegistry =
     options.subjectResourceRegistry ?? builtInSubjectResourceRegistry;
@@ -291,7 +318,7 @@ export function normalizeAuthoringBaseV3(
       diagnostics,
       "AUTHORING_FEATURE_NOT_SUPPORTED",
       `/relationships/${index}`,
-      `Relationship '${relationship.type}' is not supported by AuthoringSpec V3.`,
+      `Relationship '${relationship.type}' is not supported by AuthoringSpec V${spec.schemaVersion}.`,
       { feature: "relationships", type: relationship.type },
     );
   });
@@ -300,7 +327,7 @@ export function normalizeAuthoringBaseV3(
       diagnostics,
       "AUTHORING_FEATURE_NOT_SUPPORTED",
       `/rules/${index}`,
-      `Rule '${rule.kind}' is not supported by AuthoringSpec V3.`,
+      `Rule '${rule.kind}' is not supported by AuthoringSpec V${spec.schemaVersion}.`,
       { feature: "rules", kind: rule.kind },
     );
   });
@@ -311,7 +338,7 @@ export function normalizeAuthoringBaseV3(
       diagnostics,
       "AUTHORING_CARDINALITY_INVALID",
       "/nodes",
-      `AuthoringSpec V3 requires exactly one Terrain node; received ${terrains.length}.`,
+      `AuthoringSpec V${spec.schemaVersion} requires exactly one Terrain node; received ${terrains.length}.`,
       { kind: "terrain", expected: 1, actual: terrains.length },
     );
   }
@@ -413,7 +440,7 @@ export function normalizeAuthoringBaseV3(
           diagnostics,
           "AUTHORING_RESOURCE_NOT_SUPPORTED",
           `/nodes/${index}/components/cameraRig`,
-          "AuthoringSpec V3 supports only the standard third-person Camera Rig.",
+          `AuthoringSpec V${spec.schemaVersion} supports only the standard third-person Camera Rig.`,
           { supportedResourceRefs: [SUPPORTED_CAMERA_RIG] },
         );
       }

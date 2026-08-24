@@ -11,8 +11,11 @@ import {
 import { isNil } from "lodash-es";
 
 import { sha256CanonicalJson } from "./canonical-json.js";
-import { canonicalAuthoringIdentityV3 } from "./canonical-authoring-identity.js";
-import { normalizeAuthoringBaseV3 } from "./normalize.js";
+import {
+  canonicalAuthoringIdentityV3,
+} from "./canonical-authoring-identity.js";
+import { canonicalAuthoringLayoutIdentityV4 } from "./canonical-authoring-identity-v4.js";
+import { normalizeAuthoringBaseV3, normalizeAuthoringBaseV4 } from "./normalize.js";
 import type {
   AuthoringDiagnostic,
   AuthoringResult,
@@ -24,11 +27,24 @@ import type {
 } from "./types.js";
 import type {
   AuthoringSpecV3,
-  PlacementConstraintSpecV1,
 } from "./types-v3.js";
+import type {
+  AuthoringSpecV4,
+  NormalizeAuthoringOptionsV4,
+  PlacementConstraintSpecV1 as PlacementConstraintSpecV4,
+} from "./types-v4.js";
 import { validateAuthoringSpecV3 } from "./validate-v3.js";
+import { validateAuthoringSpecV4 } from "./validate-v4.js";
+
+type LayoutAuthoringSpec = AuthoringSpecV4;
+type LayoutPlacementConstraint = PlacementConstraintSpecV4;
 
 export interface ResolveAuthoringLayoutV3Result
+  extends AuthoringResult<ResolvedLayoutInputV1> {
+  readonly resolvedSolverProfile?: ResolvedLayoutSolverProfileV1;
+}
+
+export interface ResolveAuthoringLayoutV4Result
   extends AuthoringResult<ResolvedLayoutInputV1> {
   readonly resolvedSolverProfile?: ResolvedLayoutSolverProfileV1;
 }
@@ -161,7 +177,7 @@ function halfExtents(prototype: PrimitivePrototypeSpecV2): readonly [number, num
   }
 }
 
-function constraintEntityIds(constraint: PlacementConstraintSpecV1): readonly string[] {
+function constraintEntityIds(constraint: LayoutPlacementConstraint): readonly string[] {
   switch (constraint.kind) {
     case "inside-region":
     case "outside-region":
@@ -181,7 +197,7 @@ function constraintEntityIds(constraint: PlacementConstraintSpecV1): readonly st
   }
 }
 
-function semanticReferenceDiagnostics(spec: AuthoringSpecV3): readonly AuthoringDiagnostic[] {
+function semanticReferenceDiagnostics(spec: LayoutAuthoringSpec): readonly AuthoringDiagnostic[] {
   const diagnostics: AuthoringDiagnostic[] = [];
   const nodeById = new Map(spec.nodes.map((node) => [node.id, node]));
   const regionIds = new Set(spec.spatial.regions.map((region) => region.id));
@@ -265,7 +281,9 @@ export function resolveAuthoringLayoutV3(
       diagnostics: [diagnostic("AUTHORING_LAYOUT_PROFILE_NOT_FOUND", "/layout/solverProfileRef", `Layout Solver Profile '${spec.layout.solverProfileRef}' is unavailable.`, { solverProfileRef: spec.layout.solverProfileRef })],
     };
   }
-  const referenceDiagnostics = semanticReferenceDiagnostics(spec);
+  const referenceDiagnostics = semanticReferenceDiagnostics(
+    spec as unknown as LayoutAuthoringSpec,
+  );
   if (referenceDiagnostics.length > 0) {
     return { ok: false, diagnostics: referenceDiagnostics, resolvedSolverProfile };
   }
@@ -273,7 +291,69 @@ export function resolveAuthoringLayoutV3(
   if (!normalizedBase.ok || normalizedBase.value === undefined) {
     return { ok: false, diagnostics: normalizedBase.diagnostics, resolvedSolverProfile };
   }
-  const normalized = normalizedBase.value;
+  return resolveValidatedAuthoringLayout(
+    spec as unknown as LayoutAuthoringSpec,
+    normalizedBase.value,
+    resolvedSolverProfile,
+    sha256CanonicalJson(
+      canonicalAuthoringIdentityV3(spec, normalizedBase.value),
+    ) as `sha256:${string}`,
+  );
+}
+
+export function resolveAuthoringLayoutV4(
+  value: unknown,
+  options: NormalizeAuthoringOptionsV4 = {},
+): ResolveAuthoringLayoutV4Result {
+  const schema = validateAuthoringSpecV4(value);
+  if (!schema.ok || schema.value === undefined) {
+    return { ok: false, diagnostics: schema.diagnostics };
+  }
+  const spec = schema.value;
+  let resolvedSolverProfile: ResolvedLayoutSolverProfileV1;
+  try {
+    resolvedSolverProfile = resolveLayoutSolverProfileV1(
+      spec.layout.solverProfileRef,
+    );
+  } catch {
+    return {
+      ok: false,
+      diagnostics: [diagnostic(
+        "AUTHORING_LAYOUT_PROFILE_NOT_FOUND",
+        "/layout/solverProfileRef",
+        `Layout Solver Profile '${spec.layout.solverProfileRef}' is unavailable.`,
+        { solverProfileRef: spec.layout.solverProfileRef },
+      )],
+    };
+  }
+  const referenceDiagnostics = semanticReferenceDiagnostics(spec);
+  if (referenceDiagnostics.length > 0) {
+    return { ok: false, diagnostics: referenceDiagnostics, resolvedSolverProfile };
+  }
+  const normalizedBase = normalizeAuthoringBaseV4(spec, options);
+  if (!normalizedBase.ok || normalizedBase.value === undefined) {
+    return {
+      ok: false,
+      diagnostics: normalizedBase.diagnostics,
+      resolvedSolverProfile,
+    };
+  }
+  return resolveValidatedAuthoringLayout(
+    spec,
+    normalizedBase.value,
+    resolvedSolverProfile,
+    sha256CanonicalJson(
+      canonicalAuthoringLayoutIdentityV4(spec, normalizedBase.value),
+    ) as `sha256:${string}`,
+  );
+}
+
+function resolveValidatedAuthoringLayout(
+  spec: LayoutAuthoringSpec,
+  normalized: NormalizedWorldBase,
+  resolvedSolverProfile: ResolvedLayoutSolverProfileV1,
+  authoringSpecHash: `sha256:${string}`,
+): ResolveAuthoringLayoutV3Result {
   const prototypeByRef = new Map(normalized.resources.prototypes.map((prototype) => [
     `package://prototype/${prototype.id}@${prototype.version}`,
     prototype,
@@ -347,9 +427,7 @@ export function resolveAuthoringLayoutV3(
     kind: "worldkit-resolved-layout-input",
     schemaVersion: 1,
     id: spec.id,
-    authoringSpecHash: sha256CanonicalJson(
-      canonicalAuthoringIdentityV3(spec, normalized),
-    ) as `sha256:${string}`,
+    authoringSpecHash,
     registryLockHash: normalized.resources.resourceLockHash as `sha256:${string}`,
     solverProfile: {
       solverProfileRef: resolvedSolverProfile.resourceRef,

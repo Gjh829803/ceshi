@@ -20,13 +20,13 @@ import {
   normalizeSubjectDefinitionV2,
   ResourceLockBuilderV1,
   sha256CanonicalJson,
-  type NormalizeAuthoringResultV3,
+  type NormalizeAuthoringResultV4,
 } from "./index";
 import {
-  createValidAuthoringSpec,
-  createValidPackageSubjectWorld,
+  createValidAuthoringSpecV4 as createValidAuthoringSpec,
+  createValidPackageSubjectWorldV4 as createValidPackageSubjectWorld,
   createValidRiggedPackageDefinition,
-  createValidRiggedPackageSubjectWorld,
+  createValidRiggedPackageSubjectWorldV4 as createValidRiggedPackageSubjectWorld,
 } from "./test-fixture";
 
 const SUBJECT_ASSET_REF = "worldkit://subject-asset/humanoid.golden@1";
@@ -159,7 +159,7 @@ function diagnosticForRiggedWorld(
   return result.diagnostics;
 }
 
-function packageDefinitionHash(result: NormalizeAuthoringResultV3): string {
+function packageDefinitionHash(result: NormalizeAuthoringResultV4): string {
   return result.value!.resources.subjectDefinitions.find(
     (definition) => definition.source === "package",
   )!.subjectDefinitionHash;
@@ -175,7 +175,7 @@ describe("ResourceLockBuilderV1 canonical ordering", () => {
     const build = (orderedRefs: readonly string[]) => {
       const builder = new ResourceLockBuilderV1();
       const diagnostics: Array<
-        NormalizeAuthoringResultV3["diagnostics"][number]
+        NormalizeAuthoringResultV4["diagnostics"][number]
       > = [];
       for (const resourceRef of orderedRefs) {
         builder.addPackageSubjectDefinition(
@@ -292,7 +292,7 @@ describe("Package Subject Definition normalization", () => {
       "sha256:af999810bb6087b623c3ded79f3edbd74f2ad50859e0114e74ef29b34e7fb2c8",
     );
     expect(result.normalizedWorldIrHash).toBe(
-      "sha256:4b7a68b3c1115d4050efe58fc49504a03296b3b6c2db468c479f72e248799263",
+      "sha256:9b61a0d9c5f0670fbe6660fb06f07c48214b5cb710fcc7b6e085ac3dccdb1f01",
     );
   });
 

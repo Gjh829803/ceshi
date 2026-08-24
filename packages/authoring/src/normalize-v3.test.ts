@@ -4,10 +4,10 @@ import {
   normalizeAuthoringSpecV3,
   type AuthoringSpecV3,
 } from "./index.js";
-import { createValidAuthoringSpec } from "./test-fixture.js";
+import { createValidAuthoringSpecV3 } from "./test-fixture.js";
 
 function world(solved: boolean): AuthoringSpecV3 {
-  const base = createValidAuthoringSpec();
+  const base = createValidAuthoringSpecV3();
   if (!solved) return base;
   return {
     ...base,

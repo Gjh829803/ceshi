@@ -1,17 +1,16 @@
 import { canonicalExecutionResourceLockEntriesV1 } from "@whitebox-world/runtime-contracts";
 
 import { sha256CanonicalJson } from "./canonical-json.js";
+import type { NormalizedWorldBase, NormalizedWorldResourcesV2 } from "./types.js";
 import type {
-  NormalizedWorldBase,
-  NormalizedWorldResourcesV2,
-} from "./types.js";
-import type { AuthoringSpecV3 } from "./types-v3.js";
-import type {
+  AuthoringSpecV4,
   NormalizedWorldResourcesV4,
 } from "./types-v4.js";
 
-function buildCanonicalAuthoringIdentityV3(
-  spec: AuthoringSpecV3,
+const TRAVERSAL_SURFACE_PROFILE_RESOURCE_KIND = "traversal-surface-profile";
+
+function canonicalIdentityBaseV4(
+  spec: AuthoringSpecV4,
   normalizedBase: NormalizedWorldBase,
 ) {
   return {
@@ -96,14 +95,7 @@ function buildCanonicalAuthoringIdentityV3(
   };
 }
 
-export type CanonicalAuthoringIdentityV3 = ReturnType<
-  typeof buildCanonicalAuthoringIdentityV3
->;
-
-
-const TRAVERSAL_SURFACE_PROFILE_RESOURCE_KIND = "traversal-surface-profile";
-
-function projectNormalizedWorldResourcesToLayoutIdentity(
+export function projectNormalizedWorldResourcesToLayoutIdentityV4(
   resources: NormalizedWorldResourcesV4,
 ): NormalizedWorldResourcesV2 {
   const prototypes = resources.prototypes.map((prototype) => {
@@ -126,16 +118,36 @@ function projectNormalizedWorldResourcesToLayoutIdentity(
   };
 }
 
-/** @deprecated Retained only until WorldPackage and Validation migrate in UCCB-60. */
-export function projectNormalizedWorldResourcesToV3LayoutIdentity(
-  resources: NormalizedWorldResourcesV4,
-): NormalizedWorldResourcesV2 {
-  return projectNormalizedWorldResourcesToLayoutIdentity(resources);
+export function canonicalAuthoringIdentityV4(
+  spec: AuthoringSpecV4,
+  normalizedBase: NormalizedWorldBase,
+) {
+  const baseIdentity = canonicalIdentityBaseV4(spec, normalizedBase);
+  return {
+    ...baseIdentity,
+    spatial: {
+      ...baseIdentity.spatial,
+      traversalAreas: [...spec.spatial.traversalAreas]
+        .sort((left, right) => left.id.localeCompare(right.id))
+        .map((row) => structuredClone(row)),
+    },
+    constraints: {
+      placements: baseIdentity.constraints.placements,
+      connectivity: [...spec.constraints.connectivity]
+        .sort((left, right) => left.id.localeCompare(right.id))
+        .map((row) => structuredClone(row)),
+    },
+  };
 }
 
-export function canonicalAuthoringIdentityV3(
-  spec: AuthoringSpecV3,
+export function canonicalAuthoringLayoutIdentityV4(
+  spec: AuthoringSpecV4,
   normalizedBase: NormalizedWorldBase,
-): CanonicalAuthoringIdentityV3 {
-  return buildCanonicalAuthoringIdentityV3(spec, normalizedBase);
+) {
+  return canonicalIdentityBaseV4(spec, {
+    ...normalizedBase,
+    resources: projectNormalizedWorldResourcesToLayoutIdentityV4(
+      normalizedBase.resources as NormalizedWorldResourcesV4,
+    ),
+  });
 }

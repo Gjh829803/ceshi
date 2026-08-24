@@ -10,7 +10,15 @@ import {
 } from "./index.js";
 
 function validV3(): AuthoringSpecV3 {
-  const source = structuredClone(basicWorldV3) as unknown as AuthoringSpecV3;
+  const current = structuredClone(basicWorldV3);
+  const { traversalAreas: _traversalAreas, ...spatial } = current.spatial;
+  const { connectivity: _connectivity, ...constraints } = current.constraints;
+  const source = {
+    ...current,
+    schemaVersion: 3,
+    spatial,
+    constraints,
+  } as unknown as AuthoringSpecV3;
   const nodes = source.nodes.map((node) => {
     if (node.id === "tower") {
       if (node.kind !== "object") throw new Error("Tower fixture must be an Object.");

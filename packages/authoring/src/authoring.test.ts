@@ -7,15 +7,15 @@ import {
   validatePackageSubjectDefinition,
 } from "./index";
 import {
-  createValidAuthoringSpec,
-  createValidPackageSubjectWorld,
+  createValidAuthoringSpecV4 as createValidAuthoringSpec,
+  createValidPackageSubjectWorldV4 as createValidPackageSubjectWorld,
   createValidRiggedPackageDefinition,
 } from "./test-fixture";
 
 const validSpec = createValidAuthoringSpec();
 
-describe("AuthoringSpecV3", () => {
-  it("strictly parses a valid canonical V3 document", () => {
+describe("current AuthoringSpec", () => {
+  it("strictly parses a valid canonical V4 document", () => {
     const result = parseAuthoringSpecJson(JSON.stringify(validSpec));
 
     expect(result.ok).toBe(true);
@@ -71,7 +71,7 @@ describe("AuthoringSpecV3", () => {
           severity: "error",
           code: "AUTHORING_SCHEMA_VERSION_NOT_SUPPORTED",
           instancePath: "/schemaVersion",
-          details: { supportedSchemaVersions: [3] },
+          details: { supportedSchemaVersions: [4] },
         },
       ],
     });
@@ -88,13 +88,13 @@ describe("AuthoringSpecV3", () => {
         {
           code: "AUTHORING_SCHEMA_VERSION_NOT_SUPPORTED",
           instancePath: "/schemaVersion",
-          details: { supportedSchemaVersions: [3] },
+          details: { supportedSchemaVersions: [4] },
         },
       ],
     });
   });
 
-  it("rejects unknown V3 root fields and the removed legacy subject reference field", () => {
+  it("rejects unknown V4 root fields and the removed legacy subject reference field", () => {
     const subject = validSpec.nodes.find((node) => node.kind === "subject");
     const legacySubjectReferenceField = ["kit", "Ref"].join("");
     expect(subject).toBeDefined();

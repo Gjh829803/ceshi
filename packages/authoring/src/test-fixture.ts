@@ -2,8 +2,9 @@ import type {
   PackageSubjectDefinitionV1,
 } from "./types";
 import type { AuthoringSpecV3 } from "./types-v3.js";
+import type { AuthoringSpecV4 } from "./types-v4.js";
 
-export function createValidAuthoringSpec(): AuthoringSpecV3 {
+export function createValidAuthoringSpecV3(): AuthoringSpecV3 {
   return {
     kind: "worldkit-authoring-spec",
     schemaVersion: 3,
@@ -121,6 +122,26 @@ export function createValidAuthoringSpec(): AuthoringSpecV3 {
       cameraEntityId: "camera-main",
     },
     constraints: { placements: [] },
+  };
+}
+
+export function createValidAuthoringSpec(): AuthoringSpecV3 {
+  return createValidAuthoringSpecV3();
+}
+
+export function createValidAuthoringSpecV4(): AuthoringSpecV4 {
+  const source = createValidAuthoringSpecV3();
+  return {
+    ...source,
+    schemaVersion: 4,
+    spatial: {
+      ...source.spatial,
+      traversalAreas: [],
+    },
+    constraints: {
+      placements: source.constraints.placements,
+      connectivity: [],
+    },
   };
 }
 
@@ -330,6 +351,19 @@ export function createValidRiggedPackageDefinition(): PackageSubjectDefinitionV1
   };
 }
 
+export function createValidPackageSubjectWorldV4(options: {
+  reverseDefinitionCollections?: boolean;
+  bodyWidthMeters?: number;
+} = {}): AuthoringSpecV4 {
+  const source = createValidPackageSubjectWorld(options);
+  return {
+    ...source,
+    schemaVersion: 4,
+    spatial: { ...source.spatial, traversalAreas: [] },
+    constraints: { ...source.constraints, connectivity: [] },
+  };
+}
+
 export function createValidRiggedPackageSubjectWorld(): AuthoringSpecV3 {
   const base = createValidAuthoringSpec();
   return {
@@ -347,5 +381,15 @@ export function createValidRiggedPackageSubjectWorld(): AuthoringSpecV3 {
           }
         : node,
     ),
+  };
+}
+
+export function createValidRiggedPackageSubjectWorldV4(): AuthoringSpecV4 {
+  const source = createValidRiggedPackageSubjectWorld();
+  return {
+    ...source,
+    schemaVersion: 4,
+    spatial: { ...source.spatial, traversalAreas: [] },
+    constraints: { ...source.constraints, connectivity: [] },
   };
 }

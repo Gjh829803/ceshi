@@ -7,8 +7,8 @@ import type {
   AuthoringResult,
   PackageSubjectDefinitionV1,
 } from "./types";
-import type { AuthoringSpecV3 } from "./types-v3.js";
-import { validateAuthoringSpecV3 } from "./validate-v3.js";
+import type { AuthoringSpecV4 } from "./types-v4.js";
+import { validateAuthoringSpecV4 } from "./validate-v4.js";
 
 const ajv = new Ajv2020({
   allErrors: true,
@@ -97,8 +97,8 @@ function diagnosticFor(error: ErrorObject): AuthoringDiagnostic {
   };
 }
 
-export function validateAuthoringSpec(value: unknown): AuthoringResult<AuthoringSpecV3> {
-  return validateAuthoringSpecV3(value);
+export function validateAuthoringSpec(value: unknown): AuthoringResult<AuthoringSpecV4> {
+  return validateAuthoringSpecV4(value);
 }
 
 export function validatePackageSubjectDefinition(
