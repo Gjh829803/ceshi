@@ -55,6 +55,7 @@
     "@whitebox-world/authoring": "workspace:*",
     "@whitebox-world/compiler": "workspace:*",
     "@whitebox-world/control-capture": "workspace:*",
+    "@whitebox-world/gameplay": "workspace:*",
     "@whitebox-world/gameplay-contracts": "workspace:*",
     "@whitebox-world/protocol": "workspace:*",
     "@whitebox-world/runtime-babylon": "workspace:*",

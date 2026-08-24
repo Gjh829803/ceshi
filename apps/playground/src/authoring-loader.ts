@@ -11,13 +11,9 @@ import {
   type NormalizedWorldIRV4,
 } from "@whitebox-world/authoring";
 import { compileWorld, compileWorldV5 } from "@whitebox-world/compiler";
-import {
-  CONTROL_TRANSITION_CAPABILITY_REF,
-  createCoreControlFeatureFactoryV1,
-} from "@whitebox-world/gameplay";
+import { createCoreGameplayBootstrapV1 } from "@whitebox-world/gameplay";
 import {
   createGameplayBootstrapResourceLockEntryV1,
-  createGameplayBootstrapV1,
   type GameplayBootstrapV1,
 } from "@whitebox-world/gameplay-contracts";
 import {
@@ -36,7 +32,7 @@ import {
 } from "@whitebox-world/runtime-contracts";
 import type { RuntimeWorldConfigurationV1 } from "@whitebox-world/runtime-host";
 import { createWorldPackageBuildReceiptV1 } from "@whitebox-world/world-package";
-import { isNil, uniq } from "lodash-es";
+import { isNil } from "lodash-es";
 
 import {
   PLAYGROUND_SUBJECT_ASSET_PACKAGE_PATH_BY_REF_V1,
@@ -114,7 +110,6 @@ const CAPABILITY_PLAYGROUND_MINIMUM_RESOURCE_BUDGET = Object.freeze({
 function createRuntimeGameplayBootstrap(
   normalizedWorldIr: NormalizedWorldIRV4,
 ): GameplayBootstrapV1 {
-  const coreControlManifest = createCoreControlFeatureFactoryV1().manifest;
   const entityDescriptors = normalizedWorldIr.nodes
     .filter((node) => node.kind === "subject")
     .map((node) => {
@@ -133,22 +128,10 @@ function createRuntimeGameplayBootstrap(
         capabilityRefs: definition.capabilityRefs,
       };
     });
-  return createGameplayBootstrapV1({
-    kind: "gameplay-bootstrap",
-    id: `${normalizedWorldIr.id}.gameplay`,
-    version: 1,
-    resourceRef:
-      `worldkit://gameplay-bootstrap/${normalizedWorldIr.id}.${normalizedWorldIr.seed}@1`,
+  return createCoreGameplayBootstrapV1({
+    worldId: normalizedWorldIr.id,
+    worldSeed: normalizedWorldIr.seed,
     entityDescriptors,
-    featureResourceLocks: [{
-      resourceRef: coreControlManifest.resourceRef,
-      contentHash: coreControlManifest.contentHash,
-    }],
-    semanticActionDefinitions: [],
-    availableCapabilityRefs: uniq([
-      ...entityDescriptors.flatMap((descriptor) => descriptor.capabilityRefs),
-      CONTROL_TRANSITION_CAPABILITY_REF,
-    ]),
   });
 }
 

@@ -13,9 +13,9 @@ import {
   type NormalizedWorldIRV4,
 } from "@whitebox-world/authoring";
 import { compileWorld, compileWorldV5 } from "@whitebox-world/compiler";
+import { createCoreGameplayBootstrapV1 } from "@whitebox-world/gameplay";
 import {
   createGameplayBootstrapResourceLockEntryV1,
-  createGameplayBootstrapV1,
   type GameplayBootstrapV1,
 } from "@whitebox-world/gameplay-contracts";
 import type {
@@ -23,7 +23,7 @@ import type {
   ExecutionPlanV4,
   ExecutionPlanV5,
 } from "@whitebox-world/runtime-contracts";
-import { isNil, uniq } from "lodash-es";
+import { isNil } from "lodash-es";
 
 export interface CliDiagnostic {
   severity: "info" | "warning" | "error";
@@ -70,7 +70,7 @@ export interface WorldkitRoutePipelineSuccess {
   executionPlanHash: string;
 }
 
-function createDataOnlyGameplayBootstrap(
+function createRuntimeGameplayBootstrap(
   normalizedWorldIr: NormalizedWorldIRV4,
 ): GameplayBootstrapV1 {
   const entityDescriptors = normalizedWorldIr.nodes
@@ -91,18 +91,10 @@ function createDataOnlyGameplayBootstrap(
         capabilityRefs: definition.capabilityRefs,
       };
     });
-  return createGameplayBootstrapV1({
-    kind: "gameplay-bootstrap",
-    id: `${normalizedWorldIr.id}.gameplay`,
-    version: 1,
-    resourceRef:
-      `worldkit://gameplay-bootstrap/${normalizedWorldIr.id}.${normalizedWorldIr.seed}@1`,
+  return createCoreGameplayBootstrapV1({
+    worldId: normalizedWorldIr.id,
+    worldSeed: normalizedWorldIr.seed,
     entityDescriptors,
-    featureResourceLocks: [],
-    semanticActionDefinitions: [],
-    availableCapabilityRefs: uniq(
-      entityDescriptors.flatMap((descriptor) => descriptor.capabilityRefs),
-    ),
   });
 }
 
@@ -206,7 +198,7 @@ export async function loadWorldkitRoutePipeline(
     normalized.layoutSolveReportHash === undefined) {
     return { ok: false, exitCode: 2, diagnostics: normalized.diagnostics };
   }
-  const gameplayBootstrap = createDataOnlyGameplayBootstrap(normalized.value);
+  const gameplayBootstrap = createRuntimeGameplayBootstrap(normalized.value);
   const compiled = compileWorldV5({
     normalizedWorldIr: normalized.value,
     normalizedWorldIrHash: normalized.normalizedWorldIrHash,

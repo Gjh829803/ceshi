@@ -34,6 +34,9 @@ importers:
       '@whitebox-world/control-capture':
         specifier: workspace:*
         version: link:packages/control-capture
+      '@whitebox-world/gameplay':
+        specifier: workspace:*
+        version: link:packages/gameplay
       '@whitebox-world/gameplay-contracts':
         specifier: workspace:*
         version: link:packages/gameplay-contracts

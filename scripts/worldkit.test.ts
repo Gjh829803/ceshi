@@ -21,11 +21,16 @@ import {
   createValidRiggedPackageDefinition,
 } from "../packages/authoring/src/test-fixture";
 import type { AuthoringSpecV4 } from "@whitebox-world/authoring";
+import {
+  CONTROL_TRANSITION_CAPABILITY_REF,
+  createCoreControlFeatureFactoryV1,
+} from "@whitebox-world/gameplay";
 
 import {
   loadWorldkitPipeline,
   loadWorldkitRoutePipeline,
 } from "./lib/worldkit-pipeline";
+import { loadAuthoringScene } from "../apps/playground/src/authoring-loader";
 import {
   RouteValidationRunnerInfrastructureErrorV1,
   runTrustedRouteValidationV1,
@@ -147,6 +152,39 @@ describe("worldkit CLI", () => {
       executionPlan: { schemaVersion: 5 },
     });
     expect(legacy).toMatchObject({ ok: false, exitCode: 2 });
+  });
+
+  it("locks the authoritative core-control feature into Route V5 plans", async () => {
+    const directory = await createTemporaryDirectory();
+    const inputPath = await writeRouteWorld(directory);
+    const route = await loadWorldkitRoutePipeline(inputPath);
+    if (!route.ok) {
+      throw new Error(JSON.stringify(route.diagnostics));
+    }
+    const coreControlManifest = createCoreControlFeatureFactoryV1().manifest;
+    const sourceText = await readFile(inputPath, "utf8");
+    const loaded = await loadAuthoringScene(async () => new Response(sourceText, {
+      status: 200,
+      headers: { "content-type": "application/json" },
+    }));
+
+    expect(route.gameplayBootstrap.featureResourceLocks).toEqual([{
+      resourceRef: coreControlManifest.resourceRef,
+      contentHash: coreControlManifest.contentHash,
+    }]);
+    expect(route.gameplayBootstrap.availableCapabilityRefs).toContain(
+      CONTROL_TRANSITION_CAPABILITY_REF,
+    );
+    expect(route.executionPlan.resourceLockEntries).toContainEqual({
+      resourceRef: route.gameplayBootstrap.resourceRef,
+      resourceKind: "gameplay-bootstrap",
+      resolvedVersion: "1",
+      contentHash: route.gameplayBootstrap.contentHash,
+    });
+    expect(loaded.runtimeWorldConfiguration?.gameplayBootstrap).toEqual(
+      route.gameplayBootstrap,
+    );
+    expect(loaded.executionPlanHash).toBe(route.executionPlanHash);
   });
 
   it("parses an explicit dependency refresh for local Runtime startup", () => {
