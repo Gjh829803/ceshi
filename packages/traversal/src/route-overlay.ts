@@ -16,30 +16,11 @@ type UnknownRecord = Record<string, unknown>;
 type Vec2 = readonly [number, number];
 type Vec3 = readonly [number, number, number];
 
-export interface RouteOverlayColliderIdentityV1 {
+export interface RouteOverlayColliderIdentityV2 {
   readonly entityId: string;
   readonly logicalSubshapeId: string;
   readonly colliderSubshapeId: string;
   readonly colliderHash: Sha256Hash;
-}
-
-export interface RouteOverlayV1 {
-  readonly kind: "route-overlay";
-  readonly schemaVersion: 1;
-  readonly constraintId: string;
-  readonly routeId: string;
-  readonly traversingEntityId: string;
-  readonly startAnchor: RouteBuildAnchorV1;
-  readonly destinationAnchor: RouteBuildAnchorV1;
-  readonly traversalSurfaceIdentity: TraversalSurfaceIdentityV1;
-  readonly resolvedTraversalLockHash: Sha256Hash;
-  readonly traversalGraphHash: Sha256Hash;
-  readonly routePathReceiptHash: Sha256Hash;
-  readonly orderedTraversalNodeIds: readonly string[];
-  readonly orderedTraversalEdgeIds: readonly string[];
-  readonly orderedPathPositionsMetersXYZ: readonly Vec3[];
-  readonly hardRibbon: RouteHardRibbonV1;
-  readonly blockingColliderIdentities: readonly RouteOverlayColliderIdentityV1[];
 }
 
 const SHA256_PATTERN = /^sha256:[a-f0-9]{64}$/;
@@ -51,7 +32,7 @@ const OVERLAY_FIELDS = [
   "traversingEntityId",
   "startAnchor",
   "destinationAnchor",
-  "traversalSurfaceIdentity",
+  "orderedTraversalSurfaceIdentities",
   "resolvedTraversalLockHash",
   "traversalGraphHash",
   "routePathReceiptHash",
@@ -59,7 +40,7 @@ const OVERLAY_FIELDS = [
   "orderedTraversalEdgeIds",
   "orderedPathPositionsMetersXYZ",
   "hardRibbon",
-  "blockingColliderIdentities",
+  "staticColliderIdentities",
 ] as const;
 const ANCHOR_FIELDS = ["entityId", "positionMetersXYZ"] as const;
 const HARD_RIBBON_FIELDS = [
@@ -246,64 +227,6 @@ function canonicalHardRibbon(value: unknown): RouteHardRibbonV1 {
   };
 }
 
-function canonicalBlockingColliderIdentities(
-  value: unknown,
-  traversalSurfaceColliderSubshapeId: string,
-): readonly RouteOverlayColliderIdentityV1[] {
-  const path = "blockingColliderIdentities";
-  if (!Array.isArray(value)) {
-    fail(path, "must be an array");
-  }
-  let previousColliderSubshapeId: string | undefined;
-  return value.map((entry, index) => {
-    const entryPath = `${path}/${index}`;
-    const record = requireExactRecord(
-      entry,
-      COLLIDER_IDENTITY_FIELDS,
-      entryPath,
-    );
-    const entityId = requireString(record.entityId, `${entryPath}/entityId`);
-    const logicalSubshapeId = requireString(
-      record.logicalSubshapeId,
-      `${entryPath}/logicalSubshapeId`,
-    );
-    const colliderSubshapeId = requireString(
-      record.colliderSubshapeId,
-      `${entryPath}/colliderSubshapeId`,
-    );
-    if (
-      colliderSubshapeId !== deriveColliderSubshapeIdV1(
-        entityId,
-        logicalSubshapeId,
-      )
-    ) {
-      fail(
-        `${entryPath}/colliderSubshapeId`,
-        "must match the canonical Entity and logical Subshape identity",
-      );
-    }
-    if (
-      !isNil(previousColliderSubshapeId) &&
-      colliderSubshapeId <= previousColliderSubshapeId
-    ) {
-      fail(path, "must be strictly sorted by colliderSubshapeId");
-    }
-    previousColliderSubshapeId = colliderSubshapeId;
-    if (colliderSubshapeId === traversalSurfaceColliderSubshapeId) {
-      fail(
-        `${entryPath}/colliderSubshapeId`,
-        "must not duplicate the Traversal Surface colliderSubshapeId",
-      );
-    }
-    return {
-      entityId,
-      logicalSubshapeId,
-      colliderSubshapeId,
-      colliderHash: requireHash(record.colliderHash, `${entryPath}/colliderHash`),
-    };
-  });
-}
-
 function deepFreeze<T>(value: T): T {
   if (isNil(value) || typeof value !== "object" || Object.isFrozen(value)) {
     return value;
@@ -314,116 +237,26 @@ function deepFreeze<T>(value: T): T {
   return Object.freeze(value);
 }
 
-export function canonicalRouteOverlayV1(value: unknown): RouteOverlayV1 {
-  const record = requireExactRecord(value, OVERLAY_FIELDS, "");
-  if (record.kind !== "route-overlay") {
-    fail("kind", "must be 'route-overlay'");
-  }
-  if (record.schemaVersion !== 1) {
-    fail("schemaVersion", "must be 1");
-  }
 
-  const routeId = requireString(record.routeId, "routeId");
-  const startAnchor = canonicalAnchor(record.startAnchor, "startAnchor");
-  const destinationAnchor = canonicalAnchor(
-    record.destinationAnchor,
-    "destinationAnchor",
-  );
-  if (startAnchor.entityId === destinationAnchor.entityId) {
-    fail("destinationAnchor/entityId", "must differ from startAnchor/entityId");
-  }
-
-  let traversalSurfaceIdentity: TraversalSurfaceIdentityV1;
-  try {
-    traversalSurfaceIdentity = assertTraversalSurfaceIdentityV1(
-      record.traversalSurfaceIdentity,
-    );
-  } catch {
-    fail(
-      "traversalSurfaceIdentity",
-      "must be a canonical Traversal Surface identity",
-    );
-  }
-
-  const orderedTraversalNodeIds = requireUniqueStringArray(
-    record.orderedTraversalNodeIds,
-    "orderedTraversalNodeIds",
-  );
-  if (orderedTraversalNodeIds.length === 0) {
-    fail("orderedTraversalNodeIds", "must contain at least one Node id");
-  }
-  const orderedTraversalEdgeIds = requireUniqueStringArray(
-    record.orderedTraversalEdgeIds,
-    "orderedTraversalEdgeIds",
-  );
-  if (orderedTraversalEdgeIds.length !== orderedTraversalNodeIds.length - 1) {
-    fail(
-      "orderedTraversalEdgeIds",
-      "length must equal orderedTraversalNodeIds.length - 1",
-    );
-  }
-
-  const hardRibbon = canonicalHardRibbon(record.hardRibbon);
-  if (hardRibbon.routeId !== routeId) {
-    fail("hardRibbon/routeId", "must match routeId");
-  }
-
-  return deepFreeze({
-    kind: "route-overlay",
-    schemaVersion: 1,
-    constraintId: requireString(record.constraintId, "constraintId"),
-    routeId,
-    traversingEntityId: requireString(
-      record.traversingEntityId,
-      "traversingEntityId",
-    ),
-    startAnchor,
-    destinationAnchor,
-    traversalSurfaceIdentity,
-    resolvedTraversalLockHash: requireHash(
-      record.resolvedTraversalLockHash,
-      "resolvedTraversalLockHash",
-    ),
-    traversalGraphHash: requireHash(
-      record.traversalGraphHash,
-      "traversalGraphHash",
-    ),
-    routePathReceiptHash: requireHash(
-      record.routePathReceiptHash,
-      "routePathReceiptHash",
-    ),
-    orderedTraversalNodeIds,
-    orderedTraversalEdgeIds,
-    orderedPathPositionsMetersXYZ: requireDistinctAdjacentVec3Array(
-      record.orderedPathPositionsMetersXYZ,
-      "orderedPathPositionsMetersXYZ",
-    ),
-    hardRibbon,
-    blockingColliderIdentities: canonicalBlockingColliderIdentities(
-      record.blockingColliderIdentities,
-      traversalSurfaceIdentity.colliderSubshapeId,
-    ),
-  });
-}
-
-export function hashRouteOverlayV1(value: unknown): Sha256Hash {
-  return sha256CanonicalJson(canonicalRouteOverlayV1(value)) as Sha256Hash;
-}
-
-const OVERLAY_FIELDS_V2 = OVERLAY_FIELDS.map((field) => {
-  if (field === "traversalSurfaceIdentity") return "orderedTraversalSurfaceIdentities";
-  if (field === "blockingColliderIdentities") return "staticColliderIdentities";
-  return field;
-});
-
-export interface RouteOverlayV2 extends Omit<
-  RouteOverlayV1,
-  "schemaVersion" | "traversalSurfaceIdentity" | "blockingColliderIdentities"
-> {
+export interface RouteOverlayV2 {
+  readonly kind: "route-overlay";
   readonly schemaVersion: 2;
+  readonly constraintId: string;
+  readonly routeId: string;
+  readonly traversingEntityId: string;
+  readonly startAnchor: RouteBuildAnchorV1;
+  readonly destinationAnchor: RouteBuildAnchorV1;
   readonly orderedTraversalSurfaceIdentities: readonly TraversalSurfaceIdentityV1[];
-  readonly staticColliderIdentities: readonly RouteOverlayColliderIdentityV1[];
+  readonly resolvedTraversalLockHash: Sha256Hash;
+  readonly traversalGraphHash: Sha256Hash;
+  readonly routePathReceiptHash: Sha256Hash;
+  readonly orderedTraversalNodeIds: readonly string[];
+  readonly orderedTraversalEdgeIds: readonly string[];
+  readonly orderedPathPositionsMetersXYZ: readonly Vec3[];
+  readonly hardRibbon: RouteHardRibbonV1;
+  readonly staticColliderIdentities: readonly RouteOverlayColliderIdentityV2[];
 }
+
 
 export interface AssertRouteOverlayContextInputV2 {
   readonly overlay: unknown;
@@ -458,7 +291,7 @@ function canonicalOrderedOverlayIdentities(
 
 function canonicalStaticColliderIdentities(
   value: unknown,
-): readonly RouteOverlayColliderIdentityV1[] {
+): readonly RouteOverlayColliderIdentityV2[] {
   const path = "staticColliderIdentities";
   if (!Array.isArray(value)) {
     fail(path, "must be an array");
@@ -508,7 +341,7 @@ function canonicalStaticColliderIdentities(
 }
 
 export function canonicalRouteOverlayV2(value: unknown): RouteOverlayV2 {
-  const record = requireExactRecord(value, OVERLAY_FIELDS_V2, "");
+  const record = requireExactRecord(value, OVERLAY_FIELDS, "");
   if (record.kind !== "route-overlay") {
     fail("kind", "must be 'route-overlay'");
   }

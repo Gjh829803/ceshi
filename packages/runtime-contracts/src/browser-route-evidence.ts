@@ -1,24 +1,14 @@
 import {
-  assertRouteRuntimeProbeReceiptContextV1,
   assertRouteRuntimeProbeReceiptContextV2,
-  canonicalRouteOverlayV1,
   canonicalRouteOverlayV2,
-  canonicalRoutePathReceiptV1,
   canonicalRoutePathReceiptV2,
-  canonicalRouteRuntimeProbeReceiptV1,
   canonicalRouteRuntimeProbeReceiptV2,
-  hashRouteOverlayV1,
   hashRouteOverlayV2,
-  hashRoutePathReceiptV1,
   hashRoutePathReceiptV2,
-  hashRouteRuntimeProbeReceiptV1,
   hashRouteRuntimeProbeReceiptV2,
   resolveTraversalDriverProfileV1,
-  type RouteOverlayV1,
   type RouteOverlayV2,
-  type RoutePathReceiptV1,
   type RoutePathReceiptV2,
-  type RouteRuntimeProbeReceiptV1,
   type RouteRuntimeProbeReceiptV2,
 } from "@whitebox-world/traversal";
 import { isEqual, isNil, isPlainObject } from "lodash-es";
@@ -89,34 +79,6 @@ export interface RouteEvidenceSummaryV1 extends RouteEvidenceSelectorV1 {
   readonly routeOverlayStatus: "available" | "unavailable";
 }
 
-export interface WorldkitBrowserRouteEvidenceProjectionV1 {
-  readonly selector: RouteEvidenceSelectorV1;
-  readonly summary: RouteEvidenceSummaryV1;
-  readonly routePathReceipt?: RoutePathReceiptV1;
-  readonly routePathReceiptHash?: Sha256HashV1;
-  readonly routeRuntimeProbeReceipt?: RouteRuntimeProbeReceiptV1;
-  readonly routeRuntimeProbeReceiptHash?: Sha256HashV1;
-  readonly routeOverlay?: RouteOverlayV1;
-  readonly routeOverlayHash?: Sha256HashV1;
-}
-
-export interface WorldkitBrowserRouteEvidencePublicationV1 {
-  readonly kind: "worldkit-browser-route-evidence-publication";
-  readonly schemaVersion: 1;
-  readonly worldPackageRootHash: Sha256HashV1;
-  readonly authoringSpecHash: Sha256HashV1;
-  readonly normalizedWorldIrHash: Sha256HashV1;
-  readonly executionPlanHash: Sha256HashV1;
-  readonly resourceLockHash: Sha256HashV1;
-  readonly layoutSolveReportHash: Sha256HashV1;
-  readonly validationReportHash: Sha256HashV1;
-  readonly routeValidationSetReceiptHash: Sha256HashV1;
-  readonly validationProfileRef: string;
-  readonly validationProfileResolvedVersion: string;
-  readonly validationProfileHash: Sha256HashV1;
-  readonly routes: readonly WorldkitBrowserRouteEvidenceProjectionV1[];
-}
-
 export type RouteEvidenceUnavailableReasonV1 =
   | "route-evidence-not-loaded"
   | "route-not-found"
@@ -142,34 +104,9 @@ export interface RouteSummaryAvailableResultV1
   readonly summary: RouteEvidenceSummaryV1;
 }
 
-export interface RoutePathReceiptAvailableResultV1
-  extends RouteEvidenceAvailableResultBaseV1 {
-  readonly routePathReceipt: RoutePathReceiptV1;
-}
-
-export interface RouteRuntimeProbeReceiptAvailableResultV1
-  extends RouteEvidenceAvailableResultBaseV1 {
-  readonly routeRuntimeProbeReceipt: RouteRuntimeProbeReceiptV1;
-}
-
-export interface RouteOverlayAvailableResultV1
-  extends RouteEvidenceAvailableResultBaseV1 {
-  readonly routeOverlay: RouteOverlayV1;
-}
-
 export type RouteSummaryQueryResultV1 =
   | RouteSummaryAvailableResultV1
   | RouteEvidenceUnavailableResultV1;
-export type RoutePathReceiptQueryResultV1 =
-  | RoutePathReceiptAvailableResultV1
-  | RouteEvidenceUnavailableResultV1;
-export type RouteRuntimeProbeReceiptQueryResultV1 =
-  | RouteRuntimeProbeReceiptAvailableResultV1
-  | RouteEvidenceUnavailableResultV1;
-export type RouteOverlayQueryResultV1 =
-  | RouteOverlayAvailableResultV1
-  | RouteEvidenceUnavailableResultV1;
-
 export interface RoutePathReceiptAvailableResultV2
   extends RouteEvidenceAvailableResultBaseV1 {
   readonly routePathReceipt: RoutePathReceiptV2;
@@ -363,201 +300,6 @@ function requireOptionalPair(
   const hasHash = Object.hasOwn(record, hashField);
   if (hasValue !== hasHash) publicationInvalid();
   return hasValue;
-}
-
-function canonicalProjection(
-  value: unknown,
-  publication: Readonly<{
-    authoringSpecHash: Sha256HashV1;
-    executionPlanHash: Sha256HashV1;
-    resourceLockHash: Sha256HashV1;
-    layoutSolveReportHash: Sha256HashV1;
-    validationProfileRef: string;
-    validationProfileResolvedVersion: string;
-    validationProfileHash: Sha256HashV1;
-  }>,
-): WorldkitBrowserRouteEvidenceProjectionV1 {
-  const record = requireRecord(value);
-  requireExactFields(record, ["selector", "summary"], PROJECTION_FIELDS.slice(2));
-  const selector = canonicalSelector(record.selector);
-  const summary = canonicalSummary(record.summary);
-  requireEqual(
-    { constraintId: summary.constraintId, routeId: summary.routeId },
-    selector,
-  );
-
-  const hasPath = requireOptionalPair(
-    record,
-    "routePathReceipt",
-    "routePathReceiptHash",
-  );
-  const hasProbe = requireOptionalPair(
-    record,
-    "routeRuntimeProbeReceipt",
-    "routeRuntimeProbeReceiptHash",
-  );
-  const hasOverlay = requireOptionalPair(
-    record,
-    "routeOverlay",
-    "routeOverlayHash",
-  );
-  if ((hasProbe || hasOverlay) && !hasPath) publicationInvalid();
-
-  let path: RoutePathReceiptV1 | undefined;
-  let pathHash: Sha256HashV1 | undefined;
-  if (hasPath) {
-    path = canonicalRoutePathReceiptV1(record.routePathReceipt);
-    pathHash = requireHash(record.routePathReceiptHash);
-    requireEqual(pathHash, hashRoutePathReceiptV1(path));
-    requireEqual(
-      { constraintId: path.constraintId, routeId: path.routeId },
-      selector,
-    );
-    requireEqual(path.authoringSpecHash, publication.authoringSpecHash);
-    requireEqual(path.layoutSolveReportHash, publication.layoutSolveReportHash);
-    requireEqual(path.resourceLockHash, publication.resourceLockHash);
-    requireEqual(summary.traversingEntityId, path.traversingEntityId);
-    requireEqual(summary.startAnchorEntityId, path.startAnchorEntityId);
-    requireEqual(summary.destinationAnchorEntityId, path.destinationAnchorEntityId);
-  }
-
-  let probe: RouteRuntimeProbeReceiptV1 | undefined;
-  let probeHash: Sha256HashV1 | undefined;
-  if (hasProbe) {
-    if (isNil(path)) publicationInvalid();
-    const canonicalProbe = canonicalRouteRuntimeProbeReceiptV1(
-      record.routeRuntimeProbeReceipt,
-    );
-    probe = assertRouteRuntimeProbeReceiptContextV1({
-      receipt: canonicalProbe,
-      routePathReceipt: path,
-      resolvedDriverProfile: resolveTraversalDriverProfileV1(
-        canonicalProbe.request.driverProfileRef,
-      ),
-      validationProfileIdentity: {
-        resourceRef: publication.validationProfileRef,
-        version: publication.validationProfileResolvedVersion,
-        contentHash: publication.validationProfileHash,
-      },
-    });
-    probeHash = requireHash(record.routeRuntimeProbeReceiptHash);
-    requireEqual(probeHash, hashRouteRuntimeProbeReceiptV1(probe));
-    requireEqual(probe.request.executionPlanHash, publication.executionPlanHash);
-  }
-
-  let overlay: RouteOverlayV1 | undefined;
-  let overlayHash: Sha256HashV1 | undefined;
-  if (hasOverlay) {
-    if (isNil(path)) publicationInvalid();
-    overlay = canonicalRouteOverlayV1(record.routeOverlay);
-    overlayHash = requireHash(record.routeOverlayHash);
-    requireEqual(overlayHash, hashRouteOverlayV1(overlay));
-    const expectedBindings: ReadonlyArray<readonly [unknown, unknown]> = [
-      [overlay.constraintId, path.constraintId],
-      [overlay.routeId, path.routeId],
-      [overlay.traversingEntityId, path.traversingEntityId],
-      [overlay.startAnchor.entityId, path.startAnchorEntityId],
-      [overlay.destinationAnchor.entityId, path.destinationAnchorEntityId],
-      [overlay.traversalSurfaceIdentity, path.traversalSurfaceIdentity],
-      [overlay.resolvedTraversalLockHash, path.resolvedTraversalLockHash],
-      [overlay.traversalGraphHash, path.traversalGraphHash],
-      [overlay.routePathReceiptHash, pathHash],
-      [overlay.orderedTraversalNodeIds, path.orderedTraversalNodeIds],
-      [overlay.orderedTraversalEdgeIds, path.orderedTraversalEdgeIds],
-      [
-        overlay.orderedPathPositionsMetersXYZ,
-        path.orderedPathPositionsMetersXYZ,
-      ],
-    ];
-    for (const [actual, expected] of expectedBindings) {
-      requireEqual(actual, expected);
-    }
-  }
-
-  requireEqual(summary.routePathStatus, hasPath ? "complete" : "unavailable");
-  requireEqual(
-    summary.routeRuntimeProbeStatus,
-    isNil(probe) ? "unavailable" : probe.status,
-  );
-  requireEqual(
-    summary.routeOverlayStatus,
-    isNil(overlay) ? "unavailable" : "available",
-  );
-  if (hasPath && summary.connectivityStatus !== "complete") publicationInvalid();
-
-  return {
-    selector,
-    summary,
-    ...(isNil(path) ? {} : {
-      routePathReceipt: path,
-      routePathReceiptHash: pathHash!,
-    }),
-    ...(isNil(probe) ? {} : {
-      routeRuntimeProbeReceipt: probe,
-      routeRuntimeProbeReceiptHash: probeHash!,
-    }),
-    ...(isNil(overlay) ? {} : {
-      routeOverlay: overlay,
-      routeOverlayHash: overlayHash!,
-    }),
-  };
-}
-
-export function canonicalWorldkitBrowserRouteEvidencePublicationV1(
-  value: unknown,
-): WorldkitBrowserRouteEvidencePublicationV1 {
-  try {
-    assertPureDataGraph(value);
-    const cloned = structuredClone(value);
-    const record = requireRecord(cloned);
-    requireExactFields(record, PUBLICATION_FIELDS);
-    if (
-      record.kind !== "worldkit-browser-route-evidence-publication" ||
-      record.schemaVersion !== 1 ||
-      !Array.isArray(record.routes)
-    ) {
-      publicationInvalid();
-    }
-    const identity = {
-      worldPackageRootHash: requireHash(record.worldPackageRootHash),
-      authoringSpecHash: requireHash(record.authoringSpecHash),
-      normalizedWorldIrHash: requireHash(record.normalizedWorldIrHash),
-      executionPlanHash: requireHash(record.executionPlanHash),
-      resourceLockHash: requireHash(record.resourceLockHash),
-      layoutSolveReportHash: requireHash(record.layoutSolveReportHash),
-      validationReportHash: requireHash(record.validationReportHash),
-      routeValidationSetReceiptHash: requireHash(
-        record.routeValidationSetReceiptHash,
-      ),
-      validationProfileRef: requireString(record.validationProfileRef),
-      validationProfileResolvedVersion: requireString(
-        record.validationProfileResolvedVersion,
-      ),
-      validationProfileHash: requireHash(record.validationProfileHash),
-    };
-    const routes = record.routes.map((route) =>
-      canonicalProjection(route, identity)
-    );
-    for (let index = 1; index < routes.length; index += 1) {
-      if (selectorOrder(routes[index - 1]!.selector, routes[index]!.selector) >= 0) {
-        publicationInvalid();
-      }
-    }
-    return deepFreeze({
-      kind: "worldkit-browser-route-evidence-publication",
-      schemaVersion: 1,
-      ...identity,
-      routes,
-    });
-  } catch (error) {
-    if (
-      error instanceof Error &&
-      error.message === "WORLDKIT_BROWSER_ROUTE_EVIDENCE_PUBLICATION_INVALID"
-    ) {
-      throw error;
-    }
-    publicationInvalid();
-  }
 }
 
 export interface WorldkitBrowserRouteEvidenceProjectionV2 {

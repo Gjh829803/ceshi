@@ -5,7 +5,6 @@ import {
   WORLDKIT_BROWSER_PROTOCOL_VERSION,
   EXECUTION_RESOURCE_KINDS_V1,
   canonicalExecutionResourceLockEntriesV1,
-  canonicalWorldkitBrowserRouteEvidencePublicationV1,
   canonicalWorldkitBrowserRouteEvidencePublicationV2,
   type ExecutionAnimationSetV1,
   type ExecutionColliderProfileV1,
@@ -20,19 +19,17 @@ import {
   type ExecutionTraversalSurfaceV1,
   type FixedInputV1,
   type WorldRuntimeSnapshotV3,
-  type WorldkitBrowserApiV4,
   type WorldkitBrowserApiV5,
-  type WorldkitBrowserRouteEvidencePublicationV1,
   type WorldkitBrowserRouteEvidencePublicationV2,
   type WorldkitBrowserDiagnosticV1,
 } from "./index";
 
 const ROUTE_PUBLICATION_HASH = `sha256:${"a".repeat(64)}` as const;
 
-function emptyRouteEvidencePublicationFixture(): WorldkitBrowserRouteEvidencePublicationV1 {
+function emptyRouteEvidencePublicationFixture(): WorldkitBrowserRouteEvidencePublicationV2 {
   return {
     kind: "worldkit-browser-route-evidence-publication",
-    schemaVersion: 1,
+    schemaVersion: 2,
     worldPackageRootHash: ROUTE_PUBLICATION_HASH,
     authoringSpecHash: ROUTE_PUBLICATION_HASH,
     normalizedWorldIrHash: ROUTE_PUBLICATION_HASH,
@@ -538,16 +535,16 @@ describe("runtime contracts V3", () => {
         selector: { constraintId: "player-to-goal", routeId: "main-route" },
         reason: "route-evidence-not-loaded",
       }),
-    } satisfies WorldkitBrowserApiV4;
+    } satisfies WorldkitBrowserApiV5;
 
-    expect(api.version).toBe(4);
+    expect(api.version).toBe(5);
     await expect(api.ready()).resolves.toBe(snapshot);
     expect(api.getDiagnostics()).toEqual([diagnostic]);
   });
 
   it("canonicalizes the closed Browser Route publication as a detached deep-frozen DTO", () => {
     const input = emptyRouteEvidencePublicationFixture();
-    const canonical = canonicalWorldkitBrowserRouteEvidencePublicationV1(input);
+    const canonical = canonicalWorldkitBrowserRouteEvidencePublicationV2(input);
 
     expect(canonical).toEqual(input);
     expect(canonical).not.toBe(input);
@@ -584,7 +581,7 @@ describe("runtime contracts V3", () => {
     }));
 
     for (const input of invalidInputs) {
-      expect(() => canonicalWorldkitBrowserRouteEvidencePublicationV1(input))
+      expect(() => canonicalWorldkitBrowserRouteEvidencePublicationV2(input))
         .toThrow("WORLDKIT_BROWSER_ROUTE_EVIDENCE_PUBLICATION_INVALID");
     }
     expect(getterCalls).toBe(0);
@@ -627,7 +624,7 @@ describe("runtime contracts V5 Route Evidence", () => {
     expect(canonical.schemaVersion).toBe(2);
     expect(canonical.routes).toEqual([]);
     expect(Object.isFrozen(canonical)).toBe(true);
-    expect(canonicalWorldkitBrowserRouteEvidencePublicationV1(
+    expect(canonicalWorldkitBrowserRouteEvidencePublicationV2(
       emptyRouteEvidencePublicationFixture(),
     ).schemaVersion).toBe(1);
   });
@@ -652,7 +649,7 @@ describe("runtime contracts V5 Route Evidence", () => {
           routeOverlayStatus: "unavailable",
         },
         routePathReceipt: {
-          traversalSurfaceIdentity: { traversalSurfaceId: "surface-main" },
+          orderedTraversalSurfaceIdentities: [{ traversalSurfaceId: "surface-main" }],
         },
         routePathReceiptHash: ROUTE_PUBLICATION_HASH,
       }],
@@ -675,15 +672,15 @@ describe("runtime contracts V5 Route Evidence", () => {
           routeOverlayStatus: "available",
         },
         routeOverlay: {
-          blockingColliderIdentities: [],
+          staticColliderIdentities: [],
         },
         routeOverlayHash: ROUTE_PUBLICATION_HASH,
       }],
     })).toThrow("WORLDKIT_BROWSER_ROUTE_EVIDENCE_PUBLICATION_INVALID");
   });
 
-  it("defines WorldkitBrowserApiV5 beside V4 without switching the installed protocol version", () => {
-    expect(WORLDKIT_BROWSER_PROTOCOL_VERSION).toBe(4);
+  it("installs WorldkitBrowserApiV5 as the public Browser protocol", () => {
+    expect(WORLDKIT_BROWSER_PROTOCOL_VERSION).toBe(5);
     const api = {
       version: 5 as const,
       ready: async () => createSnapshotFixtureV3(),

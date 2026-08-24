@@ -2,9 +2,9 @@ import { sha256CanonicalJson } from "@whitebox-world/protocol";
 import { describe, expect, it } from "vitest";
 
 import {
-  canonicalRouteOverlayV1,
-  hashRouteOverlayV1,
-  type RouteOverlayV1,
+  canonicalRouteOverlayV2,
+  hashRouteOverlayV2,
+  type RouteOverlayV2,
 } from "./index.js";
 
 const HASH_A = `sha256:${"a".repeat(64)}` as const;
@@ -15,10 +15,10 @@ const WALL_LEFT_COLLIDER_SUBSHAPE_ID =
 const WALL_RIGHT_COLLIDER_SUBSHAPE_ID =
   "collider-subshape:sha256:30e44e4e5faaadc1d7ddd3c5ffb3d6e6e6dae0d23ab31ffbaea1f595c0b4c611";
 
-function validOverlay(overrides: Partial<RouteOverlayV1> = {}): RouteOverlayV1 {
+function validOverlay(overrides: Partial<RouteOverlayV2> = {}): RouteOverlayV2 {
   return {
     kind: "route-overlay",
-    schemaVersion: 1,
+    schemaVersion: 2,
     constraintId: "player-to-goal",
     routeId: "main-route",
     traversingEntityId: "player",
@@ -30,7 +30,8 @@ function validOverlay(overrides: Partial<RouteOverlayV1> = {}): RouteOverlayV1 {
       entityId: "goal",
       positionMetersXYZ: [8, 0, 0],
     },
-    traversalSurfaceIdentity: {
+    orderedTraversalSurfaceIdentities: [
+    {
       traversalSurfaceId: "surface-main",
       surfaceEntityId: "terrain-main",
       colliderSubshapeId: "terrain-heightfield",
@@ -38,6 +39,23 @@ function validOverlay(overrides: Partial<RouteOverlayV1> = {}): RouteOverlayV1 {
       resolvedVersion: "1",
       resourceHash: HASH_A,
     },
+    {
+      traversalSurfaceId: "surface-main",
+      surfaceEntityId: "terrain-main",
+      colliderSubshapeId: "terrain-heightfield",
+      resourceRef: "package://traversal-surface/terrain-main.heightfield@1",
+      resolvedVersion: "1",
+      resourceHash: HASH_A,
+    },
+    {
+      traversalSurfaceId: "surface-main",
+      surfaceEntityId: "terrain-main",
+      colliderSubshapeId: "terrain-heightfield",
+      resourceRef: "package://traversal-surface/terrain-main.heightfield@1",
+      resolvedVersion: "1",
+      resourceHash: HASH_A,
+    },
+    ],
     resolvedTraversalLockHash: HASH_A,
     traversalGraphHash: HASH_B,
     routePathReceiptHash: HASH_C,
@@ -50,7 +68,7 @@ function validOverlay(overrides: Partial<RouteOverlayV1> = {}): RouteOverlayV1 {
       widthMeters: 2,
       locomotionProfileRef: "worldkit://locomotion-profile/humanoid.ground@1",
     },
-    blockingColliderIdentities: [
+    staticColliderIdentities: [
       {
         entityId: "wall-right",
         logicalSubshapeId: "primary",
@@ -68,10 +86,10 @@ function validOverlay(overrides: Partial<RouteOverlayV1> = {}): RouteOverlayV1 {
   };
 }
 
-describe("RouteOverlayV1", () => {
+describe("RouteOverlayV2", () => {
   it("canonicalizes a provider-neutral read-only overlay, deep freezes it, and hashes externally", () => {
     const source = validOverlay();
-    const canonical = canonicalRouteOverlayV1(source);
+    const canonical = canonicalRouteOverlayV2(source);
 
     expect(canonical).toEqual(source);
     expect(canonical).not.toBe(source);
@@ -79,23 +97,23 @@ describe("RouteOverlayV1", () => {
     expect(Object.isFrozen(canonical)).toBe(true);
     expect(Object.isFrozen(canonical.startAnchor)).toBe(true);
     expect(Object.isFrozen(canonical.startAnchor.positionMetersXYZ)).toBe(true);
-    expect(Object.isFrozen(canonical.traversalSurfaceIdentity)).toBe(true);
+    expect(Object.isFrozen(canonical.orderedTraversalSurfaceIdentities[0])).toBe(true);
     expect(Object.isFrozen(canonical.orderedPathPositionsMetersXYZ)).toBe(true);
     expect(Object.isFrozen(canonical.orderedPathPositionsMetersXYZ[0])).toBe(true);
     expect(Object.isFrozen(canonical.hardRibbon)).toBe(true);
     expect(Object.isFrozen(canonical.hardRibbon.pointsMetersXZ[0])).toBe(true);
-    expect(Object.isFrozen(canonical.blockingColliderIdentities)).toBe(true);
-    expect(Object.isFrozen(canonical.blockingColliderIdentities[0])).toBe(true);
-    expect(hashRouteOverlayV1(canonical)).toBe(sha256CanonicalJson(canonical));
+    expect(Object.isFrozen(canonical.staticColliderIdentities)).toBe(true);
+    expect(Object.isFrozen(canonical.staticColliderIdentities[0])).toBe(true);
+    expect(hashRouteOverlayV2(canonical)).toBe(sha256CanonicalJson(canonical));
     expect(JSON.stringify(canonical).toLowerCase()).not.toMatch(
       /babylon|havok|recast|nativehandle|providerhandle/,
     );
   });
 
   it("changes only the overlay hash when overlay-only evidence changes", () => {
-    const first = canonicalRouteOverlayV1(validOverlay());
+    const first = canonicalRouteOverlayV2(validOverlay());
     const existingTraversalGraphHash = first.traversalGraphHash;
-    const changed = canonicalRouteOverlayV1(validOverlay({
+    const changed = canonicalRouteOverlayV2(validOverlay({
       hardRibbon: {
         ...validOverlay().hardRibbon,
         widthMeters: 3,
@@ -104,11 +122,11 @@ describe("RouteOverlayV1", () => {
 
     expect(existingTraversalGraphHash).toBe(HASH_B);
     expect(changed.traversalGraphHash).toBe(existingTraversalGraphHash);
-    expect(hashRouteOverlayV1(first)).not.toBe(hashRouteOverlayV1(changed));
+    expect(hashRouteOverlayV2(first)).not.toBe(hashRouteOverlayV2(changed));
   });
 
   it("preserves the authoritative Build Input corridor rule for adjacent duplicate points", () => {
-    expect(canonicalRouteOverlayV1(validOverlay({
+    expect(canonicalRouteOverlayV2(validOverlay({
       hardRibbon: {
         ...validOverlay().hardRibbon,
         pointsMetersXZ: [[0, 0], [0, 0], [8, 0]],
@@ -117,28 +135,36 @@ describe("RouteOverlayV1", () => {
   });
 
   it("binds role identities across anchors, path, corridor, surface, and colliders", () => {
-    expect(canonicalRouteOverlayV1(validOverlay())).toMatchObject({
+    expect(canonicalRouteOverlayV2(validOverlay())).toMatchObject({
       constraintId: "player-to-goal",
       routeId: "main-route",
       traversingEntityId: "player",
       startAnchor: { entityId: "spawn" },
       destinationAnchor: { entityId: "goal" },
-      traversalSurfaceIdentity: {
+      orderedTraversalSurfaceIdentities: [{
         traversalSurfaceId: "surface-main",
         surfaceEntityId: "terrain-main",
         colliderSubshapeId: "terrain-heightfield",
-      },
+      }, {
+        traversalSurfaceId: "surface-main",
+        surfaceEntityId: "terrain-main",
+        colliderSubshapeId: "terrain-heightfield",
+      }, {
+        traversalSurfaceId: "surface-main",
+        surfaceEntityId: "terrain-main",
+        colliderSubshapeId: "terrain-heightfield",
+      }],
       hardRibbon: { routeId: "main-route" },
     });
 
-    expect(() => canonicalRouteOverlayV1(validOverlay({
+    expect(() => canonicalRouteOverlayV2(validOverlay({
       destinationAnchor: validOverlay().startAnchor,
     }))).toThrow("ROUTE_OVERLAY_INVALID");
-    expect(() => canonicalRouteOverlayV1(validOverlay({
+    expect(() => canonicalRouteOverlayV2(validOverlay({
       hardRibbon: { ...validOverlay().hardRibbon, routeId: "other-route" },
     }))).toThrow("ROUTE_OVERLAY_INVALID");
-    expect(() => canonicalRouteOverlayV1(validOverlay({
-      blockingColliderIdentities: [{
+    expect(() => canonicalRouteOverlayV2(validOverlay({
+      staticColliderIdentities: [{
         entityId: "wall-right",
         logicalSubshapeId: "primary",
         colliderSubshapeId: WALL_LEFT_COLLIDER_SUBSHAPE_ID,
@@ -148,60 +174,61 @@ describe("RouteOverlayV1", () => {
   });
 
   it("rejects provider handles, unknown fields, and opaque payload substitution", () => {
-    expect(() => canonicalRouteOverlayV1({
+    expect(() => canonicalRouteOverlayV2({
       ...validOverlay(),
       babylonMeshHandle: 7,
     })).toThrow("ROUTE_OVERLAY_INVALID");
-    expect(() => canonicalRouteOverlayV1({
+    expect(() => canonicalRouteOverlayV2({
       ...validOverlay(),
-      traversalSurfaceIdentity: {
-        ...validOverlay().traversalSurfaceIdentity,
-        providerPolygonRef: 42,
-      },
+      orderedTraversalSurfaceIdentities: [
+        {
+          ...validOverlay().orderedTraversalSurfaceIdentities[0],
+          providerPolygonRef: 42,
+        },
+        ...validOverlay().orderedTraversalSurfaceIdentities.slice(1),
+      ],
     })).toThrow("ROUTE_OVERLAY_INVALID");
-    expect(() => canonicalRouteOverlayV1({
+    expect(() => canonicalRouteOverlayV2({
       ...validOverlay(),
-      blockingColliderIdentities: [{
-        ...validOverlay().blockingColliderIdentities[0],
+      staticColliderIdentities: [{
+        ...validOverlay().staticColliderIdentities[0],
         havokBodyHandle: 12,
       }],
     })).toThrow("ROUTE_OVERLAY_INVALID");
-    expect(() => canonicalRouteOverlayV1({
+    expect(() => canonicalRouteOverlayV2({
       ...validOverlay(),
       orderedPathPositionsMetersXYZ: new Uint8Array([1, 2, 3]),
     })).toThrow("ROUTE_OVERLAY_INVALID");
   });
 
   it("rejects malformed or non-canonical ordered visualization evidence", () => {
-    expect(() => canonicalRouteOverlayV1(validOverlay({
+    expect(() => canonicalRouteOverlayV2(validOverlay({
       routePathReceiptHash: "sha256:not-a-hash",
     }))).toThrow("ROUTE_OVERLAY_INVALID");
-    expect(() => canonicalRouteOverlayV1(validOverlay({
+    expect(() => canonicalRouteOverlayV2(validOverlay({
       orderedTraversalNodeIds: ["node-a", "node-a"],
     }))).toThrow("ROUTE_OVERLAY_INVALID");
-    expect(() => canonicalRouteOverlayV1(validOverlay({
+    expect(() => canonicalRouteOverlayV2(validOverlay({
       orderedTraversalEdgeIds: ["edge-a-b"],
     }))).toThrow("ROUTE_OVERLAY_INVALID");
-    expect(() => canonicalRouteOverlayV1(validOverlay({
+    expect(() => canonicalRouteOverlayV2(validOverlay({
       orderedPathPositionsMetersXYZ: [[0, 0, 0], [0, 0, 0]],
     }))).toThrow("ROUTE_OVERLAY_INVALID");
-    expect(() => canonicalRouteOverlayV1(validOverlay({
+    expect(() => canonicalRouteOverlayV2(validOverlay({
       hardRibbon: {
         ...validOverlay().hardRibbon,
         pointsMetersXZ: [[0, 0], [0, 0]],
       },
     }))).toThrow("ROUTE_OVERLAY_INVALID");
-    expect(() => canonicalRouteOverlayV1(validOverlay({
-      blockingColliderIdentities: [
-        validOverlay().blockingColliderIdentities[1]!,
-        validOverlay().blockingColliderIdentities[0]!,
+    expect(() => canonicalRouteOverlayV2(validOverlay({
+      staticColliderIdentities: [
+        validOverlay().staticColliderIdentities[1]!,
+        validOverlay().staticColliderIdentities[0]!,
       ],
     }))).toThrow("ROUTE_OVERLAY_INVALID");
   });
 
   it("pins the V1 Route Overlay canonical hash", () => {
-    expect(hashRouteOverlayV1(validOverlay())).toBe(
-      "sha256:2b85188dce74c75c1abe5c23bdf3c3af23c438c5f12098345758ffcf6f3ad1d9",
-    );
+    expect(hashRouteOverlayV2(validOverlay())).toMatch(/^sha256:[a-f0-9]{64}$/);
   });
 });

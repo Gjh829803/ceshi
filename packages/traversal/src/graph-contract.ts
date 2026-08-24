@@ -33,26 +33,6 @@ export interface TraversalEdgeV1 {
   readonly routePathCost: number;
 }
 
-export interface TraversalGraphV1 {
-  readonly kind: "traversal-graph";
-  readonly schemaVersion: 1;
-  readonly authoringSpecHash: `sha256:${string}`;
-  readonly layoutSolveReportHash: `sha256:${string}`;
-  readonly resourceLockHash: `sha256:${string}`;
-  readonly terrainArtifactHash: `sha256:${string}`;
-  readonly colliderArtifactHash: `sha256:${string}`;
-  readonly surfaceArtifactHash: `sha256:${string}`;
-  readonly routeBuildInputHash: `sha256:${string}`;
-  readonly resolvedTraversalLockHash: `sha256:${string}`;
-  readonly graphBuilderProfileRef: string;
-  readonly graphBuilderResolvedVersion: string;
-  readonly graphBuilderProfileHash: `sha256:${string}`;
-  readonly routeId: string;
-  readonly startAnchorEntityId: string;
-  readonly destinationAnchorEntityId: string;
-  readonly traversalNodesById: Readonly<Record<string, TraversalNodeV1>>;
-  readonly traversalEdgesById: Readonly<Record<string, TraversalEdgeV1>>;
-}
 
 const SHA256_PATTERN = /^sha256:[a-f0-9]{64}$/;
 const EDGE_TYPES = new Set(["walk", "slope", "step"]);
@@ -447,86 +427,7 @@ function validateEdge(
   };
 }
 
-export function canonicalTraversalGraphV1(value: unknown): TraversalGraphV1 {
-  if (isNil(value) || !isPlainObject(value)) {
-    failGraph("expected an object.");
-  }
-  const record = value as Record<string, unknown>;
-  rejectUnknownFields(record, GRAPH_FIELDS, "");
-  for (const field of GRAPH_FIELDS) {
-    if (isNil(record[field])) {
-      failGraph(`missing field '${field}'.`);
-    }
-  }
-  if (record.kind !== "traversal-graph") {
-    failGraph("kind must be 'traversal-graph'.");
-  }
-  if (record.schemaVersion !== 1) {
-    failGraph("schemaVersion must be 1.");
-  }
 
-  const hashes = Object.fromEntries(
-    GRAPH_HASH_FIELDS.map((field) => [field, requireHash(record[field], field)]),
-  ) as Pick<TraversalGraphV1, (typeof GRAPH_HASH_FIELDS)[number]>;
-  const strings = Object.fromEntries(
-    GRAPH_STRING_FIELDS.map((field) => [
-      field,
-      requireNonEmptyString(record[field], field),
-    ]),
-  ) as Pick<TraversalGraphV1, (typeof GRAPH_STRING_FIELDS)[number]>;
-  assertResolvedGraphBuilderIdentity(
-    strings.graphBuilderProfileRef,
-    strings.graphBuilderResolvedVersion,
-    hashes.graphBuilderProfileHash,
-  );
-
-  if (!isPlainObject(record.traversalNodesById)) {
-    failGraph("'traversalNodesById' must be an object.");
-  }
-  if (!isPlainObject(record.traversalEdgesById)) {
-    failGraph("'traversalEdgesById' must be an object.");
-  }
-
-  const traversalNodesById: Record<string, TraversalNodeV1> = {};
-  for (const [nodeId, node] of Object.entries(
-    record.traversalNodesById as Record<string, unknown>,
-  ).sort(([left], [right]) => compareCanonicalId(left, right))) {
-    traversalNodesById[nodeId] = validateNode(
-      node,
-      `traversalNodesById/${nodeId}`,
-      nodeId,
-    );
-  }
-  if (isEmpty(traversalNodesById)) {
-    failGraph("a Traversal Graph must contain at least one Node.");
-  }
-
-  const nodeIds = new Set(Object.keys(traversalNodesById));
-  const traversalEdgesById: Record<string, TraversalEdgeV1> = {};
-  for (const [edgeId, edge] of Object.entries(
-    record.traversalEdgesById as Record<string, unknown>,
-  ).sort(([left], [right]) => compareCanonicalId(left, right))) {
-    traversalEdgesById[edgeId] = validateEdge(
-      edge,
-      `traversalEdgesById/${edgeId}`,
-      edgeId,
-      nodeIds,
-    );
-  }
-
-  return deepFreeze({
-    kind: "traversal-graph",
-    schemaVersion: 1,
-    ...hashes,
-    ...strings,
-    traversalNodesById,
-    traversalEdgesById,
-  });
-}
-
-export function hashTraversalGraphV1(value: unknown): `sha256:${string}` {
-  return sha256CanonicalJson(canonicalTraversalGraphV1(value)) as `sha256:${string}`;
-}
 
 const GRAPH_FIELDS_V2 = [
   ...GRAPH_FIELDS.filter((field) => field !== "schemaVersion"),
@@ -576,8 +477,25 @@ function canonicalInventory(
   return inventory;
 }
 
-export interface TraversalGraphV2 extends Omit<TraversalGraphV1, "schemaVersion"> {
+export interface TraversalGraphV2 {
+  readonly kind: "traversal-graph";
   readonly schemaVersion: 2;
+  readonly authoringSpecHash: `sha256:${string}`;
+  readonly layoutSolveReportHash: `sha256:${string}`;
+  readonly resourceLockHash: `sha256:${string}`;
+  readonly terrainArtifactHash: `sha256:${string}`;
+  readonly colliderArtifactHash: `sha256:${string}`;
+  readonly surfaceArtifactHash: `sha256:${string}`;
+  readonly routeBuildInputHash: `sha256:${string}`;
+  readonly resolvedTraversalLockHash: `sha256:${string}`;
+  readonly graphBuilderProfileRef: string;
+  readonly graphBuilderResolvedVersion: string;
+  readonly graphBuilderProfileHash: `sha256:${string}`;
+  readonly routeId: string;
+  readonly startAnchorEntityId: string;
+  readonly destinationAnchorEntityId: string;
+  readonly traversalNodesById: Readonly<Record<string, TraversalNodeV1>>;
+  readonly traversalEdgesById: Readonly<Record<string, TraversalEdgeV1>>;
   readonly geometryArtifactHash: `sha256:${string}`;
   readonly traversalSurfaceIdentitiesById: Readonly<
     Record<string, TraversalSurfaceIdentityV1>

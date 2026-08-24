@@ -3,16 +3,14 @@ import { describe, expect, it } from "vitest";
 import {
   BUILT_IN_HEIGHTFIELD_R1_TRAVERSAL_GRAPH_BUILDER_PROFILE_REF,
   BUILT_IN_TRAVERSAL_DRIVER_PROFILE_REF,
-  canonicalRoutePathReceiptV1,
   canonicalRoutePathReceiptV2,
-  hashRouteRuntimeProbeReceiptV1,
   hashRouteRuntimeProbeReceiptV2,
   resolveTraversalDriverProfileV1,
   resolveTraversalGraphBuilderProfileV2,
   type CharacterSupportStateV1,
   type CharacterSupportSurfaceResolutionV1,
-  type RoutePathReceiptV1,
-  type RouteRuntimeProbeReceiptV1,
+  type RoutePathReceiptV2,
+  type RouteRuntimeProbeReceiptV2,
   type TraversalRuntimePortV1,
   type TraversalRuntimeTickEvidenceV1,
 } from "@whitebox-world/traversal";
@@ -22,17 +20,21 @@ import type { ValidationProfileV2 } from "./types-v2.js";
 
 type Vec3 = readonly [number, number, number];
 
-type RunRouteRuntimeProbeV1 = (input: Readonly<{
-  routePathReceipt: RoutePathReceiptV1;
+type RunRouteRuntimeProbeV2 = (input: Readonly<{
+  routePathReceipt: RoutePathReceiptV2;
   traversalDriverProfile: ReturnType<typeof resolveTraversalDriverProfileV1>;
   runtimePort: TraversalRuntimePortV1;
   validationProfile: ValidationProfileV2;
-}>) => Promise<RouteRuntimeProbeReceiptV1>;
+  resolvedControlFeelProfile: Readonly<{
+    readonly walkSpeedMetersPerSecond: number;
+  }>;
+  positionQuantizationMeters: number;
+}>) => Promise<RouteRuntimeProbeReceiptV2>;
 
-const runRouteRuntimeProbeV1 = (
-  validation as unknown as { runRouteRuntimeProbeV1?: RunRouteRuntimeProbeV1 }
-).runRouteRuntimeProbeV1;
-const hasRunner = typeof runRouteRuntimeProbeV1 === "function";
+const runRouteRuntimeProbeV2 = (
+  validation as unknown as { runRouteRuntimeProbeV2?: RunRouteRuntimeProbeV2 }
+).runRouteRuntimeProbeV2;
+const hasRunner = typeof runRouteRuntimeProbeV2 === "function";
 
 const HASH_A = `sha256:${"a".repeat(64)}` as const;
 const HASH_B = `sha256:${"b".repeat(64)}` as const;
@@ -60,6 +62,9 @@ const RUNTIME_IDENTITY = {
 const DRIVER = resolveTraversalDriverProfileV1(
   BUILT_IN_TRAVERSAL_DRIVER_PROFILE_REF,
 );
+const BUILDER = resolveTraversalGraphBuilderProfileV2(
+  BUILT_IN_HEIGHTFIELD_R1_TRAVERSAL_GRAPH_BUILDER_PROFILE_REF,
+);
 const VALIDATION_PROFILE = validation.OUTDOOR_WORLD_PACKAGE_DEV_VALIDATION_PROFILE_V2;
 const THRESHOLDS = VALIDATION_PROFILE.routeRuntimeGateThresholds;
 
@@ -77,8 +82,8 @@ function ceilToMillimeter(value: number): number {
 
 function pathReceipt(
   points: readonly Vec3[] = [[0, 0, 0], [10, 0, 0]],
-  overrides: Partial<RoutePathReceiptV1> = {},
-): RoutePathReceiptV1 {
+  overrides: Partial<RoutePathReceiptV2> = {},
+): RoutePathReceiptV2 {
   const builder = resolveTraversalGraphBuilderProfileV2(
     BUILT_IN_HEIGHTFIELD_R1_TRAVERSAL_GRAPH_BUILDER_PROFILE_REF,
   );
@@ -91,9 +96,9 @@ function pathReceipt(
       sum + ceilToMillimeter(distanceXZ(points[index]!, point)),
     0,
   );
-  return canonicalRoutePathReceiptV1({
+  return canonicalRoutePathReceiptV2({
     kind: "route-path-receipt",
-    schemaVersion: 1,
+    schemaVersion: 2,
     status: "complete",
     constraintId: "player-to-goal",
     routeId: "main-route",
@@ -106,7 +111,7 @@ function pathReceipt(
     traversalGraphHash: HASH_A,
     routeBuildInputHash: HASH_B,
     resolvedTraversalLockHash: HASH_D,
-    traversalSurfaceIdentity: SURFACE,
+    orderedTraversalSurfaceIdentities: points.map(() => SURFACE),
     graphBuilderProfileRef: builder.resourceRef,
     graphBuilderResolvedVersion: builder.resolvedVersion,
     graphBuilderProfileHash: builder.contentHash,
@@ -156,7 +161,7 @@ class ScriptedRuntimePort implements TraversalRuntimePortV1 {
   private latestEvidence: TraversalRuntimeTickEvidenceV1;
 
   public constructor(
-    private readonly path: RoutePathReceiptV1,
+    private readonly path: RoutePathReceiptV2,
     private readonly initialFrame: RuntimeFrame,
     private readonly tickFrames: readonly RuntimeFrameSource[],
     identityOverrides: Partial<Pick<
@@ -254,15 +259,17 @@ class ScriptedRuntimePort implements TraversalRuntimePortV1 {
 }
 
 async function run(
-  path: RoutePathReceiptV1,
+  path: RoutePathReceiptV2,
   port: TraversalRuntimePortV1,
-): Promise<RouteRuntimeProbeReceiptV1> {
-  if (runRouteRuntimeProbeV1 === undefined) throw new Error("runner missing");
-  return runRouteRuntimeProbeV1({
+): Promise<RouteRuntimeProbeReceiptV2> {
+  if (runRouteRuntimeProbeV2 === undefined) throw new Error("runner missing");
+  return runRouteRuntimeProbeV2({
     routePathReceipt: path,
     traversalDriverProfile: DRIVER,
     runtimePort: port,
     validationProfile: VALIDATION_PROFILE,
+    resolvedControlFeelProfile: { walkSpeedMetersPerSecond: 4 },
+    positionQuantizationMeters: BUILDER.profile.positionQuantizationMeters,
   });
 }
 
@@ -272,7 +279,7 @@ describe("route runtime probe public runner", () => {
   });
 });
 
-describe.runIf(hasRunner)("runRouteRuntimeProbeV1", () => {
+describe.runIf(hasRunner)("runRouteRuntimeProbeV2", () => {
   it("rejects identity and ambiguous R1 path topology before reset", async () => {
     const valid = pathReceipt();
     const mismatchedPort = new ScriptedRuntimePort(
@@ -282,7 +289,7 @@ describe.runIf(hasRunner)("runRouteRuntimeProbeV1", () => {
       { resourceLockHash: HASH_A },
     );
     await expect(run(valid, mismatchedPort)).rejects.toMatchObject({
-      name: "RouteRuntimeProbeErrorV1",
+      name: "RouteRuntimeProbeErrorV2",
     });
     expect(mismatchedPort.resetCallCount).toBe(0);
     expect(mismatchedPort.fixedTickCallCount).toBe(0);
@@ -616,7 +623,7 @@ describe.runIf(hasRunner)("runRouteRuntimeProbeV1", () => {
         [frame],
       );
       await expect(run(path, port)).rejects.toMatchObject({
-        name: "RouteRuntimeProbeErrorV1",
+        name: "RouteRuntimeProbeErrorV2",
         code: "ROUTE_RUNTIME_PROBE_RUNTIME_INVALID",
       });
     }
@@ -627,7 +634,7 @@ describe.runIf(hasRunner)("runRouteRuntimeProbeV1", () => {
       [{ positionMetersXYZ: [1, 0, 0], shouldThrow: true }],
     );
     await expect(run(path, throwingPort)).rejects.toMatchObject({
-      name: "RouteRuntimeProbeErrorV1",
+      name: "RouteRuntimeProbeErrorV2",
       code: "ROUTE_RUNTIME_PROBE_RUNTIME_UNAVAILABLE",
       message: "ROUTE_RUNTIME_PROBE_RUNTIME_UNAVAILABLE",
     });
@@ -642,8 +649,8 @@ describe.runIf(hasRunner)("runRouteRuntimeProbeV1", () => {
         },
       },
     ) as ValidationProfileV2;
-    if (runRouteRuntimeProbeV1 === undefined) throw new Error("runner missing");
-    await expect(runRouteRuntimeProbeV1({
+    if (runRouteRuntimeProbeV2 === undefined) throw new Error("runner missing");
+    await expect(runRouteRuntimeProbeV2({
       routePathReceipt: path,
       traversalDriverProfile: DRIVER,
       runtimePort: new ScriptedRuntimePort(
@@ -652,8 +659,10 @@ describe.runIf(hasRunner)("runRouteRuntimeProbeV1", () => {
         [{ positionMetersXYZ: [10, 0, 0] }],
       ),
       validationProfile: malformedValidationProfile,
+      resolvedControlFeelProfile: { walkSpeedMetersPerSecond: 4 },
+      positionQuantizationMeters: BUILDER.profile.positionQuantizationMeters,
     })).rejects.toMatchObject({
-      name: "RouteRuntimeProbeErrorV1",
+      name: "RouteRuntimeProbeErrorV2",
       code: "ROUTE_RUNTIME_PROBE_INPUT_INVALID",
       message: "ROUTE_RUNTIME_PROBE_INPUT_INVALID",
     });
@@ -681,15 +690,17 @@ describe.runIf(hasRunner)("runRouteRuntimeProbeV1", () => {
           : { ...validThresholds, stalledWindowTicks: 0 };
       },
     });
-    if (runRouteRuntimeProbeV1 === undefined) throw new Error("runner missing");
+    if (runRouteRuntimeProbeV2 === undefined) throw new Error("runner missing");
 
-    await expect(runRouteRuntimeProbeV1({
+    await expect(runRouteRuntimeProbeV2({
       routePathReceipt: path,
       traversalDriverProfile: DRIVER,
       runtimePort: port,
       validationProfile: statefulProfile,
+      resolvedControlFeelProfile: { walkSpeedMetersPerSecond: 4 },
+      positionQuantizationMeters: BUILDER.profile.positionQuantizationMeters,
     })).rejects.toMatchObject({
-      name: "RouteRuntimeProbeErrorV1",
+      name: "RouteRuntimeProbeErrorV2",
       code: "ROUTE_RUNTIME_PROBE_INPUT_INVALID",
       message: "ROUTE_RUNTIME_PROBE_INPUT_INVALID",
     });
@@ -708,7 +719,7 @@ describe.runIf(hasRunner)("runRouteRuntimeProbeV1", () => {
     );
 
     await expect(run(path, port)).rejects.toMatchObject({
-      name: "RouteRuntimeProbeErrorV1",
+      name: "RouteRuntimeProbeErrorV2",
       code: "ROUTE_RUNTIME_PROBE_RUNTIME_INVALID",
       message: "ROUTE_RUNTIME_PROBE_RUNTIME_INVALID",
     });
@@ -755,7 +766,7 @@ describe.runIf(hasRunner)("runRouteRuntimeProbeV1", () => {
     ]);
 
     const hashes = [first, second, concurrentA, concurrentB].map(
-      hashRouteRuntimeProbeReceiptV1,
+      hashRouteRuntimeProbeReceiptV2,
     );
     expect(new Set(hashes)).toHaveLength(1);
     expect(Object.isFrozen(first)).toBe(true);
@@ -799,12 +810,14 @@ describe.runIf(hasRunner)("runRouteRuntimeProbeV1", () => {
       },
     };
     const mutableProfile = structuredClone(VALIDATION_PROFILE) as ValidationProfileV2;
-    if (runRouteRuntimeProbeV1 === undefined) throw new Error("runner missing");
-    const receiptPromise = runRouteRuntimeProbeV1({
+    if (runRouteRuntimeProbeV2 === undefined) throw new Error("runner missing");
+    const receiptPromise = runRouteRuntimeProbeV2({
       routePathReceipt: path,
       traversalDriverProfile: DRIVER,
       runtimePort: delayedPort,
       validationProfile: mutableProfile,
+      resolvedControlFeelProfile: { walkSpeedMetersPerSecond: 4 },
+      positionQuantizationMeters: BUILDER.profile.positionQuantizationMeters,
     });
 
     await firstTickEntered;
@@ -826,25 +839,6 @@ describe.runIf(hasRunner)("runRouteRuntimeProbeV1", () => {
 });
 
 
-type RunRouteRuntimeProbeV2 = (input: Readonly<{
-  routePathReceipt: ReturnType<typeof canonicalRoutePathReceiptV2>;
-  traversalDriverProfile: ReturnType<typeof resolveTraversalDriverProfileV1>;
-  runtimePort: TraversalRuntimePortV1;
-  validationProfile: ValidationProfileV2;
-  walkSpeedMetersPerSecond: number;
-  positionQuantizationMeters: number;
-}>) => Promise<{
-  readonly status: string;
-  readonly ticks: ReadonlyArray<{
-    readonly expectedTraversalSurfaceIds: readonly string[];
-    readonly runtimeEvidence: TraversalRuntimeTickEvidenceV1;
-  }>;
-  readonly failure?: { readonly kind: string };
-}>;
-
-const runRouteRuntimeProbeV2 = (
-  validation as unknown as { runRouteRuntimeProbeV2?: RunRouteRuntimeProbeV2 }
-).runRouteRuntimeProbeV2;
 
 const HEIGHTFIELD_SURFACE = {
   ...SURFACE,
@@ -927,7 +921,7 @@ function stationPort(
   ticks: readonly RuntimeFrameSource[],
 ): TraversalRuntimePortV1 {
   return new ScriptedRuntimePort(
-    path as unknown as RoutePathReceiptV1,
+    path as unknown as RoutePathReceiptV2,
     initial,
     ticks,
   );
@@ -949,7 +943,7 @@ async function runV2(
     traversalDriverProfile: DRIVER,
     runtimePort: port,
     validationProfile: VALIDATION_PROFILE,
-    walkSpeedMetersPerSecond,
+    resolvedControlFeelProfile: { walkSpeedMetersPerSecond },
     positionQuantizationMeters: builder.profile.positionQuantizationMeters,
   }) as Promise<NonNullable<Awaited<ReturnType<RunRouteRuntimeProbeV2>>>>;
 }
@@ -1004,7 +998,7 @@ describe("runRouteRuntimeProbeV2 3D support station", () => {
     );
     const receipt = await runV2(path, port, 180);
     expect(receipt.status).toBe("failed");
-    expect(receipt.failure?.kind).toBe("support-surface-mismatch");
+    expect(receipt.status === "failed" ? receipt.failure.kind : undefined).toBe("support-surface-mismatch");
     expect(receipt.ticks[0]?.expectedTraversalSurfaceIds).toEqual([
       PLATFORM_SURFACE.traversalSurfaceId,
     ]);

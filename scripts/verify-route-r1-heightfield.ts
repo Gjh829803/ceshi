@@ -8,9 +8,9 @@ import { promisify } from "node:util";
 import { parseAuthoringSpecV4 } from "@whitebox-world/authoring";
 import { sha256CanonicalJson } from "@whitebox-world/protocol";
 import {
-  canonicalRouteOverlayV1,
-  canonicalRouteRuntimeProbeReceiptV1,
-  hashRouteRuntimeProbeReceiptV1,
+  canonicalRouteOverlayV2,
+  canonicalRouteRuntimeProbeReceiptV2,
+  hashRouteRuntimeProbeReceiptV2,
   resolveTraversalGraphBuilderProfileV2,
 } from "@whitebox-world/traversal";
 import {
@@ -214,7 +214,7 @@ const ADVERSARIAL_ROUTE_CHECKS_V1 = Object.freeze([
     checkId: "route-deviation",
     testFile: "packages/validation/src/route-runtime-probe.test.ts",
     expectedTestFullNames: Object.freeze([
-      "runRouteRuntimeProbeV1 treats sliding as support and fails deviation only when it exceeds the threshold",
+      "runRouteRuntimeProbeV2 treats sliding as support and fails deviation only when it exceeds the threshold",
     ]),
   }),
   Object.freeze({
@@ -445,7 +445,7 @@ function readRuntimeProbeReceipt(
     !isNil(evidence),
     "success cadence validation must emit Runtime Probe evidence.",
   );
-  return canonicalRouteRuntimeProbeReceiptV1(
+  return canonicalRouteRuntimeProbeReceiptV2(
     JSON.parse(new TextDecoder().decode(evidence.bytes)),
   );
 }
@@ -492,7 +492,7 @@ async function runSuccessRenderCadenceMatrix(
       renderCadence,
       validationReportHash: run.summary.validationReportHash,
       runtimeProbeReceiptHash:
-        hashRouteRuntimeProbeReceiptV1(receipt) as `sha256:${string}`,
+        hashRouteRuntimeProbeReceiptV2(receipt) as `sha256:${string}`,
       finalRuntimeEvidenceHash:
         sha256CanonicalJson(finalTick.runtimeEvidence) as `sha256:${string}`,
       processedTickCount: receipt.metrics.processedTickCount,
@@ -690,7 +690,7 @@ export async function runRouteR1HeightfieldVerification(options: {
     for (const evidence of run.trustedResult.evidenceFiles) {
       const decoded = JSON.parse(new TextDecoder().decode(evidence.bytes)) as unknown;
       const canonicalEvidence = evidence.kind === "route-overlay"
-        ? canonicalRouteOverlayV1(decoded)
+        ? canonicalRouteOverlayV2(decoded)
         : decoded;
       scannedEvidenceKinds.add(evidence.kind);
       for (const key of findForbiddenProviderHandleKeys(canonicalEvidence)) {

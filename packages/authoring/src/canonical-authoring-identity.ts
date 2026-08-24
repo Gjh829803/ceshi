@@ -1,6 +1,15 @@
-import type { NormalizedWorldBase } from "./types.js";
+import { canonicalExecutionResourceLockEntriesV1 } from "@whitebox-world/runtime-contracts";
+
+import { sha256CanonicalJson } from "./canonical-json.js";
+import type {
+  NormalizedWorldBase,
+  NormalizedWorldResourcesV2,
+} from "./types.js";
 import type { AuthoringSpecV3 } from "./types-v3.js";
-import type { AuthoringSpecV4 } from "./types-v4.js";
+import type {
+  AuthoringSpecV4,
+  NormalizedWorldResourcesV4,
+} from "./types-v4.js";
 
 function buildCanonicalAuthoringIdentityV3(
   spec: AuthoringSpecV3,
@@ -91,6 +100,32 @@ function buildCanonicalAuthoringIdentityV3(
 export type CanonicalAuthoringIdentityV3 = ReturnType<
   typeof buildCanonicalAuthoringIdentityV3
 >;
+
+
+const TRAVERSAL_SURFACE_PROFILE_RESOURCE_KIND = "traversal-surface-profile";
+
+export function projectNormalizedWorldResourcesToV3LayoutIdentity(
+  resources: NormalizedWorldResourcesV4,
+): NormalizedWorldResourcesV2 {
+  const prototypes = resources.prototypes.map((prototype) => {
+    const {
+      traversalSurfaceBindings: _traversalSurfaceBindings,
+      ...projectedPrototype
+    } = structuredClone(prototype);
+    return projectedPrototype;
+  });
+  const resourceLock = canonicalExecutionResourceLockEntriesV1(
+    resources.resourceLock.filter(
+      (entry) => entry.resourceKind !== TRAVERSAL_SURFACE_PROFILE_RESOURCE_KIND,
+    ),
+  );
+  return {
+    ...structuredClone(resources),
+    prototypes,
+    resourceLock,
+    resourceLockHash: sha256CanonicalJson(resourceLock),
+  };
+}
 
 export function canonicalAuthoringIdentityV3(
   spec: AuthoringSpecV3,

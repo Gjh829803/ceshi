@@ -16,23 +16,23 @@ import {
   type CanonicalTraversalSurfaceTriangleSourceV1,
 } from "@whitebox-world/terrain-surface";
 import {
-  assertHeightfieldRouteBuildInputV1,
+  assertRouteBuildInputV2,
   assertTraversalGraphBuildBudgetV1,
-  hashHeightfieldRouteBuildInputV1,
+  createRouteBuildInputReceiptV2,
+  hashRouteColliderArtifactV2,
+  hashRouteGeometryArtifactV2,
+  hashRouteSurfaceArtifactV2,
+  hashRouteTerrainArtifactV2,
   type BlockedWaterBoundaryV1,
   type BlockedWaterExclusionV1,
   type BlockedTraversalAreaExclusionV1,
   type CanonicalTriangleSoupV1,
-  type HeightfieldRouteBuildBudgetEvidenceV1,
-  type HeightfieldRouteBuildInputReceiptV1,
-  type HeightfieldRouteBuildInputV1,
-  type HeightfieldRouteTerrainSourceV1,
+  type RouteBuildInputReceiptV2,
   type RouteBuildInputV2,
-  type StaticBlockingColliderV1,
+  type RouteTerrainSourceV2,
   type StaticColliderSourceV1,
   type TraversalCapabilityEnvelopeV1,
   type TraversalSurfaceIdentityV1,
-  assertRouteBuildInputV2,
 } from "@whitebox-world/traversal";
 import { isEmpty, isEqual, isNil } from "lodash-es";
 
@@ -45,7 +45,7 @@ const SHA256_PATTERN = /^sha256:[a-f0-9]{64}$/;
 const STADIUM_HALF_CAP_CHORDS = 16;
 const GEOMETRY_EPSILON = 1e-10;
 
-export type HeightfieldRouteBuildInputInvalidReasonV1 =
+export type RouteBuildInputFromPlanInvalidReasonV2 =
   | "input-invalid"
   | "plan-not-v5"
   | "hash-invalid"
@@ -65,28 +65,28 @@ export type HeightfieldRouteBuildInputInvalidReasonV1 =
   | "non-positive-scale"
   | "contract-invalid";
 
-export class HeightfieldRouteBuildInputInvalidErrorV1 extends Error {
+export class RouteBuildInputFromPlanInvalidErrorV2 extends Error {
   readonly code = "HEIGHTFIELD_ROUTE_BUILD_INPUT_INVALID" as const;
-  readonly reason: HeightfieldRouteBuildInputInvalidReasonV1;
+  readonly reason: RouteBuildInputFromPlanInvalidReasonV2;
 
-  constructor(reason: HeightfieldRouteBuildInputInvalidReasonV1, message: string) {
+  constructor(reason: RouteBuildInputFromPlanInvalidReasonV2, message: string) {
     super(`HEIGHTFIELD_ROUTE_BUILD_INPUT_INVALID (${reason}): ${message}`);
-    this.name = "HeightfieldRouteBuildInputInvalidErrorV1";
+    this.name = "RouteBuildInputFromPlanInvalidErrorV2";
     this.reason = reason;
   }
 }
 
-export interface CreateHeightfieldRouteBuildInputInputV1 {
+export interface CreateRouteBuildInputFromPlanInputV2 {
   readonly executionPlan: ExecutionPlanV5;
   readonly capabilityEnvelope: TraversalCapabilityEnvelopeV1;
   readonly constraintId: string;
 }
 
 function failStructural(
-  reason: HeightfieldRouteBuildInputInvalidReasonV1,
+  reason: RouteBuildInputFromPlanInvalidReasonV2,
   message: string,
 ): never {
-  throw new HeightfieldRouteBuildInputInvalidErrorV1(reason, message);
+  throw new RouteBuildInputFromPlanInvalidErrorV2(reason, message);
 }
 
 function failSemantic(code: string, message: string): never {
@@ -791,7 +791,7 @@ function relevantBlockingColliders(
   colliders: readonly ExecutionStaticColliderV1[],
   points: readonly Vec2[],
   widthMeters: number,
-): readonly StaticBlockingColliderV1[] {
+): readonly StaticColliderSourceV1[] {
   return colliders
     .map((collider) => ({ collider, soup: colliderSoup(collider) }))
     .filter(({ soup }) => colliderIntersectsRibbon(soup, points, widthMeters))
@@ -830,7 +830,7 @@ function exactBounds(soup: CanonicalTriangleSoupV1): {
   };
 }
 
-function requirePlanAndEnvelope(input: CreateHeightfieldRouteBuildInputInputV1): void {
+function requirePlanAndEnvelope(input: CreateRouteBuildInputFromPlanInputV2): void {
   if (isNil(input) || typeof input !== "object" || Array.isArray(input)) {
     failStructural("input-invalid", "factory input must be an object.");
   }
@@ -915,9 +915,9 @@ function requirePlanAndEnvelope(input: CreateHeightfieldRouteBuildInputInputV1):
   }
 }
 
-export function createHeightfieldRouteBuildInputV1(
-  input: CreateHeightfieldRouteBuildInputInputV1,
-): HeightfieldRouteBuildInputReceiptV1 {
+export function createRouteBuildInputFromPlanV2(
+  input: CreateRouteBuildInputFromPlanInputV2,
+): RouteBuildInputReceiptV2 {
   requirePlanAndEnvelope(input);
   const plan = input.executionPlan;
   const envelope = input.capabilityEnvelope;
@@ -986,17 +986,39 @@ export function createHeightfieldRouteBuildInputV1(
     );
   }
 
-  const surfaces = plan.traversal.surfaces.filter((candidate) => {
+  if (!Array.isArray(plan.traversal.surfaces)) {
+    failStructural("contract-invalid", "Traversal Surface rows must be an array.");
+  }
+  const traversalSurfaces: TraversalSurfaceIdentityV1[] = plan.traversal.surfaces.map((candidate, index) => {
     if (isNil(candidate) || typeof candidate !== "object") {
       failStructural("contract-invalid", "Traversal Surface rows must be objects.");
     }
-    return candidate.kind === "heightfield";
-  });
-  if (surfaces.length === 0) failStructural("surface-missing", "Heightfield Traversal Surface is missing.");
-  if (surfaces.length !== 1) failStructural("surface-ambiguous", "Heightfield Traversal Surface is ambiguous.");
-  const surface = surfaces[0]!;
-  if (surface.surfaceEntityId !== plan.terrain.entityId) {
-    failStructural("surface-terrain-mismatch", "Traversal Surface does not identify the Plan terrain.");
+    return {
+      traversalSurfaceId: candidate.traversalSurfaceId,
+      surfaceEntityId: candidate.surfaceEntityId,
+      colliderSubshapeId: candidate.colliderSubshapeId,
+      resourceRef: candidate.resourceRef,
+      resolvedVersion: candidate.resolvedVersion,
+      resourceHash: candidate.resourceHash,
+    };
+  }).sort((left, right) =>
+    left.traversalSurfaceId < right.traversalSurfaceId
+      ? -1
+      : left.traversalSurfaceId > right.traversalSurfaceId
+        ? 1
+        : 0,
+  );
+  if (traversalSurfaces.length === 0) {
+    failStructural("surface-missing", "Traversal Surface is missing.");
+  }
+  const heightfieldSurfaces = traversalSurfaces.filter(
+    (surface) => surface.surfaceEntityId === plan.terrain.entityId,
+  );
+  if (heightfieldSurfaces.length === 0) {
+    failStructural("surface-missing", "Heightfield Traversal Surface is missing.");
+  }
+  if (heightfieldSurfaces.length !== 1) {
+    failStructural("surface-ambiguous", "Heightfield Traversal Surface is ambiguous.");
   }
 
   requireVec2(plan.terrain.centerMetersXZ, "terrain centerMetersXZ");
@@ -1039,7 +1061,7 @@ export function createHeightfieldRouteBuildInputV1(
   try {
     emitted = heightfieldTriangles(plan);
   } catch (cause) {
-    if (cause instanceof HeightfieldRouteBuildInputInvalidErrorV1) throw cause;
+    if (cause instanceof RouteBuildInputFromPlanInvalidErrorV2) throw cause;
     failStructural(
       "contract-invalid",
       cause instanceof Error
@@ -1074,28 +1096,38 @@ export function createHeightfieldRouteBuildInputV1(
       }
     }
   }
-  const terrainSource: HeightfieldRouteTerrainSourceV1 = isNil(terrainSoup)
+  const terrainSource: RouteTerrainSourceV2 = isNil(terrainSoup)
     ? {
         kind: "empty",
         terrainEntityId: plan.terrain.entityId,
-        terrainArtifactHash: emitted.emitterHash,
       }
     : {
         kind: "bounded",
         terrainEntityId: plan.terrain.entityId,
-        terrainArtifactHash: emitted.emitterHash,
         triangleSoup: terrainSoup,
         ...exactBounds(terrainSoup),
       };
-  const blockingColliders = relevantBlockingColliders(
+  const staticColliders = [...relevantBlockingColliders(
     plan.staticColliders,
     route.pointsMetersXZ,
     route.widthMeters,
+  )].sort((left, right) =>
+    left.colliderSubshapeId < right.colliderSubshapeId
+      ? -1
+      : left.colliderSubshapeId > right.colliderSubshapeId
+        ? 1
+        : 0,
   );
-  const colliderArtifactHash = sha256CanonicalJson(blockingColliders) as `sha256:${string}`;
-  const buildInput: HeightfieldRouteBuildInputV1 = {
-    kind: "heightfield-route-build-input",
-    schemaVersion: 1,
+  const terrainArtifactHash = hashRouteTerrainArtifactV2(terrainSource);
+  const colliderArtifactHash = hashRouteColliderArtifactV2(staticColliders);
+  const geometryArtifactHash = hashRouteGeometryArtifactV2({
+    terrainArtifactHash,
+    colliderArtifactHash,
+  });
+  const surfaceArtifactHash = hashRouteSurfaceArtifactV2(traversalSurfaces);
+  const buildInput: RouteBuildInputV2 = {
+    kind: "route-build-input",
+    schemaVersion: 2,
     authoringSpecHash: plan.authoringSpecHash,
     layoutSolveReportHash: plan.layout.layoutSolveReportHash as `sha256:${string}`,
     resourceLockHash: plan.resourceLockHash as `sha256:${string}`,
@@ -1123,56 +1155,26 @@ export function createHeightfieldRouteBuildInputV1(
       widthMeters: route.widthMeters,
       locomotionProfileRef: route.locomotionProfileRef,
     },
-    traversalSurface: {
-      traversalSurfaceId: surface.traversalSurfaceId,
-      surfaceEntityId: surface.surfaceEntityId,
-      colliderSubshapeId: surface.colliderSubshapeId,
-      resourceRef: surface.resourceRef,
-      resolvedVersion: surface.resolvedVersion,
-      resourceHash: surface.resourceHash,
-    },
+    traversalSurfaces,
     capabilityEnvelope: envelope,
     terrainSource,
-    blockingColliders,
+    staticColliders,
+    terrainArtifactHash,
     colliderArtifactHash,
+    geometryArtifactHash,
+    surfaceArtifactHash,
     blockedTraversalAreaExclusions: traversalAreaResult.exclusions,
     blockedWaterExclusions: waterResult.exclusions,
   };
 
   try {
-    assertHeightfieldRouteBuildInputV1(buildInput);
+    return createRouteBuildInputReceiptV2(buildInput);
   } catch (cause) {
     failStructural(
       "contract-invalid",
       cause instanceof Error ? cause.message : "assembled Build Input failed strict validation.",
     );
   }
-
-  let budgetEvidence: HeightfieldRouteBuildBudgetEvidenceV1;
-  if (terrainSource.kind === "empty") {
-    budgetEvidence = { kind: "not-required-empty-source" };
-  } else {
-    const estimate = assertTraversalGraphBuildBudgetV1({
-      minimumMetersXZ: terrainSource.minimumMetersXZ,
-      maximumMetersXZ: terrainSource.maximumMetersXZ,
-      tileSizeCells: envelope.tileSizeCells,
-      voxelCellSizeMeters: envelope.voxelCellSizeMeters,
-      maximumTiles: envelope.maximumTiles,
-    });
-    budgetEvidence = {
-      kind: "heightfield-tile-estimate",
-      ...estimate,
-      maximumTiles: envelope.maximumTiles,
-      minimumMetersXZ: [...terrainSource.minimumMetersXZ],
-      maximumMetersXZ: [...terrainSource.maximumMetersXZ],
-    };
-  }
-  const routeBuildInputHash = hashHeightfieldRouteBuildInputV1(buildInput);
-  return deepFreeze({
-    input: buildInput,
-    routeBuildInputHash,
-    budgetEvidence,
-  });
 }
 
 export type RecastHeightfieldSourceAreaModeV1 =
@@ -1197,79 +1199,6 @@ export interface RecastHeightfieldSourceV1 {
   readonly bounds: readonly [Vec3, Vec3];
   readonly sourceAreaMode?: RecastHeightfieldSourceAreaModeV1;
   readonly candidateTraversalSurfaceIds?: readonly string[];
-}
-
-export function mapHeightfieldRouteBuildInputToRecastSourceV1(
-  input: HeightfieldRouteBuildInputV1,
-): RecastHeightfieldSourceV1 {
-  assertHeightfieldRouteBuildInputV1(input);
-  if (input.terrainSource.kind !== "bounded") {
-    failStructural(
-      "contract-invalid",
-      "a bounded terrain source is required before provider mapping.",
-    );
-  }
-  const terrainPositions = input.terrainSource.triangleSoup.positionsMetersXYZ;
-  const terrainIndices = input.terrainSource.triangleSoup.triangleIndices;
-  const positions = [...terrainPositions];
-  const indices = [...terrainIndices];
-  const terrainVertexCount = terrainPositions.length / 3;
-  let blockerTriangleCount = 0;
-
-  for (const blocker of input.blockingColliders) {
-    const blockerPositions = blocker.triangleSoup.positionsMetersXYZ;
-    const blockerIndices = blocker.triangleSoup.triangleIndices;
-    const blockerVertexOffset = positions.length / 3;
-    positions.push(...blockerPositions);
-    for (const blockerIndex of blockerIndices) {
-      indices.push(blockerVertexOffset + blockerIndex);
-    }
-    blockerTriangleCount += blockerIndices.length / 3;
-  }
-
-  let minimumY = Number.POSITIVE_INFINITY;
-  let maximumY = Number.NEGATIVE_INFINITY;
-  for (let offset = 1; offset < positions.length; offset += 3) {
-    minimumY = Math.min(minimumY, positions[offset]!);
-    maximumY = Math.max(maximumY, positions[offset]!);
-  }
-  const bounds = [
-    [
-      input.terrainSource.minimumMetersXZ[0],
-      minimumY,
-      input.terrainSource.minimumMetersXZ[1],
-    ],
-    [
-      input.terrainSource.maximumMetersXZ[0],
-      maximumY,
-      input.terrainSource.maximumMetersXZ[1],
-    ],
-  ] as const;
-  const base = {
-    positions: Object.freeze(positions),
-    indices: Object.freeze(indices),
-    bounds: deepFreeze(bounds),
-  };
-  if (blockerTriangleCount === 0) {
-    return Object.freeze(base);
-  }
-  if (
-    !(terrainVertexCount > 0) ||
-    !(terrainVertexCount < positions.length / 3)
-  ) {
-    failStructural(
-      "contract-invalid",
-      "positive blocker triangles require a strictly interior terrain vertex boundary.",
-    );
-  }
-  return deepFreeze({
-    ...base,
-    sourceAreaMode: {
-      kind: "terrain-with-static-blockers-r1",
-      terrainVertexCount,
-      blockerAreaId: 1,
-    },
-  });
 }
 
 function appendSoup(

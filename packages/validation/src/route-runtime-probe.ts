@@ -1,25 +1,18 @@
 import {
   advanceRouteRuntimeProbeSupportStationV2,
-  canonicalRoutePathReceiptV1,
   canonicalRoutePathReceiptV2,
-  canonicalRouteRuntimeProbeReceiptV1,
   canonicalRouteRuntimeProbeReceiptV2,
   canonicalTraversalRuntimeTickEvidenceV1,
-  createRouteRuntimeProbeRequestV1,
   createRouteRuntimeProbeRequestV2,
   resolveTraversalDriverProfileV1,
   resolveTraversalGraphBuilderProfile,
   type CharacterSupportSurfaceResolutionV1,
   type ResolvedTraversalDriverProfileV1,
-  type RoutePathReceiptV1,
   type RoutePathReceiptV2,
-  type RouteRuntimeProbeFailureV1,
-  type RouteRuntimeProbeMetricsV1,
-  type RouteRuntimeProbeReceiptV1,
+  type RouteRuntimeProbeFailureV2,
+  type RouteRuntimeProbeMetricsV2,
   type RouteRuntimeProbeReceiptV2,
-  type RouteRuntimeProbeRequestV1,
   type RouteRuntimeProbeRequestV2,
-  type RouteRuntimeProbeTickV1,
   type RouteRuntimeProbeTickV2,
   type TraversalRuntimePortV1,
   type TraversalRuntimeTickEvidenceV1,
@@ -40,31 +33,24 @@ import { assertAccessorFreeDataGraph } from "./accessor-free-data.js";
 type Vec2 = readonly [number, number];
 type Vec3 = readonly [number, number, number];
 
-export const ROUTE_RUNTIME_PROBE_ERROR_CODES_V1 = [
+export const ROUTE_RUNTIME_PROBE_ERROR_CODES_V2 = [
   "ROUTE_RUNTIME_PROBE_INPUT_INVALID",
   "ROUTE_RUNTIME_PROBE_PATH_INVALID",
   "ROUTE_RUNTIME_PROBE_RUNTIME_INVALID",
   "ROUTE_RUNTIME_PROBE_RUNTIME_UNAVAILABLE",
 ] as const;
 
-export type RouteRuntimeProbeErrorCodeV1 =
-  (typeof ROUTE_RUNTIME_PROBE_ERROR_CODES_V1)[number];
+export type RouteRuntimeProbeErrorCodeV2 =
+  (typeof ROUTE_RUNTIME_PROBE_ERROR_CODES_V2)[number];
 
-export class RouteRuntimeProbeErrorV1 extends Error {
-  public readonly code: RouteRuntimeProbeErrorCodeV1;
+export class RouteRuntimeProbeErrorV2 extends Error {
+  public readonly code: RouteRuntimeProbeErrorCodeV2;
 
-  public constructor(code: RouteRuntimeProbeErrorCodeV1) {
+  public constructor(code: RouteRuntimeProbeErrorCodeV2) {
     super(code);
-    this.name = "RouteRuntimeProbeErrorV1";
+    this.name = "RouteRuntimeProbeErrorV2";
     this.code = code;
   }
-}
-
-export interface RunRouteRuntimeProbeInputV1 {
-  readonly routePathReceipt: RoutePathReceiptV1;
-  readonly traversalDriverProfile: ResolvedTraversalDriverProfileV1;
-  readonly runtimePort: TraversalRuntimePortV1;
-  readonly validationProfile: ValidationProfileV2;
 }
 
 export interface RunRouteRuntimeProbeInputV2 {
@@ -72,7 +58,9 @@ export interface RunRouteRuntimeProbeInputV2 {
   readonly traversalDriverProfile: ResolvedTraversalDriverProfileV1;
   readonly runtimePort: TraversalRuntimePortV1;
   readonly validationProfile: ValidationProfileV2;
-  readonly walkSpeedMetersPerSecond: number;
+  readonly resolvedControlFeelProfile: Readonly<{
+    readonly walkSpeedMetersPerSecond: number;
+  }>;
   readonly positionQuantizationMeters: number;
 }
 
@@ -99,13 +87,13 @@ interface PathGeometry {
 
 const GEOMETRY_EPSILON = 1e-9;
 
-function fail(code: RouteRuntimeProbeErrorCodeV1): never {
-  throw new RouteRuntimeProbeErrorV1(code);
+function fail(code: RouteRuntimeProbeErrorCodeV2): never {
+  throw new RouteRuntimeProbeErrorV2(code);
 }
 
-function canonicalPath(value: RoutePathReceiptV1): RoutePathReceiptV1 {
+function canonicalPath(value: RoutePathReceiptV2): RoutePathReceiptV2 {
   try {
-    return canonicalRoutePathReceiptV1(value);
+    return canonicalRoutePathReceiptV2(value);
   } catch {
     return fail("ROUTE_RUNTIME_PROBE_INPUT_INVALID");
   }
@@ -121,7 +109,7 @@ function canonicalDriver(
     }
     return resolved;
   } catch (error) {
-    if (error instanceof RouteRuntimeProbeErrorV1) throw error;
+    if (error instanceof RouteRuntimeProbeErrorV2) throw error;
     return fail("ROUTE_RUNTIME_PROBE_INPUT_INVALID");
   }
 }
@@ -159,7 +147,7 @@ function canonicalValidationProfile(
       }),
     });
   } catch (error) {
-    if (error instanceof RouteRuntimeProbeErrorV1) throw error;
+    if (error instanceof RouteRuntimeProbeErrorV2) throw error;
     return fail("ROUTE_RUNTIME_PROBE_INPUT_INVALID");
   }
 }
@@ -222,7 +210,7 @@ function segmentsIntersect(a: PathSegment, b: PathSegment): boolean {
 }
 
 function createPathGeometry(
-  path: RoutePathReceiptV1 | RoutePathReceiptV2,
+  path: RoutePathReceiptV2 | RoutePathReceiptV2,
 ): PathGeometry {
   let positionQuantizationMeters: number;
   try {
@@ -237,7 +225,7 @@ function createPathGeometry(
     }
     positionQuantizationMeters = builder.profile.positionQuantizationMeters;
   } catch (error) {
-    if (error instanceof RouteRuntimeProbeErrorV1) throw error;
+    if (error instanceof RouteRuntimeProbeErrorV2) throw error;
     return fail("ROUTE_RUNTIME_PROBE_PATH_INVALID");
   }
   const points = path.orderedPathPositionsMetersXYZ.map(xz);
@@ -422,7 +410,7 @@ function surfaceMismatch(
 
 function runtimeEvidence(
   value: TraversalRuntimeTickEvidenceV1,
-  request: RouteRuntimeProbeRequestV1 | RouteRuntimeProbeRequestV2,
+  request: RouteRuntimeProbeRequestV2 | RouteRuntimeProbeRequestV2,
   expectedTick: number,
   fixedTimeStepSeconds?: number,
 ): TraversalRuntimeTickEvidenceV1 {
@@ -455,7 +443,7 @@ function runtimeEvidence(
 function emptyMetrics(
   initial: TraversalRuntimeTickEvidenceV1,
   surface: TraversalSurfaceIdentityV1,
-): RouteRuntimeProbeMetricsV1 {
+): RouteRuntimeProbeMetricsV2 {
   return {
     processedTickCount: 0,
     maximumStalledDurationTicks: 0,
@@ -469,14 +457,14 @@ function emptyMetrics(
 }
 
 function failedReceipt(
-  request: RouteRuntimeProbeRequestV1,
+  request: RouteRuntimeProbeRequestV2,
   initialRuntimeEvidence: TraversalRuntimeTickEvidenceV1,
-  ticks: readonly RouteRuntimeProbeTickV1[],
-  metrics: RouteRuntimeProbeMetricsV1,
-  failure: RouteRuntimeProbeFailureV1,
-): RouteRuntimeProbeReceiptV1 {
+  ticks: readonly RouteRuntimeProbeTickV2[],
+  metrics: RouteRuntimeProbeMetricsV2,
+  failure: RouteRuntimeProbeFailureV2,
+): RouteRuntimeProbeReceiptV2 {
   try {
-    return canonicalRouteRuntimeProbeReceiptV1({
+    return canonicalRouteRuntimeProbeReceiptV2({
       kind: "route-runtime-probe-receipt",
       schemaVersion: 1,
       status: "failed",
@@ -492,13 +480,13 @@ function failedReceipt(
 }
 
 function completeReceipt(
-  request: RouteRuntimeProbeRequestV1,
+  request: RouteRuntimeProbeRequestV2,
   initialRuntimeEvidence: TraversalRuntimeTickEvidenceV1,
-  ticks: readonly RouteRuntimeProbeTickV1[],
-  metrics: RouteRuntimeProbeMetricsV1,
-): RouteRuntimeProbeReceiptV1 {
+  ticks: readonly RouteRuntimeProbeTickV2[],
+  metrics: RouteRuntimeProbeMetricsV2,
+): RouteRuntimeProbeReceiptV2 {
   try {
-    return canonicalRouteRuntimeProbeReceiptV1({
+    return canonicalRouteRuntimeProbeReceiptV2({
       kind: "route-runtime-probe-receipt",
       schemaVersion: 1,
       status: "complete",
@@ -548,7 +536,7 @@ function surfaceMismatchV2(
 function emptyMetricsV2(
   initial: TraversalRuntimeTickEvidenceV1,
   expectedTraversalSurfaceIds: readonly string[],
-): RouteRuntimeProbeMetricsV1 {
+): RouteRuntimeProbeMetricsV2 {
   return {
     processedTickCount: 0,
     maximumStalledDurationTicks: 0,
@@ -567,8 +555,8 @@ function failedReceiptV2(
   request: RouteRuntimeProbeRequestV2,
   initialRuntimeEvidence: TraversalRuntimeTickEvidenceV1,
   ticks: readonly RouteRuntimeProbeTickV2[],
-  metrics: RouteRuntimeProbeMetricsV1,
-  failure: RouteRuntimeProbeFailureV1,
+  metrics: RouteRuntimeProbeMetricsV2,
+  failure: RouteRuntimeProbeFailureV2,
 ): RouteRuntimeProbeReceiptV2 {
   try {
     return canonicalRouteRuntimeProbeReceiptV2({
@@ -590,7 +578,7 @@ function completeReceiptV2(
   request: RouteRuntimeProbeRequestV2,
   initialRuntimeEvidence: TraversalRuntimeTickEvidenceV1,
   ticks: readonly RouteRuntimeProbeTickV2[],
-  metrics: RouteRuntimeProbeMetricsV1,
+  metrics: RouteRuntimeProbeMetricsV2,
 ): RouteRuntimeProbeReceiptV2 {
   try {
     return canonicalRouteRuntimeProbeReceiptV2({
@@ -606,262 +594,6 @@ function completeReceiptV2(
   } catch {
     return fail("ROUTE_RUNTIME_PROBE_RUNTIME_INVALID");
   }
-}
-
-export async function runRouteRuntimeProbeV1(
-  input: RunRouteRuntimeProbeInputV1,
-): Promise<RouteRuntimeProbeReceiptV1> {
-  const path = canonicalPath(input.routePathReceipt);
-  const driver = canonicalDriver(input.traversalDriverProfile);
-  const validation = canonicalValidationProfile(input.validationProfile);
-  const geometry = createPathGeometry(path);
-  const thresholds = validation.thresholds;
-
-  let request: RouteRuntimeProbeRequestV1;
-  try {
-    request = createRouteRuntimeProbeRequestV1({
-      routePathReceipt: path,
-      resolvedDriverProfile: driver,
-      runtimePort: input.runtimePort,
-      validationProfileIdentity: validation.identity,
-    });
-  } catch {
-    return fail("ROUTE_RUNTIME_PROBE_INPUT_INVALID");
-  }
-
-  let rawInitial: TraversalRuntimeTickEvidenceV1;
-  try {
-    rawInitial = input.runtimePort.resetToStartAnchor({
-      startAnchorEntityId: path.startAnchorEntityId,
-    });
-  } catch {
-    return fail("ROUTE_RUNTIME_PROBE_RUNTIME_UNAVAILABLE");
-  }
-  const initial = runtimeEvidence(rawInitial, request, 0);
-  const initialMetrics = emptyMetrics(initial, path.traversalSurfaceIdentity);
-  if (initial.characterSupport.supportState === "unsupported") {
-    return failedReceipt(request, initial, [], initialMetrics, {
-      kind: "start-support-invalid",
-      failureProbeTick: 0,
-      failurePositionMetersXYZ: initial.subjectPositionMetersXYZ,
-      supportState: "unsupported",
-    });
-  }
-  if (surfaceMismatch(initial, path.traversalSurfaceIdentity)) {
-    return failedReceipt(request, initial, [], initialMetrics, {
-      kind: "support-surface-mismatch",
-      failureProbeTick: 0,
-      failurePositionMetersXYZ: initial.subjectPositionMetersXYZ,
-      supportState: initial.characterSupport.supportState,
-      surfaceResolutionMode: mismatchMode(
-        initial.characterSupport.surfaceResolution,
-      ),
-    });
-  }
-
-  const destination = geometry.points.at(-1)!;
-  if (
-    requireFiniteRuntimeDerived(
-      distanceXZ(xz(initial.subjectPositionMetersXYZ), destination),
-    ) <=
-      thresholds.destinationToleranceMetersXZ
-  ) {
-    return completeReceipt(request, initial, [], initialMetrics);
-  }
-
-  const ticks: RouteRuntimeProbeTickV1[] = [];
-  let previousEvidence = initial;
-  let previousProgressMetersXZ = 0;
-  let progressBaselineMetersXZ = 0;
-  let stalledDurationTicks = 0;
-  let consecutiveUnexpectedUnsupportedTicks = 0;
-  let maximumStalledDurationTicks = 0;
-  let maximumRouteDeviationMetersXZ = 0;
-  let maximumConsecutiveUnexpectedUnsupportedTicks = 0;
-  let slidingDurationTicks = 0;
-  let unexpectedSupportLossCount = 0;
-  let wrongSupportSurfaceCount = 0;
-
-  for (
-    let probeTick = 1;
-    probeTick <= thresholds.maximumProbeTicks;
-    probeTick += 1
-  ) {
-    const subjectBeforeTick = xz(previousEvidence.subjectPositionMetersXYZ);
-    const selectedProgress = projectForwardProgress(
-      geometry,
-      subjectBeforeTick,
-      previousProgressMetersXZ,
-      driver.profile.pathLookaheadMetersXZ,
-    );
-    const targetProgress = Math.min(
-      geometry.totalDistanceMetersXZ,
-      selectedProgress + driver.profile.pathLookaheadMetersXZ,
-    );
-    const walkDirectionWorldXZ = quantizedDirection(
-      subjectBeforeTick,
-      pointAtProgress(geometry, targetProgress),
-      driver.profile.intentDirectionQuantizationRatio,
-    );
-
-    let rawEvidence: TraversalRuntimeTickEvidenceV1;
-    try {
-      rawEvidence = await input.runtimePort.runFixedTick(Object.freeze({
-        walkDirectionWorldXZ: Object.freeze(walkDirectionWorldXZ),
-      }));
-    } catch {
-      return fail("ROUTE_RUNTIME_PROBE_RUNTIME_UNAVAILABLE");
-    }
-    const evidence = runtimeEvidence(
-      rawEvidence,
-      request,
-      probeTick,
-      initial.fixedTimeStepSeconds,
-    );
-    const subjectAfterTick = xz(evidence.subjectPositionMetersXYZ);
-    let routeProgressMetersXZ = projectForwardProgress(
-      geometry,
-      subjectAfterTick,
-      previousProgressMetersXZ,
-      driver.profile.pathLookaheadMetersXZ,
-    );
-    const routeDeviationMetersXZ = deviationFromCompletePath(
-      geometry,
-      subjectAfterTick,
-    );
-    const isUnsupported = evidence.characterSupport.supportState === "unsupported";
-    const hasExpectedSurface = !isUnsupported &&
-      !surfaceMismatch(evidence, path.traversalSurfaceIdentity);
-    const hasArrived = hasExpectedSurface &&
-      requireFiniteRuntimeDerived(distanceXZ(subjectAfterTick, destination)) <=
-        thresholds.destinationToleranceMetersXZ;
-    if (hasArrived) routeProgressMetersXZ = geometry.totalDistanceMetersXZ;
-
-    if (
-      routeProgressMetersXZ - progressBaselineMetersXZ >=
-        thresholds.minimumProgressMetersXZ
-    ) {
-      progressBaselineMetersXZ = routeProgressMetersXZ;
-      stalledDurationTicks = 0;
-    } else {
-      stalledDurationTicks += 1;
-    }
-    if (isUnsupported) {
-      consecutiveUnexpectedUnsupportedTicks += 1;
-      if (previousEvidence.characterSupport.supportState !== "unsupported") {
-        unexpectedSupportLossCount += 1;
-      }
-    } else {
-      consecutiveUnexpectedUnsupportedTicks = 0;
-    }
-    if (evidence.characterSupport.supportState === "sliding") {
-      slidingDurationTicks += 1;
-    }
-    if (surfaceMismatch(evidence, path.traversalSurfaceIdentity)) {
-      wrongSupportSurfaceCount = 1;
-    }
-
-    maximumStalledDurationTicks = Math.max(
-      maximumStalledDurationTicks,
-      stalledDurationTicks,
-    );
-    maximumRouteDeviationMetersXZ = Math.max(
-      maximumRouteDeviationMetersXZ,
-      routeDeviationMetersXZ,
-    );
-    maximumConsecutiveUnexpectedUnsupportedTicks = Math.max(
-      maximumConsecutiveUnexpectedUnsupportedTicks,
-      consecutiveUnexpectedUnsupportedTicks,
-    );
-
-    const row: RouteRuntimeProbeTickV1 = {
-      kind: "route-runtime-probe-tick",
-      schemaVersion: 1,
-      probeTick,
-      runtimeEvidence: evidence,
-      walkDirectionWorldXZ,
-      routeProgressMetersXZ,
-      remainingRouteDistanceMetersXZ: hasArrived
-        ? 0
-        : requireFiniteRuntimeDerived(
-            Math.max(
-              0,
-              geometry.totalDistanceMetersXZ - routeProgressMetersXZ,
-            ),
-          ),
-      routeDeviationMetersXZ,
-      stalledDurationTicks,
-      consecutiveUnexpectedUnsupportedTicks,
-    };
-    ticks.push(row);
-    const metrics: RouteRuntimeProbeMetricsV1 = {
-      processedTickCount: ticks.length,
-      maximumStalledDurationTicks,
-      maximumRouteDeviationMetersXZ,
-      maximumConsecutiveUnexpectedUnsupportedTicks,
-      slidingDurationTicks,
-      unexpectedSupportLossCount,
-      wrongSupportSurfaceCount,
-      invalidPhysicsValueCount: 0,
-    };
-
-    if (surfaceMismatch(evidence, path.traversalSurfaceIdentity)) {
-      const supportState = evidence.characterSupport.supportState;
-      if (supportState === "unsupported") {
-        return fail("ROUTE_RUNTIME_PROBE_RUNTIME_INVALID");
-      }
-      return failedReceipt(request, initial, ticks, metrics, {
-        kind: "support-surface-mismatch",
-        failureProbeTick: probeTick,
-        failurePositionMetersXYZ: evidence.subjectPositionMetersXYZ,
-        supportState,
-        surfaceResolutionMode: mismatchMode(
-          evidence.characterSupport.surfaceResolution,
-        ),
-      });
-    }
-    if (
-      consecutiveUnexpectedUnsupportedTicks >
-        thresholds.maximumConsecutiveUnsupportedTicks
-    ) {
-      return failedReceipt(request, initial, ticks, metrics, {
-        kind: "runtime-support-lost",
-        failureProbeTick: probeTick,
-        failurePositionMetersXYZ: evidence.subjectPositionMetersXYZ,
-        consecutiveUnexpectedUnsupportedTicks,
-      });
-    }
-    if (routeDeviationMetersXZ > thresholds.maximumRouteDeviationMetersXZ) {
-      return failedReceipt(request, initial, ticks, metrics, {
-        kind: "runtime-deviated",
-        failureProbeTick: probeTick,
-        failurePositionMetersXYZ: evidence.subjectPositionMetersXYZ,
-        routeDeviationMetersXZ,
-      });
-    }
-    if (hasArrived) {
-      return completeReceipt(request, initial, ticks, metrics);
-    }
-    if (stalledDurationTicks > thresholds.stalledWindowTicks) {
-      return failedReceipt(request, initial, ticks, metrics, {
-        kind: "runtime-stalled",
-        failureProbeTick: probeTick,
-        failurePositionMetersXYZ: evidence.subjectPositionMetersXYZ,
-        stalledDurationTicks,
-      });
-    }
-    if (probeTick === thresholds.maximumProbeTicks) {
-      return failedReceipt(request, initial, ticks, metrics, {
-        kind: "maximum-probe-ticks-reached",
-        failureProbeTick: probeTick,
-        failurePositionMetersXYZ: evidence.subjectPositionMetersXYZ,
-        processedTickCount: ticks.length,
-      });
-    }
-    previousEvidence = evidence;
-    previousProgressMetersXZ = routeProgressMetersXZ;
-  }
-  return fail("ROUTE_RUNTIME_PROBE_RUNTIME_INVALID");
 }
 
 export async function runRouteRuntimeProbeV2(
@@ -880,7 +612,7 @@ export async function runRouteRuntimeProbeV2(
       resolvedDriverProfile: driver,
       runtimePort: input.runtimePort,
       validationProfileIdentity: validation.identity,
-      walkSpeedMetersPerSecond: input.walkSpeedMetersPerSecond,
+      resolvedControlFeelProfile: input.resolvedControlFeelProfile,
       positionQuantizationMeters: input.positionQuantizationMeters,
     });
   } catch {
@@ -901,8 +633,9 @@ export async function runRouteRuntimeProbeV2(
     path,
     initial.subjectPositionMetersXYZ,
     previousArcLengthMeters,
-    input.walkSpeedMetersPerSecond,
+    input.resolvedControlFeelProfile.walkSpeedMetersPerSecond,
     input.positionQuantizationMeters,
+    initial.fixedTimeStepSeconds,
   );
   previousArcLengthMeters = initialStation.arcLengthMeters;
   const initialExpectedTraversalSurfaceIds =
@@ -994,8 +727,9 @@ export async function runRouteRuntimeProbeV2(
       path,
       evidence.subjectPositionMetersXYZ,
       previousArcLengthMeters,
-      input.walkSpeedMetersPerSecond,
+      input.resolvedControlFeelProfile.walkSpeedMetersPerSecond,
       input.positionQuantizationMeters,
+      evidence.fixedTimeStepSeconds,
     );
     previousArcLengthMeters = station.arcLengthMeters;
     const expectedTraversalSurfaceIds = station.expectedTraversalSurfaceIds;
@@ -1076,7 +810,7 @@ export async function runRouteRuntimeProbeV2(
       expectedTraversalSurfaceIds,
     };
     ticks.push(row);
-    const metrics: RouteRuntimeProbeMetricsV1 = {
+    const metrics: RouteRuntimeProbeMetricsV2 = {
       processedTickCount: ticks.length,
       maximumStalledDurationTicks,
       maximumRouteDeviationMetersXZ,

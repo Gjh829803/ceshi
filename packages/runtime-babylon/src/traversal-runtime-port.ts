@@ -238,7 +238,14 @@ function liveLockMatches(
 
 function collectCanonicalTraversalSurfaceSources(
   plan: ExecutionPlanV5,
-): CanonicalTraversalSurfaceTriangleSourceV1[] {
+):
+  | {
+    status: "ok";
+    sources: CanonicalTraversalSurfaceTriangleSourceV1[];
+  }
+  | {
+    status: "missing-bound-collider";
+  } {
   const colliderBySubshapeId = new Map(
     plan.staticColliders.map((collider) => [
       collider.colliderSubshapeId,
@@ -278,7 +285,7 @@ function collectCanonicalTraversalSurfaceSources(
     if (surface.kind === "static-collider") {
       const collider = colliderBySubshapeId.get(surface.colliderSubshapeId);
       if (isNil(collider)) {
-        continue;
+        return { status: "missing-bound-collider" };
       }
       const mesh = emitTransformedStaticColliderTriangleMeshV1(
         collider.shape,
@@ -291,7 +298,7 @@ function collectCanonicalTraversalSurfaceSources(
       });
     }
   }
-  return sources;
+  return { status: "ok", sources };
 }
 
 function classifySurface(
@@ -305,7 +312,11 @@ function classifySurface(
   if (sample.isSupportSurfaceDynamic) {
     return { mode: "unmatched" };
   }
-  const sources = collectCanonicalTraversalSurfaceSources(plan);
+  const collected = collectCanonicalTraversalSurfaceSources(plan);
+  if (collected.status === "missing-bound-collider") {
+    return { mode: "unmatched" };
+  }
+  const { sources } = collected;
   if (isEmpty(sources)) {
     return { mode: "unmatched" };
   }

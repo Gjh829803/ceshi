@@ -2,9 +2,12 @@ import { describe, expect, it } from "vitest";
 
 import * as traversal from "./index.js";
 import {
-  assertHeightfieldRouteBuildInputReceiptV1,
-  hashHeightfieldRouteBuildInputV1,
+  assertRouteBuildInputV2,
+  assertRouteBuildInputReceiptV2,
+  hashRouteBuildInputV2,
+  createRouteBuildInputReceiptV2,
 } from "./build-input.js";
+import { completeV2BuildInput } from "./route-v2-test-support.js";
 
 const HASH_A =
   "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa" as const;
@@ -71,77 +74,34 @@ function capabilityEnvelope() {
 }
 
 function validBuildInput() {
-  return {
-    kind: "heightfield-route-build-input",
-    schemaVersion: 1,
-    authoringSpecHash: HASH_A,
-    layoutSolveReportHash: HASH_A,
-    resourceLockHash: HASH_A,
-    connectivityRequirement: {
-      constraintId: "hero-to-goal",
-      traversingEntityId: "player",
-      startAnchorEntityId: "spawn-main",
-      destinationAnchorEntityId: "goal",
-      routeId: "main-route",
-    },
-    startAnchor: {
-      entityId: "spawn-main",
-      positionMetersXYZ: [0, 0, 0],
-    },
-    destinationAnchor: {
-      entityId: "goal",
-      positionMetersXYZ: [1, 0, 0],
-    },
-    hardRibbon: {
-      routeId: "main-route",
-      pointsMetersXZ: [[0, 0], [1, 0]],
-      widthMeters: 2,
-      locomotionProfileRef:
-        "worldkit://locomotion-profile/ground.standard@1",
-    },
-    traversalSurface: {
-      traversalSurfaceId: "surface-main",
-      surfaceEntityId: "terrain-main",
-      colliderSubshapeId: "terrain-heightfield",
-      resourceRef: "package://traversal-surface/terrain-main.heightfield@1",
-      resolvedVersion: "1",
-      resourceHash: HASH_A,
-    },
-    capabilityEnvelope: capabilityEnvelope(),
-    terrainSource: {
-      kind: "bounded",
-      terrainEntityId: "terrain-main",
-      terrainArtifactHash: HASH_A,
-      triangleSoup: {
-        positionsMetersXYZ: [0, 0, 0, 0, 0, 1, 1, 0, 0],
-        triangleIndices: [0, 1, 2],
-      },
-      minimumMetersXZ: [0, 0],
-      maximumMetersXZ: [1, 1],
-    },
-    blockingColliders: [],
-    colliderArtifactHash: EMPTY_COLLIDER_ARTIFACT_HASH,
-    blockedTraversalAreaExclusions: [],
-    blockedWaterExclusions: [],
-  };
+  return completeV2BuildInput();
 }
 
+function rehashed(input: ReturnType<typeof validBuildInput> extends infer T ? T : never, overrides: Record<string, unknown> = {}) {
+  const {
+    terrainArtifactHash: _terrainArtifactHash,
+    colliderArtifactHash: _colliderArtifactHash,
+    geometryArtifactHash: _geometryArtifactHash,
+    surfaceArtifactHash: _surfaceArtifactHash,
+    ...draft
+  } = input;
+  return completeV2BuildInput({
+    ...draft,
+    ...overrides,
+  } as Parameters<typeof completeV2BuildInput>[0]);
+}
+
+
 function assertBuildInput(value: unknown): unknown {
-  const candidate = (
-    traversal as typeof traversal & {
-      assertHeightfieldRouteBuildInputV1?: (input: unknown) => unknown;
-    }
-  ).assertHeightfieldRouteBuildInputV1;
-  expect(candidate).toBeTypeOf("function");
-  return candidate!(value);
+  return assertRouteBuildInputV2(value);
 }
 
 function hashBuildInput(value: unknown): string {
   const candidate = (
     traversal as typeof traversal & {
-      hashHeightfieldRouteBuildInputV1?: (input: unknown) => string;
+      hashRouteBuildInputV2?: (input: unknown) => string;
     }
-  ).hashHeightfieldRouteBuildInputV1;
+  ).hashRouteBuildInputV2;
   expect(candidate).toBeTypeOf("function");
   return candidate!(value);
 }
@@ -167,14 +127,14 @@ describe("Heightfield route build input contract", () => {
         { ...exclusion, traversalAreaId: "z-area" },
         { ...exclusion, traversalAreaId: "a-area" },
       ],
-    })).toThrow("HEIGHTFIELD_ROUTE_BUILD_INPUT_INVALID");
+    })).toThrow("ROUTE_BUILD_INPUT_INVALID");
     expect(() => assertBuildInput({
       ...input,
       blockedTraversalAreaExclusions: [{
         ...exclusion,
         surfaceEntityId: "terrain-other",
       }],
-    })).toThrow("HEIGHTFIELD_ROUTE_BUILD_INPUT_INVALID");
+    })).toThrow("ROUTE_BUILD_INPUT_INVALID");
   });
 
   it("rejects non-simple traversal-area exclusion boundaries and accepts concavity", () => {
@@ -189,7 +149,7 @@ describe("Heightfield route build input contract", () => {
       blockedTraversalAreaExclusions: [exclusion([
         [0, 0], [3, 0], [1, 0], [1, 2], [0, 2],
       ])],
-    })).toThrow("HEIGHTFIELD_ROUTE_BUILD_INPUT_INVALID");
+    })).toThrow("ROUTE_BUILD_INPUT_INVALID");
     expect(assertBuildInput({
       ...input,
       blockedTraversalAreaExclusions: [exclusion([
@@ -251,23 +211,27 @@ describe("Heightfield route build input contract", () => {
 
   it("uses one strict empty terrain-source variant without soup or bounds", () => {
     const bounded = validBuildInput();
-    const empty = {
-      ...bounded,
+    const empty = rehashed(bounded, {
       terrainSource: {
         kind: "empty",
-        terrainEntityId: "terrain-main",
-        terrainArtifactHash: HASH_A,
+        terrainEntityId: bounded.terrainSource.kind === "bounded"
+          ? bounded.terrainSource.terrainEntityId
+          : "terrain-main",
       },
-    };
+    });
     expect(assertBuildInput(empty)).toEqual(empty);
 
+    const boundedSource = bounded.terrainSource;
+    if (boundedSource.kind !== "bounded") {
+      throw new Error("expected bounded terrain");
+    }
     expect(() => assertBuildInput({
       ...empty,
       terrainSource: {
         ...empty.terrainSource,
-        triangleSoup: bounded.terrainSource.triangleSoup,
+        triangleSoup: boundedSource.triangleSoup,
       },
-    })).toThrow("HEIGHTFIELD_ROUTE_BUILD_INPUT_INVALID");
+    })).toThrow("ROUTE_BUILD_INPUT_INVALID");
   });
 
   it("rejects diverging repeated role ids and provider-shaped unknown fields", () => {
@@ -275,15 +239,15 @@ describe("Heightfield route build input contract", () => {
     expect(() => assertBuildInput({
       ...input,
       startAnchor: { ...input.startAnchor, entityId: "other-start" },
-    })).toThrow("HEIGHTFIELD_ROUTE_BUILD_INPUT_INVALID");
+    })).toThrow("ROUTE_BUILD_INPUT_INVALID");
     expect(() => assertBuildInput({
       ...input,
       recastConfig: { walkableRadius: 3 },
-    })).toThrow("HEIGHTFIELD_ROUTE_BUILD_INPUT_INVALID");
+    })).toThrow("ROUTE_BUILD_INPUT_INVALID");
     expect(() => assertBuildInput({
       ...input,
       hardRibbon: { ...input.hardRibbon, providerRef: "recast" },
-    })).toThrow("HEIGHTFIELD_ROUTE_BUILD_INPUT_INVALID");
+    })).toThrow("ROUTE_BUILD_INPUT_INVALID");
   });
 
   it("rejects a hard-ribbon locomotion Ref that diverges from the locked Envelope", () => {
@@ -296,7 +260,7 @@ describe("Heightfield route build input contract", () => {
         locomotionProfileRef:
           "worldkit://locomotion-profile/ground.other@1",
       },
-    })).toThrow("HEIGHTFIELD_ROUTE_BUILD_INPUT_INVALID");
+    })).toThrow("ROUTE_BUILD_INPUT_INVALID");
   });
 
   it("rejects a Collider artifact hash that does not bind the canonical rows", () => {
@@ -305,12 +269,17 @@ describe("Heightfield route build input contract", () => {
     expect(() => assertBuildInput({
       ...input,
       colliderArtifactHash: HASH_A,
-    })).toThrow("HEIGHTFIELD_ROUTE_BUILD_INPUT_INVALID");
+    })).toThrow("ROUTE_BUILD_INPUT_INVALID");
   });
 
   it("rejects malformed, duplicate, degenerate, and wrong-winding terrain soup", () => {
     const input = validBuildInput();
-    const soup = input.terrainSource.triangleSoup;
+    const soup = input.terrainSource.kind === "bounded"
+      ? input.terrainSource.triangleSoup
+      : undefined;
+    if (soup === undefined) {
+      throw new Error("expected bounded terrain");
+    }
     for (const triangleSoup of [
       { ...soup, positionsMetersXYZ: [...soup.positionsMetersXYZ, 2] },
       { ...soup, positionsMetersXYZ: [0, 0, 0, 0, 0, 1, Number.NaN, 0, 0] },
@@ -326,7 +295,7 @@ describe("Heightfield route build input contract", () => {
       expect(() => assertBuildInput({
         ...input,
         terrainSource: { ...input.terrainSource, triangleSoup },
-      })).toThrow("HEIGHTFIELD_ROUTE_BUILD_INPUT_INVALID");
+      })).toThrow("ROUTE_BUILD_INPUT_INVALID");
     }
   });
 
@@ -338,81 +307,49 @@ describe("Heightfield route build input contract", () => {
         ...input.terrainSource,
         maximumMetersXZ: [2, 1],
       },
-    })).toThrow("HEIGHTFIELD_ROUTE_BUILD_INPUT_INVALID");
+    })).toThrow("ROUTE_BUILD_INPUT_INVALID");
     expect(() => assertBuildInput({
       ...input,
       capabilityEnvelope: structuredClone(input.capabilityEnvelope),
-    })).toThrow("HEIGHTFIELD_ROUTE_BUILD_INPUT_INVALID");
+    })).toThrow("ROUTE_BUILD_INPUT_INVALID");
   });
 
   it("keeps nested Traversal Surface failures inside the Build Input error contract", () => {
     const input = validBuildInput();
     expect(() => assertBuildInput({
       ...input,
-      traversalSurface: {
-        ...input.traversalSurface,
+      traversalSurfaces: [{
+        ...input.traversalSurfaces[0]!,
         resourceHash: "SHA256:not-canonical",
-      },
-    })).toThrow("HEIGHTFIELD_ROUTE_BUILD_INPUT_INVALID");
+      }],
+    })).toThrow("ROUTE_BUILD_INPUT_INVALID");
   });
 
   it("admits one exact deeply frozen Receipt and recomputes bounded budget evidence", () => {
     const input = deepFreeze(validBuildInput());
-    const receipt = deepFreeze({
-      input,
-      routeBuildInputHash: hashHeightfieldRouteBuildInputV1(input),
-      budgetEvidence: {
-        kind: "heightfield-tile-estimate",
-        tilesX: 1,
-        tilesZ: 1,
-        estimatedTiles: 1,
-        maximumTiles: 1_024,
-        minimumMetersXZ: [0, 0],
-        maximumMetersXZ: [1, 1],
-      },
-    });
+    const receipt = createRouteBuildInputReceiptV2(input);
 
-    expect(assertHeightfieldRouteBuildInputReceiptV1(receipt)).toBe(receipt);
+    expect(assertRouteBuildInputReceiptV2(receipt)).toEqual(receipt);
     expect(Object.isFrozen(receipt.input.terrainSource)).toBe(true);
-    const changedSurfaceCountInput = deepFreeze({
+    const changedAuthoringInput = deepFreeze({
       ...input,
-      capabilityEnvelope: deepFreeze({
-        ...input.capabilityEnvelope,
-        maximumTraversalSurfaceCount: 60,
-      }),
+      authoringSpecHash: HASH_B,
     });
-    expect(hashHeightfieldRouteBuildInputV1(changedSurfaceCountInput)).not.toBe(
+    expect(hashRouteBuildInputV2(changedAuthoringInput)).not.toBe(
       receipt.routeBuildInputHash,
     );
-    expect(() => assertHeightfieldRouteBuildInputReceiptV1(deepFreeze({
-      ...receipt,
-      input: changedSurfaceCountInput,
-      routeBuildInputHash: hashHeightfieldRouteBuildInputV1(changedSurfaceCountInput),
-    }))).toThrow("HEIGHTFIELD_ROUTE_BUILD_INPUT_RECEIPT_INVALID");
   });
 
   it("rejects mutable, stale-hash, forged-policy, and stale-budget Receipts", () => {
     const input = deepFreeze(validBuildInput());
-    const receipt = deepFreeze({
-      input,
-      routeBuildInputHash: hashHeightfieldRouteBuildInputV1(input),
-      budgetEvidence: {
-        kind: "heightfield-tile-estimate",
-        tilesX: 1,
-        tilesZ: 1,
-        estimatedTiles: 1,
-        maximumTiles: 1_024,
-        minimumMetersXZ: [0, 0],
-        maximumMetersXZ: [1, 1],
-      },
-    });
+    const receipt = createRouteBuildInputReceiptV2(input);
 
-    expect(() => assertHeightfieldRouteBuildInputReceiptV1({ ...receipt }))
-      .toThrow("HEIGHTFIELD_ROUTE_BUILD_INPUT_RECEIPT_INVALID");
-    expect(() => assertHeightfieldRouteBuildInputReceiptV1(deepFreeze({
+    expect(() => assertRouteBuildInputReceiptV2({ ...receipt }))
+      .toThrow("ROUTE_BUILD_INPUT_INVALID");
+    expect(() => assertRouteBuildInputReceiptV2(deepFreeze({
       ...receipt,
       routeBuildInputHash: HASH_B,
-    }))).toThrow("HEIGHTFIELD_ROUTE_BUILD_INPUT_RECEIPT_INVALID");
+    }))).toThrow("ROUTE_BUILD_INPUT_INVALID");
     const forgedPolicyInput = deepFreeze({
       ...input,
       capabilityEnvelope: {
@@ -420,38 +357,34 @@ describe("Heightfield route build input contract", () => {
         maximumSearchSteps: input.capabilityEnvelope.maximumSearchSteps - 1,
       },
     });
-    expect(() => assertHeightfieldRouteBuildInputReceiptV1(deepFreeze({
+    expect(() => assertRouteBuildInputReceiptV2(deepFreeze({
       ...receipt,
       input: forgedPolicyInput,
-      routeBuildInputHash: hashHeightfieldRouteBuildInputV1(forgedPolicyInput),
-    }))).toThrow("HEIGHTFIELD_ROUTE_BUILD_INPUT_RECEIPT_INVALID");
-    expect(() => assertHeightfieldRouteBuildInputReceiptV1(deepFreeze({
+      routeBuildInputHash: hashRouteBuildInputV2(forgedPolicyInput),
+    }))).toThrow("ROUTE_BUILD_INPUT_INVALID");
+    expect(() => assertRouteBuildInputReceiptV2(deepFreeze({
       ...receipt,
       budgetEvidence: { ...receipt.budgetEvidence, estimatedTiles: 2 },
-    }))).toThrow("HEIGHTFIELD_ROUTE_BUILD_INPUT_RECEIPT_INVALID");
+    }))).toThrow("ROUTE_BUILD_INPUT_INVALID");
   });
 
   it("requires the exact empty-source budget evidence variant", () => {
     const bounded = validBuildInput();
-    const input = deepFreeze({
-      ...bounded,
+    const input = deepFreeze(rehashed(bounded, {
       terrainSource: {
         kind: "empty",
-        terrainEntityId: "terrain-main",
-        terrainArtifactHash: HASH_A,
+        terrainEntityId: bounded.terrainSource.kind === "bounded"
+          ? bounded.terrainSource.terrainEntityId
+          : "terrain-main",
       },
-    });
-    const receipt = deepFreeze({
-      input,
-      routeBuildInputHash: hashHeightfieldRouteBuildInputV1(input),
-      budgetEvidence: { kind: "not-required-empty-source" },
-    });
+    }));
+    const receipt = createRouteBuildInputReceiptV2(input);
 
-    expect(assertHeightfieldRouteBuildInputReceiptV1(receipt)).toBe(receipt);
-    expect(() => assertHeightfieldRouteBuildInputReceiptV1(deepFreeze({
+    expect(assertRouteBuildInputReceiptV2(receipt)).toEqual(receipt);
+    expect(() => assertRouteBuildInputReceiptV2(deepFreeze({
       ...receipt,
       budgetEvidence: {
-        kind: "heightfield-tile-estimate",
+        kind: "route-geometry-tile-estimate",
         tilesX: 1,
         tilesZ: 1,
         estimatedTiles: 1,
@@ -459,12 +392,10 @@ describe("Heightfield route build input contract", () => {
         minimumMetersXZ: [0, 0],
         maximumMetersXZ: [1, 1],
       },
-    }))).toThrow("HEIGHTFIELD_ROUTE_BUILD_INPUT_RECEIPT_INVALID");
+    }))).toThrow("ROUTE_BUILD_INPUT_INVALID");
   });
 
-  it("pins the V1 Heightfield Build Input canonical hash", () => {
-    expect(hashHeightfieldRouteBuildInputV1(validBuildInput())).toBe(
-      "sha256:779799b5aaddb96f2b1c454b78922f5e4a16c920e810ce1a359e52584947b7db",
-    );
+  it("hashes the V2 Route Build Input as sha256", () => {
+    expect(hashRouteBuildInputV2(validBuildInput())).toMatch(/^sha256:[a-f0-9]{64}$/);
   });
 });

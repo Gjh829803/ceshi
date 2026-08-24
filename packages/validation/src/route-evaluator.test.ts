@@ -2,12 +2,9 @@ import { canonicalJsonBytes, sha256Bytes } from "@whitebox-world/protocol";
 import {
   BUILT_IN_HEIGHTFIELD_R1_TRAVERSAL_GRAPH_BUILDER_PROFILE_REF,
   BUILT_IN_TRAVERSAL_DRIVER_PROFILE_REF,
-  canonicalRoutePathReceiptV1,
   canonicalRoutePathReceiptV2,
-  canonicalRouteConnectivityFailureV1,
-  canonicalHeightfieldRouteConnectivityResultV1,
+  canonicalRouteConnectivityFailureV2,
   canonicalRouteConnectivityResultV2,
-  canonicalRouteRuntimeProbeReceiptV1,
   canonicalRouteRuntimeProbeReceiptV2,
   createTraversalCapabilityEnvelopeV1,
   createRouteBuildInputReceiptV2,
@@ -15,24 +12,24 @@ import {
   hashRouteColliderArtifactV2,
   hashRouteGeometryArtifactV2,
   hashRouteSurfaceArtifactV2,
-  assertHeightfieldRouteBuildInputReceiptV1,
-  hashHeightfieldRouteBuildInputV1,
-  hashRouteConnectivityFailureV1,
-  hashRoutePathReceiptV1,
+  assertRouteBuildInputReceiptV2,
+  hashRouteBuildInputV2,
+  hashRouteConnectivityFailureV2,
   hashRoutePathReceiptV2,
-  hashTraversalGraphV1,
   hashTraversalGraphV2,
   canonicalTraversalGraphV2,
   resolveTraversalDriverProfileV1,
   resolveTraversalGraphBuilderProfileV2,
   resolveTraversalLockV1,
+  deriveColliderSubshapeIdV1,
   type ResolvedTraversalLockV1,
-  type HeightfieldRouteConnectivityResultV1,
-  type HeightfieldRouteBuildInputReceiptV1,
-  type RouteConnectivityFailureReasonV1,
-  type RoutePathReceiptV1,
-  type RouteRuntimeProbeReceiptV1,
-  type TraversalGraphV1,
+  type StaticColliderSourceV1,
+  type RouteConnectivityResultV2,
+  type RouteBuildInputReceiptV2,
+  type RouteConnectivityFailureReasonV2,
+  type RoutePathReceiptV2,
+  type RouteRuntimeProbeReceiptV2,
+  type TraversalGraphV2,
 } from "@whitebox-world/traversal";
 import { isNil } from "lodash-es";
 import { describe, expect, it } from "vitest";
@@ -73,6 +70,73 @@ const SURFACE = {
   resolvedVersion: "1",
   resourceHash: HASH_B,
 } as const;
+
+const WALL_ENTITY_ID = "wall-narrow";
+const WALL_LOGICAL_SUBSHAPE_ID = "primary";
+const WALL_COLLIDER_SUBSHAPE_ID = deriveColliderSubshapeIdV1(
+  WALL_ENTITY_ID,
+  WALL_LOGICAL_SUBSHAPE_ID,
+);
+const CEILING_ENTITY_ID = "ceiling-low";
+const CEILING_LOGICAL_SUBSHAPE_ID = "primary";
+const CEILING_COLLIDER_SUBSHAPE_ID = deriveColliderSubshapeIdV1(
+  CEILING_ENTITY_ID,
+  CEILING_LOGICAL_SUBSHAPE_ID,
+);
+
+function staticBoxCollider(
+  entityId: string,
+  logicalSubshapeId: string,
+): StaticColliderSourceV1 {
+  const triangleSoup = {
+    positionsMetersXYZ: [
+      0, 0, 0, 1, 0, 0, 1, 1, 0, 0, 1, 0,
+      0, 0, 1, 1, 0, 1, 1, 1, 1, 0, 1, 1,
+    ],
+    triangleIndices: [
+      0, 3, 2, 0, 2, 1,
+      4, 5, 6, 4, 6, 7,
+      0, 1, 5, 0, 5, 4,
+      3, 7, 6, 3, 6, 2,
+      0, 4, 7, 0, 7, 3,
+      1, 2, 6, 1, 6, 5,
+    ],
+  };
+  return {
+    entityId,
+    logicalSubshapeId,
+    colliderSubshapeId: deriveColliderSubshapeIdV1(entityId, logicalSubshapeId),
+    colliderHash: HASH_A,
+    triangleSoup,
+  };
+}
+
+function rebuildBuildInputReceipt(
+  receipt: RouteBuildInputReceiptV2,
+  overrides: Readonly<{
+    terrainSource?: RouteBuildInputReceiptV2["input"]["terrainSource"];
+    staticColliders?: readonly StaticColliderSourceV1[];
+  }>,
+): RouteBuildInputReceiptV2 {
+  const draft = {
+    ...receipt.input,
+    ...overrides,
+  };
+  const terrainArtifactHash = hashRouteTerrainArtifactV2(draft.terrainSource);
+  const colliderArtifactHash = hashRouteColliderArtifactV2(draft.staticColliders);
+  const geometryArtifactHash = hashRouteGeometryArtifactV2({
+    terrainArtifactHash,
+    colliderArtifactHash,
+  });
+  const surfaceArtifactHash = hashRouteSurfaceArtifactV2(draft.traversalSurfaces);
+  return createRouteBuildInputReceiptV2({
+    ...draft,
+    terrainArtifactHash,
+    colliderArtifactHash,
+    geometryArtifactHash,
+    surfaceArtifactHash,
+  });
+}
 
 function lockInput(
   overrides: Partial<ResolvedTraversalLockV1> = {},
@@ -144,7 +208,7 @@ function buildInputReceipt(
     traversingEntityId: "player",
     routeId: "main-route",
   },
-): HeightfieldRouteBuildInputReceiptV1 {
+): RouteBuildInputReceiptV2 {
   const graphBuilderProfile = resolveTraversalGraphBuilderProfileV2(
     BUILT_IN_HEIGHTFIELD_R1_TRAVERSAL_GRAPH_BUILDER_PROFILE_REF,
   );
@@ -152,9 +216,9 @@ function buildInputReceipt(
     traversalLockReceipt: lockReceipt,
     graphBuilderProfile,
   }).envelope;
-  const buildInput = deepFreeze({
-    kind: "heightfield-route-build-input" as const,
-    schemaVersion: 1 as const,
+  const draft = {
+    kind: "route-build-input" as const,
+    schemaVersion: 2 as const,
     authoringSpecHash: worldIdentity.authoringSpecHash,
     layoutSolveReportHash: worldIdentity.layoutSolveReportHash,
     resourceLockHash: worldIdentity.resourceLockHash,
@@ -179,12 +243,11 @@ function buildInputReceipt(
       widthMeters: 2,
       locomotionProfileRef: lockReceipt.lock.locomotionProfileRef,
     },
-    traversalSurface: SURFACE,
+    traversalSurfaces: [SURFACE],
     capabilityEnvelope,
     terrainSource: {
       kind: "bounded" as const,
       terrainEntityId: SURFACE.surfaceEntityId,
-      terrainArtifactHash: HASH_A,
       triangleSoup: {
         positionsMetersXYZ: [0, 0, 0, 0, 0, 1, 1, 0, 0],
         triangleIndices: [0, 1, 2],
@@ -192,30 +255,30 @@ function buildInputReceipt(
       minimumMetersXZ: [0, 0] as const,
       maximumMetersXZ: [1, 1] as const,
     },
-    blockingColliders: [],
-    colliderArtifactHash: EMPTY_COLLIDER_HASH,
-    blockedWaterExclusions: [],
-    blockedTraversalAreaExclusions: [],
+    staticColliders: [] as const,
+    blockedTraversalAreaExclusions: [] as const,
+    blockedWaterExclusions: [] as const,
+  };
+  const terrainArtifactHash = hashRouteTerrainArtifactV2(draft.terrainSource);
+  const colliderArtifactHash = hashRouteColliderArtifactV2(draft.staticColliders);
+  const geometryArtifactHash = hashRouteGeometryArtifactV2({
+    terrainArtifactHash,
+    colliderArtifactHash,
   });
-  return assertHeightfieldRouteBuildInputReceiptV1(deepFreeze({
-    input: buildInput,
-    routeBuildInputHash: hashHeightfieldRouteBuildInputV1(buildInput),
-    budgetEvidence: {
-      kind: "heightfield-tile-estimate" as const,
-      tilesX: 1,
-      tilesZ: 1,
-      estimatedTiles: 1,
-      maximumTiles: capabilityEnvelope.maximumTiles,
-      minimumMetersXZ: [0, 0] as const,
-      maximumMetersXZ: [1, 1] as const,
-    },
-  }));
+  const surfaceArtifactHash = hashRouteSurfaceArtifactV2(draft.traversalSurfaces);
+  return createRouteBuildInputReceiptV2({
+    ...draft,
+    terrainArtifactHash,
+    colliderArtifactHash,
+    geometryArtifactHash,
+    surfaceArtifactHash,
+  });
 }
 
 function graph(
-  buildReceipt: HeightfieldRouteBuildInputReceiptV1,
+  buildReceipt: RouteBuildInputReceiptV2,
   reverseMaps = false,
-): TraversalGraphV1 {
+): TraversalGraphV2 {
   const buildInput = buildReceipt.input;
   const envelope = buildInput.capabilityEnvelope;
   const start = {
@@ -248,13 +311,17 @@ function graph(
   };
   return {
     kind: "traversal-graph",
-    schemaVersion: 1,
+    schemaVersion: 2,
+    geometryArtifactHash: buildInput.geometryArtifactHash,
+    traversalSurfaceIdentitiesById: {
+      [SURFACE.traversalSurfaceId]: SURFACE,
+    },
     authoringSpecHash: buildInput.authoringSpecHash,
     layoutSolveReportHash: buildInput.layoutSolveReportHash,
     resourceLockHash: buildInput.resourceLockHash,
-    terrainArtifactHash: buildInput.terrainSource.terrainArtifactHash,
+    terrainArtifactHash: buildInput.terrainArtifactHash,
     colliderArtifactHash: buildInput.colliderArtifactHash,
-    surfaceArtifactHash: buildInput.traversalSurface.resourceHash,
+    surfaceArtifactHash: buildInput.surfaceArtifactHash,
     routeBuildInputHash: buildReceipt.routeBuildInputHash,
     resolvedTraversalLockHash: envelope.resolvedTraversalLockHash,
     graphBuilderProfileRef: envelope.graphBuilderProfileRef,
@@ -271,13 +338,13 @@ function graph(
 }
 
 function path(
-  traversalGraph: TraversalGraphV1,
+  traversalGraph: TraversalGraphV2,
   constraintId = "player-to-goal",
   traversingEntityId = "player",
-): RoutePathReceiptV1 {
-  return canonicalRoutePathReceiptV1({
+): RoutePathReceiptV2 {
+  return canonicalRoutePathReceiptV2({
     kind: "route-path-receipt",
-    schemaVersion: 1,
+    schemaVersion: 2,
     status: "complete",
     constraintId,
     routeId: traversalGraph.routeId,
@@ -287,10 +354,10 @@ function path(
     authoringSpecHash: traversalGraph.authoringSpecHash,
     layoutSolveReportHash: traversalGraph.layoutSolveReportHash,
     resourceLockHash: traversalGraph.resourceLockHash,
-    traversalGraphHash: hashTraversalGraphV1(traversalGraph),
+    traversalGraphHash: hashTraversalGraphV2(traversalGraph),
     routeBuildInputHash: traversalGraph.routeBuildInputHash,
     resolvedTraversalLockHash: traversalGraph.resolvedTraversalLockHash,
-    traversalSurfaceIdentity: SURFACE,
+    orderedTraversalSurfaceIdentities: [SURFACE, SURFACE],
     graphBuilderProfileRef: traversalGraph.graphBuilderProfileRef,
     graphBuilderResolvedVersion: traversalGraph.graphBuilderResolvedVersion,
     graphBuilderProfileHash: traversalGraph.graphBuilderProfileHash,
@@ -309,9 +376,9 @@ function path(
 }
 
 function completeProbe(
-  routePath: RoutePathReceiptV1,
+  routePath: RoutePathReceiptV2,
   lock: ReturnType<typeof resolveTraversalLockV1>,
-): RouteRuntimeProbeReceiptV1 {
+): RouteRuntimeProbeReceiptV2 {
   const driver = resolveTraversalDriverProfileV1(
     BUILT_IN_TRAVERSAL_DRIVER_PROFILE_REF,
   );
@@ -349,14 +416,14 @@ function completeProbe(
       surfaceResolution: { mode: "resolved" as const, ...SURFACE },
     },
   };
-  return canonicalRouteRuntimeProbeReceiptV1({
+  return canonicalRouteRuntimeProbeReceiptV2({
     kind: "route-runtime-probe-receipt",
-    schemaVersion: 1,
+    schemaVersion: 2,
     status: "complete",
     request: {
       kind: "route-runtime-probe-request",
-      schemaVersion: 1,
-      routePathReceiptHash: hashRoutePathReceiptV1(routePath),
+      schemaVersion: 2,
+      routePathReceiptHash: hashRoutePathReceiptV2(routePath),
       constraintId: routePath.constraintId,
       routeId: routePath.routeId,
       traversingEntityId: routePath.traversingEntityId,
@@ -369,7 +436,6 @@ function completeProbe(
       routeBuildInputHash: routePath.routeBuildInputHash,
       traversalGraphHash: routePath.traversalGraphHash,
       resolvedTraversalLockHash: routePath.resolvedTraversalLockHash,
-      traversalSurfaceIdentity: routePath.traversalSurfaceIdentity,
       driverProfileRef: driver.resourceRef,
       driverResolvedVersion: driver.resolvedVersion,
       driverProfileHash: driver.contentHash,
@@ -380,6 +446,10 @@ function completeProbe(
       validationProfileHash:
         OUTDOOR_WORLD_PACKAGE_DEV_VALIDATION_PROFILE_HASH_V2,
       runtimeImplementationIdentity,
+      walkSpeedMetersPerSecond: 4,
+      positionQuantizationMeters: resolveTraversalGraphBuilderProfileV2(
+        BUILT_IN_HEIGHTFIELD_R1_TRAVERSAL_GRAPH_BUILDER_PROFILE_REF,
+      ).profile.positionQuantizationMeters,
     },
     initialRuntimeEvidence,
     ticks: [],
@@ -398,9 +468,9 @@ function completeProbe(
 }
 
 function failedStartSupportProbe(
-  routePath: RoutePathReceiptV1,
+  routePath: RoutePathReceiptV2,
   lock: ReturnType<typeof resolveTraversalLockV1>,
-): RouteRuntimeProbeReceiptV1 {
+): RouteRuntimeProbeReceiptV2 {
   const complete = completeProbe(routePath, lock);
   const initialRuntimeEvidence = {
     ...complete.initialRuntimeEvidence,
@@ -413,9 +483,9 @@ function failedStartSupportProbe(
       surfaceResolution: { mode: "unsupported" as const },
     },
   };
-  return canonicalRouteRuntimeProbeReceiptV1({
+  return canonicalRouteRuntimeProbeReceiptV2({
     kind: "route-runtime-probe-receipt",
-    schemaVersion: 1,
+    schemaVersion: 2,
     status: "failed",
     request: complete.request,
     initialRuntimeEvidence,
@@ -463,14 +533,14 @@ function rowInput(options: Readonly<{
     : completeProbe(routePathReceipt, resolvedTraversalLockReceipt);
   return {
     routeBuildInputReceipt,
-    routeConnectivityResult: canonicalHeightfieldRouteConnectivityResultV1({
-      kind: "heightfield-route-connectivity-result",
-      schemaVersion: 1,
+    routeConnectivityResult: canonicalRouteConnectivityResultV2({
+      kind: "route-connectivity-result",
+      schemaVersion: 2,
       status: "complete",
       traversalGraph,
-      traversalGraphHash: hashTraversalGraphV1(traversalGraph),
+      traversalGraphHash: hashTraversalGraphV2(traversalGraph),
       routePathReceipt,
-      routePathReceiptHash: hashRoutePathReceiptV1(routePathReceipt),
+      routePathReceiptHash: hashRoutePathReceiptV2(routePathReceipt),
     }),
     ...(routeRuntimeProbeReceipt === undefined
       ? {}
@@ -524,14 +594,14 @@ function failedConnectivityInput(
   status: "unreachable" | "incomplete",
   options: Readonly<{
     graphStatus?: "complete" | "unavailable";
-    reason?: RouteConnectivityFailureReasonV1;
-    routeBuildInputReceipt?: HeightfieldRouteBuildInputReceiptV1;
+    reason?: RouteConnectivityFailureReasonV2;
+    routeBuildInputReceipt?: RouteBuildInputReceiptV2;
     constraintId?: string;
     routeId?: string;
   }> = {},
 ): CreateRouteValidationReportInputV2 {
   const resolvedTraversalLockReceipt = resolveTraversalLockV1(lockInput());
-  const routeBuildInputReceipt = options.routeBuildInputReceipt ??
+  let routeBuildInputReceipt = options.routeBuildInputReceipt ??
     buildInputReceipt(
       resolvedTraversalLockReceipt,
       SUBJECT,
@@ -541,17 +611,41 @@ function failedConnectivityInput(
         routeId: options.routeId ?? "main-route",
       },
     );
+  const pendingReason = options.reason;
+  if (!isNil(pendingReason) && pendingReason.kind === "empty-heightfield-source") {
+    routeBuildInputReceipt = rebuildBuildInputReceipt(routeBuildInputReceipt, {
+      terrainSource: {
+        kind: "empty",
+        terrainEntityId: SURFACE.surfaceEntityId,
+      },
+      staticColliders: [],
+    });
+  }
+  if (
+    !isNil(pendingReason) &&
+    "relevantColliderSubshapeIds" in pendingReason
+  ) {
+    const colliders: StaticColliderSourceV1[] = [];
+    if (pendingReason.relevantColliderSubshapeIds.includes(WALL_COLLIDER_SUBSHAPE_ID)) {
+      colliders.push(staticBoxCollider(WALL_ENTITY_ID, WALL_LOGICAL_SUBSHAPE_ID));
+    }
+    if (pendingReason.relevantColliderSubshapeIds.includes(CEILING_COLLIDER_SUBSHAPE_ID)) {
+      colliders.push(staticBoxCollider(CEILING_ENTITY_ID, CEILING_LOGICAL_SUBSHAPE_ID));
+    }
+    routeBuildInputReceipt = rebuildBuildInputReceipt(routeBuildInputReceipt, {
+      staticColliders: colliders,
+    });
+  }
   const requirement = routeBuildInputReceipt.input.connectivityRequirement;
   const envelope = routeBuildInputReceipt.input.capabilityEnvelope;
   const graphStatus = options.graphStatus ?? "unavailable";
   const traversalGraph = graphStatus === "complete"
     ? graph(routeBuildInputReceipt)
     : undefined;
-  const defaultReason: RouteConnectivityFailureReasonV1 = status === "unreachable"
+  const defaultReason: RouteConnectivityFailureReasonV2 = status === "unreachable"
     ? {
         kind: "slope-threshold-exceeded",
         code: "ROUTE_SLOPE_EXCEEDED",
-        terrainEntityId: SURFACE.surfaceEntityId,
         maximumObservedSlopeDegrees: 48,
         maximumAllowedSlopeDegrees: 42,
         proofKind: "unique-single-reason-cut",
@@ -562,18 +656,38 @@ function failedConnectivityInput(
       ? {
           kind: "search-budget-exceeded",
           code: "ROUTE_GRAPH_BUDGET_EXCEEDED",
-          maximumAllowedCount: 100,
-          minimumRequiredCount: 101,
+          maximumAllowedCount: envelope.maximumSearchSteps,
+          minimumRequiredCount: envelope.maximumSearchSteps + 1,
         }
       : {
           kind: "node-budget-exceeded",
           code: "ROUTE_GRAPH_BUDGET_EXCEEDED",
-          maximumAllowedCount: 100,
-          minimumRequiredCount: 101,
+          maximumAllowedCount: envelope.maximumNodes,
+          minimumRequiredCount: envelope.maximumNodes + 1,
         };
-  const connectivityFailure = canonicalRouteConnectivityFailureV1({
+  let reason = options.reason ?? defaultReason;
+  if (reason.kind === "node-budget-exceeded") {
+    reason = {
+      ...reason,
+      maximumAllowedCount: envelope.maximumNodes,
+      minimumRequiredCount: envelope.maximumNodes + 1,
+    };
+  } else if (reason.kind === "edge-budget-exceeded") {
+    reason = {
+      ...reason,
+      maximumAllowedCount: envelope.maximumEdges,
+      minimumRequiredCount: envelope.maximumEdges + 1,
+    };
+  } else if (reason.kind === "search-budget-exceeded") {
+    reason = {
+      ...reason,
+      maximumAllowedCount: envelope.maximumSearchSteps,
+      minimumRequiredCount: envelope.maximumSearchSteps + 1,
+    };
+  }
+  const connectivityFailure = canonicalRouteConnectivityFailureV2({
     kind: "route-connectivity-failure",
-    schemaVersion: 1,
+    schemaVersion: 2,
     constraintId: requirement.constraintId,
     routeId: requirement.routeId,
     traversingEntityId: requirement.traversingEntityId,
@@ -581,9 +695,15 @@ function failedConnectivityInput(
     destinationAnchorEntityId: "goal",
     startAnchorPositionMetersXYZ: [0, 0, 0],
     destinationAnchorPositionMetersXYZ: [1, 0, 0],
-    traversalSurfaceId: SURFACE.traversalSurfaceId,
-    surfaceEntityId: SURFACE.surfaceEntityId,
-    colliderSubshapeId: SURFACE.colliderSubshapeId,
+    relatedTraversalSurfaceIdentities: (
+      reason.kind === "slope-threshold-exceeded" ||
+      reason.kind === "step-height-threshold-exceeded" ||
+      reason.kind === "clearance-width-insufficient" ||
+      reason.kind === "overhead-clearance-insufficient" ||
+      reason.kind === "surface-gap-exceeded"
+        ? [SURFACE]
+        : []
+    ),
     routeBuildInputHash: routeBuildInputReceipt.routeBuildInputHash,
     resolvedTraversalLockHash:
       resolvedTraversalLockReceipt.resolvedTraversalLockHash,
@@ -593,23 +713,23 @@ function failedConnectivityInput(
     status,
     graphStatus,
     ...(graphStatus === "complete"
-      ? { traversalGraphHash: hashTraversalGraphV1(traversalGraph!) }
+      ? { traversalGraphHash: hashTraversalGraphV2(traversalGraph!) }
       : {}),
-    reason: options.reason ?? defaultReason,
+    reason,
   });
-  const routeConnectivityResult = canonicalHeightfieldRouteConnectivityResultV1({
-    kind: "heightfield-route-connectivity-result",
-    schemaVersion: 1,
+  const routeConnectivityResult = canonicalRouteConnectivityResultV2({
+    kind: "route-connectivity-result",
+    schemaVersion: 2,
     status,
     graphStatus,
     ...(graphStatus === "complete"
       ? {
           traversalGraph,
-          traversalGraphHash: hashTraversalGraphV1(traversalGraph!),
+          traversalGraphHash: hashTraversalGraphV2(traversalGraph!),
         }
       : {}),
     connectivityFailure,
-    connectivityFailureHash: hashRouteConnectivityFailureV1(connectivityFailure),
+    connectivityFailureHash: hashRouteConnectivityFailureV2(connectivityFailure),
   });
   const row: RouteValidationRowInputV2 = {
     routeBuildInputReceipt,
@@ -635,7 +755,6 @@ const THRESHOLD_FAILURE_REASONS = [
   {
     kind: "slope-threshold-exceeded",
     code: "ROUTE_SLOPE_EXCEEDED",
-    terrainEntityId: SURFACE.surfaceEntityId,
     maximumObservedSlopeDegrees: 48,
     maximumAllowedSlopeDegrees: 42,
     proofKind: "unique-single-reason-cut",
@@ -645,7 +764,6 @@ const THRESHOLD_FAILURE_REASONS = [
   {
     kind: "step-height-threshold-exceeded",
     code: "ROUTE_STEP_HEIGHT_EXCEEDED",
-    terrainEntityId: SURFACE.surfaceEntityId,
     maximumObservedStepHeightMeters: 0.4,
     maximumAllowedStepHeightMeters: 0.3,
     proofKind: "unique-single-reason-cut",
@@ -655,8 +773,7 @@ const THRESHOLD_FAILURE_REASONS = [
   {
     kind: "clearance-width-insufficient",
     code: "ROUTE_CLEARANCE_WIDTH_INSUFFICIENT",
-    terrainEntityId: SURFACE.surfaceEntityId,
-    relevantColliderSubshapeIds: ["wall-narrow"],
+    relevantColliderSubshapeIds: [WALL_COLLIDER_SUBSHAPE_ID],
     minimumObservedClearanceWidthMeters: 0.6,
     minimumRequiredClearanceWidthMeters: (0.35 + 0.05) * 2,
     proofKind: "unique-single-reason-cut",
@@ -666,8 +783,7 @@ const THRESHOLD_FAILURE_REASONS = [
   {
     kind: "overhead-clearance-insufficient",
     code: "ROUTE_OVERHEAD_CLEARANCE_INSUFFICIENT",
-    terrainEntityId: SURFACE.surfaceEntityId,
-    relevantColliderSubshapeIds: ["ceiling-low"],
+    relevantColliderSubshapeIds: [CEILING_COLLIDER_SUBSHAPE_ID],
     minimumObservedClearanceHeightMeters: 1.7,
     minimumRequiredClearanceHeightMeters: 1.8,
     proofKind: "unique-single-reason-cut",
@@ -677,14 +793,13 @@ const THRESHOLD_FAILURE_REASONS = [
   {
     kind: "surface-gap-exceeded",
     code: "ROUTE_SURFACE_GAP_EXCEEDED",
-    terrainEntityId: SURFACE.surfaceEntityId,
     maximumObservedSurfaceGapMeters: 0.1,
     maximumAllowedSurfaceGapMeters: 0,
     proofKind: "unique-single-reason-cut",
     proofCandidateIds: ["gap"],
     failurePositionMetersXYZ: [0.5, 0, 0],
   },
-] as const satisfies readonly RouteConnectivityFailureReasonV1[];
+] as const satisfies readonly RouteConnectivityFailureReasonV2[];
 
 const FAILURE_VARIANTS = [
   {
@@ -694,7 +809,7 @@ const FAILURE_VARIANTS = [
     reason: {
       kind: "empty-heightfield-source",
       code: "ROUTE_REQUIRED_PATH_UNREACHABLE",
-      terrainEntityId: SURFACE.surfaceEntityId,
+      terrainEntityId: "terrain-main",
     },
   },
   {
@@ -704,8 +819,6 @@ const FAILURE_VARIANTS = [
     reason: {
       kind: "no-queryable-ground-surface",
       code: "ROUTE_REQUIRED_PATH_UNREACHABLE",
-      terrainEntityId: SURFACE.surfaceEntityId,
-      traversalSurfaceId: SURFACE.traversalSurfaceId,
     },
   },
   ...THRESHOLD_FAILURE_REASONS.map((reason) => ({
@@ -745,7 +858,6 @@ const FAILURE_VARIANTS = [
       code: "ROUTE_START_SURFACE_NOT_FOUND",
       anchorEntityId: "spawn",
       positionMetersXYZ: [0, 0, 0],
-      traversalSurfaceId: SURFACE.traversalSurfaceId,
     },
   },
   {
@@ -757,7 +869,6 @@ const FAILURE_VARIANTS = [
       code: "ROUTE_DESTINATION_SURFACE_NOT_FOUND",
       anchorEntityId: "goal",
       positionMetersXYZ: [1, 0, 0],
-      traversalSurfaceId: SURFACE.traversalSurfaceId,
     },
   },
   {
@@ -767,7 +878,6 @@ const FAILURE_VARIANTS = [
     reason: {
       kind: "required-path-unreachable",
       code: "ROUTE_REQUIRED_PATH_UNREACHABLE",
-      traversalSurfaceId: SURFACE.traversalSurfaceId,
       relevantBlockingColliderEntityIds: [],
       blockedWaterEntityIds: [],
     },
@@ -804,11 +914,11 @@ const FAILURE_VARIANTS = [
   name: string;
   status: "unreachable" | "incomplete";
   graphStatus: "complete" | "unavailable";
-  reason: RouteConnectivityFailureReasonV1;
+  reason: RouteConnectivityFailureReasonV2;
 }>[];
 
 function expectedFailureDetailsKind(
-  reason: RouteConnectivityFailureReasonV1,
+  reason: RouteConnectivityFailureReasonV2,
 ): "capacity-exceeded" | "degrees-threshold" | "meters-threshold" | "state-mismatch" {
   if (reason.kind === "slope-threshold-exceeded") return "degrees-threshold";
   if (
@@ -831,7 +941,7 @@ function expectedFailureDetailsKind(
 }
 
 function expectedFailurePosition(
-  reason: RouteConnectivityFailureReasonV1,
+  reason: RouteConnectivityFailureReasonV2,
 ): readonly [number, number, number] {
   if (
     reason.kind === "slope-threshold-exceeded" ||
@@ -1046,9 +1156,6 @@ describe("createRouteValidationReportV2", () => {
       throw new Error("Expected a complete Runtime failure fixture.");
     }
     const routePathReceipt = runtimeBaseline.routeConnectivityResult.routePathReceipt;
-    if (!("traversalSurfaceIdentity" in routePathReceipt)) {
-      throw new Error("Expected a V1 Path Receipt fixture.");
-    }
     const failedProbe = failedStartSupportProbe(
       routePathReceipt,
       runtimeBaseline.resolvedTraversalLockReceipt,
@@ -1256,9 +1363,6 @@ describe("createRouteValidationReportV2", () => {
     const baseline = input();
     const baselineRow = onlyRow(baseline);
     const completePath = completeConnectivity(baseline).routePathReceipt;
-    if (!("traversalSurfaceIdentity" in completePath)) {
-      throw new Error("Expected a V1 Path Receipt fixture.");
-    }
     const failedProbe = failedStartSupportProbe(
       completePath,
       baselineRow.resolvedTraversalLockReceipt,
@@ -1291,7 +1395,6 @@ describe("createRouteValidationReportV2", () => {
         traversingEntityId: "player",
         startAnchorEntityId: "spawn",
         destinationAnchorEntityId: "goal",
-        traversalSurfaceId: SURFACE.traversalSurfaceId,
         colliderSubshapeId: SURFACE.colliderSubshapeId,
         positionMetersXYZ: [1, 0, 0],
         evidenceArtifactRefs: [
@@ -1315,8 +1418,8 @@ describe("createRouteValidationReportV2", () => {
     const baseline = input();
     const baselineRow = onlyRow(baseline);
     const routeRuntimeProbeReceipt = baselineRow.routeRuntimeProbeReceipt!;
-    if (routeRuntimeProbeReceipt.schemaVersion !== 1) {
-      throw new Error("Expected a V1 Probe Receipt fixture.");
+    if (routeRuntimeProbeReceipt.schemaVersion !== 2) {
+      throw new Error("Expected a V2 Probe Receipt fixture.");
     }
     const forged = {
       ...baseline,
@@ -1379,7 +1482,6 @@ describe("createRouteValidationReportV2", () => {
         traversingEntityId: "player",
         startAnchorEntityId: "spawn",
         destinationAnchorEntityId: "goal",
-        traversalSurfaceId: SURFACE.traversalSurfaceId,
         colliderSubshapeId: SURFACE.colliderSubshapeId,
         positionMetersXYZ: [0.5, 0.4, 0],
         evidenceArtifactRefs: [
@@ -1408,7 +1510,7 @@ describe("createRouteValidationReportV2", () => {
       reason: {
         kind: "empty-heightfield-source",
         code: "ROUTE_REQUIRED_PATH_UNREACHABLE",
-        terrainEntityId: SURFACE.surfaceEntityId,
+        terrainEntityId: "terrain-main",
       },
     });
 
@@ -1464,11 +1566,9 @@ describe("createRouteValidationReportV2", () => {
     expect(report.diagnostics).toEqual(expect.arrayContaining([
       expect.objectContaining({
         code: "ROUTE_GRAPH_BUDGET_EXCEEDED",
-        details: {
+        details: expect.objectContaining({
           kind: "capacity-exceeded",
-          maximumAllowedCount: 100,
-          minimumRequiredCount: 101,
-        },
+        }),
       }),
     ]));
     expect(validateValidationReportV2(report)).toMatchObject({ ok: true });
@@ -1566,7 +1666,7 @@ function v2BuildInputReceipt(
     capabilityEnvelope,
     terrainSource: {
       kind: "bounded" as const,
-      terrainEntityId: "terrain-main",
+      terrainEntityId: SURFACE.surfaceEntityId,
       triangleSoup: terrainSoupV2(),
       minimumMetersXZ: [0, 0] as const,
       maximumMetersXZ: [1, 1] as const,

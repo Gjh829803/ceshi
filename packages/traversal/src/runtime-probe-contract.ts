@@ -2,11 +2,8 @@ import { sha256CanonicalJson } from "@whitebox-world/protocol";
 import { isEmpty, isEqual, isNil, isPlainObject } from "lodash-es";
 
 import {
-  canonicalRoutePathReceiptV1,
   canonicalRoutePathReceiptV2,
-  hashRoutePathReceiptV1,
   hashRoutePathReceiptV2,
-  type RoutePathReceiptV1,
   type RoutePathReceiptV2,
 } from "./path-receipt.js";
 import {
@@ -34,52 +31,13 @@ type Vec2 = readonly [number, number];
 type Vec3 = readonly [number, number, number];
 type UnknownRecord = Record<string, unknown>;
 
-export interface RouteRuntimeProbeValidationProfileIdentityV1 {
+export interface RouteRuntimeProbeValidationProfileIdentityV2 {
   readonly resourceRef: string;
   readonly version: string;
   readonly contentHash: Sha256Hash;
 }
 
-export interface RouteRuntimeProbeRequestV1 {
-  readonly kind: "route-runtime-probe-request";
-  readonly schemaVersion: 1;
-  readonly routePathReceiptHash: Sha256Hash;
-  readonly constraintId: string;
-  readonly routeId: string;
-  readonly traversingEntityId: string;
-  readonly startAnchorEntityId: string;
-  readonly destinationAnchorEntityId: string;
-  readonly authoringSpecHash: Sha256Hash;
-  readonly layoutSolveReportHash: Sha256Hash;
-  readonly resourceLockHash: Sha256Hash;
-  readonly executionPlanHash: Sha256Hash;
-  readonly routeBuildInputHash: Sha256Hash;
-  readonly traversalGraphHash: Sha256Hash;
-  readonly resolvedTraversalLockHash: Sha256Hash;
-  readonly traversalSurfaceIdentity: TraversalSurfaceIdentityV1;
-  readonly driverProfileRef: string;
-  readonly driverResolvedVersion: string;
-  readonly driverProfileHash: Sha256Hash;
-  readonly validationProfileRef: string;
-  readonly validationProfileVersion: string;
-  readonly validationProfileHash: Sha256Hash;
-  readonly runtimeImplementationIdentity: TraversalRuntimeImplementationIdentityV1;
-}
-
-export interface RouteRuntimeProbeTickV1 {
-  readonly kind: "route-runtime-probe-tick";
-  readonly schemaVersion: 1;
-  readonly probeTick: number;
-  readonly runtimeEvidence: TraversalRuntimeTickEvidenceV1;
-  readonly walkDirectionWorldXZ: Vec2;
-  readonly routeProgressMetersXZ: number;
-  readonly remainingRouteDistanceMetersXZ: number;
-  readonly routeDeviationMetersXZ: number;
-  readonly stalledDurationTicks: number;
-  readonly consecutiveUnexpectedUnsupportedTicks: number;
-}
-
-export interface RouteRuntimeProbeMetricsV1 {
+export interface RouteRuntimeProbeMetricsV2 {
   readonly processedTickCount: number;
   readonly maximumStalledDurationTicks: number;
   readonly maximumRouteDeviationMetersXZ: number;
@@ -90,99 +48,41 @@ export interface RouteRuntimeProbeMetricsV1 {
   readonly invalidPhysicsValueCount: number;
 }
 
-interface RouteRuntimeProbeFailureBaseV1 {
+interface RouteRuntimeProbeFailureBaseV2 {
   readonly failureProbeTick: number;
   readonly failurePositionMetersXYZ: Vec3;
 }
 
-export type RouteRuntimeProbeFailureV1 =
-  | Readonly<RouteRuntimeProbeFailureBaseV1 & {
+export type RouteRuntimeProbeFailureV2 =
+  | Readonly<RouteRuntimeProbeFailureBaseV2 & {
       kind: "start-support-invalid";
       supportState: "unsupported";
     }>
-  | Readonly<RouteRuntimeProbeFailureBaseV1 & {
+  | Readonly<RouteRuntimeProbeFailureBaseV2 & {
       kind: "support-surface-mismatch";
       supportState: "supported" | "sliding";
       surfaceResolutionMode: "unmatched" | "ambiguous" | "resolved";
     }>
-  | Readonly<RouteRuntimeProbeFailureBaseV1 & {
+  | Readonly<RouteRuntimeProbeFailureBaseV2 & {
       kind: "runtime-stalled";
       stalledDurationTicks: number;
     }>
-  | Readonly<RouteRuntimeProbeFailureBaseV1 & {
+  | Readonly<RouteRuntimeProbeFailureBaseV2 & {
       kind: "runtime-deviated";
       routeDeviationMetersXZ: number;
     }>
-  | Readonly<RouteRuntimeProbeFailureBaseV1 & {
+  | Readonly<RouteRuntimeProbeFailureBaseV2 & {
       kind: "runtime-support-lost";
       consecutiveUnexpectedUnsupportedTicks: number;
     }>
-  | Readonly<RouteRuntimeProbeFailureBaseV1 & {
+  | Readonly<RouteRuntimeProbeFailureBaseV2 & {
       kind: "maximum-probe-ticks-reached";
       processedTickCount: number;
     }>;
 
-interface RouteRuntimeProbeReceiptBaseV1 {
-  readonly kind: "route-runtime-probe-receipt";
-  readonly schemaVersion: 1;
-  readonly request: RouteRuntimeProbeRequestV1;
-  readonly initialRuntimeEvidence: TraversalRuntimeTickEvidenceV1;
-  readonly ticks: readonly RouteRuntimeProbeTickV1[];
-  readonly metrics: RouteRuntimeProbeMetricsV1;
-}
-
-export type RouteRuntimeProbeReceiptV1 =
-  | Readonly<RouteRuntimeProbeReceiptBaseV1 & {
-      status: "complete";
-      completionDurationTicks: number;
-    }>
-  | Readonly<RouteRuntimeProbeReceiptBaseV1 & {
-      status: "failed";
-      failure: RouteRuntimeProbeFailureV1;
-    }>;
-
-export interface CreateRouteRuntimeProbeRequestInputV1 {
-  readonly routePathReceipt: RoutePathReceiptV1;
-  readonly resolvedDriverProfile: ResolvedTraversalDriverProfileV1;
-  readonly runtimePort: TraversalRuntimePortV1;
-  readonly validationProfileIdentity: RouteRuntimeProbeValidationProfileIdentityV1;
-}
-
-export interface AssertRouteRuntimeProbeReceiptContextInputV1 {
-  readonly receipt: RouteRuntimeProbeReceiptV1;
-  readonly routePathReceipt: RoutePathReceiptV1;
-  readonly resolvedDriverProfile: ResolvedTraversalDriverProfileV1;
-  readonly validationProfileIdentity: RouteRuntimeProbeValidationProfileIdentityV1;
-}
-
 const SHA256_PATTERN = /^sha256:[a-f0-9]{64}$/;
 const DIRECTION_LENGTH_TOLERANCE = 1e-9;
 
-const REQUEST_FIELDS = [
-  "kind",
-  "schemaVersion",
-  "routePathReceiptHash",
-  "constraintId",
-  "routeId",
-  "traversingEntityId",
-  "startAnchorEntityId",
-  "destinationAnchorEntityId",
-  "authoringSpecHash",
-  "layoutSolveReportHash",
-  "resourceLockHash",
-  "executionPlanHash",
-  "routeBuildInputHash",
-  "traversalGraphHash",
-  "resolvedTraversalLockHash",
-  "traversalSurfaceIdentity",
-  "driverProfileRef",
-  "driverResolvedVersion",
-  "driverProfileHash",
-  "validationProfileRef",
-  "validationProfileVersion",
-  "validationProfileHash",
-  "runtimeImplementationIdentity",
-] as const;
 
 const RUNTIME_IDENTITY_FIELDS = [
   "runtimeBackendRef",
@@ -489,7 +389,7 @@ function canonicalValidationIdentity(
   value: unknown,
   path: string,
   prefix: FailurePrefix,
-): RouteRuntimeProbeValidationProfileIdentityV1 {
+): RouteRuntimeProbeValidationProfileIdentityV2 {
   const record = requireExactRecord(
     value,
     VALIDATION_IDENTITY_FIELDS,
@@ -559,138 +459,6 @@ function assertResolvedDriverIdentity(
   return resolved;
 }
 
-export function canonicalRouteRuntimeProbeRequestV1(
-  value: unknown,
-): RouteRuntimeProbeRequestV1 {
-  const prefix = "ROUTE_RUNTIME_PROBE_REQUEST_INVALID";
-  const record = requireExactRecord(value, REQUEST_FIELDS, "", prefix);
-  if (record.kind !== "route-runtime-probe-request") {
-    fail(prefix, "kind", "must be 'route-runtime-probe-request'");
-  }
-  if (record.schemaVersion !== 1) fail(prefix, "schemaVersion", "must be 1");
-
-  const strings = {
-    constraintId: requireString(record.constraintId, "constraintId", prefix),
-    routeId: requireString(record.routeId, "routeId", prefix),
-    traversingEntityId: requireString(
-      record.traversingEntityId,
-      "traversingEntityId",
-      prefix,
-    ),
-    startAnchorEntityId: requireString(
-      record.startAnchorEntityId,
-      "startAnchorEntityId",
-      prefix,
-    ),
-    destinationAnchorEntityId: requireString(
-      record.destinationAnchorEntityId,
-      "destinationAnchorEntityId",
-      prefix,
-    ),
-    driverProfileRef: requireString(
-      record.driverProfileRef,
-      "driverProfileRef",
-      prefix,
-    ),
-    driverResolvedVersion: requireString(
-      record.driverResolvedVersion,
-      "driverResolvedVersion",
-      prefix,
-    ),
-    validationProfileRef: requireString(
-      record.validationProfileRef,
-      "validationProfileRef",
-      prefix,
-    ),
-    validationProfileVersion: requireString(
-      record.validationProfileVersion,
-      "validationProfileVersion",
-      prefix,
-    ),
-  } as const;
-  if (strings.startAnchorEntityId === strings.destinationAnchorEntityId) {
-    fail(prefix, "startAnchorEntityId", "must differ from destinationAnchorEntityId");
-  }
-  const hashes = {
-    routePathReceiptHash: requireHash(
-      record.routePathReceiptHash,
-      "routePathReceiptHash",
-      prefix,
-    ),
-    authoringSpecHash: requireHash(record.authoringSpecHash, "authoringSpecHash", prefix),
-    layoutSolveReportHash: requireHash(
-      record.layoutSolveReportHash,
-      "layoutSolveReportHash",
-      prefix,
-    ),
-    resourceLockHash: requireHash(record.resourceLockHash, "resourceLockHash", prefix),
-    executionPlanHash: requireHash(record.executionPlanHash, "executionPlanHash", prefix),
-    routeBuildInputHash: requireHash(
-      record.routeBuildInputHash,
-      "routeBuildInputHash",
-      prefix,
-    ),
-    traversalGraphHash: requireHash(record.traversalGraphHash, "traversalGraphHash", prefix),
-    resolvedTraversalLockHash: requireHash(
-      record.resolvedTraversalLockHash,
-      "resolvedTraversalLockHash",
-      prefix,
-    ),
-    driverProfileHash: requireHash(record.driverProfileHash, "driverProfileHash", prefix),
-    validationProfileHash: requireHash(
-      record.validationProfileHash,
-      "validationProfileHash",
-      prefix,
-    ),
-  } as const;
-  assertResolvedDriverIdentity(
-    strings.driverProfileRef,
-    strings.driverResolvedVersion,
-    hashes.driverProfileHash,
-    prefix,
-  );
-
-  return deepFreeze({
-    kind: "route-runtime-probe-request",
-    schemaVersion: 1,
-    routePathReceiptHash: hashes.routePathReceiptHash,
-    constraintId: strings.constraintId,
-    routeId: strings.routeId,
-    traversingEntityId: strings.traversingEntityId,
-    startAnchorEntityId: strings.startAnchorEntityId,
-    destinationAnchorEntityId: strings.destinationAnchorEntityId,
-    authoringSpecHash: hashes.authoringSpecHash,
-    layoutSolveReportHash: hashes.layoutSolveReportHash,
-    resourceLockHash: hashes.resourceLockHash,
-    executionPlanHash: hashes.executionPlanHash,
-    routeBuildInputHash: hashes.routeBuildInputHash,
-    traversalGraphHash: hashes.traversalGraphHash,
-    resolvedTraversalLockHash: hashes.resolvedTraversalLockHash,
-    traversalSurfaceIdentity: canonicalSurfaceIdentity(
-      record.traversalSurfaceIdentity,
-      "traversalSurfaceIdentity",
-      prefix,
-    ),
-    driverProfileRef: strings.driverProfileRef,
-    driverResolvedVersion: strings.driverResolvedVersion,
-    driverProfileHash: hashes.driverProfileHash,
-    validationProfileRef: strings.validationProfileRef,
-    validationProfileVersion: strings.validationProfileVersion,
-    validationProfileHash: hashes.validationProfileHash,
-    runtimeImplementationIdentity: canonicalRuntimeIdentity(
-      record.runtimeImplementationIdentity,
-      "runtimeImplementationIdentity",
-      prefix,
-    ),
-  });
-}
-
-export function hashRouteRuntimeProbeRequestV1(value: unknown): Sha256Hash {
-  return sha256CanonicalJson(
-    canonicalRouteRuntimeProbeRequestV1(value),
-  ) as Sha256Hash;
-}
-
 function assertResolvedDriverInput(
   value: ResolvedTraversalDriverProfileV1,
   prefix: FailurePrefix,
@@ -723,170 +491,7 @@ function assertResolvedDriverInput(
   return resolved;
 }
 
-export function createRouteRuntimeProbeRequestV1(
-  input: CreateRouteRuntimeProbeRequestInputV1,
-): RouteRuntimeProbeRequestV1 {
-  const prefix = "ROUTE_RUNTIME_PROBE_REQUEST_INVALID";
-  let path: RoutePathReceiptV1;
-  try {
-    path = canonicalRoutePathReceiptV1(input.routePathReceipt);
-  } catch {
-    fail(prefix, "routePathReceipt", "must be a canonical Path Receipt");
-  }
-  const driver = assertResolvedDriverInput(input.resolvedDriverProfile, prefix);
-  const validation = canonicalValidationIdentity(
-    input.validationProfileIdentity,
-    "validationProfileIdentity",
-    prefix,
-  );
-  const port = requireObject(input.runtimePort, "runtimePort", prefix);
-  let portSnapshot: UnknownRecord;
-  try {
-    portSnapshot = {
-      kind: port.kind,
-      schemaVersion: port.schemaVersion,
-      traversingEntityId: port.traversingEntityId,
-      authoringSpecHash: port.authoringSpecHash,
-      layoutSolveReportHash: port.layoutSolveReportHash,
-      resourceLockHash: port.resourceLockHash,
-      executionPlanHash: port.executionPlanHash,
-      resolvedTraversalLockHash: port.resolvedTraversalLockHash,
-      runtimeImplementationIdentity: port.runtimeImplementationIdentity,
-      readLatestTickEvidence: port.readLatestTickEvidence,
-      resetToStartAnchor: port.resetToStartAnchor,
-      runFixedTick: port.runFixedTick,
-    };
-  } catch {
-    fail(prefix, "runtimePort", "provider-neutral identity unavailable");
-  }
-  if (
-    portSnapshot.kind !== "traversal-runtime-port" ||
-    portSnapshot.schemaVersion !== 1
-  ) {
-    fail(prefix, "runtimePort", "must be a Traversal Runtime Port V1");
-  }
-  if (
-    typeof portSnapshot.readLatestTickEvidence !== "function" ||
-    typeof portSnapshot.resetToStartAnchor !== "function" ||
-    typeof portSnapshot.runFixedTick !== "function"
-  ) {
-    fail(prefix, "runtimePort", "must expose the closed Runtime Port operations");
-  }
-  const runtimeIdentity = canonicalRuntimeIdentity(
-    portSnapshot.runtimeImplementationIdentity,
-    "runtimePort/runtimeImplementationIdentity",
-    prefix,
-  );
-  const portBindings: Readonly<Record<string, unknown>> = {
-    traversingEntityId: portSnapshot.traversingEntityId,
-    authoringSpecHash: portSnapshot.authoringSpecHash,
-    layoutSolveReportHash: portSnapshot.layoutSolveReportHash,
-    resourceLockHash: portSnapshot.resourceLockHash,
-    resolvedTraversalLockHash: portSnapshot.resolvedTraversalLockHash,
-  };
-  const pathBindings: Readonly<Record<string, unknown>> = {
-    traversingEntityId: path.traversingEntityId,
-    authoringSpecHash: path.authoringSpecHash,
-    layoutSolveReportHash: path.layoutSolveReportHash,
-    resourceLockHash: path.resourceLockHash,
-    resolvedTraversalLockHash: path.resolvedTraversalLockHash,
-  };
-  for (const field of Object.keys(pathBindings)) {
-    requireEqual(
-      portBindings[field],
-      pathBindings[field],
-      `runtimePort/${field}`,
-      prefix,
-    );
-  }
-
-  return canonicalRouteRuntimeProbeRequestV1({
-    kind: "route-runtime-probe-request",
-    schemaVersion: 1,
-    routePathReceiptHash: hashRoutePathReceiptV1(path),
-    constraintId: path.constraintId,
-    routeId: path.routeId,
-    traversingEntityId: path.traversingEntityId,
-    startAnchorEntityId: path.startAnchorEntityId,
-    destinationAnchorEntityId: path.destinationAnchorEntityId,
-    authoringSpecHash: path.authoringSpecHash,
-    layoutSolveReportHash: path.layoutSolveReportHash,
-    resourceLockHash: path.resourceLockHash,
-    executionPlanHash: requireHash(
-      portSnapshot.executionPlanHash,
-      "runtimePort/executionPlanHash",
-      prefix,
-    ),
-    routeBuildInputHash: path.routeBuildInputHash,
-    traversalGraphHash: path.traversalGraphHash,
-    resolvedTraversalLockHash: path.resolvedTraversalLockHash,
-    traversalSurfaceIdentity: path.traversalSurfaceIdentity,
-    driverProfileRef: driver.resourceRef,
-    driverResolvedVersion: driver.resolvedVersion,
-    driverProfileHash: driver.contentHash,
-    validationProfileRef: validation.resourceRef,
-    validationProfileVersion: validation.version,
-    validationProfileHash: validation.contentHash,
-    runtimeImplementationIdentity: runtimeIdentity,
-  });
-}
-
-export function canonicalRouteRuntimeProbeTickV1(
-  value: unknown,
-): RouteRuntimeProbeTickV1 {
-  const prefix = "ROUTE_RUNTIME_PROBE_TICK_INVALID";
-  const record = requireExactRecord(value, TICK_FIELDS, "", prefix);
-  if (record.kind !== "route-runtime-probe-tick") {
-    fail(prefix, "kind", "must be 'route-runtime-probe-tick'");
-  }
-  if (record.schemaVersion !== 1) fail(prefix, "schemaVersion", "must be 1");
-  return deepFreeze({
-    kind: "route-runtime-probe-tick",
-    schemaVersion: 1,
-    probeTick: requirePositiveInteger(record.probeTick, "probeTick", prefix),
-    runtimeEvidence: canonicalRuntimeEvidence(
-      record.runtimeEvidence,
-      "runtimeEvidence",
-      prefix,
-    ),
-    walkDirectionWorldXZ: requireVec2(
-      record.walkDirectionWorldXZ,
-      "walkDirectionWorldXZ",
-      prefix,
-    ),
-    routeProgressMetersXZ: requireNonNegative(
-      record.routeProgressMetersXZ,
-      "routeProgressMetersXZ",
-      prefix,
-    ),
-    remainingRouteDistanceMetersXZ: requireNonNegative(
-      record.remainingRouteDistanceMetersXZ,
-      "remainingRouteDistanceMetersXZ",
-      prefix,
-    ),
-    routeDeviationMetersXZ: requireNonNegative(
-      record.routeDeviationMetersXZ,
-      "routeDeviationMetersXZ",
-      prefix,
-    ),
-    stalledDurationTicks: requireNonNegativeInteger(
-      record.stalledDurationTicks,
-      "stalledDurationTicks",
-      prefix,
-    ),
-    consecutiveUnexpectedUnsupportedTicks: requireNonNegativeInteger(
-      record.consecutiveUnexpectedUnsupportedTicks,
-      "consecutiveUnexpectedUnsupportedTicks",
-      prefix,
-    ),
-  });
-}
-
-export function hashRouteRuntimeProbeTickV1(value: unknown): Sha256Hash {
-  return sha256CanonicalJson(canonicalRouteRuntimeProbeTickV1(value)) as Sha256Hash;
-}
-
-function canonicalMetrics(value: unknown): RouteRuntimeProbeMetricsV1 {
+function canonicalMetrics(value: unknown): RouteRuntimeProbeMetricsV2 {
   const prefix = "ROUTE_RUNTIME_PROBE_RECEIPT_INVALID";
   const record = requireExactRecord(value, METRICS_FIELDS, "metrics", prefix);
   return {
@@ -933,96 +538,7 @@ function canonicalMetrics(value: unknown): RouteRuntimeProbeMetricsV1 {
   };
 }
 
-function isSurfaceMismatch(
-  evidence: TraversalRuntimeTickEvidenceV1,
-  expected: TraversalSurfaceIdentityV1,
-): boolean {
-  if (evidence.characterSupport.supportState === "unsupported") return false;
-  const resolution = evidence.characterSupport.surfaceResolution;
-  return resolution.mode !== "resolved" || !isEqual(resolution, {
-    mode: "resolved",
-    ...expected,
-  });
-}
-
-function assertRuntimeEvidenceBindings(
-  evidence: TraversalRuntimeTickEvidenceV1,
-  request: RouteRuntimeProbeRequestV1,
-  fixedTimeStepSeconds: number,
-  path: string,
-): void {
-  const prefix = "ROUTE_RUNTIME_PROBE_RECEIPT_INVALID";
-  const expected: Readonly<Record<string, unknown>> = {
-    traversingEntityId: request.traversingEntityId,
-    authoringSpecHash: request.authoringSpecHash,
-    layoutSolveReportHash: request.layoutSolveReportHash,
-    resourceLockHash: request.resourceLockHash,
-    executionPlanHash: request.executionPlanHash,
-    resolvedTraversalLockHash: request.resolvedTraversalLockHash,
-    runtimeImplementationIdentity: request.runtimeImplementationIdentity,
-    fixedTimeStepSeconds,
-  };
-  for (const [field, expectedValue] of Object.entries(expected)) {
-    requireEqual(
-      (evidence as unknown as UnknownRecord)[field],
-      expectedValue,
-      `${path}/${field}`,
-      prefix,
-    );
-  }
-}
-
-function deriveMetrics(
-  initial: TraversalRuntimeTickEvidenceV1,
-  ticks: readonly RouteRuntimeProbeTickV1[],
-  surface: TraversalSurfaceIdentityV1,
-): RouteRuntimeProbeMetricsV1 {
-  let maximumStalledDurationTicks = 0;
-  let maximumRouteDeviationMetersXZ = 0;
-  let maximumConsecutiveUnexpectedUnsupportedTicks = 0;
-  let slidingDurationTicks = 0;
-  let unexpectedSupportLossCount = 0;
-  let previousUnsupported = initial.characterSupport.supportState === "unsupported";
-  let wrongSupportSurfaceCount = isSurfaceMismatch(initial, surface) ? 1 : 0;
-
-  for (const row of ticks) {
-    maximumStalledDurationTicks = Math.max(
-      maximumStalledDurationTicks,
-      row.stalledDurationTicks,
-    );
-    maximumRouteDeviationMetersXZ = Math.max(
-      maximumRouteDeviationMetersXZ,
-      row.routeDeviationMetersXZ,
-    );
-    maximumConsecutiveUnexpectedUnsupportedTicks = Math.max(
-      maximumConsecutiveUnexpectedUnsupportedTicks,
-      row.consecutiveUnexpectedUnsupportedTicks,
-    );
-    if (row.runtimeEvidence.characterSupport.supportState === "sliding") {
-      slidingDurationTicks += 1;
-    }
-    const unsupported =
-      row.runtimeEvidence.characterSupport.supportState === "unsupported";
-    if (unsupported && !previousUnsupported) unexpectedSupportLossCount += 1;
-    previousUnsupported = unsupported;
-    if (isSurfaceMismatch(row.runtimeEvidence, surface)) {
-      wrongSupportSurfaceCount = 1;
-    }
-  }
-
-  return {
-    processedTickCount: ticks.length,
-    maximumStalledDurationTicks,
-    maximumRouteDeviationMetersXZ,
-    maximumConsecutiveUnexpectedUnsupportedTicks,
-    slidingDurationTicks,
-    unexpectedSupportLossCount,
-    wrongSupportSurfaceCount,
-    invalidPhysicsValueCount: 0,
-  };
-}
-
-function canonicalFailure(value: unknown): RouteRuntimeProbeFailureV1 {
+function canonicalFailure(value: unknown): RouteRuntimeProbeFailureV2 {
   const prefix = "ROUTE_RUNTIME_PROBE_RECEIPT_INVALID";
   const base = requireRecord(value, "failure", prefix);
   if (
@@ -1117,324 +633,6 @@ function canonicalFailure(value: unknown): RouteRuntimeProbeFailureV1 {
   }
 }
 
-function assertFailureConsistency(
-  failure: RouteRuntimeProbeFailureV1,
-  initial: TraversalRuntimeTickEvidenceV1,
-  ticks: readonly RouteRuntimeProbeTickV1[],
-  metrics: RouteRuntimeProbeMetricsV1,
-  surface: TraversalSurfaceIdentityV1,
-): void {
-  const prefix = "ROUTE_RUNTIME_PROBE_RECEIPT_INVALID";
-  const finalRow = ticks.at(-1);
-  const referencedEvidence = failure.failureProbeTick === 0
-    ? initial
-    : finalRow?.runtimeEvidence;
-  if (isNil(referencedEvidence)) {
-    fail(prefix, "failure/failureProbeTick", "must reference initial or final evidence");
-  }
-  if (
-    failure.failureProbeTick !== 0 &&
-    (isNil(finalRow) || failure.failureProbeTick !== finalRow.probeTick)
-  ) {
-    fail(prefix, "failure/failureProbeTick", "must reference the final Tick row");
-  }
-  requireEqual(
-    failure.failurePositionMetersXYZ,
-    referencedEvidence.subjectPositionMetersXYZ,
-    "failure/failurePositionMetersXYZ",
-    prefix,
-  );
-
-  switch (failure.kind) {
-    case "start-support-invalid":
-      if (
-        failure.failureProbeTick !== 0 ||
-        initial.characterSupport.supportState !== failure.supportState
-      ) {
-        fail(prefix, "failure", "must match unsupported initial Runtime evidence");
-      }
-      return;
-    case "support-surface-mismatch": {
-      const support = referencedEvidence.characterSupport;
-      if (
-        support.supportState !== failure.supportState ||
-        support.surfaceResolution.mode !== failure.surfaceResolutionMode ||
-        !isSurfaceMismatch(referencedEvidence, surface)
-      ) {
-        fail(prefix, "failure", "must match surface-mismatched Runtime evidence");
-      }
-      return;
-    }
-    case "runtime-stalled":
-      if (
-        failure.failureProbeTick === 0 ||
-        finalRow?.stalledDurationTicks !== failure.stalledDurationTicks
-      ) {
-        fail(prefix, "failure/stalledDurationTicks", "must match the final Tick row");
-      }
-      return;
-    case "runtime-deviated":
-      if (
-        failure.failureProbeTick === 0 ||
-        finalRow?.routeDeviationMetersXZ !== failure.routeDeviationMetersXZ
-      ) {
-        fail(prefix, "failure/routeDeviationMetersXZ", "must match the final Tick row");
-      }
-      return;
-    case "runtime-support-lost":
-      if (
-        failure.failureProbeTick === 0 ||
-        finalRow?.runtimeEvidence.characterSupport.supportState !== "unsupported" ||
-        finalRow.consecutiveUnexpectedUnsupportedTicks !==
-          failure.consecutiveUnexpectedUnsupportedTicks
-      ) {
-        fail(
-          prefix,
-          "failure/consecutiveUnexpectedUnsupportedTicks",
-          "must match the final unsupported Tick row",
-        );
-      }
-      return;
-    case "maximum-probe-ticks-reached":
-      if (
-        failure.failureProbeTick === 0 ||
-        failure.processedTickCount !== metrics.processedTickCount
-      ) {
-        fail(prefix, "failure/processedTickCount", "must match processed Tick count");
-      }
-  }
-}
-
-export function canonicalRouteRuntimeProbeReceiptV1(
-  value: unknown,
-): RouteRuntimeProbeReceiptV1 {
-  const prefix = "ROUTE_RUNTIME_PROBE_RECEIPT_INVALID";
-  const base = requireRecord(value, "", prefix);
-  const fields = base.status === "complete"
-    ? COMPLETE_RECEIPT_FIELDS
-    : base.status === "failed"
-      ? FAILED_RECEIPT_FIELDS
-      : undefined;
-  if (isNil(fields)) fail(prefix, "status", "must be 'complete' or 'failed'");
-  const record = requireExactRecord(value, fields, "", prefix);
-  if (record.kind !== "route-runtime-probe-receipt") {
-    fail(prefix, "kind", "must be 'route-runtime-probe-receipt'");
-  }
-  if (record.schemaVersion !== 1) fail(prefix, "schemaVersion", "must be 1");
-
-  let request: RouteRuntimeProbeRequestV1;
-  try {
-    request = canonicalRouteRuntimeProbeRequestV1(record.request);
-  } catch {
-    fail(prefix, "request", "must be a canonical Route Runtime Probe Request");
-  }
-  const initialRuntimeEvidence = canonicalRuntimeEvidence(
-    record.initialRuntimeEvidence,
-    "initialRuntimeEvidence",
-    prefix,
-  );
-  if (initialRuntimeEvidence.tick !== 0) {
-    fail(prefix, "initialRuntimeEvidence/tick", "must be 0");
-  }
-  assertRuntimeEvidenceBindings(
-    initialRuntimeEvidence,
-    request,
-    initialRuntimeEvidence.fixedTimeStepSeconds,
-    "initialRuntimeEvidence",
-  );
-  if (!Array.isArray(record.ticks)) fail(prefix, "ticks", "must be an array");
-  const ticks = record.ticks.map((rawTick, index) => {
-    let row: RouteRuntimeProbeTickV1;
-    try {
-      row = canonicalRouteRuntimeProbeTickV1(rawTick);
-    } catch {
-      fail(prefix, `ticks/${index}`, "must be a canonical Route Runtime Probe Tick");
-    }
-    const expectedProbeTick = index + 1;
-    if (row.probeTick !== expectedProbeTick) {
-      fail(prefix, `ticks/${index}/probeTick`, "must be consecutive from 1");
-    }
-    if (row.runtimeEvidence.tick !== row.probeTick) {
-      fail(prefix, `ticks/${index}/runtimeEvidence/tick`, "must equal probeTick");
-    }
-    assertRuntimeEvidenceBindings(
-      row.runtimeEvidence,
-      request,
-      initialRuntimeEvidence.fixedTimeStepSeconds,
-      `ticks/${index}/runtimeEvidence`,
-    );
-    return row;
-  });
-
-  const firstMismatchIndex = ticks.findIndex((row) =>
-    isSurfaceMismatch(row.runtimeEvidence, request.traversalSurfaceIdentity)
-  );
-  if (firstMismatchIndex >= 0 && firstMismatchIndex !== ticks.length - 1) {
-    fail(prefix, "ticks", "must stop at the first support-surface mismatch");
-  }
-  const metrics = canonicalMetrics(record.metrics);
-  requireEqual(
-    metrics,
-    deriveMetrics(
-      initialRuntimeEvidence,
-      ticks,
-      request.traversalSurfaceIdentity,
-    ),
-    "metrics",
-    prefix,
-  );
-  if (metrics.invalidPhysicsValueCount !== 0) {
-    fail(prefix, "metrics/invalidPhysicsValueCount", "must be 0");
-  }
-
-  if (record.status === "complete") {
-    const finalTick = ticks.at(-1);
-    if (
-      initialRuntimeEvidence.characterSupport.supportState === "unsupported" ||
-      isSurfaceMismatch(initialRuntimeEvidence, request.traversalSurfaceIdentity) ||
-      firstMismatchIndex >= 0 ||
-      finalTick?.runtimeEvidence.characterSupport.supportState === "unsupported"
-    ) {
-      fail(prefix, "status", "complete cannot contain invalid initial or surface evidence");
-    }
-    const completionDurationTicks = requireNonNegativeInteger(
-      record.completionDurationTicks,
-      "completionDurationTicks",
-      prefix,
-    );
-    if (completionDurationTicks !== metrics.processedTickCount) {
-      fail(prefix, "completionDurationTicks", "must equal processedTickCount");
-    }
-    if (
-      !isNil(finalTick) &&
-      finalTick.remainingRouteDistanceMetersXZ !== 0
-    ) {
-      fail(
-        prefix,
-        "ticks",
-        "complete final Tick must have zero remainingRouteDistanceMetersXZ",
-      );
-    }
-    return deepFreeze({
-      kind: "route-runtime-probe-receipt",
-      schemaVersion: 1,
-      status: "complete",
-      request,
-      initialRuntimeEvidence,
-      ticks,
-      metrics,
-      completionDurationTicks,
-    });
-  }
-
-  const failure = canonicalFailure(record.failure);
-  assertFailureConsistency(
-    failure,
-    initialRuntimeEvidence,
-    ticks,
-    metrics,
-    request.traversalSurfaceIdentity,
-  );
-  if (
-    initialRuntimeEvidence.characterSupport.supportState === "unsupported" &&
-    failure.kind !== "start-support-invalid"
-  ) {
-    fail(prefix, "failure/kind", "must report invalid initial support");
-  }
-  if (
-    initialRuntimeEvidence.characterSupport.supportState === "unsupported" &&
-    ticks.length !== 0
-  ) {
-    fail(prefix, "ticks", "must be empty after invalid initial support");
-  }
-  if (
-    isSurfaceMismatch(initialRuntimeEvidence, request.traversalSurfaceIdentity) &&
-    (failure.kind !== "support-surface-mismatch" || failure.failureProbeTick !== 0)
-  ) {
-    fail(prefix, "failure/kind", "must report initial support-surface mismatch");
-  }
-  if (
-    isSurfaceMismatch(initialRuntimeEvidence, request.traversalSurfaceIdentity) &&
-    ticks.length !== 0
-  ) {
-    fail(prefix, "ticks", "must be empty after initial support-surface mismatch");
-  }
-  if (
-    firstMismatchIndex >= 0 &&
-    (failure.kind !== "support-surface-mismatch" ||
-      failure.failureProbeTick !== ticks[firstMismatchIndex]?.probeTick)
-  ) {
-    fail(prefix, "failure/kind", "must report the first Tick support-surface mismatch");
-  }
-  return deepFreeze({
-    kind: "route-runtime-probe-receipt",
-    schemaVersion: 1,
-    status: "failed",
-    request,
-    initialRuntimeEvidence,
-    ticks,
-    metrics,
-    failure,
-  });
-}
-
-export function hashRouteRuntimeProbeReceiptV1(value: unknown): Sha256Hash {
-  return sha256CanonicalJson(
-    canonicalRouteRuntimeProbeReceiptV1(value),
-  ) as Sha256Hash;
-}
-
-export function assertRouteRuntimeProbeReceiptContextV1(
-  input: AssertRouteRuntimeProbeReceiptContextInputV1,
-): RouteRuntimeProbeReceiptV1 {
-  const prefix = "ROUTE_RUNTIME_PROBE_CONTEXT_INVALID";
-  let receipt: RouteRuntimeProbeReceiptV1;
-  let path: RoutePathReceiptV1;
-  try {
-    receipt = canonicalRouteRuntimeProbeReceiptV1(input.receipt);
-    path = canonicalRoutePathReceiptV1(input.routePathReceipt);
-  } catch {
-    fail(prefix, "", "requires canonical Receipt and Path evidence");
-  }
-  const driver = assertResolvedDriverInput(input.resolvedDriverProfile, prefix);
-  const validation = canonicalValidationIdentity(
-    input.validationProfileIdentity,
-    "validationProfileIdentity",
-    prefix,
-  );
-  const expected: Readonly<Record<string, unknown>> = {
-    routePathReceiptHash: hashRoutePathReceiptV1(path),
-    constraintId: path.constraintId,
-    routeId: path.routeId,
-    traversingEntityId: path.traversingEntityId,
-    startAnchorEntityId: path.startAnchorEntityId,
-    destinationAnchorEntityId: path.destinationAnchorEntityId,
-    authoringSpecHash: path.authoringSpecHash,
-    layoutSolveReportHash: path.layoutSolveReportHash,
-    resourceLockHash: path.resourceLockHash,
-    routeBuildInputHash: path.routeBuildInputHash,
-    traversalGraphHash: path.traversalGraphHash,
-    resolvedTraversalLockHash: path.resolvedTraversalLockHash,
-    traversalSurfaceIdentity: path.traversalSurfaceIdentity,
-    driverProfileRef: driver.resourceRef,
-    driverResolvedVersion: driver.resolvedVersion,
-    driverProfileHash: driver.contentHash,
-    validationProfileRef: validation.resourceRef,
-    validationProfileVersion: validation.version,
-    validationProfileHash: validation.contentHash,
-  };
-  for (const [field, expectedValue] of Object.entries(expected)) {
-    requireEqual(
-      (receipt.request as unknown as UnknownRecord)[field],
-      expectedValue,
-      `request/${field}`,
-      prefix,
-    );
-  }
-  return receipt;
-}
-
-
 const REQUEST_FIELDS_V2 = [
   "kind",
   "schemaVersion",
@@ -1467,20 +665,44 @@ const TICK_FIELDS_V2 = [
   "expectedTraversalSurfaceIds",
 ] as const;
 
-export interface RouteRuntimeProbeRequestV2 extends Omit<
-  RouteRuntimeProbeRequestV1,
-  "schemaVersion" | "traversalSurfaceIdentity"
-> {
+export interface RouteRuntimeProbeRequestV2 {
+  readonly kind: "route-runtime-probe-request";
   readonly schemaVersion: 2;
+  readonly routePathReceiptHash: Sha256Hash;
+  readonly constraintId: string;
+  readonly routeId: string;
+  readonly traversingEntityId: string;
+  readonly startAnchorEntityId: string;
+  readonly destinationAnchorEntityId: string;
+  readonly authoringSpecHash: Sha256Hash;
+  readonly layoutSolveReportHash: Sha256Hash;
+  readonly resourceLockHash: Sha256Hash;
+  readonly executionPlanHash: Sha256Hash;
+  readonly routeBuildInputHash: Sha256Hash;
+  readonly traversalGraphHash: Sha256Hash;
+  readonly resolvedTraversalLockHash: Sha256Hash;
+  readonly driverProfileRef: string;
+  readonly driverResolvedVersion: string;
+  readonly driverProfileHash: Sha256Hash;
+  readonly validationProfileRef: string;
+  readonly validationProfileVersion: string;
+  readonly validationProfileHash: Sha256Hash;
+  readonly runtimeImplementationIdentity: TraversalRuntimeImplementationIdentityV1;
   readonly walkSpeedMetersPerSecond: number;
   readonly positionQuantizationMeters: number;
 }
 
-export interface RouteRuntimeProbeTickV2 extends Omit<
-  RouteRuntimeProbeTickV1,
-  "schemaVersion"
-> {
+export interface RouteRuntimeProbeTickV2 {
+  readonly kind: "route-runtime-probe-tick";
   readonly schemaVersion: 2;
+  readonly probeTick: number;
+  readonly runtimeEvidence: TraversalRuntimeTickEvidenceV1;
+  readonly walkDirectionWorldXZ: Vec2;
+  readonly routeProgressMetersXZ: number;
+  readonly remainingRouteDistanceMetersXZ: number;
+  readonly routeDeviationMetersXZ: number;
+  readonly stalledDurationTicks: number;
+  readonly consecutiveUnexpectedUnsupportedTicks: number;
   readonly expectedTraversalSurfaceIds: readonly string[];
 }
 
@@ -1490,7 +712,7 @@ interface RouteRuntimeProbeReceiptBaseV2 {
   readonly request: RouteRuntimeProbeRequestV2;
   readonly initialRuntimeEvidence: TraversalRuntimeTickEvidenceV1;
   readonly ticks: readonly RouteRuntimeProbeTickV2[];
-  readonly metrics: RouteRuntimeProbeMetricsV1;
+  readonly metrics: RouteRuntimeProbeMetricsV2;
 }
 
 export type RouteRuntimeProbeReceiptV2 =
@@ -1500,15 +722,17 @@ export type RouteRuntimeProbeReceiptV2 =
     }>
   | Readonly<RouteRuntimeProbeReceiptBaseV2 & {
       status: "failed";
-      failure: RouteRuntimeProbeFailureV1;
+      failure: RouteRuntimeProbeFailureV2;
     }>;
 
 export interface CreateRouteRuntimeProbeRequestInputV2 {
   readonly routePathReceipt: RoutePathReceiptV2;
   readonly resolvedDriverProfile: ResolvedTraversalDriverProfileV1;
   readonly runtimePort: TraversalRuntimePortV1;
-  readonly validationProfileIdentity: RouteRuntimeProbeValidationProfileIdentityV1;
-  readonly walkSpeedMetersPerSecond: number;
+  readonly validationProfileIdentity: RouteRuntimeProbeValidationProfileIdentityV2;
+  readonly resolvedControlFeelProfile: Readonly<{
+    readonly walkSpeedMetersPerSecond: number;
+  }>;
   readonly positionQuantizationMeters: number;
 }
 
@@ -1516,7 +740,7 @@ export interface AssertRouteRuntimeProbeReceiptContextInputV2 {
   readonly receipt: RouteRuntimeProbeReceiptV2;
   readonly routePathReceipt: RoutePathReceiptV2;
   readonly resolvedDriverProfile: ResolvedTraversalDriverProfileV1;
-  readonly validationProfileIdentity: RouteRuntimeProbeValidationProfileIdentityV1;
+  readonly validationProfileIdentity: RouteRuntimeProbeValidationProfileIdentityV2;
 }
 
 function requirePositiveFinite(
@@ -1590,7 +814,7 @@ function deriveMetricsV2(
   initial: TraversalRuntimeTickEvidenceV1,
   ticks: readonly RouteRuntimeProbeTickV2[],
   initialExpectedTraversalSurfaceIds: readonly string[],
-): RouteRuntimeProbeMetricsV1 {
+): RouteRuntimeProbeMetricsV2 {
   let maximumStalledDurationTicks = 0;
   let maximumRouteDeviationMetersXZ = 0;
   let maximumConsecutiveUnexpectedUnsupportedTicks = 0;
@@ -1708,6 +932,7 @@ export function advanceRouteRuntimeProbeSupportStationV2(
   previousArcLengthMeters: number,
   walkSpeedMetersPerSecond: number,
   positionQuantizationMeters: number,
+  fixedTimeStepSeconds: number,
 ): Readonly<{
   readonly arcLengthMeters: number;
   readonly expectedTraversalSurfaceIds: readonly string[];
@@ -1717,7 +942,7 @@ export function advanceRouteRuntimeProbeSupportStationV2(
   const identities = path.orderedTraversalSurfaceIdentities;
   const polyline = polylineArcLengths(points);
   const maxForwardMeters =
-    walkSpeedMetersPerSecond * (1 / 60) + positionQuantizationMeters;
+    walkSpeedMetersPerSecond * fixedTimeStepSeconds + positionQuantizationMeters;
   const windowStart = Math.max(0, previousArcLengthMeters - positionQuantizationMeters);
   const windowEnd = Math.min(
     polyline.total,
@@ -1980,9 +1205,12 @@ export function createRouteRuntimeProbeRequestV2(
   ) {
     fail(prefix, "routePathReceipt", "must match the Registry Graph Builder Profile identity");
   }
+  if (isNil(input.resolvedControlFeelProfile) || isEmpty(input.resolvedControlFeelProfile)) {
+    fail(prefix, "resolvedControlFeelProfile", "must be a resolved control-feel profile");
+  }
   const walkSpeedMetersPerSecond = requirePositiveFinite(
-    input.walkSpeedMetersPerSecond,
-    "walkSpeedMetersPerSecond",
+    input.resolvedControlFeelProfile.walkSpeedMetersPerSecond,
+    "resolvedControlFeelProfile/walkSpeedMetersPerSecond",
     prefix,
   );
   const positionQuantizationMeters = requirePositiveFinite(
@@ -2150,7 +1378,7 @@ export function hashRouteRuntimeProbeTickV2(value: unknown): Sha256Hash {
 }
 
 function assertFailureConsistencyV2(
-  failure: RouteRuntimeProbeFailureV1,
+  failure: RouteRuntimeProbeFailureV2,
   initial: TraversalRuntimeTickEvidenceV1,
   ticks: readonly RouteRuntimeProbeTickV2[],
   initialExpectedTraversalSurfaceIds: readonly string[],
@@ -2474,6 +1702,7 @@ export function assertRouteRuntimeProbeReceiptContextV2(
     0,
     receipt.request.walkSpeedMetersPerSecond,
     receipt.request.positionQuantizationMeters,
+    receipt.initialRuntimeEvidence.fixedTimeStepSeconds,
   );
   stationArc = initialStation.arcLengthMeters;
   if (
@@ -2495,6 +1724,7 @@ export function assertRouteRuntimeProbeReceiptContextV2(
       stationArc,
       receipt.request.walkSpeedMetersPerSecond,
       receipt.request.positionQuantizationMeters,
+      row.runtimeEvidence.fixedTimeStepSeconds,
     );
     requireEqual(
       row.expectedTraversalSurfaceIds,

@@ -386,7 +386,7 @@ interface WorldkitBrowserDiagnosticV1 {
   details?: Readonly<Record<string, unknown>>;
 }
 
-interface WorldkitBrowserApiV4 {
+interface WorldkitBrowserApiV5 {
   version: 4;
   ready(): Promise<WorldRuntimeSnapshotV3>;
   getSnapshot(): WorldRuntimeSnapshotV3;
@@ -403,9 +403,9 @@ interface WorldkitBrowserApiV4 {
 
   // V4 additive, read-only Route evidence
   getRouteSummary(selector: RouteEvidenceSelectorV1): RouteSummaryQueryResultV1;
-  getRoutePathReceipt(selector: RouteEvidenceSelectorV1): RoutePathReceiptQueryResultV1;
-  getRouteRuntimeProbeReceipt(selector: RouteEvidenceSelectorV1): RouteRuntimeProbeReceiptQueryResultV1;
-  getRouteOverlay(selector: RouteEvidenceSelectorV1): RouteOverlayQueryResultV1;
+  getRoutePathReceipt(selector: RouteEvidenceSelectorV1): RoutePathReceiptQueryResultV2;
+  getRouteRuntimeProbeReceipt(selector: RouteEvidenceSelectorV1): RouteRuntimeProbeReceiptQueryResultV2;
+  getRouteOverlay(selector: RouteEvidenceSelectorV1): RouteOverlayQueryResultV2;
 }
 ```
 

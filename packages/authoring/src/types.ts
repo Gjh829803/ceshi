@@ -90,6 +90,7 @@ export interface TerrainNodeSpecV2 {
         centerMetersXZ: Vec2;
         sizeMetersXZ: Vec2;
         resolutionCellsXZ: readonly [columns: number, rows: number];
+        heightSamplesMeters?: readonly number[];
       };
       semantic?: { classId: string };
     };

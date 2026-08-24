@@ -1,6 +1,7 @@
 import {
   preflightCanonicalTraversalSurfaceOverlapsV1,
 } from "@whitebox-world/terrain-surface";
+import { isNil } from "lodash-es";
 import { describe, expect, it } from "vitest";
 
 import { evaluateRequiredRouteV2 } from "./evaluate-route.js";
@@ -10,6 +11,21 @@ import {
 import {
   createMultiSurfaceRouteBuildInputReceiptV2,
 } from "./test-fixture.test-support.js";
+
+function catalogIdentitiesV2(
+  receipt: ReturnType<typeof createMultiSurfaceRouteBuildInputReceiptV2>,
+  traversalSurfaceIds: readonly string[],
+) {
+  return traversalSurfaceIds.map((traversalSurfaceId) => {
+    const identity = receipt.input.traversalSurfaces.find(
+      (surface) => surface.traversalSurfaceId === traversalSurfaceId,
+    );
+    if (isNil(identity)) {
+      throw new Error(`missing catalog Traversal Surface '${traversalSurfaceId}'`);
+    }
+    return identity;
+  });
+}
 
 function serializedProviderLeak(value: unknown): string[] {
   const json = JSON.stringify(value);
@@ -34,6 +50,9 @@ describe("evaluateRequiredRouteV2", () => {
       (identity) => identity.traversalSurfaceId,
     );
     expect(surfaceIds.length).toBe(result.routePathReceipt.orderedTraversalNodeIds.length);
+    expect(result.routePathReceipt.orderedPathPositionsMetersXYZ).toHaveLength(
+      result.routePathReceipt.orderedTraversalNodeIds.length,
+    );
     const uniqueSequence = surfaceIds.filter((id, index) => id !== surfaceIds[index - 1]);
     expect(uniqueSequence).toEqual([
       "surface-heightfield",
@@ -56,7 +75,9 @@ describe("evaluateRequiredRouteV2", () => {
     expect(result.status).toBe("unreachable");
     if (result.status === "complete") return;
     expect(result.connectivityFailure.reason.kind).toBe("step-height-threshold-exceeded");
-    expect(result.connectivityFailure.relatedTraversalSurfaceIdentities).toHaveLength(1);
+    expect(result.connectivityFailure.relatedTraversalSurfaceIdentities).toEqual(
+      catalogIdentitiesV2(receipt, ["surface-heightfield", "surface-step"]),
+    );
   });
 
   it("rejects a 1cm surface gap with a dedicated gap diagnostic", async () => {
@@ -67,6 +88,9 @@ describe("evaluateRequiredRouteV2", () => {
     expect(result.status).toBe("unreachable");
     if (result.status === "complete") return;
     expect(result.connectivityFailure.reason.kind).toBe("surface-gap-exceeded");
+    expect(result.connectivityFailure.relatedTraversalSurfaceIdentities).toEqual(
+      catalogIdentitiesV2(receipt, ["surface-heightfield", "surface-ramp"]),
+    );
   });
 
   it("rejects a narrow tread with a dedicated width diagnostic", async () => {
@@ -78,6 +102,9 @@ describe("evaluateRequiredRouteV2", () => {
     expect(result.status).toBe("unreachable");
     if (result.status === "complete") return;
     expect(result.connectivityFailure.reason.kind).toBe("clearance-width-insufficient");
+    expect(result.connectivityFailure.relatedTraversalSurfaceIdentities).toEqual(
+      catalogIdentitiesV2(receipt, ["surface-heightfield", "surface-platform", "surface-ramp", "surface-step"]),
+    );
   });
 
   it("rejects low overhead with a dedicated overhead diagnostic", async () => {
@@ -88,6 +115,9 @@ describe("evaluateRequiredRouteV2", () => {
     expect(result.status).toBe("unreachable");
     if (result.status === "complete") return;
     expect(result.connectivityFailure.reason.kind).toBe("overhead-clearance-insufficient");
+    expect(result.connectivityFailure.relatedTraversalSurfaceIdentities).toEqual(
+      catalogIdentitiesV2(receipt, ["surface-heightfield", "surface-platform", "surface-ramp", "surface-step"]),
+    );
   });
 
   it("maps a missing Profile on an unbound platform to zero identities plus collider evidence", async () => {
@@ -96,7 +126,7 @@ describe("evaluateRequiredRouteV2", () => {
       destinationOnPlatform: true,
     });
     const result = await evaluateRequiredRouteV2({ buildInputReceipt: receipt });
-    expect(result.status).toBe("incomplete");
+    expect(result.status).toBe("unreachable");
     if (result.status === "complete") return;
     expect(result.graphStatus).toBe("unavailable");
     expect(result.connectivityFailure.reason.kind).toBe("surface-profile-missing");
@@ -111,7 +141,7 @@ describe("evaluateRequiredRouteV2", () => {
       overlapCoplanarMeters: 1,
     });
     const result = await evaluateRequiredRouteV2({ buildInputReceipt: receipt });
-    expect(result.status).toBe("incomplete");
+    expect(result.status).toBe("unreachable");
     if (result.status === "complete") return;
     expect(result.graphStatus).toBe("unavailable");
     expect(result.connectivityFailure.reason.kind).toBe("surface-correlation-ambiguous");

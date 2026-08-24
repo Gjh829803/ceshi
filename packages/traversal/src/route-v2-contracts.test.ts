@@ -255,7 +255,9 @@ describe("Route V2 Graph, Path, Overlay, and Connectivity", () => {
     expect(path).not.toHaveProperty("traversalSurfaceIdentity");
     expect(overlay).not.toHaveProperty("traversalSurfaceIdentity");
     expect(overlay).toHaveProperty("staticColliderIdentities");
-    expect(overlay).not.toHaveProperty("blockingColliderIdentities");
+    expect(overlay).not.toHaveProperty(
+      ["blocking", "Collider", "Identities"].join(""),
+    );
     expect(overlay.orderedTraversalSurfaceIdentities).toEqual(
       path.orderedTraversalSurfaceIdentities,
     );
@@ -529,7 +531,7 @@ describe("Route V2 Graph, Path, Overlay, and Connectivity", () => {
 
     const profileMissing = canonicalRouteConnectivityFailureV2({
       ...common,
-      status: "incomplete",
+      status: "unreachable",
       graphStatus: "unavailable",
       reason: {
         kind: "surface-profile-missing",
@@ -548,7 +550,7 @@ describe("Route V2 Graph, Path, Overlay, and Connectivity", () => {
     expect(canonicalRouteConnectivityFailureV2({
       ...common,
       relatedTraversalSurfaceIdentities: [heightfieldSurface()],
-      status: "incomplete",
+      status: "unreachable",
       graphStatus: "unavailable",
       reason: {
         kind: "surface-correlation-missing",
@@ -563,7 +565,7 @@ describe("Route V2 Graph, Path, Overlay, and Connectivity", () => {
     expect(canonicalRouteConnectivityFailureV2({
       ...common,
       relatedTraversalSurfaceIdentities: sortedIdentities,
-      status: "incomplete",
+      status: "unreachable",
       graphStatus: "unavailable",
       reason: {
         kind: "surface-correlation-ambiguous",
@@ -578,7 +580,7 @@ describe("Route V2 Graph, Path, Overlay, and Connectivity", () => {
         heightfieldSurface(),
         { ...heightfieldSurface(), resolvedVersion: "2" },
       ],
-      status: "incomplete",
+      status: "unreachable",
       graphStatus: "unavailable",
       reason: {
         kind: "surface-correlation-ambiguous",

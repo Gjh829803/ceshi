@@ -1679,6 +1679,14 @@
                       "items": false,
                       "minItems": 2,
                       "maxItems": 2
+                    },
+                    "heightSamplesMeters": {
+                      "type": "array",
+                      "minItems": 4,
+                      "maxItems": 4096,
+                      "items": {
+                        "type": "number"
+                      }
                     }
                   }
                 },

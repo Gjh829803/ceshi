@@ -8,6 +8,8 @@ import {
   type ResolvedLayoutSolverProfileV1,
 } from "@whitebox-world/layout-solver";
 
+import { isNil } from "lodash-es";
+
 import { sha256CanonicalJson } from "./canonical-json.js";
 import { canonicalAuthoringIdentityV3 } from "./canonical-authoring-identity.js";
 import { normalizeAuthoringBaseV3 } from "./normalize.js";
@@ -112,20 +114,28 @@ function terrainHeightfield(normalized: NormalizedWorldBase): LayoutHeightfieldV
   const [sizeX, sizeZ] = grid.sizeMetersXZ;
   const minimumX = centerX - sizeX / 2;
   const minimumZ = centerZ - sizeZ / 2;
+  const sampledHeights = grid.heightSamplesMeters;
   const heightSamplesMeters: number[] = [];
-  for (let zIndex = 0; zIndex < rows; zIndex += 1) {
-    const z = minimumZ + zIndex / (rows - 1) * sizeZ;
-    for (let xIndex = 0; xIndex < columns; xIndex += 1) {
-      const x = minimumX + xIndex / (columns - 1) * sizeX;
-      const noise = source.amplitudeMeters === 0
-        ? 0
-        : fractalNoise(
-            normalized.seed,
-            x * source.frequencyPerMeter,
-            z * source.frequencyPerMeter,
-            source,
-          );
-      heightSamplesMeters.push(source.baseHeightMeters + noise * source.amplitudeMeters);
+  if (!isNil(sampledHeights)) {
+    if (sampledHeights.length !== columns * rows) {
+      throw new Error("AUTHORING_TERRAIN_HEIGHT_SAMPLES_LENGTH_INVALID");
+    }
+    heightSamplesMeters.push(...sampledHeights);
+  } else {
+    for (let zIndex = 0; zIndex < rows; zIndex += 1) {
+      const z = minimumZ + zIndex / (rows - 1) * sizeZ;
+      for (let xIndex = 0; xIndex < columns; xIndex += 1) {
+        const x = minimumX + xIndex / (columns - 1) * sizeX;
+        const noise = source.amplitudeMeters === 0
+          ? 0
+          : fractalNoise(
+              normalized.seed,
+              x * source.frequencyPerMeter,
+              z * source.frequencyPerMeter,
+              source,
+            );
+        heightSamplesMeters.push(source.baseHeightMeters + noise * source.amplitudeMeters);
+      }
     }
   }
   return {

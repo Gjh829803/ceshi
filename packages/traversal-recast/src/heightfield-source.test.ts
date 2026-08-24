@@ -6,9 +6,12 @@ import {
 } from "@whitebox-world/terrain-surface";
 import { describe, expect, it } from "vitest";
 
+import { deriveColliderSubshapeIdV1 } from "@whitebox-world/traversal";
+import { isNil } from "lodash-es";
+
 import {
-  createHeightfieldRouteBuildInputV1,
-  evaluateRequiredHeightfieldRouteV1,
+  createRouteBuildInputFromPlanV2,
+  evaluateRequiredRouteV2,
 } from "./index.js";
 import * as heightfieldSourceModule from "./heightfield-source.js";
 import { createRecastTestEnvelopeV1 } from "./test-fixture.test-support.js";
@@ -151,7 +154,7 @@ function basePlan(): HeightfieldSourcePlanFixture {
 }
 
 function build(plan: HeightfieldSourcePlanFixture = basePlan()) {
-  return createHeightfieldRouteBuildInputV1({
+  return createRouteBuildInputFromPlanV2({
     executionPlan: plan as unknown as ExecutionPlanV5,
     capabilityEnvelope: createRecastTestEnvelopeV1({
       resourceLockHash: plan.resourceLockHash as `sha256:${string}`,
@@ -398,7 +401,7 @@ describe("Heightfield Route R1 locked source assembly", () => {
     }];
 
     const receipt = build(plan);
-    const result = await evaluateRequiredHeightfieldRouteV1({
+    const result = await evaluateRequiredRouteV2({
       buildInputReceipt: receipt,
     });
 
@@ -408,84 +411,9 @@ describe("Heightfield Route R1 locked source assembly", () => {
     expect(result.connectivityFailure.reason).toMatchObject({
       kind: "surface-gap-exceeded",
       code: "ROUTE_SURFACE_GAP_EXCEEDED",
-      terrainEntityId: "terrain-main",
       maximumObservedSurfaceGapMeters: 2,
       maximumAllowedSurfaceGapMeters: 0,
     });
-  });
-
-  it("maps terrain first and omits sourceAreaMode unless blocker triangles are positive", () => {
-    const mapSource = (heightfieldSourceModule as {
-      mapHeightfieldRouteBuildInputToRecastSourceV1?: (
-        input: ReturnType<typeof build>["input"],
-      ) => {
-        positions: readonly number[];
-        indices: readonly number[];
-        bounds: readonly [readonly [number, number, number], readonly [number, number, number]];
-        sourceAreaMode?: {
-          kind: string;
-          terrainVertexCount: number;
-          blockerAreaId: number;
-        };
-      };
-    }).mapHeightfieldRouteBuildInputToRecastSourceV1;
-    expect(typeof mapSource).toBe("function");
-    if (mapSource === undefined) return;
-
-    const terrainOnlyReceipt = build(basePlan());
-    const terrainOnly = mapSource(terrainOnlyReceipt.input);
-    expect(Object.hasOwn(terrainOnly, "sourceAreaMode")).toBe(false);
-    expect(terrainOnly.positions).toEqual(
-      terrainOnlyReceipt.input.terrainSource.kind === "bounded"
-        ? terrainOnlyReceipt.input.terrainSource.triangleSoup.positionsMetersXYZ
-        : [],
-    );
-
-    const plan = basePlan();
-    plan.staticColliders = [{
-      entityId: "low-box",
-      logicalSubshapeId: "primary",
-      colliderSubshapeId: "collider:low-box:primary",
-      colliderHash: HASH_A,
-      transform: {
-        positionMetersXYZ: [0, 0.1, 0],
-        rotationEulerRadiansXYZ: [0, 0, 0],
-        scaleXYZ: [1, 1, 1],
-      },
-      shape: { kind: "box", sizeMetersXYZ: [1, 0.2, 1] },
-    }];
-    const blockedReceipt = build(plan);
-    const blocked = mapSource(blockedReceipt.input);
-    if (blockedReceipt.input.terrainSource.kind !== "bounded") {
-      throw new Error("expected bounded terrain source");
-    }
-    const terrainVertexCount =
-      blockedReceipt.input.terrainSource.triangleSoup.positionsMetersXYZ.length / 3;
-    expect(blocked.sourceAreaMode).toEqual({
-      kind: "terrain-with-static-blockers-r1",
-      terrainVertexCount,
-      blockerAreaId: 1,
-    });
-    expect(terrainVertexCount).toBeGreaterThan(0);
-    expect(terrainVertexCount).toBeLessThan(blocked.positions.length / 3);
-    expect(blocked.positions.slice(0, terrainVertexCount * 3)).toEqual(
-      blockedReceipt.input.terrainSource.triangleSoup.positionsMetersXYZ,
-    );
-    expect(blocked.indices.slice(0,
-      blockedReceipt.input.terrainSource.triangleSoup.triangleIndices.length,
-    )).toEqual(blockedReceipt.input.terrainSource.triangleSoup.triangleIndices);
-    expect(blocked.bounds[0][0]).toBe(
-      blockedReceipt.input.terrainSource.minimumMetersXZ[0],
-    );
-    expect(blocked.bounds[0][2]).toBe(
-      blockedReceipt.input.terrainSource.minimumMetersXZ[1],
-    );
-    expect(blocked.bounds[1][0]).toBe(
-      blockedReceipt.input.terrainSource.maximumMetersXZ[0],
-    );
-    expect(blocked.bounds[1][2]).toBe(
-      blockedReceipt.input.terrainSource.maximumMetersXZ[1],
-    );
   });
 
   it("selects one locked requirement and returns deterministic clipped source evidence", () => {
@@ -506,7 +434,7 @@ describe("Heightfield Route R1 locked source assembly", () => {
     expect(first.input.startAnchor.positionMetersXYZ).toEqual([-4, 0, 0]);
     expect(first.input.destinationAnchor.positionMetersXYZ).toEqual([4, 0, 0]);
     expect(first.input.terrainSource.kind).toBe("bounded");
-    expect(first.budgetEvidence.kind).toBe("heightfield-tile-estimate");
+    expect(first.budgetEvidence.kind).toBe("route-geometry-tile-estimate");
     expect(Object.isFrozen(first)).toBe(true);
 
     if (first.input.terrainSource.kind !== "bounded") throw new Error("expected bounded");
@@ -550,7 +478,7 @@ describe("Heightfield Route R1 locked source assembly", () => {
     plan.staticColliders = [{
       entityId: "wall",
       logicalSubshapeId: "primary",
-      colliderSubshapeId: "collider:wall:primary",
+      colliderSubshapeId: deriveColliderSubshapeIdV1("wall", "primary"),
       colliderHash: HASH_A,
       transform: {
         positionMetersXYZ: [0, 1, 0],
@@ -560,9 +488,9 @@ describe("Heightfield Route R1 locked source assembly", () => {
       shape: { kind: "box", sizeMetersXYZ: [0.4, 2, 4] },
     }];
     const receipt = build(plan);
-    expect(receipt.input.blockingColliders).toHaveLength(1);
-    expect(receipt.input.blockingColliders[0]?.triangleSoup.triangleIndices).toHaveLength(36);
-    const positions = receipt.input.blockingColliders[0]!.triangleSoup
+    expect(receipt.input.staticColliders).toHaveLength(1);
+    expect(receipt.input.staticColliders[0]?.triangleSoup.triangleIndices).toHaveLength(36);
+    const positions = receipt.input.staticColliders[0]!.triangleSoup
       .positionsMetersXYZ;
     const expectedCorner = [
       -0.3 * Math.cos(Math.PI / 6) - 2 * Math.sin(Math.PI / 6),
@@ -600,13 +528,13 @@ describe("Heightfield Route R1 locked source assembly", () => {
     plan.staticColliders = [{
       entityId: "geometry-conformance-box",
       logicalSubshapeId: "primary",
-      colliderSubshapeId: "collider:geometry-conformance-box:primary",
+      colliderSubshapeId: deriveColliderSubshapeIdV1("geometry-conformance-box", "primary"),
       colliderHash: HASH_A,
       transform,
       shape,
     }];
 
-    const blocker = build(plan).input.blockingColliders[0]!;
+    const blocker = build(plan).input.staticColliders[0]!;
     const canonicalWorldMesh =
       emitTransformedStaticColliderTriangleMeshV1(shape, transform);
     const graphBuilderWorldPositions = blocker.triangleSoup.positionsMetersXYZ;
@@ -614,7 +542,7 @@ describe("Heightfield Route R1 locked source assembly", () => {
       canonicalWorldMesh.worldPositionsMetersXYZ;
 
     expect(blocker.colliderSubshapeId).toBe(
-      "collider:geometry-conformance-box:primary",
+      deriveColliderSubshapeIdV1("geometry-conformance-box", "primary"),
     );
     expect(blocker.triangleSoup.triangleIndices).toEqual(
       canonicalWorldMesh.triangleIndices,
@@ -634,7 +562,7 @@ describe("Heightfield Route R1 locked source assembly", () => {
       {
         entityId: "blocker-underscore",
         logicalSubshapeId: "primary",
-        colliderSubshapeId: "collider:a_",
+        colliderSubshapeId: deriveColliderSubshapeIdV1("blocker-underscore", "primary"),
         colliderHash: HASH_A,
         transform: {
           positionMetersXYZ: [-1, 1, 0],
@@ -646,7 +574,7 @@ describe("Heightfield Route R1 locked source assembly", () => {
       {
         entityId: "blocker-hyphen",
         logicalSubshapeId: "primary",
-        colliderSubshapeId: "collider:a-",
+        colliderSubshapeId: deriveColliderSubshapeIdV1("blocker-hyphen", "primary"),
         colliderHash: HASH_A,
         transform: {
           positionMetersXYZ: [1, 1, 0],
@@ -657,9 +585,12 @@ describe("Heightfield Route R1 locked source assembly", () => {
       },
     ];
 
-    expect(build(plan).input.blockingColliders.map(
+    expect(build(plan).input.staticColliders.map(
       (collider) => collider.colliderSubshapeId,
-    )).toEqual(["collider:a-", "collider:a_"]);
+    )).toEqual([
+      deriveColliderSubshapeIdV1("blocker-hyphen", "primary"),
+      deriveColliderSubshapeIdV1("blocker-underscore", "primary"),
+    ].sort((left, right) => (left < right ? -1 : 1)));
   });
 
   it("uses circumscribed closed cylinder and level-2 icosphere blocker soups", () => {
@@ -668,7 +599,7 @@ describe("Heightfield Route R1 locked source assembly", () => {
       {
         entityId: "cone-visual-cylinder-lock",
         logicalSubshapeId: "primary",
-        colliderSubshapeId: "collider:a-cylinder",
+        colliderSubshapeId: deriveColliderSubshapeIdV1("cone-visual-cylinder-lock", "primary"),
         colliderHash: HASH_A,
         transform: {
           positionMetersXYZ: [-2, 1, 0],
@@ -680,7 +611,7 @@ describe("Heightfield Route R1 locked source assembly", () => {
       {
         entityId: "sphere",
         logicalSubshapeId: "primary",
-        colliderSubshapeId: "collider:b-sphere",
+        colliderSubshapeId: deriveColliderSubshapeIdV1("sphere", "primary"),
         colliderHash: HASH_A,
         transform: {
           positionMetersXYZ: [2, 1, 0],
@@ -690,31 +621,36 @@ describe("Heightfield Route R1 locked source assembly", () => {
         shape: { kind: "sphere", radiusMeters: 1 },
       },
     ];
-    const blockers = build(plan).input.blockingColliders;
+    const blockers = build(plan).input.staticColliders;
     expect(blockers.map((entry) => entry.colliderSubshapeId)).toEqual([
-      "collider:a-cylinder",
-      "collider:b-sphere",
-    ]);
-    expect(blockers[0]!.triangleSoup.triangleIndices).toHaveLength(24 * 4 * 3);
-    expect(blockers[1]!.triangleSoup.triangleIndices).toHaveLength(20 * 4 ** 2 * 3);
+      deriveColliderSubshapeIdV1("cone-visual-cylinder-lock", "primary"),
+      deriveColliderSubshapeIdV1("sphere", "primary"),
+    ].sort((left, right) => (left < right ? -1 : 1)));
+    const cylinder = blockers.find((entry) => entry.entityId === "cone-visual-cylinder-lock");
+    const sphere = blockers.find((entry) => entry.entityId === "sphere");
+    if (isNil(cylinder) || isNil(sphere)) {
+      throw new Error("expected cylinder and sphere blocker soups");
+    }
+    expect(cylinder.triangleSoup.triangleIndices).toHaveLength(24 * 4 * 3);
+    expect(sphere.triangleSoup.triangleIndices).toHaveLength(20 * 4 ** 2 * 3);
     expect(minimumFacePlaneDistance(
-      blockers[0]!.triangleSoup.positionsMetersXYZ,
-      blockers[0]!.triangleSoup.triangleIndices,
+      cylinder.triangleSoup.positionsMetersXYZ,
+      cylinder.triangleSoup.triangleIndices,
       [-2, 1, 0],
     )).toBeGreaterThanOrEqual(1 - 1e-9);
     expect(minimumFacePlaneDistance(
-      blockers[1]!.triangleSoup.positionsMetersXYZ,
-      blockers[1]!.triangleSoup.triangleIndices,
+      sphere.triangleSoup.positionsMetersXYZ,
+      sphere.triangleSoup.triangleIndices,
       [2, 1, 0],
     )).toBeGreaterThanOrEqual(1 - 1e-9);
-    expect(blockers[0]!.triangleSoup.triangleIndices).toEqual(
+    expect(cylinder.triangleSoup.triangleIndices).toEqual(
       emitStaticColliderTriangleMeshV1({
         kind: "cylinder",
         radiusMeters: 1,
         heightMeters: 2,
       }).triangleIndices,
     );
-    expect(blockers[1]!.triangleSoup.triangleIndices).toEqual(
+    expect(sphere.triangleSoup.triangleIndices).toEqual(
       emitStaticColliderTriangleMeshV1({
         kind: "sphere",
         radiusMeters: 1,
@@ -727,7 +663,7 @@ describe("Heightfield Route R1 locked source assembly", () => {
     remote.staticColliders = [{
       entityId: "remote-wall",
       logicalSubshapeId: "primary",
-      colliderSubshapeId: "collider:remote-wall",
+      colliderSubshapeId: deriveColliderSubshapeIdV1("remote-wall", "primary"),
       colliderHash: HASH_A,
       transform: {
         positionMetersXYZ: [0, 1, 100],
@@ -736,7 +672,7 @@ describe("Heightfield Route R1 locked source assembly", () => {
       },
       shape: { kind: "box", sizeMetersXYZ: [1, 2, 2] },
     }];
-    expect(build(remote).input.blockingColliders).toEqual([]);
+    expect(build(remote).input.staticColliders).toEqual([]);
     expect(build(remote).input.colliderArtifactHash).toBe(
       build(basePlan()).input.colliderArtifactHash,
     );
@@ -849,7 +785,7 @@ describe("Heightfield Route R1 locked source assembly", () => {
     collider.staticColliders = [{
       entityId: "wall",
       logicalSubshapeId: "primary",
-      colliderSubshapeId: "collider:wall",
+      colliderSubshapeId: deriveColliderSubshapeIdV1("wall", "primary"),
       colliderHash: HASH_A,
       transform: {
         positionMetersXYZ: [0, 1, 0],
@@ -874,7 +810,7 @@ describe("Heightfield Route R1 locked source assembly", () => {
     hashes.add(build(water).routeBuildInputHash);
 
     const envelopePlan = basePlan();
-    const envelopeHash = createHeightfieldRouteBuildInputV1({
+    const envelopeHash = createRouteBuildInputFromPlanV2({
       executionPlan: envelopePlan as unknown as ExecutionPlanV5,
       capabilityEnvelope: createRecastTestEnvelopeV1({
         maxSlopeDegrees: 35,
@@ -894,7 +830,7 @@ describe("Heightfield Route R1 locked source assembly", () => {
       resourceLockHash: baseline.resourceLockHash as `sha256:${string}`,
     });
     const buildTampered = (plan: HeightfieldSourcePlanFixture) =>
-      createHeightfieldRouteBuildInputV1({
+      createRouteBuildInputFromPlanV2({
         executionPlan: plan as unknown as ExecutionPlanV5,
         capabilityEnvelope,
         constraintId: "hero-to-goal",
@@ -945,7 +881,7 @@ describe("Heightfield Route R1 locked source assembly", () => {
 
     const surfaceMismatch = basePlan();
     surfaceMismatch.traversal.surfaces[0]!.surfaceEntityId = "other-terrain";
-    expect(() => build(surfaceMismatch)).toThrow("surface-terrain-mismatch");
+    expect(() => build(surfaceMismatch)).toThrow("surface-missing");
 
     const outside = basePlan();
     outside.layout.placementsByEntityId = {
@@ -954,14 +890,14 @@ describe("Heightfield Route R1 locked source assembly", () => {
     };
     expect(() => build(outside)).toThrow("ROUTE_DESTINATION_SURFACE_NOT_FOUND");
 
-    expect(() => createHeightfieldRouteBuildInputV1({
+    expect(() => createRouteBuildInputFromPlanV2({
       executionPlan: basePlan() as unknown as ExecutionPlanV5,
       capabilityEnvelope: createRecastTestEnvelopeV1(),
       constraintId: "hero-to-goal",
       providerConfig: {},
     } as never)).toThrow("input-invalid");
 
-    expect(() => createHeightfieldRouteBuildInputV1({
+    expect(() => createRouteBuildInputFromPlanV2({
       executionPlan: basePlan() as unknown as ExecutionPlanV5,
       constraintId: "hero-to-goal",
     } as never)).toThrow("input-invalid");
@@ -981,7 +917,7 @@ describe("Heightfield Route R1 locked source assembly", () => {
     }];
     const empty = build(emptyPlan);
     expect(empty.input.terrainSource.kind).toBe("empty");
-    expect(empty.budgetEvidence).toEqual({ kind: "not-required-empty-source" });
+    expect(empty.budgetEvidence).toEqual({ kind: "not-required-empty-geometry" });
 
     const huge = basePlan();
     huge.terrain = {
@@ -1039,8 +975,4 @@ describe("mapRouteBuildInputToRecastSourceV2", () => {
     );
   });
 
-  it("keeps R1 mapping putting every Static Collider in the blocker suffix", () => {
-    const mapSource = heightfieldSourceModule.mapHeightfieldRouteBuildInputToRecastSourceV1;
-    expect(typeof mapSource).toBe("function");
-  });
 });

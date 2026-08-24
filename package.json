@@ -44,6 +44,7 @@
     "verify:validation-capture": "tsx scripts/verify-validation-capture.ts",
     "verify:route-r0-contract": "tsx scripts/verify-route-r0-contract.ts",
     "verify:route-r1-heightfield": "tsx scripts/verify-route-r1-heightfield.ts",
+    "verify:route-r1b-static-platform": "tsx scripts/verify-route-r1b-static-platform.ts",
     "benchmark:route-r1b-surface-preflight": "tsx scripts/benchmark-route-r1b-surface-preflight.ts"
   },
   "dependencies": {

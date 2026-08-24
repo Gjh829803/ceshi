@@ -18,26 +18,26 @@ import {
 import {
   BUILT_IN_HEIGHTFIELD_R1_TRAVERSAL_GRAPH_BUILDER_PROFILE_REF,
   BUILT_IN_TRAVERSAL_DRIVER_PROFILE_REF,
-  canonicalHeightfieldRouteConnectivityResultV1,
-  canonicalRouteConnectivityFailureV1,
+  canonicalRouteConnectivityResultV2,
+  canonicalRouteConnectivityFailureV2,
   canonicalTraversalRuntimeTickEvidenceV1,
   createTraversalCapabilityEnvelopeV1,
   resolveTraversalDriverProfileV1,
   resolveTraversalGraphBuilderProfileV2,
-  hashRouteConnectivityFailureV1,
-  type HeightfieldRouteBuildInputReceiptV1,
+  hashRouteConnectivityFailureV2,
+  type RouteBuildInputReceiptV2,
   type ResolvedTraversalLockReceiptV1,
-  type RoutePathReceiptV1,
+  type RoutePathReceiptV2,
   type TraversalRuntimePortV1,
 } from "@whitebox-world/traversal";
 import {
-  createHeightfieldRouteBuildInputV1,
-  evaluateRequiredHeightfieldRouteV1,
+  createRouteBuildInputFromPlanV2,
+  evaluateRequiredRouteV2,
 } from "@whitebox-world/traversal-recast";
 import {
   createRouteValidationReportV2,
   OUTDOOR_WORLD_PACKAGE_DEV_VALIDATION_PROFILE_V2,
-  runRouteRuntimeProbeV1,
+  runRouteRuntimeProbeV2,
   type WorldPackageValidationSubjectV1,
 } from "@whitebox-world/validation";
 import { isNil } from "lodash-es";
@@ -273,7 +273,7 @@ function prepareFixture(spec: AuthoringSpecV4): PreparedFixture {
 function fakeRuntimePort(input: Readonly<{
   executionPlan: ExecutionPlanV5;
   lockReceipt: ResolvedTraversalLockReceiptV1;
-  routePathReceipt: RoutePathReceiptV1;
+  routePathReceipt: RoutePathReceiptV2;
   stalled?: boolean;
 }>): TraversalRuntimePortV1 {
   const path = input.routePathReceipt;
@@ -317,7 +317,7 @@ function fakeRuntimePort(input: Readonly<{
         isSupportSurfaceDynamic: false,
         surfaceResolution: {
           mode: "resolved",
-          ...path.traversalSurfaceIdentity,
+          ...path.orderedTraversalSurfaceIdentities[0],
         },
       },
     });
@@ -353,14 +353,14 @@ function fakeRuntimePort(input: Readonly<{
 }
 
 function incompleteResultForBuildInput(
-  receipt: HeightfieldRouteBuildInputReceiptV1,
+  receipt: RouteBuildInputReceiptV2,
 ) {
   const input = receipt.input;
   const requirement = input.connectivityRequirement;
   const envelope = input.capabilityEnvelope;
-  const failure = canonicalRouteConnectivityFailureV1({
+  const failure = canonicalRouteConnectivityFailureV2({
     kind: "route-connectivity-failure",
-    schemaVersion: 1,
+    schemaVersion: 2,
     constraintId: requirement.constraintId,
     routeId: requirement.routeId,
     traversingEntityId: requirement.traversingEntityId,
@@ -368,9 +368,9 @@ function incompleteResultForBuildInput(
     destinationAnchorEntityId: input.destinationAnchor.entityId,
     startAnchorPositionMetersXYZ: input.startAnchor.positionMetersXYZ,
     destinationAnchorPositionMetersXYZ: input.destinationAnchor.positionMetersXYZ,
-    traversalSurfaceId: input.traversalSurface.traversalSurfaceId,
-    surfaceEntityId: input.traversalSurface.surfaceEntityId,
-    colliderSubshapeId: input.traversalSurface.colliderSubshapeId,
+    traversalSurfaceId: input.traversalSurfaces[0]!.traversalSurfaceId,
+    surfaceEntityId: input.traversalSurfaces[0]!.surfaceEntityId,
+    colliderSubshapeId: input.traversalSurfaces[0]!.colliderSubshapeId,
     routeBuildInputHash: receipt.routeBuildInputHash,
     resolvedTraversalLockHash: envelope.resolvedTraversalLockHash,
     graphBuilderProfileRef: envelope.graphBuilderProfileRef,
@@ -385,13 +385,13 @@ function incompleteResultForBuildInput(
       minimumRequiredCount: envelope.maximumNodes + 1,
     },
   });
-  return canonicalHeightfieldRouteConnectivityResultV1({
+  return canonicalRouteConnectivityResultV2({
     kind: "heightfield-route-connectivity-result",
     schemaVersion: 1,
     status: "incomplete",
     graphStatus: "unavailable",
     connectivityFailure: failure,
-    connectivityFailureHash: hashRouteConnectivityFailureV1(failure),
+    connectivityFailureHash: hashRouteConnectivityFailureV2(failure),
   });
 }
 
@@ -414,8 +414,8 @@ function operationsForFixture(
       ),
     createCapabilityEnvelope: (input) =>
       createTraversalCapabilityEnvelopeV1(input),
-    createBuildInput: (input) => createHeightfieldRouteBuildInputV1(input),
-    evaluateRoute: (input) => evaluateRequiredHeightfieldRouteV1(input),
+    createBuildInput: (input) => createRouteBuildInputFromPlanV2(input),
+    evaluateRoute: (input) => evaluateRequiredRouteV2(input),
     createRuntimeLease: async ({ executionPlan, traversalLockReceipt, routePathReceipt }) => ({
       runtimePort: fakeRuntimePort({
         executionPlan,
@@ -426,7 +426,7 @@ function operationsForFixture(
     }),
     resolveDriverProfile: () =>
       resolveTraversalDriverProfileV1(BUILT_IN_TRAVERSAL_DRIVER_PROFILE_REF),
-    runRuntimeProbe: (input) => runRouteRuntimeProbeV1(input),
+    runRuntimeProbe: (input) => runRouteRuntimeProbeV2(input),
     createReport: (input) => createRouteValidationReportV2(input),
     ...overrides,
   };

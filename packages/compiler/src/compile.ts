@@ -177,30 +177,40 @@ function compileTerrainV3(world: NormalizedWorldIRV3): ExecutionTerrainV3 {
   const [sizeX, sizeZ] = terrain.grid.sizeMetersXZ;
   const minimumX = centerX - sizeX / 2;
   const minimumZ = centerZ - sizeZ / 2;
+  const sampledHeights = terrain.grid.heightSamplesMeters;
   const heights: number[] = [];
+  if (!isNil(sampledHeights)) {
+    if (sampledHeights.length !== columns * rows) {
+      throw new Error(
+        "NormalizedWorldIRV3 invariant violated: terrain grid heightSamplesMeters length must equal resolutionCellsXZ product.",
+      );
+    }
+    heights.push(...sampledHeights);
+  } else {
+    for (let zIndex = 0; zIndex < rows; zIndex += 1) {
+      const z = minimumZ + (zIndex / (rows - 1)) * sizeZ;
+      for (let xIndex = 0; xIndex < columns; xIndex += 1) {
+        const x = minimumX + (xIndex / (columns - 1)) * sizeX;
+        const noise =
+          source.amplitudeMeters === 0
+            ? 0
+            : sampleFractalNoise(
+                world.seed,
+                x * source.frequencyPerMeter,
+                z * source.frequencyPerMeter,
+                source.octaves,
+                source.lacunarityRatio,
+                source.persistenceRatio,
+              );
+        heights.push(source.baseHeightMeters + noise * source.amplitudeMeters);
+      }
+    }
+  }
   let minimumHeightMeters = Number.POSITIVE_INFINITY;
   let maximumHeightMeters = Number.NEGATIVE_INFINITY;
-
-  for (let zIndex = 0; zIndex < rows; zIndex += 1) {
-    const z = minimumZ + (zIndex / (rows - 1)) * sizeZ;
-    for (let xIndex = 0; xIndex < columns; xIndex += 1) {
-      const x = minimumX + (xIndex / (columns - 1)) * sizeX;
-      const noise =
-        source.amplitudeMeters === 0
-          ? 0
-          : sampleFractalNoise(
-              world.seed,
-              x * source.frequencyPerMeter,
-              z * source.frequencyPerMeter,
-              source.octaves,
-              source.lacunarityRatio,
-              source.persistenceRatio,
-            );
-      const height = source.baseHeightMeters + noise * source.amplitudeMeters;
-      heights.push(height);
-      minimumHeightMeters = Math.min(minimumHeightMeters, height);
-      maximumHeightMeters = Math.max(maximumHeightMeters, height);
-    }
+  for (const height of heights) {
+    minimumHeightMeters = Math.min(minimumHeightMeters, height);
+    maximumHeightMeters = Math.max(maximumHeightMeters, height);
   }
 
   return {

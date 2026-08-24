@@ -180,51 +180,6 @@ export function sortedSurfaces() {
   return [heightfieldSurface(), platformSurface()].sort(byTraversalSurfaceId);
 }
 
-export function validV1BuildInput() {
-  return {
-    kind: "heightfield-route-build-input",
-    schemaVersion: 1,
-    authoringSpecHash: HASH_A,
-    layoutSolveReportHash: HASH_A,
-    resourceLockHash: HASH_A,
-    connectivityRequirement: {
-      constraintId: "hero-to-goal",
-      traversingEntityId: "player",
-      startAnchorEntityId: "spawn-main",
-      destinationAnchorEntityId: "goal",
-      routeId: "main-route",
-    },
-    startAnchor: {
-      entityId: "spawn-main",
-      positionMetersXYZ: [0, 0, 0] as const,
-    },
-    destinationAnchor: {
-      entityId: "goal",
-      positionMetersXYZ: [1, 0, 0] as const,
-    },
-    hardRibbon: {
-      routeId: "main-route",
-      pointsMetersXZ: [[0, 0], [1, 0]] as const,
-      widthMeters: 2,
-      locomotionProfileRef: "worldkit://locomotion-profile/ground.standard@1",
-    },
-    traversalSurface: heightfieldSurface(),
-    capabilityEnvelope: capabilityEnvelope(),
-    terrainSource: {
-      kind: "bounded" as const,
-      terrainEntityId: "terrain-main",
-      terrainArtifactHash: HASH_A,
-      triangleSoup: terrainSoup(),
-      minimumMetersXZ: [0, 0] as const,
-      maximumMetersXZ: [1, 1] as const,
-    },
-    blockingColliders: [] as const,
-    colliderArtifactHash: sha256CanonicalJson([]),
-    blockedTraversalAreaExclusions: [] as const,
-    blockedWaterExclusions: [] as const,
-  };
-}
-
 export function validV2BuildInputDraft() {
   return {
     kind: "route-build-input" as const,

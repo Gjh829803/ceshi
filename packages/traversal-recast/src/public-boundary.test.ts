@@ -7,10 +7,9 @@ import * as publicApi from "./index.js";
 describe("traversal-recast provider boundary", () => {
   it("does not expose provider handles, configs, or identities at the package root", () => {
     expect(Object.keys(publicApi).sort()).toEqual([
-      "HeightfieldRouteBuildInputInvalidErrorV1",
-      "RouteConnectivityOperationAbortedErrorV1",
-      "createHeightfieldRouteBuildInputV1",
-      "evaluateRequiredHeightfieldRouteV1",
+      "RouteBuildInputFromPlanInvalidErrorV2",
+      "RouteConnectivityOperationAbortedErrorV2",
+      "createRouteBuildInputFromPlanV2",
       "evaluateRequiredRouteV2",
     ]);
 

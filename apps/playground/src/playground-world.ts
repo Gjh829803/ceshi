@@ -4,9 +4,9 @@ import type {
   VisualPrototypeSpec,
 } from "@whitebox-world/world";
 import type {
-  WorldkitBrowserApiV4,
+  WorldkitBrowserApiV5,
 } from "@whitebox-world/runtime-contracts";
-export type { WorldkitBrowserApiV4 } from "@whitebox-world/runtime-contracts";
+export type { WorldkitBrowserApiV5 } from "@whitebox-world/runtime-contracts";
 
 export type InputAction =
   | "forward"
@@ -139,7 +139,7 @@ export interface PlaygroundAutomationApi {
 declare global {
   interface Window {
     __WHITEBOX_PLAYGROUND__: PlaygroundAutomationApi;
-    __WORLDKIT__?: WorldkitBrowserApiV4;
+    __WORLDKIT__?: WorldkitBrowserApiV5;
   }
 }
 

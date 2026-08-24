@@ -29,6 +29,7 @@ import {
   TraversalRuntimeErrorV1,
   type ResolvedTraversalLockReceiptV1,
 } from "@whitebox-world/traversal";
+import { isNil } from "lodash-es";
 import { describe, expect, it, vi } from "vitest";
 
 import {
@@ -493,6 +494,37 @@ function withBoundStaticBoxAtStart(
       surfaces: [
         ...plan.traversal.surfaces,
         boundSurfaceForCollider(collider, "primary"),
+      ],
+    },
+  };
+}
+
+function withBoundMissingStaticColliderSurface(
+  fixture: ReturnType<typeof compileFixture>,
+): ExecutionPlanV5 {
+  const plan = structuredClone(fixture.executionPlan);
+  const missingCollider: ExecutionPlanV5["staticColliders"][number] = {
+    entityId: "missing-platform",
+    logicalSubshapeId: "primary",
+    colliderSubshapeId: "collider:missing-platform:primary",
+    colliderHash: `sha256:${"c".repeat(64)}` as const,
+    transform: {
+      positionMetersXYZ: [0, 0.5, 0] as const,
+      rotationEulerRadiansXYZ: [0, 0, 0] as const,
+      scaleXYZ: [1, 1, 1] as const,
+    },
+    shape: {
+      kind: "box" as const,
+      sizeMetersXYZ: [2, 1, 2] as const,
+    },
+  };
+  return {
+    ...plan,
+    traversal: {
+      ...plan.traversal,
+      surfaces: [
+        ...plan.traversal.surfaces,
+        boundSurfaceForCollider(missingCollider, "primary"),
       ],
     },
   };
@@ -1628,6 +1660,47 @@ describe("createBabylonTraversalRuntimePortV1", () => {
       } finally {
         await runtime.dispose();
       }
+    }
+  }, 30_000);
+
+  it("classifies a bound missing static-collider row as unmatched instead of the heightfield below", async () => {
+    const fixture = compileFixture();
+    const plan = withBoundMissingStaticColliderSurface(fixture);
+    const heightfield = plan.traversal.surfaces.find(
+      (surface) => surface.kind === "heightfield",
+    );
+    if (isNil(heightfield)) {
+      throw new Error("Fixture is missing the heightfield traversal surface.");
+    }
+    let runtime: BabylonWorldRuntime | undefined;
+    try {
+      runtime = await createRuntime(plan);
+    } catch (error) {
+      expect(isWorldRuntimeLayoutAssertionErrorV1(error)).toBe(true);
+      return;
+    }
+    if (isNil(runtime)) {
+      throw new Error("createRuntime returned without a runtime.");
+    }
+    try {
+      const port = createBabylonTraversalRuntimePortV1({
+        runtime,
+        traversalLockReceipt: fixture.traversalLockReceipt,
+      });
+      const evidence = port.resetToStartAnchor({
+        startAnchorEntityId: "spawn-main",
+      });
+
+      expect(evidence.characterSupport.supportState).toBe("supported");
+      expect(evidence.characterSupport.surfaceResolution).not.toMatchObject({
+        mode: "resolved",
+        traversalSurfaceId: heightfield.traversalSurfaceId,
+      });
+      expect(evidence.characterSupport.surfaceResolution).toEqual({
+        mode: "unmatched",
+      });
+    } finally {
+      await runtime.dispose();
     }
   }, 30_000);
 

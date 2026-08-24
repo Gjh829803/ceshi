@@ -12,8 +12,8 @@ import {
 import { compileWorldV5 } from "@whitebox-world/compiler";
 import { canonicalJsonBytes } from "@whitebox-world/protocol";
 import {
-  canonicalWorldkitBrowserRouteEvidencePublicationV1,
-  type WorldkitBrowserRouteEvidencePublicationV1,
+  canonicalWorldkitBrowserRouteEvidencePublicationV2,
+  type WorldkitBrowserRouteEvidencePublicationV2,
 } from "@whitebox-world/runtime-contracts";
 import { chromium } from "playwright";
 import { afterEach, describe, expect, it } from "vitest";
@@ -30,9 +30,9 @@ const handles: WorldkitServerHandle[] = [];
 const HASH = `sha256:${"1".repeat(64)}` as const;
 
 function routeEvidencePublication(
-  overrides: Partial<WorldkitBrowserRouteEvidencePublicationV1> = {},
-): WorldkitBrowserRouteEvidencePublicationV1 {
-  return canonicalWorldkitBrowserRouteEvidencePublicationV1({
+  overrides: Partial<WorldkitBrowserRouteEvidencePublicationV2> = {},
+): WorldkitBrowserRouteEvidencePublicationV2 {
+  return canonicalWorldkitBrowserRouteEvidencePublicationV2({
     kind: "worldkit-browser-route-evidence-publication",
     schemaVersion: 1,
     worldPackageRootHash: HASH,
@@ -107,7 +107,7 @@ function routeAuthoringWorld(): AuthoringSpecV4 {
 
 function sameWorldRouteEvidencePublication(
   source: AuthoringSpecV4,
-): WorldkitBrowserRouteEvidencePublicationV1 {
+): WorldkitBrowserRouteEvidencePublicationV2 {
   const normalized = normalizeAuthoringSpecV4(source);
   if (
     !normalized.ok ||

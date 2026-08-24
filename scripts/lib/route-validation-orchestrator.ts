@@ -9,19 +9,19 @@ import type {
 } from "@whitebox-world/runtime-contracts";
 import type { SubjectAssetResolverV1 } from "@whitebox-world/runtime-babylon";
 import {
-  assertHeightfieldRouteConnectivityResultForBuildInputV1,
+  assertRouteConnectivityResultForBuildInputV2,
   assertTraversalRuntimeWorldIdentityMatchesGraphV1,
-  canonicalRouteOverlayV1,
-  canonicalRouteRuntimeProbeReceiptV1,
+  canonicalRouteOverlayV2,
+  canonicalRouteRuntimeProbeReceiptV2,
   type CreateTraversalCapabilityEnvelopeInputV1,
-  type HeightfieldRouteBuildInputReceiptV1,
-  type HeightfieldRouteConnectivityResultV1,
+  type RouteBuildInputReceiptV2,
+  type RouteConnectivityResultV2,
   type ResolvedTraversalDriverProfileV1,
   type ResolvedTraversalGraphBuilderProfileV2,
   type ResolvedTraversalLockReceiptV1,
-  type RouteOverlayV1,
-  type RoutePathReceiptV1,
-  type RouteRuntimeProbeReceiptV1,
+  type RouteOverlayV2,
+  type RoutePathReceiptV2,
+  type RouteRuntimeProbeReceiptV2,
   type TraversalCapabilityEnvelopeReceiptV1,
   type TraversalRuntimePortV1,
 } from "@whitebox-world/traversal";
@@ -31,9 +31,9 @@ import {
   validateValidationReportV2,
   type CreateRouteValidationReportInputV2,
   type EvidenceArtifactKindV2,
-  type RouteEvidencePublicationRowInputV1,
+  type RouteEvidencePublicationRowInputV2,
   type RouteValidationRowInputV2,
-  type RunRouteRuntimeProbeInputV1,
+  type RunRouteRuntimeProbeInputV2,
   type ValidationReportV2,
   type WorldPackageValidationSubjectV1,
 } from "@whitebox-world/validation";
@@ -50,7 +50,7 @@ export interface RouteValidationRuntimeCreationInputV1 {
   readonly executionPlan: ExecutionPlanV5;
   readonly runtimeSessionId: string;
   readonly traversalLockReceipt: ResolvedTraversalLockReceiptV1;
-  readonly routePathReceipt: RoutePathReceiptV1;
+  readonly routePathReceipt: RoutePathReceiptV2;
   readonly runtimeAssetResolver?: SubjectAssetResolverV1;
   readonly havokWasmBytes?: Readonly<Uint8Array>;
 }
@@ -75,17 +75,17 @@ export interface RouteValidationOrchestratorOperationsV1 {
     capabilityEnvelope:
       TraversalCapabilityEnvelopeReceiptV1["envelope"];
     constraintId: string;
-  }>) => HeightfieldRouteBuildInputReceiptV1;
+  }>) => RouteBuildInputReceiptV2;
   readonly evaluateRoute: (input: Readonly<{
-    buildInputReceipt: HeightfieldRouteBuildInputReceiptV1;
-  }>) => Promise<HeightfieldRouteConnectivityResultV1>;
+    buildInputReceipt: RouteBuildInputReceiptV2;
+  }>) => Promise<RouteConnectivityResultV2>;
   readonly createRuntimeLease: (
     input: RouteValidationRuntimeCreationInputV1,
   ) => Promise<RouteValidationRuntimeLeaseV1>;
   readonly resolveDriverProfile: () => ResolvedTraversalDriverProfileV1;
   readonly runRuntimeProbe: (
-    input: RunRouteRuntimeProbeInputV1,
-  ) => Promise<RouteRuntimeProbeReceiptV1>;
+    input: RunRouteRuntimeProbeInputV2,
+  ) => Promise<RouteRuntimeProbeReceiptV2>;
   readonly createReport: (
     input: CreateRouteValidationReportInputV2,
   ) => ValidationReportV2;
@@ -110,7 +110,7 @@ export interface RouteValidationEvidenceFileV1 {
 export interface RouteValidationOrchestrationResultV1 {
   readonly report: ValidationReportV2;
   readonly evidenceFiles: readonly RouteValidationEvidenceFileV1[];
-  readonly publicationRows: readonly RouteEvidencePublicationRowInputV1[];
+  readonly publicationRows: readonly RouteEvidencePublicationRowInputV2[];
 }
 
 interface CanonicalOrchestrationInputV1 {
@@ -478,9 +478,9 @@ function sortedRequirements(
 }
 
 function canonicalOverlay(
-  buildInputReceipt: HeightfieldRouteBuildInputReceiptV1,
-  result: Extract<HeightfieldRouteConnectivityResultV1, { status: "complete" }>,
-): RouteOverlayV1 {
+  buildInputReceipt: RouteBuildInputReceiptV2,
+  result: Extract<RouteConnectivityResultV2, { status: "complete" }>,
+): RouteOverlayV2 {
   const buildInput = buildInputReceipt.input;
   const requirement = buildInput.connectivityRequirement;
   const graph = result.traversalGraph;
@@ -500,15 +500,15 @@ function canonicalOverlay(
   ) {
     fail("ROUTE_VALIDATION_ORCHESTRATION_OVERLAY_BINDING_MISMATCH");
   }
-  return canonicalRouteOverlayV1({
+  return canonicalRouteOverlayV2({
     kind: "route-overlay",
-    schemaVersion: 1,
+    schemaVersion: 2,
     constraintId: requirement.constraintId,
     routeId: requirement.routeId,
     traversingEntityId: requirement.traversingEntityId,
     startAnchor: buildInput.startAnchor,
     destinationAnchor: buildInput.destinationAnchor,
-    traversalSurfaceIdentity: path.traversalSurfaceIdentity,
+    orderedTraversalSurfaceIdentities: path.orderedTraversalSurfaceIdentities,
     resolvedTraversalLockHash: path.resolvedTraversalLockHash,
     traversalGraphHash: result.traversalGraphHash,
     routePathReceiptHash: result.routePathReceiptHash,
@@ -516,7 +516,7 @@ function canonicalOverlay(
     orderedTraversalEdgeIds: path.orderedTraversalEdgeIds,
     orderedPathPositionsMetersXYZ: path.orderedPathPositionsMetersXYZ,
     hardRibbon: buildInput.hardRibbon,
-    blockingColliderIdentities: buildInput.blockingColliders
+    staticColliderIdentities: buildInput.staticColliders
       .map((collider) => ({
         entityId: collider.entityId,
         logicalSubshapeId: collider.logicalSubshapeId,
@@ -557,8 +557,8 @@ async function probeCompleteRoute(
   operations: RouteValidationOrchestratorOperationsV1,
   rowIndex: number,
   traversalLockReceipt: ResolvedTraversalLockReceiptV1,
-  result: Extract<HeightfieldRouteConnectivityResultV1, { status: "complete" }>,
-): Promise<RouteRuntimeProbeReceiptV1> {
+  result: Extract<RouteConnectivityResultV2, { status: "complete" }>,
+): Promise<RouteRuntimeProbeReceiptV2> {
   const lease = await operations.createRuntimeLease({
     executionPlan: input.executionPlan,
     runtimeSessionId: `worldkit-route-validation-${String(rowIndex).padStart(6, "0")}`,
@@ -572,7 +572,7 @@ async function probeCompleteRoute(
       : { havokWasmBytes: input.havokWasmBytes }),
   });
   let primaryError: unknown;
-  let receipt: RouteRuntimeProbeReceiptV1 | undefined;
+  let receipt: RouteRuntimeProbeReceiptV2 | undefined;
   try {
     if (
       isNil(lease) ||
@@ -616,12 +616,23 @@ async function probeCompleteRoute(
       traversalGraph: result.traversalGraph,
       runtimeWorldIdentity: lease.runtimePort,
     });
-    receipt = canonicalRouteRuntimeProbeReceiptV1(
+    receipt = canonicalRouteRuntimeProbeReceiptV2(
       await operations.runRuntimeProbe({
         routePathReceipt: result.routePathReceipt,
         traversalDriverProfile: operations.resolveDriverProfile(),
         runtimePort: lease.runtimePort,
         validationProfile: OUTDOOR_WORLD_PACKAGE_DEV_VALIDATION_PROFILE_V2,
+        resolvedControlFeelProfile: (() => {
+          const subject = input.executionPlan.subjects.find(
+            (candidate) => candidate.entityId === result.routePathReceipt.traversingEntityId,
+          );
+          if (isNil(subject)) {
+            return fail("ROUTE_VALIDATION_RUNTIME_SUBJECT_MISSING");
+          }
+          return subject.controlFeel;
+        })(),
+        positionQuantizationMeters:
+          operations.resolveGraphBuilderProfile().profile.positionQuantizationMeters,
       }),
     );
   } catch (error) {
@@ -710,9 +721,9 @@ function canonicalBoundReport(
 }
 
 function evidenceBytesForResult(
-  result: HeightfieldRouteConnectivityResultV1,
-  probe: RouteRuntimeProbeReceiptV1 | undefined,
-  overlay: RouteOverlayV1 | undefined,
+  result: RouteConnectivityResultV2,
+  probe: RouteRuntimeProbeReceiptV2 | undefined,
+  overlay: RouteOverlayV2 | undefined,
 ): RouteValidationRowInputV2["evidenceBytes"] {
   if (result.status === "complete") {
     if (isNil(probe) || isNil(overlay)) {
@@ -817,7 +828,7 @@ export async function orchestrateRouteValidationV1(
   const input = canonicalInput(rawInput);
   const requirements = sortedRequirements(input.executionPlan);
   const rows: RouteValidationRowInputV2[] = [];
-  const publicationRows: RouteEvidencePublicationRowInputV1[] = [];
+  const publicationRows: RouteEvidencePublicationRowInputV2[] = [];
   const rowEvidence: RowEvidenceV1[] = [];
 
   for (const [rowIndex, requirement] of requirements.entries()) {
@@ -836,13 +847,13 @@ export async function orchestrateRouteValidationV1(
       constraintId: requirement.constraintId,
     });
     const routeConnectivityResult =
-      assertHeightfieldRouteConnectivityResultForBuildInputV1(
+      assertRouteConnectivityResultForBuildInputV2(
         await operations.evaluateRoute({ buildInputReceipt: routeBuildInputReceipt }),
         routeBuildInputReceipt,
       );
 
-    let routeRuntimeProbeReceipt: RouteRuntimeProbeReceiptV1 | undefined;
-    let routeOverlay: RouteOverlayV1 | undefined;
+    let routeRuntimeProbeReceipt: RouteRuntimeProbeReceiptV2 | undefined;
+    let routeOverlay: RouteOverlayV2 | undefined;
     if (routeConnectivityResult.status === "complete") {
       routeRuntimeProbeReceipt = await probeCompleteRoute(
         input,

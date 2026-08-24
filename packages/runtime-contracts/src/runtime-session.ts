@@ -4,11 +4,8 @@ import type {
 } from "@whitebox-world/control-capture";
 import type {
   RouteEvidenceSelectorV1,
-  RouteOverlayQueryResultV1,
   RouteOverlayQueryResultV2,
-  RoutePathReceiptQueryResultV1,
   RoutePathReceiptQueryResultV2,
-  RouteRuntimeProbeReceiptQueryResultV1,
   RouteRuntimeProbeReceiptQueryResultV2,
   RouteSummaryQueryResultV1,
 } from "./browser-route-evidence";
@@ -348,7 +345,7 @@ export interface SubjectHarnessReportV1 {
   tick: number;
 }
 
-export const WORLDKIT_BROWSER_PROTOCOL_VERSION = 4 as const;
+export const WORLDKIT_BROWSER_PROTOCOL_VERSION = 5 as const;
 
 export interface WorldkitBrowserDiagnosticV1 {
   severity: "info" | "warning" | "error";
@@ -358,7 +355,7 @@ export interface WorldkitBrowserDiagnosticV1 {
   details?: Readonly<Record<string, unknown>>;
 }
 
-export interface WorldkitBrowserApiV4 {
+export interface WorldkitBrowserApiV5 {
   version: typeof WORLDKIT_BROWSER_PROTOCOL_VERSION;
   ready(): Promise<WorldRuntimeSnapshotV3>;
   getSnapshot(): WorldRuntimeSnapshotV3;
@@ -402,30 +399,6 @@ export interface WorldkitBrowserApiV4 {
   runHarness?(subjectEntityId: string): Promise<SubjectHarnessReportV1>;
   getSubjectSnapshot?(subjectEntityId: string): SubjectRuntimeStateV3 | undefined;
   getCameraSnapshot?(): WorldRuntimeSnapshotV3["camera"];
-  getRouteSummary(selector: RouteEvidenceSelectorV1): RouteSummaryQueryResultV1;
-  getRoutePathReceipt(
-    selector: RouteEvidenceSelectorV1,
-  ): RoutePathReceiptQueryResultV1;
-  getRouteRuntimeProbeReceipt(
-    selector: RouteEvidenceSelectorV1,
-  ): RouteRuntimeProbeReceiptQueryResultV1;
-  getRouteOverlay(selector: RouteEvidenceSelectorV1): RouteOverlayQueryResultV1;
-}
-
-export interface WorldkitBrowserApiV5 {
-  version: 5;
-  ready(): Promise<WorldRuntimeSnapshotV3>;
-  getSnapshot(): WorldRuntimeSnapshotV3;
-  getDiagnostics(): readonly WorldkitBrowserDiagnosticV1[];
-  bindControl(request: BindControlRequestV2): ControlBindingReceiptV2;
-  runFixedInput(steps: readonly FixedInputV1[]): Promise<WorldRuntimeSnapshotV3>;
-  getControlCaptureCapabilities(): ControlCaptureCapabilitiesV1;
-  waitForSimulationTick(expectedSimulationTick: number): Promise<WorldRuntimeSnapshotV3>;
-  waitForRenderReady(expectedSimulationTick: number): Promise<RenderReadyReceiptV1>;
-  captureControlFrame(request: ControlCaptureRequestV1): Promise<RuntimeControlCaptureFrameV1>;
-  captureScreenshot(): string;
-  reset(): WorldRuntimeSnapshotV3;
-  setPaused(paused: boolean): WorldRuntimeSnapshotV3;
   getRouteSummary(selector: RouteEvidenceSelectorV1): RouteSummaryQueryResultV1;
   getRoutePathReceipt(
     selector: RouteEvidenceSelectorV1,

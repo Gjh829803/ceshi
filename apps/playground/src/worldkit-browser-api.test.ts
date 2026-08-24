@@ -13,8 +13,7 @@ import type {
   RuntimeControlCaptureFrameV1,
   RouteEvidenceSelectorV1,
   WorldRuntimeSnapshotV3,
-  WorldkitBrowserRouteEvidencePublicationV1,
-  WorldkitBrowserApiV4,
+  WorldkitBrowserRouteEvidencePublicationV2,
   WorldkitBrowserApiV5,
   WorldkitBrowserDiagnosticV1,
 } from "@whitebox-world/runtime-contracts";
@@ -49,7 +48,7 @@ const GRAPH_BUILDER_PROFILE = resolveTraversalGraphBuilderProfileV2(
   BUILT_IN_HEIGHTFIELD_R1_TRAVERSAL_GRAPH_BUILDER_PROFILE_REF,
 );
 
-function routeEvidencePublicationFixture(): WorldkitBrowserRouteEvidencePublicationV1 {
+function routeEvidencePublicationFixture(): WorldkitBrowserRouteEvidencePublicationV2 {
   const traversalSurfaceIdentity = {
     traversalSurfaceId: "surface-main",
     surfaceEntityId: "terrain-main",
@@ -71,7 +70,9 @@ function routeEvidencePublicationFixture(): WorldkitBrowserRouteEvidencePublicat
   } as const;
   const traversalGraph = {
     kind: "traversal-graph",
-    schemaVersion: 1,
+    schemaVersion: 2,
+    geometryArtifactHash: HASH_A,
+    traversalSurfaceIdentitiesById: {},
     authoringSpecHash: HASH_B,
     layoutSolveReportHash: HASH_C,
     resourceLockHash: HASH_D,
@@ -118,7 +119,7 @@ function routeEvidencePublicationFixture(): WorldkitBrowserRouteEvidencePublicat
     `sha256:${string}`;
   const routePathReceipt = {
     kind: "route-path-receipt",
-    schemaVersion: 1,
+    schemaVersion: 2,
     status: "complete",
     ...ROUTE_SELECTOR,
     traversingEntityId: "player",
@@ -130,7 +131,7 @@ function routeEvidencePublicationFixture(): WorldkitBrowserRouteEvidencePublicat
     traversalGraphHash,
     routeBuildInputHash: traversalGraph.routeBuildInputHash,
     resolvedTraversalLockHash: traversalGraph.resolvedTraversalLockHash,
-    traversalSurfaceIdentity,
+    orderedTraversalSurfaceIdentities: [traversalSurfaceIdentity],
     graphBuilderProfileRef,
     graphBuilderResolvedVersion,
     graphBuilderProfileHash,
@@ -184,11 +185,11 @@ function routeEvidencePublicationFixture(): WorldkitBrowserRouteEvidencePublicat
   } as const;
   const routeRuntimeProbeReceipt = {
     kind: "route-runtime-probe-receipt",
-    schemaVersion: 1,
+    schemaVersion: 2,
     status: "complete",
     request: {
       kind: "route-runtime-probe-request",
-      schemaVersion: 1,
+      schemaVersion: 2,
       routePathReceiptHash,
       ...ROUTE_SELECTOR,
       traversingEntityId: routePathReceipt.traversingEntityId,
@@ -201,7 +202,6 @@ function routeEvidencePublicationFixture(): WorldkitBrowserRouteEvidencePublicat
       routeBuildInputHash: routePathReceipt.routeBuildInputHash,
       traversalGraphHash,
       resolvedTraversalLockHash: routePathReceipt.resolvedTraversalLockHash,
-      traversalSurfaceIdentity,
       driverProfileRef:
         "worldkit://traversal-driver-profile/walk-hard-ribbon.r1@1",
       driverResolvedVersion: "1",
@@ -213,6 +213,8 @@ function routeEvidencePublicationFixture(): WorldkitBrowserRouteEvidencePublicat
       validationProfileHash:
         "sha256:4ae59a7b56f09055e35ad6c8c90a81d32bc5655e2ce845865c0cc945f09f042e",
       runtimeImplementationIdentity,
+      walkSpeedMetersPerSecond: 4,
+      positionQuantizationMeters: 0.05,
     },
     initialRuntimeEvidence,
     ticks: [],
@@ -230,7 +232,7 @@ function routeEvidencePublicationFixture(): WorldkitBrowserRouteEvidencePublicat
   } as const;
   const routeOverlay = {
     kind: "route-overlay",
-    schemaVersion: 1,
+    schemaVersion: 2,
     ...ROUTE_SELECTOR,
     traversingEntityId: routePathReceipt.traversingEntityId,
     startAnchor: {
@@ -241,7 +243,7 @@ function routeEvidencePublicationFixture(): WorldkitBrowserRouteEvidencePublicat
       entityId: routePathReceipt.destinationAnchorEntityId,
       positionMetersXYZ: [1, 0, 0],
     },
-    traversalSurfaceIdentity,
+    orderedTraversalSurfaceIdentities: [traversalSurfaceIdentity],
     resolvedTraversalLockHash: routePathReceipt.resolvedTraversalLockHash,
     traversalGraphHash,
     routePathReceiptHash,
@@ -256,11 +258,11 @@ function routeEvidencePublicationFixture(): WorldkitBrowserRouteEvidencePublicat
       locomotionProfileRef:
         "worldkit://locomotion-profile/humanoid.ground@1",
     },
-    blockingColliderIdentities: [],
+    staticColliderIdentities: [],
   } as const;
   return {
     kind: "worldkit-browser-route-evidence-publication",
-    schemaVersion: 1,
+    schemaVersion: 2,
     worldPackageRootHash: HASH_A,
     authoringSpecHash: routePathReceipt.authoringSpecHash,
     normalizedWorldIrHash: HASH_E,
@@ -302,7 +304,7 @@ function routeEvidencePublicationFixture(): WorldkitBrowserRouteEvidencePublicat
   };
 }
 
-function unreachableRouteEvidencePublicationFixture(): WorldkitBrowserRouteEvidencePublicationV1 {
+function unreachableRouteEvidencePublicationFixture(): WorldkitBrowserRouteEvidencePublicationV2 {
   const complete = routeEvidencePublicationFixture();
   const route = complete.routes[0]!;
   return {
@@ -710,7 +712,7 @@ describe("installDeferredWorldkitBrowserApi", () => {
     const source = routeEvidencePublicationFixture();
     const route = source.routes[0]!;
     const install = (
-      routeEvidencePublication: WorldkitBrowserRouteEvidencePublicationV1,
+      routeEvidencePublication: WorldkitBrowserRouteEvidencePublicationV2,
     ) => installDeferredWorldkitBrowserApi({
       target: {},
       statusElement: { dataset: {} },
@@ -724,7 +726,7 @@ describe("installDeferredWorldkitBrowserApi", () => {
         ...route,
         routeOverlay: new Uint8Array([1, 2, 3]),
       }],
-    } as unknown as WorldkitBrowserRouteEvidencePublicationV1)).toThrow(
+    } as unknown as WorldkitBrowserRouteEvidencePublicationV2)).toThrow(
       "WORLDKIT_BROWSER_ROUTE_EVIDENCE_PUBLICATION_INVALID",
     );
     expect(() => install({
@@ -736,7 +738,7 @@ describe("installDeferredWorldkitBrowserApi", () => {
           providerHandle: "secret-provider-object",
         },
       }],
-    } as unknown as WorldkitBrowserRouteEvidencePublicationV1)).toThrow(
+    } as unknown as WorldkitBrowserRouteEvidencePublicationV2)).toThrow(
       "WORLDKIT_BROWSER_ROUTE_EVIDENCE_PUBLICATION_INVALID",
     );
     expect(() => install({
@@ -765,7 +767,7 @@ describe("installDeferredWorldkitBrowserApi", () => {
     const source = routeEvidencePublicationFixture();
     const route = source.routes[0]!;
     const install = (
-      routeEvidencePublication: WorldkitBrowserRouteEvidencePublicationV1,
+      routeEvidencePublication: WorldkitBrowserRouteEvidencePublicationV2,
     ) => installDeferredWorldkitBrowserApi({
       target: {},
       statusElement: { dataset: {} },
@@ -822,7 +824,7 @@ describe("installDeferredWorldkitBrowserApi", () => {
         routeOverlayStatus: "unavailable",
       },
     } as const);
-    const install = (routes: WorldkitBrowserRouteEvidencePublicationV1["routes"]) =>
+    const install = (routes: WorldkitBrowserRouteEvidencePublicationV2["routes"]) =>
       installDeferredWorldkitBrowserApi({
         target: {},
         statusElement: { dataset: {} },
@@ -880,7 +882,7 @@ describe("installDeferredWorldkitBrowserApi", () => {
   it("installs before startup, keeps one ready Promise, and gates sync/async methods", async () => {
     const gate = deferred<void>();
     const adapter = adapterFixture();
-    const target: { __WORLDKIT__?: WorldkitBrowserApiV4 } = {};
+    const target: { __WORLDKIT__?: WorldkitBrowserApiV5 } = {};
     const statusElement = { dataset: {} as Record<string, string | undefined> };
     const installation = installDeferredWorldkitBrowserApi({
       target,
@@ -1167,7 +1169,7 @@ describe("installDeferredWorldkitBrowserApi", () => {
   });
 
   it("forwards only guarded Subject Asset codes and publishes one stable diagnostic", async () => {
-    const target: { __WORLDKIT__?: WorldkitBrowserApiV4 } = {};
+    const target: { __WORLDKIT__?: WorldkitBrowserApiV5 } = {};
     const statusElement = { dataset: {} as Record<string, string | undefined> };
     const installation = installDeferredWorldkitBrowserApi({
       target,
@@ -1337,20 +1339,20 @@ describe("createWorldkitBrowserApiV5", () => {
     "getRouteOverlay",
   ] as const;
 
-  it("preserves V4 methods, stays off window.__WORLDKIT__, and deep-freezes Route Evidence", () => {
+  it("preserves prior Browser methods, installs V5 on window.__WORLDKIT__, and deep-freezes Route Evidence", () => {
     const api = createWorldkitBrowserApiV5({});
     expect(api.version).toBe(5);
     for (const methodName of V4_REQUIRED_METHODS) {
       expect(typeof api[methodName]).toBe("function");
     }
-    const target: { __WORLDKIT__?: WorldkitBrowserApiV4 } = {};
+    const target: { __WORLDKIT__?: WorldkitBrowserApiV5 } = {};
     const installation = installDeferredWorldkitBrowserApi({
       target,
       statusElement: { dataset: {} },
       initialize: async () => adapterFixture(),
     });
     expect(target.__WORLDKIT__).toBe(installation.api);
-    expect(target.__WORLDKIT__?.version).toBe(4);
+    expect(target.__WORLDKIT__?.version).toBe(5);
     expect(api).not.toBe(target.__WORLDKIT__);
 
     const selector = { constraintId: "player-to-goal", routeId: "main-route" };

@@ -1,17 +1,15 @@
 export {
-  createHeightfieldRouteBuildInputV1,
-  HeightfieldRouteBuildInputInvalidErrorV1,
+  createRouteBuildInputFromPlanV2,
+  RouteBuildInputFromPlanInvalidErrorV2,
 } from "./heightfield-source.js";
 export type {
-  CreateHeightfieldRouteBuildInputInputV1,
-  HeightfieldRouteBuildInputInvalidReasonV1,
+  CreateRouteBuildInputFromPlanInputV2,
+  RouteBuildInputFromPlanInvalidReasonV2,
 } from "./heightfield-source.js";
 export {
-  evaluateRequiredHeightfieldRouteV1,
   evaluateRequiredRouteV2,
-  RouteConnectivityOperationAbortedErrorV1,
+  RouteConnectivityOperationAbortedErrorV2,
 } from "./evaluate-route.js";
 export type {
-  EvaluateRequiredHeightfieldRouteInputV1,
   EvaluateRequiredRouteInputV2,
 } from "./evaluate-route.js";

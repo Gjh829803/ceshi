@@ -5,16 +5,12 @@ import {
   type CanonicalTraversalSurfaceTriangleSourceV1,
 } from "@whitebox-world/terrain-surface";
 import {
-  assertHeightfieldRouteBuildInputReceiptV1,
   assertRouteBuildInputReceiptV2,
-  canonicalTraversalGraphV1,
   canonicalTraversalGraphV2,
   quantizeTraversalMetersToMicrometersV1,
-  type HeightfieldRouteBuildInputReceiptV1,
   type RouteBuildInputReceiptV2,
   type TraversalCapabilityEnvelopeV1,
   type TraversalEdgeV1,
-  type TraversalGraphV1,
   type TraversalGraphV2,
   type TraversalNodeV1,
   type TraversalSurfaceIdentityV1,
@@ -76,24 +72,6 @@ export interface RecastNavMeshAuditSnapshotV1 {
   readonly nullLinkIndex: number;
   readonly tiles: readonly RecastAuditTileV1[];
 }
-
-export type HeightfieldTraversalGraphProjectionV1 =
-  | Readonly<{
-      status: "complete";
-      traversalGraph: TraversalGraphV1;
-      traversalNodeIdByProviderPolygonRef: ReadonlyMap<number, string>;
-      providerPolygonRefByTraversalNodeId: ReadonlyMap<string, number>;
-    }>
-  | Readonly<{
-      status: "unavailable";
-      reason: "no-queryable-ground-surface";
-    }>
-  | Readonly<{
-      status: "incomplete";
-      capacityKind: "nodes" | "edges";
-      maximumAllowedCount: number;
-      minimumRequiredCount: number;
-    }>;
 
 export type TraversalGraphProjectionV2 =
   | Readonly<{
@@ -390,13 +368,6 @@ function nodeIdFromSurface(
     colliderSubshapeId: surface.colliderSubshapeId,
     canonicalVertexCycleUnitsXYZ: cycle,
   }).slice("sha256:".length)}`;
-}
-
-function nodeId(
-  receipt: HeightfieldRouteBuildInputReceiptV1,
-  cycle: readonly Vec3Units[],
-): string {
-  return nodeIdFromSurface(receipt.input.traversalSurface, cycle);
 }
 
 function edgeId(fromTraversalNodeId: string, toTraversalNodeId: string): string {
@@ -751,7 +722,7 @@ function buildEdge(
 function capacityResult(
   capacityKind: "nodes" | "edges",
   maximumAllowedCount: number,
-): HeightfieldTraversalGraphProjectionV1 {
+): TraversalGraphProjectionV2 {
   return deepFreeze({
     status: "incomplete",
     capacityKind,
@@ -765,7 +736,7 @@ export function classifyGraphProjectionCapacityV1(input: Readonly<{
   edgeCount: number;
   maximumNodes: number;
   maximumEdges: number;
-}>): HeightfieldTraversalGraphProjectionV1 | undefined {
+}>): TraversalGraphProjectionV2 | undefined {
   for (const [field, value] of Object.entries(input)) {
     if (!Number.isSafeInteger(value) || value < 0) {
       fail(`${field} must be a non-negative safe integer.`);
@@ -781,211 +752,6 @@ export function classifyGraphProjectionCapacityV1(input: Readonly<{
     return capacityResult("edges", input.maximumEdges);
   }
   return undefined;
-}
-
-export function buildHeightfieldTraversalGraphFromSnapshotV1(
-  snapshot: RecastNavMeshAuditSnapshotV1,
-  rawReceipt: HeightfieldRouteBuildInputReceiptV1,
-): HeightfieldTraversalGraphProjectionV1 {
-  const receipt = assertHeightfieldRouteBuildInputReceiptV1(rawReceipt);
-  if (receipt.input.terrainSource.kind !== "bounded") {
-    fail("a bounded Heightfield source is required for Graph projection.");
-  }
-  if (
-    snapshot.kind !== "recast-navmesh-audit-snapshot" ||
-    snapshot.schemaVersion !== 1 ||
-    !Number.isSafeInteger(snapshot.nullLinkIndex)
-  ) fail("audit snapshot header is invalid.");
-  if (receipt.budgetEvidence.kind !== "heightfield-tile-estimate") {
-    fail("bounded source requires Tile budget evidence.");
-  }
-  if (snapshot.tiles.length > receipt.budgetEvidence.estimatedTiles) {
-    fail("observed non-null Tile count exceeds the admitted estimate.");
-  }
-
-  const envelope = receipt.input.capabilityEnvelope;
-  const config = mapTraversalCapabilityEnvelopeToRecastTiledConfigV1(envelope);
-  const voxelCellSizeMicrometers = quantizeTraversalMetersToMicrometersV1(
-    envelope.voxelCellSizeMeters,
-  );
-  const voxelCellHeightMicrometers = quantizeTraversalMetersToMicrometersV1(
-    envelope.voxelCellHeightMeters,
-  );
-  const clearanceWidthMeters = floorMicrometerValueToQuantum(
-    2 * config.walkableRadius * voxelCellSizeMicrometers,
-    envelope.positionQuantizationMeters,
-  );
-  const clearanceHeightMeters = floorMicrometerValueToQuantum(
-    config.walkableHeight * voxelCellHeightMicrometers,
-    envelope.positionQuantizationMeters,
-  );
-  if (!(clearanceWidthMeters > 0) || !(clearanceHeightMeters > 0)) {
-    fail("conservative clearance lower bounds must be positive.");
-  }
-  const ribbon = createHardRibbonProofV1({
-    pointsMetersXZ: receipt.input.hardRibbon.pointsMetersXZ,
-    widthMeters: receipt.input.hardRibbon.widthMeters,
-  });
-
-  const providerRefs = new Set<number>();
-  const omittedRefs = new Set<number>();
-  const tileIds = new Set<string>();
-  const candidates: QuantizedPolygonV1[] = [];
-  for (const tile of snapshot.tiles) {
-    for (const field of [tile.tileX, tile.tileZ, tile.tileLayer, tile.maximumLinkCount]) {
-      requireSafeInteger(field, "Tile integer field");
-    }
-    if (tile.maximumLinkCount < 0 || tile.links.length > tile.maximumLinkCount) {
-      fail("Tile Link table exceeds maxLinkCount.");
-    }
-    if (tile.offMeshConnectionCount !== 0) {
-      fail("off-mesh connections are forbidden in Heightfield R1.");
-    }
-    const canonicalTileId = tileId(tile);
-    if (tileIds.has(canonicalTileId)) fail("duplicate canonical Tile identity.");
-    tileIds.add(canonicalTileId);
-    for (const polygon of tile.polygons) {
-      if (
-        !Number.isSafeInteger(polygon.providerPolygonRef) ||
-        !(polygon.providerPolygonRef > 0) ||
-        polygon.providerPolygonRef > RECAST_QUERY_PROVIDER_CONSTANTS_V1.maximumProviderPolygonRef
-      ) fail("provider polygon Ref must be a positive unsigned 32-bit integer.");
-      if (providerRefs.has(polygon.providerPolygonRef)) fail("duplicate provider polygon Ref.");
-      providerRefs.add(polygon.providerPolygonRef);
-      if (
-        polygon.providerType !== GROUND_POLYGON_TYPE ||
-        polygon.areaId !== TERRAIN_AREA_ID ||
-        polygon.flags !== TERRAIN_FLAG
-      ) continue;
-      const projected = projectPolygon(
-        tile,
-        polygon,
-        receipt.input.traversalSurface,
-        receipt.input.capabilityEnvelope,
-        clearanceWidthMeters,
-        clearanceHeightMeters,
-      );
-      const centroid = projected.node.positionMetersXYZ;
-      if (!isPointInsideHardRibbonV1(ribbon, [centroid[0], centroid[2]])) {
-        omittedRefs.add(polygon.providerPolygonRef);
-        continue;
-      }
-      candidates.push(projected);
-    }
-  }
-  candidates.sort((left, right) => compareCanonical(left.node.id, right.node.id));
-  if (candidates.length === 0) {
-    return deepFreeze({ status: "unavailable", reason: "no-queryable-ground-surface" });
-  }
-  const nodeCapacity = classifyGraphProjectionCapacityV1({
-    nodeCount: candidates.length,
-    edgeCount: 0,
-    maximumNodes: envelope.maximumNodes,
-    maximumEdges: envelope.maximumEdges,
-  });
-  if (!isNil(nodeCapacity)) return nodeCapacity;
-
-  const byProviderRef = new Map<number, QuantizedPolygonV1>();
-  const byNodeId = new Map<string, QuantizedPolygonV1>();
-  for (const candidate of candidates) {
-    if (byNodeId.has(candidate.node.id)) fail("canonical Node ID collision.");
-    byProviderRef.set(candidate.providerPolygonRef, candidate);
-    byNodeId.set(candidate.node.id, candidate);
-  }
-  const edgeCandidates = new Map<string, ProjectedEdgeCandidateV1>();
-  for (const source of candidates) {
-    const linksByIndex = new Map(
-      source.tile.links.map((link) => [link.providerLinkIndex, link]),
-    );
-    const visited = new Set<number>();
-    let linkIndex = source.polygon.firstLinkIndex;
-    while (linkIndex !== snapshot.nullLinkIndex) {
-      if (visited.has(linkIndex)) fail("Link cycle detected.");
-      visited.add(linkIndex);
-      if (visited.size > source.tile.maximumLinkCount) {
-        fail("Link chain exceeds maxLinkCount.");
-      }
-      const link = linksByIndex.get(linkIndex);
-      if (isNil(link)) fail("Link index is out of range.");
-      if (link.targetProviderPolygonRef !== 0) {
-        const target = byProviderRef.get(link.targetProviderPolygonRef);
-        if (isNil(target)) {
-          if (!omittedRefs.has(link.targetProviderPolygonRef)) {
-            fail("Link has an unresolved non-zero target Ref.");
-          }
-        } else {
-          const projectedEdge = buildEdge(
-            source,
-            target,
-            link,
-            receipt.input,
-            clearanceWidthMeters,
-            clearanceHeightMeters,
-          );
-          if (!isNil(projectedEdge)) {
-            const existing = edgeCandidates.get(projectedEdge.edge.id);
-            if (
-              !isNil(existing) &&
-              (
-                JSON.stringify(existing.edge) !== JSON.stringify(projectedEdge.edge) ||
-                existing.portalEvidenceKey !== projectedEdge.portalEvidenceKey
-              )
-            ) {
-              fail("ordered polygon pair produced conflicting Edge evidence.");
-            }
-            edgeCandidates.set(projectedEdge.edge.id, projectedEdge);
-          }
-        }
-      }
-      linkIndex = link.nextLinkIndex;
-    }
-  }
-  const edges = [...edgeCandidates.values()].map(({ edge }) => edge).sort((left, right) =>
-    compareCanonical(left.id, right.id));
-  const edgeCapacity = classifyGraphProjectionCapacityV1({
-    nodeCount: candidates.length,
-    edgeCount: edges.length,
-    maximumNodes: envelope.maximumNodes,
-    maximumEdges: envelope.maximumEdges,
-  });
-  if (!isNil(edgeCapacity)) return edgeCapacity;
-
-  const traversalNodesById = Object.fromEntries(
-    candidates.map((candidate) => [candidate.node.id, candidate.node]),
-  );
-  const traversalEdgesById = Object.fromEntries(
-    edges.map((edge) => [edge.id, edge]),
-  );
-  const graph = canonicalTraversalGraphV1({
-    kind: "traversal-graph",
-    schemaVersion: 1,
-    authoringSpecHash: receipt.input.authoringSpecHash,
-    layoutSolveReportHash: receipt.input.layoutSolveReportHash,
-    resourceLockHash: receipt.input.resourceLockHash,
-    terrainArtifactHash: receipt.input.terrainSource.terrainArtifactHash,
-    colliderArtifactHash: receipt.input.colliderArtifactHash,
-    surfaceArtifactHash: receipt.input.traversalSurface.resourceHash,
-    routeBuildInputHash: receipt.routeBuildInputHash,
-    resolvedTraversalLockHash: envelope.resolvedTraversalLockHash,
-    graphBuilderProfileRef: envelope.graphBuilderProfileRef,
-    graphBuilderResolvedVersion: envelope.graphBuilderResolvedVersion,
-    graphBuilderProfileHash: envelope.graphBuilderProfileHash,
-    routeId: receipt.input.connectivityRequirement.routeId,
-    startAnchorEntityId: receipt.input.connectivityRequirement.startAnchorEntityId,
-    destinationAnchorEntityId: receipt.input.connectivityRequirement.destinationAnchorEntityId,
-    traversalNodesById,
-    traversalEdgesById,
-  });
-  return deepFreeze({
-    status: "complete",
-    traversalGraph: graph,
-    traversalNodeIdByProviderPolygonRef: new Map(
-      candidates.map((candidate) => [candidate.providerPolygonRef, candidate.node.id]),
-    ),
-    providerPolygonRefByTraversalNodeId: new Map(
-      candidates.map((candidate) => [candidate.node.id, candidate.providerPolygonRef]),
-    ),
-  });
 }
 
 function rawTileVertex(tile: RecastAuditTileV1, index: number): Vec3 {
@@ -1129,23 +895,96 @@ export function snapshotRecastNavMeshV1(navMesh: NavMesh): RecastNavMeshAuditSna
   });
 }
 
-export function buildHeightfieldTraversalGraphV1(
-  navMesh: NavMesh,
-  receipt: HeightfieldRouteBuildInputReceiptV1,
-): HeightfieldTraversalGraphProjectionV1 {
-  return buildHeightfieldTraversalGraphFromSnapshotV1(
-    snapshotRecastNavMeshV1(navMesh),
-    receipt,
-  );
-}
-
-
 
 function sortIdentitiesBySurfaceId(
   identities: readonly TraversalSurfaceIdentityV1[],
 ): TraversalSurfaceIdentityV1[] {
   return [...identities].sort((left, right) =>
     compareCanonical(left.traversalSurfaceId, right.traversalSurfaceId));
+}
+
+export function graphNodeCorrelationHeightWindowMetersV2(
+  envelope: Pick<TraversalCapabilityEnvelopeV1, "positionQuantizationMeters">,
+): number {
+  return envelope.positionQuantizationMeters / 2 +
+    TRAVERSAL_SURFACE_QUERY_HEIGHT_EPSILON_METERS_V1;
+}
+
+function interpolateTriangleHeightMetersAtXzV2(
+  a: Vec3,
+  b: Vec3,
+  c: Vec3,
+  pointMetersXZ: readonly [number, number],
+): number | undefined {
+  const px = pointMetersXZ[0];
+  const pz = pointMetersXZ[1];
+  const v0x = c[0] - a[0];
+  const v0z = c[2] - a[2];
+  const v1x = b[0] - a[0];
+  const v1z = b[2] - a[2];
+  const v2x = px - a[0];
+  const v2z = pz - a[2];
+  const dot00 = v0x * v0x + v0z * v0z;
+  const dot01 = v0x * v1x + v0z * v1z;
+  const dot02 = v0x * v2x + v0z * v2z;
+  const dot11 = v1x * v1x + v1z * v1z;
+  const dot12 = v1x * v2x + v1z * v2z;
+  const denom = dot00 * dot11 - dot01 * dot01;
+  if (denom === 0) return undefined;
+  const u = (dot11 * dot02 - dot01 * dot12) / denom;
+  const v = (dot00 * dot12 - dot01 * dot02) / denom;
+  if (u < -1e-12 || v < -1e-12 || u + v > 1 + 1e-12) return undefined;
+  return a[1] + v * (b[1] - a[1]) + u * (c[1] - a[1]);
+}
+
+function sampleQuantizedDetailHeightMetersAtXzV2(
+  triangles: readonly RecastAuditDetailTriangleV1[],
+  pointMetersXZ: readonly [number, number],
+  quantumMeters: number,
+): number | undefined {
+  for (const triangle of triangles) {
+    const heightMeters = interpolateTriangleHeightMetersAtXzV2(
+      triangle[0],
+      triangle[1],
+      triangle[2],
+      pointMetersXZ,
+    );
+    if (isNil(heightMeters)) continue;
+    return unitsToMeters(quantizeToUnits(heightMeters, quantumMeters), quantumMeters);
+  }
+  return undefined;
+}
+
+function sampleClosestSourceHeightMetersAtXzV2(
+  source: CanonicalTraversalSurfaceTriangleSourceV1,
+  pointMetersXZ: readonly [number, number],
+  preferredHeightMeters: number,
+  quantumMeters: number,
+): number | undefined {
+  const positions = source.worldPositionsMetersXYZ;
+  const indices = source.triangleIndices;
+  if (isNil(positions) || isNil(indices) || isEmpty(indices)) return undefined;
+  let bestHeightMeters: number | undefined;
+  let bestDeltaMeters = Number.POSITIVE_INFINITY;
+  for (let offset = 0; offset + 2 < indices.length; offset += 3) {
+    const i0 = indices[offset]! * 3;
+    const i1 = indices[offset + 1]! * 3;
+    const i2 = indices[offset + 2]! * 3;
+    const a: Vec3 = [positions[i0]!, positions[i0 + 1]!, positions[i0 + 2]!];
+    const b: Vec3 = [positions[i1]!, positions[i1 + 1]!, positions[i1 + 2]!];
+    const c: Vec3 = [positions[i2]!, positions[i2 + 1]!, positions[i2 + 2]!];
+    const ny = (b[2] - a[2]) * (c[0] - a[0]) - (b[0] - a[0]) * (c[2] - a[2]);
+    if (!(ny > 0)) continue;
+    const heightMeters = interpolateTriangleHeightMetersAtXzV2(a, b, c, pointMetersXZ);
+    if (isNil(heightMeters)) continue;
+    const deltaMeters = Math.abs(heightMeters - preferredHeightMeters);
+    if (deltaMeters < bestDeltaMeters) {
+      bestDeltaMeters = deltaMeters;
+      bestHeightMeters = heightMeters;
+    }
+  }
+  if (isNil(bestHeightMeters)) return undefined;
+  return unitsToMeters(quantizeToUnits(bestHeightMeters, quantumMeters), quantumMeters);
 }
 
 function correlateTaggedTraversalSurfaceV2(
@@ -1185,15 +1024,33 @@ function correlateTaggedTraversalSurfaceV2(
       relatedTraversalSurfaceIdentities: isNil(identity) ? [] : [identity],
     };
   }
-  const heightBandMeters =
-    envelope.voxelCellHeightMeters +
-    envelope.maxStepHeightMeters +
-    TRAVERSAL_SURFACE_QUERY_HEIGHT_EPSILON_METERS_V1;
+  const pointMetersXZ: readonly [number, number] = [
+    centroidMetersXYZ[0],
+    centroidMetersXYZ[2],
+  ];
+  const detailHeightMeters = sampleQuantizedDetailHeightMetersAtXzV2(
+    polygon.detailTrianglesMetersXYZ,
+    pointMetersXZ,
+    envelope.positionQuantizationMeters,
+  );
+  const recastHeightMeters = isNil(detailHeightMeters)
+    ? centroidMetersXYZ[1]
+    : detailHeightMeters;
+  const sourceHeightMeters = sampleClosestSourceHeightMetersAtXzV2(
+    source,
+    pointMetersXZ,
+    recastHeightMeters,
+    envelope.positionQuantizationMeters,
+  );
+  const referenceHeightMeters = isNil(sourceHeightMeters)
+    ? recastHeightMeters
+    : sourceHeightMeters;
   const hits = queryCanonicalTraversalSurfaceHitsV1({
     sources: [source],
-    pointMetersXZ: [centroidMetersXYZ[0], centroidMetersXYZ[2]],
-    referenceHeightMeters: centroidMetersXYZ[1],
-    maximumReferenceHeightDifferenceMeters: heightBandMeters,
+    pointMetersXZ,
+    referenceHeightMeters,
+    maximumReferenceHeightDifferenceMeters:
+      graphNodeCorrelationHeightWindowMetersV2(envelope),
     normalAdmission: {
       mode: "upward-slope",
       minimumUpwardNormalYRatio: Math.cos(
@@ -1489,7 +1346,10 @@ export function buildTraversalGraphFromSnapshotV2(
   rawReceipt: RouteBuildInputReceiptV2,
 ): TraversalGraphProjectionV2 {
   const receipt = assertRouteBuildInputReceiptV2(rawReceipt);
-  if (receipt.input.terrainSource.kind !== "bounded") {
+  if (
+    receipt.input.terrainSource.kind !== "bounded" &&
+    isEmpty(receipt.input.staticColliders)
+  ) {
     fail("a bounded Heightfield source is required for Graph projection.");
   }
   if (

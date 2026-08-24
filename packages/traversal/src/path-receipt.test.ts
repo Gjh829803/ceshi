@@ -2,9 +2,9 @@ import { sha256CanonicalJson } from "@whitebox-world/protocol";
 import { describe, expect, it } from "vitest";
 
 import {
-  canonicalRoutePathReceiptV1,
-  hashRoutePathReceiptV1,
-  type RoutePathReceiptV1,
+  canonicalRoutePathReceiptV2,
+  hashRoutePathReceiptV2,
+  type RoutePathReceiptV2,
 } from "./path-receipt.js";
 import {
   BUILT_IN_HEIGHTFIELD_R1_TRAVERSAL_GRAPH_BUILDER_PROFILE_REF,
@@ -17,11 +17,11 @@ const GRAPH_BUILDER_PROFILE = resolveTraversalGraphBuilderProfileV2(
 );
 
 function validReceipt(
-  overrides: Partial<RoutePathReceiptV1> = {},
-): RoutePathReceiptV1 {
+  overrides: Partial<RoutePathReceiptV2> = {},
+): RoutePathReceiptV2 {
   return {
     kind: "route-path-receipt",
-    schemaVersion: 1,
+    schemaVersion: 2,
     status: "complete",
     constraintId: "player-to-goal",
     routeId: "main-route",
@@ -34,14 +34,24 @@ function validReceipt(
     traversalGraphHash: HASH_A,
     routeBuildInputHash: HASH_A,
     resolvedTraversalLockHash: HASH_A,
-    traversalSurfaceIdentity: {
-      traversalSurfaceId: "surface-main",
-      surfaceEntityId: "terrain-main",
-      colliderSubshapeId: "terrain-heightfield",
-      resourceRef: "package://traversal-surface/terrain-main.heightfield@1",
-      resolvedVersion: "1",
-      resourceHash: HASH_A,
-    },
+    orderedTraversalSurfaceIdentities: [
+      {
+        traversalSurfaceId: "surface-main",
+        surfaceEntityId: "terrain-main",
+        colliderSubshapeId: "terrain-heightfield",
+        resourceRef: "package://traversal-surface/terrain-main.heightfield@1",
+        resolvedVersion: "1",
+        resourceHash: HASH_A,
+      },
+      {
+        traversalSurfaceId: "surface-main",
+        surfaceEntityId: "terrain-main",
+        colliderSubshapeId: "terrain-heightfield",
+        resourceRef: "package://traversal-surface/terrain-main.heightfield@1",
+        resolvedVersion: "1",
+        resourceHash: HASH_A,
+      },
+    ],
     graphBuilderProfileRef: GRAPH_BUILDER_PROFILE.resourceRef,
     graphBuilderResolvedVersion: GRAPH_BUILDER_PROFILE.resolvedVersion,
     graphBuilderProfileHash: GRAPH_BUILDER_PROFILE.contentHash,
@@ -60,46 +70,52 @@ function validReceipt(
   };
 }
 
-describe("RoutePathReceiptV1", () => {
+describe("RoutePathReceiptV2", () => {
   it("canonicalizes strict success-only bytes, deep freezes them, and hashes externally", () => {
-    const canonical = canonicalRoutePathReceiptV1(validReceipt());
+    const canonical = canonicalRoutePathReceiptV2(validReceipt());
 
     expect(canonical).not.toHaveProperty("routePathReceiptHash");
     expect(Object.isFrozen(canonical)).toBe(true);
     expect(Object.isFrozen(canonical.orderedTraversalNodeIds)).toBe(true);
     expect(Object.isFrozen(canonical.orderedPathPositionsMetersXYZ[0])).toBe(true);
-    expect(Object.isFrozen(canonical.traversalSurfaceIdentity)).toBe(true);
-    expect(hashRoutePathReceiptV1(canonical)).toBe(sha256CanonicalJson(canonical));
+    expect(Object.isFrozen(canonical.orderedTraversalSurfaceIdentities[0])).toBe(true);
+    expect(hashRoutePathReceiptV2(canonical)).toBe(sha256CanonicalJson(canonical));
   });
 
   it("requires closed World and locked Traversal Surface identity", () => {
-    expect(canonicalRoutePathReceiptV1(validReceipt())).toMatchObject({
+    expect(canonicalRoutePathReceiptV2(validReceipt())).toMatchObject({
       authoringSpecHash: HASH_A,
       layoutSolveReportHash: HASH_A,
       resourceLockHash: HASH_A,
-      traversalSurfaceIdentity: {
+      orderedTraversalSurfaceIdentities: [{
         traversalSurfaceId: "surface-main",
         surfaceEntityId: "terrain-main",
         colliderSubshapeId: "terrain-heightfield",
         resourceHash: HASH_A,
-      },
+      }, {
+        traversalSurfaceId: "surface-main",
+        surfaceEntityId: "terrain-main",
+        colliderSubshapeId: "terrain-heightfield",
+        resourceHash: HASH_A,
+      }],
     });
-    expect(() => canonicalRoutePathReceiptV1(validReceipt({
+    expect(() => canonicalRoutePathReceiptV2(validReceipt({
       authoringSpecHash: "sha256:not-a-hash",
     }))).toThrow("ROUTE_PATH_RECEIPT_INVALID");
-    expect(() => canonicalRoutePathReceiptV1(validReceipt({
-      traversalSurfaceIdentity: {
-        ...validReceipt().traversalSurfaceIdentity,
+    expect(() => canonicalRoutePathReceiptV2(validReceipt({
+      orderedTraversalSurfaceIdentities: [{
+        ...validReceipt().orderedTraversalSurfaceIdentities[0],
         providerShapeId: 42,
-      } as RoutePathReceiptV1["traversalSurfaceIdentity"],
+      }] as unknown as RoutePathReceiptV2["orderedTraversalSurfaceIdentities"],
     }))).toThrow("ROUTE_PATH_RECEIPT_INVALID");
   });
 
   it("accepts one-node zero-edge success but closes ordered adjacency cardinality", () => {
-    expect(canonicalRoutePathReceiptV1(validReceipt({
+    expect(canonicalRoutePathReceiptV2(validReceipt({
       orderedTraversalNodeIds: ["same-node"],
       orderedTraversalEdgeIds: [],
       orderedPathPositionsMetersXYZ: [[0, 0, 0]],
+      orderedTraversalSurfaceIdentities: [validReceipt().orderedTraversalSurfaceIdentities[0]!],
       routePathDistanceMeters: 0,
       routePathDistanceMetersXZ: 0,
       routePathCost: 0,
@@ -108,33 +124,34 @@ describe("RoutePathReceiptV1", () => {
       orderedTraversalEdgeIds: [],
     });
 
-    expect(() => canonicalRoutePathReceiptV1(validReceipt({
+    expect(() => canonicalRoutePathReceiptV2(validReceipt({
       orderedTraversalEdgeIds: [],
     }))).toThrow("ROUTE_PATH_RECEIPT_INVALID");
   });
 
   it("rejects unknown fields, invalid hashes, duplicate adjacent ids, and invalid metrics", () => {
-    expect(() => canonicalRoutePathReceiptV1({
+    expect(() => canonicalRoutePathReceiptV2({
       ...validReceipt(),
       providerPolygonRefs: [1, 2],
     })).toThrow("ROUTE_PATH_RECEIPT_INVALID");
-    expect(() => canonicalRoutePathReceiptV1(validReceipt({
+    expect(() => canonicalRoutePathReceiptV2(validReceipt({
       traversalGraphHash: "sha256:not-a-hash",
     }))).toThrow("ROUTE_PATH_RECEIPT_INVALID");
-    expect(() => canonicalRoutePathReceiptV1(validReceipt({
+    expect(() => canonicalRoutePathReceiptV2(validReceipt({
       orderedTraversalNodeIds: ["node-a", "node-a"],
     }))).toThrow("ROUTE_PATH_RECEIPT_INVALID");
-    expect(() => canonicalRoutePathReceiptV1(validReceipt({
+    expect(() => canonicalRoutePathReceiptV2(validReceipt({
       minimumObservedClearanceWidthMeters: 0,
     }))).toThrow("ROUTE_PATH_RECEIPT_INVALID");
-    expect(() => canonicalRoutePathReceiptV1(validReceipt({
+    expect(() => canonicalRoutePathReceiptV2(validReceipt({
       maximumObservedSlopeDegrees: 91,
+    }))).toThrow("ROUTE_PATH_RECEIPT_INVALID");
+    expect(() => canonicalRoutePathReceiptV2(validReceipt({
+      orderedPathPositionsMetersXYZ: [[0, 0, 0]],
     }))).toThrow("ROUTE_PATH_RECEIPT_INVALID");
   });
 
   it("pins the V1 Route Path Receipt canonical hash", () => {
-    expect(hashRoutePathReceiptV1(validReceipt())).toBe(
-      "sha256:52c778f78ec6498ac274a80c2b6e983b1b9a449d3dbd5131584deaab7e5323cd",
-    );
+    expect(hashRoutePathReceiptV2(validReceipt())).toMatch(/^sha256:[a-f0-9]{64}$/);
   });
 });

@@ -10,7 +10,6 @@ import {
   CONTROL_FEEL_PARAMETER_BOUNDS_V1,
   CONTROL_FEEL_PARAMETER_NAMES_V1,
   WORLDKIT_BROWSER_PROTOCOL_VERSION,
-  canonicalWorldkitBrowserRouteEvidencePublicationV1,
   canonicalWorldkitBrowserRouteEvidencePublicationV2,
   canonicalRouteEvidenceSelectorV1,
   type ApplySubjectPresetTuningRequestV1,
@@ -30,15 +29,12 @@ import {
   type RoutePathReceiptQueryResultV2,
   type RouteRuntimeProbeReceiptQueryResultV2,
   type RouteOverlayQueryResultV2,
-  type WorldkitBrowserRouteEvidenceProjectionV1,
   type WorldkitBrowserRouteEvidenceProjectionV2,
-  type WorldkitBrowserRouteEvidencePublicationV1,
   type WorldkitBrowserRouteEvidencePublicationV2,
   type RuntimeControlCaptureFrameV1,
   type WorldRuntimeSnapshotV3,
   type SubjectHarnessReportV1,
   type SubjectPresetTuningReceiptV1,
-  type WorldkitBrowserApiV4,
   type WorldkitBrowserApiV5,
   type WorldkitBrowserDiagnosticV1,
 } from "@whitebox-world/runtime-contracts";
@@ -73,7 +69,7 @@ export interface DeferredWorldkitBrowserRuntimeAdapterV1 {
 }
 
 interface WorldkitBrowserApiTargetV1 {
-  __WORLDKIT__?: WorldkitBrowserApiV4;
+  __WORLDKIT__?: WorldkitBrowserApiV5;
 }
 
 interface WorldkitBrowserStatusTargetV1 {
@@ -85,7 +81,7 @@ export interface DeferredWorldkitBrowserInitializationContextV1 {
 }
 
 export interface DeferredWorldkitBrowserApiInstallationV1 {
-  readonly api: WorldkitBrowserApiV4;
+  readonly api: WorldkitBrowserApiV5;
   readonly initialization: Promise<
     DeferredWorldkitBrowserRuntimeAdapterV1 | undefined
   >;
@@ -188,13 +184,13 @@ function routeEvidenceKey(selector: RouteEvidenceSelectorV1): string {
 }
 
 function createRouteEvidenceByKey(
-  publication: WorldkitBrowserRouteEvidencePublicationV1 | undefined,
-): ReadonlyMap<string, WorldkitBrowserRouteEvidenceProjectionV1> | undefined {
+  publication: WorldkitBrowserRouteEvidencePublicationV2 | undefined,
+): ReadonlyMap<string, WorldkitBrowserRouteEvidenceProjectionV2> | undefined {
   if (publication === undefined) return undefined;
-  const canonical = canonicalWorldkitBrowserRouteEvidencePublicationV1(
+  const canonical = canonicalWorldkitBrowserRouteEvidencePublicationV2(
     publication,
   );
-  const byKey = new Map<string, WorldkitBrowserRouteEvidenceProjectionV1>();
+  const byKey = new Map<string, WorldkitBrowserRouteEvidenceProjectionV2>();
   for (const projection of canonical.routes) {
     const key = routeEvidenceKey(projection.selector);
     byKey.set(key, projection);
@@ -486,7 +482,7 @@ function runtimeProfileDiscoverySummaryV1(
 export function installDeferredWorldkitBrowserApi(options: {
   target: WorldkitBrowserApiTargetV1;
   statusElement: WorldkitBrowserStatusTargetV1;
-  routeEvidencePublication?: WorldkitBrowserRouteEvidencePublicationV1;
+  routeEvidencePublication?: WorldkitBrowserRouteEvidencePublicationV2;
   startupFailureDiagnostics?: readonly WorldkitBrowserDiagnosticV1[];
   initialize(
     context: DeferredWorldkitBrowserInitializationContextV1,
@@ -529,7 +525,7 @@ export function installDeferredWorldkitBrowserApi(options: {
     value: RouteEvidenceSelectorV1,
   ): Readonly<{
     selector: RouteEvidenceSelectorV1;
-    projection?: WorldkitBrowserRouteEvidenceProjectionV1;
+    projection?: WorldkitBrowserRouteEvidenceProjectionV2;
     unavailableReason?: RouteEvidenceUnavailableReasonV1;
   }> => {
     const selector = canonicalRouteEvidenceSelectorV1(value);
@@ -550,7 +546,7 @@ export function installDeferredWorldkitBrowserApi(options: {
     lookup.unavailableReason ?? reason,
   );
 
-  const api: WorldkitBrowserApiV4 = {
+  const api: WorldkitBrowserApiV5 = {
     version: WORLDKIT_BROWSER_PROTOCOL_VERSION,
     ready: () => startupPromise,
     getSnapshot: () => requireReadyAdapter().runtimeSnapshot(),

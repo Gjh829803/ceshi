@@ -2,9 +2,8 @@ import { sha256CanonicalJson } from "@whitebox-world/protocol";
 import { describe, expect, it } from "vitest";
 
 import {
-  assertHeightfieldRouteBuildInputV1,
-  assertRouteBuildInputReceiptV2,
   assertRouteBuildInputV2,
+  assertRouteBuildInputReceiptV2,
   createRouteBuildInputReceiptV2,
   hashRouteBuildInputV2,
   hashRouteColliderArtifactV2,
@@ -17,7 +16,6 @@ import {
   deepFreeze,
   HASH_A,
   terrainSoup,
-  validV1BuildInput,
   validV2BuildInputDraft,
   type RouteBuildInputV2Draft,
 } from "./route-v2-test-support.js";
@@ -49,13 +47,8 @@ function freezeEnvelopeClone(
 }
 
 describe("RouteBuildInputV2", () => {
-  it("rejects V1 roots/fields and V1 rejects V2 roots/fields", () => {
+  it("rejects leftover V1 fields on V2 Build Input", () => {
     const v2 = completeV2Input();
-    const v1 = validV1BuildInput();
-    expect(() => assertHeightfieldRouteBuildInputV1(v2)).toThrow(
-      "HEIGHTFIELD_ROUTE_BUILD_INPUT_INVALID",
-    );
-    expect(() => assertRouteBuildInputV2(v1)).toThrow("ROUTE_BUILD_INPUT_INVALID");
     expect(() => assertRouteBuildInputV2({
       ...v2,
       blockingColliders: [],

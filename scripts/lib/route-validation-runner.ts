@@ -9,7 +9,7 @@ import type {
   SubjectAssetResolverV1,
 } from "@whitebox-world/runtime-babylon";
 import type {
-  WorldkitBrowserRouteEvidencePublicationV1,
+  WorldkitBrowserRouteEvidencePublicationV2,
 } from "@whitebox-world/runtime-contracts";
 import {
   BUILT_IN_HEIGHTFIELD_R1_TRAVERSAL_GRAPH_BUILDER_PROFILE_REF,
@@ -17,20 +17,20 @@ import {
   createTraversalCapabilityEnvelopeV1,
   resolveTraversalDriverProfileV1,
   resolveTraversalGraphBuilderProfileV2,
-  type HeightfieldRouteBuildInputReceiptV1,
+  type RouteBuildInputReceiptV2,
   type TraversalRuntimePortV1,
 } from "@whitebox-world/traversal";
 import {
-  createHeightfieldRouteBuildInputV1,
-  evaluateRequiredHeightfieldRouteV1,
+  createRouteBuildInputFromPlanV2,
+  evaluateRequiredRouteV2,
 } from "@whitebox-world/traversal-recast";
 import {
   OUTDOOR_WORLD_PACKAGE_DEV_VALIDATION_PROFILE_V2,
   createRouteValidationReportV2,
   createWorldPackageValidationSubjectV1,
-  createWorldkitBrowserRouteEvidencePublicationV1,
+  createWorldkitBrowserRouteEvidencePublicationV2,
   hashValidationReportV2,
-  runRouteRuntimeProbeV1,
+  runRouteRuntimeProbeV2,
   type ValidationReportV2,
   type WorldPackageValidationSubjectV1,
 } from "@whitebox-world/validation";
@@ -84,9 +84,9 @@ export interface TrustedRouteValidationResultV1 {
   readonly report: ValidationReportV2;
   readonly validationReportHash: Hash;
   readonly evidenceFiles: readonly RouteValidationEvidenceFileV1[];
-  readonly routeEvidencePublication: WorldkitBrowserRouteEvidencePublicationV1;
+  readonly routeEvidencePublication: WorldkitBrowserRouteEvidencePublicationV2;
   readonly routeBuildInputReceipts:
-    readonly HeightfieldRouteBuildInputReceiptV1[];
+    readonly RouteBuildInputReceiptV2[];
   readonly hostRenderScheduleStats?: TrustedRouteRenderScheduleStatsV1;
 }
 
@@ -258,7 +258,7 @@ export async function runTrustedRouteValidationV1(
   }
   let hostFixedTickCount = 0;
   let hostRenderFrameCount = 0;
-  const routeBuildInputReceipts: HeightfieldRouteBuildInputReceiptV1[] = [];
+  const routeBuildInputReceipts: RouteBuildInputReceiptV2[] = [];
   let graphBuilderProfile: ReturnType<
     typeof resolveTraversalGraphBuilderProfileV2
   >;
@@ -341,11 +341,11 @@ export async function runTrustedRouteValidationV1(
     createCapabilityEnvelope: (input) =>
       createTraversalCapabilityEnvelopeV1(input),
     createBuildInput: (input) => {
-      const receipt = createHeightfieldRouteBuildInputV1(input);
+      const receipt = createRouteBuildInputFromPlanV2(input);
       routeBuildInputReceipts.push(receipt);
       return receipt;
     },
-    evaluateRoute: (input) => evaluateRequiredHeightfieldRouteV1(input),
+    evaluateRoute: (input) => evaluateRequiredRouteV2(input),
     createRuntimeLease: async (input) => {
       const havokWasmBytes = input.havokWasmBytes ??
         await loadHavokWasmBytesOnce();
@@ -406,11 +406,11 @@ export async function runTrustedRouteValidationV1(
     resolveDriverProfile: () => resolveTraversalDriverProfileV1(
       BUILT_IN_TRAVERSAL_DRIVER_PROFILE_REF,
     ),
-    runRuntimeProbe: (input) => runRouteRuntimeProbeV1(input),
+    runRuntimeProbe: (input) => runRouteRuntimeProbeV2(input),
     createReport: (input) => createRouteValidationReportV2(input),
   });
   const routeEvidencePublication =
-    createWorldkitBrowserRouteEvidencePublicationV1({
+    createWorldkitBrowserRouteEvidencePublicationV2({
       subject,
       validationReport: orchestration.report,
       rows: orchestration.publicationRows,

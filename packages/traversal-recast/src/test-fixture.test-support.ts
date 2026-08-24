@@ -247,6 +247,7 @@ export interface MultiSurfaceRouteFixtureOptionsV2 {
   readonly walkwayMinimumZ?: number;
   readonly walkwayMaximumZ?: number;
   readonly includeLowOverhead?: boolean;
+  readonly emptyTerrain?: boolean;
 }
 
 export function createMultiSurfaceRouteBuildInputReceiptV2(
@@ -384,10 +385,20 @@ export function createMultiSurfaceRouteBuildInputReceiptV2(
         : 0,
   );
   const destinationX = 18 + gapMeters;
-  const destinationPositionMetersXYZ = options.destinationOnPlatform === true
-    ? [9.5, stepHeightMeters, 3] as const
-    : [destinationX, 0, 3] as const;
-  const ribbonEndX = options.destinationOnPlatform === true ? 12 : destinationX;
+  const emptyTerrain = options.emptyTerrain === true;
+  const startPositionMetersXYZ = emptyTerrain
+    ? [8, stepHeightMeters, 3] as const
+    : [2, 0, 3] as const;
+  const destinationPositionMetersXYZ = emptyTerrain
+    ? [11, stepHeightMeters, 3] as const
+    : options.destinationOnPlatform === true
+      ? [9.5, stepHeightMeters, 3] as const
+      : [destinationX, 0, 3] as const;
+  const ribbonEndX = emptyTerrain
+    ? 12
+    : options.destinationOnPlatform === true
+      ? 12
+      : destinationX;
   const draft = {
     kind: "route-build-input" as const,
     schemaVersion: 2 as const,
@@ -403,7 +414,7 @@ export function createMultiSurfaceRouteBuildInputReceiptV2(
     },
     startAnchor: {
       entityId: "anchor-start",
-      positionMetersXYZ: [2, 0, 3] as const,
+      positionMetersXYZ: startPositionMetersXYZ,
     },
     destinationAnchor: {
       entityId: "anchor-destination",
@@ -417,13 +428,18 @@ export function createMultiSurfaceRouteBuildInputReceiptV2(
     },
     traversalSurfaces,
     capabilityEnvelope,
-    terrainSource: {
-      kind: "bounded" as const,
-      terrainEntityId: "terrain-main",
-      triangleSoup: terrainSoup,
-      minimumMetersXZ,
-      maximumMetersXZ,
-    },
+    terrainSource: emptyTerrain
+      ? {
+          kind: "empty" as const,
+          terrainEntityId: "terrain-main",
+        }
+      : {
+          kind: "bounded" as const,
+          terrainEntityId: "terrain-main",
+          triangleSoup: terrainSoup,
+          minimumMetersXZ,
+          maximumMetersXZ,
+        },
     staticColliders,
     blockedTraversalAreaExclusions: [] as const,
     blockedWaterExclusions: [] as const,

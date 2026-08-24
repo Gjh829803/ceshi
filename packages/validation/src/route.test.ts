@@ -8,15 +8,15 @@ import {
   validateValidationProfileV1,
   validateValidationProfileV2,
 } from "./index";
-import type { RouteConnectivityFailureV1 } from "@whitebox-world/traversal";
-import { ROUTE_CONNECTIVITY_FAILURE_CODES_V1 } from "@whitebox-world/traversal";
+import type { RouteConnectivityFailureV2 } from "@whitebox-world/traversal";
+import { ROUTE_CONNECTIVITY_FAILURE_CODES_V2 } from "@whitebox-world/traversal";
 
 const HASH = `sha256:${"a".repeat(64)}` as const;
 
 function failureCommon() {
   return {
     kind: "route-connectivity-failure" as const,
-    schemaVersion: 1 as const,
+    schemaVersion: 2 as const,
     constraintId: "player-to-goal",
     routeId: "main-route",
     traversingEntityId: "player",
@@ -24,9 +24,7 @@ function failureCommon() {
     destinationAnchorEntityId: "goal",
     startAnchorPositionMetersXYZ: [0, 0, 0] as const,
     destinationAnchorPositionMetersXYZ: [10, 0, 0] as const,
-    traversalSurfaceId: "surface-main",
-    surfaceEntityId: "terrain-main",
-    colliderSubshapeId: "terrain-heightfield",
+    relatedTraversalSurfaceIdentities: [] as const,
     routeBuildInputHash: HASH,
     resolvedTraversalLockHash: HASH,
     graphBuilderProfileRef:
@@ -52,9 +50,9 @@ describe("Route validation vocabulary", () => {
       ]),
     );
     expect(ROUTE_VALIDATION_DIAGNOSTIC_CODES_V2).toEqual(
-      expect.arrayContaining([...ROUTE_CONNECTIVITY_FAILURE_CODES_V1]),
+      expect.arrayContaining([...ROUTE_CONNECTIVITY_FAILURE_CODES_V2]),
     );
-    expect(ROUTE_CONNECTIVITY_FAILURE_CODES_V1).not.toContain(
+    expect(ROUTE_CONNECTIVITY_FAILURE_CODES_V2).not.toContain(
       "ROUTE_RUNTIME_STALLED",
     );
   });
@@ -181,11 +179,10 @@ describe("Route validation vocabulary", () => {
         proofKind: "unique-single-reason-cut",
         proofCandidateIds: ["candidate-a"],
         failurePositionMetersXYZ: [4.25, 0.35, 0],
-        terrainEntityId: "terrain-main",
         maximumObservedStepHeightMeters: 0.35,
         maximumAllowedStepHeightMeters: 0.3,
       },
-    } as const satisfies RouteConnectivityFailureV1;
+    } as const satisfies RouteConnectivityFailureV2;
 
     const diagnostic = createRouteConnectivityValidationDiagnosticV2({
       id: "route-step-failed",
@@ -210,7 +207,7 @@ describe("Route validation vocabulary", () => {
         code: "ROUTE_REQUIRED_PATH_UNREACHABLE",
         terrainEntityId: "terrain-main",
       },
-    } as const satisfies RouteConnectivityFailureV1;
+    } as const satisfies RouteConnectivityFailureV2;
     expect(createRouteConnectivityValidationDiagnosticV2({
       id: "route-unreachable",
       metricId: "unreachable-required-route-count",
@@ -230,7 +227,7 @@ describe("Route validation vocabulary", () => {
         maximumAllowedCount: 100,
         minimumRequiredCount: 101,
       },
-    } as const satisfies RouteConnectivityFailureV1;
+    } as const satisfies RouteConnectivityFailureV2;
 
     const diagnostic = createRouteConnectivityValidationDiagnosticV2({
       id: "route-capacity",

@@ -1,4 +1,5 @@
 import { isNil } from "lodash-es";
+import type { TraversalSurfaceIdentityV1 } from "@whitebox-world/traversal";
 
 type Vec3 = readonly [number, number, number];
 
@@ -52,6 +53,7 @@ export interface RouteRejectionCandidateV1 {
   readonly toNodeId: string;
   readonly failurePositionMetersXYZ: Vec3;
   readonly rejectionReasons: readonly RouteRejectionReasonV1[];
+  readonly relatedTraversalSurfaceIdentities?: readonly TraversalSurfaceIdentityV1[];
 }
 
 export interface EvaluateRouteRejectionProofInputV1 {

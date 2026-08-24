@@ -151,6 +151,32 @@ describe("WorldPackageBuildReceiptV1", () => {
     expect(assertWorldPackageBuildReceiptV1(first)).toEqual(first);
   });
 
+  it("binds a V4 world whose Prototypes restore Traversal Surface bindings", () => {
+    const source = createValidAuthoringSpec();
+    const authoringSpec: AuthoringSpecV4 = {
+      ...asV4(source),
+      resources: {
+        ...source.resources,
+        prototypes: source.resources.prototypes.map((prototype, index) =>
+          index !== 0
+            ? prototype
+            : {
+                ...prototype,
+                traversalSurfaceBindings: [{
+                  id: "deck",
+                  kind: "collider-subshape",
+                  logicalSubshapeId: "primary",
+                  traversalSurfaceProfileRef:
+                    "worldkit://traversal-surface-profile/ground.static@1",
+                }],
+              },
+        ),
+      },
+    };
+    const receipt = createWorldPackageBuildReceiptV1(compileInput(authoringSpec));
+    expect(assertWorldPackageBuildReceiptV1(receipt)).toEqual(receipt);
+  });
+
   it("verifies real asset bytes and binds them into Manifest, integrity, and Root", async () => {
     const input = await riggedInput();
     const receipt = createWorldPackageBuildReceiptV1(input);

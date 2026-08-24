@@ -21,8 +21,8 @@ import type {
   ExecutionPlanV5,
 } from "@whitebox-world/runtime-contracts";
 import {
-  canonicalWorldkitBrowserRouteEvidencePublicationV1,
-  type WorldkitBrowserRouteEvidencePublicationV1,
+  canonicalWorldkitBrowserRouteEvidencePublicationV2,
+  type WorldkitBrowserRouteEvidencePublicationV2,
 } from "@whitebox-world/runtime-contracts";
 
 type CapabilityDemoResourceBudgetV1 = Readonly<
@@ -71,7 +71,7 @@ export interface AuthoringSceneLoadResult {
   executionPlanHash?: string;
   diagnostics: readonly (AuthoringDiagnostic | CompileDiagnostic)[];
   hostOverlay?: CapabilityDemoHostOverlayV1;
-  routeEvidencePublication?: WorldkitBrowserRouteEvidencePublicationV1;
+  routeEvidencePublication?: WorldkitBrowserRouteEvidencePublicationV2;
 }
 
 export type AuthoringSourceFetcher = () => Promise<Response>;
@@ -394,7 +394,7 @@ function applyCapabilityDemoContext<Source extends SupportedAuthoringSpec>(
 type RouteEvidenceLoadResult =
   | Readonly<{
       ok: true;
-      publication?: WorldkitBrowserRouteEvidencePublicationV1;
+      publication?: WorldkitBrowserRouteEvidencePublicationV2;
     }>
   | Readonly<{
       ok: false;
@@ -476,7 +476,7 @@ async function loadRouteEvidence(
   try {
     return {
       ok: true,
-      publication: canonicalWorldkitBrowserRouteEvidencePublicationV1(
+      publication: canonicalWorldkitBrowserRouteEvidencePublicationV2(
         parsed.value,
       ),
     };

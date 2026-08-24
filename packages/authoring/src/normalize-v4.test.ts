@@ -1,8 +1,10 @@
 import { describe, expect, it } from "vitest";
 
 import {
+  canonicalAuthoringIdentityV3,
   normalizeAuthoringSpecV3,
   normalizeAuthoringSpecV4,
+  projectNormalizedWorldResourcesToV3LayoutIdentity,
   type AuthoringSpecV4,
 } from "./index.js";
 import { createValidAuthoringSpec } from "./test-fixture.js";
@@ -263,6 +265,45 @@ describe("normalizeAuthoringSpecV4", () => {
     );
     expect(baseline.value?.authoringSpecHash).not.toBe(
       baseline.layoutSolveReport?.authoringSpecHash,
+    );
+  });
+
+  it("reconstructs the V3 layout identity from restored V4 Normalized IR resources", () => {
+    const spec = routeWorldWithBindings();
+    const result = normalizeAuthoringSpecV4(spec);
+    const world = result.value;
+    const layoutSolveReport = result.layoutSolveReport;
+    if (
+      result.ok !== true ||
+      world === undefined ||
+      layoutSolveReport === undefined
+    ) {
+      throw new Error(`bound fixture normalization failed: ${JSON.stringify(result.diagnostics)}`);
+    }
+
+    const layoutResources = projectNormalizedWorldResourcesToV3LayoutIdentity(
+      world.resources,
+    );
+    const projectedV3 = {
+      ...structuredClone(spec),
+      schemaVersion: 3 as const,
+      constraints: {
+        placements: structuredClone([...spec.constraints.placements]),
+      },
+    };
+    expect(
+      sha256CanonicalJson(
+        canonicalAuthoringIdentityV3(projectedV3, {
+          ...world,
+          resources: layoutResources,
+        }),
+      ),
+    ).toBe(layoutSolveReport.authoringSpecHash);
+    expect(layoutResources.resourceLockHash).toBe(
+      layoutSolveReport.registryLockHash,
+    );
+    expect(layoutResources.resourceLockHash).not.toBe(
+      world.resources.resourceLockHash,
     );
   });
 

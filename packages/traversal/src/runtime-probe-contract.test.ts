@@ -4,42 +4,54 @@ import { describe, expect, it } from "vitest";
 import * as traversal from "./index.js";
 import type {
   CharacterSupportSurfaceResolutionV1,
-  RoutePathReceiptV1,
+  RoutePathReceiptV2,
   ResolvedTraversalDriverProfileV1,
   TraversalRuntimePortV1,
   TraversalRuntimeTickEvidenceV1,
 } from "./index.js";
 import type {
-  RouteRuntimeProbeFailureV1,
-  RouteRuntimeProbeReceiptV1,
-  RouteRuntimeProbeRequestV1,
-  RouteRuntimeProbeTickV1,
+  RouteRuntimeProbeFailureV2,
+  RouteRuntimeProbeReceiptV2,
+  RouteRuntimeProbeRequestV2,
+  RouteRuntimeProbeTickV2,
 } from "./runtime-probe-contract.js";
 
 interface RuntimeProbeApi {
-  readonly assertRouteRuntimeProbeReceiptContextV1: (input: Readonly<{
-    receipt: RouteRuntimeProbeReceiptV1;
-    routePathReceipt: RoutePathReceiptV1;
+  readonly advanceRouteRuntimeProbeSupportStationV2: (
+    path: RoutePathReceiptV2,
+    subjectPositionMetersXYZ: readonly [number, number, number],
+    previousArcLengthMeters: number,
+    walkSpeedMetersPerSecond: number,
+    positionQuantizationMeters: number,
+    fixedTimeStepSeconds: number,
+  ) => Readonly<{
+    readonly arcLengthMeters: number;
+    readonly expectedTraversalSurfaceIds: readonly string[];
+    readonly retainedSegmentIndexes: readonly number[];
+  }>;
+  readonly assertRouteRuntimeProbeReceiptContextV2: (input: Readonly<{
+    receipt: RouteRuntimeProbeReceiptV2;
+    routePathReceipt: RoutePathReceiptV2;
     resolvedDriverProfile: ResolvedTraversalDriverProfileV1;
     validationProfileIdentity: Readonly<{
       resourceRef: string;
       version: string;
       contentHash: `sha256:${string}`;
     }>;
-  }>) => RouteRuntimeProbeReceiptV1;
-  readonly canonicalRoutePathReceiptV1: typeof traversal.canonicalRoutePathReceiptV1;
-  readonly hashRoutePathReceiptV1: typeof traversal.hashRoutePathReceiptV1;
-  readonly canonicalRouteRuntimeProbeReceiptV1: (
+  }>) => RouteRuntimeProbeReceiptV2;
+  readonly canonicalRoutePathReceiptV2: typeof traversal.canonicalRoutePathReceiptV2;
+  readonly hashRoutePathReceiptV2: typeof traversal.hashRoutePathReceiptV2;
+  readonly canonicalRouteRuntimeProbeReceiptV2: (
     value: unknown,
-  ) => RouteRuntimeProbeReceiptV1;
-  readonly canonicalRouteRuntimeProbeRequestV1: (
+  ) => RouteRuntimeProbeReceiptV2;
+  readonly canonicalRouteRuntimeProbeRequestV2: (
     value: unknown,
-  ) => RouteRuntimeProbeRequestV1;
-  readonly canonicalRouteRuntimeProbeTickV1: (
+  ) => RouteRuntimeProbeRequestV2;
+  readonly canonicalRouteRuntimeProbeTickV2: (
     value: unknown,
-  ) => RouteRuntimeProbeTickV1;
-  readonly createRouteRuntimeProbeRequestV1: (input: Readonly<{
-    routePathReceipt: RoutePathReceiptV1;
+  ) => RouteRuntimeProbeTickV2;
+  readonly createRouteRuntimeProbeRequestV2: (input: Readonly<{
+    routePathReceipt: RoutePathReceiptV2;
     runtimePort: TraversalRuntimePortV1;
     resolvedDriverProfile: ResolvedTraversalDriverProfileV1;
     validationProfileIdentity: Readonly<{
@@ -47,40 +59,46 @@ interface RuntimeProbeApi {
       version: string;
       contentHash: `sha256:${string}`;
     }>;
-  }>) => RouteRuntimeProbeRequestV1;
-  readonly hashRouteRuntimeProbeReceiptV1: (
+    walkSpeedMetersPerSecond?: number;
+    resolvedControlFeelProfile: Readonly<{
+      readonly walkSpeedMetersPerSecond: number;
+    }>;
+    positionQuantizationMeters: number;
+  }>) => RouteRuntimeProbeRequestV2;
+  readonly hashRouteRuntimeProbeReceiptV2: (
     value: unknown,
   ) => `sha256:${string}`;
-  readonly hashRouteRuntimeProbeRequestV1: (
+  readonly hashRouteRuntimeProbeRequestV2: (
     value: unknown,
   ) => `sha256:${string}`;
-  readonly hashRouteRuntimeProbeTickV1: (
+  readonly hashRouteRuntimeProbeTickV2: (
     value: unknown,
   ) => `sha256:${string}`;
 }
 
 const {
-  assertRouteRuntimeProbeReceiptContextV1,
-  canonicalRoutePathReceiptV1,
-  canonicalRouteRuntimeProbeReceiptV1,
-  canonicalRouteRuntimeProbeRequestV1,
-  canonicalRouteRuntimeProbeTickV1,
-  createRouteRuntimeProbeRequestV1,
-  hashRoutePathReceiptV1,
-  hashRouteRuntimeProbeReceiptV1,
-  hashRouteRuntimeProbeRequestV1,
-  hashRouteRuntimeProbeTickV1,
+  advanceRouteRuntimeProbeSupportStationV2,
+  assertRouteRuntimeProbeReceiptContextV2,
+  canonicalRoutePathReceiptV2,
+  canonicalRouteRuntimeProbeReceiptV2,
+  canonicalRouteRuntimeProbeRequestV2,
+  canonicalRouteRuntimeProbeTickV2,
+  createRouteRuntimeProbeRequestV2,
+  hashRoutePathReceiptV2,
+  hashRouteRuntimeProbeReceiptV2,
+  hashRouteRuntimeProbeRequestV2,
+  hashRouteRuntimeProbeTickV2,
 } = traversal as unknown as RuntimeProbeApi;
 
 const hasRuntimeProbeApi = [
-  assertRouteRuntimeProbeReceiptContextV1,
-  canonicalRouteRuntimeProbeReceiptV1,
-  canonicalRouteRuntimeProbeRequestV1,
-  canonicalRouteRuntimeProbeTickV1,
-  createRouteRuntimeProbeRequestV1,
-  hashRouteRuntimeProbeReceiptV1,
-  hashRouteRuntimeProbeRequestV1,
-  hashRouteRuntimeProbeTickV1,
+  assertRouteRuntimeProbeReceiptContextV2,
+  canonicalRouteRuntimeProbeReceiptV2,
+  canonicalRouteRuntimeProbeRequestV2,
+  canonicalRouteRuntimeProbeTickV2,
+  createRouteRuntimeProbeRequestV2,
+  hashRouteRuntimeProbeReceiptV2,
+  hashRouteRuntimeProbeRequestV2,
+  hashRouteRuntimeProbeTickV2,
 ].every((candidate) => typeof candidate === "function");
 
 const HASH_A = `sha256:${"a".repeat(64)}` as const;
@@ -132,10 +150,10 @@ const VALIDATION_PROFILE_IDENTITY = {
   contentHash: HASH_B,
 } as const;
 
-function pathReceipt(): RoutePathReceiptV1 {
-  return canonicalRoutePathReceiptV1({
+function pathReceipt(): RoutePathReceiptV2 {
+  return canonicalRoutePathReceiptV2({
     kind: "route-path-receipt",
-    schemaVersion: 1,
+    schemaVersion: 2,
     status: "complete",
     constraintId: "player-to-goal",
     routeId: "main-route",
@@ -148,7 +166,7 @@ function pathReceipt(): RoutePathReceiptV1 {
     traversalGraphHash: HASH_A,
     routeBuildInputHash: HASH_B,
     resolvedTraversalLockHash: HASH_C,
-    traversalSurfaceIdentity: SURFACE,
+    orderedTraversalSurfaceIdentities: [SURFACE, SURFACE],
     graphBuilderProfileRef: GRAPH_BUILDER_PROFILE.resourceRef,
     graphBuilderResolvedVersion: GRAPH_BUILDER_PROFILE.resolvedVersion,
     graphBuilderProfileHash: GRAPH_BUILDER_PROFILE.contentHash,
@@ -167,13 +185,13 @@ function pathReceipt(): RoutePathReceiptV1 {
 }
 
 function request(
-  overrides: Partial<RouteRuntimeProbeRequestV1> = {},
-): RouteRuntimeProbeRequestV1 {
+  overrides: Partial<RouteRuntimeProbeRequestV2> = {},
+): RouteRuntimeProbeRequestV2 {
   const path = pathReceipt();
   return {
     kind: "route-runtime-probe-request",
-    schemaVersion: 1,
-    routePathReceiptHash: hashRoutePathReceiptV1(path),
+    schemaVersion: 2,
+    routePathReceiptHash: hashRoutePathReceiptV2(path),
     constraintId: path.constraintId,
     routeId: path.routeId,
     traversingEntityId: path.traversingEntityId,
@@ -186,7 +204,6 @@ function request(
     routeBuildInputHash: path.routeBuildInputHash,
     traversalGraphHash: path.traversalGraphHash,
     resolvedTraversalLockHash: path.resolvedTraversalLockHash,
-    traversalSurfaceIdentity: path.traversalSurfaceIdentity,
     driverProfileRef:
       "worldkit://traversal-driver-profile/walk-hard-ribbon.r1@1",
     driverResolvedVersion: "1",
@@ -196,6 +213,8 @@ function request(
     validationProfileVersion: "2",
     validationProfileHash: HASH_B,
     runtimeImplementationIdentity: RUNTIME_IDENTITY,
+    walkSpeedMetersPerSecond: 4,
+    positionQuantizationMeters: GRAPH_BUILDER_PROFILE.profile.positionQuantizationMeters,
     ...overrides,
   };
 }
@@ -257,11 +276,11 @@ function unsupportedRuntimeEvidence(tick: number): TraversalRuntimeTickEvidenceV
 
 function tick(
   probeTick: number,
-  overrides: Partial<RouteRuntimeProbeTickV1> = {},
-): RouteRuntimeProbeTickV1 {
+  overrides: Partial<RouteRuntimeProbeTickV2> = {},
+): RouteRuntimeProbeTickV2 {
   return {
     kind: "route-runtime-probe-tick",
-    schemaVersion: 1,
+    schemaVersion: 2,
     probeTick,
     runtimeEvidence: runtimeEvidence(probeTick),
     walkDirectionWorldXZ: [1, 0],
@@ -270,13 +289,14 @@ function tick(
     routeDeviationMetersXZ: probeTick / 10,
     stalledDurationTicks: probeTick - 1,
     consecutiveUnexpectedUnsupportedTicks: 0,
+    expectedTraversalSurfaceIds: [SURFACE.traversalSurfaceId],
     ...overrides,
   };
 }
 
 function metrics(
-  overrides: Partial<RouteRuntimeProbeReceiptV1["metrics"]> = {},
-): RouteRuntimeProbeReceiptV1["metrics"] {
+  overrides: Partial<RouteRuntimeProbeReceiptV2["metrics"]> = {},
+): RouteRuntimeProbeReceiptV2["metrics"] {
   return {
     processedTickCount: 2,
     maximumStalledDurationTicks: 1,
@@ -290,7 +310,7 @@ function metrics(
   };
 }
 
-function completeReceipt(): RouteRuntimeProbeReceiptV1 {
+function completeReceipt(): RouteRuntimeProbeReceiptV2 {
   const second = tick(2, {
     runtimeEvidence: runtimeEvidence(2, {
       characterSupport: {
@@ -301,7 +321,7 @@ function completeReceipt(): RouteRuntimeProbeReceiptV1 {
   });
   return {
     kind: "route-runtime-probe-receipt",
-    schemaVersion: 1,
+    schemaVersion: 2,
     status: "complete",
     request: request(),
     initialRuntimeEvidence: runtimeEvidence(0),
@@ -312,13 +332,13 @@ function completeReceipt(): RouteRuntimeProbeReceiptV1 {
 }
 
 function oneTickFailure(
-  failure: RouteRuntimeProbeFailureV1,
-  tickOverrides: Partial<RouteRuntimeProbeTickV1> = {},
-): Extract<RouteRuntimeProbeReceiptV1, { readonly status: "failed" }> {
+  failure: RouteRuntimeProbeFailureV2,
+  tickOverrides: Partial<RouteRuntimeProbeTickV2> = {},
+): Extract<RouteRuntimeProbeReceiptV2, { readonly status: "failed" }> {
   const finalTick = tick(1, tickOverrides);
   return {
     kind: "route-runtime-probe-receipt",
-    schemaVersion: 1,
+    schemaVersion: 2,
     status: "failed",
     request: request(),
     initialRuntimeEvidence: runtimeEvidence(0),
@@ -346,33 +366,33 @@ describe("runtime probe contract public API", () => {
   });
 });
 
-describe.skipIf(!hasRuntimeProbeApi)("RouteRuntimeProbeRequestV1", () => {
+describe.skipIf(!hasRuntimeProbeApi)("RouteRuntimeProbeRequestV2", () => {
   it("canonicalizes the closed Path, World, Lock, Runtime, Driver, and Validation identities", () => {
     const raw = request();
-    const canonical = canonicalRouteRuntimeProbeRequestV1(raw);
+    const canonical = canonicalRouteRuntimeProbeRequestV2(raw);
 
     expect(canonical).not.toBe(raw);
     expect(canonical).toEqual(raw);
     expect(Object.isFrozen(canonical)).toBe(true);
-    expect(Object.isFrozen(canonical.traversalSurfaceIdentity)).toBe(true);
+    expect(canonical.walkSpeedMetersPerSecond).toBe(4);
     expect(Object.isFrozen(canonical.runtimeImplementationIdentity)).toBe(true);
-    expect(hashRouteRuntimeProbeRequestV1(raw)).toBe(sha256CanonicalJson(canonical));
+    expect(hashRouteRuntimeProbeRequestV2(raw)).toBe(sha256CanonicalJson(canonical));
   });
 
   it("rejects Registry Driver mismatches", () => {
-    expect(() => canonicalRouteRuntimeProbeRequestV1(request({
+    expect(() => canonicalRouteRuntimeProbeRequestV2(request({
       driverProfileHash: HASH_A,
     }))).toThrow("ROUTE_RUNTIME_PROBE_REQUEST_INVALID");
   });
 
   it("validates Validation Profile identity shape without importing Validation policy", () => {
-    expect(() => canonicalRouteRuntimeProbeRequestV1(request({
+    expect(() => canonicalRouteRuntimeProbeRequestV2(request({
       validationProfileRef: "",
     }))).toThrow("ROUTE_RUNTIME_PROBE_REQUEST_INVALID");
-    expect(() => canonicalRouteRuntimeProbeRequestV1(request({
+    expect(() => canonicalRouteRuntimeProbeRequestV2(request({
       validationProfileVersion: "",
     }))).toThrow("ROUTE_RUNTIME_PROBE_REQUEST_INVALID");
-    expect(() => canonicalRouteRuntimeProbeRequestV1(request({
+    expect(() => canonicalRouteRuntimeProbeRequestV2(request({
       validationProfileHash: "sha256:UPPERCASE",
     }))).toThrow("ROUTE_RUNTIME_PROBE_REQUEST_INVALID");
   });
@@ -401,13 +421,15 @@ describe.skipIf(!hasRuntimeProbeApi)("RouteRuntimeProbeRequestV1", () => {
       },
     };
 
-    expect(() => createRouteRuntimeProbeRequestV1({
+    expect(() => createRouteRuntimeProbeRequestV2({
       routePathReceipt: pathReceipt(),
       runtimePort: port,
       resolvedDriverProfile: RESOLVED_DRIVER_PROFILE,
       validationProfileIdentity: VALIDATION_PROFILE_IDENTITY,
+      resolvedControlFeelProfile: { walkSpeedMetersPerSecond: 4 },
+      positionQuantizationMeters: GRAPH_BUILDER_PROFILE.profile.positionQuantizationMeters,
     })).toThrow("ROUTE_RUNTIME_PROBE_REQUEST_INVALID");
-    expect(() => createRouteRuntimeProbeRequestV1({
+    expect(() => createRouteRuntimeProbeRequestV2({
       routePathReceipt: pathReceipt(),
       runtimePort: {
         ...port,
@@ -416,6 +438,8 @@ describe.skipIf(!hasRuntimeProbeApi)("RouteRuntimeProbeRequestV1", () => {
       },
       resolvedDriverProfile: RESOLVED_DRIVER_PROFILE,
       validationProfileIdentity: VALIDATION_PROFILE_IDENTITY,
+      resolvedControlFeelProfile: { walkSpeedMetersPerSecond: 4 },
+      positionQuantizationMeters: GRAPH_BUILDER_PROFILE.profile.positionQuantizationMeters,
     })).toThrow("ROUTE_RUNTIME_PROBE_REQUEST_INVALID");
     expect(resetCount).toBe(0);
     expect(fixedTickCount).toBe(0);
@@ -425,11 +449,13 @@ describe.skipIf(!hasRuntimeProbeApi)("RouteRuntimeProbeRequestV1", () => {
       port,
       { authoringSpecHash: HASH_A },
     ) as TraversalRuntimePortV1;
-    const canonical = createRouteRuntimeProbeRequestV1({
+    const canonical = createRouteRuntimeProbeRequestV2({
       routePathReceipt: pathReceipt(),
       runtimePort: classBasedPort,
       resolvedDriverProfile: RESOLVED_DRIVER_PROFILE,
       validationProfileIdentity: VALIDATION_PROFILE_IDENTITY,
+      resolvedControlFeelProfile: { walkSpeedMetersPerSecond: 4 },
+      positionQuantizationMeters: GRAPH_BUILDER_PROFILE.profile.positionQuantizationMeters,
     });
     expect(canonical).toEqual(request());
 
@@ -439,77 +465,79 @@ describe.skipIf(!hasRuntimeProbeApi)("RouteRuntimeProbeRequestV1", () => {
         throw new Error("Havok native provider detail");
       },
     });
-    expect(() => createRouteRuntimeProbeRequestV1({
+    expect(() => createRouteRuntimeProbeRequestV2({
       routePathReceipt: pathReceipt(),
       runtimePort: throwingPort,
       resolvedDriverProfile: RESOLVED_DRIVER_PROFILE,
       validationProfileIdentity: VALIDATION_PROFILE_IDENTITY,
+      resolvedControlFeelProfile: { walkSpeedMetersPerSecond: 4 },
+      positionQuantizationMeters: GRAPH_BUILDER_PROFILE.profile.positionQuantizationMeters,
     })).toThrow(
       "ROUTE_RUNTIME_PROBE_REQUEST_INVALID: runtimePort: provider-neutral identity unavailable",
     );
   });
 
   it("rejects provider dialect and Validation thresholds", () => {
-    expect(() => canonicalRouteRuntimeProbeRequestV1({
+    expect(() => canonicalRouteRuntimeProbeRequestV2({
       ...request(),
       babylonBodyId: 42,
     })).toThrow("ROUTE_RUNTIME_PROBE_REQUEST_INVALID");
-    expect(() => canonicalRouteRuntimeProbeRequestV1({
+    expect(() => canonicalRouteRuntimeProbeRequestV2({
       ...request(),
       maximumProbeTicks: 600,
     })).toThrow("ROUTE_RUNTIME_PROBE_REQUEST_INVALID");
   });
 });
 
-describe.skipIf(!hasRuntimeProbeApi)("RouteRuntimeProbeTickV1", () => {
+describe.skipIf(!hasRuntimeProbeApi)("RouteRuntimeProbeTickV2", () => {
   it("preserves canonical Runtime evidence, normalizes negative zero, freezes, and hashes", () => {
     const raw = tick(1, {
       walkDirectionWorldXZ: [-0, 1],
       routeDeviationMetersXZ: -0,
       stalledDurationTicks: 0,
     });
-    const canonical = canonicalRouteRuntimeProbeTickV1(raw);
+    const canonical = canonicalRouteRuntimeProbeTickV2(raw);
 
     expect(canonical.walkDirectionWorldXZ).toEqual([0, 1]);
     expect(canonical.routeDeviationMetersXZ).toBe(0);
     expect(canonical.runtimeEvidence).toEqual(raw.runtimeEvidence);
     expect(Object.isFrozen(canonical.runtimeEvidence.characterSupport)).toBe(true);
-    expect(hashRouteRuntimeProbeTickV1(raw)).toBe(sha256CanonicalJson(canonical));
+    expect(hashRouteRuntimeProbeTickV2(raw)).toBe(sha256CanonicalJson(canonical));
   });
 
   it("rejects non-positive/non-integer Probe ticks, non-unit intent, invalid metrics, and unknown fields", () => {
     for (const probeTick of [0, -1, 1.5]) {
-      expect(() => canonicalRouteRuntimeProbeTickV1(tick(probeTick)))
+      expect(() => canonicalRouteRuntimeProbeTickV2(tick(probeTick)))
         .toThrow("ROUTE_RUNTIME_PROBE_TICK_INVALID");
     }
-    expect(() => canonicalRouteRuntimeProbeTickV1(tick(1, {
+    expect(() => canonicalRouteRuntimeProbeTickV2(tick(1, {
       walkDirectionWorldXZ: [0.5, 0.5],
     }))).toThrow("ROUTE_RUNTIME_PROBE_TICK_INVALID");
-    expect(() => canonicalRouteRuntimeProbeTickV1(tick(1, {
+    expect(() => canonicalRouteRuntimeProbeTickV2(tick(1, {
       routeProgressMetersXZ: Number.NaN,
     }))).toThrow("ROUTE_RUNTIME_PROBE_TICK_INVALID");
-    expect(() => canonicalRouteRuntimeProbeTickV1({
+    expect(() => canonicalRouteRuntimeProbeTickV2({
       ...tick(1),
       havokContactHandle: 1,
     })).toThrow("ROUTE_RUNTIME_PROBE_TICK_INVALID");
   });
 });
 
-describe.skipIf(!hasRuntimeProbeApi)("RouteRuntimeProbeReceiptV1", () => {
+describe.skipIf(!hasRuntimeProbeApi)("RouteRuntimeProbeReceiptV2", () => {
   it("admits a canonical complete receipt with deterministic metrics and immutable stable bytes", () => {
     const raw = completeReceipt();
-    const canonical = canonicalRouteRuntimeProbeReceiptV1(raw);
+    const canonical = canonicalRouteRuntimeProbeReceiptV2(raw);
 
     expect(canonical).not.toBe(raw);
     expect(canonical).toEqual(raw);
     expect(Object.isFrozen(canonical)).toBe(true);
     expect(Object.isFrozen(canonical.ticks)).toBe(true);
     expect(Object.isFrozen(canonical.ticks[0]?.walkDirectionWorldXZ)).toBe(true);
-    expect(hashRouteRuntimeProbeReceiptV1(raw)).toBe(sha256CanonicalJson(canonical));
+    expect(hashRouteRuntimeProbeReceiptV2(raw)).toBe(sha256CanonicalJson(canonical));
   });
 
   it("keeps a 3-4-5 Path's 3D distance while completing against zero XZ remaining distance", () => {
-    const slopedPath = canonicalRoutePathReceiptV1({
+    const slopedPath = canonicalRoutePathReceiptV2({
       ...pathReceipt(),
       orderedPathPositionsMetersXYZ: [[0, 0, 0], [3, 4, 0]],
       routePathDistanceMeters: 5,
@@ -521,13 +549,13 @@ describe.skipIf(!hasRuntimeProbeApi)("RouteRuntimeProbeReceiptV1", () => {
       remainingRouteDistanceMetersXZ: 0,
       routeDeviationMetersXZ: 0,
     });
-    const raw: RouteRuntimeProbeReceiptV1 = {
+    const raw: RouteRuntimeProbeReceiptV2 = {
       kind: "route-runtime-probe-receipt",
-      schemaVersion: 1,
+      schemaVersion: 2,
       status: "complete",
-      request: canonicalRouteRuntimeProbeRequestV1({
+      request: canonicalRouteRuntimeProbeRequestV2({
         ...request(),
-        routePathReceiptHash: hashRoutePathReceiptV1(slopedPath),
+        routePathReceiptHash: hashRoutePathReceiptV2(slopedPath),
       }),
       initialRuntimeEvidence: runtimeEvidence(0),
       ticks: [finalRow],
@@ -542,7 +570,7 @@ describe.skipIf(!hasRuntimeProbeApi)("RouteRuntimeProbeReceiptV1", () => {
       completionDurationTicks: 1,
     };
 
-    const canonical = assertRouteRuntimeProbeReceiptContextV1({
+    const canonical = assertRouteRuntimeProbeReceiptContextV2({
       receipt: raw,
       routePathReceipt: slopedPath,
       resolvedDriverProfile: RESOLVED_DRIVER_PROFILE,
@@ -551,7 +579,7 @@ describe.skipIf(!hasRuntimeProbeApi)("RouteRuntimeProbeReceiptV1", () => {
     expect(slopedPath.routePathDistanceMeters).toBe(5);
     expect(slopedPath.routePathDistanceMetersXZ).toBe(3);
     expect(canonical.ticks.at(-1)?.remainingRouteDistanceMetersXZ).toBe(0);
-    expect(() => canonicalRouteRuntimeProbeReceiptV1({
+    expect(() => canonicalRouteRuntimeProbeReceiptV2({
       ...raw,
       ticks: [{ ...finalRow, remainingRouteDistanceMetersXZ: 0.25 }],
     })).toThrow("ROUTE_RUNTIME_PROBE_RECEIPT_INVALID");
@@ -559,9 +587,9 @@ describe.skipIf(!hasRuntimeProbeApi)("RouteRuntimeProbeReceiptV1", () => {
 
   it("admits every closed failure branch with evidence-derived observed values", () => {
     const unsupportedInitial = unsupportedRuntimeEvidence(0);
-    const startInvalid: RouteRuntimeProbeReceiptV1 = {
+    const startInvalid: RouteRuntimeProbeReceiptV2 = {
       kind: "route-runtime-probe-receipt",
-      schemaVersion: 1,
+      schemaVersion: 2,
       status: "failed",
       request: request(),
       initialRuntimeEvidence: unsupportedInitial,
@@ -588,7 +616,7 @@ describe.skipIf(!hasRuntimeProbeApi)("RouteRuntimeProbeReceiptV1", () => {
         surfaceResolution: surfaceResolution("unmatched"),
       },
     });
-    const branches: readonly RouteRuntimeProbeReceiptV1[] = [
+    const branches: readonly RouteRuntimeProbeReceiptV2[] = [
       startInvalid,
       oneTickFailure({
         kind: "support-surface-mismatch",
@@ -627,12 +655,12 @@ describe.skipIf(!hasRuntimeProbeApi)("RouteRuntimeProbeReceiptV1", () => {
     ];
 
     for (const branch of branches) {
-      expect(canonicalRouteRuntimeProbeReceiptV1(branch)).toEqual(branch);
+      expect(canonicalRouteRuntimeProbeReceiptV2(branch)).toEqual(branch);
     }
     expect(startInvalid.failure.failurePositionMetersXYZ).not.toEqual(
       startInvalid.initialRuntimeEvidence.characterSupport.sampledFootPositionMetersXYZ,
     );
-    expect(() => canonicalRouteRuntimeProbeReceiptV1({
+    expect(() => canonicalRouteRuntimeProbeReceiptV2({
       ...startInvalid,
       ticks: [tick(1)],
       metrics: metrics({
@@ -655,7 +683,7 @@ describe.skipIf(!hasRuntimeProbeApi)("RouteRuntimeProbeReceiptV1", () => {
     }, { stalledDurationTicks: 4 });
 
     for (const kind of ["toString", "constructor"]) {
-      expect(() => canonicalRouteRuntimeProbeReceiptV1({
+      expect(() => canonicalRouteRuntimeProbeReceiptV2({
         ...base,
         failure: { kind },
       })).toThrow(/^ROUTE_RUNTIME_PROBE_RECEIPT_INVALID:/);
@@ -669,7 +697,7 @@ describe.skipIf(!hasRuntimeProbeApi)("RouteRuntimeProbeReceiptV1", () => {
       remainingRouteDistanceMetersXZ: 0,
       consecutiveUnexpectedUnsupportedTicks: 1,
     });
-    expect(() => canonicalRouteRuntimeProbeReceiptV1({
+    expect(() => canonicalRouteRuntimeProbeReceiptV2({
       ...completeReceipt(),
       ticks: [finalTick],
       metrics: metrics({
@@ -691,9 +719,9 @@ describe.skipIf(!hasRuntimeProbeApi)("RouteRuntimeProbeReceiptV1", () => {
         surfaceResolution: { mode: "ambiguous" },
       },
     });
-    const failed: RouteRuntimeProbeReceiptV1 = {
+    const failed: RouteRuntimeProbeReceiptV2 = {
       kind: "route-runtime-probe-receipt",
-      schemaVersion: 1,
+      schemaVersion: 2,
       status: "failed",
       request: request(),
       initialRuntimeEvidence,
@@ -715,14 +743,14 @@ describe.skipIf(!hasRuntimeProbeApi)("RouteRuntimeProbeReceiptV1", () => {
         surfaceResolutionMode: "ambiguous",
       },
     };
-    const canonical = canonicalRouteRuntimeProbeReceiptV1(failed);
-    expect(assertRouteRuntimeProbeReceiptContextV1({
+    const canonical = canonicalRouteRuntimeProbeReceiptV2(failed);
+    expect(assertRouteRuntimeProbeReceiptContextV2({
       receipt: canonical,
       routePathReceipt: pathReceipt(),
       resolvedDriverProfile: RESOLVED_DRIVER_PROFILE,
       validationProfileIdentity: VALIDATION_PROFILE_IDENTITY,
     })).toEqual(canonical);
-    expect(() => canonicalRouteRuntimeProbeReceiptV1({
+    expect(() => canonicalRouteRuntimeProbeReceiptV2({
       ...failed,
       ticks: [tick(1)],
       metrics: metrics({
@@ -735,7 +763,7 @@ describe.skipIf(!hasRuntimeProbeApi)("RouteRuntimeProbeReceiptV1", () => {
         wrongSupportSurfaceCount: 1,
       }),
     })).toThrow("ROUTE_RUNTIME_PROBE_RECEIPT_INVALID");
-    expect(() => assertRouteRuntimeProbeReceiptContextV1({
+    expect(() => assertRouteRuntimeProbeReceiptContextV2({
       receipt: {
         ...canonical,
         request: { ...canonical.request, destinationAnchorEntityId: "other-goal" },
@@ -796,18 +824,18 @@ describe.skipIf(!hasRuntimeProbeApi)("RouteRuntimeProbeReceiptV1", () => {
       },
     ];
     for (const invalid of invalidReceipts) {
-      expect(() => canonicalRouteRuntimeProbeReceiptV1(invalid))
+      expect(() => canonicalRouteRuntimeProbeReceiptV2(invalid))
         .toThrow("ROUTE_RUNTIME_PROBE_RECEIPT_INVALID");
     }
   });
 
   it("rejects metric reductions, completion duration, and failure evidence inconsistencies", () => {
     const complete = completeReceipt();
-    expect(() => canonicalRouteRuntimeProbeReceiptV1({
+    expect(() => canonicalRouteRuntimeProbeReceiptV2({
       ...complete,
       metrics: { ...complete.metrics, slidingDurationTicks: 0 },
     })).toThrow("ROUTE_RUNTIME_PROBE_RECEIPT_INVALID");
-    expect(() => canonicalRouteRuntimeProbeReceiptV1({
+    expect(() => canonicalRouteRuntimeProbeReceiptV2({
       ...complete,
       completionDurationTicks: 1,
     })).toThrow("ROUTE_RUNTIME_PROBE_RECEIPT_INVALID");
@@ -818,15 +846,15 @@ describe.skipIf(!hasRuntimeProbeApi)("RouteRuntimeProbeReceiptV1", () => {
       failurePositionMetersXYZ: runtimeEvidence(1).subjectPositionMetersXYZ,
       stalledDurationTicks: 4,
     }, { stalledDurationTicks: 4 });
-    expect(() => canonicalRouteRuntimeProbeReceiptV1({
+    expect(() => canonicalRouteRuntimeProbeReceiptV2({
       ...failed,
       failure: { ...failed.failure, failureProbeTick: 0 },
     })).toThrow("ROUTE_RUNTIME_PROBE_RECEIPT_INVALID");
-    expect(() => canonicalRouteRuntimeProbeReceiptV1({
+    expect(() => canonicalRouteRuntimeProbeReceiptV2({
       ...failed,
       failure: { ...failed.failure, failurePositionMetersXYZ: [99, 0, 0] },
     })).toThrow("ROUTE_RUNTIME_PROBE_RECEIPT_INVALID");
-    expect(() => canonicalRouteRuntimeProbeReceiptV1({
+    expect(() => canonicalRouteRuntimeProbeReceiptV2({
       ...failed,
       failure: { ...failed.failure, stalledDurationTicks: 3 },
     })).toThrow("ROUTE_RUNTIME_PROBE_RECEIPT_INVALID");
@@ -834,15 +862,15 @@ describe.skipIf(!hasRuntimeProbeApi)("RouteRuntimeProbeReceiptV1", () => {
 
   it("rejects unknown provider/error/threshold fields and malformed Runtime values without a receipt", () => {
     const complete = completeReceipt();
-    expect(() => canonicalRouteRuntimeProbeReceiptV1({
+    expect(() => canonicalRouteRuntimeProbeReceiptV2({
       ...complete,
       destinationToleranceMeters: 0.5,
     })).toThrow("ROUTE_RUNTIME_PROBE_RECEIPT_INVALID");
-    expect(() => canonicalRouteRuntimeProbeReceiptV1({
+    expect(() => canonicalRouteRuntimeProbeReceiptV2({
       ...complete,
       ticks: [{ ...complete.ticks[0], providerBodyId: 7 }, complete.ticks[1]],
     })).toThrow("ROUTE_RUNTIME_PROBE_RECEIPT_INVALID");
-    expect(() => canonicalRouteRuntimeProbeReceiptV1({
+    expect(() => canonicalRouteRuntimeProbeReceiptV2({
       ...complete,
       ticks: [{
         ...complete.ticks[0],
@@ -852,7 +880,7 @@ describe.skipIf(!hasRuntimeProbeApi)("RouteRuntimeProbeReceiptV1", () => {
         },
       }, complete.ticks[1]],
     })).toThrow("ROUTE_RUNTIME_PROBE_RECEIPT_INVALID");
-    expect(() => canonicalRouteRuntimeProbeReceiptV1({
+    expect(() => canonicalRouteRuntimeProbeReceiptV2({
       ...oneTickFailure({
         kind: "runtime-stalled",
         failureProbeTick: 1,
@@ -871,31 +899,8 @@ describe.skipIf(!hasRuntimeProbeApi)("RouteRuntimeProbeReceiptV1", () => {
 });
 
 
-const {
-  assertRouteRuntimeProbeReceiptContextV2,
-  canonicalRoutePathReceiptV2,
-  canonicalRouteRuntimeProbeReceiptV2,
-  canonicalRouteRuntimeProbeRequestV2,
-  canonicalRouteRuntimeProbeTickV2,
-  createRouteRuntimeProbeRequestV2,
-  hashRoutePathReceiptV2,
-  hashRouteRuntimeProbeReceiptV2,
-  hashRouteRuntimeProbeRequestV2,
-  hashRouteRuntimeProbeTickV2,
-} = traversal as unknown as {
-  readonly assertRouteRuntimeProbeReceiptContextV2?: typeof Function.prototype;
-  readonly canonicalRoutePathReceiptV2: typeof traversal.canonicalRoutePathReceiptV2;
-  readonly canonicalRouteRuntimeProbeReceiptV2?: (value: unknown) => unknown;
-  readonly canonicalRouteRuntimeProbeRequestV2?: (value: unknown) => unknown;
-  readonly canonicalRouteRuntimeProbeTickV2?: (value: unknown) => unknown;
-  readonly createRouteRuntimeProbeRequestV2?: (input: unknown) => unknown;
-  readonly hashRoutePathReceiptV2: typeof traversal.hashRoutePathReceiptV2;
-  readonly hashRouteRuntimeProbeReceiptV2?: (value: unknown) => `sha256:${string}`;
-  readonly hashRouteRuntimeProbeRequestV2?: (value: unknown) => `sha256:${string}`;
-  readonly hashRouteRuntimeProbeTickV2?: (value: unknown) => `sha256:${string}`;
-};
-
 const hasRuntimeProbeApiV2 = [
+  advanceRouteRuntimeProbeSupportStationV2,
   assertRouteRuntimeProbeReceiptContextV2,
   canonicalRouteRuntimeProbeReceiptV2,
   canonicalRouteRuntimeProbeRequestV2,
@@ -975,9 +980,9 @@ describe.skipIf(!hasRuntimeProbeApiV2)("RouteRuntimeProbeRequestV2", () => {
         runFixedTick: async () => runtimeEvidence(1),
       },
       validationProfileIdentity: VALIDATION_PROFILE_IDENTITY,
-      walkSpeedMetersPerSecond: 4,
+      resolvedControlFeelProfile: { walkSpeedMetersPerSecond: 4 },
       positionQuantizationMeters: GRAPH_BUILDER_PROFILE.profile.positionQuantizationMeters,
-    }) as Record<string, unknown>;
+    }) as unknown as Record<string, unknown>;
     expect(created.schemaVersion).toBe(2);
     expect(created.routePathReceiptHash).toBe(hashRoutePathReceiptV2(path));
     expect(created.walkSpeedMetersPerSecond).toBe(4);
@@ -989,8 +994,34 @@ describe.skipIf(!hasRuntimeProbeApiV2)("RouteRuntimeProbeRequestV2", () => {
     expect(Object.isFrozen(canonical)).toBe(true);
     expect(() => canonicalRouteRuntimeProbeRequestV2!({
       ...created,
-      traversalSurfaceIdentity: SURFACE,
+      orderedTraversalSurfaceIdentities: SURFACE,
     })).toThrow(/ROUTE_RUNTIME_PROBE_REQUEST_INVALID/);
+  });
+
+  it("derives request walk speed from the resolved control-feel profile only", () => {
+    const path = pathReceiptV2();
+    const created = createRouteRuntimeProbeRequestV2!({
+      routePathReceipt: path,
+      resolvedDriverProfile: RESOLVED_DRIVER_PROFILE,
+      runtimePort: {
+        kind: "traversal-runtime-port",
+        schemaVersion: 1,
+        traversingEntityId: path.traversingEntityId,
+        authoringSpecHash: path.authoringSpecHash,
+        layoutSolveReportHash: path.layoutSolveReportHash,
+        resourceLockHash: path.resourceLockHash,
+        executionPlanHash: HASH_A,
+        resolvedTraversalLockHash: path.resolvedTraversalLockHash,
+        runtimeImplementationIdentity: RUNTIME_IDENTITY,
+        readLatestTickEvidence: () => runtimeEvidence(0),
+        resetToStartAnchor: () => runtimeEvidence(0),
+        runFixedTick: async () => runtimeEvidence(1),
+      },
+      validationProfileIdentity: VALIDATION_PROFILE_IDENTITY,
+      resolvedControlFeelProfile: { walkSpeedMetersPerSecond: 1 },
+      positionQuantizationMeters: GRAPH_BUILDER_PROFILE.profile.positionQuantizationMeters,
+    });
+    expect(created.walkSpeedMetersPerSecond).toBe(1);
   });
 });
 
@@ -1018,5 +1049,68 @@ describe.skipIf(!hasRuntimeProbeApiV2)("RouteRuntimeProbeTickV2", () => {
       ...raw,
       expectedTraversalSurfaceIds: ["surface-a", "surface-a"],
     })).toThrow(/ROUTE_RUNTIME_PROBE_TICK_INVALID/);
+  });
+});
+
+describe.skipIf(!hasRuntimeProbeApiV2)("advanceRouteRuntimeProbeSupportStationV2", () => {
+  it("bounds the station window by walk speed times that tick's dt plus quantization", () => {
+    const path = pathReceiptV2(
+      [[0, 0, 0], [0.025, 0, 0], [1, 0, 0]],
+      ["surface-a", "surface-a", "surface-b"],
+    );
+    const walkSpeedMetersPerSecond = 1;
+    const positionQuantizationMeters =
+      GRAPH_BUILDER_PROFILE.profile.positionQuantizationMeters;
+    const previousArcLengthMeters = 0;
+    const windowMeters = (fixedTimeStepSeconds: number): number =>
+      walkSpeedMetersPerSecond * fixedTimeStepSeconds + positionQuantizationMeters;
+
+    expect(windowMeters(1 / 60)).toBeLessThan(0.025);
+    expect(windowMeters(1 / 30)).toBeGreaterThan(0.025);
+
+    const atOriginSixty = advanceRouteRuntimeProbeSupportStationV2(
+      path,
+      [0, 0, 0],
+      previousArcLengthMeters,
+      walkSpeedMetersPerSecond,
+      positionQuantizationMeters,
+      1 / 60,
+    );
+    expect(atOriginSixty.expectedTraversalSurfaceIds).toEqual(["surface-a"]);
+
+    const atOriginThirty = advanceRouteRuntimeProbeSupportStationV2(
+      path,
+      [0, 0, 0],
+      previousArcLengthMeters,
+      walkSpeedMetersPerSecond,
+      positionQuantizationMeters,
+      1 / 30,
+    );
+    expect(atOriginThirty.expectedTraversalSurfaceIds).toEqual(["surface-a"]);
+    expect(atOriginThirty.retainedSegmentIndexes).toEqual([0]);
+
+    const atSeamSixty = advanceRouteRuntimeProbeSupportStationV2(
+      path,
+      [0.025, 0, 0],
+      previousArcLengthMeters,
+      walkSpeedMetersPerSecond,
+      positionQuantizationMeters,
+      1 / 60,
+    );
+    expect(atSeamSixty.expectedTraversalSurfaceIds).toEqual(["surface-a"]);
+
+    const atSeamThirty = advanceRouteRuntimeProbeSupportStationV2(
+      path,
+      [0.025, 0, 0],
+      previousArcLengthMeters,
+      walkSpeedMetersPerSecond,
+      positionQuantizationMeters,
+      1 / 30,
+    );
+    expect(atSeamThirty.expectedTraversalSurfaceIds).toEqual([
+      "surface-a",
+      "surface-b",
+    ]);
+    expect(atSeamThirty.retainedSegmentIndexes).toEqual([0, 1]);
   });
 });

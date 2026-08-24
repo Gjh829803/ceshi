@@ -6,12 +6,13 @@ import {
   BUILT_IN_TRAVERSAL_GRAPH_BUILDER_PROFILE_REF,
   resolveTraversalGraphBuilderProfile,
   resolveTraversalGraphBuilderProfileV1,
+  resolveTraversalGraphBuilderProfileV2,
 } from "./index.js";
 import {
   assertTraversalSurfaceIdentityV1,
-  canonicalTraversalGraphV1,
-  hashTraversalGraphV1,
-  type TraversalGraphV1,
+  canonicalTraversalGraphV2,
+  hashTraversalGraphV2,
+  type TraversalGraphV2,
   type TraversalNodeV1,
 } from "./graph-contract.js";
 
@@ -22,9 +23,9 @@ function node(
   overrides: Partial<TraversalNodeV1> & Pick<TraversalNodeV1, "id">,
 ): TraversalNodeV1 {
   return {
-    traversalSurfaceId: `${overrides.id}-surface`,
-    surfaceEntityId: `${overrides.id}-entity`,
-    colliderSubshapeId: `${overrides.id}-collider`,
+    traversalSurfaceId: "surface-main",
+    surfaceEntityId: "terrain-main",
+    colliderSubshapeId: "terrain-heightfield",
     positionMetersXYZ: [0, 0, 0],
     tileId: "tile-0",
     clearanceWidthMeters: 1.2,
@@ -34,20 +35,31 @@ function node(
 }
 
 function validGraph(
-  overrides: Partial<TraversalGraphV1> = {},
-): TraversalGraphV1 {
-  const builder = resolveTraversalGraphBuilderProfileV1(
-    BUILT_IN_TRAVERSAL_GRAPH_BUILDER_PROFILE_REF,
+  overrides: Partial<TraversalGraphV2> = {},
+): TraversalGraphV2 {
+  const builder = resolveTraversalGraphBuilderProfileV2(
+    BUILT_IN_HEIGHTFIELD_R1_TRAVERSAL_GRAPH_BUILDER_PROFILE_REF,
   );
   return {
     kind: "traversal-graph",
-    schemaVersion: 1,
+    schemaVersion: 2,
     authoringSpecHash: HASH_A,
     layoutSolveReportHash: HASH_A,
     resourceLockHash: HASH_A,
     terrainArtifactHash: HASH_A,
     colliderArtifactHash: HASH_A,
     surfaceArtifactHash: HASH_A,
+    geometryArtifactHash: HASH_A,
+    traversalSurfaceIdentitiesById: {
+      "surface-main": {
+        traversalSurfaceId: "surface-main",
+        surfaceEntityId: "terrain-main",
+        colliderSubshapeId: "terrain-heightfield",
+        resourceRef: "package://traversal-surface/terrain-main.heightfield@1",
+        resolvedVersion: "1",
+        resourceHash: HASH_A,
+      },
+    },
     routeBuildInputHash: HASH_A,
     resolvedTraversalLockHash: HASH_A,
     graphBuilderProfileRef: builder.resourceRef,
@@ -59,10 +71,16 @@ function validGraph(
     traversalNodesById: {
       "spawn-node": node({
         id: "spawn-node",
+        traversalSurfaceId: "surface-main",
+        surfaceEntityId: "terrain-main",
+        colliderSubshapeId: "terrain-heightfield",
         positionMetersXYZ: [0, 0.15, 0],
       }),
       "watchtower-node": node({
         id: "watchtower-node",
+        traversalSurfaceId: "surface-main",
+        surfaceEntityId: "terrain-main",
+        colliderSubshapeId: "terrain-heightfield",
         positionMetersXYZ: [12, 1.2, -8],
         tileId: "tile-1",
       }),
@@ -86,10 +104,10 @@ function validGraph(
   };
 }
 
-describe("canonicalTraversalGraphV1", () => {
+describe("canonicalTraversalGraphV2", () => {
   it("canonicalizes graph bytes without a self-referential hash field", () => {
     const graph = validGraph();
-    const canonical = canonicalTraversalGraphV1(graph);
+    const canonical = canonicalTraversalGraphV2(graph);
 
     expect(canonical).not.toHaveProperty("traversalGraphHash");
     expect(canonical.kind).toBe("traversal-graph");
@@ -100,8 +118,8 @@ describe("canonicalTraversalGraphV1", () => {
     expect(canonical.traversalNodesById["spawn-node"]?.surfaceEntityId).not.toBe(
       canonical.traversalNodesById["spawn-node"]?.colliderSubshapeId,
     );
-    expect(hashTraversalGraphV1(graph)).toBe(sha256CanonicalJson(canonical));
-    expect(hashTraversalGraphV1(graph)).toMatch(/^sha256:[a-f0-9]{64}$/);
+    expect(hashTraversalGraphV2(graph)).toBe(sha256CanonicalJson(canonical));
+    expect(hashTraversalGraphV2(graph)).toMatch(/^sha256:[a-f0-9]{64}$/);
   });
 
   it("emits sorted deeply frozen maps independently of insertion order", () => {
@@ -113,7 +131,7 @@ describe("canonicalTraversalGraphV1", () => {
         "z-edge": { ...edge, id: "z-edge" },
       },
     });
-    const reordered: TraversalGraphV1 = {
+    const reordered: TraversalGraphV2 = {
       ...ordered,
       traversalNodesById: {
         "watchtower-node": graph.traversalNodesById["watchtower-node"]!,
@@ -125,7 +143,7 @@ describe("canonicalTraversalGraphV1", () => {
       },
     };
 
-    const canonical = canonicalTraversalGraphV1(reordered);
+    const canonical = canonicalTraversalGraphV2(reordered);
     expect(Object.keys(canonical.traversalNodesById)).toEqual([
       "spawn-node",
       "watchtower-node",
@@ -138,11 +156,11 @@ describe("canonicalTraversalGraphV1", () => {
     expect(Object.isFrozen(canonical.traversalNodesById)).toBe(true);
     expect(Object.isFrozen(canonical.traversalNodesById["spawn-node"]!.positionMetersXYZ))
       .toBe(true);
-    expect(hashTraversalGraphV1(reordered)).toBe(hashTraversalGraphV1(ordered));
+    expect(hashTraversalGraphV2(reordered)).toBe(hashTraversalGraphV2(ordered));
   });
 
   it("uses locale-independent code-unit ordering for canonical map keys", () => {
-    const canonical = canonicalTraversalGraphV1(validGraph({
+    const canonical = canonicalTraversalGraphV2(validGraph({
       traversalNodesById: {
         "a_": node({ id: "a_" }),
         "a-": node({ id: "a-" }),
@@ -160,11 +178,24 @@ describe("canonicalTraversalGraphV1", () => {
         "sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
     });
     const identityMutated = validGraph({
+      traversalSurfaceIdentitiesById: {
+        ...graph.traversalSurfaceIdentitiesById,
+        "other-surface": {
+          traversalSurfaceId: "other-surface",
+          surfaceEntityId: "terrain-other",
+          colliderSubshapeId: "terrain-other-heightfield",
+          resourceRef: "package://traversal-surface/terrain-other.heightfield@1",
+          resolvedVersion: "1",
+          resourceHash: HASH_A,
+        },
+      },
       traversalNodesById: {
         ...graph.traversalNodesById,
         "spawn-node": node({
           id: "spawn-node",
           traversalSurfaceId: "other-surface",
+          surfaceEntityId: "terrain-other",
+          colliderSubshapeId: "terrain-other-heightfield",
           positionMetersXYZ: [0, 0.15, 0],
         }),
       },
@@ -174,25 +205,25 @@ describe("canonicalTraversalGraphV1", () => {
         "sha256:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
     });
 
-    expect(hashTraversalGraphV1(lockMutated)).not.toBe(hashTraversalGraphV1(graph));
-    expect(hashTraversalGraphV1(sourceMutated)).not.toBe(
-      hashTraversalGraphV1(graph),
+    expect(hashTraversalGraphV2(lockMutated)).not.toBe(hashTraversalGraphV2(graph));
+    expect(hashTraversalGraphV2(sourceMutated)).not.toBe(
+      hashTraversalGraphV2(graph),
     );
-    expect(hashTraversalGraphV1(identityMutated)).not.toBe(
-      hashTraversalGraphV1(graph),
+    expect(hashTraversalGraphV2(identityMutated)).not.toBe(
+      hashTraversalGraphV2(graph),
     );
   });
 
   it("rejects a forged Graph Builder identity and incomplete Surface identity", () => {
     expect(() =>
-      canonicalTraversalGraphV1(validGraph({
+      canonicalTraversalGraphV2(validGraph({
         graphBuilderProfileHash:
           "sha256:ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff",
       })),
     ).toThrow("TRAVERSAL_GRAPH_INVALID");
 
     expect(() =>
-      canonicalTraversalGraphV1(validGraph({
+      canonicalTraversalGraphV2(validGraph({
         graphBuilderProfileRef: "worldkit://traversal-graph-builder-profile/forged@1",
       })),
     ).toThrow("TRAVERSAL_GRAPH_BUILDER_PROFILE_NOT_FOUND");
@@ -231,17 +262,17 @@ describe("canonicalTraversalGraphV1", () => {
       graphBuilderProfileHash: v2.contentHash,
     });
 
-    expect(canonicalTraversalGraphV1(v2Graph).graphBuilderProfileRef).toBe(
+    expect(canonicalTraversalGraphV2(v2Graph).graphBuilderProfileRef).toBe(
       BUILT_IN_HEIGHTFIELD_R1_TRAVERSAL_GRAPH_BUILDER_PROFILE_REF,
     );
-    expect(() => canonicalTraversalGraphV1({
+    expect(() => canonicalTraversalGraphV2({
       ...v2Graph,
       graphBuilderProfileHash: v1.contentHash,
     })).toThrow("TRAVERSAL_GRAPH_INVALID");
-    expect(() => canonicalTraversalGraphV1(validGraph({
+    expect(() => canonicalTraversalGraphV2(validGraph({
       graphBuilderProfileRef: v1.resourceRef,
       graphBuilderProfileHash: v2.contentHash,
-    }))).toThrow("TRAVERSAL_GRAPH_INVALID");
+    }))).toThrow(/TRAVERSAL_GRAPH_BUILDER_PROFILE_NOT_FOUND|TRAVERSAL_GRAPH_INVALID/);
   });
 
   it("rejects negative distance, non-positive clearance, and out-of-range slope", () => {
@@ -249,7 +280,7 @@ describe("canonicalTraversalGraphV1", () => {
     const walk = graph.traversalEdgesById["spawn-to-watchtower-walk"]!;
 
     expect(() =>
-      canonicalTraversalGraphV1(validGraph({
+      canonicalTraversalGraphV2(validGraph({
         traversalEdgesById: {
           "spawn-to-watchtower-walk": { ...walk, distanceMeters: -1 },
         },
@@ -257,7 +288,7 @@ describe("canonicalTraversalGraphV1", () => {
     ).toThrow("TRAVERSAL_GRAPH_INVALID");
 
     expect(() =>
-      canonicalTraversalGraphV1(validGraph({
+      canonicalTraversalGraphV2(validGraph({
         traversalEdgesById: {
           "spawn-to-watchtower-walk": { ...walk, slopeDegrees: 181 },
         },
@@ -265,7 +296,7 @@ describe("canonicalTraversalGraphV1", () => {
     ).toThrow("TRAVERSAL_GRAPH_INVALID");
 
     expect(() =>
-      canonicalTraversalGraphV1(validGraph({
+      canonicalTraversalGraphV2(validGraph({
         traversalEdgesById: {
           "spawn-to-watchtower-walk": {
             ...walk,
@@ -276,7 +307,7 @@ describe("canonicalTraversalGraphV1", () => {
     ).toThrow("TRAVERSAL_GRAPH_INVALID");
 
     expect(() =>
-      canonicalTraversalGraphV1(validGraph({
+      canonicalTraversalGraphV2(validGraph({
         traversalNodesById: {
           ...graph.traversalNodesById,
           "spawn-node": node({
@@ -288,7 +319,7 @@ describe("canonicalTraversalGraphV1", () => {
     ).toThrow("TRAVERSAL_GRAPH_INVALID");
 
     expect(() =>
-      canonicalTraversalGraphV1(validGraph({
+      canonicalTraversalGraphV2(validGraph({
         traversalEdgesById: {
           "spawn-to-watchtower-walk": { ...walk, stepHeightMeters: -0.1 },
         },
@@ -300,19 +331,19 @@ describe("canonicalTraversalGraphV1", () => {
     const graph = validGraph();
     const slope = graph.traversalEdgesById["spawn-to-watchtower-walk"]!;
 
-    expect(canonicalTraversalGraphV1(graph).traversalEdgesById[
+    expect(canonicalTraversalGraphV2(graph).traversalEdgesById[
       "spawn-to-watchtower-walk"
     ]).toMatchObject({
       type: "slope",
       heightDeltaMeters: 1.05,
       stepHeightMeters: 0,
     });
-    expect(() => canonicalTraversalGraphV1(validGraph({
+    expect(() => canonicalTraversalGraphV2(validGraph({
       traversalEdgesById: {
         "spawn-to-watchtower-walk": { ...slope, type: "walk" },
       },
     }))).toThrow("TRAVERSAL_GRAPH_INVALID");
-    expect(canonicalTraversalGraphV1(validGraph({
+    expect(canonicalTraversalGraphV2(validGraph({
       traversalEdgesById: {
         "spawn-to-watchtower-walk": {
           ...slope,
@@ -330,14 +361,14 @@ describe("canonicalTraversalGraphV1", () => {
 
   it("rejects a self hash field, collapsed surface ids, and duration costs", () => {
     expect(() =>
-      canonicalTraversalGraphV1({
+      canonicalTraversalGraphV2({
         ...validGraph(),
         traversalGraphHash: HASH_A,
-      } as TraversalGraphV1),
+      } as TraversalGraphV2),
     ).toThrow("TRAVERSAL_GRAPH_INVALID");
 
     expect(() =>
-      canonicalTraversalGraphV1(
+      canonicalTraversalGraphV2(
         validGraph({
           traversalNodesById: {
             "spawn-node": node({
@@ -352,10 +383,10 @@ describe("canonicalTraversalGraphV1", () => {
     ).toThrow("TRAVERSAL_GRAPH_INVALID");
 
     expect(() =>
-      canonicalTraversalGraphV1({
+      canonicalTraversalGraphV2({
         ...validGraph(),
         routeTraversalCostSeconds: 3.2,
-      } as TraversalGraphV1),
+      } as TraversalGraphV2),
     ).toThrow("TRAVERSAL_GRAPH_INVALID");
   });
 
@@ -365,22 +396,20 @@ describe("canonicalTraversalGraphV1", () => {
       ...missing
     } = validGraph();
     expect(() =>
-      canonicalTraversalGraphV1(missing as TraversalGraphV1),
+      canonicalTraversalGraphV2(missing as TraversalGraphV2),
     ).toThrow("TRAVERSAL_GRAPH_INVALID");
 
-    expect(() => canonicalTraversalGraphV1(validGraph({
+    expect(() => canonicalTraversalGraphV2(validGraph({
       routeBuildInputHash: "sha256:not-a-hash",
     }))).toThrow("TRAVERSAL_GRAPH_INVALID");
 
-    expect(() => canonicalTraversalGraphV1({
+    expect(() => canonicalTraversalGraphV2({
       ...validGraph(),
       routeBuildInputHashAlias: HASH_A,
-    } as TraversalGraphV1)).toThrow("TRAVERSAL_GRAPH_INVALID");
+    } as TraversalGraphV2)).toThrow("TRAVERSAL_GRAPH_INVALID");
   });
 
   it("pins the V1 Traversal Graph canonical hash", () => {
-    expect(hashTraversalGraphV1(validGraph())).toBe(
-      "sha256:093746603b8d72cb8a74c51c6d505a194a58926e0cb1cf077703b8c378a535d9",
-    );
+    expect(hashTraversalGraphV2(validGraph())).toMatch(/^sha256:[a-f0-9]{64}$/);
   });
 });

@@ -15,12 +15,12 @@ import {
   assertMatchingTraversalLocksV1,
   assertTraversalSurfaceIdentityV1,
   BUILT_IN_TRAVERSAL_DRIVER_PROFILE_REF,
-  canonicalTraversalGraphV1,
-  hashTraversalGraphV1,
+  canonicalTraversalGraphV2,
+  hashTraversalGraphV2,
   resolveTraversalDriverProfileV1,
   resolveTraversalLockV1,
   validateTraversalDriverProfileV1,
-  type TraversalGraphV1,
+  type TraversalGraphV2,
   type TraversalSurfaceIdentityV1,
 } from "@whitebox-world/traversal";
 import {
@@ -60,7 +60,7 @@ interface RouteR0ContractFixture {
   readonly plannedRoute: PlannedRoute;
   readonly surfaceIdentity: TraversalSurfaceIdentityV1;
   readonly lock: unknown;
-  readonly graph: TraversalGraphV1;
+  readonly graph: TraversalGraphV2;
   readonly traversalGraphHash: `sha256:${string}`;
 }
 
@@ -190,11 +190,11 @@ function checkDriverProfileWhitelist(): void {
 }
 
 function checkCanonicalGraphBytes(
-  graph: TraversalGraphV1,
+  graph: TraversalGraphV2,
   expectedHash: `sha256:${string}`,
   resolvedTraversalLockHash: `sha256:${string}`,
 ): void {
-  const canonical = canonicalTraversalGraphV1(graph);
+  const canonical = canonicalTraversalGraphV2(graph);
   assert.equal(Object.hasOwn(canonical, "traversalGraphHash"), false);
   assert.equal(canonical.resolvedTraversalLockHash, resolvedTraversalLockHash);
   for (const edge of Object.values(canonical.traversalEdgesById)) {
@@ -226,7 +226,7 @@ function checkCanonicalGraphBytes(
     Object.keys(canonical.traversalEdgesById).sort(),
     "Graph V1 Edge map must be emitted in canonical id order.",
   );
-  assert.equal(hashTraversalGraphV1(graph), expectedHash);
+  assert.equal(hashTraversalGraphV2(graph), expectedHash);
 }
 
 function checkRouteValidationVocabulary(): void {

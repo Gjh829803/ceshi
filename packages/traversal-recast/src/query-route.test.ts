@@ -1,9 +1,9 @@
 import {
   BUILT_IN_HEIGHTFIELD_R1_TRAVERSAL_GRAPH_BUILDER_PROFILE_REF,
-  canonicalTraversalGraphV1,
+  canonicalTraversalGraphV2,
   resolveTraversalGraphBuilderProfileV2,
   type TraversalEdgeV1,
-  type TraversalGraphV1,
+  type TraversalGraphV2,
   type TraversalNodeV1,
 } from "@whitebox-world/traversal";
 import { describe, expect, it } from "vitest";
@@ -53,16 +53,27 @@ function edge(
 function graph(
   nodes: readonly TraversalNodeV1[],
   edges: readonly TraversalEdgeV1[],
-): TraversalGraphV1 {
+): TraversalGraphV2 {
   return {
     kind: "traversal-graph",
-    schemaVersion: 1,
+    schemaVersion: 2,
     authoringSpecHash: HASH,
     layoutSolveReportHash: HASH,
     resourceLockHash: HASH,
     terrainArtifactHash: HASH,
     colliderArtifactHash: HASH,
     surfaceArtifactHash: HASH,
+    geometryArtifactHash: HASH,
+    traversalSurfaceIdentitiesById: {
+      "surface-main": {
+        traversalSurfaceId: "surface-main",
+        surfaceEntityId: "terrain-main",
+        colliderSubshapeId: "terrain-heightfield",
+        resourceRef: "package://traversal-surface/terrain-main.heightfield@1",
+        resolvedVersion: "1",
+        resourceHash: HASH,
+      },
+    },
     routeBuildInputHash: HASH,
     resolvedTraversalLockHash: HASH,
     graphBuilderProfileRef: GRAPH_BUILDER_PROFILE.resourceRef,
@@ -84,7 +95,7 @@ const PROFILE = {
 
 describe("selectCanonicalTraversalPathV1", () => {
   it("binds each fixture Graph Builder identity to the canonical Registry Profile", () => {
-    const value = canonicalTraversalGraphV1(graph(
+    const value = canonicalTraversalGraphV2(graph(
       [node("start", 0), node("goal", 1)],
       [edge("edge", "start", "goal", 1)],
     ));

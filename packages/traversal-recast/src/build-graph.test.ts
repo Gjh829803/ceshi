@@ -1,15 +1,19 @@
 import {
-  assertTraversalGraphBuildBudgetV1,
-  hashHeightfieldRouteBuildInputV1,
-  type HeightfieldRouteBuildInputReceiptV1,
-  type HeightfieldRouteBuildInputV1,
+  createRouteBuildInputReceiptV2,
+  hashRouteColliderArtifactV2,
+  hashRouteGeometryArtifactV2,
+  hashRouteSurfaceArtifactV2,
+  hashRouteTerrainArtifactV2,
+  type RouteBuildInputReceiptV2,
+  type RouteBuildInputV2,
 } from "@whitebox-world/traversal";
 import { sha256CanonicalJson } from "@whitebox-world/protocol";
 import { describe, expect, it } from "vitest";
 
 import {
-  buildHeightfieldTraversalGraphFromSnapshotV1,
+  buildTraversalGraphFromSnapshotV2,
   classifyGraphProjectionCapacityV1,
+  graphNodeCorrelationHeightWindowMetersV2,
   interpolatePortalBoundaryPointUnitsV1,
   type RecastNavMeshAuditSnapshotV1,
 } from "./build-graph.js";
@@ -31,17 +35,17 @@ function deepFreeze<T>(value: T): T {
 }
 
 function receipt(
-  overrides: Partial<HeightfieldRouteBuildInputV1["capabilityEnvelope"]> = {},
-): HeightfieldRouteBuildInputReceiptV1 {
+  overrides: Partial<RouteBuildInputV2["capabilityEnvelope"]> = {},
+): RouteBuildInputReceiptV2 {
   const resourceLockHash = HASH_C;
-  const capabilityEnvelope = {
+  const capabilityEnvelope = deepFreeze({
     ...createRecastTestEnvelopeV1({ resourceLockHash }),
     ...overrides,
     resourceLockHash,
-  };
-  const input: HeightfieldRouteBuildInputV1 = {
-    kind: "heightfield-route-build-input",
-    schemaVersion: 1,
+  });
+  const input = {
+    kind: "route-build-input",
+    schemaVersion: 2,
     authoringSpecHash: HASH_A,
     layoutSolveReportHash: HASH_B,
     resourceLockHash,
@@ -66,55 +70,51 @@ function receipt(
       widthMeters: 4,
       locomotionProfileRef: capabilityEnvelope.locomotionProfileRef,
     },
-    traversalSurface: {
+    traversalSurfaces: [{
       traversalSurfaceId: "surface-ground",
       surfaceEntityId: "terrain-ground",
       colliderSubshapeId: "collider-terrain",
       resourceRef: "worldkit://terrain/ground@1",
       resolvedVersion: "1",
       resourceHash: HASH_A,
-    },
+    }],
     capabilityEnvelope,
     terrainSource: {
       kind: "bounded",
       terrainEntityId: "terrain-ground",
-      terrainArtifactHash: HASH_B,
       triangleSoup: {
         positionsMetersXYZ: [
           0, 0, 0,
           0, 0, 4,
-          16, 0, 0,
-          16, 0, 4,
+          2, 0, 0,
+          2, 0, 4,
+          2, 0.2, 0,
+          2, 0.2, 4,
+          16, 0.2, 0,
+          16, 0.2, 4,
         ],
-        triangleIndices: [0, 1, 2, 2, 1, 3],
+        triangleIndices: [0, 1, 2, 2, 1, 3, 4, 5, 6, 6, 5, 7],
       },
       minimumMetersXZ: [0, 0],
       maximumMetersXZ: [16, 4],
     },
-    blockingColliders: [],
-    colliderArtifactHash: sha256CanonicalJson([]) as `sha256:${string}`,
+    staticColliders: [],
     blockedTraversalAreaExclusions: [],
     blockedWaterExclusions: [],
   };
-  const estimate = assertTraversalGraphBuildBudgetV1({
-    minimumMetersXZ: [0, 0],
-    maximumMetersXZ: [16, 4],
-    tileSizeCells: capabilityEnvelope.tileSizeCells,
-    voxelCellSizeMeters: capabilityEnvelope.voxelCellSizeMeters,
-    maximumTiles: capabilityEnvelope.maximumTiles,
-  });
-  const frozenInput = deepFreeze(input);
-  return deepFreeze({
-    input: frozenInput,
-    routeBuildInputHash: hashHeightfieldRouteBuildInputV1(frozenInput),
-    budgetEvidence: {
-      kind: "heightfield-tile-estimate",
-      ...estimate,
-      maximumTiles: capabilityEnvelope.maximumTiles,
-      minimumMetersXZ: [0, 0],
-      maximumMetersXZ: [16, 4],
-    },
-  });
+  const terrainArtifactHash = hashRouteTerrainArtifactV2(input.terrainSource);
+  const colliderArtifactHash = hashRouteColliderArtifactV2(input.staticColliders);
+  const completeInput = {
+    ...input,
+    terrainArtifactHash,
+    colliderArtifactHash,
+    geometryArtifactHash: hashRouteGeometryArtifactV2({
+      terrainArtifactHash,
+      colliderArtifactHash,
+    }),
+    surfaceArtifactHash: hashRouteSurfaceArtifactV2(input.traversalSurfaces),
+  };
+  return createRouteBuildInputReceiptV2(completeInput);
 }
 
 function twoTileSnapshot(): RecastNavMeshAuditSnapshotV1 {
@@ -138,7 +138,7 @@ function twoTileSnapshot(): RecastNavMeshAuditSnapshotV1 {
         polygons: [{
           providerPolygonRef: 101,
           providerType: 0,
-          areaId: 0,
+          areaId: 2,
           flags: 1,
           vertexIndices: [0, 1, 2, 3],
           firstLinkIndex: 0,
@@ -172,7 +172,7 @@ function twoTileSnapshot(): RecastNavMeshAuditSnapshotV1 {
         polygons: [{
           providerPolygonRef: 202,
           providerType: 0,
-          areaId: 0,
+          areaId: 2,
           flags: 1,
           vertexIndices: [0, 1, 2, 3],
           firstLinkIndex: 0,
@@ -209,7 +209,7 @@ describe("canonical Recast traversal Graph projection", () => {
   });
 
   it("projects deterministic Nodes, cross-Tile portals, slope, signed delta, and step evidence", () => {
-    const result = buildHeightfieldTraversalGraphFromSnapshotV1(
+    const result = buildTraversalGraphFromSnapshotV2(
       twoTileSnapshot(),
       receipt(),
     );
@@ -241,12 +241,12 @@ describe("canonical Recast traversal Graph projection", () => {
   });
 
   it("is byte-identical when provider Tile enumeration order changes", () => {
-    const first = buildHeightfieldTraversalGraphFromSnapshotV1(
+    const first = buildTraversalGraphFromSnapshotV2(
       twoTileSnapshot(),
       receipt(),
     );
     const reversed = twoTileSnapshot();
-    const second = buildHeightfieldTraversalGraphFromSnapshotV1(
+    const second = buildTraversalGraphFromSnapshotV2(
       deepFreeze({ ...reversed, tiles: [...reversed.tiles].reverse() }),
       receipt(),
     );
@@ -276,7 +276,7 @@ describe("canonical Recast traversal Graph projection", () => {
         })),
       })),
     });
-    expect(buildHeightfieldTraversalGraphFromSnapshotV1(moved, receipt())).toEqual({
+    expect(buildTraversalGraphFromSnapshotV2(moved, receipt())).toEqual({
       status: "unavailable",
       reason: "no-queryable-ground-surface",
     });
@@ -310,7 +310,7 @@ describe("canonical Recast traversal Graph projection", () => {
           }
         : tile),
     });
-    expect(() => buildHeightfieldTraversalGraphFromSnapshotV1(
+    expect(() => buildTraversalGraphFromSnapshotV2(
       unresolved,
       receipt(),
     )).toThrow(/unresolved non-zero target/i);
@@ -324,7 +324,7 @@ describe("canonical Recast traversal Graph projection", () => {
           }
         : tile),
     });
-    expect(() => buildHeightfieldTraversalGraphFromSnapshotV1(
+    expect(() => buildTraversalGraphFromSnapshotV2(
       cyclic,
       receipt(),
     )).toThrow(/link cycle/i);
@@ -344,7 +344,7 @@ describe("canonical Recast traversal Graph projection", () => {
           }
         : tile),
     });
-    expect(() => buildHeightfieldTraversalGraphFromSnapshotV1(
+    expect(() => buildTraversalGraphFromSnapshotV2(
       oversizedProviderRef,
       receipt(),
     )).toThrow(/positive unsigned 32-bit integer/i);
@@ -358,7 +358,7 @@ describe("canonical Recast traversal Graph projection", () => {
           }
         : tile),
     });
-    expect(() => buildHeightfieldTraversalGraphFromSnapshotV1(
+    expect(() => buildTraversalGraphFromSnapshotV2(
       unknownFlags,
       receipt(),
     )).toThrow(/unresolved non-zero target/i);
@@ -377,7 +377,7 @@ describe("canonical Recast traversal Graph projection", () => {
           }
         : tile),
     });
-    expect(() => buildHeightfieldTraversalGraphFromSnapshotV1(
+    expect(() => buildTraversalGraphFromSnapshotV2(
       inverted,
       receipt(),
     )).toThrow(/positive-Y provider winding/i);
@@ -388,7 +388,7 @@ describe("canonical Recast traversal Graph projection", () => {
         ? { ...tile, links: tile.links.map((link) => ({ ...link, side: 1 })) }
         : tile),
     });
-    expect(() => buildHeightfieldTraversalGraphFromSnapshotV1(
+    expect(() => buildTraversalGraphFromSnapshotV2(
       invalidSide,
       receipt(),
     )).toThrow(/four Tile boundary sides/i);
@@ -414,10 +414,22 @@ describe("canonical Recast traversal Graph projection", () => {
           }
         : tile),
     });
-    expect(() => buildHeightfieldTraversalGraphFromSnapshotV1(
+    expect(() => buildTraversalGraphFromSnapshotV2(
       conflicting,
       receipt(),
     )).toThrow(/conflicting Edge evidence/i);
+  });
+
+  it("uses a quantization-half Graph Node correlation height window", () => {
+    const envelope = createRecastTestEnvelopeV1();
+    const windowMeters = graphNodeCorrelationHeightWindowMetersV2(envelope);
+    expect(windowMeters).toBe(0.001 / 2 + 0.00001);
+    expect(windowMeters).toBeLessThan(envelope.voxelCellHeightMeters);
+    expect(windowMeters).not.toBe(
+      envelope.voxelCellHeightMeters +
+      envelope.maxStepHeightMeters +
+      0.00001,
+    );
   });
 
   it("rejects a centroid height delta outside the safe quantized range", () => {
@@ -425,7 +437,7 @@ describe("canonical Recast traversal Graph projection", () => {
     const extreme = deepFreeze({
       ...snapshot,
       tiles: snapshot.tiles.map((tile, tileIndex) => {
-        const y = tileIndex === 0 ? -5_000_000_000_000 : 5_000_000_000_000;
+        const y = tileIndex === 0 ? -9_007_199_254_740_992 : 9_007_199_254_740_992;
         return {
           ...tile,
           verticesMetersXYZ: tile.verticesMetersXYZ.map((point) => [
@@ -446,9 +458,9 @@ describe("canonical Recast traversal Graph projection", () => {
         };
       }),
     });
-    expect(() => buildHeightfieldTraversalGraphFromSnapshotV1(
+    expect(() => buildTraversalGraphFromSnapshotV2(
       extreme,
       receipt(),
-    )).toThrow(/height delta.*safe integer/i);
+    )).toThrow(/safe integer/i);
   });
 });
