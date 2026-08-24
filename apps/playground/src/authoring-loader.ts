@@ -28,7 +28,7 @@ import {
 } from "@whitebox-world/runtime-contracts";
 import type { RuntimeWorldConfigurationV1 } from "@whitebox-world/runtime-host";
 import { createWorldPackageBuildReceiptV1 } from "@whitebox-world/world-package";
-import { isNil } from "lodash-es";
+import { isNil, uniq } from "lodash-es";
 
 import {
   PLAYGROUND_SUBJECT_ASSET_PACKAGE_PATH_BY_REF_V1,
@@ -181,9 +181,14 @@ function createRelationshipDeferredPreview(
     id: `playground-preview.${source.id}`,
     resourceRef:
       `worldkit://subject-definition/playground-preview.${source.id}@${source.version}`,
-    capabilityRefs: source.capabilityRefs.filter(
-      (capabilityRef) => !deferredCapabilityRefSet.has(capabilityRef),
-    ),
+    capabilityRefs: uniq([
+      ...source.capabilityRefs.filter(
+        (capabilityRef) =>
+          !deferredCapabilityRefSet.has(capabilityRef) &&
+          !capabilityRef.startsWith("worldkit://capability/locomotion."),
+      ),
+      "worldkit://capability/locomotion.ground@1",
+    ]),
     relationshipCapabilityRefs: [],
   };
   const definition = deepFreeze({

@@ -119,7 +119,11 @@ function fakeRuntimeFactory(
         runtimeBackend: "babylon-havok",
         tick: harness.publishedWorldProjection.simulationTick,
         ready: true,
-        controlledEntityId: configuration.executionPlan.initialControlledEntityId,
+        possessionTarget: {
+          mode: "possessed",
+          controlledEntityId:
+            configuration.executionPlan.initialControlledEntityId,
+        },
         subjectStatesByEntityId: {},
         camera: {
           entityId: "camera.main",

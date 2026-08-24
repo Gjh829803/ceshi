@@ -3,7 +3,7 @@ import {
   type AuthoringDiagnostic,
   type AuthoringSpecV4,
   type PrimitivePrototypeSpecV2,
-  type WorldNodeSpecV3,
+  type WorldNodeSpecV4,
 } from "@whitebox-world/authoring";
 import type {
   CompileDiagnostic,
@@ -42,7 +42,7 @@ const LAYOUT_SOLVER_PROFILE_REF =
 const DEFAULT_SUBJECT_DEFINITION_REF =
   "worldkit://subject-definition/humanoid.third-person@1";
 const CAMERA_RIG_REF = "worldkit://camera/third-person.standard@1";
-const LEGACY_SUBJECT_CENTER_OFFSET_METERS = 0.9;
+const SCENE_HUMANOID_SPAWN_CENTER_OFFSET_METERS = 0.9;
 
 export type OutdoorSceneGameplayDiagnostic =
   | AuthoringDiagnostic
@@ -90,7 +90,7 @@ interface ImportedHeightfieldV1 {
 interface FlattenedLandmarkPrimitiveV1 {
   readonly entityId: string;
   readonly prototype: PrimitivePrototypeSpecV2;
-  readonly node: Extract<WorldNodeSpecV3, { kind: "object" }>;
+  readonly node: Extract<WorldNodeSpecV4, { kind: "object" }>;
 }
 
 function isFiniteVector3(value: unknown, positive = false): value is readonly [number, number, number] {
@@ -559,7 +559,7 @@ function isWater(value: unknown): value is WaterSurfaceDescriptor {
 
 function waterNode(
   resource: TrackedWorldResource<WaterSurfaceDescriptor>,
-): Extract<WorldNodeSpecV3, { kind: "water" }> {
+): Extract<WorldNodeSpecV4, { kind: "water" }> {
   const descriptor = resource.value;
   const boundary = descriptor.area.kind === "circle"
     ? {
@@ -679,7 +679,7 @@ function buildAuthoringSpec(
     .map(waterNode);
   const spawnSubjectOriginPositionMetersXYZ = [
     scene.spawn.position[0],
-    scene.spawn.position[1] - LEGACY_SUBJECT_CENTER_OFFSET_METERS,
+    scene.spawn.position[1] - SCENE_HUMANOID_SPAWN_CENTER_OFFSET_METERS,
     scene.spawn.position[2],
   ] as const;
   if (

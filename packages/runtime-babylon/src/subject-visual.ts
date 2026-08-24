@@ -9,7 +9,6 @@ import { TransformNode } from "@babylonjs/core/Meshes/transformNode.js";
 import type { Scene } from "@babylonjs/core/scene.pure.js";
 
 import type {
-  ExecutionPlanV4,
   ExecutionPlanV5,
   ExecutionRigProfileV1,
   ExecutionSubjectAssetV1,
@@ -40,7 +39,7 @@ export interface SubjectVisual {
 
 export interface CreateSubjectVisualOptionsV1 {
   subject: ExecutionSubjectV3;
-  executionPlan: ExecutionPlanV4 | ExecutionPlanV5;
+  executionPlan: ExecutionPlanV5;
   material: Material;
   scene: Scene;
   subjectAssetCache: SubjectAssetCacheV1;

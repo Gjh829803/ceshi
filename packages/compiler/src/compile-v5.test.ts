@@ -69,7 +69,7 @@ import { sha256CanonicalJson } from "@whitebox-world/protocol";
 import { deriveColliderSubshapeIdV1 } from "@whitebox-world/traversal";
 import { createValidAuthoringSpec } from "../../authoring/src/test-fixture";
 
-import { compileWorld, compileWorldV5 } from "./index";
+import { compileWorldV5 } from "./index";
 
 const GAMEPLAY_BOOTSTRAP_LOCK =
   createGameplayBootstrapResourceLockEntryV1(createGameplayBootstrapV1({
@@ -242,7 +242,7 @@ describe("compileWorldV5", () => {
       throw new Error("Fixture normalization failed.");
     }
 
-    const result = compileWorld({
+    const result = compileWorldV5({
       normalizedWorldIr: normalized.value,
       normalizedWorldIrHash: normalized.normalizedWorldIrHash,
       gameplayBootstrapResourceLock: GAMEPLAY_BOOTSTRAP_LOCK,

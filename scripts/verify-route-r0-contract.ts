@@ -6,7 +6,6 @@ import { fileURLToPath } from "node:url";
 import {
   parseAuthoringSpecV4,
   stringifyCanonicalJson,
-  validateAuthoringSpec,
   validateAuthoringSpecV4,
   type AuthoringSpecV4,
 } from "@whitebox-world/authoring";
@@ -118,7 +117,7 @@ function checkAuthoringV4Connectivity(authoringSpec: unknown): void {
     schemaVersion: 3,
   };
   assert.equal(
-    validateAuthoringSpec(obsoleteVersionPolluted).ok,
+    validateAuthoringSpecV4(obsoleteVersionPolluted).ok,
     false,
     "Current Authoring validation must reject an obsolete top-level version.",
   );

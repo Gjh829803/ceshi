@@ -1,9 +1,9 @@
 import { describe, expect, it } from "vitest";
 
 import {
-  parseAuthoringSpecJson,
+  parseAuthoringSpecV4,
   parseCanonicalJson,
-  validateAuthoringSpec,
+  validateAuthoringSpecV4,
   validatePackageSubjectDefinition,
 } from "./index";
 import {
@@ -16,7 +16,7 @@ const validSpec = createValidAuthoringSpec();
 
 describe("current AuthoringSpec", () => {
   it("strictly parses a valid canonical V4 document", () => {
-    const result = parseAuthoringSpecJson(JSON.stringify(validSpec));
+    const result = parseAuthoringSpecV4(JSON.stringify(validSpec));
 
     expect(result.ok).toBe(true);
     expect(result.value).toEqual(validSpec);
@@ -24,7 +24,7 @@ describe("current AuthoringSpec", () => {
   });
 
   it("rejects duplicate JSON object keys before schema validation", () => {
-    const result = parseAuthoringSpecJson(
+    const result = parseAuthoringSpecV4(
       '{"kind":"worldkit-authoring-spec","kind":"worldkit-authoring-spec","schemaVersion":3}',
     );
 
@@ -49,7 +49,7 @@ describe("current AuthoringSpec", () => {
   it("rejects unknown Subject fields instead of silently ignoring them", () => {
     const subject = validSpec.nodes.find((node) => node.kind === "subject");
     expect(subject).toBeDefined();
-    const result = validateAuthoringSpec({
+    const result = validateAuthoringSpecV4({
       ...validSpec,
       nodes: validSpec.nodes.map((node) =>
         node === subject ? { ...node, unexpectedSubjectField: true } : node,
@@ -60,7 +60,7 @@ describe("current AuthoringSpec", () => {
   });
 
   it("rejects the unpublished schemaVersion 1 instead of migrating it", () => {
-    const result = parseAuthoringSpecJson(
+    const result = parseAuthoringSpecV4(
       JSON.stringify({ ...validSpec, schemaVersion: 1 }),
     );
 
@@ -78,7 +78,7 @@ describe("current AuthoringSpec", () => {
   });
 
   it("rejects unsupported non-integer schema versions with the same version diagnostic", () => {
-    const result = parseAuthoringSpecJson(
+    const result = parseAuthoringSpecV4(
       JSON.stringify({ ...validSpec, schemaVersion: 3.5 }),
     );
 
@@ -99,9 +99,9 @@ describe("current AuthoringSpec", () => {
     const legacySubjectReferenceField = ["kit", "Ref"].join("");
     expect(subject).toBeDefined();
 
-    expect(validateAuthoringSpec({ ...validSpec, unexpectedRootField: true }).ok).toBe(false);
+    expect(validateAuthoringSpecV4({ ...validSpec, unexpectedRootField: true }).ok).toBe(false);
     expect(
-      validateAuthoringSpec({
+      validateAuthoringSpecV4({
         ...validSpec,
         nodes: validSpec.nodes.map((node) =>
           node === subject
@@ -119,7 +119,7 @@ describe("current AuthoringSpec", () => {
   it("rejects invalid or unversioned Subject Definition refs", () => {
     const subject = validSpec.nodes.find((node) => node.kind === "subject");
     expect(subject).toBeDefined();
-    const result = validateAuthoringSpec({
+    const result = validateAuthoringSpecV4({
       ...validSpec,
       nodes: validSpec.nodes.map((node) =>
         node === subject
@@ -140,7 +140,7 @@ describe("current AuthoringSpec", () => {
     const definition = packageWorld.resources.subjectDefinitions[0];
     expect(definition).toBeDefined();
 
-    expect(validateAuthoringSpec(packageWorld).ok).toBe(true);
+    expect(validateAuthoringSpecV4(packageWorld).ok).toBe(true);
     expect(validatePackageSubjectDefinition(definition)).toEqual({
       ok: true,
       value: definition,

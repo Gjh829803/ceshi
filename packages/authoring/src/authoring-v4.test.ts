@@ -1,10 +1,8 @@
 import { describe, expect, it } from "vitest";
 
 import {
-  normalizeAuthoringSpec,
-  parseAuthoringSpecJson,
+  normalizeAuthoringSpecV4,
   parseAuthoringSpecV4,
-  validateAuthoringSpec,
   validateAuthoringSpecV4,
   type AuthoringSpecV4,
   type ConnectedByRouteConstraintV1,
@@ -123,9 +121,9 @@ describe("current Authoring entrypoints", () => {
     const v4 = validV4();
     const stale = { ...v4, schemaVersion: 3 };
 
-    expect(parseAuthoringSpecJson(JSON.stringify(v4)).ok).toBe(true);
-    expect(validateAuthoringSpec(v4).ok).toBe(true);
-    expect(normalizeAuthoringSpec(v4)).toMatchObject({
+    expect(parseAuthoringSpecV4(JSON.stringify(v4)).ok).toBe(true);
+    expect(validateAuthoringSpecV4(v4).ok).toBe(true);
+    expect(normalizeAuthoringSpecV4(v4)).toMatchObject({
       ok: true,
       value: {
         kind: "worldkit-normalized-world",
@@ -133,7 +131,7 @@ describe("current Authoring entrypoints", () => {
       },
     });
 
-    expect(parseAuthoringSpecJson(JSON.stringify(stale))).toMatchObject({
+    expect(parseAuthoringSpecV4(JSON.stringify(stale))).toMatchObject({
       ok: false,
       diagnostics: expect.arrayContaining([
         expect.objectContaining({
@@ -637,7 +635,7 @@ describe("Authoring Spec V4 connectivity schema", () => {
         },
       ],
     });
-    expect(parseAuthoringSpecJson(JSON.stringify(v4)).ok).toBe(true);
+    expect(parseAuthoringSpecV4(JSON.stringify(v4)).ok).toBe(true);
   });
 });
 

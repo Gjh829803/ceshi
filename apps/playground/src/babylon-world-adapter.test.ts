@@ -221,7 +221,10 @@ function runtimeSnapshot(
     runtimeBackend: "babylon-havok",
     tick,
     ready: true,
-    controlledEntityId: "player",
+    possessionTarget: {
+      mode: "possessed",
+      controlledEntityId: "player",
+    },
     subjectStatesByEntityId: {
       player: {
         entityId: "player",
@@ -394,6 +397,71 @@ afterEach(() => {
 });
 
 describe("BabylonWorldAdapter frame loop", () => {
+  it("fails closed instead of selecting the initial Subject when possession is unbound", () => {
+    const possessedProjection = runtimeSnapshot();
+    const unboundProjection: BabylonRuntimeProjectionV1 = {
+      ...possessedProjection,
+      possessionTarget: { mode: "unbound" },
+      camera: {
+        entityId: possessedProjection.camera.entityId,
+        positionMetersXYZ: possessedProjection.camera.positionMetersXYZ,
+        activeCameraProfileRef:
+          possessedProjection.camera.activeCameraProfileRef,
+        activeCameraRigRef: possessedProjection.camera.activeCameraRigRef,
+        activeCameraModifierRefs:
+          possessedProjection.camera.activeCameraModifierRefs,
+        safeFallbackActive: possessedProjection.camera.safeFallbackActive,
+        viewYawOffsetRadians:
+          possessedProjection.camera.viewYawOffsetRadians,
+        viewPitchOffsetRadians:
+          possessedProjection.camera.viewPitchOffsetRadians,
+        viewDistanceOffsetMeters:
+          possessedProjection.camera.viewDistanceOffsetMeters,
+      },
+    };
+    const { adapter, runtime } = createAdapterProbe();
+    vi.spyOn(runtime, "snapshot").mockReturnValue(unboundProjection);
+
+    expect(() => activeActionForControlledSubject(unboundProjection)).toThrow(
+      "WORLDKIT_RUNTIME_CONTROL_UNBOUND",
+    );
+    expect(() => adapter.snapshot()).toThrow(
+      "WORLDKIT_RUNTIME_CONTROL_UNBOUND",
+    );
+  });
+
+  it("keeps scheduling display frames while canonical possession is unbound", async () => {
+    const possessedProjection = runtimeSnapshot();
+    const unboundProjection: BabylonRuntimeProjectionV1 = {
+      ...possessedProjection,
+      possessionTarget: { mode: "unbound" },
+      camera: {
+        entityId: possessedProjection.camera.entityId,
+        positionMetersXYZ: possessedProjection.camera.positionMetersXYZ,
+        activeCameraProfileRef:
+          possessedProjection.camera.activeCameraProfileRef,
+        activeCameraRigRef: possessedProjection.camera.activeCameraRigRef,
+        activeCameraModifierRefs:
+          possessedProjection.camera.activeCameraModifierRefs,
+        safeFallbackActive: possessedProjection.camera.safeFallbackActive,
+        viewYawOffsetRadians:
+          possessedProjection.camera.viewYawOffsetRadians,
+        viewPitchOffsetRadians:
+          possessedProjection.camera.viewPitchOffsetRadians,
+        viewDistanceOffsetMeters:
+          possessedProjection.camera.viewDistanceOffsetMeters,
+      },
+    };
+    const { adapter, runtime, requestFrame } = createAdapterProbe();
+    vi.spyOn(runtime, "snapshot").mockReturnValue(unboundProjection);
+
+    await expect(adapter.animate(17)).resolves.toBeUndefined();
+
+    expect(runtime.runFixedInput).toHaveBeenCalledWith({ actions: [], ticks: 1 });
+    expect(requestFrame).toHaveBeenCalledOnce();
+    expect(adapter.isPaused()).toBe(false);
+  });
+
   it("uses a locked ExecutionPlan V5 at the adapter boundary", () => {
     expect(LOCKED_EXECUTION_PLAN_V5).toMatchObject({
       kind: "worldkit-execution-plan",

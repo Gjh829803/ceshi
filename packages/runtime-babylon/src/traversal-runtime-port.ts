@@ -522,7 +522,7 @@ class BabylonTraversalRuntimePortV1 implements TraversalRuntimePortV1 {
       fail("TRAVERSAL_RUNTIME_NOT_CONTROLLED");
     }
     const plan = this.#host.readExecutionPlan();
-    if (plan !== this.#plan || plan.schemaVersion !== 5) {
+    if (plan !== this.#plan) {
       fail("TRAVERSAL_RUNTIME_LOCK_MISMATCH");
     }
     let currentExecutionPlanHash: string;
@@ -641,7 +641,6 @@ export function createBabylonTraversalRuntimePortV1(input: Readonly<{
     fail("TRAVERSAL_RUNTIME_NOT_CONTROLLED");
   }
   const plan = host.readExecutionPlan();
-  if (plan.schemaVersion !== 5) fail("TRAVERSAL_RUNTIME_PLAN_NOT_V5");
   const creationExecutionPlanHash = host.readCreationExecutionPlanHash();
   let currentExecutionPlanHash: `sha256:${string}`;
   try {

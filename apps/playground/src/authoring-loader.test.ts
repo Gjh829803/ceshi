@@ -315,7 +315,7 @@ describe("loadAuthoringScene", () => {
     }
   });
 
-  it("tracks physical Shift keys and maps legacy run without deriving HUD Action from velocity", () => {
+  it("tracks physical Shift keys and maps run without deriving HUD Action from velocity", () => {
     const tracker = new PhysicalKeyboardActionTracker();
     tracker.press("ShiftLeft");
     tracker.press("ShiftRight");
@@ -347,7 +347,10 @@ describe("loadAuthoringScene", () => {
       runtimeBackend: "babylon-havok",
       tick: 1,
       ready: true,
-      controlledEntityId: "player",
+      possessionTarget: {
+        mode: "possessed",
+        controlledEntityId: "player",
+      },
       subjectStatesByEntityId: {
         player: {
           entityId: "player",
@@ -392,8 +395,12 @@ describe("loadAuthoringScene", () => {
   });
 
   it("rejects obsolete Authoring V3 input before compilation", async () => {
+    const obsolete = {
+      ...createValidPackageSubjectWorld(),
+      schemaVersion: 3,
+    };
     const loaded = await loadAuthoringScene(async () =>
-      new Response(JSON.stringify(createValidPackageSubjectWorld()), {
+      new Response(JSON.stringify(obsolete), {
         status: 200,
         headers: { "content-type": "application/json" },
       }),

@@ -3,7 +3,6 @@ import { readFile } from "node:fs/promises";
 import { describe, expect, it } from "vitest";
 
 import {
-  normalizeAuthoringSpec,
   normalizeAuthoringSpecV4,
   sha256CanonicalJson,
   type AuthoringSpecV4,
@@ -105,7 +104,7 @@ function compileAuthoringSpec(options: {
   if (options.subjectDefinitionRef !== undefined) {
     subject.subjectDefinitionRef = options.subjectDefinitionRef;
   }
-  const normalized = normalizeAuthoringSpec(spec);
+  const normalized = normalizeAuthoringSpecV4(spec);
   if (
     !normalized.ok ||
     normalized.value === undefined ||
@@ -154,7 +153,7 @@ function normalizeRiggedWorld(
 ) {
   const spec = createValidRiggedPackageSubjectWorldV4();
   mutate?.(spec);
-  const normalized = normalizeAuthoringSpec(
+  const normalized = normalizeAuthoringSpecV4(
     spec,
     usePrivateRegistry
       ? { subjectResourceRegistry: registryWithPrivateAssetMetadata() }
@@ -178,7 +177,7 @@ function compileNormalizedWorld(world: NormalizedWorldIRV4) {
 }
 
 function compilePackageWorld() {
-  const normalized = normalizeAuthoringSpec(createValidPackageSubjectWorldV4());
+  const normalized = normalizeAuthoringSpecV4(createValidPackageSubjectWorldV4());
   if (
     !normalized.ok ||
     normalized.value === undefined ||
@@ -346,7 +345,7 @@ describe("compileWorld", () => {
       throw new Error("Expected the valid fixture to contain a Subject node.");
     }
     subject.subjectDefinitionRef = "worldkit://subject-definition/humanoid.g-bot@1";
-    const normalized = normalizeAuthoringSpec(spec);
+    const normalized = normalizeAuthoringSpecV4(spec);
     if (!normalized.ok || normalized.value === undefined) {
       throw new Error(`G Bot fixture did not normalize: ${JSON.stringify(normalized.diagnostics)}`);
     }
@@ -379,7 +378,7 @@ describe("compileWorld", () => {
       throw new Error("Expected the valid fixture to contain a Subject node.");
     }
     subject.subjectDefinitionRef = "worldkit://subject-definition/humanoid.g-bot@1";
-    const normalized = normalizeAuthoringSpec(spec);
+    const normalized = normalizeAuthoringSpecV4(spec);
     if (!normalized.ok || normalized.value === undefined) {
       throw new Error(`G Bot fixture did not normalize: ${JSON.stringify(normalized.diagnostics)}`);
     }
@@ -825,7 +824,7 @@ describe("compileWorld", () => {
         createValidRiggedPackageDefinition(),
       ],
     };
-    const normalized = normalizeAuthoringSpec(spec);
+    const normalized = normalizeAuthoringSpecV4(spec);
     expect(normalized.ok).toBe(true);
     expect(normalized.value?.resources.subjectAssets).toHaveLength(1);
 
@@ -995,7 +994,7 @@ describe("compileWorld", () => {
       ...spec.world,
       resourceBudget: { ...spec.world.resourceBudget, maxVertices: 100 },
     };
-    const normalized = normalizeAuthoringSpec(spec);
+    const normalized = normalizeAuthoringSpecV4(spec);
     if (
       !normalized.ok ||
       normalized.value === undefined ||
@@ -1020,7 +1019,7 @@ describe("compileWorld", () => {
   });
 
   it("rejects a normalized hash that does not match the supplied V4 IR", () => {
-    const normalized = normalizeAuthoringSpec(createValidPackageSubjectWorldV4());
+    const normalized = normalizeAuthoringSpecV4(createValidPackageSubjectWorldV4());
     if (!normalized.ok || normalized.value === undefined) {
       throw new Error("Fixture did not normalize.");
     }
@@ -1124,7 +1123,7 @@ describe("compileWorld", () => {
     water.components.water.traversalMode = "blocked";
     spawn.placement.transform.positionMetersXYZ = [25, 0, 0];
 
-    const normalized = normalizeAuthoringSpec(spec);
+    const normalized = normalizeAuthoringSpecV4(spec);
     if (!normalized.ok || normalized.value === undefined || normalized.normalizedWorldIrHash === undefined) {
       throw new Error(`Blocked-water fixture did not normalize: ${JSON.stringify(normalized.diagnostics)}`);
     }
@@ -1154,7 +1153,7 @@ describe("compileWorld", () => {
     water.components.water.depthMeters = 2;
     spawn.placement.transform.positionMetersXYZ = [37.2, 0, 0];
 
-    const normalized = normalizeAuthoringSpec(spec);
+    const normalized = normalizeAuthoringSpecV4(spec);
     if (!normalized.ok || normalized.value === undefined || normalized.normalizedWorldIrHash === undefined) {
       throw new Error(`Blocked-water edge fixture did not normalize: ${JSON.stringify(normalized.diagnostics)}`);
     }
@@ -1180,7 +1179,7 @@ describe("compileWorld", () => {
     water.components.water.traversalMode = traversalMode;
     spawn.placement.transform.positionMetersXYZ = spawnPosition;
 
-    const normalized = normalizeAuthoringSpec(spec);
+    const normalized = normalizeAuthoringSpecV4(spec);
     if (!normalized.ok || normalized.value === undefined || normalized.normalizedWorldIrHash === undefined) {
       throw new Error(`Allowed-water fixture did not normalize: ${JSON.stringify(normalized.diagnostics)}`);
     }
@@ -1202,7 +1201,7 @@ describe("compileWorld", () => {
     water.components.water.depthMeters = 2;
     spawn.placement.transform.positionMetersXYZ = [25, 0, 0];
 
-    const normalized = normalizeAuthoringSpec(spec);
+    const normalized = normalizeAuthoringSpecV4(spec);
     if (!normalized.ok || normalized.value === undefined || normalized.normalizedWorldIrHash === undefined) {
       throw new Error(`Elevated-water fixture did not normalize: ${JSON.stringify(normalized.diagnostics)}`);
     }
@@ -1226,7 +1225,7 @@ describe("compileWorld", () => {
     object.placement.transform.positionMetersXYZ = [0, 2, 30];
     spawn.placement.transform.positionMetersXYZ = [0, 0, 30];
 
-    const normalized = normalizeAuthoringSpec(spec);
+    const normalized = normalizeAuthoringSpecV4(spec);
     if (!normalized.ok || normalized.value === undefined || normalized.normalizedWorldIrHash === undefined) {
       throw new Error(`Static-blocker fixture did not normalize: ${JSON.stringify(normalized.diagnostics)}`);
     }
@@ -1267,7 +1266,7 @@ describe("compileWorld", () => {
     object.placement.transform.scaleXYZ = [4, 1, 1];
     spawn.placement.transform.positionMetersXYZ = [4.2, 0, 30];
 
-    const normalized = normalizeAuthoringSpec(spec);
+    const normalized = normalizeAuthoringSpecV4(spec);
     if (!normalized.ok || normalized.value === undefined || normalized.normalizedWorldIrHash === undefined) {
       throw new Error(`Non-uniform blocker fixture did not normalize: ${JSON.stringify(normalized.diagnostics)}`);
     }
@@ -1291,7 +1290,7 @@ describe("compileWorld", () => {
     object.placement.transform.positionMetersXYZ = [0, -2, 30];
     spawn.placement.transform.positionMetersXYZ = [0, 0, 30];
 
-    const normalized = normalizeAuthoringSpec(spec);
+    const normalized = normalizeAuthoringSpecV4(spec);
     if (!normalized.ok || normalized.value === undefined || normalized.normalizedWorldIrHash === undefined) {
       throw new Error(`Static-blocker contact fixture did not normalize: ${JSON.stringify(normalized.diagnostics)}`);
     }

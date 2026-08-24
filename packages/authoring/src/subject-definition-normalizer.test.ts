@@ -16,7 +16,7 @@ import { BUILT_IN_SUBJECT_RESOURCE_MANIFESTS } from "../../subject-registry/src/
 import type { RegistrySubjectDefinitionInputV3 } from "../../subject-registry/src/types-v3";
 
 import {
-  normalizeAuthoringSpec,
+  normalizeAuthoringSpecV4,
   normalizeSubjectDefinitionV2,
   ResourceLockBuilderV1,
   sha256CanonicalJson,
@@ -154,7 +154,7 @@ function diagnosticForRiggedWorld(
 ) {
   const world = createValidRiggedPackageSubjectWorld();
   mutateWorld?.(world);
-  const result = normalizeAuthoringSpec(world, { subjectResourceRegistry });
+  const result = normalizeAuthoringSpecV4(world, { subjectResourceRegistry });
   expect(result.ok).toBe(false);
   return result.diagnostics;
 }
@@ -205,7 +205,7 @@ describe("ResourceLockBuilderV1 canonical ordering", () => {
 
 describe("Package Subject Definition normalization", () => {
   it("normalizes and locks the complete Golden rigged graph without asset bytes", () => {
-    const result = normalizeAuthoringSpec(createValidRiggedPackageSubjectWorld());
+    const result = normalizeAuthoringSpecV4(createValidRiggedPackageSubjectWorld());
 
     expect(result.ok).toBe(true);
     expect(result.value?.resources).toMatchObject({
@@ -305,7 +305,7 @@ describe("Package Subject Definition normalization", () => {
   });
 
   it("locks the current rigged Subject Definition, Resource Lock, and Normalized IR hashes", () => {
-    const result = normalizeAuthoringSpec(createValidRiggedPackageSubjectWorld());
+    const result = normalizeAuthoringSpecV4(createValidRiggedPackageSubjectWorld());
 
     expect(result.ok).toBe(true);
     expect(packageDefinitionHash(result)).toBe(
@@ -329,7 +329,7 @@ describe("Package Subject Definition normalization", () => {
       ],
     };
 
-    const result = normalizeAuthoringSpec(world);
+    const result = normalizeAuthoringSpecV4(world);
 
     expect(result.ok).toBe(true);
     expect(result.value?.resources.subjectAssets).toHaveLength(1);
@@ -343,10 +343,10 @@ describe("Package Subject Definition normalization", () => {
   });
 
   it("keeps rigged hashes stable when Registry manifest collections are reordered", () => {
-    const forward = normalizeAuthoringSpec(createValidRiggedPackageSubjectWorld(), {
+    const forward = normalizeAuthoringSpecV4(createValidRiggedPackageSubjectWorld(), {
       subjectResourceRegistry: registryWithPermutedNewResourceCollections(false),
     });
-    const reversed = normalizeAuthoringSpec(createValidRiggedPackageSubjectWorld(), {
+    const reversed = normalizeAuthoringSpecV4(createValidRiggedPackageSubjectWorld(), {
       subjectResourceRegistry: registryWithPermutedNewResourceCollections(true),
     });
 
@@ -393,7 +393,7 @@ describe("Package Subject Definition normalization", () => {
         : resource,
     );
 
-    const result = normalizeAuthoringSpec(world, { subjectResourceRegistry });
+    const result = normalizeAuthoringSpecV4(world, { subjectResourceRegistry });
     expect(result.ok).toBe(true);
     const tables = {
       subjectAssets: result.value!.resources.subjectAssets,
@@ -526,7 +526,7 @@ describe("Package Subject Definition normalization", () => {
     ];
     const worldBefore = structuredClone(world);
 
-    const result = normalizeAuthoringSpec(world, { subjectResourceRegistry });
+    const result = normalizeAuthoringSpecV4(world, { subjectResourceRegistry });
 
     expect(result.diagnostics).toEqual([]);
     expect(result.ok).toBe(true);
@@ -987,7 +987,7 @@ describe("Package Subject Definition normalization", () => {
   });
 
   it("normalizes one Package Definition once for two Subject instances", () => {
-    const result = normalizeAuthoringSpec(createValidPackageSubjectWorld());
+    const result = normalizeAuthoringSpecV4(createValidPackageSubjectWorld());
 
     expect(result.ok).toBe(true);
     expect(result.value?.resources.subjectDefinitions).toHaveLength(2);
@@ -1018,7 +1018,7 @@ describe("Package Subject Definition normalization", () => {
   });
 
   it("assembles every Package Subject from the complete locked capability graph", () => {
-    const result = normalizeAuthoringSpec(createValidPackageSubjectWorld());
+    const result = normalizeAuthoringSpecV4(createValidPackageSubjectWorld());
     const definition = result.value?.resources.subjectDefinitions.find(
       (row) =>
         row.subjectDefinitionRef ===
@@ -1061,8 +1061,8 @@ describe("Package Subject Definition normalization", () => {
   });
 
   it("makes Definition and world hashes insensitive to order-only changes", () => {
-    const first = normalizeAuthoringSpec(createValidPackageSubjectWorld());
-    const reordered = normalizeAuthoringSpec(
+    const first = normalizeAuthoringSpecV4(createValidPackageSubjectWorld());
+    const reordered = normalizeAuthoringSpecV4(
       createValidPackageSubjectWorld({ reverseDefinitionCollections: true }),
     );
 
@@ -1073,8 +1073,8 @@ describe("Package Subject Definition normalization", () => {
   });
 
   it("changes Definition Hash for semantic geometry changes", () => {
-    const first = normalizeAuthoringSpec(createValidPackageSubjectWorld());
-    const changed = normalizeAuthoringSpec(
+    const first = normalizeAuthoringSpecV4(createValidPackageSubjectWorld());
+    const changed = normalizeAuthoringSpecV4(
       createValidPackageSubjectWorld({ bodyWidthMeters: 1.1 }),
     );
 
@@ -1084,7 +1084,7 @@ describe("Package Subject Definition normalization", () => {
   });
 
   it("emits a stable, de-duplicated Resource Lock", () => {
-    const result = normalizeAuthoringSpec(createValidPackageSubjectWorld());
+    const result = normalizeAuthoringSpecV4(createValidPackageSubjectWorld());
 
     expect(result.ok).toBe(true);
     const lock = result.value!.resources.resourceLock;
@@ -1129,7 +1129,7 @@ describe("Package Subject Definition normalization", () => {
   });
 
   it("locks the complete capability graph for the primitive R1 humanoid without a GLB", () => {
-    const result = normalizeAuthoringSpec(createValidAuthoringSpec());
+    const result = normalizeAuthoringSpecV4(createValidAuthoringSpec());
 
     expect(result.ok).toBe(true);
     const definition = result.value!.resources.subjectDefinitions.find(
@@ -1181,7 +1181,7 @@ describe("Package Subject Definition normalization", () => {
       ],
     };
 
-    expect(normalizeAuthoringSpec(spec).diagnostics).toContainEqual(
+    expect(normalizeAuthoringSpecV4(spec).diagnostics).toContainEqual(
       expect.objectContaining({
         code: "SUBJECT_DEFINITION_DUPLICATE",
         instancePath: "/resources/subjectDefinitions/1",
@@ -1201,7 +1201,7 @@ describe("Package Subject Definition normalization", () => {
         : node,
     );
 
-    expect(normalizeAuthoringSpec(spec).diagnostics).toContainEqual(
+    expect(normalizeAuthoringSpecV4(spec).diagnostics).toContainEqual(
       expect.objectContaining({
         code: "SUBJECT_DEFINITION_NOT_FOUND",
         instancePath: "/nodes/8/subjectDefinitionRef",
@@ -1226,7 +1226,7 @@ describe("Package Subject Definition normalization", () => {
       ],
     };
 
-    expect(normalizeAuthoringSpec(spec).diagnostics).toContainEqual(
+    expect(normalizeAuthoringSpecV4(spec).diagnostics).toContainEqual(
       expect.objectContaining({
         code: "SUBJECT_CAPABILITY_UNSATISFIED",
         instancePath:
@@ -1304,7 +1304,7 @@ describe("Package Subject Definition normalization", () => {
       ],
     };
 
-    expect(normalizeAuthoringSpec(spec).diagnostics).toContainEqual(
+    expect(normalizeAuthoringSpecV4(spec).diagnostics).toContainEqual(
       expect.objectContaining({
         code: "SUBJECT_SUPPORT_ORIGIN_INVALID",
         instancePath: "/resources/subjectDefinitions/0/visualParts",
@@ -1328,7 +1328,7 @@ describe("Package Subject Definition normalization", () => {
       ],
     };
 
-    expect(normalizeAuthoringSpec(spec).diagnostics).toContainEqual(
+    expect(normalizeAuthoringSpecV4(spec).diagnostics).toContainEqual(
       expect.objectContaining({
         code: "SUBJECT_COLLIDER_DERIVATION_FAILED",
         instancePath: "/resources/subjectDefinitions/0/colliderPolicy",
@@ -1348,7 +1348,7 @@ describe("Package Subject Definition normalization", () => {
     };
 
     expect(
-      normalizeAuthoringSpec(createValidPackageSubjectWorld(), {
+      normalizeAuthoringSpecV4(createValidPackageSubjectWorld(), {
         subjectResourceRegistry: conflictingRegistry,
       }).diagnostics,
     ).toContainEqual(

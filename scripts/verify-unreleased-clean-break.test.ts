@@ -140,10 +140,10 @@ describe("verify:unreleased-clean-break", () => {
           value: token(["project", "Normalized", "World", "V4", "To", "V3"]),
         }],
       }]);
-    expect(family(report, "superseded-serialized-authoring").matchesByPath)
+    expect(family(report, "superseded-serialized-contracts").matchesByPath)
       .toEqual([{
         path: "examples/old-world.json",
-        matches: [{ line: 3, value: "schemaVersion:3" }],
+        matches: [{ line: 3, value: "worldkit-authoring-spec@3" }],
       }]);
     expect(report.forbiddenMatchCount).toBe(2);
     expect(report.ok).toBe(false);
@@ -195,6 +195,129 @@ describe("verify:unreleased-clean-break", () => {
       matchCount: 2,
     });
     expect(report.forbiddenMatchCount).toBe(5);
+    expect(report.ok).toBe(false);
+  });
+
+  it("blocks superseded v3 node contracts after authoring v4 became authoritative", async () => {
+    const fixtureRoot = await mkdtemp(path.join(os.tmpdir(), "clean-break-node-v3-"));
+    cleanupPaths.push(fixtureRoot);
+    await mkdir(path.join(fixtureRoot, "packages", "authoring"), { recursive: true });
+    await writeFile(
+      path.join(fixtureRoot, "packages", "authoring", "compatibility.ts"),
+      [
+        `export type InputNode = ${token(["World", "Node", "Spec", "V3"])};`,
+        `export type NormalizedNode = ${token(["Normalized", "World", "Node", "V3"])};`,
+      ].join("\n"),
+      "utf8",
+    );
+
+    const report = await scanUnreleasedCleanBreak(fixtureRoot);
+
+    expect(family(report, "superseded-top-level-contracts")).toMatchObject({
+      classification: "superseded-delete",
+      matchCount: 2,
+    });
+    expect(report.forbiddenMatchCount).toBe(2);
+    expect(report.ok).toBe(false);
+  });
+
+  it("blocks versionless public aliases after versioned APIs became authoritative", async () => {
+    const fixtureRoot = await mkdtemp(path.join(os.tmpdir(), "clean-break-aliases-"));
+    cleanupPaths.push(fixtureRoot);
+    await mkdir(path.join(fixtureRoot, "packages", "api"), { recursive: true });
+    await writeFile(
+      path.join(fixtureRoot, "packages", "api", "index.ts"),
+      [
+        `export { ${token(["normalize", "Authoring", "Spec", "V4"])} as ${token(["normalize", "Authoring", "Spec"])} };`,
+        `export function ${token(["parse", "Authoring", "Spec", "Json"])}(source: string) { return source; }`,
+        `export function ${token(["validate", "Authoring", "Spec"])}(value: unknown) { return value; }`,
+        `export const ${token(["compile", "World"])} = ${token(["compile", "World", "V5"])};`,
+      ].join("\n"),
+      "utf8",
+    );
+
+    const report = await scanUnreleasedCleanBreak(fixtureRoot);
+
+    expect(family(report, "superseded-compatibility-mechanisms")).toMatchObject({
+      classification: "superseded-delete",
+      matchCount: 4,
+    });
+    expect(report.forbiddenMatchCount).toBe(4);
+    expect(report.ok).toBe(false);
+  });
+
+  it("blocks superseded protocol names written with spaces in active documentation", async () => {
+    const fixtureRoot = await mkdtemp(path.join(os.tmpdir(), "clean-break-active-docs-"));
+    cleanupPaths.push(fixtureRoot);
+    const quickstartPath = path.join(
+      fixtureRoot,
+      "docs",
+      "17-canonical-json-quickstart.md",
+    );
+    await mkdir(path.dirname(quickstartPath), { recursive: true });
+    await writeFile(
+      quickstartPath,
+      [
+        `${token(["Authoring", "Spec"])} V3 compiles to ${token(["Normalized", "World", "IR"])} V3.`,
+        `${token(["Execution", "Plan"])} V4 produces ${token(["Snapshot"])} V3 through ${token(["Browser", " Protocol"])} V4.`,
+      ].join("\n"),
+      "utf8",
+    );
+
+    const report = await scanUnreleasedCleanBreak(fixtureRoot);
+
+    expect(family(report, "superseded-active-documentation")).toMatchObject({
+      classification: "superseded-delete",
+      matchCount: 5,
+    });
+    expect(report.ok).toBe(false);
+  });
+
+  it("blocks a second public V4 JSON parser name and a hidden legacy camera path", async () => {
+    const fixtureRoot = await mkdtemp(path.join(os.tmpdir(), "clean-break-parser-alias-"));
+    cleanupPaths.push(fixtureRoot);
+    await mkdir(path.join(fixtureRoot, "packages", "authoring"), { recursive: true });
+    await writeFile(
+      path.join(fixtureRoot, "packages", "authoring", "parse.ts"),
+      [
+        `export function ${token(["parse", "Authoring", "Spec", "Json", "V4"])}(source: string) { return source; }`,
+        `class Camera { private ${token(["update", "Legacy"])}() {} }`,
+      ].join("\n"),
+      "utf8",
+    );
+
+    const report = await scanUnreleasedCleanBreak(fixtureRoot);
+
+    expect(family(report, "superseded-compatibility-mechanisms")).toMatchObject({
+      classification: "superseded-delete",
+      matchCount: 2,
+    });
+    expect(report.ok).toBe(false);
+  });
+
+  it("discovers nested superseded serialized contracts under generated artifacts", async () => {
+    const fixtureRoot = await mkdtemp(path.join(os.tmpdir(), "clean-break-artifacts-"));
+    cleanupPaths.push(fixtureRoot);
+    await mkdir(path.join(fixtureRoot, "artifacts", "generated"), { recursive: true });
+    await writeFile(
+      path.join(fixtureRoot, "artifacts", "generated", "bundle.json"),
+      JSON.stringify({
+        records: [
+          { kind: "worldkit-normalized-world", schemaVersion: 3 },
+          { kind: "worldkit-execution-plan", schemaVersion: 4 },
+          { kind: "worldkit-runtime-snapshot", schemaVersion: 3 },
+        ],
+      }, null, 2),
+      "utf8",
+    );
+
+    const report = await scanUnreleasedCleanBreak(fixtureRoot);
+
+    expect(family(report, "superseded-serialized-contracts")).toMatchObject({
+      classification: "superseded-delete",
+      matchCount: 3,
+    });
+    expect(report.forbiddenMatchCount).toBe(3);
     expect(report.ok).toBe(false);
   });
 });

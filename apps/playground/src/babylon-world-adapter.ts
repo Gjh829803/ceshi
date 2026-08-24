@@ -175,11 +175,14 @@ export class PhysicalKeyboardActionTracker {
 export function activeActionForControlledSubject(
   snapshot: BabylonRuntimeProjectionV1,
 ): WorldSnapshot["player"]["action"] {
-  const controlledSubject =
-    snapshot.subjectStatesByEntityId[snapshot.controlledEntityId];
+  if (snapshot.possessionTarget.mode === "unbound") {
+    throw new Error("WORLDKIT_RUNTIME_CONTROL_UNBOUND");
+  }
+  const { controlledEntityId } = snapshot.possessionTarget;
+  const controlledSubject = snapshot.subjectStatesByEntityId[controlledEntityId];
   if (controlledSubject === undefined) {
     throw new Error(
-      `WORLDKIT_RUNTIME_SNAPSHOT_CONTROL_TARGET_NOT_FOUND: ${snapshot.controlledEntityId}`,
+      `WORLDKIT_RUNTIME_SNAPSHOT_CONTROL_TARGET_NOT_FOUND: ${controlledEntityId}`,
     );
   }
   return controlledSubject.activeActionId;
@@ -701,10 +704,14 @@ export class BabylonWorldAdapter implements PlaygroundWorldAdapter {
 
   snapshot(): WorldSnapshot {
     const snapshot = this.activeRuntime().snapshot();
-    const controlledSubject = snapshot.subjectStatesByEntityId[snapshot.controlledEntityId];
+    if (snapshot.possessionTarget.mode === "unbound") {
+      throw new Error("WORLDKIT_RUNTIME_CONTROL_UNBOUND");
+    }
+    const { controlledEntityId } = snapshot.possessionTarget;
+    const controlledSubject = snapshot.subjectStatesByEntityId[controlledEntityId];
     if (controlledSubject === undefined) {
       throw new Error(
-        `WORLDKIT_RUNTIME_SNAPSHOT_CONTROL_TARGET_NOT_FOUND: ${snapshot.controlledEntityId}`,
+        `WORLDKIT_RUNTIME_SNAPSHOT_CONTROL_TARGET_NOT_FOUND: ${controlledEntityId}`,
       );
     }
     const forward = controlledSubject.forwardXYZ ?? [0, 0, -1];
@@ -863,14 +870,20 @@ export class BabylonWorldAdapter implements PlaygroundWorldAdapter {
     if (!this.paused && !this.animationPending && ticks > 0) {
       this.animationPending = true;
       try {
-        this.applyCameraActions([...this.cameraInput], ticks);
         const runtimeProjection = this.activeRuntime().snapshot();
+        const controlledEntityId = runtimeProjection.possessionTarget.mode === "possessed"
+          ? runtimeProjection.possessionTarget.controlledEntityId
+          : undefined;
+        if (!isNil(controlledEntityId)) {
+          this.applyCameraActions([...this.cameraInput], ticks);
+        }
         await this.coordinator.runFixedInput({
-          actions: this.keyboardInput.actions(
-            runtimeProjection.subjectStatesByEntityId[
-              runtimeProjection.controlledEntityId
-            ]?.activeMotionKernelRef,
-          ),
+          actions: isNil(controlledEntityId)
+            ? []
+            : this.keyboardInput.actions(
+              runtimeProjection.subjectStatesByEntityId[controlledEntityId]
+                ?.activeMotionKernelRef,
+            ),
           ticks,
         });
       } catch (error) {
@@ -954,6 +967,9 @@ export class BabylonWorldAdapter implements PlaygroundWorldAdapter {
   }
 
   private emit(): void {
+    if (this.activeRuntime().snapshot().possessionTarget.mode === "unbound") {
+      return;
+    }
     const snapshot = this.snapshot();
     for (const listener of this.listeners) listener(snapshot);
   }

@@ -87,57 +87,6 @@ export interface ViewTargetSampleV1 {
   cameraContextTags: readonly string[];
 }
 
-export const TRUSTED_DEFAULT_CONTROLLER_ID = "controller-primary" as const;
-
-export interface BindControlRequestV2 {
-  controllerId: string;
-  controlledEntityId: string;
-  expectedControlledEntityId: string;
-}
-
-export interface ControlBindingReceiptV2 {
-  kind: "worldkit-control-binding-receipt";
-  schemaVersion: 2;
-  status: "committed" | "rejected";
-  controllerId: string;
-  previousControlledEntityId: string;
-  controlledEntityId: string;
-  diagnostic?: {
-    code:
-      | "CONTROL_BINDING_STALE"
-      | "CONTROL_CONTROLLER_NOT_FOUND"
-      | "CONTROL_TARGET_NOT_FOUND";
-    message: string;
-  };
-}
-
-export interface ControllerRuntimeStateV3 {
-  id: string;
-  controlledEntityId: string;
-}
-
-export interface SubjectRuntimeStateV3 {
-  entityId: string;
-  subjectDefinitionRef: string;
-  subjectDefinitionHash: string;
-  positionMetersXYZ: Vec3;
-  velocityMetersPerSecondXYZ: Vec3;
-  movementMedium: PublishedMovementMediumV1;
-  activeActionId: string;
-  forwardXYZ?: Vec3;
-  speedMetersPerSecond?: number;
-  activeControlFeelProfileRef?: string;
-  activePhysicsBodyProfileRef?: string;
-  activeLocomotionProfileRef?: string;
-  locomotionMode?: LocomotionModeV1;
-  activeMotionProfileRef?: string;
-  activeMotionKernelRef?: string;
-  motionTags?: readonly string[];
-  relationshipRole?: "none" | "rider" | "driver" | "passenger" | "tethered";
-  safeFallbackActive?: boolean;
-  motionFailureCode?: string;
-}
-
 export interface ApplySubjectPresetTuningRequestV1 {
   subjectEntityId: string;
   expectedSubjectDefinitionRef: string;
@@ -151,35 +100,6 @@ export interface SubjectPresetTuningReceiptV1 {
   status: "committed" | "rejected";
   diagnostic?: { code: string; message: string };
   snapshot: WorldRuntimeSnapshotV4;
-}
-
-export interface WorldRuntimeSnapshotV3 {
-  kind: "worldkit-runtime-snapshot";
-  schemaVersion: 3;
-  runtimeBackend: "babylon-havok";
-  tick: number;
-  ready: boolean;
-  controlledEntityId: string;
-  controllersById: Readonly<Record<string, ControllerRuntimeStateV3>>;
-  subjectStatesByEntityId: Readonly<Record<string, SubjectRuntimeStateV3>>;
-  camera: {
-    entityId: string;
-    targetEntityId: string;
-    positionMetersXYZ: Vec3;
-    activeCameraProfileRef?: string;
-    activeCameraRigRef?: string;
-    activeCameraModifierRefs?: readonly string[];
-    safeFallbackActive?: boolean;
-    viewYawOffsetRadians?: number;
-    viewPitchOffsetRadians?: number;
-    viewDistanceOffsetMeters?: number;
-  };
-  physics: { backend: "havok"; ready: boolean; fixedTimeStepSeconds: number };
-  resources: {
-    meshes: number;
-    bodies: number;
-    terrainSamples: number;
-  };
 }
 
 export type WorldRuntimeCameraStateV4 =

@@ -6,7 +6,7 @@ import type {
   NormalizedSubjectDefinitionV2,
   NormalizedWorldIRV4,
   NormalizedLayoutAssertionV1,
-  NormalizedWorldNodeV3,
+  NormalizedWorldNodeV4,
   NormalizedSubjectSocketV2,
   NormalizedSubjectVisualPartV2,
   PrimitivePrototypeSpecV2,
@@ -198,12 +198,12 @@ export function sampleTerrainHeight(
   )!.heightMeters;
 }
 
-function findOnlyNodeV3<K extends NormalizedWorldNodeV3["kind"]>(
-  nodes: readonly NormalizedWorldNodeV3[],
+function findOnlyNodeV4<K extends NormalizedWorldNodeV4["kind"]>(
+  nodes: readonly NormalizedWorldNodeV4[],
   kind: K,
-): Extract<NormalizedWorldNodeV3, { kind: K }> {
+): Extract<NormalizedWorldNodeV4, { kind: K }> {
   const node = nodes.find(
-    (candidate): candidate is Extract<NormalizedWorldNodeV3, { kind: K }> =>
+    (candidate): candidate is Extract<NormalizedWorldNodeV4, { kind: K }> =>
       candidate.kind === kind,
   );
   if (node === undefined) {
@@ -213,7 +213,7 @@ function findOnlyNodeV3<K extends NormalizedWorldNodeV3["kind"]>(
 }
 
 function compileTerrainV3(world: NormalizedWorldCompileView): ExecutionTerrainV3 {
-  const node = findOnlyNodeV3(world.nodes, "terrain");
+  const node = findOnlyNodeV4(world.nodes, "terrain");
   const terrain = node.components.terrain;
   const source = terrain.source;
   const [columns, rows] = terrain.grid.resolutionCellsXZ;
@@ -290,7 +290,7 @@ function compileWatersV3(
 ): ExecutionWaterV3[] {
   return world.nodes
     .filter(
-      (node): node is Extract<NormalizedWorldNodeV3, { kind: "water" }> =>
+      (node): node is Extract<NormalizedWorldNodeV4, { kind: "water" }> =>
         node.kind === "water",
     )
     .map((node) => {
@@ -339,7 +339,7 @@ function compileObjectsV3(world: NormalizedWorldCompileView): ExecutionObjectV3[
   );
   return world.nodes
     .filter(
-      (node): node is Extract<NormalizedWorldNodeV3, { kind: "object" }> =>
+      (node): node is Extract<NormalizedWorldNodeV4, { kind: "object" }> =>
         node.kind === "object",
     )
     .map((node) => {
@@ -889,7 +889,7 @@ function compileSubjectsV3(
   const anchorsByEntityId = new Map(
     world.nodes
       .filter(
-        (node): node is Extract<NormalizedWorldNodeV3, { kind: "anchor" }> =>
+        (node): node is Extract<NormalizedWorldNodeV4, { kind: "anchor" }> =>
           node.kind === "anchor",
       )
       .map((anchor) => [anchor.id, anchor]),
@@ -902,7 +902,7 @@ function compileSubjectsV3(
 
   const subjects = world.nodes
     .filter(
-      (node): node is Extract<NormalizedWorldNodeV3, { kind: "subject" }> =>
+      (node): node is Extract<NormalizedWorldNodeV4, { kind: "subject" }> =>
         node.kind === "subject",
     )
     .sort((left, right) => left.id.localeCompare(right.id))
@@ -1208,7 +1208,7 @@ function compileWorldCore(input: CompileWorldCoreInput): CompileWorldCoreResult 
     if (spawnDiagnostics.length > 0) {
       return { ok: false, diagnostics: spawnDiagnostics };
     }
-    const cameraNode = findOnlyNodeV3(world.nodes, "camera");
+    const cameraNode = findOnlyNodeV4(world.nodes, "camera");
     const terrainVertices =
       terrain.resolutionCellsXZ[0] * terrain.resolutionCellsXZ[1];
     const terrainTriangles =
@@ -2038,5 +2038,3 @@ export function compileWorldV5(input: CompileWorldInputV5): CompileWorldResultV5
     };
   }
 }
-
-export const compileWorld = compileWorldV5;

@@ -10,11 +10,9 @@ import { MeshBuilder } from "@babylonjs/core/Meshes/meshBuilder.js";
 import { VertexData } from "@babylonjs/core/Meshes/mesh.vertexData.js";
 import { PhysicsAggregate } from "@babylonjs/core/Physics/v2/physicsAggregate.js";
 import {
-  PhysicsShapeHeightField,
   PhysicsShapeMesh,
   type PhysicsShape,
 } from "@babylonjs/core/Physics/v2/physicsShape.js";
-import { PhysicsShapeType } from "@babylonjs/core/Physics/v2/IPhysicsEnginePlugin.js";
 import type { PhysicsEngine } from "@babylonjs/core/Physics/v2/physicsEngine.js";
 import { Scene } from "@babylonjs/core/scene.pure.js";
 import { CONTROL_CAPTURE_PASS_IDS_V1 } from "@whitebox-world/control-capture";
@@ -25,18 +23,14 @@ import type {
 import type {
   ApplyCameraPreviewRequestV1,
   ApplySubjectPresetTuningRequestV1,
-  BindControlRequestV2,
   CameraPreviewStateV1,
   CameraViewInputV1,
   ControlCaptureCapabilitiesV1,
   ControlCaptureRequestV1,
   ControlInputAxesV2,
-  ControlBindingReceiptV2,
-  ExecutionControlProfileV1,
   ExecutionObjectV3,
   ExecutionLayoutAssertionV1,
   ExecutionLayoutPlacementV1,
-  ExecutionPlanV4,
   ExecutionPlanV5,
   ExecutionStaticColliderV1,
   ExecutionWaterBoundaryV3,
@@ -50,17 +44,13 @@ import type {
   Vec2,
   Vec3,
   ViewTargetSampleV1,
-  WorldRuntimeSnapshotV3,
 } from "@whitebox-world/runtime-contracts";
-import { TRUSTED_DEFAULT_CONTROLLER_ID } from "@whitebox-world/runtime-contracts";
 import { sha256CanonicalJson } from "@whitebox-world/protocol";
 import { resolveGroundHumanoidAction } from "@whitebox-world/subject-actions";
 import {
   emitStaticColliderTriangleMeshV1,
   emitTransformedStaticColliderTriangleMeshV1,
   queryStaticColliderTriangleMeshSupportHeightMetersV1,
-  queryLockedColliderSupportHeightMeters,
-  type LockedSupportColliderV1,
 } from "@whitebox-world/terrain-surface";
 import { isNil } from "lodash-es";
 
@@ -80,7 +70,6 @@ import { createSubjectVisual, type SubjectVisual } from "./subject-visual";
 import {
   createTerrainMesh,
   sampleExecutionTerrainHeight,
-  toBabylonHeightfieldData,
 } from "./terrain";
 import {
   captureBabylonControlFrameV1,
@@ -97,6 +86,7 @@ import {
   type BabylonTraversalRuntimeInternalV1,
   type StaticCollisionMeshEntryV1,
 } from "./traversal-runtime-internal";
+import type { BabylonRuntimeProjectionV1 } from "./runtime-projection";
 
 function canonicalizeSignedZero(value: number): number {
   return Object.is(value, -0) ? 0 : value;
@@ -112,7 +102,7 @@ export type BabylonWorldRuntimeInitializationStageV1 =
   | "ready";
 
 export interface BabylonWorldRuntimeOptions {
-  executionPlan: ExecutionPlanV4 | ExecutionPlanV5;
+  executionPlan: ExecutionPlanV5;
   runtimeSessionId?: string;
   canvas?: HTMLCanvasElement;
   engineFactory?: () => AbstractEngine;
@@ -124,8 +114,6 @@ export interface BabylonWorldRuntimeOptions {
   onInitializationStage?(stage: BabylonWorldRuntimeInitializationStageV1): void;
 }
 
-type RuntimeExecutionPlanV1 = ExecutionPlanV4 | ExecutionPlanV5;
-
 type OwnedDisposer = () => void | Promise<void>;
 
 interface BabylonGameplayPublishedStateV1 {
@@ -135,32 +123,9 @@ interface BabylonGameplayPublishedStateV1 {
   >;
 }
 
-const UNBOUND_GAMEPLAY_STATE: BabylonGameplayPublishedStateV1 = Object.freeze({
-  possessionTarget: Object.freeze({ mode: "unbound" }),
-  viewProjection: Object.freeze({ viewStateRevision: 0 }),
-});
-
-function initialRuntimeControlledEntityId(
-  executionPlan: RuntimeExecutionPlanV1,
-): string {
-  if (executionPlan.schemaVersion === 5) {
-    // G19-4 bridge only: this seeds the legacy runtime until G19-5 Possession
-    // owns committed control. It is not a second public control truth.
-    return executionPlan.initialControlledEntityId;
-  }
-  return executionPlan.controlledEntityId;
-}
-
 const WATER_SURFACE_CLASSIFICATION_EPSILON_METERS = 0.1;
-const LEGACY_CAMERA_RELATIVE_CONTROL_PROFILE = {
-  resourceRef: "worldkit://control-profile/legacy.camera-relative@1",
-  contentHash: "sha256:legacy-control-profile",
-  commandKind: "planar-vector",
-  inputSpace: "camera-relative",
-  facingPolicy: "align-to-move",
-  lateralMovementPolicy: "allowed",
-  moveDeadzoneRatio: 0,
-} as const satisfies ExecutionControlProfileV1;
+const EMPTY_INPUT_ACTIONS: readonly SemanticInputActionV1[] = Object.freeze([]);
+const EMPTY_INPUT_AXES: Readonly<ControlInputAxesV2> = Object.freeze({});
 
 class WorldRuntimeDisposeErrorV1 extends Error {
   readonly name = "WorldRuntimeDisposeErrorV1";
@@ -193,7 +158,7 @@ interface RuntimeLayoutBoundsV1 {
 }
 
 function runtimeLayoutBounds(
-  executionPlan: RuntimeExecutionPlanV1,
+  executionPlan: ExecutionPlanV5,
   placement: ExecutionLayoutPlacementV1,
 ): RuntimeLayoutBoundsV1 {
   const object = executionPlan.objects.find((row) => row.entityId === placement.entityId);
@@ -268,63 +233,8 @@ function runtimeAabbsOverlap(
   );
 }
 
-/**
- * Derives the locked support collider for a placed object from its execution
- * primitive and frozen placement transform. Kinds or transforms the locked
- * collider cannot represent throw OBJECT_SUPPORT_SURFACE_QUERY_UNSUPPORTED;
- * the AABB top is never a fallback support surface.
- */
-function lockedSupportColliderForPlacement(
-  executionPlan: RuntimeExecutionPlanV1,
-  placement: ExecutionLayoutPlacementV1,
-): LockedSupportColliderV1 {
-  const object = executionPlan.objects.find((row) => row.entityId === placement.entityId);
-  if (object === undefined) {
-    throw new Error(
-      `OBJECT_SUPPORT_SURFACE_QUERY_UNSUPPORTED: Supporting entity "${placement.entityId}" has no locked object collider.`,
-    );
-  }
-  const { positionMetersXYZ, rotationEulerRadiansXYZ, scaleXYZ } = placement.transform;
-  const primitive = object.primitive;
-  if (primitive.kind === "box") {
-    return {
-      kind: "box",
-      centerMetersXYZ: positionMetersXYZ,
-      halfExtentsMetersXYZ: [
-        (primitive.sizeMetersXYZ[0] / 2) * scaleXYZ[0],
-        (primitive.sizeMetersXYZ[1] / 2) * scaleXYZ[1],
-        (primitive.sizeMetersXYZ[2] / 2) * scaleXYZ[2],
-      ],
-      rotationEulerRadiansXYZ,
-    };
-  }
-  if (primitive.kind === "sphere" && scaleXYZ[0] === scaleXYZ[1] && scaleXYZ[1] === scaleXYZ[2]) {
-    return {
-      kind: "sphere",
-      centerMetersXYZ: positionMetersXYZ,
-      radiusMeters: primitive.radiusMeters * scaleXYZ[0],
-    };
-  }
-  if (
-    primitive.kind === "cylinder" &&
-    scaleXYZ[0] === scaleXYZ[2] &&
-    rotationEulerRadiansXYZ[0] === 0 &&
-    rotationEulerRadiansXYZ[2] === 0
-  ) {
-    return {
-      kind: "cylinder",
-      centerMetersXYZ: positionMetersXYZ,
-      radiusMeters: primitive.radiusMeters * scaleXYZ[0],
-      heightMeters: primitive.heightMeters * scaleXYZ[1],
-    };
-  }
-  throw new Error(
-    `OBJECT_SUPPORT_SURFACE_QUERY_UNSUPPORTED: Object "${object.entityId}" primitive kind "${primitive.kind}" with this transform has no locked support collider.`,
-  );
-}
-
 function revalidateSupportAssertion(
-  executionPlan: RuntimeExecutionPlanV1,
+  executionPlan: ExecutionPlanV5,
   assertion: Extract<ExecutionLayoutAssertionV1, { kind: "supported-by" }>,
   boundsByEntityId: Readonly<Record<string, RuntimeLayoutBoundsV1>>,
 ): boolean {
@@ -342,54 +252,36 @@ function revalidateSupportAssertion(
     return Math.max(...gaps) <= assertion.maximumSupportGapMeters + supportGapTolerance &&
       passing / gaps.length + 0.000001 >= assertion.minimumSupportRatio;
   }
-  if (executionPlan.schemaVersion === 5) {
-    const colliderMeshes = executionPlan.staticColliders
-      .filter((collider) => collider.entityId === assertion.supportingEntityId)
-      .map((collider) => emitTransformedStaticColliderTriangleMeshV1(
-        collider.shape,
-        collider.transform,
-      ));
-    if (colliderMeshes.length === 0) return false;
-    const samples = runtimeSupportSamples(supported);
-    const gaps: number[] = [];
-    for (const point of samples) {
-      const supportHeightsMeters = colliderMeshes
-        .map((mesh) =>
-          queryStaticColliderTriangleMeshSupportHeightMetersV1(mesh, point)
-        )
-        .filter((heightMeters): heightMeters is number => !isNil(heightMeters));
-      if (supportHeightsMeters.length === 0) continue;
-      gaps.push(Math.abs(bottom - Math.max(...supportHeightsMeters)));
-    }
-    if (gaps.length === 0) return false;
-    const passing = gaps.filter((gap) =>
-      gap <= assertion.maximumSupportGapMeters + supportGapTolerance
-    ).length;
-    return Math.max(...gaps) <=
-        assertion.maximumSupportGapMeters + supportGapTolerance &&
-      passing / samples.length + 0.000001 >= assertion.minimumSupportRatio;
-  }
-  const supportingPlacement =
-    executionPlan.layout.placementsByEntityId[assertion.supportingEntityId];
-  if (supportingPlacement === undefined) return false;
-  const collider = lockedSupportColliderForPlacement(executionPlan, supportingPlacement);
+  const colliderMeshes = executionPlan.staticColliders
+    .filter((collider) => collider.entityId === assertion.supportingEntityId)
+    .map((collider) => emitTransformedStaticColliderTriangleMeshV1(
+      collider.shape,
+      collider.transform,
+    ));
+  if (colliderMeshes.length === 0) return false;
   const samples = runtimeSupportSamples(supported);
   const gaps: number[] = [];
   for (const point of samples) {
-    const heightMeters = queryLockedColliderSupportHeightMeters(collider, point);
-    if (heightMeters !== undefined) gaps.push(Math.abs(bottom - heightMeters));
+    const supportHeightsMeters = colliderMeshes
+      .map((mesh) =>
+        queryStaticColliderTriangleMeshSupportHeightMetersV1(mesh, point)
+      )
+      .filter((heightMeters): heightMeters is number => !isNil(heightMeters));
+    if (supportHeightsMeters.length === 0) continue;
+    gaps.push(Math.abs(bottom - Math.max(...supportHeightsMeters)));
   }
   if (gaps.length === 0) return false;
   const passing = gaps.filter((gap) =>
     gap <= assertion.maximumSupportGapMeters + supportGapTolerance
   ).length;
-  return Math.max(...gaps) <= assertion.maximumSupportGapMeters + supportGapTolerance &&
+  return Math.max(...gaps) <=
+      assertion.maximumSupportGapMeters + supportGapTolerance &&
     passing / samples.length + 0.000001 >= assertion.minimumSupportRatio;
 }
 
 function revalidateClearanceAssertion(
   assertion: Extract<ExecutionLayoutAssertionV1, { kind: "minimum-clearance" }>,
-  executionPlan: RuntimeExecutionPlanV1,
+  executionPlan: ExecutionPlanV5,
   boundsByEntityId: Readonly<Record<string, RuntimeLayoutBoundsV1>>,
 ): boolean {
   const entity = boundsByEntityId[assertion.entityId];
@@ -406,7 +298,7 @@ function revalidateClearanceAssertion(
   return minimumClearance + (assertion.tolerances.overlapMeters ?? 0) >= assertion.clearanceMeters;
 }
 
-function revalidateRuntimeLayoutAssertions(executionPlan: RuntimeExecutionPlanV1): void {
+function revalidateRuntimeLayoutAssertions(executionPlan: ExecutionPlanV5): void {
   const placements = Object.values(executionPlan.layout.placementsByEntityId);
   const boundsByEntityId = Object.fromEntries(placements.map((placement) => [
     placement.entityId,
@@ -572,7 +464,7 @@ function containsPoint(boundary: ExecutionWaterBoundaryV3, x: number, z: number)
 }
 
 function waterSurfaceHeightAtSubjectOrigin(
-  executionPlan: RuntimeExecutionPlanV1,
+  executionPlan: ExecutionPlanV5,
   subjectOrigin: Vector3,
 ): number | undefined {
   return executionPlan.waters.find((water) =>
@@ -586,7 +478,7 @@ function waterSurfaceHeightAtSubjectOrigin(
 
 function configureAtmosphere(
   scene: Scene,
-  preset: RuntimeExecutionPlanV1["atmospherePreset"],
+  preset: ExecutionPlanV5["atmospherePreset"],
 ): void {
   const colors = {
     "clear-day": new Color4(0.55, 0.78, 0.92, 1),
@@ -623,7 +515,7 @@ export interface BabylonSubjectPresetTuningReceiptV1 extends Omit<
   SubjectPresetTuningReceiptV1,
   "snapshot"
 > {
-  readonly snapshot: WorldRuntimeSnapshotV3;
+  readonly snapshot: BabylonRuntimeProjectionV1;
 }
 
 export class BabylonWorldRuntime {
@@ -634,7 +526,7 @@ export class BabylonWorldRuntime {
   private renderFrameIndex = 0;
   private disposed = false;
   private latestRenderReadyReceipt: RenderReadyReceiptV1 | undefined;
-  private controlledEntityId: string;
+  private appliedCameraViewStateRevision = 0;
   private traversalConfigurationEpoch = 0;
   private readonly aggregates: PhysicsAggregate[] = [];
   private readonly ownedTerrainShape: PhysicsShape;
@@ -649,11 +541,11 @@ export class BabylonWorldRuntime {
   private readonly ownedDisposers: readonly OwnedDisposer[];
   private activeInputActions: readonly SemanticInputActionV1[] = [];
   private activeInputAxes: Readonly<ControlInputAxesV2> = {};
-  private gameplayPublishedState = UNBOUND_GAMEPLAY_STATE;
+  private gameplayPublishedState: BabylonGameplayPublishedStateV1;
   readonly #creationExecutionPlanHash: `sha256:${string}` | undefined;
 
   private constructor(
-    private readonly executionPlan: RuntimeExecutionPlanV1,
+    private readonly executionPlan: ExecutionPlanV5,
     private readonly runtimeSessionId: string,
     private readonly engine: AbstractEngine,
     private readonly scene: Scene,
@@ -667,7 +559,10 @@ export class BabylonWorldRuntime {
     autoStartRenderLoop: boolean,
     creationExecutionPlanHash: `sha256:${string}` | undefined,
   ) {
-    this.controlledEntityId = initialRuntimeControlledEntityId(executionPlan);
+    this.gameplayPublishedState = Object.freeze({
+      possessionTarget: Object.freeze({ mode: "unbound" }),
+      viewProjection: Object.freeze({ viewStateRevision: 0 }),
+    });
     this.subjectControllersByEntityId = subjectControllersByEntityId;
     this.subjectVisuals = subjectVisuals;
     this.subjectVisualsByEntityId = new Map(
@@ -690,33 +585,42 @@ export class BabylonWorldRuntime {
   }
 
   static async create(options: BabylonWorldRuntimeOptions): Promise<BabylonWorldRuntime> {
+    if ((options.executionPlan as { schemaVersion?: unknown }).schemaVersion !== 5) {
+      throw new Error(
+        "WORLDKIT_RUNTIME_EXECUTION_PLAN_V5_REQUIRED: Babylon Runtime requires ExecutionPlanV5.",
+      );
+    }
     if (options.executionPlan.runtimeBackend !== "babylon-havok") {
       throw new Error(`WORLDKIT_RUNTIME_BACKEND_UNSUPPORTED: ${options.executionPlan.runtimeBackend as string}`);
-    }
-    if (options.engineFactory === undefined && options.canvas === undefined) {
-      throw new TypeError("BabylonWorldRuntime requires canvas or engineFactory.");
     }
     if (options.executionPlan.subjects.length === 0) {
       throw new Error("WORLDKIT_RUNTIME_SUBJECTS_EMPTY");
     }
     const subjectEntityIds = new Set<string>();
     for (const subject of options.executionPlan.subjects) {
+      if (subject.capabilityAssembly === undefined) {
+        throw new Error(
+          `WORLDKIT_RUNTIME_CAPABILITY_ASSEMBLY_REQUIRED: ${subject.entityId}`,
+        );
+      }
       if (subjectEntityIds.has(subject.entityId)) {
         throw new Error(`WORLDKIT_RUNTIME_SUBJECT_DUPLICATE: ${subject.entityId}`);
       }
       subjectEntityIds.add(subject.entityId);
     }
-    const initialControlledEntityId = initialRuntimeControlledEntityId(
-      options.executionPlan,
-    );
+    if (options.engineFactory === undefined && options.canvas === undefined) {
+      throw new TypeError("BabylonWorldRuntime requires canvas or engineFactory.");
+    }
+    const initialControlledEntityId =
+      options.executionPlan.initialControlledEntityId;
     if (!subjectEntityIds.has(initialControlledEntityId)) {
       throw new Error(
         `WORLDKIT_RUNTIME_CONTROL_TARGET_NOT_FOUND: ${initialControlledEntityId}`,
       );
     }
-    const creationExecutionPlanHash = options.executionPlan.schemaVersion === 5
-      ? sha256CanonicalJson(options.executionPlan) as `sha256:${string}`
-      : undefined;
+    const creationExecutionPlanHash = sha256CanonicalJson(
+      options.executionPlan,
+    ) as `sha256:${string}`;
     const ownedDisposers: OwnedDisposer[] = [];
     options.onInitializationStage?.("engine");
     const engine = options.engineFactory?.() ?? new Engine(options.canvas!, true, { preserveDrawingBuffer: true, stencil: true });
@@ -737,20 +641,7 @@ export class BabylonWorldRuntime {
       const materials = createWhiteboxMaterials(scene);
 
       const terrainMesh = createTerrainMesh(options.executionPlan.terrain, materials.terrain, scene);
-      const terrain = options.executionPlan.terrain;
-      const [terrainColumns, terrainRows] = terrain.resolutionCellsXZ;
-      const terrainShape: PhysicsShape = options.executionPlan.schemaVersion === 5
-        ? new PhysicsShapeMesh(terrainMesh, scene)
-        : terrainColumns === terrainRows
-        ? new PhysicsShapeHeightField(
-            terrain.sizeMetersXZ[0],
-            terrain.sizeMetersXZ[1],
-            terrainColumns,
-            terrainRows,
-            toBabylonHeightfieldData(terrain),
-            scene,
-          )
-        : new PhysicsShapeMesh(terrainMesh, scene);
+      const terrainShape: PhysicsShape = new PhysicsShapeMesh(terrainMesh, scene);
       const aggregates: PhysicsAggregate[] = [];
       ownedDisposers.push(() => terrainShape.dispose());
       const terrainAggregate = new PhysicsAggregate(
@@ -764,39 +655,22 @@ export class BabylonWorldRuntime {
 
       for (const water of options.executionPlan.waters) createWaterMesh(water, materials, scene);
       for (const object of options.executionPlan.objects) {
-        const mesh = createObjectMesh(object, materials, scene);
-        if (options.executionPlan.schemaVersion === 4 && object.collisionEnabled) {
-          const shapeType = object.primitive.kind === "box"
-            ? PhysicsShapeType.BOX
-            : object.primitive.kind === "sphere"
-              ? PhysicsShapeType.SPHERE
-              : PhysicsShapeType.CYLINDER;
-          const aggregate = new PhysicsAggregate(
-            mesh,
-            shapeType,
-            { mass: 0, friction: 0.75, restitution: 0 },
-            scene,
-          );
-          aggregates.push(aggregate);
-          ownedDisposers.push(() => aggregate.dispose());
-        }
+        createObjectMesh(object, materials, scene);
       }
       const staticCollisionMeshes: StaticCollisionMeshEntryV1[] = [];
-      if (options.executionPlan.schemaVersion === 5) {
-        for (const collider of options.executionPlan.staticColliders) {
-          const mesh = createStaticCollisionMesh(collider, scene);
-          const shape = new PhysicsShapeMesh(mesh, scene);
-          ownedDisposers.push(() => shape.dispose());
-          const aggregate = new PhysicsAggregate(
-            mesh,
-            shape,
-            { mass: 0, friction: 0.75, restitution: 0 },
-            scene,
-          );
-          aggregates.push(aggregate);
-          staticCollisionMeshes.push({ collider, mesh });
-          ownedDisposers.push(() => aggregate.dispose());
-        }
+      for (const collider of options.executionPlan.staticColliders) {
+        const mesh = createStaticCollisionMesh(collider, scene);
+        const shape = new PhysicsShapeMesh(mesh, scene);
+        ownedDisposers.push(() => shape.dispose());
+        const aggregate = new PhysicsAggregate(
+          mesh,
+          shape,
+          { mass: 0, friction: 0.75, restitution: 0 },
+          scene,
+        );
+        aggregates.push(aggregate);
+        staticCollisionMeshes.push({ collider, mesh });
+        ownedDisposers.push(() => aggregate.dispose());
       }
 
       revalidateRuntimeLayoutAssertions(options.executionPlan);
@@ -868,99 +742,24 @@ export class BabylonWorldRuntime {
     }
   }
 
-  bindControl(request: BindControlRequestV2): ControlBindingReceiptV2 {
-    this.assertUsable();
-    const previousControlledEntityId = this.controlledEntityId;
-    if (request.controllerId !== TRUSTED_DEFAULT_CONTROLLER_ID) {
-      return {
-        kind: "worldkit-control-binding-receipt",
-        schemaVersion: 2,
-        status: "rejected",
-        controllerId: request.controllerId,
-        previousControlledEntityId,
-        controlledEntityId: this.controlledEntityId,
-        diagnostic: {
-          code: "CONTROL_CONTROLLER_NOT_FOUND",
-          message: `Controller '${request.controllerId}' does not exist.`,
-        },
-      };
-    }
-    if (!this.subjectControllersByEntityId.has(request.controlledEntityId)) {
-      return {
-        kind: "worldkit-control-binding-receipt",
-        schemaVersion: 2,
-        status: "rejected",
-        controllerId: request.controllerId,
-        previousControlledEntityId,
-        controlledEntityId: this.controlledEntityId,
-        diagnostic: {
-          code: "CONTROL_TARGET_NOT_FOUND",
-          message: `Subject '${request.controlledEntityId}' does not exist.`,
-        },
-      };
-    }
-    if (request.expectedControlledEntityId !== this.controlledEntityId) {
-      return {
-        kind: "worldkit-control-binding-receipt",
-        schemaVersion: 2,
-        status: "rejected",
-        controllerId: request.controllerId,
-        previousControlledEntityId,
-        controlledEntityId: this.controlledEntityId,
-        diagnostic: {
-          code: "CONTROL_BINDING_STALE",
-          message: `Controller '${request.controllerId}' controls '${this.controlledEntityId}', not '${request.expectedControlledEntityId}'.`,
-        },
-      };
-    }
-    if (request.controlledEntityId === this.controlledEntityId) {
-      return {
-        kind: "worldkit-control-binding-receipt",
-        schemaVersion: 2,
-        status: "committed",
-        controllerId: request.controllerId,
-        previousControlledEntityId,
-        controlledEntityId: this.controlledEntityId,
-      };
-    }
-
-    const previousController = this.controllerFor(this.controlledEntityId);
-    previousController.stop();
-    previousController.clearRetainedCharacterSupportSample();
-    this.visualFor(this.controlledEntityId).stepAnimation(this.tick, "idle");
-    this.controlledEntityId = request.controlledEntityId;
-    this.activeInputActions = [];
-    this.activeInputAxes = {};
-    this.controllerFor(this.controlledEntityId)
-      .clearRetainedCharacterSupportSample();
-    this.traversalConfigurationEpoch += 1;
-    this.latestRenderReadyReceipt = undefined;
-    this.cameraDirector.reset();
-    this.updateCamera();
-    return {
-      kind: "worldkit-control-binding-receipt",
-      schemaVersion: 2,
-      status: "committed",
-      controllerId: request.controllerId,
-      previousControlledEntityId,
-      controlledEntityId: this.controlledEntityId,
-    };
-  }
-
-  async runFixedInput(input: FixedInputV1): Promise<WorldRuntimeSnapshotV3> {
+  async runFixedInput(input: FixedInputV1): Promise<BabylonRuntimeProjectionV1> {
     this.assertUsable();
     if (!Number.isSafeInteger(input.ticks) || input.ticks < 0 || input.ticks > 36_000) {
       throw new RangeError("Fixed input ticks must be an integer from 0 through 36000.");
     }
     if (input.ticks > 0) this.latestRenderReadyReceipt = undefined;
     for (let index = 0; index < input.ticks; index += 1) {
-      this.activeInputActions = [...input.actions];
-      this.activeInputAxes = input.axes === undefined ? {} : { ...input.axes };
+      const controlledEntityId = this.controlledEntityId();
+      const targetIsBound = controlledEntityId !== undefined;
+      this.activeInputActions = targetIsBound ? [...input.actions] : [];
+      this.activeInputAxes = targetIsBound && input.axes !== undefined
+        ? { ...input.axes }
+        : {};
       this.cameraDirector.setInputActions(this.activeInputActions);
       const viewControlFrame = this.cameraDirector.controlFrame(this.tick);
       for (const subject of this.executionPlan.subjects) {
         const controller = this.controllerFor(subject.entityId);
-        const controlled = subject.entityId === this.controlledEntityId;
+        const controlled = subject.entityId === controlledEntityId;
         if (controlled || controller.movementMedium !== "ground") {
           controller.step(
             controlled ? input.actions : [],
@@ -968,14 +767,16 @@ export class BabylonWorldRuntime {
             controlled ? input.axes : undefined,
           );
         } else {
-          // Uncontrolled grounded subjects are not simulated with input or
-          // gravity, but they still appear in the Snapshot, so they receive
-          // one support query and resolver publish per fixed tick.
+          // A possession publication only swaps prebuilt authority state. The
+          // next fixed Tick consumes that state as neutral input for every
+          // uncontrolled grounded Subject before physics advances.
+          controller.stop();
           controller.publishSupport();
         }
       }
       this.commitFixedTick(
-        input.actions.includes("run") || input.actions.includes("boost"),
+        targetIsBound &&
+          (input.actions.includes("run") || input.actions.includes("boost")),
       );
     }
     return this.snapshot();
@@ -985,7 +786,7 @@ export class BabylonWorldRuntime {
     return {
       readExecutionPlan: () => this.executionPlan,
       readCreationExecutionPlanHash: () => this.#creationExecutionPlanHash,
-      readControlledEntityId: () => this.controlledEntityId,
+      readControlledEntityId: () => this.controlledEntityId(),
       readConfigurationEpoch: () => this.traversalConfigurationEpoch,
       readTick: () => this.tick,
       isDisposed: () => this.disposed,
@@ -999,11 +800,6 @@ export class BabylonWorldRuntime {
 
   [BABYLON_GAMEPLAY_RUNTIME_INTERNAL](): BabylonGameplayRuntimeInternalV1 {
     const executionPlan = this.executionPlan;
-    if (executionPlan.schemaVersion !== 5) {
-      throw new Error(
-        "WORLDKIT_GAMEPLAY_EXECUTION_PLAN_V5_REQUIRED: Gameplay Runtime requires ExecutionPlanV5.",
-      );
-    }
     return {
       readExecutionPlan: () => executionPlan,
       readPossessionTarget: () => this.gameplayPublishedState.possessionTarget,
@@ -1115,20 +911,35 @@ export class BabylonWorldRuntime {
       possessionTarget: target,
       viewProjection: projectedViewStateAfter,
     });
+    const previousControlledEntityId = this.controlledEntityId();
+    const targetControlledEntityId = target.mode === "possessed"
+      ? target.controlledEntityId
+      : undefined;
+    const targetChanged = targetControlledEntityId !== previousControlledEntityId;
+    if (
+      targetChanged &&
+      this.traversalConfigurationEpoch === Number.MAX_SAFE_INTEGER
+    ) {
+      throw new Error(
+        "WORLDKIT_TRAVERSAL_CONFIGURATION_EPOCH_EXHAUSTED: Traversal configuration epoch is exhausted.",
+      );
+    }
+    const traversalConfigurationEpochAfter = targetChanged
+      ? this.traversalConfigurationEpoch + 1
+      : this.traversalConfigurationEpoch;
     let lifecycle: "prepared" | "committed" | "aborted" = "prepared";
     let abortPromise: Promise<void> | undefined;
     return Object.freeze({
       projectedWorldStateAfter,
       projectedViewStateAfter,
       commitPrepared: (): void => {
-        if (lifecycle === "aborted") {
-          throw new Error("Babylon Gameplay possession transaction is already aborted.");
-        }
-        if (lifecycle === "committed") {
-          throw new Error("Babylon Gameplay possession transaction is already committed.");
-        }
+        if (lifecycle !== "prepared") return;
         lifecycle = "committed";
         this.gameplayPublishedState = stagedState;
+        this.traversalConfigurationEpoch = traversalConfigurationEpochAfter;
+        this.activeInputActions = EMPTY_INPUT_ACTIONS;
+        this.activeInputAxes = EMPTY_INPUT_AXES;
+        this.latestRenderReadyReceipt = undefined;
       },
       abort: (): Promise<void> => {
         if (!isNil(abortPromise)) return abortPromise;
@@ -1174,6 +985,7 @@ export class BabylonWorldRuntime {
           isTarget ? input.axes : undefined,
         );
       } else {
+        controller.stop();
         controller.publishSupport();
       }
     }
@@ -1212,18 +1024,21 @@ export class BabylonWorldRuntime {
     if (physicsEngine === null) throw new Error("WORLDKIT_HAVOK_ENGINE_MISSING");
     physicsEngine._step(FIXED_TIME_STEP_SECONDS);
     this.tick += 1;
+    const controlledEntityId = this.controlledEntityId();
     for (const subject of this.executionPlan.subjects) {
       const controller = this.controllerFor(subject.entityId);
       const visual = this.visualFor(subject.entityId);
       controller.synchronizeVisual();
-      if (subject.entityId !== this.controlledEntityId) {
+      if (subject.entityId !== controlledEntityId) {
         visual.stepAnimation(this.tick, "idle");
         continue;
       }
       const motion = controller.sampleMotion(runRequested);
       visual.stepAnimation(this.tick, resolveGroundHumanoidAction(motion));
     }
-    this.updateCamera();
+    if (controlledEntityId !== undefined) {
+      this.updateCameraForEntity(controlledEntityId);
+    }
   }
 
   private resetToTraversalAnchor(input: Readonly<{
@@ -1232,7 +1047,7 @@ export class BabylonWorldRuntime {
     facingYawRadians: number;
   }>): void {
     this.assertUsable();
-    if (input.traversingEntityId !== this.controlledEntityId) {
+    if (input.traversingEntityId !== this.controlledEntityId()) {
       throw new Error("TRAVERSAL_RUNTIME_NOT_CONTROLLED");
     }
     this.traversalConfigurationEpoch += 1;
@@ -1261,7 +1076,7 @@ export class BabylonWorldRuntime {
     walkDirectionWorldXZ: readonly [number, number];
   }>): void {
     this.assertUsable();
-    if (input.traversingEntityId !== this.controlledEntityId) {
+    if (input.traversingEntityId !== this.controlledEntityId()) {
       throw new Error("TRAVERSAL_RUNTIME_NOT_CONTROLLED");
     }
     this.latestRenderReadyReceipt = undefined;
@@ -1288,29 +1103,19 @@ export class BabylonWorldRuntime {
     this.commitFixedTick(false);
   }
 
-  snapshot(): WorldRuntimeSnapshotV3 {
+  snapshot(): BabylonRuntimeProjectionV1 {
     this.assertUsable();
+    const possessionTarget = this.gameplayPublishedState.possessionTarget;
+    const controlledEntityId = this.controlledEntityId();
     const subjectStatesByEntityId: Record<
       string,
-      WorldRuntimeSnapshotV3["subjectStatesByEntityId"][string]
+      BabylonRuntimeProjectionV1["subjectStatesByEntityId"][string]
     > = {};
     for (const subject of this.executionPlan.subjects) {
       const controller = this.controllerFor(subject.entityId);
       const subjectOrigin = controller.subjectOrigin;
       const velocity = controller.velocity;
       const motion = controller.motionSnapshot();
-      const capabilityState = subject.capabilityAssembly === undefined
-        ? {}
-        : {
-            activeMotionProfileRef: motion.activeMotionProfileRef,
-            activeMotionKernelRef: motion.activeMotionKernelRef,
-            motionTags: motion.motionTags,
-            relationshipRole: "none" as const,
-            safeFallbackActive: motion.fallbackActive,
-            ...(motion.lastFailureCode === undefined
-              ? {}
-              : { motionFailureCode: motion.lastFailureCode }),
-          };
       subjectStatesByEntityId[subject.entityId] = {
         entityId: subject.entityId,
         subjectDefinitionRef: subject.subjectDefinitionRef,
@@ -1325,28 +1130,29 @@ export class BabylonWorldRuntime {
         activePhysicsBodyProfileRef: motion.activePhysicsBodyProfileRef,
         activeLocomotionProfileRef: motion.activeLocomotionProfileRef,
         locomotionMode: motion.locomotionMode,
-        ...capabilityState,
+        activeMotionProfileRef: motion.activeMotionProfileRef,
+        activeMotionKernelRef: motion.activeMotionKernelRef,
+        motionTags: motion.motionTags,
+        relationshipRole: "none",
+        safeFallbackActive: motion.fallbackActive,
+        ...(motion.lastFailureCode === undefined
+          ? {}
+          : { motionFailureCode: motion.lastFailureCode }),
       };
     }
     const cameraDirectorSnapshot = this.cameraDirector.snapshot();
     return {
-      kind: "worldkit-runtime-snapshot",
-      schemaVersion: 3,
       runtimeBackend: "babylon-havok",
       tick: this.tick,
       ready: true,
-      controlledEntityId: this.controlledEntityId,
-      controllersById: {
-        [TRUSTED_DEFAULT_CONTROLLER_ID]: {
-          id: TRUSTED_DEFAULT_CONTROLLER_ID,
-          controlledEntityId: this.controlledEntityId,
-        },
-      },
+      possessionTarget,
       subjectStatesByEntityId,
       physics: { backend: "havok", ready: true, fixedTimeStepSeconds: FIXED_TIME_STEP_SECONDS },
       camera: {
         entityId: this.executionPlan.camera.cameraEntityId,
-        targetEntityId: this.controlledEntityId,
+        ...(controlledEntityId === undefined
+          ? {}
+          : { targetEntityId: controlledEntityId }),
         positionMetersXYZ: [
           this.camera.position.x,
           this.camera.position.y,
@@ -1368,14 +1174,16 @@ export class BabylonWorldRuntime {
     };
   }
 
-  reset(): WorldRuntimeSnapshotV3 {
+  reset(): BabylonRuntimeProjectionV1 {
     this.assertUsable();
     this.traversalConfigurationEpoch += 1;
     for (const controller of this.subjectControllersByEntityId.values()) controller.reset();
     for (const visual of this.subjectVisuals) visual.resetAnimation();
-    this.controlledEntityId = initialRuntimeControlledEntityId(
-      this.executionPlan,
-    );
+    this.gameplayPublishedState = Object.freeze({
+      possessionTarget: Object.freeze({ mode: "unbound" }),
+      viewProjection: Object.freeze({ viewStateRevision: 0 }),
+    });
+    this.appliedCameraViewStateRevision = 0;
     this.tick = 0;
     this.activeInputActions = [];
     this.activeInputAxes = {};
@@ -1542,10 +1350,24 @@ export class BabylonWorldRuntime {
   }
 
   private updateCamera(): void {
-    this.updateCameraForEntity(this.controlledEntityId);
+    const controlledEntityId = this.controlledEntityId();
+    if (controlledEntityId !== undefined) {
+      this.updateCameraForEntity(controlledEntityId);
+    }
+  }
+
+  private synchronizeCameraViewSession(): void {
+    const publishedViewStateRevision =
+      this.gameplayPublishedState.viewProjection.viewStateRevision;
+    if (this.appliedCameraViewStateRevision === publishedViewStateRevision) {
+      return;
+    }
+    this.cameraDirector.reset();
+    this.appliedCameraViewStateRevision = publishedViewStateRevision;
   }
 
   private updateCameraForEntity(entityId: string): void {
+    this.synchronizeCameraViewSession();
     const subject = this.executionPlan.subjects.find(
       (candidate) => candidate.entityId === entityId,
     );
@@ -1580,8 +1402,7 @@ export class BabylonWorldRuntime {
       relationshipRole: "none",
       cameraContextTags: [
         ...(hasForwardControlIntentV1(
-          subject.capabilityAssembly?.controlProfile ??
-            LEGACY_CAMERA_RELATIVE_CONTROL_PROFILE,
+          subject.capabilityAssembly.controlProfile,
           controller.activeControlFeel.moveResponseExponent,
           this.activeInputActions,
           this.activeInputAxes,
@@ -1599,19 +1420,25 @@ export class BabylonWorldRuntime {
       ],
     };
     this.cameraDirector.update(
-      subject.capabilityAssembly?.cameraContext,
+      subject.capabilityAssembly.cameraContext,
       sample,
       FIXED_TIME_STEP_SECONDS,
     );
   }
 
-  requestCameraProfile(profileRef: string): WorldRuntimeSnapshotV3 {
+  requestCameraProfile(profileRef: string): BabylonRuntimeProjectionV1 {
     this.assertUsable();
+    const controlledEntityId = this.controlledEntityId();
     const subject = this.executionPlan.subjects.find(
-      (candidate) => candidate.entityId === this.controlledEntityId,
+      (candidate) => candidate.entityId === controlledEntityId,
     );
+    if (subject === undefined) {
+      throw new Error(
+        `WORLDKIT_RUNTIME_CONTROL_TARGET_NOT_FOUND: ${String(controlledEntityId)}`,
+      );
+    }
     const reachable = new Set(
-      (subject?.capabilityAssembly?.cameraContext.cameraRigProfiles ?? [])
+      subject.capabilityAssembly.cameraContext.cameraRigProfiles
         .map((profile) => profile.resourceRef),
     );
     if (!reachable.has(profileRef)) {
@@ -1619,6 +1446,7 @@ export class BabylonWorldRuntime {
         "Camera Profile Ref must be reachable from the Camera Context.",
       );
     }
+    this.synchronizeCameraViewSession();
     if (!this.cameraDirector.requestProfile(profileRef)) {
       throw new RangeError("Camera Profile Ref must be a non-empty string.");
     }
@@ -1627,16 +1455,22 @@ export class BabylonWorldRuntime {
     return this.snapshot();
   }
 
-  resetCameraProfile(): WorldRuntimeSnapshotV3 {
+  resetCameraProfile(): BabylonRuntimeProjectionV1 {
     this.assertUsable();
+    this.synchronizeCameraViewSession();
     this.cameraDirector.resetProfileSelection();
     this.latestRenderReadyReceipt = undefined;
     this.updateCamera();
     return this.snapshot();
   }
 
-  adjustCameraView(input: CameraViewInputV1): WorldRuntimeSnapshotV3 {
+  adjustCameraView(input: CameraViewInputV1): BabylonRuntimeProjectionV1 {
     this.assertUsable();
+    if (![input.yawDeltaRadians ?? 0, input.pitchDeltaRadians ?? 0, input.zoomDeltaMeters ?? 0]
+      .every(Number.isFinite)) {
+      throw new RangeError("Camera view deltas must be finite numbers.");
+    }
+    this.synchronizeCameraViewSession();
     if (!this.cameraDirector.adjustView(input)) {
       throw new RangeError("Camera view deltas must be finite numbers.");
     }
@@ -1645,8 +1479,9 @@ export class BabylonWorldRuntime {
     return this.snapshot();
   }
 
-  resetCameraView(): WorldRuntimeSnapshotV3 {
+  resetCameraView(): BabylonRuntimeProjectionV1 {
     this.assertUsable();
+    this.synchronizeCameraViewSession();
     this.cameraDirector.resetView();
     this.latestRenderReadyReceipt = undefined;
     this.updateCamera();
@@ -1668,11 +1503,17 @@ export class BabylonWorldRuntime {
     ) {
       throw new Error("SUBJECT_PRESET_INVALID_CAMERA_TUNING");
     }
+    const controlledEntityId = this.controlledEntityId();
     const subject = this.executionPlan.subjects.find(
-      (candidate) => candidate.entityId === this.controlledEntityId,
+      (candidate) => candidate.entityId === controlledEntityId,
     );
+    if (subject === undefined) {
+      throw new Error(
+        `WORLDKIT_RUNTIME_CONTROL_TARGET_NOT_FOUND: ${String(controlledEntityId)}`,
+      );
+    }
     const cameraProfiles =
-      subject?.capabilityAssembly?.cameraContext.cameraRigProfiles ?? [];
+      subject.capabilityAssembly.cameraContext.cameraRigProfiles;
     if (!this.cameraDirector.applyPreview(
       tuningByProfileRef,
       cameraProfiles,
@@ -1737,12 +1578,6 @@ export class BabylonWorldRuntime {
       );
     }
     const assembly = subject.capabilityAssembly;
-    if (assembly === undefined) {
-      return reject(
-        "SUBJECT_PRESET_CAPABILITY_ASSEMBLY_REQUIRED",
-        "Legacy subjects cannot receive capability preset tuning.",
-      );
-    }
     const controller = this.controllerFor(subject.entityId);
     const controlFeelProfiles = [
       subject.controlFeel,
@@ -1800,7 +1635,7 @@ export class BabylonWorldRuntime {
     const motion = controller.motionSnapshot();
     const state = this.snapshot().subjectStatesByEntityId[subjectEntityId]!;
     const assembly = subject.capabilityAssembly;
-    const activeMotionKernel = assembly?.motionKernels.find(
+    const activeMotionKernel = assembly.motionKernels.find(
       (candidate) => candidate.resourceRef === motion.activeMotionKernelRef,
     );
     const finiteState = [
@@ -1813,7 +1648,7 @@ export class BabylonWorldRuntime {
     const cameraState = this.snapshot().camera;
     const cameraFinite = cameraState.positionMetersXYZ.every(Number.isFinite);
     const availableSocketIds = new Set(subject.sockets.map((socket) => socket.id));
-    const relationshipSocketCoverage = assembly?.relationshipProfiles.every(
+    const relationshipSocketCoverage = assembly.relationshipProfiles.every(
       (profile) => {
         const sourceAvailable = profile.requiredSourceSocketIds.every((socketId) =>
           availableSocketIds.has(socketId),
@@ -1823,12 +1658,11 @@ export class BabylonWorldRuntime {
         );
         return sourceAvailable || targetAvailable;
       },
-    ) ?? true;
+    );
     const checks: SubjectHarnessReportV1["checks"] = [
       {
         checkId: "H01",
         status:
-          assembly === undefined ||
           activeMotionKernel?.commandKind === assembly.controlProfile.commandKind
             ? "passed"
             : "failed",
@@ -1847,7 +1681,7 @@ export class BabylonWorldRuntime {
       {
         checkId: "H04",
         status:
-          assembly?.relationshipProfiles.length === 0
+          assembly.relationshipProfiles.length === 0
             ? "not-exercised"
             : relationshipSocketCoverage
               ? "passed"
@@ -1879,7 +1713,7 @@ export class BabylonWorldRuntime {
       {
         checkId: "H09",
         status:
-          assembly === undefined || assembly.fallbackMotionProfile.resourceRef.length > 0
+          assembly.fallbackMotionProfile.resourceRef.length > 0
             ? "passed"
             : "failed",
         message: "Safe fallback is declared and invalid states are trapped by the Kernel Runtime.",
@@ -1899,6 +1733,12 @@ export class BabylonWorldRuntime {
       throw new Error(`WORLDKIT_RUNTIME_SUBJECT_NOT_FOUND: ${subjectEntityId}`);
     }
     return controller;
+  }
+
+  private controlledEntityId(): string | undefined {
+    return this.gameplayPublishedState.possessionTarget.mode === "possessed"
+      ? this.gameplayPublishedState.possessionTarget.controlledEntityId
+      : undefined;
   }
 
   private visualFor(subjectEntityId: string): SubjectVisual {

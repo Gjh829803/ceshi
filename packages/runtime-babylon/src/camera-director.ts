@@ -9,7 +9,6 @@ import type {
   CameraViewInputV1,
   ExecutionCameraModifierProfileV1,
   ExecutionCameraRigProfileV1,
-  ExecutionPlanV4,
   ExecutionPlanV5,
   ExecutionSubjectCapabilityAssemblyV1,
   SemanticInputActionV1,
@@ -178,7 +177,7 @@ export class CameraDirectorV1 {
   private controlForward = new Vector3(0, 0, -1);
 
   constructor(
-    private readonly executionPlan: ExecutionPlanV4 | ExecutionPlanV5,
+    private readonly executionPlan: ExecutionPlanV5,
     private readonly camera: FreeCamera,
     private readonly scene: Scene,
   ) {
@@ -297,14 +296,15 @@ export class CameraDirectorV1 {
   }
 
   update(
-    cameraContext: CameraContextV1 | undefined,
+    cameraContext: CameraContextV1,
     sample: ViewTargetSampleV1,
     deltaSeconds: number,
   ): void {
     const selected = this.selectProfile(cameraContext, sample);
     if (selected === undefined) {
-      this.updateLegacy(sample);
-      return;
+      throw new Error(
+        "WORLDKIT_RUNTIME_CAMERA_PROFILE_NOT_FOUND: Camera context has no resolvable default profile.",
+      );
     }
     const baseProfile = selected.profile;
     const profile: ExecutionCameraRigProfileV1 = selected.modifiers.reduce(
@@ -853,10 +853,9 @@ export class CameraDirectorV1 {
   }
 
   private selectProfile(
-    context: CameraContextV1 | undefined,
+    context: CameraContextV1,
     sample: ViewTargetSampleV1,
   ): SelectedCameraStateV1 | undefined {
-    if (context === undefined) return undefined;
     const byRef = new Map(
       context.cameraRigProfiles.map((profile) => [profile.resourceRef, profile]),
     );
@@ -935,40 +934,4 @@ export class CameraDirectorV1 {
     );
   }
 
-  private updateLegacy(sample: ViewTargetSampleV1): void {
-    const origin = new Vector3(...sample.targetPositionMetersXYZ);
-    const plan = this.executionPlan.camera;
-    const target = new Vector3(origin.x, origin.y + plan.targetHeightMeters, origin.z);
-    this.viewYawOffsetRadians = this.targetYawOffsetRadians;
-    this.viewPitchOffsetRadians = this.targetPitchOffsetRadians;
-    this.viewDistanceOffsetMeters = this.targetDistanceOffsetMeters;
-    const yawRadians = this.viewYawOffsetRadians;
-    const pitchRadians = clamp(
-      plan.pitchRadians + this.viewPitchOffsetRadians,
-      -0.95,
-      0.65,
-    );
-    const distanceMeters = clamp(
-      plan.distanceMeters + this.viewDistanceOffsetMeters,
-      1.8,
-      8,
-    );
-    const horizontalDistance = Math.cos(pitchRadians) * distanceMeters;
-    this.camera.position.set(
-      target.x + Math.sin(yawRadians) * horizontalDistance,
-      target.y + Math.sin(pitchRadians) * distanceMeters,
-      target.z + Math.cos(yawRadians) * horizontalDistance,
-    );
-    this.camera.setTarget(target);
-    this.smoothedTarget.copyFrom(target);
-    this.activeProfileRef = plan.rigRef;
-    this.activeRigRef = "worldkit://camera-rig/orbit-follow@1";
-    this.activeModifierRefs = [];
-    this.controlForward.copyFrom(
-      horizontalDirection(this.camera.getForwardRay().direction) ??
-        new Vector3(0, 0, -1),
-    );
-    this.fallbackActive = false;
-    this.initialized = true;
-  }
 }

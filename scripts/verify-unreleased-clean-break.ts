@@ -1,13 +1,18 @@
 import { readdir, readFile } from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import { isNil } from "lodash-es";
 
 export const CLEAN_BREAK_SCAN_ROOTS = Object.freeze([
   "packages",
   "apps",
   "scripts",
   "examples",
+  "artifacts",
   "README.md",
+  "docs/00-project-overview.md",
+  "docs/02-sdk-architecture.md",
+  "docs/05-mvp-roadmap.md",
   "docs/17-canonical-json-quickstart.md",
 ] as const);
 
@@ -60,6 +65,7 @@ interface TextFamilyDefinition {
   readonly classification: CleanBreakClassification;
   readonly blocksCompletion: boolean;
   readonly pattern: RegExp;
+  readonly pathPattern?: RegExp;
 }
 
 interface MutableMatch {
@@ -85,6 +91,8 @@ function textFamilyDefinitions(): readonly TextFamilyDefinition[] {
     ...[1, 2, 3].map((version) => token(["Authoring", "Spec", "V", String(version)])),
     ...[1, 2, 3].map((version) => token(["Normalized", "World", "IR", "V", String(version)])),
     ...[1, 2, 3, 4].map((version) => token(["Execution", "Plan", "V", String(version)])),
+    token(["World", "Node", "Spec", "V3"]),
+    token(["Normalized", "World", "Node", "V3"]),
   ];
   const currentTopLevel = [
     token(["Authoring", "Spec", "V4"]),
@@ -118,9 +126,22 @@ function textFamilyDefinitions(): readonly TextFamilyDefinition[] {
     escaped(token(["LEGACY", "_MOTION"])),
     escaped(token(["LEGACY", "_CAMERA"])),
     `\\b${escaped(token(["bind", "Control"]))}\\s*\\(`,
+    `${escaped(token(["normalize", "Authoring", "Spec", "V4"]))}\\s+as\\s+${escaped(token(["normalize", "Authoring", "Spec"]))}`,
+    `export\\s+function\\s+${escaped(token(["parse", "Authoring", "Spec", "Json"]))}\\s*\\(`,
+    `export\\s+function\\s+${escaped(token(["parse", "Authoring", "Spec", "Json", "V4"]))}\\s*\\(`,
+    `private\\s+${escaped(token(["update", "Legacy"]))}\\s*\\(`,
+    `export\\s+function\\s+${escaped(token(["validate", "Authoring", "Spec"]))}\\s*\\(`,
+    `export\\s+const\\s+${escaped(token(["compile", "World"]))}\\s*=\\s*${escaped(token(["compile", "World", "V5"]))}`,
   ];
 
   return Object.freeze([
+    Object.freeze({
+      familyId: "superseded-active-documentation",
+      classification: "superseded-delete" as const,
+      blocksCompletion: true,
+      pathPattern: /^(?:README\.md|docs\/(?:00-project-overview|02-sdk-architecture|05-mvp-roadmap|17-canonical-json-quickstart)\.md)$/,
+      pattern: /\b(?:AuthoringSpec\s+V[1-3]|NormalizedWorldIR\s+V[1-3]|ExecutionPlan\s+V[1-4]|Snapshot\s+V3|Browser Protocol\s+V4)\b/g,
+    }),
     Object.freeze({
       familyId: "superseded-top-level-contracts",
       classification: "superseded-delete" as const,
@@ -206,6 +227,10 @@ function collectTextMatches(
   relativePath: string,
   definition: TextFamilyDefinition,
 ): readonly MutableMatch[] {
+  if (definition.pathPattern !== undefined) {
+    definition.pathPattern.lastIndex = 0;
+    if (!definition.pathPattern.test(relativePath)) return [];
+  }
   const matches: MutableMatch[] = [];
   definition.pattern.lastIndex = 0;
   for (const match of source.matchAll(definition.pattern)) {
@@ -218,7 +243,14 @@ function collectTextMatches(
   return matches;
 }
 
-function serializedAuthoringMatches(
+const CURRENT_SERIALIZED_SCHEMA_VERSION_BY_KIND = Object.freeze({
+  "worldkit-authoring-spec": 4,
+  "worldkit-normalized-world": 4,
+  "worldkit-execution-plan": 5,
+  "worldkit-runtime-snapshot": 4,
+} as const);
+
+function serializedContractMatches(
   source: string,
   relativePath: string,
 ): readonly MutableMatch[] {
@@ -229,28 +261,44 @@ function serializedAuthoringMatches(
   } catch {
     return [];
   }
-  if (
-    typeof parsed !== "object"
-    || parsed === null
-    || !("kind" in parsed)
-    || !("schemaVersion" in parsed)
-  ) return [];
-  const candidate = parsed as { kind?: unknown; schemaVersion?: unknown };
-  if (
-    candidate.kind !== "worldkit-authoring-spec"
-    || typeof candidate.schemaVersion !== "number"
-    || candidate.schemaVersion < 1
-    || candidate.schemaVersion > 3
-  ) return [];
-  const versionPattern = new RegExp(
-    `"${token(["schema", "Version"])}"\\s*:\\s*${candidate.schemaVersion}`,
-  );
-  const versionMatch = versionPattern.exec(source);
-  return [{
-    path: relativePath,
-    line: lineAt(source, versionMatch?.index ?? 0),
-    value: `${token(["schema", "Version"])}:${candidate.schemaVersion}`,
-  }];
+  const matches: MutableMatch[] = [];
+  let sourceCursor = 0;
+  const visit = (value: unknown): void => {
+    if (Array.isArray(value)) {
+      for (const entry of value) visit(entry);
+      return;
+    }
+    if (typeof value !== "object" || isNil(value)) return;
+    const candidate = value as Record<string, unknown>;
+    const kind = candidate.kind;
+    const schemaVersion = candidate.schemaVersion;
+    if (
+      typeof kind === "string"
+      && Object.hasOwn(CURRENT_SERIALIZED_SCHEMA_VERSION_BY_KIND, kind)
+      && typeof schemaVersion === "number"
+    ) {
+      const currentVersion = CURRENT_SERIALIZED_SCHEMA_VERSION_BY_KIND[
+        kind as keyof typeof CURRENT_SERIALIZED_SCHEMA_VERSION_BY_KIND
+      ];
+      if (schemaVersion >= 1 && schemaVersion < currentVersion) {
+        const versionPattern = new RegExp(
+          `"${token(["schema", "Version"])}"\\s*:\\s*${schemaVersion}`,
+          "g",
+        );
+        versionPattern.lastIndex = sourceCursor;
+        const versionMatch = versionPattern.exec(source);
+        sourceCursor = versionPattern.lastIndex;
+        matches.push({
+          path: relativePath,
+          line: lineAt(source, versionMatch?.index ?? 0),
+          value: `${kind}@${schemaVersion}`,
+        });
+      }
+    }
+    for (const child of Object.values(candidate)) visit(child);
+  };
+  visit(parsed);
+  return matches;
 }
 
 function groupByPath(matches: readonly MutableMatch[]): readonly CleanBreakPathMatches[] {
@@ -284,7 +332,7 @@ export async function scanUnreleasedCleanBreak(
   const matchesByFamily = new Map<string, MutableMatch[]>(
     definitions.map((definition) => [definition.familyId, []]),
   );
-  matchesByFamily.set("superseded-serialized-authoring", []);
+  matchesByFamily.set("superseded-serialized-contracts", []);
 
   for (const absolutePath of files) {
     const bytes = await readFile(absolutePath);
@@ -296,15 +344,15 @@ export async function scanUnreleasedCleanBreak(
         ...collectTextMatches(source, relativePath, definition),
       );
     }
-    matchesByFamily.get("superseded-serialized-authoring")!.push(
-      ...serializedAuthoringMatches(source, relativePath),
+    matchesByFamily.get("superseded-serialized-contracts")!.push(
+      ...serializedContractMatches(source, relativePath),
     );
   }
 
   const allDefinitions = [
     ...definitions.slice(0, 2),
     {
-      familyId: "superseded-serialized-authoring",
+      familyId: "superseded-serialized-contracts",
       classification: "superseded-delete" as const,
       blocksCompletion: true,
       pattern: /(?:)/g,
