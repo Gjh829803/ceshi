@@ -671,8 +671,6 @@ function installTuningWorkbench(
             contentHash: profile.contentHash,
           })),
           defaultCameraProfileRef,
-          firstPersonCameraProfileRef:
-            exactBaseline.firstPersonCameraRigProfileRef ?? null,
         }
       : undefined;
   const localRepository = localBaseline === undefined
@@ -682,11 +680,9 @@ function installTuningWorkbench(
     localBaseline === undefined
       ? preference === "auto"
         ? "auto"
-        : preference === "first-person"
-          ? exactBaseline?.firstPersonCameraRigProfileRef ?? "auto"
-          : cameraRows.some((profile) => profile.resourceRef === preference)
-            ? preference
-            : "auto"
+        : cameraRows.some((profile) => profile.resourceRef === preference)
+          ? preference
+          : "auto"
       : normalizeSubjectPresetCameraPreferenceV1(preference, localBaseline);
   const syncCompactCameraSelect = (): void => {
     const compactCameraSelect = document.querySelector<HTMLSelectElement>(
@@ -862,7 +858,6 @@ function installTuningWorkbench(
   };
 
   if (localRepository !== undefined && localBaseline !== undefined) {
-    localRepository.migrateV4(localBaseline);
     const localDefault = localRepository.resolveLocalDefault(localBaseline);
     const initialDraft = localDefault.status === "applicable"
       ? localRepository.restoreVersion(localDefault.pointer.localVersionId).value
@@ -988,7 +983,6 @@ function installTuningWorkbench(
     cameraTuning = profile === undefined
       ? {}
       : { ...(cameraTuningByProfileRef[profile.resourceRef] ?? {}) } as CameraTuningV1;
-    const storageKey = `worldkit.camera-tuning.v4.${workbenchContext.definition.resourceRef}.${profile?.resourceRef ?? "auto"}.${profile?.contentHash ?? "unlocked"}`;
     const settings: Array<{
       key: keyof CameraTuningV1;
       label: string;
@@ -1052,7 +1046,6 @@ function installTuningWorkbench(
           cameraTuningByProfileRef[profile.resourceRef] = { ...cameraTuning } as Record<string, number>;
         }
         output.textContent = nextValue.toFixed(2);
-        writeLocalDraft(storageKey, JSON.stringify(cameraTuning));
         applyCameraTuning();
         persistWorkingDraft();
         saveStatus.textContent = `“${setting.label}”已应用；这组数值只属于当前镜头`;
@@ -1559,9 +1552,6 @@ function installCapabilityAuthoringPanel(
   );
   const controlProfile = profiles.find((row) => row.kind === "control-profile");
   const cameraProfiles = profiles.filter((row) => row.kind === "camera-rig-profile");
-  const firstPersonCameraProfileRef = cameraProfiles.find(
-    (profile) => profile.baseMode === "first-person",
-  )?.resourceRef;
   cameraSelect.replaceChildren(
     ...[
       ["auto", "自动选择合适镜头"],
@@ -1574,22 +1564,16 @@ function installCapabilityAuthoringPanel(
     }),
   );
   const storedCameraPreference = readLocalDraft("worldkit.camera-preference");
-  const migratedStoredCameraPreference = storedCameraPreference === "first-person"
-    ? firstPersonCameraProfileRef ?? "auto"
-    : storedCameraPreference;
   if (
-    !isNil(migratedStoredCameraPreference) &&
-    [...cameraSelect.options].some((option) => option.value === migratedStoredCameraPreference)
+    !isNil(storedCameraPreference) &&
+    [...cameraSelect.options].some((option) => option.value === storedCameraPreference)
   ) {
-    cameraSelect.value = migratedStoredCameraPreference;
+    cameraSelect.value = storedCameraPreference;
     try {
-      if (migratedStoredCameraPreference === "auto") {
+      if (storedCameraPreference === "auto") {
         api.resetCameraProfile?.();
       } else {
-        api.requestCameraProfile?.(migratedStoredCameraPreference);
-      }
-      if (storedCameraPreference === "first-person") {
-        writeLocalDraft("worldkit.camera-preference", migratedStoredCameraPreference);
+        api.requestCameraProfile?.(storedCameraPreference);
       }
     } catch {
       cameraSelect.value = "auto";

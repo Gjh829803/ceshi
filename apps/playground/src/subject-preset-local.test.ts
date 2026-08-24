@@ -4,7 +4,6 @@ import type { NumericProfileOverrideV1 } from "@whitebox-world/runtime-contracts
 
 import {
   SUBJECT_PRESET_LOCAL_STORAGE_KEY,
-  SUBJECT_PRESET_V4_MIGRATION_RECEIPT_KEY,
   compareSubjectPresetSemanticContentV1,
   createSubjectPresetLocalRepository,
   hashSubjectPresetSemanticContentV1,
@@ -120,7 +119,6 @@ function fixtureBaseline(): SubjectPresetLocalBaselineV1 {
       { resourceRef: CHASE_REF, contentHash: CHASE_HASH },
     ],
     defaultCameraProfileRef: CHASE_REF,
-    firstPersonCameraProfileRef: null,
   };
 }
 
@@ -382,103 +380,23 @@ describe("subject preset local repository", () => {
     expect(repository.getLocalDefault("vehicle.four-wheel.arcade")).toBeUndefined();
   });
 
-  it("migrates exact V4 motion and every compatible camera profile once", () => {
-    const storage = new MemoryStorage();
-    const motionKey = `worldkit.motion-draft.v4.${SUBJECT_REF}.${MOTION_REF}.${MOTION_HASH}`;
-    const orbitKey = `worldkit.camera-tuning.v4.${SUBJECT_REF}.${ORBIT_REF}.${ORBIT_HASH}`;
-    const chaseKey = `worldkit.camera-tuning.v4.${SUBJECT_REF}.${CHASE_REF}.${CHASE_HASH}`;
-    storage.setItem(motionKey, JSON.stringify({
-      lowSpeedTurnRateRadiansPerSecond: 0.7,
-    }));
-    storage.setItem(orbitKey, JSON.stringify({ distanceMeters: 5.5 }));
-    storage.setItem(chaseKey, JSON.stringify({
-      distanceMeters: 8,
-      lookAheadSeconds: 0.4,
-    }));
-    storage.setItem("worldkit.camera-preference", ORBIT_REF);
+  it("reads only the current repository envelope and ignores unrelated browser storage", () => {
+    class ReadTrackingStorage extends MemoryStorage {
+      readonly readKeys: string[] = [];
+
+      override getItem(key: string): string | null {
+        this.readKeys.push(key);
+        return super.getItem(key);
+      }
+    }
+    const storage = new ReadTrackingStorage();
+    storage.setItem("worldkit.subject-preset-migration.v1", "{broken-json");
+    storage.setItem("worldkit.camera-preference", "first-person");
+
     const repository = createRepository(storage);
 
-    const first = repository.migrateV4(fixtureBaseline());
-    const second = createRepository(storage).migrateV4(fixtureBaseline());
-
-    expect(first).toMatchObject({
-      status: "persisted",
-      value: {
-        migrationStatus: "migrated",
-        migratedSourceKeys: [
-          "worldkit.camera-preference",
-          chaseKey,
-          orbitKey,
-          motionKey,
-        ].sort(),
-        diagnostics: [],
-      },
-    });
-    expect(second.value.migrationStatus).toBe("already-migrated");
-    const versions = repository.listVersions("vehicle.four-wheel.arcade");
-    expect(versions).toHaveLength(1);
-    expect(versions[0]?.content).toMatchObject({
-      selectedCameraPreferenceRef: ORBIT_REF,
-      controlFeelOverridesByProfileRef: {
-        [CONTROL_FEEL_REF]: {
-          baseResourceRef: CONTROL_FEEL_REF,
-          baseContentHash: CONTROL_FEEL_HASH,
-          values: { lowSpeedTurnRateRadiansPerSecond: 0.7 },
-        },
-      },
-      cameraOverridesByProfileRef: {
-        [ORBIT_REF]: {
-          baseResourceRef: ORBIT_REF,
-          baseContentHash: ORBIT_HASH,
-          values: { distanceMeters: 5.5 },
-        },
-        [CHASE_REF]: {
-          baseResourceRef: CHASE_REF,
-          baseContentHash: CHASE_HASH,
-          values: { distanceMeters: 8, lookAheadSeconds: 0.4 },
-        },
-      },
-    });
-    expect(repository.getWorkingDraft(fixtureBaseline())?.draftId).toBe(
-      versions[0]?.sourceDraftId,
-    );
-    expect(storage.getItem(SUBJECT_PRESET_V4_MIGRATION_RECEIPT_KEY)).not.toBeNull();
-    expect(storage.getItem(motionKey)).not.toBeNull();
-    expect(storage.getItem(orbitKey)).not.toBeNull();
-    expect(storage.getItem(chaseKey)).not.toBeNull();
-  });
-
-  it("retains malformed and hash-drifted V4 values as diagnostics without applying them", () => {
-    const storage = new MemoryStorage();
-    const malformedMotionKey =
-      `worldkit.motion-draft.v4.${SUBJECT_REF}.${MOTION_REF}.${MOTION_HASH}`;
-    const staleCameraKey =
-      `worldkit.camera-tuning.v4.${SUBJECT_REF}.${ORBIT_REF}.sha256:${"e".repeat(64)}`;
-    storage.setItem(malformedMotionKey, "{broken-json");
-    storage.setItem(staleCameraKey, JSON.stringify({ distanceMeters: 99 }));
-    const repository = createRepository(storage);
-
-    const migration = repository.migrateV4(fixtureBaseline());
-
-    expect(migration.value).toMatchObject({
-      migrationStatus: "no-compatible-data",
-      migratedSourceKeys: [],
-      diagnostics: expect.arrayContaining([
-        expect.objectContaining({
-          code: "SUBJECT_PRESET_V4_SOURCE_INVALID",
-          storageKey: malformedMotionKey,
-        }),
-        expect.objectContaining({
-          code: "SUBJECT_PRESET_V4_HASH_DRIFT",
-          storageKey: staleCameraKey,
-        }),
-      ]),
-    });
+    expect(storage.readKeys).toEqual([SUBJECT_PRESET_LOCAL_STORAGE_KEY]);
     expect(repository.listVersions("vehicle.four-wheel.arcade")).toEqual([]);
-    expect(storage.getItem(malformedMotionKey)).toBe("{broken-json");
-    expect(storage.getItem(staleCameraKey)).not.toBeNull();
-    expect(repository.migrateV4(fixtureBaseline()).value.migrationStatus).toBe(
-      "already-migrated",
-    );
+    expect(repository.getDiagnostics()).toEqual([]);
   });
 });

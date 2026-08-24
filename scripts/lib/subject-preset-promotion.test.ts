@@ -282,12 +282,10 @@ describe("subject preset promotion", { timeout: 60_000 }, () => {
       "subject-preset",
       "validate",
       "candidate.json",
-      "--legacy-v4",
       "--json",
     ])).toEqual({
       command: "subject-preset-validate",
       inputPath: "candidate.json",
-      legacyV4: true,
       json: true,
     });
     expect(parseWorldkitArgs([
@@ -296,13 +294,11 @@ describe("subject preset promotion", { timeout: 60_000 }, () => {
       "candidate.json",
       "--output",
       "plan.json",
-      "--legacy-v4",
       "--json",
     ])).toEqual({
       command: "subject-preset-plan",
       inputPath: "candidate.json",
       outputPath: "plan.json",
-      legacyV4: true,
       json: true,
     });
     expect(parseWorldkitArgs([
@@ -314,7 +310,6 @@ describe("subject preset promotion", { timeout: 60_000 }, () => {
       "--harness-receipt",
       "receipt.json",
       "--write",
-      "--legacy-v4",
       "--json",
     ])).toEqual({
       command: "subject-preset-promote",
@@ -322,9 +317,14 @@ describe("subject preset promotion", { timeout: 60_000 }, () => {
       planPath: "plan.json",
       harnessReceiptPath: "receipt.json",
       write: true,
-      legacyV4: true,
       json: true,
     });
+    expect(() => parseWorldkitArgs([
+      "subject-preset",
+      "validate",
+      "candidate.json",
+      "--legacy-v4",
+    ])).toThrow("Unknown subject-preset validate option '--legacy-v4'.");
     expect(() => parseWorldkitArgs([
       "subject-preset",
       "promote",
