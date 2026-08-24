@@ -1,19 +1,92 @@
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { afterEach, describe, expect, expectTypeOf, it, vi } from "vitest";
 
+import {
+  normalizeAuthoringSpecV4,
+  type NormalizedWorldIRV4,
+} from "@whitebox-world/authoring";
+import { compileWorldV5 } from "@whitebox-world/compiler";
+import { createCoreGameplayBootstrapV1 } from "@whitebox-world/gameplay";
+import {
+  createGameplayBootstrapResourceLockEntryV1,
+} from "@whitebox-world/gameplay-contracts";
 import type {
   CameraViewInputV1,
   ControlCaptureRequestV1,
-  ExecutionPlanV4,
+  ExecutionPlanV5,
   FixedInputV1,
   RuntimeControlCaptureFrameV1,
   WorldRuntimeSnapshotV3,
   WorldRuntimeSnapshotV4,
 } from "@whitebox-world/runtime-contracts";
+import { isNil } from "lodash-es";
+
+import {
+  createValidAuthoringSpecV4,
+} from "../../../packages/authoring/src/test-fixture";
 
 import {
   BabylonWorldAdapter,
   PhysicalKeyboardActionTracker,
+  featureInspections,
 } from "./babylon-world-adapter";
+
+expectTypeOf<Parameters<typeof featureInspections>[0]>()
+  .toEqualTypeOf<ExecutionPlanV5>();
+
+function gameplayEntityDescriptors(
+  normalizedWorldIr: NormalizedWorldIRV4,
+) {
+  return normalizedWorldIr.nodes
+    .filter((node) => node.kind === "subject")
+    .map((node) => {
+      const definition = normalizedWorldIr.resources.subjectDefinitions.find(
+        (candidate) =>
+          candidate.subjectDefinitionRef === node.subjectDefinitionRef,
+      );
+      if (isNil(definition)) {
+        throw new Error(
+          `Adapter fixture Subject Definition missing: ${node.subjectDefinitionRef}`,
+        );
+      }
+      return {
+        id: node.id,
+        entityDefinitionRef: node.subjectDefinitionRef,
+        capabilityRefs: definition.capabilityRefs,
+      };
+    });
+}
+
+function createLockedExecutionPlanV5(): ExecutionPlanV5 {
+  const normalized = normalizeAuthoringSpecV4(createValidAuthoringSpecV4());
+  if (
+    !normalized.ok ||
+    isNil(normalized.value) ||
+    isNil(normalized.normalizedWorldIrHash)
+  ) {
+    throw new Error(
+      `Adapter fixture normalization failed: ${JSON.stringify(normalized.diagnostics)}`,
+    );
+  }
+  const gameplayBootstrap = createCoreGameplayBootstrapV1({
+    worldId: normalized.value.id,
+    worldSeed: normalized.value.seed,
+    entityDescriptors: gameplayEntityDescriptors(normalized.value),
+  });
+  const compiled = compileWorldV5({
+    normalizedWorldIr: normalized.value,
+    normalizedWorldIrHash: normalized.normalizedWorldIrHash,
+    gameplayBootstrapResourceLock:
+      createGameplayBootstrapResourceLockEntryV1(gameplayBootstrap),
+  });
+  if (!compiled.ok || isNil(compiled.executionPlan)) {
+    throw new Error(
+      `Adapter fixture compilation failed: ${JSON.stringify(compiled.diagnostics)}`,
+    );
+  }
+  return compiled.executionPlan;
+}
+
+const LOCKED_EXECUTION_PLAN_V5 = createLockedExecutionPlanV5();
 
 interface RuntimeProbe {
   runFixedInput: ReturnType<typeof vi.fn<(input: FixedInputV1) => Promise<WorldRuntimeSnapshotV3>>>;
@@ -219,15 +292,7 @@ function createAdapterProbe(): {
     ),
     snapshot: () => runtimeSnapshot(tick, cameraView),
   };
-  const executionPlan = {
-    id: "adapter-test",
-    camera: {
-      pitchRadians: 0.2,
-      distanceMeters: 4,
-    },
-    layout: { layoutAssertions: [], layoutSolveReportHash: `sha256:${"2".repeat(64)}` },
-    resourceUsage: { triangles: 2 },
-  } as unknown as ExecutionPlanV4;
+  const executionPlan = LOCKED_EXECUTION_PLAN_V5;
   const canvas = {} as HTMLCanvasElement;
   const acquireRuntimeActivity = vi.fn(
     (request: { id: string; activityKind: string }) => ({
@@ -310,6 +375,17 @@ afterEach(() => {
 });
 
 describe("BabylonWorldAdapter frame loop", () => {
+  it("uses a locked ExecutionPlan V5 at the adapter boundary", () => {
+    expect(LOCKED_EXECUTION_PLAN_V5).toMatchObject({
+      kind: "worldkit-execution-plan",
+      schemaVersion: 5,
+    });
+    expect(LOCKED_EXECUTION_PLAN_V5.resourceLockEntries).toContainEqual(
+      expect.objectContaining({ resourceKind: "gameplay-bootstrap" }),
+    );
+    expect(featureInspections(LOCKED_EXECUTION_PLAN_V5)).not.toHaveLength(0);
+  });
+
   it("accumulates fixed simulation ticks independently from display frames", async () => {
     const { adapter, runtime } = createAdapterProbe();
 

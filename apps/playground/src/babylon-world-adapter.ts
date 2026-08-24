@@ -5,7 +5,6 @@ import type {
   CameraViewInputV1,
   ControlCaptureCapabilitiesV1,
   ControlCaptureRequestV1,
-  ExecutionPlanV4,
   ExecutionPlanV5,
   FixedInputV1,
   RenderReadyReceiptV1,
@@ -45,8 +44,6 @@ import {
   createGameplayBabylonRuntimeCoordinatorV1,
   type GameplayBabylonRuntimeCoordinatorV1,
 } from "./gameplay-babylon-runtime-coordinator";
-
-type PlaygroundExecutionPlanV1 = ExecutionPlanV4 | ExecutionPlanV5;
 
 export interface BabylonWorldAdapterCreateOptionsV1 extends Pick<
   BabylonWorldRuntimeOptions,
@@ -188,7 +185,7 @@ export function activeActionForControlledSubject(
   return controlledSubject.activeActionId;
 }
 
-export function featureInspections(plan: PlaygroundExecutionPlanV1): readonly FeatureInspection[] {
+export function featureInspections(plan: ExecutionPlanV5): readonly FeatureInspection[] {
   return [
     {
       id: plan.terrain.entityId,
@@ -296,7 +293,7 @@ export class BabylonWorldAdapter implements PlaygroundWorldAdapter {
   private mountedContainer: HTMLElement | undefined;
 
   private constructor(
-    private readonly executionPlan: PlaygroundExecutionPlanV1,
+    private readonly executionPlan: ExecutionPlanV5,
     private readonly coordinator: GameplayBabylonRuntimeCoordinatorV1,
     private readonly playgroundMetadata?: PlaygroundWorldMetadataV1,
   ) {
