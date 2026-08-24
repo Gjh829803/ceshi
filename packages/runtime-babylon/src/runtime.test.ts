@@ -9,6 +9,7 @@ import { NullEngine } from "@babylonjs/core/Engines/nullEngine.pure.js";
 import { LoadAssetContainerAsync } from "@babylonjs/core/Loading/sceneLoader.js";
 import { StandardMaterial } from "@babylonjs/core/Materials/standardMaterial.js";
 import { Quaternion, Vector3 } from "@babylonjs/core/Maths/math.vector.js";
+import type { Mesh } from "@babylonjs/core/Meshes/mesh.js";
 import { TransformNode } from "@babylonjs/core/Meshes/transformNode.js";
 import type { PhysicsEngine } from "@babylonjs/core/Physics/v2/physicsEngine.js";
 import { Scene } from "@babylonjs/core/scene.pure.js";
@@ -477,7 +478,7 @@ interface RuntimeDebugProbe {
 interface SubjectVisualInternals extends SubjectVisual {
   assetInstance?: SubjectAssetInstanceV1;
   assetLease?: SubjectAssetLeaseV1;
-  primitiveMeshes?: readonly TransformNode[];
+  primitiveMeshes?: readonly Mesh[];
   assetPartRoots?: readonly TransformNode[];
 }
 
@@ -895,6 +896,7 @@ const staticAssetPartLocalTransform = {
 };
 
 function createStaticAssetSubjectExecutionPlan(options: {
+  mixedParts?: boolean;
   twoSubjects?: boolean;
 } = {}): ExecutionPlanV4 {
   const base = createFlatRiggedExecutionPlan();
@@ -903,12 +905,26 @@ function createStaticAssetSubjectExecutionPlan(options: {
   if (assetPart === undefined) throw new Error("Rigged fixture Asset Part missing.");
   const staticSubject = {
     ...baseSubject,
-    visualParts: [{
-      ...assetPart,
-      subjectAssetRef: staticSubjectAssetDescriptor.subjectAssetRef,
-      localTransform: staticAssetPartLocalTransform,
-      semanticTags: ["body", "static", "runtime-test"],
-    }],
+    visualParts: [
+      ...(options.mixedParts
+        ? [{
+            id: "primitive-marker",
+            kind: "primitive" as const,
+            shape: { kind: "sphere" as const, radiusMeters: 0.08 },
+            localTransform: {
+              positionMetersXYZ: [0, 2.05, 0] as const,
+              rotationEulerRadiansXYZ: [0, 0, 0] as const,
+            },
+            semanticTags: ["marker", "static", "runtime-test"],
+          }]
+        : []),
+      {
+        ...assetPart,
+        subjectAssetRef: staticSubjectAssetDescriptor.subjectAssetRef,
+        localTransform: staticAssetPartLocalTransform,
+        semanticTags: ["body", "static", "runtime-test"],
+      },
+    ],
     visualBinding: { mode: "static" as const },
     sockets: [{
       id: "focus.local",
@@ -1562,9 +1578,12 @@ describe("BabylonWorldRuntime", () => {
       }
     });
 
-    it("owns mutable Material state and disposal independently per instance", async () => {
+    it("owns one isolated Material across mixed static Asset and Primitive Parts", async () => {
       const runtime = await createRuntime(
-        createStaticAssetSubjectExecutionPlan({ twoSubjects: true }),
+        createStaticAssetSubjectExecutionPlan({
+          mixedParts: true,
+          twoSubjects: true,
+        }),
         { subjectAssetResolver: createMemoryResolver(staticSubjectAssetBytes) },
       );
       try {
@@ -1573,33 +1592,58 @@ describe("BabylonWorldRuntime", () => {
         const secondaryVisual = probe.visual("static-secondary");
         const primaryInstance = primaryVisual.assetInstance!;
         const secondaryInstance = secondaryVisual.assetInstance!;
-        const primaryMaterial = primaryInstance.meshes[0]!.material;
-        const secondaryMaterial = secondaryInstance.meshes[0]!.material;
+        const primaryAssetMesh = primaryInstance.meshes[0]!;
+        const secondaryAssetMesh = secondaryInstance.meshes[0]!;
+        const primaryPrimitiveMesh = primaryVisual.primitiveMeshes![0]!;
+        const secondaryPrimitiveMesh = secondaryVisual.primitiveMeshes![0]!;
+        const primaryMaterial = primaryAssetMesh.material;
+        const secondaryMaterial = secondaryAssetMesh.material;
+        const runtimeMaterial = (runtime as unknown as { scene: Scene }).scene
+          .getMaterialByName("worldkit.material.subject");
         let primaryMaterialDisposed = false;
         let secondaryMaterialDisposed = false;
+        let runtimeMaterialDisposed = false;
         primaryMaterial?.onDisposeObservable.add(() => {
           primaryMaterialDisposed = true;
         });
         secondaryMaterial?.onDisposeObservable.add(() => {
           secondaryMaterialDisposed = true;
         });
+        runtimeMaterial?.onDisposeObservable.add(() => {
+          runtimeMaterialDisposed = true;
+        });
 
         expect(primaryMaterial).toBeInstanceOf(StandardMaterial);
         expect(secondaryMaterial).toBeInstanceOf(StandardMaterial);
+        expect(runtimeMaterial).toBeInstanceOf(StandardMaterial);
+        expect(primaryPrimitiveMesh.material).toBe(primaryMaterial);
+        expect(secondaryPrimitiveMesh.material).toBe(secondaryMaterial);
         expect(primaryMaterial).not.toBe(secondaryMaterial);
+        expect(primaryMaterial).not.toBe(runtimeMaterial);
+        expect(secondaryMaterial).not.toBe(runtimeMaterial);
         expect(primaryMaterial?.alpha).toBe(1);
         expect(secondaryMaterial?.alpha).toBe(1);
+        expect(runtimeMaterial?.alpha).toBe(1);
 
         primaryMaterial!.alpha = 0.25;
 
+        expect(primaryPrimitiveMesh.material?.alpha).toBe(0.25);
         expect(secondaryMaterial?.alpha).toBe(1);
+        expect(secondaryPrimitiveMesh.material?.alpha).toBe(1);
+        expect(runtimeMaterial?.alpha).toBe(1);
         primaryVisual.dispose();
         expect(primaryMaterialDisposed).toBe(true);
         expect(secondaryMaterialDisposed).toBe(false);
-        expect(secondaryInstance.meshes[0]!.material).toBe(secondaryMaterial);
+        expect(runtimeMaterialDisposed).toBe(false);
+        expect(secondaryAssetMesh.material).toBe(secondaryMaterial);
+        expect(secondaryPrimitiveMesh.material).toBe(secondaryMaterial);
+        expect(secondaryAssetMesh.isDisposed()).toBe(false);
+        expect(secondaryPrimitiveMesh.isDisposed()).toBe(false);
         expect(secondaryInstance.rootNodes[0]!.isDisposed()).toBe(false);
         secondaryMaterial!.alpha = 0.75;
-        expect(secondaryMaterial?.alpha).toBe(0.75);
+        expect(secondaryAssetMesh.material?.alpha).toBe(0.75);
+        expect(secondaryPrimitiveMesh.material?.alpha).toBe(0.75);
+        expect(runtimeMaterial?.alpha).toBe(1);
       } finally {
         await runtime.dispose();
       }

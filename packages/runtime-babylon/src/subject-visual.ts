@@ -364,12 +364,27 @@ export async function createSubjectVisual(
     if (subject.visualBinding.mode === "rigged" && assetParts.length !== 1) {
       throw assetError("SUBJECT_ASSET_RIG_INCOMPATIBLE");
     }
+    if (subject.visualBinding.mode === "static" && assetParts.length > 0) {
+      assetDescriptor = exactResource(
+        executionPlan.subjectAssets,
+        assetParts[0]!.subjectAssetRef,
+        (resource) => resource.subjectAssetRef,
+        "SUBJECT_ASSET_RIG_INCOMPATIBLE",
+      );
+      const clonedMaterial = material.clone(
+        `${subject.entityId}.static-subject-material`,
+      );
+      if (clonedMaterial === null) {
+        throw assetError("SUBJECT_ASSET_RIG_INCOMPATIBLE", assetDescriptor);
+      }
+      staticOwnedMaterial = clonedMaterial;
+    }
     for (const part of subject.visualParts) {
       if (part.kind === "primitive") {
         const mesh = createPartMesh(subject.entityId, part, scene);
         mesh.parent = root;
         applyLocalTransform(mesh, part.localTransform);
-        mesh.material = material;
+        mesh.material = staticOwnedMaterial ?? material;
         mesh.metadata = {
           worldkitEntityId: subject.entityId,
           subjectVisualPartId: part.id,
@@ -390,15 +405,6 @@ export async function createSubjectVisual(
       assetDescriptor = asset;
       assetLease = await subjectAssetCache.acquire(asset);
       assetInstance = assetLease.instantiate(subject.entityId);
-      if (subject.visualBinding.mode === "static") {
-        const clonedMaterial = material.clone(
-          `${subject.entityId}.static-subject-material`,
-        );
-        if (clonedMaterial === null) {
-          throw assetError("SUBJECT_ASSET_RIG_INCOMPATIBLE", asset);
-        }
-        staticOwnedMaterial = clonedMaterial;
-      }
       const partRoot = new TransformNode(`${subject.entityId}.${part.id}`, scene);
       partRoot.parent = root;
       applyLocalTransform(partRoot, part.localTransform);
