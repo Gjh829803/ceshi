@@ -1085,6 +1085,10 @@ export class RuntimeHost {
     );
   }
 
+  runtimeActivitySnapshot(): RuntimeActivityCoordinatorSnapshotV1 {
+    return this.activityCoordinator.snapshot();
+  }
+
   acquireRuntimeActivity(input: unknown): RuntimeActivityAcquireResultV1 {
     if (
       this.disposeRequested ||

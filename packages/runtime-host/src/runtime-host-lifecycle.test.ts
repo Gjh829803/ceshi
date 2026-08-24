@@ -66,6 +66,7 @@ interface RuntimeHostUnderTestV1 {
   resetWithInitialControlBinding(
     input: unknown,
   ): Promise<WorldSessionPublicationV1>;
+  runtimeActivitySnapshot(): runtimeHostModule.RuntimeActivityCoordinatorSnapshotV1;
   acquireRuntimeActivity(input: unknown): RuntimeActivityAcquireResultV1;
   dispose(): Promise<void>;
 }
@@ -473,6 +474,52 @@ async function createHost(
 }
 
 describe("RuntimeHost lifecycle isolation and admission", () => {
+  it("publishes immutable provider-neutral Runtime Activity counters without lease authority", async () => {
+    const current = createPortHarness();
+    const { host } = await createHost([current]);
+
+    const initial = host.runtimeActivitySnapshot();
+    expect(initial).toEqual({
+      runtimeActivityEpoch: 0,
+      activeRuntimeActivityCount: 0,
+      retainedRuntimeActivityRecordCount: 0,
+    });
+    expect(Object.isFrozen(initial)).toBe(true);
+    expect(Object.keys(initial)).toEqual([
+      "runtimeActivityEpoch",
+      "activeRuntimeActivityCount",
+      "retainedRuntimeActivityRecordCount",
+    ]);
+    expect(initial).not.toHaveProperty("lease");
+    expect(initial).not.toHaveProperty("handle");
+
+    const acquired = host.acquireRuntimeActivity({
+      kind: "runtime-run",
+      requestId: "activity.snapshot",
+      payloadHash: HASH_A,
+    });
+    if (acquired.status !== "active") {
+      throw new Error("Expected an active Runtime Activity lease.");
+    }
+    expect(host.runtimeActivitySnapshot()).toEqual({
+      runtimeActivityEpoch: 1,
+      activeRuntimeActivityCount: 1,
+      retainedRuntimeActivityRecordCount: 1,
+    });
+    expect(initial).toEqual({
+      runtimeActivityEpoch: 0,
+      activeRuntimeActivityCount: 0,
+      retainedRuntimeActivityRecordCount: 0,
+    });
+
+    acquired.lease.release();
+    expect(host.runtimeActivitySnapshot()).toEqual({
+      runtimeActivityEpoch: 2,
+      activeRuntimeActivityCount: 0,
+      retainedRuntimeActivityRecordCount: 1,
+    });
+  });
+
   it("keeps WorldSession state and ID ledgers isolated between two Hosts", async () => {
     const firstPort = createPortHarness();
     const secondPort = createPortHarness();
