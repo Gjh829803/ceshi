@@ -2,7 +2,7 @@
 
 ## 1. 文档状态
 
-- 状态：**Task 10 complete matrix and host review green / final Cursor core review pending（2026-08-24）**。R1b 与 M5 仍开放。
+- 状态：**R1b / Task 10 / M5 Complete（2026-08-24）**。
 - 所属里程碑：P0.1 / M5。
 - 前置能力：Route R0 与 R1 Heightfield 已通过 PR #20 合入 `main`；
   `pnpm verify:route-r0-contract`、`pnpm verify:route-r1-heightfield` 和真实
@@ -13,8 +13,9 @@
   - [Control Feel、Physics Medium 与 State Resolver](./2026-08-21-control-feel-physics-medium-state-resolver-design.md)
 - 本文只冻结 R1b 普通静态平台切片。实现与收口进度以
   [R1b 实施计划](../plans/2026-08-23-route-r1b-static-platform-implementation-plan.md)
-  为准；Task 9、完整矩阵和主 Agent 深审已完成且无 open host P0/P1，但一次最终核心
-  Cursor CR 尚未完成，因此不能提前宣布 R1b/M5 完成。
+  为准；候选 `506e088bf929d153f4bbc4a24be5eaaa64a1ba87` 相对 base
+  `9c5a6158c347e08ea0af01135cb827166ffbede0` 已通过 Task 9/10、修后完整矩阵、
+  主 Agent 深审和 Cursor 首轮/条件复核，无 open confirmed P0/P1，因此 R1b/M5 已完成。
 
 ## 2. 目标与非目标
 
@@ -1109,7 +1110,7 @@ R1b 新增 `examples/traversal/r1b-static-platform/`，至少包含：
 | `fail-wrong-runtime-surface` | Graph complete | `ROUTE_RUNTIME_SUPPORT_SURFACE_MISMATCH` |
 | `fail-platform-edge-fall` | Graph complete fixture injection | `ROUTE_RUNTIME_SUPPORT_LOST` |
 | `fail-overlapping-surfaces` | `ROUTE_SURFACE_CORRELATION_AMBIGUOUS` | Graph fail 后不运行 |
-| `fail-runtime-overlapping-surfaces` | complete fixture injection | Runtime `ambiguous` 不能通过 |
+| `fail-runtime-overlapping-surfaces` | complete；真实 `0.02m` 静态薄片与 Heightfield 的实际 Runtime 支撑区域重叠 | `ROUTE_RUNTIME_SUPPORT_SURFACE_MISMATCH`；Runtime `ambiguous` 不能通过 |
 
 锁定人形 Profile 的 `maxStepHeightMeters = 0.3`：
 
@@ -1206,7 +1207,7 @@ pnpm verify:rigged-subject
 pnpm verify:g-bot-subject
 ```
 
-只有以下全部成立才能关闭 R1b 和 M5：
+R1b 和 M5 的关闭条件如下：
 
 - R1 Heightfield 无语义回归；
 - Static Surface/Collider/Graph/Runtime 共享同一 provenance；
@@ -1215,5 +1216,12 @@ pnpm verify:g-bot-subject
 - 无 open P0/P1；
 - 全维度 review 与 Runtime deep review 已记录；
 - README、Route 总规格与 `docs/18` 同步标明 M5 完成、H1/H2/H3 仍开放。
+
+上述条件已由 `506e088` 的修后完整矩阵、主 Agent 全维度/Runtime 深审、首轮 Cursor
+chat `1e938715-a5b2-4a25-ad83-45eec0c37c15` 与条件复核 chat
+`d61f751c-a398-4063-bcbf-2ddc55ea20a9` 满足。首轮对 `28752e0` 为 Final GO / No findings，
+但给出 Runtime ambiguous 诊断分层建议；主审确认并修复后，三模式回归证明 Runtime
+`unmatched / ambiguous / wrong resolved Surface` 均归一为
+`ROUTE_RUNTIME_SUPPORT_SURFACE_MISMATCH`，条件复核对 `506e088` 再次为 Final GO / No findings。
 
 R1b/M5 完成不等于 SDK 已支持桥梁双层、洞穴、动态平台、NPC 或公开导航命令。

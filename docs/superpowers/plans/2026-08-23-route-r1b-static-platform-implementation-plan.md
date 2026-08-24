@@ -79,7 +79,7 @@ The V2/V5 public clean break is atomic at Task 9. Earlier tasks may add the new 
 - Adds each distinct resolved Traversal Surface Profile receipt to the Authoring Resource Lock and preserves byte-identical Authoring/Execution lock rows.
 - Uses existing `deriveColliderSubshapeIdV1(entityId, logicalSubshapeId)` and existing `ExecutionStaticColliderV1` fields unchanged.
 
-- [ ] **Step 1: Write RED Authoring normalization tests**
+- [x] **Step 1: Write RED Authoring normalization tests**
 
 Add a box Prototype with:
 
@@ -95,7 +95,7 @@ traversalSurfaceBindings: [{
 
 Assert canonical preservation, strict field rejection, duplicate `id` rejection, unknown Subshape rejection, and rejection when `collisionEnabled === false`. Also assert V3 still rejects `traversalSurfaceBindings`, while V4 normalization sorts/deep-freezes bindings and changes `authoringSpecHash`, `normalizedWorldIrHash`, and `resourceLockHash` when the binding or resolved Profile changes.
 
-- [ ] **Step 2: Verify Authoring RED**
+- [x] **Step 2: Verify Authoring RED**
 
 Run:
 
@@ -105,7 +105,7 @@ pnpm vitest run packages/authoring/src/authoring-v4.test.ts packages/authoring/s
 
 Expected: FAIL because `traversalSurfaceBindings` is not part of the closed Prototype contract.
 
-- [ ] **Step 3: Implement the closed Authoring binding**
+- [x] **Step 3: Implement the closed Authoring binding**
 
 Add:
 
@@ -120,7 +120,7 @@ export interface PrototypeTraversalSurfaceBindingV1 {
 
 Add the same closed shape and a dedicated `traversal-surface-profile-ref` format to the V4 JSON Schema/AJV validator. Put only the shared binding vocabulary in `types.ts`; widen Prototype/resource types in `types-v4.ts` without weakening V3. Strip bindings before calling the V3 normalizer, then restore them by `id`, deep-freeze them, and include them in the V4 canonical identity. Resolve every distinct Profile Ref through Task 3, insert the exact receipt through `ResourceLockBuilderV1`, and add `@whitebox-world/traversal` as a direct Authoring dependency. Keep Object instances free of per-instance Surface geometry or toggles.
 
-- [ ] **Step 4: Write RED Compiler and Runtime Contract tests**
+- [x] **Step 4: Write RED Compiler and Runtime Contract tests**
 
 Prove two Objects sharing one Prototype produce two static Surface rows with different `surfaceEntityId`/`colliderSubshapeId`, while each row joins exactly one existing Collider row:
 
@@ -133,7 +133,7 @@ expect(surface.colliderHash).toBe(collider.colliderHash);
 
 Also prove the R1 Heightfield ID is byte-identical to the pre-R1b fixture and that a forged-but-hash-consistent normalized V4 join fails Plan admission. Extend `compile-traversal-lock.test.ts` to prove the Traversal Surface Profile row survives byte-identically from normalized to Execution Resource Lock and that a missing or changed row fails closed.
 
-- [ ] **Step 5: Verify Compiler RED**
+- [x] **Step 5: Verify Compiler RED**
 
 Run:
 
@@ -143,7 +143,7 @@ pnpm vitest run packages/compiler/src/compile-v5.test.ts packages/runtime-contra
 
 Expected: FAIL because `ExecutionStaticColliderTraversalSurfaceV1` and the new Resource kind do not exist.
 
-- [ ] **Step 6: Implement per-instance Surface compilation**
+- [x] **Step 6: Implement per-instance Surface compilation**
 
 Compile the static Surface resource identity as:
 
@@ -166,7 +166,7 @@ Compile the static Surface resource identity as:
 
 Sort compiled surfaces by `traversalSurfaceId`. Resolve every Profile again in Compiler, require an exact `resourceRef`/`resourceKind`/`resolvedVersion`/`contentHash` match with one normalized lock row, and copy that receipt into the compiled Surface. Fail before returning a Plan on missing/ambiguous Collider joins, unresolved Profile refs, or lock drift.
 
-- [ ] **Step 7: Run Task 1 gates and commit**
+- [x] **Step 7: Run Task 1 gates and commit**
 
 ```bash
 pnpm vitest run packages/authoring/src/authoring-v4.test.ts packages/authoring/src/normalize-v4.test.ts packages/compiler/src/compile-v5.test.ts packages/compiler/src/compile-traversal-lock.test.ts packages/runtime-contracts/src/runtime-contracts.test.ts
@@ -249,7 +249,7 @@ V2 names this task must create (do not alias to V1):
 - `empty-heightfield-source` only when `terrainSource.kind === "empty"` and `staticColliders.length === 0`
 - New reasons: `surface-profile-missing`, `surface-correlation-missing`, `surface-correlation-ambiguous`, `traversal-surface-count-budget-exceeded`, `traversal-surface-triangle-pair-test-budget-exceeded`
 
-- [ ] **Step 1: Write and execute V1-only byte characterization guards**
+- [x] **Step 1: Write and execute V1-only byte characterization guards**
 
 Before importing any missing V2 symbol, pin one literal canonical hash for every V1 serialized root touched by this task: Build Input, Graph, Path, Overlay, Connectivity Failure, and Connectivity Result. Keep this checkpoint V1-only: it must not import V2 entrypoints or depend on module-link failure.
 
@@ -259,7 +259,7 @@ pnpm vitest run packages/traversal/src/build-input.test.ts packages/traversal/sr
 
 Expected: PASS and record the six literal V1 hashes before production declaration changes. This successful characterization run is mandatory evidence; a later missing-export RED cannot substitute for it.
 
-- [ ] **Step 2: Write RED Build Input V2 tests**
+- [x] **Step 2: Write RED Build Input V2 tests**
 
 In a separate V2 RED test section/file, assert V1 rejects V2 roots/fields and V2 rejects V1 roots/fields; these staging regressions are deleted with V1 in Task 9 and are not a compatibility layer.
 
@@ -316,7 +316,7 @@ Add two budget adversaries. First, `terrainSource.kind === "empty"` plus a non-e
 
 Import these runtime entrypoints from the Traversal package root so RED is executable rather than type-erased: `assertRouteBuildInputV2`, `hashRouteBuildInputV2`, `assertRouteBuildInputReceiptV2`, the four artifact hash helpers, and `createRouteBuildInputReceiptV2`. The literal V1 hashes are already proven green in Step 1; this separate module is now allowed to fail during missing V2 export linkage.
 
-- [ ] **Step 3: Verify Build Input RED**
+- [x] **Step 3: Verify Build Input RED**
 
 ```bash
 pnpm vitest run packages/traversal/src/build-input.test.ts
@@ -324,7 +324,7 @@ pnpm vitest run packages/traversal/src/build-input.test.ts
 
 Expected: FAIL because the executable V2 Build Input/hash/receipt entrypoints do not exist.
 
-- [ ] **Step 4: Implement strict V2 Build Input and receipt**
+- [x] **Step 4: Implement strict V2 Build Input and receipt**
 
 Define the exact closed Terrain and static sources:
 
@@ -380,7 +380,7 @@ Exclusions remain full Build Input fields and enter only `routeBuildInputHash`; 
 
 Add strict V2 declarations/exports beside the unchanged V1 implementation as feature-branch staging. Recompute every V2 child/root hash inside the canonical validator. Do not translate, alias, auto-upgrade, or change the meaning of any V1 field; V1 remains byte-stable until Task 9 deletes it.
 
-- [ ] **Step 5: Write RED Graph/Path/Overlay/Connectivity V2 tests**
+- [x] **Step 5: Write RED Graph/Path/Overlay/Connectivity V2 tests**
 
 Create a Graph path whose ordered nodes use Heightfield → platform → Heightfield. Assert the aligned identities:
 
@@ -417,7 +417,7 @@ The Profile reason requires non-empty sorted `relevantColliderSubshapeIds`; unre
 
 Import executable RED entrypoints from the package root: `canonicalTraversalGraphV2`, `hashTraversalGraphV2`, `assertTraversalGraphForBuildInputV2`, `canonicalRoutePathReceiptV2`, `hashRoutePathReceiptV2`, `assertRoutePathReceiptForGraphV2`, `canonicalRouteOverlayV2`, `hashRouteOverlayV2`, `assertRouteOverlayContextV2`, `ROUTE_CONNECTIVITY_FAILURE_CODES_V2`, `canonicalRouteConnectivityFailureV2`, `hashRouteConnectivityFailureV2`, `canonicalRouteConnectivityResultV2`, and `assertRouteConnectivityResultForBuildInputV2`. Missing functions, rather than erased interfaces, are the required initial RED.
 
-- [ ] **Step 6: Verify V2 receipt RED**
+- [x] **Step 6: Verify V2 receipt RED**
 
 ```bash
 pnpm vitest run packages/traversal/src/graph-contract.test.ts packages/traversal/src/path-receipt.test.ts packages/traversal/src/route-overlay.test.ts packages/traversal/src/connectivity-result.test.ts
@@ -425,7 +425,7 @@ pnpm vitest run packages/traversal/src/graph-contract.test.ts packages/traversal
 
 Expected: FAIL on missing executable V2 Graph/Path/Overlay/Connectivity entrypoints and path-global Surface assertions.
 
-- [ ] **Step 7: Implement V2 Graph and receipt contextual validation**
+- [x] **Step 7: Implement V2 Graph and receipt contextual validation**
 
 `RouteConnectivityResultV2` must use `kind: "route-connectivity-result"`, `schemaVersion: 2`; validate Graph inventory exactly against Build Input; validate every Node triple against its inventory row; validate every ordered Path identity against the matching Node inventory row; and never invent one Surface for a pre-correlation failure. Connectivity Result does not contain an Overlay, so its context validator must not synthesize that dependency.
 
@@ -439,7 +439,7 @@ returns a deeply frozen canonical Overlay. This direct Node/inventory postcondit
 Result admission already proved Graph↔Path context. Task 8 Validation owns the trusted complete Result +
 Build Input integration point; callers cannot self-report an independent Path.
 
-- [ ] **Step 8: Run Task 2 gates and commit**
+- [x] **Step 8: Run Task 2 gates and commit**
 
 ```bash
 pnpm vitest run packages/traversal/src/build-budget.test.ts packages/traversal/src/build-input.test.ts packages/traversal/src/graph-contract.test.ts packages/traversal/src/path-receipt.test.ts packages/traversal/src/route-overlay.test.ts packages/traversal/src/connectivity-result.test.ts
@@ -481,7 +481,7 @@ Expected: all focused tests, fixed V1-byte guards, the R1 Heightfield gate, and 
   1 preserves the Heightfield gate until Task 2 introduces V2.
 - Keeps downstream Path, Connectivity, Probe, and Browser fixtures bound to the exact resolved built-in Profile hash and Envelope bytes instead of duplicating a stale hash literal. Playground tests import the resolver only from the public `@whitebox-world/traversal` package root and declare that package as a direct dev dependency; no deep-relative package-internal import is allowed.
 
-- [ ] **Step 1: Write RED Profile and Envelope tests**
+- [x] **Step 1: Write RED Profile and Envelope tests**
 
 Assert the built-in Profile is exactly:
 
@@ -505,7 +505,7 @@ a claim that point and pair predicates have equivalent cost.
 
 Keep the core RED assertions in `profile-registry.test.ts`, `capability-envelope.test.ts`, and `build-budget.test.ts`: those tests must fail before the Profile and all three Envelope fields exist. Run the Path Receipt, Connectivity Result, Runtime Probe, and Browser API fixtures in the same integration command as stale-identity guards, but do not require all four downstream fixtures to fail in the initial RED state. Their Profile hash and Envelope-derived fields must come from `resolveTraversalGraphBuilderProfileV2()` / `createTraversalCapabilityEnvelopeV1()` rather than the pre-R1b literal, so the Profile content change cannot leave internally inconsistent fixtures green.
 
-- [ ] **Step 2: Verify RED**
+- [x] **Step 2: Verify RED**
 
 ```bash
 pnpm vitest run packages/traversal/src/profile-registry.test.ts packages/traversal/src/capability-envelope.test.ts packages/traversal/src/build-budget.test.ts packages/traversal/src/path-receipt.test.ts packages/traversal/src/connectivity-result.test.ts packages/traversal/src/runtime-probe-contract.test.ts apps/playground/src/worldkit-browser-api.test.ts
@@ -516,11 +516,11 @@ Envelope fields are absent. The four downstream fixture suites may still pass be
 change; they become mandatory green integration gates after Step 3 updates the resolved Profile identity
 and Envelope-derived fixture values.
 
-- [ ] **Step 3: Implement Profile resolution and generic budget**
+- [x] **Step 3: Implement Profile resolution and generic budget**
 
 Keep slope, step, capsule, clearance, speed, and Provider area values out of `TraversalSurfaceProfileV1`. Adapter admission consumes only the three provider-neutral values already copied into the Envelope. Update every listed downstream fixture to derive the built-in Graph Builder Profile hash and Envelope fields from the public resolver/factory. In `apps/playground/src/worldkit-browser-api.test.ts`, import `resolveTraversalGraphBuilderProfileV2` from `@whitebox-world/traversal`, add `@whitebox-world/traversal: "workspace:*"` to Playground `devDependencies`, and refresh `pnpm-lock.yaml`; do not reach into `packages/traversal/src` from the app.
 
-- [ ] **Step 4: Run Task 3 gates and commit**
+- [x] **Step 4: Run Task 3 gates and commit**
 
 ```bash
 pnpm install
@@ -573,7 +573,7 @@ Expected: all focused tests, the R1 Heightfield gate, and typecheck pass.
   normal epsilon and never flips downward normals upward.
 - Replaces duplicated Recast Euler/TRS geometry code with the existing world-space `emitTransformedStaticColliderTriangleMeshV1()` authority.
 
-- [ ] **Step 1: Write RED asymmetric geometry tests**
+- [x] **Step 1: Write RED asymmetric geometry tests**
 
 Write RED tests for the exact query and pair contracts before production exports exist:
 
@@ -601,7 +601,7 @@ Write RED tests for the exact query and pair contracts before production exports
   the first and returns `budget-exceeded` on the second, with `minimumRequiredCount === 2`; forged budget
   values fail before broadphase work.
 
-- [ ] **Step 2: Verify geometry RED**
+- [x] **Step 2: Verify geometry RED**
 
 ```bash
 pnpm vitest run packages/terrain-surface/src/traversal-surface-query.test.ts packages/terrain-surface/src/static-collider-triangle-mesh.test.ts
@@ -609,7 +609,7 @@ pnpm vitest run packages/terrain-surface/src/traversal-surface-query.test.ts pac
 
 Expected: FAIL because the shared query module does not exist.
 
-- [ ] **Step 3: Implement deterministic shared query classification**
+- [x] **Step 3: Implement deterministic shared query classification**
 
 Use deterministic world-space vector math through existing terrain-surface utilities. XZ point
 admission compares perpendicular edge distance only with
@@ -640,7 +640,7 @@ Implement legacy `sampleTriangleHeightfieldSurface()` and
 package-private triangle primitive. Delete or deprecate independent barycentric/vertical-query code and
 prove no third semantic implementation remains.
 
-- [ ] **Step 4: Write RED shared-emitter Recast test**
+- [x] **Step 4: Write RED shared-emitter Recast test**
 
 Spy on the shared emitter output only through value comparison: Graph source positions/indices must
 equal `emitTransformedStaticColliderTriangleMeshV1()` `worldPositionsMetersXYZ`/indices for asymmetric
@@ -649,7 +649,7 @@ byte-for-byte; Babylon Float32 is not part of this Task 4 assertion. Delete expe
 duplicate Recast TRS implementation and remove the local Euler/`transformSoup` path from
 `heightfield-source.ts`.
 
-- [ ] **Step 5: Implement shared source emission and preflight**
+- [x] **Step 5: Implement shared source emission and preflight**
 
 Build `StaticColliderSourceV1` only in Traversal-Recast from the Execution Collider and the shared
 emitter: copy `entityId`, `logicalSubshapeId`, `colliderSubshapeId`, and `colliderHash` from the compiled
@@ -674,7 +674,7 @@ is computed from canonical translation plus the sum of absolute canonical linear
 vertex terms. It never uses only final-coordinate magnitude and never enters Canonical Schema, query
 constants, public protocols, receipts, Profiles, or hashes.
 
-- [ ] **Step 6: Benchmark the admitted ceiling and record Task 4 disposition**
+- [x] **Step 6: Benchmark the admitted ceiling and record Task 4 disposition**
 
 After focused GREEN, run a deterministic representative R1b fixture and a near-4,000,000-candidate
 adversarial fixture on a supported environment. Record command, OS/CPU/runtime versions, source/triangle/
@@ -683,7 +683,7 @@ evidence, not a machine-independent pass threshold. If time or memory is unaccep
 unreleased Profile value and content Hash, rerun Profile/Envelope/query RED→GREEN, and repeat independent
 review before Task 6 starts.
 
-- [ ] **Step 7: Run Task 4 gates and commit**
+- [x] **Step 7: Run Task 4 gates and commit**
 
 ```bash
 pnpm vitest run packages/terrain-surface/src packages/traversal-recast/src/heightfield-source.test.ts
@@ -713,7 +713,7 @@ exported, and the benchmark disposition records elapsed time plus peak memory.
 - Adds private `sourceAreaMode.kind = "layered-traversal-sources-r1b"` with closed `candidateSourceRanges` and `blockerStartVertexIndex`.
 - Returns no Provider area/tag in public or canonical results.
 
-- [ ] **Step 1: Write RED installed-provider acceptance tests**
+- [x] **Step 1: Write RED installed-provider acceptance tests**
 
 Use real `generateTiledNavMesh` to prove:
 
@@ -723,7 +723,7 @@ Use real `generateTiledNavMesh` to prove:
 4. slope-incompatible faces remain non-walkable;
 5. 61 candidate ranges are accepted, while 62 candidate ranges fail before Provider execution.
 
-- [ ] **Step 2: Verify provider RED**
+- [x] **Step 2: Verify provider RED**
 
 ```bash
 pnpm vitest run packages/traversal-recast/src/provider-acceptance.test.ts packages/traversal-recast/src/provider-lifecycle.test.ts
@@ -731,7 +731,7 @@ pnpm vitest run packages/traversal-recast/src/provider-acceptance.test.ts packag
 
 Expected: FAIL because the installed patch only accepts `terrain-with-static-blockers-r1`.
 
-- [ ] **Step 3: Patch the exact Provider pipeline order**
+- [x] **Step 3: Patch the exact Provider pipeline order**
 
 Implement and test:
 
@@ -746,11 +746,11 @@ markWalkableTriangles
 
 Validate every triangle belongs entirely to one declared vertex range. Reserve area `0` for null, `1` for blocker, and `63` for the Recast walkable sentinel; map candidate ordinals `0..60` to `2..62`. Reject mixed-range indices, overlapping ranges, unsorted ordinals, out-of-bounds ranges, 62 candidate ranges, and unknown fields.
 
-- [ ] **Step 4: Refresh patch and Adapter identities**
+- [x] **Step 4: Refresh patch and Adapter identities**
 
 Update the patch fingerprint and `TRAVERSAL_RECAST_ADAPTER_IDENTITY_V1` hash through the repository's existing canonical identity helpers. Do not hand-edit expected hashes without a test demonstrating the new bytes.
 
-- [ ] **Step 5: Run Task 5 gates and commit**
+- [x] **Step 5: Run Task 5 gates and commit**
 
 ```bash
 pnpm install
@@ -788,11 +788,11 @@ Expected: real Provider acceptance and identity tests pass.
   classifier or create a second same-band authority.
 - Produces provider-private `TraversalGraphProjectionV2` and `QueryRequiredRouteInputV2` beside the staging V1 types; neither may retain Heightfield-only Build Input/Graph assumptions. Task 9 deletes `HeightfieldTraversalGraphProjectionV1`, `QueryRequiredRouteInputV1`, and their V1 constructor/assert/canonical/hash satellites after all call sites migrate.
 
-- [ ] **Step 1: Write RED successful multi-Surface Graph test**
+- [x] **Step 1: Write RED successful multi-Surface Graph test**
 
 Build Heightfield → 0.25m step chain → platform → ramp → Heightfield. Assert complete Path, ordered Surface sequence, `step` edges at legal risers, and no Provider fields in serialized Graph/Path.
 
-- [ ] **Step 2: Verify Graph RED**
+- [x] **Step 2: Verify Graph RED**
 
 ```bash
 pnpm vitest run packages/traversal-recast/src/heightfield-source.test.ts packages/traversal-recast/src/build-graph.test.ts packages/traversal-recast/src/query-route.test.ts
@@ -800,19 +800,19 @@ pnpm vitest run packages/traversal-recast/src/heightfield-source.test.ts package
 
 Expected: FAIL because the R1 mapper puts every static Collider in the blocker suffix and stamps one Heightfield identity on every Node.
 
-- [ ] **Step 3: Implement multi-source mapping and Node correlation**
+- [x] **Step 3: Implement multi-source mapping and Node correlation**
 
 Sort candidate ranges by `traversalSurfaceId`, blockers by `colliderSubshapeId`, and verify private tag → source range → Surface/geometry hashes. Build Graph inventory from the exact canonical `input.traversalSurfaces` rows; each emitted Node triple must match the referenced inventory row. Query only the tagged canonical source through Task 4 `queryCanonicalTraversalSurfaceHitsV1()`, using quantized Node Y, `positionQuantizationMeters / 2 + TRAVERSAL_SURFACE_QUERY_HEIGHT_EPSILON_METERS_V1`, and `minimumUpwardNormalYRatio = cos(maxSlopeDegrees)`. Delete Task 6's barycentric epsilon/leaf; never select highest/lowest/nearest Surface or repeat Resource Ref/Version/Hash on every Node. Route evaluation consumes only `TraversalGraphProjectionV2` + `RouteBuildInputReceiptV2` through `QueryRequiredRouteInputV2`; do not hide a Heightfield/V1 receipt behind an unchanged internal type.
 
-- [ ] **Step 4: Write RED failure and rejection-proof tests**
+- [x] **Step 4: Write RED failure and rejection-proof tests**
 
 Cover 0.35m step, 1cm gap, narrow tread, low overhead, missing Profile, forged Collider binding, coplanar interior overlap, stacked layers, Surface-count overflow, and triangle-pair limit 1 overflow. Assert the pair budget exits on candidate 2 and maps to the exact reason/zero identities/count fields. Each dedicated diagnostic must be backed by a one-relaxation rejection proof; mixed failures remain generic.
 
-- [ ] **Step 5: Implement multi-Surface edges and V2 failures**
+- [x] **Step 5: Implement multi-Surface edges and V2 failures**
 
 Publish only `walk | slope | step`. A seam requires canonical boundary evidence. Do not use visual bounds or raw Provider adjacency to bridge a gap. Populate `relatedTraversalSurfaceIdentities` only from canonical Build Input rows and obey Task 2 reason cardinalities: Profile Missing has zero identities plus collider evidence, Correlation Missing has zero or one, Correlation Ambiguous has at least two, and both Surface-count and triangle-pair-test budgets have zero. The latter uses `traversal-surface-triangle-pair-test-budget-exceeded`, `maximumAllowedCount = Envelope budget`, and `minimumRequiredCount = maximum + 1`; do not copy it into `RouteBuildBudgetEvidenceV2`.
 
-- [ ] **Step 6: Run Task 6 gates and commit**
+- [x] **Step 6: Run Task 6 gates and commit**
 
 ```bash
 pnpm vitest run packages/traversal-recast/src
@@ -846,7 +846,7 @@ Expected: multi-Surface success/failure tests pass and R1 remains green.
 - Keeps Babylon/Havok Float32 conformance tolerance private to the Runtime Adapter and out of every
   Canonical/public/hash contract.
 
-- [ ] **Step 1: Write RED Runtime correlation tests**
+- [x] **Step 1: Write RED Runtime correlation tests**
 
 Cover Heightfield, bound static platform, unbound Collider, dynamic support, flat↔ramp/ridge/0.25m exact
 seams, coplanar overlap, stacked lower layer, downward bottom/vertical side rejection, `SLIDING`, Reset,
@@ -861,7 +861,7 @@ emitter under private per-axis tolerance
 translation plus absolute linear-transform × local-vertex terms. A wrong Euler order must still fail;
 do not assert byte equality at the Float32 engine boundary.
 
-- [ ] **Step 2: Verify Runtime RED**
+- [x] **Step 2: Verify Runtime RED**
 
 ```bash
 pnpm vitest run packages/runtime-babylon/src/traversal-runtime-port.test.ts packages/runtime-babylon/src/traversal-runtime-support-conformance.test.ts
@@ -869,7 +869,7 @@ pnpm vitest run packages/runtime-babylon/src/traversal-runtime-port.test.ts pack
 
 Expected: FAIL because static support is currently counted only as Heightfield ambiguity/unmatched.
 
-- [ ] **Step 3: Implement immutable static Surface correlation**
+- [x] **Step 3: Implement immutable static Surface correlation**
 
 Index canonical sources by `colliderSubshapeId`, then query Heightfield plus compiled Surface-bound rows
 in one shared plural call and join its returned `traversalSurfaceId` to the Execution Surface inventory.
@@ -878,7 +878,7 @@ duplicate `verticalTriangleHit()` path, private barycentric epsilon, and negativ
 sampler facades must reuse Task 4's shared package-private leaf. Return
 `unsupported | unmatched | ambiguous | resolved` without changing movement state.
 
-- [ ] **Step 4: Run Task 7 gates and commit**
+- [x] **Step 4: Run Task 7 gates and commit**
 
 ```bash
 pnpm vitest run packages/runtime-babylon/src/traversal-runtime-port.test.ts packages/runtime-babylon/src/traversal-runtime-support-conformance.test.ts packages/runtime-babylon/src/runtime.test.ts
@@ -924,7 +924,7 @@ Expected: Runtime tests pass with exactly one support query per tick.
   canonical DTO and is not a raw-publication provenance owner.
 - Defines and tests V5 builders/contracts beside unchanged V4 declarations, but does not switch `window.__WORLDKIT__` or trusted-host consumers until Task 9's atomic cutover.
 
-- [ ] **Step 1: Write RED 3D station tests**
+- [x] **Step 1: Write RED 3D station tests**
 
 Prove:
 
@@ -935,7 +935,7 @@ Prove:
 5. Reset/Rebind restores station to the start;
 6. 30/60/120-like render cadence produces byte-identical Probe receipts.
 
-- [ ] **Step 2: Verify Probe RED**
+- [x] **Step 2: Verify Probe RED**
 
 ```bash
 pnpm vitest run packages/traversal/src/runtime-probe-contract.test.ts packages/validation/src/route-runtime-probe.test.ts
@@ -943,19 +943,19 @@ pnpm vitest run packages/traversal/src/runtime-probe-contract.test.ts packages/v
 
 Expected: FAIL because Probe V1 uses a path-global Surface and XZ progress only.
 
-- [ ] **Step 3: Implement Probe-private monotonic 3D station**
+- [x] **Step 3: Implement Probe-private monotonic 3D station**
 
 Bound each tick's search window with resolved `control-feel-profile.walkSpeedMetersPerSecond * fixedTimeStepSeconds + positionQuantizationMeters`; permit one quantization band of physical backtrack. Deduplicate endpoint Surface IDs in canonical order. Keep Driver Intent computation unchanged.
 
-- [ ] **Step 4: Write RED Browser V5 tests**
+- [x] **Step 4: Write RED Browser V5 tests**
 
 Assert V5 preserves V4 methods but route evidence publishes V2 Path/Overlay arrays plus `staticColliderIdentities`, rejects old `traversalSurfaceIdentity` and `blockingColliderIdentities`, deep-freezes results, and never exposes Provider fields. At the Validation factory: mutate one Overlay Surface identity and its hash; mutate the same Path+Overlay identity and both hashes while leaving Graph unchanged; replace both with another valid Build Input Surface while preserving Node IDs; and mutate one Static Collider inventory row plus Overlay hash. Every case must fail through Traversal-owned `assertRouteOverlayContextV2()` using the exact row Result + Build Input Receipt. The untouched complete Result must retain identical canonical Path/Overlay bytes and hashes through Validation, Runtime Contracts, and Browser. At Runtime Contracts/Browser standalone admission, tamper a Path identity, Path Receipt Hash, closed field, or child hash and prove those locally self-verifiable corruptions fail. Do not claim that a context-free Browser canonicalizer can detect forged Graph/Collider provenance plus attacker-recomputed hashes.
 
-- [ ] **Step 5: Implement route evidence V2 and Browser V5 preparation**
+- [x] **Step 5: Implement route evidence V2 and Browser V5 preparation**
 
 Add strict V5 builders and V2 projection without alias fields, fallback reads, or V1↔V2 conversion. `createWorldkitBrowserRouteEvidencePublicationV2()` imports `assertRouteOverlayContextV2()` from the Traversal package root and passes the exact `validationRow.routeConnectivityResult` and `validationRow.routeBuildInputReceipt`; it hashes/publishes only the returned canonical Overlay. Runtime Contracts deletes Browser-owned V1 Build Input/Graph/Collider provenance reconstruction but retains standalone closed-shape, nested hash, Path/Overlay internal consistency, selector/publication consistency, and deep-freeze checks. Browser exposes no arbitrary raw-publication trust setter and installs only the canonical DTO delivered by the Trusted Host. Any CLI/file/network raw ingress is admitted by Validation/Trusted Host with the corresponding Validation Receipt, Build Input Receipt, and hash chain before this factory; it must not bypass the factory by type assertion. Keep the installed `window.__WORLDKIT__` V4 until Task 9 so the unmodified trusted host remains green; Task 9 switches the window, host, CLI, examples, generated/public exports, and tests atomically, then deletes V4/V1.
 
-- [ ] **Step 6: Run Task 8 gates and commit**
+- [x] **Step 6: Run Task 8 gates and commit**
 
 ```bash
 pnpm vitest run packages/traversal/src/runtime-probe-contract.test.ts packages/validation/src/route-runtime-probe.test.ts packages/validation/src/route-evaluator.test.ts packages/validation/src/route-evidence-publication.test.ts packages/runtime-contracts/src/runtime-contracts.test.ts apps/playground/src/worldkit-browser-api.test.ts
@@ -973,8 +973,8 @@ on `codex/r1b-integration@c48537f`. The atomic V2/V5 public cutover, fixture
 inventory, eleven Authoring worlds, consumer census, both verifier-only
 negative proofs, and the focused blocking gates are complete. The accepted
 fixture disposition and fresh evidence are recorded in
-`docs/reviews/2026-08-24-route-r1b-task9-fixture-disposition.md`. Task 10, R1b
-completion, and M5 completion remain open.
+`docs/reviews/2026-08-24-route-r1b-task9-fixture-disposition.md`. This Task 9 handoff did not
+itself close Task 10, R1b, or M5; the Task 10 evidence below now closes all three.
 
 **Files:**
 - Create: `examples/traversal/r1b-static-platform/success-steps-platform-ramp.world.json`
@@ -1068,7 +1068,7 @@ The executable census and the documented Step 5 command must use the identical T
 `[A-Za-z0-9_]*RouteThresholdRejection(?:Proof|Reason)[A-Za-z0-9_]*V1`; do not maintain a narrower test-only
 or prose-only family.
 
-- [ ] **Step 2: Verify gate RED**
+- [x] **Step 2: Verify gate RED**
 
 ```bash
 pnpm vitest run scripts/verify-route-r1b-static-platform.test.ts
@@ -1146,14 +1146,14 @@ Task 10 review gates have run.
 
 ### Task 10: Full Verification, Deep Review, and M5 Handoff
 
-**Current status (2026-08-24):** Task 9 implementation and its focused matrix are complete.
-After the Runtime snap-down correction, P1.5 focused conformance passed 9/9, the R1b verifier
-passed all 11 fixtures, and the complete matrix passed: `typecheck`, full `pnpm test`
-(148 files / 1574 tests), `build`, R0, R1, R1b, Canonical, Placement, Rigged Subject, and
-G Bot all exited 0. The host full-dimension/runtime review checked installed Babylon
-`checkSupport()` normal normalization, snap-down ownership, and the clean-break diff, with no
-open host P0/P1. Task 10 remains open only for one final independent Cursor core review; R1b
-and M5 must remain open until its findings are dispositioned.
+**Current status (2026-08-24): Complete.** Task 9 implementation and its focused matrix are
+complete. After the Runtime snap-down correction and Runtime ambiguous diagnostic-layer fix,
+the R1b verifier passed all 11 fixtures, and the final complete matrix passed: `typecheck`,
+full `pnpm test` (148 files / 1577 tests), `build`, R0, R1, R1b, Canonical, Placement,
+Rigged Subject, G Bot, and `git diff --check` all exited 0. The host full-dimension/runtime
+review checked installed Babylon `checkSupport()` semantics, snap-down ownership, Runtime
+support-surface diagnostics, and the clean-break diff. Both Cursor reviews returned Final GO /
+No findings. No open confirmed P0/P1 remains; Task 10, R1b, and M5 are complete.
 
 The snap-down root cause was a capsule cast accepting the rounded Minkowski edge of a surface
 being left as if it continued the previous support plane. The resulting synthetic `sliding`
@@ -1194,8 +1194,8 @@ pnpm verify:g-bot-subject
 
 Expected: every command exits 0 with no unaccounted warning.
 
-Fresh result: all commands exited 0; full `pnpm test` passed 148 files / 1574 tests and the
-R1b verifier passed all 11 fixtures.
+Fresh result after the final diagnostic fix: all commands exited 0; full `pnpm test` passed
+148 files / 1577 tests and the R1b verifier passed all 11 fixtures.
 
 - [x] **Step 2: Perform host self-review**
 
@@ -1204,23 +1204,37 @@ Apply `docs/reviews/full-dimension-review-protocol.md` and `docs/reviews/runtime
 Disposition: reviewed the installed Babylon `checkSupport()` normal normalization, snap-down
 authority/ownership, V2/V5 clean-break diff and provider boundary. No host P0/P1 remains open.
 
-- [ ] **Step 3: Request one final independent Cursor core review**
+- [x] **Step 3: Request one final independent Cursor core review**
 
 Use `/Users/xiateng/.agents/skills/reviewing-with-cursor/SKILL.md` with a fresh code review ID bound to the actual `git merge-base origin/main HEAD` at review time and the final head SHA. Record every finding as confirmed, rejected, or deferred; fix only confirmed in-scope defects with a failing reproducer.
 
-- [ ] **Step 4: Conditionally re-review confirmed fixes**
+Result: chat `1e938715-a5b2-4a25-ad83-45eec0c37c15` reviewed `28752e0` against base
+`9c5a6158c347e08ea0af01135cb827166ffbede0` and returned Final GO / No findings. Its
+non-blocking Runtime ambiguous diagnostic-layer recommendation was independently confirmed
+by the host and fixed in `506e088`.
+
+- [x] **Step 4: Conditionally re-review confirmed fixes**
 
 Do not request a mechanical second review when the core review reports no confirmed blocker.
-Only if Step 3 confirms a real defect and code changes are required, re-run the affected and
-complete gates, then use a new review ID to verify the resulting fix. Completion requires no
-open confirmed P0/P1; every reported blocker must otherwise have a host-evidenced rejection
-or an explicit out-of-scope disposition that does not violate the frozen completion contract.
+Only if Step 3 evidence leads the host to confirm a real defect and code changes are required,
+re-run the affected and complete gates, then use a new review ID to verify the resulting fix.
+Completion requires no open confirmed P0/P1; every reported blocker must otherwise have a
+host-evidenced rejection or an explicit out-of-scope disposition that does not violate the
+frozen completion contract.
 
-- [ ] **Step 5: Update public progress and remaining gaps**
+Result: the fix added explicit `unmatched / ambiguous / wrong resolved Surface` regression
+coverage and consistently publishes `ROUTE_RUNTIME_SUPPORT_SURFACE_MISMATCH`. After the full
+matrix passed, conditional review chat `d61f751c-a398-4063-bcbf-2ddc55ea20a9` reviewed
+`506e088bf929d153f4bbc4a24be5eaaa64a1ba87` and returned Final GO / No findings.
+
+- [x] **Step 5: Update public progress and remaining gaps**
 
 Mark R1b/M5 complete only if the complete matrix and reviews pass. Keep bridge/underpass H1, openings H2, caves/interiors H3, dynamic platforms, NPCs, and public navigation commands explicitly open.
 
-- [ ] **Step 6: Commit the verified handoff**
+- [x] **Step 6: Commit the verified handoff**
+
+The owning main agent commits and pushes this verified handoff after the final documentation
+diff check; this step is administrative and does not expand the R1b/M5 capability boundary.
 
 ```bash
 git add README.md docs package.json pnpm-lock.yaml

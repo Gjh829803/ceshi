@@ -3,15 +3,18 @@
 ## 1. 审查元数据
 
 - 日期：2026-08-24
-- 状态：**In progress / completion decision pending**
+- 状态：**Final GO / R1b and M5 complete**
 - 审查模式：B（变更审查），并因涉及 Babylon/Havok、资源生命周期、CLI/Browser
   Runtime Evidence 而完整纳入 `runtime-deep-review-checklist.md`
 - 分支：`codex/r1b-integration`
 - 本文创建时 HEAD：`2e761c3a7da70999a7fc5aeef2838c1c16e5a4ab`
-- 本文创建时 `merge-base origin/main HEAD`：
+- 最终候选 HEAD：`506e088bf929d153f4bbc4a24be5eaaa64a1ba87`
+- 最终 `merge-base origin/main HEAD`：
   `9c5a6158c347e08ea0af01135cb827166ffbede0`
-- 最终审查对象：待 Task 10 全量门禁和必要修复稳定后，重新记录最终 HEAD 与
-  merge-base；本文创建时 SHA 不得替代最终审查绑定
+- 首轮 Cursor 审查对象：`28752e0`；chat
+  `1e938715-a5b2-4a25-ad83-45eec0c37c15`，Final GO / No findings
+- 条件复核对象：`506e088bf929d153f4bbc4a24be5eaaa64a1ba87`；chat
+  `d61f751c-a398-4063-bcbf-2ddc55ea20a9`，Final GO / No findings
 - 权威规格：
   - `docs/superpowers/specs/2026-08-23-route-r1b-static-platform-design.md`
   - `docs/superpowers/specs/2026-08-21-route-graph-and-traversability-design.md`
@@ -22,19 +25,19 @@
 - 安装依赖版本：Babylon.js `9.21.2`、Havok `1.3.14`、patched
   Recast Navigation `0.43.1`；版本来自 `package.json`、`pnpm-lock.yaml` 与
   `pnpm-workspace.yaml`
-- 当前最终源码已完成 Task 10 完整矩阵与主 Agent 深审；门禁生成的 Rigged/G Bot
-  Artifact 已与源码变更区分并恢复。最终 Cursor CR 必须绑定候选提交的实际
-  merge-base/HEAD。本文在 Cursor 结论前仍不得作为 M5 完成凭据。
+- 最终源码已完成 Task 10 完整矩阵、主 Agent 深审与两轮 Cursor 独立复核；门禁生成的
+  Rigged/G Bot Artifact 已与源码变更区分并恢复。本文绑定上述最终 candidate/base，
+  可作为 R1b/M5 完成凭据。
 
 ### 1.1 当前结论
 
-Task 9 实现、Task 10 完整验证矩阵和主 Agent 深审均已完成。主 Agent 已对照安装的
-Babylon.js 9.21.2 源码核对 `checkSupport()` normal normalization，并复核 snap-down
-ownership、R1b clean break diff 与公共协议边界；当前没有 open host P0/P1。
-
-Task 10 唯一剩余阻断项是一次绑定实际 merge-base/最终 HEAD 的 Cursor 核心 CR。若该
-CR 确认真实缺陷并触发代码修复，才追加一次针对修复结果的复核。在 Cursor finding
-完成 disposition 前，R1b/M5 仍不关闭。
+Task 9 实现、Task 10 完整验证矩阵、主 Agent 深审和独立复核均已完成。首轮 Cursor
+对 `28752e0` 给出 Final GO / No findings，同时提出 Runtime ambiguous 应留在 Runtime
+诊断层的建议。主审独立确认当 Graph 已通过时，该失败不应发布 Graph 层的
+`ROUTE_SURFACE_CORRELATION_AMBIGUOUS`，并在 `506e088` 统一为
+`ROUTE_RUNTIME_SUPPORT_SURFACE_MISMATCH`，补充 `unmatched / ambiguous / wrong resolved
+Surface` 三模式回归。修后完整矩阵与条件复核全部通过，当前无 open confirmed P0/P1，
+因此 R1b/M5 完成。
 
 ## 2. 审查对象与已证实合同
 
@@ -69,7 +72,7 @@ manual-interaction 证据，也不扩大为桥下双层、洞穴、动态平台�
 | P1.5 focused conformance | 1 file / 9 tests passed | automated-contract/runtime-integration |
 | R1b verifier after snap-down fix | 11 / 11 fixtures passed | automated-contract/runtime-integration |
 | `pnpm typecheck` | passed | automated-contract |
-| `pnpm test` | 148 files / 1574 tests passed | automated-contract/runtime-integration |
+| `pnpm test` | 148 files / 1577 tests passed | automated-contract/runtime-integration |
 | `pnpm build` | passed | automated-contract |
 | `pnpm verify:route-r0-contract` | passed | automated-contract |
 | `pnpm verify:route-r1-heightfield` | passed | automated-contract/runtime-integration |
@@ -84,9 +87,9 @@ Task 9 较早的聚焦矩阵也已通过 43 files / 525 tests；R1 success Repor
 并发和 30/60/120-like cadence 下保持 Hash：
 `sha256:87b2c4c6c7d64384075d52c65b5a6bdc8ca63e92c84647cd2cedbc5f72da4b91`。
 
-上述完整矩阵均已在保留原有 0.5m/s snap-down 上行阈值、只增加 surface-normal
-alignment 防护的最终源码上退出 `0`。自动化与视觉 Gate 没有替代最终独立代码审查；
-Cursor 核心 CR 仍 pending。
+上述完整矩阵均已在保留原有 0.5m/s snap-down 上行阈值、增加 surface-normal
+alignment 防护并修正 Runtime 诊断分层的最终源码上退出 `0`。自动化与视觉 Gate
+没有替代独立代码审查；两轮 Cursor 结论已分别绑定 `28752e0` 与最终 `506e088`。
 
 ## 3. 旧结论复验
 
@@ -122,7 +125,7 @@ Cursor 核心 CR 仍 pending。
   的旧路径只按最大步高、walkable slope 和向下距离接受 capsule cast；离开平坦台面时，
   cast 可先命中 Minkowski rounded edge，其法线与上一权威支撑平面不一致，却被 snap-down
   当作连续地面。P1.5 ledge/coyote 回归在修复前观察到合成的 `sliding` Tick；修复后的
-  focused suite 为 9/9，full `pnpm test` 为 148 files / 1574 tests。
+  focused suite 为 9/9，最终 full `pnpm test` 为 148 files / 1577 tests。
 - 期望：snap-down 只能延续与上一 retained support 几何法线一致的平面；已离开支撑后，
   独立且可走的新落地点仍可被接受。Ground support 继续由 Havok Character Controller
   和 retained `checkSupport()` 单一链路拥有。
@@ -134,20 +137,35 @@ Cursor 核心 CR 仍 pending。
   `SNAP_DOWN_UPWARD_SPEED_LIMIT_METERS_PER_SECOND = 0.5` 保持不变，避免扩张无关运动
   行为；当先前为 `unsupported` 时，独立可走落点不受法线对齐限制。回归同时断言进入
   Air 前 retained support 仍是 `supported`，并验证一 Tick coyote jump。
-- 复核：已由 focused P1.5 9/9、R1b 11/11、typecheck 与 full 148/1574 tests 复核；
-  完整矩阵与主 Agent 深审通过，无 open host P0/P1；Cursor 核心 CR pending。
+- 复核：已由 focused P1.5 9/9、R1b 11/11、typecheck 与最终 full 148/1577 tests 复核；
+  最终完整矩阵、主 Agent 深审与两轮 Cursor 复核通过，
+  无 open confirmed P0/P1。
 
 该修复只触及 Babylon Runtime 的 snap-down 几何判定及其 P1.5 回归测试；没有修改
 Canonical Schema、Camera、Route Graph/Query/Evidence 合同或 R1b Fixture oracle。
 
-主 Agent 深审没有发现其他 open P0/P1；这仍不替代 Cursor 最终核心 CR。
+### [P2] [D6] Runtime `ambiguous` 被错误发布为 Graph correlation 诊断
+
+- 证据（static-read / automated-contract）：`28752e0` 中，Graph 已成功完成而真实 Runtime
+  support resolver 返回 `ambiguous` 时，Validation Report 发布了 Graph 层
+  `ROUTE_SURFACE_CORRELATION_AMBIGUOUS`。这会混淆构图期 Surface correlation failure 与
+  运行时支撑身份不匹配两个独立权威。
+- 处置：首轮 Cursor 的非阻断建议触发主审复核；主审确认后在 `506e088` 将 Runtime
+  `support-surface-mismatch` 的 `unmatched / ambiguous / wrong resolved Surface` 三种模式
+  统一映射为 `ROUTE_RUNTIME_SUPPORT_SURFACE_MISMATCH`，并新增三模式回归。真实
+  `fail-runtime-overlapping-surfaces` 继续使用 `0.02m` 静态薄片与 Heightfield 的实际
+  Runtime 重叠支撑，并由真实 Probe 产生 `ambiguous` 支撑证据。
+- 复核：R1b 11/11、148 files / 1577 tests 与完整矩阵通过；条件复核 chat
+  `d61f751c-a398-4063-bcbf-2ddc55ea20a9` 对 `506e088` 为 Final GO / No findings。
+
+主 Agent 深审与两轮 Cursor 复核没有发现其他 open confirmed P0/P1。
 
 ## 6. 完整验证矩阵
 
 | Gate | 状态 | 完成要求 |
 | --- | --- | --- |
 | `pnpm typecheck` | passed after final Runtime fix | exit 0 |
-| `pnpm test` | passed after final Runtime fix: 148 files / 1574 tests | exit 0；记录 warning disposition |
+| `pnpm test` | passed after final Runtime fixes: 148 files / 1577 tests | exit 0；记录 warning disposition |
 | `pnpm build` | passed after final Runtime fix | exit 0；Chunk/资源 warning 已纳入主审 |
 | `pnpm verify:route-r0-contract` | passed after final Runtime fix | exit 0 |
 | `pnpm verify:route-r1-heightfield` | passed after final Runtime fix | exit 0 |
@@ -158,8 +176,8 @@ Canonical Schema、Camera、Route Graph/Query/Evidence 合同或 R1b Fixture ora
 | `pnpm verify:g-bot-subject` | passed after final Runtime fix | exit 0 |
 | 主 Agent full-dimension/runtime review | passed | D2–D6 闭合、无 open host P0/P1 |
 | 安装源码复核 | passed for changed semantics | Babylon 9.21.2 `checkSupport()` normal normalization、snap-down ownership 与 diff clean break 已核对 |
-| Cursor 最终核心 CR | pending | 绑定最终 merge-base/HEAD，finding 全部 disposition |
-| 条件式 Cursor 修复复核 | not required unless code changes | 仅首轮确认真实缺陷并发生修复后执行 |
+| Cursor 首轮核心 CR | Final GO / No findings | chat `1e938715-a5b2-4a25-ad83-45eec0c37c15`，对象 `28752e0` |
+| 条件式 Cursor 修复复核 | Final GO / No findings | chat `d61f751c-a398-4063-bcbf-2ddc55ea20a9`，对象 `506e088` |
 
 ## 7. Runtime 对抗覆盖处置
 
@@ -176,7 +194,7 @@ Canonical Schema、Camera、Route Graph/Query/Evidence 合同或 R1b Fixture ora
 
 ## 8. 明确非目标与后续缺口
 
-即使 R1b/M5 最终通过，以下能力仍然开放，不能由本切片宣称支持：
+R1b/M5 已通过，但以下能力仍然开放，不能由本切片宣称支持：
 
 - H1：桥面/桥下同 XZ 双层通行、underpass、完整 Bridge/Cliff Fixture；
 - H2：Terrain Opening、洞口和 Render/Physics/Query 同步移除；
@@ -196,22 +214,23 @@ Canonical Schema、Camera、Route Graph/Query/Evidence 合同或 R1b Fixture ora
 | --- | --- | --- |
 | D1 定位与需求边界 | 已查 | R1b 仅普通静态 Ground Surface；H1/H2/H3、dynamic platform、NPC/public `goTo` 明确开放 |
 | D2 Schema 与 AI-friendly | 已查 | V2/V5 clean break、legacy/provider census 与公共边界通过；snap-down 修复未改公共 Schema |
-| D3 承诺与事实对拍 | 已查 | README/spec/docs18 保持 R1b/M5 open；完成矩阵与 remaining Cursor 阻断项如实记录 |
+| D3 承诺与事实对拍 | 已查 | README/spec/docs18 同步关闭 R1b/M5，并继续明确所有范围外能力 |
 | D4 单一权威状态 | 已查 | Ground support/Surface/Graph/Runtime authority、安装源码 normal normalization 与 snap-down ownership 已核对 |
 | D5 工程质量与可维护性 | 已查 | 聚焦/全量确定性、对抗、cleanup、依赖和失败路径审计完成，无 open host P0/P1 |
-| D6 门禁与证据分层 | 已查 | 自动合同、Runtime integration、视觉 Gate 与未完成 Cursor CR 分层记录 |
+| D6 门禁与证据分层 | 已查 | 自动合同、Runtime integration、视觉 Gate、主审与两轮 Cursor 复核分层记录；Runtime ambiguous 使用 Runtime mismatch 诊断 |
 
 ## 10. 完成判定
 
-本文当前结论是 **NOT READY FOR R1b/M5 COMPLETION**，唯一原因是最终 Cursor 核心 CR
-尚未完成，而不是完整矩阵、主 Agent 深审或已知 host P0/P1 未闭合。
-
-只有以下全部成立，才能把本文状态改为 Final 并同步关闭 R1b/M5：
+本文最终结论是 **FINAL GO：R1b/M5 COMPLETE**。以下完成条件已全部满足：
 
 1. §6 所有 blocking gates 在最终 clean tree 上退出 `0`，warning 已分类；
 2. §7 对抗覆盖和 §9 D2–D6 全部闭合；
 3. 安装依赖源码语义已核对并记录；
 4. 没有 open confirmed P0/P1；
-5. 一次最终核心 Cursor CR 已完成且所有 finding 已 disposition；
-6. 仅在首轮确认真实缺陷并发生代码修复时，追加修复后的复核；
+5. 首轮 Cursor 核心 CR 已完成，结论为 Final GO / No findings；
+6. 首轮建议引出的诊断分层修复已完成，并通过修后条件复核；
 7. README、R1b 规格、实施计划与 `docs/18` 继续明确 H1/H2/H3 等非目标。
+
+该完成判定只覆盖 R1b 普通静态地面通行与 M5 冻结合同。H1/H2/H3、动态平台、
+NPC/public `goTo`、车辆及 §8 其余能力保持开放；当前证据仍按 automated-contract、
+runtime-integration、rendered-visual 与独立 review 分层，不扩张为这些能力的生产支持。
