@@ -46,7 +46,7 @@ shasum -a 256 \
 
 ## 确定性源 FBX 探针
 
-下面的只读探针记录 Loader 实际看到的 Mesh、Skinned Mesh、Skeleton、Bone、Animation Stack/Clip、时长、轨道首尾差和源 Bounds。`FBXLoader` 将 FBX Animation Stack/Layer 物化为 `root.animations` 中的 `AnimationClip`；报告中的 Clip 名称是 Loader 输出，不是人工推断的动作语义。
+下面的只读探针记录 Loader 实际看到的 Mesh、Skinned Mesh、Skeleton、Bone、Animation Stack/Clip、时长、轨道首尾差和源 Bounds。`FBXLoader` 将 FBX Animation Stack/Layer 物化为 `root.animations` 中的 `AnimationClip`；报告中的 Clip 名称是 Loader 输出，不是人工推断的动作语义。`root.position / quaternion / scale / up` 只是 parse 后 Three.js 场景根 `Group` 的观察值，其中 `root.up` 是 `Object3D` 默认值，不是 FBX 作者声明的源坐标朝向证据。
 
 ```bash
 node --input-type=module - <<'JS'
@@ -97,11 +97,11 @@ for (const [id, relativePath] of candidates) {
   });
   console.log(JSON.stringify({
     id,
-    rootTransform: {
+    loaderSceneRootObservation: {
       position: root.position.toArray(),
       quaternion: root.quaternion.toArray(),
       scale: root.scale.toArray(),
-      up: root.up.toArray(),
+      object3DUpDefault: root.up.toArray(),
     },
     counts: {
       meshes: meshes.length,
@@ -139,7 +139,7 @@ JS
 | 正时长 Clip | 9 | 3 |
 | 正时长分布 | 6 × 2.633333 s；3 × 4.133333 s | 3 × 2.633333 s |
 | 源 Bounds 尺寸 | `[208.283604, 157.944598, 283.696986]` | `[208.283616, 198.697032, 118.556743]` |
-| 源 root Transform | position `[0,0,0]`；quaternion `[0,0,0,1]`；scale `[1,1,1]`；up `[0,1,0]` | 同左 |
+| FBXLoader 场景根观察值（非源朝向声明） | position `[0,0,0]`；quaternion `[0,0,0,1]`；scale `[1,1,1]`；Three.js `Object3D.up` 默认值 `[0,1,0]` | 同左 |
 
 `quadruped-animal` 的 9 个正时长 Clip 是三个近似重复骨架命名域上的匿名 Stack/Layer 结果；所有正时长 Clip 的轨道首尾数值相同，但这只能说明首尾闭合，不能证明 `idle / walk / run` 的动作身份。其 42 个零时长 Clip 是 Pose，不是可结束的 `jump`。
 
