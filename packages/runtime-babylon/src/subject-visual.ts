@@ -218,6 +218,35 @@ interface StaticAssetPartResetStateV1 {
   readonly scaling: Vector3;
 }
 
+type CleanupAttemptV1 = (cleanup: () => void) => void;
+
+function disposeSubjectSocketsAndPrimitives(
+  socketNodesById: ReadonlyMap<string, TransformNode>,
+  primitiveMeshes: readonly Mesh[],
+  attempt: CleanupAttemptV1,
+): void {
+  for (const socket of [...socketNodesById.values()].reverse()) {
+    attempt(() => socket.detachFromBone());
+    attempt(() => socket.dispose(false, false));
+  }
+  for (const mesh of [...primitiveMeshes].reverse()) {
+    attempt(() => mesh.dispose(false, false));
+  }
+}
+
+function disposeSubjectAssetNodesAndMaterial(
+  assetPartRoots: readonly TransformNode[],
+  staticOwnedMaterial: Material | undefined,
+  root: TransformNode,
+  attempt: CleanupAttemptV1,
+): void {
+  for (const partRoot of [...assetPartRoots].reverse()) {
+    attempt(() => partRoot.dispose(false, false));
+  }
+  attempt(() => staticOwnedMaterial?.dispose(false, false));
+  attempt(() => root.dispose(false, false));
+}
+
 class OwnedSubjectVisual implements SubjectVisual {
   private disposed = false;
   private fallbackActionId: GroundHumanoidActionIdV1 = "idle";
@@ -230,6 +259,7 @@ class OwnedSubjectVisual implements SubjectVisual {
     private readonly assetPartRoots: readonly TransformNode[],
     private readonly staticAssetPartResetStates:
       readonly StaticAssetPartResetStateV1[],
+    private readonly staticOwnedMaterial: Material | undefined,
     private readonly animationPlayer: SubjectAnimationPlayer | undefined,
     private readonly assetDescriptor: ExecutionSubjectAssetV1 | undefined,
     private readonly assetInstance: SubjectAssetInstanceV1 | undefined,
@@ -271,22 +301,38 @@ class OwnedSubjectVisual implements SubjectVisual {
         firstFailure ??= error;
       }
     };
-    attempt(() => this.animationPlayer?.dispose());
-    for (const socket of [...this.socketNodesById.values()].reverse()) {
-      attempt(() => socket.detachFromBone());
-      attempt(() => socket.dispose(false, false));
+    if (this.staticOwnedMaterial !== undefined) {
+      attempt(() => this.assetInstance?.dispose());
+      attempt(() => this.assetLease?.release());
+      disposeSubjectSocketsAndPrimitives(
+        this.socketNodesById,
+        this.primitiveMeshes,
+        attempt,
+      );
+      disposeSubjectAssetNodesAndMaterial(
+        this.assetPartRoots,
+        this.staticOwnedMaterial,
+        this.root,
+        attempt,
+      );
+    } else {
+      attempt(() => this.animationPlayer?.dispose());
+      disposeSubjectSocketsAndPrimitives(
+        this.socketNodesById,
+        this.primitiveMeshes,
+        attempt,
+      );
+      if (this.assetInstance !== undefined) {
+        attempt(() => this.assetInstance!.dispose());
+      }
+      disposeSubjectAssetNodesAndMaterial(
+        this.assetPartRoots,
+        undefined,
+        this.root,
+        attempt,
+      );
+      if (this.assetLease !== undefined) attempt(() => this.assetLease!.release());
     }
-    for (const mesh of [...this.primitiveMeshes].reverse()) {
-      attempt(() => mesh.dispose(false, false));
-    }
-    if (this.assetInstance !== undefined) {
-      attempt(() => this.assetInstance!.dispose());
-    }
-    for (const partRoot of [...this.assetPartRoots].reverse()) {
-      attempt(() => partRoot.dispose(false, false));
-    }
-    attempt(() => this.root.dispose(false, false));
-    if (this.assetLease !== undefined) attempt(() => this.assetLease!.release());
     if (firstFailure !== undefined) {
       throw assetError("SUBJECT_ASSET_DISPOSE_FAILED", this.assetDescriptor);
     }
@@ -311,6 +357,7 @@ export async function createSubjectVisual(
   let assetInstance: SubjectAssetInstanceV1 | undefined;
   let animationPlayer: SubjectAnimationPlayer | undefined;
   let assetDescriptor: ExecutionSubjectAssetV1 | undefined;
+  let staticOwnedMaterial: Material | undefined;
 
   try {
     const assetParts = subject.visualParts.filter((part) => part.kind === "asset");
@@ -343,6 +390,15 @@ export async function createSubjectVisual(
       assetDescriptor = asset;
       assetLease = await subjectAssetCache.acquire(asset);
       assetInstance = assetLease.instantiate(subject.entityId);
+      if (subject.visualBinding.mode === "static") {
+        const clonedMaterial = material.clone(
+          `${subject.entityId}.static-subject-material`,
+        );
+        if (clonedMaterial === null) {
+          throw assetError("SUBJECT_ASSET_RIG_INCOMPATIBLE", asset);
+        }
+        staticOwnedMaterial = clonedMaterial;
+      }
       const partRoot = new TransformNode(`${subject.entityId}.${part.id}`, scene);
       partRoot.parent = root;
       applyLocalTransform(partRoot, part.localTransform);
@@ -350,7 +406,7 @@ export async function createSubjectVisual(
       assetPartRoots.push(partRoot);
       for (const importedRoot of assetInstance.rootNodes) importedRoot.parent = partRoot;
       for (const mesh of assetInstance.meshes) {
-        mesh.material = material;
+        mesh.material = staticOwnedMaterial ?? material;
         mesh.metadata = {
           worldkitEntityId: subject.entityId,
           subjectVisualPartId: part.id,
@@ -477,6 +533,7 @@ export async function createSubjectVisual(
       primitiveMeshes,
       assetPartRoots,
       staticAssetPartResetStates,
+      staticOwnedMaterial,
       animationPlayer,
       assetDescriptor,
       assetInstance,
@@ -490,20 +547,36 @@ export async function createSubjectVisual(
         // Preserve the primary stable construction diagnostic.
       }
     };
-    attempt(() => animationPlayer?.dispose());
-    for (const socketNode of [...socketNodesById.values()].reverse()) {
-      attempt(() => socketNode.detachFromBone());
-      attempt(() => socketNode.dispose(false, false));
+    if (subject.visualBinding.mode === "static") {
+      attempt(() => assetInstance?.dispose());
+      attempt(() => assetLease?.release());
+      disposeSubjectSocketsAndPrimitives(
+        socketNodesById,
+        primitiveMeshes,
+        attempt,
+      );
+      disposeSubjectAssetNodesAndMaterial(
+        assetPartRoots,
+        staticOwnedMaterial,
+        root,
+        attempt,
+      );
+    } else {
+      attempt(() => animationPlayer?.dispose());
+      disposeSubjectSocketsAndPrimitives(
+        socketNodesById,
+        primitiveMeshes,
+        attempt,
+      );
+      attempt(() => assetInstance?.dispose());
+      disposeSubjectAssetNodesAndMaterial(
+        assetPartRoots,
+        undefined,
+        root,
+        attempt,
+      );
+      attempt(() => assetLease?.release());
     }
-    for (const mesh of [...primitiveMeshes].reverse()) {
-      attempt(() => mesh.dispose(false, false));
-    }
-    attempt(() => assetInstance?.dispose());
-    for (const partRoot of [...assetPartRoots].reverse()) {
-      attempt(() => partRoot.dispose(false, false));
-    }
-    attempt(() => root.dispose(false, false));
-    attempt(() => assetLease?.release());
     if (error instanceof SubjectAssetRuntimeErrorV1) throw error;
     throw assetError("SUBJECT_ASSET_RIG_INCOMPATIBLE");
   }

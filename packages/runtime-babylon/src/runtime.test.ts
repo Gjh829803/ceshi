@@ -1562,6 +1562,49 @@ describe("BabylonWorldRuntime", () => {
       }
     });
 
+    it("owns mutable Material state and disposal independently per instance", async () => {
+      const runtime = await createRuntime(
+        createStaticAssetSubjectExecutionPlan({ twoSubjects: true }),
+        { subjectAssetResolver: createMemoryResolver(staticSubjectAssetBytes) },
+      );
+      try {
+        const probe = createSubjectVisualProbe(runtime);
+        const primaryVisual = probe.visual("player");
+        const secondaryVisual = probe.visual("static-secondary");
+        const primaryInstance = primaryVisual.assetInstance!;
+        const secondaryInstance = secondaryVisual.assetInstance!;
+        const primaryMaterial = primaryInstance.meshes[0]!.material;
+        const secondaryMaterial = secondaryInstance.meshes[0]!.material;
+        let primaryMaterialDisposed = false;
+        let secondaryMaterialDisposed = false;
+        primaryMaterial?.onDisposeObservable.add(() => {
+          primaryMaterialDisposed = true;
+        });
+        secondaryMaterial?.onDisposeObservable.add(() => {
+          secondaryMaterialDisposed = true;
+        });
+
+        expect(primaryMaterial).toBeInstanceOf(StandardMaterial);
+        expect(secondaryMaterial).toBeInstanceOf(StandardMaterial);
+        expect(primaryMaterial).not.toBe(secondaryMaterial);
+        expect(primaryMaterial?.alpha).toBe(1);
+        expect(secondaryMaterial?.alpha).toBe(1);
+
+        primaryMaterial!.alpha = 0.25;
+
+        expect(secondaryMaterial?.alpha).toBe(1);
+        primaryVisual.dispose();
+        expect(primaryMaterialDisposed).toBe(true);
+        expect(secondaryMaterialDisposed).toBe(false);
+        expect(secondaryInstance.meshes[0]!.material).toBe(secondaryMaterial);
+        expect(secondaryInstance.rootNodes[0]!.isDisposed()).toBe(false);
+        secondaryMaterial!.alpha = 0.75;
+        expect(secondaryMaterial?.alpha).toBe(0.75);
+      } finally {
+        await runtime.dispose();
+      }
+    });
+
     it("restores the authored Asset Part local transform on reset", async () => {
       const runtime = await createRuntime(createStaticAssetSubjectExecutionPlan(), {
         subjectAssetResolver: createMemoryResolver(staticSubjectAssetBytes),
@@ -1637,7 +1680,7 @@ describe("BabylonWorldRuntime", () => {
       }
     });
 
-    it("disposes the static instance before releasing its Asset lease", async () => {
+    it("disposes Instance then Lease before every Subject-owned resource", async () => {
       const { engine, scene } = createAssetScene();
       const material = new StandardMaterial("static-subject-test", scene);
       const cache = new SubjectAssetCacheV1(
@@ -1657,21 +1700,163 @@ describe("BabylonWorldRuntime", () => {
         }) as SubjectVisualInternals;
         const instance = visual.assetInstance!;
         const lease = visual.assetLease!;
+        const socket = visual.socketNodesById.get("focus.local")!;
+        const partRoot = visual.assetPartRoots![0]!;
+        const ownedMaterial = instance.meshes[0]!.material!;
+        const disposalOrder: string[] = [];
+        const nativeInstanceDispose = instance.dispose.bind(instance);
+        vi.spyOn(instance, "dispose").mockImplementation(() => {
+          disposalOrder.push("instance");
+          nativeInstanceDispose();
+        });
         const nativeRelease = lease.release.bind(lease);
-        let instanceWasDisposedBeforeRelease = false;
         vi.spyOn(lease, "release").mockImplementation(() => {
-          instanceWasDisposedBeforeRelease = instance.rootNodes.every((node) =>
-            node.isDisposed()
-          );
+          disposalOrder.push("lease");
           nativeRelease();
+        });
+        const nativeSocketDispose = socket.dispose.bind(socket);
+        vi.spyOn(socket, "dispose").mockImplementation((...args) => {
+          disposalOrder.push("socket");
+          nativeSocketDispose(...args);
+        });
+        const nativePartRootDispose = partRoot.dispose.bind(partRoot);
+        vi.spyOn(partRoot, "dispose").mockImplementation((...args) => {
+          disposalOrder.push("part-root");
+          nativePartRootDispose(...args);
+        });
+        const nativeMaterialDispose = ownedMaterial.dispose.bind(ownedMaterial);
+        vi.spyOn(ownedMaterial, "dispose").mockImplementation((...args) => {
+          disposalOrder.push("material");
+          nativeMaterialDispose(...args);
+        });
+        const nativeRootDispose = visual.root.dispose.bind(visual.root);
+        vi.spyOn(visual.root, "dispose").mockImplementation((...args) => {
+          disposalOrder.push("root");
+          nativeRootDispose(...args);
         });
 
         visual.dispose();
 
-        expect(instanceWasDisposedBeforeRelease).toBe(true);
+        expect(disposalOrder).toEqual([
+          "instance",
+          "lease",
+          "socket",
+          "part-root",
+          "material",
+          "root",
+        ]);
         expect(instance.rootNodes.every((node) => node.isDisposed())).toBe(true);
       } finally {
         visual?.dispose();
+        await cache.dispose();
+        material.dispose();
+        scene.dispose();
+        engine.dispose();
+      }
+    });
+
+    it("keeps the frozen cleanup order after partial construction and throwing disposers", async () => {
+      const { engine, scene } = createAssetScene();
+      const material = new StandardMaterial("static-subject-test", scene);
+      const cache = new SubjectAssetCacheV1(
+        scene,
+        createMemoryResolver(staticSubjectAssetBytes),
+      );
+      const baseExecutionPlan = createStaticAssetSubjectExecutionPlan();
+      const riggedSocket = createFlatRiggedExecutionPlan().subjects[0]!.sockets[0]!;
+      const staticSubject = baseExecutionPlan.subjects[0]!;
+      const executionPlan: ExecutionPlanV4 = {
+        ...baseExecutionPlan,
+        subjects: [{
+          ...staticSubject,
+          sockets: [...staticSubject.sockets, riggedSocket],
+        }],
+      };
+      const disposalOrder: string[] = [];
+      const observedNodes = new Map<string, TransformNode>();
+      const expectedNodeLabelByName = new Map([
+        ["player.visual-root", "root"],
+        ["player.body.asset", "part-root"],
+        ["player.socket.focus.local", "socket"],
+      ]);
+      scene.onNewTransformNodeAddedObservable.add((node) => {
+        const label = expectedNodeLabelByName.get(node.name);
+        if (label === undefined) return;
+        observedNodes.set(label, node);
+        const nativeDispose = node.dispose.bind(node);
+        vi.spyOn(node, "dispose").mockImplementation((...args) => {
+          disposalOrder.push(label);
+          nativeDispose(...args);
+        });
+      });
+      let ownedMaterial: StandardMaterial | undefined;
+      let ownedMaterialDisposed = false;
+      const nativeClone = material.clone.bind(material);
+      vi.spyOn(material, "clone").mockImplementation((...args) => {
+        ownedMaterial = nativeClone(...args);
+        ownedMaterial.onDisposeObservable.add(() => {
+          ownedMaterialDisposed = true;
+        });
+        const nativeDispose = ownedMaterial.dispose.bind(ownedMaterial);
+        vi.spyOn(ownedMaterial, "dispose").mockImplementation((...disposeArgs) => {
+          disposalOrder.push("material");
+          nativeDispose(...disposeArgs);
+          throw new Error("BABYLON_PROVIDER_PRIVATE_MATERIAL_DISPOSE_FAILURE");
+        });
+        return ownedMaterial;
+      });
+      const nativeAcquire = cache.acquire.bind(cache);
+      vi.spyOn(cache, "acquire").mockImplementation(async (asset) => {
+        const lease = await nativeAcquire(asset);
+        const nativeInstantiate = lease.instantiate.bind(lease);
+        vi.spyOn(lease, "instantiate").mockImplementation((subjectEntityId) => {
+          const instance = nativeInstantiate(subjectEntityId);
+          const nativeInstanceDispose = instance.dispose.bind(instance);
+          vi.spyOn(instance, "dispose").mockImplementation(() => {
+            disposalOrder.push("instance");
+            nativeInstanceDispose();
+            throw new Error("BABYLON_PROVIDER_PRIVATE_INSTANCE_DISPOSE_FAILURE");
+          });
+          return instance;
+        });
+        const nativeRelease = lease.release.bind(lease);
+        vi.spyOn(lease, "release").mockImplementation(() => {
+          disposalOrder.push("lease");
+          nativeRelease();
+          throw new Error("BABYLON_PROVIDER_PRIVATE_LEASE_RELEASE_FAILURE");
+        });
+        return lease;
+      });
+
+      try {
+        const error = await createSubjectVisual({
+          subject: executionPlan.subjects[0]!,
+          executionPlan,
+          material,
+          scene,
+          subjectAssetCache: cache,
+        }).catch((reason) => reason as unknown);
+
+        expect(error).toMatchObject({ code: "SUBJECT_ASSET_SOCKET_BONE_MISSING" });
+        expect(error).not.toHaveProperty("cause");
+        expect(String(error)).not.toMatch(/babylon|provider/i);
+        expect(disposalOrder).toEqual([
+          "instance",
+          "lease",
+          "socket",
+          "part-root",
+          "material",
+          "root",
+        ]);
+        expect(ownedMaterialDisposed).toBe(true);
+        expect(
+          [...observedNodes.values()].every((node) => node.isDisposed()),
+        ).toBe(true);
+        expect(
+          (cache as unknown as { leases: ReadonlySet<SubjectAssetLeaseV1> }).leases
+            .size,
+        ).toBe(0);
+      } finally {
         await cache.dispose();
         material.dispose();
         scene.dispose();
