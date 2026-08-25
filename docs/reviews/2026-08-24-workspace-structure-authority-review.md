@@ -1,358 +1,176 @@
 # Workspace 结构与权威边界审查
 
-> 状态：**Current review evidence / non-authoritative**
+> 状态：**根因闭包实现完成；等待独立 completion review**
 >
-> 当前产品审查对象：`origin/main@47525bb2967a0b04190c3b2b8db536fd9fa9c32d`
+> 最新 `main` 基线：`origin/main@749b594bb35830b5c92f8e6b7df1c645e36fc530`
 >
-> 开发分支：`cursor/workspace-structure-audit-ad0d`；最新 `main` 合并提交：`1018d15`
+> 实现分支：`codex/authority-root-cause-closure`
 >
-> 本文记录当前代码树的结构、公共 owner、事实源与门禁边界；不替代 Canonical Schema、
-> Frozen Spec、`AGENTS.md`、正式 Gameplay 合同或可复跑的交付证据。
+> 原始审查对象：`main@4ae1912`；原 Cursor Draft PR：
+> [#27](https://github.com/seedleap/agent-whitebox-world-sdk/pull/27)
 
-结论分两层：**大结构方向 GO；当前 authority / publication / gate closure NO-GO**。最新
-`main` 没有恢复 Legacy/Three/Rapier，也没有形成第二套 Runtime、Camera 或 Capture owner；M5
-remediation、模块化 Subject 资产链、测试 census/分 lane 与 tracked CI 都是实质进步。逐项复验并
-落地 Gate Authority Closure V1 后，仍有 **9 组 P1、6 组 P2**，本轮未确认 P0。
+本文是结构审查与任务裁决记录，不替代 Canonical Schema、Frozen Spec、`AGENTS.md`、正式 Gameplay
+合同或可复跑的交付证据。历史 Cursor 报告、Codex 修订和补充 ChatGPT 分析只作为调查线索；当前裁决
+均重新落到最新源码、实际 diff 和当前命令。
 
-相对上一版的 `11 P1 / 5 P2`，不是机械改数：`testkit` 反向生产依赖确实存在，但当前只有一个
-实现 owner、没有已复现的错误结果，客观上应从 P1 降为 P2；Gate Authority Closure V1 又关闭一组
-原 P1。这里的 NO-GO 只表示不能宣称“结构与公开 authority 已经整体闭环”或据此发布，不表示应
-回滚现有架构，也不否认门禁子域已经闭合。
+## 1. 当前结论
 
-## 1. 审查元数据与判断口径
+结论需要分层表达：
 
-- 日期：2026-08-25。
-- 模式：[`full-dimension-review-protocol.md`](full-dimension-review-protocol.md) 的 **C（整仓审计）**，
+- **核心 authority / public contract 根因闭包：Host review GO。** 本轮选择的 HSE 与 WS 根因均已实现，
+  当前没有未处置的 P0/P1；最终状态仍以独立 completion review 为最后一道门。
+- **整仓可维护性“全部完成”：NO。** 仍有 3 组明确的 P2 总任务：52 条历史 workspace boundary
+  债、剩余领域的广义 generated parity、Host/Studio/CLI 大型模块拆分。它们不再制造第二套产品
+  truth，且已有门禁阻止新增债，因此不应冒充阻塞根因，也不能从总任务中删除。
+- **大结构方向继续 GO。** 不做第二轮大搬家，不合并已经正确分层的 Authoring、Compiler、Runtime、
+  Gameplay、Traversal、World 和 provider adapter。
+
+本轮不是按文件大小或目录整齐度选任务，而是优先消除会持续传播错误设计的根因：竞争 authority、
+虚假 public entrypoint、不闭合 Ref、生产依赖测试包、冻结协议 admission 漂移，以及无法阻止新增结构债
+的门禁缺口。大规模历史搬迁和 shell 拆分被显式延期，不为了宣称“全修完”而扩大改动面。
+
+## 2. 判断口径与设计原则
+
+- 日期：2026-08-26。
+- 模式：[`full-dimension-review-protocol.md`](full-dimension-review-protocol.md) 的 C（整仓审计），
   覆盖 D1–D6；Runtime 判断继续受
   [`runtime-deep-review-checklist.md`](runtime-deep-review-checklist.md) 约束。
-- Draft PR：[#27](https://github.com/seedleap/agent-whitebox-world-sdk/pull/27)。
-- 原审查基线：`main@4ae1912`；上一版产品基线：`main@a8b9fd3`。
-- 本轮复审 `a8b9fd3..47525bb`：52 commits、264 files、`+14,936/-1,383`，覆盖 M5 remediation、
-  Hosted Studio cloud/local execution、模块化 Subject source/runtime bundles、gate census 与 CI。
-- 历史 Cursor 报告、Codex 修订、用户提供的 ChatGPT 分析和旧 review 只作为调查线索；所有现行
-  P0/P1 均重新落到当前源码或当前命令。
-- 合并后的共享工作树一度被并行任务写入 4 个未提交产品改动；当时本审查没有还原、提交或作为
-  产品证据使用。它们随后由 `47525bb` 正式进入 `main`，本轮再按正式 commit 复审：三文件 81/81
-  聚焦回归与 typecheck 通过。此前全量产品门禁在 detached clean worktree 的 exact `d4e4e8b`
-  tree 上执行；本分支现已在同一 worktree 落地 Gate Authority Closure V1，并在最终未变产品树上重跑
-  分层门禁。下文把旧 clean-tree 证据与本分支新证据分开记录，不互相替代。
+- 实现依据：
+  [`2026-08-26-authority-root-cause-closure-design.md`](../superpowers/specs/2026-08-26-authority-root-cause-closure-design.md)
+  与
+  [`2026-08-26-authority-root-cause-closure-implementation-plan.md`](../superpowers/plans/2026-08-26-authority-root-cause-closure-implementation-plan.md)。
+- P0：已确认的静默正确性或冻结边界破坏；P1：公共命令、事实源、发布入口或 blocking evidence
+  不可信；P2：尚未造成静默错误、但需要计划化治理的工程边界与可维护性债。
+- 一个概念只允许一个 public owner；unreleased private Schema 采用 clean break，不用永久 alias
+  保存开发历史。
+- worker 报告不是集成证据；主 Agent 必须审查 actual diff、处理语义合并并在最终树运行相关门禁。
 
-优先级按当前影响而不是 Roadmap 热度：P0 是已确认的静默正确性/冻结边界破坏；P1 是已冻结合同、
-公共命令、事实源、发布入口或 blocking evidence 不可信；P2 是尚未造成静默错误的工程边界、
-生命周期和可维护性债。同一根因按一组 finding 计数。
+## 3. 核心根因处置
 
-### 1.1 Authority hierarchy
+| ID | 原 finding / 根因 | 当前处置 | 关键闭包证据 |
+|---|---|---|---|
+| `HSE-00` | Studio Preview 分拆读取，可能跨 attempt 拼接 AuthoringSpec 与 capture groups | **Fixed** | 单一 `/preview-bootstrap` 绑定 record before/after、attempt、evaluation、Authoring hash、完整 final map 和 groups；旧 split routes 移除；stale/cross-attempt/hash/group negatives |
+| `HSE-01` | Hosted draft/final/capture contract 使用竞争 identity、双 manifest 和非 Canonical 字段 | **Fixed / clean break** | draft/final 独立 kind；唯一 whitebox tri-view manifest；`visualTargetId`、`imageDataUri`、`imageUri`；unknown-safe diagnostics；旧 types/kinds/fields 只留 negative census |
+| `HSE-02` | `studio:public` 只启动 proxy，公开命令并不组成可运行 topology | **Fixed** | 受监督 wrapper 在鉴权后启动 internal Studio；nonce+PID readiness；secret isolation；进程组 SIGTERM→SIGKILL；crash/timeout/port/signal E2E；73/73 Studio tests |
+| `WS-00` | active docs 对 M5/R1b 与 Browser Reset possession 的描述互相矛盾 | **Fixed** | docs 00/18 对当前 R1b 与后续 H1/H2/H3 分界一致；docs 20 区分 Host reset 与 Browser `resetWithInitialControlBinding()`，consumer 读取返回 Snapshot |
+| `WS-01` | CLI、Browser 和 closure 使用不同 Registry discovery view；Motion Catalog 暴露 dangling parameter refs | **Fixed / clean break** | 唯一 `resolveResource` / `listDiscoverableResources({kind})`；删除 4 套旧 typed list APIs；统一 reference-edge owner；CLI/Browser/Preview/promotion 共用 facade；删除 `parameterSchemaRef` / `runtimeParameterNames` |
+| `WS-02` | SubjectPreset DTO、Subject resource kind、Action/Bone/Topology vocabulary 有多个公共 owner | **Fixed / clean break** | 新底层 `@whitebox-world/subject-contracts` 独占 serialized DTO、closed terms 和 guards；旧 Runtime/generic owners 删除；automatic resolver 窄化为 `idle\|walk\|run\|jump`；Authoring 拒绝 stale bone `root` |
+| `WS-03` | Canonical JSON 接受并归一化 Frozen Spec 禁止的 `-0` | **Fixed** | object/string/hash/bytes 与 Authoring text/object admissions 全部 fail closed；SubjectPreset numeric override 同步拒绝；Traversal regression fixture 对新 admission 对齐 |
+| `WS-04` | Compiler/World 的生产 spawn-safety 不变量位于 `testkit` | **Fixed** | 算法唯一 owner 迁入 `terrain-surface`；diagnostics/order/epsilon/42° 行为不变；零生产 `testkit` import，无 compatibility re-export |
+| `WS-05A` | Workspace 图没有 fail-closed floor，新增 deep import/undeclared edge 不会被拦截 | **Fixed floor** | TS AST 扫描 static/export/dynamic/require；拒绝 undeclared、prod→dev、private sibling source、非法 export、prod testing edge 和 cycle；精确 debt ledger 无 wildcard；stale debt 也失败 |
+| `WS-06A/B` | check/update 混权、generated check 自愈、independent tests 漏 lane | **Fixed on prior main work** | verifier 默认只读、显式 update；临时 bundle byte-compare；6 Node / 2 Python / 1 Site independent census；root contract/heavy 去重 |
+| `WS-07A` | Planner checker 手写且与 Canonical parser 不等价，tracked bundle 无双向 parity | **Fixed** | Planner source 直接消费 `parseSceneBriefV1`；raw Brief bytes hash 保留；valid、duplicate target、second Subject、49-char movement source/bundle exact parity；Planner+Builder 统一 generate/check |
 
-| 作用域 | 当前权威 | 约束 |
+### 3.1 主审中额外纠正的假闭包
+
+1. WS-01 初稿只迁移 CLI/Browser，却保留旧 public list APIs。主审要求并完成 clean break；否则原
+   “多 discovery authority” finding 仍成立。
+2. WS-01 的正式 producer 原子更新 JSON/hash/PNG 受管目录。PNG bytes 的刷新来自 producer 演进，
+   不是 Motion 视觉语义变化；只回退二进制会破坏同一 receipt 的原子一致性。
+3. WS-02 合入后 Planner/Builder portable bundles 因公共依赖闭包改变而变 stale。最终 generated gate
+   先 RED，再通过唯一 producer 刷新两份 bundle，并由只读 check 与 10 个 parity tests 证明 current。
+4. 完整 contract lane 暴露 Simulation Take 测试仍硬编码旧 Placement hashes。三个 received hashes
+   与当前正式 producer receipt 一致，因此只更新 exact expectation，不恢复旧 Catalog；focused 1/1
+   通过，其他 2020 个 contract tests 的同树通过证据未被该 test-only 修改失效。
+
+## 4. 明确延期的总任务
+
+| ID | 优先级 | 为什么延期而不是忽略 | 推荐交付与验收 |
+|---|---:|---|---|
+| `WS-07B` | 后续 1 | Public Schema/generated drift 会影响正确性，但 Planner、Builder 与 Hosted wire 的当前高风险切片已闭合；全仓一次性推广成本高 | 按 public contract family 建唯一 source、正负 parity、unknown-key/round-trip；每次只迁一个领域，禁止私有 deep import 换小 bundle |
+| `WS-05B/C` | 后续 2 | 当前 52 条历史 debt 是工程边界债，不是 52 个产品 bug；`WS-05A` 已阻止新增并要求 debt 只能下降 | 按 owner 批次消减 exact ledger；补必要 `/testing` exports 与每包 direct deps/tsconfig；每批要求 debt count 下降、零 cycle、无 wildcard |
+| `WS-08` | 后续 3 | `scripts/worldkit.ts`、Studio server、recording/Host tooling 偏大，但当前 authority、lifecycle 与 entrypoint 已闭合；立即拆包协调成本最高 | 先稳定 Host primitives，再抽正式 package；保持 Runtime/Camera/Capture 唯一 owner；用 CLI snapshots、readiness/lifecycle 和 build graph 证明无行为变化 |
+
+推荐顺序是 `WS-07B → WS-05B/C → WS-08`。前两项提高机械正确性与依赖纪律；WS-08 主要提升长期
+可维护性，应在 public contracts 稳定后分阶段做。52 是当前 ledger 的真实数量；此前 55 中有 3 条已被
+WS-01 消除，门禁正确要求同步删除 stale debt，不能为了“数字稳定”保留虚假记录。
+
+## 5. 更新后的门禁策略
+
+| 阶段 | 策略 | 本轮实际应用 |
 |---|---|---|
-| 仓库流程、阶段边界、Schema 命名 | `AGENTS.md` | README、计划和 review 不能覆盖 |
-| 已冻结公共合同 | Frozen Spec + Canonical Schema + conformance tests | 不能由示例、UI 或 Adapter 猜测 |
-| Gameplay 对接 | [`docs/20-gameplay-integration-contract.md`](../20-gameplay-integration-contract.md) + exact exports | 文档、Browser 和 Host 必须同义 |
-| 当前能力与 Backlog | [`docs/00-project-overview.md`](../00-project-overview.md) 与 [`docs/18-refactor-progress-and-backlog.md`](../18-refactor-progress-and-backlog.md)，由当前代码和新鲜 gate 佐证 | 日期计数只是历史证据 |
-| Onboarding | README、docs 15/17 | 从上述事实派生，不另持有能力真相 |
-| 历史证据 | `docs/reviews/**`、`docs/superpowers/plans/**` | 不拥有当前完成状态；本文也属于此类 |
+| 影响面建模 | 先列 owner、输入、证据层和 invalidation scope | HSE/WS 任务图明确 depends_on、blocks、独占文件/接口、execution mode |
+| TDD / focused | 每个行为修复先 RED，修复后只跑受影响 suite | Preview、Hosted contract、Studio lifecycle、Registry、Subject vocabulary、negative zero、Planner parity、boundary floor 均有 reproducer |
+| Generated | producer 与 check 分权；check 只在 temp 生成并 byte-compare | 最终发现 stale bundle 后仅显式 generate 一次，再用 read-only check 收口 |
+| Root aggregate | `pnpm test` 内部依次运行 boundary、census、contract、heavy | 不额外重复 `test:scenes`；contract 的单一 stale fixture 采用 scoped rerun，heavy 首次完整执行 |
+| Independent | 不从 root green 推导 Node/Python/Site/Browser | Studio、6 Node / 2 Python / 1 Site、四个真实 Browser verifier 分层执行 |
+| 证据复用 | 后续修改只使可能受影响的证据失效 | test-only hash expectation 只重跑该 test；文档 truth 更新只需 diff/link/claim check |
+| 收口 | frozen install、diff check、tracked tree cleanliness、独立 review | 不通过重复全量命令“证明更绿”；Cursor finding 必须由 Host 复现和裁决 |
 
-### 1.2 最新 main 的实质变化
+这与最新 `main` 的提速意图一致：删除重复 lane，但不删除独立证据层。速度来自正确的 invalidation
+模型，而不是少验证 public contract 或用成功 worker report 代替集成。
 
-1. M5 在 R1 Heightfield / R1b Static Platform 当前生产边界内完成 remediation；Traversal 仍由
-   `traversal` 公共合同与 `traversal-recast` provider adapter 分层，没有新增第二个 Route owner。
-2. G Bot/Golden 引入不可变模块化 Source Package 与派生 Runtime Bundle，Registry 升到 `@2`；
-   两个只读 `--check` 均通过，source、Runtime bundle 与视觉/人工证据边界清楚。
-3. root test 现在先做 202-file census，再运行 183-file contract lane 与 19-file single-worker
-   resource-heavy lane；tracked CI 组合临时 generated check、typecheck、Studio、完整 independent lane、
-   root test 和 build，且每层只运行一次。
-   新增 `test:contract:coverage` 是按需覆盖率诊断，不应在 root green 后默认重复执行 contract。
-4. `47525bb` 修正 Static Platform Route 不应强制 Anchor 位于 terrain bounds 的错误假设，并增加
-   多 Route inventory 隔离与 seeded progress invariants；它强化现有 Traversal owner，没有新增 authority。
-5. Hosted Studio 增加 cloud/local bounded queues、stop/cancel、Snapshot V4/opening-frame validation；
-   但 public Preview hash join、capture DTO 与 public process topology 尚未闭合。
-6. Babylon-only、Gameplay RuntimeHost、Camera Domain 和 Authoring capture 委托关系没有回退；Hosted
-   DTO 不能被误报为第二套 Runtime/Renderer/Camera。
+## 6. 最终实现树证据
 
-## 2. 当前产品树执行证据与限制
-
-| 命令 / 检查 | 结果 | 当前解释 |
+| 命令 / 检查 | 结果 | 解释 |
 |---|---:|---|
-| `git fetch origin main cursor/workspace-structure-audit-ad0d` | 0 | 远端 `main` 为 `47525bb` |
-| `git merge --no-edit origin/main` | 0 | 生成 `1018d15`，无文本冲突 |
-| `pnpm install --frozen-lockfile`（`d4e4e8b` clean tree） | 0 | 按 lock 刷新新增 GLTF 工具依赖 |
-| `pnpm assets:subjects:modularize:check` | 0 | tracked Source Package 与确定性恢复一致 |
-| `pnpm assets:subjects:runtime-bundles:check` | 0 | tracked Runtime Bundle 与唯一派生输出一致 |
-| `pnpm test:census`（Gate Authority Closure V1 final tree） | 0 | 202 files = 183 contract + 19 resource-heavy；Builder parity 调整为 measured-duration |
-| `pnpm test:contract`（Gate Authority Closure V1 final tree） | 0 | 183/183 files、1990/1990 tests；134.91 秒 |
-| `pnpm test:resource-heavy`（Gate Authority Closure V1 final tree） | 0 | 19/19 files、338/338 tests；311.99 秒；single worker |
-| `pnpm test:contract`（`d4e4e8b` clean tree） | 0 | 182/182 files、1972/1972 tests；181.49 秒 |
-| `pnpm test:resource-heavy`（`d4e4e8b` clean tree） | 0 | 18/18 files、336/336 tests；412.88 秒；single worker |
-| `pnpm typecheck`（`d4e4e8b` clean tree） | 0 | root `tsc --noEmit` 通过 |
-| `pnpm test:studio` / `pnpm test:lwdp-client`（`d4e4e8b` clean tree） | 0 / 0 | 独立 Node lane 分别 50/50、20/20 通过 |
-| Seedance Node conformance（`d4e4e8b` clean tree） | 0 | 按 CI 的 `pillow + requests` 前置条件运行，1/1 通过；裸本机 Python 缺 `requests` 不计产品失败 |
-| `pnpm build`（`d4e4e8b` clean tree） | 0 | Playground production bundle 成功；仅保留既有 chunk-size warning |
-| 最新 Traversal delta 三文件聚焦回归 | 0 | 3/3 files、81/81 tests；覆盖 Static Platform inventory 与 seeded progress invariants |
-| 最新 Traversal delta 后 `pnpm typecheck` | 0 | `47525bb` 产品输入的 root `tsc --noEmit` 通过 |
-| Registry CLI `describe control-feel-profile/humanoid.medium-ground@1` | 2 | 通用 CLI 仍误报当前 Capability resource not found |
-| Motion Kernel `parameterSchemaRef` census | 10/10 dangling | 仓库仍无对应 resource owner/resolver |
-| `pnpm check:agent-self-check` | 0 | 临时目录生成后与 tracked Builder bundle byte-compare；不先自愈 tracked 输出 |
-| Builder self-check 聚焦回归 | 0 | 2/2；显式临时输出与 source/bundle 行为 parity，tracked bundle 前后无 diff |
-| `pnpm test:studio`（Gate Authority Closure V1 final tree） | 0 | 50/50；与 independent/root lane 不重叠 |
-| `pnpm test:independent:node` | 0 | 23/23；包含原 orphan image-delivery 与 Seedance，后者按 CI 的 `pillow + requests` 前置运行 |
-| `pnpm test:independent:python` | 0 | 两个 Cursor Python 文件共 17/17；每个 dotted repo path 直接执行一次 |
-| Site `npm test` | 0 | Vinext production build + server-render 1/1；直接发布 current architecture，零 `/legacy/` dependency |
-| `pnpm typecheck` / `pnpm build`（Gate Authority Closure V1 final tree） | 0 / 0 | root typecheck 与 Playground production bundle 通过；仅保留既有 chunk-size warning |
-| 最终 mutation audit | 0 | 完整分层门禁前后 tracked/untracked change fingerprints 一致；`git diff --check` 通过 |
-| 四个默认 Browser verifier | 0 / 0 / 0 / 0 | 均报告 `publicationMode: check`；真实 Browser/Havok 检查后 `artifacts/` 无 tracked diff |
-| Cursor final review `gac-v1-final-20260825` | `FINAL GO` | 初审 1 个 Site current-capability P2 经 RED/GREEN 修复；同 review ID 窄复核确认 closed，未新增 P0–P3 |
-| Cursor fresh read-only review `workspace-audit-2e8cf72` | 不作为完成证据 | 已完成主要源码/10 P1/6 P2/testkit 分级对拍；按用户收口指令在最终 verdict 前停止，且早于 `47525bb`，未伪报 `FINAL GO` |
+| `git fetch origin main && git merge origin/main` | 0 | `origin/main` 仍为 `749b594`；实现分支已包含最新 main，无文本或语义增量 |
+| `pnpm install --frozen-lockfile` | 0 | 27 workspace projects；新 `subject-contracts` 由冻结 lock 正式链接 |
+| `pnpm typecheck` | 0 | 最终 TypeScript source tree 通过 |
+| `pnpm check:agent-self-check` | 0 | Planner/Builder tracked bundles 与临时 generated bytes 一致 |
+| self-check focused | 3 files / 10 tests | source/bundle 正负 parity 与 mutated tracked copy fail-closed 全过 |
+| `pnpm test:studio` | 73/73 | atomic Preview、current Hosted contract 与 supervised public topology 同树通过 |
+| independent Node | 23/23 | 按 CI 的隔离 Python `pillow + requests` 前置运行，Seedance conformance 通过 |
+| independent Python | 11/11 + 6/6 | 两个 manifest-登记 Python suites 通过 |
+| independent Site | 1/1 | 按 Site lock `npm ci` 后 production build 与 server-render contract 通过 |
+| `pnpm test` boundary/census | 52 debt；206 = 186 + 20 | boundary floor 与 exact lane census 通过 |
+| contract lane + scoped fixture rerun | 2020/2021 初次通过；stale fixture 修后 1/1 | 唯一失败是旧 producer hash expectation；test-only 更新不使其余 2020 个结果失效 |
+| `pnpm test:resource-heavy` | 20/20 files、344/344 tests | 单 worker；Runtime、Recast/Havok、Browser host、Planner/Builder portable parity 全过 |
+| `pnpm build` | 0 | Playground production build，2187 modules；仅保留既有 >500 kB chunk warning |
+| `verify:canonical` / `verify:rigged-subject` / `verify:g-bot-subject` / `verify:placement-layout` | 0 / 0 / 0 / 0 | 真实 Browser/Havok checks；全部 `publicationMode: check`，未 promotion tracked artifacts |
+| `git diff --check` | 0 | 当前 committed implementation 无 whitespace error |
 
-本轮为验证 check/update 分权，已顺序运行 `verify:canonical`、`verify:placement-layout`、
-`verify:rigged-subject` 与 `verify:g-bot-subject`；四者都运行真实 Browser/Havok Gate，但默认只清理
-staging，不 promotion tracked golden。没有把这些自动化检查冒充 manual interaction、外网 tunnel
-或 provider production 验证。
+自动 contract、真实 Browser/render、manual interaction 是不同证据层。本轮没有把自动 Browser smoke
+冒充人工交互或 production provider 验证；这些结构修复也没有新增 interiors、vehicles、NPC behavior、
+caves、overhangs 或 networking 的生产能力声明。
 
-## 3. 当前结构判断
+## 7. 当前合理架构与禁止的“规整”
 
-以下 package 分层合理，不应为了目录更少而合并：
+以下分层继续成立：
 
 - `authoring → compiler → runtime-contracts → runtime-host / runtime-babylon`；
 - `gameplay-contracts → gameplay`，Host 独占事务、Session、Journal 与 Publication Barrier；
 - `traversal` 与 `traversal-recast`；`world` 与 `world-package`；
-- `subject-actions`、`subject-composition` 与 `subject-registry`；
+- `subject-contracts` 只拥有 serialized DTO/vocabulary，`subject-registry` 拥有发现/解析，
+  `subject-actions` 拥有自动选择行为；
 - provider-neutral `camera` 与最终 Pose owner `runtime-babylon/CameraDirector`。
 
-`WorldRuntimeSnapshotV4` 已拆分 `world/view/runtime/resources`，WorldSession publication 原子聚合 World
-State、Gameplay Inspection 与 View State。Camera 剩余接线、`mountedOn`、完整 Relationship、Compound
-Collider 和 Ragdoll 是 backlog seam，不是当前结构 bug。模块化资产链也没有把 glTF 处理泄漏到 Runtime；
-它的问题主要是大型 tooling 仍留在 `scripts/` 的工程归属。
+明确不做：
 
-当前规整重点已经从“再退役哪些包”转为：
+- 不恢复 Three/Rapier、Legacy Site bundle 或已删除 packages；
+- 不把上述正确分层合并成 `shared/common/utils` 巨包；
+- 不为 unreleased private contract 保留双读、alias 或只服务开发历史的 migration；
+- 不把 Authoring capture 报成第二 Runtime/Camera owner；
+- 不把 Camera 后续接线、mounted relationships、Compound Collider、Ragdoll 或新产品能力塞进结构修复；
+- 不为了 line count 拆开强耦合 authority，或为了占用并行 Agent 人为切碎任务。
 
-1. 对齐 active docs、公开 Studio entrypoint 与真实实现；
-2. 关闭 Registry、SubjectPreset、Canonical JSON、Catalog 与 Hosted Preview 权威断链；
-3. 继续完成 generated parity；check/update 与 independent test lanes 已由本分支闭包；
-4. 再处理 testkit、scripts、test imports、manifest/tsconfig 和 oversized shells。
+## 8. 对 Cursor 与补充 ChatGPT 分析的裁决
 
-## 4. 当前 Findings
+外部分析对 Gameplay Authority / RuntimeHost、`possessedBy` 唯一 control truth、World/View/Runtime
+projection、Camera provider-neutral Domain 的方向判断合理；但旧结论的时间点、P1/P2 分级和“已完成”
+声明必须以最新 tree 复验。
 
-### [P1] [D1/D3] 当前完成记录仍没有原子关闭 active docs
+本轮没有因为模型来源决定采纳与否：
 
-**Disposition：partially fixed / remains。** docs 00/17 已更新 R1b/M5 的头部状态，但
-`docs/00-project-overview.md:103-107` 仍把“完整 M5”和 Gameplay 整体写成未实现，与同页 :55-59
-及现行 G19/M5 事实冲突；`docs/18-refactor-progress-and-backlog.md:277-285` 仍保留未勾选的 R1b Task 10，
-而 :843-865 又明确 M5 已关闭。
+- 接受了能在当前源码复现的 authority 断链；
+- 撤回或延期了没有静默错误证据、只属于未来能力或大规模可维护性的建议；
+- 对 Cursor/worker 初稿保留判断权，例如要求彻底删除旧 Registry list APIs，而不是只迁移主要消费者；
+- 所有确认修复都有本地 reproducer、focused regression 与集成证据。
 
-Site 子项已关闭：`sites/world-sdk-blueprint/app/page.tsx` 直接 server-render 当前 V4/V5/RuntimeHost/
-Babylon/Havok/Browser V5 架构与户外高度场边界，render contract 拒绝 iframe 和 `/legacy/`，并进入
-independent CI lane。剩余 P1 只指 active docs 内部 current-state record 尚未原子统一。
+## 9. 后续依赖感知工作图
 
-### [P1] [D2/D4] 正式 Gameplay 文档把 Browser Reset 的 possession 语义写反
-
-**Disposition：remains。** `docs/20-gameplay-integration-contract.md:186-187` 说 Reset 清空 possession、
-consumer 必须重新 bind；真实 Browser 路径调用 `resetWithInitialControlBinding()`，在返回 Snapshot 前
-完成初始绑定。应分别记录 Host reset 和 Browser reset，consumer 读取返回 Snapshot 的 `possessedBy`。
-
-### [P1] [D2/D3] Registry CLI 与 Browser 仍不是同一资源发现权威
-
-**Disposition：remains；当前树实测。** Registry 继续公开 `listResources()` 与
-`listCapabilityResources()` 两套视图；通用 CLI 只查前者，Browser 从 Capability 视图发现当前资源。
-查询 `worldkit://control-feel-profile/humanoid.medium-ground@1` 仍 exit 2。应提供 closed-kind
-`resolveResource(ref)` 与统一的 `listDiscoverableResources(filter)`。
-
-### [P1] [D2] `SubjectPresetClosureV1` 仍有两个公共 owner
-
-**Disposition：remains。** Registry 版本的 `resourceKind` 是 closed union；
-`runtime-contracts/src/subject-preset.ts:11-23` 的同名公开形状仍是 `string`，两者都从 package root
-导出。选择一个低层 owner，另一侧只导入或显式投影，并增加 exact-key/closed-kind/hash conformance。
-
-### [P1] [D2/D6] Canonical JSON 仍接受并归一化 Frozen Spec 禁止的 `-0`
-
-**Disposition：remains。** Frozen AI-first spec :2122、:2208 要求 parser 和 Golden Fixture 拒绝
-`-0`；`packages/protocol/src/canonical-json.ts:27-34` 将负零改成 `0`，test :62-67 正向锁定接受。
-修复必须原子覆盖 parser、canonicalizer、Golden fixtures 与 hash conformance。
-
-### [P1] [D2/D3] Catalog 的公开 Ref 与锁定 Profile 仍不闭合
-
-**Disposition：remains。** Motion Kernel catalog 的 10 个 `parameterSchemaRef` 全部指向不存在的
-`motion-parameter-schema` resource kind/resolver。应建立“每个 public `...Ref` 必须 resolve”与
-Definition/Profile/Kernel exact closure conformance。
-
-### [Fixed] [D6] Gate Authority Closure V1 已关闭 check/update 与独立 lane 假绿
-
-**Disposition：fixed on development branch。** `WS-06A/WS-06B` 已按去重策略落地：
-
-- 四个 Browser verifier 默认只验证 staging inventory 并清理；只有对应 `:update` 命令可调用既有原子
-  promotion，未知参数 fail closed；
-- Builder tracked bundle 只有 `generate:agent-self-check` 可生成，`check:agent-self-check` 在临时目录
-  build 后 byte-compare，root parity 不再先运行 producer；该重用例按实测进入 resource-heavy；
-- independent census 精确覆盖 6 个 root Node、2 个 Cursor Python 与 1 个 Site suite；Node/Python/Site
-  顺序执行一次，Studio 与 root Vitest 不被重复；
-- tracked CI 改为临时 generated check、Studio、independent、root test、build，并以
-  `git diff --exit-code` 收口。
-
-此前“CI 未消费 `apps/playground/vite.config.test.mjs`”的子结论经当前树复核撤回：
-`apps/playground/vite-host.test.ts` 已直接 import 该配置，且该 test 属于 contract lane。真正遗漏的
-image-delivery、Cursor Python 与 Site 已由 independent manifest 闭合。默认 verifier 的 staging 中含
-随机 Session identity 和截图，因此本修复没有伪造 whole-directory byte parity。
-
-### [P1] [D2/D3/D4] Studio Preview 丢失 AuthoringSpec 与 implementation map 的 hash join
-
-**Disposition：remains。** 正式 CLI 读取完整 map 并校验 `authoringSpecHash`；Studio 在
-`apps/studio/server.mjs:2740-2770` 分别提供 AuthoringSpec 与只含 `{ targets }` 的 capture groups，
-Playground `main.ts:1924-1946` 并行读取，loader 只验证 target shape。应返回绑定 attempt、
-AuthoringSpec hash 与 capture groups 的原子 Preview Bootstrap，并增加 stale/cross-attempt 对抗测试。
-
-### [P1] [D2/D3] Hosted implementation/capture wire contract 暴露竞争 identity
-
-**Disposition：remains。** final `SceneBriefImplementationMapV1` 要求 hashes 与 capture groups；Builder
-draft 缺少这些字段，却使用相同 `kind/schemaVersion`。同一 public module 又同时导出无实际消费者的
-`CaptureTargetManifestV1` 与现行 `RuntimeTriviewManifestV1`，并暴露 `imageDataUrl`、`imagePath`、
-`targetId` 等非 Canonical 名称。发布前应 clean break：独立 draft kind 或 Host-private draft、单 manifest
-owner、Canonical names 与稳定 unknown-shape diagnostics。
-
-### [P1] [D3/D5/D6] `pnpm studio:public` 没有组成可运行的公开 Studio topology
-
-**Disposition：remains。** 根脚本只启动 proxy；默认 upstream 是 4197，普通 Studio 默认 4174，
-proxy 不启动或监督内部 Studio，docs 15 也没有精确双进程命令和 env/auth 隔离。代理本身的 loopback、
-Authorization stripping、allowlist 与 Upgrade denial 是合理安全边界；最小修复是受监督 wrapper，或
-明确重命名为 public proxy 并增加默认 `/api/health` topology E2E。
-
----
-
-### [P2] [D2/D5] Canonical 生产不变量仍位于 `testkit`
-
-**Disposition：remains；从 P1 降为 P2。** Compiler/World 显式生产依赖 testkit 并调用其中的
-`validateSpawnSafety()`。这是包职责与依赖方向不整洁，但当前只有一个算法 owner，没有证据表明生产
-结果错误或出现双 truth。应迁到低层生产合同包并保持 diagnostics/hash，不复制算法或新建 god package。
-
-### [P2] [D5] test imports、manifest 与 tsconfig 隔离仍不一致
-
-**Disposition：changed / remains。** 新 census 已机械关闭所有 Vitest `.test.ts` 的 lane 归属；但 tests
-仍从根隐式获得 Vitest/DOM/Node，部分 test 穿透 sibling private source，scripts 与 cross-package tests
-不在正式 exports/manifest 图内。根 tsconfig 一次覆盖 packages/apps/scripts，workspace packages 没有
-分层 tsconfig。先建 boundary gate，再从 leaf packages 引入最少必要的 library/browser/node/test 配置。
-
-### [P2] [D5/D6] `scripts/` 与 Studio 仍是 Workspace 图外的 Host/Provider 产品模块
-
-**Disposition：changed / worsened structure。** `scripts/worldkit.ts` 约 1,633 行，Studio server 约
-3,062 行，recording service 约 1,167 行，模块化资产核心又在 `scripts/lib` 达约 1,741 行。
-新增 bounded queue、job timeout、stop/cancel 和上传 byte cap 是进步；残余是 SIGTERM 后缺统一
-grace→SIGKILL/process-tree escalation、部分 provider/output 缺统一 byte/deadline budget，以及 readiness
-未形成单一合同。
-
-### [P2] [D2/D5/D6] Schema、validator 与 generated/parity 仍无完整机械边界
-
-**Disposition：partially fixed / remains。** Builder bundle 进入 CI diff check 是有效进步；但 docs 22
-仍声称 Planner/Builder checker 都 source-generated，Planner checker 实际是手写 validator，与 canonical
-parser 在 duplicate target、second Subject、movement-label length 等规则上不等价。Trusted Host 会随后
-fail closed，所以当前是错误 passed receipt 后任务终止，不是非法 Brief 被提升。应建立 source/bundle
-正负 exact parity、unknown-key、round-trip 与 diagnostic coverage。
-
-### [P2] [D2] Action、Bone 与 Topology vocabulary 仍有多个 owner
-
-**Disposition：remains。** Ground Humanoid Action、Biped Bone 与 Body Topology 继续在多个 package/fixture
-重复；当前未确认 shape drift，故保持 P2。选择唯一 vocabulary owner 或 generated parity，并明确
-automatic resolver 只是窄 subset。
-
-### [P2] [D5] Runtime authority 已统一，但 Playground/Studio shells 仍偏大
-
-**Disposition：旧双 Runtime finding 保持关闭；maintainability residual worsened。** 三条 Playground
-route 继续使用同一 Babylon owner，Authoring capture 继续委托 `captureArtifactView()`；但 `main.ts`、
-Studio server 与 recording service 仍混合 DOM/API、route、process lifecycle、capture 与 disposal。
-可以拆 bootloader/controllers/services，但不能重新制造 canonical/catalog 两套 Runtime。
-
-## 5. 存量 Findings 在最新 main 上的逐项状态
-
-| 旧 finding | 当前状态 | 最新裁决 |
-|---|---|---|
-| Browser V5 vs Placement/docs V4 | 主体已修复 | 只余 active publication truth |
-| Registry CLI vs Browser discovery | 仍存在 | 当前树 CLI exit 2 |
-| Compiler/World 生产依赖 testkit | 仍存在但降级 | 单 owner 包边界债，改列 P2 |
-| `SubjectPresetClosureV1` 双 owner | 仍存在 | closed kind vs `string` |
-| Canonical JSON 接受 `-0` | 仍存在 | Frozen spec 与实现/测试相反 |
-| Plan-first Camera 无单位字段 | 继续撤回 | catalog-local convention 被明确授权 |
-| Motion/Subject Catalog 闭包 | 仍存在 | 10/10 parameter Schema Ref dangling |
-| verify 更新 golden + gate 不健康 | 已修复 | default check、explicit update、temporary bundle parity、independent census 与 CI clean-tree 已落地 |
-| exports/manifest/tsconfig/import graph | 收窄后仍存在 | census 已修；test/scripts/tsconfig isolation 开放 |
-| `scripts/` 隐式 Host/CLI | 加重 | Studio/local-cloud/assets tooling 扩大图外职责 |
-| `packages/world` barrel 加载 Three | 已修复 | 本增量未回退 |
-| Schema/type/validator/generated | 部分改善后仍存在 | Builder CI 正向；Planner、draft/final、manifests 仍有 parity debt |
-| Action/Bone/Topology 重复 | 仍存在 | 尚未确认 shape drift，保持 P2 |
-| Canonical/Legacy 共用 Playground | 已修复 | Babylon-only 路由统一，只余 shell 可维护性 |
-| docs/Site provenance | partially fixed / remains | Site 已切到 current architecture 并进 CI；active docs 内部矛盾仍开放 |
-| 无版本 facade 绑定旧 major | 已修复 | current-only V4/V5 保持 |
-
-Hosted Preview hash join、Hosted capture public contract 与 `studio:public` topology 是上一基线新增的三项
-P1，本轮 main 没有关闭；模块化 Subject 资产链未新增独立 P0/P1。
-
-## 6. 对补充 ChatGPT 分析的最新裁决
-
-外部分析总体方向合理：Gameplay Authority / RuntimeHost、`possessedBy` 唯一 control truth、
-World/View/Runtime projection、Camera provider-neutral Domain 都已成为现行事实。它对 `mountedOn`、
-Compound Collider、Ragdoll 的建议仍属于产品路线，不是本次 Workspace P0/P1；当前也没有理由恢复旧
-Camera fallback 或 Motion 参数袋。
-
-需要补正的是时间点和证据：M5 当前生产边界已 remediation，模块化资产也通过 deterministic checks；
-当前 blocking 风险集中在 public authority、Preview 原子绑定、Studio entrypoint 与剩余 generated parity；
-check/update 和独立 lane 已在本分支关闭。方向正确不能抵消其余当前可复现失败。
-
-## 7. 本轮启用并校正的门禁策略
-
-| 阶段 | 当前策略 | 本轮应用 |
-|---|---|---|
-| 影响面建模 | 先列改动/claim 的输入与证据层 | source、Studio/LWDP、assets、build、Browser、visual/manual、docs 分 lane |
-| 聚焦回归 | reproducer / affected checks first | Registry、image-delivery、Site、两项 asset check 先行 |
-| Root aggregate | census → bounded contract → single-worker heavy | exact clean tree 各 lane 一次，不重复 `test:scenes` |
-| 独立 lane | 不从 root green 推导 Node/Python/Site/Browser | `test:independent` 闭合 Node/Python/Site；Browser/render/manual 仍分层 |
-| 证据复用 | 仅在输入/claim 未变时复用 | 纯文档修订后不重放产品 Runtime gates |
-| 只读边界 | producer 不能冒充 check | 四 verifier 默认 check、显式 `:update`；Builder temp byte-compare |
-| 收口 | diff/link/claim + scoped status | CI 最终 `git diff --exit-code`；不通过重复测试证明 cleanliness |
-
-这与 main 去重/提速的意图一致：contract 与 resource-heavy 只各运行一次，scene alias 不再重复。剩余
-工作不是退回“多跑几遍”，而是提高 lane 分类、独立 test coverage 和 check/update 的可信度。
-
-## 8. 依赖感知工作图
-
-| ID / independently verifiable deliverable | depends_on | blocks | ownership / integration point | required evidence | mode |
+| ID / deliverable | depends_on | blocks | ownership / integration point | required evidence | mode |
 |---|---|---|---|---|---|
-| `WS-00` current publication truth：docs 00/18/20 + Site | 无 | `WS-INT` | 主 Agent独占 active authority 与 Site route | Reset contract、Site build/test、claim census | `main-agent-only` |
-| `WS-01` Registry discovery + Catalog closure | 无 | `WS-02`, `WS-07`, `WS-INT` | Registry closed resolver/list；CLI/Browser/Closure 只消费 facade | list/describe/resolve、exact closure | `main-agent-only` |
-| `WS-02` SubjectPreset + vocabulary owner | `WS-01` | `WS-07`, `WS-INT` | 低层 contract owner；Registry/Runtime 只导入/投影 | exact-key、closed-kind、vocabulary parity | `sequential` |
-| `WS-03` Canonical `-0` admission | 无 | `WS-07`, `WS-INT` | parser/canonicalizer + Authoring + hash fixtures | negative-zero parser/golden/hash | `main-agent-only` |
-| `WS-04` invariants 迁出 testkit | 无 | `WS-05`, `WS-INT` | 低层生产包独占；diagnostics 不变 | Compiler/World parity、无生产反向依赖 | `parallel-safe` |
-| `WS-05` workspace boundaries | `WS-04` | `WS-07`, `WS-08`, `WS-INT` | manifests/exports/tsconfigs/`/testing` | import lint、leaf isolation、0 cycles | `parallel-safe` |
-| `WS-06A` 只读 gate floor（已完成） | 无 | `WS-06B`, `WS-07`, `WS-INT` | verifier check/update；checker temp byte-compare | stale negative、clean-tree | `main-agent-only` |
-| `WS-06B` independent lane closure（已完成） | `WS-06A` | `WS-INT` | 保留 census/contract/heavy；补 Node/Python/Site | 6 Node / 2 Python / 1 Site、orphan 0、CI matrix | `main-agent-only` |
-| `WS-07` generated parity | `WS-01..WS-03`, `WS-05`, `WS-06A`, `HSE-01` | `WS-INT` | 每领域唯一 source；Planner/Builder/validator parity | 正负 parity、unknown-key/round-trip | `sequential` |
-| `HSE-00` 原子 Preview Bootstrap | 无 | `WS-INT` | Host 独占 attempt/hash/groups | stale/cross-attempt Browser tests | `main-agent-only` |
-| `HSE-01` Hosted contract clean break | 无 | `WS-07`, `WS-INT` | 独立 draft kind、单 manifest、Canonical names | closed union、consumer census | `main-agent-only` |
-| `HSE-02` public Studio topology | 无 | `WS-08`, `WS-INT` | wrapper 或明确双进程 contract | health E2E、shutdown cleanup | `main-agent-only` |
-| `WS-08` Host/CLI/Studio composition | `WS-05`, `HSE-02` | `WS-INT` | stable Host primitives → formal package | CLI snapshots、lifecycle/readiness | `sequential` |
-| `WS-INT` 最终集成 | 上述全部 | 无 | 主 Agent独占 semantic merge 与 release evidence | relevant gates once、必要 Browser/render/manual、独立复核 | `main-agent-only` |
+| `ARC-INT` 当前根因闭包最终集成 | 当前 HSE/WS slice | 无 | 主 Agent独占 report、semantic merge、main push | relevant gates、fresh final review、remote SHA | `main-agent-only` |
+| `WS-07B` 分领域扩展 generated parity | `ARC-INT` | 相关 schema release | 每领域唯一 source 与 explicit producer/check | 正负 parity、unknown-key、round-trip、tracked bytes | `sequential` |
+| `WS-05B/C` 分批消减 52 条 boundary debt | `ARC-INT` | `WS-08` 的 package extraction | exact ledger owner；public/testing exports；direct deps/tsconfig | debt count 单调下降、zero stale/new、zero cycles | `parallel-safe`（仅不重叠 owner） |
+| `WS-08` Host/Studio/CLI composition | 稳定 public contracts；相关 WS-05 debt 已清 | 无 | main Agent保留 architecture/lifecycle；按 stable primitive 抽 package | CLI snapshots、readiness/shutdown、build graph、Studio E2E | `sequential` |
 
-只有依赖 ready、owner 和 integration point 不重叠的任务可以并行；worker 报告不是集成证明。
+只有依赖 ready、owner 和 integration point 不重叠的工作才能并行；最后集成、cross-cutting interface 和
+发布证据继续由主 Agent持有。
 
-## 9. 明确不做的“规整”
+## 10. 当前发布判断
 
-- 不恢复 Three/Rapier、Legacy Site bundle 或已删除 packages。
-- 不合并 `authoring/compiler/runtime-contracts/runtime-host/runtime-babylon`，也不合并
-  `traversal/traversal-recast`、`world/world-package`。
-- 不把 Authoring capture API 报成第二 Runtime/Camera owner。
-- 不把 Plan-first catalog 的 `distance/targetHeight` 改成 Canonical Schema 字段。
-- 不为未发布私有 draft 保留永久 alias/migration；可以明确 clean break。
-- 不新建模糊 `shared/common/utils` 巨包。
-- 不把 Camera 后续接线、mounted relationships、Compound Collider 或 Ragdoll 塞进结构修复。
-- 不删除 plan-lock、scene artifacts、planning images、tri-view 或 golden fixture；应修 producer 权限。
-
-## 10. 覆盖与当前结论
-
-| 维度 | 状态 | 当前结论 |
-|---|---|---|
-| D1 定位与需求 | 已查 | Babylon-only、Gameplay、M5 与 Hosted approximation 边界成立；active docs/public Studio 未闭合，Site 子项已关闭 |
-| D2 Schema / AI-friendly | 已查 | `-0`、SubjectPreset、Catalog Ref、Hosted draft/final/manifest/checker parity 开放 |
-| D3 承诺与事实 | 已查 | Registry、Reset 文档、Preview hash join 与 Studio command 分叉；Site 已改为 current publication |
-| D4 单一状态权威 | 已查 | Runtime/Camera/possession owner 成立；Preview evidence 可能跨 attempt，但不是第二 simulation truth |
-| D5 工程边界 | 已查 | testkit 降为 P2；scripts/Studio、manifest/tsconfig/generated 边界开放 |
-| D6 门禁与证据 | 已查并修复 | census/CI/heavy 保留；default verifier 只读、Builder 无 self-heal、independent orphan 0 |
-
-总体判断：**保留现有架构，不做第二轮大搬家；继续修可验证的 public authority 断链。** `WS-06A/WS-06B`
-已完成；后续推荐顺序是 `HSE-00`、`HSE-01`、`HSE-02`、`WS-00/WS-01/WS-03`，随后再做
-testkit/workspace/generated 与 Host/CLI。只有所有相关 P1 有 reproducer、修复和按当前去重策略取得的
-最终树证据后，“authority / gate closure”才能从 NO-GO 改为 GO。
+在独立 completion review 前，准确表述是：**实现与 Host 证据已达到核心根因闭包 GO，最终发布裁决
+待 fresh read-only review。** 这不是“整个仓库没有债务”，而是最核心、最差的竞争设计已经被清除，
+剩余工作已进入有门禁、有 owner、有验收条件的总任务，不再靠模糊的“以后规整”管理。
