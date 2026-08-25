@@ -1,5 +1,6 @@
 export * from "./babylon-world-runtime";
 export * from "./runtime-projection";
+export * from "./artifact-capture";
 export {
   BABYLON_TRAVERSAL_RUNTIME_ADAPTER_MANIFEST_V1,
   BABYLON_TRAVERSAL_RUNTIME_BACKEND_MANIFEST_V1,

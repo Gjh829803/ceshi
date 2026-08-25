@@ -74,14 +74,15 @@ Apply `docs/reviews/runtime-deep-review-checklist.md` whenever changing or revie
 7. Open `http://127.0.0.1:5173/?scene=<catalog-id>`. Compare the three planning captures with intent, test playability, then export every Prototype's SDK-derived whitebox tri-view.
 8. Visual Bible uses those tri-views and the verified manifest to create styled tri-views and the final rendered opening frame. Finish with `pnpm visual:finalize -- --scene <catalog-id>` and `pnpm visual:check -- --scene <catalog-id>`.
 
-Do not modify `sdk-world-adapter.ts`, physics, camera, or rendering code merely to create a scene.
+Do not modify Runtime, physics, camera, or rendering internals merely to create a scene.
 
 ## Local Runtime startup
 
 - When a user asks to view the product G Bot locally, run `pnpm dev:g-bot` and open the URL printed by the command.
 - `?authoring=1` requires an AuthoringSpec injected by `worldkit run <world.json>`. Never combine plain `pnpm dev` with `?authoring=1` or present that combination to a user.
 - If the browser reports `504 Outdated Optimize Dep` after a branch or dependency change, stop the old server and run `pnpm dev:g-bot:refresh` once. Do not change Babylon, physics, camera, or runtime code to repair a stale Vite dependency cache.
-- Use `pnpm dev` only for the Legacy/catalog Playground. Do not describe it as the Canonical Authoring Runtime entry.
+- Use `pnpm dev` for the Babylon-backed catalog Playground. It is a scene workflow and artifact
+  surface, not the Canonical Authoring Runtime entry supplied by `worldkit run`.
 
 ## Preferred APIs
 
@@ -93,9 +94,15 @@ Do not modify `sdk-world-adapter.ts`, physics, camera, or rendering code merely 
 - `world.player.spawn(...)` exactly once.
 - `world.atmosphere.set(...)` for sky/fog/sun semantics.
 
-In the **Legacy/catalog scene workflow only**, `world.player.spawn(...)` uses the old Three.js-facing convention: `facingRadians: 0` faces `-Z`, while `Math.PI` faces `+Z`. This is not a Canonical Babylon Runtime contract. For a composition-critical opening view in that Legacy workflow, set `camera: { pitchRadians, distance, fovDegrees, targetHeight }`; a larger positive pitch looks farther downward. Supported pitch is `-0.95..0.65`, distance is `1.8..8m`, and target height is `0.5..4.5m`. Keep these as initial framing choices only—the SDK still owns runtime camera controls.
+In the catalog scene workflow, `world.player.spawn(...)` uses the serialized authoring convention:
+`facingRadians: 0` faces `-Z`, while `Math.PI` faces `+Z`. For a composition-critical opening view,
+set `camera: { pitchRadians, distance, fovDegrees, targetHeight }`; a larger positive pitch looks
+farther downward. Supported pitch is `-0.95..0.65`, distance is `1.8..8m`, and target height is
+`0.5..4.5m`. Keep these as initial framing choices only—the SDK still owns runtime camera controls.
 
-When built-ins are insufficient, define a local `defineWorldFeature(...)` and use only its tracked `BuildContext`. Register custom terrain through `world.terrain.custom(...)`. Never add opaque objects directly to `THREE.Scene` from a scene module.
+When built-ins are insufficient, define a local `defineWorldFeature(...)` and use only its tracked
+`BuildContext`. Register custom terrain through `world.terrain.custom(...)`. Scene modules must not
+add opaque renderer or physics objects directly; provider objects stay behind Runtime adapters.
 
 ## Required properties
 

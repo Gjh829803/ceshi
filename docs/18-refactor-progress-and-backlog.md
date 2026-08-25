@@ -34,6 +34,31 @@
 > Gate；统一 Validation 的 Capture/Integrity V1 也已进入回归。完整 P1.4 WorldPackage、
 > Placement/Physics/Composition 等统一 Gate、恢复续拍与 Video Adapter 仍未完成。
 
+## 当前执行 Epic：Babylon-only Runtime 收口（TR0–TR7）
+
+当前主线执行计划是
+[`2026-08-25-babylon-only-threejs-retirement.md`](superpowers/plans/2026-08-25-babylon-only-threejs-retirement.md)。
+它保留 Plan-first、Opening Composition、Studio preview、planning capture 和 SDK-derived
+tri-view 产品合同，同时把 gameplay、catalog 和 artifact-only 路由收口到同一个
+Babylon/Havok Runtime。下表描述当前候选工作树状态；“候选已实现”不等于已完成 TR7
+全量集成、独立审查或发布。
+
+| ID | 当前状态 | 当前交付物 | depends_on / blocks | 完成证据 |
+|---|---|---|---|---|
+| TR0 | 已完成 | 冻结 Babylon-only 边界、迁移范围、资产不变式和依赖图 | 无 / TR1–TR7 | 本 Epic 与实施计划可从权威 Backlog 发现 |
+| TR1 | 候选已实现，待 TR7 | Outdoor importer 与 World geometry 只使用 Babylon/引擎无关数据 | TR0 / TR2、TR5 | 非对称 TRS、terrain geometry data、六场景回归进入集成矩阵 |
+| TR2 | 候选已实现，待最终渲染验收 | Babylon artifact renderer 承接 opening frame、mask/report、planning views 和 prototype tri-view | TR0、TR1 / TR3、TR5、TR6 | 生命周期测试和 6/6 artifact route 已通过；最终像素证据由 TR7 收口 |
+| TR3 | 候选已实现，待 TR7 | 旧 Runtime cluster 退出；`@whitebox-world/camera` clean-break 为 provider-neutral Domain | TR2 / TR5、TR6 | 包边界和纯 Selection 测试已加入；不宣称 Browser/Runtime selector 已接线 |
+| TR4 | 候选已实现，聚焦门禁已过 | Static Subject intake 改为 GLB-first；保留 19/19 Registry/hash/load/dispose 验证 | TR0 / TR6 | `verify:xier120-subjects` 与 malformed/hash mismatch 负向门禁 |
+| TR5 | 进行中 | Scene/artifact verification 迁移到 Babylon/Havok | TR1、TR2、TR3 / TR7 | `test:scenes`、6/6 gameplay/artifact 已通过；新增 14 项 geometry conformance 覆盖 Primitive、水体边界、凹多边形双绕序、退化拒绝和 dispose；Studio/full gates 尚待收口 |
+| TR6 | 候选已实现，待 TR7 | Active docs、Agent 规则、架构站和 Camera 包说明统一为 Babylon-only | TR2、TR3、TR4 / TR7 | Active provider scan 零命中；18 个 Markdown 入口相对链接和 architecture build 已通过 |
+| TR7 | 待执行，main-agent-only | 全量门禁、视觉证据、深审、独立复核、提交并推送 `main` | TR3–TR6 / 无 | 完整测试/build/Browser/scene/artifact/census 与远端 SHA |
+
+`@whitebox-world/camera` 当前已实现命名 Rig/Modifier/Context Profile、View Preference、
+Context admission、纯 Selection/Explain 和诊断；committed Gameplay Context Projection、
+Registry Lock、Browser preference 命令，以及 Babylon CameraDirector 消费 Selection Decision
+仍属于 P2.4 后续工作。历史 review/spec 只用于解释决策来源，不能覆盖本表和真实代码状态。
+
 ## 1. 文档职责
 
 本文负责回答三个问题：
@@ -63,8 +88,8 @@
 - [`2026-08-24-unreleased-compatibility-clean-break-design.md`](superpowers/specs/2026-08-24-unreleased-compatibility-clean-break-design.md)：G19-8 未发布协议 clean break 的权威边界、UCCB 依赖图与零消费者门禁；
 - [`2026-08-25-historical-naming-and-compatibility-path-cleanup-plan.md`](superpowers/plans/2026-08-25-historical-naming-and-compatibility-path-cleanup-plan.md)：UCCB-65 历史命名、公共导出、隐式兼容行为、生成资产与延期清理账本的专项执行计划；
 - [`2026-08-25-gameplay-g19-8-completion.md`](reviews/2026-08-25-gameplay-g19-8-completion.md)：G19-8 current-only clean break、全量门禁与 Final GO disposition；
-- [`2026-08-24-context-driven-gameplay-camera-composition-design.md`](superpowers/specs/2026-08-24-context-driven-gameplay-camera-composition-design.md)：已评审并按当前 `main` 复核的 Kit、Relationship、Action、Equipment、Flight 与 Camera Context/Director 端到端组合合同；已决策 Canonical Camera 独立包方向、Legacy Three 隔离边界和 GCC 工作图，公共合同仍待 GCC-0～0C 冻结，能力仍未实施；
-- [`2026-08-25-context-driven-camera-package-boundary-review.md`](reviews/2026-08-25-context-driven-camera-package-boundary-review.md)：基于当前源码的 Canonical Camera 分包、Legacy Three 反向可达性与成组清退门禁复审；无 open confirmed P0/P1/P2，实施仍由 P2.4 GCC-0～8 和 P3.2 跟踪；
+- [`2026-08-24-context-driven-gameplay-camera-composition-design.md`](superpowers/specs/2026-08-24-context-driven-gameplay-camera-composition-design.md)：Kit、Relationship、Action、Equipment、Flight 与 Camera Context/Director 的设计输入；Camera Domain 已实现的部分和剩余集成以本页 P2.4 为准；
+- [`2026-08-25-context-driven-camera-package-boundary-review.md`](reviews/2026-08-25-context-driven-camera-package-boundary-review.md)：Camera 分包决策的历史审查证据，不是 active 实现状态或可用入口；
 - [`2026-08-19-world-validation-report-and-quality-gates-design.md`](superpowers/specs/2026-08-19-world-validation-report-and-quality-gates-design.md)：量化 Gate、Metric、Evidence 和生产阻断协议；
 - [`2026-08-20-ai-authored-geometry-extension-design.md`](superpowers/specs/2026-08-20-ai-authored-geometry-extension-design.md)：未来可能需要的 AI 自定义几何能力及候选技术，仅供调研评审，不属于当前 Roadmap；
 - `docs/superpowers/plans/`：已经进入实施阶段的单个纵向切片计划与证据。
@@ -547,22 +572,21 @@ Incremental Hot Apply，以及哪些 Runtime 状态被保留、重置或替换�
 
 #### P2.4 多 Controller、相机模式与受控操作
 
-- [x] 完成并评审 [上下文驱动 Gameplay 与 Camera 组合设计](superpowers/specs/2026-08-24-context-driven-gameplay-camera-composition-design.md)；已接受 Kit → committed state → Camera Context → CameraDirector 的单向链路、唯一 View Preference 和代表性 Fixture；代码实现及公共合同 clean break 尚未开始。
-- [x] 完成 Package Boundary/current-main 复审：Canonical Camera 目标为 clean-break 后的
-  `@whitebox-world/camera` provider-neutral Domain；当前同名 Three.js 包仍属 Legacy，不能
-  承接新能力，也不能在 catalog/scene 工作流迁移前被单点删除。
-- [ ] GCC-0/GCC-0A：冻结术语、Schema 版本和 Browser V5/View clean break，并与已经合入
-  `main` 的 G19-6 当前合同对拍；不得反向重开 G19-5/G19-6 或保留旧命令 alias。
-- [ ] GCC-0B/GCC-0C：冻结 package API/dependency DAG；把旧 Three Camera Rig 原子迁入明确
-  Legacy scope，释放并 clean-break 建立 Canonical `packages/camera`，同时保持
-  `pnpm dev`、scene tests 和 build 不退化。
-- [ ] GCC-1/GCC-2/GCC-3：完成 committed Gameplay → Camera Context Projection、Profile
-  Admission/Selection/Explain 和唯一 `cameraViewPreference` / View State 公共合同。
+- [x] 完成并评审 [上下文驱动 Gameplay 与 Camera 组合设计](superpowers/specs/2026-08-24-context-driven-gameplay-camera-composition-design.md)；接受 Kit → committed state → Camera Context → CameraDirector 单向链路、唯一 View Preference 和代表性 Fixture。
+- [x] `@whitebox-world/camera` 已 clean-break 为 provider-neutral Domain，交付关闭的命名
+  Rig/Modifier/Context Profile、`CameraContextSampleV1`、`CameraViewPreferenceV1`、Context/
+  Preference admission、纯 `selectCameraViewV1`、fallback diagnostic 与 explain。
+- [x] GCC-0B/GCC-0C：package API/dependency DAG 与 provider-negative 边界测试已建立；Camera
+  Domain 不拥有 renderer、physics、Browser、Runtime Session 或 Gameplay State。
+- [ ] GCC-0/GCC-0A/GCC-1：冻结 Browser V5/View clean break 与 committed Gameplay →
+  `CameraContextSampleV1` Projection；不得保留旧命令 alias 或从 Render Pose 反推 Context。
+- [ ] GCC-2/GCC-3：把已实现的 Profile admission/Selection/Explain 接入 Registry Lock、
+  唯一 `cameraViewPreference` Command/View State 和原子拒绝语义。
 - [ ] GCC-4/GCC-5：CameraDirector 消费纯 Selection Decision；Mount/Equipment/Flight 事务
   只提交 Camera 输入并与 Gameplay 一起原子回滚。
 - [ ] GCC-6/GCC-7：交付两个 Kit、Registry Lock、Browser/CLI/Take 与两个 Golden Fixture，
   分离 automated contract、runtime numeric、rendered visual 和 manual interaction 证据。
-- [ ] GCC-8：全门禁、Legacy 隔离审计、最终复核和 production/experimental 声明。
+- [ ] GCC-8：全门禁、包边界审计、最终复核和 production/experimental 声明。
 - [ ] 同一 Runtime Session 创建多个 Controller 并在同一 Tick 提交 Intent Batch。
 - [ ] Possession 权限、Sequence、Expected State 和冲突策略。
 - [ ] 第一人称、第三人称和声明式 Camera Rig 切换。
@@ -668,20 +692,21 @@ Replay、Streaming/Dispose 和自动 Diagnostic；普通 Agent 只引用稳定 P
 - [ ] Package 完整性、真实性、许可证和不可信输入安全 Gate。
 - [ ] 所有必需 Gate 失败都阻止发布，不能由综合分数抵消。
 
-#### P3.2 默认实现切换
+#### P3.2 Babylon-only Runtime 收口
 
-- [ ] Playground 默认入口切换到 Canonical Babylon/Havok Runtime。
-- [ ] Babylon 承接 `?scene=` catalog 的场景加载、交互、Opening Composition、规划捕获和
-  SDK-derived tri-view，或由产品明确退役这些入口；替代证据进入同等 Blocking Gate。
-- [ ] 生产 Agent 编排迁出 SDK 仓库，只保留 SDK Fixture、Skill/CLI 接入文档和 Conformance。
-- [ ] 旧 Plan-first 工件格式冻结为回归 Fixture，相关 ADR 标记为 Superseded。
-- [ ] 反向可达性证明为零后，原子移除 `sdk-world-adapter`、旧
-  `core/physics/subjects/animation` Runtime 和 Rapier 依赖；`world/contracts/testkit` 仍被
-  Planner/Compiler/Gate 使用，不随 Legacy Runtime 误删。
-- [ ] Three.js/Rapier Alpha 归档或移除，不继续承接新能力；不得只删除
-  `packages/camera` 留下半残依赖。
-- [ ] README、AGENTS、快速接入、示例和发布流程只指向 Canonical 协议。
-- [ ] 完整清理验证证明没有旧字段、双重运行时真相或隐式兼容分支。
+- [x] TR0 已冻结依赖图与产品保留合同；执行权威为
+  [Babylon-only Runtime 收口实施计划](superpowers/plans/2026-08-25-babylon-only-threejs-retirement.md)。
+- [x] TR1/TR3/TR4 候选实现已移除旧 geometry/Runtime/bake 路径，并建立 provider-neutral
+  Camera Domain 与 GLB-first intake；最终状态仍由 TR7 集成门禁决定。
+- [x] TR2 候选实现已让 Babylon 承接 `?scene=` artifact-only 的 Opening Composition、
+  planning capture 和 SDK-derived tri-view；实际 6/6 像素证据尚待 TR5/TR7。
+- [ ] TR5 已通过 `test:scenes`、6/6 gameplay/artifact 和 14 项 Babylon geometry
+  conformance；继续完成 Studio preview/capture 与最终非对称 terrain parity，确保没有第二套
+  Gameplay 或 capture truth。
+- [x] TR6 候选已让 README、AGENTS、快速接入、架构站和发布流程只指向 Babylon-backed
+  当前入口；历史 review/spec 只保留决策证据，不作为可用说明。最终发布仍受 TR7 阻断。
+- [ ] TR7 运行完整 Gates、provider census、Runtime 深审、独立复核和 rendered/manual evidence，
+  之后才能提交、推送并宣布默认实现收口完成。
 
 #### P3.3 后续独立能力
 
@@ -834,7 +859,8 @@ S1b Golden、
    [实施计划](superpowers/plans/2026-08-21-p15-control-feel-state-resolver.md) 已实施、
    通过全部生产 Gate，并由 PR #10 合入 `main`；水介质、`ControlMethodProfile`、
    CLI/Browser E2E 覆盖，以及整支对抗审查仍未交付。相机 overlay 已在 Browser V5
-   基线上完成门禁与最终审查；GCC-3 `cameraViewPreference` clean break 仍未完成；作者面板
+   基线上完成门禁与最终审查；Camera Domain 的 `cameraViewPreference` 和纯 Selection 已实现，
+   但 Browser Command/View State 与 Babylon CameraDirector 接线仍未完成；作者面板
    Feel 范围与 session 数字袋类型已在 Preset 语义合同修复中收口，
    M7 不标记完成；
 8. **M8：完成 Canonical World State + Typed Relationship 人—滑板窄可视切片**：G19-2/G19-4
@@ -882,4 +908,4 @@ Validation Capture/Integrity V1 字段已经冻结；后续 Subject、Gate 或 P
 | 任意 Blender/Python 代码进入生产世界 | 只允许隔离制作 Provider；Runtime 只消费锁定制品 |
 | 机器人研究仓库的格式污染 Web SDK | 只借鉴 Solver、Gate、Registry 和 Capture 思想，通过 Adapter 映射 |
 | S0/S1a/Golden/G Bot S1b 切片完成被误读为整个 Subject 系统完成 | 本文分别追踪 S1b 未完成项、S2、S3 和 S4 |
-| 旧 Three/Rapier 与新 Babylon/Havok 长期双轨 | P3.2 设定明确默认切换和退出 Gate |
+| Babylon-only 候选实现未经过完整 scene/artifact/Studio 与 rendered evidence 就被提前宣布完成 | P3.2/TR7 要求完整 Gates、provider census、深审与独立复核后才能发布 |

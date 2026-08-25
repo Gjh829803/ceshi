@@ -33,7 +33,7 @@ Director LLM → Render Directive SDK ────────────┘
 
 | 角色 | 负责什么 | 不负责什么 | 当前状态 |
 |---|---|---|---|
-| Planner / Builder / Visual Bible | 分别定义世界、实现可版本化白膜、生成视觉条件 | 不跨越冻结边界，不参与每帧控制，不绕过 SDK 改 Three.js/Rapier | 多 Agent Alpha 可用 |
+| Planner / Builder / Visual Bible | 分别定义世界、实现可版本化白膜、生成视觉条件 | 不跨越冻结边界，不参与每帧控制，不绕过 SDK 修改引擎 Adapter | 多 Agent Alpha 可用 |
 | 白膜 World SDK | 世界构建、主体、镜头、运动、物理、动作和确定性状态 | 不生成最终高质量视觉 | 第一期 Alpha 可运行 |
 | Director LLM + Director SDK | 运行时理解意图，并通过观察、命令、任务和回执受控改世界 | 不逐帧驱动刚体，不直接拿底层对象 | 仅完成方案设计 |
 | 实时世界模型 | 根据白膜条件生成材质、光影、天气、风格和视觉细节 | 不决定位置、碰撞、导航、数量和玩法结果 | 尚未接入 |
@@ -44,7 +44,8 @@ Director LLM → Render Directive SDK ────────────┘
 
 > Golden Humanoid S1b 首个可视纵向切片已完成并进入回归；S1b 整体与 Semantic Actions 整体仍未完成.
 
-> Placement Solver S1 首个海湾纵向切片已完成并进入回归；通用 Terrain Mask、Route R1b、更多 Constraint 与 P0.1 整体仍未完成。
+> Placement Solver S1 首个海湾纵向切片已完成并进入回归；通用 Terrain Mask、更多
+> Constraint 与 P0.1 整体仍未完成。
 
 > Simulation Take / Control Capture V1 已完成固定 Tick 时间线、五 Pass Babylon 捕获、
 > Render Ready Receipt、原子 Bundle 和真实 Chromium Gate；统一 Validation 的
@@ -52,7 +53,8 @@ Director LLM → Render Directive SDK ────────────┘
 > Validation 接入与 Video Adapter 仍未完成。
 
 > Route R1 Heightfield 已完成 Golden/Adversarial Fixture、双 Blocking Gate 与
-> `pnpm verify:route-r1-heightfield`。R1b、完整 M5 仍开放。
+> `pnpm verify:route-r1-heightfield`。R1b 静态平台切片也已通过真实 Babylon/Havok
+> Probe；完整 M5 仍开放。
 
 第一期 Alpha 已证明以下链路可以运行：
 
@@ -89,8 +91,6 @@ Director LLM → Render Directive SDK ────────────┘
   直接暴露 `activeActionId`；真实 Chromium 门禁覆盖动作截图、墙体停止、实例隔离
   和 GLB 内存篡改后的 `SUBJECT_ASSET_HASH_MISMATCH`。
 - 一个第三人称人形主体：WASD 镜头相对移动、跑步、物理跳跃、第三人称镜头和碰撞。
-- Legacy Three/Rapier 路径仍可用调用方自己的 Mixamo 兼容 GLB 做本地实验；它不是
-  Canonical Babylon S1b 的资产来源或发布门禁。
 - 室外高度场场景：连续分块地形、四种 relief、局部塑形、湖泊/水体、复合几何标志物。
 - 可追踪的 `WorldFeature`：稳定 ID、schema、seed、依赖、资源所有权、预算、诊断、重建和清理。
 - `defineOutdoorScene` 场景 DSL、场景目录、Playground、检查器和固定输入 Smoke API。
@@ -100,7 +100,7 @@ Director LLM → Render Directive SDK ────────────┘
 
 当前的“自由创造”严格指室外高度场白膜世界，不等于任意 3D 游戏类型。
 Primitive 四足代理已经可以自定义和控制，但动物资产、骨骼、动画与行为尚未
-实现；通用 Terrain Mask、Route R1b 与完整 M5、更多 Constraint、洞穴、倒悬结构、完整
+实现；通用 Terrain Mask 与完整 M5、更多 Constraint、洞穴、倒悬结构、完整
 室内、车辆、骑乘、NPC、寻路、Gameplay、联网、Render Bridge、实时世界模型和
 Runtime Director 也都尚未实现。
 
@@ -111,8 +111,8 @@ Runtime Director 也都尚未实现。
 - WaterBody 是白膜水体与基础本地预览，不是最终生成式水面。
 - 图片可以传给 Coding Agent，但单张透视图只能重建可见构图与合理的可玩延伸，不能恢复唯一真实三维几何。
 - World Plan 和 Opening Shot 是创作意图，不是碰撞或高度真相；高度、坡度、可通行性必须从实际白膜计算。
-- 仓库同时有 Three.js/Rapier 创作 Playground 与 Babylon.js/Havok Canonical
-  页面；二者都只显示本地白膜，没有实时世界模型参与。
+- Catalog Playground、artifact-only 捕获和 Canonical Authoring 页面都由 Babylon/Havok
+  链路承载；它们用途不同，但不形成第二套 Runtime 真相，也都没有实时世界模型参与。
 - `mistbound-rider` 中的马和骑手是静态标志物，用于测试构图；它不是可骑乘主体。
 - 现有自动测试覆盖编译、资源归属、物理高度场和固定步长等工程契约；固定输入 Smoke 目前通过 Playground 按钮/API 手动触发，尚未纳入浏览器 E2E。两者都不能代替运动手感和图像构图的人工验收。
 

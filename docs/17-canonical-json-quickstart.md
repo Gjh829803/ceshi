@@ -19,10 +19,12 @@ AuthoringSpec V4
 
 > Golden Humanoid S1b 首个可视纵向切片已完成并进入回归；S1b 整体与 Semantic Actions 整体仍未完成.
 
-> Placement Solver S1 首个海湾纵向切片已完成并进入回归；通用 Terrain Mask、Route R1b、更多 Constraint 与 P0.1 整体仍未完成。
+> Placement Solver S1 首个海湾纵向切片已完成并进入回归；通用 Terrain Mask、更多
+> Constraint 与 P0.1 整体仍未完成。
 
 > Route R1 Heightfield 已完成并通过 `pnpm verify:route-r1-heightfield`。公开 Golden
-> 示例为 `examples/traversal/r1-heightfield/`。R1b 与完整 M5 仍开放。
+> 示例为 `examples/traversal/r1-heightfield/`。R1b 静态平台切片已通过
+> `pnpm verify:route-r1b-static-platform`；完整 M5 仍开放。
 
 ## 1. 最短运行路径
 
@@ -476,11 +478,12 @@ pnpm verify:rigged-subject
 
 三条命令是最小上手流程；只有 `pnpm verify:rigged-subject` 是单命令 Gate。
 
-## 9. 旧场景与发布门禁
+## 9. Catalog 场景与发布门禁
 
-现有 `OutdoorWorldSpec`、Three.js/Rapier 场景 DSL 和 Plan-first Agent 流水线
-属于隔离的创作实验；它们不是 Canonical 协议的版本兼容层，也不是新程序的 JSON 接口。
-新集成不要依赖 `sdk-world-adapter.ts`，也不要直接写 Three/Babylon 对象。
+现有 `OutdoorWorldSpec` 场景 DSL 和 Plan-first Agent 流水线由 Babylon-backed catalog 与
+artifact-only 路由承载，用于规划、构图和 tri-view 产品工作流；它们不是 Canonical 协议的
+版本兼容层，也不是新程序的 JSON 接口。新集成使用 `worldkit` 和 Browser Protocol V5，
+不直接写 Babylon/Havok 对象。
 
 完整门禁：
 

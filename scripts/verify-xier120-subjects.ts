@@ -30,7 +30,6 @@ import {
 } from "@whitebox-world/subject-registry";
 
 import { XIER120_SUBJECT_ASSET_URI_BY_REF_V1 } from "../apps/playground/src/worldkit-asset-resolver";
-import { bakeXier120StaticSubjects } from "./bake-xier120-static-subjects";
 
 const EXPECTED_SUBJECT_COUNT = 19;
 const DEFAULT_FIXTURE_RELATIVE_PATH =
@@ -91,7 +90,8 @@ export interface Xier120ActualUseVerificationReportV1 {
   readonly fixtureSubjectDefinitionRef: string;
   readonly selectionMode: "direct-fixture-ref-plus-capability-catalog";
   readonly sourceHashMatchCount: 19;
-  readonly exactBakeMatchCount: 19;
+  readonly committedGlbHashMatchCount: 19;
+  readonly admittedGlbCount: 19;
   readonly subjectCount: 19;
   readonly results: readonly Xier120SubjectActualUseResultV1[];
 }
@@ -602,16 +602,6 @@ export async function verifyXier120Subjects(input: {
   const sourceHashMatchCount = await verifySourceHashes(
     input.repositoryRootPath,
   );
-  const bakeSummaries = await bakeXier120StaticSubjects({
-    repositoryRootPath: input.repositoryRootPath,
-    check: true,
-  });
-  requireInvariant(
-    bakeSummaries.length === EXPECTED_SUBJECT_COUNT &&
-      bakeSummaries.every((summary) => summary.matchedCommittedBytes),
-    "XIER120_BAKE_CHECK_FAILED",
-  );
-
   const definitions = [...XIER120_SUBJECT_DEFINITIONS].sort((left, right) =>
     left.resourceRef.localeCompare(right.resourceRef),
   );
@@ -620,6 +610,7 @@ export async function verifyXier120Subjects(input: {
     "XIER120_DEFINITION_COUNT_INVALID",
   );
   const results: Xier120SubjectActualUseResultV1[] = [];
+  let committedGlbHashMatchCount = 0;
   for (const definition of definitions) {
     const resolvedDefinition =
       builtInSubjectResourceRegistry.resolveSubjectDefinition(
@@ -638,6 +629,15 @@ export async function verifyXier120Subjects(input: {
       assetPart?.kind === "asset",
       `XIER120_DEFINITION_ASSET_MISSING:${definition.resourceRef}`,
     );
+    const assetManifest = builtInSubjectResourceRegistry.resolveSubjectAsset(
+      assetPart.subjectAssetRef,
+    );
+    requireInvariant(
+      assetManifest !== undefined &&
+        assetManifest.format === "glb" &&
+        assetManifest.artifact.mediaType === "model/gltf-binary",
+      `XIER120_SUBJECT_ASSET_MANIFEST_INVALID:${assetPart.subjectAssetRef}`,
+    );
     const publicAssetUri =
       XIER120_SUBJECT_ASSET_URI_BY_REF_V1[assetPart.subjectAssetRef];
     requireInvariant(
@@ -652,6 +652,15 @@ export async function verifyXier120Subjects(input: {
         publicAssetUri.slice(1),
       ),
     );
+    requireInvariant(
+      assetBytes.byteLength === assetManifest.artifact.byteLength,
+      `XIER120_COMMITTED_GLB_LENGTH_MISMATCH:${assetPart.subjectAssetRef}`,
+    );
+    requireInvariant(
+      sha256Bytes(assetBytes) === assetManifest.artifact.contentHash,
+      `XIER120_COMMITTED_GLB_HASH_MISMATCH:${assetPart.subjectAssetRef}`,
+    );
+    committedGlbHashMatchCount += 1;
     results.push(
       await verifyXier120SubjectActualUse({
         authoringSourceText,
@@ -660,6 +669,14 @@ export async function verifyXier120Subjects(input: {
       }),
     );
   }
+  requireInvariant(
+    committedGlbHashMatchCount === EXPECTED_SUBJECT_COUNT,
+    "XIER120_COMMITTED_GLB_HASH_COUNT_INVALID",
+  );
+  requireInvariant(
+    results.length === EXPECTED_SUBJECT_COUNT,
+    "XIER120_COMMITTED_GLB_ADMISSION_COUNT_INVALID",
+  );
 
   return Object.freeze({
     kind: "xier120-subject-actual-use-verification",
@@ -668,7 +685,8 @@ export async function verifyXier120Subjects(input: {
     fixtureSubjectDefinitionRef: fixtureSubject.subjectDefinitionRef,
     selectionMode: "direct-fixture-ref-plus-capability-catalog",
     sourceHashMatchCount,
-    exactBakeMatchCount: 19,
+    committedGlbHashMatchCount: 19,
+    admittedGlbCount: 19,
     subjectCount: 19,
     results: Object.freeze(results),
   });
@@ -691,7 +709,8 @@ async function main(): Promise<void> {
   console.log(
     `xier120 actual-use: ${report.subjectCount}/${EXPECTED_SUBJECT_COUNT} passed; ` +
       `source hashes ${report.sourceHashMatchCount}/${EXPECTED_SUBJECT_COUNT}; ` +
-      `exact bakes ${report.exactBakeMatchCount}/${EXPECTED_SUBJECT_COUNT}; ` +
+      `committed GLB hashes ${report.committedGlbHashMatchCount}/${EXPECTED_SUBJECT_COUNT}; ` +
+      `admitted GLBs ${report.admittedGlbCount}/${EXPECTED_SUBJECT_COUNT}; ` +
       "two instances and full lease/cache disposal verified for every Subject",
   );
 }

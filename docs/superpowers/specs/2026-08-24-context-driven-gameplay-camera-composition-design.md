@@ -2,13 +2,14 @@
 
 ## 1. 文档状态
 
-- 状态：**Reviewed / Approved for Implementation Planning（2026-08-24）**；
-  **Package Boundary / current-main re-review（2026-08-25）**。
+- 状态：**Reviewed / Approved（2026-08-24）**；
+  **Camera Domain boundary implemented，Runtime integration pending（2026-08-25）**。
 - 适用里程碑：P2.2 骑乘与控制上下文、P2.3 装备/飞行/动作变体、P2.4 多相机模式。
-- 当前实现基线：已合入 `main` 的 G19-6 Gameplay/Browser V5 底座、
+- 当前实现基线：已合入 `main` 的 G19 Gameplay/Browser V5 底座、
   `RuntimeHost` / `WorldSession`、`CameraDirectorV1`、`camera-rig-profile`、
   `camera-modifier-profile`、`camera-context-profile`、Capability Runtime 和
-  Subject Preset Workspace。
+  Subject Preset Workspace；Babylon-only 收口候选已将 `@whitebox-world/camera`
+  clean-break 为 provider-neutral Camera Domain。
 - 上位规格：
   - [AI-first LEGO 游戏 SDK 总体设计](./2026-08-17-ai-first-lego-game-sdk-design.md)
   - [可扩展主体组装 Authoring](./2026-08-19-extensible-subject-authoring-design.md)
@@ -19,8 +20,9 @@
 
 本文补齐“人物/坐骑/装备/运动/动作与镜头怎样组合成可复用体验”的端到端合同。
 它不替换上位规格，也不声明飞行、骑乘、装备或第一人称已经生产可用。本文已经完成
-人工设计评审，可以为首个纵向切片编写实施计划；公共合同、Canonical Camera 包边界和
-Legacy 迁移门禁仍须在 GCC-0/GCC-0A/GCC-0B/GCC-0C 完成后才能冻结并进入实现。
+人工设计评审。Canonical Camera 包边界、Profile/Context/Preference/Decision/Explain
+领域合同和纯选择函数已经实现；committed Gameplay Context Projection、Registry Lock、
+Browser Preference 协议和 Babylon `CameraDirectorV1` 接线仍按 §15 与权威 Backlog 推进。
 
 ## 2. 决策摘要
 
@@ -79,6 +81,8 @@ CameraDirector
 - `first-person.standard`、`flight.glide`、`follow.mounted` 等 Registry 资源，其中
   Glide/Mounted 仍为实验能力；
 - Subject Definition 到 `cameraContextProfileRef` 的锁定与编译。
+- 独立 `@whitebox-world/camera` 包中的命名 Profile、Context Sample、View Preference、
+  Admission、确定性 `selectCameraViewV1`、Decision、Explain 与 Diagnostic。
 
 这些能力说明底层方向已经成立，但不能据此宣称完整组合已经交付。
 
@@ -127,9 +131,8 @@ G19-6 已经发布 Browser V5 的当前 Camera Preview/Profile 过渡面，因�
 
 ```text
 当前 main：R1b + G19-1..6 + Browser V5 + Possession/Camera Target 已完成
+  → GCC-0/GCC-0B/GCC-0C 已冻结并实现 Canonical Camera 包边界与依赖方向
   → GCC-0A 对拍当前 V5/View 合同，不回写历史 G19 任务
-  → GCC-0B 冻结 Canonical Camera 包边界与依赖方向
-  → GCC-0C 隔离旧 Three Camera Rig，clean-break 释放 @whitebox-world/camera
   → GCC-1/GCC-2/GCC-3 冻结 Context、Profile 与唯一 View Preference 公共合同
   → GCC-4 让 CameraDirector 消费纯确定性 Selection Decision
   → G19-7 只完成 Outdoor/catalog lifecycle，不发布第二套 Camera 方言
@@ -190,12 +193,12 @@ Camera 是 View State，不是 World State。不同 Session 可以观察同一�
 
 Camera Profile、Context、Preference、Admission、Selection 和 Explain 已经形成独立、
 provider-neutral 的领域语义，首个实施切片必须将它们收敛到唯一 Canonical 包
-`@whitebox-world/camera`。这不是新增第二个 Camera 方言，而是对当前同名 Legacy 包执行
-一次未发布阶段的 clean break。
+`@whitebox-world/camera`。它已经通过未发布阶段 clean break 成为唯一 Camera Domain，
+不保留旧 Provider API 或同义字段。
 
 | 包 / 路径 | 唯一职责 | 稳定输入 | 稳定输出 | 明确禁止 |
 | --- | --- | --- | --- | --- |
-| `packages/camera` | Camera 参数、Rig/Modifier/Context Profile、View Preference、Context Sample、Admission、纯 Selection 与 Explain | provider-neutral Profile 集合、Context Sample、Preference | `CameraSelectionDecisionV1`、结构化 Explain/Diagnostic | 依赖 Three/Babylon/Havok、Registry、Runtime Session、Gameplay 或 Browser DOM |
+| `packages/camera` | Camera 参数、Rig/Modifier/Context Profile、View Preference、Context Sample、Admission、纯 Selection 与 Explain | provider-neutral Profile 集合、Context Sample、Preference | `CameraSelectionDecisionV1`、结构化 Explain/Diagnostic | 依赖任何 renderer/physics provider、Registry、Runtime Session、Gameplay 或 Browser DOM |
 | `packages/subject-registry` | Camera 资源 Envelope、版本、Hash、Catalog、AI Metadata、Discovery 与解析 | `@whitebox-world/camera` 的资源内容合同 | 精确 Ref/Version/Hash 的已解析资源 | 重新定义 Camera 参数、选择规则或会话状态 |
 | `packages/authoring` / `packages/compiler` | Schema、Resource Lock、Context 闭包与 ExecutionPlan 投影 | 已解析 Registry 资源和 Authoring 意图 | 锁定的 IR / ExecutionPlan Camera 描述 | 在编译期执行 Runtime Selection 或读取 Session 状态 |
 | `packages/gameplay-contracts` / `packages/gameplay` | `possessedBy`、`mountedOn`、`equippedAt`、Action、Motion、Medium 等世界真相 | Gameplay Command 与 fixed-tick state | committed Gameplay State/Event/Receipt | 保存 Camera 数值、最终 Rig 或 Babylon Target |
@@ -219,29 +222,17 @@ apps / scripts / control-capture ──→ runtime-contracts
 `camera ↔ gameplay-contracts` 循环。Browser Command/Event Envelope 留在
 `runtime-contracts`；Camera Domain 只拥有可以脱离 Session 独立校验和测试的值对象与纯函数。
 
-### 5.2 Legacy Three/Rapier exit boundary
+### 5.2 Retired-provider clean-break status
 
-当前 `packages/camera` 不是上述 Canonical 包：它直接暴露 Three.js
-`PerspectiveCamera` / `Object3D` / `Vector3`，只服务旧 `packages/subjects`、
-`SdkWorldAdapter` 和 Legacy/catalog Playground。Canonical Babylon Runtime 从未消费它。
+GCC-0C 已按 P3.2 收口候选原子完成：`packages/camera` 只暴露 provider-neutral Domain；
+旧 Camera Rig、旧 Runtime cluster 和旧 Playground Adapter 已删除，Plan-first scene、Opening
+Composition、SDK-derived tri-view 与 scene gates 由 Babylon artifact renderer 承接。
+`packages/world`、`packages/contracts`、`packages/testkit` 继续承担 Planner/Compiler/Scene
+合同，不属于 Runtime Provider，也不得因引擎收口被删除。
 
-因此实施不得在旧包上渐进叠加新类型。GCC-0C 必须原子完成：
-
-1. 把旧 `ThirdPersonCameraRig` 与 `CameraMovementBasis` 移入明确标记的 Legacy Subject
-   实现范围，删除 `@whitebox-world/subjects → @whitebox-world/camera` 依赖和跨包
-   `../../camera/src` 穿透；
-2. 在同一变更中把 `packages/camera` clean-break 重建为 provider-neutral Camera Domain，
-   不保留 Three API alias；
-3. 证明 `pnpm dev`、Legacy scene tests 和 build 未因迁移退化，同时证明 Canonical 包依赖图
-   不含 Three/Rapier/Babylon；
-4. 在 P3.2 之前继续把剩余 Three/Rapier 链视为隔离的 Legacy Fixture，不向其增加新能力。
-
-整条 Legacy Runtime 现在不能直接删除：`pnpm dev`、Plan-first scene、Opening
-Composition、SDK-derived tri-view 和 `test:scenes` 仍依赖该路径。完整删除必须先由 Babylon
-承接这些产品入口，或由产品明确退役它们，再原子移除 `sdk-world-adapter`、旧
-`core/physics/subjects/animation` Runtime、Rapier 依赖与相应测试。`packages/world`、
-`packages/contracts`、`packages/testkit` 仍被 Planner/Compiler/Scene Gate 使用，不属于可随
-Runtime 一并删除的集合。
+该 clean break 只完成包边界和领域纯函数，不表示 GCC-1～GCC-8 已交付。后续实现必须从
+`@whitebox-world/camera` 的稳定 Decision 输入接到 `CameraDirectorV1`，不得恢复旧 API、
+建立 Provider alias，或让 Adapter 自行发明第二套 Profile/Context/Preference 语义。
 
 ## 6. AI-facing 组合模型
 
@@ -720,10 +711,9 @@ Camera Tag 不能再改变当前 View。
 
 ### 14.1 Contract / Compiler
 
-- `@whitebox-world/camera` 不依赖 Three、Babylon、Havok、Registry、Gameplay、Runtime Session
+- `@whitebox-world/camera` 不依赖任何 renderer/physics provider、Registry、Gameplay、Runtime Session
   或 Browser DOM；所有生产消费者只沿单向依赖读取它；
-- 旧 Three Camera Rig 已移出 `packages/camera`，不存在 `../../camera/src` 跨包穿透，
-  Legacy/catalog 回归在迁移后仍通过；
+- 旧 Provider Camera Rig 与跨包穿透已删除，catalog/artifact 回归由 Babylon 路径通过；
 - Kit 展开结果不包含 Kit 魔法分支，所有资源都有 Ref/Version/Hash；
 - 未锁 Profile、未知 Tag、重复 Rule ID、冲突优先级、缺失 Socket 稳定失败；
 - Canonical Schema、AI Profile、CLI、Browser、Snapshot/Event 使用同一字段名；
@@ -757,16 +747,17 @@ interaction。截图不能代替 Relationship/State Gate，单元测试也不能
 
 ## 15. 实施依赖图
 
-本文只定义已通过人工评审的设计，不直接实施。GCC-0/GCC-0A/GCC-0B/GCC-0C 冻结公共
-合同和包边界后，实施计划必须使用以下工作图；表中的输入、输出和集成点是 worker handoff
-的最小合同，不得在实施时改名或另建方言。
+本文同时记录已冻结设计和实施状态。GCC-0/GCC-0B/GCC-0C 已在 Babylon-only 收口候选中
+完成；其余任务仍必须使用以下工作图。表中的输入、输出和集成点是 worker handoff 的
+最小合同，不得在实施时改名或另建方言；实时状态以 `docs/18-refactor-progress-and-backlog.md`
+为唯一入口。
 
 | ID | 目标与独立交付物 | depends_on | blocks | 独占所有权与精确集成点 | 稳定输入 → 稳定输出 | 验证 | 模式 |
 | --- | --- | --- | --- | --- | --- | --- | --- |
 | GCC-0 | 冻结本文、术语、Schema 版本策略和首个 Fixture | 无 | GCC-0A/0B/1..8 | 主 Agent；本规格、ADR、Backlog | 当前产品边界与上位规格 → Frozen design baseline | 模式 A 全维度审查 | main-agent-only |
 | GCC-0A | 将旧 G19 依赖改为 current-main reconciliation，冻结唯一 Browser V5/View clean break | GCC-0、当前 `main` G19-6 | GCC-1/3 | 主 Agent；`gameplay-framework-r1b` spec/plan、Browser exact-key contract、本文；不改 Runtime | 当前 V5 keys/DTO/owner map → 删除/新增集合与无别名合同 | spec/plan/source 三方对拍 | main-agent-only |
 | GCC-0B | 冻结 Canonical Camera package API 与单向 dependency DAG | GCC-0 | GCC-0C/1/2/3/4 | 主 Agent；`packages/camera` exports、workspace package map、实施计划 | §5.1 ownership → package manifest、public symbol list、dependency rules | package graph negative checks | main-agent-only |
-| GCC-0C | 隔离旧 Three Camera Rig，并 clean-break 建立 provider-neutral `@whitebox-world/camera` | GCC-0B | GCC-1/2/3/4 | `packages/camera` 独占；旧 Rig 只迁入 `packages/subjects/src/legacy/`，不得改 Gameplay/Runtime | Legacy Rig API + GCC-0B symbol list → Legacy 行为不变、空的 Canonical package boundary | legacy unit/scene/build + dependency grep | sequential |
+| GCC-0C | **已实现**：删除旧 Provider Rig/Runtime，并 clean-break 建立 provider-neutral `@whitebox-world/camera` | GCC-0B | GCC-1/2/3/4 | `packages/camera` 独占；Runtime Provider 不得反向进入 Domain | GCC-0B symbol list → Canonical Domain、纯 Selection/Explain、无旧 alias | package boundary、scene/artifact/build、dependency census | sequential |
 | GCC-1 | Relationship/Action/Equipment 到 Context 的 provider-neutral Projection 合同 | GCC-0A/0B/0C、当前 Gameplay State、P2.1 状态合同 | GCC-4/5 | `gameplay-contracts` + `runtime-contracts` DTO、`runtime-host` projector integration；不选择 Rig | committed epoch + relationship/action/motion/medium → ordered `CameraContextSampleV1` | contract/hash/multi-instance tests | sequential |
 | GCC-2 | Camera Profile/Context Admission、确定性 Selection 与 Explain | GCC-0B/0C | GCC-4/6 | `packages/camera` 纯函数 + `subject-registry` Envelope/loader + `authoring/compiler` lock projection | locked profiles + sample + preference → decision/explain 或稳定拒绝 | ambiguity/unknown-ref/order negative fixtures | parallel-safe |
 | GCC-3 | Camera View Preference、View State、Selection Event/Explain 公共协议 | GCC-0A/0B/0C、Canonical Runtime State | GCC-4/7 | `runtime-contracts` Command/Event/Snapshot + Browser/CLI generated surface；值对象从 `camera` 导入 | V5 session identity + preference command → receipt/view revision/event | schema/exact-key/protocol tests | parallel-safe |
@@ -774,7 +765,7 @@ interaction。截图不能代替 Relationship/State Gate，单元测试也不能
 | GCC-5 | Mount/Equipment/Flight 事务提供 Camera 输入，不直接控制镜头 | GCC-1、G19-7、P2.2/P2.3 | GCC-6 | relationship/action/capability runtime；复用当前 WorldSession barrier | typed transaction → committed facts/receipt/event 或全量 rollback | rollback/rebind/dispose tests | sequential |
 | GCC-6 | 两个代表性 Kit 与 Registry Lock | GCC-2/4/5 | GCC-7 | Registry assets/examples；不得改 Runtime | frozen Kit recipes + profiles → locked expansion/explain | expand/validate/explain | sequential |
 | GCC-7 | Browser/CLI/Take 与两个 Golden Fixture | GCC-3/4/6、G19-7 lifecycle | GCC-8 | apps/scripts/control-capture/fixtures；不新增协议字段 | public commands + locked worlds → automated/numeric/rendered/manual 四类证据 | real Chromium + Havok | sequential |
-| GCC-8 | 全门禁、Legacy 隔离审计、文档状态与生产声明 | GCC-7 | 无 | 主 Agent 集成；README/AGENTS/Backlog/Review | integrated HEAD + evidence → GO/NO-GO 与准确 production/experimental 声明 | full gates + final review | main-agent-only |
+| GCC-8 | 全门禁、Provider 边界审计、文档状态与生产声明 | GCC-7 | 无 | 主 Agent 集成；README/AGENTS/Backlog/Review | integrated HEAD + evidence → GO/NO-GO 与准确 production/experimental 声明 | full gates + final review | main-agent-only |
 
 GCC-1、GCC-2、GCC-3 只有在 GCC-0A～0C 完成且文件所有权不重叠时才可并行。GCC-4 以后
 进入 Runtime 权威集成，必须顺序推进。G19-6 已完成，不能被本文反向改成待办；G19-7 只
@@ -793,8 +784,8 @@ GCC-1、GCC-2、GCC-3 只有在 GCC-0A～0C 完成且文件所有权不重叠时
 
 ## 17. 评审决策
 
-本次人工评审接受以下设计决定；它们在 GCC-0/GCC-0A/GCC-0B/GCC-0C 与当前 `main`
-合同对拍后冻结：
+本次人工评审接受以下设计决定。GCC-0/GCC-0B/GCC-0C 已冻结；GCC-0A 及后续 Runtime
+接线继续与当前 `main` 合同对拍：
 
 1. 采用 Kit → Canonical 展开 → committed state → Camera Context → CameraDirector 的单向链路。
 2. Kit/“预设体验”不成为 Runtime 第二真相。
@@ -806,7 +797,6 @@ GCC-1、GCC-2、GCC-3 只有在 GCC-0A～0C 完成且文件所有权不重叠时
 7. 第一个实施切片同时验收第三人称御剑飞行和第一人称滑翔，但仍按依赖拆成 Relationship/
    Flight/Camera/Fixture 阶段，不一次性硬编码两个 Demo。
 8. Canonical Camera Domain 使用 clean-break 后的独立 `@whitebox-world/camera` 包；
-   `runtime-babylon` 只实现 Provider View，现有 Three.js 同名包不得承接新能力。
-9. 整条 Three/Rapier Legacy Runtime 只有在 Babylon 承接或正式退役 catalog scene、Opening
-   Composition、tri-view 与 scene gates 后才能成组删除；本切片只隔离旧 Camera Rig 并释放
-   Canonical 包名，不删除仍有产品调用方的链路。
+   `runtime-babylon` 只实现 Provider View，不能把引擎对象反向暴露到 Domain。
+9. 旧 Runtime 仅在 Babylon 承接 catalog scene、Opening Composition、tri-view 与 scene
+   gates 后成组删除；该条件已由 P3.2 候选满足，后续不得恢复双运行底座。

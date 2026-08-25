@@ -1,43 +1,14 @@
-export const CAMERA_RIG_PARAMETER_NAMES_V1 = [
-  "distanceMeters",
-  "minimumDistanceMeters",
-  "maximumDistanceMeters",
-  "targetHeightMeters",
-  "shoulderOffsetMeters",
-  "pitchRadians",
-  "minimumPitchRadians",
-  "maximumPitchRadians",
-  "positionDampingPerSecond",
-  "horizontalPositionDampingPerSecond",
-  "verticalPositionDampingPerSecond",
-  "maximumPositionLagMeters",
-  "rotationDampingPerSecond",
-  "yawDampingPerSecond",
-  "pitchDampingPerSecond",
-  "collisionRadiusMeters",
-  "collisionRetractionMetersPerSecond",
-  "collisionRecoveryMetersPerSecond",
-  "baseFovDegrees",
-  "speedFovDegreesPerMeterPerSecond",
-  "maximumSpeedFovDegrees",
-  "lookAheadSeconds",
-  "accelerationLookAheadSecondsSquared",
-  "transitionSeconds",
-  "minimumHeadingSpeedMetersPerSecond",
-  "velocityHeadingDampingPerSecond",
-  "fovDampingPerSecond",
-  "horizontalDeadZoneRatio",
-  "verticalDeadZoneRatio",
-  "recenterDelaySeconds",
-  "recenterDurationSeconds",
-  "recenterMinimumSpeedMetersPerSecond",
-  "teleportSnapDistanceMeters",
-  "lookSensitivityXRatio",
-  "lookSensitivityYRatio",
-] as const;
+import {
+  CAMERA_RIG_PARAMETER_NAMES_V1,
+  type CameraRigParameterNameV1,
+  type CameraRigParametersV1,
+} from "@whitebox-world/camera";
 
-export type CameraRigParameterNameV1 = typeof CAMERA_RIG_PARAMETER_NAMES_V1[number];
-export type CameraRigParametersV1 = Record<CameraRigParameterNameV1, number>;
+export {
+  CAMERA_RIG_PARAMETER_NAMES_V1,
+  type CameraRigParameterNameV1,
+  type CameraRigParametersV1,
+} from "@whitebox-world/camera";
 
 export const CAMERA_TUNING_PARAMETER_NAMES_V1 = [
   "distanceMeters",

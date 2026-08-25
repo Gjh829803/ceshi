@@ -2036,11 +2036,12 @@ if (runtimeRoute.mode === "unknown") {
   delete window.__WORLDKIT__;
   delete (window as { __WHITEBOX_PLAYGROUND__?: unknown }).__WHITEBOX_PLAYGROUND__;
   delete document.documentElement.dataset.worldkitStatus;
-  const { SdkWorldAdapter } = await import("./sdk-world-adapter.js");
+  const { BabylonArtifactRenderer } = await import("./babylon-artifact-renderer.js");
   let rollbackArtifactPageState = (): void => {};
   const artifactLifecycle = await createAndStartArtifactRenderer({
-    create: () => SdkWorldAdapter.createArtifactRenderer(
+    create: () => BabylonArtifactRenderer.createArtifactRenderer(
       sceneCatalog[runtimeRoute.sceneCatalogId]!,
+      runtimeRoute.sceneCatalogId,
     ),
     container: viewport,
     setupPageState: (renderer) => {

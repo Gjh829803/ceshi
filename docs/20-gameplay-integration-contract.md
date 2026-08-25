@@ -29,8 +29,8 @@ AuthoringSpec V4
 3. `window.__WORLDKIT__.version === 5`；
 4. 请求和返回值直接使用 SDK 导出的 exact 类型。
 
-`pnpm dev` 是 Legacy/catalog Playground，不得与 `?authoring=1` 组合，也不是本合同的
-Canonical Runtime 入口。
+`pnpm dev` 启动 Babylon-backed catalog Playground；不得与 `?authoring=1` 组合，也不是
+本合同的 Canonical Authoring Runtime 入口。
 
 ## 1. 权威包与所有权
 
@@ -39,6 +39,7 @@ Canonical Runtime 入口。
 | Command、Receipt、Event、World State | `@whitebox-world/gameplay-contracts` | 直接导入 exact 类型 |
 | Browser V5、Snapshot V4、Capture、Activity | `@whitebox-world/runtime-contracts` | 只通过 `window.__WORLDKIT__` 使用 |
 | RuntimeHost command/journal/session | `@whitebox-world/runtime-host` | SDK 内部所有；下游不 import |
+| Camera Profile/Context/Preference/Selection | `@whitebox-world/camera` | 当前提供 provider-neutral 领域合同和纯选择；不得误写成已接入 Browser/Runtime Pose |
 | Babylon Gameplay World Port | `@whitebox-world/runtime-babylon` | Adapter 内部所有；下游不依赖 internal Symbol |
 
 权威状态分层如下：
@@ -47,7 +48,8 @@ Canonical Runtime 入口。
 - Gameplay Inspection 是实时控制、Action 和 Event 游标的权威投影；
 - World State 是可寻址、可校验的 Canonical 状态；
 - Subject State 是运动和能力的 Runtime 投影；
-- CameraDirector 独占 Camera Profile、Modifier、Preference 和最终 Pose；
+- 当前 Babylon CameraDirector 独占最终 Pose；`@whitebox-world/camera` 独占新的 Profile、
+  Modifier、Context、Preference 和纯 Selection 语义。两者的正式单向接线尚未交付；
 - Simulation Tick 是唯一 Gameplay 时间。
 
 Babylon、Havok、Recast 的对象、handle、provider 名称和内部状态不得进入 Command、Snapshot、
@@ -250,7 +252,9 @@ Host 配置的 `fixedInputControllerEntityId` 是物理固定输入的唯一权�
 - 更完整的 Semantic Action Presentation 与动画内容映射；
 - 多 Controller 输入调度；
 - 关系型玩法切片，例如骑乘、装备、拖挂和容器；
-- 新的 Camera Context/Action Presentation 组合能力。
+- `@whitebox-world/camera` 的命名 Profile、Context admission、View Preference、纯
+  Selection/Explain 已实现；committed Gameplay Context Projection、Browser 命令、
+  Registry Lock 以及 Babylon CameraDirector 消费 Selection Decision 仍需独立能力 Gate。
 
 这些能力通过新增关闭合同扩展，不通过修改已经冻结的 Gameplay 字段或增加兼容 alias 实现。
 当 Action 展示不可用时，调用方应按 unavailable 处理，不得从 Ref 尾段、Definition ID、文件名或

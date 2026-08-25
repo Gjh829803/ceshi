@@ -43,7 +43,8 @@
 
 当前实现说明：Canonical Babylon 路径的项目自有 Golden GLB 与首个产品 G Bot 已验证
 `idle / walk / run / jump`、固定 Tick 动作状态、Havok 位移、墙体碰撞与双实例隔离。
-Legacy Three/Rapier 路径仍可用本地 Mixamo 资产做实验，但不代表后续产品资产已验收。
+Catalog、artifact-only 和 Canonical Authoring 页面现在都由 Babylon/Havok 承载；首个产品
+资产通过不代表后续产品资产已验收。
 
 ### 2. 室外自由地形搭建
 
@@ -79,8 +80,8 @@ Coding Agent 可以通过 `defineWorldFeature` 自行定义湖泊、山脉、峡
 - World、Entity、Transform
 - 固定更新循环
 - 输入系统
-- Three.js 场景同步
-- Rapier 物理同步
+- Babylon 场景同步
+- Havok 物理同步
 - Asset Registry
 - Feature Registry
 - 创建、更新、删除和重建 Feature
@@ -194,7 +195,8 @@ Lock、物理与控制。该能力证明了“Definition 与 Instance 分离”�
 
 ## 后续工作流 B：Runtime World Director（已规划、未承诺排期）
 
-第一期不实现，但将它作为正式后续模块规划：让运行时 LLM 根据用户需求，通过受控协议修改世界，而不是重新运行 Coding Agent 或直接操作 Three.js/Rapier。
+第一期不实现，但将它作为正式后续模块规划：让运行时 LLM 根据用户需求，通过受控协议修改
+世界，而不是重新运行 Coding Agent 或直接操作 Babylon/Havok Provider 对象。
 
 建议分三步：
 
@@ -207,7 +209,7 @@ Lock、物理与控制。该能力证明了“Definition 与 Instance 分离”�
 ## 第一期建议实现顺序
 
 1. 定义 World、Entity、SubjectKit、WorldFeature 和资源所有权协议。
-2. 实现固定更新循环与 Three.js/Rapier 同步。
+2. 实现固定更新循环与 Babylon/Havok 同步。
 3. 实现标准骨骼人形白膜和第三人称控制。
 4. 绑定少量基础动作并完成状态切换。
 5. 实现 Shape、Terrain、Surface 和 Geometry 基础操作。

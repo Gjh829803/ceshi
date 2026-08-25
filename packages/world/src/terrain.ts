@@ -1,5 +1,3 @@
-import { BufferAttribute, BufferGeometry } from "three";
-
 import type { Vec2Tuple, Vec3Tuple } from "@whitebox-world/contracts";
 import { sampleTriangleHeightfieldSurface } from "@whitebox-world/terrain-surface";
 
@@ -172,6 +170,8 @@ export interface HeightfieldGeometryData {
   normals: Float32Array;
   uvs: Float32Array;
   indices: Uint32Array;
+  aabbMinimumMetersXYZ: Vec3Tuple;
+  aabbMaximumMetersXYZ: Vec3Tuple;
 }
 
 function assertPositiveInteger(value: number, label: string): void {
@@ -529,6 +529,8 @@ export class Heightfield implements TerrainSurface {
     const indices = new Uint32Array(this.triangleCount * 3);
     let vertexOffset = 0;
     let uvOffset = 0;
+    let minimumHeightMeters = Number.POSITIVE_INFINITY;
+    let maximumHeightMeters = Number.NEGATIVE_INFINITY;
     const normalSampleDistance = Math.min(
       this.width / this.xSegments,
       this.depth / this.zSegments,
@@ -538,8 +540,11 @@ export class Heightfield implements TerrainSurface {
       for (let xIndex = 0; xIndex <= this.xSegments; xIndex += 1) {
         const point = this.pointAt(xIndex, zIndex);
         positions[vertexOffset] = point[0];
-        positions[vertexOffset + 1] = this.getHeight(xIndex, zIndex);
+        const heightMeters = this.getHeight(xIndex, zIndex);
+        positions[vertexOffset + 1] = heightMeters;
         positions[vertexOffset + 2] = point[1];
+        minimumHeightMeters = Math.min(minimumHeightMeters, heightMeters);
+        maximumHeightMeters = Math.max(maximumHeightMeters, heightMeters);
         const normal = sampleTerrainNormal(
           normalSource,
           point[0],
@@ -568,19 +573,22 @@ export class Heightfield implements TerrainSurface {
       }
     }
 
-    return { positions, normals, uvs, indices };
-  }
-
-  toBufferGeometry(normalSource: TerrainSurface = this): BufferGeometry {
-    const data = this.toGeometryData(normalSource);
-    const geometry = new BufferGeometry();
-    geometry.setAttribute("position", new BufferAttribute(data.positions, 3));
-    geometry.setAttribute("normal", new BufferAttribute(data.normals, 3));
-    geometry.setAttribute("uv", new BufferAttribute(data.uvs, 2));
-    geometry.setIndex(new BufferAttribute(data.indices, 1));
-    geometry.computeBoundingBox();
-    geometry.computeBoundingSphere();
-    return geometry;
+    return {
+      positions,
+      normals,
+      uvs,
+      indices,
+      aabbMinimumMetersXYZ: [
+        this.origin[0] - this.width / 2,
+        minimumHeightMeters,
+        this.origin[1] - this.depth / 2,
+      ],
+      aabbMaximumMetersXYZ: [
+        this.origin[0] + this.width / 2,
+        maximumHeightMeters,
+        this.origin[1] + this.depth / 2,
+      ],
+    };
   }
 }
 

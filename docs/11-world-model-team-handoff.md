@@ -3,10 +3,10 @@
 ## 1. 当前交付是什么
 
 本仓库交付的是确定性白模世界 SDK 和 Playground，不包含世界模型实现。当前
-Canonical Authoring V2 已能编译到 Babylon.js/Havok Runtime，并提供 Runtime
-Snapshot、Browser Protocol 和单截图；多 Pass Control Capture Bundle 与生成式视频
-链路尚未实现。仓库中的 Three.js/Rapier Playground 是旧 Alpha/回归路径，不能作为
-新接入协议真相。
+Canonical Authoring V4 已能编译到 Babylon/Havok Runtime，并提供 Runtime Snapshot V4、
+Browser Protocol V5、单截图和五 Pass Control Capture Bundle；生成式视频链路尚未实现。
+Catalog、artifact-only 和 Canonical Authoring 页面共享同一 Babylon/Havok Runtime 边界，
+新接入协议真相仍是 Canonical Schema、CLI 和 Browser Protocol。
 
 世界模型团队可以运行现有样例理解白模世界中的地形、主体、相机、动作、语义和
 稳定 ID。当前优先目标不是立刻追求实时最终画质，而是评审并冻结
@@ -90,22 +90,24 @@ Manifest、Hash 和 Evidence。两个 Take 复用同一世界但拥有不同 Tak
 - `packages/authoring`、`packages/compiler`、`packages/contracts`：当前 Canonical Authoring、Normalized IR、Resource Lock 与编译底座。
 - `packages/runtime-babylon`、`packages/runtime-contracts`：当前 Canonical Babylon/Havok Runtime、ExecutionPlan、Session 与 Port。
 - `apps/playground/src/main.ts`、`packages/runtime-contracts` 与 `scripts/worldkit.ts`：Browser Protocol、Snapshot、截图和 CLI 入口。
-- `apps/playground/src/sdk-world-adapter.ts`：旧 Alpha 创作链路与迁移回归入口，不是新 Capture 协议实现位置。
-- `packages/core`：World、Entity、Transform、Input 和固定更新。
-- `packages/world`：Terrain、Water、Landmark、FeatureRegistry 和场景 DSL。
+- `apps/playground/src/babylon-world-adapter.ts` 与 `babylon-artifact-renderer.ts`：当前
+  gameplay、catalog、Opening Composition、planning capture 和 tri-view Runtime 入口。
+- `packages/world`：Terrain、Water、Landmark、FeatureRegistry、规划工件和场景 DSL；只输出
+  引擎无关数据。
 - `packages/world/src/world-spec.ts` 与 `planning-artifacts.ts`：创作意图、WorldPrompt、Entity Catalog、证据来源、进入镜头和真实地形规划工件。
 - `apps/playground/public/scene-plans/grassland/` 与 `artifacts/scenes/grassland/`：当前规划图片、白膜三视图、冻结锁和可重复导出的结构化样例。
-- `packages/subjects`、`packages/camera`、`packages/animation`：主体、相机和动作状态。
+- `packages/subject-registry`、`packages/subject-composition`、`packages/subject-actions`：主体、
+  组合、资产和动作语义；`packages/camera` 提供命名 Profile/Context/Preference 与纯选择，
+  尚未接入最终 Runtime Pose。
 - `assets/humanoid/action-manifest.json`：动作语义清单；不包含可再分发的人形资产。
-- `window.__WHITEBOX_PLAYGROUND__` automation API v3：快照、固定输入、普通截图、WorldSpec/规划工件/三种规划视图、语义构图 Mask/评分，以及 Prototype 查询和白膜三视图捕获/导出入口。
+- `window.__WHITEBOX_PLAYGROUND__` automation API：快照、固定输入、普通截图、WorldSpec/规划工件/三种规划视图、语义构图 Mask/评分，以及 Prototype 查询和白膜三视图捕获/导出入口。
 
 ## 6. 当前缺口
 
-仓库尚未实现：
+仓库已经实现 Simulation Take V1、固定 Tick/Capture Schedule、五 Pass、Control Capture
+Bundle、Integrity 和首条 Validation Capture/Integrity Report；仍未实现：
 
-- Simulation Take、固定 Tick Track 与 Capture Schedule 实现。
-- 五个必需 Pass 的 GPU Readback 与 Capture Encoding Profile。
-- Control Capture Bundle Writer、Integrity、Resume/Finalize 与 Validation Report。
+- 完整 Replay/Resume、Motion Vector、Event/Action/Relationship Receipt 和视频级长序列 Gate。
 - 正式 Instance/Semantic Table 与 Appearance/Reference 资产接入协议。
 - Visual Bible 当前只落地了输入/输出工件门禁；样式三视图尚未转换成正式运行时 `AppearanceManifest`。
 - 实时传输、模型服务客户端和生成帧回传。
@@ -113,13 +115,14 @@ Manifest、Hash 和 Evidence。两个 Take 复用同一世界但拥有不同 Tak
 - Render Directive Gateway。
 
 因此当前共享代码的目的，是让双方基于同一份确定性世界评审并实现控制制品契约，
-而不是把现有单截图或旧 Playground 当成世界模型接入完成品。
+而不是把现有截图、五 Pass 窄切片或 catalog Playground 当成世界模型接入完成品。
 
 ## 7. 本地运行与验证
 
 ```bash
 pnpm install
-pnpm dev
+pnpm worldkit run examples/authoring/package-subject-world.json
+pnpm dev # Babylon catalog Playground
 pnpm test
 pnpm typecheck
 pnpm build

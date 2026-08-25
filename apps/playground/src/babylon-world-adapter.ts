@@ -38,6 +38,8 @@ import type {
   InputAction,
   PlaygroundWorldMetadataV1,
   PlaygroundWorldAdapter,
+  OpeningCompositionReport,
+  PlanningViewKind,
   WorldSnapshot,
 } from "./playground-world";
 import {
@@ -294,6 +296,9 @@ export class BabylonWorldAdapter implements PlaygroundWorldAdapter {
   private activeCameraPointerId: number | null = null;
   private lastCameraPointerPosition: readonly [number, number] = [0, 0];
   private mountedContainer: HTMLElement | undefined;
+  private compositionCache:
+    | Readonly<{ dataUrl: string; report: OpeningCompositionReport }>
+    | undefined;
 
   private constructor(
     private readonly executionPlan: ExecutionPlanV5,
@@ -657,15 +662,26 @@ export class BabylonWorldAdapter implements PlaygroundWorldAdapter {
   }
 
   captureCompositionMask(): string {
-    return "";
+    return this.captureCompositionAnalysis()?.dataUrl ?? "";
   }
 
-  analyzeOpeningComposition(): null {
-    return null;
+  analyzeOpeningComposition(): OpeningCompositionReport | null {
+    return this.captureCompositionAnalysis()?.report ?? null;
   }
 
   async exportOpeningFrame(): Promise<string> {
     throw new Error("Opening-frame artifact export is not available for Canonical JSON V2.");
+  }
+
+  captureOpeningFrameDataUrl(): string {
+    const guide = this.playgroundMetadata?.worldSpec?.entry.composition.guide;
+    const aspectRatio = guide?.aspectRatio ?? 16 / 9;
+    return this.activeRuntime().captureArtifactView({
+      kind: "opening-frame",
+      widthPixels: 1_280,
+      heightPixels: Math.round(1_280 / aspectRatio),
+      cameraPose: this.artifactOpeningCameraPose(),
+    }).dataUrl;
   }
 
   getWorldSpec(): NonNullable<PlaygroundWorldMetadataV1["worldSpec"]> | null {
@@ -680,8 +696,59 @@ export class BabylonWorldAdapter implements PlaygroundWorldAdapter {
       : structuredClone(this.playgroundMetadata.planArtifacts);
   }
 
-  capturePlanningView(): string {
-    throw new Error("Planning views are not available for Canonical JSON V2.");
+  capturePlanningView(kind: PlanningViewKind): string {
+    const worldSpec = this.playgroundMetadata?.worldSpec;
+    const planArtifacts = this.playgroundMetadata?.planArtifacts;
+    if (worldSpec === undefined || planArtifacts === undefined) {
+      throw new Error("Planning artifacts are unavailable.");
+    }
+    if (kind === "opening-shot") {
+      this.resetCameraViewRuntime();
+      return this.captureScreenshot();
+    }
+    if (kind === "height-slope-plan") {
+      const artifact = planArtifacts.heightSlope;
+      const canvas = document.createElement("canvas");
+      canvas.width = artifact.grid.columns;
+      canvas.height = artifact.grid.rows;
+      const context = canvas.getContext("2d");
+      if (context === null) throw new Error("2D canvas is unavailable.");
+      const image = context.createImageData(canvas.width, canvas.height);
+      const heightRange = Math.max(
+        1e-6,
+        artifact.stats.maximumHeight - artifact.stats.minimumHeight,
+      );
+      for (let index = 0; index < artifact.grid.heights.length; index += 1) {
+        const height = artifact.grid.heights[index];
+        const slopeDegrees = artifact.grid.slopesDegrees[index];
+        const offset = index * 4;
+        if (height == null || slopeDegrees == null) {
+          image.data.set([20, 24, 28, 255], offset);
+          continue;
+        }
+        const elevation = (height - artifact.stats.minimumHeight) / heightRange;
+        const brightness = 0.65 + elevation * 0.35;
+        const base = slopeDegrees <= 35
+          ? [66, 145, 82]
+          : slopeDegrees <= 42
+            ? [222, 174, 61]
+            : [204, 68, 62];
+        image.data[offset] = Math.round((base[0] ?? 0) * brightness);
+        image.data[offset + 1] = Math.round((base[1] ?? 0) * brightness);
+        image.data[offset + 2] = Math.round((base[2] ?? 0) * brightness);
+        image.data[offset + 3] = 255;
+      }
+      context.putImageData(image, 0, 0);
+      return canvas.toDataURL("image/png");
+    }
+    return this.activeRuntime().captureArtifactView({
+      kind: "top-down",
+      widthPixels: Math.max(1, this.canvas.width),
+      heightPixels: Math.max(1, this.canvas.height),
+      centerMetersXZ: worldSpec.bounds.center,
+      sizeMetersXZ: worldSpec.bounds.size,
+      maximumHeightMeters: worldSpec.bounds.heightRange[1],
+    }).dataUrl;
   }
 
   getVisualPrototypes(): ReturnType<PlaygroundWorldAdapter["getVisualPrototypes"]> {
@@ -690,12 +757,222 @@ export class BabylonWorldAdapter implements PlaygroundWorldAdapter {
       : structuredClone(this.playgroundMetadata.worldSpec.entityCatalog.prototypes);
   }
 
-  captureWhiteboxTriview(): string {
-    throw new Error("Prototype tri-view export is not available for Canonical JSON V2.");
+  captureWhiteboxTriview(prototypeId: string): string {
+    const worldSpec = this.playgroundMetadata?.worldSpec;
+    if (worldSpec === undefined) throw new Error("WorldSpec is unavailable.");
+    const prototype = worldSpec.entityCatalog.prototypes.find(
+      (candidate) => candidate.id === prototypeId,
+    );
+    if (prototype === undefined) throw new Error(`Unknown visual prototype ${prototypeId}.`);
+    const instance = worldSpec.entityCatalog.instances.find(
+      (candidate) => candidate.prototypeId === prototypeId,
+    );
+    if (instance === undefined) throw new Error(`Prototype ${prototypeId} has no bound instance.`);
+    return this.activeRuntime().captureArtifactView({
+      kind: "entity-triview",
+      widthPixels: Math.max(3, this.canvas.width),
+      heightPixels: Math.max(1, this.canvas.height),
+      entityIds: this.executionEntityIdsForBinding(
+        instance.binding.kind,
+        instance.binding.id,
+      ),
+      identityColor: prototype.instanceColor,
+    }).dataUrl;
   }
 
   async exportWhiteboxTriviews(): Promise<readonly string[]> {
     return [];
+  }
+
+  private captureCompositionAnalysis():
+    | Readonly<{ dataUrl: string; report: OpeningCompositionReport }>
+    | null {
+    const worldSpec = this.playgroundMetadata?.worldSpec;
+    const guide = worldSpec?.entry.composition.guide;
+    if (worldSpec === undefined || guide === undefined) return null;
+    if (this.compositionCache !== undefined) return this.compositionCache;
+    const colorByEntityId: Record<string, string> = {};
+    for (const region of guide.regions) {
+      for (const instance of worldSpec.entityCatalog.instances) {
+        if (region.semantic.includes(instance.binding.id)) {
+          for (const entityId of this.executionEntityIdsForBinding(
+            instance.binding.kind,
+            instance.binding.id,
+          )) colorByEntityId[entityId] = region.color;
+        }
+      }
+      if (region.semantic.includes("terrain")) colorByEntityId.terrain = region.color;
+      if (/(water|bay|sea|lake)/.test(region.semantic)) {
+        for (const feature of this.executionPlan.waters) {
+          colorByEntityId[feature.entityId] = region.color;
+        }
+      }
+    }
+    const skyRegion = guide.regions.find((region) => region.semantic.includes("sky"));
+    this.resetCameraViewRuntime();
+    const capture = this.activeRuntime().captureArtifactView({
+      kind: "composition-mask",
+      widthPixels: guide.resolution[0],
+      heightPixels: guide.resolution[1],
+      backgroundColor: skyRegion?.color ?? "#CFD5D5",
+      colorByEntityId,
+      projectedEntityIds: guide.anchors.flatMap((anchor) =>
+        this.executionEntityIdsForBinding(anchor.binding.kind, anchor.binding.id)
+      ),
+      cameraPose: this.artifactOpeningCameraPose(),
+    });
+    const parseColor = (value: string): readonly [number, number, number] => {
+      const hex = Number.parseInt(value.slice(1), 16);
+      return [(hex >> 16) & 255, (hex >> 8) & 255, hex & 255];
+    };
+    const insidePolygon = (
+      point: readonly [number, number],
+      polygon: readonly (readonly [number, number])[],
+    ): boolean => {
+      let inside = false;
+      for (
+        let current = 0, previous = polygon.length - 1;
+        current < polygon.length;
+        previous = current, current += 1
+      ) {
+        const a = polygon[current]!;
+        const b = polygon[previous]!;
+        if (
+          (a[1] > point[1]) !== (b[1] > point[1]) &&
+          point[0] < ((b[0] - a[0]) * (point[1] - a[1])) / (b[1] - a[1]) + a[0]
+        ) inside = !inside;
+      }
+      return inside;
+    };
+    const regions = guide.regions.map((region) => {
+      const color = parseColor(region.color);
+      let intersection = 0;
+      let union = 0;
+      for (let y = 0; y < capture.heightPixels; y += 1) {
+        for (let x = 0; x < capture.widthPixels; x += 1) {
+          const offset = (y * capture.widthPixels + x) * 4;
+          const desired = insidePolygon(
+            [(x + 0.5) / capture.widthPixels, (y + 0.5) / capture.heightPixels],
+            region.polygon,
+          );
+          const observed = Math.hypot(
+            (capture.pixelsRgba[offset] ?? 0) - color[0],
+            (capture.pixelsRgba[offset + 1] ?? 0) - color[1],
+            (capture.pixelsRgba[offset + 2] ?? 0) - color[2],
+          ) <= 38;
+          if (desired && observed) intersection += 1;
+          if (desired || observed) union += 1;
+        }
+      }
+      const iou = union === 0 ? 0 : intersection / union;
+      return {
+        id: region.id,
+        iou,
+        minimumIou: region.minimumIou,
+        pass: iou >= region.minimumIou,
+      };
+    });
+    const anchors = guide.anchors.map((anchor) => {
+      const projected = this.executionEntityIdsForBinding(
+        anchor.binding.kind,
+        anchor.binding.id,
+      ).flatMap((entityId) => {
+        const bounds = capture.projectedBoundsByEntityId[entityId];
+        return bounds === undefined ? [] : [bounds];
+      });
+      const minimumX = Math.min(...projected.map((bounds) =>
+        bounds.centerRatioXY[0] - bounds.sizeRatioXY[0] / 2
+      ));
+      const maximumX = Math.max(...projected.map((bounds) =>
+        bounds.centerRatioXY[0] + bounds.sizeRatioXY[0] / 2
+      ));
+      const minimumY = Math.min(...projected.map((bounds) =>
+        bounds.centerRatioXY[1] - bounds.sizeRatioXY[1] / 2
+      ));
+      const maximumY = Math.max(...projected.map((bounds) =>
+        bounds.centerRatioXY[1] + bounds.sizeRatioXY[1] / 2
+      ));
+      const observedCenter: readonly [number, number] | null = projected.length === 0
+        ? null
+        : [(minimumX + maximumX) / 2, (minimumY + maximumY) / 2];
+      const observedSize: readonly [number, number] | null = projected.length === 0
+        ? null
+        : [maximumX - minimumX, maximumY - minimumY];
+      const centerError = observedCenter === null
+        ? Number.POSITIVE_INFINITY
+        : Math.hypot(
+            observedCenter[0] - anchor.center[0],
+            observedCenter[1] - anchor.center[1],
+          );
+      const sizeError = anchor.size === undefined || observedSize === null
+        ? 0
+        : Math.hypot(
+            observedSize[0] - anchor.size[0],
+            observedSize[1] - anchor.size[1],
+          ) * 0.5;
+      const error = centerError + sizeError;
+      return {
+        id: anchor.id,
+        expectedCenter: anchor.center,
+        observedCenter,
+        ...(anchor.size === undefined ? {} : { expectedSize: anchor.size }),
+        observedSize,
+        error,
+        tolerance: anchor.tolerance,
+        pass: error <= anchor.tolerance,
+      };
+    });
+    const scores = [
+      ...regions.map((region) => Math.min(1, region.iou / Math.max(1e-6, region.minimumIou))),
+      ...anchors.map((anchor) => Math.max(0, 1 - anchor.error / anchor.tolerance)),
+    ];
+    const score = scores.reduce((sum, value) => sum + value, 0) / Math.max(1, scores.length);
+    this.compositionCache = {
+      dataUrl: capture.dataUrl,
+      report: {
+        score,
+        minimumScore: guide.minimumScore,
+        pass: score >= guide.minimumScore &&
+          regions.every((region) => region.pass) &&
+          anchors.every((anchor) => anchor.pass),
+        regions,
+        anchors,
+      },
+    };
+    return this.compositionCache;
+  }
+
+  private executionEntityIdsForBinding(
+    kind: "feature" | "runtime-entity",
+    bindingId: string,
+  ): readonly string[] {
+    if (kind === "runtime-entity") return [bindingId];
+    const prefix = `obj.${bindingId}.`;
+    return this.executionPlan.objects
+      .map((object) => object.entityId)
+      .filter((entityId) => entityId.startsWith(prefix));
+  }
+
+  private artifactOpeningCameraPose() {
+    const subject = this.executionPlan.subjects.find(
+      (candidate) => candidate.entityId === this.executionPlan.camera.targetEntityId,
+    );
+    if (subject === undefined) {
+      throw new Error("BABYLON_ARTIFACT_CAMERA_TARGET_UNAVAILABLE");
+    }
+    return {
+      targetPositionMetersXYZ: [
+        subject.spawnSubjectOriginPositionMetersXYZ[0],
+        subject.spawnSubjectOriginPositionMetersXYZ[1] +
+          subject.collider.centerOffsetFromSubjectOriginMetersXYZ[1],
+        subject.spawnSubjectOriginPositionMetersXYZ[2],
+      ] as const,
+      targetHeightMeters: this.executionPlan.camera.targetHeightMeters,
+      facingYawRadians: subject.spawnSubjectFacingRadians,
+      pitchRadians: this.executionPlan.camera.pitchRadians,
+      distanceMeters: this.executionPlan.camera.distanceMeters,
+      fovDegrees: this.executionPlan.camera.fovDegrees,
+    };
   }
 
   inspectFeatures(): readonly FeatureInspection[] {

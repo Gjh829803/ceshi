@@ -425,19 +425,17 @@ Protocol V5。详细事务、状态保留和权限边界见总体设计 §16.4�
 | `@whitebox-world/authoring` | L2/L3/L4 | Schema、校验、资源锁定、Normalizer 和 IR |
 | `@whitebox-world/runtime-contracts` | L2/L4/L5 | ExecutionPlan、Snapshot 和 Runtime 公共契约 |
 | `@whitebox-world/compiler` | L3/L4 | IR → ExecutionPlan 的确定性编译 |
+| `@whitebox-world/camera` | L5 | Provider-neutral 命名 Camera Rig/Modifier/Context Profile、View Preference、纯 Selection/Explain；Gameplay 投影、Browser 命令和 Runtime Pose 接线尚未完成 |
 | `@whitebox-world/traversal` | L4/L5/L8 | Traversal Lock/Envelope、Graph/Path/Probe Receipt、Route Overlay 与 Provider-neutral Evidence |
 | `@whitebox-world/traversal-recast` | L6 | Recast/Detour Graph Builder 与 Query Provider Adapter；Provider 身份和 Handle 不进入 Canonical Bytes |
 | `@whitebox-world/runtime-babylon` | L6/L7 | Babylon/Havok 运行、资产、骨骼动画、控制、相机和状态 |
 
-### 7.2 隔离的实验路径
+### 7.2 场景与制品工作流
 
-`packages/contracts`、`core`、`world`、`camera`、`physics`、`subjects`、`animation` 和
-相关 `testkit` 仍包含 Three.js/Rapier 场景实验。它们不是 Canonical Babylon Runtime
-的版本兼容层或公共协议，也不能把 Three/Rapier 类型反向带入 Authoring、IR、
-ExecutionPlan 或 Browser Protocol。新集成只能使用当前 Canonical 链路。
-
-`apps/playground` 同时承载 Canonical Browser Gate 和隔离场景实验，因此看到它同时
-依赖两组包并不代表两套 Runtime 可以在 Canonical 协议内混用。
+`@whitebox-world/world` 保留 Plan-first 场景 DSL、规划工件和引擎无关几何数据；
+`@whitebox-world/testkit` 只服务门禁。`apps/playground` 同时承载 Canonical Browser Gate、
+Babylon-backed catalog gameplay 和 artifact-only 捕获，但三者共享同一 Authoring/Compiler
+与 Babylon/Havok Runtime 边界，不存在可混用的第二套运行时协议。
 
 ## 8. 横向基础能力
 

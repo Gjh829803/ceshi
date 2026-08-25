@@ -7,10 +7,10 @@ Authoring 字段或 Scene 脚本。长期的设计合同见
 | 交付物 | 接入路径 | 当前可用范围 |
 |---|---|---|
 | 已规范化的 Rigged GLB，且具备骨架和 `idle`、`walk`、`run`、`jump` | **Rigged GLB**：继续本文件的 G Bot 路径 | G Bot 的四个地面动作；不要把额外 Clip 标成 Runtime 能力 |
-| 已规范化的无 Rig、无动画 Static GLB | **Ready Static GLB**：读 [批量 Static GLB / FBX 指南](./product-asset-intake-static-assets.md) | 静态视觉加现有 ground Character 能力，不意味着车辆、飞行、坐骑或 NPC 行为 |
-| 只有 FBX 源文件，或 Static GLB 未满足单位、轴、Pivot、朝向或静态清单 | **Source FBX batch**：读 [批量 Static GLB / FBX 指南](./product-asset-intake-static-assets.md) | 先冻结来源并做确定性 bake；不能把 xier120 专用命令当成通用转换器 |
+| 已规范化的无 Rig、无动画 Static GLB | **Ready Static GLB**：读 [批量 Static GLB 指南](./product-asset-intake-static-assets.md) | 静态视觉加现有 ground Character 能力，不意味着车辆、飞行、坐骑或 NPC 行为 |
+| 只有源格式，或 Static GLB 未满足单位、轴、Pivot、朝向或静态清单 | **外部转换后重新接入**：先在 SDK 仓库外生成符合合同的 GLB，再走 [批量 Static GLB 指南](./product-asset-intake-static-assets.md) | 仓库不提供源格式转换器；转换工具、参数和来源版本只作为 provenance 记录，Runtime 与 Registry 只接收最终 GLB |
 
-三条路径共同要求精确版本的 Registry Ref、原始字节的 `sha256:`、确定的
+三条路径共同要求精确版本的 Registry Ref、最终 GLB 字节的 `sha256:`、确定的
 `byteLength`、`-Z` forward、`+Y` up、1 meter/unit、`support-center` Pivot，以及
 每个资产经过 Registry、Resolver、自动化、渲染和人工证据闭环。World JSON 只持有
 `subjectDefinitionRef`，不持有 GLB 路径、骨名、Clip 名、引擎 Handle 或 Collider 参数。
@@ -64,7 +64,7 @@ Capability-driven 调用方必须先在
 `builtInSubjectResourceRegistry.listCapabilitySubjectDefinitions()` 中发现同一 Ref，再读取
 精确资源。当前 `worldkit registry list --kind subject-definition` 是 legacy CLI view，
 不列出 xier120 的 schema-v3 Capability Definitions；它不能作为静态 Subject 的发现面。
-完整的 capability discovery 命令在 [批量 Static GLB / FBX 指南](./product-asset-intake-static-assets.md)。
+完整的 capability discovery 命令在 [批量 Static GLB 指南](./product-asset-intake-static-assets.md)。
 已知 Ref 可以用 CLI describe 核对：
 
 ```bash

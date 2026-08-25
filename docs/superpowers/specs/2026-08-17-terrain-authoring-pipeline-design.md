@@ -8,7 +8,8 @@
 - 非 Heightfield 子规格：
   [`2026-08-21-hybrid-terrain-and-non-heightfield-topology-design.md`](2026-08-21-hybrid-terrain-and-non-heightfield-topology-design.md)。
 - 目标读者：World Planner Agent 团队、SDK Schema/Compiler 团队、Babylon/Havok Runtime 团队和自动验收团队。
-- 设计前提：当前仓库中的 Three.js/Rapier 实现是 Demo 和回归基准，不拥有新架构兼容性要求。
+- 历史设计前提：本文起草时仓库中的 Three.js/Rapier 只被视为 Demo 和回归基准；该
+  Provider 已在后续 Babylon-only 收口中退休，不是当前实现、依赖或兼容目标。
 
 本文件定义从 AI 地形意图到生产 Heightfield、语义层、物理碰撞和验收报告的完整工程链路。它不规定上游必须使用某个模型供应商，也不把 GPT Image 等生成模型的进程内 API 放入 SDK Core。
 

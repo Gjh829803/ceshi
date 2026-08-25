@@ -436,11 +436,10 @@ Validation 词汇。它不构建 Traversal Graph，不跑 Character Controller�
 
 | Package | 核心职责 | 公开边界 | 明确禁止 |
 |---|---|---|---|
-| `packages/contracts/` | Alpha 层共享 ID、Transform、Frame、Action 与 Diagnostic 基础类型 | 仅遗留/底层共享类型 | 承载新 Canonical Schema 或引擎对象 |
+| `packages/contracts/` | Alpha 层共享 ID、Transform、Frame、Action 与 Diagnostic 基础类型 | 仅底层共享类型 | 承载新 Canonical Schema 或引擎对象 |
 | `packages/protocol/` | Canonical JSON Bytes、稳定排序与 SHA-256 Hash | Canonical 序列化基础 | 依赖领域 Runtime 或 Provider |
 | `packages/runtime-contracts/` | ExecutionPlan V5、World Runtime Snapshot V4、Camera 参数和 Browser Protocol V5 | Runtime/Browser 当前公共合同 | 暴露 Babylon、Havok、Recast Handle |
 | `packages/gameplay-contracts/` | Gameplay Command、Receipt、Event、State 与 Bootstrap 的关闭合同 | Gameplay 当前公共合同 | 实现 Gameplay 规则或依赖引擎 |
-| `packages/core/` | 早期 Entity、Transform、Input、Event 与 World 基础实现 | 历史内部模块，非公共入口 | 成为无边界的通用工具杂物包 |
 | `packages/world/` | `world.*` Authoring DSL、Feature、Terrain、Landmark、规划工件与场景规格 | AI/场景作者入口 | 直接创建 Provider 对象或修改 Runtime 内部 |
 | `packages/authoring/` | Authoring V4 Schema、Parser、Normalizer、Resource Lock、Preset Candidate 与 Normalized IR V4 | AI Schema 与 Authoring Pipeline | 执行 Babylon/Havok 或反向读取 Runtime State |
 | `packages/layout-solver/` | 候选生成、Constraint Evaluator、确定性搜索和 Layout Report | 引擎无关 Solver 合同 | 直接修改场景或依赖渲染结果 |
@@ -450,10 +449,7 @@ Validation 词汇。它不构建 Traversal Graph，不跑 Character Controller�
 | `packages/subject-registry/` | 精确版本的 Subject Definition、Capability Assembly、Profile 与 Asset Inventory | 当前 Registry 资源入口，不回退到旧 Definition | 保存会话状态或未版本化数字 overlay |
 | `packages/subject-composition/` | Primitive Bounds、Collider 推导、角色胶囊和资源成本 | 内部可复用 LEGO 几何合同 | 依赖 Babylon Mesh 或场景层级 |
 | `packages/subject-actions/` | Character State、Ground Humanoid Action 与动作解析 | 引擎无关动作语义 | 直接播放 AnimationGroup 或控制输入设备 |
-| `packages/subjects/` | 早期 Humanoid Kit、Visual 与 Motor 组合 | 历史/实验内部模块，非生产兼容入口 | 定义新的 Canonical Subject 方言 |
-| `packages/animation/` | Action Registry、Humanoid 动作状态机与动画状态推进 | 内部运行能力 | 决定 Gameplay Action 准入或 World State |
-| `packages/camera/` | **当前为 Legacy Three.js** 第三人称 Rig，仅服务旧 `subjects`/catalog 回归；目标是在隔离旧实现后 clean-break 为 provider-neutral Camera Domain | 当前不属于 Canonical 公开边界 | 承接新的 Camera Profile/Context、被 Babylon Runtime 依赖前假装已完成 clean break |
-| `packages/physics/` | Physics Body、Collider、Shape 与早期 Physics System 抽象 | 内部物理合同 | 把 Provider Body/Shape Handle 写入 Schema |
+| `packages/camera/` | Provider-neutral 命名 Camera Rig/Modifier/Context Profile、View Preference、纯 Selection/Explain | Camera 领域合同；Runtime/Browser 接线尚未完成 | 创建渲染相机、执行碰撞查询、拥有 Gameplay State，或把纯选择误写成已交付 Runtime selector |
 | `packages/terrain-surface/` | Heightfield、Triangle Mesh、Collider Support 与 Surface Query | Traversal/Runtime 内部几何合同 | 把单一 Heightfield 冒充全部空间拓扑 |
 | `packages/traversal/` | Traversal Surface、Lock、Capability Envelope、Graph/Path/Probe Receipt 与 Route Overlay | Provider-neutral Route 合同 | 暴露 Recast 数据或替代 Runtime 支撑事实 |
 | `packages/traversal-recast/` | Recast/Detour Graph Build、Query 与 Route Evidence Provider Adapter | 不直接面向 AI | 让 Provider 名称或 Handle 进入 Canonical 协议 |
@@ -463,13 +459,20 @@ Validation 词汇。它不构建 Traversal Graph，不跑 Character Controller�
 | `packages/control-capture/` | Simulation Take、Capture Schedule、Profile、严格校验与 Hash | Take/Capture 自动化合同 | 把 Authoring Preview 当作 Gameplay Ground Truth |
 | `packages/testkit/` | Feature Ownership、Transform、Spawn Safety 与诊断测试辅助 | 仅测试/门禁 | 被生产 Runtime 依赖为业务实现 |
 
+旧的 `@whitebox-world/physics` 和 `@whitebox-world/subjects` 已删除，也没有被一对一合并成
+新的大包。Subject 的公共资源、组合和动作语义分别由 `subject-registry`、
+`subject-composition` 和 `subject-actions` 持有；Babylon Mesh、Havok Collider、角色控制器、
+动画播放和资源释放等 Provider 实现统一由 `runtime-babylon` 持有，并在包内按职责分模块。
+只有当一项能力具有独立的公共合同、复用边界或生命周期所有权时才拆成 Workspace Package；
+不按领域名词机械拆包，也不让 Provider 实现反向污染公共合同。
+
 Gameplay 合同、引擎无关规则、Runtime Host 生命周期和 Babylon Adapter 各自拥有
 独立边界。控制权只能通过 Gameplay possession 事务改变，Browser/Adapter 不提供
 绕过关系真相的直接绑定入口。应用与工具入口保持为：
 
 | 路径 | 职责 |
 |---|---|
-| `apps/playground/` | Canonical Runtime 页面、旧 Alpha 场景和浏览器验证入口 |
+| `apps/playground/` | Canonical Runtime 页面、Babylon-backed catalog/artifact 场景和浏览器验证入口 |
 | `scripts/worldkit.ts` | SDK CLI |
 
 Compiler 和 Runtime 不能反向读取 Agent Prompt；Runtime Adapter 不能把 Babylon
@@ -505,9 +508,8 @@ Browser、示例和门禁。若本轮确实无法删除某个旧路径，技术�
 - [未发布协议兼容层 Clean Break 设计](docs/superpowers/specs/2026-08-24-unreleased-compatibility-clean-break-design.md)
 - [历史命名与兼容路径清理专项计划](docs/superpowers/plans/2026-08-25-historical-naming-and-compatibility-path-cleanup-plan.md)
 - [Gameplay RuntimeHost G19-3 审查处置](docs/reviews/2026-08-24-gameplay-runtime-host-g19-3-review.md)
-- [上下文驱动 Gameplay 与 Camera 组合设计（已评审，未来能力）](docs/superpowers/specs/2026-08-24-context-driven-gameplay-camera-composition-design.md)
-- [上下文驱动 Gameplay 与 Camera 设计审查记录](docs/reviews/2026-08-24-context-driven-gameplay-camera-composition-design-review.md)
-- [Camera Canonical 分包与 Legacy Three 清退边界复审](docs/reviews/2026-08-25-context-driven-camera-package-boundary-review.md)
+- [上下文驱动 Gameplay 与 Camera 组合设计](docs/superpowers/specs/2026-08-24-context-driven-gameplay-camera-composition-design.md)：Camera 领域包已实现，Gameplay/Browser/Runtime 集成仍按 Backlog 推进。
+- [Babylon-only Runtime 收口实施计划](docs/superpowers/plans/2026-08-25-babylon-only-threejs-retirement.md)
 - [AI-first Terrain Authoring Pipeline 设计](docs/superpowers/specs/2026-08-17-terrain-authoring-pipeline-design.md)
 - [Hybrid Terrain 与非 Heightfield 特殊地形设计](docs/superpowers/specs/2026-08-21-hybrid-terrain-and-non-heightfield-topology-design.md)
 - [可扩展主体组装 Authoring 专项设计](docs/superpowers/specs/2026-08-19-extensible-subject-authoring-design.md)
@@ -537,7 +539,7 @@ Browser、示例和门禁。若本轮确实无法删除某个旧路径，技术�
 
 - [AI 自定义场景几何扩展候选方案](docs/superpowers/specs/2026-08-20-ai-authored-geometry-extension-design.md)：
   只记录未来可能需要解决的能力缺口和候选技术，不表示确定会做、没有排期，也没有
-  选定 Recipe、MeshDraft、GLB、Sandbox 或 Three Authoring Bridge 等技术路线。
+  选定 Recipe、MeshDraft、GLB、Sandbox 或其他 Authoring Provider 等技术路线。
 
 ### 已完成实施切片
 
@@ -562,29 +564,21 @@ Browser、示例和门禁。若本轮确实无法删除某个旧路径，技术�
 - [ADR-0005：分离 Planner、Builder 与 Visual Bible](decisions/0005-separated-planner-builder-visual-bible.md)
 - [ADR-0006：AuthoringSpec 编译架构与 Babylon Runtime](decisions/0006-authoring-spec-compiler-architecture.md)
 
-## Legacy 与实验路径
+## Catalog 场景与创作制品
 
-仓库仍保留 Three.js/Rapier Alpha Playground、Plan-first 多 Agent 场景流程、
-Creator Studio 和若干已验证场景，作为创作实验、视觉回归和迁移 Fixture。
-
-当前 `packages/camera` 也属于这条 Legacy 链，不能作为 Canonical Camera Profile/Context
-实现入口。新 Camera 的目标包边界、旧 Rig 隔离顺序和删除门禁见
-[上下文驱动 Gameplay 与 Camera 组合设计](docs/superpowers/specs/2026-08-24-context-driven-gameplay-camera-composition-design.md#51-canonical-package-boundary)。
-在 Babylon 承接 catalog scene、Opening Composition、tri-view 和 scene gates 之前，不得
-单点删除旧 Camera 包或让 Three/Rapier 链继续承接新能力。
+Plan-first 多 Agent 场景流程、Creator Studio 和已验证 catalog 场景继续作为创作、
+视觉回归与产品 Fixture。Gameplay、Opening Composition、规划捕获和 SDK-derived tri-view
+都由 Babylon-backed Playground 承载；World Plan、Opening Shot、plan lock、白膜三视图和
+Visual Bible 工件合同不因 Runtime 收口而改变。
 
 ```bash
 pnpm dev
 pnpm studio
 ```
 
-`pnpm dev` 只用于 Legacy/场景目录 Playground，不能为 `?authoring=1` 注入
-AuthoringSpec。Canonical G Bot 体验使用 `pnpm dev:g-bot`。这些 Legacy 入口不是新
-程序的 Canonical 协议真相，不再承接新的底层能力。新外部程序应
-使用 `worldkit`、Canonical Authoring V4 和 Browser Protocol V5。最终切换计划见
-[重构总进度与 Backlog](docs/18-refactor-progress-and-backlog.md#p32-默认实现切换)。
-
-仓库不分发来源尚未确认的 Xbot。以下 Mixamo 入口只属于 Legacy Three/Rapier
-实验路径，不是 Canonical Babylon S1b。需要本地验证 Mixamo 兼容 GLB 时，请按照
-[Alpha 运行指南](docs/07-alpha-implementation.md)链接自己的合规资产；没有资产时
-Runtime 会明确显示白模占位体，不会伪装成已绑定角色。
+`pnpm dev` 用于 Babylon-backed catalog Playground，不能为 `?authoring=1` 注入
+AuthoringSpec。Canonical G Bot 体验使用 `pnpm dev:g-bot`；新外部程序使用 `worldkit`、
+Canonical Authoring V4 和 Browser Protocol V5。Camera 的命名 Profile/Context、Preference、
+纯 Selection/Explain 已在 `@whitebox-world/camera` 实现；committed Gameplay Context
+Projection、Browser 命令、Registry Lock 和 Babylon CameraDirector 消费 Selection Decision
+仍未交付，详见[重构总进度与 Backlog](docs/18-refactor-progress-and-backlog.md#p24-多-controller相机模式与受控操作)。

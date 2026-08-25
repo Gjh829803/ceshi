@@ -2,9 +2,37 @@ import { describe, expect, it } from "vitest";
 import { compileOutdoorScene } from "@whitebox-world/world";
 
 import { sceneCatalog } from "./scenes/index.js";
-import { loadOutdoorGameplaySceneV1 } from "./outdoor-scene-gameplay-loader.js";
+import {
+  loadOutdoorGameplaySceneV1,
+  projectOutdoorLandmarkTransformV1,
+} from "./outdoor-scene-gameplay-loader.js";
 
 describe("loadOutdoorGameplaySceneV1", () => {
+  it("composes nested legacy XYZ transforms into the Babylon execution convention", () => {
+    const result = projectOutdoorLandmarkTransformV1([
+      {
+        position: [10, 0, 0],
+        rotation: [0, Math.PI / 2, 0],
+        scale: [2, 2, 2],
+      },
+      {
+        position: [1, 0, 0],
+        rotation: [0.2, 0, -0.3],
+        scale: [1, 1, 1],
+      },
+    ]);
+
+    expect(result.positionMetersXYZ[0]).toBeCloseTo(10, 6);
+    expect(result.positionMetersXYZ[1]).toBeCloseTo(0, 6);
+    expect(result.positionMetersXYZ[2]).toBeCloseTo(-2, 6);
+    expect(result.rotationEulerRadiansXYZ[0]).toBeCloseTo(0.2, 6);
+    expect(result.rotationEulerRadiansXYZ[1]).toBeCloseTo(Math.PI / 2, 6);
+    expect(result.rotationEulerRadiansXYZ[2]).toBeCloseTo(-0.3, 6);
+    expect(result.scaleXYZ[0]).toBeCloseTo(2, 6);
+    expect(result.scaleXYZ[1]).toBeCloseTo(2, 6);
+    expect(result.scaleXYZ[2]).toBeCloseTo(2, 6);
+  });
+
   it.each(Object.entries(sceneCatalog))(
     "compiles catalog scene %s through Authoring V4 and ExecutionPlan V5",
     async (sceneCatalogId, sceneDefinition) => {

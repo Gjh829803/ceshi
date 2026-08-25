@@ -6,7 +6,6 @@ import { Quaternion, Vector3 } from "@babylonjs/core/Maths/math.vector.js";
 import { DirectionalLight } from "@babylonjs/core/Lights/directionalLight.js";
 import { HemisphericLight } from "@babylonjs/core/Lights/hemisphericLight.js";
 import { Mesh } from "@babylonjs/core/Meshes/mesh.js";
-import { MeshBuilder } from "@babylonjs/core/Meshes/meshBuilder.js";
 import { VertexData } from "@babylonjs/core/Meshes/mesh.vertexData.js";
 import { PhysicsAggregate } from "@babylonjs/core/Physics/v2/physicsAggregate.js";
 import {
@@ -28,13 +27,11 @@ import type {
   ControlCaptureCapabilitiesV1,
   ControlCaptureRequestV1,
   ControlInputAxesV2,
-  ExecutionObjectV3,
   ExecutionLayoutAssertionV1,
   ExecutionLayoutPlacementV1,
   ExecutionPlanV5,
   ExecutionStaticColliderV1,
   ExecutionWaterBoundaryV3,
-  ExecutionWaterV3,
   FixedInputV1,
   PublishedMovementMediumV1,
   RenderReadyReceiptV1,
@@ -55,7 +52,7 @@ import {
 import { isNil } from "lodash-es";
 
 import "./babylon-shader-bootstrap";
-import { createWhiteboxMaterials, type WhiteboxMaterials } from "./materials";
+import { createWhiteboxMaterials } from "./materials";
 import { enableHavokPhysics, FIXED_TIME_STEP_SECONDS } from "./physics";
 import { SubjectController } from "./subject-controller";
 import { CameraDirectorV1 } from "./camera-director";
@@ -87,6 +84,15 @@ import {
   type StaticCollisionMeshEntryV1,
 } from "./traversal-runtime-internal";
 import type { BabylonRuntimeProjectionV1 } from "./runtime-projection";
+import {
+  captureBabylonArtifactViewV1,
+  type BabylonArtifactCaptureRequestV1,
+  type BabylonArtifactCaptureResultV1,
+} from "./artifact-capture";
+import {
+  createBabylonObjectMeshV1,
+  createBabylonWaterMeshV1,
+} from "./scene-geometry";
 
 function canonicalizeSignedZero(value: number): number {
   return Object.is(value, -0) ? 0 : value;
@@ -314,64 +320,6 @@ function revalidateRuntimeLayoutAssertions(executionPlan: ExecutionPlanV5): void
   }
 }
 
-function applyTransform(mesh: Mesh, object: ExecutionObjectV3): void {
-  mesh.position = new Vector3(...object.transform.positionMetersXYZ);
-  const [rotationX, rotationY, rotationZ] = object.transform.rotationEulerRadiansXYZ;
-  mesh.rotationQuaternion = Quaternion.FromEulerAngles(rotationX, rotationY, rotationZ);
-  mesh.scaling = new Vector3(...object.transform.scaleXYZ);
-  mesh.metadata = { worldkitEntityId: object.entityId, semanticClassId: object.semanticClassId };
-}
-
-function createObjectMesh(object: ExecutionObjectV3, materials: WhiteboxMaterials, scene: Scene): Mesh {
-  let mesh: Mesh;
-  switch (object.primitive.kind) {
-    case "box":
-      mesh = MeshBuilder.CreateBox(
-        object.entityId,
-        {
-          width: object.primitive.sizeMetersXYZ[0],
-          height: object.primitive.sizeMetersXYZ[1],
-          depth: object.primitive.sizeMetersXYZ[2],
-        },
-        scene,
-      );
-      break;
-    case "sphere":
-      mesh = MeshBuilder.CreateSphere(
-        object.entityId,
-        { diameter: object.primitive.radiusMeters * 2, segments: 16 },
-        scene,
-      );
-      break;
-    case "cylinder":
-      mesh = MeshBuilder.CreateCylinder(
-        object.entityId,
-        {
-          height: object.primitive.heightMeters,
-          diameter: object.primitive.radiusMeters * 2,
-          tessellation: 24,
-        },
-        scene,
-      );
-      break;
-    case "cone":
-      mesh = MeshBuilder.CreateCylinder(
-        object.entityId,
-        {
-          height: object.primitive.heightMeters,
-          diameterBottom: object.primitive.radiusMeters * 2,
-          diameterTop: 0,
-          tessellation: 24,
-        },
-        scene,
-      );
-      break;
-  }
-  applyTransform(mesh, object);
-  mesh.material = materials.object;
-  return mesh;
-}
-
 function createStaticCollisionMesh(
   collider: ExecutionStaticColliderV1,
   scene: Scene,
@@ -398,45 +346,6 @@ function createStaticCollisionMesh(
   };
   mesh.isVisible = false;
   mesh.computeWorldMatrix(true);
-  return mesh;
-}
-
-function createWaterMesh(water: ExecutionWaterV3, materials: WhiteboxMaterials, scene: Scene): Mesh {
-  const boundary = water.boundary;
-  let mesh: Mesh;
-  if (boundary.kind === "circle" || boundary.kind === "ellipse") {
-    mesh = MeshBuilder.CreateDisc(water.entityId, { radius: 1, tessellation: 64, sideOrientation: Mesh.DOUBLESIDE }, scene);
-    mesh.rotation.x = Math.PI / 2;
-    const radii = boundary.kind === "circle"
-      ? [boundary.radiusMeters, boundary.radiusMeters] as const
-      : boundary.radiusMetersXZ;
-    mesh.scaling.x = radii[0];
-    mesh.scaling.y = radii[1];
-    mesh.position = new Vector3(
-      boundary.centerMetersXZ[0],
-      water.waterLevelMeters,
-      boundary.centerMetersXZ[1],
-    );
-  } else {
-    mesh = new Mesh(water.entityId, scene);
-    const centerX = boundary.pointsMetersXZ.reduce((sum, point) => sum + point[0], 0) / boundary.pointsMetersXZ.length;
-    const centerZ = boundary.pointsMetersXZ.reduce((sum, point) => sum + point[1], 0) / boundary.pointsMetersXZ.length;
-    const positions = [centerX, water.waterLevelMeters, centerZ];
-    const indices: number[] = [];
-    for (const point of boundary.pointsMetersXZ) positions.push(point[0], water.waterLevelMeters, point[1]);
-    for (let index = 0; index < boundary.pointsMetersXZ.length; index += 1) {
-      indices.push(0, index + 1, ((index + 1) % boundary.pointsMetersXZ.length) + 1);
-    }
-    const normals: number[] = [];
-    VertexData.ComputeNormals(positions, indices, normals);
-    const data = new VertexData();
-    data.positions = positions;
-    data.indices = indices;
-    data.normals = normals;
-    data.applyToMesh(mesh, false);
-  }
-  mesh.material = materials.water;
-  mesh.metadata = { worldkitEntityId: water.entityId, semanticClassId: water.semanticClassId };
   return mesh;
 }
 
@@ -653,9 +562,11 @@ export class BabylonWorldRuntime {
       aggregates.push(terrainAggregate);
       ownedDisposers.push(() => terrainAggregate.dispose());
 
-      for (const water of options.executionPlan.waters) createWaterMesh(water, materials, scene);
+      for (const water of options.executionPlan.waters) {
+        createBabylonWaterMeshV1(water, materials, scene);
+      }
       for (const object of options.executionPlan.objects) {
-        createObjectMesh(object, materials, scene);
+        createBabylonObjectMeshV1(object, materials, scene);
       }
       const staticCollisionMeshes: StaticCollisionMeshEntryV1[] = [];
       for (const collider of options.executionPlan.staticColliders) {
@@ -1319,6 +1230,20 @@ export class BabylonWorldRuntime {
     this.renderFrameIndex += 1;
     this.latestRenderReadyReceipt = receipt;
     return receipt;
+  }
+
+  /** Provider-internal artifact capture; public Authoring and Browser DTOs stay engine-neutral. */
+  captureArtifactView(
+    request: BabylonArtifactCaptureRequestV1,
+  ): BabylonArtifactCaptureResultV1 {
+    this.assertUsable();
+    this.updateCamera();
+    return captureBabylonArtifactViewV1({
+      scene: this.scene,
+      engine: this.engine,
+      camera: this.camera,
+      request,
+    });
   }
 
   async renderFrameWhenReady(): Promise<RenderReadyReceiptV1> {

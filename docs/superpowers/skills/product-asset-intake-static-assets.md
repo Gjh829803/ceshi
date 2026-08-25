@@ -1,9 +1,10 @@
-# Static Subject Asset Batch Intake
+# Static GLB Subject Asset Batch Intake
 
 这是一条给“收到一目录 Static GLB，想把它们作为可用 Subjects”的重复使用流程。
-它也覆盖只有 FBX 的批量来源。入口路由在
-[`product-asset-intake.md`](./product-asset-intake.md)；Rigged G Bot 仍走原来的 Rigged
-路径，不能用本流程削减其骨架或动作合同。
+入口路由在 [`product-asset-intake.md`](./product-asset-intake.md)；Rigged G Bot 仍走原来的
+Rigged 路径，不能用本流程削减其骨架或动作合同。仓库只接收已转换的 GLB；FBX、Blender
+工程等源格式必须在 SDK 仓库外完成转换，转换工具和参数作为 provenance 记录，而不是仓库
+脚本、Runtime 或 Registry 的能力。
 
 ## 当前合同与决策
 
@@ -18,24 +19,19 @@ Asset Manifest 和 schema-v3 Subject Definition。Definition 的静态资产不�
 由 Registry 中已实现的 capability 定义；没有合同就维持静态视觉加地面 Character 的
 范围。
 
-先逐个资产回答下表，再开始注册。一个 batch 内可以混用两条来源路径，但每个输出
-Subject 必须有自己的 Asset、Collider 与 Definition Ref。
+先逐个资产回答下表，再开始注册。每个输出 Subject 必须有自己的 Asset、Collider 与
+Definition Ref。
 
 | 来源情况 | 决定 | 证据与限制 |
 |---|---|---|
 | 已有 GLB 满足本节全部静态合同 | Ready Static GLB admission | 冻结该 GLB bytes，记录清单、Hash、尺寸和人工朝向检查；当前仓库没有可直接接收任意目录的通用 admission CLI |
-| GLB 的单位、轴、Pivot、朝向、内容清单或自包含性不符合 | 不能直接注册 | 先为该 batch 做一个经评审的确定性 normalizer；不要靠 Subject 的 local transform 掩盖错误 |
-| 只有 FBX | Source FBX deterministic bake | 冻结 source Catalog 后，按 xier120 的 bake/config 模式实现并验证该 batch 的转换 |
+| GLB 的单位、轴、Pivot、朝向、内容清单或自包含性不符合 | 不能直接注册 | 在仓库外修正并重新导出，再把新 GLB 当成新的不可变输入完整 admission；不要靠 Subject 的 local transform 掩盖错误 |
+| 只有 FBX 或其他源格式 | 不能直接注册 | 在仓库外转换为满足合同的 GLB，记录原始来源 Hash、转换工具版本和显式单位/轴/Pivot 参数，再从 Ready Static GLB admission 开始 |
 | 需要骨架、Clip 或四个语义动作 | 改走 Rigged GLB | 回到入口的 G Bot 路由；不要把 Rigged 资产伪装成 Static |
 
-`pnpm bake:xier120-subjects` 只处理 19 个 `xier120.*` FBX 条目及
-`xier120StaticSubjectBakeConfigs`，不是通用转换器。新 batch 绝不调用它、绝不把新项塞进
-`xier120StaticSubjectBakeConfigs`，也不改写 xier120 已提交的 GLB。可复用的是它的受测
-模式：`scripts/lib/static-subject-bake.ts` 的确定性 flatten、`support-center` 重心、
-GLB inventory 和精确字节比对；`bakeStaticSubjectFbx` 的当前输入类型是
-`ContributorSourceFbxAssetInventoryEntryV1`，因此它也不是跨 batch 的公开转换 API。为
-新来源建立自己的 Catalog、配置、driver、验证器和测试，或先把泛化设计作为单独的
-Capability/Adapter 评审。
+xier120 的 19 个已提交 GLB 是受 Registry Hash、长度和 Babylon 加载门禁保护的现有
+artifact，不是可重新烘焙的模板。不要改写其 bytes 或把新来源加入 xier120 专用 Registry
+常量。可复用的是最终 GLB admission、Registry/Resolver 闭环和实际 Runtime 验证合同。
 
 ## 1. 冻结输入与许可
 
@@ -48,11 +44,12 @@ xier120 的实际模板是
 原始相对路径、仓库相对路径、`byteLength`、`contentHash`、`coarseClass`、`format`，以及
 `runtimeStatus` / `conversionRequired`。用读取到的 bytes 重新计算 Hash 和长度；任一不符
 即停止，不能用新的 Hash 覆盖 Catalog 以继续接入。Ready Static GLB 也要建立等价的
-immutable inventory，即使它不使用当前的 FBX 专用 TypeScript 导出。
+immutable inventory；来源 provenance 与最终 Runtime artifact inventory 分开记录。
 
 `SubjectAssetManifestInputV1.provenance` 要有 `licenseSpdxId` 和
-`redistributionPolicy`；可再记录 `sourceUri`、`licenseUri` 和 `author`。没有书面可公开
-再分发授权时，默认 `internal-only`，不要选择 `allowed`。xier120 是具体例子：其
+`redistributionPolicy`；可再记录 `sourceUri`、`licenseUri` 和 `author`。配套 Source
+Catalog 或接入证据另行记录源字节 Hash、转换工具版本和转换参数。没有书面可公开再分发
+授权时，默认 `internal-only`，不要选择 `allowed`。xier120 是具体例子：其
 `XIER120_SUBJECT_ASSET_MANIFESTS` 使用
 `LicenseRef-Loopit-Company-Private`、`internal-only` 和作者 `xier120`；这些值不能被
 复制为其他来源的许可证结论。
@@ -73,33 +70,21 @@ immutable inventory，即使它不使用当前的 FBX 专用 TypeScript 导出�
 6. 记录原始 GLB Hash/长度。之后 asset bytes、Registry artifact 的 Hash/长度、Host
    Resolver 取得的 bytes 必须完全相同。
 
-如果第 4 或第 5 步失败，Ready GLB 不能直接登记。当前代码没有“给任意 GLB 旋转并导出”
-的通用命令；为该 batch 新建确定性 normalizer 后，再把 normalizer 输出当作上面的
-ready artifact 重新 admission。normalizer 要明确记录 units、上轴、forward、旋转、缩放
-和 Pivot，不得把这些判断留给 Runtime。
+如果第 4 或第 5 步失败，Ready GLB 不能直接登记。必须在仓库外重新转换，并把输出当作
+新的 ready artifact 完整 admission。provenance 要明确记录 units、上轴、forward、旋转、
+缩放、Pivot、转换工具与版本，不得把这些判断留给 Runtime。
 
-## 3. Source FBX deterministic bake
+## 3. 外部转换边界
 
-FBX 先进入 Catalog，再为每个 `sourceId` 写显式配置。xier120 的配置类型
-`StaticSubjectBakeConfigV1` 与
-`packages/subject-registry/src/xier120-static-subject-config.ts` 展示了当前所需事实：
-`scaleToMeters`、`rotateXYZRadians`、`expectedForward: "-Z"` 和
-`displayColorHex`。xier120 的实际 driver 是
-`scripts/bake-xier120-static-subjects.ts`，输出在
-`apps/playground/public/subject-assets/xier120/` 下；它的 `outputPathFor()` 由每个
-`xier120.` 前缀 Source ID 导出对应的 `slug/v1/slug.glb` 路径。
+SDK 仓库不拥有 FBX 或 DCC 工程到 GLB 的转换实现，也不承诺某个离线转换器的行为。
+提供方必须在交付前完成转换，并随最终 GLB 提供可审计 provenance：原始来源标识和 Hash、
+转换工具及精确版本、单位换算、轴向、forward、旋转/缩放、Pivot 处理、材质/纹理策略，
+以及适用时的镜像 winding 和 normals 处理。
 
-新的 FBX batch 复制这种**结构**而不是名称或数据：在一次写入前验证所有 source
-`byteLength` / `contentHash` 和一对一配置；每个 Mesh 应用完整 world transform 加配置
-旋转/缩放，flatten 后 support-center；导出自包含 GLB 和 inventory；然后在临时目录
-重算并逐字节比较已提交输出。`scripts/lib/static-subject-bake.ts` 有一个必须保留的
-几何规则：如果合成的 `worldToBakeMatrix.determinant() < 0`，必须反转每个三角形的
-winding（交换 B/C），再计算 normals。否则镜像或负缩放会产生错误的外向面。
-
-`scripts/lib/static-subject-bake.test.ts` 是这项模式的可执行参考：它覆盖负 determinant
-的外向 normals、两次 bake 的 byte identity、自包含 GLB、静态 inventory 以及
-Babylon admission。新 batch 的测试至少同样覆盖其配置完整性、来源 Hash、反射 winding、
-determinism 和 GLB admission；不应只复用 xier120 的 19 项通过结果。
+仓库评审只以最终 GLB bytes 为权威输入。转换后必须重新执行第 2 节全部 admission，不能用
+来源文件可解析、转换工具本地通过或旧 batch 的结果代替。若转换过程需要成为产品能力，
+应在独立工具仓库和独立安全/格式合同下设计；不得把它加入 SDK Runtime、Registry adapter
+或场景工作流。
 
 ## 4. Registry、Definition 与所有 Resolver
 
@@ -183,20 +168,18 @@ Capability Catalog discovery 和已知 Ref 的直接使用也不等于 public Br
 ## 5. 必需验证证据
 
 每个新 batch 都需要自己的命名 verifier 与受测 fixture；没有通用的
-`verify:static-subjects`。xier120 的
-`pnpm bake:xier120-subjects -- --check` 和
-`pnpm verify:xier120-subjects` 只证明 xier120 的 19 项，不证明另一目录的 30 项。
+`verify:static-subjects`。xier120 的 `pnpm verify:xier120-subjects` 只证明 xier120 的
+19 项，不证明另一目录的 30 项。
 
 | 证据层 | 每资产或每 batch 的最小证明 |
 |---|---|
-| 自动化合同 | 冻结 source/ready bytes Hash 和长度；FBX bake 的 exact-byte 回归；GLB inventory；Asset/Collider/Definition closure；Capability Catalog discovery；`subjectDefinitionRef` 的 normalize/compile；同一 asset 的双实例、隔离、dispose、cache 生命周期和 Hash 拒绝；以及 `DEFAULT_WORLD_PACKAGE_RESOURCE_MAPPING_BY_REF_V1` 的 trusted preflight 解析、路径和 bytes/Hash 匹配 |
+| 自动化合同 | 冻结最终 GLB bytes 的 Hash 和长度；拒绝 malformed GLB 与 Hash mismatch；GLB inventory；Asset/Collider/Definition closure；Capability Catalog discovery；`subjectDefinitionRef` 的 normalize/compile；同一 asset 的双实例、隔离、dispose、cache 生命周期；以及 `DEFAULT_WORLD_PACKAGE_RESOURCE_MAPPING_BY_REF_V1` 的 trusted preflight 解析、路径和 bytes/Hash 匹配 |
 | 渲染 | 每个资产在 Canonical Authoring Runtime 的截图或同等持久画面证据，核对朝向、up、support-center、可见网格与 Collider 对位；更新 Definition 或 Resolver 后重新跑 |
 | 人工交互 | 先声明交互等价类别。静态 ground Subject 共用同一 capability/profile/Host 路径且所有资产已有自动化加渲染证据时，每类抽一个代表验证 spawn、W/A/S/D、jump、相机拖拽/滚轮和 reset；样本只证明该类代表。若要对每个资产作单独交互承诺、它引入新 capability/profile/Host 路径，或渲染/抽样发现异常，则该资产必须逐项人工验证。所有记录都只能声明 ground Character 交互，不能解释为驾驶、飞行、骑乘或 NPC 行为。 |
 
 xier120 可作为完整工作例子：
 
 ```bash
-pnpm bake:xier120-subjects -- --check
 pnpm verify:xier120-subjects
 pnpm worldkit validate examples/authoring/xier120-subject-gallery.json --json
 pnpm worldkit subject explain examples/authoring/xier120-subject-gallery.json \
@@ -221,9 +204,9 @@ schema-v4 fixture 的 `pnpm worldkit run`，确认 preflight 和 Host 都成功�
 
 | 失败 | 处理 |
 |---|---|
-| source Hash 或长度变化 | 停止；确认来源版本和许可后，以新版本重新 Catalog、bake、Registry 和 Resolver，而不是篡改旧记录 |
-| 反射后黑面、内翻或 normals 错误 | 检查 bake matrix determinant；负值必须反转 winding 后再算 normals |
-| 资产横放、倒置、脚悬空或正面错误 | 回到 batch 配置/normalizer；明确 scale、旋转、up、forward 和 support-center，不用世界 Transform 补偿 |
+| 最终 GLB Hash 或长度变化 | 停止；确认来源版本、转换 provenance 和许可后，以新版本重新 admission、Registry 和 Resolver，而不是篡改旧记录 |
+| 反射后黑面、内翻或 normals 错误 | 回到仓库外转换流程修正 winding/normals，产生新的 GLB，并重新执行完整 admission |
+| 资产横放、倒置、脚悬空或正面错误 | 回到仓库外转换流程；明确 scale、旋转、up、forward 和 support-center，不用世界 Transform 补偿 |
 | Registry 可 describe 但 Playground 或 `worldkit run` 解析失败 | 同时检查三个 Playground maps 与 `DEFAULT_WORLD_PACKAGE_RESOURCE_MAPPING_BY_REF_V1`；确认 URL 在 `/subject-assets/` 下、package path 唯一，且四面读取的 bytes/Hash 一致 |
 | Capability Catalog 能发现 Definition，Browser selector 却不显示 | 先区分 direct/capability use 与 public-default policy。检查 `listCapabilitySubjectDefinitions()`；不要自动修改 `listPublicDefaults()`，除非公开产品目录策略已批准 |
 | 资产外观像车、飞行器或带骑手 | 保持 internal/static ground 范围；若产品需要 vehicle、flight、mount 或 NPC，提交 Capability Gap，不虚构行为 |

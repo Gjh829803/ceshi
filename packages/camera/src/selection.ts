@@ -1,0 +1,543 @@
+import type {
+  CameraAdmissionResultV1,
+  CameraContextProfileV1,
+  CameraContextRuleExplainV1,
+  CameraContextRuleV2,
+  CameraContextSampleV1,
+  CameraDiagnosticCodeV1,
+  CameraDiagnosticV1,
+  CameraRelationshipConditionV1,
+  CameraSelectionInputV1,
+  CameraSelectionResultV1,
+  CameraViewPreferenceAdmissionResultV1,
+  CameraViewPreferenceV1,
+} from "./camera-domain.js";
+import { CAMERA_RIG_PARAMETER_NAMES_V1 } from "./camera-domain.js";
+
+function compareCodeUnits(left: string, right: string): number {
+  return left < right ? -1 : left > right ? 1 : 0;
+}
+
+function diagnostic(
+  cameraContextProfile: CameraContextProfileV1,
+  code: CameraDiagnosticCodeV1,
+  message: string,
+  options: { cameraContextRuleId?: string; resourceRef?: string } = {},
+): CameraDiagnosticV1 {
+  return {
+    severity: code === "CAMERA_PREFERENCE_CONTEXT_INCOMPATIBLE"
+      ? "warning"
+      : "error",
+    code,
+    message,
+    cameraContextProfileRef: cameraContextProfile.cameraContextProfileRef,
+    ...options,
+  };
+}
+
+function sortedRules(
+  rules: readonly CameraContextRuleV2[],
+): readonly CameraContextRuleV2[] {
+  return [...rules].sort((left, right) =>
+    right.priority - left.priority || compareCodeUnits(left.id, right.id)
+  );
+}
+
+function duplicatedValues<T>(values: readonly T[]): T[] {
+  const seen = new Set<T>();
+  const duplicated = new Set<T>();
+  for (const value of values) {
+    if (seen.has(value)) duplicated.add(value);
+    else seen.add(value);
+  }
+  return [...duplicated];
+}
+
+function emptyConditionNames(rule: CameraContextRuleV2): readonly string[] {
+  return Object.entries(rule.when)
+    .filter(([, value]) => Array.isArray(value) && value.length === 0)
+    .map(([name]) => name)
+    .sort(compareCodeUnits);
+}
+
+function allowedCameraRigProfileRefs(
+  cameraContextProfile: CameraContextProfileV1,
+): ReadonlySet<string> {
+  return new Set([
+    cameraContextProfile.defaultCameraRigProfileRef,
+    ...(cameraContextProfile.firstPersonCameraRigProfileRef === undefined
+      ? []
+      : [cameraContextProfile.firstPersonCameraRigProfileRef]),
+    ...cameraContextProfile.rules.flatMap((rule) =>
+      rule.cameraRigProfileRef === undefined ? [] : [rule.cameraRigProfileRef]
+    ),
+  ]);
+}
+
+function conflictingModifierFields(
+  cameraContextProfile: CameraContextProfileV1,
+  rule: CameraContextRuleV2,
+): readonly string[] {
+  const modifiersByRef = new Map(
+    cameraContextProfile.cameraModifierProfiles.map((modifier) => [
+      modifier.cameraModifierProfileRef,
+      modifier,
+    ]),
+  );
+  const valueByFieldName = new Map<string, string | number>();
+  const conflicts = new Set<string>();
+  const recordValue = (fieldName: string, value: string | number): void => {
+    const previousValue = valueByFieldName.get(fieldName);
+    if (previousValue !== undefined && previousValue !== value) {
+      conflicts.add(fieldName);
+    } else {
+      valueByFieldName.set(fieldName, value);
+    }
+  };
+  for (const modifierRef of rule.cameraModifierRefs ?? []) {
+    const modifier = modifiersByRef.get(modifierRef);
+    if (modifier === undefined) continue;
+    for (const [parameterName, value] of Object.entries(
+      modifier.parameterOverrides,
+    )) {
+      if (value !== undefined) recordValue(parameterName, value);
+    }
+    if (modifier.headingSourceOverride !== undefined) {
+      recordValue("headingSourceOverride", modifier.headingSourceOverride);
+    }
+    if (modifier.reverseHeadingPolicyOverride !== undefined) {
+      recordValue(
+        "reverseHeadingPolicyOverride",
+        modifier.reverseHeadingPolicyOverride,
+      );
+    }
+    if (modifier.recenterModeOverride !== undefined) {
+      recordValue("recenterModeOverride", modifier.recenterModeOverride);
+    }
+  }
+  return [...conflicts].sort(compareCodeUnits);
+}
+
+export function admitCameraContextProfileV1(
+  cameraContextProfile: CameraContextProfileV1,
+): CameraAdmissionResultV1 {
+  const diagnostics: CameraDiagnosticV1[] = [];
+  const expectedParameterNames = [...CAMERA_RIG_PARAMETER_NAMES_V1]
+    .sort(compareCodeUnits);
+  const rigProfileRefs = new Set(
+    cameraContextProfile.cameraRigProfiles.map(
+      (profile) => profile.cameraRigProfileRef,
+    ),
+  );
+  const modifierProfileRefs = new Set(
+    cameraContextProfile.cameraModifierProfiles.map(
+      (profile) => profile.cameraModifierProfileRef,
+    ),
+  );
+
+  for (const resourceRef of duplicatedValues(
+    cameraContextProfile.cameraRigProfiles.map(
+      (profile) => profile.cameraRigProfileRef,
+    ),
+  ).sort(compareCodeUnits)) {
+    diagnostics.push(diagnostic(
+      cameraContextProfile,
+      "CAMERA_PROFILE_INVALID",
+      `Camera Rig Profile Ref '${resourceRef}' is not unique.`,
+      { resourceRef },
+    ));
+  }
+  for (const resourceRef of duplicatedValues(
+    cameraContextProfile.cameraModifierProfiles.map(
+      (profile) => profile.cameraModifierProfileRef,
+    ),
+  ).sort(compareCodeUnits)) {
+    diagnostics.push(diagnostic(
+      cameraContextProfile,
+      "CAMERA_PROFILE_INVALID",
+      `Camera Modifier Profile Ref '${resourceRef}' is not unique.`,
+      { resourceRef },
+    ));
+  }
+  for (const profile of cameraContextProfile.cameraRigProfiles) {
+    const actualParameterNames = Object.keys(profile.parameters)
+      .sort(compareCodeUnits);
+    const hasExactParameterNames =
+      actualParameterNames.length === expectedParameterNames.length &&
+      actualParameterNames.every(
+        (name, index) => name === expectedParameterNames[index],
+      );
+    const hasOnlyFiniteValues = Object.values(profile.parameters)
+      .every((value) => typeof value === "number" && Number.isFinite(value));
+    if (hasExactParameterNames && hasOnlyFiniteValues) continue;
+    diagnostics.push(diagnostic(
+      cameraContextProfile,
+      "CAMERA_PROFILE_INVALID",
+      `Camera Rig Profile '${profile.cameraRigProfileRef}' must provide exactly the closed finite Camera parameter vocabulary.`,
+      { resourceRef: profile.cameraRigProfileRef },
+    ));
+  }
+  const allowedParameterNames = new Set<string>(CAMERA_RIG_PARAMETER_NAMES_V1);
+  for (const profile of cameraContextProfile.cameraModifierProfiles) {
+    const overrides = Object.entries(profile.parameterOverrides);
+    if (overrides.every(([name, value]) =>
+      allowedParameterNames.has(name) &&
+      typeof value === "number" &&
+      Number.isFinite(value)
+    )) continue;
+    diagnostics.push(diagnostic(
+      cameraContextProfile,
+      "CAMERA_PROFILE_INVALID",
+      `Camera Modifier Profile '${profile.cameraModifierProfileRef}' contains an unknown or non-finite Camera parameter override.`,
+      { resourceRef: profile.cameraModifierProfileRef },
+    ));
+  }
+
+  if (!rigProfileRefs.has(cameraContextProfile.defaultCameraRigProfileRef)) {
+    diagnostics.push(diagnostic(
+      cameraContextProfile,
+      "CAMERA_RESOURCE_NOT_LOCKED",
+      `Default Camera Rig Profile '${cameraContextProfile.defaultCameraRigProfileRef}' is not available.`,
+      { resourceRef: cameraContextProfile.defaultCameraRigProfileRef },
+    ));
+  }
+  if (
+    cameraContextProfile.firstPersonCameraRigProfileRef !== undefined &&
+    !rigProfileRefs.has(cameraContextProfile.firstPersonCameraRigProfileRef)
+  ) {
+    diagnostics.push(diagnostic(
+      cameraContextProfile,
+      "CAMERA_RESOURCE_NOT_LOCKED",
+      `First-person Camera Rig Profile '${cameraContextProfile.firstPersonCameraRigProfileRef}' is not available.`,
+      { resourceRef: cameraContextProfile.firstPersonCameraRigProfileRef },
+    ));
+  }
+
+  const duplicateRuleIds = duplicatedValues(
+    cameraContextProfile.rules.map((rule) => rule.id),
+  ).sort(compareCodeUnits);
+  const duplicatePriorities = duplicatedValues(
+    cameraContextProfile.rules.map((rule) => rule.priority),
+  ).sort((left, right) => right - left);
+  for (const ruleId of duplicateRuleIds) {
+    diagnostics.push(diagnostic(
+      cameraContextProfile,
+      "CAMERA_CONTEXT_RULE_AMBIGUOUS",
+      `Camera Context Rule id '${ruleId}' is not unique.`,
+      { cameraContextRuleId: ruleId },
+    ));
+  }
+  for (const priority of duplicatePriorities) {
+    diagnostics.push(diagnostic(
+      cameraContextProfile,
+      "CAMERA_CONTEXT_RULE_AMBIGUOUS",
+      `Camera Context Rule priority '${priority}' is not unique.`,
+    ));
+  }
+
+  for (const rule of sortedRules(cameraContextProfile.rules)) {
+    if (
+      rule.cameraRigProfileRef !== undefined &&
+      !rigProfileRefs.has(rule.cameraRigProfileRef)
+    ) {
+      diagnostics.push(diagnostic(
+        cameraContextProfile,
+        "CAMERA_RESOURCE_NOT_LOCKED",
+        `Camera Rig Profile '${rule.cameraRigProfileRef}' used by Rule '${rule.id}' is not available.`,
+        { cameraContextRuleId: rule.id, resourceRef: rule.cameraRigProfileRef },
+      ));
+    }
+    for (const modifierRef of rule.cameraModifierRefs ?? []) {
+      if (modifierProfileRefs.has(modifierRef)) continue;
+      diagnostics.push(diagnostic(
+        cameraContextProfile,
+        "CAMERA_RESOURCE_NOT_LOCKED",
+        `Camera Modifier Profile '${modifierRef}' used by Rule '${rule.id}' is not available.`,
+        { cameraContextRuleId: rule.id, resourceRef: modifierRef },
+      ));
+    }
+    const conflictingFields = conflictingModifierFields(
+      cameraContextProfile,
+      rule,
+    );
+    if (conflictingFields.length > 0) {
+      diagnostics.push(diagnostic(
+        cameraContextProfile,
+        "CAMERA_CONTEXT_RULE_AMBIGUOUS",
+        `Camera Context Rule '${rule.id}' has conflicting Modifier values for: ${conflictingFields.join(", ")}.`,
+        { cameraContextRuleId: rule.id },
+      ));
+    }
+
+    const emptyConditions = emptyConditionNames(rule);
+    if (emptyConditions.length > 0) {
+      diagnostics.push(diagnostic(
+        cameraContextProfile,
+        "CAMERA_CONTEXT_RULE_INVALID",
+        `Camera Context Rule '${rule.id}' has empty conditions: ${emptyConditions.join(", ")}.`,
+        { cameraContextRuleId: rule.id },
+      ));
+    }
+    if (
+      rule.cameraRigProfileRef === undefined &&
+      (rule.cameraModifierRefs === undefined || rule.cameraModifierRefs.length === 0)
+    ) {
+      diagnostics.push(diagnostic(
+        cameraContextProfile,
+        "CAMERA_CONTEXT_RULE_INVALID",
+        `Camera Context Rule '${rule.id}' does not select a Rig or Modifier.`,
+        { cameraContextRuleId: rule.id },
+      ));
+    }
+    if (!Number.isSafeInteger(rule.priority)) {
+      diagnostics.push(diagnostic(
+        cameraContextProfile,
+        "CAMERA_CONTEXT_RULE_INVALID",
+        `Camera Context Rule '${rule.id}' priority must be a finite safe integer.`,
+        { cameraContextRuleId: rule.id },
+      ));
+    }
+  }
+
+  return diagnostics.length === 0 ? { ok: true } : { ok: false, diagnostics };
+}
+
+export function admitCameraViewPreferenceV1(
+  cameraContextProfile: CameraContextProfileV1,
+  cameraViewPreference: CameraViewPreferenceV1,
+): CameraViewPreferenceAdmissionResultV1 {
+  const contextAdmission = admitCameraContextProfileV1(cameraContextProfile);
+  if (!contextAdmission.ok) return contextAdmission;
+  if (
+    cameraViewPreference.mode === "first-person" &&
+    cameraContextProfile.firstPersonCameraRigProfileRef === undefined
+  ) {
+    return {
+      ok: false,
+      diagnostics: [diagnostic(
+        cameraContextProfile,
+        "CAMERA_FIRST_PERSON_UNAVAILABLE",
+        "The current Camera Context does not provide a first-person Camera Rig Profile.",
+      )],
+    };
+  }
+  if (
+    cameraViewPreference.mode === "camera-rig-profile" &&
+    !allowedCameraRigProfileRefs(cameraContextProfile).has(
+      cameraViewPreference.cameraRigProfileRef,
+    )
+  ) {
+    return {
+      ok: false,
+      diagnostics: [diagnostic(
+        cameraContextProfile,
+        "CAMERA_PREFERENCE_NOT_ALLOWED",
+        `Camera Rig Profile '${cameraViewPreference.cameraRigProfileRef}' is not allowed by the current Camera Context.`,
+        { resourceRef: cameraViewPreference.cameraRigProfileRef },
+      )],
+    };
+  }
+  return { ok: true, cameraViewPreference };
+}
+
+function relationshipConditionMatches(
+  condition: CameraRelationshipConditionV1,
+  sample: CameraContextSampleV1,
+): boolean {
+  const relevantEntityIds = new Set([
+    sample.controlledEntityId,
+    sample.targetEntityId,
+  ]);
+  return sample.relationshipContexts.some((relationship) => {
+    if (relationship.type !== condition.type) return false;
+    switch (relationship.type) {
+      case "possessedBy":
+        return relevantEntityIds.has(
+          condition.entityRole === "controlled"
+            ? relationship.controlledEntityId
+            : relationship.controllerEntityId,
+        );
+      case "mountedOn":
+        return relevantEntityIds.has(
+          condition.entityRole === "rider"
+            ? relationship.riderEntityId
+            : relationship.mountEntityId,
+        );
+      case "equippedAt":
+        return relevantEntityIds.has(
+          condition.entityRole === "item"
+            ? relationship.itemEntityId
+            : relationship.wearerEntityId,
+        );
+    }
+  });
+}
+
+function ruleExplain(
+  rule: CameraContextRuleV2,
+  sample: CameraContextSampleV1,
+): CameraContextRuleExplainV1 {
+  const unmatchedReasons: string[] = [];
+  if (
+    rule.when.allRelationshipConditions?.some(
+      (condition) => !relationshipConditionMatches(condition, sample),
+    )
+  ) unmatchedReasons.push("relationship-condition-not-met");
+  if (
+    rule.when.motionProfileRefs !== undefined &&
+    !rule.when.motionProfileRefs.includes(sample.activeMotionProfileRef)
+  ) unmatchedReasons.push("motion-profile-not-matched");
+  if (
+    rule.when.motionKernelRefs !== undefined &&
+    !rule.when.motionKernelRefs.includes(sample.activeMotionKernelRef)
+  ) unmatchedReasons.push("motion-kernel-not-matched");
+  if (
+    rule.when.movementMediums !== undefined &&
+    !rule.when.movementMediums.includes(sample.movementMedium)
+  ) unmatchedReasons.push("movement-medium-not-matched");
+  if (
+    rule.when.requiredActiveActionRefs?.some(
+      (actionRef) => !sample.activeActionRefs.includes(actionRef),
+    )
+  ) unmatchedReasons.push("required-action-not-active");
+
+  const [velocityX, velocityY, velocityZ] =
+    sample.velocityMetersPerSecondXYZ;
+  const speedMetersPerSecond = Math.hypot(velocityX, velocityY, velocityZ);
+  if (
+    rule.when.minimumSpeedMetersPerSecond !== undefined &&
+    speedMetersPerSecond < rule.when.minimumSpeedMetersPerSecond
+  ) unmatchedReasons.push("minimum-speed-not-met");
+  if (
+    rule.when.maximumSpeedMetersPerSecond !== undefined &&
+    speedMetersPerSecond > rule.when.maximumSpeedMetersPerSecond
+  ) unmatchedReasons.push("maximum-speed-exceeded");
+  if (
+    rule.when.requiredSocketIds?.some(
+      (socketId) => !Object.hasOwn(sample.socketPositionsMetersXYZById, socketId),
+    )
+  ) unmatchedReasons.push("required-socket-unavailable");
+  if (
+    rule.when.requiredCameraContextTags?.some(
+      (tag) => !sample.cameraContextTags.includes(tag),
+    )
+  ) unmatchedReasons.push("required-camera-context-tag-missing");
+
+  return {
+    cameraContextRuleId: rule.id,
+    priority: rule.priority,
+    matched: unmatchedReasons.length === 0,
+    unmatchedReasons,
+  };
+}
+
+function appliedModifierRefs(
+  matchedRules: readonly CameraContextRuleV2[],
+): readonly string[] {
+  const highestPriorityUseByRef = new Map<
+    string,
+    { priority: number; ruleId: string; modifierIndex: number }
+  >();
+  for (const rule of matchedRules) {
+    (rule.cameraModifierRefs ?? []).forEach((resourceRef, modifierIndex) => {
+      if (highestPriorityUseByRef.has(resourceRef)) return;
+      highestPriorityUseByRef.set(resourceRef, {
+        priority: rule.priority,
+        ruleId: rule.id,
+        modifierIndex,
+      });
+    });
+  }
+  return [...highestPriorityUseByRef.entries()]
+    .sort((left, right) =>
+      left[1].priority - right[1].priority ||
+      compareCodeUnits(left[1].ruleId, right[1].ruleId) ||
+      left[1].modifierIndex - right[1].modifierIndex ||
+      compareCodeUnits(left[0], right[0])
+    )
+    .map(([resourceRef]) => resourceRef);
+}
+
+export function selectCameraViewV1(
+  input: CameraSelectionInputV1,
+): CameraSelectionResultV1 {
+  const admission = admitCameraContextProfileV1(input.cameraContextProfile);
+  if (!admission.ok) return admission;
+
+  const rules = sortedRules(input.cameraContextProfile.rules);
+  const cameraContextRules = rules.map((rule) =>
+    ruleExplain(rule, input.cameraContextSample)
+  );
+  const matchedRuleIds = new Set(
+    cameraContextRules
+      .filter((candidate) => candidate.matched)
+      .map((candidate) => candidate.cameraContextRuleId),
+  );
+  const matchedRules = rules.filter((rule) => matchedRuleIds.has(rule.id));
+  const diagnostics: CameraDiagnosticV1[] = [];
+  let fallbackActive = false;
+  let activeCameraRigProfileRef: string;
+
+  switch (input.cameraViewPreference.mode) {
+    case "auto":
+      activeCameraRigProfileRef = matchedRules.find(
+        (rule) => rule.cameraRigProfileRef !== undefined,
+      )?.cameraRigProfileRef ??
+        input.cameraContextProfile.defaultCameraRigProfileRef;
+      break;
+    case "first-person":
+      if (input.cameraContextProfile.firstPersonCameraRigProfileRef !== undefined) {
+        activeCameraRigProfileRef =
+          input.cameraContextProfile.firstPersonCameraRigProfileRef;
+      } else {
+        activeCameraRigProfileRef =
+          input.cameraContextProfile.defaultCameraRigProfileRef;
+        fallbackActive = true;
+      }
+      break;
+    case "camera-rig-profile":
+      if (
+        allowedCameraRigProfileRefs(input.cameraContextProfile).has(
+          input.cameraViewPreference.cameraRigProfileRef,
+        )
+      ) {
+        activeCameraRigProfileRef = input.cameraViewPreference.cameraRigProfileRef;
+      } else {
+        activeCameraRigProfileRef =
+          input.cameraContextProfile.defaultCameraRigProfileRef;
+        fallbackActive = true;
+      }
+      break;
+  }
+
+  if (fallbackActive) {
+    diagnostics.push(diagnostic(
+      input.cameraContextProfile,
+      "CAMERA_PREFERENCE_CONTEXT_INCOMPATIBLE",
+      "The committed Camera Context no longer supports the stored Camera View Preference; the locked default Safe View is active.",
+    ));
+  }
+
+  const activeCameraModifierRefs = appliedModifierRefs(matchedRules);
+  return {
+    ok: true,
+    decision: {
+      schemaVersion: 1,
+      simulationTick: input.cameraContextSample.simulationTick,
+      targetEntityId: input.cameraContextSample.targetEntityId,
+      activeCameraRigProfileRef,
+      activeCameraModifierRefs,
+      matchedCameraContextRuleIds: matchedRules.map((rule) => rule.id),
+      cameraViewPreference: input.cameraViewPreference,
+      fallbackActive,
+      diagnostics,
+      explain: {
+        cameraViewPreference: input.cameraViewPreference,
+        cameraContextRules,
+        selectedCameraRigProfileRef: activeCameraRigProfileRef,
+        appliedCameraModifierRefs: activeCameraModifierRefs,
+        fallbackActive,
+      },
+    },
+  };
+}

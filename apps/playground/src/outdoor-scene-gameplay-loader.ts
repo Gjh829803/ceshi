@@ -10,6 +10,7 @@ import type {
   ExecutionPlanV5,
 } from "@whitebox-world/runtime-contracts";
 import type { RuntimeWorldConfigurationV1 } from "@whitebox-world/runtime-host";
+import { Matrix, Quaternion, Vector3 } from "@babylonjs/core/Maths/math.vector.js";
 import {
   SceneCompilationError,
   compileOutdoorScene,
@@ -25,7 +26,6 @@ import {
   type TrackedWorldResource,
   type WaterSurfaceDescriptor,
 } from "@whitebox-world/world";
-import { Euler, Matrix4, Quaternion, Vector3 } from "three";
 import { isNil } from "lodash-es";
 
 import {
@@ -387,30 +387,46 @@ function prototypeId(entityId: string): string {
   return `proto.${stableSuffix(entityId, 24)}`;
 }
 
-function localMatrix(descriptor: LandmarkDescriptor): Matrix4 {
-  const position = new Vector3(...descriptor.transform.position);
-  const quaternion = new Quaternion().setFromEuler(
-    new Euler(...descriptor.transform.rotation, "XYZ"),
+function legacyXyzQuaternion(
+  rotation: readonly [number, number, number],
+): Quaternion {
+  const [rotationX, rotationY, rotationZ] = rotation;
+  const cosX = Math.cos(rotationX / 2);
+  const cosY = Math.cos(rotationY / 2);
+  const cosZ = Math.cos(rotationZ / 2);
+  const sinX = Math.sin(rotationX / 2);
+  const sinY = Math.sin(rotationY / 2);
+  const sinZ = Math.sin(rotationZ / 2);
+  return new Quaternion(
+    sinX * cosY * cosZ + cosX * sinY * sinZ,
+    cosX * sinY * cosZ - sinX * cosY * sinZ,
+    cosX * cosY * sinZ + sinX * sinY * cosZ,
+    cosX * cosY * cosZ - sinX * sinY * sinZ,
   );
-  const scale = new Vector3(...descriptor.transform.scale);
+}
+
+function localMatrix(transform: LandmarkDescriptor["transform"]): Matrix {
+  const position = new Vector3(...transform.position);
+  const quaternion = legacyXyzQuaternion(transform.rotation);
+  const scale = new Vector3(...transform.scale);
   if (
-    !position.toArray().every(Number.isFinite) ||
-    !quaternion.toArray().every(Number.isFinite) ||
-    !scale.toArray().every((value) => Number.isFinite(value) && value > 0)
+    !position.asArray().every(Number.isFinite) ||
+    !quaternion.asArray().every(Number.isFinite) ||
+    !scale.asArray().every((value) => Number.isFinite(value) && value > 0)
   ) {
     throw new OutdoorSceneImportError(
       "OUTDOOR_SCENE_IMPORT_TRANSFORM_INVALID",
       "Landmark transforms require finite coordinates and positive scale.",
     );
   }
-  return new Matrix4().compose(position, quaternion, scale);
+  return Matrix.Compose(scale, quaternion, position);
 }
 
 function normalizedZero(value: number): number {
   return Math.abs(value) < 1e-12 ? 0 : value;
 }
 
-function executionTransform(matrix: Matrix4): Readonly<{
+function executionTransform(matrix: Matrix): Readonly<{
   positionMetersXYZ: readonly [number, number, number];
   rotationEulerRadiansXYZ: readonly [number, number, number];
   scaleXYZ: readonly [number, number, number];
@@ -418,21 +434,22 @@ function executionTransform(matrix: Matrix4): Readonly<{
   const position = new Vector3();
   const quaternion = new Quaternion();
   const scale = new Vector3();
-  matrix.decompose(position, quaternion, scale);
+  const decomposed = matrix.decompose(scale, quaternion, position);
   if (
-    !position.toArray().every(Number.isFinite) ||
-    !quaternion.toArray().every(Number.isFinite) ||
-    !scale.toArray().every((value) => Number.isFinite(value) && value > 0)
+    !decomposed ||
+    !position.asArray().every(Number.isFinite) ||
+    !quaternion.asArray().every(Number.isFinite) ||
+    !scale.asArray().every((value) => Number.isFinite(value) && value > 0)
   ) {
     throw new OutdoorSceneImportError(
       "OUTDOOR_SCENE_IMPORT_TRANSFORM_INVALID",
       "A flattened landmark transform is not a finite positive TRS transform.",
     );
   }
-  const recomposed = new Matrix4().compose(position, quaternion, scale);
+  const recomposed = Matrix.Compose(scale, quaternion, position);
   if (
-    matrix.elements.some(
-      (value, index) => Math.abs(value - recomposed.elements[index]!) > 1e-7,
+    Array.from(matrix.m).some(
+      (value, index) => Math.abs(value - recomposed.m[index]!) > 1e-6,
     )
   ) {
     throw new OutdoorSceneImportError(
@@ -440,16 +457,26 @@ function executionTransform(matrix: Matrix4): Readonly<{
       "A nested landmark transform contains shear that ExecutionPlan TRS cannot represent.",
     );
   }
-  const babylonEuler = new Euler().setFromQuaternion(quaternion, "YXZ");
+  const babylonEuler = quaternion.toEulerAngles();
   return {
-    positionMetersXYZ: position.toArray().map(normalizedZero) as [number, number, number],
+    positionMetersXYZ: position.asArray().map(normalizedZero) as [number, number, number],
     rotationEulerRadiansXYZ: [
       normalizedZero(babylonEuler.x),
       normalizedZero(babylonEuler.y),
       normalizedZero(babylonEuler.z),
     ],
-    scaleXYZ: scale.toArray().map(normalizedZero) as [number, number, number],
+    scaleXYZ: scale.asArray().map(normalizedZero) as [number, number, number],
   };
+}
+
+export function projectOutdoorLandmarkTransformV1(
+  transforms: readonly LandmarkDescriptor["transform"][],
+): ReturnType<typeof executionTransform> {
+  const matrix = transforms.reduce(
+    (parentMatrix, transform) => localMatrix(transform).multiply(parentMatrix),
+    Matrix.Identity(),
+  );
+  return executionTransform(matrix);
 }
 
 function primitivePrototype(
@@ -504,13 +531,13 @@ function flattenLandmark(
   const result: FlattenedLandmarkPrimitiveV1[] = [];
   const visit = (
     current: LandmarkDescriptor,
-    parentMatrix: Matrix4,
+    parentMatrix: Matrix,
     path: readonly string[],
     inheritedSemanticClassId: string,
   ): void => {
     const segment = `${safeIdToken(current.id ?? current.kind)}-${String(path.length + 1).padStart(3, "0")}`;
     const currentPath = [...path, segment];
-    const worldMatrix = parentMatrix.clone().multiply(localMatrix(current));
+    const worldMatrix = localMatrix(current.transform).multiply(parentMatrix);
     const semanticClassId =
       current.appearance?.semantic.trim() || inheritedSemanticClassId;
     if (current.kind === "compound") {
@@ -542,7 +569,7 @@ function flattenLandmark(
   };
   visit(
     descriptor,
-    new Matrix4().identity(),
+    Matrix.Identity(),
     [],
     `landmark.${safeIdToken(ownerFeatureId)}`,
   );

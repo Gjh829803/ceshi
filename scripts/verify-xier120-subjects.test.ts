@@ -8,6 +8,7 @@ const SUBJECT_DEFINITION_REF =
 const SUBJECT_ASSET_REF = "worldkit://subject-asset/xier120.biped-animal@1";
 const COLLIDER_PROFILE_REF =
   "worldkit://collider-profile/xier120.biped-animal@1";
+const REPOSITORY_ROOT_PATH = fileURLToPath(new URL("../", import.meta.url));
 const ASSET_URL = new URL(
   "../apps/playground/public/subject-assets/xier120/biped-animal/v1/biped-animal.glb",
   import.meta.url,
@@ -18,6 +19,9 @@ const AUTHORING_SOURCE_URL = new URL(
 );
 
 interface VerifierModule {
+  verifyXier120Subjects(input: {
+    repositoryRootPath: string;
+  }): Promise<unknown>;
   verifyXier120SubjectActualUse(input: {
     authoringSourceText: string;
     subjectDefinitionRef: string;
@@ -33,6 +37,29 @@ async function loadVerifier(): Promise<VerifierModule> {
 }
 
 describe("xier120 actual-use verifier", () => {
+  it("admits all 19 committed GLBs without relying on a repository bake step", async () => {
+    const { verifyXier120Subjects } = await loadVerifier();
+
+    await expect(
+      verifyXier120Subjects({ repositoryRootPath: REPOSITORY_ROOT_PATH }),
+    ).resolves.toMatchObject({
+      sourceHashMatchCount: 19,
+      committedGlbHashMatchCount: 19,
+      admittedGlbCount: 19,
+      subjectCount: 19,
+      results: expect.arrayContaining([
+        expect.objectContaining({
+          subjectDefinitionRef: SUBJECT_DEFINITION_REF,
+          subjectAssetRef: SUBJECT_ASSET_REF,
+          cacheResolveCount: 1,
+          instanceCount: 2,
+          disposedInstanceCount: 2,
+          cacheDisposed: true,
+        }),
+      ]),
+    });
+  }, 30_000);
+
   it("reports the real Registry, Compiler, and two-instance lifecycle closure", async () => {
     const [{ verifyXier120SubjectActualUse }, authoringSourceText, assetBytes] =
       await Promise.all([

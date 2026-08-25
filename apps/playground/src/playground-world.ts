@@ -130,7 +130,7 @@ export interface PlaygroundWorldAdapter {
  *
  * This boundary intentionally excludes Gameplay control, fixed simulation,
  * snapshots, and subscriptions. Canonical Runtime/Browser ownership belongs to
- * the Gameplay host, never to the legacy Three.js artifact renderer.
+ * the Gameplay host, never to an artifact-only rendering surface.
  */
 export interface PlaygroundArtifactRenderer {
   readonly name: string;
