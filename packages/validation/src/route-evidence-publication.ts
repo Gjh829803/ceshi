@@ -531,6 +531,8 @@ export function createWorldkitBrowserRouteEvidencePublicationV2(
       subject: snapshot.subject,
       dependencyReportRefs: snapshot.validationReport.dependencyReportRefs,
       validationProfile: OUTDOOR_WORLD_PACKAGE_DEV_VALIDATION_PROFILE_V2,
+      requiredRoutes:
+        snapshot.validationReport.routeValidationSetReceipt.requiredRoutes,
       rows: snapshot.rows.map(({ validationRow }) => validationRow),
     });
     requireEqual(snapshot.validationReport, rebuiltReport);

@@ -85,6 +85,7 @@ async function createStrictValidationReportV2File(): Promise<{
       layoutSolveReportHash: HASH_C,
     },
     validationProfile: OUTDOOR_WORLD_PACKAGE_DEV_VALIDATION_PROFILE_V2,
+    requiredRoutes: [],
     rows: [],
   });
   const reportPath = path.join(parentDirectory, "route-validation-report.json");

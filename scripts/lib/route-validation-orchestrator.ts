@@ -901,6 +901,13 @@ export async function orchestrateRouteValidationV1(
       subject: input.subject,
       dependencyReportRefs: input.dependencyReportRefs,
       validationProfile: OUTDOOR_WORLD_PACKAGE_DEV_VALIDATION_PROFILE_V2,
+      requiredRoutes: requirements.map((requirement) => ({
+        constraintId: requirement.constraintId,
+        routeId: requirement.routeId,
+        traversingEntityId: requirement.traversingEntityId,
+        startAnchorEntityId: requirement.startAnchorEntityId,
+        destinationAnchorEntityId: requirement.destinationAnchorEntityId,
+      })),
       rows: Object.freeze(rows),
     }),
     input,
