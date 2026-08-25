@@ -26,7 +26,11 @@ import {
   explainSubjectFile,
   type SubjectExplanationSuccessV1,
 } from "./lib/subject-explain";
-import { promoteArtifactDirectory } from "./lib/artifact-directory-promotion";
+import {
+  finalizeArtifactDirectory,
+  parseArtifactPublicationMode,
+  type ArtifactPublicationMode,
+} from "./lib/artifact-directory-promotion";
 import { launchChromiumWithSystemFallback } from "./lib/playwright-browser-launch";
 import {
   analyzeSubjectPoseCrop,
@@ -870,30 +874,35 @@ async function writeVerification(
   await writeFile(paths.verification, `${stringifyCanonicalJson(verification)}\n`);
 }
 
-async function run(): Promise<void> {
+async function run(publicationMode: ArtifactPublicationMode): Promise<void> {
   const temporaryDirectory = await mkdtemp(
     path.join(path.dirname(TARGET_ARTIFACT_DIRECTORY), ".rigged-subject-world.tmp-"),
   );
   const paths = pathsFor(temporaryDirectory);
-  let promoted = false;
   try {
     const artifact = await runCliGates(paths);
     const browser = await verifyBrowser(paths, artifact);
     await writeVerification(paths, artifact, browser);
-    const promotion = await promoteArtifactDirectory({
+    const publication = await finalizeArtifactDirectory({
+      mode: publicationMode,
       temporaryDirectory,
       targetDirectory: TARGET_ARTIFACT_DIRECTORY,
       expectedFilenames: ARTIFACT_FILES,
     });
-    promoted = true;
-    if (promotion.backupGarbageCollection === "deferred") {
+    if (
+      publication.publicationMode === "update" &&
+      publication.backupGarbageCollection === "deferred"
+    ) {
       process.stderr.write(
-        `Rigged artifact backup GC deferred at '${promotion.deferredBackupDirectory}'.\n`,
+        `Rigged artifact backup GC deferred at '${publication.deferredBackupDirectory}'.\n`,
       );
     }
     process.stdout.write(`${JSON.stringify({
       ok: true,
-      artifacts: TARGET_ARTIFACT_DIRECTORY,
+      publicationMode: publication.publicationMode,
+      artifacts: publication.publicationMode === "update"
+        ? TARGET_ARTIFACT_DIRECTORY
+        : null,
       hashes: {
         normalizedWorldIr: artifact.normalizedWorldIrHash,
         executionPlan: artifact.executionPlanHash,
@@ -906,12 +915,12 @@ async function run(): Promise<void> {
       tamper: browser.tamper,
     }, null, 2)}\n`);
   } finally {
-    if (!promoted) await rm(temporaryDirectory, { recursive: true, force: true });
+    await rm(temporaryDirectory, { recursive: true, force: true });
   }
 }
 
 try {
-  await run();
+  await run(parseArtifactPublicationMode(process.argv.slice(2)));
 } catch (error) {
   const code = error instanceof PlaywrightBrowserUnavailableError ? error.code : undefined;
   process.stderr.write(`${JSON.stringify({

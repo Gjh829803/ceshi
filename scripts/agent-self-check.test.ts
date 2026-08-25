@@ -10,6 +10,29 @@ function run(command: string, arguments_: readonly string[]) {
 }
 
 describe("single-job Planner and Builder self-check bundles", () => {
+  it("builds the Builder bundle into explicit temporary output without changing tracked bytes", async () => {
+    const root = await mkdtemp(path.join(tmpdir(), "worldkit-builder-bundle-"));
+    const trackedBundlePath = path.resolve(
+      ".codex/skills/worldkit-canonical-builder/scripts/self-check.mjs",
+    );
+    const trackedBytesBefore = await readFile(trackedBundlePath);
+    try {
+      const buildBundle = run("node", [
+        "scripts/build-agent-self-check.mjs",
+        "--out-dir",
+        root,
+      ]);
+
+      expect(buildBundle.status, buildBundle.stderr || buildBundle.stdout).toBe(0);
+      expect(await readFile(path.join(root, "self-check.mjs"))).toEqual(
+        trackedBytesBefore,
+      );
+      expect(await readFile(trackedBundlePath)).toEqual(trackedBytesBefore);
+    } finally {
+      await rm(root, { recursive: true, force: true });
+    }
+  }, 30_000);
+
   it("runs without a repository dependency graph and produces replayable receipts", async () => {
     const root = await mkdtemp(path.join(tmpdir(), "worldkit-agent-self-check-"));
     try {
@@ -73,8 +96,6 @@ describe("single-job Planner and Builder self-check bundles", () => {
       expect(planner.status, planner.stderr || planner.stdout).toBe(0);
       expect(JSON.parse(await readFile(plannerReport, "utf8"))).toMatchObject({ status: "passed" });
 
-      const buildBundle = run("node", ["scripts/build-agent-self-check.mjs"]);
-      expect(buildBundle.status, buildBundle.stderr || buildBundle.stdout).toBe(0);
       const hostReport = path.join(root, "builder-host.json");
       const agentReport = path.join(root, "builder-agent.json");
       const common = [

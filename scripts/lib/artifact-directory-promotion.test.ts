@@ -13,7 +13,11 @@ import path from "node:path";
 
 import { afterEach, describe, expect, it } from "vitest";
 
-import { promoteArtifactDirectory } from "./artifact-directory-promotion";
+import {
+  finalizeArtifactDirectory,
+  parseArtifactPublicationMode,
+  promoteArtifactDirectory,
+} from "./artifact-directory-promotion";
 
 const roots: string[] = [];
 
@@ -152,4 +156,42 @@ describe("promoteArtifactDirectory", () => {
       expect(await valueAt(target)).toBe("new");
     },
   );
+});
+
+describe("artifact publication mode", () => {
+  it("defaults to read-only check and requires an explicit update flag", () => {
+    expect(parseArtifactPublicationMode([])).toBe("check");
+    expect(parseArtifactPublicationMode(["--update"])).toBe("update");
+    expect(() => parseArtifactPublicationMode(["--write"])).toThrow(
+      /ARTIFACT_PUBLICATION_ARGUMENT_INVALID/,
+    );
+  });
+
+  it("checks exact staging inventory without replacing tracked target bytes", async () => {
+    const { target, temporary } = await fixture();
+
+    await expect(finalizeArtifactDirectory({
+      mode: "check",
+      temporaryDirectory: temporary,
+      targetDirectory: target,
+      expectedFilenames: ["value.txt"],
+    })).resolves.toEqual({ publicationMode: "check" });
+    expect(await valueAt(target)).toBe("old");
+    expect(await valueAt(temporary)).toBe("new");
+  });
+
+  it("promotes validated staging bytes only in explicit update mode", async () => {
+    const { target, temporary } = await fixture();
+
+    await expect(finalizeArtifactDirectory({
+      mode: "update",
+      temporaryDirectory: temporary,
+      targetDirectory: target,
+      expectedFilenames: ["value.txt"],
+    })).resolves.toEqual({
+      publicationMode: "update",
+      backupGarbageCollection: "complete",
+    });
+    expect(await valueAt(target)).toBe("new");
+  });
 });

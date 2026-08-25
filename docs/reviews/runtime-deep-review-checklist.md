@@ -66,21 +66,42 @@ Evidence reports must name the exact commands, test counts, artifacts inspected,
 
 ## 6. Required completion gates
 
-Run the focused reproducer first, then run each relevant full gate once on the final tree. Reuse a passing result while its inputs are unchanged; do not use a narrower alias to repeat coverage already provided by a broader command. In particular, root `pnpm test` already discovers the two files behind `pnpm test:scenes`. `pnpm test:studio` is separate because Studio uses Node's test runner, and Browser verifiers, rendered inspection, manual interaction, and production builds prove different evidence layers.
+Run the focused reproducer first, then run each relevant full gate once on the final tree. Reuse a passing result while its inputs are unchanged; do not use a narrower alias to repeat coverage already provided by a broader command. Root `pnpm test` first runs a census, then the bounded `test:contract` lane and the single-worker `test:resource-heavy` lane; together they cover every discovered Vitest `.test.ts`, including the two files behind `pnpm test:scenes`. `pnpm test:studio` is separate because Studio uses its package-owned Node runner. `pnpm test:independent` has its own fail-closed census and sequentially covers root Node `.test.mjs`, project-local Cursor Python, and the active Site. Browser verifiers, rendered inspection, manual interaction, and production builds remain different evidence layers.
 
-For changes touching the canonical Babylon runtime, select from this default closure according to the affected contracts:
+`pnpm test:contract:coverage` is an opt-in coverage diagnostic that reruns the contract lane with instrumentation. Run it only when a coverage claim or test-gap investigation requires it; do not append it to a passing root aggregate as a default duplicate gate.
+
+For changes touching the canonical Babylon runtime, select from this read-only base closure according to the affected contracts:
 
 ```bash
 pnpm typecheck
 pnpm test
 pnpm build
+```
+
+Studio and the independent Node/Python/Site gate are added only when their inputs are affected:
+
+```bash
+pnpm test:studio
+pnpm test:independent
+```
+
+The tracked CI currently combines the temporary generated Builder bundle check, typecheck, Studio, the complete independent gate, root Vitest aggregate, Playground build, and a final tracked clean-tree assertion. Treat that workflow as an explicit coverage list, not as evidence for Browser/visual/manual lanes that it does not invoke.
+
+Browser and capability verification is a separate evidence layer. The current coverage map includes:
+
+```bash
 pnpm verify:canonical
 pnpm verify:placement-layout
 pnpm verify:rigged-subject
 pnpm verify:g-bot-subject
 ```
 
-The list is a coverage map, not an instruction to rerun every command after every edit. Evidence becomes stale only when a subsequent change can affect that command's inputs or claim:
+Those four commands are read-only by default: they validate exact staging inventory and remove temporary
+evidence without replacing tracked golden directories. Artifact publication requires the corresponding explicit
+`:update` command and authorization to update evidence; reviewers must inspect any resulting diff. Whole-directory
+byte equality is not a contract for screenshots and runtime/session identities.
+
+These lists are coverage maps, not an instruction to rerun every command after every edit. Evidence becomes stale only when a subsequent change can affect that command's inputs or claim:
 
 - runtime or shared-contract changes: focused regression, `typecheck`, root `test`, `build`, and the directly affected Browser/capability verifier;
 - verifier, fixture, or capture changes: that verifier and its focused tests; add `build` only when shipped code or bundling changed;

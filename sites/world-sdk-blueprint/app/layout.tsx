@@ -15,7 +15,7 @@ const geistMono = Geist_Mono({
 export const metadata: Metadata = {
   title: "World SDK · 技术方案",
   description:
-    "两段 Agent 创造世界，World SDK 维护确定性规则，Runtime World Director 支持玩家实时用自然语言改变世界。",
+    "规划与构建 Agent 创造世界，World SDK 维护从语义输入到可观察 Runtime 的确定性规则与权威边界。",
   icons: {
     icon: "/favicon.svg",
     shortcut: "/favicon.svg",

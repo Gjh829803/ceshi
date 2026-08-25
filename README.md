@@ -400,10 +400,32 @@ Pose 配置及 Registry 锁定，才能成为可运行的主体资产。
 
 ## 验证
 
+常规只读基础门禁按受影响输入选择：
+
 ```bash
 pnpm typecheck
 pnpm test
 pnpm build
+```
+
+根 `pnpm test` 不是重复执行同一套 Vitest：它先用 `test:census` 确认每个 `.test.ts`
+恰好进入一个 lane，再运行最多两个 worker 的 `test:contract` 与单 worker 的
+`test:resource-heavy`。资源型用例不再和 contract 用例争抢浏览器、Havok/Recast 或子进程
+预算；`test:scenes` 已属于 contract lane，无需再跑一次。
+`pnpm test:contract:coverage` 是按需的覆盖率诊断，会带 coverage instrumentation 重新执行
+contract lane；只有审查覆盖率 claim 或定位测试盲区时才运行，不作为 `pnpm test` 之后的默认重复门禁。
+
+Studio 使用 package-owned Node Test Runner；其余 root Node、Cursor Python 与 Site
+suite 由 fail-closed independent census 顺序执行，均不在根 Vitest 内：
+
+```bash
+pnpm test:studio
+pnpm test:independent
+```
+
+需要证明真实 Browser/Capability 接线时，再选择直接相关的 verifier：
+
+```bash
 pnpm verify:canonical
 pnpm verify:rigged-subject
 pnpm verify:g-bot-subject
@@ -415,11 +437,19 @@ pnpm verify:route-r0-contract
 
 这是一张完整能力覆盖表，不要求每次小改都机械重跑全部命令。先跑受影响的定向回归，
 在最终待合入树上把相关完整门禁各跑一次；只要后续改动没有触及某条门禁的输入或承诺，
-它的通过证据可以复用。根 `pnpm test` 已包含 `pnpm test:scenes` 的两个 Vitest 文件，
-不要连续重复执行；`pnpm test:studio` 使用独立 Node Test Runner，需要 Studio 证据时单独跑。
+它的通过证据可以复用。Studio 与 independent tests 需要按改动范围单独跑；tracked CI 当前显式组合
+临时目录 generated bundle check、typecheck、Studio、independent Node/Python/Site、root test、
+Playground build 与最终 clean-tree assertion，但没有被 workflow 调用的证据层不能因“CI 存在”而
+视为已覆盖。
 生产构建、Browser/Capability verifier、截图检查和人工交互属于不同证据层，不能由单元
 测试替代。详细失效规则见
 [`runtime-deep-review-checklist.md`](docs/reviews/runtime-deep-review-checklist.md#6-required-completion-gates)。
+
+`verify:canonical`、`verify:placement-layout`、`verify:rigged-subject` 和
+`verify:g-bot-subject` 默认只生成临时 staging、完成真实检查后清理，不修改 tracked golden。
+只有得到更新制品授权时才运行对应的显式 `:update` 命令，例如
+`pnpm verify:canonical:update`，并审查其 artifact diff。默认 verifier 不对包含随机 Session identity
+和截图的整个目录做伪字节稳定比较。
 
 `verify:canonical` 会在真实 Chromium 中验证 Canonical Build Artifact、
 Babylon/Havok、墙体碰撞、水域切换、两个 Package Subject 独立控制、截图、
