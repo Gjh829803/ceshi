@@ -91,23 +91,23 @@ export const XIER120_SUBJECT_ASSET_PACKAGE_PATH_BY_REF_V1: Readonly<
 
 export const PLAYGROUND_SUBJECT_ASSET_URI_BY_REF_V1 = Object.freeze({
   ...XIER120_SUBJECT_ASSET_URI_BY_REF_V1,
-  "worldkit://subject-asset/actor.humanoid.g-bot@1":
-    "/subject-assets/humanoid/g-bot/v1/g-bot.glb",
-  "worldkit://subject-asset/humanoid.golden@1":
-    "/worldkit-assets/golden-humanoid.glb",
+  "worldkit://subject-asset/actor.humanoid.g-bot@2":
+    "/subject-assets/humanoid/g-bot/v2/g-bot.glb",
+  "worldkit://subject-asset/humanoid.golden@2":
+    "/subject-assets/humanoid/golden/v2/golden-humanoid.glb",
 });
 
 export const PLAYGROUND_CAPABILITY_SUBJECT_ASSET_URI_BY_REF_V1 = Object.freeze({
   ...PLAYGROUND_SUBJECT_ASSET_URI_BY_REF_V1,
-  "worldkit://subject-asset/actor.humanoid.g-bot@1":
-    "/subject-assets/humanoid/g-bot/v1/g-bot.glb",
+  "worldkit://subject-asset/actor.humanoid.g-bot@2":
+    "/subject-assets/humanoid/g-bot/v2/g-bot.glb",
 });
 
 export const PLAYGROUND_SUBJECT_ASSET_PACKAGE_PATH_BY_REF_V1 = Object.freeze({
   ...XIER120_SUBJECT_ASSET_PACKAGE_PATH_BY_REF_V1,
-  "worldkit://subject-asset/actor.humanoid.g-bot@1":
+  "worldkit://subject-asset/actor.humanoid.g-bot@2":
     "resources/subject-assets/actor.humanoid.g-bot.glb",
-  "worldkit://subject-asset/humanoid.golden@1":
+  "worldkit://subject-asset/humanoid.golden@2":
     "resources/subject-assets/humanoid.golden.glb",
 });
 

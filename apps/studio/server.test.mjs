@@ -480,8 +480,8 @@ test("proxies Playground subject assets through the Studio origin", async () => 
   const origin = await listen(studio);
   try {
     for (const assetPath of [
-      "/subject-assets/humanoid/g-bot/v1/g-bot.glb?worldkit-content-hash=test",
-      "/worldkit-assets/golden-humanoid.glb",
+      "/subject-assets/humanoid/g-bot/v2/g-bot.glb?worldkit-content-hash=test",
+      "/subject-assets/humanoid/golden/v2/golden-humanoid.glb",
     ]) {
       const response = await fetch(`${origin}${assetPath}`);
       assert.equal(response.status, 200);
@@ -489,8 +489,8 @@ test("proxies Playground subject assets through the Studio origin", async () => 
       assert.equal(await response.text(), "glb-through-playground");
     }
     assert.deepEqual(requestedUrls, [
-      "/subject-assets/humanoid/g-bot/v1/g-bot.glb?worldkit-content-hash=test",
-      "/worldkit-assets/golden-humanoid.glb",
+      "/subject-assets/humanoid/g-bot/v2/g-bot.glb?worldkit-content-hash=test",
+      "/subject-assets/humanoid/golden/v2/golden-humanoid.glb",
     ]);
   } finally {
     await studio.shutdown();

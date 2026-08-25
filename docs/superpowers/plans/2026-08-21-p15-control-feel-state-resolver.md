@@ -154,7 +154,7 @@ describe("P1.5 admission debt", () => {
 
   it("currently binds ground-water-air medium and no controlFeelProfileRef", () => {
     const subject = registry.getResource(
-      "worldkit://subject-definition/humanoid.g-bot@1",
+      "worldkit://subject-definition/humanoid.g-bot@2",
     );
     expect(subject?.kind).toBe("subject-definition");
     const profiles = (
@@ -441,7 +441,7 @@ it("replaces water medium and binds feel on G Bot and Golden", () => {
     registry.getResource("worldkit://medium-profile/ground-water-air.standard@1"),
   ).toBeUndefined();
   for (const ref of [
-    "worldkit://subject-definition/humanoid.g-bot@1",
+    "worldkit://subject-definition/humanoid.g-bot@2",
     "worldkit://subject-definition/humanoid.golden-rigged@1",
   ]) {
     const subject = registry.getResource(ref) as {
@@ -520,7 +520,7 @@ git commit -m "feat: clean-break built-in feel, medium, and locomotion catalogs"
 it("projects feel and body traversal, not locomotion speeds", () => {
   const plan = compileAuthoringSpec(
     createValidAuthoringSpec({
-      subjectDefinitionRef: "worldkit://subject-definition/humanoid.g-bot@1",
+      subjectDefinitionRef: "worldkit://subject-definition/humanoid.g-bot@2",
     }),
   );
   const player = plan.subjectsByEntityId.player;

@@ -13,7 +13,7 @@ import {
 } from "./product-asset-intake";
 
 const G_BOT_FIXTURE_PATH = fileURLToPath(
-  new URL("../../examples/product-asset-intakes/humanoid.g-bot@1.json", import.meta.url),
+  new URL("../../examples/product-asset-intakes/humanoid.g-bot@2.json", import.meta.url),
 );
 
 function validFixture(): ProductAssetIntakeFixtureV1 {
@@ -21,13 +21,13 @@ function validFixture(): ProductAssetIntakeFixtureV1 {
     schemaVersion: 1,
     kind: "product-asset-intake-fixture",
     id: "humanoid.g-bot",
-    subjectDefinitionRef: "worldkit://subject-definition/humanoid.g-bot@1",
-    subjectAssetRef: "worldkit://subject-asset/actor.humanoid.g-bot@1",
-    rigProfileRef: "worldkit://rig-profile/biped.mixamo-g-bot@1",
-    animationSetRef: "worldkit://animation-set/humanoid.ground.g-bot@1",
+    subjectDefinitionRef: "worldkit://subject-definition/humanoid.g-bot@2",
+    subjectAssetRef: "worldkit://subject-asset/actor.humanoid.g-bot@2",
+    rigProfileRef: "worldkit://rig-profile/biped.mixamo-g-bot@2",
+    animationSetRef: "worldkit://animation-set/humanoid.ground.g-bot@2",
     colliderProfileRef: "worldkit://collider-profile/humanoid.g-bot-capsule@1",
-    hostPublicUri: "/subject-assets/humanoid/g-bot/v1/g-bot.glb",
-    glbRepositoryPath: "apps/playground/public/subject-assets/humanoid/g-bot/v1/g-bot.glb",
+    hostPublicUri: "/subject-assets/humanoid/g-bot/v2/g-bot.glb",
+    glbRepositoryPath: "apps/playground/public/subject-assets/humanoid/g-bot/v2/g-bot.glb",
     productAssetManifestPath: "assets/subjects/humanoid/g-bot/asset.manifest.json",
     productActionManifestPath: "assets/subjects/humanoid/g-bot/action-manifest.json",
     authoringWorldPath: "examples/authoring/g-bot-subject-world.json",
@@ -95,7 +95,7 @@ describe("product asset intake fixture", () => {
     })).toThrowError("PRODUCT_ASSET_INTAKE_FIELD_UNKNOWN");
     expect(() => parseProductAssetIntakeFixtureV1({
       ...validFixture(),
-      rigProfileRef: "worldkit://subject-asset/actor.humanoid.g-bot@1",
+      rigProfileRef: "worldkit://subject-asset/actor.humanoid.g-bot@2",
     })).toThrowError("PRODUCT_ASSET_INTAKE_REF_INVALID");
   });
 
@@ -106,7 +106,7 @@ describe("product asset intake fixture", () => {
     })).not.toThrow();
     expect(() => assertProductAssetIntakeBindingsV1({
       ...validFixture(),
-      rigProfileRef: "worldkit://rig-profile/biped.golden@1",
+      rigProfileRef: "worldkit://rig-profile/biped.golden@2",
     }, {
       registry: builtInSubjectResourceRegistry,
       hostPublicUriBySubjectAssetRef: PLAYGROUND_SUBJECT_ASSET_URI_BY_REF_V1,

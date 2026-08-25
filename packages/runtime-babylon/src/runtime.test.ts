@@ -97,7 +97,7 @@ const havokWasmBinary = havokWasmBytes.buffer.slice(
 const goldenSubjectAssetBytes = new Uint8Array(
   await readFile(
     new URL(
-      "../../../apps/playground/public/worldkit-assets/golden-humanoid.glb",
+      "../../../apps/playground/public/subject-assets/humanoid/golden/v2/golden-humanoid.glb",
       import.meta.url,
     ),
   ),
@@ -106,7 +106,7 @@ const goldenSubjectAssetBytes = new Uint8Array(
 const gBotSubjectAssetBytes = new Uint8Array(
   await readFile(
     new URL(
-      "../../../apps/playground/public/subject-assets/humanoid/g-bot/v1/g-bot.glb",
+      "../../../apps/playground/public/subject-assets/humanoid/g-bot/v2/g-bot.glb",
       import.meta.url,
     ),
   ),
@@ -150,10 +150,10 @@ describe("Babylon runtime fixture compilation", () => {
 });
 
 const goldenSubjectAssetDescriptor = {
-  subjectAssetRef: "worldkit://subject-asset/humanoid.golden@1",
+  subjectAssetRef: "worldkit://subject-asset/humanoid.golden@2",
   artifactContentHash:
-    "sha256:1095fd65c754d53e6db3757ab5e1c9e5e9dcea2581f85d40f37ea4890ee8c2c2",
-  byteLength: 43_656,
+    "sha256:6cf29a2c9c024bdc108a8a436255abbb5f370d658d78cca0afb30f4872cd25a8",
+  byteLength: 48_060,
   mediaType: "model/gltf-binary",
   format: "glb",
   inventory: {
@@ -270,6 +270,7 @@ const staticSubjectAssetDescriptor = {
 } as const satisfies ExecutionSubjectAssetV1;
 
 interface MutableGlbJson {
+  extras?: Record<string, unknown>;
   buffers?: Array<Record<string, unknown>>;
   images?: Array<Record<string, unknown>>;
   scenes?: Array<{ nodes?: number[] }>;
@@ -2007,7 +2008,7 @@ describe("BabylonWorldRuntime", () => {
         ? {
             ...node,
             subjectDefinitionRef:
-              "worldkit://subject-definition/humanoid.g-bot@1",
+              "worldkit://subject-definition/humanoid.g-bot@2",
           }
         : node,
     );
@@ -4247,16 +4248,37 @@ describe("SubjectAssetCacheV1", () => {
 
   it("rejects a GLB JSON chunk padded with non-JSON NUL bytes", async () => {
     const { engine, scene } = createAssetScene();
-    const bytes = goldenSubjectAssetBytes.slice();
-    const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
+    let bytes: Uint8Array | undefined;
+    for (let probeLength = 1; probeLength <= 4; probeLength += 1) {
+      const candidate = mutateGlbJson(goldenSubjectAssetBytes, (json) => {
+        json.extras = { paddingProbe: "x".repeat(probeLength) };
+      });
+      const candidateView = new DataView(
+        candidate.buffer,
+        candidate.byteOffset,
+        candidate.byteLength,
+      );
+      const candidateJsonChunkLength = candidateView.getUint32(12, true);
+      if (candidate[20 + candidateJsonChunkLength - 1] === 0x20) {
+        bytes = candidate;
+        break;
+      }
+    }
+    expect(bytes).toBeDefined();
+    const paddedBytes = bytes!;
+    const view = new DataView(
+      paddedBytes.buffer,
+      paddedBytes.byteOffset,
+      paddedBytes.byteLength,
+    );
     const jsonChunkLength = view.getUint32(12, true);
     const finalJsonByteIndex = 20 + jsonChunkLength - 1;
-    expect(bytes[finalJsonByteIndex]).toBe(0x20);
-    bytes[finalJsonByteIndex] = 0;
-    const cache = new SubjectAssetCacheV1(scene, createMemoryResolver(bytes));
+    expect(paddedBytes[finalJsonByteIndex]).toBe(0x20);
+    paddedBytes[finalJsonByteIndex] = 0;
+    const cache = new SubjectAssetCacheV1(scene, createMemoryResolver(paddedBytes));
     const loaderCallCount = vi.mocked(LoadAssetContainerAsync).mock.calls.length;
 
-    await expect(cache.acquire(descriptorForBytes(bytes))).rejects.toThrow(
+    await expect(cache.acquire(descriptorForBytes(paddedBytes))).rejects.toThrow(
       /SUBJECT_ASSET_FORMAT_UNSUPPORTED/,
     );
     expect(LoadAssetContainerAsync).toHaveBeenCalledTimes(loaderCallCount);

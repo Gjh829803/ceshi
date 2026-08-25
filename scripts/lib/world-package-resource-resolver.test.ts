@@ -113,8 +113,8 @@ describe("resolveWorldPackageResourceArtifactsV1", () => {
     const publicRoot = await temporaryPublicRoot();
     const goldenBytes = new Uint8Array([0x67, 0x6c, 0x54, 0x46, 0x01]);
     const gBotBytes = new Uint8Array([0x67, 0x6c, 0x54, 0x46, 0x02]);
-    const goldenRef = "worldkit://subject-asset/humanoid.golden@1";
-    const gBotRef = "worldkit://subject-asset/actor.humanoid.g-bot@1";
+    const goldenRef = "worldkit://subject-asset/humanoid.golden@2";
+    const gBotRef = "worldkit://subject-asset/actor.humanoid.g-bot@2";
     await writePublicAsset(
       publicRoot,
       DEFAULT_WORLD_PACKAGE_RESOURCE_MAPPING_BY_REF_V1[goldenRef]!.publicUri,

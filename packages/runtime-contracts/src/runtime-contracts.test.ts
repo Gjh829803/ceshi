@@ -443,7 +443,7 @@ describe("runtime contracts V3", () => {
 
   it("defines minimal engine-neutral execution resource descriptors", () => {
     const subjectAsset = {
-      subjectAssetRef: "worldkit://subject-asset/humanoid.golden@1",
+      subjectAssetRef: "worldkit://subject-asset/humanoid.golden@2",
       artifactContentHash: `sha256:${"1".repeat(64)}`,
       byteLength: 43_656,
       mediaType: "model/gltf-binary",
@@ -458,7 +458,7 @@ describe("runtime contracts V3", () => {
       },
     } satisfies ExecutionSubjectAssetV1;
     const rigProfile = {
-      rigProfileRef: "worldkit://rig-profile/biped.golden@1",
+      rigProfileRef: "worldkit://rig-profile/biped.golden@2",
       bodyTopology: "biped",
       skeletonRootBoneName: "root",
       requiredBoneIds: ["hips", "hand.right"],
@@ -483,7 +483,7 @@ describe("runtime contracts V3", () => {
       },
     } satisfies ExecutionRigProfileV1;
     const animationSet = {
-      animationSetRef: "worldkit://animation-set/humanoid.ground.golden@1",
+      animationSetRef: "worldkit://animation-set/humanoid.ground.golden@2",
       subjectAssetRef: subjectAsset.subjectAssetRef,
       rigProfileRef: rigProfile.rigProfileRef,
       defaultActionId: "idle",

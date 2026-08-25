@@ -375,7 +375,7 @@ WorldPackage、Resume 与完整 Replay Gate 为完成标准。
 - [x] Golden 切片中缺少 Rig、Clip、Collider 或 Socket 时返回稳定 Diagnostic，不静默猜测。
 - [x] 把 G Bot 的 Manifest/Registry/Gate 固化为
   [`Product Asset Intake Template`](superpowers/specs/2026-08-21-product-asset-intake-template-design.md)
-  与 Fixture `examples/product-asset-intakes/humanoid.g-bot@1.json`；未接入第二个产品 GLB。
+  与 Fixture `examples/product-asset-intakes/humanoid.g-bot@2.json`；未接入第二个产品 GLB。
 
 #### P1.3 Semantic Action 与 Animation Binding
 
@@ -850,7 +850,7 @@ S1b Golden、
 1. **M1（已完成）：把 G Bot 的交付 Manifest/Registry 映射/Gate 固化为后续产品资产接入模板**
    （专项 [`product-asset-intake-template`](superpowers/specs/2026-08-21-product-asset-intake-template-design.md)，
    执行 [`product-asset-intake`](superpowers/skills/product-asset-intake.md)；G Bot Fixture
-   `examples/product-asset-intakes/humanoid.g-bot@1.json`）；
+   `examples/product-asset-intakes/humanoid.g-bot@2.json`）；
 2. **M2（已完成）：冻结 Take/Capture V1 首条实施范围**；
 3. **M3（已完成）：实现五 Pass Capture 窄纵向切片并复用 Placement World Identity/Hash**；
 4. **M4（已完成）：实现 P0.3 统一 Validation Profile/Report 的 Capture/Integrity 窄切片，把现有 Bundle Gate 纳入同一报告协议**；

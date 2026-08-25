@@ -8,7 +8,7 @@ import { inspectProductAssetEvidence } from "./product-asset-evidence";
 import { parseProductAssetIntakeFixtureV1 } from "./product-asset-intake";
 
 const G_BOT_FIXTURE_PATH = fileURLToPath(
-  new URL("../../examples/product-asset-intakes/humanoid.g-bot@1.json", import.meta.url),
+  new URL("../../examples/product-asset-intakes/humanoid.g-bot@2.json", import.meta.url),
 );
 const REPOSITORY_ROOT = fileURLToPath(new URL("../../", import.meta.url));
 
@@ -35,8 +35,8 @@ describe("product asset evidence", () => {
       schemaVersion: 1,
       subjectAssetRef: fixture.subjectAssetRef,
       artifactContentHash:
-        "sha256:41833210e735788da0777fc37badcec03f90ccf17ab5a7d89103f0727abeeb1b",
-      byteLength: 5_302_160,
+        "sha256:4bcf3fabdba1e083ef54bf172fd962ca740e0f2fabdb9cddaae45d5ea208718f",
+      byteLength: 6_743_072,
       formatVersion: "2.0",
       meshCount: 2,
       jointCount: 65,

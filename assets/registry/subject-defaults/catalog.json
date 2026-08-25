@@ -13,8 +13,8 @@
     },
     {
       "subjectDefinitionId": "humanoid.g-bot",
-      "subjectDefinitionRef": "worldkit://subject-definition/humanoid.g-bot@1",
-      "subjectDefinitionContentHash": "sha256:b6b9cc919ee4ddf5f1d0c63d093a7c26e04271e4b49cc5c6a3869e9e82f2879c"
+      "subjectDefinitionRef": "worldkit://subject-definition/humanoid.g-bot@2",
+      "subjectDefinitionContentHash": "sha256:7e56addb34e91835a229c309fd5c132ab94e895ebc529f827b47d46729d4f9c4"
     },
     {
       "subjectDefinitionId": "surface-craft.ice-skimmer",

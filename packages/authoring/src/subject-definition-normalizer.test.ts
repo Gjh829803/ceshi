@@ -29,9 +29,9 @@ import {
   createValidRiggedPackageSubjectWorld,
 } from "./test-fixture";
 
-const SUBJECT_ASSET_REF = "worldkit://subject-asset/humanoid.golden@1";
-const RIG_PROFILE_REF = "worldkit://rig-profile/biped.golden@1";
-const ANIMATION_SET_REF = "worldkit://animation-set/humanoid.ground.golden@1";
+const SUBJECT_ASSET_REF = "worldkit://subject-asset/humanoid.golden@2";
+const RIG_PROFILE_REF = "worldkit://rig-profile/biped.golden@2";
+const ANIMATION_SET_REF = "worldkit://animation-set/humanoid.ground.golden@2";
 const COLLIDER_PROFILE_REF =
   "worldkit://collider-profile/humanoid.medium-capsule@1";
 const BIPED_BONE_IDS = [
@@ -295,8 +295,8 @@ describe("Package Subject Definition normalization", () => {
         {
           subjectAssetRef: SUBJECT_ASSET_REF,
           artifactContentHash:
-            "sha256:1095fd65c754d53e6db3757ab5e1c9e5e9dcea2581f85d40f37ea4890ee8c2c2",
-          byteLength: 43_656,
+            "sha256:6cf29a2c9c024bdc108a8a436255abbb5f370d658d78cca0afb30f4872cd25a8",
+          byteLength: 48_060,
           mediaType: "model/gltf-binary",
           format: "glb",
         },
@@ -391,13 +391,13 @@ describe("Package Subject Definition normalization", () => {
 
     expect(result.ok).toBe(true);
     expect(packageDefinitionHash(result)).toBe(
-      "sha256:f1e3d29c97842b1447e93e696e83ff6df370d6409604dad43b0b485a61f58e7d",
+      "sha256:7fa027c89ef71aed6e6390293ed27a2b4757e13f0cfd0fd3c36a9a51095160f1",
     );
     expect(result.value?.resources.resourceLockHash).toBe(
-      "sha256:8d04944564bb926529d71cce1ca8fe27c59df87702ed856d23db5156d32f0dc1",
+      "sha256:4b6e32291625deebdf389da8595c887b31a2f0b4a4aa15e27d2230c8e3d4cd47",
     );
     expect(result.normalizedWorldIrHash).toBe(
-      "sha256:8491394f6d0fcff1da84a300050fe882e6e6a1ba676ed76a90a4b1464b4999a0",
+      "sha256:861e6fb644cb0ebc4fe984cd5ee7abc864b266cfaa4804a4f3f8fbab46ba83db",
     );
   });
 
@@ -516,8 +516,8 @@ describe("Package Subject Definition normalization", () => {
       subjectAssetRef: SUBJECT_ASSET_REF,
       subjectAssetManifestHash: expect.stringMatching(/^sha256:[a-f0-9]{64}$/),
       artifactContentHash:
-        "sha256:1095fd65c754d53e6db3757ab5e1c9e5e9dcea2581f85d40f37ea4890ee8c2c2",
-      byteLength: 43_656,
+        "sha256:6cf29a2c9c024bdc108a8a436255abbb5f370d658d78cca0afb30f4872cd25a8",
+      byteLength: 48_060,
       mediaType: "model/gltf-binary",
       format: "glb",
       inventory: {

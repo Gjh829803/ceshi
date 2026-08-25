@@ -32,7 +32,7 @@ function rgbaFixture(
 describe("subject pose evidence", () => {
   it("reads the walk duration and FPS from the committed GLB", async () => {
     const bytes = await readFile(fileURLToPath(new URL(
-      "../../apps/playground/public/worldkit-assets/golden-humanoid.glb",
+      "../../apps/playground/public/subject-assets/humanoid/golden/v2/golden-humanoid.glb",
       import.meta.url,
     )));
 

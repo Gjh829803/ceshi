@@ -81,7 +81,7 @@ Compiler 把同一字段当偏移：
 
 | Ref | 出处 | 实际用在 |
 |---|---|---|
-| `worldkit://subject-definition/humanoid.g-bot@1` | `built-in-subject-definitions.ts`（V2，无 `capabilityAssembly`，socket 几乎只有 `hand.right`） | `examples/authoring/g-bot-subject-world.json`、`pnpm verify:g-bot-subject` |
+| `worldkit://subject-definition/humanoid.g-bot@2` | `built-in-subject-definitions.ts`（V2，无 `capabilityAssembly`，socket 几乎只有 `hand.right`） | `examples/authoring/g-bot-subject-world.json`、`pnpm verify:g-bot-subject` |
 | `worldkit://subject-definition/humanoid.g-bot.ground@1` | `assets/registry/subject-definitions/catalog.json`（V3 + K01 + 相机 sockets） | playground 能力包、`capability-runtime.test.ts` |
 
 共用同一 GLB / Rig / AnimationSet / Capsule。改相机 socket 或 motion profile **不会**被 `verify:g-bot-subject` 挡住。这是大型项目最典型的双入口漂移。

@@ -207,13 +207,13 @@
     {
       "id": "rigged-primary",
       "kind": "subject",
-      "subjectDefinitionRef": "worldkit://subject-definition/humanoid.rigged-golden@1",
+      "subjectDefinitionRef": "worldkit://subject-definition/humanoid.rigged-golden@2",
       "spawnAnchorEntityId": "spawn-rigged-primary"
     },
     {
       "id": "rigged-secondary",
       "kind": "subject",
-      "subjectDefinitionRef": "worldkit://subject-definition/humanoid.rigged-golden@1",
+      "subjectDefinitionRef": "worldkit://subject-definition/humanoid.rigged-golden@2",
       "spawnAnchorEntityId": "spawn-rigged-secondary"
     },
     {

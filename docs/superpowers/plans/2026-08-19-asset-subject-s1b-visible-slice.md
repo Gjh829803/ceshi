@@ -210,13 +210,13 @@ export interface SubjectResourceRegistryV2 {
 ```
 
 - Built-in refs:
-  - `worldkit://subject-asset/humanoid.golden@1`
-  - `worldkit://rig-profile/biped.golden@1`
-  - `worldkit://animation-set/humanoid.ground.golden@1`
+  - `worldkit://subject-asset/humanoid.golden@2`
+  - `worldkit://rig-profile/biped.golden@2`
+  - `worldkit://animation-set/humanoid.ground.golden@2`
   - `worldkit://collider-profile/humanoid.medium-capsule@1`
 
 Task 3 consumes those four resources and produces
-`worldkit://subject-definition/humanoid.rigged-golden@1` after Registry and Authoring share
+`worldkit://subject-definition/humanoid.rigged-golden@2` after Registry and Authoring share
 the same Visual/Socket unions.
 
 - [ ] **Step 1: Add failing protocol and registry tests**
@@ -230,11 +230,11 @@ it("hashes raw bytes without canonical JSON conversion", () => {
 
 it("resolves the exact Golden asset binding graph", () => {
   const animationSet = builtInSubjectResourceRegistry.resolveAnimationSet(
-    "worldkit://animation-set/humanoid.ground.golden@1",
+    "worldkit://animation-set/humanoid.ground.golden@2",
   );
   expect(animationSet).toMatchObject({
-    subjectAssetRef: "worldkit://subject-asset/humanoid.golden@1",
-    rigProfileRef: "worldkit://rig-profile/biped.golden@1",
+    subjectAssetRef: "worldkit://subject-asset/humanoid.golden@2",
+    rigProfileRef: "worldkit://rig-profile/biped.golden@2",
     requiredActionIds: ["idle", "walk", "run", "jump"],
   });
 });
@@ -363,7 +363,7 @@ Use `oneOf` branches with `additionalProperties: false`. Asset Part requires
 
 Apply the same unions to Registry definitions in this step, add
 `visualBinding: { mode: "static" }` and `kind: "local"` to existing built-ins, then register
-`worldkit://subject-definition/humanoid.rigged-golden@1` with one Golden Asset Part, rigged
+`worldkit://subject-definition/humanoid.rigged-golden@2` with one Golden Asset Part, rigged
 Visual Binding, Bone Socket, and explicit Collider Profile.
 
 Until Task 4 adds the corresponding ExecutionPlan branches, Compiler must explicitly reject a
@@ -558,7 +558,7 @@ it("compiles one rigged Subject into ref-only visual parts and resource tables",
   expect(plan.subjects[0]?.visualParts).toEqual([
     expect.objectContaining({
       kind: "asset",
-      subjectAssetRef: "worldkit://subject-asset/humanoid.golden@1",
+      subjectAssetRef: "worldkit://subject-asset/humanoid.golden@2",
     }),
   ]);
   expect(plan.subjectAssets).toHaveLength(1);
@@ -1198,7 +1198,7 @@ export function createFetchSubjectAssetResolver(
 
 ```ts
 {
-  "worldkit://subject-asset/humanoid.golden@1":
+  "worldkit://subject-asset/humanoid.golden@2":
     "/worldkit-assets/golden-humanoid.glb"
 }
 ```
@@ -1260,7 +1260,7 @@ Browser protocol's arbitrary `Readonly<Record<string, unknown>>` diagnostics wit
 - [ ] **Step 5: Add the rigged Canonical world and Explain output**
 
 Reuse the existing terrain/wall/camera shape but spawn two instances of
-`worldkit://subject-definition/humanoid.rigged-golden@1` at two different Spawn Anchors and
+`worldkit://subject-definition/humanoid.rigged-golden@2` at two different Spawn Anchors and
 non-overlapping positions, with stable Entity IDs and Camera/startup control targeting the
 intended controlled instance. Extend lock selection so Explain
 includes the Asset, Rig, Animation Set, Collider Profile, Physics Body, Locomotion, Capability,

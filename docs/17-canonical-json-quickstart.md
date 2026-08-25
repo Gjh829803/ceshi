@@ -283,7 +283,7 @@ Normalizer 统一生成这些字段。Compiler 和 Runtime 只消费已经解析
 {
   "id": "rigged-primary",
   "kind": "subject",
-  "subjectDefinitionRef": "worldkit://subject-definition/humanoid.rigged-golden@1",
+  "subjectDefinitionRef": "worldkit://subject-definition/humanoid.rigged-golden@2",
   "spawnAnchorEntityId": "spawn-rigged-primary"
 }
 ```
@@ -509,7 +509,7 @@ Rig/Clip/Collider 绑定、四种固定 Tick 动作、双实例隔离、Havok �
 `verify:g-bot-subject` 对首个产品 G Bot 独立验证 GLB/Manifest/Registry 映射、
 65 根源 Bone、25 个源 Clip、当前四个 Semantic Action、双实例隔离、墙体碰撞和
 五张 936×596 截图。普通 JSON 示例只写
-`worldkit://subject-definition/humanoid.g-bot@1`，不写模型 URL、Mixamo Bone 或 Clip 名。
+`worldkit://subject-definition/humanoid.g-bot@2`，不写模型 URL、Mixamo Bone 或 Clip 名。
 
 `verify:placement-layout` 在真实 Chromium/Havok 中验证海湾 Fixture 的 19 条约束、
 八种 S1 Kind、Report → IR → Plan → Snapshot 一致性、Required Assertion、连续和并发

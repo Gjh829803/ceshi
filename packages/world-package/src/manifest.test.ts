@@ -43,7 +43,7 @@ function validManifest(
     },
     resources: [
       {
-        resourceRef: "worldkit://subject-asset/humanoid.golden@1",
+        resourceRef: "worldkit://subject-asset/humanoid.golden@2",
         packagePath: "resources/subject-assets/humanoid.golden.glb",
         mediaType: "model/gltf-binary",
         sizeBytes: 3,

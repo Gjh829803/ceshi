@@ -382,7 +382,7 @@ function snapshotFixture(action: "idle" | "walk" | "run" | "jump" = "idle"): Wor
             id: "rigged-primary",
             kind: "spatial-entity-state",
             entityDefinitionRef:
-              "worldkit://subject-definition/humanoid.rigged-golden@1",
+              "worldkit://subject-definition/humanoid.rigged-golden@2",
             entityDefinitionHash: `sha256:${"1".repeat(64)}`,
             semanticClassId: "subject.humanoid.player",
             lifecycleMode: "active",
@@ -1438,16 +1438,16 @@ describe("installDeferredWorldkitBrowserApi", () => {
     }) ?? [];
     expect(productionDefinitions.map((definition) => definition.resourceRef)).toEqual([
       "worldkit://subject-definition/animal.quadruped.forward-steer@2",
-      "worldkit://subject-definition/humanoid.g-bot@1",
+      "worldkit://subject-definition/humanoid.g-bot@2",
     ]);
     const gBotSummary = productionDefinitions.find(
       (definition) =>
         definition.resourceRef ===
-        "worldkit://subject-definition/humanoid.g-bot@1",
+        "worldkit://subject-definition/humanoid.g-bot@2",
     );
     expect(gBotSummary?.contentHash).toBe(
       builtInSubjectResourceRegistry.resolveSubjectDefinition(
-        "worldkit://subject-definition/humanoid.g-bot@1",
+        "worldkit://subject-definition/humanoid.g-bot@2",
       )?.contentHash,
     );
     expect(gBotSummary?.contentHash).toMatch(/^sha256:[a-f0-9]{64}$/);
@@ -1483,7 +1483,7 @@ describe("installDeferredWorldkitBrowserApi", () => {
     expect(allKernels).toHaveLength(10);
 
     const compatibleProfiles = installation.api.listCompatibleProfiles?.(
-      "worldkit://subject-definition/humanoid.g-bot@1",
+      "worldkit://subject-definition/humanoid.g-bot@2",
     ) ?? [];
     for (const profile of compatibleProfiles.filter((candidate) =>
       candidate.kind === "control-feel-profile" ||
@@ -1499,7 +1499,7 @@ describe("installDeferredWorldkitBrowserApi", () => {
 
   it("lists only G Bot's allowed Control Feels, not the whole catalog", () => {
     const listed = listSubjectPresetAuthoringProfilesV1(
-      "worldkit://subject-definition/humanoid.g-bot@1",
+      "worldkit://subject-definition/humanoid.g-bot@2",
     );
     const feelRefs = listed
       .filter((profile) => profile.kind === "control-feel-profile")
@@ -1565,10 +1565,10 @@ describe("installDeferredWorldkitBrowserApi", () => {
     await installation.initialization;
 
     expect(installation.api.validateSubjectPackage?.(
-      "worldkit://subject-definition/humanoid.g-bot@1",
+      "worldkit://subject-definition/humanoid.g-bot@2",
     )).toEqual({
       valid: true,
-      subjectDefinitionRef: "worldkit://subject-definition/humanoid.g-bot@1",
+      subjectDefinitionRef: "worldkit://subject-definition/humanoid.g-bot@2",
       diagnostics: [],
     });
   });
@@ -1587,7 +1587,7 @@ describe("installDeferredWorldkitBrowserApi", () => {
 
     expect(validateSubjectPackageAgainstRegistry(
       registry,
-      "worldkit://subject-definition/humanoid.g-bot@1",
+      "worldkit://subject-definition/humanoid.g-bot@2",
     )).toMatchObject({
       valid: false,
       diagnostics: expect.arrayContaining([
@@ -1644,7 +1644,7 @@ describe("installDeferredWorldkitBrowserApi", () => {
       statusElement,
       initialize: async () => {
         throw new SubjectAssetRuntimeErrorV1("SUBJECT_ASSET_HASH_MISMATCH", {
-          subjectAssetRef: "worldkit://subject-asset/humanoid.golden@1",
+          subjectAssetRef: "worldkit://subject-asset/humanoid.golden@2",
           artifactContentHash: `sha256:${"1".repeat(64)}`,
         });
       },

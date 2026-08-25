@@ -6,8 +6,8 @@ This is the maintained selection guide for resources usable by Canonical Authori
 
 | Intended controlled subject | Exact ref | Rendered form | Policy |
 |---|---|---|---|
-| Playable ground humanoid | `worldkit://subject-definition/humanoid.g-bot@1` | Rigged product G Bot GLB with Mixamo rig, ground actions, collider/control profiles, and camera sockets | Default and recommended for any human-shaped third-person player |
-| Golden rigged fixture | `worldkit://subject-definition/humanoid.rigged-golden@1` | Rigged Golden GLB fixture | Use only when the plan explicitly asks for the Golden fixture or a regression fixture |
+| Playable ground humanoid | `worldkit://subject-definition/humanoid.g-bot@2` | Rigged product G Bot GLB with Mixamo rig, ground actions, collider/control profiles, and camera sockets | Default and recommended for any human-shaped third-person player |
+| Golden rigged fixture | `worldkit://subject-definition/humanoid.rigged-golden@2` | Rigged Golden GLB fixture | Use only when the plan explicitly asks for the Golden fixture or a regression fixture |
 | Primitive humanoid proxy | `worldkit://subject-definition/humanoid.third-person@1` | One static vertical capsule; normally appears as a red column | Use only for an explicitly requested capsule/primitive placeholder; never use as the default humanoid |
 | Primitive quadruped proxy | `worldkit://subject-definition/quadruped.ground-proxy@1` | Static box/cylinder quadruped proxy | Use only for an explicitly simple ground quadruped |
 
@@ -17,7 +17,7 @@ The Registry also contains advanced or experimental packages, but their presence
 
 | Movement intent | Builder choice | Status |
 |---|---|---|
-| Ordinary ground humanoid | `worldkit://subject-definition/humanoid.g-bot@1` | Supported |
+| Ordinary ground humanoid | `worldkit://subject-definition/humanoid.g-bot@2` | Supported |
 | Board, glide, vehicle, watercraft or other motion-changing assembly | Do not select in production | Report a capability gap; a catalog row or experimental kernel is not production admission |
 | Mount, seated driver/passenger, tethered multi-entity assembly | Do not author | Relationship runtime remains reserved |
 | Hover, powered flight, underwater six-degree movement | Report capability gap | Exact Motion Kernel remains reserved |

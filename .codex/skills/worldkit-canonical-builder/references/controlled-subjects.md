@@ -6,7 +6,7 @@ The controlled Subject owns movement, collision, control input, facing, spawn, a
 
 | Request | Builder action |
 |---|---|
-| Ordinary person, regardless of clothing, armor, backpack, weapon, or carried appearance | Use `worldkit://subject-definition/humanoid.g-bot@1` only. Do not draw or map appearance-only accessories. Styling adds them later. |
+| Ordinary person, regardless of clothing, armor, backpack, weapon, or carried appearance | Use `worldkit://subject-definition/humanoid.g-bot@2` only. Do not draw or map appearance-only accessories. Styling adds them later. |
 | Equipment that rigidly moves with the person but does not require distinct motion behavior | If its whitebox silhouette is structurally necessary, create one package-local bound Subject containing the humanoid asset and the minimum equipment primitive. The equipment is not a separate Object. |
 | Board riding, inertial sliding, wingsuit/glider motion, vehicle, mount, boat, powered flight, underwater, or another custom movement assembly | Outside the hosted workflow's current production lane. Report the capability gap; never fake the requested mode with ordinary humanoid motion. |
 
@@ -48,7 +48,7 @@ When a bound visual assembly is needed but ordinary ground locomotion is explici
     {
       "id": "body.asset",
       "kind": "asset",
-      "subjectAssetRef": "worldkit://subject-asset/actor.humanoid.g-bot@1",
+      "subjectAssetRef": "worldkit://subject-asset/actor.humanoid.g-bot@2",
       "localTransform": {
         "positionMetersXYZ": [0, 0.08, 0],
         "rotationEulerRadiansXYZ": [0, 3.141592653589793, 0],
@@ -71,8 +71,8 @@ When a bound visual assembly is needed but ordinary ground locomotion is explici
   ],
   "visualBinding": {
     "mode": "rigged",
-    "rigProfileRef": "worldkit://rig-profile/biped.mixamo-g-bot@1",
-    "animationSetRef": "worldkit://animation-set/humanoid.ground.g-bot@1"
+    "rigProfileRef": "worldkit://rig-profile/biped.mixamo-g-bot@2",
+    "animationSetRef": "worldkit://animation-set/humanoid.ground.g-bot@2"
   },
   "sockets": [],
   "colliderPolicy": {
@@ -99,7 +99,7 @@ When a bound visual assembly is needed but ordinary ground locomotion is explici
     "harnessProfileRef": "worldkit://harness-profile/subject.standard@1"
   },
   "relationshipCapabilityRefs": [],
-  "actionOrPoseSetRef": "worldkit://animation-set/humanoid.ground.g-bot@1",
+  "actionOrPoseSetRef": "worldkit://animation-set/humanoid.ground.g-bot@2",
   "renderBindingProfileRef": "worldkit://render-binding/subject.standard@1",
   "aiMetadata": {
     "displayName": "Humanoid on board ground proxy",
