@@ -34,7 +34,7 @@ describe("real Browser verifier launch policy", () => {
     ]) {
       const source = await readFile(verifierPath, "utf8");
       expect(source).toContain("__WORLDKIT_AUTHORING_CAPTURE__");
-      expect(source).toContain('id: "pose-primary-subject"');
+      expect(source).toContain('visualTargetId: "pose-primary-subject"');
       expect(source).toContain('identityColor: "#E85D5D"');
       expect(source.indexOf('identityColor: "#E85D5D"')).toBeGreaterThan(
         source.indexOf("CLI world.png"),

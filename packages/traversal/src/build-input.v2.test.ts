@@ -157,6 +157,9 @@ describe("RouteBuildInputV2", () => {
       { minimumMetersXZ: [-0, 0], maximumMetersXZ: [1, 1] },
     ];
     for (const bounds of attacks) {
+      const containsNegativeZero = bounds.minimumMetersXZ.some((value) =>
+        Object.is(value, -0)
+      ) || bounds.maximumMetersXZ.some((value) => Object.is(value, -0));
       const forgedTerrainSource = {
         kind: "bounded" as const,
         terrainEntityId: "terrain-main",
@@ -164,13 +167,15 @@ describe("RouteBuildInputV2", () => {
         minimumMetersXZ: bounds.minimumMetersXZ,
         maximumMetersXZ: bounds.maximumMetersXZ,
       };
-      const forgedTerrainArtifactHash = sha256CanonicalJson({
-        kind: forgedTerrainSource.kind,
-        terrainEntityId: forgedTerrainSource.terrainEntityId,
-        triangleSoup: forgedTerrainSource.triangleSoup,
-        minimumMetersXZ: forgedTerrainSource.minimumMetersXZ,
-        maximumMetersXZ: forgedTerrainSource.maximumMetersXZ,
-      });
+      const forgedTerrainArtifactHash = containsNegativeZero
+        ? HASH_A
+        : sha256CanonicalJson({
+            kind: forgedTerrainSource.kind,
+            terrainEntityId: forgedTerrainSource.terrainEntityId,
+            triangleSoup: forgedTerrainSource.triangleSoup,
+            minimumMetersXZ: forgedTerrainSource.minimumMetersXZ,
+            maximumMetersXZ: forgedTerrainSource.maximumMetersXZ,
+          });
       const forgedGeometryArtifactHash = sha256CanonicalJson({
         terrainArtifactHash: forgedTerrainArtifactHash,
         colliderArtifactHash: valid.colliderArtifactHash,
@@ -183,7 +188,9 @@ describe("RouteBuildInputV2", () => {
       };
       const attackerReceipt = deepFreeze({
         input: forgedInput,
-        routeBuildInputHash: sha256CanonicalJson(forgedInput),
+        routeBuildInputHash: containsNegativeZero
+          ? HASH_A
+          : sha256CanonicalJson(forgedInput),
         budgetEvidence: {
           kind: "route-geometry-tile-estimate",
           tilesX: 1,
