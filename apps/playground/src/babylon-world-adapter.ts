@@ -9,13 +9,16 @@ import type {
   FixedInputV1,
   RenderReadyReceiptV1,
   RuntimeControlCaptureFrameV1,
+  RuntimeCaptureTargetV1,
   SemanticInputActionV1,
   RuntimeActivityReceiptV1,
   RuntimeActivityRequestV1,
   WorldRuntimeSnapshotV4,
   SubjectPresetTuningReceiptV1,
   WorldkitBrowserDiagnosticV1,
+  WhiteboxTriviewCaptureV1,
 } from "@whitebox-world/runtime-contracts";
+import { validateRuntimeCaptureTargetsV1 } from "@whitebox-world/runtime-contracts";
 import type {
   GameplayCommandReceiptV1,
   GameplayCommandV1,
@@ -299,6 +302,7 @@ export class BabylonWorldAdapter implements PlaygroundWorldAdapter {
   private compositionCache:
     | Readonly<{ dataUrl: string; report: OpeningCompositionReport }>
     | undefined;
+  private visualCaptureTargets: readonly RuntimeCaptureTargetV1[] = [];
 
   private constructor(
     private readonly executionPlan: ExecutionPlanV5,
@@ -661,6 +665,56 @@ export class BabylonWorldAdapter implements PlaygroundWorldAdapter {
     return this.canvas.toDataURL("image/png");
   }
 
+  configureVisualCaptureTargets(
+    targets: readonly RuntimeCaptureTargetV1[],
+  ): readonly RuntimeCaptureTargetV1[] {
+    const diagnostics = validateRuntimeCaptureTargetsV1(targets);
+    if (diagnostics.length > 0) {
+      throw new Error(`WORLDKIT_CAPTURE_TARGETS_INVALID: ${diagnostics.join(" ")}`);
+    }
+    const capturableEntityIds = new Set([
+      ...this.executionPlan.subjects.map(({ entityId }) => entityId),
+      ...this.executionPlan.objects.map(({ entityId }) => entityId),
+    ]);
+    for (const target of targets) {
+      for (const runtimeEntityId of target.runtimeEntityIds) {
+        if (!capturableEntityIds.has(runtimeEntityId)) {
+          throw new Error(`WORLDKIT_CAPTURE_TARGET_NOT_FOUND: ${runtimeEntityId}`);
+        }
+      }
+    }
+    this.visualCaptureTargets = targets.map((target) => Object.freeze({
+      ...target,
+      runtimeEntityIds: Object.freeze([...target.runtimeEntityIds]),
+    }));
+    return this.listCaptureTargets();
+  }
+
+  listCaptureTargets(): readonly RuntimeCaptureTargetV1[] {
+    return structuredClone(this.visualCaptureTargets);
+  }
+
+  captureRuntimeWhiteboxTriview(targetId: string): WhiteboxTriviewCaptureV1 {
+    const target = this.visualCaptureTargets.find((candidate) => candidate.id === targetId);
+    if (target === undefined) {
+      throw new Error(`WORLDKIT_CAPTURE_TARGET_NOT_FOUND: ${targetId}`);
+    }
+    return {
+      kind: "worldkit-whitebox-triview-capture",
+      schemaVersion: 1,
+      targetId,
+      runtimeEntityIds: [...target.runtimeEntityIds],
+      views: ["front", "right", "back"],
+      imageDataUrl: this.activeRuntime().captureArtifactView({
+        kind: "entity-triview",
+        widthPixels: Math.max(3, this.canvas.width),
+        heightPixels: Math.max(1, this.canvas.height),
+        entityIds: target.runtimeEntityIds,
+        identityColor: target.identityColor,
+      }).dataUrl,
+    };
+  }
+
   captureCompositionMask(): string {
     return this.captureCompositionAnalysis()?.dataUrl ?? "";
   }
@@ -670,7 +724,7 @@ export class BabylonWorldAdapter implements PlaygroundWorldAdapter {
   }
 
   async exportOpeningFrame(): Promise<string> {
-    throw new Error("Opening-frame artifact export is not available for Canonical JSON V2.");
+    throw new Error("Opening-frame artifact export is unavailable through this adapter method.");
   }
 
   captureOpeningFrameDataUrl(): string {
@@ -758,6 +812,9 @@ export class BabylonWorldAdapter implements PlaygroundWorldAdapter {
   }
 
   captureWhiteboxTriview(prototypeId: string): string {
+    if (this.visualCaptureTargets.some(({ id }) => id === prototypeId)) {
+      return this.captureRuntimeWhiteboxTriview(prototypeId).imageDataUrl;
+    }
     const worldSpec = this.playgroundMetadata?.worldSpec;
     if (worldSpec === undefined) throw new Error("WorldSpec is unavailable.");
     const prototype = worldSpec.entityCatalog.prototypes.find(
@@ -781,7 +838,25 @@ export class BabylonWorldAdapter implements PlaygroundWorldAdapter {
   }
 
   async exportWhiteboxTriviews(): Promise<readonly string[]> {
-    return [];
+    const outputPaths: string[] = [];
+    for (const target of this.visualCaptureTargets) {
+      const capture = this.captureRuntimeWhiteboxTriview(target.id);
+      const response = await fetch("/__whitebox/write-triview", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          sceneId: this.executionPlan.id,
+          prototypeId: target.id,
+          dataUrl: capture.imageDataUrl,
+        }),
+      });
+      if (!response.ok) {
+        throw new Error(`Failed to export ${target.id}: ${await response.text()}`);
+      }
+      const payload = await response.json() as { path: string };
+      outputPaths.push(payload.path);
+    }
+    return outputPaths;
   }
 
   private captureCompositionAnalysis():

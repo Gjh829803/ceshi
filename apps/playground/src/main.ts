@@ -16,6 +16,7 @@ import type {
 import { isNil } from "lodash-es";
 
 import { CanvasRecorder } from "./canvas-recorder.js";
+import { installRecordingWorkbench } from "./recording-workbench.js";
 import type {
   FeatureInspection,
   OpeningCompositionReport,
@@ -49,6 +50,7 @@ import { sceneCatalog } from "./scenes/index.js";
 import { createGameplayPageLifecycle } from "./gameplay-page-lifecycle.js";
 import { createAndStartArtifactRenderer } from "./artifact-renderer-lifecycle.js";
 import { installPageExitDisposal } from "./page-exit-lifecycle.js";
+import { installWorldkitAuthoringCaptureApi } from "./worldkit-authoring-capture-api.js";
 
 const app = document.querySelector<HTMLDivElement>("#app");
 if (app === null) throw new Error("Missing #app container");
@@ -122,6 +124,7 @@ app.innerHTML = `
       </div>
 
       <aside class="inspector">
+        <div id="recording-workbench-root"></div>
         <div class="inspector-heading">
           <div><p class="eyebrow">FEATURE GRAPH</p><h2>世界检查器</h2></div>
           <span id="feature-count">0 FEATURES</span>
@@ -1906,6 +1909,7 @@ if (runtimeRoute.mode === "unknown") {
   let preparationError: unknown;
   let prepared: Readonly<{
     loaded: Awaited<ReturnType<typeof import("./authoring-loader.js")["loadAuthoringScene"]>>;
+    visualCaptureTargets: Awaited<ReturnType<typeof import("./authoring-loader.js")["loadRuntimeVisualCaptureTargets"]>>;
     BabylonWorldAdapter: typeof import("./babylon-world-adapter.js")["BabylonWorldAdapter"];
   }> | undefined;
   try {
@@ -1913,12 +1917,32 @@ if (runtimeRoute.mode === "unknown") {
     const { BabylonWorldAdapter } = await import("./babylon-world-adapter.js");
     const subjectDefinitionRef = urlParameters.get("subjectDefinitionRef");
     let loaded: Awaited<ReturnType<typeof import("./authoring-loader.js")["loadAuthoringScene"]>>;
+    let visualCaptureTargets: Awaited<ReturnType<typeof import("./authoring-loader.js")["loadRuntimeVisualCaptureTargets"]>> = [];
     if (runtimeRoute.mode === "authoring") {
-      const { loadAuthoringScene } = await import("./authoring-loader.js");
+      const { loadAuthoringScene, loadRuntimeVisualCaptureTargets } = await import("./authoring-loader.js");
       startupStage = "authoring-load";
-      loaded = await loadAuthoringScene(undefined, {
-        ...(isNil(subjectDefinitionRef) ? {} : { subjectDefinitionRef }),
-      });
+      const worldId = urlParameters.get("world");
+      [loaded, visualCaptureTargets] = await Promise.all([
+        loadAuthoringScene(
+          isNil(worldId)
+            ? undefined
+            : () => fetch(
+                `/api/worlds/${encodeURIComponent(worldId)}/authoring-spec`,
+                { cache: "no-store" },
+              ),
+          {
+            ...(isNil(subjectDefinitionRef) ? {} : { subjectDefinitionRef }),
+          },
+        ),
+        isNil(worldId)
+          ? Promise.resolve([])
+          : loadRuntimeVisualCaptureTargets(
+              () => fetch(
+                `/api/worlds/${encodeURIComponent(worldId)}/visual-capture-targets`,
+                { cache: "no-store" },
+              ),
+            ),
+      ]);
     } else {
       const { loadOutdoorGameplaySceneV1 } = await import(
         "./outdoor-scene-gameplay-loader.js"
@@ -1937,7 +1961,7 @@ if (runtimeRoute.mode === "unknown") {
       createdPlaygroundMetadata = outdoorLoaded.playgroundMetadata;
       loaded = outdoorLoaded;
     }
-    prepared = { loaded, BabylonWorldAdapter };
+    prepared = { loaded, visualCaptureTargets, BabylonWorldAdapter };
   } catch (error) {
     preparationError = error;
   }
@@ -1958,7 +1982,7 @@ if (runtimeRoute.mode === "unknown") {
         if (prepared === undefined) {
           throw new Error("WORLDKIT_AUTHORING_PREPARATION_MISSING");
         }
-        const { loaded, BabylonWorldAdapter } = prepared;
+        const { loaded, visualCaptureTargets, BabylonWorldAdapter } = prepared;
         if (
           !loaded.ok ||
           loaded.executionPlan === undefined ||
@@ -1983,6 +2007,10 @@ if (runtimeRoute.mode === "unknown") {
             },
           },
         );
+        startupStage = "visual-targets-configure";
+        if (visualCaptureTargets.length > 0) {
+          adapter.configureVisualCaptureTargets(visualCaptureTargets);
+        }
         createdAdapter = adapter;
         createdHostOverlay = loaded.hostOverlay;
         trackAdapter(adapter);
@@ -1997,10 +2025,19 @@ if (runtimeRoute.mode === "unknown") {
       }
     },
   });
+  let authoringCaptureInstallation:
+    | ReturnType<typeof installWorldkitAuthoringCaptureApi>
+    | undefined;
   const pageLifecycle = createGameplayPageLifecycle({
     initialization: browserInstallation.initialization,
     getAdapter: () => createdAdapter,
     setup(adapter) {
+      if (runtimeRoute.mode === "authoring") {
+        authoringCaptureInstallation = installWorldkitAuthoringCaptureApi(
+          window,
+          adapter,
+        );
+      }
       const workbench = runtimeRoute.mode === "authoring"
         ? installCapabilityAuthoringPanel(
             browserInstallation.api,
@@ -2017,7 +2054,10 @@ if (runtimeRoute.mode === "unknown") {
     rollbackPageState() {
       delete (window as { __WHITEBOX_PLAYGROUND__?: unknown }).__WHITEBOX_PLAYGROUND__;
     },
-    disposeRuntimeHost: () => browserInstallation.dispose(),
+    disposeRuntimeHost: async () => {
+      authoringCaptureInstallation?.dispose();
+      await browserInstallation.dispose();
+    },
   });
   let pageSetupSucceeded = false;
   try {
@@ -2069,6 +2109,13 @@ function startPlayground(
 requiredElement("#adapter-name").textContent = adapter.name;
 let recorderCanvas = adapter.canvas;
 let canvasRecorder = new CanvasRecorder(recorderCanvas);
+const recordingWorldId = urlParameters.get("world");
+const recordingWorkbench = runtimeRoute.mode === "authoring" && !isNil(recordingWorldId)
+  ? installRecordingWorkbench({
+      root: requiredElement<HTMLDivElement>("#recording-workbench-root"),
+      sceneId: recordingWorldId,
+    })
+  : undefined;
 let recordingTimer: number | null = null;
 
 async function resetPlaygroundWorld(): Promise<void> {
@@ -2247,10 +2294,12 @@ function downloadRecording(blob: Blob, extension: "mp4" | "webm"): string {
   return filename;
 }
 
-function showRecordingSaved(filename: string, blob: Blob, durationMs: number): void {
+function showRecordingSaved(label: string, blob: Blob, durationMs: number, persisted = true): void {
   const toast = requiredElement<HTMLDivElement>("#recording-toast");
   const megabytes = blob.size / 1_000_000;
-  toast.textContent = `已保存 ${formatRecordingTime(durationMs)} · ${megabytes.toFixed(1)} MB · ${filename}`;
+  toast.textContent = persisted
+    ? `已加入页面录制清单 · ${formatRecordingTime(durationMs)} · ${megabytes.toFixed(1)} MB · ${label}`
+    : `未保存到页面，已下载本地备份 · ${formatRecordingTime(durationMs)} · ${megabytes.toFixed(1)} MB · ${label}`;
   toast.hidden = false;
   window.setTimeout(() => {
     toast.hidden = true;
@@ -2278,8 +2327,19 @@ requiredElement<HTMLButtonElement>("#record-button").addEventListener("click", a
   requiredElement("#record-label").textContent = "正在保存…";
   try {
     const result = await canvasRecorder.stop();
-    const filename = downloadRecording(result.blob, result.extension);
-    showRecordingSaved(filename, result.blob, result.durationMs);
+    if (recordingWorkbench === undefined) {
+      const filename = downloadRecording(result.blob, result.extension);
+      showRecordingSaved(filename, result.blob, result.durationMs);
+    } else {
+      try {
+        const recording = await recordingWorkbench.uploadRecording(result);
+        showRecordingSaved(recording.title, result.blob, result.durationMs);
+      } catch (error) {
+        const filename = downloadRecording(result.blob, result.extension);
+        showRecordingSaved(filename, result.blob, result.durationMs, false);
+        window.alert(error instanceof Error ? error.message : String(error));
+      }
+    }
   } catch (error) {
     window.alert(error instanceof Error ? error.message : String(error));
   } finally {
@@ -2397,6 +2457,7 @@ installPageExitDisposal({
   dispose: async () => {
     if (recordingTimer !== null) window.clearInterval(recordingTimer);
     canvasRecorder.dispose();
+    recordingWorkbench?.dispose();
     if (disposeBrowserRuntime === undefined) adapter.dispose();
     else await disposeBrowserRuntime();
   },

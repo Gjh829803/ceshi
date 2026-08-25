@@ -3,7 +3,7 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <meta name="description" content="使用本地 Codex 与 WorldKit SDK 创建可游玩的白膜世界。" />
+    <meta name="description" content="使用 LWDP 云端 Codex 与 WorldKit SDK 并发创建可游玩的白膜世界。" />
     <title>WorldKit Creator Studio</title>
     <link rel="stylesheet" href="/styles.css" />
   </head>
@@ -13,33 +13,45 @@
         <span class="brand-mark">W</span>
         <span><b>WORLDKIT</b><small>CREATOR STUDIO</small></span>
       </a>
-      <div class="runtime-state" id="runtime-state">
-        <i></i><span>正在连接本地运行时</span>
+      <div class="topbar-actions">
+        <nav aria-label="页面导航">
+          <a href="#create">创建世界</a>
+          <a href="#test-sets">测试集</a>
+          <a href="#history">任务历史</a>
+        </nav>
+        <div class="runtime-state" id="runtime-state">
+          <i></i><span>正在连接本地运行时</span>
+        </div>
       </div>
     </header>
 
     <main>
-      <section class="hero">
-        <div>
-          <p class="kicker">PROMPT + IMAGE → PLAYABLE WHITEBOX</p>
-          <h1>描述一个世界，<br />让本地 Codex<br />把它建出来。</h1>
+      <section class="hero studio-hero">
+        <div class="hero-intro">
+          <p class="kicker">WORLDKIT / CREATION & EVALUATION</p>
+          <h1>创建一个世界，<br />或批量跑一组测试。</h1>
+          <p class="hero-copy">填写描述、选择图片、立即提交。生成过程在后台运行，结果统一进入任务历史。</p>
         </div>
-        <p class="hero-copy">Creator Studio 会先规划完整世界，再冻结空间定义并搭建可游玩的白膜。每次创建都会留下输入、进度、工件、日志和体验入口。</p>
+        <div class="hero-actions" aria-label="主要功能">
+          <button class="hero-action active" data-workspace-mode="create" type="button"><span>01</span><b>新建世界</b><small>单张图片或文字描述</small></button>
+          <button class="hero-action" data-workspace-mode="test-sets" type="button"><span>02</span><b>测试集</b><small>批量图片与运行结果</small></button>
+        </div>
       </section>
 
-      <section class="workspace">
-        <aside class="composer-panel">
-          <div class="panel-heading">
-            <span>CREATE / 01</span>
-            <b>新建世界</b>
-          </div>
-          <form id="create-form">
+      <section class="creation-surface" id="create" data-workspace-panel="create">
+        <header class="surface-heading">
+          <div><p class="kicker">CREATE / SINGLE WORLD</p><h2>新建世界</h2></div>
+          <p>名称可以不填。世界描述与参考图片至少提供一种视觉意图，提交按钮始终位于表单正下方。</p>
+        </header>
+        <form id="create-form" class="create-form">
+          <div class="create-fields">
             <label class="field-label" for="world-title">世界名称 <span>可选</span></label>
             <input id="world-title" name="title" maxlength="80" placeholder="例如：雾中群岛" />
 
             <label class="field-label" for="world-prompt">世界描述</label>
-            <textarea id="world-prompt" name="prompt" required minlength="4" maxlength="8000" placeholder="一片山峦起伏的草地，中央有一座巨大的蓝色湖泊。玩家从南侧高坡进入，远方能看见北岸灯塔……"></textarea>
-
+            <textarea id="world-prompt" name="prompt" required minlength="4" maxlength="8000" placeholder="描述玩家进入后看见什么、可以向哪里移动，以及必须保留的主体、地形和标志物。"></textarea>
+          </div>
+          <div class="create-reference">
             <label class="field-label">参考图片 <span>可选 · PNG / JPEG / WebP</span></label>
             <button class="dropzone" id="dropzone" type="button">
               <input id="world-image" type="file" accept="image/png,image/jpeg,image/webp" hidden />
@@ -48,26 +60,75 @@
               <img id="image-preview" alt="参考图预览" hidden />
               <span class="replace-image" id="replace-image" hidden>更换图片</span>
             </button>
-
-            <div class="generation-contract">
-              <div><span>01</span><p><b>World Planner</b>扩展完整世界与进入视角</p></div>
-              <div><span>02</span><p><b>Plan Lock</b>冻结地形、路径和实体身份</p></div>
-              <div><span>03</span><p><b>World Builder</b>生成可碰撞、可游玩的白膜</p></div>
-            </div>
-
+          </div>
+          <div class="create-submit">
             <button class="submit-button" id="submit-button" type="submit">
-              <span><small>RUN LOCAL CODEX</small>生成白膜世界</span>
+              <span><small>RUN LWDP CLOUD CODEX</small>生成白膜世界</span>
               <b>→</b>
             </button>
             <p class="form-message" id="form-message" role="status"></p>
-          </form>
-        </aside>
+          </div>
+        </form>
+        <div class="implementation-notes">
+          <details>
+            <summary>查看生成流程</summary>
+            <div class="generation-contract">
+              <div><span>01</span><p><b>WorldKit Planner</b>区分用户事实、可见证据、工程推断与视觉设想，生成托管式意图摘要和规划图</p></div>
+              <div><span>02</span><p><b>Canonical Builder</b>在同一 Codex Job 内运行 main Schema、布局、编译与探索容量自检，Host 只复验一次后捕获白膜</p></div>
+              <div><span>03</span><p><b>Visual Provider Adapter</b>可选地合成共享视觉约束、新首帧 prompt 和全部三视图 prompt</p></div>
+              <div><span>04</span><p><b>Direct ImageGen</b>同时生成标准第三人称背影新首帧与全部渲染后三视图</p></div>
+              <div><span>05</span><p><b>Ready</b>新首帧和渲染后三视图完成即可查看详情并进入白膜世界，无需试玩</p></div>
+            </div>
+          </details>
+          <details>
+            <summary>查看 Agent 当前可调用主体 <span id="capability-count">读取中</span></summary>
+            <section class="agent-capabilities" aria-labelledby="agent-capability-title">
+              <div class="capability-heading"><div><small>AGENT SDK / LIVE CATALOG</small><b id="agent-capability-title">当前可调用主体</b></div></div>
+              <div class="capability-list" id="subject-catalog"></div>
+            </section>
+          </details>
+        </div>
+      </section>
 
-        <section class="history-panel">
+      <section class="test-set-surface" id="test-sets" data-workspace-panel="test-sets" hidden>
+        <header class="surface-heading">
+          <div><p class="kicker">EVALUATE / IMAGE SETS</p><h2>测试集</h2></div>
+          <p>把一组参考图保存成测试集，选中后批量创建世界。每张图都是一个独立任务，共用同一条测试说明。</p>
+        </header>
+        <div class="test-set-layout">
+          <form id="test-set-form" class="test-set-composer">
+            <div class="panel-heading"><span>NEW SET</span><b>构建测试集</b></div>
+            <label class="field-label" for="test-set-name">测试集名称</label>
+            <input id="test-set-name" maxlength="80" required placeholder="例如：室外复杂地形 20 例" />
+            <label class="field-label" for="test-set-prompt">统一测试说明</label>
+            <textarea id="test-set-prompt" required minlength="4" maxlength="8000">严格依据每张参考图创建可玩的白膜世界。保留参考图中的主体、空间拓扑、地形路线和标志物，只在原镜头不符合标准可玩第一/第三人称时做最小镜头调整。</textarea>
+            <label class="field-label">测试图片 <span>最多 200 张</span></label>
+            <div class="test-upload-actions">
+              <button id="test-set-file-trigger" type="button"><b>选择多张图片</b><small>PNG / JPEG / WebP</small></button>
+              <button id="test-set-folder-trigger" type="button"><b>选择整个文件夹</b><small>适合导入本地测试集</small></button>
+              <input id="test-set-files" type="file" multiple accept="image/png,image/jpeg,image/webp" hidden />
+              <input id="test-set-folder" type="file" multiple webkitdirectory directory accept="image/png,image/jpeg,image/webp" hidden />
+            </div>
+            <div class="test-upload-list" id="test-set-upload-list"><p>还没有选择图片。</p></div>
+            <button class="submit-button" id="test-set-save" type="submit"><span><small>SAVE TEST SET</small>保存测试集</span><b>＋</b></button>
+            <p class="form-message" id="test-set-message" role="status"></p>
+          </form>
+          <section class="test-set-library">
+            <div class="test-set-toolbar">
+              <div><span id="test-set-count">0 个测试集</span><small id="selected-test-count">尚未选择</small></div>
+              <button id="run-selected-test-sets" type="button" disabled>运行所选 case →</button>
+            </div>
+            <div class="test-set-grid" id="test-set-grid"></div>
+            <div class="empty-state compact" id="test-set-empty"><span>T–00</span><h3>还没有测试集</h3><p>在左侧选择多张图片或整个文件夹，保存后即可批量运行。</p></div>
+          </section>
+        </div>
+      </section>
+
+      <section class="history-panel history-wide" id="history">
           <div class="history-heading">
             <div>
-              <p class="kicker">WORLD HISTORY / LOCAL</p>
-              <h2>历史创建</h2>
+              <p class="kicker">WORLD HISTORY / LWDP CLOUD</p>
+              <h2>世界任务</h2>
             </div>
             <div class="history-stats" id="history-stats"></div>
           </div>
@@ -75,7 +136,7 @@
           <div class="filters" role="tablist" aria-label="筛选历史世界">
             <button class="active" data-filter="all" type="button">全部</button>
             <button data-filter="running" type="button">生成中</button>
-            <button data-filter="ready" type="button">可游玩</button>
+            <button data-filter="ready" type="button">已就绪</button>
             <button data-filter="failed" type="button">需处理</button>
           </div>
 
@@ -85,7 +146,6 @@
             <p>在左侧输入一句话或上传参考图，第一条创建记录会出现在这里。</p>
           </div>
           <div class="world-grid" id="world-grid" aria-live="polite"></div>
-        </section>
       </section>
     </main>
 
@@ -94,10 +154,38 @@
       <div id="dialog-content"></div>
     </dialog>
 
+    <dialog id="test-case-dialog" class="test-case-dialog">
+      <button class="case-dialog-close" id="case-dialog-close" type="button" aria-label="关闭案例选择">×</button>
+      <header class="case-dialog-heading">
+        <div><p class="kicker">SELECT CASES</p><h2 id="case-dialog-title">选择测试案例</h2></div>
+        <p id="case-dialog-description"></p>
+      </header>
+      <div class="case-dialog-toolbar">
+        <span id="case-dialog-count">已选 0 个</span>
+        <div>
+          <button id="case-filter-humanoid-walking" type="button">仅正常步行人形</button>
+          <button id="case-select-all" type="button">全选</button>
+          <button id="case-clear-all" type="button">清空</button>
+        </div>
+      </div>
+      <div class="case-picker-grid" id="case-picker-grid"></div>
+      <footer class="case-dialog-actions">
+        <button id="case-dialog-cancel" type="button">取消</button>
+        <button id="case-dialog-confirm" type="button">确定选择</button>
+      </footer>
+    </dialog>
+
     <template id="world-card-template">
       <article class="world-card">
         <button class="card-cover" type="button">
-          <img alt="" />
+          <img class="cover-image" alt="" />
+          <span class="cover-comparison" hidden>
+            <img class="comparison-reference" alt="" />
+            <img class="comparison-whitebox" alt="" />
+            <i class="comparison-divider" aria-hidden="true"></i>
+            <span class="comparison-label reference-label">参考图</span>
+            <span class="comparison-label whitebox-label">白膜首帧</span>
+          </span>
           <span class="cover-fallback">W</span>
           <span class="status-pill"></span>
         </button>

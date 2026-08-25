@@ -21,12 +21,13 @@ import {
   canonicalWorldkitBrowserRouteEvidencePublicationV2,
   type WorldkitBrowserRouteEvidencePublicationV2,
 } from "@whitebox-world/runtime-contracts";
+import type { Browser } from "playwright";
 import { isNil, uniq } from "lodash-es";
-import { chromium } from "playwright";
 import { afterEach, describe, expect, it } from "vitest";
 
 import { createValidAuthoringSpec } from "../../packages/authoring/src/test-fixture";
 
+import { launchChromiumWithSystemFallback } from "./playwright-browser-launch";
 import { startWorldkitServer, type WorldkitServerHandle } from "./worldkit-server";
 
 const INPUT_PATH = fileURLToPath(
@@ -259,21 +260,21 @@ describe("startWorldkitServer", () => {
     );
     const inputPath = path.join(inputDirectory, "world.json");
     await writeFile(inputPath, JSON.stringify(source), "utf8");
-    let browser: Awaited<ReturnType<typeof chromium.launch>> | undefined;
+    let browser: Browser | undefined;
     try {
       const handle = await startWorldkitServer({
         inputPath,
         routeEvidence: routeEvidenceInput(publication),
       });
       handles.push(handle);
-      browser = await chromium.launch({ headless: true });
+      browser = await launchChromiumWithSystemFallback();
       const page = await browser.newPage();
       await page.goto(handle.url, {
         waitUntil: "domcontentloaded",
         timeout: 30_000,
       });
       await page.waitForFunction(
-        () => window.__WORLDKIT__ !== undefined,
+        () => document.documentElement.dataset.worldkitStatus === "ready",
         undefined,
         { timeout: 30_000 },
       );
@@ -324,14 +325,14 @@ describe("startWorldkitServer", () => {
     );
     const inputPath = path.join(inputDirectory, "world.json");
     await writeFile(inputPath, JSON.stringify(source), "utf8");
-    let browser: Awaited<ReturnType<typeof chromium.launch>> | undefined;
+    let browser: Browser | undefined;
     try {
       const handle = await startWorldkitServer({
         inputPath,
         routeEvidence: routeEvidenceInput(mismatchedPublication),
       });
       handles.push(handle);
-      browser = await chromium.launch({ headless: true });
+      browser = await launchChromiumWithSystemFallback();
       const page = await browser.newPage();
       await page.goto(handle.url, {
         waitUntil: "domcontentloaded",

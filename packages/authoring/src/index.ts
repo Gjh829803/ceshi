@@ -10,6 +10,7 @@ export { normalizeAuthoringSpecV4 } from "./normalize-v4";
 export * from "./parse";
 export * from "./parse-v4";
 export * from "./resource-lock";
+export * from "./scene-brief-v1";
 export * from "./subject-definition-normalizer";
 export * from "./subject-preset-candidate";
 export * from "./types";
