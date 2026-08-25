@@ -645,7 +645,7 @@ export async function runRouteRuntimeProbeV2(
   let previousArcLengthMeters = 0;
   const initialStation = advanceRouteRuntimeProbeSupportStationV2(
     path,
-    initial.subjectPositionMetersXYZ,
+    initial.characterSupport.sampledFootPositionMetersXYZ,
     previousArcLengthMeters,
     input.resolvedControlFeelProfile.walkSpeedMetersPerSecond,
     input.positionQuantizationMeters,
@@ -740,7 +740,7 @@ export async function runRouteRuntimeProbeV2(
     );
     const station = advanceRouteRuntimeProbeSupportStationV2(
       path,
-      evidence.subjectPositionMetersXYZ,
+      evidence.characterSupport.sampledFootPositionMetersXYZ,
       previousArcLengthMeters,
       input.resolvedControlFeelProfile.walkSpeedMetersPerSecond,
       input.positionQuantizationMeters,

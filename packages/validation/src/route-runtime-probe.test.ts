@@ -158,6 +158,7 @@ function pathReceipt(
 
 interface RuntimeFrame {
   readonly positionMetersXYZ: Vec3;
+  readonly sampledFootPositionMetersXYZ?: Vec3;
   readonly supportState?: CharacterSupportStateV1;
   readonly surfaceResolution?: CharacterSupportSurfaceResolutionV1;
   readonly tick?: number;
@@ -276,7 +277,8 @@ class ScriptedRuntimePort implements TraversalRuntimePortV1 {
         schemaVersion: 1,
         supportState,
         supportNormalWorldXYZ: [0, 1, 0],
-        sampledFootPositionMetersXYZ: frame.positionMetersXYZ,
+        sampledFootPositionMetersXYZ:
+          frame.sampledFootPositionMetersXYZ ?? frame.positionMetersXYZ,
         isSupportSurfaceDynamic: false,
         surfaceResolution,
       },
@@ -1095,6 +1097,30 @@ describe("runRouteRuntimeProbeV2 3D support station", () => {
       HEIGHTFIELD_SURFACE.traversalSurfaceId,
       PLATFORM_SURFACE.traversalSurfaceId,
     ].sort());
+  });
+
+  it("selects support station from retained foot when subject origin has crossed ahead", async () => {
+    const path = pathReceiptV2(STEP_PATH_POINTS, STEP_PATH_SURFACES);
+    const port = stationPort(
+      path,
+      {
+        positionMetersXYZ: [0, 0, 0],
+        surfaceResolution: { mode: "resolved", ...HEIGHTFIELD_SURFACE },
+      },
+      [{
+        positionMetersXYZ: [3.2, 0.4, 0],
+        sampledFootPositionMetersXYZ: [1.9, 0, 0],
+        surfaceResolution: { mode: "resolved", ...HEIGHTFIELD_SURFACE },
+      }],
+    );
+
+    const receipt = await runV2(path, port, 180);
+
+    expect(receipt.ticks[0]?.expectedTraversalSurfaceIds).toEqual([
+      HEIGHTFIELD_SURFACE.traversalSurfaceId,
+    ]);
+    expect(receipt.status === "failed" ? receipt.failure.kind : undefined)
+      .not.toBe("support-surface-mismatch");
   });
 
   it("mismatches a lower same-XZ Heightfield after the station is on the platform segment", async () => {

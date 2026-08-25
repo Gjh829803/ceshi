@@ -776,6 +776,45 @@ describe.skipIf(!hasRuntimeProbeApi)("RouteRuntimeProbeReceiptV2", () => {
     })).toThrow("ROUTE_RUNTIME_PROBE_CONTEXT_INVALID");
   });
 
+  it("contextually derives each support station from retained foot instead of subject origin", () => {
+    const path = pathReceiptV2(
+      [[0, 0, 0], [1, 0, 0], [2, 0, 0], [3, 0, 0]],
+      ["surface-main", "surface-main", "surface-b", "surface-b"],
+    );
+    const asymmetricEvidence = runtimeEvidence(1, {
+      subjectPositionMetersXYZ: [2.5, 0, 0],
+      characterSupport: {
+        ...runtimeEvidence(1).characterSupport,
+        sampledFootPositionMetersXYZ: [0.5, 0, 0],
+      },
+    });
+    const raw = oneTickFailure({
+      kind: "runtime-stalled",
+      failureProbeTick: 1,
+      failurePositionMetersXYZ: asymmetricEvidence.subjectPositionMetersXYZ,
+      stalledDurationTicks: 1,
+    }, {
+      runtimeEvidence: asymmetricEvidence,
+      expectedTraversalSurfaceIds: ["surface-main"],
+      stalledDurationTicks: 1,
+    });
+    const receipt: RouteRuntimeProbeReceiptV2 = {
+      ...raw,
+      request: request({
+        routePathReceiptHash: hashRoutePathReceiptV2(path),
+        walkSpeedMetersPerSecond: 180,
+      }),
+    };
+
+    expect(canonicalRouteRuntimeProbeReceiptV2(receipt)).toEqual(receipt);
+    expect(assertRouteRuntimeProbeReceiptContextV2({
+      receipt,
+      routePathReceipt: path,
+      resolvedDriverProfile: RESOLVED_DRIVER_PROFILE,
+      validationProfileIdentity: VALIDATION_PROFILE_IDENTITY,
+    })).toEqual(receipt);
+  });
+
   it("rejects non-consecutive evidence/Probe ticks and every identity mismatch", () => {
     const base = completeReceipt();
     const invalidReceipts: readonly unknown[] = [

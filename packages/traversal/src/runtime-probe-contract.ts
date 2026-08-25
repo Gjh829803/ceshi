@@ -1711,7 +1711,7 @@ export function assertRouteRuntimeProbeReceiptContextV2(
   let stationArc = 0;
   const initialStation = advanceRouteRuntimeProbeSupportStationV2(
     path,
-    receipt.initialRuntimeEvidence.subjectPositionMetersXYZ,
+    receipt.initialRuntimeEvidence.characterSupport.sampledFootPositionMetersXYZ,
     0,
     receipt.request.walkSpeedMetersPerSecond,
     receipt.request.positionQuantizationMeters,
@@ -1733,7 +1733,7 @@ export function assertRouteRuntimeProbeReceiptContextV2(
   for (const [index, row] of receipt.ticks.entries()) {
     const station = advanceRouteRuntimeProbeSupportStationV2(
       path,
-      row.runtimeEvidence.subjectPositionMetersXYZ,
+      row.runtimeEvidence.characterSupport.sampledFootPositionMetersXYZ,
       stationArc,
       receipt.request.walkSpeedMetersPerSecond,
       receipt.request.positionQuantizationMeters,
