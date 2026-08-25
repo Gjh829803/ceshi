@@ -1,6 +1,6 @@
 # Workspace 结构与权威边界审查
 
-> 状态：**根因闭包实现完成；等待独立 completion review**
+> 状态：**核心根因闭包 GO；Host 与独立 completion review 均通过**
 >
 > 最新 `main` 基线：`origin/main@749b594bb35830b5c92f8e6b7df1c645e36fc530`
 >
@@ -17,8 +17,9 @@
 
 结论需要分层表达：
 
-- **核心 authority / public contract 根因闭包：Host review GO。** 本轮选择的 HSE 与 WS 根因均已实现，
-  当前没有未处置的 P0/P1；最终状态仍以独立 completion review 为最后一道门。
+- **核心 authority / public contract 根因闭包：GO。** 本轮选择的 HSE 与 WS 根因均已实现，
+  当前没有未处置的 P0/P1；Host 证据通过，fresh read-only Cursor completion review 结论为
+  `FINAL GO / No findings`。
 - **整仓可维护性“全部完成”：NO。** 仍有 3 组明确的 P2 总任务：52 条历史 workspace boundary
   债、剩余领域的广义 generated parity、Host/Studio/CLI 大型模块拆分。它们不再制造第二套产品
   truth，且已有门禁阻止新增债，因此不应冒充阻塞根因，也不能从总任务中删除。
@@ -119,6 +120,7 @@ WS-01 消除，门禁正确要求同步删除 stale debt，不能为了“数字
 | `pnpm build` | 0 | Playground production build，2187 modules；仅保留既有 >500 kB chunk warning |
 | `verify:canonical` / `verify:rigged-subject` / `verify:g-bot-subject` / `verify:placement-layout` | 0 / 0 / 0 / 0 | 真实 Browser/Havok checks；全部 `publicationMode: check`，未 promotion tracked artifacts |
 | `git diff --check` | 0 | 当前 committed implementation 无 whitespace error |
+| Cursor completion review `arc-final-20260826-b` | `FINAL GO / No findings` | read-only；exit 0；review 前后 tree fingerprint 都是 `36356e830e...`，无 tree drift。更早未产出 durable report 的静默尝试不计作证据 |
 
 自动 contract、真实 Browser/render、manual interaction 是不同证据层。本轮没有把自动 Browser smoke
 冒充人工交互或 production provider 验证；这些结构修复也没有新增 interiors、vehicles、NPC behavior、
@@ -171,6 +173,7 @@ projection、Camera provider-neutral Domain 的方向判断合理；但旧结论
 
 ## 10. 当前发布判断
 
-在独立 completion review 前，准确表述是：**实现与 Host 证据已达到核心根因闭包 GO，最终发布裁决
-待 fresh read-only review。** 这不是“整个仓库没有债务”，而是最核心、最差的竞争设计已经被清除，
-剩余工作已进入有门禁、有 owner、有验收条件的总任务，不再靠模糊的“以后规整”管理。
+**核心根因闭包最终发布判断：GO。** Host 复验和 fresh read-only Cursor completion review 均通过，
+独立 review `arc-final-20260826-b` 在同一 tree fingerprint 上返回 `FINAL GO / No findings`。
+这不是“整个仓库没有债务”，而是最核心、最差的竞争设计已经被清除；剩余工作已进入有门禁、
+有 owner、有验收条件的总任务，不再靠模糊的“以后规整”管理。
