@@ -982,6 +982,91 @@ describe("Heightfield Route R1 locked source assembly", () => {
     };
     expect(() => build(huge)).toThrow("ROUTE_GRAPH_BUDGET_EXCEEDED");
   });
+
+  it("scopes each Required Route's Surface and Collider inventories independently within one Plan", () => {
+    const plan = basePlan();
+    const deckSubshapeId = deriveColliderSubshapeIdV1("deck-b", "primary");
+    plan.staticColliders = [{
+      entityId: "deck-b",
+      logicalSubshapeId: "primary",
+      colliderSubshapeId: deckSubshapeId,
+      colliderHash: HASH_A,
+      transform: {
+        positionMetersXYZ: [12, 0.125, 0],
+        rotationEulerRadiansXYZ: [0, 0, 0],
+        scaleXYZ: [1, 1, 1],
+      },
+      shape: { kind: "box", sizeMetersXYZ: [4, 0.25, 2] },
+    }];
+    plan.layout.routes.push({
+      id: "deck-route",
+      kind: "polyline-xz",
+      pointsMetersXZ: [[10, 0], [14, 0]],
+      widthMeters: 2,
+      locomotionProfileRef: "worldkit://locomotion-profile/ground.standard@1",
+    });
+    plan.layout.placementsByEntityId["deck-spawn"] = placement(
+      "deck-spawn",
+      [10.5, 0.25, 0],
+    );
+    plan.layout.placementsByEntityId["deck-goal"] = placement(
+      "deck-goal",
+      [13.5, 0.25, 0],
+    );
+    plan.traversal.anchorEntityIds.push("deck-spawn", "deck-goal");
+    plan.traversal.surfaces.push({
+      kind: "static-collider",
+      traversalSurfaceId: "surface-deck-b",
+      surfaceEntityId: "deck-b",
+      colliderSubshapeId: deckSubshapeId,
+      resourceRef: "package://traversal-surface/deck-b.primary@1",
+      resolvedVersion: "1",
+      resourceHash: HASH_A,
+      logicalSurfaceId: "primary",
+      logicalSubshapeId: "primary",
+      colliderHash: HASH_A,
+      traversalSurfaceProfileRef:
+        "worldkit://traversal-surface-profile/ground.static@1",
+      traversalSurfaceProfileResolvedVersion: "1",
+      traversalSurfaceProfileHash: HASH_A,
+    });
+    plan.traversal.connectivityRequirements.push({
+      constraintId: "deck-link",
+      kind: "connected-by-route",
+      traversingEntityId: "player",
+      startAnchorEntityId: "deck-spawn",
+      destinationAnchorEntityId: "deck-goal",
+      routeId: "deck-route",
+    });
+    const buildFor = (constraintId: string) =>
+      createRouteBuildInputFromPlanV2({
+        executionPlan: plan as unknown as ExecutionPlanV5,
+        capabilityEnvelope: createRecastTestEnvelopeV1({
+          resourceLockHash: plan.resourceLockHash as `sha256:${string}`,
+        }),
+        traversalLockReceipt: createRecastTestLockReceiptV1({
+          resourceLockHash: plan.resourceLockHash as `sha256:${string}`,
+        }),
+        constraintId,
+      });
+
+    const ground = buildFor("hero-to-goal");
+    const deck = buildFor("deck-link");
+
+    expect(ground.input.staticColliders.map((row) => row.entityId))
+      .toEqual([]);
+    expect(ground.input.traversalSurfaces.map((row) => row.traversalSurfaceId))
+      .toEqual(["surface-main"]);
+    expect(deck.input.staticColliders.map((row) => row.entityId))
+      .toEqual(["deck-b"]);
+    expect(deck.input.traversalSurfaces.map((row) => row.traversalSurfaceId))
+      .toEqual(["surface-deck-b", "surface-main"]);
+    expect(deck.input.terrainSource).toEqual({
+      kind: "empty",
+      terrainEntityId: "terrain-main",
+    });
+    expect(deck.budgetEvidence.kind).toBe("route-geometry-tile-estimate");
+  });
 });
 
 

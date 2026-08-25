@@ -1267,3 +1267,286 @@ describe.skipIf(!hasRuntimeProbeApiV2)("advanceRouteRuntimeProbeSupportStationV2
     expect(atSeamThirty.retainedSegmentIndexes).toEqual([0, 1]);
   });
 });
+
+describe("advanceRouteRuntimeProbeSupportStationV2 seeded invariants", () => {
+  const WALK_SPEED_METERS_PER_SECOND = 4;
+  const POSITION_QUANTIZATION_METERS =
+    GRAPH_BUILDER_PROFILE.profile.positionQuantizationMeters;
+  const FIXED_TIME_STEP_SECONDS = 1 / 60;
+
+  const PROPERTY_SURFACES = [
+    { ...SURFACE, traversalSurfaceId: "surface-prop-a" },
+    { ...SURFACE, traversalSurfaceId: "surface-prop-b" },
+    { ...SURFACE, traversalSurfaceId: "surface-prop-c" },
+  ] as const;
+
+  // Deterministic mulberry32: the property suite must produce the identical
+  // case list on every run and machine, matching repository determinism rules.
+  function createSeededRandom(seed: number): () => number {
+    let state = seed >>> 0;
+    return () => {
+      state = (state + 0x6d2b79f5) >>> 0;
+      let t = state;
+      t = Math.imul(t ^ (t >>> 15), t | 1);
+      t ^= t + Math.imul(t ^ (t >>> 7), t | 61);
+      return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+    };
+  }
+
+  function randomPolylinePoints(
+    random: () => number,
+  ): readonly [number, number, number][] {
+    const segmentCount = 1 + Math.floor(random() * 5);
+    const points: [number, number, number][] = [[0, 0, 0]];
+    let x = 0;
+    let z = 0;
+    for (let index = 0; index < segmentCount; index += 1) {
+      const direction = Math.floor(random() * 4);
+      const lengthMeters = 0.01 + Math.floor(random() * 2000) / 1000;
+      if (direction === 0) x += lengthMeters;
+      else if (direction === 1) x -= lengthMeters;
+      else if (direction === 2) z += lengthMeters;
+      else z -= lengthMeters;
+      const y = Math.round((random() - 0.5) * 400) / 1000;
+      points.push([Math.round(x * 1000) / 1000, y, Math.round(z * 1000) / 1000]);
+    }
+    return points;
+  }
+
+  function propertyPathReceipt(
+    points: readonly (readonly [number, number, number])[],
+  ): RoutePathReceiptV2 {
+    let routePathDistanceMeters = 0;
+    let routePathDistanceMetersXZ = 0;
+    let maximumObservedSlopeDegrees = 0;
+    for (let index = 1; index < points.length; index += 1) {
+      const previous = points[index - 1]!;
+      const current = points[index]!;
+      const dx = current[0] - previous[0];
+      const dy = current[1] - previous[1];
+      const dz = current[2] - previous[2];
+      const horizontalMeters = Math.hypot(dx, dz);
+      routePathDistanceMeters += Math.ceil(
+        Math.hypot(dx, dy, dz) / POSITION_QUANTIZATION_METERS - Number.EPSILON,
+      ) * POSITION_QUANTIZATION_METERS;
+      routePathDistanceMetersXZ += Math.ceil(
+        horizontalMeters / POSITION_QUANTIZATION_METERS - Number.EPSILON,
+      ) * POSITION_QUANTIZATION_METERS;
+      const slopeDegrees = horizontalMeters === 0
+        ? 90
+        : Math.atan2(Math.abs(dy), horizontalMeters) * 180 / Math.PI;
+      maximumObservedSlopeDegrees = Math.max(
+        maximumObservedSlopeDegrees,
+        Math.ceil(slopeDegrees / 0.000001 - Number.EPSILON) * 0.000001,
+      );
+    }
+    return canonicalRoutePathReceiptV2({
+      kind: "route-path-receipt",
+      schemaVersion: 2,
+      status: "complete",
+      constraintId: "player-to-goal",
+      routeId: "main-route",
+      traversingEntityId: "player",
+      startAnchorEntityId: "spawn",
+      destinationAnchorEntityId: "goal",
+      authoringSpecHash: HASH_A,
+      layoutSolveReportHash: HASH_B,
+      resourceLockHash: HASH_C,
+      traversalGraphHash: HASH_A,
+      routeBuildInputHash: HASH_B,
+      resolvedTraversalLockHash: HASH_C,
+      orderedTraversalSurfaceIdentities: points.map(
+        (_, index) => PROPERTY_SURFACES[index % PROPERTY_SURFACES.length]!,
+      ),
+      graphBuilderProfileRef: GRAPH_BUILDER_PROFILE.resourceRef,
+      graphBuilderResolvedVersion: GRAPH_BUILDER_PROFILE.resolvedVersion,
+      graphBuilderProfileHash: GRAPH_BUILDER_PROFILE.contentHash,
+      orderedTraversalNodeIds: points.map((_, index) => `node-prop-${index}`),
+      orderedTraversalEdgeIds: points
+        .slice(1)
+        .map((_, index) => `edge-prop-${index}`),
+      orderedPathPositionsMetersXYZ: points,
+      routePathDistanceMeters,
+      routePathDistanceMetersXZ,
+      routePathCost: routePathDistanceMeters,
+      maximumObservedSlopeDegrees,
+      maximumObservedStepHeightMeters: 0,
+      minimumObservedClearanceWidthMeters: 0.9,
+      minimumObservedClearanceHeightMeters: 2,
+      maximumObservedSurfaceGapMeters: 0,
+    });
+  }
+
+  function pointAlongPolyline(
+    points: readonly (readonly [number, number, number])[],
+    ratio: number,
+  ): [number, number, number] {
+    const segmentIndex = Math.min(
+      points.length - 2,
+      Math.floor(ratio * (points.length - 1)),
+    );
+    const start = points[segmentIndex]!;
+    const end = points[segmentIndex + 1]!;
+    const local = ratio * (points.length - 1) - segmentIndex;
+    return [
+      start[0] + (end[0] - start[0]) * local,
+      start[1] + (end[1] - start[1]) * local,
+      start[2] + (end[2] - start[2]) * local,
+    ];
+  }
+
+  it("keeps every windowed station output bounded, total-consistent, and deterministic", () => {
+    const random = createSeededRandom(0x6d355eed);
+    for (let caseIndex = 0; caseIndex < 200; caseIndex += 1) {
+      const points = randomPolylinePoints(random);
+      const path = propertyPathReceipt(points);
+      const totalLengthMeters = points.slice(1).reduce(
+        (sum, point, index) =>
+          sum + Math.hypot(
+            point[0] - points[index]![0],
+            point[1] - points[index]![1],
+            point[2] - points[index]![2],
+          ),
+        0,
+      );
+      const foot = pointAlongPolyline(points, random());
+      const previousArcLengthMeters = random() * totalLengthMeters;
+      const maxForwardMeters = WALK_SPEED_METERS_PER_SECOND *
+        FIXED_TIME_STEP_SECONDS +
+        POSITION_QUANTIZATION_METERS;
+
+      const station = advanceRouteRuntimeProbeSupportStationV2(
+        path,
+        foot,
+        previousArcLengthMeters,
+        WALK_SPEED_METERS_PER_SECOND,
+        POSITION_QUANTIZATION_METERS,
+        FIXED_TIME_STEP_SECONDS,
+      );
+
+      expect(station.arcLengthMeters).toBeGreaterThanOrEqual(
+        Math.max(0, previousArcLengthMeters - POSITION_QUANTIZATION_METERS) -
+          1e-9,
+      );
+      expect(station.arcLengthMeters).toBeLessThanOrEqual(
+        Math.min(totalLengthMeters, previousArcLengthMeters + maxForwardMeters) +
+          1e-9,
+      );
+      expect(station.totalArcLengthMeters).toBeCloseTo(totalLengthMeters, 9);
+      expect(station.remainingArcLengthMeters).toBeCloseTo(
+        Math.max(0, station.totalArcLengthMeters - station.arcLengthMeters),
+        9,
+      );
+
+      expect(station.expectedTraversalSurfaceIds.length).toBeGreaterThan(0);
+      for (let index = 1; index < station.expectedTraversalSurfaceIds.length; index += 1) {
+        expect(station.expectedTraversalSurfaceIds[index - 1]! <
+          station.expectedTraversalSurfaceIds[index]!).toBe(true);
+      }
+      const endpointIds = new Set(
+        station.retainedSegmentIndexes.flatMap((index) => [
+          path.orderedTraversalSurfaceIdentities[index]!.traversalSurfaceId,
+          path.orderedTraversalSurfaceIdentities[index + 1]!.traversalSurfaceId,
+        ]),
+      );
+      for (const id of station.expectedTraversalSurfaceIds) {
+        expect(endpointIds.has(id)).toBe(true);
+      }
+      for (let index = 1; index < station.retainedSegmentIndexes.length; index += 1) {
+        expect(station.retainedSegmentIndexes[index]!).toBe(
+          station.retainedSegmentIndexes[index - 1]! + 1,
+        );
+      }
+
+      const repeated = advanceRouteRuntimeProbeSupportStationV2(
+        path,
+        foot,
+        previousArcLengthMeters,
+        WALK_SPEED_METERS_PER_SECOND,
+        POSITION_QUANTIZATION_METERS,
+        FIXED_TIME_STEP_SECONDS,
+      );
+      expect(repeated).toEqual(station);
+    }
+  });
+
+  function pointAtArcLength(
+    points: readonly (readonly [number, number, number])[],
+    arcLengthMeters: number,
+  ): [number, number, number] {
+    let remaining = Math.max(0, arcLengthMeters);
+    for (let index = 1; index < points.length; index += 1) {
+      const start = points[index - 1]!;
+      const end = points[index]!;
+      const length = Math.hypot(
+        end[0] - start[0],
+        end[1] - start[1],
+        end[2] - start[2],
+      );
+      if (remaining <= length || index === points.length - 1) {
+        const ratio = length === 0 ? 0 : Math.min(1, remaining / length);
+        return [
+          start[0] + (end[0] - start[0]) * ratio,
+          start[1] + (end[1] - start[1]) * ratio,
+          start[2] + (end[2] - start[2]) * ratio,
+        ];
+      }
+      remaining -= length;
+    }
+    return [...points[points.length - 1]!] as [number, number, number];
+  }
+
+  it("advances monotonically along a seeded walk and closes the remaining arc at the end", () => {
+    const random = createSeededRandom(0x6d355eed + 1);
+    for (let caseIndex = 0; caseIndex < 60; caseIndex += 1) {
+      const points = randomPolylinePoints(random);
+      const path = propertyPathReceipt(points);
+      const totalLengthMeters = points.slice(1).reduce(
+        (sum, point, index) =>
+          sum + Math.hypot(
+            point[0] - points[index]![0],
+            point[1] - points[index]![1],
+            point[2] - points[index]![2],
+          ),
+        0,
+      );
+      const maxForwardMeters = WALK_SPEED_METERS_PER_SECOND *
+        FIXED_TIME_STEP_SECONDS +
+        POSITION_QUANTIZATION_METERS;
+
+      let previousArcLengthMeters = 0;
+      const stepCount = Math.max(
+        1,
+        Math.ceil(totalLengthMeters / (maxForwardMeters * 0.7)),
+      );
+      for (let step = 1; step <= stepCount; step += 1) {
+        const station = advanceRouteRuntimeProbeSupportStationV2(
+          path,
+          pointAtArcLength(
+            points,
+            Math.min(totalLengthMeters, (step / stepCount) * totalLengthMeters),
+          ),
+          previousArcLengthMeters,
+          WALK_SPEED_METERS_PER_SECOND,
+          POSITION_QUANTIZATION_METERS,
+          FIXED_TIME_STEP_SECONDS,
+        );
+        expect(station.arcLengthMeters).toBeGreaterThanOrEqual(
+          previousArcLengthMeters - POSITION_QUANTIZATION_METERS - 1e-9,
+        );
+        previousArcLengthMeters = station.arcLengthMeters;
+      }
+      const finalStation = advanceRouteRuntimeProbeSupportStationV2(
+        path,
+        points[points.length - 1]!,
+        previousArcLengthMeters,
+        WALK_SPEED_METERS_PER_SECOND,
+        POSITION_QUANTIZATION_METERS,
+        FIXED_TIME_STEP_SECONDS,
+      );
+      expect(finalStation.remainingArcLengthMeters).toBeLessThanOrEqual(
+        maxForwardMeters + POSITION_QUANTIZATION_METERS + 1e-9,
+      );
+    }
+  });
+});

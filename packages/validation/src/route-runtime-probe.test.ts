@@ -1263,3 +1263,102 @@ describe("runRouteRuntimeProbeV2 3D support station", () => {
     expect(hashes[2]).toBe(hashes[0]);
   });
 });
+
+describe("runRouteRuntimeProbeV2 seeded route invariants", () => {
+  // Deterministic mulberry32: the property suite must produce the identical
+  // case list on every run and machine, matching repository determinism rules.
+  function createSeededRandom(seed: number): () => number {
+    let state = seed >>> 0;
+    return () => {
+      state = (state + 0x6d2b79f5) >>> 0;
+      let t = state;
+      t = Math.imul(t ^ (t >>> 15), t | 1);
+      t ^= t + Math.imul(t ^ (t >>> 7), t | 61);
+      return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+    };
+  }
+
+  function randomPolylinePoints(
+    random: () => number,
+  ): readonly Vec3[] {
+    const segmentCount = 1 + Math.floor(random() * 5);
+    const points: Vec3[] = [[0, 0, 0]];
+    let x = 0;
+    let z = 0;
+    for (let index = 0; index < segmentCount; index += 1) {
+      const direction = Math.floor(random() * 4);
+      const lengthMeters = 0.01 + Math.floor(random() * 2000) / 1000;
+      if (direction === 0) x += lengthMeters;
+      else if (direction === 1) x -= lengthMeters;
+      else if (direction === 2) z += lengthMeters;
+      else z -= lengthMeters;
+      points.push([Math.round(x * 1000) / 1000, 0, Math.round(z * 1000) / 1000]);
+    }
+    return points;
+  }
+
+  it("completes seeded random routes while preserving per-Tick progress invariants", async () => {
+    const random = createSeededRandom(0x726f7574);
+    for (let caseIndex = 0; caseIndex < 60; caseIndex += 1) {
+      const points = randomPolylinePoints(random);
+      const path = pathReceipt(points);
+      const port = new ScriptedRuntimePort(
+        path,
+        { positionMetersXYZ: points[0]! },
+        framesAlongPolyline(points, 0.04),
+      );
+
+      const receipt = await run(path, port);
+
+      expect(
+        receipt.status === "failed" ? receipt.failure.kind : receipt.status,
+      ).toBe("complete");
+      expect(receipt.metrics.processedTickCount).toBe(receipt.ticks.length);
+      if (
+        receipt.status === "complete" &&
+        receipt.completionDurationTicks === 0
+      ) {
+        expect(path.routePathDistanceMetersXZ)
+          .toBeLessThanOrEqual(THRESHOLDS.destinationToleranceMetersXZ);
+      }
+      let previousProgressMetersXZ = 0;
+      for (const [index, row] of receipt.ticks.entries()) {
+        expect(row.probeTick).toBe(index + 1);
+        expect(row.routeProgressMetersXZ)
+          .toBeGreaterThanOrEqual(previousProgressMetersXZ);
+        previousProgressMetersXZ = row.routeProgressMetersXZ;
+        expect(row.routeDeviationMetersXZ).toBeGreaterThanOrEqual(0);
+        expect(row.remainingRouteDistanceMetersXZ).toBeGreaterThanOrEqual(0);
+        if (index < receipt.ticks.length - 1) {
+          expect(row.remainingRouteDistanceMetersXZ).toBeCloseTo(
+            Math.max(
+              0,
+              path.routePathDistanceMetersXZ - row.routeProgressMetersXZ,
+            ),
+            9,
+          );
+        }
+        expect(row.expectedTraversalSurfaceIds.length).toBeGreaterThan(0);
+        for (
+          let idIndex = 1;
+          idIndex < row.expectedTraversalSurfaceIds.length;
+          idIndex += 1
+        ) {
+          expect(
+            row.expectedTraversalSurfaceIds[idIndex - 1]! <
+              row.expectedTraversalSurfaceIds[idIndex]!,
+          ).toBe(true);
+        }
+      }
+      const finalTick = receipt.ticks.at(-1);
+      if (
+        receipt.status === "complete" &&
+        receipt.completionDurationTicks === 0
+      ) {
+        expect(finalTick).toBeUndefined();
+      } else {
+        expect(finalTick?.remainingRouteDistanceMetersXZ).toBe(0);
+      }
+    }
+  });
+});
