@@ -59,10 +59,14 @@ assets/subjects/packages/<creator-id>/<subject-id>/v<version>/
 ├── materials/
 │   └── default/
 │       └── material-set.manifest.json
-└── animations/
-    └── <action-id>/
-        ├── clip.glb
-        └── clip.manifest.json
+├── animations/
+│   └── <action-id>/
+│       ├── clip.glb
+│       └── clip.manifest.json
+└── extensions/
+    └── source-archive/
+        ├── original.glb
+        └── original.manifest.json
 ```
 
 Texture artifacts, when present, live below the owning Material Set at
@@ -71,6 +75,13 @@ or texture resources, so this migration must not fabricate texture files.
 
 All paths are immutable after publication. Changed bytes require a new exact resource version and
 content hash.
+
+`extensions/` is the explicit preservation boundary for source content that is not part of the
+standard Model, Material Set, Texture, or Animation Clip contracts. The recovery input is archived
+byte-for-byte as `source-archive/original.glb`; its manifest records the source hash plus cameras,
+lights, glTF extension usage, `extras`, and unknown top-level JSON keys. Extension artifacts are
+provenance/evidence only and have `runtimeConsumption: "forbidden"` in this slice. A future feature
+must define and version a dedicated public contract before Runtime may consume any of them.
 
 ## 4. Artifact contracts for this slice
 
@@ -135,6 +146,19 @@ playback speed ratio, blend duration in seconds, Root Motion mode, and provenanc
 
 The GLB Clip name is provider data. Gameplay and Authoring use the stable semantic `actionId`.
 
+### 4.5 Extension Source Archive
+
+`extensions/source-archive/original.glb` is an exact byte copy of the committed recovery input. It
+exists so unsupported cameras, lights, auxiliary nodes, custom `extras`, and glTF extensions remain
+recoverable without weakening standard-layer validation. `original.manifest.json` records the
+archive hash/length, provenance, a deterministic residue inventory, and
+`runtimeConsumption: "forbidden"`.
+
+The archive must not be parsed as an alternate Model or Clip at Runtime, and preserving it does not
+claim that the unsupported content is valid, secure, or implemented. When an extension becomes a
+product feature, it graduates through a separately reviewed resource contract and migration rather
+than being read opportunistically from this folder.
+
 ## 5. Existing asset migration
 
 ### 5.1 G Bot
@@ -149,6 +173,8 @@ The deterministic recovery tool therefore produces:
 - twenty-five one-Clip Animation GLBs mapped through the existing action manifest;
 - package/model/material/clip manifests with `provenance.mode: "derived-recovery"` and the merged
   GLB hash as the source identity.
+- an exact `extensions/source-archive/original.glb` recovery-input archive and residue manifest;
+  neither is a Runtime input.
 
 Recovery does not claim byte identity with the missing original action files. The existing merged
 GLB remains unchanged and remains the Runtime input. G Bot orientation requires rendered old/new

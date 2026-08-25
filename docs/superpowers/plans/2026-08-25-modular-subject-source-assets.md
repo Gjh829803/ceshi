@@ -4,7 +4,7 @@
 
 **Goal:** Recover the existing merged G Bot and Golden GLBs into deterministic modular product-source packages, inventory all xier120 assets, and publish a concrete product correction guide without changing current Runtime inputs.
 
-**Architecture:** A tested glTF recovery library reads committed self-contained GLBs, validates an explicit package definition, and emits one animation-free Model GLB, one Material Set manifest, and one animation-only GLB per semantic action. A CLI stages the complete nested directory and atomically promotes it in write mode, or compares exact bytes in check mode. Existing Runtime GLBs and Registry contracts remain unchanged.
+**Architecture:** A tested glTF recovery library reads committed self-contained GLBs, validates an explicit package definition, and emits one animation-free Model GLB, one Material Set manifest, one animation-only GLB per semantic action, and one byte-identical non-Runtime Source Archive under `extensions/`. A CLI stages the complete nested directory and atomically promotes it in write mode, or compares exact bytes in check mode. Existing Runtime GLBs and Registry contracts remain unchanged.
 
 **Tech Stack:** TypeScript 5.9, Node.js 24 APIs, Vitest 3.2, `@gltf-transform/core` 4.4.2, `@gltf-transform/functions` 4.4.2, existing WorldKit hashing/canonical JSON conventions.
 
@@ -131,6 +131,12 @@ Material, Texture, Image, Camera, and external URI facts. Reject all non-finite 
 duplicate action IDs/source Clips, missing configured Clips, unexpected unmapped Clips, external
 URIs, zero-duration Clips, and any rigged source whose Skin count is not exactly one.
 
+The recovered package also exposes `sourceArchive`: unchanged input bytes plus a canonical
+`extensions/source-archive/original.manifest.json`. Its deterministic residue inventory records
+Camera/Light counts, glTF `extensionsUsed`/`extensionsRequired`, root/Node/Material `extras` counts,
+and unknown top-level GLB JSON keys. The archive manifest sets
+`runtimeConsumption: "forbidden"`; unknown content must not enter standard Model or Clip layers.
+
 Compute `rigSignatureHash` from canonical JSON containing each joint's full path, parent path,
 translation, rotation, scale, and inverse-bind matrix row in stable joint order.
 
@@ -155,6 +161,7 @@ Run the focused test after each case. Add tests proving stable diagnostics for:
 - static GLB supplied with actions;
 - Model/Clip Rig signature mismatch after a joint transform mutation;
 - two independent recoveries produce byte-identical GLBs and manifests.
+- Source Archive bytes equal the input byte-for-byte and its manifest forbids Runtime consumption.
 
 Run:
 
@@ -190,6 +197,7 @@ git commit -m "feat(assets): add deterministic subject source recovery"
 In temporary directories, execute the real CLI library against Golden and assert:
 
 - write mode publishes the exact nested inventory only after complete validation;
+- write mode includes the exact Source Archive and residue manifest under `extensions/`;
 - check mode succeeds against unchanged output;
 - tampering one Clip byte produces `MODULAR_SUBJECT_SOURCE_OUTPUT_MISMATCH` and does not rewrite it;
 - injected staging failure preserves the prior target directory byte-for-byte;
@@ -272,6 +280,7 @@ Expected report:
 
 - G Bot: one Model, one Material Set, twenty-five Animation Clips;
 - Golden: one Model, one Material Set, four Animation Clips;
+- each package: one byte-identical recovery-input archive plus a non-Runtime residue manifest;
 - no current Runtime path modified.
 
 - [ ] **Step 2: Verify exact deterministic outputs**
@@ -316,6 +325,7 @@ git commit -m "feat(assets): recover modular G Bot and Golden sources"
 - Modify: `scripts/modular-subject-source-packages.test.ts`
 - Create: `assets/subjects/packages/migration-inventory.json`
 - Create: `docs/20-modular-subject-source-assets.md`
+- Modify: `docs/16-subject-assets-3c-integration.md`
 
 **Interfaces:**
 - Consumes: committed xier120 Registry manifests, source inventory, runtime GLB bytes, and Task 3 package manifests.
@@ -385,12 +395,18 @@ Expected: 21/21 rows verified, including 19/19 xier120 source/runtime hashes.
 - evidence layering: structural recovery is not rendered equivalence;
 - the next approved Runtime slice, without claiming it is implemented.
 
+Update `docs/16-subject-assets-3c-integration.md`, the existing Subject asset import guide, so its
+product-delivery section points to the modular package layout and correction guide, distinguishes
+product-authoritative sources from current self-contained Runtime GLBs, and documents the
+`extensions/` preservation/forbidden-consumption rule. Do not leave the older guide implying that a
+single merged GLB is the preferred editable product source.
+
 Run `git diff --check` and manually verify every local link and command.
 
 - [ ] **Step 5: Commit Task 4**
 
 ```bash
-git add scripts/lib/subject-source-migration-audit.ts scripts/lib/subject-source-migration-audit.test.ts scripts/modular-subject-source-packages.ts scripts/modular-subject-source-packages.test.ts assets/subjects/packages/migration-inventory.json docs/20-modular-subject-source-assets.md
+git add scripts/lib/subject-source-migration-audit.ts scripts/lib/subject-source-migration-audit.test.ts scripts/modular-subject-source-packages.ts scripts/modular-subject-source-packages.test.ts assets/subjects/packages/migration-inventory.json docs/20-modular-subject-source-assets.md docs/16-subject-assets-3c-integration.md
 git commit -m "docs(assets): publish subject migration corrections"
 ```
 
