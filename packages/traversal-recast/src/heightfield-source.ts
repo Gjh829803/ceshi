@@ -1051,14 +1051,6 @@ export function createRouteBuildInputFromPlanV2(
   if (!(plan.terrain.sizeMetersXZ[0] > 0) || !(plan.terrain.sizeMetersXZ[1] > 0)) {
     failStructural("contract-invalid", "terrain sizeMetersXZ must be positive.");
   }
-  const terrainMinimum: Vec2 = [
-    plan.terrain.centerMetersXZ[0] - plan.terrain.sizeMetersXZ[0] / 2,
-    plan.terrain.centerMetersXZ[1] - plan.terrain.sizeMetersXZ[1] / 2,
-  ];
-  const terrainMaximum: Vec2 = [
-    plan.terrain.centerMetersXZ[0] + plan.terrain.sizeMetersXZ[0] / 2,
-    plan.terrain.centerMetersXZ[1] + plan.terrain.sizeMetersXZ[1] / 2,
-  ];
   const endpoints = [
     {
       label: "start",
@@ -1073,12 +1065,8 @@ export function createRouteBuildInputFromPlanV2(
   ] as const;
   for (const endpoint of endpoints) {
     const point: Vec2 = [endpoint.position[0], endpoint.position[2]];
-    if (
-      point[0] < terrainMinimum[0] || point[0] > terrainMaximum[0] ||
-      point[1] < terrainMinimum[1] || point[1] > terrainMaximum[1] ||
-      !inHardRibbon(point, route.pointsMetersXZ, route.widthMeters)
-    ) {
-      failSemantic(endpoint.code, `${endpoint.label} Anchor is outside the terrain or exact hard ribbon.`);
+    if (!inHardRibbon(point, route.pointsMetersXZ, route.widthMeters)) {
+      failSemantic(endpoint.code, `${endpoint.label} Anchor is outside the exact hard ribbon.`);
     }
   }
 

@@ -48,6 +48,7 @@
     "test": "pnpm test:census && pnpm test:contract && pnpm test:resource-heavy",
     "test:census": "tsx scripts/verify-test-gate-census.ts",
     "test:contract": "vitest run --config vitest.contract.config.ts",
+    "test:contract:coverage": "vitest run --coverage --config vitest.contract.config.ts --coverage.reporter=text --coverage.reporter=json-summary",
     "test:resource-heavy": "vitest run --config vitest.resource-heavy.config.ts",
     "test:focused": "vitest run",
     "test:scenes": "vitest run packages/world/src/scene.test.ts apps/playground/src/scenes/scenes.test.ts",
