@@ -91,9 +91,9 @@
    contract lane 内，不得把别名的二次通过计成新增证据。
    `pnpm test:contract:coverage` 会用 coverage instrumentation 重跑 contract lane，只在覆盖率
    claim 或盲区诊断需要时运行；它不是 root aggregate 通过后的默认第二遍 contract gate。
-3. 不得反向假设聚合覆盖。test census 只闭合 Vitest `.test.ts`；`pnpm test:studio`、
-   `pnpm test:lwdp-client`、其余 Node `.test.mjs`、Python/Site 检查、生产 build、Browser
-   verifier、rendered visual 与 manual interaction 仍是独立证据层。审查触及相应输入时必须
+3. 不得反向假设聚合覆盖。test census 只闭合 Vitest `.test.ts`；`pnpm test:studio` 与
+   `pnpm test:independent`（root Node `.test.mjs`、Cursor Python、Site）仍是独立门禁，生产 build、
+   Browser verifier、rendered visual 与 manual interaction 仍是不同证据层。审查触及相应输入时必须
    直接运行对应 lane，或明确记为未跑。tracked CI 覆盖了哪些独立 lane，也必须以当前 workflow
    为准，不能从“存在 CI”推导成所有证据层已闭合。
 4. 后续改动只让它可能影响的证据失效：Runtime/shared contract 改动会失效相关回归、typecheck、
@@ -116,10 +116,10 @@
 | Root Vitest aggregate | `pnpm test` | census 后运行 contract + resource-heavy，两 lane 精确覆盖 `.test.ts` 并已包含 scenes；不包含独立 Node/Python/Site tests |
 | Contract coverage diagnostic | `pnpm test:contract:coverage` | 按需重跑 contract 并生成 coverage；证明覆盖率 claim，不作为默认 completion gate 或新增行为证据 |
 | Studio | `pnpm test:studio` | Studio Node tests；不被 root Vitest 包含 |
-| LWDP client | `pnpm test:lwdp-client` | LWDP Node tests；不被 root Vitest 包含 |
+| Independent | `pnpm test:independent` | fail-closed census 后顺序运行 root Node、Cursor Python、Site；不被 root Vitest 包含 |
 | Production bundle | `pnpm build` 或受影响 app 的 build | bundling 与 shipped import graph；不证明交互/像素 |
-| Tracked CI | `.github/workflows/ci.yml` 的实际命令 | 当前组合 generated diff、typecheck、Studio/LWDP/Seedance、root test 与 build；未列入 workflow 的 Node/Python/Site/Browser/visual/manual lane 仍未覆盖 |
-| Browser / capability | 直接相关 verifier | 真实 Host/Runtime 接线；若命令会更新 tracked artifact，按上面的只读规则处置 |
+| Tracked CI | `.github/workflows/ci.yml` 的实际命令 | 当前组合临时 generated check、typecheck、Studio、independent、root test、build 与 clean-tree；未列入 workflow 的 Browser/visual/manual lane 仍未覆盖 |
+| Browser / capability | 默认 verifier；发布时使用 `*:update` | 默认真实检查后清理 staging；只有显式 update 可替换 tracked artifact |
 | Visual / interaction | 截图检查、manual interaction | 可见结果或手感；不能由单元测试、hash 或 smoke 替代 |
 
 ## 3. 输出格式

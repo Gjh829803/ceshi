@@ -5,21 +5,8 @@ import path from "node:path";
 import test from "node:test";
 
 import { importGeneratedImages } from "./import-generated-images.mjs";
-import { createVisualPlanSource } from "./write-visual-plan-manifest.mjs";
 
 const PNG = Buffer.from("89504e470d0a1a0a00000000", "hex");
-
-test("writes a minimal escaped visual plan manifest", () => {
-  const source = createVisualPlanSource({
-    sceneId: "safe-world-1234",
-    request: 'A world with "quotes" and a newline\nwithout executable interpolation.',
-    references: ["/scene-plans/safe-world-1234/reference-0.png"],
-  });
-  assert.match(source, /defineVisualWorldPlan/);
-  assert.match(source, /safe-world-1234/);
-  assert.match(source, /reference-0\.png/);
-  assert.doesNotMatch(source, /entityCatalog|locomotionBindings|worldPrompt/);
-});
 
 test("imports fresh PNGs from the transcript session in generation order", async () => {
   const root = await mkdtemp(path.join(os.tmpdir(), "worldkit-image-delivery-"));

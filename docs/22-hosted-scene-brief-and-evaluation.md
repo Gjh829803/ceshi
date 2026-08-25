@@ -50,7 +50,7 @@ The Builder maps each `visualTargetId` to one or more runtime entity IDs. The tr
 
 ## Portable self-checkers
 
-Planner and Builder skills include single-file checkers for isolated cloud workspaces. They are generated from repository source, not manually maintained as a second compiler. `pnpm build:agent-self-check` rebuilds the Builder checker, and the parity test verifies the bundled checker against source behavior.
+Planner and Builder skills include single-file checkers for isolated cloud workspaces. They are generated from repository source, not manually maintained as a second compiler. `pnpm generate:agent-self-check` is the explicit tracked-output producer; `pnpm check:agent-self-check` builds into a temporary directory and byte-compares without changing the repository. The parity test executes the committed bundle against source behavior without rebuilding it first.
 
 The Builder checker covers current Authoring V4 parsing, layout, normalization, IR V4 / ExecutionPlan V5 compilation, Registry closure, Gameplay Bootstrap construction, resource budgets, spawn support and implementation-map integrity. `maxVertices`, `maxTriangles`, and `maxColliders` are all hard compiler gates.
 

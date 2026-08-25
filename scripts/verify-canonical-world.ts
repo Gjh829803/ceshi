@@ -24,7 +24,11 @@ import {
   explainSubjectFile,
   type SubjectExplanationSuccessV1,
 } from "./lib/subject-explain";
-import { promoteArtifactDirectory } from "./lib/artifact-directory-promotion";
+import {
+  finalizeArtifactDirectory,
+  parseArtifactPublicationMode,
+  type ArtifactPublicationMode,
+} from "./lib/artifact-directory-promotion";
 import { launchChromiumWithSystemFallback } from "./lib/playwright-browser-launch";
 import { startWorldkitServer } from "./lib/worldkit-server";
 import { main as worldkitMain } from "./worldkit";
@@ -818,31 +822,34 @@ async function verifyBrowserProtocolAndPhysics(): Promise<{
   return result;
 }
 
-async function run(): Promise<void> {
+async function run(publicationMode: ArtifactPublicationMode): Promise<void> {
   const temporaryDirectory = await mkdtemp(
     path.join(path.dirname(TARGET_ARTIFACT_DIRECTORY), ".package-subject-world.tmp-"),
   );
   const paths = artifactPaths(temporaryDirectory);
-  let promoted = false;
   let artifacts: Awaited<ReturnType<typeof verifyArtifacts>>;
   let physics: Awaited<ReturnType<typeof verifyBrowserProtocolAndPhysics>>;
+  let publication: Awaited<ReturnType<typeof finalizeArtifactDirectory>>;
   try {
     await runCliGates(paths);
     artifacts = await verifyArtifacts(paths);
     physics = await verifyBrowserProtocolAndPhysics();
-    const promotion = await promoteArtifactDirectory({
+    publication = await finalizeArtifactDirectory({
+      mode: publicationMode,
       temporaryDirectory,
       targetDirectory: TARGET_ARTIFACT_DIRECTORY,
       expectedFilenames: CANONICAL_ARTIFACT_FILES,
     });
-    promoted = true;
-    if (promotion.backupGarbageCollection === "deferred") {
+    if (
+      publication.publicationMode === "update" &&
+      publication.backupGarbageCollection === "deferred"
+    ) {
       process.stderr.write(
-        `Canonical artifact backup GC deferred at '${promotion.deferredBackupDirectory}'.\n`,
+        `Canonical artifact backup GC deferred at '${publication.deferredBackupDirectory}'.\n`,
       );
     }
   } finally {
-    if (!promoted) await rm(temporaryDirectory, { recursive: true, force: true });
+    await rm(temporaryDirectory, { recursive: true, force: true });
   }
   process.stdout.write(
     `${JSON.stringify(
@@ -876,15 +883,19 @@ async function run(): Promise<void> {
           subjectDefinition: artifacts.subjectDefinitionHash,
           resourceLock: artifacts.resourceLockHash,
         },
-        artifacts: {
-          build: path.join(TARGET_ARTIFACT_DIRECTORY, "world.build.json"),
-          screenshot: {
-            path: path.join(TARGET_ARTIFACT_DIRECTORY, "world.png"),
-            ...artifacts.dimensions,
-          },
-          snapshot: path.join(TARGET_ARTIFACT_DIRECTORY, "snapshot.json"),
-          explain: path.join(TARGET_ARTIFACT_DIRECTORY, "explain.json"),
-        },
+        publicationMode: publication.publicationMode,
+        artifacts:
+          publication.publicationMode === "update"
+            ? {
+                build: path.join(TARGET_ARTIFACT_DIRECTORY, "world.build.json"),
+                screenshot: {
+                  path: path.join(TARGET_ARTIFACT_DIRECTORY, "world.png"),
+                  ...artifacts.dimensions,
+                },
+                snapshot: path.join(TARGET_ARTIFACT_DIRECTORY, "snapshot.json"),
+                explain: path.join(TARGET_ARTIFACT_DIRECTORY, "explain.json"),
+              }
+            : { retained: false, screenshot: artifacts.dimensions },
         physicsBodyCount: artifacts.bodyCount,
         ...physics,
       },
@@ -895,7 +906,7 @@ async function run(): Promise<void> {
 }
 
 try {
-  await run();
+  await run(parseArtifactPublicationMode(process.argv.slice(2)));
 } catch (error) {
   process.stderr.write(
     `${error instanceof Error ? error.stack ?? error.message : String(error)}\n`,

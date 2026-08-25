@@ -34,7 +34,11 @@ import {
   type LayoutSolveReportV1,
   type ResolvedLayoutInputV1,
 } from "../packages/layout-solver/src/index.js";
-import { promoteArtifactDirectory } from "./lib/artifact-directory-promotion";
+import {
+  finalizeArtifactDirectory,
+  parseArtifactPublicationMode,
+  type ArtifactPublicationMode,
+} from "./lib/artifact-directory-promotion";
 import { layoutSolveFile } from "./lib/layout-artifacts";
 import { launchChromiumWithSystemFallback } from "./lib/playwright-browser-launch";
 import { loadWorldkitRoutePipeline } from "./lib/worldkit-pipeline";
@@ -648,7 +652,9 @@ async function solveInto(directory: string) {
   };
 }
 
-export async function runPlacementLayoutVerification(): Promise<void> {
+export async function runPlacementLayoutVerification(
+  publicationMode: ArtifactPublicationMode = "check",
+): Promise<void> {
   const sourceText = await readFile(INPUT_PATH, "utf8");
   const spec = parseAuthoringSpec(sourceText);
   assertCoastalFixtureShape(spec);
@@ -661,7 +667,6 @@ export async function runPlacementLayoutVerification(): Promise<void> {
       mkdtemp(path.join(tmpdir(), `worldkit-placement-${name}-`)),
     ),
   );
-  let promoted = false;
   try {
     const primary = await solveInto(solveDirectories[0]!);
     const repeat = await solveInto(solveDirectories[1]!);
@@ -776,23 +781,28 @@ export async function runPlacementLayoutVerification(): Promise<void> {
         `${stringifyCanonicalJson(verification)}\n`,
       ),
     ]);
-    const publication = await promoteArtifactDirectory({
+    const publication = await finalizeArtifactDirectory({
+      mode: publicationMode,
       temporaryDirectory: stagingDirectory,
       targetDirectory: TARGET_ARTIFACT_DIRECTORY,
       expectedFilenames: ARTIFACT_FILENAMES,
     });
-    promoted = true;
     process.stdout.write(`${JSON.stringify({
       ok: true,
       hashes: verification.hashes,
       screenshot: verification.screenshot,
       searchNodeCount: primary.report.searchNodeCount,
       constraints: Object.keys(primary.report.constraintResultsById).length,
-      artifacts: TARGET_ARTIFACT_DIRECTORY,
-      backupGarbageCollection: publication.backupGarbageCollection,
+      publicationMode: publication.publicationMode,
+      artifacts: publication.publicationMode === "update"
+        ? TARGET_ARTIFACT_DIRECTORY
+        : null,
+      ...(publication.publicationMode === "update"
+        ? { backupGarbageCollection: publication.backupGarbageCollection }
+        : {}),
     }, null, 2)}\n`);
   } finally {
-    if (!promoted) await rm(stagingDirectory, { recursive: true, force: true });
+    await rm(stagingDirectory, { recursive: true, force: true });
     await Promise.all(
       solveDirectories.map((directory) => rm(directory, { recursive: true, force: true })),
     );
@@ -801,7 +811,9 @@ export async function runPlacementLayoutVerification(): Promise<void> {
 
 if (process.argv[1] !== undefined && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
   try {
-    await runPlacementLayoutVerification();
+    await runPlacementLayoutVerification(
+      parseArtifactPublicationMode(process.argv.slice(2)),
+    );
   } catch (error) {
     process.stderr.write(`${error instanceof Error ? error.stack ?? error.message : String(error)}\n`);
     process.exitCode = 1;

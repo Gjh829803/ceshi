@@ -22,6 +22,12 @@ export type ArtifactDirectoryPromotionResult =
       deferredBackupDirectory: string;
     };
 
+export type ArtifactPublicationMode = "check" | "update";
+
+export type FinalizeArtifactDirectoryResult =
+  | { publicationMode: "check" }
+  | ({ publicationMode: "update" } & ArtifactDirectoryPromotionResult);
+
 const DEFAULT_FILE_SYSTEM: ArtifactDirectoryPromotionFileSystem = {
   rename,
   rm,
@@ -48,6 +54,31 @@ async function assertExactFiles(
       `Artifact directory file inventory mismatch: expected ${JSON.stringify(expected)}, received ${JSON.stringify(actualFilenames)}.`,
     );
   }
+}
+
+export function parseArtifactPublicationMode(
+  arguments_: readonly string[],
+): ArtifactPublicationMode {
+  if (arguments_.length === 0) return "check";
+  if (arguments_.length === 1 && arguments_[0] === "--update") return "update";
+  throw new Error(
+    "ARTIFACT_PUBLICATION_ARGUMENT_INVALID: expected no arguments or exactly '--update'.",
+  );
+}
+
+export async function finalizeArtifactDirectory(
+  options: PromoteArtifactDirectoryOptions & {
+    readonly mode: ArtifactPublicationMode;
+  },
+): Promise<FinalizeArtifactDirectoryResult> {
+  if (options.mode === "check") {
+    await assertExactFiles(options.temporaryDirectory, options.expectedFilenames);
+    return { publicationMode: "check" };
+  }
+  return {
+    publicationMode: "update",
+    ...(await promoteArtifactDirectory(options)),
+  };
 }
 
 export async function promoteArtifactDirectory(
