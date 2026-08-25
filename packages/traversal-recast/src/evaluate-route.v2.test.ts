@@ -150,6 +150,27 @@ describe("evaluateRequiredRouteV2", () => {
     ).toBeGreaterThanOrEqual(2);
   });
 
+  it("fails closed when the start Anchor lies between two walkable layers", async () => {
+    const receipt = createMultiSurfaceRouteBuildInputReceiptV2({
+      ambiguousStartLayerHeightMeters: 2.6,
+    });
+    const result = await evaluateRequiredRouteV2({ buildInputReceipt: receipt });
+    expect(result.status).toBe("incomplete");
+    if (result.status !== "incomplete") return;
+    expect(result.graphStatus).toBe("complete");
+    expect(result.connectivityFailure.reason.kind).toBe(
+      "start-surface-ambiguous",
+    );
+    expect(result.connectivityFailure.reason.code).toBe(
+      "ROUTE_CORRIDOR_LAYER_AMBIGUOUS",
+    );
+    expect(
+      result.connectivityFailure.relatedTraversalSurfaceIdentities.map(
+        (identity) => identity.traversalSurfaceId,
+      ),
+    ).toEqual(["surface-heightfield", "surface-start-upper-deck"]);
+  });
+
   it("fails closed when 62 Traversal Surfaces exceed the locked count budget", () => {
     expect(() => createMultiSurfaceRouteBuildInputReceiptV2({
       extraDummySurfaceCount: 58,

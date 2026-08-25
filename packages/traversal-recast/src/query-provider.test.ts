@@ -36,6 +36,14 @@ type QueryProviderModule = Readonly<{
       halfExtentsMetersXYZ: readonly [number, number, number];
     }>,
   ) => unknown;
+  findNearestRecastPolygonAmongRefsV1?: (
+    receipt: unknown,
+    input: Readonly<{
+      positionMetersXYZ: readonly [number, number, number];
+      halfExtentsMetersXYZ: readonly [number, number, number];
+      polygonRefs: readonly number[];
+    }>,
+  ) => unknown;
   findStraightRecastPathV1?: (
     receipt: unknown,
     input: Readonly<{
@@ -75,11 +83,13 @@ async function withPlaneQuery(
       expect(typeof module.createRecastQueryProviderV1).toBe("function");
       expect(typeof module.destroyRecastQueryProviderV1).toBe("function");
       expect(typeof module.findNearestRecastPolygonV1).toBe("function");
+      expect(typeof module.findNearestRecastPolygonAmongRefsV1).toBe("function");
       expect(typeof module.findStraightRecastPathV1).toBe("function");
       if (
         module.createRecastQueryProviderV1 === undefined ||
         module.destroyRecastQueryProviderV1 === undefined ||
         module.findNearestRecastPolygonV1 === undefined ||
+        module.findNearestRecastPolygonAmongRefsV1 === undefined ||
         module.findStraightRecastPathV1 === undefined
       ) return;
       const completeModule = module as Required<QueryProviderModule>;
@@ -282,6 +292,51 @@ describe("raw Recast query provider", () => {
         positionMetersXYZ: [1_000, 1_000, 1_000],
         halfExtentsMetersXYZ: [0.01, 0.01, 0.01],
       })).toEqual({ kind: "miss" });
+    });
+  });
+
+  it("selects the same closest allowed polygon regardless of Ref order", async () => {
+    await withPlaneQuery((module, receipt) => {
+      if (Raw.Module === undefined) throw new Error("expected initialized Raw module");
+      const queryPrototype = Raw.Module.NavMeshQuery.prototype;
+      const originalClosestPointOnPoly = queryPrototype.closestPointOnPoly;
+      queryPrototype.closestPointOnPoly = function closestAllowed(
+        polygonRef,
+        _position,
+        closestPoint,
+        isOverPolygon,
+      ) {
+        closestPoint.x = polygonRef === 3 ? 1 : 2;
+        closestPoint.y = 0;
+        closestPoint.z = 0;
+        isOverPolygon.value = true;
+        return Detour.DT_SUCCESS;
+      };
+      try {
+        const forward = module.findNearestRecastPolygonAmongRefsV1(receipt, {
+          positionMetersXYZ: [0, 0, 0],
+          halfExtentsMetersXYZ: [3, 1, 1],
+          polygonRefs: [3, 9],
+        });
+        const reversed = module.findNearestRecastPolygonAmongRefsV1(receipt, {
+          positionMetersXYZ: [0, 0, 0],
+          halfExtentsMetersXYZ: [3, 1, 1],
+          polygonRefs: [9, 3],
+        });
+        expect(reversed).toEqual(forward);
+        expect(forward).toMatchObject({
+          kind: "complete",
+          polygonRef: 3,
+          positionMetersXYZ: [1, 0, 0],
+        });
+        expect(() => module.findNearestRecastPolygonAmongRefsV1(receipt, {
+          positionMetersXYZ: [0, 0, 0],
+          halfExtentsMetersXYZ: [3, 1, 1],
+          polygonRefs: [0x1_0000_0000],
+        })).toThrow("positive unsigned 32-bit integers");
+      } finally {
+        queryPrototype.closestPointOnPoly = originalClosestPointOnPoly;
+      }
     });
   });
 

@@ -9,7 +9,7 @@ import {
   type RouteBuildInputReceiptV2,
   type RouteBuildInputV2,
 } from "@whitebox-world/traversal";
-import { Raw } from "recast-navigation";
+import { Detour, Raw } from "recast-navigation";
 import { describe, expect, it } from "vitest";
 
 import {
@@ -275,13 +275,11 @@ describe("evaluateRequiredRouteV2", () => {
     await evaluateRequiredRouteV2({ buildInputReceipt: flatReceipt() });
     if (Raw.Module === undefined) throw new Error("expected initialized Raw module");
     const queryPrototype = Raw.Module.NavMeshQuery.prototype;
-    const originalFindNearestPoly = queryPrototype.findNearestPoly;
-    let queryCount = 0;
-    queryPrototype.findNearestPoly = function findNearestWithForcedStartMiss(...args) {
-      const status = originalFindNearestPoly.call(this, ...args);
-      queryCount += 1;
-      if (queryCount === 1) args[3].value = 0;
-      return status;
+    const originalClosestPointOnPoly = queryPrototype.closestPointOnPoly;
+    queryPrototype.closestPointOnPoly = function closestWithForcedStartMiss(...args) {
+      return args[1][0]! < 4
+        ? Detour.DT_FAILURE
+        : originalClosestPointOnPoly.call(this, ...args);
     };
     try {
       const result = await evaluateRequiredRouteV2({
@@ -295,7 +293,7 @@ describe("evaluateRequiredRouteV2", () => {
         anchorEntityId: "anchor-start",
       });
     } finally {
-      queryPrototype.findNearestPoly = originalFindNearestPoly;
+      queryPrototype.closestPointOnPoly = originalClosestPointOnPoly;
     }
   });
 
@@ -303,13 +301,11 @@ describe("evaluateRequiredRouteV2", () => {
     await evaluateRequiredRouteV2({ buildInputReceipt: flatReceipt() });
     if (Raw.Module === undefined) throw new Error("expected initialized Raw module");
     const queryPrototype = Raw.Module.NavMeshQuery.prototype;
-    const originalFindNearestPoly = queryPrototype.findNearestPoly;
-    let queryCount = 0;
-    queryPrototype.findNearestPoly = function findNearestWithFilteredDestination(...args) {
-      const status = originalFindNearestPoly.call(this, ...args);
-      queryCount += 1;
-      if (queryCount === 2) args[3].value = 0xffff_ffff;
-      return status;
+    const originalClosestPointOnPoly = queryPrototype.closestPointOnPoly;
+    queryPrototype.closestPointOnPoly = function closestWithFilteredDestination(...args) {
+      return args[1][0]! > 4
+        ? Detour.DT_FAILURE
+        : originalClosestPointOnPoly.call(this, ...args);
     };
     try {
       const result = await evaluateRequiredRouteV2({
@@ -323,7 +319,7 @@ describe("evaluateRequiredRouteV2", () => {
         anchorEntityId: "anchor-destination",
       });
     } finally {
-      queryPrototype.findNearestPoly = originalFindNearestPoly;
+      queryPrototype.closestPointOnPoly = originalClosestPointOnPoly;
     }
   });
 
@@ -347,8 +343,8 @@ describe("evaluateRequiredRouteV2", () => {
     await evaluateRequiredRouteV2({ buildInputReceipt: flatReceipt() });
     if (Raw.Module === undefined) throw new Error("expected initialized Raw module");
     const queryPrototype = Raw.Module.NavMeshQuery.prototype;
-    const originalFindNearestPoly = queryPrototype.findNearestPoly;
-    queryPrototype.findNearestPoly = () => {
+    const originalClosestPointOnPoly = queryPrototype.closestPointOnPoly;
+    queryPrototype.closestPointOnPoly = () => {
       throw undefined;
     };
     let didThrow = false;
@@ -359,7 +355,7 @@ describe("evaluateRequiredRouteV2", () => {
       didThrow = true;
       caught = error;
     } finally {
-      queryPrototype.findNearestPoly = originalFindNearestPoly;
+      queryPrototype.closestPointOnPoly = originalClosestPointOnPoly;
     }
     expect(didThrow).toBe(true);
     expect(caught).toBeUndefined();

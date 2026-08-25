@@ -255,6 +255,7 @@ export interface MultiSurfaceRouteFixtureOptionsV2 {
   readonly walkwayMaximumZ?: number;
   readonly includeLowOverhead?: boolean;
   readonly emptyTerrain?: boolean;
+  readonly ambiguousStartLayerHeightMeters?: number;
 }
 
 export function createMultiSurfaceRouteBuildInputReceiptV2(
@@ -347,6 +348,20 @@ export function createMultiSurfaceRouteBuildInputReceiptV2(
     }),
     HASH_E,
   );
+  const startUpperDeck = options.ambiguousStartLayerHeightMeters === undefined
+    ? undefined
+    : collider(
+        "start-upper-deck",
+        boxSoup({
+          minimumX: 0,
+          maximumX: 4,
+          minimumZ: 0,
+          maximumZ: 6,
+          bottomMeters: options.ambiguousStartLayerHeightMeters - 0.2,
+          topMeters: options.ambiguousStartLayerHeightMeters,
+        }),
+        HASH_E,
+      );
   const extraUnbound = [
     ...(options.includeUnboundWall === true ? [wall] : []),
     ...(options.includeLowOverhead === true ? [overhead] : []),
@@ -355,7 +370,7 @@ export function createMultiSurfaceRouteBuildInputReceiptV2(
     extraUnbound.length > 0
       ? [platform, ramp, step, ...extraUnbound, ...dummyColliders]
       : [platform, ramp, step, ...dummyColliders]
-  ).sort((left, right) =>
+  ).concat(startUpperDeck === undefined ? [] : [startUpperDeck]).sort((left, right) =>
     left.colliderSubshapeId < right.colliderSubshapeId
       ? -1
       : left.colliderSubshapeId > right.colliderSubshapeId
@@ -373,6 +388,14 @@ export function createMultiSurfaceRouteBuildInputReceiptV2(
         ),
         surface("surface-ramp", ramp.entityId, ramp.colliderSubshapeId, HASH_C),
         surface("surface-step", step.entityId, step.colliderSubshapeId, HASH_D),
+        ...(startUpperDeck === undefined
+          ? []
+          : [surface(
+              "surface-start-upper-deck",
+              startUpperDeck.entityId,
+              startUpperDeck.colliderSubshapeId,
+              HASH_E,
+            )]),
       ];
   const dummySurfaces = dummyColliders.map((row, index) => surface(
     `surface-dummy-${String(index).padStart(2, "0")}`,
@@ -393,7 +416,9 @@ export function createMultiSurfaceRouteBuildInputReceiptV2(
   );
   const destinationX = 18 + gapMeters;
   const emptyTerrain = options.emptyTerrain === true;
-  const startPositionMetersXYZ = emptyTerrain
+  const startPositionMetersXYZ = options.ambiguousStartLayerHeightMeters !== undefined
+    ? [2, options.ambiguousStartLayerHeightMeters / 2, 3] as const
+    : emptyTerrain
     ? [8, stepHeightMeters, 3] as const
     : [2, 0, 3] as const;
   const destinationPositionMetersXYZ = emptyTerrain

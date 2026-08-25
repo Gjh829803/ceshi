@@ -48,9 +48,9 @@ import {
 } from "./provider-lifecycle.js";
 import {
   createRecastQueryProviderV1,
-  findNearestRecastPolygonV1,
+  findNearestRecastPolygonAmongRefsV1,
   findStraightRecastPathV1,
-  type FindNearestRecastPolygonInputV1,
+  type FindNearestRecastPolygonAmongRefsInputV1,
   type FindStraightRecastPathInputV1,
   type RecastNearestPolygonResultV1,
   type RecastQueryProviderReceiptV1,
@@ -83,7 +83,7 @@ export class RouteConnectivityOperationAbortedErrorV2 extends Error {
 
 export interface TraversalRouteQueryProviderV1 {
   readonly findNearestPolygon: (
-    input: FindNearestRecastPolygonInputV1,
+    input: FindNearestRecastPolygonAmongRefsInputV1,
   ) => RecastNearestPolygonResultV1;
   readonly findStraightPath: (
     input: FindStraightRecastPathInputV1,
@@ -462,6 +462,114 @@ function endpointFailureV2(
   );
 }
 
+function endpointAmbiguityFailureV2(
+  receipt: RouteBuildInputReceiptV2,
+  graph: TraversalGraphV2,
+  endpoint: "start" | "destination",
+  identities: readonly TraversalSurfaceIdentityV1[],
+): RouteConnectivityResultV2 {
+  const anchor = endpoint === "start"
+    ? receipt.input.startAnchor
+    : receipt.input.destinationAnchor;
+  const quantum = receipt.input.capabilityEnvelope.positionQuantizationMeters;
+  return failureResultV2(
+    receipt,
+    "incomplete",
+    graph,
+    endpoint === "start"
+      ? {
+          kind: "start-surface-ambiguous",
+          code: "ROUTE_CORRIDOR_LAYER_AMBIGUOUS",
+          anchorEntityId: anchor.entityId,
+          positionMetersXYZ: quantizeVec3(anchor.positionMetersXYZ, quantum),
+        }
+      : {
+          kind: "destination-surface-ambiguous",
+          code: "ROUTE_CORRIDOR_LAYER_AMBIGUOUS",
+          anchorEntityId: anchor.entityId,
+          positionMetersXYZ: quantizeVec3(anchor.positionMetersXYZ, quantum),
+        },
+    sortIdentitiesV2(identities),
+  );
+}
+
+function endpointSurfaceAdmissionV2(
+  receipt: RouteBuildInputReceiptV2,
+  graph: TraversalGraphV2,
+  endpoint: "start" | "destination",
+  maximumReferenceHeightDifferenceMeters: number,
+):
+  | Readonly<{ mode: "missing" }>
+  | Readonly<{
+      mode: "ambiguous";
+      identities: readonly TraversalSurfaceIdentityV1[];
+    }>
+  | Readonly<{
+      mode: "resolved";
+      traversalSurfaceId: string;
+    }> {
+  const graphSurfaceIds = new Set(
+    Object.values(graph.traversalNodesById).map(
+      (node) => node.traversalSurfaceId,
+    ),
+  );
+  const sources = collectBoundTraversalSurfaceQuerySourcesV2(receipt.input).filter(
+    (source) => graphSurfaceIds.has(source.traversalSurfaceId),
+  );
+  const anchor = endpoint === "start"
+    ? receipt.input.startAnchor
+    : receipt.input.destinationAnchor;
+  if (isEmpty(sources)) return { mode: "missing" };
+  const resolution = queryCanonicalTraversalSurfaceHitsV1({
+    sources,
+    pointMetersXZ: [
+      anchor.positionMetersXYZ[0],
+      anchor.positionMetersXYZ[2],
+    ],
+    referenceHeightMeters: anchor.positionMetersXYZ[1],
+    maximumReferenceHeightDifferenceMeters,
+    normalAdmission: {
+      mode: "upward-slope",
+      minimumUpwardNormalYRatio: Math.cos(
+        receipt.input.capabilityEnvelope.maxSlopeDegrees * Math.PI / 180,
+      ),
+    },
+  });
+  if (resolution.mode === "missing") return { mode: "missing" };
+  const hasMultipleHeightLayers = resolution.hits.some(
+    (hit) =>
+      Math.abs(hit.heightMeters - resolution.hits[0]!.heightMeters) >
+      sameBandHeightMetersV2(receipt.input.capabilityEnvelope),
+  );
+  if (resolution.mode === "ambiguous" || hasMultipleHeightLayers) {
+    const hitIds = new Set(
+      resolution.hits.map((hit) => hit.traversalSurfaceId),
+    );
+    return {
+      mode: "ambiguous",
+      identities: receipt.input.traversalSurfaces.filter((surface) =>
+        hitIds.has(surface.traversalSurfaceId)
+      ),
+    };
+  }
+  return {
+    mode: "resolved",
+    traversalSurfaceId: resolution.hit.traversalSurfaceId,
+  };
+}
+
+function providerPolygonRefsForSurfaceV2(
+  projection: Extract<TraversalGraphProjectionV2, { readonly status: "complete" }>,
+  traversalSurfaceId: string,
+): readonly number[] {
+  return [...new Set(
+    Object.values(projection.traversalGraph.traversalNodesById)
+      .filter((node) => node.traversalSurfaceId === traversalSurfaceId)
+      .map((node) => projection.providerPolygonRefByTraversalNodeId.get(node.id))
+      .filter((polygonRef): polygonRef is number => !isNil(polygonRef)),
+  )].sort((left, right) => left - right);
+}
+
 function sameBandHeightMetersV2(envelope: RouteBuildInputV2["capabilityEnvelope"]): number {
   return envelope.positionQuantizationMeters / 2 +
     TRAVERSAL_SURFACE_QUERY_HEIGHT_EPSILON_METERS_V1;
@@ -643,9 +751,30 @@ export function queryRequiredRouteV2(
     envelope.capsuleRadiusMeters + envelope.clearanceMarginMeters +
       envelope.voxelCellSizeMeters,
   ];
+  const startSurface = endpointSurfaceAdmissionV2(
+    receipt,
+    graph,
+    "start",
+    halfExtents[1],
+  );
+  if (startSurface.mode === "missing") {
+    return endpointFailureV2(receipt, graph, "start");
+  }
+  if (startSurface.mode === "ambiguous") {
+    return endpointAmbiguityFailureV2(
+      receipt,
+      graph,
+      "start",
+      startSurface.identities,
+    );
+  }
   const startNearest = queryProvider.findNearestPolygon({
     positionMetersXYZ: receipt.input.startAnchor.positionMetersXYZ,
     halfExtentsMetersXYZ: halfExtents,
+    polygonRefs: providerPolygonRefsForSurfaceV2(
+      projection,
+      startSurface.traversalSurfaceId,
+    ),
   });
   if (startNearest.kind === "miss") return endpointFailureV2(receipt, graph, "start");
   if (!isWithinHalfExtents(
@@ -658,9 +787,30 @@ export function queryRequiredRouteV2(
   );
   if (isNil(startTraversalNodeId)) return endpointFailureV2(receipt, graph, "start");
 
+  const destinationSurface = endpointSurfaceAdmissionV2(
+    receipt,
+    graph,
+    "destination",
+    halfExtents[1],
+  );
+  if (destinationSurface.mode === "missing") {
+    return endpointFailureV2(receipt, graph, "destination");
+  }
+  if (destinationSurface.mode === "ambiguous") {
+    return endpointAmbiguityFailureV2(
+      receipt,
+      graph,
+      "destination",
+      destinationSurface.identities,
+    );
+  }
   const destinationNearest = queryProvider.findNearestPolygon({
     positionMetersXYZ: receipt.input.destinationAnchor.positionMetersXYZ,
     halfExtentsMetersXYZ: halfExtents,
+    polygonRefs: providerPolygonRefsForSurfaceV2(
+      projection,
+      destinationSurface.traversalSurfaceId,
+    ),
   });
   if (destinationNearest.kind === "miss") {
     return endpointFailureV2(receipt, graph, "destination");
@@ -671,7 +821,6 @@ export function queryRequiredRouteV2(
     halfExtents,
   )) fail("provider destination point escaped the locked endpoint query extents.");
   const destinationTraversalNodeId =
-    projection.providerPolygonRefByTraversalNodeId &&
     projection.traversalNodeIdByProviderPolygonRef.get(
       destinationNearest.polygonRef,
     );
@@ -1021,7 +1170,7 @@ export async function evaluateRequiredRouteV2(
             buildInputReceipt: receipt,
             queryProvider: {
               findNearestPolygon: (input) =>
-                findNearestRecastPolygonV1(queryReceipt!, input),
+                findNearestRecastPolygonAmongRefsV1(queryReceipt!, input),
               findStraightPath: (input) =>
                 findStraightRecastPathV1(queryReceipt!, input),
             },

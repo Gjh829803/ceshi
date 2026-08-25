@@ -16,7 +16,6 @@ export const ROUTE_VALIDATION_DIAGNOSTIC_CODES_V2 = [
   "ROUTE_LOCOMOTION_PROFILE_MISMATCH",
   "ROUTE_WATER_TRAVERSAL_UNSUPPORTED",
   "ROUTE_TRAVERSAL_LOCK_MISMATCH",
-  "ROUTE_CORRIDOR_LAYER_AMBIGUOUS",
   "ROUTE_START_SUPPORT_INVALID",
   "ROUTE_RUNTIME_SUPPORT_SURFACE_MISMATCH",
   "ROUTE_RUNTIME_STALLED",
@@ -130,6 +129,8 @@ function diagnosticDetailsForFailure(
     case "no-queryable-ground-surface":
     case "start-surface-not-found":
     case "destination-surface-not-found":
+    case "start-surface-ambiguous":
+    case "destination-surface-ambiguous":
     case "required-path-unreachable":
     case "surface-profile-missing":
     case "surface-correlation-missing":
@@ -164,6 +165,8 @@ function diagnosticPositionForFailure(
       return reason.failurePositionMetersXYZ;
     case "start-surface-not-found":
     case "destination-surface-not-found":
+    case "start-surface-ambiguous":
+    case "destination-surface-ambiguous":
       return reason.positionMetersXYZ;
     case "empty-heightfield-source":
     case "no-queryable-ground-surface":
@@ -196,6 +199,9 @@ function remediationForFailure(failure: RouteConnectivityFailureV2): string {
       return "Raise or remove the overhead Collider to restore the locked capsule clearance.";
     case "surface-gap-exceeded":
       return "Close the unsupported gap with continuous Heightfield ground.";
+    case "start-surface-ambiguous":
+    case "destination-surface-ambiguous":
+      return "Move the Anchor onto exactly one walkable height layer or remove the overlapping layer.";
     case "node-budget-exceeded":
     case "edge-budget-exceeded":
     case "search-budget-exceeded":

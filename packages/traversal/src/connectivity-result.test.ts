@@ -30,6 +30,8 @@ import {
 } from "./profile-registry.js";
 import {
   heightfieldSurface,
+  platformCollider,
+  platformSurface,
   validV2BuildInputDraft,
   v2BuildInputReceipt,
   type RouteBuildInputV2Draft,
@@ -633,6 +635,60 @@ describe("RouteConnectivityResultV2", () => {
 });
 
 describe("RouteConnectivityResultV2 contextual failure evidence", () => {
+  it("admits ambiguous endpoints only as complete-Graph incomplete failures with two identities", () => {
+    const surfaces = [heightfieldSurface(), platformSurface()].sort((left, right) =>
+      left.traversalSurfaceId < right.traversalSurfaceId ? -1 : 1
+    );
+    const receipt = contextualReceiptV2({
+      traversalSurfaces: surfaces,
+      staticColliders: [platformCollider()],
+    });
+    const traversalGraph = graphV2(receipt);
+    const traversalGraphHash = hashTraversalGraphV2(traversalGraph);
+    const reasons = [
+      {
+        kind: "start-surface-ambiguous" as const,
+        code: "ROUTE_CORRIDOR_LAYER_AMBIGUOUS" as const,
+        anchorEntityId: receipt.input.startAnchor.entityId,
+        positionMetersXYZ: [0.001, 0, 0] as const,
+      },
+      {
+        kind: "destination-surface-ambiguous" as const,
+        code: "ROUTE_CORRIDOR_LAYER_AMBIGUOUS" as const,
+        anchorEntityId: receipt.input.destinationAnchor.entityId,
+        positionMetersXYZ: [8.999, 0, 0] as const,
+      },
+    ];
+    for (const reason of reasons) {
+      const failure = canonicalRouteConnectivityFailureV2({
+        ...failureCommonV2(receipt),
+        relatedTraversalSurfaceIdentities: surfaces,
+        status: "incomplete",
+        graphStatus: "complete",
+        traversalGraphHash,
+        reason,
+      });
+      expect(() => assertRouteConnectivityResultForBuildInputV2({
+        kind: "route-connectivity-result",
+        schemaVersion: 2,
+        status: "incomplete",
+        graphStatus: "complete",
+        traversalGraph,
+        traversalGraphHash,
+        connectivityFailure: failure,
+        connectivityFailureHash: hashRouteConnectivityFailureV2(failure),
+      }, receipt)).not.toThrow();
+      expect(() => canonicalRouteConnectivityFailureV2({
+        ...failure,
+        relatedTraversalSurfaceIdentities: [surfaces[0]],
+      })).toThrow("must contain at least two identities");
+      expect(() => canonicalRouteConnectivityFailureV2({
+        ...failure,
+        status: "unreachable",
+      })).toThrow("closed status/graphStatus variant");
+    }
+  });
+
   it("rejects forged start and destination reason anchors after hashes are recomputed", () => {
     const receipt = contextualReceiptV2();
     const traversalGraph = graphV2(receipt);
