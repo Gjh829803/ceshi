@@ -9,9 +9,15 @@ export interface CanvasRecordingResult {
 
 export interface CanvasRecorderOptions {
   frameRate?: number;
+  width?: number;
+  height?: number;
   videoBitsPerSecond?: number;
   now?: () => number;
 }
+
+export const WHITEBOX_RECORDING_WIDTH = 1280;
+export const WHITEBOX_RECORDING_HEIGHT = 720;
+export const WHITEBOX_RECORDING_FRAME_RATE = 24;
 
 const MIME_TYPE_CANDIDATES = [
   "video/webm;codecs=vp9",
@@ -33,10 +39,15 @@ export function recordingExtension(mimeType: string): "mp4" | "webm" {
 
 export class CanvasRecorder {
   private readonly frameRate: number;
+  private readonly width: number;
+  private readonly height: number;
   private readonly videoBitsPerSecond: number;
   private readonly now: () => number;
   private mediaRecorder: MediaRecorder | null = null;
   private stream: MediaStream | null = null;
+  private captureCanvas: HTMLCanvasElement | null = null;
+  private captureContext: CanvasRenderingContext2D | null = null;
+  private drawTimer: number | null = null;
   private chunks: Blob[] = [];
   private startedAt = 0;
   private stateValue: CanvasRecordingState = "idle";
@@ -46,7 +57,9 @@ export class CanvasRecorder {
     private readonly canvas: HTMLCanvasElement,
     options: CanvasRecorderOptions = {},
   ) {
-    this.frameRate = options.frameRate ?? 60;
+    this.frameRate = options.frameRate ?? WHITEBOX_RECORDING_FRAME_RATE;
+    this.width = options.width ?? WHITEBOX_RECORDING_WIDTH;
+    this.height = options.height ?? WHITEBOX_RECORDING_HEIGHT;
     this.videoBitsPerSecond = options.videoBitsPerSecond ?? 12_000_000;
     this.now = options.now ?? (() => performance.now());
   }
@@ -74,7 +87,20 @@ export class CanvasRecorder {
         ? MediaRecorder.isTypeSupported(candidate)
         : false,
     );
-    this.stream = this.canvas.captureStream(this.frameRate);
+    this.captureCanvas = this.canvas.ownerDocument.createElement("canvas");
+    this.captureCanvas.width = this.width;
+    this.captureCanvas.height = this.height;
+    this.captureContext = this.captureCanvas.getContext("2d", { alpha: false });
+    if (this.captureContext === null) {
+      this.finish();
+      throw new Error("无法建立 1280×720 白膜录制画布。");
+    }
+    this.drawCaptureFrame();
+    this.drawTimer = window.setInterval(
+      () => this.drawCaptureFrame(),
+      1_000 / this.frameRate,
+    );
+    this.stream = this.captureCanvas.captureStream(this.frameRate);
     this.chunks = [];
     this.stopPromise = null;
     try {
@@ -135,11 +161,29 @@ export class CanvasRecorder {
     if (event.data.size > 0) this.chunks.push(event.data);
   };
 
+  private drawCaptureFrame(): void {
+    if (this.captureContext === null) return;
+    const sourceWidth = Math.max(1, this.canvas.width);
+    const sourceHeight = Math.max(1, this.canvas.height);
+    const scale = Math.min(this.width / sourceWidth, this.height / sourceHeight);
+    const drawWidth = sourceWidth * scale;
+    const drawHeight = sourceHeight * scale;
+    const offsetX = (this.width - drawWidth) / 2;
+    const offsetY = (this.height - drawHeight) / 2;
+    this.captureContext.fillStyle = "#000000";
+    this.captureContext.fillRect(0, 0, this.width, this.height);
+    this.captureContext.drawImage(this.canvas, offsetX, offsetY, drawWidth, drawHeight);
+  }
+
   private finish(): void {
     this.mediaRecorder?.removeEventListener("dataavailable", this.handleDataAvailable);
     for (const track of this.stream?.getTracks() ?? []) track.stop();
+    if (this.drawTimer !== null) window.clearInterval(this.drawTimer);
     this.mediaRecorder = null;
     this.stream = null;
+    this.captureCanvas = null;
+    this.captureContext = null;
+    this.drawTimer = null;
     this.chunks = [];
     this.startedAt = 0;
     this.stateValue = "idle";

@@ -83,22 +83,73 @@ def measure_subject_center(image_path: Path) -> dict[str, float | int]:
 
 def measure_runtime_rear_alignment(snapshot_path: Path) -> dict[str, float | bool | str]:
     snapshot = json.loads(snapshot_path.read_text(encoding="utf-8"))
-    controlled_id = str(snapshot.get("controlledEntityId", ""))
-    camera = snapshot.get("camera") if isinstance(snapshot.get("camera"), dict) else {}
-    states = snapshot.get("subjectStatesByEntityId")
+    if (
+        snapshot.get("kind") != "worldkit-runtime-snapshot"
+        or snapshot.get("schemaVersion") != 4
+    ):
+        raise ValueError("Runtime Snapshot must use the current WorldKit Snapshot V4 contract.")
+
+    world = snapshot.get("world") if isinstance(snapshot.get("world"), dict) else {}
+    inspection = (
+        world.get("gameplayInspection")
+        if isinstance(world.get("gameplayInspection"), dict)
+        else {}
+    )
+    relationships = inspection.get("possessedByRelationshipsById")
+    possession_rows = list(relationships.values()) if isinstance(relationships, dict) else []
+    controlled_rows = [
+        row
+        for row in possession_rows
+        if isinstance(row, dict) and row.get("controllerEntityId") == "controller-primary"
+    ]
+    if len(controlled_rows) != 1:
+        raise ValueError("Runtime Snapshot must contain exactly one primary possession binding.")
+    controlled_id = str(controlled_rows[0].get("controlledEntityId", ""))
+
+    view = snapshot.get("view") if isinstance(snapshot.get("view"), dict) else {}
+    camera = view.get("camera") if isinstance(view.get("camera"), dict) else {}
+    if camera.get("mode") != "tracking":
+        raise ValueError("Runtime Snapshot entry camera must be tracking the controlled Subject.")
+
+    states = world.get("subjectStatesByEntityId")
     state = states.get(controlled_id) if isinstance(states, dict) else None
-    if not controlled_id or not isinstance(state, dict):
+    entity_state = state.get("entityState") if isinstance(state, dict) else None
+    if not controlled_id or not isinstance(entity_state, dict):
         raise ValueError("Runtime Snapshot is missing the controlled Subject state.")
     camera_position = camera.get("positionMetersXYZ")
-    subject_position = state.get("positionMetersXYZ")
-    subject_forward = state.get("forwardXYZ")
+    subject_position = entity_state.get("positionMetersXYZ")
     if not all(
         isinstance(vector, list)
         and len(vector) == 3
         and all(isinstance(value, (int, float)) and math.isfinite(value) for value in vector)
-        for vector in (camera_position, subject_position, subject_forward)
+        for vector in (camera_position, subject_position)
     ):
-        raise ValueError("Runtime camera/Subject vectors are missing or invalid.")
+        raise ValueError("Runtime camera/Subject positions are missing or invalid.")
+
+    rotation = entity_state.get("rotationQuaternionXYZW")
+    if not (
+        isinstance(rotation, list)
+        and len(rotation) == 4
+        and all(isinstance(value, (int, float)) and math.isfinite(value) for value in rotation)
+    ):
+        raise ValueError("Runtime Subject rotation quaternion is missing or invalid.")
+    qx, qy, qz, qw = rotation
+    quaternion_length = math.sqrt(qx * qx + qy * qy + qz * qz + qw * qw)
+    if quaternion_length <= 1e-9:
+        raise ValueError("Runtime Subject rotation quaternion is degenerate.")
+    qx, qy, qz, qw = (
+        qx / quaternion_length,
+        qy / quaternion_length,
+        qz / quaternion_length,
+        qw / quaternion_length,
+    )
+    # Snapshot V4 publishes rotation, not a duplicated forward vector. Rotate
+    # the Canonical local forward axis (0, 0, -1) by the Subject quaternion.
+    subject_forward = (
+        -2 * (qw * qy + qx * qz),
+        2 * (qw * qx - qy * qz),
+        -1 + 2 * (qx * qx + qy * qy),
+    )
     camera_to_subject = (
         subject_position[0] - camera_position[0],
         subject_position[2] - camera_position[2],
@@ -198,6 +249,7 @@ def _arguments() -> argparse.Namespace:
     parser = argparse.ArgumentParser()
     parser.add_argument("--image", required=True)
     parser.add_argument("--snapshot")
+    parser.add_argument("--output")
     return parser.parse_args()
 
 
@@ -207,7 +259,12 @@ def main() -> int:
         Path(arguments.image).resolve(),
         Path(arguments.snapshot).resolve() if arguments.snapshot else None,
     )
-    print(json.dumps(result, ensure_ascii=False, sort_keys=True))
+    serialized = json.dumps(result, ensure_ascii=False, sort_keys=True)
+    if arguments.output:
+        output_path = Path(arguments.output).resolve()
+        output_path.parent.mkdir(parents=True, exist_ok=True)
+        output_path.write_text(f"{serialized}\n", encoding="utf-8")
+    print(serialized)
     return 0 if result["status"] == "passed" else 2
 
 

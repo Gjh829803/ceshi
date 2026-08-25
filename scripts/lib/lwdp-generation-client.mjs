@@ -3,7 +3,9 @@ import { homedir } from "node:os";
 import { basename, dirname, join, resolve } from "node:path";
 import { mkdir, readFile, rename, rm, stat } from "node:fs/promises";
 
-const terminalStatuses = new Set(["succeeded", "completed", "failed", "submit_failed"]);
+const terminalStatuses = new Set([
+  "succeeded", "completed", "failed", "submit_failed", "cancelled", "stopped",
+]);
 
 function parseEnv(contents) {
   const values = {};
@@ -59,7 +61,10 @@ async function responseJson(response) {
       ? parsed.detail
       : parsed?.detail === undefined ? "" : JSON.stringify(parsed.detail);
     const message = parsed?.error || parsed?.message || detail || `HTTP ${response.status}`;
-    throw new Error(`LWDP request failed (${response.status}): ${message}`);
+    const error = new Error(`LWDP request failed (${response.status}): ${message}`);
+    error.status = response.status;
+    error.payload = parsed;
+    throw error;
   }
   return parsed;
 }
@@ -99,12 +104,67 @@ export async function lwdpRequest(pathname, {
   throw lastError ?? new Error("LWDP request failed without a response.");
 }
 
-export async function submitCodexGenerationJob(payload, options = {}) {
-  return lwdpRequest("/api/v1/generation/codex/jobs", {
-    ...options,
-    method: "POST",
-    body: payload,
-  });
+export async function findGenerationJobByRequestId(requestId, {
+  pipeline = "codex",
+  ...options
+} = {}) {
+  if (typeof requestId !== "string" || requestId.length === 0) {
+    throw new Error("request_id is required for exact LWDP job recovery.");
+  }
+  const query = pipeline ? `?pipeline=${encodeURIComponent(pipeline)}` : "";
+  return lwdpRequest(
+    `/api/v1/generation/jobs/by-request-id/${encodeURIComponent(requestId)}${query}`,
+    options,
+  );
+}
+
+export async function submitCodexGenerationJob(payload, {
+  recoveryAttempts = 3,
+  recoveryDelayMs = 1_000,
+  ...options
+} = {}) {
+  if (typeof payload?.request_id !== "string" || payload.request_id.length === 0) {
+    throw new Error("Generic Codex jobs require a stable request_id.");
+  }
+  try {
+    return await lwdpRequest("/api/v1/generation/codex/jobs", {
+      ...options,
+      maxAttempts: 1,
+      method: "POST",
+      body: payload,
+    });
+  } catch (submissionError) {
+    if (
+      submissionError?.status !== undefined &&
+      ![429, 502, 503, 504].includes(submissionError.status)
+    ) {
+      throw submissionError;
+    }
+    let lastLookupError = null;
+    for (let attempt = 1; attempt <= recoveryAttempts; attempt += 1) {
+      try {
+        const recovered = await findGenerationJobByRequestId(payload.request_id, {
+          ...options,
+          pipeline: "codex",
+          maxAttempts: 1,
+        });
+        return { ...recovered, recovered_by_request_id: true };
+      } catch (lookupError) {
+        lastLookupError = lookupError;
+        if (lookupError?.status !== 404 && lookupError?.status !== undefined) break;
+      }
+      if (attempt < recoveryAttempts) {
+        await new Promise((resolvePromise) => setTimeout(resolvePromise, recoveryDelayMs));
+      }
+    }
+    const recoveryDetail = lastLookupError instanceof Error
+      ? ` Exact request lookup also failed: ${lastLookupError.message}`
+      : "";
+    throw new Error(
+      `LWDP Codex submission outcome is unknown and no existing job was recovered.${recoveryDetail}`,
+      { cause: submissionError },
+    );
+  }
 }
 
 export async function submitGenerationJob(payload, options = {}) {
@@ -113,6 +173,13 @@ export async function submitGenerationJob(payload, options = {}) {
     method: "POST",
     body: payload,
   });
+}
+
+export async function cancelGenerationJob(jobId, options = {}) {
+  return lwdpRequest(
+    `/api/v1/generation/jobs/${encodeURIComponent(jobId)}/cancel`,
+    { ...options, method: "POST" },
+  );
 }
 
 export function submittedJobId(payload) {
@@ -157,12 +224,14 @@ export async function fetchGenerationItems(jobId, options = {}) {
 }
 
 export function assertSuccessfulJob(job, itemsPayload, expectedItemIds = []) {
-  if (job?.status === "failed" || job?.status === "submit_failed") {
-    throw new Error(`LWDP job failed: ${job?.error || job?.status}`);
+  const jobStatus = String(job?.status ?? "");
+  if (["failed", "submit_failed", "cancelled", "stopped"].includes(jobStatus)) {
+    throw new Error(`LWDP job did not succeed: ${job?.error || jobStatus}`);
   }
   const items = itemsPayload?.items ?? itemsPayload?.data ?? [];
   const failed = Array.isArray(items)
-    ? items.filter((item) => ["failed", "rejected"].includes(String(item?.status)))
+    ? items.filter((item) =>
+      ["failed", "rejected", "cancelled", "stopped"].includes(String(item?.status)))
     : [];
   if (failed.length > 0) {
     throw new Error(`LWDP task failures: ${failed.map((item) =>

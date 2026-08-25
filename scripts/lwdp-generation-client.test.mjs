@@ -7,12 +7,15 @@ import test from "node:test";
 
 import {
   assertSuccessfulJob,
+  cancelGenerationJob,
   downloadS3FileAtomic,
+  findGenerationJobByRequestId,
   joinS3Uri,
   lwdpRequest,
   loadLwdpGenerationConfig,
   pollGenerationJob,
   salvageableGenerationItemIds,
+  submitCodexGenerationJob,
   submittedJobId,
 } from "./lib/lwdp-generation-client.mjs";
 
@@ -84,6 +87,52 @@ test("surfaces FastAPI detail from a failed LWDP submission", async () => {
   );
 });
 
+test("recovers one single-task Codex job by exact request_id without a second POST", async () => {
+  const requests = [];
+  const config = { baseUrl: "https://lwdp.example.test", token: "secret", userId: "worldkit-studio" };
+  const payload = await submitCodexGenerationJob({
+    request_id: "worldkit-planner-attempt-1",
+    tasks: [{ id: "planner" }],
+  }, {
+    config,
+    recoveryAttempts: 2,
+    recoveryDelayMs: 1,
+    fetchImplementation: async (url, init) => {
+      requests.push({ url, method: init.method });
+      if (init.method === "POST") return new Response("gateway lost response", { status: 502 });
+      return new Response(JSON.stringify({ job: { job_id: "gen_recovered", status: "submitted" } }), {
+        status: 200,
+      });
+    },
+  });
+  assert.equal(submittedJobId(payload), "gen_recovered");
+  assert.equal(payload.recovered_by_request_id, true);
+  assert.deepEqual(requests, [
+    { url: "https://lwdp.example.test/api/v1/generation/codex/jobs", method: "POST" },
+    {
+      url: "https://lwdp.example.test/api/v1/generation/jobs/by-request-id/worldkit-planner-attempt-1?pipeline=codex",
+      method: "GET",
+    },
+  ]);
+});
+
+test("does not hide a conflicting idempotency payload behind request lookup", async () => {
+  const requests = [];
+  await assert.rejects(submitCodexGenerationJob({
+    request_id: "worldkit-conflict",
+    tasks: [{ id: "planner" }],
+  }, {
+    config: { baseUrl: "https://lwdp.example.test", token: "secret", userId: "worldkit-studio" },
+    fetchImplementation: async (url, init) => {
+      requests.push({ url, method: init.method });
+      return new Response(JSON.stringify({ error: "request_id_conflict" }), { status: 409 });
+    },
+  }), /request_id_conflict/);
+  assert.equal(requests.length, 1);
+  assert.equal(requests[0].method, "POST");
+  await assert.rejects(findGenerationJobByRequestId("", {}), /request_id is required/);
+});
+
 test("polls until a terminal LWDP status and rejects item failures", async () => {
   const states = ["submitted", "running", "succeeded"];
   const progress = [];
@@ -104,6 +153,39 @@ test("polls until a terminal LWDP status and rejects item failures", async () =>
     { status: "completed" },
     { items: [{ item_id: "builder", status: "failed", error: "bad output" }] },
   ), /builder: bad output/);
+});
+
+test("treats cancelled and stopped LWDP jobs and items as unsuccessful terminal results", () => {
+  for (const status of ["cancelled", "stopped"]) {
+    assert.throws(
+      () => assertSuccessfulJob({ status }, { items: [] }, ["planner"]),
+      new RegExp(`LWDP job did not succeed: ${status}`),
+    );
+    assert.throws(
+      () => assertSuccessfulJob(
+        { status: "completed" },
+        { items: [{ item_id: "planner", status }] },
+        ["planner"],
+      ),
+      new RegExp(`planner: ${status}`),
+    );
+  }
+});
+
+test("cancels an LWDP job through the idempotent generation endpoint", async () => {
+  const observed = [];
+  const payload = await cancelGenerationJob("gen_cancel", {
+    config: { baseUrl: "https://lwdp.example.test", token: "secret", userId: "worldkit" },
+    fetchImplementation: async (url, init) => {
+      observed.push({ url, init });
+      return new Response(JSON.stringify({ job: { job_id: "gen_cancel", status: "cancelled" } }), {
+        status: 200,
+      });
+    },
+  });
+  assert.equal(payload.job.status, "cancelled");
+  assert.equal(observed[0].url, "https://lwdp.example.test/api/v1/generation/jobs/gen_cancel/cancel");
+  assert.equal(observed[0].init.method, "POST");
 });
 
 test("recognizes only Ray-timeout items whose generated files were salvaged", () => {
@@ -162,8 +244,10 @@ test("assembles cloud Codex and T2I tasks without local credentials in smoke mod
     assert.equal(codex.status, 0, codex.stderr);
     assert.match(
       codex.stdout,
-      /WORLDKIT_LWDP_CODEX_SMOKE codex-smoke profile=formal model=gpt-5\.6-sol reasoning=xhigh submitAttempts=1 assets=1 outputs=1/,
+      /WORLDKIT_LWDP_CODEX_SMOKE codex-smoke dispatch=single-task-fast-path tasks=1 profile=formal model=gpt-5\.6-sol reasoning=xhigh submitAttempts=1 assets=1 outputs=1/,
     );
+    const cloudRunner = await readFile(path.join(repoRoot, "scripts/run-lwdp-codex-task.mjs"), "utf8");
+    assert.doesNotMatch(cloudRunner, /distributed|max_pods|pod_concurrency|account_concurrency/);
 
     const t2i = spawnSync(process.execPath, [
       "scripts/run-lwdp-t2i-job.mjs",
@@ -201,7 +285,7 @@ test("rejects repeated creation attempts for formal Codex and WorldKit T2I stage
       "--submit-attempts", "2",
     ], { cwd: repoRoot, env: environment, encoding: "utf8" });
     assert.notEqual(codex.status, 0);
-    assert.match(codex.stderr, /submit each LWDP creation request exactly once/);
+    assert.match(codex.stderr, /submits every LWDP Codex creation request exactly once/);
 
     const t2i = spawnSync(process.execPath, [
       "scripts/run-lwdp-t2i-job.mjs",

@@ -16,6 +16,7 @@ interface RecordingArtifactState {
 
 interface RecordingJobState {
   status: string;
+  backend?: "cloud" | "local" | null;
   error?: string | null;
   taskId?: string | null;
   providerStatus?: string | null;
@@ -138,7 +139,7 @@ function renderRecordingCard(item: RecordingListItem): string {
     <figcaption>白膜录屏 · 运动与镜头权威</figcaption></figure>`;
   const videos = item.generatedVideoUrl
     ? `<div class="recording-comparison">${sourceVideo}
-        <figure><video controls muted playsinline preload="metadata" src="${escapeHtml(item.generatedVideoUrl)}"></video>
+        <figure><video controls playsinline preload="metadata" src="${escapeHtml(item.generatedVideoUrl)}"></video>
         <figcaption>Seedance 2.5 · 最终视频</figcaption></figure></div>`
     : `<div class="recording-source-preview">${sourceVideo}</div>`;
   const prompt = item.promptUrl
@@ -152,7 +153,7 @@ function renderRecordingCard(item: RecordingListItem): string {
     </header>
     ${videos}
     <div class="recording-pipeline">
-      <span class="${item.prompt.status === "succeeded" ? "done" : ""}">1 · Codex Prompt</span>
+      <span class="${item.prompt.status === "succeeded" ? "done" : ""}">1 · Codex Prompt${item.prompt.backend ? ` · ${item.prompt.backend === "local" ? "本地" : "云端"}` : ""}</span>
       <i>→</i>
       <span class="${item.video.status === "succeeded" ? "done" : ""}">2 · Seedance 2.5</span>
     </div>

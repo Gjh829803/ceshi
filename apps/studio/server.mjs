@@ -20,6 +20,10 @@ import { fileURLToPath } from "node:url";
 
 import { createRecordingWorkbenchService } from "./recording-workbench.mjs";
 import { FORMAL_CODEX_EXECUTION_PROFILE } from "../../scripts/lib/lwdp-codex-profile.mjs";
+import {
+  cancelGenerationJob,
+  loadLwdpGenerationConfig,
+} from "../../scripts/lib/lwdp-generation-client.mjs";
 
 const studioRoot = path.dirname(fileURLToPath(import.meta.url));
 const defaultRepoRoot = path.resolve(studioRoot, "../..");
@@ -29,7 +33,8 @@ const idPattern = /^[a-z0-9][a-z0-9-]{2,79}$/;
 // The Studio workflow is unreleased and intentionally has one current contract.
 // Bump this only when the persisted Studio record shape changes; do not keep
 // parallel historical workflow implementations in the runtime.
-export const workflowPolicyVersion = 1;
+export const workflowPolicyVersion = 3;
+const codexBackendValues = new Set(["cloud", "local"]);
 const allowedRootSceneAssets = new Set([
   "world-plan.png",
   "opening-shot.png",
@@ -91,6 +96,13 @@ const workflowStageDefinitions = [
     required: ["opening-frame", "runtime-snapshot", "capture-targets"],
   },
   {
+    id: "entry-alignment-validation",
+    title: "进入构图校验",
+    owner: "Trusted Host",
+    description: "基于真实白膜首帧与 Runtime Snapshot V4 检查主体严格居中、相机锁定受控主体且位于正后方。",
+    required: ["entry-third-person-validation"],
+  },
+  {
     id: "visual-prompt-synthesis",
     title: "视觉提示词合成",
     owner: "Configured Visual Prompt Provider",
@@ -127,7 +139,7 @@ function canonicalWorkflowStage(stage, record = {}) {
   if (stage === "preparing" || stage === "queued") return "input";
   if (stage === "ready") return record.styledTriviewsRequired === true
     ? "visual-imagegen"
-    : "runtime-capture";
+    : "entry-alignment-validation";
   return runtimeStageAliases.get(stage) ?? stage;
 }
 
@@ -185,7 +197,8 @@ export function deriveReliabilityMetrics(records = [], options = {}) {
   const successful = records.filter((record) => record?.outcome === "passed");
   const terminalFailures = records.filter((record) =>
     record?.outcome === "failed" ||
-    record?.status === "failed" || record?.status === "interrupted");
+    record?.status === "failed" ||
+    (record?.status === "interrupted" && record?.outcome !== "cancelled"));
   const terminalCount = successful.length + terminalFailures.length;
   const failureCount = terminalFailures.length;
   const failureRate = terminalCount === 0 ? null : failureCount / terminalCount;
@@ -558,6 +571,10 @@ function commandAvailable(command) {
   return result.status === 0;
 }
 
+function normalizedCodexBackend(value, fallback = null) {
+  return typeof value === "string" && codexBackendValues.has(value) ? value : fallback;
+}
+
 export function isAllowedSceneAsset(relativePath) {
   if (allowedRootSceneAssets.has(relativePath)) return true;
   if (/^reference-[0-9]+\.(?:png|jpe?g|webp)$/.test(relativePath)) return true;
@@ -582,14 +599,86 @@ export function createStudio(options = {}) {
     configuredConcurrency >= 1 && configuredConcurrency <= 16
     ? configuredConcurrency
     : 4;
+  const configuredBackendConcurrency = (value, fallback) => {
+    const parsed = Number(value);
+    return Number.isSafeInteger(parsed) && parsed >= 1 && parsed <= 16
+      ? parsed
+      : fallback;
+  };
+  const maxConcurrentJobsByBackend = {
+    cloud: configuredBackendConcurrency(
+      options.maxConcurrentCloudJobs ?? process.env.WORLDKIT_STUDIO_MAX_CONCURRENT_CLOUD_JOBS,
+      maxConcurrentJobs,
+    ),
+    local: configuredBackendConcurrency(
+      options.maxConcurrentLocalJobs ?? process.env.WORLDKIT_STUDIO_MAX_CONCURRENT_LOCAL_JOBS,
+      1,
+    ),
+  };
   const importExistingArtifacts = options.importExistingArtifacts ?? true;
   const importBuiltinTestSets = options.importBuiltinTestSets ?? dataRoot === defaultDataRoot;
   const importBuiltinResults = options.importBuiltinResults ?? dataRoot === defaultDataRoot;
+  const runtimeSettingsPath = path.join(dataRoot, "runtime-settings.json");
+  const initialCodexBackend = normalizedCodexBackend(
+    options.initialCodexBackend ?? options.codexBackend ?? process.env.WORLDKIT_CODEX_BACKEND,
+    "cloud",
+  );
+  const codexSpawnSync = options.codexSpawnSync ?? spawnSync;
+  const codexBinary = options.codexBinary ?? process.env.WORLDKIT_LOCAL_CODEX_BIN ?? "codex";
+  const worldSpawnImplementation = options.worldSpawnImplementation ?? spawn;
+  const beforeWorldSpawn = options.beforeWorldSpawn ?? (() => undefined);
   const queue = [];
   const activeJobs = new Set();
+  const activeJobBackends = new Map();
   const activeChildren = new Map();
+  const stoppingJobs = new Set();
   const runRecordMutation = createKeyedSerialExecutor();
+  const runRuntimeSettingsMutation = createKeyedSerialExecutor();
+  let selectedCodexBackend = initialCodexBackend;
   let shuttingDown = false;
+
+  function effectiveCodexBackend(record) {
+    return normalizedCodexBackend(record?.codexBackend, "cloud");
+  }
+
+  async function codexBackendAvailability() {
+    const lwdpEnvFile = process.env.WORLDKIT_LWDP_ENV_FILE ||
+      path.join(homedir(), ".codex", "secrets", "lwdp_generation.env");
+    const cloud = Boolean(options.lwdpConfigured ??
+      (Boolean(process.env.LWDP_GENERATION_API_TOKEN) || await fileExists(lwdpEnvFile)));
+    let local = false;
+    try {
+      const codexEnvironment = {
+        ...process.env,
+        ...(process.env.WORLDKIT_LOCAL_CODEX_HOME
+          ? { CODEX_HOME: process.env.WORLDKIT_LOCAL_CODEX_HOME }
+          : {}),
+      };
+      const version = codexSpawnSync(codexBinary, ["--version"], {
+        stdio: "ignore",
+        env: codexEnvironment,
+      });
+      const login = version?.status === 0
+        ? codexSpawnSync(codexBinary, ["login", "status"], {
+            stdio: "ignore",
+            env: codexEnvironment,
+          })
+        : null;
+      local = version?.status === 0 && login?.status === 0;
+    } catch {
+      local = false;
+    }
+    return { cloud, local };
+  }
+
+  async function persistCodexBackend(backend) {
+    await writeJsonAtomic(runtimeSettingsPath, {
+      kind: "worldkit-studio-runtime-settings",
+      schemaVersion: 1,
+      codexBackend: backend,
+      updatedAt: new Date().toISOString(),
+    });
+  }
 
   function runBackgroundTask(id, operationName, operation) {
     void Promise.resolve().then(operation).catch((error) => {
@@ -613,6 +702,7 @@ export function createStudio(options = {}) {
     maxConcurrentJobs: options.maxConcurrentRecordingJobs,
     generationRunner: options.recordingGenerationRunner,
     spawnImplementation: options.recordingSpawnImplementation,
+    codexBackendProvider: () => selectedCodexBackend,
   });
 
   const recordPath = (id) => path.join(worldsRoot, id, "record.json");
@@ -688,6 +778,7 @@ export function createStudio(options = {}) {
       "opening-frame": [path.join(artifactRoot, "opening-frame.png")],
       "runtime-snapshot": [path.join(artifactRoot, "runtime-snapshot.json")],
       "capture-targets": [path.join(artifactRoot, "triviews", "capture-targets.json")],
+      "entry-third-person-validation": [path.join(artifactRoot, "entry-third-person-validation.json")],
       "visual-generation-prompts": [path.join(artifactRoot, "visual-generation-prompts.json")],
       "styled-opening-frame": [path.join(artifactRoot, "styled-opening-frame.png")],
       "styled-opening-frame-manifest": [path.join(artifactRoot, "styled-opening-frame-manifest.json")],
@@ -1261,6 +1352,7 @@ export function createStudio(options = {}) {
     }
     return {
       ...record,
+      codexBackend: effectiveCodexBackend(record),
       coverUrl,
       referenceUrl: record.referenceImage ? `/api/worlds/${record.id}/reference` : null,
       whiteboxOpeningFrameUrl: whiteboxOpeningFrameAvailable
@@ -1392,6 +1484,11 @@ export function createStudio(options = {}) {
         id: "capture-targets", phase: "runtime-capture", title: "白膜三视图清单",
         description: "每个 subject/object 的 Front / Right / Back 捕获索引。",
         owner: "Babylon Runtime", format: "JSON",
+      },
+      {
+        id: "entry-third-person-validation", phase: "entry-alignment-validation", title: "进入构图校验报告",
+        description: "使用 Runtime Snapshot V4 与真实白膜首帧验证主体居中、相机目标和正后方对齐。",
+        owner: "Trusted Host", format: "JSON",
       },
       {
         id: "visual-generation-prompts", phase: "visual-prompt-synthesis", title: "视觉生成提示词包",
@@ -1660,6 +1757,16 @@ export function createStudio(options = {}) {
         ));
         continue;
       }
+      const localCodexJob = /^WORLDKIT_LOCAL_CODEX_JOB ([a-z-]+) ([a-zA-Z0-9._:-]+)(?:\s+.*)?$/.exec(line.trim());
+      if (localCodexJob) {
+        runBackgroundTask(id, "append-local-codex-job", () => appendTrajectoryEvent(
+          id,
+          localCodexJob[1],
+          `本地 Codex 任务 ${localCodexJob[2]} 已启动。`,
+          { kind: "local-job", taskId: localCodexJob[2] },
+        ));
+        continue;
+      }
       const cloudImageJob = /^WORLDKIT_LWDP_IMAGE_JOB ([a-z-]+) (gen_[a-zA-Z0-9]+) items=([0-9]+)$/.exec(line.trim());
       if (cloudImageJob) {
         runBackgroundTask(id, "append-image-job", () => appendTrajectoryEvent(
@@ -1710,15 +1817,18 @@ export function createStudio(options = {}) {
 
   async function runJob(id) {
     const record = await readRecord(id);
-    if (!record || shuttingDown) return;
+    if (!record || shuttingDown || stoppingJobs.has(id)) return;
+    const codexBackend = effectiveCodexBackend(record);
     const attempt = (record.attempt ?? 0) + 1;
     const styledOpeningFrameRequired = record.referenceImage !== null;
     const styledTriviewsRequired = record.referenceImage !== null;
     await writeFile(logPath(id), `WorldKit Creator Studio\nscene=${record.sceneId}\nattempt=${attempt}\n\n`, "utf8");
+    if (shuttingDown || stoppingJobs.has(id)) return;
     const startedAt = new Date().toISOString();
     await updateRecord(id, {
       status: "running",
       stage: "preparing",
+      codexBackend,
       workflowPolicyVersion,
       attempt,
       startedAt,
@@ -1734,7 +1844,12 @@ export function createStudio(options = {}) {
       styledTriviewsRequired,
       styledTriviewsStatus: styledTriviewsRequired ? "pending" : "not-required",
     });
-    await appendTrajectoryEvent(id, "preparing", `第 ${attempt} 次生成开始，准备隔离任务环境。`, { kind: "started" });
+    await appendTrajectoryEvent(
+      id,
+      "preparing",
+      `第 ${attempt} 次生成开始，使用${codexBackend === "cloud" ? "云端 LWDP" : "本地"} Codex，准备隔离任务环境。`,
+      { kind: "started", codexBackend },
+    );
 
     const artifactRoot = path.join(repoRoot, "artifacts/scenes", record.sceneId);
     await mkdir(artifactRoot, { recursive: true });
@@ -1744,6 +1859,7 @@ export function createStudio(options = {}) {
     const caseHash = `sha256:${createHash("sha256").update(JSON.stringify({
       prompt: record.prompt,
       referenceImageHash: record.referenceImage?.contentSha256 ?? null,
+      codexBackend,
       workflowPolicyVersion,
     })).digest("hex")}`;
     await writeJsonAtomic(path.join(artifactRoot, "evaluation-run.json"), {
@@ -1759,6 +1875,7 @@ export function createStudio(options = {}) {
       testSetId: record.testSetId ?? null,
       testSetImageId: record.testSetImageId ?? null,
       batchId: record.batchId ?? null,
+      codexBackend,
       startedAt,
     });
 
@@ -1766,11 +1883,22 @@ export function createStudio(options = {}) {
     if (record.referenceImage) args.push("--image", path.join(worldsRoot, id, record.referenceImage.fileName));
     args.push(record.prompt);
 
-    await appendJobLog(id, `Launching hosted Planner (Brief + built-in imagegen) → Canonical Builder; trusted Host validates Authoring V4 / IR V4 / Plan V5 and performs Babylon capture; configured visual adapters may generate optional styled outputs.\n`);
-    const child = spawn("pnpm", args, {
+    await appendJobLog(
+      id,
+      `Launching ${codexBackend === "cloud" ? "LWDP cloud" : "local"} Codex: hosted Planner (Brief + built-in imagegen) → Canonical Builder; trusted Host validates Authoring V4 / IR V4 / Plan V5 and performs Babylon capture; configured visual adapters may generate optional styled outputs.\n`,
+    );
+    await beforeWorldSpawn(id);
+    if (shuttingDown || stoppingJobs.has(id)) return;
+    const child = worldSpawnImplementation("pnpm", args, {
       cwd: repoRoot,
-      env: { ...process.env, FORCE_COLOR: "0", NO_COLOR: "1" },
+      env: {
+        ...process.env,
+        FORCE_COLOR: "0",
+        NO_COLOR: "1",
+        WORLDKIT_CODEX_BACKEND: codexBackend,
+      },
       shell: false,
+      detached: process.platform !== "win32",
       stdio: ["ignore", "pipe", "pipe"],
     });
     activeChildren.set(id, child);
@@ -1786,6 +1914,8 @@ export function createStudio(options = {}) {
     activeChildren.delete(id);
     if (stdout.buffer) await appendJobLog(id, `[stdout] ${stdout.buffer}\n`);
     if (stderr.buffer) await appendJobLog(id, `[stderr] ${stderr.buffer}\n`);
+
+    if (stoppingJobs.has(id)) return;
 
     if (shuttingDown) {
       const latestRecord = await readRecord(id);
@@ -1813,6 +1943,7 @@ export function createStudio(options = {}) {
       "opening-frame.png",
       "runtime-snapshot.json",
       path.join("triviews", "capture-targets.json"),
+      "entry-third-person-validation.json",
     ];
     if (styledOpeningFrameRequired) {
       requiredArtifacts.push("visual-generation-prompts.json", "styled-opening-frame.png");
@@ -1861,6 +1992,7 @@ export function createStudio(options = {}) {
         caseHash,
         workflowPolicyVersion,
         attempt,
+        codexBackend,
         outcome: "passed",
         whiteboxOutcome: "passed",
         gates: artifactGates,
@@ -1868,6 +2000,7 @@ export function createStudio(options = {}) {
       });
       await appendJobLog(id, "\nWorld generation completed after trusted Babylon capture and optional visual-provider outputs.\n");
       await appendTrajectoryEvent(id, "runtime-capture", "进入首帧、运行快照与实体白膜三视图均已生成。", { kind: "completed" });
+      await appendTrajectoryEvent(id, "entry-alignment-validation", "真实首帧与 Runtime Snapshot V4 的第三人称进入构图校验已通过。", { kind: "completed" });
       if (styledOpeningFrameRequired) {
         await appendTrajectoryEvent(id, "visual-prompt-synthesis", "视觉提示词提供方已依据用户首帧、真实白模首帧和白模三视图固化共享视觉约束。", { kind: "completed" });
       }
@@ -1877,7 +2010,17 @@ export function createStudio(options = {}) {
       return;
     }
 
-    const reason = exit.error instanceof Error
+    const entryValidation = await readJsonIfPresent(
+      path.join(artifactRoot, "entry-third-person-validation.json"),
+    );
+    const entryFailure = entryValidation?.status === "failed"
+      ? (entryValidation.diagnostics ?? [])
+        .map((diagnostic) => `${diagnostic.code}: ${diagnostic.message}`)
+        .join("; ")
+      : "";
+    const reason = entryFailure
+      ? `Entry third-person validation failed: ${entryFailure}`
+      : exit.error instanceof Error
       ? exit.error.message
       : exit.code === 0
         ? `World generation omitted required artifacts: ${Object.entries(artifactGates).filter(([, passed]) => !passed).map(([name]) => name).join(", ")}.`
@@ -1901,6 +2044,7 @@ export function createStudio(options = {}) {
       caseHash,
       workflowPolicyVersion,
       attempt,
+      codexBackend,
       outcome: "failed",
       gates: artifactGates,
       error: reason,
@@ -1915,44 +2059,105 @@ export function createStudio(options = {}) {
     );
   }
 
+  function queueItem(id, backend) {
+    return `world:${normalizedCodexBackend(backend, "cloud")}:${id}`;
+  }
+
+  function parseQueueItem(item) {
+    const match = /^world:(cloud|local):([a-z0-9-]+)$/.exec(item);
+    return match ? { backend: match[1], id: match[2] } : null;
+  }
+
+  function activeCountForBackend(backend) {
+    return [...activeJobBackends.values()].filter((value) => value === backend).length;
+  }
+
+  function queuedCountForBackend(backend) {
+    return queue.filter((item) => parseQueueItem(item)?.backend === backend).length;
+  }
+
+  function terminateChild(child) {
+    if (!child || child.killed) return false;
+    if (process.platform !== "win32" && Number.isSafeInteger(child.pid)) {
+      try {
+        process.kill(-child.pid, "SIGTERM");
+        return true;
+      } catch (error) {
+        if (error?.code !== "ESRCH") throw error;
+      }
+    }
+    return child.kill("SIGTERM");
+  }
+
   function pumpQueue() {
     if (!autoRunJobs || shuttingDown) return;
-    while (activeJobs.size < maxConcurrentJobs) {
-      const item = queue.shift();
-      if (!item) return;
-      const separator = item.indexOf(":");
-      const id = item.slice(separator + 1);
-      if (activeJobs.has(id)) continue;
+    for (;;) {
+      const queueIndex = queue.findIndex((item) => {
+        const parsed = parseQueueItem(item);
+        return parsed !== null &&
+          activeCountForBackend(parsed.backend) < maxConcurrentJobsByBackend[parsed.backend];
+      });
+      if (queueIndex < 0) return;
+      const [item] = queue.splice(queueIndex, 1);
+      const parsed = parseQueueItem(item);
+      if (parsed === null || activeJobs.has(parsed.id)) continue;
+      const { backend, id } = parsed;
       activeJobs.add(id);
+      activeJobBackends.set(id, backend);
       const executeJob = typeof options.jobRunner === "function" ? options.jobRunner : runJob;
       runBackgroundTask(id, "execute-queued-job", async () => {
         try {
           await executeJob(id);
         } catch (error) {
-          const latest = await readRecord(id);
-          const finishedAt = new Date().toISOString();
-          await updateRecord(id, {
-            status: "failed",
-            stage: "failed",
-            failedStage: latest?.stage ?? "preparing",
-            finishedAt,
-            error: error instanceof Error ? error.message : String(error),
-            captureStatus: "failed",
-            outcome: "failed",
-          });
+          if (!stoppingJobs.has(id)) {
+            const latest = await readRecord(id);
+            const finishedAt = new Date().toISOString();
+            await updateRecord(id, {
+              status: "failed",
+              stage: "failed",
+              failedStage: latest?.stage ?? "preparing",
+              finishedAt,
+              error: error instanceof Error ? error.message : String(error),
+              captureStatus: "failed",
+              outcome: "failed",
+            });
+          }
         } finally {
           activeJobs.delete(id);
+          activeJobBackends.delete(id);
           activeChildren.delete(id);
+          stoppingJobs.delete(id);
           pumpQueue();
         }
       });
     }
   }
 
-  function enqueue(id) {
-    const key = `world:${id}`;
+  function enqueue(id, backend) {
+    const key = queueItem(id, backend);
     if (!activeJobs.has(id) && !queue.includes(key)) queue.push(key);
     pumpQueue();
+  }
+
+  async function cancelRemoteLwdpJob(record) {
+    if (effectiveCodexBackend(record) !== "cloud") return { requested: false, jobId: null };
+    const rawLog = await readFile(logPath(record.id), "utf8").catch(() => "");
+    const matches = [...rawLog.matchAll(/WORLDKIT_LWDP_JOB\s+[^\s]+\s+[^\s]+\s+(gen_[a-zA-Z0-9]+)/g)];
+    const jobId = matches.at(-1)?.[1] ?? null;
+    if (jobId === null) return { requested: false, jobId: null };
+    try {
+      const config = await loadLwdpGenerationConfig();
+      const response = await cancelGenerationJob(jobId, { config, maxAttempts: 1 });
+      const job = response?.job ?? response;
+      return { requested: true, jobId, status: String(job?.status ?? "cancel-requested") };
+    } catch (error) {
+      return {
+        requested: true,
+        jobId,
+        status: "cancel-request-failed",
+        error: error instanceof Error ? error.message : String(error),
+      };
+    }
   }
 
   async function createQueuedWorld({
@@ -1963,6 +2168,7 @@ export function createStudio(options = {}) {
     testSetId = null,
     testSetImageId = null,
     batchId = null,
+    codexBackend = selectedCodexBackend,
   }, existingIds) {
     const ids = existingIds ?? new Set((await listRecords()).map((record) => record.id));
     const id = createSceneId(title, ids);
@@ -1990,6 +2196,7 @@ export function createStudio(options = {}) {
       referenceImage,
       status: "queued",
       stage: "queued",
+      codexBackend,
       attempt: 0,
       origin,
       ...(testSetId === null ? {} : { testSetId }),
@@ -2010,10 +2217,12 @@ export function createStudio(options = {}) {
       workflowPolicyVersion,
     };
     await writeRecord(record);
+    const codexQueueLabel = codexBackend === "cloud" ? "LWDP 云端" : "本地";
     await appendTrajectoryEvent(id, "queued", testSetId === null
-      ? "任务已创建并进入 LWDP 云端 Codex 并发队列。"
-      : `测试集 ${testSetId} 的图片任务已进入 LWDP 云端 Codex 并发队列。`, { kind: "queued" });
-    enqueue(id);
+      ? `任务已创建并进入${codexQueueLabel} Codex 并发队列。`
+      : `测试集 ${testSetId} 的图片任务已进入${codexQueueLabel} Codex 并发队列。`,
+    { kind: "queued", codexBackend });
+    enqueue(id, codexBackend);
     return record;
   }
 
@@ -2103,6 +2312,7 @@ export function createStudio(options = {}) {
       caseHash: evaluationRun?.caseHash ?? null,
       workflowPolicyVersion,
       attempt: record.attempt,
+      codexBackend: effectiveCodexBackend(record),
       outcome: "passed",
       whiteboxOutcome: "passed",
       imageValidation: "not-required",
@@ -2126,6 +2336,13 @@ export function createStudio(options = {}) {
       mkdir(testSetsRoot, { recursive: true }),
       recordingWorkbench.initialize(),
     ]);
+    const persistedSettings = await readJsonIfPresent(runtimeSettingsPath);
+    const persistedCodexBackend = normalizedCodexBackend(persistedSettings?.codexBackend);
+    if (persistedCodexBackend === null) {
+      await persistCodexBackend(selectedCodexBackend);
+    } else {
+      selectedCodexBackend = persistedCodexBackend;
+    }
     await importBuiltinTestSetRecords();
     await importBuiltinResultRecords();
     for (const testSet of await listTestSets()) await refreshTestSetIntegrity(testSet);
@@ -2143,7 +2360,7 @@ export function createStudio(options = {}) {
         });
         await appendTrajectoryEvent(record.id, "interrupted", "Creator Studio 重启，运行中的任务被标记为中断。", { kind: "failed" });
       } else if (record.status === "queued") {
-        queue.push(`world:${record.id}`);
+        queue.push(queueItem(record.id, effectiveCodexBackend(record)));
       }
     }
     pumpQueue();
@@ -2152,11 +2369,45 @@ export function createStudio(options = {}) {
   async function handleApi(request, response, url) {
     if (await recordingWorkbench.handleApi(request, response, url)) return true;
 
+    if (request.method === "PUT" && url.pathname === "/api/settings/codex-backend") {
+      const body = await readJsonBody(request);
+      const requestedBackend = normalizedCodexBackend(body?.backend);
+      if (requestedBackend === null) {
+        throw new InputError("Codex 运行端只能是 cloud 或 local。");
+      }
+      const result = await runRuntimeSettingsMutation("codex-backend", async () => {
+        const availability = await codexBackendAvailability();
+        if (!availability[requestedBackend]) return { changed: false, availability };
+        selectedCodexBackend = requestedBackend;
+        await persistCodexBackend(selectedCodexBackend);
+        return { changed: true, availability };
+      });
+      const codexBackends = {
+        cloud: { available: result.availability.cloud },
+        local: { available: result.availability.local },
+      };
+      if (!result.changed) {
+        sendJson(response, 409, {
+          error: requestedBackend === "cloud"
+            ? "LWDP 云端 Codex 当前不可用，未切换运行端。"
+            : "本地 Codex 未安装或尚未登录，未切换运行端。",
+          codexBackend: selectedCodexBackend,
+          codexAvailable: result.availability[selectedCodexBackend],
+          codexBackends,
+        });
+        return true;
+      }
+      sendJson(response, 200, {
+        codexBackend: selectedCodexBackend,
+        codexAvailable: true,
+        codexBackends,
+      });
+      return true;
+    }
+
     if (request.method === "GET" && url.pathname === "/api/health") {
-      const lwdpEnvFile = process.env.WORLDKIT_LWDP_ENV_FILE ||
-        path.join(homedir(), ".codex", "secrets", "lwdp_generation.env");
-      const lwdpConfigured = options.lwdpConfigured ??
-        (Boolean(process.env.LWDP_GENERATION_API_TOKEN) || await fileExists(lwdpEnvFile));
+      const availability = await codexBackendAvailability();
+      const lwdpConfigured = availability.cloud;
       const geminiRuntimeRoot = path.join(repoRoot, ".codex-tmp", "runtime-config");
       const geminiConfigured = await fileExists(path.join(geminiRuntimeRoot, "gemini.env")) &&
         await fileExists(path.join(geminiRuntimeRoot, "google-service-account.json"));
@@ -2164,9 +2415,18 @@ export function createStudio(options = {}) {
         (await listRecords()).filter((record) =>
           record.origin === "test-set" && record.workflowPolicyVersion === workflowPolicyVersion),
       );
+      const activeJobSummaries = [...activeJobs].map((id) => ({
+        id,
+        codexBackend: activeJobBackends.get(id) ?? "cloud",
+      }));
       sendJson(response, 200, {
         ok: true,
-        codexAvailable: lwdpConfigured,
+        codexBackend: selectedCodexBackend,
+        codexAvailable: availability[selectedCodexBackend],
+        codexBackends: {
+          cloud: { available: availability.cloud },
+          local: { available: availability.local },
+        },
         lwdpConfigured,
         geminiConfigured,
         geminiPromptModel: "gemini-3-flash-preview",
@@ -2174,13 +2434,18 @@ export function createStudio(options = {}) {
         codexExecutionProfile: FORMAL_CODEX_EXECUTION_PROFILE,
         pnpmAvailable: commandAvailable("pnpm"),
         activeJob: activeJobs.values().next().value ?? null,
-        activeJobs: [...activeJobs],
+        activeJobs: activeJobSummaries,
         maxConcurrentJobs,
+        maxConcurrentJobsByBackend,
         recordingActiveJobs: recordingWorkbench.activeJobs,
         recordingMaxConcurrentJobs: recordingWorkbench.maxConcurrentJobs,
         queued: queue.length,
+        queuedByBackend: {
+          cloud: queuedCountForBackend("cloud"),
+          local: queuedCountForBackend("local"),
+        },
         playgroundOrigin,
-        workflow: "current-canonical-whitebox-hosted-evaluation",
+        workflow: "switchable-codex-current-canonical-whitebox-hosted-evaluation",
         reliability,
         workflowPolicyVersion,
       });
@@ -2353,6 +2618,7 @@ export function createStudio(options = {}) {
         throw new InputError("这个测试集没有可运行的有效 case。");
       }
       const batchId = `batch-${Date.now().toString(36)}-${randomBytes(2).toString("hex")}`;
+      const batchCodexBackend = selectedCodexBackend;
       const existingIds = new Set((await listRecords()).map((world) => world.id));
       const worlds = [];
       for (const image of selectedImages) {
@@ -2375,6 +2641,7 @@ export function createStudio(options = {}) {
           testSetId: record.id,
           testSetImageId: image.id,
           batchId,
+          codexBackend: batchCodexBackend,
         }, existingIds);
         worlds.push(world);
       }
@@ -2520,6 +2787,61 @@ export function createStudio(options = {}) {
       return true;
     }
 
+    const stopMatch = /^\/api\/worlds\/([a-z0-9-]+)\/stop$/.exec(url.pathname);
+    if (request.method === "POST" && stopMatch) {
+      const record = await readRecord(stopMatch[1]);
+      if (!record) {
+        sendError(response, 404, "没有找到这个世界。");
+        return true;
+      }
+      if (!["queued", "running", "visual-queued", "visual-running"].includes(record.status)) {
+        sendError(response, 409, "只有排队或运行中的任务可以停止。");
+        return true;
+      }
+
+      const wasActive = activeJobs.has(record.id);
+      if (wasActive) stoppingJobs.add(record.id);
+      for (let index = queue.length - 1; index >= 0; index -= 1) {
+        if (parseQueueItem(queue[index])?.id === record.id) queue.splice(index, 1);
+      }
+
+      const remoteCancellation = wasActive
+        ? await cancelRemoteLwdpJob(record)
+        : { requested: false, jobId: null };
+      if (wasActive) terminateChild(activeChildren.get(record.id));
+
+      const artifactRoot = path.join(repoRoot, "artifacts/scenes", record.sceneId);
+      const capturePassed = await fileExists(path.join(artifactRoot, "opening-frame.png")) &&
+        await fileExists(path.join(artifactRoot, "triviews", "capture-targets.json"));
+      const stopped = await updateRecord(record.id, {
+        status: "interrupted",
+        stage: "interrupted",
+        failedStage: record.stage,
+        finishedAt: new Date().toISOString(),
+        error: wasActive ? "用户已停止正在运行的任务。" : "用户已取消排队任务。",
+        captureRequired: false,
+        captureStatus: capturePassed ? "passed" : "not-run",
+        outcome: "cancelled",
+      });
+      await appendJobLog(
+        record.id,
+        `\nWorld generation ${wasActive ? "stopped" : "removed from queue"} by user.\n`,
+      );
+      await appendTrajectoryEvent(
+        record.id,
+        "interrupted",
+        wasActive ? "用户停止了正在运行的任务。" : "用户取消了排队任务。",
+        { kind: "cancelled", remoteCancellation },
+      );
+      pumpQueue();
+      sendJson(response, 200, {
+        ok: true,
+        world: await enrichRecord(stopped),
+        remoteCancellation,
+      });
+      return true;
+    }
+
     const retryMatch = /^\/api\/worlds\/([a-z0-9-]+)\/retry$/.exec(url.pathname);
     if (request.method === "POST" && retryMatch) {
       const record = await readRecord(retryMatch[1]);
@@ -2544,7 +2866,7 @@ export function createStudio(options = {}) {
         styledTriviewsStatus: record.referenceImage ? "pending" : "not-required",
       });
       await appendTrajectoryEvent(record.id, "queued", "用户发起重试，任务重新进入队列。", { kind: "queued" });
-      enqueue(record.id);
+      enqueue(record.id, effectiveCodexBackend(record));
       sendJson(response, 202, { ok: true });
       return true;
     }
@@ -2662,7 +2984,7 @@ export function createStudio(options = {}) {
   async function shutdown() {
     shuttingDown = true;
     for (const child of activeChildren.values()) {
-      if (!child.killed) child.kill("SIGTERM");
+      terminateChild(child);
     }
     await Promise.all([
       recordingWorkbench.shutdown(),

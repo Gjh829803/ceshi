@@ -93,7 +93,7 @@ export function readGlbAnimationClipTiming(
       candidate?.max?.[0] !== maximumSeconds
     )
   ) {
-    throw new Error(`GLB animation clip '${clipName}' has invalid timing bounds.`);
+    throw new Error(`GLB animation clip '${clipName}' has inconsistent timing bounds.`);
   }
   const durationSeconds = maximumSeconds! - minimumSeconds!;
   const framesPerSecond = animation.extras?.framesPerSecond ??

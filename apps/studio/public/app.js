@@ -16,11 +16,18 @@ const state = {
   casePickerTestSetId: null,
   casePickerDraft: new Set(),
   casePickerFilter: "all",
+  health: null,
+  codexBackend: null,
+  codexAvailable: false,
+  backendSwitching: false,
+  backendMessage: "",
+  submittingWorld: false,
+  runningTestSets: false,
 };
 
 const stageLabels = {
-  queued: "等待 LWDP 云端 Codex",
-  preparing: "准备隔离工作区",
+  queued: "等待 Codex 执行",
+  preparing: "准备任务工作区",
   planner: "生成托管式意图摘要、规划图与自检收据",
   "coding-agent": "Coding Agent 搭建可碰撞白膜世界",
   "canonical-build": "校验并编译 Canonical JSON",
@@ -29,6 +36,7 @@ const stageLabels = {
   interrupted: "任务中断，可以重试",
   "change-requested": "Agent 请求修改冻结计划",
   "runtime-capture": "捕获真实白膜运行结果",
+  "entry-alignment-validation": "校验第三人称进入构图",
   "visual-prompt-synthesis": "可配置视觉提供方合成首帧与三视图提示词",
   "visual-imagegen": "可配置图片提供方生成可选视觉结果",
 };
@@ -52,6 +60,7 @@ const progressByStage = {
   "canonical-build": 82,
   validation: 82,
   "runtime-capture": 94,
+  "entry-alignment-validation": 96,
   "visual-prompt-synthesis": 97,
   "visual-imagegen": 99,
   ready: 100,
@@ -73,6 +82,10 @@ const worldGrid = document.querySelector("#world-grid");
 const emptyState = document.querySelector("#empty-state");
 const historyStats = document.querySelector("#history-stats");
 const runtimeState = document.querySelector("#runtime-state");
+const codexBackendButtons = [...document.querySelectorAll("[data-codex-backend]")];
+const codexBackendNote = document.querySelector("#codex-backend-note");
+const submitBackendEyebrow = document.querySelector("#submit-backend-eyebrow");
+const historyKicker = document.querySelector("#history-kicker");
 const subjectCatalog = document.querySelector("#subject-catalog");
 const capabilityCount = document.querySelector("#capability-count");
 const template = document.querySelector("#world-card-template");
@@ -109,6 +122,35 @@ function escapeHtml(value) {
 
 function safeCssColor(value) {
   return /^#[0-9a-f]{6}$/i.test(String(value)) ? String(value) : "#9aa9a8";
+}
+
+const codexBackendDetails = Object.freeze({
+  cloud: Object.freeze({ label: "云端 Codex", eyebrow: "RUN CLOUD CODEX", kicker: "WORLD HISTORY / CLOUD SELECTED" }),
+  local: Object.freeze({ label: "本地 Codex", eyebrow: "RUN LOCAL CODEX", kicker: "WORLD HISTORY / LOCAL SELECTED" }),
+});
+
+function normalizeCodexBackend(value) {
+  return value === "cloud" || value === "local" ? value : null;
+}
+
+function codexBackendLabel(value) {
+  const backend = normalizeCodexBackend(value);
+  return backend ? codexBackendDetails[backend].label : "Codex";
+}
+
+function worldCodexBackend(world) {
+  return normalizeCodexBackend(world?.codexBackend);
+}
+
+function stageLabel(stage, backendValue = null) {
+  const base = stageLabels[stage] ?? String(stage ?? "unknown");
+  const backend = normalizeCodexBackend(backendValue);
+  if (!backend) return base;
+  if (stage === "queued") return `等待${codexBackendDetails[backend].label}`;
+  if (["preparing", "planner", "spatial-planner", "image-planner", "builder", "coding-agent"].includes(stage)) {
+    return `${codexBackendDetails[backend].label} · ${base}`;
+  }
+  return base;
 }
 
 function formatDate(value) {
@@ -166,6 +208,7 @@ function historyRevision(worlds) {
     world.stage,
     world.updatedAt,
     world.queuePosition,
+    world.codexBackend,
     world.coverUrl,
     world.whiteboxOpeningFrameUrl,
   ]));
@@ -327,7 +370,13 @@ function updateTestSetSelection() {
   selectedTestCount.textContent = selectedCaseCount === 0
     ? "尚未选择 case"
     : `已选 ${selectedSetCount} 组 · 将创建 ${selectedCaseCount} 个世界任务`;
-  runSelectedTestSets.disabled = selectedCaseCount === 0;
+  runSelectedTestSets.disabled = selectedCaseCount === 0
+    || !state.codexAvailable
+    || state.backendSwitching
+    || state.runningTestSets;
+  runSelectedTestSets.title = state.codexAvailable
+    ? "按当前选择的 Codex 执行端创建这些任务"
+    : `${codexBackendLabel(state.codexBackend)}当前不可用`;
 }
 
 function renderTestSets() {
@@ -545,8 +594,16 @@ function renderHistory() {
     fragment.querySelector("h3").textContent = world.title;
     fragment.querySelector(".prompt-excerpt").textContent = world.prompt;
     fragment.querySelector(".progress-track i").style.width = `${progressByStage[world.stage] ?? 8}%`;
+    const backend = worldCodexBackend(world);
+    const backendBadge = fragment.querySelector(".backend-badge");
+    if (backend) {
+      backendBadge.hidden = false;
+      backendBadge.textContent = codexBackendLabel(backend);
+      backendBadge.title = `该任务创建时已固定使用${codexBackendLabel(backend)}`;
+      card.dataset.codexBackend = backend;
+    }
     const queue = world.queuePosition ? ` · 队列第 ${world.queuePosition} 位` : "";
-    fragment.querySelector(".stage-copy").textContent = `${stageLabels[world.stage] ?? world.stage}${queue}`;
+    fragment.querySelector(".stage-copy").textContent = `${stageLabel(world.stage, backend)}${queue}`;
     const play = fragment.querySelector(".play-button");
     if (world.previewUrl) {
       play.href = world.previewUrl;
@@ -554,6 +611,11 @@ function renderHistory() {
     } else {
       play.removeAttribute("href");
       play.setAttribute("aria-disabled", "true");
+    }
+    const stop = fragment.querySelector(".stop-button");
+    if (["queued", "running", "visual-queued", "visual-running"].includes(world.status)) {
+      stop.hidden = false;
+      stop.addEventListener("click", () => void requestWorldStop(world.id, stop));
     }
     for (const button of fragment.querySelectorAll(".details-button, .card-cover")) {
       button.addEventListener("click", () => openWorld(world.id));
@@ -582,21 +644,121 @@ async function loadWorlds() {
 async function loadHealth() {
   try {
     const response = await fetch("/api/health", { cache: "no-store" });
+    if (!response.ok) throw new Error("运行状态读取失败");
     const health = await response.json();
-    const online = health.ok && health.codexAvailable && health.pnpmAvailable;
-    const profile = health.codexExecutionProfile;
+    const backend = normalizeCodexBackend(health.codexBackend);
+    if (!backend) throw new Error("Codex 执行端配置无效");
+    state.health = health;
+    state.codexBackend = backend;
+    state.codexAvailable = Boolean(health.codexAvailable);
+    state.backendMessage = "";
+    const online = health.ok && state.codexAvailable && health.pnpmAvailable;
+    const profile = health.codexExecutionProfile ?? health.formalCodexExecutionProfile ?? health.formalProfile;
     const profileLabel = profile?.model && profile?.reasoningEffort
       ? `${profile.model} · ${profile.reasoningEffort}`
       : "正式模型未声明";
+    const allActiveJobs = Array.isArray(health.activeJobs) ? health.activeJobs : health.activeJob ? [health.activeJob] : [];
+    const taggedActiveJobs = allActiveJobs.filter((job) => normalizeCodexBackend(job?.codexBackend));
+    const activeJobs = taggedActiveJobs.length > 0
+      ? taggedActiveJobs.filter((job) => normalizeCodexBackend(job.codexBackend) === backend)
+      : allActiveJobs;
+    const activeCount = activeJobs.length;
+    const backendLabel = codexBackendLabel(backend);
+    const backendCapacity = health.maxConcurrentJobsByBackend?.[backend] ?? health.maxConcurrentJobs ?? activeCount;
+    const backendQueued = health.queuedByBackend?.[backend] ?? 0;
     runtimeState.className = `runtime-state ${online ? "online" : "offline"}`;
     runtimeState.querySelector("span").textContent = online
-      ? (health.activeJobs?.length ?? Number(Boolean(health.activeJob))) > 0
-        ? `LWDP ${profileLabel} 并发运行 ${health.activeJobs?.length ?? 1}/${health.maxConcurrentJobs ?? 1}`
-        : `LWDP 正式档 · ${profileLabel}`
-      : "Codex 或 pnpm 不可用";
-  } catch {
+      ? activeCount > 0
+        ? `${backendLabel} · ${profileLabel} · 运行 ${activeCount}/${backendCapacity}${backendQueued > 0 ? ` · 排队 ${backendQueued}` : ""}`
+        : `${backendLabel} · ${profileLabel} · 可用${backendQueued > 0 ? ` · 排队 ${backendQueued}` : ""}`
+      : health.pnpmAvailable === false
+        ? "主机 pnpm 当前不可用"
+        : `${backendLabel}当前不可用`;
+    syncCodexBackendUi();
+  } catch (error) {
+    state.health = null;
+    state.codexAvailable = false;
+    state.backendMessage = error.message;
     runtimeState.className = "runtime-state offline";
     runtimeState.querySelector("span").textContent = "本地运行时未连接";
+    syncCodexBackendUi();
+  }
+}
+
+function backendAvailability(backend) {
+  return state.health?.codexBackends?.[backend]?.available === true;
+}
+
+function syncCodexBackendUi() {
+  const backend = normalizeCodexBackend(state.codexBackend);
+  const details = backend ? codexBackendDetails[backend] : null;
+  for (const button of codexBackendButtons) {
+    const option = normalizeCodexBackend(button.dataset.codexBackend);
+    if (!option) continue;
+    const available = backendAvailability(option);
+    const isCurrent = option === backend;
+    button.setAttribute("aria-pressed", String(isCurrent));
+    button.classList.toggle("active", isCurrent);
+    button.disabled = !available || state.backendSwitching || state.submittingWorld || state.runningTestSets;
+    const reason = state.health?.codexBackends?.[option]?.reason;
+    const unavailableReason = typeof reason === "string" && reason.trim()
+      ? reason
+      : option === "local"
+        ? "这台机器未检测到已安装且登录的 Codex"
+        : "项目内云端 Codex 配置不可用";
+    const status = available
+      ? `${isCurrent ? "当前使用" : "切换为"}${codexBackendLabel(option)}；只影响之后新建的任务`
+      : `${codexBackendLabel(option)}不可用：${unavailableReason}`;
+    button.title = status;
+    button.setAttribute("aria-label", status);
+  }
+
+  submitBackendEyebrow.textContent = details?.eyebrow ?? "SELECT CODEX BACKEND";
+  historyKicker.textContent = details?.kicker ?? "WORLD HISTORY / CODEX BACKENDS";
+  submitButton.disabled = !state.codexAvailable || state.backendSwitching || state.submittingWorld;
+  if (state.backendSwitching && details) {
+    codexBackendNote.textContent = `正在切换到${details.label}……已经排队或运行的任务不会改变。`;
+  } else if (state.backendMessage) {
+    codexBackendNote.textContent = `执行端切换失败：${state.backendMessage}`;
+  } else if (backend === "local") {
+    codexBackendNote.textContent = "新任务将使用这台机器现有的 Codex 登录，不复制凭证；已经排队或运行的任务保持原执行端。";
+  } else if (backend === "cloud") {
+    codexBackendNote.textContent = "新任务将使用云端 Codex；已经排队或运行的任务保持原执行端。";
+  } else {
+    codexBackendNote.textContent = "正在读取执行端配置。切换只影响之后新建的任务。";
+  }
+  updateTestSetSelection();
+}
+
+async function selectCodexBackend(backendValue) {
+  const backend = normalizeCodexBackend(backendValue);
+  if (!backend || backend === state.codexBackend || state.backendSwitching || !backendAvailability(backend)) return;
+  state.backendSwitching = true;
+  state.backendMessage = "";
+  syncCodexBackendUi();
+  try {
+    const response = await fetch("/api/settings/codex-backend", {
+      method: "PUT",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ backend }),
+    });
+    const payload = await response.json().catch(() => ({}));
+    if (!response.ok) {
+      const retainedBackend = normalizeCodexBackend(payload.codexBackend);
+      if (retainedBackend) state.codexBackend = retainedBackend;
+      if (payload.codexBackends) {
+        state.health = { ...state.health, codexBackends: payload.codexBackends };
+        state.codexAvailable = Boolean(payload.codexAvailable);
+      }
+      throw new Error(payload.error ?? `无法切换到${codexBackendLabel(backend)}`);
+    }
+    state.codexBackend = backend;
+    await loadHealth();
+  } catch (error) {
+    state.backendMessage = error.message;
+  } finally {
+    state.backendSwitching = false;
+    syncCodexBackendUi();
   }
 }
 
@@ -699,6 +861,7 @@ const phaseTitles = {
   "coding-agent": "白膜实现",
   "canonical-build": "Canonical 构建",
   "runtime-capture": "真实运行捕获",
+  "entry-alignment-validation": "进入构图校验",
   "visual-prompt-synthesis": "视觉提示词合成",
   "visual-imagegen": "并发视觉生成",
 };
@@ -855,7 +1018,7 @@ function applyLiveDetailUpdate(world, media) {
     if (element) element.textContent = value;
   };
   setText("[data-live-status]", worldStatusLabel(world));
-  setText("[data-live-stage]", stageLabels[world.stage] ?? world.stage);
+  setText("[data-live-stage]", stageLabel(world.stage, worldCodexBackend(world)));
   setText("[data-live-core-stages]", `${complete}/${coreStages.length}`);
   setText("[data-live-deliverables]", String(available));
   setText("[data-live-prototypes]", String(media?.prototypes?.length ?? 0));
@@ -1092,8 +1255,37 @@ function patchRuntimeLog(media, log) {
 
 function renderDialogActions(world) {
   const canRetry = ["failed", "interrupted"].includes(world.status);
+  const canStop = ["queued", "running", "visual-queued", "visual-running"].includes(world.status);
   return `${world.previewUrl ? `<a href="${escapeHtml(world.previewUrl)}" target="_blank" rel="noreferrer">进入白膜世界 ↗</a>` : ""}
+    ${canStop ? `<button type="button" class="stop-world">停止任务</button>` : ""}
     ${canRetry ? `<button type="button" id="retry-world">重新生成</button>` : ""}`;
+}
+
+async function requestWorldStop(id, button) {
+  if (!button || button.disabled) return;
+  button.disabled = true;
+  const previousLabel = button.textContent;
+  button.textContent = "停止中…";
+  try {
+    const result = await fetch(`/api/worlds/${id}/stop`, { method: "POST" });
+    const payload = await result.json();
+    if (!result.ok) throw new Error(payload.error ?? "停止失败");
+    await loadWorlds();
+    if (state.selectedId === id && dialog.open) await refreshDialog(id);
+  } catch (error) {
+    button.textContent = error.message;
+    button.disabled = false;
+    setTimeout(() => {
+      if (button.isConnected && !button.disabled) button.textContent = previousLabel;
+    }, 2_000);
+  }
+}
+
+function wireStopAction(id) {
+  const stop = dialogContent.querySelector(".stop-world");
+  if (!stop || stop.dataset.wired === "true") return;
+  stop.dataset.wired = "true";
+  stop.addEventListener("click", () => void requestWorldStop(id, stop));
 }
 
 function wireRetryAction(id) {
@@ -1120,6 +1312,7 @@ function patchWorldActions(world) {
   actions.dataset.status = world.status;
   actions.innerHTML = renderDialogActions(world);
   wireRetryAction(world.id);
+  wireStopAction(world.id);
 }
 
 function patchDetailCounts(world, media) {
@@ -1202,7 +1395,7 @@ async function refreshDialog(id, suppliedPayload = null) {
       <div class="dialog-title">
         <p><span class="detail-status" data-live-status>${escapeHtml(worldStatusLabel(world))}</span>${escapeHtml(world.sceneId)}</p>
         <h2>${escapeHtml(world.title)}</h2>
-        <span data-live-stage>${escapeHtml(stageLabels[world.stage] ?? world.stage)}</span>
+        <span data-live-stage>${escapeHtml(stageLabel(world.stage, worldCodexBackend(world)))}</span>
       </div>
       <div class="dialog-hero-metrics">
         <div><b data-live-total-duration>${escapeHtml(formatDuration(media?.trajectory?.summary?.durationMs, media?.trajectory?.summary?.durationStatus))}</b><small>总历时</small></div>
@@ -1215,7 +1408,7 @@ async function refreshDialog(id, suppliedPayload = null) {
     <div class="detail-layout">
       <aside class="detail-sidebar">
         <section><small>WORLD REQUEST</small><p>${escapeHtml(world.prompt)}</p><button class="text-button" id="copy-world-prompt" type="button">复制用户描述</button></section>
-        <section class="detail-meta"><small>TASK INFO</small><dl><div><dt>创建时间</dt><dd>${escapeHtml(formatDateTime(world.createdAt))}</dd></div><div><dt>最近更新</dt><dd data-live-updated-at>${escapeHtml(formatDateTime(world.updatedAt))}</dd></div><div><dt>尝试次数</dt><dd>${world.attempt}</dd></div><div><dt>轨迹来源</dt><dd>${media?.trajectory?.source === "recorded" ? "运行时记录" : "历史工件恢复"}</dd></div></dl></section>
+        <section class="detail-meta"><small>TASK INFO</small><dl><div><dt>创建时间</dt><dd>${escapeHtml(formatDateTime(world.createdAt))}</dd></div><div><dt>最近更新</dt><dd data-live-updated-at>${escapeHtml(formatDateTime(world.updatedAt))}</dd></div>${worldCodexBackend(world) ? `<div><dt>Codex 执行端</dt><dd>${escapeHtml(codexBackendLabel(worldCodexBackend(world)))}</dd></div>` : ""}<div><dt>尝试次数</dt><dd>${world.attempt}</dd></div><div><dt>轨迹来源</dt><dd>${media?.trajectory?.source === "recorded" ? "运行时记录" : "历史工件恢复"}</dd></div></dl></section>
         <section><small>PIPELINE AT A GLANCE</small>${renderTrajectory(media, true)}</section>
         ${world.error ? `<section class="detail-error"><small>NEEDS ATTENTION</small><p>${escapeHtml(world.error)}</p></section>` : ""}
         <div class="dialog-actions" data-live-actions data-status="${escapeHtml(world.status)}">${renderDialogActions(world)}</div>
@@ -1238,7 +1431,7 @@ async function refreshDialog(id, suppliedPayload = null) {
         ${panel("trajectory", `
           <div class="panel-heading-large"><div><small>AUDITABLE EXECUTION TRAJECTORY</small><h3>Agent 执行轨迹</h3></div><span>展示可观察动作与工具输出，不展示隐藏思维链</span></div>
           <div class="trajectory-layout"><section>${renderTrajectory(media)}</section><section><div data-live-events>${renderEventStream(media)}</div></section></div>
-          <details class="runtime-log" ${world.status === "running" ? "open" : ""}><summary>查看 LWDP Agent / 本地主机日志预览</summary>${fullLogUrl ? `<a class="full-log-link" href="${escapeHtml(fullLogUrl)}" download>下载完整原始日志</a>` : ""}<pre>${escapeHtml(log || "任务尚未开始输出日志。")}</pre></details>
+          <details class="runtime-log" ${world.status === "running" ? "open" : ""}><summary>查看${escapeHtml(codexBackendLabel(worldCodexBackend(world)))} Agent / Host 日志预览</summary>${fullLogUrl ? `<a class="full-log-link" href="${escapeHtml(fullLogUrl)}" download>下载完整原始日志</a>` : ""}<pre>${escapeHtml(log || "任务尚未开始输出日志。")}</pre></details>
         `)}
         ${panel("deliverables", `
           <div class="panel-heading-large"><div><small>PROCESS DELIVERABLE INVENTORY</small><h3>全过程交付物</h3></div><span data-live-deliverable-summary>${availableDeliverables} / ${deliverables.length} 可查看</span></div>
@@ -1271,6 +1464,7 @@ async function refreshDialog(id, suppliedPayload = null) {
     event.currentTarget.textContent = "已复制";
   });
   wireRetryAction(id);
+  wireStopAction(id);
   const pre = dialogContent.querySelector(".runtime-log pre");
   if (pre) pre.scrollTop = pre.scrollHeight;
   if (previousScrollTop > 0) {
@@ -1407,8 +1601,10 @@ runSelectedTestSets.addEventListener("click", async () => {
   const selected = state.testSets
     .map((testSet) => ({ testSet, imageIds: [...selectedCasesFor(testSet.id)] }))
     .filter(({ imageIds }) => imageIds.length > 0);
-  if (selected.length === 0) return;
-  runSelectedTestSets.disabled = true;
+  if (selected.length === 0 || !state.codexAvailable) return;
+  const requestedBackend = state.codexBackend;
+  state.runningTestSets = true;
+  syncCodexBackendUi();
   let createdWorlds = 0;
   try {
     for (let index = 0; index < selected.length; index += 1) {
@@ -1423,7 +1619,7 @@ runSelectedTestSets.addEventListener("click", async () => {
       if (!response.ok) throw new Error(payload.error ?? `${testSet.name} 启动失败`);
       createdWorlds += payload.worlds?.length ?? 0;
     }
-    showTestSetMessage(`已创建 ${createdWorlds} 个世界任务，任务会按队列逐个运行。`);
+    showTestSetMessage(`已按${codexBackendLabel(requestedBackend)}创建 ${createdWorlds} 个世界任务；每个任务已固定执行端。`);
     state.filter = "running";
     document.querySelectorAll(".filters button").forEach((button) => button.classList.toggle("active", button.dataset.filter === "running"));
     await Promise.all([loadTestSets(), loadWorlds()]);
@@ -1431,14 +1627,22 @@ runSelectedTestSets.addEventListener("click", async () => {
   } catch (error) {
     showTestSetMessage(error.message, true);
   } finally {
+    state.runningTestSets = false;
     updateTestSetSelection();
+    syncCodexBackendUi();
   }
 });
 
 form.addEventListener("submit", async (event) => {
   event.preventDefault();
-  submitButton.disabled = true;
-  showMessage("正在创建任务并写入本地历史……");
+  if (!state.codexAvailable) {
+    showMessage(`${codexBackendLabel(state.codexBackend)}当前不可用，请先选择可用的执行端。`, true);
+    return;
+  }
+  const requestedBackend = state.codexBackend;
+  state.submittingWorld = true;
+  syncCodexBackendUi();
+  showMessage(`正在通过${codexBackendLabel(requestedBackend)}创建任务并写入历史……`);
   try {
     const response = await fetch("/api/worlds", {
       method: "POST",
@@ -1456,7 +1660,7 @@ form.addEventListener("submit", async (event) => {
     imagePreview.hidden = true;
     imagePreview.removeAttribute("src");
     replaceImage.hidden = true;
-    showMessage(`“${payload.world.title}”已进入生成队列。可以离开页面，历史记录会保留。`);
+    showMessage(`“${payload.world.title}”已进入${codexBackendLabel(worldCodexBackend(payload.world) ?? requestedBackend)}队列。执行端已固定，可以离开页面。`);
     state.filter = "all";
     document.querySelectorAll(".filters button").forEach((button) => button.classList.toggle("active", button.dataset.filter === "all"));
     await loadWorlds();
@@ -1464,9 +1668,14 @@ form.addEventListener("submit", async (event) => {
   } catch (error) {
     showMessage(error.message, true);
   } finally {
-    submitButton.disabled = false;
+    state.submittingWorld = false;
+    syncCodexBackendUi();
   }
 });
+
+for (const button of codexBackendButtons) {
+  button.addEventListener("click", () => void selectCodexBackend(button.dataset.codexBackend));
+}
 
 document.querySelectorAll(".filters button").forEach((button) => {
   button.addEventListener("click", () => {
@@ -1485,6 +1694,7 @@ dialog.addEventListener("close", () => {
 });
 
 setWorkspaceMode(location.hash === "#test-sets" ? "test-sets" : "create", false);
+syncCodexBackendUi();
 await Promise.all([loadHealth(), loadWorlds(), loadSubjectCatalog(), loadTestSets()]);
 setInterval(() => void loadHealth(), 5_000);
 setInterval(() => void loadWorlds(), 2_500);

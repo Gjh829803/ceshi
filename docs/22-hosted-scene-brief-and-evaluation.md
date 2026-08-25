@@ -38,7 +38,7 @@ The trusted Host owns validation, Registry closure, Gameplay Bootstrap, compilat
 - `仅视觉层设想` prevents lighting, texture and style from becoming collision geometry;
 - `运动模式`, `空间`, `通行`, `首帧`, and `视觉目标` describe requested behavior and composition.
 
-Movement labels are requests, not proof of runtime support. The Builder must select a compatible implemented Registry closure or return a capability-gap diagnostic. It must not substitute a different motion model. Experimental resources may be exercised in an explicitly experimental evaluation lane, but are not production support.
+Movement labels are requests, not proof of runtime support. Shape and behavior stay independent: the Builder may use a complete Registry Subject or assemble one package-local controlled silhouette from an exact registered Subject Asset plus primitive visual parts. It selects an exact implemented Registry closure when one compiles without reserved relationships. Otherwise the hosted workflow preserves the complete requested silhouette and world topology, uses the documented ground closure as an explicit playable approximation, and records requested versus implemented behavior in Subject metadata. A missing same-named preset never permits an Agent to omit the world, and per-scene Builder work never adds SDK motion bases or edits Registry/Runtime/Compiler code.
 
 World size is derived from the request, visible evidence, inferred continuation, terrain-cell guidance and enforced resource budgets. Perimeter length divided by nominal speed is not a valid exploration-quality gate.
 
@@ -63,14 +63,15 @@ Studio persists one unreleased current workflow contract instead of carrying V18
 3. Canonical Builder and Builder self-check;
 4. trusted Canonical build;
 5. real Babylon runtime capture;
-6. optional visual prompt synthesis;
-7. optional visual image generation.
+6. Snapshot V4 plus opening-frame third-person alignment validation;
+7. optional visual prompt synthesis;
+8. optional visual image generation.
 
-Each task is isolated, uses atomic artifact promotion, records stage receipts and can be retried without treating partial results as passed. External evaluation corpora belong outside ordinary Git history; their manifests must record source, license/provenance and content hashes.
+Each task is isolated, uses atomic artifact promotion, records stage receipts and can be retried without treating partial results as passed. Cloud and local Codex execution use independent bounded queues; local defaults to one slot. A queued or running case can be stopped without counting user cancellation as an evaluation failure. Cloud creation uses one single-task POST and recovers an uncertain response only through the same stable `request_id`, never by issuing a second creation request. External evaluation corpora belong outside ordinary Git history; their manifests must record source, license/provenance and content hashes.
 
 ## Current production boundary
 
-The production authoring lane remains outdoor heightfield worlds with current static structures, water representation, subjects and R1/R1b traversability. Do not present interiors, caves, overhangs, NPC behavior, vehicles, flight, underwater navigation, dynamic platforms or networking as production support. Requests outside that boundary remain explicit capability gaps or separately labelled experiments.
+The formal production authoring lane remains outdoor heightfield worlds with current static structures, water representation, subjects and R1/R1b traversability. Do not present interiors, caves, overhangs, NPC behavior, vehicles, flight, underwater navigation, dynamic platforms or networking as exact production support. The hosted approximation policy above may still return a complete playable silhouette and world, but it must disclose the implemented behavior and must not claim unsupported Route or motion evidence.
 
 ## Commands
 

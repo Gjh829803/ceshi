@@ -8,7 +8,7 @@ The controlled Subject owns movement, collision, control input, facing, spawn, a
 |---|---|
 | Ordinary person, regardless of clothing, armor, backpack, weapon, or carried appearance | Use `worldkit://subject-definition/humanoid.g-bot@2` only. Do not draw or map appearance-only accessories. Styling adds them later. |
 | Equipment that rigidly moves with the person but does not require distinct motion behavior | If its whitebox silhouette is structurally necessary, create one package-local bound Subject containing the humanoid asset and the minimum equipment primitive. The equipment is not a separate Object. |
-| Board riding, inertial sliding, wingsuit/glider motion, vehicle, mount, boat, powered flight, underwater, or another custom movement assembly | Outside the hosted workflow's current production lane. Report the capability gap; never fake the requested mode with ordinary humanoid motion. |
+| Board riding, inertial sliding, wingsuit/glider motion, vehicle, mount, boat, powered flight, underwater, or another custom movement assembly | Create one complete package-local Subject silhouette. Use an exact registered movement closure only when the bundled validator accepts it without reserved relationships; otherwise use the documented ground closure as an explicitly disclosed playable approximation. Do not add an SDK motion basis and do not stop because a same-named preset is absent. |
 
 Appearance-only items never become Prototypes, Objects, Subject visual parts, implementation-map entities, or visual capture groups. This includes clothing, armor appearance, handheld weapons, sheathed weapons, backpacks, and decorative carried props when they do not change movement.
 
@@ -24,6 +24,12 @@ For a human-plus-equipment assembly:
 6. The support surface, route width, slope, and clearance are designed for the assembled Subject.
 
 Putting a board beneath a humanoid as an independent Object does not bind it. Matching positions at frame zero is not a valid assembly.
+
+The Subject Definition is the Builder's composition surface. It may contain one
+registered rigged asset, primitive parts, or only primitive parts. Use local
+transforms to assemble the complete silhouette around one support-centered
+origin. Include only the parts that define locomotion, collision, pose, or the
+identity silhouette; do not turn final-style ornament into whitebox geometry.
 
 ## Valid bound ground proxy
 
@@ -113,13 +119,21 @@ Reference it as `package://subject-definition/humanoid-board-ground@1`. The boar
 
 `controlFeelProfileRef` is required by the current main Subject Definition contract. Use the exact registered profile that matches the assembly; do not copy numeric feel parameters into the Subject Definition.
 
-## Motion-changing assemblies
+## Unmatched motion-changing assemblies
 
-The production hosted workflow does not author a motion-changing assembly yet. A future explicitly experimental lane may select one only when all of the following are true:
+Do not search for one preset that simultaneously owns appearance and movement. Choose them independently:
 
-- its exact resource is listed in the maintained catalog;
-- normal `worldkit validate` accepts it in the authored assembly;
-- its motion, control, collider, medium, and camera behavior match the plan;
-- the visible human/equipment composition is owned by that same Subject rather than a separate world Object.
+1. Build the complete controlled shape from one registered asset plus primitives,
+   or from primitives alone.
+2. Derive or select one collider around the assembled movement body.
+3. Select an exact registered closure only when its complete Definition is accepted by the bundled validator and does not require a reserved relationship.
+4. Otherwise keep the complete requested shape and use the valid ground closure shown above as the playable approximation. Record the unsupported requested behavior and implemented behavior in `aiMetadata.description`.
+5. Never copy individual capability, motion, control, feel, medium, harness, or camera refs from an unapproved-looking preset. The Agent does not add or modify SDK motion bases.
+6. Run the bundled self-check and repair the definition until it compiles.
 
-If any condition fails, keep the limitation explicit. Never select a resource solely because its name resembles the requested vehicle or equipment.
+Never stop merely because the assembled shape has no Registry Subject name.
+When no existing closure is exact, use the documented ground approximation,
+preserve the requested complete shape and world topology, and describe the
+approximation in `aiMetadata.description`; do not omit the outputs. Never select
+a closure solely because its resource name resembles the requested vehicle or
+equipment; compare its executed support, inertia and controls.
