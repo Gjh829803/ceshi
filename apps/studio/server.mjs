@@ -684,6 +684,7 @@ export function createStudio(options = {}) {
       "builder-self-check": [path.join(artifactRoot, "builder-self-check.json")],
       "implementation-map": [path.join(artifactRoot, "scene-implementation-map.json")],
       "execution-plan": [path.join(artifactRoot, "world.build.json")],
+      "route-validation-manifest": [path.join(artifactRoot, "route-validation-manifest.json")],
       "opening-frame": [path.join(artifactRoot, "opening-frame.png")],
       "runtime-snapshot": [path.join(artifactRoot, "runtime-snapshot.json")],
       "capture-targets": [path.join(artifactRoot, "triviews", "capture-targets.json")],
@@ -950,6 +951,126 @@ export function createStudio(options = {}) {
     }
   }
 
+  function canonicalJson(value) {
+    if (value === null || typeof value !== "object") return JSON.stringify(value);
+    if (Array.isArray(value)) return `[${value.map(canonicalJson).join(",")}]`;
+    return `{${Object.keys(value).sort().map((key) =>
+      `${JSON.stringify(key)}:${canonicalJson(value[key])}`).join(",")}}`;
+  }
+
+  function hashCanonicalJson(value) {
+    return `sha256:${createHash("sha256").update(canonicalJson(value)).digest("hex")}`;
+  }
+
+  function expectedRequiredRoutes(executionPlan) {
+    const requirements = executionPlan?.traversal?.connectivityRequirements;
+    if (!Array.isArray(requirements)) return null;
+    return requirements.map((requirement) => ({
+      constraintId: requirement?.constraintId,
+      routeId: requirement?.routeId,
+      traversingEntityId: requirement?.traversingEntityId,
+      startAnchorEntityId: requirement?.startAnchorEntityId,
+      destinationAnchorEntityId: requirement?.destinationAnchorEntityId,
+    })).sort((left, right) =>
+      String(left.constraintId) < String(right.constraintId)
+        ? -1
+        : String(left.constraintId) > String(right.constraintId)
+        ? 1
+        : String(left.routeId) < String(right.routeId)
+        ? -1
+        : String(left.routeId) > String(right.routeId)
+        ? 1
+        : 0
+    );
+  }
+
+  async function hasTrustedRouteValidationArtifacts(
+    artifactRoot,
+    sceneId,
+    builderCheck,
+    build,
+    authoringHash,
+    freshnessFloor,
+  ) {
+    if (builderCheck.requiresTrustedRouteValidation !== true) return true;
+    const manifestPath = path.join(artifactRoot, "route-validation-manifest.json");
+    if (!await nonemptyArtifact(manifestPath, freshnessFloor)) return false;
+    const manifest = await readJsonIfPresent(manifestPath);
+    if (
+      manifest?.kind !== "worldkit-route-validation-manifest" ||
+      manifest.schemaVersion !== 1 ||
+      manifest.sceneId !== sceneId ||
+      !/^route-validation\.[0-9]{8}-[0-9]{6}-[0-9]+\.json$/.test(
+        manifest.reportFileName ?? "",
+      ) ||
+      !/^sha256:[a-f0-9]{64}$/.test(manifest.reportContentHash ?? "")
+    ) return false;
+    const reportPath = path.join(artifactRoot, manifest.reportFileName);
+    if (!await nonemptyArtifact(reportPath, freshnessFloor)) return false;
+    const [reportBytes, report] = await Promise.all([
+      readFile(reportPath).catch(() => null),
+      readJsonIfPresent(reportPath),
+    ]);
+    if (
+      reportBytes === null ||
+      reportBytes.toString("utf8") !== `${canonicalJson(report)}\n` ||
+      `sha256:${createHash("sha256").update(reportBytes).digest("hex")}` !==
+        manifest.reportContentHash ||
+      report?.kind !== "worldkit-validation-report" ||
+      report.schemaVersion !== 2 ||
+      report.status !== "passed"
+    ) return false;
+    const executionPlan = build.executionPlan;
+    const requiredRoutes = expectedRequiredRoutes(executionPlan);
+    if (
+      requiredRoutes === null ||
+      requiredRoutes.length === 0 ||
+      hashCanonicalJson(executionPlan) !== build.executionPlanHash ||
+      hashCanonicalJson(build.normalizedWorldIr) !== build.normalizedWorldIrHash ||
+      executionPlan.authoringSpecHash !== authoringHash
+    ) return false;
+    const subject = report.subject;
+    const receipt = report.routeValidationSetReceipt;
+    const expectedIdentity = {
+      authoringSpecHash: executionPlan.authoringSpecHash,
+      normalizedWorldIrHash: build.normalizedWorldIrHash,
+      executionPlanHash: build.executionPlanHash,
+      resourceLockHash: executionPlan.resourceLockHash,
+      layoutSolveReportHash: executionPlan.layout?.layoutSolveReportHash,
+    };
+    for (const [field, expected] of Object.entries(expectedIdentity)) {
+      if (!/^sha256:[a-f0-9]{64}$/.test(expected ?? "")) return false;
+      if (subject?.[field] !== expected || receipt?.[field] !== expected) return false;
+    }
+    const expectedSetHash = hashCanonicalJson({
+      kind: "route-validation-required-route-set",
+      schemaVersion: 1,
+      executionPlanHash: build.executionPlanHash,
+      requiredRoutes,
+    });
+    if (
+      receipt.requiredRouteCount !== requiredRoutes.length ||
+      receipt.requiredRouteSetHash !== expectedSetHash ||
+      canonicalJson(receipt.requiredRoutes) !== canonicalJson(requiredRoutes) ||
+      !Array.isArray(receipt.rows) ||
+      receipt.rows.length !== requiredRoutes.length
+    ) return false;
+    for (const [index, requiredRoute] of requiredRoutes.entries()) {
+      const row = receipt.rows[index];
+      if (
+        row?.constraintId !== requiredRoute.constraintId ||
+        row.routeId !== requiredRoute.routeId ||
+        row.traversingEntityId !== requiredRoute.traversingEntityId ||
+        row.startAnchorEntityId !== requiredRoute.startAnchorEntityId ||
+        row.destinationAnchorEntityId !== requiredRoute.destinationAnchorEntityId ||
+        row.connectivityStatus !== "complete" ||
+        row.runtimeStatus !== "complete"
+      ) return false;
+    }
+    return report.gateResultsById?.["route-connectivity"]?.status === "passed" &&
+      report.gateResultsById?.["route-runtime-conformance"]?.status === "passed";
+  }
+
   async function hasTrustedWhiteboxArtifacts(artifactRoot, sceneId, freshnessFloor = Number.NEGATIVE_INFINITY) {
     const paths = {
       brief: path.join(artifactRoot, "scene-brief.md"),
@@ -1028,6 +1149,14 @@ export function createStudio(options = {}) {
       !Array.isArray(captureTargets.targets) || captureTargets.targets.length === 0 ||
       captureTargets.targets.length > 5
     ) return false;
+    if (!await hasTrustedRouteValidationArtifacts(
+      artifactRoot,
+      sceneId,
+      builderCheck,
+      build,
+      authoringHash,
+      freshnessFloor,
+    )) return false;
 
     const paletteTargetIds = palette.targets.map(({ id }) => id);
     const mappingTargetIds = implementationMap.mappings.map(({ visualTargetId }) => visualTargetId);
