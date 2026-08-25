@@ -253,6 +253,41 @@ function pointAtProgress(
   };
 }
 
+function firstTurnProgressMetersXZ(
+  geometry: PathGeometry,
+  startProgressMetersXZ: number,
+  endProgressMetersXZ: number,
+): number | undefined {
+  // The 3D support station may advance by at most one physical fixed-tick step.
+  // Keep XZ lookahead inside the current straight run so intent cannot shortcut
+  // a Path corner and leave that authoritative station behind.
+  for (let index = 0; index < geometry.segments.length - 1; index += 1) {
+    const incoming = geometry.segments[index]!;
+    const outgoing = geometry.segments[index + 1]!;
+    const cornerProgressMetersXZ = incoming.endProgressMetersXZ;
+    if (
+      cornerProgressMetersXZ <=
+        startProgressMetersXZ + PROJECTION_TIE_EPSILON_METERS ||
+      cornerProgressMetersXZ > endProgressMetersXZ
+    ) {
+      continue;
+    }
+    const incomingX = incoming.end.x - incoming.start.x;
+    const incomingZ = incoming.end.z - incoming.start.z;
+    const outgoingX = outgoing.end.x - outgoing.start.x;
+    const outgoingZ = outgoing.end.z - outgoing.start.z;
+    const cross = incomingX * outgoingZ - incomingZ * outgoingX;
+    const crossScale =
+      Math.abs(incomingX * outgoingZ) + Math.abs(incomingZ * outgoingX);
+    const isCollinear = Math.abs(cross) <= Number.EPSILON * crossScale;
+    const continuesForward = incomingX * outgoingX + incomingZ * outgoingZ > 0;
+    if (!isCollinear || !continuesForward) {
+      return cornerProgressMetersXZ;
+    }
+  }
+  return undefined;
+}
+
 function projectForwardProgress(
   geometry: PathGeometry,
   subject: XzPoint,
@@ -697,16 +732,30 @@ export async function runRouteRuntimeProbeV2(
     probeTick += 1
   ) {
     const subjectBeforeTick = xz(previousEvidence.subjectPositionMetersXYZ);
+    const projectionEndProgressMetersXZ = Math.min(
+      geometry.totalDistanceMetersXZ,
+      previousProgressMetersXZ + driver.profile.pathLookaheadMetersXZ,
+    );
+    const projectionLimitMetersXZ = firstTurnProgressMetersXZ(
+      geometry,
+      previousProgressMetersXZ,
+      projectionEndProgressMetersXZ,
+    ) ?? projectionEndProgressMetersXZ;
     const selectedProgress = projectForwardProgress(
       geometry,
       subjectBeforeTick,
       previousProgressMetersXZ,
-      driver.profile.pathLookaheadMetersXZ,
+      projectionLimitMetersXZ - previousProgressMetersXZ,
     );
-    const targetProgress = Math.min(
+    const unrestrictedTargetProgress = Math.min(
       geometry.totalDistanceMetersXZ,
       selectedProgress + driver.profile.pathLookaheadMetersXZ,
     );
+    const targetProgress = firstTurnProgressMetersXZ(
+      geometry,
+      selectedProgress,
+      unrestrictedTargetProgress,
+    ) ?? unrestrictedTargetProgress;
     const walkDirectionWorldXZ = quantizedDirection(
       subjectBeforeTick,
       pointAtProgress(geometry, targetProgress),

@@ -369,7 +369,7 @@ describe.runIf(hasRunner)("runRouteRuntimeProbeV2", () => {
     expect(port.fixedTickCallCount).toBe(0);
   });
 
-  it("follows straight and corner paths with world-XZ walk-only pure pursuit", async () => {
+  it("follows straight paths and stops world-XZ lookahead at the next corner", async () => {
     const straight = pathReceipt([[0, 0, 0], [10, 0, 0]]);
     const straightPort = new ScriptedRuntimePort(
       straight,
@@ -393,8 +393,7 @@ describe.runIf(hasRunner)("runRouteRuntimeProbeV2", () => {
     await run(corner, cornerPort);
     const cornerIntent = cornerPort.fixedTickRequests[0]!
       .walkDirectionWorldXZ as readonly [number, number];
-    expect(cornerIntent[0]).toBeGreaterThan(0.9);
-    expect(cornerIntent[1]).toBeGreaterThan(0.1);
+    expect(cornerIntent).toEqual([1, 0]);
     expect(Math.hypot(...cornerIntent)).toBeCloseTo(1, 12);
   });
 
@@ -786,6 +785,41 @@ describe.runIf(hasRunner)("runRouteRuntimeProbeV2", () => {
     );
     await run(path, port);
     expect(port.fixedTickRequests[0]).toEqual({ walkDirectionWorldXZ: [0, 0] });
+  });
+
+  it("drives through successive turns without letting lookahead skip the support station", async () => {
+    const path = pathReceipt([
+      [0, 0, 0],
+      [4, 0, 0],
+      [4.5, 0, 2],
+      [5, 0, 0],
+      [6, 0, -4],
+    ]);
+    let position: Vec3 = path.orderedPathPositionsMetersXYZ[0]!;
+    let port: ScriptedRuntimePort;
+    const frame = (): RuntimeFrame => {
+      const request = port.fixedTickRequests.at(-1) as
+        | { readonly walkDirectionWorldXZ: readonly [number, number] }
+        | undefined;
+      if (request === undefined) throw new Error("direction request missing");
+      position = [
+        position[0] + request.walkDirectionWorldXZ[0] * 4 / 60,
+        0,
+        position[2] + request.walkDirectionWorldXZ[1] * 4 / 60,
+      ];
+      return { positionMetersXYZ: position };
+    };
+    port = new ScriptedRuntimePort(
+      path,
+      { positionMetersXYZ: position },
+      [frame],
+    );
+
+    const receipt = await run(path, port);
+
+    expect(
+      receipt.status === "failed" ? receipt.failure : receipt.status,
+    ).toBe("complete");
   });
 
   it("keeps consecutive and concurrent runs isolated with immutable stable receipts", async () => {
