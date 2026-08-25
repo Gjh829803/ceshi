@@ -1,8 +1,60 @@
-# M5 Route Graph / Traversability 深度审查（2026-08-25 最新 main 复验）
+# M5 Route Graph / Traversability 深度审查（2026-08-25 修复终审）
 
-> 当前处置以第 0 节为准。第 1 节以后保留 2026-08-24 原始审查锚点、完整 finding 机制和历史门禁证据；其中已经修复或撤回的旧结论会在第 0 节和原 finding 标题中明确标记。
+> 当前处置以第 0A 节为准。第 0 节及其后内容保留 2026-08-24 至修复前的原始审查锚点、完整 finding 机制和历史门禁证据；其中的 NO-GO、仍存在和旧 main SHA 仅代表当时状态，不再是当前结论。
 
-## 0. 2026-08-25 最新 main 复验（当前权威）
+## 0A. 2026-08-25 修复终审（当前权威）
+
+- 当前基线：`origin/main@1fabf53c54270e35cd61c58087a6e5c36224516a`（`feat(assets): activate modular subject runtime bundles`）。
+- 修复分支：`codex/m5-traversability-remediation`；通过 merge commit `d929bea` 合入上述 main，没有文本冲突。
+- 审查模式：实现前 Mode C 全仓审查；修复阶段按 finding 的失效证据执行 focused gate；最终按新门禁策略执行完整 contract lane、串行 resource-heavy lane、R0/R1/R1b verifier、typecheck、canonical verifier 与 production build。
+- 当前 host 结论：**GO candidate。原报告 4 个有效 P0、12 个 P1 与其 P2 均已修复或按一手引擎证据撤回；完整相关门禁无剩余失败。**
+- 最新 main 的 modular 3D asset 拆分没有推翻 M5 finding 机制或结论；它改变了依赖、Subject 资产包和生成 self-check，因此已在 `1011de2` 中补入门禁 census、模块化 GLB pose evidence 兼容和生成产物同步。
+
+### 0A.1 Finding 最终处置
+
+| 原 finding | 最终处置 | 修复证据 |
+| --- | --- | --- |
+| P0 长绕路近终点 0 Tick complete | **已修复** | `670a4aa`：arrival 同时要求最终 3D station arc 与真实终点容差；保留整条短 Path 的合法 0 Tick 例外。 |
+| P0 retained foot / subject origin 权威分裂 | **已修复** | `1483499`：所有 support station 统一使用 retained foot XYZ。 |
+| P0 step-up 单 Tick 超位移 | **撤回** | `a25dbac`：Babylon/Jolt 的三段 sweep 后 kinematic reposition 不受普通 `speed × dt` 位移 oracle 约束；合法/过高/窄踏面/cadence 门禁保留。 |
+| P0 Capability Envelope 未重绑定 Lock | **已修复** | `dd54f48`：Build Receipt admission 从 Resolved Lock 重派生并核对 Capsule/slope/step Envelope。 |
+| P0 Tick 0 ambiguous support 可伪造 complete | **已修复** | `5a5fc24`：initial support mismatch 进入 metrics 与 receipt/context validation。 |
+| P1 单节点 / 零边 Path station 崩溃 | **已修复** | `fab119b`：单节点 station 返回唯一 Surface，arc/remaining/total 均为 0。 |
+| P1 Runtime 额外拒绝 Canonical Path topology | **已修复** | `bf8d3b0`：删除 XZ-zero、非相邻重复和分层自交的额外 blanket rejection。 |
+| P1 远端平台污染无关 Route scope | **已修复** | `9870e0f`：Surface 与 Collider 使用同一 route scope。 |
+| P1 分层端点歧义被 nearest polygon 消解 | **已修复** | `0b7844c`：端点多层候选无法唯一消歧时 fail closed。 |
+| P1 seam proof 非 edge-local | **已修复** | `1ba2e68`：gap/step 证明绑定当前 portal edge，不再复用 Surface-pair 全局最小值。 |
+| P1 Required Route 子集可生成 passed Report | **已修复** | `cb25269`：Report Receipt 绑定完整 required route count、set hash 与规范化 rows，validator 拒绝 missing/extra。 |
+| P1 V2 evidence 使用 v1 MIME | **已修复** | `41099fd`：Graph/Failure/Path/Probe 使用 V2 MIME，并闭合 Browser connectivity/Path 状态。 |
+| P1 SubjectController 部分构造泄漏 | **已修复** | `6383431`：native controller 构造后所有可抛工作具备回滚，保留 primary error。 |
+| P1 Hosted Studio 可绕过 Route Report | **已修复** | `b415de2`：固定 manifest 引用 nonce report；Required Route admission 校验 canonical bytes、world hashes、完整 route set 与 passed status。 |
+| P1 Visual Capture 配置失败泄漏 Runtime | **已修复** | `1e306a7`：Adapter 在任何可抛配置前交给唯一 owner。 |
+| P1 Surface failure 状态误标 | **已修复** | `814e315`：profile/correlation missing/ambiguous 统一为 `incomplete / unavailable`；R1b verifier 同步验证 diagnostic code。 |
+| P1 overlap failure Y=0；P2 Diagnostic 丢候选 Surface | **已修复** | `814e315`：使用真实 elevated world Y，并在 Diagnostic 中保留完整排序 Surface identities。 |
+| P2 resource-heavy timeout | **已修复** | `1b7de50` + `1011de2`：`pnpm test` 拆为 contract 与单 worker resource-heavy 两 lane；census 保证全部测试恰好归属一条 lane。 |
+| P2 slope / clean-break / 文档漂移 | **已修复** | `db1fc09`：slope 统一为 `[0,90)`，删除重复 V2 类型/接口，并把 active M5 文档重新绑定真实门禁状态。 |
+
+完整门禁还发现并关闭了一个原报告未列出的集成缺口：Recast Path 出现 successive turns 时，Driver 的 2.4m lookahead 会切过转角，而冻结的 3D support station 只能按单 Tick 物理步长推进，最终在真实 Havok runner 中误报 `runtime-stalled`。`79952d1` 增加动态方向跟随 RED，并把 lookahead/projection 限制在当前直线段；`acd4a69` 同步 R1b verifier 的基础设施状态 oracle。该修复不放宽 stalled、deviation、support 或 arrival 阈值。
+
+### 0A.2 最终门禁证据
+
+| 命令 / 证据 | 当前分支结果 |
+| --- | --- |
+| `pnpm test:census` | exit 0；200 test files，182 contract、18 resource-heavy，missing/duplicate 为 0 |
+| `pnpm test:contract` | exit 0；182 files / 1966 tests，152.68s |
+| `pnpm test:resource-heavy` | exit 0；18 files / 336 tests，286.97s；单 worker 串行 |
+| `pnpm typecheck` | exit 0 |
+| `pnpm verify:canonical` | exit 0；Canonical V4/V5、Browser V5、真实 capture 与 deterministic reset 闭包通过 |
+| `pnpm verify:route-r0-contract` | exit 0；8 checks；仍明确不把 R0 当作 R1/R1b runtime 证明 |
+| `pnpm verify:route-r1-heightfield` | exit 0；11 fixtures、8 adversarial checks；repeat/concurrent/30-60-120 cadence hashes 一致 |
+| `pnpm verify:route-r1b-static-platform` | exit 0；11 fixtures；legacy census 0；repeat/concurrent/30-60-120 cadence hashes 一致；profile/correlation failures 为 `incomplete` |
+| `pnpm build` | exit 0；Vite 2190 modules，53.39s；仅保留既有大 chunk warning |
+| 真实 Recast + Babylon/Havok trusted runner | 12/12；successive-turn 路线 68.159s 完成，不再 stalled |
+| `worldkit run` Route Host/Browser transport | 1/1；51.675s；same-world evidence 发布与 owned state 清理通过 |
+
+证据边界：以上包含 automated contract、真实 Babylon/Havok Runtime、Browser/Studio transport 与 rendered canonical capture；没有新增 manual-interaction evidence。Canonical verifier 产生的 tracked screenshot/snapshot 差异已在核验后恢复，分支不提交动态取证噪声。
+
+## 0. 2026-08-25 修复前最新 main 复验（历史证据）
 
 - 最新 `origin/main`：`a8b9fd363a7116a8eb731e2c56f0f210c0ee00c8`（`docs: record final pr14 integration baseline`）。
 - 报告分支：`codex/m5-traversability-deep-review`，已 fetch 并把两份报告提交 rebase 到上述 main；本轮改文档前 HEAD 为 `893ae2394fcb664da62eab9d129859f55bf60baf`。
