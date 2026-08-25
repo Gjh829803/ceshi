@@ -928,19 +928,30 @@ function polylineArcLengths(
 
 export function advanceRouteRuntimeProbeSupportStationV2(
   path: RoutePathReceiptV2,
-  subjectPositionMetersXYZ: Vec3,
+  sampledFootPositionMetersXYZ: Vec3,
   previousArcLengthMeters: number,
   walkSpeedMetersPerSecond: number,
   positionQuantizationMeters: number,
   fixedTimeStepSeconds: number,
 ): Readonly<{
   readonly arcLengthMeters: number;
+  readonly totalArcLengthMeters: number;
+  readonly remainingArcLengthMeters: number;
   readonly expectedTraversalSurfaceIds: readonly string[];
   readonly retainedSegmentIndexes: readonly number[];
 }> {
   const points = path.orderedPathPositionsMetersXYZ;
   const identities = path.orderedTraversalSurfaceIdentities;
   const polyline = polylineArcLengths(points);
+  if (points.length === 1) {
+    return {
+      arcLengthMeters: 0,
+      totalArcLengthMeters: 0,
+      remainingArcLengthMeters: 0,
+      expectedTraversalSurfaceIds: [identities[0]!.traversalSurfaceId],
+      retainedSegmentIndexes: [],
+    };
+  }
   const maxForwardMeters =
     walkSpeedMetersPerSecond * fixedTimeStepSeconds + positionQuantizationMeters;
   const windowStart = Math.max(0, previousArcLengthMeters - positionQuantizationMeters);
@@ -975,7 +986,7 @@ export function advanceRouteRuntimeProbeSupportStationV2(
       start[2] + (end[2] - start[2]) * endParameter,
     ];
     const projection = distancePointToSegment3d(
-      subjectPositionMetersXYZ,
+      sampledFootPositionMetersXYZ,
       clippedStartPoint,
       clippedEndPoint,
     );
@@ -1021,7 +1032,7 @@ export function advanceRouteRuntimeProbeSupportStationV2(
   const primaryStart = points[primaryIndex]!;
   const primaryEnd = points[primaryIndex + 1]!;
   const primaryProjection = distancePointToSegment3d(
-    subjectPositionMetersXYZ,
+    sampledFootPositionMetersXYZ,
     primaryStart,
     primaryEnd,
   );
@@ -1035,6 +1046,8 @@ export function advanceRouteRuntimeProbeSupportStationV2(
   );
   return {
     arcLengthMeters: nextArc,
+    totalArcLengthMeters: polyline.total,
+    remainingArcLengthMeters: Math.max(0, polyline.total - nextArc),
     expectedTraversalSurfaceIds: [...expectedIds].sort((left, right) =>
       left < right ? -1 : left > right ? 1 : 0,
     ),

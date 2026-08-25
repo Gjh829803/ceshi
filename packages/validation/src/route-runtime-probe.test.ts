@@ -953,6 +953,24 @@ describe("runRouteRuntimeProbeV2 3D support station", () => {
     expect(typeof runRouteRuntimeProbeV2).toBe("function");
   });
 
+  it("completes a one-node support station using its sole Surface identity", async () => {
+    const path = pathReceiptV2([[0, 0, 0]], [HEIGHTFIELD_SURFACE]);
+    const port = stationPort(
+      path,
+      {
+        positionMetersXYZ: [0, 0, 0],
+        surfaceResolution: { mode: "resolved", ...HEIGHTFIELD_SURFACE },
+      },
+      [],
+    );
+    const receipt = await runV2(path, port, 4);
+    expect(receipt).toMatchObject({
+      status: "complete",
+      completionDurationTicks: 0,
+      ticks: [],
+    });
+  });
+
   it("keeps Heightfield expected ids when 2.4m XZ lookahead already sees the step", async () => {
     const path = pathReceiptV2(STEP_PATH_POINTS, STEP_PATH_SURFACES);
     const port = stationPort(

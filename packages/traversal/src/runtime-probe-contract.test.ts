@@ -26,6 +26,8 @@ interface RuntimeProbeApi {
     fixedTimeStepSeconds: number,
   ) => Readonly<{
     readonly arcLengthMeters: number;
+    readonly totalArcLengthMeters: number;
+    readonly remainingArcLengthMeters: number;
     readonly expectedTraversalSurfaceIds: readonly string[];
     readonly retainedSegmentIndexes: readonly number[];
   }>;
@@ -915,6 +917,18 @@ function pathReceiptV2(
   points: ReadonlyArray<readonly [number, number, number]> = [[0, 0, 0], [1, 0, 0]],
   surfaceIds: readonly string[] = points.map(() => SURFACE.traversalSurfaceId),
 ): traversal.RoutePathReceiptV2 {
+  const routePathDistanceMeters = points.slice(1).reduce((total, point, index) => {
+    const previous = points[index]!;
+    return total + Math.hypot(
+      point[0] - previous[0],
+      point[1] - previous[1],
+      point[2] - previous[2],
+    );
+  }, 0);
+  const routePathDistanceMetersXZ = points.slice(1).reduce((total, point, index) => {
+    const previous = points[index]!;
+    return total + Math.hypot(point[0] - previous[0], point[2] - previous[2]);
+  }, 0);
   const identities = surfaceIds.map((traversalSurfaceId, index) => ({
     ...SURFACE,
     traversalSurfaceId,
@@ -942,9 +956,9 @@ function pathReceiptV2(
     orderedTraversalEdgeIds: points.slice(1).map((_, index) => `edge-${index}`),
     orderedPathPositionsMetersXYZ: points,
     orderedTraversalSurfaceIdentities: identities,
-    routePathDistanceMeters: 1,
-    routePathDistanceMetersXZ: 1,
-    routePathCost: 0.5,
+    routePathDistanceMeters,
+    routePathDistanceMetersXZ,
+    routePathCost: routePathDistanceMeters,
     maximumObservedSlopeDegrees: 0,
     maximumObservedStepHeightMeters: 0,
     minimumObservedClearanceWidthMeters: 0.9,
@@ -1053,6 +1067,54 @@ describe.skipIf(!hasRuntimeProbeApiV2)("RouteRuntimeProbeTickV2", () => {
 });
 
 describe.skipIf(!hasRuntimeProbeApiV2)("advanceRouteRuntimeProbeSupportStationV2", () => {
+  it("defines a total station for one node and preserves 3D layered topology", () => {
+    const oneNode = advanceRouteRuntimeProbeSupportStationV2(
+      pathReceiptV2([[0, 0, 0]], ["surface-a"]),
+      [0, 0, 0],
+      0,
+      1,
+      GRAPH_BUILDER_PROFILE.profile.positionQuantizationMeters,
+      1 / 60,
+    );
+    expect(oneNode).toEqual({
+      arcLengthMeters: 0,
+      totalArcLengthMeters: 0,
+      remainingArcLengthMeters: 0,
+      expectedTraversalSurfaceIds: ["surface-a"],
+      retainedSegmentIndexes: [],
+    });
+
+    const vertical = advanceRouteRuntimeProbeSupportStationV2(
+      pathReceiptV2([[0, 0, 0], [0, 2, 0]], ["surface-a", "surface-b"]),
+      [0, 1.5, 0],
+      0,
+      10,
+      GRAPH_BUILDER_PROFILE.profile.positionQuantizationMeters,
+      1,
+    );
+    expect(vertical).toMatchObject({
+      arcLengthMeters: 1.5,
+      totalArcLengthMeters: 2,
+      remainingArcLengthMeters: 0.5,
+      expectedTraversalSurfaceIds: ["surface-a", "surface-b"],
+      retainedSegmentIndexes: [0],
+    });
+
+    const layeredCrossing = advanceRouteRuntimeProbeSupportStationV2(
+      pathReceiptV2(
+        [[0, 0, 0], [2, 0, 2], [0, 5, 2], [2, 5, 0]],
+        ["surface-lower", "surface-lower", "surface-connector", "surface-upper"],
+      ),
+      [1, 0, 1],
+      0,
+      20,
+      GRAPH_BUILDER_PROFILE.profile.positionQuantizationMeters,
+      1,
+    );
+    expect(layeredCrossing.retainedSegmentIndexes).toEqual([0]);
+    expect(layeredCrossing.expectedTraversalSurfaceIds).toEqual(["surface-lower"]);
+  });
+
   it("bounds the station window by walk speed times that tick's dt plus quantization", () => {
     const path = pathReceiptV2(
       [[0, 0, 0], [0.025, 0, 0], [1, 0, 0]],
