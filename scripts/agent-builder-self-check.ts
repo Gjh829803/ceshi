@@ -18,10 +18,14 @@ import { createCoreGameplayBootstrapV1 } from "@whitebox-world/gameplay";
 import {
   createGameplayBootstrapResourceLockEntryV1,
 } from "@whitebox-world/gameplay-contracts";
-import type { ExecutionPlanV5 } from "@whitebox-world/runtime-contracts";
+import {
+  validateSceneBriefImplementationMapDraftV1,
+  type ExecutionPlanV5,
+  type SceneBriefImplementationMapDraftV1,
+} from "@whitebox-world/runtime-contracts";
 import { isNil } from "lodash-es";
 
-export const BUILDER_SELF_CHECK_VERSION = "worldkit-builder-self-check-v4";
+export const BUILDER_SELF_CHECK_VERSION = "worldkit-builder-self-check-v5";
 
 const SPAWN_GROUND_TOLERANCE_METERS = 0.15;
 
@@ -162,22 +166,34 @@ function implementationMapDiagnostics(options: {
   controlledEntityId: string;
   runtimeEntityIds: ReadonlySet<string>;
 }): SelfCheckDiagnostic[] {
-  let draft: any;
+  let draft: unknown;
   try {
     draft = JSON.parse(options.draftSource);
   } catch (error) {
     return [{ code: "IMPLEMENTATION_MAP_JSON_INVALID", message: error instanceof Error ? error.message : String(error) }];
   }
+  const contractDiagnostics = validateSceneBriefImplementationMapDraftV1(draft);
+  if (contractDiagnostics.length > 0) return [...contractDiagnostics];
+  const implementationMap = draft as SceneBriefImplementationMapDraftV1;
   const diagnostics: SelfCheckDiagnostic[] = [];
-  if (draft?.kind !== "worldkit-scene-brief-implementation-map" || draft?.schemaVersion !== 1 ||
-      draft?.sceneId !== options.sceneId || draft?.authoringSpecId !== options.authoringId ||
-      !Array.isArray(draft?.mappings)) {
-    return [{ code: "IMPLEMENTATION_MAP_INVALID", message: "Implementation map header or mappings are invalid." }];
+  if (implementationMap.sceneId !== options.sceneId) {
+    diagnostics.push({
+      code: "IMPLEMENTATION_MAP_SCENE_ID_MISMATCH",
+      message: "Implementation map sceneId does not match the requested scene.",
+      instancePath: "/sceneId",
+    });
+  }
+  if (implementationMap.authoringSpecId !== options.authoringId) {
+    diagnostics.push({
+      code: "IMPLEMENTATION_MAP_AUTHORING_SPEC_ID_MISMATCH",
+      message: "Implementation map authoringSpecId does not match AuthoringSpec.",
+      instancePath: "/authoringSpecId",
+    });
   }
   const expected = new Set(options.visualTargetIds);
   const seenTargets = new Set<string>();
   const seenEntities = new Set<string>();
-  for (const mapping of draft.mappings) {
+  for (const mapping of implementationMap.visualTargetMappings) {
     if (!expected.has(mapping?.visualTargetId) || seenTargets.has(mapping.visualTargetId) ||
         !Array.isArray(mapping?.runtimeEntityIds) || mapping.runtimeEntityIds.length === 0) {
       diagnostics.push({ code: "IMPLEMENTATION_MAP_TARGET_INVALID", message: `Invalid mapping for '${String(mapping?.visualTargetId)}'.` });
@@ -197,7 +213,9 @@ function implementationMapDiagnostics(options: {
   for (const targetId of expected) {
     if (!seenTargets.has(targetId)) diagnostics.push({ code: "IMPLEMENTATION_MAP_TARGET_MISSING", message: `Visual target '${targetId}' is unmapped.` });
   }
-  const primary = draft.mappings.find((mapping: any) => mapping.visualTargetId === options.visualTargetIds[0]);
+  const primary = implementationMap.visualTargetMappings.find(
+    (mapping) => mapping.visualTargetId === options.visualTargetIds[0],
+  );
   if (!primary?.runtimeEntityIds?.includes(options.controlledEntityId)) {
     diagnostics.push({ code: "IMPLEMENTATION_MAP_PRIMARY_SUBJECT_INVALID", message: "Primary visual target must map the startup-controlled Subject." });
   }

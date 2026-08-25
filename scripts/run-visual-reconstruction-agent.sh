@@ -33,7 +33,7 @@ for required in \
   "$artifact_root/scene-implementation-map.json" \
   "$artifact_root/opening-frame.png" \
   "$artifact_root/runtime-snapshot.json" \
-  "$artifact_root/triviews/capture-targets.json" \
+  "$artifact_root/triviews/whitebox-triview-manifest.json" \
   "$artifact_root/styled-opening-frame.png" \
   "$artifact_root/styled-opening-frame-manifest.json" \
   "$artifact_root/styled-opening-frame-report.json"; do
@@ -72,7 +72,7 @@ echo "WORLDKIT_VIDEO_STAGE reference-ingest"
   --scene-id "$scene_id" --scene-root "$artifact_root" \
   --video "$whitebox_video" --user-frame "$user_frame" \
   --opening-frame "$artifact_root/opening-frame.png" \
-  --triview-manifest "$artifact_root/triviews/capture-targets.json"
+  --triview-manifest "$artifact_root/triviews/whitebox-triview-manifest.json"
 
 copied_user_frame=""
 for candidate in "$artifact_root"/user-first-frame.png "$artifact_root"/user-first-frame.jpg "$artifact_root"/user-first-frame.webp; do

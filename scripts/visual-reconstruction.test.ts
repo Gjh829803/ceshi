@@ -25,11 +25,10 @@ it("lists tri-view inputs with their exact palette target identity", async () =>
   const root = await mkdtemp(path.join(tmpdir(), "triview-targets-"));
   roots.push(root);
   await mkdir(path.join(root, "triviews", "visual-target-1"), { recursive: true });
-  await writeFile(path.join(root, "triviews", "capture-targets.json"), JSON.stringify({
-    targets: [{
-      id: "visual-target-1",
+  await writeFile(path.join(root, "triviews", "whitebox-triview-manifest.json"), JSON.stringify({
+    whiteboxTriviews: [{
       visualTargetId: "visual-target-1",
-      imagePath: "visual-target-1/whitebox-triview.png",
+      imageUri: "visual-target-1/whitebox-triview.png",
     }],
   }));
   await writeFile(path.join(root, "visual-identity-palette.json"), JSON.stringify({
@@ -71,20 +70,19 @@ it("binds a manual whitebox recording, reconstructs the styled frame, and render
   ffmpeg(["-f", "lavfi", "-i", "color=c=blue:s=320x180", "-frames:v", "1", userFramePath]);
   ffmpeg(["-f", "lavfi", "-i", "color=c=white:s=320x180", "-frames:v", "1", openingFramePath]);
   await copyFile(openingFramePath, triviewPath);
-  const triviewManifestPath = path.join(sceneRoot, "triviews", "capture-targets.json");
+  const triviewManifestPath = path.join(sceneRoot, "triviews", "whitebox-triview-manifest.json");
   await writeFile(triviewManifestPath, JSON.stringify({
-    kind: "worldkit-runtime-triview-manifest",
+    kind: "worldkit-whitebox-triview-manifest",
     schemaVersion: 1,
     executionPlanHash: `sha256:${"a".repeat(64)}`,
-    targets: [{
-      id: "traveler",
+    whiteboxTriviews: [{
       visualTargetId: "traveler",
       runtimeEntityIds: ["traveler"],
       role: "primary-subject",
       semanticClassId: "subject.traveler",
       identityColor: "#E85D5D",
       views: ["front", "right", "back"],
-      imagePath: "traveler/whitebox-triview.png",
+      imageUri: "traveler/whitebox-triview.png",
     }],
   }));
   const prepared = await prepareVisualReconstruction({
@@ -108,7 +106,7 @@ it("binds a manual whitebox recording, reconstructs the styled frame, and render
     await readFile(path.join(sceneRoot, "styled-opening-frame-manifest.json"), "utf8"),
   );
   expect(firstFrameManifest.status).toBe("passed");
-  expect(firstFrameManifest.supplementalTriviews[0]?.targetId).toBe("traveler");
+  expect(firstFrameManifest.supplementalTriviews[0]?.visualTargetId).toBe("traveler");
   expect(await readFile(path.join(sceneRoot, "styled-opening-frame-report.json"), "utf8"))
     .toContain("worldkit-styled-opening-frame-report");
   const styledTriviewPath = path.join(triviewRoot, "styled-triview.png");
@@ -120,7 +118,7 @@ it("binds a manual whitebox recording, reconstructs the styled frame, and render
   expect(styledTriviewManifest.status).toBe("passed");
   expect(styledTriviewManifest.appearanceSource.path).toBe("styled-opening-frame.png");
   expect(styledTriviewManifest.targets[0]).toMatchObject({
-    id: "traveler",
+    visualTargetId: "traveler",
     whiteboxTriview: { path: "triviews/traveler/whitebox-triview.png" },
     styledTriview: { path: "triviews/traveler/styled-triview.png" },
   });

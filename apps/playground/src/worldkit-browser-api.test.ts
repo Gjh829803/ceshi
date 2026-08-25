@@ -1788,7 +1788,7 @@ describe("installDeferredWorldkitBrowserApi", () => {
 
   it("owns the playground Adapter before visual target configuration can fail", async () => {
     const adapter = Object.assign(adapterFixture(), {
-      configureVisualCaptureTargets: () => {
+      configureVisualCaptureGroups: () => {
         throw new Error("WORLDKIT_CAPTURE_TARGET_NOT_FOUND: missing");
       },
       mount: () => {
@@ -1806,8 +1806,7 @@ describe("installDeferredWorldkitBrowserApi", () => {
         typeof adapter
       >({
         adapter,
-        visualCaptureTargets: [{
-          id: "missing-target",
+        visualCaptureGroups: [{
           visualTargetId: "missing-target",
           runtimeEntityIds: ["missing"],
           role: "primary-subject",

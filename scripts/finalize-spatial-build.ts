@@ -11,37 +11,19 @@ import {
   type SceneBriefV1,
 } from "@whitebox-world/authoring";
 import {
+  validateSceneBriefImplementationMapDraftV1,
   validateSceneBriefImplementationMapV1,
-  type RuntimeCaptureTargetV1,
+  type HostedVisualContractDiagnosticV1,
+  type SceneBriefImplementationMapDraftV1,
   type SceneBriefImplementationMapV1,
+  type VisualCaptureGroupV1,
 } from "@whitebox-world/runtime-contracts";
 
 import { loadWorldkitRoutePipeline } from "./lib/worldkit-pipeline";
 
-interface ImplementationMapDraftV1 {
-  kind: "worldkit-scene-brief-implementation-map";
-  schemaVersion: 1;
-  sceneId: string;
-  authoringSpecId: string;
-  mappings: readonly {
-    visualTargetId: string;
-    runtimeEntityIds: readonly string[];
-  }[];
-}
-
-function isImplementationMapDraftV1(value: unknown): value is ImplementationMapDraftV1 {
-  if (value === null || typeof value !== "object") return false;
-  const record = value as Partial<ImplementationMapDraftV1>;
-  return record.kind === "worldkit-scene-brief-implementation-map" &&
-    record.schemaVersion === 1 &&
-    typeof record.sceneId === "string" &&
-    typeof record.authoringSpecId === "string" &&
-    Array.isArray(record.mappings) &&
-    record.mappings.every((mapping) =>
-      mapping !== null && typeof mapping === "object" &&
-      typeof mapping.visualTargetId === "string" &&
-      Array.isArray(mapping.runtimeEntityIds) &&
-      mapping.runtimeEntityIds.every((id: unknown) => typeof id === "string"));
+function formatHostedDiagnostic(diagnostic: HostedVisualContractDiagnosticV1): string {
+  const location = diagnostic.instancePath ? ` at ${diagnostic.instancePath}` : "";
+  return `${diagnostic.code}${location}: ${diagnostic.message}`;
 }
 
 export const VISUAL_IDENTITY_COLORS = [
@@ -58,7 +40,7 @@ export interface VisualIdentityPaletteTargetV1 {
   targetKind: SceneBriefV1["visualTargets"][number]["kind"];
   name: string;
   description: string;
-  role: RuntimeCaptureTargetV1["role"];
+  role: VisualCaptureGroupV1["role"];
   semanticClassId: string;
   identityColor: `#${string}`;
 }
@@ -80,17 +62,16 @@ export function deriveVisualIdentityPalette(
 
 export function deriveVisualCaptureGroups(options: {
   brief: SceneBriefV1;
-  mappings: ImplementationMapDraftV1["mappings"];
-}): readonly RuntimeCaptureTargetV1[] {
+  visualTargetMappings: SceneBriefImplementationMapDraftV1["visualTargetMappings"];
+}): readonly VisualCaptureGroupV1[] {
   const mappingByVisualTargetId = new Map(
-    options.mappings.map((mapping) => [mapping.visualTargetId, mapping] as const),
+    options.visualTargetMappings.map((mapping) => [mapping.visualTargetId, mapping] as const),
   );
   return deriveVisualIdentityPalette(options.brief).flatMap((target) => {
     const mapping = mappingByVisualTargetId.get(target.visualTargetId);
     return mapping === undefined
       ? []
       : [{
-          id: target.id,
           visualTargetId: target.visualTargetId,
           runtimeEntityIds: [...mapping.runtimeEntityIds],
           role: target.role,
@@ -123,28 +104,29 @@ export async function finalizeSceneBuild(options: {
   if (!draftResult.ok || draftResult.value === undefined) {
     throw new Error(`Implementation map draft is invalid JSON: ${draftResult.diagnostics.map(({ code }) => code).join(", ")}`);
   }
-  if (!isImplementationMapDraftV1(draftResult.value)) {
-    throw new Error("Implementation map draft does not match the Scene Brief map shape.");
+  const draftDiagnostics = validateSceneBriefImplementationMapDraftV1(draftResult.value);
+  if (draftDiagnostics.length > 0) {
+    throw new Error(draftDiagnostics.map(formatHostedDiagnostic).join("\n"));
   }
-  const draft = draftResult.value;
+  const draft = draftResult.value as SceneBriefImplementationMapDraftV1;
   const pipeline = await loadWorldkitRoutePipeline(options.worldPath);
   if (!pipeline.ok) {
     throw new Error(`AuthoringSpec does not compile: ${pipeline.diagnostics.map(({ code }) => code).join(", ")}`);
   }
   const value: SceneBriefImplementationMapV1 = {
-    kind: draft.kind,
+    kind: "worldkit-scene-brief-implementation-map",
     schemaVersion: draft.schemaVersion,
     sceneId: draft.sceneId,
     sceneBriefHash: briefResult.sceneBriefHash,
     authoringSpecId: draft.authoringSpecId,
     authoringSpecHash: sha256CanonicalJson(worldResult.value) as `sha256:${string}`,
-    mappings: draft.mappings,
+    visualTargetMappings: draft.visualTargetMappings,
     visualCaptureGroups: deriveVisualCaptureGroups({
       brief: briefResult.value,
-      mappings: draft.mappings,
+      visualTargetMappings: draft.visualTargetMappings,
     }),
   };
-  const errors = [...validateSceneBriefImplementationMapV1(value)];
+  const errors = validateSceneBriefImplementationMapV1(value).map(formatHostedDiagnostic);
   if (value.sceneId !== options.sceneId) errors.push("Implementation map sceneId does not match the requested scene.");
   if (value.authoringSpecId !== worldResult.value.id) errors.push("Implementation map authoringSpecId does not match AuthoringSpec.");
   const primaryVisualGroup = value.visualCaptureGroups.find(
@@ -170,7 +152,7 @@ export async function finalizeSceneBuild(options: {
     ...pipeline.executionPlan.objects.map(({ entityId }) => entityId),
   ]);
   const mappedRuntimeEntityIds = new Set<string>();
-  for (const mapping of value.mappings) {
+  for (const mapping of value.visualTargetMappings) {
     if (!targetIds.has(mapping.visualTargetId)) {
       errors.push(`Unknown Scene Brief visual target '${mapping.visualTargetId}'.`);
     }

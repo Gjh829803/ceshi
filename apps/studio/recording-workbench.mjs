@@ -454,35 +454,35 @@ export function createRecordingWorkbenchService(options = {}) {
     const manifest = await readJson(path.join(artifactRoot, "styled-triviews-manifest.json"));
     const declaredTargets = Array.isArray(manifest?.targets) ? manifest.targets : [];
     const triViews = [];
-    const unresolvedTargetIds = [];
-    const seenTargetIds = new Set();
+    const unresolvedVisualTargetIds = [];
+    const seenVisualTargetIds = new Set();
     for (const [index, target] of declaredTargets.entries()) {
-      const targetId = ID_PATTERN.test(target?.id)
-        ? target.id
+      const visualTargetId = ID_PATTERN.test(target?.visualTargetId)
+        ? target.visualTargetId
         : `manifest-target-${index + 1}`;
-      if (!ID_PATTERN.test(target?.id) || seenTargetIds.has(target.id)) {
-        unresolvedTargetIds.push(targetId);
+      if (!ID_PATTERN.test(target?.visualTargetId) || seenVisualTargetIds.has(target.visualTargetId)) {
+        unresolvedVisualTargetIds.push(visualTargetId);
         continue;
       }
-      seenTargetIds.add(target.id);
+      seenVisualTargetIds.add(target.visualTargetId);
       const relativePath = target?.styledTriview?.path;
       if (typeof relativePath !== "string" || relativePath.includes("..") || path.isAbsolute(relativePath)) {
-        unresolvedTargetIds.push(target.id);
+        unresolvedVisualTargetIds.push(target.visualTargetId);
         continue;
       }
       const styledPath = path.resolve(artifactRoot, relativePath);
       if (!styledPath.startsWith(`${artifactRoot}${path.sep}`) || !await fileExists(styledPath)) {
-        unresolvedTargetIds.push(target.id);
+        unresolvedVisualTargetIds.push(target.visualTargetId);
         continue;
       }
       const whiteboxPath = path.join(
         artifactRoot,
         "triviews",
-        target.id,
+        target.visualTargetId,
         "whitebox-triview.png",
       );
       triViews.push({
-        id: target.id,
+        visualTargetId: target.visualTargetId,
         role: target.role ?? "landmark",
         semanticClassId: target.semanticClassId ?? null,
         styledPath,
@@ -491,14 +491,14 @@ export function createRecordingWorkbenchService(options = {}) {
     }
     triViews.sort((left, right) => {
       const rank = (value) => value === "primary-subject" ? 0 : value === "primary-landmark" ? 1 : 2;
-      return rank(left.role) - rank(right.role) || left.id.localeCompare(right.id);
+      return rank(left.role) - rank(right.role) || left.visualTargetId.localeCompare(right.visualTargetId);
     });
     const openingFrameReady = await fileExists(openingFramePath);
     const worldPlanReady = await fileExists(worldPlanPath);
     const ready = openingFrameReady && triViews.some(({ role, whiteboxPath }) =>
       role === "primary-subject" && whiteboxPath !== null);
     const bundleReady = ready && worldPlanReady && declaredTargets.length > 0 &&
-      unresolvedTargetIds.length === 0 &&
+      unresolvedVisualTargetIds.length === 0 &&
       triViews.length === declaredTargets.length &&
       triViews.every(({ whiteboxPath }) => whiteboxPath !== null);
     return {
@@ -508,7 +508,7 @@ export function createRecordingWorkbenchService(options = {}) {
       worldPlanPath,
       worldPlanReady,
       triViews,
-      unresolvedTargetIds,
+      unresolvedTargetIds: unresolvedVisualTargetIds,
     };
   }
 
@@ -796,7 +796,7 @@ export function createRecordingWorkbenchService(options = {}) {
       }
       const missingWhiteboxTargets = assets.triViews
         .filter(({ whiteboxPath }) => whiteboxPath === null)
-        .map(({ id }) => id);
+        .map(({ visualTargetId }) => visualTargetId);
       if (missingWhiteboxTargets.length > 0) {
         throw new Error(`下载包缺少白膜三视图：${missingWhiteboxTargets.join(", ")}`);
       }
@@ -804,7 +804,7 @@ export function createRecordingWorkbenchService(options = {}) {
         const number = String(index + 1).padStart(2, "0");
         return {
           index: index + 1,
-          targetId: target.id,
+          visualTargetId: target.visualTargetId,
           role: target.role,
           semanticClassId: target.semanticClassId,
           layout: "whitebox-left-styled-right",
@@ -844,7 +844,7 @@ export function createRecordingWorkbenchService(options = {}) {
             destinationPath,
             sceneId,
             recordingId,
-            targetId: target.targetId,
+            visualTargetId: target.visualTargetId,
           });
         } else {
           const result = await runTrackedChild(
@@ -864,7 +864,7 @@ export function createRecordingWorkbenchService(options = {}) {
           }
         }
         if (!await fileExists(destinationPath) || (await stat(destinationPath)).size === 0) {
-          throw new Error(`三视图对照图没有生成：${target.targetId}`);
+          throw new Error(`三视图对照图没有生成：${target.visualTargetId}`);
         }
       }
       await writeJsonAtomic(path.join(folder, "recording-manifest.json"), {

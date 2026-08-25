@@ -19,8 +19,8 @@ import { canonicalJsonBytes } from "@whitebox-world/protocol";
 import {
   validateSceneBriefImplementationMapV1,
   type SceneBriefImplementationMapV1,
-  type RuntimeCaptureTargetV1,
-  type RuntimeTriviewManifestV1,
+  type VisualCaptureGroupV1,
+  type WhiteboxTriviewManifestV1,
   type WhiteboxTriviewCaptureV1,
   type WorldRuntimeSnapshotV4,
 } from "@whitebox-world/runtime-contracts";
@@ -917,7 +917,7 @@ export async function captureFile(
     );
   }
 
-  let configuredCaptureTargets: readonly RuntimeCaptureTargetV1[] = [];
+  let configuredCaptureGroups: readonly VisualCaptureGroupV1[] = [];
   if (absoluteImplementationMapPath !== undefined) {
     try {
       const [mapSource, worldSource] = await Promise.all([
@@ -934,11 +934,14 @@ export async function captureFile(
       }
       const implementationMap = mapResult.value as unknown as SceneBriefImplementationMapV1;
       const mapErrors = validateSceneBriefImplementationMapV1(implementationMap);
-      if (mapErrors.length > 0) throw new Error(mapErrors.join(" "));
+      if (mapErrors.length > 0) {
+        throw new Error(mapErrors.map(({ code, instancePath, message }) =>
+          `${code} ${instancePath}: ${message}`).join(" "));
+      }
       if (implementationMap.authoringSpecHash !== sha256CanonicalJson(worldResult.value)) {
         throw new Error("Implementation map does not bind this AuthoringSpec.");
       }
-      configuredCaptureTargets = implementationMap.visualCaptureGroups;
+      configuredCaptureGroups = implementationMap.visualCaptureGroups;
     } catch (error) {
       return cliFailure(
         "CLI_CAPTURE_GROUPS_INVALID",
@@ -1009,7 +1012,7 @@ export async function captureFile(
       await api.ready();
       await new Promise<void>((resolve) => requestAnimationFrame(() => resolve()));
     });
-    if (configuredCaptureTargets.length > 0) {
+    if (configuredCaptureGroups.length > 0) {
       await page.waitForFunction(
         () => window.__WORLDKIT_AUTHORING_CAPTURE__ !== undefined,
         undefined,
@@ -1017,12 +1020,12 @@ export async function captureFile(
       );
     }
     const capture = await captureVisibleWorldWithRetries(() => page.evaluate(
-      async (captureTargets): Promise<{
+      async (captureGroups): Promise<{
         snapshot: WorldRuntimeSnapshotV4;
         screenshotDataUrl: string;
         sampledRgbColorCount: number;
         triviews: readonly {
-          target: RuntimeCaptureTargetV1;
+          target: VisualCaptureGroupV1;
           capture: WhiteboxTriviewCaptureV1;
           sampledRgbColorCount: number;
         }[];
@@ -1034,9 +1037,9 @@ export async function captureFile(
         const authoringCaptureApi = window.__WORLDKIT_AUTHORING_CAPTURE__;
         api.setPaused(true);
         const snapshot = await api.reset();
-        const configuredTargets = captureTargets.length === 0
+        const configuredGroups = captureGroups.length === 0
           ? []
-          : authoringCaptureApi?.configureVisualCaptureTargets(captureTargets) ?? (() => {
+          : authoringCaptureApi?.configureVisualCaptureGroups(captureGroups) ?? (() => {
               throw new Error("WORLDKIT_CAPTURE_TARGET_CONFIGURATION_UNAVAILABLE");
             })();
         await new Promise<void>((resolve) => requestAnimationFrame(() => resolve()));
@@ -1084,15 +1087,15 @@ export async function captureFile(
           throw new Error("WORLDKIT_CAPTURE_TICK_ADVANCED");
         }
         const triviews: {
-          target: RuntimeCaptureTargetV1;
+          target: VisualCaptureGroupV1;
           capture: WhiteboxTriviewCaptureV1;
           sampledRgbColorCount: number;
         }[] = [];
         if (authoringCaptureApi !== undefined) {
-          for (const target of configuredTargets) {
-            const triviewCapture = authoringCaptureApi.captureWhiteboxTriview(target.id);
+          for (const target of configuredGroups) {
+            const triviewCapture = authoringCaptureApi.captureWhiteboxTriview(target.visualTargetId);
             const triviewImage = new Image();
-            triviewImage.src = triviewCapture.imageDataUrl;
+            triviewImage.src = triviewCapture.imageDataUri;
             await triviewImage.decode();
             inspectionCanvas.width = triviewImage.naturalWidth;
             inspectionCanvas.height = triviewImage.naturalHeight;
@@ -1126,7 +1129,7 @@ export async function captureFile(
           sampledRgbColorCount,
           triviews,
         };
-      }, configuredCaptureTargets,
+      }, configuredCaptureGroups,
     ));
     const pngDataUrlPrefix = "data:image/png;base64,";
     if (!capture.screenshotDataUrl.startsWith(pngDataUrlPrefix)) {
@@ -1145,53 +1148,52 @@ export async function captureFile(
       );
     }
     if (absoluteTriviewOutputPath !== undefined) {
-      const targets = [] as {
-        id: string;
+      const whiteboxTriviews = [] as {
         visualTargetId: string;
         runtimeEntityIds: readonly string[];
-        role: RuntimeCaptureTargetV1["role"];
+        role: VisualCaptureGroupV1["role"];
         semanticClassId: string;
         identityColor: `#${string}`;
         views: readonly ["front", "right", "back"];
-        imagePath: string;
+        imageUri: string;
       }[];
       for (const triview of capture.triviews) {
-        if (!/^[a-z0-9][a-z0-9-]{2,79}$/.test(triview.target.id)) {
-          throw new Error(`WORLDKIT_CAPTURE_TARGET_ID_INVALID: ${triview.target.id}`);
+        if (!/^[a-z0-9][a-z0-9-]{2,79}$/.test(triview.target.visualTargetId)) {
+          throw new Error(`WORLDKIT_CAPTURE_TARGET_ID_INVALID: ${triview.target.visualTargetId}`);
         }
-        if (!triview.capture.imageDataUrl.startsWith(pngDataUrlPrefix)) {
-          throw new Error(`WORLDKIT_CAPTURE_TRIVIEW_DATA_URL_INVALID: ${triview.target.id}`);
+        if (!triview.capture.imageDataUri.startsWith(pngDataUrlPrefix)) {
+          throw new Error(`WORLDKIT_CAPTURE_TRIVIEW_DATA_URL_INVALID: ${triview.target.visualTargetId}`);
         }
         if (triview.sampledRgbColorCount < 2) {
-          throw new Error(`WORLDKIT_CAPTURE_TRIVIEW_EMPTY: ${triview.target.id}`);
+          throw new Error(`WORLDKIT_CAPTURE_TRIVIEW_EMPTY: ${triview.target.visualTargetId}`);
         }
-        const relativeImagePath = `${triview.target.id}/whitebox-triview.png`;
+        const relativeImagePath = `${triview.target.visualTargetId}/whitebox-triview.png`;
         const imagePath = path.join(absoluteTriviewOutputPath, relativeImagePath);
         await mkdir(path.dirname(imagePath), { recursive: true });
         await writeFile(
           imagePath,
           Buffer.from(
-            triview.capture.imageDataUrl.slice(pngDataUrlPrefix.length),
+            triview.capture.imageDataUri.slice(pngDataUrlPrefix.length),
             "base64",
           ),
         );
-        targets.push({
+        whiteboxTriviews.push({
           ...triview.target,
           views: ["front", "right", "back"],
-          imagePath: relativeImagePath,
+          imageUri: relativeImagePath,
         });
       }
       if (validation.executionPlanHash === undefined) {
         throw new Error("WORLDKIT_CAPTURE_EXECUTION_PLAN_HASH_MISSING");
       }
-      const manifest: RuntimeTriviewManifestV1 = {
-        kind: "worldkit-runtime-triview-manifest",
+      const manifest: WhiteboxTriviewManifestV1 = {
+        kind: "worldkit-whitebox-triview-manifest",
         schemaVersion: 1,
         executionPlanHash: validation.executionPlanHash as `sha256:${string}`,
-        targets,
+        whiteboxTriviews,
       };
       await writeAtomic(
-        path.join(absoluteTriviewOutputPath, "capture-targets.json"),
+        path.join(absoluteTriviewOutputPath, "whitebox-triview-manifest.json"),
         `${stringifyCanonicalJson(manifest)}\n`,
       );
     }

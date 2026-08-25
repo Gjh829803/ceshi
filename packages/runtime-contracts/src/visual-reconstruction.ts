@@ -31,7 +31,7 @@ export interface VisualReferenceManifestV1 {
   };
   supplementalTriviews: readonly {
     token: `@图片${number}`;
-    targetId: string;
+    visualTargetId: string;
     path: string;
     contentHash: `sha256:${string}`;
   }[];
@@ -136,7 +136,7 @@ export function validateVisualReferenceManifestV1(value: VisualReferenceManifest
   const triViews = Array.isArray(value.supplementalTriviews) ? value.supplementalTriviews : [];
   const expectedTokens = triViews.map((_, index) => `@图片${index + 3}`);
   if (!Array.isArray(value.supplementalTriviews) || triViews.some((item, index) =>
-    item.token !== expectedTokens[index] || !ID.test(item.targetId) || !text(item.path) || !HASH.test(item.contentHash))) {
+    item.token !== expectedTokens[index] || !ID.test(item.visualTargetId) || !text(item.path) || !HASH.test(item.contentHash))) {
     errors.push("Visual tri-view bindings must be ordered from @图片3.");
   }
   return errors;

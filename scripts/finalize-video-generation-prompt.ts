@@ -45,7 +45,7 @@ function renderPrompt(
   const triViews = manifest.supplementalTriviews.length === 0
     ? "无额外三视图。"
     : manifest.supplementalTriviews.map((item) =>
-        `${item.token}是 ${item.targetId} 的白膜 Front / Right / Back 三视图，只用于补足主体或关键物体在不同方向的轮廓、比例和结构；不得覆盖@视频1的运动、镜头与空间，也不得覆盖@图片1和@图片2的最终外观。`)
+        `${item.token}是 ${item.visualTargetId} 的白膜 Front / Right / Back 三视图，只用于补足主体或关键物体在不同方向的轮廓、比例和结构；不得覆盖@视频1的运动、镜头与空间，也不得覆盖@图片1和@图片2的最终外观。`)
       .join("\n");
   const restrictions = fields.additionalRestrictions.length === 0
     ? ""

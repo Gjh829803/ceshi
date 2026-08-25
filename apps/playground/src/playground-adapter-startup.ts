@@ -1,9 +1,9 @@
-import type { RuntimeCaptureTargetV1 } from "@whitebox-world/runtime-contracts";
+import type { VisualCaptureGroupV1 } from "@whitebox-world/runtime-contracts";
 
 export interface PlaygroundStartupAdapterV1 {
-  configureVisualCaptureTargets(
-    targets: readonly RuntimeCaptureTargetV1[],
-  ): readonly RuntimeCaptureTargetV1[];
+  configureVisualCaptureGroups(
+    groups: readonly VisualCaptureGroupV1[],
+  ): readonly VisualCaptureGroupV1[];
   mount(container: HTMLElement): void;
   render(): void;
 }
@@ -11,7 +11,7 @@ export interface PlaygroundStartupAdapterV1 {
 export function initializePlaygroundAdapterV1<T extends PlaygroundStartupAdapterV1>(
   input: Readonly<{
     adapter: T;
-    visualCaptureTargets: readonly RuntimeCaptureTargetV1[];
+    visualCaptureGroups: readonly VisualCaptureGroupV1[];
     viewport: HTMLElement;
     trackAdapter(adapter: T): void;
     setStartupStage(
@@ -21,8 +21,8 @@ export function initializePlaygroundAdapterV1<T extends PlaygroundStartupAdapter
 ): T {
   input.trackAdapter(input.adapter);
   input.setStartupStage("visual-targets-configure");
-  if (input.visualCaptureTargets.length > 0) {
-    input.adapter.configureVisualCaptureTargets(input.visualCaptureTargets);
+  if (input.visualCaptureGroups.length > 0) {
+    input.adapter.configureVisualCaptureGroups(input.visualCaptureGroups);
   }
   input.setStartupStage("adapter-mount");
   input.adapter.mount(input.viewport);

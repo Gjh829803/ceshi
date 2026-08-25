@@ -75,11 +75,11 @@ afterEach(async () => {
 it("finalizes a Scene Brief map and verifies visual targets against runtime entities", async () => {
   const files = await fixture();
   await writeFile(files.mapDraftPath, JSON.stringify({
-    kind: "worldkit-scene-brief-implementation-map",
+    kind: "worldkit-scene-brief-implementation-map-draft",
     schemaVersion: 1,
     sceneId: files.sceneId,
     authoringSpecId: "basic-world",
-    mappings: [
+    visualTargetMappings: [
       { visualTargetId: "visual-target-1", runtimeEntityIds: ["player"] },
       { visualTargetId: "visual-target-2", runtimeEntityIds: ["tower"] },
     ],
@@ -89,13 +89,13 @@ it("finalizes a Scene Brief map and verifies visual targets against runtime enti
   expect(result.authoringSpecHash).toMatch(/^sha256:[a-f0-9]{64}$/);
   expect(result.visualCaptureGroups).toEqual([
     expect.objectContaining({
-      id: "visual-target-1",
+      visualTargetId: "visual-target-1",
       runtimeEntityIds: ["player"],
       role: "primary-subject",
       identityColor: "#E85D5D",
     }),
     expect.objectContaining({
-      id: "visual-target-2",
+      visualTargetId: "visual-target-2",
       runtimeEntityIds: ["tower"],
       role: "primary-landmark",
       identityColor: "#F28E2B",
@@ -106,11 +106,11 @@ it("finalizes a Scene Brief map and verifies visual targets against runtime enti
 it("rejects missing visual targets, extra mappings, and invented runtime ids", async () => {
   const files = await fixture();
   await writeFile(files.mapDraftPath, JSON.stringify({
-    kind: "worldkit-scene-brief-implementation-map",
+    kind: "worldkit-scene-brief-implementation-map-draft",
     schemaVersion: 1,
     sceneId: files.sceneId,
     authoringSpecId: "basic-world",
-    mappings: [
+    visualTargetMappings: [
       { visualTargetId: "visual-target-1", runtimeEntityIds: ["invented-player"] },
       { visualTargetId: "visual-target-3", runtimeEntityIds: ["tower"] },
     ],
@@ -129,17 +129,34 @@ it("keeps identical complete instances in one repeated visual target", () => {
   if (!parsed.ok) return;
   const groups = deriveVisualCaptureGroups({
     brief: parsed.value,
-    mappings: [
+    visualTargetMappings: [
       { visualTargetId: "visual-target-1", runtimeEntityIds: ["player"] },
       { visualTargetId: "visual-target-2", runtimeEntityIds: ["tower-east", "tower-west"] },
     ],
   });
   expect(groups).toHaveLength(2);
   expect(groups[1]).toMatchObject({
-    id: "visual-target-2",
+    visualTargetId: "visual-target-2",
     runtimeEntityIds: ["tower-east", "tower-west"],
   });
   expect(deriveVisualIdentityPalette(parsed.value)).toHaveLength(2);
+});
+
+it("rejects the retired final-kind draft and mappings field", async () => {
+  const files = await fixture();
+  await writeFile(files.mapDraftPath, JSON.stringify({
+    kind: "worldkit-scene-brief-implementation-map",
+    schemaVersion: 1,
+    sceneId: files.sceneId,
+    authoringSpecId: "basic-world",
+    mappings: [
+      { visualTargetId: "visual-target-1", runtimeEntityIds: ["player"] },
+      { visualTargetId: "visual-target-2", runtimeEntityIds: ["tower"] },
+    ],
+  }));
+  await expect(finalizeSceneBuild(files)).rejects.toThrow(
+    /HOSTED_VISUAL_UNKNOWN_FIELD.*mappings.*HOSTED_VISUAL_DRAFT_KIND_INVALID/s,
+  );
 });
 
 it("writes movement mode and complete target descriptions into the trusted palette", async () => {

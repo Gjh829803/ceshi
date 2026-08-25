@@ -64,11 +64,11 @@ describe("single-job Planner and Builder self-check bundles", () => {
         writeFile(briefPath, brief),
         writeFile(worldPath, JSON.stringify(world)),
         writeFile(mapPath, JSON.stringify({
-          kind: "worldkit-scene-brief-implementation-map",
+          kind: "worldkit-scene-brief-implementation-map-draft",
           schemaVersion: 1,
           sceneId: "self-check-scene",
           authoringSpecId: "basic-world",
-          mappings: [
+          visualTargetMappings: [
             { visualTargetId: "visual-target-1", runtimeEntityIds: ["player"] },
             { visualTargetId: "visual-target-2", runtimeEntityIds: ["tower"] },
           ],
@@ -110,9 +110,40 @@ describe("single-job Planner and Builder self-check bundles", () => {
       expect(agent.status, agent.stderr || agent.stdout).toBe(0);
       expect(await readFile(agentReport, "utf8")).toBe(await readFile(hostReport, "utf8"));
       expect(JSON.parse(await readFile(agentReport, "utf8"))).toMatchObject({
-        validatorVersion: "worldkit-builder-self-check-v4",
+        validatorVersion: "worldkit-builder-self-check-v5",
         requiresTrustedRouteValidation: false,
       });
+
+      await writeFile(mapPath, JSON.stringify({
+        kind: "worldkit-scene-brief-implementation-map",
+        schemaVersion: 1,
+        sceneId: "self-check-scene",
+        authoringSpecId: "basic-world",
+        mappings: [
+          { visualTargetId: "visual-target-1", runtimeEntityIds: ["player"] },
+          { visualTargetId: "visual-target-2", runtimeEntityIds: ["tower"] },
+        ],
+      }));
+      const legacyReport = path.join(root, "builder-legacy-map.json");
+      const legacy = run("pnpm", ["exec", "tsx", "scripts/agent-builder-self-check.ts", ...common, "--report", legacyReport]);
+      expect(legacy.status).toBe(2);
+      expect(JSON.parse(await readFile(legacyReport, "utf8"))).toMatchObject({
+        status: "failed",
+        diagnostics: expect.arrayContaining([
+          expect.objectContaining({ code: "HOSTED_VISUAL_DRAFT_KIND_INVALID" }),
+          expect.objectContaining({ code: "HOSTED_VISUAL_UNKNOWN_FIELD" }),
+        ]),
+      });
+      await writeFile(mapPath, JSON.stringify({
+        kind: "worldkit-scene-brief-implementation-map-draft",
+        schemaVersion: 1,
+        sceneId: "self-check-scene",
+        authoringSpecId: "basic-world",
+        visualTargetMappings: [
+          { visualTargetId: "visual-target-1", runtimeEntityIds: ["player"] },
+          { visualTargetId: "visual-target-2", runtimeEntityIds: ["tower"] },
+        ],
+      }));
 
       world.world.environment.preset = "night";
       await writeFile(worldPath, JSON.stringify(world));

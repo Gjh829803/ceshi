@@ -7,7 +7,7 @@ import type {
   CompatibleProfileSummaryV1,
   ControlTuningV1,
   MotionKernelSummaryV1,
-  RuntimeCaptureTargetV1,
+  VisualCaptureGroupV1,
   SemanticInputActionV1,
   SubjectDefinitionSummaryV1,
   WorldRuntimeSnapshotV4,
@@ -1911,7 +1911,7 @@ if (runtimeRoute.mode === "unknown") {
   let preparationError: unknown;
   let prepared: Readonly<{
     loaded: Awaited<ReturnType<typeof import("./authoring-loader.js")["loadAuthoringScene"]>>;
-    visualCaptureTargets: readonly RuntimeCaptureTargetV1[];
+    visualCaptureGroups: readonly VisualCaptureGroupV1[];
     BabylonWorldAdapter: typeof import("./babylon-world-adapter.js")["BabylonWorldAdapter"];
   }> | undefined;
   try {
@@ -1919,7 +1919,7 @@ if (runtimeRoute.mode === "unknown") {
     const { BabylonWorldAdapter } = await import("./babylon-world-adapter.js");
     const subjectDefinitionRef = urlParameters.get("subjectDefinitionRef");
     let loaded: Awaited<ReturnType<typeof import("./authoring-loader.js")["loadAuthoringScene"]>>;
-    let visualCaptureTargets: readonly RuntimeCaptureTargetV1[] = [];
+    let visualCaptureGroups: readonly VisualCaptureGroupV1[] = [];
     if (runtimeRoute.mode === "authoring") {
       const { loadAuthoringScene, loadStudioAuthoringPreviewV1 } = await import("./authoring-loader.js");
       startupStage = "authoring-load";
@@ -1939,7 +1939,7 @@ if (runtimeRoute.mode === "unknown") {
           authoringOptions,
         );
         loaded = preview.loaded;
-        visualCaptureTargets = preview.visualCaptureTargets;
+        visualCaptureGroups = preview.visualCaptureGroups;
       }
     } else {
       const { loadOutdoorGameplaySceneV1 } = await import(
@@ -1959,7 +1959,7 @@ if (runtimeRoute.mode === "unknown") {
       createdPlaygroundMetadata = outdoorLoaded.playgroundMetadata;
       loaded = outdoorLoaded;
     }
-    prepared = { loaded, visualCaptureTargets, BabylonWorldAdapter };
+    prepared = { loaded, visualCaptureGroups, BabylonWorldAdapter };
   } catch (error) {
     preparationError = error;
   }
@@ -1980,7 +1980,7 @@ if (runtimeRoute.mode === "unknown") {
         if (prepared === undefined) {
           throw new Error("WORLDKIT_AUTHORING_PREPARATION_MISSING");
         }
-        const { loaded, visualCaptureTargets, BabylonWorldAdapter } = prepared;
+        const { loaded, visualCaptureGroups, BabylonWorldAdapter } = prepared;
         if (
           !loaded.ok ||
           loaded.executionPlan === undefined ||
@@ -2008,7 +2008,7 @@ if (runtimeRoute.mode === "unknown") {
         createdHostOverlay = loaded.hostOverlay;
         createdAdapter = initializePlaygroundAdapterV1<BabylonWorldAdapter>({
           adapter,
-          visualCaptureTargets,
+          visualCaptureGroups,
           viewport,
           trackAdapter,
           setStartupStage(stage) {

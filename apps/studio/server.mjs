@@ -97,7 +97,7 @@ const workflowStageDefinitions = [
     title: "真实白膜捕获",
     owner: "Playground",
     description: "无头 Babylon 真实运行，输出进入首帧、快照、实体清单及 Front/Right/Back 白膜三视图。",
-    required: ["opening-frame", "runtime-snapshot", "capture-targets"],
+    required: ["opening-frame", "runtime-snapshot", "whitebox-triview-manifest"],
   },
   {
     id: "entry-alignment-validation",
@@ -781,7 +781,7 @@ export function createStudio(options = {}) {
       "route-validation-manifest": [path.join(artifactRoot, "route-validation-manifest.json")],
       "opening-frame": [path.join(artifactRoot, "opening-frame.png")],
       "runtime-snapshot": [path.join(artifactRoot, "runtime-snapshot.json")],
-      "capture-targets": [path.join(artifactRoot, "triviews", "capture-targets.json")],
+      "whitebox-triview-manifest": [path.join(artifactRoot, "triviews", "whitebox-triview-manifest.json")],
       "entry-third-person-validation": [path.join(artifactRoot, "entry-third-person-validation.json")],
       "visual-generation-prompts": [path.join(artifactRoot, "visual-generation-prompts.json")],
       "styled-opening-frame": [path.join(artifactRoot, "styled-opening-frame.png")],
@@ -1178,7 +1178,7 @@ export function createStudio(options = {}) {
       build: path.join(artifactRoot, "world.build.json"),
       openingFrame: path.join(artifactRoot, "opening-frame.png"),
       snapshot: path.join(artifactRoot, "runtime-snapshot.json"),
-      captureTargets: path.join(artifactRoot, "triviews", "capture-targets.json"),
+      captureTargets: path.join(artifactRoot, "triviews", "whitebox-triview-manifest.json"),
     };
     if (!(await Promise.all(Object.values(paths).map((filePath) =>
       nonemptyArtifact(filePath, freshnessFloor)))).every(Boolean)) return false;
@@ -1223,7 +1223,7 @@ export function createStudio(options = {}) {
       authoring?.kind !== "worldkit-authoring-spec" || authoring.schemaVersion !== 4 ||
       typeof authoring.id !== "string" || !idPattern.test(authoring.id) ||
       builderCheck?.kind !== "worldkit-builder-self-check" || builderCheck.schemaVersion !== 1 ||
-      builderCheck.validatorVersion !== "worldkit-builder-self-check-v4" ||
+      builderCheck.validatorVersion !== "worldkit-builder-self-check-v5" ||
       builderCheck.sceneId !== sceneId || builderCheck.status !== "passed" ||
       builderCheck.inputs?.sceneBriefHash !== briefHash ||
       builderCheck.inputs?.authoringSpecHash !== authoringHash ||
@@ -1233,16 +1233,16 @@ export function createStudio(options = {}) {
       implementationMap.sceneBriefHash !== palette.sceneBriefHash ||
       !/^sha256:[a-f0-9]{64}$/.test(implementationMap.authoringSpecHash ?? "") ||
       implementationMap.authoringSpecId !== authoring.id ||
-      !Array.isArray(implementationMap.mappings) || implementationMap.mappings.length === 0 ||
+      !Array.isArray(implementationMap.visualTargetMappings) || implementationMap.visualTargetMappings.length === 0 ||
       !Array.isArray(implementationMap.visualCaptureGroups) || implementationMap.visualCaptureGroups.length === 0 ||
       build?.kind !== "worldkit-build-artifact" || build.schemaVersion !== 4 ||
       build.executionPlan?.kind !== "worldkit-execution-plan" || build.executionPlan.schemaVersion !== 5 ||
       !/^sha256:[a-f0-9]{64}$/.test(build.executionPlanHash ?? "") ||
       snapshot?.kind !== "worldkit-runtime-snapshot" || snapshot.schemaVersion !== 4 ||
-      captureTargets?.kind !== "worldkit-runtime-triview-manifest" || captureTargets.schemaVersion !== 1 ||
+      captureTargets?.kind !== "worldkit-whitebox-triview-manifest" || captureTargets.schemaVersion !== 1 ||
       captureTargets.executionPlanHash !== build.executionPlanHash ||
-      !Array.isArray(captureTargets.targets) || captureTargets.targets.length === 0 ||
-      captureTargets.targets.length > 5
+      !Array.isArray(captureTargets.whiteboxTriviews) || captureTargets.whiteboxTriviews.length === 0 ||
+      captureTargets.whiteboxTriviews.length > 5
     ) return false;
     if (!await hasTrustedRouteValidationArtifacts(
       artifactRoot,
@@ -1254,32 +1254,32 @@ export function createStudio(options = {}) {
     )) return false;
 
     const paletteTargetIds = palette.targets.map(({ id }) => id);
-    const mappingTargetIds = implementationMap.mappings.map(({ visualTargetId }) => visualTargetId);
+    const mappingTargetIds = implementationMap.visualTargetMappings.map(({ visualTargetId }) => visualTargetId);
     const captureGroupTargetIds = implementationMap.visualCaptureGroups.map(({ visualTargetId }) => visualTargetId);
     if (
       new Set(paletteTargetIds).size !== paletteTargetIds.length ||
       [...paletteTargetIds].sort().join(",") !== [...mappingTargetIds].sort().join(",") ||
       [...paletteTargetIds].sort().join(",") !== [...captureGroupTargetIds].sort().join(",")
     ) return false;
-    const captureGroupById = new Map(
-      implementationMap.visualCaptureGroups.map((group) => [group.id, group]),
+    const captureGroupByVisualTargetId = new Map(
+      implementationMap.visualCaptureGroups.map((group) => [group.visualTargetId, group]),
     );
-    const targetIds = new Set();
-    for (const target of captureTargets.targets) {
-      const group = captureGroupById.get(target?.id);
+    const visualTargetIds = new Set();
+    for (const target of captureTargets.whiteboxTriviews) {
+      const group = captureGroupByVisualTargetId.get(target?.visualTargetId);
       if (
-        !idPattern.test(target?.id ?? "") || targetIds.has(target.id) ||
-        group === undefined || group.visualTargetId !== target.visualTargetId ||
+        !idPattern.test(target?.visualTargetId ?? "") || visualTargetIds.has(target.visualTargetId) ||
+        group === undefined ||
         JSON.stringify(group.runtimeEntityIds) !== JSON.stringify(target.runtimeEntityIds) ||
         group.role !== target.role || group.semanticClassId !== target.semanticClassId ||
         group.identityColor !== target.identityColor ||
-        target.imagePath !== `${target.id}/whitebox-triview.png` ||
+        target.imageUri !== `${target.visualTargetId}/whitebox-triview.png` ||
         !Array.isArray(target.views) || target.views.join(",") !== "front,right,back" ||
-        !await pngArtifact(path.join(artifactRoot, "triviews", target.imagePath), freshnessFloor)
+        !await pngArtifact(path.join(artifactRoot, "triviews", target.imageUri), freshnessFloor)
       ) return false;
-      targetIds.add(target.id);
+      visualTargetIds.add(target.visualTargetId);
     }
-    return targetIds.size === captureGroupById.size;
+    return visualTargetIds.size === captureGroupByVisualTargetId.size;
   }
 
   async function importExistingWorlds() {
@@ -1291,7 +1291,7 @@ export function createStudio(options = {}) {
     for (const entry of entries) {
       if (!entry.isDirectory() || !idPattern.test(entry.name) || knownSceneIds.has(entry.name)) continue;
       const sceneBriefPath = path.join(artifactsRoot, entry.name, "scene-brief.md");
-      const captureTargetsPath = path.join(artifactsRoot, entry.name, "triviews", "capture-targets.json");
+      const captureTargetsPath = path.join(artifactsRoot, entry.name, "triviews", "whitebox-triview-manifest.json");
       const artifactRoot = path.join(artifactsRoot, entry.name);
       if (!await hasTrustedWhiteboxArtifacts(artifactRoot, entry.name)) continue;
       try {
@@ -1485,7 +1485,7 @@ export function createStudio(options = {}) {
         owner: "Babylon Runtime", format: "JSON",
       },
       {
-        id: "capture-targets", phase: "runtime-capture", title: "白膜三视图清单",
+        id: "whitebox-triview-manifest", phase: "runtime-capture", title: "白膜三视图清单",
         description: "每个 subject/object 的 Front / Right / Back 捕获索引。",
         owner: "Babylon Runtime", format: "JSON",
       },
@@ -1581,7 +1581,7 @@ export function createStudio(options = {}) {
     const planRoot = path.join(repoRoot, "apps/playground/public/scene-plans", record.sceneId);
     const [sceneBrief, captureManifest] = await Promise.all([
       readFile(path.join(artifactRoot, "scene-brief.md"), "utf8").catch(() => null),
-      readJsonIfPresent(path.join(artifactRoot, "triviews", "capture-targets.json")),
+      readJsonIfPresent(path.join(artifactRoot, "triviews", "whitebox-triview-manifest.json")),
     ]);
     const planning = [];
     if (record.referenceImage) {
@@ -1611,14 +1611,14 @@ export function createStudio(options = {}) {
       planning.push({ kind, title, description, prompt: null, url: available ? url : null, available });
     }
     const prototypes = [];
-    for (const target of captureManifest?.targets ?? []) {
-      if (!idPattern.test(target?.id)) continue;
-      const imagePath = path.join(artifactRoot, "triviews", target.id, "whitebox-triview.png");
-      const styledImagePath = path.join(artifactRoot, "triviews", target.id, "styled-triview.png");
+    for (const target of captureManifest?.whiteboxTriviews ?? []) {
+      if (!idPattern.test(target?.visualTargetId)) continue;
+      const imagePath = path.join(artifactRoot, "triviews", target.visualTargetId, "whitebox-triview.png");
+      const styledImagePath = path.join(artifactRoot, "triviews", target.visualTargetId, "styled-triview.png");
       const available = await fileExists(imagePath);
       const styledAvailable = await fileExists(styledImagePath);
       prototypes.push({
-        id: target.id,
+        id: target.visualTargetId,
         role: target.role,
         semantic: target.semanticClassId,
         description: "Complete visual group Front / Right / Back whitebox capture.",
@@ -1628,8 +1628,8 @@ export function createStudio(options = {}) {
         approximateSize: null,
         memberCount: Array.isArray(target.runtimeEntityIds) ? target.runtimeEntityIds.length : 1,
         consistencyRationale: null,
-        whiteboxUrl: available ? `/api/worlds/${record.id}/triviews/${target.id}` : null,
-        styledUrl: styledAvailable ? `/api/worlds/${record.id}/styled-triviews/${target.id}` : null,
+        whiteboxUrl: available ? `/api/worlds/${record.id}/triviews/${target.visualTargetId}` : null,
+        styledUrl: styledAvailable ? `/api/worlds/${record.id}/styled-triviews/${target.visualTargetId}` : null,
       });
     }
     const helpers = [];
@@ -1946,7 +1946,7 @@ export function createStudio(options = {}) {
       "world.build.json",
       "opening-frame.png",
       "runtime-snapshot.json",
-      path.join("triviews", "capture-targets.json"),
+      path.join("triviews", "whitebox-triview-manifest.json"),
       "entry-third-person-validation.json",
     ];
     if (styledOpeningFrameRequired) {
@@ -1955,11 +1955,11 @@ export function createStudio(options = {}) {
     if (styledTriviewsRequired) {
       requiredArtifacts.push("styled-triviews-manifest.json", "styled-triviews-report.json");
       const captureManifest = await readJsonIfPresent(
-        path.join(artifactRoot, "triviews", "capture-targets.json"),
+        path.join(artifactRoot, "triviews", "whitebox-triview-manifest.json"),
       );
-      for (const target of captureManifest?.targets ?? []) {
-        if (idPattern.test(target?.id)) {
-          requiredArtifacts.push(path.join("triviews", target.id, "styled-triview.png"));
+      for (const target of captureManifest?.whiteboxTriviews ?? []) {
+        if (idPattern.test(target?.visualTargetId)) {
+          requiredArtifacts.push(path.join("triviews", target.visualTargetId, "styled-triview.png"));
         }
       }
     }
@@ -2036,7 +2036,7 @@ export function createStudio(options = {}) {
       failedStage: latestRecord?.stage ?? "preparing",
       finishedAt,
       error: reason,
-      captureStatus: artifactGates["opening-frame.png"] && artifactGates[path.join("triviews", "capture-targets.json")]
+      captureStatus: artifactGates["opening-frame.png"] && artifactGates[path.join("triviews", "whitebox-triview-manifest.json")]
         ? "passed"
         : "failed",
       outcome: "failed",
@@ -2255,11 +2255,11 @@ export function createStudio(options = {}) {
         "styled-triviews-report.json",
       );
       const captureManifest = await readJsonIfPresent(
-        path.join(artifactRoot, "triviews", "capture-targets.json"),
+        path.join(artifactRoot, "triviews", "whitebox-triview-manifest.json"),
       );
-      for (const target of captureManifest?.targets ?? []) {
-        if (idPattern.test(target?.id)) {
-          required.push(path.join("triviews", target.id, "styled-triview.png"));
+      for (const target of captureManifest?.whiteboxTriviews ?? []) {
+        if (idPattern.test(target?.visualTargetId)) {
+          required.push(path.join("triviews", target.visualTargetId, "styled-triview.png"));
         }
       }
     }
@@ -2273,7 +2273,7 @@ export function createStudio(options = {}) {
       readJsonIfPresent(path.join(artifactRoot, "evaluation-run.json")),
       readJsonIfPresent(path.join(artifactRoot, "styled-opening-frame-report.json")),
       readJsonIfPresent(path.join(artifactRoot, "styled-triviews-report.json")),
-      readJsonIfPresent(path.join(artifactRoot, "triviews", "capture-targets.json")),
+      readJsonIfPresent(path.join(artifactRoot, "triviews", "whitebox-triview-manifest.json")),
     ]);
     if (
       evaluationRun?.kind !== "worldkit-evaluation-run" || evaluationRun.schemaVersion !== 1 ||
@@ -2288,9 +2288,9 @@ export function createStudio(options = {}) {
         triViewReport?.kind !== "worldkit-styled-triview-report" || triViewReport.schemaVersion !== 1 ||
         triViewReport.sceneId !== record.sceneId || triViewReport.status !== "passed"
       ) return false;
-      for (const target of captureManifest?.targets ?? []) {
+      for (const target of captureManifest?.whiteboxTriviews ?? []) {
         if (!await pngArtifact(
-          path.join(artifactRoot, "triviews", target.id, "styled-triview.png"),
+          path.join(artifactRoot, "triviews", target.visualTargetId, "styled-triview.png"),
           freshnessFloor,
         )) return false;
       }
@@ -2833,7 +2833,7 @@ export function createStudio(options = {}) {
 
       const artifactRoot = path.join(repoRoot, "artifacts/scenes", record.sceneId);
       const capturePassed = await fileExists(path.join(artifactRoot, "opening-frame.png")) &&
-        await fileExists(path.join(artifactRoot, "triviews", "capture-targets.json"));
+        await fileExists(path.join(artifactRoot, "triviews", "whitebox-triview-manifest.json"));
       const stopped = await updateRecord(record.id, {
         status: "interrupted",
         stage: "interrupted",

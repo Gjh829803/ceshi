@@ -14,7 +14,7 @@ if (!Number.isSafeInteger(limit) || limit < 1 || limit > 5) throw new Error("--l
 const format = option("--format", "paths");
 if (!["paths", "tsv"].includes(format)) throw new Error("--format must be paths or tsv.");
 const captureManifest = await readFile(
-  path.join(sceneRoot, "triviews", "capture-targets.json"),
+  path.join(sceneRoot, "triviews", "whitebox-triview-manifest.json"),
   "utf8",
 ).then(JSON.parse);
 let paletteTargets = [];
@@ -25,28 +25,27 @@ try {
   ).then(JSON.parse);
   paletteTargets = Array.isArray(palette.targets) ? palette.targets : [];
 } catch {
-  // Legacy capture manifests can still be listed without semantic metadata.
+  // Semantic palette metadata is optional for path-only listing.
 }
 const paletteByVisualTargetId = new Map(
   paletteTargets.map((target) => [target.visualTargetId || target.id, target]),
 );
-const rows = (Array.isArray(captureManifest.targets) ? captureManifest.targets : []).map((target) => ({
-  targetId: target.id,
-  path: path.join("triviews", target.imagePath),
-  visualTargetId: target.visualTargetId || target.id,
-  target: paletteByVisualTargetId.get(target.visualTargetId || target.id),
+const rows = (Array.isArray(captureManifest.whiteboxTriviews) ? captureManifest.whiteboxTriviews : []).map((target) => ({
+  visualTargetId: target.visualTargetId,
+  path: path.join("triviews", target.imageUri),
+  target: paletteByVisualTargetId.get(target.visualTargetId),
 }));
 function tsv(value) {
   return String(value || "").replace(/[\t\r\n]+/g, " ").trim();
 }
 for (const row of rows.slice(0, limit)) {
-  if (!/^[a-z0-9][a-z0-9-]{2,79}$/.test(row.targetId)) throw new Error("Tri-view target id is invalid.");
+  if (!/^[a-z0-9][a-z0-9-]{2,79}$/.test(row.visualTargetId)) throw new Error("Tri-view visual target id is invalid.");
   const absolutePath = path.resolve(sceneRoot, row.path);
   const relative = path.relative(sceneRoot, absolutePath);
   if (relative.startsWith("..") || path.isAbsolute(relative)) throw new Error("Tri-view input escaped scene root.");
   process.stdout.write(format === "tsv"
     ? [
-        row.targetId,
+        row.visualTargetId,
         absolutePath,
         row.visualTargetId,
         row.target?.targetKind,

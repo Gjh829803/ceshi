@@ -221,11 +221,11 @@ Write:
 
 ```json
 {
-  "kind": "worldkit-scene-brief-implementation-map",
+  "kind": "worldkit-scene-brief-implementation-map-draft",
   "schemaVersion": 1,
   "sceneId": "scene-id",
   "authoringSpecId": "scene-id-authoring",
-  "mappings": [
+  "visualTargetMappings": [
     {
       "visualTargetId": "visual-target-1",
       "runtimeEntityIds": ["player"]

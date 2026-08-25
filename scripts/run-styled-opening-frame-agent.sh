@@ -31,7 +31,7 @@ for required in \
   "$artifact_root/scene-implementation-map.json" \
   "$artifact_root/opening-frame.png" \
   "$artifact_root/runtime-snapshot.json" \
-  "$artifact_root/triviews/capture-targets.json"; do
+  "$artifact_root/triviews/whitebox-triview-manifest.json"; do
   [[ -s "$required" ]] || { echo "Required whitebox artifact is missing: $required" >&2; exit 3; }
 done
 if [[ -z "$user_frame" ]]; then

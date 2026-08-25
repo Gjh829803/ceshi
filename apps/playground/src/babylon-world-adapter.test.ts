@@ -120,12 +120,12 @@ interface AdapterProbe {
   waitForSimulationTick(expectedSimulationTick: number): Promise<WorldRuntimeSnapshotV4>;
   waitForRenderReady(expectedSimulationTick: number): Promise<unknown>;
   captureControlFrame(request: ControlCaptureRequestV1): Promise<RuntimeControlCaptureFrameV1>;
-  configureVisualCaptureTargets(
-    targets: readonly import("@whitebox-world/runtime-contracts").RuntimeCaptureTargetV1[],
-  ): readonly import("@whitebox-world/runtime-contracts").RuntimeCaptureTargetV1[];
-  listCaptureTargets(): readonly import("@whitebox-world/runtime-contracts").RuntimeCaptureTargetV1[];
+  configureVisualCaptureGroups(
+    targets: readonly import("@whitebox-world/runtime-contracts").VisualCaptureGroupV1[],
+  ): readonly import("@whitebox-world/runtime-contracts").VisualCaptureGroupV1[];
+  listVisualCaptureGroups(): readonly import("@whitebox-world/runtime-contracts").VisualCaptureGroupV1[];
   captureRuntimeWhiteboxTriview(
-    targetId: string,
+    visualTargetId: string,
   ): import("@whitebox-world/runtime-contracts").WhiteboxTriviewCaptureV1;
 }
 
@@ -387,7 +387,7 @@ function createAdapterProbe(): {
     animationFrameId: null,
     frame: 0,
     captureActivitySequence: 0,
-    visualCaptureTargets: [],
+    visualCaptureGroups: [],
     previousAnimationTimestampMilliseconds: 0,
     fixedStepAccumulatorSeconds: 0,
     displayFramesPerSecond: 0,
@@ -414,7 +414,6 @@ describe("BabylonWorldAdapter frame loop", () => {
   it("keeps grouped whitebox capture on the Adapter artifact surface", () => {
     const { adapter, runtime } = createAdapterProbe();
     const target = {
-      id: "player-target",
       visualTargetId: "visual-target-1",
       runtimeEntityIds: ["player"],
       role: "primary-subject",
@@ -422,17 +421,17 @@ describe("BabylonWorldAdapter frame loop", () => {
       identityColor: "#E85D5D",
     } as const;
 
-    expect(adapter.listCaptureTargets()).toEqual([]);
-    expect(adapter.configureVisualCaptureTargets([target])).toEqual([target]);
-    expect(adapter.listCaptureTargets()).toEqual([target]);
+    expect(adapter.listVisualCaptureGroups()).toEqual([]);
+    expect(adapter.configureVisualCaptureGroups([target])).toEqual([target]);
+    expect(adapter.listVisualCaptureGroups()).toEqual([target]);
     expect(() => adapter.captureRuntimeWhiteboxTriview("missing-target")).toThrow(
       "WORLDKIT_CAPTURE_TARGET_NOT_FOUND",
     );
-    expect(adapter.captureRuntimeWhiteboxTriview(target.id)).toMatchObject({
-      targetId: target.id,
+    expect(adapter.captureRuntimeWhiteboxTriview(target.visualTargetId)).toMatchObject({
+      visualTargetId: target.visualTargetId,
       runtimeEntityIds: ["player"],
       views: ["front", "right", "back"],
-      imageDataUrl: "data:image/png;base64,test",
+      imageDataUri: "data:image/png;base64,test",
     });
     expect(runtime.captureArtifactView).toHaveBeenCalledWith({
       kind: "entity-triview",

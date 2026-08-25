@@ -135,23 +135,23 @@ export async function prepareVisualReconstruction(options) {
   await assertImage(contactSheetPath);
 
   const triviewManifest = JSON.parse(await readFile(triviewManifestPath, "utf8"));
-  if (triviewManifest.kind !== "worldkit-runtime-triview-manifest" || !Array.isArray(triviewManifest.targets)) {
-    throw new Error("Runtime tri-view manifest is invalid.");
+  if (triviewManifest.kind !== "worldkit-whitebox-triview-manifest" || !Array.isArray(triviewManifest.whiteboxTriviews)) {
+    throw new Error("Whitebox tri-view manifest is invalid.");
   }
   const supplementalTriviews = [];
-  for (const [index, target] of triviewManifest.targets.entries()) {
-    if (!/^[a-z0-9][a-z0-9-]{2,79}$/.test(target.id) ||
-        target.imagePath !== `${target.id}/whitebox-triview.png`) {
-      throw new Error(`Runtime tri-view target '${target.id ?? ""}' is unsafe.`);
+  for (const [index, target] of triviewManifest.whiteboxTriviews.entries()) {
+    if (!/^[a-z0-9][a-z0-9-]{2,79}$/.test(target.visualTargetId) ||
+        target.imageUri !== `${target.visualTargetId}/whitebox-triview.png`) {
+      throw new Error(`Whitebox tri-view target '${target.visualTargetId ?? ""}' is unsafe.`);
     }
-    const absolutePath = path.resolve(path.dirname(triviewManifestPath), target.imagePath);
+    const absolutePath = path.resolve(path.dirname(triviewManifestPath), target.imageUri);
     if (!isWithin(path.dirname(triviewManifestPath), absolutePath)) throw new Error("Tri-view path escaped its root.");
     await assertImage(absolutePath);
     const canonicalAbsolutePath = await realpath(absolutePath);
     if (!isWithin(canonicalSceneRoot, canonicalAbsolutePath)) throw new Error("Tri-view resolved outside scene root.");
     supplementalTriviews.push({
       token: `@图片${index + 3}`,
-      targetId: target.id,
+      visualTargetId: target.visualTargetId,
       path: path.relative(canonicalSceneRoot, canonicalAbsolutePath),
       contentHash: await contentHash(absolutePath),
     });

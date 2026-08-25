@@ -25,7 +25,7 @@ artifact_root="$project_root/artifacts/scenes/$scene_id"
 for required in \
   "$artifact_root/visual-generation-prompts.json" \
   "$artifact_root/styled-opening-frame.png" \
-  "$artifact_root/triviews/capture-targets.json"; do
+  "$artifact_root/triviews/whitebox-triview-manifest.json"; do
   [[ -s "$required" ]] || { echo "Required styled tri-view input is missing: $required" >&2; exit 3; }
 done
 

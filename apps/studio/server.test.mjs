@@ -67,11 +67,11 @@ async function writeTrustedWhiteboxArtifacts(
     id: sceneId,
   })}\n`;
   const mapDraft = `${JSON.stringify({
-    kind: "worldkit-scene-brief-implementation-map",
+    kind: "worldkit-scene-brief-implementation-map-draft",
     schemaVersion: 1,
     sceneId,
     authoringSpecId: sceneId,
-    mappings: [{ visualTargetId: "player-subject", runtimeEntityIds: ["player"] }],
+    visualTargetMappings: [{ visualTargetId: "player-subject", runtimeEntityIds: ["player"] }],
   })}\n`;
   const hash = (source) => `sha256:${createHash("sha256").update(source).digest("hex")}`;
   const resourceLockHash = `sha256:${"e".repeat(64)}`;
@@ -84,7 +84,6 @@ async function writeTrustedWhiteboxArtifacts(
   };
   const normalizedWorldIrHash = hash(canonicalJson(normalizedWorldIr));
   const visualTarget = {
-    id: "player-subject",
     visualTargetId: "player-subject",
     runtimeEntityIds: ["player"],
     role: "primary-subject",
@@ -98,7 +97,7 @@ async function writeTrustedWhiteboxArtifacts(
     sceneBriefHash,
     authoringSpecId: sceneId,
     authoringSpecHash,
-    mappings: [{ visualTargetId: "player-subject", runtimeEntityIds: ["player"] }],
+    visualTargetMappings: [{ visualTargetId: "player-subject", runtimeEntityIds: ["player"] }],
     visualCaptureGroups: [visualTarget],
   };
   const requiredRoutes = requiresRouteValidation
@@ -126,13 +125,13 @@ async function writeTrustedWhiteboxArtifacts(
   };
   const executionPlanHash = hash(canonicalJson(executionPlan));
   const captureTargets = {
-    kind: "worldkit-runtime-triview-manifest",
+    kind: "worldkit-whitebox-triview-manifest",
     schemaVersion: 1,
     executionPlanHash,
-    targets: [{
+    whiteboxTriviews: [{
       ...visualTarget,
       views: ["front", "right", "back"],
-      imagePath: "player-subject/whitebox-triview.png",
+      imageUri: "player-subject/whitebox-triview.png",
     }],
   };
   await Promise.all([
@@ -157,7 +156,7 @@ async function writeTrustedWhiteboxArtifacts(
     writeFile(path.join(artifactRoot, "builder-self-check.json"), JSON.stringify({
       kind: "worldkit-builder-self-check",
       schemaVersion: 1,
-      validatorVersion: "worldkit-builder-self-check-v4",
+      validatorVersion: "worldkit-builder-self-check-v5",
       sceneId,
       status: "passed",
       requiresTrustedRouteValidation: requiresRouteValidation,
@@ -181,7 +180,7 @@ async function writeTrustedWhiteboxArtifacts(
       kind: "worldkit-runtime-snapshot",
       schemaVersion: 4,
     })),
-    writeFile(path.join(artifactRoot, "triviews/capture-targets.json"), JSON.stringify(captureTargets)),
+    writeFile(path.join(artifactRoot, "triviews/whitebox-triview-manifest.json"), JSON.stringify(captureTargets)),
     writeFile(path.join(triViewRoot, "whitebox-triview.png"), png),
   ]);
   if (requiresRouteValidation && routeReportMode !== "missing") {
@@ -1030,7 +1029,7 @@ test("separates whitebox capture from Snapshot V4 entry-alignment validation", (
   const availableIds = [
     "scene-brief", "planner-self-check", "visual-identity-palette", "world-plan", "entry-whitebox-target",
     "authoring-spec", "implementation-map-draft", "builder-self-check", "implementation-map", "execution-plan",
-    "opening-frame", "runtime-snapshot", "capture-targets",
+    "opening-frame", "runtime-snapshot", "whitebox-triview-manifest",
   ];
   const failedStages = deriveWorkflowTrajectory({
     record: {
@@ -1086,7 +1085,7 @@ test("records tokens per new agent stage and elapsed time", () => {
     availableIds: [
       "scene-brief", "visual-identity-palette", "world-plan", "entry-whitebox-target", "authoring-spec",
       "implementation-map-draft", "implementation-map", "execution-plan",
-      "opening-frame", "runtime-snapshot", "capture-targets",
+      "opening-frame", "runtime-snapshot", "whitebox-triview-manifest",
     ],
   });
   const metrics = deriveWorkflowMetrics({ record, stages, rawLog, events: [] });
@@ -1258,8 +1257,8 @@ test("does not recover an explicitly failed visual run from leftover output file
       "scene-brief.md", "visual-identity-palette.json", "authoring.json", "scene-implementation-map.json", "world.build.json",
       "runtime-snapshot.json", "evaluation-run.json", "planner-self-check.json", "builder-self-check.json",
     ].map((fileName) => writeFile(path.join(artifactRoot, fileName), "{}")),
-    writeFile(path.join(artifactRoot, "triviews/capture-targets.json"), JSON.stringify({
-      targets: [{ id: "player-subject" }],
+    writeFile(path.join(artifactRoot, "triviews/whitebox-triview-manifest.json"), JSON.stringify({
+      whiteboxTriviews: [{ visualTargetId: "player-subject" }],
     })),
     writeFile(path.join(artifactRoot, "opening-frame.png"), png),
     writeFile(path.join(artifactRoot, "visual-generation-prompts.json"), "{}"),
@@ -1321,8 +1320,8 @@ test("does not recover stale placeholder outputs left before the current visual 
       "scene-brief.md", "visual-identity-palette.json", "authoring.json", "scene-implementation-map.json", "world.build.json",
       "runtime-snapshot.json", "evaluation-run.json", "planner-self-check.json", "builder-self-check.json",
     ].map((fileName) => writeFile(path.join(artifactRoot, fileName), "{}")),
-    writeFile(path.join(artifactRoot, "triviews/capture-targets.json"), JSON.stringify({
-      targets: [{ id: "player-subject" }],
+    writeFile(path.join(artifactRoot, "triviews/whitebox-triview-manifest.json"), JSON.stringify({
+      whiteboxTriviews: [{ visualTargetId: "player-subject" }],
     })),
     writeFile(path.join(artifactRoot, "opening-frame.png"), png),
     writeFile(path.join(artifactRoot, "visual-generation-prompts.json"), "{}"),
@@ -1369,11 +1368,11 @@ test("does not import a three-file artifact fragment as a passed world", async (
       schemaVersion: 4,
       id: sceneId,
     })),
-    writeFile(path.join(artifactRoot, "triviews/capture-targets.json"), JSON.stringify({
-      kind: "worldkit-runtime-triview-manifest",
+    writeFile(path.join(artifactRoot, "triviews/whitebox-triview-manifest.json"), JSON.stringify({
+      kind: "worldkit-whitebox-triview-manifest",
       schemaVersion: 1,
       executionPlanHash: `sha256:${"a".repeat(64)}`,
-      targets: [],
+      whiteboxTriviews: [],
     })),
   ]);
 
@@ -1501,8 +1500,8 @@ test("recovers fresh visual outputs only when current trusted receipts are passe
       sceneId: created.sceneId,
       status: "passed",
     })),
-    ...captureTargets.targets.map((target) =>
-      writeFile(path.join(artifactRoot, "triviews", target.id, "styled-triview.png"), png)),
+    ...captureTargets.whiteboxTriviews.map((target) =>
+      writeFile(path.join(artifactRoot, "triviews", target.visualTargetId, "styled-triview.png"), png)),
   ]);
 
   const recoveredStudio = createStudio({ repoRoot: fakeRepoRoot, dataRoot, autoRunJobs: false });
@@ -1539,7 +1538,6 @@ test("serves Scene Brief deliverables and runtime tri-views", async () => {
       writeFile(path.join(artifactRoot, "authoring.json"), "{}"),
       writeFile(path.join(artifactRoot, "scene-implementation-map.json"), JSON.stringify({
         visualCaptureGroups: [{
-          id: "player-subject",
           visualTargetId: "player-subject",
           runtimeEntityIds: ["player", "player-accessory"],
           role: "primary-subject",
@@ -1550,9 +1548,8 @@ test("serves Scene Brief deliverables and runtime tri-views", async () => {
       writeFile(path.join(artifactRoot, "world.build.json"), "{}"),
       writeFile(path.join(artifactRoot, "opening-frame.png"), Buffer.from("89504e470d0a1a0a", "hex")),
       writeFile(path.join(artifactRoot, "runtime-snapshot.json"), "{}"),
-      writeFile(path.join(artifactRoot, "triviews", "capture-targets.json"), JSON.stringify({
-        targets: [{
-          id: "player-subject",
+      writeFile(path.join(artifactRoot, "triviews", "whitebox-triview-manifest.json"), JSON.stringify({
+        whiteboxTriviews: [{
           visualTargetId: "player-subject",
           runtimeEntityIds: ["player", "player-accessory"],
           role: "primary-subject",
@@ -1621,9 +1618,8 @@ test("serves one atomic Preview bootstrap and removes split Preview authority ro
       sceneBriefHash: `sha256:${"b".repeat(64)}`,
       authoringSpecId: created.sceneId,
       authoringSpecHash,
-      mappings: [{ visualTargetId: "player-subject", runtimeEntityIds: ["player"] }],
+      visualTargetMappings: [{ visualTargetId: "player-subject", runtimeEntityIds: ["player"] }],
       visualCaptureGroups: [{
-        id: "player-subject",
         visualTargetId: "player-subject",
         runtimeEntityIds: ["player"],
         role: "primary-subject",

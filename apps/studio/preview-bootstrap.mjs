@@ -137,6 +137,10 @@ function sameStringSet(left, right) {
     [...left].sort().every((value, index) => value === [...right].sort()[index]);
 }
 
+function hasExactKeys(value, keys) {
+  return Object.keys(value).sort().join("\0") === [...keys].sort().join("\0");
+}
+
 function validateImplementationMap(value) {
   if (
     value.kind !== "worldkit-scene-brief-implementation-map" ||
@@ -145,13 +149,23 @@ function validateImplementationMap(value) {
     !ID.test(value.authoringSpecId ?? "") ||
     !HASH.test(value.sceneBriefHash ?? "") ||
     !HASH.test(value.authoringSpecHash ?? "") ||
-    !Array.isArray(value.mappings) ||
+    !hasExactKeys(value, [
+      "kind",
+      "schemaVersion",
+      "sceneId",
+      "sceneBriefHash",
+      "authoringSpecId",
+      "authoringSpecHash",
+      "visualTargetMappings",
+      "visualCaptureGroups",
+    ]) ||
+    !Array.isArray(value.visualTargetMappings) ||
     !Array.isArray(value.visualCaptureGroups)
   ) return false;
 
   if (
-    value.mappings.length < 1 ||
-    value.mappings.length > MAXIMUM_VISUAL_CAPTURE_TARGETS ||
+    value.visualTargetMappings.length < 1 ||
+    value.visualTargetMappings.length > MAXIMUM_VISUAL_CAPTURE_TARGETS ||
     value.visualCaptureGroups.length < 1 ||
     value.visualCaptureGroups.length > MAXIMUM_VISUAL_CAPTURE_TARGETS
   ) return false;
@@ -159,9 +173,10 @@ function validateImplementationMap(value) {
   const mappingTargetIds = [];
   const mappedEntityIds = [];
   const mappingsByTargetId = new Map();
-  for (const mapping of value.mappings) {
+  for (const mapping of value.visualTargetMappings) {
     if (
       mapping === null || typeof mapping !== "object" || Array.isArray(mapping) ||
+      !hasExactKeys(mapping, ["visualTargetId", "runtimeEntityIds"]) ||
       !ID.test(mapping.visualTargetId ?? "") ||
       !validStringArray(mapping.runtimeEntityIds)
     ) return false;
@@ -174,21 +189,25 @@ function validateImplementationMap(value) {
     new Set(mappedEntityIds).size !== mappedEntityIds.length
   ) return false;
 
-  const groupIds = [];
   const groupTargetIds = [];
   const groupedEntityIds = [];
   let primarySubjectCount = 0;
   for (const group of value.visualCaptureGroups) {
     if (
       group === null || typeof group !== "object" || Array.isArray(group) ||
-      !ID.test(group.id ?? "") ||
+      !hasExactKeys(group, [
+        "visualTargetId",
+        "runtimeEntityIds",
+        "role",
+        "semanticClassId",
+        "identityColor",
+      ]) ||
       !ID.test(group.visualTargetId ?? "") ||
       !validStringArray(group.runtimeEntityIds) ||
       !VISUAL_CAPTURE_ROLES.has(group.role) ||
       typeof group.semanticClassId !== "string" || !group.semanticClassId.trim() ||
       !COLOR.test(group.identityColor ?? "")
     ) return false;
-    groupIds.push(group.id);
     groupTargetIds.push(group.visualTargetId);
     groupedEntityIds.push(...group.runtimeEntityIds);
     if (group.role === "primary-subject") primarySubjectCount += 1;
@@ -197,8 +216,7 @@ function validateImplementationMap(value) {
       return false;
     }
   }
-  return new Set(groupIds).size === groupIds.length &&
-    new Set(groupTargetIds).size === groupTargetIds.length &&
+  return new Set(groupTargetIds).size === groupTargetIds.length &&
     new Set(groupedEntityIds).size === groupedEntityIds.length &&
     primarySubjectCount === 1 &&
     sameStringSet(mappingTargetIds, groupTargetIds);

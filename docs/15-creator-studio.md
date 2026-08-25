@@ -49,12 +49,15 @@ Core endpoints include:
 - `POST /api/worlds`
 - `GET /api/worlds/:id`
 - `POST /api/worlds/:id/retry`
-- `GET /api/worlds/:id/authoring-spec`
-- `GET /api/worlds/:id/visual-capture-targets`
-- `GET /api/worlds/:id/triviews/:targetId`
-- `GET /api/worlds/:id/styled-triviews/:targetId`
+- `GET /api/worlds/:id/preview-bootstrap`
+- `GET /api/worlds/:id/triviews/:visualTargetId`
+- `GET /api/worlds/:id/styled-triviews/:visualTargetId`
 
 The page does not perform a second hidden runtime capture through legacy `capture-start`, `capture-failed`, or `verify-entry` endpoints. Runtime capture is completed by the trusted CLI pipeline.
+
+The Preview bootstrap is the only Studio-backed Authoring injection route. It atomically binds one Studio attempt, the Canonical AuthoringSpec hash, and the complete final Scene Brief implementation map. Playground rejects stale attempts, cross-scene maps, hash mismatches, and incomplete capture-group mappings before creating the Runtime adapter.
+
+The Hosted visual contract uses `visualTargetId` as its only semantic identity. Builder writes the closed `worldkit-scene-brief-implementation-map-draft` with `visualTargetMappings`; the trusted host publishes the final `worldkit-scene-brief-implementation-map`; Runtime capture publishes `triviews/whitebox-triview-manifest.json` with `whiteboxTriviews` and canonical `imageUri` values. The retired `mappings`, capture-group `id`, and runtime tri-view manifest dialect are not accepted.
 
 ## Current boundary
 

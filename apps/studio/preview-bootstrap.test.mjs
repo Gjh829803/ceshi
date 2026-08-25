@@ -34,12 +34,11 @@ function validInput() {
     sceneBriefHash: `sha256:${"b".repeat(64)}`,
     authoringSpecId: SCENE_ID,
     authoringSpecHash,
-    mappings: [{
+    visualTargetMappings: [{
       visualTargetId: "player-subject",
       runtimeEntityIds: ["player", "player-hat"],
     }],
     visualCaptureGroups: [{
-      id: "player-subject",
       visualTargetId: "player-subject",
       runtimeEntityIds: ["player", "player-hat"],
       role: "primary-subject",
@@ -154,6 +153,20 @@ test("fails closed when implementation mappings and capture groups do not close"
   expectCode("STUDIO_PREVIEW_AUTHORITY_MISMATCH", (input) => {
     const implementationMap = JSON.parse(input.implementationMapSource);
     implementationMap.visualCaptureGroups[0].runtimeEntityIds = ["player"];
+    input.implementationMapSource = JSON.stringify(implementationMap);
+  });
+});
+
+test("rejects the retired mappings field and competing capture-group id", () => {
+  expectCode("STUDIO_PREVIEW_AUTHORITY_MISMATCH", (input) => {
+    const implementationMap = JSON.parse(input.implementationMapSource);
+    implementationMap.mappings = implementationMap.visualTargetMappings;
+    delete implementationMap.visualTargetMappings;
+    input.implementationMapSource = JSON.stringify(implementationMap);
+  });
+  expectCode("STUDIO_PREVIEW_AUTHORITY_MISMATCH", (input) => {
+    const implementationMap = JSON.parse(input.implementationMapSource);
+    implementationMap.visualCaptureGroups[0].id = "competing-id";
     input.implementationMapSource = JSON.stringify(implementationMap);
   });
 });

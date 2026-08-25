@@ -256,9 +256,8 @@ describe("loadAuthoringScene", () => {
       sceneBriefHash: `sha256:${"b".repeat(64)}` as const,
       authoringSpecId: authoringSpec.id,
       authoringSpecHash: authoringSpecHash as `sha256:${string}`,
-      mappings: [{ visualTargetId: "player-subject", runtimeEntityIds: ["player"] }],
+      visualTargetMappings: [{ visualTargetId: "player-subject", runtimeEntityIds: ["player"] }],
       visualCaptureGroups: [{
-        id: "player-subject",
         visualTargetId: "player-subject",
         runtimeEntityIds: ["player"],
         role: "primary-subject",
@@ -282,8 +281,7 @@ describe("loadAuthoringScene", () => {
     expect(fetchBootstrap).toHaveBeenCalledTimes(1);
     expect(preview.loaded.ok).toBe(true);
     expect(preview.attempt).toBe(2);
-    expect(preview.visualCaptureTargets).toEqual([{
-      id: "player-subject",
+    expect(preview.visualCaptureGroups).toEqual([{
       visualTargetId: "player-subject",
       runtimeEntityIds: ["player"],
       role: "primary-subject",
@@ -291,7 +289,7 @@ describe("loadAuthoringScene", () => {
       identityColor: "#E85D5D",
     }]);
     implementationMap.visualCaptureGroups[0]!.runtimeEntityIds.push("mutated");
-    expect(preview.visualCaptureTargets[0]!.runtimeEntityIds).toEqual(["player"]);
+    expect(preview.visualCaptureGroups[0]!.runtimeEntityIds).toEqual(["player"]);
   });
 
   it("rejects malformed or cross-authority Studio Preview bootstraps", async () => {
@@ -314,9 +312,8 @@ describe("loadAuthoringScene", () => {
         sceneBriefHash: `sha256:${"b".repeat(64)}`,
         authoringSpecId: authoringSpec.id,
         authoringSpecHash,
-        mappings: [{ visualTargetId: "player-subject", runtimeEntityIds: ["player"] }],
+        visualTargetMappings: [{ visualTargetId: "player-subject", runtimeEntityIds: ["player"] }],
         visualCaptureGroups: [{
-          id: "player-subject",
           visualTargetId: "player-subject",
           runtimeEntityIds: ["player"],
           role: "primary-subject",

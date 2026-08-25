@@ -22,8 +22,8 @@ import {
 import type {
   CompileDiagnostic,
   ExecutionPlanV5,
-  RuntimeCaptureTargetV1,
   SceneBriefImplementationMapV1,
+  VisualCaptureGroupV1,
 } from "@whitebox-world/runtime-contracts";
 import {
   canonicalWorldkitBrowserRouteEvidencePublicationV2,
@@ -117,7 +117,7 @@ export async function loadStudioAuthoringPreviewV1(
   options: AuthoringSceneLoadOptionsV1 = {},
 ): Promise<Readonly<{
   loaded: AuthoringSceneLoadResult;
-  visualCaptureTargets: readonly RuntimeCaptureTargetV1[];
+  visualCaptureGroups: readonly VisualCaptureGroupV1[];
   attempt: number;
   attemptStartedAt: string;
 }>> {
@@ -158,20 +158,13 @@ export async function loadStudioAuthoringPreviewV1(
     payload.implementationMap === null ||
       typeof payload.implementationMap !== "object" ||
       Array.isArray(payload.implementationMap) ||
-    !Array.isArray(payload.implementationMap.mappings) ||
+    !Array.isArray(payload.implementationMap.visualTargetMappings) ||
     !Array.isArray(payload.implementationMap.visualCaptureGroups)
   ) {
     throw new Error("Studio Preview bootstrap wrapper is invalid.");
   }
   const implementationMap = payload.implementationMap as SceneBriefImplementationMapV1;
-  let implementationMapErrors: readonly string[];
-  try {
-    implementationMapErrors = validateSceneBriefImplementationMapV1(implementationMap);
-  } catch (error) {
-    throw new Error("Studio Preview bootstrap implementation map is malformed.", {
-      cause: error,
-    });
-  }
+  const implementationMapErrors = validateSceneBriefImplementationMapV1(implementationMap);
   const canonicalAuthoringSpecHash = sha256CanonicalJson(payload.authoringSpec);
   if (
     implementationMapErrors.length > 0 ||
@@ -200,7 +193,7 @@ export async function loadStudioAuthoringPreviewV1(
   );
   return Object.freeze({
     loaded,
-    visualCaptureTargets: Object.freeze(
+    visualCaptureGroups: Object.freeze(
       implementationMap.visualCaptureGroups.map((target) => Object.freeze({
         ...target,
         runtimeEntityIds: Object.freeze([...target.runtimeEntityIds]),

@@ -328,6 +328,18 @@ class SHA256 extends HashMD {
 }
 const sha256$1 = /* @__PURE__ */ createHasher(() => new SHA256());
 const sha256 = sha256$1;
+class CanonicalJsonAdmissionError extends TypeError {
+  code;
+  instancePath;
+  constructor(instancePath) {
+    super(
+      `Negative zero at ${canonicalJsonPath(instancePath)} is unsupported canonical JSON.`
+    );
+    this.name = "CanonicalJsonAdmissionError";
+    this.code = "CANONICAL_JSON_NEGATIVE_ZERO";
+    this.instancePath = instancePath;
+  }
+}
 function canonicalJsonPath(path2) {
   return path2 || "/";
 }
@@ -353,7 +365,10 @@ function canonicalize(value, path2) {
     if (!Number.isFinite(value)) {
       throw new TypeError(`Non-finite number at ${canonicalJsonPath(path2)}.`);
     }
-    return Object.is(value, -0) ? 0 : value;
+    if (Object.is(value, -0)) {
+      throw new CanonicalJsonAdmissionError(path2);
+    }
+    return value;
   }
   if (Array.isArray(value)) {
     if (Object.getPrototypeOf(value) !== Array.prototype) {
@@ -385,6 +400,9 @@ function canonicalize(value, path2) {
     return Object.fromEntries(entries);
   }
   throw new TypeError(`Unsupported canonical JSON value at ${canonicalJsonPath(path2)}.`);
+}
+function assertCanonicalJsonValue(value) {
+  canonicalize(value, "");
 }
 function stringifyCanonicalJson(value) {
   return JSON.stringify(canonicalize(value, ""));
@@ -1666,6 +1684,137 @@ function deriveColliderSubshapeIdV1(entityId, logicalSubshapeId) {
   }
   return `collider-subshape:${sha256CanonicalJson({ entityId, logicalSubshapeId })}`;
 }
+const MAXIMUM_VISUAL_CAPTURE_GROUPS_V1 = 5;
+const ID = /^[a-z0-9][a-z0-9-]{2,79}$/;
+function diagnostic$1(code2, instancePath, message) {
+  return { code: code2, instancePath, message };
+}
+function record(value) {
+  return value !== null && typeof value === "object" && !Array.isArray(value) ? value : void 0;
+}
+function exactKeys(value, allowedKeys, instancePath) {
+  const allowed = new Set(allowedKeys);
+  return Object.keys(value).filter((key) => !allowed.has(key)).sort().map((key) => diagnostic$1(
+    "HOSTED_VISUAL_UNKNOWN_FIELD",
+    `${instancePath}/${key}`,
+    `Unknown Hosted visual contract field '${key}'.`
+  ));
+}
+function validIdArray(value) {
+  return Array.isArray(value) && value.length > 0 && value.every((item) => typeof item === "string" && ID.test(item)) && new Set(value).size === value.length;
+}
+function validateVisualTargetMappings(value, instancePath) {
+  if (!Array.isArray(value)) {
+    return [diagnostic$1(
+      "HOSTED_VISUAL_MAPPINGS_REQUIRED",
+      instancePath,
+      "visualTargetMappings must be an array."
+    )];
+  }
+  const diagnostics = [];
+  if (value.length < 1 || value.length > MAXIMUM_VISUAL_CAPTURE_GROUPS_V1) {
+    diagnostics.push(diagnostic$1(
+      "HOSTED_VISUAL_MAPPING_COUNT_INVALID",
+      instancePath,
+      `visualTargetMappings must contain 1-${MAXIMUM_VISUAL_CAPTURE_GROUPS_V1} entries.`
+    ));
+  }
+  const visualTargetIds = [];
+  const runtimeEntityIds = [];
+  value.forEach((candidate, index) => {
+    const path2 = `${instancePath}/${index}`;
+    const mapping = record(candidate);
+    if (mapping === void 0) {
+      diagnostics.push(diagnostic$1(
+        "HOSTED_VISUAL_MAPPING_INVALID",
+        path2,
+        "Visual target mapping must be an object."
+      ));
+      return;
+    }
+    diagnostics.push(...exactKeys(mapping, ["visualTargetId", "runtimeEntityIds"], path2));
+    if (typeof mapping.visualTargetId !== "string" || !ID.test(mapping.visualTargetId)) {
+      diagnostics.push(diagnostic$1(
+        "HOSTED_VISUAL_TARGET_ID_INVALID",
+        `${path2}/visualTargetId`,
+        "visualTargetId is invalid."
+      ));
+    } else {
+      visualTargetIds.push(mapping.visualTargetId);
+    }
+    if (!validIdArray(mapping.runtimeEntityIds)) {
+      diagnostics.push(diagnostic$1(
+        "HOSTED_VISUAL_RUNTIME_ENTITY_IDS_INVALID",
+        `${path2}/runtimeEntityIds`,
+        "runtimeEntityIds must be a non-empty unique ID array."
+      ));
+    } else {
+      runtimeEntityIds.push(...mapping.runtimeEntityIds);
+    }
+  });
+  if (new Set(visualTargetIds).size !== visualTargetIds.length) {
+    diagnostics.push(diagnostic$1(
+      "HOSTED_VISUAL_TARGET_ID_REUSED",
+      instancePath,
+      "visualTargetId may appear in only one mapping."
+    ));
+  }
+  if (new Set(runtimeEntityIds).size !== runtimeEntityIds.length) {
+    diagnostics.push(diagnostic$1(
+      "HOSTED_VISUAL_RUNTIME_ENTITY_REUSED",
+      instancePath,
+      "A runtime entity may appear in only one visual target mapping."
+    ));
+  }
+  return diagnostics;
+}
+const DRAFT_KEYS = [
+  "kind",
+  "schemaVersion",
+  "sceneId",
+  "authoringSpecId",
+  "visualTargetMappings"
+];
+function validateSceneBriefImplementationMapDraftV1(value) {
+  const draft = record(value);
+  if (draft === void 0) {
+    return [diagnostic$1(
+      "HOSTED_VISUAL_DRAFT_OBJECT_REQUIRED",
+      "",
+      "Scene Brief implementation-map draft must be an object."
+    )];
+  }
+  const diagnostics = exactKeys(draft, DRAFT_KEYS, "");
+  if (draft.kind !== "worldkit-scene-brief-implementation-map-draft") {
+    diagnostics.push(diagnostic$1(
+      "HOSTED_VISUAL_DRAFT_KIND_INVALID",
+      "/kind",
+      "Scene Brief implementation-map draft kind is invalid."
+    ));
+  }
+  if (draft.schemaVersion !== 1) {
+    diagnostics.push(diagnostic$1(
+      "HOSTED_VISUAL_SCHEMA_VERSION_INVALID",
+      "/schemaVersion",
+      "Scene Brief implementation-map draft schemaVersion is invalid."
+    ));
+  }
+  if (typeof draft.sceneId !== "string" || !ID.test(draft.sceneId)) {
+    diagnostics.push(diagnostic$1("HOSTED_VISUAL_SCENE_ID_INVALID", "/sceneId", "sceneId is invalid."));
+  }
+  if (typeof draft.authoringSpecId !== "string" || !ID.test(draft.authoringSpecId)) {
+    diagnostics.push(diagnostic$1(
+      "HOSTED_VISUAL_AUTHORING_SPEC_ID_INVALID",
+      "/authoringSpecId",
+      "authoringSpecId is invalid."
+    ));
+  }
+  diagnostics.push(...validateVisualTargetMappings(
+    draft.visualTargetMappings,
+    "/visualTargetMappings"
+  ));
+  return diagnostics;
+}
 const EXECUTION_RESOURCE_KINDS_V1 = [
   "subject-definition",
   "subject-asset",
@@ -1708,24 +1857,24 @@ function canonicalExecutionResourceLockEntriesV1(value) {
     if (isNil(candidate) || typeof candidate !== "object" || Array.isArray(candidate)) {
       throw new TypeError("EXECUTION_RESOURCE_LOCK_INVALID");
     }
-    const record = candidate;
-    const fields = Object.keys(record).sort();
+    const record2 = candidate;
+    const fields = Object.keys(record2).sort();
     const expectedFields = [...EXECUTION_RESOURCE_LOCK_ENTRY_FIELDS_V1].sort();
-    if (fields.length !== expectedFields.length || fields.some((field, index) => field !== expectedFields[index]) || typeof record.resourceRef !== "string" || record.resourceRef.length === 0 || typeof record.resolvedVersion !== "string" || record.resolvedVersion.length === 0 || typeof record.contentHash !== "string" || !EXECUTION_RESOURCE_HASH_PATTERN_V1.test(record.contentHash) || !EXECUTION_RESOURCE_KINDS_V1.includes(
-      record.resourceKind
+    if (fields.length !== expectedFields.length || fields.some((field, index) => field !== expectedFields[index]) || typeof record2.resourceRef !== "string" || record2.resourceRef.length === 0 || typeof record2.resolvedVersion !== "string" || record2.resolvedVersion.length === 0 || typeof record2.contentHash !== "string" || !EXECUTION_RESOURCE_HASH_PATTERN_V1.test(record2.contentHash) || !EXECUTION_RESOURCE_KINDS_V1.includes(
+      record2.resourceKind
     )) {
       throw new TypeError("EXECUTION_RESOURCE_LOCK_INVALID");
     }
-    const resourceKey = `${record.resourceKind}\0${record.resourceRef}`;
+    const resourceKey = `${record2.resourceKind}\0${record2.resourceRef}`;
     if (seenResourceKeys.has(resourceKey)) {
       throw new TypeError("EXECUTION_RESOURCE_LOCK_INVALID");
     }
     seenResourceKeys.add(resourceKey);
     return Object.freeze({
-      resourceRef: record.resourceRef,
-      resourceKind: record.resourceKind,
-      resolvedVersion: record.resolvedVersion,
-      contentHash: record.contentHash
+      resourceRef: record2.resourceRef,
+      resourceKind: record2.resourceKind,
+      resolvedVersion: record2.resolvedVersion,
+      contentHash: record2.contentHash
     });
   });
   rows.sort(
@@ -1805,12 +1954,12 @@ function dataRecord(input) {
   return input;
 }
 function exactDataRecord(input, requiredFields, optionalFields = []) {
-  const record = dataRecord(input);
-  const keys = Object.keys(record);
-  if (requiredFields.some((field) => !Object.hasOwn(record, field)) || keys.some(
+  const record2 = dataRecord(input);
+  const keys = Object.keys(record2);
+  if (requiredFields.some((field) => !Object.hasOwn(record2, field)) || keys.some(
     (field) => !requiredFields.includes(field) && !optionalFields.includes(field)
   )) return invalidExecutionPlanV5();
-  return record;
+  return record2;
 }
 function dataArray(input) {
   if (!Array.isArray(input)) return invalidExecutionPlanV5();
@@ -16262,6 +16411,22 @@ function traversalAreaDiagnostics(spec) {
   return diagnostics;
 }
 function validateAuthoringSpecV4(value) {
+  try {
+    assertCanonicalJsonValue(value);
+  } catch (error) {
+    if (error instanceof CanonicalJsonAdmissionError) {
+      return {
+        ok: false,
+        diagnostics: [{
+          severity: "error",
+          code: "AUTHORING_JSON_NEGATIVE_ZERO",
+          instancePath: error.instancePath,
+          message: "Negative zero is not allowed in Canonical JSON."
+        }]
+      };
+    }
+    throw error;
+  }
   if (!validateCanonicalAuthoringSpecV4(value)) {
     const errors2 = validateCanonicalAuthoringSpecV4.errors;
     return {
@@ -18312,7 +18477,24 @@ function parseCanonicalJson(sourceText) {
   if (duplicateDiagnostics.length > 0) {
     return { ok: false, diagnostics: duplicateDiagnostics };
   }
-  return { ok: true, value: JSON.parse(sourceText), diagnostics: [] };
+  const value = JSON.parse(sourceText);
+  try {
+    assertCanonicalJsonValue(value);
+  } catch (error) {
+    if (error instanceof CanonicalJsonAdmissionError) {
+      return {
+        ok: false,
+        diagnostics: [{
+          severity: "error",
+          code: "AUTHORING_JSON_NEGATIVE_ZERO",
+          instancePath: error.instancePath,
+          message: "Negative zero is not allowed in Canonical JSON."
+        }]
+      };
+    }
+    throw error;
+  }
+  return { ok: true, value, diagnostics: [] };
 }
 function parseAuthoringSpecV4(sourceText) {
   const parsed = parseCanonicalJson(sourceText);
@@ -20104,26 +20286,26 @@ function canonicalPrototypeTraversalSurfaceBindingV1(value, prototypeId) {
       `Traversal Surface binding '${prototypeId}.<unknown>' is invalid.`
     );
   }
-  const record = value;
-  const fields = Object.keys(record).sort();
+  const record2 = value;
+  const fields = Object.keys(record2).sort();
   const expectedFields = [
     ...PROTOTYPE_TRAVERSAL_SURFACE_BINDING_FIELDS_V1
   ].sort();
-  const bindingId = typeof record.id === "string" ? record.id : "<unknown>";
-  if (fields.length !== expectedFields.length || fields.some((field, index) => field !== expectedFields[index]) || typeof record.id !== "string" || !PROTOTYPE_TRAVERSAL_SURFACE_BINDING_ID_PATTERN_V1.test(record.id) || record.kind !== "collider-subshape" || typeof record.logicalSubshapeId !== "string" || !PROTOTYPE_TRAVERSAL_SURFACE_BINDING_ID_PATTERN_V1.test(
-    record.logicalSubshapeId
-  ) || typeof record.traversalSurfaceProfileRef !== "string" || !TRAVERSAL_SURFACE_PROFILE_REF_PATTERN_V1.test(
-    record.traversalSurfaceProfileRef
+  const bindingId = typeof record2.id === "string" ? record2.id : "<unknown>";
+  if (fields.length !== expectedFields.length || fields.some((field, index) => field !== expectedFields[index]) || typeof record2.id !== "string" || !PROTOTYPE_TRAVERSAL_SURFACE_BINDING_ID_PATTERN_V1.test(record2.id) || record2.kind !== "collider-subshape" || typeof record2.logicalSubshapeId !== "string" || !PROTOTYPE_TRAVERSAL_SURFACE_BINDING_ID_PATTERN_V1.test(
+    record2.logicalSubshapeId
+  ) || typeof record2.traversalSurfaceProfileRef !== "string" || !TRAVERSAL_SURFACE_PROFILE_REF_PATTERN_V1.test(
+    record2.traversalSurfaceProfileRef
   )) {
     throw new Error(
       `Traversal Surface binding '${prototypeId}.${bindingId}' is invalid.`
     );
   }
   return Object.freeze({
-    id: record.id,
-    kind: record.kind,
-    logicalSubshapeId: record.logicalSubshapeId,
-    traversalSurfaceProfileRef: record.traversalSurfaceProfileRef
+    id: record2.id,
+    kind: record2.kind,
+    logicalSubshapeId: record2.logicalSubshapeId,
+    traversalSurfaceProfileRef: record2.traversalSurfaceProfileRef
   });
 }
 function compileStaticColliderTraversalSurfaceV1(input) {
@@ -20456,12 +20638,12 @@ const GAMEPLAY_CAPACITY_BUDGET_KEYS = [
 ];
 function parseGameplayCapacityBudgetV1(input) {
   const schemaName = "GameplayCapacityBudgetV1";
-  const record = snapshotDataRecord$1(input) ?? invalid$1(schemaName);
-  if (!hasExactKeys$1(record, GAMEPLAY_CAPACITY_BUDGET_KEYS) || !GAMEPLAY_CAPACITY_BUDGET_KEYS.every(
-    (key) => isSafeNonNegativeInteger$1(record[key])
+  const record2 = snapshotDataRecord$1(input) ?? invalid$1(schemaName);
+  if (!hasExactKeys$1(record2, GAMEPLAY_CAPACITY_BUDGET_KEYS) || !GAMEPLAY_CAPACITY_BUDGET_KEYS.every(
+    (key) => isSafeNonNegativeInteger$1(record2[key])
   )) invalid$1(schemaName);
   return deepFreeze$1(Object.fromEntries(
-    GAMEPLAY_CAPACITY_BUDGET_KEYS.map((key) => [key, record[key]])
+    GAMEPLAY_CAPACITY_BUDGET_KEYS.map((key) => [key, record2[key]])
   ));
 }
 parseGameplayCapacityBudgetV1({
@@ -20534,8 +20716,8 @@ function snapshotDataArray(value) {
     return void 0;
   }
 }
-function hasExactKeys(record, keys) {
-  const ownKeys = Reflect.ownKeys(record);
+function hasExactKeys(record2, keys) {
+  const ownKeys = Reflect.ownKeys(record2);
   return ownKeys.length === keys.length && ownKeys.every(
     (key) => typeof key === "string" && keys.includes(key)
   );
@@ -20583,13 +20765,13 @@ function deepFreeze(value) {
   return Object.freeze(value);
 }
 function parseGameplayEntityDescriptor(input, mode, schemaName) {
-  const record = snapshotDataRecord(input);
-  if (isNil(record)) invalid(schemaName);
-  if (!hasExactKeys(record, ["id", "entityDefinitionRef", "capabilityRefs"]) || !isNonEmptyString(record.id) || !isNonEmptyString(record.entityDefinitionRef)) invalid(schemaName);
+  const record2 = snapshotDataRecord(input);
+  if (isNil(record2)) invalid(schemaName);
+  if (!hasExactKeys(record2, ["id", "entityDefinitionRef", "capabilityRefs"]) || !isNonEmptyString(record2.id) || !isNonEmptyString(record2.entityDefinitionRef)) invalid(schemaName);
   return deepFreeze({
-    id: record.id,
-    entityDefinitionRef: record.entityDefinitionRef,
-    capabilityRefs: canonicalStringSet(record.capabilityRefs, schemaName, mode)
+    id: record2.id,
+    entityDefinitionRef: record2.entityDefinitionRef,
+    capabilityRefs: canonicalStringSet(record2.capabilityRefs, schemaName, mode)
   });
 }
 function createGameplayEntityDescriptorV1(input) {
@@ -20604,9 +20786,9 @@ function parseGameplayEntityDescriptorV1(input) {
 }
 function parseGameplayFeatureManifestBody(input, mode) {
   const schemaName = "GameplayFeatureManifestBodyV1";
-  const record = snapshotDataRecord(input);
-  if (isNil(record)) invalid(schemaName);
-  if (!hasExactKeys(record, [
+  const record2 = snapshotDataRecord(input);
+  if (isNil(record2)) invalid(schemaName);
+  if (!hasExactKeys(record2, [
     "kind",
     "id",
     "version",
@@ -20615,26 +20797,26 @@ function parseGameplayFeatureManifestBody(input, mode) {
     "requiredCapabilityRefs",
     "commandTypes",
     "resourceBudget"
-  ]) || record.kind !== "gameplay-feature" || !isNonEmptyString(record.id) || !isSafePositiveInteger(record.version) || !isNonEmptyString(record.resourceRef)) invalid(schemaName);
-  const commandTypes = canonicalStringSet(record.commandTypes, schemaName, mode);
+  ]) || record2.kind !== "gameplay-feature" || !isNonEmptyString(record2.id) || !isSafePositiveInteger(record2.version) || !isNonEmptyString(record2.resourceRef)) invalid(schemaName);
+  const commandTypes = canonicalStringSet(record2.commandTypes, schemaName, mode);
   if (!commandTypes.every(
     (type2) => GAMEPLAY_COMMAND_TYPES.has(type2)
   )) invalid(schemaName);
-  const resourceBudget = snapshotDataRecord(record.resourceBudget);
+  const resourceBudget = snapshotDataRecord(record2.resourceBudget);
   if (isNil(resourceBudget)) invalid(schemaName);
   if (!hasExactKeys(resourceBudget, ["stateSliceCount", "commandHandlerCount"]) || resourceBudget.stateSliceCount !== 1 || !isSafeNonNegativeInteger(resourceBudget.commandHandlerCount) || resourceBudget.commandHandlerCount !== commandTypes.length) invalid(schemaName);
   return deepFreeze({
     kind: "gameplay-feature",
-    id: record.id,
-    version: record.version,
-    resourceRef: record.resourceRef,
+    id: record2.id,
+    version: record2.version,
+    resourceRef: record2.resourceRef,
     dependencyFeatureRefs: canonicalStringSet(
-      record.dependencyFeatureRefs,
+      record2.dependencyFeatureRefs,
       schemaName,
       mode
     ),
     requiredCapabilityRefs: canonicalStringSet(
-      record.requiredCapabilityRefs,
+      record2.requiredCapabilityRefs,
       schemaName,
       mode
     ),
@@ -20654,19 +20836,19 @@ function createGameplayFeatureManifestV1(input) {
 }
 function parseGameplayFeatureResourceLockV1(input) {
   const schemaName = "GameplayFeatureResourceLockV1";
-  const record = snapshotDataRecord(input);
-  if (isNil(record)) invalid(schemaName);
-  if (!hasExactKeys(record, ["resourceRef", "contentHash"]) || !isNonEmptyString(record.resourceRef) || !isSha256(record.contentHash)) invalid(schemaName);
+  const record2 = snapshotDataRecord(input);
+  if (isNil(record2)) invalid(schemaName);
+  if (!hasExactKeys(record2, ["resourceRef", "contentHash"]) || !isNonEmptyString(record2.resourceRef) || !isSha256(record2.contentHash)) invalid(schemaName);
   return deepFreeze({
-    resourceRef: record.resourceRef,
-    contentHash: record.contentHash
+    resourceRef: record2.resourceRef,
+    contentHash: record2.contentHash
   });
 }
 function parseGameplayActionDefinitionBody(input, mode) {
   const schemaName = "GameplayActionDefinitionBodyV1";
-  const record = snapshotDataRecord(input);
-  if (isNil(record)) invalid(schemaName);
-  if (!hasExactKeys(record, [
+  const record2 = snapshotDataRecord(input);
+  if (isNil(record2)) invalid(schemaName);
+  if (!hasExactKeys(record2, [
     "kind",
     "id",
     "version",
@@ -20677,8 +20859,8 @@ function parseGameplayActionDefinitionBody(input, mode) {
     "allowedActorEntityDefinitionRefs",
     "requiredActorCapabilityRefs",
     "request"
-  ]) || record.kind !== "semantic-action" || !isNonEmptyString(record.id) || !isSafePositiveInteger(record.version) || !isNonEmptyString(record.resourceRef) || record.executionMode !== "exclusive-per-subject" || typeof record.isMovementInputBlocked !== "boolean") invalid(schemaName);
-  const completionRecord = snapshotDataRecord(record.completion);
+  ]) || record2.kind !== "semantic-action" || !isNonEmptyString(record2.id) || !isSafePositiveInteger(record2.version) || !isNonEmptyString(record2.resourceRef) || record2.executionMode !== "exclusive-per-subject" || typeof record2.isMovementInputBlocked !== "boolean") invalid(schemaName);
+  const completionRecord = snapshotDataRecord(record2.completion);
   if (isNil(completionRecord)) invalid(schemaName);
   let completion;
   if (completionRecord.mode === "explicit-cancel" && hasExactKeys(completionRecord, ["mode"])) {
@@ -20691,7 +20873,7 @@ function parseGameplayActionDefinitionBody(input, mode) {
   } else {
     return invalid(schemaName);
   }
-  const requestRecord = snapshotDataRecord(record.request);
+  const requestRecord = snapshotDataRecord(record2.request);
   if (isNil(requestRecord)) invalid(schemaName);
   let request;
   if (requestRecord.mode === "none" && hasExactKeys(requestRecord, ["mode"])) {
@@ -20711,19 +20893,19 @@ function parseGameplayActionDefinitionBody(input, mode) {
   }
   return deepFreeze({
     kind: "semantic-action",
-    id: record.id,
-    version: record.version,
-    resourceRef: record.resourceRef,
+    id: record2.id,
+    version: record2.version,
+    resourceRef: record2.resourceRef,
     executionMode: "exclusive-per-subject",
     completion,
-    isMovementInputBlocked: record.isMovementInputBlocked,
+    isMovementInputBlocked: record2.isMovementInputBlocked,
     allowedActorEntityDefinitionRefs: canonicalStringSet(
-      record.allowedActorEntityDefinitionRefs,
+      record2.allowedActorEntityDefinitionRefs,
       schemaName,
       mode
     ),
     requiredActorCapabilityRefs: canonicalStringSet(
-      record.requiredActorCapabilityRefs,
+      record2.requiredActorCapabilityRefs,
       schemaName,
       mode
     ),
@@ -20732,9 +20914,9 @@ function parseGameplayActionDefinitionBody(input, mode) {
 }
 function parseGameplayActionDefinitionV1(input) {
   const schemaName = "GameplayActionDefinitionV1";
-  const record = snapshotDataRecord(input);
-  if (isNil(record)) invalid(schemaName);
-  if (!hasExactKeys(record, [
+  const record2 = snapshotDataRecord(input);
+  if (isNil(record2)) invalid(schemaName);
+  if (!hasExactKeys(record2, [
     "kind",
     "id",
     "version",
@@ -20746,8 +20928,8 @@ function parseGameplayActionDefinitionV1(input) {
     "allowedActorEntityDefinitionRefs",
     "requiredActorCapabilityRefs",
     "request"
-  ]) || !isSha256(record.contentHash)) invalid(schemaName);
-  const { contentHash: contentHash2, ...bodyInput } = record;
+  ]) || !isSha256(record2.contentHash)) invalid(schemaName);
+  const { contentHash: contentHash2, ...bodyInput } = record2;
   let body;
   try {
     body = parseGameplayActionDefinitionBody(bodyInput, "strict");
@@ -20778,9 +20960,9 @@ function canonicalObjectCollection(input, schemaName, mode, parse, identity2) {
 }
 function parseGameplayBootstrapBody(input, mode) {
   const schemaName = "GameplayBootstrapBodyV1";
-  const record = snapshotDataRecord(input);
-  if (isNil(record)) invalid(schemaName);
-  if (!hasExactKeys(record, [
+  const record2 = snapshotDataRecord(input);
+  if (isNil(record2)) invalid(schemaName);
+  if (!hasExactKeys(record2, [
     "kind",
     "id",
     "version",
@@ -20789,38 +20971,38 @@ function parseGameplayBootstrapBody(input, mode) {
     "featureResourceLocks",
     "semanticActionDefinitions",
     "availableCapabilityRefs"
-  ]) || record.kind !== "gameplay-bootstrap" || !isNonEmptyString(record.id) || !isSafePositiveInteger(record.version) || !isNonEmptyString(record.resourceRef)) invalid(schemaName);
+  ]) || record2.kind !== "gameplay-bootstrap" || !isNonEmptyString(record2.id) || !isSafePositiveInteger(record2.version) || !isNonEmptyString(record2.resourceRef)) invalid(schemaName);
   const parseEntity = mode === "strict" ? parseGameplayEntityDescriptorV1 : (value) => createGameplayEntityDescriptorV1(
     value
   );
   return deepFreeze({
     kind: "gameplay-bootstrap",
-    id: record.id,
-    version: record.version,
-    resourceRef: record.resourceRef,
+    id: record2.id,
+    version: record2.version,
+    resourceRef: record2.resourceRef,
     entityDescriptors: canonicalObjectCollection(
-      record.entityDescriptors,
+      record2.entityDescriptors,
       schemaName,
       mode,
       parseEntity,
       (value) => value.id
     ),
     featureResourceLocks: canonicalObjectCollection(
-      record.featureResourceLocks,
+      record2.featureResourceLocks,
       schemaName,
       mode,
       parseGameplayFeatureResourceLockV1,
       (value) => value.resourceRef
     ),
     semanticActionDefinitions: canonicalObjectCollection(
-      record.semanticActionDefinitions,
+      record2.semanticActionDefinitions,
       schemaName,
       mode,
       parseGameplayActionDefinitionV1,
       (value) => value.resourceRef
     ),
     availableCapabilityRefs: canonicalStringSet(
-      record.availableCapabilityRefs,
+      record2.availableCapabilityRefs,
       schemaName,
       mode
     )
@@ -20835,9 +21017,9 @@ function createGameplayBootstrapV1(input) {
 }
 function parseGameplayBootstrapV1(input) {
   const schemaName = "GameplayBootstrapV1";
-  const record = snapshotDataRecord(input);
-  if (isNil(record)) invalid(schemaName);
-  if (!hasExactKeys(record, [
+  const record2 = snapshotDataRecord(input);
+  if (isNil(record2)) invalid(schemaName);
+  if (!hasExactKeys(record2, [
     "kind",
     "id",
     "version",
@@ -20847,8 +21029,8 @@ function parseGameplayBootstrapV1(input) {
     "featureResourceLocks",
     "semanticActionDefinitions",
     "availableCapabilityRefs"
-  ]) || !isSha256(record.contentHash)) invalid(schemaName);
-  const { contentHash: contentHash2, ...bodyInput } = record;
+  ]) || !isSha256(record2.contentHash)) invalid(schemaName);
+  const { contentHash: contentHash2, ...bodyInput } = record2;
   let body;
   try {
     body = parseGameplayBootstrapBody(bodyInput, "strict");
@@ -20939,7 +21121,7 @@ createGameplayFeatureManifestV1({
   commandTypes: ["action.activate", "action.cancel"],
   resourceBudget: { stateSliceCount: 1, commandHandlerCount: 2 }
 });
-const BUILDER_SELF_CHECK_VERSION = "worldkit-builder-self-check-v4";
+const BUILDER_SELF_CHECK_VERSION = "worldkit-builder-self-check-v5";
 const SPAWN_GROUND_TOLERANCE_METERS = 0.15;
 function option(arguments_, name) {
   const index = arguments_.indexOf(name);
@@ -21048,14 +21230,28 @@ function implementationMapDiagnostics(options) {
   } catch (error) {
     return [{ code: "IMPLEMENTATION_MAP_JSON_INVALID", message: error instanceof Error ? error.message : String(error) }];
   }
+  const contractDiagnostics = validateSceneBriefImplementationMapDraftV1(draft);
+  if (contractDiagnostics.length > 0) return [...contractDiagnostics];
+  const implementationMap = draft;
   const diagnostics = [];
-  if (draft?.kind !== "worldkit-scene-brief-implementation-map" || draft?.schemaVersion !== 1 || draft?.sceneId !== options.sceneId || draft?.authoringSpecId !== options.authoringId || !Array.isArray(draft?.mappings)) {
-    return [{ code: "IMPLEMENTATION_MAP_INVALID", message: "Implementation map header or mappings are invalid." }];
+  if (implementationMap.sceneId !== options.sceneId) {
+    diagnostics.push({
+      code: "IMPLEMENTATION_MAP_SCENE_ID_MISMATCH",
+      message: "Implementation map sceneId does not match the requested scene.",
+      instancePath: "/sceneId"
+    });
+  }
+  if (implementationMap.authoringSpecId !== options.authoringId) {
+    diagnostics.push({
+      code: "IMPLEMENTATION_MAP_AUTHORING_SPEC_ID_MISMATCH",
+      message: "Implementation map authoringSpecId does not match AuthoringSpec.",
+      instancePath: "/authoringSpecId"
+    });
   }
   const expected = new Set(options.visualTargetIds);
   const seenTargets = /* @__PURE__ */ new Set();
   const seenEntities = /* @__PURE__ */ new Set();
-  for (const mapping of draft.mappings) {
+  for (const mapping of implementationMap.visualTargetMappings) {
     if (!expected.has(mapping?.visualTargetId) || seenTargets.has(mapping.visualTargetId) || !Array.isArray(mapping?.runtimeEntityIds) || mapping.runtimeEntityIds.length === 0) {
       diagnostics.push({ code: "IMPLEMENTATION_MAP_TARGET_INVALID", message: `Invalid mapping for '${String(mapping?.visualTargetId)}'.` });
       continue;
@@ -21074,7 +21270,9 @@ function implementationMapDiagnostics(options) {
   for (const targetId of expected) {
     if (!seenTargets.has(targetId)) diagnostics.push({ code: "IMPLEMENTATION_MAP_TARGET_MISSING", message: `Visual target '${targetId}' is unmapped.` });
   }
-  const primary = draft.mappings.find((mapping) => mapping.visualTargetId === options.visualTargetIds[0]);
+  const primary = implementationMap.visualTargetMappings.find(
+    (mapping) => mapping.visualTargetId === options.visualTargetIds[0]
+  );
   if (!primary?.runtimeEntityIds?.includes(options.controlledEntityId)) {
     diagnostics.push({ code: "IMPLEMENTATION_MAP_PRIMARY_SUBJECT_INVALID", message: "Primary visual target must map the startup-controlled Subject." });
   }

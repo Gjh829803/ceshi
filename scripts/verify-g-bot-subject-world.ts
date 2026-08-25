@@ -528,8 +528,7 @@ async function verifyBrowser(
     const poseTarget = await page.evaluate((runtimeEntityId) => {
       const api = window.__WORLDKIT_AUTHORING_CAPTURE__;
       if (api === undefined) throw new Error("WORLDKIT_AUTHORING_CAPTURE_PROTOCOL_MISSING");
-      return api.configureVisualCaptureTargets([{
-        id: "pose-primary-subject",
+      return api.configureVisualCaptureGroups([{
         visualTargetId: "pose-primary-subject",
         runtimeEntityIds: [runtimeEntityId],
         role: "primary-subject",

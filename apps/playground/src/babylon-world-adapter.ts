@@ -9,7 +9,7 @@ import type {
   FixedInputV1,
   RenderReadyReceiptV1,
   RuntimeControlCaptureFrameV1,
-  RuntimeCaptureTargetV1,
+  VisualCaptureGroupV1,
   SemanticInputActionV1,
   RuntimeActivityReceiptV1,
   RuntimeActivityRequestV1,
@@ -18,7 +18,7 @@ import type {
   WorldkitBrowserDiagnosticV1,
   WhiteboxTriviewCaptureV1,
 } from "@whitebox-world/runtime-contracts";
-import { validateRuntimeCaptureTargetsV1 } from "@whitebox-world/runtime-contracts";
+import { validateVisualCaptureGroupsV1 } from "@whitebox-world/runtime-contracts";
 import type {
   GameplayCommandReceiptV1,
   GameplayCommandV1,
@@ -302,7 +302,7 @@ export class BabylonWorldAdapter implements PlaygroundWorldAdapter {
   private compositionCache:
     | Readonly<{ dataUrl: string; report: OpeningCompositionReport }>
     | undefined;
-  private visualCaptureTargets: readonly RuntimeCaptureTargetV1[] = [];
+  private visualCaptureGroups: readonly VisualCaptureGroupV1[] = [];
 
   private constructor(
     private readonly executionPlan: ExecutionPlanV5,
@@ -665,47 +665,47 @@ export class BabylonWorldAdapter implements PlaygroundWorldAdapter {
     return this.canvas.toDataURL("image/png");
   }
 
-  configureVisualCaptureTargets(
-    targets: readonly RuntimeCaptureTargetV1[],
-  ): readonly RuntimeCaptureTargetV1[] {
-    const diagnostics = validateRuntimeCaptureTargetsV1(targets);
+  configureVisualCaptureGroups(
+    groups: readonly VisualCaptureGroupV1[],
+  ): readonly VisualCaptureGroupV1[] {
+    const diagnostics = validateVisualCaptureGroupsV1(groups);
     if (diagnostics.length > 0) {
-      throw new Error(`WORLDKIT_CAPTURE_TARGETS_INVALID: ${diagnostics.join(" ")}`);
+      throw new Error(`WORLDKIT_CAPTURE_GROUPS_INVALID: ${diagnostics.map(({ code, instancePath, message }) => `${code} ${instancePath}: ${message}`).join(" ")}`);
     }
     const capturableEntityIds = new Set([
       ...this.executionPlan.subjects.map(({ entityId }) => entityId),
       ...this.executionPlan.objects.map(({ entityId }) => entityId),
     ]);
-    for (const target of targets) {
+    for (const target of groups) {
       for (const runtimeEntityId of target.runtimeEntityIds) {
         if (!capturableEntityIds.has(runtimeEntityId)) {
           throw new Error(`WORLDKIT_CAPTURE_TARGET_NOT_FOUND: ${runtimeEntityId}`);
         }
       }
     }
-    this.visualCaptureTargets = targets.map((target) => Object.freeze({
+    this.visualCaptureGroups = groups.map((target) => Object.freeze({
       ...target,
       runtimeEntityIds: Object.freeze([...target.runtimeEntityIds]),
     }));
-    return this.listCaptureTargets();
+    return this.listVisualCaptureGroups();
   }
 
-  listCaptureTargets(): readonly RuntimeCaptureTargetV1[] {
-    return structuredClone(this.visualCaptureTargets);
+  listVisualCaptureGroups(): readonly VisualCaptureGroupV1[] {
+    return structuredClone(this.visualCaptureGroups);
   }
 
-  captureRuntimeWhiteboxTriview(targetId: string): WhiteboxTriviewCaptureV1 {
-    const target = this.visualCaptureTargets.find((candidate) => candidate.id === targetId);
+  captureRuntimeWhiteboxTriview(visualTargetId: string): WhiteboxTriviewCaptureV1 {
+    const target = this.visualCaptureGroups.find((candidate) => candidate.visualTargetId === visualTargetId);
     if (target === undefined) {
-      throw new Error(`WORLDKIT_CAPTURE_TARGET_NOT_FOUND: ${targetId}`);
+      throw new Error(`WORLDKIT_CAPTURE_TARGET_NOT_FOUND: ${visualTargetId}`);
     }
     return {
       kind: "worldkit-whitebox-triview-capture",
       schemaVersion: 1,
-      targetId,
+      visualTargetId,
       runtimeEntityIds: [...target.runtimeEntityIds],
       views: ["front", "right", "back"],
-      imageDataUrl: this.activeRuntime().captureArtifactView({
+      imageDataUri: this.activeRuntime().captureArtifactView({
         kind: "entity-triview",
         widthPixels: Math.max(3, this.canvas.width),
         heightPixels: Math.max(1, this.canvas.height),
@@ -812,8 +812,8 @@ export class BabylonWorldAdapter implements PlaygroundWorldAdapter {
   }
 
   captureWhiteboxTriview(prototypeId: string): string {
-    if (this.visualCaptureTargets.some(({ id }) => id === prototypeId)) {
-      return this.captureRuntimeWhiteboxTriview(prototypeId).imageDataUrl;
+    if (this.visualCaptureGroups.some(({ visualTargetId }) => visualTargetId === prototypeId)) {
+      return this.captureRuntimeWhiteboxTriview(prototypeId).imageDataUri;
     }
     const worldSpec = this.playgroundMetadata?.worldSpec;
     if (worldSpec === undefined) throw new Error("WorldSpec is unavailable.");
@@ -839,19 +839,19 @@ export class BabylonWorldAdapter implements PlaygroundWorldAdapter {
 
   async exportWhiteboxTriviews(): Promise<readonly string[]> {
     const outputPaths: string[] = [];
-    for (const target of this.visualCaptureTargets) {
-      const capture = this.captureRuntimeWhiteboxTriview(target.id);
+    for (const target of this.visualCaptureGroups) {
+      const capture = this.captureRuntimeWhiteboxTriview(target.visualTargetId);
       const response = await fetch("/__whitebox/write-triview", {
         method: "POST",
         headers: { "content-type": "application/json" },
         body: JSON.stringify({
           sceneId: this.executionPlan.id,
-          prototypeId: target.id,
-          dataUrl: capture.imageDataUrl,
+          prototypeId: target.visualTargetId,
+          dataUrl: capture.imageDataUri,
         }),
       });
       if (!response.ok) {
-        throw new Error(`Failed to export ${target.id}: ${await response.text()}`);
+        throw new Error(`Failed to export ${target.visualTargetId}: ${await response.text()}`);
       }
       const payload = await response.json() as { path: string };
       outputPaths.push(payload.path);

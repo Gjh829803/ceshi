@@ -154,7 +154,9 @@ describe("Canonical Builder skill", () => {
     expect(template).toContain('"kind": "solved"');
     expect(template).toContain('"traversalAreas": []');
     expect(template).toContain('"connectivity": []');
-    expect(template).toContain('"kind": "worldkit-scene-brief-implementation-map"');
+    expect(template).toContain('"kind": "worldkit-scene-brief-implementation-map-draft"');
+    expect(template).toContain('"visualTargetMappings"');
+    expect(template).not.toContain('"mappings"');
     expect(template).toContain('"visualTargetId": "visual-target-1"');
     expect(template).not.toContain('"planId"');
     expect(template).toContain("humanoid.g-bot@2");

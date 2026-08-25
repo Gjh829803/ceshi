@@ -44,13 +44,13 @@ async function makeFixture() {
   await writeFile(path.join(artifactRoot, "styled-triviews-manifest.json"), JSON.stringify({
     targets: [
       {
-        id: "hero",
+        visualTargetId: "hero",
         role: "primary-subject",
         semanticClassId: "complete-hero",
         styledTriview: { path: "triviews/hero/styled-triview.png" },
       },
       {
-        id: "tower",
+        visualTargetId: "tower",
         role: "primary-landmark",
         semanticClassId: "complete-tower",
         styledTriview: { path: "triviews/tower/styled-triview.png" },
@@ -561,7 +561,7 @@ test("persists browser recordings, lists them, generates independently, and serv
       triviews: [
         {
           index: 1,
-          targetId: "hero",
+          visualTargetId: "hero",
           role: "primary-subject",
           semanticClassId: "complete-hero",
           layout: "whitebox-left-styled-right",
@@ -571,7 +571,7 @@ test("persists browser recordings, lists them, generates independently, and serv
         },
         {
           index: 2,
-          targetId: "tower",
+          visualTargetId: "tower",
           role: "primary-landmark",
           semanticClassId: "complete-tower",
           layout: "whitebox-left-styled-right",

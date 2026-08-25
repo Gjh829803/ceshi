@@ -35,8 +35,7 @@ SCENE_ID_PATTERN = __import__("re").compile(r"^[a-z0-9][a-z0-9-]{2,79}$")
 
 @dataclass(frozen=True)
 class VisualTarget:
-    target_id: str
-    plan_element_id: str
+    visual_target_id: str
     role: str
     semantic_class_id: str
     identity_color: str
@@ -162,7 +161,7 @@ def _atomic_png(path: Path, image_bytes: bytes) -> None:
 
 
 def _load_targets(scene_root: Path) -> list[VisualTarget]:
-    capture = _read_json(scene_root / "triviews" / "capture-targets.json")
+    capture = _read_json(scene_root / "triviews" / "whitebox-triview-manifest.json")
     palette = _read_json(scene_root / "visual-identity-palette.json")
     palette_by_id = {
         str(item.get("visualTargetId") or item.get("id")): item
@@ -170,24 +169,22 @@ def _load_targets(scene_root: Path) -> list[VisualTarget]:
         if isinstance(item, dict)
     }
     targets: list[VisualTarget] = []
-    for item in capture.get("targets", [])[:5]:
-        target_id = str(item.get("id", ""))
-        plan_element_id = str(item.get("visualTargetId") or target_id)
-        if not SCENE_ID_PATTERN.fullmatch(target_id):
-            raise RuntimeError(f"Visual target id is invalid: {target_id}")
-        whitebox_path = (scene_root / "triviews" / str(item.get("imagePath", ""))).resolve()
+    for item in capture.get("whiteboxTriviews", [])[:5]:
+        visual_target_id = str(item.get("visualTargetId", ""))
+        if not SCENE_ID_PATTERN.fullmatch(visual_target_id):
+            raise RuntimeError(f"Visual target id is invalid: {visual_target_id}")
+        whitebox_path = (scene_root / "triviews" / str(item.get("imageUri", ""))).resolve()
         if scene_root.resolve() not in whitebox_path.parents:
-            raise RuntimeError(f"Visual target escaped scene root: {target_id}")
+            raise RuntimeError(f"Visual target escaped scene root: {visual_target_id}")
         _assert_regular_image(whitebox_path)
-        metadata = palette_by_id.get(plan_element_id, {})
+        metadata = palette_by_id.get(visual_target_id, {})
         targets.append(
             VisualTarget(
-                target_id=target_id,
-                plan_element_id=plan_element_id,
+                visual_target_id=visual_target_id,
                 role=str(item.get("role", "visual-target")),
                 semantic_class_id=str(item.get("semanticClassId", "visual.target")),
                 identity_color=str(item.get("identityColor", "")),
-                name=str(metadata.get("name") or plan_element_id),
+                name=str(metadata.get("name") or visual_target_id),
                 description=str(metadata.get("description") or ""),
                 whitebox_path=whitebox_path,
             )
@@ -212,8 +209,7 @@ def _open_images(paths: Iterable[Path]) -> list[Image.Image]:
 
 def _target_payload(target: VisualTarget) -> dict[str, str]:
     return {
-        "target_id": target.target_id,
-        "plan_element_id": target.plan_element_id,
+        "visualTargetId": target.visual_target_id,
         "role": target.role,
         "semantic_class_id": target.semantic_class_id,
         "identity_color": target.identity_color,
@@ -272,9 +268,9 @@ Each tri-view prompt must render only its named complete target as exactly three
                 "items": {
                     "type": "object",
                     "additionalProperties": False,
-                    "required": ["target_id", "prompt"],
+                    "required": ["visualTargetId", "prompt"],
                     "properties": {
-                        "target_id": {"type": "string"},
+                        "visualTargetId": {"type": "string"},
                         "prompt": {"type": "string", "minLength": 250},
                     },
                 },
@@ -302,11 +298,11 @@ Each tri-view prompt must render only its named complete target as exactly three
     if not response_text:
         raise RuntimeError("Gemini prompt synthesis returned no JSON text.")
     payload = json.loads(response_text)
-    expected_ids = [target.target_id for target in targets]
+    expected_ids = [target.visual_target_id for target in targets]
     prompt_items = payload.get("triview_prompts", [])
-    actual_ids = [str(item.get("target_id", "")) for item in prompt_items]
+    actual_ids = [str(item.get("visualTargetId", "")) for item in prompt_items]
     if actual_ids != expected_ids:
-        by_id = {str(item.get("target_id", "")): item for item in prompt_items}
+        by_id = {str(item.get("visualTargetId", "")): item for item in prompt_items}
         if set(by_id) != set(expected_ids):
             raise RuntimeError(
                 f"Gemini tri-view prompt coverage mismatch: expected {expected_ids}, got {actual_ids}"
@@ -425,12 +421,12 @@ def _generate_images(
         )
     if only in {"all", "triviews"}:
         prompts_by_id = {
-            str(item["target_id"]): item for item in bundle.get("styledTriviews", [])
+            str(item["visualTargetId"]): item for item in bundle.get("styledTriviews", [])
         }
         for target in targets:
-            prompt_item = prompts_by_id.get(target.target_id)
+            prompt_item = prompts_by_id.get(target.visual_target_id)
             if prompt_item is None:
-                raise RuntimeError(f"Prompt bundle is missing target {target.target_id}.")
+                raise RuntimeError(f"Prompt bundle is missing target {target.visual_target_id}.")
             jobs.append(
                 {
                     "prompt": (
@@ -442,7 +438,7 @@ def _generate_images(
                         scene_root / "opening-frame.png",
                         target.whitebox_path,
                     ],
-                    "output_path": scene_root / "triviews" / target.target_id / "styled-triview.png",
+                    "output_path": scene_root / "triviews" / target.visual_target_id / "styled-triview.png",
                 }
             )
     requested_workers = int(os.environ.get("WORLDKIT_IMAGEGEN_CONCURRENCY", "6"))
@@ -504,7 +500,7 @@ def main() -> int:
         scene_root / "scene-brief.md",
         scene_root / "visual-identity-palette.json",
         scene_root / "opening-frame.png",
-        scene_root / "triviews" / "capture-targets.json",
+        scene_root / "triviews" / "whitebox-triview-manifest.json",
     ):
         if not required.is_file() or required.is_symlink():
             raise RuntimeError(f"Required visual input is missing: {required}")

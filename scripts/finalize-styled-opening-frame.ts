@@ -5,8 +5,8 @@ import path from "node:path";
 
 import { sha256CanonicalJson, stringifyCanonicalJson } from "@whitebox-world/authoring";
 import {
-  validateRuntimeTriviewManifestV1,
-  type RuntimeTriviewManifestV1,
+  validateWhiteboxTriviewManifestV1,
+  type WhiteboxTriviewManifestV1,
 } from "@whitebox-world/runtime-contracts";
 
 function option(arguments_: readonly string[], name: string): string {
@@ -47,7 +47,7 @@ export async function finalizeStyledOpeningFrame(options: {
   const sceneRoot = await realpath(path.resolve(options.sceneRoot));
   const openingFramePath = path.join(sceneRoot, "opening-frame.png");
   const styledFramePath = path.join(sceneRoot, "styled-opening-frame.png");
-  const captureManifestPath = path.join(sceneRoot, "triviews", "capture-targets.json");
+  const captureManifestPath = path.join(sceneRoot, "triviews", "whitebox-triview-manifest.json");
   const [userFormat] = await Promise.all([
     assertImage(path.resolve(options.userFramePath)),
     assertImage(openingFramePath),
@@ -64,15 +64,18 @@ export async function finalizeStyledOpeningFrame(options: {
 
   const captureManifest = JSON.parse(
     await readFile(captureManifestPath, "utf8"),
-  ) as RuntimeTriviewManifestV1;
-  const captureErrors = validateRuntimeTriviewManifestV1(captureManifest);
-  if (captureErrors.length > 0) throw new Error(captureErrors.join("\n"));
+  ) as WhiteboxTriviewManifestV1;
+  const captureErrors = validateWhiteboxTriviewManifestV1(captureManifest);
+  if (captureErrors.length > 0) {
+    throw new Error(captureErrors.map(({ code, instancePath, message }) =>
+      `${code} ${instancePath}: ${message}`).join("\n"));
+  }
   const triViews = [];
-  for (const target of captureManifest.targets) {
-    const triViewPath = path.join(sceneRoot, "triviews", target.imagePath);
+  for (const target of captureManifest.whiteboxTriviews) {
+    const triViewPath = path.join(sceneRoot, "triviews", target.imageUri);
     await assertImage(triViewPath);
     triViews.push({
-      targetId: target.id,
+      visualTargetId: target.visualTargetId,
       path: path.relative(sceneRoot, triViewPath),
       contentHash: await hash(triViewPath),
     });
