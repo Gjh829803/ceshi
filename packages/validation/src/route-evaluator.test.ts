@@ -70,6 +70,12 @@ const SURFACE = {
   resolvedVersion: "1",
   resourceHash: HASH_B,
 } as const;
+const SECONDARY_SURFACE = {
+  ...SURFACE,
+  traversalSurfaceId: "surface-secondary",
+  surfaceEntityId: "platform-secondary",
+  colliderSubshapeId: deriveColliderSubshapeIdV1("platform-secondary", "primary"),
+} as const;
 
 const WALL_ENTITY_ID = "wall-narrow";
 const WALL_LOGICAL_SUBSHAPE_ID = "primary";
@@ -116,6 +122,7 @@ function rebuildBuildInputReceipt(
   overrides: Readonly<{
     terrainSource?: RouteBuildInputReceiptV2["input"]["terrainSource"];
     staticColliders?: readonly StaticColliderSourceV1[];
+    traversalSurfaces?: RouteBuildInputReceiptV2["input"]["traversalSurfaces"];
   }>,
 ): RouteBuildInputReceiptV2 {
   const draft = {
@@ -701,6 +708,15 @@ function failedConnectivityInput(
   }
   if (
     !isNil(pendingReason) &&
+    pendingReason.kind === "surface-correlation-ambiguous"
+  ) {
+    routeBuildInputReceipt = rebuildBuildInputReceipt(routeBuildInputReceipt, {
+      traversalSurfaces: [SURFACE, SECONDARY_SURFACE],
+      staticColliders: [staticBoxCollider("platform-secondary", "primary")],
+    });
+  }
+  if (
+    !isNil(pendingReason) &&
     "relevantColliderSubshapeIds" in pendingReason
   ) {
     const colliders: StaticColliderSourceV1[] = [];
@@ -774,7 +790,9 @@ function failedConnectivityInput(
     startAnchorPositionMetersXYZ: [0, 0, 0],
     destinationAnchorPositionMetersXYZ: [1, 0, 0],
     relatedTraversalSurfaceIdentities: (
-      reason.kind === "slope-threshold-exceeded" ||
+      reason.kind === "surface-correlation-ambiguous"
+        ? [SURFACE, SECONDARY_SURFACE]
+        : reason.kind === "slope-threshold-exceeded" ||
       reason.kind === "step-height-threshold-exceeded" ||
       reason.kind === "clearance-width-insufficient" ||
       reason.kind === "overhead-clearance-insufficient" ||
@@ -1390,6 +1408,48 @@ describe("createRouteValidationReportV2", () => {
     expect(report.status).toBe("passed");
     expect(report.gateResultsById["route-connectivity"]?.status).toBe("passed");
     expect(report.gateResultsById["route-runtime-conformance"]?.status).toBe("passed");
+    expect(report.evidenceArtifactsById["route:player-to-goal:traversal-graph"])
+      .toMatchObject({
+        mediaType: "application/vnd.worldkit.traversal-graph.v2+json",
+      });
+    expect(report.evidenceArtifactsById["route:player-to-goal:route-path-receipt"])
+      .toMatchObject({
+        mediaType: "application/vnd.worldkit.route-path-receipt.v2+json",
+      });
+    expect(report.evidenceArtifactsById["route:player-to-goal:route-runtime-probe-receipt"])
+      .toMatchObject({
+        mediaType:
+          "application/vnd.worldkit.route-runtime-probe-receipt.v2+json",
+      });
+    expect(validateValidationReportV2(report)).toMatchObject({ ok: true });
+  });
+
+  it("publishes every ambiguous Surface identity in the route Diagnostic", () => {
+    const report = createRouteValidationReportV2(
+      failedConnectivityInput("incomplete", {
+        reason: {
+          kind: "surface-correlation-ambiguous",
+          code: "ROUTE_SURFACE_CORRELATION_AMBIGUOUS",
+          failurePositionMetersXYZ: [0.5, 0.25, 0],
+        },
+      }),
+    );
+    const diagnostic = report.diagnostics.find(
+      ({ code }) => code === "ROUTE_SURFACE_CORRELATION_AMBIGUOUS",
+    );
+
+    expect(diagnostic).toMatchObject({
+      relatedTraversalSurfaceIdentities: [
+        { traversalSurfaceId: "surface-main" },
+        { traversalSurfaceId: "surface-secondary" },
+      ],
+    });
+    expect(report.evidenceArtifactsById[
+      "route:player-to-goal:route-connectivity-failure"
+    ]).toMatchObject({
+      mediaType:
+        "application/vnd.worldkit.route-connectivity-failure.v2+json",
+    });
     expect(validateValidationReportV2(report)).toMatchObject({ ok: true });
   });
 

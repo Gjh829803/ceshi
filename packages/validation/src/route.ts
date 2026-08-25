@@ -247,6 +247,8 @@ export function createRouteConnectivityValidationDiagnosticV2(
             failure.relatedTraversalSurfaceIdentities[0].traversalSurfaceId,
           colliderSubshapeId:
             failure.relatedTraversalSurfaceIdentities[0].colliderSubshapeId,
+          relatedTraversalSurfaceIdentities:
+            failure.relatedTraversalSurfaceIdentities,
         }),
     positionMetersXYZ: diagnosticPositionForFailure(failure),
     evidenceArtifactRefs: [input.evidenceArtifactRef],

@@ -849,6 +849,29 @@ describe("runtime contracts V5 Route Evidence", () => {
     })).toThrow("WORLDKIT_BROWSER_ROUTE_EVIDENCE_PUBLICATION_INVALID");
   });
 
+  it("rejects complete connectivity when the canonical Path is unavailable", () => {
+    const valid = emptyRouteEvidencePublicationFixtureV2();
+    expect(() => canonicalWorldkitBrowserRouteEvidencePublicationV2({
+      ...valid,
+      routes: [{
+        selector: { constraintId: "player-to-goal", routeId: "main-route" },
+        summary: {
+          kind: "route-evidence-summary",
+          schemaVersion: 1,
+          constraintId: "player-to-goal",
+          routeId: "main-route",
+          traversingEntityId: "player",
+          startAnchorEntityId: "spawn",
+          destinationAnchorEntityId: "goal",
+          connectivityStatus: "complete",
+          routePathStatus: "unavailable",
+          routeRuntimeProbeStatus: "unavailable",
+          routeOverlayStatus: "unavailable",
+        },
+      }],
+    })).toThrow("WORLDKIT_BROWSER_ROUTE_EVIDENCE_PUBLICATION_INVALID");
+  });
+
   it("installs WorldkitBrowserApiV5 as the public Browser protocol", () => {
     expect(WORLDKIT_BROWSER_PROTOCOL_VERSION).toBe(5);
     const snapshot = createSnapshotFixtureV4();

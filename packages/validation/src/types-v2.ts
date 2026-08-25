@@ -18,6 +18,7 @@ import type {
   RouteRuntimeGateThresholdsV1,
   RouteValidationDiagnosticCodeV2,
 } from "./route";
+import type { TraversalSurfaceIdentityV1 } from "@whitebox-world/traversal";
 
 interface MetricDefinitionBaseV2 {
   readonly id: string;
@@ -330,6 +331,7 @@ export interface RouteRowValidationDiagnosticV2 extends ValidationDiagnosticBase
   readonly destinationAnchorEntityId: string;
   readonly traversalSurfaceId?: string;
   readonly colliderSubshapeId?: string;
+  readonly relatedTraversalSurfaceIdentities?: readonly TraversalSurfaceIdentityV1[];
   readonly positionMetersXYZ?: readonly [number, number, number];
 }
 

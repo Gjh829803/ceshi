@@ -1170,7 +1170,7 @@ function createFailedConnectivityReport(
     failure.routeId,
     failure.constraintId,
     "route-connectivity-failure.json",
-    "application/vnd.worldkit.route-connectivity-failure.v1+json",
+    "application/vnd.worldkit.route-connectivity-failure.v2+json",
     input.evidenceBytes.routeConnectivityFailure,
   );
   const evidenceArtifactsById: Record<string, EvidenceArtifactV2> = {
@@ -1206,7 +1206,7 @@ function createFailedConnectivityReport(
       failure.routeId,
       failure.constraintId,
       "traversal-graph.json",
-      "application/vnd.worldkit.traversal-graph.v1+json",
+      "application/vnd.worldkit.traversal-graph.v2+json",
       input.evidenceBytes.traversalGraph,
     );
     graphArtifactRef = graphBase.artifactRef;
@@ -1311,7 +1311,7 @@ function evaluateRouteValidationRowAsReportV2(
     routePathReceipt.routeId,
     routePathReceipt.constraintId,
     "traversal-graph.json",
-    "application/vnd.worldkit.traversal-graph.v1+json",
+    "application/vnd.worldkit.traversal-graph.v2+json",
     input.evidenceBytes.traversalGraph,
   );
   const pathBase = evidenceBase(
@@ -1320,7 +1320,7 @@ function evaluateRouteValidationRowAsReportV2(
     routePathReceipt.routeId,
     routePathReceipt.constraintId,
     "route-path-receipt.json",
-    "application/vnd.worldkit.route-path-receipt.v1+json",
+    "application/vnd.worldkit.route-path-receipt.v2+json",
     input.evidenceBytes.routePathReceipt,
   );
   const evidenceArtifactsById: Record<string, EvidenceArtifactV2> = {
@@ -1470,7 +1470,7 @@ function evaluateRouteValidationRowAsReportV2(
       routePathReceipt.routeId,
       routePathReceipt.constraintId,
       "route-runtime-probe-receipt.json",
-      "application/vnd.worldkit.route-runtime-probe-receipt.v1+json",
+      "application/vnd.worldkit.route-runtime-probe-receipt.v2+json",
       input.evidenceBytes.routeRuntimeProbeReceipt,
     );
     evidenceArtifactsById[probeBase.id] = {
