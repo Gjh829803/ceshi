@@ -153,6 +153,27 @@ Compiler 必须按 Object 实例展开 Binding。两个实例即使引用同一�
 不同的 `surfaceEntityId` 与 `colliderSubshapeId`；Prototype 中的 `binding.id` 和
 `logicalSubshapeId` 保持资源局部稳定，不携带实例 ID。
 
+### 5.1.1 长期 AI-facing 演进边界
+
+`TraversalSurfaceBinding` 是稳定的 Canonical 资源级合同，用于把候选通行语义绑定到具体逻辑
+Subshape；它不意味着未来所有普通 Agent 都必须直接 author `kind: "collider-subshape"`、
+`logicalSubshapeId` 等资源内部字段。
+
+长期边界固定为：
+
+- 普通 Agent 优先表达“这座桥、平台或坡道承担 ground traversal”这类高层语义，并选择已验证的
+  Prototype / Registry Kit；高级或 package-local 资源 authoring 可以继续直接声明
+  `TraversalSurfaceBinding`。
+- 若未来增加更高层 Kit 或受控 Authoring Sugar，它只能由 Normalizer / Kit Expander
+  确定性展开为现有 `TraversalSurfaceBinding`，并继续由 Compiler 生成实例级
+  `surfaceEntityId`、`colliderSubshapeId`、`traversalSurfaceId`、Ref 与 Hash；不得新增平行
+  Runtime toggle、第二份 walkable geometry 或第二套 Surface identity。
+- Compiler / Runtime 不得从水平面、朝上法线、Mesh/材质命名或视觉上“像桥、道路”自动推断
+  候选通行语义。图片/Prompt 中“这个结构应该可走”的判断属于 Planner/Agent；“这个锁定
+  Subject 实际能否走过去”的证明属于 SDK Graph/Query 与 Babylon/Havok Runtime Gate。
+- 当前 Authoring V4 的 `traversalSurfaceBindings` 仍是已实现、可验证的真实接口。本节只冻结
+  抽象演进方向，不预先冻结 `affordance`、`traversal` 等尚未实现的新字段名。
+
 ### 5.2 Traversal Surface Profile
 
 R1b 冻结一个内置 Profile：

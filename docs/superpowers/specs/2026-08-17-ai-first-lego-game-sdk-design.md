@@ -52,6 +52,7 @@ Control Capture Bundle + Validation Report
 10. AI 表达 Region、相对空间关系和 Placement Constraint；确定性 Layout Solver 负责最终 Transform，运行时 Gameplay Relationship 不参与编译时布局。
 11. WorldPackage、Simulation Take、Runtime Session、Control Capture Bundle 和最终生成视频是不同制品，使用明确引用和 Hash 连接。
 12. 生产验收由版本化 Validation Profile 与量化 Validation Report 决定；任一必需 Gate 失败都不能被综合分数覆盖。
+13. AI-facing 层负责表达世界语义与创作意图；Canonical Resource Contract 负责把 Prototype、Kit 和受控 Authoring Sugar 确定性展开为稳定资源引用、逻辑 Subshape、物理身份与 Hash，Runtime/Validation 负责证明实际世界事实。未来可以增加更高层语义 Sugar，但只能降级为既有 Canonical 合同，不能形成第二套 Runtime、Physics 或 Traversal 真相。
 
 本项目不以短期开发成本最小为目标，优先保证 AI 可用性、长期扩展性和架构边界；但生产运行时的帧率、内存、包体、资源预算和安全性仍属于强制验收指标。
 
