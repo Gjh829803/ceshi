@@ -37,13 +37,15 @@
 
 完整门禁还发现并关闭了一个原报告未列出的集成缺口：Recast Path 出现 successive turns 时，Driver 的 2.4m lookahead 会切过转角，而冻结的 3D support station 只能按单 Tick 物理步长推进，最终在真实 Havok runner 中误报 `runtime-stalled`。`79952d1` 增加动态方向跟随 RED，并把 lookahead/projection 限制在当前直线段；`acd4a69` 同步 R1b verifier 的基础设施状态 oracle。该修复不放宽 stalled、deviation、support 或 arrival 阈值。
 
+直接合入 `main` 前的最终 `pnpm test` 首轮还发现 `scripts/verify-route-r1b-static-platform.test.ts` 保留了 `acd4a69` 之前的三个镜像预期：生产 verifier 与冻结 R1b 规格都已要求 profile/correlation missing/ambiguous 为 `incomplete / unavailable`，该 contract test 却仍断言 `failed`。当前失败作为 RED 后，只把这三个测试预期同步为 `incomplete`；focused test 5/5 与随后完整 `pnpm test` 均通过，生产实现未改变。
+
 ### 0A.2 最终门禁证据
 
 | 命令 / 证据 | 当前分支结果 |
 | --- | --- |
 | `pnpm test:census` | exit 0；200 test files，182 contract、18 resource-heavy，missing/duplicate 为 0 |
-| `pnpm test:contract` | exit 0；182 files / 1966 tests，152.68s |
-| `pnpm test:resource-heavy` | exit 0；18 files / 336 tests，286.97s；单 worker 串行 |
+| `pnpm test:contract` | exit 0；182 files / 1967 tests，139.69s |
+| `pnpm test:resource-heavy` | exit 0；18 files / 336 tests，312.10s；单 worker 串行 |
 | `pnpm typecheck` | exit 0 |
 | `pnpm verify:canonical` | exit 0；Canonical V4/V5、Browser V5、真实 capture 与 deterministic reset 闭包通过 |
 | `pnpm verify:route-r0-contract` | exit 0；8 checks；仍明确不把 R0 当作 R1/R1b runtime 证明 |
