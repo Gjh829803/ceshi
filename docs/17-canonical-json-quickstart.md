@@ -24,7 +24,8 @@ AuthoringSpec V4
 
 > Route R1 Heightfield 已完成并通过 `pnpm verify:route-r1-heightfield`。公开 Golden
 > 示例为 `examples/traversal/r1-heightfield/`。R1b 静态平台切片已通过
-> `pnpm verify:route-r1b-static-platform`；完整 M5 仍开放。
+> `pnpm verify:route-r1b-static-platform`；M5 深审 remediation 尚待最新 `main`
+> 集成门禁与独立复核，当前不宣称里程碑关闭。
 
 ## 1. 最短运行路径
 
@@ -460,7 +461,7 @@ Screen Region、八种关闭 Constraint、Required/Preferred 与锁定 Profile/S
 - Relationship、挂载、坐骑、拖拽、装备、武器和车辆；
 - NPC 行为、战斗、导航、玩法规则、网络与动态刚体；
 - 飞行、第一人称/自由镜头、室内、洞穴、悬挑和 Overhang 地形；
-- 通用 Terrain Mask、Route R1b、S1 之外的 Constraint、增量 Solver 和完整 P0.1；
+- 通用 Terrain Mask、S1 之外的 Constraint、增量 Solver 和完整 P0.1；
 - 非空 `relationships`、非空 `rules` 和运行时动态 Spawn。
 
 `seat.mount` 目前只是可验证、可解释的 Socket 数据，不代表骑乘逻辑已经实现。

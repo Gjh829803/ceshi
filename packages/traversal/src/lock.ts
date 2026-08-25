@@ -163,8 +163,8 @@ export function resolveTraversalLockV1(
   if (!(capsuleHeightMeters > 0)) {
     failLock("'capsuleHeightMeters' must be > 0.");
   }
-  if (!(maxSlopeDegrees > 0 && maxSlopeDegrees <= 90)) {
-    failLock("'maxSlopeDegrees' must be in (0, 90].");
+  if (!(maxSlopeDegrees >= 0 && maxSlopeDegrees < 90)) {
+    failLock("'maxSlopeDegrees' must be in [0, 90).");
   }
   if (!(maxStepHeightMeters >= 0 && maxStepHeightMeters <= 2)) {
     failLock("'maxStepHeightMeters' must be in [0, 2].");

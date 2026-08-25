@@ -489,8 +489,8 @@ function validateCapabilityEnvelope(
     record.maxSlopeDegrees,
     `${path}/maxSlopeDegrees`,
   );
-  if (maxSlopeDegrees < 0 || maxSlopeDegrees > 90) {
-    fail(`${path}/maxSlopeDegrees`, "must be in [0, 90]");
+  if (maxSlopeDegrees < 0 || !(maxSlopeDegrees < 90)) {
+    fail(`${path}/maxSlopeDegrees`, "must be in [0, 90)");
   }
   requireNonNegative(record.maxStepHeightMeters, `${path}/maxStepHeightMeters`);
   for (const field of [

@@ -49,12 +49,10 @@ describe("Recast tiled config mapping", () => {
     const supported = mapTraversalCapabilityEnvelopeToRecastTiledConfigV1(
       createRecastTestEnvelopeV1({ maxSlopeDegrees: 89.999 }),
     );
-    const vertical = createRecastTestEnvelopeV1({ maxSlopeDegrees: 90 });
 
     expect(supported.walkableSlopeAngle).toBe(89.999);
-    expect(() => mapTraversalCapabilityEnvelopeToRecastTiledConfigV1(
-      vertical,
-    )).toThrow("TRAVERSAL_RECAST_CONFIG_INVALID");
+    expect(() => createRecastTestEnvelopeV1({ maxSlopeDegrees: 90 }))
+      .toThrow("TRAVERSAL_LOCK_INVALID");
   });
 
   it("keeps the locked capsule-clearance boundary coupled to the audited backend tuple", () => {

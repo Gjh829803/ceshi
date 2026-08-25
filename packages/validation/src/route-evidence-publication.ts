@@ -343,17 +343,6 @@ function hashValidationReportV2(report: ValidationReportV2): Sha256HashV1 {
 
 
 
-export interface RouteEvidencePublicationRowInputV2 {
-  readonly validationRow: RouteValidationRowInputV2;
-  readonly routeOverlay?: RouteOverlayV2;
-}
-
-export interface CreateWorldkitBrowserRouteEvidencePublicationInputV2 {
-  readonly subject: WorldPackageValidationSubjectV1;
-  readonly validationReport: ValidationReportV2;
-  readonly rows: readonly RouteEvidencePublicationRowInputV2[];
-}
-
 function expectedOverlayV2(
   row: RouteValidationRowInputV2,
   overlay: RouteOverlayV2,

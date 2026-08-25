@@ -185,7 +185,7 @@ function ceilToQuantum(value: number, quantum: number): number {
 }
 
 function createPathGeometry(
-  path: RoutePathReceiptV2 | RoutePathReceiptV2,
+  path: RoutePathReceiptV2,
 ): PathGeometry {
   let positionQuantizationMeters: number;
   try {

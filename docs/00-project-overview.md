@@ -54,7 +54,8 @@ Director LLM → Render Directive SDK ────────────┘
 
 > Route R1 Heightfield 已完成 Golden/Adversarial Fixture、双 Blocking Gate 与
 > `pnpm verify:route-r1-heightfield`。R1b 静态平台切片也已通过真实 Babylon/Havok
-> Probe；完整 M5 仍开放。
+> Probe。M5 深审发现的合同、证据闭包和 Hosted admission 问题正在收口；在最新
+> `main` 集成门禁与独立复核完成前，不宣称 M5 已关闭。
 
 第一期 Alpha 已证明以下链路可以运行：
 
@@ -150,7 +151,7 @@ Entity 通过八种关闭 Constraint、Required/Preferred 优先级和锁定 Sol
 Required Runtime Assertion，不重新布局。海湾 Fixture 覆盖接地、净空、路线坡度、
 镜头可见性、冲突、篡改、预算和连续/并发确定性。
 
-未完成：通用 Terrain Mask、Route R1b、更多 Constraint、增量求解、通用
+未完成：通用 Terrain Mask、更多 Constraint、增量求解、通用
 Validation Report 以及完整 P0.1。S1 证明的是一个受控纵向切片，不是任意开放世界
 布局已经生产完成。
 
@@ -166,7 +167,8 @@ Task 9 的 11 个 Authoring V4 Golden/Adversarial Fixture 与
 `pnpm verify:route-r1-heightfield` 已进入回归。终审记录见
 [R1 Heightfield Runtime Review](reviews/2026-08-22-route-r1-heightfield-runtime-review.md)。
 
-未完成：R1b 静态平台/Surface→Collider Subshape，以及完整 M5 验收。非当前
+R1b 静态平台/Surface→Collider Subshape 已实现并进入回归；M5 深审 remediation
+仍需通过最新 `main` 的完整集成门禁与独立复核。非当前
 AuthoringSpec V4 输入会在统一入口严格拒绝；页面也不会成为备用 Evidence Producer。
 
 ### Simulation Take / Control Capture V1：首个五 Pass 切片

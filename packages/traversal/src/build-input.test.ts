@@ -114,6 +114,26 @@ function hashBuildInput(value: unknown): string {
   return candidate!(value);
 }
 
+describe("Traversal Capability Envelope slope admission", () => {
+  it("accepts zero and rejects the vertical boundary", () => {
+    const baseline = validBuildInput();
+    expect(() => assertRouteBuildInputV2(deepFreeze({
+      ...baseline,
+      capabilityEnvelope: {
+        ...baseline.capabilityEnvelope,
+        maxSlopeDegrees: 0,
+      },
+    }))).not.toThrow();
+    expect(() => assertRouteBuildInputV2(deepFreeze({
+      ...baseline,
+      capabilityEnvelope: {
+        ...baseline.capabilityEnvelope,
+        maxSlopeDegrees: 90,
+      },
+    }))).toThrow("must be in [0, 90)");
+  });
+});
+
 describe("Heightfield route build input contract", () => {
   it("accepts only sorted provider-neutral blocked traversal-area provenance", () => {
     const input = validBuildInput();
