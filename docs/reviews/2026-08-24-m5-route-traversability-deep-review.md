@@ -4,32 +4,35 @@
 
 ## 0. 2026-08-25 最新 main 复验（当前权威）
 
-- 最新 `origin/main`：`01ee4b9dd403dcc3f05b59ec29d7dbd8e5b17f10`（`refactor: retire legacy three runtime`）。
-- 报告分支：`codex/m5-traversability-deep-review`，已先 fetch，再把报告提交 rebase 到上述 main；复验开始时报告分支 HEAD 为 `d8ab34a4a554c09da4dec7495071b227c59a1b3c`。
-- 原始审查锚点：`4ae1912b3e7ce0b635a4a2fc6cf0b3ae178a75e5`；从该锚点到最新 main 共 135 个提交。
+- 最新 `origin/main`：`a8b9fd363a7116a8eb731e2c56f0f210c0ee00c8`（`docs: record final pr14 integration baseline`）。
+- 报告分支：`codex/m5-traversability-deep-review`，已 fetch 并把两份报告提交 rebase 到上述 main；本轮改文档前 HEAD 为 `a0367161213874f00e622542b8635eb3f747ae0f`。
+- 原始审查锚点：`4ae1912b3e7ce0b635a4a2fc6cf0b3ae178a75e5`；从该锚点到最新 main 共 141 个提交。
 - 审查模式：Mode B 最新变更复验，并按 full-dimension protocol 补齐 D1–D6；Runtime 部分完整应用 runtime-deep-review checklist。
-- 依赖重新按 frozen lockfile 安装：Babylon.js 9.21.2、Havok 1.3.14、recast-navigation 0.43.1、lodash-es 4.18.1。
+- `126a8f4..a8b9fd3` 新增 4 个提交、改动 97 个文件，主体是 Hosted Scene Brief / Recording / Visual workflow；所有既有 M5 owner、fixture、Route runner 与 lockfile blob 均未变化。
+- 安装依赖仍为 Babylon.js 9.21.2、Havok 1.3.14、recast-navigation 0.43.1、lodash-es 4.18.1；本轮未重复安装未变化的 frozen lockfile。
 - 本次只修改审查报告，没有修改 M5、Runtime、Schema、验证器或 SDK 实现。
 
 ### 0.1 最新结论
 
-**仍为 NO-GO。最新 main 没有关闭 5 个原 P0，也没有关闭 8 个原 P1。**
+**仍为 NO-GO。最新 main 没有关闭 5 个原 P0 或 8 个原 P1，并由 Hosted workflow 新增 2 个 P1；当前合计 5 个 P0、10 个 P1。**
 
-main 的大量更新修复了两条旧的次要结论：独立 `route-validation-runner.test.ts` 的 timeout 已关闭；旧报告对 Medium `contentHash` 的判断不准确，现撤回。它们不改变 M5 的阻断结论，因为下面 5 个 P0 已在 `01ee4b9` 上重新执行并复现：
+旧报告对 Medium `contentHash` 的判断不准确，继续撤回。此前标记为已关闭的 `route-validation-runner.test.ts` timeout 在最新全量门禁中重新出现：隔离运行通过，但与整仓资源型测试并行时超过 180 秒。这不改变下面 5 个 P0 的阻断地位。
+
+五个 P0 的反例已在 `126a8f4` 上重放；`126a8f4..a8b9fd3` 的 owner、fixture、依赖和 lockfile 均逐 blob 相同，因此按当前证据作用域规则沿用到 `a8b9fd3`。同时，本轮在 `a8b9fd3` 上重新执行 R0/R1/R1b 与全量测试，结果如下：
 
 | ID | 当前状态 | 最新 main 自动化复验 |
 | --- | --- | --- |
 | M5-P0-01 长绕路 0 Tick 假通过 | **仍存在** | 16.795m lower→ramp→upper Path，起终点 XZ 仅 0.4m；结果 `complete`、`completionDurationTicks=0`、`processedTickCount=0`、`fixedTickCallCount=0`。当前 owner 仍在 `packages/validation/src/route-runtime-probe.ts:667-675,747-753`。 |
 | M5-P0-02 station 使用 subject origin 而非 retained foot | **仍存在** | 当前 R1b 成功 fixture 中有 6 Tick 的 foot/subject-origin expected Surface set 分裂；最小例中 foot 仍在 segment 0，subject origin 已选择 segment 1。runner 仍在 `route-runtime-probe.ts:632-639,726-733` 传 subject origin，context validator 仍在 `runtime-probe-contract.ts:1698-1727` 重复同一权威错误。 |
 | M5-P0-03 step-up 单 Tick 超位移 | **仍存在** | 真实 `success-steps-platform-ramp` 仍 `complete`（385 ticks）；Tick 47 水平位移 0.34m，而冻结上界为 0.041m，即 8.29268 倍。当前实现仍在 `packages/runtime-babylon/src/motion-kernel-runtime.ts:245-280` 扩大 `remainingTime`。 |
-| M5-P0-04 Envelope 未与 Lock 重绑定 | **仍存在** | 从真实 receipt 把 `capsuleRadiusMeters` 由 0.32 改为 0.01，保留相同 `resolvedTraversalLockHash`，`createRouteBuildInputReceiptV2` 仍接受并生成新 `routeBuildInputHash`。当前 admission 仍只做字段/Graph Profile 自校验：`packages/traversal/src/build-input.ts:425-527,1002-1033,1273-1299`。 |
+| M5-P0-04 Envelope 未与 Lock 重绑定 | **仍存在** | 从真实 receipt 把 `capsuleRadiusMeters` 由 0.32 改为 0.01，保留相同 `resolvedTraversalLockHash`，`createRouteBuildInputReceiptV2` 仍接受并生成新 `routeBuildInputHash`。Graph Builder Profile 已在 `packages/traversal/src/build-input.ts:1002-1033` 重绑定；缺口是 admission 没有从 Lock receipt 重新派生并逐字节核对 Capsule/slope/step Envelope，见 `:425-527,1273-1299`。 |
 | M5-P0-05 forged Tick 0 support | **仍存在** | 从真实 385-Tick complete receipt 把 initial `surfaceResolution` 改为 `ambiguous`；canonicalizer 与 context validator 均接受，`wrongSupportSurfaceCount=0`。当前分支仍在 `runtime-probe-contract.ts:813-827,1527-1571,1698-1719` 漏计有后续 ticks 时的 initial mismatch。 |
 
-这不是“旧源码没看完”的推断：上述 5 个 P0 都有最新 main 的独立运行结果。正式 R1/R1b fixture 全绿只能证明已列 fixture，不足以覆盖这些反例。
+这不是“旧源码没看完”的推断：上述 5 个 P0 都有一手反例、当前 owner 逐 blob 复核和最新树正式门禁的三层证据。R1/R1b fixture 全绿只能证明已列 fixture，不足以覆盖这些反例。
 
-### 0.2 原 findings 逐条处置
+### 0.2 Findings 逐条处置
 
-| 原 finding | 最新 main 处置 | 当前证据 |
+| finding | 最新 main 处置 | 当前证据 |
 | --- | --- | --- |
 | P0 长绕路近终点 0 Tick complete | **仍存在** | 最新脚本复现；`route-runtime-probe.ts:667-675,747-753`。 |
 | P0 retained foot / subject origin 权威分裂 | **仍存在** | 最新脚本与真实 R1b evidence；6 Tick allowed-set 分裂。 |
@@ -44,23 +47,24 @@ main 的大量更新修复了两条旧的次要结论：独立 `route-validation
 | P1 公开 Report 可接受 Required Route 子集 | **仍存在** | 公开输入仍只有 caller rows：`route-evaluator.ts:69-75,1826-1901`。Trusted orchestrator 在 `route-validation-orchestrator.ts:824-906` 当前会遍历完整 Plan，所以这里仍定为公共合同缺口，而非已证明 CLI 主路径假通过。 |
 | P1 V2 Route evidence 使用 v1 MIME | **仍存在** | failure/graph/path/probe 仍分别使用 `v1+json`：`route-evaluator.ts:1161-1168,1197-1204,1302-1318,1458-1468`；`validate-v2.ts:1027-1056` 仍只要求非空字符串。 |
 | P1 SubjectController 部分构造泄漏 | **仍存在，且仍是 pre-existing debt** | 最新失败注入 3/3 均 `created=2,released=0`；allocation 后仍有 throwing work：`motion-kernel-runtime.ts:442-463`，host 到成功后才登记 disposer：`babylon-world-runtime.ts:601-620`。 |
-| P2 route-validation-runner timeout | **已关闭** | 专用 timeout 已从 120s 调整到 180s；最新隔离运行 12/12 通过，真实 case 66.522s、suite 71.39s；全量运行中该 case 79.607s，也在预算内。 |
+| P1 Hosted Studio 导入未绑定 Route report | **新增，存在** | 生产 runner 在 `scripts/run-spatial-world-agent.sh:211-226` 对 `requiresTrustedRouteValidation` 执行 Route gate；但 `apps/studio/server.mjs:672-701,953-1030` 的 deliverable/admission 不要求或校验该 report，随后在 `:1061-1098` 直接标 `ready/passed`。 |
+| P1 Visual Capture 配置失败泄漏 Runtime | **新增，存在** | `main.ts:1998-2016` 在 Adapter 创建成功后先 configure、后登记 owner；未知 entity 在 `babylon-world-adapter.ts:668-683` 抛错，Browser catch `worldkit-browser-api.ts:1209-1247` 只能释放已登记 owner。最小所有权复现为 `disposed=0,status=error`。 |
+| P2 route-validation-runner timeout | **重新打开** | `pnpm test` 中真实 case 191.074s，超过 180s；隔离运行仍 12/12 通过，真实 case 96.565s、suite 103.22s。问题是资源型门禁并发编排/预算不稳定，不应只继续上调 timeout。 |
 | P2 Browser complete connectivity / unavailable Path | **仍存在** | 最新最小 DTO 仍被接受；`browser-route-evidence.ts:443-452` 只有 `hasPath ⇒ connectivity complete`，没有反向闭包。 |
 | P2 slope domain 不一致 | **仍存在** | Lock 接受 `(0,90]`，Build Input 接受 `[0,90]`，Recast 要求 `[0,90)`：`lock.ts:152-167`、`build-input.ts:473-479`、`recast-config.ts:123-129`。 |
-| P2 Medium `contentHash` 缺失 | **撤回旧 finding** | Execution Medium 合同有意不暴露 `contentHash`（`execution-plan.ts:337-357`）；compiler 已把 locked Medium hash 与 Definition projection 的 ref/air 比较（`compile-traversal-lock.ts:182-189`）。旧报告把不同职责形态误判成缺校验。 |
-| P2 完成声明 / 文档不一致 | **仍存在** | `docs/18-refactor-progress-and-backlog.md:19-22,848-855` 宣称 M5 closed/no P0/P1；同文件 Validation Report epic `:322-325` 仍把 Route/Browser/CI evidence 接入列为开放（不是声称 Route Graph 本身未实现）；`docs/00-project-overview.md:55-57`、`docs/05-mvp-roadmap.md:17`、`docs/17-canonical-json-quickstart.md:25-27` 又写 M5 仍开放。 |
+| P2 Medium `contentHash` 缺失 | **撤回旧 finding** | Execution Medium 合同有意不暴露 `contentHash`（`execution-plan.ts:337-357`）；compiler 已把 locked Medium hash 与 Definition projection 的 ref/air 比较（`compile-traversal-lock.ts:186-189`）。旧报告把不同职责形态误判成缺校验。 |
+| P2 完成声明 / 文档不一致 | **仍存在，且扩大** | `docs/05-mvp-roadmap.md:17,106-125` 本轮改称 M5 closed；`docs/18-refactor-progress-and-backlog.md:19-22,840-843,855-861` 与 PR14 integration review `:28` 也称 closed。相反，`docs/00-project-overview.md:55-57,103,153-169`、`docs/17-canonical-json-quickstart.md:25-27` 仍称完整 M5/R1b 开放；`docs/18:326` 还保留 Browser/CI Evidence 开放项。 |
 | P2 dead code / clean-break 噪声 | **部分修复** | `route-evaluator.ts` 的冗余分支已清理；但 `route-runtime-probe.ts:212-214` 仍有 `RoutePathReceiptV2 \| RoutePathReceiptV2`，`route-evidence-publication.ts:69-78,346-355` 仍重复导出同名 interfaces。 |
 
-本轮没有确认新的 P0–P2。结论变化仅为：1 条旧 P2 已修复、1 条旧 P2 子结论撤回、1 条 dead-code 子结论部分修复；其余 finding 保持。
+本轮确认 2 个新增 P1，没有新增 P0。结论变化为：原 5 个 P0、8 个 P1 保持；runner timeout P2 重新打开；Medium 子结论继续撤回；dead-code 子结论仍为部分修复。
 
 ### 0.3 最新门禁矩阵
 
-| 命令 / 证据 | `01ee4b9` 结果 |
+| 命令 / 证据 | `a8b9fd3` 结果 |
 | --- | --- |
-| `pnpm install --frozen-lockfile` | exit 0，26 workspace projects |
 | `pnpm typecheck` | exit 0 |
-| `pnpm test` | exit 0，180/180 files、2194/2194 tests，298.20s |
-| 隔离 `route-validation-runner.test.ts` | exit 0，12/12；真实 case 66.522s，suite 71.39s |
+| `pnpm test` | **exit 1**，193/194 files、2235/2236 tests；唯一失败为真实 Route case 191.074s > 180s；suite 533.27s |
+| 隔离 `route-validation-runner.test.ts` | exit 0，12/12；真实 case 96.565s，suite 103.22s |
 | `pnpm verify:route-r0-contract` | exit 0，8 checks；脚本自身明确不证明 R1/R1b |
 | `pnpm verify:route-r1-heightfield` | exit 0，11 fixtures、8 adversarial checks；repeat/concurrent/cadence hashes 一致，provider leaks 为空 |
 | `pnpm verify:route-r1b-static-platform` | exit 0，11 fixtures；legacy census 0；repeat/concurrent/cadence hashes 一致 |
@@ -68,14 +72,16 @@ main 的大量更新修复了两条旧的次要结论：独立 `route-validation
 | `pnpm verify:placement-layout` | exit 0 |
 | `pnpm verify:rigged-subject` | exit 0 |
 | `pnpm verify:g-bot-subject` | exit 0 |
-| `pnpm verify:unreleased-clean-break` | exit 0，641 files、0 forbidden、507 current-authority matches |
-| `pnpm build` | exit 0，Vite 2184 modules，1m29s；仅大 chunk warning |
+| `pnpm verify:unreleased-clean-break` | exit 0，694 files、0 forbidden、519 current-authority matches |
+| 改动后的 `worldkit-route-run.integration.test.ts` | exit 0，1/1，120.430s |
+| `pnpm test:studio` / `pnpm test:lwdp-client` | exit 0，36/36 与 13/13 |
+| `pnpm build` | exit 0，Vite 2189 modules，1m15s；仅大 chunk warning |
 
 门禁运行生成的动态 session/hash 差异已在取证后恢复；最终分支只保留本文档改动。
 
 ### 0.4 变更面与证据边界
 
-从原锚点到最新 main，以下 8 个 finding owner 的 Git blob 完全相同：
+`126a8f4..a8b9fd3` 中以下既有 finding owner、相关测试、Route fixture、依赖与 lockfile 的 Git blob 完全相同：
 
 - `packages/validation/src/route-runtime-probe.ts`
 - `packages/traversal/src/build-input.ts`
@@ -86,28 +92,41 @@ main 的大量更新修复了两条旧的次要结论：独立 `route-validation
 - `packages/traversal-recast/src/evaluate-route.ts`
 - `packages/traversal-recast/src/build-graph.ts`
 
-`motion-kernel-runtime.ts` 有其他兼容性清理，但 P0 step-up block 与 P1 partial-construction 顺序仍在；`route-evaluator.ts` 有 clean-break 整理，但 Required Route set binding 与 MIME 闭包仍未补齐。
+`motion-kernel-runtime.ts` 的 P0 step-up block 与 P1 partial-construction 顺序未变；`route-evaluator.ts` 的 Required Route set binding 与 MIME 闭包也未补齐。四个新提交改变的是 Hosted/Studio/Playground integration，并由此新增上述两个 P1。
 
-本轮使用 static-read、自动化 contract、真实 Babylon/Havok runtime probe 和完整仓库门禁。Canonical / Placement / Rigged / G Bot gates 生成了 rendered artifacts，但本文不把它们当作 Route 通过性证明；没有声明 manual-interaction evidence。
+本轮使用 static-read、自动化 contract、真实 Babylon/Havok runtime probe、Browser/Studio 定向测试和完整仓库门禁。Canonical / Placement / Rigged / G Bot gates 生成了 rendered artifacts，但本文不把它们当作 Route 通过性证明；没有声明 manual-interaction evidence。动态 artifact 差异在取证后已恢复。
 
 ### 0.5 Cursor 只读独立终审
 
-- 使用新的隔离 review：stage `m5-latest-main-recheck-2026-08-25`，review ID `m5-recheck-01ee4b9-20260825`，Cursor chat `abca8117-00f3-448a-bb7d-c666798fe831`；模式为 Ask/read-only，没有修改文件。
-- Cursor 返回 **FINAL NO-GO**，精确未过门禁同样是 `M5 Complete / Final GO / no open P0/P1`。
-- 它逐条确认 5 个 P0 和 8 个 P1；确认 runner timeout 已关闭、Medium `contentHash` finding 应撤回、Browser/slope/docs/dead-code 的 P2 处置正确；没有驳回主审 finding，也没有发现新的 P0–P2。
-- 证据边界：Cursor 本轮重读当前源码与安装版 Babylon/Havok source，但没有自己重跑 Havok/CLI；对动态数值采用主审在同一 `01ee4b9` 上的执行证据。主审已独立保存复现输出并逐项核对其 source reasoning，没有用 Cursor 结论替代自动化证据。
-- 唯一表述校正：`docs/18:322-325` 是 Validation Report epic 仍把 Route evidence / Browser/CI 接入列为开放，不是“Route Graph 尚未实现”；本文已按该职责边界收窄措辞。
+- 当前树复核 chat：`67613810-edac-4772-a7bb-02389b85ba29`；Cursor CLI exit 0，审查前后 tree fingerprint 均为 `1d611de4dd2702f3d74c9e90cf3181ba235db62b3e1756fe28a9f921a8f47629`，没有写入或树漂移。
+- 独立结论：M5 release **NO-GO**；finding set **READY to begin remediation design**。Cursor 确认 5 个 P0、8 个原 P1、2 个新增 P1、重新打开的 runner timeout P2，以及 Browser/slope/docs/dead-code 处置；同意撤回 Medium finding；没有新增 P0–P2。
+- 主审接受的措辞修正：Graph Builder Profile 已重绑定，P0-04 缺的是 Lock-derived Capability Envelope 重算；短 Path 总长处于容差内的 0 Tick complete 是合法例外；现有 Studio import 绿测只是无 Required Route 的浅工件，不是本 finding 的 RED；Controller leak、MIME、Medium 的现行行号已在本文校正。
+- 证据边界：Cursor 使用 Ask/read-only static review，对已安装 Babylon 源码作了核对；Ask 模式拒绝其 Git/GitHub diff listing。主审已独立 fetch、逐 blob 比较、执行动态反例和当前树门禁，因此该限制不构成 finding 处置阻塞。
 
 ### 0.6 当前处置建议
 
 重新打开 M5，并撤回 `Complete / Final GO / no open P0/P1`。修复顺序仍应是：
 
 1. 先为 5 个 P0 提交 fix-before-fix failing reproducer；
-2. 修复 P0 后逐条关闭 8 个 P1 合同/生命周期缺口；
+2. 修复 P0 后逐条关闭 10 个 P1 合同/生命周期缺口，包括两个 Hosted 新回归；
 3. 把本报告的反例纳入正式 verifier，而不是只保留外部审查脚本；
-4. 重跑 focused regressions、R0/R1/R1b、完整 test/typecheck/build、Report/Browser 同字节闭包，以及分层长绕路和窄踏面的真实 Runtime evidence。
+4. 把 root test 重构为“并行 contract lane + 串行 resource-heavy lane”，保留 `pnpm test` 的全覆盖语义；按变更影响只执行失效证据，合入前再执行相关完整闭包；
+5. 重跑 focused regressions、R0/R1/R1b、完整 test/typecheck/build、Report/Browser/Studio 同字节闭包，以及分层长绕路和窄踏面的真实 Runtime evidence。
 
-`route-validation-runner` timeout 已关闭、Medium finding 已撤回，这两项不构成恢复 M5 Final GO 的依据。
+Medium finding 已撤回；runner timeout 则必须通过门禁编排修复并在 full-suite/isolated 两层都稳定通过，不能靠继续增加单测预算关闭。
+
+### 0.7 下一阶段门禁策略（设计提案，批准后落地）
+
+目标是提高修复迭代效率，同时不削弱 `pnpm test` 的完整覆盖语义：
+
+1. `pnpm test` 保持唯一完整 wrapper，顺序调用并行的 contract lane 与串行的 resource-heavy lane；任一 lane 失败即整体失败。
+2. resource-heavy manifest 必须显式列出文件，首批至少包括 `scripts/lib/route-validation-runner.test.ts`、`scripts/worldkit-route-run.integration.test.ts`、`scripts/verification-browser-launch.test.ts`，以及经计时确认会启动 Havok/Recast/Playwright/Vite 子进程的 Runtime suites。不能用继续增加 180 秒 timeout 替代串行隔离。
+3. 增加自动 census：根据 `vitest.config.ts` 的 root include 收集全部测试文件，并断言每个文件恰好属于一个 lane（union 等于 root 集、intersection 为空）；这样 lane manifest 漏项会在门禁自身 fail closed。
+4. 实现期先跑 finding 对应的 focused RED/GREEN；源码、Schema、fixture 或 generated artifact 的变化只作废其依赖证据。跨 authority 的 station、step-up、Envelope、Report 修复必须重跑相关完整 lane。
+5. 最终树上每个相关完整 lane 恰好运行一次；`typecheck`、`build`、R0/R1/R1b、Browser Route integration、Studio、LWDP 与 clean-break 仍是 root Vitest 之外的显式闭包，不能因 lane 拆分省略。
+6. 五个 P0 的反例必须进入正式 verifier，并保留“整条 Path 总长在 tolerance 内才允许 0 Tick”的合法短路径测试。外部 `/tmp` 审查脚本只作取证，不作为长期覆盖。
+
+修复工作按三个 batch 推进：A 先落地门禁 census 并锁住 5 个 P0 RED/GREEN；B 在 P0 authority 稳定后处理 10 个 P1；C 处理 P2、文档与 clean-break，并执行最终完整闭包。具体文件所有权、依赖边和集成点需在实施前的修复设计中冻结。
 
 ## 1. 原始审查元数据（2026-08-24 历史锚点）
 
@@ -211,7 +230,7 @@ main 的大量更新修复了两条旧的次要结论：独立 `route-validation
 
 ### [P0] [D4/D6] 长绕路可因起终点 XZ 接近而在 Tick 0 假通过
 
-- 证据（automated-contract）：667:675:packages/validation/src/route-runtime-probe.ts 在 reset 后只比较 subject 与最终 Path point 的 XZ 距离；747:753 的逐 Tick arrival 同样不要求 support station 已进入末段。最小复现使用 16.795m 的 lower→ramp→upper 路径，起终点 XZ 距离 0.4m，结果为 complete、completionDurationTicks=0、fixedTickCallCount=0。此前独立复现的 20m U path、端点距离 0.283m 也得到同样结果。
+- 证据（automated-contract）：667:675:packages/validation/src/route-runtime-probe.ts 在 reset 后只比较 subject 与最终 Path point 的 XZ 距离；747:753 的逐 Tick arrival 同样不要求 support station 已进入末段。最小复现使用 16.795m 的 lower→ramp→upper 路径，起终点 XZ 距离 0.4m，结果为 complete、completionDurationTicks=0、fixedTickCallCount=0。此前独立复现的 20m U path、端点距离 0.283m 也得到同样结果。`route-runtime-probe.test.ts:316-333` 另有合法 0.4m 短 Path 的 0 Tick 测试，修复必须保留“整条 Path 总长已在 tolerance 内”的例外。
 - 期望：36:59、128:131、351:384:docs/superpowers/specs/2026-08-21-route-graph-and-traversability-design.md 要求主体实际完成同层/分层 Required Route，不得用终点容差跳过整条路径。
 - 影响：桥下到桥面、下层到上层、围墙两侧或回环路线可以完全不移动就通过 Blocking Runtime Gate。
 - 建议：arrival 必须同时要求 support station 进入最终 segment/node band、Path progress 已到终段，并且实际 support 属于最终允许 Surface。零 Tick 完成只允许 canonical Path 自身总长处于终点容差内。
@@ -227,7 +246,7 @@ main 的大量更新修复了两条旧的次要结论：独立 `route-validation
 
 ### [P0] [D4/D5] M5 step-up 在一个 fixed tick 内推进约 8.3 倍允许水平距离
 
-- 证据（automated-contract + installed-source）：250:284:packages/runtime-babylon/src/motion-kernel-runtime.ts 把 remainingTime 扩到足够走过 capsule radius + keepDistance + 0.02m，再仅裁剪返回的 consumed time。安装版 Babylon 9.21.2 characterController.js:1329-1343 用扩大的 remainingTime 计算 sweep 距离，1409:1444 在返回前直接提交 landing pose。真实 success-steps-platform-ramp 在 Tick 47 的水平位移为 0.34m，而 2.4m/s、1/60s、0.001m quantization 只允许 0.041m，比值 8.29268；fixture 仍以 385 ticks complete。
+- 证据（automated-contract + installed-source）：245:280:packages/runtime-babylon/src/motion-kernel-runtime.ts 把 remainingTime 扩到足够走过 capsule radius + keepDistance + 0.02m，再仅裁剪返回的 consumed time。安装版 Babylon 9.21.2 的默认 `keepDistance` 为 0.05m（characterController.js:84），并用扩大的 remainingTime 计算 sweep 距离、在返回前直接提交 landing pose。真实 success-steps-platform-ramp 在 Tick 47 的水平位移为 0.34m，而 2.4m/s、1/60s、0.001m quantization 只允许 0.041m，比值 8.29268；fixture 仍以 385 ticks complete。
 - 期望：369:373:docs/superpowers/specs/2026-08-21-route-graph-and-traversability-design.md 禁止 teleport/skip；626:629:R1b 规格把 station 最大前进锁为 walkSpeed × fixed dt + quantization。
 - 影响：station 落后于真实 pose，无法证明每个中间 tread/path section 被实际经过；窄踏面或中间阻挡可能被 step-up 跨过，而 Gate 仍记录 complete。
 - 建议：不要通过扩大 physics time budget 获得前向 clearance。修复必须先有真实失败 fixture，并逐 Tick 断言 planar pose delta 不超过冻结上界；增加不可跳过的窄 tread/blocker。
@@ -235,8 +254,8 @@ main 的大量更新修复了两条旧的次要结论：独立 `route-validation
 
 ### [P0] [D4/D6] Build Input Receipt 接受与 Traversal Lock 不一致的伪造 Capability Envelope
 
-- 证据（automated-contract）：425:527:packages/traversal/src/build-input.ts 只校验 Envelope 字段形状/范围；1002:1033 只重新解析 Graph Builder Profile；1273:1299 从 caller 提供的 Envelope 自身重算 Receipt。主 Agent从真实 R1b success receipt 克隆输入，把 capsuleRadiusMeters 从 0.32 改为 0.01，保留相同 resolvedTraversalLockHash，createRouteBuildInputReceiptV2 仍 exit 0 并生成新的合法 routeBuildInputHash。
-- 期望：79:172:packages/traversal/src/capability-envelope.ts 是 Envelope 唯一派生 owner；307:312:docs/superpowers/specs/2026-08-23-route-r1b-static-platform-design.md 要求 Build Input admission/Receipt 重算并证明 Lock-derived Capability，而不是只信 Envelope 自己。
+- 证据（automated-contract）：425:527:packages/traversal/src/build-input.ts 只校验 Envelope 字段形状/范围；1002:1033 已重新解析并重绑定 Graph Builder Profile；1273:1299 则仍从 caller 提供的 Envelope 自身重算 Receipt，没有从 Lock 重建 Capability。主 Agent从真实 R1b success receipt 克隆输入，把 capsuleRadiusMeters 从 0.32 改为 0.01，保留相同 resolvedTraversalLockHash，createRouteBuildInputReceiptV2 仍 exit 0 并生成新的合法 routeBuildInputHash。
+- 期望：79:172:packages/traversal/src/capability-envelope.ts 是 Envelope 唯一派生 owner；307:312:docs/superpowers/specs/2026-08-23-route-r1b-static-platform-design.md 中 Graph Builder Profile 重绑定已实现，仍缺的是 Lock-derived 胶囊/坡度/步高重算与逐字节校验。
 - 影响：Graph Gate 可按伪造的小胶囊、坡度或步高构图，Runtime Gate 仍按真实 Lock 运行；两道 Blocking Gate 虽携带同一 Lock hash，实际证明的是不同能力合同。
 - 建议：Build Input context/admission 必须接收 canonical ResolvedTraversalLockReceipt 和 Graph Builder receipt，重新调用唯一 Envelope factory并逐字节比较；所有 Lock-derived 字段做篡改单元表。
 - 复核：Contract 子审查发现，主 Agent用真实 receipt 独立重跑确认；Cursor static-read 确认为 P0。
@@ -299,7 +318,7 @@ main 的大量更新修复了两条旧的次要结论：独立 `route-validation
 
 ### [P1] [D2/D6] V2 Route JSON evidence 仍标记为 v1+json
 
-- 证据（static-read）：1190、1226、1331、1340、1505:packages/validation/src/route-evaluator.ts 分别把 V2 Connectivity Failure、Graph、Path、Probe 标为 application/vnd.worldkit.*.v1+json；validate-v2 只检查 mediaType 是字符串，不检查 kind/schemaVersion/mediaType 闭包；legacy census 未扫描这些 MIME 值。
+- 证据（static-read）：1167、1203、1308、1317、1467:packages/validation/src/route-evaluator.ts 分别把 V2 Connectivity Failure、Graph、Path、Probe 标为 application/vnd.worldkit.*.v1+json；validate-v2 只检查 mediaType 是字符串，不检查 kind/schemaVersion/mediaType 闭包；legacy census 未扫描这些 MIME 值。RouteValidationSetReceipt 自身仍是 V1，`:1870` 的 v1 MIME 应保留。
 - 期望：R1b clean break 要求 V1/V2 bytes 与公共协议原子迁移，不保留 V1 alias。
 - 影响：按 MIME 分派的消费者会调用已删除 V1 decoder 或拒绝合法 V2 bytes；Report hash 还会把错误元数据固化。
 - 建议：冻结 kind + schemaVersion + mediaType 映射表，V2 四类改为 v2+json，并更新 golden hashes；RouteValidationSetReceipt 本身仍是 V1，应保留 v1。
@@ -307,18 +326,34 @@ main 的大量更新修复了两条旧的次要结论：独立 `route-validation
 
 ### [P1] [D5/D6] SubjectController 部分构造失败泄漏两个 Havok QueryCollector（pre-existing）
 
-- 证据（automated-contract + installed-source）：463:483:packages/runtime-babylon/src/motion-kernel-runtime.ts 在 new PhysicsCharacterController 后仍执行可能抛错的 bootstrap/checkSupport；审查锚点 777:786:babylon-world-runtime.ts 只有构造成功后才注册 disposer。Babylon 9.21.2 characterController.js:208-209 创建两个 collectors，214:223 仅由 controller.dispose 释放。失败注入连续 3 次均 created=2、released=0，虽然 engineDisposed=true。
+- 证据（automated-contract + installed-source）：442:450:packages/runtime-babylon/src/motion-kernel-runtime.ts 分配 PhysicsCharacterController，随后 `:458-461` 执行可能抛错的 bootstrap/checkSupport；`babylon-world-runtime.ts:611-620` 只有构造成功后才注册 disposer。Babylon 9.21.2 characterController.js:208-209 创建两个 collectors，214:223 仅由 controller.dispose 释放。失败注入连续 3 次均 created=2、released=0，虽然 engineDisposed=true。
 - 期望：runtime-deep-review checklist 要求 partial construction 和 throwing cleanup 不泄漏 native resources。
 - 影响：同一进程启动失败/重试会持续泄漏 Havok handle。
 - 建议：把 controller native allocation 后的配置封装为可回滚 factory，catch 时先 dispose 再 rethrow；测试精确比较 created/released handle 集合。
 - 复核：Runtime 子审查发现，主 Agent独立重跑 3/3 确认。该问题早于 M5 baseline，不应标成 M5 regression，但属于当前 Runtime debt；Cursor static-read 确认为 P1。
 
-### [P2] [RESOLVED 2026-08-25] [D6] 正式 verifier 与同一真实 fixture 的测试预算
+### [P1] [D4/D6] Hosted Studio 导入可绕过 Required Route Validation Report
 
-- 最新处置：**已关闭。** `scripts/lib/route-validation-runner.test.ts:363` 的专用 timeout 已由 120s 调整为 180s；最新 main 隔离运行 12/12 通过，真实 V4/V5 case 66.522s、suite 71.39s；全量 `pnpm test` 中该 case 79.607s，也在预算内。
+- 证据（static-read）：生产 runner 读取 trusted Builder receipt 的 `requiresTrustedRouteValidation`，并在为 true 时执行 `worldkit verify route`，见 `scripts/run-spatial-world-agent.sh:211-226`。但是 Studio 的 deliverable inventory 与 `hasTrustedWhiteboxArtifacts()` required paths 不包含 Route report，见 `apps/studio/server.mjs:672-701,953-966`；admission 对 Authoring 只检查 `kind/schemaVersion/id`，也不检查 Builder receipt 的 Route-required flag，见 `:998-1030`；通过后直接写入 `ready/passed`，见 `:1061-1098`。现有 `server.test.mjs:842-858` 绿测只证明一个没有 Required Route flag 的浅工件可以导入，不能作为“Required Route 缺 report 仍 passed”的动态 RED。
+- 期望：当 Canonical Authoring/Builder receipt 声明存在 Required Route 时，import/recovery 必须要求可发现、canonical 且绑定同一 Authoring/IR/ExecutionPlan/Resource Lock hashes 的 Route Validation Report；缺失、失败或跨世界 report 必须 fail closed。
+- 影响：正常生成链路会执行 M5 Blocking Gate，但已有产物导入/恢复链路可跳过它并在 Studio 中显示通过，形成同一工件的双重准入权威。
+- 建议：由固定 manifest 指向 nonce report；admission 从可信 Builder receipt 决定是否必需，复用 canonical validator 验证 report/hash closure。增加 Required Route 缺失、错误 hash、failed report 与 exact passing report 四组测试。
+- 复核：Contract 子审查发现；主 Agent逐行核对生产 runner、Studio admission、状态提升与现有测试，确认是 `a8b9fd3` 新增 P1，不属于原 M5 实现 finding。修复前必须先补 Required Route + missing/mismatched/failed/exact report 四类 admission 测试。
+
+### [P1] [D5/D6] Visual Capture target 配置失败泄漏完整 Babylon Runtime
+
+- 证据（static-read + automated ownership probe）：`apps/playground/src/main.ts:1998-2009` 已成功创建 Adapter，随后在 `:2010-2013` 配置 target；未知 Runtime Entity 会在 `babylon-world-adapter.ts:668-683` 抛错，但 `createdAdapter` 与 `trackAdapter()` 直到 `main.ts:2014-2016` 才执行。Browser catch 只能释放已登记 owner，见 `worldkit-browser-api.ts:1209-1247`。最小所有权复现返回 `disposed=0,status=error`；正确 disposer 原本会在 `babylon-world-adapter.ts:1107-1122` 移除 listeners 并释放 coordinator。
+- 期望：任何已成功创建的 Adapter 必须在后续可抛工作前交给唯一 owner；启动失败仍只 dispose 一次、保留主错误，且不得 mount/render/ready。
+- 影响：一个 schema-valid 但引用不存在 Entity 的 capture target 会持续保有 window/canvas listeners 与整套 Babylon/Havok Runtime；重试会累积资源。
+- 建议：把 `createdAdapter` 与 `trackAdapter(adapter)` 移到 configure 之前，并为 create→track→configure:throw→dispose 的严格事件顺序增加回归；错误仍应为 `WORLDKIT_CAPTURE_TARGET_NOT_FOUND`。
+- 复核：Runtime 子审查发现并执行最小 owner probe；主 Agent对拍初始化、配置、Browser catch 与 disposer 控制流，确认是 `73f1830` 新回归。
+
+### [P2] [REOPENED 2026-08-25] [D6] 正式 verifier 与同一真实 fixture 的测试预算
+
+- 最新处置：**重新打开。** `scripts/lib/route-validation-runner.test.ts:363` 的专用 timeout 虽已由 120s 调整到 180s，但 `a8b9fd3` 全量 `pnpm test` 中真实 V4/V5 case 为 191.074s，成为 193/194 files、2235/2236 tests 中唯一失败；隔离运行则为 12/12、真实 case 96.565s、suite 103.22s。
 - 历史证据：原锚点的真实 fixture 在全量测试约 197s、单独重跑约 140s，均超过当时 120s timeout；正式 verifier 因无同一 timeout 仍可通过。
-- 关闭理由：当前隔离和全量两条证据都在显式预算内，且完整 `pnpm test` 为 180/180 files、2194/2194 tests。并发重负载下的单次超时不再作为产品缺陷计入。
-- 后续建议：继续保留 wall-clock regression budget；若耗时重新接近 180s，再 profile 重复的 canonical build / Browser / Runtime 初始化工作。
+- 重新打开理由：isolated 与 full-suite 相差近 2 倍，表明资源型 Havok/Recast/Browser tests 在默认并行 lane 内竞争，门禁不能稳定完成；继续增加单 case timeout 会掩盖编排问题。
+- 后续建议：保留 `pnpm test` 的完整语义，但拆成并行 contract lane 与串行 resource-heavy lane；focused review 只运行受影响 lane，最终 integration 各 lane 恰好运行一次。修复后要求 full root test 与 isolated runner 都通过。
 
 ### [P2] [D6] Browser V2 canonicalizer 允许 complete connectivity 却没有 Path
 
@@ -332,9 +367,9 @@ main 的大量更新修复了两条旧的次要结论：独立 `route-validation
 
 - 证据（static-read）：
   - packages/traversal/src/lock.ts 接受 maxSlopeDegrees=90，build-input 也接受 [0,90]，但 traversal-recast/src/recast-config.ts 要求 [0,90)；
-  - docs/18-refactor-progress-and-backlog.md 宣称 Route R0/R1/R1b 已完成且无 open P0/P1，同时在 Validation Report epic 中仍把 Route evidence / Browser/CI 接入列为开放；另外三份 active docs 又写完整 M5 仍开放；
+  - docs/18-refactor-progress-and-backlog.md 宣称 Route R0/R1/R1b 已完成且无 open P0/P1，同时在 Validation Report epic 中仍把 Route evidence / Browser/CI 接入列为开放；docs/00-project-overview.md 与 docs/17-canonical-json-quickstart.md 又写完整 M5 仍开放，且 docs/00:153-169 仍把已通过当前 verifier 的 R1b 写成未完成；
   - clean-break 有部分进展，但 `route-runtime-probe.ts` 仍有 `RoutePathReceiptV2 | RoutePathReceiptV2`，`route-evidence-publication.ts` 仍重复导出两组同名 interface。
-- 撤回项：旧报告声称 Compiler 未比较 Medium `contentHash`，该判断不准确。Execution Medium projection 有意不暴露 `contentHash`；`compile-traversal-lock.ts:182-189` 已比较 locked Medium hash、resource ref 与 Definition `air` projection。不同于 Motion 的合同形态不等于缺少 fail-closed 校验。
+- 撤回项：旧报告声称 Compiler 未比较 Medium `contentHash`，该判断不准确。Execution Medium projection 有意不暴露 `contentHash`；`compile-traversal-lock.ts:186-189` 已比较 locked Medium hash、resource ref 与 Definition `air` projection。不同于 Motion 的合同形态不等于缺少 fail-closed 校验。
 - 期望：公共 Lock 与 provider admission 一致；唯一进度账本、active docs 和 clean-break census 与事实一致。
 - 影响：90° profile 在 provider 边界才异常；相互矛盾的完成声明会让后续 Agent 错误跳过阻断修复；重复声明增加协议漂移风险。
 - 建议：原子统一 slope domain；把 M5 状态回退为 reopened；清理重复 union/interface 并扩大 clean-break census。
@@ -348,7 +383,7 @@ main 的大量更新修复了两条旧的次要结论：独立 `route-validation
 | D2 Schema 与 AI-friendly | 已查 | V2 naming/identity 主体一致；发现 MIME clean-break 与冗余声明 |
 | D3 承诺与事实 | 已查 | 对拍 Route/R1b/Validation 规格、backlog、旧 review；发现 complete claim、Path topology、scope/seam/layer 差异 |
 | D4 单一权威状态 | 已查 | 检查 Lock→Envelope、Graph、retained support、station、arrival、Medium；确认 5 个 P0 |
-| D5 工程质量 | 已查 | 检查 installed Babylon semantics、partial construction、dispose、test timeout、dead code；step-up/native leak 仍在，旧 timeout 已在最新 main 关闭 |
+| D5 工程质量 | 已查 | 检查 installed Babylon semantics、partial construction、dispose、test timeout、dead code；step-up/native leaks 仍在，新增 Adapter startup leak，runner timeout 重新打开 |
 | D6 门禁与证据分层 | 已查 | 跑 R0/R1/R1b、full tests、build/typecheck、artifact forgery probes；明确 automated 与 rendered/manual 边界 |
 
-最终处置建议（2026-08-25 最新 main 复验后不变）：重新打开 M5。先修复并以 failing reproducer 锁住全部 P0，再处理 P1 合同缺口；之后必须重跑 focused regressions、R0/R1/R1b、完整 pnpm test/typecheck/build、同字节 Report/Browser publication，以及真实窄踏面/分层长绕路交互证据。不能仅凭当前 11+11 fixture matrix 和全量门禁变绿恢复 Final GO。
+最终处置建议（2026-08-25 最新 main 复验）：重新打开 M5。先修复并以 failing reproducer 锁住全部 P0，再处理 10 个 P1 合同/生命周期缺口；同步把门禁拆成可按影响面选择、最终仍完整闭合的 lane。之后必须重跑 focused regressions、R0/R1/R1b、完整 pnpm test/typecheck/build、同字节 Report/Browser/Studio publication，以及真实窄踏面/分层长绕路交互证据。不能仅凭当前 11+11 fixture matrix 恢复 Final GO。
