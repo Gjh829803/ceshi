@@ -2,9 +2,9 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** Recover the existing merged G Bot and Golden GLBs into deterministic modular product-source packages, inventory all xier120 assets, and publish a concrete product correction guide without changing current Runtime inputs.
+**Goal:** Recover the existing merged G Bot and Golden GLBs into deterministic modular product-source packages, inventory all xier120 assets, publish a concrete product correction guide, and cleanly activate derived Runtime Bundles.
 
-**Architecture:** A tested glTF recovery library reads committed self-contained GLBs, validates an explicit package definition, and emits one animation-free Model GLB, one Material Set manifest, one animation-only GLB per semantic action, and one byte-identical non-Runtime Source Archive under `extensions/`. A CLI stages the complete nested directory and atomically promotes it in write mode, or compares exact bytes in check mode. Existing Runtime GLBs and Registry contracts remain unchanged.
+**Architecture:** A tested glTF recovery library reads committed self-contained GLBs, validates an explicit package definition, and emits one animation-free Model GLB, one Material Set manifest, one animation-only GLB per semantic action, and one byte-identical non-Runtime Source Archive under `extensions/`. A second deterministic assembler derives the self-contained Runtime GLB from those locked sources. CLIs stage complete outputs and atomically promote them in write mode, or compare exact bytes in check mode. Registry and resolver entries advance to the new derived Bundles with no legacy public path.
 
 **Tech Stack:** TypeScript 5.9, Node.js 24 APIs, Vitest 3.2, `@gltf-transform/core` 4.4.2, `@gltf-transform/functions` 4.4.2, existing WorldKit hashing/canonical JSON conventions.
 
@@ -12,13 +12,13 @@
 
 ## Global Constraints
 
-- Product-authoritative resources are Model Asset, Rig Profile, Material Set, Animation Clip Assets, and Animation Set; current Runtime assets remain compatibility inputs.
+- Product-authoritative resources are Model Asset, Rig Profile, Material Set, Animation Clip Assets, and Animation Set; Runtime Bundles are derived outputs.
 - A rigged Model GLB has Mesh + Skin + exactly one Skeleton + Bind Pose and zero Animations.
 - An Animation Clip GLB has exactly one Animation and zero Mesh, Material, Texture, Image, Camera, and Light resources.
 - Model and every Clip must share one exact deterministic Rig signature; this slice performs no retargeting.
 - The CLI never derives semantic `actionId` values from provider Clip names; every mapping is explicit.
 - All written resources use `kind`, `schemaVersion`, `id`, `version`, `resourceRef`, unit-bearing numeric names, and exact SHA-256 identities.
-- Existing merged GLBs, Registry Refs, Authoring examples, Resolver maps, and Runtime behavior are not modified.
+- Babylon's self-contained GLB Runtime contract is not modified; active Registry Refs, examples, and resolver maps move to derived Bundles with a clean version break.
 - xier120 static GLB bytes are not copied, rewritten, rigged, or assigned invented actions.
 - No texture resource is generated when the source GLB contains no Image/Texture.
 - Output paths are immutable package versions under `assets/subjects/packages/**`.
@@ -477,3 +477,134 @@ rerun only invalidated evidence.
 
 Use `superpowers:finishing-a-development-branch` after all findings are closed. Do not merge, push,
 or delete the worktree without explicit authorization for those side effects.
+
+---
+
+### Task 6: Deterministic Runtime Bundle assembly
+
+**Files:**
+- Create: `scripts/lib/modular-subject-runtime-bundle.ts`
+- Create: `scripts/lib/modular-subject-runtime-bundle.test.ts`
+
+**Interfaces:**
+- Consumes: one committed modular package directory created by Tasks 1-3.
+- Produces: `assembleModularSubjectRuntimeBundle(options): Promise<ModularSubjectRuntimeBundleV1>`
+  and `validateModularSubjectRuntimeBundle(bundle): Promise<void>`.
+
+- [ ] **Step 1: Write failing integration tests**
+
+Read the real Golden and G Bot modular packages. Require the assembled Bundle to retain the Model
+mesh/skeleton inventory, contain exactly the package's ordered semantic actions, use no external
+URI, and reproduce byte-identically across two independent calls. Tamper a Clip manifest hash and
+require `MODULAR_SUBJECT_RUNTIME_INPUT_HASH_MISMATCH`; retarget a Clip channel to an unknown Node
+path and require `MODULAR_SUBJECT_RUNTIME_TARGET_MISSING`.
+
+- [ ] **Step 2: Run RED**
+
+```bash
+pnpm vitest run scripts/lib/modular-subject-runtime-bundle.test.ts
+```
+
+Expected: FAIL because the assembly module does not exist.
+
+- [ ] **Step 3: Implement minimal exact assembly**
+
+Use `NodeIO`, `copyToDocument`, `prune`, and `unpartition`. Validate package/manifests and artifact
+hashes before parsing. Start from `model/model.glb`, copy one Animation at a time, and replace every
+copied channel target with the unique Model Node resolved by canonical full path. Dispose copied
+Clip-only Nodes/Scenes/Skins, compact to one internal Buffer, inspect the final GLB, and emit a
+canonical manifest containing ordered Model/Material/Clip source hashes and final Bundle identity.
+
+- [ ] **Step 4: Run GREEN and commit**
+
+```bash
+pnpm vitest run scripts/lib/modular-subject-runtime-bundle.test.ts
+git add scripts/lib/modular-subject-runtime-bundle.ts scripts/lib/modular-subject-runtime-bundle.test.ts docs/superpowers/specs/2026-08-25-modular-subject-source-assets-design.md docs/superpowers/plans/2026-08-25-modular-subject-source-assets.md
+git commit -m "feat(assets): assemble modular subject runtime bundles"
+```
+
+---
+
+### Task 7: Publish and activate Runtime Bundles
+
+**Files:**
+- Create: `scripts/modular-subject-runtime-bundles.ts`
+- Create: `scripts/modular-subject-runtime-bundles.test.ts`
+- Create: `assets/subjects/runtime-bundles/seedleap/{g-bot,golden-humanoid}/v1/runtime-bundle.manifest.json`
+- Create: `apps/playground/public/subject-assets/humanoid/g-bot/v2/g-bot.glb`
+- Create: `apps/playground/public/subject-assets/humanoid/golden/v2/golden-humanoid.glb`
+- Delete: `apps/playground/public/subject-assets/humanoid/g-bot/v1/g-bot.glb`
+- Delete: `apps/playground/public/worldkit-assets/golden-humanoid.glb`
+- Modify: `package.json`
+- Modify: `packages/subject-registry/src/built-in-resource-manifests.ts`
+- Modify: `apps/playground/src/worldkit-asset-resolver.ts`
+- Modify: `scripts/lib/world-package-resource-resolver.ts`
+- Modify: `assets/subjects/humanoid/g-bot/asset.manifest.json`
+- Modify: `examples/product-asset-intakes/humanoid.g-bot@2.json`
+- Modify: affected exact-lock tests and fixtures.
+
+**Interfaces:**
+- Consumes: Task 6 assembly API and the explicit package catalog.
+- Produces: `pnpm assets:subjects:runtime-bundles` and
+  `pnpm assets:subjects:runtime-bundles:check`; all project examples use the new versioned Subject
+  Definition Refs and resolve only to the new Bundle paths and Registry locks.
+
+- [ ] **Step 1: Write failing CLI and activation tests**
+
+Require write/check byte equality, tamper detection, no reads from `extensions/`, exact host path
+mapping, and Registry length/hash equality with the generated public file.
+
+- [ ] **Step 2: Run RED**
+
+```bash
+pnpm vitest run scripts/modular-subject-runtime-bundles.test.ts packages/subject-registry/src/subject-registry.test.ts apps/playground/src/worldkit-asset-resolver.test.ts
+```
+
+- [ ] **Step 3: Implement publication and activation**
+
+Stage both Bundle files and manifests under owned sibling temporary paths, validate them, then
+promote them. Add the two root scripts. Regenerate once, record exact byte lengths/hashes, upgrade
+the G Bot and Golden Subject Asset, Rig Profile, Animation Set, and Subject Definition Refs to
+`@2`, rewrite all in-repository consumers, and remove the old public GLBs and `@1` graph. Do not add
+fallback mappings or aliases.
+
+- [ ] **Step 4: Run GREEN and commit**
+
+```bash
+pnpm assets:subjects:runtime-bundles:check
+pnpm vitest run scripts/lib/modular-subject-runtime-bundle.test.ts scripts/modular-subject-runtime-bundles.test.ts packages/subject-registry/src/subject-registry.test.ts apps/playground/src/worldkit-asset-resolver.test.ts scripts/lib/world-package-resource-resolver.test.ts
+git add package.json scripts assets/subjects/runtime-bundles assets/subjects/humanoid/g-bot/asset.manifest.json apps/playground/public apps/playground/src/worldkit-asset-resolver.ts packages/subject-registry/src/built-in-resource-manifests.ts examples/product-asset-intakes/humanoid.g-bot@2.json
+git commit -m "feat(assets): activate modular subject runtime bundles"
+```
+
+---
+
+### Task 8: Guidance, verification, and main integration
+
+**Files:**
+- Modify: `docs/20-modular-subject-source-assets.md`
+- Modify: `docs/16-subject-assets-3c-integration.md`
+- Modify: `docs/superpowers/skills/product-asset-intake.md`
+- Modify: `docs/superpowers/skills/product-asset-intake-static-assets.md`
+
+- [ ] **Step 1: Synchronize product guidance**
+
+Document the authoritative flow as `Model/Material/Clips -> generated Runtime Bundle -> unchanged
+Subject Definition Ref`, both write/check commands, version/update rules, and the fact that
+`extensions/` and former merged recovery inputs are not Runtime sources.
+
+- [ ] **Step 2: Run affected verification**
+
+```bash
+pnpm assets:subjects:modularize:check
+pnpm assets:subjects:runtime-bundles:check
+pnpm vitest run scripts/lib/modular-subject-source.test.ts scripts/lib/modular-subject-runtime-bundle.test.ts scripts/modular-subject-source-packages.test.ts scripts/modular-subject-runtime-bundles.test.ts packages/subject-registry/src/subject-registry.test.ts apps/playground/src/worldkit-asset-resolver.test.ts scripts/lib/world-package-resource-resolver.test.ts packages/runtime-babylon/src/runtime.test.ts
+pnpm typecheck
+git diff --check
+```
+
+- [ ] **Step 3: Commit, synchronize, push, and clean owned worktree**
+
+Fetch `origin/main`, rebase the feature branch if required, rerun invalidated focused gates, push
+the verified HEAD to `main`, confirm `origin/main` equals that commit, and remove only
+`.worktrees/modular-subject-source-assets` after its status is clean.

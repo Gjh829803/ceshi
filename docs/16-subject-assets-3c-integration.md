@@ -212,7 +212,8 @@ Bundle 只提供资产事实和参考；最终 Collider、控制、物理和 Cam
 新产品交付的权威源采用“Model + Rig Profile + Material/Texture + 独立 Animation
 Clip”的模块化结构，完整目录、命令和当前资产修改清单见
 [`20-modular-subject-source-assets.md`](./20-modular-subject-source-assets.md)。当前 Runtime
-仍消费确定性合并的自包含 GLB；该兼容 Bundle 不是产品团队继续编辑动作/材质的权威源。
+仍消费确定性生成的自包含 GLB；该派生 Bundle 不是产品团队继续编辑动作/材质的权威源，
+也不存在旧合并 GLB 的公开兼容入口。
 
 本节的 Bone Mapping 与动作要求只适用于 Rigged Subject。首个产品实例仍是 G Bot，接入路由见
 [`product-asset-intake.md`](./superpowers/skills/product-asset-intake.md)。无 Rig、无动画的
@@ -229,12 +230,12 @@ flight、mount 或 NPC Runtime 行为。
 | 必需输入 | 当前 S1b 契约 | Golden / G Bot 已验收参考值 |
 |---|---|---|
 | Product source | Model GLB 零动作；一个动作一个 Clip GLB；材质/纹理独立；未知内容进入禁止 Runtime 消费的 `extensions/` | G Bot 已恢复为 1 Model + 25 Clips；Golden 为 1 Model + 4 Clips |
-| Runtime GLB bytes | 当前兼容入口仍为单文件、自包含 GLB 2.0；不允许外部 Buffer/Image URI | Golden 43,656 bytes；G Bot 5,302,160 bytes |
+| Runtime GLB bytes | 唯一入口为模块化源生成的单文件、自包含 GLB 2.0；不允许外部 Buffer/Image URI | Golden 48,060 bytes；G Bot 6,743,072 bytes |
 | Coordinate convention | `-Z` Forward、`+Y` Up、1 meter/unit | 同契约 |
 | Pivot | `support-center`，主体 Origin 与 Collider/Camera/Snapshot 共用 | 同契约 |
-| Asset Hash | 对原始 GLB bytes 计算 `sha256:`，并记录精确 `byteLength` | Golden `sha256:1095fd…8c2c2`；G Bot `sha256:418332…eeb1b` |
+| Asset Hash | 对派生 Runtime Bundle bytes 计算 `sha256:`，并记录精确 `byteLength` | Golden `sha256:6cf29a…25a8`；G Bot `sha256:4bcf3f…718f` |
 | License/Provenance | SPDX 或内部 License ID、再分发策略、作者；可选来源/许可证 URI 只留在 Registry Manifest | `LicenseRef-Project-Owned`、`allowed`、`Agent Whitebox World SDK` |
-| Bone mapping | 版本化 Rig Profile：唯一 Skeleton Root 独立声明，17 个解剖语义 Bone ID → 源节点名 | Golden `biped.golden@1`；G Bot `biped.mixamo-g-bot@1` |
+| Bone mapping | 版本化 Rig Profile：唯一 Skeleton Root 独立声明，17 个解剖语义 Bone ID → 源节点名 | Golden `biped.golden@2`；G Bot `biped.mixamo-g-bot@2` |
 | Clip mappings (4) | 版本化 Animation Set：每个语义 Action 显式映射源 Clip、Loop、速度、Blend、Root Motion | Golden 与 G Bot 均显式映射 `idle/walk/run/jump`，全部 in-place |
 | Collider ref | 引用经过验收的 Collider Profile；不在运行时从 Mesh Bounds 猜测 | `worldkit://collider-profile/humanoid.medium-capsule@1`，0.32m radius / 1.92m height |
 | Bone Sockets (optional) | 可选；使用稳定 Socket ID、语义 `boneId` 与局部 Offset，不暴露 Babylon Node Path | Golden 提供 `hand.right` → `boneId: "hand.right"` |
@@ -272,7 +273,7 @@ pnpm verify:g-bot-subject
 这里存在两层映射文件，职责不可混合：产品交付的 `asset.manifest.json` 和
 `action-manifest.json` 记录源文件、源 Bone、源 Clip 与制作事实；SDK 注册的
 `RigProfile` 和 `AnimationSet` 把这些源 Key 转成 `hand.right`、`walk` 等稳定语义
-Key。AI-facing World JSON 只引用 `worldkit://subject-definition/humanoid.g-bot@1`。
+Key。AI-facing World JSON 只引用 `worldkit://subject-definition/humanoid.g-bot@2`。
 
 ## 6. Character：分层状态而不是复制主体
 

@@ -40,7 +40,7 @@ Independent Subject Instance + Havok Controller + Fixed-tick Action State
 {
   "id": "hero",
   "kind": "subject",
-  "subjectDefinitionRef": "worldkit://subject-definition/humanoid.rigged-golden@1",
+  "subjectDefinitionRef": "worldkit://subject-definition/humanoid.rigged-golden@2",
   "spawnAnchorEntityId": "spawn-hero"
 }
 ```
@@ -620,7 +620,7 @@ Golden Fixture 只验证 SDK 管线，不作为产品人物视觉标准。
 首个产品 G Bot 已按此流程接入：产品 `asset.manifest.json` / `action-manifest.json`
 保留源资产事实，Registry `RigProfile` / `AnimationSet` 显式映射 65 根源 Bone 和
 25 个源 Clip 中当前开放的 `idle/walk/run/jump`；普通 World JSON 只引用
-`worldkit://subject-definition/humanoid.g-bot@1`。独立验收命令为
+`worldkit://subject-definition/humanoid.g-bot@2`。独立验收命令为
 `pnpm verify:g-bot-subject`。后续产品人物按
 [`Product Asset Intake Template`](2026-08-21-product-asset-intake-template-design.md)
 复制 Fixture，不要再复制 G Bot 专用脚本。

@@ -16,7 +16,7 @@
 - Solved Anchor transforms are absolute world-space values. Do not reinterpret their Y component as an offset.
 - `forwardDirection: "-z"` remains the asset-forward convention; initial world facing is a separate `spawnSubjectFacingRadians` value.
 - Terrain queries match the actual `TL-BL-TR` / `TR-BL-BR` triangle diagonal used by render and physics.
-- Use the single canonical product Ref `worldkit://subject-definition/humanoid.g-bot@1`; no compatibility alias is required because the SDK is unreleased.
+- Use the single canonical product Ref `worldkit://subject-definition/humanoid.g-bot@2`; no compatibility alias is required because the SDK is unreleased.
 - Do not implement relationships, swimming, five-pass capture, a new camera algorithm, vehicles, NPC behavior, or generic action-catalog work.
 - Do not filter `Beta_Joints` by name.
 - Every production change starts with a focused failing regression and ends with its focused suite green.
@@ -98,7 +98,7 @@
 - Modify: G Bot verifier expectations and generated evidence when hashes change.
 
 **Interfaces:**
-- Produces: one V3 `worldkit://subject-definition/humanoid.g-bot@1` containing capability assembly, camera/seat sockets, and `hand.right`.
+- Produces: one V3 `worldkit://subject-definition/humanoid.g-bot@2` containing capability assembly, camera/seat sockets, and `hand.right`.
 - Removes: `worldkit://subject-definition/humanoid.g-bot.ground@1` from public discovery.
 - Guarantees: CLI and Browser discovery return the same canonical Ref and Registry hash.
 

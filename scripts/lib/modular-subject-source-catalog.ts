@@ -52,10 +52,10 @@ export const G_BOT_MODULAR_SUBJECT_SOURCE_PACKAGE = freezeDefinition({
   creatorId: "seedleap",
   displayName: "G Bot Golden",
   sourceGlbRelativePath:
-    "apps/playground/public/subject-assets/humanoid/g-bot/v1/g-bot.glb",
+    "assets/subjects/packages/seedleap/g-bot/v1/extensions/source-archive/original.glb",
   expectedSourceContentHash:
     "sha256:41833210e735788da0777fc37badcec03f90ccf17ab5a7d89103f0727abeeb1b",
-  rigProfileRef: "worldkit://rig-profile/biped.mixamo-g-bot@1",
+  rigProfileRef: "worldkit://rig-profile/biped.mixamo-g-bot@2",
   provenanceMode: "derived-recovery",
   spatialConvention: {
     units: "meters",
@@ -104,10 +104,11 @@ export const GOLDEN_MODULAR_SUBJECT_SOURCE_PACKAGE = freezeDefinition({
   version: 1,
   creatorId: "seedleap",
   displayName: "Golden Humanoid",
-  sourceGlbRelativePath: "apps/playground/public/worldkit-assets/golden-humanoid.glb",
+  sourceGlbRelativePath:
+    "assets/subjects/packages/seedleap/golden-humanoid/v1/extensions/source-archive/original.glb",
   expectedSourceContentHash:
     "sha256:1095fd65c754d53e6db3757ab5e1c9e5e9dcea2581f85d40f37ea4890ee8c2c2",
-  rigProfileRef: "worldkit://rig-profile/biped.golden@1",
+  rigProfileRef: "worldkit://rig-profile/biped.golden@2",
   provenanceMode: "generated-fixture",
   spatialConvention: {
     units: "meters",

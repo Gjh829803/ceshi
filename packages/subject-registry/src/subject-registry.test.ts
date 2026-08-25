@@ -11,23 +11,23 @@ import type {
   AnimationSetManifestInputV1,
 } from "./index";
 
-const SUBJECT_ASSET_REF = "worldkit://subject-asset/humanoid.golden@1";
-const RIG_PROFILE_REF = "worldkit://rig-profile/biped.golden@1";
-const ANIMATION_SET_REF = "worldkit://animation-set/humanoid.ground.golden@1";
+const SUBJECT_ASSET_REF = "worldkit://subject-asset/humanoid.golden@2";
+const RIG_PROFILE_REF = "worldkit://rig-profile/biped.golden@2";
+const ANIMATION_SET_REF = "worldkit://animation-set/humanoid.ground.golden@2";
 const COLLIDER_PROFILE_REF =
   "worldkit://collider-profile/humanoid.medium-capsule@1";
 const RIGGED_SUBJECT_DEFINITION_REF =
-  "worldkit://subject-definition/humanoid.rigged-golden@1";
+  "worldkit://subject-definition/humanoid.rigged-golden@2";
 const G_BOT_SUBJECT_ASSET_REF =
-  "worldkit://subject-asset/actor.humanoid.g-bot@1";
+  "worldkit://subject-asset/actor.humanoid.g-bot@2";
 const G_BOT_RIG_PROFILE_REF =
-  "worldkit://rig-profile/biped.mixamo-g-bot@1";
+  "worldkit://rig-profile/biped.mixamo-g-bot@2";
 const G_BOT_ANIMATION_SET_REF =
-  "worldkit://animation-set/humanoid.ground.g-bot@1";
+  "worldkit://animation-set/humanoid.ground.g-bot@2";
 const G_BOT_COLLIDER_PROFILE_REF =
   "worldkit://collider-profile/humanoid.g-bot-capsule@1";
 const G_BOT_SUBJECT_DEFINITION_REF =
-  "worldkit://subject-definition/humanoid.g-bot@1";
+  "worldkit://subject-definition/humanoid.g-bot@2";
 const G_BOT_ACTION_IDS = [
   "dance.rumba",
   "emote.angry",
@@ -233,7 +233,7 @@ describe("subject resource registry", () => {
       "worldkit://subject-definition/animal.quadruped.forward-steer@2",
       "worldkit://subject-definition/glider.paraglider.unpowered@1",
       G_BOT_SUBJECT_DEFINITION_REF,
-      "worldkit://subject-definition/humanoid.rigged-golden@1",
+      "worldkit://subject-definition/humanoid.rigged-golden@2",
       "worldkit://subject-definition/humanoid.third-person@1",
       "worldkit://subject-definition/quadruped.ground-proxy@1",
       "worldkit://subject-definition/surface-craft.ice-skimmer@1",
@@ -433,14 +433,14 @@ describe("subject resource registry", () => {
     expect(builtInSubjectResourceRegistry.resolveSubjectAsset(SUBJECT_ASSET_REF)).toMatchObject({
       kind: "subject-asset",
       id: "humanoid.golden",
-      version: 1,
+      version: 2,
       resourceRef: SUBJECT_ASSET_REF,
       format: "glb",
       artifact: {
         mediaType: "model/gltf-binary",
-        byteLength: 43_656,
+        byteLength: 48_060,
         contentHash:
-          "sha256:1095fd65c754d53e6db3757ab5e1c9e5e9dcea2581f85d40f37ea4890ee8c2c2",
+          "sha256:6cf29a2c9c024bdc108a8a436255abbb5f370d658d78cca0afb30f4872cd25a8",
       },
       coordinateConvention: {
         forwardAxis: "-Z",
@@ -470,7 +470,7 @@ describe("subject resource registry", () => {
     expect(builtInSubjectResourceRegistry.resolveRigProfile(RIG_PROFILE_REF)).toMatchObject({
       kind: "rig-profile",
       id: "biped.golden",
-      version: 1,
+      version: 2,
       resourceRef: RIG_PROFILE_REF,
       bodyTopology: "biped",
       compatibleSubjectAssetRefs: [SUBJECT_ASSET_REF],
@@ -489,7 +489,7 @@ describe("subject resource registry", () => {
     ).toMatchObject({
       kind: "animation-set",
       id: "humanoid.ground.golden",
-      version: 1,
+      version: 2,
       resourceRef: ANIMATION_SET_REF,
       subjectAssetRef: SUBJECT_ASSET_REF,
       rigProfileRef: RIG_PROFILE_REF,
@@ -554,13 +554,13 @@ describe("subject resource registry", () => {
     ).toMatchObject({
       kind: "subject-asset",
       id: "actor.humanoid.g-bot",
-      version: 1,
+      version: 2,
       resourceRef: G_BOT_SUBJECT_ASSET_REF,
       artifact: {
         mediaType: "model/gltf-binary",
-        byteLength: 5_302_160,
+        byteLength: 6_743_072,
         contentHash:
-          "sha256:41833210e735788da0777fc37badcec03f90ccf17ab5a7d89103f0727abeeb1b",
+          "sha256:4bcf3fabdba1e083ef54bf172fd962ca740e0f2fabdb9cddaae45d5ea208718f",
       },
       bounds: {
         minimumMetersXYZ: [-0.9025661945343018, -0.0003511549439281225, -0.14895710349082947],
@@ -749,17 +749,17 @@ describe("subject resource registry", () => {
       {
         resourceRef: G_BOT_SUBJECT_ASSET_REF,
         contentHash:
-          "sha256:fec417067c0ff5fb6f45adcc3ad6185bd6f692a58e6e5617d064de4e11448831",
+          "sha256:502a489be4a4443ddc94e2459156e91a444bbeab721af6f01ab9b593302b2eb6",
       },
       {
         resourceRef: G_BOT_RIG_PROFILE_REF,
         contentHash:
-          "sha256:463eda61823207629b87b50938f42f4b55bb246944d16b51214ebeb3eaa343bc",
+          "sha256:b64799dcb7eb6ec10a70b871516cd048963cc0b0536b71f1a0862812be0fa483",
       },
       {
         resourceRef: G_BOT_ANIMATION_SET_REF,
         contentHash:
-          "sha256:e624c0f621e1a74ec034a7746a7b0a4536c9af7113b481f25a737ec5992629c4",
+          "sha256:5af2ac07e7dfcf4c6647399022b42c70c7ae7824604fc341d750cb337de1fa27",
       },
       {
         resourceRef: G_BOT_COLLIDER_PROFILE_REF,
@@ -769,7 +769,7 @@ describe("subject resource registry", () => {
       {
         resourceRef: G_BOT_SUBJECT_DEFINITION_REF,
         contentHash:
-          "sha256:b6b9cc919ee4ddf5f1d0c63d093a7c26e04271e4b49cc5c6a3869e9e82f2879c",
+          "sha256:7e56addb34e91835a229c309fd5c132ab94e895ebc529f827b47d46729d4f9c4",
       },
     ]);
   });
@@ -800,8 +800,8 @@ describe("subject resource registry", () => {
 
     for (const { exactRef, resolve } of cases) {
       expect(resolve(exactRef)).toBeDefined();
-      expect(resolve(exactRef.replace(/@1$/, "@latest"))).toBeUndefined();
-      expect(resolve(exactRef.replace(/@1$/, ""))).toBeUndefined();
+      expect(resolve(exactRef.replace(/@\d+$/, "@latest"))).toBeUndefined();
+      expect(resolve(exactRef.replace(/@\d+$/, ""))).toBeUndefined();
       expect(resolve(exactRef.replace(/^worldkit:/, "whitebox:"))).toBeUndefined();
     }
   });

@@ -15,7 +15,7 @@ bytes 的 `sha256:` 与 `byteLength`、`-Z` forward、`+Y` up、1 meter/unit，�
 Asset Manifest 和 schema-v3 Subject Definition。Definition 的静态资产不带 Rig、Socket、
 动画或动画能力；当前只能复用已有的 ground Character capability。
 
-Ready Static GLB 是受限兼容路径，不是长期 Rigged 产品源模板。来源内容仍应按不可变
+Ready Static GLB 是明确的静态产品类型，不是旧 Rigged 接入兼容层，也不是长期 Rigged 产品源模板。来源内容仍应按不可变
 Source Package 记录；材质/纹理可独立保存，非标准内容进入
 `extensions/source-archive/` 且禁止 Runtime 消费。以后增加 Rig/动作时必须发布新的
 Rigged 版本，不能覆盖这个 Static GLB 或借用空 Rig/Clip。

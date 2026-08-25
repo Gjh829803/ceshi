@@ -60,6 +60,19 @@ describe("auditSubjectSourceMigration", () => {
     expect(rowsById["seedleap.golden-humanoid"]?.statuses).toEqual([
       "recovered-modular",
     ]);
+    expect(rowsById["seedleap.g-bot"]?.runtime).toMatchObject({
+      relativePath: "apps/playground/public/subject-assets/humanoid/g-bot/v2/g-bot.glb",
+      byteLengthBytes: 6_743_072,
+      contentHash:
+        "sha256:4bcf3fabdba1e083ef54bf172fd962ca740e0f2fabdb9cddaae45d5ea208718f",
+    });
+    expect(rowsById["seedleap.golden-humanoid"]?.runtime).toMatchObject({
+      relativePath:
+        "apps/playground/public/subject-assets/humanoid/golden/v2/golden-humanoid.glb",
+      byteLengthBytes: 48_060,
+      contentHash:
+        "sha256:6cf29a2c9c024bdc108a8a436255abbb5f370d658d78cca0afb30f4872cd25a8",
+    });
 
     for (const source of sourceFbxContributorAssetInventory) {
       const row = rowsById[source.sourceId];

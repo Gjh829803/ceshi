@@ -120,7 +120,7 @@ Use this template as the structural starting point. Infer IDs, bounds, terrain, 
     {
       "id": "player",
       "kind": "subject",
-      "subjectDefinitionRef": "worldkit://subject-definition/humanoid.g-bot@1",
+      "subjectDefinitionRef": "worldkit://subject-definition/humanoid.g-bot@2",
       "spawnAnchorEntityId": "spawn-main"
     },
     {

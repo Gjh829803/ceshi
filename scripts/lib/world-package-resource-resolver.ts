@@ -87,13 +87,13 @@ export const DEFAULT_WORLD_PACKAGE_RESOURCE_MAPPING_BY_REF_V1: Readonly<
   Record<string, WorldPackageResourceMappingV1>
 > = Object.freeze({
   ...XIER120_WORLD_PACKAGE_RESOURCE_MAPPING_BY_REF_V1,
-  "worldkit://subject-asset/actor.humanoid.g-bot@1": Object.freeze({
-    publicUri: "/subject-assets/humanoid/g-bot/v1/g-bot.glb",
+  "worldkit://subject-asset/actor.humanoid.g-bot@2": Object.freeze({
+    publicUri: "/subject-assets/humanoid/g-bot/v2/g-bot.glb",
     packagePath: "resources/subject-assets/actor.humanoid.g-bot.glb",
     mediaType: "model/gltf-binary",
   }),
-  "worldkit://subject-asset/humanoid.golden@1": Object.freeze({
-    publicUri: "/worldkit-assets/golden-humanoid.glb",
+  "worldkit://subject-asset/humanoid.golden@2": Object.freeze({
+    publicUri: "/subject-assets/humanoid/golden/v2/golden-humanoid.glb",
     packagePath: "resources/subject-assets/humanoid.golden.glb",
     mediaType: "model/gltf-binary",
   }),

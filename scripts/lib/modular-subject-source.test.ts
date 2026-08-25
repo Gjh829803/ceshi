@@ -21,11 +21,14 @@ const TINY_PNG_BYTES = Uint8Array.from(Buffer.from(
 ));
 
 const GOLDEN_GLB_PATH = fileURLToPath(
-  new URL("../../apps/playground/public/worldkit-assets/golden-humanoid.glb", import.meta.url),
+  new URL(
+    "../../assets/subjects/packages/seedleap/golden-humanoid/v1/extensions/source-archive/original.glb",
+    import.meta.url,
+  ),
 );
 const G_BOT_GLB_PATH = fileURLToPath(
   new URL(
-    "../../apps/playground/public/subject-assets/humanoid/g-bot/v1/g-bot.glb",
+    "../../assets/subjects/packages/seedleap/g-bot/v1/extensions/source-archive/original.glb",
     import.meta.url,
   ),
 );
@@ -35,7 +38,8 @@ const goldenPackageDefinition: ModularSubjectPackageDefinitionV1 = {
   version: 1,
   creatorId: "seedleap",
   displayName: "Golden Humanoid",
-  sourceGlbRelativePath: "apps/playground/public/worldkit-assets/golden-humanoid.glb",
+  sourceGlbRelativePath:
+    "assets/subjects/packages/seedleap/golden-humanoid/v1/extensions/source-archive/original.glb",
   expectedSourceContentHash:
     "sha256:1095fd65c754d53e6db3757ab5e1c9e5e9dcea2581f85d40f37ea4890ee8c2c2",
   rigProfileRef: "worldkit://rig-profile/humanoid.golden-biped@1",
@@ -134,9 +138,9 @@ describe("modular Subject source recovery", () => {
       definition: {
         ...goldenPackageDefinition,
         id: "g-bot-buffer-compaction",
-        sourceGlbRelativePath: "apps/playground/public/subject-assets/humanoid/g-bot/v1/g-bot.glb",
+        sourceGlbRelativePath: "apps/playground/public/subject-assets/humanoid/g-bot/v2/g-bot.glb",
         expectedSourceContentHash: sourceHash(singleActionSource),
-        rigProfileRef: "worldkit://rig-profile/biped.mixamo-g-bot@1",
+        rigProfileRef: "worldkit://rig-profile/biped.mixamo-g-bot@2",
         provenanceMode: "derived-recovery",
         spatialReview: {
           spatialReviewStatus: "needs-visual-review",

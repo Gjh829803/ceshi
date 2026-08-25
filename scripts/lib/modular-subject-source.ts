@@ -1044,6 +1044,7 @@ async function recoverModelDocument(source: Document): Promise<Uint8Array> {
   root.listTextures().forEach((texture) => texture.dispose());
   disposeAccessorsExcept(model, modelAccessors(model));
   await model.transform(prune({
+    keepAttributes: true,
     propertyTypes: [
       PropertyType.ANIMATION,
       PropertyType.ANIMATION_CHANNEL,

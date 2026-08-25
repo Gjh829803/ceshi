@@ -189,8 +189,8 @@ describe("P1.5 admission clean-break", () => {
       ),
     ).toBeUndefined();
     for (const ref of [
-      "worldkit://subject-definition/humanoid.g-bot@1",
-      "worldkit://subject-definition/humanoid.rigged-golden@1",
+      "worldkit://subject-definition/humanoid.g-bot@2",
+      "worldkit://subject-definition/humanoid.rigged-golden@2",
     ]) {
       const subject = builtInSubjectResourceRegistry.resolveSubjectDefinition(ref);
       expect(subject?.profiles).toMatchObject({

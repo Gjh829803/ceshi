@@ -50,11 +50,11 @@ function deepFreeze<T>(value: T): Readonly<T> {
 const ROUTE_EVIDENCE_HASH = `sha256:${"9".repeat(64)}` as const;
 const coreControlManifest = createCoreControlFeatureFactoryV1().manifest;
 const goldenAssetBytes = new Uint8Array(await readFile(fileURLToPath(new URL(
-  "../public/worldkit-assets/golden-humanoid.glb",
+  "../public/subject-assets/humanoid/golden/v2/golden-humanoid.glb",
   import.meta.url,
 ))));
 const gBotAssetBytes = new Uint8Array(await readFile(fileURLToPath(new URL(
-  "../public/subject-assets/humanoid/g-bot/v1/g-bot.glb",
+  "../public/subject-assets/humanoid/g-bot/v2/g-bot.glb",
   import.meta.url,
 ))));
 
@@ -309,7 +309,7 @@ describe("loadAuthoringScene", () => {
         "subjectDefinitionRef",
       ]);
       expect(subject.subjectDefinitionRef).toBe(
-        "worldkit://subject-definition/humanoid.rigged-golden@1",
+        "worldkit://subject-definition/humanoid.rigged-golden@2",
       );
     }
     expect(anchors.map((anchor) => anchor.id)).toEqual([
@@ -389,7 +389,7 @@ describe("loadAuthoringScene", () => {
       subjectStatesByEntityId: {
         player: {
           entityId: "player",
-          subjectDefinitionRef: "worldkit://subject-definition/humanoid.rigged-golden@1",
+          subjectDefinitionRef: "worldkit://subject-definition/humanoid.rigged-golden@2",
           subjectDefinitionHash: `sha256:${"1".repeat(64)}`,
           positionMetersXYZ: [0, 0, 0],
           velocityMetersPerSecondXYZ: [0, 0, 0],
@@ -562,7 +562,7 @@ describe("loadAuthoringScene", () => {
       async () => jsonResponse(routeAuthoringWorld()),
       {
         subjectDefinitionRef:
-          "worldkit://subject-definition/humanoid.g-bot@1",
+          "worldkit://subject-definition/humanoid.g-bot@2",
         fetchSubjectAsset: (async (input: URL | RequestInfo) => {
           const requestUrl = String(input);
           fetchCalls.push(requestUrl);
@@ -582,18 +582,18 @@ describe("loadAuthoringScene", () => {
     expect(loaded.ok).toBe(true);
     expect(fetchCalls).toEqual([
       expect.stringMatching(
-        /^https:\/\/playground\.test\/subject-assets\/humanoid\/g-bot\/v1\/g-bot\.glb\?worldkit-content-hash=sha256%3A[a-f0-9]{64}$/,
+        /^https:\/\/playground\.test\/subject-assets\/humanoid\/g-bot\/v2\/g-bot\.glb\?worldkit-content-hash=sha256%3A[a-f0-9]{64}$/,
       ),
     ]);
     expect(
       loaded.runtimeWorldConfiguration?.worldPackageBuildReceipt.manifest.resources,
     ).toContainEqual({
-      resourceRef: "worldkit://subject-asset/actor.humanoid.g-bot@1",
+      resourceRef: "worldkit://subject-asset/actor.humanoid.g-bot@2",
       packagePath: "resources/subject-assets/actor.humanoid.g-bot.glb",
       mediaType: "model/gltf-binary",
       sizeBytes: gBotAssetBytes.byteLength,
       contentHash:
-        "sha256:41833210e735788da0777fc37badcec03f90ccf17ab5a7d89103f0727abeeb1b",
+        "sha256:4bcf3fabdba1e083ef54bf172fd962ca740e0f2fabdb9cddaae45d5ea208718f",
     });
   }, 15_000);
 
@@ -875,7 +875,7 @@ describe("loadAuthoringScene", () => {
       async () => new Response(JSON.stringify(source)),
       {
         subjectDefinitionRef:
-          "worldkit://subject-definition/humanoid.g-bot@1",
+          "worldkit://subject-definition/humanoid.g-bot@2",
         fetchSubjectAsset: (async (input: URL | RequestInfo) => ({
           ok: true,
           redirected: false,
@@ -895,7 +895,7 @@ describe("loadAuthoringScene", () => {
         subjects: [
           expect.objectContaining({
             subjectDefinitionRef:
-              "worldkit://subject-definition/humanoid.g-bot@1",
+              "worldkit://subject-definition/humanoid.g-bot@2",
           }),
         ],
       },
@@ -904,7 +904,7 @@ describe("loadAuthoringScene", () => {
         kind: "capability-demo",
         id: "capability-demo",
         subjectDefinitionRef:
-          "worldkit://subject-definition/humanoid.g-bot@1",
+          "worldkit://subject-definition/humanoid.g-bot@2",
         changes: [
           {
             type: "subject-definition-replaced",
@@ -912,7 +912,7 @@ describe("loadAuthoringScene", () => {
             beforeSubjectDefinitionRef:
               "worldkit://subject-definition/humanoid.third-person@1",
             afterSubjectDefinitionRef:
-              "worldkit://subject-definition/humanoid.g-bot@1",
+              "worldkit://subject-definition/humanoid.g-bot@2",
           },
           {
             type: "resource-budget-changed",
@@ -964,7 +964,7 @@ describe("loadAuthoringScene", () => {
       async () => new Response(sourceText),
       {
         subjectDefinitionRef:
-          "worldkit://subject-definition/humanoid.g-bot@1",
+          "worldkit://subject-definition/humanoid.g-bot@2",
       },
     );
     const unmodified = await loadAuthoringScene(
@@ -990,14 +990,14 @@ describe("loadAuthoringScene", () => {
       kind: "capability-demo",
       id: "capability-demo",
       subjectDefinitionRef:
-        "worldkit://subject-definition/humanoid.g-bot@1",
+        "worldkit://subject-definition/humanoid.g-bot@2",
       changes: [{
         type: "subject-definition-replaced",
         subjectEntityId: "player",
         beforeSubjectDefinitionRef:
           "worldkit://subject-definition/humanoid.third-person@1",
         afterSubjectDefinitionRef:
-          "worldkit://subject-definition/humanoid.g-bot@1",
+          "worldkit://subject-definition/humanoid.g-bot@2",
       }],
     });
     expect(Object.isFrozen(overlaid.hostOverlay)).toBe(true);

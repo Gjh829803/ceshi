@@ -110,13 +110,13 @@
     {
       "id": "g-bot-primary",
       "kind": "subject",
-      "subjectDefinitionRef": "worldkit://subject-definition/humanoid.g-bot@1",
+      "subjectDefinitionRef": "worldkit://subject-definition/humanoid.g-bot@2",
       "spawnAnchorEntityId": "spawn-g-bot-primary"
     },
     {
       "id": "g-bot-secondary",
       "kind": "subject",
-      "subjectDefinitionRef": "worldkit://subject-definition/humanoid.g-bot@1",
+      "subjectDefinitionRef": "worldkit://subject-definition/humanoid.g-bot@2",
       "spawnAnchorEntityId": "spawn-g-bot-secondary"
     },
     {

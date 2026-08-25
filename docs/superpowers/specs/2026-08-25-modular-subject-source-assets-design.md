@@ -1,9 +1,9 @@
 # Modular Subject Source Assets Design
 
-- Status: Frozen for the source-migration slice
+- Status: Frozen for source migration and approved Runtime activation
 - Date: 2026-08-25
-- Scope: product-authoritative Subject source packages and recovery of existing merged GLBs
-- Runtime behavior: unchanged in this slice
+- Scope: product-authoritative Subject source packages, recovery of existing merged GLBs, and deterministic derived Runtime Bundles
+- Runtime behavior: the self-contained GLB contract is unchanged; active inputs move cleanly to derived Bundles
 
 ## 1. Decision
 
@@ -23,10 +23,10 @@ matrices, and the bind pose form one structural unit. The Rig Profile remains a 
 contract: it maps provider node names to stable semantic bone IDs and defines compatibility.
 
 Material/texture facts and Animation Clips are source resources, not embedded source authority in
-the Model Asset. The first implementation slice creates and validates these modular source
-artifacts without changing Canonical Authoring, Normalized IR, ExecutionPlan, WorldPackage, or
-Babylon Runtime behavior. Existing self-contained Runtime GLBs remain the compatibility and
-rendered-regression baseline.
+the Model Asset. The implementation creates and validates these modular source artifacts without
+changing Canonical Authoring, Normalized IR, ExecutionPlan, WorldPackage, or Babylon Runtime
+contracts. Section 11 activates deterministic self-contained Runtime Bundles derived from those
+sources and removes the former public merged inputs without a compatibility path.
 
 ## 2. Why the source and Runtime layers remain separate
 
@@ -35,8 +35,8 @@ separate GLB therefore does not, by itself, define safe cross-file binding. Curr
 loads one Subject Asset container and obtains its Skeleton and Animation Groups from that same
 container.
 
-This slice establishes the durable product source boundary first. A later approved Runtime slice
-may choose either:
+The source migration first established the durable product boundary. The approved activation in
+Section 11 chooses the first of these approaches:
 
 1. deterministically assemble the locked Model, Material Set, and Animation Clips into a derived
    self-contained Runtime GLB; or
@@ -280,11 +280,55 @@ rendered equivalence from structural tests alone.
 Architecture, public-contract decisions, dependency rulings, and final integration remain owned by
 the main agent. MSA-04 may be delegated only after the recovery report schema from MSA-02 is stable.
 
-## 11. Non-goals
+## 11. Approved Runtime activation slice
+
+The modular package is now the product-authoritative input for a deterministic derived Runtime
+Bundle. Runtime continues to consume one self-contained GLB; Babylon does not load cross-file
+Animation Clips and no public Authoring, Registry, Normalized IR, ExecutionPlan, or WorldPackage
+schema changes are introduced.
+
+For each rigged modular package, the build tool:
+
+1. reads the committed `model/model.glb`, Model manifest, every declared one-action Clip GLB, and
+   Clip manifest;
+2. verifies exact artifact hashes, the package action closure, and one identical Rig signature;
+3. copies each Clip animation into the Model document and retargets every channel by its unique
+   full joint path;
+4. rejects missing, ambiguous, or non-Rig targets rather than guessing by short Node name;
+5. writes one deterministic self-contained Runtime Bundle plus a canonical provenance manifest;
+6. publishes the same locked Bundle bytes to a single new versioned host asset path; and
+7. replaces all in-repository Registry, Resolver, WorldPackage, example, and test references with
+   the new versioned Subject Asset and Subject Definition Refs.
+
+The former merged GLBs are removed from the public host surface. Their exact bytes remain only as
+non-Runtime Source Archives under `extensions/`; there is no fallback URL, alias Ref, dual Hash, or
+legacy resolver branch. Updating a Model, Material Set, or Clip requires
+a new immutable package version, regeneration of the Runtime Bundle, Registry lock update, and the
+normal rendered/manual gates. `extensions/` remains provenance-only and is never assembled.
+
+Runtime Bundle manifests record the exact Model, Material Set, and ordered Clip resource hashes so
+the derived artifact is reproducible and auditable. Material Set application remains a separate
+future Runtime styling slice because the current whitebox Subject visual intentionally replaces
+imported materials; this activation proves Model/Rig/Animation source authority without weakening
+that renderer policy.
+
+### 11.1 Runtime activation responsibility graph
+
+| ID | Goal and independently verifiable deliverable | depends_on | blocks | Exclusive ownership | Stable I/O and integration point | Required evidence | Mode |
+|---|---|---|---|---|---|---|---|
+| MSA-07 | Deterministically assemble and validate a self-contained Runtime Bundle from one modular package | MSA-03 | MSA-08 | `scripts/lib/modular-subject-runtime-bundle.ts` and focused tests | committed package files -> Bundle bytes + canonical manifest | red/green; exact action closure; full-path retargeting; byte determinism; tamper rejection | `sequential` |
+| MSA-08 | Publish G Bot and Golden Bundle artifacts and check them exactly | MSA-07 | MSA-09 | bundle CLI, generated Bundle GLBs/manifests, root scripts | package catalog -> staged public artifacts or mismatch diagnostics | write/check equivalence; old merged inputs byte-identical | `sequential` |
+| MSA-09 | Clean-break all in-repository Subject entries onto derived Bundles | MSA-08 | MSA-10 | built-in Subject Asset locks, browser/CLI mappings, G Bot intake/runtime manifest, examples/tests | new versioned Subject Definition Ref -> new locked Bundle bytes | no old public GLB/Ref/path remains; Registry, resolver, WorldPackage, Runtime asset-load tests | `main-agent-only` |
+| MSA-10 | Synchronize guidance, verify, integrate, and clean only this worktree | MSA-09 | — | import docs, branch integration, owned worktree | activated tree -> pushed `main` | focused gates, typecheck, diff hygiene, remote-main verification | `main-agent-only` |
+
+All four tasks are sequential because generated bytes, Registry locks, and host mappings share one
+artifact identity. Per the user's explicit instruction, this slice does not schedule subagents.
+
+## 12. Non-goals
 
 - changing public Authoring/Registry/ExecutionPlan fields;
 - loading independent Animation Clips or Material Sets in Babylon Runtime;
-- replacing current Runtime GLBs;
+- deleting the exact former merged bytes from `extensions/source-archive/`;
 - automatic cross-Rig retargeting;
 - repairing non-human Skin weights or inventing semantic Bone mappings;
 - enabling vehicles, flight, mounts, composites, or NPC behavior;

@@ -238,8 +238,8 @@ const RIGGED_GOLDEN_HUMANOID_DEFINITION: RegistrySubjectDefinitionInputV3 = {
   kind: "subject-definition",
   schemaVersion: 3,
   id: "humanoid.rigged-golden",
-  version: 1,
-  resourceRef: "worldkit://subject-definition/humanoid.rigged-golden@1",
+  version: 2,
+  resourceRef: "worldkit://subject-definition/humanoid.rigged-golden@2",
   authoringAvailability: "recommended",
   category: "human",
   bodyTopology: "biped",
@@ -249,7 +249,7 @@ const RIGGED_GOLDEN_HUMANOID_DEFINITION: RegistrySubjectDefinitionInputV3 = {
     {
       id: "body.asset",
       kind: "asset",
-      subjectAssetRef: "worldkit://subject-asset/humanoid.golden@1",
+      subjectAssetRef: "worldkit://subject-asset/humanoid.golden@2",
       localTransform: {
         positionMetersXYZ: [0, 0, 0],
         rotationEulerRadiansXYZ: [0, 0, 0],
@@ -261,8 +261,8 @@ const RIGGED_GOLDEN_HUMANOID_DEFINITION: RegistrySubjectDefinitionInputV3 = {
   ],
   visualBinding: {
     mode: "rigged",
-    rigProfileRef: "worldkit://rig-profile/biped.golden@1",
-    animationSetRef: "worldkit://animation-set/humanoid.ground.golden@1",
+    rigProfileRef: "worldkit://rig-profile/biped.golden@2",
+    animationSetRef: "worldkit://animation-set/humanoid.ground.golden@2",
   },
   sockets: [
     {
@@ -300,7 +300,7 @@ const RIGGED_GOLDEN_HUMANOID_DEFINITION: RegistrySubjectDefinitionInputV3 = {
     harnessProfileRef: "worldkit://harness-profile/subject.standard@1",
   },
   relationshipCapabilityRefs: [],
-  actionOrPoseSetRef: "worldkit://animation-set/humanoid.ground.golden@1",
+  actionOrPoseSetRef: "worldkit://animation-set/humanoid.ground.golden@2",
   renderBindingProfileRef: "worldkit://render-binding/subject.standard@1",
   aiMetadata: {
     displayName: "Rigged Golden humanoid",
@@ -313,8 +313,8 @@ export const G_BOT_HUMANOID_DEFINITION: RegistrySubjectDefinitionInputV3 = {
   kind: "subject-definition",
   schemaVersion: 3,
   id: "humanoid.g-bot",
-  version: 1,
-  resourceRef: "worldkit://subject-definition/humanoid.g-bot@1",
+  version: 2,
+  resourceRef: "worldkit://subject-definition/humanoid.g-bot@2",
   authoringAvailability: "recommended",
   category: "human",
   bodyTopology: "biped",
@@ -324,7 +324,7 @@ export const G_BOT_HUMANOID_DEFINITION: RegistrySubjectDefinitionInputV3 = {
     {
       id: "body.asset",
       kind: "asset",
-      subjectAssetRef: "worldkit://subject-asset/actor.humanoid.g-bot@1",
+      subjectAssetRef: "worldkit://subject-asset/actor.humanoid.g-bot@2",
       localTransform: {
         positionMetersXYZ: [0, 0, 0],
         rotationEulerRadiansXYZ: [0, Math.PI, 0],
@@ -336,8 +336,8 @@ export const G_BOT_HUMANOID_DEFINITION: RegistrySubjectDefinitionInputV3 = {
   ],
   visualBinding: {
     mode: "rigged",
-    rigProfileRef: "worldkit://rig-profile/biped.mixamo-g-bot@1",
-    animationSetRef: "worldkit://animation-set/humanoid.ground.g-bot@1",
+    rigProfileRef: "worldkit://rig-profile/biped.mixamo-g-bot@2",
+    animationSetRef: "worldkit://animation-set/humanoid.ground.g-bot@2",
   },
   sockets: [
     {
@@ -422,7 +422,7 @@ export const G_BOT_HUMANOID_DEFINITION: RegistrySubjectDefinitionInputV3 = {
     harnessProfileRef: "worldkit://harness-profile/subject.standard@1",
   },
   relationshipCapabilityRefs: [],
-  actionOrPoseSetRef: "worldkit://animation-set/humanoid.ground.g-bot@1",
+  actionOrPoseSetRef: "worldkit://animation-set/humanoid.ground.g-bot@2",
   renderBindingProfileRef: "worldkit://render-binding/subject.standard@1",
   aiMetadata: {
     displayName: "G Bot humanoid",

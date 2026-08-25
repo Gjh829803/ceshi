@@ -14,14 +14,14 @@ import type {
 const GOLDEN_HUMANOID_SUBJECT_ASSET: SubjectAssetManifestInputV1 = {
   kind: "subject-asset",
   id: "humanoid.golden",
-  version: 1,
-  resourceRef: "worldkit://subject-asset/humanoid.golden@1",
+  version: 2,
+  resourceRef: "worldkit://subject-asset/humanoid.golden@2",
   format: "glb",
   artifact: {
     mediaType: "model/gltf-binary",
-    byteLength: 43_656,
+    byteLength: 48_060,
     contentHash:
-      "sha256:1095fd65c754d53e6db3757ab5e1c9e5e9dcea2581f85d40f37ea4890ee8c2c2",
+      "sha256:6cf29a2c9c024bdc108a8a436255abbb5f370d658d78cca0afb30f4872cd25a8",
   },
   coordinateConvention: {
     forwardAxis: "-Z",
@@ -76,8 +76,8 @@ const GOLDEN_BIPED_BONE_IDS = [
 const GOLDEN_BIPED_RIG_PROFILE: RigProfileManifestInputV1 = {
   kind: "rig-profile",
   id: "biped.golden",
-  version: 1,
-  resourceRef: "worldkit://rig-profile/biped.golden@1",
+  version: 2,
+  resourceRef: "worldkit://rig-profile/biped.golden@2",
   bodyTopology: "biped",
   compatibleSubjectAssetRefs: [GOLDEN_HUMANOID_SUBJECT_ASSET.resourceRef],
   skeletonRootBoneName: "root",
@@ -112,8 +112,8 @@ const GOLDEN_BIPED_RIG_PROFILE: RigProfileManifestInputV1 = {
 const GOLDEN_GROUND_ANIMATION_SET: AnimationSetManifestInputV1 = {
   kind: "animation-set",
   id: "humanoid.ground.golden",
-  version: 1,
-  resourceRef: "worldkit://animation-set/humanoid.ground.golden@1",
+  version: 2,
+  resourceRef: "worldkit://animation-set/humanoid.ground.golden@2",
   subjectAssetRef: GOLDEN_HUMANOID_SUBJECT_ASSET.resourceRef,
   rigProfileRef: GOLDEN_BIPED_RIG_PROFILE.resourceRef,
   defaultActionId: "idle",
@@ -162,14 +162,14 @@ const GOLDEN_GROUND_ANIMATION_SET: AnimationSetManifestInputV1 = {
 const G_BOT_SUBJECT_ASSET: SubjectAssetManifestInputV1 = {
   kind: "subject-asset",
   id: "actor.humanoid.g-bot",
-  version: 1,
-  resourceRef: "worldkit://subject-asset/actor.humanoid.g-bot@1",
+  version: 2,
+  resourceRef: "worldkit://subject-asset/actor.humanoid.g-bot@2",
   format: "glb",
   artifact: {
     mediaType: "model/gltf-binary",
-    byteLength: 5_302_160,
+    byteLength: 6_743_072,
     contentHash:
-      "sha256:41833210e735788da0777fc37badcec03f90ccf17ab5a7d89103f0727abeeb1b",
+      "sha256:4bcf3fabdba1e083ef54bf172fd962ca740e0f2fabdb9cddaae45d5ea208718f",
   },
   coordinateConvention: {
     forwardAxis: "-Z",
@@ -235,8 +235,8 @@ const G_BOT_SUBJECT_ASSET: SubjectAssetManifestInputV1 = {
 const G_BOT_MIXAMO_RIG_PROFILE: RigProfileManifestInputV1 = {
   kind: "rig-profile",
   id: "biped.mixamo-g-bot",
-  version: 1,
-  resourceRef: "worldkit://rig-profile/biped.mixamo-g-bot@1",
+  version: 2,
+  resourceRef: "worldkit://rig-profile/biped.mixamo-g-bot@2",
   bodyTopology: "biped",
   compatibleSubjectAssetRefs: [G_BOT_SUBJECT_ASSET.resourceRef],
   skeletonRootBoneName: "mixamorig:Hips",
@@ -302,8 +302,8 @@ const G_BOT_ACTION_BINDINGS = [
 const G_BOT_GROUND_ANIMATION_SET: AnimationSetManifestInputV1 = {
   kind: "animation-set",
   id: "humanoid.ground.g-bot",
-  version: 1,
-  resourceRef: "worldkit://animation-set/humanoid.ground.g-bot@1",
+  version: 2,
+  resourceRef: "worldkit://animation-set/humanoid.ground.g-bot@2",
   subjectAssetRef: G_BOT_SUBJECT_ASSET.resourceRef,
   rigProfileRef: G_BOT_MIXAMO_RIG_PROFILE.resourceRef,
   defaultActionId: "idle",

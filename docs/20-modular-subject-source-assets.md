@@ -1,8 +1,9 @@
 # 模块化 Subject 资产导入与 xier120 修改清单
 
 本文件是产品资产权威源的当前导入标准，也是本次 G Bot、Golden 和 xier120 迁移结果。
-它不改变现有 Runtime 合同：当前 Babylon Runtime 仍加载一个自包含 GLB，并使用
-`whitebox-neutral` 材质；模块化目录是产品可维护源，现有合并 GLB 是兼容运行产物。
+Babylon Runtime 继续加载一个自包含 GLB，并使用 `whitebox-neutral` 材质；该 GLB
+现在只允许由模块化产品权威源确定性生成。项目不保留旧合并 GLB 的公开路径、Resolver
+回退或旧 Registry Ref；旧原始字节只在 `extensions/source-archive/` 内作为非 Runtime 证据。
 
 ## 1. 长期权威结构
 
@@ -57,35 +58,39 @@ Signature，不做自动 Retarget。
 ```bash
 pnpm assets:subjects:modularize
 pnpm assets:subjects:modularize:check
+pnpm assets:subjects:runtime-bundles
+pnpm assets:subjects:runtime-bundles:check
 pnpm vitest run \
   scripts/lib/modular-subject-source.test.ts \
   scripts/lib/subject-source-migration-audit.test.ts \
   scripts/modular-subject-source-packages.test.ts
 ```
 
-`--write` 在受管目录内完整暂存、验证后替换；`--check` 在系统临时目录重建并逐字节比较，
-不修改目标。机器可读总表位于
+`modularize` 是现有合并来源的一次性恢复/审计工具；日常产品更新直接发布新版本的
+Model、Material Set 或独立 Clip，再由 `runtime-bundles` 生成唯一运行产物。两个
+`--check` 命令只验证确定性，不修改目标。机器可读总表位于
 [`assets/subjects/packages/migration-inventory.json`](../assets/subjects/packages/migration-inventory.json)。
 
 ## 3. 当前实际可用入口
 
-- G Bot：场景引用 `worldkit://subject-definition/humanoid.g-bot@1`；当前仍解析合并
-  `g-bot.glb`，模块化包已生成但未接入独立动作/材质 Runtime。
-- Golden：场景引用 `worldkit://subject-definition/humanoid.rigged-golden@1`；同样保留现有自包含 Runtime GLB。
+- G Bot：场景引用 `worldkit://subject-definition/humanoid.g-bot@2`；唯一运行资产为模块化
+  Model 与 25 个独立 Clip 生成的 `/subject-assets/humanoid/g-bot/v2/g-bot.glb`。
+- Golden：场景引用 `worldkit://subject-definition/humanoid.rigged-golden@2`；唯一运行资产为
+  `/subject-assets/humanoid/golden/v2/golden-humanoid.glb`，由 Model 与 4 个独立 Clip 生成。
 - xier120：19 个 Definition 已能以 `static-subject` 直接引用，例如
   `worldkit://subject-definition/xier120.biped-animal@1`。它们只有静态外观加当前 ground
   Character 能力，不等于车辆、飞行、骑乘或 NPC 行为。
 
-因此，本次拆分不会让现有入口失效，也不声称 Runtime 已能跨文件加载动作或切换真实材质。
-下一片经批准的 Runtime 工作应选择：从模块化源确定性组装兼容 Bundle，或增加 Model、Clip、
-Material/Texture 独立缓存和显式目标转换。该工作尚未实现。
+Runtime 不跨文件临时绑定动作：构建阶段按完整 Bone 路径验证并装配，运行阶段只消费锁定
+Bundle。更新任一独立动作后，重跑 Bundle 命令并升级 Registry 版本即可生效。真实材质仍
+受当前 `whitebox-neutral` 渲染策略约束，这与资产来源是否模块化无关。
 
 ## 4. 当前资产结论与产品修改项
 
 | 资产 | 当前可用状态 | Rigged/动态阻断 | 产品需要修改 |
 | --- | --- | --- | --- |
-| `seedleap.g-bot` | 合并 Runtime GLB 可用；模块化恢复完成 | 空间朝向/支点仍需渲染复核 | 补正/右/背及旧新 Opening Frame 对比；通过前保持 `needs-visual-review` |
-| `seedleap.golden-humanoid` | Runtime 与模块化 Fixture 均可用 | 无 | 无需重导；保持 Model、Rig、材质和动作的不可变独立版本 |
+| `seedleap.g-bot` | 模块化源与派生 Runtime Bundle 已接入 `@2` | 空间朝向/支点仍需渲染复核 | 补正/右/背及 Opening Frame 复核；通过前保持 `needs-visual-review` |
+| `seedleap.golden-humanoid` | 模块化源与派生 Runtime Bundle 已接入 `@2` | 无 | 无需重导；保持 Model、Rig、材质和动作的不可变独立版本 |
 | `xier120.aerial-cockpit` | 静态 Subject 可用 | 控制主体未定义；无 composite Rig/flight 合同 | 拆分骑手/设备权属，声明唯一受控根，再分别导出 Rig/动作并申请飞行能力 |
 | `xier120.aerial-hanging` | 静态 Subject 可用 | 同上 | 声明受控根和附件合同，输出单一批准 Rig、Bind Pose 与独立动作 |
 | `xier120.aerial-seated` | 静态 Subject 可用 | 同上 | 拆分骑手与飞行器视觉/控制权，申请对应能力后重导 |

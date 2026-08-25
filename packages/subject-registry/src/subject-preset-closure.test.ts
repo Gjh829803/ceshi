@@ -10,7 +10,7 @@ import {
 const VEHICLE_DEFINITION_REF =
   "worldkit://subject-definition/vehicle.four-wheel.arcade@1";
 const G_BOT_DEFINITION_REF =
-  "worldkit://subject-definition/humanoid.g-bot@1";
+  "worldkit://subject-definition/humanoid.g-bot@2";
 
 describe("subject preset resource closure", () => {
   it("returns the complete sorted exact dependency closure", () => {
@@ -105,9 +105,9 @@ describe("subject preset resource closure", () => {
 
     expect(closure.entries.map((entry) => entry.resourceRef)).toEqual(
       expect.arrayContaining([
-        "worldkit://subject-asset/actor.humanoid.g-bot@1",
-        "worldkit://rig-profile/biped.mixamo-g-bot@1",
-        "worldkit://animation-set/humanoid.ground.g-bot@1",
+        "worldkit://subject-asset/actor.humanoid.g-bot@2",
+        "worldkit://rig-profile/biped.mixamo-g-bot@2",
+        "worldkit://animation-set/humanoid.ground.g-bot@2",
         "worldkit://collider-profile/humanoid.g-bot-capsule@1",
       ]),
     );

@@ -33,7 +33,7 @@ Read these files completely before writing either output:
 ## Implementation priority
 
 1. Read the brief's explicit movement mode, then select the controlled Subject class and motion envelope so route width, slope, clearance, spawn support, and camera scale use the right constraints.
-   - A playable ground humanoid uses `worldkit://subject-definition/humanoid.g-bot@1` by default.
+   - A playable ground humanoid uses `worldkit://subject-definition/humanoid.g-bot@2` by default.
    - `worldkit://subject-definition/humanoid.third-person@1` is a red static capsule proxy. Use it only when the user or brief explicitly asks for a primitive/capsule placeholder.
    - Never assume a resource name implies its rendered shape; follow the catalog.
    - Use only a resource whose current Registry entry implements the requested capability and whose authoring availability is suitable for the requested lane. Experimental entries may be evaluated explicitly, but must not be reported as production support. If no compatible resource exists, stop with a capability-gap diagnostic instead of substituting another movement model.

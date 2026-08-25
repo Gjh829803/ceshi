@@ -31,7 +31,7 @@ Terrain height, normal, and slope queries must use one shared triangle-surface s
 
 ### 2. One canonical G Bot product definition
 
-The unreleased SDK uses a clean break: `worldkit://subject-definition/humanoid.g-bot@1` becomes the single V3 product definition. It contains the approved capability assembly plus both camera/seat sockets and `hand.right`. The duplicate `.ground@1` definition is removed. CLI, Browser, examples, build artifacts, and both G Bot conformance paths resolve the same Ref and canonical hash.
+The unreleased SDK uses a clean break: `worldkit://subject-definition/humanoid.g-bot@2` becomes the single V3 product definition. It contains the approved capability assembly plus both camera/seat sockets and `hand.right`. The duplicate `.ground@1` definition is removed. CLI, Browser, examples, build artifacts, and both G Bot conformance paths resolve the same Ref and canonical hash.
 
 The semantic action resolver remains limited to implemented baseline actions. The 25-clip asset inventory is not promoted into a universal engine action contract in this closure; that taxonomy is deferred to the extensible action-catalog design.
 

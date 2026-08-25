@@ -7,7 +7,10 @@ import {
   sourceFbxContributorAssetInventory,
 } from "@whitebox-world/subject-registry";
 
-import { XIER120_SUBJECT_ASSET_URI_BY_REF_V1 } from "../../apps/playground/src/worldkit-asset-resolver";
+import {
+  PLAYGROUND_SUBJECT_ASSET_URI_BY_REF_V1,
+  XIER120_SUBJECT_ASSET_URI_BY_REF_V1,
+} from "../../apps/playground/src/worldkit-asset-resolver";
 import { BUILT_IN_SUBJECT_RESOURCE_MANIFESTS } from "../../packages/subject-registry/src/built-in-resource-manifests";
 import { canonicalSubjectManifestBytes } from "./modular-subject-source";
 import {
@@ -138,11 +141,36 @@ async function modularRow(
   subjectAssetId: string,
 ): Promise<SubjectSourceMigrationRowV1> {
   const runtimeManifest = builtInSubjectAsset(subjectAssetId);
-  const source = await verifiedArtifact(
+  const sourceBytes = await readFile(path.join(repositoryRoot, definition.sourceGlbRelativePath));
+  if (sha256Bytes(sourceBytes) !== definition.expectedSourceContentHash) {
+    throw new Error(
+      `SUBJECT_SOURCE_MIGRATION_CONTENT_HASH_MISMATCH: ${definition.sourceGlbRelativePath}`,
+    );
+  }
+  const source: SubjectSourceMigrationArtifactV1 = {
+    relativePath: definition.sourceGlbRelativePath,
+    byteLengthBytes: sourceBytes.byteLength,
+    contentHash: definition.expectedSourceContentHash,
+  };
+  const runtimePublicUri = (
+    PLAYGROUND_SUBJECT_ASSET_URI_BY_REF_V1 as Readonly<Record<string, string>>
+  )[runtimeManifest.resourceRef];
+  if (runtimePublicUri === undefined || !runtimePublicUri.startsWith("/")) {
+    throw new Error(`SUBJECT_SOURCE_MIGRATION_RUNTIME_URI_MISSING: ${definition.id}`);
+  }
+  const runtimeRelativePath = path.posix.join(
+    "apps/playground/public",
+    runtimePublicUri.slice(1),
+  );
+  const runtimeContentHash = runtimeManifest.artifact.contentHash;
+  if (!/^sha256:[a-f0-9]{64}$/.test(runtimeContentHash)) {
+    throw new Error(`SUBJECT_SOURCE_MIGRATION_RUNTIME_HASH_INVALID: ${definition.id}`);
+  }
+  const runtime = await verifiedArtifact(
     repositoryRoot,
-    definition.sourceGlbRelativePath,
+    runtimeRelativePath,
     runtimeManifest.artifact.byteLength,
-    definition.expectedSourceContentHash,
+    runtimeContentHash as `sha256:${string}`,
   );
   return {
     id: `${definition.creatorId}.${definition.id}`,
@@ -153,7 +181,7 @@ async function modularRow(
       ? ["recovered-modular", "needs-visual-review"]
       : ["recovered-modular"],
     source,
-    runtime: { ...source, subjectAssetRef: runtimeManifest.resourceRef },
+    runtime: { ...runtime, subjectAssetRef: runtimeManifest.resourceRef },
     sourcePackageRef:
       `worldkit://subject-source-package/${definition.creatorId}.${definition.id}@${definition.version}`,
     rigProfileRef: definition.rigProfileRef,

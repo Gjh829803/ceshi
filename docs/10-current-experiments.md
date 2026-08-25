@@ -71,7 +71,7 @@ pnpm verify:canonical
 ### Canonical Asset Subject S1b / Golden Humanoid 实验
 
 [`rigged-subject-world.json`](../examples/authoring/rigged-subject-world.json) 只在普通
-Subject Node 中引用 `worldkit://subject-definition/humanoid.rigged-golden@1`。GLB 路径、
+Subject Node 中引用 `worldkit://subject-definition/humanoid.rigged-golden@2`。GLB 路径、
 骨骼名、源 Clip 名和 Capsule 尺寸均留在 Registry/Host 边界，不进入世界 JSON。
 
 `pnpm verify:rigged-subject` 已验证：

@@ -25,7 +25,7 @@ const havokWasmBinary = havokWasmBytes.buffer.slice(
 const gBotAssetBytes = new Uint8Array(
   await readFile(
     new URL(
-      "../../../apps/playground/public/subject-assets/humanoid/g-bot/v1/g-bot.glb",
+      "../../../apps/playground/public/subject-assets/humanoid/g-bot/v2/g-bot.glb",
       import.meta.url,
     ),
   ),
@@ -50,7 +50,7 @@ function createFlatTerrainCapabilitySpec() {
 }
 
 async function createCameraPreviewChannelRuntime() {
-  const subjectDefinitionRef = "worldkit://subject-definition/humanoid.g-bot@1";
+  const subjectDefinitionRef = "worldkit://subject-definition/humanoid.g-bot@2";
   const spec = createFlatTerrainCapabilitySpec();
   const subject = spec.nodes.find((node) => node.kind === "subject");
   if (subject?.kind !== "subject") {

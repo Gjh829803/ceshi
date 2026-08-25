@@ -47,7 +47,7 @@ const REPOSITORY_ROOT = fileURLToPath(new URL("../", import.meta.url));
 const INTAKE_FIXTURE = parseProductAssetIntakeFixtureV1(
   JSON.parse(
     readFileSync(
-      path.join(REPOSITORY_ROOT, "examples/product-asset-intakes/humanoid.g-bot@1.json"),
+      path.join(REPOSITORY_ROOT, "examples/product-asset-intakes/humanoid.g-bot@2.json"),
       "utf8",
     ),
   ) as unknown,

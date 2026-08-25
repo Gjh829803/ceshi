@@ -36,9 +36,9 @@ import {
   sampleTerrainHeight,
 } from "./index";
 
-const SUBJECT_ASSET_REF = "worldkit://subject-asset/humanoid.golden@1";
-const RIG_PROFILE_REF = "worldkit://rig-profile/biped.golden@1";
-const ANIMATION_SET_REF = "worldkit://animation-set/humanoid.ground.golden@1";
+const SUBJECT_ASSET_REF = "worldkit://subject-asset/humanoid.golden@2";
+const RIG_PROFILE_REF = "worldkit://rig-profile/biped.golden@2";
+const ANIMATION_SET_REF = "worldkit://animation-set/humanoid.ground.golden@2";
 const COLLIDER_PROFILE_REF =
   "worldkit://collider-profile/humanoid.medium-capsule@1";
 const BIPED_BONE_IDS = [
@@ -306,7 +306,7 @@ const PRODUCT_FIXED_SPAWN_CASES = [
 describe("compileWorld", () => {
   it("projects feel and body traversal, not locomotion speeds", () => {
     const plan = compileAuthoringSpec({
-      subjectDefinitionRef: "worldkit://subject-definition/humanoid.g-bot@1",
+      subjectDefinitionRef: "worldkit://subject-definition/humanoid.g-bot@2",
     });
     const player = plan.subjects.find((subject) => subject.entityId === "player");
     if (player === undefined) {
@@ -358,7 +358,7 @@ describe("compileWorld", () => {
     if (subject === undefined || subject.kind !== "subject") {
       throw new Error("Expected the valid fixture to contain a Subject node.");
     }
-    subject.subjectDefinitionRef = "worldkit://subject-definition/humanoid.g-bot@1";
+    subject.subjectDefinitionRef = "worldkit://subject-definition/humanoid.g-bot@2";
     const normalized = normalizeAuthoringSpecV4(spec);
     if (!normalized.ok || normalized.value === undefined) {
       throw new Error(`G Bot fixture did not normalize: ${JSON.stringify(normalized.diagnostics)}`);
@@ -391,7 +391,7 @@ describe("compileWorld", () => {
     if (subject === undefined || subject.kind !== "subject") {
       throw new Error("Expected the valid fixture to contain a Subject node.");
     }
-    subject.subjectDefinitionRef = "worldkit://subject-definition/humanoid.g-bot@1";
+    subject.subjectDefinitionRef = "worldkit://subject-definition/humanoid.g-bot@2";
     const normalized = normalizeAuthoringSpecV4(spec);
     if (!normalized.ok || normalized.value === undefined) {
       throw new Error(`G Bot fixture did not normalize: ${JSON.stringify(normalized.diagnostics)}`);
@@ -494,8 +494,8 @@ describe("compileWorld", () => {
     expect(plan.subjectAssets[0]).toMatchObject({
       subjectAssetRef: SUBJECT_ASSET_REF,
       artifactContentHash:
-        "sha256:1095fd65c754d53e6db3757ab5e1c9e5e9dcea2581f85d40f37ea4890ee8c2c2",
-      byteLength: 43_656,
+        "sha256:6cf29a2c9c024bdc108a8a436255abbb5f370d658d78cca0afb30f4872cd25a8",
+      byteLength: 48_060,
       mediaType: "model/gltf-binary",
       format: "glb",
       inventory: { vertexCount: 360, triangleCount: 180 },
@@ -576,7 +576,7 @@ describe("compileWorld", () => {
         code: "COMPILER_NORMALIZED_IR_INVALID",
         instancePath: "/normalizedWorldIr",
         message:
-          "NormalizedWorldIR invariant violated: missing Subject Asset 'worldkit://subject-asset/humanoid.golden@1'.",
+          "NormalizedWorldIR invariant violated: missing Subject Asset 'worldkit://subject-asset/humanoid.golden@2'.",
       }],
     });
   });
@@ -585,7 +585,7 @@ describe("compileWorld", () => {
     {
       label: "missing Subject Asset Resource Lock row",
       expectedMessage:
-        "NormalizedWorldIR invariant violated: Subject Asset 'worldkit://subject-asset/humanoid.golden@1' requires one matching locked Subject Asset.",
+        "NormalizedWorldIR invariant violated: Subject Asset 'worldkit://subject-asset/humanoid.golden@2' requires one matching locked Subject Asset.",
       mutate: (world: NormalizedWorldIRV4) => {
         world.resources.resourceLock = world.resources.resourceLock.filter(
           (row) => row.resourceRef !== SUBJECT_ASSET_REF,
@@ -611,7 +611,7 @@ describe("compileWorld", () => {
     {
       label: "wrong-kind Subject Asset Resource Lock row",
       expectedMessage:
-        "NormalizedWorldIR invariant violated: Subject Asset 'worldkit://subject-asset/humanoid.golden@1' requires one matching locked Subject Asset.",
+        "NormalizedWorldIR invariant violated: Subject Asset 'worldkit://subject-asset/humanoid.golden@2' requires one matching locked Subject Asset.",
       mutate: (world: NormalizedWorldIRV4) => {
         world.resources.resourceLock = world.resources.resourceLock.map((row) =>
           row.resourceRef === SUBJECT_ASSET_REF
@@ -623,7 +623,7 @@ describe("compileWorld", () => {
     {
       label: "forged Subject Asset Resource Lock content hash",
       expectedMessage:
-        "NormalizedWorldIR invariant violated: Subject Asset 'worldkit://subject-asset/humanoid.golden@1' does not match its locked Registry manifest hash.",
+        "NormalizedWorldIR invariant violated: Subject Asset 'worldkit://subject-asset/humanoid.golden@2' does not match its locked Registry manifest hash.",
       mutate: (world: NormalizedWorldIRV4) => {
         world.resources.resourceLock = world.resources.resourceLock.map((row) =>
           row.resourceRef === SUBJECT_ASSET_REF
@@ -660,7 +660,7 @@ describe("compileWorld", () => {
         normalizedWorldIrHash: rigged.normalizedWorldIrHash!,
       }).executionPlanHash,
     ).toBe(
-      "sha256:e0bcaf42d565603caebd14f45935c5049af4f5f79f7818f0c61a7d12b7acb6e6",
+      "sha256:dde416aabc914a218d3a4a1fc9e4deeb9a7bad0115fda0973f05bae8199811ae",
     );
   });
 
@@ -673,7 +673,7 @@ describe("compileWorld", () => {
         delete sourceNodeNameByBoneId.head;
       },
       message:
-        "NormalizedWorldIR invariant violated: Rig Profile 'worldkit://rig-profile/biped.golden@1' is missing source-node mapping for Bone 'head'.",
+        "NormalizedWorldIR invariant violated: Rig Profile 'worldkit://rig-profile/biped.golden@2' is missing source-node mapping for Bone 'head'.",
     },
     {
       label: "whitespace-only canonical Bone mapping",
@@ -683,7 +683,7 @@ describe("compileWorld", () => {
         sourceNodeNameByBoneId.head = " \t ";
       },
       message:
-        "NormalizedWorldIR invariant violated: Rig Profile 'worldkit://rig-profile/biped.golden@1' has an empty source-node mapping for Bone 'head'.",
+        "NormalizedWorldIR invariant violated: Rig Profile 'worldkit://rig-profile/biped.golden@2' has an empty source-node mapping for Bone 'head'.",
     },
     {
       label: "own-property undefined canonical Bone mapping",
@@ -693,7 +693,7 @@ describe("compileWorld", () => {
         sourceNodeNameByBoneId.head = undefined;
       },
       message:
-        "NormalizedWorldIR invariant violated: Rig Profile 'worldkit://rig-profile/biped.golden@1' is missing source-node mapping for Bone 'head'.",
+        "NormalizedWorldIR invariant violated: Rig Profile 'worldkit://rig-profile/biped.golden@2' is missing source-node mapping for Bone 'head'.",
     },
     {
       label: "numeric canonical Bone mapping",
@@ -703,7 +703,7 @@ describe("compileWorld", () => {
         sourceNodeNameByBoneId.head = 123;
       },
       message:
-        "NormalizedWorldIR invariant violated: Rig Profile 'worldkit://rig-profile/biped.golden@1' is missing source-node mapping for Bone 'head'.",
+        "NormalizedWorldIR invariant violated: Rig Profile 'worldkit://rig-profile/biped.golden@2' is missing source-node mapping for Bone 'head'.",
     },
     {
       label: "explicit empty canonical Bone mapping",
@@ -713,7 +713,7 @@ describe("compileWorld", () => {
         sourceNodeNameByBoneId.head = "";
       },
       message:
-        "NormalizedWorldIR invariant violated: Rig Profile 'worldkit://rig-profile/biped.golden@1' has an empty source-node mapping for Bone 'head'.",
+        "NormalizedWorldIR invariant violated: Rig Profile 'worldkit://rig-profile/biped.golden@2' has an empty source-node mapping for Bone 'head'.",
     },
   ])("rejects a $label", ({ mutate, message }) => {
     const normalized = normalizeRiggedWorld();
@@ -977,7 +977,7 @@ describe("compileWorld", () => {
         world.resources.subjectAssets = [];
       },
       message:
-        "NormalizedWorldIR invariant violated: missing Subject Asset 'worldkit://subject-asset/humanoid.golden@1'.",
+        "NormalizedWorldIR invariant violated: missing Subject Asset 'worldkit://subject-asset/humanoid.golden@2'.",
     },
     {
       label: "duplicate Subject Asset row",
@@ -988,7 +988,7 @@ describe("compileWorld", () => {
         ];
       },
       message:
-        "NormalizedWorldIR invariant violated: duplicate Subject Asset 'worldkit://subject-asset/humanoid.golden@1'.",
+        "NormalizedWorldIR invariant violated: duplicate Subject Asset 'worldkit://subject-asset/humanoid.golden@2'.",
     },
     {
       label: "mismatched Animation Set Asset row",
@@ -999,7 +999,7 @@ describe("compileWorld", () => {
         }));
       },
       message:
-        "NormalizedWorldIR invariant violated: Animation Set 'worldkit://animation-set/humanoid.ground.golden@1' targets Subject Asset 'worldkit://subject-asset/other@1', but Subject 'player' selects 'worldkit://subject-asset/humanoid.golden@1'.",
+        "NormalizedWorldIR invariant violated: Animation Set 'worldkit://animation-set/humanoid.ground.golden@2' targets Subject Asset 'worldkit://subject-asset/other@1', but Subject 'player' selects 'worldkit://subject-asset/humanoid.golden@2'.",
     },
   ])("rejects a $label with a stable diagnostic", ({ mutate, message }) => {
     const normalized = normalizeRiggedWorld();

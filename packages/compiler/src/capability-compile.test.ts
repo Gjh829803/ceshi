@@ -29,7 +29,7 @@ const GAMEPLAY_BOOTSTRAP_LOCK =
 const IMPLEMENTED_PACKAGES = [
   {
     subjectDefinitionRef:
-      "worldkit://subject-definition/humanoid.g-bot@1",
+      "worldkit://subject-definition/humanoid.g-bot@2",
     defaultMotionKernelRef: "worldkit://motion-kernel/free-ground@1",
     motionKernelRefs: ["worldkit://motion-kernel/free-ground@1"],
     controlProfileRef: "worldkit://control-profile/planar.camera-relative@1",
@@ -163,7 +163,7 @@ describe("capability-driven Subject compilation", () => {
     if (subject === undefined || subject.kind !== "subject") {
       throw new Error("Expected the valid fixture to contain a Subject node.");
     }
-    subject.subjectDefinitionRef = "worldkit://subject-definition/humanoid.g-bot@1";
+    subject.subjectDefinitionRef = "worldkit://subject-definition/humanoid.g-bot@2";
     const normalized = normalizeAuthoringSpecV4(spec);
     if (!normalized.ok || normalized.value === undefined) {
       throw new Error(`G Bot fixture did not normalize: ${JSON.stringify(normalized.diagnostics)}`);

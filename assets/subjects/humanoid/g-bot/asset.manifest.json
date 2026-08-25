@@ -1,17 +1,17 @@
 {
   "schemaVersion": 1,
   "id": "actor.humanoid.g-bot",
-  "version": "1.1.0",
-  "resourceRef": "worldkit://subject-asset/actor.humanoid.g-bot@1",
+  "version": "2.0.0",
+  "resourceRef": "worldkit://subject-asset/actor.humanoid.g-bot@2",
   "label": "G Bot Golden",
   "kind": "actor",
   "topology": "humanoid",
   "runtime": {
     "type": "glb",
-    "url": "/subject-assets/humanoid/g-bot/v1/g-bot.glb",
+    "url": "/subject-assets/humanoid/g-bot/v2/g-bot.glb",
     "formatVersion": "2.0",
-    "byteLength": 5302160,
-    "contentHash": "sha256:41833210e735788da0777fc37badcec03f90ccf17ab5a7d89103f0727abeeb1b"
+    "byteLength": 6743072,
+    "contentHash": "sha256:4bcf3fabdba1e083ef54bf172fd962ca740e0f2fabdb9cddaae45d5ea208718f"
   },
   "coordinates": {
     "unit": "meter",

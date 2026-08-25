@@ -12,6 +12,8 @@
     "generate:golden-humanoid": "tsx scripts/fixtures/generate-golden-humanoid-glb.ts --write",
     "assets:subjects:modularize": "tsx scripts/modular-subject-source-packages.ts --write",
     "assets:subjects:modularize:check": "tsx scripts/modular-subject-source-packages.ts --check",
+    "assets:subjects:runtime-bundles": "tsx scripts/modular-subject-runtime-bundles.ts --write",
+    "assets:subjects:runtime-bundles:check": "tsx scripts/modular-subject-runtime-bundles.ts --check",
     "verify:xier120-subjects": "tsx scripts/verify-xier120-subjects.ts",
     "generate:example-takes": "tsx scripts/generate-example-takes.ts",
     "studio": "pnpm --filter @whitebox-world/studio dev",

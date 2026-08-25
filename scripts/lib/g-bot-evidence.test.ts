@@ -7,7 +7,7 @@ import { inspectGBotProductAssetEvidence } from "./g-bot-evidence";
 
 const GLB_PATH = fileURLToPath(
   new URL(
-    "../../apps/playground/public/subject-assets/humanoid/g-bot/v1/g-bot.glb",
+    "../../apps/playground/public/subject-assets/humanoid/g-bot/v2/g-bot.glb",
     import.meta.url,
   ),
 );
@@ -34,10 +34,10 @@ describe("G Bot product asset evidence", () => {
 
     expect(evidence).toMatchObject({
       schemaVersion: 1,
-      subjectAssetRef: "worldkit://subject-asset/actor.humanoid.g-bot@1",
+      subjectAssetRef: "worldkit://subject-asset/actor.humanoid.g-bot@2",
       artifactContentHash:
-        "sha256:41833210e735788da0777fc37badcec03f90ccf17ab5a7d89103f0727abeeb1b",
-      byteLength: 5_302_160,
+        "sha256:4bcf3fabdba1e083ef54bf172fd962ca740e0f2fabdb9cddaae45d5ea208718f",
+      byteLength: 6_743_072,
       formatVersion: "2.0",
       meshCount: 2,
       jointCount: 65,
@@ -72,7 +72,7 @@ describe("G Bot product asset evidence", () => {
       "emote.salute",
       "emote.angry",
       "dance.rumba",
-    ]);
+    ].sort());
     expect(evidence.supportedActionBindings).toEqual([
       { actionId: "idle", sourceClip: "idle" },
       { actionId: "walk", sourceClip: "walk" },
