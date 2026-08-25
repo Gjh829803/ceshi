@@ -93,6 +93,26 @@ describe("evaluateRequiredRouteV2", () => {
     );
   });
 
+  it("does not use a remote exact seam to admit a local Surface gap", async () => {
+    const receipt = createMultiSurfaceRouteBuildInputReceiptV2({
+      stepPlatformGapMeters: 0.002,
+      includeRemoteExactStepPlatformSeam: true,
+      hardRibbonWidthMeters: 4,
+    });
+    const result = await evaluateRequiredRouteV2({ buildInputReceipt: receipt });
+    expect(result.status).toBe("unreachable");
+    if (result.status !== "unreachable") return;
+    expect(result.connectivityFailure.reason.kind).toBe("surface-gap-exceeded");
+  });
+
+  it("uses portal height instead of Surface centroids for a sloped seam", async () => {
+    const receipt = createMultiSurfaceRouteBuildInputReceiptV2({
+      rampEndHeightMeters: 3,
+    });
+    const result = await evaluateRequiredRouteV2({ buildInputReceipt: receipt });
+    expect(result.status).toBe("complete");
+  });
+
   it("rejects a narrow tread with a dedicated width diagnostic", async () => {
     const receipt = createMultiSurfaceRouteBuildInputReceiptV2({
       walkwayMinimumZ: 2.9,
