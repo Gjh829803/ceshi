@@ -1,6 +1,115 @@
-# M5 Route Graph / Traversability 深度审查
+# M5 Route Graph / Traversability 深度审查（2026-08-25 最新 main 复验）
 
-## 1. 审查元数据
+> 当前处置以第 0 节为准。第 1 节以后保留 2026-08-24 原始审查锚点、完整 finding 机制和历史门禁证据；其中已经修复或撤回的旧结论会在第 0 节和原 finding 标题中明确标记。
+
+## 0. 2026-08-25 最新 main 复验（当前权威）
+
+- 最新 `origin/main`：`01ee4b9dd403dcc3f05b59ec29d7dbd8e5b17f10`（`refactor: retire legacy three runtime`）。
+- 报告分支：`codex/m5-traversability-deep-review`，已先 fetch，再把报告提交 rebase 到上述 main；复验开始时报告分支 HEAD 为 `d8ab34a4a554c09da4dec7495071b227c59a1b3c`。
+- 原始审查锚点：`4ae1912b3e7ce0b635a4a2fc6cf0b3ae178a75e5`；从该锚点到最新 main 共 135 个提交。
+- 审查模式：Mode B 最新变更复验，并按 full-dimension protocol 补齐 D1–D6；Runtime 部分完整应用 runtime-deep-review checklist。
+- 依赖重新按 frozen lockfile 安装：Babylon.js 9.21.2、Havok 1.3.14、recast-navigation 0.43.1、lodash-es 4.18.1。
+- 本次只修改审查报告，没有修改 M5、Runtime、Schema、验证器或 SDK 实现。
+
+### 0.1 最新结论
+
+**仍为 NO-GO。最新 main 没有关闭 5 个原 P0，也没有关闭 8 个原 P1。**
+
+main 的大量更新修复了两条旧的次要结论：独立 `route-validation-runner.test.ts` 的 timeout 已关闭；旧报告对 Medium `contentHash` 的判断不准确，现撤回。它们不改变 M5 的阻断结论，因为下面 5 个 P0 已在 `01ee4b9` 上重新执行并复现：
+
+| ID | 当前状态 | 最新 main 自动化复验 |
+| --- | --- | --- |
+| M5-P0-01 长绕路 0 Tick 假通过 | **仍存在** | 16.795m lower→ramp→upper Path，起终点 XZ 仅 0.4m；结果 `complete`、`completionDurationTicks=0`、`processedTickCount=0`、`fixedTickCallCount=0`。当前 owner 仍在 `packages/validation/src/route-runtime-probe.ts:667-675,747-753`。 |
+| M5-P0-02 station 使用 subject origin 而非 retained foot | **仍存在** | 当前 R1b 成功 fixture 中有 6 Tick 的 foot/subject-origin expected Surface set 分裂；最小例中 foot 仍在 segment 0，subject origin 已选择 segment 1。runner 仍在 `route-runtime-probe.ts:632-639,726-733` 传 subject origin，context validator 仍在 `runtime-probe-contract.ts:1698-1727` 重复同一权威错误。 |
+| M5-P0-03 step-up 单 Tick 超位移 | **仍存在** | 真实 `success-steps-platform-ramp` 仍 `complete`（385 ticks）；Tick 47 水平位移 0.34m，而冻结上界为 0.041m，即 8.29268 倍。当前实现仍在 `packages/runtime-babylon/src/motion-kernel-runtime.ts:245-280` 扩大 `remainingTime`。 |
+| M5-P0-04 Envelope 未与 Lock 重绑定 | **仍存在** | 从真实 receipt 把 `capsuleRadiusMeters` 由 0.32 改为 0.01，保留相同 `resolvedTraversalLockHash`，`createRouteBuildInputReceiptV2` 仍接受并生成新 `routeBuildInputHash`。当前 admission 仍只做字段/Graph Profile 自校验：`packages/traversal/src/build-input.ts:425-527,1002-1033,1273-1299`。 |
+| M5-P0-05 forged Tick 0 support | **仍存在** | 从真实 385-Tick complete receipt 把 initial `surfaceResolution` 改为 `ambiguous`；canonicalizer 与 context validator 均接受，`wrongSupportSurfaceCount=0`。当前分支仍在 `runtime-probe-contract.ts:813-827,1527-1571,1698-1719` 漏计有后续 ticks 时的 initial mismatch。 |
+
+这不是“旧源码没看完”的推断：上述 5 个 P0 都有最新 main 的独立运行结果。正式 R1/R1b fixture 全绿只能证明已列 fixture，不足以覆盖这些反例。
+
+### 0.2 原 findings 逐条处置
+
+| 原 finding | 最新 main 处置 | 当前证据 |
+| --- | --- | --- |
+| P0 长绕路近终点 0 Tick complete | **仍存在** | 最新脚本复现；`route-runtime-probe.ts:667-675,747-753`。 |
+| P0 retained foot / subject origin 权威分裂 | **仍存在** | 最新脚本与真实 R1b evidence；6 Tick allowed-set 分裂。 |
+| P0 step-up 超出 fixed-tick 位移预算 | **仍存在** | 最新真实 Havok success fixture；0.34m / 0.041m。 |
+| P0 Capability Envelope 未重绑定 Lock | **仍存在** | 最新真实 receipt 篡改复现；同 Lock hash 下 0.01m capsule 被接受。 |
+| P0 Tick 0 ambiguous support 可伪造 complete | **仍存在** | 最新真实 385-Tick receipt 篡改复现；canonical/context 均接受。 |
+| P1 单节点 / 零边 Path station 崩溃 | **仍存在** | Canonical Path factory 仍接受；`runtime-probe-contract.ts:929-1042` 仍读取 `identities[index + 1]`，复现 `TypeError`。 |
+| P1 Canonical Path 与 Runtime topology 合同分裂 | **仍存在** | `route-runtime-probe.ts:212-269` 仍额外拒绝 XZ-zero、非相邻重复与自交。 |
+| P1 远端已绑定平台污染无关 Route scope | **仍存在** | 最新脚本仍得到 `HEIGHTFIELD_ROUTE_BUILD_INPUT_INVALID`；全 Surface inventory 与 route-scoped collider inventory 仍分别位于 `heightfield-source.ts:989-1018,1110-1127`。 |
+| P1 分层端点歧义被 nearest polygon 静默消解 | **仍存在** | `evaluate-route.ts:631-680` 仍只取单个 provider nearest polygon；`connectivity-result.ts:696-730` 仍无 layer-ambiguous reason。 |
+| P1 seam proof 非 edge-local | **仍存在** | 核心 blob 未变；`build-graph.ts:1298-1340` 仍按 Surface pair 缓存全局最小 gap，并在 node position 采 step；adapter manifest 仍承诺 portal endpoint。该条为 current-source 静态闭合，没有新增动态 seam fixture。 |
+| P1 公开 Report 可接受 Required Route 子集 | **仍存在** | 公开输入仍只有 caller rows：`route-evaluator.ts:69-75,1826-1901`。Trusted orchestrator 在 `route-validation-orchestrator.ts:824-906` 当前会遍历完整 Plan，所以这里仍定为公共合同缺口，而非已证明 CLI 主路径假通过。 |
+| P1 V2 Route evidence 使用 v1 MIME | **仍存在** | failure/graph/path/probe 仍分别使用 `v1+json`：`route-evaluator.ts:1161-1168,1197-1204,1302-1318,1458-1468`；`validate-v2.ts:1027-1056` 仍只要求非空字符串。 |
+| P1 SubjectController 部分构造泄漏 | **仍存在，且仍是 pre-existing debt** | 最新失败注入 3/3 均 `created=2,released=0`；allocation 后仍有 throwing work：`motion-kernel-runtime.ts:442-463`，host 到成功后才登记 disposer：`babylon-world-runtime.ts:601-620`。 |
+| P2 route-validation-runner timeout | **已关闭** | 专用 timeout 已从 120s 调整到 180s；最新隔离运行 12/12 通过，真实 case 66.522s、suite 71.39s；全量运行中该 case 79.607s，也在预算内。 |
+| P2 Browser complete connectivity / unavailable Path | **仍存在** | 最新最小 DTO 仍被接受；`browser-route-evidence.ts:443-452` 只有 `hasPath ⇒ connectivity complete`，没有反向闭包。 |
+| P2 slope domain 不一致 | **仍存在** | Lock 接受 `(0,90]`，Build Input 接受 `[0,90]`，Recast 要求 `[0,90)`：`lock.ts:152-167`、`build-input.ts:473-479`、`recast-config.ts:123-129`。 |
+| P2 Medium `contentHash` 缺失 | **撤回旧 finding** | Execution Medium 合同有意不暴露 `contentHash`（`execution-plan.ts:337-357`）；compiler 已把 locked Medium hash 与 Definition projection 的 ref/air 比较（`compile-traversal-lock.ts:182-189`）。旧报告把不同职责形态误判成缺校验。 |
+| P2 完成声明 / 文档不一致 | **仍存在** | `docs/18-refactor-progress-and-backlog.md:19-22,848-855` 宣称 M5 closed/no P0/P1；同文件 Validation Report epic `:322-325` 仍把 Route/Browser/CI evidence 接入列为开放（不是声称 Route Graph 本身未实现）；`docs/00-project-overview.md:55-57`、`docs/05-mvp-roadmap.md:17`、`docs/17-canonical-json-quickstart.md:25-27` 又写 M5 仍开放。 |
+| P2 dead code / clean-break 噪声 | **部分修复** | `route-evaluator.ts` 的冗余分支已清理；但 `route-runtime-probe.ts:212-214` 仍有 `RoutePathReceiptV2 \| RoutePathReceiptV2`，`route-evidence-publication.ts:69-78,346-355` 仍重复导出同名 interfaces。 |
+
+本轮没有确认新的 P0–P2。结论变化仅为：1 条旧 P2 已修复、1 条旧 P2 子结论撤回、1 条 dead-code 子结论部分修复；其余 finding 保持。
+
+### 0.3 最新门禁矩阵
+
+| 命令 / 证据 | `01ee4b9` 结果 |
+| --- | --- |
+| `pnpm install --frozen-lockfile` | exit 0，26 workspace projects |
+| `pnpm typecheck` | exit 0 |
+| `pnpm test` | exit 0，180/180 files、2194/2194 tests，298.20s |
+| 隔离 `route-validation-runner.test.ts` | exit 0，12/12；真实 case 66.522s，suite 71.39s |
+| `pnpm verify:route-r0-contract` | exit 0，8 checks；脚本自身明确不证明 R1/R1b |
+| `pnpm verify:route-r1-heightfield` | exit 0，11 fixtures、8 adversarial checks；repeat/concurrent/cadence hashes 一致，provider leaks 为空 |
+| `pnpm verify:route-r1b-static-platform` | exit 0，11 fixtures；legacy census 0；repeat/concurrent/cadence hashes 一致 |
+| `pnpm verify:canonical` | exit 0 |
+| `pnpm verify:placement-layout` | exit 0 |
+| `pnpm verify:rigged-subject` | exit 0 |
+| `pnpm verify:g-bot-subject` | exit 0 |
+| `pnpm verify:unreleased-clean-break` | exit 0，641 files、0 forbidden、507 current-authority matches |
+| `pnpm build` | exit 0，Vite 2184 modules，1m29s；仅大 chunk warning |
+
+门禁运行生成的动态 session/hash 差异已在取证后恢复；最终分支只保留本文档改动。
+
+### 0.4 变更面与证据边界
+
+从原锚点到最新 main，以下 8 个 finding owner 的 Git blob 完全相同：
+
+- `packages/validation/src/route-runtime-probe.ts`
+- `packages/traversal/src/build-input.ts`
+- `packages/traversal/src/runtime-probe-contract.ts`
+- `packages/traversal/src/path-receipt.ts`
+- `packages/runtime-contracts/src/browser-route-evidence.ts`
+- `packages/traversal-recast/src/heightfield-source.ts`
+- `packages/traversal-recast/src/evaluate-route.ts`
+- `packages/traversal-recast/src/build-graph.ts`
+
+`motion-kernel-runtime.ts` 有其他兼容性清理，但 P0 step-up block 与 P1 partial-construction 顺序仍在；`route-evaluator.ts` 有 clean-break 整理，但 Required Route set binding 与 MIME 闭包仍未补齐。
+
+本轮使用 static-read、自动化 contract、真实 Babylon/Havok runtime probe 和完整仓库门禁。Canonical / Placement / Rigged / G Bot gates 生成了 rendered artifacts，但本文不把它们当作 Route 通过性证明；没有声明 manual-interaction evidence。
+
+### 0.5 Cursor 只读独立终审
+
+- 使用新的隔离 review：stage `m5-latest-main-recheck-2026-08-25`，review ID `m5-recheck-01ee4b9-20260825`，Cursor chat `abca8117-00f3-448a-bb7d-c666798fe831`；模式为 Ask/read-only，没有修改文件。
+- Cursor 返回 **FINAL NO-GO**，精确未过门禁同样是 `M5 Complete / Final GO / no open P0/P1`。
+- 它逐条确认 5 个 P0 和 8 个 P1；确认 runner timeout 已关闭、Medium `contentHash` finding 应撤回、Browser/slope/docs/dead-code 的 P2 处置正确；没有驳回主审 finding，也没有发现新的 P0–P2。
+- 证据边界：Cursor 本轮重读当前源码与安装版 Babylon/Havok source，但没有自己重跑 Havok/CLI；对动态数值采用主审在同一 `01ee4b9` 上的执行证据。主审已独立保存复现输出并逐项核对其 source reasoning，没有用 Cursor 结论替代自动化证据。
+- 唯一表述校正：`docs/18:322-325` 是 Validation Report epic 仍把 Route evidence / Browser/CI 接入列为开放，不是“Route Graph 尚未实现”；本文已按该职责边界收窄措辞。
+
+### 0.6 当前处置建议
+
+重新打开 M5，并撤回 `Complete / Final GO / no open P0/P1`。修复顺序仍应是：
+
+1. 先为 5 个 P0 提交 fix-before-fix failing reproducer；
+2. 修复 P0 后逐条关闭 8 个 P1 合同/生命周期缺口；
+3. 把本报告的反例纳入正式 verifier，而不是只保留外部审查脚本；
+4. 重跑 focused regressions、R0/R1/R1b、完整 test/typecheck/build、Report/Browser 同字节闭包，以及分层长绕路和窄踏面的真实 Runtime evidence。
+
+`route-validation-runner` timeout 已关闭、Medium finding 已撤回，这两项不构成恢复 M5 Final GO 的依据。
+
+## 1. 原始审查元数据（2026-08-24 历史锚点）
 
 - 审查模式：Mode B change review，并补齐 D1，实际覆盖 D1–D6。
 - 里程碑定位：M5 确实是“指定主体是否能沿 Required Route 实际通过”的里程碑；它包含 R0 合同、R1 Heightfield、R1b Static Platform，以及真实 fixed-tick Babylon/Havok Controller Gate。
@@ -18,7 +127,7 @@
   - docs/reviews/runtime-deep-review-checklist.md
   - docs/reviews/full-dimension-review-protocol.md
 
-### 1.1 结论
+### 1.1 原始结论（4ae1912）
 
 **NO-GO：M5 当前不能继续保持 “Complete / Final GO / 无 open P0/P1” 的结论。**
 
@@ -76,7 +185,7 @@
 
 证据分层：本文结论使用 static-read 与 automated-contract。Canonical / Rigged / G Bot gates 生成了截图，但本次没有把截图当作 Route 通过性证据；没有声明 manual-interaction 通过。
 
-### 1.4 Cursor 只读独立复核
+### 1.4 原始 Cursor 只读独立复核
 
 - Cursor Agent CLI（Ask/read-only，chat `0bc03737-4255-47d2-9b4c-89a7ad510cbc`）返回 **CODE NO-GO**。
 - 它确认六个主审假设的机制均成立，并把 0-Tick 长绕路、Lock/Envelope 未重绑定、forged Tick 0 complete 判为 P0；单节点崩溃、Path topology 合同分裂、partial-construction native leak 判为 P1。
@@ -204,13 +313,12 @@
 - 建议：把 controller native allocation 后的配置封装为可回滚 factory，catch 时先 dispose 再 rethrow；测试精确比较 created/released handle 集合。
 - 复核：Runtime 子审查发现，主 Agent独立重跑 3/3 确认。该问题早于 M5 baseline，不应标成 M5 regression，但属于当前 Runtime debt；Cursor static-read 确认为 P1。
 
-### [P2] [D6] 正式 verifier 通过，但仓库同一真实 fixture 的测试 timeout 已稳定失效
+### [P2] [RESOLVED 2026-08-25] [D6] 正式 verifier 与同一真实 fixture 的测试预算
 
-- 证据（automated-contract）：route-validation-runner.test.ts 的真实 V4/V5 fixture 在全量测试约 197s、单独重跑约 140s，均超过 120s timeout；正式 verify:route-r1b-static-platform 约 154s 后 exit 0。
-- 期望：完成门禁应在同一默认测试预算下可重复运行，不能靠“脚本没有 timeout”掩盖测试长期红。
-- 影响：pnpm test 当前不能作为 release completion proof，也会放大并发运行时的浏览器/场景超时。
-- 建议：先 profile 耗时来源；拆分/缓存确定性重复工作，或在有证据后调整专用 timeout，同时保留 wall-clock regression budget。
-- 复核：主 Agent全量与单文件两次确认。
+- 最新处置：**已关闭。** `scripts/lib/route-validation-runner.test.ts:363` 的专用 timeout 已由 120s 调整为 180s；最新 main 隔离运行 12/12 通过，真实 V4/V5 case 66.522s、suite 71.39s；全量 `pnpm test` 中该 case 79.607s，也在预算内。
+- 历史证据：原锚点的真实 fixture 在全量测试约 197s、单独重跑约 140s，均超过当时 120s timeout；正式 verifier 因无同一 timeout 仍可通过。
+- 关闭理由：当前隔离和全量两条证据都在显式预算内，且完整 `pnpm test` 为 180/180 files、2194/2194 tests。并发重负载下的单次超时不再作为产品缺陷计入。
+- 后续建议：继续保留 wall-clock regression budget；若耗时重新接近 180s，再 profile 重复的 canonical build / Browser / Runtime 初始化工作。
 
 ### [P2] [D6] Browser V2 canonicalizer 允许 complete connectivity 却没有 Path
 
@@ -220,17 +328,17 @@
 - 建议：connectivity complete 与 hasPath 双向等价；unreachable/incomplete 必须无 Path；建立状态组合表测试。
 - 复核：Runtime 子审查发现，主 Agent独立重跑确认；Cursor 未把它提升为独立 finding。
 
-### [P2] [D3/D5] 其他合同与完成声明不一致
+### [P2] [D3/D5] 其他合同、文档与 clean-break 声明不一致
 
 - 证据（static-read）：
   - packages/traversal/src/lock.ts 接受 maxSlopeDegrees=90，build-input 也接受 [0,90]，但 traversal-recast/src/recast-config.ts 要求 [0,90)；
-  - packages/compiler/src/compile-traversal-lock.ts 对 Medium Profile 没有像 Motion Profile 一样比较 Execution Plan contentHash；
-  - docs/18-refactor-progress-and-backlog.md 一处宣称 Route R0/R1/R1b 完成，另一处仍写 Route/Browser/CI 待接入；
-  - validation 中仍有 V2 | V2 重复 union、重复 interface 与旧 V1 helper dead code。
-- 期望：公共 Lock 与 provider admission 一致；Compiler capability assembly fail closed；唯一进度账本和 clean-break census 与事实一致。
-- 影响：90° profile 在 provider 才异常；Medium hash drift 未在 compiler 边界拒绝；后续 Agent 可能重复实现或漏修真实能力。
-- 建议：原子统一 slope domain；补 Medium hash regression；修订 capability ledger；清理死分支并扩大 clean-break census。
-- 复核：Contract/Validation 子审查发现，主 Agent核对当前源码；未单独提升为 P0/P1。
+  - docs/18-refactor-progress-and-backlog.md 宣称 Route R0/R1/R1b 已完成且无 open P0/P1，同时在 Validation Report epic 中仍把 Route evidence / Browser/CI 接入列为开放；另外三份 active docs 又写完整 M5 仍开放；
+  - clean-break 有部分进展，但 `route-runtime-probe.ts` 仍有 `RoutePathReceiptV2 | RoutePathReceiptV2`，`route-evidence-publication.ts` 仍重复导出两组同名 interface。
+- 撤回项：旧报告声称 Compiler 未比较 Medium `contentHash`，该判断不准确。Execution Medium projection 有意不暴露 `contentHash`；`compile-traversal-lock.ts:182-189` 已比较 locked Medium hash、resource ref 与 Definition `air` projection。不同于 Motion 的合同形态不等于缺少 fail-closed 校验。
+- 期望：公共 Lock 与 provider admission 一致；唯一进度账本、active docs 和 clean-break census 与事实一致。
+- 影响：90° profile 在 provider 边界才异常；相互矛盾的完成声明会让后续 Agent 错误跳过阻断修复；重复声明增加协议漂移风险。
+- 建议：原子统一 slope domain；把 M5 状态回退为 reopened；清理重复 union/interface 并扩大 clean-break census。
+- 复核：Contract/Validation 子审查发现，主 Agent在最新 main 核对源码；Medium 子结论已按当前职责边界撤回，其余未单独提升为 P0/P1。
 
 ## 4. 维度覆盖表
 
@@ -240,7 +348,7 @@
 | D2 Schema 与 AI-friendly | 已查 | V2 naming/identity 主体一致；发现 MIME clean-break 与冗余声明 |
 | D3 承诺与事实 | 已查 | 对拍 Route/R1b/Validation 规格、backlog、旧 review；发现 complete claim、Path topology、scope/seam/layer 差异 |
 | D4 单一权威状态 | 已查 | 检查 Lock→Envelope、Graph、retained support、station、arrival、Medium；确认 5 个 P0 |
-| D5 工程质量 | 已查 | 检查 installed Babylon semantics、partial construction、dispose、test timeout、dead code；发现 step-up 与 native leak |
+| D5 工程质量 | 已查 | 检查 installed Babylon semantics、partial construction、dispose、test timeout、dead code；step-up/native leak 仍在，旧 timeout 已在最新 main 关闭 |
 | D6 门禁与证据分层 | 已查 | 跑 R0/R1/R1b、full tests、build/typecheck、artifact forgery probes；明确 automated 与 rendered/manual 边界 |
 
-最终处置建议：重新打开 M5。先修复并以 failing reproducer 锁住全部 P0，再处理 P1 合同缺口；之后必须重跑 focused regressions、R0/R1/R1b、完整 pnpm test/typecheck/build、同字节 Report/Browser publication，以及真实窄踏面/分层长绕路交互证据。不能仅凭当前 11+11 fixture matrix 恢复 Final GO。
+最终处置建议（2026-08-25 最新 main 复验后不变）：重新打开 M5。先修复并以 failing reproducer 锁住全部 P0，再处理 P1 合同缺口；之后必须重跑 focused regressions、R0/R1/R1b、完整 pnpm test/typecheck/build、同字节 Report/Browser publication，以及真实窄踏面/分层长绕路交互证据。不能仅凭当前 11+11 fixture matrix 和全量门禁变绿恢复 Final GO。
