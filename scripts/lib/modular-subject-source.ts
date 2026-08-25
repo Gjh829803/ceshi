@@ -11,6 +11,7 @@ import {
   type Node,
   type Property,
   type Skin,
+  type Texture,
 } from "@gltf-transform/core";
 import { cloneDocument, prune } from "@gltf-transform/functions";
 
@@ -48,6 +49,29 @@ export interface ModularSubjectActionDefinitionV1 {
   readonly rootMotionMode: "in-place";
 }
 
+export interface ModularSubjectSpatialConventionV1 {
+  readonly units: "meters";
+  readonly upAxis: "+Y";
+  readonly forwardAxis: "-Z";
+  readonly pivot: "support-center";
+}
+
+export type ModularSubjectSpatialReviewV1 =
+  | {
+      readonly spatialReviewStatus: "verified";
+      readonly evidence: {
+        readonly kind: "generated-fixture-contract" | "manual-visual-review";
+        readonly evidenceRef: string;
+      };
+    }
+  | {
+      readonly spatialReviewStatus: "needs-visual-review";
+      readonly evidence: {
+        readonly kind: "product-sidecar-declaration";
+        readonly evidenceRef: string;
+      };
+    };
+
 export interface ModularSubjectPackageDefinitionV1 {
   readonly id: string;
   readonly version: number;
@@ -57,6 +81,8 @@ export interface ModularSubjectPackageDefinitionV1 {
   readonly expectedSourceContentHash: `sha256:${string}`;
   readonly rigProfileRef: string;
   readonly provenanceMode: "derived-recovery" | "generated-fixture";
+  readonly spatialConvention: ModularSubjectSpatialConventionV1;
+  readonly spatialReview: ModularSubjectSpatialReviewV1;
   readonly actions: readonly ModularSubjectActionDefinitionV1[];
 }
 
@@ -70,6 +96,7 @@ export interface ModularSubjectGlbInventoryV1 {
   readonly skinCount: number;
   readonly skeletonCount: number;
   readonly jointCount: number;
+  readonly inverseBindMatrixCount: number;
   readonly nodeCount: number;
   readonly materialCount: number;
   readonly textureCount: number;
@@ -103,12 +130,8 @@ export interface SubjectModelAssetManifestV1 {
   readonly resourceRef: string;
   readonly artifact: SubjectArtifactV1;
   readonly provenance: SubjectProvenanceV1;
-  readonly coordinateConvention: {
-    readonly units: "meters";
-    readonly upAxis: "+Y";
-    readonly forwardAxis: "-Z";
-    readonly pivot: "support-center";
-  };
+  readonly spatialConvention: ModularSubjectSpatialConventionV1;
+  readonly spatialReview: ModularSubjectSpatialReviewV1;
   readonly inventory: ModularSubjectGlbInventoryV1;
   readonly materialSlotIds: readonly string[];
   readonly rigProfileRef: string;
@@ -122,10 +145,30 @@ export interface MaterialTextureBindingV1 {
     | "normal"
     | "occlusion"
     | "emissive";
-  readonly sourceName: string;
-  readonly sourceMimeType: string;
-  readonly sourceContentHash: `sha256:${string}`;
+  readonly sourceTextureName: string;
+  readonly textureArtifactRef: string;
+  readonly textureArtifactRelativePath: string;
+}
+
+export type MaterialTextureMediaTypeV1 =
+  | "image/png"
+  | "image/jpeg"
+  | "image/webp"
+  | "image/ktx2"
+  | "image/avif";
+
+export interface MaterialTextureArtifactManifestV1 {
+  readonly id: string;
+  readonly resourceRef: string;
+  readonly relativePath: string;
+  readonly mediaType: MaterialTextureMediaTypeV1;
   readonly byteLengthBytes: number;
+  readonly contentHash: `sha256:${string}`;
+}
+
+export interface RecoveredMaterialTextureArtifactV1
+  extends MaterialTextureArtifactManifestV1 {
+  readonly bytes: Uint8Array;
 }
 
 export interface MaterialSlotDefinitionV1 {
@@ -149,6 +192,7 @@ export interface MaterialSetManifestV1 {
   readonly resourceRef: string;
   readonly variantId: "default";
   readonly provenance: SubjectProvenanceV1;
+  readonly textureArtifacts: readonly MaterialTextureArtifactManifestV1[];
   readonly materials: readonly MaterialSlotDefinitionV1[];
 }
 
@@ -235,6 +279,7 @@ export interface RecoveredMaterialSetV1 {
   readonly manifestRelativePath: "materials/default/material-set.manifest.json";
   readonly manifest: MaterialSetManifestV1;
   readonly manifestBytes: Uint8Array;
+  readonly textureArtifacts: readonly RecoveredMaterialTextureArtifactV1[];
 }
 
 export interface RecoveredAnimationClipV1 {
@@ -612,6 +657,7 @@ async function inspectDocument(bytes: Uint8Array): Promise<InspectedDocumentV1> 
       skinCount: skins.length,
       skeletonCount: skins.length,
       jointCount: skin?.listJoints().length ?? 0,
+      inverseBindMatrixCount: skin?.getInverseBindMatrices()?.getCount() ?? 0,
       nodeCount: root.listNodes().length,
       materialCount: root.listMaterials().length,
       textureCount: raw.textures?.length ?? 0,
@@ -633,6 +679,32 @@ export async function inspectModularSubjectGlb(
 }
 
 function validateDefinition(definition: ModularSubjectPackageDefinitionV1): void {
+  const spatialConvention = definition.spatialConvention;
+  if (
+    spatialConvention?.units !== "meters" ||
+    spatialConvention.upAxis !== "+Y" ||
+    spatialConvention.forwardAxis !== "-Z" ||
+    spatialConvention.pivot !== "support-center"
+  ) {
+    return fail("MODULAR_SUBJECT_SOURCE_SPATIAL_CONVENTION_INVALID");
+  }
+  const spatialReview = definition.spatialReview;
+  const spatialReviewStatus = spatialReview?.spatialReviewStatus as string | undefined;
+  const spatialEvidence = spatialReview?.evidence;
+  if (
+    spatialReview === undefined ||
+    spatialEvidence === undefined ||
+    spatialEvidence.evidenceRef.length === 0 ||
+    !["verified", "needs-visual-review"].includes(spatialReviewStatus ?? "") ||
+    (spatialReviewStatus === "verified" &&
+      !["generated-fixture-contract", "manual-visual-review"].includes(
+        spatialEvidence.kind,
+      )) ||
+    (spatialReviewStatus === "needs-visual-review" &&
+      spatialEvidence.kind !== "product-sidecar-declaration")
+  ) {
+    return fail("MODULAR_SUBJECT_SOURCE_SPATIAL_REVIEW_INVALID");
+  }
   const actionIds = definition.actions.map((action) => action.actionId);
   const sourceClipNames = definition.actions.map((action) => action.sourceClipName);
   const duplicateActionIds = actionIds.filter((id, index) => actionIds.indexOf(id) !== index);
@@ -684,6 +756,22 @@ function validateActionCoverage(
   }
 }
 
+function validateRiggedModelInventory(
+  inventory: ModularSubjectGlbInventoryV1,
+  requireMesh: boolean,
+): void {
+  if (
+    (requireMesh && inventory.meshCount < 1) ||
+    inventory.skinCount !== 1 ||
+    inventory.skeletonCount !== 1 ||
+    inventory.jointCount < 1 ||
+    inventory.inverseBindMatrixCount !== inventory.jointCount ||
+    inventory.rigSignatureHash === null
+  ) {
+    return fail("MODULAR_SUBJECT_SOURCE_MODEL_RIG_REQUIRED");
+  }
+}
+
 function slugMaterialName(name: string, index: number): string {
   const slug = name
     .normalize("NFKD")
@@ -711,7 +799,76 @@ function tuple4(value: ArrayLike<number>): [number, number, number, number] {
   return [value[0]!, value[1]!, value[2]!, value[3]!];
 }
 
-function materialTextureBindings(material: Material): MaterialTextureBindingV1[] {
+function textureFileExtension(mediaType: string): string {
+  switch (mediaType) {
+    case "image/png": return "png";
+    case "image/jpeg": return "jpg";
+    case "image/webp": return "webp";
+    case "image/ktx2": return "ktx2";
+    case "image/avif": return "avif";
+    default: return fail("MODULAR_SUBJECT_SOURCE_TEXTURE_MIME_UNSUPPORTED", mediaType);
+  }
+}
+
+function equalTextureBytes(left: Uint8Array, right: Uint8Array): boolean {
+  return left.byteLength === right.byteLength &&
+    left.every((value, index) => value === right[index]);
+}
+
+function recoverTextureArtifacts(
+  definition: ModularSubjectPackageDefinitionV1,
+  textures: readonly Texture[],
+): {
+  readonly artifacts: RecoveredMaterialTextureArtifactV1[];
+  readonly artifactByTexture: ReadonlyMap<Texture, RecoveredMaterialTextureArtifactV1>;
+} {
+  const artifactByTexture = new Map<Texture, RecoveredMaterialTextureArtifactV1>();
+  const artifactByHash = new Map<string, RecoveredMaterialTextureArtifactV1>();
+  for (const texture of textures) {
+    const image = texture.getImage();
+    if (image === null) {
+      return fail("MODULAR_SUBJECT_SOURCE_TEXTURE_IMAGE_MISSING", texture.getName());
+    }
+    const mediaType = texture.getMimeType() as MaterialTextureMediaTypeV1;
+    const extension = textureFileExtension(mediaType);
+    const contentHash = sha256(image);
+    const hashValue = contentHash.slice(SHA256_PREFIX.length);
+    const existing = artifactByHash.get(contentHash);
+    if (existing !== undefined) {
+      if (!equalTextureBytes(existing.bytes, image)) {
+        return fail("MODULAR_SUBJECT_SOURCE_TEXTURE_HASH_COLLISION", contentHash);
+      }
+      if (existing.mediaType !== mediaType) {
+        return fail("MODULAR_SUBJECT_SOURCE_TEXTURE_MIME_CONFLICT", contentHash);
+      }
+      artifactByTexture.set(texture, existing);
+      continue;
+    }
+    const artifact: RecoveredMaterialTextureArtifactV1 = {
+      id: `${definition.id}.texture.${hashValue}`,
+      resourceRef:
+        `worldkit://texture/${definition.creatorId}.${definition.id}.${hashValue}@${definition.version}`,
+      relativePath: `materials/default/textures/${hashValue}.${extension}`,
+      mediaType,
+      byteLengthBytes: image.byteLength,
+      contentHash,
+      bytes: Uint8Array.from(image),
+    };
+    artifactByHash.set(contentHash, artifact);
+    artifactByTexture.set(texture, artifact);
+  }
+  return {
+    artifacts: [...artifactByHash.values()].sort((left, right) =>
+      compareCodeUnits(left.relativePath, right.relativePath),
+    ),
+    artifactByTexture,
+  };
+}
+
+function materialTextureBindings(
+  material: Material,
+  artifactByTexture: ReadonlyMap<Texture, RecoveredMaterialTextureArtifactV1>,
+): MaterialTextureBindingV1[] {
   const rows = [
     ["base-color", material.getBaseColorTexture()],
     ["metallic-roughness", material.getMetallicRoughnessTexture()],
@@ -721,16 +878,15 @@ function materialTextureBindings(material: Material): MaterialTextureBindingV1[]
   ] as const;
   return rows.flatMap(([channel, texture]) => {
     if (texture === null) return [];
-    const image = texture.getImage();
-    if (image === null) {
-      return fail("MODULAR_SUBJECT_SOURCE_TEXTURE_IMAGE_MISSING", texture.getName());
+    const artifact = artifactByTexture.get(texture);
+    if (artifact === undefined) {
+      return fail("MODULAR_SUBJECT_SOURCE_TEXTURE_ARTIFACT_MISSING", texture.getName());
     }
     return [{
       channel,
-      sourceName: texture.getName(),
-      sourceMimeType: texture.getMimeType(),
-      sourceContentHash: sha256(image),
-      byteLengthBytes: image.byteLength,
+      sourceTextureName: texture.getName(),
+      textureArtifactRef: artifact.resourceRef,
+      textureArtifactRelativePath: artifact.relativePath,
     }];
   });
 }
@@ -740,6 +896,8 @@ function makeMaterialSetManifest(
   sourceContentHash: `sha256:${string}`,
   materials: readonly Material[],
   slotIds: readonly string[],
+  textureArtifacts: readonly RecoveredMaterialTextureArtifactV1[],
+  artifactByTexture: ReadonlyMap<Texture, RecoveredMaterialTextureArtifactV1>,
 ): MaterialSetManifestV1 {
   return {
     kind: "material-set",
@@ -749,6 +907,7 @@ function makeMaterialSetManifest(
     resourceRef: `worldkit://material-set/${definition.creatorId}.${definition.id}.default@${definition.version}`,
     variantId: "default",
     provenance: makeProvenance(definition, sourceContentHash),
+    textureArtifacts: textureArtifacts.map(({ bytes: _bytes, ...artifact }) => artifact),
     materials: materials.map((material, index) => ({
       materialSlotId: slotIds[index]!,
       sourceMaterialName: material.getName(),
@@ -759,7 +918,7 @@ function makeMaterialSetManifest(
       alphaMode: material.getAlphaMode(),
       alphaCutoff: material.getAlphaCutoff(),
       isDoubleSided: material.getDoubleSided(),
-      textures: materialTextureBindings(material),
+      textures: materialTextureBindings(material, artifactByTexture),
     })),
   };
 }
@@ -772,6 +931,21 @@ function makeProvenance(
     mode: definition.provenanceMode,
     sourceGlbRelativePath: definition.sourceGlbRelativePath,
     sourceContentHash,
+  };
+}
+
+function copySpatialReview(
+  review: ModularSubjectSpatialReviewV1,
+): ModularSubjectSpatialReviewV1 {
+  if (review.spatialReviewStatus === "verified") {
+    return {
+      spatialReviewStatus: review.spatialReviewStatus,
+      evidence: { ...review.evidence },
+    };
+  }
+  return {
+    spatialReviewStatus: review.spatialReviewStatus,
+    evidence: { ...review.evidence },
   };
 }
 
@@ -796,10 +970,19 @@ async function recoverModelDocument(source: Document): Promise<Uint8Array> {
   root.listAnimations().forEach((animation) => animation.dispose());
   root.listNodes().forEach((node) => node.setCamera(null));
   root.listCameras().forEach((camera) => camera.dispose());
+  root.listMaterials().forEach((material) => {
+    material.setBaseColorTexture(null);
+    material.setMetallicRoughnessTexture(null);
+    material.setNormalTexture(null);
+    material.setOcclusionTexture(null);
+    material.setEmissiveTexture(null);
+  });
+  root.listTextures().forEach((texture) => texture.dispose());
   await model.transform(prune({
     propertyTypes: [
       PropertyType.ANIMATION,
       PropertyType.CAMERA,
+      PropertyType.TEXTURE,
       PropertyType.ACCESSOR,
       PropertyType.BUFFER,
     ],
@@ -873,6 +1056,7 @@ export async function recoverModularSubjectSourcePackage(
   }
   const source = await inspectDocument(input.sourceGlbBytes);
   validateActionCoverage(input.definition, source.inventory);
+  validateRiggedModelInventory(source.inventory, true);
   const rawSource = parseRawGlbJson(input.sourceGlbBytes);
   const residueInventory = extensionResidueInventory(rawSource);
 
@@ -901,16 +1085,23 @@ export async function recoverModularSubjectSourcePackage(
   );
   const sourceMaterials = source.document.getRoot().listMaterials();
   const slotIds = materialSlotIds(sourceMaterials);
+  const recoveredTextures = recoverTextureArtifacts(
+    input.definition,
+    source.document.getRoot().listTextures(),
+  );
   const materialSetManifest = makeMaterialSetManifest(
     input.definition,
     sourceContentHash,
     sourceMaterials,
     slotIds,
+    recoveredTextures.artifacts,
+    recoveredTextures.artifactByTexture,
   );
   const materialSet: RecoveredMaterialSetV1 = {
     manifestRelativePath: "materials/default/material-set.manifest.json",
     manifest: materialSetManifest,
     manifestBytes: canonicalSubjectManifestBytes(materialSetManifest),
+    textureArtifacts: recoveredTextures.artifacts,
   };
 
   const modelGlbBytes = await recoverModelDocument(source.document);
@@ -924,12 +1115,8 @@ export async function recoverModularSubjectSourcePackage(
     resourceRef: modelResourceRef,
     artifact: artifact("model/model.glb", modelGlbBytes),
     provenance: makeProvenance(input.definition, sourceContentHash),
-    coordinateConvention: {
-      units: "meters",
-      upAxis: "+Y",
-      forwardAxis: "-Z",
-      pivot: "support-center",
-    },
+    spatialConvention: { ...input.definition.spatialConvention },
+    spatialReview: copySpatialReview(input.definition.spatialReview),
     inventory: modelInventory,
     materialSlotIds: slotIds,
     rigProfileRef: input.definition.rigProfileRef,
@@ -1034,6 +1221,10 @@ function validateCanonicalManifest(value: unknown, bytes: Uint8Array, label: str
   }
 }
 
+function canonicalValuesEqual(left: unknown, right: unknown): boolean {
+  return equalBytes(canonicalSubjectManifestBytes(left), canonicalSubjectManifestBytes(right));
+}
+
 function validateArtifact(artifactValue: SubjectArtifactV1, bytes: Uint8Array): void {
   if (artifactValue.byteLengthBytes !== bytes.byteLength) {
     return fail("MODULAR_SUBJECT_SOURCE_ARTIFACT_BYTE_LENGTH_MISMATCH", artifactValue.relativePath);
@@ -1053,47 +1244,300 @@ function hasExtensionResidue(inventory: SubjectSourceExtensionResidueInventoryV1
     inventory.hasOtherNonStandardContent;
 }
 
+function validateSpatialManifest(manifest: SubjectModelAssetManifestV1): void {
+  const convention = manifest.spatialConvention;
+  const review = manifest.spatialReview;
+  const reviewStatus = review?.spatialReviewStatus as string | undefined;
+  const evidence = review?.evidence;
+  if (
+    convention === undefined ||
+    convention.units !== "meters" ||
+    convention.upAxis !== "+Y" ||
+    convention.forwardAxis !== "-Z" ||
+    convention.pivot !== "support-center" ||
+    evidence === undefined ||
+    evidence.evidenceRef.length === 0 ||
+    !["verified", "needs-visual-review"].includes(reviewStatus ?? "") ||
+    (reviewStatus === "verified" &&
+      !["generated-fixture-contract", "manual-visual-review"].includes(evidence.kind)) ||
+    (reviewStatus === "needs-visual-review" &&
+      evidence.kind !== "product-sidecar-declaration")
+  ) {
+    return fail("MODULAR_SUBJECT_SOURCE_SPATIAL_MANIFEST_INVALID");
+  }
+}
+
+function textureArtifactMetadata(
+  artifactValue: RecoveredMaterialTextureArtifactV1,
+): MaterialTextureArtifactManifestV1 {
+  const { bytes: _bytes, ...metadata } = artifactValue;
+  return metadata;
+}
+
+function validateTextureArtifactSet(
+  recovered: RecoveredSubjectSourcePackageV1,
+): ReadonlyMap<string, RecoveredMaterialTextureArtifactV1> {
+  const { textureArtifacts } = recovered.materialSet;
+  const manifestArtifacts = recovered.materialSet.manifest.textureArtifacts;
+  if (
+    !canonicalValuesEqual(
+      textureArtifacts.map(textureArtifactMetadata),
+      manifestArtifacts,
+    )
+  ) {
+    return fail("MODULAR_SUBJECT_SOURCE_TEXTURE_ARTIFACT_METADATA_MISMATCH");
+  }
+  const artifactByRef = new Map<string, RecoveredMaterialTextureArtifactV1>();
+  for (const [index, textureArtifact] of textureArtifacts.entries()) {
+    if (textureArtifact.contentHash !== sha256(textureArtifact.bytes)) {
+      return fail("MODULAR_SUBJECT_SOURCE_TEXTURE_ARTIFACT_HASH_MISMATCH");
+    }
+    if (textureArtifact.byteLengthBytes !== textureArtifact.bytes.byteLength) {
+      return fail("MODULAR_SUBJECT_SOURCE_TEXTURE_ARTIFACT_BYTE_LENGTH_MISMATCH");
+    }
+    const hashValue = textureArtifact.contentHash.slice(SHA256_PREFIX.length);
+    const expectedPath =
+      `materials/default/textures/${hashValue}.${textureFileExtension(textureArtifact.mediaType)}`;
+    const expectedId = `${recovered.packageManifest.id}.texture.${hashValue}`;
+    const expectedRef =
+      `worldkit://texture/${recovered.packageManifest.creatorId}.${recovered.packageManifest.id}.${hashValue}@${recovered.packageManifest.version}`;
+    if (
+      textureArtifact.relativePath !== expectedPath ||
+      textureArtifact.id !== expectedId ||
+      textureArtifact.resourceRef !== expectedRef ||
+      (index > 0 && textureArtifacts[index - 1]!.relativePath >= textureArtifact.relativePath) ||
+      artifactByRef.has(textureArtifact.resourceRef)
+    ) {
+      return fail("MODULAR_SUBJECT_SOURCE_TEXTURE_ARTIFACT_METADATA_MISMATCH");
+    }
+    artifactByRef.set(textureArtifact.resourceRef, textureArtifact);
+  }
+  for (const material of recovered.materialSet.manifest.materials) {
+    const channels = new Set<string>();
+    for (const binding of material.textures) {
+      const textureArtifact = artifactByRef.get(binding.textureArtifactRef);
+      if (
+        textureArtifact === undefined ||
+        binding.textureArtifactRelativePath !== textureArtifact.relativePath ||
+        binding.sourceTextureName.length === 0 ||
+        channels.has(binding.channel)
+      ) {
+        return fail("MODULAR_SUBJECT_SOURCE_TEXTURE_BINDING_INVALID", material.materialSlotId);
+      }
+      channels.add(binding.channel);
+    }
+  }
+  return artifactByRef;
+}
+
 export async function validateRecoveredSubjectSourcePackage(
   recovered: RecoveredSubjectSourcePackageV1,
 ): Promise<void> {
+  const packageManifest = recovered.packageManifest;
+  const model = recovered.model;
+  const materialSet = recovered.materialSet;
+  const sourceArchive = recovered.sourceArchive;
+
   validateCanonicalManifest(
-    recovered.packageManifest,
+    packageManifest,
     recovered.packageManifestBytes,
     recovered.packageManifestRelativePath,
   );
   validateCanonicalManifest(
-    recovered.materialSet.manifest,
-    recovered.materialSet.manifestBytes,
-    recovered.materialSet.manifestRelativePath,
+    materialSet.manifest,
+    materialSet.manifestBytes,
+    materialSet.manifestRelativePath,
   );
   validateCanonicalManifest(
-    recovered.model.manifest,
-    recovered.model.manifestBytes,
-    recovered.model.manifestRelativePath,
+    model.manifest,
+    model.manifestBytes,
+    model.manifestRelativePath,
   );
   validateCanonicalManifest(
-    recovered.sourceArchive.manifest,
-    recovered.sourceArchive.manifestBytes,
-    recovered.sourceArchive.manifestRelativePath,
+    sourceArchive.manifest,
+    sourceArchive.manifestBytes,
+    sourceArchive.manifestRelativePath,
   );
-  validateArtifact(recovered.sourceArchive.manifest.artifact, recovered.sourceArchive.glbBytes);
-  const archivedResidue = extensionResidueInventory(
-    parseRawGlbJson(recovered.sourceArchive.glbBytes),
-  );
+
+  if (recovered.packageManifestRelativePath !== "package.manifest.json") {
+    return fail("MODULAR_SUBJECT_SOURCE_PATH_MISMATCH", "package");
+  }
   if (
-    recovered.sourceArchive.manifest.runtimeConsumption !== "forbidden" ||
-    !equalBytes(
-      canonicalSubjectManifestBytes(archivedResidue),
-      canonicalSubjectManifestBytes(recovered.sourceArchive.manifest.residueInventory),
-    )
+    model.glbRelativePath !== "model/model.glb" ||
+    model.manifestRelativePath !== "model/model.manifest.json" ||
+    model.manifest.artifact.relativePath !== model.glbRelativePath
+  ) {
+    return fail("MODULAR_SUBJECT_SOURCE_PATH_MISMATCH", "model");
+  }
+  if (materialSet.manifestRelativePath !== "materials/default/material-set.manifest.json") {
+    return fail("MODULAR_SUBJECT_SOURCE_PATH_MISMATCH", "material-set");
+  }
+  if (
+    sourceArchive.glbRelativePath !== "extensions/source-archive/original.glb" ||
+    sourceArchive.manifestRelativePath !==
+      "extensions/source-archive/original.manifest.json" ||
+    sourceArchive.manifest.artifact.relativePath !== sourceArchive.glbRelativePath
+  ) {
+    return fail("MODULAR_SUBJECT_SOURCE_PATH_MISMATCH", "source-archive");
+  }
+
+  if (
+    packageManifest.kind !== "subject-source-package" ||
+    packageManifest.schemaVersion !== 1 ||
+    packageManifest.id.length === 0 ||
+    packageManifest.creatorId.length === 0 ||
+    packageManifest.displayName.length === 0 ||
+    !Number.isInteger(packageManifest.version) ||
+    packageManifest.version < 1 ||
+    packageManifest.resourceRef !==
+      `worldkit://subject-source-package/${packageManifest.creatorId}.${packageManifest.id}@${packageManifest.version}`
+  ) {
+    return fail("MODULAR_SUBJECT_SOURCE_IDENTITY_MISMATCH", "package");
+  }
+  if (
+    model.manifest.kind !== "subject-model-asset" ||
+    model.manifest.schemaVersion !== 1 ||
+    model.manifest.id !== packageManifest.id ||
+    model.manifest.version !== packageManifest.version ||
+    model.manifest.resourceRef !==
+      `worldkit://subject-model-asset/${packageManifest.creatorId}.${packageManifest.id}@${packageManifest.version}`
+  ) {
+    return fail("MODULAR_SUBJECT_SOURCE_IDENTITY_MISMATCH", "model");
+  }
+  if (
+    materialSet.manifest.kind !== "material-set" ||
+    materialSet.manifest.schemaVersion !== 1 ||
+    materialSet.manifest.id !== `${packageManifest.id}.default` ||
+    materialSet.manifest.version !== packageManifest.version ||
+    materialSet.manifest.variantId !== "default" ||
+    materialSet.manifest.resourceRef !==
+      `worldkit://material-set/${packageManifest.creatorId}.${packageManifest.id}.default@${packageManifest.version}`
+  ) {
+    return fail("MODULAR_SUBJECT_SOURCE_IDENTITY_MISMATCH", "material-set");
+  }
+  if (
+    sourceArchive.manifest.kind !== "subject-source-archive" ||
+    sourceArchive.manifest.schemaVersion !== 1 ||
+    sourceArchive.manifest.id !== packageManifest.id ||
+    sourceArchive.manifest.version !== packageManifest.version ||
+    sourceArchive.manifest.resourceRef !==
+      `worldkit://subject-source-archive/${packageManifest.creatorId}.${packageManifest.id}@${packageManifest.version}`
+  ) {
+    return fail("MODULAR_SUBJECT_SOURCE_IDENTITY_MISMATCH", "source-archive");
+  }
+  validateSpatialManifest(model.manifest);
+
+  const sourceContentHash = sha256(sourceArchive.glbBytes);
+  if (
+    packageManifest.sourceGlbRelativePath.length === 0 ||
+    packageManifest.sourceContentHash !== sourceContentHash ||
+    sourceArchive.manifest.artifact.contentHash !== sourceContentHash
+  ) {
+    return fail("MODULAR_SUBJECT_SOURCE_SOURCE_HASH_MISMATCH");
+  }
+  const expectedProvenance: SubjectProvenanceV1 = {
+    mode: sourceArchive.manifest.provenance.mode,
+    sourceGlbRelativePath: packageManifest.sourceGlbRelativePath,
+    sourceContentHash,
+  };
+  if (!canonicalValuesEqual(sourceArchive.manifest.provenance, expectedProvenance)) {
+    return fail("MODULAR_SUBJECT_SOURCE_PROVENANCE_MISMATCH", "source-archive");
+  }
+  if (!canonicalValuesEqual(model.manifest.provenance, expectedProvenance)) {
+    return fail("MODULAR_SUBJECT_SOURCE_PROVENANCE_MISMATCH", "model");
+  }
+  if (!canonicalValuesEqual(materialSet.manifest.provenance, expectedProvenance)) {
+    return fail("MODULAR_SUBJECT_SOURCE_PROVENANCE_MISMATCH", "material-set");
+  }
+
+  if (packageManifest.modelRef !== model.manifest.resourceRef) {
+    return fail("MODULAR_SUBJECT_SOURCE_PACKAGE_REF_MISMATCH", "model");
+  }
+  if (packageManifest.materialSetRef !== materialSet.manifest.resourceRef) {
+    return fail("MODULAR_SUBJECT_SOURCE_PACKAGE_REF_MISMATCH", "material-set");
+  }
+  if (packageManifest.sourceArchiveRef !== sourceArchive.manifest.resourceRef) {
+    return fail("MODULAR_SUBJECT_SOURCE_PACKAGE_REF_MISMATCH", "source-archive");
+  }
+  if (
+    packageManifest.rigProfileRef.length === 0 ||
+    model.manifest.rigProfileRef !== packageManifest.rigProfileRef
+  ) {
+    return fail("MODULAR_SUBJECT_SOURCE_PACKAGE_REF_MISMATCH", "rig-profile");
+  }
+
+  validateArtifact(sourceArchive.manifest.artifact, sourceArchive.glbBytes);
+  const archivedRaw = parseRawGlbJson(sourceArchive.glbBytes);
+  const archivedResidue = extensionResidueInventory(archivedRaw);
+  if (
+    sourceArchive.manifest.runtimeConsumption !== "forbidden" ||
+    !canonicalValuesEqual(archivedResidue, sourceArchive.manifest.residueInventory)
   ) {
     return fail("MODULAR_SUBJECT_SOURCE_ARCHIVE_CONTRACT_INVALID");
   }
+  const sourceInspection = await inspectDocument(sourceArchive.glbBytes);
+  validateRiggedModelInventory(sourceInspection.inventory, true);
 
-  const modelInventory = await inspectModularSubjectGlb(recovered.model.glbBytes);
-  const modelResidue = extensionResidueInventory(parseRawGlbJson(recovered.model.glbBytes));
+  validateTextureArtifactSet(recovered);
+  const sourceMaterials = sourceInspection.document.getRoot().listMaterials();
+  const expectedMaterialSlotIds = materialSlotIds(sourceMaterials);
+  const expectedTextures = recoverTextureArtifacts(
+    {
+      id: packageManifest.id,
+      version: packageManifest.version,
+      creatorId: packageManifest.creatorId,
+      displayName: packageManifest.displayName,
+      sourceGlbRelativePath: packageManifest.sourceGlbRelativePath,
+      expectedSourceContentHash: sourceContentHash,
+      rigProfileRef: packageManifest.rigProfileRef,
+      provenanceMode: expectedProvenance.mode,
+      spatialConvention: model.manifest.spatialConvention,
+      spatialReview: model.manifest.spatialReview,
+      actions: [],
+    },
+    sourceInspection.document.getRoot().listTextures(),
+  );
+  const expectedMaterialManifest = makeMaterialSetManifest(
+    {
+      id: packageManifest.id,
+      version: packageManifest.version,
+      creatorId: packageManifest.creatorId,
+      displayName: packageManifest.displayName,
+      sourceGlbRelativePath: packageManifest.sourceGlbRelativePath,
+      expectedSourceContentHash: sourceContentHash,
+      rigProfileRef: packageManifest.rigProfileRef,
+      provenanceMode: expectedProvenance.mode,
+      spatialConvention: model.manifest.spatialConvention,
+      spatialReview: model.manifest.spatialReview,
+      actions: [],
+    },
+    sourceContentHash,
+    sourceMaterials,
+    expectedMaterialSlotIds,
+    expectedTextures.artifacts,
+    expectedTextures.artifactByTexture,
+  );
+  if (!canonicalValuesEqual(materialSet.manifest, expectedMaterialManifest)) {
+    return fail("MODULAR_SUBJECT_SOURCE_MATERIAL_SET_MISMATCH");
+  }
+  if (
+    expectedTextures.artifacts.length !== materialSet.textureArtifacts.length ||
+    expectedTextures.artifacts.some((expected, index) => {
+      const actual = materialSet.textureArtifacts[index];
+      return actual === undefined ||
+        !canonicalValuesEqual(textureArtifactMetadata(expected), textureArtifactMetadata(actual)) ||
+        !equalBytes(expected.bytes, actual.bytes);
+    })
+  ) {
+    return fail("MODULAR_SUBJECT_SOURCE_TEXTURE_ARTIFACT_SOURCE_MISMATCH");
+  }
+
+  const modelInventory = await inspectModularSubjectGlb(model.glbBytes);
+  const modelResidue = extensionResidueInventory(parseRawGlbJson(model.glbBytes));
   if (
     modelInventory.animationClipCount !== 0 ||
+    modelInventory.textureCount !== 0 ||
+    modelInventory.imageCount !== 0 ||
     modelInventory.cameraCount !== 0 ||
     modelInventory.lightCount !== 0 ||
     modelInventory.externalUris.length !== 0 ||
@@ -1101,13 +1545,24 @@ export async function validateRecoveredSubjectSourcePackage(
   ) {
     return fail("MODULAR_SUBJECT_SOURCE_MODEL_CONTRACT_INVALID");
   }
-  if (modelInventory.meshCount > 0 && modelInventory.skinCount !== 1) {
-    return fail("MODULAR_SUBJECT_SOURCE_MODEL_RIG_INVALID");
-  }
-  if (modelInventory.rigSignatureHash !== recovered.model.manifest.rigSignatureHash) {
+  validateRiggedModelInventory(modelInventory, true);
+  if (modelInventory.rigSignatureHash !== model.manifest.rigSignatureHash) {
     return fail("MODULAR_SUBJECT_SOURCE_MODEL_RIG_SIGNATURE_MISMATCH");
   }
-  validateArtifact(recovered.model.manifest.artifact, recovered.model.glbBytes);
+  if (!canonicalValuesEqual(modelInventory, model.inventory)) {
+    return fail("MODULAR_SUBJECT_SOURCE_INVENTORY_MISMATCH", "model.result");
+  }
+  if (!canonicalValuesEqual(modelInventory, model.manifest.inventory)) {
+    return fail("MODULAR_SUBJECT_SOURCE_INVENTORY_MISMATCH", "model.manifest");
+  }
+  if (
+    model.manifest.rigSignatureHash === null ||
+    model.manifest.materialSlotIds.length !== modelInventory.materialCount ||
+    !canonicalValuesEqual(model.manifest.materialSlotIds, expectedMaterialSlotIds)
+  ) {
+    return fail("MODULAR_SUBJECT_SOURCE_MODEL_METADATA_MISMATCH");
+  }
+  validateArtifact(model.manifest.artifact, model.glbBytes);
 
   const actionIds = recovered.animationClips.map((clip) => clip.actionId);
   if (new Set(actionIds).size !== actionIds.length) {
@@ -1118,7 +1573,36 @@ export async function validateRecoveredSubjectSourcePackage(
   }
   for (const clip of recovered.animationClips) {
     validateCanonicalManifest(clip.manifest, clip.manifestBytes, clip.manifestRelativePath);
+    const expectedGlbRelativePath = `animations/${clip.actionId}/clip.glb`;
+    const expectedManifestRelativePath = `animations/${clip.actionId}/clip.manifest.json`;
+    if (
+      clip.glbRelativePath !== expectedGlbRelativePath ||
+      clip.manifestRelativePath !== expectedManifestRelativePath ||
+      clip.manifest.artifact.relativePath !== expectedGlbRelativePath
+    ) {
+      return fail("MODULAR_SUBJECT_SOURCE_PATH_MISMATCH", `clip.${clip.actionId}`);
+    }
+    if (
+      clip.manifest.kind !== "animation-clip" ||
+      clip.manifest.schemaVersion !== 1 ||
+      clip.manifest.id !== `${packageManifest.id}.${clip.actionId}` ||
+      clip.manifest.version !== packageManifest.version ||
+      clip.manifest.resourceRef !==
+        `worldkit://animation-clip/${packageManifest.creatorId}.${packageManifest.id}.${clip.actionId}@${packageManifest.version}`
+    ) {
+      return fail("MODULAR_SUBJECT_SOURCE_IDENTITY_MISMATCH", `clip.${clip.actionId}`);
+    }
+    if (!canonicalValuesEqual(clip.manifest.provenance, expectedProvenance)) {
+      return fail("MODULAR_SUBJECT_SOURCE_PROVENANCE_MISMATCH", `clip.${clip.actionId}`);
+    }
+    if (
+      clip.manifest.rigProfileRef !== packageManifest.rigProfileRef ||
+      clip.manifest.rigProfileRef !== model.manifest.rigProfileRef
+    ) {
+      return fail("MODULAR_SUBJECT_SOURCE_PACKAGE_REF_MISMATCH", "rig-profile");
+    }
     const inventory = await inspectModularSubjectGlb(clip.glbBytes);
+    validateRiggedModelInventory(inventory, false);
     const clipResidue = extensionResidueInventory(parseRawGlbJson(clip.glbBytes));
     if (
       inventory.meshCount !== 0 ||
@@ -1135,10 +1619,29 @@ export async function validateRecoveredSubjectSourcePackage(
       return fail("MODULAR_SUBJECT_SOURCE_CLIP_CONTRACT_INVALID", clip.actionId);
     }
     if (
-      inventory.rigSignatureHash !== recovered.model.manifest.rigSignatureHash ||
-      clip.manifest.rigSignatureHash !== recovered.model.manifest.rigSignatureHash
+      inventory.rigSignatureHash !== model.manifest.rigSignatureHash ||
+      clip.manifest.rigSignatureHash !== model.manifest.rigSignatureHash
     ) {
       return fail("MODULAR_SUBJECT_SOURCE_RIG_SIGNATURE_MISMATCH", clip.actionId);
+    }
+    if (!canonicalValuesEqual(inventory, clip.inventory)) {
+      return fail("MODULAR_SUBJECT_SOURCE_INVENTORY_MISMATCH", `clip.${clip.actionId}`);
+    }
+    const sourceAnimation = sourceInspection.inventory.animationClips.find(
+      (row) => row.name === clip.manifest.sourceClipName,
+    );
+    if (
+      clip.manifest.actionId !== clip.actionId ||
+      clip.manifest.durationSeconds !== inventory.animationClips[0]?.durationSeconds ||
+      sourceAnimation?.durationSeconds !== clip.manifest.durationSeconds ||
+      !Number.isFinite(clip.manifest.playbackSpeedRatio) ||
+      clip.manifest.playbackSpeedRatio <= 0 ||
+      !Number.isFinite(clip.manifest.blendDurationSeconds) ||
+      clip.manifest.blendDurationSeconds < 0 ||
+      !["repeat", "once"].includes(clip.manifest.loopMode) ||
+      clip.manifest.rootMotionMode !== "in-place"
+    ) {
+      return fail("MODULAR_SUBJECT_SOURCE_CLIP_METADATA_MISMATCH", clip.actionId);
     }
     validateArtifact(clip.manifest.artifact, clip.glbBytes);
   }
@@ -1153,7 +1656,13 @@ export async function validateRecoveredSubjectSourcePackage(
   ) {
     return fail("MODULAR_SUBJECT_SOURCE_PACKAGE_ACTION_SET_MISMATCH");
   }
-  if (recovered.packageManifest.sourceArchiveRef !== recovered.sourceArchive.manifest.resourceRef) {
-    return fail("MODULAR_SUBJECT_SOURCE_PACKAGE_ARCHIVE_REF_MISMATCH");
+  const mappedSourceClipNames = recovered.animationClips
+    .map((clip) => clip.manifest.sourceClipName)
+    .sort(compareCodeUnits);
+  const sourceClipNames = sourceInspection.inventory.animationClips
+    .map((clip) => clip.name)
+    .sort(compareCodeUnits);
+  if (!canonicalValuesEqual(mappedSourceClipNames, sourceClipNames)) {
+    return fail("MODULAR_SUBJECT_SOURCE_PACKAGE_ACTION_SET_MISMATCH");
   }
 }

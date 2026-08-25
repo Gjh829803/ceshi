@@ -6,6 +6,7 @@ import { Document, Logger, NodeIO } from "@gltf-transform/core";
 import { describe, expect, it } from "vitest";
 
 import {
+  canonicalSubjectManifestBytes,
   inspectModularSubjectGlb,
   recoverModularSubjectSourcePackage,
   validateRecoveredSubjectSourcePackage,
@@ -14,6 +15,10 @@ import {
 } from "./modular-subject-source";
 
 const TEST_IO = new NodeIO().setLogger(new Logger(Logger.Verbosity.SILENT));
+const TINY_PNG_BYTES = Uint8Array.from(Buffer.from(
+  "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M/wHwAF/gL+X8p8WQAAAABJRU5ErkJggg==",
+  "base64",
+));
 
 const GOLDEN_GLB_PATH = fileURLToPath(
   new URL("../../apps/playground/public/worldkit-assets/golden-humanoid.glb", import.meta.url),
@@ -35,6 +40,19 @@ const goldenPackageDefinition: ModularSubjectPackageDefinitionV1 = {
     "sha256:1095fd65c754d53e6db3757ab5e1c9e5e9dcea2581f85d40f37ea4890ee8c2c2",
   rigProfileRef: "worldkit://rig-profile/humanoid.golden-biped@1",
   provenanceMode: "generated-fixture",
+  spatialConvention: {
+    units: "meters",
+    upAxis: "+Y",
+    forwardAxis: "-Z",
+    pivot: "support-center",
+  },
+  spatialReview: {
+    spatialReviewStatus: "verified",
+    evidence: {
+      kind: "generated-fixture-contract",
+      evidenceRef: "scripts/fixtures/generate-golden-humanoid-glb.ts",
+    },
+  },
   actions: [
     {
       actionId: "idle",
@@ -112,6 +130,12 @@ describe("modular Subject source recovery", () => {
       skeletonCount: 1,
       animationClipCount: 0,
     });
+    expect(recovered.model.manifest.spatialConvention).toEqual(
+      goldenPackageDefinition.spatialConvention,
+    );
+    expect(recovered.model.manifest.spatialReview).toEqual(
+      goldenPackageDefinition.spatialReview,
+    );
     expect(recovered.animationClips.map((row) => row.actionId)).toEqual([
       "idle",
       "jump",
@@ -147,6 +171,102 @@ describe("modular Subject source recovery", () => {
     }
 
     await expect(validateRecoveredSubjectSourcePackage(recovered)).resolves.toBeUndefined();
+
+  });
+
+  it("rejects canonical but false inventories, paths, metadata, provenance, refs, and identities", async () => {
+    const recovered = await recoverModularSubjectSourcePackage({
+      definition: goldenPackageDefinition,
+      sourceGlbBytes: await readFile(GOLDEN_GLB_PATH),
+    });
+
+    await expect(validateRecoveredSubjectSourcePackage({
+      ...recovered,
+      model: {
+        ...recovered.model,
+        inventory: {
+          ...recovered.model.inventory,
+          meshCount: recovered.model.inventory.meshCount + 1,
+        },
+      },
+    })).rejects.toThrowError("MODULAR_SUBJECT_SOURCE_INVENTORY_MISMATCH: model.result");
+
+    const staleInventoryManifest = {
+      ...recovered.model.manifest,
+      inventory: {
+        ...recovered.model.manifest.inventory,
+        jointCount: recovered.model.manifest.inventory.jointCount + 1,
+      },
+    };
+    await expect(validateRecoveredSubjectSourcePackage({
+      ...recovered,
+      model: {
+        ...recovered.model,
+        manifest: staleInventoryManifest,
+        manifestBytes: canonicalSubjectManifestBytes(staleInventoryManifest),
+      },
+    })).rejects.toThrowError("MODULAR_SUBJECT_SOURCE_INVENTORY_MISMATCH: model.manifest");
+
+    await expect(validateRecoveredSubjectSourcePackage({
+      ...recovered,
+      model: {
+        ...recovered.model,
+        glbRelativePath: "wrong/model.glb" as "model/model.glb",
+      },
+    })).rejects.toThrowError("MODULAR_SUBJECT_SOURCE_PATH_MISMATCH: model");
+
+    const firstClip = recovered.animationClips[0]!;
+    const staleClipManifest = {
+      ...firstClip.manifest,
+      durationSeconds: firstClip.manifest.durationSeconds + 1,
+    };
+    await expect(validateRecoveredSubjectSourcePackage({
+      ...recovered,
+      animationClips: [{
+        ...firstClip,
+        manifest: staleClipManifest,
+        manifestBytes: canonicalSubjectManifestBytes(staleClipManifest),
+      }, ...recovered.animationClips.slice(1)],
+    })).rejects.toThrowError("MODULAR_SUBJECT_SOURCE_CLIP_METADATA_MISMATCH: idle");
+
+    const staleMaterialManifest = {
+      ...recovered.materialSet.manifest,
+      provenance: {
+        ...recovered.materialSet.manifest.provenance,
+        sourceGlbRelativePath: "wrong/source.glb",
+      },
+    };
+    await expect(validateRecoveredSubjectSourcePackage({
+      ...recovered,
+      materialSet: {
+        ...recovered.materialSet,
+        manifest: staleMaterialManifest,
+        manifestBytes: canonicalSubjectManifestBytes(staleMaterialManifest),
+      },
+    })).rejects.toThrowError("MODULAR_SUBJECT_SOURCE_PROVENANCE_MISMATCH: material-set");
+
+    const stalePackageManifest = {
+      ...recovered.packageManifest,
+      modelRef: "worldkit://subject-model-asset/wrong@1",
+    };
+    await expect(validateRecoveredSubjectSourcePackage({
+      ...recovered,
+      packageManifest: stalePackageManifest,
+      packageManifestBytes: canonicalSubjectManifestBytes(stalePackageManifest),
+    })).rejects.toThrowError("MODULAR_SUBJECT_SOURCE_PACKAGE_REF_MISMATCH: model");
+
+    const staleIdentityManifest = {
+      ...recovered.model.manifest,
+      id: "wrong-model",
+    };
+    await expect(validateRecoveredSubjectSourcePackage({
+      ...recovered,
+      model: {
+        ...recovered.model,
+        manifest: staleIdentityManifest,
+        manifestBytes: canonicalSubjectManifestBytes(staleIdentityManifest),
+      },
+    })).rejects.toThrowError("MODULAR_SUBJECT_SOURCE_IDENTITY_MISMATCH: model");
   });
 
   it("rejects a configured source Clip that does not exist", async () => {
@@ -159,6 +279,38 @@ describe("modular Subject source recovery", () => {
       definition: definitionFor(sourceGlbBytes, actions),
       sourceGlbBytes,
     })).rejects.toThrowError("MODULAR_SUBJECT_SOURCE_CONFIGURED_CLIP_MISSING: missing.walk");
+  });
+
+  it("rejects an untrusted forward-axis or pivot claim instead of fabricating Model truth", async () => {
+    const sourceGlbBytes = await readFile(GOLDEN_GLB_PATH);
+    const invalidDefinition = {
+      ...goldenPackageDefinition,
+      spatialConvention: {
+        ...goldenPackageDefinition.spatialConvention,
+        forwardAxis: "+Z",
+        pivot: "provider-origin",
+      },
+    } as unknown as ModularSubjectPackageDefinitionV1;
+
+    await expect(recoverModularSubjectSourcePackage({
+      definition: invalidDefinition,
+      sourceGlbBytes,
+    })).rejects.toThrowError("MODULAR_SUBJECT_SOURCE_SPATIAL_CONVENTION_INVALID");
+
+    const invalidReview = {
+      ...goldenPackageDefinition,
+      spatialReview: {
+        spatialReviewStatus: "claimed-without-review",
+        evidence: {
+          kind: "product-sidecar-declaration",
+          evidenceRef: "sidecars/golden-humanoid.json",
+        },
+      },
+    } as unknown as ModularSubjectPackageDefinitionV1;
+    await expect(recoverModularSubjectSourcePackage({
+      definition: invalidReview,
+      sourceGlbBytes,
+    })).rejects.toThrowError("MODULAR_SUBJECT_SOURCE_SPATIAL_REVIEW_INVALID");
   });
 
   it("rejects duplicate semantic action IDs", async () => {
@@ -194,6 +346,85 @@ describe("modular Subject source recovery", () => {
       definition: definitionFor(staticGlbBytes),
       sourceGlbBytes: staticGlbBytes,
     })).rejects.toThrowError("MODULAR_SUBJECT_SOURCE_STATIC_ACTIONS_UNSUPPORTED");
+  });
+
+  it("rejects a zero-action empty GLB because recovery is rigged-package-only", async () => {
+    const document = new Document();
+    document.createScene("EmptyScene");
+    const emptyGlbBytes = await TEST_IO.writeBinary(document);
+
+    await expect(recoverModularSubjectSourcePackage({
+      definition: definitionFor(emptyGlbBytes, []),
+      sourceGlbBytes: emptyGlbBytes,
+    })).rejects.toThrowError("MODULAR_SUBJECT_SOURCE_MODEL_RIG_REQUIRED");
+  });
+
+  it("recovers duplicate embedded image bytes as one independently addressable texture artifact", async () => {
+    const document = await TEST_IO.readBinary(await readFile(GOLDEN_GLB_PATH));
+    const material = document.getRoot().listMaterials()[0]!;
+    const baseColorTexture = document.createTexture("duplicate-base-color")
+      .setMimeType("image/png")
+      .setImage(TINY_PNG_BYTES);
+    const emissiveTexture = document.createTexture("duplicate-emissive")
+      .setMimeType("image/png")
+      .setImage(TINY_PNG_BYTES);
+    material.setBaseColorTexture(baseColorTexture);
+    material.setEmissiveTexture(emissiveTexture);
+    const texturedGlbBytes = await TEST_IO.writeBinary(document);
+
+    const recovered = await recoverModularSubjectSourcePackage({
+      definition: definitionFor(texturedGlbBytes),
+      sourceGlbBytes: texturedGlbBytes,
+    });
+    const textureHash = sourceHash(TINY_PNG_BYTES);
+    const expectedRelativePath =
+      `materials/default/textures/${textureHash.slice("sha256:".length)}.png`;
+
+    expect(recovered.materialSet.textureArtifacts).toHaveLength(1);
+    expect(recovered.materialSet.textureArtifacts[0]).toMatchObject({
+      relativePath: expectedRelativePath,
+      mediaType: "image/png",
+      byteLengthBytes: TINY_PNG_BYTES.byteLength,
+      contentHash: textureHash,
+    });
+    expect(recovered.materialSet.textureArtifacts[0]!.bytes).toEqual(TINY_PNG_BYTES);
+    const textureBindings = recovered.materialSet.manifest.materials.flatMap(
+      (row) => row.textures,
+    );
+    expect(textureBindings.map((row) => row.textureArtifactRelativePath)).toEqual([
+      expectedRelativePath,
+      expectedRelativePath,
+    ]);
+    expect(new Set(textureBindings.map((row) => row.textureArtifactRef)).size).toBe(1);
+    expect(await inspectModularSubjectGlb(recovered.model.glbBytes)).toMatchObject({
+      textureCount: 0,
+      imageCount: 0,
+    });
+    await expect(validateRecoveredSubjectSourcePackage(recovered)).resolves.toBeUndefined();
+
+    const tamperedTextureBytes = Uint8Array.from(TINY_PNG_BYTES);
+    tamperedTextureBytes[0] = tamperedTextureBytes[0]! ^ 0xff;
+    await expect(validateRecoveredSubjectSourcePackage({
+      ...recovered,
+      materialSet: {
+        ...recovered.materialSet,
+        textureArtifacts: [{
+          ...recovered.materialSet.textureArtifacts[0]!,
+          bytes: tamperedTextureBytes,
+        }],
+      },
+    })).rejects.toThrowError("MODULAR_SUBJECT_SOURCE_TEXTURE_ARTIFACT_HASH_MISMATCH");
+
+    await expect(validateRecoveredSubjectSourcePackage({
+      ...recovered,
+      materialSet: {
+        ...recovered.materialSet,
+        textureArtifacts: [{
+          ...recovered.materialSet.textureArtifacts[0]!,
+          relativePath: "materials/default/textures/wrong.png",
+        }],
+      },
+    })).rejects.toThrowError("MODULAR_SUBJECT_SOURCE_TEXTURE_ARTIFACT_METADATA_MISMATCH");
   });
 
   it("rejects a Clip whose joint Bind Pose drifts from the recovered Model", async () => {
