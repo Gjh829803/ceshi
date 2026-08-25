@@ -7,6 +7,6 @@
     "dev": "node server.mjs",
     "start": "node server.mjs",
     "public-proxy": "node public-proxy.mjs",
-    "test": "node --test server.test.mjs public-proxy.test.mjs recording-workbench.test.mjs"
+    "test": "node --test server.test.mjs public-proxy.test.mjs preview-bootstrap.test.mjs recording-workbench.test.mjs"
   }
 }
