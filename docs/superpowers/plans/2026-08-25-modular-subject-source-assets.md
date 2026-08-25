@@ -326,6 +326,8 @@ git commit -m "feat(assets): recover modular G Bot and Golden sources"
 - Create: `assets/subjects/packages/migration-inventory.json`
 - Create: `docs/20-modular-subject-source-assets.md`
 - Modify: `docs/16-subject-assets-3c-integration.md`
+- Modify: `docs/superpowers/skills/product-asset-intake.md`
+- Modify: `docs/superpowers/skills/product-asset-intake-static-assets.md`
 
 **Interfaces:**
 - Consumes: committed xier120 Registry manifests, source inventory, runtime GLB bytes, and Task 3 package manifests.
@@ -401,12 +403,17 @@ product-authoritative sources from current self-contained Runtime GLBs, and docu
 `extensions/` preservation/forbidden-consumption rule. Do not leave the older guide implying that a
 single merged GLB is the preferred editable product source.
 
+Synchronize the two detailed intake guides under `docs/superpowers/skills/` to the same authority:
+new product delivery starts from the modular source package, Ready Static remains an explicitly
+limited path, and existing merged GLBs are compatibility Runtime artifacts rather than editable
+source templates. Keep their Registry/Resolver/runtime verification instructions intact.
+
 Run `git diff --check` and manually verify every local link and command.
 
 - [ ] **Step 5: Commit Task 4**
 
 ```bash
-git add scripts/lib/subject-source-migration-audit.ts scripts/lib/subject-source-migration-audit.test.ts scripts/modular-subject-source-packages.ts scripts/modular-subject-source-packages.test.ts assets/subjects/packages/migration-inventory.json docs/20-modular-subject-source-assets.md docs/16-subject-assets-3c-integration.md
+git add scripts/lib/subject-source-migration-audit.ts scripts/lib/subject-source-migration-audit.test.ts scripts/modular-subject-source-packages.ts scripts/modular-subject-source-packages.test.ts assets/subjects/packages/migration-inventory.json docs/20-modular-subject-source-assets.md docs/16-subject-assets-3c-integration.md docs/superpowers/skills/product-asset-intake.md docs/superpowers/skills/product-asset-intake-static-assets.md
 git commit -m "docs(assets): publish subject migration corrections"
 ```
 
