@@ -44,6 +44,105 @@ async function listen(studio) {
   return `http://127.0.0.1:${address.port}`;
 }
 
+async function writeTrustedWhiteboxArtifacts(fakeRepoRoot, sceneId) {
+  const artifactRoot = path.join(fakeRepoRoot, "artifacts/scenes", sceneId);
+  const triViewRoot = path.join(artifactRoot, "triviews", "player-subject");
+  await mkdir(triViewRoot, { recursive: true });
+  const png = Buffer.from("89504e470d0a1a0a00000000", "hex");
+  const brief = "# WorldKit Scene Brief\n\n## 场景\n可信导入场景\n";
+  const authoring = `${JSON.stringify({
+    kind: "worldkit-authoring-spec",
+    schemaVersion: 4,
+    id: sceneId,
+  })}\n`;
+  const mapDraft = `${JSON.stringify({
+    kind: "worldkit-scene-brief-implementation-map",
+    schemaVersion: 1,
+    sceneId,
+    authoringSpecId: sceneId,
+    mappings: [{ visualTargetId: "player-subject", runtimeEntityIds: ["player"] }],
+  })}\n`;
+  const hash = (source) => `sha256:${createHash("sha256").update(source).digest("hex")}`;
+  const executionPlanHash = `sha256:${"a".repeat(64)}`;
+  const sceneBriefHash = `sha256:${"b".repeat(64)}`;
+  const authoringSpecHash = `sha256:${"c".repeat(64)}`;
+  const visualTarget = {
+    id: "player-subject",
+    visualTargetId: "player-subject",
+    runtimeEntityIds: ["player"],
+    role: "primary-subject",
+    semanticClassId: "subject.player",
+    identityColor: "#E85D5D",
+  };
+  const implementationMap = {
+    kind: "worldkit-scene-brief-implementation-map",
+    schemaVersion: 1,
+    sceneId,
+    sceneBriefHash,
+    authoringSpecId: sceneId,
+    authoringSpecHash,
+    mappings: [{ visualTargetId: "player-subject", runtimeEntityIds: ["player"] }],
+    visualCaptureGroups: [visualTarget],
+  };
+  const captureTargets = {
+    kind: "worldkit-runtime-triview-manifest",
+    schemaVersion: 1,
+    executionPlanHash,
+    targets: [{
+      ...visualTarget,
+      views: ["front", "right", "back"],
+      imagePath: "player-subject/whitebox-triview.png",
+    }],
+  };
+  await Promise.all([
+    writeFile(path.join(artifactRoot, "scene-brief.md"), brief),
+    writeFile(path.join(artifactRoot, "planner-self-check.json"), JSON.stringify({
+      kind: "worldkit-planner-self-check",
+      schemaVersion: 1,
+      validatorVersion: "worldkit-planner-self-check-v1",
+      sceneId,
+      status: "passed",
+      inputs: { sceneBriefHash: hash(brief) },
+    })),
+    writeFile(path.join(artifactRoot, "visual-identity-palette.json"), JSON.stringify({
+      kind: "worldkit-visual-identity-palette",
+      schemaVersion: 1,
+      sceneId,
+      sceneBriefHash,
+      targets: [{ id: "player-subject" }],
+    })),
+    writeFile(path.join(artifactRoot, "authoring.json"), authoring),
+    writeFile(path.join(artifactRoot, "implementation-map.draft.json"), mapDraft),
+    writeFile(path.join(artifactRoot, "builder-self-check.json"), JSON.stringify({
+      kind: "worldkit-builder-self-check",
+      schemaVersion: 1,
+      validatorVersion: "worldkit-builder-self-check-v4",
+      sceneId,
+      status: "passed",
+      inputs: {
+        sceneBriefHash: hash(brief),
+        authoringSpecHash: hash(authoring),
+        implementationMapDraftHash: hash(mapDraft),
+      },
+    })),
+    writeFile(path.join(artifactRoot, "scene-implementation-map.json"), JSON.stringify(implementationMap)),
+    writeFile(path.join(artifactRoot, "world.build.json"), JSON.stringify({
+      kind: "worldkit-build-artifact",
+      schemaVersion: 4,
+      executionPlanHash,
+      executionPlan: { kind: "worldkit-execution-plan", schemaVersion: 5 },
+    })),
+    writeFile(path.join(artifactRoot, "opening-frame.png"), png),
+    writeFile(path.join(artifactRoot, "runtime-snapshot.json"), JSON.stringify({
+      kind: "worldkit-runtime-snapshot",
+      schemaVersion: 4,
+    })),
+    writeFile(path.join(artifactRoot, "triviews/capture-targets.json"), JSON.stringify(captureTargets)),
+    writeFile(path.join(triViewRoot, "whitebox-triview.png"), png),
+  ]);
+  return { artifactRoot, captureTargets, png };
+}
+
 test.afterEach(async () => {
   await Promise.all(temporaryRoots.splice(0).map((root) => rm(root, { recursive: true, force: true })));
 });
@@ -587,7 +686,7 @@ test("does not expose manual whitebox video upload in the automatic Studio workf
   }
 });
 
-test("recovers a direct-imagegen interruption once the prompt bundle and every image exist", async () => {
+test("does not recover an explicitly failed visual run from leftover output files", async () => {
   const dataRoot = await temporaryRoot(".test-data-");
   const fakeRepoRoot = await temporaryRoot(".test-repo-");
   const firstStudio = createStudio({ repoRoot: fakeRepoRoot, dataRoot, autoRunJobs: false });
@@ -637,13 +736,208 @@ test("recovers a direct-imagegen interruption once the prompt bundle and every i
   const recoveredOrigin = await listen(recoveredStudio);
   try {
     const detail = await (await fetch(`${recoveredOrigin}/api/worlds/${created.id}`)).json();
+    assert.equal(detail.world.status, "failed");
+    assert.equal(detail.world.outcome, "failed");
+    assert.equal(detail.world.error, "Legacy image alignment failed.");
+    assert.equal(detail.world.previewUrl, `/play?authoring=1&world=${created.id}`);
+    await assert.rejects(
+      readFile(path.join(artifactRoot, "evaluation-report.json"), "utf8"),
+      { code: "ENOENT" },
+    );
+  } finally {
+    await recoveredStudio.shutdown();
+  }
+});
+
+test("does not recover stale placeholder outputs left before the current visual attempt", async () => {
+  const dataRoot = await temporaryRoot(".test-data-");
+  const fakeRepoRoot = await temporaryRoot(".test-repo-");
+  const firstStudio = createStudio({ repoRoot: fakeRepoRoot, dataRoot, autoRunJobs: false });
+  const firstOrigin = await listen(firstStudio);
+  const png = Buffer.from("89504e470d0a1a0a00000000", "hex");
+  const created = (await (await fetch(`${firstOrigin}/api/worlds`, {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({
+      title: "Stale Visual Outputs",
+      prompt: "Create a playable third-person world.",
+      image: { name: "reference.png", dataUrl: `data:image/png;base64,${png.toString("base64")}` },
+    }),
+  })).json()).world;
+  await firstStudio.shutdown();
+
+  const artifactRoot = path.join(fakeRepoRoot, "artifacts/scenes", created.sceneId);
+  await mkdir(path.join(artifactRoot, "triviews", "player-subject"), { recursive: true });
+  await Promise.all([
+    ...[
+      "scene-brief.md", "visual-identity-palette.json", "authoring.json", "scene-implementation-map.json", "world.build.json",
+      "runtime-snapshot.json", "evaluation-run.json", "planner-self-check.json", "builder-self-check.json",
+    ].map((fileName) => writeFile(path.join(artifactRoot, fileName), "{}")),
+    writeFile(path.join(artifactRoot, "triviews/capture-targets.json"), JSON.stringify({
+      targets: [{ id: "player-subject" }],
+    })),
+    writeFile(path.join(artifactRoot, "opening-frame.png"), png),
+    writeFile(path.join(artifactRoot, "visual-generation-prompts.json"), "{}"),
+    writeFile(path.join(artifactRoot, "styled-opening-frame.png"), png),
+    writeFile(path.join(artifactRoot, "triviews/player-subject/styled-triview.png"), png),
+    writeFile(path.join(artifactRoot, "styled-triviews-manifest.json"), "{}"),
+    writeFile(path.join(artifactRoot, "styled-triviews-report.json"), "{}"),
+  ]);
+  const recordPath = path.join(dataRoot, "worlds", created.id, "record.json");
+  const record = JSON.parse(await readFile(recordPath, "utf8"));
+  await writeFile(recordPath, JSON.stringify({
+    ...record,
+    status: "running",
+    stage: "visual-imagegen",
+    failedStage: null,
+    attempt: 1,
+    startedAt: new Date(Date.now() + 60_000).toISOString(),
+    captureStatus: "passed",
+    outcome: null,
+    error: null,
+  }));
+
+  const recoveredStudio = createStudio({ repoRoot: fakeRepoRoot, dataRoot, autoRunJobs: false });
+  const recoveredOrigin = await listen(recoveredStudio);
+  try {
+    const detail = await (await fetch(`${recoveredOrigin}/api/worlds/${created.id}`)).json();
+    assert.equal(detail.world.status, "interrupted");
+    assert.notEqual(detail.world.outcome, "passed");
+  } finally {
+    await recoveredStudio.shutdown();
+  }
+});
+
+test("does not import a three-file artifact fragment as a passed world", async () => {
+  const dataRoot = await temporaryRoot(".test-data-");
+  const fakeRepoRoot = await temporaryRoot(".test-repo-");
+  const sceneId = "partial-import-world";
+  const artifactRoot = path.join(fakeRepoRoot, "artifacts/scenes", sceneId);
+  await mkdir(path.join(artifactRoot, "triviews"), { recursive: true });
+  await Promise.all([
+    writeFile(path.join(artifactRoot, "scene-brief.md"), "# WorldKit Scene Brief\n"),
+    writeFile(path.join(artifactRoot, "authoring.json"), JSON.stringify({
+      kind: "worldkit-authoring-spec",
+      schemaVersion: 4,
+      id: sceneId,
+    })),
+    writeFile(path.join(artifactRoot, "triviews/capture-targets.json"), JSON.stringify({
+      kind: "worldkit-runtime-triview-manifest",
+      schemaVersion: 1,
+      executionPlanHash: `sha256:${"a".repeat(64)}`,
+      targets: [],
+    })),
+  ]);
+
+  const studio = createStudio({ repoRoot: fakeRepoRoot, dataRoot, autoRunJobs: false });
+  const origin = await listen(studio);
+  try {
+    const payload = await (await fetch(`${origin}/api/worlds`)).json();
+    assert.deepEqual(payload.worlds, []);
+  } finally {
+    await studio.shutdown();
+  }
+});
+
+test("imports a complete current whitebox chain with passed trusted receipts", async () => {
+  const dataRoot = await temporaryRoot(".test-data-");
+  const fakeRepoRoot = await temporaryRoot(".test-repo-");
+  const sceneId = "trusted-import-world";
+  await writeTrustedWhiteboxArtifacts(fakeRepoRoot, sceneId);
+
+  const studio = createStudio({ repoRoot: fakeRepoRoot, dataRoot, autoRunJobs: false });
+  const origin = await listen(studio);
+  try {
+    const payload = await (await fetch(`${origin}/api/worlds`)).json();
+    assert.equal(payload.worlds.length, 1);
+    assert.equal(payload.worlds[0].sceneId, sceneId);
+    assert.equal(payload.worlds[0].status, "ready");
+    assert.equal(payload.worlds[0].outcome, "passed");
+  } finally {
+    await studio.shutdown();
+  }
+});
+
+test("recovers fresh visual outputs only when current trusted receipts are passed", async () => {
+  const dataRoot = await temporaryRoot(".test-data-");
+  const fakeRepoRoot = await temporaryRoot(".test-repo-");
+  const firstStudio = createStudio({ repoRoot: fakeRepoRoot, dataRoot, autoRunJobs: false });
+  const firstOrigin = await listen(firstStudio);
+  const png = Buffer.from("89504e470d0a1a0a00000000", "hex");
+  const created = (await (await fetch(`${firstOrigin}/api/worlds`, {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({
+      title: "Recover Fresh Visuals",
+      prompt: "Create a playable third-person world.",
+      image: { name: "reference.png", dataUrl: `data:image/png;base64,${png.toString("base64")}` },
+    }),
+  })).json()).world;
+  await firstStudio.shutdown();
+
+  const recordPath = path.join(dataRoot, "worlds", created.id, "record.json");
+  const record = JSON.parse(await readFile(recordPath, "utf8"));
+  const startedAt = new Date().toISOString();
+  const currentRecord = {
+    ...record,
+    status: "running",
+    stage: "visual-imagegen",
+    failedStage: null,
+    attempt: 1,
+    startedAt,
+    captureStatus: "passed",
+    outcome: null,
+    error: null,
+  };
+  await writeFile(recordPath, JSON.stringify(currentRecord));
+  const { artifactRoot, captureTargets } = await writeTrustedWhiteboxArtifacts(fakeRepoRoot, created.sceneId);
+  await Promise.all([
+    writeFile(path.join(artifactRoot, "evaluation-run.json"), JSON.stringify({
+      kind: "worldkit-evaluation-run",
+      schemaVersion: 1,
+      caseId: created.id,
+      sceneId: created.sceneId,
+      workflowPolicyVersion,
+      attempt: 1,
+      startedAt,
+    })),
+    writeFile(path.join(artifactRoot, "visual-generation-prompts.json"), "{}"),
+    writeFile(path.join(artifactRoot, "styled-opening-frame.png"), png),
+    writeFile(path.join(artifactRoot, "styled-opening-frame-manifest.json"), JSON.stringify({
+      kind: "worldkit-styled-opening-frame-manifest",
+      schemaVersion: 1,
+      sceneId: created.sceneId,
+      status: "passed",
+    })),
+    writeFile(path.join(artifactRoot, "styled-opening-frame-report.json"), JSON.stringify({
+      kind: "worldkit-styled-opening-frame-report",
+      schemaVersion: 1,
+      sceneId: created.sceneId,
+      status: "passed",
+    })),
+    writeFile(path.join(artifactRoot, "styled-triviews-manifest.json"), JSON.stringify({
+      kind: "worldkit-styled-triview-manifest",
+      schemaVersion: 1,
+      sceneId: created.sceneId,
+      status: "passed",
+    })),
+    writeFile(path.join(artifactRoot, "styled-triviews-report.json"), JSON.stringify({
+      kind: "worldkit-styled-triview-report",
+      schemaVersion: 1,
+      sceneId: created.sceneId,
+      status: "passed",
+    })),
+    ...captureTargets.targets.map((target) =>
+      writeFile(path.join(artifactRoot, "triviews", target.id, "styled-triview.png"), png)),
+  ]);
+
+  const recoveredStudio = createStudio({ repoRoot: fakeRepoRoot, dataRoot, autoRunJobs: false });
+  const recoveredOrigin = await listen(recoveredStudio);
+  try {
+    const detail = await (await fetch(`${recoveredOrigin}/api/worlds/${created.id}`)).json();
     assert.equal(detail.world.status, "ready");
     assert.equal(detail.world.outcome, "passed");
     assert.equal(detail.world.error, null);
-    assert.equal(detail.world.previewUrl, `/play?authoring=1&world=${created.id}`);
-    const report = JSON.parse(await readFile(path.join(artifactRoot, "evaluation-report.json"), "utf8"));
-    assert.equal(report.outcome, "passed");
-    assert.equal(report.imageValidation, "not-required");
   } finally {
     await recoveredStudio.shutdown();
   }

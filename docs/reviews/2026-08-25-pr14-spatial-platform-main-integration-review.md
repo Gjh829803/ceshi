@@ -5,7 +5,8 @@
 - Source PR: `#14 feat: integrate lightweight scene planning and evaluation workflow`
 - Source branch reviewed through: `origin/codex/spatial-plan-platform-main@917b9b60890fa971fd38ef5dab33b8db417aa592`
 - Original implementation slice selectively integrated through: `15b3fd952247b56403b355ba81450777274794ed`
-- Target baseline: `origin/main@01ee4b9dd403dcc3f05b59ec29d7dbd8e5b17f10`
+- Initial target baseline: `origin/main@01ee4b9dd403dcc3f05b59ec29d7dbd8e5b17f10`
+- Final integration baseline: `origin/main@ff3c23c29cb9b148025eaf8c6a17faa8f26a0d21`
 - Integration method: current-main reimplementation and squash, not a history merge
 - Review protocols: `full-dimension-review-protocol.md` and `runtime-deep-review-checklist.md`
 
@@ -93,3 +94,39 @@ Contract and integration evidence completed during review:
 - all catalog Outdoor Gameplay browser and artifact-only gates.
 
 All listed commands completed successfully on the integration worktree before the independent completion review. The runtime gates produced real Chromium/Babylon/Havok evidence; no generated verification output is included as an incidental source change.
+
+## Independent completion-review disposition
+
+Cursor Grok 4.6 Extra High performed a read-only final review of the committed
+`01ee4b9..e4ab30b` integration after the host review. The host reproduced all
+five reported defects before changing code. No P0 was reported; three P1 and two
+P2 findings were confirmed and closed:
+
+- Studio no longer turns an explicit failed visual run into `passed` merely
+  because output files exist. Recovery is limited to current running or
+  interrupted attempts with fresh, matching trusted receipts and complete
+  current-version artifacts.
+- Existing artifact import no longer treats a Scene Brief, AuthoringSpec and
+  capture manifest fragment as a passed world. It requires the complete current
+  whitebox chain, passed Planner/Builder receipts, matching hashes and real PNG
+  captures.
+- the Builder's required terrain reference now agrees with the compiler that
+  vertices, triangles and colliders are all hard budgets;
+- the same reference reports flight, underwater traversal, vehicles, caves and
+  interiors as capability gaps instead of teaching unsupported production
+  recipes; and
+- the protected Studio proxy now uses a method-and-path allowlist, blocks the
+  whitebox write endpoint and arbitrary filesystem access, disables public
+  Upgrade tunnelling, and permits only the narrow read-only Vite source paths
+  needed by the authenticated monorepo preview.
+
+Focused regressions cover explicit failure preservation, stale attempt outputs,
+partial imports, valid current imports and recovery, Builder instruction parity,
+public API methods, Vite source containment, arbitrary file denial and Upgrade
+denial. These fixes do not add a new Canonical protocol or relax the current
+outdoor-heightfield capability boundary.
+
+Before final integration, the two reviewed commits were rebased onto
+`ff3c23c`. The host retained that baseline's Babylon shared-material mask
+isolation, temporary-texture disposal, camera-selection hardening and strict
+`isNil` cleanup, then rechecked the hosted capture adapter against those owners.

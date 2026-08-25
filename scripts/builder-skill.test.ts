@@ -100,10 +100,13 @@ describe("Canonical Builder skill", () => {
   });
 
   it("consumes the lightweight movement brief and maps only complete visual targets", async () => {
-    const [skill, template] = await Promise.all([
+    const [skill, template, terrainAndStructures] = await Promise.all([
       readFile(path.resolve(".codex/skills/worldkit-canonical-builder/SKILL.md"), "utf8"),
       readFile(path.resolve(
         ".codex/skills/worldkit-canonical-builder/references/canonical-template.md",
+      ), "utf8"),
+      readFile(path.resolve(
+        ".codex/skills/worldkit-canonical-builder/references/terrain-and-structures.md",
       ), "utf8"),
     ]);
     expect(skill).toContain("brief's explicit movement mode");
@@ -143,5 +146,23 @@ describe("Canonical Builder skill", () => {
     expect(template).toContain('"kind": "worldkit-scene-brief-implementation-map"');
     expect(template).toContain('"visualTargetId": "visual-target-1"');
     expect(template).not.toContain('"planId"');
+    expect(terrainAndStructures).toContain(
+      "`maxVertices`, `maxTriangles`, and `maxColliders` are required hard budgets",
+    );
+    expect(terrainAndStructures).toContain(
+      "the current compiler rejects every overrun",
+    );
+    expect(terrainAndStructures).not.toContain(
+      "`maxTriangles` is a required resource-budget field but no longer blocks validation or compilation",
+    );
+    expect(terrainAndStructures).toContain(
+      "Flight, underwater, vehicles, caves, interiors, and other unsupported production movement or topology requests are capability gaps",
+    );
+    expect(terrainAndStructures).not.toContain(
+      "Flight also needs at least 120 m of usable vertical range",
+    );
+    expect(terrainAndStructures).not.toContain(
+      "Flight or underwater: world bounds are the free movement domain",
+    );
   });
 });

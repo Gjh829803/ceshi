@@ -1,6 +1,5 @@
 import { timingSafeEqual } from "node:crypto";
 import { createServer, request as createHttpRequest } from "node:http";
-import net from "node:net";
 import path from "node:path";
 import process from "node:process";
 import { fileURLToPath } from "node:url";
@@ -53,6 +52,115 @@ function unauthorizedResponse(response) {
   response.end("WorldKit Creator Studio requires an access key.");
 }
 
+function forbiddenResponse(response) {
+  response.writeHead(403, {
+    "content-type": "text/plain; charset=utf-8",
+    "cache-control": "no-store",
+  });
+  response.end("This route is not exposed by the WorldKit public proxy.");
+}
+
+const publicApiRoutes = [
+  { methods: ["GET"], pattern: /^\/api\/(?:health|reliability|subject-catalog|test-sets)$/ },
+  { methods: ["POST"], pattern: /^\/api\/test-sets$/ },
+  { methods: ["POST"], pattern: /^\/api\/test-sets\/[a-z0-9-]+\/images$/ },
+  { methods: ["GET"], pattern: /^\/api\/test-sets\/[a-z0-9-]+\/images\/[a-z0-9-]+$/ },
+  { methods: ["POST"], pattern: /^\/api\/test-sets\/[a-z0-9-]+\/run$/ },
+  { methods: ["GET", "POST"], pattern: /^\/api\/worlds$/ },
+  { methods: ["GET"], pattern: /^\/api\/worlds\/[a-z0-9-]+$/ },
+  {
+    methods: ["GET"],
+    pattern: /^\/api\/worlds\/[a-z0-9-]+\/(?:triviews|styled-triviews)\/[a-z0-9-]+$/,
+  },
+  {
+    methods: ["GET"],
+    pattern: /^\/api\/worlds\/[a-z0-9-]+\/(?:authoring-spec|visual-capture-targets|reference)$/,
+  },
+  { methods: ["GET"], pattern: /^\/api\/worlds\/[a-z0-9-]+\/deliverables\/[a-z0-9-]+$/ },
+  { methods: ["POST"], pattern: /^\/api\/worlds\/[a-z0-9-]+\/retry$/ },
+  {
+    methods: ["GET", "POST"],
+    pattern: /^\/api\/recording-worlds\/[a-z0-9-]+\/recordings$/,
+  },
+  {
+    methods: ["POST"],
+    pattern: /^\/api\/recording-worlds\/[a-z0-9-]+\/recordings\/recording-[a-z0-9-]+\/generate$/,
+  },
+  {
+    methods: ["GET", "HEAD"],
+    pattern: /^\/api\/recording-worlds\/[a-z0-9-]+\/recordings\/recording-[a-z0-9-]+\/(?:source|generated|prompt|prompt-template|bundle)$/,
+  },
+];
+
+const publicStaticPaths = new Set(["/", "/index.html", "/app.js", "/styles.css", "/play", "/play/"]);
+const publicAssetPrefixes = [
+  "/@vite/",
+  "/src/",
+  "/node_modules/",
+  "/local-assets/",
+  "/subject-assets/",
+  "/worldkit-assets/",
+  "/scene-plans/",
+];
+const viteSourceExtensions = new Set([".ts", ".tsx", ".js", ".mjs", ".css", ".json"]);
+
+function isAllowedViteFsSource(pathname) {
+  if (!pathname.startsWith("/@fs/")) return false;
+  let requestedPath;
+  try {
+    requestedPath = decodeURIComponent(pathname.slice("/@fs".length));
+  } catch {
+    return false;
+  }
+  if (requestedPath.includes("\0")) return false;
+  const resolvedPath = path.resolve(requestedPath);
+  if (!viteSourceExtensions.has(path.extname(resolvedPath).toLowerCase())) return false;
+
+  const playgroundSourceRoot = path.join(repoRoot, "apps/playground/src");
+  const playgroundRelativePath = path.relative(playgroundSourceRoot, resolvedPath);
+  if (
+    playgroundRelativePath !== "" &&
+    !playgroundRelativePath.startsWith(`..${path.sep}`) &&
+    playgroundRelativePath !== ".." &&
+    !path.isAbsolute(playgroundRelativePath)
+  ) {
+    return true;
+  }
+
+  const packagesRoot = path.join(repoRoot, "packages");
+  const packageRelativePath = path.relative(packagesRoot, resolvedPath);
+  if (
+    packageRelativePath === "" ||
+    packageRelativePath.startsWith(`..${path.sep}`) ||
+    packageRelativePath === ".." ||
+    path.isAbsolute(packageRelativePath)
+  ) {
+    return false;
+  }
+  const [packageName, sourceDirectory, ...sourcePath] = packageRelativePath.split(path.sep);
+  return /^[a-z0-9][a-z0-9-]*$/.test(packageName) &&
+    sourceDirectory === "src" &&
+    sourcePath.length > 0;
+}
+
+export function isAllowedStudioPublicRequest(method, rawUrl) {
+  if (typeof method !== "string" || typeof rawUrl !== "string") return false;
+  let pathname;
+  try {
+    pathname = new URL(rawUrl, "http://127.0.0.1").pathname;
+  } catch {
+    return false;
+  }
+  if (["GET", "HEAD"].includes(method)) {
+    if (publicStaticPaths.has(pathname)) return true;
+    if (publicAssetPrefixes.some((prefix) => pathname.startsWith(prefix))) return true;
+    if (isAllowedViteFsSource(pathname)) return true;
+  }
+  if (method === "GET" && /^\/scene-assets\/[a-z0-9-]+\/.+$/.test(pathname)) return true;
+  return publicApiRoutes.some(({ methods, pattern }) =>
+    methods.includes(method) && pattern.test(pathname));
+}
+
 function upstreamHeaders(headers, target) {
   const forwarded = { ...headers, host: target.host };
   delete forwarded.authorization;
@@ -73,6 +181,10 @@ export function createStudioPublicProxy(options) {
   const server = createServer((request, response) => {
     if (!isAuthorizedPublicRequest(request.headers.authorization, accessKey)) {
       unauthorizedResponse(response);
+      return;
+    }
+    if (!isAllowedStudioPublicRequest(request.method, request.url)) {
+      forbiddenResponse(response);
       return;
     }
     const upstream = createHttpRequest({
@@ -103,7 +215,7 @@ export function createStudioPublicProxy(options) {
     request.pipe(upstream);
   });
 
-  server.on("upgrade", (request, socket, head) => {
+  server.on("upgrade", (request, socket) => {
     if (!isAuthorizedPublicRequest(request.headers.authorization, accessKey)) {
       socket.end(
         "HTTP/1.1 401 Unauthorized\r\n" +
@@ -112,18 +224,11 @@ export function createStudioPublicProxy(options) {
       );
       return;
     }
-    const upstream = net.connect(Number(target.port || 80), target.hostname);
-    upstream.once("connect", () => {
-      const headers = upstreamHeaders(request.headers, target);
-      const headerLines = Object.entries(headers).flatMap(([name, value]) =>
-        Array.isArray(value)
-          ? value.map((entry) => `${name}: ${entry}`)
-          : value === undefined ? [] : [`${name}: ${value}`]);
-      upstream.write(`${request.method} ${request.url} HTTP/${request.httpVersion}\r\n${headerLines.join("\r\n")}\r\n\r\n`);
-      if (head.length > 0) upstream.write(head);
-      socket.pipe(upstream).pipe(socket);
-    });
-    upstream.once("error", () => socket.destroy());
+    socket.end(
+      "HTTP/1.1 403 Forbidden\r\n" +
+      "Cache-Control: no-store\r\n" +
+      "Connection: close\r\n\r\n",
+    );
   });
 
   return server;

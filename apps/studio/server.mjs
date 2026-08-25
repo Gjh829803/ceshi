@@ -923,6 +923,141 @@ export function createStudio(options = {}) {
     return records.sort((left, right) => right.createdAt.localeCompare(left.createdAt));
   }
 
+  async function nonemptyArtifact(filePath, freshnessFloor = Number.NEGATIVE_INFINITY) {
+    try {
+      const metadata = await stat(filePath);
+      return metadata.isFile() && metadata.size > 0 && metadata.mtimeMs >= freshnessFloor;
+    } catch {
+      return false;
+    }
+  }
+
+  async function pngArtifact(filePath, freshnessFloor = Number.NEGATIVE_INFINITY) {
+    if (!await nonemptyArtifact(filePath, freshnessFloor)) return false;
+    try {
+      const bytes = await readFile(filePath);
+      return bytes.length > 8 && bytes.subarray(0, 8).toString("hex") === "89504e470d0a1a0a";
+    } catch {
+      return false;
+    }
+  }
+
+  async function sourceHash(filePath) {
+    try {
+      return `sha256:${createHash("sha256").update(await readFile(filePath)).digest("hex")}`;
+    } catch {
+      return null;
+    }
+  }
+
+  async function hasTrustedWhiteboxArtifacts(artifactRoot, sceneId, freshnessFloor = Number.NEGATIVE_INFINITY) {
+    const paths = {
+      brief: path.join(artifactRoot, "scene-brief.md"),
+      plannerCheck: path.join(artifactRoot, "planner-self-check.json"),
+      palette: path.join(artifactRoot, "visual-identity-palette.json"),
+      authoring: path.join(artifactRoot, "authoring.json"),
+      mapDraft: path.join(artifactRoot, "implementation-map.draft.json"),
+      builderCheck: path.join(artifactRoot, "builder-self-check.json"),
+      implementationMap: path.join(artifactRoot, "scene-implementation-map.json"),
+      build: path.join(artifactRoot, "world.build.json"),
+      openingFrame: path.join(artifactRoot, "opening-frame.png"),
+      snapshot: path.join(artifactRoot, "runtime-snapshot.json"),
+      captureTargets: path.join(artifactRoot, "triviews", "capture-targets.json"),
+    };
+    if (!(await Promise.all(Object.values(paths).map((filePath) =>
+      nonemptyArtifact(filePath, freshnessFloor)))).every(Boolean)) return false;
+    if (!await pngArtifact(paths.openingFrame, freshnessFloor)) return false;
+
+    const [
+      brief,
+      plannerCheck,
+      palette,
+      authoring,
+      builderCheck,
+      implementationMap,
+      build,
+      snapshot,
+      captureTargets,
+      briefHash,
+      authoringHash,
+      mapDraftHash,
+    ] = await Promise.all([
+      readFile(paths.brief, "utf8").catch(() => null),
+      readJsonIfPresent(paths.plannerCheck),
+      readJsonIfPresent(paths.palette),
+      readJsonIfPresent(paths.authoring),
+      readJsonIfPresent(paths.builderCheck),
+      readJsonIfPresent(paths.implementationMap),
+      readJsonIfPresent(paths.build),
+      readJsonIfPresent(paths.snapshot),
+      readJsonIfPresent(paths.captureTargets),
+      sourceHash(paths.brief),
+      sourceHash(paths.authoring),
+      sourceHash(paths.mapDraft),
+    ]);
+    if (
+      typeof brief !== "string" || !brief.startsWith("# WorldKit Scene Brief") ||
+      plannerCheck?.kind !== "worldkit-planner-self-check" || plannerCheck.schemaVersion !== 1 ||
+      plannerCheck.validatorVersion !== "worldkit-planner-self-check-v1" ||
+      plannerCheck.sceneId !== sceneId || plannerCheck.status !== "passed" ||
+      plannerCheck.inputs?.sceneBriefHash !== briefHash ||
+      palette?.kind !== "worldkit-visual-identity-palette" || palette.schemaVersion !== 1 ||
+      palette.sceneId !== sceneId || !/^sha256:[a-f0-9]{64}$/.test(palette.sceneBriefHash ?? "") ||
+      !Array.isArray(palette.targets) || palette.targets.length === 0 || palette.targets.length > 5 ||
+      authoring?.kind !== "worldkit-authoring-spec" || authoring.schemaVersion !== 4 ||
+      typeof authoring.id !== "string" || !idPattern.test(authoring.id) ||
+      builderCheck?.kind !== "worldkit-builder-self-check" || builderCheck.schemaVersion !== 1 ||
+      builderCheck.validatorVersion !== "worldkit-builder-self-check-v4" ||
+      builderCheck.sceneId !== sceneId || builderCheck.status !== "passed" ||
+      builderCheck.inputs?.sceneBriefHash !== briefHash ||
+      builderCheck.inputs?.authoringSpecHash !== authoringHash ||
+      builderCheck.inputs?.implementationMapDraftHash !== mapDraftHash ||
+      implementationMap?.kind !== "worldkit-scene-brief-implementation-map" ||
+      implementationMap.schemaVersion !== 1 || implementationMap.sceneId !== sceneId ||
+      implementationMap.sceneBriefHash !== palette.sceneBriefHash ||
+      !/^sha256:[a-f0-9]{64}$/.test(implementationMap.authoringSpecHash ?? "") ||
+      implementationMap.authoringSpecId !== authoring.id ||
+      !Array.isArray(implementationMap.mappings) || implementationMap.mappings.length === 0 ||
+      !Array.isArray(implementationMap.visualCaptureGroups) || implementationMap.visualCaptureGroups.length === 0 ||
+      build?.kind !== "worldkit-build-artifact" || build.schemaVersion !== 4 ||
+      build.executionPlan?.kind !== "worldkit-execution-plan" || build.executionPlan.schemaVersion !== 5 ||
+      !/^sha256:[a-f0-9]{64}$/.test(build.executionPlanHash ?? "") ||
+      snapshot?.kind !== "worldkit-runtime-snapshot" || snapshot.schemaVersion !== 4 ||
+      captureTargets?.kind !== "worldkit-runtime-triview-manifest" || captureTargets.schemaVersion !== 1 ||
+      captureTargets.executionPlanHash !== build.executionPlanHash ||
+      !Array.isArray(captureTargets.targets) || captureTargets.targets.length === 0 ||
+      captureTargets.targets.length > 5
+    ) return false;
+
+    const paletteTargetIds = palette.targets.map(({ id }) => id);
+    const mappingTargetIds = implementationMap.mappings.map(({ visualTargetId }) => visualTargetId);
+    const captureGroupTargetIds = implementationMap.visualCaptureGroups.map(({ visualTargetId }) => visualTargetId);
+    if (
+      new Set(paletteTargetIds).size !== paletteTargetIds.length ||
+      [...paletteTargetIds].sort().join(",") !== [...mappingTargetIds].sort().join(",") ||
+      [...paletteTargetIds].sort().join(",") !== [...captureGroupTargetIds].sort().join(",")
+    ) return false;
+    const captureGroupById = new Map(
+      implementationMap.visualCaptureGroups.map((group) => [group.id, group]),
+    );
+    const targetIds = new Set();
+    for (const target of captureTargets.targets) {
+      const group = captureGroupById.get(target?.id);
+      if (
+        !idPattern.test(target?.id ?? "") || targetIds.has(target.id) ||
+        group === undefined || group.visualTargetId !== target.visualTargetId ||
+        JSON.stringify(group.runtimeEntityIds) !== JSON.stringify(target.runtimeEntityIds) ||
+        group.role !== target.role || group.semanticClassId !== target.semanticClassId ||
+        group.identityColor !== target.identityColor ||
+        target.imagePath !== `${target.id}/whitebox-triview.png` ||
+        !Array.isArray(target.views) || target.views.join(",") !== "front,right,back" ||
+        !await pngArtifact(path.join(artifactRoot, "triviews", target.imagePath), freshnessFloor)
+      ) return false;
+      targetIds.add(target.id);
+    }
+    return targetIds.size === captureGroupById.size;
+  }
+
   async function importExistingWorlds() {
     const artifactsRoot = path.join(repoRoot, "artifacts/scenes");
     if (!await fileExists(artifactsRoot)) return;
@@ -932,10 +1067,9 @@ export function createStudio(options = {}) {
     for (const entry of entries) {
       if (!entry.isDirectory() || !idPattern.test(entry.name) || knownSceneIds.has(entry.name)) continue;
       const sceneBriefPath = path.join(artifactsRoot, entry.name, "scene-brief.md");
-      const authoringPath = path.join(artifactsRoot, entry.name, "authoring.json");
       const captureTargetsPath = path.join(artifactsRoot, entry.name, "triviews", "capture-targets.json");
-      if (!await fileExists(sceneBriefPath) || !await fileExists(authoringPath) ||
-          !await fileExists(captureTargetsPath)) continue;
+      const artifactRoot = path.join(artifactsRoot, entry.name);
+      if (!await hasTrustedWhiteboxArtifacts(artifactRoot, entry.name)) continue;
       try {
         const [sceneBrief, metadata] = await Promise.all([
           readFile(sceneBriefPath, "utf8"),
@@ -1757,27 +1891,27 @@ export function createStudio(options = {}) {
   async function recoverGeneratedStyledOutputs(record) {
     if (
       record.workflowPolicyVersion !== workflowPolicyVersion ||
-      !["failed", "interrupted", "running"].includes(record.status) ||
+      !["interrupted", "running"].includes(record.status) ||
+      /alignment.{0,24}(?:fail|error)|(?:fail|error).{0,24}alignment|视觉.{0,12}(?:失败|未通过)/i.test(record.error ?? "") ||
       ![record.failedStage, record.stage].some((stage) =>
         ["visual-prompt-synthesis", "visual-imagegen"].includes(stage))
     ) return false;
     const artifactRoot = path.join(repoRoot, "artifacts/scenes", record.sceneId);
+    const startedAtMs = Date.parse(record.startedAt ?? "");
+    if (!Number.isFinite(startedAtMs)) return false;
+    const freshnessFloor = startedAtMs - 1_000;
+    if (!await hasTrustedWhiteboxArtifacts(artifactRoot, record.sceneId, freshnessFloor)) return false;
     const required = [
-      "scene-brief.md",
-      "planner-self-check.json",
-      "visual-identity-palette.json",
-      "authoring.json",
-      "builder-self-check.json",
-      "scene-implementation-map.json",
-      "world.build.json",
-      "opening-frame.png",
-      "runtime-snapshot.json",
-      path.join("triviews", "capture-targets.json"),
       "visual-generation-prompts.json",
       "styled-opening-frame.png",
     ];
     if (record.referenceImage !== null) {
-      required.push("styled-triviews-manifest.json", "styled-triviews-report.json");
+      required.push(
+        "styled-opening-frame-manifest.json",
+        "styled-opening-frame-report.json",
+        "styled-triviews-manifest.json",
+        "styled-triviews-report.json",
+      );
       const captureManifest = await readJsonIfPresent(
         path.join(artifactRoot, "triviews", "capture-targets.json"),
       );
@@ -1789,10 +1923,36 @@ export function createStudio(options = {}) {
     }
     const gates = Object.fromEntries(await Promise.all(required.map(async (relativePath) => [
       relativePath,
-      await fileExists(path.join(artifactRoot, relativePath)),
+      await nonemptyArtifact(path.join(artifactRoot, relativePath), freshnessFloor),
     ])));
     if (!Object.values(gates).every(Boolean)) return false;
-    const evaluationRun = await readJsonIfPresent(path.join(artifactRoot, "evaluation-run.json"));
+    if (!await pngArtifact(path.join(artifactRoot, "styled-opening-frame.png"), freshnessFloor)) return false;
+    const [evaluationRun, openingReport, triViewReport, captureManifest] = await Promise.all([
+      readJsonIfPresent(path.join(artifactRoot, "evaluation-run.json")),
+      readJsonIfPresent(path.join(artifactRoot, "styled-opening-frame-report.json")),
+      readJsonIfPresent(path.join(artifactRoot, "styled-triviews-report.json")),
+      readJsonIfPresent(path.join(artifactRoot, "triviews", "capture-targets.json")),
+    ]);
+    if (
+      evaluationRun?.kind !== "worldkit-evaluation-run" || evaluationRun.schemaVersion !== 1 ||
+      evaluationRun.caseId !== record.id || evaluationRun.sceneId !== record.sceneId ||
+      evaluationRun.workflowPolicyVersion !== workflowPolicyVersion ||
+      evaluationRun.attempt !== record.attempt || evaluationRun.startedAt !== record.startedAt
+    ) return false;
+    if (record.referenceImage !== null) {
+      if (
+        openingReport?.kind !== "worldkit-styled-opening-frame-report" || openingReport.schemaVersion !== 1 ||
+        openingReport.sceneId !== record.sceneId || openingReport.status !== "passed" ||
+        triViewReport?.kind !== "worldkit-styled-triview-report" || triViewReport.schemaVersion !== 1 ||
+        triViewReport.sceneId !== record.sceneId || triViewReport.status !== "passed"
+      ) return false;
+      for (const target of captureManifest?.targets ?? []) {
+        if (!await pngArtifact(
+          path.join(artifactRoot, "triviews", target.id, "styled-triview.png"),
+          freshnessFloor,
+        )) return false;
+      }
+    }
     const finishedAt = new Date().toISOString();
     await updateRecord(record.id, {
       status: "ready",
@@ -1802,7 +1962,7 @@ export function createStudio(options = {}) {
       captureStatus: "passed",
       outcome: "passed",
       whiteboxOutcome: "passed",
-      styledOpeningFrameStatus: "passed",
+      styledOpeningFrameStatus: record.referenceImage === null ? "not-required" : "passed",
       styledTriviewsStatus: record.referenceImage === null ? "not-required" : "passed",
       finishedAt,
       error: null,
