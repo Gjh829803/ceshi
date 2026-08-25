@@ -819,11 +819,6 @@ describe.skipIf(!hasRuntimeProbeApi)("RouteRuntimeProbeReceiptV2", () => {
     for (const initialSurfaceResolution of [
       { mode: "ambiguous" as const },
       { mode: "unmatched" as const },
-      {
-        mode: "resolved" as const,
-        ...SURFACE,
-        traversalSurfaceId: "surface-forged",
-      },
     ]) {
       const complete = completeReceipt();
       const forged: RouteRuntimeProbeReceiptV2 = {
@@ -846,6 +841,30 @@ describe.skipIf(!hasRuntimeProbeApi)("RouteRuntimeProbeReceiptV2", () => {
         validationProfileIdentity: VALIDATION_PROFILE_IDENTITY,
       })).toThrow("ROUTE_RUNTIME_PROBE_CONTEXT_INVALID");
     }
+
+    const complete = completeReceipt();
+    const wrongResolved: RouteRuntimeProbeReceiptV2 = {
+      ...complete,
+      initialRuntimeEvidence: runtimeEvidence(0, {
+        characterSupport: {
+          ...runtimeEvidence(0).characterSupport,
+          surfaceResolution: {
+            mode: "resolved",
+            ...SURFACE,
+            traversalSurfaceId: "surface-forged",
+          },
+        },
+      }),
+    };
+    expect(canonicalRouteRuntimeProbeReceiptV2(wrongResolved)).toEqual(
+      wrongResolved,
+    );
+    expect(() => assertRouteRuntimeProbeReceiptContextV2({
+      receipt: wrongResolved,
+      routePathReceipt: pathReceipt(),
+      resolvedDriverProfile: RESOLVED_DRIVER_PROFILE,
+      validationProfileIdentity: VALIDATION_PROFILE_IDENTITY,
+    })).toThrow("ROUTE_RUNTIME_PROBE_CONTEXT_INVALID");
   });
 
   it("rejects non-consecutive evidence/Probe ticks and every identity mismatch", () => {

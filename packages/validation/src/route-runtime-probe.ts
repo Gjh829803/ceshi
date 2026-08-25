@@ -85,7 +85,7 @@ interface PathGeometry {
   readonly totalDistanceMetersXZ: number;
 }
 
-const GEOMETRY_EPSILON = 1e-9;
+const PROJECTION_TIE_EPSILON_METERS = 1e-9;
 
 function fail(code: RouteRuntimeProbeErrorCodeV2): never {
   throw new RouteRuntimeProbeErrorV2(code);
@@ -160,6 +160,14 @@ function distanceXZ(a: XzPoint, b: XzPoint): number {
   return Math.hypot(a.x - b.x, a.z - b.z);
 }
 
+function distanceXYZ(a: Vec3, b: Vec3): number {
+  return requireFiniteRuntimeDerived(Math.hypot(
+    a[0] - b[0],
+    a[1] - b[1],
+    a[2] - b[2],
+  ));
+}
+
 function requireFiniteRuntimeDerived(value: number): number {
   if (!Number.isFinite(value)) {
     fail("ROUTE_RUNTIME_PROBE_RUNTIME_INVALID");
@@ -174,39 +182,6 @@ function ceilToQuantum(value: number, quantum: number): number {
   }
   const quantized = units * quantum;
   return quantized === 0 ? 0 : quantized;
-}
-
-function orientation(a: XzPoint, b: XzPoint, c: XzPoint): number {
-  return (b.x - a.x) * (c.z - a.z) - (b.z - a.z) * (c.x - a.x);
-}
-
-function onSegment(a: XzPoint, b: XzPoint, point: XzPoint): boolean {
-  return Math.abs(orientation(a, b, point)) <= GEOMETRY_EPSILON &&
-    point.x >= Math.min(a.x, b.x) - GEOMETRY_EPSILON &&
-    point.x <= Math.max(a.x, b.x) + GEOMETRY_EPSILON &&
-    point.z >= Math.min(a.z, b.z) - GEOMETRY_EPSILON &&
-    point.z <= Math.max(a.z, b.z) + GEOMETRY_EPSILON;
-}
-
-function segmentsIntersect(a: PathSegment, b: PathSegment): boolean {
-  const o1 = orientation(a.start, a.end, b.start);
-  const o2 = orientation(a.start, a.end, b.end);
-  const o3 = orientation(b.start, b.end, a.start);
-  const o4 = orientation(b.start, b.end, a.end);
-  if (
-    ((o1 > GEOMETRY_EPSILON && o2 < -GEOMETRY_EPSILON) ||
-      (o1 < -GEOMETRY_EPSILON && o2 > GEOMETRY_EPSILON)) &&
-    ((o3 > GEOMETRY_EPSILON && o4 < -GEOMETRY_EPSILON) ||
-      (o3 < -GEOMETRY_EPSILON && o4 > GEOMETRY_EPSILON))
-  ) {
-    return true;
-  }
-  return (
-    (Math.abs(o1) <= GEOMETRY_EPSILON && onSegment(a.start, a.end, b.start)) ||
-    (Math.abs(o2) <= GEOMETRY_EPSILON && onSegment(a.start, a.end, b.end)) ||
-    (Math.abs(o3) <= GEOMETRY_EPSILON && onSegment(b.start, b.end, a.start)) ||
-    (Math.abs(o4) <= GEOMETRY_EPSILON && onSegment(b.start, b.end, a.end))
-  );
 }
 
 function createPathGeometry(
@@ -235,9 +210,6 @@ function createPathGeometry(
     const start = points[index]!;
     const end = points[index + 1]!;
     const rawLengthMetersXZ = distanceXZ(start, end);
-    if (!(rawLengthMetersXZ > 0)) {
-      fail("ROUTE_RUNTIME_PROBE_PATH_INVALID");
-    }
     const lengthMetersXZ = ceilToQuantum(
       rawLengthMetersXZ,
       positionQuantizationMeters,
@@ -254,20 +226,6 @@ function createPathGeometry(
     totalDistanceMetersXZ += lengthMetersXZ;
   }
 
-  for (let left = 0; left < points.length; left += 1) {
-    for (let right = left + 2; right < points.length; right += 1) {
-      if (distanceXZ(points[left]!, points[right]!) <= GEOMETRY_EPSILON) {
-        fail("ROUTE_RUNTIME_PROBE_PATH_INVALID");
-      }
-    }
-  }
-  for (let left = 0; left < segments.length; left += 1) {
-    for (let right = left + 2; right < segments.length; right += 1) {
-      if (segmentsIntersect(segments[left]!, segments[right]!)) {
-        fail("ROUTE_RUNTIME_PROBE_PATH_INVALID");
-      }
-    }
-  }
   if (totalDistanceMetersXZ !== path.routePathDistanceMetersXZ) {
     fail("ROUTE_RUNTIME_PROBE_PATH_INVALID");
   }
@@ -320,6 +278,23 @@ function projectForwardProgress(
     if (eligibleStart > eligibleEnd) continue;
     const dx = segment.end.x - segment.start.x;
     const dz = segment.end.z - segment.start.z;
+    if (segment.rawLengthMetersXZ === 0) {
+      const candidateDistance = requireFiniteRuntimeDerived(
+        distanceXZ(subject, segment.end),
+      );
+      if (
+        candidateDistance < selectedDistance - PROJECTION_TIE_EPSILON_METERS ||
+        (
+          Math.abs(candidateDistance - selectedDistance) <=
+            PROJECTION_TIE_EPSILON_METERS &&
+          eligibleEnd > selectedProgressMetersXZ
+        )
+      ) {
+        selectedDistance = candidateDistance;
+        selectedProgressMetersXZ = eligibleEnd;
+      }
+      continue;
+    }
     const rawParameter = (
       (subject.x - segment.start.x) * dx +
       (subject.z - segment.start.z) * dz
@@ -334,7 +309,14 @@ function projectForwardProgress(
     const candidateDistance = requireFiniteRuntimeDerived(
       distanceXZ(subject, candidatePoint),
     );
-    if (candidateDistance < selectedDistance) {
+    if (
+      candidateDistance < selectedDistance - PROJECTION_TIE_EPSILON_METERS ||
+      (
+        Math.abs(candidateDistance - selectedDistance) <=
+          PROJECTION_TIE_EPSILON_METERS &&
+        candidateProgress > selectedProgressMetersXZ
+      )
+    ) {
       selectedDistance = candidateDistance;
       selectedProgressMetersXZ = candidateProgress;
     }
@@ -355,6 +337,13 @@ function deviationFromCompletePath(
   for (const segment of geometry.segments) {
     const dx = segment.end.x - segment.start.x;
     const dz = segment.end.z - segment.start.z;
+    if (segment.rawLengthMetersXZ === 0) {
+      minimumDistance = Math.min(
+        minimumDistance,
+        requireFiniteRuntimeDerived(distanceXZ(subject, segment.end)),
+      );
+      continue;
+    }
     const rawParameter = (
       (subject.x - segment.start.x) * dx +
       (subject.z - segment.start.z) * dz
@@ -692,7 +681,7 @@ export async function runRouteRuntimeProbeV2(
   const ticks: RouteRuntimeProbeTickV2[] = [];
   let previousEvidence = initial;
   let previousProgressMetersXZ = 0;
-  let progressBaselineMetersXZ = 0;
+  let verifiedStationAdvanceSinceProgressBaselineMeters = 0;
   let stalledDurationTicks = 0;
   let consecutiveUnexpectedUnsupportedTicks = 0;
   let maximumStalledDurationTicks = 0;
@@ -738,6 +727,7 @@ export async function runRouteRuntimeProbeV2(
       probeTick,
       initial.fixedTimeStepSeconds,
     );
+    const stationArcBeforeTick = previousArcLengthMeters;
     const station = advanceRouteRuntimeProbeSupportStationV2(
       path,
       evidence.characterSupport.sampledFootPositionMetersXYZ,
@@ -771,11 +761,23 @@ export async function runRouteRuntimeProbeV2(
     });
     if (hasArrived) routeProgressMetersXZ = geometry.totalDistanceMetersXZ;
 
+    const stationAdvanceMeters = Math.max(
+      0,
+      station.arcLengthMeters - stationArcBeforeTick,
+    );
+    const retainedFootTravelMeters = distanceXYZ(
+      previousEvidence.characterSupport.sampledFootPositionMetersXYZ,
+      evidence.characterSupport.sampledFootPositionMetersXYZ,
+    );
+    verifiedStationAdvanceSinceProgressBaselineMeters += Math.min(
+      stationAdvanceMeters,
+      retainedFootTravelMeters,
+    );
     if (
-      routeProgressMetersXZ - progressBaselineMetersXZ >=
+      verifiedStationAdvanceSinceProgressBaselineMeters >=
         thresholds.minimumProgressMetersXZ
     ) {
-      progressBaselineMetersXZ = routeProgressMetersXZ;
+      verifiedStationAdvanceSinceProgressBaselineMeters = 0;
       stalledDurationTicks = 0;
     } else {
       stalledDurationTicks += 1;

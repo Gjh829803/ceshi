@@ -308,7 +308,7 @@ describe("route runtime probe public runner", () => {
 });
 
 describe.runIf(hasRunner)("runRouteRuntimeProbeV2", () => {
-  it("rejects identity and ambiguous R1 path topology before reset", async () => {
+  it("rejects identity mismatch before reset", async () => {
     const valid = pathReceipt();
     const mismatchedPort = new ScriptedRuntimePort(
       valid,
@@ -321,23 +321,32 @@ describe.runIf(hasRunner)("runRouteRuntimeProbeV2", () => {
     });
     expect(mismatchedPort.resetCallCount).toBe(0);
     expect(mismatchedPort.fixedTickCallCount).toBe(0);
+  });
 
-    const invalidPaths = [
+  it("accepts canonical layered, repeated-XZ, and crossing Path topology", async () => {
+    const canonicalPaths = [
       pathReceipt([[0, 0, 0], [0, 1, 0], [2, 0, 0]]),
       pathReceipt([[0, 0, 0], [2, 0, 0], [2, 0, 2], [0, 0, 0]]),
       pathReceipt([[0, 0, 0], [3, 0, 0], [1, 0, 0], [4, 0, 0]]),
-      pathReceipt([[0, 0, 0], [2, 0, 2], [0, 0, 2], [2, 0, 0]]),
+      pathReceipt([[0, 0, 0], [2, 0, 2], [0, 1, 2], [2, 1, 0]]),
     ];
-    for (const invalidPath of invalidPaths) {
+    for (const path of canonicalPaths) {
       const port = new ScriptedRuntimePort(
-        invalidPath,
-        { positionMetersXYZ: invalidPath.orderedPathPositionsMetersXYZ[0]! },
-        [{ positionMetersXYZ: invalidPath.orderedPathPositionsMetersXYZ.at(-1)! }],
+        path,
+        { positionMetersXYZ: path.orderedPathPositionsMetersXYZ[0]! },
+        framesAlongPolyline(path.orderedPathPositionsMetersXYZ, 0.04),
       );
-      await expect(run(invalidPath, port)).rejects.toMatchObject({
-        code: "ROUTE_RUNTIME_PROBE_PATH_INVALID",
+      const receipt = await run(path, port);
+      expect({
+        status: receipt.status,
+        failure: receipt.status === "failed" ? receipt.failure : undefined,
+        points: path.orderedPathPositionsMetersXYZ,
+      }).toEqual({
+        status: "complete",
+        failure: undefined,
+        points: path.orderedPathPositionsMetersXYZ,
       });
-      expect(port.resetCallCount).toBe(0);
+      expect(port.resetCallCount).toBe(1);
     }
   });
 

@@ -1540,11 +1540,12 @@ export function canonicalRouteRuntimeProbeReceiptV2(
   const firstMismatchIndex = ticks.findIndex((row) =>
     isSurfaceMismatchV2(row.runtimeEvidence, row.expectedTraversalSurfaceIds)
   );
-  const hasInitialSurfaceMismatch = ticks.length > 0 && isSurfaceMismatchV2(
-    initialRuntimeEvidence,
-    ticks[0]!.expectedTraversalSurfaceIds,
-  );
-  if (hasInitialSurfaceMismatch) {
+  const initialSurfaceResolution =
+    initialRuntimeEvidence.characterSupport.surfaceResolution;
+  const hasInitialUnresolvedSurface =
+    initialRuntimeEvidence.characterSupport.supportState !== "unsupported" &&
+    initialSurfaceResolution.mode !== "resolved";
+  if (ticks.length > 0 && hasInitialUnresolvedSurface) {
     fail(prefix, "ticks", "must be empty after initial support-surface mismatch");
   }
   if (firstMismatchIndex >= 0 && firstMismatchIndex !== ticks.length - 1) {
@@ -1569,7 +1570,9 @@ export function canonicalRouteRuntimeProbeReceiptV2(
     : deriveMetricsV2(
         initialRuntimeEvidence,
         ticks,
-        ticks[0]!.expectedTraversalSurfaceIds,
+        initialSurfaceResolution.mode === "resolved"
+          ? [initialSurfaceResolution.traversalSurfaceId]
+          : [],
       );
   requireEqual(
     metrics,
@@ -1584,6 +1587,7 @@ export function canonicalRouteRuntimeProbeReceiptV2(
     const finalTick = ticks.at(-1);
     if (
       initialRuntimeEvidence.characterSupport.supportState === "unsupported" ||
+      hasInitialUnresolvedSurface ||
       firstMismatchIndex >= 0 ||
       finalTick?.runtimeEvidence.characterSupport.supportState === "unsupported"
     ) {
