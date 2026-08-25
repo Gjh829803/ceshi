@@ -1,10 +1,10 @@
 # M5 Remediation Batch A: Gates and P0 Implementation Plan
 
-> **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
+> **Execution:** Implement task-by-task in the main process. Use subagents only when the user explicitly requests delegation. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** Land the fail-closed two-lane test gate and close the five confirmed M5 P0 findings with fix-before-fix RED/GREEN evidence.
+**Goal:** Land the fail-closed two-lane test gate, close the four effective M5 P0 findings with fix-before-fix RED/GREEN evidence, and formally withdraw the invalid step-up pose-delta finding.
 
-**Architecture:** First replace the unstable single-process root Vitest command with an explicit complete lane manifest and three sequential processes. Then stabilize Path station/support authority, close zero-tick and Tick-0 receipt holes, bind Build Input Envelope bytes to the admitted Lock, and constrain Babylon step-up to the real fixed-tick budget. Public contracts use a clean break; no aliases or fallback reads are allowed.
+**Architecture:** First replace the unstable single-process root Vitest command with an explicit complete lane manifest and three sequential processes. Then stabilize Path station/support authority, close zero-tick and Tick-0 receipt holes, and bind Build Input Envelope bytes to the admitted Lock. Babylon/Jolt source verification establishes that validated stair-step reposition is not governed by the ordinary `speed × dt` pose-delta oracle, so the step-up item changes documentation only. Public contracts use a clean break; no aliases or fallback reads are allowed.
 
 **Tech Stack:** TypeScript 5.9, Vitest 3.2.7 public Node API, Babylon.js 9.21.2, Havok 1.3.14, Recast Navigation 0.43.1, pnpm 10.14.
 
@@ -436,52 +436,35 @@ Commit all atomic factory/consumer changes with message `fix(traversal): bind bu
 
 ---
 
-### Task 8: Constrain Babylon step-up to the fixed-tick budget
+### Task 8: Withdraw the invalid fixed-tick step-up oracle
 
 **Files:**
 
-- Modify: `packages/runtime-babylon/src/motion-kernel-runtime.ts`
-- Modify: `scripts/lib/route-runtime-probe.integration.test.ts`
-- Modify only if needed for focused helper coverage: `packages/runtime-babylon/src/p15-conformance.test.ts`
+- Modify: `docs/reviews/2026-08-24-m5-route-traversability-deep-review.md`
+- Modify: `docs/superpowers/specs/2026-08-25-m5-traversability-remediation-design.md`
+- Modify: `docs/superpowers/plans/2026-08-25-m5-remediation-batch-a-gates-and-p0.md`
 
-**Interfaces:** `_tryStepUp()` receives and uses the actual Babylon `remainingTime`. No provider call may receive padded time; committed pose and returned consumed time use the same budget.
+**Interfaces:** No production interface changes. Stair stepping remains a provider-owned kinematic reposition accepted only after Babylon's up/forward/down casts validate clearance and landing. Ordinary locomotion keeps its fixed-tick budget; the stair landing pose itself is not constrained by a `speed × dt` pose-delta assertion.
 
-- [ ] **Step 1: Add real Havok displacement RED**
+- [x] **Step 1: Reproduce the observation and inspect the installed engine source**
 
-Use the current R1b success steps fixture and record consecutive Tick XZ positions. Require every Tick:
+The real `success-steps-platform-ramp` fixture reproduces the observed approximately `0.34m` stair tick. Installed Babylon.js 9.21.2 explicitly labels step-up as teleport/reposition and validates it with upward, forward, and downward casts before committing the landing pose.
 
-```ts
-const maximumTickDisplacementMeters =
-  walkSpeedMetersPerSecond * fixedTimeStepSeconds + positionQuantizationMeters;
-expect(horizontalDisplacementMeters).toBeLessThanOrEqual(
-  maximumTickDisplacementMeters,
-);
-```
+- [x] **Step 2: Compare against an independent production KCC**
 
-Keep the legal 0.25m step success and existing 0.35m/narrow-tread failures.
+Jolt CharacterVirtual `WalkStairs` uses the same up/forward/down collision-cast pattern and intentionally supplies minimum forward travel because high-frequency `velocity × dt` can be too short to mount a step. Its official tests cover 60/120/240/360 Hz stair progression.
 
-- [ ] **Step 2: Observe RED exclusively**
+- [x] **Step 3: Run minimal counter-hypothesis experiments**
 
-```bash
-pnpm exec vitest run scripts/lib/route-runtime-probe.integration.test.ts --no-file-parallelism --maxWorkers=1 --minWorkers=1
-```
+Removing the padded forward travel makes the legal 0.25m fixture fail `runtime-stalled`. A provider-private multi-tick clipping experiment stops the capsule at the stair side and fails `support-surface-mismatch` with `surfaceResolutionMode="unmatched"`. Revert both experiments; neither is a valid fix.
 
-Expected: the reproduced step tick is approximately `0.34m`, above the approximately `0.041m` frozen budget.
+- [x] **Step 4: Correct the finding and preserve the real gates**
 
-- [ ] **Step 3: Remove padded time**
-
-Call `super._tryStepUp(remainingTime, ...)` and return its real consumed value. Do not clip only after Babylon has committed pose. If the legal step fixture becomes RED, add a provider-private multi-tick step maneuver constrained by the same per-tick budget; do not change public Schema or motion profiles.
-
-- [ ] **Step 4: Run focused GREEN and R1b**
-
-```bash
-pnpm exec vitest run scripts/lib/route-runtime-probe.integration.test.ts --no-file-parallelism --maxWorkers=1 --minWorkers=1
-pnpm verify:route-r1b-static-platform
-```
+Withdraw the P0 and explain why the observed pose delta does not establish an unchecked skip. Do not modify Runtime code. Keep existing R1b coverage for legal 0.25m success, over-height 0.35m failure, narrow-tread failure, penetration/dynamic/slope rejection, and cadence stability.
 
 - [ ] **Step 5: Commit**
 
-Commit with message `fix(runtime): keep step-up within fixed tick`.
+Commit the evidence correction with message `docs: withdraw invalid step-up finding`.
 
 ---
 

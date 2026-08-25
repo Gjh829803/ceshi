@@ -8,7 +8,7 @@
 
 ## 1. Goal
 
-Close the five confirmed P0 and twelve confirmed P1 findings without weakening the frozen Route R0/R1/R1b or P1.5 movement contracts. Replace the unstable monolithic Vitest execution policy with a complete two-lane gate whose test census remains fail-closed as other branches add tests.
+Close the four effective P0 and twelve confirmed P1 findings without weakening the frozen Route R0/R1/R1b or P1.5 movement contracts. Replace the unstable monolithic Vitest execution policy with a complete two-lane gate whose test census remains fail-closed as other branches add tests. The original fixed-tick step-up finding is withdrawn: Babylon and Jolt both implement validated kinematic stair reposition, so ordinary `speed × dt` is not a valid stair-step pose-delta oracle.
 
 M5 is complete only when every Required Route is bound to the same locked capability context, produces truthful Graph/Path evidence, and is traversed by the real fixed-tick Babylon/Havok Subject Controller with canonical support and progress evidence.
 
@@ -38,7 +38,8 @@ It does not modify M5 Traversal, Recast, Runtime, Validation, Browser, Studio, o
 | Capability Envelope | the existing canonical Envelope factory, re-derived from the admitted Resolved Traversal Lock | Build Input receipt and Graph Builder admission |
 | Route progress station | one Path station helper over canonical 3D arc length | Runtime runner, Tick evidence, context validator |
 | Support Surface | MotionKernel retained-foot `checkSupport()` result | Route station resolution and Probe receipt validation |
-| Fixed-tick movement budget | MotionKernel fixed-step input | Babylon character integration and step-up |
+| Ordinary fixed-tick movement budget | MotionKernel fixed-step input | Babylon character integration outside validated stair-step reposition |
+| Stair-step landing | Babylon CharacterController up/forward/down sweeps and legal landing constraints | MotionKernel pose/support evidence and R1b fixtures |
 | Surface/Collider route scope | one deterministic Build Input projection | Recast geometry and Surface inventory |
 | Seam evidence | edge-local canonical portal/boundary proof | Traversal Graph edge publication |
 | Required Route set | ExecutionPlan-derived canonical expected-set receipt | Report factory, validator, Browser publication, Studio admission |
@@ -90,8 +91,8 @@ Every row is an independently reviewable deliverable. The main agent owns cross-
 | PROBE-1 | Forbid long-arc Route completion at Tick 0 | PATH-1 | INT-1 | `packages/validation/src/route-runtime-probe*` arrival logic/tests | zero-tick completion only when total canonical Path arc length is within arrival tolerance | 16.795m loop RED, legal short-path GREEN, real fixture | sequential |
 | PROBE-2 | Use retained-foot position and retained support as the only Route station/support authority | PATH-1 | PROBE-3, INT-1 | Runtime Probe port/runner boundary plus focused tests | MotionKernel retained foot/support sample → PATH-1 station; subject origin is not re-inferred | six-tick split RED, ledge departure/reset/rebind and R1b GREEN | sequential |
 | PROBE-3 | Count and reject Tick-0 unresolved/ambiguous/wrong Surface even when later ticks exist | PATH-1, PROBE-2 | INT-1 | `packages/traversal/src/runtime-probe-contract*` | initial expected Surface from PATH-1 is always included in mismatch metrics and complete admission | forged 385-tick receipt RED/GREEN | sequential |
-| MOTION-1 | Keep step-up displacement within the same fixed-tick budget | — | LIFE-1, INT-1 | `packages/runtime-babylon/src/motion-kernel-runtime*`, `scripts/lib/route-runtime-probe.integration.test.ts` | Babylon sweep/integration never receives more remaining time than the fixed-step budget; returned time and committed pose agree | narrow-step 0.34m RED; 30/60/120-like cadence and R1b success GREEN | sequential; owns real Havok process |
-| LIFE-1 | Roll back native SubjectController allocation on partial construction failure | MOTION-1 | INT-1 | MotionKernel controller construction and `runtime.test.ts` lifecycle cases | allocate → configure/check → register; any throw disposes both Babylon collectors exactly once and rethrows primary error | created/released handle equality over three failures | sequential because it shares `motion-kernel-runtime.ts` |
+| MOTION-1 | Withdraw the invalid stair-step pose-delta oracle and preserve the real R1b stair gates | — | INT-1 | design/review/implementation-plan documents only | Babylon/Jolt source evidence establishes validated up/forward/down reposition; no production behavior changes | direct unpadding produces `runtime-stalled`; staged clipping produces unmatched support; existing 0.25m/0.35m/narrow/cadence fixtures remain authoritative | main-agent-only |
+| LIFE-1 | Roll back native SubjectController allocation on partial construction failure | — | INT-1 | MotionKernel controller construction and `runtime.test.ts` lifecycle cases | allocate → configure/check → register; any throw disposes both Babylon collectors exactly once and rethrows primary error | created/released handle equality over three failures | sequential |
 | LIFE-2 | Register Visual Capture Runtime ownership before target configuration can throw | — | INT-1 | Playground startup ordering and lifecycle tests | create → track owner → configure; failure → exactly-once dispose; never mount/render/ready | invalid entity RED and event-order GREEN | parallel-safe |
 | GRAPH-1 | Give Surface and Collider inventories one deterministic Route scope | LOCK-1 | GRAPH-2, GRAPH-3, INT-1 | `packages/traversal-recast/src/heightfield-source*` | one route-scoped projection supplies both Surface and Collider inventories | remote platform pollution RED; multiple-route GREEN | sequential |
 | GRAPH-2 | Fail closed on layered endpoint ambiguity before provider nearest-polygon selection | GRAPH-1 | INT-1 | endpoint admission in `evaluate-route*` and provider/query seam | canonical endpoint Surface query → zero/one/many candidate result; many publishes `start-surface-ambiguous` or `destination-surface-ambiguous` as `incomplete / complete` with at least two sorted identities; provider receives exactly one resolved Surface | reversed tile order and stacked endpoint RED/GREEN | sequential |
@@ -106,13 +107,13 @@ Every row is an independently reviewable deliverable. The main agent owns cross-
 ## 7. Sequencing and parallelism
 
 1. Land `GATE-1` first so every later iteration uses the new policy. `pnpm test` runs census, contract, and resource-heavy as three sequential processes; it does not raise timeouts.
-2. In parallel, stabilize `LOCK-1`, `PATH-1`, `MOTION-1`, `LIFE-1`, and `LIFE-2`; they own disjoint files and contracts.
+2. Stabilize `LOCK-1` and `PATH-1`, record the source-backed `MOTION-1` withdrawal, then handle `LIFE-1` and `LIFE-2`. Work remains in the main process unless the user explicitly requests delegation.
 3. Run `PROBE-1 → PROBE-2 → PROBE-3` sequentially because all three depend on the same Path/support authority.
 4. Run `GRAPH-1 → (GRAPH-2, GRAPH-3, GRAPH-4)` after the Route scope contract is stable. The three child tasks may execute in parallel only if their tests and implementation files do not overlap; `evaluate-route.ts` makes GRAPH-2 and GRAPH-4 sequential in practice.
 5. Run `REPORT-1 → REPORT-2 → STUDIO-1` sequentially. These tasks change one public evidence chain and must not be split across competing dialects.
 6. Run `CLEAN-1`, then main-agent `INT-1` over the integrated tree.
 
-Subagent success is never integration proof. The main agent reviews actual diffs, checks public naming against the AI-first schema rules, and executes every affected complete lane.
+Delegated work, when explicitly requested, is never integration proof. The main agent reviews actual diffs, checks public naming against the AI-first schema rules, and executes every affected complete lane.
 
 ## 8. TDD and verification policy
 

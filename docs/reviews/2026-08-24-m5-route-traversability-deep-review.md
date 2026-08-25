@@ -14,21 +14,21 @@
 
 ### 0.1 最新结论
 
-**仍为 NO-GO。最新 main 没有关闭 5 个原 P0 或 8 个原 P1，并由 Hosted workflow 新增 2 个 P1；本轮独立 Cursor main 审计再确认 2 个此前未记录的 P1；当前合计 5 个 P0、12 个 P1。**
+**仍为 NO-GO。最新 main 没有关闭 4 个有效 P0 或 8 个原 P1，并由 Hosted workflow 新增 2 个 P1；本轮独立 Cursor main 审计再确认 2 个此前未记录的 P1；当前合计 4 个 P0、12 个 P1。step-up 单 Tick 位移 finding 经 Babylon/Jolt 源码复核后撤回，见 0.8。**
 
-旧报告对 Medium `contentHash` 的判断不准确，继续撤回。此前标记为已关闭的 `route-validation-runner.test.ts` timeout 在最新全量门禁中重新出现：隔离运行通过，但与整仓资源型测试并行时超过 180 秒。这不改变下面 5 个 P0 的阻断地位。
+旧报告对 Medium `contentHash` 的判断不准确，继续撤回。此前标记为已关闭的 `route-validation-runner.test.ts` timeout 在最新全量门禁中重新出现：隔离运行通过，但与整仓资源型测试并行时超过 180 秒。这不改变下面 4 个有效 P0 的阻断地位。
 
-五个 P0 的反例已在 `126a8f4` 上重放；`126a8f4..a8b9fd3` 的 owner、fixture、依赖和 lockfile 均逐 blob 相同，因此按当前证据作用域规则沿用到 `a8b9fd3`。同时，本轮在 `a8b9fd3` 上重新执行 R0/R1/R1b 与全量测试，结果如下：
+原先五个 P0 候选的反例已在 `126a8f4` 上重放；`126a8f4..a8b9fd3` 的 owner、fixture、依赖和 lockfile 均逐 blob 相同，因此按当前证据作用域规则沿用到 `a8b9fd3`。后续引擎源码核对与反证实验推翻了其中 step-up 的预期 oracle，故当前只保留四个有效 P0。同时，本轮在 `a8b9fd3` 上重新执行 R0/R1/R1b 与全量测试，结果如下：
 
 | ID | 当前状态 | 最新 main 自动化复验 |
 | --- | --- | --- |
 | M5-P0-01 长绕路 0 Tick 假通过 | **仍存在** | 16.795m lower→ramp→upper Path，起终点 XZ 仅 0.4m；结果 `complete`、`completionDurationTicks=0`、`processedTickCount=0`、`fixedTickCallCount=0`。当前 owner 仍在 `packages/validation/src/route-runtime-probe.ts:667-675,747-753`。 |
 | M5-P0-02 station 使用 subject origin 而非 retained foot | **仍存在** | 当前 R1b 成功 fixture 中有 6 Tick 的 foot/subject-origin expected Surface set 分裂；最小例中 foot 仍在 segment 0，subject origin 已选择 segment 1。runner 仍在 `route-runtime-probe.ts:632-639,726-733` 传 subject origin，context validator 仍在 `runtime-probe-contract.ts:1698-1727` 重复同一权威错误。 |
-| M5-P0-03 step-up 单 Tick 超位移 | **仍存在** | 真实 `success-steps-platform-ramp` 仍 `complete`（385 ticks）；Tick 47 水平位移 0.34m，而冻结上界为 0.041m，即 8.29268 倍。当前实现仍在 `packages/runtime-babylon/src/motion-kernel-runtime.ts:245-280` 扩大 `remainingTime`。 |
+| M5-P0-03 step-up 单 Tick 超位移 | **撤回（错误 oracle）** | 严格 `speed × dt` 是普通位移预算，不是 kinematic stair-step reposition 合同。Babylon 9.21.2 与 Jolt CharacterVirtual 都以 up/forward/down sweep 验证后 reposition；强制多 Tick 截断会停在台阶侧面并产生真实 `unmatched` support。见 0.8。 |
 | M5-P0-04 Envelope 未与 Lock 重绑定 | **仍存在** | 从真实 receipt 把 `capsuleRadiusMeters` 由 0.32 改为 0.01，保留相同 `resolvedTraversalLockHash`，`createRouteBuildInputReceiptV2` 仍接受并生成新 `routeBuildInputHash`。Graph Builder Profile 已在 `packages/traversal/src/build-input.ts:1002-1033` 重绑定；缺口是 admission 没有从 Lock receipt 重新派生并逐字节核对 Capsule/slope/step Envelope，见 `:425-527,1273-1299`。 |
 | M5-P0-05 forged Tick 0 support | **仍存在** | 从真实 385-Tick complete receipt 把 initial `surfaceResolution` 改为 `ambiguous`；canonicalizer 与 context validator 均接受，`wrongSupportSurfaceCount=0`。当前分支仍在 `runtime-probe-contract.ts:813-827,1527-1571,1698-1719` 漏计有后续 ticks 时的 initial mismatch。 |
 
-这不是“旧源码没看完”的推断：上述 5 个 P0 都有一手反例、当前 owner 逐 blob 复核和最新树正式门禁的三层证据。R1/R1b fixture 全绿只能证明已列 fixture，不足以覆盖这些反例。
+其余 4 个 P0 仍有一手反例、当前 owner 逐 blob 复核和最新树正式门禁的三层证据。R1/R1b fixture 全绿只能证明已列 fixture，不足以覆盖这些反例。
 
 ### 0.2 Findings 逐条处置
 
@@ -36,7 +36,7 @@
 | --- | --- | --- |
 | P0 长绕路近终点 0 Tick complete | **仍存在** | 最新脚本复现；`route-runtime-probe.ts:667-675,747-753`。 |
 | P0 retained foot / subject origin 权威分裂 | **仍存在** | 最新脚本与真实 R1b evidence；6 Tick allowed-set 分裂。 |
-| P0 step-up 超出 fixed-tick 位移预算 | **仍存在** | 最新真实 Havok success fixture；0.34m / 0.041m。 |
+| P0 step-up 超出 fixed-tick 位移预算 | **撤回** | Babylon/Jolt 的 stair step 是经三段 sweep 验证后的 kinematic reposition；`speed × dt` 不能作为 stair-step pose delta oracle。 |
 | P0 Capability Envelope 未重绑定 Lock | **仍存在** | 最新真实 receipt 篡改复现；同 Lock hash 下 0.01m capsule 被接受。 |
 | P0 Tick 0 ambiguous support 可伪造 complete | **仍存在** | 最新真实 385-Tick receipt 篡改复现；canonical/context 均接受。 |
 | P1 单节点 / 零边 Path station 崩溃 | **仍存在** | Canonical Path factory 仍接受；`runtime-probe-contract.ts:929-1042` 仍读取 `identities[index + 1]`，复现 `TypeError`。 |
@@ -59,7 +59,7 @@
 | P2 完成声明 / 文档不一致 | **仍存在，且扩大** | `docs/05-mvp-roadmap.md:17,106-125` 本轮改称 M5 closed；`docs/18-refactor-progress-and-backlog.md:19-22,840-843,855-861` 与 PR14 integration review `:28` 也称 closed。相反，`docs/00-project-overview.md:55-57,103,153-169`、`docs/17-canonical-json-quickstart.md:25-27` 仍称完整 M5/R1b 开放；`docs/18:326` 还保留 Browser/CI Evidence 开放项。 |
 | P2 dead code / clean-break 噪声 | **部分修复** | `route-evaluator.ts` 的冗余分支已清理；但 `route-runtime-probe.ts:212-214` 仍有 `RoutePathReceiptV2 \| RoutePathReceiptV2`，`route-evidence-publication.ts:69-78,346-355` 仍重复导出同名 interfaces。 |
 
-最新 main 的 Hosted workflow 变更新增 2 个 P1；本轮 Cursor clean-main 补充审计又确认 2 个此前遗漏的现存 P1 与 1 个 P2，没有新增 P0。结论变化为：原 5 个 P0、8 个 P1 保持，当前合计 5 个 P0、12 个 P1；runner timeout P2 重新打开；Medium 子结论继续撤回；dead-code 子结论仍为部分修复。
+最新 main 的 Hosted workflow 变更新增 2 个 P1；本轮 Cursor clean-main 补充审计又确认 2 个此前遗漏的现存 P1 与 1 个 P2，没有新增 P0。经后续 Babylon/Jolt 源码复核，原 step-up P0 因 oracle 不成立而撤回；当前合计 4 个有效 P0、12 个 P1。runner timeout P2 重新打开；Medium 子结论继续撤回；dead-code 子结论仍为部分修复。
 
 ### 0.3 最新门禁矩阵
 
@@ -97,14 +97,14 @@
 - `packages/traversal-recast/src/evaluate-route.ts`
 - `packages/traversal-recast/src/build-graph.ts`
 
-`motion-kernel-runtime.ts` 的 P0 step-up block 与 P1 partial-construction 顺序未变；`route-evaluator.ts` 的 Required Route set binding 与 MIME 闭包也未补齐。四个新提交改变的是 Hosted/Studio/Playground integration，并由此新增上述两个 Hosted P1。Surface failure 状态与坐标两条 P1 是本轮对当前 main 补审时发现的既有遗漏，不能归因于这四个提交。
+`motion-kernel-runtime.ts` 的 step-up block 与 P1 partial-construction 顺序未变；前者经 0.8 的源码核对不再视为缺陷，后者仍有效。`route-evaluator.ts` 的 Required Route set binding 与 MIME 闭包也未补齐。四个新提交改变的是 Hosted/Studio/Playground integration，并由此新增上述两个 Hosted P1。Surface failure 状态与坐标两条 P1 是本轮对当前 main 补审时发现的既有遗漏，不能归因于这四个提交。
 
 本轮使用 static-read、自动化 contract、真实 Babylon/Havok runtime probe、Browser/Studio 定向测试和完整仓库门禁。Canonical / Placement / Rigged / G Bot gates 生成了 rendered artifacts，但本文不把它们当作 Route 通过性证明；没有声明 manual-interaction evidence。动态 artifact 差异在取证后已恢复。
 
 ### 0.5 Cursor 只读独立终审
 
 - 当前树复核 chat：`67613810-edac-4772-a7bb-02389b85ba29`；Cursor CLI exit 0，审查前后 tree fingerprint 均为 `1d611de4dd2702f3d74c9e90cf3181ba235db62b3e1756fe28a9f921a8f47629`，没有写入或树漂移。
-- 独立结论：M5 release **NO-GO**；finding set **READY to begin remediation design**。Cursor 确认 5 个 P0、8 个原 P1、2 个新增 P1、重新打开的 runner timeout P2，以及 Browser/slope/docs/dead-code 处置；同意撤回 Medium finding；没有新增 P0–P2。
+- 独立结论（历史）：M5 release **NO-GO**；finding set **READY to begin remediation design**。Cursor 当时确认 5 个 P0、8 个原 P1、2 个新增 P1、重新打开的 runner timeout P2，以及 Browser/slope/docs/dead-code 处置；同意撤回 Medium finding；没有新增 P0–P2。该静态复核未验证 stair-step 的行业实现合同，step-up 子结论已由 0.8 的 installed-source 与真实 Havok 反证实验覆盖。
 - 主审接受的措辞修正：Graph Builder Profile 已重绑定，P0-04 缺的是 Lock-derived Capability Envelope 重算；短 Path 总长处于容差内的 0 Tick complete 是合法例外；现有 Studio import 绿测只是无 Required Route 的浅工件，不是本 finding 的 RED；Controller leak、MIME、Medium 的现行行号已在本文校正。
 - 证据边界：Cursor 使用 Ask/read-only static review，对已安装 Babylon 源码作了核对；Ask 模式拒绝其 Git/GitHub diff listing。主审已独立 fetch、逐 blob 比较、执行动态反例和当前树门禁，因此该限制不构成 finding 处置阻塞。
 
@@ -120,7 +120,7 @@
 
 重新打开 M5，并撤回 `Complete / Final GO / no open P0/P1`。修复顺序仍应是：
 
-1. 先为 5 个 P0 提交 fix-before-fix failing reproducer；
+1. 先为 4 个有效 P0 提交 fix-before-fix failing reproducer；step-up 维持现有合法/过高/窄踏面/cadence 门禁，不再加入错误的 `speed × dt` pose-delta 断言；
 2. 修复 P0 后逐条关闭 12 个 P1 合同/生命周期缺口，包括两个 Hosted 新回归与两条本轮补审确认的 Surface failure 缺口；
 3. 把本报告的反例纳入正式 verifier，而不是只保留外部审查脚本；
 4. 把 root test 重构为“并行 contract lane + 串行 resource-heavy lane”，保留 `pnpm test` 的全覆盖语义；按变更影响只执行失效证据，合入前再执行相关完整闭包；
@@ -135,11 +135,22 @@ Medium finding 已撤回；runner timeout 则必须通过门禁编排修复并�
 1. `pnpm test` 保持唯一完整 wrapper，顺序调用并行的 contract lane 与串行的 resource-heavy lane；任一 lane 失败即整体失败。
 2. resource-heavy manifest 必须显式列出文件，首批至少包括 `scripts/lib/route-validation-runner.test.ts`、`scripts/worldkit-route-run.integration.test.ts`、`scripts/verification-browser-launch.test.ts`，以及经计时确认会启动 Havok/Recast/Playwright/Vite 子进程的 Runtime suites。不能用继续增加 180 秒 timeout 替代串行隔离。
 3. 增加自动 census：根据 `vitest.config.ts` 的 root include 收集全部测试文件，并断言每个文件恰好属于一个 lane（union 等于 root 集、intersection 为空）；这样 lane manifest 漏项会在门禁自身 fail closed。
-4. 实现期先跑 finding 对应的 focused RED/GREEN；源码、Schema、fixture 或 generated artifact 的变化只作废其依赖证据。跨 authority 的 station、step-up、Envelope、Report 修复必须重跑相关完整 lane。
+4. 实现期先跑 finding 对应的 focused RED/GREEN；源码、Schema、fixture 或 generated artifact 的变化只作废其依赖证据。跨 authority 的 station、Envelope、Report 修复必须重跑相关完整 lane；stair-step 相关改动继续重跑真实 Havok/R1b lane。
 5. 最终树上每个相关完整 lane 恰好运行一次；`typecheck`、`build`、R0/R1/R1b、Browser Route integration、Studio、LWDP 与 clean-break 仍是 root Vitest 之外的显式闭包，不能因 lane 拆分省略。
-6. 五个 P0 的反例必须进入正式 verifier，并保留“整条 Path 总长在 tolerance 内才允许 0 Tick”的合法短路径测试。外部 `/tmp` 审查脚本只作取证，不作为长期覆盖。
+6. 四个有效 P0 的反例必须进入正式 verifier，并保留“整条 Path 总长在 tolerance 内才允许 0 Tick”的合法短路径测试。step-up 保留既有合法 0.25m、非法 0.35m、窄踏面和 cadence 覆盖。外部 `/tmp` 审查脚本只作取证，不作为长期覆盖。
 
-修复工作按三个 batch 推进：A 先落地门禁 census 并锁住 5 个 P0 RED/GREEN；B 在 P0 authority 稳定后处理 12 个 P1；C 处理 P2、文档与 clean-break，并执行最终完整闭包。具体文件所有权、依赖边和集成点需在实施前的修复设计中冻结。
+修复工作按三个 batch 推进：A 先落地门禁 census 并锁住 4 个有效 P0 RED/GREEN，同时记录 step-up 撤回依据；B 在 P0 authority 稳定后处理 12 个 P1；C 处理 P2、文档与 clean-break，并执行最终完整闭包。具体文件所有权、依赖边和集成点需在实施前的修复设计中冻结。
+
+### 0.8 Step-up finding 撤回依据
+
+原 finding 观察到的 `0.34m` 单 Tick pose delta 是真实的，但据此要求 stair-step pose delta 必须小于 `walkSpeed × fixedDt + quantization` 是错误 oracle，不能证明 Runtime teleport/skip 了未经验证的路径：
+
+- 安装版 Babylon.js 9.21.2 的 `Physics/v2/characterController.js` 明确把 step-up 定义为 teleport/reposition，而非普通 contact-resolution motion；实现依次做 upward、forward、downward cast，拒绝动态落点、不可行走坡面和穿透，然后一次提交 landing pose 与 displacement。
+- [Jolt CharacterVirtual 官方实现](https://github.com/jrouwe/JoltPhysics/blob/master/Jolt/Physics/Character/CharacterVirtual.cpp) 的 `WalkStairs` 同样执行 up/forward/down sweep 后移动到有效接触点；[官方配置](https://github.com/jrouwe/JoltPhysics/blob/master/Jolt/Physics/Character/CharacterVirtual.h) 还设置最小前向步进量，专门避免高帧率下 `velocity × dt` 太小而无法踏上台阶。
+- [Jolt 官方 CharacterVirtual 测试](https://github.com/jrouwe/JoltPhysics/blob/master/UnitTests/Physics/CharacterVirtualTests.cpp) 在 60/120/240/360 Hz 验证走楼梯始终保持 floor/progression；Jolt 作者也在[官方讨论](https://github.com/jrouwe/JoltPhysics/discussions/1866)说明，kinematic stair stepping 不能只靠单一速度完成，成熟做法就是 up/forward/down casts 后 reposition。
+- 本分支真实 Havok 反证实验中，直接移除 padded forward time 会使合法 0.25m step 以 `runtime-stalled` 失败；把 reposition 强制拆成多 Tick 则会让胶囊停在台阶侧面，产生 `support-surface-mismatch`，且 `surfaceResolutionMode="unmatched"`。两种结果都破坏合法 stair traversal，没有提升证据真实性。
+
+因此本条撤回，不修改生产 step-up 实现。正确门禁是：只允许经过完整 sweep 验证的合法 landing；拒绝动态/穿透/过高/不可行走坡面和窄踏面；在多 cadence 下保持稳定。现有 R1b 的 0.25m 成功、0.35m 失败、窄踏面失败和 cadence fixture 继续承担该职责。如果以后要把每级台阶作为独立 Route station，应该修改 Path/Surface 建模合同，而不是把普通 locomotion 的 `speed × dt` 误套到 kinematic step-up reposition。
 
 ## 1. 原始审查元数据（2026-08-24 历史锚点）
 
@@ -163,15 +174,15 @@ Medium finding 已撤回；runner timeout 则必须通过门禁编排修复并�
 
 **NO-GO：M5 当前不能继续保持 “Complete / Final GO / 无 open P0/P1” 的结论。**
 
-冻结的 R0/R1/R1b happy-path 与 adversarial fixture 矩阵大体健康；但是矩阵之外已复现 5 个 P0：
+冻结的 R0/R1/R1b happy-path 与 adversarial fixture 矩阵大体健康；原始审查在矩阵之外报告了 5 个 P0 候选：
 
 1. 长绕路只因起终点 XZ 接近即可在 0 Tick 假通过；
 2. support station 使用 post subject origin，而非 frozen contract 要求的 retained foot；
-3. M5 自定义 step-up 在一个 fixed tick 内推进约 8.3 倍允许水平距离，正式成功 fixture 仍通过；
+3. M5 自定义 step-up 在一个 fixed tick 内推进约 8.3 倍普通 locomotion 位移预算，正式成功 fixture 仍通过；该候选后经引擎源码与反证实验撤回，见 0.8；
 4. Build Input Receipt 接受与同一 Traversal Lock hash 不一致的伪造胶囊能力；
 5. Canonical Probe Receipt 与 context validator 接受 Tick 0 ambiguous support 的 forged complete evidence。
 
-这些问题不是“测试偶发不绿”，而是 Blocking Gate 可静默给出错误通过，或 Canonical Evidence 可被重哈希后伪造。
+除已撤回的第 3 条外，其余问题不是“测试偶发不绿”，而是 Blocking Gate 可静默给出错误通过，或 Canonical Evidence 可被重哈希后伪造。
 
 ### 1.2 权威图
 
@@ -183,7 +194,7 @@ Medium finding 已撤回；runner timeout 则必须通过门禁编排修复并�
 | Ground support | 每 Subject 每 fixed tick 唯一 checkSupport() | Medium、Jump、Evidence | 通过，未发现 ray/AABB 第二接地路径 |
 | Runtime Surface identity | retained support + canonical collider correlation | Runtime Evidence | 通过 |
 | 3D support station | retained foot XYZ + monotonic path station | expected Surface、Probe receipt | 失败：runner/context 均使用 post subject origin |
-| Fixed-tick displacement | locked Feel speed × fixed dt | Controller、station window | 失败：step-up 扩大 remainingTime 并先提交 pose |
+| Stair-step landing | Controller up/forward/down sweep + 合法 landing 约束 | Controller、station evidence | 已复核：kinematic reposition 不受普通 `speed × dt` pose-delta oracle 约束；维持过高/窄踏面/cadence 门禁 |
 | Canonical Report/Publication | Validation evaluator + context validators | CLI、Browser V5 | 部分失败：缺 route-set binding、MIME/status closure 与 forged receipt rejection |
 | Resource lifetime | Runtime owned disposer stack | Controller、Havok native handles | 部分失败：pre-existing partial-construction leak |
 
@@ -221,7 +232,7 @@ Medium finding 已撤回；runner timeout 则必须通过门禁编排修复并�
 
 - Cursor Agent CLI（Ask/read-only，chat `0bc03737-4255-47d2-9b4c-89a7ad510cbc`）返回 **CODE NO-GO**。
 - 它确认六个主审假设的机制均成立，并把 0-Tick 长绕路、Lock/Envelope 未重绑定、forged Tick 0 complete 判为 P0；单节点崩溃、Path topology 合同分裂、partial-construction native leak 判为 P1。
-- 分歧：Cursor 仅凭 static-read 把 retained-foot/post-origin 与 step-up 位移定为 P1，理由是它没有执行门禁假绿/窄踏面脚本。主审保留 P0：前者已在真实 fixture 观察到 6 Tick 的允许 Surface 集合分裂，且 runner/context validator 共同使用错误权威；后者已用真实 Havok success fixture 测得 0.34m 水平位移，对冻结上界 0.041m，仍被 Blocking Gate 接受。这里记录分歧，不把 Cursor 的保守定级覆盖自动化证据。
+- 分歧（历史）：Cursor 仅凭 static-read 把 retained-foot/post-origin 与 step-up 位移定为 P1，理由是它没有执行门禁假绿/窄踏面脚本。主审当时把两者保留为 P0。后续 retained-foot finding 仍由真实 fixture 的 6 Tick authority 分裂支持；step-up finding 则因冻结上界并不适用于 kinematic stair reposition 而撤回，见 0.8。
 - Cursor 未把其余 P1 提升进自己的可复现清单；主审只保留已有子审查执行证据或已独立闭合的当前源码证据，不因 Cursor 未执行这些脚本而删除。
 
 ## 2. 旧结论复验
@@ -257,13 +268,12 @@ Medium finding 已撤回；runner timeout 则必须通过门禁编排修复并�
 - 建议：runner 和 context validator 一律传 characterSupport.sampledFootPositionMetersXYZ；helper 参数改名为 sampledFootPositionMetersXYZ；增加 foot/post-origin 明确分离的回归。
 - 复核：主 Agent、Runtime 子审查和真实 R1b fixture evidence 共同确认；Cursor 确认合同违规机制但因未执行 false-green 脚本定为 P1，主审按上述实测保留 P0。
 
-### [P0] [D4/D5] M5 step-up 在一个 fixed tick 内推进约 8.3 倍允许水平距离
+### [撤回，原 P0] [D4/D5] M5 step-up 在一个 fixed tick 内推进约 8.3 倍普通位移预算
 
-- 证据（automated-contract + installed-source）：245:280:packages/runtime-babylon/src/motion-kernel-runtime.ts 把 remainingTime 扩到足够走过 capsule radius + keepDistance + 0.02m，再仅裁剪返回的 consumed time。安装版 Babylon 9.21.2 的默认 `keepDistance` 为 0.05m（characterController.js:84），并用扩大的 remainingTime 计算 sweep 距离、在返回前直接提交 landing pose。真实 success-steps-platform-ramp 在 Tick 47 的水平位移为 0.34m，而 2.4m/s、1/60s、0.001m quantization 只允许 0.041m，比值 8.29268；fixture 仍以 385 ticks complete。
-- 期望：369:373:docs/superpowers/specs/2026-08-21-route-graph-and-traversability-design.md 禁止 teleport/skip；626:629:R1b 规格把 station 最大前进锁为 walkSpeed × fixed dt + quantization。
-- 影响：station 落后于真实 pose，无法证明每个中间 tread/path section 被实际经过；窄踏面或中间阻挡可能被 step-up 跨过，而 Gate 仍记录 complete。
-- 建议：不要通过扩大 physics time budget 获得前向 clearance。修复必须先有真实失败 fixture，并逐 Tick 断言 planar pose delta 不超过冻结上界；增加不可跳过的窄 tread/blocker。
-- 复核：主 Agent重跑真实 Havok probe，数值与子审查完全一致；已对照安装依赖源码。Cursor 确认时间扩张与 pose commit 机制但因未执行窄踏面脚本定为 P1，主审按真实 success fixture 的越界位移保留 P0。
+- 原始证据（automated-contract）：真实 `success-steps-platform-ramp` 在 Tick 47 的水平 pose delta 为 0.34m，而 2.4m/s、1/60s、0.001m quantization 的普通 locomotion 预算为 0.041m；该数值观察成立。
+- 撤回原因（installed-source + counterexample）：安装版 Babylon 9.21.2 明确把 step-up 作为经过 up/forward/down casts 验证后的 teleport/reposition，而不是 contact-resolution motion。Jolt CharacterVirtual 采用同一成熟模式，并故意设置 minimum step forward 以避免高帧率 `velocity × dt` 过小。直接移除 padding 会让合法 0.25m step `runtime-stalled`；强制多 Tick 截断会停在台阶侧面并得到 `surfaceResolutionMode="unmatched"`。因此原 `speed × dt` pose-delta 期望是错误 oracle，不足以证明未经验证的 skip。
+- 正确处置：不改生产 step-up。继续以完整 sweep/landing、动态与穿透拒绝、0.25m 成功、0.35m 与窄踏面失败、30/60/120-like cadence 稳定性为门禁。若产品要证明每一级 tread 都被逐级经过，应先把 tread 变成 Path/Surface 证据合同的一部分。
+- 复核来源：见 0.8 的 Babylon installed source、Jolt 官方源码/测试/作者说明与真实 Havok 反证实验。
 
 ### [P0] [D4/D6] Build Input Receipt 接受与 Traversal Lock 不一致的伪造 Capability Envelope
 
@@ -419,8 +429,8 @@ Medium finding 已撤回；runner timeout 则必须通过门禁编排修复并�
 | D1 定位与需求边界 | 已查 | M5=Route/主体真实通过性；区分 R0、R1、R1b 与 H1/H2/H3、dynamic platform、NPC/goTo 等开放项 |
 | D2 Schema 与 AI-friendly | 已查 | V2 naming/identity 主体一致；发现 MIME clean-break、冗余声明、overlap XYZ 错位与 Diagnostic identity 截断 |
 | D3 承诺与事实 | 已查 | 对拍 Route/R1b/Validation 规格、backlog、旧 review；发现 complete claim、Path topology、scope/seam/layer 与 Surface failure status 差异 |
-| D4 单一权威状态 | 已查 | 检查 Lock→Envelope、Graph、retained support、station、arrival、Medium；确认 5 个 P0 |
-| D5 工程质量 | 已查 | 检查 installed Babylon semantics、partial construction、dispose、test timeout、dead code；step-up/native leaks 仍在，新增 Adapter startup leak，runner timeout 重新打开 |
+| D4 单一权威状态 | 已查 | 检查 Lock→Envelope、Graph、retained support、station、arrival、Medium；确认 4 个有效 P0，撤回 step-up 错误 oracle |
+| D5 工程质量 | 已查 | 检查 installed Babylon semantics、partial construction、dispose、test timeout、dead code；native leaks 仍在，新增 Adapter startup leak，runner timeout 重新打开；step-up 经源码复核不构成缺陷 |
 | D6 门禁与证据分层 | 已查 | 跑 R0/R1/R1b、full tests、build/typecheck、artifact forgery 与 Surface failure probes；确认现有 profile-missing 测试为 false green，并明确 automated 与 rendered/manual 边界 |
 
 最终处置建议（2026-08-25 最新 main 复验）：重新打开 M5。先修复并以 failing reproducer 锁住全部 P0，再处理 12 个 P1 合同/生命周期缺口；同步把门禁拆成可按影响面选择、最终仍完整闭合的 lane。之后必须重跑 focused regressions、R0/R1/R1b、完整 pnpm test/typecheck/build、同字节 Report/Browser/Studio publication，以及真实窄踏面/分层长绕路交互证据。不能仅凭当前 11+11 fixture matrix 恢复 Final GO。
