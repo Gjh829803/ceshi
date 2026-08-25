@@ -66,7 +66,9 @@ Evidence reports must name the exact commands, test counts, artifacts inspected,
 
 ## 6. Required completion gates
 
-Run the focused reproducer first, then run each relevant full gate once on the final tree. Reuse a passing result while its inputs are unchanged; do not use a narrower alias to repeat coverage already provided by a broader command. In particular, root `pnpm test` already discovers the two files behind `pnpm test:scenes`. `pnpm test:studio` is separate because Studio uses Node's test runner, and Browser verifiers, rendered inspection, manual interaction, and production builds prove different evidence layers.
+Run the focused reproducer first, then run each relevant full gate once on the final tree. Reuse a passing result while its inputs are unchanged; do not use a narrower alias to repeat coverage already provided by a broader command. Root `pnpm test` first runs a census, then the bounded `test:contract` lane and the single-worker `test:resource-heavy` lane; together they cover every discovered Vitest `.test.ts`, including the two files behind `pnpm test:scenes`. `pnpm test:studio` is separate because Studio uses Node's test runner, and other Node/Python/Site tests, Browser verifiers, rendered inspection, manual interaction, and production builds prove different evidence layers.
+
+`pnpm test:contract:coverage` is an opt-in coverage diagnostic that reruns the contract lane with instrumentation. Run it only when a coverage claim or test-gap investigation requires it; do not append it to a passing root aggregate as a default duplicate gate.
 
 For changes touching the canonical Babylon runtime, select from this read-only base closure according to the affected contracts:
 
@@ -82,6 +84,8 @@ Studio and LWDP use separate Node test lanes and are added only when their input
 pnpm test:studio
 pnpm test:lwdp-client
 ```
+
+The tracked CI currently combines the generated Builder bundle diff check, typecheck, Studio/LWDP/Seedance Node lanes, root Vitest aggregate, and Playground build. Treat that workflow as an explicit coverage list, not as evidence for Node/Python/Site/Browser/visual/manual lanes that it does not invoke.
 
 Browser and capability verification is a separate evidence layer. The current coverage map includes:
 

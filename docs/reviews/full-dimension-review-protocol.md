@@ -85,11 +85,17 @@
 受影响的承诺在最终树上得到一次足够强、可追溯且不改写被审对象的证据。
 
 1. 先跑失败复现或最窄的受影响回归；确认方向后，在最终待审树上把每个相关完整门禁各跑一次。
-2. 同一树上，宽门禁已经明确包含窄门禁时不重复执行。当前根 `pnpm test` 已收集
-   `pnpm test:scenes` 的两个 Vitest 文件；不得把别名的二次通过计成新增证据。
-3. 不得反向假设聚合覆盖。当前 `pnpm test` 只收 `.test.ts`；`pnpm test:studio`、
-   `pnpm test:lwdp-client`、生产 build、Site/Node/Python 检查、Browser verifier、rendered visual
-   与 manual interaction 都是独立证据层。审查触及相应输入时必须直接运行对应 lane，或明确记为未跑。
+2. 同一树上，宽门禁已经明确包含窄门禁时不重复执行。当前根 `pnpm test` 先用
+   `test:census` 对全部 Vitest `.test.ts` 做精确分类，再依次运行最多两个 worker 的
+   `test:contract` 和单 worker 的 `test:resource-heavy`；`pnpm test:scenes` 的两个文件已在
+   contract lane 内，不得把别名的二次通过计成新增证据。
+   `pnpm test:contract:coverage` 会用 coverage instrumentation 重跑 contract lane，只在覆盖率
+   claim 或盲区诊断需要时运行；它不是 root aggregate 通过后的默认第二遍 contract gate。
+3. 不得反向假设聚合覆盖。test census 只闭合 Vitest `.test.ts`；`pnpm test:studio`、
+   `pnpm test:lwdp-client`、其余 Node `.test.mjs`、Python/Site 检查、生产 build、Browser
+   verifier、rendered visual 与 manual interaction 仍是独立证据层。审查触及相应输入时必须
+   直接运行对应 lane，或明确记为未跑。tracked CI 覆盖了哪些独立 lane，也必须以当前 workflow
+   为准，不能从“存在 CI”推导成所有证据层已闭合。
 4. 后续改动只让它可能影响的证据失效：Runtime/shared contract 改动会失效相关回归、typecheck、
    root test、build 和直接相关的 capability evidence；构建或依赖改动只失效受影响 build；纯文档修订
    只需重做 diff、链接和 claim 对拍。跨域公共合同、共享 Runtime owner 或依赖图改变时，才重新打开
@@ -107,10 +113,12 @@
 | Lane | 当前入口 | 证明范围 / 不覆盖范围 |
 |---|---|---|
 | Type / source contract | `pnpm typecheck` | TypeScript 输入；不证明 Runtime、Node `.mjs` 或视觉行为 |
-| Root unit / contract | `pnpm test` | 根 Vitest `.test.ts`，已包含 scenes；不包含独立 Node/Python/Site tests |
+| Root Vitest aggregate | `pnpm test` | census 后运行 contract + resource-heavy，两 lane 精确覆盖 `.test.ts` 并已包含 scenes；不包含独立 Node/Python/Site tests |
+| Contract coverage diagnostic | `pnpm test:contract:coverage` | 按需重跑 contract 并生成 coverage；证明覆盖率 claim，不作为默认 completion gate 或新增行为证据 |
 | Studio | `pnpm test:studio` | Studio Node tests；不被 root Vitest 包含 |
 | LWDP client | `pnpm test:lwdp-client` | LWDP Node tests；不被 root Vitest 包含 |
 | Production bundle | `pnpm build` 或受影响 app 的 build | bundling 与 shipped import graph；不证明交互/像素 |
+| Tracked CI | `.github/workflows/ci.yml` 的实际命令 | 当前组合 generated diff、typecheck、Studio/LWDP/Seedance、root test 与 build；未列入 workflow 的 Node/Python/Site/Browser/visual/manual lane 仍未覆盖 |
 | Browser / capability | 直接相关 verifier | 真实 Host/Runtime 接线；若命令会更新 tracked artifact，按上面的只读规则处置 |
 | Visual / interaction | 截图检查、manual interaction | 可见结果或手感；不能由单元测试、hash 或 smoke 替代 |
 
