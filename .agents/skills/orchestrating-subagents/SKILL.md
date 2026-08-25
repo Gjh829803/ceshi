@@ -1,6 +1,6 @@
 ---
 name: orchestrating-subagents
-description: Use when designing or executing a complex software-development task with multiple substantial, materially independent workstreams whose parallel execution is expected to materially reduce wall-clock time.
+description: Use when the user explicitly requests subagents, parallel agents, delegation, or multi-agent task scheduling.
 ---
 
 # Orchestrating Subagents
@@ -10,6 +10,12 @@ description: Use when designing or executing a complex software-development task
 Coordinate independent work while retaining architecture and integration.
 
 **Core principle:** maximize useful parallelism, not agent count.
+
+## Explicit Invocation Only
+
+This skill is opt-in. Activate it only when the current user explicitly requests subagents, parallel agents, delegation, or multi-agent task scheduling. Do not infer authorization from task complexity, task count, available concurrency, a standing project recommendation, or the possibility of an independent review.
+
+Without that explicit request, keep decomposition and execution in the main agent and do not dispatch subagents.
 
 ## Decision Gate
 
