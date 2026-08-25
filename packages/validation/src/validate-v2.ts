@@ -1239,6 +1239,7 @@ function validateReportDiagnostic(
       "destinationAnchorEntityId",
       "traversalSurfaceId",
       "colliderSubshapeId",
+      "relatedTraversalSurfaceIdentities",
       "positionMetersXYZ",
       "evidenceArtifactRefs",
       "details",
@@ -1253,6 +1254,7 @@ function validateReportDiagnostic(
         "destinationAnchorEntityId",
         "traversalSurfaceId",
         "colliderSubshapeId",
+        "relatedTraversalSurfaceIdentities",
         "positionMetersXYZ",
       ].includes(field)
     ),
@@ -1286,6 +1288,62 @@ function validateReportDiagnostic(
   }
   if (!isNil(record.colliderSubshapeId)) {
     requireString(record.colliderSubshapeId, `${path}/colliderSubshapeId`, diagnostics);
+  }
+  if (!isNil(record.relatedTraversalSurfaceIdentities)) {
+    if (!Array.isArray(record.relatedTraversalSurfaceIdentities)) {
+      addDiagnostic(
+        diagnostics,
+        "VALIDATION_ARRAY_INVALID",
+        `${path}/relatedTraversalSurfaceIdentities`,
+        "Expected an array.",
+      );
+    } else {
+      let previousTraversalSurfaceId: string | undefined;
+      record.relatedTraversalSurfaceIdentities.forEach((value, index) => {
+        const identityPath = `${path}/relatedTraversalSurfaceIdentities/${index}`;
+        const identity = asRecord(value, identityPath, diagnostics);
+        if (identity === undefined) return;
+        rejectUnknownFields(
+          identity,
+          [
+            "traversalSurfaceId",
+            "surfaceEntityId",
+            "colliderSubshapeId",
+            "resourceRef",
+            "resolvedVersion",
+            "resourceHash",
+          ],
+          identityPath,
+          diagnostics,
+        );
+        for (const field of [
+          "traversalSurfaceId",
+          "surfaceEntityId",
+          "colliderSubshapeId",
+          "resourceRef",
+          "resolvedVersion",
+        ]) {
+          requireString(identity[field], `${identityPath}/${field}`, diagnostics);
+        }
+        requireHash(identity.resourceHash, `${identityPath}/resourceHash`, diagnostics);
+        const traversalSurfaceId = identity.traversalSurfaceId;
+        if (
+          typeof traversalSurfaceId === "string" &&
+          previousTraversalSurfaceId !== undefined &&
+          previousTraversalSurfaceId >= traversalSurfaceId
+        ) {
+          addDiagnostic(
+            diagnostics,
+            "VALIDATION_ARRAY_INVALID",
+            `${path}/relatedTraversalSurfaceIdentities`,
+            "Expected unique identities sorted by traversalSurfaceId.",
+          );
+        }
+        if (typeof traversalSurfaceId === "string") {
+          previousTraversalSurfaceId = traversalSurfaceId;
+        }
+      });
+    }
   }
   if (!isNil(record.positionMetersXYZ)) {
     if (!Array.isArray(record.positionMetersXYZ) || record.positionMetersXYZ.length !== 3) {

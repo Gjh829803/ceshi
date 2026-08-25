@@ -21,6 +21,7 @@ import {
   hashValidationProfileV2,
   hashValidationReportV1,
   hashValidationReportV2,
+  hashRouteValidationRequiredRouteSetV1,
   validateValidationProfileV1,
   validateValidationProfileV2,
   validateValidationReportV1,
@@ -934,6 +935,13 @@ function routeValidationSetReceipt(
     runtimeStatus?: "complete" | "failed" | "not-run";
   }> = {},
 ): RouteValidationSetReceiptV1 {
+  const requiredRoutes = [{
+    constraintId: ROUTE_CONSTRAINT_ID,
+    routeId: ROUTE_ID,
+    traversingEntityId: "player",
+    startAnchorEntityId: "spawn",
+    destinationAnchorEntityId: "goal",
+  }] as const;
   return {
     kind: "route-validation-set-receipt",
     schemaVersion: 1,
@@ -942,6 +950,12 @@ function routeValidationSetReceipt(
     executionPlanHash: HASH_A,
     resourceLockHash: HASH_B,
     layoutSolveReportHash: HASH_C,
+    requiredRouteCount: 1,
+    requiredRouteSetHash: hashRouteValidationRequiredRouteSetV1(
+      HASH_A,
+      requiredRoutes,
+    ),
+    requiredRoutes,
     rows: [{
       constraintId: ROUTE_CONSTRAINT_ID,
       routeId: ROUTE_ID,

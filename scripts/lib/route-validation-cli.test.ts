@@ -56,6 +56,7 @@ function reportWithStatus(status: ValidationReportV2["status"]): ValidationRepor
       layoutSolveReportHash: HASH_F,
     },
     validationProfile: OUTDOOR_WORLD_PACKAGE_DEV_VALIDATION_PROFILE_V2,
+    requiredRoutes: [],
     rows: [],
   });
   return Object.freeze({ ...report, status });

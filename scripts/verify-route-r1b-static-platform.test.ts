@@ -140,7 +140,7 @@ describe("verify:route-r1b-static-platform", () => {
       {
         fixtureId: "fail-missing-surface-profile",
         graph: {
-          status: "failed",
+          status: "incomplete",
           diagnosticCode: "ROUTE_SURFACE_PROFILE_MISSING",
         },
         runtime: { status: "incomplete" },
@@ -148,7 +148,7 @@ describe("verify:route-r1b-static-platform", () => {
       {
         fixtureId: "fail-wrong-collider-binding",
         graph: {
-          status: "failed",
+          status: "incomplete",
           diagnosticCode: "ROUTE_SURFACE_CORRELATION_MISSING",
         },
         runtime: { status: "incomplete" },
@@ -172,7 +172,7 @@ describe("verify:route-r1b-static-platform", () => {
       {
         fixtureId: "fail-overlapping-surfaces",
         graph: {
-          status: "failed",
+          status: "incomplete",
           diagnosticCode: "ROUTE_SURFACE_CORRELATION_AMBIGUOUS",
         },
         runtime: { status: "incomplete" },

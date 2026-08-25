@@ -3,6 +3,7 @@ import { isPlainObject } from "lodash-es";
 
 import { assertAccessorFreeDataGraph } from "./accessor-free-data.js";
 import type {
+  RouteValidationRequiredRouteV1,
   RouteValidationSetReceiptV1,
   RouteValidationSetRowV1,
 } from "./types-v2.js";
@@ -18,7 +19,17 @@ const RECEIPT_FIELDS = [
   "executionPlanHash",
   "resourceLockHash",
   "layoutSolveReportHash",
+  "requiredRouteCount",
+  "requiredRouteSetHash",
+  "requiredRoutes",
   "rows",
+] as const;
+const REQUIRED_ROUTE_FIELDS = [
+  "constraintId",
+  "routeId",
+  "traversingEntityId",
+  "startAnchorEntityId",
+  "destinationAnchorEntityId",
 ] as const;
 const ROW_FIELDS = [
   "constraintId",
@@ -84,6 +95,73 @@ function enumValue<T extends string>(
     fail(path, `expected one of ${allowed.join(", ")}`);
   }
   return value as T;
+}
+
+function canonicalRequiredRoute(
+  value: unknown,
+  index: number,
+): RouteValidationRequiredRouteV1 {
+  const path = `requiredRoutes/${index}`;
+  const source = record(value, path);
+  exactFields(source, REQUIRED_ROUTE_FIELDS, path);
+  return Object.freeze({
+    constraintId: string(source.constraintId, `${path}/constraintId`),
+    routeId: string(source.routeId, `${path}/routeId`),
+    traversingEntityId: string(
+      source.traversingEntityId,
+      `${path}/traversingEntityId`,
+    ),
+    startAnchorEntityId: string(
+      source.startAnchorEntityId,
+      `${path}/startAnchorEntityId`,
+    ),
+    destinationAnchorEntityId: string(
+      source.destinationAnchorEntityId,
+      `${path}/destinationAnchorEntityId`,
+    ),
+  });
+}
+
+function assertCanonicalRequiredRoutes(
+  routes: readonly RouteValidationRequiredRouteV1[],
+): void {
+  for (let index = 1; index < routes.length; index += 1) {
+    const previous = routes[index - 1]!;
+    const current = routes[index]!;
+    if (
+      previous.constraintId > current.constraintId ||
+      (previous.constraintId === current.constraintId &&
+        previous.routeId >= current.routeId)
+    ) {
+      fail(
+        "requiredRoutes",
+        "must be unique and sorted by constraintId then routeId",
+      );
+    }
+  }
+}
+
+export function hashRouteValidationRequiredRouteSetV1(
+  executionPlanHash: Sha256HashV1,
+  requiredRoutes: readonly RouteValidationRequiredRouteV1[],
+): Sha256HashV1 {
+  return sha256CanonicalJson({
+    kind: "route-validation-required-route-set",
+    schemaVersion: 1,
+    executionPlanHash,
+    requiredRoutes,
+  }) as Sha256HashV1;
+}
+
+export function canonicalRouteValidationRequiredRoutesV1(
+  value: unknown,
+): readonly RouteValidationRequiredRouteV1[] {
+  if (!Array.isArray(value)) {
+    fail("requiredRoutes", "expected an array");
+  }
+  const routes = value.map(canonicalRequiredRoute);
+  assertCanonicalRequiredRoutes(routes);
+  return Object.freeze(routes);
 }
 
 function canonicalRow(value: unknown, index: number): RouteValidationSetRowV1 {
@@ -154,6 +232,26 @@ export function canonicalRouteValidationSetReceiptV1(
     fail("kind", "must be route-validation-set-receipt");
   }
   if (source.schemaVersion !== 1) fail("schemaVersion", "must be 1");
+  const executionPlanHash = hash(source.executionPlanHash, "executionPlanHash");
+  const requiredRoutes = canonicalRouteValidationRequiredRoutesV1(
+    source.requiredRoutes,
+  );
+  if (
+    !Number.isSafeInteger(source.requiredRouteCount) ||
+    source.requiredRouteCount !== requiredRoutes.length
+  ) {
+    fail("requiredRouteCount", "must equal requiredRoutes.length");
+  }
+  const requiredRouteSetHash = hash(
+    source.requiredRouteSetHash,
+    "requiredRouteSetHash",
+  );
+  if (
+    requiredRouteSetHash !==
+      hashRouteValidationRequiredRouteSetV1(executionPlanHash, requiredRoutes)
+  ) {
+    fail("requiredRouteSetHash", "does not match requiredRoutes");
+  }
   if (!Array.isArray(source.rows)) fail("rows", "expected an array");
   const rows = source.rows.map(canonicalRow);
   for (let index = 1; index < rows.length; index += 1) {
@@ -167,6 +265,21 @@ export function canonicalRouteValidationSetReceiptV1(
       fail("rows", "must be unique and sorted by constraintId then routeId");
     }
   }
+  if (rows.length !== requiredRoutes.length) {
+    fail("rows", "must cover every required Route exactly once");
+  }
+  for (const [index, route] of requiredRoutes.entries()) {
+    const row = rows[index]!;
+    if (
+      row.constraintId !== route.constraintId ||
+      row.routeId !== route.routeId ||
+      row.traversingEntityId !== route.traversingEntityId ||
+      row.startAnchorEntityId !== route.startAnchorEntityId ||
+      row.destinationAnchorEntityId !== route.destinationAnchorEntityId
+    ) {
+      fail(`rows/${index}`, "does not match requiredRoutes identity");
+    }
+  }
   return Object.freeze({
     kind: "route-validation-set-receipt",
     schemaVersion: 1,
@@ -175,12 +288,15 @@ export function canonicalRouteValidationSetReceiptV1(
       source.normalizedWorldIrHash,
       "normalizedWorldIrHash",
     ),
-    executionPlanHash: hash(source.executionPlanHash, "executionPlanHash"),
+    executionPlanHash,
     resourceLockHash: hash(source.resourceLockHash, "resourceLockHash"),
     layoutSolveReportHash: hash(
       source.layoutSolveReportHash,
       "layoutSolveReportHash",
     ),
+    requiredRouteCount: requiredRoutes.length,
+    requiredRouteSetHash,
+    requiredRoutes,
     rows: Object.freeze(rows),
   });
 }

@@ -34,6 +34,11 @@ export interface FindNearestRecastPolygonInputV1 {
   readonly halfExtentsMetersXYZ: Vec3;
 }
 
+export interface FindNearestRecastPolygonAmongRefsInputV1
+  extends FindNearestRecastPolygonInputV1 {
+  readonly polygonRefs: readonly number[];
+}
+
 export interface RecastStraightPathPointV1 {
   readonly positionMetersXYZ: Vec3;
   readonly flags: number;
@@ -270,6 +275,118 @@ export function findNearestRecastPolygonV1(
     primaryError,
     cleanupOperations,
     "TRAVERSAL_RECAST_NEAREST_POLYGON_UNWIND_FAILED",
+  );
+}
+
+export function findNearestRecastPolygonAmongRefsV1(
+  receipt: RecastQueryProviderReceiptV1,
+  input: FindNearestRecastPolygonAmongRefsInputV1,
+): RecastNearestPolygonResultV1 {
+  requireFiniteVec3(input.positionMetersXYZ, "positionMetersXYZ");
+  requireFiniteVec3(input.halfExtentsMetersXYZ, "halfExtentsMetersXYZ");
+  if (input.halfExtentsMetersXYZ.some((component) => !(component > 0))) {
+    throw new Error(
+      "TRAVERSAL_RECAST_QUERY_INPUT_INVALID: half extents must be positive.",
+    );
+  }
+  if (!Array.isArray(input.polygonRefs)) {
+    throw new Error(
+      "TRAVERSAL_RECAST_QUERY_INPUT_INVALID: polygonRefs must be an array.",
+    );
+  }
+  const polygonRefs = [...new Set(input.polygonRefs)].sort((left, right) => left - right);
+  if (
+    polygonRefs.some(
+      (polygonRef) =>
+        !Number.isSafeInteger(polygonRef) ||
+        polygonRef <= 0 ||
+        polygonRef > RECAST_QUERY_PROVIDER_CONSTANTS_V1.maximumProviderPolygonRef,
+    )
+  ) {
+    throw new Error(
+      "TRAVERSAL_RECAST_QUERY_INPUT_INVALID: polygonRefs must contain positive unsigned 32-bit integers.",
+    );
+  }
+  const { rawQuery } = requireResources(receipt);
+  const cleanupOperations: Array<() => void> = [];
+  let result: RecastNearestPolygonResultV1 | undefined;
+  let hasPrimaryError = false;
+  let primaryError: unknown;
+  let selected:
+    | Readonly<{
+        polygonRef: number;
+        positionMetersXYZ: Vec3;
+        isOverPolygon: boolean;
+        distanceSquaredMeters: number;
+      }>
+    | undefined;
+  try {
+    const closestPoint = new Raw.Vec3();
+    cleanupOperations.unshift(() => Raw.destroy(closestPoint));
+    const isOverPolygon = new Raw.BoolRef();
+    cleanupOperations.unshift(() => Raw.destroy(isOverPolygon));
+    for (const polygonRef of polygonRefs) {
+      const status = rawQuery.closestPointOnPoly(
+        polygonRef,
+        input.positionMetersXYZ,
+        closestPoint,
+        isOverPolygon,
+      );
+      if (!statusSucceed(status)) continue;
+      const positionMetersXYZ = [
+        closestPoint.x,
+        closestPoint.y,
+        closestPoint.z,
+      ] as const;
+      requireFiniteVec3(positionMetersXYZ, "nearest provider point");
+      if (
+        positionMetersXYZ.some(
+          (component, axis) =>
+            Math.abs(component - input.positionMetersXYZ[axis]!) >
+            input.halfExtentsMetersXYZ[axis]!,
+        )
+      ) {
+        continue;
+      }
+      const distanceSquaredMeters = positionMetersXYZ.reduce(
+        (sum, component, axis) => {
+          const delta = component - input.positionMetersXYZ[axis]!;
+          return sum + delta * delta;
+        },
+        0,
+      );
+      if (
+        isNil(selected) ||
+        distanceSquaredMeters < selected.distanceSquaredMeters ||
+        (distanceSquaredMeters === selected.distanceSquaredMeters &&
+          polygonRef < selected.polygonRef)
+      ) {
+        selected = {
+          polygonRef,
+          positionMetersXYZ,
+          isOverPolygon: isOverPolygon.value,
+          distanceSquaredMeters,
+        };
+      }
+    }
+    result = isNil(selected)
+      ? Object.freeze({ kind: "miss" })
+      : Object.freeze({
+          kind: "complete",
+          polygonRef: selected.polygonRef,
+          positionMetersXYZ: Object.freeze(selected.positionMetersXYZ),
+          isOverPolygon: selected.isOverPolygon,
+        });
+  } catch (error) {
+    hasPrimaryError = true;
+    primaryError = error;
+  }
+  return finishWithCleanup(
+    result,
+    hasPrimaryError,
+    primaryError,
+    cleanupOperations,
+    "TRAVERSAL_RECAST_NEAREST_ALLOWED_POLYGON_UNWIND_FAILED",
   );
 }
 

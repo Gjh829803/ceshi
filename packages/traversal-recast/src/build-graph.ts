@@ -31,6 +31,7 @@ import {
 import { mapTraversalCapabilityEnvelopeToRecastTiledConfigV1 } from "./recast-config.js";
 
 type Vec3 = readonly [number, number, number];
+type Vec2 = readonly [number, number];
 type Vec3Units = readonly [number, number, number];
 
 export type RecastAuditDetailTriangleV1 = readonly [Vec3, Vec3, Vec3];
@@ -120,6 +121,7 @@ interface PortalEvidenceV1 {
 interface ProjectedEdgeCandidateV1 {
   readonly edge: TraversalEdgeV1;
   readonly portalEvidenceKey: string;
+  readonly portal: PortalEvidenceV1;
 }
 
 const ANGLE_QUANTUM_DEGREES = 0.000001;
@@ -716,6 +718,7 @@ function buildEdge(
   return {
     edge,
     portalEvidenceKey: JSON.stringify(portal),
+    portal,
   };
 }
 
@@ -1083,170 +1086,6 @@ function correlateTaggedTraversalSurfaceV2(
 }
 
 
-interface CanonicalSeamV2 {
-  readonly xzGapMeters: number;
-  readonly stepHeightMeters: number;
-}
-
-function collectUpwardTrianglesXzV2(
-  source: CanonicalTraversalSurfaceTriangleSourceV1,
-): readonly (readonly [readonly [number, number], readonly [number, number], readonly [number, number]])[] {
-  const positions = source.worldPositionsMetersXYZ;
-  const indices = source.triangleIndices;
-  const triangles: Array<readonly [readonly [number, number], readonly [number, number], readonly [number, number]]> = [];
-  if (isNil(positions) || isNil(indices) || isEmpty(indices)) return triangles;
-  for (let offset = 0; offset + 2 < indices.length; offset += 3) {
-    const i0 = indices[offset]! * 3;
-    const i1 = indices[offset + 1]! * 3;
-    const i2 = indices[offset + 2]! * 3;
-    const ax = positions[i0]!;
-    const ay = positions[i0 + 1]!;
-    const az = positions[i0 + 2]!;
-    const bx = positions[i1]!;
-    const by = positions[i1 + 1]!;
-    const bz = positions[i1 + 2]!;
-    const cx = positions[i2]!;
-    const cy = positions[i2 + 1]!;
-    const cz = positions[i2 + 2]!;
-    const abx = bx - ax;
-    const aby = by - ay;
-    const abz = bz - az;
-    const acx = cx - ax;
-    const acy = cy - ay;
-    const acz = cz - az;
-    const normalY = abz * acx - abx * acz;
-    if (!(normalY > 0)) continue;
-    triangles.push([[ax, az], [bx, bz], [cx, cz]]);
-  }
-  return triangles;
-}
-
-function clamp01V2(value: number): number {
-  if (value <= 0) return 0;
-  if (value >= 1) return 1;
-  return value;
-}
-
-function distancePointToSegmentXzV2(
-  px: number,
-  pz: number,
-  ax: number,
-  az: number,
-  bx: number,
-  bz: number,
-): number {
-  const abx = bx - ax;
-  const abz = bz - az;
-  const lengthSq = abx * abx + abz * abz;
-  const t = lengthSq === 0 ? 0 : clamp01V2(((px - ax) * abx + (pz - az) * abz) / lengthSq);
-  const qx = ax + t * abx;
-  const qz = az + t * abz;
-  return Math.hypot(px - qx, pz - qz);
-}
-
-function signedAreaXzV2(
-  ax: number,
-  az: number,
-  bx: number,
-  bz: number,
-  cx: number,
-  cz: number,
-): number {
-  return (bx - ax) * (cz - az) - (bz - az) * (cx - ax);
-}
-
-function pointInTriangleXzV2(
-  px: number,
-  pz: number,
-  triangle: readonly [readonly [number, number], readonly [number, number], readonly [number, number]],
-): boolean {
-  const [a, b, c] = triangle;
-  const area = signedAreaXzV2(a[0], a[1], b[0], b[1], c[0], c[1]);
-  if (area === 0) return false;
-  const s1 = signedAreaXzV2(px, pz, a[0], a[1], b[0], b[1]);
-  const s2 = signedAreaXzV2(px, pz, b[0], b[1], c[0], c[1]);
-  const s3 = signedAreaXzV2(px, pz, c[0], c[1], a[0], a[1]);
-  const hasNeg = s1 < 0 || s2 < 0 || s3 < 0;
-  const hasPos = s1 > 0 || s2 > 0 || s3 > 0;
-  if (area > 0) return !hasNeg;
-  return !hasPos;
-}
-
-function segmentIntersectionXzV2(
-  ax: number,
-  az: number,
-  bx: number,
-  bz: number,
-  cx: number,
-  cz: number,
-  dx: number,
-  dz: number,
-): boolean {
-  const d1 = signedAreaXzV2(cx, cz, dx, dz, ax, az);
-  const d2 = signedAreaXzV2(cx, cz, dx, dz, bx, bz);
-  const d3 = signedAreaXzV2(ax, az, bx, bz, cx, cz);
-  const d4 = signedAreaXzV2(ax, az, bx, bz, dx, dz);
-  if (((d1 > 0 && d2 < 0) || (d1 < 0 && d2 > 0)) && ((d3 > 0 && d4 < 0) || (d3 < 0 && d4 > 0))) {
-    return true;
-  }
-  return false;
-}
-
-function trianglePairXzGapMetersV2(
-  left: readonly [readonly [number, number], readonly [number, number], readonly [number, number]],
-  right: readonly [readonly [number, number], readonly [number, number], readonly [number, number]],
-): number {
-  for (const point of left) {
-    if (pointInTriangleXzV2(point[0], point[1], right)) return 0;
-  }
-  for (const point of right) {
-    if (pointInTriangleXzV2(point[0], point[1], left)) return 0;
-  }
-  for (let i = 0; i < 3; i += 1) {
-    const a = left[i]!;
-    const b = left[(i + 1) % 3]!;
-    for (let j = 0; j < 3; j += 1) {
-      const c = right[j]!;
-      const d = right[(j + 1) % 3]!;
-      if (segmentIntersectionXzV2(a[0], a[1], b[0], b[1], c[0], c[1], d[0], d[1])) return 0;
-    }
-  }
-  let minDistance = Number.POSITIVE_INFINITY;
-  const pairs: Array<readonly [typeof left, typeof right]> = [[left, right], [right, left]];
-  for (const [src, dst] of pairs) {
-    for (const point of src) {
-      for (let i = 0; i < 3; i += 1) {
-        const a = dst[i]!;
-        const b = dst[(i + 1) % 3]!;
-        minDistance = Math.min(
-          minDistance,
-          distancePointToSegmentXzV2(point[0], point[1], a[0], a[1], b[0], b[1]),
-        );
-      }
-    }
-  }
-  return minDistance;
-}
-
-function minUpwardTriangleXzGapMetersV2(
-  leftSource: CanonicalTraversalSurfaceTriangleSourceV1,
-  rightSource: CanonicalTraversalSurfaceTriangleSourceV1,
-): number {
-  const leftTriangles = collectUpwardTrianglesXzV2(leftSource);
-  const rightTriangles = collectUpwardTrianglesXzV2(rightSource);
-  if (isEmpty(leftTriangles) || isEmpty(rightTriangles)) {
-    return Number.POSITIVE_INFINITY;
-  }
-  let minDistance = Number.POSITIVE_INFINITY;
-  for (const left of leftTriangles) {
-    for (const right of rightTriangles) {
-      minDistance = Math.min(minDistance, trianglePairXzGapMetersV2(left, right));
-      if (minDistance === 0) return 0;
-    }
-  }
-  return minDistance;
-}
-
 function sampleResolvedHeightMetersV2(
   source: CanonicalTraversalSurfaceTriangleSourceV1,
   pointMetersXZ: readonly [number, number],
@@ -1272,6 +1111,117 @@ function sampleResolvedHeightMetersV2(
   return hits.hit.heightMeters;
 }
 
+function closestPointOnSegmentXzV2(
+  point: Vec2,
+  start: Vec2,
+  end: Vec2,
+): Vec2 {
+  const dx = end[0] - start[0];
+  const dz = end[1] - start[1];
+  const lengthSquared = dx * dx + dz * dz;
+  const rawT = lengthSquared === 0
+    ? 0
+    : ((point[0] - start[0]) * dx + (point[1] - start[1]) * dz) /
+      lengthSquared;
+  const t = Math.max(0, Math.min(1, rawT));
+  return [start[0] + t * dx, start[1] + t * dz];
+}
+
+function collectUpwardSourceEdgesV2(
+  source: CanonicalTraversalSurfaceTriangleSourceV1,
+): readonly (readonly [Vec2, Vec2])[] {
+  const edges: Array<readonly [Vec2, Vec2]> = [];
+  for (let offset = 0; offset + 2 < source.triangleIndices.length; offset += 3) {
+    const indices = [
+      source.triangleIndices[offset]!,
+      source.triangleIndices[offset + 1]!,
+      source.triangleIndices[offset + 2]!,
+    ];
+    const vertices = indices.map((index) => [
+      source.worldPositionsMetersXYZ[index * 3]!,
+      source.worldPositionsMetersXYZ[index * 3 + 1]!,
+      source.worldPositionsMetersXYZ[index * 3 + 2]!,
+    ] as const);
+    const a = vertices[0]!;
+    const b = vertices[1]!;
+    const c = vertices[2]!;
+    const normalY =
+      (b[2] - a[2]) * (c[0] - a[0]) -
+      (b[0] - a[0]) * (c[2] - a[2]);
+    if (!(normalY > 0)) continue;
+    const points = vertices.map((vertex) => [vertex[0], vertex[2]] as const);
+    for (let edge = 0; edge < 3; edge += 1) {
+      edges.push([points[edge]!, points[(edge + 1) % 3]!]);
+    }
+  }
+  return edges;
+}
+
+function closestSegmentPairCandidatesV2(
+  left: readonly [Vec2, Vec2],
+  right: readonly [Vec2, Vec2],
+  portalPointMetersXZ: Vec2,
+): readonly Readonly<{ leftPoint: Vec2; rightPoint: Vec2 }>[] {
+  return [
+    {
+      leftPoint: closestPointOnSegmentXzV2(portalPointMetersXZ, ...left),
+      rightPoint: closestPointOnSegmentXzV2(portalPointMetersXZ, ...right),
+    },
+    { leftPoint: left[0], rightPoint: closestPointOnSegmentXzV2(left[0], ...right) },
+    { leftPoint: left[1], rightPoint: closestPointOnSegmentXzV2(left[1], ...right) },
+    { leftPoint: closestPointOnSegmentXzV2(right[0], ...left), rightPoint: right[0] },
+    { leftPoint: closestPointOnSegmentXzV2(right[1], ...left), rightPoint: right[1] },
+  ];
+}
+
+function nearestLocalSourcePairV2(
+  leftSource: CanonicalTraversalSurfaceTriangleSourceV1,
+  rightSource: CanonicalTraversalSurfaceTriangleSourceV1,
+  portalPointMetersXZ: Vec2,
+  maximumLocalDistanceMeters: number,
+): Readonly<{ leftPoint: Vec2; rightPoint: Vec2; gapMeters: number }> | undefined {
+  let best:
+    | Readonly<{
+        leftPoint: Vec2;
+        rightPoint: Vec2;
+        gapMeters: number;
+        portalDistanceMeters: number;
+      }>
+    | undefined;
+  for (const left of collectUpwardSourceEdgesV2(leftSource)) {
+    for (const right of collectUpwardSourceEdgesV2(rightSource)) {
+      for (const candidate of closestSegmentPairCandidatesV2(
+        left,
+        right,
+        portalPointMetersXZ,
+      )) {
+        const midpoint: Vec2 = [
+          (candidate.leftPoint[0] + candidate.rightPoint[0]) / 2,
+          (candidate.leftPoint[1] + candidate.rightPoint[1]) / 2,
+        ];
+        const portalDistanceMeters = Math.hypot(
+          midpoint[0] - portalPointMetersXZ[0],
+          midpoint[1] - portalPointMetersXZ[1],
+        );
+        if (portalDistanceMeters > maximumLocalDistanceMeters) continue;
+        const gapMeters = Math.hypot(
+          candidate.leftPoint[0] - candidate.rightPoint[0],
+          candidate.leftPoint[1] - candidate.rightPoint[1],
+        );
+        if (
+          isNil(best) ||
+          gapMeters < best.gapMeters ||
+          (gapMeters === best.gapMeters &&
+            portalDistanceMeters < best.portalDistanceMeters)
+        ) {
+          best = { ...candidate, gapMeters, portalDistanceMeters };
+        }
+      }
+    }
+  }
+  return best;
+}
+
 function retypeProjectedEdgeAsStepV2(
   projected: ProjectedEdgeCandidateV1,
   stepHeightMeters: number,
@@ -1292,6 +1242,7 @@ function retypeProjectedEdgeAsStepV2(
       routePathCost: ceilingToQuantum(cost, COST_QUANTUM_RATIO),
     },
     portalEvidenceKey: projected.portalEvidenceKey,
+    portal: projected.portal,
   };
 }
 
@@ -1301,7 +1252,6 @@ function refineCanonicalSeamEdgeV2(
   target: QuantizedPolygonV1,
   querySourcesById: ReadonlyMap<string, CanonicalTraversalSurfaceTriangleSourceV1>,
   envelope: TraversalCapabilityEnvelopeV1,
-  seamCache: Map<string, CanonicalSeamV2>,
 ): ProjectedEdgeCandidateV1 | undefined {
   const sourceSurfaceId = source.node.traversalSurfaceId;
   const targetSurfaceId = target.node.traversalSurfaceId;
@@ -1309,30 +1259,51 @@ function refineCanonicalSeamEdgeV2(
   const sourceSource = querySourcesById.get(sourceSurfaceId);
   const targetSource = querySourcesById.get(targetSurfaceId);
   if (isNil(sourceSource) || isNil(targetSource)) return undefined;
-  const cacheKey = sourceSurfaceId < targetSurfaceId
-    ? `${sourceSurfaceId}\0${targetSurfaceId}`
-    : `${targetSurfaceId}\0${sourceSurfaceId}`;
-  let seam = seamCache.get(cacheKey);
-  if (isNil(seam)) {
-    const xzGapMeters = minUpwardTriangleXzGapMetersV2(sourceSource, targetSource);
-    seam = { xzGapMeters, stepHeightMeters: 0 };
-    seamCache.set(cacheKey, seam);
+  const portalMinimumMeters = pointUnitsToMeters(
+    projected.portal.minimumUnitsXYZ,
+    envelope.positionQuantizationMeters,
+  );
+  const portalMaximumMeters = pointUnitsToMeters(
+    projected.portal.maximumUnitsXYZ,
+    envelope.positionQuantizationMeters,
+  );
+  const samplesMetersXZ = [
+    [portalMinimumMeters[0], portalMinimumMeters[2]],
+    [
+      (portalMinimumMeters[0] + portalMaximumMeters[0]) / 2,
+      (portalMinimumMeters[2] + portalMaximumMeters[2]) / 2,
+    ],
+    [portalMaximumMeters[0], portalMaximumMeters[2]],
+  ] as const;
+  let stepHeightMeters = 0;
+  for (const pointMetersXZ of samplesMetersXZ) {
+    const pair = nearestLocalSourcePairV2(
+      sourceSource,
+      targetSource,
+      pointMetersXZ,
+      envelope.voxelCellSizeMeters * 2 + envelope.positionQuantizationMeters,
+    );
+    if (isNil(pair) || pair.gapMeters > envelope.positionQuantizationMeters) {
+      return undefined;
+    }
+    const sourceHeight = sampleResolvedHeightMetersV2(
+      sourceSource,
+      pair.leftPoint,
+      envelope,
+      source.node.positionMetersXYZ[1],
+    );
+    const targetHeight = sampleResolvedHeightMetersV2(
+      targetSource,
+      pair.rightPoint,
+      envelope,
+      target.node.positionMetersXYZ[1],
+    );
+    if (isNil(sourceHeight) || isNil(targetHeight)) return undefined;
+    stepHeightMeters = Math.max(
+      stepHeightMeters,
+      Math.abs(sourceHeight - targetHeight),
+    );
   }
-  if (seam.xzGapMeters > envelope.positionQuantizationMeters) return undefined;
-  const sourceHeight = sampleResolvedHeightMetersV2(
-    sourceSource,
-    [source.node.positionMetersXYZ[0], source.node.positionMetersXYZ[2]],
-    envelope,
-    source.node.positionMetersXYZ[1],
-  );
-  const targetHeight = sampleResolvedHeightMetersV2(
-    targetSource,
-    [target.node.positionMetersXYZ[0], target.node.positionMetersXYZ[2]],
-    envelope,
-    target.node.positionMetersXYZ[1],
-  );
-  if (isNil(sourceHeight) || isNil(targetHeight)) return undefined;
-  const stepHeightMeters = Math.abs(sourceHeight - targetHeight);
   if (stepHeightMeters > envelope.maxStepHeightMeters) return undefined;
   if (stepHeightMeters > envelope.positionQuantizationMeters) {
     return retypeProjectedEdgeAsStepV2(projected, stepHeightMeters, envelope);
@@ -1379,7 +1350,6 @@ export function buildTraversalGraphFromSnapshotV2(
       source,
     ] as const),
   );
-  const seamCache = new Map<string, CanonicalSeamV2>();
   const config = mapTraversalCapabilityEnvelopeToRecastTiledConfigV1(envelope);
   const voxelCellSizeMicrometers = quantizeTraversalMetersToMicrometersV1(
     envelope.voxelCellSizeMeters,
@@ -1536,7 +1506,6 @@ export function buildTraversalGraphFromSnapshotV2(
                 target,
                 querySourcesById,
                 envelope,
-                seamCache,
               );
           if (!isNil(projectedEdge)) {
             const existing = edgeCandidates.get(projectedEdge.edge.id);

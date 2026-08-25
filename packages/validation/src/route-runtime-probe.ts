@@ -16,7 +16,6 @@ import {
   type RouteRuntimeProbeTickV2,
   type TraversalRuntimePortV1,
   type TraversalRuntimeTickEvidenceV1,
-  type TraversalSurfaceIdentityV1,
 } from "@whitebox-world/traversal";
 import { isEqual, isNil } from "lodash-es";
 
@@ -85,18 +84,10 @@ interface PathGeometry {
   readonly totalDistanceMetersXZ: number;
 }
 
-const GEOMETRY_EPSILON = 1e-9;
+const PROJECTION_TIE_EPSILON_METERS = 1e-9;
 
 function fail(code: RouteRuntimeProbeErrorCodeV2): never {
   throw new RouteRuntimeProbeErrorV2(code);
-}
-
-function canonicalPath(value: RoutePathReceiptV2): RoutePathReceiptV2 {
-  try {
-    return canonicalRoutePathReceiptV2(value);
-  } catch {
-    return fail("ROUTE_RUNTIME_PROBE_INPUT_INVALID");
-  }
 }
 
 function canonicalDriver(
@@ -160,6 +151,14 @@ function distanceXZ(a: XzPoint, b: XzPoint): number {
   return Math.hypot(a.x - b.x, a.z - b.z);
 }
 
+function distanceXYZ(a: Vec3, b: Vec3): number {
+  return requireFiniteRuntimeDerived(Math.hypot(
+    a[0] - b[0],
+    a[1] - b[1],
+    a[2] - b[2],
+  ));
+}
+
 function requireFiniteRuntimeDerived(value: number): number {
   if (!Number.isFinite(value)) {
     fail("ROUTE_RUNTIME_PROBE_RUNTIME_INVALID");
@@ -176,41 +175,8 @@ function ceilToQuantum(value: number, quantum: number): number {
   return quantized === 0 ? 0 : quantized;
 }
 
-function orientation(a: XzPoint, b: XzPoint, c: XzPoint): number {
-  return (b.x - a.x) * (c.z - a.z) - (b.z - a.z) * (c.x - a.x);
-}
-
-function onSegment(a: XzPoint, b: XzPoint, point: XzPoint): boolean {
-  return Math.abs(orientation(a, b, point)) <= GEOMETRY_EPSILON &&
-    point.x >= Math.min(a.x, b.x) - GEOMETRY_EPSILON &&
-    point.x <= Math.max(a.x, b.x) + GEOMETRY_EPSILON &&
-    point.z >= Math.min(a.z, b.z) - GEOMETRY_EPSILON &&
-    point.z <= Math.max(a.z, b.z) + GEOMETRY_EPSILON;
-}
-
-function segmentsIntersect(a: PathSegment, b: PathSegment): boolean {
-  const o1 = orientation(a.start, a.end, b.start);
-  const o2 = orientation(a.start, a.end, b.end);
-  const o3 = orientation(b.start, b.end, a.start);
-  const o4 = orientation(b.start, b.end, a.end);
-  if (
-    ((o1 > GEOMETRY_EPSILON && o2 < -GEOMETRY_EPSILON) ||
-      (o1 < -GEOMETRY_EPSILON && o2 > GEOMETRY_EPSILON)) &&
-    ((o3 > GEOMETRY_EPSILON && o4 < -GEOMETRY_EPSILON) ||
-      (o3 < -GEOMETRY_EPSILON && o4 > GEOMETRY_EPSILON))
-  ) {
-    return true;
-  }
-  return (
-    (Math.abs(o1) <= GEOMETRY_EPSILON && onSegment(a.start, a.end, b.start)) ||
-    (Math.abs(o2) <= GEOMETRY_EPSILON && onSegment(a.start, a.end, b.end)) ||
-    (Math.abs(o3) <= GEOMETRY_EPSILON && onSegment(b.start, b.end, a.start)) ||
-    (Math.abs(o4) <= GEOMETRY_EPSILON && onSegment(b.start, b.end, a.end))
-  );
-}
-
 function createPathGeometry(
-  path: RoutePathReceiptV2 | RoutePathReceiptV2,
+  path: RoutePathReceiptV2,
 ): PathGeometry {
   let positionQuantizationMeters: number;
   try {
@@ -235,9 +201,6 @@ function createPathGeometry(
     const start = points[index]!;
     const end = points[index + 1]!;
     const rawLengthMetersXZ = distanceXZ(start, end);
-    if (!(rawLengthMetersXZ > 0)) {
-      fail("ROUTE_RUNTIME_PROBE_PATH_INVALID");
-    }
     const lengthMetersXZ = ceilToQuantum(
       rawLengthMetersXZ,
       positionQuantizationMeters,
@@ -254,20 +217,6 @@ function createPathGeometry(
     totalDistanceMetersXZ += lengthMetersXZ;
   }
 
-  for (let left = 0; left < points.length; left += 1) {
-    for (let right = left + 2; right < points.length; right += 1) {
-      if (distanceXZ(points[left]!, points[right]!) <= GEOMETRY_EPSILON) {
-        fail("ROUTE_RUNTIME_PROBE_PATH_INVALID");
-      }
-    }
-  }
-  for (let left = 0; left < segments.length; left += 1) {
-    for (let right = left + 2; right < segments.length; right += 1) {
-      if (segmentsIntersect(segments[left]!, segments[right]!)) {
-        fail("ROUTE_RUNTIME_PROBE_PATH_INVALID");
-      }
-    }
-  }
   if (totalDistanceMetersXZ !== path.routePathDistanceMetersXZ) {
     fail("ROUTE_RUNTIME_PROBE_PATH_INVALID");
   }
@@ -295,6 +244,41 @@ function pointAtProgress(
   };
 }
 
+function firstTurnProgressMetersXZ(
+  geometry: PathGeometry,
+  startProgressMetersXZ: number,
+  endProgressMetersXZ: number,
+): number | undefined {
+  // The 3D support station may advance by at most one physical fixed-tick step.
+  // Keep XZ lookahead inside the current straight run so intent cannot shortcut
+  // a Path corner and leave that authoritative station behind.
+  for (let index = 0; index < geometry.segments.length - 1; index += 1) {
+    const incoming = geometry.segments[index]!;
+    const outgoing = geometry.segments[index + 1]!;
+    const cornerProgressMetersXZ = incoming.endProgressMetersXZ;
+    if (
+      cornerProgressMetersXZ <=
+        startProgressMetersXZ + PROJECTION_TIE_EPSILON_METERS ||
+      cornerProgressMetersXZ > endProgressMetersXZ
+    ) {
+      continue;
+    }
+    const incomingX = incoming.end.x - incoming.start.x;
+    const incomingZ = incoming.end.z - incoming.start.z;
+    const outgoingX = outgoing.end.x - outgoing.start.x;
+    const outgoingZ = outgoing.end.z - outgoing.start.z;
+    const cross = incomingX * outgoingZ - incomingZ * outgoingX;
+    const crossScale =
+      Math.abs(incomingX * outgoingZ) + Math.abs(incomingZ * outgoingX);
+    const isCollinear = Math.abs(cross) <= Number.EPSILON * crossScale;
+    const continuesForward = incomingX * outgoingX + incomingZ * outgoingZ > 0;
+    if (!isCollinear || !continuesForward) {
+      return cornerProgressMetersXZ;
+    }
+  }
+  return undefined;
+}
+
 function projectForwardProgress(
   geometry: PathGeometry,
   subject: XzPoint,
@@ -320,6 +304,23 @@ function projectForwardProgress(
     if (eligibleStart > eligibleEnd) continue;
     const dx = segment.end.x - segment.start.x;
     const dz = segment.end.z - segment.start.z;
+    if (segment.rawLengthMetersXZ === 0) {
+      const candidateDistance = requireFiniteRuntimeDerived(
+        distanceXZ(subject, segment.end),
+      );
+      if (
+        candidateDistance < selectedDistance - PROJECTION_TIE_EPSILON_METERS ||
+        (
+          Math.abs(candidateDistance - selectedDistance) <=
+            PROJECTION_TIE_EPSILON_METERS &&
+          eligibleEnd > selectedProgressMetersXZ
+        )
+      ) {
+        selectedDistance = candidateDistance;
+        selectedProgressMetersXZ = eligibleEnd;
+      }
+      continue;
+    }
     const rawParameter = (
       (subject.x - segment.start.x) * dx +
       (subject.z - segment.start.z) * dz
@@ -334,7 +335,14 @@ function projectForwardProgress(
     const candidateDistance = requireFiniteRuntimeDerived(
       distanceXZ(subject, candidatePoint),
     );
-    if (candidateDistance < selectedDistance) {
+    if (
+      candidateDistance < selectedDistance - PROJECTION_TIE_EPSILON_METERS ||
+      (
+        Math.abs(candidateDistance - selectedDistance) <=
+          PROJECTION_TIE_EPSILON_METERS &&
+        candidateProgress > selectedProgressMetersXZ
+      )
+    ) {
       selectedDistance = candidateDistance;
       selectedProgressMetersXZ = candidateProgress;
     }
@@ -355,6 +363,13 @@ function deviationFromCompletePath(
   for (const segment of geometry.segments) {
     const dx = segment.end.x - segment.start.x;
     const dz = segment.end.z - segment.start.z;
+    if (segment.rawLengthMetersXZ === 0) {
+      minimumDistance = Math.min(
+        minimumDistance,
+        requireFiniteRuntimeDerived(distanceXZ(subject, segment.end)),
+      );
+      continue;
+    }
     const rawParameter = (
       (subject.x - segment.start.x) * dx +
       (subject.z - segment.start.z) * dz
@@ -397,20 +412,9 @@ function quantizedDirection(
   return [x === 0 ? 0 : x, z === 0 ? 0 : z];
 }
 
-function surfaceMismatch(
-  evidence: TraversalRuntimeTickEvidenceV1,
-  expected: TraversalSurfaceIdentityV1,
-): boolean {
-  if (evidence.characterSupport.supportState === "unsupported") return false;
-  return !isEqual(evidence.characterSupport.surfaceResolution, {
-    mode: "resolved",
-    ...expected,
-  });
-}
-
 function runtimeEvidence(
   value: TraversalRuntimeTickEvidenceV1,
-  request: RouteRuntimeProbeRequestV2 | RouteRuntimeProbeRequestV2,
+  request: RouteRuntimeProbeRequestV2,
   expectedTick: number,
   fixedTimeStepSeconds?: number,
 ): TraversalRuntimeTickEvidenceV1 {
@@ -438,67 +442,6 @@ function runtimeEvidence(
     fail("ROUTE_RUNTIME_PROBE_RUNTIME_INVALID");
   }
   return evidence;
-}
-
-function emptyMetrics(
-  initial: TraversalRuntimeTickEvidenceV1,
-  surface: TraversalSurfaceIdentityV1,
-): RouteRuntimeProbeMetricsV2 {
-  return {
-    processedTickCount: 0,
-    maximumStalledDurationTicks: 0,
-    maximumRouteDeviationMetersXZ: 0,
-    maximumConsecutiveUnexpectedUnsupportedTicks: 0,
-    slidingDurationTicks: 0,
-    unexpectedSupportLossCount: 0,
-    wrongSupportSurfaceCount: surfaceMismatch(initial, surface) ? 1 : 0,
-    invalidPhysicsValueCount: 0,
-  };
-}
-
-function failedReceipt(
-  request: RouteRuntimeProbeRequestV2,
-  initialRuntimeEvidence: TraversalRuntimeTickEvidenceV1,
-  ticks: readonly RouteRuntimeProbeTickV2[],
-  metrics: RouteRuntimeProbeMetricsV2,
-  failure: RouteRuntimeProbeFailureV2,
-): RouteRuntimeProbeReceiptV2 {
-  try {
-    return canonicalRouteRuntimeProbeReceiptV2({
-      kind: "route-runtime-probe-receipt",
-      schemaVersion: 1,
-      status: "failed",
-      request,
-      initialRuntimeEvidence,
-      ticks,
-      metrics,
-      failure,
-    });
-  } catch {
-    return fail("ROUTE_RUNTIME_PROBE_RUNTIME_INVALID");
-  }
-}
-
-function completeReceipt(
-  request: RouteRuntimeProbeRequestV2,
-  initialRuntimeEvidence: TraversalRuntimeTickEvidenceV1,
-  ticks: readonly RouteRuntimeProbeTickV2[],
-  metrics: RouteRuntimeProbeMetricsV2,
-): RouteRuntimeProbeReceiptV2 {
-  try {
-    return canonicalRouteRuntimeProbeReceiptV2({
-      kind: "route-runtime-probe-receipt",
-      schemaVersion: 1,
-      status: "complete",
-      request,
-      initialRuntimeEvidence,
-      ticks,
-      metrics,
-      completionDurationTicks: ticks.length,
-    });
-  } catch {
-    return fail("ROUTE_RUNTIME_PROBE_RUNTIME_INVALID");
-  }
 }
 
 function mismatchMode(
@@ -596,6 +539,20 @@ function completeReceiptV2(
   }
 }
 
+function hasArrivedAtRouteDestinationV2(input: Readonly<{
+  hasExpectedSurface: boolean;
+  remainingArcLengthMeters: number;
+  subjectPositionMetersXZ: XzPoint;
+  destinationMetersXZ: XzPoint;
+  destinationToleranceMetersXZ: number;
+}>): boolean {
+  return input.hasExpectedSurface &&
+    input.remainingArcLengthMeters <= input.destinationToleranceMetersXZ &&
+    requireFiniteRuntimeDerived(
+      distanceXZ(input.subjectPositionMetersXZ, input.destinationMetersXZ),
+    ) <= input.destinationToleranceMetersXZ;
+}
+
 export async function runRouteRuntimeProbeV2(
   input: RunRouteRuntimeProbeInputV2,
 ): Promise<RouteRuntimeProbeReceiptV2> {
@@ -631,7 +588,7 @@ export async function runRouteRuntimeProbeV2(
   let previousArcLengthMeters = 0;
   const initialStation = advanceRouteRuntimeProbeSupportStationV2(
     path,
-    initial.subjectPositionMetersXYZ,
+    initial.characterSupport.sampledFootPositionMetersXYZ,
     previousArcLengthMeters,
     input.resolvedControlFeelProfile.walkSpeedMetersPerSecond,
     input.positionQuantizationMeters,
@@ -665,19 +622,20 @@ export async function runRouteRuntimeProbeV2(
   }
 
   const destination = geometry.points.at(-1)!;
-  if (
-    requireFiniteRuntimeDerived(
-      distanceXZ(xz(initial.subjectPositionMetersXYZ), destination),
-    ) <=
-      thresholds.destinationToleranceMetersXZ
-  ) {
+  if (hasArrivedAtRouteDestinationV2({
+    hasExpectedSurface: true,
+    remainingArcLengthMeters: initialStation.remainingArcLengthMeters,
+    subjectPositionMetersXZ: xz(initial.subjectPositionMetersXYZ),
+    destinationMetersXZ: destination,
+    destinationToleranceMetersXZ: thresholds.destinationToleranceMetersXZ,
+  })) {
     return completeReceiptV2(request, initial, [], initialMetrics);
   }
 
   const ticks: RouteRuntimeProbeTickV2[] = [];
   let previousEvidence = initial;
   let previousProgressMetersXZ = 0;
-  let progressBaselineMetersXZ = 0;
+  let verifiedStationAdvanceSinceProgressBaselineMeters = 0;
   let stalledDurationTicks = 0;
   let consecutiveUnexpectedUnsupportedTicks = 0;
   let maximumStalledDurationTicks = 0;
@@ -693,16 +651,30 @@ export async function runRouteRuntimeProbeV2(
     probeTick += 1
   ) {
     const subjectBeforeTick = xz(previousEvidence.subjectPositionMetersXYZ);
+    const projectionEndProgressMetersXZ = Math.min(
+      geometry.totalDistanceMetersXZ,
+      previousProgressMetersXZ + driver.profile.pathLookaheadMetersXZ,
+    );
+    const projectionLimitMetersXZ = firstTurnProgressMetersXZ(
+      geometry,
+      previousProgressMetersXZ,
+      projectionEndProgressMetersXZ,
+    ) ?? projectionEndProgressMetersXZ;
     const selectedProgress = projectForwardProgress(
       geometry,
       subjectBeforeTick,
       previousProgressMetersXZ,
-      driver.profile.pathLookaheadMetersXZ,
+      projectionLimitMetersXZ - previousProgressMetersXZ,
     );
-    const targetProgress = Math.min(
+    const unrestrictedTargetProgress = Math.min(
       geometry.totalDistanceMetersXZ,
       selectedProgress + driver.profile.pathLookaheadMetersXZ,
     );
+    const targetProgress = firstTurnProgressMetersXZ(
+      geometry,
+      selectedProgress,
+      unrestrictedTargetProgress,
+    ) ?? unrestrictedTargetProgress;
     const walkDirectionWorldXZ = quantizedDirection(
       subjectBeforeTick,
       pointAtProgress(geometry, targetProgress),
@@ -723,9 +695,10 @@ export async function runRouteRuntimeProbeV2(
       probeTick,
       initial.fixedTimeStepSeconds,
     );
+    const stationArcBeforeTick = previousArcLengthMeters;
     const station = advanceRouteRuntimeProbeSupportStationV2(
       path,
-      evidence.subjectPositionMetersXYZ,
+      evidence.characterSupport.sampledFootPositionMetersXYZ,
       previousArcLengthMeters,
       input.resolvedControlFeelProfile.walkSpeedMetersPerSecond,
       input.positionQuantizationMeters,
@@ -747,16 +720,32 @@ export async function runRouteRuntimeProbeV2(
     const isUnsupported = evidence.characterSupport.supportState === "unsupported";
     const hasExpectedSurface = !isUnsupported &&
       !surfaceMismatchV2(evidence, expectedTraversalSurfaceIds);
-    const hasArrived = hasExpectedSurface &&
-      requireFiniteRuntimeDerived(distanceXZ(subjectAfterTick, destination)) <=
-        thresholds.destinationToleranceMetersXZ;
+    const hasArrived = hasArrivedAtRouteDestinationV2({
+      hasExpectedSurface,
+      remainingArcLengthMeters: station.remainingArcLengthMeters,
+      subjectPositionMetersXZ: subjectAfterTick,
+      destinationMetersXZ: destination,
+      destinationToleranceMetersXZ: thresholds.destinationToleranceMetersXZ,
+    });
     if (hasArrived) routeProgressMetersXZ = geometry.totalDistanceMetersXZ;
 
+    const stationAdvanceMeters = Math.max(
+      0,
+      station.arcLengthMeters - stationArcBeforeTick,
+    );
+    const retainedFootTravelMeters = distanceXYZ(
+      previousEvidence.characterSupport.sampledFootPositionMetersXYZ,
+      evidence.characterSupport.sampledFootPositionMetersXYZ,
+    );
+    verifiedStationAdvanceSinceProgressBaselineMeters += Math.min(
+      stationAdvanceMeters,
+      retainedFootTravelMeters,
+    );
     if (
-      routeProgressMetersXZ - progressBaselineMetersXZ >=
+      verifiedStationAdvanceSinceProgressBaselineMeters >=
         thresholds.minimumProgressMetersXZ
     ) {
-      progressBaselineMetersXZ = routeProgressMetersXZ;
+      verifiedStationAdvanceSinceProgressBaselineMeters = 0;
       stalledDurationTicks = 0;
     } else {
       stalledDurationTicks += 1;
@@ -879,4 +868,3 @@ export async function runRouteRuntimeProbeV2(
   }
   return fail("ROUTE_RUNTIME_PROBE_RUNTIME_INVALID");
 }
-

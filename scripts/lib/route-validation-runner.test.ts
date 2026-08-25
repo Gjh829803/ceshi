@@ -104,7 +104,7 @@ describe("Route validation trusted runner", () => {
     });
 
     expect(result.report.gateResultsById["route-connectivity"]?.status).toBe(
-      "failed",
+      "incomplete",
     );
     expect(
       result.report.gateResultsById["route-runtime-conformance"]?.status,

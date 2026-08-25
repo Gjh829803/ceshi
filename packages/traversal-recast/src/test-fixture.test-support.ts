@@ -14,6 +14,7 @@ import {
   resolveTraversalLockV1,
   type CanonicalTriangleSoupV1,
   type ResolvedTraversalLockV1,
+  type ResolvedTraversalLockReceiptV1,
   type RouteBuildInputReceiptV2,
   type RouteBuildInputV2,
   type StaticColliderSourceV1,
@@ -33,11 +34,11 @@ const HASH_D =
 const HASH_E =
   "sha256:eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee" as const;
 
-export function createRecastTestEnvelopeV1(
+export function createRecastTestLockReceiptV1(
   overrides: Partial<ResolvedTraversalLockV1> = {},
-): TraversalCapabilityEnvelopeV1 {
+): ResolvedTraversalLockReceiptV1 {
   const runtimeIdentity = BABYLON_TRAVERSAL_RUNTIME_IMPLEMENTATION_IDENTITY_V1;
-  const lock = resolveTraversalLockV1({
+  return resolveTraversalLockV1({
     kind: "resolved-traversal-lock",
     schemaVersion: 1,
     subjectEntityId: "player",
@@ -70,6 +71,12 @@ export function createRecastTestEnvelopeV1(
     maxStepHeightMeters: 0.3,
     ...overrides,
   });
+}
+
+export function createRecastTestEnvelopeV1(
+  overrides: Partial<ResolvedTraversalLockV1> = {},
+): TraversalCapabilityEnvelopeV1 {
+  const lock = createRecastTestLockReceiptV1(overrides);
   return createTraversalCapabilityEnvelopeV1({
     traversalLockReceipt: lock,
     graphBuilderProfile: resolveTraversalGraphBuilderProfileV2(
@@ -248,6 +255,11 @@ export interface MultiSurfaceRouteFixtureOptionsV2 {
   readonly walkwayMaximumZ?: number;
   readonly includeLowOverhead?: boolean;
   readonly emptyTerrain?: boolean;
+  readonly ambiguousStartLayerHeightMeters?: number;
+  readonly stepPlatformGapMeters?: number;
+  readonly includeRemoteExactStepPlatformSeam?: boolean;
+  readonly hardRibbonWidthMeters?: number;
+  readonly rampEndHeightMeters?: number;
 }
 
 export function createMultiSurfaceRouteBuildInputReceiptV2(
@@ -258,34 +270,56 @@ export function createMultiSurfaceRouteBuildInputReceiptV2(
   const overlapCoplanarMeters = options.overlapCoplanarMeters ?? 0;
   const walkwayMinimumZ = options.walkwayMinimumZ ?? 1;
   const walkwayMaximumZ = options.walkwayMaximumZ ?? 5;
+  const stepPlatformGapMeters = options.stepPlatformGapMeters ?? 0;
+  const rampEndHeightMeters = options.rampEndHeightMeters ?? 0;
   const capabilityEnvelope = createRecastTestEnvelopeV1();
   const terrainSoup = mergeSoups([
     planeSoup(0, 4, 0, 6),
-    planeSoup(16 + gapMeters, 20 + gapMeters, 0, 6),
+    planeSoup(16 + gapMeters, 20 + gapMeters, 0, 6, rampEndHeightMeters),
   ]);
   const [minimumMetersXZ, maximumMetersXZ] = xzExtrema([terrainSoup]);
+  const stepSoup = boxSoup({
+    minimumX: 4,
+    maximumX: 7,
+    minimumZ: walkwayMinimumZ,
+    maximumZ: walkwayMaximumZ,
+    bottomMeters: 0,
+    topMeters: stepHeightMeters,
+  });
+  const platformSoup = boxSoup({
+    minimumX: 7 + stepPlatformGapMeters - overlapCoplanarMeters,
+    maximumX: 12,
+    minimumZ: walkwayMinimumZ,
+    maximumZ: walkwayMaximumZ,
+    bottomMeters: 0,
+    topMeters: stepHeightMeters,
+  });
   const step = collider(
     "step-box",
-    boxSoup({
-      minimumX: 4,
-      maximumX: 7,
-      minimumZ: walkwayMinimumZ,
-      maximumZ: walkwayMaximumZ,
-      bottomMeters: 0,
-      topMeters: stepHeightMeters,
-    }),
+    options.includeRemoteExactStepPlatformSeam === true
+      ? mergeSoups([stepSoup, boxSoup({
+          minimumX: 0,
+          maximumX: 1,
+          minimumZ: 6,
+          maximumZ: 7,
+          bottomMeters: 0,
+          topMeters: stepHeightMeters,
+        })])
+      : stepSoup,
     HASH_B,
   );
   const platform = collider(
     "platform-deck",
-    boxSoup({
-      minimumX: 7 - overlapCoplanarMeters,
-      maximumX: 12,
-      minimumZ: walkwayMinimumZ,
-      maximumZ: walkwayMaximumZ,
-      bottomMeters: 0,
-      topMeters: stepHeightMeters,
-    }),
+    options.includeRemoteExactStepPlatformSeam === true
+      ? mergeSoups([platformSoup, boxSoup({
+          minimumX: 1,
+          maximumX: 2,
+          minimumZ: 6,
+          maximumZ: 7,
+          bottomMeters: 0,
+          topMeters: stepHeightMeters,
+        })])
+      : platformSoup,
     HASH_C,
   );
   const ramp = collider(
@@ -296,7 +330,7 @@ export function createMultiSurfaceRouteBuildInputReceiptV2(
       minimumZ: walkwayMinimumZ,
       maximumZ: walkwayMaximumZ,
       startHeightMeters: stepHeightMeters,
-      endHeightMeters: 0,
+      endHeightMeters: rampEndHeightMeters,
     }),
     HASH_D,
   );
@@ -340,6 +374,20 @@ export function createMultiSurfaceRouteBuildInputReceiptV2(
     }),
     HASH_E,
   );
+  const startUpperDeck = options.ambiguousStartLayerHeightMeters === undefined
+    ? undefined
+    : collider(
+        "start-upper-deck",
+        boxSoup({
+          minimumX: 0,
+          maximumX: 4,
+          minimumZ: 0,
+          maximumZ: 6,
+          bottomMeters: options.ambiguousStartLayerHeightMeters - 0.2,
+          topMeters: options.ambiguousStartLayerHeightMeters,
+        }),
+        HASH_E,
+      );
   const extraUnbound = [
     ...(options.includeUnboundWall === true ? [wall] : []),
     ...(options.includeLowOverhead === true ? [overhead] : []),
@@ -348,7 +396,7 @@ export function createMultiSurfaceRouteBuildInputReceiptV2(
     extraUnbound.length > 0
       ? [platform, ramp, step, ...extraUnbound, ...dummyColliders]
       : [platform, ramp, step, ...dummyColliders]
-  ).sort((left, right) =>
+  ).concat(startUpperDeck === undefined ? [] : [startUpperDeck]).sort((left, right) =>
     left.colliderSubshapeId < right.colliderSubshapeId
       ? -1
       : left.colliderSubshapeId > right.colliderSubshapeId
@@ -366,6 +414,14 @@ export function createMultiSurfaceRouteBuildInputReceiptV2(
         ),
         surface("surface-ramp", ramp.entityId, ramp.colliderSubshapeId, HASH_C),
         surface("surface-step", step.entityId, step.colliderSubshapeId, HASH_D),
+        ...(startUpperDeck === undefined
+          ? []
+          : [surface(
+              "surface-start-upper-deck",
+              startUpperDeck.entityId,
+              startUpperDeck.colliderSubshapeId,
+              HASH_E,
+            )]),
       ];
   const dummySurfaces = dummyColliders.map((row, index) => surface(
     `surface-dummy-${String(index).padStart(2, "0")}`,
@@ -386,14 +442,16 @@ export function createMultiSurfaceRouteBuildInputReceiptV2(
   );
   const destinationX = 18 + gapMeters;
   const emptyTerrain = options.emptyTerrain === true;
-  const startPositionMetersXYZ = emptyTerrain
+  const startPositionMetersXYZ = options.ambiguousStartLayerHeightMeters !== undefined
+    ? [2, options.ambiguousStartLayerHeightMeters / 2, 3] as const
+    : emptyTerrain
     ? [8, stepHeightMeters, 3] as const
     : [2, 0, 3] as const;
   const destinationPositionMetersXYZ = emptyTerrain
     ? [11, stepHeightMeters, 3] as const
     : options.destinationOnPlatform === true
       ? [9.5, stepHeightMeters, 3] as const
-      : [destinationX, 0, 3] as const;
+      : [destinationX, rampEndHeightMeters, 3] as const;
   const ribbonEndX = emptyTerrain
     ? 12
     : options.destinationOnPlatform === true
@@ -423,7 +481,7 @@ export function createMultiSurfaceRouteBuildInputReceiptV2(
     hardRibbon: {
       routeId: "route-main",
       pointsMetersXZ: [[0, 3], [ribbonEndX, 3]] as const,
-      widthMeters: 8,
+      widthMeters: options.hardRibbonWidthMeters ?? 8,
       locomotionProfileRef: capabilityEnvelope.locomotionProfileRef,
     },
     traversalSurfaces,
@@ -456,7 +514,12 @@ export function createMultiSurfaceRouteBuildInputReceiptV2(
     }),
     surfaceArtifactHash: hashRouteSurfaceArtifactV2(draft.traversalSurfaces),
   };
-  return createRouteBuildInputReceiptV2(input);
+  return createRouteBuildInputReceiptV2({
+    input,
+    traversalLockReceipt: createRecastTestLockReceiptV1({
+      resourceLockHash: capabilityEnvelope.resourceLockHash,
+    }),
+  });
 }
 
 export function createOverlappingSurfaceRouteBuildInputReceiptV2(): RouteBuildInputReceiptV2 {

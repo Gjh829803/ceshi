@@ -16,7 +16,7 @@ import os
 import re
 import subprocess
 import time
-from datetime import UTC, datetime
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
@@ -42,7 +42,7 @@ def parse_args() -> argparse.Namespace:
 
 
 def now() -> str:
-    return datetime.now(UTC).isoformat()
+    return datetime.now(timezone.utc).isoformat()
 
 
 def sha256(path: Path) -> str:

@@ -44,7 +44,18 @@ async function listen(studio) {
   return `http://127.0.0.1:${address.port}`;
 }
 
-async function writeTrustedWhiteboxArtifacts(fakeRepoRoot, sceneId) {
+function canonicalJson(value) {
+  if (value === null || typeof value !== "object") return JSON.stringify(value);
+  if (Array.isArray(value)) return `[${value.map(canonicalJson).join(",")}]`;
+  return `{${Object.keys(value).sort().map((key) =>
+    `${JSON.stringify(key)}:${canonicalJson(value[key])}`).join(",")}}`;
+}
+
+async function writeTrustedWhiteboxArtifacts(
+  fakeRepoRoot,
+  sceneId,
+  { requiresRouteValidation = false, routeReportMode = "exact" } = {},
+) {
   const artifactRoot = path.join(fakeRepoRoot, "artifacts/scenes", sceneId);
   const triViewRoot = path.join(artifactRoot, "triviews", "player-subject");
   await mkdir(triViewRoot, { recursive: true });
@@ -63,9 +74,15 @@ async function writeTrustedWhiteboxArtifacts(fakeRepoRoot, sceneId) {
     mappings: [{ visualTargetId: "player-subject", runtimeEntityIds: ["player"] }],
   })}\n`;
   const hash = (source) => `sha256:${createHash("sha256").update(source).digest("hex")}`;
-  const executionPlanHash = `sha256:${"a".repeat(64)}`;
+  const resourceLockHash = `sha256:${"e".repeat(64)}`;
+  const layoutSolveReportHash = `sha256:${"f".repeat(64)}`;
   const sceneBriefHash = `sha256:${"b".repeat(64)}`;
-  const authoringSpecHash = `sha256:${"c".repeat(64)}`;
+  const authoringSpecHash = hash(authoring);
+  const normalizedWorldIr = {
+    kind: "normalized-world-ir",
+    schemaVersion: 4,
+  };
+  const normalizedWorldIrHash = hash(canonicalJson(normalizedWorldIr));
   const visualTarget = {
     id: "player-subject",
     visualTargetId: "player-subject",
@@ -84,6 +101,30 @@ async function writeTrustedWhiteboxArtifacts(fakeRepoRoot, sceneId) {
     mappings: [{ visualTargetId: "player-subject", runtimeEntityIds: ["player"] }],
     visualCaptureGroups: [visualTarget],
   };
+  const requiredRoutes = requiresRouteValidation
+    ? [{
+        constraintId: "player-to-goal",
+        routeId: "main-route",
+        traversingEntityId: "player",
+        startAnchorEntityId: "spawn",
+        destinationAnchorEntityId: "goal",
+      }]
+    : [];
+  const executionPlan = {
+    kind: "worldkit-execution-plan",
+    schemaVersion: 5,
+    authoringSpecHash,
+    normalizedWorldIrHash,
+    resourceLockHash,
+    layout: { layoutSolveReportHash },
+    traversal: {
+      connectivityRequirements: requiredRoutes.map((route) => ({
+        ...route,
+        kind: "connected-by-route",
+      })),
+    },
+  };
+  const executionPlanHash = hash(canonicalJson(executionPlan));
   const captureTargets = {
     kind: "worldkit-runtime-triview-manifest",
     schemaVersion: 1,
@@ -119,6 +160,7 @@ async function writeTrustedWhiteboxArtifacts(fakeRepoRoot, sceneId) {
       validatorVersion: "worldkit-builder-self-check-v4",
       sceneId,
       status: "passed",
+      requiresTrustedRouteValidation: requiresRouteValidation,
       inputs: {
         sceneBriefHash: hash(brief),
         authoringSpecHash: hash(authoring),
@@ -129,8 +171,10 @@ async function writeTrustedWhiteboxArtifacts(fakeRepoRoot, sceneId) {
     writeFile(path.join(artifactRoot, "world.build.json"), JSON.stringify({
       kind: "worldkit-build-artifact",
       schemaVersion: 4,
+      normalizedWorldIrHash,
       executionPlanHash,
-      executionPlan: { kind: "worldkit-execution-plan", schemaVersion: 5 },
+      normalizedWorldIr,
+      executionPlan,
     })),
     writeFile(path.join(artifactRoot, "opening-frame.png"), png),
     writeFile(path.join(artifactRoot, "runtime-snapshot.json"), JSON.stringify({
@@ -140,6 +184,68 @@ async function writeTrustedWhiteboxArtifacts(fakeRepoRoot, sceneId) {
     writeFile(path.join(artifactRoot, "triviews/capture-targets.json"), JSON.stringify(captureTargets)),
     writeFile(path.join(triViewRoot, "whitebox-triview.png"), png),
   ]);
+  if (requiresRouteValidation && routeReportMode !== "missing") {
+    const reportFileName = "route-validation.20260825-120000-123.json";
+    const requiredRouteSetHash = `sha256:${createHash("sha256").update(
+      canonicalJson({
+        kind: "route-validation-required-route-set",
+        schemaVersion: 1,
+        executionPlanHash,
+        requiredRoutes,
+      }),
+    ).digest("hex")}`;
+    const report = {
+      kind: "worldkit-validation-report",
+      schemaVersion: 2,
+      id: `${sceneId}.route-validation`,
+      status: routeReportMode === "failed" ? "failed" : "passed",
+      subject: {
+        kind: "world-package",
+        authoringSpecHash,
+        normalizedWorldIrHash,
+        executionPlanHash: routeReportMode === "mismatched" ? resourceLockHash : executionPlanHash,
+        resourceLockHash,
+        layoutSolveReportHash,
+      },
+      routeValidationSetReceipt: {
+        kind: "route-validation-set-receipt",
+        schemaVersion: 1,
+        authoringSpecHash,
+        normalizedWorldIrHash,
+        executionPlanHash,
+        resourceLockHash,
+        layoutSolveReportHash,
+        requiredRouteCount: requiredRoutes.length,
+        requiredRouteSetHash,
+        requiredRoutes,
+        rows: requiredRoutes.map((route) => ({
+          ...route,
+          resolvedTraversalLockHash: `sha256:${"9".repeat(64)}`,
+          connectivityStatus: "complete",
+          runtimeStatus: "complete",
+          evidenceArtifactRefs: [],
+        })),
+      },
+      gateResultsById: {
+        "route-connectivity": { status: "passed" },
+        "route-runtime-conformance": { status: "passed" },
+      },
+      evidenceArtifactsById: {},
+      diagnostics: [],
+    };
+    const reportBytes = Buffer.from(`${canonicalJson(report)}\n`);
+    await Promise.all([
+      writeFile(path.join(artifactRoot, reportFileName), reportBytes),
+      writeFile(path.join(artifactRoot, "route-validation-manifest.json"), JSON.stringify({
+        kind: "worldkit-route-validation-manifest",
+        schemaVersion: 1,
+        sceneId,
+        reportFileName,
+        reportContentHash:
+          `sha256:${createHash("sha256").update(reportBytes).digest("hex")}`,
+      })),
+    ]);
+  }
   return { artifactRoot, captureTargets, png };
 }
 
@@ -1297,6 +1403,32 @@ test("imports a complete current whitebox chain with passed trusted receipts", a
     assert.equal(payload.worlds[0].outcome, "passed");
   } finally {
     await studio.shutdown();
+  }
+});
+
+test("requires an exact same-world passed Route report when Builder declares Required Routes", async () => {
+  for (const [routeReportMode, shouldImport] of [
+    ["missing", false],
+    ["mismatched", false],
+    ["failed", false],
+    ["exact", true],
+  ]) {
+    const dataRoot = await temporaryRoot(`.test-data-route-${routeReportMode}-`);
+    const fakeRepoRoot = await temporaryRoot(`.test-repo-route-${routeReportMode}-`);
+    const sceneId = `route-${routeReportMode}-world`;
+    await writeTrustedWhiteboxArtifacts(fakeRepoRoot, sceneId, {
+      requiresRouteValidation: true,
+      routeReportMode,
+    });
+
+    const studio = createStudio({ repoRoot: fakeRepoRoot, dataRoot, autoRunJobs: false });
+    const origin = await listen(studio);
+    try {
+      const payload = await (await fetch(`${origin}/api/worlds`)).json();
+      assert.equal(payload.worlds.some((world) => world.sceneId === sceneId), shouldImport);
+    } finally {
+      await studio.shutdown();
+    }
   }
 });
 

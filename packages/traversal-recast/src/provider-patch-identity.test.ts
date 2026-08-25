@@ -123,7 +123,7 @@ describe("Recast provider lifecycle patch identity", () => {
 
   it("uses portable, version-qualified lifecycle patch identity", () => {
     expect(manifest.graphProviderAdapterResolvedVersion).toBe(
-      "0.43.1+lifecycle.1+source-areas.3+mapping.5",
+      "0.43.1+lifecycle.1+source-areas.3+mapping.6",
     );
     expect(manifest.providerPackages).toEqual(EXPECTED_PROVIDER_PACKAGES);
     expect(manifest.lifecyclePatches).toMatchObject({

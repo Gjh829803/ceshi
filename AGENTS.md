@@ -17,7 +17,7 @@ For complex SDK or runtime work, define responsibility boundaries during technic
 
 Keep architecture, cross-cutting interfaces, dependency decisions, and final integration owned by the main agent until their contracts are stable. Parallelize only ready workstreams that are materially independent and whose time savings exceed coordination costs. Do not distort the architecture, invent work, or split tightly coupled edits merely to occupy more agents. Successful worker reports are not integration proof: review the actual changes, reconcile assumptions, and run end-to-end gates after integration.
 
-Use the project-local [orchestrating-subagents skill](.agents/skills/orchestrating-subagents/SKILL.md) to construct and execute this handoff. After the host's own review, use the project-local [reviewing-with-cursor skill](.agents/skills/reviewing-with-cursor/SKILL.md) when an authenticated Cursor Agent CLI is available and an independent design, code, or completion review is valuable. Cursor remains read-only; every finding must be independently reproduced and dispositioned before any fix.
+After the host's own review, use the project-local [reviewing-with-cursor skill](.agents/skills/reviewing-with-cursor/SKILL.md) when an authenticated Cursor Agent CLI is available and an independent design, code, or completion review is valuable. Cursor remains read-only; every finding must be independently reproduced and dispositioned before any fix.
 
 ## Schema naming and AI friendliness
 

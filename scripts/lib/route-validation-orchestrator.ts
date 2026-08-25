@@ -74,6 +74,7 @@ export interface RouteValidationOrchestratorOperationsV1 {
     executionPlan: ExecutionPlanV5;
     capabilityEnvelope:
       TraversalCapabilityEnvelopeReceiptV1["envelope"];
+    traversalLockReceipt: ResolvedTraversalLockReceiptV1;
     constraintId: string;
   }>) => RouteBuildInputReceiptV2;
   readonly evaluateRoute: (input: Readonly<{
@@ -844,6 +845,7 @@ export async function orchestrateRouteValidationV1(
     const routeBuildInputReceipt = operations.createBuildInput({
       executionPlan: input.executionPlan,
       capabilityEnvelope: capabilityEnvelope.envelope,
+      traversalLockReceipt,
       constraintId: requirement.constraintId,
     });
     const routeConnectivityResult =
@@ -899,6 +901,13 @@ export async function orchestrateRouteValidationV1(
       subject: input.subject,
       dependencyReportRefs: input.dependencyReportRefs,
       validationProfile: OUTDOOR_WORLD_PACKAGE_DEV_VALIDATION_PROFILE_V2,
+      requiredRoutes: requirements.map((requirement) => ({
+        constraintId: requirement.constraintId,
+        routeId: requirement.routeId,
+        traversingEntityId: requirement.traversingEntityId,
+        startAnchorEntityId: requirement.startAnchorEntityId,
+        destinationAnchorEntityId: requirement.destinationAnchorEntityId,
+      })),
       rows: Object.freeze(rows),
     }),
     input,

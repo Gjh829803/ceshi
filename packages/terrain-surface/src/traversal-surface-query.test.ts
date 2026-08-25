@@ -572,15 +572,17 @@ describe("preflightCanonicalTraversalSurfaceOverlapsV1", () => {
   });
 
   it("preserves the canonical blocker and witness when sources are reversed", () => {
-    const alpha = horizontalSource("alpha", [0, 0], 2, 0);
-    const zeta = horizontalSource("zeta", [0, 0], 2, 0);
+    const alpha = horizontalSource("alpha", [0, 0], 2, 0.25);
+    const zeta = horizontalSource("zeta", [0, 0], 2, 0.3);
     const expected = {
       mode: "blocked",
       blocker: {
         firstTraversalSurfaceId: "alpha",
         secondTraversalSurfaceId: "zeta",
         witnessPointMetersXZ: [0, 0],
-        minimumHeightDifferenceMeters: 0,
+        firstHeightMeters: 0.25,
+        secondHeightMeters: 0.3,
+        minimumHeightDifferenceMeters: 0.04999999999999999,
       },
     };
 

@@ -45,6 +45,7 @@ import {
   validateSubjectPackageAgainstRegistry,
   type DeferredWorldkitBrowserRuntimeAdapterV1,
 } from "./worldkit-browser-api";
+import { initializePlaygroundAdapterV1 } from "./playground-adapter-startup";
 
 const HASH_A = `sha256:${"a".repeat(64)}` as const;
 const HASH_B = `sha256:${"b".repeat(64)}` as const;
@@ -1782,6 +1783,45 @@ describe("installDeferredWorldkitBrowserApi", () => {
     await expect(installation.initialization).resolves.toBeUndefined();
     expect(adapter.disposeCount).toBe(1);
     await expect(installation.dispose()).resolves.toBeUndefined();
+    expect(adapter.disposeCount).toBe(1);
+  });
+
+  it("owns the playground Adapter before visual target configuration can fail", async () => {
+    const adapter = Object.assign(adapterFixture(), {
+      configureVisualCaptureTargets: () => {
+        throw new Error("WORLDKIT_CAPTURE_TARGET_NOT_FOUND: missing");
+      },
+      mount: () => {
+        throw new Error("mount must not run");
+      },
+      render: () => {
+        throw new Error("render must not run");
+      },
+    });
+    const statusElement = { dataset: {} as Record<string, string | undefined> };
+    const installation = installDeferredWorldkitBrowserApi({
+      target: {},
+      statusElement,
+      initialize: async ({ trackAdapter }) => initializePlaygroundAdapterV1<
+        typeof adapter
+      >({
+        adapter,
+        visualCaptureTargets: [{
+          id: "missing-target",
+          visualTargetId: "missing-target",
+          runtimeEntityIds: ["missing"],
+          role: "primary-subject",
+          semanticClassId: "subject.missing",
+          identityColor: "#E85D5D",
+        }],
+        viewport: {} as HTMLElement,
+        trackAdapter,
+        setStartupStage: () => undefined,
+      }),
+    });
+
+    await expect(installation.initialization).resolves.toBeUndefined();
+    expect(statusElement.dataset.worldkitStatus).toBe("error");
     expect(adapter.disposeCount).toBe(1);
   });
 });

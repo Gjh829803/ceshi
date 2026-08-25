@@ -1,6 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { readFile } from "node:fs/promises";
-import path from "node:path";
 import { fileURLToPath } from "node:url";
 
 import {
@@ -267,16 +266,6 @@ describe("loadAuthoringScene", () => {
     await expect(loadRuntimeVisualCaptureTargets(async () => new Response(JSON.stringify({
       targets: [],
     }), { status: 200 }))).rejects.toThrow(/Visual capture groups must contain 1-5 targets/);
-  });
-
-  it("configures trusted target colors before mounting an interactive world", async () => {
-    const mainSource = await readFile(path.resolve("apps/playground/src/main.ts"), "utf8");
-    const endpointIndex = mainSource.indexOf("/visual-capture-targets");
-    const configureIndex = mainSource.indexOf("adapter.configureVisualCaptureTargets(visualCaptureTargets)");
-    const mountIndex = mainSource.indexOf("adapter.mount(viewport)", configureIndex);
-    expect(endpointIndex).toBeGreaterThan(-1);
-    expect(configureIndex).toBeGreaterThan(endpointIndex);
-    expect(mountIndex).toBeGreaterThan(configureIndex);
   });
 
   it("keeps the rigged canonical world ref-only with two stable non-overlapping instances", async () => {

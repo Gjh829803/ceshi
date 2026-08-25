@@ -18,7 +18,10 @@ import {
   interpolatePortalBoundaryPointUnitsV1,
   type RecastNavMeshAuditSnapshotV1,
 } from "./build-graph.js";
-import { createRecastTestEnvelopeV1 } from "./test-fixture.test-support.js";
+import {
+  createRecastTestEnvelopeV1,
+  createRecastTestLockReceiptV1,
+} from "./test-fixture.test-support.js";
 
 const HASH_A =
   "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa" as const;
@@ -116,7 +119,10 @@ function receipt(
     }),
     surfaceArtifactHash: hashRouteSurfaceArtifactV2(input.traversalSurfaces),
   };
-  return createRouteBuildInputReceiptV2(completeInput);
+  return createRouteBuildInputReceiptV2({
+    input: completeInput as unknown as RouteBuildInputV2,
+    traversalLockReceipt: createRecastTestLockReceiptV1({ resourceLockHash }),
+  });
 }
 
 function twoTileSnapshot(): RecastNavMeshAuditSnapshotV1 {

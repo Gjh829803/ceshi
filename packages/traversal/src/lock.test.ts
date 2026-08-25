@@ -119,6 +119,16 @@ describe("resolveTraversalLockV1", () => {
       "TRAVERSAL_LOCK_INVALID",
     );
   });
+
+  it("uses the same closed slope interval as provider admission", () => {
+    expect(resolveTraversalLockV1(validLockInput({ maxSlopeDegrees: 0 })).lock)
+      .toMatchObject({ maxSlopeDegrees: 0 });
+    expect(resolveTraversalLockV1(validLockInput({ maxSlopeDegrees: 89.999 })).lock)
+      .toMatchObject({ maxSlopeDegrees: 89.999 });
+    expect(() => resolveTraversalLockV1(
+      validLockInput({ maxSlopeDegrees: 90 }),
+    )).toThrow("must be in [0, 90)");
+  });
 });
 
 describe("assertMatchingTraversalLocksV1", () => {

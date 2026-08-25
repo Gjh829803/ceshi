@@ -311,6 +311,7 @@ function fakeRuntimePort(input: Readonly<{
   };
   let tick = 0;
   let position = [...path.orderedPathPositionsMetersXYZ[0]!] as [number, number, number];
+  const destination = path.orderedPathPositionsMetersXYZ.at(-1)!;
   const evidence = (velocity: readonly [number, number, number]) =>
     canonicalTraversalRuntimeTickEvidenceV1({
       kind: "traversal-runtime-tick-evidence",
@@ -354,16 +355,22 @@ function fakeRuntimePort(input: Readonly<{
     runFixedTick: async ({ walkDirectionWorldXZ }) => {
       tick += 1;
       if (input.stalled !== true) {
-        position = [
-          position[0] + walkDirectionWorldXZ[0] * 0.1,
-          position[1],
-          position[2] + walkDirectionWorldXZ[1] * 0.1,
-        ];
+        const destinationDistanceMetersXZ = Math.hypot(
+          destination[0] - position[0],
+          destination[2] - position[2],
+        );
+        position = destinationDistanceMetersXZ <= 0.044
+          ? [...destination]
+          : [
+              position[0] + walkDirectionWorldXZ[0] * 0.04,
+              position[1],
+              position[2] + walkDirectionWorldXZ[1] * 0.04,
+            ];
       }
       return evidence([
-        input.stalled === true ? 0 : walkDirectionWorldXZ[0] * 6,
+        input.stalled === true ? 0 : walkDirectionWorldXZ[0] * 2.4,
         0,
-        input.stalled === true ? 0 : walkDirectionWorldXZ[1] * 6,
+        input.stalled === true ? 0 : walkDirectionWorldXZ[1] * 2.4,
       ]);
     },
   };
@@ -465,7 +472,6 @@ describe("orchestrateRouteValidationV1", () => {
       subject: complete.subject,
       reportId: "route-real-pass",
     }, operationsForFixture(complete));
-
     expect(result.report.status).toBe("passed");
     expect(result.report.routeValidationSetReceipt.rows).toMatchObject([{
       constraintId: "hero-to-goal",

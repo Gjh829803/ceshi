@@ -67,55 +67,39 @@ export function readGlbAnimationClipTiming(
     throw new Error(`GLB animation clip '${clipName}' must resolve exactly once.`);
   }
   const animation = matches[0]!;
-  const inputAccessorIndexes = [...new Set(
+  const inputAccessorIndexes = new Set(
     animation.samplers?.map((sampler) => sampler.input) ?? [],
-  )];
+  );
   if (
-    inputAccessorIndexes.length === 0 ||
-    inputAccessorIndexes.some(
-      (accessorIndex) =>
-        accessorIndex === undefined || !Number.isSafeInteger(accessorIndex),
-    )
+    inputAccessorIndexes.size === 0 ||
+    [...inputAccessorIndexes].some((index) => !Number.isSafeInteger(index))
   ) {
     throw new Error(`GLB animation clip '${clipName}' must use valid timing accessors.`);
   }
-  const timingAccessors = inputAccessorIndexes.map(
-    (accessorIndex) => document.accessors![accessorIndex!],
+  const accessors = [...inputAccessorIndexes].map((index) =>
+    document.accessors![index!]
   );
-  const firstAccessor = timingAccessors[0];
-  const minimumSeconds = firstAccessor?.min?.[0];
-  const maximumSeconds = firstAccessor?.max?.[0];
+  const accessor = accessors[0];
+  const keyframeCount = accessor?.count;
+  const minimumSeconds = accessor?.min?.[0];
+  const maximumSeconds = accessor?.max?.[0];
   if (
     !Number.isFinite(minimumSeconds) ||
     !Number.isFinite(maximumSeconds) ||
     maximumSeconds! <= minimumSeconds! ||
-    timingAccessors.some(
-      (accessor) =>
-        accessor?.min?.[0] !== minimumSeconds ||
-        accessor?.max?.[0] !== maximumSeconds,
+    accessors.some((candidate) =>
+      candidate?.count !== keyframeCount ||
+      candidate?.min?.[0] !== minimumSeconds ||
+      candidate?.max?.[0] !== maximumSeconds
     )
   ) {
     throw new Error(`GLB animation clip '${clipName}' has inconsistent timing bounds.`);
   }
   const durationSeconds = maximumSeconds! - minimumSeconds!;
-  const explicitFramesPerSecond = animation.extras?.framesPerSecond;
-  const derivedSampleRates = timingAccessors.map((accessor) =>
-    Number.isSafeInteger(accessor?.count) && accessor!.count! >= 2
-      ? (accessor!.count! - 1) / durationSeconds
-      : Number.NaN
-  );
-  const derivedFramesPerSecond = derivedSampleRates[0] ?? Number.NaN;
-  if (
-    explicitFramesPerSecond === undefined &&
-    derivedSampleRates.some(
-      (sampleRate) =>
-        !Number.isFinite(sampleRate) ||
-        Math.abs(sampleRate - derivedFramesPerSecond) > 1e-9,
-    )
-  ) {
-    throw new Error(`GLB animation clip '${clipName}' has inconsistent sample rates.`);
-  }
-  const framesPerSecond = explicitFramesPerSecond ?? derivedFramesPerSecond;
+  const framesPerSecond = animation.extras?.framesPerSecond ??
+    (Number.isSafeInteger(keyframeCount) && keyframeCount! > 1
+      ? (keyframeCount! - 1) / durationSeconds
+      : Number.NaN);
   assertPositiveFinite(framesPerSecond, "GLB animation framesPerSecond");
   return {
     durationSeconds,

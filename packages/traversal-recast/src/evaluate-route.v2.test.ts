@@ -93,6 +93,26 @@ describe("evaluateRequiredRouteV2", () => {
     );
   });
 
+  it("does not use a remote exact seam to admit a local Surface gap", async () => {
+    const receipt = createMultiSurfaceRouteBuildInputReceiptV2({
+      stepPlatformGapMeters: 0.002,
+      includeRemoteExactStepPlatformSeam: true,
+      hardRibbonWidthMeters: 4,
+    });
+    const result = await evaluateRequiredRouteV2({ buildInputReceipt: receipt });
+    expect(result.status).toBe("unreachable");
+    if (result.status !== "unreachable") return;
+    expect(result.connectivityFailure.reason.kind).toBe("surface-gap-exceeded");
+  });
+
+  it("uses portal height instead of Surface centroids for a sloped seam", async () => {
+    const receipt = createMultiSurfaceRouteBuildInputReceiptV2({
+      rampEndHeightMeters: 3,
+    });
+    const result = await evaluateRequiredRouteV2({ buildInputReceipt: receipt });
+    expect(result.status).toBe("complete");
+  });
+
   it("rejects a narrow tread with a dedicated width diagnostic", async () => {
     const receipt = createMultiSurfaceRouteBuildInputReceiptV2({
       walkwayMinimumZ: 2.9,
@@ -126,7 +146,7 @@ describe("evaluateRequiredRouteV2", () => {
       destinationOnPlatform: true,
     });
     const result = await evaluateRequiredRouteV2({ buildInputReceipt: receipt });
-    expect(result.status).toBe("unreachable");
+    expect(result.status).toBe("incomplete");
     if (result.status === "complete") return;
     expect(result.graphStatus).toBe("unavailable");
     expect(result.connectivityFailure.reason.kind).toBe("surface-profile-missing");
@@ -141,13 +161,37 @@ describe("evaluateRequiredRouteV2", () => {
       overlapCoplanarMeters: 1,
     });
     const result = await evaluateRequiredRouteV2({ buildInputReceipt: receipt });
-    expect(result.status).toBe("unreachable");
+    expect(result.status).toBe("incomplete");
     if (result.status === "complete") return;
     expect(result.graphStatus).toBe("unavailable");
     expect(result.connectivityFailure.reason.kind).toBe("surface-correlation-ambiguous");
+    if (result.connectivityFailure.reason.kind === "surface-correlation-ambiguous") {
+      expect(result.connectivityFailure.reason.failurePositionMetersXYZ[1]).toBe(0.25);
+    }
     expect(
       result.connectivityFailure.relatedTraversalSurfaceIdentities.length,
     ).toBeGreaterThanOrEqual(2);
+  });
+
+  it("fails closed when the start Anchor lies between two walkable layers", async () => {
+    const receipt = createMultiSurfaceRouteBuildInputReceiptV2({
+      ambiguousStartLayerHeightMeters: 2.6,
+    });
+    const result = await evaluateRequiredRouteV2({ buildInputReceipt: receipt });
+    expect(result.status).toBe("incomplete");
+    if (result.status !== "incomplete") return;
+    expect(result.graphStatus).toBe("complete");
+    expect(result.connectivityFailure.reason.kind).toBe(
+      "start-surface-ambiguous",
+    );
+    expect(result.connectivityFailure.reason.code).toBe(
+      "ROUTE_CORRIDOR_LAYER_AMBIGUOUS",
+    );
+    expect(
+      result.connectivityFailure.relatedTraversalSurfaceIdentities.map(
+        (identity) => identity.traversalSurfaceId,
+      ),
+    ).toEqual(["surface-heightfield", "surface-start-upper-deck"]);
   });
 
   it("fails closed when 62 Traversal Surfaces exceed the locked count budget", () => {

@@ -224,9 +224,27 @@ run_builder_gates() {
   route_validation_required="$("$node_bin" -e 'const fs=require("node:fs");const report=JSON.parse(fs.readFileSync(process.argv[1],"utf8"));process.stdout.write(report.requiresTrustedRouteValidation===true?"1":"0")' "$builder_host_receipt")" &&
   if [[ "$route_validation_required" == "1" ]]; then
     echo "WORLDKIT_STAGE route-validation"
+    route_validation_report="$artifact_root/route-validation.$codex_run_nonce.json"
     "$pnpm_bin" worldkit verify route "$artifact_root/authoring.json" \
       --profile worldkit://validation-profile/outdoor-world-package-dev@1 \
-      --output "$artifact_root/route-validation.$codex_run_nonce.json" --json
+      --output "$route_validation_report" --json &&
+    "$node_bin" -e '
+      const fs = require("node:fs");
+      const path = require("node:path");
+      const crypto = require("node:crypto");
+      const [reportPath, manifestPath, sceneId] = process.argv.slice(1);
+      const bytes = fs.readFileSync(reportPath);
+      const manifest = {
+        kind: "worldkit-route-validation-manifest",
+        schemaVersion: 1,
+        sceneId,
+        reportFileName: path.basename(reportPath),
+        reportContentHash: `sha256:${crypto.createHash("sha256").update(bytes).digest("hex")}`,
+      };
+      const temporaryPath = `${manifestPath}.tmp-${process.pid}`;
+      fs.writeFileSync(temporaryPath, `${JSON.stringify(manifest)}\n`, { flag: "wx" });
+      fs.renameSync(temporaryPath, manifestPath);
+    ' "$route_validation_report" "$artifact_root/route-validation-manifest.json" "$scene_id"
   fi &&
   echo "WORLDKIT_STAGE runtime-capture" &&
   "$pnpm_bin" worldkit capture "$artifact_root/authoring.json" \
