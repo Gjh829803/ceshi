@@ -73,6 +73,24 @@ class SkillContractTest(unittest.TestCase):
         self.assertIn('display_name: "Reviewing with Cursor"', content)
         self.assertIn("$reviewing-with-cursor", content)
 
+    def test_session_operations_are_discoverable_and_define_liveness_contract(self) -> None:
+        entrypoint = (ROOT / "SKILL.md").read_text(encoding="utf-8")
+        operations = (ROOT / "references" / "session-operations.md").read_text(
+            encoding="utf-8"
+        )
+
+        self.assertIn("references/session-operations.md", entrypoint)
+        for required_term in (
+            "--output-file",
+            "exit code 3",
+            "Every 15 silent seconds",
+            "After 60 silent seconds",
+            "--resume",
+            "agent status --format json",
+            "does not implicitly create a file under",
+        ):
+            self.assertIn(required_term, operations)
+
 
 if __name__ == "__main__":
     unittest.main()

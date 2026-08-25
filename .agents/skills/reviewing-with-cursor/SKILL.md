@@ -5,60 +5,51 @@ description: Use when a non-Cursor coding agent needs an independent design, cod
 
 # Reviewing with Cursor
 
-## Overview
-
 Use Cursor as a read-only second opinion. The host reproduces findings before changing code.
 
 ## Applicability preflight
 
-Use only when Cursor is an external reviewer:
+1. Identify whether the host agent is Cursor. If it is Cursor or unknown, this is not independent.
+2. The CLI must be already installed and authenticated. Resolve `CURSOR_AGENT_BIN` or `command -v agent`; require `agent --help` to contain `Start the Cursor Agent` and `agent status` to succeed. Never install or log in automatically.
+3. Require a Git worktree because the helper uses private Git metadata.
 
-1. Identify the host from runtime context. If the host agent is Cursor or unknown, stop; self-review is not independent.
-2. The Cursor Agent CLI must be already installed and authenticated. Resolve `CURSOR_AGENT_BIN` or use `command -v agent`; require `agent --help` to contain `Start the Cursor Agent` and `agent status` to succeed. Never install, log in, or change authentication automatically.
-3. Require a Git worktree; the helper uses private Git metadata.
-
-On failure, do not run the helper. Report blocked or not applicable; use another reviewer only when authorized.
-
-If Cursor reports `Workspace Trust Required`, tell the user to trust the worktree (for example with `--trust`) after explicit approval. Never do this automatically.
+On failure, do not run the helper. If Cursor reports `Workspace Trust Required`, request explicit approval before suggesting `--trust`; never add trust automatically.
 
 ## Review modes
 
 | Role | Session policy | Purpose |
 |---|---|---|
-| `design` | Reuse per worktree and stage | Preserve design decisions |
-| `code` | New `review-id` per task or commit | Inspect the actual diff |
+| `design` | Reuse per worktree/stage | Preserve decisions |
+| `code` | New `review-id` per task/commit | Inspect the diff |
 | `final` | New `review-id` after gates | Challenge completion afresh |
 
-Do not reuse a chat across worktrees, branches, stages, or reviewer roles. Never use `--continue`; resume only an explicit chat ID.
+Never reuse a chat across worktrees, branches, stages, or roles. Never use `--continue`; use explicit `--resume` only.
 
 ## Workflow
 
-1. Self-review first. Record design, scope, commits, tests, closed findings, and prohibited changes.
-2. Read [references/review-prompts.md](references/review-prompts.md); write the applicable prompt to a temporary file.
-3. Resolve this skill directory, then run:
+1. Self-review. Record scope, commits, tests, closed findings, and prohibited changes.
+2. Read [review-prompts.md](references/review-prompts.md) and write the smallest applicable prompt.
+3. Run:
 
 ```bash
 python3 <skill-dir>/scripts/cursor_review_session.py run \
-  --workspace <worktree> \
-  --stage <stage-id> \
-  --role design \
-  --prompt-file <prompt.md>
+  --workspace <worktree> --stage <stage-id> --role design \
+  --prompt-file <prompt.md> --output-file <report.md>
 ```
 
-For `code` and `final`, also pass a stable, unique `--review-id`, such as the task ID plus head SHA. The default model is `cursor-grok-4.6-xhigh`.
+For `code` and `final`, add a stable unique `--review-id`. `--output-file` is optional and atomic. Cursor stays read-only through `--mode ask`; never add `--force` or `--yolo`.
 
-4. Cursor must stay read-only through `--mode ask`. Do not add `--force` or `--yolo`.
-5. Mark each finding `confirmed`, `rejected`, or `deferred`. Confirm defects with reproduction or source/contract evidence. Fix only confirmed in-scope defects, run gates, then re-review with the same ID.
-6. Before claiming a stage complete, use a new `final` review ID and reconcile its findings independently.
+4. Disposition every finding as `confirmed`, `rejected`, or `deferred`. Reproduce confirmed defects, fix only in-scope defects, rerun invalidated gates, then use the narrow follow-up prompt with the same ID.
+5. Before completion, use a fresh `final` review ID and independently reconcile its findings.
 
-The helper stores chat IDs in the worktree's private Git metadata, uses explicit `--resume`, and serializes access to each chat. `--dry-run` prints commands without invoking Cursor or writing state.
+The helper fingerprints review inputs and rejects verdicts after tree drift. It also monitors silent runs and can query live progress through the same chat. Read [session-operations.md](references/session-operations.md) for reports, liveness checks, `inspect`, and recovery.
 
 ## Required output contract
 
-Ask Cursor for a `GO` or `NO-GO` verdict followed by P0-P3 findings. Each finding must include file/line, violated contract, evidence, trigger or reproduction, impact, and a focused test. No finding is accepted merely because Cursor reported it.
+Any unresolved P0/P1 or unmet required gate means `NO-GO`. `GO` may retain only explicitly non-blocking, tracked P2/P3 items. Each finding includes file/line, contract, evidence, reproduction, impact, and focused test. Cursor's claim alone is not proof.
 
 ## Stop conditions
 
-- Missing `agent`, authentication, authoritative design, or review range: report the blocker; do not invent evidence.
-- Cursor proposes edits outside scope: reject or defer them explicitly.
-- A long-lived design chat cites stale code: provide current commits and diff; rotate the stage chat if it remains confused.
+- Missing CLI, authentication, authority, or review range: report the blocker.
+- Out-of-scope edits: reject or defer them.
+- Stale long-lived chat: provide current commits/diff; rotate it if confusion remains.

@@ -20,7 +20,8 @@ Check ownership boundaries, public contracts, failure semantics, lifecycle,
 extensibility, determinism, and whether implementation evidence can prove the
 design. Verify claims against the current tree and installed dependency source.
 
-Return DESIGN GO or DESIGN NO-GO. Report only reproducible P0-P3 findings.
+Return DESIGN GO or DESIGN NO-GO. Any unresolved P0/P1 means NO-GO; GO may
+retain only explicitly non-blocking, tracked P2/P3 items. Report only reproducible P0-P3 findings.
 For each finding include file/line, violated contract, evidence, trigger or
 reproduction, impact, and required test. Separate required corrections from
 optional suggestions. Do not repeat a closed finding unless current evidence
@@ -47,7 +48,8 @@ contracts, state ownership, partial failure and cleanup, concurrency, reset/retr
 boundary conditions, dependency-version assumptions, and adversarial test gaps.
 Ignore formatting-only preferences.
 
-Return CODE GO or CODE NO-GO. Report only reproducible P0-P3 findings. Each
+Return CODE GO or CODE NO-GO. Any unresolved P0/P1 means NO-GO; GO may retain
+only explicitly non-blocking, tracked P2/P3 items. Report only reproducible P0-P3 findings. Each
 finding must include file/line, violated contract, evidence, trigger or
 reproduction, impact, and a focused regression test. State "No findings" when
 the evidence supports it.
@@ -74,7 +76,24 @@ behavior. Look for false-green tests, stale documentation, unowned state,
 incomplete cleanup, and claims stronger than the evidence.
 
 Return FINAL GO or FINAL NO-GO, then reproducible P0-P3 findings using the same
-evidence fields. A NO-GO must name the exact unmet gate.
+evidence fields. Any unresolved P0/P1 or unmet required gate means FINAL NO-GO;
+FINAL GO may retain only explicitly non-blocking, tracked P2/P3 items.
+```
+
+## Narrow follow-up
+
+```text
+Continue the existing review. Do not modify files or rescan unrelated code.
+
+Review ID: [same review ID]
+Prior findings: [IDs and prior disposition]
+Changes since review: [small exact file/behavior list]
+Fresh evidence: [only invalidated gates rerun]
+
+Verify only whether these changes close the listed findings without introducing
+an adjacent regression. Return changed dispositions, any new reproducible P0-P3
+finding in the standard evidence shape, and the role-appropriate GO/NO-GO verdict.
+Any unresolved P0/P1 or unmet required gate means NO-GO.
 ```
 
 ## Host disposition record
