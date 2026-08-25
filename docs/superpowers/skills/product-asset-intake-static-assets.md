@@ -150,18 +150,17 @@ URI/package-path 映射，并扩展或由新 batch map 合成第四项；为该 
 发布前验证 AI 发现面：
 
 ```bash
-pnpm exec tsx --eval 'import { builtInSubjectResourceRegistry } from "@whitebox-world/subject-registry"; console.log(builtInSubjectResourceRegistry.listCapabilitySubjectDefinitions().map((definition) => definition.resourceRef).filter((resourceRef) => resourceRef.startsWith("worldkit://subject-definition/xier120.")));'
+pnpm exec tsx --eval 'import { builtInSubjectResourceRegistry } from "@whitebox-world/subject-registry"; console.log(builtInSubjectResourceRegistry.listDiscoverableResources({ kind: "subject-definition" }).map((definition) => definition.resourceRef).filter((resourceRef) => resourceRef.startsWith("worldkit://subject-definition/xier120.")));'
+pnpm worldkit registry list --kind subject-definition --json
 pnpm worldkit registry describe \
   --resource-ref worldkit://subject-definition/xier120.biped-animal@1 --json
 ```
 
 batch verifier 还要断言
-`builtInSubjectResourceRegistry.listCapabilitySubjectDefinitions()` 含同一
-`subjectDefinitionRef`。Capability Catalog 是 capability-driven Authoring 的实际选择面；
-当前 `pnpm worldkit registry list --kind subject-definition --json` 只调用
-`listSubjectDefinitions()` 的 legacy CLI view，不能列出 xier120 schema-v3 静态
-Definitions。不要把该 CLI list 的通过当作 capability discovery；在拿到精确 Ref 后，
-`worldkit registry describe` 仍应通过。
+`builtInSubjectResourceRegistry.listDiscoverableResources({ kind: "subject-definition" })`
+含同一 `subjectDefinitionRef`。CLI list、CLI describe 与 capability-driven Authoring
+必须消费同一个 Registry facade；list 中发现的每个 Ref 都必须由 `resolveResource()` 与
+`worldkit registry describe` identity-resolve。
 
 Capability Catalog discovery 和已知 Ref 的直接使用也不等于 public Browser selector
 可见。`apps/playground/src/worldkit-browser-api.ts` 的 `listSubjectDefinitions()` 从
@@ -214,6 +213,6 @@ schema-v4 fixture 的 `pnpm worldkit run`，确认 preflight 和 Host 都成功�
 | 反射后黑面、内翻或 normals 错误 | 回到仓库外转换流程修正 winding/normals，产生新的 GLB，并重新执行完整 admission |
 | 资产横放、倒置、脚悬空或正面错误 | 回到仓库外转换流程；明确 scale、旋转、up、forward 和 support-center，不用世界 Transform 补偿 |
 | Registry 可 describe 但 Playground 或 `worldkit run` 解析失败 | 同时检查三个 Playground maps 与 `DEFAULT_WORLD_PACKAGE_RESOURCE_MAPPING_BY_REF_V1`；确认 URL 在 `/subject-assets/` 下、package path 唯一，且四面读取的 bytes/Hash 一致 |
-| Capability Catalog 能发现 Definition，Browser selector 却不显示 | 先区分 direct/capability use 与 public-default policy。检查 `listCapabilitySubjectDefinitions()`；不要自动修改 `listPublicDefaults()`，除非公开产品目录策略已批准 |
+| Registry 能发现 Definition，Browser selector 却不显示 | 先区分 direct/capability use 与 public-default policy。检查 `listDiscoverableResources({ kind: "subject-definition" })`；不要自动修改 `listPublicDefaults()`，除非公开产品目录策略已批准 |
 | 资产外观像车、飞行器或带骑手 | 保持 internal/static ground 范围；若产品需要 vehicle、flight、mount 或 NPC，提交 Capability Gap，不虚构行为 |
 | 想把一个未验证目录批量发布 | 按每资产 inventory、Registry Ref、Resolver 和三类证据收齐；抽样不能替代 30 个资产的视觉朝向 QA |

@@ -73,10 +73,11 @@ Profile/Adapter 评审。
 ```
 
 Capability-driven 调用方必须先在
-`builtInSubjectResourceRegistry.listCapabilitySubjectDefinitions()` 中发现同一 Ref，再读取
-精确资源。当前 `worldkit registry list --kind subject-definition` 是 legacy CLI view，
-不列出 xier120 的 schema-v3 Capability Definitions；它不能作为静态 Subject 的发现面。
-完整的 capability discovery 命令在 [批量 Static GLB 指南](./product-asset-intake-static-assets.md)。
+`builtInSubjectResourceRegistry.listDiscoverableResources({ kind: "subject-definition" })`
+中发现同一 Ref，再通过 `resolveResource(resourceRef)` 读取精确资源。CLI 与 Browser/Host
+共用这一个 Registry discovery authority，因此
+`worldkit registry list --kind subject-definition --json` 也必须列出同一 Definition。
+完整的 discovery 命令在 [批量 Static GLB 指南](./product-asset-intake-static-assets.md)。
 已知 Ref 可以用 CLI describe 核对：
 
 ```bash
