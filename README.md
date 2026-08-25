@@ -382,10 +382,24 @@ Pose 配置及 Registry 锁定，才能成为可运行的主体资产。
 
 ## 验证
 
+常规只读基础门禁按受影响输入选择：
+
 ```bash
 pnpm typecheck
 pnpm test
 pnpm build
+```
+
+Studio 和 LWDP 使用独立 Node Test Runner，不在根 Vitest 内：
+
+```bash
+pnpm test:studio
+pnpm test:lwdp-client
+```
+
+需要证明真实 Browser/Capability 接线时，再选择直接相关的 verifier：
+
+```bash
 pnpm verify:canonical
 pnpm verify:rigged-subject
 pnpm verify:g-bot-subject
@@ -398,10 +412,15 @@ pnpm verify:route-r0-contract
 这是一张完整能力覆盖表，不要求每次小改都机械重跑全部命令。先跑受影响的定向回归，
 在最终待合入树上把相关完整门禁各跑一次；只要后续改动没有触及某条门禁的输入或承诺，
 它的通过证据可以复用。根 `pnpm test` 已包含 `pnpm test:scenes` 的两个 Vitest 文件，
-不要连续重复执行；`pnpm test:studio` 使用独立 Node Test Runner，需要 Studio 证据时单独跑。
+不要连续重复执行；Studio/LWDP、未聚合的 Node/Python/Site tests 需要按改动范围单独跑。
 生产构建、Browser/Capability verifier、截图检查和人工交互属于不同证据层，不能由单元
 测试替代。详细失效规则见
 [`runtime-deep-review-checklist.md`](docs/reviews/runtime-deep-review-checklist.md#6-required-completion-gates)。
+
+当前 `verify:canonical`、`verify:placement-layout`、`verify:rigged-subject` 和
+`verify:g-bot-subject` 的成功路径会 promotion tracked golden。它们在 check/update 拆分前不是
+只读审查命令：只读审查应复用 exact-input evidence 或明确记为未跑，不能运行后丢弃写入；只有
+得到更新制品授权的实施变更才可以运行并审查其 diff。
 
 `verify:canonical` 会在真实 Chromium 中验证 Canonical Build Artifact、
 Babylon/Havok、墙体碰撞、水域切换、两个 Package Subject 独立控制、截图、

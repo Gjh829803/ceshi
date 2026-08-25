@@ -68,19 +68,37 @@ Evidence reports must name the exact commands, test counts, artifacts inspected,
 
 Run the focused reproducer first, then run each relevant full gate once on the final tree. Reuse a passing result while its inputs are unchanged; do not use a narrower alias to repeat coverage already provided by a broader command. In particular, root `pnpm test` already discovers the two files behind `pnpm test:scenes`. `pnpm test:studio` is separate because Studio uses Node's test runner, and Browser verifiers, rendered inspection, manual interaction, and production builds prove different evidence layers.
 
-For changes touching the canonical Babylon runtime, select from this default closure according to the affected contracts:
+For changes touching the canonical Babylon runtime, select from this read-only base closure according to the affected contracts:
 
 ```bash
 pnpm typecheck
 pnpm test
 pnpm build
+```
+
+Studio and LWDP use separate Node test lanes and are added only when their inputs are affected:
+
+```bash
+pnpm test:studio
+pnpm test:lwdp-client
+```
+
+Browser and capability verification is a separate evidence layer. The current coverage map includes:
+
+```bash
 pnpm verify:canonical
 pnpm verify:placement-layout
 pnpm verify:rigged-subject
 pnpm verify:g-bot-subject
 ```
 
-The list is a coverage map, not an instruction to rerun every command after every edit. Evidence becomes stale only when a subsequent change can affect that command's inputs or claim:
+The verifier list is not a blanket instruction for a read-only review. At the time of this checklist,
+those four commands can promote tracked golden artifacts on their success path. Until each producer has a
+separate read-only `--check` and explicit update command, reviewers must either reuse exact-input evidence or
+record the verifier as not run; they must not run it and then discard its writes. An authorized implementation
+session may update artifacts only when that update is part of the requested change and the resulting diff is reviewed.
+
+These lists are coverage maps, not an instruction to rerun every command after every edit. Evidence becomes stale only when a subsequent change can affect that command's inputs or claim:
 
 - runtime or shared-contract changes: focused regression, `typecheck`, root `test`, `build`, and the directly affected Browser/capability verifier;
 - verifier, fixture, or capture changes: that verifier and its focused tests; add `build` only when shipped code or bundling changed;

@@ -79,6 +79,41 @@
 - Blocking Gate 与 Required Metric 一票否决，不被总体分数或 advisory 项抵消；发现任何「总分掩盖关键失败」的写法即缺陷。
 - 审查声明跑过的每条命令附 exit code；环境缺依赖导致未跑的门禁，明说「未跑及原因」，不得含糊为「应该能过」。
 
+### D6.1 变更感知的门禁选择与证据复用
+
+先建立「改动/结论 → 输入 → 门禁」映射，再运行命令。门禁数量不是审查质量指标；目标是让每项
+受影响的承诺在最终树上得到一次足够强、可追溯且不改写被审对象的证据。
+
+1. 先跑失败复现或最窄的受影响回归；确认方向后，在最终待审树上把每个相关完整门禁各跑一次。
+2. 同一树上，宽门禁已经明确包含窄门禁时不重复执行。当前根 `pnpm test` 已收集
+   `pnpm test:scenes` 的两个 Vitest 文件；不得把别名的二次通过计成新增证据。
+3. 不得反向假设聚合覆盖。当前 `pnpm test` 只收 `.test.ts`；`pnpm test:studio`、
+   `pnpm test:lwdp-client`、生产 build、Site/Node/Python 检查、Browser verifier、rendered visual
+   与 manual interaction 都是独立证据层。审查触及相应输入时必须直接运行对应 lane，或明确记为未跑。
+4. 后续改动只让它可能影响的证据失效：Runtime/shared contract 改动会失效相关回归、typecheck、
+   root test、build 和直接相关的 capability evidence；构建或依赖改动只失效受影响 build；纯文档修订
+   只需重做 diff、链接和 claim 对拍。跨域公共合同、共享 Runtime owner 或依赖图改变时，才重新打开
+   整个相关 closure。
+5. 复用证据必须记录来源 commit/tree、命令、结果、时间和适用输入。只有被审产品树与该证据输入
+   相同、且其结论范围没有扩大时才能复用；旧 review 的一句「已通过」不是可复用证据。
+6. 审查命令必须只读。任何成功路径会生成、替换或格式化 tracked 文件的命令，都属于 update-capable
+   producer，不得在只读审查中当作 check 运行。先要求 `--check` / 临时目录 byte-compare / 独立
+   `*:update` 权限；在拆分完成前，只能复用 exact-input 证据或如实记为未跑，不能运行后清掉 diff。
+7. 每组自动门禁结束后检查 tracked worktree；完成前执行 `git diff --check` 和 clean-tree assertion。
+   审查前已存在的用户文件不纳入证据，也不得为了得到 clean result 而删除或覆盖。
+
+最小命令矩阵如下；按受影响输入选行，不机械全跑：
+
+| Lane | 当前入口 | 证明范围 / 不覆盖范围 |
+|---|---|---|
+| Type / source contract | `pnpm typecheck` | TypeScript 输入；不证明 Runtime、Node `.mjs` 或视觉行为 |
+| Root unit / contract | `pnpm test` | 根 Vitest `.test.ts`，已包含 scenes；不包含独立 Node/Python/Site tests |
+| Studio | `pnpm test:studio` | Studio Node tests；不被 root Vitest 包含 |
+| LWDP client | `pnpm test:lwdp-client` | LWDP Node tests；不被 root Vitest 包含 |
+| Production bundle | `pnpm build` 或受影响 app 的 build | bundling 与 shipped import graph；不证明交互/像素 |
+| Browser / capability | 直接相关 verifier | 真实 Host/Runtime 接线；若命令会更新 tracked artifact，按上面的只读规则处置 |
+| Visual / interaction | 截图检查、manual interaction | 可见结果或手感；不能由单元测试、hash 或 smoke 替代 |
+
 ## 3. 输出格式
 
 产出一份 `docs/reviews/YYYY-MM-DD-<subject>-review.md`（模式 B 若派发方要求，可输出为 PR 评论，结构不变）。findings 必须自包含，能被另一个模型在不读本会话上下文的情况下对抗复核。
