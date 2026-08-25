@@ -32,40 +32,8 @@ function family(
 describe("verify:unreleased-clean-break", () => {
   const cleanupPaths: string[] = [];
 
-  afterEach(async () => {
-    await Promise.all(cleanupPaths.splice(0).map((target) => rm(target, {
-      force: true,
-      recursive: true,
-    })));
-  });
-
-  it("discovers a forbidden consumer added to an unlisted file under a scan root", async () => {
-    const injectedDirectory = path.join(
-      repositoryRoot,
-      "packages",
-      ".clean-break-adversarial-fixture",
-    );
-    const injectedPath = path.join(injectedDirectory, "new-consumer.ts");
-    cleanupPaths.push(injectedDirectory);
-    await mkdir(injectedDirectory, { recursive: true });
-    await writeFile(
-      injectedPath,
-      `export type Injected = ${token(["Execution", "Plan", "V4"])};\n`,
-      "utf8",
-    );
-
-    const report = await scanUnreleasedCleanBreak(repositoryRoot);
-    const matches = family(report, "superseded-top-level-contracts").matchesByPath;
-
-    expect(matches).toContainEqual({
-      path: "packages/.clean-break-adversarial-fixture/new-consumer.ts",
-      matches: [{ line: 1, value: token(["Execution", "Plan", "V4"]) }],
-    });
-    expect(report.ok).toBe(false);
-  });
-
-  it("passes the final zero contract while reporting current authority suffixes", async () => {
-    const fixtureRoot = await mkdtemp(path.join(os.tmpdir(), "clean-break-zero-"));
+  async function createFixtureRoot(prefix: string): Promise<string> {
+    const fixtureRoot = await mkdtemp(path.join(os.tmpdir(), prefix));
     cleanupPaths.push(fixtureRoot);
     for (const root of CLEAN_BREAK_SCAN_ROOTS) {
       const target = path.join(fixtureRoot, root);
@@ -76,6 +44,43 @@ describe("verify:unreleased-clean-break", () => {
         await mkdir(target, { recursive: true });
       }
     }
+    return fixtureRoot;
+  }
+
+  afterEach(async () => {
+    await Promise.all(cleanupPaths.splice(0).map((target) => rm(target, {
+      force: true,
+      recursive: true,
+    })));
+  });
+
+  it("discovers a forbidden consumer added to an unlisted file under a scan root", async () => {
+    const fixtureRoot = await createFixtureRoot("clean-break-adversarial-");
+    const injectedDirectory = path.join(
+      fixtureRoot,
+      "packages",
+      ".clean-break-adversarial-fixture",
+    );
+    const injectedPath = path.join(injectedDirectory, "new-consumer.ts");
+    await mkdir(injectedDirectory, { recursive: true });
+    await writeFile(
+      injectedPath,
+      `export type Injected = ${token(["Execution", "Plan", "V4"])};\n`,
+      "utf8",
+    );
+
+    const report = await scanUnreleasedCleanBreak(fixtureRoot);
+    const matches = family(report, "superseded-top-level-contracts").matchesByPath;
+
+    expect(matches).toContainEqual({
+      path: "packages/.clean-break-adversarial-fixture/new-consumer.ts",
+      matches: [{ line: 1, value: token(["Execution", "Plan", "V4"]) }],
+    });
+    expect(report.ok).toBe(false);
+  });
+
+  it("passes the final zero contract while reporting current authority suffixes", async () => {
+    const fixtureRoot = await createFixtureRoot("clean-break-zero-");
     await writeFile(
       path.join(fixtureRoot, "packages", "current.ts"),
       [
