@@ -139,7 +139,7 @@ async function writeTrustedWhiteboxArtifacts(
     writeFile(path.join(artifactRoot, "planner-self-check.json"), JSON.stringify({
       kind: "worldkit-planner-self-check",
       schemaVersion: 1,
-      validatorVersion: "worldkit-planner-self-check-v1",
+      validatorVersion: "worldkit-planner-self-check-v2",
       sceneId,
       status: "passed",
       inputs: { sceneBriefHash: hash(brief) },

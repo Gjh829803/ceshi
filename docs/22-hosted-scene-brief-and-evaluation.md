@@ -50,7 +50,7 @@ The Builder maps each `visualTargetId` to one or more runtime entity IDs. The tr
 
 ## Portable self-checkers
 
-Planner and Builder skills include single-file checkers for isolated cloud workspaces. They are generated from repository source, not manually maintained as a second compiler. `pnpm generate:agent-self-check` is the explicit tracked-output producer; `pnpm check:agent-self-check` builds into a temporary directory and byte-compares without changing the repository. The parity test executes the committed bundle against source behavior without rebuilding it first.
+Planner and Builder skills include single-file checkers for isolated cloud workspaces. They are generated together from repository source, not manually maintained as second compilers. The Planner source directly adapts `parseSceneBriefV1` diagnostics while its receipt intentionally hashes the raw Scene Brief bytes consumed by Studio. `pnpm generate:agent-self-check` is the only explicit producer for both tracked bundles; `pnpm check:agent-self-check` builds both into a temporary skill tree and byte-compares without changing the repository. Parity coverage executes source and committed bundles against valid, duplicate-target, second-Subject and overlong-movement fixtures without rebuilding the committed bundle first.
 
 The Builder checker covers current Authoring V4 parsing, layout, normalization, IR V4 / ExecutionPlan V5 compilation, Registry closure, Gameplay Bootstrap construction, resource budgets, spawn support and implementation-map integrity. `maxVertices`, `maxTriangles`, and `maxColliders` are all hard compiler gates.
 
@@ -76,6 +76,8 @@ The formal production authoring lane remains outdoor heightfield worlds with cur
 ## Commands
 
 ```bash
+pnpm generate:agent-self-check
+pnpm check:agent-self-check
 pnpm agent:world -- --scene-id <scene-id> --image /absolute/reference.png "<request>"
 pnpm agent:world:plan -- --scene-id <scene-id> --image /absolute/reference.png "<request>"
 pnpm agent:world:build -- --scene-id <scene-id>

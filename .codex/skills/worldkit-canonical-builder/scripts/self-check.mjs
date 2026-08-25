@@ -1426,6 +1426,275 @@ function queryLockedColliderSupportHeightMeters(collider, pointMetersXZ) {
       );
   }
 }
+const DEFAULT_HUMANOID_TRAVERSAL = Object.freeze({
+  maxSlopeClimbDegrees: 42,
+  minSlopeSlideDegrees: 48,
+  autostepHeight: 0.35,
+  snapToGroundDistance: 0.3
+});
+const DEFAULT_RADIUS = 0.35;
+const DEFAULT_HEIGHT = 1.8;
+const EPSILON$1 = 1e-5;
+function isFiniteVector(value) {
+  return value.every(Number.isFinite);
+}
+function isInsideBounds(point, bounds) {
+  return point.every(
+    (axis, index) => axis >= bounds.min[index] && axis <= bounds.max[index]
+  );
+}
+function overlaps(a, b) {
+  return a.min[0] < b.max[0] - EPSILON$1 && a.max[0] > b.min[0] + EPSILON$1 && a.min[1] < b.max[1] - EPSILON$1 && a.max[1] > b.min[1] + EPSILON$1 && a.min[2] < b.max[2] - EPSILON$1 && a.max[2] > b.min[2] + EPSILON$1;
+}
+function intervalsStrictlyOverlap(leftMinimum, leftMaximum, rightMinimum, rightMaximum) {
+  return leftMinimum < rightMaximum - EPSILON$1 && leftMaximum > rightMinimum + EPSILON$1;
+}
+function playerBounds(position, radius, height) {
+  return {
+    min: [position[0] - radius, position[1], position[2] - radius],
+    max: [position[0] + radius, position[1] + height, position[2] + radius]
+  };
+}
+function pointOnSegment$1(point, from, to) {
+  const edgeX = to[0] - from[0];
+  const edgeZ = to[1] - from[1];
+  const pointX = point[0] - from[0];
+  const pointZ = point[1] - from[1];
+  const cross2 = edgeX * pointZ - edgeZ * pointX;
+  if (Math.abs(cross2) > EPSILON$1) return false;
+  const dot2 = pointX * edgeX + pointZ * edgeZ;
+  return dot2 >= -EPSILON$1 && dot2 <= edgeX * edgeX + edgeZ * edgeZ + EPSILON$1;
+}
+function footprintContains(boundary, point) {
+  if (boundary.kind === "circle") {
+    return Math.hypot(
+      point[0] - boundary.centerMetersXZ[0],
+      point[1] - boundary.centerMetersXZ[1]
+    ) <= boundary.radiusMeters + EPSILON$1;
+  }
+  if (boundary.kind === "ellipse") {
+    const x = (point[0] - boundary.centerMetersXZ[0]) / boundary.radiusMetersXZ[0];
+    const z = (point[1] - boundary.centerMetersXZ[1]) / boundary.radiusMetersXZ[1];
+    return x * x + z * z <= 1 + EPSILON$1;
+  }
+  let inside = false;
+  for (let current = 0, previous = boundary.pointsMetersXZ.length - 1; current < boundary.pointsMetersXZ.length; previous = current, current += 1) {
+    const from = boundary.pointsMetersXZ[previous];
+    const to = boundary.pointsMetersXZ[current];
+    if (from === void 0 || to === void 0) continue;
+    if (pointOnSegment$1(point, from, to)) return true;
+    const crosses = to[1] > point[1] !== from[1] > point[1] && point[0] < (from[0] - to[0]) * (point[1] - to[1]) / (from[1] - to[1]) + to[0];
+    if (crosses) inside = !inside;
+  }
+  return inside;
+}
+function pointToSegmentDistanceSquared(point, from, to) {
+  const edgeX = to[0] - from[0];
+  const edgeZ = to[1] - from[1];
+  const lengthSquared = edgeX * edgeX + edgeZ * edgeZ;
+  if (lengthSquared === 0) {
+    return (point[0] - from[0]) ** 2 + (point[1] - from[1]) ** 2;
+  }
+  const projection = Math.max(0, Math.min(
+    1,
+    ((point[0] - from[0]) * edgeX + (point[1] - from[1]) * edgeZ) / lengthSquared
+  ));
+  const closestX = from[0] + projection * edgeX;
+  const closestZ = from[1] + projection * edgeZ;
+  return (point[0] - closestX) ** 2 + (point[1] - closestZ) ** 2;
+}
+function pointToEllipseDistanceSquared(point, center, radii) {
+  const x = Math.abs(point[0] - center[0]);
+  const z = Math.abs(point[1] - center[1]);
+  const radiusX = radii[0];
+  const radiusZ = radii[1];
+  const normalizedDistanceSquared = (x / radiusX) ** 2 + (z / radiusZ) ** 2;
+  if (normalizedDistanceSquared <= 1) return 0;
+  const equation = (lambda) => (radiusX * x / (lambda + radiusX * radiusX)) ** 2 + (radiusZ * z / (lambda + radiusZ * radiusZ)) ** 2 - 1;
+  let lower = 0;
+  let upper = Math.max(
+    1,
+    radiusX * radiusX,
+    radiusZ * radiusZ,
+    radiusX * x,
+    radiusZ * z
+  );
+  while (equation(upper) > 0) upper *= 2;
+  for (let iteration = 0; iteration < 64; iteration += 1) {
+    const middle = (lower + upper) / 2;
+    if (equation(middle) > 0) lower = middle;
+    else upper = middle;
+  }
+  const closestX = radiusX * radiusX * x / (upper + radiusX * radiusX);
+  const closestZ = radiusZ * radiusZ * z / (upper + radiusZ * radiusZ);
+  return (x - closestX) ** 2 + (z - closestZ) ** 2;
+}
+function discIntersectsFootprint(boundary, center, radius) {
+  const maximumDistanceSquared = (radius + EPSILON$1) ** 2;
+  if (boundary.kind === "circle") {
+    return Math.hypot(
+      center[0] - boundary.centerMetersXZ[0],
+      center[1] - boundary.centerMetersXZ[1]
+    ) <= boundary.radiusMeters + radius + EPSILON$1;
+  }
+  if (boundary.kind === "ellipse") {
+    return pointToEllipseDistanceSquared(
+      center,
+      boundary.centerMetersXZ,
+      boundary.radiusMetersXZ
+    ) <= maximumDistanceSquared;
+  }
+  if (footprintContains(boundary, center)) return true;
+  return boundary.pointsMetersXZ.some((from, index) => {
+    const to = boundary.pointsMetersXZ[(index + 1) % boundary.pointsMetersXZ.length];
+    return to !== void 0 && pointToSegmentDistanceSquared(center, from, to) <= maximumDistanceSquared;
+  });
+}
+function validateSpawnSafety(input) {
+  const diagnostics = [];
+  const radius = input.capsule?.radius ?? DEFAULT_RADIUS;
+  const height = input.capsule?.height ?? DEFAULT_HEIGHT;
+  if (!isFiniteVector(input.position) || !Number.isFinite(radius) || !Number.isFinite(height)) {
+    return [
+      {
+        severity: "error",
+        code: "SPAWN_NOT_FINITE",
+        message: `Spawn ${input.entityId} contains a non-finite position or capsule dimension.`,
+        entityId: input.entityId
+      }
+    ];
+  }
+  if (radius <= 0 || height <= 0) {
+    diagnostics.push({
+      severity: "error",
+      code: "SPAWN_INVALID_CAPSULE",
+      message: `Spawn ${input.entityId} requires positive capsule dimensions.`,
+      entityId: input.entityId,
+      suggestions: ["Use the humanoid SubjectKit default capsule dimensions."]
+    });
+    return diagnostics;
+  }
+  if (input.worldBounds !== void 0) {
+    const head = [
+      input.position[0],
+      input.position[1] + height,
+      input.position[2]
+    ];
+    if (!isInsideBounds(input.position, input.worldBounds) || !isInsideBounds(head, input.worldBounds)) {
+      diagnostics.push({
+        severity: "error",
+        code: "SPAWN_OUTSIDE_WORLD",
+        message: `Spawn ${input.entityId} is outside the configured world bounds.`,
+        entityId: input.entityId,
+        suggestions: ["Move the spawn point inside the playable bounds."]
+      });
+    }
+  }
+  const bounds = playerBounds(input.position, radius, height);
+  for (const collider of input.colliders ?? []) {
+    if (collider.isTrigger === true || !overlaps(bounds, collider.bounds)) continue;
+    diagnostics.push({
+      severity: "error",
+      code: "SPAWN_INTERSECTS_COLLIDER",
+      message: `Spawn ${input.entityId} intersects collider${collider.entityId === void 0 ? "" : ` ${collider.entityId}`}.`,
+      entityId: input.entityId,
+      ...collider.featureId === void 0 ? {} : { featureId: collider.featureId },
+      suggestions: ["Move the spawn point or resize the blocking collider."]
+    });
+  }
+  const positionXZ = [input.position[0], input.position[2]];
+  for (const water of input.waterSurfaces ?? []) {
+    const subjectMinimum = input.position[1];
+    const subjectMaximum = input.position[1] + height;
+    const waterMinimum = water.waterLevelMeters - water.depthMeters;
+    if (water.traversalMode !== "blocked" || !discIntersectsFootprint(water.boundary, positionXZ, radius) || !intervalsStrictlyOverlap(
+      subjectMinimum,
+      subjectMaximum,
+      waterMinimum,
+      water.waterLevelMeters
+    )) continue;
+    diagnostics.push({
+      severity: "error",
+      code: "SPAWN_IN_BLOCKED_WATER",
+      message: `Spawn ${input.entityId} is inside blocked water ${water.entityId}.`,
+      entityId: input.entityId,
+      ...water.featureId === void 0 ? {} : { featureId: water.featureId },
+      suggestions: [
+        "Move the spawn outside blocked water or mark an intentionally walkable surface as walkable."
+      ]
+    });
+  }
+  for (const blocker of input.staticBlockingObjects ?? []) {
+    if (!discIntersectsFootprint(blocker.footprint, positionXZ, radius)) continue;
+    if (blocker.heightRangeMeters !== void 0) {
+      const [minimum, maximum] = blocker.heightRangeMeters;
+      const subjectMinimum = input.position[1];
+      const subjectMaximum = input.position[1] + height;
+      if (!intervalsStrictlyOverlap(
+        subjectMinimum,
+        subjectMaximum,
+        minimum,
+        maximum
+      )) continue;
+    }
+    diagnostics.push({
+      severity: "error",
+      code: "SPAWN_INSIDE_STATIC_BLOCKER",
+      message: `Spawn ${input.entityId} is inside static blocking object ${blocker.entityId}.`,
+      entityId: input.entityId,
+      ...blocker.featureId === void 0 ? {} : { featureId: blocker.featureId },
+      suggestions: ["Move the spawn outside the blocking object's footprint."]
+    });
+  }
+  if (input.ground !== void 0) {
+    const groundHeight = input.ground.heightAt(input.position[0], input.position[2]);
+    const tolerance = input.ground.tolerance ?? 0.15;
+    const maxDrop = input.ground.maxDrop ?? 1;
+    if (groundHeight === void 0 || !Number.isFinite(groundHeight)) {
+      diagnostics.push({
+        severity: "error",
+        code: "SPAWN_HAS_NO_GROUND",
+        message: `Spawn ${input.entityId} has no finite ground sample beneath it.`,
+        entityId: input.entityId,
+        suggestions: ["Choose a spawn point on generated terrain."]
+      });
+    } else {
+      const offset = input.position[1] - groundHeight;
+      if (offset < -tolerance) {
+        diagnostics.push({
+          severity: "error",
+          code: "SPAWN_BELOW_GROUND",
+          message: `Spawn ${input.entityId} is ${Math.abs(offset).toFixed(2)}m below the terrain.`,
+          entityId: input.entityId,
+          suggestions: ["Snap the spawn feet position to terrain height."]
+        });
+      } else if (offset > maxDrop) {
+        diagnostics.push({
+          severity: "warning",
+          code: "SPAWN_ABOVE_GROUND",
+          message: `Spawn ${input.entityId} is ${offset.toFixed(2)}m above the terrain.`,
+          entityId: input.entityId,
+          suggestions: ["Snap the spawn feet position to terrain height unless an intentional drop is desired."]
+        });
+      }
+      const slope = input.ground.slopeDegreesAt?.(
+        input.position[0],
+        input.position[2]
+      );
+      const maxWalkableSlope = input.ground.maxWalkableSlopeDegrees ?? DEFAULT_HUMANOID_TRAVERSAL.maxSlopeClimbDegrees;
+      if (slope !== void 0 && Number.isFinite(slope) && slope > maxWalkableSlope) {
+        diagnostics.push({
+          severity: "error",
+          code: "SPAWN_SLOPE_NOT_WALKABLE",
+          message: `Spawn ${input.entityId} is on a ${slope.toFixed(1)}° slope, above the ${maxWalkableSlope}° climb limit.`,
+          entityId: input.entityId,
+          suggestions: ["Flatten and smooth the spawn area or choose another point."]
+        });
+      }
+    }
+  }
+  return diagnostics;
+}
 const TRAVERSAL_AREA_COMPLEXITY_LIMITS_V1 = Object.freeze({
   maximumAreaCount: 64,
   maximumPointsPerArea: 128,
@@ -3138,7 +3407,7 @@ function resolveLayoutSolverProfileV1(resourceRef) {
     profile
   });
 }
-const EPSILON$1 = 1e-9;
+const EPSILON = 1e-9;
 function assertFinite(value) {
   if (!Number.isFinite(value)) throw new Error("LAYOUT_GEOMETRY_NON_FINITE");
 }
@@ -3163,14 +3432,14 @@ function validatePolygonXZ(points) {
     const next2 = points[(index + 1) % points.length];
     doubledArea += current[0] * next2[1] - next2[0] * current[1];
   }
-  return Math.abs(doubledArea) <= EPSILON$1 ? "LAYOUT_POLYGON_DEGENERATE" : void 0;
+  return Math.abs(doubledArea) <= EPSILON ? "LAYOUT_POLYGON_DEGENERATE" : void 0;
 }
-function pointOnSegment$1(point, start, end) {
+function pointOnSegment(point, start, end) {
   const cross2 = (point[1] - start[1]) * (end[0] - start[0]) - (point[0] - start[0]) * (end[1] - start[1]);
-  if (Math.abs(cross2) > EPSILON$1) return false;
+  if (Math.abs(cross2) > EPSILON) return false;
   const dot2 = (point[0] - start[0]) * (end[0] - start[0]) + (point[1] - start[1]) * (end[1] - start[1]);
   const squaredLength = (end[0] - start[0]) ** 2 + (end[1] - start[1]) ** 2;
-  return dot2 >= -EPSILON$1 && dot2 <= squaredLength + EPSILON$1;
+  return dot2 >= -EPSILON && dot2 <= squaredLength + EPSILON;
 }
 function pointInPolygonXZ(point, polygon) {
   assertFiniteVector(point);
@@ -3180,7 +3449,7 @@ function pointInPolygonXZ(point, polygon) {
   for (let currentIndex = 0, previousIndex = polygon.length - 1; currentIndex < polygon.length; previousIndex = currentIndex, currentIndex += 1) {
     const current = polygon[currentIndex];
     const previous = polygon[previousIndex];
-    if (pointOnSegment$1(point, previous, current)) return true;
+    if (pointOnSegment(point, previous, current)) return true;
     const crosses = current[1] > point[1] !== previous[1] > point[1] && point[0] < (previous[0] - current[0]) * (point[1] - current[1]) / (previous[1] - current[1]) + current[0];
     if (crosses) inside = !inside;
   }
@@ -3190,7 +3459,7 @@ function pointToSegmentDistance(point, start, end) {
   const dx = end[0] - start[0];
   const dz = end[1] - start[1];
   const lengthSquared = dx * dx + dz * dz;
-  if (lengthSquared <= EPSILON$1) return Math.hypot(point[0] - start[0], point[1] - start[1]);
+  if (lengthSquared <= EPSILON) return Math.hypot(point[0] - start[0], point[1] - start[1]);
   const ratio = Math.max(
     0,
     Math.min(1, ((point[0] - start[0]) * dx + (point[1] - start[1]) * dz) / lengthSquared)
@@ -3274,8 +3543,8 @@ function sampleRoutePolylineV1(points, spacingMeters) {
     const start = points[index];
     const end = points[index + 1];
     const length = Math.hypot(end[0] - start[0], end[1] - start[1]);
-    if (length <= EPSILON$1) throw new Error("LAYOUT_ROUTE_INVALID");
-    for (let distance2 = spacingMeters; distance2 < length - EPSILON$1; distance2 += spacingMeters) {
+    if (length <= EPSILON) throw new Error("LAYOUT_ROUTE_INVALID");
+    for (let distance2 = spacingMeters; distance2 < length - EPSILON; distance2 += spacingMeters) {
       const ratio = distance2 / length;
       samples.push([
         quantizeFinite(start[0] + (end[0] - start[0]) * ratio, 1e-6),
@@ -3304,7 +3573,7 @@ function cross(left, right) {
 function normalize(vector) {
   assertFiniteVector(vector);
   const length = Math.hypot(...vector);
-  if (length <= EPSILON$1) throw new Error("LAYOUT_CAMERA_INVALID");
+  if (length <= EPSILON) throw new Error("LAYOUT_CAMERA_INVALID");
   return [vector[0] / length, vector[1] / length, vector[2] / length];
 }
 function projectToScreenUv(camera, pointMetersXYZ) {
@@ -18710,275 +18979,6 @@ ajv.addSchema(subjectDefinitionV1Schema);
   }
   return registeredValidator;
 })();
-const DEFAULT_HUMANOID_TRAVERSAL = Object.freeze({
-  maxSlopeClimbDegrees: 42,
-  minSlopeSlideDegrees: 48,
-  autostepHeight: 0.35,
-  snapToGroundDistance: 0.3
-});
-const DEFAULT_RADIUS = 0.35;
-const DEFAULT_HEIGHT = 1.8;
-const EPSILON = 1e-5;
-function isFiniteVector(value) {
-  return value.every(Number.isFinite);
-}
-function isInsideBounds(point, bounds) {
-  return point.every(
-    (axis, index) => axis >= bounds.min[index] && axis <= bounds.max[index]
-  );
-}
-function overlaps(a, b) {
-  return a.min[0] < b.max[0] - EPSILON && a.max[0] > b.min[0] + EPSILON && a.min[1] < b.max[1] - EPSILON && a.max[1] > b.min[1] + EPSILON && a.min[2] < b.max[2] - EPSILON && a.max[2] > b.min[2] + EPSILON;
-}
-function intervalsStrictlyOverlap(leftMinimum, leftMaximum, rightMinimum, rightMaximum) {
-  return leftMinimum < rightMaximum - EPSILON && leftMaximum > rightMinimum + EPSILON;
-}
-function playerBounds(position, radius, height) {
-  return {
-    min: [position[0] - radius, position[1], position[2] - radius],
-    max: [position[0] + radius, position[1] + height, position[2] + radius]
-  };
-}
-function pointOnSegment(point, from, to) {
-  const edgeX = to[0] - from[0];
-  const edgeZ = to[1] - from[1];
-  const pointX = point[0] - from[0];
-  const pointZ = point[1] - from[1];
-  const cross2 = edgeX * pointZ - edgeZ * pointX;
-  if (Math.abs(cross2) > EPSILON) return false;
-  const dot2 = pointX * edgeX + pointZ * edgeZ;
-  return dot2 >= -EPSILON && dot2 <= edgeX * edgeX + edgeZ * edgeZ + EPSILON;
-}
-function footprintContains(boundary, point) {
-  if (boundary.kind === "circle") {
-    return Math.hypot(
-      point[0] - boundary.centerMetersXZ[0],
-      point[1] - boundary.centerMetersXZ[1]
-    ) <= boundary.radiusMeters + EPSILON;
-  }
-  if (boundary.kind === "ellipse") {
-    const x = (point[0] - boundary.centerMetersXZ[0]) / boundary.radiusMetersXZ[0];
-    const z = (point[1] - boundary.centerMetersXZ[1]) / boundary.radiusMetersXZ[1];
-    return x * x + z * z <= 1 + EPSILON;
-  }
-  let inside = false;
-  for (let current = 0, previous = boundary.pointsMetersXZ.length - 1; current < boundary.pointsMetersXZ.length; previous = current, current += 1) {
-    const from = boundary.pointsMetersXZ[previous];
-    const to = boundary.pointsMetersXZ[current];
-    if (from === void 0 || to === void 0) continue;
-    if (pointOnSegment(point, from, to)) return true;
-    const crosses = to[1] > point[1] !== from[1] > point[1] && point[0] < (from[0] - to[0]) * (point[1] - to[1]) / (from[1] - to[1]) + to[0];
-    if (crosses) inside = !inside;
-  }
-  return inside;
-}
-function pointToSegmentDistanceSquared(point, from, to) {
-  const edgeX = to[0] - from[0];
-  const edgeZ = to[1] - from[1];
-  const lengthSquared = edgeX * edgeX + edgeZ * edgeZ;
-  if (lengthSquared === 0) {
-    return (point[0] - from[0]) ** 2 + (point[1] - from[1]) ** 2;
-  }
-  const projection = Math.max(0, Math.min(
-    1,
-    ((point[0] - from[0]) * edgeX + (point[1] - from[1]) * edgeZ) / lengthSquared
-  ));
-  const closestX = from[0] + projection * edgeX;
-  const closestZ = from[1] + projection * edgeZ;
-  return (point[0] - closestX) ** 2 + (point[1] - closestZ) ** 2;
-}
-function pointToEllipseDistanceSquared(point, center, radii) {
-  const x = Math.abs(point[0] - center[0]);
-  const z = Math.abs(point[1] - center[1]);
-  const radiusX = radii[0];
-  const radiusZ = radii[1];
-  const normalizedDistanceSquared = (x / radiusX) ** 2 + (z / radiusZ) ** 2;
-  if (normalizedDistanceSquared <= 1) return 0;
-  const equation = (lambda) => (radiusX * x / (lambda + radiusX * radiusX)) ** 2 + (radiusZ * z / (lambda + radiusZ * radiusZ)) ** 2 - 1;
-  let lower = 0;
-  let upper = Math.max(
-    1,
-    radiusX * radiusX,
-    radiusZ * radiusZ,
-    radiusX * x,
-    radiusZ * z
-  );
-  while (equation(upper) > 0) upper *= 2;
-  for (let iteration = 0; iteration < 64; iteration += 1) {
-    const middle = (lower + upper) / 2;
-    if (equation(middle) > 0) lower = middle;
-    else upper = middle;
-  }
-  const closestX = radiusX * radiusX * x / (upper + radiusX * radiusX);
-  const closestZ = radiusZ * radiusZ * z / (upper + radiusZ * radiusZ);
-  return (x - closestX) ** 2 + (z - closestZ) ** 2;
-}
-function discIntersectsFootprint(boundary, center, radius) {
-  const maximumDistanceSquared = (radius + EPSILON) ** 2;
-  if (boundary.kind === "circle") {
-    return Math.hypot(
-      center[0] - boundary.centerMetersXZ[0],
-      center[1] - boundary.centerMetersXZ[1]
-    ) <= boundary.radiusMeters + radius + EPSILON;
-  }
-  if (boundary.kind === "ellipse") {
-    return pointToEllipseDistanceSquared(
-      center,
-      boundary.centerMetersXZ,
-      boundary.radiusMetersXZ
-    ) <= maximumDistanceSquared;
-  }
-  if (footprintContains(boundary, center)) return true;
-  return boundary.pointsMetersXZ.some((from, index) => {
-    const to = boundary.pointsMetersXZ[(index + 1) % boundary.pointsMetersXZ.length];
-    return to !== void 0 && pointToSegmentDistanceSquared(center, from, to) <= maximumDistanceSquared;
-  });
-}
-function validateSpawnSafety(input) {
-  const diagnostics = [];
-  const radius = input.capsule?.radius ?? DEFAULT_RADIUS;
-  const height = input.capsule?.height ?? DEFAULT_HEIGHT;
-  if (!isFiniteVector(input.position) || !Number.isFinite(radius) || !Number.isFinite(height)) {
-    return [
-      {
-        severity: "error",
-        code: "SPAWN_NOT_FINITE",
-        message: `Spawn ${input.entityId} contains a non-finite position or capsule dimension.`,
-        entityId: input.entityId
-      }
-    ];
-  }
-  if (radius <= 0 || height <= 0) {
-    diagnostics.push({
-      severity: "error",
-      code: "SPAWN_INVALID_CAPSULE",
-      message: `Spawn ${input.entityId} requires positive capsule dimensions.`,
-      entityId: input.entityId,
-      suggestions: ["Use the humanoid SubjectKit default capsule dimensions."]
-    });
-    return diagnostics;
-  }
-  if (input.worldBounds !== void 0) {
-    const head = [
-      input.position[0],
-      input.position[1] + height,
-      input.position[2]
-    ];
-    if (!isInsideBounds(input.position, input.worldBounds) || !isInsideBounds(head, input.worldBounds)) {
-      diagnostics.push({
-        severity: "error",
-        code: "SPAWN_OUTSIDE_WORLD",
-        message: `Spawn ${input.entityId} is outside the configured world bounds.`,
-        entityId: input.entityId,
-        suggestions: ["Move the spawn point inside the playable bounds."]
-      });
-    }
-  }
-  const bounds = playerBounds(input.position, radius, height);
-  for (const collider of input.colliders ?? []) {
-    if (collider.isTrigger === true || !overlaps(bounds, collider.bounds)) continue;
-    diagnostics.push({
-      severity: "error",
-      code: "SPAWN_INTERSECTS_COLLIDER",
-      message: `Spawn ${input.entityId} intersects collider${collider.entityId === void 0 ? "" : ` ${collider.entityId}`}.`,
-      entityId: input.entityId,
-      ...collider.featureId === void 0 ? {} : { featureId: collider.featureId },
-      suggestions: ["Move the spawn point or resize the blocking collider."]
-    });
-  }
-  const positionXZ = [input.position[0], input.position[2]];
-  for (const water of input.waterSurfaces ?? []) {
-    const subjectMinimum = input.position[1];
-    const subjectMaximum = input.position[1] + height;
-    const waterMinimum = water.waterLevelMeters - water.depthMeters;
-    if (water.traversalMode !== "blocked" || !discIntersectsFootprint(water.boundary, positionXZ, radius) || !intervalsStrictlyOverlap(
-      subjectMinimum,
-      subjectMaximum,
-      waterMinimum,
-      water.waterLevelMeters
-    )) continue;
-    diagnostics.push({
-      severity: "error",
-      code: "SPAWN_IN_BLOCKED_WATER",
-      message: `Spawn ${input.entityId} is inside blocked water ${water.entityId}.`,
-      entityId: input.entityId,
-      ...water.featureId === void 0 ? {} : { featureId: water.featureId },
-      suggestions: [
-        "Move the spawn outside blocked water or mark an intentionally walkable surface as walkable."
-      ]
-    });
-  }
-  for (const blocker of input.staticBlockingObjects ?? []) {
-    if (!discIntersectsFootprint(blocker.footprint, positionXZ, radius)) continue;
-    if (blocker.heightRangeMeters !== void 0) {
-      const [minimum, maximum] = blocker.heightRangeMeters;
-      const subjectMinimum = input.position[1];
-      const subjectMaximum = input.position[1] + height;
-      if (!intervalsStrictlyOverlap(
-        subjectMinimum,
-        subjectMaximum,
-        minimum,
-        maximum
-      )) continue;
-    }
-    diagnostics.push({
-      severity: "error",
-      code: "SPAWN_INSIDE_STATIC_BLOCKER",
-      message: `Spawn ${input.entityId} is inside static blocking object ${blocker.entityId}.`,
-      entityId: input.entityId,
-      ...blocker.featureId === void 0 ? {} : { featureId: blocker.featureId },
-      suggestions: ["Move the spawn outside the blocking object's footprint."]
-    });
-  }
-  if (input.ground !== void 0) {
-    const groundHeight = input.ground.heightAt(input.position[0], input.position[2]);
-    const tolerance = input.ground.tolerance ?? 0.15;
-    const maxDrop = input.ground.maxDrop ?? 1;
-    if (groundHeight === void 0 || !Number.isFinite(groundHeight)) {
-      diagnostics.push({
-        severity: "error",
-        code: "SPAWN_HAS_NO_GROUND",
-        message: `Spawn ${input.entityId} has no finite ground sample beneath it.`,
-        entityId: input.entityId,
-        suggestions: ["Choose a spawn point on generated terrain."]
-      });
-    } else {
-      const offset = input.position[1] - groundHeight;
-      if (offset < -tolerance) {
-        diagnostics.push({
-          severity: "error",
-          code: "SPAWN_BELOW_GROUND",
-          message: `Spawn ${input.entityId} is ${Math.abs(offset).toFixed(2)}m below the terrain.`,
-          entityId: input.entityId,
-          suggestions: ["Snap the spawn feet position to terrain height."]
-        });
-      } else if (offset > maxDrop) {
-        diagnostics.push({
-          severity: "warning",
-          code: "SPAWN_ABOVE_GROUND",
-          message: `Spawn ${input.entityId} is ${offset.toFixed(2)}m above the terrain.`,
-          entityId: input.entityId,
-          suggestions: ["Snap the spawn feet position to terrain height unless an intentional drop is desired."]
-        });
-      }
-      const slope = input.ground.slopeDegreesAt?.(
-        input.position[0],
-        input.position[2]
-      );
-      const maxWalkableSlope = input.ground.maxWalkableSlopeDegrees ?? DEFAULT_HUMANOID_TRAVERSAL.maxSlopeClimbDegrees;
-      if (slope !== void 0 && Number.isFinite(slope) && slope > maxWalkableSlope) {
-        diagnostics.push({
-          severity: "error",
-          code: "SPAWN_SLOPE_NOT_WALKABLE",
-          message: `Spawn ${input.entityId} is on a ${slope.toFixed(1)}° slope, above the ${maxWalkableSlope}° climb limit.`,
-          entityId: input.entityId,
-          suggestions: ["Flatten and smooth the spawn area or choose another point."]
-        });
-      }
-    }
-  }
-  return diagnostics;
-}
 function lattice(seed, x, z) {
   let value = seed ^ Math.imul(x, 521288629) ^ Math.imul(z, 1597334677);
   value = Math.imul(value ^ value >>> 16, 73244475);

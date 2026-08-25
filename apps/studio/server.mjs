@@ -1218,7 +1218,7 @@ export function createStudio(options = {}) {
     if (
       typeof brief !== "string" || !brief.startsWith("# WorldKit Scene Brief") ||
       plannerCheck?.kind !== "worldkit-planner-self-check" || plannerCheck.schemaVersion !== 1 ||
-      plannerCheck.validatorVersion !== "worldkit-planner-self-check-v1" ||
+      plannerCheck.validatorVersion !== "worldkit-planner-self-check-v2" ||
       plannerCheck.sceneId !== sceneId || plannerCheck.status !== "passed" ||
       plannerCheck.inputs?.sceneBriefHash !== briefHash ||
       palette?.kind !== "worldkit-visual-identity-palette" || palette.schemaVersion !== 1 ||

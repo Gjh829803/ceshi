@@ -10,24 +10,40 @@ function run(command: string, arguments_: readonly string[]) {
 }
 
 describe("single-job Planner and Builder self-check bundles", () => {
-  it("builds the Builder bundle into explicit temporary output without changing tracked bytes", async () => {
-    const root = await mkdtemp(path.join(tmpdir(), "worldkit-builder-bundle-"));
-    const trackedBundlePath = path.resolve(
-      ".codex/skills/worldkit-canonical-builder/scripts/self-check.mjs",
-    );
-    const trackedBytesBefore = await readFile(trackedBundlePath);
+  it("builds Planner and Builder bundles into explicit temporary output without changing tracked bytes", async () => {
+    const root = await mkdtemp(path.join(tmpdir(), "worldkit-agent-bundles-"));
+    const bundles = [
+      {
+        id: "planner",
+        relativePath: "worldkit-spatial-planner/scripts/self-check.mjs",
+      },
+      {
+        id: "builder",
+        relativePath: "worldkit-canonical-builder/scripts/self-check.mjs",
+      },
+    ] as const;
+    const trackedBytesBefore = new Map(await Promise.all(
+      bundles.map(async ({ id, relativePath }) => [
+        id,
+        await readFile(path.join(".codex/skills", relativePath)),
+      ] as const),
+    ));
     try {
       const buildBundle = run("node", [
         "scripts/build-agent-self-check.mjs",
-        "--out-dir",
+        "--out-root",
         root,
       ]);
 
       expect(buildBundle.status, buildBundle.stderr || buildBundle.stdout).toBe(0);
-      expect(await readFile(path.join(root, "self-check.mjs"))).toEqual(
-        trackedBytesBefore,
-      );
-      expect(await readFile(trackedBundlePath)).toEqual(trackedBytesBefore);
+      for (const { id, relativePath } of bundles) {
+        expect(await readFile(path.join(root, relativePath))).toEqual(
+          trackedBytesBefore.get(id),
+        );
+        expect(await readFile(path.join(".codex/skills", relativePath))).toEqual(
+          trackedBytesBefore.get(id),
+        );
+      }
     } finally {
       await rm(root, { recursive: true, force: true });
     }

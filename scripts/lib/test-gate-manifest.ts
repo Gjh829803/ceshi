@@ -165,6 +165,7 @@ export const TEST_GATE_MANIFEST_V1: readonly TestGateManifestEntryV1[] = Object.
   { path: "packages/world/src/shapes.test.ts", lane: "contract" },
   { path: "packages/world/src/terrain.test.ts", lane: "contract" },
   { path: "packages/world/src/world-spec.test.ts", lane: "contract" },
+  { path: "scripts/agent-planner-self-check.test.ts", lane: "resource-heavy", reasonCodes: ["measured-duration"] },
   { path: "scripts/agent-self-check.test.ts", lane: "resource-heavy", reasonCodes: ["measured-duration"] },
   { path: "scripts/builder-skill.test.ts", lane: "contract" },
   { path: "scripts/composition-lifecycle.test.ts", lane: "contract" },
