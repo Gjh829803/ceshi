@@ -100,6 +100,14 @@ function isProcessAlive(pid) {
   }
 }
 
+async function waitForProcessExit(pid, timeoutMs = 1_000) {
+  const deadline = Date.now() + timeoutMs;
+  while (isProcessAlive(pid) && Date.now() < deadline) {
+    await new Promise((resolve) => setTimeout(resolve, 10));
+  }
+  return !isProcessAlive(pid);
+}
+
 async function forceKillProcessGroup(pid) {
   if (!pid || !isProcessAlive(pid)) return;
   try {
@@ -369,7 +377,7 @@ test("closes the public listener and child process group when Studio crashes", a
     assert.equal(closure.reason, "child-exit");
     assert.equal(closure.exit.code, 29);
     assert.equal(isProcessAlive(processIds.pid), false);
-    assert.equal(isProcessAlive(processIds.grandchildPid), false);
+    assert.equal(await waitForProcessExit(processIds.grandchildPid), true);
     await assert.rejects(
       fetch(topology.publicOrigin, { signal: AbortSignal.timeout(100) }),
     );
@@ -456,8 +464,8 @@ test("wrapper shutdown escalates against a Studio process group that ignores SIG
     assert.equal(closure.reason, "shutdown");
     assert.equal(closure.termination.escalated, true);
     assert.equal(closure.termination.exit.signal, "SIGKILL");
-    assert.equal(isProcessAlive(processIds.pid), false);
-    assert.equal(isProcessAlive(processIds.grandchildPid), false);
+    assert.equal(await waitForProcessExit(processIds.pid), true);
+    assert.equal(await waitForProcessExit(processIds.grandchildPid), true);
     await assert.rejects(fetch(topology.publicOrigin, { signal: AbortSignal.timeout(100) }));
   } finally {
     if (topology) await topology.shutdown();
