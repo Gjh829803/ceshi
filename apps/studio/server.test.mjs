@@ -518,6 +518,40 @@ test("protects public Studio instances with Basic access", () => {
   assert.equal(isAuthorizedHeader(valid, "secret"), true);
 });
 
+test("proves private readiness only to the parent that holds the child nonce", async () => {
+  const dataRoot = await temporaryRoot(".readiness-nonce-");
+  const readinessNonce = "0123456789abcdef0123456789abcdef";
+  const studio = createStudio({
+    repoRoot,
+    dataRoot,
+    autoRunJobs: false,
+    importExistingArtifacts: false,
+    readinessNonce,
+  });
+  const origin = await listen(studio);
+  try {
+    const missing = await fetch(`${origin}/__worldkit/studio-ready`);
+    assert.equal(missing.status, 404);
+
+    const wrong = await fetch(`${origin}/__worldkit/studio-ready`, {
+      headers: { "x-worldkit-readiness-nonce": "fedcba9876543210fedcba9876543210" },
+    });
+    assert.equal(wrong.status, 404);
+
+    const ready = await fetch(`${origin}/__worldkit/studio-ready`, {
+      headers: { "x-worldkit-readiness-nonce": readinessNonce },
+    });
+    assert.equal(ready.status, 200);
+    assert.deepEqual(await ready.json(), {
+      status: "ready",
+      nonce: readinessNonce,
+      pid: process.pid,
+    });
+  } finally {
+    await studio.shutdown();
+  }
+});
+
 test("publishes bounded concurrent cloud-case capacity without starting queued work", async () => {
   const dataRoot = await temporaryRoot(".test-data-");
   const studio = createStudio({

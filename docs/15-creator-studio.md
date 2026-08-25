@@ -38,7 +38,29 @@ Evaluation image corpora are external inputs. Do not commit large generated/refe
 
 ## Public access
 
-The protected public proxy forwards to one loopback Studio process and does not forward its Basic access key downstream. Quick tunnels are temporary demonstrations, not a production hosting guarantee. A long-lived deployment needs a fixed authenticated endpoint, external object storage for large artifacts, and an isolated trusted worker.
+Copy `config/studio-public.env.example` to
+`.codex-tmp/runtime-config/studio-public.env`, set `WORLDKIT_ACCESS_KEY` to at least 16 random
+characters, then start the supervised entrypoint:
+
+```bash
+pnpm studio:public
+```
+
+The wrapper alone receives the Basic access key. It owns an internal Studio process on loopback
+port 4197, proves that exact child ready with a private nonce, and only then opens the protected
+proxy on loopback port 4175 (or `WORLDKIT_PUBLIC_PROXY_PORT`). The child environment does not
+receive the Basic key or any `WORLDKIT_PUBLIC_*` wrapper setting. Child exit closes the public
+listener; wrapper shutdown terminates the complete child process group with a bounded SIGTERM to
+SIGKILL escalation.
+
+`pnpm --filter @whitebox-world/studio public-proxy` remains a low-level command for a loopback
+Studio that is already owned by an external supervisor. It may use
+`WORLDKIT_PUBLIC_PROXY_TARGET`; `pnpm studio:public` does not delegate ownership to that target.
+
+Both commands bind loopback only. They do not provide TLS, a tunnel, external artifact storage,
+or long-lived production hosting. Quick tunnels are temporary demonstrations. A long-lived
+deployment needs a fixed authenticated endpoint, external object storage for large artifacts,
+and an isolated trusted worker.
 
 ## APIs
 

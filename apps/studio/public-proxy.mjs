@@ -171,7 +171,7 @@ function upstreamHeaders(headers, target) {
 
 export function createStudioPublicProxy(options) {
   const accessKey = options.accessKey ?? "";
-  if (accessKey.length < 16) {
+  if (typeof accessKey !== "string" || accessKey.length < 16) {
     throw new Error("WORLDKIT_ACCESS_KEY must contain at least 16 characters.");
   }
   const target = validatedTargetOrigin(

@@ -110,6 +110,7 @@ test("does not expose Vite internals or unlisted paths through the public bounda
       ["POST", "/src/main.ts"],
       ["POST", "/node_modules/.vite/deps/lodash-es.js"],
       ["POST", "/__whitebox/write-triview"],
+      ["GET", "/__worldkit/studio-ready"],
       ["GET", "/play/@fs/etc/passwd"],
       ["POST", "/app.js"],
       ["GET", "/api/not-a-studio-route"],
@@ -196,6 +197,10 @@ test("does not create an authenticated WebSocket tunnel to the internal Studio",
 });
 
 test("rejects weak credentials and non-loopback targets", () => {
+  assert.throws(
+    () => createStudioPublicProxy({ accessKey: 123 }),
+    /at least 16 characters/,
+  );
   assert.throws(
     () => createStudioPublicProxy({ accessKey: "short" }),
     /at least 16 characters/,

@@ -595,6 +595,10 @@ export function createStudio(options = {}) {
   const playgroundOrigin = options.playgroundOrigin ?? "http://127.0.0.1:5173";
   const playgroundInternalOrigin = options.playgroundInternalOrigin ?? "http://127.0.0.1:5173";
   const accessKey = options.accessKey ?? "";
+  const readinessNonce = options.readinessNonce ?? "";
+  if (readinessNonce !== "" && !/^[a-f0-9]{32,128}$/.test(readinessNonce)) {
+    throw new Error("Studio readiness nonce must contain 32 to 128 lowercase hexadecimal characters.");
+  }
   const autoRunJobs = options.autoRunJobs ?? true;
   const configuredConcurrency = Number(
     options.maxConcurrentJobs ?? process.env.WORLDKIT_STUDIO_MAX_CONCURRENT_JOBS ?? 4,
@@ -2954,6 +2958,21 @@ export function createStudio(options = {}) {
   async function handleRequest(request, response) {
     const url = new URL(request.url ?? "/", "http://127.0.0.1");
     try {
+      if (url.pathname === "/__worldkit/studio-ready") {
+        if (
+          request.method === "GET" &&
+          readinessNonce !== "" &&
+          typeof request.headers["x-worldkit-readiness-nonce"] === "string" &&
+          constantTimeEqual(request.headers["x-worldkit-readiness-nonce"], readinessNonce)
+        ) {
+          sendJson(response, 200, { status: "ready", nonce: readinessNonce, pid: process.pid });
+        } else {
+          response.writeHead(404, { "cache-control": "no-store" });
+          response.end("Not found");
+        }
+        return;
+      }
+
       if (!isAuthorizedHeader(request.headers.authorization, accessKey)) {
         response.writeHead(401, {
           "content-type": "text/plain; charset=utf-8",
@@ -3040,13 +3059,22 @@ async function isOriginAvailable(origin) {
 async function startMain() {
   const host = "127.0.0.1";
   const port = Number(process.env.WORLDKIT_STUDIO_PORT ?? 4174);
+  const dataRoot = process.env.WORLDKIT_STUDIO_DATA_ROOT ?? defaultDataRoot;
+  const readinessNonce = process.env.WORLDKIT_STUDIO_READINESS_NONCE ?? "";
+  delete process.env.WORLDKIT_STUDIO_READINESS_NONCE;
   const playgroundInternalOrigin = process.env.WORLDKIT_PLAYGROUND_INTERNAL_ORIGIN ?? "http://127.0.0.1:5173";
   const playgroundOrigin = process.env.WORLDKIT_PLAYGROUND_ORIGIN ?? playgroundInternalOrigin;
   const accessKey = process.env.WORLDKIT_ACCESS_KEY ?? "";
   if (process.env.WORLDKIT_PUBLIC_MODE === "1" && accessKey.length < 16) {
     throw new Error("WORLDKIT_PUBLIC_MODE requires a WORLDKIT_ACCESS_KEY of at least 16 characters.");
   }
-  const studio = createStudio({ playgroundOrigin, playgroundInternalOrigin, accessKey });
+  const studio = createStudio({
+    dataRoot,
+    playgroundOrigin,
+    playgroundInternalOrigin,
+    accessKey,
+    readinessNonce,
+  });
   await studio.initialize();
   await new Promise((resolve, reject) => {
     studio.server.once("error", reject);
