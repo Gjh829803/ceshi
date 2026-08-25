@@ -11,6 +11,7 @@ import {
   type CharacterSupportSurfaceResolutionV1,
   type RoutePathReceiptV2,
   type RouteRuntimeProbeReceiptV2,
+  type TraversalSurfaceIdentityV1,
   type TraversalRuntimePortV1,
   type TraversalRuntimeTickEvidenceV1,
 } from "@whitebox-world/traversal";
@@ -78,6 +79,31 @@ function distanceXZ(a: Vec3, b: Vec3): number {
 
 function ceilToMillimeter(value: number): number {
   return Math.ceil(value / 0.001 - Number.EPSILON) * 0.001;
+}
+
+function framesAlongPolyline(
+  points: readonly Vec3[],
+  stepMeters = 0.05,
+  supportState?: CharacterSupportStateV1,
+): RuntimeFrame[] {
+  const frames: RuntimeFrame[] = [];
+  for (let segmentIndex = 0; segmentIndex < points.length - 1; segmentIndex += 1) {
+    const start = points[segmentIndex]!;
+    const end = points[segmentIndex + 1]!;
+    const steps = Math.ceil(distance3d(start, end) / stepMeters);
+    for (let step = 1; step <= steps; step += 1) {
+      const ratio = step / steps;
+      frames.push({
+        positionMetersXYZ: [
+          start[0] + (end[0] - start[0]) * ratio,
+          start[1] + (end[1] - start[1]) * ratio,
+          start[2] + (end[2] - start[2]) * ratio,
+        ],
+        ...(supportState === undefined ? {} : { supportState }),
+      });
+    }
+  }
+  return frames;
 }
 
 function pathReceipt(
@@ -385,7 +411,7 @@ describe.runIf(hasRunner)("runRouteRuntimeProbeV2", () => {
     const slopePort = new ScriptedRuntimePort(
       slope,
       { positionMetersXYZ: [0, 0, 0] },
-      [{ positionMetersXYZ: [3, 4, 0] }],
+      framesAlongPolyline([[0, 0, 0], [3, 4, 0]]),
     );
     const slopeReceipt = await run(slope, slopePort);
     expect(slope.routePathDistanceMeters).toBe(5);
@@ -400,8 +426,8 @@ describe.runIf(hasRunner)("runRouteRuntimeProbeV2", () => {
       wide,
       { positionMetersXYZ: [0, 0, 0.52] },
       [
-        { positionMetersXYZ: [5, 0, 0.52] },
-        { positionMetersXYZ: [10, 0, 0] },
+        { positionMetersXYZ: [0.05, 0, 0.52] },
+        ...framesAlongPolyline([[0.05, 0, 0.52], [10, 0, 0]]),
       ],
     );
     const wideReceipt = await run(wide, widePort);
@@ -415,17 +441,15 @@ describe.runIf(hasRunner)("runRouteRuntimeProbeV2", () => {
     const port = new ScriptedRuntimePort(
       diagonal,
       { positionMetersXYZ: [0, 0, 0] },
-      [{ positionMetersXYZ: [1, 0, 1] }],
+      framesAlongPolyline([[0, 0, 0], [1, 0, 1]]),
     );
 
     const receipt = await run(diagonal, port);
 
-    expect(receipt).toMatchObject({
-      status: "complete",
-      ticks: [{
-        routeProgressMetersXZ: 1.415,
-        remainingRouteDistanceMetersXZ: 0,
-      }],
+    expect(receipt.status).toBe("complete");
+    expect(receipt.ticks.at(-1)).toMatchObject({
+      routeProgressMetersXZ: 1.415,
+      remainingRouteDistanceMetersXZ: 0,
     });
   });
 
@@ -471,19 +495,22 @@ describe.runIf(hasRunner)("runRouteRuntimeProbeV2", () => {
     const equalityPort = new ScriptedRuntimePort(
       path,
       { positionMetersXYZ: [0, 0, 0] },
-      [
-        {
-          positionMetersXYZ: [5, 0, THRESHOLDS.maximumRouteDeviationMetersXZ],
-          supportState: "sliding",
-        },
-        { positionMetersXYZ: [10, 0, 0], supportState: "sliding" },
-      ],
+      framesAlongPolyline(
+        [
+          [0, 0, 0],
+          [5, 0, THRESHOLDS.maximumRouteDeviationMetersXZ],
+          [10, 0, 0],
+        ],
+        0.05,
+        "sliding",
+      ),
     );
     const equality = await run(path, equalityPort);
-    expect(equality).toMatchObject({
-      status: "complete",
-      metrics: { slidingDurationTicks: 2 },
-    });
+    expect(equality.status).toBe("complete");
+    expect(equality.metrics.slidingDurationTicks).toBe(
+      equality.metrics.processedTickCount,
+    );
+    expect(equality.metrics.slidingDurationTicks).toBeGreaterThan(2);
 
     const exceededPort = new ScriptedRuntimePort(
       path,
@@ -551,14 +578,13 @@ describe.runIf(hasRunner)("runRouteRuntimeProbeV2", () => {
       path,
       { positionMetersXYZ: [0, 0, 0] },
       [
-        { positionMetersXYZ: [1, 0, 0], supportState: "unsupported" },
-        { positionMetersXYZ: [1, 0, 0] },
+        { positionMetersXYZ: [0.05, 0, 0], supportState: "unsupported" },
+        ...framesAlongPolyline([[0.05, 0, 0], [1, 0, 0]]),
       ],
     );
     const recovered = await run(path, recoveredPort);
     expect(recovered).toMatchObject({
       status: "complete",
-      completionDurationTicks: 2,
       metrics: { unexpectedSupportLossCount: 1 },
     });
 
@@ -575,11 +601,11 @@ describe.runIf(hasRunner)("runRouteRuntimeProbeV2", () => {
   });
 
   it("allows final-tick arrival and otherwise stops exactly at the maximum Tick", async () => {
-    const path = pathReceipt([[0, 0, 0], [120, 0, 0]]);
+    const path = pathReceipt([[0, 0, 0], [48.48, 0, 0]]);
     const frame = (tickCall: number, arrives: boolean): RuntimeFrame => ({
       positionMetersXYZ: tickCall === THRESHOLDS.maximumProbeTicks
-        ? [arrives ? 120 : 119.4, 0, 0]
-        : [Math.min(tickCall * 0.1, 119.4), 0, 0],
+        ? [arrives ? 48 : 47.97, 0, 0]
+        : [tickCall * 0.04, 0, 0],
     });
     const arrivalPort = new ScriptedRuntimePort(
       path,
@@ -737,7 +763,7 @@ describe.runIf(hasRunner)("runRouteRuntimeProbeV2", () => {
     const hairpinPort = new ScriptedRuntimePort(
       hairpin,
       { positionMetersXYZ: [0, 0, 0] },
-      [{ positionMetersXYZ: [0, 0, 0.01] }],
+      framesAlongPolyline(hairpin.orderedPathPositionsMetersXYZ),
     );
     expect((await run(hairpin, hairpinPort)).status).toBe("complete");
 
@@ -852,10 +878,18 @@ const PLATFORM_SURFACE = {
   resourceRef: "package://traversal-surface/platform-deck.primary@1",
   resourceHash: HASH_B,
 } as const;
+const RAMP_SURFACE = {
+  ...SURFACE,
+  traversalSurfaceId: "surface-ramp",
+  surfaceEntityId: "ramp-main",
+  colliderSubshapeId: "ramp-main:primary",
+  resourceRef: "package://traversal-surface/ramp-main.primary@1",
+  resourceHash: HASH_C,
+} as const;
 
 function pathReceiptV2(
   points: readonly Vec3[],
-  identities: ReadonlyArray<typeof HEIGHTFIELD_SURFACE | typeof PLATFORM_SURFACE>,
+  identities: readonly TraversalSurfaceIdentityV1[],
 ): ReturnType<typeof canonicalRoutePathReceiptV2> {
   const builder = resolveTraversalGraphBuilderProfileV2(
     BUILT_IN_HEIGHTFIELD_R1_TRAVERSAL_GRAPH_BUILDER_PROFILE_REF,
@@ -969,6 +1003,65 @@ describe("runRouteRuntimeProbeV2 3D support station", () => {
       completionDurationTicks: 0,
       ticks: [],
     });
+  });
+
+  it("does not zero-tick complete a 16.795m lower-ramp-upper route whose endpoints are 0.4m apart", async () => {
+    const points = [
+      [0, 0, 0],
+      [5, 0, 0],
+      [5, 0.5, 5],
+      [0, 1, 0.4],
+    ] as const satisfies readonly Vec3[];
+    const path = pathReceiptV2(points, [
+      HEIGHTFIELD_SURFACE,
+      HEIGHTFIELD_SURFACE,
+      RAMP_SURFACE,
+      PLATFORM_SURFACE,
+    ]);
+    expect(path.routePathDistanceMetersXZ).toBeCloseTo(16.795, 3);
+    expect(distanceXZ(points[0], points.at(-1)!)).toBe(0.4);
+    const port = stationPort(
+      path,
+      {
+        positionMetersXYZ: points[0],
+        surfaceResolution: { mode: "resolved", ...HEIGHTFIELD_SURFACE },
+      },
+      [{
+        positionMetersXYZ: points.at(-1)!,
+        surfaceResolution: { mode: "resolved", ...PLATFORM_SURFACE },
+      }],
+    ) as ScriptedRuntimePort;
+
+    const receipt = await runV2(path, port, 4);
+
+    expect(port.fixedTickCallCount).toBeGreaterThan(0);
+    expect(receipt).not.toMatchObject({
+      status: "complete",
+      completionDurationTicks: 0,
+    });
+  });
+
+  it("does not complete near the endpoint while station arc remains outside the final band", async () => {
+    const path = pathReceiptV2(
+      [[0, 0, 0], [10, 0, 0]],
+      [HEIGHTFIELD_SURFACE, HEIGHTFIELD_SURFACE],
+    );
+    const port = stationPort(
+      path,
+      {
+        positionMetersXYZ: [0, 0, 0],
+        surfaceResolution: { mode: "resolved", ...HEIGHTFIELD_SURFACE },
+      },
+      [{
+        positionMetersXYZ: [9.6, 0, 0],
+        surfaceResolution: { mode: "resolved", ...HEIGHTFIELD_SURFACE },
+      }],
+    ) as ScriptedRuntimePort;
+
+    const receipt = await runV2(path, port, 4);
+
+    expect(port.fixedTickCallCount).toBeGreaterThan(1);
+    expect(receipt.status).toBe("failed");
   });
 
   it("keeps Heightfield expected ids when 2.4m XZ lookahead already sees the step", async () => {

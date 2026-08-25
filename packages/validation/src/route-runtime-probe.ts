@@ -596,6 +596,20 @@ function completeReceiptV2(
   }
 }
 
+function hasArrivedAtRouteDestinationV2(input: Readonly<{
+  hasExpectedSurface: boolean;
+  remainingArcLengthMeters: number;
+  subjectPositionMetersXZ: XzPoint;
+  destinationMetersXZ: XzPoint;
+  destinationToleranceMetersXZ: number;
+}>): boolean {
+  return input.hasExpectedSurface &&
+    input.remainingArcLengthMeters <= input.destinationToleranceMetersXZ &&
+    requireFiniteRuntimeDerived(
+      distanceXZ(input.subjectPositionMetersXZ, input.destinationMetersXZ),
+    ) <= input.destinationToleranceMetersXZ;
+}
+
 export async function runRouteRuntimeProbeV2(
   input: RunRouteRuntimeProbeInputV2,
 ): Promise<RouteRuntimeProbeReceiptV2> {
@@ -665,12 +679,13 @@ export async function runRouteRuntimeProbeV2(
   }
 
   const destination = geometry.points.at(-1)!;
-  if (
-    requireFiniteRuntimeDerived(
-      distanceXZ(xz(initial.subjectPositionMetersXYZ), destination),
-    ) <=
-      thresholds.destinationToleranceMetersXZ
-  ) {
+  if (hasArrivedAtRouteDestinationV2({
+    hasExpectedSurface: true,
+    remainingArcLengthMeters: initialStation.remainingArcLengthMeters,
+    subjectPositionMetersXZ: xz(initial.subjectPositionMetersXYZ),
+    destinationMetersXZ: destination,
+    destinationToleranceMetersXZ: thresholds.destinationToleranceMetersXZ,
+  })) {
     return completeReceiptV2(request, initial, [], initialMetrics);
   }
 
@@ -747,9 +762,13 @@ export async function runRouteRuntimeProbeV2(
     const isUnsupported = evidence.characterSupport.supportState === "unsupported";
     const hasExpectedSurface = !isUnsupported &&
       !surfaceMismatchV2(evidence, expectedTraversalSurfaceIds);
-    const hasArrived = hasExpectedSurface &&
-      requireFiniteRuntimeDerived(distanceXZ(subjectAfterTick, destination)) <=
-        thresholds.destinationToleranceMetersXZ;
+    const hasArrived = hasArrivedAtRouteDestinationV2({
+      hasExpectedSurface,
+      remainingArcLengthMeters: station.remainingArcLengthMeters,
+      subjectPositionMetersXZ: subjectAfterTick,
+      destinationMetersXZ: destination,
+      destinationToleranceMetersXZ: thresholds.destinationToleranceMetersXZ,
+    });
     if (hasArrived) routeProgressMetersXZ = geometry.totalDistanceMetersXZ;
 
     if (
@@ -879,4 +898,3 @@ export async function runRouteRuntimeProbeV2(
   }
   return fail("ROUTE_RUNTIME_PROBE_RUNTIME_INVALID");
 }
-
