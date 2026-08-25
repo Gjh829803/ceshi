@@ -5,6 +5,7 @@ import { sha256CanonicalJson } from "@whitebox-world/protocol";
 import {
   builtInSubjectResourceRegistry,
   createSubjectResourceRegistry,
+  XIER120_SUBJECT_DEFINITIONS,
 } from "./index";
 import type {
   AnimationSetManifestInputV1,
@@ -203,15 +204,44 @@ function registryWithPermutedNewResourceCollections(
 }
 
 describe("subject resource registry", () => {
+  it("rejects a Subject Definition without the current schemaVersion", () => {
+    const currentDefinition = structuredClone(
+      builtInSubjectResourceRegistry.resolveSubjectDefinition(
+        G_BOT_SUBJECT_DEFINITION_REF,
+      )!,
+    );
+    const {
+      schemaVersion: _schemaVersion,
+      contentHash: _contentHash,
+      ...definitionWithoutVersion
+    } = currentDefinition;
+
+    expect(() => createSubjectResourceRegistry([
+      definitionWithoutVersion as unknown as Parameters<
+        typeof createSubjectResourceRegistry
+      >[0][number],
+    ])).toThrowError("SUBJECT_REGISTRY_SUBJECT_DEFINITION_VERSION_NOT_SUPPORTED");
+  });
+
   it("exposes canonical subject-definition resource refs", () => {
     expect(
       builtInSubjectResourceRegistry
         .listSubjectDefinitions()
         .map((definition) => definition.resourceRef),
     ).toEqual([
+      "worldkit://subject-definition/animal.quadruped.forward-steer@1",
+      "worldkit://subject-definition/animal.quadruped.forward-steer@2",
+      "worldkit://subject-definition/glider.paraglider.unpowered@1",
       G_BOT_SUBJECT_DEFINITION_REF,
+      "worldkit://subject-definition/humanoid.rigged-golden@1",
       "worldkit://subject-definition/humanoid.third-person@1",
       "worldkit://subject-definition/quadruped.ground-proxy@1",
+      "worldkit://subject-definition/surface-craft.ice-skimmer@1",
+      "worldkit://subject-definition/vehicle.four-wheel.arcade@1",
+      "worldkit://subject-definition/watercraft.kayak.surface@1",
+      ...XIER120_SUBJECT_DEFINITIONS
+        .map((definition) => definition.resourceRef)
+        .sort((left, right) => left.localeCompare(right)),
     ]);
   });
 

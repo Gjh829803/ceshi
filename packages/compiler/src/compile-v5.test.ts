@@ -1,4 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
+import { isNil } from "lodash-es";
 
 const colliderSubshapeIdFault = vi.hoisted(() => ({
   isEnabled: false,
@@ -60,11 +61,27 @@ import {
   normalizeAuthoringSpecV4,
   type AuthoringSpecV4,
 } from "@whitebox-world/authoring";
+import {
+  createGameplayBootstrapResourceLockEntryV1,
+  createGameplayBootstrapV1,
+} from "@whitebox-world/gameplay-contracts";
 import { sha256CanonicalJson } from "@whitebox-world/protocol";
 import { deriveColliderSubshapeIdV1 } from "@whitebox-world/traversal";
 import { createValidAuthoringSpec } from "../../authoring/src/test-fixture";
 
 import { compileWorldV5 } from "./index";
+
+const GAMEPLAY_BOOTSTRAP_LOCK =
+  createGameplayBootstrapResourceLockEntryV1(createGameplayBootstrapV1({
+    kind: "gameplay-bootstrap",
+    id: "compile-v5-test.gameplay",
+    version: 1,
+    resourceRef: "worldkit://gameplay-bootstrap/compile-v5-test@1",
+    entityDescriptors: [],
+    featureResourceLocks: [],
+    semanticActionDefinitions: [],
+    availableCapabilityRefs: [],
+  }));
 
 function routeWorld(options: {
   seed?: number;
@@ -208,6 +225,7 @@ function compile(spec = routeWorld()) {
   const compiled = compileWorldV5({
     normalizedWorldIr: normalized.value,
     normalizedWorldIrHash: normalized.normalizedWorldIrHash,
+    gameplayBootstrapResourceLock: GAMEPLAY_BOOTSTRAP_LOCK,
   });
   if (!compiled.ok || compiled.executionPlan === undefined ||
     compiled.executionPlanHash === undefined) {
@@ -217,6 +235,118 @@ function compile(spec = routeWorld()) {
 }
 
 describe("compileWorldV5", () => {
+  it("uses V5 as the unversioned current compiler boundary", () => {
+    const normalized = normalizeAuthoringSpecV4(routeWorld());
+    if (!normalized.ok || isNil(normalized.value) ||
+      isNil(normalized.normalizedWorldIrHash)) {
+      throw new Error("Fixture normalization failed.");
+    }
+
+    const result = compileWorldV5({
+      normalizedWorldIr: normalized.value,
+      normalizedWorldIrHash: normalized.normalizedWorldIrHash,
+      gameplayBootstrapResourceLock: GAMEPLAY_BOOTSTRAP_LOCK,
+    });
+
+    expect(result).toMatchObject({
+      ok: true,
+      executionPlan: {
+        schemaVersion: 5,
+        initialControlledEntityId: "player",
+      },
+    });
+  });
+
+  it("rejects accessor-backed input without invoking the accessor", () => {
+    const normalized = normalizeAuthoringSpecV4(routeWorld());
+    if (!normalized.ok || isNil(normalized.value) ||
+      isNil(normalized.normalizedWorldIrHash)) {
+      throw new Error("Fixture normalization failed.");
+    }
+    let getterCalls = 0;
+    Object.defineProperty(normalized.value, "authoringSpecHash", {
+      enumerable: true,
+      configurable: true,
+      get() {
+        getterCalls += 1;
+        return `sha256:${"b".repeat(64)}`;
+      },
+    });
+
+    const result = compileWorldV5({
+      normalizedWorldIr: normalized.value,
+      normalizedWorldIrHash: normalized.normalizedWorldIrHash,
+      gameplayBootstrapResourceLock: GAMEPLAY_BOOTSTRAP_LOCK,
+    });
+
+    expect(result).toMatchObject({
+      ok: false,
+      diagnostics: [{
+        code: "COMPILER_INPUT_ACCESSOR_FORBIDDEN",
+        instancePath: "/normalizedWorldIr",
+      }],
+    });
+    expect(getterCalls).toBe(0);
+  });
+
+  it("publishes a parsed V5 Plan whose full lock is the IR subset plus Gameplay Bootstrap", () => {
+    const normalized = normalizeAuthoringSpecV4(routeWorld());
+    if (!normalized.ok || isNil(normalized.value) ||
+      isNil(normalized.normalizedWorldIrHash)) {
+      throw new Error("Fixture normalization failed.");
+    }
+
+    const result = compileWorldV5({
+      normalizedWorldIr: normalized.value,
+      normalizedWorldIrHash: normalized.normalizedWorldIrHash,
+      gameplayBootstrapResourceLock: GAMEPLAY_BOOTSTRAP_LOCK,
+    });
+
+    expect(result.ok).toBe(true);
+    expect(result.executionPlan).toMatchObject({
+      schemaVersion: 5,
+      initialControlledEntityId: normalized.value.startup.controlledEntityId,
+      resourceLockEntries: [
+        ...normalized.value.resources.resourceLock,
+        GAMEPLAY_BOOTSTRAP_LOCK,
+      ].sort((left, right) =>
+        left.resourceRef.localeCompare(right.resourceRef) ||
+        left.resourceKind.localeCompare(right.resourceKind)),
+    });
+    expect(result.executionPlan).not.toHaveProperty("controlledEntityId");
+    expect(Object.isFrozen(result.executionPlan)).toBe(true);
+    expect(Object.isFrozen(result.executionPlan?.resourceLockEntries)).toBe(true);
+  });
+
+  it("rejects a non-Gameplay or duplicate Bootstrap Resource Lock", () => {
+    const normalized = normalizeAuthoringSpecV4(routeWorld());
+    if (!normalized.ok || isNil(normalized.value) ||
+      isNil(normalized.normalizedWorldIrHash)) {
+      throw new Error("Fixture normalization failed.");
+    }
+    const compileWith = (gameplayBootstrapResourceLock: unknown) =>
+      compileWorldV5({
+        normalizedWorldIr: normalized.value!,
+        normalizedWorldIrHash: normalized.normalizedWorldIrHash!,
+        gameplayBootstrapResourceLock:
+          gameplayBootstrapResourceLock as typeof GAMEPLAY_BOOTSTRAP_LOCK,
+      });
+
+    expect(compileWith({
+      ...GAMEPLAY_BOOTSTRAP_LOCK,
+      resourceKind: "subject-definition",
+    })).toMatchObject({
+      ok: false,
+      diagnostics: [{ code: "COMPILER_GAMEPLAY_BOOTSTRAP_LOCK_INVALID" }],
+    });
+    expect(compileWith({
+      ...GAMEPLAY_BOOTSTRAP_LOCK,
+      resourceRef: normalized.value.resources.resourceLock[0]!.resourceRef,
+    })).toMatchObject({
+      ok: false,
+      diagnostics: [{ code: "COMPILER_GAMEPLAY_BOOTSTRAP_LOCK_INVALID" }],
+    });
+  });
   it("rejects a hash-consistent IR whose Resource Lock hash contradicts its entries", () => {
     const normalized = normalizeAuthoringSpecV4(
       routeWorld({ staticSurface: true }),
@@ -230,6 +360,7 @@ describe("compileWorldV5", () => {
     const result = compileWorldV5({
       normalizedWorldIr: forged,
       normalizedWorldIrHash: sha256CanonicalJson(forged),
+      gameplayBootstrapResourceLock: GAMEPLAY_BOOTSTRAP_LOCK,
     });
 
     expect(result).toEqual({
@@ -350,6 +481,7 @@ describe("compileWorldV5", () => {
     expect(compileWorldV5({
       normalizedWorldIr: forged,
       normalizedWorldIrHash: sha256CanonicalJson(forged),
+      gameplayBootstrapResourceLock: GAMEPLAY_BOOTSTRAP_LOCK,
     })).toMatchObject({
       ok: false,
       diagnostics: expect.arrayContaining([expect.objectContaining({
@@ -371,6 +503,7 @@ describe("compileWorldV5", () => {
     const result = compileWorldV5({
       normalizedWorldIr: normalized.value,
       normalizedWorldIrHash: sha256CanonicalJson(normalized.value),
+      gameplayBootstrapResourceLock: GAMEPLAY_BOOTSTRAP_LOCK,
     });
     colliderSubshapeIdFault.isEnabled = false;
 
@@ -403,6 +536,7 @@ describe("compileWorldV5", () => {
     const result = compileWorldV5({
       normalizedWorldIr: forged,
       normalizedWorldIrHash: sha256CanonicalJson(forged),
+      gameplayBootstrapResourceLock: GAMEPLAY_BOOTSTRAP_LOCK,
     });
 
     expect(result).toEqual({
@@ -434,6 +568,7 @@ describe("compileWorldV5", () => {
     const result = compileWorldV5({
       normalizedWorldIr: forged,
       normalizedWorldIrHash: sha256CanonicalJson(forged),
+      gameplayBootstrapResourceLock: GAMEPLAY_BOOTSTRAP_LOCK,
     });
 
     expect(result).toEqual({
@@ -466,6 +601,7 @@ describe("compileWorldV5", () => {
       result = compileWorldV5({
         normalizedWorldIr: normalized.value,
         normalizedWorldIrHash: normalized.normalizedWorldIrHash,
+        gameplayBootstrapResourceLock: GAMEPLAY_BOOTSTRAP_LOCK,
       });
     } finally {
       traversalSurfaceIdFault.isEnabled = false;
@@ -517,6 +653,7 @@ describe("compileWorldV5", () => {
     const result = compileWorldV5({
       normalizedWorldIr: forged,
       normalizedWorldIrHash: sha256CanonicalJson(forged),
+      gameplayBootstrapResourceLock: GAMEPLAY_BOOTSTRAP_LOCK,
     });
 
     expect(result).toEqual({
@@ -635,6 +772,10 @@ describe("compileWorldV5", () => {
                 grid: {
                   ...node.components.terrain.grid,
                   resolutionCellsXZ: [513, 513],
+                  heightSamplesMeters: Array.from(
+                    { length: 513 * 513 },
+                    (_, index) => (index % 17) / 10,
+                  ),
                 },
               },
             },

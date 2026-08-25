@@ -118,16 +118,18 @@
     "cameraEntityId": "camera-main"
   },
   "unknownFieldThatMustFail": true,
-  "schemaVersion": 3,
+  "schemaVersion": 4,
   "layout": {
     "solverProfileRef": "worldkit://layout-solver-profile/outdoor.s1@1"
   },
   "spatial": {
     "regions": [],
     "routes": [],
-    "screenRegions": []
+    "screenRegions": [],
+    "traversalAreas": []
   },
   "constraints": {
-    "placements": []
+    "placements": [],
+    "connectivity": []
   }
 }

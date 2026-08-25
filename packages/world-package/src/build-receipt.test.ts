@@ -8,16 +8,24 @@ import {
   type LayoutSolveResultV1,
 } from "@whitebox-world/layout-solver";
 import {
+  createGameplayBootstrapV1,
+  createGameplayBootstrapResourceLockEntryV1,
+  gameplayBootstrapCanonicalBytesV1,
+  type GameplayBootstrapV1,
+} from "@whitebox-world/gameplay-contracts";
+import {
   canonicalJsonBytes,
   sha256Bytes,
   sha256CanonicalJson,
 } from "@whitebox-world/protocol";
 import { readFile } from "node:fs/promises";
+import { isNil } from "lodash-es";
 import { describe, expect, it } from "vitest";
 
 import {
   assertWorldPackageBuildReceiptClosureV1,
   assertWorldPackageBuildReceiptV1,
+  assertWorldPackageGameplayBootstrapMembershipV1,
   createWorldPackageBuildReceiptV1,
   type CreateWorldPackageBuildReceiptInputV1,
   type WorldPackageBuildClosureV1,
@@ -57,9 +65,15 @@ function compileInput(
   ) {
     throw new Error(`fixture normalization failed: ${JSON.stringify(normalized.diagnostics)}`);
   }
+  const bootstrap = gameplayBootstrap(
+    authoringSpec,
+    normalized.value,
+  );
   const compiled = compileWorldV5({
     normalizedWorldIr: normalized.value,
     normalizedWorldIrHash: normalized.normalizedWorldIrHash,
+    gameplayBootstrapResourceLock:
+      createGameplayBootstrapResourceLockEntryV1(bootstrap),
   });
   if (!compiled.ok || compiled.executionPlan === undefined) {
     throw new Error(`fixture compilation failed: ${JSON.stringify(compiled.diagnostics)}`);
@@ -75,6 +89,7 @@ function compileInput(
     normalizedWorldIr: normalized.value,
     layoutSolveResult,
     executionPlan: compiled.executionPlan,
+    gameplayBootstrap: bootstrap,
     resourceArtifacts: [],
     ...overrides,
   };
@@ -83,6 +98,38 @@ function compileInput(
 function assetFreeInput(seed = 1024): CreateWorldPackageBuildReceiptInputV1 {
   const source = createValidAuthoringSpec();
   return compileInput(asV4({ ...source, seed }));
+}
+
+function gameplayBootstrap(
+  authoringSpec: AuthoringSpecV4,
+  normalizedWorldIr: CreateWorldPackageBuildReceiptInputV1["normalizedWorldIr"],
+): GameplayBootstrapV1 {
+  return createGameplayBootstrapV1({
+    kind: "gameplay-bootstrap",
+    id: `${authoringSpec.id}.gameplay`,
+    version: 1,
+    resourceRef:
+      `worldkit://gameplay-bootstrap/${authoringSpec.id}@1`,
+    entityDescriptors: normalizedWorldIr.nodes
+      .filter((node) => node.kind === "subject")
+      .map((node) => {
+        const definition = normalizedWorldIr.resources.subjectDefinitions
+          .find((candidate) =>
+            candidate.subjectDefinitionRef === node.subjectDefinitionRef
+          );
+        if (isNil(definition)) {
+          throw new Error(`missing fixture Subject Definition '${node.subjectDefinitionRef}'`);
+        }
+        return {
+          id: node.id,
+          entityDefinitionRef: node.subjectDefinitionRef,
+          capabilityRefs: definition.capabilityRefs,
+        };
+      }),
+    featureResourceLocks: [],
+    semanticActionDefinitions: [],
+    availableCapabilityRefs: [],
+  });
 }
 
 async function riggedInput(): Promise<CreateWorldPackageBuildReceiptInputV1> {
@@ -125,6 +172,146 @@ async function uninstantiatedRiggedResourceInput(): Promise<CreateWorldPackageBu
 }
 
 describe("WorldPackageBuildReceiptV1", () => {
+  it("packages canonical Gameplay Bootstrap bytes with distinct semantic and artifact hash domains", () => {
+    const base = assetFreeInput();
+    const bootstrap = base.gameplayBootstrap;
+    const receipt = createWorldPackageBuildReceiptV1({
+      ...base,
+      gameplayBootstrap: bootstrap,
+    });
+    const bytes = gameplayBootstrapCanonicalBytesV1(bootstrap);
+    const artifactHash = sha256Bytes(bytes);
+
+    expect(receipt.manifest.resources).toContainEqual({
+      resourceRef: bootstrap.resourceRef,
+      packagePath: "gameplay/bootstrap.json",
+      mediaType: "application/vnd.worldkit.gameplay-bootstrap+json",
+      sizeBytes: bytes.byteLength,
+      contentHash: artifactHash,
+    });
+    expect(receipt.fileIntegrityEntries).toContainEqual({
+      path: "gameplay/bootstrap.json",
+      mediaType: "application/vnd.worldkit.gameplay-bootstrap+json",
+      sizeBytes: bytes.byteLength,
+      sha256: artifactHash,
+    });
+    expect(artifactHash).not.toBe(bootstrap.contentHash);
+    expect(assertWorldPackageGameplayBootstrapMembershipV1({
+      executionPlan: base.executionPlan,
+      gameplayBootstrap: bootstrap,
+      worldPackageBuildReceipt: receipt,
+    })).toEqual(bootstrap);
+  });
+
+  it("rejects a canonical Bootstrap whose semantic lock is not the Plan member", () => {
+    const input = assetFreeInput();
+    const receipt = createWorldPackageBuildReceiptV1(input);
+    const changedBootstrap = createGameplayBootstrapV1({
+      kind: input.gameplayBootstrap.kind,
+      id: input.gameplayBootstrap.id,
+      version: input.gameplayBootstrap.version,
+      resourceRef: input.gameplayBootstrap.resourceRef,
+      entityDescriptors: input.gameplayBootstrap.entityDescriptors,
+      featureResourceLocks: input.gameplayBootstrap.featureResourceLocks,
+      semanticActionDefinitions:
+        input.gameplayBootstrap.semanticActionDefinitions,
+      availableCapabilityRefs: [
+        ...input.gameplayBootstrap.availableCapabilityRefs,
+        "worldkit://runtime-capability/changed@1",
+      ],
+    });
+
+    expect(() => assertWorldPackageGameplayBootstrapMembershipV1({
+      executionPlan: input.executionPlan,
+      gameplayBootstrap: changedBootstrap,
+      worldPackageBuildReceipt: receipt,
+    })).toThrow("WORLD_PACKAGE_GAMEPLAY_BOOTSTRAP_MEMBERSHIP_INVALID");
+  });
+
+  it("rejects missing and self-hash-tampered Gameplay Bootstrap build inputs", () => {
+    const input = assetFreeInput();
+
+    expect(() => createWorldPackageBuildReceiptV1({
+      ...input,
+      gameplayBootstrap: undefined,
+    } as unknown as CreateWorldPackageBuildReceiptInputV1)).toThrow(
+      "WORLD_PACKAGE_BUILD_INPUT_INVALID",
+    );
+    expect(() => createWorldPackageBuildReceiptV1({
+      ...input,
+      gameplayBootstrap: {
+        ...input.gameplayBootstrap,
+        contentHash: `sha256:${"f".repeat(64)}`,
+      },
+    })).toThrow("WORLD_PACKAGE_BUILD_INPUT_INVALID");
+  });
+
+  it("rejects missing or tampered Bootstrap package membership", () => {
+    const input = assetFreeInput();
+    const receipt = createWorldPackageBuildReceiptV1(input);
+    const withoutBootstrapRow = {
+      ...receipt,
+      manifest: {
+        ...receipt.manifest,
+        resources: receipt.manifest.resources.filter(
+          (row) => row.packagePath !== "gameplay/bootstrap.json",
+        ),
+      },
+    };
+    const withTamperedIntegrity = {
+      ...receipt,
+      fileIntegrityEntries: receipt.fileIntegrityEntries.map((entry) =>
+        entry.path === "gameplay/bootstrap.json"
+          ? { ...entry, sha256: `sha256:${"f".repeat(64)}` as const }
+          : entry
+      ),
+    };
+
+    for (const worldPackageBuildReceipt of [
+      withoutBootstrapRow,
+      withTamperedIntegrity,
+    ]) {
+      expect(() => assertWorldPackageGameplayBootstrapMembershipV1({
+        executionPlan: input.executionPlan,
+        gameplayBootstrap: input.gameplayBootstrap,
+        worldPackageBuildReceipt,
+      })).toThrow("WORLD_PACKAGE_GAMEPLAY_BOOTSTRAP_MEMBERSHIP_INVALID");
+    }
+  });
+
+  it("rejects non-canonical Plan lock order and closure Bootstrap drift", () => {
+    const input = assetFreeInput();
+    const receipt = createWorldPackageBuildReceiptV1(input);
+    const reversedPlan = {
+      ...input.executionPlan,
+      resourceLockEntries: [...input.executionPlan.resourceLockEntries].reverse(),
+    };
+    const changedBootstrap = createGameplayBootstrapV1({
+      kind: input.gameplayBootstrap.kind,
+      id: input.gameplayBootstrap.id,
+      version: input.gameplayBootstrap.version + 1,
+      resourceRef: input.gameplayBootstrap.resourceRef,
+      entityDescriptors: input.gameplayBootstrap.entityDescriptors,
+      featureResourceLocks: input.gameplayBootstrap.featureResourceLocks,
+      semanticActionDefinitions:
+        input.gameplayBootstrap.semanticActionDefinitions,
+      availableCapabilityRefs: input.gameplayBootstrap.availableCapabilityRefs,
+    });
+
+    expect(() => assertWorldPackageGameplayBootstrapMembershipV1({
+      executionPlan: reversedPlan,
+      gameplayBootstrap: input.gameplayBootstrap,
+      worldPackageBuildReceipt: receipt,
+    })).toThrow("WORLD_PACKAGE_GAMEPLAY_BOOTSTRAP_MEMBERSHIP_INVALID");
+    expect(() => assertWorldPackageBuildReceiptClosureV1(receipt, {
+      authoringSpec: input.authoringSpec,
+      normalizedWorldIr: input.normalizedWorldIr,
+      layoutSolveResult: input.layoutSolveResult,
+      executionPlan: input.executionPlan,
+      gameplayBootstrap: changedBootstrap,
+    })).toThrow("WORLD_PACKAGE_BUILD_RECEIPT_CLOSURE_INVALID");
+  });
+
   it("builds a deterministic asset-free receipt from real V4/V4/V5 artifacts", () => {
     const first = createWorldPackageBuildReceiptV1(assetFreeInput());
     const repeated = createWorldPackageBuildReceiptV1(assetFreeInput());
@@ -133,11 +320,15 @@ describe("WorldPackageBuildReceiptV1", () => {
     expect(first.manifest).toMatchObject({
       worldId: "basic-world",
       seed: 1024,
-      controlledEntityId: "player",
-      resources: [],
+      initialControlledEntityId: "player",
     });
+    expect(first.manifest.resources).toHaveLength(1);
+    expect(first.manifest.resources[0]?.packagePath).toBe(
+      "gameplay/bootstrap.json",
+    );
     expect(first.fileIntegrityEntries.map((row) => row.path)).toEqual([
       "authoring-spec.json",
+      "gameplay/bootstrap.json",
       "layout-solve-report.json",
       "manifest.json",
       "registry-lock.json",
@@ -179,16 +370,23 @@ describe("WorldPackageBuildReceiptV1", () => {
 
   it("verifies real asset bytes and binds them into Manifest, integrity, and Root", async () => {
     const input = await riggedInput();
+    expect(input.normalizedWorldIr.resources.subjectAssets[0]).toHaveProperty(
+      "subjectAssetManifestHash",
+    );
+    expect(input.executionPlan.subjectAssets[0]).not.toHaveProperty(
+      "subjectAssetManifestHash",
+    );
     const receipt = createWorldPackageBuildReceiptV1(input);
     const artifact = input.resourceArtifacts[0]!;
 
-    expect(receipt.manifest.resources).toEqual([{
+    expect(receipt.manifest.resources).toContainEqual({
       resourceRef: artifact.resourceRef,
       packagePath: artifact.packagePath,
       mediaType: artifact.mediaType,
       sizeBytes: artifact.bytes.byteLength,
       contentHash: sha256Bytes(artifact.bytes),
-    }]);
+    });
+    expect(receipt.manifest.resources).toHaveLength(2);
     expect(receipt.fileIntegrityEntries).toContainEqual({
       path: artifact.packagePath,
       mediaType: artifact.mediaType,
@@ -206,6 +404,7 @@ describe("WorldPackageBuildReceiptV1", () => {
       normalizedWorldIr: input.normalizedWorldIr,
       layoutSolveResult: input.layoutSolveResult,
       executionPlan: input.executionPlan,
+      gameplayBootstrap: input.gameplayBootstrap,
     };
 
     expect(assertWorldPackageBuildReceiptClosureV1(receipt, closure)).toEqual(
@@ -234,6 +433,7 @@ describe("WorldPackageBuildReceiptV1", () => {
       normalizedWorldIr: input.normalizedWorldIr,
       layoutSolveResult: input.layoutSolveResult,
       executionPlan: input.executionPlan,
+      gameplayBootstrap: input.gameplayBootstrap,
     } as unknown as WorldPackageBuildClosureV1;
 
     expect(() => assertWorldPackageBuildReceiptClosureV1(
@@ -260,6 +460,7 @@ describe("WorldPackageBuildReceiptV1", () => {
     const receipt = createWorldPackageBuildReceiptV1(input);
 
     expect(receipt.manifest.resources.map((row) => row.resourceRef)).toEqual([
+      input.gameplayBootstrap.resourceRef,
       "worldkit://subject-asset/humanoid.golden@1",
     ]);
   });
@@ -289,7 +490,7 @@ describe("WorldPackageBuildReceiptV1", () => {
     const expectedByPath = new Map([
       ["authoring-spec.json", canonicalJsonBytes(input.authoringSpec)],
       ["world.normalized.json", canonicalJsonBytes(input.normalizedWorldIr)],
-      ["registry-lock.json", canonicalJsonBytes(input.normalizedWorldIr.resources.resourceLock)],
+      ["registry-lock.json", canonicalJsonBytes(input.executionPlan.resourceLockEntries)],
       ["layout-solve-report.json", canonicalJsonBytes(input.layoutSolveResult.report)],
       ["targets/babylon-web/execution-plan.json", canonicalJsonBytes(input.executionPlan)],
     ]);
@@ -458,8 +659,9 @@ describe("WorldPackageBuildReceiptV1", () => {
 
   it("rejects accessor-bearing build input before reading the accessor", () => {
     const input = assetFreeInput();
+    const executionPlan = { ...input.executionPlan };
     let readCount = 0;
-    Object.defineProperty(input.executionPlan, "controlledEntityId", {
+    Object.defineProperty(executionPlan, "initialControlledEntityId", {
       configurable: true,
       enumerable: true,
       get: () => {
@@ -468,7 +670,10 @@ describe("WorldPackageBuildReceiptV1", () => {
       },
     });
 
-    expect(() => createWorldPackageBuildReceiptV1(input)).toThrow(
+    expect(() => createWorldPackageBuildReceiptV1({
+      ...input,
+      executionPlan,
+    })).toThrow(
       "WORLD_PACKAGE_BUILD_INPUT_ACCESSOR_FORBIDDEN",
     );
     expect(readCount).toBe(0);

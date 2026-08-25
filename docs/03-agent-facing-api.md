@@ -4,7 +4,10 @@
 
 ## 1. 目标
 
-本文主要描述创作期 Coding Agent API。运行期还会有一套更窄的 `Runtime World Director` 工具协议；它只能观察和操作已声明能力的 Entity，不编写任意场景代码，也不接触底层 Three.js/Rapier 对象。完整设计见 [运行时世界导演与受控世界操作协议](09-runtime-world-director.md)。
+本文主要描述创作期 Coding Agent API。运行期还会有一套更窄的 `Runtime World Director`
+工具协议；它只能观察和操作已声明能力的 Entity，不编写任意场景代码，也不接触 Babylon、
+Havok 或其他 Provider 对象。完整设计见
+[运行时世界导演与受控世界操作协议](09-runtime-world-director.md)。
 
 长期 Agent API 应该让 Coding Agent 把主要注意力放在：
 
@@ -322,8 +325,8 @@ await world.capture({
 └── 更完整 Validation / Capture
 
 SDK 内部
-├── Three.js scene graph details
-├── Rapier body synchronization
+├── Babylon scene graph details
+├── Havok body synchronization
 ├── Character ground detection
 ├── Camera collision
 ├── Animation transitions
@@ -331,4 +334,5 @@ SDK 内部
 └── Render pass implementation
 ```
 
-底层 Three.js 对象可以保留高级入口，但不应出现在默认文档和生成示例中。
+底层 Provider 对象不提供 Agent 高级入口，也不应出现在默认文档和生成示例中；需要新算法时
+通过版本化 Adapter/Plugin 合同接入。

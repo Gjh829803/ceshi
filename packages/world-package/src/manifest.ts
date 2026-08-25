@@ -30,7 +30,7 @@ const MANIFEST_FIELDS = [
   "executionPlanHash",
   "resourceLockHash",
   "layoutSolveReportHash",
-  "controlledEntityId",
+  "initialControlledEntityId",
   "entryPoint",
   "resources",
 ] as const;
@@ -297,7 +297,11 @@ export function canonicalWorldPackageManifestV1(
       "layoutSolveReportHash",
       code,
     ),
-    controlledEntityId: requireString(record.controlledEntityId, "controlledEntityId", code),
+    initialControlledEntityId: requireString(
+      record.initialControlledEntityId,
+      "initialControlledEntityId",
+      code,
+    ),
     entryPoint: { executionPlanPath: "targets/babylon-web/execution-plan.json" },
     resources,
   });

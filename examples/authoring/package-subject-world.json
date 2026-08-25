@@ -70,6 +70,7 @@
         "id": "coastal-pack-animal",
         "version": 1,
         "kind": "subject-definition",
+        "authoringAvailability": "recommended",
         "category": "animal",
         "bodyTopology": "quadruped",
         "semanticClassId": "subject.animal.pack",
@@ -260,10 +261,28 @@
           "worldkit://capability/locomotion.ground@1"
         ],
         "profiles": {
-          "physicsBodyProfileRef": "worldkit://physics-body-profile/character.medium@1",
+          "physicsBodyProfileRef": "worldkit://physics-body-profile/character.capability-medium@1",
           "locomotionProfileRef": "worldkit://locomotion-profile/ground.standard@1",
-          "controlFeelProfileRef": "worldkit://control-feel-profile/humanoid.medium-ground@1"
+          "controlFeelProfileRef": "worldkit://control-feel-profile/humanoid.medium-ground@1",
+          "allowedControlFeelProfileRefs": [
+            "worldkit://control-feel-profile/humanoid.medium-ground@1",
+            "worldkit://control-feel-profile/humanoid.heavy-ground@1"
+          ],
+          "motion": {
+            "defaultMotionProfileRef": "worldkit://motion-profile/free-ground.humanoid-medium@1",
+            "optionalMotionProfileRefs": [
+              "worldkit://motion-profile/safe-ground@1"
+            ],
+            "fallbackMotionProfileRef": "worldkit://motion-profile/safe-ground@1"
+          },
+          "controlProfileRef": "worldkit://control-profile/planar.camera-relative@1",
+          "cameraContextProfileRef": "worldkit://camera-context/capability-driven.default@1",
+          "mediumProfileRef": "worldkit://medium-profile/ground-air.standard@1",
+          "harnessProfileRef": "worldkit://harness-profile/subject.standard@1"
         },
+        "relationshipCapabilityRefs": [],
+        "actionOrPoseSetRef": "worldkit://pose-set/static.whitebox@1",
+        "renderBindingProfileRef": "worldkit://render-binding/subject.standard@1",
         "aiMetadata": {
           "displayName": "Coastal pack animal",
           "description": "A package-local controllable quadruped whitebox proxy used to verify deterministic composition and independent runtime instances.",
@@ -480,16 +499,18 @@
     "controlledEntityId": "player",
     "cameraEntityId": "camera-main"
   },
-  "schemaVersion": 3,
+  "schemaVersion": 4,
   "layout": {
     "solverProfileRef": "worldkit://layout-solver-profile/outdoor.s1@1"
   },
   "spatial": {
+    "traversalAreas": [],
     "regions": [],
     "routes": [],
     "screenRegions": []
   },
   "constraints": {
+    "connectivity": [],
     "placements": []
   }
 }

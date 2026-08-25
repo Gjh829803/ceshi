@@ -1,6 +1,6 @@
 {
   "kind": "worldkit-authoring-spec",
-  "schemaVersion": 3,
+  "schemaVersion": 4,
   "id": "placement-coastal-world",
   "seed": 20310417,
   "provenance": {
@@ -59,6 +59,7 @@
     "solverProfileRef": "worldkit://layout-solver-profile/outdoor.s1@1"
   },
   "spatial": {
+    "traversalAreas": [],
     "regions": [
       {
         "id": "spawn-overlook-region",
@@ -258,6 +259,7 @@
     "cameraEntityId": "camera-main"
   },
   "constraints": {
+    "connectivity": [],
     "placements": [
       {
         "id": "spawn-inside",

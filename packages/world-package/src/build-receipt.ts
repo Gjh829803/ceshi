@@ -1,17 +1,27 @@
 import {
-  canonicalAuthoringIdentityV3,
   canonicalAuthoringIdentityV4,
-  projectNormalizedWorldResourcesToV3LayoutIdentity,
+  canonicalAuthoringLayoutIdentityV4,
+  projectNormalizedWorldResourcesToLayoutIdentityV4,
   validateAuthoringSpecV4,
 } from "@whitebox-world/authoring";
 import { compileWorldV5 } from "@whitebox-world/compiler";
+import {
+  createGameplayBootstrapResourceLockEntryV1,
+  gameplayBootstrapCanonicalBytesV1,
+  parseGameplayBootstrapV1,
+  type GameplayBootstrapV1,
+} from "@whitebox-world/gameplay-contracts";
 import { hashLayoutSolveReportV1 } from "@whitebox-world/layout-solver";
 import {
   canonicalJsonBytes,
   sha256Bytes,
   sha256CanonicalJson,
 } from "@whitebox-world/protocol";
-import { canonicalExecutionResourceLockEntriesV1 } from "@whitebox-world/runtime-contracts";
+import {
+  canonicalExecutionResourceLockEntriesV1,
+  type ExecutionPlanV5,
+  type ExecutionResourceLockEntryV1,
+} from "@whitebox-world/runtime-contracts";
 import { isEqual, isNil, isPlainObject } from "lodash-es";
 
 import {
@@ -32,11 +42,15 @@ import type {
   WorldPackageManifestV1,
   WorldPackageResourceArtifactV1,
   WorldPackageSha256HashV1,
+  WorldPackageGameplayBootstrapMembershipInputV1,
 } from "./types.js";
 
 type UnknownRecord = Record<string, unknown>;
 const HASH_PATTERN = /^sha256:[a-f0-9]{64}$/;
 const ZERO_HASH = `sha256:${"0".repeat(64)}`;
+export const GAMEPLAY_BOOTSTRAP_PACKAGE_PATH_V1 = "gameplay/bootstrap.json";
+export const GAMEPLAY_BOOTSTRAP_MEDIA_TYPE_V1 =
+  "application/vnd.worldkit.gameplay-bootstrap+json";
 const RECEIPT_FIELDS = [
   "kind",
   "schemaVersion",
@@ -51,6 +65,7 @@ const INPUT_REQUIRED_FIELDS = [
   "normalizedWorldIr",
   "layoutSolveResult",
   "executionPlan",
+  "gameplayBootstrap",
   "resourceArtifacts",
 ] as const;
 const INPUT_ALLOWED_FIELDS = [...INPUT_REQUIRED_FIELDS, "includeAuthoringSpec"] as const;
@@ -60,6 +75,7 @@ const BUILD_CLOSURE_FIELDS = [
   "normalizedWorldIr",
   "layoutSolveResult",
   "executionPlan",
+  "gameplayBootstrap",
 ] as const;
 
 function fail(code: string, path: string, message: string): never {
@@ -119,6 +135,58 @@ function assertNoAllZeroHashValues(
 
 function compareCanonicalStrings(left: string, right: string): number {
   return left < right ? -1 : left > right ? 1 : 0;
+}
+
+function canonicalGameplayBootstrap(
+  value: unknown,
+  code: string,
+  path: string,
+): GameplayBootstrapV1 {
+  try {
+    return parseGameplayBootstrapV1(value);
+  } catch {
+    fail(code, path, "must be a canonical GameplayBootstrapV1");
+  }
+}
+
+function canonicalPlanResourceLockWithGameplayBootstrap(
+  normalizedWorldIr: CreateWorldPackageBuildReceiptInputV1["normalizedWorldIr"],
+  executionPlan: ExecutionPlanV5,
+  gameplayBootstrap: GameplayBootstrapV1,
+  code: string,
+): readonly ExecutionResourceLockEntryV1[] {
+  let baseResourceLock: readonly ExecutionResourceLockEntryV1[];
+  let planResourceLock: readonly ExecutionResourceLockEntryV1[];
+  let expectedPlanResourceLock: readonly ExecutionResourceLockEntryV1[];
+  try {
+    baseResourceLock = canonicalExecutionResourceLockEntriesV1(
+      normalizedWorldIr.resources.resourceLock,
+    );
+    planResourceLock = canonicalExecutionResourceLockEntriesV1(
+      executionPlan.resourceLockEntries,
+    );
+    expectedPlanResourceLock = canonicalExecutionResourceLockEntriesV1([
+      ...baseResourceLock,
+      createGameplayBootstrapResourceLockEntryV1(gameplayBootstrap),
+    ]);
+  } catch {
+    fail(code, "executionPlan/resourceLockEntries", "must be a canonical Execution Resource Lock");
+  }
+  if (!isEqual(executionPlan.resourceLockEntries, planResourceLock)) {
+    fail(code, "executionPlan/resourceLockEntries", "must use canonical resource order");
+  }
+  if (!isEqual(planResourceLock, expectedPlanResourceLock)) {
+    fail(
+      code,
+      "executionPlan/resourceLockEntries",
+      "must equal the Normalized IR Resource Lock plus exactly one Gameplay Bootstrap lock",
+    );
+  }
+  const planResourceLockHash = sha256CanonicalJson(planResourceLock);
+  if (executionPlan.resourceLockHash !== planResourceLockHash) {
+    fail(code, "executionPlan/resourceLockHash", "does not match the full Execution Resource Lock");
+  }
+  return planResourceLock;
 }
 
 function jsonIntegrityEntry(path: string, value: unknown): WorldPackageFileIntegrityEntryV1 {
@@ -226,6 +294,11 @@ export function createWorldPackageBuildReceiptV1(
   const world = snapshot.normalizedWorldIr;
   const layout = snapshot.layoutSolveResult;
   const plan = snapshot.executionPlan;
+  const gameplayBootstrap = canonicalGameplayBootstrap(
+    snapshot.gameplayBootstrap,
+    code,
+    "gameplayBootstrap",
+  );
   if (world.kind !== "worldkit-normalized-world" || world.schemaVersion !== 4) {
     fail(code, "normalizedWorldIr", "must be NormalizedWorldIRV4");
   }
@@ -247,23 +320,26 @@ export function createWorldPackageBuildReceiptV1(
   const normalizedWorldIrHash = sha256CanonicalJson(world) as WorldPackageSha256HashV1;
   const executionPlanHash = sha256CanonicalJson(plan) as WorldPackageSha256HashV1;
   const layoutSolveReportHash = hashLayoutSolveReportV1(layout.report);
-  const resourceLock = canonicalExecutionResourceLockEntriesV1(
+  const normalizedResourceLock = canonicalExecutionResourceLockEntriesV1(
     world.resources.resourceLock,
   );
-  const planResourceLock = canonicalExecutionResourceLockEntriesV1(plan.resourceLockEntries);
-  const resourceLockHash = sha256CanonicalJson(resourceLock) as WorldPackageSha256HashV1;
-  const projectedV3 = {
-    ...structuredClone(spec),
-    schemaVersion: 3 as const,
-    constraints: {
-      placements: structuredClone([...spec.constraints.placements]),
-    },
-  };
-  const layoutResources = projectNormalizedWorldResourcesToV3LayoutIdentity(
+  const planResourceLock = canonicalPlanResourceLockWithGameplayBootstrap(
+    world,
+    plan,
+    gameplayBootstrap,
+    code,
+  );
+  const normalizedResourceLockHash = sha256CanonicalJson(
+    normalizedResourceLock,
+  ) as WorldPackageSha256HashV1;
+  const resourceLockHash = sha256CanonicalJson(
+    planResourceLock,
+  ) as WorldPackageSha256HashV1;
+  const layoutResources = projectNormalizedWorldResourcesToLayoutIdentityV4(
     world.resources,
   );
   const layoutAuthoringSpecHash = sha256CanonicalJson(
-    canonicalAuthoringIdentityV3(projectedV3, {
+    canonicalAuthoringLayoutIdentityV4(spec, {
       ...world,
       resources: layoutResources,
     }),
@@ -275,10 +351,17 @@ export function createWorldPackageBuildReceiptV1(
   ): void => {
     if (!isEqual(actual, expected)) fail(code, path, "canonical binding mismatch");
   };
-  requireBinding(world.resources.resourceLock, resourceLock, "normalizedWorldIr/resources/resourceLock");
+  requireBinding(
+    world.resources.resourceLock,
+    normalizedResourceLock,
+    "normalizedWorldIr/resources/resourceLock",
+  );
   requireBinding(plan.resourceLockEntries, planResourceLock, "executionPlan/resourceLockEntries");
-  requireBinding(resourceLock, planResourceLock, "executionPlan/resourceLockEntries");
-  requireBinding(world.resources.resourceLockHash, resourceLockHash, "normalizedWorldIr/resources/resourceLockHash");
+  requireBinding(
+    world.resources.resourceLockHash,
+    normalizedResourceLockHash,
+    "normalizedWorldIr/resources/resourceLockHash",
+  );
   requireBinding(plan.resourceLockHash, resourceLockHash, "executionPlan/resourceLockHash");
   requireBinding(world.authoringSpecHash, authoringSpecHash, "normalizedWorldIr/authoringSpecHash");
   requireBinding(plan.authoringSpecHash, authoringSpecHash, "executionPlan/authoringSpecHash");
@@ -286,9 +369,8 @@ export function createWorldPackageBuildReceiptV1(
   requireBinding(layout.layoutSolveReportHash, layoutSolveReportHash, "layoutSolveResult/layoutSolveReportHash");
   requireBinding(world.layout.layoutSolveReportHash, layoutSolveReportHash, "normalizedWorldIr/layout/layoutSolveReportHash");
   requireBinding(plan.layout.layoutSolveReportHash, layoutSolveReportHash, "executionPlan/layout/layoutSolveReportHash");
-  // Layout V1 currently solves the canonical V3 placement projection. The V4
-  // identity remains authoritative for the WorldPackage while this explicit
-  // projection binding prevents an unrelated layout report from entering it.
+  // Layout evidence binds the canonical V4 layout identity while the full V4
+  // identity remains authoritative for the WorldPackage.
   requireBinding(layout.report.authoringSpecHash, layoutAuthoringSpecHash, "layoutSolveResult/report/authoringSpecHash");
   requireBinding(layout.report.registryLockHash, layoutResources.resourceLockHash, "layoutSolveResult/report/registryLockHash");
   requireBinding(layout.report.solverProfileRef, world.layout.solverProfileRef, "normalizedWorldIr/layout/solverProfileRef");
@@ -302,7 +384,11 @@ export function createWorldPackageBuildReceiptV1(
   requireBinding(spec.seed, world.seed, "normalizedWorldIr/seed");
   requireBinding(spec.seed, plan.seed, "executionPlan/seed");
   requireBinding(spec.seed, layout.report.seed, "layoutSolveResult/report/seed");
-  requireBinding(spec.startup.controlledEntityId, plan.controlledEntityId, "executionPlan/controlledEntityId");
+  requireBinding(
+    spec.startup.controlledEntityId,
+    plan.initialControlledEntityId,
+    "executionPlan/initialControlledEntityId",
+  );
   const normalizedSubjectAssetsByRef = new Map(
     world.resources.subjectAssets.map((asset) => [asset.subjectAssetRef, asset]),
   );
@@ -314,9 +400,23 @@ export function createWorldPackageBuildReceiptV1(
     fail(code, "executionPlan/subjectAssets", "subject asset Refs must be unique");
   }
   for (const asset of plan.subjectAssets) {
+    const normalizedAsset = normalizedSubjectAssetsByRef.get(
+      asset.subjectAssetRef,
+    );
+    if (isNil(normalizedAsset)) {
+      fail(
+        code,
+        `executionPlan/subjectAssets/${asset.subjectAssetRef}`,
+        "is missing from NormalizedWorldIRV4",
+      );
+    }
+    const {
+      subjectAssetManifestHash: _subjectAssetManifestHash,
+      ...expectedExecutionAsset
+    } = normalizedAsset;
     requireBinding(
       asset,
-      normalizedSubjectAssetsByRef.get(asset.subjectAssetRef),
+      expectedExecutionAsset,
       `executionPlan/subjectAssets/${asset.subjectAssetRef}`,
     );
   }
@@ -332,6 +432,8 @@ export function createWorldPackageBuildReceiptV1(
   const compiled = compileWorldV5({
     normalizedWorldIr: world,
     normalizedWorldIrHash,
+    gameplayBootstrapResourceLock:
+      createGameplayBootstrapResourceLockEntryV1(gameplayBootstrap),
   });
   if (
     !compiled.ok ||
@@ -355,6 +457,19 @@ export function createWorldPackageBuildReceiptV1(
     snapshot.resourceArtifacts,
     world.resources.subjectAssets,
   );
+  const gameplayBootstrapBytes = gameplayBootstrapCanonicalBytesV1(
+    gameplayBootstrap,
+  );
+  const gameplayBootstrapArtifactHash = sha256Bytes(
+    gameplayBootstrapBytes,
+  ) as WorldPackageSha256HashV1;
+  const gameplayBootstrapManifestRow: WorldPackageResourceArtifactV1 = {
+    resourceRef: gameplayBootstrap.resourceRef,
+    packagePath: GAMEPLAY_BOOTSTRAP_PACKAGE_PATH_V1,
+    mediaType: GAMEPLAY_BOOTSTRAP_MEDIA_TYPE_V1,
+    sizeBytes: gameplayBootstrapBytes.byteLength,
+    contentHash: gameplayBootstrapArtifactHash,
+  };
   const manifest = canonicalWorldPackageManifestV1({
     kind: "worldkit-world-package-manifest",
     schemaVersion: 1,
@@ -373,11 +488,11 @@ export function createWorldPackageBuildReceiptV1(
     executionPlanHash,
     resourceLockHash,
     layoutSolveReportHash,
-    controlledEntityId: plan.controlledEntityId,
+    initialControlledEntityId: plan.initialControlledEntityId,
     entryPoint: {
       executionPlanPath: "targets/babylon-web/execution-plan.json",
     },
-    resources: resources.manifestRows,
+    resources: [...resources.manifestRows, gameplayBootstrapManifestRow],
   });
   const manifestHash = hashWorldPackageManifestV1(manifest);
   const fileIntegrityEntries = canonicalWorldPackageFileIntegrityEntriesV1([
@@ -386,12 +501,18 @@ export function createWorldPackageBuildReceiptV1(
       ? []
       : [jsonIntegrityEntry("authoring-spec.json", spec)]),
     jsonIntegrityEntry("world.normalized.json", world),
-    jsonIntegrityEntry("registry-lock.json", resourceLock),
+    jsonIntegrityEntry("registry-lock.json", planResourceLock),
     jsonIntegrityEntry("layout-solve-report.json", layout.report),
     jsonIntegrityEntry("targets/babylon-web/execution-plan.json", plan),
     ...resources.integrityRows,
+    {
+      path: GAMEPLAY_BOOTSTRAP_PACKAGE_PATH_V1,
+      mediaType: GAMEPLAY_BOOTSTRAP_MEDIA_TYPE_V1,
+      sizeBytes: gameplayBootstrapBytes.byteLength,
+      sha256: gameplayBootstrapArtifactHash,
+    },
   ]);
-  return assertWorldPackageBuildReceiptV1({
+  const receipt = assertWorldPackageBuildReceiptV1({
     kind: "worldkit-world-package-build-receipt",
     schemaVersion: 1,
     manifest,
@@ -399,6 +520,12 @@ export function createWorldPackageBuildReceiptV1(
     fileIntegrityEntries,
     worldPackageRootHash: hashWorldPackageRootV1(fileIntegrityEntries),
   });
+  assertWorldPackageGameplayBootstrapMembershipV1({
+    executionPlan: plan,
+    gameplayBootstrap,
+    worldPackageBuildReceipt: receipt,
+  });
+  return receipt;
 }
 
 export function assertWorldPackageBuildReceiptV1(
@@ -498,6 +625,123 @@ export function assertWorldPackageBuildReceiptV1(
 }
 
 /**
+ * Proves that one canonical Gameplay Bootstrap is a member of the exact Plan
+ * Resource Lock and of the receipt-backed WorldPackage byte inventory.
+ */
+export function assertWorldPackageGameplayBootstrapMembershipV1(
+  input: WorldPackageGameplayBootstrapMembershipInputV1,
+): GameplayBootstrapV1 {
+  const code = "WORLD_PACKAGE_GAMEPLAY_BOOTSTRAP_MEMBERSHIP_INVALID";
+  assertWorldPackageAccessorFreeDataGraphV1(
+    input,
+    "WORLD_PACKAGE_GAMEPLAY_BOOTSTRAP_MEMBERSHIP_ACCESSOR_FORBIDDEN",
+  );
+  exactRecord(
+    input,
+    ["executionPlan", "gameplayBootstrap", "worldPackageBuildReceipt"],
+    ["executionPlan", "gameplayBootstrap", "worldPackageBuildReceipt"],
+    "",
+    code,
+  );
+  let snapshot: WorldPackageGameplayBootstrapMembershipInputV1;
+  try {
+    snapshot = structuredClone(input);
+  } catch {
+    fail(code, "", "membership input must be a cloneable canonical data graph");
+  }
+  let receipt: WorldPackageBuildReceiptV1;
+  try {
+    receipt = assertWorldPackageBuildReceiptV1(
+      snapshot.worldPackageBuildReceipt,
+    );
+  } catch {
+    fail(code, "worldPackageBuildReceipt", "must be a canonical closed Build Receipt");
+  }
+  const gameplayBootstrap = canonicalGameplayBootstrap(
+    snapshot.gameplayBootstrap,
+    code,
+    "gameplayBootstrap",
+  );
+  const plan = snapshot.executionPlan;
+  if (plan.kind !== "worldkit-execution-plan" || plan.schemaVersion !== 5) {
+    fail(code, "executionPlan", "must be ExecutionPlanV5");
+  }
+  const executionPlanHash = sha256CanonicalJson(
+    plan,
+  ) as WorldPackageSha256HashV1;
+  if (receipt.manifest.executionPlanHash !== executionPlanHash) {
+    fail(code, "executionPlan", "does not match the receipt Manifest Plan identity");
+  }
+
+  let planResourceLock: readonly ExecutionResourceLockEntryV1[];
+  try {
+    planResourceLock = canonicalExecutionResourceLockEntriesV1(
+      plan.resourceLockEntries,
+    );
+  } catch {
+    fail(code, "executionPlan/resourceLockEntries", "must be canonical");
+  }
+  if (!isEqual(plan.resourceLockEntries, planResourceLock)) {
+    fail(code, "executionPlan/resourceLockEntries", "must use canonical order");
+  }
+  const expectedBootstrapLock = createGameplayBootstrapResourceLockEntryV1(
+    gameplayBootstrap,
+  );
+  const bootstrapLocks = planResourceLock.filter(
+    (entry) => entry.resourceKind === "gameplay-bootstrap",
+  );
+  if (
+    bootstrapLocks.length !== 1 ||
+    !isEqual(bootstrapLocks[0], expectedBootstrapLock) ||
+    receipt.manifest.resourceLockHash !== sha256CanonicalJson(planResourceLock)
+  ) {
+    fail(
+      code,
+      "executionPlan/resourceLockEntries",
+      "must contain exactly the supplied Gameplay Bootstrap semantic lock",
+    );
+  }
+
+  const bootstrapBytes = gameplayBootstrapCanonicalBytesV1(
+    gameplayBootstrap,
+  );
+  const bootstrapArtifactHash = sha256Bytes(
+    bootstrapBytes,
+  ) as WorldPackageSha256HashV1;
+  const manifestRows = receipt.manifest.resources.filter(
+    (row) =>
+      row.resourceRef === gameplayBootstrap.resourceRef ||
+      row.packagePath === GAMEPLAY_BOOTSTRAP_PACKAGE_PATH_V1,
+  );
+  if (
+    manifestRows.length !== 1 ||
+    manifestRows[0]?.resourceRef !== gameplayBootstrap.resourceRef ||
+    manifestRows[0]?.packagePath !== GAMEPLAY_BOOTSTRAP_PACKAGE_PATH_V1 ||
+    manifestRows[0]?.mediaType !== GAMEPLAY_BOOTSTRAP_MEDIA_TYPE_V1 ||
+    manifestRows[0]?.sizeBytes !== bootstrapBytes.byteLength ||
+    manifestRows[0]?.contentHash !== bootstrapArtifactHash
+  ) {
+    fail(code, "worldPackageBuildReceipt/manifest/resources", "Gameplay Bootstrap artifact is not bound");
+  }
+  const integrityRows = receipt.fileIntegrityEntries.filter(
+    (entry) => entry.path === GAMEPLAY_BOOTSTRAP_PACKAGE_PATH_V1,
+  );
+  if (
+    integrityRows.length !== 1 ||
+    integrityRows[0]?.mediaType !== GAMEPLAY_BOOTSTRAP_MEDIA_TYPE_V1 ||
+    integrityRows[0]?.sizeBytes !== bootstrapBytes.byteLength ||
+    integrityRows[0]?.sha256 !== bootstrapArtifactHash
+  ) {
+    fail(
+      code,
+      "worldPackageBuildReceipt/fileIntegrityEntries",
+      "Gameplay Bootstrap canonical bytes are not bound",
+    );
+  }
+  return gameplayBootstrap;
+}
+
+/**
  * Binds a self-consistent receipt to the canonical files and resource closure
  * that actually produced it. Package Root assembly remains owned here rather
  * than being independently reinterpreted by Validation or Host code.
@@ -525,6 +769,39 @@ export function assertWorldPackageBuildReceiptClosureV1(
     fail(code, "", "closure must be a cloneable canonical data graph");
   }
   const receipt = assertWorldPackageBuildReceiptV1(value);
+  const gameplayBootstrap = canonicalGameplayBootstrap(
+    snapshot.gameplayBootstrap,
+    code,
+    "gameplayBootstrap",
+  );
+  try {
+    assertWorldPackageGameplayBootstrapMembershipV1({
+      executionPlan: snapshot.executionPlan,
+      gameplayBootstrap,
+      worldPackageBuildReceipt: receipt,
+    });
+  } catch {
+    fail(code, "gameplayBootstrap", "does not match the locked WorldPackage membership");
+  }
+
+  const normalizedWorldIrHash = sha256CanonicalJson(
+    snapshot.normalizedWorldIr,
+  );
+  const compiled = compileWorldV5({
+    normalizedWorldIr: snapshot.normalizedWorldIr,
+    normalizedWorldIrHash,
+    gameplayBootstrapResourceLock:
+      createGameplayBootstrapResourceLockEntryV1(gameplayBootstrap),
+  });
+  if (
+    !compiled.ok ||
+    isNil(compiled.executionPlan) ||
+    isNil(compiled.executionPlanHash) ||
+    !isEqual(compiled.executionPlan, snapshot.executionPlan) ||
+    compiled.executionPlanHash !== sha256CanonicalJson(snapshot.executionPlan)
+  ) {
+    fail(code, "executionPlan", "cannot be replayed from the exact locked closure");
+  }
 
   const expectedAssetsByRef = new Map(
     snapshot.normalizedWorldIr.resources.subjectAssets.map((asset) => [
@@ -535,11 +812,12 @@ export function assertWorldPackageBuildReceiptClosureV1(
   if (
     expectedAssetsByRef.size !==
       snapshot.normalizedWorldIr.resources.subjectAssets.length ||
-    receipt.manifest.resources.length !== expectedAssetsByRef.size
+    receipt.manifest.resources.length !== expectedAssetsByRef.size + 1
   ) {
     fail(code, "manifest/resources", "does not match the Normalized IR resource closure");
   }
   for (const resource of receipt.manifest.resources) {
+    if (resource.packagePath === GAMEPLAY_BOOTSTRAP_PACKAGE_PATH_V1) continue;
     const expected = expectedAssetsByRef.get(resource.resourceRef);
     if (
       isNil(expected) ||
@@ -566,7 +844,7 @@ export function assertWorldPackageBuildReceiptClosureV1(
     jsonIntegrityEntry("world.normalized.json", snapshot.normalizedWorldIr),
     jsonIntegrityEntry(
       "registry-lock.json",
-      snapshot.normalizedWorldIr.resources.resourceLock,
+      snapshot.executionPlan.resourceLockEntries,
     ),
     jsonIntegrityEntry(
       "layout-solve-report.json",

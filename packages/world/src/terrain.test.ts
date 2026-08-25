@@ -40,7 +40,7 @@ describe("Heightfield", () => {
     expect(terrain.sampleHeight(2, 0)).toBeUndefined();
   });
 
-  it("generates indexed Three.js BufferGeometry data", () => {
+  it("generates provider-neutral indexed geometry data with world-space bounds", () => {
     const terrain = new Heightfield({ width: 10, depth: 20, xSegments: 2, zSegments: 3, baseHeight: 2 });
     const data = terrain.toGeometryData();
     expect(data.positions).toHaveLength(12 * 3);
@@ -48,12 +48,10 @@ describe("Heightfield", () => {
     expect(data.uvs).toHaveLength(12 * 2);
     expect(data.indices).toHaveLength(12 * 3);
     expect(data.normals[1]).toBeCloseTo(1);
-
-    const geometry = terrain.toBufferGeometry();
-    expect(geometry.getAttribute("position").count).toBe(12);
-    expect(geometry.index?.count).toBe(36);
-    expect(geometry.boundingBox?.min.y).toBe(2);
-    geometry.dispose();
+    expect(data.positions).toBeInstanceOf(Float32Array);
+    expect(data.indices).toBeInstanceOf(Uint32Array);
+    expect(data.aabbMinimumMetersXYZ).toEqual([-5, 2, -10]);
+    expect(data.aabbMaximumMetersXYZ).toEqual([5, 2, 10]);
   });
 
   it("supports snapshots for deterministic rollback", () => {

@@ -2,22 +2,24 @@ import { readFile } from "node:fs/promises";
 import path from "node:path";
 
 import {
-  normalizeAuthoringSpec,
   normalizeAuthoringSpecV4,
-  parseAuthoringSpecJson,
   parseAuthoringSpecV4,
   type AuthoringDiagnostic,
   type AuthoringSpecV4,
   type NormalizeAuthoringResultV4,
-  type NormalizedWorldIRV3,
   type NormalizedWorldIRV4,
 } from "@whitebox-world/authoring";
-import { compileWorld, compileWorldV5 } from "@whitebox-world/compiler";
+import { compileWorldV5 } from "@whitebox-world/compiler";
+import { createCoreGameplayBootstrapV1 } from "@whitebox-world/gameplay";
+import {
+  createGameplayBootstrapResourceLockEntryV1,
+  type GameplayBootstrapV1,
+} from "@whitebox-world/gameplay-contracts";
 import type {
   CompileDiagnostic,
-  ExecutionPlanV4,
   ExecutionPlanV5,
 } from "@whitebox-world/runtime-contracts";
+import { isNil } from "lodash-es";
 
 export interface CliDiagnostic {
   severity: "info" | "warning" | "error";
@@ -38,17 +40,6 @@ export interface WorldkitFailure {
   diagnostics: readonly WorldkitDiagnostic[];
 }
 
-export interface WorldkitPipelineSuccess {
-  ok: true;
-  exitCode: 0;
-  diagnostics: readonly [];
-  absoluteInputPath: string;
-  normalizedWorldIr: NormalizedWorldIRV3;
-  normalizedWorldIrHash: string;
-  executionPlan: ExecutionPlanV4;
-  executionPlanHash: string;
-}
-
 export interface WorldkitRoutePipelineSuccess {
   ok: true;
   exitCode: 0;
@@ -59,8 +50,37 @@ export interface WorldkitRoutePipelineSuccess {
   normalizedWorldIrHash: string;
   layoutSolveReport: NonNullable<NormalizeAuthoringResultV4["layoutSolveReport"]>;
   layoutSolveReportHash: `sha256:${string}`;
+  gameplayBootstrap: GameplayBootstrapV1;
   executionPlan: ExecutionPlanV5;
   executionPlanHash: string;
+}
+
+function createRuntimeGameplayBootstrap(
+  normalizedWorldIr: NormalizedWorldIRV4,
+): GameplayBootstrapV1 {
+  const entityDescriptors = normalizedWorldIr.nodes
+    .filter((node) => node.kind === "subject")
+    .map((node) => {
+      const definition = normalizedWorldIr.resources.subjectDefinitions.find(
+        (candidate) =>
+          candidate.subjectDefinitionRef === node.subjectDefinitionRef,
+      );
+      if (isNil(definition)) {
+        throw new Error(
+          `WORLDKIT_PIPELINE_GAMEPLAY_SUBJECT_DEFINITION_MISSING: ${node.subjectDefinitionRef}`,
+        );
+      }
+      return {
+        id: node.id,
+        entityDefinitionRef: node.subjectDefinitionRef,
+        capabilityRefs: definition.capabilityRefs,
+      };
+    });
+  return createCoreGameplayBootstrapV1({
+    worldId: normalizedWorldIr.id,
+    worldSeed: normalizedWorldIr.seed,
+    entityDescriptors,
+  });
 }
 
 export function cliFailure(
@@ -105,47 +125,6 @@ export async function readWorldkitInput(
   }
 }
 
-export async function loadWorldkitPipeline(
-  inputPath: string,
-): Promise<WorldkitPipelineSuccess | WorldkitFailure> {
-  const input = await readWorldkitInput(inputPath);
-  if (!input.ok) return input;
-
-  const parsed = parseAuthoringSpecJson(input.sourceText);
-  if (!parsed.ok || parsed.value === undefined) {
-    return { ok: false, exitCode: 2, diagnostics: parsed.diagnostics };
-  }
-  const normalized = normalizeAuthoringSpec(parsed.value);
-  if (
-    !normalized.ok ||
-    normalized.value === undefined ||
-    normalized.normalizedWorldIrHash === undefined
-  ) {
-    return { ok: false, exitCode: 2, diagnostics: normalized.diagnostics };
-  }
-  const compiled = compileWorld({
-    normalizedWorldIr: normalized.value,
-    normalizedWorldIrHash: normalized.normalizedWorldIrHash,
-  });
-  if (
-    !compiled.ok ||
-    compiled.executionPlan === undefined ||
-    compiled.executionPlanHash === undefined
-  ) {
-    return { ok: false, exitCode: 2, diagnostics: compiled.diagnostics };
-  }
-  return {
-    ok: true,
-    exitCode: 0,
-    diagnostics: [],
-    absoluteInputPath: input.absoluteInputPath,
-    normalizedWorldIr: normalized.value,
-    normalizedWorldIrHash: normalized.normalizedWorldIrHash,
-    executionPlan: compiled.executionPlan,
-    executionPlanHash: compiled.executionPlanHash,
-  };
-}
-
 export async function loadWorldkitRoutePipeline(
   inputPath: string,
 ): Promise<WorldkitRoutePipelineSuccess | WorldkitFailure> {
@@ -163,9 +142,12 @@ export async function loadWorldkitRoutePipeline(
     normalized.layoutSolveReportHash === undefined) {
     return { ok: false, exitCode: 2, diagnostics: normalized.diagnostics };
   }
+  const gameplayBootstrap = createRuntimeGameplayBootstrap(normalized.value);
   const compiled = compileWorldV5({
     normalizedWorldIr: normalized.value,
     normalizedWorldIrHash: normalized.normalizedWorldIrHash,
+    gameplayBootstrapResourceLock:
+      createGameplayBootstrapResourceLockEntryV1(gameplayBootstrap),
   });
   if (!compiled.ok || compiled.executionPlan === undefined ||
     compiled.executionPlanHash === undefined) {
@@ -181,6 +163,7 @@ export async function loadWorldkitRoutePipeline(
     normalizedWorldIrHash: normalized.normalizedWorldIrHash,
     layoutSolveReport: normalized.layoutSolveReport,
     layoutSolveReportHash: normalized.layoutSolveReportHash,
+    gameplayBootstrap,
     executionPlan: compiled.executionPlan,
     executionPlanHash: compiled.executionPlanHash,
   };

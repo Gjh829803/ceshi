@@ -1,15 +1,18 @@
 import {
-  normalizeAuthoringSpec,
   normalizeAuthoringSpecV4,
   parseCanonicalJson,
-  parseAuthoringSpecJson,
   parseAuthoringSpecV4,
   sha256CanonicalJson,
   type AuthoringDiagnostic,
-  type AuthoringSpecV3,
   type AuthoringSpecV4,
+  type NormalizedWorldIRV4,
 } from "@whitebox-world/authoring";
-import { compileWorld, compileWorldV5 } from "@whitebox-world/compiler";
+import { compileWorldV5 } from "@whitebox-world/compiler";
+import { createCoreGameplayBootstrapV1 } from "@whitebox-world/gameplay";
+import {
+  createGameplayBootstrapResourceLockEntryV1,
+  type GameplayBootstrapV1,
+} from "@whitebox-world/gameplay-contracts";
 import {
   builtInSubjectResourceRegistry,
   type RegistrySubjectDefinitionV3,
@@ -17,16 +20,24 @@ import {
 } from "@whitebox-world/subject-registry";
 import type {
   CompileDiagnostic,
-  ExecutionPlanV4,
   ExecutionPlanV5,
 } from "@whitebox-world/runtime-contracts";
 import {
   canonicalWorldkitBrowserRouteEvidencePublicationV2,
   type WorldkitBrowserRouteEvidencePublicationV2,
 } from "@whitebox-world/runtime-contracts";
+import type { RuntimeWorldConfigurationV1 } from "@whitebox-world/runtime-host";
+import { createWorldPackageBuildReceiptV1 } from "@whitebox-world/world-package";
+import { isNil, uniq } from "lodash-es";
+
+import {
+  PLAYGROUND_SUBJECT_ASSET_PACKAGE_PATH_BY_REF_V1,
+  PLAYGROUND_SUBJECT_ASSET_URI_BY_REF_V1,
+  resolveWorldPackageSubjectAssetArtifactsV1,
+} from "./worldkit-asset-resolver.js";
 
 type CapabilityDemoResourceBudgetV1 = Readonly<
-  AuthoringSpecV3["world"]["resourceBudget"]
+  AuthoringSpecV4["world"]["resourceBudget"]
 >;
 
 type CapabilityDemoPositionMetersXYZV1 = readonly [number, number, number];
@@ -66,12 +77,14 @@ export interface CapabilityDemoHostOverlayV1 {
 
 export interface AuthoringSceneLoadResult {
   ok: boolean;
-  executionPlan?: ExecutionPlanV4 | ExecutionPlanV5;
+  executionPlan?: ExecutionPlanV5;
   normalizedWorldIrHash?: string;
   executionPlanHash?: string;
   diagnostics: readonly (AuthoringDiagnostic | CompileDiagnostic)[];
   hostOverlay?: CapabilityDemoHostOverlayV1;
   routeEvidencePublication?: WorldkitBrowserRouteEvidencePublicationV2;
+  /** Internal Host bootstrap. This is intentionally not a public Browser DTO. */
+  runtimeWorldConfiguration?: RuntimeWorldConfigurationV1;
 }
 
 export type AuthoringSourceFetcher = () => Promise<Response>;
@@ -79,9 +92,8 @@ export type AuthoringSourceFetcher = () => Promise<Response>;
 export interface AuthoringSceneLoadOptionsV1 {
   subjectDefinitionRef?: string;
   fetchRouteEvidence?: AuthoringSourceFetcher;
+  fetchSubjectAsset?: typeof fetch;
 }
-
-type SupportedAuthoringSpec = AuthoringSpecV3 | AuthoringSpecV4;
 
 const CAPABILITY_PLAYGROUND_MINIMUM_RESOURCE_BUDGET = Object.freeze({
   maxVertices: 200_000,
@@ -89,8 +101,36 @@ const CAPABILITY_PLAYGROUND_MINIMUM_RESOURCE_BUDGET = Object.freeze({
   maxColliders: 128,
 });
 
+function createRuntimeGameplayBootstrap(
+  normalizedWorldIr: NormalizedWorldIRV4,
+): GameplayBootstrapV1 {
+  const entityDescriptors = normalizedWorldIr.nodes
+    .filter((node) => node.kind === "subject")
+    .map((node) => {
+      const definition = normalizedWorldIr.resources.subjectDefinitions.find(
+        (candidate) =>
+          candidate.subjectDefinitionRef === node.subjectDefinitionRef,
+      );
+      if (isNil(definition)) {
+        throw new Error(
+          `AUTHORING_GAMEPLAY_SUBJECT_DEFINITION_MISSING: ${node.subjectDefinitionRef}`,
+        );
+      }
+      return {
+        id: node.id,
+        entityDefinitionRef: node.subjectDefinitionRef,
+        capabilityRefs: definition.capabilityRefs,
+      };
+    });
+  return createCoreGameplayBootstrapV1({
+    worldId: normalizedWorldIr.id,
+    worldSeed: normalizedWorldIr.seed,
+    entityDescriptors,
+  });
+}
+
 function frozenResourceBudget(
-  resourceBudget: AuthoringSpecV3["world"]["resourceBudget"],
+  resourceBudget: AuthoringSpecV4["world"]["resourceBudget"],
 ): CapabilityDemoResourceBudgetV1 {
   return Object.freeze({ ...resourceBudget });
 }
@@ -141,9 +181,14 @@ function createRelationshipDeferredPreview(
     id: `playground-preview.${source.id}`,
     resourceRef:
       `worldkit://subject-definition/playground-preview.${source.id}@${source.version}`,
-    capabilityRefs: source.capabilityRefs.filter(
-      (capabilityRef) => !deferredCapabilityRefSet.has(capabilityRef),
-    ),
+    capabilityRefs: uniq([
+      ...source.capabilityRefs.filter(
+        (capabilityRef) =>
+          !deferredCapabilityRefSet.has(capabilityRef) &&
+          !capabilityRef.startsWith("worldkit://capability/locomotion."),
+      ),
+      "worldkit://capability/locomotion.ground@1",
+    ]),
     relationshipCapabilityRefs: [],
   };
   const definition = deepFreeze({
@@ -210,11 +255,11 @@ async function sourceResponseDiagnosticCode(
   }
 }
 
-function applyCapabilityDemoContext<Source extends SupportedAuthoringSpec>(
-  source: Source,
+function applyCapabilityDemoContext(
+  source: AuthoringSpecV4,
   subjectDefinitionRef: string,
 ): Readonly<{
-  source: Source;
+  source: AuthoringSpecV4;
   hostOverlay?: CapabilityDemoHostOverlayV1;
   subjectResourceRegistry?: SubjectResourceRegistryV3;
 }> {
@@ -387,7 +432,7 @@ function applyCapabilityDemoContext<Source extends SupportedAuthoringSpec>(
         }
         return node;
       }),
-    } as Source,
+    } as AuthoringSpecV4,
   };
 }
 
@@ -555,7 +600,6 @@ export async function loadAuthoringScene(
     typeof syntax.value === "object" &&
     (syntax.value as { kind?: unknown }).kind === "worldkit-authoring-spec" &&
     Object.hasOwn(syntax.value, "schemaVersion") &&
-    schemaVersion !== 3 &&
     schemaVersion !== 4
   ) {
     return {
@@ -565,13 +609,11 @@ export async function loadAuthoringScene(
         code: "AUTHORING_SCHEMA_VERSION_NOT_SUPPORTED",
         instancePath: "/schemaVersion",
         message: `Authoring schema version '${String(schemaVersion)}' is not supported.`,
-        details: { supportedSchemaVersions: [3, 4] },
+        details: { supportedSchemaVersions: [4] },
       }],
     };
   }
-  const parsed = schemaVersion === 4
-    ? parseAuthoringSpecV4(sourceText)
-    : parseAuthoringSpecJson(sourceText);
+  const parsed = parseAuthoringSpecV4(sourceText);
   if (!parsed.ok || parsed.value === undefined) return { ok: false, diagnostics: parsed.diagnostics };
   const overlayResult = options.subjectDefinitionRef === undefined
     ? { source: parsed.value }
@@ -583,9 +625,7 @@ export async function loadAuthoringScene(
   const normalizeOptions = subjectResourceRegistry === undefined
     ? {}
     : { subjectResourceRegistry };
-  const normalized = source.schemaVersion === 4
-    ? normalizeAuthoringSpecV4(source, normalizeOptions)
-    : normalizeAuthoringSpec(source, normalizeOptions);
+  const normalized = normalizeAuthoringSpecV4(source, normalizeOptions);
   if (!normalized.ok || normalized.value === undefined || normalized.normalizedWorldIrHash === undefined) {
     return {
       ok: false,
@@ -593,15 +633,13 @@ export async function loadAuthoringScene(
       ...(hostOverlay === undefined ? {} : { hostOverlay }),
     };
   }
-  const compiled = normalized.value.schemaVersion === 4
-    ? compileWorldV5({
-        normalizedWorldIr: normalized.value,
-        normalizedWorldIrHash: normalized.normalizedWorldIrHash,
-      })
-    : compileWorld({
-        normalizedWorldIr: normalized.value,
-        normalizedWorldIrHash: normalized.normalizedWorldIrHash,
-      });
+  const gameplayBootstrap = createRuntimeGameplayBootstrap(normalized.value);
+  const compiled = compileWorldV5({
+    normalizedWorldIr: normalized.value,
+    normalizedWorldIrHash: normalized.normalizedWorldIrHash,
+    gameplayBootstrapResourceLock:
+      createGameplayBootstrapResourceLockEntryV1(gameplayBootstrap),
+  });
   if (!compiled.ok || compiled.executionPlan === undefined || compiled.executionPlanHash === undefined) {
     return {
       ok: false,
@@ -621,25 +659,7 @@ export async function loadAuthoringScene(
       ...(hostOverlay === undefined ? {} : { hostOverlay }),
     };
   }
-  if (
-    source.schemaVersion === 3 &&
-    routeEvidence.publication !== undefined
-  ) {
-    return {
-      ok: false,
-      diagnostics: [{
-        severity: "error",
-        code: "WORLDKIT_ROUTE_EVIDENCE_REQUIRES_AUTHORING_V4",
-        instancePath: "/schemaVersion",
-        message: "Configured Route evidence requires AuthoringSpec V4 and ExecutionPlan V5.",
-      }],
-      ...(hostOverlay === undefined ? {} : { hostOverlay }),
-    };
-  }
-  if (
-    source.schemaVersion === 4 &&
-    routeEvidence.publication !== undefined
-  ) {
+  if (routeEvidence.publication !== undefined) {
     if (
       normalized.value.schemaVersion !== 4 ||
       compiled.executionPlan.schemaVersion !== 5 ||
@@ -651,7 +671,7 @@ export async function loadAuthoringScene(
       authoringSpecHash: normalized.value.authoringSpecHash,
       normalizedWorldIrHash: normalized.normalizedWorldIrHash,
       executionPlanHash: compiled.executionPlanHash,
-      resourceLockHash: normalized.value.resources.resourceLockHash,
+      resourceLockHash: compiled.executionPlan.resourceLockHash,
       layoutSolveReportHash: normalized.layoutSolveReportHash,
     } as const;
     for (const field of [
@@ -669,6 +689,64 @@ export async function loadAuthoringScene(
     }
   }
 
+  let runtimeWorldConfiguration: RuntimeWorldConfigurationV1;
+  if (
+    normalized.value.schemaVersion !== 4 ||
+    compiled.executionPlan.schemaVersion !== 5 ||
+    isNil(normalized.layoutSolveReport) ||
+    isNil(normalized.layoutSolveReportHash)
+  ) {
+    throw new Error("AUTHORING_RUNTIME_CONFIGURATION_INTERNAL_VERSION_MISMATCH");
+  }
+  try {
+    const resourceArtifacts = isNil(options.fetchSubjectAsset)
+      ? await resolveWorldPackageSubjectAssetArtifactsV1(
+          normalized.value.resources.subjectAssets,
+          PLAYGROUND_SUBJECT_ASSET_URI_BY_REF_V1,
+          PLAYGROUND_SUBJECT_ASSET_PACKAGE_PATH_BY_REF_V1,
+        )
+      : await resolveWorldPackageSubjectAssetArtifactsV1(
+          normalized.value.resources.subjectAssets,
+          PLAYGROUND_SUBJECT_ASSET_URI_BY_REF_V1,
+          PLAYGROUND_SUBJECT_ASSET_PACKAGE_PATH_BY_REF_V1,
+          options.fetchSubjectAsset,
+        );
+    const worldPackageBuildReceipt = createWorldPackageBuildReceiptV1({
+      packageId: `${source.id}.${source.seed}`,
+      authoringSpec: source,
+      normalizedWorldIr: normalized.value,
+      layoutSolveResult: {
+        status: normalized.layoutSolveReport.status,
+        report: normalized.layoutSolveReport,
+        layoutSolveReportHash: normalized.layoutSolveReportHash,
+      },
+      executionPlan: compiled.executionPlan,
+      gameplayBootstrap,
+      resourceArtifacts,
+    });
+    runtimeWorldConfiguration = Object.freeze({
+      executionPlan: compiled.executionPlan,
+      executionPlanHash:
+        worldPackageBuildReceipt.manifest.executionPlanHash,
+      worldPackageRef:
+        `worldkit://world-package/${source.id}.${source.seed}@1`,
+      worldPackageBuildReceipt,
+      gameplayBootstrap,
+    });
+  } catch {
+    return {
+      ok: false,
+      diagnostics: [{
+        severity: "error",
+        code: "AUTHORING_RUNTIME_CONFIGURATION_INVALID",
+        instancePath: "/resources",
+        message:
+          "Unable to construct the locked Runtime World Configuration from the Authoring world.",
+      }],
+      ...(hostOverlay === undefined ? {} : { hostOverlay }),
+    };
+  }
+
   return {
     ok: true,
     executionPlan: compiled.executionPlan,
@@ -679,5 +757,6 @@ export async function loadAuthoringScene(
     ...(routeEvidence.publication === undefined
       ? {}
       : { routeEvidencePublication: routeEvidence.publication }),
+    runtimeWorldConfiguration,
   };
 }

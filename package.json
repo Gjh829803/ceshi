@@ -10,6 +10,8 @@
     "dev:g-bot": "pnpm worldkit run examples/authoring/g-bot-subject-world.json",
     "dev:g-bot:refresh": "pnpm worldkit run examples/authoring/g-bot-subject-world.json --refresh-dependencies",
     "generate:golden-humanoid": "tsx scripts/fixtures/generate-golden-humanoid-glb.ts --write",
+    "verify:xier120-subjects": "tsx scripts/verify-xier120-subjects.ts",
+    "generate:example-takes": "tsx scripts/generate-example-takes.ts",
     "studio": "pnpm --filter @whitebox-world/studio dev",
     "studio:public": "WORLDKIT_PUBLIC_MODE=1 WORLDKIT_STUDIO_PORT=4175 WORLDKIT_PLAYGROUND_ORIGIN=/play WORLDKIT_PLAYGROUND_INTERNAL_ORIGIN=http://127.0.0.1:5173 WORLDKIT_DISABLE_PLAYGROUND_SPAWN=1 pnpm --filter @whitebox-world/studio dev",
     "test:studio": "pnpm --filter @whitebox-world/studio test",
@@ -45,15 +47,18 @@
     "verify:route-r0-contract": "tsx scripts/verify-route-r0-contract.ts",
     "verify:route-r1-heightfield": "tsx scripts/verify-route-r1-heightfield.ts",
     "verify:route-r1b-static-platform": "tsx scripts/verify-route-r1b-static-platform.ts",
+    "verify:outdoor-gameplay": "tsx scripts/verify-outdoor-gameplay-worlds.ts",
+    "verify:unreleased-clean-break": "tsx scripts/verify-unreleased-clean-break.ts",
     "benchmark:route-r1b-surface-preflight": "tsx scripts/benchmark-route-r1b-surface-preflight.ts"
   },
   "dependencies": {
     "@babylonjs/core": "9.21.2",
     "@babylonjs/havok": "1.3.14",
-    "@dimforge/rapier3d-compat": "^0.19.3",
     "@whitebox-world/authoring": "workspace:*",
     "@whitebox-world/compiler": "workspace:*",
     "@whitebox-world/control-capture": "workspace:*",
+    "@whitebox-world/gameplay": "workspace:*",
+    "@whitebox-world/gameplay-contracts": "workspace:*",
     "@whitebox-world/protocol": "workspace:*",
     "@whitebox-world/runtime-babylon": "workspace:*",
     "@whitebox-world/runtime-contracts": "workspace:*",
@@ -63,13 +68,11 @@
     "@whitebox-world/validation": "workspace:*",
     "@whitebox-world/world": "workspace:*",
     "@whitebox-world/world-package": "workspace:*",
-    "lodash-es": "^4.18.1",
-    "three": "^0.180.0"
+    "lodash-es": "^4.18.1"
   },
   "devDependencies": {
     "@types/lodash-es": "^4.17.12",
     "@types/node": "^24.3.0",
-    "@types/three": "^0.180.0",
     "@vitest/coverage-v8": "^3.2.4",
     "playwright": "^1.62.1",
     "tsx": "^4.23.12",

@@ -2,8 +2,8 @@
   "kind": "worldkit-simulation-take",
   "schemaVersion": 1,
   "id": "coastal-walk-opening",
-  "worldPackageRef": "worldkit://world-package/coastal-whitebox@1",
-  "worldPackageRootHash": "sha256:16ea169661da248a04db56c7ed3be9e0838e80cfe0bb4887f0c17704b72b44f6",
+  "worldPackageRef": "worldkit://world-package/placement-coastal-world.20310417@1",
+  "worldPackageRootHash": "sha256:5806c6e5cc705cbf9b7a0b4e4d4b4bfe2c1561290ad41319fc67deef3c41add5",
   "seed": 731991,
   "simulationTickRate": {
     "numeratorTicks": 60,
@@ -29,19 +29,28 @@
       "keyframes": [
         {
           "tick": 0,
-          "moveAxesXZ": [0, 1],
+          "moveAxesXZ": [
+            0,
+            1
+          ],
           "runEnabled": false,
           "jumpPressed": false
         },
         {
           "tick": 300,
-          "moveAxesXZ": [0.2, 1],
+          "moveAxesXZ": [
+            0.2,
+            1
+          ],
           "runEnabled": false,
           "jumpPressed": false
         },
         {
           "tick": 480,
-          "moveAxesXZ": [0, 0],
+          "moveAxesXZ": [
+            0,
+            0
+          ],
           "runEnabled": false,
           "jumpPressed": false
         }

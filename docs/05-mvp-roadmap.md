@@ -12,7 +12,7 @@
 | 工作流 | 状态 | 说明 |
 |---|---|---|
 | Phase I：第三人称人形 + 室外搭建 | Alpha 收敛中 | 主链路可运行；资产/动作 QA、视觉回归、手感和更多图像场景仍需收敛 |
-| Subject Authoring S1a | 已完成 | Authoring V2、Registry/Package Primitive Definition、自动 Capsule、Hash/Lock、复数实例、CLI Explain；Browser Protocol 已干净升级至 V4 并保留原能力 |
+| Subject Authoring S1a | 已完成 | AuthoringSpec V4、Registry/Package Primitive Definition、自动 Capsule、Hash/Lock、复数实例、CLI Explain；Browser Protocol V5 通过当前合同提供对应能力，不保留旧版本别名 |
 | Subject Authoring S1b | Golden + 首个产品切片已完成 | 项目自有 Golden 与产品 G Bot 的 GLB、Rig、Collider Profile 与 `idle/walk/run/jump` 已通过 Canonical Babylon/Havok E2E；更多产品资产、Compound Collider、LOD 和更多动作/拓扑仍开放 |
 | M5 Route Graph / Traversability | R1 Heightfield 已完成 | Authoring V4 Golden/Adversarial Fixture、双 Blocking Gate、真实 Babylon/Havok Probe 与 `pnpm verify:route-r1-heightfield` 已进入回归；R1b 与 M5 总验收仍开放 |
 | Phase II：更多主体/动作 + 室内 | 未开始 | 优先级尚未冻结 |
@@ -43,7 +43,8 @@
 
 当前实现说明：Canonical Babylon 路径的项目自有 Golden GLB 与首个产品 G Bot 已验证
 `idle / walk / run / jump`、固定 Tick 动作状态、Havok 位移、墙体碰撞与双实例隔离。
-Legacy Three/Rapier 路径仍可用本地 Mixamo 资产做实验，但不代表后续产品资产已验收。
+Catalog、artifact-only 和 Canonical Authoring 页面现在都由 Babylon/Havok 承载；首个产品
+资产通过不代表后续产品资产已验收。
 
 ### 2. 室外自由地形搭建
 
@@ -79,8 +80,8 @@ Coding Agent 可以通过 `defineWorldFeature` 自行定义湖泊、山脉、峡
 - World、Entity、Transform
 - 固定更新循环
 - 输入系统
-- Three.js 场景同步
-- Rapier 物理同步
+- Babylon 场景同步
+- Havok 物理同步
 - Asset Registry
 - Feature Registry
 - 创建、更新、删除和重建 Feature
@@ -113,7 +114,7 @@ M5 的目标不是让 AI 编写 NavMesh，而是让 AI 继续使用 Route、Anch
 3. Validation Subject 绑定同一组五个权威 Hash；
 4. Recast 只作为 Provider Adapter 构建 Graph/Path；
 5. 真实 Babylon/Havok `NullEngine` Character Controller 做固定 Tick Probe；
-6. CLI 发布 Canonical Evidence/Report，可信 Host 向 Browser Protocol V4 注入只读投影；
+6. CLI 发布 Canonical Evidence/Report，可信 Host 向 Browser Protocol V5 注入只读投影；
 7. 11 个 Authoring V4 Golden/Adversarial Fixture 与 `pnpm verify:route-r1-heightfield` 进入回归。
 
 终审见 [R1 Heightfield Runtime Review](reviews/2026-08-22-route-r1-heightfield-runtime-review.md)。
@@ -194,7 +195,8 @@ Lock、物理与控制。该能力证明了“Definition 与 Instance 分离”�
 
 ## 后续工作流 B：Runtime World Director（已规划、未承诺排期）
 
-第一期不实现，但将它作为正式后续模块规划：让运行时 LLM 根据用户需求，通过受控协议修改世界，而不是重新运行 Coding Agent 或直接操作 Three.js/Rapier。
+第一期不实现，但将它作为正式后续模块规划：让运行时 LLM 根据用户需求，通过受控协议修改
+世界，而不是重新运行 Coding Agent 或直接操作 Babylon/Havok Provider 对象。
 
 建议分三步：
 
@@ -207,7 +209,7 @@ Lock、物理与控制。该能力证明了“Definition 与 Instance 分离”�
 ## 第一期建议实现顺序
 
 1. 定义 World、Entity、SubjectKit、WorldFeature 和资源所有权协议。
-2. 实现固定更新循环与 Three.js/Rapier 同步。
+2. 实现固定更新循环与 Babylon/Havok 同步。
 3. 实现标准骨骼人形白膜和第三人称控制。
 4. 绑定少量基础动作并完成状态切换。
 5. 实现 Shape、Terrain、Surface 和 Geometry 基础操作。

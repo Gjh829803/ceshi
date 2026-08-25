@@ -413,6 +413,7 @@ interface ControllerEntityStateV1 {
   kind: "controller-entity-state";
   controllerDefinitionRef: string;
   controllerDefinitionHash: `sha256:${string}`;
+  participantId: string;
   lifecycleMode: "active" | "suspended" | "disabled";
   inputMode: "human" | "agent" | "replay";
 }
@@ -424,6 +425,7 @@ interface ControllerEntityStateV1 {
 - 单位进入字段名。
 - 静态且未变化的 Entity 可以只存在于 WorldPackage；若其门状态、破坏状态或 Transform 可变，则进入 Snapshot。
 - Controller 与可见 Subject 都是 Entity State Union 的成员；不再维护第二份 `controllerStatesById` Map。
+- `participantId` 只关联外部 Participant 与 Controller Entity；它不是控制目标，不能替代 Relationship。
 - Controller 不通过 `controlledEntityId` 字段独立保存控制真相；控制目标来自 `possessedBy` Relationship。
 - Entity 不反向保存 `activeActionIds`；活动 Action 只在 `activeActionStatesById` 中以 `actorEntityId` 建立权威关联，需要的反向索引由消费者派生。
 
@@ -549,6 +551,8 @@ interface SupportedByFactV1 {
   id: string;
   type: "supportedBy";
   schemaVersion: 1;
+  semanticFactProjectorProfileRef: string;
+  semanticFactProjectorProfileHash: `sha256:${string}`;
   supportedEntityId: string;
   supportSurfaceEntityId: string;
   supportColliderSubshapeId: string;
@@ -562,6 +566,8 @@ interface TouchingFactV1 {
   id: string;
   type: "touching";
   schemaVersion: 1;
+  semanticFactProjectorProfileRef: string;
+  semanticFactProjectorProfileHash: `sha256:${string}`;
   entityIds: readonly [string, string];
   startedSimulationTick: number;
 }
@@ -570,13 +576,23 @@ interface InsideVolumeFactV1 {
   id: string;
   type: "insideVolume";
   schemaVersion: 1;
+  semanticFactProjectorProfileRef: string;
+  semanticFactProjectorProfileHash: `sha256:${string}`;
   containedEntityId: string;
   volumeEntityId: string;
   startedSimulationTick: number;
 }
 ```
 
-`TouchingFactV1.entityIds` 是对称端点，必须按 Entity ID 字典序排序；其余 Fact 使用角色化端点。`supportSurfaceEntityId`、`supportColliderSubshapeId` 与可选的 `supportTraversalSurfaceId` 复用 Route/Hybrid Terrain 已冻结的三层 Surface 身份：世界所有者、几何命中和可通行语义不能缩成同一个含糊 `surfaceId`。
+`TouchingFactV1.entityIds` 是对称端点，必须按 Entity ID 字典序排序；其余 Fact 使用角色化端点。
+每条 Fact 显式携带锁定 `semanticFactProjectorProfileRef/hash`，以便 standalone parser 能验证
+Fact ID，不能依赖进程内隐式默认 Projector。`supportSurfaceEntityId`、
+`supportColliderSubshapeId` 与可选的 `supportTraversalSurfaceId` 复用 Route/Hybrid Terrain 已冻结的
+三层 Surface 身份：世界所有者、几何命中和可通行语义不能缩成同一个含糊 `surfaceId`。
+`supportedEntityId` / `containedEntityId` 必须指向 Snapshot 中的动态 Spatial Entity；静态
+`supportSurfaceEntityId`、`volumeEntityId` 或 `touching` 的静态一端可以只存在于已锁定
+WorldPackage。Standalone Snapshot parser 只拒绝当前 State Map 中已知但角色错误的端点；完整
+Package membership 由 RuntimeHost 装配门禁结合 Package Root 闭包验证。
 
 ### 10.3 Semantic Fact Projector
 
@@ -617,21 +633,30 @@ Havok / Character Support / Trigger / Constraint raw result
 ### 11.1 Action State
 
 ```ts
-interface ActionStateV1 {
+interface ActionStateBaseV1 {
   id: string;
   kind: "action-state";
   semanticActionRef: string;
   semanticActionHash: `sha256:${string}`;
-  actionRequestRef: string;
-  actionRequestHash: `sha256:${string}`;
   actorEntityId: string;
   mode: "starting" | "active" | "completing";
   startedSimulationTick: number;
   lastTransitionSimulationTick: number;
 }
+
+type ActionStateV1 = ActionStateBaseV1 & (
+  | {
+      actionRequestRef?: never;
+      actionRequestHash?: never;
+    }
+  | {
+      actionRequestRef: string;
+      actionRequestHash: `sha256:${string}`;
+    }
+);
 ```
 
-`actionRequestRef` 指向已经过对应 Action Definition Schema 验证的不可变 Canonical Request；Mount Request 使用 `riderEntityId/mountEntityId/mountSlotId`，Equipment Request 使用 `itemEntityId/wearerEntityId/equipmentSlotId`。新 Action 通过 Registry Schema 扩展，不在公共 State Envelope 中增加 `params` 或 `targetIdsByRole` 通用袋。`actorEntityId` 是用于查询的受校验投影，必须与 Request 中的 Actor 角色一致，否则整个 Snapshot 无效。
+无参数的 Semantic Action 可以合法地不携带 Action Request；需要参数的 Action 必须同时携带 `actionRequestRef` 与 `actionRequestHash`，不允许只出现其中一个，也不为无参数动作制造空 Request。`actionRequestRef` 指向已经过对应 Action Definition Schema 验证的不可变 Canonical Request；Mount Request 使用 `riderEntityId/mountEntityId/mountSlotId`，Equipment Request 使用 `itemEntityId/wearerEntityId/equipmentSlotId`。新 Action 通过 Registry Schema 扩展，不在公共 State Envelope 中增加 `params` 或 `targetIdsByRole` 通用袋。携带 Request 时，`actorEntityId` 是用于查询的受校验投影，必须与 Request 中的 Actor 角色一致，否则整个 Snapshot 无效。
 
 Animation Clip、Blend、Layer 和 Root Motion 是 Action 的 Runtime/Visual 执行细节。Snapshot 可以记录 `semanticActionRef` 和 Phase，但不把 Clip Name 当作语义动作真相。`activeActionStatesById` 只包含尚未终止的实例；`completed/cancelled/failed` 只进入 Receipt/Event，避免 Snapshot 形成无界历史日志。
 
@@ -648,6 +673,7 @@ Receipt 必须包含：
 - committed 时的 `worldStateAfterRef` 与 `worldStateAfterHash`。
 
 相同 Command ID + 相同 Canonical Payload 重试返回同一 Receipt；相同 ID + 不同 Payload 返回 `COMMAND_ID_CONFLICT`。
+Receipt 的 `eventIds` 必须使用同一 `worldSessionId`，每项严格等于 `gameplay-event:<worldSessionId>:<sequence>`；`sequence` 遵循 Event 的安全非负整数域，数组按 sequence 严格递增，不允许重复、逆序、前导零或跨 Session 引用。Rejected Receipt 的 `eventIds` 必须为空。
 
 ### 11.3 Event
 
@@ -705,6 +731,8 @@ type WorldEventV1 =
 - `sequence` 在一个 WorldSession 内严格递增。
 - Command 直接提交关系时，Relationship Event 才携带该 `commandId`。
 - Physics Fact Event 可以引用相关 Action/Event，但不能仅因发生在下一 Tick 就声称由某 Command 直接造成。
+- `semantic-fact.started` 的 Event Tick 等于 Fact `startedSimulationTick`；
+  `semantic-fact.ended` 的 Event Tick 不早于 started Tick，避免事件声称未来才开始的 Fact。
 - 不创建 `gravityActivated` 这类不真实的引擎事件。释放物体应记录关系解除、Support 结束、Action 状态和后续 Contact 开始。
 - Event 不是 Snapshot 内数组；Snapshot 只保存 `lastEventSequence`，事件通过独立 Log/Ref 获取。
 
@@ -713,7 +741,9 @@ type WorldEventV1 =
 - Command ID 由调用方提供并承担幂等键；同 ID 不允许复用为不同 Payload。
 - Relationship ID 在 Bind Request/初始 WorldPackage 中确定，并在连续存在期间保持不变；解除后重新建立产生新 ID。
 - Action State ID 由已接受的 Action Request 确定；同一 Command 产生多个 Action 时使用稳定 Ordinal 派生，不能使用数组插入顺序。
-- Semantic Fact ID 由 Fact Type、Canonical Endpoint、开始 Tick 和锁定 Projector Profile 派生；同一连续接触期间不变，结束后重新开始产生新 ID。
+- Semantic Fact ID 由 Fact Type、Canonical Endpoint、开始 Tick 和 Fact 内显式锁定的
+  `semanticFactProjectorProfileRef/hash` 派生；连续期间会变化的接触点/法线不进入 ID。parser 必须
+  重算并拒绝不匹配的 ID；同一连续接触期间 ID 不变，结束后重新开始产生新 ID。
 - Event ID 由 `worldSessionId + sequence` 派生；`sequence` 是 WorldSession 内唯一顺序真相，Timestamp 只作观测信息，不能用于排序。
 - Snapshot 只保留当前 Entity、Relationship、Fact 和未终止 Action；终态、删除和历史只保留在 Receipt/Event Log 与 Checkpoint Artifact 中。
 

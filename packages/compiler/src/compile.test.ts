@@ -3,12 +3,15 @@ import { readFile } from "node:fs/promises";
 import { describe, expect, it } from "vitest";
 
 import {
-  normalizeAuthoringSpec,
-  normalizeAuthoringSpecV3,
+  normalizeAuthoringSpecV4,
   sha256CanonicalJson,
-  type AuthoringSpecV3,
-  type NormalizedWorldIRV3,
+  type AuthoringSpecV4,
+  type NormalizedWorldIRV4,
 } from "@whitebox-world/authoring";
+import {
+  createGameplayBootstrapResourceLockEntryV1,
+  createGameplayBootstrapV1,
+} from "@whitebox-world/gameplay-contracts";
 import {
   builtInSubjectResourceRegistry,
   createSubjectResourceRegistry,
@@ -22,13 +25,16 @@ import { BUILT_IN_SUBJECT_DEFINITIONS } from "../../subject-registry/src/built-i
 import { BUILT_IN_SUBJECT_RESOURCE_MANIFESTS } from "../../subject-registry/src/built-in-resource-manifests";
 import type { RegistrySubjectDefinitionInputV3 } from "../../subject-registry/src/types-v3";
 import {
-  createValidPackageSubjectWorld,
-  createValidAuthoringSpec,
+  createValidAuthoringSpecV4 as createValidAuthoringSpec,
+  createValidPackageSubjectWorldV4,
   createValidRiggedPackageDefinition,
-  createValidRiggedPackageSubjectWorld,
+  createValidRiggedPackageSubjectWorldV4,
 } from "../../authoring/src/test-fixture";
 
-import { compileWorld, compileWorldV4, sampleTerrainHeight } from "./index";
+import {
+  compileWorldV5,
+  sampleTerrainHeight,
+} from "./index";
 
 const SUBJECT_ASSET_REF = "worldkit://subject-asset/humanoid.golden@1";
 const RIG_PROFILE_REF = "worldkit://rig-profile/biped.golden@1";
@@ -57,6 +63,27 @@ const BIPED_BONE_IDS = [
 const INJECTED_SOURCE_URI = "https://registry.invalid/private/golden-humanoid.glb";
 const INJECTED_LICENSE_URI = "https://registry.invalid/private/license";
 const INJECTED_AI_TAG = "registry-private-discovery-tag";
+const GAMEPLAY_BOOTSTRAP_LOCK =
+  createGameplayBootstrapResourceLockEntryV1(createGameplayBootstrapV1({
+    kind: "gameplay-bootstrap",
+    id: "compiler-current-test.gameplay",
+    version: 1,
+    resourceRef: "worldkit://gameplay-bootstrap/compiler-current-test@1",
+    entityDescriptors: [],
+    featureResourceLocks: [],
+    semanticActionDefinitions: [],
+    availableCapabilityRefs: [],
+  }));
+
+function compileWorld(input: {
+  readonly normalizedWorldIr: NormalizedWorldIRV4;
+  readonly normalizedWorldIrHash: string;
+}) {
+  return compileWorldV5({
+    ...input,
+    gameplayBootstrapResourceLock: GAMEPLAY_BOOTSTRAP_LOCK,
+  });
+}
 
 const ALL_BUILT_IN_REGISTRY_INPUTS = [
   ...BUILT_IN_SUBJECT_DEFINITIONS,
@@ -77,7 +104,7 @@ function compileAuthoringSpec(options: {
   if (options.subjectDefinitionRef !== undefined) {
     subject.subjectDefinitionRef = options.subjectDefinitionRef;
   }
-  const normalized = normalizeAuthoringSpec(spec);
+  const normalized = normalizeAuthoringSpecV4(spec);
   if (
     !normalized.ok ||
     normalized.value === undefined ||
@@ -121,12 +148,12 @@ function registryWithPrivateAssetMetadata() {
 }
 
 function normalizeRiggedWorld(
-  mutate?: (spec: AuthoringSpecV3) => void,
+  mutate?: (spec: AuthoringSpecV4) => void,
   usePrivateRegistry = false,
 ) {
-  const spec = createValidRiggedPackageSubjectWorld();
+  const spec = createValidRiggedPackageSubjectWorldV4();
   mutate?.(spec);
-  const normalized = normalizeAuthoringSpec(
+  const normalized = normalizeAuthoringSpecV4(
     spec,
     usePrivateRegistry
       ? { subjectResourceRegistry: registryWithPrivateAssetMetadata() }
@@ -142,7 +169,21 @@ function normalizeRiggedWorld(
   return normalized;
 }
 
-function compileNormalizedWorld(world: NormalizedWorldIRV3) {
+function normalizeStaticAssetWorld() {
+  return normalizeRiggedWorld((spec) => {
+    const definition = spec.resources.subjectDefinitions[0]!;
+    spec.resources = {
+      ...spec.resources,
+      subjectDefinitions: [{
+        ...definition,
+        visualBinding: { mode: "static" },
+        sockets: [],
+      }],
+    };
+  });
+}
+
+function compileNormalizedWorld(world: NormalizedWorldIRV4) {
   return compileWorld({
     normalizedWorldIr: world,
     normalizedWorldIrHash: sha256CanonicalJson(world),
@@ -150,7 +191,7 @@ function compileNormalizedWorld(world: NormalizedWorldIRV3) {
 }
 
 function compilePackageWorld() {
-  const normalized = normalizeAuthoringSpec(createValidPackageSubjectWorld());
+  const normalized = normalizeAuthoringSpecV4(createValidPackageSubjectWorldV4());
   if (
     !normalized.ok ||
     normalized.value === undefined ||
@@ -164,7 +205,7 @@ function compilePackageWorld() {
   });
 }
 
-function createSolvedLayoutWorldV3(): AuthoringSpecV3 {
+function createSolvedLayoutWorldV4(): AuthoringSpecV4 {
   const base = createValidAuthoringSpec();
   return {
     ...base,
@@ -177,6 +218,7 @@ function createSolvedLayoutWorldV3(): AuthoringSpecV3 {
       }],
       routes: [],
       screenRegions: [],
+      traversalAreas: [],
     },
     nodes: base.nodes.map((node) =>
       node.id === "spawn-main" && node.kind === "anchor"
@@ -209,14 +251,15 @@ function createSolvedLayoutWorldV3(): AuthoringSpecV3 {
           minimumSupportRatio: 1,
         },
       ],
+      connectivity: [],
     },
   };
 }
 
-function normalizeSolvedLayoutWorldV3() {
-  const result = normalizeAuthoringSpecV3(createSolvedLayoutWorldV3());
+function normalizeSolvedLayoutWorldV4() {
+  const result = normalizeAuthoringSpecV4(createSolvedLayoutWorldV4());
   if (!result.ok || result.value === undefined || result.normalizedWorldIrHash === undefined) {
-    throw new Error(`V3 fixture did not normalize: ${JSON.stringify(result.diagnostics)}`);
+    throw new Error(`V4 fixture did not normalize: ${JSON.stringify(result.diagnostics)}`);
   }
   return result;
 }
@@ -316,7 +359,7 @@ describe("compileWorld", () => {
       throw new Error("Expected the valid fixture to contain a Subject node.");
     }
     subject.subjectDefinitionRef = "worldkit://subject-definition/humanoid.g-bot@1";
-    const normalized = normalizeAuthoringSpec(spec);
+    const normalized = normalizeAuthoringSpecV4(spec);
     if (!normalized.ok || normalized.value === undefined) {
       throw new Error(`G Bot fixture did not normalize: ${JSON.stringify(normalized.diagnostics)}`);
     }
@@ -349,7 +392,7 @@ describe("compileWorld", () => {
       throw new Error("Expected the valid fixture to contain a Subject node.");
     }
     subject.subjectDefinitionRef = "worldkit://subject-definition/humanoid.g-bot@1";
-    const normalized = normalizeAuthoringSpec(spec);
+    const normalized = normalizeAuthoringSpecV4(spec);
     if (!normalized.ok || normalized.value === undefined) {
       throw new Error(`G Bot fixture did not normalize: ${JSON.stringify(normalized.diagnostics)}`);
     }
@@ -496,6 +539,118 @@ describe("compileWorld", () => {
     expect(plan.subjects[0]?.controlFeel.contentHash).toMatch(/^sha256:[a-f0-9]{64}$/);
   });
 
+  it("compiles one static Subject Asset into the addressable ExecutionPlan asset table", () => {
+    const normalized = normalizeStaticAssetWorld();
+    const result = compileWorld({
+      normalizedWorldIr: normalized.value!,
+      normalizedWorldIrHash: normalized.normalizedWorldIrHash!,
+    });
+
+    expect(result.ok).toBe(true);
+    const plan = result.executionPlan!;
+    const subject = plan.subjects.find((candidate) => candidate.entityId === "player")!;
+    expect(subject.visualBinding).toEqual({ mode: "static" });
+    expect(subject.visualParts).toEqual([
+      expect.objectContaining({
+        id: "body.asset",
+        kind: "asset",
+        subjectAssetRef: SUBJECT_ASSET_REF,
+      }),
+    ]);
+    expect(plan.subjectAssets).toEqual([
+      expect.objectContaining({ subjectAssetRef: SUBJECT_ASSET_REF }),
+    ]);
+    expect(plan.rigProfiles).toEqual([]);
+    expect(plan.animationSets).toEqual([]);
+  });
+
+  it("preserves the unresolved Subject Asset invariant for a static Subject", () => {
+    const normalized = normalizeStaticAssetWorld();
+    const world = structuredClone(normalized.value!);
+    world.resources.subjectAssets = [];
+
+    expect(compileNormalizedWorld(world)).toEqual({
+      ok: false,
+      diagnostics: [{
+        severity: "error",
+        code: "COMPILER_NORMALIZED_IR_INVALID",
+        instancePath: "/normalizedWorldIr",
+        message:
+          "NormalizedWorldIR invariant violated: missing Subject Asset 'worldkit://subject-asset/humanoid.golden@1'.",
+      }],
+    });
+  });
+
+  it.each([
+    {
+      label: "missing Subject Asset Resource Lock row",
+      expectedMessage:
+        "NormalizedWorldIR invariant violated: Subject Asset 'worldkit://subject-asset/humanoid.golden@1' requires one matching locked Subject Asset.",
+      mutate: (world: NormalizedWorldIRV4) => {
+        world.resources.resourceLock = world.resources.resourceLock.filter(
+          (row) => row.resourceRef !== SUBJECT_ASSET_REF,
+        );
+      },
+    },
+    {
+      label: "duplicate Subject Asset Resource Lock row",
+      expectedMessage: "EXECUTION_RESOURCE_LOCK_INVALID",
+      mutate: (world: NormalizedWorldIRV4) => {
+        const subjectAssetLock = world.resources.resourceLock.find(
+          (row) => row.resourceRef === SUBJECT_ASSET_REF,
+        );
+        if (subjectAssetLock === undefined) {
+          throw new Error("Static Subject Asset lock fixture is missing its lock row.");
+        }
+        world.resources.resourceLock = [
+          ...world.resources.resourceLock,
+          structuredClone(subjectAssetLock),
+        ];
+      },
+    },
+    {
+      label: "wrong-kind Subject Asset Resource Lock row",
+      expectedMessage:
+        "NormalizedWorldIR invariant violated: Subject Asset 'worldkit://subject-asset/humanoid.golden@1' requires one matching locked Subject Asset.",
+      mutate: (world: NormalizedWorldIRV4) => {
+        world.resources.resourceLock = world.resources.resourceLock.map((row) =>
+          row.resourceRef === SUBJECT_ASSET_REF
+            ? { ...row, resourceKind: "rig-profile" }
+            : row,
+        );
+      },
+    },
+    {
+      label: "forged Subject Asset Resource Lock content hash",
+      expectedMessage:
+        "NormalizedWorldIR invariant violated: Subject Asset 'worldkit://subject-asset/humanoid.golden@1' does not match its locked Registry manifest hash.",
+      mutate: (world: NormalizedWorldIRV4) => {
+        world.resources.resourceLock = world.resources.resourceLock.map((row) =>
+          row.resourceRef === SUBJECT_ASSET_REF
+            ? { ...row, contentHash: `sha256:${"0".repeat(64)}` }
+            : row,
+        );
+      },
+    },
+  ])("rejects a $label for a static Subject", ({ mutate, expectedMessage }) => {
+    const normalized = normalizeStaticAssetWorld();
+    const world = structuredClone(normalized.value!);
+    mutate(world);
+    world.resources.resourceLockHash = sha256CanonicalJson(
+      world.resources.resourceLock,
+    );
+
+    expect(compileNormalizedWorld(world)).toEqual({
+      ok: false,
+      diagnostics: [{
+        severity: "error",
+        code: "COMPILER_NORMALIZED_IR_INVALID",
+        instancePath: "/normalizedWorldIr",
+        message: expectedMessage,
+      }],
+    });
+  });
+
   it("locks the current valid rigged ExecutionPlan hash", () => {
     const rigged = normalizeRiggedWorld();
 
@@ -505,60 +660,60 @@ describe("compileWorld", () => {
         normalizedWorldIrHash: rigged.normalizedWorldIrHash!,
       }).executionPlanHash,
     ).toBe(
-      "sha256:351614bc988e28afd7b2d6cd8ea0d42fd325d063cf2ea43bacf5b7aa786fe9b2",
+      "sha256:e0bcaf42d565603caebd14f45935c5049af4f5f79f7818f0c61a7d12b7acb6e6",
     );
   });
 
   it.each([
     {
       label: "missing canonical Bone mapping",
-      mutate: (world: NormalizedWorldIRV3) => {
+      mutate: (world: NormalizedWorldIRV4) => {
         const sourceNodeNameByBoneId = world.resources.rigProfiles[0]!
           .sourceNodeNameByBoneId as unknown as Record<string, string>;
         delete sourceNodeNameByBoneId.head;
       },
       message:
-        "NormalizedWorldIRV3 invariant violated: Rig Profile 'worldkit://rig-profile/biped.golden@1' is missing source-node mapping for Bone 'head'.",
+        "NormalizedWorldIR invariant violated: Rig Profile 'worldkit://rig-profile/biped.golden@1' is missing source-node mapping for Bone 'head'.",
     },
     {
       label: "whitespace-only canonical Bone mapping",
-      mutate: (world: NormalizedWorldIRV3) => {
+      mutate: (world: NormalizedWorldIRV4) => {
         const sourceNodeNameByBoneId = world.resources.rigProfiles[0]!
           .sourceNodeNameByBoneId as unknown as Record<string, string>;
         sourceNodeNameByBoneId.head = " \t ";
       },
       message:
-        "NormalizedWorldIRV3 invariant violated: Rig Profile 'worldkit://rig-profile/biped.golden@1' has an empty source-node mapping for Bone 'head'.",
+        "NormalizedWorldIR invariant violated: Rig Profile 'worldkit://rig-profile/biped.golden@1' has an empty source-node mapping for Bone 'head'.",
     },
     {
       label: "own-property undefined canonical Bone mapping",
-      mutate: (world: NormalizedWorldIRV3) => {
+      mutate: (world: NormalizedWorldIRV4) => {
         const sourceNodeNameByBoneId = world.resources.rigProfiles[0]!
           .sourceNodeNameByBoneId as unknown as Record<string, unknown>;
         sourceNodeNameByBoneId.head = undefined;
       },
       message:
-        "NormalizedWorldIRV3 invariant violated: Rig Profile 'worldkit://rig-profile/biped.golden@1' is missing source-node mapping for Bone 'head'.",
+        "NormalizedWorldIR invariant violated: Rig Profile 'worldkit://rig-profile/biped.golden@1' is missing source-node mapping for Bone 'head'.",
     },
     {
       label: "numeric canonical Bone mapping",
-      mutate: (world: NormalizedWorldIRV3) => {
+      mutate: (world: NormalizedWorldIRV4) => {
         const sourceNodeNameByBoneId = world.resources.rigProfiles[0]!
           .sourceNodeNameByBoneId as unknown as Record<string, unknown>;
         sourceNodeNameByBoneId.head = 123;
       },
       message:
-        "NormalizedWorldIRV3 invariant violated: Rig Profile 'worldkit://rig-profile/biped.golden@1' is missing source-node mapping for Bone 'head'.",
+        "NormalizedWorldIR invariant violated: Rig Profile 'worldkit://rig-profile/biped.golden@1' is missing source-node mapping for Bone 'head'.",
     },
     {
       label: "explicit empty canonical Bone mapping",
-      mutate: (world: NormalizedWorldIRV3) => {
+      mutate: (world: NormalizedWorldIRV4) => {
         const sourceNodeNameByBoneId = world.resources.rigProfiles[0]!
           .sourceNodeNameByBoneId as unknown as Record<string, string>;
         sourceNodeNameByBoneId.head = "";
       },
       message:
-        "NormalizedWorldIRV3 invariant violated: Rig Profile 'worldkit://rig-profile/biped.golden@1' has an empty source-node mapping for Bone 'head'.",
+        "NormalizedWorldIR invariant violated: Rig Profile 'worldkit://rig-profile/biped.golden@1' has an empty source-node mapping for Bone 'head'.",
     },
   ])("rejects a $label", ({ mutate, message }) => {
     const normalized = normalizeRiggedWorld();
@@ -787,7 +942,7 @@ describe("compileWorld", () => {
   });
 
   it("excludes normalized resources reachable only from unused Definitions", () => {
-    const spec = createValidPackageSubjectWorld();
+    const spec = createValidPackageSubjectWorldV4();
     spec.resources = {
       ...spec.resources,
       subjectDefinitions: [
@@ -795,7 +950,7 @@ describe("compileWorld", () => {
         createValidRiggedPackageDefinition(),
       ],
     };
-    const normalized = normalizeAuthoringSpec(spec);
+    const normalized = normalizeAuthoringSpecV4(spec);
     expect(normalized.ok).toBe(true);
     expect(normalized.value?.resources.subjectAssets).toHaveLength(1);
 
@@ -818,33 +973,33 @@ describe("compileWorld", () => {
   it.each([
     {
       label: "missing reachable Subject Asset row",
-      mutate: (world: NormalizedWorldIRV3) => {
+      mutate: (world: NormalizedWorldIRV4) => {
         world.resources.subjectAssets = [];
       },
       message:
-        "NormalizedWorldIRV3 invariant violated: missing Subject Asset 'worldkit://subject-asset/humanoid.golden@1'.",
+        "NormalizedWorldIR invariant violated: missing Subject Asset 'worldkit://subject-asset/humanoid.golden@1'.",
     },
     {
       label: "duplicate Subject Asset row",
-      mutate: (world: NormalizedWorldIRV3) => {
+      mutate: (world: NormalizedWorldIRV4) => {
         world.resources.subjectAssets = [
           ...world.resources.subjectAssets,
           structuredClone(world.resources.subjectAssets[0]!),
         ];
       },
       message:
-        "NormalizedWorldIRV3 invariant violated: duplicate Subject Asset 'worldkit://subject-asset/humanoid.golden@1'.",
+        "NormalizedWorldIR invariant violated: duplicate Subject Asset 'worldkit://subject-asset/humanoid.golden@1'.",
     },
     {
       label: "mismatched Animation Set Asset row",
-      mutate: (world: NormalizedWorldIRV3) => {
+      mutate: (world: NormalizedWorldIRV4) => {
         world.resources.animationSets = world.resources.animationSets.map((row) => ({
           ...row,
           subjectAssetRef: "worldkit://subject-asset/other@1",
         }));
       },
       message:
-        "NormalizedWorldIRV3 invariant violated: Animation Set 'worldkit://animation-set/humanoid.ground.golden@1' targets Subject Asset 'worldkit://subject-asset/other@1', but Subject 'player' selects 'worldkit://subject-asset/humanoid.golden@1'.",
+        "NormalizedWorldIR invariant violated: Animation Set 'worldkit://animation-set/humanoid.ground.golden@1' targets Subject Asset 'worldkit://subject-asset/other@1', but Subject 'player' selects 'worldkit://subject-asset/humanoid.golden@1'.",
     },
   ])("rejects a $label with a stable diagnostic", ({ mutate, message }) => {
     const normalized = normalizeRiggedWorld();
@@ -868,7 +1023,7 @@ describe("compileWorld", () => {
     const result = compilePackageWorld();
 
     expect(result.ok).toBe(true);
-    expect(result.executionPlan?.schemaVersion).toBe(4);
+    expect(result.executionPlan?.schemaVersion).toBe(5);
     expect(
       result.executionPlan?.subjects.map((subject) => ({
         entityId: subject.entityId,
@@ -960,12 +1115,12 @@ describe("compileWorld", () => {
   });
 
   it("fails before runtime construction when the plan exceeds a resource budget", () => {
-    const spec = createValidPackageSubjectWorld();
+    const spec = createValidPackageSubjectWorldV4();
     spec.world = {
       ...spec.world,
       resourceBudget: { ...spec.world.resourceBudget, maxVertices: 100 },
     };
-    const normalized = normalizeAuthoringSpec(spec);
+    const normalized = normalizeAuthoringSpecV4(spec);
     if (
       !normalized.ok ||
       normalized.value === undefined ||
@@ -989,8 +1144,8 @@ describe("compileWorld", () => {
     );
   });
 
-  it("rejects a normalized hash that does not match the supplied V2 IR", () => {
-    const normalized = normalizeAuthoringSpec(createValidPackageSubjectWorld());
+  it("rejects a normalized hash that does not match the supplied V4 IR", () => {
+    const normalized = normalizeAuthoringSpecV4(createValidPackageSubjectWorldV4());
     if (!normalized.ok || normalized.value === undefined) {
       throw new Error("Fixture did not normalize.");
     }
@@ -1011,9 +1166,9 @@ describe("compileWorld", () => {
     });
   });
 
-  it("compiles V3 solved layout IR into an exact V4 execution layout projection", () => {
-    const normalized = normalizeSolvedLayoutWorldV3();
-    const result = compileWorldV4({
+  it("compiles V4 solved layout IR into the exact V5 execution layout", () => {
+    const normalized = normalizeSolvedLayoutWorldV4();
+    const result = compileWorld({
       normalizedWorldIr: normalized.value!,
       normalizedWorldIrHash: normalized.normalizedWorldIrHash!,
     });
@@ -1021,7 +1176,7 @@ describe("compileWorld", () => {
     expect(result.ok).toBe(true);
     expect(result.executionPlan).toMatchObject({
       kind: "worldkit-execution-plan",
-      schemaVersion: 4,
+      schemaVersion: 5,
       normalizedWorldIrHash: normalized.normalizedWorldIrHash,
       camera: { aspectRatio: 16 / 9 },
       layout: {
@@ -1049,15 +1204,15 @@ describe("compileWorld", () => {
     expect(serialized).not.toContain('"constraints"');
     expect(serialized).not.toMatch(/candidateRegionIds|sourceUri|licenseUri|providerHandle/);
     expect(result.executionPlanHash).toBe(
-      "sha256:5c70313404f4b16e033fbf0bc150e2e6887db7272894c58b9d4c96fdb8b784a4",
+      "sha256:361248bdcb9f56ec4b49195dfa2c2f0cee124107dc964623d1c89d85c45c6828",
     );
   });
 
   it("copies the solved spawn position and Y rotation without terrain resampling", () => {
-    const normalized = normalizeSolvedLayoutWorldV3();
+    const normalized = normalizeSolvedLayoutWorldV4();
     const world = structuredClone(normalized.value!) as unknown as {
-      nodes: Array<NormalizedWorldIRV3["nodes"][number]>;
-    } & NormalizedWorldIRV3;
+      nodes: Array<NormalizedWorldIRV4["nodes"][number]>;
+    } & NormalizedWorldIRV4;
     const spawnAnchor = world.nodes.find(
       (node) => node.kind === "anchor" && node.id === "spawn-main",
     );
@@ -1094,7 +1249,7 @@ describe("compileWorld", () => {
     water.components.water.traversalMode = "blocked";
     spawn.placement.transform.positionMetersXYZ = [25, 0, 0];
 
-    const normalized = normalizeAuthoringSpec(spec);
+    const normalized = normalizeAuthoringSpecV4(spec);
     if (!normalized.ok || normalized.value === undefined || normalized.normalizedWorldIrHash === undefined) {
       throw new Error(`Blocked-water fixture did not normalize: ${JSON.stringify(normalized.diagnostics)}`);
     }
@@ -1124,7 +1279,7 @@ describe("compileWorld", () => {
     water.components.water.depthMeters = 2;
     spawn.placement.transform.positionMetersXYZ = [37.2, 0, 0];
 
-    const normalized = normalizeAuthoringSpec(spec);
+    const normalized = normalizeAuthoringSpecV4(spec);
     if (!normalized.ok || normalized.value === undefined || normalized.normalizedWorldIrHash === undefined) {
       throw new Error(`Blocked-water edge fixture did not normalize: ${JSON.stringify(normalized.diagnostics)}`);
     }
@@ -1150,7 +1305,7 @@ describe("compileWorld", () => {
     water.components.water.traversalMode = traversalMode;
     spawn.placement.transform.positionMetersXYZ = spawnPosition;
 
-    const normalized = normalizeAuthoringSpec(spec);
+    const normalized = normalizeAuthoringSpecV4(spec);
     if (!normalized.ok || normalized.value === undefined || normalized.normalizedWorldIrHash === undefined) {
       throw new Error(`Allowed-water fixture did not normalize: ${JSON.stringify(normalized.diagnostics)}`);
     }
@@ -1172,7 +1327,7 @@ describe("compileWorld", () => {
     water.components.water.depthMeters = 2;
     spawn.placement.transform.positionMetersXYZ = [25, 0, 0];
 
-    const normalized = normalizeAuthoringSpec(spec);
+    const normalized = normalizeAuthoringSpecV4(spec);
     if (!normalized.ok || normalized.value === undefined || normalized.normalizedWorldIrHash === undefined) {
       throw new Error(`Elevated-water fixture did not normalize: ${JSON.stringify(normalized.diagnostics)}`);
     }
@@ -1196,7 +1351,7 @@ describe("compileWorld", () => {
     object.placement.transform.positionMetersXYZ = [0, 2, 30];
     spawn.placement.transform.positionMetersXYZ = [0, 0, 30];
 
-    const normalized = normalizeAuthoringSpec(spec);
+    const normalized = normalizeAuthoringSpecV4(spec);
     if (!normalized.ok || normalized.value === undefined || normalized.normalizedWorldIrHash === undefined) {
       throw new Error(`Static-blocker fixture did not normalize: ${JSON.stringify(normalized.diagnostics)}`);
     }
@@ -1237,7 +1392,7 @@ describe("compileWorld", () => {
     object.placement.transform.scaleXYZ = [4, 1, 1];
     spawn.placement.transform.positionMetersXYZ = [4.2, 0, 30];
 
-    const normalized = normalizeAuthoringSpec(spec);
+    const normalized = normalizeAuthoringSpecV4(spec);
     if (!normalized.ok || normalized.value === undefined || normalized.normalizedWorldIrHash === undefined) {
       throw new Error(`Non-uniform blocker fixture did not normalize: ${JSON.stringify(normalized.diagnostics)}`);
     }
@@ -1261,7 +1416,7 @@ describe("compileWorld", () => {
     object.placement.transform.positionMetersXYZ = [0, -2, 30];
     spawn.placement.transform.positionMetersXYZ = [0, 0, 30];
 
-    const normalized = normalizeAuthoringSpec(spec);
+    const normalized = normalizeAuthoringSpecV4(spec);
     if (!normalized.ok || normalized.value === undefined || normalized.normalizedWorldIrHash === undefined) {
       throw new Error(`Static-blocker contact fixture did not normalize: ${JSON.stringify(normalized.diagnostics)}`);
     }
@@ -1279,8 +1434,8 @@ describe("compileWorld", () => {
     async ({ path, spawns }) => {
       const spec = JSON.parse(
         await readFile(new URL(path, import.meta.url), "utf8"),
-      ) as AuthoringSpecV3;
-      const normalized = normalizeAuthoringSpec(spec);
+      ) as AuthoringSpecV4;
+      const normalized = normalizeAuthoringSpecV4(spec);
       if (
         !normalized.ok ||
         normalized.value === undefined ||
@@ -1290,9 +1445,21 @@ describe("compileWorld", () => {
           `Product fixture did not normalize: ${JSON.stringify(normalized.diagnostics)}`,
         );
       }
-      const compiled = compileWorld({
+      const gameplayBootstrapResourceLock =
+        createGameplayBootstrapResourceLockEntryV1(createGameplayBootstrapV1({
+          kind: "gameplay-bootstrap",
+          id: `${spec.id}.compile-product-fixture`,
+          version: 1,
+          resourceRef: `worldkit://gameplay-bootstrap/${spec.id}.compile-product-fixture@1`,
+          entityDescriptors: [],
+          featureResourceLocks: [],
+          semanticActionDefinitions: [],
+          availableCapabilityRefs: [],
+        }));
+      const compiled = compileWorldV5({
         normalizedWorldIr: normalized.value,
         normalizedWorldIrHash: normalized.normalizedWorldIrHash,
+        gameplayBootstrapResourceLock,
       });
       const executionPlan = compiled.executionPlan!;
 
@@ -1335,8 +1502,8 @@ describe("compileWorld", () => {
     },
   );
 
-  it("projects forged nested IR objects explicitly and rejects a V3 IR hash mismatch", () => {
-    const normalized = normalizeSolvedLayoutWorldV3();
+  it("projects forged nested IR objects explicitly and rejects a V4 IR hash mismatch", () => {
+    const normalized = normalizeSolvedLayoutWorldV4();
     const forged = structuredClone(normalized.value!) as unknown as {
       layout: {
         regions: Array<Record<string, unknown>>;
@@ -1345,14 +1512,14 @@ describe("compileWorld", () => {
     };
     forged.layout.regions[0]!.providerHandle = "private-region-handle";
     forged.layout.assertions[0]!.providerHandle = "private-assertion-handle";
-    const projected = compileWorldV4({
+    const projected = compileWorld({
       normalizedWorldIr: forged as unknown as NonNullable<typeof normalized.value>,
       normalizedWorldIrHash: sha256CanonicalJson(forged),
     });
     expect(projected.ok).toBe(true);
     expect(JSON.stringify(projected.executionPlan)).not.toContain("private-");
 
-    expect(compileWorldV4({
+    expect(compileWorld({
       normalizedWorldIr: normalized.value!,
       normalizedWorldIrHash: `sha256:${"0".repeat(64)}`,
     })).toMatchObject({

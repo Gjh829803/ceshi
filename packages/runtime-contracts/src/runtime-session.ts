@@ -3,6 +3,16 @@ import type {
   Sha256HashV1,
 } from "@whitebox-world/control-capture";
 import type {
+  GameplayCommandReceiptV1,
+  GameplayCommandV1,
+  GameplayCapabilityStateV1,
+  GameplayDiagnosticV1,
+  GameplayEventV1,
+  GameplayInspectionSnapshotV1,
+  SpatialEntityStateV1,
+  WorldStateSnapshotV1,
+} from "@whitebox-world/gameplay-contracts";
+import type {
   RouteEvidenceSelectorV1,
   RouteOverlayQueryResultV2,
   RoutePathReceiptQueryResultV2,
@@ -77,57 +87,6 @@ export interface ViewTargetSampleV1 {
   cameraContextTags: readonly string[];
 }
 
-export const TRUSTED_DEFAULT_CONTROLLER_ID = "controller-primary" as const;
-
-export interface BindControlRequestV2 {
-  controllerId: string;
-  controlledEntityId: string;
-  expectedControlledEntityId: string;
-}
-
-export interface ControlBindingReceiptV2 {
-  kind: "worldkit-control-binding-receipt";
-  schemaVersion: 2;
-  status: "committed" | "rejected";
-  controllerId: string;
-  previousControlledEntityId: string;
-  controlledEntityId: string;
-  diagnostic?: {
-    code:
-      | "CONTROL_BINDING_STALE"
-      | "CONTROL_CONTROLLER_NOT_FOUND"
-      | "CONTROL_TARGET_NOT_FOUND";
-    message: string;
-  };
-}
-
-export interface ControllerRuntimeStateV3 {
-  id: string;
-  controlledEntityId: string;
-}
-
-export interface SubjectRuntimeStateV3 {
-  entityId: string;
-  subjectDefinitionRef: string;
-  subjectDefinitionHash: string;
-  positionMetersXYZ: Vec3;
-  velocityMetersPerSecondXYZ: Vec3;
-  movementMedium: PublishedMovementMediumV1;
-  activeActionId: string;
-  forwardXYZ?: Vec3;
-  speedMetersPerSecond?: number;
-  activeControlFeelProfileRef?: string;
-  activePhysicsBodyProfileRef?: string;
-  activeLocomotionProfileRef?: string;
-  locomotionMode?: LocomotionModeV1;
-  activeMotionProfileRef?: string;
-  activeMotionKernelRef?: string;
-  motionTags?: readonly string[];
-  relationshipRole?: "none" | "rider" | "driver" | "passenger" | "tethered";
-  safeFallbackActive?: boolean;
-  motionFailureCode?: string;
-}
-
 export interface ApplySubjectPresetTuningRequestV1 {
   subjectEntityId: string;
   expectedSubjectDefinitionRef: string;
@@ -140,35 +99,63 @@ export interface ApplySubjectPresetTuningRequestV1 {
 export interface SubjectPresetTuningReceiptV1 {
   status: "committed" | "rejected";
   diagnostic?: { code: string; message: string };
-  snapshot: WorldRuntimeSnapshotV3;
+  snapshot: WorldRuntimeSnapshotV4;
 }
 
-export interface WorldRuntimeSnapshotV3 {
-  kind: "worldkit-runtime-snapshot";
-  schemaVersion: 3;
-  runtimeBackend: "babylon-havok";
-  tick: number;
-  ready: boolean;
-  controlledEntityId: string;
-  controllersById: Readonly<Record<string, ControllerRuntimeStateV3>>;
-  subjectStatesByEntityId: Readonly<Record<string, SubjectRuntimeStateV3>>;
-  camera: {
-    entityId: string;
-    targetEntityId: string;
-    positionMetersXYZ: Vec3;
-    activeCameraProfileRef?: string;
-    activeCameraRigRef?: string;
-    activeCameraModifierRefs?: readonly string[];
-    safeFallbackActive?: boolean;
-    viewYawOffsetRadians?: number;
-    viewPitchOffsetRadians?: number;
-    viewDistanceOffsetMeters?: number;
+export type WorldRuntimeCameraStateV4 =
+  | Readonly<{
+      mode: "unbound";
+    }>
+  | Readonly<{
+      mode: "tracking";
+      id: string;
+      targetEntityId: string;
+      positionMetersXYZ: Vec3;
+      activeCameraProfileRef: string;
+      activeCameraRigRef: string;
+      activeCameraModifierRefs: readonly string[];
+      safeFallbackActive: boolean;
+      viewYawOffsetRadians: number;
+      viewPitchOffsetRadians: number;
+      viewDistanceOffsetMeters: number;
+    }>;
+
+export interface WorldRuntimeSubjectStateV4 {
+  readonly entityState: SpatialEntityStateV1;
+  readonly capabilityStatesById: Readonly<
+    Record<string, GameplayCapabilityStateV1>
+  >;
+}
+
+export interface WorldRuntimeSnapshotV4 {
+  readonly kind: "worldkit-runtime-snapshot";
+  readonly schemaVersion: 4;
+  readonly runtimeSessionId: string;
+  readonly worldSessionId: string;
+  readonly world: {
+    readonly publicationEpoch: number;
+    readonly simulationTick: number;
+    readonly worldStateRef: string;
+    readonly worldStateHash: Sha256HashV1;
+    readonly subjectStatesByEntityId: Readonly<
+      Record<string, WorldRuntimeSubjectStateV4>
+    >;
+    readonly gameplayInspection: GameplayInspectionSnapshotV1;
   };
-  physics: { backend: "havok"; ready: boolean; fixedTimeStepSeconds: number };
-  resources: {
-    meshes: number;
-    bodies: number;
-    terrainSamples: number;
+  readonly view: {
+    readonly viewStateRevision: number;
+    readonly camera: WorldRuntimeCameraStateV4;
+  };
+  readonly runtime: {
+    readonly phase: "ready" | "failed" | "disposed";
+    readonly isPaused: boolean;
+    readonly fixedTimeStepSeconds: number;
+  };
+  readonly resources: {
+    readonly phase: "ready" | "degraded" | "failed";
+    readonly meshCount: number;
+    readonly physicsBodyCount: number;
+    readonly terrainSampleCount: number;
   };
 }
 
@@ -261,27 +248,10 @@ export interface RuntimeControlCaptureFrameV1 {
   readonly widthPixels: number;
   readonly heightPixels: number;
   readonly camera: ControlCaptureCameraV1;
-  readonly snapshot: WorldRuntimeSnapshotV3;
+  readonly snapshot: WorldRuntimeSnapshotV4;
   readonly semanticClasses: readonly ControlCaptureSemanticClassEntryV1[];
   readonly instances: readonly ControlCaptureInstanceEntryV1[];
   readonly passesById: Readonly<Record<ControlCapturePassIdV1, ControlCapturePassPayloadV1>>;
-}
-
-export interface WorldRuntimeSessionV3 {
-  readonly runtimeBackend: "babylon-havok";
-  readonly ready: Promise<void>;
-  bindControl(request: BindControlRequestV2): ControlBindingReceiptV2;
-  runFixedInput(input: FixedInputV1): Promise<WorldRuntimeSnapshotV3>;
-  snapshot(): WorldRuntimeSnapshotV3;
-  reset(): WorldRuntimeSnapshotV3;
-  applySubjectPresetTuning?(
-    request: ApplySubjectPresetTuningRequestV1,
-  ): SubjectPresetTuningReceiptV1;
-  getControlCaptureCapabilities(): ControlCaptureCapabilitiesV1;
-  waitForRenderReady(expectedSimulationTick: number): RenderReadyReceiptV1;
-  captureControlFrame(request: ControlCaptureRequestV1): Promise<RuntimeControlCaptureFrameV1>;
-  renderFrame(): RenderReadyReceiptV1;
-  dispose(): Promise<void>;
 }
 
 export interface SubjectDefinitionSummaryV1 {
@@ -352,6 +322,7 @@ export interface SubjectHarnessReportV1 {
 }
 
 export const WORLDKIT_BROWSER_PROTOCOL_VERSION = 5 as const;
+export const WORLDKIT_GAMEPLAY_EVENT_PAGE_MAXIMUM_COUNT = 256 as const;
 
 export interface WorldkitBrowserDiagnosticV1 {
   severity: "info" | "warning" | "error";
@@ -361,52 +332,110 @@ export interface WorldkitBrowserDiagnosticV1 {
   details?: Readonly<Record<string, unknown>>;
 }
 
+export interface GameplayEventsQueryV1 {
+  readonly afterEventSequence: number;
+  readonly maximumEventCount: number;
+}
+
+export interface GameplayEventsQueryResultV1 {
+  readonly events: readonly GameplayEventV1[];
+  readonly nextAfterEventSequence: number;
+  readonly hasMore: boolean;
+}
+
+export interface WorldStateSnapshotRequestV1 {
+  readonly worldStateRef: string;
+}
+
+export type RuntimeActivityKindV1 =
+  | "runtime-run"
+  | "simulation-take"
+  | "control-capture";
+
+export interface RuntimeActivityRequestV1 {
+  readonly schemaVersion: 1;
+  readonly id: string;
+  readonly activityKind: RuntimeActivityKindV1;
+  readonly expectedWorldSessionId: string;
+}
+
+interface RuntimeActivityReceiptBaseV1 {
+  readonly kind: "worldkit-runtime-activity-receipt";
+  readonly schemaVersion: 1;
+  readonly requestId: string;
+  readonly activityKind: RuntimeActivityKindV1;
+  readonly worldSessionId: string;
+  readonly runtimeActivityEpoch: number;
+}
+
+export type RuntimeActivityReceiptV1 =
+  | (RuntimeActivityReceiptBaseV1 & Readonly<{
+      status: "active" | "released" | "terminated-by-host";
+    }>)
+  | (RuntimeActivityReceiptBaseV1 & Readonly<{
+      status: "rejected";
+      diagnostic: GameplayDiagnosticV1;
+    }>);
+
 export interface WorldkitBrowserApiV5 {
   version: typeof WORLDKIT_BROWSER_PROTOCOL_VERSION;
-  ready(): Promise<WorldRuntimeSnapshotV3>;
-  getSnapshot(): WorldRuntimeSnapshotV3;
+  ready(): Promise<WorldRuntimeSnapshotV4>;
+  getSnapshot(): WorldRuntimeSnapshotV4;
   getDiagnostics(): readonly WorldkitBrowserDiagnosticV1[];
-  bindControl(request: BindControlRequestV2): ControlBindingReceiptV2;
-  runFixedInput(steps: readonly FixedInputV1[]): Promise<WorldRuntimeSnapshotV3>;
+  executeGameplayCommand(
+    command: GameplayCommandV1,
+  ): Promise<GameplayCommandReceiptV1>;
+  runFixedInput(steps: readonly FixedInputV1[]): Promise<WorldRuntimeSnapshotV4>;
+  getGameplayEvents(query: GameplayEventsQueryV1): GameplayEventsQueryResultV1;
+  getGameplayInspectionSnapshot(): GameplayInspectionSnapshotV1;
+  getWorldStateSnapshot(
+    request: WorldStateSnapshotRequestV1,
+  ): WorldStateSnapshotV1;
+  acquireRuntimeActivity(
+    request: RuntimeActivityRequestV1,
+  ): RuntimeActivityReceiptV1;
+  releaseRuntimeActivity(
+    request: RuntimeActivityRequestV1,
+  ): RuntimeActivityReceiptV1;
   getControlCaptureCapabilities(): ControlCaptureCapabilitiesV1;
-  waitForSimulationTick(expectedSimulationTick: number): Promise<WorldRuntimeSnapshotV3>;
+  waitForSimulationTick(expectedSimulationTick: number): Promise<WorldRuntimeSnapshotV4>;
   waitForRenderReady(expectedSimulationTick: number): Promise<RenderReadyReceiptV1>;
   captureControlFrame(request: ControlCaptureRequestV1): Promise<RuntimeControlCaptureFrameV1>;
   captureScreenshot(): string;
-  reset(): WorldRuntimeSnapshotV3;
-  setPaused(paused: boolean): WorldRuntimeSnapshotV3;
-  listSubjectDefinitions?(
+  reset(): Promise<WorldRuntimeSnapshotV4>;
+  setPaused(paused: boolean): WorldRuntimeSnapshotV4;
+  listSubjectDefinitions(
     options?: CapabilityDiscoveryOptionsV1,
   ): readonly SubjectDefinitionSummaryV1[];
-  listMotionKernels?(
+  listMotionKernels(
     options?: CapabilityDiscoveryOptionsV1,
   ): readonly MotionKernelSummaryV1[];
-  listCompatibleProfiles?(
+  listCompatibleProfiles(
     subjectDefinitionRef: string,
   ): readonly CompatibleProfileSummaryV1[];
-  getSubjectPresetBaseline?(
+  getSubjectPresetBaseline(
     subjectDefinitionRef: string,
   ): SubjectPresetBaselineV1;
-  validateSubjectPackage?(
+  validateSubjectPackage(
     subjectDefinitionRef: string,
   ): SubjectPackageValidationResultV1;
-  setIntent?(input: FixedInputV1): Promise<WorldRuntimeSnapshotV3>;
-  requestCameraProfile?(profileRef: string): WorldRuntimeSnapshotV3;
-  resetCameraProfile?(): WorldRuntimeSnapshotV3;
-  adjustCameraView?(input: CameraViewInputV1): WorldRuntimeSnapshotV3;
-  resetCameraView?(): WorldRuntimeSnapshotV3;
-  getCameraPreviewState?(): CameraPreviewStateV1;
-  applyCameraPreview?(request: ApplyCameraPreviewRequestV1): CameraPreviewStateV1;
-  applySubjectPresetTuning?(
+  setIntent(input: FixedInputV1): Promise<WorldRuntimeSnapshotV4>;
+  requestCameraProfile(profileRef: string): WorldRuntimeSnapshotV4;
+  resetCameraProfile(): WorldRuntimeSnapshotV4;
+  adjustCameraView(input: CameraViewInputV1): WorldRuntimeSnapshotV4;
+  resetCameraView(): WorldRuntimeSnapshotV4;
+  getCameraPreviewState(): CameraPreviewStateV1;
+  applyCameraPreview(request: ApplyCameraPreviewRequestV1): CameraPreviewStateV1;
+  applySubjectPresetTuning(
     request: ApplySubjectPresetTuningRequestV1,
   ): SubjectPresetTuningReceiptV1;
-  setMotionProfile?(
+  setMotionProfile(
     subjectEntityId: string,
     motionProfileRef: string,
-  ): Promise<WorldRuntimeSnapshotV3>;
-  runHarness?(subjectEntityId: string): Promise<SubjectHarnessReportV1>;
-  getSubjectSnapshot?(subjectEntityId: string): SubjectRuntimeStateV3 | undefined;
-  getCameraSnapshot?(): WorldRuntimeSnapshotV3["camera"];
+  ): Promise<WorldRuntimeSnapshotV4>;
+  runHarness(subjectEntityId: string): Promise<SubjectHarnessReportV1>;
+  getSubjectSnapshot(subjectEntityId: string): WorldRuntimeSubjectStateV4 | undefined;
+  getCameraSnapshot(): WorldRuntimeCameraStateV4;
   getRouteSummary(selector: RouteEvidenceSelectorV1): RouteSummaryQueryResultV1;
   getRoutePathReceipt(
     selector: RouteEvidenceSelectorV1,

@@ -8,13 +8,20 @@ import path from "node:path";
 import {
   normalizeAuthoringSpecV4,
   type AuthoringSpecV4,
+  type NormalizedWorldIRV4,
 } from "@whitebox-world/authoring";
 import { compileWorldV5 } from "@whitebox-world/compiler";
+import {
+  createGameplayBootstrapResourceLockEntryV1,
+  createGameplayBootstrapV1,
+  createGameplayFeatureManifestV1,
+} from "@whitebox-world/gameplay-contracts";
 import { canonicalJsonBytes } from "@whitebox-world/protocol";
 import {
   canonicalWorldkitBrowserRouteEvidencePublicationV2,
   type WorldkitBrowserRouteEvidencePublicationV2,
 } from "@whitebox-world/runtime-contracts";
+import { isNil, uniq } from "lodash-es";
 import { chromium } from "playwright";
 import { afterEach, describe, expect, it } from "vitest";
 
@@ -28,6 +35,59 @@ const INPUT_PATH = fileURLToPath(
 const handles: WorldkitServerHandle[] = [];
 
 const HASH = `sha256:${"1".repeat(64)}` as const;
+const CONTROL_TRANSITION_CAPABILITY_REF =
+  "worldkit://runtime-capability/control-transition@1" as const;
+
+const coreControlManifest = createGameplayFeatureManifestV1({
+  kind: "gameplay-feature",
+  id: "core-control",
+  version: 1,
+  resourceRef: "worldkit://gameplay-feature/core-control@1",
+  dependencyFeatureRefs: [],
+  requiredCapabilityRefs: [CONTROL_TRANSITION_CAPABILITY_REF],
+  commandTypes: ["control.bind", "control.release"],
+  resourceBudget: { stateSliceCount: 1, commandHandlerCount: 2 },
+});
+
+function gameplayBootstrapResourceLock(
+  normalizedWorldIr: NormalizedWorldIRV4,
+) {
+  const entityDescriptors = normalizedWorldIr.nodes
+    .filter((node) => node.kind === "subject")
+    .map((node) => {
+      const definition = normalizedWorldIr.resources.subjectDefinitions.find(
+        (candidate) =>
+          candidate.subjectDefinitionRef === node.subjectDefinitionRef,
+      );
+      if (isNil(definition)) {
+        throw new Error(`Missing Subject Definition '${node.subjectDefinitionRef}'.`);
+      }
+      return {
+        id: node.id,
+        entityDefinitionRef: node.subjectDefinitionRef,
+        capabilityRefs: definition.capabilityRefs,
+      };
+    });
+  return createGameplayBootstrapResourceLockEntryV1(
+    createGameplayBootstrapV1({
+      kind: "gameplay-bootstrap",
+      id: `${normalizedWorldIr.id}.gameplay`,
+      version: 1,
+      resourceRef:
+        `worldkit://gameplay-bootstrap/${normalizedWorldIr.id}.${normalizedWorldIr.seed}@1`,
+      entityDescriptors,
+      featureResourceLocks: [{
+        resourceRef: coreControlManifest.resourceRef,
+        contentHash: coreControlManifest.contentHash,
+      }],
+      semanticActionDefinitions: [],
+      availableCapabilityRefs: uniq([
+        ...entityDescriptors.flatMap((descriptor) => descriptor.capabilityRefs),
+        CONTROL_TRANSITION_CAPABILITY_REF,
+      ]),
+    }),
+  );
+}
 
 function routeEvidencePublication(
   overrides: Partial<WorldkitBrowserRouteEvidencePublicationV2> = {},
@@ -120,6 +180,8 @@ function sameWorldRouteEvidencePublication(
   const compiled = compileWorldV5({
     normalizedWorldIr: normalized.value,
     normalizedWorldIrHash: normalized.normalizedWorldIrHash,
+    gameplayBootstrapResourceLock:
+      gameplayBootstrapResourceLock(normalized.value),
   });
   if (
     !compiled.ok ||
@@ -134,7 +196,7 @@ function sameWorldRouteEvidencePublication(
       normalized.normalizedWorldIrHash as `sha256:${string}`,
     executionPlanHash: compiled.executionPlanHash as `sha256:${string}`,
     resourceLockHash:
-      normalized.value.resources.resourceLockHash as `sha256:${string}`,
+      compiled.executionPlan.resourceLockHash as `sha256:${string}`,
     layoutSolveReportHash:
       normalized.layoutSolveReportHash as `sha256:${string}`,
   });
@@ -218,19 +280,27 @@ describe("startWorldkitServer", () => {
       const result = await page.evaluate(async () => {
         const api = window.__WORLDKIT__!;
         const ready = await api.ready();
+        const possession = Object.values(
+          ready.world.gameplayInspection.possessedByRelationshipsById,
+        ).find(
+          (relationship) =>
+            relationship.controllerEntityId === "controller-primary",
+        );
         const selector = {
           constraintId: "not-published",
           routeId: "not-published",
         };
         return {
           version: api.version,
-          executionWorldId: ready.controlledEntityId,
+          executionWorldId: possession?.controlledEntityId,
+          rootControlledEntityIdPresent: "controlledEntityId" in ready,
           routeResult: api.getRouteSummary(selector),
         };
       });
       expect(result).toMatchObject({
         version: 5,
         executionWorldId: "player",
+        rootControlledEntityIdPresent: false,
         routeResult: {
           availability: "unavailable",
           reason: "route-not-found",

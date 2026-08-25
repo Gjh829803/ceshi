@@ -4,26 +4,39 @@ import type {
   ControlIntentTrackV1,
 } from "@whitebox-world/control-capture";
 import type {
-  BindControlRequestV2,
+  ExpectedPossessionV1,
+  GameplayCommandReceiptV1,
+  GameplayCommandV1,
+} from "@whitebox-world/gameplay-contracts";
+import type {
   CameraViewInputV1,
   ControlCaptureCapabilitiesV1,
   ControlCaptureRequestV1,
-  ControlBindingReceiptV2,
   FixedInputV1,
   RenderReadyReceiptV1,
+  RuntimeActivityReceiptV1,
+  RuntimeActivityRequestV1,
   RuntimeControlCaptureFrameV1,
-  WorldRuntimeSnapshotV3,
+  WorldRuntimeSnapshotV4,
 } from "@whitebox-world/runtime-contracts";
-import { isEqual } from "lodash-es";
+import { isEqual, isNil } from "lodash-es";
 
 export interface SimulationTakeBrowserDriverV1 {
   getControlCaptureCapabilities(): ControlCaptureCapabilitiesV1 | Promise<ControlCaptureCapabilitiesV1>;
-  setPaused(paused: boolean): WorldRuntimeSnapshotV3 | Promise<WorldRuntimeSnapshotV3>;
-  reset(): WorldRuntimeSnapshotV3 | Promise<WorldRuntimeSnapshotV3>;
-  bindControl(request: BindControlRequestV2): ControlBindingReceiptV2 | Promise<ControlBindingReceiptV2>;
-  runFixedInput(steps: readonly FixedInputV1[]): Promise<WorldRuntimeSnapshotV3>;
-  adjustCameraView(input: CameraViewInputV1): WorldRuntimeSnapshotV3 | Promise<WorldRuntimeSnapshotV3>;
-  waitForSimulationTick(expectedSimulationTick: number): Promise<WorldRuntimeSnapshotV3>;
+  setPaused(paused: boolean): WorldRuntimeSnapshotV4 | Promise<WorldRuntimeSnapshotV4>;
+  reset(): Promise<WorldRuntimeSnapshotV4>;
+  acquireRuntimeActivity(
+    request: RuntimeActivityRequestV1,
+  ): RuntimeActivityReceiptV1 | Promise<RuntimeActivityReceiptV1>;
+  releaseRuntimeActivity(
+    request: RuntimeActivityRequestV1,
+  ): RuntimeActivityReceiptV1 | Promise<RuntimeActivityReceiptV1>;
+  executeGameplayCommand(
+    command: GameplayCommandV1,
+  ): Promise<GameplayCommandReceiptV1>;
+  runFixedInput(steps: readonly FixedInputV1[]): Promise<WorldRuntimeSnapshotV4>;
+  adjustCameraView(input: CameraViewInputV1): WorldRuntimeSnapshotV4 | Promise<WorldRuntimeSnapshotV4>;
+  waitForSimulationTick(expectedSimulationTick: number): Promise<WorldRuntimeSnapshotV4>;
   waitForRenderReady(expectedSimulationTick: number): Promise<RenderReadyReceiptV1>;
   captureControlFrame(request: ControlCaptureRequestV1): Promise<RuntimeControlCaptureFrameV1>;
 }
@@ -97,7 +110,7 @@ function assertCapturedFrame(
     frame.runtimeSessionId !== receipt.runtimeSessionId ||
     frame.widthPixels !== request.widthPixels ||
     frame.heightPixels !== request.heightPixels ||
-    frame.snapshot.tick !== request.expectedSimulationTick
+    frame.snapshot.world.simulationTick !== request.expectedSimulationTick
   ) {
     throw new Error("CONTROL_CAPTURE_FRAME_METADATA_MISMATCH");
   }
@@ -116,6 +129,21 @@ function assertCapturedFrame(
       throw new Error("CONTROL_CAPTURE_PASS_PAYLOAD_INVALID");
     }
   }
+}
+
+function expectedPossessionForController(
+  snapshot: WorldRuntimeSnapshotV4,
+  controllerEntityId: string,
+): ExpectedPossessionV1 {
+  const possession = Object.values(
+    snapshot.world.gameplayInspection.possessedByRelationshipsById,
+  ).find((relationship) => relationship.controllerEntityId === controllerEntityId);
+  return isNil(possession)
+    ? { mode: "unbound" }
+    : {
+        mode: "possessed",
+        controlledEntityId: possession.controlledEntityId,
+      };
 }
 
 export async function runCompiledSimulationTakeV1(
@@ -145,99 +173,158 @@ export async function runCompiledSimulationTakeV1(
 
   await driver.setPaused(true);
   const resetSnapshot = await driver.reset();
-  const binding = await driver.bindControl({
-    controllerId: controller.id,
-    expectedControlledEntityId: resetSnapshot.controlledEntityId,
-    controlledEntityId: controller.controlledEntityId,
-  });
-  if (binding.status !== "committed") {
-    throw new Error("SIMULATION_TAKE_CONTROL_BINDING_REJECTED");
-  }
-  if (cameraTrack !== undefined && cameraTrack.cameraEntityId !== resetSnapshot.camera.entityId) {
-    throw new Error("SIMULATION_TAKE_CAMERA_ENTITY_MISMATCH");
-  }
-
-  if (compiledTake.take.startTick > resetSnapshot.tick) {
-    await driver.runFixedInput([{
-      actions: [],
-      ticks: compiledTake.take.startTick - resetSnapshot.tick,
-    }]);
-  }
-  let activeMoveAxesXZ: readonly [number, number] = [0, 0];
-  let activeRunEnabled = false;
-  let cameraYawOffsetRadians = 0;
-  let cameraPitchOffsetRadians = 0;
-  let cameraDistanceOffsetMeters = 0;
-  const captureByTick = new Map(
-    compiledTake.captureSchedulePlan.entries.map((entry) => [entry.simulationTick, entry]),
-  );
-  let runtimeSessionId: string | undefined;
-  let semanticClasses: RuntimeControlCaptureFrameV1["semanticClasses"] | undefined;
-  let instances: RuntimeControlCaptureFrameV1["instances"] | undefined;
-
-  for (
-    let tick = compiledTake.take.startTick;
-    tick < compiledTake.take.endTickExclusive;
-    tick += 1
-  ) {
-    const intentKeyframe = controlTrack?.keyframes.find((keyframe) => keyframe.tick === tick);
-    if (intentKeyframe !== undefined) {
-      activeMoveAxesXZ = intentKeyframe.moveAxesXZ;
-      activeRunEnabled = intentKeyframe.runEnabled;
-    }
-    const cameraKeyframe = cameraTrack?.keyframes.find((keyframe) => keyframe.tick === tick);
-    if (cameraKeyframe !== undefined) {
-      await driver.adjustCameraView({
-        yawDeltaRadians: cameraKeyframe.viewYawOffsetRadians - cameraYawOffsetRadians,
-        pitchDeltaRadians: cameraKeyframe.viewPitchOffsetRadians - cameraPitchOffsetRadians,
-        zoomDeltaMeters: cameraKeyframe.viewDistanceOffsetMeters - cameraDistanceOffsetMeters,
-      });
-      cameraYawOffsetRadians = cameraKeyframe.viewYawOffsetRadians;
-      cameraPitchOffsetRadians = cameraKeyframe.viewPitchOffsetRadians;
-      cameraDistanceOffsetMeters = cameraKeyframe.viewDistanceOffsetMeters;
-    }
-
-    const capture = captureByTick.get(tick);
-    if (capture !== undefined) {
-      await driver.waitForSimulationTick(tick);
-      const receipt = await driver.waitForRenderReady(tick);
-      const request: ControlCaptureRequestV1 = {
-        captureFrameIndex: capture.captureFrameIndex,
-        expectedSimulationTick: tick,
-        renderReadyReceiptId: receipt.id,
-        widthPixels: options.widthPixels,
-        heightPixels: options.heightPixels,
-      };
-      const frame = await driver.captureControlFrame(request);
-      assertCapturedFrame(frame, request, receipt);
-      if (runtimeSessionId === undefined) {
-        runtimeSessionId = frame.runtimeSessionId;
-        semanticClasses = frame.semanticClasses;
-        instances = frame.instances;
-      } else if (
-        runtimeSessionId !== frame.runtimeSessionId ||
-        !isEqual(semanticClasses, frame.semanticClasses) ||
-        !isEqual(instances, frame.instances)
-      ) {
-        throw new Error("CONTROL_CAPTURE_FRAME_TABLE_MISMATCH");
-      }
-      await options.onFrame(frame);
-    }
-
-    const jumpPressed = intentKeyframe?.jumpPressed === true;
-    await driver.runFixedInput([{
-      actions: actionsForIntent(activeMoveAxesXZ, activeRunEnabled, jumpPressed),
-      ticks: 1,
-    }]);
-  }
-
-  if (runtimeSessionId === undefined || semanticClasses === undefined || instances === undefined) {
-    throw new Error("SIMULATION_TAKE_CAPTURE_SCHEDULE_EMPTY");
-  }
-  return {
-    capturedFrameCount: compiledTake.captureSchedulePlan.entries.length,
-    runtimeSessionId,
-    semanticClasses,
-    instances,
+  const activityRequest: RuntimeActivityRequestV1 = {
+    schemaVersion: 1,
+    id: `activity:simulation-take:${compiledTake.take.id}:${resetSnapshot.worldSessionId}`,
+    activityKind: "simulation-take",
+    expectedWorldSessionId: resetSnapshot.worldSessionId,
   };
+  const activity = await driver.acquireRuntimeActivity(activityRequest);
+  if (activity.status !== "active") {
+    throw new Error("SIMULATION_TAKE_ACTIVITY_ACQUIRE_REJECTED");
+  }
+
+  let primaryFailure: unknown;
+  try {
+    if (
+      activity.requestId !== activityRequest.id ||
+      activity.activityKind !== activityRequest.activityKind ||
+      activity.worldSessionId !== activityRequest.expectedWorldSessionId
+    ) {
+      throw new Error("SIMULATION_TAKE_ACTIVITY_ACQUIRE_REJECTED");
+    }
+    const expectedPossession = expectedPossessionForController(
+      resetSnapshot,
+      controller.id,
+    );
+    if (
+      expectedPossession.mode !== "possessed" ||
+      expectedPossession.controlledEntityId !== controller.controlledEntityId
+    ) {
+      const bindingCommand: GameplayCommandV1 = {
+        schemaVersion: 1,
+        id: `command:simulation-take:${compiledTake.take.id}:${resetSnapshot.worldSessionId}:control.bind`,
+        type: "control.bind",
+        runtimeSessionId: resetSnapshot.runtimeSessionId,
+        worldSessionId: resetSnapshot.worldSessionId,
+        controllerEntityId: controller.id,
+        controlledEntityId: controller.controlledEntityId,
+        expectedPossession,
+      };
+      const binding = await driver.executeGameplayCommand(bindingCommand);
+      if (binding.status !== "committed") {
+        throw new Error("SIMULATION_TAKE_CONTROL_BINDING_REJECTED");
+      }
+    }
+    if (
+      !isNil(cameraTrack) &&
+      (
+        resetSnapshot.view.camera.mode !== "tracking" ||
+        cameraTrack.cameraEntityId !== resetSnapshot.view.camera.id
+      )
+    ) {
+      throw new Error("SIMULATION_TAKE_CAMERA_ENTITY_MISMATCH");
+    }
+
+    if (compiledTake.take.startTick > resetSnapshot.world.simulationTick) {
+      await driver.runFixedInput([{
+        actions: [],
+        ticks: compiledTake.take.startTick - resetSnapshot.world.simulationTick,
+      }]);
+    }
+    let activeMoveAxesXZ: readonly [number, number] = [0, 0];
+    let activeRunEnabled = false;
+    let cameraYawOffsetRadians = 0;
+    let cameraPitchOffsetRadians = 0;
+    let cameraDistanceOffsetMeters = 0;
+    const captureByTick = new Map(
+      compiledTake.captureSchedulePlan.entries.map((entry) => [entry.simulationTick, entry]),
+    );
+    let runtimeSessionId: string | undefined;
+    let semanticClasses: RuntimeControlCaptureFrameV1["semanticClasses"] | undefined;
+    let instances: RuntimeControlCaptureFrameV1["instances"] | undefined;
+
+    for (
+      let tick = compiledTake.take.startTick;
+      tick < compiledTake.take.endTickExclusive;
+      tick += 1
+    ) {
+      const intentKeyframe = controlTrack?.keyframes.find((keyframe) => keyframe.tick === tick);
+      if (!isNil(intentKeyframe)) {
+        activeMoveAxesXZ = intentKeyframe.moveAxesXZ;
+        activeRunEnabled = intentKeyframe.runEnabled;
+      }
+      const cameraKeyframe = cameraTrack?.keyframes.find((keyframe) => keyframe.tick === tick);
+      if (!isNil(cameraKeyframe)) {
+        await driver.adjustCameraView({
+          yawDeltaRadians: cameraKeyframe.viewYawOffsetRadians - cameraYawOffsetRadians,
+          pitchDeltaRadians: cameraKeyframe.viewPitchOffsetRadians - cameraPitchOffsetRadians,
+          zoomDeltaMeters: cameraKeyframe.viewDistanceOffsetMeters - cameraDistanceOffsetMeters,
+        });
+        cameraYawOffsetRadians = cameraKeyframe.viewYawOffsetRadians;
+        cameraPitchOffsetRadians = cameraKeyframe.viewPitchOffsetRadians;
+        cameraDistanceOffsetMeters = cameraKeyframe.viewDistanceOffsetMeters;
+      }
+
+      const capture = captureByTick.get(tick);
+      if (!isNil(capture)) {
+        await driver.waitForSimulationTick(tick);
+        const receipt = await driver.waitForRenderReady(tick);
+        const request: ControlCaptureRequestV1 = {
+          captureFrameIndex: capture.captureFrameIndex,
+          expectedSimulationTick: tick,
+          renderReadyReceiptId: receipt.id,
+          widthPixels: options.widthPixels,
+          heightPixels: options.heightPixels,
+        };
+        const frame = await driver.captureControlFrame(request);
+        assertCapturedFrame(frame, request, receipt);
+        if (isNil(runtimeSessionId)) {
+          runtimeSessionId = frame.runtimeSessionId;
+          semanticClasses = frame.semanticClasses;
+          instances = frame.instances;
+        } else if (
+          runtimeSessionId !== frame.runtimeSessionId ||
+          !isEqual(semanticClasses, frame.semanticClasses) ||
+          !isEqual(instances, frame.instances)
+        ) {
+          throw new Error("CONTROL_CAPTURE_FRAME_TABLE_MISMATCH");
+        }
+        await options.onFrame(frame);
+      }
+
+      const jumpPressed = intentKeyframe?.jumpPressed === true;
+      await driver.runFixedInput([{
+        actions: actionsForIntent(activeMoveAxesXZ, activeRunEnabled, jumpPressed),
+        ticks: 1,
+      }]);
+    }
+
+    if (isNil(runtimeSessionId) || isNil(semanticClasses) || isNil(instances)) {
+      throw new Error("SIMULATION_TAKE_CAPTURE_SCHEDULE_EMPTY");
+    }
+    return {
+      capturedFrameCount: compiledTake.captureSchedulePlan.entries.length,
+      runtimeSessionId,
+      semanticClasses,
+      instances,
+    };
+  } catch (error) {
+    primaryFailure = error;
+    throw error;
+  } finally {
+    try {
+      const released = await driver.releaseRuntimeActivity(activityRequest);
+      if (
+        (released.status !== "released" && released.status !== "terminated-by-host") ||
+        released.requestId !== activityRequest.id ||
+        released.activityKind !== activityRequest.activityKind ||
+        released.worldSessionId !== activityRequest.expectedWorldSessionId
+      ) {
+        throw new Error("SIMULATION_TAKE_ACTIVITY_RELEASE_REJECTED");
+      }
+    } catch (releaseError) {
+      if (isNil(primaryFailure)) throw releaseError;
+    }
+  }
 }

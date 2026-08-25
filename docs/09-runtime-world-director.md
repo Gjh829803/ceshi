@@ -55,7 +55,8 @@ World Control Gateway
 Render Bridge → 实时世界模型
 ```
 
-LLM 面对的是小而稳定的工具协议，不直接获得 `THREE.Object3D`、Rapier body、动画 mixer 或导航内部对象。
+LLM 面对的是小而稳定的工具协议，不直接获得 Babylon Node、Havok Body、AnimationGroup
+或导航 Provider 内部对象。
 
 ## 4. 两条操作通道
 
@@ -127,7 +128,8 @@ type WorldObservation = {
 | `feature.update` | 调整塔高、湖泊范围 | 通过 Feature Registry 重建受影响资源 |
 | `environment.update` | 修改时间或逻辑天气 | 更新受追踪环境状态和 Render Binding |
 
-初版缩放只承诺 primitive 和批准资产的统一缩放。缩放必须同时更新碰撞体、包围盒和导航占用；不能只缩放 Three.js mesh。非均匀骨骼主体缩放、动态刚体瞬时放大等高风险操作默认拒绝。
+初版缩放只承诺 primitive 和批准资产的统一缩放。缩放必须同时更新碰撞体、包围盒和导航
+占用；不能只缩放渲染 Mesh。非均匀骨骼主体缩放、动态刚体瞬时放大等高风险操作默认拒绝。
 
 “消失”需要明确语义：
 

@@ -15,9 +15,10 @@ import type {
   ControlCaptureCameraV1,
   ControlCapturePassPayloadV1,
   RuntimeControlCaptureFrameV1,
-  WorldRuntimeSnapshotV3,
 } from "@whitebox-world/runtime-contracts";
 import { orderBy, uniqBy } from "lodash-es";
+
+import type { BabylonRuntimeProjectionV1 } from "./runtime-projection";
 
 interface CaptureClassifiedMeshV1 {
   readonly metadata?: {
@@ -55,8 +56,18 @@ export interface CaptureBabylonControlFrameOptionsV1 {
   readonly heightPixels: number;
   readonly cameraEntityId: string;
   readonly cameraRigRef: string;
-  readonly snapshot: WorldRuntimeSnapshotV3;
+  readonly snapshot: BabylonRuntimeProjectionV1;
 }
+
+/**
+ * Provider-internal capture result. The Browser protocol replaces this
+ * provider projection with the canonical WorldRuntimeSnapshotV4 before
+ * publication.
+ */
+export type BabylonControlCaptureFrameV1 = Omit<
+  RuntimeControlCaptureFrameV1,
+  "snapshot"
+> & Readonly<{ snapshot: BabylonRuntimeProjectionV1 }>;
 
 const MAX_CAPTURE_TABLE_ID = 0x00ff_ffff;
 
@@ -528,7 +539,7 @@ function captureCamera(
 
 export async function captureBabylonControlFrameV1(
   options: CaptureBabylonControlFrameOptionsV1,
-): Promise<RuntimeControlCaptureFrameV1> {
+): Promise<BabylonControlCaptureFrameV1> {
   await options.scene.whenReadyAsync(false);
   const meshes = captureMeshes(options.scene);
   const tables = buildControlCaptureTablesV1(meshes);

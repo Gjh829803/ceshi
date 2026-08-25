@@ -7,18 +7,25 @@ import {
 } from "@whitebox-world/runtime-babylon";
 import type {
   ApplyCameraPreviewRequestV1,
-  BindControlRequestV2,
   CameraPreviewStateV1,
   ControlCapturePassPayloadV1,
-  ControlBindingReceiptV2,
   FixedInputV1,
+  GameplayEventsQueryResultV1,
+  RuntimeActivityReceiptV1,
   RuntimeControlCaptureFrameV1,
   RouteEvidenceSelectorV1,
-  WorldRuntimeSnapshotV3,
+  WorldRuntimeSnapshotV4,
   WorldkitBrowserRouteEvidencePublicationV2,
   WorldkitBrowserApiV5,
   WorldkitBrowserDiagnosticV1,
 } from "@whitebox-world/runtime-contracts";
+import type {
+  GameplayCommandReceiptV1,
+  GameplayCommandV1,
+  GameplayEventV1,
+  GameplayInspectionSnapshotV1,
+  WorldStateSnapshotV1,
+} from "@whitebox-world/gameplay-contracts";
 import {
   builtInSubjectResourceRegistry,
   type SubjectResourceRegistryV3,
@@ -45,6 +52,7 @@ const HASH_C = `sha256:${"c".repeat(64)}` as const;
 const HASH_D = `sha256:${"d".repeat(64)}` as const;
 const HASH_E = `sha256:${"e".repeat(64)}` as const;
 const HASH_F = `sha256:${"f".repeat(64)}` as const;
+const WORLD_STATE_REF = `worldkit://world-state/world-state:${"c".repeat(64)}`;
 const ROUTE_SELECTOR = {
   constraintId: "player-to-goal",
   routeId: "main-route",
@@ -336,38 +344,97 @@ function unreachableRouteEvidencePublicationFixture(): WorldkitBrowserRouteEvide
   };
 }
 
-function snapshotFixture(action: "idle" | "walk" | "run" | "jump" = "idle"): WorldRuntimeSnapshotV3 {
+function gameplayInspectionFixture(): GameplayInspectionSnapshotV1 {
+  return {
+    kind: "worldkit-gameplay-inspection-snapshot",
+    schemaVersion: 1,
+    projection: "inspection",
+    id: "gameplay-inspection:world-session-test:0",
+    runtimeSessionId: "runtime-session-test",
+    worldSessionId: "world-session-test",
+    gameplayModeRef: "worldkit://gameplay-mode/outdoor.default@1",
+    phase: "ready",
+    simulationTick: 0,
+    participantStatesById: {},
+    controllerStatesById: {},
+    possessedByRelationshipsById: {},
+    activeActionStatesById: {},
+    activatedGameplayFeatureRefs: [],
+    lastEventSequence: 0,
+  };
+}
+
+function snapshotFixture(action: "idle" | "walk" | "run" | "jump" = "idle"): WorldRuntimeSnapshotV4 {
   return {
     kind: "worldkit-runtime-snapshot",
-    schemaVersion: 3,
-    runtimeBackend: "babylon-havok",
-    tick: 0,
-    ready: true,
-    controlledEntityId: "rigged-primary",
-    controllersById: {
-      "controller-primary": {
-        id: "controller-primary",
-        controlledEntityId: "rigged-primary",
+    schemaVersion: 4,
+    runtimeSessionId: "runtime-session-test",
+    worldSessionId: "world-session-test",
+    world: {
+      publicationEpoch: 1,
+      simulationTick: 0,
+      worldStateRef: WORLD_STATE_REF,
+      worldStateHash: `sha256:${"c".repeat(64)}`,
+      subjectStatesByEntityId: {
+        "rigged-primary": {
+          entityState: {
+            id: "rigged-primary",
+            kind: "spatial-entity-state",
+            entityDefinitionRef:
+              "worldkit://subject-definition/humanoid.rigged-golden@1",
+            entityDefinitionHash: `sha256:${"1".repeat(64)}`,
+            semanticClassId: "subject.humanoid.player",
+            lifecycleMode: "active",
+            positionMetersXYZ: [0, 0, 0],
+            rotationQuaternionXYZW: [0, 0, 0, 1],
+            scaleRatioXYZ: [1, 1, 1],
+            linearVelocityMetersPerSecondXYZ: [0, 0, 0],
+          },
+          capabilityStatesById: action === "idle" ? {} : {
+            "locomotion:rigged-primary": {
+              id: "locomotion:rigged-primary",
+              kind: "locomotion-capability-state",
+              ownerEntityId: "rigged-primary",
+              locomotionCapabilityRef:
+                "worldkit://locomotion-capability/ground.standard@1",
+              locomotionCapabilityHash: `sha256:${"2".repeat(64)}`,
+              mode: action === "jump" ? "airborne" : action,
+              movementMedium: action === "jump" ? "air" : "ground",
+              facingYawRadians: 0,
+              speedMetersPerSecond: action === "run" ? 4 : 2,
+            },
+          },
+        },
       },
+      gameplayInspection: gameplayInspectionFixture(),
     },
-    subjectStatesByEntityId: {
-      "rigged-primary": {
-        entityId: "rigged-primary",
-        subjectDefinitionRef: "worldkit://subject-definition/humanoid.rigged-golden@1",
-        subjectDefinitionHash: `sha256:${"1".repeat(64)}`,
+    view: {
+      viewStateRevision: 1,
+      camera: {
+        mode: "tracking",
+        id: "camera-main",
+        targetEntityId: "rigged-primary",
         positionMetersXYZ: [0, 0, 0],
-        velocityMetersPerSecondXYZ: [0, 0, 0],
-        movementMedium: "ground",
-        activeActionId: action,
+        activeCameraProfileRef: "worldkit://camera-profile/orbit.default@1",
+        activeCameraRigRef: "worldkit://camera-rig/orbit.default@1",
+        activeCameraModifierRefs: [],
+        safeFallbackActive: false,
+        viewYawOffsetRadians: 0,
+        viewPitchOffsetRadians: 0,
+        viewDistanceOffsetMeters: 0,
       },
     },
-    camera: {
-      entityId: "camera-main",
-      targetEntityId: "rigged-primary",
-      positionMetersXYZ: [0, 4, 6],
+    runtime: {
+      phase: "ready",
+      isPaused: false,
+      fixedTimeStepSeconds: 1 / 60,
     },
-    physics: { backend: "havok", ready: true, fixedTimeStepSeconds: 1 / 60 },
-    resources: { meshes: 1, bodies: 1, terrainSamples: 9 },
+    resources: {
+      phase: "ready",
+      meshCount: 1,
+      physicsBodyCount: 1,
+      terrainSampleCount: 9,
+    },
   };
 }
 
@@ -426,13 +493,29 @@ function adapterFixture(
     disposeCount: 0,
     runtimeDiagnostics: () => runtimeDiagnostics,
     runtimeSnapshot: () => snapshot,
-    bindControl: (request: BindControlRequestV2): ControlBindingReceiptV2 => ({
-      kind: "worldkit-control-binding-receipt",
-      schemaVersion: 2,
+    executeGameplayCommandRuntime: async () => ({
       status: "committed",
-      controllerId: request.controllerId,
-      previousControlledEntityId: request.expectedControlledEntityId,
-      controlledEntityId: request.controlledEntityId,
+    }) as GameplayCommandReceiptV1,
+    gameplayEventsAfterRuntime: () => [],
+    gameplayInspectionSnapshotRuntime: () => gameplayInspectionFixture(),
+    worldStateSnapshotRuntime: () => undefined,
+    acquireRuntimeActivityRuntime: (request) => ({
+      kind: "worldkit-runtime-activity-receipt",
+      schemaVersion: 1,
+      requestId: request.id,
+      activityKind: request.activityKind,
+      worldSessionId: request.expectedWorldSessionId,
+      runtimeActivityEpoch: 1,
+      status: "active",
+    }),
+    releaseRuntimeActivityRuntime: (request) => ({
+      kind: "worldkit-runtime-activity-receipt",
+      schemaVersion: 1,
+      requestId: request.id,
+      activityKind: request.activityKind,
+      worldSessionId: request.expectedWorldSessionId,
+      runtimeActivityEpoch: 2,
+      status: "released",
     }),
     runWorldkitFixedInput: async (_steps: readonly FixedInputV1[]) => snapshotFixture("run"),
     getControlCaptureCapabilities: () => ({
@@ -463,8 +546,39 @@ function adapterFixture(
     }),
     captureControlFrame: async () => captureFrame,
     captureScreenshot: () => "data:image/png;base64,",
-    resetRuntime: () => snapshot,
+    resetRuntime: async () => snapshot,
     setPaused: () => undefined,
+    requestCameraProfileRuntime: () => snapshot,
+    resetCameraProfileRuntime: () => snapshot,
+    adjustCameraViewRuntime: () => snapshot,
+    resetCameraViewRuntime: () => snapshot,
+    getCameraPreviewStateRuntime: () => ({
+      kind: "worldkit-camera-preview-state",
+      schemaVersion: 1,
+      activeCameraProfileRef: "worldkit://camera-profile/orbit.default@1",
+      activeCameraRigRef: "worldkit://camera-rig/orbit.default@1",
+      activeCameraModifierRefs: [],
+      tuningByProfileRef: {},
+    }),
+    applyCameraPreviewRuntime: () => ({
+      kind: "worldkit-camera-preview-state",
+      schemaVersion: 1,
+      activeCameraProfileRef: "worldkit://camera-profile/orbit.default@1",
+      activeCameraRigRef: "worldkit://camera-rig/orbit.default@1",
+      activeCameraModifierRefs: [],
+      tuningByProfileRef: {},
+    }),
+    applySubjectPresetTuningRuntime: () => ({
+      status: "committed",
+      snapshot,
+    }),
+    runSubjectHarness: async (subjectEntityId) => ({
+      subjectEntityId,
+      passed: true,
+      checks: [],
+      tick: 0,
+    }),
+    setMotionProfileRuntime: async () => snapshot,
     disposeRuntime: async function () {
       this.disposeCount += 1;
     },
@@ -486,62 +600,334 @@ function deferred<T>(): {
 }
 
 describe("installDeferredWorldkitBrowserApi", () => {
-  it("preserves all 27 V3 methods and adds only read-only Route Evidence getters", () => {
+  it("publishes exactly the 39 mandatory V5 own enumerable keys", () => {
     const installation = installDeferredWorldkitBrowserApi({
       target: {},
       statusElement: { dataset: {} },
       initialize: async () => adapterFixture(),
     });
-    const inheritedMethodNames = [
-      "ready",
-      "getSnapshot",
-      "getDiagnostics",
-      "bindControl",
-      "runFixedInput",
-      "getControlCaptureCapabilities",
-      "waitForSimulationTick",
-      "waitForRenderReady",
-      "captureControlFrame",
-      "captureScreenshot",
-      "reset",
-      "setPaused",
-      "listSubjectDefinitions",
-      "listMotionKernels",
-      "listCompatibleProfiles",
-      "getSubjectPresetBaseline",
-      "validateSubjectPackage",
-      "setIntent",
-      "requestCameraProfile",
-      "resetCameraProfile",
+    expect(Object.keys(installation.api).sort()).toEqual([
+      "acquireRuntimeActivity",
       "adjustCameraView",
-      "resetCameraView",
-      "getCameraPreviewState",
       "applyCameraPreview",
       "applySubjectPresetTuning",
-      "setMotionProfile",
-      "runHarness",
-      "getSubjectSnapshot",
+      "captureControlFrame",
+      "captureScreenshot",
+      "executeGameplayCommand",
+      "getCameraPreviewState",
       "getCameraSnapshot",
-    ] as const;
-    const routeGetterNames = [
-      "getRouteSummary",
+      "getControlCaptureCapabilities",
+      "getDiagnostics",
+      "getGameplayEvents",
+      "getGameplayInspectionSnapshot",
+      "getRouteOverlay",
       "getRoutePathReceipt",
       "getRouteRuntimeProbeReceipt",
-      "getRouteOverlay",
-    ] as const;
+      "getRouteSummary",
+      "getSnapshot",
+      "getSubjectPresetBaseline",
+      "getSubjectSnapshot",
+      "getWorldStateSnapshot",
+      "listCompatibleProfiles",
+      "listMotionKernels",
+      "listSubjectDefinitions",
+      "ready",
+      "releaseRuntimeActivity",
+      "requestCameraProfile",
+      "reset",
+      "resetCameraProfile",
+      "resetCameraView",
+      "runFixedInput",
+      "runHarness",
+      "setIntent",
+      "setMotionProfile",
+      "setPaused",
+      "validateSubjectPackage",
+      "version",
+      "waitForRenderReady",
+      "waitForSimulationTick",
+    ]);
+    expect(installation.api).not.toHaveProperty("bindControl");
+  });
 
-    expect(inheritedMethodNames).toHaveLength(29);
-    for (const methodName of [...inheritedMethodNames, ...routeGetterNames]) {
-      expect(installation.api[methodName]).toEqual(expect.any(Function));
+  it("forwards Gameplay command, inspection, World State, and Activity through the V5 bridge", async () => {
+    const adapter = adapterFixture();
+    const command = {
+      schemaVersion: 1,
+      id: "command-bind",
+      type: "control.bind",
+      runtimeSessionId: "runtime-session-test",
+      worldSessionId: "world-session-test",
+      controllerEntityId: "controller-primary",
+      controlledEntityId: "rigged-primary",
+      expectedPossession: { mode: "unbound" },
+    } as const satisfies GameplayCommandV1;
+    const receipt = { status: "committed" } as GameplayCommandReceiptV1;
+    const worldState = {
+      id: `world-state:${"c".repeat(64)}`,
+      runtimeSessionId: "runtime-session-test",
+      worldSessionId: "world-session-test",
+    } as unknown as WorldStateSnapshotV1;
+    const commandInputs: GameplayCommandV1[] = [];
+    const worldStateRefs: string[] = [];
+    adapter.executeGameplayCommandRuntime = async (input) => {
+      commandInputs.push(input);
+      return receipt;
+    };
+    adapter.worldStateSnapshotRuntime = (worldStateRef) => {
+      worldStateRefs.push(worldStateRef);
+      return worldState;
+    };
+    const installation = installDeferredWorldkitBrowserApi({
+      target: {},
+      statusElement: { dataset: {} },
+      initialize: async () => adapter,
+    });
+    await installation.initialization;
+
+    await expect(installation.api.executeGameplayCommand(command)).resolves.toBe(receipt);
+    expect(commandInputs).toEqual([command]);
+    expect(installation.api.getGameplayInspectionSnapshot()).toEqual(
+      gameplayInspectionFixture(),
+    );
+    expect(installation.api.getWorldStateSnapshot({
+      worldStateRef: WORLD_STATE_REF,
+    })).toBe(worldState);
+    expect(worldStateRefs).toEqual([WORLD_STATE_REF]);
+    const activityRequest = {
+      schemaVersion: 1,
+      id: "take-1",
+      activityKind: "simulation-take",
+      expectedWorldSessionId: "world-session-test",
+    } as const;
+    expect(installation.api.acquireRuntimeActivity(activityRequest)).toMatchObject({
+      requestId: "take-1",
+      status: "active",
+    });
+    expect(installation.api.releaseRuntimeActivity(activityRequest)).toMatchObject({
+      requestId: "take-1",
+      status: "released",
+    });
+  });
+
+  it("paginates Gameplay Events with an exclusive validated cursor", async () => {
+    const events = [1, 2, 3].map((sequence): GameplayEventV1 => ({
+      kind: "worldkit-gameplay-event",
+      schemaVersion: 1,
+      id: `gameplay-event:world-session-test:${sequence}`,
+      type: "world.failed",
+      runtimeSessionId: "runtime-session-test",
+      worldSessionId: "world-session-test",
+      sequence,
+      simulationTick: sequence,
+      diagnostic: { code: "WORLD_SESSION_FAILED", message: "fixture" },
+    }));
+    const adapter = adapterFixture();
+    const observedQueries: [number, number][] = [];
+    adapter.gameplayEventsAfterRuntime = (afterEventSequence, maximumEventCount) => {
+      observedQueries.push([afterEventSequence, maximumEventCount]);
+      return events.filter(({ sequence }) => sequence > afterEventSequence)
+        .slice(0, maximumEventCount);
+    };
+    const installation = installDeferredWorldkitBrowserApi({
+      target: {},
+      statusElement: { dataset: {} },
+      initialize: async () => adapter,
+    });
+    await installation.initialization;
+
+    expect(installation.api.getGameplayEvents({
+      afterEventSequence: 0,
+      maximumEventCount: 2,
+    })).toEqual({
+      events: events.slice(0, 2),
+      nextAfterEventSequence: 2,
+      hasMore: true,
+    } satisfies GameplayEventsQueryResultV1);
+    expect(installation.api.getGameplayEvents({
+      afterEventSequence: 2,
+      maximumEventCount: 2,
+    })).toEqual({
+      events: [events[2]],
+      nextAfterEventSequence: 3,
+      hasMore: false,
+    });
+    expect(installation.api.getGameplayEvents({
+      afterEventSequence: 3,
+      maximumEventCount: 2,
+    })).toEqual({
+      events: [],
+      nextAfterEventSequence: 3,
+      hasMore: false,
+    });
+    expect(observedQueries).toEqual([[0, 3], [2, 3], [3, 3]]);
+
+    for (const invalidQuery of [
+      { afterEventSequence: -1, maximumEventCount: 1 },
+      { afterEventSequence: 0, maximumEventCount: 0 },
+      { afterEventSequence: 0, maximumEventCount: 257 },
+      { afterEventSequence: 0, maximumEventCount: 1, providerHandle: "secret" },
+    ]) {
+      expect(() => installation.api.getGameplayEvents(invalidQuery)).toThrowError(
+        expect.objectContaining({ code: "WORLDKIT_GAMEPLAY_EVENTS_QUERY_INVALID" }),
+      );
     }
-    const exposedNames = Object.getOwnPropertyNames(installation.api);
-    expect(exposedNames.filter((name) =>
-      /^(build|query|runRoute|setRoute|setValidation|set.*Threshold)/.test(name)
-    )).toEqual([]);
-    expect(exposedNames).not.toContain("getTraversalGraph");
-    expect(exposedNames).not.toContain("getRouteOverlayBytes");
-    expect(exposedNames).not.toContain("setCameraPreference");
-    expect(exposedNames).not.toContain("setCameraTuning");
+    const accessorQuery = Object.defineProperty({ maximumEventCount: 1 },
+      "afterEventSequence", {
+        enumerable: true,
+        get: () => {
+          throw new Error("must not execute");
+        },
+      });
+    expect(() => installation.api.getGameplayEvents(accessorQuery as never))
+      .toThrowError(expect.objectContaining({
+        code: "WORLDKIT_GAMEPLAY_EVENTS_QUERY_INVALID",
+      }));
+  });
+
+  it("rejects malformed and unavailable World State and Activity requests", async () => {
+    const installation = installDeferredWorldkitBrowserApi({
+      target: {},
+      statusElement: { dataset: {} },
+      initialize: async () => adapterFixture(),
+    });
+    await installation.initialization;
+
+    expect(() => installation.api.getWorldStateSnapshot({
+      worldStateRef: `worldkit://world-state/world-state:${"d".repeat(64)}`,
+    })).toThrowError(expect.objectContaining({
+      code: "WORLDKIT_WORLD_STATE_SNAPSHOT_NOT_FOUND",
+    }));
+    expect(() => installation.api.getWorldStateSnapshot({
+      worldStateRef: "missing",
+      providerHandle: "secret",
+    } as never)).toThrowError(expect.objectContaining({
+      code: "WORLDKIT_WORLD_STATE_SNAPSHOT_REQUEST_INVALID",
+    }));
+    expect(() => installation.api.acquireRuntimeActivity({
+      schemaVersion: 1,
+      id: "",
+      activityKind: "simulation-take",
+      expectedWorldSessionId: "world-session-test",
+    })).toThrowError(expect.objectContaining({
+      code: "WORLDKIT_RUNTIME_ACTIVITY_REQUEST_INVALID",
+    }));
+  });
+
+  it("sanitizes Adapter failures without exposing provider messages", async () => {
+    const adapter = adapterFixture();
+    adapter.executeGameplayCommandRuntime = async () => {
+      throw new Error("recast native pointer 0xdeadbeef");
+    };
+    adapter.runWorldkitFixedInput = async () => {
+      throw new Error("havok internal body handle");
+    };
+    const installation = installDeferredWorldkitBrowserApi({
+      target: {},
+      statusElement: { dataset: {} },
+      initialize: async () => adapter,
+    });
+    await installation.initialization;
+    const command = {
+      schemaVersion: 1,
+      id: "command-bind",
+      type: "control.bind",
+      runtimeSessionId: "runtime-session-test",
+      worldSessionId: "world-session-test",
+      controllerEntityId: "controller-primary",
+      controlledEntityId: "rigged-primary",
+      expectedPossession: { mode: "unbound" },
+    } as const satisfies GameplayCommandV1;
+
+    const commandError = await installation.api.executeGameplayCommand(command)
+      .catch((error: unknown) => error) as {
+        code: string;
+        diagnostic: WorldkitBrowserDiagnosticV1;
+      };
+    expect(commandError.code).toBe("WORLDKIT_GAMEPLAY_COMMAND_EXECUTION_FAILED");
+    expect(JSON.stringify(commandError)).not.toMatch(/recast|pointer|0xdeadbeef/i);
+    const fixedInputError = await installation.api.runFixedInput([])
+      .catch((error: unknown) => error) as {
+        code: string;
+        diagnostic: WorldkitBrowserDiagnosticV1;
+      };
+    expect(fixedInputError.code).toBe("WORLDKIT_FIXED_INPUT_EXECUTION_FAILED");
+    expect(JSON.stringify(fixedInputError)).not.toMatch(/havok|body handle/i);
+  });
+
+  it("fails closed when the Adapter violates Gameplay Event ordering or Session ownership", async () => {
+    const adapter = adapterFixture();
+    const malformedEvent = (sequence: number, worldSessionId: string): GameplayEventV1 => ({
+      kind: "worldkit-gameplay-event",
+      schemaVersion: 1,
+      id: `gameplay-event:${worldSessionId}:${sequence}`,
+      type: "world.failed",
+      runtimeSessionId: "runtime-session-test",
+      worldSessionId,
+      sequence,
+      simulationTick: sequence,
+      diagnostic: { code: "WORLD_SESSION_FAILED", message: "fixture" },
+    });
+    const installation = installDeferredWorldkitBrowserApi({
+      target: {},
+      statusElement: { dataset: {} },
+      initialize: async () => adapter,
+    });
+    await installation.initialization;
+
+    adapter.gameplayEventsAfterRuntime = () => [
+      malformedEvent(2, "world-session-test"),
+      malformedEvent(1, "world-session-test"),
+    ];
+    expect(() => installation.api.getGameplayEvents({
+      afterEventSequence: 0,
+      maximumEventCount: 2,
+    })).toThrowError(expect.objectContaining({
+      code: "WORLDKIT_GAMEPLAY_EVENTS_PROTOCOL_INVALID",
+    }));
+    adapter.gameplayEventsAfterRuntime = () => [
+      malformedEvent(1, "world-session-other"),
+    ];
+    expect(() => installation.api.getGameplayEvents({
+      afterEventSequence: 0,
+      maximumEventCount: 2,
+    })).toThrowError(expect.objectContaining({
+      code: "WORLDKIT_GAMEPLAY_EVENTS_PROTOCOL_INVALID",
+    }));
+  });
+
+  it("blocks Runtime observation while asynchronous reset is pending", async () => {
+    const resetGate = deferred<WorldRuntimeSnapshotV4>();
+    const adapter = adapterFixture();
+    adapter.resetRuntime = () => resetGate.promise;
+    const installation = installDeferredWorldkitBrowserApi({
+      target: {},
+      statusElement: { dataset: {} },
+      initialize: async () => adapter,
+    });
+    await installation.initialization;
+
+    const resetPromise = installation.api.reset();
+    expect(() => installation.api.getSnapshot()).toThrowError(
+      expect.objectContaining({ code: "WORLDKIT_RUNTIME_RESET_IN_PROGRESS" }),
+    );
+    expect(() => installation.api.getGameplayInspectionSnapshot()).toThrowError(
+      expect.objectContaining({ code: "WORLDKIT_RUNTIME_RESET_IN_PROGRESS" }),
+    );
+    await expect(installation.api.runFixedInput([])).rejects.toMatchObject({
+      code: "WORLDKIT_RUNTIME_RESET_IN_PROGRESS",
+    });
+    expect(() => installation.api.reset()).toThrowError(
+      expect.objectContaining({ code: "WORLDKIT_RUNTIME_RESET_IN_PROGRESS" }),
+    );
+
+    const replacementSnapshot = {
+      ...snapshotFixture(),
+      worldSessionId: "world-session-replacement",
+    };
+    resetGate.resolve(replacementSnapshot);
+    await expect(resetPromise).resolves.toBe(replacementSnapshot);
+    expect(installation.api.getSnapshot()).toBe(adapter.runtimeSnapshot());
   });
 
   it("forwards Camera Profile and preview calls through the single Browser V5 protocol", async () => {
@@ -616,28 +1002,6 @@ describe("installDeferredWorldkitBrowserApi", () => {
     );
     expect(previewRequests).toHaveLength(1);
     expect(previewRequests[0]).toBe(previewRequest);
-  });
-
-  it("reports stable errors when the Runtime Adapter lacks Camera Profile or preview support", async () => {
-    const installation = installDeferredWorldkitBrowserApi({
-      target: {},
-      statusElement: { dataset: {} },
-      initialize: async () => adapterFixture(),
-    });
-    await installation.initialization;
-
-    expect(() => installation.api.requestCameraProfile?.(
-      "worldkit://camera-profile/first-person.standard@1",
-    )).toThrowError("WORLDKIT_CAMERA_PROFILE_UNAVAILABLE");
-    expect(() => installation.api.resetCameraProfile?.()).toThrowError(
-      "WORLDKIT_CAMERA_PROFILE_RESET_UNAVAILABLE",
-    );
-    expect(() => installation.api.getCameraPreviewState?.()).toThrowError(
-      "WORLDKIT_CAMERA_PREVIEW_UNAVAILABLE",
-    );
-    expect(() => installation.api.applyCameraPreview?.({
-      tuningByProfileRef: {},
-    })).toThrowError("WORLDKIT_CAMERA_PREVIEW_UNAVAILABLE");
   });
 
   it("projects canonical Route Evidence by stable identity as detached immutable copies", async () => {
@@ -1035,7 +1399,9 @@ describe("installDeferredWorldkitBrowserApi", () => {
     expect(api).not.toHaveProperty("setControlTuning");
     expect(api).not.toHaveProperty("getControlTuning");
     expect(api.getControlCaptureCapabilities().available).toBe(true);
-    await expect(api.waitForSimulationTick(0)).resolves.toMatchObject({ tick: 0 });
+    await expect(api.waitForSimulationTick(0)).resolves.toMatchObject({
+      world: { simulationTick: 0 },
+    });
     const receipt = await api.waitForRenderReady(0);
     expect(receipt).toMatchObject({ simulationTick: 0, renderFrameIndex: 0 });
     await expect(api.captureControlFrame({
@@ -1264,21 +1630,8 @@ describe("installDeferredWorldkitBrowserApi", () => {
     expect(Object.isFrozen(diagnostics[0])).toBe(true);
     expect(Object.isFrozen(diagnostics[0]?.details)).toBe(true);
     expect(Object.isFrozen(diagnostics[0]?.details?.measurements)).toBe(true);
-    expect(Object.keys(installation.api).sort()).toEqual([
-      "bindControl",
-      "captureControlFrame",
-      "captureScreenshot",
-      "getControlCaptureCapabilities",
-      "getDiagnostics",
-      "getSnapshot",
-      "ready",
-      "reset",
-      "runFixedInput",
-      "setPaused",
-      "version",
-      "waitForRenderReady",
-      "waitForSimulationTick",
-    ]);
+    expect(Object.keys(installation.api)).toHaveLength(39);
+    expect(installation.api).not.toHaveProperty("bindControl");
     expect(JSON.stringify(installation.api)).not.toMatch(/solve|search|repair|mutate/i);
   });
 
@@ -1434,12 +1787,17 @@ describe("installDeferredWorldkitBrowserApi", () => {
 });
 
 describe("createWorldkitBrowserApiV5", () => {
-  const V4_REQUIRED_METHODS = [
+  const V5_REQUIRED_METHODS = [
     "ready",
     "getSnapshot",
     "getDiagnostics",
-    "bindControl",
+    "executeGameplayCommand",
     "runFixedInput",
+    "getGameplayEvents",
+    "getGameplayInspectionSnapshot",
+    "getWorldStateSnapshot",
+    "acquireRuntimeActivity",
+    "releaseRuntimeActivity",
     "getControlCaptureCapabilities",
     "waitForSimulationTick",
     "waitForRenderReady",
@@ -1456,7 +1814,9 @@ describe("createWorldkitBrowserApiV5", () => {
   it("preserves prior Browser methods, installs V5 on window.__WORLDKIT__, and deep-freezes Route Evidence", () => {
     const api = createWorldkitBrowserApiV5({});
     expect(api.version).toBe(5);
-    for (const methodName of V4_REQUIRED_METHODS) {
+    expect(Object.keys(api)).toHaveLength(39);
+    expect(api).not.toHaveProperty("bindControl");
+    for (const methodName of V5_REQUIRED_METHODS) {
       expect(typeof api[methodName]).toBe("function");
     }
     const target: { __WORLDKIT__?: WorldkitBrowserApiV5 } = {};

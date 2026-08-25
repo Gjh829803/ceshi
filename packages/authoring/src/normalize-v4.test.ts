@@ -1,10 +1,9 @@
 import { describe, expect, it } from "vitest";
 
 import {
-  canonicalAuthoringIdentityV3,
-  normalizeAuthoringSpecV3,
+  canonicalAuthoringLayoutIdentityV4,
   normalizeAuthoringSpecV4,
-  projectNormalizedWorldResourcesToV3LayoutIdentity,
+  projectNormalizedWorldResourcesToLayoutIdentityV4,
   type AuthoringSpecV4,
 } from "./index.js";
 import { createValidAuthoringSpec } from "./test-fixture.js";
@@ -233,7 +232,7 @@ describe("normalizeAuthoringSpecV4", () => {
     expect(result.normalizedWorldIrHash).not.toBe(result.layoutSolveReportHash);
   });
 
-  it("hashes the complete V4 Authoring identity without aliasing the V3 layout identity", () => {
+  it("hashes the complete V4 Authoring identity independently from layout identity", () => {
     const baseline = normalizeAuthoringSpecV4(routeWorld());
     const repeated = normalizeAuthoringSpecV4(routeWorld());
     const changedSource = routeWorld();
@@ -268,7 +267,7 @@ describe("normalizeAuthoringSpecV4", () => {
     );
   });
 
-  it("reconstructs the V3 layout identity from restored V4 Normalized IR resources", () => {
+  it("reconstructs the self-contained V4 layout identity from normalized resources", () => {
     const spec = routeWorldWithBindings();
     const result = normalizeAuthoringSpecV4(spec);
     const world = result.value;
@@ -281,19 +280,12 @@ describe("normalizeAuthoringSpecV4", () => {
       throw new Error(`bound fixture normalization failed: ${JSON.stringify(result.diagnostics)}`);
     }
 
-    const layoutResources = projectNormalizedWorldResourcesToV3LayoutIdentity(
+    const layoutResources = projectNormalizedWorldResourcesToLayoutIdentityV4(
       world.resources,
     );
-    const projectedV3 = {
-      ...structuredClone(spec),
-      schemaVersion: 3 as const,
-      constraints: {
-        placements: structuredClone([...spec.constraints.placements]),
-      },
-    };
     expect(
       sha256CanonicalJson(
-        canonicalAuthoringIdentityV3(projectedV3, {
+        canonicalAuthoringLayoutIdentityV4(spec, {
           ...world,
           resources: layoutResources,
         }),
@@ -378,15 +370,4 @@ describe("normalizeAuthoringSpecV4", () => {
       .not.toBe(normalizeAuthoringSpecV4(routeWorld()).normalizedWorldIrHash);
   });
 
-  it("does not let the explicit V3 normalizer reinterpret V4", () => {
-    expect(normalizeAuthoringSpecV3(routeWorld())).toMatchObject({
-      ok: false,
-      diagnostics: expect.arrayContaining([
-        expect.objectContaining({
-          code: "AUTHORING_SCHEMA_INVALID",
-          instancePath: "/schemaVersion",
-        }),
-      ]),
-    });
-  });
 });

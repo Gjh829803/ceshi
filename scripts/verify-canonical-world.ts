@@ -17,12 +17,12 @@ import {
 
 import {
   stringifyCanonicalJson,
-  type NormalizedWorldIRV3,
+  type NormalizedWorldIRV4,
 } from "@whitebox-world/authoring";
 import type {
-  ExecutionPlanV4,
+  ExecutionPlanV5,
   Vec3,
-  WorldRuntimeSnapshotV3,
+  WorldRuntimeSnapshotV4,
 } from "@whitebox-world/runtime-contracts";
 
 import {
@@ -61,8 +61,13 @@ const BROWSER_PROTOCOL_V5_METHOD_NAMES = [
   "ready",
   "getSnapshot",
   "getDiagnostics",
-  "bindControl",
+  "executeGameplayCommand",
   "runFixedInput",
+  "getGameplayEvents",
+  "getGameplayInspectionSnapshot",
+  "getWorldStateSnapshot",
+  "acquireRuntimeActivity",
+  "releaseRuntimeActivity",
   "getControlCaptureCapabilities",
   "waitForSimulationTick",
   "waitForRenderReady",
@@ -103,13 +108,13 @@ const FORBIDDEN_BROWSER_ROUTE_AUTHORITY_NAMES = [
   "setRouteEvidence",
 ] as const;
 
-interface WorldBuildArtifactV3 {
+interface WorldBuildArtifactV4 {
   kind: "worldkit-build-artifact";
-  schemaVersion: 3;
+  schemaVersion: 4;
   normalizedWorldIrHash: string;
   executionPlanHash: string;
-  normalizedWorldIr: NormalizedWorldIRV3;
-  executionPlan: ExecutionPlanV4;
+  normalizedWorldIr: NormalizedWorldIRV4;
+  executionPlan: ExecutionPlanV5;
 }
 
 interface CanonicalArtifactPaths {
@@ -173,7 +178,7 @@ async function runCliGates(paths: CanonicalArtifactPaths): Promise<void> {
   assert.equal(
     await worldkitMain(["build", INPUT_PATH, "--output", paths.build, "--json"]),
     0,
-    "worldkit build must emit the canonical V3 build artifact.",
+    "worldkit build must emit the canonical V4 build artifact.",
   );
   const firstBuildBytes = await readFile(paths.build, "utf8");
   assert.equal(
@@ -222,7 +227,7 @@ async function runCliGates(paths: CanonicalArtifactPaths): Promise<void> {
       "--json",
     ]),
     0,
-    "worldkit capture must emit a PNG and plural V3 runtime snapshot.",
+    "worldkit capture must emit a PNG and plural V4 runtime snapshot.",
   );
 }
 
@@ -234,17 +239,16 @@ async function verifyArtifacts(paths: CanonicalArtifactPaths): Promise<{
   subjectDefinitionHash: string;
   resourceLockHash: string;
 }> {
-  const artifact = parseJson<WorldBuildArtifactV3>(
+  const artifact = parseJson<WorldBuildArtifactV4>(
     await readFile(paths.build, "utf8"),
     "Build artifact",
   );
   assert.equal(artifact.kind, "worldkit-build-artifact");
-  assert.equal(artifact.schemaVersion, 3);
+  assert.equal(artifact.schemaVersion, 4);
   assert.match(artifact.normalizedWorldIrHash, /^sha256:[a-f0-9]{64}$/);
   assert.match(artifact.executionPlanHash, /^sha256:[a-f0-9]{64}$/);
-  assert.equal(artifact.normalizedWorldIr.schemaVersion, 3);
-  assert.equal(artifact.executionPlan.schemaVersion, 4);
-  assert.equal(artifact.executionPlan.runtimeBackend, "babylon-havok");
+  assert.equal(artifact.normalizedWorldIr.schemaVersion, 4);
+  assert.equal(artifact.executionPlan.schemaVersion, 5);
   assert.equal(artifact.executionPlan.terrain.entityId, "terrain-main");
   assert.deepEqual(
     artifact.executionPlan.waters.map((water) => water.entityId),
@@ -254,7 +258,7 @@ async function verifyArtifacts(paths: CanonicalArtifactPaths): Promise<{
     artifact.executionPlan.objects.map((object) => object.entityId),
     ["tower", "wall-east", "wall-west"],
   );
-  assert.equal(artifact.executionPlan.controlledEntityId, PLAYER_ENTITY_ID);
+  assert.equal(artifact.executionPlan.initialControlledEntityId, PLAYER_ENTITY_ID);
   assert.deepEqual(
     artifact.executionPlan.subjects.map((subject) => subject.entityId),
     [
@@ -315,40 +319,51 @@ async function verifyArtifacts(paths: CanonicalArtifactPaths): Promise<{
   );
   assert.ok(explanation.subject.resourceLockEntries.length >= 5);
 
-  const snapshot = parseJson<WorldRuntimeSnapshotV3>(
+  const snapshot = parseJson<WorldRuntimeSnapshotV4>(
     await readFile(paths.snapshot, "utf8"),
     "Runtime snapshot",
   );
-  assert.equal(snapshot.schemaVersion, 3);
-  assert.equal(snapshot.runtimeBackend, "babylon-havok");
-  assert.deepEqual(snapshot.physics, {
-    backend: "havok",
-    ready: true,
-    fixedTimeStepSeconds: 1 / 60,
-  });
-  assert.equal(snapshot.controlledEntityId, PLAYER_ENTITY_ID);
-  assert.deepEqual(Object.keys(snapshot.subjectStatesByEntityId).sort(), [
+  assert.equal(snapshot.schemaVersion, 4);
+  assert.equal(snapshot.runtime.phase, "ready");
+  assert.equal(snapshot.runtime.fixedTimeStepSeconds, 1 / 60);
+  assert.equal(snapshot.resources.phase, "ready");
+  assert.deepEqual(Object.keys(snapshot.world.subjectStatesByEntityId).sort(), [
     FIRST_PACKAGE_SUBJECT_ENTITY_ID,
     SECOND_PACKAGE_SUBJECT_ENTITY_ID,
     PLAYER_ENTITY_ID,
   ]);
-  for (const state of Object.values(snapshot.subjectStatesByEntityId)) {
-    assert.equal(state.activeActionId, "idle");
+  for (const state of Object.values(snapshot.world.subjectStatesByEntityId)) {
+    assert.ok(
+      Object.values(state.capabilityStatesById).every(
+        (capability) => capability.mode === "idle",
+      ),
+      "Initial locomotion capability state was not idle.",
+    );
   }
   assert.notStrictEqual(
-    snapshot.subjectStatesByEntityId[FIRST_PACKAGE_SUBJECT_ENTITY_ID],
-    snapshot.subjectStatesByEntityId[SECOND_PACKAGE_SUBJECT_ENTITY_ID],
+    snapshot.world.subjectStatesByEntityId[FIRST_PACKAGE_SUBJECT_ENTITY_ID],
+    snapshot.world.subjectStatesByEntityId[SECOND_PACKAGE_SUBJECT_ENTITY_ID],
   );
-  assert.equal(
-    snapshot.controllersById["controller-primary"]?.controlledEntityId,
-    PLAYER_ENTITY_ID,
-  );
-  assert.equal(snapshot.camera.entityId, "camera-main");
   assert.ok(
-    snapshot.resources.bodies >= 7,
-    "Terrain, three static objects, and three Subjects must own Havok bodies.",
+    Object.values(
+      snapshot.world.gameplayInspection.possessedByRelationshipsById,
+    ).some(
+      (relationship) =>
+        relationship.controllerEntityId === "controller-primary" &&
+        relationship.controlledEntityId === PLAYER_ENTITY_ID,
+    ),
+    "CLI snapshot did not publish the initial possession relationship.",
   );
-  assert.equal(snapshot.resources.terrainSamples, 65 * 65);
+  assert.equal(snapshot.view.camera.mode, "tracking");
+  assert.equal(
+    snapshot.view.camera.mode === "tracking" ? snapshot.view.camera.id : undefined,
+    "camera-main",
+  );
+  assert.ok(
+    snapshot.resources.physicsBodyCount >= 7,
+    "Terrain, three static objects, and three Subjects must own physics bodies.",
+  );
+  assert.equal(snapshot.resources.terrainSampleCount, 65 * 65);
 
   const dimensions = inspectPng(await readFile(paths.screenshot));
   assert.ok(
@@ -357,7 +372,7 @@ async function verifyArtifacts(paths: CanonicalArtifactPaths): Promise<{
   );
   return {
     dimensions,
-    bodyCount: snapshot.resources.bodies,
+    bodyCount: snapshot.resources.physicsBodyCount,
     normalizedWorldIrHash: artifact.normalizedWorldIrHash,
     executionPlanHash: artifact.executionPlanHash,
     subjectDefinitionHash,
@@ -383,6 +398,46 @@ function assertPositionUnchanged(
   assert.ok(
     maximumDriftMeters <= 1e-9,
     `${message} Maximum drift was ${maximumDriftMeters}m.`,
+  );
+}
+
+function requireSubjectProjection(
+  snapshot: WorldRuntimeSnapshotV4,
+  entityId: string,
+): WorldRuntimeSnapshotV4["world"]["subjectStatesByEntityId"][string] {
+  const subject = snapshot.world.subjectStatesByEntityId[entityId];
+  assert.ok(subject !== undefined, `Missing Subject projection '${entityId}'.`);
+  return subject;
+}
+
+function requireLocomotionCapability(
+  snapshot: WorldRuntimeSnapshotV4,
+  entityId: string,
+) {
+  const capability = Object.values(
+    requireSubjectProjection(snapshot, entityId).capabilityStatesById,
+  ).find((candidate) => candidate.kind === "locomotion-capability-state");
+  assert.ok(
+    capability !== undefined,
+    `Missing locomotion capability state for '${entityId}'.`,
+  );
+  return capability;
+}
+
+function assertPossessedBy(
+  snapshot: WorldRuntimeSnapshotV4,
+  controllerEntityId: string,
+  controlledEntityId: string,
+): void {
+  assert.ok(
+    Object.values(
+      snapshot.world.gameplayInspection.possessedByRelationshipsById,
+    ).some(
+      (relationship) =>
+        relationship.controllerEntityId === controllerEntityId &&
+        relationship.controlledEntityId === controlledEntityId,
+    ),
+    `Controller '${controllerEntityId}' does not possess '${controlledEntityId}'.`,
   );
 }
 
@@ -427,12 +482,11 @@ async function verifyBrowserProtocolAndPhysics(): Promise<{
     );
     assert.equal(await page.evaluate(() => window.__WORLDKIT__!.version), 5);
     const ready = await page.evaluate(async () => window.__WORLDKIT__!.ready());
-    assert.equal(ready.schemaVersion, 3);
-    assert.equal(ready.runtimeBackend, "babylon-havok");
-    assert.equal(ready.physics.backend, "havok");
-    assert.equal(ready.physics.ready, true);
-    assert.equal(ready.controlledEntityId, PLAYER_ENTITY_ID);
-    assert.deepEqual(Object.keys(ready.subjectStatesByEntityId).sort(), [
+    assert.equal(ready.schemaVersion, 4);
+    assert.equal(ready.runtime.phase, "ready");
+    assert.equal(ready.resources.phase, "ready");
+    assertPossessedBy(ready, "controller-primary", PLAYER_ENTITY_ID);
+    assert.deepEqual(Object.keys(ready.world.subjectStatesByEntityId).sort(), [
       FIRST_PACKAGE_SUBJECT_ENTITY_ID,
       SECOND_PACKAGE_SUBJECT_ENTITY_ID,
       PLAYER_ENTITY_ID,
@@ -470,7 +524,7 @@ async function verifyBrowserProtocolAndPhysics(): Promise<{
         forbiddenNames: FORBIDDEN_BROWSER_ROUTE_AUTHORITY_NAMES,
       },
     );
-    assert.equal(BROWSER_PROTOCOL_V5_METHOD_NAMES.length, 33);
+    assert.equal(BROWSER_PROTOCOL_V5_METHOD_NAMES.length, 38);
     assert.deepEqual(browserProtocol.missingMethodNames, []);
     assert.deepEqual(browserProtocol.forbiddenAuthorityNames, []);
     assert.deepEqual(
@@ -492,10 +546,13 @@ async function verifyBrowserProtocolAndPhysics(): Promise<{
     const wallStop = await page.evaluate(async () => {
       const api = window.__WORLDKIT__!;
       api.setPaused(true);
-      api.reset();
+      await api.reset();
       return api.runFixedInput([{ actions: ["move-right"], ticks: 360 }]);
     });
-    const wallStopPlayer = wallStop.subjectStatesByEntityId[PLAYER_ENTITY_ID]!;
+    const wallStopPlayer = requireSubjectProjection(
+      wallStop,
+      PLAYER_ENTITY_ID,
+    ).entityState;
     assert.ok(
       wallStopPlayer.positionMetersXYZ[0] > 2,
       "Fixed input did not move player toward the east wall.",
@@ -507,141 +564,204 @@ async function verifyBrowserProtocolAndPhysics(): Promise<{
 
     const lakeEntry = await page.evaluate(async () => {
       const api = window.__WORLDKIT__!;
-      api.reset();
+      await api.reset();
       return api.runFixedInput([{ actions: ["move-forward"], ticks: 720 }]);
     });
-    const lakeEntryPlayer = lakeEntry.subjectStatesByEntityId[PLAYER_ENTITY_ID]!;
+    const lakeEntryPlayer = requireSubjectProjection(
+      lakeEntry,
+      PLAYER_ENTITY_ID,
+    ).entityState;
+    const lakeEntryLocomotion = requireLocomotionCapability(
+      lakeEntry,
+      PLAYER_ENTITY_ID,
+    );
     assert.ok(
       lakeEntryPlayer.positionMetersXYZ[2] < 5,
       "Fixed input did not move player toward the lake.",
     );
     assert.ok(
-      lakeEntryPlayer.movementMedium === "ground" ||
-        lakeEntryPlayer.movementMedium === "air",
-      `P1.5 publishes only the closed ground/air medium set; received '${lakeEntryPlayer.movementMedium}'.`,
+      lakeEntryLocomotion.movementMedium === "ground" ||
+        lakeEntryLocomotion.movementMedium === "air",
+      `P1.5 publishes only the closed ground/air medium set; received '${lakeEntryLocomotion.movementMedium}'.`,
     );
-    assert.equal(lakeEntryPlayer.activeActionId, "walk");
+    assert.equal(lakeEntryLocomotion.mode, "walk");
 
     const firstStart = await page.evaluate(async () => {
       const api = window.__WORLDKIT__!;
-      api.reset();
+      await api.reset();
       return api.runFixedInput([{ actions: [], ticks: 1 }]);
     });
     const firstReceipt = await page.evaluate(
-      ({ controlledEntityId }) =>
-        window.__WORLDKIT__!.bindControl({
-          controllerId: "controller-primary",
-          expectedControlledEntityId: "player",
+      async ({ controlledEntityId, snapshot }) =>
+        window.__WORLDKIT__!.executeGameplayCommand({
+          schemaVersion: 1,
+          id: "canonical-bind-first-package-subject",
+          type: "control.bind",
+          runtimeSessionId: snapshot.runtimeSessionId,
+          worldSessionId: snapshot.worldSessionId,
+          controllerEntityId: "controller-primary",
           controlledEntityId,
+          expectedPossession: {
+            mode: "possessed",
+            controlledEntityId: "player",
+          },
         }),
-      { controlledEntityId: FIRST_PACKAGE_SUBJECT_ENTITY_ID },
+      {
+        controlledEntityId: FIRST_PACKAGE_SUBJECT_ENTITY_ID,
+        snapshot: firstStart,
+      },
     );
     assert.equal(firstReceipt.status, "committed");
-    assert.equal(firstReceipt.controlledEntityId, FIRST_PACKAGE_SUBJECT_ENTITY_ID);
     const firstMove = await page.evaluate(() =>
       window.__WORLDKIT__!.runFixedInput([
         { actions: ["move-right"], ticks: 120 },
       ]),
     );
-    assert.equal(firstMove.controlledEntityId, FIRST_PACKAGE_SUBJECT_ENTITY_ID);
+    assertPossessedBy(
+      firstMove,
+      "controller-primary",
+      FIRST_PACKAGE_SUBJECT_ENTITY_ID,
+    );
     assert.equal(
-      firstMove.subjectStatesByEntityId[FIRST_PACKAGE_SUBJECT_ENTITY_ID]!
-        .activeActionId,
+      requireLocomotionCapability(firstMove, FIRST_PACKAGE_SUBJECT_ENTITY_ID).mode,
       "walk",
     );
-    assert.equal(firstMove.camera.targetEntityId, FIRST_PACKAGE_SUBJECT_ENTITY_ID);
+    assert.equal(firstMove.view.camera.mode, "tracking");
+    assert.equal(
+      firstMove.view.camera.mode === "tracking"
+        ? firstMove.view.camera.targetEntityId
+        : undefined,
+      FIRST_PACKAGE_SUBJECT_ENTITY_ID,
+    );
     assert.ok(
-      firstMove.subjectStatesByEntityId[FIRST_PACKAGE_SUBJECT_ENTITY_ID]!
-        .positionMetersXYZ[0] >
-        firstStart.subjectStatesByEntityId[FIRST_PACKAGE_SUBJECT_ENTITY_ID]!
-          .positionMetersXYZ[0],
+      requireSubjectProjection(firstMove, FIRST_PACKAGE_SUBJECT_ENTITY_ID)
+        .entityState.positionMetersXYZ[0] >
+        requireSubjectProjection(firstStart, FIRST_PACKAGE_SUBJECT_ENTITY_ID)
+          .entityState.positionMetersXYZ[0],
       "The first Package Definition instance did not move.",
     );
     assertPositionUnchanged(
-      firstMove.subjectStatesByEntityId[SECOND_PACKAGE_SUBJECT_ENTITY_ID]!
-        .positionMetersXYZ,
-      firstStart.subjectStatesByEntityId[SECOND_PACKAGE_SUBJECT_ENTITY_ID]!
-        .positionMetersXYZ,
+      requireSubjectProjection(firstMove, SECOND_PACKAGE_SUBJECT_ENTITY_ID)
+        .entityState.positionMetersXYZ,
+      requireSubjectProjection(firstStart, SECOND_PACKAGE_SUBJECT_ENTITY_ID)
+        .entityState.positionMetersXYZ,
       "The second Package Definition instance moved during first-instance input.",
     );
     assertPositionUnchanged(
-      firstMove.subjectStatesByEntityId[PLAYER_ENTITY_ID]!.positionMetersXYZ,
-      firstStart.subjectStatesByEntityId[PLAYER_ENTITY_ID]!.positionMetersXYZ,
+      requireSubjectProjection(firstMove, PLAYER_ENTITY_ID).entityState
+        .positionMetersXYZ,
+      requireSubjectProjection(firstStart, PLAYER_ENTITY_ID).entityState
+        .positionMetersXYZ,
       "The uncontrolled player moved during first-instance input.",
     );
 
     const secondStart = await page.evaluate(async () => {
       const api = window.__WORLDKIT__!;
-      api.reset();
+      await api.reset();
       return api.runFixedInput([{ actions: [], ticks: 1 }]);
     });
     const secondReceipt = await page.evaluate(
-      ({ controlledEntityId }) =>
-        window.__WORLDKIT__!.bindControl({
-          controllerId: "controller-primary",
-          expectedControlledEntityId: "player",
+      async ({ controlledEntityId, snapshot }) =>
+        window.__WORLDKIT__!.executeGameplayCommand({
+          schemaVersion: 1,
+          id: "canonical-bind-second-package-subject",
+          type: "control.bind",
+          runtimeSessionId: snapshot.runtimeSessionId,
+          worldSessionId: snapshot.worldSessionId,
+          controllerEntityId: "controller-primary",
           controlledEntityId,
+          expectedPossession: {
+            mode: "possessed",
+            controlledEntityId: "player",
+          },
         }),
-      { controlledEntityId: SECOND_PACKAGE_SUBJECT_ENTITY_ID },
+      {
+        controlledEntityId: SECOND_PACKAGE_SUBJECT_ENTITY_ID,
+        snapshot: secondStart,
+      },
     );
     assert.equal(secondReceipt.status, "committed");
-    assert.equal(secondReceipt.controlledEntityId, SECOND_PACKAGE_SUBJECT_ENTITY_ID);
     const secondMove = await page.evaluate(() =>
       window.__WORLDKIT__!.runFixedInput([
         { actions: ["move-left"], ticks: 120 },
       ]),
     );
-    assert.equal(secondMove.controlledEntityId, SECOND_PACKAGE_SUBJECT_ENTITY_ID);
+    assertPossessedBy(
+      secondMove,
+      "controller-primary",
+      SECOND_PACKAGE_SUBJECT_ENTITY_ID,
+    );
     assert.equal(
-      secondMove.subjectStatesByEntityId[SECOND_PACKAGE_SUBJECT_ENTITY_ID]!
-        .activeActionId,
+      requireLocomotionCapability(secondMove, SECOND_PACKAGE_SUBJECT_ENTITY_ID).mode,
       "walk",
     );
-    assert.equal(secondMove.camera.targetEntityId, SECOND_PACKAGE_SUBJECT_ENTITY_ID);
+    assert.equal(secondMove.view.camera.mode, "tracking");
+    assert.equal(
+      secondMove.view.camera.mode === "tracking"
+        ? secondMove.view.camera.targetEntityId
+        : undefined,
+      SECOND_PACKAGE_SUBJECT_ENTITY_ID,
+    );
     assert.ok(
-      secondMove.subjectStatesByEntityId[SECOND_PACKAGE_SUBJECT_ENTITY_ID]!
-        .positionMetersXYZ[0] <
-        secondStart.subjectStatesByEntityId[SECOND_PACKAGE_SUBJECT_ENTITY_ID]!
-          .positionMetersXYZ[0],
+      requireSubjectProjection(secondMove, SECOND_PACKAGE_SUBJECT_ENTITY_ID)
+        .entityState.positionMetersXYZ[0] <
+        requireSubjectProjection(secondStart, SECOND_PACKAGE_SUBJECT_ENTITY_ID)
+          .entityState.positionMetersXYZ[0],
       "The second Package Definition instance did not move.",
     );
     assertPositionUnchanged(
-      secondMove.subjectStatesByEntityId[FIRST_PACKAGE_SUBJECT_ENTITY_ID]!
-        .positionMetersXYZ,
-      secondStart.subjectStatesByEntityId[FIRST_PACKAGE_SUBJECT_ENTITY_ID]!
-        .positionMetersXYZ,
+      requireSubjectProjection(secondMove, FIRST_PACKAGE_SUBJECT_ENTITY_ID)
+        .entityState.positionMetersXYZ,
+      requireSubjectProjection(secondStart, FIRST_PACKAGE_SUBJECT_ENTITY_ID)
+        .entityState.positionMetersXYZ,
       "The first Package Definition instance moved during second-instance input.",
     );
     assertPositionUnchanged(
-      secondMove.subjectStatesByEntityId[PLAYER_ENTITY_ID]!.positionMetersXYZ,
-      secondStart.subjectStatesByEntityId[PLAYER_ENTITY_ID]!.positionMetersXYZ,
+      requireSubjectProjection(secondMove, PLAYER_ENTITY_ID).entityState
+        .positionMetersXYZ,
+      requireSubjectProjection(secondStart, PLAYER_ENTITY_ID).entityState
+        .positionMetersXYZ,
       "The uncontrolled player moved during second-instance input.",
     );
 
-    const reset = await page.evaluate(() => window.__WORLDKIT__!.reset());
-    assert.equal(reset.controlledEntityId, PLAYER_ENTITY_ID);
-    assert.equal(reset.camera.targetEntityId, PLAYER_ENTITY_ID);
+    const reset = await page.evaluate(async () => window.__WORLDKIT__!.reset());
+    assert.equal(reset.world.simulationTick, 0);
+    assert.notEqual(reset.worldSessionId, secondMove.worldSessionId);
+    assertPossessedBy(reset, "controller-primary", PLAYER_ENTITY_ID);
+    assert.equal(reset.view.camera.mode, "tracking");
+    assert.equal(
+      reset.view.camera.mode === "tracking"
+        ? reset.view.camera.targetEntityId
+        : undefined,
+      PLAYER_ENTITY_ID,
+    );
     for (const entityId of [
       FIRST_PACKAGE_SUBJECT_ENTITY_ID,
       SECOND_PACKAGE_SUBJECT_ENTITY_ID,
       PLAYER_ENTITY_ID,
     ]) {
-      const resetState = reset.subjectStatesByEntityId[entityId]!;
-      const readyState = ready.subjectStatesByEntityId[entityId]!;
-      assert.equal(resetState.subjectDefinitionRef, readyState.subjectDefinitionRef);
+      const resetState = requireSubjectProjection(reset, entityId);
+      const readyState = requireSubjectProjection(ready, entityId);
       assert.equal(
-        resetState.subjectDefinitionHash,
-        readyState.subjectDefinitionHash,
+        resetState.entityState.entityDefinitionRef,
+        readyState.entityState.entityDefinitionRef,
       );
-      assert.equal(resetState.movementMedium, readyState.movementMedium);
-      assert.equal(resetState.activeActionId, "idle");
+      assert.equal(
+        resetState.entityState.entityDefinitionHash,
+        readyState.entityState.entityDefinitionHash,
+      );
+      assert.equal(
+        requireLocomotionCapability(reset, entityId).movementMedium,
+        requireLocomotionCapability(ready, entityId).movementMedium,
+      );
+      assert.equal(requireLocomotionCapability(reset, entityId).mode, "idle");
       assertPositionUnchanged(
-        resetState.positionMetersXYZ,
-        readyState.positionMetersXYZ,
+        resetState.entityState.positionMetersXYZ,
+        readyState.entityState.positionMetersXYZ,
         `Reset did not restore Subject Origin for '${entityId}'.`,
       );
       assert.ok(
-        resetState.velocityMetersPerSecondXYZ.every(
+        (resetState.entityState.linearVelocityMetersPerSecondXYZ ?? [0, 0, 0]).every(
           (velocity) => Math.abs(velocity) <= 1e-9,
         ),
         `Reset did not clear velocity for '${entityId}'.`,
@@ -653,19 +773,19 @@ async function verifyBrowserProtocolAndPhysics(): Promise<{
       lakeEntryPositionMetersXYZ: lakeEntryPlayer.positionMetersXYZ,
       firstPackageSubjectMovement: {
         beforePositionMetersXYZ:
-          firstStart.subjectStatesByEntityId[FIRST_PACKAGE_SUBJECT_ENTITY_ID]!
-            .positionMetersXYZ,
+          requireSubjectProjection(firstStart, FIRST_PACKAGE_SUBJECT_ENTITY_ID)
+            .entityState.positionMetersXYZ,
         afterPositionMetersXYZ:
-          firstMove.subjectStatesByEntityId[FIRST_PACKAGE_SUBJECT_ENTITY_ID]!
-            .positionMetersXYZ,
+          requireSubjectProjection(firstMove, FIRST_PACKAGE_SUBJECT_ENTITY_ID)
+            .entityState.positionMetersXYZ,
       },
       secondPackageSubjectMovement: {
         beforePositionMetersXYZ:
-          secondStart.subjectStatesByEntityId[SECOND_PACKAGE_SUBJECT_ENTITY_ID]!
-            .positionMetersXYZ,
+          requireSubjectProjection(secondStart, SECOND_PACKAGE_SUBJECT_ENTITY_ID)
+            .entityState.positionMetersXYZ,
         afterPositionMetersXYZ:
-          secondMove.subjectStatesByEntityId[SECOND_PACKAGE_SUBJECT_ENTITY_ID]!
-            .positionMetersXYZ,
+          requireSubjectProjection(secondMove, SECOND_PACKAGE_SUBJECT_ENTITY_ID)
+            .entityState.positionMetersXYZ,
       },
     };
   } catch (error) {
@@ -733,20 +853,20 @@ async function run(): Promise<void> {
       {
         ok: true,
         protocolVersions: {
-          authoring: 3,
-          normalizedWorldIr: 3,
-          executionPlan: 4,
-          runtimeSnapshot: 3,
+          authoring: 4,
+          normalizedWorldIr: 4,
+          executionPlan: 5,
+          runtimeSnapshot: 4,
           browserProtocol: 5,
         },
         gates: [
           "strict-valid-input",
           "strict-invalid-input-rejection",
-          "deterministic-v3-v4-build-artifact",
+          "deterministic-v4-v5-build-artifact",
           "subject-explain-artifact",
           "playwright-capture",
           "browser-protocol-v5",
-          "babylon-havok-runtime",
+          "provider-neutral-runtime-health",
           "shared-package-definition",
           "independent-subject-runtime-state",
           "blocking-wall-collision",
@@ -769,7 +889,7 @@ async function run(): Promise<void> {
           snapshot: path.join(TARGET_ARTIFACT_DIRECTORY, "snapshot.json"),
           explain: path.join(TARGET_ARTIFACT_DIRECTORY, "explain.json"),
         },
-        havokBodies: artifacts.bodyCount,
+        physicsBodyCount: artifacts.bodyCount,
         ...physics,
       },
       null,

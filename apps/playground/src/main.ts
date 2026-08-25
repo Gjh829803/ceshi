@@ -9,6 +9,8 @@ import type {
   MotionKernelSummaryV1,
   SemanticInputActionV1,
   SubjectDefinitionSummaryV1,
+  WorldRuntimeSnapshotV4,
+  WorldRuntimeSubjectStateV4,
   WorldkitBrowserApiV5,
 } from "@whitebox-world/runtime-contracts";
 import { isNil } from "lodash-es";
@@ -16,6 +18,10 @@ import { isNil } from "lodash-es";
 import { CanvasRecorder } from "./canvas-recorder.js";
 import type {
   FeatureInspection,
+  OpeningCompositionReport,
+  PlanningViewKind,
+  PlaygroundArtifactAutomationApiV1,
+  PlaygroundArtifactRenderer,
   PlaygroundAutomationApi,
   PlaygroundWorldAdapter,
   WorldSnapshot,
@@ -38,11 +44,20 @@ import {
   createSubjectPresetWorkbenchDraftV1,
   normalizeSubjectPresetCameraPreferenceV1,
 } from "./subject-preset-workbench.js";
+import { resolvePlaygroundRuntimeRoute } from "./playground-runtime-route.js";
+import { sceneCatalog } from "./scenes/index.js";
+import { createGameplayPageLifecycle } from "./gameplay-page-lifecycle.js";
+import { createAndStartArtifactRenderer } from "./artifact-renderer-lifecycle.js";
+import { installPageExitDisposal } from "./page-exit-lifecycle.js";
 
 const app = document.querySelector<HTMLDivElement>("#app");
 if (app === null) throw new Error("Missing #app container");
 const urlParameters = new URLSearchParams(window.location.search);
-const authoringMode = urlParameters.get("authoring") === "1";
+const runtimeRoute = resolvePlaygroundRuntimeRoute(
+  window.location.search,
+  sceneCatalog,
+);
+const authoringMode = runtimeRoute.mode === "authoring";
 
 interface AuthoringStartupDebugV1 {
   stage: string;
@@ -405,6 +420,35 @@ function kernelFriendlyName(kernel: MotionKernelSummaryV1 | undefined): string {
   return names[kernel.resourceRef] ?? kernel.displayName;
 }
 
+function controlledEntityIdFromSnapshotV4(
+  snapshot: WorldRuntimeSnapshotV4,
+): string {
+  const relationships = Object.values(
+    snapshot.world.gameplayInspection.possessedByRelationshipsById,
+  ).filter(({ controllerEntityId }) => controllerEntityId === "controller-primary");
+  if (relationships.length !== 1) {
+    throw new Error("WORLDKIT_PLAYGROUND_CONTROL_BINDING_UNAVAILABLE");
+  }
+  return relationships[0]!.controlledEntityId;
+}
+
+function locomotionStateFromSubjectV4(
+  subject: WorldRuntimeSubjectStateV4 | undefined,
+) {
+  return Object.values(subject?.capabilityStatesById ?? {}).find(
+    (state) => state.kind === "locomotion-capability-state",
+  );
+}
+
+function activeActionFromSnapshotV4(
+  snapshot: WorldRuntimeSnapshotV4,
+  actorEntityId: string,
+): string | undefined {
+  return Object.values(
+    snapshot.world.gameplayInspection.activeActionStatesById,
+  ).find((state) => state.actorEntityId === actorEntityId)?.semanticActionRef;
+}
+
 function downloadJson(filename: string, payload: unknown): void {
   const blob = new Blob([`${JSON.stringify(payload, null, 2)}\n`], {
     type: "application/json",
@@ -479,10 +523,11 @@ function installTuningWorkbench(
   subjectSelect.addEventListener("change", () => navigateToSubjectPackage(subjectSelect.value));
   const summary = requiredElement<HTMLDivElement>("#tuning-subject-summary");
   const currentSubject = api.getSubjectSnapshot?.(workbenchContext.controlledEntityId);
+  const currentLocomotionState = locomotionStateFromSubjectV4(currentSubject);
   summary.innerHTML = `
     <div><span>现在调的是</span><strong>${escapeHtml(subjectFriendlyName(workbenchContext.definition))}</strong></div>
     <div><span>移动方式</span><strong>${escapeHtml(kernelFriendlyName(workbenchContext.activeKernel))}</strong></div>
-    <div><span>所在环境</span><strong>${currentSubject?.movementMedium === "air" ? "空中" : "地面"}</strong></div>
+    <div><span>所在环境</span><strong>${currentLocomotionState?.movementMedium === "air" ? "空中" : "地面"}</strong></div>
     <div><span>配置权限</span><strong>${workbenchContext.definition.authoringAvailability}</strong></div>
   `;
 
@@ -534,8 +579,8 @@ function installTuningWorkbench(
       inputStatus.textContent = `正在执行“${item.title}”…`;
       try {
         const after = await api.runFixedInput(item.steps);
-        const state = after.subjectStatesByEntityId[after.controlledEntityId];
-        inputStatus.textContent = `“${item.title}”已执行 · 当前动作：${state?.activeActionId ?? "已提交"}`;
+        const controlledEntityId = controlledEntityIdFromSnapshotV4(after);
+        inputStatus.textContent = `“${item.title}”已执行 · 当前动作：${activeActionFromSnapshotV4(after, controlledEntityId) ?? "已提交"}`;
       } catch {
         inputStatus.textContent = `“${item.title}”没有成功执行，世界状态已保留。`;
       }
@@ -575,6 +620,10 @@ function installTuningWorkbench(
   let cameraTuning: CameraTuningV1 = {};
   let selectedControlFeelProfileRef = controlFeelProfile?.resourceRef ?? "";
   let selectedMotionProfileRef = defaultMotion?.resourceRef ?? "";
+  let appliedGameplayProfileSelection = {
+    motionProfileRef: selectedMotionProfileRef,
+    controlFeelProfileRef: selectedControlFeelProfileRef,
+  };
   const selectedControlFeelProfile = (): CompatibleProfileSummaryV1 | undefined =>
     controlFeelProfiles.find(
       (profile) => profile.resourceRef === selectedControlFeelProfileRef,
@@ -622,8 +671,6 @@ function installTuningWorkbench(
             contentHash: profile.contentHash,
           })),
           defaultCameraProfileRef,
-          firstPersonCameraProfileRef:
-            exactBaseline.firstPersonCameraRigProfileRef ?? null,
         }
       : undefined;
   const localRepository = localBaseline === undefined
@@ -633,11 +680,9 @@ function installTuningWorkbench(
     localBaseline === undefined
       ? preference === "auto"
         ? "auto"
-        : preference === "first-person"
-          ? exactBaseline?.firstPersonCameraRigProfileRef ?? "auto"
-          : cameraRows.some((profile) => profile.resourceRef === preference)
-            ? preference
-            : "auto"
+        : cameraRows.some((profile) => profile.resourceRef === preference)
+          ? preference
+          : "auto"
       : normalizeSubjectPresetCameraPreferenceV1(preference, localBaseline);
   const syncCompactCameraSelect = (): void => {
     const compactCameraSelect = document.querySelector<HTMLSelectElement>(
@@ -768,7 +813,6 @@ function installTuningWorkbench(
   const applyWorkingDraftAtomically = (draft: SubjectPresetWorkingDraftV1): boolean => {
     if (
       api.applySubjectPresetTuning === undefined ||
-      api.getSubjectSnapshot === undefined ||
       api.getCameraPreviewState === undefined ||
       api.requestCameraProfile === undefined ||
       api.resetCameraProfile === undefined ||
@@ -780,8 +824,8 @@ function installTuningWorkbench(
       draft,
       subjectEntityId: workbenchContext.controlledEntityId,
       previousCameraPreferenceRef: appliedCameraPreferenceRef,
+      previousGameplayProfileSelection: appliedGameplayProfileSelection,
       runtime: {
-        getSubjectSnapshot: (subjectEntityId) => api.getSubjectSnapshot!(subjectEntityId),
         getCameraPreviewState: () => api.getCameraPreviewState!(),
         requestCameraProfile: (profileRef) => api.requestCameraProfile!(profileRef),
         resetCameraProfile: () => api.resetCameraProfile!(),
@@ -802,6 +846,10 @@ function installTuningWorkbench(
       return false;
     }
     appliedCameraPreferenceRef = draft.selectedCameraPreferenceRef;
+    appliedGameplayProfileSelection = {
+      motionProfileRef: draft.selectedMotionProfileRef,
+      controlFeelProfileRef: draft.selectedControlFeelProfileRef,
+    };
     const compactCameraSelect = document.querySelector<HTMLSelectElement>("#camera-preference-select");
     if (compactCameraSelect !== null) {
       compactCameraSelect.value = cameraPreference;
@@ -810,7 +858,6 @@ function installTuningWorkbench(
   };
 
   if (localRepository !== undefined && localBaseline !== undefined) {
-    localRepository.migrateV4(localBaseline);
     const localDefault = localRepository.resolveLocalDefault(localBaseline);
     const initialDraft = localDefault.status === "applicable"
       ? localRepository.restoreVersion(localDefault.pointer.localVersionId).value
@@ -907,8 +954,11 @@ function installTuningWorkbench(
   };
 
   const activeTunableCameraProfile = (): CompatibleProfileSummaryV1 | undefined => {
+    const camera = api.getCameraSnapshot?.();
     const profileRef = cameraPreference === "auto"
-      ? api.getCameraSnapshot?.().activeCameraProfileRef
+      ? camera?.mode === "tracking"
+        ? camera.activeCameraProfileRef
+        : undefined
       : cameraPreference;
     return cameraRows.find((row) => row.resourceRef === profileRef) ?? cameraRows[0];
   };
@@ -933,7 +983,6 @@ function installTuningWorkbench(
     cameraTuning = profile === undefined
       ? {}
       : { ...(cameraTuningByProfileRef[profile.resourceRef] ?? {}) } as CameraTuningV1;
-    const storageKey = `worldkit.camera-tuning.v4.${workbenchContext.definition.resourceRef}.${profile?.resourceRef ?? "auto"}.${profile?.contentHash ?? "unlocked"}`;
     const settings: Array<{
       key: keyof CameraTuningV1;
       label: string;
@@ -997,7 +1046,6 @@ function installTuningWorkbench(
           cameraTuningByProfileRef[profile.resourceRef] = { ...cameraTuning } as Record<string, number>;
         }
         output.textContent = nextValue.toFixed(2);
-        writeLocalDraft(storageKey, JSON.stringify(cameraTuning));
         applyCameraTuning();
         persistWorkingDraft();
         saveStatus.textContent = `“${setting.label}”已应用；这组数值只属于当前镜头`;
@@ -1363,6 +1411,10 @@ function installTuningWorkbench(
     },
     reapplyWorkingDraftAfterSimulationReset(): void {
       appliedCameraPreferenceRef = null;
+      appliedGameplayProfileSelection = {
+        motionProfileRef: defaultMotion?.resourceRef ?? "",
+        controlFeelProfileRef: controlFeelProfile?.resourceRef ?? "",
+      };
       const draft = createCurrentWorkingDraft();
       if (draft === undefined) return;
       applyWorkingDraftAtomically(draft);
@@ -1438,9 +1490,11 @@ function installCapabilityAuthoringPanel(
   const drafts = requiredElement<HTMLDivElement>("#parameter-drafts");
   const harnessOutput = requiredElement<HTMLPreElement>("#harness-output");
   const snapshot = api.getSnapshot();
-  const activeSubject = snapshot.subjectStatesByEntityId[snapshot.controlledEntityId];
+  const controlledEntityId = controlledEntityIdFromSnapshotV4(snapshot);
+  const activeSubject = snapshot.world.subjectStatesByEntityId[controlledEntityId];
   const requestedDefinitionRef = urlParameters.get("subjectDefinitionRef");
-  const activeDefinitionRef = requestedDefinitionRef ?? activeSubject?.subjectDefinitionRef ??
+  const activeDefinitionRef = requestedDefinitionRef ??
+    activeSubject?.entityState.entityDefinitionRef ??
     definitions[0]!.resourceRef;
   packageSelect.replaceChildren(...definitions.map((definition) => {
     const option = document.createElement("option");
@@ -1452,11 +1506,14 @@ function installCapabilityAuthoringPanel(
 
   const definition = definitions.find((row) => row.resourceRef === packageSelect.value) ??
     definitions[0]!;
+  const activeMotionProfile = builtInSubjectResourceRegistry.resolveMotionProfile(
+    definition.defaultMotionProfileRef,
+  );
   const activeKernel = api.listMotionKernels?.({
     includeExperimental: true,
     includeInternal: true,
   }).find(
-    (kernel) => kernel.resourceRef === activeSubject?.activeMotionKernelRef,
+    (kernel) => kernel.resourceRef === activeMotionProfile?.motionKernelRef,
   );
   const controls = requiredElement<HTMLDivElement>("#controls-card");
   controls.innerHTML = activeKernel?.commandKind === "throttle-steer"
@@ -1495,9 +1552,6 @@ function installCapabilityAuthoringPanel(
   );
   const controlProfile = profiles.find((row) => row.kind === "control-profile");
   const cameraProfiles = profiles.filter((row) => row.kind === "camera-rig-profile");
-  const firstPersonCameraProfileRef = cameraProfiles.find(
-    (profile) => profile.baseMode === "first-person",
-  )?.resourceRef;
   cameraSelect.replaceChildren(
     ...[
       ["auto", "自动选择合适镜头"],
@@ -1510,32 +1564,27 @@ function installCapabilityAuthoringPanel(
     }),
   );
   const storedCameraPreference = readLocalDraft("worldkit.camera-preference");
-  const migratedStoredCameraPreference = storedCameraPreference === "first-person"
-    ? firstPersonCameraProfileRef ?? "auto"
-    : storedCameraPreference;
   if (
-    !isNil(migratedStoredCameraPreference) &&
-    [...cameraSelect.options].some((option) => option.value === migratedStoredCameraPreference)
+    !isNil(storedCameraPreference) &&
+    [...cameraSelect.options].some((option) => option.value === storedCameraPreference)
   ) {
-    cameraSelect.value = migratedStoredCameraPreference;
+    cameraSelect.value = storedCameraPreference;
     try {
-      if (migratedStoredCameraPreference === "auto") {
+      if (storedCameraPreference === "auto") {
         api.resetCameraProfile?.();
       } else {
-        api.requestCameraProfile?.(migratedStoredCameraPreference);
-      }
-      if (storedCameraPreference === "first-person") {
-        writeLocalDraft("worldkit.camera-preference", migratedStoredCameraPreference);
+        api.requestCameraProfile?.(storedCameraPreference);
       }
     } catch {
       cameraSelect.value = "auto";
     }
   }
+  const camera = snapshot.view.camera;
   context.innerHTML = `
     <div><span>当前主体</span><code>${escapeHtml(subjectFriendlyName(definition))}</code></div>
     <div><span>移动方式</span><code>${escapeHtml(kernelFriendlyName(activeKernel))}</code></div>
-    <div><span>当前镜头</span><code>${escapeHtml(FRIENDLY_CAMERA_PROFILES[snapshot.camera.activeCameraProfileRef ?? ""]?.[0] ?? "自动")}</code></div>
-    <div><span>自动镜头效果</span><code>${escapeHtml((snapshot.camera.activeCameraModifierRefs ?? []).map((resourceRef) => FRIENDLY_CAMERA_MODIFIERS[resourceRef] ?? resourceRef).join("、") || "无")}</code></div>
+    <div><span>当前镜头</span><code>${escapeHtml(camera.mode === "tracking" ? FRIENDLY_CAMERA_PROFILES[camera.activeCameraProfileRef]?.[0] ?? "自动" : "未绑定")}</code></div>
+    <div><span>自动镜头效果</span><code>${escapeHtml(camera.mode === "tracking" ? camera.activeCameraModifierRefs.map((resourceRef) => FRIENDLY_CAMERA_MODIFIERS[resourceRef] ?? resourceRef).join("、") || "无" : "无")}</code></div>
     ${hostOverlay?.changes.some((change) => change.type === "relationship-capabilities-deferred") === true
       ? "<div><span>关系能力</span><code>运动预览；Seat / Tether / Mount 暂缓</code></div>"
       : ""}
@@ -1607,7 +1656,7 @@ function installCapabilityAuthoringPanel(
     cameraProfiles,
     parameterDraft,
     motionDraftStorageKey,
-    controlledEntityId: snapshot.controlledEntityId,
+    controlledEntityId,
     initialCameraPreference: cameraSelect.value,
     ...(hostOverlay === undefined ? {} : { hostOverlay }),
   });
@@ -1636,8 +1685,8 @@ function installCapabilityAuthoringPanel(
       return;
     }
     harnessOutput.textContent = JSON.stringify(
-      api.getSubjectSnapshot?.(snapshot.controlledEntityId) ??
-        api.getSnapshot().subjectStatesByEntityId[snapshot.controlledEntityId],
+      api.getSubjectSnapshot?.(controlledEntityId) ??
+        api.getSnapshot().world.subjectStatesByEntityId[controlledEntityId],
       null,
       2,
     );
@@ -1646,7 +1695,7 @@ function installCapabilityAuthoringPanel(
     if (api.runHarness === undefined) return;
     harnessOutput.textContent = "running…";
     try {
-      const report = await api.runHarness(snapshot.controlledEntityId);
+      const report = await api.runHarness(controlledEntityId);
       harnessOutput.textContent = JSON.stringify(
         withCapabilityDemoHarnessScope(report, hostOverlay),
         null,
@@ -1666,9 +1715,193 @@ function installCapabilityAuthoringPanel(
   return tuningWorkbench;
 }
 
-if (authoringMode) {
+function setupArtifactPlayground(
+  renderer: PlaygroundArtifactRenderer,
+  captureArtifactsEnabled: boolean,
+): () => void {
+  const abortController = new AbortController();
+  let captureTimer: number | undefined;
+  const rollback = (): void => {
+    abortController.abort();
+    if (!isNil(captureTimer)) window.clearTimeout(captureTimer);
+    delete (window as { __WHITEBOX_PLAYGROUND__?: unknown }).__WHITEBOX_PLAYGROUND__;
+    delete document.documentElement.dataset.artifactCapture;
+  };
+
+  try {
+    requiredElement("#adapter-name").textContent = renderer.name;
+    requiredElement<HTMLButtonElement>("#pause-button").hidden = true;
+    requiredElement<HTMLButtonElement>("#record-button").hidden = true;
+    requiredElement<HTMLButtonElement>("#smoke-button").hidden = true;
+    const resetButton = requiredElement<HTMLButtonElement>("#reset-button");
+    resetButton.textContent = "恢复开场视图";
+
+    let selectedFeatureId: string | null = null;
+    const resourceTotal = (feature: FeatureInspection): number =>
+      feature.resources.reduce(
+        (sum, resource) => sum + (resource.vertices ?? 0),
+        0,
+      );
+    const renderFeatureList = (features: readonly FeatureInspection[]): void => {
+      requiredElement("#feature-count").textContent = `${features.length} FEATURES`;
+      featureList.replaceChildren(...features.map((feature) => {
+        const button = document.createElement("button");
+        button.type = "button";
+        button.className = `feature-item${selectedFeatureId === feature.id ? " selected" : ""}`;
+        button.dataset.featureId = feature.id;
+        button.innerHTML = `
+          <span class="feature-icon ${feature.resources[0]?.kind ?? "mesh"}"></span>
+          <span><strong>${feature.id}</strong><small>${feature.type} · v${feature.version}</small></span>
+          <em>${feature.status}</em>
+        `;
+        button.addEventListener("click", () => selectFeature(feature.id), {
+          signal: abortController.signal,
+        });
+        return button;
+      }));
+    };
+    const selectFeature = (featureId: string): void => {
+      selectedFeatureId = featureId;
+      const features = renderer.inspectFeatures();
+      const feature = features.find((item) => item.id === featureId);
+      renderFeatureList(features);
+      if (isNil(feature)) return;
+      const parameterRows = Object.entries(feature.parameters)
+        .map(([key, value]) =>
+          `<div><dt>${key}</dt><dd>${escapeHtml(JSON.stringify(value))}</dd></div>`)
+        .join("");
+      const resourceRows = feature.resources
+        .map((resource) => `
+          <li><span><i class="dot ${resource.kind}"></i>${resource.id}</span>
+          <em>${isNil(resource.vertices) ? resource.kind : `${resource.vertices.toLocaleString()} vertices`}</em></li>
+        `)
+        .join("");
+      const diagnostics = feature.diagnostics.length === 0
+        ? `<p class="diagnostic-ok">✓ No diagnostics</p>`
+        : feature.diagnostics
+            .map((item) =>
+              `<p class="diagnostic-${item.severity}">${item.code}: ${item.message}</p>`)
+            .join("");
+      inspection.innerHTML = `
+        <div class="inspection-title">
+          <div><p class="eyebrow">SELECTED FEATURE</p><h3>${feature.id}</h3></div>
+          <span>${resourceTotal(feature).toLocaleString()} VTX</span>
+        </div>
+        <dl class="parameter-grid">${parameterRows}</dl>
+        <div class="resource-section"><h4>Owned resources</h4><ul>${resourceRows}</ul></div>
+        <div class="diagnostic-section"><h4>Diagnostics</h4>${diagnostics}</div>
+      `;
+    };
+
+    const automationApi: PlaygroundArtifactAutomationApiV1 = Object.freeze({
+      version: 1,
+      inspectFeatures: () => renderer.inspectFeatures(),
+      captureScreenshot: () => renderer.captureScreenshot(),
+      captureCompositionMask: () => renderer.captureCompositionMask(),
+      analyzeOpeningComposition: () => renderer.analyzeOpeningComposition(),
+      exportOpeningFrame: (report?: OpeningCompositionReport) =>
+        renderer.exportOpeningFrame(report),
+      getWorldSpec: () => renderer.getWorldSpec(),
+      getPlanArtifacts: () => renderer.getPlanArtifacts(),
+      capturePlanningView: (kind: PlanningViewKind) =>
+        renderer.capturePlanningView(kind),
+      getVisualPrototypes: () => renderer.getVisualPrototypes(),
+      captureWhiteboxTriview: (prototypeId: string) =>
+        renderer.captureWhiteboxTriview(prototypeId),
+      exportWhiteboxTriviews: () => renderer.exportWhiteboxTriviews(),
+    });
+    window.__WHITEBOX_PLAYGROUND__ = automationApi;
+
+    const features = renderer.inspectFeatures();
+    renderFeatureList(features);
+    selectFeature(features[0]?.id ?? "");
+    resetButton.addEventListener("click", () => renderer.restoreOpeningView(), {
+      signal: abortController.signal,
+    });
+    requiredElement<HTMLButtonElement>("#capture-button").addEventListener("click", () => {
+      const link = document.createElement("a");
+      link.download = `whitebox-world-${Date.now()}.png`;
+      link.href = renderer.captureScreenshot();
+      link.click();
+    }, { signal: abortController.signal });
+    requiredElement<HTMLButtonElement>("#triview-button").addEventListener("click", () => {
+      const output = requiredElement<HTMLPreElement>("#smoke-output");
+      output.textContent = "exporting whitebox tri-views…";
+      void renderer.exportWhiteboxTriviews().then(
+        (paths) => {
+          output.textContent = `exported ${paths.length} tri-views\n${paths.join("\n")}`;
+        },
+        (error: unknown) => {
+          output.textContent = error instanceof Error ? error.message : String(error);
+        },
+      );
+    }, { signal: abortController.signal });
+    requiredElement<HTMLButtonElement>("#composition-button").addEventListener("click", () => {
+      renderer.restoreOpeningView();
+      const report = renderer.analyzeOpeningComposition();
+      const mask = requiredElement<HTMLImageElement>("#composition-mask");
+      mask.src = renderer.captureCompositionMask();
+      mask.hidden = isNil(report);
+      requiredElement<HTMLPreElement>("#smoke-output").textContent = isNil(report)
+        ? "This scene has no opening composition guide."
+        : JSON.stringify(report, null, 2);
+    }, { signal: abortController.signal });
+
+    if (captureArtifactsEnabled) {
+      captureTimer = window.setTimeout(() => {
+        void (async () => {
+          const sceneId = renderer.getWorldSpec()?.id ?? "unknown-scene";
+          try {
+            renderer.restoreOpeningView();
+            const triViewPaths = await renderer.exportWhiteboxTriviews();
+            renderer.restoreOpeningView();
+            const report = renderer.analyzeOpeningComposition();
+            const openingFramePath = isNil(report)
+              ? null
+              : await renderer.exportOpeningFrame(report);
+            document.documentElement.dataset.artifactCapture = "complete";
+            window.parent.postMessage({
+              type: "whitebox-artifact-capture",
+              sceneId,
+              status: "complete",
+              triViewCount: triViewPaths.length,
+              openingFramePath,
+              compositionPass: report?.pass ?? null,
+              compositionScore: report?.score ?? null,
+            }, "*");
+          } catch (error) {
+            document.documentElement.dataset.artifactCapture = "failed";
+            window.parent.postMessage({
+              type: "whitebox-artifact-capture",
+              sceneId,
+              status: "failed",
+              error: error instanceof Error ? error.message : String(error),
+            }, "*");
+          }
+        })();
+      }, 900);
+    }
+    return rollback;
+  } catch (error) {
+    rollback();
+    throw error;
+  }
+}
+
+if (runtimeRoute.mode === "unknown") {
+  delete window.__WORLDKIT__;
+  delete (window as { __WHITEBOX_PLAYGROUND__?: unknown }).__WHITEBOX_PLAYGROUND__;
+  document.documentElement.dataset.worldkitStatus = "error";
+  requiredElement("#adapter-name").textContent = "route-error";
+  inspection.innerHTML = `<pre>${escapeHtml(JSON.stringify({
+    diagnostics: [runtimeRoute.diagnostic],
+  }, null, 2))}</pre>`;
+} else if (runtimeRoute.mode !== "artifact-only") {
   let createdAdapter: BabylonWorldAdapter | null = null;
   let createdHostOverlay: CapabilityDemoHostOverlayV1 | undefined;
+  let createdPlaygroundMetadata:
+    | import("./playground-world.js").PlaygroundWorldMetadataV1
+    | undefined;
   let startupStage = "host-resolver";
   let preparationError: unknown;
   let prepared: Readonly<{
@@ -1677,16 +1910,33 @@ if (authoringMode) {
   }> | undefined;
   try {
     startupStage = "module-import";
-    const [{ loadAuthoringScene }, { BabylonWorldAdapter }] = await Promise.all([
-      import("./authoring-loader.js"),
-      import("./babylon-world-adapter.js"),
-    ]);
-    startupStage = "authoring-load";
-    const loaded = await loadAuthoringScene(undefined, {
-      ...(urlParameters.get("subjectDefinitionRef") === null
-        ? {}
-        : { subjectDefinitionRef: urlParameters.get("subjectDefinitionRef")! }),
-    });
+    const { BabylonWorldAdapter } = await import("./babylon-world-adapter.js");
+    const subjectDefinitionRef = urlParameters.get("subjectDefinitionRef");
+    let loaded: Awaited<ReturnType<typeof import("./authoring-loader.js")["loadAuthoringScene"]>>;
+    if (runtimeRoute.mode === "authoring") {
+      const { loadAuthoringScene } = await import("./authoring-loader.js");
+      startupStage = "authoring-load";
+      loaded = await loadAuthoringScene(undefined, {
+        ...(isNil(subjectDefinitionRef) ? {} : { subjectDefinitionRef }),
+      });
+    } else {
+      const { loadOutdoorGameplaySceneV1 } = await import(
+        "./outdoor-scene-gameplay-loader.js"
+      );
+      startupStage = "outdoor-scene-load";
+      const outdoorLoaded = await loadOutdoorGameplaySceneV1(
+        sceneCatalog[runtimeRoute.sceneCatalogId]!,
+        {
+          sceneCatalogId: runtimeRoute.sceneCatalogId,
+          aspectRatio: viewport.clientWidth > 0 && viewport.clientHeight > 0
+            ? viewport.clientWidth / viewport.clientHeight
+            : 16 / 9,
+          ...(isNil(subjectDefinitionRef) ? {} : { subjectDefinitionRef }),
+        },
+      );
+      createdPlaygroundMetadata = outdoorLoaded.playgroundMetadata;
+      loaded = outdoorLoaded;
+    }
     prepared = { loaded, BabylonWorldAdapter };
   } catch (error) {
     preparationError = error;
@@ -1709,7 +1959,11 @@ if (authoringMode) {
           throw new Error("WORLDKIT_AUTHORING_PREPARATION_MISSING");
         }
         const { loaded, BabylonWorldAdapter } = prepared;
-        if (!loaded.ok || loaded.executionPlan === undefined) {
+        if (
+          !loaded.ok ||
+          loaded.executionPlan === undefined ||
+          loaded.runtimeWorldConfiguration === undefined
+        ) {
           inspection.innerHTML = `<pre>${escapeHtml(JSON.stringify(loaded.diagnostics, null, 2))}</pre>`;
           throw new Error("WORLDKIT_AUTHORING_LOAD_FAILED");
         }
@@ -1717,12 +1971,18 @@ if (authoringMode) {
           PLAYGROUND_CAPABILITY_SUBJECT_ASSET_URI_BY_REF_V1,
         );
         startupStage = "runtime-create";
-        const adapter = await BabylonWorldAdapter.create(loaded.executionPlan, {
-          subjectAssetResolver,
-          onInitializationStage(stage) {
-            startupStage = `runtime:${stage}`;
+        const adapter = await BabylonWorldAdapter.create(
+          loaded.runtimeWorldConfiguration,
+          {
+            subjectAssetResolver,
+            ...(isNil(createdPlaygroundMetadata)
+              ? {}
+              : { playgroundMetadata: createdPlaygroundMetadata }),
+            onInitializationStage(stage) {
+              startupStage = `runtime:${stage}`;
+            },
           },
-        });
+        );
         createdAdapter = adapter;
         createdHostOverlay = loaded.hostOverlay;
         trackAdapter(adapter);
@@ -1737,37 +1997,92 @@ if (authoringMode) {
       }
     },
   });
-  const initialized = await browserInstallation.initialization;
-  if (initialized !== undefined && createdAdapter !== null) {
-    const workbench = installCapabilityAuthoringPanel(
-      browserInstallation.api,
-      createdHostOverlay,
-    );
-    startPlayground(createdAdapter, () => browserInstallation.dispose(), {
-      afterSimulationReset: () => workbench?.reapplyWorkingDraftAfterSimulationReset(),
-    });
-  } else {
+  const pageLifecycle = createGameplayPageLifecycle({
+    initialization: browserInstallation.initialization,
+    getAdapter: () => createdAdapter,
+    setup(adapter) {
+      const workbench = runtimeRoute.mode === "authoring"
+        ? installCapabilityAuthoringPanel(
+            browserInstallation.api,
+            createdHostOverlay,
+          )
+        : undefined;
+      startPlayground(adapter, () => pageLifecycle.dispose(), {
+        resetSimulation: async () => {
+          await browserInstallation.api.reset();
+        },
+        afterSimulationReset: () => workbench?.reapplyWorkingDraftAfterSimulationReset(),
+      });
+    },
+    rollbackPageState() {
+      delete (window as { __WHITEBOX_PLAYGROUND__?: unknown }).__WHITEBOX_PLAYGROUND__;
+    },
+    disposeRuntimeHost: () => browserInstallation.dispose(),
+  });
+  let pageSetupSucceeded = false;
+  try {
+    pageSetupSucceeded = await pageLifecycle.completeSetup();
+  } catch (error) {
+    captureAuthoringStartupFailure("page-setup", error);
+    document.documentElement.dataset.worldkitStatus = "error";
+  }
+  if (!pageSetupSucceeded) {
     inspection.innerHTML = `<pre>${escapeHtml(JSON.stringify(authoringStartupEvidence(browserInstallation.api), null, 2))}</pre>`;
-    installAuthoringRecoveryPanel(browserInstallation.api);
+    if (runtimeRoute.mode === "authoring") {
+      installAuthoringRecoveryPanel(browserInstallation.api);
+    }
   }
 } else {
-  const [{ SdkWorldAdapter }, { resolveScene }] = await Promise.all([
-    import("./sdk-world-adapter.js"),
-    import("./scenes/index.js"),
-  ]);
-  const adapter = await SdkWorldAdapter.create(resolveScene(window.location.search));
-  adapter.mount(viewport);
-  startPlayground(adapter);
+  delete window.__WORLDKIT__;
+  delete (window as { __WHITEBOX_PLAYGROUND__?: unknown }).__WHITEBOX_PLAYGROUND__;
+  delete document.documentElement.dataset.worldkitStatus;
+  const { BabylonArtifactRenderer } = await import("./babylon-artifact-renderer.js");
+  let rollbackArtifactPageState = (): void => {};
+  const artifactLifecycle = await createAndStartArtifactRenderer({
+    create: () => BabylonArtifactRenderer.createArtifactRenderer(
+      sceneCatalog[runtimeRoute.sceneCatalogId]!,
+      runtimeRoute.sceneCatalogId,
+    ),
+    container: viewport,
+    setupPageState: (renderer) => {
+      rollbackArtifactPageState = setupArtifactPlayground(
+        renderer,
+        runtimeRoute.captureArtifactsEnabled,
+      );
+    },
+    rollbackPageState: () => rollbackArtifactPageState(),
+  });
+  installPageExitDisposal({
+    target: window,
+    dispose: () => artifactLifecycle.dispose(),
+  });
 }
 
 function startPlayground(
   adapter: PlaygroundWorldAdapter,
   disposeBrowserRuntime?: () => Promise<void>,
-  options: { afterSimulationReset?: () => void } = {},
+  options: {
+    resetSimulation?: () => Promise<void>;
+    afterSimulationReset?: () => void | Promise<void>;
+  } = {},
 ): void {
 requiredElement("#adapter-name").textContent = adapter.name;
-const canvasRecorder = new CanvasRecorder(adapter.canvas);
+let recorderCanvas = adapter.canvas;
+let canvasRecorder = new CanvasRecorder(recorderCanvas);
 let recordingTimer: number | null = null;
+
+async function resetPlaygroundWorld(): Promise<void> {
+  if (canvasRecorder.state !== "idle") {
+    throw new Error("WORLDKIT_RECORDING_RESET_CONFLICT");
+  }
+  if (options.resetSimulation === undefined) adapter.reset();
+  else await options.resetSimulation();
+  await options.afterSimulationReset?.();
+  if (recorderCanvas === adapter.canvas) return;
+  canvasRecorder.dispose();
+  recorderCanvas = adapter.canvas;
+  canvasRecorder = new CanvasRecorder(recorderCanvas);
+}
 
 let selectedFeatureId: string | null = null;
 
@@ -1885,9 +2200,12 @@ requiredElement<HTMLButtonElement>("#pause-button").addEventListener("click", ()
   adapter.setPaused(!adapter.isPaused());
 });
 
-requiredElement<HTMLButtonElement>("#reset-button").addEventListener("click", () => {
-  adapter.reset();
-  options.afterSimulationReset?.();
+requiredElement<HTMLButtonElement>("#reset-button").addEventListener("click", async () => {
+  try {
+    await resetPlaygroundWorld();
+  } catch (error) {
+    window.alert(error instanceof Error ? error.message : String(error));
+  }
 });
 
 requiredElement<HTMLButtonElement>("#capture-button").addEventListener("click", () => {
@@ -1987,7 +2305,7 @@ requiredElement<HTMLButtonElement>("#triview-button").addEventListener("click", 
 requiredElement<HTMLButtonElement>("#smoke-button").addEventListener("click", async () => {
   const output = requiredElement<HTMLPreElement>("#smoke-output");
   output.textContent = "running…";
-  adapter.reset();
+  await resetPlaygroundWorld();
   const before = adapter.snapshot();
   const cameraUp = await adapter.runFixedInput([
     { actions: ["cameraUp"], ticks: 30 },
@@ -2023,7 +2341,7 @@ requiredElement<HTMLButtonElement>("#smoke-button").addEventListener("click", as
 
 requiredElement<HTMLButtonElement>("#composition-button").addEventListener("click", async () => {
   const output = requiredElement<HTMLPreElement>("#smoke-output");
-  adapter.reset();
+  await resetPlaygroundWorld();
   const report = adapter.analyzeOpeningComposition();
   const mask = requiredElement<HTMLImageElement>("#composition-mask");
   mask.src = adapter.captureCompositionMask();
@@ -2048,7 +2366,7 @@ async function captureRequestedArtifacts(): Promise<void> {
   try {
     await new Promise<void>((resolve) => window.setTimeout(resolve, 900));
     const triViewPaths = await adapter.exportWhiteboxTriviews();
-    adapter.reset();
+    await resetPlaygroundWorld();
     const report = adapter.analyzeOpeningComposition();
     const openingFramePath = report === null ? null : await adapter.exportOpeningFrame(report);
     document.documentElement.dataset.artifactCapture = "complete";
@@ -2074,10 +2392,13 @@ async function captureRequestedArtifacts(): Promise<void> {
 
 void captureRequestedArtifacts();
 
-window.addEventListener("beforeunload", () => {
-  if (recordingTimer !== null) window.clearInterval(recordingTimer);
-  canvasRecorder.dispose();
-  if (disposeBrowserRuntime === undefined) adapter.dispose();
-  else void disposeBrowserRuntime();
+installPageExitDisposal({
+  target: window,
+  dispose: async () => {
+    if (recordingTimer !== null) window.clearInterval(recordingTimer);
+    canvasRecorder.dispose();
+    if (disposeBrowserRuntime === undefined) adapter.dispose();
+    else await disposeBrowserRuntime();
+  },
 });
 }

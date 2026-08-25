@@ -518,8 +518,11 @@ class BabylonTraversalRuntimePortV1 implements TraversalRuntimePortV1 {
     if (this.#runtimeUnavailable || this.#host.isDisposed()) {
       fail("TRAVERSAL_RUNTIME_UNAVAILABLE");
     }
+    if (this.#host.readControlledEntityId() !== this.traversingEntityId) {
+      fail("TRAVERSAL_RUNTIME_NOT_CONTROLLED");
+    }
     const plan = this.#host.readExecutionPlan();
-    if (plan !== this.#plan || plan.schemaVersion !== 5) {
+    if (plan !== this.#plan) {
       fail("TRAVERSAL_RUNTIME_LOCK_MISMATCH");
     }
     let currentExecutionPlanHash: string;
@@ -539,9 +542,6 @@ class BabylonTraversalRuntimePortV1 implements TraversalRuntimePortV1 {
     const currentPaperLock = exactPlanAndReceiptLock(this.#plan, this.#receipt);
     if (!isEqual(currentPaperLock.lock, this.#lock)) {
       fail("TRAVERSAL_RUNTIME_LOCK_MISMATCH");
-    }
-    if (this.#host.readControlledEntityId() !== this.traversingEntityId) {
-      fail("TRAVERSAL_RUNTIME_NOT_CONTROLLED");
     }
     const controller = this.#host.readSubjectController(this.traversingEntityId);
     if (isNil(controller)) {
@@ -637,8 +637,10 @@ export function createBabylonTraversalRuntimePortV1(input: Readonly<{
   if (typeof access !== "function") fail("TRAVERSAL_RUNTIME_UNAVAILABLE");
   const host = access.call(input.runtime);
   if (host.isDisposed()) fail("TRAVERSAL_RUNTIME_UNAVAILABLE");
+  if (isNil(host.readControlledEntityId())) {
+    fail("TRAVERSAL_RUNTIME_NOT_CONTROLLED");
+  }
   const plan = host.readExecutionPlan();
-  if (plan.schemaVersion !== 5) fail("TRAVERSAL_RUNTIME_PLAN_NOT_V5");
   const creationExecutionPlanHash = host.readCreationExecutionPlanHash();
   let currentExecutionPlanHash: `sha256:${string}`;
   try {

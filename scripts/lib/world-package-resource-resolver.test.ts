@@ -1,5 +1,12 @@
 import { createHash } from "node:crypto";
-import { mkdtemp, mkdir, rm, symlink, writeFile } from "node:fs/promises";
+import {
+  mkdtemp,
+  mkdir,
+  readFile,
+  rm,
+  symlink,
+  writeFile,
+} from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 
@@ -7,6 +14,7 @@ import type {
   NormalizedSubjectAssetV1,
   NormalizedWorldIRV4,
 } from "@whitebox-world/authoring";
+import { XIER120_SUBJECT_ASSET_MANIFESTS } from "@whitebox-world/subject-registry";
 import { afterEach, describe, expect, it } from "vitest";
 
 import {
@@ -44,6 +52,7 @@ function subjectAsset(
 ): NormalizedSubjectAssetV1 {
   return {
     subjectAssetRef,
+    subjectAssetManifestHash: `sha256:${"f".repeat(64)}`,
     artifactContentHash: hashBytes(bytes),
     byteLength: bytes.byteLength,
     mediaType: "model/gltf-binary",
@@ -139,6 +148,33 @@ describe("resolveWorldPackageResourceArtifactsV1", () => {
         bytes: goldenBytes,
       },
     ]);
+  });
+
+  it("resolves a real xier120 asset through the trusted default package mapping", async () => {
+    const manifest = XIER120_SUBJECT_ASSET_MANIFESTS.find(
+      (candidate) =>
+        candidate.resourceRef ===
+        "worldkit://subject-asset/xier120.biped-animal@1",
+    )!;
+    const diskBytes = await readFile(
+      new URL(
+        "../../apps/playground/public/subject-assets/xier120/biped-animal/v1/biped-animal.glb",
+        import.meta.url,
+      ),
+    );
+
+    const result = await resolveWorldPackageResourceArtifactsV1(
+      normalizedWorldIr([subjectAsset(manifest.resourceRef, diskBytes)]),
+    );
+
+    expect(diskBytes.byteLength).toBe(manifest.artifact.byteLength);
+    expect(hashBytes(diskBytes)).toBe(manifest.artifact.contentHash);
+    expect(result).toEqual([{
+      resourceRef: manifest.resourceRef,
+      packagePath: "resources/subject-assets/xier120.biped-animal.glb",
+      mediaType: "model/gltf-binary",
+      bytes: Uint8Array.from(diskBytes),
+    }]);
   });
 
   it("allows an asset-free Normalized World without inventing resource artifacts", async () => {

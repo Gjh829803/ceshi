@@ -1,12 +1,12 @@
 import { describe, expect, it } from "vitest";
 
-import { normalizeAuthoringSpec } from "./index";
+import { normalizeAuthoringSpecV4 } from "./index";
 import {
   createValidAuthoringSpec,
   createValidPackageSubjectWorld,
 } from "./test-fixture";
 
-describe("normalizeAuthoringSpec", () => {
+describe("normalizeAuthoringSpecV4", () => {
   it("produces byte-stable normalized ordering and transform defaults", () => {
     const ordered = createValidPackageSubjectWorld();
     const shuffled = createValidPackageSubjectWorld();
@@ -16,8 +16,8 @@ describe("normalizeAuthoringSpec", () => {
       subjectDefinitions: [...shuffled.resources.subjectDefinitions].reverse(),
     };
 
-    const first = normalizeAuthoringSpec(shuffled);
-    const second = normalizeAuthoringSpec(ordered);
+    const first = normalizeAuthoringSpecV4(shuffled);
+    const second = normalizeAuthoringSpecV4(ordered);
 
     expect(first.ok).toBe(true);
     expect(first.value).toEqual(second.value);
@@ -52,7 +52,7 @@ describe("normalizeAuthoringSpec", () => {
       return withoutSpawn;
     });
 
-    const result = normalizeAuthoringSpec(spec);
+    const result = normalizeAuthoringSpecV4(spec);
 
     expect(result.ok).toBe(true);
     expect(result.value?.nodes.find((node) => node.id === "player")).toMatchObject({
@@ -69,7 +69,7 @@ describe("normalizeAuthoringSpec", () => {
       return withoutSpawn;
     });
 
-    expect(normalizeAuthoringSpec(spec).diagnostics).toContainEqual(
+    expect(normalizeAuthoringSpecV4(spec).diagnostics).toContainEqual(
       expect.objectContaining({
         code: "AUTHORING_SUBJECT_SPAWN_REQUIRED",
         instancePath: "/nodes/8/spawnAnchorEntityId",
@@ -81,7 +81,7 @@ describe("normalizeAuthoringSpec", () => {
     const spec = createValidAuthoringSpec();
     spec.nodes = [...spec.nodes, structuredClone(spec.nodes[0]!)];
 
-    expect(normalizeAuthoringSpec(spec).diagnostics).toContainEqual(
+    expect(normalizeAuthoringSpecV4(spec).diagnostics).toContainEqual(
       expect.objectContaining({
         code: "AUTHORING_DUPLICATE_ID",
         instancePath: "/nodes/6/id",
@@ -97,7 +97,7 @@ describe("normalizeAuthoringSpec", () => {
         : node,
     );
 
-    expect(normalizeAuthoringSpec(spec).diagnostics).toContainEqual(
+    expect(normalizeAuthoringSpecV4(spec).diagnostics).toContainEqual(
       expect.objectContaining({
         code: "AUTHORING_REFERENCE_NOT_FOUND",
         instancePath: "/nodes/2/prototypeRef",
@@ -110,7 +110,7 @@ describe("normalizeAuthoringSpec", () => {
     spec.relationships = [{ id: "unsupported", type: "mountedOn", schemaVersion: 1 }];
     spec.rules = [{ id: "unsupported-rule", kind: "combat" }];
 
-    expect(normalizeAuthoringSpec(spec).diagnostics).toEqual(
+    expect(normalizeAuthoringSpecV4(spec).diagnostics).toEqual(
       expect.arrayContaining([
         expect.objectContaining({
           code: "AUTHORING_FEATURE_NOT_SUPPORTED",
@@ -128,7 +128,7 @@ describe("normalizeAuthoringSpec", () => {
     const spec = createValidAuthoringSpec();
     spec.startup = { ...spec.startup, cameraEntityId: "terrain-main" };
 
-    expect(normalizeAuthoringSpec(spec).diagnostics).toContainEqual(
+    expect(normalizeAuthoringSpecV4(spec).diagnostics).toContainEqual(
       expect.objectContaining({
         code: "AUTHORING_REFERENCE_KIND_MISMATCH",
         instancePath: "/startup/cameraEntityId",
@@ -150,7 +150,7 @@ describe("normalizeAuthoringSpec", () => {
         : node,
     );
 
-    expect(normalizeAuthoringSpec(spec).diagnostics).toContainEqual(
+    expect(normalizeAuthoringSpecV4(spec).diagnostics).toContainEqual(
       expect.objectContaining({
         code: "AUTHORING_SPAWN_OUT_OF_BOUNDS",
         instancePath: "/nodes/3/placement/transform/positionMetersXYZ",

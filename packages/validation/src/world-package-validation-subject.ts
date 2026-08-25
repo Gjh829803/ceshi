@@ -1,12 +1,17 @@
 import {
   canonicalAuthoringIdentityV4,
   normalizeAuthoringSpecV4,
-  projectNormalizedWorldResourcesToV3LayoutIdentity,
+  projectNormalizedWorldResourcesToLayoutIdentityV4,
   validateAuthoringSpecV4,
   type AuthoringSpecV4,
   type NormalizedWorldIRV4,
 } from "@whitebox-world/authoring";
 import { compileWorldV5 } from "@whitebox-world/compiler";
+import {
+  createGameplayBootstrapResourceLockEntryV1,
+  parseGameplayBootstrapV1,
+  type GameplayBootstrapV1,
+} from "@whitebox-world/gameplay-contracts";
 import {
   hashLayoutSolveReportV1,
   type LayoutSolveResultV1,
@@ -20,6 +25,7 @@ import {
   assertWorldPackageAccessorFreeDataGraphV1,
   assertWorldPackageBuildReceiptClosureV1,
   assertWorldPackageBuildReceiptV1,
+  assertWorldPackageGameplayBootstrapMembershipV1,
   type WorldPackageBuildReceiptV1,
   type WorldPackageSha256HashV1,
 } from "@whitebox-world/world-package";
@@ -35,6 +41,7 @@ const INPUT_FIELDS = [
   "normalizedWorldIr",
   "layoutSolveResult",
   "executionPlan",
+  "gameplayBootstrap",
 ] as const;
 
 export interface CreateWorldPackageValidationSubjectInputV1 {
@@ -43,6 +50,7 @@ export interface CreateWorldPackageValidationSubjectInputV1 {
   readonly normalizedWorldIr: NormalizedWorldIRV4;
   readonly layoutSolveResult: LayoutSolveResultV1;
   readonly executionPlan: ExecutionPlanV5;
+  readonly gameplayBootstrap: GameplayBootstrapV1;
 }
 
 function fail(path: string, message: string): never {
@@ -169,6 +177,20 @@ export function createWorldPackageValidationSubjectV1(
     hashLayoutSolveReportV1(snapshot.layoutSolveResult.report),
   );
 
+  let gameplayBootstrap: GameplayBootstrapV1;
+  try {
+    gameplayBootstrap = parseGameplayBootstrapV1(snapshot.gameplayBootstrap);
+  } catch {
+    fail("gameplayBootstrap", "must be a canonical GameplayBootstrapV1");
+  }
+  requireEqual(
+    snapshot.gameplayBootstrap,
+    gameplayBootstrap,
+    "gameplayBootstrap",
+  );
+  const gameplayBootstrapResourceLock =
+    createGameplayBootstrapResourceLockEntryV1(gameplayBootstrap);
+
   let canonicalResourceLock: ReturnType<
     typeof canonicalExecutionResourceLockEntriesV1
   >;
@@ -195,18 +217,26 @@ export function createWorldPackageValidationSubjectV1(
     canonicalPlanResourceLock,
     "executionPlan/resourceLockEntries",
   );
+  const expectedPlanResourceLock = canonicalExecutionResourceLockEntriesV1([
+    ...canonicalResourceLock,
+    gameplayBootstrapResourceLock,
+  ]);
   requireEqual(
     canonicalPlanResourceLock,
-    canonicalResourceLock,
+    expectedPlanResourceLock,
     "executionPlan/resourceLockEntries",
   );
-  const resourceLockHash = asHash(
+  const normalizedResourceLockHash = asHash(
     sha256CanonicalJson(canonicalResourceLock),
+  );
+  const resourceLockHash = asHash(
+    sha256CanonicalJson(canonicalPlanResourceLock),
   );
 
   const compiled = compileWorldV5({
     normalizedWorldIr: snapshot.normalizedWorldIr,
     normalizedWorldIrHash,
+    gameplayBootstrapResourceLock,
   });
   if (
     !compiled.ok ||
@@ -246,7 +276,7 @@ export function createWorldPackageValidationSubjectV1(
   );
   requireEqual(
     snapshot.normalizedWorldIr.resources.resourceLockHash,
-    resourceLockHash,
+    normalizedResourceLockHash,
     "normalizedWorldIr/resources/resourceLockHash",
   );
   requireEqual(
@@ -271,7 +301,7 @@ export function createWorldPackageValidationSubjectV1(
   );
   requireEqual(
     snapshot.layoutSolveResult.report.registryLockHash,
-    projectNormalizedWorldResourcesToV3LayoutIdentity(
+    projectNormalizedWorldResourcesToLayoutIdentityV4(
       snapshot.normalizedWorldIr.resources,
     ).resourceLockHash,
     "layoutSolveResult/report/registryLockHash",
@@ -281,9 +311,9 @@ export function createWorldPackageValidationSubjectV1(
   requireEqual(manifest.worldId, validated.value.id, "manifest/worldId");
   requireEqual(manifest.seed, validated.value.seed, "manifest/seed");
   requireEqual(
-    manifest.controlledEntityId,
-    snapshot.executionPlan.controlledEntityId,
-    "manifest/controlledEntityId",
+    manifest.initialControlledEntityId,
+    snapshot.executionPlan.initialControlledEntityId,
+    "manifest/initialControlledEntityId",
   );
   requireEqual(
     manifest.authoringSpecHash,
@@ -317,11 +347,25 @@ export function createWorldPackageValidationSubjectV1(
       normalizedWorldIr: snapshot.normalizedWorldIr,
       layoutSolveResult: snapshot.layoutSolveResult,
       executionPlan: snapshot.executionPlan,
+      gameplayBootstrap,
     });
   } catch {
     fail(
       "worldPackageBuildReceipt",
       "must match the canonical V4/V5 build artifact closure",
+    );
+  }
+
+  try {
+    assertWorldPackageGameplayBootstrapMembershipV1({
+      executionPlan: snapshot.executionPlan,
+      gameplayBootstrap,
+      worldPackageBuildReceipt: receipt,
+    });
+  } catch {
+    fail(
+      "gameplayBootstrap",
+      "must match the Plan lock and WorldPackage byte inventory",
     );
   }
 

@@ -204,29 +204,6 @@ export type SubjectSocketDefinitionV2 =
       semanticTags: readonly string[];
     };
 
-export interface RegistrySubjectDefinitionInputV2 extends SubjectRegistryResourceBaseInputV1 {
-  kind: "subject-definition";
-  category: "human" | "animal" | "vehicle" | "composite" | "custom";
-  bodyTopology: SubjectBodyTopologyV2;
-  semanticClassId: string;
-  coordinateConvention: {
-    forwardAxis: "-Z";
-    upAxis: "+Y";
-    metersPerUnit: 1;
-    pivot: "support-center";
-  };
-  visualParts: readonly SubjectVisualPartDefinitionV2[];
-  visualBinding: SubjectVisualBindingV1;
-  sockets: readonly SubjectSocketDefinitionV2[];
-  colliderPolicy: SubjectColliderPolicyV2;
-  capabilityRefs: readonly string[];
-  profiles: {
-    physicsBodyProfileRef: string;
-    locomotionProfileRef: string;
-    controlFeelProfileRef: string;
-  };
-}
-
 export interface CapabilityManifestInputV1 extends SubjectRegistryResourceBaseInputV1 {
   kind: "capability";
   requiredCapabilityRefs: readonly string[];
@@ -285,7 +262,6 @@ export type SubjectAssetManifestV1 = WithContentHash<SubjectAssetManifestInputV1
 export type RigProfileManifestV1 = WithContentHash<RigProfileManifestInputV1>;
 export type AnimationSetManifestV1 = WithContentHash<AnimationSetManifestInputV1>;
 export type ColliderProfileManifestV1 = WithContentHash<ColliderProfileManifestInputV1>;
-export type RegistrySubjectDefinitionV2 = WithContentHash<RegistrySubjectDefinitionInputV2>;
 export type CapabilityManifestV1 = WithContentHash<CapabilityManifestInputV1>;
 export type PhysicsBodyProfileManifestV1 =
   WithContentHash<PhysicsBodyProfileManifestInputV1>;
@@ -298,7 +274,6 @@ export type SubjectRegistryResourceInputV1 =
   | RigProfileManifestInputV1
   | AnimationSetManifestInputV1
   | ColliderProfileManifestInputV1
-  | RegistrySubjectDefinitionInputV2
   | CapabilityManifestInputV1
   | PhysicsBodyProfileManifestInputV1
   | LocomotionProfileManifestInputV1
@@ -309,24 +284,7 @@ export type SubjectRegistryResourceV1 =
   | RigProfileManifestV1
   | AnimationSetManifestV1
   | ColliderProfileManifestV1
-  | RegistrySubjectDefinitionV2
   | CapabilityManifestV1
   | PhysicsBodyProfileManifestV1
   | LocomotionProfileManifestV1
   | ColliderDerivationProfileManifestV1;
-
-export interface SubjectResourceRegistryV2 {
-  resolveSubjectAsset(resourceRef: string): SubjectAssetManifestV1 | undefined;
-  resolveRigProfile(resourceRef: string): RigProfileManifestV1 | undefined;
-  resolveAnimationSet(resourceRef: string): AnimationSetManifestV1 | undefined;
-  resolveColliderProfile(resourceRef: string): ColliderProfileManifestV1 | undefined;
-  resolveSubjectDefinition(resourceRef: string): RegistrySubjectDefinitionV2 | undefined;
-  resolveCapability(resourceRef: string): CapabilityManifestV1 | undefined;
-  resolvePhysicsBodyProfile(resourceRef: string): PhysicsBodyProfileManifestV1 | undefined;
-  resolveLocomotionProfile(resourceRef: string): LocomotionProfileManifestV1 | undefined;
-  resolveColliderDerivationProfile(
-    resourceRef: string,
-  ): ColliderDerivationProfileManifestV1 | undefined;
-  listSubjectDefinitions(): readonly RegistrySubjectDefinitionV2[];
-  listResources(): readonly SubjectRegistryResourceV1[];
-}

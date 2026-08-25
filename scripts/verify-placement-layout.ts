@@ -16,17 +16,16 @@ import { fileURLToPath } from "node:url";
 import { chromium, type Browser, type BrowserContext, type Page } from "playwright";
 
 import {
-  parseAuthoringSpecJson,
-  resolveAuthoringLayoutV3,
+  parseAuthoringSpecV4,
+  resolveAuthoringLayoutV4,
   sha256CanonicalJson,
   stringifyCanonicalJson,
-  type AuthoringSpecV3,
-  type NormalizedWorldIRV3,
+  type AuthoringSpecV4,
+  type NormalizedWorldIRV4,
 } from "@whitebox-world/authoring";
-import { compileWorld } from "@whitebox-world/compiler";
 import type {
-  ExecutionPlanV4,
-  WorldRuntimeSnapshotV3,
+  ExecutionPlanV5,
+  WorldRuntimeSnapshotV4,
   WorldkitBrowserDiagnosticV1,
 } from "@whitebox-world/runtime-contracts";
 
@@ -37,6 +36,7 @@ import {
 } from "../packages/layout-solver/src/index.js";
 import { promoteArtifactDirectory } from "./lib/artifact-directory-promotion";
 import { layoutSolveFile } from "./lib/layout-artifacts";
+import { loadWorldkitRoutePipeline } from "./lib/worldkit-pipeline";
 import { startWorldkitServer } from "./lib/worldkit-server";
 import { captureVisibleWorldWithRetries } from "./worldkit";
 
@@ -148,17 +148,17 @@ const REQUIRED_CONSTRAINT_KINDS = [
   "within-slope-limit",
 ] as const;
 
-interface WorldBuildArtifactV3 {
+interface WorldBuildArtifactV4 {
   readonly kind: "worldkit-build-artifact";
-  readonly schemaVersion: 3;
+  readonly schemaVersion: 4;
   readonly normalizedWorldIrHash: string;
   readonly executionPlanHash: string;
-  readonly normalizedWorldIr: NormalizedWorldIRV3;
-  readonly executionPlan: ExecutionPlanV4;
+  readonly normalizedWorldIr: NormalizedWorldIRV4;
+  readonly executionPlan: ExecutionPlanV5;
 }
 
 interface BrowserEvidenceV1 {
-  readonly snapshot: WorldRuntimeSnapshotV3;
+  readonly snapshot: WorldRuntimeSnapshotV4;
   readonly diagnostics: readonly WorldkitBrowserDiagnosticV1[];
   readonly apiKeys: readonly string[];
   readonly screenshotBytes: Buffer;
@@ -220,33 +220,29 @@ function deepEqualCanonical(actual: unknown, expected: unknown, message: string)
   assert.equal(stringifyCanonicalJson(actual), stringifyCanonicalJson(expected), message);
 }
 
-function parseAuthoringSpec(sourceText: string): AuthoringSpecV3 {
-  const parsed = parseAuthoringSpecJson(sourceText);
+function parseAuthoringSpec(sourceText: string): AuthoringSpecV4 {
+  const parsed = parseAuthoringSpecV4(sourceText);
   assert.equal(parsed.ok, true, JSON.stringify(parsed.diagnostics));
   assert.ok(parsed.value !== undefined);
   return parsed.value;
 }
 
-function compileBuildArtifact(
-  normalizedWorldIr: NormalizedWorldIRV3,
-  normalizedWorldIrHash: string,
-): WorldBuildArtifactV3 {
-  const compiled = compileWorld({ normalizedWorldIr, normalizedWorldIrHash });
+async function compileBuildArtifact(): Promise<WorldBuildArtifactV4> {
+  const compiled = await loadWorldkitRoutePipeline(INPUT_PATH);
   assert.equal(compiled.ok, true, JSON.stringify(compiled.diagnostics));
-  assert.ok(compiled.executionPlan !== undefined);
-  assert.ok(compiled.executionPlanHash !== undefined);
+  assert.ok(compiled.ok);
   return {
     kind: "worldkit-build-artifact",
-    schemaVersion: 3,
-    normalizedWorldIrHash,
+    schemaVersion: 4,
+    normalizedWorldIrHash: compiled.normalizedWorldIrHash,
     executionPlanHash: compiled.executionPlanHash,
-    normalizedWorldIr,
+    normalizedWorldIr: compiled.normalizedWorldIr,
     executionPlan: compiled.executionPlan,
   };
 }
 
-function assertCoastalFixtureShape(spec: AuthoringSpecV3): void {
-  assert.equal(spec.schemaVersion, 3);
+function assertCoastalFixtureShape(spec: AuthoringSpecV4): void {
+  assert.equal(spec.schemaVersion, 4);
   assert.equal(spec.nodes.filter((node) => node.kind === "terrain").length, 1);
   assert.equal(spec.nodes.filter((node) => node.kind === "water").length, 1);
   assert.equal(spec.nodes.filter((node) => node.kind === "subject").length, 1);
@@ -268,7 +264,7 @@ function assertCoastalFixtureShape(spec: AuthoringSpecV3): void {
 
 function assertProjectionAgreement(
   report: LayoutSolveReportV1,
-  build: WorldBuildArtifactV3,
+  build: WorldBuildArtifactV4,
 ): void {
   const { normalizedWorldIr, executionPlan } = build;
   assert.equal(report.status, "solved");
@@ -362,7 +358,7 @@ async function captureBrowserEvidence(): Promise<BrowserEvidenceV1> {
       const ready = await api.ready();
       await new Promise<void>((resolve) => requestAnimationFrame(() => resolve()));
       api.setPaused(true);
-      const snapshot = api.reset();
+      const snapshot = await api.reset();
       await new Promise<void>((resolve) => requestAnimationFrame(() => resolve()));
       await new Promise<void>((resolve) => requestAnimationFrame(() => resolve()));
       api.captureScreenshot();
@@ -405,24 +401,66 @@ async function captureBrowserEvidence(): Promise<BrowserEvidenceV1> {
         sampledRgbColorCount: sampledRgbColors.size,
       };
     }));
-    assert.equal(captured.ready.schemaVersion, 3);
-    assert.equal(captured.snapshot.tick, 0);
-    assert.equal(captured.snapshot.controlledEntityId, "player");
+    assert.equal(captured.ready.schemaVersion, 4);
+    assert.equal(captured.snapshot.world.simulationTick, 0);
+    assert.notEqual(
+      captured.snapshot.worldSessionId,
+      captured.ready.worldSessionId,
+      "Reset reused the previous WorldSession.",
+    );
+    assert.ok(
+      Object.values(
+        captured.snapshot.world.gameplayInspection
+          .possessedByRelationshipsById,
+      ).some(
+        (relationship) =>
+          relationship.controllerEntityId === "controller-primary" &&
+          relationship.controlledEntityId === "player",
+      ),
+      "Reset did not restore the canonical player possession relationship.",
+    );
     assert.deepEqual(
-      captured.snapshot.subjectStatesByEntityId.player?.positionMetersXYZ,
+      captured.snapshot.world.subjectStatesByEntityId.player?.entityState
+        .positionMetersXYZ,
       [-2, 2, 28],
     );
     assert.deepEqual(captured.apiKeys, [
-      "bindControl",
+      "acquireRuntimeActivity",
+      "adjustCameraView",
+      "applyCameraPreview",
+      "applySubjectPresetTuning",
       "captureControlFrame",
       "captureScreenshot",
+      "executeGameplayCommand",
+      "getCameraPreviewState",
+      "getCameraSnapshot",
       "getControlCaptureCapabilities",
       "getDiagnostics",
+      "getGameplayEvents",
+      "getGameplayInspectionSnapshot",
+      "getRouteOverlay",
+      "getRoutePathReceipt",
+      "getRouteRuntimeProbeReceipt",
+      "getRouteSummary",
       "getSnapshot",
+      "getSubjectPresetBaseline",
+      "getSubjectSnapshot",
+      "getWorldStateSnapshot",
+      "listCompatibleProfiles",
+      "listMotionKernels",
+      "listSubjectDefinitions",
       "ready",
+      "releaseRuntimeActivity",
+      "requestCameraProfile",
       "reset",
+      "resetCameraProfile",
+      "resetCameraView",
       "runFixedInput",
+      "runHarness",
+      "setIntent",
+      "setMotionProfile",
       "setPaused",
+      "validateSubjectPackage",
       "version",
       "waitForRenderReady",
       "waitForSimulationTick",
@@ -467,7 +505,7 @@ async function captureBrowserEvidence(): Promise<BrowserEvidenceV1> {
 
 function assertBrowserLayoutEvidence(
   diagnostics: readonly WorldkitBrowserDiagnosticV1[],
-  plan: ExecutionPlanV4,
+  plan: ExecutionPlanV5,
 ): void {
   const layoutDiagnostics = diagnostics.filter(
     (diagnostic) => diagnostic.code === "WORLDKIT_LAYOUT_ASSERTION_SATISFIED",
@@ -513,8 +551,8 @@ function conflictInput(resolved: ResolvedLayoutInputV1): ResolvedLayoutInputV1 {
   };
 }
 
-function runNegativeGates(spec: AuthoringSpecV3, solvedReport: LayoutSolveReportV1) {
-  const resolved = resolveAuthoringLayoutV3(spec);
+function runNegativeGates(spec: AuthoringSpecV4, solvedReport: LayoutSolveReportV1) {
+  const resolved = resolveAuthoringLayoutV4(spec);
   assert.equal(resolved.ok, true, JSON.stringify(resolved.diagnostics));
   assert.ok(resolved.value !== undefined && resolved.resolvedSolverProfile !== undefined);
   const conflict = solveLayoutV1(
@@ -605,7 +643,7 @@ async function solveInto(directory: string) {
     reportBytes,
     irBytes,
     report: parseJson<LayoutSolveReportV1>(reportBytes, "Layout report"),
-    normalizedWorldIr: parseJson<NormalizedWorldIRV3>(irBytes, "NormalizedWorldIR"),
+    normalizedWorldIr: parseJson<NormalizedWorldIRV4>(irBytes, "NormalizedWorldIR"),
   };
 }
 
@@ -636,13 +674,19 @@ export async function runPlacementLayoutVerification(): Promise<void> {
       assert.equal(other.result.layoutSolveReportHash, primary.result.layoutSolveReportHash);
       assert.equal(other.result.normalizedWorldIrHash, primary.result.normalizedWorldIrHash);
     }
-    const build = compileBuildArtifact(
+    const build = await compileBuildArtifact();
+    deepEqualCanonical(
+      build.normalizedWorldIr,
       primary.normalizedWorldIr,
+      "Route pipeline and layout artifact normalized different V4 worlds.",
+    );
+    assert.equal(
+      build.normalizedWorldIrHash,
       primary.result.normalizedWorldIrHash,
     );
     assertProjectionAgreement(primary.report, build);
-    const repeatedBuilds = [repeat, concurrentA, concurrentB].map((entry) =>
-      compileBuildArtifact(entry.normalizedWorldIr, entry.result.normalizedWorldIrHash),
+    const repeatedBuilds = await Promise.all(
+      [repeat, concurrentA, concurrentB].map(() => compileBuildArtifact()),
     );
     assert.ok(repeatedBuilds.every((entry) => entry.executionPlanHash === build.executionPlanHash));
     const targetBeforeNegativeGates = await artifactDirectoryFingerprint(
@@ -658,7 +702,8 @@ export async function runPlacementLayoutVerification(): Promise<void> {
     const browser = await captureBrowserEvidence();
     assertBrowserLayoutEvidence(browser.diagnostics, build.executionPlan);
     deepEqualCanonical(
-      browser.snapshot.subjectStatesByEntityId.player?.positionMetersXYZ,
+      browser.snapshot.world.subjectStatesByEntityId.player?.entityState
+        .positionMetersXYZ,
       build.executionPlan.subjects.find((subject) => subject.entityId === "player")
         ?.spawnSubjectOriginPositionMetersXYZ,
       "Browser Snapshot did not preserve the solved spawn.",
@@ -671,11 +716,11 @@ export async function runPlacementLayoutVerification(): Promise<void> {
       schemaVersion: 1,
       inputPath: path.relative(REPOSITORY_ROOT, INPUT_PATH),
       protocolVersions: {
-        authoring: 3,
-        normalizedWorldIr: 3,
-        executionPlan: 4,
-        runtimeSnapshot: 3,
-        browserProtocol: 4,
+        authoring: 4,
+        normalizedWorldIr: 4,
+        executionPlan: 5,
+        runtimeSnapshot: 4,
+        browserProtocol: 5,
       },
       hashes: {
         authoringSpec: primary.report.authoringSpecHash,

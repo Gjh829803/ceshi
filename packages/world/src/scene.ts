@@ -109,7 +109,6 @@ export interface ResolvedSceneSpawn {
 }
 
 export type SceneRollingTerrainSpec = RollingTerrainParams & { id: string; seed?: Seed };
-export type SceneTiledTerrainSpec = TiledRollingTerrainParams & { id: string; seed?: Seed };
 export type SceneLandscapeTerrainSpec = Omit<TiledRollingTerrainParams, "relief"> & {
   id: string;
   seed?: Seed;
@@ -140,8 +139,6 @@ export interface OutdoorSceneAuthoringContext {
     /** Preferred large-world API. The relief choice must match the requested scene. */
     landscape(spec: SceneLandscapeTerrainSpec): SceneTerrainHandle;
     rolling(spec: SceneRollingTerrainSpec): SceneTerrainHandle;
-    /** @deprecated Prefer landscape({ relief: ... }) for explicit authoring intent. */
-    tiledRolling(spec: SceneTiledTerrainSpec): SceneTerrainHandle;
     custom<P extends object, O>(
       definition: WorldFeatureDefinition<P, O>,
       options: FeatureInstanceOptions<P>,
@@ -443,16 +440,6 @@ export function compileOutdoorScene(definition: OutdoorSceneDefinition): Compile
       rolling: (spec) => {
         const { id, seed, ...params } = spec;
         const inspection = registry.instantiate(RollingTerrainFeature, {
-          id,
-          seed: resolvedSeed(sceneSeed, id, seed),
-          params,
-        });
-        const output = requireBuilt(inspection);
-        return asTerrainHandle(inspection, output, output.terrainId);
-      },
-      tiledRolling: (spec) => {
-        const { id, seed, ...params } = spec;
-        const inspection = registry.instantiate(TiledRollingTerrainFeature, {
           id,
           seed: resolvedSeed(sceneSeed, id, seed),
           params,

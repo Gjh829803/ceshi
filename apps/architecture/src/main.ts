@@ -17,7 +17,7 @@ const layers: Record<LayerKey, LayerDetail> = {
     title: "Authoring SDK",
     status: "室外 Alpha",
     description:
-      "给 Coding Agent 一组稳定的世界表达能力。Agent 定义世界、Feature、主体和规则，但不直接操作 Three.js 或 Rapier。",
+      "给 Coding Agent 一组稳定的世界表达能力。Agent 定义世界、Feature、主体和规则，但不直接操作 Babylon、Havok 或其他 Provider 对象。",
     modules: ["WorldSpec", "FeatureRegistry", "SubjectKit", "Scene Compiler", "Agent Testkit"],
     output: "输出：可版本化、可追踪、可重建的 World Package",
   },
@@ -389,7 +389,7 @@ app.innerHTML = `
           <header><span></span><div><small>RUNNING ALPHA</small><h3>已经实现</h3></div></header>
           <ul>
             <li>固定步长 World / Entity / Input</li>
-            <li>Rapier 刚体、碰撞和高度场</li>
+            <li>Babylon/Havok 刚体、碰撞和高度场</li>
             <li>第三人称人形 SubjectKit</li>
             <li>室外地形、Raster、Mask、水体与标志物</li>
             <li>FeatureRegistry 与 Plan-first 创作链路</li>

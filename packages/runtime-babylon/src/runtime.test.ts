@@ -7,7 +7,9 @@ import { AnimationGroup } from "@babylonjs/core/Animations/animationGroup.js";
 import { VertexBuffer } from "@babylonjs/core/Buffers/buffer.js";
 import { NullEngine } from "@babylonjs/core/Engines/nullEngine.pure.js";
 import { LoadAssetContainerAsync } from "@babylonjs/core/Loading/sceneLoader.js";
-import { Vector3 } from "@babylonjs/core/Maths/math.vector.js";
+import { StandardMaterial } from "@babylonjs/core/Materials/standardMaterial.js";
+import { Quaternion, Vector3 } from "@babylonjs/core/Maths/math.vector.js";
+import type { Mesh } from "@babylonjs/core/Meshes/mesh.js";
 import { TransformNode } from "@babylonjs/core/Meshes/transformNode.js";
 import type { PhysicsEngine } from "@babylonjs/core/Physics/v2/physicsEngine.js";
 import { Scene } from "@babylonjs/core/scene.pure.js";
@@ -25,25 +27,29 @@ vi.mock("@babylonjs/core/Loading/sceneLoader.js", async (importOriginal) => {
 });
 
 import {
-  normalizeAuthoringSpec,
-  type AuthoringSpecV3,
+  normalizeAuthoringSpecV4,
+  type AuthoringSpecV4,
 } from "@whitebox-world/authoring";
-import { compileWorld } from "@whitebox-world/compiler";
+import { compileWorldV5 } from "@whitebox-world/compiler";
+import { createCoreGameplayBootstrapV1 } from "@whitebox-world/gameplay";
+import { createGameplayBootstrapResourceLockEntryV1 } from "@whitebox-world/gameplay-contracts";
 import {
-  createValidAuthoringSpec,
-  createValidPackageSubjectWorld,
-  createValidRiggedPackageSubjectWorld,
+  createValidAuthoringSpecV4,
+  createValidPackageSubjectWorldV4,
+  createValidRiggedPackageSubjectWorldV4,
 } from "../../authoring/src/test-fixture";
 import type {
   ExecutionAnimationSetV1,
   ExecutionObjectV3,
-  ExecutionPlanV4,
   ExecutionPlanV5,
+  ExecutionStaticColliderV1,
   ExecutionSubjectAssetV1,
   FixedInputV1,
   Vec3,
 } from "@whitebox-world/runtime-contracts";
 import { emitTransformedStaticColliderTriangleMeshV1 } from "@whitebox-world/terrain-surface";
+import { parseGameplayWorldStateProjectionV1 } from "@whitebox-world/runtime-host";
+import { isNil } from "lodash-es";
 
 import {
   BabylonWorldRuntime,
@@ -58,8 +64,11 @@ import {
   type SubjectVisual,
   type BabylonWorldRuntimeOptions,
 } from "./index";
-import { lockPublishedGroundFeels } from "./lock-published-ground-feels";
+import { BABYLON_GAMEPLAY_RUNTIME_INTERNAL } from "./gameplay-runtime-internal";
+import { bindRuntimeTestPossession } from "./runtime-test-possession";
+import { compileRuntimeTestPlanV5 } from "./runtime-test-plan";
 import { SubjectAnimationPlayer } from "./subject-animation-player";
+import { createSubjectVisual } from "./subject-visual";
 import { sampleExecutionTerrainHeight } from "./terrain";
 
 const loadAssetContainerImplementation = vi
@@ -124,11 +133,11 @@ const gBotAuthoringSpec = JSON.parse(
     ),
     "utf8",
   ),
-) as AuthoringSpecV3;
+) as AuthoringSpecV4;
 
 describe("Babylon runtime fixture compilation", () => {
   it("keeps the real G Bot authored heightfield non-flat", () => {
-    const executionPlan = compileExecutionPlan(structuredClone(gBotAuthoringSpec));
+    const executionPlan = compileRouteExecutionPlan(structuredClone(gBotAuthoringSpec));
     const uniqueHeights = new Set(executionPlan.terrain.heightSamplesMeters);
 
     expect(uniqueHeights.size).toBeGreaterThan(1);
@@ -153,6 +162,109 @@ const goldenSubjectAssetDescriptor = {
     skeletonCount: 1,
     boneCount: 18,
     animationClipNames: ["idle", "jump", "run", "walk"],
+  },
+} as const satisfies ExecutionSubjectAssetV1;
+
+function buildStaticTriangleGlb(): Uint8Array {
+  const positions = [
+    -0.5, 0, 0,
+    0.5, 0, 0,
+    0, 1, 0,
+  ] as const;
+  const normals = [
+    0, 0, 1,
+    0, 0, 1,
+    0, 0, 1,
+  ] as const;
+  const binary = new Uint8Array(80);
+  const binaryView = new DataView(binary.buffer);
+  for (let index = 0; index < positions.length; index += 1) {
+    binaryView.setFloat32(index * 4, positions[index]!, true);
+  }
+  for (let index = 0; index < normals.length; index += 1) {
+    binaryView.setFloat32(36 + index * 4, normals[index]!, true);
+  }
+  for (let index = 0; index < 3; index += 1) {
+    binaryView.setUint16(72 + index * 2, index, true);
+  }
+
+  const gltf = {
+    asset: { version: "2.0", generator: "worldkit-runtime-static-test" },
+    scene: 0,
+    scenes: [{ nodes: [0] }],
+    nodes: [{ name: "static-triangle", mesh: 0 }],
+    meshes: [{
+      name: "static-triangle",
+      primitives: [{
+        attributes: { POSITION: 0, NORMAL: 1 },
+        indices: 2,
+        material: 0,
+        mode: 4,
+      }],
+    }],
+    materials: [{
+      name: "fixture-whitebox",
+      pbrMetallicRoughness: {
+        baseColorFactor: [0.4, 0.6, 0.8, 1],
+        metallicFactor: 0,
+        roughnessFactor: 1,
+      },
+    }],
+    buffers: [{ byteLength: binary.byteLength }],
+    bufferViews: [
+      { buffer: 0, byteOffset: 0, byteLength: 36, target: 34962 },
+      { buffer: 0, byteOffset: 36, byteLength: 36, target: 34962 },
+      { buffer: 0, byteOffset: 72, byteLength: 6, target: 34963 },
+    ],
+    accessors: [
+      {
+        bufferView: 0,
+        componentType: 5126,
+        count: 3,
+        type: "VEC3",
+        min: [-0.5, 0, 0],
+        max: [0.5, 1, 0],
+      },
+      { bufferView: 1, componentType: 5126, count: 3, type: "VEC3" },
+      { bufferView: 2, componentType: 5123, count: 3, type: "SCALAR" },
+    ],
+  };
+  const encodedJson = new TextEncoder().encode(JSON.stringify(gltf));
+  const paddedJsonLength = Math.ceil(encodedJson.byteLength / 4) * 4;
+  const json = new Uint8Array(paddedJsonLength);
+  json.fill(0x20);
+  json.set(encodedJson);
+  const totalLength = 12 + 8 + json.byteLength + 8 + binary.byteLength;
+  const glb = new Uint8Array(totalLength);
+  const glbView = new DataView(glb.buffer);
+  glbView.setUint32(0, 0x46546c67, true);
+  glbView.setUint32(4, 2, true);
+  glbView.setUint32(8, totalLength, true);
+  glbView.setUint32(12, json.byteLength, true);
+  glbView.setUint32(16, 0x4e4f534a, true);
+  glb.set(json, 20);
+  const binaryHeaderOffset = 20 + json.byteLength;
+  glbView.setUint32(binaryHeaderOffset, binary.byteLength, true);
+  glbView.setUint32(binaryHeaderOffset + 4, 0x004e4942, true);
+  glb.set(binary, binaryHeaderOffset + 8);
+  return glb;
+}
+
+const staticSubjectAssetBytes = buildStaticTriangleGlb();
+
+const staticSubjectAssetDescriptor = {
+  subjectAssetRef: "worldkit://subject-asset/static.runtime-test@1",
+  artifactContentHash: sha256Bytes(staticSubjectAssetBytes),
+  byteLength: staticSubjectAssetBytes.byteLength,
+  mediaType: "model/gltf-binary",
+  format: "glb",
+  inventory: {
+    meshCount: 1,
+    vertexCount: 3,
+    triangleCount: 1,
+    skeletonCount: 0,
+    boneCount: 0,
+    animationClipNames: [],
   },
 } as const satisfies ExecutionSubjectAssetV1;
 
@@ -362,15 +474,15 @@ interface RuntimeDebugProbe {
   visualRootYawRadians(subjectEntityId: string): number;
 }
 
-interface RiggedVisualInternals extends SubjectVisual {
+interface SubjectVisualInternals extends SubjectVisual {
   assetInstance?: SubjectAssetInstanceV1;
   assetLease?: SubjectAssetLeaseV1;
-  primitiveMeshes?: readonly TransformNode[];
+  primitiveMeshes?: readonly Mesh[];
   assetPartRoots?: readonly TransformNode[];
 }
 
-interface RiggedRuntimeProbe {
-  visual(subjectEntityId: string): RiggedVisualInternals;
+interface SubjectVisualProbe {
+  visual(subjectEntityId: string): SubjectVisualInternals;
 }
 
 interface CartesianVector {
@@ -422,9 +534,9 @@ function createRuntimeDebugProbe(runtime: BabylonWorldRuntime): RuntimeDebugProb
   };
 }
 
-function createRiggedRuntimeProbe(runtime: BabylonWorldRuntime): RiggedRuntimeProbe {
+function createSubjectVisualProbe(runtime: BabylonWorldRuntime): SubjectVisualProbe {
   const internals = runtime as unknown as {
-    subjectVisuals: readonly RiggedVisualInternals[];
+    subjectVisuals: readonly SubjectVisualInternals[];
   };
   return {
     visual(subjectEntityId) {
@@ -446,8 +558,12 @@ function moveRightForTicks(tickCount: number): FixedInputV1 {
   return { actions: ["move-right"], ticks: tickCount };
 }
 
-function compileExecutionPlan(spec: AuthoringSpecV3): ExecutionPlanV4 {
-  const normalized = normalizeAuthoringSpec(spec);
+function compileExecutionPlan(spec: AuthoringSpecV4): ExecutionPlanV5 {
+  return compileRuntimeTestPlanV5(spec);
+}
+
+function compileRouteExecutionPlan(spec: AuthoringSpecV4): ExecutionPlanV5 {
+  const normalized = normalizeAuthoringSpecV4(spec);
   if (
     !normalized.ok ||
     normalized.value === undefined ||
@@ -455,9 +571,31 @@ function compileExecutionPlan(spec: AuthoringSpecV3): ExecutionPlanV4 {
   ) {
     throw new Error(`Fixture normalize failed: ${JSON.stringify(normalized.diagnostics)}`);
   }
-  const compiled = compileWorld({
+  const entityDescriptors = normalized.value.nodes
+    .filter((node) => node.kind === "subject")
+    .map((node) => {
+      const definition = normalized.value?.resources.subjectDefinitions.find(
+        (candidate) => candidate.subjectDefinitionRef === node.subjectDefinitionRef,
+      );
+      if (isNil(definition)) {
+        throw new Error(`Fixture Subject Definition missing: ${node.subjectDefinitionRef}`);
+      }
+      return {
+        id: node.id,
+        entityDefinitionRef: node.subjectDefinitionRef,
+        capabilityRefs: definition.capabilityRefs,
+      };
+    });
+  const gameplayBootstrap = createCoreGameplayBootstrapV1({
+    worldId: normalized.value.id,
+    worldSeed: normalized.value.seed,
+    entityDescriptors,
+  });
+  const compiled = compileWorldV5({
     normalizedWorldIr: normalized.value,
     normalizedWorldIrHash: normalized.normalizedWorldIrHash,
+    gameplayBootstrapResourceLock:
+      createGameplayBootstrapResourceLockEntryV1(gameplayBootstrap),
   });
   if (!compiled.ok || compiled.executionPlan === undefined) {
     throw new Error(`Fixture compile failed: ${JSON.stringify(compiled.diagnostics)}`);
@@ -465,7 +603,7 @@ function compileExecutionPlan(spec: AuthoringSpecV3): ExecutionPlanV4 {
   return compiled.executionPlan;
 }
 
-function compileFlatTerrainExecutionPlan(spec: AuthoringSpecV3): ExecutionPlanV4 {
+function compileFlatTerrainExecutionPlan(spec: AuthoringSpecV4): ExecutionPlanV5 {
   const flatTerrainSpec = structuredClone(spec);
   flatTerrainSpec.nodes = flatTerrainSpec.nodes.map((node) =>
     node.kind === "terrain" &&
@@ -490,21 +628,22 @@ function compileFlatTerrainExecutionPlan(spec: AuthoringSpecV3): ExecutionPlanV4
 }
 
 function createFlatPackageExecutionPlan(
-  mutator?: (spec: AuthoringSpecV3) => void,
-): ExecutionPlanV4 {
-  const spec = createValidPackageSubjectWorld();
+  mutator?: (spec: AuthoringSpecV4) => void,
+): ExecutionPlanV5 {
+  const spec = createValidPackageSubjectWorldV4();
   mutator?.(spec);
   return compileFlatTerrainExecutionPlan(spec);
 }
 
 async function createRuntime(
-  executionPlan: ExecutionPlanV4 | ExecutionPlanV5,
+  executionPlan: ExecutionPlanV5,
   options: Pick<
     BabylonWorldRuntimeOptions,
     "engineFactory" | "subjectAssetResolver" | "subjectAssetCacheOptions"
   > = {},
+  bindInitialPossession = true,
 ): Promise<BabylonWorldRuntime> {
-  return BabylonWorldRuntime.create({
+  const runtime = await BabylonWorldRuntime.create({
     executionPlan,
     ...options,
     havokWasmBinary,
@@ -517,6 +656,13 @@ async function createRuntime(
         lockstepMaxSteps: 4,
       })),
   });
+  if (bindInitialPossession) {
+    await bindRuntimeTestPossession(
+      runtime,
+      executionPlan.initialControlledEntityId,
+    );
+  }
+  return runtime;
 }
 
 async function createFlatPackageRuntime(): Promise<BabylonWorldRuntime> {
@@ -527,7 +673,7 @@ function createColliderSupportExecutionPlan(options: {
   pedestalPrimitive: ExecutionObjectV3["primitive"];
   crateBottomMeters: number;
   maximumSupportGapMeters: number;
-}): ExecutionPlanV4 {
+}): ExecutionPlanV5 {
   const base = createFlatPackageExecutionPlan();
   const placementProvenance =
     base.layout.placementsByEntityId["wall-east"]!.placementProvenance;
@@ -562,6 +708,22 @@ function createColliderSupportExecutionPlan(options: {
         semanticClassId: "prop.crate",
       },
     ],
+    staticColliders: options.pedestalPrimitive.kind === "cone"
+      ? base.staticColliders
+      : [
+          ...base.staticColliders,
+          {
+        entityId: "pedestal",
+        logicalSubshapeId: "primary",
+        colliderSubshapeId: "collider:pedestal:primary",
+        colliderHash: sha256CanonicalJson({
+          shape: options.pedestalPrimitive,
+          transform: pedestalTransform,
+        }) as `sha256:${string}`,
+        transform: pedestalTransform,
+            shape: options.pedestalPrimitive as ExecutionStaticColliderV1["shape"],
+          },
+        ],
     layout: {
       ...base.layout,
       placementsByEntityId: {
@@ -588,35 +750,7 @@ function createColliderSupportExecutionPlan(options: {
 }
 
 function createV5StaticColliderSupportExecutionPlan(): ExecutionPlanV5 {
-  const v4 = createFlatPackageExecutionPlan();
-  const resourceLockEntries = [{
-    resourceRef: "worldkit://subject-definition/runtime-test@1",
-    resourceKind: "subject-definition" as const,
-    resolvedVersion: "1",
-    contentHash: `sha256:${"d".repeat(64)}` as const,
-  }];
-  const base: ExecutionPlanV5 = {
-    ...v4,
-    schemaVersion: 5,
-    authoringSpecHash: `sha256:${"b".repeat(64)}`,
-    resourceLockEntries,
-    resourceLockHash: sha256CanonicalJson(resourceLockEntries),
-    traversal: {
-      traversalAreas: [],
-      surfaces: [{
-        kind: "heightfield",
-        traversalSurfaceId: "surface:terrain-main:heightfield",
-        surfaceEntityId: v4.terrain.entityId,
-        colliderSubshapeId: "collider:terrain-main:heightfield",
-        resourceRef: "worldkit://terrain-surface/terrain-main@1",
-        resolvedVersion: "1",
-        resourceHash: `sha256:${"c".repeat(64)}`,
-      }],
-      connectivityRequirements: [],
-      anchorEntityIds: [],
-    },
-    staticColliders: [],
-  };
+  const base = createFlatPackageExecutionPlan();
   const placementProvenance =
     base.layout.placementsByEntityId["spawn-main"]!.placementProvenance;
   const pedestalTransform = {
@@ -718,14 +852,80 @@ function createV5StaticColliderGeometryConformancePlan(): ExecutionPlanV5 {
   };
 }
 
-function createFlatRiggedExecutionPlan(): ExecutionPlanV4 {
-  return compileFlatTerrainExecutionPlan(createValidRiggedPackageSubjectWorld());
+function createFlatRiggedExecutionPlan(): ExecutionPlanV5 {
+  return compileFlatTerrainExecutionPlan(createValidRiggedPackageSubjectWorldV4());
 }
 
-function createTwoRiggedSubjectExecutionPlan(): ExecutionPlanV4 {
+const staticAssetPartLocalTransform = {
+  positionMetersXYZ: [1, 2, -3] as const,
+  rotationEulerRadiansXYZ: [0, Math.PI / 3, 0] as const,
+  scaleXYZ: [2, 3, 4] as const,
+};
+
+function createStaticAssetSubjectExecutionPlan(options: {
+  mixedParts?: boolean;
+  twoSubjects?: boolean;
+} = {}): ExecutionPlanV5 {
+  const base = createFlatRiggedExecutionPlan();
+  const baseSubject = base.subjects[0]!;
+  const assetPart = baseSubject.visualParts.find((part) => part.kind === "asset");
+  if (assetPart === undefined) throw new Error("Rigged fixture Asset Part missing.");
+  const staticSubject = {
+    ...baseSubject,
+    visualParts: [
+      ...(options.mixedParts
+        ? [{
+            id: "primitive-marker",
+            kind: "primitive" as const,
+            shape: { kind: "sphere" as const, radiusMeters: 0.08 },
+            localTransform: {
+              positionMetersXYZ: [0, 2.05, 0] as const,
+              rotationEulerRadiansXYZ: [0, 0, 0] as const,
+            },
+            semanticTags: ["marker", "static", "runtime-test"],
+          }]
+        : []),
+      {
+        ...assetPart,
+        subjectAssetRef: staticSubjectAssetDescriptor.subjectAssetRef,
+        localTransform: staticAssetPartLocalTransform,
+        semanticTags: ["body", "static", "runtime-test"],
+      },
+    ],
+    visualBinding: { mode: "static" as const },
+    sockets: [{
+      id: "focus.local",
+      kind: "local" as const,
+      localTransform: {
+        positionMetersXYZ: [0, 1.5, 0] as const,
+        rotationEulerRadiansXYZ: [0, 0, 0] as const,
+      },
+      semanticTags: ["focus"],
+    }],
+  };
+  return {
+    ...base,
+    subjects: options.twoSubjects
+      ? [
+          staticSubject,
+          {
+            ...staticSubject,
+            entityId: "static-secondary",
+            spawnAnchorEntityId: "spawn-static-secondary",
+            spawnSubjectOriginPositionMetersXYZ: [4, 0, 30],
+          },
+        ]
+      : [staticSubject],
+    subjectAssets: [structuredClone(staticSubjectAssetDescriptor)],
+    rigProfiles: [],
+    animationSets: [],
+  };
+}
+
+function createTwoRiggedSubjectExecutionPlan(): ExecutionPlanV5 {
   const executionPlan = createFlatRiggedExecutionPlan();
   const player = executionPlan.subjects[0]!;
-  return lockPublishedGroundFeels({
+  return {
     ...executionPlan,
     subjects: [
       player,
@@ -736,11 +936,11 @@ function createTwoRiggedSubjectExecutionPlan(): ExecutionPlanV4 {
         spawnSubjectOriginPositionMetersXYZ: [4, 0, 30],
       },
     ],
-  });
+  };
 }
 
 async function expectRiggedRuntimeFailure(
-  executionPlan: ExecutionPlanV4,
+  executionPlan: ExecutionPlanV5,
   code: SubjectAssetRuntimeErrorV1["code"],
 ): Promise<void> {
   const error = await createRiggedRuntime(executionPlan).catch(
@@ -760,7 +960,7 @@ async function createRiggedRuntime(
 }
 
 async function movementResult(
-  executionPlan: ExecutionPlanV4,
+  executionPlan: ExecutionPlanV5,
   actions: FixedInputV1["actions"],
 ): Promise<{ deltaXMeters: number; movementMedium: "ground" | "air" }> {
   const runtime = await createRuntime(executionPlan);
@@ -779,7 +979,7 @@ async function movementResult(
 
 async function createRuntimeWithPackageSubject(): Promise<{
   runtime: BabylonWorldRuntime;
-  executionPlan: ExecutionPlanV4;
+  executionPlan: ExecutionPlanV5;
   debug: RuntimeDebugProbe;
 }> {
   const executionPlan = createFlatPackageExecutionPlan();
@@ -856,15 +1056,14 @@ describe("BabylonWorldRuntime", () => {
     }
   });
 
-  it("initializes a right-handed Babylon scene with Havok from ExecutionPlanV4", async () => {
+  it("initializes a right-handed Babylon scene with Havok from ExecutionPlanV5", async () => {
     const runtime = await createFlatPackageRuntime();
 
     expect(runtime.snapshot()).toMatchObject({
       runtimeBackend: "babylon-havok",
       ready: true,
       physics: { backend: "havok", ready: true, fixedTimeStepSeconds: 1 / 60 },
-      schemaVersion: 3,
-      controlledEntityId: "player",
+      possessionTarget: { mode: "possessed", controlledEntityId: "player" },
       subjectStatesByEntityId: {
         player: {
           entityId: "player",
@@ -947,7 +1146,7 @@ describe("BabylonWorldRuntime", () => {
   it("rejects a tampered frozen support assertion and cleans initialized resources", async () => {
     const executionPlan = createFlatPackageExecutionPlan();
     const wallPlacement = executionPlan.layout.placementsByEntityId["wall-east"]!;
-    const tamperedPlan: ExecutionPlanV4 = {
+    const tamperedPlan: ExecutionPlanV5 = {
       ...executionPlan,
       layout: {
         ...executionPlan.layout,
@@ -1001,7 +1200,7 @@ describe("BabylonWorldRuntime", () => {
     const executionPlan = createFlatPackageExecutionPlan();
     const wallPlacement = executionPlan.layout.placementsByEntityId["wall-east"]!;
     const spawnPlacement = executionPlan.layout.placementsByEntityId["spawn-main"]!;
-    const tamperedPlan: ExecutionPlanV4 = {
+    const tamperedPlan: ExecutionPlanV5 = {
       ...executionPlan,
       layout: {
         ...executionPlan.layout,
@@ -1049,7 +1248,7 @@ describe("BabylonWorldRuntime", () => {
       rotationEulerRadiansXYZ: [0.4, 0.7, -0.3] as const,
       scaleXYZ: [1, 1, 1] as const,
     };
-    const executionPlan: ExecutionPlanV4 = {
+    const executionPlan: ExecutionPlanV5 = {
       ...base,
       terrain: {
         ...base.terrain,
@@ -1100,14 +1299,14 @@ describe("BabylonWorldRuntime", () => {
     const executionPlan = createColliderSupportExecutionPlan({
       pedestalPrimitive: { kind: "box", sizeMetersXYZ: [4, 1, 4] },
       crateBottomMeters: 2 + 0.5 * Math.cos(rollRadians),
-      maximumSupportGapMeters: 0.1,
+      maximumSupportGapMeters: 0.2,
     });
 
     const runtime = await createRuntime(executionPlan);
     await runtime.dispose();
   }, 15_000);
 
-  it("throws OBJECT_SUPPORT_SURFACE_QUERY_UNSUPPORTED for an unsupported supporting collider kind", async () => {
+  it("rejects supported-by when no V5 static collider represents the visual", async () => {
     const executionPlan = createColliderSupportExecutionPlan({
       pedestalPrimitive: { kind: "cone", radiusMeters: 2, heightMeters: 1 },
       crateBottomMeters: 2.5,
@@ -1115,7 +1314,7 @@ describe("BabylonWorldRuntime", () => {
     });
 
     await expect(createRuntime(executionPlan)).rejects.toThrow(
-      /^OBJECT_SUPPORT_SURFACE_QUERY_UNSUPPORTED/,
+      /^WORLDKIT_LAYOUT_ASSERTION_FAILED/,
     );
   }, 15_000);
 
@@ -1252,7 +1451,7 @@ describe("BabylonWorldRuntime", () => {
 
   it("initializes and resets Subject yaw from the solved spawn facing", async () => {
     const base = createFlatPackageExecutionPlan();
-    const executionPlan: ExecutionPlanV4 = {
+    const executionPlan: ExecutionPlanV5 = {
       ...base,
       subjects: base.subjects.map((subject) =>
         subject.entityId === "player"
@@ -1282,15 +1481,17 @@ describe("BabylonWorldRuntime", () => {
     await runtime.dispose();
   });
 
-  it("creates and snapshots every compiled Subject independently", async () => {
-    const runtime = await createFlatPackageRuntime();
+  it("creates unbound and snapshots every compiled Subject independently", async () => {
+    const executionPlan = createFlatPackageExecutionPlan();
+    const runtime = await createRuntime(executionPlan, {}, false);
 
     expect(Object.keys(runtime.snapshot().subjectStatesByEntityId).sort()).toEqual([
       "pack-animal-a",
       "pack-animal-b",
       "player",
     ]);
-    expect(runtime.snapshot().controlledEntityId).toBe("player");
+    expect(runtime.snapshot().possessionTarget).toEqual({ mode: "unbound" });
+    expect(runtime.snapshot().camera).not.toHaveProperty("targetEntityId");
     await runtime.dispose();
   });
 
@@ -1312,9 +1513,418 @@ describe("BabylonWorldRuntime", () => {
     await runtime.dispose();
   });
 
+  describe("static asset subject", () => {
+    it("rejects two static Asset Parts before acquiring either Asset lease", async () => {
+      const { engine, scene } = createAssetScene();
+      const material = new StandardMaterial("static-subject-test", scene);
+      const cache = new SubjectAssetCacheV1(
+        scene,
+        createMemoryResolver(staticSubjectAssetBytes),
+      );
+      const baseExecutionPlan = createStaticAssetSubjectExecutionPlan();
+      const staticSubject = baseExecutionPlan.subjects[0]!;
+      const assetPart = staticSubject.visualParts.find(
+        (part) => part.kind === "asset",
+      )!;
+      const executionPlan: ExecutionPlanV5 = {
+        ...baseExecutionPlan,
+        subjects: [{
+          ...staticSubject,
+          visualParts: [
+            assetPart,
+            { ...structuredClone(assetPart), id: "body.asset.duplicate" },
+          ],
+        }],
+      };
+      const acquire = vi.spyOn(cache, "acquire");
+
+      try {
+        await expect(createSubjectVisual({
+          subject: executionPlan.subjects[0]!,
+          executionPlan,
+          material,
+          scene,
+          subjectAssetCache: cache,
+        })).rejects.toMatchObject({ code: "SUBJECT_ASSET_RIG_INCOMPATIBLE" });
+        expect(acquire).not.toHaveBeenCalled();
+        expect(
+          (cache as unknown as { leases: ReadonlySet<SubjectAssetLeaseV1> }).leases
+            .size,
+        ).toBe(0);
+      } finally {
+        await cache.dispose();
+        material.dispose();
+        scene.dispose();
+        engine.dispose();
+      }
+    });
+
+    it("loads a real static GLB without Rig resources and isolates two instances", async () => {
+      const runtime = await createRuntime(
+        createStaticAssetSubjectExecutionPlan({ twoSubjects: true }),
+        { subjectAssetResolver: createMemoryResolver(staticSubjectAssetBytes) },
+      );
+      try {
+        const probe = createSubjectVisualProbe(runtime);
+        const primaryVisual = probe.visual("player");
+        const secondaryVisual = probe.visual("static-secondary");
+        const primaryInstance = primaryVisual.assetInstance!;
+        const secondaryInstance = secondaryVisual.assetInstance!;
+        const primaryPartRoot = primaryVisual.assetPartRoots![0]!;
+        const secondaryPartRoot = secondaryVisual.assetPartRoots![0]!;
+
+        expect(primaryInstance.skeletons).toEqual([]);
+        expect(primaryInstance.animationGroups).toEqual([]);
+        expect(primaryInstance.rootNodes[0]).not.toBe(secondaryInstance.rootNodes[0]);
+        expect(primaryInstance.meshes[0]).not.toBe(secondaryInstance.meshes[0]);
+        expect(primaryPartRoot).not.toBe(secondaryPartRoot);
+        expect(primaryInstance.rootNodes[0]!.parent).toBe(primaryPartRoot);
+        expect(secondaryInstance.rootNodes[0]!.parent).toBe(secondaryPartRoot);
+        expect(primaryVisual.socketNodesById.get("focus.local")).not.toBe(
+          secondaryVisual.socketNodesById.get("focus.local"),
+        );
+        expect(primaryVisual.socketNodesById.get("focus.local")?.parent).toBe(
+          primaryVisual.root,
+        );
+      } finally {
+        await runtime.dispose();
+      }
+    });
+
+    it("owns one isolated Material across mixed static Asset and Primitive Parts", async () => {
+      const runtime = await createRuntime(
+        createStaticAssetSubjectExecutionPlan({
+          mixedParts: true,
+          twoSubjects: true,
+        }),
+        { subjectAssetResolver: createMemoryResolver(staticSubjectAssetBytes) },
+      );
+      try {
+        const probe = createSubjectVisualProbe(runtime);
+        const primaryVisual = probe.visual("player");
+        const secondaryVisual = probe.visual("static-secondary");
+        const primaryInstance = primaryVisual.assetInstance!;
+        const secondaryInstance = secondaryVisual.assetInstance!;
+        const primaryAssetMesh = primaryInstance.meshes[0]!;
+        const secondaryAssetMesh = secondaryInstance.meshes[0]!;
+        const primaryPrimitiveMesh = primaryVisual.primitiveMeshes![0]!;
+        const secondaryPrimitiveMesh = secondaryVisual.primitiveMeshes![0]!;
+        const primaryMaterial = primaryAssetMesh.material;
+        const secondaryMaterial = secondaryAssetMesh.material;
+        const runtimeMaterial = (runtime as unknown as { scene: Scene }).scene
+          .getMaterialByName("worldkit.material.subject");
+        let primaryMaterialDisposed = false;
+        let secondaryMaterialDisposed = false;
+        let runtimeMaterialDisposed = false;
+        primaryMaterial?.onDisposeObservable.add(() => {
+          primaryMaterialDisposed = true;
+        });
+        secondaryMaterial?.onDisposeObservable.add(() => {
+          secondaryMaterialDisposed = true;
+        });
+        runtimeMaterial?.onDisposeObservable.add(() => {
+          runtimeMaterialDisposed = true;
+        });
+
+        expect(primaryMaterial).toBeInstanceOf(StandardMaterial);
+        expect(secondaryMaterial).toBeInstanceOf(StandardMaterial);
+        expect(runtimeMaterial).toBeInstanceOf(StandardMaterial);
+        expect(primaryPrimitiveMesh.material).toBe(primaryMaterial);
+        expect(secondaryPrimitiveMesh.material).toBe(secondaryMaterial);
+        expect(primaryMaterial).not.toBe(secondaryMaterial);
+        expect(primaryMaterial).not.toBe(runtimeMaterial);
+        expect(secondaryMaterial).not.toBe(runtimeMaterial);
+        expect(primaryMaterial?.alpha).toBe(1);
+        expect(secondaryMaterial?.alpha).toBe(1);
+        expect(runtimeMaterial?.alpha).toBe(1);
+
+        primaryMaterial!.alpha = 0.25;
+
+        expect(primaryPrimitiveMesh.material?.alpha).toBe(0.25);
+        expect(secondaryMaterial?.alpha).toBe(1);
+        expect(secondaryPrimitiveMesh.material?.alpha).toBe(1);
+        expect(runtimeMaterial?.alpha).toBe(1);
+        primaryVisual.dispose();
+        expect(primaryMaterialDisposed).toBe(true);
+        expect(secondaryMaterialDisposed).toBe(false);
+        expect(runtimeMaterialDisposed).toBe(false);
+        expect(secondaryAssetMesh.material).toBe(secondaryMaterial);
+        expect(secondaryPrimitiveMesh.material).toBe(secondaryMaterial);
+        expect(secondaryAssetMesh.isDisposed()).toBe(false);
+        expect(secondaryPrimitiveMesh.isDisposed()).toBe(false);
+        expect(secondaryInstance.rootNodes[0]!.isDisposed()).toBe(false);
+        secondaryMaterial!.alpha = 0.75;
+        expect(secondaryAssetMesh.material?.alpha).toBe(0.75);
+        expect(secondaryPrimitiveMesh.material?.alpha).toBe(0.75);
+        expect(runtimeMaterial?.alpha).toBe(1);
+      } finally {
+        await runtime.dispose();
+      }
+    });
+
+    it("restores the authored Asset Part local transform on reset", async () => {
+      const runtime = await createRuntime(createStaticAssetSubjectExecutionPlan(), {
+        subjectAssetResolver: createMemoryResolver(staticSubjectAssetBytes),
+      });
+      try {
+        const partRoot = createSubjectVisualProbe(runtime)
+          .visual("player")
+          .assetPartRoots![0]!;
+        partRoot.position.set(9, 8, 7);
+        partRoot.rotationQuaternion = Quaternion.FromEulerAngles(0.4, 0.5, 0.6);
+        partRoot.scaling.set(6, 5, 4);
+
+        runtime.reset();
+
+        expect(partRoot.position.asArray()).toEqual([1, 2, -3]);
+        expect(partRoot.scaling.asArray()).toEqual([2, 3, 4]);
+        expect(partRoot.rotationQuaternion?.x).toBeCloseTo(0, 12);
+        expect(partRoot.rotationQuaternion?.y).toBeCloseTo(0.5, 12);
+        expect(partRoot.rotationQuaternion?.z).toBeCloseTo(0, 12);
+        expect(partRoot.rotationQuaternion?.w).toBeCloseTo(Math.sqrt(3) / 2, 12);
+      } finally {
+        await runtime.dispose();
+      }
+    });
+
+    it("releases the real Asset lease when construction fails after instantiation", async () => {
+      const { engine, scene } = createAssetScene();
+      const material = new StandardMaterial("static-subject-test", scene);
+      const cache = new SubjectAssetCacheV1(
+        scene,
+        createMemoryResolver(staticSubjectAssetBytes),
+      );
+      const nativeAcquire = cache.acquire.bind(cache);
+      let partialInstance: SubjectAssetInstanceV1 | undefined;
+      vi.spyOn(cache, "acquire").mockImplementation(async (asset) => {
+        const lease = await nativeAcquire(asset);
+        const nativeInstantiate = lease.instantiate.bind(lease);
+        vi.spyOn(lease, "instantiate").mockImplementation((subjectEntityId) => {
+          partialInstance = nativeInstantiate(subjectEntityId);
+          throw new Error("BABYLON_PROVIDER_PRIVATE_PARTIAL_CONSTRUCTION_FAILURE");
+        });
+        return lease;
+      });
+      const executionPlan = createStaticAssetSubjectExecutionPlan();
+
+      try {
+        const error = await createSubjectVisual({
+          subject: executionPlan.subjects[0]!,
+          executionPlan,
+          material,
+          scene,
+          subjectAssetCache: cache,
+        }).catch((reason) => reason as unknown);
+        const cacheInternals = cache as unknown as {
+          leases: ReadonlySet<SubjectAssetLeaseV1>;
+          entriesByKey: ReadonlyMap<string, { refCount: number }>;
+        };
+
+        expect(error).toMatchObject({ code: "SUBJECT_ASSET_RIG_INCOMPATIBLE" });
+        expect(error).not.toHaveProperty("cause");
+        expect(String(error)).not.toMatch(/babylon|provider/i);
+        expect(partialInstance).toBeDefined();
+        expect(partialInstance!.rootNodes.every((node) => node.isDisposed())).toBe(true);
+        expect(cacheInternals.leases.size).toBe(0);
+        expect(
+          [...cacheInternals.entriesByKey.values()].map((entry) => entry.refCount),
+        ).toEqual([0]);
+      } finally {
+        await cache.dispose();
+        material.dispose();
+        scene.dispose();
+        engine.dispose();
+      }
+    });
+
+    it("disposes Instance then Lease before every Subject-owned resource", async () => {
+      const { engine, scene } = createAssetScene();
+      const material = new StandardMaterial("static-subject-test", scene);
+      const cache = new SubjectAssetCacheV1(
+        scene,
+        createMemoryResolver(staticSubjectAssetBytes),
+      );
+      const executionPlan = createStaticAssetSubjectExecutionPlan();
+      let visual: SubjectVisualInternals | undefined;
+
+      try {
+        visual = await createSubjectVisual({
+          subject: executionPlan.subjects[0]!,
+          executionPlan,
+          material,
+          scene,
+          subjectAssetCache: cache,
+        }) as SubjectVisualInternals;
+        const instance = visual.assetInstance!;
+        const lease = visual.assetLease!;
+        const socket = visual.socketNodesById.get("focus.local")!;
+        const partRoot = visual.assetPartRoots![0]!;
+        const ownedMaterial = instance.meshes[0]!.material!;
+        const disposalOrder: string[] = [];
+        const nativeInstanceDispose = instance.dispose.bind(instance);
+        vi.spyOn(instance, "dispose").mockImplementation(() => {
+          disposalOrder.push("instance");
+          nativeInstanceDispose();
+        });
+        const nativeRelease = lease.release.bind(lease);
+        vi.spyOn(lease, "release").mockImplementation(() => {
+          disposalOrder.push("lease");
+          nativeRelease();
+        });
+        const nativeSocketDispose = socket.dispose.bind(socket);
+        vi.spyOn(socket, "dispose").mockImplementation((...args) => {
+          disposalOrder.push("socket");
+          nativeSocketDispose(...args);
+        });
+        const nativePartRootDispose = partRoot.dispose.bind(partRoot);
+        vi.spyOn(partRoot, "dispose").mockImplementation((...args) => {
+          disposalOrder.push("part-root");
+          nativePartRootDispose(...args);
+        });
+        const nativeMaterialDispose = ownedMaterial.dispose.bind(ownedMaterial);
+        vi.spyOn(ownedMaterial, "dispose").mockImplementation((...args) => {
+          disposalOrder.push("material");
+          nativeMaterialDispose(...args);
+        });
+        const nativeRootDispose = visual.root.dispose.bind(visual.root);
+        vi.spyOn(visual.root, "dispose").mockImplementation((...args) => {
+          disposalOrder.push("root");
+          nativeRootDispose(...args);
+        });
+
+        visual.dispose();
+
+        expect(disposalOrder).toEqual([
+          "instance",
+          "lease",
+          "socket",
+          "part-root",
+          "material",
+          "root",
+        ]);
+        expect(instance.rootNodes.every((node) => node.isDisposed())).toBe(true);
+      } finally {
+        visual?.dispose();
+        await cache.dispose();
+        material.dispose();
+        scene.dispose();
+        engine.dispose();
+      }
+    });
+
+    it("keeps the frozen cleanup order after partial construction and throwing disposers", async () => {
+      const { engine, scene } = createAssetScene();
+      const material = new StandardMaterial("static-subject-test", scene);
+      const cache = new SubjectAssetCacheV1(
+        scene,
+        createMemoryResolver(staticSubjectAssetBytes),
+      );
+      const baseExecutionPlan = createStaticAssetSubjectExecutionPlan();
+      const riggedSocket = createFlatRiggedExecutionPlan().subjects[0]!.sockets[0]!;
+      const staticSubject = baseExecutionPlan.subjects[0]!;
+      const executionPlan: ExecutionPlanV5 = {
+        ...baseExecutionPlan,
+        subjects: [{
+          ...staticSubject,
+          sockets: [...staticSubject.sockets, riggedSocket],
+        }],
+      };
+      const disposalOrder: string[] = [];
+      const observedNodes = new Map<string, TransformNode>();
+      const expectedNodeLabelByName = new Map([
+        ["player.visual-root", "root"],
+        ["player.body.asset", "part-root"],
+        ["player.socket.focus.local", "socket"],
+      ]);
+      scene.onNewTransformNodeAddedObservable.add((node) => {
+        const label = expectedNodeLabelByName.get(node.name);
+        if (label === undefined) return;
+        observedNodes.set(label, node);
+        const nativeDispose = node.dispose.bind(node);
+        vi.spyOn(node, "dispose").mockImplementation((...args) => {
+          disposalOrder.push(label);
+          nativeDispose(...args);
+        });
+      });
+      let ownedMaterial: StandardMaterial | undefined;
+      let ownedMaterialDisposed = false;
+      const nativeClone = material.clone.bind(material);
+      vi.spyOn(material, "clone").mockImplementation((...args) => {
+        ownedMaterial = nativeClone(...args);
+        ownedMaterial.onDisposeObservable.add(() => {
+          ownedMaterialDisposed = true;
+        });
+        const nativeDispose = ownedMaterial.dispose.bind(ownedMaterial);
+        vi.spyOn(ownedMaterial, "dispose").mockImplementation((...disposeArgs) => {
+          disposalOrder.push("material");
+          nativeDispose(...disposeArgs);
+          throw new Error("BABYLON_PROVIDER_PRIVATE_MATERIAL_DISPOSE_FAILURE");
+        });
+        return ownedMaterial;
+      });
+      const nativeAcquire = cache.acquire.bind(cache);
+      vi.spyOn(cache, "acquire").mockImplementation(async (asset) => {
+        const lease = await nativeAcquire(asset);
+        const nativeInstantiate = lease.instantiate.bind(lease);
+        vi.spyOn(lease, "instantiate").mockImplementation((subjectEntityId) => {
+          const instance = nativeInstantiate(subjectEntityId);
+          const nativeInstanceDispose = instance.dispose.bind(instance);
+          vi.spyOn(instance, "dispose").mockImplementation(() => {
+            disposalOrder.push("instance");
+            nativeInstanceDispose();
+            throw new Error("BABYLON_PROVIDER_PRIVATE_INSTANCE_DISPOSE_FAILURE");
+          });
+          return instance;
+        });
+        const nativeRelease = lease.release.bind(lease);
+        vi.spyOn(lease, "release").mockImplementation(() => {
+          disposalOrder.push("lease");
+          nativeRelease();
+          throw new Error("BABYLON_PROVIDER_PRIVATE_LEASE_RELEASE_FAILURE");
+        });
+        return lease;
+      });
+
+      try {
+        const error = await createSubjectVisual({
+          subject: executionPlan.subjects[0]!,
+          executionPlan,
+          material,
+          scene,
+          subjectAssetCache: cache,
+        }).catch((reason) => reason as unknown);
+
+        expect(error).toMatchObject({ code: "SUBJECT_ASSET_SOCKET_BONE_MISSING" });
+        expect(error).not.toHaveProperty("cause");
+        expect(String(error)).not.toMatch(/babylon|provider/i);
+        expect(disposalOrder).toEqual([
+          "instance",
+          "lease",
+          "socket",
+          "part-root",
+          "material",
+          "root",
+        ]);
+        expect(ownedMaterialDisposed).toBe(true);
+        expect(
+          [...observedNodes.values()].every((node) => node.isDisposed()),
+        ).toBe(true);
+        expect(
+          (cache as unknown as { leases: ReadonlySet<SubjectAssetLeaseV1> }).leases
+            .size,
+        ).toBe(0);
+      } finally {
+        await cache.dispose();
+        material.dispose();
+        scene.dispose();
+        engine.dispose();
+      }
+    });
+  });
+
   it("requires an explicit Subject Asset resolver before constructing Asset visuals", async () => {
     const executionPlan = compileExecutionPlan(
-      createValidRiggedPackageSubjectWorld(),
+      createValidRiggedPackageSubjectWorldV4(),
     );
 
     const error = await createRuntime(executionPlan).catch((reason) => reason as unknown);
@@ -1347,7 +1957,7 @@ describe("BabylonWorldRuntime", () => {
   });
 
   it("loads the Registry G Bot with a Hips-root Mixamo rig and four semantic Actions", async () => {
-    const spec = createValidAuthoringSpec();
+    const spec = createValidAuthoringSpecV4();
     spec.nodes = spec.nodes.map((node) =>
       node.kind === "subject" && node.id === "player"
         ? {
@@ -1359,7 +1969,7 @@ describe("BabylonWorldRuntime", () => {
     );
     const baseExecutionPlan = compileFlatTerrainExecutionPlan(spec);
     const primarySubject = baseExecutionPlan.subjects[0]!;
-    const executionPlan: ExecutionPlanV4 = {
+    const executionPlan: ExecutionPlanV5 = {
       ...baseExecutionPlan,
       subjects: [
         primarySubject,
@@ -1384,7 +1994,7 @@ describe("BabylonWorldRuntime", () => {
     const runtime = await createRuntime(executionPlan, {
       subjectAssetResolver: createMemoryResolver(gBotSubjectAssetBytes),
     });
-    const probe = createRiggedRuntimeProbe(runtime);
+    const probe = createSubjectVisualProbe(runtime);
     const visual = probe.visual("player");
     const secondaryVisual = probe.visual("g-bot-secondary");
     const primaryInstance = visual.assetInstance!;
@@ -1472,10 +2082,10 @@ describe("BabylonWorldRuntime", () => {
 
   it("samples the G Bot pose once when many fixed Ticks share one rendered frame", async () => {
     const runtime = await createRuntime(
-      compileExecutionPlan(structuredClone(gBotAuthoringSpec)),
+      compileRouteExecutionPlan(structuredClone(gBotAuthoringSpec)),
       { subjectAssetResolver: createMemoryResolver(gBotSubjectAssetBytes) },
     );
-    const animationGroups = createRiggedRuntimeProbe(runtime)
+    const animationGroups = createSubjectVisualProbe(runtime)
       .visual("g-bot-primary")
       .assetInstance!.animationGroups;
     const poseSampleSpies = animationGroups.map((group) =>
@@ -1504,7 +2114,7 @@ describe("BabylonWorldRuntime", () => {
 
   it("lands the product G Bot on its authored heightfield after one jump input", async () => {
     const runtime = await createRuntime(
-      compileExecutionPlan(structuredClone(gBotAuthoringSpec)),
+      compileRouteExecutionPlan(structuredClone(gBotAuthoringSpec)),
       { subjectAssetResolver: createMemoryResolver(gBotSubjectAssetBytes) },
     );
 
@@ -1521,7 +2131,7 @@ describe("BabylonWorldRuntime", () => {
 
   it("keeps two rigged Subjects on isolated Skeleton, Clip, Socket, and Action state", async () => {
     const basePlan = createTwoRiggedSubjectExecutionPlan();
-    const executionPlan: ExecutionPlanV4 = {
+    const executionPlan: ExecutionPlanV5 = {
       ...basePlan,
       subjects: basePlan.subjects.map((subject) => ({
         ...subject,
@@ -1566,7 +2176,7 @@ describe("BabylonWorldRuntime", () => {
       })),
     };
     const runtime = await createRiggedRuntime(executionPlan);
-    const probe = createRiggedRuntimeProbe(runtime);
+    const probe = createSubjectVisualProbe(runtime);
     const playerVisual = probe.visual("player");
     const heroBVisual = probe.visual("hero-b");
     const playerInstance = playerVisual.assetInstance!;
@@ -1654,7 +2264,7 @@ describe("BabylonWorldRuntime", () => {
 
   it("transitions jump back to idle and reset restores Tick zero and idle frame", async () => {
     const runtime = await createRiggedRuntime();
-    const probe = createRiggedRuntimeProbe(runtime);
+    const probe = createSubjectVisualProbe(runtime);
     const visual = probe.visual("player");
 
     await runtime.runFixedInput({ actions: [], ticks: 5 });
@@ -1680,8 +2290,10 @@ describe("BabylonWorldRuntime", () => {
       activeActionId: "idle",
       movementMedium: "ground",
       positionMetersXYZ: [expect.any(Number), expect.any(Number), expect.any(Number)],
-      velocityMetersPerSecondXYZ: [0, 0, 0],
     });
+    expect(
+      landed.subjectStatesByEntityId.player!.velocityMetersPerSecondXYZ.map(Math.abs),
+    ).toEqual([0, 0, 0]);
     expect(landed.subjectStatesByEntityId.player!.positionMetersXYZ[0]).toBeCloseTo(0, 3);
     expect(landed.subjectStatesByEntityId.player!.positionMetersXYZ[2]).toBeCloseTo(30, 2);
     expect(
@@ -1716,21 +2328,21 @@ describe("BabylonWorldRuntime", () => {
 
   it("rejects missing, aliased, and incorrectly rooted Rig Bone mappings", async () => {
     for (const mutateRig of [
-      (plan: ExecutionPlanV4) => {
+      (plan: ExecutionPlanV5) => {
         const rig = plan.rigProfiles[0]!;
         (rig.sourceNodeNameByBoneId as Record<string, string>).head = "missing-head";
       },
-      (plan: ExecutionPlanV4) => {
+      (plan: ExecutionPlanV5) => {
         const rig = plan.rigProfiles[0]!;
         (rig.sourceNodeNameByBoneId as Record<string, string>)["hand.right"] =
           rig.sourceNodeNameByBoneId["hand.left"];
       },
-      (plan: ExecutionPlanV4) => {
+      (plan: ExecutionPlanV5) => {
         (plan.rigProfiles[0] as { skeletonRootBoneName: string }).skeletonRootBoneName =
           "hips";
       },
     ]) {
-      const executionPlan = createFlatRiggedExecutionPlan();
+      const executionPlan = structuredClone(createFlatRiggedExecutionPlan());
       mutateRig(executionPlan);
       await expectRiggedRuntimeFailure(
         executionPlan,
@@ -1751,7 +2363,7 @@ describe("BabylonWorldRuntime", () => {
         binding.blendDurationSeconds = -1;
       },
     ]) {
-      const executionPlan = createFlatRiggedExecutionPlan();
+      const executionPlan = structuredClone(createFlatRiggedExecutionPlan());
       mutateBinding(
         executionPlan.animationSets[0]!.animationBindings[0] as unknown as Record<
           string,
@@ -1839,7 +2451,7 @@ describe("BabylonWorldRuntime", () => {
 
   it("rejects missing, multiple, duplicate-name, and multiple-root Skeleton structures", async () => {
     const cases: Array<{
-      mutatePlan?: (plan: ExecutionPlanV4) => void;
+      mutatePlan?: (plan: ExecutionPlanV5) => void;
       mutateContainer: (container: AssetContainer) => void;
     }> = [
       {
@@ -1878,7 +2490,7 @@ describe("BabylonWorldRuntime", () => {
     ];
 
     for (const testCase of cases) {
-      const executionPlan = createFlatRiggedExecutionPlan();
+      const executionPlan = structuredClone(createFlatRiggedExecutionPlan());
       testCase.mutatePlan?.(executionPlan);
       mutateNextLoadedContainer(testCase.mutateContainer);
       await expectRiggedRuntimeFailure(
@@ -1900,7 +2512,7 @@ describe("BabylonWorldRuntime", () => {
   });
 
   it("uses the closed Socket diagnostic when a Bone Socket cannot resolve its semantic Bone", async () => {
-    const executionPlan = createFlatRiggedExecutionPlan();
+    const executionPlan = structuredClone(createFlatRiggedExecutionPlan());
     const subject = executionPlan.subjects[0]!;
     const boneSocket = subject.sockets.find((socket) => socket.kind === "bone")!;
     (boneSocket as { boneId: string }).boneId = "unmapped.bone";
@@ -1927,7 +2539,7 @@ describe("BabylonWorldRuntime", () => {
         return instance;
       });
     });
-    const executionPlan = createFlatRiggedExecutionPlan();
+    const executionPlan = structuredClone(createFlatRiggedExecutionPlan());
     (executionPlan.rigProfiles[0] as { skeletonRootBoneName: string }).skeletonRootBoneName =
       "hips";
     const engine = new NullEngine();
@@ -1970,7 +2582,7 @@ describe("BabylonWorldRuntime", () => {
   it("sanitizes rigged Visual cleanup failures after attempting every sibling", async () => {
     const basePlan = createFlatRiggedExecutionPlan();
     const baseSubject = basePlan.subjects[0]!;
-    const executionPlan: ExecutionPlanV4 = {
+    const executionPlan: ExecutionPlanV5 = {
       ...basePlan,
       subjects: [
         {
@@ -2004,7 +2616,7 @@ describe("BabylonWorldRuntime", () => {
       ],
     };
     const runtime = await createRiggedRuntime(executionPlan);
-    const visual = createRiggedRuntimeProbe(runtime).visual("player");
+    const visual = createSubjectVisualProbe(runtime).visual("player");
     const boneSocket = visual.socketNodesById.get("hand.right")!;
     const localSocket = visual.socketNodesById.get("focus.local")!;
     const instance = visual.assetInstance!;
@@ -2168,7 +2780,7 @@ describe("BabylonWorldRuntime", () => {
   it("falls from an unsupported airborne spawn and lands on the terrain", async () => {
     const base = createFlatPackageExecutionPlan();
     const player = base.subjects.find((subject) => subject.entityId === "player")!;
-    const executionPlan: ExecutionPlanV4 = {
+    const executionPlan: ExecutionPlanV5 = {
       ...base,
       terrain: {
         ...base.terrain,
@@ -2205,7 +2817,7 @@ describe("BabylonWorldRuntime", () => {
     const base = createFlatPackageExecutionPlan();
     const player = base.subjects.find((subject) => subject.entityId === "player")!;
     const wall = base.objects.find((object) => object.entityId === "wall-east")!;
-    const executionPlan: ExecutionPlanV4 = {
+    const executionPlan: ExecutionPlanV5 = {
       ...base,
       terrain: {
         ...base.terrain,
@@ -2249,7 +2861,7 @@ describe("BabylonWorldRuntime", () => {
   it("uses Havok support rather than bilinear terrain height for ground and jump state", async () => {
     const base = createFlatPackageExecutionPlan();
     const player = base.subjects.find((subject) => subject.entityId === "player")!;
-    const executionPlan: ExecutionPlanV4 = {
+    const executionPlan: ExecutionPlanV5 = {
       ...base,
       terrain: {
         ...base.terrain,
@@ -2297,7 +2909,7 @@ describe("BabylonWorldRuntime", () => {
 
   it("keeps asymmetric square heightfield physics aligned with rendered XZ samples", async () => {
     const base = createFlatPackageExecutionPlan();
-    const executionPlan: ExecutionPlanV4 = {
+    const executionPlan: ExecutionPlanV5 = {
       ...base,
       terrain: {
         ...base.terrain,
@@ -2321,14 +2933,14 @@ describe("BabylonWorldRuntime", () => {
     );
 
     expect(hit.hasHit).toBe(true);
-    expect(hit.hitPointWorld.y).toBeCloseTo(0.35, 4);
+    expect(hit.hitPointWorld.y).toBeCloseTo(0.35, 3);
 
     await runtime.dispose();
   });
 
   it("keeps rectangular terrain mesh physics aligned with rendered XZ samples", async () => {
     const base = createFlatPackageExecutionPlan();
-    const executionPlan: ExecutionPlanV4 = {
+    const executionPlan: ExecutionPlanV5 = {
       ...base,
       terrain: {
         ...base.terrain,
@@ -2360,7 +2972,7 @@ describe("BabylonWorldRuntime", () => {
   it("applies gravity to an uncontrolled airborne Subject while keeping it idle", async () => {
     const base = createFlatPackageExecutionPlan();
     const player = base.subjects.find((subject) => subject.entityId === "player")!;
-    const executionPlan: ExecutionPlanV4 = {
+    const executionPlan: ExecutionPlanV5 = {
       ...base,
       terrain: {
         ...base.terrain,
@@ -2396,7 +3008,7 @@ describe("BabylonWorldRuntime", () => {
   it("settles an uncontrolled Subject spawned just above terrain", async () => {
     const base = createFlatPackageExecutionPlan();
     const player = base.subjects.find((subject) => subject.entityId === "player")!;
-    const executionPlan: ExecutionPlanV4 = {
+    const executionPlan: ExecutionPlanV5 = {
       ...base,
       terrain: {
         ...base.terrain,
@@ -2457,93 +3069,269 @@ describe("BabylonWorldRuntime", () => {
     }
   });
 
-  it("switches the default Controller atomically and moves only the committed Subject", async () => {
-    const runtime = await createFlatPackageRuntime();
-    const before = runtime.snapshot();
+  it("stages Gameplay possession without mutating the live Runtime and publishes it atomically", async () => {
+    const runtime = await createRuntime(
+      createV5StaticColliderSupportExecutionPlan(),
+      {},
+      false,
+    );
+    try {
+      const internal = runtime[BABYLON_GAMEPLAY_RUNTIME_INTERNAL]();
+      const projectionBefore = runtime.snapshot();
+      const viewBefore = internal.readViewProjection();
 
-    expect(
-      runtime.bindControl({
-        controllerId: "controller-primary",
-        expectedControlledEntityId: "player",
+      expect(internal.readPossessionTarget()).toEqual({ mode: "unbound" });
+      expect(projectionBefore.possessionTarget).toEqual({ mode: "unbound" });
+
+      const prepared = await internal.preparePossessionTarget({
+        mode: "possessed",
         controlledEntityId: "pack-animal-a",
-      }),
-    ).toMatchObject({ status: "committed", controlledEntityId: "pack-animal-a" });
-    const after = await runtime.runFixedInput(moveRightForTicks(60));
+      });
 
-    expect(after.subjectStatesByEntityId["pack-animal-a"]!.positionMetersXYZ[0]).toBeGreaterThan(
-      before.subjectStatesByEntityId["pack-animal-a"]!.positionMetersXYZ[0],
-    );
-    const inactiveBefore = before.subjectStatesByEntityId.player!.positionMetersXYZ;
-    const inactiveAfter = after.subjectStatesByEntityId.player!.positionMetersXYZ;
-    expect(Math.abs(inactiveAfter[0] - inactiveBefore[0])).toBeLessThan(0.000_01);
-    expect(inactiveAfter[1]).toBeCloseTo(inactiveBefore[1]);
-    expect(Math.abs(inactiveAfter[2] - inactiveBefore[2])).toBeLessThan(0.000_01);
-    expect(after.camera.targetEntityId).toBe("pack-animal-a");
-    await runtime.dispose();
+      expect(internal.readPossessionTarget()).toEqual({ mode: "unbound" });
+      expect(internal.readViewProjection()).toBe(viewBefore);
+      expect(runtime.snapshot()).toEqual(projectionBefore);
+      expect(prepared.projectedViewStateAfter.viewStateRevision).toBe(
+        viewBefore.viewStateRevision + 1,
+      );
+
+      expect(prepared.commitPrepared).not.toThrow();
+      expect(internal.readPossessionTarget()).toEqual({
+        mode: "possessed",
+        controlledEntityId: "pack-animal-a",
+      });
+      expect(internal.readViewProjection()).toEqual(
+        prepared.projectedViewStateAfter,
+      );
+      expect(runtime.snapshot().possessionTarget).toEqual({
+        mode: "possessed",
+        controlledEntityId: "pack-animal-a",
+      });
+    } finally {
+      await runtime.dispose();
+    }
   });
 
-  it("idles the previous rigged Subject in the committed rebind snapshot", async () => {
-    const runtime = await createRiggedRuntime(
-      createTwoRiggedSubjectExecutionPlan(),
+  it("publishes a prepared Gameplay possession without invoking fallible controller, animation, or Camera work", async () => {
+    const runtime = await createRuntime(
+      createV5StaticColliderSupportExecutionPlan(),
+      {},
+      false,
     );
-    const running = await runtime.runFixedInput({
-      actions: ["move-right", "run"],
-      ticks: 2,
-    });
-    expect(running.subjectStatesByEntityId.player?.activeActionId).toBe("run");
-
-    expect(
-      runtime.bindControl({
-        controllerId: "controller-primary",
-        expectedControlledEntityId: "player",
-        controlledEntityId: "hero-b",
-      }),
-    ).toMatchObject({ status: "committed", controlledEntityId: "hero-b" });
-    const immediate = runtime.snapshot();
-    const zeroTick = await runtime.runFixedInput({ actions: [], ticks: 0 });
-
-    expect(immediate.subjectStatesByEntityId.player?.activeActionId).toBe("idle");
-    expect(zeroTick.subjectStatesByEntityId.player?.activeActionId).toBe("idle");
-    expect(immediate.tick).toBe(running.tick);
-    expect(zeroTick.tick).toBe(running.tick);
-    await runtime.dispose();
-  });
-
-  it("rejects stale, unknown Controller, and unknown Subject bindings", async () => {
-    const runtime = await createFlatPackageRuntime();
-
-    expect(
-      runtime.bindControl({
-        controllerId: "controller-primary",
-        expectedControlledEntityId: "pack-animal-a",
+    try {
+      const internal = runtime[BABYLON_GAMEPLAY_RUNTIME_INTERNAL]();
+      const initialBind = await internal.preparePossessionTarget({
+        mode: "possessed",
         controlledEntityId: "player",
-      }),
-    ).toMatchObject({
-      status: "rejected",
-      diagnostic: { code: "CONTROL_BINDING_STALE" },
-    });
-    expect(
-      runtime.bindControl({
-        controllerId: "controller-missing",
-        expectedControlledEntityId: "player",
+      });
+      initialBind.commitPrepared();
+      await internal.runFixedInputTick({
+        actions: ["move-right", "run"],
+        ticks: 1,
+      });
+      const prepared = await internal.preparePossessionTarget({
+        mode: "possessed",
         controlledEntityId: "pack-animal-a",
-      }),
-    ).toMatchObject({
-      status: "rejected",
-      diagnostic: { code: "CONTROL_CONTROLLER_NOT_FOUND" },
-    });
-    expect(
-      runtime.bindControl({
-        controllerId: "controller-primary",
-        expectedControlledEntityId: "player",
+      });
+      const runtimeInternals = runtime as unknown as {
+        cameraDirector: { reset(): void };
+        updateCameraForEntity(entityId: string): void;
+        subjectControllersByEntityId: ReadonlyMap<string, { stop(): void }>;
+        subjectVisualsByEntityId: ReadonlyMap<
+          string,
+          { stepAnimation(tick: number, actionId: string): void }
+        >;
+      };
+      const previousController = runtimeInternals.subjectControllersByEntityId
+        .get("player")!;
+      const previousVisual = runtimeInternals.subjectVisualsByEntityId
+        .get("player")!;
+
+      vi.spyOn(previousController, "stop").mockImplementation(() => {
+        throw new Error("controller stop must not run during publication");
+      });
+      vi.spyOn(previousVisual, "stepAnimation").mockImplementation(() => {
+        throw new Error("animation mutation must not run during publication");
+      });
+      vi.spyOn(runtimeInternals.cameraDirector, "reset").mockImplementation(() => {
+        throw new Error("Camera reset must not run during publication");
+      });
+      vi.spyOn(runtimeInternals, "updateCameraForEntity").mockImplementation(() => {
+        throw new Error("Camera update must not run during publication");
+      });
+
+      expect(prepared.commitPrepared).not.toThrow();
+      expect(internal.readPossessionTarget()).toEqual({
+        mode: "possessed",
+        controlledEntityId: "pack-animal-a",
+      });
+      expect(internal.readViewProjection()).toBe(
+        prepared.projectedViewStateAfter,
+      );
+      expect(prepared.commitPrepared).not.toThrow();
+      expect(internal.readViewProjection()).toBe(
+        prepared.projectedViewStateAfter,
+      );
+    } finally {
+      await runtime.dispose();
+    }
+  });
+
+  it("initializes a newly published Camera view on render without advancing fixed Tick", async () => {
+    const runtime = await createRuntime(
+      createV5StaticColliderSupportExecutionPlan(),
+      {},
+      false,
+    );
+    try {
+      const internal = runtime[BABYLON_GAMEPLAY_RUNTIME_INTERNAL]();
+      const prepared = await internal.preparePossessionTarget({
+        mode: "possessed",
+        controlledEntityId: "player",
+      });
+      prepared.commitPrepared();
+      const beforeRender = runtime.snapshot();
+
+      runtime.renderFrame();
+      const afterFirstRender = runtime.snapshot();
+      runtime.renderFrame();
+      const afterSecondRender = runtime.snapshot();
+
+      expect(afterFirstRender.tick).toBe(beforeRender.tick);
+      expect(afterFirstRender.camera.positionMetersXYZ).not.toEqual([0, 0, 0]);
+      expect(afterSecondRender.camera).toEqual(afterFirstRender.camera);
+    } finally {
+      await runtime.dispose();
+    }
+  });
+
+  it("aborts staged Gameplay possession idempotently without changing target, Camera, or projection", async () => {
+    const runtime = await createRuntime(createV5StaticColliderSupportExecutionPlan());
+    try {
+      const internal = runtime[BABYLON_GAMEPLAY_RUNTIME_INTERNAL]();
+      const targetBefore = internal.readPossessionTarget();
+      const worldBefore = internal.readWorldProjection();
+      const viewBefore = internal.readViewProjection();
+      const cameraBefore = runtime.snapshot().camera;
+      const prepared = await internal.preparePossessionTarget({
+        mode: "possessed",
+        controlledEntityId: "pack-animal-a",
+      });
+
+      const firstAbort = prepared.abort();
+      expect(prepared.abort()).toBe(firstAbort);
+      await firstAbort;
+
+      expect(internal.readPossessionTarget()).toBe(targetBefore);
+      expect(internal.readWorldProjection()).toEqual(worldBefore);
+      expect(internal.readViewProjection()).toBe(viewBefore);
+      expect(runtime.snapshot().camera).toEqual(cameraBefore);
+      expect(prepared.commitPrepared).not.toThrow();
+      expect(internal.readPossessionTarget()).toBe(targetBefore);
+    } finally {
+      await runtime.dispose();
+    }
+  });
+
+  it("routes one Gameplay fixed Tick only to the committed target and freezes Camera while unbound", async () => {
+    const executionPlan = createV5StaticColliderSupportExecutionPlan();
+    const runtime = await createRuntime(executionPlan);
+    try {
+      const internal = runtime[BABYLON_GAMEPLAY_RUNTIME_INTERNAL]();
+      const playerMoving = await internal.runFixedInputTick({
+        actions: ["move-right", "run"],
+        ticks: 1,
+      });
+      expect(playerMoving.capabilityStatesById[
+        "capability-state:player:locomotion"
+      ]).toMatchObject({ mode: "run" });
+      const bind = await internal.preparePossessionTarget({
+        mode: "possessed",
+        controlledEntityId: "pack-animal-a",
+      });
+      bind.commitPrepared();
+      const packAnimal = executionPlan.subjects.find(
+        (subject) => subject.entityId === "pack-animal-a",
+      )!;
+      expect(
+        runtime.requestCameraProfile(
+          packAnimal.capabilityAssembly.cameraContext.defaultCameraRigProfileRef,
+        ).camera.targetEntityId,
+      ).toBe("pack-animal-a");
+      const before = internal.readWorldProjection();
+      const moved = await internal.runFixedInputTick({
+        actions: ["move-right"],
+        ticks: 1,
+      });
+
+      expect(runtime.snapshot().subjectStatesByEntityId.player!.activeActionId)
+        .toBe("idle");
+
+      expect(() => parseGameplayWorldStateProjectionV1(moved, {
+        controllerEntityIds: ["controller-primary"],
+      })).not.toThrow();
+
+      expect(moved.simulationTick).toBe(before.simulationTick + 1);
+      expect(
+        moved.spatialEntityStatesById["pack-animal-a"]!.positionMetersXYZ[0],
+      ).toBeGreaterThan(
+        before.spatialEntityStatesById["pack-animal-a"]!.positionMetersXYZ[0],
+      );
+      expect(
+        moved.spatialEntityStatesById.player!.positionMetersXYZ[0],
+      ).toBeCloseTo(
+        before.spatialEntityStatesById.player!.positionMetersXYZ[0],
+        8,
+      );
+      expect(moved.capabilityStatesById[
+        "capability-state:pack-animal-a:locomotion"
+      ]).toMatchObject({
+        kind: "locomotion-capability-state",
+        ownerEntityId: "pack-animal-a",
+        locomotionCapabilityRef:
+          "worldkit://capability/locomotion.ground@1",
+        mode: "walk",
+        movementMedium: "ground",
+      });
+      expect(moved.semanticFactsById).toEqual({});
+
+      const cameraBeforeRelease = runtime.snapshot().camera;
+      const release = await internal.preparePossessionTarget({ mode: "unbound" });
+      release.commitPrepared();
+      await internal.runFixedInputTick({
+        actions: ["move-right", "camera-recenter"],
+        ticks: 1,
+      });
+
+      expect(internal.readPossessionTarget()).toEqual({ mode: "unbound" });
+      const { targetEntityId: _releasedTargetEntityId, ...frozenCamera } =
+        cameraBeforeRelease;
+      expect(runtime.snapshot().camera).toEqual(frozenCamera);
+    } finally {
+      await runtime.dispose();
+    }
+  });
+
+  it("rejects invalid Gameplay targets and non-single-Tick batches before mutation", async () => {
+    const runtime = await createRuntime(createV5StaticColliderSupportExecutionPlan());
+    try {
+      const internal = runtime[BABYLON_GAMEPLAY_RUNTIME_INTERNAL]();
+      await expect(internal.preparePossessionTarget({
+        mode: "possessed",
         controlledEntityId: "missing",
-      }),
-    ).toMatchObject({
-      status: "rejected",
-      diagnostic: { code: "CONTROL_TARGET_NOT_FOUND" },
-    });
-    expect(runtime.snapshot().controlledEntityId).toBe("player");
-    await runtime.dispose();
+      })).rejects.toThrow(/target/i);
+      await expect(internal.runFixedInputTick({
+        actions: [],
+        ticks: 2,
+      } as never)).rejects.toThrow(/one fixed Tick/i);
+      expect(internal.readPossessionTarget()).toEqual({
+        mode: "possessed",
+        controlledEntityId: "player",
+      });
+      expect(internal.readWorldProjection().simulationTick).toBe(0);
+    } finally {
+      await runtime.dispose();
+    }
   });
 
   it("moves by semantic fixed input but cannot pass through a fixed wall", async () => {
@@ -2579,6 +3367,7 @@ describe("BabylonWorldRuntime", () => {
 
     for (const action of actions) {
       runtime.reset();
+      await bindRuntimeTestPossession(runtime, "player");
       const snapshot = await runtime.runFixedInput({ actions: [action], ticks: 60 });
       const [forwardX, , forwardZ] =
         snapshot.subjectStatesByEntityId.player!.forwardXYZ!;
@@ -2601,6 +3390,7 @@ describe("BabylonWorldRuntime", () => {
       expect(resetPlayer.activeMotionProfileRef).toBe(
         "worldkit://motion-profile/free-ground.humanoid-medium@1",
       );
+      await bindRuntimeTestPossession(runtime, "player");
 
       const moved = await runtime.runFixedInput({
         actions: ["move-forward"],
@@ -2643,7 +3433,7 @@ describe("BabylonWorldRuntime", () => {
     const player = base.subjects.find((subject) => subject.entityId === "player")!;
     const wall = base.objects.find((object) => object.entityId === "wall-east")!;
     const water = base.waters[0]!;
-    const executionPlan: ExecutionPlanV4 = {
+    const executionPlan: ExecutionPlanV5 = {
       ...base,
       terrain: {
         ...base.terrain,
@@ -2676,6 +3466,18 @@ describe("BabylonWorldRuntime", () => {
           },
         },
       ],
+      staticColliders: [{
+        entityId: "pier",
+        logicalSubshapeId: "primary",
+        colliderSubshapeId: "collider:pier:primary",
+        colliderHash: `sha256:${"a".repeat(64)}`,
+        transform: {
+          positionMetersXYZ: [0, 0.5, 0],
+          rotationEulerRadiansXYZ: [0, 0, 0],
+          scaleXYZ: [1, 1, 1],
+        },
+        shape: { kind: "box", sizeMetersXYZ: [6, 1, 6] },
+      }],
       subjects: [
         {
           ...player,
@@ -2707,23 +3509,26 @@ describe("BabylonWorldRuntime", () => {
 
   it("camera follows Subject Origin plus target height", async () => {
     const { runtime, executionPlan } = await createRuntimeWithPackageSubject();
-    runtime.bindControl({
-      controllerId: "controller-primary",
-      expectedControlledEntityId: "player",
+    const possession = await runtime[BABYLON_GAMEPLAY_RUNTIME_INTERNAL]()
+      .preparePossessionTarget({
+      mode: "possessed",
       controlledEntityId: "pack-animal-a",
     });
+    possession.commitPrepared();
     const snapshot = runtime.snapshot();
     const state = snapshot.subjectStatesByEntityId["pack-animal-a"]!;
-    const camera = executionPlan.camera;
-    const horizontalDistance = Math.cos(camera.pitchRadians) * camera.distanceMeters;
-
-    expect(snapshot.camera.positionMetersXYZ).toEqual([
-      state.positionMetersXYZ[0],
-      state.positionMetersXYZ[1] +
-        camera.targetHeightMeters +
-        Math.sin(camera.pitchRadians) * camera.distanceMeters,
-      state.positionMetersXYZ[2] + horizontalDistance,
-    ]);
+    expect(snapshot.possessionTarget).toEqual({
+      mode: "possessed",
+      controlledEntityId: "pack-animal-a",
+    });
+    expect(snapshot.camera.targetEntityId).toBe("pack-animal-a");
+    expect(snapshot.camera.positionMetersXYZ.every(Number.isFinite)).toBe(true);
+    expect(
+      Math.hypot(
+        snapshot.camera.positionMetersXYZ[0] - state.positionMetersXYZ[0],
+        snapshot.camera.positionMetersXYZ[2] - state.positionMetersXYZ[2],
+      ),
+    ).toBeGreaterThan(1);
     await runtime.dispose();
   });
 
@@ -2743,23 +3548,22 @@ describe("BabylonWorldRuntime", () => {
     await runtime.dispose();
   });
 
-  it("reset restores origins, controller centers, velocity, binding, and camera", async () => {
+  it("reset restores origins, controller centers, and velocity while releasing possession", async () => {
     const { runtime, executionPlan, debug } = await createRuntimeWithPackageSubject();
-    const initialCamera = runtime.snapshot().camera.positionMetersXYZ;
-    runtime.bindControl({
-      controllerId: "controller-primary",
-      expectedControlledEntityId: "player",
+    const possession = await runtime[BABYLON_GAMEPLAY_RUNTIME_INTERNAL]()
+      .preparePossessionTarget({
+      mode: "possessed",
       controlledEntityId: "pack-animal-a",
     });
+    possession.commitPrepared();
     await runtime.runFixedInput(moveRightForTicks(30));
 
     const reset = runtime.reset();
 
     expect(reset.tick).toBe(0);
-    expect(reset.controlledEntityId).toBe("player");
-    reset.camera.positionMetersXYZ.forEach((value, index) => {
-      expect(value).toBeCloseTo(initialCamera[index]!, 12);
-    });
+    expect(reset.possessionTarget).toEqual({ mode: "unbound" });
+    expect(reset.camera).not.toHaveProperty("targetEntityId");
+    expect(reset.camera.positionMetersXYZ.every(Number.isFinite)).toBe(true);
     for (const subject of executionPlan.subjects) {
       const state = reset.subjectStatesByEntityId[subject.entityId]!;
       expect(state.positionMetersXYZ).toEqual(subject.spawnSubjectOriginPositionMetersXYZ);

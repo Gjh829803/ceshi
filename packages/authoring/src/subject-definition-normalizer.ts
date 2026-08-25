@@ -7,10 +7,8 @@ import type {
   AnimationSetManifestV1,
   ControlFeelProfileV1,
   RegistrySubjectDefinitionV3,
-  RegistrySubjectDefinitionV2,
   RigProfileManifestV1,
   SubjectAssetManifestV1,
-  SubjectResourceRegistryV2,
   SubjectResourceRegistryV3,
 } from "@whitebox-world/subject-registry";
 import { selectableControlFeelProfileRefsV1 } from "@whitebox-world/subject-registry";
@@ -30,23 +28,23 @@ import type {
   Vec3,
 } from "./types";
 
-type SubjectDefinitionSourceV2 = PackageSubjectDefinitionV1 | RegistrySubjectDefinitionV2;
+type SubjectDefinitionSourceV2 = PackageSubjectDefinitionV1 | RegistrySubjectDefinitionV3;
 
 export interface NormalizeSubjectDefinitionRequestV2 {
   definition: SubjectDefinitionSourceV2;
   subjectDefinitionRef: string;
   source: "package" | "registry";
   instancePath: string;
-  subjectResourceRegistry: SubjectResourceRegistryV2;
+  subjectResourceRegistry: SubjectResourceRegistryV3;
   resourceLockBuilder: ResourceLockBuilderV1;
   diagnostics: AuthoringDiagnostic[];
   resourceBudget?: AuthoringDocumentBase["world"]["resourceBudget"];
 }
 
-interface NormalizedRiggedVisualResourcesV1 {
-  subjectAssetResource: SubjectAssetManifestV1;
-  rigProfileResource: RigProfileManifestV1;
-  animationSetResource: AnimationSetManifestV1;
+interface NormalizedVisualResourcesV1 {
+  subjectAssetResource?: SubjectAssetManifestV1;
+  rigProfileResource?: RigProfileManifestV1;
+  animationSetResource?: AnimationSetManifestV1;
 }
 
 const REQUIRED_GROUND_ACTION_IDS = ["idle", "jump", "run", "walk"] as const;
@@ -66,13 +64,7 @@ function controlFeelProfileRefForDefinition(
 function selectableControlFeelRefsForDefinition(
   definition: SubjectDefinitionSourceV2,
 ): readonly string[] {
-  if ("schemaVersion" in definition && definition.schemaVersion === 3) {
-    return selectableControlFeelProfileRefsV1(
-      (definition as RegistrySubjectDefinitionV3).profiles,
-    );
-  }
-  const defaultRef = controlFeelProfileRefForDefinition(definition);
-  return defaultRef === undefined ? [] : [defaultRef];
+  return selectableControlFeelProfileRefsV1(definition.profiles);
 }
 
 function projectControlFeelProfile(
@@ -101,17 +93,7 @@ function resolveControlFeelProfileV1(
   definition: SubjectDefinitionSourceV2,
   request: NormalizeSubjectDefinitionRequestV2,
 ): ControlFeelProfileV1 | undefined {
-  const registry = request.subjectResourceRegistry as Partial<SubjectResourceRegistryV3>;
-  if (typeof registry.resolveControlFeelProfile !== "function") {
-    addError(
-      request.diagnostics,
-      "SUBJECT_CAPABILITY_UNSATISFIED",
-      `${request.instancePath}/profiles/controlFeelProfileRef`,
-      "Control Feel Profile resolution requires a capability-driven Subject Registry.",
-      { subjectDefinitionRef: request.subjectDefinitionRef },
-    );
-    return undefined;
-  }
+  const registry = request.subjectResourceRegistry;
   const controlFeelProfileRef = controlFeelProfileRefForDefinition(definition);
   if (controlFeelProfileRef === undefined) {
     addError(
@@ -145,8 +127,7 @@ function resolveControlFeelProfileV1(
 function resolveAvailableControlFeelsV1(
   request: NormalizeSubjectDefinitionRequestV2,
 ): readonly NormalizedControlFeelV1[] {
-  const registry = request.subjectResourceRegistry as Partial<SubjectResourceRegistryV3>;
-  if (typeof registry.resolveControlFeelProfile !== "function") return [];
+  const registry = request.subjectResourceRegistry;
   return selectableControlFeelRefsForDefinition(request.definition).flatMap((resourceRef) => {
     const profile = registry.resolveControlFeelProfile!(resourceRef);
     if (profile === undefined) return [];
@@ -183,11 +164,8 @@ function normalizeCapabilityAssemblyV1(
   definition: SubjectDefinitionSourceV2,
   request: NormalizeSubjectDefinitionRequestV2,
 ): NormalizedCapabilityAssemblyV1 | undefined {
-  if (!("schemaVersion" in definition) || definition.schemaVersion !== 3) {
-    return undefined;
-  }
-  const subject = definition as RegistrySubjectDefinitionV3;
-  const registry = request.subjectResourceRegistry as Partial<SubjectResourceRegistryV3>;
+  const subject = definition;
+  const registry = request.subjectResourceRegistry;
   if (
     typeof registry.resolveMotionProfile !== "function" ||
     typeof registry.resolveMotionKernel !== "function" ||
@@ -205,8 +183,8 @@ function normalizeCapabilityAssemblyV1(
       request.diagnostics,
       "SUBJECT_CAPABILITY_UNSATISFIED",
       request.instancePath,
-      "A schemaVersion 3 Subject Definition requires a capability-driven Subject Registry.",
-      { subjectDefinitionRef: subject.resourceRef },
+      "A current Subject Definition requires the complete capability-driven Subject Registry.",
+      { subjectDefinitionRef: request.subjectDefinitionRef },
     );
     return undefined;
   }
@@ -555,7 +533,7 @@ function normalizeSockets(
 }
 
 function resourcesOfKind(
-  registry: SubjectResourceRegistryV2,
+  registry: SubjectResourceRegistryV3,
   kind: "subject-asset" | "rig-profile" | "animation-set" | "collider-profile",
 ): readonly string[] {
   return registry.listResources()
@@ -564,22 +542,29 @@ function resourcesOfKind(
     .sort((left, right) => left.localeCompare(right));
 }
 
-function resolveRiggedVisualResources(
+function resolveVisualResources(
   definition: SubjectDefinitionSourceV2,
   request: NormalizeSubjectDefinitionRequestV2,
-): NormalizedRiggedVisualResourcesV1 | undefined {
+): NormalizedVisualResourcesV1 | undefined {
   const { diagnostics, instancePath, resourceLockBuilder, subjectResourceRegistry } = request;
-  if (definition.visualBinding.mode !== "rigged") return undefined;
-
   const assetParts = definition.visualParts.filter((part) => part.kind === "asset");
-  if (assetParts.length !== 1) {
+  if (definition.visualBinding.mode === "static" && assetParts.length > 1) {
+    addError(diagnostics, "STATIC_SUBJECT_MULTIPLE_ASSET_PARTS_UNSUPPORTED",
+      `${instancePath}/visualParts`,
+      "A static Subject Definition supports at most one Asset Part.",
+      { assetPartCount: assetParts.length });
+    return undefined;
+  }
+  if (definition.visualBinding.mode === "rigged" && assetParts.length !== 1) {
     addError(diagnostics, "SUBJECT_ASSET_PROFILE_INCOMPATIBLE",
       `${instancePath}/visualParts`,
       "A rigged Subject Definition requires exactly one Asset Part.",
       { requiredAssetPartCount: 1, assetPartCount: assetParts.length });
   }
   const assetPart = assetParts[0];
-  if (assetPart === undefined) return undefined;
+  if (assetPart === undefined) {
+    return definition.visualBinding.mode === "static" ? {} : undefined;
+  }
   const assetPartIndex = definition.visualParts.indexOf(assetPart);
 
   const subjectAsset = subjectResourceRegistry.resolveSubjectAsset(assetPart.subjectAssetRef);
@@ -595,6 +580,12 @@ function resolveRiggedVisualResources(
   } else {
     resourceLockBuilder.addRegistryResource(subjectAsset,
       `${instancePath}/visualParts/${assetPartIndex}/subjectAssetRef`, diagnostics);
+  }
+
+  if (definition.visualBinding.mode === "static") {
+    return subjectAsset === undefined
+      ? undefined
+      : { subjectAssetResource: structuredClone(subjectAsset) };
   }
 
   const { rigProfileRef, animationSetRef } = definition.visualBinding;
@@ -860,7 +851,7 @@ export function normalizeSubjectDefinitionV2(
   const initialErrorCount = diagnostics.filter((item) => item.severity === "error").length;
 
   if (source === "registry") {
-    resourceLockBuilder.addRegistryResource(definition as RegistrySubjectDefinitionV2,
+    resourceLockBuilder.addRegistryResource(definition as RegistrySubjectDefinitionV3,
       instancePath, diagnostics);
   }
   const visualParts = normalizeVisualParts(definition, instancePath, diagnostics);
@@ -879,6 +870,31 @@ export function normalizeSubjectDefinitionV2(
     resourceLockBuilder.addRegistryResource(resource, `${instancePath}/capabilityRefs`, diagnostics);
     return [resource];
   });
+  const locomotionCapabilities = capabilities.filter((capability) =>
+    capability.resourceRef.startsWith("worldkit://capability/locomotion.")
+  );
+  const primaryLocomotionCapabilities = locomotionCapabilities.filter(
+    (capability) =>
+      !locomotionCapabilities.some(
+        (candidate) =>
+          candidate.resourceRef !== capability.resourceRef &&
+          candidate.requiredCapabilityRefs.includes(capability.resourceRef),
+      ),
+  );
+  if (primaryLocomotionCapabilities.length !== 1) {
+    addError(
+      diagnostics,
+      "SUBJECT_CAPABILITY_UNSATISFIED",
+      `${instancePath}/capabilityRefs`,
+      "Subject Definition requires exactly one primary locomotion Capability after dependency resolution.",
+      {
+        primaryLocomotionCapabilityRefs: primaryLocomotionCapabilities.map(
+          (capability) => capability.resourceRef,
+        ),
+      },
+    );
+  }
+  const locomotionCapability = primaryLocomotionCapabilities[0];
 
   const physicsBodyProfile = subjectResourceRegistry.resolvePhysicsBodyProfile(
     definition.profiles.physicsBodyProfileRef);
@@ -920,16 +936,7 @@ export function normalizeSubjectDefinitionV2(
       }
     }
   }
-  const isCapabilityDrivenV3 =
-    "schemaVersion" in definition && definition.schemaVersion === 3;
-  if (!isCapabilityDrivenV3 && (capabilityRefs.length !== 1 ||
-    capabilityRefs[0] !== "worldkit://capability/locomotion.ground@1" ||
-    capabilities[0]?.providedFeatures.includes("ground-locomotion") !== true)) {
-    addError(diagnostics, "SUBJECT_CAPABILITY_UNSATISFIED", `${instancePath}/capabilityRefs`,
-      "S1b Subject Definitions require exactly the ground locomotion capability.",
-      { requiredCapabilityRefs: ["worldkit://capability/locomotion.ground@1"] });
-  }
-  if (!isCapabilityDrivenV3 && locomotionProfile !== undefined && locomotionProfile.requiredCapabilityRefs.some(
+  if (locomotionProfile !== undefined && locomotionProfile.requiredCapabilityRefs.some(
     (resourceRef) => !selectedCapabilityRefs.has(resourceRef))) {
     addError(diagnostics, "SUBJECT_CAPABILITY_UNSATISFIED",
       `${instancePath}/profiles/locomotionProfileRef`,
@@ -944,17 +951,8 @@ export function normalizeSubjectDefinitionV2(
       { bodyTopology: definition.bodyTopology });
   }
 
-  let riggedResources: NormalizedRiggedVisualResourcesV1 | undefined;
-  if (definition.visualBinding.mode === "rigged") {
-    riggedResources = resolveRiggedVisualResources(definition, request);
-  } else {
-    const assetPartIds = definition.visualParts.filter((part) => part.kind === "asset")
-      .map((part) => part.id).sort((left, right) => left.localeCompare(right));
-    if (assetPartIds.length > 0) {
-      addError(diagnostics, "SUBJECT_ASSET_PROFILE_INCOMPATIBLE",
-        `${instancePath}/visualBinding/mode`,
-        "A static Subject Definition cannot contain Asset Parts.", { assetPartIds });
-    }
+  const visualResources = resolveVisualResources(definition, request);
+  if (definition.visualBinding.mode === "static") {
     definition.sockets.forEach((socket, index) => {
       if (socket.kind === "bone") {
         addError(diagnostics, "SUBJECT_ASSET_PROFILE_INCOMPATIBLE",
@@ -968,7 +966,7 @@ export function normalizeSubjectDefinitionV2(
   const capabilityAssembly = normalizeCapabilityAssemblyV1(definition, request);
   const primitiveCost = calculatePrimitiveResourceCost(
     visualParts.filter((part) => part.kind === "primitive"));
-  const subjectAsset = riggedResources?.subjectAssetResource;
+  const subjectAsset = visualResources?.subjectAssetResource;
   const resourceCost = {
     vertices: primitiveCost.vertices + (subjectAsset?.inventory.vertexCount ?? 0),
     triangles: primitiveCost.triangles + (subjectAsset?.inventory.triangleCount ?? 0),
@@ -1000,8 +998,13 @@ export function normalizeSubjectDefinitionV2(
   const finalErrorCount = diagnostics.filter((item) => item.severity === "error").length;
   if (finalErrorCount > initialErrorCount || physicsBodyProfile === undefined ||
     locomotionProfile === undefined || controlFeelProfile === undefined ||
+    locomotionCapability === undefined ||
+    capabilityAssembly === undefined ||
     normalizedCollider === undefined ||
-    (definition.visualBinding.mode === "rigged" && riggedResources === undefined)) {
+    (definition.visualBinding.mode === "rigged" &&
+      (visualResources?.subjectAssetResource === undefined ||
+        visualResources.rigProfileResource === undefined ||
+        visualResources.animationSetResource === undefined))) {
     return undefined;
   }
 
@@ -1025,6 +1028,8 @@ export function normalizeSubjectDefinitionV2(
     sockets,
     colliderPolicy: structuredClone(definition.colliderPolicy),
     capabilityRefs,
+    locomotionCapabilityRef: locomotionCapability.resourceRef,
+    locomotionCapabilityHash: locomotionCapability.contentHash,
     profiles: structuredClone(definition.profiles),
     locomotion: {
       allowWalk: locomotionProfile.allowWalk,
@@ -1032,7 +1037,7 @@ export function normalizeSubjectDefinitionV2(
       allowJump: locomotionProfile.allowJump,
     },
     controlFeel: projectControlFeelProfile(controlFeelProfile),
-    ...(capabilityAssembly === undefined ? {} : { capabilityAssembly }),
+    capabilityAssembly,
     aiMetadata: {
       ...structuredClone(definition.aiMetadata),
       semanticTags: sortedStrings(definition.aiMetadata.semanticTags),

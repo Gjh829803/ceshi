@@ -1,9 +1,9 @@
 import { describe, expect, it } from "vitest";
 
 import {
-  parseAuthoringSpecJson,
+  parseAuthoringSpecV4,
   parseCanonicalJson,
-  validateAuthoringSpec,
+  validateAuthoringSpecV4,
   validatePackageSubjectDefinition,
 } from "./index";
 import {
@@ -14,9 +14,9 @@ import {
 
 const validSpec = createValidAuthoringSpec();
 
-describe("AuthoringSpecV3", () => {
-  it("strictly parses a valid canonical V3 document", () => {
-    const result = parseAuthoringSpecJson(JSON.stringify(validSpec));
+describe("current AuthoringSpec", () => {
+  it("strictly parses a valid canonical V4 document", () => {
+    const result = parseAuthoringSpecV4(JSON.stringify(validSpec));
 
     expect(result.ok).toBe(true);
     expect(result.value).toEqual(validSpec);
@@ -24,7 +24,7 @@ describe("AuthoringSpecV3", () => {
   });
 
   it("rejects duplicate JSON object keys before schema validation", () => {
-    const result = parseAuthoringSpecJson(
+    const result = parseAuthoringSpecV4(
       '{"kind":"worldkit-authoring-spec","kind":"worldkit-authoring-spec","schemaVersion":3}',
     );
 
@@ -49,7 +49,7 @@ describe("AuthoringSpecV3", () => {
   it("rejects unknown Subject fields instead of silently ignoring them", () => {
     const subject = validSpec.nodes.find((node) => node.kind === "subject");
     expect(subject).toBeDefined();
-    const result = validateAuthoringSpec({
+    const result = validateAuthoringSpecV4({
       ...validSpec,
       nodes: validSpec.nodes.map((node) =>
         node === subject ? { ...node, unexpectedSubjectField: true } : node,
@@ -60,7 +60,7 @@ describe("AuthoringSpecV3", () => {
   });
 
   it("rejects the unpublished schemaVersion 1 instead of migrating it", () => {
-    const result = parseAuthoringSpecJson(
+    const result = parseAuthoringSpecV4(
       JSON.stringify({ ...validSpec, schemaVersion: 1 }),
     );
 
@@ -71,14 +71,14 @@ describe("AuthoringSpecV3", () => {
           severity: "error",
           code: "AUTHORING_SCHEMA_VERSION_NOT_SUPPORTED",
           instancePath: "/schemaVersion",
-          details: { supportedSchemaVersions: [3] },
+          details: { supportedSchemaVersions: [4] },
         },
       ],
     });
   });
 
   it("rejects unsupported non-integer schema versions with the same version diagnostic", () => {
-    const result = parseAuthoringSpecJson(
+    const result = parseAuthoringSpecV4(
       JSON.stringify({ ...validSpec, schemaVersion: 3.5 }),
     );
 
@@ -88,20 +88,20 @@ describe("AuthoringSpecV3", () => {
         {
           code: "AUTHORING_SCHEMA_VERSION_NOT_SUPPORTED",
           instancePath: "/schemaVersion",
-          details: { supportedSchemaVersions: [3] },
+          details: { supportedSchemaVersions: [4] },
         },
       ],
     });
   });
 
-  it("rejects unknown V3 root fields and the removed legacy subject reference field", () => {
+  it("rejects unknown V4 root fields and the removed legacy subject reference field", () => {
     const subject = validSpec.nodes.find((node) => node.kind === "subject");
     const legacySubjectReferenceField = ["kit", "Ref"].join("");
     expect(subject).toBeDefined();
 
-    expect(validateAuthoringSpec({ ...validSpec, unexpectedRootField: true }).ok).toBe(false);
+    expect(validateAuthoringSpecV4({ ...validSpec, unexpectedRootField: true }).ok).toBe(false);
     expect(
-      validateAuthoringSpec({
+      validateAuthoringSpecV4({
         ...validSpec,
         nodes: validSpec.nodes.map((node) =>
           node === subject
@@ -119,7 +119,7 @@ describe("AuthoringSpecV3", () => {
   it("rejects invalid or unversioned Subject Definition refs", () => {
     const subject = validSpec.nodes.find((node) => node.kind === "subject");
     expect(subject).toBeDefined();
-    const result = validateAuthoringSpec({
+    const result = validateAuthoringSpecV4({
       ...validSpec,
       nodes: validSpec.nodes.map((node) =>
         node === subject
@@ -140,7 +140,7 @@ describe("AuthoringSpecV3", () => {
     const definition = packageWorld.resources.subjectDefinitions[0];
     expect(definition).toBeDefined();
 
-    expect(validateAuthoringSpec(packageWorld).ok).toBe(true);
+    expect(validateAuthoringSpecV4(packageWorld).ok).toBe(true);
     expect(validatePackageSubjectDefinition(definition)).toEqual({
       ok: true,
       value: definition,
@@ -191,10 +191,24 @@ describe("AuthoringSpecV3", () => {
     });
   });
 
+  it("accepts one static Asset Part without rigged-only resources", () => {
+    const definition = createValidRiggedPackageDefinition();
+    const staticDefinition = {
+      ...definition,
+      visualBinding: { mode: "static" as const },
+      sockets: [],
+    };
+
+    expect(validatePackageSubjectDefinition(staticDefinition)).toEqual({
+      ok: true,
+      value: staticDefinition,
+      diagnostics: [],
+    });
+  });
+
   it.each([
     ["asset part with colliderContribution", "/visualParts/0/colliderContribution"],
     ["rigged binding without animationSetRef", "/visualBinding/animationSetRef"],
-    ["static binding containing an asset part", "/visualBinding/mode"],
     ["bone socket without boneId", "/sockets/0/boneId"],
   ])("rejects %s at the exact property path", (_label, instancePath) => {
     const definition = structuredClone(
@@ -210,9 +224,6 @@ describe("AuthoringSpecV3", () => {
         break;
       case "/visualBinding/animationSetRef":
         delete visualBinding.animationSetRef;
-        break;
-      case "/visualBinding/mode":
-        definition.visualBinding = { mode: "static" };
         break;
       case "/sockets/0/boneId":
         delete sockets[0]!.boneId;

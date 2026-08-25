@@ -57,6 +57,43 @@ import { resolveWorldPackageResourceArtifactsV1 } from "./world-package-resource
 
 type Hash = `sha256:${string}`;
 
+const ROUTE_VALIDATION_CONTROLLER_ENTITY_ID =
+  "route-validation-controller" as const;
+
+function routeValidationPossessionTransitionV1(input: Readonly<{
+  runtimeSessionId: string;
+  controlledEntityId: string;
+}>) {
+  const commandId = `route-validation-bind:${input.runtimeSessionId}`;
+  return Object.freeze({
+    kind: "gameplay-transition-plan",
+    schemaVersion: 1,
+    type: "control.bind",
+    commandId,
+    expectedStateRevision: 0,
+    relationshipChanges: Object.freeze([Object.freeze({
+      operation: "add" as const,
+      after: Object.freeze({
+        id: `possession:${commandId}`,
+        type: "possessedBy" as const,
+        schemaVersion: 1 as const,
+        controlledEntityId: input.controlledEntityId,
+        controllerEntityId: ROUTE_VALIDATION_CONTROLLER_ENTITY_ID,
+        establishedSimulationTick: 0,
+      }),
+    })]),
+    actionChanges: Object.freeze([]),
+    newlyCommittedActionExecutionIds: Object.freeze([]),
+    capacityDelta: Object.freeze({
+      relationshipStateCountDelta: 1,
+      activeActionStateCountDelta: 0,
+      usedActionExecutionIdCountDelta: 0,
+      immediateEventCount: 1,
+      terminalEventReservationCountDelta: 0,
+    }),
+  });
+}
+
 export const TRUSTED_ROUTE_RENDER_CADENCES_V1 = Object.freeze([
   "30-like",
   "60-like",
@@ -456,6 +493,7 @@ export async function runTrustedRouteValidationV1(
     normalizedWorldIr: pipeline.normalizedWorldIr,
     layoutSolveResult,
     executionPlan: pipeline.executionPlan,
+    gameplayBootstrap: pipeline.gameplayBootstrap,
     resourceArtifacts,
   });
   const subject = createWorldPackageValidationSubjectV1({
@@ -464,6 +502,7 @@ export async function runTrustedRouteValidationV1(
     normalizedWorldIr: pipeline.normalizedWorldIr,
     layoutSolveResult,
     executionPlan: pipeline.executionPlan,
+    gameplayBootstrap: pipeline.gameplayBootstrap,
   });
   const runtimeAssetResolver = createWorldPackageSubjectAssetResolverV1(
     resourceArtifacts,
@@ -527,6 +566,18 @@ export async function runTrustedRouteValidationV1(
         }),
       });
       try {
+        const gameplayWorldPort =
+          runtimeBabylon.createBabylonGameplayWorldPortV1(
+            runtime,
+            ROUTE_VALIDATION_CONTROLLER_ENTITY_ID,
+          );
+        const possession = await gameplayWorldPort.prepareGameplayTransition(
+          routeValidationPossessionTransitionV1({
+            runtimeSessionId: input.runtimeSessionId,
+            controlledEntityId: input.traversalLockReceipt.lock.subjectEntityId,
+          }),
+        );
+        possession.commitPrepared();
         const providerRuntimePort =
           runtimeBabylon.createBabylonTraversalRuntimePortV1({
             runtime,

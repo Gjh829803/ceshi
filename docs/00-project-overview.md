@@ -8,7 +8,7 @@
 ## 1. 一句话定义
 
 这是一个面向创作 Agent 的语义白膜游戏 SDK：上游可以走 Plan-first
-场景创作链路，也可以直接交付 Canonical Authoring V3 JSON；SDK 把世界与
+场景创作链路，也可以直接交付 Canonical Authoring V4 JSON；SDK 把世界与
 主体定义确定性编译成可运行、可观察、带物理的白膜世界，未来实时世界模型
 再把白膜条件渲染成最终画面。
 
@@ -33,7 +33,7 @@ Director LLM → Render Directive SDK ────────────┘
 
 | 角色 | 负责什么 | 不负责什么 | 当前状态 |
 |---|---|---|---|
-| Planner / Builder / Visual Bible | 分别定义世界、实现可版本化白膜、生成视觉条件 | 不跨越冻结边界，不参与每帧控制，不绕过 SDK 改 Three.js/Rapier | 多 Agent Alpha 可用 |
+| Planner / Builder / Visual Bible | 分别定义世界、实现可版本化白膜、生成视觉条件 | 不跨越冻结边界，不参与每帧控制，不绕过 SDK 修改引擎 Adapter | 多 Agent Alpha 可用 |
 | 白膜 World SDK | 世界构建、主体、镜头、运动、物理、动作和确定性状态 | 不生成最终高质量视觉 | 第一期 Alpha 可运行 |
 | Director LLM + Director SDK | 运行时理解意图，并通过观察、命令、任务和回执受控改世界 | 不逐帧驱动刚体，不直接拿底层对象 | 仅完成方案设计 |
 | 实时世界模型 | 根据白膜条件生成材质、光影、天气、风格和视觉细节 | 不决定位置、碰撞、导航、数量和玩法结果 | 尚未接入 |
@@ -44,7 +44,8 @@ Director LLM → Render Directive SDK ────────────┘
 
 > Golden Humanoid S1b 首个可视纵向切片已完成并进入回归；S1b 整体与 Semantic Actions 整体仍未完成.
 
-> Placement Solver S1 首个海湾纵向切片已完成并进入回归；通用 Terrain Mask、Route R1b、更多 Constraint 与 P0.1 整体仍未完成。
+> Placement Solver S1 首个海湾纵向切片已完成并进入回归；通用 Terrain Mask、更多
+> Constraint 与 P0.1 整体仍未完成。
 
 > Simulation Take / Control Capture V1 已完成固定 Tick 时间线、五 Pass Babylon 捕获、
 > Render Ready Receipt、原子 Bundle 和真实 Chromium Gate；统一 Validation 的
@@ -52,19 +53,20 @@ Director LLM → Render Directive SDK ────────────┘
 > Validation 接入与 Video Adapter 仍未完成。
 
 > Route R1 Heightfield 已完成 Golden/Adversarial Fixture、双 Blocking Gate 与
-> `pnpm verify:route-r1-heightfield`。R1b、完整 M5 仍开放。
+> `pnpm verify:route-r1-heightfield`。R1b 静态平台切片也已通过真实 Babylon/Havok
+> Probe；完整 M5 仍开放。
 
 第一期 Alpha 已证明以下链路可以运行：
 
-- 基础世界使用 Canonical Authoring V3 → NormalizedWorldIR V3 → ExecutionPlan V4；
-  Route Connectivity 使用干净升级后的 V4 → IR V4 → ExecutionPlan V5。两者都保持严格
-  JSON、精确版本 Registry、Package 局部 Primitive Subject Definition、Socket、自动
-  Capsule、Definition Hash 和 Resource Lock。
+- 所有 Canonical 世界统一使用 AuthoringSpec V4 → NormalizedWorldIR V4 →
+  ExecutionPlan V5；这条唯一当前链路保持严格 JSON、精确版本 Registry、Package
+  局部 Primitive Subject Definition、Socket、自动 Capsule、Definition Hash 和
+  Resource Lock。未发布的旧版本已删除，不提供兼容解析或字段别名。
 - Placement Solver S1 已交付 Fixed/Solved Placement、Polygon Region、Polyline Route、
   Screen Region、八种关闭 Constraint、Required/Preferred、确定性 Report、CLI 和
   Browser/Havok 复验；海湾 Fixture 的 19 条约束已进入回归。
 - 一个内置人形与两个共享 Package Definition 的四足代理可以同时生成；三个
-  Subject 拥有独立 Havok Controller/状态，Browser Protocol V4 完整保留原控制、
+  Subject 拥有独立 Havok Controller/状态，Browser Protocol V5 提供 Gameplay Command、
   固定输入、复位、查询 Snapshot 和截图。
 - `worldkit` 支持校验、构建、运行、截图、Registry Discovery、独立 Definition
   校验、Subject Explain、Take validate/inspect/run、Capture validate/inspect，以及
@@ -74,7 +76,7 @@ Director LLM → Render Directive SDK ────────────┘
   ExecutionPlan V5 世界依次物化为最小正式
   WorldPackage Build Receipt、Validation Subject、Recast Graph/Path、真实
   Babylon/Havok `NullEngine` 固定 Tick Probe 和 Canonical Evidence/Report；Browser
-  Protocol V4 只增加 Route Summary、Path Receipt、Probe Receipt、Overlay 四个只读
+  Protocol V5 通过 Route Summary、Path Receipt、Probe Receipt、Overlay 四个只读
   getter，页面不构图、不运行 Probe、不生产证据。
 - Simulation Take V1 把 Control/Camera Keyframe 编译为 60 Hz 固定 Tick 与精确 Capture
   Schedule；Babylon 从同一 Render Ready 状态输出 Neutral、Depth、Semantic、Instance、
@@ -89,8 +91,6 @@ Director LLM → Render Directive SDK ────────────┘
   直接暴露 `activeActionId`；真实 Chromium 门禁覆盖动作截图、墙体停止、实例隔离
   和 GLB 内存篡改后的 `SUBJECT_ASSET_HASH_MISMATCH`。
 - 一个第三人称人形主体：WASD 镜头相对移动、跑步、物理跳跃、第三人称镜头和碰撞。
-- Legacy Three/Rapier 路径仍可用调用方自己的 Mixamo 兼容 GLB 做本地实验；它不是
-  Canonical Babylon S1b 的资产来源或发布门禁。
 - 室外高度场场景：连续分块地形、四种 relief、局部塑形、湖泊/水体、复合几何标志物。
 - 可追踪的 `WorldFeature`：稳定 ID、schema、seed、依赖、资源所有权、预算、诊断、重建和清理。
 - `defineOutdoorScene` 场景 DSL、场景目录、Playground、检查器和固定输入 Smoke API。
@@ -100,7 +100,7 @@ Director LLM → Render Directive SDK ────────────┘
 
 当前的“自由创造”严格指室外高度场白膜世界，不等于任意 3D 游戏类型。
 Primitive 四足代理已经可以自定义和控制，但动物资产、骨骼、动画与行为尚未
-实现；通用 Terrain Mask、Route R1b 与完整 M5、更多 Constraint、洞穴、倒悬结构、完整
+实现；通用 Terrain Mask 与完整 M5、更多 Constraint、洞穴、倒悬结构、完整
 室内、车辆、骑乘、NPC、寻路、Gameplay、联网、Render Bridge、实时世界模型和
 Runtime Director 也都尚未实现。
 
@@ -111,8 +111,8 @@ Runtime Director 也都尚未实现。
 - WaterBody 是白膜水体与基础本地预览，不是最终生成式水面。
 - 图片可以传给 Coding Agent，但单张透视图只能重建可见构图与合理的可玩延伸，不能恢复唯一真实三维几何。
 - World Plan 和 Opening Shot 是创作意图，不是碰撞或高度真相；高度、坡度、可通行性必须从实际白膜计算。
-- 仓库同时有 Three.js/Rapier 创作 Playground 与 Babylon.js/Havok Canonical
-  页面；二者都只显示本地白膜，没有实时世界模型参与。
+- Catalog Playground、artifact-only 捕获和 Canonical Authoring 页面都由 Babylon/Havok
+  链路承载；它们用途不同，但不形成第二套 Runtime 真相，也都没有实时世界模型参与。
 - `mistbound-rider` 中的马和骑手是静态标志物，用于测试构图；它不是可骑乘主体。
 - 现有自动测试覆盖编译、资源归属、物理高度场和固定步长等工程契约；固定输入 Smoke 目前通过 Playground 按钮/API 手动触发，尚未纳入浏览器 E2E。两者都不能代替运动手感和图像构图的人工验收。
 
@@ -161,13 +161,13 @@ Validation Report 以及完整 P0.1。S1 证明的是一个受控纵向切片，
 Validation Subject 绑定五个权威 Hash，再用 Recast Graph/Path 与真实 Babylon/Havok
 `NullEngine` Character Controller Probe 生成 Canonical Route Evidence 和统一 Report。
 `worldkit run` 复用同一可信链路，通过 Host 私有、只读传输把证据注入 Browser
-Protocol V4；页面只读取 Route Summary、Path Receipt、Probe Receipt 和 Overlay。
+Protocol V5；页面只读取 Route Summary、Path Receipt、Probe Receipt 和 Overlay。
 Task 9 的 11 个 Authoring V4 Golden/Adversarial Fixture 与
 `pnpm verify:route-r1-heightfield` 已进入回归。终审记录见
 [R1 Heightfield Runtime Review](reviews/2026-08-22-route-r1-heightfield-runtime-review.md)。
 
-未完成：R1b 静态平台/Surface→Collider Subshape，以及完整 M5 验收。V3 输入明确不进入
-Route Verification；页面也不会成为备用 Evidence Producer。
+未完成：R1b 静态平台/Surface→Collider Subshape，以及完整 M5 验收。非当前
+AuthoringSpec V4 输入会在统一入口严格拒绝；页面也不会成为备用 Evidence Producer。
 
 ### Simulation Take / Control Capture V1：首个五 Pass 切片
 
@@ -214,8 +214,8 @@ Video Subject；Profile 组合/Override；`verify compare`；Browser/CI Evidence
 5. [Plan-first 世界创作协议](12-plan-first-world-authoring.md)：如何从输入得到可追踪世界和规划工件。
 6. [多 Agent 世界创作流水线](13-multi-agent-world-authoring.md)：三个 Agent 的权限、工件和门禁。
 7. [能力分层与体验路线](14-capability-levels-and-experience-roadmap.md)：SDK、World Model 和玩家体验如何逐级增长。
-8. [Canonical Authoring V3/V4 快速接入](17-canonical-json-quickstart.md)：AI/CLI
-   的基础世界与 Route 协议、Placement Solver、Package Definition、Route Verification 和 Browser V4。
+8. [Canonical Authoring V4 快速接入](17-canonical-json-quickstart.md)：AI/CLI
+   的基础世界与 Route 协议、Placement Solver、Package Definition、Route Verification 和 Browser V5。
 9. [AI-first LEGO Game SDK 生产设计](superpowers/specs/2026-08-17-ai-first-lego-game-sdk-design.md)：面向重构的长期 Schema、Compiler、Runtime、CLI 和门禁设计。
 10. [Placement Constraint 与确定性 Layout Solver](superpowers/specs/2026-08-19-placement-constraint-layout-solver-design.md)：AI 如何表达空间意图，SDK 如何生成最终 Transform。
 11. [Simulation Take 与 Control Capture Bundle](superpowers/specs/2026-08-19-simulation-take-control-capture-design.md)：世界、操作/镜头和多 Pass 控制制品如何分离。

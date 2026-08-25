@@ -51,6 +51,7 @@ Candidate 中的浏览器检查只作为可追溯的参考信息，可以是不�
 美术源文件与 Runtime 资产是两层：
 
 - `assets/subjects/source-fbx/vehicles/` 中的 FBX 是可追溯的 **source-only** 源资产，清单记录原始中文相对路径、稳定英文仓库路径、字节数和 SHA-256。
+- `assets/subjects/source-fbx/contributors/<creatorId>/` 中的 FBX 通过通用 contributor 清单聚合，`creatorId` 同时写入目录和带命名空间的 `sourceId`，避免不同来源的同名素材互相覆盖。
 - Babylon Runtime 的正式入口仍是完成坐标、尺寸、骨骼/动作、Collider、Socket 和清单校验后的 GLB。
 - 当前页面中除 G Bot 外的五个主体仍是 Registry `visualParts` 生成的程序化白模。源 FBX 没有注册到 Asset Resolver，因此不会冒充可运行主体。
 

@@ -24,7 +24,7 @@ import {
   sha256CanonicalJson,
   stringifyCanonicalJson,
 } from "@whitebox-world/protocol";
-import type { WorldRuntimeSnapshotV3 } from "@whitebox-world/runtime-contracts";
+import type { WorldRuntimeSnapshotV4 } from "@whitebox-world/runtime-contracts";
 import { isEqual, isPlainObject } from "lodash-es";
 
 const PASS_FILE_NAMES: Readonly<Record<ControlCapturePassIdV1, string>> = {
@@ -100,7 +100,7 @@ export interface ControlCaptureFrameInputV1 {
   readonly widthPixels: number;
   readonly heightPixels: number;
   readonly camera: ControlCaptureCameraV1;
-  readonly snapshot: WorldRuntimeSnapshotV3;
+  readonly snapshot: WorldRuntimeSnapshotV4;
   readonly passesById: Readonly<Record<string, ControlCapturePassBytesV1>>;
 }
 
@@ -110,6 +110,7 @@ export interface CreateControlCaptureBundleWriterOptionsV1 {
   readonly compiledTake: CompiledSimulationTakeV1;
   readonly worldPackageIdentity: WorldPackageIdentityV1;
   readonly runtimeSessionId: string;
+  readonly worldSessionId: string;
   readonly semanticClasses: readonly SemanticClassTableEntryV1[];
   readonly instances: readonly InstanceTableEntryV1[];
 }
@@ -230,7 +231,13 @@ function assertFrameShape(
   if (frame.runtimeSessionId !== options.runtimeSessionId) {
     throw new Error("CAPTURE_SESSION_MISMATCH: Frame belongs to another Runtime Session.");
   }
-  if (frame.snapshot.tick !== frame.simulationTick) {
+  if (frame.snapshot.runtimeSessionId !== frame.runtimeSessionId) {
+    throw new Error("CAPTURE_SESSION_MISMATCH: Snapshot belongs to another Runtime Session.");
+  }
+  if (frame.snapshot.worldSessionId !== options.worldSessionId) {
+    throw new Error("CAPTURE_SESSION_MISMATCH: Snapshot belongs to another World Session.");
+  }
+  if (frame.snapshot.world.simulationTick !== frame.simulationTick) {
     throw new Error("CAPTURE_FRAME_TICK_INVALID: Snapshot tick does not match captured simulation tick.");
   }
   if (!Number.isSafeInteger(frame.widthPixels) || frame.widthPixels < 1 ||

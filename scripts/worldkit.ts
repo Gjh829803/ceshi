@@ -1,6 +1,6 @@
 import { randomUUID } from "node:crypto";
 import { execFile as execFileCallback } from "node:child_process";
-import { mkdir, rename, rm, stat, writeFile } from "node:fs/promises";
+import { mkdir, rename, rm, writeFile } from "node:fs/promises";
 import { fileURLToPath } from "node:url";
 import path from "node:path";
 import { promisify } from "node:util";
@@ -12,10 +12,9 @@ import {
   stringifyCanonicalJson,
   validatePackageSubjectDefinition,
   type AuthoringDiagnostic,
-  type SubjectPresetCandidateV1,
 } from "@whitebox-world/authoring";
 import { canonicalJsonBytes } from "@whitebox-world/protocol";
-import type { WorldRuntimeSnapshotV3 } from "@whitebox-world/runtime-contracts";
+import type { WorldRuntimeSnapshotV4 } from "@whitebox-world/runtime-contracts";
 import {
   builtInSubjectResourceRegistry,
   type SubjectRegistryResourceV3,
@@ -30,7 +29,6 @@ import {
 } from "./lib/layout-artifacts";
 import {
   cliFailure,
-  loadWorldkitPipeline,
   loadWorldkitRoutePipeline,
   readWorldkitInput,
   type CliDiagnostic,
@@ -49,7 +47,6 @@ import {
 } from "./lib/simulation-take-cli";
 import {
   assertSubjectPresetArtifactLocationV1,
-  importLegacySubjectPresetCandidateFileV4,
   planSubjectPresetPromotion,
   promoteSubjectPresetTransactionally,
   readSubjectPresetHarnessReceiptFileV1,
@@ -90,9 +87,9 @@ Usage:
   worldkit take run <take.json> --world <world.json> --output <directory> --width-pixels <integer> --height-pixels <integer> [--port <port>] [--json]
   worldkit capture validate <bundle-directory> [--json]
   worldkit capture inspect <bundle-directory> [--json]
-  worldkit subject-preset validate <candidate.json> [--legacy-v4] [--json]
-  worldkit subject-preset plan <candidate.json> --output <plan.json> [--legacy-v4] [--json]
-  worldkit subject-preset promote <candidate.json> --plan <plan.json> --harness-receipt <receipt.json> --write [--legacy-v4] [--json]
+  worldkit subject-preset validate <candidate.json> [--json]
+  worldkit subject-preset plan <candidate.json> --output <plan.json> [--json]
+  worldkit subject-preset promote <candidate.json> --plan <plan.json> --harness-receipt <receipt.json> --write [--json]
   worldkit verify capture <bundle-directory> --output <validation-report.json> [--json]
   worldkit verify route <world.json> --profile <validation-profile-ref> --output <validation-report.json> [--json]
   worldkit verify explain <validation-report.json> --gate-id <id> [--json]
@@ -154,14 +151,12 @@ export type WorldkitArgs =
   | {
       command: "subject-preset-validate";
       inputPath: string;
-      legacyV4: boolean;
       json: boolean;
     }
   | {
       command: "subject-preset-plan";
       inputPath: string;
       outputPath: string;
-      legacyV4: boolean;
       json: boolean;
     }
   | {
@@ -170,7 +165,6 @@ export type WorldkitArgs =
       planPath: string;
       harnessReceiptPath: string;
       write: true;
-      legacyV4: boolean;
       json: boolean;
     }
   | {
@@ -306,18 +300,15 @@ export function parseWorldkitArgs(arguments_: readonly string[]): WorldkitArgs {
     const operation = takeRequiredPositional(tokens, "subject-preset operation");
     const inputPath = takeRequiredPositional(tokens, "Subject Preset candidate file");
     if (operation === "validate") {
-      const legacyV4 = takeFlag(tokens, "--legacy-v4");
       rejectRemaining(tokens, "subject-preset validate");
       return {
         command: "subject-preset-validate",
         inputPath,
-        legacyV4,
         json,
       };
     }
     if (operation === "plan") {
       const outputPath = takeOption(tokens, "--output");
-      const legacyV4 = takeFlag(tokens, "--legacy-v4");
       if (outputPath === undefined) {
         throw new WorldkitUsageError(
           "subject-preset plan requires --output <plan.json>.",
@@ -328,7 +319,6 @@ export function parseWorldkitArgs(arguments_: readonly string[]): WorldkitArgs {
         command: "subject-preset-plan",
         inputPath,
         outputPath,
-        legacyV4,
         json,
       };
     }
@@ -336,7 +326,6 @@ export function parseWorldkitArgs(arguments_: readonly string[]): WorldkitArgs {
       const planPath = takeOption(tokens, "--plan");
       const harnessReceiptPath = takeOption(tokens, "--harness-receipt");
       const write = takeFlag(tokens, "--write");
-      const legacyV4 = takeFlag(tokens, "--legacy-v4");
       if (planPath === undefined) {
         throw new WorldkitUsageError(
           "subject-preset promote requires --plan <plan.json>.",
@@ -359,7 +348,6 @@ export function parseWorldkitArgs(arguments_: readonly string[]): WorldkitArgs {
         planPath,
         harnessReceiptPath,
         write: true,
-        legacyV4,
         json,
       };
     }
@@ -730,7 +718,7 @@ export async function validateSubjectDefinitionFile(inputPath: string) {
 export async function validateFile(
   inputPath: string,
 ): Promise<WorldkitCommandResult> {
-  const pipeline = await loadWorldkitPipeline(inputPath);
+  const pipeline = await loadWorldkitRoutePipeline(inputPath);
   if (!pipeline.ok) return pipeline;
   return {
     ok: true,
@@ -772,11 +760,11 @@ export async function buildFile(
       "Build output must not overwrite the AuthoringSpec input.",
     );
   }
-  const pipeline = await loadWorldkitPipeline(absoluteInputPath);
+  const pipeline = await loadWorldkitRoutePipeline(absoluteInputPath);
   if (!pipeline.ok) return pipeline;
   const artifact = {
     kind: "worldkit-build-artifact",
-    schemaVersion: 3,
+    schemaVersion: 4,
     normalizedWorldIrHash: pipeline.normalizedWorldIrHash,
     executionPlanHash: pipeline.executionPlanHash,
     normalizedWorldIr: pipeline.normalizedWorldIr,
@@ -896,7 +884,7 @@ export async function captureFile(
     });
     const capture = await captureVisibleWorldWithRetries(() => page.evaluate(
       async (): Promise<{
-        snapshot: WorldRuntimeSnapshotV3;
+        snapshot: WorldRuntimeSnapshotV4;
         screenshotDataUrl: string;
         sampledRgbColorCount: number;
       }> => {
@@ -905,11 +893,14 @@ export async function captureFile(
           throw new Error("WORLDKIT_BROWSER_PROTOCOL_MISSING");
         }
         api.setPaused(true);
-        const snapshot = api.reset();
+        const snapshot = await api.reset();
         await new Promise<void>((resolve) => requestAnimationFrame(() => resolve()));
         await new Promise<void>((resolve) => requestAnimationFrame(() => resolve()));
         const beforeCapture = api.getSnapshot();
-        if (beforeCapture.tick !== snapshot.tick) {
+        if (
+          beforeCapture.world.simulationTick !==
+            snapshot.world.simulationTick
+        ) {
           throw new Error("WORLDKIT_CAPTURE_TICK_MISMATCH");
         }
         api.captureScreenshot();
@@ -945,7 +936,10 @@ export async function captureFile(
           if (sampledRgbColors.size >= 4) break;
         }
         const afterCapture = api.getSnapshot();
-        if (afterCapture.tick !== snapshot.tick) {
+        if (
+          afterCapture.world.simulationTick !==
+            snapshot.world.simulationTick
+        ) {
           throw new Error("WORLDKIT_CAPTURE_TICK_ADVANCED");
         }
         return {
@@ -1007,35 +1001,11 @@ function subjectPresetCliFailure(error: unknown) {
   return cliFailure(code, message);
 }
 
-async function currentRepositoryCommit(): Promise<string> {
-  const { stdout } = await execFile(
-    "git",
-    ["-C", REPOSITORY_ROOT, "rev-parse", "--verify", "HEAD"],
-  );
-  return stdout.trim();
-}
-
-async function importLegacySubjectPresetForCli(
-  inputPath: string,
-): Promise<SubjectPresetCandidateV1> {
-  return importLegacySubjectPresetCandidateFileV4(inputPath, {
-    candidateId: "legacy-v4-import",
-    displayName: "Legacy V4 Subject Preset import",
-    notes: "Conversion from a locked Authoring V4 export.",
-    createdAtIso: (await stat(inputPath)).mtime.toISOString(),
-    sourceCommit: await currentRepositoryCommit(),
-    runtimeBuild: "legacy-v4-import",
-  });
-}
-
 async function validateSubjectPresetForCli(
   inputPath: string,
-  legacyV4: boolean,
 ) {
   try {
-    const candidate = legacyV4
-      ? await importLegacySubjectPresetForCli(inputPath)
-      : await validateSubjectPresetCandidateFile(inputPath);
+    const candidate = await validateSubjectPresetCandidateFile(inputPath);
     return {
       ok: true as const,
       exitCode: 0 as const,
@@ -1045,7 +1015,7 @@ async function validateSubjectPresetForCli(
       candidateId: candidate.semanticContent.candidateId,
       subjectDefinitionId: candidate.semanticContent.subjectDefinitionId,
       candidateSemanticContentHash: candidate.semanticContentHash,
-      sourceFormat: legacyV4 ? "legacy-authoring-v4" as const : "candidate-v1" as const,
+      sourceFormat: "candidate-v1" as const,
       generatedRegistryWriteCount: 0 as const,
     };
   } catch (error) {
@@ -1056,16 +1026,11 @@ async function validateSubjectPresetForCli(
 async function planSubjectPresetForCli(
   inputPath: string,
   outputPath: string,
-  legacyV4: boolean,
 ) {
   try {
     assertSubjectPresetArtifactLocationV1(outputPath, REPOSITORY_ROOT);
-    const candidate = legacyV4
-      ? await importLegacySubjectPresetForCli(inputPath)
-      : undefined;
     const plan = await planSubjectPresetPromotion(inputPath, {
       repositoryRoot: REPOSITORY_ROOT,
-      ...(candidate === undefined ? {} : { candidate }),
     });
     const absoluteOutputPath = path.resolve(outputPath);
     if (absoluteOutputPath === path.resolve(inputPath)) {
@@ -1097,16 +1062,12 @@ async function promoteSubjectPresetForCli(
   inputPath: string,
   planPath: string,
   harnessReceiptPath: string,
-  legacyV4: boolean,
 ) {
   try {
     const plan = await readSubjectPresetPromotionPlanFileV1(planPath);
     const harnessReceipt = await readSubjectPresetHarnessReceiptFileV1(
       harnessReceiptPath,
     );
-    const candidate = legacyV4
-      ? await importLegacySubjectPresetForCli(inputPath)
-      : undefined;
     const promotion = await promoteSubjectPresetTransactionally(inputPath, {
       repositoryRoot: REPOSITORY_ROOT,
       plan,
@@ -1114,7 +1075,6 @@ async function promoteSubjectPresetForCli(
       harnessReceipt,
       harnessReceiptPath,
       write: true,
-      ...(candidate === undefined ? {} : { candidate }),
     });
     return {
       ok: true as const,
@@ -1342,10 +1302,7 @@ export async function main(
     return result.exitCode;
   }
   if (parsed.command === "subject-preset-validate") {
-    const result = await validateSubjectPresetForCli(
-      parsed.inputPath,
-      parsed.legacyV4,
-    );
+    const result = await validateSubjectPresetForCli(parsed.inputPath);
     printResult(result, parsed.json);
     return result.exitCode;
   }
@@ -1353,7 +1310,6 @@ export async function main(
     const result = await planSubjectPresetForCli(
       parsed.inputPath,
       parsed.outputPath,
-      parsed.legacyV4,
     );
     printResult(result, parsed.json);
     return result.exitCode;
@@ -1363,7 +1319,6 @@ export async function main(
       parsed.inputPath,
       parsed.planPath,
       parsed.harnessReceiptPath,
-      parsed.legacyV4,
     );
     printResult(result, parsed.json);
     return result.exitCode;

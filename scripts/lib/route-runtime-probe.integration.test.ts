@@ -11,6 +11,10 @@ import {
   compileWorldV5,
 } from "@whitebox-world/compiler";
 import {
+  createGameplayBootstrapResourceLockEntryV1,
+  createGameplayBootstrapV1,
+} from "@whitebox-world/gameplay-contracts";
+import {
   BabylonWorldRuntime,
   BABYLON_TRAVERSAL_RUNTIME_IMPLEMENTATION_IDENTITY_V1,
   createBabylonTraversalRuntimePortV1,
@@ -44,6 +48,7 @@ import { isEqual, isNil } from "lodash-es";
 import { beforeAll, describe, expect, it, vi } from "vitest";
 
 import { createValidAuthoringSpec } from "../../packages/authoring/src/test-fixture.js";
+import { bindRuntimeTestPossession } from "../../packages/runtime-babylon/src/runtime-test-possession.js";
 
 const havokWasmBytes = await readFile(
   createRequire(import.meta.url).resolve(
@@ -54,6 +59,17 @@ const havokWasmBinary = havokWasmBytes.buffer.slice(
   havokWasmBytes.byteOffset,
   havokWasmBytes.byteOffset + havokWasmBytes.byteLength,
 ) as ArrayBuffer;
+const GAMEPLAY_BOOTSTRAP_RESOURCE_LOCK =
+  createGameplayBootstrapResourceLockEntryV1(createGameplayBootstrapV1({
+    kind: "gameplay-bootstrap",
+    id: "route-runtime-probe-test.gameplay",
+    version: 1,
+    resourceRef: "worldkit://gameplay-bootstrap/route-runtime-probe-test@1",
+    entityDescriptors: [],
+    featureResourceLocks: [],
+    semanticActionDefinitions: [],
+    availableCapabilityRefs: [],
+  }));
 
 interface RealRouteFixture {
   readonly executionPlan: ExecutionPlanV5;
@@ -173,6 +189,7 @@ async function prepareRealRouteFixture(
   const compiled = compileWorldV5({
     normalizedWorldIr: normalized.value,
     normalizedWorldIrHash: normalized.normalizedWorldIrHash,
+    gameplayBootstrapResourceLock: GAMEPLAY_BOOTSTRAP_RESOURCE_LOCK,
   });
   if (!compiled.ok || isNil(compiled.executionPlan)) {
     throw new Error(`Route fixture compilation failed: ${JSON.stringify(compiled.diagnostics)}`);
@@ -233,6 +250,10 @@ async function createRuntimeHarness(
   });
   try {
     if (isNil(engine)) throw new Error("NullEngine was not created.");
+    await bindRuntimeTestPossession(
+      runtime,
+      fixture.traversalLockReceipt.lock.subjectEntityId,
+    );
     const port = createBabylonTraversalRuntimePortV1({
       runtime,
       traversalLockReceipt: fixture.traversalLockReceipt,

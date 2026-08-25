@@ -13,10 +13,8 @@ import {
   compileWorldV5,
 } from "@whitebox-world/compiler";
 import type {
-  ExecutionPlanV4,
   ExecutionPlanV5,
 } from "@whitebox-world/runtime-contracts";
-import { TRUSTED_DEFAULT_CONTROLLER_ID } from "@whitebox-world/runtime-contracts";
 import { sha256CanonicalJson } from "@whitebox-world/protocol";
 import { Vector3 } from "@babylonjs/core/Maths/math.vector.js";
 import {
@@ -33,18 +31,26 @@ import { isNil } from "lodash-es";
 import { describe, expect, it, vi } from "vitest";
 
 import {
-  createValidAuthoringSpec,
-  createValidPackageSubjectWorld,
+  createValidAuthoringSpecV4,
+  createValidPackageSubjectWorldV4,
 } from "../../authoring/src/test-fixture";
 import {
   BabylonWorldRuntime,
   isWorldRuntimeLayoutAssertionErrorV1,
 } from "./babylon-world-runtime";
-import { BABYLON_TRAVERSAL_RUNTIME_INTERNAL } from "./traversal-runtime-internal";
+import {
+  BABYLON_GAMEPLAY_RUNTIME_INTERNAL,
+} from "./gameplay-runtime-internal";
+import { bindRuntimeTestPossession } from "./runtime-test-possession";
+import {
+  BABYLON_TRAVERSAL_RUNTIME_INTERNAL,
+  type BabylonTraversalRuntimeInternalV1,
+} from "./traversal-runtime-internal";
 import { createBabylonTraversalRuntimePortV1 } from "./traversal-runtime-port";
 import {
   BABYLON_TRAVERSAL_RUNTIME_IMPLEMENTATION_IDENTITY_V1,
 } from "./traversal-implementation-identity";
+import { createRuntimeTestGameplayBootstrapLockV1 } from "./runtime-test-plan";
 
 const havokWasmBytes = await readFile(
   createRequire(import.meta.url).resolve(
@@ -55,9 +61,8 @@ const havokWasmBinary = havokWasmBytes.buffer.slice(
   havokWasmBytes.byteOffset,
   havokWasmBytes.byteOffset + havokWasmBytes.byteLength,
 ) as ArrayBuffer;
-
 function routeWorld(
-  source = createValidAuthoringSpec(),
+  source = createValidAuthoringSpecV4(),
 ): AuthoringSpecV4 {
   return {
     ...source,
@@ -135,6 +140,8 @@ function compileFixture(world = routeWorld()): {
   const compiled = compileWorldV5({
     normalizedWorldIr: normalized.value,
     normalizedWorldIrHash: normalized.normalizedWorldIrHash,
+    gameplayBootstrapResourceLock:
+      createRuntimeTestGameplayBootstrapLockV1(normalized.value),
   });
   if (!compiled.ok || compiled.executionPlan === undefined) {
     throw new Error("Route fixture compilation failed.");
@@ -154,9 +161,9 @@ function compileFixture(world = routeWorld()): {
 }
 
 async function createRuntime(
-  executionPlan: ExecutionPlanV4 | ExecutionPlanV5,
+  executionPlan: ExecutionPlanV5,
 ): Promise<BabylonWorldRuntime> {
-  return BabylonWorldRuntime.create({
+  const runtime = await BabylonWorldRuntime.create({
     executionPlan,
     havokWasmBinary,
     autoStartRenderLoop: false,
@@ -168,6 +175,18 @@ async function createRuntime(
       lockstepMaxSteps: 4,
     }),
   });
+  await bindRuntimeTestPossession(
+    runtime,
+    executionPlan.initialControlledEntityId,
+  );
+  return runtime;
+}
+
+async function commitPossession(
+  runtime: BabylonWorldRuntime,
+  controlledEntityId: string,
+): Promise<void> {
+  await bindRuntimeTestPossession(runtime, controlledEntityId);
 }
 
 function expectRuntimeCode(
@@ -182,6 +201,22 @@ function expectRuntimeCode(
     expect((error as TraversalRuntimeErrorV1).code).toBe(code);
     expect((error as Error).message).toBe(code);
   }
+}
+
+function overrideControlledEntityReader(
+  runtime: BabylonWorldRuntime,
+  readControlledEntityId: () => string | undefined,
+): BabylonTraversalRuntimeInternalV1 {
+  const original = runtime[BABYLON_TRAVERSAL_RUNTIME_INTERNAL]();
+  const overridden: BabylonTraversalRuntimeInternalV1 = {
+    ...original,
+    readControlledEntityId,
+  };
+  Object.defineProperty(runtime, BABYLON_TRAVERSAL_RUNTIME_INTERNAL, {
+    configurable: true,
+    value: () => overridden,
+  });
+  return overridden;
 }
 
 function withStaticBoxAtStart(
@@ -980,20 +1015,53 @@ function withStartTransform(
 }
 
 describe("createBabylonTraversalRuntimePortV1", () => {
-  it("fails closed for a V4 Runtime before evaluating traversal lock details", async () => {
+  it("fails closed before reading world evidence after Gameplay releases control", async () => {
     const fixture = compileFixture();
-    const runtime = await createRuntime({
-      ...fixture.executionPlan,
-      schemaVersion: 4,
-    } as unknown as ExecutionPlanV4);
+    const runtime = await createRuntime(fixture.executionPlan);
+    let controlledEntityId: string | undefined = "player";
+    const host = overrideControlledEntityReader(
+      runtime,
+      () => controlledEntityId,
+    );
     try {
-      expectRuntimeCode(
-        () => createBabylonTraversalRuntimePortV1({
-          runtime,
-          traversalLockReceipt: fixture.traversalLockReceipt,
-        }),
-        "TRAVERSAL_RUNTIME_PLAN_NOT_V5",
+      const port = createBabylonTraversalRuntimePortV1({
+        runtime,
+        traversalLockReceipt: fixture.traversalLockReceipt,
+      });
+      port.resetToStartAnchor({ startAnchorEntityId: "spawn-main" });
+      const lockedIdentity = {
+        authoringSpecHash: port.authoringSpecHash,
+        layoutSolveReportHash: port.layoutSolveReportHash,
+        resourceLockHash: port.resourceLockHash,
+        executionPlanHash: port.executionPlanHash,
+        resolvedTraversalLockHash: port.resolvedTraversalLockHash,
+      };
+
+      controlledEntityId = undefined;
+      const planRead = vi.spyOn(host, "readExecutionPlan").mockImplementation(
+        () => {
+          throw new Error("released control must be rejected first");
+        },
       );
+
+      expectRuntimeCode(
+        () => port.readLatestTickEvidence(),
+        "TRAVERSAL_RUNTIME_NOT_CONTROLLED",
+      );
+      expectRuntimeCode(
+        () => port.resetToStartAnchor({ startAnchorEntityId: "spawn-main" }),
+        "TRAVERSAL_RUNTIME_NOT_CONTROLLED",
+      );
+      await expect(port.runFixedTick({ walkDirectionWorldXZ: [0, -1] }))
+        .rejects.toMatchObject({ code: "TRAVERSAL_RUNTIME_NOT_CONTROLLED" });
+      expect(planRead).not.toHaveBeenCalled();
+      expect({
+        authoringSpecHash: port.authoringSpecHash,
+        layoutSolveReportHash: port.layoutSolveReportHash,
+        resourceLockHash: port.resourceLockHash,
+        executionPlanHash: port.executionPlanHash,
+        resolvedTraversalLockHash: port.resolvedTraversalLockHash,
+      }).toEqual(lockedIdentity);
     } finally {
       await runtime.dispose();
     }
@@ -1164,9 +1232,10 @@ describe("createBabylonTraversalRuntimePortV1", () => {
 
   it("closes non-canonical world drift introduced after Runtime creation", async () => {
     const fixture = compileFixture();
-    const runtime = await createRuntime(fixture.executionPlan);
+    const executionPlan = structuredClone(fixture.executionPlan);
+    const runtime = await createRuntime(executionPlan);
     try {
-      const samples = fixture.executionPlan.terrain
+      const samples = executionPlan.terrain
         .heightSamplesMeters as unknown[];
       samples[0] = 1n;
 
@@ -1184,14 +1253,15 @@ describe("createBabylonTraversalRuntimePortV1", () => {
 
   it("rejects in-place V5 Plan drift even when its published world hashes stay unchanged", async () => {
     const fixture = compileFixture();
-    const runtime = await createRuntime(fixture.executionPlan);
+    const executionPlan = structuredClone(fixture.executionPlan);
+    const runtime = await createRuntime(executionPlan);
     try {
       const port = createBabylonTraversalRuntimePortV1({
         runtime,
         traversalLockReceipt: fixture.traversalLockReceipt,
       });
       const originalExecutionPlanHash = port.executionPlanHash;
-      const samples = fixture.executionPlan.terrain.heightSamplesMeters as number[];
+      const samples = executionPlan.terrain.heightSamplesMeters as number[];
       samples[0] = samples[0]! + 0.25;
 
       expect(port.executionPlanHash).toBe(originalExecutionPlanHash);
@@ -1206,13 +1276,14 @@ describe("createBabylonTraversalRuntimePortV1", () => {
 
   it("closes canonical hashing failures from adversarial in-place V5 Plan drift", async () => {
     const fixture = compileFixture();
-    const runtime = await createRuntime(fixture.executionPlan);
+    const executionPlan = structuredClone(fixture.executionPlan);
+    const runtime = await createRuntime(executionPlan);
     try {
       const port = createBabylonTraversalRuntimePortV1({
         runtime,
         traversalLockReceipt: fixture.traversalLockReceipt,
       });
-      const samples = fixture.executionPlan.terrain.heightSamplesMeters as unknown[];
+      const samples = executionPlan.terrain.heightSamplesMeters as unknown[];
       samples[0] = 1n;
 
       expectRuntimeCode(
@@ -1568,7 +1639,7 @@ describe("createBabylonTraversalRuntimePortV1", () => {
       runtime.reset();
       expectRuntimeCode(
         () => port.readLatestTickEvidence(),
-        "TRAVERSAL_RUNTIME_EVIDENCE_UNAVAILABLE",
+        "TRAVERSAL_RUNTIME_NOT_CONTROLLED",
       );
     } finally {
       await runtime.dispose();
@@ -1812,7 +1883,7 @@ describe("createBabylonTraversalRuntimePortV1", () => {
   }, 30_000);
 
   it("invalidates evidence across rebind-away and rebind-back transitions", async () => {
-    const fixture = compileFixture(routeWorld(createValidPackageSubjectWorld()));
+    const fixture = compileFixture(routeWorld(createValidPackageSubjectWorldV4()));
     const runtime = await createRuntime(fixture.executionPlan);
     try {
       const port = createBabylonTraversalRuntimePortV1({
@@ -1820,20 +1891,12 @@ describe("createBabylonTraversalRuntimePortV1", () => {
         traversalLockReceipt: fixture.traversalLockReceipt,
       });
       port.resetToStartAnchor({ startAnchorEntityId: "spawn-main" });
-      expect(runtime.bindControl({
-        controllerId: TRUSTED_DEFAULT_CONTROLLER_ID,
-        expectedControlledEntityId: "player",
-        controlledEntityId: "pack-animal-a",
-      }).status).toBe("committed");
+      await commitPossession(runtime, "pack-animal-a");
       expectRuntimeCode(
         () => port.readLatestTickEvidence(),
         "TRAVERSAL_RUNTIME_NOT_CONTROLLED",
       );
-      expect(runtime.bindControl({
-        controllerId: TRUSTED_DEFAULT_CONTROLLER_ID,
-        expectedControlledEntityId: "pack-animal-a",
-        controlledEntityId: "player",
-      }).status).toBe("committed");
+      await commitPossession(runtime, "player");
       expectRuntimeCode(
         () => port.readLatestTickEvidence(),
         "TRAVERSAL_RUNTIME_EVIDENCE_UNAVAILABLE",
@@ -1844,7 +1907,7 @@ describe("createBabylonTraversalRuntimePortV1", () => {
   }, 30_000);
 
   it("performs one merged reset support query for every Subject", async () => {
-    const fixture = compileFixture(routeWorld(createValidPackageSubjectWorld()));
+    const fixture = compileFixture(routeWorld(createValidPackageSubjectWorldV4()));
     const runtime = await createRuntime(fixture.executionPlan);
     try {
       const controllers = (runtime as unknown as {
@@ -2167,7 +2230,7 @@ describe("createBabylonTraversalRuntimePortV1", () => {
   }, 30_000);
 
   it("keeps bound-platform resolution across reset and rebind-back", async () => {
-    const fixture = compileFixture(routeWorld(createValidPackageSubjectWorld()));
+    const fixture = compileFixture(routeWorld(createValidPackageSubjectWorldV4()));
     const plan = withBoundStaticBoxAtStart(fixture, 1);
     const runtime = await createRuntime(plan);
     try {
@@ -2188,20 +2251,12 @@ describe("createBabylonTraversalRuntimePortV1", () => {
         traversalSurfaceId: bound.traversalSurfaceId,
       });
 
-      expect(runtime.bindControl({
-        controllerId: TRUSTED_DEFAULT_CONTROLLER_ID,
-        expectedControlledEntityId: "player",
-        controlledEntityId: "pack-animal-a",
-      }).status).toBe("committed");
+      await commitPossession(runtime, "pack-animal-a");
       expectRuntimeCode(
         () => port.readLatestTickEvidence(),
         "TRAVERSAL_RUNTIME_NOT_CONTROLLED",
       );
-      expect(runtime.bindControl({
-        controllerId: TRUSTED_DEFAULT_CONTROLLER_ID,
-        expectedControlledEntityId: "pack-animal-a",
-        controlledEntityId: "player",
-      }).status).toBe("committed");
+      await commitPossession(runtime, "player");
       expectRuntimeCode(
         () => port.readLatestTickEvidence(),
         "TRAVERSAL_RUNTIME_EVIDENCE_UNAVAILABLE",

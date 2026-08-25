@@ -15,7 +15,7 @@ Planner Agent
     ↓ WorldSpec / WorldPrompt / Entity Catalog / 规划图（冻结）
 Builder Agent
     ↓ 编写 TypeScript 世界代码
-Three.js 白膜游戏运行时
+Babylon/Havok 白膜游戏运行时
     ↘ SDK 白膜三视图 → Visual Bible Agent → 样式三视图 / 渲染首帧
     ↓ 白膜 + 深度 + 法线 + ID + 动作 + 语义
 实时世界模型
@@ -32,7 +32,7 @@ Director LLM
     ↓ 结构化观察、命令、任务和回执
 World Control Gateway
     ↓ 通过权限与一致性校验后在固定 tick 提交
-Three.js 白膜游戏运行时
+Babylon/Havok 白膜游戏运行时
 ```
 
 创作 Agent 组负责规划、实现和视觉定义；Director LLM 负责在已运行世界允许的能力范围内进行即时编排。两类 Agent 都不能绕过白膜运行时直接改变最终画面的逻辑真相。当前只有第一条链路的室外 Alpha 已运行；Director 和实时世界模型仍处于方案/接入准备阶段。
@@ -94,9 +94,9 @@ Three.js 白膜游戏运行时
 - 复杂角色捏脸和服装系统
 - 完整商业游戏编辑器
 - Agent 每帧参与玩家控制
-- LLM 绕过命令协议直接修改 Three.js、Rapier 或导航内部状态
+- LLM 绕过命令协议直接修改 Babylon、Havok 或导航 Provider 内部状态
 - 让世界模型决定物理、碰撞或胜负
-- 任意插件和任意底层 Three.js 代码作为默认创作方式
+- 任意插件和任意底层引擎代码作为默认创作方式
 
 ## 6. 产品成功标准
 

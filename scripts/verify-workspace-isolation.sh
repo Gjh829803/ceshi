@@ -4,9 +4,19 @@ set -euo pipefail
 project_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 outside_probe="$(dirname "$project_root")"
 real_home="$HOME"
+real_corepack_home="${COREPACK_HOME:-$real_home/.cache/node/corepack}"
 codex_bin="$(command -v codex)"
-pnpm_bin="/opt/homebrew/bin/pnpm"
+pnpm_bin="$(command -v pnpm)"
 task_tmp="$(mktemp -d /tmp/whitebox-agent.XXXXXX)"
+
+case "$pnpm_bin" in
+  /opt/homebrew/*) node_toolchain_root="/opt/homebrew" ;;
+  /usr/local/*) node_toolchain_root="/usr/local" ;;
+  *)
+    echo "Unsupported isolated Node toolchain path: $pnpm_bin" >&2
+    exit 2
+    ;;
+esac
 
 case "$task_tmp" in
   /tmp/whitebox-agent.*) ;;
@@ -19,7 +29,11 @@ trap cleanup EXIT
 
 mkdir -p "$task_tmp/home" "$task_tmp/tmp"
 if [[ ! -x "$pnpm_bin" ]]; then
-  echo "Expected the isolated Node toolchain at $pnpm_bin" >&2
+  echo "Expected an executable isolated Node toolchain at $pnpm_bin" >&2
+  exit 2
+fi
+if [[ ! -d "$real_corepack_home" ]]; then
+  echo "Expected the offline Corepack cache at $real_corepack_home" >&2
   exit 2
 fi
 if find "$project_root/apps/playground/public" -type l -print -quit | grep -q .; then
@@ -31,14 +45,15 @@ permission_args=(
   -c 'default_permissions="whitebox_workspace_only"'
   -c 'permissions.whitebox_workspace_only.extends=":workspace"'
   -c "permissions.whitebox_workspace_only.workspace_roots={\"$project_root\"=true}"
-  -c "permissions.whitebox_workspace_only.filesystem={\":root\"=\"deny\", \":minimal\"=\"read\", \"/opt/homebrew\"=\"read\", \"$task_tmp\"=\"write\", \":tmpdir\"=\"deny\", \":slash_tmp\"=\"deny\"}"
+  -c "permissions.whitebox_workspace_only.filesystem={\":root\"=\"deny\", \":minimal\"=\"read\", \"$node_toolchain_root\"=\"read\", \"$real_corepack_home\"=\"read\", \"$task_tmp\"=\"write\", \":tmpdir\"=\"deny\", \":slash_tmp\"=\"deny\"}"
   -c 'permissions.whitebox_workspace_only.network.enabled=false'
 )
 
 HOME="$task_tmp/home" \
 TMPDIR="$task_tmp/tmp" \
 NPM_CONFIG_USERCONFIG="$task_tmp/home/.npmrc" \
-PATH="/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin" \
+COREPACK_HOME="$real_corepack_home" \
+PATH="$(dirname "$pnpm_bin"):/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin" \
 LC_ALL=C \
 LANG=C \
 "$codex_bin" sandbox \

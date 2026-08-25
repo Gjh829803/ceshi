@@ -57,7 +57,7 @@ FeatureRegistry + resource ownership
        ↓
 Generic runtime compiler
        ↓
-Three.js meshes + Rapier colliders + SubjectKit
+Babylon meshes + Havok colliders + Subject runtime
        ↓
 SDK-derived plans + whitebox tri-views
        ↓
@@ -113,7 +113,8 @@ export const scene = definePlannedOutdoorScene({
 
 ### 大地形
 
-`world.terrain.landscape` 创建连续分块高度场。每个 tile 具有独立 Mesh 和 Rapier Collider，但所有 tile 使用世界坐标噪声，因此边界高度一致。
+`world.terrain.landscape` 创建连续分块高度场。每个 tile 具有独立 Babylon Mesh 和 Havok
+Collider，但所有 tile 使用世界坐标噪声，因此边界高度一致。
 
 必须按照用户场景选择 `relief`，而不是默认把所有场景做成强烈起伏：
 
@@ -145,7 +146,8 @@ WaterBody 会统一雕刻岸带、湖底、水位和最小深度，并输出水�
 
 ### 标志物
 
-`world.landmark.compound` 可以递归组合 Box、Sphere、Cylinder、Cone 和 Plane。运行时会为每个允许碰撞的 primitive 自动生成匹配的 Rapier Collider。
+`world.landmark.compound` 可以递归组合 Box、Sphere、Cylinder、Cone 和 Plane。运行时会为
+每个允许碰撞的 primitive 自动生成匹配的 Havok Collider。
 
 ### 自定义 Feature
 

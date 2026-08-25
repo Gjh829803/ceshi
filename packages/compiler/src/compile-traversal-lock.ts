@@ -205,11 +205,21 @@ export function compileResolvedTraversalLockV1(
     fail("Resource Lock entries are invalid.");
   }
   const actualResourceLockHash = sha256CanonicalJson(canonicalResourceLock);
+  const gameplayBootstrapRows = canonicalPlanResourceLock.filter(
+    (row) => row.resourceKind === "gameplay-bootstrap",
+  );
+  const canonicalPlanBaseResourceLock = canonicalPlanResourceLock.filter(
+    (row) => row.resourceKind !== "gameplay-bootstrap",
+  );
+  const actualPlanResourceLockHash = sha256CanonicalJson(
+    canonicalPlanResourceLock,
+  );
   if (input.normalizedWorldIr.resources.resourceLockHash !==
       actualResourceLockHash ||
-    input.executionPlan.resourceLockHash !== actualResourceLockHash ||
+    input.executionPlan.resourceLockHash !== actualPlanResourceLockHash ||
     !isEqual(input.executionPlan.resourceLockEntries, canonicalPlanResourceLock) ||
-    !isEqual(canonicalPlanResourceLock, canonicalResourceLock)) {
+    gameplayBootstrapRows.length !== 1 ||
+    !isEqual(canonicalPlanBaseResourceLock, canonicalResourceLock)) {
     fail("Resource Lock hash does not match the Normalized World and Execution Plan.");
   }
 
@@ -217,7 +227,7 @@ export function compileResolvedTraversalLockV1(
     kind: "resolved-traversal-lock",
     schemaVersion: 1,
     subjectEntityId: subject.entityId,
-    resourceLockHash: actualResourceLockHash as `sha256:${string}`,
+    resourceLockHash: actualPlanResourceLockHash as `sha256:${string}`,
     subjectDefinitionRef: subject.subjectDefinitionRef,
     subjectDefinitionHash: subject.subjectDefinitionHash,
     colliderProfileRef: colliderProfile.resourceRef,

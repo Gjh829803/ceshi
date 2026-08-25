@@ -3,8 +3,16 @@ import {
   type AuthoringSpecV4,
 } from "@whitebox-world/authoring";
 import { compileWorldV5 } from "@whitebox-world/compiler";
+import {
+  createGameplayBootstrapResourceLockEntryV1,
+  createGameplayBootstrapV1,
+  type GameplayBootstrapV1,
+} from "@whitebox-world/gameplay-contracts";
 import type { LayoutSolveResultV1 } from "@whitebox-world/layout-solver";
 import { canonicalJsonBytes, sha256Bytes } from "@whitebox-world/protocol";
+import {
+  canonicalExecutionResourceLockEntriesV1,
+} from "@whitebox-world/runtime-contracts";
 import {
   assertWorldPackageBuildReceiptV1,
   canonicalWorldPackageFileIntegrityEntriesV1,
@@ -17,6 +25,7 @@ import {
   type WorldPackageManifestV1,
   type WorldPackageSha256HashV1,
 } from "@whitebox-world/world-package";
+import { isNil } from "lodash-es";
 import { describe, expect, it } from "vitest";
 
 import { createValidAuthoringSpec } from "../../authoring/src/test-fixture.js";
@@ -39,6 +48,42 @@ function asV4(
   };
 }
 
+function createGameplayBootstrap(
+  authoringSpec: AuthoringSpecV4,
+  normalizedWorldIr: NonNullable<
+    ReturnType<typeof normalizeAuthoringSpecV4>["value"]
+  >,
+): GameplayBootstrapV1 {
+  return createGameplayBootstrapV1({
+    kind: "gameplay-bootstrap",
+    id: `${authoringSpec.id}.${authoringSpec.seed}.gameplay`,
+    version: 1,
+    resourceRef:
+      `worldkit://gameplay-bootstrap/${authoringSpec.id}.${authoringSpec.seed}@1`,
+    entityDescriptors: normalizedWorldIr.nodes
+      .filter((node) => node.kind === "subject")
+      .map((node) => {
+        const definition = normalizedWorldIr.resources.subjectDefinitions.find(
+          (candidate) =>
+            candidate.subjectDefinitionRef === node.subjectDefinitionRef,
+        );
+        if (isNil(definition)) {
+          throw new Error(
+            `missing fixture Subject Definition '${node.subjectDefinitionRef}'`,
+          );
+        }
+        return {
+          id: node.id,
+          entityDefinitionRef: node.subjectDefinitionRef,
+          capabilityRefs: definition.capabilityRefs,
+        };
+      }),
+    featureResourceLocks: [],
+    semanticActionDefinitions: [],
+    availableCapabilityRefs: [],
+  });
+}
+
 function createFixture(
   seed = 1024,
 ): Readonly<{
@@ -57,9 +102,12 @@ function createFixture(
   ) {
     throw new Error(`fixture normalization failed: ${JSON.stringify(normalized.diagnostics)}`);
   }
+  const gameplayBootstrap = createGameplayBootstrap(authoringSpec, normalized.value);
   const compiled = compileWorldV5({
     normalizedWorldIr: normalized.value,
     normalizedWorldIrHash: normalized.normalizedWorldIrHash,
+    gameplayBootstrapResourceLock:
+      createGameplayBootstrapResourceLockEntryV1(gameplayBootstrap),
   });
   if (!compiled.ok || compiled.executionPlan === undefined) {
     throw new Error(`fixture compilation failed: ${JSON.stringify(compiled.diagnostics)}`);
@@ -75,6 +123,7 @@ function createFixture(
     normalizedWorldIr: normalized.value,
     layoutSolveResult,
     executionPlan: compiled.executionPlan,
+    gameplayBootstrap,
     resourceArtifacts: [],
   };
   return {
@@ -85,6 +134,7 @@ function createFixture(
       normalizedWorldIr: normalized.value,
       layoutSolveResult,
       executionPlan: compiled.executionPlan,
+      gameplayBootstrap,
     },
   };
 }
@@ -139,6 +189,25 @@ describe("WorldPackageValidationSubjectV1 assembly", () => {
       "worldPackageRootHash",
     ]);
     expect(Object.isFrozen(subject)).toBe(true);
+    expect(validationInput.worldPackageBuildReceipt.manifest.initialControlledEntityId)
+      .toBe(validationInput.executionPlan.initialControlledEntityId);
+    const expectedPlanResourceLock = canonicalExecutionResourceLockEntriesV1([
+      ...validationInput.normalizedWorldIr.resources.resourceLock,
+      createGameplayBootstrapResourceLockEntryV1(
+        validationInput.gameplayBootstrap,
+      ),
+    ]);
+    expect(validationInput.executionPlan.resourceLockEntries).toEqual(
+      expectedPlanResourceLock,
+    );
+    expect(validationInput.executionPlan.resourceLockEntries).toHaveLength(
+      validationInput.normalizedWorldIr.resources.resourceLock.length + 1,
+    );
+    expect(
+      validationInput.executionPlan.resourceLockEntries.filter(
+        (entry) => entry.resourceKind === "gameplay-bootstrap",
+      ),
+    ).toHaveLength(1);
   });
 
   it("binds a V4 world whose Prototypes restore Traversal Surface bindings", () => {
@@ -174,9 +243,15 @@ describe("WorldPackageValidationSubjectV1 assembly", () => {
       ) {
         throw new Error(`bound fixture normalization failed: ${JSON.stringify(normalized.diagnostics)}`);
       }
+      const gameplayBootstrap = createGameplayBootstrap(
+        authoringSpec,
+        normalized.value,
+      );
       const compiled = compileWorldV5({
         normalizedWorldIr: normalized.value,
         normalizedWorldIrHash: normalized.normalizedWorldIrHash,
+        gameplayBootstrapResourceLock:
+          createGameplayBootstrapResourceLockEntryV1(gameplayBootstrap),
       });
       if (!compiled.ok || compiled.executionPlan === undefined) {
         throw new Error(`bound fixture compilation failed: ${JSON.stringify(compiled.diagnostics)}`);
@@ -192,6 +267,7 @@ describe("WorldPackageValidationSubjectV1 assembly", () => {
         normalizedWorldIr: normalized.value,
         layoutSolveResult,
         executionPlan: compiled.executionPlan,
+        gameplayBootstrap,
         resourceArtifacts: [],
       };
       return {
@@ -201,11 +277,15 @@ describe("WorldPackageValidationSubjectV1 assembly", () => {
           normalizedWorldIr: normalized.value,
           layoutSolveResult,
           executionPlan: compiled.executionPlan,
+          gameplayBootstrap,
         },
       };
     })();
     const subject = createWorldPackageValidationSubjectV1(validationInput);
     expect(subject.resourceLockHash).toBe(
+      validationInput.executionPlan.resourceLockHash,
+    );
+    expect(subject.resourceLockHash).not.toBe(
       validationInput.normalizedWorldIr.resources.resourceLockHash,
     );
     expect(subject.layoutSolveReportHash).toBe(
@@ -234,6 +314,7 @@ describe("WorldPackageValidationSubjectV1 assembly", () => {
       { ...first, normalizedWorldIr: other.normalizedWorldIr },
       { ...first, layoutSolveResult: other.layoutSolveResult },
       { ...first, executionPlan: other.executionPlan },
+      { ...first, gameplayBootstrap: other.gameplayBootstrap },
     ];
 
     for (const candidate of cases) {
@@ -331,7 +412,7 @@ describe("WorldPackageValidationSubjectV1 assembly", () => {
     })).toThrow("WORLD_PACKAGE_VALIDATION_SUBJECT_INPUT_INVALID");
   });
 
-  it("rejects unknown fields, raw hash bags, transitional identities, and V3 artifacts", () => {
+  it("rejects unknown fields and raw hash bags", () => {
     const { validationInput } = createFixture();
     expect(() => createWorldPackageValidationSubjectV1({
       ...validationInput,
@@ -352,28 +433,6 @@ describe("WorldPackageValidationSubjectV1 assembly", () => {
     } as unknown as CreateWorldPackageValidationSubjectInputV1)).toThrow(
       "WORLD_PACKAGE_VALIDATION_SUBJECT_INPUT_INVALID",
     );
-    for (const invalidReceipt of [
-      {
-        kind: "worldkit-transitional-world-package-identity",
-        schemaVersion: 1,
-        worldPackageRootHash: validationInput.worldPackageBuildReceipt.worldPackageRootHash,
-      },
-      {
-        kind: "worldkit-build-artifact",
-        schemaVersion: 3,
-        normalizedWorldIrHash:
-          validationInput.worldPackageBuildReceipt.manifest.normalizedWorldIrHash,
-        executionPlanHash:
-          validationInput.worldPackageBuildReceipt.manifest.executionPlanHash,
-      },
-    ]) {
-      expect(() => createWorldPackageValidationSubjectV1({
-        ...validationInput,
-        worldPackageBuildReceipt: invalidReceipt,
-      } as unknown as CreateWorldPackageValidationSubjectInputV1)).toThrow(
-        "WORLD_PACKAGE_VALIDATION_SUBJECT_INPUT_INVALID",
-      );
-    }
   });
 
   it("rejects all-zero child identities before they can become a subject", () => {
@@ -390,9 +449,13 @@ describe("WorldPackageValidationSubjectV1 assembly", () => {
   });
 
   it("rejects accessors and symbols without invoking hidden state", () => {
-    const accessorInput = createFixture().validationInput;
+    const source = createFixture().validationInput;
+    const accessorInput: CreateWorldPackageValidationSubjectInputV1 = {
+      ...source,
+      executionPlan: structuredClone(source.executionPlan),
+    };
     let readCount = 0;
-    Object.defineProperty(accessorInput.executionPlan, "controlledEntityId", {
+    Object.defineProperty(accessorInput.executionPlan, "initialControlledEntityId", {
       configurable: true,
       enumerable: true,
       get: () => {

@@ -13,7 +13,7 @@ Agent 定义 World Feature
         ↓
 Feature Registry 记录定义与参数
         ↓
-World Compiler 生成 Three.js / Rapier 资源
+World Compiler 生成引擎无关数据，Babylon/Havok Adapter 创建运行资源
 ```
 
 ## 2. World Kernel
@@ -110,7 +110,8 @@ Feature 拥有其全部输出资源。更新或删除 Feature 时，SDK 能精�
 
 ## 5. 约束
 
-Agent 默认不能直接向 `THREE.Scene` 添加不透明对象，而应通过 `BuildContext` 修改世界。Feature 必须：
+Agent 不能直接向 renderer scene 或 physics world 添加不透明对象，而应通过 `BuildContext`
+修改世界。Feature 必须：
 
 - 声明参数 schema
 - 使用确定性随机种子
@@ -119,7 +120,7 @@ Agent 默认不能直接向 `THREE.Scene` 添加不透明对象，而应通过 `
 - 接受顶点数、碰撞体数、构建时间和内存预算
 - 能够被独立重建和删除
 
-底层 Three.js 入口可以作为未来高级能力，但不进入第一期默认 Agent API。
+底层 Provider 对象不作为未来 Agent 扩展入口；算法扩展必须经过版本化 Adapter/Plugin 合同。
 
 ## 6. 第一期参考 Features
 

@@ -73,11 +73,6 @@ export interface MotionKernelLiveLockStateV1 {
   readonly mediumProfileRef: string;
 }
 
-const LEGACY_CONTROL_PROFILE_REF =
-  "worldkit://control-profile/legacy-planar.camera-relative@1";
-const FIRST_SLICE_MEDIUM_PROFILE_REF =
-  "worldkit://medium-profile/ground-air.standard@1";
-
 type ControlFeelSurfaceV1 = ExecutionSubjectV3["controlFeel"];
 
 function requireControlFeel(subject: ExecutionSubjectV3): ControlFeelSurfaceV1 {
@@ -418,12 +413,10 @@ export class MotionKernelRuntimeV1 {
     ) => number | undefined,
   ) {
     this.controlFeel = requireControlFeel(subject);
-    if (subject.capabilityAssembly !== undefined) {
-      if (subject.capabilityAssembly.mediumProfile.air === undefined) {
-        throw new Error(
-          "MEDIUM_PROFILE_FIELD_FORBIDDEN: capability-driven subject requires mediumProfile.air.",
-        );
-      }
+    if (subject.capabilityAssembly.mediumProfile.air === undefined) {
+      throw new Error(
+        "MEDIUM_PROFILE_FIELD_FORBIDDEN: capability-driven subject requires mediumProfile.air.",
+      );
     }
     this.gravity = new Vector3(...gravityMetersPerSecondSquaredXYZ);
     this.gravityDirection = this.gravity.normalizeToNew();
@@ -431,29 +424,15 @@ export class MotionKernelRuntimeV1 {
     this.colliderCenterOffset = new Vector3(
       ...subject.collider.centerOffsetFromSubjectOriginMetersXYZ,
     );
-    const compatibilityProfile: ExecutionMotionProfileV1 = {
-      resourceRef: "worldkit://motion-profile/legacy-ground.compatibility@1",
-      contentHash: "sha256:legacy-motion-profile",
-      motionKernelRef: "worldkit://motion-kernel/free-ground@1",
-      motionTags: ["free-ground", "ground", "legacy"],
-    };
-    const compatibilityFallbackProfile: ExecutionMotionProfileV1 = {
-      resourceRef: "worldkit://motion-profile/legacy-ground.safe-stop@1",
-      contentHash: "sha256:legacy-safe-stop-motion-profile",
-      motionKernelRef: "worldkit://motion-kernel/free-ground@1",
-      motionTags: ["free-ground", "ground", "legacy", "safe", "stopped"],
-    };
     const assembly = subject.capabilityAssembly;
-    const profiles = assembly === undefined
-      ? [compatibilityProfile, compatibilityFallbackProfile]
-      : [
-          assembly.defaultMotionProfile,
-          ...assembly.optionalMotionProfiles,
-          assembly.fallbackMotionProfile,
-        ];
+    const profiles = [
+      assembly.defaultMotionProfile,
+      ...assembly.optionalMotionProfiles,
+      assembly.fallbackMotionProfile,
+    ];
     this.motionModeResolver = new MotionModeResolverV1(
-      assembly?.defaultMotionProfile ?? compatibilityProfile,
-      assembly?.fallbackMotionProfile ?? compatibilityFallbackProfile,
+      assembly.defaultMotionProfile,
+      assembly.fallbackMotionProfile,
       profiles,
       () => true,
     );
@@ -559,12 +538,9 @@ export class MotionKernelRuntimeV1 {
       activeMotionKernelRef: activeMotionProfile.motionKernelRef,
       physicsBodyProfileRef: this.subject.physicsBodyProfileRef,
       locomotionProfileRef: this.subject.locomotionProfileRef,
-      controlProfileRef:
-        assembly?.controlProfile.resourceRef ?? LEGACY_CONTROL_PROFILE_REF,
-      controlProfileHash:
-        assembly?.controlProfile.contentHash ?? "sha256:legacy-control-profile",
-      mediumProfileRef:
-        assembly?.mediumProfile.resourceRef ?? FIRST_SLICE_MEDIUM_PROFILE_REF,
+      controlProfileRef: assembly.controlProfile.resourceRef,
+      controlProfileHash: assembly.controlProfile.contentHash,
+      mediumProfileRef: assembly.mediumProfile.resourceRef,
     });
   }
 
@@ -758,8 +734,8 @@ export class MotionKernelRuntimeV1 {
       motionProfileRef: motionProfile.resourceRef,
       motionKernelRef: motionProfile.motionKernelRef,
       controlFeelProfileRef: this.controlFeel.resourceRef,
-      controlProfileRef: assembly?.controlProfile.resourceRef ?? LEGACY_CONTROL_PROFILE_REF,
-      mediumProfileRef: assembly?.mediumProfile.resourceRef ?? FIRST_SLICE_MEDIUM_PROFILE_REF,
+      controlProfileRef: assembly.controlProfile.resourceRef,
+      mediumProfileRef: assembly.mediumProfile.resourceRef,
       allowWalk: this.subject.locomotion.allowWalk,
       allowRun: this.subject.locomotion.allowRun,
       allowJump: this.subject.locomotion.allowJump,

@@ -1,12 +1,30 @@
 import { describe, expect, it } from "vitest";
 
-import { normalizeAuthoringSpec } from "@whitebox-world/authoring";
+import { normalizeAuthoringSpecV4 } from "@whitebox-world/authoring";
+import {
+  createGameplayBootstrapResourceLockEntryV1,
+  createGameplayBootstrapV1,
+} from "@whitebox-world/gameplay-contracts";
 import { sha256CanonicalJson } from "@whitebox-world/protocol";
 import type { ExecutionSubjectCapabilityAssemblyV1 } from "@whitebox-world/runtime-contracts";
 import { builtInSubjectResourceRegistry } from "@whitebox-world/subject-registry";
 
-import { createValidAuthoringSpec } from "../../authoring/src/test-fixture";
-import { compileWorld } from "./index";
+import {
+  createValidAuthoringSpecV4 as createValidAuthoringSpec,
+} from "../../authoring/src/test-fixture";
+import { compileWorldV5 } from "./index";
+
+const GAMEPLAY_BOOTSTRAP_LOCK =
+  createGameplayBootstrapResourceLockEntryV1(createGameplayBootstrapV1({
+    kind: "gameplay-bootstrap",
+    id: "capability-compile-test.gameplay",
+    version: 1,
+    resourceRef: "worldkit://gameplay-bootstrap/capability-compile-test@1",
+    entityDescriptors: [],
+    featureResourceLocks: [],
+    semanticActionDefinitions: [],
+    availableCapabilityRefs: [],
+  }));
 
 const IMPLEMENTED_PACKAGES = [
   {
@@ -46,7 +64,7 @@ function compilePackage(
   }
   subject.subjectDefinitionRef = subjectDefinitionRef;
 
-  const normalized = normalizeAuthoringSpec(spec);
+  const normalized = normalizeAuthoringSpecV4(spec);
   if (
     !normalized.ok ||
     normalized.value === undefined ||
@@ -54,9 +72,10 @@ function compilePackage(
   ) {
     throw new Error(`Capability package failed to normalize: ${JSON.stringify(normalized.diagnostics)}`);
   }
-  const compiled = compileWorld({
+  const compiled = compileWorldV5({
     normalizedWorldIr: normalized.value,
     normalizedWorldIrHash: normalized.normalizedWorldIrHash,
+    gameplayBootstrapResourceLock: GAMEPLAY_BOOTSTRAP_LOCK,
   });
   if (!compiled.ok || compiled.executionPlan === undefined) {
     throw new Error(`Capability package failed to compile: ${JSON.stringify(compiled.diagnostics)}`);
@@ -129,7 +148,7 @@ describe("capability-driven Subject compilation", () => {
       }
       subject.subjectDefinitionRef = subjectDefinitionRef;
 
-      const normalized = normalizeAuthoringSpec(spec);
+      const normalized = normalizeAuthoringSpecV4(spec);
 
       expect(normalized.ok).toBe(false);
       expect(normalized.diagnostics).toEqual(expect.arrayContaining([
@@ -145,7 +164,7 @@ describe("capability-driven Subject compilation", () => {
       throw new Error("Expected the valid fixture to contain a Subject node.");
     }
     subject.subjectDefinitionRef = "worldkit://subject-definition/humanoid.g-bot@1";
-    const normalized = normalizeAuthoringSpec(spec);
+    const normalized = normalizeAuthoringSpecV4(spec);
     if (!normalized.ok || normalized.value === undefined) {
       throw new Error(`G Bot fixture did not normalize: ${JSON.stringify(normalized.diagnostics)}`);
     }
@@ -163,9 +182,10 @@ describe("capability-driven Subject compilation", () => {
     }
     definition.capabilityAssembly.relationshipProfiles = [reservedSeat];
 
-    expect(compileWorld({
+    expect(compileWorldV5({
       normalizedWorldIr: forged,
       normalizedWorldIrHash: sha256CanonicalJson(forged),
+      gameplayBootstrapResourceLock: GAMEPLAY_BOOTSTRAP_LOCK,
     })).toMatchObject({
       ok: false,
       diagnostics: [{

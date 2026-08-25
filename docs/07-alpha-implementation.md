@@ -1,128 +1,116 @@
-# Legacy 第一期 Alpha 实现与运行指南（Three/Rapier/local-Mixamo）
+# Babylon Alpha 实现与运行指南
 
-> 本文只记录 Legacy Three.js/Rapier/local-Mixamo 创作 Playground，保留用于场景
-> 创作实验和迁移回归；它不是 Canonical Babylon S1b 的接入指南或当前协议真相。
-> 新程序请使用 [Canonical Authoring V2 快速接入](17-canonical-json-quickstart.md)。
-> 2026-08-15 的历史实验与边界见[当前实验与验证记录](10-current-experiments.md)。
+> 本文记录当前唯一的 Babylon/Havok 白膜 Runtime 与 catalog 场景工作流。Canonical
+> Authoring 输入和 Browser 协议以
+> [Canonical Authoring V4 快速接入](17-canonical-json-quickstart.md)为准；本文不定义第二套
+> Schema 或 Gameplay 真相。
 
-> Golden Humanoid S1b 首个可视纵向切片已完成并进入回归；S1b 整体与 Semantic Actions 整体仍未完成.
-
-## Legacy 已交付运行链路
-
-当前 Playground 不是静态界面，而是用 SDK 的真实模块构建并运行下面这条链路：
+## 1. 当前运行链路
 
 ```text
-FeatureRegistry
-  ├─ TiledRollingTerrain   → 4×4 Heightfield → Three Mesh + Rapier Collider
-  ├─ Lake/WaterBody        → Basin + outer shore bank + shader surface + Semantic
-  └─ CompoundLandmark      → Geometry hierarchy + Rapier Collider
-
-HumanoidThirdPersonSubjectKit
-  ├─ Rapier capsule motor
-  ├─ Mixamo-compatible SkinnedMesh（+Z 资产正面自动校正到运行时 -Z 前进轴）
-  ├─ idle / walk / run state machine
-  └─ ThirdPersonCameraRig + physics raycast collision + vertical jitter filtering
+OutdoorWorldSpec / AuthoringSpec V4
+  -> NormalizedWorldIR V4
+  -> ExecutionPlan V5 / RuntimeWorldConfiguration V1
+  -> BabylonWorldAdapter + Havok
+  -> Gameplay / Opening Composition / Planning Capture / Whitebox Tri-view
 ```
 
-用户操作与固定输入 Smoke 走同一套 SubjectKit、物理世界和固定更新循环。世界检查器直接显示 Feature 参数、版本、seed、状态、资源、顶点数和诊断；Feature budget 与 build time 由 Registry 追踪，但当前 UI 尚未显示。
+Babylon 拥有场景、相机、资产、动画与渲染资源；Havok 拥有碰撞、支撑和 Character
+运动。Catalog gameplay、artifact-only 捕获与 Canonical Authoring 页面使用相同的
+Authoring/Compiler 和 Runtime 边界，不允许场景模块直接创建 Provider 对象或维护备用状态。
 
-## 运行
+`@whitebox-world/camera` 已提供 provider-neutral 的命名 Camera Rig/Modifier/Context Profile、
+View Preference、纯 Selection/Explain 和诊断。它还没有接入 committed Gameplay Context
+Projection、Browser preference 命令或 Babylon CameraDirector 的最终 Pose 流程，因此不能把
+第一人称、飞行跟随或按场景自动切换视角描述成已交付 Runtime 能力。
 
-要求 Node.js 20+ 与 pnpm 10+。
+## 2. Canonical Authoring Runtime
+
+要求 Node.js 20+ 与 pnpm 10+：
 
 ```bash
 pnpm install
+pnpm worldkit validate examples/authoring/package-subject-world.json --json
+pnpm worldkit run examples/authoring/package-subject-world.json
+```
+
+`worldkit run` 负责注入 `?authoring=1` 所需的 AuthoringSpec，并发布
+`window.__WORLDKIT__` Browser Protocol V5。不要把普通 `pnpm dev` 与 `?authoring=1`
+组合。
+
+查看 G Bot：
+
+```bash
+pnpm dev:g-bot
+```
+
+依赖切换后若浏览器报告 `504 Outdated Optimize Dep`，停止旧服务并只运行一次：
+
+```bash
+pnpm dev:g-bot:refresh
+```
+
+## 3. Babylon catalog Playground
+
+```bash
 pnpm dev
 ```
 
-打开 `http://127.0.0.1:5173/`。
+打开 `http://127.0.0.1:5173/?scene=<catalog-id>`。该入口用于现有 catalog gameplay、场景
+检查、Opening Composition 和规划/三视图制品，不是 Canonical JSON 的注入入口。
 
-常用验证命令：
+场景页面可通过 `window.__WHITEBOX_PLAYGROUND__` 暴露有界的自动化能力，例如 Snapshot、
+Feature inspection、固定输入和截图。它是 catalog/制品工作流的测试面，不替代
+`window.__WORLDKIT__` 的 Canonical Browser 合同。
+
+常用门禁：
 
 ```bash
+pnpm test:scenes
 pnpm typecheck
-pnpm test
 pnpm build
+pnpm verify:outdoor-gameplay
 ```
 
-默认 `grassland` 场景为 640m × 640m 的 `plain` 分块地形和大型湖泊；`?scene=canyon` 是一个只使用公开 BuildContext 编写的自定义峡谷/Polygon 河流场景；`?scene=azure-bay` 和 `?scene=mistbound-rider` 用于更复杂的图片构图/语义组合实验。地形基础预设为 `flat / plain / hills / mountains`，人形最大爬坡角为 42°，48°以上自动滑落。`↑ / ↓` 按玩家视线方向控制上下观察；角色显示使用固定物理步长插值和接地高度平滑，固定输入 Smoke 同时验证移动、Transform 有限性和两个方向的镜头输入。
+## 4. Plan-first 场景与制品合同
 
-顶部“录制画面”直接采集 Three.js WebGL canvas，默认以 60 FPS、12 Mbps 编码。录制中仍可正常使用键鼠；停止后浏览器自动下载 WebM 或 MP4。HUD、操作提示、检查器、录制状态和其他 DOM UI 都不在视频流中。
+Plan-first 工作流继续保留以下权威工件：
 
-Playground 左上角的 `WHITEBOX / LOCAL PREVIEW` 明确表示当前只运行 Three.js 本地白膜预览；没有实时世界模型或多 pass Render Bridge。
+1. `apps/playground/src/scenes/plans/<catalog-id>.ts` 中完整的 WorldSpec、WorldPrompt、
+   Entity Catalog 和 Opening Shot；
+2. Codex imagegen 生成的 `world-plan.png` 与 `opening-shot.png`；
+3. Host 生成且不可手改的 `artifacts/scenes/<catalog-id>/plan-lock.json`；
+4. SDK 从实际白膜派生的 Height/Slope、Opening Composition、planning views 和每个
+   Prototype 的 `front/right/back` whitebox tri-view；
+5. 以 verified whitebox tri-view 为结构输入生成的 styled tri-view 和最终 opening frame。
 
-Playground 暴露只用于测试和集成的浏览器 API：
-
-```ts
-window.__WHITEBOX_PLAYGROUND__.getSnapshot();
-window.__WHITEBOX_PLAYGROUND__.inspectFeatures();
-await window.__WHITEBOX_PLAYGROUND__.runFixedInput([
-  { actions: ["forward", "run"], ticks: 120 },
-]);
-window.__WHITEBOX_PLAYGROUND__.captureScreenshot();
-```
-
-## 本地 Mixamo 兼容人形
-
-仓库记录了本地 Mixamo 动作和候选 Xbot 的文件哈希、骨架与 clip 清单，但不会复制或分发来源/再分发授权尚未确认的资产。
-
-在启动隔离 Agent 之前，由用户把自己的带骨骼 GLB 导入到 Playground：
+基本流程：
 
 ```bash
-pnpm import:local-humanoid -- /absolute/path/to/Xbot.glb
+pnpm plan:freeze -- --scene <catalog-id>
+pnpm plan:check -- --scene <catalog-id>
+pnpm plan:scene -- --scene <catalog-id>
+pnpm plan:scene:check -- --scene <catalog-id>
+pnpm visual:finalize -- --scene <catalog-id>
+pnpm visual:check -- --scene <catalog-id>
 ```
 
-也可以使用环境变量：
+World Plan 和 Opening Shot 表达创作意图，不能替代实际高度、坡度、碰撞和可通行性。
+Opening Composition 的 required region/anchor 失败是 Blocking Failure，不能由综合分数或
+Feature presence 抵消。Whitebox tri-view 必须由已验证的 Babylon Runtime 捕获，不能用图片
+生成工具虚构。
 
-```bash
-WHITEBOX_HUMANOID_GLB=/absolute/path/to/Xbot.glb pnpm import:local-humanoid
-```
+## 5. 当前明确边界
 
-导入命令会复制文件到 gitignored 的 workspace 本地缓存，不会创建指向其他目录的符号链接。运行时要求至少包含一个 `SkinnedMesh`，并包含归一化后名为 `mixamorighips` 的根骨骼（例如 `mixamorig:Hips`）。当前 action manifest 只声明目标 GLB 中真实存在的 `idle`、`walk`、`run`。本地 `Jump.fbx` 已登记为源动作，但尚未完成目标绑定和视觉 QA，因此跳跃物理存在、跳跃动画不会被伪报为完成。
+- 当前生产承诺是室外 Heightfield、静态障碍、水域、Ground/Air Character 和第三人称跟随；
+- 第一人称、车辆、骑乘、飞行、游泳、NPC、完整室内、洞穴、联网与实时 World Model 仍是
+  Capability Gap；
+- `mistbound-rider` 等 catalog 场景中的组合主体可以是构图 Fixture，不自动获得骑乘或飞行
+  能力；
+- 最终 GLB 必须经过 Registry、长度/Hash、Inventory、Babylon load/instantiate/dispose 门禁；
+  源格式转换不属于 SDK Runtime 或仓库内资产接入能力；
+- 自动化合同、渲染证据与人工交互证据必须分开报告，单一 smoke test 不代表生产支持。
 
-## Agent 如何自由定义世界
-
-Agent 不需要等 SDK 新增“火山”或“峡谷”名词。它可以使用受追踪的 BuildContext 组合基础空间操作：
-
-```ts
-const VolcanoFeature = defineWorldFeature({
-  type: "custom.volcano",
-  version: 1,
-  source: "game/features/volcano.ts",
-  schema: { size: "positiveNumber", height: "positiveNumber" },
-  build(ctx, params) {
-    const terrainId = ctx.terrain.create({
-      width: params.size * 3,
-      depth: params.size * 3,
-      xSegments: 64,
-      zSegments: 64,
-    });
-    ctx.terrain.raise(terrainId, {
-      area: ctx.shape.circle([0, 0], params.size),
-      amount: params.height,
-      falloffWidth: params.size,
-    });
-    ctx.terrain.lower(terrainId, {
-      area: ctx.shape.circle([0, 0], params.size * 0.2),
-      amount: params.height * 0.4,
-      falloffWidth: params.size * 0.2,
-    });
-    ctx.semantic.bind(terrainId, { semantic: "volcano" });
-    return { terrainId };
-  },
-});
-```
-
-Registry 会追踪定义版本、来源哈希、参数、seed、依赖、输出资源、预算和诊断。失败构建会回滚，不会留下半完成资源。
-
-## 当前明确边界
-
-- 本节只描述 Legacy Three/Rapier/local-Mixamo 路径；Canonical Babylon 的 Golden
-  GLB/Rig/Animation/Collider Profile 事实以快速接入和 S1b 设计文档为准。
-- 这是第一期 Alpha，不是生产级完整游戏引擎。
-- 已实现 Circle、Ellipse、Polygon；Curve/Path 和通用 SDF 仍是后续扩展点。
-- 湖泊的地形凹陷、水面和语义已实现；`blocked/swimmable` 目前是语义契约，尚未变成完整游泳/禁行玩法。
-- 目前只有第三人称人形；车辆、骑乘、动物、第一人称与室内属于第二期。
-- 未实现 NPC、寻路、任务、联网和实时生成式渲染桥。
-- `mistbound-rider` 的马和骑手是非碰撞静态标志物，只用于构图实验，不是骑乘 SubjectKit。
-- 当前候选 Xbot GLB 中确实存在并可绑定 `idle / walk / run` clip；这不证明 retarget 观感、循环接触质量或发布就绪。正式分发前仍需确认资产授权并做人工动作观感验收。
+当前迁移与最终集成状态见
+[SDK 重构总进度与 Backlog](18-refactor-progress-and-backlog.md)和
+[Babylon-only Runtime 收口实施计划](superpowers/plans/2026-08-25-babylon-only-threejs-retirement.md)。

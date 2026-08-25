@@ -37,7 +37,7 @@ function validManifest(
     executionPlanHash: HASH_C,
     resourceLockHash: HASH_D,
     layoutSolveReportHash: HASH_E,
-    controlledEntityId: "player",
+    initialControlledEntityId: "player",
     entryPoint: {
       executionPlanPath: "targets/babylon-web/execution-plan.json",
     },
@@ -72,6 +72,17 @@ describe("WorldPackageManifestV1", () => {
     expect(JSON.stringify(manifest).toLowerCase()).not.toMatch(
       /babylonmesh|havok|recast|providerhandle|\/users\//,
     );
+  });
+
+  it("requires the clean-break initial control candidate and rejects the old alias", () => {
+    const manifest = canonicalWorldPackageManifestV1(validManifest());
+
+    expect(manifest.initialControlledEntityId).toBe("player");
+    expect(manifest).not.toHaveProperty("controlledEntityId");
+    expect(() => canonicalWorldPackageManifestV1({
+      ...validManifest(),
+      controlledEntityId: "player",
+    })).toThrow("WORLD_PACKAGE_MANIFEST_INVALID");
   });
 
   it("sorts resources by resourceRef then packagePath and rejects ambiguity", () => {

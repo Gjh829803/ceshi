@@ -16,6 +16,7 @@ import {
   sha256CanonicalJson,
   stringifyCanonicalJson,
 } from "@whitebox-world/protocol";
+import type { WorldRuntimeSnapshotV4 } from "@whitebox-world/runtime-contracts";
 
 import {
   collectControlCaptureBundleByteEvidenceV1,
@@ -27,6 +28,84 @@ import {
 
 const temporaryDirectories: string[] = [];
 const WORLD_HASH = `sha256:${"a".repeat(64)}` as Sha256HashV1;
+
+function runtimeSnapshot(simulationTick: number): WorldRuntimeSnapshotV4 {
+  const runtimeSessionId = "session-test";
+  const worldSessionId = "world-session-test";
+  return {
+    kind: "worldkit-runtime-snapshot",
+    schemaVersion: 4,
+    runtimeSessionId,
+    worldSessionId,
+    world: {
+      publicationEpoch: 1,
+      simulationTick,
+      worldStateRef: `worldkit://world-state/world-state:${"d".repeat(64)}`,
+      worldStateHash: WORLD_HASH,
+      subjectStatesByEntityId: {},
+      gameplayInspection: {
+        kind: "worldkit-gameplay-inspection-snapshot",
+        schemaVersion: 1,
+        projection: "inspection",
+        id: `gameplay-inspection:${worldSessionId}:${simulationTick}`,
+        runtimeSessionId,
+        worldSessionId,
+        gameplayModeRef: "worldkit://gameplay-mode/outdoor.default@1",
+        phase: "ready",
+        simulationTick,
+        participantStatesById: {
+          "participant-primary": { id: "participant-primary", mode: "active" },
+        },
+        controllerStatesById: {
+          "controller-primary": {
+            id: "controller-primary",
+            participantId: "participant-primary",
+          },
+        },
+        possessedByRelationshipsById: {
+          "possessed-by-primary": {
+            id: "possessed-by-primary",
+            type: "possessedBy",
+            schemaVersion: 1,
+            controlledEntityId: "player",
+            controllerEntityId: "controller-primary",
+            establishedSimulationTick: simulationTick,
+          },
+        },
+        activeActionStatesById: {},
+        activatedGameplayFeatureRefs: [],
+        lastEventSequence: 0,
+      },
+    },
+    view: {
+      viewStateRevision: simulationTick,
+      camera: {
+        mode: "tracking",
+        id: "camera-main",
+        targetEntityId: "player",
+        positionMetersXYZ: [0, 2, 5],
+        activeCameraProfileRef: "worldkit://camera-profile/test@1",
+        activeCameraRigRef: "worldkit://camera-rig/third-person-orbit@1",
+        activeCameraModifierRefs: [],
+        safeFallbackActive: false,
+        viewYawOffsetRadians: 0,
+        viewPitchOffsetRadians: 0,
+        viewDistanceOffsetMeters: 0,
+      },
+    },
+    runtime: {
+      phase: "ready",
+      isPaused: true,
+      fixedTimeStepSeconds: 1 / 60,
+    },
+    resources: {
+      phase: "ready",
+      meshCount: 1,
+      physicsBodyCount: 1,
+      terrainSampleCount: 4,
+    },
+  };
+}
 
 async function createTemporaryDirectory(): Promise<string> {
   const directory = await mkdtemp(path.join(tmpdir(), "worldkit-control-capture-"));
@@ -136,23 +215,7 @@ function frameInput(
       viewMatrixColumnMajor: [1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1] as const,
       projectionMatrixColumnMajor: [1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1] as const,
     },
-    snapshot: {
-      kind: "worldkit-runtime-snapshot",
-      schemaVersion: 3,
-      runtimeBackend: "babylon-havok",
-      tick: simulationTick,
-      ready: true,
-      controlledEntityId: "player",
-      controllersById: { "controller-primary": { id: "controller-primary", controlledEntityId: "player" } },
-      subjectStatesByEntityId: {},
-      camera: {
-        entityId: "camera-main",
-        targetEntityId: "player",
-        positionMetersXYZ: [0, 2, 5] as const,
-      },
-      physics: { backend: "havok", ready: true, fixedTimeStepSeconds: 1 / 60 },
-      resources: { meshes: 1, bodies: 1, terrainSamples: 4 },
-    },
+    snapshot: runtimeSnapshot(simulationTick),
     passesById: Object.fromEntries(CONTROL_CAPTURE_PASS_IDS_V1.map((passId) => [
       passId,
       {
@@ -175,6 +238,7 @@ async function createWriter(outputDirectory: string) {
       executionPlanHash: `sha256:${"c".repeat(64)}` as Sha256HashV1,
     },
     runtimeSessionId: "session-test",
+    worldSessionId: "world-session-test",
     semanticClasses: [{ numericId: 1, semanticClassId: "terrain.ground" }],
     instances: [{ numericId: 1, entityId: "terrain-main", semanticClassId: "terrain.ground" }],
   });
@@ -291,6 +355,30 @@ describe("Control Capture Bundle V1", () => {
     const mixed = { ...frameInput(0, 0), runtimeSessionId: "other-session" };
     await expect(secondWriter.appendFrame(mixed)).rejects.toThrow("CAPTURE_SESSION_MISMATCH");
     await expect(access(secondOutput)).rejects.toThrow();
+
+    const thirdOutput = path.join(parent, "capture-bundle-3");
+    const thirdWriter = await createWriter(thirdOutput);
+    const mixedSnapshot = frameInput(0, 0);
+    await expect(thirdWriter.appendFrame({
+      ...mixedSnapshot,
+      snapshot: {
+        ...mixedSnapshot.snapshot,
+        runtimeSessionId: "other-session",
+      },
+    })).rejects.toThrow("CAPTURE_SESSION_MISMATCH");
+    await expect(access(thirdOutput)).rejects.toThrow();
+
+    const fourthOutput = path.join(parent, "capture-bundle-4");
+    const fourthWriter = await createWriter(fourthOutput);
+    const crossWorldSnapshot = frameInput(0, 0);
+    await expect(fourthWriter.appendFrame({
+      ...crossWorldSnapshot,
+      snapshot: {
+        ...crossWorldSnapshot.snapshot,
+        worldSessionId: "other-world-session",
+      },
+    })).rejects.toThrow("CAPTURE_SESSION_MISMATCH");
+    await expect(access(fourthOutput)).rejects.toThrow();
     expect((await readdir(parent)).filter((name) => name.includes("staging"))).toEqual([]);
   });
 

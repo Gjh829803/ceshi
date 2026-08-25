@@ -113,7 +113,7 @@ Actions 已经通过验收。
 
 | 反馈 | 当前处理 | 验证状态 |
 |---|---|---|
-| W 前进方向与人物朝向相反 | Canonical Golden/G Bot 资产与运行时统一为 `-Z`；Legacy Mixamo `+Z` 资产仍在旧加载层校正 | Golden 与 G Bot E2E 覆盖 `-Z` 朝向；每个后续产品资产仍需独立视觉 QA |
+| W 前进方向与人物朝向相反 | Canonical 资产与 Runtime 统一为 `-Z`；不符合约定的源资产必须在仓库外规范化为 admitted GLB | Golden 与 G Bot E2E 覆盖 `-Z` 朝向；每个后续产品资产仍需独立视觉 QA |
 | 镜头离人物过远 | 第三人称默认距离下调，并允许场景在 `1.8..8m` 内设置初始距离 | 参数校验和镜头单测已覆盖 |
 | 地图太小 | 默认草地扩展为 4 × 4 个 160m tile，即 640m × 640m | 场景编译测试已覆盖 |
 | 水体奇怪 | 增加专用 WaterBody/Lake：湖盆、岸带、水位、浅深色、菲涅尔和轻微波纹 | 功能已运行；最终水质仍由世界模型负责 |
@@ -121,7 +121,7 @@ Actions 已经通过验收。
 | 角色在不平地面上带动镜头颠簸 | 固定物理步长插值、接地高度平滑和镜头竖直抖动过滤 | 单测/Smoke 覆盖数值稳定性；主观手感仍需持续人工回归 |
 | 所有地形都过度起伏 | 增加 `flat/plain/hills/mountains`，要求按用户场景选择 | API、场景规则和测试已覆盖 |
 | 不可爬坡面没有定义 | 人形 42° 最大爬坡、48° 自动滑落，主路线建议 ≤35° | 出生点坡度检查；Azure Bay 路线测试覆盖 ≤35° |
-| 分块地形出现缝或高差 | 分块使用世界坐标采样；渲染网格和 Rapier 高度场复用同一高度数据 | 自动测试验证高度/物理对齐；像素级接缝仍需浏览器截图回归 |
+| 分块地形出现缝或高差 | 分块使用世界坐标采样；Babylon 渲染网格和 Havok 高度场复用同一高度数据 | 自动测试验证高度/物理对齐；像素级接缝仍需浏览器截图回归 |
 | 参考图白膜只有几个圆和浮动方块 | 增加全局高度 Raster、语义 Mask、地形内生远岛、地形吸附标志物和首帧构图门禁 | `sunlit-flower-bay` 浏览器实测区域 IoU、人物与灯塔锚点均过线 |
 | 需要不带 UI 的游玩录屏 | 直接录制 WebGL canvas 的 60 FPS 视频流，停止后按浏览器编码能力下载 WebM/MP4 | 真实浏览器录制 6 秒并生成 1.2 MB WebM；录制按钮、HUD 和检查器不在 canvas 流中 |
 
@@ -143,7 +143,7 @@ Actions 已经通过验收。
 - 参考图先复制为项目内 `reference-0.png`，并和 World Plan、Opening Shot、WorldSpec 一起进入 `plan-lock.json`；Builder 只消费项目内 URI，未读取其他工作区目录。
 - Planner 扩展出 1200m × 1000m 完整世界、进入视角、六条路线、一个主体 Prototype 与灯塔/房屋/帆船三个物体 Prototype。四类实例分别使用红、黄、蓝、紫唯一白膜色。
 - 旧 Builder 虽通过数值测试，但首帧本质上仍是几个圆形抬升、一个水面和两个浮动方块岛；规划 Region 只是元数据，没有真正写入几何。这一结果被保留为失败样例并触发 SDK 改造。
-- 新 Builder 用一张 241 × 201 的 Agent 数据场表达完整海湾、海岸、远岛、出生坡面和路径高程，用独立 Raster Mask 标出草地、岩壁和道路。地形、渲染网格和 Rapier 仍共享同一高度数据，远岛不再是方块，房屋与灯塔在构建时吸附地面。
+- 新 Builder 用一张 241 × 201 的 Agent 数据场表达完整海湾、海岸、远岛、出生坡面和路径高程，用独立 Raster Mask 标出草地、岩壁和道路。地形、Babylon 渲染网格和 Havok 仍共享同一高度数据，远岛不再是方块，房屋与灯塔在构建时吸附地面。
 - Opening Shot 新增 320 × 180 语义 Mask 门禁：天空/海湾用区域 IoU，人物/灯塔用投影中心与尺寸误差；总分达标也不能覆盖单项失败。浏览器最终验收已通过。
 - Codex Image 工具以白膜三视图作为结构约束、参考图和 Opening Shot 作为风格约束，生成四张样式三视图和 `opening-frame-rendered.png`。`visual-bible-manifest.json` 已记录最终首帧与全部八张三视图的哈希，`visual:check` 通过。
 - Builder 隔离流程曾两次把并发文档提交或自身临时编译缓存误判为越权；实现本身的测试、类型检查、构建和规划导出均通过。后续应把权限审计的基线限定为 Agent 阶段开始后的授权文件集合，并显式忽略阶段私有临时目录。
@@ -170,7 +170,6 @@ pnpm visual:check -- --scene sunlit-flower-bay passed
 
 已知非阻塞告警：
 
-- Rapier compat 初始化仍会输出 deprecated parameter 警告，需要升级调用方式。
 - Playground 生产构建通过；Vite 仍提示多个大于 500 kB 的 chunk，需要后续
   code splitting，但不阻塞当前协议与 E2E 门禁。
 
@@ -180,9 +179,9 @@ pnpm visual:check -- --scene sunlit-flower-bay passed
 
 - 场景可编译、所有 Feature 构建成功。
 - 资源唯一所有权、依赖、有限 Transform，以及出生点的地形高度/落差/坡度安全；尚未检查出生点与水体、标志物或世界边界相交。
-- 各场景渲染高度采样与 Rapier 高度场一致。
+- 各场景 Babylon 渲染高度采样与 Havok 高度场一致。
 - Azure Bay 从出生点到观景坡底的主路线坡度不超过 35°；Sunlit Flower Bay 六条冻结路线均满足各自 30°–34° 上限。
-- Core、Physics、Camera、Subject、Animation、Terrain、Feature、Schema 和 Testkit 的核心单元测试。
+- Camera Domain、Runtime Babylon、Terrain、Feature、Schema、World 和 Testkit 的核心单元测试。
 - WorldSpec 的必需字段、项目内图片 URI、Feature/进入镜头一致性，以及结构化规划工件的确定性导出。
 - WorldPrompt 完整性、Prototype/Instance 引用、唯一实例色、固定三视图路径和 Landmark 运行时绑定。
 - Planner 冻结输入的哈希漂移、verified 场景清单和 Visual Bible 输入文件完整性。
@@ -202,10 +201,9 @@ pnpm visual:check -- --scene sunlit-flower-bay passed
 
 其他实现层已知问题：
 
-- `WorldSnapshot.player.grounded` 目前由最近动作推断，不是 Rapier motor 的真实 grounded 状态。
 - `reset()` 重置主体、镜头和输入，但不会把 World tick 或 frame 归零。
 - `humanoid-rig-status` 是 Adapter 为检查器追加的运行时状态项，不属于 FeatureRegistry 资源图。
-- 早期未引用的 `demo-world-adapter.ts` 已删除；Playground 只保留真实 `SdkWorldAdapter` 链路。
+- Playground gameplay、catalog 和 artifact-only 路由只保留 Babylon-backed Adapter 链路。
 
 ## 7. 当前结论
 

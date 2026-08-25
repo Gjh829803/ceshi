@@ -8,7 +8,7 @@ import type {
 
 import {
   cliFailure,
-  loadWorldkitPipeline,
+  loadWorldkitRoutePipeline,
   type WorldkitFailure,
 } from "./worldkit-pipeline";
 
@@ -80,7 +80,7 @@ export async function explainSubjectFile(
   inputPath: string,
   entityId: string,
 ): Promise<SubjectExplanationResultV1> {
-  const pipeline = await loadWorldkitPipeline(inputPath);
+  const pipeline = await loadWorldkitRoutePipeline(inputPath);
   if (!pipeline.ok) return pipeline;
 
   const executionSubject = pipeline.executionPlan.subjects.find(
@@ -106,7 +106,7 @@ export async function explainSubjectFile(
   if (definition === undefined) {
     return cliFailure(
       "SUBJECT_DEFINITION_NOT_FOUND",
-      `Resolved Subject Definition '${executionSubject.subjectDefinitionRef}' is missing from NormalizedWorldIRV3.`,
+      `Resolved Subject Definition '${executionSubject.subjectDefinitionRef}' is missing from NormalizedWorldIRV4.`,
       {
         entityId,
         subjectDefinitionRef: executionSubject.subjectDefinitionRef,

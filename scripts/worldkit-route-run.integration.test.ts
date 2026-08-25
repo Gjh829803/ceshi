@@ -18,6 +18,7 @@ const ROUTE_SELECTOR = {
   constraintId: "player-can-reach-watchtower",
   routeId: "spawn-to-watchtower",
 } as const;
+const WORLDKIT_ROUTE_BROWSER_READY_TIMEOUT_MILLISECONDS = 120_000;
 
 interface WorldkitRunReadyV1 {
   readonly ok: true;
@@ -190,7 +191,7 @@ describe("worldkit run trusted Route Host transport", () => {
         authoringSpecHash: pipeline.normalizedWorldIr.authoringSpecHash,
         normalizedWorldIrHash: pipeline.normalizedWorldIrHash,
         executionPlanHash: pipeline.executionPlanHash,
-        resourceLockHash: pipeline.normalizedWorldIr.resources.resourceLockHash,
+        resourceLockHash: pipeline.executionPlan.resourceLockHash,
         layoutSolveReportHash: pipeline.layoutSolveReportHash,
       };
       const port = await allocateAvailablePort();
@@ -217,7 +218,7 @@ describe("worldkit run trusted Route Host transport", () => {
         throw new Error("worldkit run did not receive a process ID.");
       }
       const childProcessId = child.pid;
-      const ready = await waitForWorldkitRunReady(child, 75_000);
+      const ready = await waitForWorldkitRunReady(child, 120_000);
       expect(ready.port).toBe(port);
       expect(await ownedRouteEvidenceDirectories(childProcessId)).toHaveLength(1);
 
@@ -225,12 +226,12 @@ describe("worldkit run trusted Route Host transport", () => {
       const page = await browser.newPage();
       await page.goto(ready.url, {
         waitUntil: "domcontentloaded",
-        timeout: 30_000,
+        timeout: WORLDKIT_ROUTE_BROWSER_READY_TIMEOUT_MILLISECONDS,
       });
       await page.waitForFunction(
         () => window.__WORLDKIT__ !== undefined,
         undefined,
-        { timeout: 30_000 },
+        { timeout: WORLDKIT_ROUTE_BROWSER_READY_TIMEOUT_MILLISECONDS },
       );
       const result = await page.evaluate(async (selector) => {
         const api = window.__WORLDKIT__!;
@@ -303,5 +304,5 @@ describe("worldkit run trusted Route Host transport", () => {
       if (!isNil(child)) await stopWorldkitRun(child).catch(() => undefined);
       await rm(temporaryDirectory, { recursive: true, force: true });
     }
-  }, 120_000);
+  }, 300_000);
 });

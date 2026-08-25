@@ -1,8 +1,8 @@
 import { describe, expect, it } from "vitest";
 
 import {
-  TRUSTED_DEFAULT_CONTROLLER_ID,
   WORLDKIT_BROWSER_PROTOCOL_VERSION,
+  WORLDKIT_GAMEPLAY_EVENT_PAGE_MAXIMUM_COUNT,
   EXECUTION_RESOURCE_KINDS_V1,
   canonicalExecutionResourceLockEntriesV1,
   canonicalWorldkitBrowserRouteEvidencePublicationV2,
@@ -10,6 +10,7 @@ import {
   type ExecutionColliderProfileV1,
   type ExecutionRigProfileV1,
   type ExecutionSubjectAssetV1,
+  type ExecutionSubjectCapabilityAssemblyV1,
   type ExecutionSubjectV3,
   type ExecutionLayoutAssertionV1,
   type ExecutionStaticColliderV1,
@@ -18,13 +19,73 @@ import {
   type ExecutionPlanV5,
   type ExecutionTraversalSurfaceV1,
   type FixedInputV1,
-  type WorldRuntimeSnapshotV3,
+  type GameplayEventsQueryV1,
+  type GameplayEventsQueryResultV1,
+  type RuntimeActivityRequestV1,
+  type RuntimeActivityReceiptV1,
+  type WorldStateSnapshotRequestV1,
+  type WorldRuntimeSnapshotV4,
   type WorldkitBrowserApiV5,
   type WorldkitBrowserRouteEvidencePublicationV2,
   type WorldkitBrowserDiagnosticV1,
 } from "./index";
+import type {
+  GameplayInspectionSnapshotV1,
+  WorldStateSnapshotV1,
+} from "@whitebox-world/gameplay-contracts";
 
 const ROUTE_PUBLICATION_HASH = `sha256:${"a".repeat(64)}` as const;
+
+function capabilityAssemblyFixture(): ExecutionSubjectCapabilityAssemblyV1 {
+  const motionProfile = {
+    resourceRef: "worldkit://motion-profile/test@1",
+    contentHash: ROUTE_PUBLICATION_HASH,
+    motionKernelRef: "worldkit://motion-kernel/test@1",
+    motionTags: ["ground"],
+  };
+  return {
+    authoringAvailability: "recommended",
+    physicsBodyProfileRef: "worldkit://physics-body-profile/test@1",
+    locomotionProfileRef: "worldkit://locomotion-profile/test@1",
+    defaultMotionProfile: motionProfile,
+    optionalMotionProfiles: [],
+    fallbackMotionProfile: motionProfile,
+    motionKernels: [{
+      resourceRef: "worldkit://motion-kernel/test@1",
+      implementationId: "free-ground",
+      commandKind: "planar-vector",
+      supportedMediums: ["ground", "air"],
+      runtimeParameterNames: [],
+      fallbackMotionProfileRef: motionProfile.resourceRef,
+      deterministic: true,
+    }],
+    controlProfile: {
+      resourceRef: "worldkit://control-profile/test@1",
+      contentHash: ROUTE_PUBLICATION_HASH,
+      commandKind: "planar-vector",
+      inputSpace: "camera-relative",
+      facingPolicy: "align-to-move",
+      lateralMovementPolicy: "allowed",
+      moveDeadzoneRatio: 0.1,
+    },
+    cameraContext: {
+      resourceRef: "worldkit://camera-context/test@1",
+      defaultCameraRigProfileRef: "worldkit://camera-profile/test@1",
+      rules: [],
+      cameraRigProfiles: [],
+      cameraModifierProfiles: [],
+    },
+    mediumProfile: {
+      resourceRef: "worldkit://medium-profile/test@1",
+      air: { gravityRatio: 1, linearDragPerSecond: 0 },
+    },
+    relationshipProfiles: [],
+    harnessProfileRef: "worldkit://harness-profile/test@1",
+    requiredHarnessCheckIds: ["H01"],
+    actionOrPoseSetRef: "worldkit://pose-set/test@1",
+    renderBindingProfileRef: "worldkit://render-binding/test@1",
+  };
+}
 
 function emptyRouteEvidencePublicationFixture(): WorldkitBrowserRouteEvidencePublicationV2 {
   return {
@@ -46,48 +107,106 @@ function emptyRouteEvidencePublicationFixture(): WorldkitBrowserRouteEvidencePub
   };
 }
 
-function createSnapshotFixtureV3(): WorldRuntimeSnapshotV3 {
+function createGameplayInspectionFixtureV1(): GameplayInspectionSnapshotV1 {
+  return {
+    kind: "worldkit-gameplay-inspection-snapshot",
+    schemaVersion: 1,
+    projection: "inspection",
+    id: "gameplay-inspection:world-session-test:30",
+    runtimeSessionId: "runtime-session-test",
+    worldSessionId: "world-session-test",
+    gameplayModeRef: "worldkit://gameplay-mode/outdoor.default@1",
+    phase: "ready",
+    simulationTick: 30,
+    participantStatesById: {
+      "participant-primary": { id: "participant-primary", mode: "active" },
+    },
+    controllerStatesById: {
+      "controller-primary": {
+        id: "controller-primary",
+        participantId: "participant-primary",
+      },
+    },
+    possessedByRelationshipsById: {},
+    activeActionStatesById: {},
+    activatedGameplayFeatureRefs: [],
+    lastEventSequence: 0,
+  };
+}
+
+function createSnapshotFixtureV4(): WorldRuntimeSnapshotV4 {
   return {
     kind: "worldkit-runtime-snapshot",
-    schemaVersion: 3,
-    runtimeBackend: "babylon-havok",
-    tick: 30,
-    ready: true,
-    controlledEntityId: "player",
-    controllersById: {
-      "controller-primary": { id: "controller-primary", controlledEntityId: "player" },
-    },
-    subjectStatesByEntityId: {
-      "pack-animal-a": {
-        entityId: "pack-animal-a",
-        subjectDefinitionRef:
-          "package://subject-definition/coastal-pack-animal@1",
-        subjectDefinitionHash: `sha256:${"a".repeat(64)}`,
-        positionMetersXYZ: [6, 0, 28],
-        velocityMetersPerSecondXYZ: [0, 0, 0],
-        movementMedium: "ground",
-        activeActionId: "idle",
+    schemaVersion: 4,
+    runtimeSessionId: "runtime-session-test",
+    worldSessionId: "world-session-test",
+    world: {
+      publicationEpoch: 4,
+      simulationTick: 30,
+      worldStateRef: "world-state:test:30",
+      worldStateHash: `sha256:${"c".repeat(64)}`,
+      subjectStatesByEntityId: {
+        player: {
+          entityState: {
+            id: "player",
+            kind: "spatial-entity-state",
+            entityDefinitionRef:
+              "worldkit://subject-definition/humanoid.third-person@1",
+            entityDefinitionHash: `sha256:${"b".repeat(64)}`,
+            semanticClassId: "subject.humanoid.player",
+            lifecycleMode: "active",
+            positionMetersXYZ: [0, 0, 30],
+            rotationQuaternionXYZW: [0, 0, 0, 1],
+            scaleRatioXYZ: [1, 1, 1],
+            linearVelocityMetersPerSecondXYZ: [0, 0, -4],
+          },
+          capabilityStatesById: {
+            "locomotion:player": {
+              id: "locomotion:player",
+              kind: "locomotion-capability-state",
+              ownerEntityId: "player",
+              locomotionCapabilityRef:
+                "worldkit://locomotion-capability/ground.standard@1",
+              locomotionCapabilityHash: `sha256:${"d".repeat(64)}`,
+              mode: "run",
+              movementMedium: "ground",
+              facingYawRadians: 0,
+              speedMetersPerSecond: 4,
+            },
+          },
+        },
       },
-      player: {
-        entityId: "player",
-        subjectDefinitionRef:
-          "worldkit://subject-definition/humanoid.third-person@1",
-        subjectDefinitionHash: `sha256:${"b".repeat(64)}`,
-        positionMetersXYZ: [0, 0, 30],
-        velocityMetersPerSecondXYZ: [0, 0, -4],
-        movementMedium: "ground",
-        activeActionId: "run",
-        activeControlFeelProfileRef:
-          "worldkit://control-feel-profile/humanoid.medium-ground@1",
+      gameplayInspection: createGameplayInspectionFixtureV1(),
+    },
+    view: {
+      viewStateRevision: 7,
+      camera: {
+        mode: "tracking",
+        id: "camera-main",
+        targetEntityId: "player",
+        positionMetersXYZ: [0, 4, 35],
+        activeCameraProfileRef:
+          "worldkit://camera-profile/humanoid.third-person@1",
+        activeCameraRigRef:
+          "worldkit://camera-rig-profile/humanoid.third-person@1",
+        activeCameraModifierRefs: [],
+        safeFallbackActive: false,
+        viewYawOffsetRadians: 0,
+        viewPitchOffsetRadians: 0,
+        viewDistanceOffsetMeters: 0,
       },
     },
-    camera: {
-      entityId: "camera-main",
-      targetEntityId: "player",
-      positionMetersXYZ: [0, 4, 35],
+    runtime: {
+      phase: "ready",
+      isPaused: false,
+      fixedTimeStepSeconds: 1 / 60,
     },
-    physics: { backend: "havok", ready: true, fixedTimeStepSeconds: 1 / 60 },
-    resources: { meshes: 12, bodies: 4, terrainSamples: 65 * 65 },
+    resources: {
+      phase: "ready",
+      meshCount: 12,
+      physicsBodyCount: 4,
+      terrainSampleCount: 65 * 65,
+    },
   };
 }
 
@@ -262,6 +381,8 @@ describe("runtime contracts V3", () => {
         allowRun: true,
         allowJump: true,
       },
+      locomotionCapabilityRef: "worldkit://capability/locomotion.ground@1",
+      locomotionCapabilityHash: `sha256:${"3".repeat(64)}`,
       physicsBodyProfileRef: "worldkit://physics-body-profile/character.medium@1",
       locomotionProfileRef: "worldkit://locomotion-profile/ground.standard@1",
       controlFeel: {
@@ -300,6 +421,7 @@ describe("runtime contracts V3", () => {
           jumpReleaseGravityRatio: 2.2,
         },
       ],
+      capabilityAssembly: capabilityAssemblyFixture(),
     } satisfies ExecutionSubjectV3;
 
     expect(subject).toMatchObject({
@@ -317,18 +439,6 @@ describe("runtime contracts V3", () => {
     expect(Object.keys(subject.availableControlFeels[0]!).sort()).toEqual(
       Object.keys(subject.controlFeel).sort(),
     );
-  });
-
-  it("publishes first-slice movement medium and feel refs on SnapshotV3", () => {
-    const snapshot = createSnapshotFixtureV3();
-    const player = snapshot.subjectStatesByEntityId.player!;
-
-    expect(player.movementMedium).toBe("ground");
-    expect(player.activeControlFeelProfileRef).toBe(
-      "worldkit://control-feel-profile/humanoid.medium-ground@1",
-    );
-    expect(player).not.toHaveProperty("motionParameterTuning");
-    expect(["ground", "air"]).toContain(player.movementMedium);
   });
 
   it("defines minimal engine-neutral execution resource descriptors", () => {
@@ -439,28 +549,8 @@ describe("runtime contracts V3", () => {
     expect(input.actions).toEqual(["move-forward", "run"]);
   });
 
-  it("defines every SnapshotV3 Subject position as Subject Origin", () => {
-    const snapshot = createSnapshotFixtureV3();
-
-    expect(snapshot.schemaVersion).toBe(3);
-    expect(snapshot.subjectStatesByEntityId.player).toMatchObject({
-      subjectDefinitionRef: expect.any(String),
-      subjectDefinitionHash: expect.stringMatching(/^sha256:/),
-      positionMetersXYZ: expect.any(Array),
-      velocityMetersPerSecondXYZ: expect.any(Array),
-      activeActionId: "run",
-    });
-    expect(snapshot.subjectStatesByEntityId.player).not.toHaveProperty(
-      "positionMeters",
-    );
-  });
-
-  it("keeps the stable trusted default Controller ID", () => {
-    expect(TRUSTED_DEFAULT_CONTROLLER_ID).toBe("controller-primary");
-  });
-
-  it("defines Browser Protocol V4 directly over SnapshotV3", async () => {
-    const snapshot = createSnapshotFixtureV3();
+  it("defines Browser Protocol V5 directly over provider-neutral SnapshotV4", async () => {
+    const snapshot = createSnapshotFixtureV4();
     const diagnostic = {
       severity: "error",
       code: "SUBJECT_ASSET_HASH_MISMATCH",
@@ -472,15 +562,33 @@ describe("runtime contracts V3", () => {
       ready: async () => snapshot,
       getSnapshot: () => snapshot,
       getDiagnostics: () => [diagnostic],
-      bindControl: () => ({
-        kind: "worldkit-control-binding-receipt" as const,
-        schemaVersion: 2 as const,
-        status: "committed" as const,
-        controllerId: "controller-primary",
-        previousControlledEntityId: "player",
-        controlledEntityId: "pack-animal-a",
-      }),
+      executeGameplayCommand: async () => ({}) as never,
       runFixedInput: async () => snapshot,
+      getGameplayEvents: ({ afterEventSequence }) => ({
+        events: [],
+        nextAfterEventSequence: afterEventSequence,
+        hasMore: false,
+      }),
+      getGameplayInspectionSnapshot: () => snapshot.world.gameplayInspection,
+      getWorldStateSnapshot: () => ({}) as WorldStateSnapshotV1,
+      acquireRuntimeActivity: (request) => ({
+        kind: "worldkit-runtime-activity-receipt",
+        schemaVersion: 1,
+        requestId: request.id,
+        activityKind: request.activityKind,
+        worldSessionId: request.expectedWorldSessionId,
+        runtimeActivityEpoch: 1,
+        status: "active",
+      }),
+      releaseRuntimeActivity: (request) => ({
+        kind: "worldkit-runtime-activity-receipt",
+        schemaVersion: 1,
+        requestId: request.id,
+        activityKind: request.activityKind,
+        worldSessionId: request.expectedWorldSessionId,
+        runtimeActivityEpoch: 2,
+        status: "released",
+      }),
       getControlCaptureCapabilities: () => ({
         kind: "worldkit-control-capture-capabilities" as const,
         schemaVersion: 1 as const,
@@ -505,8 +613,25 @@ describe("runtime contracts V3", () => {
         throw new Error("not exercised");
       },
       captureScreenshot: () => "data:image/png;base64,",
-      reset: () => snapshot,
+      reset: async () => snapshot,
       setPaused: () => snapshot,
+      listSubjectDefinitions: () => [],
+      listMotionKernels: () => [],
+      listCompatibleProfiles: () => [],
+      getSubjectPresetBaseline: () => ({}) as never,
+      validateSubjectPackage: () => ({}) as never,
+      setIntent: async () => snapshot,
+      requestCameraProfile: () => snapshot,
+      resetCameraProfile: () => snapshot,
+      adjustCameraView: () => snapshot,
+      resetCameraView: () => snapshot,
+      getCameraPreviewState: () => ({}) as never,
+      applyCameraPreview: () => ({}) as never,
+      applySubjectPresetTuning: () => ({}) as never,
+      setMotionProfile: async () => snapshot,
+      runHarness: async () => ({}) as never,
+      getSubjectSnapshot: () => snapshot.world.subjectStatesByEntityId.player,
+      getCameraSnapshot: () => snapshot.view.camera,
       getRouteSummary: () => ({
         kind: "worldkit-route-evidence-query-result",
         schemaVersion: 1,
@@ -539,7 +664,51 @@ describe("runtime contracts V3", () => {
 
     expect(api.version).toBe(5);
     await expect(api.ready()).resolves.toBe(snapshot);
+    await expect(api.reset()).resolves.toBe(snapshot);
     expect(api.getDiagnostics()).toEqual([diagnostic]);
+    expect(Object.keys(api).sort()).toHaveLength(39);
+    expect(api).not.toHaveProperty("bindControl");
+    expect(snapshot).not.toHaveProperty("controlledEntityId");
+    expect(snapshot.world).not.toHaveProperty("controlledEntityId");
+    expect(snapshot.view).not.toHaveProperty("controlledEntityId");
+    expect(snapshot.runtime).not.toHaveProperty("controlledEntityId");
+    expect(snapshot.resources).not.toHaveProperty("controlledEntityId");
+    expect(Object.keys(snapshot).sort()).toEqual([
+      "kind",
+      "resources",
+      "runtime",
+      "runtimeSessionId",
+      "schemaVersion",
+      "view",
+      "world",
+      "worldSessionId",
+    ]);
+    expect(Object.keys(snapshot.world).sort()).toEqual([
+      "gameplayInspection",
+      "publicationEpoch",
+      "simulationTick",
+      "subjectStatesByEntityId",
+      "worldStateHash",
+      "worldStateRef",
+    ]);
+    expect(Object.keys(snapshot.view).sort()).toEqual([
+      "camera",
+      "viewStateRevision",
+    ]);
+    expect(Object.keys(snapshot.runtime).sort()).toEqual([
+      "fixedTimeStepSeconds",
+      "isPaused",
+      "phase",
+    ]);
+    expect(Object.keys(snapshot.resources).sort()).toEqual([
+      "meshCount",
+      "phase",
+      "physicsBodyCount",
+      "terrainSampleCount",
+    ]);
+    expect(JSON.stringify(snapshot)).not.toMatch(
+      /babylon|havok|recast|provider|backend/i,
+    );
   });
 
   it("canonicalizes the closed Browser Route publication as a detached deep-frozen DTO", () => {
@@ -682,20 +851,47 @@ describe("runtime contracts V5 Route Evidence", () => {
 
   it("installs WorldkitBrowserApiV5 as the public Browser protocol", () => {
     expect(WORLDKIT_BROWSER_PROTOCOL_VERSION).toBe(5);
+    const snapshot = createSnapshotFixtureV4();
     const api = {
       version: 5 as const,
-      ready: async () => createSnapshotFixtureV3(),
-      getSnapshot: () => createSnapshotFixtureV3(),
+      ready: async () => snapshot,
+      getSnapshot: () => snapshot,
       getDiagnostics: () => [],
-      bindControl: () => ({}) as never,
-      runFixedInput: async () => createSnapshotFixtureV3(),
+      executeGameplayCommand: async () => ({}) as never,
+      runFixedInput: async () => snapshot,
+      getGameplayEvents: ({ afterEventSequence }) => ({
+        events: [],
+        nextAfterEventSequence: afterEventSequence,
+        hasMore: false,
+      }),
+      getGameplayInspectionSnapshot: () => snapshot.world.gameplayInspection,
+      getWorldStateSnapshot: () => ({}) as WorldStateSnapshotV1,
+      acquireRuntimeActivity: () => ({}) as RuntimeActivityReceiptV1,
+      releaseRuntimeActivity: () => ({}) as RuntimeActivityReceiptV1,
       getControlCaptureCapabilities: () => ({}) as never,
-      waitForSimulationTick: async () => createSnapshotFixtureV3(),
+      waitForSimulationTick: async () => snapshot,
       waitForRenderReady: async () => ({}) as never,
       captureControlFrame: async () => ({}) as never,
       captureScreenshot: () => "",
-      reset: () => createSnapshotFixtureV3(),
-      setPaused: () => createSnapshotFixtureV3(),
+      reset: async () => snapshot,
+      setPaused: () => snapshot,
+      listSubjectDefinitions: () => [],
+      listMotionKernels: () => [],
+      listCompatibleProfiles: () => [],
+      getSubjectPresetBaseline: () => ({}) as never,
+      validateSubjectPackage: () => ({}) as never,
+      setIntent: async () => snapshot,
+      requestCameraProfile: () => snapshot,
+      resetCameraProfile: () => snapshot,
+      adjustCameraView: () => snapshot,
+      resetCameraView: () => snapshot,
+      getCameraPreviewState: () => ({}) as never,
+      applyCameraPreview: () => ({}) as never,
+      applySubjectPresetTuning: () => ({}) as never,
+      setMotionProfile: async () => snapshot,
+      runHarness: async () => ({}) as never,
+      getSubjectSnapshot: () => snapshot.world.subjectStatesByEntityId.player,
+      getCameraSnapshot: () => snapshot.view.camera,
       getRouteSummary: () => ({
         kind: "worldkit-route-evidence-query-result",
         schemaVersion: 1,
@@ -725,6 +921,109 @@ describe("runtime contracts V5 Route Evidence", () => {
         reason: "route-evidence-not-loaded",
       }),
     } satisfies WorldkitBrowserApiV5;
-    expect(api.version).toBe(5);
+    expect(Object.keys(api).sort()).toEqual([
+      "acquireRuntimeActivity",
+      "adjustCameraView",
+      "applyCameraPreview",
+      "applySubjectPresetTuning",
+      "captureControlFrame",
+      "captureScreenshot",
+      "executeGameplayCommand",
+      "getCameraPreviewState",
+      "getCameraSnapshot",
+      "getControlCaptureCapabilities",
+      "getDiagnostics",
+      "getGameplayEvents",
+      "getGameplayInspectionSnapshot",
+      "getRouteOverlay",
+      "getRoutePathReceipt",
+      "getRouteRuntimeProbeReceipt",
+      "getRouteSummary",
+      "getSnapshot",
+      "getSubjectPresetBaseline",
+      "getSubjectSnapshot",
+      "getWorldStateSnapshot",
+      "listCompatibleProfiles",
+      "listMotionKernels",
+      "listSubjectDefinitions",
+      "ready",
+      "releaseRuntimeActivity",
+      "requestCameraProfile",
+      "reset",
+      "resetCameraProfile",
+      "resetCameraView",
+      "runFixedInput",
+      "runHarness",
+      "setIntent",
+      "setMotionProfile",
+      "setPaused",
+      "validateSubjectPackage",
+      "version",
+      "waitForRenderReady",
+      "waitForSimulationTick",
+    ]);
+    expect(api).not.toHaveProperty("bindControl");
+  });
+
+  it("publishes exact gameplay query, world-state lookup, and Activity wire DTOs", () => {
+    const query = {
+      afterEventSequence: 17,
+      maximumEventCount: WORLDKIT_GAMEPLAY_EVENT_PAGE_MAXIMUM_COUNT,
+    } satisfies GameplayEventsQueryV1;
+    const queryResult = {
+      events: [],
+      nextAfterEventSequence: 17,
+      hasMore: false,
+    } satisfies GameplayEventsQueryResultV1;
+    const worldStateRequest = {
+      worldStateRef: "world-state:test:17",
+    } satisfies WorldStateSnapshotRequestV1;
+    const activityRequest = {
+      schemaVersion: 1,
+      id: "activity:simulation-take:17",
+      activityKind: "simulation-take",
+      expectedWorldSessionId: "world-session-test",
+    } satisfies RuntimeActivityRequestV1;
+    const rejectedActivity = {
+      kind: "worldkit-runtime-activity-receipt",
+      schemaVersion: 1,
+      requestId: activityRequest.id,
+      activityKind: activityRequest.activityKind,
+      worldSessionId: activityRequest.expectedWorldSessionId,
+      runtimeActivityEpoch: 9,
+      status: "rejected",
+      diagnostic: {
+        code: "RUNTIME_ACTIVITY_ID_CONFLICT",
+        message: "The retained Activity request has different payload bytes.",
+      },
+    } satisfies RuntimeActivityReceiptV1;
+
+    expect(WORLDKIT_GAMEPLAY_EVENT_PAGE_MAXIMUM_COUNT).toBe(256);
+    expect(Object.keys(query).sort()).toEqual([
+      "afterEventSequence",
+      "maximumEventCount",
+    ]);
+    expect(Object.keys(queryResult).sort()).toEqual([
+      "events",
+      "hasMore",
+      "nextAfterEventSequence",
+    ]);
+    expect(Object.keys(worldStateRequest)).toEqual(["worldStateRef"]);
+    expect(Object.keys(activityRequest).sort()).toEqual([
+      "activityKind",
+      "expectedWorldSessionId",
+      "id",
+      "schemaVersion",
+    ]);
+    expect(Object.keys(rejectedActivity).sort()).toEqual([
+      "activityKind",
+      "diagnostic",
+      "kind",
+      "requestId",
+      "runtimeActivityEpoch",
+      "schemaVersion",
+      "status",
+      "worldSessionId",
+    ]);
   });
 });

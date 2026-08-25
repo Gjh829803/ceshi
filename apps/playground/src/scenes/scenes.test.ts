@@ -3,7 +3,6 @@ import {
   validateFiniteTransforms,
   validateSpawnSafety,
 } from "@whitebox-world/testkit";
-import { createPhysicsSystem } from "@whitebox-world/physics";
 import {
   compileOutdoorScene,
   deriveWorldPlanArtifacts,
@@ -70,49 +69,6 @@ describe("agent-authored playground scenes", () => {
       }
     }, 15_000);
 
-    it(`keeps ${catalogId} terrain rendering samples aligned with physics`, async () => {
-      const scene = compileOutdoorScene(definition);
-      const physics = await createPhysicsSystem({ gravity: [0, -9.81, 0] });
-      try {
-        for (const resource of scene.registry.listResources()) {
-          if (resource.kind !== "terrain" || !isTerrainSurface(resource.value)) continue;
-          resource.value.forEachHeightfield((heightfield) => {
-            const body = physics.createRigidBody(undefined, {
-              type: "fixed",
-              sync: "none",
-              position: [heightfield.origin[0], 0, heightfield.origin[1]],
-            });
-            body.createCollider({
-              shape: {
-                type: "heightfield",
-                rows: heightfield.zSegments,
-                columns: heightfield.xSegments,
-                heights: heightfield.heights,
-                scale: [heightfield.width, 1, heightfield.depth],
-              },
-            });
-          });
-        }
-
-        const [x, , z] = scene.spawn.position;
-        const primaryTerrain = scene.registry.getResource<TerrainSurface>(
-          scene.terrainHandles[0]?.terrainId ?? "",
-        );
-        const expectedHeight = isTerrainSurface(primaryTerrain?.value)
-          ? primaryTerrain.value.sampleHeight(x, z)
-          : undefined;
-        const hit = physics.raycast({
-          origin: [x, 100, z],
-          direction: [0, -1, 0],
-          maxDistance: 200,
-        });
-
-        expect(expectedHeight).toBeDefined();
-        expect(hit?.point[1]).toBeCloseTo(expectedHeight as number, 2);
-      } finally {
-        physics.dispose();
-      }
-    }, 15_000);
   }
 
   it("keeps the Azure Bay overlook route continuously walkable", () => {

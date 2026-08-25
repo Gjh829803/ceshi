@@ -9,6 +9,7 @@
   "dependencies": {
     "@whitebox-world/authoring": "workspace:*",
     "@whitebox-world/compiler": "workspace:*",
+    "@whitebox-world/gameplay-contracts": "workspace:*",
     "@whitebox-world/layout-solver": "workspace:*",
     "@whitebox-world/protocol": "workspace:*",
     "@whitebox-world/runtime-contracts": "workspace:*",

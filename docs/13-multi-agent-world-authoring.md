@@ -14,7 +14,7 @@ World Planner Agent
         │
         ▼  plan-lock.json（冻结）
 World Builder Agent
-  Three.js 白膜 + Rapier 碰撞 + 可玩主体
+  Babylon 白膜 + Havok 碰撞 + 可玩主体
         │
         ▼  tests / build / SDK-derived plans（验收）
 SDK 白膜三视图导出
@@ -41,7 +41,7 @@ Planner 必须先扩展“整个可玩世界”，再固定进入视角。`Outdo
 - 用户事实、参考图可见事实、Planner 推断和可选创意的证据分层。
 - Codex imagegen 生成的严格正交 `world-plan.png` 与进入视角 `opening-shot.png`。
 
-Planner 不写 Three.js 几何。规划评审通过后运行：
+Planner 不写 Babylon 或其他 Provider 几何。规划评审通过后运行：
 
 ```bash
 pnpm plan:freeze -- --scene <id>

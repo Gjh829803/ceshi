@@ -4,10 +4,9 @@ import type {
   NormalizedRigProfileV1,
   NormalizedSubjectAssetV1,
   NormalizedSubjectDefinitionV2,
-  NormalizedWorldIRV3,
   NormalizedWorldIRV4,
   NormalizedLayoutAssertionV1,
-  NormalizedWorldNodeV3,
+  NormalizedWorldNodeV4,
   NormalizedSubjectSocketV2,
   NormalizedSubjectVisualPartV2,
   PrimitivePrototypeSpecV2,
@@ -23,14 +22,16 @@ import {
 import { sampleTriangleHeightfieldSurface } from "@whitebox-world/terrain-surface";
 import {
   canonicalExecutionResourceLockEntriesV1,
+  hashExecutionPlanV5,
+  parseExecutionPlanV5,
   type CompileDiagnostic,
-  type CompileWorldResultV4,
   type ExecutionAnimationSetV1,
   type ExecutionBipedBoneIdV1,
   type ExecutionColliderProfileV1,
   type ExecutionObjectPrimitiveV3,
   type ExecutionObjectV3,
-  type ExecutionPlanV4,
+  type ExecutionPlanV5,
+  type GameplayBootstrapExecutionResourceLockV1,
   type ExecutionLayoutAssertionV1,
   type ExecutionLayoutPlacementV1,
   type ExecutionRigProfileV1,
@@ -47,7 +48,6 @@ import type {
   ExecutionConnectivityRequirementV1,
   ExecutionHeightfieldTraversalSurfaceV1,
   ExecutionTraversalAreaV1,
-  ExecutionPlanV5,
   ExecutionStaticColliderShapeV1,
   ExecutionStaticColliderV1,
   ExecutionStaticColliderTraversalSurfaceV1,
@@ -103,32 +103,76 @@ const EXECUTION_BIPED_BONE_IDS = [
   "upper-leg.right",
 ] as const satisfies readonly ExecutionBipedBoneIdV1[];
 
+type NormalizedWorldCompileView = Pick<
+  NormalizedWorldIRV4,
+  "id" | "seed" | "world" | "resources" | "nodes" | "startup"
+>;
+
 interface CompileWorldCoreInput {
-  normalizedWorldIr: NormalizedWorldIRV3;
-  normalizedWorldIrHash: string;
+  normalizedWorldIr: NormalizedWorldCompileView;
 }
 
-type ExecutionPlanCompilerCore =
-  Omit<ExecutionPlanV4, "schemaVersion" | "camera" | "layout"> & {
-    readonly schemaVersion: 3;
-    readonly camera: Omit<ExecutionPlanV4["camera"], "aspectRatio">;
-  };
+interface CompiledWorldComponents {
+  readonly id: ExecutionPlanV5["id"];
+  readonly seed: ExecutionPlanV5["seed"];
+  readonly runtimeBackend: ExecutionPlanV5["runtimeBackend"];
+  readonly coordinateSystem: ExecutionPlanV5["coordinateSystem"];
+  readonly gravityMetersPerSecondSquaredXYZ:
+    ExecutionPlanV5["gravityMetersPerSecondSquaredXYZ"];
+  readonly atmospherePreset: ExecutionPlanV5["atmospherePreset"];
+  readonly terrain: ExecutionPlanV5["terrain"];
+  readonly waters: ExecutionPlanV5["waters"];
+  readonly objects: ExecutionPlanV5["objects"];
+  readonly subjectAssets: ExecutionPlanV5["subjectAssets"];
+  readonly rigProfiles: ExecutionPlanV5["rigProfiles"];
+  readonly animationSets: ExecutionPlanV5["animationSets"];
+  readonly colliderProfiles: ExecutionPlanV5["colliderProfiles"];
+  readonly controlledEntityId: string;
+  readonly subjects: ExecutionPlanV5["subjects"];
+  readonly camera: ExecutionPlanV5["camera"];
+  readonly resourceUsage: ExecutionPlanV5["resourceUsage"];
+}
 
 interface CompileWorldCoreResult {
   readonly ok: boolean;
-  readonly executionPlan?: ExecutionPlanCompilerCore;
-  readonly executionPlanHash?: string;
+  readonly components?: CompiledWorldComponents;
   readonly diagnostics: readonly CompileDiagnostic[];
-}
-
-export interface CompileWorldInputV4 {
-  readonly normalizedWorldIr: NormalizedWorldIRV3;
-  readonly normalizedWorldIrHash: string;
 }
 
 export interface CompileWorldInputV5 {
   readonly normalizedWorldIr: NormalizedWorldIRV4;
   readonly normalizedWorldIrHash: string;
+  readonly gameplayBootstrapResourceLock: GameplayBootstrapExecutionResourceLockV1;
+}
+
+class CompilerInputAccessorErrorV1 extends Error {}
+
+function assertCompilerInputAccessorFreeV1(
+  value: unknown,
+  visited: WeakSet<object> = new WeakSet<object>(),
+): void {
+  if (isNil(value) || typeof value !== "object" || visited.has(value)) return;
+  visited.add(value);
+  if (Object.getOwnPropertySymbols(value).length > 0) {
+    throw new CompilerInputAccessorErrorV1();
+  }
+  for (const descriptor of Object.values(
+    Object.getOwnPropertyDescriptors(value),
+  )) {
+    if (!isNil(descriptor.get) || !isNil(descriptor.set)) {
+      throw new CompilerInputAccessorErrorV1();
+    }
+    if (Object.hasOwn(descriptor, "value")) {
+      assertCompilerInputAccessorFreeV1(descriptor.value, visited);
+    }
+  }
+}
+
+function snapshotCompileWorldInputV5(
+  input: CompileWorldInputV5,
+): CompileWorldInputV5 {
+  assertCompilerInputAccessorFreeV1(input);
+  return structuredClone(input);
 }
 
 export function sampleTerrainHeight(
@@ -154,22 +198,22 @@ export function sampleTerrainHeight(
   )!.heightMeters;
 }
 
-function findOnlyNodeV3<K extends NormalizedWorldNodeV3["kind"]>(
-  nodes: readonly NormalizedWorldNodeV3[],
+function findOnlyNodeV4<K extends NormalizedWorldNodeV4["kind"]>(
+  nodes: readonly NormalizedWorldNodeV4[],
   kind: K,
-): Extract<NormalizedWorldNodeV3, { kind: K }> {
+): Extract<NormalizedWorldNodeV4, { kind: K }> {
   const node = nodes.find(
-    (candidate): candidate is Extract<NormalizedWorldNodeV3, { kind: K }> =>
+    (candidate): candidate is Extract<NormalizedWorldNodeV4, { kind: K }> =>
       candidate.kind === kind,
   );
   if (node === undefined) {
-    throw new Error(`NormalizedWorldIRV3 invariant violated: missing '${kind}' node.`);
+    throw new Error(`NormalizedWorldIR invariant violated: missing '${kind}' node.`);
   }
   return node;
 }
 
-function compileTerrainV3(world: NormalizedWorldIRV3): ExecutionTerrainV3 {
-  const node = findOnlyNodeV3(world.nodes, "terrain");
+function compileTerrainV3(world: NormalizedWorldCompileView): ExecutionTerrainV3 {
+  const node = findOnlyNodeV4(world.nodes, "terrain");
   const terrain = node.components.terrain;
   const source = terrain.source;
   const [columns, rows] = terrain.grid.resolutionCellsXZ;
@@ -182,10 +226,12 @@ function compileTerrainV3(world: NormalizedWorldIRV3): ExecutionTerrainV3 {
   if (!isNil(sampledHeights)) {
     if (sampledHeights.length !== columns * rows) {
       throw new Error(
-        "NormalizedWorldIRV3 invariant violated: terrain grid heightSamplesMeters length must equal resolutionCellsXZ product.",
+        "NormalizedWorldIR invariant violated: terrain grid heightSamplesMeters length must equal resolutionCellsXZ product.",
       );
     }
-    heights.push(...sampledHeights);
+    for (const height of sampledHeights) {
+      heights.push(height);
+    }
   } else {
     for (let zIndex = 0; zIndex < rows; zIndex += 1) {
       const z = minimumZ + (zIndex / (rows - 1)) * sizeZ;
@@ -239,12 +285,12 @@ function boundaryCenterV3(boundary: ExecutionWaterBoundaryV3): Vec2 {
 }
 
 function compileWatersV3(
-  world: NormalizedWorldIRV3,
+  world: NormalizedWorldCompileView,
   terrain: ExecutionTerrainV3,
 ): ExecutionWaterV3[] {
   return world.nodes
     .filter(
-      (node): node is Extract<NormalizedWorldNodeV3, { kind: "water" }> =>
+      (node): node is Extract<NormalizedWorldNodeV4, { kind: "water" }> =>
         node.kind === "water",
     )
     .map((node) => {
@@ -284,7 +330,7 @@ function resolvePrimitiveV3(
   }
 }
 
-function compileObjectsV3(world: NormalizedWorldIRV3): ExecutionObjectV3[] {
+function compileObjectsV3(world: NormalizedWorldCompileView): ExecutionObjectV3[] {
   const prototypes = new Map(
     world.resources.prototypes.map((prototype) => [
       `${prototype.id}@${prototype.version}`,
@@ -293,7 +339,7 @@ function compileObjectsV3(world: NormalizedWorldIRV3): ExecutionObjectV3[] {
   );
   return world.nodes
     .filter(
-      (node): node is Extract<NormalizedWorldNodeV3, { kind: "object" }> =>
+      (node): node is Extract<NormalizedWorldNodeV4, { kind: "object" }> =>
         node.kind === "object",
     )
     .map((node) => {
@@ -303,7 +349,7 @@ function compileObjectsV3(world: NormalizedWorldIRV3): ExecutionObjectV3[] {
       const prototype = prototypes.get(prototypeIdentity);
       if (prototype === undefined) {
         throw new Error(
-          `NormalizedWorldIRV3 invariant violated: missing Prototype '${prototypeIdentity}'.`,
+          `NormalizedWorldIR invariant violated: missing Prototype '${prototypeIdentity}'.`,
         );
       }
       return {
@@ -466,7 +512,7 @@ function indexNormalizedResourceRowsV3<T>(
     const ref = resourceRef(row);
     if (rowsByRef.has(ref)) {
       throw new Error(
-        `NormalizedWorldIRV3 invariant violated: duplicate ${label} '${ref}'.`,
+        `NormalizedWorldIR invariant violated: duplicate ${label} '${ref}'.`,
       );
     }
     rowsByRef.set(ref, row);
@@ -482,7 +528,7 @@ function requireNormalizedResourceRowV3<T>(
   const row = rowsByRef.get(resourceRef);
   if (row === undefined) {
     throw new Error(
-      `NormalizedWorldIRV3 invariant violated: missing ${label} '${resourceRef}'.`,
+      `NormalizedWorldIR invariant violated: missing ${label} '${resourceRef}'.`,
     );
   }
   return row;
@@ -519,12 +565,12 @@ function compileRigProfileV1(
     const sourceNodeName = resource.sourceNodeNameByBoneId[boneId];
     if (!hasMapping || typeof sourceNodeName !== "string") {
       throw new Error(
-        `NormalizedWorldIRV3 invariant violated: Rig Profile '${resource.rigProfileRef}' is missing source-node mapping for Bone '${boneId}'.`,
+        `NormalizedWorldIR invariant violated: Rig Profile '${resource.rigProfileRef}' is missing source-node mapping for Bone '${boneId}'.`,
       );
     }
     if (sourceNodeName.trim().length === 0) {
       throw new Error(
-        `NormalizedWorldIRV3 invariant violated: Rig Profile '${resource.rigProfileRef}' has an empty source-node mapping for Bone '${boneId}'.`,
+        `NormalizedWorldIR invariant violated: Rig Profile '${resource.rigProfileRef}' has an empty source-node mapping for Bone '${boneId}'.`,
       );
     }
   }
@@ -696,7 +742,7 @@ function compileCapabilityAssemblyV1(
       implementationId !== "unpowered-glide"
     ) {
       throw new Error(
-        `NormalizedWorldIRV3 invariant violated: reserved Motion Kernel '${motionKernel.resourceRef}' cannot enter an Execution Plan.`,
+        `NormalizedWorldIR invariant violated: reserved Motion Kernel '${motionKernel.resourceRef}' cannot enter an Execution Plan.`,
       );
     }
     return {
@@ -712,7 +758,7 @@ function compileCapabilityAssemblyV1(
   const relationshipProfiles = assembly.relationshipProfiles.map((profile) => {
     if (profile.runtimeStatus !== "implemented" || profile.relationshipType === "mount") {
       throw new Error(
-        `NormalizedWorldIRV3 invariant violated: reserved Relationship Profile '${profile.resourceRef}' cannot enter an Execution Plan.`,
+        `NormalizedWorldIR invariant violated: reserved Relationship Profile '${profile.resourceRef}' cannot enter an Execution Plan.`,
       );
     }
     return {
@@ -812,7 +858,7 @@ function colliderProfileMatchesDefinitionV3(
 }
 
 function compileSubjectsV3(
-  world: NormalizedWorldIRV3,
+  world: NormalizedWorldCompileView,
 ): CompiledSubjectsV3 {
   const definitionsByRef = new Map(
     world.resources.subjectDefinitions.map((definition) => [
@@ -843,7 +889,7 @@ function compileSubjectsV3(
   const anchorsByEntityId = new Map(
     world.nodes
       .filter(
-        (node): node is Extract<NormalizedWorldNodeV3, { kind: "anchor" }> =>
+        (node): node is Extract<NormalizedWorldNodeV4, { kind: "anchor" }> =>
           node.kind === "anchor",
       )
       .map((anchor) => [anchor.id, anchor]),
@@ -856,7 +902,7 @@ function compileSubjectsV3(
 
   const subjects = world.nodes
     .filter(
-      (node): node is Extract<NormalizedWorldNodeV3, { kind: "subject" }> =>
+      (node): node is Extract<NormalizedWorldNodeV4, { kind: "subject" }> =>
         node.kind === "subject",
     )
     .sort((left, right) => left.id.localeCompare(right.id))
@@ -864,13 +910,37 @@ function compileSubjectsV3(
       const definition = definitionsByRef.get(node.subjectDefinitionRef);
       if (definition === undefined) {
         throw new Error(
-          `NormalizedWorldIRV3 invariant violated: Subject '${node.id}' references missing Definition '${node.subjectDefinitionRef}'.`,
+          `NormalizedWorldIR invariant violated: Subject '${node.id}' references missing Definition '${node.subjectDefinitionRef}'.`,
         );
       }
       const spawnAnchor = anchorsByEntityId.get(node.spawnAnchorEntityId);
       if (spawnAnchor === undefined) {
         throw new Error(
-          `NormalizedWorldIRV3 invariant violated: Subject '${node.id}' references missing Spawn Anchor '${node.spawnAnchorEntityId}'.`,
+          `NormalizedWorldIR invariant violated: Subject '${node.id}' references missing Spawn Anchor '${node.spawnAnchorEntityId}'.`,
+        );
+      }
+      if (!definition.capabilityRefs.includes(definition.locomotionCapabilityRef)) {
+        throw new Error(
+          `NormalizedWorldIR invariant violated: Subject '${node.id}' does not select its locomotion Capability.`,
+        );
+      }
+      const locomotionCapabilityLockRows = world.resources.resourceLock.filter(
+        (row) => row.resourceRef === definition.locomotionCapabilityRef,
+      );
+      if (
+        locomotionCapabilityLockRows.length !== 1 ||
+        locomotionCapabilityLockRows[0]?.resourceKind !== "capability" ||
+        locomotionCapabilityLockRows[0]?.contentHash !==
+          definition.locomotionCapabilityHash
+      ) {
+        throw new Error(
+          `NormalizedWorldIR invariant violated: Subject '${node.id}' requires one matching locked locomotion Capability.`,
+        );
+      }
+      const locomotionCapabilityLock = locomotionCapabilityLockRows[0];
+      if (isNil(locomotionCapabilityLock)) {
+        throw new Error(
+          `NormalizedWorldIR invariant violated: Subject '${node.id}' is missing its locked locomotion Capability.`,
         );
       }
 
@@ -887,13 +957,32 @@ function compileSubjectsV3(
           assetPart.subjectAssetRef,
           "Subject Asset",
         );
+        const subjectAssetLockRows = world.resources.resourceLock.filter(
+          (row) => row.resourceRef === subjectAsset.subjectAssetRef,
+        );
+        if (
+          subjectAssetLockRows.length !== 1 ||
+          subjectAssetLockRows[0]?.resourceKind !== "subject-asset"
+        ) {
+          throw new Error(
+            `NormalizedWorldIR invariant violated: Subject Asset '${subjectAsset.subjectAssetRef}' requires one matching locked Subject Asset.`,
+          );
+        }
+        if (
+          subjectAssetLockRows[0].contentHash !==
+            subjectAsset.subjectAssetManifestHash
+        ) {
+          throw new Error(
+            `NormalizedWorldIR invariant violated: Subject Asset '${subjectAsset.subjectAssetRef}' does not match its locked Registry manifest hash.`,
+          );
+        }
         reachableSubjectAssetsByRef.set(subjectAsset.subjectAssetRef, subjectAsset);
       }
 
       if (definition.visualBinding.mode === "rigged") {
         if (assetParts.length !== 1) {
           throw new Error(
-            `NormalizedWorldIRV3 invariant violated: rigged Subject '${node.id}' must select exactly one Subject Asset.`,
+            `NormalizedWorldIR invariant violated: rigged Subject '${node.id}' must select exactly one Subject Asset.`,
           );
         }
         const subjectAssetRef = assetParts[0]!.subjectAssetRef;
@@ -909,17 +998,17 @@ function compileSubjectsV3(
         );
         if (rigProfile.bodyTopology !== definition.bodyTopology) {
           throw new Error(
-            `NormalizedWorldIRV3 invariant violated: Rig Profile '${rigProfile.rigProfileRef}' has topology '${rigProfile.bodyTopology}', but Subject '${node.id}' has '${definition.bodyTopology}'.`,
+            `NormalizedWorldIR invariant violated: Rig Profile '${rigProfile.rigProfileRef}' has topology '${rigProfile.bodyTopology}', but Subject '${node.id}' has '${definition.bodyTopology}'.`,
           );
         }
         if (animationSet.subjectAssetRef !== subjectAssetRef) {
           throw new Error(
-            `NormalizedWorldIRV3 invariant violated: Animation Set '${animationSet.animationSetRef}' targets Subject Asset '${animationSet.subjectAssetRef}', but Subject '${node.id}' selects '${subjectAssetRef}'.`,
+            `NormalizedWorldIR invariant violated: Animation Set '${animationSet.animationSetRef}' targets Subject Asset '${animationSet.subjectAssetRef}', but Subject '${node.id}' selects '${subjectAssetRef}'.`,
           );
         }
         if (animationSet.rigProfileRef !== rigProfile.rigProfileRef) {
           throw new Error(
-            `NormalizedWorldIRV3 invariant violated: Animation Set '${animationSet.animationSetRef}' targets Rig Profile '${animationSet.rigProfileRef}', but Subject '${node.id}' selects '${rigProfile.rigProfileRef}'.`,
+            `NormalizedWorldIR invariant violated: Animation Set '${animationSet.animationSetRef}' targets Rig Profile '${animationSet.rigProfileRef}', but Subject '${node.id}' selects '${rigProfile.rigProfileRef}'.`,
           );
         }
         const requiredBoneIds = new Set(rigProfile.requiredBoneIds);
@@ -928,18 +1017,27 @@ function compileSubjectsV3(
         );
         if (missingSocketBone?.kind === "bone") {
           throw new Error(
-            `NormalizedWorldIRV3 invariant violated: Bone Socket '${missingSocketBone.id}' targets undeclared Bone '${missingSocketBone.boneId}'.`,
+            `NormalizedWorldIR invariant violated: Bone Socket '${missingSocketBone.id}' targets undeclared Bone '${missingSocketBone.boneId}'.`,
           );
         }
         reachableRigProfilesByRef.set(rigProfile.rigProfileRef, rigProfile);
         reachableAnimationSetsByRef.set(animationSet.animationSetRef, animationSet);
-      } else if (
-        assetParts.length > 0 ||
-        definition.sockets.some((socket) => socket.kind === "bone")
-      ) {
-        throw new Error(
-          `NormalizedWorldIRV3 invariant violated: static Subject '${node.id}' contains rigged visual data.`,
-        );
+      } else {
+        if (assetParts.length > 1) {
+          throw new Error(
+            `NormalizedWorldIR invariant violated: static Subject '${node.id}' supports at most one Subject Asset.`,
+          );
+        }
+        const staticBinding = definition.visualBinding;
+        if (
+          definition.sockets.some((socket) => socket.kind === "bone") ||
+          Object.prototype.hasOwnProperty.call(staticBinding, "rigProfileRef") ||
+          Object.prototype.hasOwnProperty.call(staticBinding, "animationSetRef")
+        ) {
+          throw new Error(
+            `NormalizedWorldIR invariant violated: static Subject '${node.id}' contains rigged visual data.`,
+          );
+        }
       }
 
       if (definition.colliderPolicy.kind === "profile") {
@@ -950,12 +1048,12 @@ function compileSubjectsV3(
         );
         if (!colliderProfile.supportedBodyTopologies.includes(definition.bodyTopology)) {
           throw new Error(
-            `NormalizedWorldIRV3 invariant violated: Collider Profile '${colliderProfile.colliderProfileRef}' does not support Subject '${node.id}' topology '${definition.bodyTopology}'.`,
+            `NormalizedWorldIR invariant violated: Collider Profile '${colliderProfile.colliderProfileRef}' does not support Subject '${node.id}' topology '${definition.bodyTopology}'.`,
           );
         }
         if (!colliderProfileMatchesDefinitionV3(colliderProfile, definition.collider)) {
           throw new Error(
-            `NormalizedWorldIRV3 invariant violated: Collider Profile '${colliderProfile.colliderProfileRef}' does not match Subject '${node.id}' collider.`,
+            `NormalizedWorldIR invariant violated: Collider Profile '${colliderProfile.colliderProfileRef}' does not match Subject '${node.id}' collider.`,
           );
         }
         reachableColliderProfilesByRef.set(
@@ -1004,6 +1102,8 @@ function compileSubjectsV3(
           allowRun: definition.locomotion.allowRun,
           allowJump: definition.locomotion.allowJump,
         },
+        locomotionCapabilityRef: locomotionCapabilityLock.resourceRef,
+        locomotionCapabilityHash: locomotionCapabilityLock.contentHash,
         physicsBodyProfileRef: definition.profiles.physicsBodyProfileRef,
         locomotionProfileRef: definition.profiles.locomotionProfileRef,
         controlFeel: {
@@ -1044,20 +1144,16 @@ function compileSubjectsV3(
           jumpHoldGravityRatio: feel.jumpHoldGravityRatio,
           jumpReleaseGravityRatio: feel.jumpReleaseGravityRatio,
         })),
-        ...(definition.capabilityAssembly === undefined
-          ? {}
-          : {
-              capabilityAssembly: compileCapabilityAssemblyV1(
-                definition.capabilityAssembly,
-              ),
-            }),
+        capabilityAssembly: compileCapabilityAssemblyV1(
+          definition.capabilityAssembly,
+        ),
       };
     })
     .sort((left, right) => left.entityId.localeCompare(right.entityId));
 
   if (subjects.length === 0) {
     throw new Error(
-      "NormalizedWorldIRV3 invariant violated: no Subject nodes were materialized.",
+      "NormalizedWorldIR invariant violated: no Subject nodes were materialized.",
     );
   }
   return {
@@ -1120,26 +1216,6 @@ function pushBudgetDiagnosticV3(
 
 function compileWorldCore(input: CompileWorldCoreInput): CompileWorldCoreResult {
   const world = input.normalizedWorldIr;
-  const actualNormalizedWorldIrHash = sha256CanonicalJson(world);
-  if (input.normalizedWorldIrHash !== actualNormalizedWorldIrHash) {
-    return {
-      ok: false,
-      diagnostics: [
-        {
-          severity: "error",
-          code: "COMPILER_NORMALIZED_HASH_MISMATCH",
-          instancePath: "/normalizedWorldIrHash",
-          message:
-            "The supplied normalizedWorldIrHash does not match NormalizedWorldIRV3.",
-          details: {
-            expected: actualNormalizedWorldIrHash,
-            actual: input.normalizedWorldIrHash,
-          },
-        },
-      ],
-    };
-  }
-
   try {
     const terrain = compileTerrainV3(world);
     const waters = compileWatersV3(world, terrain);
@@ -1160,7 +1236,7 @@ function compileWorldCore(input: CompileWorldCoreInput): CompileWorldCoreResult 
     if (spawnDiagnostics.length > 0) {
       return { ok: false, diagnostics: spawnDiagnostics };
     }
-    const cameraNode = findOnlyNodeV3(world.nodes, "camera");
+    const cameraNode = findOnlyNodeV4(world.nodes, "camera");
     const terrainVertices =
       terrain.resolutionCellsXZ[0] * terrain.resolutionCellsXZ[1];
     const terrainTriangles =
@@ -1214,14 +1290,10 @@ function compileWorldCore(input: CompileWorldCoreInput): CompileWorldCoreResult 
     if (diagnostics.length > 0) return { ok: false, diagnostics };
 
     const rig = cameraNode.components.cameraRig;
-    const executionPlan: ExecutionPlanCompilerCore = {
-      kind: "worldkit-execution-plan",
-      schemaVersion: 3,
+    const components: CompiledWorldComponents = {
       id: world.id,
       seed: world.seed,
       runtimeBackend: "babylon-havok",
-      normalizedWorldIrHash: input.normalizedWorldIrHash,
-      resourceLockHash: world.resources.resourceLockHash,
       coordinateSystem: world.world.coordinateSystem,
       gravityMetersPerSecondSquaredXYZ: [
         ...world.world.gravityMetersPerSecondSquaredXYZ,
@@ -1245,14 +1317,14 @@ function compileWorldCore(input: CompileWorldCoreInput): CompileWorldCoreResult 
         targetHeightMeters:
           rig.target.targetHeightMeters ?? rig.thirdPerson.targetHeightMeters,
         fovDegrees: rig.thirdPerson.fovDegrees,
+        aspectRatio: rig.thirdPerson.aspectRatio,
         manualSwitchAllowed: rig.manualSwitchAllowed,
       },
       resourceUsage: usage,
     };
     return {
       ok: true,
-      executionPlan,
-      executionPlanHash: sha256CanonicalJson(executionPlan),
+      components,
       diagnostics: [],
     };
   } catch (cause) {
@@ -1266,7 +1338,7 @@ function compileWorldCore(input: CompileWorldCoreInput): CompileWorldCoreResult 
           message:
             cause instanceof Error
               ? cause.message
-              : "NormalizedWorldIRV3 could not be compiled.",
+              : "NormalizedWorldIR could not be compiled.",
         },
       ],
     };
@@ -1389,7 +1461,7 @@ function projectLayoutAssertionV1(
 }
 
 function projectPlacementV1(
-  node: Extract<NormalizedWorldIRV3["nodes"][number], { kind: "object" | "anchor" }>,
+  node: Extract<NormalizedWorldIRV4["nodes"][number], { kind: "object" | "anchor" }>,
 ): ExecutionLayoutPlacementV1 {
   return {
     entityId: node.id,
@@ -1408,8 +1480,24 @@ function projectPlacementV1(
   };
 }
 
+type NormalizedLayoutCompileView = Readonly<{
+  nodes: NormalizedWorldIRV4["nodes"];
+  layout: Pick<
+    NormalizedWorldIRV4["layout"],
+    | "solverProfileRef"
+    | "resolvedVersion"
+    | "solverProfileHash"
+    | "layoutSolveReportHash"
+    | "regions"
+    | "routes"
+    | "screenRegions"
+    | "heightfields"
+    | "assertions"
+  >;
+}>;
+
 function compileLockedTerrainV4(
-  world: NormalizedWorldIRV3,
+  world: Pick<NormalizedLayoutCompileView, "layout">,
   baseline: ExecutionTerrainV3,
 ): ExecutionTerrainV3 {
   const heightfield = world.layout.heightfields.find((row) => row.terrainEntityId === baseline.entityId);
@@ -1442,125 +1530,65 @@ function compileLockedTerrainV4(
   };
 }
 
-export function compileWorldV4(input: CompileWorldInputV4): CompileWorldResultV4 {
-  const actualNormalizedWorldIrHash = sha256CanonicalJson(input.normalizedWorldIr);
-  if (input.normalizedWorldIrHash !== actualNormalizedWorldIrHash) {
-    return {
-      ok: false,
-      diagnostics: [{
-        severity: "error",
-        code: "COMPILER_NORMALIZED_HASH_MISMATCH",
-        instancePath: "/normalizedWorldIrHash",
-        message: "The supplied normalizedWorldIrHash does not match NormalizedWorldIRV3.",
-        details: { expected: actualNormalizedWorldIrHash, actual: input.normalizedWorldIrHash },
-      }],
-    };
-  }
-  try {
-    const world = input.normalizedWorldIr;
-    const baseline = compileWorldCore({
-      normalizedWorldIr: world,
-      normalizedWorldIrHash: input.normalizedWorldIrHash,
-    });
-    if (!baseline.ok || baseline.executionPlan === undefined) {
-      return { ok: false, diagnostics: baseline.diagnostics };
+function compileExecutionLayoutV1(
+  world: NormalizedLayoutCompileView,
+): ExecutionPlanV5["layout"] {
+  const placements = world.nodes
+    .filter((node): node is Extract<typeof node, { kind: "object" | "anchor" }> =>
+      node.kind === "object" || node.kind === "anchor")
+    .sort((left, right) => left.id.localeCompare(right.id));
+  for (const node of placements) {
+    if (
+      node.placementProvenance.layoutSolveReportHash !==
+        world.layout.layoutSolveReportHash ||
+      node.placementProvenance.solverProfileRef !== world.layout.solverProfileRef
+    ) {
+      throw new Error("COMPILER_LAYOUT_PROVENANCE_MISMATCH");
     }
-    const cameraNode = world.nodes.find((node) => node.kind === "camera");
-    if (cameraNode?.kind !== "camera") throw new Error("COMPILER_LAYOUT_CAMERA_MISSING");
-    const placements = world.nodes
-      .filter((node): node is Extract<typeof node, { kind: "object" | "anchor" }> => node.kind === "object" || node.kind === "anchor")
-      .sort((left, right) => left.id.localeCompare(right.id));
-    for (const node of placements) {
-      if (
-        node.placementProvenance.layoutSolveReportHash !== world.layout.layoutSolveReportHash ||
-        node.placementProvenance.solverProfileRef !== world.layout.solverProfileRef
-      ) throw new Error("COMPILER_LAYOUT_PROVENANCE_MISMATCH");
-    }
-    const plan: ExecutionPlanV4 = {
-      ...baseline.executionPlan,
-      schemaVersion: 4,
-      normalizedWorldIrHash: input.normalizedWorldIrHash,
-      terrain: compileLockedTerrainV4(world, baseline.executionPlan.terrain),
-      camera: {
-        ...baseline.executionPlan.camera,
-        aspectRatio: cameraNode.components.cameraRig.thirdPerson.aspectRatio,
-      },
-      layout: {
-        solverProfileRef: world.layout.solverProfileRef,
-        resolvedVersion: world.layout.resolvedVersion,
-        solverProfileHash: world.layout.solverProfileHash,
-        layoutSolveReportHash: world.layout.layoutSolveReportHash,
-        regions: [...world.layout.regions]
-          .sort((left, right) => left.id.localeCompare(right.id))
-          .map((region) => ({
-            id: region.id,
-            kind: region.kind,
-            pointsMetersXZ: region.pointsMetersXZ.map((point) => [...point]),
-            ...(region.minimumHeightMeters === undefined ? {} : { minimumHeightMeters: region.minimumHeightMeters }),
-            ...(region.maximumHeightMeters === undefined ? {} : { maximumHeightMeters: region.maximumHeightMeters }),
-            semanticClassId: region.semanticClassId,
-          })),
-        routes: [...world.layout.routes]
-          .sort((left, right) => left.id.localeCompare(right.id))
-          .map((route) => ({
-            id: route.id,
-            kind: route.kind,
-            pointsMetersXZ: route.pointsMetersXZ.map((point) => [...point]),
-            widthMeters: route.widthMeters,
-            locomotionProfileRef: route.locomotionProfileRef,
-          })),
-        screenRegions: [...world.layout.screenRegions]
-          .sort((left, right) => left.id.localeCompare(right.id))
-          .map((region) => ({
-            id: region.id,
-            kind: region.kind,
-            minimumUv: [...region.minimumUv],
-            maximumUv: [...region.maximumUv],
-          })),
-        placementsByEntityId: Object.fromEntries(placements.map((node) => [
-          node.id,
-          projectPlacementV1(node),
-        ])),
-        layoutAssertions: [...world.layout.assertions]
-          .sort((left, right) => left.constraintId.localeCompare(right.constraintId))
-          .map(projectLayoutAssertionV1),
-      },
-    };
-    return {
-      ok: true,
-      executionPlan: plan,
-      executionPlanHash: sha256CanonicalJson(plan),
-      diagnostics: [],
-    };
-  } catch (cause) {
-    return {
-      ok: false,
-      diagnostics: [{
-        severity: "error",
-        code: "COMPILER_NORMALIZED_IR_INVALID",
-        instancePath: "/normalizedWorldIr",
-        message: cause instanceof Error ? cause.message : "NormalizedWorldIRV3 could not be compiled.",
-      }],
-    };
   }
-}
-
-function projectNormalizedWorldV4ToV3(world: NormalizedWorldIRV4): NormalizedWorldIRV3 {
-  const clone = structuredClone(world);
-  const {
-    authoringSpecHash: _authoringSpecHash,
-    layout: layoutV4,
-    ...worldV3
-  } = clone;
-  const {
-    connectivityRequirements: _connectivityRequirements,
-    traversalAreas: _traversalAreas,
-    ...layout
-  } = layoutV4;
   return {
-    ...worldV3,
-    schemaVersion: 3,
-    layout,
+    solverProfileRef: world.layout.solverProfileRef,
+    resolvedVersion: world.layout.resolvedVersion,
+    solverProfileHash: world.layout.solverProfileHash,
+    layoutSolveReportHash: world.layout.layoutSolveReportHash,
+    regions: [...world.layout.regions]
+      .sort((left, right) => left.id.localeCompare(right.id))
+      .map((region) => ({
+        id: region.id,
+        kind: region.kind,
+        pointsMetersXZ: region.pointsMetersXZ.map((point) => [...point]),
+        ...(region.minimumHeightMeters === undefined
+          ? {}
+          : { minimumHeightMeters: region.minimumHeightMeters }),
+        ...(region.maximumHeightMeters === undefined
+          ? {}
+          : { maximumHeightMeters: region.maximumHeightMeters }),
+        semanticClassId: region.semanticClassId,
+      })),
+    routes: [...world.layout.routes]
+      .sort((left, right) => left.id.localeCompare(right.id))
+      .map((route) => ({
+        id: route.id,
+        kind: route.kind,
+        pointsMetersXZ: route.pointsMetersXZ.map((point) => [...point]),
+        widthMeters: route.widthMeters,
+        locomotionProfileRef: route.locomotionProfileRef,
+      })),
+    screenRegions: [...world.layout.screenRegions]
+      .sort((left, right) => left.id.localeCompare(right.id))
+      .map((region) => ({
+        id: region.id,
+        kind: region.kind,
+        minimumUv: [...region.minimumUv],
+        maximumUv: [...region.maximumUv],
+      })),
+    placementsByEntityId: Object.fromEntries(placements.map((node) => [
+      node.id,
+      projectPlacementV1(node),
+    ])),
+    layoutAssertions: [...world.layout.assertions]
+      .sort((left, right) => left.constraintId.localeCompare(right.constraintId))
+      .map(projectLayoutAssertionV1),
   };
 }
 
@@ -1577,9 +1605,9 @@ function compileTraversalAreaV1(
 }
 
 function compileHeightfieldTraversalSurfaceV1(
-  plan: ExecutionPlanV4,
+  terrain: ExecutionTerrainV3,
 ): ExecutionHeightfieldTraversalSurfaceV1 {
-  const surfaceEntityId = plan.terrain.entityId;
+  const surfaceEntityId = terrain.entityId;
   const colliderSubshapeId = deriveColliderSubshapeIdV1(
     surfaceEntityId,
     "heightfield",
@@ -1596,10 +1624,10 @@ function compileHeightfieldTraversalSurfaceV1(
     resolvedVersion: "1",
     resourceHash: sha256CanonicalJson({
       surfaceEntityId,
-      centerMetersXZ: plan.terrain.centerMetersXZ,
-      sizeMetersXZ: plan.terrain.sizeMetersXZ,
-      resolutionCellsXZ: plan.terrain.resolutionCellsXZ,
-      heightSamplesMeters: plan.terrain.heightSamplesMeters,
+      centerMetersXZ: terrain.centerMetersXZ,
+      sizeMetersXZ: terrain.sizeMetersXZ,
+      resolutionCellsXZ: terrain.resolutionCellsXZ,
+      heightSamplesMeters: terrain.heightSamplesMeters,
     }) as `sha256:${string}`,
   };
 }
@@ -1864,8 +1892,28 @@ function compileConnectivityRequirementV1(
 }
 
 export function compileWorldV5(input: CompileWorldInputV5): CompileWorldResultV5 {
-  const actualNormalizedWorldIrHash = sha256CanonicalJson(input.normalizedWorldIr);
-  if (input.normalizedWorldIrHash !== actualNormalizedWorldIrHash) {
+  let snapshot: CompileWorldInputV5;
+  try {
+    snapshot = snapshotCompileWorldInputV5(input);
+  } catch (cause) {
+    return {
+      ok: false,
+      diagnostics: [{
+        severity: "error",
+        code: cause instanceof CompilerInputAccessorErrorV1
+          ? "COMPILER_INPUT_ACCESSOR_FORBIDDEN"
+          : "COMPILER_INPUT_INVALID",
+        instancePath: "/normalizedWorldIr",
+        message: cause instanceof CompilerInputAccessorErrorV1
+          ? "Compiler input must be an accessor-free data graph."
+          : "Compiler input must be a cloneable data graph.",
+      }],
+    };
+  }
+  const actualNormalizedWorldIrHash = sha256CanonicalJson(
+    snapshot.normalizedWorldIr,
+  );
+  if (snapshot.normalizedWorldIrHash !== actualNormalizedWorldIrHash) {
     return {
       ok: false,
       diagnostics: [{
@@ -1875,45 +1923,83 @@ export function compileWorldV5(input: CompileWorldInputV5): CompileWorldResultV5
         message: "The supplied normalizedWorldIrHash does not match NormalizedWorldIRV4.",
         details: {
           expected: actualNormalizedWorldIrHash,
-          actual: input.normalizedWorldIrHash,
+          actual: snapshot.normalizedWorldIrHash,
         },
       }],
     };
   }
 
   try {
-    const resourceLockEntries = canonicalExecutionResourceLockEntriesV1(
-      input.normalizedWorldIr.resources.resourceLock,
+    const normalizedResourceLockEntries = canonicalExecutionResourceLockEntriesV1(
+      snapshot.normalizedWorldIr.resources.resourceLock,
+    ) as NormalizedWorldIRV4["resources"]["resourceLock"];
+    const normalizedResourceLockHash = sha256CanonicalJson(
+      normalizedResourceLockEntries,
     );
-    const resourceLockHash = sha256CanonicalJson(resourceLockEntries);
-    if (input.normalizedWorldIr.resources.resourceLockHash !== resourceLockHash) {
+    if (
+      snapshot.normalizedWorldIr.resources.resourceLockHash !==
+      normalizedResourceLockHash
+    ) {
       throw new Error("Resource Lock hash does not match canonical entries.");
     }
+    let gameplayBootstrapResourceLock: GameplayBootstrapExecutionResourceLockV1;
+    try {
+      const [canonicalBootstrap] = canonicalExecutionResourceLockEntriesV1([
+        snapshot.gameplayBootstrapResourceLock,
+      ]);
+      if (
+        isNil(canonicalBootstrap) ||
+        canonicalBootstrap.resourceKind !== "gameplay-bootstrap" ||
+        normalizedResourceLockEntries.some(
+          (entry) => entry.resourceRef === canonicalBootstrap.resourceRef,
+        )
+      ) {
+        throw new TypeError("Invalid Gameplay Bootstrap Resource Lock.");
+      }
+      gameplayBootstrapResourceLock = canonicalBootstrap as
+        GameplayBootstrapExecutionResourceLockV1;
+    } catch {
+      return {
+        ok: false,
+        diagnostics: [{
+          severity: "error",
+          code: "COMPILER_GAMEPLAY_BOOTSTRAP_LOCK_INVALID",
+          instancePath: "/gameplayBootstrapResourceLock",
+          message: "The Gameplay Bootstrap Resource Lock must be one unique gameplay-bootstrap row.",
+        }],
+      };
+    }
+    const resourceLockEntries = canonicalExecutionResourceLockEntriesV1([
+      ...normalizedResourceLockEntries,
+      gameplayBootstrapResourceLock,
+    ]);
+    const resourceLockHash = sha256CanonicalJson(resourceLockEntries);
     requireUniquePrototypeIdentitiesV1(
-      input.normalizedWorldIr.resources.prototypes,
+      snapshot.normalizedWorldIr.resources.prototypes,
     );
-    requireUniqueNodeEntityIdsV1(input.normalizedWorldIr.nodes);
-    const projectedWorld = projectNormalizedWorldV4ToV3(input.normalizedWorldIr);
-    const compiledV4 = compileWorldV4({
-      normalizedWorldIr: projectedWorld,
-      normalizedWorldIrHash: sha256CanonicalJson(projectedWorld),
+    requireUniqueNodeEntityIdsV1(snapshot.normalizedWorldIr.nodes);
+    const compiledCurrent = compileWorldCore({
+      normalizedWorldIr: snapshot.normalizedWorldIr,
     });
-    if (!compiledV4.ok || compiledV4.executionPlan === undefined) {
-      return { ok: false, diagnostics: compiledV4.diagnostics };
+    if (!compiledCurrent.ok || compiledCurrent.components === undefined) {
+      return { ok: false, diagnostics: compiledCurrent.diagnostics };
     }
 
-    const planV4 = compiledV4.executionPlan;
-    const staticColliders = planV4.objects
+    const terrain = compileLockedTerrainV4(
+      snapshot.normalizedWorldIr,
+      compiledCurrent.components.terrain,
+    );
+    const staticColliders = compiledCurrent.components.objects
       .filter((object) => object.collisionEnabled)
       .map(compileStaticColliderV1)
       .sort((left, right) =>
         left.colliderSubshapeId.localeCompare(right.colliderSubshapeId));
     const sortedTraversalSurfaces = [
-      compileHeightfieldTraversalSurfaceV1(planV4),
+      compileHeightfieldTraversalSurfaceV1(terrain),
       ...compileStaticColliderTraversalSurfacesV1(
-        input.normalizedWorldIr,
+        snapshot.normalizedWorldIr,
         staticColliders,
-        resourceLockEntries,
+        normalizedResourceLockEntries,
       ),
     ].sort((left, right) =>
       left.traversalSurfaceId.localeCompare(right.traversalSurfaceId));
@@ -1929,33 +2015,41 @@ export function compileWorldV5(input: CompileWorldInputV5): CompileWorldResultV5
     const traversalSurfaces = Object.freeze(
       sortedTraversalSurfaces.map((surface) => Object.freeze(surface)),
     );
-    const plan: ExecutionPlanV5 = {
-      ...planV4,
+    const {
+      controlledEntityId: initialControlledEntityId,
+      ...componentsWithoutControlledEntity
+    } = compiledCurrent.components;
+    const plan = parseExecutionPlanV5({
+      kind: "worldkit-execution-plan",
+      ...componentsWithoutControlledEntity,
       schemaVersion: 5,
-      authoringSpecHash: input.normalizedWorldIr.authoringSpecHash,
-      normalizedWorldIrHash: input.normalizedWorldIrHash,
+      initialControlledEntityId,
+      authoringSpecHash: snapshot.normalizedWorldIr.authoringSpecHash,
+      normalizedWorldIrHash: snapshot.normalizedWorldIrHash,
       resourceLockHash,
       resourceLockEntries,
+      terrain,
+      layout: compileExecutionLayoutV1(snapshot.normalizedWorldIr),
       traversal: {
         surfaces: traversalSurfaces,
-        traversalAreas: input.normalizedWorldIr.layout.traversalAreas
+        traversalAreas: snapshot.normalizedWorldIr.layout.traversalAreas
           .map(compileTraversalAreaV1)
           .sort((left, right) => left.id.localeCompare(right.id)),
-        connectivityRequirements: input.normalizedWorldIr.layout
+        connectivityRequirements: snapshot.normalizedWorldIr.layout
           .connectivityRequirements
           .map(compileConnectivityRequirementV1)
           .sort((left, right) => left.constraintId.localeCompare(right.constraintId)),
-        anchorEntityIds: input.normalizedWorldIr.nodes
+        anchorEntityIds: snapshot.normalizedWorldIr.nodes
           .filter((node) => node.kind === "anchor")
           .map((node) => node.id)
           .sort((left, right) => left.localeCompare(right)),
       },
       staticColliders,
-    };
+    });
     return {
       ok: true,
       executionPlan: plan,
-      executionPlanHash: sha256CanonicalJson(plan),
+      executionPlanHash: hashExecutionPlanV5(plan),
       diagnostics: [],
     };
   } catch (cause) {
@@ -1972,5 +2066,3 @@ export function compileWorldV5(input: CompileWorldInputV5): CompileWorldResultV5
     };
   }
 }
-
-export const compileWorld = compileWorldV4;

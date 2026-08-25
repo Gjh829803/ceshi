@@ -207,7 +207,16 @@ interface SubjectAssetBundle {
 
 Bundle 只提供资产事实和参考；最终 Collider、控制、物理和 Camera Profile 由 SDK Registry 中经过验收的配置决定。
 
-### 5.5 S1b 产品人物资产交付清单
+### 5.5 S1b Rigged 产品人物资产交付清单
+
+本节的 Bone Mapping 与四个 Clip 要求只适用于 Rigged GLB。它的首个产品实例仍是
+G Bot，接入路由见
+[`product-asset-intake.md`](./superpowers/skills/product-asset-intake.md)。无 Rig、无动画的
+Static GLB 批次不能借用本节的 Rig/Animation Set 合同；它们必须走
+[`product-asset-intake-static-assets.md`](./superpowers/skills/product-asset-intake-static-assets.md)，
+以独立的 Asset、Collider 和 schema-v3 Subject Definition 注册并验证。静态资产目前只
+获得已实现的 ground Character capability；车、飞行器、骑乘组合的外观不等于 vehicle、
+flight、mount 或 NPC Runtime 行为。
 
 产品/资产团队接入 Canonical Babylon 运行时，不需要交付场景脚本；需要交付一组
 可生成下列 Registry 资源的确定性事实。字段缺失时 SDK 应阻断接入，不能在 Scene
@@ -225,8 +234,8 @@ Bundle 只提供资产事实和参考；最终 Collider、控制、物理和 Cam
 | Collider ref | 引用经过验收的 Collider Profile；不在运行时从 Mesh Bounds 猜测 | `worldkit://collider-profile/humanoid.medium-capsule@1`，0.32m radius / 1.92m height |
 | Bone Sockets (optional) | 可选；使用稳定 Socket ID、语义 `boneId` 与局部 Offset，不暴露 Babylon Node Path | Golden 提供 `hand.right` → `boneId: "hand.right"` |
 
-产品接入时通常新增或更新 Subject Asset、Rig Profile、Animation Set、Collider Profile
-和 Subject Definition Registry 内容。普通 World Agent 仍只写
+Rigged 产品接入时通常新增或更新 Subject Asset、Rig Profile、Animation Set、Collider
+Profile 和 Subject Definition Registry 内容。普通 World Agent 仍只写
 `subjectDefinitionRef`；GLB URI、鉴权、骨骼名、源 Clip 名与 Capsule 参数不进入世界 JSON。
 
 当前最小接入/验证流程是：

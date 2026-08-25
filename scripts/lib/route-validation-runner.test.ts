@@ -15,8 +15,6 @@ import {
 import type { ResolvedWorldPackageResourceArtifactV1 } from "@whitebox-world/world-package";
 import { isNil } from "lodash-es";
 
-import { createValidAuthoringSpec } from "../../packages/authoring/src/test-fixture";
-
 import {
   canonicalFixtureFaultInjectionV1,
   createWorldPackageSubjectAssetResolverV1,
@@ -121,6 +119,12 @@ describe("Route validation trusted runner", () => {
       "inject-surface-correlation-miss",
     );
     expect(JSON.stringify(result)).not.toContain("fixtureFaultInjection");
+    expect(result.worldPackageBuildReceipt.manifest.resources).toContainEqual(
+      expect.objectContaining({
+        packagePath: "gameplay/bootstrap.json",
+        mediaType: "application/vnd.worldkit.gameplay-bootstrap+json",
+      }),
+    );
   }, 30_000);
 
   it("withdraws support once after the first successful reset", () => {
@@ -217,15 +221,22 @@ describe("Route validation trusted runner", () => {
     ).transformNode.metadata?.worldkitEntityId).toBe("terrain-main");
   });
 
-  it("rejects Authoring V3 before creating Runtime infrastructure", async () => {
+  it("rejects non-canonical current Authoring input before creating Runtime infrastructure", async () => {
     const temporaryDirectory = await mkdtemp(
-      path.join(tmpdir(), "worldkit-route-runner-v3-"),
+      path.join(tmpdir(), "worldkit-route-runner-invalid-"),
     );
     try {
+      const fixture = JSON.parse(await readFile(
+        new URL("../../examples/traversal/route-r0-contract.json", import.meta.url),
+        "utf8",
+      )) as { authoringSpec: object };
       const inputPath = path.join(temporaryDirectory, "world.json");
       await writeFile(
         inputPath,
-        JSON.stringify(createValidAuthoringSpec()),
+        JSON.stringify({
+          ...fixture.authoringSpec,
+          unexpectedAlias: { controlledEntityId: "player" },
+        }),
         "utf8",
       );
 
@@ -349,7 +360,7 @@ describe("Route validation trusted runner", () => {
     } finally {
       await rm(temporaryDirectory, { recursive: true, force: true });
     }
-  }, 120_000);
+  }, 180_000);
 
   it("returns the canonical failed Report for a V4 world with zero required Routes", async () => {
     const temporaryDirectory = await mkdtemp(

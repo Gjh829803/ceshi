@@ -9,6 +9,11 @@ import type {
   ResolvedWorldPackageResourceArtifactV1,
 } from "@whitebox-world/world-package";
 
+import {
+  XIER120_SUBJECT_ASSET_PACKAGE_PATH_BY_REF_V1,
+  XIER120_SUBJECT_ASSET_URI_BY_REF_V1,
+} from "../../apps/playground/src/worldkit-asset-resolver.js";
+
 export interface WorldPackageResourceMappingV1 {
   readonly publicUri: string;
   readonly packagePath: string;
@@ -54,9 +59,34 @@ export class WorldPackageResourceResolveInfrastructureErrorV1 extends Error {
   }
 }
 
+const XIER120_WORLD_PACKAGE_RESOURCE_MAPPING_BY_REF_V1 = Object.freeze(
+  Object.fromEntries(
+    Object.entries(XIER120_SUBJECT_ASSET_URI_BY_REF_V1).map(
+      ([resourceRef, publicUri]) => {
+        const packagePath =
+          XIER120_SUBJECT_ASSET_PACKAGE_PATH_BY_REF_V1[resourceRef];
+        if (packagePath === undefined) {
+          throw new Error(
+            `XIER120_WORLD_PACKAGE_PATH_MISSING: ${resourceRef}`,
+          );
+        }
+        return [
+          resourceRef,
+          Object.freeze({
+            publicUri,
+            packagePath,
+            mediaType: "model/gltf-binary" as const,
+          }),
+        ];
+      },
+    ),
+  ),
+);
+
 export const DEFAULT_WORLD_PACKAGE_RESOURCE_MAPPING_BY_REF_V1: Readonly<
   Record<string, WorldPackageResourceMappingV1>
 > = Object.freeze({
+  ...XIER120_WORLD_PACKAGE_RESOURCE_MAPPING_BY_REF_V1,
   "worldkit://subject-asset/actor.humanoid.g-bot@1": Object.freeze({
     publicUri: "/subject-assets/humanoid/g-bot/v1/g-bot.glb",
     packagePath: "resources/subject-assets/actor.humanoid.g-bot.glb",

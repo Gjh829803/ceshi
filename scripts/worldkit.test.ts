@@ -21,11 +21,14 @@ import {
   createValidRiggedPackageDefinition,
 } from "../packages/authoring/src/test-fixture";
 import type { AuthoringSpecV4 } from "@whitebox-world/authoring";
-
 import {
-  loadWorldkitPipeline,
-  loadWorldkitRoutePipeline,
-} from "./lib/worldkit-pipeline";
+  CONTROL_TRANSITION_CAPABILITY_REF,
+  createCoreControlFeatureFactoryV1,
+} from "@whitebox-world/gameplay";
+import { XIER120_SUBJECT_DEFINITIONS } from "@whitebox-world/subject-registry";
+
+import { loadWorldkitRoutePipeline } from "./lib/worldkit-pipeline";
+import { loadAuthoringScene } from "../apps/playground/src/authoring-loader";
 import {
   RouteValidationRunnerInfrastructureErrorV1,
   runTrustedRouteValidationV1,
@@ -54,9 +57,15 @@ async function createTemporaryDirectory(): Promise<string> {
 
 async function writePackageWorld(directory: string): Promise<string> {
   const inputPath = path.join(directory, "package-world.json");
+  const source = createValidPackageSubjectWorld();
   await writeFile(
     inputPath,
-    JSON.stringify(createValidPackageSubjectWorld()),
+    JSON.stringify({
+      ...source,
+      schemaVersion: 4,
+      spatial: { ...source.spatial, traversalAreas: [] },
+      constraints: { ...source.constraints, connectivity: [] },
+    }),
     "utf8",
   );
   return inputPath;
@@ -125,11 +134,10 @@ afterEach(async () => {
 });
 
 describe("worldkit CLI", () => {
-  it("loads V4 Route worlds only through the explicit V4/V5 pipeline", async () => {
+  it("loads V4 Route worlds through the V4/V5 pipeline", async () => {
     const directory = await createTemporaryDirectory();
     const inputPath = await writeRouteWorld(directory);
     const route = await loadWorldkitRoutePipeline(inputPath);
-    const legacy = await loadWorldkitPipeline(inputPath);
 
     expect(route).toMatchObject({
       ok: true,
@@ -146,7 +154,39 @@ describe("worldkit CLI", () => {
       layoutSolveReportHash: expect.stringMatching(/^sha256:[0-9a-f]{64}$/),
       executionPlan: { schemaVersion: 5 },
     });
-    expect(legacy).toMatchObject({ ok: false, exitCode: 2 });
+  });
+
+  it("locks the authoritative core-control feature into Route V5 plans", async () => {
+    const directory = await createTemporaryDirectory();
+    const inputPath = await writeRouteWorld(directory);
+    const route = await loadWorldkitRoutePipeline(inputPath);
+    if (!route.ok) {
+      throw new Error(JSON.stringify(route.diagnostics));
+    }
+    const coreControlManifest = createCoreControlFeatureFactoryV1().manifest;
+    const sourceText = await readFile(inputPath, "utf8");
+    const loaded = await loadAuthoringScene(async () => new Response(sourceText, {
+      status: 200,
+      headers: { "content-type": "application/json" },
+    }));
+
+    expect(route.gameplayBootstrap.featureResourceLocks).toEqual([{
+      resourceRef: coreControlManifest.resourceRef,
+      contentHash: coreControlManifest.contentHash,
+    }]);
+    expect(route.gameplayBootstrap.availableCapabilityRefs).toContain(
+      CONTROL_TRANSITION_CAPABILITY_REF,
+    );
+    expect(route.executionPlan.resourceLockEntries).toContainEqual({
+      resourceRef: route.gameplayBootstrap.resourceRef,
+      resourceKind: "gameplay-bootstrap",
+      resolvedVersion: "1",
+      contentHash: route.gameplayBootstrap.contentHash,
+    });
+    expect(loaded.runtimeWorldConfiguration?.gameplayBootstrap).toEqual(
+      route.gameplayBootstrap,
+    );
+    expect(loaded.executionPlanHash).toBe(route.executionPlanHash);
   });
 
   it("parses an explicit dependency refresh for local Runtime startup", () => {
@@ -760,9 +800,19 @@ describe("worldkit CLI", () => {
       resourceKind: "subject-definition",
     });
     expect(first.resources.map((resource) => resource.resourceRef)).toEqual([
+      "worldkit://subject-definition/animal.quadruped.forward-steer@1",
+      "worldkit://subject-definition/animal.quadruped.forward-steer@2",
+      "worldkit://subject-definition/glider.paraglider.unpowered@1",
       "worldkit://subject-definition/humanoid.g-bot@1",
+      "worldkit://subject-definition/humanoid.rigged-golden@1",
       "worldkit://subject-definition/humanoid.third-person@1",
       "worldkit://subject-definition/quadruped.ground-proxy@1",
+      "worldkit://subject-definition/surface-craft.ice-skimmer@1",
+      "worldkit://subject-definition/vehicle.four-wheel.arcade@1",
+      "worldkit://subject-definition/watercraft.kayak.surface@1",
+      ...XIER120_SUBJECT_DEFINITIONS
+        .map((definition) => definition.resourceRef)
+        .sort((left, right) => left.localeCompare(right)),
     ]);
     expect(first.resources[0]).toMatchObject({
       kind: "subject-definition",
@@ -786,7 +836,11 @@ describe("worldkit CLI", () => {
       resource: {
         resourceRef: "worldkit://subject-definition/humanoid.g-bot@1",
         schemaVersion: 3,
-        contentHash: first.resources[0]?.contentHash,
+        contentHash: first.resources.find(
+          (resource) =>
+            resource.resourceRef ===
+            "worldkit://subject-definition/humanoid.g-bot@1",
+        )?.contentHash,
       },
     });
 
@@ -957,7 +1011,7 @@ describe("worldkit CLI", () => {
         },
         profiles: {
           physicsBodyProfileRef:
-            "worldkit://physics-body-profile/character.medium@1",
+            "worldkit://physics-body-profile/character.capability-medium@1",
           locomotionProfileRef:
             "worldkit://locomotion-profile/ground.standard@1",
         },
@@ -1108,7 +1162,7 @@ describe("worldkit CLI", () => {
     });
   });
 
-  it("validates V3 files and builds deterministic V3/V4 artifacts", async () => {
+  it("validates V4 files and builds deterministic V4/V5 artifacts", async () => {
     const directory = await createTemporaryDirectory();
     const inputPath = await writePackageWorld(directory);
     const outputPath = path.join(directory, "dist", "world.build.json");
@@ -1126,12 +1180,12 @@ describe("worldkit CLI", () => {
     expect(firstBytes).toBe(secondBytes);
     expect(artifact).toMatchObject({
       kind: "worldkit-build-artifact",
-      schemaVersion: 3,
-      normalizedWorldIr: { schemaVersion: 3 },
+      schemaVersion: 4,
+      normalizedWorldIr: { schemaVersion: 4 },
       executionPlan: {
-        schemaVersion: 4,
+        schemaVersion: 5,
         runtimeBackend: "babylon-havok",
-        controlledEntityId: "player",
+        initialControlledEntityId: "player",
       },
     });
     expect(firstBytes).not.toContain(["kit", "Ref"].join(""));

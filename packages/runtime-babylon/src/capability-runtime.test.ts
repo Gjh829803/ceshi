@@ -2,20 +2,18 @@ import { readFile } from "node:fs/promises";
 import { createRequire } from "node:module";
 
 import { NullEngine } from "@babylonjs/core/Engines/nullEngine.pure.js";
-import {
-  TRUSTED_DEFAULT_CONTROLLER_ID,
-  type ExecutionPlanV4,
-} from "@whitebox-world/runtime-contracts";
-import { isNil } from "lodash-es";
+import type { ExecutionPlanV5 } from "@whitebox-world/runtime-contracts";
 import { describe, expect, it } from "vitest";
 
 // Test-only Registry access via a cross-workspace relative path (matching the
 // fixture imports below); production runtime-babylon src must not read the Registry.
 import { builtInSubjectResourceRegistry } from "../../subject-registry/src/index";
 
-import { loadAuthoringScene } from "../../../apps/playground/src/authoring-loader";
-import { createValidAuthoringSpec } from "../../authoring/src/test-fixture";
+import { createValidAuthoringSpecV4 } from "../../authoring/src/test-fixture";
 import { BabylonWorldRuntime } from "./babylon-world-runtime";
+import { BABYLON_GAMEPLAY_RUNTIME_INTERNAL } from "./gameplay-runtime-internal";
+import { bindRuntimeTestPossession } from "./runtime-test-possession";
+import { compileRuntimeTestPlanV5 } from "./runtime-test-plan";
 
 const havokWasmBytes = await readFile(
   createRequire(import.meta.url).resolve(
@@ -39,38 +37,6 @@ const cameraDirectorSource = await readFile(
   "utf8",
 );
 
-const UNAVAILABLE_RELATIONSHIP_PACKAGES = [
-  [
-    "worldkit://subject-definition/animal.quadruped.forward-steer@2",
-    "worldkit://capability/relationship.mount@1",
-    "worldkit://motion-kernel/forward-steer@1",
-    "worldkit://subject-definition/playground-preview.animal.quadruped.forward-steer@2",
-  ],
-  [
-    "worldkit://subject-definition/vehicle.four-wheel.arcade@1",
-    "worldkit://capability/relationship.seat@1",
-    "worldkit://motion-kernel/wheeled-arcade@1",
-    "worldkit://subject-definition/playground-preview.vehicle.four-wheel.arcade@1",
-  ],
-  [
-    "worldkit://subject-definition/surface-craft.ice-skimmer@1",
-    "worldkit://capability/relationship.seat@1",
-    "worldkit://motion-kernel/surface-slide@1",
-    "worldkit://subject-definition/playground-preview.surface-craft.ice-skimmer@1",
-  ],
-  [
-    "worldkit://subject-definition/watercraft.kayak.surface@1",
-    "worldkit://capability/relationship.seat@1",
-    "worldkit://motion-kernel/water-surface@1",
-    "worldkit://subject-definition/playground-preview.watercraft.kayak.surface@1",
-  ],
-  [
-    "worldkit://subject-definition/glider.paraglider.unpowered@1",
-    "worldkit://capability/relationship.tether@1",
-    "worldkit://motion-kernel/unpowered-glide@1",
-    "worldkit://subject-definition/playground-preview.glider.paraglider.unpowered@1",
-  ],
-] as const;
 
 const CAMERA_PROFILES = [
   [
@@ -98,7 +64,7 @@ const CAMERA_PROFILES = [
 const MEDIUM_FEEL_REF = "worldkit://control-feel-profile/humanoid.medium-ground@1";
 const HEAVY_FEEL_REF = "worldkit://control-feel-profile/humanoid.heavy-ground@1";
 
-function withExtraCapabilitySubject(executionPlan: ExecutionPlanV4): ExecutionPlanV4 {
+function withExtraCapabilitySubject(executionPlan: ExecutionPlanV5): ExecutionPlanV5 {
   const player = executionPlan.subjects[0];
   if (player === undefined) {
     throw new Error("Expected a compiled capability Subject.");
@@ -122,7 +88,7 @@ function withExtraCapabilitySubject(executionPlan: ExecutionPlanV4): ExecutionPl
 }
 
 function createFlatTerrainCapabilitySpec() {
-  const spec = createValidAuthoringSpec();
+  const spec = createValidAuthoringSpecV4();
   const terrain = spec.nodes.find((node) => node.kind === "terrain");
   if (terrain?.kind !== "terrain") {
     throw new Error("Capability fixture terrain is missing.");
@@ -136,6 +102,46 @@ function createFlatTerrainCapabilitySpec() {
   return spec;
 }
 
+function createGbotCapabilityExecutionPlan(): ExecutionPlanV5 {
+  const spec = createFlatTerrainCapabilitySpec();
+  const subject = spec.nodes.find((node) => node.kind === "subject");
+  if (subject?.kind !== "subject") {
+    throw new Error("Capability fixture Subject is missing.");
+  }
+  subject.subjectDefinitionRef =
+    "worldkit://subject-definition/humanoid.g-bot@1";
+  return compileRuntimeTestPlanV5(spec, {
+    subjectResourceRegistry: builtInSubjectResourceRegistry,
+  });
+}
+
+async function createBoundGbotRuntime(
+  executionPlan: ExecutionPlanV5,
+): Promise<BabylonWorldRuntime> {
+  const runtime = await BabylonWorldRuntime.create({
+    executionPlan,
+    havokWasmBinary,
+    subjectAssetResolver: {
+      async resolveSubjectAsset() {
+        return { bytes: gBotAssetBytes, sourceLabel: "g-bot-test" };
+      },
+    },
+    engineFactory: () =>
+      new NullEngine({
+        renderWidth: 640,
+        renderHeight: 360,
+        textureSize: 512,
+        deterministicLockstep: true,
+        lockstepMaxSteps: 4,
+      }),
+  });
+  await bindRuntimeTestPossession(
+    runtime,
+    executionPlan.initialControlledEntityId,
+  );
+  return runtime;
+}
+
 describe("capability package runtime smoke tests", () => {
   it("keeps Camera Director independent from controls and real-world subject categories", () => {
     expect(cameraDirectorSource).not.toMatch(
@@ -146,23 +152,15 @@ describe("capability package runtime smoke tests", () => {
   it("loads the locked 25-clip G Bot package into a live Runtime", async () => {
     const subjectDefinitionRef =
       "worldkit://subject-definition/humanoid.g-bot@1";
-    const loaded = await loadAuthoringScene(
-      async () => new Response(JSON.stringify(createFlatTerrainCapabilitySpec())),
-      { subjectDefinitionRef },
-    );
-    if (!loaded.ok || loaded.executionPlan === undefined) {
-      throw new Error(
-        `G Bot package failed to load: ${JSON.stringify(loaded.diagnostics)}`,
-      );
-    }
-    const gBotAssetPart = loaded.executionPlan.subjects[0]?.visualParts.find(
+    const executionPlan = createGbotCapabilityExecutionPlan();
+    const gBotAssetPart = executionPlan.subjects[0]?.visualParts.find(
       (part) => part.id === "body.asset",
     );
     expect(gBotAssetPart?.localTransform.rotationEulerRadiansXYZ[1]).toBeCloseTo(
       Math.PI,
       12,
     );
-    expect(loaded.executionPlan.subjects[0]?.sockets.map((socket) => socket.id).sort())
+    expect(executionPlan.subjects[0]?.sockets.map((socket) => socket.id).sort())
       .toEqual([
         "CameraTarget3D",
         "FirstPersonView",
@@ -171,24 +169,8 @@ describe("capability package runtime smoke tests", () => {
         "ThirdPersonTarget",
         "hand.right",
       ]);
-    expect(loaded.executionPlan.subjects[0]?.capabilityAssembly).toBeDefined();
-    const runtime = await BabylonWorldRuntime.create({
-      executionPlan: loaded.executionPlan,
-      havokWasmBinary,
-      subjectAssetResolver: {
-        async resolveSubjectAsset() {
-          return { bytes: gBotAssetBytes, sourceLabel: "g-bot-test" };
-        },
-      },
-      engineFactory: () =>
-        new NullEngine({
-          renderWidth: 640,
-          renderHeight: 360,
-          textureSize: 512,
-          deterministicLockstep: true,
-          lockstepMaxSteps: 4,
-        }),
-    });
+    expect(executionPlan.subjects[0]?.capabilityAssembly).toBeDefined();
+    const runtime = await createBoundGbotRuntime(executionPlan);
     try {
       const snapshot = await runtime.runFixedInput({
         actions: ["move-forward"],
@@ -270,6 +252,7 @@ describe("capability package runtime smoke tests", () => {
       runtime.resetCameraView();
       expect(runtime.resetCameraProfile().camera).not.toHaveProperty("preference");
       runtime.reset();
+      await bindRuntimeTestPossession(runtime, "player");
       runtime.requestCameraProfile("worldkit://camera-profile/orbit.medium@1");
       const runRenderedFixedInput = async (
         actions: readonly ("move-left")[],
@@ -299,12 +282,14 @@ describe("capability package runtime smoke tests", () => {
         .toBeGreaterThan(0.9);
 
       runtime.reset();
+      await bindRuntimeTestPossession(runtime, "player");
       runtime.requestCameraProfile("worldkit://camera-profile/orbit.medium@1");
       const movingNormally = await runtime.runFixedInput({
         actions: ["move-forward"],
         ticks: 60,
       });
       runtime.reset();
+      await bindRuntimeTestPossession(runtime, "player");
       runtime.requestCameraProfile("worldkit://camera-profile/orbit.medium@1");
       const movingWhileLookingBack = await runtime.runFixedInput({
         actions: ["move-forward", "camera-look-back"],
@@ -320,6 +305,7 @@ describe("capability package runtime smoke tests", () => {
       ).toBeGreaterThan(0.995);
 
       runtime.reset();
+      await bindRuntimeTestPossession(runtime, "player");
       runtime.requestCameraProfile("worldkit://camera-profile/orbit.medium@1");
       runtime.applyCameraPreview({
         tuningByProfileRef: {
@@ -355,6 +341,7 @@ describe("capability package runtime smoke tests", () => {
       ).toBeLessThan(-0.9);
 
       runtime.reset();
+      await bindRuntimeTestPossession(runtime, "player");
       expect(
         runtime.requestControlFeelProfile(
           "player",
@@ -366,6 +353,7 @@ describe("capability package runtime smoke tests", () => {
         ticks: 6,
       });
       runtime.reset();
+      await bindRuntimeTestPossession(runtime, "player");
       expect(
         runtime.requestControlFeelProfile(
           "player",
@@ -382,12 +370,14 @@ describe("capability package runtime smoke tests", () => {
         );
 
       runtime.reset();
+      await bindRuntimeTestPossession(runtime, "player");
       runtime.requestControlFeelProfile(
         "player",
         "worldkit://control-feel-profile/humanoid.heavy-ground@1",
       );
       const slowTurn = await runtime.runFixedInput({ actions: ["move-left"], ticks: 10 });
       runtime.reset();
+      await bindRuntimeTestPossession(runtime, "player");
       runtime.requestControlFeelProfile(
         "player",
         "worldkit://control-feel-profile/humanoid.medium-ground@1",
@@ -403,6 +393,7 @@ describe("capability package runtime smoke tests", () => {
       )).toThrow(/^SUBJECT_OVERRIDE_FORBIDDEN/);
 
       runtime.reset();
+      await bindRuntimeTestPossession(runtime, "player");
       expect(runtime).not.toHaveProperty("setControlFeelTuning");
       expect(runtime).not.toHaveProperty("getControlFeelTuning");
       expect(runtime).not.toHaveProperty("setControlTuning");
@@ -412,7 +403,7 @@ describe("capability package runtime smoke tests", () => {
       expect(runtime.snapshot().subjectStatesByEntityId.player)
         .not.toHaveProperty("controlParameterTuning");
 
-      const capabilityAssembly = loaded.executionPlan.subjects[0]!.capabilityAssembly!;
+      const capabilityAssembly = executionPlan.subjects[0]!.capabilityAssembly;
       const defaultMotionProfileRef = capabilityAssembly.defaultMotionProfile.resourceRef;
       const orbitProfile = capabilityAssembly.cameraContext.cameraRigProfiles.find(
         (profile) =>
@@ -437,7 +428,7 @@ describe("capability package runtime smoke tests", () => {
         subjectEntityId: "player",
         expectedSubjectDefinitionRef: subjectDefinitionRef,
         expectedSubjectDefinitionContentHash:
-          loaded.executionPlan.subjects[0]!.subjectDefinitionHash,
+          executionPlan.subjects[0]!.subjectDefinitionHash,
         selectedMotionProfileRef: defaultMotionProfileRef,
         selectedControlFeelProfileRef:
           "worldkit://control-feel-profile/unknown.unlisted@1",
@@ -450,7 +441,7 @@ describe("capability package runtime smoke tests", () => {
         subjectEntityId: "player",
         expectedSubjectDefinitionRef: subjectDefinitionRef,
         expectedSubjectDefinitionContentHash:
-          loaded.executionPlan.subjects[0]!.subjectDefinitionHash,
+          executionPlan.subjects[0]!.subjectDefinitionHash,
         selectedMotionProfileRef: defaultMotionProfileRef,
         selectedControlFeelProfileRef,
         selectedControlProfileRef:
@@ -471,7 +462,7 @@ describe("capability package runtime smoke tests", () => {
         subjectEntityId: "player",
         expectedSubjectDefinitionRef: subjectDefinitionRef,
         expectedSubjectDefinitionContentHash:
-          loaded.executionPlan.subjects[0]!.subjectDefinitionHash,
+          executionPlan.subjects[0]!.subjectDefinitionHash,
         selectedMotionProfileRef: defaultMotionProfileRef,
         selectedControlFeelProfileRef:
           "worldkit://control-feel-profile/humanoid.heavy-ground@1",
@@ -505,285 +496,10 @@ describe("capability package runtime smoke tests", () => {
     }
   }, 15_000);
 
-  it.each(UNAVAILABLE_RELATIONSHIP_PACKAGES)(
-    "loads %s through an explicit motion-only Playground preview",
-    async (subjectDefinitionRef, capabilityRef, _motionKernelRef, previewDefinitionRef) => {
-      const loaded = await loadAuthoringScene(
-        async () => new Response(JSON.stringify(createFlatTerrainCapabilitySpec())),
-        { subjectDefinitionRef },
-      );
-
-      expect(loaded.ok).toBe(true);
-      expect(loaded.diagnostics).toEqual([]);
-      expect(loaded.executionPlan?.subjects[0]?.subjectDefinitionRef)
-        .toBe(previewDefinitionRef);
-      expect(loaded.executionPlan?.subjects[0]?.capabilityAssembly?.relationshipProfiles)
-        .toEqual([]);
-      expect(loaded.hostOverlay?.changes).toContainEqual({
-        type: "relationship-capabilities-deferred",
-        sourceSubjectDefinitionRef: subjectDefinitionRef,
-        runtimeSubjectDefinitionRef: previewDefinitionRef,
-        deferredCapabilityRefs: [capabilityRef],
-      });
-    },
-  );
-
-  it.each(UNAVAILABLE_RELATIONSHIP_PACKAGES)(
-    "executes implemented Kernel for %s through the Playground preview Definition",
-    async (subjectDefinitionRef, _capabilityRef, motionKernelRef) => {
-      const loaded = await loadAuthoringScene(
-        async () => new Response(JSON.stringify(createFlatTerrainCapabilitySpec())),
-        { subjectDefinitionRef },
-      );
-      if (!loaded.ok || loaded.executionPlan === undefined) {
-        throw new Error(`Playground preview failed: ${JSON.stringify(loaded.diagnostics)}`);
-      }
-      const executionPlan = loaded.executionPlan;
-      const assembly = executionPlan.subjects[0]?.capabilityAssembly;
-      expect(assembly?.relationshipProfiles).toEqual([]);
-      const lockedMotionKernelRef = assembly?.defaultMotionProfile.motionKernelRef;
-      expect(assembly?.motionKernels).toContainEqual(expect.objectContaining({
-        resourceRef: lockedMotionKernelRef,
-      }));
-      expect(
-        builtInSubjectResourceRegistry.resolveMotionKernel(
-          lockedMotionKernelRef ?? "",
-        )?.runtimeStatus,
-      ).toBe("implemented");
-      const runtime = await BabylonWorldRuntime.create({
-        executionPlan,
-        havokWasmBinary,
-        engineFactory: () =>
-          new NullEngine({
-            renderWidth: 640,
-            renderHeight: 360,
-            textureSize: 512,
-            deterministicLockstep: true,
-            lockstepMaxSteps: 4,
-          }),
-      });
-      try {
-        const snapshot = await runtime.runFixedInput({
-          actions: ["move-forward"],
-          ticks: 30,
-        });
-        const state = snapshot.subjectStatesByEntityId.player!;
-        const harness = await runtime.runHarness("player");
-        expect(state.activeMotionKernelRef).toBe(lockedMotionKernelRef);
-        expect([
-          ...state.positionMetersXYZ,
-          ...state.velocityMetersPerSecondXYZ,
-        ].every(Number.isFinite)).toBe(true);
-        expect(snapshot.camera.positionMetersXYZ.every(Number.isFinite)).toBe(true);
-        expect(harness.passed).toBe(true);
-        expect(harness.checks).toHaveLength(9);
-
-        if (lockedMotionKernelRef === "worldkit://motion-kernel/wheeled-arcade@1") {
-          runtime.reset();
-          const stationaryTurn = await runtime.runFixedInput({
-            actions: ["move-left"],
-            ticks: 120,
-          });
-          expect(Math.abs(stationaryTurn.subjectStatesByEntityId.player!.forwardXYZ![0]))
-            .toBeLessThan(Math.sin((0.5 * Math.PI) / 180));
-
-          runtime.reset();
-          const defaultQuarterSecondTurn = await runtime.runFixedInput({
-            actions: ["move-forward", "move-left"],
-            ticks: 15,
-          });
-          const defaultForward = defaultQuarterSecondTurn
-            .subjectStatesByEntityId.player!.forwardXYZ!;
-          expect(Math.acos(Math.max(-1, Math.min(1, -defaultForward[2]))))
-            .toBeLessThan((8 * Math.PI) / 180);
-
-          const afterSteeringRelease = await runtime.runFixedInput({
-            actions: ["move-forward"],
-            ticks: 15,
-          });
-          const afterSecondReleaseWindow = await runtime.runFixedInput({
-            actions: ["move-forward"],
-            ticks: 15,
-          });
-          const releasedForward = afterSteeringRelease.subjectStatesByEntityId.player!.forwardXYZ!;
-          const settledForward = afterSecondReleaseWindow.subjectStatesByEntityId.player!.forwardXYZ!;
-          expect(Math.acos(Math.max(-1, Math.min(1,
-            releasedForward[0] * settledForward[0] + releasedForward[2] * settledForward[2],
-          )))).toBeLessThan(0.005);
-
-          runtime.reset();
-          expect(() => runtime.requestControlFeelProfile(
-            "player",
-            "worldkit://control-feel-profile/unknown.unlisted@1",
-          )).toThrow(/^SUBJECT_OVERRIDE_FORBIDDEN/);
-
-          runtime.reset();
-          runtime.requestCameraProfile("worldkit://camera-profile/chase.surface-fast@1");
-          const reversing = await runtime.runFixedInput({
-            actions: ["move-backward"],
-            ticks: 90,
-          });
-          const reversingState = reversing.subjectStatesByEntityId.player!;
-          expect(reversing.camera.activeCameraModifierRefs).toContain(
-            "worldkit://camera-modifier/reverse-stability@1",
-          );
-          const reverseOffsetX = reversing.camera.positionMetersXYZ[0] -
-            reversingState.positionMetersXYZ[0];
-          const reverseOffsetZ = reversing.camera.positionMetersXYZ[2] -
-            reversingState.positionMetersXYZ[2];
-          const reverseOffsetLength = Math.hypot(reverseOffsetX, reverseOffsetZ);
-          expect(
-            (reverseOffsetX * reversingState.forwardXYZ![0] +
-              reverseOffsetZ * reversingState.forwardXYZ![2]) /
-              reverseOffsetLength,
-          ).toBeLessThan(-0.8);
-
-          const cameraPositionAfterTurn = async (
-            minimumHeadingSpeedMetersPerSecond: number,
-          ) => {
-            runtime.reset();
-            runtime.requestCameraProfile("worldkit://camera-profile/chase.surface-fast@1");
-            runtime.applyCameraPreview({
-              tuningByProfileRef: {
-                "worldkit://camera-profile/chase.surface-fast@1": {
-                  minimumHeadingSpeedMetersPerSecond,
-                  velocityHeadingDampingPerSecond: 40,
-                  yawDampingPerSecond: 40,
-                  transitionSeconds: 0,
-                },
-              },
-            });
-            return (await runtime.runFixedInput({
-              actions: ["move-forward", "move-left"],
-              ticks: 90,
-            })).camera.positionMetersXYZ;
-          };
-          const velocityHeadingCamera = await cameraPositionAfterTurn(0);
-          const stableHeadingCamera = await cameraPositionAfterTurn(20);
-          expect(Math.hypot(
-            velocityHeadingCamera[0] - stableHeadingCamera[0],
-            velocityHeadingCamera[2] - stableHeadingCamera[2],
-          )).toBeGreaterThan(1);
-
-          const cameraDistanceAfterRun = async (maximumPositionLagMeters: number) => {
-            runtime.reset();
-            runtime.requestCameraProfile("worldkit://camera-profile/chase.surface-fast@1");
-            runtime.applyCameraPreview({
-              tuningByProfileRef: {
-                "worldkit://camera-profile/chase.surface-fast@1": {
-                  positionDampingPerSecond: 0,
-                  maximumPositionLagMeters,
-                  lookAheadSeconds: 0,
-                },
-              },
-            });
-            const after = await runtime.runFixedInput({
-              actions: ["move-forward"],
-              ticks: 90,
-            });
-            const afterState = after.subjectStatesByEntityId.player!;
-            return Math.hypot(
-              after.camera.positionMetersXYZ[0] - afterState.positionMetersXYZ[0],
-              after.camera.positionMetersXYZ[2] - afterState.positionMetersXYZ[2],
-            );
-          };
-          expect(await cameraDistanceAfterRun(20)).toBeGreaterThan(
-            (await cameraDistanceAfterRun(0)) + 2,
-          );
-        }
-        if (lockedMotionKernelRef === "worldkit://motion-kernel/water-surface@1") {
-          runtime.reset();
-          runtime.requestCameraProfile(
-            "worldkit://camera-profile/follow.medium@1",
-          );
-          await runtime.runFixedInput({
-            actions: ["move-forward", "move-left"],
-            ticks: 60,
-          });
-          const turned = await runtime.runFixedInput({ actions: [], ticks: 120 });
-          const turnedState = turned.subjectStatesByEntityId.player!;
-          expect(turned.camera.activeCameraModifierRefs).toContain(
-            "worldkit://camera-modifier/water-stability@1",
-          );
-          const offsetX = turned.camera.positionMetersXYZ[0] - turnedState.positionMetersXYZ[0];
-          const offsetZ = turned.camera.positionMetersXYZ[2] - turnedState.positionMetersXYZ[2];
-          const offsetLength = Math.hypot(offsetX, offsetZ);
-          expect(
-            (offsetX * turnedState.forwardXYZ![0] +
-              offsetZ * turnedState.forwardXYZ![2]) / offsetLength,
-          ).toBeLessThan(-0.85);
-        }
-        if (lockedMotionKernelRef === "worldkit://motion-kernel/unpowered-glide@1") {
-          runtime.reset();
-          const stableGlide = await runtime.runFixedInput({ actions: [], ticks: 300 });
-          expect(stableGlide.subjectStatesByEntityId.player!.velocityMetersPerSecondXYZ[1])
-            .toBeGreaterThanOrEqual(-6.01);
-          expect(stableGlide.subjectStatesByEntityId.player!.velocityMetersPerSecondXYZ[1])
-            .toBeLessThanOrEqual(1.51);
-
-          runtime.reset();
-          const climb = await runtime.runFixedInput({
-            actions: ["move-backward"],
-            ticks: 90,
-          });
-          runtime.reset();
-          const dive = await runtime.runFixedInput({
-            actions: ["move-forward"],
-            ticks: 90,
-          });
-          expect(climb.subjectStatesByEntityId.player!.velocityMetersPerSecondXYZ[1])
-            .toBeGreaterThan(
-              dive.subjectStatesByEntityId.player!.velocityMetersPerSecondXYZ[1],
-            );
-
-          runtime.reset();
-          const steered = await runtime.runFixedInput({
-            actions: ["move-left"],
-            ticks: 60,
-          });
-          expect(Math.abs(steered.subjectStatesByEntityId.player!.forwardXYZ![0]))
-            .toBeGreaterThan(0.5);
-          expect(() => runtime.requestControlFeelProfile(
-            "player",
-            "worldkit://control-feel-profile/unknown.unlisted@1",
-          )).toThrow(/^SUBJECT_OVERRIDE_FORBIDDEN/);
-        }
-      } finally {
-        await runtime.dispose();
-      }
-    },
-  );
 
   it("keeps the capability camera frozen across render-only paused frames", async () => {
-    const loaded = await loadAuthoringScene(
-      async () => new Response(JSON.stringify(createFlatTerrainCapabilitySpec())),
-      {
-        subjectDefinitionRef:
-          "worldkit://subject-definition/humanoid.g-bot@1",
-      },
-    );
-    if (!loaded.ok || isNil(loaded.executionPlan)) {
-      throw new Error(
-        `Capability package failed to load: ${JSON.stringify(loaded.diagnostics)}`,
-      );
-    }
-    const runtime = await BabylonWorldRuntime.create({
-      executionPlan: loaded.executionPlan,
-      havokWasmBinary,
-      subjectAssetResolver: {
-        async resolveSubjectAsset() {
-          return { bytes: gBotAssetBytes, sourceLabel: "g-bot-test" };
-        },
-      },
-      engineFactory: () =>
-        new NullEngine({
-          renderWidth: 640,
-          renderHeight: 360,
-          textureSize: 512,
-          deterministicLockstep: true,
-          lockstepMaxSteps: 4,
-        }),
-    });
+    const executionPlan = createGbotCapabilityExecutionPlan();
+    const runtime = await createBoundGbotRuntime(executionPlan);
     try {
       runtime.requestCameraProfile("worldkit://camera-profile/orbit.medium@1");
       runtime.adjustCameraView({
@@ -802,41 +518,18 @@ describe("capability package runtime smoke tests", () => {
   });
 
   it("applies unsupported gravity to the canonical G Bot instead of hovering", async () => {
-    const loaded = await loadAuthoringScene(
-      async () => new Response(JSON.stringify(createFlatTerrainCapabilitySpec())),
-      { subjectDefinitionRef: "worldkit://subject-definition/humanoid.g-bot@1" },
-    );
-    if (!loaded.ok || loaded.executionPlan === undefined) {
-      throw new Error(
-        `Capability package failed to load: ${JSON.stringify(loaded.diagnostics)}`,
-      );
-    }
+    const baseExecutionPlan = createGbotCapabilityExecutionPlan();
     const executionPlan = {
-      ...structuredClone(loaded.executionPlan),
+      ...structuredClone(baseExecutionPlan),
       waters: [],
     };
+    const initialControlledEntityId = executionPlan.initialControlledEntityId;
     const controlledSubject = executionPlan.subjects.find(
-      (subject) => subject.entityId === executionPlan.controlledEntityId,
+      (subject) => subject.entityId === initialControlledEntityId,
     );
     if (controlledSubject === undefined) throw new Error("Controlled Subject missing.");
     controlledSubject.spawnSubjectOriginPositionMetersXYZ = [0, 8, 30];
-    const runtime = await BabylonWorldRuntime.create({
-      executionPlan,
-      havokWasmBinary,
-      subjectAssetResolver: {
-        async resolveSubjectAsset() {
-          return { bytes: gBotAssetBytes, sourceLabel: "g-bot-test" };
-        },
-      },
-      engineFactory: () =>
-        new NullEngine({
-          renderWidth: 640,
-          renderHeight: 360,
-          textureSize: 512,
-          deterministicLockstep: true,
-          lockstepMaxSteps: 4,
-        }),
-    });
+    const runtime = await createBoundGbotRuntime(executionPlan);
     try {
       const landed = await runtime.runFixedInput({ actions: [], ticks: 300 });
       expect(landed.subjectStatesByEntityId.player).toMatchObject({
@@ -856,19 +549,10 @@ describe("capability package runtime smoke tests", () => {
   });
 
   it("executes a switched Profile from its locked Kernel descriptor instead of parsing its Ref", async () => {
-    const loaded = await loadAuthoringScene(
-      async () => new Response(JSON.stringify(createFlatTerrainCapabilitySpec())),
-      {
-        subjectDefinitionRef:
-          "worldkit://subject-definition/humanoid.g-bot@1",
-      },
-    );
-    if (!loaded.ok || loaded.executionPlan === undefined) {
-      throw new Error(`Capability package failed: ${JSON.stringify(loaded.diagnostics)}`);
-    }
-    const executionPlan = structuredClone(loaded.executionPlan);
+    const baseExecutionPlan = createGbotCapabilityExecutionPlan();
+    const executionPlan = structuredClone(baseExecutionPlan);
     const subject = executionPlan.subjects[0]!;
-    const assembly = subject.capabilityAssembly!;
+    const assembly = subject.capabilityAssembly;
     const originalKernelRef = "worldkit://motion-kernel/free-ground@1";
     const aliasedKernelRef = "worldkit://motion-kernel/custom-steering-implementation@1";
     const optionalProfile = {
@@ -895,23 +579,7 @@ describe("capability package runtime smoke tests", () => {
     }
     optionalKernel.resourceRef = aliasedKernelRef;
 
-    const runtime = await BabylonWorldRuntime.create({
-      executionPlan,
-      havokWasmBinary,
-      subjectAssetResolver: {
-        async resolveSubjectAsset() {
-          return { bytes: gBotAssetBytes, sourceLabel: "g-bot-test" };
-        },
-      },
-      engineFactory: () =>
-        new NullEngine({
-          renderWidth: 640,
-          renderHeight: 360,
-          textureSize: 512,
-          deterministicLockstep: true,
-          lockstepMaxSteps: 4,
-        }),
-    });
+    const runtime = await createBoundGbotRuntime(executionPlan);
     try {
       const initialZ = runtime.snapshot().subjectStatesByEntityId.player!.positionMetersXYZ[2];
       expect(runtime.requestMotionProfile("player", optionalProfile.resourceRef)).toBe(true);
@@ -931,33 +599,8 @@ describe("capability package runtime smoke tests", () => {
   });
 
   it("fires one free-ground jump until the held action is released", async () => {
-    const loaded = await loadAuthoringScene(
-      async () => new Response(JSON.stringify(createFlatTerrainCapabilitySpec())),
-      {
-        subjectDefinitionRef:
-          "worldkit://subject-definition/humanoid.g-bot@1",
-      },
-    );
-    if (!loaded.ok || loaded.executionPlan === undefined) {
-      throw new Error(`Capability package failed: ${JSON.stringify(loaded.diagnostics)}`);
-    }
-    const runtime = await BabylonWorldRuntime.create({
-      executionPlan: loaded.executionPlan,
-      havokWasmBinary,
-      subjectAssetResolver: {
-        async resolveSubjectAsset() {
-          return { bytes: gBotAssetBytes, sourceLabel: "g-bot-test" };
-        },
-      },
-      engineFactory: () =>
-        new NullEngine({
-          renderWidth: 640,
-          renderHeight: 360,
-          textureSize: 512,
-          deterministicLockstep: true,
-          lockstepMaxSteps: 4,
-        }),
-    });
+    const executionPlan = createGbotCapabilityExecutionPlan();
+    const runtime = await createBoundGbotRuntime(executionPlan);
     try {
       let takeoffCount = 0;
       let previousVerticalVelocity = 0;
@@ -980,46 +623,18 @@ describe("capability package runtime smoke tests", () => {
   });
 
   it("commits Control Feel on the next tick and clears authoring Camera state across reset", async () => {
-    const loaded = await loadAuthoringScene(
-      async () => new Response(JSON.stringify(createFlatTerrainCapabilitySpec())),
-      { subjectDefinitionRef: "worldkit://subject-definition/humanoid.g-bot@1" },
-    );
-    if (
-      !loaded.ok ||
-      loaded.executionPlan === undefined ||
-      loaded.executionPlan.schemaVersion !== 4
-    ) {
-      throw new Error(
-        `G Bot package failed to load: ${JSON.stringify(loaded.diagnostics)}`,
-      );
-    }
-    const executionPlan = withExtraCapabilitySubject(loaded.executionPlan);
+    const baseExecutionPlan = createGbotCapabilityExecutionPlan();
+    const executionPlan = withExtraCapabilitySubject(baseExecutionPlan);
     const playerSubject = executionPlan.subjects[0]!;
     const extraSubject = executionPlan.subjects[1]!;
-    const capabilityAssembly = playerSubject.capabilityAssembly!;
+    const capabilityAssembly = playerSubject.capabilityAssembly;
     const orbitProfile = capabilityAssembly.cameraContext.cameraRigProfiles.find(
       (profile) => profile.resourceRef === "worldkit://camera-profile/orbit.medium@1",
     )!;
     const followProfile = capabilityAssembly.cameraContext.cameraRigProfiles.find(
       (profile) => profile.resourceRef === "worldkit://camera-profile/follow.medium@1",
     )!;
-    const runtime = await BabylonWorldRuntime.create({
-      executionPlan,
-      havokWasmBinary,
-      subjectAssetResolver: {
-        async resolveSubjectAsset() {
-          return { bytes: gBotAssetBytes, sourceLabel: "g-bot-test" };
-        },
-      },
-      engineFactory: () =>
-        new NullEngine({
-          renderWidth: 640,
-          renderHeight: 360,
-          textureSize: 512,
-          deterministicLockstep: true,
-          lockstepMaxSteps: 4,
-        }),
-    });
+    const runtime = await createBoundGbotRuntime(executionPlan);
     try {
       await runtime.runFixedInput({ actions: [], ticks: 8 });
       const beforeRequest = runtime.snapshot();
@@ -1049,7 +664,8 @@ describe("capability package runtime smoke tests", () => {
       expect(orbitPreview.tuningByProfileRef[orbitProfile.resourceRef])
         .toEqual({ targetHeightMeters: 1.4 });
       runtime.reset();
-      const afterReset = runtime.snapshot();
+      await bindRuntimeTestPossession(runtime, "player");
+      const afterReset = await runtime.runFixedInput({ actions: [], ticks: 1 });
       expect(afterReset.subjectStatesByEntityId.player!.activeControlFeelProfileRef)
         .toBe(HEAVY_FEEL_REF);
       expect(afterReset.camera).not.toHaveProperty("tuning");
@@ -1066,47 +682,19 @@ describe("capability package runtime smoke tests", () => {
     }
   }, 15_000);
 
-  it("clears the previous owner's Camera selection and preview after bindControl rebind", async () => {
-    const loaded = await loadAuthoringScene(
-      async () => new Response(JSON.stringify(createFlatTerrainCapabilitySpec())),
-      { subjectDefinitionRef: "worldkit://subject-definition/humanoid.g-bot@1" },
-    );
-    if (
-      !loaded.ok ||
-      loaded.executionPlan === undefined ||
-      loaded.executionPlan.schemaVersion !== 4
-    ) {
-      throw new Error(
-        `G Bot package failed to load: ${JSON.stringify(loaded.diagnostics)}`,
-      );
-    }
-    const executionPlan = withExtraCapabilitySubject(loaded.executionPlan);
+  it("clears the previous owner's Camera selection and preview after Gameplay possession commit", async () => {
+    const baseExecutionPlan = createGbotCapabilityExecutionPlan();
+    const executionPlan = withExtraCapabilitySubject(baseExecutionPlan);
     const playerSubject = executionPlan.subjects[0]!;
     const extraSubject = executionPlan.subjects[1]!;
-    const capabilityAssembly = playerSubject.capabilityAssembly!;
+    const capabilityAssembly = playerSubject.capabilityAssembly;
     const orbitProfile = capabilityAssembly.cameraContext.cameraRigProfiles.find(
       (profile) => profile.resourceRef === "worldkit://camera-profile/orbit.medium@1",
     )!;
     const followProfile = capabilityAssembly.cameraContext.cameraRigProfiles.find(
       (profile) => profile.resourceRef === "worldkit://camera-profile/follow.medium@1",
     )!;
-    const runtime = await BabylonWorldRuntime.create({
-      executionPlan,
-      havokWasmBinary,
-      subjectAssetResolver: {
-        async resolveSubjectAsset() {
-          return { bytes: gBotAssetBytes, sourceLabel: "g-bot-test" };
-        },
-      },
-      engineFactory: () =>
-        new NullEngine({
-          renderWidth: 640,
-          renderHeight: 360,
-          textureSize: 512,
-          deterministicLockstep: true,
-          lockstepMaxSteps: 4,
-        }),
-    });
+    const runtime = await createBoundGbotRuntime(executionPlan);
     try {
       await runtime.runFixedInput({ actions: [], ticks: 4 });
       const automaticCameraProfileRef = runtime.snapshot().camera.activeCameraProfileRef;
@@ -1121,15 +709,16 @@ describe("capability package runtime smoke tests", () => {
         ticks: 1,
       });
 
-      const rebound = runtime.bindControl({
-        controllerId: TRUSTED_DEFAULT_CONTROLLER_ID,
-        expectedControlledEntityId: "player",
+      const rebound = await runtime[BABYLON_GAMEPLAY_RUNTIME_INTERNAL]()
+        .preparePossessionTarget({
+        mode: "possessed",
         controlledEntityId: extraSubject.entityId,
       });
-      expect(rebound.status).toBe("committed");
-      expect(runtime.snapshot().camera.targetEntityId).toBe(extraSubject.entityId);
-      expect(runtime.snapshot().camera.activeCameraProfileRef).toBe(automaticCameraProfileRef);
-      expect(runtime.snapshot().camera).not.toHaveProperty("tuning");
+      rebound.commitPrepared();
+      const afterRebindTick = await runtime.runFixedInput({ actions: [], ticks: 1 });
+      expect(afterRebindTick.camera.targetEntityId).toBe(extraSubject.entityId);
+      expect(afterRebindTick.camera.activeCameraProfileRef).toBe(automaticCameraProfileRef);
+      expect(afterRebindTick.camera).not.toHaveProperty("tuning");
       expect(runtime.getCameraPreviewState().tuningByProfileRef).toEqual({});
     } finally {
       await runtime.dispose();
@@ -1137,32 +726,8 @@ describe("capability package runtime smoke tests", () => {
   }, 15_000);
 
   it("zeros locomotion intent when safe-ground fallback is active even if move is held", async () => {
-    const loaded = await loadAuthoringScene(
-      async () => new Response(JSON.stringify(createFlatTerrainCapabilitySpec())),
-      { subjectDefinitionRef: "worldkit://subject-definition/humanoid.g-bot@1" },
-    );
-    if (!loaded.ok || loaded.executionPlan === undefined) {
-      throw new Error(
-        `G Bot package failed to load: ${JSON.stringify(loaded.diagnostics)}`,
-      );
-    }
-    const runtime = await BabylonWorldRuntime.create({
-      executionPlan: loaded.executionPlan,
-      havokWasmBinary,
-      subjectAssetResolver: {
-        async resolveSubjectAsset() {
-          return { bytes: gBotAssetBytes, sourceLabel: "g-bot-test" };
-        },
-      },
-      engineFactory: () =>
-        new NullEngine({
-          renderWidth: 640,
-          renderHeight: 360,
-          textureSize: 512,
-          deterministicLockstep: true,
-          lockstepMaxSteps: 4,
-        }),
-    });
+    const executionPlan = createGbotCapabilityExecutionPlan();
+    const runtime = await createBoundGbotRuntime(executionPlan);
     try {
       const moving = await runtime.runFixedInput({
         actions: ["move-forward"],
