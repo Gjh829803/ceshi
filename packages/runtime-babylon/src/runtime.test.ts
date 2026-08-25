@@ -11,6 +11,7 @@ import { StandardMaterial } from "@babylonjs/core/Materials/standardMaterial.js"
 import { Quaternion, Vector3 } from "@babylonjs/core/Maths/math.vector.js";
 import type { Mesh } from "@babylonjs/core/Meshes/mesh.js";
 import { TransformNode } from "@babylonjs/core/Meshes/transformNode.js";
+import { PhysicsCharacterController } from "@babylonjs/core/Physics/v2/characterController.js";
 import type { PhysicsEngine } from "@babylonjs/core/Physics/v2/physicsEngine.js";
 import { Scene } from "@babylonjs/core/scene.pure.js";
 import { sha256Bytes, sha256CanonicalJson } from "@whitebox-world/protocol";
@@ -1194,6 +1195,49 @@ describe("BabylonWorldRuntime", () => {
     });
     expect(error).not.toHaveProperty("cause");
     expect(disposeEngine).toHaveBeenCalledTimes(1);
+  });
+
+  it("releases a native character controller when support bootstrap throws", async () => {
+    const supportFailure = new Error(
+      "BABYLON_PROVIDER_PRIVATE_SUPPORT_BOOTSTRAP_FAILURE",
+    );
+    vi.spyOn(PhysicsCharacterController.prototype, "checkSupport")
+      .mockImplementationOnce(() => {
+        throw supportFailure;
+      });
+    const disposeController = vi.spyOn(
+      PhysicsCharacterController.prototype,
+      "dispose",
+    );
+
+    const error = await createRuntime(createFlatPackageExecutionPlan()).catch(
+      (reason) => reason as unknown,
+    );
+
+    expect(error).toBe(supportFailure);
+    expect(disposeController).toHaveBeenCalledTimes(1);
+  });
+
+  it("preserves the controller construction failure when rollback also throws", async () => {
+    const supportFailure = new Error(
+      "BABYLON_PROVIDER_PRIVATE_SUPPORT_BOOTSTRAP_FAILURE",
+    );
+    vi.spyOn(PhysicsCharacterController.prototype, "checkSupport")
+      .mockImplementationOnce(() => {
+        throw supportFailure;
+      });
+    const nativeDispose = PhysicsCharacterController.prototype.dispose;
+    vi.spyOn(PhysicsCharacterController.prototype, "dispose")
+      .mockImplementationOnce(function (this: PhysicsCharacterController) {
+        nativeDispose.call(this);
+        throw new Error("BABYLON_PROVIDER_PRIVATE_CONTROLLER_DISPOSE_FAILURE");
+      });
+
+    const error = await createRuntime(createFlatPackageExecutionPlan()).catch(
+      (reason) => reason as unknown,
+    );
+
+    expect(error).toBe(supportFailure);
   });
 
   it("rejects a tampered frozen minimum-clearance assertion", async () => {
